@@ -18,12 +18,12 @@ Quelli più comuni si possono copiare da **Deep link**, in fondo a Impostazioni 
 
 | Link | Cosa fa |
 |---|---|
-| `lyrimuse://lyrics-window` | Apre la finestra del testo |
-| `lyrimuse://lyrics-window/search` | Apre la finestra del testo e la finestra “Cerca testo” (la stessa di `lyrics-search`) |
+| `lyrimuse://lyrics-window` | Apre la Finestra testo |
+| `lyrimuse://lyrics-window/search` | Apre la Finestra testo e la finestra “Cerca testi” (la stessa di `lyrics-search`) |
 | `lyrimuse://lyrics-manager` | Apre Gestione testi |
-| `lyrimuse://lyrics-search` | Apre la finestra “Cerca testo” per il brano attuale |
+| `lyrimuse://lyrics-search` | Apre la finestra “Cerca testi” per il brano attuale |
 | `lyrimuse://menubar-panel` | Apre o chiude il pannello della barra dei menu |
-| `lyrimuse://menubar-panel?quick=overlay` | Apre il pannello della barra dei menu sulle impostazioni rapide di un riquadro (solo apre, non chiude mai). `quick` è uno tra `overlay`, `notch`, `menubar`, `touchbar`, `lyrics-window`, `lyrics-manager` |
+| `lyrimuse://menubar-panel?quick=overlay` | Apre il pannello della barra dei menu sulle impostazioni rapide di un riquadro (lo apre soltanto, non lo chiude mai). `quick` è uno tra `overlay`, `notch`, `menubar`, `touchbar`, `lyrics-window`, `lyrics-manager` |
 | `lyrimuse://menubar-menu` | Apre il menu dell’icona nella barra dei menu |
 | `lyrimuse://onboarding` | Apre la guida di configurazione |
 | `lyrimuse://whats-new` | Mostra le novità della versione installata |
@@ -64,7 +64,7 @@ Sono le stesse azioni delle scorciatoie in Impostazioni › Scorciatoie da tasti
 | `peek-notch` | Espande il testo nel notch per qualche secondo; eseguila di nuovo per chiuderlo prima | — |
 | `toggle-menubar-lyrics` | Mostra o nasconde il testo nella barra dei menu | `on` |
 | `toggle-touchbar` | Espande o comprime il testo nella Touch Bar (solo Mac con Touch Bar) | — |
-| `toggle-all-lyrics` | Nasconde tutto il testo: tra testo fluttuante, nel notch e nella barra dei menu, nasconde quelli attivi, ed eseguendola di nuovo ripristina esattamente quelli | `on` (`0` nasconde, `1` ripristina) |
+| `toggle-all-lyrics` | Nasconde tutto il testo: nasconde quelli attivi tra testo fluttuante, testo nel notch e testo nella barra dei menu; eseguendola di nuovo ricompaiono esattamente quelli | `on` (`0` nasconde, `1` ripristina) |
 | `toggle-lock-position` | Blocca o sblocca la posizione del testo fluttuante | `on` |
 | `toggle-translation` | Mostra o nasconde le traduzioni | `on` |
 | `toggle-romanization` | Mostra o nasconde la pronuncia | `on` |
@@ -76,9 +76,9 @@ Sono le stesse azioni delle scorciatoie in Impostazioni › Scorciatoie da tasti
 | Nome | Cosa fa | Parametri |
 |---|---|---|
 | `open-lyrics-manager` | Apre Gestione testi | — |
-| `open-lyrics-window` | Apre la finestra del testo | — |
-| `toggle-lyrics-window-mini` | Passa la finestra del testo tra dimensione mini e completa; se è chiusa, la apre in dimensione mini | `on` (`1` mini, `0` completa) |
-| `search-lyrics` | Apre la finestra “Cerca testo” | — |
+| `open-lyrics-window` | Apre la Finestra testo | — |
+| `toggle-lyrics-window-mini` | Passa la Finestra testo tra dimensione mini e completa; se è chiusa, la apre in dimensione mini | `on` (`1` mini, `0` completa) |
+| `search-lyrics` | Apre la finestra “Cerca testi” | — |
 | `open-settings` | Apre Impostazioni | — |
 | `open-player` | Porta in primo piano il player che stai usando | — |
 
@@ -125,7 +125,7 @@ Lyrimuse apre l’URL `x-success` aggiungendo come parametri cosa è in riproduz
 | `album` | Album |
 | `lyric` | La riga attuale del testo |
 | `player` | Nome del player |
-| `playing` | `1` durante la riproduzione, `0` in pausa o se non c’è nulla di caricato (in questo caso i campi sopra sono vuoti) |
+| `playing` | `1` durante la riproduzione, `0` in pausa o se non c’è nulla di caricato (se non c’è nulla di caricato, i campi sopra sono vuoti) |
 
 In Comandi Rapidi, usa l’azione **Apri URL X-Callback** con `lyrimuse://x-callback-url/now-playing` come URL. Comandi Rapidi aggiunge da solo `x-success`, e i parametri restituiti diventano l’output dell’azione.
 

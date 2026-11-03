@@ -11,7 +11,7 @@
 "%1$@ 从「%2$@」导出的备份" = "Backup esportato da “%2$@” il %1$@";
 "%1$@ 在此项被扣 %2$d 分，胜者未被扣分，%3$d 分的分差全部来自此项" = "%1$@ ha perso %2$d punti su questo criterio e il vincitore no; tutto lo scarto di %3$d punti viene da qui";
 "%1$@ 在此项被扣 %2$d 分，胜者未被扣分，%3$d 分的分差全部来自此项#one" = "%1$@ ha perso %2$d punto su questo criterio e il vincitore no; tutto lo scarto di %3$d punti viene da qui";
-"%1$@ 失败 · %2$@" = "%1$@ non riuscito · %2$@";
+"%1$@ 失败 · %2$@" = "Non riuscito %1$@ · %2$@";
 "%1$@ 小时 %2$@ 分钟" = "%1$@ h %2$@ min";
 "%1$@ 年 %2$@ 月 %3$@ 日" = "%3$@/%2$@/%1$@";
 "%1$@ 年共 %2$@ 次" = "%2$@ ascolti nel %1$@";
@@ -505,7 +505,7 @@
 "保持锁定" = "Mantieni bloccati";
 "保留副本" = "Tieni copie";
 "修复文件后重新打开 Lyrimuse；或舍弃此文件，用当前界面上的值重建（原文件将重命名保留，不会删除）" = "Correggi il file e riapri Lyrimuse, oppure scartalo e ricrealo con i valori mostrati qui (l’originale viene rinominato, non eliminato)";
-"修改后没有歌词了，未保存；修改内容仍保留在编辑框中" = "Dopo le modifiche non resta alcun testo, quindi non è stato salvato. Le modifiche restano nell’editor";
+"修改后没有歌词了，未保存；修改内容仍保留在编辑框中" = "Dopo le modifiche non resta alcun testo, quindi non è stato salvato nulla. Le modifiche restano nell’editor";
 "修改后的歌词不含任何时间戳，未保存（否则会丢失原有时间轴）；修改内容仍保留在编辑框中" = "Il testo modificato non ha alcun timestamp, quindi non è stato salvato (il timing esistente andrebbe perso). Le modifiche restano nell’editor";
 "修改此句的时间戳" = "Modifica il timestamp di questa riga";
 "候选" = "Risultati";
@@ -573,7 +573,7 @@
 "关闭后只在灵动岛上滑动调节音量时显示音量提示，键盘音量键等只显示系统自带的提示" = "Se disattivato, l’indicatore del volume appare solo quando scorri sul notch per regolarlo; i tasti del volume e le altre modifiche mostrano solo l’indicatore di sistema";
 "关闭后平时只保留刘海高度，悬停展开时照常显示" = "Se disattivato, resta solo una striscia alta quanto il notch finché non ci passi sopra per espanderla";
 "关闭后暂停推送到这个渠道，填写的内容会保留" = "Disattiva per sospendere i push a questo canale; i dati inseriti restano";
-"关闭后，仅在悬停显示播放控制时出现" = "Se disattivata, appare solo quando i controlli di riproduzione si mostrano al passaggio del mouse";
+"关闭后，仅在悬停显示播放控制时出现" = "Se disattivata, appare solo quando compaiono i controlli di riproduzione al passaggio del mouse";
 "关闭悬浮歌词" = "Chiudi testo fluttuante";
 "关闭灵动岛歌词" = "Disattiva testo nel notch";
 "关（默认）：仅替换本次歌词，之后的自动搜索或评分变化仍可能再次替换\n开：锁定这首歌曲的歌词，自动匹配不再更改\n开启后，此前手动选定的歌曲一并锁定（已被自动替换的除外）" = "No (default): sostituisce il testo solo questa volta; ricerche automatiche o cambi di punteggio successivi potrebbero sostituirlo di nuovo\nSì: blocca il testo di questo brano, così l’associazione automatica non lo cambia più\nAttivandolo si bloccano anche i brani scelti manualmente in precedenza (tranne quelli già sostituiti automaticamente)";
@@ -835,7 +835,7 @@
 "固定" = "Fisso";
 "固定在 Dock 上方正中，无法拖动" = "Fissato al centro sopra il Dock; non si può trascinare";
 "固定在菜单栏下方正中，无法拖动" = "Fissato al centro sotto la barra dei menu; non si può trascinare";
-"固定：所有歌曲使用设定的宽度\n自适应：按每首歌曲的歌词确定宽度，不超过设定宽度" = "Fissa: tutti i brani usano la larghezza impostata\nAdattiva: ogni brano ha una larghezza in base al suo testo, fino a quella impostata";
+"固定：所有歌曲使用设定的宽度\n自适应：按每首歌曲的歌词确定宽度，不超过设定宽度" = "Fisso: tutti i brani usano la larghezza impostata\nAdattivo: ogni brano ha una larghezza in base al suo testo, fino a quella impostata";
 "图标动画" = "Icona animata";
 "图标大小" = "Dimensioni icona";
 "图标换成专辑封面" = "Usa illustrazione come icona";
@@ -908,7 +908,7 @@
 "域名解析失败（DNS）：%@" = "Risoluzione DNS non riuscita: %@";
 "塞尔维亚语" = "Serbo";
 "塞尔维亚语拉丁字母（联合国推荐），如 Љубав → Ljubav" = "Alfabeto latino serbo (raccomandato dall’ONU), ad es. Љубав → Ljubav";
-"填写后，每次请求将附带 X-Lyrimuse-Signature: sha256=…（使用此密钥对请求体计算的 HMAC-SHA256），接收端可据此校验来源" = "Se impostato, ogni richiesta include X-Lyrimuse-Signature: sha256=… (un HMAC-SHA256 del corpo con questo segreto), così il destinatario può verificarne la provenienza";
+"填写后，每次请求将附带 X-Lyrimuse-Signature: sha256=…（使用此密钥对请求体计算的 HMAC-SHA256），接收端可据此校验来源" = "Se impostata, ogni richiesta include X-Lyrimuse-Signature: sha256=… (un HMAC-SHA256 del corpo calcolato con questa chiave), così il destinatario può verificarne la provenienza";
 "增强 LRC" = "LRC esteso";
 "墨字白边" = "Inchiostro";
 "声波" = "Forma d’onda";
@@ -938,7 +938,7 @@
 "始终直连" = "Connessione sempre diretta";
 "字体" = "Font";
 "字号" = "Corpo";
-"字号 %@pt" = "Dimensione %@ pt";
+"字号 %@pt" = "Corpo %@ pt";
 "字号快捷键仅对悬浮歌词有效" = "Le scorciatoie per la dimensione del font valgono solo per il testo fluttuante";
 "字节跳动旗下的音乐 App" = "L’app di musica di ByteDance";
 "字节跳动旗下的音乐平台" = "Servizio musicale di ByteDance";
@@ -964,7 +964,7 @@
 "实验室" = "Lab";
 "宽度" = "Larghezza";
 "宽度模式" = "Modalità larghezza";
-"密钥或地址有误" = "Segreto o URL errati";
+"密钥或地址有误" = "Chiave o URL errati";
 "对应多首歌曲，请选择 %@" = "Corrisponde a più brani, scegline uno %@";
 "对应歌词库中的歌曲" = "Associato a un brano della libreria";
 "对齐方式" = "Allineamento";
@@ -972,7 +972,7 @@
 "导入 %@ 首" = "Importa %@ brani";
 "导入 %@ 首#one" = "Importa %@ brano";
 "导入…" = "Importa…";
-"导入前已自动备份歌词库，可在歌词管理的「⋯」菜单中恢复" = "La libreria testi è stata salvata automaticamente prima dell’importazione. Puoi ripristinarla dal menu ⋯ in Gestione testi";
+"导入前已自动备份歌词库，可在歌词管理的「⋯」菜单中恢复" = "Prima dell’importazione è stato eseguito un backup automatico della libreria testi. Puoi ripristinarlo dal menu ⋯ in Gestione testi";
 "导入失败，请重试" = "Impossibile importare. Riprova";
 "导入失败：不是有效的 .ttf / .otf 字体文件" = "Importazione non riuscita: non è un file di font .ttf / .otf valido";
 "导入失败：无法读取所选文件，可能尚未下载到本机或无读取权限" = "Importazione non riuscita: impossibile leggere il file selezionato. Potrebbe non essere scaricato su questo Mac, oppure Lyrimuse non può leggerlo";
@@ -1125,8 +1125,8 @@
 "已开启 %@ / %@" = "%@ di %@ attive";
 "已开启「隐藏歌曲信息」" = "“Nascondi dettagli brano” è attivo";
 "已开启「隐藏歌曲信息」，与歌曲相关的选项暂不生效" = "“Nascondi dettagli brano” è attivo, quindi le opzioni relative al brano per ora non hanno effetto";
-"已恢复 %d 个歌词文件（新增 %d、覆盖 %d）" = "%d file di testo ripristinati (%d aggiunti, %d sovrascritti)";
-"已恢复 %d 个歌词文件（新增 %d、覆盖 %d）#one" = "%d file di testo ripristinato (%d aggiunti, %d sovrascritti)";
+"已恢复 %d 个歌词文件（新增 %d、覆盖 %d）" = "%d file di testo ripristinati (aggiunti: %d, sovrascritti: %d)";
+"已恢复 %d 个歌词文件（新增 %d、覆盖 %d）#one" = "%d file di testo ripristinato (aggiunti: %d, sovrascritti: %d)";
 "已恢复歌词显示" = "Testi ripristinati";
 "已手动停止" = "Interrotto manualmente";
 "已找到 %@ 首" = "Trovati finora: %@";
@@ -1193,7 +1193,7 @@
 "已连接为 @%@" = "Collegato come @%@";
 "已送达" = "Consegnato";
 "已送达（%.1f 秒），去手机或群聊里看看收到没有" = "Consegnato (%.1f s). Controlla che sia arrivato sul telefono o nel gruppo";
-"已送达（%.1f 秒），取不到收听数据，推的是示例报告" = "Consegnato (%.1f s). Nessun dato di ascolto ancora, quindi è stato inviato un report di esempio";
+"已送达（%.1f 秒），取不到收听数据，推的是示例报告" = "Consegnato (%.1f s). Dati di ascolto non disponibili, quindi è stato inviato un report di esempio";
 "已选 %@ 首" = "Selezionati: %@";
 "已选 %d / %d" = "%d di %d selezionati";
 "已选择 %@ 首" = "%@ brani selezionati";
@@ -1205,7 +1205,7 @@
 "已采用" = "Applicato";
 "已采用 %@ 的歌词" = "Testo di %@ in uso";
 "已重发" = "Reinviato";
-"已重新匹配：仍为「%1$@」（%2$@ 分），未找到更好的结果" = "Riassociato: ancora “%1$@” (%2$@ punti); niente di meglio trovato";
+"已重新匹配：仍为「%1$@」（%2$@ 分），未找到更好的结果" = "Riassociato: ancora “%1$@” (%2$@ punti); non è stato trovato nulla di meglio";
 "已重新匹配：仍为「%1$@」，但歌词正文和逐字时间轴均有变化，已更新为本轮结果（%2$@ 分）" = "Riassociato: ancora “%1$@”, ma sono cambiati sia il testo sia il timing parola per parola; aggiornato al risultato di questa ricerca (%2$@ punti)";
 "已重新匹配：仍为「%1$@」，但歌词正文有变化，已更新为本轮结果（%2$@ 分）" = "Riassociato: ancora “%1$@”, ma il testo è cambiato; aggiornato al risultato di questa ricerca (%2$@ punti)";
 "已重新匹配：仍为「%1$@」，但逐字时间轴有变化，已更新为本轮结果（%2$@ 分）" = "Riassociato: ancora “%1$@”, ma il timing parola per parola è cambiato; aggiornato al risultato di questa ricerca (%2$@ punti)";
@@ -1217,7 +1217,7 @@
 "已隐藏菜单栏歌词" = "Testo nella barra dei menu nascosto";
 "已隐藏译文" = "Traduzione nascosta";
 "已隐藏读音" = "Pronuncia nascosta";
-"已隐藏，%@ 恢复" = "Nascosto fino a %@";
+"已隐藏，%@ 恢复" = "Nascosto fino alle %@";
 "已静音" = "Audio disattivato";
 "布局" = "Layout";
 "希腊语" = "Greco";
@@ -1245,7 +1245,7 @@
 "建议" = "Suggerimenti";
 "开启「自动识别」时，将识别所有已知和已信任的播放器，上方的勾选暂不生效。如只需识别部分播放器，请取消勾选此项。" = "“Rilevamento auto” riconosce ogni player noto e autorizzato, quindi le caselle sopra ora non hanno effetto. Deselezionalo per riconoscere solo quelli che scegli";
 "开启全部" = "Attiva tutto";
-"开启后所有听歌报告都会推到这里，之后可在「听歌报告」里按报告调整" = "Se attivo, tutti i report di ascolto vengono inviati qui; puoi regolarli per report in “Report di ascolto”";
+"开启后所有听歌报告都会推到这里，之后可在「听歌报告」里按报告调整" = "Se attivo, tutti i report di ascolto vengono inviati qui; puoi regolarli report per report in “Report di ascolto”";
 "开启后播放过半即记录；Last.fm 官方规则不记录" = "Se attiva, questi brani vengono scrobblati a metà ascolto. Le regole ufficiali di Last.fm li escludono";
 "开启后识别所有内置播放器和「其他 App」中的 App" = "Se attivo, vengono rilevati tutti i player integrati e le app in “Altre app”";
 "开启后，Discord 资料卡和好友列表中将显示正在收听的歌曲。如好友无法看到，请在 Discord 的「用户设置 › 活动隐私」中开启活动状态分享" = "Se attivo, il brano che ascolti appare sul tuo profilo Discord e nell’elenco amici. Se gli amici non lo vedono, in Discord vai in Impostazioni utente › Privacy delle attività e attiva la condivisione delle attività";
@@ -1386,7 +1386,7 @@
 "拼音" = "Pinyin";
 "拼音，如 你好 → nǐ hǎo" = "Pinyin, es. 你好 → nǐ hǎo";
 "指定显示哪些歌词" = "Scegli quali testi mostrare";
-"指定颜色" = "Personalizzato";
+"指定颜色" = "Colore personalizzato";
 "指针停在灵动岛上时，双指左右滑动切歌，上下滑动调节音量" = "Con il puntatore sul notch, scorri con due dita a sinistra o a destra per cambiare brano, o in alto o in basso per regolare il volume";
 "指针在歌词行上时不展开，歌词行淡化，点按穿透到下层窗口" = "Con il puntatore sulla riga del testo, la riga sfuma invece di espandersi e i clic passano alla finestra sottostante";
 "指针悬停在封面上时也显示此行" = "Mostrata anche passando con il puntatore sull’illustrazione";
@@ -1523,13 +1523,13 @@
 "文件夹导入方式" = "Importazione cartelle";
 "文件过多（上限 %@ 个、200 MB），请分批导入" = "Troppi file (limite %@ file, 200 MB). Importali a gruppi";
 "文件过大，不像是歌词，未保存" = "File troppo grande per essere un testo; non salvato";
-"文件过大，无法导入" = "Il file è troppo grande da importare";
+"文件过大，无法导入" = "Il file è troppo grande per essere importato";
 "文字" = "Testo";
 "文字一致" = "Stesse parole";
 "文字描边" = "Contorno testo";
 "文字颜色" = "Colore testo";
 "文本与行时间一致，仅逐字时间轴不同" = "Testo e tempi delle righe coincidono; cambia solo il timing parola per parola";
-"断句" = "A capo";
+"断句" = "Suddivisione righe";
 "断开" = "Disconnetti";
 "断开 Last.fm？" = "Vuoi disconnettere Last.fm?";
 "断开…" = "Disconnetti…";
@@ -1597,7 +1597,7 @@
 "无需自动匹配的歌曲" = "Nessun brano da associare";
 "日均 %1$@ · %2$@ 天" = "%1$@/giorno · %2$@ giorni";
 "日均 %1$@ · %2$@ 天#one" = "%1$@/giorno · %2$@ giorno";
-"日文歌词自带读音，同水平候选间优先" = "Testo giapponese con pronuncia; preferito a parità di altri risultati";
+"日文歌词自带读音，同水平候选间优先" = "Testo giapponese con pronuncia; preferito tra risultati di pari livello";
 "日本 SyncPower 运营的同步歌词服务" = "Servizio di testi sincronizzati di SyncPower (Giappone)";
 "日语" = "Giapponese";
 "日语读音" = "Pronuncia giapponese";
@@ -1606,7 +1606,7 @@
 "时长" = "Durata";
 "时长 %@" = "Durata: %@";
 "时长不符" = "Durata diversa";
-"时长不符，但其他歌词源也在同一时间结束，予以采信" = "La durata non corrisponde, ma altre fonti finiscono nello stesso momento, quindi è considerata attendibile";
+"时长不符，但其他歌词源也在同一时间结束，予以采信" = "La durata non corrisponde, ma altre fonti finiscono nello stesso momento, quindi il risultato è considerato attendibile";
 "时长吻合" = "Durata corrispondente";
 "时长明显不符，且无其他源印证" = "Durata nettamente diversa, non confermata";
 "时间" = "Tempo";
@@ -1709,7 +1709,7 @@
 "最常听的专辑" = "Album top";
 "最常听的歌手" = "Artista top";
 "最常听的歌曲" = "Brano top";
-"最近一次解析时无任何歌词源应答，可能是当时网络不可用，并不代表这首歌曲无歌词。稍后将自动重试，也可立即重新自动匹配" = "Nessuna fonte dei testi ha risposto durante l’ultima ricerca, forse perché la rete non era disponibile; non significa che il brano non abbia un testo. Verrà ritentato automaticamente, oppure puoi riassociare ora";
+"最近一次解析时无任何歌词源应答，可能是当时网络不可用，并不代表这首歌曲无歌词。稍后将自动重试，也可立即重新自动匹配" = "Nessuna fonte dei testi ha risposto durante l’ultima ricerca, forse perché la rete non era disponibile; non significa che il brano non abbia un testo. Verrà fatto un nuovo tentativo automatico, oppure puoi riassociare ora";
 "最近一次评估" = "Ultima valutazione";
 "最近完成" = "Completati di recente";
 "最近播放" = "Riprodotte di recente";
@@ -1780,7 +1780,7 @@
 "未获授权" = "Non concesso";
 "未记录" = "Non registrato";
 "未设置" = "Non impostato";
-"未运行" = "Non aperto";
+"未运行" = "Non attivo";
 "未返回候选" = "Nessun risultato restituito";
 "未连接" = "Non connesso";
 "未连接 Last.fm 或 ListenBrainz" = "Last.fm o ListenBrainz non collegato";
@@ -1804,7 +1804,7 @@
 "本轮应答的源：%@" = "Fonti che hanno risposto: %@";
 "本轮无可用候选，保留现有歌词" = "Nessun risultato utilizzabile in questo tentativo; resta il testo attuale";
 "本轮无歌词源应答" = "Nessuna fonte ha risposto in questo giro";
-"本轮无歌词源返回候选" = "Nessuna fonte ha dato risultati in questo tentativo";
+"本轮无歌词源返回候选" = "Nessuna fonte ha dato risultati in questo giro";
 "本轮有歌词源未应答，为避免误降级未作更换，可稍后重试" = "Alcune fonti non hanno risposto in questo tentativo, quindi non è stato cambiato nulla per evitare un peggioramento. Riprova più tardi";
 "本轮未得到结果，请重试" = "Nessun risultato in questo tentativo. Riprova";
 "本轮未找到逐字歌词，保留现有的「%@」（逐字），以免丢失逐字时间轴" = "Nessun testo parola per parola in questo tentativo: resta “%@” (parola per parola) per non perdere il timing parola per parola";
@@ -1934,7 +1934,7 @@
 "歌词库正在刷新，请稍后重试" = "La libreria testi si sta aggiornando. Riprova tra un attimo";
 "歌词延后" = "Ritarda testo";
 "歌词引擎" = "Motore dei testi";
-"歌词引擎下次启动时删除" = "Verrà eliminato al prossimo avvio del motore dei testi";
+"歌词引擎下次启动时删除" = "Verranno eliminate al prossimo avvio del motore dei testi";
 "歌词引擎下次启动时改存" = "Verrà salvato al prossimo avvio del motore dei testi";
 "歌词引擎尚未启用，本次引导未完成，下次启动时将再次显示" = "Il motore dei testi non è ancora attivo, quindi la configurazione non risulta completata: ti verrà riproposta al prossimo avvio";
 "歌词引擎已停用，更改将在下次启用时生效" = "Il motore dei testi è disattivato. La modifica avrà effetto alla prossima attivazione";
@@ -2105,7 +2105,7 @@
 "浅色卡片" = "Scheda chiara";
 "测试" = "Prova";
 "测试中…" = "Provo…";
-"测试全部" = "Testa tutte";
+"测试全部" = "Prova tutte";
 "测试失败：%@" = "Impossibile provare le fonti dei testi: %@";
 "测试数据" = "Dati di esempio";
 "测试版更新" = "Aggiornamenti beta";
@@ -2169,7 +2169,7 @@
 "点按「拷贝修复命令」，打开「终端」，粘贴后按下 Return 键，按提示输入登录密码（输入时不显示字符），然后点按「启用」" = "Fai clic su “Copia comando di riparazione”, apri Terminale, incolla e premi A capo, inserisci la password di login quando richiesto (mentre digiti non appare nulla), poi fai clic su “Abilita”";
 "点按下载" = "Fai clic per scaricare";
 "点按以跳过" = "Fai clic per saltare";
-"点按后切换到播放进度、歌词校准、喜欢、随机/循环和音量；当前播放器不支持的项不显示" = "Toccalo per passare a posizione di riproduzione, calibrazione del testo, preferiti, casuale/ripeti e volume. Le voci non supportate dal player attuale sono nascoste";
+"点按后切换到播放进度、歌词校准、喜欢、随机/循环和音量；当前播放器不支持的项不显示" = "Toccalo per passare a posizione di riproduzione, calibrazione del testo, Preferito, Casuale/Ripeti e volume. Le voci non supportate dal player attuale sono nascoste";
 "点按图标可打开设置和歌词窗口" = "Fai clic sull’icona per aprire Impostazioni e la Finestra testo";
 "点按归零" = "Fai clic per azzerare";
 "点按录制" = "Registra scorciatoia";
@@ -2320,7 +2320,7 @@
 "统一使用这份修正后的歌词？" = "Vuoi usare questo testo corretto per tutte le voci?";
 "统计" = "Statistiche";
 "统计与榜单" = "Statistiche e classifiche";
-"继续即表示你已了解" = "Continuando, confermi di aver letto";
+"继续即表示你已了解" = "Continuando, confermi di aver letto:";
 "继续导出" = "Esporta";
 "继续播放" = "Riprendi";
 "继续显示" = "Continua a mostrare";
@@ -2427,7 +2427,7 @@
 "艺人一致，曲名除括号内说明外一致，时长相差 %@ 秒" = "Stesso artista, stesso titolo tranne le note tra parentesi; durata diversa di %@ s";
 "艺人一致，曲名除括号内说明外一致，时长相近" = "Stesso artista, stesso titolo tranne le note tra parentesi, durata simile";
 "节拍器" = "Metronomo";
-"若机器人安全设置选择了「自定义关键词」，请添加关键词「%@」；若选择了「加签」，请将密钥填入「加签密钥」" = "Se il bot usa “Parole chiave personalizzate”, aggiungi la parola chiave “%@”. Se usa “Firma”, inserisci il segreto in “Segreto di firma”";
+"若机器人安全设置选择了「自定义关键词」，请添加关键词「%@」；若选择了「加签」，请将密钥填入「加签密钥」" = "Se il bot usa “Parole chiave personalizzate”, aggiungi la parola chiave “%@”. Se usa “Firma”, inserisci la chiave in “Chiave di firma”";
 "获取" = "Fonti";
 "获取 Lyrimuse" = "Ottieni Lyrimuse";
 "获取 Token →" = "Ottieni un token →";
@@ -2441,7 +2441,7 @@
 "菜单栏正中：歌词显示在菜单栏中间，避开 App 菜单、右侧图标和刘海" = "Al centro: il testo appare al centro della barra dei menu, lontano dai menu delle app, dalle icone a destra e dal notch";
 "落后 %d 分" = "Indietro di %d";
 "薄" = "Sottile";
-"行上按 %1$@ 次计，明细合计 %2$@ 次" = "La riga conta %1$@, il dettaglio ne somma %2$@";
+"行上按 %1$@ 次计，明细合计 %2$@ 次" = "La riga conta %1$@, il dettaglio totalizza %2$@";
 "行为" = "Comportamento";
 "行数" = "Righe";
 "行时间略有出入" = "tempi delle righe leggermente diversi";
@@ -2465,7 +2465,7 @@
 "解析决策" = "Decisione di selezione";
 "解析时 %1$@ 个源应答，选用「%2$@」" = "%1$@ fonti hanno risposto; scelta “%2$@”";
 "解析时 %1$@ 个源应答，选用「%2$@」#one" = "%1$@ fonte ha risposto; scelta “%2$@”";
-"解析本地记录文件失败" = "Impossibile analizzare il file dei dati locali";
+"解析本地记录文件失败" = "Impossibile analizzare il file dei record locali";
 "解码" = "Decodifica";
 "解锁位置" = "Sblocca posizione";
 "解锁后点按将穿透到桌面；拖动方式见设置中的「长按拖动」" = "Sbloccato: i clic passano alla scrivania. Il modo di trascinare si imposta con “Tieni premuto per trascinare” nelle Impostazioni";
@@ -2500,7 +2500,7 @@
 "译文" = "Traduzione";
 "译文与读音" = "Traduzione e pronuncia";
 "译文大小" = "Corpo traduzione";
-"译文接在原文后面，排成一行，「字号」照常生效" = "La traduzione segue l’originale sulla stessa riga e “Corpo” resta valida";
+"译文接在原文后面，排成一行，「字号」照常生效" = "La traduzione segue l’originale sulla stessa riga e “Corpo” si applica comunque";
 "译文语言" = "Lingua di traduzione";
 "译文间距" = "Traduzione";
 "译文（同一行）" = "Traduzione (stessa riga)";
@@ -2556,7 +2556,7 @@
 "请更换组合，否则 Lyrimuse 位于前台时，按下该组合会同时触发菜单中的对应项" = "Scegli un’altra combinazione: altrimenti, quando Lyrimuse è in primo piano, premendola attivi anche quella voce di menu";
 "请更换组合，或先清除该项" = "Scegli un’altra combinazione o cancella prima quella";
 "请查看屏幕上弹出的系统授权对话框，选择「允许」" = "Fai clic su “Consenti” nella finestra di sistema appena comparsa";
-"请检查「签名密钥」是否与机器人设置一致；若未开启签名校验，请清空此栏" = "Controlla che “Segreto di firma” corrisponda alle impostazioni del bot. Se la verifica con firma è disattivata, svuota questo campo";
+"请检查「签名密钥」是否与机器人设置一致；若未开启签名校验，请清空此栏" = "Controlla che “Chiave di firma” corrisponda alle impostazioni del bot. Se la verifica della firma è disattivata, svuota questo campo";
 "请检查网络和地址" = "Controlla la rete e l’URL";
 "请检查网络；在部分网络环境下，Telegram 需开启系统代理才能连接" = "Controlla la rete. Su alcune reti Telegram è raggiungibile solo tramite il proxy di sistema";
 "请求权限" = "Richiedi accesso";
@@ -2565,7 +2565,7 @@
 "请稍后重试" = "Riprova più tardi";
 "读取失败，请重试" = "Impossibile leggere la cartella. Riprova";
 "读取播放状态，获取歌词和封面" = "Legge lo stato di riproduzione e recupera testi e illustrazioni";
-"读取本地记录文件失败" = "Impossibile leggere il file dei dati locali";
+"读取本地记录文件失败" = "Impossibile leggere il file dei record locali";
 "读音" = "Pronuncia";
 "读音大小" = "Corpo pronuncia";
 "读音间距" = "Pronuncia";
@@ -2608,7 +2608,7 @@
 "辅助功能权限可显示%@的随机、循环按钮和音量调节，也可在系统媒体焦点被其他 App 占用时控制暂停、恢复和切换上一首或下一首" = "Il permesso Accessibilità attiva Casuale, Ripeti e volume per %@ e permette a Lyrimuse di mettere in pausa, riprendere e cambiare brano quando un’altra app ha il focus multimediale di sistema";
 "辅助功能权限可让%@拖动进度后的歌词更准、显示循环按钮和音量调节，也可在系统媒体焦点被其他 App 占用时，通过菜单暂停、恢复和切换上一首或下一首" = "Il permesso Accessibilità mantiene preciso il testo di %@ dopo un salto nel brano, attiva il pulsante Ripeti e il controllo del volume e permette a Lyrimuse di mettere in pausa, riprendere e cambiare brano dai menu quando un’altra app ha il focus multimediale di sistema";
 "过去三年的今天及前后一周均无收听记录" = "Nessun ascolto in questo giorno, né nella settimana attorno, negli ultimi tre anni";
-"运行中" = "Aperto";
+"运行中" = "Attivo";
 "运行日志" = "Log attività";
 "近 %1$@ 天 · 最高 %2$@（%3$@）" = "Ultimi %1$@ giorni · picco %2$@ (%3$@)";
 "近 12 周的收听热力图（完整年历见设置中的统计页）" = "Mappa di calore ascolti delle ultime 12 settimane (l’anno intero è nella pagina Statistiche delle Impostazioni)";
@@ -2693,7 +2693,7 @@
 "连续收听 %d 次，点按展开每一次" = "Ascoltato %d volte di fila: fai clic per vederle tutte";
 "连续混音版，与原版编排不同" = "Mix continuo, arrangiato diversamente dall’originale";
 "迷你尺寸" = "Mini";
-"迷你尺寸下，所在屏幕有 App 全屏时隐藏" = "In dimensione Mini, si nasconde quando un’app è a tutto schermo sul suo schermo";
+"迷你尺寸下，所在屏幕有 App 全屏时隐藏" = "In dimensione Mini, si nasconde quando un’app è a tutto schermo sul suo monitor";
 "迷你尺寸下，搜索确认无歌词后才隐藏，搜索期间照常显示" = "In dimensione Mini si nasconde solo quando la ricerca conferma che non c’è testo; resta visibile durante la ricerca";
 "迷你尺寸下，暂停或未播放时隐藏，开始播放后重新显示" = "In dimensione Mini, si nasconde in pausa o a riproduzione ferma e riappare quando inizia la riproduzione";
 "迷你尺寸中一行显示不下时换行或滚动" = "Se nella vista Mini le righe lunghe vanno a capo o scorrono";
@@ -2819,7 +2819,7 @@
 "长句拆分" = "Dividi righe lunghe";
 "长按即可拖动位置" = "Tieni premuto per trascinare";
 "长按展开" = "Tieni premuto per espandere";
-"长按或右键打开设置" = "Tieni premuto o fai clic secondario per le impostazioni";
+"长按或右键打开设置" = "Tieni premuto o fai clic con il tasto destro per le impostazioni";
 "长按拖动" = "Tieni premuto per trascinare";
 "间奏中多出一段歌词" = "Testo in più in un intermezzo";
 "间距" = "Spaziatura";
@@ -2872,8 +2872,8 @@
 "预览 · 左右滚动查看完整内容" = "Anteprima · scorri in orizzontale per vedere tutta la barra";
 "预览 · 左右滚动查看完整内容 · 本句较长，将横向滚动" = "Anteprima · scorri in orizzontale per vedere tutta la barra · questa riga è lunga e scorre";
 "预览 · 已关闭，Discord 上不会显示" = "Anteprima · Disattivato, su Discord non appare nulla";
-"预览 · 已暂时隐藏，%@ 恢复" = "Anteprima · Nascosto fino a %@";
-"预览 · 当前未播放，显示示例" = "Anteprima · Nessuna riproduzione, mostro un esempio";
+"预览 · 已暂时隐藏，%@ 恢复" = "Anteprima · Nascosto fino alle %@";
+"预览 · 当前未播放，显示示例" = "Anteprima · Nessuna riproduzione, ecco un esempio";
 "预览 · 当前歌曲不会显示在 Discord 上" = "Anteprima · Il brano attuale non apparirà su Discord";
 "预览 · 暂停 %d 秒后从 Discord 上清除" = "Anteprima · Rimosso da Discord %d s dopo la pausa";
 "预览 · 本句会横向滚动" = "Anteprima · questa riga scorre";
@@ -2891,16 +2891,16 @@
 "首次同步历史记录后，将在此显示收听足迹" = "La tua impronta d’ascolto apparirà qui al termine della prima sincronizzazione della cronologia";
 "首次播放，正在联网搜索歌词，完成后将自动显示" = "Primo ascolto. Cerco il testo online; apparirà automaticamente quando è pronto";
 "首次收听" = "Primo ascolto";
-"首次解析" = "Prima risoluzione";
+"首次解析" = "Prima ricerca";
 "首轮" = "Primo giro";
 "马其顿语" = "Macedone";
 "马拉雅拉姆语" = "Malayalam";
-"高亮当前句并保持在可见范围内；手动滚动时暂停，再次点按可恢复" = "Evidenzia la riga corrente e la mantiene visibile; se scorri a mano si sospende, fai di nuovo clic per riprenderlo";
+"高亮当前句并保持在可见范围内；手动滚动时暂停，再次点按可恢复" = "Evidenzia la riga corrente e la mantiene visibile; se scorri a mano si sospende, fai di nuovo clic per riprendere";
 "高可信" = "Alta affidabilità";
 "高度" = "Altezza";
 "高级" = "Avanzate";
 "麦克风" = "Microfono";
-"黑字描边" = "Testo nero con contorno";
+"黑字描边" = "Nero con contorno";
 "黑胶唱片" = "Vinile";
 "默认" = "Default";
 "默认内容推送时按各平台的格式排版，这里只显示文字" = "Il contenuto predefinito viene impaginato per ogni piattaforma all’invio; qui è mostrato solo il testo";

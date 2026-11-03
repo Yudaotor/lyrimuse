@@ -3207,7 +3207,7 @@
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Personalizzato"
+            "value" : "Colore personalizzato"
           }
         },
         "ja" : {
@@ -5739,7 +5739,7 @@
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "La riga conta %1$@, il dettaglio ne somma %2$@"
+            "value" : "La riga conta %1$@, il dettaglio totalizza %2$@"
           }
         },
         "ja" : {
@@ -25625,13 +25625,13 @@
               "one" : {
                 "stringUnit" : {
                   "state" : "translated",
-                  "value" : "%d file di testo ripristinato (%d aggiunti, %d sovrascritti)"
+                  "value" : "%d file di testo ripristinato (aggiunti: %d, sovrascritti: %d)"
                 }
               },
               "other" : {
                 "stringUnit" : {
                   "state" : "translated",
-                  "value" : "%d file di testo ripristinati (%d aggiunti, %d sovrascritti)"
+                  "value" : "%d file di testo ripristinati (aggiunti: %d, sovrascritti: %d)"
                 }
               }
             }
@@ -27372,7 +27372,7 @@
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Riassociato: ancora “%1$@” (%2$@ punti); niente di meglio trovato"
+            "value" : "Riassociato: ancora “%1$@” (%2$@ punti); non è stato trovato nulla di meglio"
           }
         },
         "ja" : {
@@ -30696,7 +30696,7 @@
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "A capo"
+            "value" : "Suddivisione righe"
           }
         },
         "ja" : {
@@ -34209,7 +34209,7 @@
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Testo giapponese con pronuncia; preferito a parità di altri risultati"
+            "value" : "Testo giapponese con pronuncia; preferito tra risultati di pari livello"
           }
         },
         "ja" : {
@@ -34563,7 +34563,7 @@
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "La durata non corrisponde, ma altre fonti finiscono nello stesso momento, quindi è considerata attendibile"
+            "value" : "La durata non corrisponde, ma altre fonti finiscono nello stesso momento, quindi il risultato è considerato attendibile"
           }
         },
         "ja" : {
@@ -37480,7 +37480,7 @@
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Non aperto"
+            "value" : "Non attivo"
           }
         },
         "ja" : {
@@ -39976,7 +39976,7 @@
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Dimensione %@ pt"
+            "value" : "Corpo %@ pt"
           }
         },
         "ja" : {
@@ -50961,7 +50961,7 @@
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Impossibile analizzare il file dei dati locali"
+            "value" : "Impossibile analizzare il file dei record locali"
           }
         },
         "ja" : {
@@ -52941,7 +52941,7 @@
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Impossibile leggere il file dei dati locali"
+            "value" : "Impossibile leggere il file dei record locali"
           }
         },
         "ja" : {
@@ -53997,7 +53997,7 @@
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Aperto"
+            "value" : "Attivo"
           }
         },
         "ja" : {
@@ -55680,7 +55680,7 @@
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Nessuna fonte ha dato risultati in questo tentativo"
+            "value" : "Nessuna fonte ha dato risultati in questo giro"
           }
         },
         "ja" : {
@@ -60602,7 +60602,7 @@
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Tieni premuto o fai clic secondario per le impostazioni"
+            "value" : "Tieni premuto o fai clic con il tasto destro per le impostazioni"
           }
         },
         "ja" : {
@@ -62077,7 +62077,7 @@
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Prima risoluzione"
+            "value" : "Prima ricerca"
           }
         },
         "ja" : {
@@ -62195,7 +62195,7 @@
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Testo nero con contorno"
+            "value" : "Nero con contorno"
           }
         },
         "ja" : {
@@ -66731,7 +66731,7 @@
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Continuando, confermi di aver letto"
+            "value" : "Continuando, confermi di aver letto:"
           }
         },
         "ja" : {
@@ -67974,7 +67974,7 @@
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Testa tutte"
+            "value" : "Prova tutte"
           }
         },
         "ja" : {
@@ -72440,7 +72440,7 @@
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Fissa: tutti i brani usano la larghezza impostata\nAdattiva: ogni brano ha una larghezza in base al suo testo, fino a quella impostata"
+            "value" : "Fisso: tutti i brani usano la larghezza impostata\nAdattivo: ogni brano ha una larghezza in base al suo testo, fino a quella impostata"
           }
         },
         "ja" : {
@@ -99272,7 +99272,7 @@
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Nascosto fino a %@"
+            "value" : "Nascosto fino alle %@"
           }
         },
         "ja" : {
@@ -100098,7 +100098,7 @@
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Anteprima · Nascosto fino a %@"
+            "value" : "Anteprima · Nascosto fino alle %@"
           }
         },
         "ja" : {
@@ -100275,7 +100275,7 @@
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Anteprima · Nessuna riproduzione, mostro un esempio"
+            "value" : "Anteprima · Nessuna riproduzione, ecco un esempio"
           }
         },
         "ja" : {
@@ -104243,7 +104243,7 @@
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Nessuna fonte dei testi ha risposto durante l’ultima ricerca, forse perché la rete non era disponibile; non significa che il brano non abbia un testo. Verrà ritentato automaticamente, oppure puoi riassociare ora"
+            "value" : "Nessuna fonte dei testi ha risposto durante l’ultima ricerca, forse perché la rete non era disponibile; non significa che il brano non abbia un testo. Verrà fatto un nuovo tentativo automatico, oppure puoi riassociare ora"
           }
         },
         "ja" : {
@@ -106617,7 +106617,7 @@
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Evidenzia la riga corrente e la mantiene visibile; se scorri a mano si sospende, fai di nuovo clic per riprenderlo"
+            "value" : "Evidenzia la riga corrente e la mantiene visibile; se scorri a mano si sospende, fai di nuovo clic per riprendere"
           }
         },
         "ja" : {
@@ -111559,7 +111559,7 @@
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "In dimensione Mini, si nasconde quando un’app è a tutto schermo sul suo schermo"
+            "value" : "In dimensione Mini, si nasconde quando un’app è a tutto schermo sul suo monitor"
           }
         },
         "ja" : {
@@ -115059,7 +115059,7 @@
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Toccalo per passare a posizione di riproduzione, calibrazione del testo, preferiti, casuale/ripeti e volume. Le voci non supportate dal player attuale sono nascoste"
+            "value" : "Toccalo per passare a posizione di riproduzione, calibrazione del testo, Preferito, Casuale/Ripeti e volume. Le voci non supportate dal player attuale sono nascoste"
           }
         },
         "ja" : {
@@ -134333,7 +134333,7 @@
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "%1$@ non riuscito · %2$@"
+            "value" : "Non riuscito %1$@ · %2$@"
           }
         },
         "ja" : {
@@ -135817,7 +135817,7 @@
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Se impostato, ogni richiesta include X-Lyrimuse-Signature: sha256=… (un HMAC-SHA256 del corpo con questo segreto), così il destinatario può verificarne la provenienza"
+            "value" : "Se impostata, ogni richiesta include X-Lyrimuse-Signature: sha256=… (un HMAC-SHA256 del corpo calcolato con questa chiave), così il destinatario può verificarne la provenienza"
           }
         },
         "ja" : {
@@ -135923,7 +135923,7 @@
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Segreto o URL errati"
+            "value" : "Chiave o URL errati"
           }
         },
         "ja" : {
@@ -136665,7 +136665,7 @@
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Se il bot usa “Parole chiave personalizzate”, aggiungi la parola chiave “%@”. Se usa “Firma”, inserisci il segreto in “Segreto di firma”"
+            "value" : "Se il bot usa “Parole chiave personalizzate”, aggiungi la parola chiave “%@”. Se usa “Firma”, inserisci la chiave in “Chiave di firma”"
           }
         },
         "ja" : {
@@ -136718,7 +136718,7 @@
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Controlla che “Segreto di firma” corrisponda alle impostazioni del bot. Se la verifica con firma è disattivata, svuota questo campo"
+            "value" : "Controlla che “Chiave di firma” corrisponda alle impostazioni del bot. Se la verifica della firma è disattivata, svuota questo campo"
           }
         },
         "ja" : {
@@ -143338,7 +143338,7 @@
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Se attivo, tutti i report di ascolto vengono inviati qui; puoi regolarli per report in “Report di ascolto”"
+            "value" : "Se attivo, tutti i report di ascolto vengono inviati qui; puoi regolarli report per report in “Report di ascolto”"
           }
         },
         "ja" : {
@@ -143868,7 +143868,7 @@
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Se disattivata, appare solo quando i controlli di riproduzione si mostrano al passaggio del mouse"
+            "value" : "Se disattivata, appare solo quando compaiono i controlli di riproduzione al passaggio del mouse"
           }
         },
         "ja" : {
@@ -144865,7 +144865,7 @@
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Dopo le modifiche non resta alcun testo, quindi non è stato salvato. Le modifiche restano nell’editor"
+            "value" : "Dopo le modifiche non resta alcun testo, quindi non è stato salvato nulla. Le modifiche restano nell’editor"
           }
         },
         "ja" : {
@@ -156547,7 +156547,7 @@
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "La traduzione segue l’originale sulla stessa riga e “Corpo” resta valida"
+            "value" : "La traduzione segue l’originale sulla stessa riga e “Corpo” si applica comunque"
           }
         },
         "ja" : {
@@ -158022,7 +158022,7 @@
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Consegnato (%.1f s). Nessun dato di ascolto ancora, quindi è stato inviato un report di esempio"
+            "value" : "Consegnato (%.1f s). Dati di ascolto non disponibili, quindi è stato inviato un report di esempio"
           }
         },
         "ja" : {
@@ -161151,7 +161151,7 @@
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Il file è troppo grande da importare"
+            "value" : "Il file è troppo grande per essere importato"
           }
         },
         "ja" : {
@@ -161978,7 +161978,7 @@
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "La libreria testi è stata salvata automaticamente prima dell’importazione. Puoi ripristinarla dal menu ⋯ in Gestione testi"
+            "value" : "Prima dell’importazione è stato eseguito un backup automatico della libreria testi. Puoi ripristinarlo dal menu ⋯ in Gestione testi"
           }
         },
         "ja" : {
@@ -165346,7 +165346,7 @@
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Verrà eliminato al prossimo avvio del motore dei testi"
+            "value" : "Verranno eliminate al prossimo avvio del motore dei testi"
           }
         },
         "ja" : {

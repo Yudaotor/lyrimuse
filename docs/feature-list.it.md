@@ -1110,7 +1110,7 @@ Tutte le impostazioni della finestra Impostazioni, per posizione: 309 in tutto. 
 
 - **Posizione**: Al centro: il testo appare al centro della barra dei menu, lontano dai menu delle app, dalle icone a destra e dal notch
 - **Mostra su**
-- **Modalità larghezza**: Fissa: tutti i brani usano la larghezza impostata Adattiva: ogni brano ha una larghezza in base al suo testo, fino a quella impostata
+- **Modalità larghezza**: Fisso: tutti i brani usano la larghezza impostata Adattivo: ogni brano ha una larghezza in base al suo testo, fino a quella impostata
 - **Allineamento**
 
 ### Visualizzazione testo › Barra dei menu › Colore
@@ -1152,7 +1152,7 @@ Tutte le impostazioni della finestra Impostazioni, per posizione: 309 in tutto. 
 - **Posizione illustrazione**
 - **Mostra controlli**: Precedente, Riproduci/Pausa e Successivo, più un pulsante impostazioni
 - **Posizione controlli**
-- **Mostra pulsante “Altro”**: Toccalo per passare a posizione di riproduzione, calibrazione del testo, preferiti, casuale/ripeti e volume. Le voci non supportate dal player attuale sono nascoste
+- **Mostra pulsante “Altro”**: Toccalo per passare a posizione di riproduzione, calibrazione del testo, Preferito, Casuale/Ripeti e volume. Le voci non supportate dal player attuale sono nascoste
 - **Nascondi Control Strip se espanso**: Il testo occupa tutta la Touch Bar. Per raggiungere luminosità, volume e altri pulsanti di sistema, tocca prima ✕ a sinistra per chiudere il testo
 - **Control Strip**: Aggiungi, rimuovi o riordina i pulsanti di luminosità, volume e gli altri pulsanti di sistema a destra della Touch Bar in Impostazioni di Sistema › Tastiera › Impostazioni Touch Bar…
 
@@ -1216,7 +1216,7 @@ Tutte le impostazioni della finestra Impostazioni, per posizione: 309 in tutto. 
 
 - **Effetto karaoke**
 - **Colore testo**: Colore del testo della finestra testo. “Auto” passa da chiaro a scuro in base alla luminosità dello sfondo
-- **Personalizzato**
+- **Colore personalizzato**
 - **Colore cantato**
 - **Evidenziazione HDR** (solo Completa): Illumina la parte cantata sugli schermi HDR. Consuma più energia se attiva
 
@@ -1224,7 +1224,7 @@ Tutte le impostazioni della finestra Impostazioni, per posizione: 309 in tutto. 
 
 - **Pronuncia**
 - **Traduzione**
-- **Barra di avanzamento** (solo Mini): Se disattivata, appare solo quando i controlli di riproduzione si mostrano al passaggio del mouse
+- **Barra di avanzamento** (solo Mini): Se disattivata, appare solo quando compaiono i controlli di riproduzione al passaggio del mouse
 
 ### Visualizzazione testo › Finestra testo › Intestazione
 

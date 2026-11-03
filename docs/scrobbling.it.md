@@ -100,7 +100,7 @@ Per questo *Smart* cerca il brano prima di inviarlo:
 2. Altrimenti i candidati vengono raccolti da **esattamente tre fonti**: come riportato, il primo artista accreditato e le voci di quell’artista il cui titolo normalizzato dà la stessa chiave (`artist.getTopTracks`, già ordinato per ascoltatori).
 3. Tra i candidati che Last.fm ha davvero in catalogo (un MBID, oppure ≥ 500 ascoltatori, oppure una durata in catalogo; una voce fantasma non ha nessuna delle tre cose), vince quello più ascoltato, se ne verifica la durata, e vengono inviati il suo artista e il suo brano: si decide una volta e si mantiene per sempre. Se nessun candidato è idoneo, il brano viene inviato come riportato e ricontrollato dopo 90 giorni.
 
-Di proposito **non** usa `track.search`: cerca la stringa letterale, che non trova la voce in cinese tradizionale né esclude i risultati con lo stesso titolo ma di un altro brano, come `张泽熙 / 那个女孩`. La normalizzazione del titolo unifica solo le differenze di grafia di una stessa registrazione: cinese tradizionale e semplificato, varianti dei caratteri, segni diacritici, crediti degli ospiti (`(feat. X)`) e indicazioni di riedizione (`(Remastered 2014)`, `(Bonus Track)`). **Le indicazioni Live, Remix, acustico e strumentale vengono sempre mantenute**: sono registrazioni diverse. Il candidato vincente deve anche superare un controllo della durata (viene scartato se entrambe le parti conoscono una durata e differiscono di più di 8 secondi).
+Di proposito **non** usa `track.search`: cerca la stringa letterale, quindi non trova la voce in cinese tradizionale né esclude i risultati con lo stesso titolo ma di un altro brano, come `张泽熙 / 那个女孩`. La normalizzazione del titolo unifica solo le differenze di grafia di una stessa registrazione: cinese tradizionale e semplificato, varianti dei caratteri, segni diacritici, crediti degli ospiti (`(feat. X)`) e indicazioni di riedizione (`(Remastered 2014)`, `(Bonus Track)`). **Le indicazioni Live, Remix, acustico e strumentale vengono sempre mantenute**: sono registrazioni diverse. Il candidato vincente deve anche superare un controllo della durata (viene scartato se entrambe le parti conoscono una durata e le due durate differiscono di più di 8 secondi).
 
 Misurato su 240 brani reali: 33 riscritti, 162 inviati così com’erano, 45 indecidibili. Esempi:
 
@@ -117,7 +117,7 @@ Le chiavi legacy vengono ancora lette ma non più scritte, e migrano senza cambi
 
 ## 5. Se uno scrobble non riesce
 
-Gli errori vengono classificati, perché la risposta corretta è diversa. Qui sotto “annotarlo” significa che l’ascolto viene scritto in un registro locale, che un **recupero** (avviato a mano con **Recupera** accanto al conteggio “ascolti da inviare” sotto i tuoi ascolti recenti) può inviare in seguito.
+Gli errori vengono classificati, perché la risposta corretta cambia da caso a caso. Qui sotto “annotarlo” significa che l’ascolto viene scritto in un registro locale, che un **recupero** (avviato a mano con **Recupera** accanto al conteggio “ascolti da inviare” sotto i tuoi ascolti recenti) può inviare in seguito.
 
 | Cosa è successo | Cosa facciamo |
 |---|---|
