@@ -1323,6 +1323,7 @@
 "悬浮歌词" = "Schwebender Text";
 "悬浮歌词、灵动岛、菜单栏和触控栏可同时开，歌词窗口按需打开" = "Schwebender Text, Notch, Menüleiste und Touch Bar können gleichzeitig laufen; öffne das Liedtextfenster bei Bedarf";
 "悬浮歌词宽度" = "Breite des schwebenden Texts";
+"悬浮歌词开着时才显示" = "Nur sichtbar, wenn der schwebende Text an ist";
 "成立时间" = "Gegründet";
 "我已完成授权，继续" = "Autorisierung erteilt";
 "我的主题" = "Meine Designs";
@@ -1480,6 +1481,7 @@
 "播放器原始写法：%@" = "Vom Player gemeldet: %@";
 "播放器或曲库提供的标识符可信度最高；按曲名检索得到的结果可能有误，仅供参考" = "Kennungen von Playern oder Musikdatenbanken sind am zuverlässigsten; per Titelsuche gefundene Ergebnisse können falsch sein und dienen nur als Referenz";
 "播放器支持「喜欢」时才显示" = "Nur sichtbar, wenn der Player Favoriten unterstützt";
+"播放器支持随机和循环时才显示" = "Nur sichtbar, wenn der Player Zufall und Wiederholen unterstützt";
 "播放器未提供歌手，按歌名和时长推断" = "Der Player liefert keinen Künstler; aus Titel und Dauer abgeleitet";
 "播放器联动" = "Starten & Beenden";
 "播放器自带歌词" = "Liedtexte des Players";
@@ -2254,6 +2256,7 @@
 "稍粗" = "Mittel";
 "空格子" = "Leeres Feld";
 "窗口" = "Fenster";
+"窗口与显示" = "Fenster und Anzeige";
 "立即刷新" = "Jetzt aktualisieren";
 "立即更新" = "Jetzt aktualisieren";
 "立即联网自动匹配缺失的歌词，无需等待歌曲再次播放" = "Fehlende Liedtexte jetzt online zuordnen, statt zu warten, bis jeder Titel erneut läuft";

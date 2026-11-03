@@ -1323,6 +1323,7 @@
 "悬浮歌词" = "Floating Lyrics";
 "悬浮歌词、灵动岛、菜单栏和触控栏可同时开，歌词窗口按需打开" = "Floating Lyrics, Notch, Menu Bar and Touch Bar can run together; open the Lyrics Window when needed";
 "悬浮歌词宽度" = "Floating Lyrics Width";
+"悬浮歌词开着时才显示" = "Shown only while floating lyrics are on";
 "成立时间" = "Formed";
 "我已完成授权，继续" = "I’ve Authorized";
 "我的主题" = "My Themes";
@@ -1480,6 +1481,7 @@
 "播放器原始写法：%@" = "As reported by the player: %@";
 "播放器或曲库提供的标识符可信度最高；按曲名检索得到的结果可能有误，仅供参考" = "Identifiers provided by players or music databases are the most reliable; results found by title search may be wrong and are for reference only";
 "播放器支持「喜欢」时才显示" = "Shown only when the player supports favorites";
+"播放器支持随机和循环时才显示" = "Shown only when the player supports shuffle and repeat";
 "播放器未提供歌手，按歌名和时长推断" = "The player didn’t provide an artist; inferred from the title and duration";
 "播放器联动" = "Launch & Quit";
 "播放器自带歌词" = "Player’s Own Lyrics";
@@ -2254,6 +2256,7 @@
 "稍粗" = "Medium";
 "空格子" = "Empty slot";
 "窗口" = "Window";
+"窗口与显示" = "Windows & Display";
 "立即刷新" = "Refresh now";
 "立即更新" = "Update Now";
 "立即联网自动匹配缺失的歌词，无需等待歌曲再次播放" = "Auto-match missing lyrics online now instead of waiting for each song to play again";

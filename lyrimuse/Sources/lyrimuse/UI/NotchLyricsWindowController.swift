@@ -178,6 +178,9 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
     @Published private(set) var quickSlots: NotchQuickSlots = AppSettings.shared.notchQuickSlots
     /// 桌面悬浮歌词开着没有:快捷操作里那颗「悬浮歌词」键的点亮状态。
     @Published private(set) var classicOverlayOn: Bool = AppSettings.shared.classicOverlayEnabled
+    /// 菜单栏歌词开着没有、悬浮歌词锁着没有:快捷操作那两颗键的点亮状态。
+    @Published private(set) var menuBarLyricsOn: Bool = AppSettings.shared.showLyricsInMenuBar
+    @Published private(set) var overlayLocked: Bool = AppSettings.shared.lockPosition
     /// 展开时多行歌词那一格的高度(关着「多行歌词」为 0),由三项设置合成(`AppSettings.notchExpandedLyricListHeight`)。
     /// 窗口高度跟着它:订阅里先写镜像、再重算几何,`recomputeGeometry` 读镜像(同 `lyricRowHeight`)。
     @Published private(set) var expandedLyricListHeight: CGFloat = AppSettings.shared.notchExpandedLyricListHeight
@@ -660,6 +663,14 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
         .store(in: &subscriptions)
         AppSettings.shared.$classicOverlayEnabled.removeDuplicates().sink { [weak self] on in
             self?.classicOverlayOn = on
+        }
+        .store(in: &subscriptions)
+        AppSettings.shared.$showLyricsInMenuBar.removeDuplicates().sink { [weak self] on in
+            self?.menuBarLyricsOn = on
+        }
+        .store(in: &subscriptions)
+        AppSettings.shared.$lockPosition.removeDuplicates().sink { [weak self] on in
+            self?.overlayLocked = on
         }
         .store(in: &subscriptions)
         // 歌词行高度:设定值、字号、副行三项合成实际高度(设定值夹到装得下当前文字为止)。窗口高度跟着它,

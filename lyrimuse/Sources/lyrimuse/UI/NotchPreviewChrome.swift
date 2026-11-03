@@ -95,6 +95,8 @@ final class NotchPreviewChrome: ObservableObject, NotchChromeSource {
     var expandedShowsQuickActions: Bool { AppSettings.shared.notchExpandedShowsQuickActions }
     var quickSlots: NotchQuickSlots { AppSettings.shared.notchQuickSlots }
     var classicOverlayOn: Bool { AppSettings.shared.classicOverlayEnabled }
+    var menuBarLyricsOn: Bool { AppSettings.shared.showLyricsInMenuBar }
+    var overlayLocked: Bool { AppSettings.shared.lockPosition }
     var expandedLyricListHeight: CGFloat { AppSettings.shared.notchExpandedLyricListHeight }
 
     init() {

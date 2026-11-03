@@ -188,6 +188,9 @@ protocol NotchChromeSource: ObservableObject {
     var quickSlots: NotchQuickSlots { get }
     /// 桌面悬浮歌词开着没有(快捷操作「悬浮歌词」键的点亮)。
     var classicOverlayOn: Bool { get }
+    /// 菜单栏歌词开着没有、悬浮歌词锁着没有(快捷操作那两颗键的点亮)。
+    var menuBarLyricsOn: Bool { get }
+    var overlayLocked: Bool { get }
     /// 展开时多行歌词那一格的高度(`AppSettings.notchExpandedLyricListHeight`),关着「多行歌词」时为 0。
     /// 决定展开区高度,走"镜像 + 重算几何"那条链路(同 `lyricRowHeight`)。
     var expandedLyricListHeight: CGFloat { get }

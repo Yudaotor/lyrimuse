@@ -1,7 +1,7 @@
 import Foundation
 
 /// 灵动岛展开卡头部右侧快捷操作里能放的东西:一颗键或一条分隔线。放在哪一格由 `NotchQuickSlots` 管,
-/// 画法和动作在 App 侧 `NotchLyricsView.trackInfoQuickActions`。见 05 章决策 130、131、132。
+/// 画法和动作在 App 侧 `NotchLyricsView.trackInfoQuickActions`。见 05 章决策 130～133。
 public enum NotchQuickAction: String, CaseIterable, Codable, Sendable {
     case favorite
     case searchLyrics = "search-lyrics"
@@ -14,16 +14,44 @@ public enum NotchQuickAction: String, CaseIterable, Codable, Sendable {
     case lastfm
     case settings
     case close
+    case previous
+    case playPause = "play-pause"
+    case next
+    case shuffle
+    case repeatMode = "repeat"
+    case lyricsAdvance = "lyrics-advance"
+    case lyricsDelay = "lyrics-delay"
+    case lyricsOffsetReset = "lyrics-offset-reset"
+    case menuBarLyrics = "menubar-lyrics"
+    case hideAllLyrics = "hide-all-lyrics"
+    case lockOverlay = "lock-overlay"
     /// 分组竖线,占一整格,可以放不止一条。
     case divider
 
     public var isDivider: Bool { self == .divider }
 
-    /// 设置里「可添加」那一栏的顺序。
+    /// 设置里「可添加」那一栏分几组。
+    public enum PaletteGroup: CaseIterable, Sendable {
+        case playback, lyrics, surfaces, other
+    }
+
+    /// 设置里「可添加」那一栏的顺序(组内按这个排)。
     public static let paletteOrder: [NotchQuickAction] = [
-        .favorite, .searchLyrics, .toggleLyrics, .lyricsWindow, .lyricsManager, .shareLyrics,
-        .toggleOverlay, .openPlayer, .lastfm, .settings, .close, .divider,
+        .previous, .playPause, .next, .shuffle, .repeatMode, .favorite,
+        .searchLyrics, .toggleLyrics, .lyricsAdvance, .lyricsDelay, .lyricsOffsetReset,
+        .lyricsWindow, .lyricsManager, .shareLyrics, .toggleOverlay, .lockOverlay, .menuBarLyrics, .hideAllLyrics, .openPlayer,
+        .lastfm, .settings, .close, .divider,
     ]
+
+    public var paletteGroup: PaletteGroup {
+        switch self {
+        case .previous, .playPause, .next, .shuffle, .repeatMode, .favorite: return .playback
+        case .searchLyrics, .toggleLyrics, .lyricsAdvance, .lyricsDelay, .lyricsOffsetReset: return .lyrics
+        case .lyricsWindow, .lyricsManager, .shareLyrics, .toggleOverlay, .lockOverlay, .menuBarLyrics, .hideAllLyrics, .openPlayer:
+            return .surfaces
+        case .lastfm, .settings, .close, .divider: return .other
+        }
+    }
 
     /// 一格的宽(同 `NotchExpandedMetrics.trackInfoActionsHeight` 的命中尺寸)、格与格之间的间距。
     /// App 侧画法用的是同一组数,两处要一起改。

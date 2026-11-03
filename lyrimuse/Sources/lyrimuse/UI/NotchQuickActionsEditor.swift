@@ -17,6 +17,17 @@ extension NotchQuickAction {
         case .lastfm: return "chart.bar.fill"
         case .settings: return "gearshape.fill"
         case .close: return "xmark"
+        case .previous: return "backward.fill"
+        case .playPause: return "playpause.fill"
+        case .next: return "forward.fill"
+        case .shuffle: return "shuffle"
+        case .repeatMode: return "repeat"
+        case .lyricsAdvance: return LyrimuseAction.lyricsAdvanceHotkey.iconName
+        case .lyricsDelay: return LyrimuseAction.lyricsDelayHotkey.iconName
+        case .lyricsOffsetReset: return LyrimuseAction.lyricsOffsetResetHotkey.iconName
+        case .menuBarLyrics: return LyrimuseAction.toggleMenuBarLyricsHotkey.iconName
+        case .hideAllLyrics: return LyrimuseAction.toggleAllLyricsHotkey.iconName
+        case .lockOverlay: return "lock"
         case .divider: return "poweron"
         }
     }
@@ -35,7 +46,28 @@ extension NotchQuickAction {
         case .lastfm: return "Last.fm"
         case .settings: return L10n.t("设置")
         case .close: return L10n.t("关闭灵动岛歌词")
+        case .previous: return L10n.t("上一首")
+        case .playPause: return L10n.t("播放/暂停")
+        case .next: return L10n.t("下一首")
+        case .shuffle: return L10n.t("随机播放")
+        case .repeatMode: return L10n.t("循环播放")
+        case .lyricsAdvance: return L10n.t("歌词提前")
+        case .lyricsDelay: return L10n.t("歌词延后")
+        case .lyricsOffsetReset: return L10n.t("歌词偏移归零")
+        case .menuBarLyrics: return L10n.t("菜单栏歌词")
+        case .hideAllLyrics: return L10n.t("隐藏/恢复全部歌词")
+        case .lockOverlay: return L10n.t("锁定位置")
         case .divider: return L10n.t("分隔线")
+        }
+    }
+
+    /// 「可添加」里这一组的标题。
+    static func paletteGroupTitle(_ group: PaletteGroup) -> String {
+        switch group {
+        case .playback: return L10n.t("播放控制")
+        case .lyrics: return L10n.t("歌词")
+        case .surfaces: return L10n.t("窗口与显示")
+        case .other: return L10n.t("其他")
         }
     }
 
@@ -44,6 +76,8 @@ extension NotchQuickAction {
         switch self {
         case .favorite: return L10n.t("播放器支持「喜欢」时才显示")
         case .lastfm: return L10n.t("连接 Last.fm 后才显示")
+        case .shuffle, .repeatMode: return L10n.t("播放器支持随机和循环时才显示")
+        case .lockOverlay: return L10n.t("悬浮歌词开着时才显示")
         default: return nil
         }
     }
@@ -228,29 +262,20 @@ struct NotchQuickActionsEditor: View {
             Text(L10n.t("可添加"))
                 .font(.system(size: 11, weight: .semibold))
                 .foregroundStyle(.secondary)
-            WrapLayout(horizontalSpacing: 6, verticalSpacing: 6, rowAlignment: .leading) {
-                // 不用 Button:按钮的点按会抢掉拖动手势,点一下和拖出去要同时成立。
-                ForEach(addable, id: \.self) { action in
-                    HStack(spacing: 4) {
-                        Image(systemName: action.isDivider ? "minus" : action.symbolName)
-                            .font(.system(size: 10, weight: .medium))
-                            .rotationEffect(action.isDivider ? .degrees(90) : .zero)
-                        Text(action.displayName).font(.system(size: 11))
-                    }
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 4)
-                    .background(Capsule().fill(Color.primary.opacity(0.07)))
-                    .contentShape(Capsule())
-                    .onTapGesture {
-                        withAnimation(.easeOut(duration: 0.18)) {
-                            settings.notchQuickSlots = slots.addingToFirstEmpty(action, visibleSlots: visibleSlots)
+            VStack(alignment: .leading, spacing: 8) {
+                ForEach(NotchQuickAction.PaletteGroup.allCases, id: \.self) { group in
+                    let items = addable.filter { $0.paletteGroup == group }
+                    if !items.isEmpty {
+                        HStack(alignment: .firstTextBaseline, spacing: 8) {
+                            Text(NotchQuickAction.paletteGroupTitle(group))
+                                .font(.system(size: 10))
+                                .foregroundStyle(.tertiary)
+                                .frame(width: 64, alignment: .leading)
+                            WrapLayout(horizontalSpacing: 6, verticalSpacing: 6, rowAlignment: .leading) {
+                                ForEach(items, id: \.self) { action in paletteChip(action) }
+                            }
                         }
                     }
-                    .help(action.conditionNote ?? action.displayName)
-                    .modifier(SlotDragSource(payload: "palette:\(action.rawValue)"))
-                    .accessibilityElement(children: .ignore)
-                    .accessibilityLabel(action.displayName)
-                    .accessibilityAddTraits(.isButton)
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -263,6 +288,30 @@ struct NotchQuickActionsEditor: View {
                 settings.notchQuickSlots = slots.clearing(row: row, slot: index)
             }
         }
+    }
+
+    /// 「可添加」里的一颗。不用 Button:按钮的点按会抢掉拖动手势,点一下和拖出去要同时成立。
+    private func paletteChip(_ action: NotchQuickAction) -> some View {
+        HStack(spacing: 4) {
+            Image(systemName: action.isDivider ? "minus" : action.symbolName)
+                .font(.system(size: 10, weight: .medium))
+                .rotationEffect(action.isDivider ? .degrees(90) : .zero)
+            Text(action.displayName).font(.system(size: 11))
+        }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 4)
+        .background(Capsule().fill(Color.primary.opacity(0.07)))
+        .contentShape(Capsule())
+        .onTapGesture {
+            withAnimation(.easeOut(duration: 0.18)) {
+                settings.notchQuickSlots = slots.addingToFirstEmpty(action, visibleSlots: visibleSlots)
+            }
+        }
+        .help(action.conditionNote ?? action.displayName)
+        .modifier(SlotDragSource(payload: "palette:\(action.rawValue)"))
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(action.displayName)
+        .accessibilityAddTraits(.isButton)
     }
 }
 

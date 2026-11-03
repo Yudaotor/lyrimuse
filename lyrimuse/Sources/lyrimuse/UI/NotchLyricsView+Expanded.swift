@@ -219,11 +219,15 @@ extension NotchLyricsView {
     ///     歌词行),关着时字形压淡到四成、提示换成「显示歌词」。状态读 `controller.showsLyricsSetting`。
     ///   * 歌词窗口 / 歌词管理 / 分享歌词 / 切换到播放器 → 跟全局快捷键、菜单栏同一个入口(`AppActions`、`LyrimuseActionRunner`)。
     ///   * 悬浮歌词 → `LyrimuseActionRunner.perform(.toggleOverlay)`;开着时点亮,状态读 `controller.classicOverlayOn`。
+    ///   * 上一首 / 播放暂停 / 下一首 / 随机 / 循环:跟下面那排播放控制同一套(先查自动化权限);随机、循环只在
+    ///     `fullPlaybackMode` 有值(播放器此刻两样都能切)时画。
+    ///   * 歌词提前 / 延后 / 偏移归零、菜单栏歌词、隐藏 / 恢复全部歌词、锁定位置:走全局快捷键那条路(`LyrimuseActionRunner`),
+    ///     回声提示也一样;锁定位置只在悬浮歌词开着时画,菜单栏歌词开着、锁着时点亮。
     ///   * Last.fm 到 设置 › Last.fm 详情页(`openLastfmSettingsPage`)。只在 `LastfmStatsService.isConnected` 时画。
     ///   * 设置 → 直接翻到 设置 › 歌词显示 › 灵动岛。
     ///   * 关闭 → 关掉「灵动岛歌词」**总开关**(`closeFromQuickAction` → `setVisible(false)`),跟悬浮歌词那颗 ✕ 同一个意思。
     ///
-    /// 不套 `controlButton` 那层"先查 Apple Music 自动化权限"的守卫:这几个动作跟播放控制毫不相干。
+    /// 除了播放那几颗,别的不套"先查 Apple Music 自动化权限"的守卫:它们跟播放控制毫不相干。
     @ViewBuilder
     private var trackInfoQuickActions: some View {
         if controller.expandedShowsQuickActions {
@@ -242,6 +246,8 @@ extension NotchLyricsView {
                 case .favorite: return favorited != nil && !controller.isAdBreakNow
                 // `isConnected` 不是 @Published,随下一次 body 重算取值(同歌词窗口的统计元素)。
                 case .lastfm: return LastfmStatsService.shared.isConnected
+                case .shuffle, .repeatMode: return playback.fullPlaybackMode != nil
+                case .lockOverlay: return controller.classicOverlayOn
                 default: return true
                 }
             }
@@ -306,6 +312,58 @@ extension NotchLyricsView {
             quickActionButton(action.symbolName, label: L10n.t("设置…")) { openNotchSettingsPage() }
         case .close:
             quickActionButton(action.symbolName, label: L10n.t("关闭灵动岛歌词")) { controller.closeFromQuickAction() }
+        case .previous:
+            quickActionButton(action.symbolName, label: L10n.t("上一首")) { transport { MusicPlaybackController.previousTrack() } }
+        case .playPause:
+            quickActionButton(playback.isPlayingNow ? "pause.fill" : "play.fill", key: "play-pause", label: L10n.t("播放/暂停")) {
+                transport { PlaybackCoordinator.shared.userTogglePlayPause() }
+            }
+        case .next:
+            quickActionButton(action.symbolName, label: L10n.t("下一首")) { transport { MusicPlaybackController.nextTrack() } }
+        case .shuffle:
+            let mode = playback.fullPlaybackMode
+            quickActionButton(action.symbolName, label: L10n.t("随机播放"), lit: mode == .shuffle) {
+                guard let mode else { return }
+                PlaybackCoordinator.shared.setPlaybackMode(mode == .shuffle ? .list : .shuffle)
+            }
+        case .repeatMode:
+            let mode = playback.fullPlaybackMode
+            quickActionButton(mode == .repeatOne ? "repeat.1" : "repeat", key: "repeat",
+                              label: mode == .repeatOne ? L10n.t("单曲循环") : L10n.t("循环播放"),
+                              lit: mode == .repeatOne || mode == .repeatAll) {
+                guard let mode else { return }
+                PlaybackCoordinator.shared.setPlaybackMode(
+                    mode.nextRepeat(allowsRepeatOne: playback.playbackModeAllowsRepeatOne,
+                                    allowsRepeatAll: playback.playbackModeAllowsRepeatAll))
+            }
+        case .lyricsAdvance:
+            quickActionButton(action.symbolName, label: L10n.t("歌词提前")) { LyrimuseActionRunner.perform(.lyricsAdvanceHotkey) }
+        case .lyricsDelay:
+            quickActionButton(action.symbolName, label: L10n.t("歌词延后")) { LyrimuseActionRunner.perform(.lyricsDelayHotkey) }
+        case .lyricsOffsetReset:
+            quickActionButton(action.symbolName, label: L10n.t("歌词偏移归零")) { LyrimuseActionRunner.perform(.lyricsOffsetResetHotkey) }
+        case .menuBarLyrics:
+            quickActionButton(action.symbolName, label: L10n.t("显示/隐藏菜单栏歌词"), lit: controller.menuBarLyricsOn) {
+                LyrimuseActionRunner.perform(.toggleMenuBarLyricsHotkey)
+            }
+        case .hideAllLyrics:
+            quickActionButton(action.symbolName, label: L10n.t("隐藏/恢复全部歌词")) { LyrimuseActionRunner.perform(.toggleAllLyricsHotkey) }
+        case .lockOverlay:
+            quickActionButton(controller.overlayLocked ? "lock.fill" : "lock.open", key: "lock-overlay",
+                              label: L10n.t("锁定/解锁位置"), lit: controller.overlayLocked) {
+                LyrimuseActionRunner.perform(.toggleLockPosition)
+            }
+        }
+    }
+
+    /// 快捷操作里的播放键:跟下面那排播放控制一样先查自动化权限,不够就响一声。
+    private func transport(_ body: @escaping @MainActor () -> Void) {
+        Task {
+            guard await MusicAutomationPermission.checkForCurrentPlayerSafely(askIfNeeded: true) else {
+                NSSound.beep()
+                return
+            }
+            body()
         }
     }
 

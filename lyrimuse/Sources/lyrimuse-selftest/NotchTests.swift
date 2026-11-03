@@ -2404,6 +2404,23 @@ func runNotchTests() {
                     "快捷操作契约: 「展开时」浮层里快捷操作开关下面是格子编辑区")
         expectEqual(sourceHas(read("NotchSettingsRows.swift"), "settings.notchQuickSlots = .default"), true,
                     "快捷操作契约: 「展开时」恢复默认连格子一起恢复")
+        expectEqual(sourceHas(view, "case .shuffle, .repeatMode: return playback.fullPlaybackMode != nil"), true,
+                    "快捷操作契约: 随机、循环只在播放器此刻两样都能切时画")
+        expectEqual(sourceHas(view, "case .lockOverlay: return controller.classicOverlayOn"), true,
+                    "快捷操作契约: 锁定位置只在悬浮歌词开着时画")
+        expectEqual(sourceHas(view, "quickActionButton(action.symbolName, label: L10n.t(\"上一首\")) { transport { MusicPlaybackController.previousTrack() } }"), true,
+                    "快捷操作契约: 快捷操作里的播放键先查自动化权限")
+        expectEqual(sourceHas(controller, "AppSettings.shared.$showLyricsInMenuBar.removeDuplicates().sink { [weak self] on in\n            self?.menuBarLyricsOn = on")
+                    && sourceHas(controller, "AppSettings.shared.$lockPosition.removeDuplicates().sink { [weak self] on in\n            self?.overlayLocked = on"), true,
+                    "快捷操作契约: 菜单栏歌词、锁定位置的点亮状态跟着设置变")
+        do {
+            typealias Q = NotchQuickAction
+            expectEqual(Set(Q.paletteOrder), Set(Q.allCases), "可添加: 每一种都在候选栏里")
+            expectEqual(Q.paletteOrder.count, Q.allCases.count, "可添加: 候选栏里不重复")
+            let order = Q.PaletteGroup.allCases
+            let groups = Q.paletteOrder.map { order.firstIndex(of: $0.paletteGroup) ?? -1 }
+            expectEqual(groups, groups.sorted(), "可添加: 候选栏按组排,同一组挨在一起")
+        }
         do {
             typealias S = NotchQuickSlots
             typealias Q = NotchQuickAction
