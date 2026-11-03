@@ -78,6 +78,8 @@ public enum NotchExpandedMetrics {
     /// 的图标键用同一档。它参与头部高度的 `max`:四个曲目信息项全关、只开快捷操作时,头部退化成
     /// 一条 22pt 高、靠右的按钮行。
     public static let trackInfoActionsHeight: CGFloat = 22
+    /// 快捷操作排成两行时行与行之间的距离。
+    public static let trackInfoActionRowSpacing: CGFloat = 2
 
     /// 曲目信息头部要占多高 —— 四个开关(封面/歌名/歌手/专辑)现算,不查表。
     ///
@@ -92,8 +94,10 @@ public enum NotchExpandedMetrics {
     /// `showsActions`:头部右侧那排快捷操作按钮。跟封面一样是**并排**的第三块,
     /// 取 `max` 不取和 —— 三行文字(14+12+11+2 = 39)本来就比它(22)高,常见配置下开关它不改高度;
     /// 只有文字项全关(或只开一两行矮的)时它才是决定高度的那一块。
+    ///
+    /// `actionRows`:快捷操作排成几行(`NotchQuickAction.rowCount`),两行 = 22 + 2 + 22 = 46,比三行文字高,这时头部按它留。
     public static func trackInfoHeight(showsArtwork: Bool, showsTitle: Bool, showsArtist: Bool, showsAlbum: Bool,
-                                       showsActions: Bool = false) -> CGFloat {
+                                       showsActions: Bool = false, actionRows: Int = 1) -> CGFloat {
         var textHeight: CGFloat = 0
         var lineCount = 0
         if showsTitle { textHeight += trackInfoTitleLineHeight; lineCount += 1 }
@@ -101,7 +105,8 @@ public enum NotchExpandedMetrics {
         if showsAlbum { textHeight += trackInfoAlbumLineHeight; lineCount += 1 }
         if lineCount > 1 { textHeight += CGFloat(lineCount - 1) * trackInfoLineSpacing }
         let artworkHeight: CGFloat = showsArtwork ? trackInfoArtworkSide : 0
-        let actionsHeight: CGFloat = showsActions ? trackInfoActionsHeight : 0
+        let rows = CGFloat(max(1, actionRows))
+        let actionsHeight: CGFloat = showsActions ? rows * trackInfoActionsHeight + (rows - 1) * trackInfoActionRowSpacing : 0
         return max(artworkHeight, textHeight, actionsHeight)
     }
 

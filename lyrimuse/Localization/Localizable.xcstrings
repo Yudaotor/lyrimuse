@@ -202317,73 +202317,73 @@
         }
       }
     },
-    "最多 %d 个按钮" : {
+    "按现在的展开宽度，每行最多放 %d 个按钮" : {
       "extractionState" : "manual",
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Höchstens %d Tasten"
+            "value" : "Bei der aktuellen ausgeklappten Breite höchstens %d Tasten pro Zeile"
           }
         },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Up to %d buttons"
+            "value" : "At the current expanded width, up to %d buttons per row"
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Hasta %d botones"
+            "value" : "Con el ancho expandido actual, hasta %d botones por fila"
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Jusqu’à %d boutons"
+            "value" : "Avec la largeur déployée actuelle, jusqu’à %d boutons par ligne"
           }
         },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Fino a %d pulsanti"
+            "value" : "Con la larghezza espansa attuale, fino a %d pulsanti per riga"
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "ボタンは最大%d個"
+            "value" : "現在の展開時の幅では、1行にボタンを最大%d個"
           }
         },
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "버튼은 최대 %d개"
+            "value" : "현재 펼친 너비에서는 한 줄에 버튼을 최대 %d개"
           }
         },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Até %d botões"
+            "value" : "Com a largura expandida atual, até %d botões por linha"
           }
         },
         "vi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Tối đa %d nút"
+            "value" : "Với độ rộng mở rộng hiện tại, tối đa %d nút mỗi hàng"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "最多 %d 个按钮"
+            "value" : "按现在的展开宽度，每行最多放 %d 个按钮"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "最多 %d 個按鈕"
+            "value" : "依目前的展開寬度，每行最多放 %d 個按鈕"
           }
         }
       }
@@ -202526,6 +202526,219 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "右移"
+          }
+        }
+      }
+    },
+    "另起一行" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Neue Zeile"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "New Row"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nueva fila"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nouvelle ligne"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nuova riga"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "次の行へ"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "다음 줄로"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nova linha"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hàng mới"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "另起一行"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "另起一行"
+          }
+        }
+      }
+    },
+    "展开宽度不够，放不下" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Passt nicht in die ausgeklappte Breite"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Doesn’t fit at the expanded width"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No cabe con el ancho expandido"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ne tient pas dans la largeur déployée"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Non entra nella larghezza espansa"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "展開時の幅に収まりません"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "펼친 너비에 들어가지 않음"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Não cabe na largura expandida"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Không vừa độ rộng mở rộng"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "展开宽度不够，放不下"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "展開寬度不夠，放不下"
+          }
+        }
+      }
+    },
+    "灰色的放不下，加宽展开卡片或换到第二行" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Graue Tasten passen nicht. Verbreitere die ausgeklappte Karte oder verschiebe sie in die zweite Zeile"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Gray buttons don’t fit. Widen the expanded card or move them to the second row"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Los botones grises no caben. Ensancha la tarjeta expandida o pásalos a la segunda fila"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Les boutons gris ne tiennent pas. Élargissez la carte déployée ou placez-les sur la deuxième ligne"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "I pulsanti grigi non entrano. Allarga la scheda espansa o spostali nella seconda riga"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "グレーのボタンは収まりません。展開時の幅を広げるか2行目に移動してください"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "회색 버튼은 들어가지 않습니다. 펼친 너비를 넓히거나 둘째 줄로 옮기세요"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Os botões cinza não cabem. Alargue o cartão expandido ou mova-os para a segunda linha"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nút màu xám không vừa. Hãy mở rộng thẻ hoặc chuyển xuống hàng thứ hai"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "灰色的放不下，加宽展开卡片或换到第二行"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "灰色的放不下，加寬展開卡片或換到第二行"
           }
         }
       }

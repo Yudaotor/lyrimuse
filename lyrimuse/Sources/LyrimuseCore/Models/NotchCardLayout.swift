@@ -73,6 +73,8 @@ public struct NotchCardLayout: Equatable, Sendable {
     public var trackInfoShowsArtist: Bool
     public var trackInfoShowsAlbum: Bool
     public var expandedShowsQuickActions: Bool
+    /// 快捷操作排成几行(`NotchQuickAction.rowCount`),决定头部高度。
+    public var expandedQuickActionRows: Int
     /// 没有曲目时展开出来那块空闲面板的高度(`NotchExpandedMetrics.idlePanelHeight(showsLastTrack:showsQuote:)` 三档之一)。
     public var idlePanelHeight: CGFloat
 
@@ -83,6 +85,7 @@ public struct NotchCardLayout: Equatable, Sendable {
                 progressLineStyle: NotchProgressLineStyle, showsLyrics: Bool, trackHasLyricPreview: Bool, trackHasScrubber: Bool, expandedShowsNextLine: Bool,
                 expandedShowsControls: Bool, trackInfoShowsArtwork: Bool, trackInfoShowsTitle: Bool,
                 trackInfoShowsArtist: Bool, trackInfoShowsAlbum: Bool, expandedShowsQuickActions: Bool,
+                expandedQuickActionRows: Int = 1,
                 idlePanelHeight: CGFloat = NotchExpandedMetrics.idlePanelHeight(showsLastTrack: false, showsQuote: false)) {
         self.metrics = metrics
         self.isCollapsed = isCollapsed
@@ -110,6 +113,7 @@ public struct NotchCardLayout: Equatable, Sendable {
         self.trackInfoShowsArtist = trackInfoShowsArtist
         self.trackInfoShowsAlbum = trackInfoShowsAlbum
         self.expandedShowsQuickActions = expandedShowsQuickActions
+        self.expandedQuickActionRows = expandedQuickActionRows
         self.idlePanelHeight = idlePanelHeight
     }
 
@@ -175,7 +179,7 @@ public struct NotchCardLayout: Equatable, Sendable {
         return NotchExpandedMetrics.trackInfoHeight(
             showsArtwork: fields && trackInfoShowsArtwork, showsTitle: fields && trackInfoShowsTitle,
             showsArtist: fields && trackInfoShowsArtist, showsAlbum: fields && trackInfoShowsAlbum,
-            showsActions: expandedShowsQuickActions)
+            showsActions: expandedShowsQuickActions, actionRows: expandedQuickActionRows)
     }
 
     /// 展开头部的总高度:内容加上下各一份间距(头部画在歌词行之上,它自己的 frame 要含离下面歌词行的那一截);不画时 0。
@@ -193,7 +197,7 @@ public struct NotchCardLayout: Equatable, Sendable {
             trackInfoHeight: NotchExpandedMetrics.trackInfoHeight(
                 showsArtwork: trackInfoShowsArtwork, showsTitle: trackInfoShowsTitle,
                 showsArtist: trackInfoShowsArtist, showsAlbum: trackInfoShowsAlbum,
-                showsActions: expandedShowsQuickActions))
+                showsActions: expandedShowsQuickActions, actionRows: expandedQuickActionRows))
     }
 
     /// 顶行两侧此刻的内边距,规则见 `NotchWidthBounds.topRowPadding`。

@@ -710,6 +710,7 @@
 "另有 %@ 条记录过旧，Last.fm 不再接受" = "Còn %@ mục khác quá cũ, Last.fm không nhận nữa";
 "另有 %@ 首歌曲无源应答 · 全部自动匹配" = "%@ bài khác không có nguồn phản hồi · Tự động tìm tất cả";
 "另有 %d 个文件未能写入歌词文件夹，请检查写入权限和磁盘空间" = "Còn %d tệp không ghi được vào thư mục lời bài hát. Hãy kiểm tra quyền ghi và dung lượng ổ đĩa";
+"另起一行" = "Hàng mới";
 "只显示歌词" = "Chỉ lời";
 "只显示歌词源自带的读音" = "Chỉ hiện phát âm do nguồn lời cung cấp";
 "只有播放次数、时长和新听了几位歌手" = "Chỉ lượt phát, thời lượng nghe và số nghệ sĩ mới";
@@ -994,6 +995,7 @@
 "展开/收起触控栏歌词" = "Mở rộng/thu gọn lời trên Touch Bar";
 "展开圆角" = "Bo góc khi mở rộng";
 "展开宽度" = "Độ rộng khi mở rộng";
+"展开宽度不够，放不下" = "Không vừa độ rộng mở rộng";
 "展开时" = "Khi mở rộng";
 "展开时在曲目信息右侧显示喜欢、搜索歌词、设置等按钮" = "Khi mở rộng, hiện các nút như Ưa thích, Tìm lời bài hát, Cài đặt ở bên phải thông tin bài hát";
 "展开时在进度条上方显示下一句要唱的歌词" = "Khi mở rộng, hiện dòng lời sắp hát phía trên thanh tiến trình";
@@ -1339,6 +1341,7 @@
 "按收听最多的前 %1$@ 位歌手统计，占此期间收听量的 %2$@" = "Dựa trên %1$@ nghệ sĩ được nghe nhiều nhất, chiếm %2$@ lượt phát trong giai đoạn này";
 "按收听最多的前 %@ 位歌手统计" = "Dựa trên %@ nghệ sĩ được nghe nhiều nhất";
 "按歌名和歌手识别" = "Nhận diện theo tên bài và nghệ sĩ";
+"按现在的展开宽度，每行最多放 %d 个按钮" = "Với độ rộng mở rộng hiện tại, tối đa %d nút mỗi hàng";
 "按相关度" = "Theo độ liên quan";
 "按纯音乐处理：不显示歌词，也不自动搜索；原有歌词将保留，取消标记即可恢复" = "Xem là nhạc không lời: không hiện lời và không tự động tìm lời. Lời hiện có vẫn được giữ và sẽ hiện lại khi bỏ đánh dấu";
 "按翻唱者署名" = "Theo tên người hát lại";
@@ -1636,7 +1639,6 @@
 "最后一句的时间与曲长相差 25% 以上，可能是其他版本" = "Thời điểm câu cuối lệch với thời lượng bài hát hơn 25%, có thể là phiên bản khác";
 "最后一句的时间与曲长相差 25% 以上；仍可选用，但排在所有时长相符的候选之后" = "Thời điểm câu cuối lệch với thời lượng bài hát hơn 25%; vẫn có thể chọn, nhưng xếp sau mọi kết quả có thời lượng khớp";
 "最后一句的时间越接近曲长，得分越高，最高 300" = "Thời điểm câu cuối càng gần thời lượng bài hát, điểm càng cao, tối đa 300";
-"最多 %d 个按钮" = "Tối đa %d nút";
 "最多 32 个字" = "Tối đa 32 ký tự";
 "最大宽度" = "Độ rộng tối đa";
 "最常听的专辑" = "Album nghe nhiều nhất";
@@ -2084,6 +2086,7 @@
 "源自报曲长偏离吻合版本" = "Thời lượng của nguồn lệch với bản khớp";
 "滚动" = "Cuộn";
 "演唱：%@" = "Trình bày: %@";
+"灰色的放不下，加宽展开卡片或换到第二行" = "Nút màu xám không vừa. Hãy mở rộng thẻ hoặc chuyển xuống hàng thứ hai";
 "灵动岛" = "Notch";
 "灵动岛、菜单栏和触控栏歌词在播放时显示" = "Lời trên Notch, thanh menu và Touch Bar hiện khi đang phát";
 "灵动岛和菜单栏歌词在播放时显示" = "Lời trên Notch và thanh menu hiện khi đang phát";

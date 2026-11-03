@@ -2071,8 +2071,8 @@ final class AppSettings: ObservableObject {
         didSet { defaults.set(notchExpandedShowsQuickActions, forKey: Keys.notchExpandedShowsQuickActions) }
     }
 
-    /// 快捷操作那排放哪几颗、什么顺序(设置「展开时」浮层里排)。存 rawValue 数组,读回经 `NotchQuickAction.layout(fromStored:)`
-    /// 清洗;没存过是 `NotchQuickAction.defaultLayout`。不改卡片高度。
+    /// 快捷操作那排放哪几颗、什么顺序、在哪换行(设置「展开时」浮层里排)。存 rawValue 数组,读回经
+    /// `NotchQuickAction.layout(fromStored:)` 清洗;没存过是 `NotchQuickAction.defaultLayout`。排成两行时头部至少 46pt 高。
     @Published var notchQuickActions: [NotchQuickAction] {
         didSet { defaults.set(notchQuickActions.map(\.rawValue), forKey: Keys.notchQuickActions) }
     }

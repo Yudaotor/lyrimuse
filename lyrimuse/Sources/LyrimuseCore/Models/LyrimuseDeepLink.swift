@@ -147,6 +147,9 @@ public enum LyrimuseDeepLink: Equatable, Sendable {
         /// 灵动岛「风格」里的「背景」「展开背景」,跟设置页走同两个设置:`debug/notch-style?style=coverArt&expanded=solidBlack|same`
         /// (值是 `NotchCardStyle` 的 rawValue,`same` = 展开背景「同上」),至少带一个。认不认得这个值由 App 判。
         case notchStyle(style: String?, expanded: String?)
+        /// 灵动岛展开卡快捷操作的排法,跟「展开时」浮层的编辑区走同一个设置:`debug/notch-quick-actions?layout=favorite,row-break,close`
+        /// (逗号分隔的 `NotchQuickAction` rawValue,清洗规则同读设置;`default` = 恢复默认,空串 = 一颗都不放)。
+        case notchQuickActions(layout: String)
         /// 悬浮歌词的宽度(pt,按设置的区间夹取、量化)、「换句动画」和下一句字号占主句的比例(按设置的区间夹取),
         /// 跟设置页走同四个设置:`debug/overlay-layout?width=1270&line-change=0|1&next-line=0.7&overflow=wrap|scroll`,
         /// 至少带一个。
@@ -374,6 +377,9 @@ public enum LyrimuseDeepLink: Equatable, Sendable {
             let expanded = value("expanded").flatMap { $0.isEmpty ? nil : $0 }
             guard style != nil || expanded != nil else { return nil }
             self = .debug(.notchStyle(style: style, expanded: expanded))
+        case ("debug", "/notch-quick-actions"):
+            guard let layout = value("layout") else { return nil }
+            self = .debug(.notchQuickActions(layout: layout))
         case ("debug", "/word-format-switch"):
             guard let state = value("state"), !state.isEmpty else { return nil }
             let nonNegative = { (s: String?) in s.flatMap(Int.init).flatMap { $0 >= 0 ? $0 : nil } }
@@ -587,6 +593,9 @@ public enum LyrimuseDeepLink: Equatable, Sendable {
                 components.path = "/notch-style"
                 components.queryItems = (style.map { [URLQueryItem(name: "style", value: $0)] } ?? [])
                     + (expanded.map { [URLQueryItem(name: "expanded", value: $0)] } ?? [])
+            case let .notchQuickActions(layout):
+                components.path = "/notch-quick-actions"
+                components.queryItems = [URLQueryItem(name: "layout", value: layout)]
             case let .notchPassThrough(x, y):
                 components.path = "/notch-pass-through"
                 components.queryItems = [URLQueryItem(name: "x", value: String(x)), URLQueryItem(name: "y", value: String(y))]

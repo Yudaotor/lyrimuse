@@ -763,6 +763,7 @@
 "另有 %@ 首歌曲无源应答 · 全部自动匹配" = "%@ more songs had no source response · Auto-Match All";
 "另有 %@ 首歌曲无源应答 · 全部自动匹配#one" = "%@ more song had no source response · Auto-Match All";
 "另有 %d 个文件未能写入歌词文件夹，请检查写入权限和磁盘空间" = "%d more couldn’t be written to the lyrics folder. Check write access and disk space";
+"另起一行" = "New Row";
 "只显示歌词" = "Lyrics only";
 "只显示歌词源自带的读音" = "Shows only romanization supplied by the lyrics source";
 "只有播放次数、时长和新听了几位歌手" = "Just plays, listening time and how many new artists";
@@ -1054,6 +1055,7 @@
 "展开/收起触控栏歌词" = "Expand/Collapse Touch Bar Lyrics";
 "展开圆角" = "Expanded Corners";
 "展开宽度" = "Expanded Width";
+"展开宽度不够，放不下" = "Doesn’t fit at the expanded width";
 "展开时" = "Expanded";
 "展开时在曲目信息右侧显示喜欢、搜索歌词、设置等按钮" = "When expanded, shows buttons such as Favorite, Search Lyrics, and Settings to the right of the track info";
 "展开时在进度条上方显示下一句要唱的歌词" = "Shows the next lyric line above the progress bar when expanded";
@@ -1414,6 +1416,7 @@
 "按收听最多的前 %@ 位歌手统计" = "Based on your top %@ artists";
 "按收听最多的前 %@ 位歌手统计#one" = "Based on your top %@ artist";
 "按歌名和歌手识别" = "Matched by title and artist";
+"按现在的展开宽度，每行最多放 %d 个按钮" = "At the current expanded width, up to %d buttons per row";
 "按相关度" = "By Relevance";
 "按纯音乐处理：不显示歌词，也不自动搜索；原有歌词将保留，取消标记即可恢复" = "Treat as instrumental: lyrics are hidden and aren’t searched for automatically. Existing lyrics are kept and come back when you unmark it";
 "按翻唱者署名" = "Covering artist from the title";
@@ -1713,7 +1716,6 @@
 "最后一句的时间与曲长相差 25% 以上，可能是其他版本" = "The last line’s time differs from the track length by more than 25%; likely a different version";
 "最后一句的时间与曲长相差 25% 以上；仍可选用，但排在所有时长相符的候选之后" = "The last line’s time differs from the track length by more than 25%; still usable, but ranked below every candidate whose length matches";
 "最后一句的时间越接近曲长，得分越高，最高 300" = "The closer the last line’s time is to the track length, the higher the score — up to 300";
-"最多 %d 个按钮" = "Up to %d buttons";
 "最多 32 个字" = "Up to 32 characters";
 "最大宽度" = "Max Width";
 "最常听的专辑" = "Top album";
@@ -2167,6 +2169,7 @@
 "源自报曲长偏离吻合版本" = "Source duration off from matching version";
 "滚动" = "Scroll";
 "演唱：%@" = "by %@";
+"灰色的放不下，加宽展开卡片或换到第二行" = "Gray buttons don’t fit. Widen the expanded card or move them to the second row";
 "灵动岛" = "Notch";
 "灵动岛、菜单栏和触控栏歌词在播放时显示" = "Notch, menu bar and Touch Bar lyrics show up during playback";
 "灵动岛和菜单栏歌词在播放时显示" = "Notch and menu bar lyrics show up during playback";

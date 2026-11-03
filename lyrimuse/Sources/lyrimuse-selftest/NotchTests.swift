@@ -2388,10 +2388,14 @@ func runNotchTests() {
         expectEqual(sourceHas(view, "quickActionButton(favorited ? \"heart.fill\" : \"heart\", key: \"favorite\","), true,
                     "快捷操作契约: 喜欢键的气泡认固定的 key")
         expectEqual(NotchQuickAction.defaultLayout.first, .favorite, "快捷操作契约: 默认排法里喜欢键最左")
-        expectEqual(sourceHas(view, "let shown = NotchQuickAction.visible(controller.quickActions) { action in"), true,
-                    "快捷操作契约: 灵动岛按用户的排法画,经 visible 去掉不可用的键和多余的分隔线")
-        expectEqual(sourceHas(controller, "AppSettings.shared.$notchQuickActions.removeDuplicates().sink { [weak self] layout in\n            self?.quickActions = layout"), true,
-                    "快捷操作契约: 控制器镜像排法(改了设置当场换)")
+        expectEqual(sourceHas(view, "let shown = NotchQuickAction.visibleRows(controller.quickActions, capacity: capacity) { action in"), true,
+                    "快捷操作契约: 灵动岛按用户的排法分行画,经 visibleRows 去掉不可用的键、多余的分隔线和放不下的键")
+        expectEqual(sourceHas(view, "contentWidth: Double(controller.expandedCardWidth - 2 * NotchMetrics.expandedContentInset),"), true,
+                    "快捷操作契约: 每行能放多宽按展开卡的真实宽度算")
+        expectEqual(sourceHas(controller, "let rowsChanged = NotchQuickAction.rowCount(layout) != NotchQuickAction.rowCount(quickActions)\n            quickActions = layout\n            if rowsChanged { recomputeGeometry(animate: false) }"), true,
+                    "快捷操作契约: 控制器镜像排法,行数变了重算几何(两行头部更高)")
+        expectEqual(sourceHas(read("NotchChromeSource.swift"), "expandedQuickActionRows: NotchQuickAction.rowCount(quickActions)"), true,
+                    "快捷操作契约: 卡片布局按排法的行数留头部高度")
         expectEqual(sourceHas(read("../SettingsView.swift"), "NotchBehaviorToggleTile(item: .expandedShowsQuickActions)\n            }\n            NotchQuickActionsEditor()"), true,
                     "快捷操作契约: 「展开时」浮层里快捷操作开关下面是按钮编辑区")
         expectEqual(sourceHas(read("NotchSettingsRows.swift"), "settings.notchQuickActions = NotchQuickAction.defaultLayout"), true,
@@ -2402,22 +2406,59 @@ func runNotchTests() {
             expectEqual(Q.layout(fromStored: []), [], "按钮排法: 存的是空就是空(键都移掉了)")
             expectEqual(Q.layout(fromStored: ["close", "bogus", "close", "divider", "settings"]), [.close, .divider, .settings],
                         "按钮排法: 认不出的丢掉,重复的键只留第一个")
-            let many = Q.allCases.filter { !$0.isDivider }.map(\.rawValue) + Array(repeating: "divider", count: 5)
+            let many = Q.allCases.filter { !$0.isSeparator }.map(\.rawValue) + Array(repeating: "divider", count: 5)
+                + ["row-break", "row-break"]
             let capped = Q.layout(fromStored: many)
-            expectEqual([capped.filter { !$0.isDivider }.count, capped.filter(\.isDivider).count], [Q.maxButtons, Q.maxDividers],
-                        "按钮排法: 键和分隔线各按上限截")
+            expectEqual([capped.filter { !$0.isSeparator }.count, capped.filter(\.isDivider).count, capped.filter { $0 == .rowBreak }.count],
+                        [Q.allCases.count - 2, Q.maxDividers, 1], "按钮排法: 键不设上限,分隔线按上限截,换行只留一个")
             let all: (Q) -> Bool = { _ in true }
-            expectEqual(Q.visible([.divider, .searchLyrics, .divider, .divider, .close, .divider], available: all),
-                        [.searchLyrics, .divider, .close], "按钮排法: 头尾和挨着的分隔线不画")
-            expectEqual(Q.visible(Q.defaultLayout, available: { $0 != .favorite && $0 != .lastfm }),
-                        [.searchLyrics, .toggleLyrics, .divider, .settings, .close], "按钮排法: 不可用的键拿掉")
-            expectEqual(Q.visible([.lastfm, .divider, .close], available: { $0 != .lastfm }), [.close],
+            expectEqual(Q.visibleRows([.divider, .searchLyrics, .divider, .divider, .close, .divider], available: all),
+                        [[.searchLyrics, .divider, .close]], "按钮排法: 头尾和挨着的分隔线不画")
+            expectEqual(Q.visibleRows(Q.defaultLayout, available: { $0 != .favorite && $0 != .lastfm }),
+                        [[.searchLyrics, .toggleLyrics, .divider, .settings, .close]], "按钮排法: 不可用的键拿掉")
+            expectEqual(Q.visibleRows([.lastfm, .divider, .close], available: { $0 != .lastfm }), [[.close]],
                         "按钮排法: 拿掉键后落到开头的分隔线也不画")
+            // 两行
+            let twoRows: [Q] = [.favorite, .searchLyrics, .rowBreak, .divider, .settings, .close]
+            expectEqual(Q.rows(twoRows), [[.favorite, .searchLyrics], [.divider, .settings, .close]], "两行: 按换行拆")
+            expectEqual(Q.visibleRows(twoRows, available: all), [[.favorite, .searchLyrics], [.settings, .close]],
+                        "两行: 第二行开头的分隔线不画")
+            expectEqual([Q.rowCount(twoRows), Q.rowCount(Q.defaultLayout), Q.rowCount([.favorite, .rowBreak, .divider]),
+                         Q.rowCount([.rowBreak, .close])], [2, 1, 1, 1], "两行: 换行两边都有键才算两行")
+            expectEqual(Q.visibleRows([.favorite, .rowBreak, .close], available: { $0 != .favorite }), [[.close]],
+                        "两行: 一行的键都画不出时那一行不出现(高度仍按两行留)")
+            expectEqual(Q.adding(.rowBreak, to: Q.defaultLayout), [.favorite, .searchLyrics, .toggleLyrics, .rowBreak, .divider, .lastfm, .settings, .close],
+                        "两行: 换行加在第一条分隔线那里")
+            expectEqual(Q.adding(.rowBreak, to: [.favorite, .divider, .searchLyrics, .toggleLyrics, .settings, .close]),
+                        [.favorite, .rowBreak, .divider, .searchLyrics, .toggleLyrics, .settings, .close],
+                        "两行: 分隔线不在正中时也加在分隔线那里")
+            expectEqual(Q.adding(.rowBreak, to: [.favorite, .searchLyrics, .settings, .close]), [.favorite, .searchLyrics, .rowBreak, .settings, .close],
+                        "两行: 没有分隔线时加在正中")
+            expectEqual(Q.canAdd(.rowBreak, to: twoRows), false, "两行: 换行只能有一个")
+            // 宽度
+            expectEqual(Q.width(of: Q.defaultLayout), 6 * 22 + 7 + 6 * 2, "宽度: 默认那排 151pt")
+            expectEqual(Q.capacity(contentWidth: 436, showsArtwork: true, showsText: true, artworkSide: 32), 436 - 40 - 128,
+                        "宽度: 内容区减封面、文字最小宽和间距")
+            expectEqual(Q.capacity(contentWidth: 436, showsArtwork: false, showsText: false, artworkSide: 32), 436,
+                        "宽度: 只有按钮时整行都给它")
+            expectEqual(Q.capacity(contentWidth: 100, showsArtwork: true, showsText: true, artworkSide: 32), 0, "宽度: 不会是负数")
+            expectEqual(Q.visibleRows(Q.defaultLayout, capacity: 100, available: all), [[.lastfm, .settings, .close]],
+                        "宽度: 放不下从这一行最左边起不画,剩下开头的分隔线也不画")
+            expectEqual(Q.visibleRows(twoRows, capacity: 22, available: all), [[.searchLyrics], [.close]], "宽度: 两行各自按宽度装")
+            expectEqual(Q.visibleRows(Q.defaultLayout, capacity: 10, available: all), [], "宽度: 一颗都放不下就整排不画")
+            expectEqual(NotchExpandedMetrics.trackInfoHeight(showsArtwork: true, showsTitle: true, showsArtist: true, showsAlbum: true,
+                                                             showsActions: true, actionRows: 2), 46,
+                        "高度: 两行按钮 22 + 2 + 22,比三行文字高")
+            expectEqual(NotchExpandedMetrics.trackInfoHeight(showsArtwork: true, showsTitle: true, showsArtist: true, showsAlbum: true,
+                                                             showsActions: true, actionRows: 1), 39, "高度: 一行时还是文字说了算")
+            expectEqual(NotchExpandedMetrics.trackInfoHeight(showsArtwork: false, showsTitle: false, showsArtist: false, showsAlbum: false,
+                                                             showsActions: false, actionRows: 2), 0, "高度: 快捷操作关着时行数不算")
             expectEqual(Q.adding(.lyricsWindow, to: [.settings, .close]), [.settings, .lyricsWindow, .close],
                         "按钮排法: 加在最右的关闭前面")
             expectEqual(Q.adding(.close, to: [.settings]), [.settings, .close], "按钮排法: 加关闭就在末尾")
             expectEqual(Q.adding(.settings, to: [.settings]), [.settings], "按钮排法: 已有的键不重复加")
             expectEqual(Q.canAdd(.divider, to: [.divider, .divider, .divider]), false, "按钮排法: 分隔线到上限不能再加")
+            expectEqual(Q.canAdd(.openPlayer, to: Q.allCases.filter { $0 != .openPlayer }), true, "按钮排法: 键的个数不设上限")
             expectEqual(Q.moving([.favorite, .searchLyrics, .close], from: 0, to: 2), [.searchLyrics, .close, .favorite],
                         "按钮排法: 挪到最后")
             expectEqual(Q.moving([.favorite, .searchLyrics, .close], from: 2, to: -3), [.close, .favorite, .searchLyrics],

@@ -184,7 +184,7 @@ protocol NotchChromeSource: ObservableObject {
     /// 头部右侧那排「快捷操作」(搜索歌词 / 显示歌词 │ 设置 / 关闭)要不要画。
     /// 跟头部四项同一条链路:它参与头部高度(`max` 里的第三块),所以必须走"镜像 + 重算几何"。
     var expandedShowsQuickActions: Bool { get }
-    /// 快捷操作那排放哪几颗、什么顺序(`AppSettings.notchQuickActions`)。不参与高度。
+    /// 快捷操作那排放哪几颗、什么顺序、在哪换行(`AppSettings.notchQuickActions`)。行数参与头部高度,走"镜像 + 重算几何"。
     var quickActions: [NotchQuickAction] { get }
     /// 桌面悬浮歌词开着没有(快捷操作「悬浮歌词」键的点亮)。
     var classicOverlayOn: Bool { get }
@@ -216,7 +216,8 @@ extension NotchChromeSource {
             expandedShowsNextLine: expandedShowsNextLine, expandedShowsControls: expandedShowsControls,
             trackInfoShowsArtwork: expandedTrackInfoShowsArtwork, trackInfoShowsTitle: expandedTrackInfoShowsTitle,
             trackInfoShowsArtist: expandedTrackInfoShowsArtist, trackInfoShowsAlbum: expandedTrackInfoShowsAlbum,
-            expandedShowsQuickActions: expandedShowsQuickActions, idlePanelHeight: idlePanelHeight)
+            expandedShowsQuickActions: expandedShowsQuickActions,
+            expandedQuickActionRows: NotchQuickAction.rowCount(quickActions), idlePanelHeight: idlePanelHeight)
     }
 
     var showsLyricRow: Bool { cardLayout.showsLyricRow }

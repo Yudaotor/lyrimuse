@@ -763,6 +763,7 @@
 "另有 %@ 首歌曲无源应答 · 全部自动匹配" = "%@ weitere Titel ohne Antwort der Quellen · Alle zuordnen";
 "另有 %@ 首歌曲无源应答 · 全部自动匹配#one" = "%@ weiterer Titel ohne Antwort der Quellen · Alle zuordnen";
 "另有 %d 个文件未能写入歌词文件夹，请检查写入权限和磁盘空间" = "%d weitere konnten nicht in den Liedtextordner geschrieben werden. Prüfe Schreibrechte und Speicherplatz";
+"另起一行" = "Neue Zeile";
 "只显示歌词" = "Nur Liedtext";
 "只显示歌词源自带的读音" = "Zeigt nur die Umschrift der Liedtextquelle";
 "只有播放次数、时长和新听了几位歌手" = "Nur Wiedergaben, Hördauer und Anzahl neuer Künstler";
@@ -1054,6 +1055,7 @@
 "展开/收起触控栏歌词" = "Touch Bar-Liedtext ein-/ausklappen";
 "展开圆角" = "Ecken ausgeklappt";
 "展开宽度" = "Breite ausgeklappt";
+"展开宽度不够，放不下" = "Passt nicht in die ausgeklappte Breite";
 "展开时" = "Ausgeklappt";
 "展开时在曲目信息右侧显示喜欢、搜索歌词、设置等按钮" = "Zeigt ausgeklappt Tasten wie „Favorit“, „Liedtext suchen“ und „Einstellungen“ rechts neben den Titelinfos";
 "展开时在进度条上方显示下一句要唱的歌词" = "Zeigt ausgeklappt die nächste Zeile über dem Fortschrittsbalken";
@@ -1414,6 +1416,7 @@
 "按收听最多的前 %@ 位歌手统计" = "Basierend auf deinen Top-%@-Künstlern";
 "按收听最多的前 %@ 位歌手统计#one" = "Basierend auf deinem Top-%@-Künstler";
 "按歌名和歌手识别" = "Nach Titel und Künstler erkannt";
+"按现在的展开宽度，每行最多放 %d 个按钮" = "Bei der aktuellen ausgeklappten Breite höchstens %d Tasten pro Zeile";
 "按相关度" = "Nach Relevanz";
 "按纯音乐处理：不显示歌词，也不自动搜索；原有歌词将保留，取消标记即可恢复" = "Als instrumental behandeln: Liedtexte werden ausgeblendet und nicht automatisch gesucht. Vorhandene Texte bleiben erhalten und kehren zurück, wenn du die Markierung entfernst";
 "按翻唱者署名" = "Coverkünstler aus dem Titel";
@@ -1713,7 +1716,6 @@
 "最后一句的时间与曲长相差 25% 以上，可能是其他版本" = "Die Zeit der letzten Zeile weicht mehr als 25 % von der Titellänge ab; vermutlich eine andere Version";
 "最后一句的时间与曲长相差 25% 以上；仍可选用，但排在所有时长相符的候选之后" = "Die Zeit der letzten Zeile weicht mehr als 25 % von der Titellänge ab; weiter nutzbar, aber hinter allen Treffern mit passender Länge eingestuft";
 "最后一句的时间越接近曲长，得分越高，最高 300" = "Je näher die Zeit der letzten Zeile an der Titellänge liegt, desto höher die Punktzahl – bis zu 300";
-"最多 %d 个按钮" = "Höchstens %d Tasten";
 "最多 32 个字" = "Bis zu 32 Zeichen";
 "最大宽度" = "Maximalbreite";
 "最常听的专辑" = "Meistgehörtes Album";
@@ -2167,6 +2169,7 @@
 "源自报曲长偏离吻合版本" = "Dauer der Quelle weicht von passender Version ab";
 "滚动" = "Scrollen";
 "演唱：%@" = "von %@";
+"灰色的放不下，加宽展开卡片或换到第二行" = "Graue Tasten passen nicht. Verbreitere die ausgeklappte Karte oder verschiebe sie in die zweite Zeile";
 "灵动岛" = "Notch";
 "灵动岛、菜单栏和触控栏歌词在播放时显示" = "Notch-, Menüleisten- und Touch-Bar-Text erscheinen bei Wiedergabe";
 "灵动岛和菜单栏歌词在播放时显示" = "Notch- und Menüleisten-Text erscheinen bei Wiedergabe";

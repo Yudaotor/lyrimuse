@@ -203,9 +203,10 @@ extension NotchLyricsView {
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
-    /// 头部右侧那排「快捷操作」:放哪几颗、什么顺序是用户在设置「展开时」浮层里排的(`controller.quickActions`,
-    /// Core `NotchQuickAction`),默认 喜欢 · 搜索歌词 · 显示歌词 │ Last.fm · 设置 · 关闭。分隔线落到头尾或挨在一起时不画
-    /// (`NotchQuickAction.visible`)。每颗都是 22pt 命中格(跟下面播放控制三键同一档,
+    /// 头部右侧那排「快捷操作」:放哪几颗、什么顺序、在哪换行是用户在设置「展开时」浮层里排的(`controller.quickActions`,
+    /// Core `NotchQuickAction`),默认 喜欢 · 搜索歌词 · 显示歌词 │ Last.fm · 设置 · 关闭。一行或两行,各行靠右;
+    /// 分隔线落到头尾或挨在一起时不画,一行宽过头部留给它的宽度(`NotchQuickAction.capacity`,歌名歌手那一列至少留
+    /// `minTextWidth`)时从这一行最左边起不画(`NotchQuickAction.visibleRows`)。每颗都是 22pt 命中格(跟下面播放控制三键同一档,
     /// `NotchExpandedMetrics.trackInfoActionsHeight`),字形 11pt,颜色走 `accentOrWhite`、压到七成五。
     ///
     /// 各颗键的语义:
@@ -226,7 +227,14 @@ extension NotchLyricsView {
     private var trackInfoQuickActions: some View {
         if controller.expandedShowsQuickActions {
             let favorited = playback.isFavorited
-            let shown = NotchQuickAction.visible(controller.quickActions) { action in
+            let fields = !controller.isAdBreakNow
+            let capacity = NotchQuickAction.capacity(
+                contentWidth: Double(controller.expandedCardWidth - 2 * NotchMetrics.expandedContentInset),
+                showsArtwork: fields && controller.expandedTrackInfoShowsArtwork,
+                showsText: fields && (controller.expandedTrackInfoShowsTitle || controller.expandedTrackInfoShowsArtist
+                                      || controller.expandedTrackInfoShowsAlbum),
+                artworkSide: Double(NotchExpandedMetrics.trackInfoArtworkSide))
+            let shown = NotchQuickAction.visibleRows(controller.quickActions, capacity: capacity) { action in
                 switch action {
                 case .favorite: return favorited != nil && !controller.isAdBreakNow
                 // `isConnected` 不是 @Published,随下一次 body 重算取值(同歌词窗口的统计元素)。
@@ -234,23 +242,30 @@ extension NotchLyricsView {
                 default: return true
                 }
             }
-            HStack(spacing: 2) {
-                ForEach(Array(shown.enumerated()), id: \.offset) { _, action in
-                    quickActionCell(action, favorited: favorited ?? false)
+            VStack(alignment: .trailing, spacing: NotchExpandedMetrics.trackInfoActionRowSpacing) {
+                ForEach(Array(shown.enumerated()), id: \.offset) { _, row in
+                    HStack(spacing: CGFloat(NotchQuickAction.cellSpacing)) {
+                        ForEach(Array(row.enumerated()), id: \.offset) { _, action in
+                            quickActionCell(action, favorited: favorited ?? false)
+                        }
+                    }
+                    .frame(height: NotchExpandedMetrics.trackInfoActionsHeight)
                 }
             }
-            .frame(height: NotchExpandedMetrics.trackInfoActionsHeight)
         }
     }
 
     @ViewBuilder
     private func quickActionCell(_ action: NotchQuickAction, favorited: Bool) -> some View {
         switch action {
+        // 宽度跟 Core `NotchQuickAction.dividerWidth`(1 + 左右各 3)对得上,装不装得下按那份算。
         case .divider:
             Rectangle()
                 .fill(accentOrWhite.opacity(0.18))
                 .frame(width: 1, height: 12)
                 .padding(.horizontal, 3)
+        case .rowBreak:
+            EmptyView()
         case .favorite:
             quickActionButton(favorited ? "heart.fill" : "heart", key: "favorite",
                               label: favorited ? L10n.t("取消喜欢") : L10n.t("喜欢"), lit: favorited) {

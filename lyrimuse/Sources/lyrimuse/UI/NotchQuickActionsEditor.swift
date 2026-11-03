@@ -17,6 +17,7 @@ extension NotchQuickAction {
         case .settings: return "gearshape.fill"
         case .close: return "xmark"
         case .divider: return "poweron"
+        case .rowBreak: return "return"
         }
     }
 
@@ -35,6 +36,7 @@ extension NotchQuickAction {
         case .settings: return L10n.t("设置")
         case .close: return L10n.t("关闭灵动岛歌词")
         case .divider: return L10n.t("分隔线")
+        case .rowBreak: return L10n.t("另起一行")
         }
     }
 
@@ -48,9 +50,9 @@ extension NotchQuickAction {
     }
 }
 
-/// 「展开时」浮层里快捷操作那排的编辑区(「快捷操作」开着时出现):上面一条深色条照灵动岛上的样子排着当前那排键,
-/// 拖动换位置、悬停点 × 移掉;下面是还能加的键,点一下加进去(「关闭」在最右时加在它前面)。右键每一格有左移 / 右移 / 移除,
-/// 给键盘和读屏用。排法存 `AppSettings.notchQuickActions`,规则在 Core `NotchQuickAction`。见 05 章决策 130。
+/// 「展开时」浮层里快捷操作那排的编辑区(「快捷操作」开着时出现):上面一条深色条按顺序排着当前那排键(「换行」也是一格,
+/// 它后面的在灵动岛上排到第二行),拖动换位置、悬停点 × 移掉;按现在的展开宽度放不下的键画成灰的。下面是还能加的键,
+/// 点一下加进去(「关闭」在最右时加在它前面)。右键每一格有左移 / 右移 / 移除,给键盘和读屏用。排法存 `AppSettings.notchQuickActions`,规则在 Core `NotchQuickAction`。见 05 章决策 130、131。
 @MainActor
 struct NotchQuickActionsEditor: View {
     @ObservedObject private var settings = AppSettings.shared
@@ -60,16 +62,46 @@ struct NotchQuickActionsEditor: View {
 
     static let buttonCell: CGFloat = 26
     static let dividerCell: CGFloat = 10
+    static let rowBreakCell: CGFloat = 20
     static let spacing: CGFloat = 4
+
+    /// 按现在的展开宽度,灵动岛头部给按钮行留多宽(同 `trackInfoQuickActions` 的算法)。稳态宽被耳朵下限顶上去时真实宽度
+    /// 比这里算的大,这里只会少算、不会多算。
+    private var capacity: Double {
+        let width = NotchWidthBounds.expandedWidth(steady: CGFloat(settings.notchContentWidth),
+                                                   expandedSetting: CGFloat(settings.notchExpandedContentWidth))
+        return NotchQuickAction.capacity(
+            contentWidth: Double(width - 2 * NotchMetrics.expandedContentInset),
+            showsArtwork: settings.notchExpandedShowsArtwork,
+            showsText: settings.notchExpandedShowsTrackTitle || settings.notchExpandedShowsArtist || settings.notchExpandedShowsAlbum,
+            artworkSide: Double(NotchExpandedMetrics.trackInfoArtworkSide))
+    }
+
+    /// 一行最多放几颗键(不算分隔线)。
+    private var buttonsPerRow: Int {
+        max(0, Int((capacity + NotchQuickAction.cellSpacing) / (NotchQuickAction.buttonWidth + NotchQuickAction.cellSpacing)))
+    }
+
+    /// 按现在的宽度放不下、灵动岛上不画的键。
+    private var overflowing: Set<NotchQuickAction> {
+        let shown = Set(NotchQuickAction.visibleRows(layout, capacity: capacity) { _ in true }.joined())
+        return Set(layout.filter { !$0.isSeparator && !shown.contains($0) })
+    }
 
     var body: some View {
         if settings.notchExpandedShowsQuickActions {
             SettingsRowGroup(title: L10n.t("快捷操作按钮")) {
                 VStack(alignment: .leading, spacing: 10) {
                     strip
-                    Text(L10n.t("拖动调整顺序，悬停后点 × 移除"))
-                        .font(.system(size: 11))
-                        .foregroundStyle(.secondary)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(L10n.t("拖动调整顺序，悬停后点 × 移除"))
+                        Text(String(format: L10n.t("按现在的展开宽度，每行最多放 %d 个按钮"), buttonsPerRow))
+                        if !overflowing.isEmpty {
+                            Text(L10n.t("灰色的放不下，加宽展开卡片或换到第二行"))
+                        }
+                    }
+                    .font(.system(size: 11))
+                    .foregroundStyle(.secondary)
                     palette
                     if settings.notchQuickActions != NotchQuickAction.defaultLayout {
                         HStack {
@@ -89,7 +121,11 @@ struct NotchQuickActionsEditor: View {
     private var layout: [NotchQuickAction] { settings.notchQuickActions }
 
     private func width(_ action: NotchQuickAction) -> CGFloat {
-        action.isDivider ? Self.dividerCell : Self.buttonCell
+        switch action {
+        case .divider: return Self.dividerCell
+        case .rowBreak: return Self.rowBreakCell
+        default: return Self.buttonCell
+        }
     }
 
     /// 照灵动岛头部那排:深底、白字形、靠右排。
@@ -114,14 +150,20 @@ struct NotchQuickActionsEditor: View {
 
     private func cell(_ action: NotchQuickAction, index: Int) -> some View {
         let isDragged = dragging == index
+        let dimmed = overflowing.contains(action)
         return ZStack(alignment: .topTrailing) {
             Group {
-                if action.isDivider {
+                switch action {
+                case .divider:
                     Rectangle().fill(Color.white.opacity(0.3)).frame(width: 1, height: 14)
-                } else {
+                case .rowBreak:
+                    Image(systemName: action.symbolName)
+                        .font(.system(size: 10, weight: .semibold))
+                        .foregroundStyle(Color.accentColor)
+                default:
                     Image(systemName: action.symbolName)
                         .font(.system(size: 12, weight: .medium))
-                        .foregroundStyle(.white.opacity(0.85))
+                        .foregroundStyle(.white.opacity(dimmed ? 0.28 : 0.85))
                 }
             }
             .frame(width: width(action), height: Self.buttonCell)
@@ -148,7 +190,8 @@ struct NotchQuickActionsEditor: View {
         .onHover { inside in
             if inside { hovered = index } else if hovered == index { hovered = nil }
         }
-        .help(action.conditionNote.map { "\(action.displayName) · \($0)" } ?? action.displayName)
+        .help(dimmed ? "\(action.displayName) · \(L10n.t("展开宽度不够，放不下"))"
+              : action.conditionNote.map { "\(action.displayName) · \($0)" } ?? action.displayName)
         .gesture(DragGesture(minimumDistance: 3)
             .onChanged { value in
                 dragging = index
@@ -183,9 +226,8 @@ struct NotchQuickActionsEditor: View {
 
     private var palette: some View {
         let addable = NotchQuickAction.paletteOrder.filter { NotchQuickAction.canAdd($0, to: layout) }
-        let full = layout.filter { !$0.isDivider }.count >= NotchQuickAction.maxButtons
         return VStack(alignment: .leading, spacing: 6) {
-            Text(full ? String(format: L10n.t("最多 %d 个按钮"), NotchQuickAction.maxButtons) : L10n.t("可添加"))
+            Text(L10n.t("可添加"))
                 .font(.system(size: 11, weight: .semibold))
                 .foregroundStyle(.secondary)
             WrapLayout(horizontalSpacing: 6, verticalSpacing: 6, rowAlignment: .leading) {
