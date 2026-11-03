@@ -6,7 +6,7 @@
 
 **La letra en el escritorio, reinventada para Mac.**
 
-**Language / 语言 / 語言 / 言語 / 언어 / Idioma / Langue / Sprache:** [English](README.md) | [简体中文](README.zh-CN.md) | [繁體中文](README.zh-Hant.md) | [日本語](README.ja.md) | [한국어](README.ko.md) | **Español** | [Français](README.fr.md) | [Deutsch](README.de.md)
+**Language / 语言 / 語言 / 言語 / 언어 / Idioma / Langue / Sprache / Lingua:** [English](README.md) | [简体中文](README.zh-CN.md) | [繁體中文](README.zh-Hant.md) | [日本語](README.ja.md) | [한국어](README.ko.md) | **Español** | [Français](README.fr.md) | [Deutsch](README.de.md) | [Italiano](README.it.md)
 
 ![Platform](https://img.shields.io/badge/platform-macOS%2014%2B-blue)
 ![Architecture](https://img.shields.io/badge/arch-Apple%20Silicon%20%2B%20Intel-blue)
@@ -92,7 +92,7 @@ brew install --cask lyrimuse
 - **Se oculta cuando pausas**, para no quedarse en el escritorio sin hacer nada. También puede apartarse en los instrumentales, las canciones sin letra y las apps a pantalla completa, y la letra flotante puede seguirte a la pantalla de la ventana que estés usando.
 
 ### Detalles del día a día
-- **Inglés, chino simplificado, chino tradicional, japonés, coreano, español, francés y alemán**, y el cambio se aplica al instante, sin reiniciar. ¿Has visto una traducción torpe? Los pull requests son bienvenidos; cada idioma tiene una guía de estilo en `lyrimuse/Localization/`.
+- **Inglés, chino simplificado, chino tradicional, japonés, coreano, español, francés, alemán e italiano**, y el cambio se aplica al instante, sin reiniciar. ¿Has visto una traducción torpe? Los pull requests son bienvenidos; cada idioma tiene una guía de estilo en `lyrimuse/Localization/`.
 - **Liquid Glass en macOS 26.** Ajustes, el panel de la barra de menús, la ventana de letra, el gestor de letras y el asistente de configuración usan este diseño, y la mayoría pueden quedarse en modo claro u oscuro en lugar de seguir al sistema.
 - **Atajos de teclado** para cada acción, desde ocultar toda la letra hasta marcar la canción como favorita. No viene ninguno configurado, así que tú eliges las teclas. Cada acción tiene además un enlace `lyrimuse://` que puedes llamar desde Atajos, Raycast o Alfred, y desde Atajos un enlace puede devolver la canción que está sonando ([URL Scheme](docs/url-scheme.es.md)).
 - **Búsqueda en Ajustes.** Escribe en la barra lateral y se desplaza hasta la fila que coincide y la resalta, abriendo un grupo plegado si hace falta.

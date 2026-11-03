@@ -1,6 +1,6 @@
 # Cómo hace Lyrimuse scrobble en Last.fm
 
-*[English](scrobbling.md) · [简体中文](scrobbling.zh-CN.md) · [日本語](scrobbling.ja.md) · [한국어](scrobbling.ko.md) · **Español** · [Français](scrobbling.fr.md) · [Deutsch](scrobbling.de.md)*
+*[English](scrobbling.md) · [简体中文](scrobbling.zh-CN.md) · [日本語](scrobbling.ja.md) · [한국어](scrobbling.ko.md) · **Español** · [Français](scrobbling.fr.md) · [Deutsch](scrobbling.de.md) · [Italiano](scrobbling.it.md)*
 
 ## 1. Cuándo cuenta una reproducción
 

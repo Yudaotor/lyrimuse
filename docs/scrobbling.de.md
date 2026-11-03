@@ -1,6 +1,6 @@
 # Wie Lyrimuse zu Last.fm scrobbelt
 
-*[English](scrobbling.md) · [简体中文](scrobbling.zh-CN.md) · [日本語](scrobbling.ja.md) · [한국어](scrobbling.ko.md) · [Español](scrobbling.es.md) · [Français](scrobbling.fr.md) · **Deutsch***
+*[English](scrobbling.md) · [简体中文](scrobbling.zh-CN.md) · [日本語](scrobbling.ja.md) · [한국어](scrobbling.ko.md) · [Español](scrobbling.es.md) · [Français](scrobbling.fr.md) · **Deutsch** · [Italiano](scrobbling.it.md)*
 
 ## 1. Wann eine Wiedergabe zählt
 

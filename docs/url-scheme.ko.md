@@ -1,6 +1,6 @@
 # Lyrimuse URL 스킴
 
-*[English](url-scheme.md) · [简体中文](url-scheme.zh-CN.md) · [日本語](url-scheme.ja.md) · **한국어** · [Español](url-scheme.es.md) · [Français](url-scheme.fr.md) · [Deutsch](url-scheme.de.md)*
+*[English](url-scheme.md) · [简体中文](url-scheme.zh-CN.md) · [日本語](url-scheme.ja.md) · **한국어** · [Español](url-scheme.es.md) · [Français](url-scheme.fr.md) · [Deutsch](url-scheme.de.md) · [Italiano](url-scheme.it.md)*
 
 `lyrimuse://`로 시작하는 링크를 사용하면 단축어, Raycast, Alfred, Stream Deck, 터미널(`open 'lyrimuse://…'`) 등에서 Lyrimuse를 제어할 수 있습니다. 윈도우와 설정 페이지 열기, 가사 표시 및 가리기, 재생 제어, 타이밍 미세 조정, 지금 재생 중인 곡 정보 가져오기를 할 수 있습니다.
 

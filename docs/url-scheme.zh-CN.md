@@ -1,6 +1,6 @@
 # Lyrimuse URL Scheme
 
-*[English](url-scheme.md) · **简体中文** · [日本語](url-scheme.ja.md) · [한국어](url-scheme.ko.md) · [Español](url-scheme.es.md) · [Français](url-scheme.fr.md) · [Deutsch](url-scheme.de.md)*
+*[English](url-scheme.md) · **简体中文** · [日本語](url-scheme.ja.md) · [한국어](url-scheme.ko.md) · [Español](url-scheme.es.md) · [Français](url-scheme.fr.md) · [Deutsch](url-scheme.de.md) · [Italiano](url-scheme.it.md)*
 
 用 `lyrimuse://` 开头的链接，可以从快捷指令、Raycast、Alfred、Stream Deck、终端（`open 'lyrimuse://…'`）这类工具里控制 Lyrimuse：打开窗口和设置页、开关各种歌词、控制播放、调时间轴，或者拿到正在播放的信息。
 

@@ -1,6 +1,6 @@
 # Lyrimuse 往 Last.fm 打卡（scrobble）的规则
 
-*[English](scrobbling.md) · **简体中文** · [日本語](scrobbling.ja.md) · [한국어](scrobbling.ko.md) · [Español](scrobbling.es.md) · [Français](scrobbling.fr.md) · [Deutsch](scrobbling.de.md)*
+*[English](scrobbling.md) · **简体中文** · [日本語](scrobbling.ja.md) · [한국어](scrobbling.ko.md) · [Español](scrobbling.es.md) · [Français](scrobbling.fr.md) · [Deutsch](scrobbling.de.md) · [Italiano](scrobbling.it.md)*
 
 ## 1. 什么时候算一次收听
 

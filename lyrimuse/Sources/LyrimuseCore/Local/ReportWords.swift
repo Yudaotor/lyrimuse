@@ -3,7 +3,7 @@ import Foundation
 /// 听歌报告用哪种语言写:App 的界面语言(`L10n.current`:zh-hans / zh-hant / en),写进 features.json 的
 /// `report_language` 给引擎(digestlang.go)。认不得的按简体。
 public enum ReportLanguage: String, CaseIterable, Sendable {
-    case zhHans = "zh-hans", zhHant = "zh-hant", en, ja, ko, es, fr, de
+    case zhHans = "zh-hans", zhHant = "zh-hant", en, ja, ko, es, fr, de, it
 
     /// features.json 里的键名,同引擎 featureFlagsFile.ReportLanguage 的 json 标签。
     public static let featuresKey = "report_language"
@@ -459,6 +459,56 @@ public struct ReportWords: Sendable {
             "title_yesterday": "🎧 Hörbericht von gestern ({date})",
             "value_hm": "{h} Std. {m} Min.",
             "value_m": "{m} Min.",
+        ],
+        .it: [
+            "brief_line": "{label}: {name} · {n}",
+            "col_albums": "Album",
+            "col_artists": "Artisti",
+            "col_tracks": "Brani",
+            "colon": ":",
+            "compare": " ({label}: {prev}, {change})",
+            "cover": "Copertina",
+            "date": "{d}/{m}",
+            "duration_hm": " · circa {h} h {m} min",
+            "duration_m": " · circa {m} min",
+            "flat": "invariato",
+            "footer": "Lyrimuse · Dati da {source}",
+            "head_albums": "Album più ascoltati",
+            "head_artists": "Artisti più ascoltati",
+            "head_tracks": "Brani più ascoltati",
+            "item": "{i}. {name} ({n})",
+            "keyword": "ascolto",
+            "label_album": "Album",
+            "label_artist": "Artista",
+            "label_track": "Brano",
+            "link": "Classifica completa su {source}",
+            "month_names": "gennaio,febbraio,marzo,aprile,maggio,giugno,luglio,agosto,settembre,ottobre,novembre,dicembre",
+            "more": " e altri",
+            "most_played": "I più ascoltati",
+            "name_sep": ", ",
+            "names_lead": ": ",
+            "new_artists": "{n} nuovi artisti",
+            "new_artists_one": "{n} nuovo artista",
+            "pair": "{artist} - {name}",
+            "plays": "{n} ascolti",
+            "plays_one": "{n} ascolto",
+            "plays_truncated": "Oltre {n} ascolti (troppi, sono stati contati solo i più recenti)",
+            "preset_brief": "{summary}\nArtista principale: {top_artist}\nAlbum principale: {top_album}\nBrano principale: {top_track}\nNuovi artisti ({new_artists}): {new_artist_names}",
+            "preset_full": "{summary}\n\nArtisti più ascoltati:\n{top_artists}\n\nAlbum più ascoltati:\n{top_albums}\n\nBrani più ascoltati:\n{top_tracks}\n\nNuovi artisti ({new_artists}): {new_artist_names}",
+            "preset_overview": "{summary}\nNuovi artisti: {new_artists}",
+            "prev_month": "a {month_name}",
+            "prev_month_year": "a {month_name} {year}",
+            "prev_week": "settimana precedente",
+            "prev_year": "nel {year}",
+            "title_day": "🎧 Report di ascolto ({date})",
+            "title_month": "📅 Riepilogo di ascolto di {month_name} {year}",
+            "title_sample": "🎧 Report di ascolto di esempio",
+            "title_today": "🎧 Report di ascolto di oggi ({date})",
+            "title_week": "🎵 Riepilogo di ascolto della settimana scorsa ({from} – {to})",
+            "title_year": "🏆 Riepilogo di ascolto del {year}",
+            "title_yesterday": "🎧 Report di ascolto di ieri ({date})",
+            "value_hm": "{h} h {m} min",
+            "value_m": "{m} min",
         ],
     ]
 }
