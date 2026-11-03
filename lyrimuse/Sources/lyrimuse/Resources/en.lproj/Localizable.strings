@@ -763,7 +763,6 @@
 "另有 %@ 首歌曲无源应答 · 全部自动匹配" = "%@ more songs had no source response · Auto-Match All";
 "另有 %@ 首歌曲无源应答 · 全部自动匹配#one" = "%@ more song had no source response · Auto-Match All";
 "另有 %d 个文件未能写入歌词文件夹，请检查写入权限和磁盘空间" = "%d more couldn’t be written to the lyrics folder. Check write access and disk space";
-"另起一行" = "New Row";
 "只显示歌词" = "Lyrics only";
 "只显示歌词源自带的读音" = "Shows only romanization supplied by the lyrics source";
 "只有播放次数、时长和新听了几位歌手" = "Just plays, listening time and how many new artists";
@@ -783,7 +782,6 @@
 "右侧" = "Right";
 "右侧颜色" = "Right Color";
 "右对齐" = "Right";
-"右移" = "Move Right";
 "右耳" = "Right Ear";
 "右键点按主题可重命名、用当前配色覆盖或删除" = "Right-click a theme to rename it, overwrite it with the current colors, or delete it";
 "各处是否显示译文，在「歌词显示」中设置" = "Whether each place shows translations is set in Lyrics Display";
@@ -1069,7 +1067,6 @@
 "左侧" = "Left";
 "左侧颜色" = "Left Color";
 "左对齐" = "Left";
-"左移" = "Move Left";
 "左耳" = "Left Ear";
 "已下载" = "Downloaded";
 "已下载 %@ / %@" = "%@ of %@ downloaded";
@@ -1376,6 +1373,7 @@
 "找到 %1$@ · 未找到 %2$@ · 跳过 %3$@" = "Found %1$@ · Not found %2$@ · Skipped %3$@";
 "找到 %@ 首" = "%@ Found";
 "把「默认正文」换成概况、三份榜单、新歌手几段，可以逐段删改、调整顺序" = "Replace the default body with its parts (summary, the three charts, new artists) so you can edit, remove or reorder each one";
+"把下面的按钮拖进格子，格子可以留空" = "Drag buttons from below into the slots; slots can stay empty";
 "报告内容" = "Report Content";
 "拆分" = "Split";
 "拆分…" = "Split…";
@@ -1383,7 +1381,6 @@
 "拆分后，该条目将作为独立歌曲：播放次数单独统计，不再同步歌词；此前同步过去的歌词将恢复为原有版本。之后可在此恢复合并" = "The entry will become a separate song: its plays are counted separately and its lyrics no longer sync. Lyrics previously synced to it are restored to its own. You can merge it back here later";
 "拆开默认正文" = "Split Default Body";
 "拖动调整顺序" = "Drag to reorder";
-"拖动调整顺序，悬停后点 × 移除" = "Drag to reorder, hover and click × to remove";
 "拷贝" = "Copy";
 "拷贝修复命令" = "Copy Fix Command";
 "拷贝名称" = "Copy Name";
@@ -1416,7 +1413,7 @@
 "按收听最多的前 %@ 位歌手统计" = "Based on your top %@ artists";
 "按收听最多的前 %@ 位歌手统计#one" = "Based on your top %@ artist";
 "按歌名和歌手识别" = "Matched by title and artist";
-"按现在的展开宽度，每行最多放 %d 个按钮" = "At the current expanded width, up to %d buttons per row";
+"按现在的展开宽度，每行 %d 格" = "At the current expanded width: %d slots per row";
 "按相关度" = "By Relevance";
 "按纯音乐处理：不显示歌词，也不自动搜索；原有歌词将保留，取消标记即可恢复" = "Treat as instrumental: lyrics are hidden and aren’t searched for automatically. Existing lyrics are kept and come back when you unmark it";
 "按翻唱者署名" = "Covering artist from the title";
@@ -2169,7 +2166,7 @@
 "源自报曲长偏离吻合版本" = "Source duration off from matching version";
 "滚动" = "Scroll";
 "演唱：%@" = "by %@";
-"灰色的放不下，加宽展开卡片或换到第二行" = "Gray buttons don’t fit. Widen the expanded card or move them to the second row";
+"灰色的格子放不下，加宽展开卡片才会显示" = "Gray slots don’t fit and appear once the expanded card is wider";
 "灵动岛" = "Notch";
 "灵动岛、菜单栏和触控栏歌词在播放时显示" = "Notch, menu bar and Touch Bar lyrics show up during playback";
 "灵动岛和菜单栏歌词在播放时显示" = "Notch and menu bar lyrics show up during playback";
@@ -2179,7 +2176,6 @@
 "灵动岛歌词" = "Notch Lyrics";
 "灵动岛歌词未开启" = "Notch Lyrics is off";
 "点一下打开完整榜单" = "Tap to open the full chart";
-"点下面的按钮加进来" = "Click a button below to add it";
 "点按「开始使用」，让歌词随旋律逐句亮起" = "Click “Get Started” and let every line light up with the music";
 "点按「拷贝修复命令」，打开「终端」，粘贴后按下 Return 键，按提示输入登录密码（输入时不显示字符），然后点按「启用」" = "Click Copy Fix Command, open Terminal, paste it and press Return, enter your login password when asked (nothing shows as you type), then click Enable";
 "点按下载" = "Click to download";
@@ -2256,6 +2252,7 @@
 "移除导入的歌词" = "Remove Imported Lyrics";
 "移除配对" = "Unpair";
 "稍粗" = "Medium";
+"空格子" = "Empty slot";
 "窗口" = "Window";
 "立即刷新" = "Refresh now";
 "立即更新" = "Update Now";

@@ -763,7 +763,6 @@
 "另有 %@ 首歌曲无源应答 · 全部自动匹配" = "%@ canciones más sin respuesta de las fuentes · Buscar todas";
 "另有 %@ 首歌曲无源应答 · 全部自动匹配#one" = "%@ canción más sin respuesta de las fuentes · Buscar todas";
 "另有 %d 个文件未能写入歌词文件夹，请检查写入权限和磁盘空间" = "Otros %d no se pudieron escribir en la carpeta de letras. Comprueba el permiso de escritura y el espacio en disco";
-"另起一行" = "Nueva fila";
 "只显示歌词" = "Solo letra";
 "只显示歌词源自带的读音" = "Solo muestra la romanización que aporta la fuente de letras";
 "只有播放次数、时长和新听了几位歌手" = "Solo reproducciones, tiempo de escucha y cuántos artistas nuevos";
@@ -783,7 +782,6 @@
 "右侧" = "Derecha";
 "右侧颜色" = "Color derecho";
 "右对齐" = "Derecha";
-"右移" = "Mover a la derecha";
 "右耳" = "Derecha";
 "右键点按主题可重命名、用当前配色覆盖或删除" = "Haz clic secundario en un tema para renombrarlo, sobrescribirlo con los colores actuales o eliminarlo";
 "各处是否显示译文，在「歌词显示」中设置" = "Dónde se muestran las traducciones se define en «Mostrar letra»";
@@ -1069,7 +1067,6 @@
 "左侧" = "Izquierda";
 "左侧颜色" = "Color izquierdo";
 "左对齐" = "Izquierda";
-"左移" = "Mover a la izquierda";
 "左耳" = "Izquierda";
 "已下载" = "Descargado";
 "已下载 %@ / %@" = "%@ de %@ descargados";
@@ -1376,6 +1373,7 @@
 "找到 %1$@ · 未找到 %2$@ · 跳过 %3$@" = "Encontradas: %1$@ · No encontradas: %2$@ · Omitidas: %3$@";
 "找到 %@ 首" = "%@ encontradas";
 "把「默认正文」换成概况、三份榜单、新歌手几段，可以逐段删改、调整顺序" = "Sustituye el cuerpo predeterminado por sus partes (resumen, las tres listas, artistas nuevos) para editar, eliminar o reordenar cada una";
+"把下面的按钮拖进格子，格子可以留空" = "Arrastra los botones de abajo a las casillas; puedes dejar casillas vacías";
 "报告内容" = "Contenido del informe";
 "拆分" = "Separar";
 "拆分…" = "Separar…";
@@ -1383,7 +1381,6 @@
 "拆分后，该条目将作为独立歌曲：播放次数单独统计，不再同步歌词；此前同步过去的歌词将恢复为原有版本。之后可在此恢复合并" = "La entrada pasará a ser una canción aparte: sus reproducciones se cuentan por separado y su letra deja de sincronizarse. La letra que se sincronizó con ella vuelve a ser la suya propia. Puedes volver a unirla aquí más tarde";
 "拆开默认正文" = "Dividir cuerpo predeterminado";
 "拖动调整顺序" = "Arrastra para reordenar";
-"拖动调整顺序，悬停后点 × 移除" = "Arrastra para reordenar; pasa el puntero y pulsa × para quitar";
 "拷贝" = "Copiar";
 "拷贝修复命令" = "Copiar comando de reparación";
 "拷贝名称" = "Copiar nombre";
@@ -1416,7 +1413,7 @@
 "按收听最多的前 %@ 位歌手统计" = "Según tus %@ artistas más escuchados";
 "按收听最多的前 %@ 位歌手统计#one" = "Según tu top %@ de artistas";
 "按歌名和歌手识别" = "Identificada por título y artista";
-"按现在的展开宽度，每行最多放 %d 个按钮" = "Con el ancho expandido actual, hasta %d botones por fila";
+"按现在的展开宽度，每行 %d 格" = "Con el ancho expandido actual: %d casillas por fila";
 "按相关度" = "Por relevancia";
 "按纯音乐处理：不显示歌词，也不自动搜索；原有歌词将保留，取消标记即可恢复" = "Tratar como instrumental: la letra se oculta y no se busca automáticamente. La letra existente se conserva y vuelve al quitar la marca";
 "按翻唱者署名" = "Artista de la versión según el título";
@@ -2169,7 +2166,7 @@
 "源自报曲长偏离吻合版本" = "Duración de la fuente distinta de la versión coincidente";
 "滚动" = "Desplazar";
 "演唱：%@" = "de %@";
-"灰色的放不下，加宽展开卡片或换到第二行" = "Los botones grises no caben. Ensancha la tarjeta expandida o pásalos a la segunda fila";
+"灰色的格子放不下，加宽展开卡片才会显示" = "Las casillas grises no caben; aparecen al ensanchar la tarjeta expandida";
 "灵动岛" = "Notch";
 "灵动岛、菜单栏和触控栏歌词在播放时显示" = "La letra del notch, la barra de menús y la Touch Bar aparece durante la reproducción";
 "灵动岛和菜单栏歌词在播放时显示" = "La letra del notch y de la barra de menús aparece durante la reproducción";
@@ -2179,7 +2176,6 @@
 "灵动岛歌词" = "Letra en el notch";
 "灵动岛歌词未开启" = "«Letra en el notch» está desactivado";
 "点一下打开完整榜单" = "Toca para abrir la lista completa";
-"点下面的按钮加进来" = "Pulsa un botón de abajo para añadirlo";
 "点按「开始使用」，让歌词随旋律逐句亮起" = "Haz clic en «Empezar» y deja que cada línea se ilumine con la música";
 "点按「拷贝修复命令」，打开「终端」，粘贴后按下 Return 键，按提示输入登录密码（输入时不显示字符），然后点按「启用」" = "Haz clic en «Copiar comando de reparación», abre Terminal, pégalo y pulsa Retorno, escribe tu contraseña de inicio de sesión cuando se pida (no se ve al escribir) y haz clic en «Activar»";
 "点按下载" = "Haz clic para descargar";
@@ -2256,6 +2252,7 @@
 "移除导入的歌词" = "Quitar la letra importada";
 "移除配对" = "Desvincular";
 "稍粗" = "Media";
+"空格子" = "Casilla vacía";
 "窗口" = "Ventana";
 "立即刷新" = "Actualizar ahora";
 "立即更新" = "Actualizar ahora";

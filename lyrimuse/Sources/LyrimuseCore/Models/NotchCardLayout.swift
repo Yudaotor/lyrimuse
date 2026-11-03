@@ -73,7 +73,7 @@ public struct NotchCardLayout: Equatable, Sendable {
     public var trackInfoShowsArtist: Bool
     public var trackInfoShowsAlbum: Bool
     public var expandedShowsQuickActions: Bool
-    /// 快捷操作排成几行(`NotchQuickAction.rowCount`),决定头部高度。
+    /// 快捷操作用了几行(`NotchQuickSlots.usedRowCount`),决定头部高度。
     public var expandedQuickActionRows: Int
     /// 没有曲目时展开出来那块空闲面板的高度(`NotchExpandedMetrics.idlePanelHeight(showsLastTrack:showsQuote:)` 三档之一)。
     public var idlePanelHeight: CGFloat

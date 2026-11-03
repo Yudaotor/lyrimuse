@@ -174,9 +174,8 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
     /// 头部右侧那排「快捷操作」,真值在 `AppSettings.notchExpandedShowsQuickActions`。
     /// 跟头部四项同一条链路:参与头部高度(`max` 的第三块),四项全关时它一个人撑起 22pt。
     @Published private(set) var expandedShowsQuickActions: Bool = AppSettings.shared.notchExpandedShowsQuickActions
-    /// 快捷操作那排的排法(`AppSettings.notchQuickActions`)。排成几行(`NotchQuickAction.rowCount`)参与头部高度,
-    /// 行数变了要重算几何。
-    @Published private(set) var quickActions: [NotchQuickAction] = AppSettings.shared.notchQuickActions
+    /// 快捷操作的格子(`AppSettings.notchQuickSlots`)。用了几行(`usedRowCount`)参与头部高度,行数变了要重算几何。
+    @Published private(set) var quickSlots: NotchQuickSlots = AppSettings.shared.notchQuickSlots
     /// 桌面悬浮歌词开着没有:快捷操作里那颗「悬浮歌词」键的点亮状态。
     @Published private(set) var classicOverlayOn: Bool = AppSettings.shared.classicOverlayEnabled
     /// 展开时多行歌词那一格的高度(关着「多行歌词」为 0),由三项设置合成(`AppSettings.notchExpandedLyricListHeight`)。
@@ -652,10 +651,10 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
             self?.recomputeGeometry(animate: false)
         }
         .store(in: &subscriptions)
-        AppSettings.shared.$notchQuickActions.removeDuplicates().sink { [weak self] layout in
+        AppSettings.shared.$notchQuickSlots.removeDuplicates().sink { [weak self] slots in
             guard let self else { return }
-            let rowsChanged = NotchQuickAction.rowCount(layout) != NotchQuickAction.rowCount(quickActions)
-            quickActions = layout
+            let rowsChanged = slots.usedRowCount != quickSlots.usedRowCount
+            quickSlots = slots
             if rowsChanged { recomputeGeometry(animate: false) }
         }
         .store(in: &subscriptions)

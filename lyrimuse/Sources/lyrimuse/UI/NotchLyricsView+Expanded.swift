@@ -203,10 +203,11 @@ extension NotchLyricsView {
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
-    /// 头部右侧那排「快捷操作」:放哪几颗、什么顺序、在哪换行是用户在设置「展开时」浮层里排的(`controller.quickActions`,
-    /// Core `NotchQuickAction`),默认 喜欢 · 搜索歌词 · 显示歌词 │ Last.fm · 设置 · 关闭。一行或两行,各行靠右;
-    /// 分隔线落到头尾或挨在一起时不画,一行宽过头部留给它的宽度(`NotchQuickAction.capacity`,歌名歌手那一列至少留
-    /// `minTextWidth`)时从这一行最左边起不画(`NotchQuickAction.visibleRows`)。每颗都是 22pt 命中格(跟下面播放控制三键同一档,
+    /// 头部右侧的「快捷操作」:一行或两行格子,哪一格放什么是用户在设置「展开时」浮层里拖进去的(`controller.quickSlots`,
+    /// Core `NotchQuickSlots`),默认第一行 喜欢 · 搜索歌词 · 显示歌词 │ Last.fm · 设置 · 关闭。格子从右边数、靠右对齐,空着的
+    /// 格子照样占位(用户留的空);看得见几格按头部留给它的宽度算(`NotchQuickAction.capacity` / `slotsThatFit`,歌名歌手那一列
+    /// 至少留 `minTextWidth`),卡片窄了少的是最左边那几格。画不出的键(没有「喜欢」、没连 Last.fm)也当空格,别的键不挪位置。
+    /// 每格 22pt(跟下面播放控制三键同一档,
     /// `NotchExpandedMetrics.trackInfoActionsHeight`),字形 11pt,颜色走 `accentOrWhite`、压到七成五。
     ///
     /// 各颗键的语义:
@@ -227,14 +228,16 @@ extension NotchLyricsView {
     private var trackInfoQuickActions: some View {
         if controller.expandedShowsQuickActions {
             let favorited = playback.isFavorited
-            let fields = !controller.isAdBreakNow
+            // 按设置算、不看广告态:广告期间文字项不画,按那时的宽度算格子数会多出几格,格子位置跟着跳。
             let capacity = NotchQuickAction.capacity(
                 contentWidth: Double(controller.expandedCardWidth - 2 * NotchMetrics.expandedContentInset),
-                showsArtwork: fields && controller.expandedTrackInfoShowsArtwork,
-                showsText: fields && (controller.expandedTrackInfoShowsTitle || controller.expandedTrackInfoShowsArtist
-                                      || controller.expandedTrackInfoShowsAlbum),
+                showsArtwork: controller.expandedTrackInfoShowsArtwork,
+                showsText: controller.expandedTrackInfoShowsTitle || controller.expandedTrackInfoShowsArtist
+                    || controller.expandedTrackInfoShowsAlbum,
                 artworkSide: Double(NotchExpandedMetrics.trackInfoArtworkSide))
-            let shown = NotchQuickAction.visibleRows(controller.quickActions, capacity: capacity) { action in
+            let visibleSlots = NotchQuickAction.slotsThatFit(capacity: capacity)
+            let slots = controller.quickSlots
+            let available: (NotchQuickAction) -> Bool = { action in
                 switch action {
                 case .favorite: return favorited != nil && !controller.isAdBreakNow
                 // `isConnected` 不是 @Published,随下一次 body 重算取值(同歌词窗口的统计元素)。
@@ -243,10 +246,16 @@ extension NotchLyricsView {
                 }
             }
             VStack(alignment: .trailing, spacing: NotchExpandedMetrics.trackInfoActionRowSpacing) {
-                ForEach(Array(shown.enumerated()), id: \.offset) { _, row in
+                ForEach(0..<slots.usedRowCount, id: \.self) { row in
                     HStack(spacing: CGFloat(NotchQuickAction.cellSpacing)) {
-                        ForEach(Array(row.enumerated()), id: \.offset) { _, action in
-                            quickActionCell(action, favorited: favorited ?? false)
+                        ForEach(Array(slots.visibleRow(row, visibleSlots: visibleSlots, available: available).enumerated()),
+                                id: \.offset) { _, cell in
+                            if let cell {
+                                quickActionCell(cell, favorited: favorited ?? false)
+                            } else {
+                                Color.clear.frame(width: CGFloat(NotchQuickAction.cellWidth),
+                                                  height: NotchExpandedMetrics.trackInfoActionsHeight)
+                            }
                         }
                     }
                     .frame(height: NotchExpandedMetrics.trackInfoActionsHeight)
@@ -258,14 +267,12 @@ extension NotchLyricsView {
     @ViewBuilder
     private func quickActionCell(_ action: NotchQuickAction, favorited: Bool) -> some View {
         switch action {
-        // 宽度跟 Core `NotchQuickAction.dividerWidth`(1 + 左右各 3)对得上,装不装得下按那份算。
+        // 占一整格(`NotchQuickAction.cellWidth`),竖线画在正中。
         case .divider:
             Rectangle()
                 .fill(accentOrWhite.opacity(0.18))
                 .frame(width: 1, height: 12)
-                .padding(.horizontal, 3)
-        case .rowBreak:
-            EmptyView()
+                .frame(width: CGFloat(NotchQuickAction.cellWidth))
         case .favorite:
             quickActionButton(favorited ? "heart.fill" : "heart", key: "favorite",
                               label: favorited ? L10n.t("取消喜欢") : L10n.t("喜欢"), lit: favorited) {

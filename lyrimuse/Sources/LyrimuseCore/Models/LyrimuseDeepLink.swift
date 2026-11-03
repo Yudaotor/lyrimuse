@@ -147,8 +147,8 @@ public enum LyrimuseDeepLink: Equatable, Sendable {
         /// 灵动岛「风格」里的「背景」「展开背景」,跟设置页走同两个设置:`debug/notch-style?style=coverArt&expanded=solidBlack|same`
         /// (值是 `NotchCardStyle` 的 rawValue,`same` = 展开背景「同上」),至少带一个。认不认得这个值由 App 判。
         case notchStyle(style: String?, expanded: String?)
-        /// 灵动岛展开卡快捷操作的排法,跟「展开时」浮层的编辑区走同一个设置:`debug/notch-quick-actions?layout=favorite,row-break,close`
-        /// (逗号分隔的 `NotchQuickAction` rawValue,清洗规则同读设置;`default` = 恢复默认,空串 = 一颗都不放)。
+        /// 灵动岛展开卡快捷操作的格子,跟「展开时」浮层的编辑区走同一个设置:`debug/notch-quick-actions?layout=close,,settings|favorite`
+        /// (`|` 分两行,每行逗号分隔、从**最右一格**数起,空着写空串;值是 `NotchQuickAction` 的 rawValue;`default` = 恢复默认)。
         case notchQuickActions(layout: String)
         /// 悬浮歌词的宽度(pt,按设置的区间夹取、量化)、「换句动画」和下一句字号占主句的比例(按设置的区间夹取),
         /// 跟设置页走同四个设置:`debug/overlay-layout?width=1270&line-change=0|1&next-line=0.7&overflow=wrap|scroll`,

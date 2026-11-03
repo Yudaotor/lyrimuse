@@ -763,7 +763,6 @@
 "另有 %@ 首歌曲无源应答 · 全部自动匹配" = "%@ autres morceaux sans réponse des sources · Tout associer";
 "另有 %@ 首歌曲无源应答 · 全部自动匹配#one" = "%@ autre morceau sans réponse des sources · Tout associer";
 "另有 %d 个文件未能写入歌词文件夹，请检查写入权限和磁盘空间" = "Autres fichiers non écrits dans le dossier des paroles : %d. Vérifiez l’accès en écriture et l’espace disque";
-"另起一行" = "Nouvelle ligne";
 "只显示歌词" = "Paroles seules";
 "只显示歌词源自带的读音" = "N’affiche que la romanisation fournie par la source de paroles";
 "只有播放次数、时长和新听了几位歌手" = "Seulement les écoutes, le temps d’écoute et le nombre de nouveaux artistes";
@@ -783,7 +782,6 @@
 "右侧" = "Droite";
 "右侧颜色" = "Couleur de droite";
 "右对齐" = "Droite";
-"右移" = "Déplacer à droite";
 "右耳" = "Droite";
 "右键点按主题可重命名、用当前配色覆盖或删除" = "Clic droit sur un thème pour le renommer, le remplacer par les couleurs actuelles ou le supprimer";
 "各处是否显示译文，在「歌词显示」中设置" = "L’affichage des traductions à chaque endroit se règle dans « Affichage des paroles »";
@@ -1069,7 +1067,6 @@
 "左侧" = "Gauche";
 "左侧颜色" = "Couleur de gauche";
 "左对齐" = "Gauche";
-"左移" = "Déplacer à gauche";
 "左耳" = "Gauche";
 "已下载" = "Téléchargé";
 "已下载 %@ / %@" = "%@ sur %@ téléchargés";
@@ -1376,6 +1373,7 @@
 "找到 %1$@ · 未找到 %2$@ · 跳过 %3$@" = "Trouvés %1$@ · Introuvables %2$@ · Ignorés %3$@";
 "找到 %@ 首" = "Trouvés : %@";
 "把「默认正文」换成概况、三份榜单、新歌手几段，可以逐段删改、调整顺序" = "Remplace le corps par défaut par ses parties (résumé, les trois classements, nouveaux artistes) pour modifier, supprimer ou réordonner chacune";
+"把下面的按钮拖进格子，格子可以留空" = "Faites glisser les boutons ci-dessous dans les cases ; des cases peuvent rester vides";
 "报告内容" = "Contenu du bilan";
 "拆分" = "Séparer";
 "拆分…" = "Séparer…";
@@ -1383,7 +1381,6 @@
 "拆分后，该条目将作为独立歌曲：播放次数单独统计，不再同步歌词；此前同步过去的歌词将恢复为原有版本。之后可在此恢复合并" = "L’entrée deviendra un morceau distinct : ses écoutes sont comptées à part et ses paroles ne sont plus synchronisées. Les paroles synchronisées vers elle redeviennent les siennes. Vous pourrez la fusionner à nouveau ici plus tard";
 "拆开默认正文" = "Scinder le corps par défaut";
 "拖动调整顺序" = "Faites glisser pour réordonner";
-"拖动调整顺序，悬停后点 × 移除" = "Faites glisser pour réordonner, survolez puis cliquez sur × pour retirer";
 "拷贝" = "Copier";
 "拷贝修复命令" = "Copier la commande de réparation";
 "拷贝名称" = "Copier le nom";
@@ -1416,7 +1413,7 @@
 "按收听最多的前 %@ 位歌手统计" = "Selon vos %@ artistes les plus écoutés";
 "按收听最多的前 %@ 位歌手统计#one" = "Selon votre top %@ des artistes";
 "按歌名和歌手识别" = "Identifiées par titre et artiste";
-"按现在的展开宽度，每行最多放 %d 个按钮" = "Avec la largeur déployée actuelle, jusqu’à %d boutons par ligne";
+"按现在的展开宽度，每行 %d 格" = "Avec la largeur déployée actuelle : %d cases par ligne";
 "按相关度" = "Par pertinence";
 "按纯音乐处理：不显示歌词，也不自动搜索；原有歌词将保留，取消标记即可恢复" = "Traiter comme instrumental : les paroles sont masquées et ne sont pas recherchées automatiquement. Les paroles existantes sont conservées et reviennent si vous retirez la marque";
 "按翻唱者署名" = "Artiste de la reprise d’après le titre";
@@ -2169,7 +2166,7 @@
 "源自报曲长偏离吻合版本" = "Durée de la source éloignée de la version concordante";
 "滚动" = "Défiler";
 "演唱：%@" = "par %@";
-"灰色的放不下，加宽展开卡片或换到第二行" = "Les boutons gris ne tiennent pas. Élargissez la carte déployée ou placez-les sur la deuxième ligne";
+"灰色的格子放不下，加宽展开卡片才会显示" = "Les cases grises ne tiennent pas ; elles apparaissent si la carte déployée est plus large";
 "灵动岛" = "Encoche";
 "灵动岛、菜单栏和触控栏歌词在播放时显示" = "Les paroles de l’encoche, de la barre des menus et de la Touch Bar s’affichent pendant la lecture";
 "灵动岛和菜单栏歌词在播放时显示" = "Les paroles de l’encoche et de la barre des menus s’affichent pendant la lecture";
@@ -2179,7 +2176,6 @@
 "灵动岛歌词" = "Paroles de l’encoche";
 "灵动岛歌词未开启" = "Paroles dans l’encoche désactivées";
 "点一下打开完整榜单" = "Touchez pour ouvrir le classement complet";
-"点下面的按钮加进来" = "Cliquez sur un bouton ci-dessous pour l’ajouter";
 "点按「开始使用」，让歌词随旋律逐句亮起" = "Cliquez sur « Commencer » et chaque ligne s’allume avec la musique";
 "点按「拷贝修复命令」，打开「终端」，粘贴后按下 Return 键，按提示输入登录密码（输入时不显示字符），然后点按「启用」" = "Cliquez sur « Copier la commande de réparation », ouvrez Terminal, collez-la et appuyez sur Retour, saisissez votre mot de passe de session si demandé (rien ne s’affiche pendant la saisie), puis cliquez sur « Activer »";
 "点按下载" = "Cliquez pour télécharger";
@@ -2256,6 +2252,7 @@
 "移除导入的歌词" = "Retirer les paroles importées";
 "移除配对" = "Dissocier";
 "稍粗" = "Moyen";
+"空格子" = "Case vide";
 "窗口" = "Fenêtre";
 "立即刷新" = "Actualiser";
 "立即更新" = "Mettre à jour";

@@ -202175,428 +202175,215 @@
         }
       }
     },
-    "拖动调整顺序，悬停后点 × 移除" : {
+    "把下面的按钮拖进格子，格子可以留空" : {
       "extractionState" : "manual",
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Zum Umordnen ziehen, zum Entfernen darauf zeigen und × klicken"
+            "value" : "Tasten von unten in die Felder ziehen; Felder dürfen leer bleiben"
           }
         },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Drag to reorder, hover and click × to remove"
+            "value" : "Drag buttons from below into the slots; slots can stay empty"
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Arrastra para reordenar; pasa el puntero y pulsa × para quitar"
+            "value" : "Arrastra los botones de abajo a las casillas; puedes dejar casillas vacías"
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Faites glisser pour réordonner, survolez puis cliquez sur × pour retirer"
+            "value" : "Faites glisser les boutons ci-dessous dans les cases ; des cases peuvent rester vides"
           }
         },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Trascina per riordinare, passa sopra e fai clic su × per rimuovere"
+            "value" : "Trascina i pulsanti qui sotto negli slot; gli slot possono restare vuoti"
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "ドラッグで並べ替え、ポインタを合わせて×で削除"
+            "value" : "下のボタンを枠にドラッグ。空いたままの枠があっても構いません"
           }
         },
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "끌어서 순서 변경, 포인터를 올리고 ×를 눌러 제거"
+            "value" : "아래 버튼을 칸으로 끌어 놓으세요. 칸은 비워 둘 수 있습니다"
           }
         },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Arraste para reordenar; passe o cursor e clique em × para remover"
+            "value" : "Arraste os botões abaixo para os espaços; espaços podem ficar vazios"
           }
         },
         "vi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Kéo để sắp xếp lại, di con trỏ lên và bấm × để gỡ bỏ"
+            "value" : "Kéo các nút bên dưới vào ô; ô có thể để trống"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "拖动调整顺序，悬停后点 × 移除"
+            "value" : "把下面的按钮拖进格子，格子可以留空"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "拖移調整順序，游標停留後點 × 移除"
+            "value" : "把下面的按鈕拖進格子，格子可以留空"
           }
         }
       }
     },
-    "点下面的按钮加进来" : {
+    "空格子" : {
       "extractionState" : "manual",
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Unten auf eine Taste klicken, um sie hinzuzufügen"
+            "value" : "Leeres Feld"
           }
         },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Click a button below to add it"
+            "value" : "Empty slot"
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Pulsa un botón de abajo para añadirlo"
+            "value" : "Casilla vacía"
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Cliquez sur un bouton ci-dessous pour l’ajouter"
+            "value" : "Case vide"
           }
         },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Fai clic su un pulsante qui sotto per aggiungerlo"
+            "value" : "Slot vuoto"
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "下のボタンをクリックして追加"
+            "value" : "空き枠"
           }
         },
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "아래 버튼을 눌러 추가"
+            "value" : "빈 칸"
           }
         },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Clique em um botão abaixo para adicioná-lo"
+            "value" : "Espaço vazio"
           }
         },
         "vi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Bấm vào một nút bên dưới để thêm"
+            "value" : "Ô trống"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "点下面的按钮加进来"
+            "value" : "空格子"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "點下面的按鈕加進來"
+            "value" : "空格子"
           }
         }
       }
     },
-    "按现在的展开宽度，每行最多放 %d 个按钮" : {
+    "按现在的展开宽度，每行 %d 格" : {
       "extractionState" : "manual",
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Bei der aktuellen ausgeklappten Breite höchstens %d Tasten pro Zeile"
+            "value" : "Bei der aktuellen ausgeklappten Breite: %d Felder pro Zeile"
           }
         },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "At the current expanded width, up to %d buttons per row"
+            "value" : "At the current expanded width: %d slots per row"
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Con el ancho expandido actual, hasta %d botones por fila"
+            "value" : "Con el ancho expandido actual: %d casillas por fila"
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Avec la largeur déployée actuelle, jusqu’à %d boutons par ligne"
+            "value" : "Avec la largeur déployée actuelle : %d cases par ligne"
           }
         },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Con la larghezza espansa attuale, fino a %d pulsanti per riga"
+            "value" : "Con la larghezza espansa attuale: %d slot per riga"
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "現在の展開時の幅では、1行にボタンを最大%d個"
+            "value" : "現在の展開時の幅では1行%d枠"
           }
         },
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "현재 펼친 너비에서는 한 줄에 버튼을 최대 %d개"
+            "value" : "현재 펼친 너비에서는 한 줄에 %d칸"
           }
         },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Com a largura expandida atual, até %d botões por linha"
+            "value" : "Com a largura expandida atual: %d espaços por linha"
           }
         },
         "vi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Với độ rộng mở rộng hiện tại, tối đa %d nút mỗi hàng"
+            "value" : "Với độ rộng mở rộng hiện tại: %d ô mỗi hàng"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "按现在的展开宽度，每行最多放 %d 个按钮"
+            "value" : "按现在的展开宽度，每行 %d 格"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "依目前的展開寬度，每行最多放 %d 個按鈕"
-          }
-        }
-      }
-    },
-    "左移" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Nach links"
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Move Left"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Mover a la izquierda"
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Déplacer à gauche"
-          }
-        },
-        "it" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Sposta a sinistra"
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "左へ移動"
-          }
-        },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "왼쪽으로 이동"
-          }
-        },
-        "pt-BR" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Mover para a esquerda"
-          }
-        },
-        "vi" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Dời sang trái"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "左移"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "左移"
-          }
-        }
-      }
-    },
-    "右移" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Nach rechts"
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Move Right"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Mover a la derecha"
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Déplacer à droite"
-          }
-        },
-        "it" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Sposta a destra"
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "右へ移動"
-          }
-        },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "오른쪽으로 이동"
-          }
-        },
-        "pt-BR" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Mover para a direita"
-          }
-        },
-        "vi" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Dời sang phải"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "右移"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "右移"
-          }
-        }
-      }
-    },
-    "另起一行" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Neue Zeile"
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "New Row"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Nueva fila"
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Nouvelle ligne"
-          }
-        },
-        "it" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Nuova riga"
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "次の行へ"
-          }
-        },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "다음 줄로"
-          }
-        },
-        "pt-BR" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Nova linha"
-          }
-        },
-        "vi" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Hàng mới"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "另起一行"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "另起一行"
+            "value" : "依目前的展開寬度，每行 %d 格"
           }
         }
       }
@@ -202672,73 +202459,73 @@
         }
       }
     },
-    "灰色的放不下，加宽展开卡片或换到第二行" : {
+    "灰色的格子放不下，加宽展开卡片才会显示" : {
       "extractionState" : "manual",
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Graue Tasten passen nicht. Verbreitere die ausgeklappte Karte oder verschiebe sie in die zweite Zeile"
+            "value" : "Graue Felder passen nicht und erscheinen erst bei breiterer ausgeklappter Karte"
           }
         },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Gray buttons don’t fit. Widen the expanded card or move them to the second row"
+            "value" : "Gray slots don’t fit and appear once the expanded card is wider"
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Los botones grises no caben. Ensancha la tarjeta expandida o pásalos a la segunda fila"
+            "value" : "Las casillas grises no caben; aparecen al ensanchar la tarjeta expandida"
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Les boutons gris ne tiennent pas. Élargissez la carte déployée ou placez-les sur la deuxième ligne"
+            "value" : "Les cases grises ne tiennent pas ; elles apparaissent si la carte déployée est plus large"
           }
         },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "I pulsanti grigi non entrano. Allarga la scheda espansa o spostali nella seconda riga"
+            "value" : "Gli slot grigi non entrano e compaiono allargando la scheda espansa"
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "グレーのボタンは収まりません。展開時の幅を広げるか2行目に移動してください"
+            "value" : "グレーの枠は収まりません。展開時の幅を広げると表示されます"
           }
         },
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "회색 버튼은 들어가지 않습니다. 펼친 너비를 넓히거나 둘째 줄로 옮기세요"
+            "value" : "회색 칸은 들어가지 않습니다. 펼친 너비를 넓히면 표시됩니다"
           }
         },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Os botões cinza não cabem. Alargue o cartão expandido ou mova-os para a segunda linha"
+            "value" : "Os espaços cinza não cabem e aparecem quando o cartão expandido fica mais largo"
           }
         },
         "vi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Nút màu xám không vừa. Hãy mở rộng thẻ hoặc chuyển xuống hàng thứ hai"
+            "value" : "Ô màu xám không vừa, sẽ hiện khi thẻ mở rộng rộng hơn"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "灰色的放不下，加宽展开卡片或换到第二行"
+            "value" : "灰色的格子放不下，加宽展开卡片才会显示"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "灰色的放不下，加寬展開卡片或換到第二行"
+            "value" : "灰色的格子放不下，加寬展開卡片才會顯示"
           }
         }
       }

@@ -245,8 +245,8 @@ func runDeepLinkTests() {
         expectEqual(link("lyrimuse://debug/notch-style?style=coverArt&expanded=same"),
                     .debug(.notchStyle(style: "coverArt", expanded: "same")), "debug: 背景、展开背景一起设")
         expectEqual(link("lyrimuse://debug/notch-style"), nil, "debug: 灵动岛风格什么都没带不认")
-        expectEqual(link("lyrimuse://debug/notch-quick-actions?layout=favorite,row-break,close"),
-                    .debug(.notchQuickActions(layout: "favorite,row-break,close")), "debug: 灵动岛快捷操作排法")
+        expectEqual(link("lyrimuse://debug/notch-quick-actions?layout=close,,settings%7Cfavorite"),
+                    .debug(.notchQuickActions(layout: "close,,settings|favorite")), "debug: 灵动岛快捷操作格子")
         expectEqual(link("lyrimuse://debug/notch-quick-actions"), nil, "debug: 快捷操作排法没带 layout 不认")
         expectEqual(link("lyrimuse://debug/word-format-switch?state=converting&format=qrc&done=30&total=100"),
                     .debug(.wordFormatSwitch(state: "converting", format: "qrc", done: 30, total: 100)), "debug: 逐字格式切换摆到改存中")
@@ -444,7 +444,7 @@ func runDeepLinkTests() {
             .debug(.notchVolume(up: true)), .debug(.notchVolume(up: false)),
             .debug(.notchStyle(style: "solidBlack", expanded: "coverArt")),
             .debug(.notchStyle(style: nil, expanded: "same")),
-            .debug(.notchQuickActions(layout: "favorite,row-break,close")),
+            .debug(.notchQuickActions(layout: "close,,settings|favorite")),
             .debug(.notchQuickActions(layout: "")),
             .debug(.wordFormatSwitch(state: "finished", format: "ttml", done: nil, total: 17564)),
             .debug(.wordFormatSwitch(state: "queued", format: nil, done: nil, total: nil)),

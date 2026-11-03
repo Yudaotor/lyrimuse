@@ -710,7 +710,6 @@
 "另有 %@ 条记录过旧，Last.fm 不再接受" = "Còn %@ mục khác quá cũ, Last.fm không nhận nữa";
 "另有 %@ 首歌曲无源应答 · 全部自动匹配" = "%@ bài khác không có nguồn phản hồi · Tự động tìm tất cả";
 "另有 %d 个文件未能写入歌词文件夹，请检查写入权限和磁盘空间" = "Còn %d tệp không ghi được vào thư mục lời bài hát. Hãy kiểm tra quyền ghi và dung lượng ổ đĩa";
-"另起一行" = "Hàng mới";
 "只显示歌词" = "Chỉ lời";
 "只显示歌词源自带的读音" = "Chỉ hiện phát âm do nguồn lời cung cấp";
 "只有播放次数、时长和新听了几位歌手" = "Chỉ lượt phát, thời lượng nghe và số nghệ sĩ mới";
@@ -730,7 +729,6 @@
 "右侧" = "Bên phải";
 "右侧颜色" = "Màu bên phải";
 "右对齐" = "Căn phải";
-"右移" = "Dời sang phải";
 "右耳" = "Tai phải";
 "右键点按主题可重命名、用当前配色覆盖或删除" = "Bấm chuột phải vào chủ đề để đổi tên, ghi đè bằng bảng màu hiện tại hoặc xóa";
 "各处是否显示译文，在「歌词显示」中设置" = "Có hiện bản dịch ở từng nơi hay không được đặt trong “Hiển thị lời”";
@@ -1009,7 +1007,6 @@
 "左侧" = "Bên trái";
 "左侧颜色" = "Màu bên trái";
 "左对齐" = "Căn trái";
-"左移" = "Dời sang trái";
 "左耳" = "Tai trái";
 "已下载" = "Đã tải về";
 "已下载 %@ / %@" = "Đã tải %@ / %@";
@@ -1303,6 +1300,7 @@
 "找到 %1$@ · 未找到 %2$@ · 跳过 %3$@" = "Tìm thấy %1$@ · Không tìm thấy %2$@ · Bỏ qua %3$@";
 "找到 %@ 首" = "Tìm thấy %@ bài";
 "把「默认正文」换成概况、三份榜单、新歌手几段，可以逐段删改、调整顺序" = "Thay “Nội dung mặc định” bằng các phần tổng quan, ba bảng xếp hạng và nghệ sĩ mới để sửa, xóa hoặc đổi thứ tự từng phần";
+"把下面的按钮拖进格子，格子可以留空" = "Kéo các nút bên dưới vào ô; ô có thể để trống";
 "报告内容" = "Nội dung báo cáo";
 "拆分" = "Tách";
 "拆分…" = "Tách…";
@@ -1310,7 +1308,6 @@
 "拆分后，该条目将作为独立歌曲：播放次数单独统计，不再同步歌词；此前同步过去的歌词将恢复为原有版本。之后可在此恢复合并" = "Mục này sẽ thành bài hát riêng: lượt phát được tính riêng và lời không còn đồng bộ. Lời đã đồng bộ sang trước đó sẽ khôi phục về bản gốc của mục. Sau này có thể hợp nhất lại tại đây";
 "拆开默认正文" = "Tách nội dung mặc định";
 "拖动调整顺序" = "Kéo để sắp xếp lại";
-"拖动调整顺序，悬停后点 × 移除" = "Kéo để sắp xếp lại, di con trỏ lên và bấm × để gỡ bỏ";
 "拷贝" = "Sao chép";
 "拷贝修复命令" = "Sao chép lệnh sửa";
 "拷贝名称" = "Sao chép tên";
@@ -1341,7 +1338,7 @@
 "按收听最多的前 %1$@ 位歌手统计，占此期间收听量的 %2$@" = "Dựa trên %1$@ nghệ sĩ được nghe nhiều nhất, chiếm %2$@ lượt phát trong giai đoạn này";
 "按收听最多的前 %@ 位歌手统计" = "Dựa trên %@ nghệ sĩ được nghe nhiều nhất";
 "按歌名和歌手识别" = "Nhận diện theo tên bài và nghệ sĩ";
-"按现在的展开宽度，每行最多放 %d 个按钮" = "Với độ rộng mở rộng hiện tại, tối đa %d nút mỗi hàng";
+"按现在的展开宽度，每行 %d 格" = "Với độ rộng mở rộng hiện tại: %d ô mỗi hàng";
 "按相关度" = "Theo độ liên quan";
 "按纯音乐处理：不显示歌词，也不自动搜索；原有歌词将保留，取消标记即可恢复" = "Xem là nhạc không lời: không hiện lời và không tự động tìm lời. Lời hiện có vẫn được giữ và sẽ hiện lại khi bỏ đánh dấu";
 "按翻唱者署名" = "Theo tên người hát lại";
@@ -2086,7 +2083,7 @@
 "源自报曲长偏离吻合版本" = "Thời lượng của nguồn lệch với bản khớp";
 "滚动" = "Cuộn";
 "演唱：%@" = "Trình bày: %@";
-"灰色的放不下，加宽展开卡片或换到第二行" = "Nút màu xám không vừa. Hãy mở rộng thẻ hoặc chuyển xuống hàng thứ hai";
+"灰色的格子放不下，加宽展开卡片才会显示" = "Ô màu xám không vừa, sẽ hiện khi thẻ mở rộng rộng hơn";
 "灵动岛" = "Notch";
 "灵动岛、菜单栏和触控栏歌词在播放时显示" = "Lời trên Notch, thanh menu và Touch Bar hiện khi đang phát";
 "灵动岛和菜单栏歌词在播放时显示" = "Lời trên Notch và thanh menu hiện khi đang phát";
@@ -2096,7 +2093,6 @@
 "灵动岛歌词" = "Lời trên Notch";
 "灵动岛歌词未开启" = "Lời trên Notch đang tắt";
 "点一下打开完整榜单" = "Chạm để mở bảng xếp hạng đầy đủ";
-"点下面的按钮加进来" = "Bấm vào một nút bên dưới để thêm";
 "点按「开始使用」，让歌词随旋律逐句亮起" = "Bấm “Bắt đầu” để từng dòng lời sáng lên theo giai điệu";
 "点按「拷贝修复命令」，打开「终端」，粘贴后按下 Return 键，按提示输入登录密码（输入时不显示字符），然后点按「启用」" = "Bấm “Sao chép lệnh sửa”, mở Terminal, dán vào rồi nhấn Return, nhập mật khẩu đăng nhập khi được hỏi (ký tự không hiện khi gõ), sau đó bấm “Bật”";
 "点按下载" = "Bấm để tải về";
@@ -2171,6 +2167,7 @@
 "移除导入的歌词" = "Gỡ lời đã nhập";
 "移除配对" = "Hủy ghép đôi";
 "稍粗" = "Trung bình";
+"空格子" = "Ô trống";
 "窗口" = "Cửa sổ";
 "立即刷新" = "Làm mới ngay";
 "立即更新" = "Cập nhật bây giờ";

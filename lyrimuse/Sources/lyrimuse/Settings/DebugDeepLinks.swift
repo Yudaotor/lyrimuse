@@ -122,9 +122,11 @@ enum DebugDeepLinks {
             }
             logger.notice("debug notch style style=\(style ?? "nil", privacy: .public) expanded=\(expanded ?? "nil", privacy: .public)")
         case let .notchQuickActions(layout):
-            AppSettings.shared.notchQuickActions = layout == "default" ? NotchQuickAction.defaultLayout
-                : NotchQuickAction.layout(fromStored: layout.split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) })
-            logger.notice("debug notch quick actions layout=\(AppSettings.shared.notchQuickActions.map(\.rawValue).joined(separator: ","), privacy: .public)")
+            AppSettings.shared.notchQuickSlots = layout == "default" ? .default
+                : NotchQuickSlots.fromStored(layout.split(separator: "|", omittingEmptySubsequences: false)
+                    .map { $0.split(separator: ",", omittingEmptySubsequences: false).map { $0.trimmingCharacters(in: .whitespaces) } },
+                                             legacy: nil)
+            logger.notice("debug notch quick slots=\(AppSettings.shared.notchQuickSlots.stored.map { $0.joined(separator: ",") }.joined(separator: "|"), privacy: .public)")
         case let .wordFormatSwitch(state, format, done, total, removing):
             let formats = format.flatMap(LyricsWordFormat.init(rawValue:)).map { [$0] }
                 ?? Array(FeatureSettingsStore.shared.lyricsWordFormats.prefix(1))

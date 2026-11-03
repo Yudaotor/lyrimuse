@@ -1,4 +1,5 @@
 import SwiftUI
+import UniformTypeIdentifiers
 import LyrimuseCore
 
 extension NotchQuickAction {
@@ -17,7 +18,6 @@ extension NotchQuickAction {
         case .settings: return "gearshape.fill"
         case .close: return "xmark"
         case .divider: return "poweron"
-        case .rowBreak: return "return"
         }
     }
 
@@ -36,7 +36,6 @@ extension NotchQuickAction {
         case .settings: return L10n.t("设置")
         case .close: return L10n.t("关闭灵动岛歌词")
         case .divider: return L10n.t("分隔线")
-        case .rowBreak: return L10n.t("另起一行")
         }
     }
 
@@ -50,64 +49,64 @@ extension NotchQuickAction {
     }
 }
 
-/// 「展开时」浮层里快捷操作那排的编辑区(「快捷操作」开着时出现):上面一条深色条按顺序排着当前那排键(「换行」也是一格,
-/// 它后面的在灵动岛上排到第二行),拖动换位置、悬停点 × 移掉;按现在的展开宽度放不下的键画成灰的。下面是还能加的键,
-/// 点一下加进去(「关闭」在最右时加在它前面)。右键每一格有左移 / 右移 / 移除,给键盘和读屏用。排法存 `AppSettings.notchQuickActions`,规则在 Core `NotchQuickAction`。见 05 章决策 130、131。
+/// 「展开时」浮层里快捷操作的编辑区(「快捷操作」开着时出现):上面一块深底照灵动岛的样子摆着两行格子,靠右对齐、从右边数起;
+/// 下面「可添加」里的键拖进哪一格就放在哪一格(点一下放进第一个空格),格子之间拖动对调,拖回「可添加」或悬停点 × 清空,
+/// 空着的格子就是留白。按现在的展开宽度看不见的格子画成灰的。右键每一格有「移除」,给键盘和读屏用。
+/// 格子存 `AppSettings.notchQuickSlots`,规则在 Core `NotchQuickSlots`。见 05 章决策 132。
 @MainActor
 struct NotchQuickActionsEditor: View {
     @ObservedObject private var settings = AppSettings.shared
-    @State private var dragging: Int?
-    @State private var dragOffset: CGFloat = 0
-    @State private var hovered: Int?
+    @State private var hovered: Slot?
+    @State private var dropTarget: Slot?
 
-    static let buttonCell: CGFloat = 26
-    static let dividerCell: CGFloat = 10
-    static let rowBreakCell: CGFloat = 20
+    struct Slot: Hashable { let row: Int; let index: Int }
+
+    static let cell: CGFloat = 26
     static let spacing: CGFloat = 4
 
-    /// 按现在的展开宽度,灵动岛头部给按钮行留多宽(同 `trackInfoQuickActions` 的算法)。稳态宽被耳朵下限顶上去时真实宽度
-    /// 比这里算的大,这里只会少算、不会多算。
-    private var capacity: Double {
+    private var slots: NotchQuickSlots { settings.notchQuickSlots }
+
+    /// 按现在的展开宽度,一行看得见几格(同 `trackInfoQuickActions` 的算法)。稳态宽被耳朵下限顶上去时真实宽度比这里算的大,
+    /// 这里只会少算、不会多算。
+    private var visibleSlots: Int {
         let width = NotchWidthBounds.expandedWidth(steady: CGFloat(settings.notchContentWidth),
                                                    expandedSetting: CGFloat(settings.notchExpandedContentWidth))
-        return NotchQuickAction.capacity(
+        let capacity = NotchQuickAction.capacity(
             contentWidth: Double(width - 2 * NotchMetrics.expandedContentInset),
             showsArtwork: settings.notchExpandedShowsArtwork,
             showsText: settings.notchExpandedShowsTrackTitle || settings.notchExpandedShowsArtist || settings.notchExpandedShowsAlbum,
             artworkSide: Double(NotchExpandedMetrics.trackInfoArtworkSide))
+        return min(NotchQuickAction.slotsThatFit(capacity: capacity), NotchQuickSlots.slotsPerRow)
     }
 
-    /// 一行最多放几颗键(不算分隔线)。
-    private var buttonsPerRow: Int {
-        max(0, Int((capacity + NotchQuickAction.cellSpacing) / (NotchQuickAction.buttonWidth + NotchQuickAction.cellSpacing)))
+    /// 编辑区每行摆几格:看得见的格子,再加上放了东西却看不见的那几格(画成灰的),至少 1 格。
+    private var shownSlots: Int {
+        let filled = (0..<NotchQuickSlots.rowCount).compactMap { slots.lastFilled(row: $0) }.max().map { $0 + 1 } ?? 0
+        return max(1, visibleSlots, filled)
     }
 
-    /// 按现在的宽度放不下、灵动岛上不画的键。
-    private var overflowing: Set<NotchQuickAction> {
-        let shown = Set(NotchQuickAction.visibleRows(layout, capacity: capacity) { _ in true }.joined())
-        return Set(layout.filter { !$0.isSeparator && !shown.contains($0) })
+    private var hasHidden: Bool {
+        (0..<NotchQuickSlots.rowCount).contains { (slots.lastFilled(row: $0) ?? -1) >= visibleSlots }
     }
 
     var body: some View {
         if settings.notchExpandedShowsQuickActions {
             SettingsRowGroup(title: L10n.t("快捷操作按钮")) {
                 VStack(alignment: .leading, spacing: 10) {
-                    strip
+                    grid
                     VStack(alignment: .leading, spacing: 2) {
-                        Text(L10n.t("拖动调整顺序，悬停后点 × 移除"))
-                        Text(String(format: L10n.t("按现在的展开宽度，每行最多放 %d 个按钮"), buttonsPerRow))
-                        if !overflowing.isEmpty {
-                            Text(L10n.t("灰色的放不下，加宽展开卡片或换到第二行"))
-                        }
+                        Text(L10n.t("把下面的按钮拖进格子，格子可以留空"))
+                        Text(String(format: L10n.t("按现在的展开宽度，每行 %d 格"), visibleSlots))
+                        if hasHidden { Text(L10n.t("灰色的格子放不下，加宽展开卡片才会显示")) }
                     }
                     .font(.system(size: 11))
                     .foregroundStyle(.secondary)
                     palette
-                    if settings.notchQuickActions != NotchQuickAction.defaultLayout {
+                    if slots != .default {
                         HStack {
                             Spacer()
                             Button(L10n.t("恢复默认")) {
-                                withAnimation(.easeOut(duration: 0.18)) { settings.notchQuickActions = NotchQuickAction.defaultLayout }
+                                withAnimation(.easeOut(duration: 0.18)) { settings.notchQuickSlots = .default }
                             }
                             .controlSize(.small)
                         }
@@ -118,60 +117,49 @@ struct NotchQuickActionsEditor: View {
         }
     }
 
-    private var layout: [NotchQuickAction] { settings.notchQuickActions }
-
-    private func width(_ action: NotchQuickAction) -> CGFloat {
-        switch action {
-        case .divider: return Self.dividerCell
-        case .rowBreak: return Self.rowBreakCell
-        default: return Self.buttonCell
-        }
-    }
-
-    /// 照灵动岛头部那排:深底、白字形、靠右排。
-    private var strip: some View {
-        HStack(spacing: Self.spacing) {
-            Spacer(minLength: 0)
-            if layout.isEmpty {
-                Text(L10n.t("点下面的按钮加进来"))
-                    .font(.system(size: 11))
-                    .foregroundStyle(.white.opacity(0.55))
-                Spacer(minLength: 0)
-            }
-            ForEach(Array(layout.enumerated()), id: \.offset) { index, action in
-                cell(action, index: index)
-            }
-        }
-        .padding(.horizontal, 10)
-        .frame(height: 38)
-        .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(Color.black.opacity(0.88)))
-        .animation(.easeOut(duration: 0.18), value: layout)
-    }
-
-    private func cell(_ action: NotchQuickAction, index: Int) -> some View {
-        let isDragged = dragging == index
-        let dimmed = overflowing.contains(action)
-        return ZStack(alignment: .topTrailing) {
-            Group {
-                switch action {
-                case .divider:
-                    Rectangle().fill(Color.white.opacity(0.3)).frame(width: 1, height: 14)
-                case .rowBreak:
-                    Image(systemName: action.symbolName)
-                        .font(.system(size: 10, weight: .semibold))
-                        .foregroundStyle(Color.accentColor)
-                default:
-                    Image(systemName: action.symbolName)
-                        .font(.system(size: 12, weight: .medium))
-                        .foregroundStyle(.white.opacity(dimmed ? 0.28 : 0.85))
+    /// 两行格子,照灵动岛:靠右排,最右是第 0 格。
+    private var grid: some View {
+        VStack(alignment: .trailing, spacing: Self.spacing) {
+            ForEach(0..<NotchQuickSlots.rowCount, id: \.self) { row in
+                HStack(spacing: Self.spacing) {
+                    Spacer(minLength: 0)
+                    ForEach((0..<shownSlots).reversed(), id: \.self) { index in
+                        cell(Slot(row: row, index: index))
+                    }
                 }
             }
-            .frame(width: width(action), height: Self.buttonCell)
-            .background(RoundedRectangle(cornerRadius: 6, style: .continuous)
-                .fill(Color.white.opacity(hovered == index || isDragged ? 0.14 : 0)))
-            if hovered == index, dragging == nil {
+        }
+        .padding(8)
+        .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(Color.black.opacity(0.88)))
+        .animation(.easeOut(duration: 0.15), value: slots)
+    }
+
+    private func cell(_ slot: Slot) -> some View {
+        let action = slots.rows[slot.row][slot.index]
+        let hidden = slot.index >= visibleSlots
+        let targeted = dropTarget == slot
+        return ZStack(alignment: .topTrailing) {
+            ZStack {
+                RoundedRectangle(cornerRadius: 6, style: .continuous)
+                    .strokeBorder(Color.white.opacity(action == nil ? (targeted ? 0.7 : 0.22) : 0),
+                                  style: StrokeStyle(lineWidth: 1, dash: [3, 3]))
+                RoundedRectangle(cornerRadius: 6, style: .continuous)
+                    .fill(Color.white.opacity(targeted ? 0.2 : (hovered == slot && action != nil ? 0.14 : 0)))
+                if let action {
+                    if action.isDivider {
+                        Rectangle().fill(Color.white.opacity(hidden ? 0.12 : 0.3)).frame(width: 1, height: 14)
+                    } else {
+                        Image(systemName: action.symbolName)
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundStyle(.white.opacity(hidden ? 0.28 : 0.85))
+                    }
+                }
+            }
+            .frame(width: Self.cell, height: Self.cell)
+            .opacity(hidden && action == nil ? 0.45 : 1)
+            if action != nil, hovered == slot {
                 Button {
-                    remove(at: index)
+                    clear(slot)
                 } label: {
                     Image(systemName: "xmark.circle.fill")
                         .font(.system(size: 11))
@@ -184,73 +172,109 @@ struct NotchQuickActionsEditor: View {
             }
         }
         .contentShape(Rectangle())
-        .offset(x: isDragged ? dragOffset : 0)
-        .zIndex(isDragged ? 1 : 0)
-        .scaleEffect(isDragged ? 1.08 : 1)
         .onHover { inside in
-            if inside { hovered = index } else if hovered == index { hovered = nil }
+            if inside { hovered = slot } else if hovered == slot { hovered = nil }
         }
-        .help(dimmed ? "\(action.displayName) · \(L10n.t("展开宽度不够，放不下"))"
-              : action.conditionNote.map { "\(action.displayName) · \($0)" } ?? action.displayName)
-        .gesture(DragGesture(minimumDistance: 3)
-            .onChanged { value in
-                dragging = index
-                dragOffset = value.translation.width
-            }
-            .onEnded { value in
-                let target = NotchQuickAction.dropIndex(widths: layout.map { Double(width($0) + Self.spacing) },
-                                                        dragged: index, offset: Double(value.translation.width))
-                dragging = nil
-                dragOffset = 0
-                if target != index { settings.notchQuickActions = NotchQuickAction.moving(layout, from: index, to: target) }
-            })
+        .help(help(for: action, hidden: hidden))
+        .modifier(SlotDragSource(payload: action == nil ? nil : "slot:\(slot.row):\(slot.index)"))
+        .onDrop(of: [UTType.plainText], isTargeted: Binding(
+            get: { dropTarget == slot },
+            set: { inside in if inside { dropTarget = slot } else if dropTarget == slot { dropTarget = nil } })) { providers in
+            receive(providers) { payload in drop(payload, on: slot) }
+        }
         .contextMenu {
-            Button(L10n.t("左移")) { settings.notchQuickActions = NotchQuickAction.moving(layout, from: index, to: index - 1) }
-                .disabled(index == 0)
-            Button(L10n.t("右移")) { settings.notchQuickActions = NotchQuickAction.moving(layout, from: index, to: index + 1) }
-                .disabled(index == layout.count - 1)
-            Divider()
-            Button(L10n.t("移除")) { remove(at: index) }
+            if action != nil { Button(L10n.t("移除")) { clear(slot) } }
         }
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(action.displayName)
+        .accessibilityLabel(action?.displayName ?? L10n.t("空格子"))
     }
 
-    private func remove(at index: Int) {
-        guard layout.indices.contains(index) else { return }
+    private func help(for action: NotchQuickAction?, hidden: Bool) -> String {
+        guard let action else { return L10n.t("空格子") }
+        if hidden { return "\(action.displayName) · \(L10n.t("展开宽度不够，放不下"))" }
+        return action.conditionNote.map { "\(action.displayName) · \($0)" } ?? action.displayName
+    }
+
+    private func clear(_ slot: Slot) {
         hovered = nil
-        var next = layout
-        next.remove(at: index)
-        settings.notchQuickActions = next
+        settings.notchQuickSlots = slots.clearing(row: slot.row, slot: slot.index)
+    }
+
+    /// 拖进一格:「palette:<键>」放进去(已经在别处的键从原处挪过来),「slot:<行>:<格>」跟这一格对调。
+    private func drop(_ payload: String, on slot: Slot) {
+        let parts = payload.split(separator: ":").map(String.init)
+        if parts.count == 2, parts[0] == "palette", let action = NotchQuickAction(rawValue: parts[1]) {
+            settings.notchQuickSlots = slots.placing(action, row: slot.row, slot: slot.index)
+        } else if parts.count == 3, parts[0] == "slot", let row = Int(parts[1]), let index = Int(parts[2]) {
+            settings.notchQuickSlots = slots.moving(fromRow: row, fromSlot: index, toRow: slot.row, toSlot: slot.index)
+        }
+        dropTarget = nil
+    }
+
+    private func receive(_ providers: [NSItemProvider], _ handle: @escaping @MainActor (String) -> Void) -> Bool {
+        guard let provider = providers.first else { return false }
+        _ = provider.loadObject(ofClass: NSString.self) { object, _ in
+            guard let text = object as? NSString else { return }
+            let payload = text as String
+            Task { @MainActor in handle(payload) }
+        }
+        return true
     }
 
     private var palette: some View {
-        let addable = NotchQuickAction.paletteOrder.filter { NotchQuickAction.canAdd($0, to: layout) }
+        let placed = slots.placed
+        let addable = NotchQuickAction.paletteOrder.filter { $0.isDivider || !placed.contains($0) }
         return VStack(alignment: .leading, spacing: 6) {
             Text(L10n.t("可添加"))
                 .font(.system(size: 11, weight: .semibold))
                 .foregroundStyle(.secondary)
             WrapLayout(horizontalSpacing: 6, verticalSpacing: 6, rowAlignment: .leading) {
+                // 不用 Button:按钮的点按会抢掉拖动手势,点一下和拖出去要同时成立。
                 ForEach(addable, id: \.self) { action in
-                    Button {
-                        withAnimation(.easeOut(duration: 0.18)) {
-                            settings.notchQuickActions = NotchQuickAction.adding(action, to: layout)
-                        }
-                    } label: {
-                        HStack(spacing: 4) {
-                            Image(systemName: action.isDivider ? "minus" : action.symbolName)
-                                .font(.system(size: 10, weight: .medium))
-                                .rotationEffect(action.isDivider ? .degrees(90) : .zero)
-                            Text(action.displayName).font(.system(size: 11))
-                        }
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 4)
-                        .background(Capsule().fill(Color.primary.opacity(0.07)))
+                    HStack(spacing: 4) {
+                        Image(systemName: action.isDivider ? "minus" : action.symbolName)
+                            .font(.system(size: 10, weight: .medium))
+                            .rotationEffect(action.isDivider ? .degrees(90) : .zero)
+                        Text(action.displayName).font(.system(size: 11))
                     }
-                    .buttonStyle(.plain)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(Capsule().fill(Color.primary.opacity(0.07)))
+                    .contentShape(Capsule())
+                    .onTapGesture {
+                        withAnimation(.easeOut(duration: 0.18)) {
+                            settings.notchQuickSlots = slots.addingToFirstEmpty(action, visibleSlots: visibleSlots)
+                        }
+                    }
                     .help(action.conditionNote ?? action.displayName)
+                    .modifier(SlotDragSource(payload: "palette:\(action.rawValue)"))
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel(action.displayName)
+                    .accessibilityAddTraits(.isButton)
                 }
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        // 格子里的键拖回这一栏就是移掉。
+        .onDrop(of: [UTType.plainText], isTargeted: nil) { providers in
+            receive(providers) { payload in
+                let parts = payload.split(separator: ":").map(String.init)
+                guard parts.count == 3, parts[0] == "slot", let row = Int(parts[1]), let index = Int(parts[2]) else { return }
+                settings.notchQuickSlots = slots.clearing(row: row, slot: index)
+            }
+        }
+    }
+}
+
+/// 能拖的格子 / 键:拖出去的是一串文字(「palette:<键>」或「slot:<行>:<格>」),空格子不能拖。
+private struct SlotDragSource: ViewModifier {
+    let payload: String?
+
+    func body(content: Content) -> some View {
+        if let payload {
+            content.onDrag { NSItemProvider(object: payload as NSString) }
+        } else {
+            content
         }
     }
 }

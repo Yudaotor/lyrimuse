@@ -763,7 +763,6 @@
 "另有 %@ 首歌曲无源应答 · 全部自动匹配" = "Mais %@ músicas sem resposta das fontes · Buscar todas";
 "另有 %@ 首歌曲无源应答 · 全部自动匹配#one" = "Mais %@ música sem resposta das fontes · Buscar todas";
 "另有 %d 个文件未能写入歌词文件夹，请检查写入权限和磁盘空间" = "Outros arquivos não gravados na pasta de letras: %d. Verifique a permissão de gravação e o espaço em disco";
-"另起一行" = "Nova linha";
 "只显示歌词" = "Só a letra";
 "只显示歌词源自带的读音" = "Mostra só a pronúncia fornecida pela fonte de letras";
 "只有播放次数、时长和新听了几位歌手" = "Só reproduções, tempo de audição e quantos artistas novos";
@@ -783,7 +782,6 @@
 "右侧" = "Direita";
 "右侧颜色" = "Cor direita";
 "右对齐" = "Direita";
-"右移" = "Mover para a direita";
 "右耳" = "Ouvido direito";
 "右键点按主题可重命名、用当前配色覆盖或删除" = "Clique com o botão direito em um tema para renomeá-lo, substituí-lo pelas cores atuais ou apagá-lo";
 "各处是否显示译文，在「歌词显示」中设置" = "Onde a tradução aparece é definido em “Exibição da letra”";
@@ -1069,7 +1067,6 @@
 "左侧" = "Esquerda";
 "左侧颜色" = "Cor esquerda";
 "左对齐" = "Esquerda";
-"左移" = "Mover para a esquerda";
 "左耳" = "Ouvido esquerdo";
 "已下载" = "Baixado";
 "已下载 %@ / %@" = "%@ de %@ baixados";
@@ -1376,6 +1373,7 @@
 "找到 %1$@ · 未找到 %2$@ · 跳过 %3$@" = "Encontradas: %1$@ · Não encontradas: %2$@ · Puladas: %3$@";
 "找到 %@ 首" = "Encontradas: %@";
 "把「默认正文」换成概况、三份榜单、新歌手几段，可以逐段删改、调整顺序" = "Substitui o corpo padrão por suas partes (resumo, os três rankings, artistas novos) para editar, remover ou reordenar cada uma";
+"把下面的按钮拖进格子，格子可以留空" = "Arraste os botões abaixo para os espaços; espaços podem ficar vazios";
 "报告内容" = "Conteúdo do relatório";
 "拆分" = "Separar";
 "拆分…" = "Separar…";
@@ -1383,7 +1381,6 @@
 "拆分后，该条目将作为独立歌曲：播放次数单独统计，不再同步歌词；此前同步过去的歌词将恢复为原有版本。之后可在此恢复合并" = "A entrada vai virar uma música à parte: as reproduções dela são contadas separadamente e a letra deixa de ser sincronizada. A letra sincronizada com ela antes volta a ser a dela. Você pode mesclá-la de novo aqui depois";
 "拆开默认正文" = "Dividir corpo padrão";
 "拖动调整顺序" = "Arraste para reordenar";
-"拖动调整顺序，悬停后点 × 移除" = "Arraste para reordenar; passe o cursor e clique em × para remover";
 "拷贝" = "Copiar";
 "拷贝修复命令" = "Copiar comando de reparo";
 "拷贝名称" = "Copiar nome";
@@ -1416,7 +1413,7 @@
 "按收听最多的前 %@ 位歌手统计" = "Com base no seu top %@ de artistas";
 "按收听最多的前 %@ 位歌手统计#one" = "Com base no seu top %@ de artistas";
 "按歌名和歌手识别" = "Identificada por título e artista";
-"按现在的展开宽度，每行最多放 %d 个按钮" = "Com a largura expandida atual, até %d botões por linha";
+"按现在的展开宽度，每行 %d 格" = "Com a largura expandida atual: %d espaços por linha";
 "按相关度" = "Por relevância";
 "按纯音乐处理：不显示歌词，也不自动搜索；原有歌词将保留，取消标记即可恢复" = "Tratar como instrumental: a letra fica oculta e não é buscada automaticamente. A letra existente é mantida e volta quando você remove a marca";
 "按翻唱者署名" = "Artista da versão pelo título";
@@ -2169,7 +2166,7 @@
 "源自报曲长偏离吻合版本" = "Duração da fonte difere da versão correspondente";
 "滚动" = "Rolar";
 "演唱：%@" = "de %@";
-"灰色的放不下，加宽展开卡片或换到第二行" = "Os botões cinza não cabem. Alargue o cartão expandido ou mova-os para a segunda linha";
+"灰色的格子放不下，加宽展开卡片才会显示" = "Os espaços cinza não cabem e aparecem quando o cartão expandido fica mais largo";
 "灵动岛" = "Notch";
 "灵动岛、菜单栏和触控栏歌词在播放时显示" = "A letra do notch, da barra de menus e da Touch Bar aparece durante a reprodução";
 "灵动岛和菜单栏歌词在播放时显示" = "A letra do notch e da barra de menus aparece durante a reprodução";
@@ -2179,7 +2176,6 @@
 "灵动岛歌词" = "Letra no notch";
 "灵动岛歌词未开启" = "“Letra no notch” está desativado";
 "点一下打开完整榜单" = "Toque para abrir o ranking completo";
-"点下面的按钮加进来" = "Clique em um botão abaixo para adicioná-lo";
 "点按「开始使用」，让歌词随旋律逐句亮起" = "Clique em “Começar” e deixe cada linha acender com a música";
 "点按「拷贝修复命令」，打开「终端」，粘贴后按下 Return 键，按提示输入登录密码（输入时不显示字符），然后点按「启用」" = "Clique em “Copiar comando de reparo”, abra o Terminal, cole e pressione Return, digite sua senha de início de sessão quando pedido (nada aparece ao digitar) e clique em “Ativar”";
 "点按下载" = "Clique para baixar";
@@ -2256,6 +2252,7 @@
 "移除导入的歌词" = "Remover letra importada";
 "移除配对" = "Desemparelhar";
 "稍粗" = "Médio";
+"空格子" = "Espaço vazio";
 "窗口" = "Janela";
 "立即刷新" = "Atualizar agora";
 "立即更新" = "Atualizar agora";

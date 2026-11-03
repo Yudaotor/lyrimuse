@@ -95,7 +95,7 @@ public enum NotchExpandedMetrics {
     /// 取 `max` 不取和 —— 三行文字(14+12+11+2 = 39)本来就比它(22)高,常见配置下开关它不改高度;
     /// 只有文字项全关(或只开一两行矮的)时它才是决定高度的那一块。
     ///
-    /// `actionRows`:快捷操作排成几行(`NotchQuickAction.rowCount`),两行 = 22 + 2 + 22 = 46,比三行文字高,这时头部按它留。
+    /// `actionRows`:快捷操作用了几行(`NotchQuickSlots.usedRowCount`),两行 = 22 + 2 + 22 = 46,比三行文字高,这时头部按它留。
     public static func trackInfoHeight(showsArtwork: Bool, showsTitle: Bool, showsArtist: Bool, showsAlbum: Bool,
                                        showsActions: Bool = false, actionRows: Int = 1) -> CGFloat {
         var textHeight: CGFloat = 0

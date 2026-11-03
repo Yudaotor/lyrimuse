@@ -763,7 +763,6 @@
 "另有 %@ 首歌曲无源应答 · 全部自动匹配" = "%@ weitere Titel ohne Antwort der Quellen · Alle zuordnen";
 "另有 %@ 首歌曲无源应答 · 全部自动匹配#one" = "%@ weiterer Titel ohne Antwort der Quellen · Alle zuordnen";
 "另有 %d 个文件未能写入歌词文件夹，请检查写入权限和磁盘空间" = "%d weitere konnten nicht in den Liedtextordner geschrieben werden. Prüfe Schreibrechte und Speicherplatz";
-"另起一行" = "Neue Zeile";
 "只显示歌词" = "Nur Liedtext";
 "只显示歌词源自带的读音" = "Zeigt nur die Umschrift der Liedtextquelle";
 "只有播放次数、时长和新听了几位歌手" = "Nur Wiedergaben, Hördauer und Anzahl neuer Künstler";
@@ -783,7 +782,6 @@
 "右侧" = "Rechts";
 "右侧颜色" = "Farbe rechts";
 "右对齐" = "Rechts";
-"右移" = "Nach rechts";
 "右耳" = "Rechtes Ohr";
 "右键点按主题可重命名、用当前配色覆盖或删除" = "Klicke mit der rechten Maustaste auf ein Design, um es umzubenennen, mit den aktuellen Farben zu überschreiben oder zu löschen";
 "各处是否显示译文，在「歌词显示」中设置" = "Wo Übersetzungen erscheinen, legst du in „Liedtext-Anzeige“ fest";
@@ -1069,7 +1067,6 @@
 "左侧" = "Links";
 "左侧颜色" = "Farbe links";
 "左对齐" = "Links";
-"左移" = "Nach links";
 "左耳" = "Linkes Ohr";
 "已下载" = "Geladen";
 "已下载 %@ / %@" = "%@ von %@ geladen";
@@ -1376,6 +1373,7 @@
 "找到 %1$@ · 未找到 %2$@ · 跳过 %3$@" = "Gefunden %1$@ · Nicht gefunden %2$@ · Übersprungen %3$@";
 "找到 %@ 首" = "%@ gefunden";
 "把「默认正文」换成概况、三份榜单、新歌手几段，可以逐段删改、调整顺序" = "Ersetzt den Standardtext durch seine Teile (Übersicht, die drei Ranglisten, neue Künstler), damit du jeden bearbeiten, entfernen oder umordnen kannst";
+"把下面的按钮拖进格子，格子可以留空" = "Tasten von unten in die Felder ziehen; Felder dürfen leer bleiben";
 "报告内容" = "Berichtsinhalt";
 "拆分" = "Abtrennen";
 "拆分…" = "Abtrennen …";
@@ -1383,7 +1381,6 @@
 "拆分后，该条目将作为独立歌曲：播放次数单独统计，不再同步歌词；此前同步过去的歌词将恢复为原有版本。之后可在此恢复合并" = "Der Eintrag wird zu einem eigenen Titel: Wiedergaben werden getrennt gezählt und der Liedtext nicht mehr synchronisiert. Zuvor übernommener Liedtext wird auf seinen eigenen zurückgesetzt. Du kannst ihn hier später wieder zusammenführen";
 "拆开默认正文" = "Standardtext aufteilen";
 "拖动调整顺序" = "Zum Sortieren ziehen";
-"拖动调整顺序，悬停后点 × 移除" = "Zum Umordnen ziehen, zum Entfernen darauf zeigen und × klicken";
 "拷贝" = "Kopieren";
 "拷贝修复命令" = "Reparaturbefehl kopieren";
 "拷贝名称" = "Namen kopieren";
@@ -1416,7 +1413,7 @@
 "按收听最多的前 %@ 位歌手统计" = "Basierend auf deinen Top-%@-Künstlern";
 "按收听最多的前 %@ 位歌手统计#one" = "Basierend auf deinem Top-%@-Künstler";
 "按歌名和歌手识别" = "Nach Titel und Künstler erkannt";
-"按现在的展开宽度，每行最多放 %d 个按钮" = "Bei der aktuellen ausgeklappten Breite höchstens %d Tasten pro Zeile";
+"按现在的展开宽度，每行 %d 格" = "Bei der aktuellen ausgeklappten Breite: %d Felder pro Zeile";
 "按相关度" = "Nach Relevanz";
 "按纯音乐处理：不显示歌词，也不自动搜索；原有歌词将保留，取消标记即可恢复" = "Als instrumental behandeln: Liedtexte werden ausgeblendet und nicht automatisch gesucht. Vorhandene Texte bleiben erhalten und kehren zurück, wenn du die Markierung entfernst";
 "按翻唱者署名" = "Coverkünstler aus dem Titel";
@@ -2169,7 +2166,7 @@
 "源自报曲长偏离吻合版本" = "Dauer der Quelle weicht von passender Version ab";
 "滚动" = "Scrollen";
 "演唱：%@" = "von %@";
-"灰色的放不下，加宽展开卡片或换到第二行" = "Graue Tasten passen nicht. Verbreitere die ausgeklappte Karte oder verschiebe sie in die zweite Zeile";
+"灰色的格子放不下，加宽展开卡片才会显示" = "Graue Felder passen nicht und erscheinen erst bei breiterer ausgeklappter Karte";
 "灵动岛" = "Notch";
 "灵动岛、菜单栏和触控栏歌词在播放时显示" = "Notch-, Menüleisten- und Touch-Bar-Text erscheinen bei Wiedergabe";
 "灵动岛和菜单栏歌词在播放时显示" = "Notch- und Menüleisten-Text erscheinen bei Wiedergabe";
@@ -2179,7 +2176,6 @@
 "灵动岛歌词" = "Notch-Text";
 "灵动岛歌词未开启" = "Notch-Liedtext ist aus";
 "点一下打开完整榜单" = "Tippen für die ganze Rangliste";
-"点下面的按钮加进来" = "Unten auf eine Taste klicken, um sie hinzuzufügen";
 "点按「开始使用」，让歌词随旋律逐句亮起" = "Klicke auf „Los geht’s“ und jede Zeile leuchtet mit der Musik auf";
 "点按「拷贝修复命令」，打开「终端」，粘贴后按下 Return 键，按提示输入登录密码（输入时不显示字符），然后点按「启用」" = "Klicke auf „Reparaturbefehl kopieren“, öffne „Terminal“, füge ihn ein und drücke den Zeilenschalter, gib bei Aufforderung dein Anmeldepasswort ein (die Eingabe ist unsichtbar) und klicke dann auf „Aktivieren“";
 "点按下载" = "Klicken zum Laden";
@@ -2256,6 +2252,7 @@
 "移除导入的歌词" = "Importierten Liedtext entfernen";
 "移除配对" = "Entkoppeln";
 "稍粗" = "Mittel";
+"空格子" = "Leeres Feld";
 "窗口" = "Fenster";
 "立即刷新" = "Jetzt aktualisieren";
 "立即更新" = "Jetzt aktualisieren";

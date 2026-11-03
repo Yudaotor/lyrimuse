@@ -1,9 +1,7 @@
 import Foundation
 
-/// 灵动岛展开卡头部右侧那排快捷操作里的一格:哪颗键、排在第几、在哪换行,用户在设置「展开时」浮层里自己排
-/// (`np:notchQuickActions`,存 rawValue 数组)。画法和动作在 App 侧 `NotchLyricsView.trackInfoQuickActions`。
-/// 放多少颗不设固定上限:每一行按头部此刻的宽度装(`capacity`),装不下的从这一行最左边起不画。
-/// 见 05 章决策 130、131。
+/// 灵动岛展开卡头部右侧快捷操作里能放的东西:一颗键或一条分隔线。放在哪一格由 `NotchQuickSlots` 管,
+/// 画法和动作在 App 侧 `NotchLyricsView.trackInfoQuickActions`。见 05 章决策 130、131、132。
 public enum NotchQuickAction: String, CaseIterable, Codable, Sendable {
     case favorite
     case searchLyrics = "search-lyrics"
@@ -16,91 +14,27 @@ public enum NotchQuickAction: String, CaseIterable, Codable, Sendable {
     case lastfm
     case settings
     case close
-    /// 分组竖线,可以放不止一条。
+    /// 分组竖线,占一整格,可以放不止一条。
     case divider
-    /// 从这里起换到第二行。最多一个。
-    case rowBreak = "row-break"
 
-    /// 没自己排过时的那一排。
-    public static let defaultLayout: [NotchQuickAction] = [
-        .favorite, .searchLyrics, .toggleLyrics, .divider, .lastfm, .settings, .close,
-    ]
-
-    /// 最多几条分隔线。
-    public static let maxDividers = 3
-
-    /// 一颗键的命中宽(同 `NotchExpandedMetrics.trackInfoActionsHeight`)、一条分隔线连左右留白的宽、格与格之间的间距。
-    /// App 侧画法(`NotchLyricsView.quickActionCell`)用的是同一组数,两处要一起改。
-    public static let buttonWidth: Double = 22
-    public static let dividerWidth: Double = 7
-    public static let cellSpacing: Double = 2
-    /// 歌名歌手那一列至少留多宽(约 8 个汉字);按钮行装不下时让的是按钮,不是这一列。
-    public static let minTextWidth: Double = 120
-    /// 头部里封面、文字、按钮行之间的间距(`trackInfoHeader` 的 HStack)。
-    public static let headerSpacing: Double = 8
+    public var isDivider: Bool { self == .divider }
 
     /// 设置里「可添加」那一栏的顺序。
     public static let paletteOrder: [NotchQuickAction] = [
         .favorite, .searchLyrics, .toggleLyrics, .lyricsWindow, .lyricsManager, .shareLyrics,
-        .toggleOverlay, .openPlayer, .lastfm, .settings, .close, .divider, .rowBreak,
+        .toggleOverlay, .openPlayer, .lastfm, .settings, .close, .divider,
     ]
 
-    public var isDivider: Bool { self == .divider }
-    /// 分隔线、换行这种不是键的格。
-    public var isSeparator: Bool { self == .divider || self == .rowBreak }
+    /// 一格的宽(同 `NotchExpandedMetrics.trackInfoActionsHeight` 的命中尺寸)、格与格之间的间距。
+    /// App 侧画法用的是同一组数,两处要一起改。
+    public static let cellWidth: Double = 22
+    public static let cellSpacing: Double = 2
+    /// 歌名歌手那一列至少留多宽(约 8 个汉字);格子装不下时让的是格子,不是这一列。
+    public static let minTextWidth: Double = 120
+    /// 头部里封面、文字、按钮区之间的间距(`trackInfoHeader` 的 HStack)。
+    public static let headerSpacing: Double = 8
 
-    /// 存着的数组 → 排法:认不出的丢掉,同一颗键、换行只留第一次出现的,分隔线按上限截。
-    /// 存的是空数组就是空排法(用户把键都移掉了);没存过用 `defaultLayout`。
-    public static func layout(fromStored raw: [String]?) -> [NotchQuickAction] {
-        guard let raw else { return defaultLayout }
-        var seen = Set<NotchQuickAction>()
-        var dividers = 0
-        var out: [NotchQuickAction] = []
-        for value in raw {
-            guard let action = NotchQuickAction(rawValue: value) else { continue }
-            if action.isDivider {
-                guard dividers < maxDividers else { continue }
-                dividers += 1
-            } else {
-                guard !seen.contains(action) else { continue }
-                seen.insert(action)
-            }
-            out.append(action)
-        }
-        return out
-    }
-
-    /// 按换行拆成一行或两行(换行本身不在里面)。
-    public static func rows(_ layout: [NotchQuickAction]) -> [[NotchQuickAction]] {
-        guard let cut = layout.firstIndex(of: .rowBreak) else { return [layout] }
-        return [Array(layout[..<cut]), Array(layout[(cut + 1)...]).filter { $0 != .rowBreak }]
-    }
-
-    /// 头部按几行留高度:换行两边都有键才是两行。只看排法,不看这一刻哪颗键能不能画、宽度够不够 ——
-    /// 高度跟着开关走,不该因为换了一首没有「喜欢」的歌就抽一下。
-    public static func rowCount(_ layout: [NotchQuickAction]) -> Int {
-        rows(layout).filter { $0.contains { !$0.isSeparator } }.count >= 2 ? 2 : 1
-    }
-
-    /// 去掉落到头尾的分隔线和挨在一起的分隔线。
-    public static func trimmedDividers(_ row: [NotchQuickAction]) -> [NotchQuickAction] {
-        var out: [NotchQuickAction] = []
-        for action in row where action != .rowBreak {
-            if action.isDivider, out.last?.isDivider ?? true { continue }
-            out.append(action)
-        }
-        if out.last?.isDivider == true { out.removeLast() }
-        return out
-    }
-
-    /// 一行的宽。
-    public static func width(of row: [NotchQuickAction]) -> Double {
-        guard !row.isEmpty else { return 0 }
-        let cells = row.reduce(0.0) { $0 + ($1.isDivider ? dividerWidth : buttonWidth) }
-        return cells + Double(row.count - 1) * cellSpacing
-    }
-
-    /// 头部给按钮行留多宽:内容区宽减去封面、歌名歌手那一列的最小宽和它们之间的间距。
+    /// 头部给按钮区留多宽:内容区宽减去封面、歌名歌手那一列的最小宽和它们之间的间距。
     public static func capacity(contentWidth: Double, showsArtwork: Bool, showsText: Bool, artworkSide: Double) -> Double {
         var used = 0.0
         if showsArtwork { used += artworkSide + headerSpacing }
@@ -108,62 +42,118 @@ public enum NotchQuickAction: String, CaseIterable, Codable, Sendable {
         return max(0, contentWidth - used)
     }
 
-    /// 这一刻真正画出来的几行:`available` 为假的键(播放器没有「喜欢」、没连 Last.fm、广告期间的喜欢)拿掉,
-    /// 头尾和挨着的分隔线去掉;一行宽过 `capacity` 就从这一行最左边起一格一格不画,直到装得下(最右边的 ✕ 留得最久)。
-    /// 空行不出现。
-    public static func visibleRows(_ layout: [NotchQuickAction], capacity: Double = .infinity,
-                                   available: (NotchQuickAction) -> Bool) -> [[NotchQuickAction]] {
-        rows(layout).compactMap { row in
-            var kept = trimmedDividers(row.filter { $0.isDivider || available($0) })
-            while !kept.isEmpty, width(of: kept) > capacity { kept = trimmedDividers(Array(kept.dropFirst())) }
-            return kept.isEmpty ? nil : kept
+    /// 这么宽一行能摆几格。
+    public static func slotsThatFit(capacity: Double) -> Int {
+        max(0, Int((capacity + cellSpacing) / (cellWidth + cellSpacing)))
+    }
+}
+
+/// 快捷操作的格子:两行,每行固定一串格子,每格放一颗键、一条分隔线或空着(中间空着就是留白)。格子从**右边**数起
+/// (`rows[r][0]` 是最右那格),跟灵动岛上这块靠右对齐一致:卡片变窄时少掉的是最左边那几格,右边的位置不挪。
+/// 一颗键最多出现一次。存 `np:notchQuickActionSlots`(两个字符串数组,空格是 "")。见 05 章决策 132。
+public struct NotchQuickSlots: Equatable, Sendable {
+    public static let rowCount = 2
+    /// 每行最多存几格。展开宽 800pt、关着封面时一行约 26 格,存 16 格够用;多出的格子不画。
+    public static let slotsPerRow = 16
+
+    public private(set) var rows: [[NotchQuickAction?]]
+
+    /// 规整:补齐 / 截到两行、每行 `slotsPerRow` 格;同一颗键只留先出现的那格(第一行从右往左、再第二行)。
+    public init(rows: [[NotchQuickAction?]]) {
+        var seen = Set<NotchQuickAction>()
+        var out: [[NotchQuickAction?]] = []
+        for r in 0..<Self.rowCount {
+            let source = r < rows.count ? rows[r] : []
+            out.append((0..<Self.slotsPerRow).map { i -> NotchQuickAction? in
+                guard i < source.count, let action = source[i] else { return nil }
+                if action.isDivider { return action }
+                guard !seen.contains(action) else { return nil }
+                seen.insert(action)
+                return action
+            })
         }
+        self.rows = out
     }
 
-    /// 还能不能再加这一格。
-    public static func canAdd(_ action: NotchQuickAction, to layout: [NotchQuickAction]) -> Bool {
-        if action.isDivider { return layout.filter(\.isDivider).count < maxDividers }
-        return !layout.contains(action)
-    }
+    /// 没自己排过时:第一行从右往左 关闭 · 设置 · Last.fm │ 显示歌词 · 搜索歌词 · 喜欢,第二行空着。
+    public static let `default` = NotchQuickSlots(rows: [
+        [.close, .settings, .lastfm, .divider, .toggleLyrics, .searchLyrics, .favorite],
+    ])
 
-    /// 加一格。键加到末尾,末尾是「关闭」时加在它前面(✕ 留在最右边上);换行加在第一条分隔线那里(两组各占一行),
-    /// 没有分隔线就加在正中。加不了原样返回。
-    public static func adding(_ action: NotchQuickAction, to layout: [NotchQuickAction]) -> [NotchQuickAction] {
-        guard canAdd(action, to: layout) else { return layout }
-        var out = layout
-        if action == .rowBreak {
-            out.insert(action, at: out.firstIndex(of: .divider) ?? out.count / 2)
-        } else if action != .close, out.last == .close {
-            out.insert(action, at: out.count - 1)
-        } else {
-            out.append(action)
+    /// 读设置:有格子就用格子;没有时把旧的一串排法(`np:notchQuickActions`,从左往右、`row-break` 换行)换成格子,
+    /// 每行靠右摆、顺序不变;都没有用默认。
+    public static func fromStored(_ raw: [[String]]?, legacy: [String]?) -> NotchQuickSlots {
+        if let raw {
+            return NotchQuickSlots(rows: raw.map { $0.map { NotchQuickAction(rawValue: $0) } })
         }
-        return out
+        guard let legacy else { return .default }
+        let cut = legacy.firstIndex(of: "row-break")
+        let lines = cut.map { [Array(legacy[..<$0]), Array(legacy[($0 + 1)...])] } ?? [legacy]
+        return NotchQuickSlots(rows: lines.map { line in
+            line.compactMap { NotchQuickAction(rawValue: $0) }.reversed().map { Optional($0) }
+        })
     }
 
-    /// 把第 `from` 格挪到第 `to` 格(按挪完之后的位置算),越界夹到两头。
-    public static func moving(_ layout: [NotchQuickAction], from: Int, to: Int) -> [NotchQuickAction] {
-        guard layout.indices.contains(from) else { return layout }
-        var out = layout
-        let item = out.remove(at: from)
-        out.insert(item, at: min(max(to, 0), out.count))
-        return out
-    }
+    /// 存设置用的样子:空格写 ""。
+    public var stored: [[String]] { rows.map { $0.map { $0?.rawValue ?? "" } } }
 
-    /// 设置编辑区里拖动时落在第几格:`widths` 是每格的宽(含间距),`dragged` 是被拖那格,`offset` 是它中线相对起点挪了多少。
-    /// 中线越过邻格中线就换过去。
-    public static func dropIndex(widths: [Double], dragged: Int, offset: Double) -> Int {
-        guard widths.indices.contains(dragged) else { return dragged }
-        var lefts: [Double] = []
-        var x = 0.0
-        for w in widths { lefts.append(x); x += w }
-        let center = lefts[dragged] + widths[dragged] / 2 + offset
-        var target = dragged
-        for i in widths.indices where i != dragged {
-            let mid = lefts[i] + widths[i] / 2
-            if i < dragged, center < mid { target = min(target, i) }
-            if i > dragged, center > mid { target = max(target, i) }
+    /// 头部按几行留高度:第二行有东西就是两行。只看格子,不看这一刻哪颗键画得出来、宽度够不够 ——
+    /// 高度跟着设置走,不因为换了一首没有「喜欢」的歌就抽一下。
+    public var usedRowCount: Int { rows[1].contains { $0 != nil } ? 2 : 1 }
+
+    /// 已经放进格子的键(分隔线不算)。
+    public var placed: Set<NotchQuickAction> { Set(rows.joined().compactMap { $0 }.filter { !$0.isDivider }) }
+
+    /// 第 `row` 行最左一格有东西的是第几格(从右数,0 起);整行空是 nil。
+    public func lastFilled(row: Int) -> Int? { rows[row].lastIndex { $0 != nil } }
+
+    /// 放进某一格,原来那格的东西被换掉。放的是已经在别处的键时,那一格清空(一颗键只出现一次)。
+    public func placing(_ action: NotchQuickAction, row: Int, slot: Int) -> NotchQuickSlots {
+        guard rows.indices.contains(row), rows[row].indices.contains(slot) else { return self }
+        var next = rows
+        if !action.isDivider {
+            for r in next.indices { for i in next[r].indices where next[r][i] == action { next[r][i] = nil } }
         }
-        return target
+        next[row][slot] = action
+        return NotchQuickSlots(rows: next)
+    }
+
+    public func clearing(row: Int, slot: Int) -> NotchQuickSlots {
+        guard rows.indices.contains(row), rows[row].indices.contains(slot) else { return self }
+        var next = rows
+        next[row][slot] = nil
+        return NotchQuickSlots(rows: next)
+    }
+
+    /// 把一格挪到另一格:目标格原来有东西就跟它对调。
+    public func moving(fromRow: Int, fromSlot: Int, toRow: Int, toSlot: Int) -> NotchQuickSlots {
+        guard rows.indices.contains(fromRow), rows[fromRow].indices.contains(fromSlot),
+              rows.indices.contains(toRow), rows[toRow].indices.contains(toSlot) else { return self }
+        var next = rows
+        let moved = next[fromRow][fromSlot]
+        next[fromRow][fromSlot] = next[toRow][toSlot]
+        next[toRow][toSlot] = moved
+        return NotchQuickSlots(rows: next)
+    }
+
+    /// 点一下「可添加」里的键:放进看得见的格子里第一个空的(第一行从右往左,再第二行);都满了原样返回。
+    public func addingToFirstEmpty(_ action: NotchQuickAction, visibleSlots: Int) -> NotchQuickSlots {
+        let limit = min(max(visibleSlots, 0), Self.slotsPerRow)
+        for r in rows.indices {
+            if let i = (0..<limit).first(where: { rows[r][$0] == nil }) { return placing(action, row: r, slot: i) }
+        }
+        return self
+    }
+
+    /// 灵动岛上这一行画什么,**从左往右**:看得见的那几格(`visibleSlots`,按宽度算)里,`available` 为假的键
+    /// (播放器没有「喜欢」、没连 Last.fm、广告期间的喜欢)当空格画,保住别的键的位置;左边起头的空格不画(不占宽)。
+    public func visibleRow(_ row: Int, visibleSlots: Int, available: (NotchQuickAction) -> Bool) -> [NotchQuickAction?] {
+        guard rows.indices.contains(row) else { return [] }
+        let count = min(max(visibleSlots, 0), Self.slotsPerRow)
+        let cells = rows[row].prefix(count).map { action -> NotchQuickAction? in
+            guard let action, action.isDivider || available(action) else { return nil }
+            return action
+        }
+        return Array(cells.reversed().drop { $0 == nil })
     }
 }
