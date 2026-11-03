@@ -398,10 +398,6 @@ extension NotchLyricsView {
             quickActionButton(action.symbolName, label: L10n.t("卡拉OK效果"), lit: controller.karaokeOn) {
                 AppSettings.shared.notchLyricsKaraoke.toggle()
             }
-        case .lyricList:
-            quickActionButton(action.symbolName, label: L10n.t("多行歌词"), lit: controller.lyricListOn) {
-                AppSettings.shared.notchExpandedLyricList.toggle()
-            }
         case .lyricsWindowMini:
             quickActionButton(action.symbolName, label: L10n.t("切换迷你/完整尺寸")) {
                 LyrimuseActionRunner.perform(.toggleLyricsWindowMiniHotkey)

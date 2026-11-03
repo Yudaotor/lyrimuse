@@ -36,7 +36,6 @@ extension NotchQuickAction {
         case .copyLine: return "doc.on.doc"
         case .secondaryLine: return "character.bubble"
         case .karaoke: return "sparkles"
-        case .lyricList: return "text.justify.left"
         case .lyricsWindowMini: return LyrimuseAction.toggleLyricsWindowMiniHotkey.iconName
         case .lastfmLove: return "heart.circle"
         case .divider: return "poweron"
@@ -76,7 +75,6 @@ extension NotchQuickAction {
         case .copyLine: return L10n.t("复制当前歌词")
         case .secondaryLine: return L10n.t("副行")
         case .karaoke: return L10n.t("卡拉OK效果")
-        case .lyricList: return L10n.t("多行歌词")
         case .lyricsWindowMini: return L10n.t("切换迷你/完整尺寸")
         case .lastfmLove: return L10n.t("在 Last.fm 上喜欢")
         case .divider: return L10n.t("分隔线")

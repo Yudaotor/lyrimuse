@@ -165,8 +165,8 @@ func runSourceContractTests() {
                     "封面预算: 小封面缓存在后台按最近要过的尺寸先缩,源图留 3 张")
         expectEqual(flip.contains("static func prefetch(_ image: NSImage)") && flip.contains("Task.detached(priority: .userInitiated)"), true,
                     "封面预算: 翻牌指纹在后台先算")
-        expectEqual(sourceHas(flip, ".onChange(of: input) { old, new in\n            prefetchArtwork()\n            react(from: old, to: new)"), true,
-                    "封面预算: 翻牌视图输入一变先排上后台预算,再走翻牌规划")
+        expectEqual(sourceHas(flip, ".onChange(of: input, initial: true) { old, new in\n            prefetchArtwork()\n            react(from: old, to: new)"), true,
+                    "封面预算: 翻牌视图出现时和输入一变都先排上后台预算,再走翻牌规划(出现时就对一次账,不然停在构造时那一面)")
     }
 
     // 待机页「刚才在听」的封面:取数那一刻主缓存还没解码完时,歌词经「正在放的这一条」拿得到、封面拿不到,

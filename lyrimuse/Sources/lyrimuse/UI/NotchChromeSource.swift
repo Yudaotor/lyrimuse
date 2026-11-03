@@ -191,10 +191,9 @@ protocol NotchChromeSource: ObservableObject {
     /// 菜单栏歌词开着没有、悬浮歌词锁着没有(快捷操作那两颗键的点亮)。
     var menuBarLyricsOn: Bool { get }
     var overlayLocked: Bool { get }
-    /// 播放器音量(调不了是 nil)、卡拉OK与多行歌词开没开、「在 Last.fm 上喜欢」能不能点和喜欢了没有(快捷操作那几颗键用)。
+    /// 播放器音量(调不了是 nil)、卡拉OK开没开、「在 Last.fm 上喜欢」能不能点和喜欢了没有(快捷操作那几颗键用)。
     var soundVolume: Int? { get }
     var karaokeOn: Bool { get }
-    var lyricListOn: Bool { get }
     var lastfmLoveAvailable: Bool { get }
     var lastfmLoved: Bool? { get }
     /// 展开时多行歌词那一格的高度(`AppSettings.notchExpandedLyricListHeight`),关着「多行歌词」时为 0。

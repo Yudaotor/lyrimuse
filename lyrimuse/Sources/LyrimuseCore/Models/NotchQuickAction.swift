@@ -33,7 +33,6 @@ public enum NotchQuickAction: String, CaseIterable, Codable, Sendable {
     case copyLine = "copy-line"
     case secondaryLine = "secondary-line"
     case karaoke
-    case lyricList = "lyric-list"
     case lyricsWindowMini = "lyrics-window-mini"
     case lastfmLove = "lastfm-love"
     /// 分组竖线,占一整格,可以放不止一条。
@@ -50,7 +49,7 @@ public enum NotchQuickAction: String, CaseIterable, Codable, Sendable {
     public static let paletteOrder: [NotchQuickAction] = [
         .previous, .playPause, .next, .seekBackward, .seekForward, .shuffle, .repeatMode, .favorite,
         .volumeDown, .volumeUp, .mute,
-        .searchLyrics, .toggleLyrics, .copyLine, .secondaryLine, .karaoke, .lyricList,
+        .searchLyrics, .toggleLyrics, .copyLine, .secondaryLine, .karaoke,
         .lyricsAdvance, .lyricsDelay, .lyricsOffsetReset,
         .lyricsWindow, .lyricsWindowMini, .lyricsManager, .shareLyrics, .toggleOverlay, .lockOverlay, .menuBarLyrics,
         .hideAllLyrics, .openPlayer,
@@ -81,7 +80,7 @@ public enum NotchQuickAction: String, CaseIterable, Codable, Sendable {
         case .previous, .playPause, .next, .seekBackward, .seekForward, .shuffle, .repeatMode, .favorite,
              .volumeDown, .volumeUp, .mute:
             return .playback
-        case .searchLyrics, .toggleLyrics, .copyLine, .secondaryLine, .karaoke, .lyricList,
+        case .searchLyrics, .toggleLyrics, .copyLine, .secondaryLine, .karaoke,
              .lyricsAdvance, .lyricsDelay, .lyricsOffsetReset:
             return .lyrics
         case .lyricsWindow, .lyricsWindowMini, .lyricsManager, .shareLyrics, .toggleOverlay, .lockOverlay, .menuBarLyrics,

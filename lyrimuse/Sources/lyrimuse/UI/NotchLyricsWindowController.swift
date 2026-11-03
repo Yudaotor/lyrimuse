@@ -183,9 +183,8 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
     @Published private(set) var overlayLocked: Bool = AppSettings.shared.lockPosition
     /// 播放器此刻的音量(调不了是 nil):快捷操作音量三颗键画不画、静音键点不点亮。
     @Published private(set) var soundVolume: Int? = PlaybackCoordinator.shared.soundVolume
-    /// 卡拉OK效果、多行歌词开着没有:快捷操作那两颗键的点亮状态。
+    /// 卡拉OK效果开着没有:快捷操作那颗键的点亮状态。
     @Published private(set) var karaokeOn: Bool = AppSettings.shared.notchLyricsKaraoke
-    @Published private(set) var lyricListOn: Bool = AppSettings.shared.notchExpandedLyricList
     /// 「在 Last.fm 上喜欢」能不能点(连着 Last.fm、在放歌)、当前这首喜欢了没有。格子里放了这颗键才去读状态
     /// (`LastfmLoveModel.retain` / `release` 成对,见 `quickSlots` 的订阅)。
     @Published private(set) var lastfmLoveAvailable: Bool = LastfmLoveModel.shared.target != nil
@@ -688,10 +687,6 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
         .store(in: &subscriptions)
         AppSettings.shared.$notchLyricsKaraoke.removeDuplicates().sink { [weak self] on in
             self?.karaokeOn = on
-        }
-        .store(in: &subscriptions)
-        AppSettings.shared.$notchExpandedLyricList.removeDuplicates().sink { [weak self] on in
-            self?.lyricListOn = on
         }
         .store(in: &subscriptions)
         LastfmLoveModel.shared.$target.map { $0 != nil }.removeDuplicates().sink { [weak self] available in

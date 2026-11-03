@@ -99,7 +99,6 @@ final class NotchPreviewChrome: ObservableObject, NotchChromeSource {
     var overlayLocked: Bool { AppSettings.shared.lockPosition }
     var soundVolume: Int? { PlaybackCoordinator.shared.soundVolume }
     var karaokeOn: Bool { AppSettings.shared.notchLyricsKaraoke }
-    var lyricListOn: Bool { AppSettings.shared.notchExpandedLyricList }
     var lastfmLoveAvailable: Bool { LastfmStatsService.shared.isConnected }
     var lastfmLoved: Bool? { nil }
     var expandedLyricListHeight: CGFloat { AppSettings.shared.notchExpandedLyricListHeight }

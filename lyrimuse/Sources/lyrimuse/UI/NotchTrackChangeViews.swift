@@ -321,7 +321,9 @@ struct NotchEarArtworkFlip<Artwork: View, AdIcon: View>: View {
             }
         }
         .frame(maxWidth: .infinity, alignment: alignment)
-        .onChange(of: input) { old, new in
+        // `initial: true` 别去掉:@State 可能是更早一次、封面还没到时构造的,第一次出现时输入已经变了也不会再触发,
+        // 翻牌就一直停在空白那一面(05 章决策 136)。
+        .onChange(of: input, initial: true) { old, new in
             prefetchArtwork()
             react(from: old, to: new)
         }
