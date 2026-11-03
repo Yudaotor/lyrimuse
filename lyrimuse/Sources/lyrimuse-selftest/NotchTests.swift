@@ -2377,16 +2377,57 @@ func runNotchTests() {
                     "自动跳过契约: 换到下一条广告时按键次数清零")
 
         // 快捷操作:Last.fm 那颗只在连着账号时出现,落点是设置 › Last.fm。
-        expectEqual(sourceHas(view, "if LastfmStatsService.shared.isConnected {\n                    quickActionButton(\"chart.bar.fill\""), true,
+        expectEqual(sourceHas(view, "case .lastfm: return LastfmStatsService.shared.isConnected"), true,
                     "快捷操作契约: Last.fm 键只在连着账号时画")
         expectEqual(view.contains("AppActions.shared.requestSettings(.account(.lastfm))"), true,
                     "快捷操作契约: Last.fm 键翻到设置 › Last.fm 详情页")
 
         // 快捷操作:喜欢那颗只在播放器有「喜欢」、不在广告里时画,排最左(出现 / 消失时别的键不挪),展开时回读状态。
-        let favoriteAt = view.range(of: "if let favorited = playback.isFavorited, !controller.isAdBreakNow {\n                    quickActionButton(favorited ? \"heart.fill\" : \"heart\", key: \"favorite\",")?.lowerBound
-        let searchAt = view.range(of: "quickActionButton(\"magnifyingglass\", label: L10n.t(\"搜索歌词…\"))")?.lowerBound
-        expectEqual(favoriteAt != nil, true, "快捷操作契约: 喜欢键只在 isFavorited 非 nil、不在广告里时画,气泡认固定的 key")
-        expectEqual(favoriteAt.flatMap { f in searchAt.map { f < $0 } }, true, "快捷操作契约: 喜欢键排在搜索歌词前面(最左)")
+        expectEqual(sourceHas(view, "case .favorite: return favorited != nil && !controller.isAdBreakNow"), true,
+                    "快捷操作契约: 喜欢键只在 isFavorited 非 nil、不在广告里时画")
+        expectEqual(sourceHas(view, "quickActionButton(favorited ? \"heart.fill\" : \"heart\", key: \"favorite\","), true,
+                    "快捷操作契约: 喜欢键的气泡认固定的 key")
+        expectEqual(NotchQuickAction.defaultLayout.first, .favorite, "快捷操作契约: 默认排法里喜欢键最左")
+        expectEqual(sourceHas(view, "let shown = NotchQuickAction.visible(controller.quickActions) { action in"), true,
+                    "快捷操作契约: 灵动岛按用户的排法画,经 visible 去掉不可用的键和多余的分隔线")
+        expectEqual(sourceHas(controller, "AppSettings.shared.$notchQuickActions.removeDuplicates().sink { [weak self] layout in\n            self?.quickActions = layout"), true,
+                    "快捷操作契约: 控制器镜像排法(改了设置当场换)")
+        expectEqual(sourceHas(read("../SettingsView.swift"), "NotchBehaviorToggleTile(item: .expandedShowsQuickActions)\n            }\n            NotchQuickActionsEditor()"), true,
+                    "快捷操作契约: 「展开时」浮层里快捷操作开关下面是按钮编辑区")
+        expectEqual(sourceHas(read("NotchSettingsRows.swift"), "settings.notchQuickActions = NotchQuickAction.defaultLayout"), true,
+                    "快捷操作契约: 「展开时」恢复默认连按钮排法一起恢复")
+        do {
+            typealias Q = NotchQuickAction
+            expectEqual(Q.layout(fromStored: nil), Q.defaultLayout, "按钮排法: 没存过用默认")
+            expectEqual(Q.layout(fromStored: []), [], "按钮排法: 存的是空就是空(键都移掉了)")
+            expectEqual(Q.layout(fromStored: ["close", "bogus", "close", "divider", "settings"]), [.close, .divider, .settings],
+                        "按钮排法: 认不出的丢掉,重复的键只留第一个")
+            let many = Q.allCases.filter { !$0.isDivider }.map(\.rawValue) + Array(repeating: "divider", count: 5)
+            let capped = Q.layout(fromStored: many)
+            expectEqual([capped.filter { !$0.isDivider }.count, capped.filter(\.isDivider).count], [Q.maxButtons, Q.maxDividers],
+                        "按钮排法: 键和分隔线各按上限截")
+            let all: (Q) -> Bool = { _ in true }
+            expectEqual(Q.visible([.divider, .searchLyrics, .divider, .divider, .close, .divider], available: all),
+                        [.searchLyrics, .divider, .close], "按钮排法: 头尾和挨着的分隔线不画")
+            expectEqual(Q.visible(Q.defaultLayout, available: { $0 != .favorite && $0 != .lastfm }),
+                        [.searchLyrics, .toggleLyrics, .divider, .settings, .close], "按钮排法: 不可用的键拿掉")
+            expectEqual(Q.visible([.lastfm, .divider, .close], available: { $0 != .lastfm }), [.close],
+                        "按钮排法: 拿掉键后落到开头的分隔线也不画")
+            expectEqual(Q.adding(.lyricsWindow, to: [.settings, .close]), [.settings, .lyricsWindow, .close],
+                        "按钮排法: 加在最右的关闭前面")
+            expectEqual(Q.adding(.close, to: [.settings]), [.settings, .close], "按钮排法: 加关闭就在末尾")
+            expectEqual(Q.adding(.settings, to: [.settings]), [.settings], "按钮排法: 已有的键不重复加")
+            expectEqual(Q.canAdd(.divider, to: [.divider, .divider, .divider]), false, "按钮排法: 分隔线到上限不能再加")
+            expectEqual(Q.moving([.favorite, .searchLyrics, .close], from: 0, to: 2), [.searchLyrics, .close, .favorite],
+                        "按钮排法: 挪到最后")
+            expectEqual(Q.moving([.favorite, .searchLyrics, .close], from: 2, to: -3), [.close, .favorite, .searchLyrics],
+                        "按钮排法: 越界夹到两头")
+            let w = [30.0, 30.0, 14.0, 30.0]
+            expectEqual(Q.dropIndex(widths: w, dragged: 0, offset: 14), 0, "按钮拖动: 没过邻格中线不换")
+            expectEqual(Q.dropIndex(widths: w, dragged: 0, offset: 31), 1, "按钮拖动: 过了右边那格中线换过去")
+            expectEqual(Q.dropIndex(widths: w, dragged: 0, offset: 90), 3, "按钮拖动: 拖过几格就落到几格后")
+            expectEqual(Q.dropIndex(widths: w, dragged: 3, offset: -60), 1, "按钮拖动: 往左拖")
+        }
         expectEqual(sourceHas(view, "label: favorited ? L10n.t(\"取消喜欢\") : L10n.t(\"喜欢\"), lit: favorited) {\n                        PlaybackCoordinator.shared.toggleFavorited()"), true,
                     "快捷操作契约: 喜欢键走 toggleFavorited,已喜欢时点亮")
         expectEqual(sourceHas(view, "glyphOpacity: lit ? 1 : (dimmed ? 0.4 : 0.75),\n                               restingLevel: lit ? 0.16 : 0"), true,

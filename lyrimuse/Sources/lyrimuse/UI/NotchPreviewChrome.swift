@@ -93,6 +93,8 @@ final class NotchPreviewChrome: ObservableObject, NotchChromeSource {
     var expandedTrackInfoShowsArtist: Bool { AppSettings.shared.notchExpandedShowsArtist }
     var expandedTrackInfoShowsAlbum: Bool { AppSettings.shared.notchExpandedShowsAlbum }
     var expandedShowsQuickActions: Bool { AppSettings.shared.notchExpandedShowsQuickActions }
+    var quickActions: [NotchQuickAction] { AppSettings.shared.notchQuickActions }
+    var classicOverlayOn: Bool { AppSettings.shared.classicOverlayEnabled }
     var expandedLyricListHeight: CGFloat { AppSettings.shared.notchExpandedLyricListHeight }
 
     init() {

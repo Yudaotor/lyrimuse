@@ -203,72 +203,87 @@ extension NotchLyricsView {
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
-    /// 头部右侧那排「快捷操作」:喜欢、搜索歌词、显示 / 隐藏歌词、Last.fm、设置、关闭灵动岛。
-    ///
-    /// 排法照悬浮歌词那排控制胶囊(`LyricsOverlayView.playbackControls`):**对这首歌的操作 │ 窗口级
-    /// 操作**,中间一条细竖线分组,✕ 放最右最边上 —— 喜欢 · 搜索歌词 · 显示歌词 │ Last.fm · 设置 · 关闭
-    /// (喜欢只在播放器有「喜欢」时出现,Last.fm 只在连着账号时出现)。每颗都是
-    /// 22pt 命中格(跟下面播放控制三键同一档,`NotchExpandedMetrics.trackInfoActionsHeight`),
-    /// 字形 11pt,颜色跟卡上其它图标一样走 `accentOrWhite`、压到七成五 —— 这排是"手边的入口",
-    /// 不该比歌名重。
+    /// 头部右侧那排「快捷操作」:放哪几颗、什么顺序是用户在设置「展开时」浮层里排的(`controller.quickActions`,
+    /// Core `NotchQuickAction`),默认 喜欢 · 搜索歌词 · 显示歌词 │ Last.fm · 设置 · 关闭。分隔线落到头尾或挨在一起时不画
+    /// (`NotchQuickAction.visible`)。每颗都是 22pt 命中格(跟下面播放控制三键同一档,
+    /// `NotchExpandedMetrics.trackInfoActionsHeight`),字形 11pt,颜色走 `accentOrWhite`、压到七成五。
     ///
     /// 各颗键的语义:
     ///   * 喜欢 → `PlaybackCoordinator.toggleFavorited()`,跟悬浮歌词那颗心、歌词窗口那颗星同一条路。`isFavorited` 为 nil
-    ///     (这个播放器没有「喜欢」或没拿到权限)和广告期间不画。排在最左:这排键贴右对齐,它出现 / 消失时别的键不挪。
-    ///     已喜欢画实心、全亮、带淡底,同随机 / 循环键点亮。展开时回读一次状态(`NotchLyricsWindowController.refreshExpanded`)。
-    ///     见 05 章决策 79。
+    ///     (这个播放器没有「喜欢」或没拿到权限)和广告期间不画。已喜欢画实心、全亮、带淡底。展开时回读一次状态
+    ///     (`NotchLyricsWindowController.refreshExpanded`)。见 05 章决策 79。
     ///   * 搜索歌词 → `AppActions.openLyricsQuickSearch`,跟悬浮歌词 ⚙ 菜单的「搜索歌词…」同一扇小窗。
-    ///     头部本来就要求 `hasTrack`,所以不用像那边一样再按"有没有歌"决定显隐。广告期间四颗照常画、照常可点
-    ///     (头部此时只剩这一排,见 `trackInfoShowsTrackFields`)。
-    ///   * 显示歌词 → 切 `AppSettings.notchShowLyrics`(稳态那 44pt 歌词行的开关)。**展开态里看不出
-    ///     变化**(展开永远画歌词行,见 `showsLyricRow`),关着时字形压淡到四成、tooltip 换成「显示歌词」,
-    ///     让"现在是关的"当场可辨;收回稳态才看得出效果。状态读 `controller.showsLyrics`(控制器的镜像),
-    ///     不另订阅 AppSettings。
-    ///   * Last.fm 到 设置 › Last.fm 详情页(`openLastfmSettingsPage`)。是去 App 里某个页面、不是对这首歌做什么,
-    ///     所以在竖线右边。只在 `LastfmStatsService.isConnected` 时画:没连的人点了只会落到一张连接卡上。
-    ///   * 设置 → 直接翻到 设置 › 歌词显示 › 灵动岛,照抄 `OverlayQuickSettingsMenu.openMoreSettings` 那三行。
-    ///   * 关闭 → 关掉「灵动岛歌词」**总开关**(`closeFromQuickAction` → `setVisible(false)`),跟悬浮歌词
-    ///     那颗 ✕ 同一个意思;再打开走菜单栏面板 / 设置 / 快捷键。不做"只收起这一次":hover 展开
-    ///     本来移开指针就收,那颗键等于没用。
+    ///   * 显示歌词 → 切 `AppSettings.notchShowLyrics`(稳态那 44pt 歌词行的开关)。**展开态里看不出变化**(展开永远画
+    ///     歌词行),关着时字形压淡到四成、提示换成「显示歌词」。状态读 `controller.showsLyricsSetting`。
+    ///   * 歌词窗口 / 歌词管理 / 分享歌词 / 切换到播放器 → 跟全局快捷键、菜单栏同一个入口(`AppActions`、`LyrimuseActionRunner`)。
+    ///   * 悬浮歌词 → `LyrimuseActionRunner.perform(.toggleOverlay)`;开着时点亮,状态读 `controller.classicOverlayOn`。
+    ///   * Last.fm 到 设置 › Last.fm 详情页(`openLastfmSettingsPage`)。只在 `LastfmStatsService.isConnected` 时画。
+    ///   * 设置 → 直接翻到 设置 › 歌词显示 › 灵动岛。
+    ///   * 关闭 → 关掉「灵动岛歌词」**总开关**(`closeFromQuickAction` → `setVisible(false)`),跟悬浮歌词那颗 ✕ 同一个意思。
     ///
-    /// 不套 `controlButton` 那层"先查 Apple Music 自动化权限"的守卫:这几个动作跟播放控制毫不相干,
-    /// 借那层守卫会引入一个跟按钮语义不匹配的隐藏依赖(跟悬浮歌词的锁定键同一条理由)。
+    /// 不套 `controlButton` 那层"先查 Apple Music 自动化权限"的守卫:这几个动作跟播放控制毫不相干。
     @ViewBuilder
     private var trackInfoQuickActions: some View {
         if controller.expandedShowsQuickActions {
-            HStack(spacing: 2) {
-                if let favorited = playback.isFavorited, !controller.isAdBreakNow {
-                    quickActionButton(favorited ? "heart.fill" : "heart", key: "favorite",
-                                      label: favorited ? L10n.t("取消喜欢") : L10n.t("喜欢"), lit: favorited) {
-                        PlaybackCoordinator.shared.toggleFavorited()
-                    }
-                }
-                quickActionButton("magnifyingglass", label: L10n.t("搜索歌词…")) {
-                    AppActions.shared.openLyricsQuickSearch?()
-                }
-                quickActionButton("text.alignleft",
-                                  label: controller.showsLyricsSetting ? L10n.t("隐藏歌词") : L10n.t("显示歌词"),
-                                  dimmed: !controller.showsLyricsSetting) {
-                    AppSettings.shared.notchShowLyrics.toggle()
-                }
-                // 分组线:前两颗是"对这首歌 / 这行歌词"的操作,后两颗是"这块卡片"的操作。
-                Rectangle()
-                    .fill(accentOrWhite.opacity(0.18))
-                    .frame(width: 1, height: 12)
-                    .padding(.horizontal, 3)
-                // 只在连着 Last.fm 时出现:没连的人这颗键无处可去,这排仍是四颗。
+            let favorited = playback.isFavorited
+            let shown = NotchQuickAction.visible(controller.quickActions) { action in
+                switch action {
+                case .favorite: return favorited != nil && !controller.isAdBreakNow
                 // `isConnected` 不是 @Published,随下一次 body 重算取值(同歌词窗口的统计元素)。
-                if LastfmStatsService.shared.isConnected {
-                    quickActionButton("chart.bar.fill", label: L10n.t("在设置中查看 Last.fm")) {
-                        openLastfmSettingsPage()
-                    }
+                case .lastfm: return LastfmStatsService.shared.isConnected
+                default: return true
                 }
-                quickActionButton("gearshape.fill", label: L10n.t("设置…")) { openNotchSettingsPage() }
-                quickActionButton("xmark", label: L10n.t("关闭灵动岛歌词")) {
-                    controller.closeFromQuickAction()
+            }
+            HStack(spacing: 2) {
+                ForEach(Array(shown.enumerated()), id: \.offset) { _, action in
+                    quickActionCell(action, favorited: favorited ?? false)
                 }
             }
             .frame(height: NotchExpandedMetrics.trackInfoActionsHeight)
+        }
+    }
+
+    @ViewBuilder
+    private func quickActionCell(_ action: NotchQuickAction, favorited: Bool) -> some View {
+        switch action {
+        case .divider:
+            Rectangle()
+                .fill(accentOrWhite.opacity(0.18))
+                .frame(width: 1, height: 12)
+                .padding(.horizontal, 3)
+        case .favorite:
+            quickActionButton(favorited ? "heart.fill" : "heart", key: "favorite",
+                              label: favorited ? L10n.t("取消喜欢") : L10n.t("喜欢"), lit: favorited) {
+                PlaybackCoordinator.shared.toggleFavorited()
+            }
+        case .searchLyrics:
+            quickActionButton(action.symbolName, label: L10n.t("搜索歌词…")) { AppActions.shared.openLyricsQuickSearch?() }
+        case .toggleLyrics:
+            quickActionButton(action.symbolName,
+                              label: controller.showsLyricsSetting ? L10n.t("隐藏歌词") : L10n.t("显示歌词"),
+                              dimmed: !controller.showsLyricsSetting) {
+                AppSettings.shared.notchShowLyrics.toggle()
+            }
+        case .lyricsWindow:
+            quickActionButton(action.symbolName, label: L10n.t("打开歌词窗口")) { AppActions.shared.openLyricsWindow?() }
+        case .lyricsManager:
+            quickActionButton(action.symbolName, label: L10n.t("打开歌词管理")) { AppActions.shared.openLyricsManager?() }
+        case .shareLyrics:
+            quickActionButton(action.symbolName, label: L10n.t("分享歌词…")) { AppActions.shared.presentLyricShareWindow?() }
+        case .toggleOverlay:
+            quickActionButton(action.symbolName,
+                              label: L10n.t("显示/隐藏悬浮歌词"),
+                              lit: controller.classicOverlayOn) {
+                LyrimuseActionRunner.perform(.toggleOverlay)
+            }
+        case .openPlayer:
+            quickActionButton(action.symbolName, label: L10n.t("切换到播放器")) { LyrimuseActionRunner.perform(.openPlayerHotkey) }
+        case .lastfm:
+            quickActionButton(action.symbolName, label: L10n.t("在设置中查看 Last.fm")) { openLastfmSettingsPage() }
+        case .settings:
+            quickActionButton(action.symbolName, label: L10n.t("设置…")) { openNotchSettingsPage() }
+        case .close:
+            quickActionButton(action.symbolName, label: L10n.t("关闭灵动岛歌词")) { controller.closeFromQuickAction() }
         }
     }
 

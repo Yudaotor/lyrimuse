@@ -531,6 +531,7 @@ final class AppSettings: ObservableObject {
         static let notchExpandedShowsArtist = "np:notchExpandedShowsArtist"
         static let notchExpandedShowsAlbum = "np:notchExpandedShowsAlbum"
         static let notchExpandedShowsQuickActions = "np:notchExpandedShowsQuickActions"
+        static let notchQuickActions = "np:notchQuickActions"
         static let notchLyricRowShowsArtwork = "np:notchLyricRowShowsArtwork"
         static let notchLyricRowArtworkPosition = "np:notchLyricRowArtworkPosition"
         static let notchLyricsAlignment = "np:notchLyricsAlignment"
@@ -2063,12 +2064,17 @@ final class AppSettings: ObservableObject {
     @Published var notchExpandedShowsAlbum: Bool {
         didSet { defaults.set(notchExpandedShowsAlbum, forKey: Keys.notchExpandedShowsAlbum) }
     }
-    /// 曲目信息头部右侧那排「快捷操作」(搜索歌词 / 显示歌词 │ 设置 / 关闭)。一颗开关管四颗键,不拆四个 ——
-    /// 这排的意义是"展开时手边有一组入口",拆开各配没有场景。默认 `true`:它跟头部四项一样是**并排**的一块,
+    /// 曲目信息头部右侧那排「快捷操作」画不画;放哪几颗、什么顺序在 `notchQuickActions`。默认 `true`:它跟头部四项一样是**并排**的一块,
     /// 常见配置下不改卡片高度(见 `NotchExpandedMetrics.trackInfoActionsHeight`)。走跟头部四项相同的
     /// "镜像 + 重算几何"链路:四项全关、只开它时头部就是它撑起来的 22pt。
     @Published var notchExpandedShowsQuickActions: Bool {
         didSet { defaults.set(notchExpandedShowsQuickActions, forKey: Keys.notchExpandedShowsQuickActions) }
+    }
+
+    /// 快捷操作那排放哪几颗、什么顺序(设置「展开时」浮层里排)。存 rawValue 数组,读回经 `NotchQuickAction.layout(fromStored:)`
+    /// 清洗;没存过是 `NotchQuickAction.defaultLayout`。不改卡片高度。
+    @Published var notchQuickActions: [NotchQuickAction] {
+        didSet { defaults.set(notchQuickActions.map(\.rawValue), forKey: Keys.notchQuickActions) }
     }
 
     /// 歌词行(`NotchLyricsView.lyricRowContent`)末尾那枚封面缩略图要不要显示。默认值见
@@ -2964,6 +2970,7 @@ final class AppSettings: ObservableObject {
             ?? Self.defaultNotchExpandedShowsAlbum
         notchExpandedShowsQuickActions = (defaults.object(forKey: Keys.notchExpandedShowsQuickActions) as? Bool)
             ?? Self.defaultNotchExpandedShowsQuickActions
+        notchQuickActions = NotchQuickAction.layout(fromStored: defaults.stringArray(forKey: Keys.notchQuickActions))
         notchLyricRowShowsArtwork = (defaults.object(forKey: Keys.notchLyricRowShowsArtwork) as? Bool)
             ?? Self.defaultNotchLyricRowShowsArtwork
         notchLyricRowArtworkPosition = defaults.string(forKey: Keys.notchLyricRowArtworkPosition)

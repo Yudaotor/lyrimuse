@@ -586,6 +586,7 @@
 "分母为当前启用的 %d 个源；较早的条目当时可用的源可能更少" = "Mẫu số là %d nguồn đang bật; mục cũ hơn khi đó có thể có ít nguồn khả dụng hơn";
 "分组" = "Nhóm";
 "分行不同" = "khác cách ngắt dòng";
+"分隔线" = "Đường phân cách";
 "分项合计 %1$d，按下限计为 %2$d" = "Tổng các mục là %1$d, tính theo mức sàn là %2$d";
 "切换到其他歌曲前是否保存修改？" = "Lưu thay đổi trước khi chuyển sang bài khác?";
 "切换到播放器" = "Chuyển sang trình phát";
@@ -728,6 +729,7 @@
 "右侧" = "Bên phải";
 "右侧颜色" = "Màu bên phải";
 "右对齐" = "Căn phải";
+"右移" = "Dời sang phải";
 "右耳" = "Tai phải";
 "右键点按主题可重命名、用当前配色覆盖或删除" = "Bấm chuột phải vào chủ đề để đổi tên, ghi đè bằng bảng màu hiện tại hoặc xóa";
 "各处是否显示译文，在「歌词显示」中设置" = "Có hiện bản dịch ở từng nơi hay không được đặt trong “Hiển thị lời”";
@@ -1005,6 +1007,7 @@
 "左侧" = "Bên trái";
 "左侧颜色" = "Màu bên trái";
 "左对齐" = "Căn trái";
+"左移" = "Dời sang trái";
 "左耳" = "Tai trái";
 "已下载" = "Đã tải về";
 "已下载 %@ / %@" = "Đã tải %@ / %@";
@@ -1230,6 +1233,7 @@
 "循环最多：《%1$@》— %2$@（%3$@ 次）" = "Nghe nhiều nhất: “%1$@” — %2$@ (%3$@ lượt phát)";
 "微信提醒" = "Thông báo WeChat";
 "快捷操作" = "Tác vụ nhanh";
+"快捷操作按钮" = "Nút tác vụ nhanh";
 "快捷键" = "Phím tắt";
 "快捷键：⌘↩" = "Phím tắt: ⌘↩";
 "快速开关" = "Bật/tắt nhanh";
@@ -1306,6 +1310,7 @@
 "拆分后，该条目将作为独立歌曲：播放次数单独统计，不再同步歌词；此前同步过去的歌词将恢复为原有版本。之后可在此恢复合并" = "Mục này sẽ thành bài hát riêng: lượt phát được tính riêng và lời không còn đồng bộ. Lời đã đồng bộ sang trước đó sẽ khôi phục về bản gốc của mục. Sau này có thể hợp nhất lại tại đây";
 "拆开默认正文" = "Tách nội dung mặc định";
 "拖动调整顺序" = "Kéo để sắp xếp lại";
+"拖动调整顺序，悬停后点 × 移除" = "Kéo để sắp xếp lại, di con trỏ lên và bấm × để gỡ bỏ";
 "拷贝" = "Sao chép";
 "拷贝修复命令" = "Sao chép lệnh sửa";
 "拷贝名称" = "Sao chép tên";
@@ -1401,6 +1406,7 @@
 "播放器" = "Trình phát";
 "播放器原始写法：%@" = "Tên gốc từ trình phát: %@";
 "播放器或曲库提供的标识符可信度最高；按曲名检索得到的结果可能有误，仅供参考" = "Mã định danh do trình phát hoặc cơ sở dữ liệu nhạc cung cấp đáng tin nhất; kết quả tìm theo tên bài có thể sai, chỉ để tham khảo";
+"播放器支持「喜欢」时才显示" = "Chỉ hiện khi trình phát hỗ trợ “Ưa thích”";
 "播放器未提供歌手，按歌名和时长推断" = "Trình phát không cung cấp nghệ sĩ, đã suy ra từ tên bài hát và thời lượng";
 "播放器联动" = "Mở & thoát cùng trình phát";
 "播放器自带歌词" = "Lời có sẵn của trình phát";
@@ -1632,6 +1638,7 @@
 "最后一句的时间与曲长相差 25% 以上，可能是其他版本" = "Thời điểm câu cuối lệch với thời lượng bài hát hơn 25%, có thể là phiên bản khác";
 "最后一句的时间与曲长相差 25% 以上；仍可选用，但排在所有时长相符的候选之后" = "Thời điểm câu cuối lệch với thời lượng bài hát hơn 25%; vẫn có thể chọn, nhưng xếp sau mọi kết quả có thời lượng khớp";
 "最后一句的时间越接近曲长，得分越高，最高 300" = "Thời điểm câu cuối càng gần thời lượng bài hát, điểm càng cao, tối đa 300";
+"最多 %d 个按钮" = "Tối đa %d nút";
 "最多 32 个字" = "Tối đa 32 ký tự";
 "最大宽度" = "Độ rộng tối đa";
 "最常听的专辑" = "Album nghe nhiều nhất";
@@ -2088,6 +2095,7 @@
 "灵动岛歌词" = "Lời trên Notch";
 "灵动岛歌词未开启" = "Lời trên Notch đang tắt";
 "点一下打开完整榜单" = "Chạm để mở bảng xếp hạng đầy đủ";
+"点下面的按钮加进来" = "Bấm vào một nút bên dưới để thêm";
 "点按「开始使用」，让歌词随旋律逐句亮起" = "Bấm “Bắt đầu” để từng dòng lời sáng lên theo giai điệu";
 "点按「拷贝修复命令」，打开「终端」，粘贴后按下 Return 键，按提示输入登录密码（输入时不显示字符），然后点按「启用」" = "Bấm “Sao chép lệnh sửa”, mở Terminal, dán vào rồi nhấn Return, nhập mật khẩu đăng nhập khi được hỏi (ký tự không hiện khi gõ), sau đó bấm “Bật”";
 "点按下载" = "Bấm để tải về";
@@ -2600,6 +2608,7 @@
 "连接" = "Kết nối";
 "连接 Apple Music" = "Kết nối Apple Music";
 "连接 Last.fm" = "Kết nối Last.fm";
+"连接 Last.fm 后才显示" = "Chỉ hiện khi đã kết nối Last.fm";
 "连接 Last.fm 账号" = "Kết nối tài khoản Last.fm";
 "连接 Last.fm…" = "Kết nối Last.fm…";
 "连接 Last.fm，记录你收听的每一首歌" = "Kết nối Last.fm để ghi lại mọi bài hát bạn nghe";

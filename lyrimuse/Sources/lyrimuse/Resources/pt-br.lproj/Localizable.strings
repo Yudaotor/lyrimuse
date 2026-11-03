@@ -633,6 +633,7 @@
 "分母为当前启用的 %d 个源；较早的条目当时可用的源可能更少#one" = "Denominador: %d fonte ativada agora; entradas antigas podem ter tido menos fontes disponíveis na época";
 "分组" = "Agrupar";
 "分行不同" = "dividida em linhas de outra forma";
+"分隔线" = "Divisor";
 "分项合计 %1$d，按下限计为 %2$d" = "Os critérios somam %1$d; aplicado o mínimo de %2$d";
 "切换到其他歌曲前是否保存修改？" = "Salvar as alterações antes de mudar para outra música?";
 "切换到播放器" = "Ir para o player";
@@ -781,6 +782,7 @@
 "右侧" = "Direita";
 "右侧颜色" = "Cor direita";
 "右对齐" = "Direita";
+"右移" = "Mover para a direita";
 "右耳" = "Ouvido direito";
 "右键点按主题可重命名、用当前配色覆盖或删除" = "Clique com o botão direito em um tema para renomeá-lo, substituí-lo pelas cores atuais ou apagá-lo";
 "各处是否显示译文，在「歌词显示」中设置" = "Onde a tradução aparece é definido em “Exibição da letra”";
@@ -1065,6 +1067,7 @@
 "左侧" = "Esquerda";
 "左侧颜色" = "Cor esquerda";
 "左对齐" = "Esquerda";
+"左移" = "Mover para a esquerda";
 "左耳" = "Ouvido esquerdo";
 "已下载" = "Baixado";
 "已下载 %@ / %@" = "%@ de %@ baixados";
@@ -1303,6 +1306,7 @@
 "循环最多：《%1$@》— %2$@（%3$@ 次）#one" = "Mais reproduzida: %1$@ — %2$@ (%3$@ reprodução)";
 "微信提醒" = "Alerta do WeChat";
 "快捷操作" = "Ações rápidas";
+"快捷操作按钮" = "Botões de ações rápidas";
 "快捷键" = "Atalhos de teclado";
 "快捷键：⌘↩" = "Atalho: ⌘↩";
 "快速开关" = "Ajustes rápidos";
@@ -1379,6 +1383,7 @@
 "拆分后，该条目将作为独立歌曲：播放次数单独统计，不再同步歌词；此前同步过去的歌词将恢复为原有版本。之后可在此恢复合并" = "A entrada vai virar uma música à parte: as reproduções dela são contadas separadamente e a letra deixa de ser sincronizada. A letra sincronizada com ela antes volta a ser a dela. Você pode mesclá-la de novo aqui depois";
 "拆开默认正文" = "Dividir corpo padrão";
 "拖动调整顺序" = "Arraste para reordenar";
+"拖动调整顺序，悬停后点 × 移除" = "Arraste para reordenar; passe o cursor e clique em × para remover";
 "拷贝" = "Copiar";
 "拷贝修复命令" = "Copiar comando de reparo";
 "拷贝名称" = "Copiar nome";
@@ -1476,6 +1481,7 @@
 "播放器" = "Player";
 "播放器原始写法：%@" = "Segundo o player: %@";
 "播放器或曲库提供的标识符可信度最高；按曲名检索得到的结果可能有误，仅供参考" = "Identificadores fornecidos por players ou bases de dados musicais são os mais confiáveis; resultados encontrados pela busca por título podem estar errados e servem só de referência";
+"播放器支持「喜欢」时才显示" = "Aparece só quando o player permite favoritar";
 "播放器未提供歌手，按歌名和时长推断" = "O player não informou o artista; deduzido pelo título e pela duração";
 "播放器联动" = "Abrir e encerrar";
 "播放器自带歌词" = "Letra do próprio player";
@@ -1709,6 +1715,7 @@
 "最后一句的时间与曲长相差 25% 以上，可能是其他版本" = "O tempo da última linha difere da duração da música em mais de 25%; provavelmente é outra versão";
 "最后一句的时间与曲长相差 25% 以上；仍可选用，但排在所有时长相符的候选之后" = "O tempo da última linha difere da duração da música em mais de 25%; o resultado ainda pode ser usado, mas fica abaixo de todos os que têm a duração certa";
 "最后一句的时间越接近曲长，得分越高，最高 300" = "Quanto mais perto o tempo da última linha estiver da duração da música, maior a pontuação — até 300";
+"最多 %d 个按钮" = "Até %d botões";
 "最多 32 个字" = "Até 32 caracteres";
 "最大宽度" = "Largura máxima";
 "最常听的专辑" = "Álbum mais ouvido";
@@ -2171,6 +2178,7 @@
 "灵动岛歌词" = "Letra no notch";
 "灵动岛歌词未开启" = "“Letra no notch” está desativado";
 "点一下打开完整榜单" = "Toque para abrir o ranking completo";
+"点下面的按钮加进来" = "Clique em um botão abaixo para adicioná-lo";
 "点按「开始使用」，让歌词随旋律逐句亮起" = "Clique em “Começar” e deixe cada linha acender com a música";
 "点按「拷贝修复命令」，打开「终端」，粘贴后按下 Return 键，按提示输入登录密码（输入时不显示字符），然后点按「启用」" = "Clique em “Copiar comando de reparo”, abra o Terminal, cole e pressione Return, digite sua senha de início de sessão quando pedido (nada aparece ao digitar) e clique em “Ativar”";
 "点按下载" = "Clique para baixar";
@@ -2690,6 +2698,7 @@
 "连接" = "Conexão";
 "连接 Apple Music" = "Conectar Apple Music";
 "连接 Last.fm" = "Conectar Last.fm";
+"连接 Last.fm 后才显示" = "Aparece só com o Last.fm conectado";
 "连接 Last.fm 账号" = "Conectar conta do Last.fm";
 "连接 Last.fm…" = "Conectar Last.fm…";
 "连接 Last.fm，记录你收听的每一首歌" = "Conecte o Last.fm para registrar cada música que você ouve";

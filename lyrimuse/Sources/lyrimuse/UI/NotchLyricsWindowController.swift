@@ -174,6 +174,10 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
     /// 头部右侧那排「快捷操作」,真值在 `AppSettings.notchExpandedShowsQuickActions`。
     /// 跟头部四项同一条链路:参与头部高度(`max` 的第三块),四项全关时它一个人撑起 22pt。
     @Published private(set) var expandedShowsQuickActions: Bool = AppSettings.shared.notchExpandedShowsQuickActions
+    /// 快捷操作那排的排法(`AppSettings.notchQuickActions`)。不参与高度,只镜像、不重算几何。
+    @Published private(set) var quickActions: [NotchQuickAction] = AppSettings.shared.notchQuickActions
+    /// 桌面悬浮歌词开着没有:快捷操作里那颗「悬浮歌词」键的点亮状态。
+    @Published private(set) var classicOverlayOn: Bool = AppSettings.shared.classicOverlayEnabled
     /// 展开时多行歌词那一格的高度(关着「多行歌词」为 0),由三项设置合成(`AppSettings.notchExpandedLyricListHeight`)。
     /// 窗口高度跟着它:订阅里先写镜像、再重算几何,`recomputeGeometry` 读镜像(同 `lyricRowHeight`)。
     @Published private(set) var expandedLyricListHeight: CGFloat = AppSettings.shared.notchExpandedLyricListHeight
@@ -645,6 +649,14 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
         AppSettings.shared.$notchExpandedShowsQuickActions.removeDuplicates().sink { [weak self] shows in
             self?.expandedShowsQuickActions = shows
             self?.recomputeGeometry(animate: false)
+        }
+        .store(in: &subscriptions)
+        AppSettings.shared.$notchQuickActions.removeDuplicates().sink { [weak self] layout in
+            self?.quickActions = layout
+        }
+        .store(in: &subscriptions)
+        AppSettings.shared.$classicOverlayEnabled.removeDuplicates().sink { [weak self] on in
+            self?.classicOverlayOn = on
         }
         .store(in: &subscriptions)
         // 歌词行高度:设定值、字号、副行三项合成实际高度(设定值夹到装得下当前文字为止)。窗口高度跟着它,

@@ -633,6 +633,7 @@
 "分母为当前启用的 %d 个源；较早的条目当时可用的源可能更少#one" = "Le dénominateur compte %d source activée ; les entrées plus anciennes ont pu en avoir moins à l’époque";
 "分组" = "Regroupement";
 "分行不同" = "découpage en lignes différent";
+"分隔线" = "Séparateur";
 "分项合计 %1$d，按下限计为 %2$d" = "Total des critères : %1$d ; plancher appliqué : %2$d";
 "切换到其他歌曲前是否保存修改？" = "Enregistrer vos modifications avant de passer à un autre morceau ?";
 "切换到播放器" = "Basculer vers le lecteur";
@@ -781,6 +782,7 @@
 "右侧" = "Droite";
 "右侧颜色" = "Couleur de droite";
 "右对齐" = "Droite";
+"右移" = "Déplacer à droite";
 "右耳" = "Droite";
 "右键点按主题可重命名、用当前配色覆盖或删除" = "Clic droit sur un thème pour le renommer, le remplacer par les couleurs actuelles ou le supprimer";
 "各处是否显示译文，在「歌词显示」中设置" = "L’affichage des traductions à chaque endroit se règle dans « Affichage des paroles »";
@@ -1065,6 +1067,7 @@
 "左侧" = "Gauche";
 "左侧颜色" = "Couleur de gauche";
 "左对齐" = "Gauche";
+"左移" = "Déplacer à gauche";
 "左耳" = "Gauche";
 "已下载" = "Téléchargé";
 "已下载 %@ / %@" = "%@ sur %@ téléchargés";
@@ -1303,6 +1306,7 @@
 "循环最多：《%1$@》— %2$@（%3$@ 次）#one" = "Le plus écouté : %1$@ — %2$@ (%3$@ écoute)";
 "微信提醒" = "Alerte WeChat";
 "快捷操作" = "Actions rapides";
+"快捷操作按钮" = "Boutons d’actions rapides";
 "快捷键" = "Raccourcis clavier";
 "快捷键：⌘↩" = "Raccourci : ⌘↩";
 "快速开关" = "Commandes rapides";
@@ -1379,6 +1383,7 @@
 "拆分后，该条目将作为独立歌曲：播放次数单独统计，不再同步歌词；此前同步过去的歌词将恢复为原有版本。之后可在此恢复合并" = "L’entrée deviendra un morceau distinct : ses écoutes sont comptées à part et ses paroles ne sont plus synchronisées. Les paroles synchronisées vers elle redeviennent les siennes. Vous pourrez la fusionner à nouveau ici plus tard";
 "拆开默认正文" = "Scinder le corps par défaut";
 "拖动调整顺序" = "Faites glisser pour réordonner";
+"拖动调整顺序，悬停后点 × 移除" = "Faites glisser pour réordonner, survolez puis cliquez sur × pour retirer";
 "拷贝" = "Copier";
 "拷贝修复命令" = "Copier la commande de réparation";
 "拷贝名称" = "Copier le nom";
@@ -1476,6 +1481,7 @@
 "播放器" = "Lecteur";
 "播放器原始写法：%@" = "Selon le lecteur : %@";
 "播放器或曲库提供的标识符可信度最高；按曲名检索得到的结果可能有误，仅供参考" = "Les identifiants fournis par les lecteurs ou les bases musicales sont les plus fiables ; les résultats d’une recherche par titre peuvent être erronés et sont indicatifs";
+"播放器支持「喜欢」时才显示" = "Affiché seulement si le lecteur gère les favoris";
 "播放器未提供歌手，按歌名和时长推断" = "Le lecteur n’a pas fourni d’artiste ; déduit du titre et de la durée";
 "播放器联动" = "Lancer et quitter";
 "播放器自带歌词" = "Paroles du lecteur";
@@ -1709,6 +1715,7 @@
 "最后一句的时间与曲长相差 25% 以上，可能是其他版本" = "L’écart entre la dernière ligne et la durée du morceau dépasse 25 % ; sans doute une autre version";
 "最后一句的时间与曲长相差 25% 以上；仍可选用，但排在所有时长相符的候选之后" = "L’écart entre la dernière ligne et la durée du morceau dépasse 25 % ; utilisable, mais classé après tous les résultats de durée concordante";
 "最后一句的时间越接近曲长，得分越高，最高 300" = "Plus la dernière ligne est proche de la durée du morceau, plus le score est élevé, jusqu’à 300";
+"最多 %d 个按钮" = "Jusqu’à %d boutons";
 "最多 32 个字" = "32 caractères maximum";
 "最大宽度" = "Largeur limite";
 "最常听的专辑" = "Album phare";
@@ -2171,6 +2178,7 @@
 "灵动岛歌词" = "Paroles de l’encoche";
 "灵动岛歌词未开启" = "Paroles dans l’encoche désactivées";
 "点一下打开完整榜单" = "Touchez pour ouvrir le classement complet";
+"点下面的按钮加进来" = "Cliquez sur un bouton ci-dessous pour l’ajouter";
 "点按「开始使用」，让歌词随旋律逐句亮起" = "Cliquez sur « Commencer » et chaque ligne s’allume avec la musique";
 "点按「拷贝修复命令」，打开「终端」，粘贴后按下 Return 键，按提示输入登录密码（输入时不显示字符），然后点按「启用」" = "Cliquez sur « Copier la commande de réparation », ouvrez Terminal, collez-la et appuyez sur Retour, saisissez votre mot de passe de session si demandé (rien ne s’affiche pendant la saisie), puis cliquez sur « Activer »";
 "点按下载" = "Cliquez pour télécharger";
@@ -2690,6 +2698,7 @@
 "连接" = "Connexion";
 "连接 Apple Music" = "Connecter Apple Music";
 "连接 Last.fm" = "Connecter Last.fm";
+"连接 Last.fm 后才显示" = "Affiché seulement si Last.fm est connecté";
 "连接 Last.fm 账号" = "Connecter le compte Last.fm";
 "连接 Last.fm…" = "Connecter Last.fm…";
 "连接 Last.fm，记录你收听的每一首歌" = "Connectez Last.fm pour garder une trace de chaque morceau écouté";

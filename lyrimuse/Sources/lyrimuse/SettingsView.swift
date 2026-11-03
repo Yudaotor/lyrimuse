@@ -3987,7 +3987,7 @@ enum NotchBehaviorItem: String, CaseIterable, Identifiable {
     case expandedNextLine
     case expandedShowsControls
     case expandedShowsLyricsOffset
-    /// 展开态头部右侧那排快捷操作(搜索歌词 / 显示歌词 │ 设置 / 关闭)。一颗开关管四颗键。
+    /// 展开态头部右侧那排快捷操作画不画;放哪几颗在下面的编辑区(`NotchQuickActionsEditor`)。
     case expandedShowsQuickActions
     case expandedShowsArtwork
     case expandedShowsTrackTitle
@@ -4474,8 +4474,8 @@ struct NotchFontSettingsRows: View {
 
 /// 「展开态」组 —— 工具栏「展开态」浮层(`NotchExpandedPopover`)与抽屉 `expandedGroup` 同一份。
 ///
-/// 两组小块(三列 / 四列):先是控制区的两颗(显示播放控制 / 显示歌词校准)加「快捷操作」(头部右侧那排四颗键的
-/// 总开关),另一组以「曲目信息」为组名(纯说明,没有控件)带四个从属子行
+/// 两组小块(三列 / 四列):先是控制区的两颗(显示播放控制 / 显示歌词校准)加「快捷操作」(头部右侧那排键的
+/// 总开关;开着时下面跟一块按钮编辑区 `NotchQuickActionsEditor`),另一组以「曲目信息」为组名(纯说明,没有控件)带四个从属子行
 /// (封面 / 歌名 / 歌手 / 专辑)。分成两截是因为它们本来就是不同的东西 —— 平铺成一列开关的话,
 /// 这里的「显示封面」会跟「歌词行」浮层那枚同名的项混在一起。
 ///
@@ -4492,6 +4492,7 @@ struct NotchExpandedSettingsRows: View {
                 NotchBehaviorToggleTile(item: .expandedShowsLyricsOffset)
                 NotchBehaviorToggleTile(item: .expandedShowsQuickActions)
             }
+            NotchQuickActionsEditor()
             SettingsTileGrid(title: L10n.t("曲目信息"),
                                help: L10n.t("展开时显示在歌词行上方；全部关闭时不占空间"),
                                columns: 4) {

@@ -287,6 +287,7 @@ enum NotchStyleDefaults {
         settings.notchExpandedShowsArtist = AppSettings.defaultNotchExpandedShowsArtist
         settings.notchExpandedShowsAlbum = AppSettings.defaultNotchExpandedShowsAlbum
         settings.notchExpandedShowsQuickActions = AppSettings.defaultNotchExpandedShowsQuickActions
+        settings.notchQuickActions = NotchQuickAction.defaultLayout
         settings.notchLyricRowShowsArtwork = AppSettings.defaultNotchLyricRowShowsArtwork
         settings.notchLyricRowArtworkPosition = AppSettings.defaultNotchLyricRowArtworkPosition
         settings.notchLyricsAlignment = AppSettings.defaultNotchLyricsAlignment
