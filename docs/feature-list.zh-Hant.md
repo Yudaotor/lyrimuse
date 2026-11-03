@@ -2,9 +2,9 @@
 
 # Lyrimuse 功能清單
 
-[English](feature-list.md) · [简体中文](feature-list.zh-CN.md) · 繁體中文 · [日本語](feature-list.ja.md) · [한국어](feature-list.ko.md) · [Español](feature-list.es.md) · [Français](feature-list.fr.md) · [Deutsch](feature-list.de.md) · [Italiano](feature-list.it.md) · [Português (Brasil)](feature-list.pt-BR.md)
+[English](feature-list.md) · [简体中文](feature-list.zh-CN.md) · 繁體中文 · [日本語](feature-list.ja.md) · [한국어](feature-list.ko.md) · [Español](feature-list.es.md) · [Français](feature-list.fr.md) · [Deutsch](feature-list.de.md) · [Italiano](feature-list.it.md) · [Português (Brasil)](feature-list.pt-BR.md) · [Tiếng Việt](feature-list.vi.md)
 
-Lyrimuse 是一款開源（GPL-3.0）的 macOS 逐字歌詞 App，支援 macOS 14 及以上版本，相容 Apple Silicon 和 Intel 晶片。它為 Apple Music、Spotify、QQ 音樂、網易雲音樂、酷狗音樂、汽水音樂、KKBOX、Amazon Music、洛雪音樂、Kaset、reAMP、VOX、Pine Player、foobar2000，以及瀏覽器中的 YouTube Music 和 Spotify 網頁版顯示逐字同步的歌詞：可顯示在桌面浮動歌詞、動態島、選單列、觸控列和歌詞視窗中，並提供譯文和讀音標註（拼音、粵拼、日文羅馬拼音、韓文羅馬字），還可將聆聽記錄打卡到 Last.fm 和 ListenBrainz，並在 Discord 上顯示正在聆聽的歌曲。介面支援簡體中文、繁體中文、英文、日文、韓文、西班牙文、法文、德文、義大利文和巴西葡萄牙文。
+Lyrimuse 是一款開源（GPL-3.0）的 macOS 逐字歌詞 App，支援 macOS 14 及以上版本，相容 Apple Silicon 和 Intel 晶片。它為 Apple Music、Spotify、QQ 音樂、網易雲音樂、酷狗音樂、汽水音樂、KKBOX、Amazon Music、洛雪音樂、Kaset、reAMP、VOX、Pine Player、foobar2000，以及瀏覽器中的 YouTube Music 和 Spotify 網頁版顯示逐字同步的歌詞：可顯示在桌面浮動歌詞、動態島、選單列、觸控列和歌詞視窗中，並提供譯文和讀音標註（拼音、粵拼、日文羅馬拼音、韓文羅馬字），還可將聆聽記錄打卡到 Last.fm 和 ListenBrainz，並在 Discord 上顯示正在聆聽的歌曲。介面支援簡體中文、繁體中文、英文、日文、韓文、西班牙文、法文、德文、義大利文、巴西葡萄牙文和越南文。
 
 這份清單列出 Lyrimuse 的每一項功能：做什麼、在設定的哪裡、安裝後預設開著還是關著；最後附上設定視窗裡的全部設定項目。清單跟程式碼一起維護，功能有增減時同步更新。
 
@@ -762,7 +762,7 @@ Apple Music、Spotify、Kaset 和 VOX 需要「自動化」權限才能讀取播
 
 <a id="feature-language"></a>
 
-### 簡體中文、繁體中文、英文、日文、韓文、西班牙文、法文、德文、義大利文、巴西葡萄牙文介面
+### 簡體中文、繁體中文、英文、日文、韓文、西班牙文、法文、德文、義大利文、巴西葡萄牙文、越南文介面
 
 預設跟隨系統，系統語言不在其中時使用英文；切換後立即生效，無需重新啟動。
 

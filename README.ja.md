@@ -6,7 +6,7 @@
 
 **Macのために生まれ変わったデスクトップ歌詞**
 
-**Language / 语言 / 語言 / 言語 / 언어 / Idioma / Langue / Sprache / Lingua:** [English](README.md) | [简体中文](README.zh-CN.md) | [繁體中文](README.zh-Hant.md) | **日本語** | [한국어](README.ko.md) | [Español](README.es.md) | [Français](README.fr.md) | [Deutsch](README.de.md) | [Italiano](README.it.md) | [Português (Brasil)](README.pt-BR.md)
+**Language / 语言 / 語言 / 言語 / 언어 / Idioma / Langue / Sprache / Lingua:** [English](README.md) | [简体中文](README.zh-CN.md) | [繁體中文](README.zh-Hant.md) | **日本語** | [한국어](README.ko.md) | [Español](README.es.md) | [Français](README.fr.md) | [Deutsch](README.de.md) | [Italiano](README.it.md) | [Português (Brasil)](README.pt-BR.md) | [Tiếng Việt](README.vi.md)
 
 ![Platform](https://img.shields.io/badge/platform-macOS%2014%2B-blue)
 ![Architecture](https://img.shields.io/badge/arch-Apple%20Silicon%20%2B%20Intel-blue)
@@ -92,7 +92,7 @@ brew install --cask lyrimuse
 - **一時停止すると自動で隠れる**ので、何もしないままデスクトップに居座ることはありません。インストゥルメンタル、歌詞のない曲、フルスクリーンのアプリのときに隠すこともでき、フローティング表示を、使用中のウインドウがある画面に追従させることもできます。
 
 ### 日々の使い勝手
-- **英語、簡体字中国語、繁体字中国語、日本語、韓国語、スペイン語、フランス語、ドイツ語、イタリア語、ポルトガル語（ブラジル）**に対応し、切り替えは再起動なしですぐに反映されます。不自然な訳を見つけたら、プルリクエストを歓迎します。各言語のスタイルガイドは`lyrimuse/Localization/`にあります。
+- **英語、簡体字中国語、繁体字中国語、日本語、韓国語、スペイン語、フランス語、ドイツ語、イタリア語、ポルトガル語（ブラジル）、ベトナム語**に対応し、切り替えは再起動なしですぐに反映されます。不自然な訳を見つけたら、プルリクエストを歓迎します。各言語のスタイルガイドは`lyrimuse/Localization/`にあります。
 - **macOS 26のLiquid Glass**：設定、メニューバーのパネル、歌詞ウインドウ、歌詞マネージャ、セットアップガイドはLiquid Glassで作られており、その多くはシステムに合わせず、ライトまたはダークに固定することもできます。
 - すべての操作に**キーボードショートカット**を割り当てられます。すべての歌詞を隠す操作から、曲をお気に入りにする操作まで対応しています。初期状態では何も設定されていないので、キーは自分で選べます。また、すべての操作に`lyrimuse://`リンクがあり、ショートカット、Raycast、Alfredから呼び出せます。ショートカットからなら、リンクで再生中の曲の情報を受け取ることもできます（[URL Scheme](docs/url-scheme.ja.md)）。
 - **設定内を検索**：サイドバーに入力すると、該当する行までスクロールしてハイライトし、必要なら折りたたまれたグループも開きます。

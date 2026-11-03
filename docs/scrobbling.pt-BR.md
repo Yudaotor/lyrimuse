@@ -1,6 +1,6 @@
 # Como o Lyrimuse faz scrobble no Last.fm
 
-*[English](scrobbling.md) · [简体中文](scrobbling.zh-CN.md) · [日本語](scrobbling.ja.md) · [한국어](scrobbling.ko.md) · [Español](scrobbling.es.md) · [Français](scrobbling.fr.md) · [Deutsch](scrobbling.de.md) · [Italiano](scrobbling.it.md) · **Português (Brasil)***
+*[English](scrobbling.md) · [简体中文](scrobbling.zh-CN.md) · [日本語](scrobbling.ja.md) · [한국어](scrobbling.ko.md) · [Español](scrobbling.es.md) · [Français](scrobbling.fr.md) · [Deutsch](scrobbling.de.md) · [Italiano](scrobbling.it.md) · **Português (Brasil)** · [Tiếng Việt](scrobbling.vi.md)*
 
 ## 1. Quando uma reprodução conta
 

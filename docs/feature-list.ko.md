@@ -2,9 +2,9 @@
 
 # Lyrimuse 기능 목록
 
-[English](feature-list.md) · [简体中文](feature-list.zh-CN.md) · [繁體中文](feature-list.zh-Hant.md) · [日本語](feature-list.ja.md) · 한국어 · [Español](feature-list.es.md) · [Français](feature-list.fr.md) · [Deutsch](feature-list.de.md) · [Italiano](feature-list.it.md) · [Português (Brasil)](feature-list.pt-BR.md)
+[English](feature-list.md) · [简体中文](feature-list.zh-CN.md) · [繁體中文](feature-list.zh-Hant.md) · [日本語](feature-list.ja.md) · 한국어 · [Español](feature-list.es.md) · [Français](feature-list.fr.md) · [Deutsch](feature-list.de.md) · [Italiano](feature-list.it.md) · [Português (Brasil)](feature-list.pt-BR.md) · [Tiếng Việt](feature-list.vi.md)
 
-Lyrimuse는 macOS 14 이상을 지원하고 Apple Silicon과 Intel 칩 모두와 호환되는 오픈 소스(GPL-3.0) macOS 단어별 가사 앱입니다. Apple Music, Spotify, QQ Music, NetEase Cloud Music, Kugou, Soda Music, KKBOX, Amazon Music, LX Music, Kaset, reAMP, VOX, Pine Player, foobar2000, 그리고 브라우저에서 재생하는 YouTube Music과 Spotify 웹 플레이어의 가사를 단어 단위로 동기화해 표시합니다. 데스크탑 플로팅 가사, 노치, 메뉴 막대, Touch Bar, 가사 윈도우에 표시할 수 있고, 번역과 로마자 표기(병음, 광둥어 Jyutping, 일본어 로마자, 한국어 로마자)를 제공하며, 재생 기록을 Last.fm과 ListenBrainz에 스크로블하고 Discord에 지금 듣고 있는 노래를 표시할 수도 있습니다. 인터페이스는 중국어 간체, 중국어 번체, 영어, 일본어, 한국어, 스페인어, 프랑스어, 독일어, 이탈리아어, 브라질 포르투갈어를 지원합니다.
+Lyrimuse는 macOS 14 이상을 지원하고 Apple Silicon과 Intel 칩 모두와 호환되는 오픈 소스(GPL-3.0) macOS 단어별 가사 앱입니다. Apple Music, Spotify, QQ Music, NetEase Cloud Music, Kugou, Soda Music, KKBOX, Amazon Music, LX Music, Kaset, reAMP, VOX, Pine Player, foobar2000, 그리고 브라우저에서 재생하는 YouTube Music과 Spotify 웹 플레이어의 가사를 단어 단위로 동기화해 표시합니다. 데스크탑 플로팅 가사, 노치, 메뉴 막대, Touch Bar, 가사 윈도우에 표시할 수 있고, 번역과 로마자 표기(병음, 광둥어 Jyutping, 일본어 로마자, 한국어 로마자)를 제공하며, 재생 기록을 Last.fm과 ListenBrainz에 스크로블하고 Discord에 지금 듣고 있는 노래를 표시할 수도 있습니다. 인터페이스는 중국어 간체, 중국어 번체, 영어, 일본어, 한국어, 스페인어, 프랑스어, 독일어, 이탈리아어, 브라질 포르투갈어, 베트남어를 지원합니다.
 
 Lyrimuse의 모든 기능을 무엇을 하는지, 설정의 어디에 있는지, 설치 직후 켜져 있는지 꺼져 있는지와 함께 정리했습니다. 마지막에는 설정 윈도우의 모든 항목을 실었습니다. 이 목록은 코드와 함께 관리되며 기능이 바뀔 때마다 갱신됩니다.
 
@@ -762,7 +762,7 @@ Bark, ntfy, ServerChan, Feishu, DingTalk, WeCom, Telegram, Discord, Slack, 일�
 
 <a id="feature-language"></a>
 
-### 중국어 간체, 중국어 번체, 영어, 일본어, 한국어, 스페인어, 프랑스어, 독일어, 이탈리아어, 브라질 포르투갈어 인터페이스
+### 중국어 간체, 중국어 번체, 영어, 일본어, 한국어, 스페인어, 프랑스어, 독일어, 이탈리아어, 브라질 포르투갈어, 베트남어 인터페이스
 
 기본적으로 시스템 언어를 따르며, 시스템 언어가 이 중에 없으면 영어를 사용합니다. 전환하면 재시작 없이 바로 적용됩니다.
 

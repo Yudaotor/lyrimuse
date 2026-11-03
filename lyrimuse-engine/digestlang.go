@@ -26,11 +26,12 @@ const (
 	digestLangDe   digestLang = "de"
 	digestLangIt   digestLang = "it"
 	digestLangPtBR digestLang = "pt-br"
+	digestLangVi   digestLang = "vi"
 )
 
 func parseDigestLang(s string) digestLang {
 	switch l := digestLang(strings.ToLower(strings.TrimSpace(s))); l {
-	case digestLangHant, digestLangEn, digestLangJa, digestLangKo, digestLangEs, digestLangFr, digestLangDe, digestLangIt, digestLangPtBR:
+	case digestLangHant, digestLangEn, digestLangJa, digestLangKo, digestLangEs, digestLangFr, digestLangDe, digestLangIt, digestLangPtBR, digestLangVi:
 		return l
 	}
 	return digestLangHans
@@ -596,5 +597,52 @@ var digestWordTable = map[digestLang]digestWords{
 		"value_hm":        "{h} h {m} min",
 		"value_m":         "{m} min",
 		"zero_is_one":     "1",
+	},
+	digestLangVi: {
+		"brief_line":      "{label}: {name} · {n}",
+		"col_albums":      "Album",
+		"col_artists":     "Nghệ sĩ",
+		"col_tracks":      "Bài hát",
+		"colon":           ":",
+		"compare":         " ({label}: {prev}, {change})",
+		"cover":           "Ảnh bìa",
+		"date":            "{d}/{m}",
+		"duration_hm":     " · khoảng {h} giờ {m} phút",
+		"duration_m":      " · khoảng {m} phút",
+		"flat":            "không đổi",
+		"footer":          "Lyrimuse · Dữ liệu từ {source}",
+		"head_albums":     "Album nghe nhiều nhất",
+		"head_artists":    "Nghệ sĩ nghe nhiều nhất",
+		"head_tracks":     "Bài hát nghe nhiều nhất",
+		"item":            "{i}. {name} ({n})",
+		"keyword":         "nghe nhạc",
+		"label_album":     "Album",
+		"label_artist":    "Nghệ sĩ",
+		"label_track":     "Bài hát",
+		"link":            "Xem bảng xếp hạng đầy đủ trên {source}",
+		"more":            ", v.v.",
+		"most_played":     "Nghe nhiều nhất",
+		"name_sep":        ", ",
+		"names_lead":      ": ",
+		"new_artists":     "{n} nghệ sĩ mới",
+		"pair":            "{artist} - {name}",
+		"plays":           "{n} lượt phát",
+		"plays_truncated": "Hơn {n} lượt phát (quá nhiều, chỉ tính những lượt gần nhất)",
+		"preset_brief":    "{summary}\nNghệ sĩ hàng đầu: {top_artist}\nAlbum hàng đầu: {top_album}\nBài hát hàng đầu: {top_track}\nNghệ sĩ mới ({new_artists}): {new_artist_names}",
+		"preset_full":     "{summary}\n\nNghệ sĩ nghe nhiều nhất:\n{top_artists}\n\nAlbum nghe nhiều nhất:\n{top_albums}\n\nBài hát nghe nhiều nhất:\n{top_tracks}\n\nNghệ sĩ mới ({new_artists}): {new_artist_names}",
+		"preset_overview": "{summary}\nNghệ sĩ mới: {new_artists}",
+		"prev_month":      "tháng {month}",
+		"prev_month_year": "tháng {month}/{year}",
+		"prev_week":       "tuần trước đó",
+		"prev_year":       "năm {year}",
+		"title_day":       "🎧 Báo cáo nghe nhạc ({date})",
+		"title_month":     "📅 Tổng kết nghe nhạc tháng {month}/{year}",
+		"title_sample":    "🎧 Báo cáo nghe nhạc mẫu",
+		"title_today":     "🎧 Báo cáo nghe nhạc hôm nay ({date})",
+		"title_week":      "🎵 Tổng kết nghe nhạc tuần trước ({from} – {to})",
+		"title_year":      "🏆 Tổng kết nghe nhạc năm {year}",
+		"title_yesterday": "🎧 Báo cáo nghe nhạc hôm qua ({date})",
+		"value_hm":        "{h} giờ {m} phút",
+		"value_m":         "{m} phút",
 	},
 }

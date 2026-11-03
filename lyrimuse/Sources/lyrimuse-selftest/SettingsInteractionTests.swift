@@ -565,8 +565,8 @@ func runSettingsInteractionTests() {
             expectEqual(ReportWords.table[lang] ?? [:], wordsJSON[lang.rawValue] ?? ["": "缺"], "报告语言: \(lang.rawValue) 用语表同引擎")
         }
         expectEqual([ReportLanguage(""), ReportLanguage(" ZH-HANT "), ReportLanguage("en"), ReportLanguage("ja"), ReportLanguage("ko"), ReportLanguage("es"),
-                     ReportLanguage("fr"), ReportLanguage("de"), ReportLanguage("it"), ReportLanguage("pt-br"), ReportLanguage(" PT-BR "), ReportLanguage("pl")],
-                    [.zhHans, .zhHant, .en, .ja, .ko, .es, .fr, .de, .it, .ptBR, .ptBR, .zhHans],
+                     ReportLanguage("fr"), ReportLanguage("de"), ReportLanguage("it"), ReportLanguage("pt-br"), ReportLanguage(" PT-BR "), ReportLanguage("vi"), ReportLanguage("pl")],
+                    [.zhHans, .zhHant, .en, .ja, .ko, .es, .fr, .de, .it, .ptBR, .ptBR, .vi, .zhHans],
                     "报告语言: 认得的几种,其余按简体")
         expectEqual(ReportLanguage.featuresKey, "report_language", "报告语言: 键名同引擎 features.go 的 json 标签")
         expectEqual(ReportLanguage.zhHans.words.f("item", [("i", "1"), ("name", "Song {n} {name}"), ("n", "4")]), "1. Song {n} {name}（4）",
@@ -599,6 +599,9 @@ func runSettingsInteractionTests() {
         expectEqual([0, 1, 2].map { ReportLanguage.fr.words.count("plays", $0) } + [0, 1].map { ReportLanguage.es.words.count("plays", $0) },
                     ["0 écoute", "1 écoute", "2 écoutes", "0 reproducciones", "1 reproducción"],
                     "报告语言: 法语 0 也用单数(同引擎 digestWords.count),别的语言只有 1")
+        expectEqual([0, 1, 2].map { ReportLanguage.vi.words.count("plays", $0) } + [ReportLanguage.vi.words.month("title_month", year: 2026, month: 10)],
+                    ["0 lượt phát", "1 lượt phát", "2 lượt phát", "📅 Tổng kết nghe nhạc tháng 10/2026"],
+                    "报告语言: 越南语不分单复数(同日韩,表里没有 _one),月份写数字")
         expectEqual(ReportLanguage.en.words.month("title_month", year: 2026, month: 10), "📅 October 2026 Listening Digest",
                     "报告语言: 没有 month_names 的用英文月名")
         expectEqual(DigestStyle.matching(DigestTemplate.preset(.brief, lang: .en) ?? DigestTemplate(), lang: .en), .brief,
@@ -1146,7 +1149,7 @@ func runSettingsInteractionTests() {
                         + ["en", "zh-hans", "zh-hant", "ja", "ko"].map { W.windowMinWidth(enWidth, language: $0) - W.maxWidth(enWidth) },
                     [640, 640, 640, 540, 540, 540, 540, 540],
                     "设置窗最窄: 西语、法语内容区按 640(卡片列撑满 600),别的语言 540")
-        expectEqual(["de", "it", "pt-br"].map { W.windowMinWidth(enWidth, language: $0) - W.maxWidth(enWidth) }, [640, 640, 640], "设置窗最窄: 德语、意大利语、巴西葡语同样按 640")
+        expectEqual(["de", "it", "pt-br", "vi"].map { W.windowMinWidth(enWidth, language: $0) - W.maxWidth(enWidth) }, [640, 640, 640, 640], "设置窗最窄: 德语、意大利语、巴西葡语、越南语同样按 640")
         expectEqual(W.widthToRestore(lastDefault: nil, currentDefault: W.designWidth), nil,
                     "设置侧栏宽度: 没记过上次的默认宽度时不动")
         expectEqual(W.widthToRestore(lastDefault: W.designWidth, currentDefault: W.designWidth), nil,

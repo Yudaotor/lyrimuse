@@ -2,9 +2,9 @@
 
 # Lyrimuse 機能一覧
 
-[English](feature-list.md) · [简体中文](feature-list.zh-CN.md) · [繁體中文](feature-list.zh-Hant.md) · 日本語 · [한국어](feature-list.ko.md) · [Español](feature-list.es.md) · [Français](feature-list.fr.md) · [Deutsch](feature-list.de.md) · [Italiano](feature-list.it.md) · [Português (Brasil)](feature-list.pt-BR.md)
+[English](feature-list.md) · [简体中文](feature-list.zh-CN.md) · [繁體中文](feature-list.zh-Hant.md) · 日本語 · [한국어](feature-list.ko.md) · [Español](feature-list.es.md) · [Français](feature-list.fr.md) · [Deutsch](feature-list.de.md) · [Italiano](feature-list.it.md) · [Português (Brasil)](feature-list.pt-BR.md) · [Tiếng Việt](feature-list.vi.md)
 
-Lyrimuseは、オープンソース（GPL-3.0）のmacOS用の単語ごとの歌詞Appです。macOS 14以降に対応し、Apple SiliconとIntelのどちらでも動作します。Apple Music、Spotify、QQ Music、NetEase Cloud Music、Kugou、Soda Music、KKBOX、Amazon Music、LX Music、Kaset、reAMP、VOX、Pine Player、foobar2000、そしてブラウザで再生するYouTube MusicとSpotify Web版の歌詞を単語ごとに同期して、デスクトップのフローティング歌詞、ノッチ、メニューバー、Touch Bar、歌詞ウインドウに表示します。翻訳とローマ字表記（ピンイン、粤拼、日本語のローマ字、韓国語のローマ字）にも対応し、再生履歴をLast.fmとListenBrainzにScrobbleしたり、再生中の曲をDiscordに表示したりできます。インターフェイスは簡体字中国語、繁体字中国語、英語、日本語、韓国語、スペイン語、フランス語、ドイツ語、イタリア語、ポルトガル語（ブラジル）に対応しています。
+Lyrimuseは、オープンソース（GPL-3.0）のmacOS用の単語ごとの歌詞Appです。macOS 14以降に対応し、Apple SiliconとIntelのどちらでも動作します。Apple Music、Spotify、QQ Music、NetEase Cloud Music、Kugou、Soda Music、KKBOX、Amazon Music、LX Music、Kaset、reAMP、VOX、Pine Player、foobar2000、そしてブラウザで再生するYouTube MusicとSpotify Web版の歌詞を単語ごとに同期して、デスクトップのフローティング歌詞、ノッチ、メニューバー、Touch Bar、歌詞ウインドウに表示します。翻訳とローマ字表記（ピンイン、粤拼、日本語のローマ字、韓国語のローマ字）にも対応し、再生履歴をLast.fmとListenBrainzにScrobbleしたり、再生中の曲をDiscordに表示したりできます。インターフェイスは簡体字中国語、繁体字中国語、英語、日本語、韓国語、スペイン語、フランス語、ドイツ語、イタリア語、ポルトガル語（ブラジル）、ベトナム語に対応しています。
 
 Lyrimuse のすべての機能について、何ができるか、設定のどこにあるか、インストール直後にオンかオフかをまとめています。最後に設定ウインドウの全項目を載せています。この一覧はコードと一緒に管理し、機能が増減するたびに更新します。
 
@@ -762,7 +762,7 @@ Last.fmに接続していない間、再生履歴はまずこのMacに保存さ�
 
 <a id="feature-language"></a>
 
-### 簡体字中国語、繁体字中国語、英語、日本語、韓国語、スペイン語、フランス語、ドイツ語、イタリア語、ポルトガル語（ブラジル）のインターフェイス
+### 簡体字中国語、繁体字中国語、英語、日本語、韓国語、スペイン語、フランス語、ドイツ語、イタリア語、ポルトガル語（ブラジル）、ベトナム語のインターフェイス
 
 デフォルトではシステムに合わせ、システムの言語がこれらに含まれない場合は英語で表示します。切り替えるとすぐに反映され、再起動は不要です。
 

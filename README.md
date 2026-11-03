@@ -6,7 +6,7 @@
 
 **Desktop lyrics, reimagined for the Mac.**
 
-**Language / 语言 / 語言 / 言語 / 언어 / Idioma / Langue / Sprache / Lingua:** **English** | [简体中文](README.zh-CN.md) | [繁體中文](README.zh-Hant.md) | [日本語](README.ja.md) | [한국어](README.ko.md) | [Español](README.es.md) | [Français](README.fr.md) | [Deutsch](README.de.md) | [Italiano](README.it.md) | [Português (Brasil)](README.pt-BR.md)
+**Language / 语言 / 語言 / 言語 / 언어 / Idioma / Langue / Sprache / Lingua:** **English** | [简体中文](README.zh-CN.md) | [繁體中文](README.zh-Hant.md) | [日本語](README.ja.md) | [한국어](README.ko.md) | [Español](README.es.md) | [Français](README.fr.md) | [Deutsch](README.de.md) | [Italiano](README.it.md) | [Português (Brasil)](README.pt-BR.md) | [Tiếng Việt](README.vi.md)
 
 ![Platform](https://img.shields.io/badge/platform-macOS%2014%2B-blue)
 ![Architecture](https://img.shields.io/badge/arch-Apple%20Silicon%20%2B%20Intel-blue)
@@ -92,7 +92,7 @@ brew install --cask lyrimuse
 - **Hides itself when you pause**, so it isn't sitting on your desktop doing nothing. It can also step aside for instrumentals, songs without lyrics and full-screen apps, and the overlay can follow you to the screen of the window you're using.
 
 ### Everyday details
-- **English, Simplified Chinese, Traditional Chinese, Japanese, Korean, Spanish, French, German, Italian and Brazilian Portuguese**, and switching takes effect right away, no restart. Spotted a clumsy translation? Pull requests are welcome; each language has a style guide in `lyrimuse/Localization/`.
+- **English, Simplified Chinese, Traditional Chinese, Japanese, Korean, Spanish, French, German, Italian, Brazilian Portuguese and Vietnamese**, and switching takes effect right away, no restart. Spotted a clumsy translation? Pull requests are welcome; each language has a style guide in `lyrimuse/Localization/`.
 - **Liquid Glass on macOS 26.** Settings, the menu bar panel, the Lyrics Window, Lyrics Manager and the setup guide are built with it, and most of them can stay light or dark instead of following the system.
 - **Keyboard shortcuts** for every action, from hiding all lyrics to liking the song. None are set out of the box, so you pick the keys. Every action also has a `lyrimuse://` link you can call from Shortcuts, Raycast or Alfred, and from Shortcuts a link can hand back the song that's playing ([URL Scheme](docs/url-scheme.md)).
 - **Search in Settings.** Type in the sidebar and it scrolls to the matching row and highlights it, opening a collapsed group if it needs to.

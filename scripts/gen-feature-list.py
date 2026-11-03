@@ -29,12 +29,12 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-LANGS = ("en", "zh-Hans", "zh-Hant", "ja", "ko", "es", "fr", "de", "it", "pt-BR")
-LANG_LABELS = {"en": "English", "zh-Hans": "简体中文", "zh-Hant": "繁體中文", "ja": "日本語", "ko": "한국어", "es": "Español", "fr": "Français", "de": "Deutsch", "it": "Italiano", "pt-BR": "Português (Brasil)"}
+LANGS = ("en", "zh-Hans", "zh-Hant", "ja", "ko", "es", "fr", "de", "it", "pt-BR", "vi")
+LANG_LABELS = {"en": "English", "zh-Hans": "简体中文", "zh-Hant": "繁體中文", "ja": "日本語", "ko": "한국어", "es": "Español", "fr": "Français", "de": "Deutsch", "it": "Italiano", "pt-BR": "Português (Brasil)", "vi": "Tiếng Việt"}
 DOC_FILES = {"en": "feature-list.md", "zh-Hans": "feature-list.zh-CN.md", "zh-Hant": "feature-list.zh-Hant.md",
              "ja": "feature-list.ja.md", "ko": "feature-list.ko.md", "es": "feature-list.es.md",
              "fr": "feature-list.fr.md", "de": "feature-list.de.md", "it": "feature-list.it.md",
-             "pt-BR": "feature-list.pt-BR.md"}
+             "pt-BR": "feature-list.pt-BR.md", "vi": "feature-list.vi.md"}
 BRANDS = {"ListenBrainz", "Last.fm", "Discord"}
 
 CHROME = {
@@ -238,6 +238,26 @@ CHROME = {
         "sep": ": ",
         "generated": "Gerado por scripts/gen-feature-list.py a partir de shared/feature-list.json e shared/settings-catalog.json; para mudar a lista, edite esses arquivos.",
     },
+    "vi": {
+        "title": "Danh sách tính năng của Lyrimuse",
+        "intro": "Danh sách này tập hợp mọi tính năng của Lyrimuse: mỗi tính năng làm gì, nằm ở đâu trong cài đặt và có bật sẵn sau khi cài hay không; cuối trang là toàn bộ mục trong cửa sổ Cài đặt. Danh sách được duy trì cùng mã nguồn và cập nhật theo mỗi thay đổi.",
+        "toc": "Mục lục",
+        "off_title": "Tắt cho đến khi bạn bật",
+        "off_intro": "Các tính năng này tắt sau khi cài. Hãy bật chúng trong cài đặt trước (một số còn cần tài khoản hoặc quyền truy cập):",
+        "col_feature": "Tính năng",
+        "col_where": "Bật ở đâu",
+        "default_on": "Bật theo mặc định",
+        "default_off": "Tắt theo mặc định",
+        "where": "Cài đặt",
+        "index_title": "Toàn bộ cài đặt",
+        "index_intro": "Toàn bộ mục trong cửa sổ Cài đặt, theo vị trí: tổng cộng {n} mục. Gõ tên vào ô tìm kiếm ở đầu thanh bên của Cài đặt để đi thẳng tới mục đó.",
+        "settings": "Cài đặt",
+        "labs": "Thử nghiệm",
+        "mini_only": " (chỉ Mini)",
+        "full_only": " (chỉ Đầy đủ)",
+        "sep": ": ",
+        "generated": "Được tạo bởi scripts/gen-feature-list.py từ shared/feature-list.json và shared/settings-catalog.json; muốn sửa danh sách, hãy sửa các tệp đó.",
+    },
 }
 
 CALL_RE = re.compile(r"\b(SettingsRow|SettingsSubRow|SettingsCardHeader|SettingsChipToggle|SettingsToggleTile|SettingsControlCell)\(")
@@ -367,7 +387,7 @@ def load_model(root: Path = ROOT) -> dict:
             joined = ""
             for line in lines:
                 if joined:
-                    if lang in ("en", "ko", "es", "fr", "de", "it", "pt-BR"):
+                    if lang in ("en", "ko", "es", "fr", "de", "it", "pt-BR", "vi"):
                         joined += " "
                     elif lang == "ja":
                         joined += "" if joined[-1] in "。：！？" else "。"

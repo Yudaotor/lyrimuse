@@ -6,7 +6,7 @@
 
 **Letras na área de trabalho, reinventadas para o Mac.**
 
-**Language / 语言 / 語言 / 言語 / 언어 / Idioma / Langue / Sprache / Lingua:** [English](README.md) | [简体中文](README.zh-CN.md) | [繁體中文](README.zh-Hant.md) | [日本語](README.ja.md) | [한국어](README.ko.md) | [Español](README.es.md) | [Français](README.fr.md) | [Deutsch](README.de.md) | [Italiano](README.it.md) | **Português (Brasil)**
+**Language / 语言 / 語言 / 言語 / 언어 / Idioma / Langue / Sprache / Lingua:** [English](README.md) | [简体中文](README.zh-CN.md) | [繁體中文](README.zh-Hant.md) | [日本語](README.ja.md) | [한국어](README.ko.md) | [Español](README.es.md) | [Français](README.fr.md) | [Deutsch](README.de.md) | [Italiano](README.it.md) | **Português (Brasil)** | [Tiếng Việt](README.vi.md)
 
 ![Platform](https://img.shields.io/badge/platform-macOS%2014%2B-blue)
 ![Architecture](https://img.shields.io/badge/arch-Apple%20Silicon%20%2B%20Intel-blue)
@@ -92,7 +92,7 @@ brew install --cask lyrimuse
 - **Some quando você pausa**, para não ficar na área de trabalho sem fazer nada. Também pode sair do caminho em trechos instrumentais, músicas sem letra e apps em tela cheia, e a letra flutuante pode acompanhar você até a tela da janela que você está usando.
 
 ### Detalhes do dia a dia
-- **Inglês, chinês simplificado, chinês tradicional, japonês, coreano, espanhol, francês, alemão, italiano e português do Brasil**, e a troca vale na hora, sem reiniciar. Achou uma tradução desajeitada? Pull requests são bem-vindos; cada idioma tem um guia de estilo em `lyrimuse/Localization/`.
+- **Inglês, chinês simplificado, chinês tradicional, japonês, coreano, espanhol, francês, alemão, italiano, português do Brasil e vietnamita**, e a troca vale na hora, sem reiniciar. Achou uma tradução desajeitada? Pull requests são bem-vindos; cada idioma tem um guia de estilo em `lyrimuse/Localization/`.
 - **Liquid Glass no macOS 26.** Os ajustes, o painel da barra de menus, a janela da letra, o gerenciador de letras e o guia de configuração usam esse visual, e a maioria deles pode ficar sempre clara ou escura em vez de seguir o sistema.
 - **Atalhos de teclado** para todas as ações, de ocultar todas as letras a curtir a música. Nenhum vem definido de fábrica, então você escolhe as teclas. Cada ação também tem um link `lyrimuse://` que você pode chamar no Atalhos, no Raycast ou no Alfred, e no Atalhos um link pode devolver a música que está tocando ([esquema de URL](docs/url-scheme.pt-BR.md)).
 - **Busca nos ajustes.** Digite na barra lateral e ela rola até a linha correspondente e a destaca, abrindo um grupo recolhido se precisar.

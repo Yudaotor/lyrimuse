@@ -6,7 +6,7 @@
 
 **Mac을 위해 새롭게 다시 만든 데스크탑 가사**
 
-**Language / 语言 / 語言 / 言語 / 언어 / Idioma / Langue / Sprache / Lingua:** [English](README.md) | [简体中文](README.zh-CN.md) | [繁體中文](README.zh-Hant.md) | [日本語](README.ja.md) | **한국어** | [Español](README.es.md) | [Français](README.fr.md) | [Deutsch](README.de.md) | [Italiano](README.it.md) | [Português (Brasil)](README.pt-BR.md)
+**Language / 语言 / 語言 / 言語 / 언어 / Idioma / Langue / Sprache / Lingua:** [English](README.md) | [简体中文](README.zh-CN.md) | [繁體中文](README.zh-Hant.md) | [日本語](README.ja.md) | **한국어** | [Español](README.es.md) | [Français](README.fr.md) | [Deutsch](README.de.md) | [Italiano](README.it.md) | [Português (Brasil)](README.pt-BR.md) | [Tiếng Việt](README.vi.md)
 
 ![Platform](https://img.shields.io/badge/platform-macOS%2014%2B-blue)
 ![Architecture](https://img.shields.io/badge/arch-Apple%20Silicon%20%2B%20Intel-blue)
@@ -92,7 +92,7 @@ brew install --cask lyrimuse
 - **일시 정지하면 저절로 숨겨지므로** 할 일 없이 데스크탑에 남아 있지 않습니다. 연주곡, 가사가 없는 노래, 전체 화면 앱에서도 비켜 줄 수 있고, 플로팅 가사가 사용 중인 윈도우가 있는 화면으로 따라오게 할 수도 있습니다.
 
 ### 일상의 세심한 부분
-- **영어, 간체 중국어, 번체 중국어, 일본어, 한국어, 스페인어, 프랑스어, 독일어, 이탈리아어, 브라질 포르투갈어**를 지원하며, 언어를 바꾸면 재시작 없이 바로 적용됩니다. 어색한 번역을 발견했다면 Pull Request를 환영합니다. 각 언어의 스타일 가이드는 `lyrimuse/Localization/`에 있습니다.
+- **영어, 간체 중국어, 번체 중국어, 일본어, 한국어, 스페인어, 프랑스어, 독일어, 이탈리아어, 브라질 포르투갈어, 베트남어**를 지원하며, 언어를 바꾸면 재시작 없이 바로 적용됩니다. 어색한 번역을 발견했다면 Pull Request를 환영합니다. 각 언어의 스타일 가이드는 `lyrimuse/Localization/`에 있습니다.
 - **macOS 26의 Liquid Glass.** 설정, 메뉴 막대 패널, 가사 윈도우, 가사 관리자, 설정 가이드가 Liquid Glass로 만들어졌으며, 대부분은 시스템을 따르지 않고 라이트 또는 다크 모드로 고정할 수 있습니다.
 - 모든 가사를 숨기는 것부터 노래에 좋아요를 표시하는 것까지 모든 동작에 **키보드 단축키**를 지정할 수 있습니다. 기본으로 설정된 단축키는 없으므로 원하는 키를 직접 고르면 됩니다. 모든 동작에는 단축어, Raycast, Alfred에서 호출할 수 있는 `lyrimuse://` 링크도 있으며, 단축어에서는 링크로 재생 중인 노래 정보를 받아 올 수도 있습니다([URL Scheme](docs/url-scheme.ko.md)).
 - **설정 검색.** 사이드바에 입력하면 일치하는 행으로 스크롤해 강조 표시하며, 필요하면 접혀 있는 그룹도 펼칩니다.

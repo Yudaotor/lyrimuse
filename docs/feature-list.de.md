@@ -2,9 +2,9 @@
 
 # Lyrimuse-Funktionsliste
 
-[English](feature-list.md) · [简体中文](feature-list.zh-CN.md) · [繁體中文](feature-list.zh-Hant.md) · [日本語](feature-list.ja.md) · [한국어](feature-list.ko.md) · [Español](feature-list.es.md) · [Français](feature-list.fr.md) · Deutsch · [Italiano](feature-list.it.md) · [Português (Brasil)](feature-list.pt-BR.md)
+[English](feature-list.md) · [简体中文](feature-list.zh-CN.md) · [繁體中文](feature-list.zh-Hant.md) · [日本語](feature-list.ja.md) · [한국어](feature-list.ko.md) · [Español](feature-list.es.md) · [Français](feature-list.fr.md) · Deutsch · [Italiano](feature-list.it.md) · [Português (Brasil)](feature-list.pt-BR.md) · [Tiếng Việt](feature-list.vi.md)
 
-Lyrimuse ist eine Open-Source-App (GPL-3.0) für wortgenau synchronisierte Liedtexte auf dem Mac, für macOS 14 oder neuer auf Apple Silicon und Intel. Sie zeigt Liedtexte für Apple Music, Spotify, QQ Music, NetEase Cloud Music, Kugou, Soda Music, KKBOX, Amazon Music, LX Music, Kaset, reAMP, VOX, Pine Player, foobar2000 sowie YouTube Music oder Spotify Web im Browser: schwebend auf dem Schreibtisch, neben der Notch, in der Menüleiste, auf der Touch Bar oder in einem eigenen Liedtextfenster, mit Übersetzungen und Umschrift (Pinyin, kantonesisches Jyutping, japanisches Romaji, koreanische Umschrift). Sie scrobbelt zu Last.fm und ListenBrainz und kann auf Discord zeigen, was du hörst. Die Oberfläche gibt es auf Englisch, vereinfachtem Chinesisch, traditionellem Chinesisch, Japanisch, Koreanisch, Spanisch, Französisch, Deutsch, Italienisch und brasilianisches Portugiesisch.
+Lyrimuse ist eine Open-Source-App (GPL-3.0) für wortgenau synchronisierte Liedtexte auf dem Mac, für macOS 14 oder neuer auf Apple Silicon und Intel. Sie zeigt Liedtexte für Apple Music, Spotify, QQ Music, NetEase Cloud Music, Kugou, Soda Music, KKBOX, Amazon Music, LX Music, Kaset, reAMP, VOX, Pine Player, foobar2000 sowie YouTube Music oder Spotify Web im Browser: schwebend auf dem Schreibtisch, neben der Notch, in der Menüleiste, auf der Touch Bar oder in einem eigenen Liedtextfenster, mit Übersetzungen und Umschrift (Pinyin, kantonesisches Jyutping, japanisches Romaji, koreanische Umschrift). Sie scrobbelt zu Last.fm und ListenBrainz und kann auf Discord zeigen, was du hörst. Die Oberfläche gibt es auf Englisch, vereinfachtem Chinesisch, traditionellem Chinesisch, Japanisch, Koreanisch, Spanisch, Französisch, Deutsch, Italienisch, brasilianisches Portugiesisch und Vietnamesisch.
 
 Diese Liste führt jede Funktion von Lyrimuse auf: was sie macht, wo sie in den Einstellungen liegt und ob sie nach der Installation ein- oder ausgeschaltet ist; am Ende stehen alle Einstellungen des Einstellungsfensters. Sie wird mit dem Code gepflegt und bei jeder Änderung aktualisiert.
 
@@ -762,7 +762,7 @@ Beim ersten Öffnen führt dich Lyrimuse durch die Wahl der Player, das Koppeln 
 
 <a id="feature-language"></a>
 
-### Englisch, vereinfachtes und traditionelles Chinesisch, Japanisch, Koreanisch, Spanisch, Französisch, Deutsch, Italienisch und brasilianisches Portugiesisch
+### Englisch, vereinfachtes und traditionelles Chinesisch, Japanisch, Koreanisch, Spanisch, Französisch, Deutsch, Italienisch, brasilianisches Portugiesisch und Vietnamesisch
 
 Folgt standardmäßig deinem System und nutzt Englisch, wenn deine Systemsprache keine davon ist; ein Wechsel wirkt sofort, ohne Neustart.
 

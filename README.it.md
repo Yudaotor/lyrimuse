@@ -6,7 +6,7 @@
 
 **Il testo sulla scrivania, reinventato per il Mac.**
 
-**Language / 语言 / 語言 / 言語 / 언어 / Idioma / Langue / Sprache / Lingua:** [English](README.md) | [简体中文](README.zh-CN.md) | [繁體中文](README.zh-Hant.md) | [日本語](README.ja.md) | [한국어](README.ko.md) | [Español](README.es.md) | [Français](README.fr.md) | [Deutsch](README.de.md) | **Italiano** | [Português (Brasil)](README.pt-BR.md)
+**Language / 语言 / 語言 / 言語 / 언어 / Idioma / Langue / Sprache / Lingua:** [English](README.md) | [简体中文](README.zh-CN.md) | [繁體中文](README.zh-Hant.md) | [日本語](README.ja.md) | [한국어](README.ko.md) | [Español](README.es.md) | [Français](README.fr.md) | [Deutsch](README.de.md) | **Italiano** | [Português (Brasil)](README.pt-BR.md) | [Tiếng Việt](README.vi.md)
 
 ![Platform](https://img.shields.io/badge/platform-macOS%2014%2B-blue)
 ![Architecture](https://img.shields.io/badge/arch-Apple%20Silicon%20%2B%20Intel-blue)
@@ -92,7 +92,7 @@ brew install --cask lyrimuse
 - **Si nasconde quando metti in pausa**, così non resta sulla scrivania a far niente. Può anche farsi da parte durante i brani strumentali, i brani senza testo e le app a schermo intero, e il testo fluttuante può seguirti sullo schermo della finestra che stai usando.
 
 ### Dettagli di tutti i giorni
-- **Inglese, cinese semplificato, cinese tradizionale, giapponese, coreano, spagnolo, francese, tedesco, italiano e portoghese brasiliano**, e il cambio di lingua ha effetto subito, senza riavviare. Hai notato una traduzione goffa? Le pull request sono benvenute; ogni lingua ha una guida di stile in `lyrimuse/Localization/`.
+- **Inglese, cinese semplificato, cinese tradizionale, giapponese, coreano, spagnolo, francese, tedesco, italiano, portoghese brasiliano e vietnamita**, e il cambio di lingua ha effetto subito, senza riavviare. Hai notato una traduzione goffa? Le pull request sono benvenute; ogni lingua ha una guida di stile in `lyrimuse/Localization/`.
 - **Liquid Glass su macOS 26.** Le Impostazioni, il pannello della barra dei menu, la Finestra testo, Gestione testi e la guida di configurazione lo usano, e quasi tutti possono restare chiari o scuri invece di seguire il sistema.
 - **Scorciatoie da tastiera** per ogni azione, da nascondere tutti i testi ad aggiungere il brano ai preferiti. Di serie non ne è impostata nessuna, quindi i tasti li scegli tu. Ogni azione ha anche un link `lyrimuse://` che puoi richiamare da Comandi Rapidi, Raycast o Alfred, e da Comandi Rapidi un link può restituire il brano in riproduzione ([Schema URL](docs/url-scheme.it.md)).
 - **Cerca nelle Impostazioni.** Scrivi nella barra laterale e la pagina scorre fino alla riga corrispondente e la evidenzia, aprendo un gruppo chiuso se serve.
