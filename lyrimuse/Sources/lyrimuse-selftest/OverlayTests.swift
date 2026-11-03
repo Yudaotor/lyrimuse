@@ -1067,10 +1067,22 @@ func runOverlayTests() {
                     "副行字号接线: 下一句逐词读音按读音比例再乘下一句比例,SwiftUI 字体和 AppKit 孪生各一次")
         let overlay = (try? String(contentsOf: sources.appendingPathComponent("lyrimuse/UI/LyricsOverlayView.swift"),
                                    encoding: .utf8)) ?? ""
-        let columns = sourceBody("private func upcomingGroupColumns", in: overlay)
-        expectEqual([sourceHas(columns, ".font(nextLineReadingFont)"), sourceHas(columns, "romaFont: nextLineReadingFont"),
-                     sourceHas(columns, ".font(playback.romanizationFont)")], [true, true, false],
+        let columns = sourceBody("private func upcomingGroupColumns(", in: overlay)
+        let columnsKey = sourceBody("private func upcomingGroupColumnsKey", in: overlay)
+        expectEqual([sourceHas(columns, ".font(nextLineReadingFont)"), sourceHas(columns, "contentKey: upcomingGroupColumnsKey(key)"),
+                     sourceHas(columnsKey, "romaFont: nextLineReadingFont"),
+                     sourceHas(columns, ".font(playback.romanizationFont)")], [true, true, true, false],
                     "副行字号接线: 下一句逐词列的读音用缩小的那份字体,折行缓存键跟着它")
+        let nextRow = sourceBody("@ViewBuilder private var nextLinePreviewRow", in: overlay)
+        let nextRect = sourceBody("private func reportingNextLineRect", in: overlay)
+        expectEqual([sourceHas(nextRow, "reportingNextLineRect(nextLinePreviewContent(next), next: next)"),
+                     sourceHas(columns, "contentRectSink: upcomingContentSink"),
+                     sourceHas(sourceBody("private func upcomingWordRows", in: overlay), "contentRectSink: upcomingContentSink"),
+                     sourceHas(nextRect, "upcomingContentSink.owner"),
+                     sourceHas(nextRect, "upcomingGroupColumnsKey(next)"),
+                     sourceHas(nextRect, "upcomingWordRowsKey($0)")],
+                    [true, true, true, true, true, true],
+                    "悬浮淡化命中区: 下一句折行时按文字实际矩形上报,不按撑满整宽的 WrapLayout frame(04 章决策 85)")
         let preview = sourceBody("private func nextLinePreviewContent", in: overlay)
         let wordRows = sourceBody("private func upcomingWordRows", in: overlay)
         let breakWidths = sourceBody("private func upcomingBreakWidths", in: overlay)

@@ -1221,6 +1221,14 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject,
 
 
 
+    /// `debug/state` 的 `overlay` 一项:窗口 frame 和歌词文字命中区(窗口本地、左下原点;nil = 还没上报、退回整窗)。
+    var debugState: [String: Any] {
+        let frame = window.map { [$0.frame.origin.x, $0.frame.origin.y, $0.frame.width, $0.frame.height] }
+        let zone = lyricsHotZoneLocal.map { [$0.origin.x, $0.origin.y, $0.width, $0.height] }
+        return ["frame": frame.map { $0 as Any } ?? NSNull(), "visible": window?.isVisible ?? false,
+                "lyricsHotZone": zone.map { $0 as Any } ?? NSNull(), "hoveringLyrics": isHoveringLyrics]
+    }
+
     /// 歌词文字那块矩形(SwiftUI 内容坐标),换算在 recomputeHitRegions。
     ///
     /// 「指针划过时让开」不能用窗口 frame 判:窗口比文字大得多 —— 上下有卡片内边距和播放控制

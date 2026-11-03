@@ -420,6 +420,8 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
     @StateObject private var playback = OverlayPlayback()
     /// 逐字行文字实际矩形的旁路,见 WrapContentRectSink。@State 保证视图重建时是同一个实例。
     @State private var wrapContentSink = WrapContentRectSink()
+    /// 下一句预览折行时(`upcomingWordRows`、换行模式的 `upcomingGroupColumns`)文字实际矩形的旁路,同上。
+    @State private var upcomingContentSink = WrapContentRectSink()
     // 悬停展示控制按钮/长按拖动这套手势由 WindowController 用全局鼠标监听器实现
     // (背景常年点击穿透,原生 .onHover 收不到事件),这里只读它算出来的结果
     // (isHoveringForControls/isDragArmed)展示对应视觉效果,不自己维护 @State。
@@ -1476,9 +1478,9 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
             // 分栏按**下一句自己的** side 算,不继承外层 VStack 的 duetAlignment
             // (那个绑的是当前行)——.frame/.multilineTextAlignment 挂在
             // reportingTextRect(...) 的返回值上、而不是塞进它的参数里,是为了不
-            // 打乱 reportingTextRect 量出来的文字矩形(它要量的是文字本身的紧凑
-            // 边界,不是撑满整行之后的边界,见 reportingMainLineRect 同一处理由)。
-            reportingTextRect(nextLinePreviewContent(next))
+            // 打乱量出来的文字矩形(它要量的是文字本身的紧凑边界,不是撑满整行之后的边界,
+            // 见 reportingNextLineRect)。
+            reportingNextLineRect(nextLinePreviewContent(next), next: next)
                 .frame(maxWidth: .infinity, alignment: frameAlignment(for: nextLineDuetSide))
                 .multilineTextAlignment(textAlignment(for: nextLineDuetSide))
                 // 补偿到"下一句自己真正的" insets,理由见 nextLineInsetsDelta 的注释——
@@ -1571,11 +1573,8 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
     private func upcomingWordRows(_ words: [SyncedLyricWord], color: Color) -> some View {
         let text = words.map(\.text).joined()
         return WrapLayout(rowAlignment: nextLineRowAlignment,
-                          contentKey: AnyHashable(UpcomingBreakKey(
-                              line: OverlayLineKey(text: text, roma: false, mainFont: nextLinePreviewFont,
-                                                   romaFont: nextLinePreviewFont, romaGap: 0),
-                              breakFont: playback.mainFont, breakRomaFont: playback.romanizationFont,
-                              stroked: playback.textStrokeEnabled)),
+                          contentKey: upcomingWordRowsKey(words),
+                          contentRectSink: upcomingContentSink,
                           breakBefore: WrapLayoutMath.breakOpportunities(texts: words.map(\.text)),
                           trailingSpaceWidths: words.map { w in
                               let tail = String(w.text.reversed().prefix { $0.isWhitespace }.reversed())
@@ -1633,16 +1632,49 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
         } else {
             // 断点按开唱后主行的列宽定(`upcomingBreakWidths`),预览断在哪一组,开唱后就断在哪一组。
             WrapLayout(rowAlignment: nextLineRowAlignment,
-                       contentKey: AnyHashable(UpcomingBreakKey(
-                           line: OverlayLineKey(
-                               text: key, roma: true, mainFont: nextLinePreviewFont, romaFont: nextLineReadingFont,
-                               romaGap: rowSpacing.perWordReadingGap),
-                           breakFont: playback.mainFont, breakRomaFont: playback.romanizationFont,
-                           stroked: playback.textStrokeEnabled)),
+                       contentKey: upcomingGroupColumnsKey(key),
+                       contentRectSink: upcomingContentSink,
                        breakWidths: upcomingBreakWidths(words: groups.flatMap(\.words), groups: groups)) {
                 columns
             }
         }
+    }
+
+    /// 下一句两条折行支的内容身份,兼作 `upcomingContentSink` 的 owner(读的一方按它认「这块矩形是不是这一句的」)。
+    private func upcomingWordRowsKey(_ words: [SyncedLyricWord]) -> AnyHashable {
+        AnyHashable(UpcomingBreakKey(
+            line: OverlayLineKey(text: words.map(\.text).joined(), roma: false, mainFont: nextLinePreviewFont,
+                                 romaFont: nextLinePreviewFont, romaGap: 0),
+            breakFont: playback.mainFont, breakRomaFont: playback.romanizationFont,
+            stroked: playback.textStrokeEnabled))
+    }
+
+    private func upcomingGroupColumnsKey(_ key: String) -> AnyHashable {
+        AnyHashable(UpcomingBreakKey(
+            line: OverlayLineKey(
+                text: key, roma: true, mainFont: nextLinePreviewFont, romaFont: nextLineReadingFont,
+                romaGap: rowSpacing.perWordReadingGap),
+            breakFont: playback.mainFont, breakRomaFont: playback.romanizationFont,
+            stroked: playback.textStrokeEnabled))
+    }
+
+    /// 下一句预览报进歌词文字矩形的并集。折行的那两支是 WrapLayout,撑满整宽,直接拿 frame 会把左右两片空白也算成
+    /// 歌词、指针在空白处就触发「悬浮淡化」;owner 对得上这一句时按 `upcomingContentSink` 收紧(同 reportingMainLineRect),
+    /// 别的几支(整行文字、滚动模式的逐词列)frame 就是文字范围。
+    private func reportingNextLineRect<V: View>(_ v: V, next: String) -> some View {
+        v.background(
+            GeometryReader { proxy in
+                let f = proxy.frame(in: .named(overlayCoordSpaceName))
+                let owner = upcomingContentSink.owner
+                let owned = owner != nil
+                    && (owner == upcomingGroupColumnsKey(next) || upcomingWords.map { owner == upcomingWordRowsKey($0) } == true)
+                let local = owned ? upcomingContentSink.rect : .zero
+                let rect = local == .zero
+                    ? f
+                    : CGRect(x: f.minX + local.minX, y: f.minY + local.minY,
+                             width: local.width, height: local.height)
+                return Color.clear.preference(key: LyricsTextRectPreferenceKey.self, value: rect)
+            })
     }
 
     private var nextLineRowAlignment: WrapLayout.RowAlignment {

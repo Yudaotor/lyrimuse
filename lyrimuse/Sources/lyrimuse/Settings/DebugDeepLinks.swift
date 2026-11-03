@@ -233,6 +233,7 @@ enum DebugDeepLinks {
             "windows": windows,
             "menuBarCenter": MenuBarStatusItem.shared.centerDebugState,
             "notch": NotchLyricsWindowController.shared.debugState,
+            "overlay": LyricsOverlayWindowController.shared.debugState,
             "menuBarPanel": ["open": MenuBarStatusItem.shared.isPanelOpen,
                              "quick": MenuBarPanelDebugState.quickTarget.map { $0 as Any } ?? NSNull()],
             "knockedOut": SourceKnockout.knockedOut,
