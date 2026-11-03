@@ -1278,8 +1278,6 @@
 "当前动态" = "Activité";
 "当前启用的其余歌词源未应答：%@" = "Autres sources activées sans réponse : %@";
 "当前播放器不支持喜欢" = "Ce lecteur ne prend pas en charge les favoris";
-"当前播放器不支持循环播放" = "Ce lecteur ne prend pas en charge la répétition";
-"当前播放器不支持随机播放" = "Ce lecteur ne prend pas en charge la lecture aléatoire";
 "当前播放器将这首歌曲标记为纯音乐，其他候选均不采用" = "Votre lecteur marque ce morceau comme instrumental : aucun résultat n’est utilisé";
 "当前播放的是 DJ Mix 专辑中的片段（歌名带 [Mixed]，专辑名带 (DJ Mix)）。此类曲目截取自完整演出，前后带有过渡，时长与原版不同，原版歌词的时间轴无法对齐，且暂无歌词源收录混音版的时间轴" = "C’est un extrait d’un album DJ Mix (titre marqué [Mixed], album (DJ Mix)). Ces pistes sont tirées d’un set complet, avec des transitions de chaque côté et une autre durée : le minutage des paroles d’origine ne peut pas s’aligner, et aucune source de paroles ne fournit de minutage pour la version mixée";
 "当前播放的是伴奏版（歌名或专辑标注为伴奏、纯音乐或 Instrumental），不采用人声版歌词，按纯音乐显示" = "Il s’agit d’une version instrumentale (titre ou album marqué Instrumental). Les paroles chantées ne sont pas utilisées et le morceau est affiché comme instrumental";
@@ -2586,7 +2584,6 @@
 "读音大小" = "Taille romanisation";
 "读音间距" = "Romanisation";
 "调整" = "Ajuster";
-"调整大小：%@" = "Redimensionner : %@";
 "调整宽度" = "Ajuster la largeur";
 "调整颜色后，此处将出现「自定义」，点按即可保存为主题" = "Dès que vous modifiez une couleur, une carte « Personnalisé » apparaît ici. Cliquez dessus pour les enregistrer comme thème";
 "谷歌旗下的流媒体音乐网站，网址 music.youtube.com" = "Le site de streaming musical de Google, à l’adresse music.youtube.com";

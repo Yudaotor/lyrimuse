@@ -88,7 +88,7 @@ private final class PanelPlayback: ObservableObject {
     // ---- 网格布局和几种可添加的格子 ----
     /// 钮块网格放哪些格子、多大(面板底部「编辑」改的就是它)。
     @Published private(set) var panelLayout = MenuBarPanelLayout.default
-    /// 「喜欢」「随机播放」「循环播放」三格,口径同歌词窗口那几颗键:nil = 当前播放器没有这回事。
+    /// 走带那一排两侧的喜欢、随机、循环,口径同歌词窗口那几颗键:nil = 当前播放器没有这回事。
     @Published private(set) var isFavorited: Bool?
     @Published private(set) var playbackMode: MusicPlaybackController.MusicPlaybackMode?
     @Published private(set) var playbackModeOptions: MusicPlaybackController.PlaybackModeOptions = []
@@ -508,6 +508,9 @@ private struct MenuBarPanelView: View {
     @State private var dragGrab: CGSize = .zero
     @State private var dragLastTarget: MenuBarPanelLayout.Tile?
     @State private var tileFrames: [MenuBarPanelLayout.Tile: CGRect] = [:]
+    /// 正在拖右边框换档的那一格,和按下时它是哪一档。
+    @State private var resizingTile: MenuBarPanelLayout.Tile?
+    @State private var resizeStartSize = MenuBarPanelLayout.Size.medium
 
     init(close: @escaping () -> Void, initialQuickTarget: PanelQuickTarget? = nil, initialEditing: Bool = false) {
         self.close = close
@@ -576,11 +579,9 @@ private struct MenuBarPanelView: View {
         // 收起再开就对了。而 destinationStatus 的判定本身跟设置页共用同一个函数,不会出现
         // 两处口径不一致。
         .onAppear {
-            // 「喜欢」「随机播放」「循环播放」的状态平时只在换歌、歌词窗口出现这几个时机回读(见 PlaybackCoordinator.isFavorited);
-            // 网格里有这几格时开面板也读一次,用户在播放器里自己改过的才对得上。
-            if AppSettings.shared.menuBarPanelLayout.slots.contains(where: { Self.extendedControlTiles.contains($0.tile) }) {
-                PlaybackCoordinator.shared.refreshExtendedControls()
-            }
+            // 走带两侧的喜欢、随机、循环平时只在换歌、歌词窗口出现这几个时机回读(见 PlaybackCoordinator.isFavorited);
+            // 开面板也读一次,用户在播放器里自己改过的才对得上。
+            PlaybackCoordinator.shared.refreshExtendedControls()
             pendingUpdate = SparkleUpdaterManager.shared.availableUpdate
             lastfmStatus = destinationStatus(
                 for: .lastfm,
@@ -719,9 +720,6 @@ private struct MenuBarPanelView: View {
         tile != .touchBar || playback.touchBarPresent
     }
 
-    /// 状态要从播放器回读的那几格。
-    private static let extendedControlTiles: Set<MenuBarPanelLayout.Tile> = [.favorite, .shuffle, .repeatMode]
-
     /// 每一种格子画成什么、点了做什么。网格、编辑页和「可添加」都画这一份。
     @ViewBuilder private func tileView(_ tile: MenuBarPanelLayout.Tile) -> some View {
         switch tile {
@@ -767,36 +765,6 @@ private struct MenuBarPanelView: View {
             knobTile(symbol: locked ? "lock.fill" : "lock.open.fill", title: L10n.t("锁定位置"), on: locked,
                      enabled: overlayOn, help: overlayOn ? nil : L10n.t("锁定位置仅对悬浮歌词有效")) {
                 LyrimuseActionRunner.perform(.toggleLockPosition)
-            }
-        case .favorite:
-            // 同歌词窗口那颗心、灵动岛展开区那颗:当前播放器没有「喜欢」、或在放广告时灰着。灰着而不是藏起来:
-            // 换个播放器格子就挪位的话,网格会跟着跳。
-            let favorited = playback.isFavorited
-            knobTile(symbol: favorited == true ? "heart.fill" : "heart", title: L10n.t("喜欢"), on: favorited == true,
-                     enabled: favorited != nil && !playback.isCurrentTrackAdBreak,
-                     help: favorited == nil ? L10n.t("当前播放器不支持喜欢") : nil) {
-                PlaybackCoordinator.shared.toggleFavorited()
-            }
-        case .shuffle:
-            // 随机、循环两格跟歌词窗口那两颗键同一套(互斥:脚本接口只有一个播放模式)。权限检查在 setPlaybackMode 里。
-            let mode = playback.playbackMode
-            let canShuffle = mode != nil && playback.playbackModeOptions.contains(.shuffle)
-            knobTile(symbol: "shuffle", title: L10n.t("随机播放"), on: mode == .shuffle,
-                     enabled: canShuffle, help: canShuffle ? nil : L10n.t("当前播放器不支持随机播放")) {
-                PlaybackCoordinator.shared.setPlaybackMode(mode == .shuffle ? .list : .shuffle)
-            }
-        case .repeatMode:
-            // 关 → 列表循环 → 单曲循环 → 关;没有单曲循环或列表循环的播放器两态(`nextRepeat`)。
-            let mode = playback.playbackMode
-            let options = playback.playbackModeOptions
-            let canRepeat = mode != nil && options.canRepeat
-            knobTile(symbol: mode == .repeatOne ? "repeat.1" : "repeat",
-                     title: mode == .repeatOne ? L10n.t("单曲循环") : L10n.t("循环播放"),
-                     on: mode == .repeatOne || mode == .repeatAll,
-                     enabled: canRepeat, help: canRepeat ? nil : L10n.t("当前播放器不支持循环播放")) {
-                PlaybackCoordinator.shared.setPlaybackMode(
-                    (mode ?? .list).nextRepeat(allowsRepeatOne: options.contains(.repeatOne),
-                                               allowsRepeatAll: options.contains(.repeatAll)))
             }
         }
     }
@@ -938,23 +906,85 @@ private struct MenuBarPanelView: View {
                     seekable: PlaybackCoordinator.shared.acceptsSeek,
                     trackLyricsOffsetMs: playback.trackLyricsOffsetMs,
                     lyricsOffsetStepMs: playback.lyricsOffsetStepMs)
-                HStack(spacing: 28) {
-                    // 三个键跟状态栏悬停三键同一道「点了才校验权限」(没授权时响一声,不是静默失败)。
-                    controlButton("backward.fill", size: 13) {
-                        MenuBarStatusItem.withMusicPermission { MusicPlaybackController.previousTrack() }
+                HStack(spacing: 0) {
+                    // 两侧定宽:当前播放器没有喜欢 / 随机 / 循环时键藏起来,三个主键照样在正中。
+                    favoriteControl
+                        .frame(width: Self.transportSideWidth, alignment: .leading)
+                    Spacer(minLength: 0)
+                    HStack(spacing: 28) {
+                        // 三个键跟状态栏悬停三键同一道「点了才校验权限」(没授权时响一声,不是静默失败)。
+                        controlButton("backward.fill", size: 13) {
+                            MenuBarStatusItem.withMusicPermission { MusicPlaybackController.previousTrack() }
+                        }
+                        controlButton(playback.isPlayingSmoothed ? "pause.fill" : "play.fill", size: 18) {
+                            // 乐观回声版:歌词窗封面缩放/图标点击即动(见 userTogglePlayPause)。
+                            MenuBarStatusItem.withMusicPermission { PlaybackCoordinator.shared.userTogglePlayPause() }
+                        }
+                        controlButton("forward.fill", size: 13) {
+                            MenuBarStatusItem.withMusicPermission { MusicPlaybackController.nextTrack() }
+                        }
                     }
-                    controlButton(playback.isPlayingSmoothed ? "pause.fill" : "play.fill", size: 18) {
-                        // 乐观回声版:歌词窗封面缩放/图标点击即动(见 userTogglePlayPause)。
-                        MenuBarStatusItem.withMusicPermission { PlaybackCoordinator.shared.userTogglePlayPause() }
+                    Spacer(minLength: 0)
+                    HStack(spacing: 4) {
+                        shuffleControl
+                        repeatControl
                     }
-                    controlButton("forward.fill", size: 13) {
-                        MenuBarStatusItem.withMusicPermission { MusicPlaybackController.nextTrack() }
-                    }
+                    .frame(width: Self.transportSideWidth, alignment: .trailing)
                 }
             }
         }
         .padding(12)
         .menuBarPanelCardBackground(cornerRadius: 18)
+    }
+
+    /// 走带那一排两侧各占多宽:右边要放下随机、循环两颗。
+    private static let transportSideWidth: CGFloat = 64
+
+    /// 走带左边的喜欢,同歌词窗口那颗心、灵动岛展开区那颗:当前播放器没有「喜欢」或在放广告时不出现。
+    @ViewBuilder private var favoriteControl: some View {
+        if let favorited = playback.isFavorited, !playback.isCurrentTrackAdBreak {
+            sideControl(favorited ? "heart.fill" : "heart", active: favorited,
+                        label: favorited ? L10n.t("取消喜欢") : L10n.t("喜欢")) {
+                PlaybackCoordinator.shared.toggleFavorited()
+            }
+        }
+    }
+
+    /// 走带右边的随机、循环,跟歌词窗口那两颗同一套(互斥:脚本接口只有一个播放模式;权限检查在 setPlaybackMode 里)。
+    /// 这个播放器此刻切不到的那一颗不出现。
+    @ViewBuilder private var shuffleControl: some View {
+        if let mode = playback.playbackMode, playback.playbackModeOptions.contains(.shuffle) {
+            sideControl("shuffle", active: mode == .shuffle, label: L10n.t("随机播放")) {
+                PlaybackCoordinator.shared.setPlaybackMode(mode == .shuffle ? .list : .shuffle)
+            }
+        }
+    }
+
+    /// 关 → 列表循环 → 单曲循环 → 关;没有单曲循环或列表循环的播放器两态(`nextRepeat`)。
+    @ViewBuilder private var repeatControl: some View {
+        if let mode = playback.playbackMode, playback.playbackModeOptions.canRepeat {
+            let options = playback.playbackModeOptions
+            sideControl(mode == .repeatOne ? "repeat.1" : "repeat", active: mode == .repeatOne || mode == .repeatAll,
+                        label: mode == .repeatOne ? L10n.t("单曲循环") : L10n.t("循环播放")) {
+                PlaybackCoordinator.shared.setPlaybackMode(
+                    mode.nextRepeat(allowsRepeatOne: options.contains(.repeatOne),
+                                    allowsRepeatAll: options.contains(.repeatAll)))
+            }
+        }
+    }
+
+    /// 走带两侧的小键:点亮时字形换强调色,熄灭时次要色。
+    private func sideControl(_ symbol: String, active: Bool, label: String,
+                             action: @escaping () -> Void) -> some View {
+        ChipButton(cornerRadius: 13, action: action) {
+            Image(systemName: symbol)
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(active ? Color.accentColor : Color.secondary)
+                .frame(width: 28, height: 26)
+        }
+        .help(label)
+        .accessibilityLabel(label)
+        .accessibilityAddTraits(active ? .isSelected : [])
     }
 
     /// 压根没有曲目时这张卡的全部内容:两行状态字 + 一颗主动作键。
@@ -1271,7 +1301,6 @@ private struct MenuBarPanelView: View {
                 .animation(.easeOut(duration: 0.1), value: hovering)
                 .animation(.easeOut(duration: 0.06), value: pressing)
                 .accessibilityElement(children: .combine)
-                // 小号格子只有图标,名字只能从这里读到。
                 .accessibilityLabel(title)
                 .accessibilityAddTraits(.isButton)
                 // 点击全走盖在上面的 AppKit 视图(TileMouseRouter)的鼠标事件,VoiceOver 的「按下」到不了那里:
@@ -1284,11 +1313,9 @@ private struct MenuBarPanelView: View {
                 }
         }
 
-        /// 悬停提示:小号格子先报名字(格子上没有字),再是灰着的原因或「长按或右键打开设置」。
+        /// 悬停提示:灰着的原因,或「长按或右键打开设置」。
         private var toolTip: String? {
-            let lines = [size == .small ? title : nil,
-                         help ?? (openQuick == nil ? nil : L10n.t("长按或右键打开设置"))].compactMap { $0 }
-            return lines.isEmpty ? nil : lines.joined(separator: "\n")
+            help ?? (openQuick == nil ? nil : L10n.t("长按或右键打开设置"))
         }
 
         /// 静止 → 悬停 → 按下三档,一档比一档实——默认的 Button + buttonStyle 什么反馈都没给,鼠标放上去看不出
@@ -1312,14 +1339,10 @@ private struct MenuBarPanelView: View {
         // 那层 NSView 上),以及三个形态格子共有的悬停高亮。真要再补,应该补一个说得明白的
         // 形态(比如首次使用时的一次性提示),而不是把这个符号原样放回来。
 
-        /// 三档:小 = 只有图标;中 = 图标在上、名字在下;大 = 图标在左、名字在右(两个中号那么宽)。
+        /// 三档:小、中都是图标在上、名字在下(小号窄一些,一排四个);大 = 图标在左、名字在右(两个中号那么宽)。
         @ViewBuilder private var content: some View {
             switch size {
-            case .small:
-                iconCircle
-                    .frame(maxWidth: .infinity)
-                    .frame(minHeight: 56, maxHeight: .infinity)
-            case .medium:
+            case .small, .medium:
                 mediumContent
             case .large:
                 HStack(spacing: 10) {
@@ -1392,7 +1415,7 @@ private struct MenuBarPanelView: View {
 
     // MARK: 编辑布局
 
-    /// 编辑页:网格里每格左上角「−」移除、右上角换尺寸(右键也能选尺寸),拖着换位置;下面「可添加」点一格加到最后;
+    /// 编辑页:网格里每格左上角「−」移除、拖右边框换尺寸(右键也能选尺寸),拖着换位置;下面「可添加」点一格加到最后;
     /// 再下面是底栏几项的显隐、「恢复默认」和「完成」。照 macOS 控制中心的「编辑控制」。
     private var editingSection: some View {
         let addable = playback.panelLayout.addable(available: tileAvailable)
@@ -1423,8 +1446,7 @@ private struct MenuBarPanelView: View {
     private static let editGridSpace = "panel-edit-grid"
 
     private func editableTile(_ slot: MenuBarPanelLayout.Slot) -> some View {
-        let next = slot.size.next
-        return tileView(slot.tile)
+        tileView(slot.tile)
             .environment(\.panelTileSize, slot.size)
             .environment(\.panelTileEditing, true)
             // 拖着的那格原位留个淡影,跟着指针走的是上面那层 `draggedTileCopy`。
@@ -1444,14 +1466,10 @@ private struct MenuBarPanelView: View {
                 }
                 .padding(5)
             }
-            .overlay(alignment: .topTrailing) {
-                PanelEditBadge(symbol: next.units > slot.size.units ? "arrow.up.left.and.arrow.down.right"
-                                                                      : "arrow.down.right.and.arrow.up.left",
-                               tint: Color(nsColor: .systemGray),
-                               label: String(format: L10n.t("调整大小：%@"), next.panelName)) {
-                    updateLayout { $0.setSize(next, for: slot.tile) }
-                }
-                .padding(5)
+            // 右边框是拉手:往右拖变大、往左拖变小,过了两档之间的一半就换档(右键菜单也能直接选)。
+            .overlay(alignment: .trailing) {
+                PanelResizeHandle(active: resizingTile == slot.tile)
+                    .gesture(tileResizeGesture(slot))
             }
             .contextMenu {
                 ForEach(MenuBarPanelLayout.Size.allCases, id: \.self) { size in
@@ -1487,6 +1505,26 @@ private struct MenuBarPanelView: View {
                 dragLastTarget = nil
             }
     }
+
+    /// 拖右边框换档:按下那一刻的档位加上拖过的距离,落到宽度最接近的那一档(`MenuBarPanelLayout.Size.resized`)。
+    private func tileResizeGesture(_ slot: MenuBarPanelLayout.Slot) -> some Gesture {
+        DragGesture(minimumDistance: 1, coordinateSpace: .named(Self.editGridSpace))
+            .onChanged { value in
+                if resizingTile != slot.tile {
+                    resizingTile = slot.tile
+                    resizeStartSize = slot.size
+                }
+                let target = MenuBarPanelLayout.Size.resized(from: resizeStartSize, by: value.translation.width,
+                                                             rowWidth: Self.gridWidth, spacing: 9)
+                if target != playback.panelLayout.size(of: slot.tile) {
+                    updateLayout { $0.setSize(target, for: slot.tile) }
+                }
+            }
+            .onEnded { _ in resizingTile = nil }
+    }
+
+    /// 网格的宽:面板 336 减两边各 10 的内边距(`body` 里那两处)。
+    private static let gridWidth: CGFloat = 316
 
     /// 拖动中跟着指针走的那一格。
     @ViewBuilder private var draggedTileCopy: some View {

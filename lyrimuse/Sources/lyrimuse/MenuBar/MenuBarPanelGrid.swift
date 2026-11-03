@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 import LyrimuseCore
 
@@ -96,6 +97,29 @@ struct PanelEditBadge: View {
         .buttonStyle(.plain)
         .help(label)
         .accessibilityLabel(label)
+    }
+}
+
+/// 编辑时格子右边框上的拉手:一道竖条,悬停换成左右拉伸的指针。整条 14pt 宽都能按。
+struct PanelResizeHandle: View {
+    let active: Bool
+    @State private var hovering = false
+
+    var body: some View {
+        Capsule()
+            // 玻璃格是浅灰的,系统灰叠上去几乎看不见,用前景色压深。
+            .fill(Color.primary.opacity(active || hovering ? 0.55 : 0.28))
+            .frame(width: 4, height: 28)
+            .frame(width: 14)
+            .frame(maxHeight: .infinity)
+            .contentShape(Rectangle())
+            .onHover { inside in
+                guard inside != hovering else { return }
+                hovering = inside
+                if inside { NSCursor.resizeLeftRight.push() } else { NSCursor.pop() }
+            }
+            .onDisappear { if hovering { NSCursor.pop() } }
+            .accessibilityHidden(true)
     }
 }
 

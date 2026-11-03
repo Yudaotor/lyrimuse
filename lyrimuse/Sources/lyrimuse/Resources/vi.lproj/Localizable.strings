@@ -1207,8 +1207,6 @@
 "当前动态" = "Hoạt động";
 "当前启用的其余歌词源未应答：%@" = "Các nguồn lời đang bật khác không phản hồi: %@";
 "当前播放器不支持喜欢" = "Trình phát hiện tại không hỗ trợ Ưa thích";
-"当前播放器不支持循环播放" = "Trình phát hiện tại không hỗ trợ Lặp lại";
-"当前播放器不支持随机播放" = "Trình phát hiện tại không hỗ trợ Xáo trộn";
 "当前播放器将这首歌曲标记为纯音乐，其他候选均不采用" = "Trình phát hiện tại đánh dấu bài hát này là nhạc không lời, không dùng kết quả nào khác";
 "当前播放的是 DJ Mix 专辑中的片段（歌名带 [Mixed]，专辑名带 (DJ Mix)）。此类曲目截取自完整演出，前后带有过渡，时长与原版不同，原版歌词的时间轴无法对齐，且暂无歌词源收录混音版的时间轴" = "Bài đang phát là một đoạn trong album DJ Mix (tên bài có [Mixed], tên album có (DJ Mix)). Những bài này được cắt từ một buổi diễn đầy đủ, có đoạn chuyển tiếp ở hai đầu, thời lượng khác bản gốc nên thời gian của lời bản gốc không khớp được, và hiện chưa có nguồn lời nào có thời gian cho bản mix";
 "当前播放的是伴奏版（歌名或专辑标注为伴奏、纯音乐或 Instrumental），不采用人声版歌词，按纯音乐显示" = "Đang phát bản không lời (tên bài hoặc album ghi là nhạc đệm, nhạc không lời hoặc Instrumental), nên không dùng lời của bản có giọng hát và hiển thị như nhạc không lời";
@@ -2496,7 +2494,6 @@
 "读音大小" = "Cỡ phát âm";
 "读音间距" = "Giãn cách phát âm";
 "调整" = "Điều chỉnh";
-"调整大小：%@" = "Đổi kích thước: %@";
 "调整宽度" = "Chỉnh độ rộng";
 "调整颜色后，此处将出现「自定义」，点按即可保存为主题" = "Sau khi chỉnh màu, mục “Tùy chỉnh” sẽ xuất hiện ở đây, bấm vào để lưu thành chủ đề";
 "谷歌旗下的流媒体音乐网站，网址 music.youtube.com" = "Trang nghe nhạc trực tuyến của Google, địa chỉ music.youtube.com";

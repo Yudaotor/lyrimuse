@@ -18,9 +18,6 @@ public struct MenuBarPanelLayout: Equatable, Sendable {
         case translation
         case romanization
         case lockPosition = "lock-position"
-        case favorite
-        case shuffle
-        case repeatMode = "repeat"
     }
 
     public enum Size: String, CaseIterable, Sendable {
@@ -35,13 +32,19 @@ public struct MenuBarPanelLayout: Equatable, Sendable {
             }
         }
 
-        /// 编辑时点尺寸角标的下一档。
-        public var next: Size {
-            switch self {
-            case .small: return .medium
-            case .medium: return .large
-            case .large: return .small
-            }
+        /// 一排里只有同档格子、不被撑开时这一档多宽。
+        public func nominalWidth(rowWidth: CGFloat, spacing: CGFloat) -> CGFloat {
+            (rowWidth + spacing) * CGFloat(units) / CGFloat(MenuBarPanelLayout.rowUnits) - spacing
+        }
+
+        /// 编辑时拖格子右边框:从 `start` 那一档的宽度拖了 `delta`,落到宽度最接近的那一档。按档位宽算、不按格子此刻
+        /// 被撑开的实际宽度算:同排没排满时格子比它那一档宽,按实际宽度一按下就会跳档。
+        public static func resized(from start: Size, by delta: CGFloat, rowWidth: CGFloat, spacing: CGFloat) -> Size {
+            let target = start.nominalWidth(rowWidth: rowWidth, spacing: spacing) + delta
+            return allCases.min {
+                abs($0.nominalWidth(rowWidth: rowWidth, spacing: spacing) - target)
+                    < abs($1.nominalWidth(rowWidth: rowWidth, spacing: spacing) - target)
+            } ?? start
         }
     }
 

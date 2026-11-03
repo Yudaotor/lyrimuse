@@ -1278,8 +1278,6 @@
 "当前动态" = "Activity";
 "当前启用的其余歌词源未应答：%@" = "Other enabled sources did not respond: %@";
 "当前播放器不支持喜欢" = "This player doesn’t support favorites";
-"当前播放器不支持循环播放" = "This player doesn’t support repeat";
-"当前播放器不支持随机播放" = "This player doesn’t support shuffle";
 "当前播放器将这首歌曲标记为纯音乐，其他候选均不采用" = "Your player marks this track as instrumental, so no candidate is used";
 "当前播放的是 DJ Mix 专辑中的片段（歌名带 [Mixed]，专辑名带 (DJ Mix)）。此类曲目截取自完整演出，前后带有过渡，时长与原版不同，原版歌词的时间轴无法对齐，且暂无歌词源收录混音版的时间轴" = "This is a segment of a DJ Mix album (the title is tagged [Mixed] and the album (DJ Mix)). Such tracks are cut from a full set with transitions on either side and a different length, so the original lyrics’ timing can’t line up, and no lyrics source provides timing for the mixed version";
 "当前播放的是伴奏版（歌名或专辑标注为伴奏、纯音乐或 Instrumental），不采用人声版歌词，按纯音乐显示" = "This is an instrumental version (its title or album is marked Instrumental). Vocal lyrics are not used, and it is shown as instrumental";
@@ -2586,7 +2584,6 @@
 "读音大小" = "Romanization Size";
 "读音间距" = "Romanization Spacing";
 "调整" = "Adjust";
-"调整大小：%@" = "Resize: %@";
 "调整宽度" = "Adjust Width";
 "调整颜色后，此处将出现「自定义」，点按即可保存为主题" = "After you change any colors, a Custom card appears here. Click it to save them as a theme";
 "谷歌旗下的流媒体音乐网站，网址 music.youtube.com" = "Google’s music streaming site at music.youtube.com";
