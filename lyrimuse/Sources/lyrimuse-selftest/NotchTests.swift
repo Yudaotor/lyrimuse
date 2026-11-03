@@ -2396,8 +2396,12 @@ func runNotchTests() {
                     "快捷操作契约: 一行看得见几格按展开卡的真实宽度算")
         expectEqual(sourceHas(view, "showsArtwork: controller.expandedTrackInfoShowsArtwork,"), true,
                     "快捷操作契约: 格子数按设置算,不随广告态变(广告期间文字不画也不多出格子)")
-        expectEqual(sourceHas(controller, "let rowsChanged = slots.usedRowCount != quickSlots.usedRowCount\n            quickSlots = slots\n            if rowsChanged { recomputeGeometry(animate: false) }"), true,
+        expectEqual(sourceHas(controller, "let rowsChanged = slots.usedRowCount != self.quickSlots.usedRowCount\n                self.quickSlots = slots\n                if rowsChanged { self.recomputeGeometry(animate: false) }"), true,
                     "快捷操作契约: 控制器镜像格子,用的行数变了重算几何(两行头部更高)")
+        expectEqual(sourceHas(controller, "transaction.disablesAnimations = true\n            withTransaction(transaction) {\n                let rowsChanged = slots.usedRowCount != self.quickSlots.usedRowCount"), true,
+                    "快捷操作契约: 格子变化在关掉动画的事务里应用(带着动画改灵动岛窗口尺寸会布局循环崩溃)")
+        expectEqual(read("NotchQuickActionsEditor.swift").contains("withAnimation("), false,
+                    "快捷操作契约: 编辑区改格子不包 withAnimation")
         expectEqual(sourceHas(read("NotchChromeSource.swift"), "expandedQuickActionRows: quickSlots.usedRowCount"), true,
                     "快捷操作契约: 卡片布局按用了几行留头部高度")
         expectEqual(sourceHas(read("../SettingsView.swift"), "NotchBehaviorToggleTile(item: .expandedShowsQuickActions)\n            }\n            NotchQuickActionsEditor()"), true,

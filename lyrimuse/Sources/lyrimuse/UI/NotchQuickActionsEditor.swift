@@ -139,9 +139,9 @@ struct NotchQuickActionsEditor: View {
                     if slots != .default {
                         HStack {
                             Spacer()
-                            Button(L10n.t("恢复默认")) {
-                                withAnimation(.easeOut(duration: 0.18)) { settings.notchQuickSlots = .default }
-                            }
+                            // 改格子不包 withAnimation:灵动岛那扇窗在同一拍里跟着改高度,带着动画事务进去会让托管视图
+                            // 按动画改窗口尺寸、布局循环超限崩溃(05 章决策 134)。
+                            Button(L10n.t("恢复默认")) { settings.notchQuickSlots = .default }
                             .controlSize(.small)
                         }
                     }
@@ -302,11 +302,7 @@ struct NotchQuickActionsEditor: View {
         .padding(.vertical, 4)
         .background(Capsule().fill(Color.primary.opacity(0.07)))
         .contentShape(Capsule())
-        .onTapGesture {
-            withAnimation(.easeOut(duration: 0.18)) {
-                settings.notchQuickSlots = slots.addingToFirstEmpty(action, visibleSlots: visibleSlots)
-            }
-        }
+        .onTapGesture { settings.notchQuickSlots = slots.addingToFirstEmpty(action, visibleSlots: visibleSlots) }
         .help(action.conditionNote ?? action.displayName)
         .modifier(SlotDragSource(payload: "palette:\(action.rawValue)"))
         .accessibilityElement(children: .ignore)

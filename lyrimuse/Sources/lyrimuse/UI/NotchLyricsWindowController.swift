@@ -656,9 +656,15 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
         .store(in: &subscriptions)
         AppSettings.shared.$notchQuickSlots.removeDuplicates().sink { [weak self] slots in
             guard let self else { return }
-            let rowsChanged = slots.usedRowCount != quickSlots.usedRowCount
-            quickSlots = slots
-            if rowsChanged { recomputeGeometry(animate: false) }
+            // 关掉调用方的动画事务再应用:订阅在设置的 willSet 里同步跑,调用方要是在 withAnimation 里改的,
+            // 行数变化和窗口改高度会带着动画进这扇窗,托管视图按动画改窗口尺寸、布局循环超限崩溃(05 章决策 134)。
+            var transaction = Transaction()
+            transaction.disablesAnimations = true
+            withTransaction(transaction) {
+                let rowsChanged = slots.usedRowCount != self.quickSlots.usedRowCount
+                self.quickSlots = slots
+                if rowsChanged { self.recomputeGeometry(animate: false) }
+            }
         }
         .store(in: &subscriptions)
         AppSettings.shared.$classicOverlayEnabled.removeDuplicates().sink { [weak self] on in
