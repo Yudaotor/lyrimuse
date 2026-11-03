@@ -1059,9 +1059,10 @@ func runLyricsWindowTests() {
     do {
         let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
         let settingsView = (try? String(contentsOf: root.appendingPathComponent("lyrimuse/SettingsView.swift"), encoding: .utf8)) ?? ""
-        expectEqual(sourceHas(settingsView, "lyricsWindowToolbarButton(.background)\nlyricsWindowToolbarButton(.font)\n"
-                                + "lyricsWindowToolbarButton(.color)\nSpacer(minLength: 8)\nEditorToolbarResetMenu("),
-                    true, "设置分组: 工具栏第一行两种尺寸都是背景、字体、颜色")
+        expectEqual(sourceHas(settingsView, "EditorToolbarContentWidthRow(spacing: 8) {\nlyricsWindowToolbarButton(.background)\n"
+                                + "lyricsWindowToolbarButton(.font)\nlyricsWindowToolbarButton(.color)\n}\n.layoutPriority(1)\n"
+                                + "Spacer(minLength: 8)\nEditorToolbarResetMenu("),
+                    true, "设置分组: 工具栏第一行两种尺寸都是背景、字体、颜色,按内容分宽(04 章决策 87)")
         expectEqual(sourceHas(settingsView, "if lyricsWindowPreviewShowsMini {\nlyricsWindowToolbarButton(.behavior)\n}\n"
                                 + "lyricsWindowToolbarButton(.content)\nlyricsWindowToolbarButton(.layout)\n"
                                 + "lyricsWindowToolbarButton(.info)\nlyricsWindowToolbarButton(.web)\n"),

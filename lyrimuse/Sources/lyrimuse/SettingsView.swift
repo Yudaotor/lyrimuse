@@ -3181,10 +3181,14 @@ private struct AppearanceSettingsTab: View {
     private var lyricsWindowToolbar: some View {
         VStack(alignment: .leading, spacing: 10) {
             // 顺序同「全部设置」抽屉的卡,分组跟抽屉、设置搜索同名,字体 / 颜色两组跟另外三个形态同名。
+            // 两行都按内容分宽,同悬浮歌词:第一行这一组的布局优先级高于中间的空白,先拿到「重置 ▾」以外的全部宽度。
             HStack(spacing: 8) {
-                lyricsWindowToolbarButton(.background)
-                lyricsWindowToolbarButton(.font)
-                lyricsWindowToolbarButton(.color)
+                EditorToolbarContentWidthRow(spacing: 8) {
+                    lyricsWindowToolbarButton(.background)
+                    lyricsWindowToolbarButton(.font)
+                    lyricsWindowToolbarButton(.color)
+                }
+                .layoutPriority(1)
                 Spacer(minLength: 8)
                 EditorToolbarResetMenu(scope: lyricsWindowResetScope) {
                     LyricsWindowStyleDefaults.restoreDefaults(mini: lyricsWindowPreviewShowsMini)
@@ -3249,10 +3253,10 @@ private struct AppearanceSettingsTab: View {
 
     private static let lyricsWindowToolbarFirstRow: [LyricsWindowToolbarItem] = [.background, .font, .color]
 
-    /// 第二行按内容分宽,那一行的标签报文字本身的宽(`EditorToolbarContentWidthRow`)。
+    /// 两行都按内容分宽,标签报文字本身的宽(`EditorToolbarContentWidthRow`)。
     private func lyricsWindowToolbarLabel(_ item: LyricsWindowToolbarItem) -> EditorToolbarButtonLabel {
         var label = lyricsWindowToolbarBaseLabel(item)
-        label.fitsContent = !Self.lyricsWindowToolbarFirstRow.contains(item)
+        label.fitsContent = true
         return label
     }
 

@@ -32,29 +32,38 @@ public enum EditorToolbarWidths {
         return filled(low)
     }
 
-    /// 摘要只能整段取舍时(`EditorToolbarSummary`),把 `fill` 分到的宽度落到每颗实际画得出的那一档上,省下来的宽度不空着:
-    /// 先按「再升一档要多少」从少到多补给差一点的那几颗,补不动了剩下的均分给每一颗(整行照旧撑满)。
+    /// 摘要只能整段取舍时(`EditorToolbarSummary`),把 `fill` 分好的这一行重新落到每颗实际画得出的那一档上,不让宽度空在
+    /// 画不出东西的胶囊里:分档的那几颗在它们分到的总宽内挑一种组合,先让露出摘要的颗数最多,再让整句的颗数最多,再让
+    /// 用掉的宽度最多(空白最少);剩下的均分给每一颗,整行照旧撑满。一行最多五六颗、每颗几档,逐个组合比一遍。
     /// `steps` 是每颗能画的几档宽度(由宽到窄,第一档是理想宽度,最后一档是只剩标题);空数组的那颗不分档、宽度照旧。
-    /// 分到的宽度比最窄一档还窄(整行连标题都放不下)也照旧。
+    /// 有一颗分到的比它最窄一档还窄(整行连标题都放不下、按底线比例缩过),整行照旧。
     public static func snap(_ widths: [CGFloat], steps: [[CGFloat]]) -> [CGFloat] {
-        var result = widths
-        var freed: CGFloat = 0
-        for i in result.indices where i < steps.count && !steps[i].isEmpty {
-            guard let step = steps[i].first(where: { $0 <= result[i] + 0.5 }), step < result[i] else { continue }
-            freed += result[i] - step
-            result[i] = step
-        }
-        guard freed > 0 else { return result }
-        while true {
-            let upgrades = result.indices.compactMap { i -> (index: Int, cost: CGFloat)? in
-                guard i < steps.count, let next = steps[i].last(where: { $0 > result[i] + 0.5 }) else { return nil }
-                return (i, next - result[i])
+        let tolerance: CGFloat = 0.5
+        let stepped = widths.indices.filter { $0 < steps.count && !steps[$0].isEmpty }
+        guard !stepped.isEmpty,
+              stepped.allSatisfy({ widths[$0] + tolerance >= steps[$0].min() ?? 0 }) else { return widths }
+        let budget = stepped.reduce(0) { $0 + widths[$1] } + tolerance
+        var best: (score: (Int, Int, CGFloat), picks: [Int])?
+        var picks = [Int](repeating: 0, count: stepped.count)
+        func search(_ k: Int, used: CGFloat, shown: Int, whole: Int) {
+            guard used <= budget else { return }
+            guard k < stepped.count else {
+                let score = (shown, whole, used)
+                if best.map({ score > $0.score }) ?? true { best = (score, picks) }
+                return
             }
-            guard let best = upgrades.filter({ $0.cost <= freed }).min(by: { $0.cost < $1.cost }) else { break }
-            result[best.index] += best.cost
-            freed -= best.cost
+            let options = steps[stepped[k]]
+            for (j, width) in options.enumerated() {
+                picks[k] = j
+                search(k + 1, used: used + width,
+                       shown: shown + (j < options.count - 1 ? 1 : 0), whole: whole + (j == 0 ? 1 : 0))
+            }
         }
-        let spare = freed / CGFloat(max(result.count, 1))
+        search(0, used: 0, shown: 0, whole: 0)
+        guard let best else { return widths }
+        var result = widths
+        for (k, i) in stepped.enumerated() { result[i] = steps[i][best.picks[k]] }
+        let spare = (widths.reduce(0, +) - result.reduce(0, +)) / CGFloat(result.count)
         return result.map { $0 + spare }
     }
 }
