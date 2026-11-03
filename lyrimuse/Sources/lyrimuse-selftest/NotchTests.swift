@@ -2750,7 +2750,7 @@ func runNotchTests() {
                         && settingsView.contains("icon: SurfaceGlyph.notch.rawValue")
                         && menu.contains("symbol: SurfaceGlyph.notch.rawValue"), true,
                     "自画图标: 灵动岛那一格、设置页开关卡、右键菜单那一项都用自画的灵动岛图标")
-        expectEqual(panel.contains("SymbolImage(name: symbol, size: 16, weight: .semibold)")
+        expectEqual(panel.contains("SymbolImage(name: symbol, size: glyph, weight: .semibold)")
                         && quick.contains("SymbolImage(name: target.symbolName, size: 12, weight: .semibold)")
                         && menu.contains("item.image = NSImage.symbol(named: symbol, pointSize: 14, weight: .regular)"), true,
                     "自画图标: 面板格子、快捷设置头部、菜单项都按名字认自画图标")

@@ -502,15 +502,13 @@ private struct MenuBarPanelView: View {
 
     /// 在编辑格子布局(底栏最右那颗进、「完成」出):钮块网格和底栏换成编辑版,见 `editingSection`。
     @State private var editing: Bool
-    /// 编辑时正拖着的格子、指针位置(网格坐标)、按下点离格子左上角多远,以及各格此刻的位置。
+    /// 编辑时正拖着的格子、指针位置(网格坐标)、按下点离格子左上角多远,松手会落到哪(nil = 落不下,弹回)。
     @State private var draggingTile: MenuBarPanelLayout.Tile?
     @State private var dragPointer: CGPoint = .zero
     @State private var dragGrab: CGSize = .zero
-    @State private var dragLastTarget: MenuBarPanelLayout.Tile?
-    @State private var tileFrames: [MenuBarPanelLayout.Tile: CGRect] = [:]
-    /// 正在拖右边框换档的那一格,和按下时它是哪一档。
+    @State private var dropPreview: MenuBarPanelLayout.Placement?
+    /// 正在拖右下角拉手换尺寸的那一格。
     @State private var resizingTile: MenuBarPanelLayout.Tile?
-    @State private var resizeStartSize = MenuBarPanelLayout.Size.medium
 
     init(close: @escaping () -> Void, initialQuickTarget: PanelQuickTarget? = nil, initialEditing: Bool = false) {
         self.close = close
@@ -553,7 +551,7 @@ private struct MenuBarPanelView: View {
             } else if editing {
                 editingSection
             } else {
-                if !visibleSlots.isEmpty { knobGrid }
+                if hasVisibleTiles { knobGrid }
                 footer
             }
         }
@@ -696,22 +694,31 @@ private struct MenuBarPanelView: View {
 
     // MARK: 钮块网格
 
-    /// 钮块网格:放哪些格子、什么顺序、多大按 `AppSettings.menuBarPanelLayout`,底栏最右那颗「编辑」改它(06 章决策 82)。
-    /// 默认布局就是原来那两排:三种歌词展示形态一排(同级三兄弟,菜单栏那个开关的效果就发生在面板正上方),
-    /// 歌词窗口、触控栏歌词、歌词管理一排。
+    /// 钮块网格,照 macOS 控制中心:一排 4 个坑位,每格占定一块(`AppSettings.menuBarPanelLayout`),中间可以空着;
+    /// 底栏最右那颗「编辑」改它(06 章决策 82、84)。没画出来的格子(没有触控栏时的「触控栏歌词」)坑位照占着、留空;
+    /// 最下面整排都空就收起来。
     private var knobGrid: some View {
-        PanelTileGrid(spacing: 9) {
-            ForEach(visibleSlots, id: \.tile) { slot in
-                tileView(slot.tile)
-                    .environment(\.panelTileSize, slot.size)
-                    .layoutValue(key: PanelTileUnits.self, value: slot.size.units)
+        let layout = playback.panelLayout
+        let visible = layout.placements.filter { tileAvailable($0.tile) }
+        return ZStack(alignment: .topLeading) {
+            ForEach(visible, id: \.tile) { p in
+                let frame = Self.grid.frame(p)
+                tileView(p.tile)
+                    .environment(\.panelTileSize, p.size)
+                    .frame(width: frame.width, height: frame.height)
+                    .offset(x: frame.minX, y: frame.minY)
             }
         }
+        .frame(width: Self.grid.width, height: Self.grid.height(rows: layout.rowCount(including: tileAvailable)),
+               alignment: .topLeading)
     }
 
-    /// 网格里此刻画得出来的格子。
-    private var visibleSlots: [MenuBarPanelLayout.Slot] {
-        playback.panelLayout.slots.filter { tileAvailable($0.tile) }
+    /// 网格的几何:面板 336 减两边各 10 的内边距(`body` 里那两处),坑位间距 9。
+    private static let grid = PanelGridGeometry(width: 316, spacing: 9)
+
+    /// 网格里有没有画得出来的格子(都没有时整块网格不占地方)。
+    private var hasVisibleTiles: Bool {
+        playback.panelLayout.placements.contains { tileAvailable($0.tile) }
     }
 
     /// 「触控栏歌词」只在这台 Mac 此刻有触控栏时画(真机,或 Xcode 的触控栏模拟器开着;判据同设置页「触控栏」那一段、
@@ -1278,16 +1285,18 @@ private struct MenuBarPanelView: View {
         @Environment(\.panelTileSize) private var size
         @Environment(\.panelTileEditing) private var editing
 
+        private var cornerRadius: CGFloat { size.cornerRadius(cell: MenuBarPanelView.grid.cell) }
+
         var body: some View {
             content
                 .opacity(enabled ? 1 : 0.4)
                 // 玻璃格,同正在播放卡;悬停 / 按下在玻璃上再叠一层灰,整格跟着微微浮起 / 压下(玻璃自带的交互反馈
                 // 收不到:鼠标事件都落在上面那层 TileMouseRouter 上;不激活 App 的面板里 `.interactive()` 玻璃悬停也几乎看不出变化)。
                 .background(
-                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
                         .fill(Color.primary.opacity(stateFillLevel))
                 )
-                .menuBarPanelCardBackground(cornerRadius: 16)
+                .menuBarPanelCardBackground(cornerRadius: cornerRadius)
                 .scaleEffect(reduceMotion ? 1 : stateScale)
                 .overlay {
                     // 事件路由盖在最上面一层:整格都是热区,内容那边不用再加 contentShape。编辑布局时不盖:
@@ -1344,101 +1353,100 @@ private struct MenuBarPanelView: View {
         // 那层 NSView 上),以及三个形态格子共有的悬停高亮。真要再补,应该补一个说得明白的
         // 形态(比如首次使用时的一次性提示),而不是把这个符号原样放回来。
 
-        /// 三档:小、中都是图标在上、名字在下(小号窄一些,一排四个);大 = 图标在左、名字在右(两个中号那么宽)。
+        /// 三档,同控制中心:小 1×1 图标在上、名字在下;中 2×1 胶囊,图标在左、名字在右;大 2×2 图标在左上、名字在左下。
+        /// 格子尺寸由网格给(坑位边长 72),这里只排里面的东西。
         @ViewBuilder private var content: some View {
             switch size {
-            case .small, .medium:
-                mediumContent
-            case .large:
-                HStack(spacing: 10) {
-                    iconCircle
-                    Text(title).font(.system(size: 12, weight: .semibold))
-                        .foregroundStyle(.primary)
-                        .lineLimit(2)
-                        .minimumScaleFactor(0.85)
+            case .small:
+                VStack(spacing: 4) {
+                    iconCircle(30, glyph: 14)
+                    titleText(size: 10, lines: 1)
+                }
+                .padding(.horizontal, 5)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            case .medium:
+                HStack(spacing: 8) {
+                    iconCircle(40, glyph: 17)
+                    titleText(size: 12, lines: 2)
+                        .multilineTextAlignment(.leading)
                     Spacer(minLength: 0)
                 }
-                .padding(.horizontal, 12)
-                .frame(maxWidth: .infinity)
-                .frame(minHeight: 78, maxHeight: .infinity)
+                .padding(.leading, 16)
+                .padding(.trailing, 12)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            case .large:
+                VStack(alignment: .leading, spacing: 0) {
+                    iconCircle(44, glyph: 19)
+                    Spacer(minLength: 0)
+                    titleText(size: 13, lines: 2)
+                        .multilineTextAlignment(.leading)
+                }
+                .padding(16)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
             }
         }
 
-        private var iconCircle: some View {
-            SymbolImage(name: symbol, size: 16, weight: .semibold)
+        private func iconCircle(_ diameter: CGFloat, glyph: CGFloat) -> some View {
+            SymbolImage(name: symbol, size: glyph, weight: .semibold)
                 .foregroundStyle(on ? Color.white : Color.secondary)
-                .frame(width: 36, height: 36)
+                .frame(width: diameter, height: diameter)
                 .background(
                     Circle().fill(on ? AnyShapeStyle(Color.accentColor)
                                      : AnyShapeStyle(Color(nsColor: .tertiarySystemFill)))
                 )
         }
 
-        private var mediumContent: some View {
-            // 图标在**上**、文字在下(不是图标在左、文字在右):
-            // 面板内容宽 316,一排三个 + 9pt 间距 → 每格 99pt,再扣掉 16pt 内边距、28pt 图标
-            // 和 7pt 间隔,留给文字只有 **48pt**。「菜单栏歌词」在 11pt 下要 55pt,靠
-            // minimumScaleFactor(0.82) 缩到 9pt 也会被截成「菜单栏...」;英文更没救 ——
-            // "Floating Lyrics"/"Menu Bar Lyrics" 缩到 0.72 都还在截断。
-            //
-            // 竖排时文字独占整格宽度(约 83pt),中英文都完整显示。"每行两个"也能放下,但三个歌词展示形态就
-            // 不在同一排了,而它们是同级三兄弟。
-            //
-            // 代价:每格高一些(图标不跟文字并排占同一行高)。面板纵向余量本来就宽松,换来的是不必为每种
-            // 语言各想一套缩写。
-            VStack(spacing: 5) {
-                iconCircle
-                VStack(spacing: 1) {
-                    // 缩字保留但门槛提到 0.85:正常语言都放得下,它只兜"某种翻译特别长"的
-                    // 意外,不是常态依赖。
-                    // 没有副标题的格子(三个展示形态)纵向有两行的余量:译文长的语言折成两行,别截断;
-                    // 没有空格的中日文标题折行会拆开词,只放一行、缩字的门槛放宽到 0.75(见 06 章决策 79)
-                    let unbreakable = TileTitleWrap.breaksInsideWords(title)
-                    Text(title).font(.system(size: 11, weight: .semibold))
-                        .foregroundStyle(.primary)
-                        .multilineTextAlignment(.center)
-                        .lineLimit(subtitle == nil && !unbreakable ? 2 : 1)
-                        .minimumScaleFactor(unbreakable ? 0.75 : 0.85)
-                    // 副标题可选:三个开关的「已开启/已关闭」去掉了 —— 开关状态
-                    // 本来就由图标那个高亮圆底表达(开=白字+强调色底,关=次要色+浅灰底),
-                    // 再写一行字是同一件事说两遍。剩下两格的副标题是**真信息**,保留:
-                    // 「统计」要报今天多少次,「歌词窗口」要说明点了会发生什么。
-                    if let subtitle {
-                        Text(subtitle).font(.system(size: 9.5))
-                            .foregroundStyle(.secondary)
-                            .lineLimit(1)
-                    }
-                }
+        /// 名字。没有空格的中日文折行会拆开词,只放一行、缩字门槛放宽(见 06 章决策 79);带空格的语言按词折。
+        private func titleText(size fontSize: CGFloat, lines: Int) -> some View {
+            let unbreakable = TileTitleWrap.breaksInsideWords(title)
+            return Text(title).font(.system(size: fontSize, weight: .semibold))
+                .foregroundStyle(.primary)
                 .multilineTextAlignment(.center)
-            }
-            .padding(.horizontal, 6)
-            .frame(maxWidth: .infinity)
-            // 至少 78 高:有没有副标题都不影响格子尺寸,同排/跨排都对得齐;一排里有更高的格子时跟着撑满(网格按这一排最高的那格排)。
-            .frame(minHeight: 78, maxHeight: .infinity)
+                .lineLimit(unbreakable ? 1 : lines)
+                .minimumScaleFactor(unbreakable ? 0.7 : 0.8)
         }
     }
 
     // MARK: 编辑布局
 
-    /// 编辑页:网格里每格左上角「−」移除、拖右边框换尺寸(右键也能选尺寸),拖着换位置;下面「可添加」点一格加到最后;
-    /// 再下面是底栏几项的显隐、「恢复默认」和「完成」。照 macOS 控制中心的「编辑控制」。
+    /// 编辑页,照 macOS 控制中心的「编辑控制」:坑位都摆出来(空着的画淡圆,最下面多留一整排),每格左上「−」移除,
+    /// 悬停时右下角露出弧形拉手、拖它换尺寸(右键也能直接选),拖着格子换位置(落到空位,压在同尺寸的格子上两格互换,
+    /// 别的情况弹回);下面「可添加」点一格放进第一个放得下的空位;再下面是底栏几项的显隐、「恢复默认」和「完成」。
     private var editingSection: some View {
-        let addable = playback.panelLayout.addable(available: tileAvailable)
+        let layout = playback.panelLayout
+        let addable = layout.addable(available: tileAvailable)
+        let rows = layout.rowCount() + 1
         return VStack(spacing: 9) {
-            if !visibleSlots.isEmpty {
-                PanelTileGrid(spacing: 9) {
-                    ForEach(visibleSlots, id: \.tile) { slot in
-                        editableTile(slot)
-                            .layoutValue(key: PanelTileUnits.self, value: slot.size.units)
+            ZStack(alignment: .topLeading) {
+                ForEach(0..<rows, id: \.self) { row in
+                    ForEach(0..<MenuBarPanelLayout.columns, id: \.self) { column in
+                        if layout.isEmpty(column: column, row: row) {
+                            let frame = Self.grid.frame(column: column, row: row, size: .small)
+                            PanelEmptyCell()
+                                .frame(width: frame.width, height: frame.height)
+                                .offset(x: frame.minX, y: frame.minY)
+                        }
                     }
                 }
-                .coordinateSpace(name: Self.editGridSpace)
-                .onPreferenceChange(PanelTileFramesKey.self) { tileFrames = $0 }
-                .overlay(alignment: .topLeading) { draggedTileCopy }
+                if let preview = dropPreview {
+                    let frame = Self.grid.frame(preview)
+                    RoundedRectangle(cornerRadius: preview.size.cornerRadius(cell: Self.grid.cell), style: .continuous)
+                        .strokeBorder(Color.accentColor, lineWidth: 2)
+                        .frame(width: frame.width, height: frame.height)
+                        .offset(x: frame.minX, y: frame.minY)
+                }
+                ForEach(layout.placements, id: \.tile) { p in
+                    editableTile(p)
+                }
+                draggedTileCopy
             }
+            .frame(width: Self.grid.width, height: Self.grid.height(rows: rows), alignment: .topLeading)
+            .coordinateSpace(name: Self.editGridSpace)
             if !addable.isEmpty {
                 PanelEditCaption(title: L10n.t("可添加"))
-                PanelTileGrid(spacing: 9) {
+                LazyVGrid(columns: Array(repeating: GridItem(.fixed(Self.grid.cell), spacing: Self.grid.spacing),
+                                         count: MenuBarPanelLayout.columns),
+                          alignment: .leading, spacing: Self.grid.spacing) {
                     ForEach(addable, id: \.self) { tile in
                         addableTile(tile)
                     }
@@ -1450,92 +1458,81 @@ private struct MenuBarPanelView: View {
 
     private static let editGridSpace = "panel-edit-grid"
 
-    private func editableTile(_ slot: MenuBarPanelLayout.Slot) -> some View {
-        tileView(slot.tile)
-            .environment(\.panelTileSize, slot.size)
-            .environment(\.panelTileEditing, true)
+    private func editableTile(_ p: MenuBarPanelLayout.Placement) -> some View {
+        let frame = Self.grid.frame(p)
+        let radius = p.size.cornerRadius(cell: Self.grid.cell)
+        return PanelEditableTile(
+            content: tileView(p.tile)
+                .environment(\.panelTileSize, p.size)
+                .environment(\.panelTileEditing, true)
+                // 没有触控栏时「触控栏歌词」平时不画、坑位留空;编辑时照样摆出来,淡一点。
+                .opacity(tileAvailable(p.tile) ? 1 : 0.45)
+                .frame(width: frame.width, height: frame.height),
+            cornerRadius: radius,
+            resizing: resizingTile == p.tile,
+            remove: { updateLayout { $0.remove(p.tile) } },
+            resizeGesture: AnyGesture(tileResizeGesture(p).map { _ in () }))
             // 拖着的那格原位留个淡影,跟着指针走的是上面那层 `draggedTileCopy`。
-            .opacity(draggingTile == slot.tile ? 0.3 : 1)
-            .background {
-                GeometryReader { g in
-                    Color.clear.preference(key: PanelTileFramesKey.self,
-                                           value: [slot.tile: g.frame(in: .named(Self.editGridSpace))])
-                }
-            }
-            .contentShape(Rectangle())
-            .gesture(tileDragGesture(slot.tile))
-            // 两个角标都压在格子里面:往外探的话,左格右上和右格左上那两颗在 9pt 的缝里挤成一团。
-            .overlay(alignment: .topLeading) {
-                PanelEditBadge(symbol: "minus", tint: Color(nsColor: .systemGray), label: L10n.t("移除")) {
-                    updateLayout { $0.remove(slot.tile) }
-                }
-                .padding(5)
-            }
-            // 右边框是拉手:往右拖变大、往左拖变小,过了两档之间的一半就换档(右键菜单也能直接选)。
-            .overlay(alignment: .trailing) {
-                PanelResizeHandle(active: resizingTile == slot.tile)
-                    .gesture(tileResizeGesture(slot))
-            }
+            .opacity(draggingTile == p.tile ? 0.3 : 1)
+            .gesture(tileDragGesture(p))
             .contextMenu {
                 ForEach(MenuBarPanelLayout.Size.allCases, id: \.self) { size in
                     Toggle(size.panelName, isOn: Binding(
-                        get: { size == slot.size },
-                        set: { if $0 { updateLayout { $0.setSize(size, for: slot.tile) } } }))
+                        get: { size == p.size },
+                        set: { if $0 { updateLayout { $0.resize(p.tile, to: size) } } }))
                 }
                 Divider()
-                Button(L10n.t("移除")) { updateLayout { $0.remove(slot.tile) } }
+                Button(L10n.t("移除")) { updateLayout { $0.remove(p.tile) } }
             }
+            .offset(x: frame.minX, y: frame.minY)
     }
 
-    /// 拖动:指针进了另一格就把被拖的这格挪到那里(`PanelGridDrag.step`),松手就停在当前位置。
-    private func tileDragGesture(_ tile: MenuBarPanelLayout.Tile) -> some Gesture {
+    /// 拖着格子走:跟着指针的是一份拷贝,原位留淡影;此刻对准的坑位放得下就描一圈边(`dropTarget`),松手落过去,
+    /// 放不下就弹回原位。
+    private func tileDragGesture(_ p: MenuBarPanelLayout.Placement) -> some Gesture {
         DragGesture(minimumDistance: 3, coordinateSpace: .named(Self.editGridSpace))
             .onChanged { value in
-                if draggingTile != tile {
-                    let frame = tileFrames[tile] ?? .zero
+                let frame = Self.grid.frame(p)
+                if draggingTile != p.tile {
                     dragGrab = CGSize(width: value.startLocation.x - frame.minX, height: value.startLocation.y - frame.minY)
-                    dragLastTarget = nil
-                    draggingTile = tile
+                    draggingTile = p.tile
                 }
                 dragPointer = value.location
-                let step = PanelGridDrag.step(pointer: value.location, dragged: tile, frames: tileFrames,
-                                              lastTarget: dragLastTarget)
-                dragLastTarget = step.lastTarget
-                if let target = step.moveOnto {
-                    updateLayout { $0.move(tile, onto: target) }
-                }
+                let origin = CGPoint(x: value.location.x - dragGrab.width, y: value.location.y - dragGrab.height)
+                let cell = Self.grid.nearestCell(to: origin)
+                dropPreview = playback.panelLayout.dropTarget(for: p.tile, column: cell.column, row: cell.row)?.placement
             }
             .onEnded { _ in
+                if let target = dropPreview {
+                    updateLayout { $0.move(p.tile, toColumn: target.column, row: target.row) }
+                }
                 draggingTile = nil
-                dragLastTarget = nil
+                dropPreview = nil
             }
     }
 
-    /// 拖右边框换档:按下那一刻的档位加上拖过的距离,落到宽度最接近的那一档(`MenuBarPanelLayout.Size.resized`)。
-    private func tileResizeGesture(_ slot: MenuBarPanelLayout.Slot) -> some Gesture {
+    /// 拖右下角拉手换尺寸:指针盖住几列几行就换到哪一档(`PanelGridGeometry.resizedSize`),拖的同时就换;
+    /// 放不下(出界、压到别的格子)就停在原来那一档。
+    private func tileResizeGesture(_ p: MenuBarPanelLayout.Placement) -> some Gesture {
         DragGesture(minimumDistance: 1, coordinateSpace: .named(Self.editGridSpace))
             .onChanged { value in
-                if resizingTile != slot.tile {
-                    resizingTile = slot.tile
-                    resizeStartSize = slot.size
-                }
-                let target = MenuBarPanelLayout.Size.resized(from: resizeStartSize, by: value.translation.width,
-                                                             rowWidth: Self.gridWidth, spacing: 9)
-                if target != playback.panelLayout.size(of: slot.tile) {
-                    updateLayout { $0.setSize(target, for: slot.tile) }
+                resizingTile = p.tile
+                guard let current = playback.panelLayout.placement(of: p.tile) else { return }
+                let origin = Self.grid.frame(current).origin
+                let target = Self.grid.resizedSize(origin: origin, pointer: value.location)
+                if target != current.size {
+                    updateLayout { $0.resize(p.tile, to: target) }
                 }
             }
             .onEnded { _ in resizingTile = nil }
     }
 
-    /// 网格的宽:面板 336 减两边各 10 的内边距(`body` 里那两处)。
-    private static let gridWidth: CGFloat = 316
-
     /// 拖动中跟着指针走的那一格。
     @ViewBuilder private var draggedTileCopy: some View {
-        if let tile = draggingTile, let frame = tileFrames[tile], let size = playback.panelLayout.size(of: tile) {
+        if let tile = draggingTile, let p = playback.panelLayout.placement(of: tile) {
+            let frame = Self.grid.frame(p)
             tileView(tile)
-                .environment(\.panelTileSize, size)
+                .environment(\.panelTileSize, p.size)
                 .environment(\.panelTileEditing, true)
                 .frame(width: frame.width, height: frame.height)
                 .scaleEffect(reduceMotion ? 1 : 1.04)
@@ -1545,21 +1542,23 @@ private struct MenuBarPanelView: View {
         }
     }
 
-    /// 「可添加」里的一格:点一下加到网格最后(中号)。
+    /// 「可添加」里的一格(小号):点一下以中号放进第一个放得下的空位,现有几排都放不下就在最下面新起一排。
     private func addableTile(_ tile: MenuBarPanelLayout.Tile) -> some View {
         tileView(tile)
-            .environment(\.panelTileSize, .medium)
+            .environment(\.panelTileSize, .small)
             .environment(\.panelTileEditing, true)
+            .frame(width: Self.grid.cell, height: Self.grid.cell)
             .contentShape(Rectangle())
-            .onTapGesture { updateLayout { $0.add(tile) } }
+            .onTapGesture { addTile(tile) }
             .overlay(alignment: .topLeading) {
-                PanelEditBadge(symbol: "plus", tint: .accentColor, label: L10n.t("添加")) {
-                    updateLayout { $0.add(tile) }
-                }
-                .padding(5)
+                PanelEditBadge(symbol: "plus", tint: .accentColor, label: L10n.t("添加")) { addTile(tile) }
+                    .offset(x: -4, y: -4)
             }
-            .accessibilityAction(named: L10n.t("添加")) { updateLayout { $0.add(tile) } }
-            .layoutValue(key: PanelTileUnits.self, value: MenuBarPanelLayout.Size.medium.units)
+            .accessibilityAction(named: L10n.t("添加")) { addTile(tile) }
+    }
+
+    private func addTile(_ tile: MenuBarPanelLayout.Tile) {
+        updateLayout { $0.add(tile, size: .medium) }
     }
 
     /// 编辑页最下面:底栏几项的显隐(Last.fm 只在连着时才有那一项),「恢复默认」「完成」。

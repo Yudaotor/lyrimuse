@@ -2,50 +2,9 @@ import AppKit
 import SwiftUI
 import LyrimuseCore
 
-// 菜单栏面板钮块网格的排版件和编辑布局用的小零件。格子本身(KnobTile)和每一格接什么动作在 MenuBarPanel.swift;
-// 布局数据、装排规则、拖动判定在 Core 的 `MenuBarPanelLayout` / `PanelGridDrag`。见 06 章决策 82。
-
-/// 这一格占一排里的几份(`MenuBarPanelLayout.Size.units`)。
-struct PanelTileUnits: LayoutValueKey {
-    static let defaultValue = MenuBarPanelLayout.Size.medium.units
-}
-
-/// 钮块网格:按份数一排排装(`MenuBarPanelLayout.rowRanges`),每排按份数分满整行,行高取这一排最高的那格。
-struct PanelTileGrid: Layout {
-    var spacing: CGFloat = 9
-
-    private func rows(width: CGFloat, subviews: Subviews) -> [(range: Range<Int>, widths: [CGFloat], height: CGFloat)] {
-        let units = subviews.map { $0[PanelTileUnits.self] }
-        return MenuBarPanelLayout.rowRanges(units: units).map { range in
-            let widths = MenuBarPanelLayout.widths(units: Array(units[range]), rowWidth: width, spacing: spacing)
-            let height = zip(range, widths).map { i, w in
-                subviews[i].sizeThatFits(ProposedViewSize(width: w, height: nil)).height
-            }.max() ?? 0
-            return (range, widths, height)
-        }
-    }
-
-    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
-        let width = proposal.width ?? 316
-        let laid = rows(width: width, subviews: subviews)
-        guard !laid.isEmpty else { return CGSize(width: width, height: 0) }
-        let height = laid.map(\.height).reduce(0, +) + spacing * CGFloat(laid.count - 1)
-        return CGSize(width: width, height: height)
-    }
-
-    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
-        var y = bounds.minY
-        for row in rows(width: bounds.width, subviews: subviews) {
-            var x = bounds.minX
-            for (i, w) in zip(row.range, row.widths) {
-                subviews[i].place(at: CGPoint(x: x, y: y), anchor: .topLeading,
-                                  proposal: ProposedViewSize(width: w, height: row.height))
-                x += w + spacing
-            }
-            y += row.height + spacing
-        }
-    }
-}
+// 菜单栏面板钮块网格的编辑零件:编辑时每格外面那一层(「−」、右下角拉手、悬停)、空坑位、小标题。格子本身(KnobTile)
+// 和每一格接什么动作在 MenuBarPanel.swift;坑位、落点、换尺寸的规则在 Core 的 `MenuBarPanelLayout` / `PanelGridGeometry`。
+// 见 06 章决策 84。
 
 private struct PanelTileSizeKey: EnvironmentKey {
     static let defaultValue = MenuBarPanelLayout.Size.medium
@@ -56,7 +15,7 @@ private struct PanelTileEditingKey: EnvironmentKey {
 }
 
 extension EnvironmentValues {
-    /// 格子按哪一档画(小:只有图标;中:图标在上、名字在下;大:图标在左、名字在右)。
+    /// 格子按哪一档画(小 1×1:图标在上、名字在下;中 2×1:图标在左、名字在右;大 2×2:图标在左上、名字在左下)。
     var panelTileSize: MenuBarPanelLayout.Size {
         get { self[PanelTileSizeKey.self] }
         set { self[PanelTileSizeKey.self] = newValue }
@@ -69,15 +28,95 @@ extension EnvironmentValues {
     }
 }
 
-/// 编辑时各格在网格坐标里的位置,拖动判定指针落在哪一格用。
-struct PanelTileFramesKey: PreferenceKey {
-    static let defaultValue: [MenuBarPanelLayout.Tile: CGRect] = [:]
-    static func reduce(value: inout [MenuBarPanelLayout.Tile: CGRect], nextValue: () -> [MenuBarPanelLayout.Tile: CGRect]) {
-        value.merge(nextValue()) { $1 }
+/// 每一档格子的圆角:中号是胶囊,小号、大号是大圆角方块(同控制中心)。
+extension MenuBarPanelLayout.Size {
+    func cornerRadius(cell: CGFloat) -> CGFloat {
+        switch self {
+        case .small: return 22
+        case .medium: return cell / 2
+        case .large: return 28
+        }
+    }
+
+    var panelName: String {
+        switch self {
+        case .small: return L10n.t("小")
+        case .medium: return L10n.t("中")
+        case .large: return L10n.t("大")
+        }
     }
 }
 
-/// 编辑时压在格子角上的圆形小键:移除(−)、添加(+)、换尺寸。
+/// 编辑时套在一格外面的那一层:左上「−」,悬停时右下角露出一道弧形拉手(同控制中心),拖它换尺寸。
+/// 悬停状态存在这一格自己身上:存在面板上的话,指针每划过一格整块面板都要重算一遍。
+struct PanelEditableTile<Content: View>: View {
+    let content: Content
+    let cornerRadius: CGFloat
+    /// 正在拖这一格的拉手(拖动中指针离开格子,拉手也留着)。
+    let resizing: Bool
+    let remove: () -> Void
+    let resizeGesture: AnyGesture<Void>
+    @State private var hovering = false
+
+    var body: some View {
+        content
+            .contentShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
+            .onHover { hovering = $0 }
+            .overlay(alignment: .topLeading) {
+                PanelEditBadge(symbol: "minus", tint: Color(nsColor: .systemGray), label: L10n.t("移除"), action: remove)
+                    .offset(x: -4, y: -4)
+            }
+            .overlay(alignment: .bottomTrailing) {
+                PanelResizeCorner(cornerRadius: cornerRadius)
+                    .opacity(hovering || resizing ? 1 : 0)
+                    .gesture(resizeGesture)
+            }
+    }
+}
+
+/// 右下角那道弧形拉手:顺着格子圆角画的一段白色粗弧,整块 30pt 见方都能按。悬停换成斜向拉伸的指针。
+struct PanelResizeCorner: View {
+    let cornerRadius: CGFloat
+    @State private var hovering = false
+
+    var body: some View {
+        Canvas { context, size in
+            // 弧心在格子圆角的圆心上,往里收 5pt,弧跟圆角平行。
+            let r = min(cornerRadius, size.width) - 5
+            let center = CGPoint(x: size.width - min(cornerRadius, size.width), y: size.height - min(cornerRadius, size.width))
+            var path = Path()
+            path.addArc(center: center, radius: max(r, 6), startAngle: .degrees(10), endAngle: .degrees(80), clockwise: false)
+            context.stroke(path, with: .color(.white), style: StrokeStyle(lineWidth: 4, lineCap: .round))
+        }
+        .shadow(color: .black.opacity(0.35), radius: 1.5, y: 0.5)
+        .frame(width: 30, height: 30)
+        .contentShape(Rectangle())
+        .onHover { inside in
+            guard inside != hovering else { return }
+            hovering = inside
+            if inside { Self.cursor.push() } else { NSCursor.pop() }
+        }
+        .onDisappear { if hovering { NSCursor.pop() } }
+        .accessibilityHidden(true)
+    }
+
+    /// 斜向拉伸的指针只有 macOS 15 起才有,更早的系统用十字。
+    private static var cursor: NSCursor {
+        if #available(macOS 15.0, *) { return NSCursor.frameResize(position: .bottomRight, directions: .all) }
+        return .crosshair
+    }
+}
+
+/// 编辑时空着的坑位:一个淡淡的圆(同控制中心编辑时的空位)。
+struct PanelEmptyCell: View {
+    var body: some View {
+        Circle()
+            .fill(Color.primary.opacity(0.07))
+            .accessibilityHidden(true)
+    }
+}
+
+/// 编辑时压在格子角上的圆形小键:移除(−)、添加(+)。
 struct PanelEditBadge: View {
     let symbol: String
     let tint: Color
@@ -100,29 +139,6 @@ struct PanelEditBadge: View {
     }
 }
 
-/// 编辑时格子右边框上的拉手:一道竖条,悬停换成左右拉伸的指针。整条 14pt 宽都能按。
-struct PanelResizeHandle: View {
-    let active: Bool
-    @State private var hovering = false
-
-    var body: some View {
-        Capsule()
-            // 玻璃格是浅灰的,系统灰叠上去几乎看不见,用前景色压深。
-            .fill(Color.primary.opacity(active || hovering ? 0.55 : 0.28))
-            .frame(width: 4, height: 28)
-            .frame(width: 14)
-            .frame(maxHeight: .infinity)
-            .contentShape(Rectangle())
-            .onHover { inside in
-                guard inside != hovering else { return }
-                hovering = inside
-                if inside { NSCursor.resizeLeftRight.push() } else { NSCursor.pop() }
-            }
-            .onDisappear { if hovering { NSCursor.pop() } }
-            .accessibilityHidden(true)
-    }
-}
-
 /// 编辑页里「可添加」「底栏」这类小标题。
 struct PanelEditCaption: View {
     let title: String
@@ -134,16 +150,6 @@ struct PanelEditCaption: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, 6)
             .accessibilityAddTraits(.isHeader)
-    }
-}
-
-extension MenuBarPanelLayout.Size {
-    var panelName: String {
-        switch self {
-        case .small: return L10n.t("小")
-        case .medium: return L10n.t("中")
-        case .large: return L10n.t("大")
-        }
     }
 }
 

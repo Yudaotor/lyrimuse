@@ -1,10 +1,12 @@
 import Foundation
 import CoreGraphics
 
-/// 菜单栏左键面板的布局:钮块网格里放哪些格子、什么顺序、多大,底部藏了哪几项。见 06 章决策 82。
+/// 菜单栏左键面板的格子布局,照 macOS 控制中心:一排 4 个坑位,每个格子占定一块(左上角在第几列第几行、多大),
+/// 中间可以空着;底栏藏了哪几项。见 06 章决策 82、84。
 ///
-/// 存成一串 JSON(`encoded()` / `decode(_:)`)。认不出的格子丢掉、认不出的尺寸退回中号、重复的只留第一个,
-/// 一处坏数据不把整个布局清空;整串读不出来才退回默认。默认布局就是这块面板一直以来的样子。
+/// 存成一串 JSON(`encoded()` / `decode(_:)`)。认不出的格子丢掉、认不出的尺寸退回中号、重复的留第一个、
+/// 跟前面重叠或出了边界的挪到第一个放得下的空位;整串读不出来才退回默认。早先按顺序排、没有坑位的那种存法
+/// (没有 col / row)按顺序依次放进第一个放得下的空位。
 public struct MenuBarPanelLayout: Equatable, Sendable {
     /// 能放进网格的格子。rawValue 是存盘和深链里的写法,别改。
     public enum Tile: String, CaseIterable, Sendable {
@@ -12,7 +14,7 @@ public struct MenuBarPanelLayout: Equatable, Sendable {
         case notch
         case menuBar = "menubar"
         case lyricsWindow = "lyrics-window"
-        /// 只在这台 Mac 此刻有触控栏时画出来;放着不画、也不进「可添加」。
+        /// 只在这台 Mac 此刻有触控栏时画出来;没有时坑位照占着,也不进「可添加」。
         case touchBar = "touchbar"
         case lyricsManager = "lyrics-manager"
         case translation
@@ -20,40 +22,39 @@ public struct MenuBarPanelLayout: Equatable, Sendable {
         case lockPosition = "lock-position"
     }
 
+    /// 小 1×1、中 2×1、大 2×2(列 × 行),同控制中心。
     public enum Size: String, CaseIterable, Sendable {
         case small, medium, large
 
-        /// 一排 `rowUnits` 份:小 3(一排四个)、中 4(一排三个)、大 8(两个中号那么宽)。
-        public var units: Int {
-            switch self {
-            case .small: return 3
-            case .medium: return 4
-            case .large: return 8
-            }
-        }
+        public var columns: Int { self == .small ? 1 : 2 }
+        public var rows: Int { self == .large ? 2 : 1 }
 
-        /// 一排里只有同档格子、不被撑开时这一档多宽。
-        public func nominalWidth(rowWidth: CGFloat, spacing: CGFloat) -> CGFloat {
-            (rowWidth + spacing) * CGFloat(units) / CGFloat(MenuBarPanelLayout.rowUnits) - spacing
-        }
-
-        /// 编辑时拖格子右边框:从 `start` 那一档的宽度拖了 `delta`,落到宽度最接近的那一档。按档位宽算、不按格子此刻
-        /// 被撑开的实际宽度算:同排没排满时格子比它那一档宽,按实际宽度一按下就会跳档。
-        public static func resized(from start: Size, by delta: CGFloat, rowWidth: CGFloat, spacing: CGFloat) -> Size {
-            let target = start.nominalWidth(rowWidth: rowWidth, spacing: spacing) + delta
-            return allCases.min {
-                abs($0.nominalWidth(rowWidth: rowWidth, spacing: spacing) - target)
-                    < abs($1.nominalWidth(rowWidth: rowWidth, spacing: spacing) - target)
-            } ?? start
+        /// 拖右下角时指针盖住了几列几行,落到哪一档:两行就是大号,两列一行是中号,其余小号。
+        public static func fitting(columns: Int, rows: Int) -> Size {
+            if rows >= 2 { return .large }
+            return columns >= 2 ? .medium : .small
         }
     }
 
-    public struct Slot: Equatable, Hashable, Sendable {
+    public struct Placement: Equatable, Hashable, Sendable {
         public var tile: Tile
         public var size: Size
-        public init(tile: Tile, size: Size) {
+        public var column: Int
+        public var row: Int
+        public init(tile: Tile, size: Size, column: Int, row: Int) {
             self.tile = tile
             self.size = size
+            self.column = column
+            self.row = row
+        }
+
+        func covers(column c: Int, row r: Int) -> Bool {
+            (column..<column + size.columns).contains(c) && (row..<row + size.rows).contains(r)
+        }
+
+        func overlaps(_ other: Placement) -> Bool {
+            column < other.column + other.size.columns && other.column < column + size.columns
+                && row < other.row + other.size.rows && other.row < row + size.rows
         }
     }
 
@@ -62,26 +63,56 @@ public struct MenuBarPanelLayout: Equatable, Sendable {
         case settings, lastfm, version
     }
 
-    public static let rowUnits = 12
+    public static let columns = 4
 
-    public var slots: [Slot]
+    public private(set) var placements: [Placement]
     public var hiddenFooter: Set<FooterItem>
 
-    public init(slots: [Slot], hiddenFooter: Set<FooterItem> = []) {
-        var seen = Set<Tile>()
-        self.slots = slots.filter { seen.insert($0.tile).inserted }
+    /// 重复的格子留第一个;出了边界、或跟前面的重叠的,挪到第一个放得下的空位。
+    public init(placements: [Placement], hiddenFooter: Set<FooterItem> = []) {
+        self.placements = []
         self.hiddenFooter = hiddenFooter
+        for p in placements where !contains(p.tile) {
+            if fits(p, ignoring: nil) {
+                self.placements.append(p)
+            } else {
+                add(p.tile, size: p.size)
+            }
+        }
     }
 
-    public static let `default` = MenuBarPanelLayout(
-        slots: [Tile.overlay, .notch, .menuBar, .lyricsWindow, .touchBar, .lyricsManager]
-            .map { Slot(tile: $0, size: .medium) })
+    public static let `default` = MenuBarPanelLayout(placements: [
+        Placement(tile: .overlay, size: .medium, column: 0, row: 0),
+        Placement(tile: .notch, size: .medium, column: 2, row: 0),
+        Placement(tile: .menuBar, size: .medium, column: 0, row: 1),
+        Placement(tile: .lyricsWindow, size: .small, column: 2, row: 1),
+        Placement(tile: .lyricsManager, size: .small, column: 3, row: 1),
+        Placement(tile: .touchBar, size: .small, column: 0, row: 2),
+    ])
 
-    public var tiles: [Tile] { slots.map(\.tile) }
+    public var tiles: [Tile] { placements.map(\.tile) }
 
-    public func contains(_ tile: Tile) -> Bool { slots.contains { $0.tile == tile } }
+    public func contains(_ tile: Tile) -> Bool { placements.contains { $0.tile == tile } }
 
-    public func size(of tile: Tile) -> Size? { slots.first { $0.tile == tile }?.size }
+    public func placement(of tile: Tile) -> Placement? { placements.first { $0.tile == tile } }
+
+    public func size(of tile: Tile) -> Size? { placement(of: tile)?.size }
+
+    /// 占到第几行为止(行数)。`including` 只数这几格(面板平时只数画得出来的格子,没画的那几排收起来)。
+    public func rowCount(including: (Tile) -> Bool = { _ in true }) -> Int {
+        placements.filter { including($0.tile) }.map { $0.row + $0.size.rows }.max() ?? 0
+    }
+
+    /// 这个位置放不放得下:不出左右边界、行不为负,不跟别的格子(`ignoring` 那一格除外)重叠。
+    public func fits(_ p: Placement, ignoring: Tile?) -> Bool {
+        guard p.column >= 0, p.row >= 0, p.column + p.size.columns <= Self.columns else { return false }
+        return !placements.contains { $0.tile != ignoring && $0.tile != p.tile && $0.overlaps(p) }
+    }
+
+    /// 这一格空着(编辑时画占位圆)。
+    public func isEmpty(column: Int, row: Int) -> Bool {
+        !placements.contains { $0.covers(column: column, row: row) }
+    }
 
     /// 「可添加」那一栏:不在网格里、此刻能用的格子,按 `Tile.allCases` 的顺序。
     public func addable(available: (Tile) -> Bool) -> [Tile] {
@@ -89,77 +120,94 @@ public struct MenuBarPanelLayout: Equatable, Sendable {
     }
 
     public mutating func remove(_ tile: Tile) {
-        slots.removeAll { $0.tile == tile }
+        placements.removeAll { $0.tile == tile }
     }
 
-    /// 加到最后,中号。已经在网格里就不动。
+    /// 放进第一个放得下的空位(从上到下、从左到右);现有几排里放不下就放到最下面新起一排。已经在网格里就不动。
     public mutating func add(_ tile: Tile, size: Size = .medium) {
         guard !contains(tile) else { return }
-        slots.append(Slot(tile: tile, size: size))
+        placements.append(firstFit(tile, size: size))
     }
 
-    public mutating func setSize(_ size: Size, for tile: Tile) {
-        guard let i = slots.firstIndex(where: { $0.tile == tile }) else { return }
-        slots[i].size = size
+    private func firstFit(_ tile: Tile, size: Size) -> Placement {
+        let rows = rowCount()
+        for row in 0...rows {
+            for column in 0...(Self.columns - size.columns) {
+                let p = Placement(tile: tile, size: size, column: column, row: row)
+                if fits(p, ignoring: nil) { return p }
+            }
+        }
+        return Placement(tile: tile, size: size, column: 0, row: rows)
     }
 
-    /// 拖动中指针进了 `target` 那一格:被拖的格子挪到 `target` 现在的位置,中间的依次让一位。
-    public mutating func move(_ tile: Tile, onto target: Tile) {
-        guard tile != target,
-              let from = slots.firstIndex(where: { $0.tile == tile }),
-              let to = slots.firstIndex(where: { $0.tile == target }) else { return }
-        let slot = slots.remove(at: from)
-        slots.insert(slot, at: to)
+    /// 拖动松手要落到哪里:左上角对准 (column, row)。空着就直接放;正好压在一个同尺寸的格子上就两格互换;
+    /// 都不行返回 nil(弹回原位)。左右越界的先夹回网格里。
+    public func dropTarget(for tile: Tile, column: Int, row: Int) -> (placement: Placement, swapWith: Tile?)? {
+        guard let current = placement(of: tile) else { return nil }
+        let clamped = Placement(tile: tile, size: current.size,
+                                column: min(max(column, 0), Self.columns - current.size.columns),
+                                row: max(row, 0))
+        if clamped.column == current.column, clamped.row == current.row { return nil }
+        if fits(clamped, ignoring: nil) { return (clamped, nil) }
+        let hit = placements.filter { $0.tile != tile && $0.overlaps(clamped) }
+        guard hit.count == 1, let other = hit.first, other.size == current.size,
+              other.column == clamped.column, other.row == clamped.row else { return nil }
+        return (clamped, other.tile)
+    }
+
+    /// 执行 `dropTarget` 给出的落点。落不下返回 false、布局不变。
+    @discardableResult
+    public mutating func move(_ tile: Tile, toColumn column: Int, row: Int) -> Bool {
+        guard let current = placement(of: tile), let target = dropTarget(for: tile, column: column, row: row) else {
+            return false
+        }
+        if let other = target.swapWith, let j = placements.firstIndex(where: { $0.tile == other }) {
+            placements[j].column = current.column
+            placements[j].row = current.row
+        }
+        guard let i = placements.firstIndex(where: { $0.tile == tile }) else { return false }
+        placements[i] = target.placement
+        return true
+    }
+
+    /// 换尺寸:左上角不动;右边放不下(出界或压到别的格子)就试着往左挪一列。都不行返回 false、布局不变。
+    @discardableResult
+    public mutating func resize(_ tile: Tile, to size: Size) -> Bool {
+        guard let i = placements.firstIndex(where: { $0.tile == tile }) else { return false }
+        let current = placements[i]
+        guard current.size != size else { return true }
+        for column in [current.column, current.column - 1] {
+            let p = Placement(tile: tile, size: size, column: column, row: current.row)
+            if fits(p, ignoring: tile) {
+                placements[i] = p
+                return true
+            }
+        }
+        return false
     }
 
     public mutating func setFooter(_ item: FooterItem, shown: Bool) {
         if shown { hiddenFooter.remove(item) } else { hiddenFooter.insert(item) }
     }
 
-    /// 按顺序装排:这一排放不下下一格就换行。没排满的一排由视图按份数等比撑满。
-    public static func rows(_ slots: [Slot]) -> [[Slot]] {
-        rowRanges(units: slots.map(\.size.units)).map { Array(slots[$0]) }
-    }
-
-    /// 同 `rows`,只按份数排,返回每一排的下标区间(视图的 `Layout` 用它)。
-    public static func rowRanges(units: [Int]) -> [Range<Int>] {
-        var ranges: [Range<Int>] = []
-        var start = 0
-        var used = 0
-        for (i, u) in units.enumerated() {
-            if i > start, used + u > rowUnits {
-                ranges.append(start..<i)
-                start = i
-                used = 0
-            }
-            used += u
-        }
-        if start < units.count { ranges.append(start..<units.count) }
-        return ranges
-    }
-
-    /// 一排里每一格的宽:扣掉间距后按份数分。没排满的一排同样分满整行(默认布局第二排两格各占一半就是这么来的)。
-    public static func widths(units: [Int], rowWidth: CGFloat, spacing: CGFloat) -> [CGFloat] {
-        let total = units.reduce(0, +)
-        guard total > 0 else { return [] }
-        let usable = max(0, rowWidth - spacing * CGFloat(units.count - 1))
-        return units.map { usable * CGFloat($0) / CGFloat(total) }
-    }
-
     // MARK: 存盘
 
     private struct Stored: Codable {
-        struct StoredSlot: Codable {
+        struct StoredTile: Codable {
             var id: String
             var size: String?
+            var col: Int?
+            var row: Int?
         }
-        var tiles: [StoredSlot]
+        var tiles: [StoredTile]
         var hiddenFooter: [String]?
     }
 
     public func encoded() -> String {
         let stored = Stored(
-            tiles: slots.map { Stored.StoredSlot(id: $0.tile.rawValue, size: $0.size.rawValue) },
+            tiles: placements.map {
+                Stored.StoredTile(id: $0.tile.rawValue, size: $0.size.rawValue, col: $0.column, row: $0.row)
+            },
             hiddenFooter: FooterItem.allCases.filter { hiddenFooter.contains($0) }.map(\.rawValue))
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.sortedKeys]
@@ -170,30 +218,68 @@ public struct MenuBarPanelLayout: Equatable, Sendable {
     public static func decode(_ json: String?) -> MenuBarPanelLayout {
         guard let data = json?.data(using: .utf8),
               let stored = try? JSONDecoder().decode(Stored.self, from: data) else { return .default }
-        let slots = stored.tiles.compactMap { raw -> Slot? in
-            guard let tile = Tile(rawValue: raw.id) else { return nil }
-            return Slot(tile: tile, size: raw.size.flatMap(Size.init(rawValue:)) ?? .medium)
-        }
         let footer = Set((stored.hiddenFooter ?? []).compactMap(FooterItem.init(rawValue:)))
-        return MenuBarPanelLayout(slots: slots, hiddenFooter: footer)
+        var layout = MenuBarPanelLayout(placements: [], hiddenFooter: footer)
+        for raw in stored.tiles {
+            guard let tile = Tile(rawValue: raw.id), !layout.contains(tile) else { continue }
+            guard let col = raw.col, let row = raw.row else {
+                // 没有坑位的旧存法:按长相换算(旧中号是图标在上、名字在下的方块 = 现在的小号;旧大号是图标在左的宽条 = 中号)。
+                let size: Size = raw.size == "large" ? .medium : .small
+                layout.add(tile, size: size)
+                continue
+            }
+            let size = raw.size.flatMap(Size.init(rawValue:)) ?? .medium
+            let p = Placement(tile: tile, size: size, column: col, row: row)
+            if layout.fits(p, ignoring: nil) {
+                layout.placements.append(p)
+            } else {
+                layout.add(tile, size: size)
+            }
+        }
+        return layout
     }
 }
 
-/// 编辑面板时拖动格子的判定:指针此刻落在哪一格上、要不要换位。
-public enum PanelGridDrag {
-    /// 指针进了另一格才换位;还停在上一次换过位的那一格里不再换。大小不一的格子换位后指针常常落在
-    /// 刚让过来的那一格上,不加这一条会在两格之间来回换。
-    /// - frames:各格此刻的位置(同一坐标系)。
-    /// - lastTarget:上一次换位时指针进的那一格,指针离开它之后清空(由调用方按返回值更新)。
-    /// 返回 (要换到哪一格, 新的 lastTarget)。
-    public static func step<ID: Hashable>(pointer: CGPoint, dragged: ID, frames: [ID: CGRect],
-                                          lastTarget: ID?) -> (moveOnto: ID?, lastTarget: ID?) {
-        let hit = frames.first { $0.key != dragged && $0.value.contains(pointer) }?.key
-        guard let hit else {
-            // 指针在格子之间的缝里或者回到自己那一格:上一次进的那格已经离开了。
-            return (nil, nil)
-        }
-        if hit == lastTarget { return (nil, lastTarget) }
-        return (hit, hit)
+/// 编辑面板时的网格几何:坑位的边长、间距,格子在哪、指针对准哪一格。
+public struct PanelGridGeometry: Equatable, Sendable {
+    public var width: CGFloat
+    public var spacing: CGFloat
+
+    public init(width: CGFloat, spacing: CGFloat) {
+        self.width = width
+        self.spacing = spacing
+    }
+
+    /// 一个坑位的边长(正方形)。
+    public var cell: CGFloat {
+        (width - spacing * CGFloat(MenuBarPanelLayout.columns - 1)) / CGFloat(MenuBarPanelLayout.columns)
+    }
+
+    /// 相邻两个坑位左上角的距离。
+    public var stride: CGFloat { cell + spacing }
+
+    public func height(rows: Int) -> CGFloat {
+        rows > 0 ? CGFloat(rows) * stride - spacing : 0
+    }
+
+    public func frame(column: Int, row: Int, size: MenuBarPanelLayout.Size) -> CGRect {
+        CGRect(x: CGFloat(column) * stride, y: CGFloat(row) * stride,
+               width: CGFloat(size.columns) * stride - spacing, height: CGFloat(size.rows) * stride - spacing)
+    }
+
+    public func frame(_ p: MenuBarPanelLayout.Placement) -> CGRect {
+        frame(column: p.column, row: p.row, size: p.size)
+    }
+
+    /// 拖着的格子左上角此刻在 `origin`,对准的是哪一格(四舍五入到最近的坑位)。
+    public func nearestCell(to origin: CGPoint) -> (column: Int, row: Int) {
+        (Int((origin.x / stride).rounded()), Int((origin.y / stride).rounded()))
+    }
+
+    /// 拖右下角时指针在 `pointer`、格子左上角在 `origin`:指针过了第一个坑位(加间距)就算盖住两列 / 两行。
+    public func resizedSize(origin: CGPoint, pointer: CGPoint) -> MenuBarPanelLayout.Size {
+        let columns = pointer.x - origin.x > stride ? 2 : 1
+        let rows = pointer.y - origin.y > stride ? 2 : 1
+        return .fitting(columns: columns, rows: rows)
     }
 }
