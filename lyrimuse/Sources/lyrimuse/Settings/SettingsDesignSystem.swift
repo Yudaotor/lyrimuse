@@ -481,53 +481,27 @@ extension AnyTransition {
 // 卡片列宽度钉在 maxCardColumnWidth 并居中——窗口可以拖得很宽,但一行设置拉到 1000pt
 // 宽会让"标题在最左、控件在最右"两端相距太远,眼睛要来回扫。参考图里 Dropover 也是
 // 让卡片列保持一个固定的舒适宽度、两侧留白。
-// 把内容宽度钉死成"滚动视图外部的宽度",不让滚动条参与决定它。
+// 内容按滚动视图的整宽排、靠左摆，滚动条出现与否都不改变卡片列的位置。
 //
-// 抖动的机制:展开一个 DisclosureGroup 让内容超过一屏,滚动条出现,
-// **占掉约 15pt 布局宽度**,于是这一列卡片可用的宽度变窄、居中点左移 —— 整页看着往左挤
-// 了一下。收起来时反向再抖一次。
+// 接鼠标时系统「显示滚动条：自动」走常驻滚动条，它占约 15pt 布局宽度，可见区跟着变窄。
+// 内容若按可见区排，居中点左移；若按整宽排却交给 ScrollView 摆，它会把比可见区宽的内容
+// 居中，照样左移半个滚动条。所以两步缺一不可：`containerRelativeFrame` 取整宽（含滚动条那一条），
+// 外面再包一层 `minWidth: 0` 的靠左框，报给 ScrollView 的宽度就是可见区宽度，内容从左缘铺开，
+// 右边那一条被滚动条盖住——卡片列两侧有 20pt 留白，盖不到内容。
 //
-// 别被 `defaults read -g AppleShowScrollBars` 读不到值骗了:
-// 没设置 = "自动",而"自动"的含义是**按输入设备定** —— 接着鼠标就是常驻滚动条、占宽度,
-// 只有纯触控板才是不占宽度的 overlay。所以这事不能靠"默认应该是 overlay"来推断。
-//
-// 修法:量一次宽度,内容按这个宽度铺。滚动条出现与否都不再改变它。滚动条会盖住右边缘
-// 那一小条,但卡片列本身居中、最大 600pt、两侧还有 20pt padding,盖不到内容。
-//
-// 这个"量"必须**不改变视图层级**。把整个
-// ScrollView 包进 GeometryReader(GeometryReader 在外、ScrollView 在内)确实能治抖动,
-// 但换来一个更糟的回归:GeometryReader 会截断 safe area 的传播,而「外观」页顶上那条预览
-// 正是拿 .safeAreaInset 挂的 —— 两者一叠加,往下滚之后内容的实际位置和点击命中区域就
-// 错开了,表现是"分段选择器看得见却点不动,必须滚回顶部才点得着"。
-//
-// 所以 GeometryReader 只待在 .background 里**量**,ScrollView 仍然是这一层的根,safe area 照常传播。
-// 量到的是 ScrollView 自己的布局宽度 —— 这个值本来就不随滚动条出现而变(变的是内容可用宽度),
-// 所以钉死内容宽度、防抖的效果一点没丢。
-//
-// 别改成在 ScrollView 上挂 `onGeometryChange`:它在同一轮布局里把量到的宽度回写给内容宽度,内容宽度又反过来
-// 改 ScrollView 的尺寸,宽度来回振荡,设置窗口一打开就因 AppKit 布局循环崩溃(14 章决策 113)。
-private struct SettingsPageWidthKey: PreferenceKey {
-    static var defaultValue: CGFloat = 0
-    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) { value = nextValue() }
-}
-
+// 别换回「量宽度存进 @State 再 `.frame(width:)`」：用 `onGeometryChange` 回写，内容宽于可见区时宽度来回
+// 振荡，设置窗口一打开就因 AppKit 布局循环崩溃（14 章决策 113）；用覆盖式 reduce 的偏好量，真实宽度被
+// 默认值 0 冲掉，等于没量。也别把 ScrollView 包进 GeometryReader：它截断 safe area 的传播，「外观」页
+// 顶上那条 `.safeAreaInset` 预览会和点击命中区错开。
 private struct FixedWidthScrollView<Content: View>: View {
     @ViewBuilder let content: () -> Content
-    @State private var measuredWidth: CGFloat = 0
 
     var body: some View {
         ScrollView {
             content()
-                // 首帧还没量到,传 nil 让内容自己撑开,别闪一帧 0 宽。
-                .frame(width: measuredWidth > 0 ? measuredWidth : nil)
+                .containerRelativeFrame(.horizontal)
+                .frame(minWidth: 0, maxWidth: .infinity, alignment: .leading)
         }
-        .background(
-            GeometryReader { proxy in
-                Color.clear
-                    .preference(key: SettingsPageWidthKey.self, value: proxy.size.width)
-            }
-        )
-        .onPreferenceChange(SettingsPageWidthKey.self) { measuredWidth = $0 }
     }
 }
 

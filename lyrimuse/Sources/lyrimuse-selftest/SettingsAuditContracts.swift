@@ -278,4 +278,8 @@ func runSettingsAuditContracts() {
     expectEqual(sourceHas(app("Settings/WebLyricsSettingsCard.swift"),
                           "note: settings.webLyricsAllowLAN ? L10n.t(\"更改后需重新扫码连接\") : L10n.t(\"更改后需重新打开本机地址\"))"),
                 true, "网页歌词「端口」: 说明按局域网开没开写")
+    let pageScroll = sourceBody("private struct FixedWidthScrollView<Content: View>: View {", in: app("Settings/SettingsDesignSystem.swift"))
+    expectEqual(sourceHas(pageScroll, ".containerRelativeFrame(.horizontal)\n.frame(minWidth: 0, maxWidth: .infinity, alignment: .leading)")
+                && !pageScroll.contains("onGeometryChange") && !pageScroll.contains("GeometryReader"), true,
+                "设置页滚动: 内容按整宽排、靠左摆,常驻滚动条出现时卡片列不左移")
 }
