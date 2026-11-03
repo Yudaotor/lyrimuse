@@ -43,6 +43,7 @@ extension MenuBarPanelLayout.Size {
 
 /// 编辑时套在一格外面的那一层:左上「−」,悬停时右下角露出一道弧形拉手(同控制中心),拖它换尺寸。
 /// 悬停状态存在这一格自己身上:存在面板上的话,指针每划过一格整块面板都要重算一遍。
+/// `onHover` 挂在最外层(连拉手一起算):挂在内容上的话,指针一挪到拉手上内容就报「离开」,拉手跟着藏起来、点不到。
 struct PanelEditableTile<Content: View>: View {
     let content: Content
     let cornerRadius: CGFloat
@@ -55,22 +56,23 @@ struct PanelEditableTile<Content: View>: View {
     var body: some View {
         content
             .contentShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
-            .onHover { hovering = $0 }
             .overlay(alignment: .topLeading) {
                 PanelEditBadge(symbol: "minus", tint: Color(nsColor: .systemGray), label: L10n.t("移除"), action: remove)
                     .offset(x: -4, y: -4)
             }
             .overlay(alignment: .bottomTrailing) {
-                PanelResizeCorner(cornerRadius: cornerRadius)
-                    .opacity(hovering || resizing ? 1 : 0)
+                PanelResizeCorner(cornerRadius: cornerRadius, visible: hovering || resizing)
                     .gesture(resizeGesture)
             }
+            .onHover { hovering = $0 }
     }
 }
 
 /// 右下角那道弧形拉手:顺着格子圆角画的一段白色粗弧,整块 30pt 见方都能按。悬停换成斜向拉伸的指针。
+/// 藏起来时只把弧线调透明,可按的那块一直在:整个视图透明度为 0 时 SwiftUI 不再把点击交给它。
 struct PanelResizeCorner: View {
     let cornerRadius: CGFloat
+    let visible: Bool
     @State private var hovering = false
 
     var body: some View {
@@ -83,6 +85,7 @@ struct PanelResizeCorner: View {
             context.stroke(path, with: .color(.white), style: StrokeStyle(lineWidth: 4, lineCap: .round))
         }
         .shadow(color: .black.opacity(0.35), radius: 1.5, y: 0.5)
+        .opacity(visible ? 1 : 0)
         .frame(width: 30, height: 30)
         .contentShape(Rectangle())
         .onHover { inside in

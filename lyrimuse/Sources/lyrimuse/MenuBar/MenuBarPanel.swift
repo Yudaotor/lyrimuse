@@ -273,7 +273,7 @@ final class MenuBarPanelController {
                 // 点状态栏按钮那一下也会先到这里(macOS 26 上状态栏的点击先当作别的进程的事件发出来),
                 // 在这里收的话按钮的 toggle 紧接着又把面板打开。开关交给 toggle。
                 guard let self, self.anchorScreenRect?.contains(location) != true else { return }
-                self.close()
+                self.closeFromWatcher()
             }
         }
         localClickMonitor = NSEvent.addLocalMonitorForEvents(
@@ -286,21 +286,27 @@ final class MenuBarPanelController {
             if let level = target?.level, level >= .popUpMenu { return event }
             // 锚点也不算:它的点击走 toggle,在这里先收的话 toggle 紧接着又把面板打开。按点击位置认。
             if self.anchorScreenRect?.contains(NSEvent.mouseLocation) == true { return event }
-            self.close()
+            self.closeFromWatcher()
             return event
         }
         spaceChangeObserver = NSWorkspace.shared.notificationCenter.addObserver(
             forName: NSWorkspace.activeSpaceDidChangeNotification, object: nil, queue: .main
         ) { [weak self] _ in
-            Task { @MainActor in self?.close() }
+            Task { @MainActor in self?.closeFromWatcher() }
         }
         appActivationObserver = NSWorkspace.shared.notificationCenter.addObserver(
             forName: NSWorkspace.didActivateApplicationNotification, object: nil, queue: .main
         ) { [weak self] note in
             let app = note.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication
             guard app?.processIdentifier != ProcessInfo.processInfo.processIdentifier else { return }
-            Task { @MainActor in self?.close() }
+            Task { @MainActor in self?.closeFromWatcher() }
         }
+    }
+
+    /// 上面几种「点到外面 / 切走了」的收起。`debug/panel-pin` 开着时不收(验证脚本拖动前得先提前台)。
+    private func closeFromWatcher() {
+        guard !MenuBarPanelDebugState.pinned else { return }
+        close()
     }
 
     private func teardownDismissWatchers() {

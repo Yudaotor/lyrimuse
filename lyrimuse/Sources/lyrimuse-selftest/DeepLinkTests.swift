@@ -179,6 +179,12 @@ func runDeepLinkTests() {
         expectEqual(link("lyrimuse://debug/restore"), .debug(.restore), "debug: 恢复")
         expectEqual(link("lyrimuse://debug/config-save"), .debug(.saveConfig), "debug: 账号配置原样保存一次")
         expectEqual(link("lyrimuse://debug/panel-layout"), .debug(.panelLayout(json: nil)), "debug: 面板布局不带 json 恢复默认")
+        expectEqual(link("lyrimuse://debug/panel-pin?on=1"), .debug(.panelPin(on: true)), "debug: 面板不自动收起")
+        expectEqual(link("lyrimuse://debug/panel-pin") == nil, true, "debug: 面板钉住没给 on 不认")
+        expectEqual(link("lyrimuse://debug/panel-drag?from=205,436&to=350.5,436"),
+                    .debug(.panelDrag(from: CGPoint(x: 205, y: 436), to: CGPoint(x: 350.5, y: 436))), "debug: 面板里拖一下")
+        expectEqual(link("lyrimuse://debug/panel-drag?from=1,2") == nil && link("lyrimuse://debug/panel-drag?from=1&to=3,4") == nil, true,
+                    "debug: 面板拖动缺终点或坐标不全不认")
         expectEqual(link("lyrimuse://debug/panel-layout?json=%7B%22tiles%22%3A%5B%5D%7D"), .debug(.panelLayout(json: "{\"tiles\":[]}")),
                     "debug: 面板布局带 json")
         expectEqual(link("lyrimuse://debug/stall?ms=120"), .debug(.stall(ms: 120)), "debug: 主线程睡一段")
@@ -432,7 +438,7 @@ func runDeepLinkTests() {
             .debug(.simulateIdle),
             .debug(.toggleFavorite), .debug(.idleResume), .debug(.seek(seconds: 99.7)), .debug(.seek(seconds: 0)),
             .debug(.knockout(leg: .appleMusicScript, on: false)), .debug(.knockout(leg: .spotifyScript, on: true)),
-            .debug(.knockout(leg: .kasetScript, on: false)), .debug(.saveConfig), .debug(.panelLayout(json: nil)),
+            .debug(.knockout(leg: .kasetScript, on: false)), .debug(.saveConfig), .debug(.panelLayout(json: nil)), .debug(.panelPin(on: true)), .debug(.panelPin(on: false)), .debug(.panelDrag(from: CGPoint(x: 1.5, y: 2), to: CGPoint(x: 300, y: 400))),
             .debug(.panelLayout(json: MenuBarPanelLayout(placements: [.init(tile: .translation, size: .large, column: 0, row: 0)], hiddenFooter: [.version]).encoded())), .debug(.volume(percent: 0)), .debug(.volume(percent: 100)),
             .debug(.stall(ms: 1)), .debug(.stall(ms: 2000)), .debug(.milestonePreview),
             .debug(.notchBehavior(collapseWhenPaused: true, hideWhenNotPlaying: nil)),

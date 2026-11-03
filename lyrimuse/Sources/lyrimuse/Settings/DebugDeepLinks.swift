@@ -173,6 +173,11 @@ enum DebugDeepLinks {
                 let ok = await ConfigStore.shared.save()
                 logger.notice("debug config save ok=\(ok, privacy: .public)")
             }
+        case let .panelDrag(from, to):
+            panelDrag(from: from, to: to)
+        case let .panelPin(on):
+            MenuBarPanelDebugState.pinned = on
+            logger.notice("debug panel pin \(on, privacy: .public)")
         case let .panelLayout(json):
             AppSettings.shared.menuBarPanelLayout = MenuBarPanelLayout.decode(json)
             logger.notice("debug panel layout \(AppSettings.shared.menuBarPanelLayout.encoded(), privacy: .public)")
@@ -425,10 +430,45 @@ enum DebugDeepLinks {
     }
 }
 
+extension DebugDeepLinks {
+    /// `debug/panel-drag`:往面板窗口送一串按下 → 20 步拖动 → 松开,每步之间让出主线程一拍(SwiftUI 的拖动手势按事件逐个处理)。
+    static func panelDrag(from: CGPoint, to: CGPoint) {
+        guard let window = NSApp.windows.first(where: {
+            $0.isVisible && String(describing: type(of: $0)).contains("MenuBarPanelWindow")
+        }) else {
+            logger.notice("debug panel drag: panel is not open")
+            return
+        }
+        let height = window.frame.height
+        func event(_ type: NSEvent.EventType, _ p: CGPoint) -> NSEvent? {
+            NSEvent.mouseEvent(with: type, location: NSPoint(x: p.x, y: height - p.y), modifierFlags: [],
+                               timestamp: ProcessInfo.processInfo.systemUptime, windowNumber: window.windowNumber,
+                               context: nil, eventNumber: 0, clickCount: 1, pressure: type == .leftMouseUp ? 0 : 1)
+        }
+        Task { @MainActor in
+            if let e = event(.mouseMoved, from) { window.sendEvent(e) }
+            try? await Task.sleep(nanoseconds: 50_000_000)
+            if let e = event(.leftMouseDown, from) { window.sendEvent(e) }
+            let steps = 20
+            for i in 1...steps {
+                try? await Task.sleep(nanoseconds: 16_000_000)
+                let t = CGFloat(i) / CGFloat(steps)
+                let p = CGPoint(x: from.x + (to.x - from.x) * t, y: from.y + (to.y - from.y) * t)
+                if let e = event(.leftMouseDragged, p) { window.sendEvent(e) }
+            }
+            try? await Task.sleep(nanoseconds: 50_000_000)
+            if let e = event(.leftMouseUp, to) { window.sendEvent(e) }
+            logger.notice("debug panel drag done")
+        }
+    }
+}
+
 /// 菜单栏面板此刻翻在哪一格(深链取值,nil = 钮块网格或面板没开)。只给 `debug/state` 读,面板自己不读它。
 @MainActor
 enum MenuBarPanelDebugState {
     static var quickTarget: String?
     /// 面板在不在编辑布局。
     static var editing = false
+    /// `debug/panel-pin`:开着时点到外面、切 App、切桌面空间都不收面板(不落盘)。
+    static var pinned = false
 }

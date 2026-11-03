@@ -134,6 +134,12 @@ public enum LyrimuseDeepLink: Equatable, Sendable {
         /// 菜单栏左键面板的布局,跟面板里「编辑」改的同一个设置(`debug/panel-layout?json=<MenuBarPanelLayout.encoded()>`,
         /// 不带 json 恢复默认)。
         case panelLayout(json: String?)
+        /// 菜单栏面板点到外面、切 App、切桌面空间时不自动收起(`debug/panel-pin?on=1`,`on=0` 恢复),不落盘:
+        /// 验证脚本得先把窗口提到前台才能拖动,一提前台面板就被当成点到外面收掉了。
+        case panelPin(on: Bool)
+        /// 在菜单栏面板里从 (x1, y1) 按下、拖到 (x2, y2) 松开(面板窗口内的点坐标,左上角为原点),事件直接送进面板窗口,
+        /// 跟手拖走同一条路:`debug/panel-drag?from=205,436&to=350,436`。验证脚本合成的系统鼠标事件进不了这扇面板。
+        case panelDrag(from: CGPoint, to: CGPoint)
         /// 主线程原地睡这么多毫秒(`debug/stall?ms=`,1…`maxStallMs`):造出「别的窗口把主线程占住」那一下,验动画扛不扛得住。
         case stall(ms: Int)
         /// 灵动岛摆一次报喜,跟设置页「收听里程碑」旁那颗「试用」走同一条路(`debug/milestone-preview`)。
@@ -296,6 +302,16 @@ public enum LyrimuseDeepLink: Equatable, Sendable {
             self = .debug(.saveConfig)
         case ("debug", "/panel-layout"):
             self = .debug(.panelLayout(json: value("json").flatMap { $0.isEmpty ? nil : $0 }))
+        case ("debug", "/panel-drag"):
+            func point(_ name: String) -> CGPoint? {
+                let parts = (value(name) ?? "").split(separator: ",").compactMap { Double($0) }
+                return parts.count == 2 ? CGPoint(x: parts[0], y: parts[1]) : nil
+            }
+            guard let from = point("from"), let to = point("to") else { return nil }
+            self = .debug(.panelDrag(from: from, to: to))
+        case ("debug", "/panel-pin"):
+            guard let on = value("on").flatMap(Self.parseBool) else { return nil }
+            self = .debug(.panelPin(on: on))
         case ("debug", "/stall"):
             guard let ms = value("ms").flatMap(Int.init), (1...Self.maxStallMs).contains(ms) else { return nil }
             self = .debug(.stall(ms: ms))
@@ -528,6 +544,13 @@ public enum LyrimuseDeepLink: Equatable, Sendable {
             case let .panelLayout(json):
                 components.path = "/panel-layout"
                 if let json { components.queryItems = [URLQueryItem(name: "json", value: json)] }
+            case let .panelDrag(from, to):
+                components.path = "/panel-drag"
+                func text(_ p: CGPoint) -> String { "\(p.x),\(p.y)" }
+                components.queryItems = [URLQueryItem(name: "from", value: text(from)), URLQueryItem(name: "to", value: text(to))]
+            case let .panelPin(on):
+                components.path = "/panel-pin"
+                components.queryItems = [URLQueryItem(name: "on", value: on ? "1" : "0")]
             case let .stall(ms):
                 components.path = "/stall"
                 components.queryItems = [URLQueryItem(name: "ms", value: String(ms))]
