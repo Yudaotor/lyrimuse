@@ -21,6 +21,28 @@ func runSettingsInteractionTests() {
         expectEqual(fill([100, 60], [80], 150), [90, 60], "工具栏分宽: 没给底线的那颗不压")
         expectEqual(fill([100, 60], [0, 0], -5), [0, 0], "工具栏分宽: 没有空间时都是 0")
     }
+    // ---- EditorToolbarSummary:工具栏摘要放不下时按整段取舍(04 章决策 87) ----
+    do {
+        expectEqual(EditorToolbarSummary.candidates("Tự động"), ["Tự động"], "工具栏摘要: 只有一个值就只有整句一档")
+        expectEqual(EditorToolbarSummary.candidates("Theo ảnh bìa · Trong suốt"), ["Theo ảnh bìa · Trong suốt", "Theo ảnh bìa…"],
+                    "工具栏摘要: 两个值时第二档只留第一个值加省略号")
+        expectEqual(EditorToolbarSummary.candidates("A · B · C"), ["A · B · C", "A · B…", "A…"], "工具栏摘要: 由长到短逐个少掉末尾的值")
+        expectEqual(EditorToolbarSummary.candidates(""), [""], "工具栏摘要: 空串照原样")
+        expectEqual(EditorToolbarSummary.parts("PingFang SC 较粗 31pt"), ["PingFang SC 较粗 31pt"], "工具栏摘要: 空格不算分段")
+    }
+    do {
+        func snap(_ widths: [CGFloat], _ steps: [[CGFloat]]) -> [CGFloat] {
+            EditorToolbarWidths.snap(widths, steps: steps).map { ($0 * 100).rounded() / 100 }
+        }
+        expectEqual(snap([90, 90, 90], [[120, 60], [120, 60], [120, 60]]), [130, 70, 70],
+                    "工具栏落档: 三颗都画不全时,省下的宽度先补满一颗,剩下的均分")
+        expectEqual(snap([100, 100], [[150, 110, 70], [105, 70]]), [82.5, 117.5],
+                    "工具栏落档: 先补升一档花得最少的那颗,补不动了余量均分")
+        expectEqual(snap([80, 80], [[], [100, 50]]), [95, 65], "工具栏落档: 不分档的那颗宽度照旧,只分到均分的余量")
+        expectEqual(snap([120, 60], [[120, 60], [60, 40]]), [120, 60], "工具栏落档: 刚好落在档上就不动")
+        expectEqual(snap([30, 30], [[120, 60], [120, 60]]), [30, 30], "工具栏落档: 比最窄一档还窄照旧")
+        expectEqual(snap([100.3], [[100, 60]]), [100.3], "工具栏落档: 差不到半 pt 当作已在档上")
+    }
     // ---- RelayPushStatus:网页推送健康度(样例与引擎 relaystatus_test.go 共用) ----
     do {
         typealias R = RelayPushStatus

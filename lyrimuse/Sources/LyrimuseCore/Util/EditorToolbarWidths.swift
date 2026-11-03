@@ -31,4 +31,46 @@ public enum EditorToolbarWidths {
         }
         return filled(low)
     }
+
+    /// 摘要只能整段取舍时(`EditorToolbarSummary`),把 `fill` 分到的宽度落到每颗实际画得出的那一档上,省下来的宽度不空着:
+    /// 先按「再升一档要多少」从少到多补给差一点的那几颗,补不动了剩下的均分给每一颗(整行照旧撑满)。
+    /// `steps` 是每颗能画的几档宽度(由宽到窄,第一档是理想宽度,最后一档是只剩标题);空数组的那颗不分档、宽度照旧。
+    /// 分到的宽度比最窄一档还窄(整行连标题都放不下)也照旧。
+    public static func snap(_ widths: [CGFloat], steps: [[CGFloat]]) -> [CGFloat] {
+        var result = widths
+        var freed: CGFloat = 0
+        for i in result.indices where i < steps.count && !steps[i].isEmpty {
+            guard let step = steps[i].first(where: { $0 <= result[i] + 0.5 }), step < result[i] else { continue }
+            freed += result[i] - step
+            result[i] = step
+        }
+        guard freed > 0 else { return result }
+        while true {
+            let upgrades = result.indices.compactMap { i -> (index: Int, cost: CGFloat)? in
+                guard i < steps.count, let next = steps[i].last(where: { $0 > result[i] + 0.5 }) else { return nil }
+                return (i, next - result[i])
+            }
+            guard let best = upgrades.filter({ $0.cost <= freed }).min(by: { $0.cost < $1.cost }) else { break }
+            result[best.index] += best.cost
+            freed -= best.cost
+        }
+        let spare = freed / CGFloat(max(result.count, 1))
+        return result.map { $0 + spare }
+    }
+}
+
+/// 工具栏胶囊上「· 当前值」放不下时能退到的几档(`EditorToolbarButtonLabel`):按「 · 」分开的值整段取舍,不在一个值中间截断。
+/// 见 04 章决策 87。
+public enum EditorToolbarSummary {
+    public static let separator = " · "
+
+    public static func parts(_ summary: String) -> [String] {
+        summary.components(separatedBy: separator)
+    }
+
+    /// 由长到短:整句,再依次少掉末尾一个值、加「…」。
+    public static func candidates(_ summary: String) -> [String] {
+        let parts = parts(summary)
+        return [summary] + (1..<parts.count).reversed().map { parts[0..<$0].joined(separator: separator) + "…" }
+    }
 }

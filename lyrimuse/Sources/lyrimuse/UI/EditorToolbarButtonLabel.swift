@@ -52,22 +52,49 @@ struct EditorToolbarButtonLabel: View {
             Text(title)
                 .lineLimit(1)
             if beta { SettingsBetaBadge() }
-            EditorToolbarSummarySlot {
-                HStack(spacing: 5) {
-                    Text("·")
-                        .foregroundStyle(.tertiary)
-                    Text(summary)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
-                        .truncationMode(.tail)
-                }
-            }
-            .frame(idealWidth: fitsContent ? nil : Self.summaryWidth, maxWidth: Self.summaryWidth, alignment: .leading)
-            .clipped()
-            .layoutPriority(-1)
+            summaryView
+                .frame(idealWidth: fitsContent ? nil : Self.summaryWidth, maxWidth: Self.summaryWidth, alignment: .leading)
+                .clipped()
+                .layoutPriority(-1)
         }
         // 悬停给出整句:摘要被压短或只报了数量时,不用点开浮层也知道是什么。
         .help(title + " · " + (detail ?? summary))
+    }
+
+    /// 摘要按「整段」取舍,不在一个值中间截断(只露半个词读不出是什么):放得下就整句;放不下就留开头几个
+    /// 「 · 」分开的值、末尾加「…」;连第一个值都放不下就整截藏掉,只剩图标和标题。只有第一个值本身比摘要上限还长
+    /// (用户自选的长字体名、长主题名,任何宽度下都放不全)才照旧按尾部截断。挑哪一档靠 `ViewThatFits` 比各档的
+    /// 理想宽度,第一档是整句,所以按内容分宽那一行量到的理想宽度不变。见 04 章决策 87。
+    private var summaryView: some View {
+        let candidates = EditorToolbarSummary.candidates(summary)
+        return ViewThatFits(in: .horizontal) {
+            ForEach(candidates.indices, id: \.self) { index in
+                summaryLine(candidates[index]).fixedSize()
+            }
+            EditorToolbarSummarySlot(
+                hideBelow: Self.allowsTailTruncation(summary) ? EditorToolbarSummarySlot.hideBelow : .infinity
+            ) {
+                summaryLine(EditorToolbarSummary.parts(summary)[0])
+            }
+        }
+    }
+
+    private func summaryLine(_ text: String) -> some View {
+        HStack(spacing: 5) {
+            Text("·")
+                .foregroundStyle(.tertiary)
+            Text(text)
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+                .truncationMode(.tail)
+        }
+    }
+}
+
+extension EditorToolbarButtonLabel {
+    /// 第一个值连同间隔点比摘要上限还宽:任何宽度下都放不全,只能截。
+    static func allowsTailTruncation(_ summary: String) -> Bool {
+        textWidth("· " + EditorToolbarSummary.parts(summary)[0]) > summaryWidth
     }
 }
 
@@ -78,7 +105,8 @@ struct EditorToolbarButtonLabel: View {
 /// 每颗压到「理想宽度 − 摘要可让的宽度」(`editorToolbarSummarySlack`)就不再压:再往下压截的是标题。
 /// 所有按钮都到了这条底线还放不下(最窄卡片列下灵动岛第一行的英文、日文),才按底线的比例一起缩:亏空仍由摘要先吃,
 /// 摘要窄过「…」时只露半个字。别给摘要加最小宽度去避开它:那样亏空转给标题,标题会被截到只剩「…」。
-/// 按钮上没挂这个值的按 0 算,即不压。
+/// 按钮上没挂这个值的按 0 算,即不压。分完再按每颗摘要能画的几档落档(`EditorToolbarSummarySteps`、`EditorToolbarWidths.snap`):
+/// 摘要整段藏掉或少掉末尾的值时,省下的宽度补给别的胶囊,不留在这颗里空着。
 struct EditorToolbarContentWidthRow: Layout {
     var spacing: CGFloat = 8
 
@@ -107,7 +135,9 @@ struct EditorToolbarContentWidthRow: Layout {
         let ideals = subviews.map { $0.sizeThatFits(.unspecified).width }
         guard let available else { return ideals }
         let floors = zip(subviews, ideals).map { $1 - max($0[EditorToolbarSummarySlack.self], 0) }
-        return EditorToolbarWidths.fill(ideals: ideals, floors: floors, room: available - gaps(subviews))
+        let widths = EditorToolbarWidths.fill(ideals: ideals, floors: floors, room: available - gaps(subviews))
+        let steps = zip(subviews, ideals).map { subview, ideal in subview[EditorToolbarSummarySteps.self].map { ideal - $0 } }
+        return EditorToolbarWidths.snap(widths, steps: steps)
     }
 }
 
@@ -116,15 +146,23 @@ struct EditorToolbarSummarySlack: LayoutValueKey {
     static let defaultValue: CGFloat = 0
 }
 
-/// 「· 当前值」那一截:分到的宽度连几个字都放不下时整截不画(宽度报 0、外面 `.clipped()` 裁掉),按钮只剩图标和标题,
-/// 别露一两个字母或半个省略号。
+/// 摘要能画的几档各比理想宽度窄多少(由少到多,第一档 0 是整句,最后一档是整截藏掉);空 = 不分档(长名字照旧连续截断)。
+struct EditorToolbarSummarySteps: LayoutValueKey {
+    static let defaultValue: [CGFloat] = []
+}
+
+/// 「· 当前值」放不下任何一整档时的那一截:分到的宽度低于 `hideBelow` 就整截不画(宽度报 0、外面 `.clipped()` 裁掉),
+/// 按钮只剩图标和标题;够宽(只给放不全的长名字)才按尾部截断。
 struct EditorToolbarSummarySlot: Layout {
-    /// 低于这个宽度就藏:间隔点、间距、省略号之外还能露两三个字母。
-    static let hideBelow: CGFloat = 34
+    /// 长名字截断时的下限:间隔点、间距、省略号之外还能露十来个字母,露得更少就藏。
+    static let hideBelow: CGFloat = 80
+
+    /// 传 `.infinity` 就是一律藏。
+    var hideBelow: CGFloat = Self.hideBelow
 
     func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
         guard let child = subviews.first else { return .zero }
-        if let width = proposal.width, width < Self.hideBelow {
+        if (proposal.width ?? .infinity) < hideBelow {
             return CGSize(width: 0, height: child.sizeThatFits(.unspecified).height)
         }
         return child.sizeThatFits(proposal)
@@ -132,7 +170,7 @@ struct EditorToolbarSummarySlot: Layout {
 
     func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
         guard let child = subviews.first else { return }
-        let width = bounds.width < Self.hideBelow ? 0 : bounds.width
+        let width = bounds.width < hideBelow ? 0 : bounds.width
         child.place(at: CGPoint(x: bounds.minX, y: bounds.midY), anchor: .leading,
                     proposal: ProposedViewSize(width: width, height: bounds.height))
     }
@@ -144,9 +182,21 @@ extension EditorToolbarButtonLabel {
 
     /// 按工具栏的字号量摘要的宽,估出它能让出多少。字号跟各工具栏外层的 `.font(.system(size: 12))` 一致,改一处要一起改。
     static func summarySlack(_ summary: String) -> CGFloat {
+        max(min(textWidth(summary), summaryWidth) - summaryFloor, 0)
+    }
+
+    /// 各档比理想宽度窄多少,给 `EditorToolbarContentWidthRow` 落档用:少掉末尾值的几档按文字差算、多留 1pt
+    /// (量出来的跟实际排版差零点几 pt,宁可宽一点,别差一丝落到下一档);藏掉那一档同 `summarySlack`。长名字不分档。
+    static func summarySteps(_ summary: String) -> [CGFloat] {
+        guard !allowsTailTruncation(summary) else { return [] }
+        let full = min(textWidth(summary), summaryWidth)
+        let shorter = EditorToolbarSummary.candidates(summary).dropFirst().map { max(full - textWidth($0) - 1, 0) }
+        return [0] + shorter + [summarySlack(summary)]
+    }
+
+    static func textWidth(_ text: String) -> CGFloat {
         let font = NSFont.systemFont(ofSize: 12)
-        let width = (summary as NSString).size(withAttributes: [.font: font]).width.rounded(.up)
-        return max(min(width, summaryWidth) - summaryFloor, 0)
+        return (text as NSString).size(withAttributes: [.font: font]).width.rounded(.up)
     }
 }
 
@@ -154,5 +204,6 @@ extension View {
     /// 挂在 `EditorToolbarContentWidthRow` 里每颗按钮的最外层:告诉那一行这颗的摘要能让多少宽。
     func editorToolbarSummarySlack(_ summary: String) -> some View {
         layoutValue(key: EditorToolbarSummarySlack.self, value: EditorToolbarButtonLabel.summarySlack(summary))
+            .layoutValue(key: EditorToolbarSummarySteps.self, value: EditorToolbarButtonLabel.summarySteps(summary))
     }
 }

@@ -271,6 +271,11 @@ func runSettingsAuditContracts() {
                 "触控栏「文字颜色」: 四档跟标题排不下一行时换到标题下面,判据只拿标题单行宽去比(17 章决策 57)")
     expectEqual(sourceHas(menuBarStage, "icon: \"rectangle.split.1x2\",\ntitle: L10n.t(\"布局\"),"), true,
                 "菜单栏: 「布局」入口图标同歌词窗口、触控栏")
+    let toolbarLabel = sourceBody("private var summaryView: some View {", in: app("UI/EditorToolbarButtonLabel.swift"))
+    expectEqual(sourceHas(toolbarLabel, "let candidates = EditorToolbarSummary.candidates(summary)\nreturn ViewThatFits(in: .horizontal) {")
+                && sourceHas(toolbarLabel, "summaryLine(candidates[index]).fixedSize()")
+                && sourceHas(toolbarLabel, "hideBelow: Self.allowsTailTruncation(summary) ? EditorToolbarSummarySlot.hideBelow : .infinity"), true,
+                "编辑台工具栏摘要: 整句、少掉末尾的值几档逐个试,都放不下就整截藏掉,只有放不全的长名字才截断(04 章决策 87)")
     let overlayColors = sourceBody("struct OverlayColorSettingsRows: View {", in: styleRows)
     expectEqual(sourceHas(overlayColors, "title: pairedKaraokeColors ? L10n.t(\"已唱颜色\") : L10n.t(\"文字颜色\")) {")
                 && sourceHas(overlayColors, "label: { $0 ? L10n.t(\"跟随封面\") : L10n.t(\"自定义\") },"), true,
