@@ -1154,7 +1154,7 @@ func runTouchBarTests() {
         let panel = code(appDir.appendingPathComponent("MenuBar/MenuBarPanel.swift")) ?? ""
         let quick = code(appDir.appendingPathComponent("MenuBar/MenuBarPanelQuickSettings.swift")) ?? ""
         let settingsView = code(appDir.appendingPathComponent("SettingsView.swift")) ?? ""
-        expectEqual(panel.contains("if playback.touchBarPresent {")
+        expectEqual(panel.contains("tile != .touchBar || playback.touchBarPresent")
                         && panel.contains("TouchBarAvailability.shared.$isPresent")
                         && panel.contains("if !present, quickTarget == .touchBar { setQuickTarget(nil) }"), true,
                     "触控栏面板: 那一格只在有触控栏时出现,跟着触控栏出现 / 消失,没了时快捷设置退回网格")

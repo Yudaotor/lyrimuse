@@ -167,6 +167,9 @@ enum DebugDeepLinks {
                 let ok = await ConfigStore.shared.save()
                 logger.notice("debug config save ok=\(ok, privacy: .public)")
             }
+        case let .panelLayout(json):
+            AppSettings.shared.menuBarPanelLayout = MenuBarPanelLayout.decode(json)
+            logger.notice("debug panel layout \(AppSettings.shared.menuBarPanelLayout.encoded(), privacy: .public)")
         case let .knockout(leg, on):
             SourceKnockout.set(leg, out: !on)
             LocalPlaybackSource.shared.simulationChanged()
@@ -236,7 +239,9 @@ enum DebugDeepLinks {
             "notch": NotchLyricsWindowController.shared.debugState,
             "overlay": LyricsOverlayWindowController.shared.debugState,
             "menuBarPanel": ["open": MenuBarStatusItem.shared.isPanelOpen,
-                             "quick": MenuBarPanelDebugState.quickTarget.map { $0 as Any } ?? NSNull()],
+                             "quick": MenuBarPanelDebugState.quickTarget.map { $0 as Any } ?? NSNull(),
+                             "editing": MenuBarPanelDebugState.editing,
+                             "layout": AppSettings.shared.menuBarPanelLayout.encoded()],
             "knockedOut": SourceKnockout.knockedOut,
             // 播放源交出来的那张封面(高清替代之前),验证封面退到了哪一条来源时跟文件的哈希对。
             "artwork": LocalPlaybackSource.shared.artworkData.map { data -> Any in
@@ -418,4 +423,6 @@ enum DebugDeepLinks {
 @MainActor
 enum MenuBarPanelDebugState {
     static var quickTarget: String?
+    /// 面板在不在编辑布局。
+    static var editing = false
 }

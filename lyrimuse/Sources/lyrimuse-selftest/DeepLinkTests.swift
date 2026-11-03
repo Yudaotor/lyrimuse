@@ -178,6 +178,9 @@ func runDeepLinkTests() {
         expectEqual(link("lyrimuse://debug/checkpoint"), .debug(.checkpoint), "debug: 记下")
         expectEqual(link("lyrimuse://debug/restore"), .debug(.restore), "debug: 恢复")
         expectEqual(link("lyrimuse://debug/config-save"), .debug(.saveConfig), "debug: 账号配置原样保存一次")
+        expectEqual(link("lyrimuse://debug/panel-layout"), .debug(.panelLayout(json: nil)), "debug: 面板布局不带 json 恢复默认")
+        expectEqual(link("lyrimuse://debug/panel-layout?json=%7B%22tiles%22%3A%5B%5D%7D"), .debug(.panelLayout(json: "{\"tiles\":[]}")),
+                    "debug: 面板布局带 json")
         expectEqual(link("lyrimuse://debug/stall?ms=120"), .debug(.stall(ms: 120)), "debug: 主线程睡一段")
         expectEqual(link("lyrimuse://debug/stall") == nil && link("lyrimuse://debug/stall?ms=0") == nil
                     && link("lyrimuse://debug/stall?ms=2001") == nil, true, "debug: 睡多久没给、0、超上限都不认")
@@ -426,7 +429,8 @@ func runDeepLinkTests() {
             .debug(.simulateIdle),
             .debug(.toggleFavorite), .debug(.idleResume), .debug(.seek(seconds: 99.7)), .debug(.seek(seconds: 0)),
             .debug(.knockout(leg: .appleMusicScript, on: false)), .debug(.knockout(leg: .spotifyScript, on: true)),
-            .debug(.knockout(leg: .kasetScript, on: false)), .debug(.saveConfig), .debug(.volume(percent: 0)), .debug(.volume(percent: 100)),
+            .debug(.knockout(leg: .kasetScript, on: false)), .debug(.saveConfig), .debug(.panelLayout(json: nil)),
+            .debug(.panelLayout(json: MenuBarPanelLayout(slots: [.init(tile: .favorite, size: .large)], hiddenFooter: [.version]).encoded())), .debug(.volume(percent: 0)), .debug(.volume(percent: 100)),
             .debug(.stall(ms: 1)), .debug(.stall(ms: 2000)), .debug(.milestonePreview),
             .debug(.notchBehavior(collapseWhenPaused: true, hideWhenNotPlaying: nil)),
             .debug(.notchBehavior(collapseWhenPaused: false, hideWhenNotPlaying: true)),
@@ -571,8 +575,8 @@ func runDeepLinkTests() {
                     && sheet.contains(".onChange(of: \"\\(summary.key)#\\(showEvidence)\", initial: true) { _, _ in if showEvidence { evidenceExpanded = true } }")
                     && sheet.contains(".onChange(of: \"\\(summary.key)#\\(compareKey ?? \"\")\", initial: true) { _, _ in if let compareKey { selected = compareKey } }"), true,
                     "深链接线: evidence=1 打开同曲条目就展开匹配依据、compare 选中那一条的对照,开着时换一首也照办;面板关掉后手点打开照旧")
-        expectEqual(statusItem.contains("if quick != nil, panelIsOpen { panelController.close() }"), true,
-                    "深链接线: 面板带 quick 时开着也不关,翻到那一格")
+        expectEqual(statusItem.contains("if quick != nil || editing, panelIsOpen { panelController.close() }"), true,
+                    "深链接线: 面板带 quick(含 quick=edit)时开着也不关,翻到那一页")
         expectEqual(router.contains("guard let success else {") && router.contains("NSWorkspace.shared.open(url)"), true,
                     "深链接线: x-callback 只往解析层放行的地址回传")
         expectEqual(router.contains("playing: hasTrack && p.isPlayingSmoothed"), true,

@@ -44,8 +44,9 @@ enum DeepLinkRouter {
         case .whatsNew:
             AppActions.shared.openWhatsNew?()
         case let .menuBarPanel(quick):
-            // 认不出的 quick 当没带(只开面板)。
-            MenuBarStatusItem.shared.togglePanelFromDeepLink(quick: quick.flatMap(PanelQuickTarget.init(deepLinkValue:)))
+            // quick=edit 打开就进编辑;别的认不出的 quick 当没带(只开面板)。
+            MenuBarStatusItem.shared.togglePanelFromDeepLink(quick: quick.flatMap(PanelQuickTarget.init(deepLinkValue:)),
+                                                             editing: quick == "edit")
         case .menuBarMenu:
             MenuBarStatusItem.shared.popUpMenuFromDeepLink()
         case .onboarding:

@@ -374,6 +374,7 @@
 "两者均为现场版，但该候选的专辑名对应另一场演出（如另一次巡演），其时间轴与当前录音无法对齐" = "Les deux sont des versions live, mais l’album de ce résultat correspond à un autre concert (une autre tournée par exemple), son minutage ne s’alignera donc pas sur cet enregistrement";
 "两首探测曲均无响应，该源目前可能不可用" = "Aucun des deux morceaux test n’a répondu ; cette source est peut-être indisponible pour le moment";
 "个人是一串数字，群组以 -100 开头" = "Un nombre pour une personne ; les groupes commencent par -100";
+"中" = "Moyenne";
 "中国移动旗下的音乐平台" = "Service musical de China Mobile";
 "中文" = "Chinois";
 "中文歌词统一成简体或繁体" = "Affiche les paroles chinoises en caractères simplifiés ou traditionnels";
@@ -772,6 +773,7 @@
 "可在其他设备上控制播放、跳转歌词" = "Contrôlez la lecture et passez à une ligne des paroles depuis d’autres appareils";
 "可在快捷指令、Raycast、Alfred 等工具中打开；将指针悬停在上方的快捷键上，可拷贝对应操作的链接" = "Ouvrez-les depuis Raccourcis, Raycast, Alfred et d’autres outils similaires. Survolez un raccourci ci-dessus pour copier le lien de cette action";
 "可拖到任意位置" = "Déplaçable partout";
+"可添加" = "Disponibles";
 "可跳过的广告出现时自动跳过" = "Les pubs pouvant être passées le sont dès leur apparition";
 "可重新获取的封面与查询结果" = "Illustrations et recherches récupérables à nouveau";
 "台湾、香港常用的流媒体音乐 App" = "Une app de streaming musical populaire à Taïwan et Hong Kong";
@@ -1237,6 +1239,7 @@
 "应用主题前手动调整的配色，点按即可恢复" = "Les couleurs définies avant d’appliquer un thème. Cliquez pour les restaurer";
 "应答" = "A répondu";
 "应答源最少" = "Le moins de sources ayant répondu";
+"底栏" = "Barre inférieure";
 "底边" = "Bord inférieur";
 "底部居中" = "En bas au centre";
 "底部颜色" = "Couleur du bas";
@@ -1272,6 +1275,8 @@
 "当前动态" = "Activité";
 "当前启用的其余歌词源未应答：%@" = "Autres sources activées sans réponse : %@";
 "当前播放器不支持喜欢" = "Ce lecteur ne prend pas en charge les favoris";
+"当前播放器不支持循环播放" = "Ce lecteur ne prend pas en charge la répétition";
+"当前播放器不支持随机播放" = "Ce lecteur ne prend pas en charge la lecture aléatoire";
 "当前播放器将这首歌曲标记为纯音乐，其他候选均不采用" = "Votre lecteur marque ce morceau comme instrumental : aucun résultat n’est utilisé";
 "当前播放的是 DJ Mix 专辑中的片段（歌名带 [Mixed]，专辑名带 (DJ Mix)）。此类曲目截取自完整演出，前后带有过渡，时长与原版不同，原版歌词的时间轴无法对齐，且暂无歌词源收录混音版的时间轴" = "C’est un extrait d’un album DJ Mix (titre marqué [Mixed], album (DJ Mix)). Ces pistes sont tirées d’un set complet, avec des transitions de chaque côté et une autre durée : le minutage des paroles d’origine ne peut pas s’aligner, et aucune source de paroles ne fournit de minutage pour la version mixée";
 "当前播放的是伴奏版（歌名或专辑标注为伴奏、纯音乐或 Instrumental），不采用人声版歌词，按纯音乐显示" = "Il s’agit d’une version instrumentale (titre ou album marqué Instrumental). Les paroles chantées ne sont pas utilisées et le morceau est affiché comme instrumental";
@@ -2120,6 +2125,7 @@
 "深色" = "Sombre";
 "深色卡片" = "Carte sombre";
 "深色渐变" = "Dégradé sombre";
+"添加" = "Ajouter";
 "添加 App…" = "Ajouter…";
 "添加一个渠道，听歌报告就会推到你的手机、群聊或自建服务" = "Ajoutez un canal pour recevoir vos bilans d’écoute sur votre téléphone, dans un groupe ou sur votre propre service";
 "添加中…" = "Ajout…";
@@ -2182,6 +2188,7 @@
 "热力图、收听时段、那年今日" = "Carte de chaleur, heures d’écoute et « Ce jour-là »";
 "版本 %@" = "Version %@";
 "版本不符" = "Version différente";
+"版本号" = "Version";
 "版本尾缀写法" = "Style du suffixe de version";
 "版权说明" = "Avis de copyright";
 "特厚" = "Ultra-épais";
@@ -2333,6 +2340,7 @@
 "编辑期间这首歌曲的歌词已发生变化，本次未应用；再次编辑将打开最新版本" = "Les paroles de ce morceau ont changé pendant la modification : cet enregistrement n’a pas été appliqué. Cliquez de nouveau sur « Modifier » pour ouvrir la dernière version";
 "编辑模板…" = "Modifier le modèle…";
 "编辑歌词" = "Modifier les paroles";
+"编辑面板" = "Modifier le panneau";
 "缩小字号" = "Réduire la police";
 "缩小悬浮歌词字号" = "Réduire les paroles flottantes";
 "缺少用户名" = "Nom d’utilisateur manquant";
@@ -2570,6 +2578,7 @@
 "读音大小" = "Taille romanisation";
 "读音间距" = "Romanisation";
 "调整" = "Ajuster";
+"调整大小：%@" = "Redimensionner : %@";
 "调整宽度" = "Ajuster la largeur";
 "调整颜色后，此处将出现「自定义」，点按即可保存为主题" = "Dès que vous modifiez une couleur, une carte « Personnalisé » apparaît ici. Cliquez dessus pour les enregistrer comme thème";
 "谷歌旗下的流媒体音乐网站，网址 music.youtube.com" = "Le site de streaming musical de Google, à l’adresse music.youtube.com";

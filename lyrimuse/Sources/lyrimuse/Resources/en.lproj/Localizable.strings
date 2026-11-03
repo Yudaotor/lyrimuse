@@ -374,6 +374,7 @@
 "两者均为现场版，但该候选的专辑名对应另一场演出（如另一次巡演），其时间轴与当前录音无法对齐" = "Both are live versions, but this candidate’s album points to a different performance (such as another tour), so its timing won’t line up with this recording";
 "两首探测曲均无响应，该源目前可能不可用" = "Neither probe track got a response — this source may currently be unavailable";
 "个人是一串数字，群组以 -100 开头" = "A number for a person; groups start with -100";
+"中" = "Medium";
 "中国移动旗下的音乐平台" = "China Mobile’s music service";
 "中文" = "Chinese";
 "中文歌词统一成简体或繁体" = "Show Chinese lyrics in Simplified or Traditional characters";
@@ -772,6 +773,7 @@
 "可在其他设备上控制播放、跳转歌词" = "Control playback and jump to lyrics from other devices";
 "可在快捷指令、Raycast、Alfred 等工具中打开；将指针悬停在上方的快捷键上，可拷贝对应操作的链接" = "Open these from Shortcuts, Raycast, Alfred and similar tools. Hover over a shortcut above to copy the link for that action";
 "可拖到任意位置" = "Drag it anywhere";
+"可添加" = "Available";
 "可跳过的广告出现时自动跳过" = "Skippable ads are skipped as soon as they appear";
 "可重新获取的封面与查询结果" = "Artwork and lookups that can be fetched again";
 "台湾、香港常用的流媒体音乐 App" = "A music streaming app popular in Taiwan and Hong Kong";
@@ -1237,6 +1239,7 @@
 "应用主题前手动调整的配色，点按即可恢复" = "The colors you set before applying a theme. Click to restore them";
 "应答" = "Responded";
 "应答源最少" = "Fewest sources responded";
+"底栏" = "Bottom Bar";
 "底边" = "Bottom Edge";
 "底部居中" = "Bottom Center";
 "底部颜色" = "Bottom Color";
@@ -1272,6 +1275,8 @@
 "当前动态" = "Activity";
 "当前启用的其余歌词源未应答：%@" = "Other enabled sources did not respond: %@";
 "当前播放器不支持喜欢" = "This player doesn’t support favorites";
+"当前播放器不支持循环播放" = "This player doesn’t support repeat";
+"当前播放器不支持随机播放" = "This player doesn’t support shuffle";
 "当前播放器将这首歌曲标记为纯音乐，其他候选均不采用" = "Your player marks this track as instrumental, so no candidate is used";
 "当前播放的是 DJ Mix 专辑中的片段（歌名带 [Mixed]，专辑名带 (DJ Mix)）。此类曲目截取自完整演出，前后带有过渡，时长与原版不同，原版歌词的时间轴无法对齐，且暂无歌词源收录混音版的时间轴" = "This is a segment of a DJ Mix album (the title is tagged [Mixed] and the album (DJ Mix)). Such tracks are cut from a full set with transitions on either side and a different length, so the original lyrics’ timing can’t line up, and no lyrics source provides timing for the mixed version";
 "当前播放的是伴奏版（歌名或专辑标注为伴奏、纯音乐或 Instrumental），不采用人声版歌词，按纯音乐显示" = "This is an instrumental version (its title or album is marked Instrumental). Vocal lyrics are not used, and it is shown as instrumental";
@@ -2120,6 +2125,7 @@
 "深色" = "Dark";
 "深色卡片" = "Dark Card";
 "深色渐变" = "Dark Gradient";
+"添加" = "Add";
 "添加 App…" = "Add App…";
 "添加一个渠道，听歌报告就会推到你的手机、群聊或自建服务" = "Add a channel and your listening reports will be pushed to your phone, a group chat or your own service";
 "添加中…" = "Adding…";
@@ -2182,6 +2188,7 @@
 "热力图、收听时段、那年今日" = "Heatmap, listening hours and On This Day";
 "版本 %@" = "Version %@";
 "版本不符" = "Version mismatch";
+"版本号" = "Version";
 "版本尾缀写法" = "Version suffix style";
 "版权说明" = "Copyright Notice";
 "特厚" = "Ultra Thick";
@@ -2333,6 +2340,7 @@
 "编辑期间这首歌曲的歌词已发生变化，本次未应用；再次编辑将打开最新版本" = "This song’s lyrics changed while you were editing, so this save wasn’t applied. Click Edit again to open the latest version";
 "编辑模板…" = "Edit Template…";
 "编辑歌词" = "Edit Lyrics";
+"编辑面板" = "Edit Panel";
 "缩小字号" = "Decrease Font Size";
 "缩小悬浮歌词字号" = "Decrease Floating Lyrics Font Size";
 "缺少用户名" = "Username missing";
@@ -2570,6 +2578,7 @@
 "读音大小" = "Romanization Size";
 "读音间距" = "Romanization Spacing";
 "调整" = "Adjust";
+"调整大小：%@" = "Resize: %@";
 "调整宽度" = "Adjust Width";
 "调整颜色后，此处将出现「自定义」，点按即可保存为主题" = "After you change any colors, a Custom card appears here. Click it to save them as a theme";
 "谷歌旗下的流媒体音乐网站，网址 music.youtube.com" = "Google’s music streaming site at music.youtube.com";

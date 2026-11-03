@@ -598,12 +598,12 @@ final class MenuBarStatusItem: NSObject {
     private var anchorIsBusy: Bool { panelIsOpen || statusMenuIsOpen || positionHintIsOpen }
 
     /// lyrimuse://menubar-panel:开 / 关左键面板,跟普通左键按下同一个结果(不认控制键、不走悬停三键)。
-    /// 带 `quick` 时打开就翻到那一格的快捷设置,面板开着也不关:收起再按那一格重新打开
-    /// (自动化要的是「打开并翻到那一格」,不是开关)。
-    func togglePanelFromDeepLink(quick: PanelQuickTarget? = nil) {
+    /// 带 `quick` 时打开就翻到那一格的快捷设置,`editing` 时打开就进编辑;这两种面板开着也不关:收起再按那一页重新打开
+    /// (自动化要的是「打开并翻到那一页」,不是开关)。
+    func togglePanelFromDeepLink(quick: PanelQuickTarget? = nil, editing: Bool = false) {
         guard let button = statusItem?.button else { return }
-        if quick != nil, panelIsOpen { panelController.close() }
-        panelController.toggle(relativeTo: button, quick: quick)
+        if quick != nil || editing, panelIsOpen { panelController.close() }
+        panelController.toggle(relativeTo: button, quick: quick, editing: editing)
     }
 
     /// lyrimuse://menubar-menu:弹出右键菜单,同右键点状态栏图标;面板开着先收起。

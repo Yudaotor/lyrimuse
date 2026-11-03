@@ -14,7 +14,7 @@ import Foundation
 ///     lyrics-search                 「搜索歌词…」小窗(当前这首)
 ///     lyrics-share                  「分享歌词」窗口(当前这首)
 ///     whats-new                     「本次更新」卡片(当前版本的更新内容)
-///     menubar-panel[?quick=<格子>]   开 / 关菜单栏左键面板,带 quick 时翻到那一格的快捷设置
+///     menubar-panel[?quick=<格子>]   开 / 关菜单栏左键面板,带 quick 时翻到那一格的快捷设置,quick=edit 进编辑
 ///     menubar-menu                  弹出菜单栏右键菜单(同右键点状态栏图标)
 ///     onboarding                    欢迎引导
 ///     action/<名字>[?on=1|0][&step=<秒>]   执行一个动作(= 全局快捷键那一套,见 `LyrimuseAction`)
@@ -131,6 +131,9 @@ public enum LyrimuseDeepLink: Equatable, Sendable {
         /// 悬浮歌词、灵动岛、菜单栏的彩虹开关,跟设置页走同一个设置(`debug/rainbow?overlay=0|1&notch=0|1&menubar=0|1`,
         /// 至少带一个)。
         case rainbow(overlay: Bool?, notch: Bool?, menuBar: Bool? = nil)
+        /// 菜单栏左键面板的布局,跟面板里「编辑」改的同一个设置(`debug/panel-layout?json=<MenuBarPanelLayout.encoded()>`,
+        /// 不带 json 恢复默认)。
+        case panelLayout(json: String?)
         /// 主线程原地睡这么多毫秒(`debug/stall?ms=`,1…`maxStallMs`):造出「别的窗口把主线程占住」那一下,验动画扛不扛得住。
         case stall(ms: Int)
         /// 灵动岛摆一次报喜,跟设置页「收听里程碑」旁那颗「试用」走同一条路(`debug/milestone-preview`)。
@@ -288,6 +291,8 @@ public enum LyrimuseDeepLink: Equatable, Sendable {
             }
         case ("debug", "/config-save"):
             self = .debug(.saveConfig)
+        case ("debug", "/panel-layout"):
+            self = .debug(.panelLayout(json: value("json").flatMap { $0.isEmpty ? nil : $0 }))
         case ("debug", "/stall"):
             guard let ms = value("ms").flatMap(Int.init), (1...Self.maxStallMs).contains(ms) else { return nil }
             self = .debug(.stall(ms: ms))
@@ -514,6 +519,9 @@ public enum LyrimuseDeepLink: Equatable, Sendable {
                 components.path = "/notify-channel"
                 if let id { components.queryItems = [URLQueryItem(name: "id", value: id)] }
             case .saveConfig: components.path = "/config-save"
+            case let .panelLayout(json):
+                components.path = "/panel-layout"
+                if let json { components.queryItems = [URLQueryItem(name: "json", value: json)] }
             case let .stall(ms):
                 components.path = "/stall"
                 components.queryItems = [URLQueryItem(name: "ms", value: String(ms))]

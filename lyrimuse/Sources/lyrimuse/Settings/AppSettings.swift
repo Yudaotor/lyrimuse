@@ -382,6 +382,7 @@ final class AppSettings: ObservableObject {
         static let menuBarSecondaryLine = "np:menuBarSecondaryLine"
         static let menuBarTranslationInline = "np:menuBarTranslationInline"
         static let menuBarHoverShowsControls = "np:menuBarHoverShowsControls"
+        static let menuBarPanelLayout = "np:menuBarPanelLayout"
         static let menuBarShowsTitleWhenNoLyrics = "np:menuBarShowsTitleWhenNoLyrics"
         static let menuBarIconStyle = "np:menuBarIconStyle"
         static let menuBarIconAnimates = "np:menuBarIconAnimates"
@@ -1332,6 +1333,11 @@ final class AppSettings: ObservableObject {
     /// 在 LyrimuseCore 的 `MenuBarHoverControls` 里。
     @Published var menuBarHoverShowsControls: Bool {
         didSet { defaults.set(menuBarHoverShowsControls, forKey: Keys.menuBarHoverShowsControls) }
+    }
+    /// 菜单栏左键面板的格子和底部排法(面板底部「编辑」改的就是它)。结构和容错在 Core 的 `MenuBarPanelLayout`,
+    /// 存成一串 JSON;没存过 = 默认布局。
+    @Published var menuBarPanelLayout: MenuBarPanelLayout {
+        didSet { defaults.set(menuBarPanelLayout.encoded(), forKey: Keys.menuBarPanelLayout) }
     }
     // 菜单栏歌词:这首歌没有歌词 / 还在搜时用「♪ 歌名」占住槽位,不缩回小图标。判据在 Core 的
     // MenuBarSlotPolicy.displayText;暂停仍缩回,广告不显示广告标题。做成开关是给"共享屏幕时
@@ -2702,6 +2708,7 @@ final class AppSettings: ObservableObject {
         // 默认关,理由见属性上那段注释(改的是既有手势的语义)。
         menuBarHoverShowsControls = (defaults.object(forKey: Keys.menuBarHoverShowsControls) as? Bool)
             ?? Self.defaultMenuBarHoverShowsControls
+        menuBarPanelLayout = MenuBarPanelLayout.decode(defaults.string(forKey: Keys.menuBarPanelLayout))
         menuBarShowsTitleWhenNoLyrics = (defaults.object(forKey: Keys.menuBarShowsTitleWhenNoLyrics) as? Bool)
             ?? Self.defaultMenuBarShowsTitleWhenNoLyrics
         menuBarIconStyle = defaults.string(forKey: Keys.menuBarIconStyle)

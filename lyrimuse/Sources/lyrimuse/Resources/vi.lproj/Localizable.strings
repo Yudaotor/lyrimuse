@@ -348,6 +348,7 @@
 "两者均为现场版，但该候选的专辑名对应另一场演出（如另一次巡演），其时间轴与当前录音无法对齐" = "Cả hai đều là bản live, nhưng album của kết quả này thuộc một buổi diễn khác (chẳng hạn một tour khác), nên thời gian không khớp với bản thu này";
 "两首探测曲均无响应，该源目前可能不可用" = "Cả hai bài thử đều không có phản hồi, nguồn này có thể đang không khả dụng";
 "个人是一串数字，群组以 -100 开头" = "Cá nhân là một dãy số, nhóm bắt đầu bằng -100";
+"中" = "Vừa";
 "中国移动旗下的音乐平台" = "Nền tảng nhạc của China Mobile";
 "中文" = "Tiếng Trung";
 "中文歌词统一成简体或繁体" = "Hiện lời tiếng Trung bằng chữ giản thể hoặc phồn thể";
@@ -719,6 +720,7 @@
 "可在其他设备上控制播放、跳转歌词" = "Điều khiển phát và chuyển tới dòng lời từ thiết bị khác";
 "可在快捷指令、Raycast、Alfred 等工具中打开；将指针悬停在上方的快捷键上，可拷贝对应操作的链接" = "Mở được từ Phím tắt, Raycast, Alfred và các công cụ tương tự; di chuột lên phím tắt ở trên để sao chép liên kết của thao tác đó";
 "可拖到任意位置" = "Kéo được tới bất kỳ đâu";
+"可添加" = "Có thể thêm";
 "可跳过的广告出现时自动跳过" = "Tự bỏ qua quảng cáo có thể bỏ qua ngay khi xuất hiện";
 "可重新获取的封面与查询结果" = "Ảnh bìa và kết quả tra cứu có thể lấy lại";
 "台湾、香港常用的流媒体音乐 App" = "Ứng dụng nghe nhạc trực tuyến phổ biến ở Đài Loan và Hồng Kông";
@@ -1166,6 +1168,7 @@
 "应用主题前手动调整的配色，点按即可恢复" = "Màu bạn chỉnh trước khi áp dụng chủ đề. Bấm để khôi phục";
 "应答" = "Đã phản hồi";
 "应答源最少" = "Ít nguồn phản hồi nhất";
+"底栏" = "Thanh dưới";
 "底边" = "Cạnh dưới";
 "底部居中" = "Giữa phía dưới";
 "底部颜色" = "Màu phía dưới";
@@ -1201,6 +1204,8 @@
 "当前动态" = "Hoạt động";
 "当前启用的其余歌词源未应答：%@" = "Các nguồn lời đang bật khác không phản hồi: %@";
 "当前播放器不支持喜欢" = "Trình phát hiện tại không hỗ trợ Ưa thích";
+"当前播放器不支持循环播放" = "Trình phát hiện tại không hỗ trợ Lặp lại";
+"当前播放器不支持随机播放" = "Trình phát hiện tại không hỗ trợ Xáo trộn";
 "当前播放器将这首歌曲标记为纯音乐，其他候选均不采用" = "Trình phát hiện tại đánh dấu bài hát này là nhạc không lời, không dùng kết quả nào khác";
 "当前播放的是 DJ Mix 专辑中的片段（歌名带 [Mixed]，专辑名带 (DJ Mix)）。此类曲目截取自完整演出，前后带有过渡，时长与原版不同，原版歌词的时间轴无法对齐，且暂无歌词源收录混音版的时间轴" = "Bài đang phát là một đoạn trong album DJ Mix (tên bài có [Mixed], tên album có (DJ Mix)). Những bài này được cắt từ một buổi diễn đầy đủ, có đoạn chuyển tiếp ở hai đầu, thời lượng khác bản gốc nên thời gian của lời bản gốc không khớp được, và hiện chưa có nguồn lời nào có thời gian cho bản mix";
 "当前播放的是伴奏版（歌名或专辑标注为伴奏、纯音乐或 Instrumental），不采用人声版歌词，按纯音乐显示" = "Đang phát bản không lời (tên bài hoặc album ghi là nhạc đệm, nhạc không lời hoặc Instrumental), nên không dùng lời của bản có giọng hát và hiển thị như nhạc không lời";
@@ -2038,6 +2043,7 @@
 "深色" = "Tối";
 "深色卡片" = "Thẻ tối";
 "深色渐变" = "Dải màu tối";
+"添加" = "Thêm";
 "添加 App…" = "Thêm ứng dụng…";
 "添加一个渠道，听歌报告就会推到你的手机、群聊或自建服务" = "Thêm một kênh để gửi báo cáo nghe nhạc đến điện thoại, nhóm chat hoặc dịch vụ riêng của bạn";
 "添加中…" = "Đang thêm…";
@@ -2099,6 +2105,7 @@
 "热力图、收听时段、那年今日" = "Bản đồ nhiệt, giờ nghe và Ngày này năm xưa";
 "版本 %@" = "Phiên bản %@";
 "版本不符" = "Phiên bản không khớp";
+"版本号" = "Phiên bản";
 "版本尾缀写法" = "Cách ghi hậu tố phiên bản";
 "版权说明" = "Thông báo bản quyền";
 "特厚" = "Siêu dày";
@@ -2246,6 +2253,7 @@
 "编辑期间这首歌曲的歌词已发生变化，本次未应用；再次编辑将打开最新版本" = "Lời của bài hát này đã thay đổi trong lúc bạn sửa nên lần lưu này chưa được áp dụng; sửa lại sẽ mở phiên bản mới nhất";
 "编辑模板…" = "Sửa mẫu…";
 "编辑歌词" = "Sửa lời";
+"编辑面板" = "Sửa bảng";
 "缩小字号" = "Giảm cỡ chữ";
 "缩小悬浮歌词字号" = "Giảm cỡ Lời nổi";
 "缺少用户名" = "Thiếu tên người dùng";
@@ -2480,6 +2488,7 @@
 "读音大小" = "Cỡ phát âm";
 "读音间距" = "Giãn cách phát âm";
 "调整" = "Điều chỉnh";
+"调整大小：%@" = "Đổi kích thước: %@";
 "调整宽度" = "Chỉnh độ rộng";
 "调整颜色后，此处将出现「自定义」，点按即可保存为主题" = "Sau khi chỉnh màu, mục “Tùy chỉnh” sẽ xuất hiện ở đây, bấm vào để lưu thành chủ đề";
 "谷歌旗下的流媒体音乐网站，网址 music.youtube.com" = "Trang nghe nhạc trực tuyến của Google, địa chỉ music.youtube.com";

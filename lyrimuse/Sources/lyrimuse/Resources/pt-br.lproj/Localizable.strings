@@ -374,6 +374,7 @@
 "两者均为现场版，但该候选的专辑名对应另一场演出（如另一次巡演），其时间轴与当前录音无法对齐" = "Ambas são versões ao vivo, mas o álbum deste resultado indica outra apresentação (como outra turnê), então o tempo não vai coincidir com esta gravação";
 "两首探测曲均无响应，该源目前可能不可用" = "Nenhuma das duas músicas de teste respondeu; esta fonte de letras pode estar indisponível no momento";
 "个人是一串数字，群组以 -100 开头" = "Um número para uma pessoa; grupos começam com -100";
+"中" = "Médio";
 "中国移动旗下的音乐平台" = "Serviço de música da China Mobile";
 "中文" = "Chinês";
 "中文歌词统一成简体或繁体" = "Mostra a letra em chinês com caracteres simplificados ou tradicionais";
@@ -772,6 +773,7 @@
 "可在其他设备上控制播放、跳转歌词" = "Controle a reprodução e pule para a letra em outros dispositivos";
 "可在快捷指令、Raycast、Alfred 等工具中打开；将指针悬停在上方的快捷键上，可拷贝对应操作的链接" = "Abra-os pelo app Atalhos, Raycast, Alfred e ferramentas parecidas. Passe o cursor sobre um atalho acima para copiar o link dessa ação";
 "可拖到任意位置" = "Arraste para qualquer lugar";
+"可添加" = "Disponíveis";
 "可跳过的广告出现时自动跳过" = "Anúncios puláveis são pulados assim que aparecem";
 "可重新获取的封面与查询结果" = "Capas e consultas que podem ser obtidas de novo";
 "台湾、香港常用的流媒体音乐 App" = "App de streaming de música popular em Taiwan e Hong Kong";
@@ -1237,6 +1239,7 @@
 "应用主题前手动调整的配色，点按即可恢复" = "As cores que você definiu antes de aplicar um tema. Clique para restaurá-las";
 "应答" = "Respondeu";
 "应答源最少" = "Menos fontes responderam";
+"底栏" = "Barra inferior";
 "底边" = "Borda inferior";
 "底部居中" = "Centro inferior";
 "底部颜色" = "Cor inferior";
@@ -1272,6 +1275,8 @@
 "当前动态" = "Atividade";
 "当前启用的其余歌词源未应答：%@" = "Outras fontes ativadas não responderam: %@";
 "当前播放器不支持喜欢" = "Este player não suporta favoritos";
+"当前播放器不支持循环播放" = "Este player não suporta repetição";
+"当前播放器不支持随机播放" = "Este player não suporta modo aleatório";
 "当前播放器将这首歌曲标记为纯音乐，其他候选均不采用" = "Seu player marca esta música como instrumental, então nenhum resultado é usado";
 "当前播放的是 DJ Mix 专辑中的片段（歌名带 [Mixed]，专辑名带 (DJ Mix)）。此类曲目截取自完整演出，前后带有过渡，时长与原版不同，原版歌词的时间轴无法对齐，且暂无歌词源收录混音版的时间轴" = "Este é um trecho de um álbum DJ Mix (o título traz [Mixed] e o álbum, (DJ Mix)). Essas faixas são cortadas de um set completo, com transições nas pontas e duração diferente, então os tempos da letra original não se alinham, e nenhuma fonte de letras oferece tempos para a versão mixada";
 "当前播放的是伴奏版（歌名或专辑标注为伴奏、纯音乐或 Instrumental），不采用人声版歌词，按纯音乐显示" = "Esta é uma versão instrumental (o título ou o álbum indica Instrumental). A letra cantada não é usada e a música aparece como instrumental";
@@ -2120,6 +2125,7 @@
 "深色" = "Escuro";
 "深色卡片" = "Cartão escuro";
 "深色渐变" = "Degradê escuro";
+"添加" = "Adicionar";
 "添加 App…" = "Adicionar app…";
 "添加一个渠道，听歌报告就会推到你的手机、群聊或自建服务" = "Adicione um canal e seus relatórios de audição serão enviados para seu celular, um chat em grupo ou seu próprio serviço";
 "添加中…" = "Adicionando…";
@@ -2182,6 +2188,7 @@
 "热力图、收听时段、那年今日" = "Mapa de calor, horários de audição e “Neste dia”";
 "版本 %@" = "Versão %@";
 "版本不符" = "Versão diferente";
+"版本号" = "Versão";
 "版本尾缀写法" = "Estilo do sufixo de versão";
 "版权说明" = "Aviso de direitos autorais";
 "特厚" = "Ultraespesso";
@@ -2333,6 +2340,7 @@
 "编辑期间这首歌曲的歌词已发生变化，本次未应用；再次编辑将打开最新版本" = "A letra desta música mudou enquanto você editava, então este salvamento não foi aplicado. Edite de novo para abrir a versão mais recente";
 "编辑模板…" = "Editar modelo…";
 "编辑歌词" = "Editar letra";
+"编辑面板" = "Editar painel";
 "缩小字号" = "Diminuir fonte";
 "缩小悬浮歌词字号" = "Diminuir tamanho da letra flutuante";
 "缺少用户名" = "Nome de usuário ausente";
@@ -2570,6 +2578,7 @@
 "读音大小" = "Corpo da pronúncia";
 "读音间距" = "Pronúncia";
 "调整" = "Ajustar";
+"调整大小：%@" = "Redimensionar: %@";
 "调整宽度" = "Ajustar largura";
 "调整颜色后，此处将出现「自定义」，点按即可保存为主题" = "Depois que você altera alguma cor, um cartão “Personalizado” aparece aqui. Clique nele para salvar as cores como tema";
 "谷歌旗下的流媒体音乐网站，网址 music.youtube.com" = "O site de streaming de música do Google, em music.youtube.com";

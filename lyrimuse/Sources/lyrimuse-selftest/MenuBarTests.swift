@@ -1760,7 +1760,9 @@ func runMenuBarTests() {
         // 窗口跟着内容长高:尺寸由宿主视图在 layout() 里报。GeometryReader + PreferenceKey 那条在内容比窗口高时不来(06 章决策 44)。
         expectEqual(panel.contains("host.onFittingSizeChange = { [weak self] size in self?.place(size: size) }")
                     && sourceHas(panel, "guard fitting != bounds.size else { return }\n        onFittingSizeChange?(fitting)")
-                    && !panel.contains("onPreferenceChange("), true,
+                    // 编辑布局时收集各格位置(拖动判定用)那一处不管尺寸,放行;别的 onPreferenceChange 一律不许。
+                    && panel.components(separatedBy: "onPreferenceChange(").count
+                        == panel.components(separatedBy: "onPreferenceChange(PanelTileFramesKey.self)").count, true,
                     "面板尺寸: 宿主视图 layout() 里当场报 fittingSize,不用 PreferenceKey、不推到下一拍")
         // 内容贴顶:对不上高度的那一帧不许上下居中(翻面时整个面板抖一下),minHeight: 0 不能省(06 章决策 45)。
         expectEqual(panel.contains(".frame(minWidth: 0, maxWidth: .infinity, minHeight: 0, maxHeight: .infinity, alignment: .top)"), true,
@@ -1915,7 +1917,7 @@ func runMenuBarTests() {
                     "菜单栏正中悬停三键: 接管期间 refresh 早退,面板开着不接管")
         expectEqual(sourceHas(item, "let highlighted = on && self.panelController.isAnchored(to: self.statusItem?.button)"), true,
                     "菜单栏正中: 面板挂在正中时状态栏那一格不反白")
-        expectEqual(sourceHas(src("MenuBarPanel.swift"), "func toggle(relativeTo anchor: NSView, quick: PanelQuickTarget? = nil) {"), true,
+        expectEqual(sourceHas(src("MenuBarPanel.swift"), "func toggle(relativeTo anchor: NSView, quick: PanelQuickTarget? = nil, editing: Bool = false) {"), true,
                     "菜单栏面板: 能挂在任意视图下面")
         expectEqual(center.contains("AXUIElementSetMessagingTimeout(barElement, messagingTimeout)")
                     && center.contains("AXUIElementSetMessagingTimeout(item, messagingTimeout)"), true,
@@ -1995,5 +1997,84 @@ func runMenuBarTests() {
         expectEqual(settingsSrc.contains("(defaults.object(forKey: Keys.menuBarLyricsWidth) as? Double) ?? 250, to: Self.menuBarLyricsWidthRange))")
                     && settingsSrc.contains(".flatMap { LyricsRestingAlignment.menuBarOptions.contains($0) ? $0 : nil }"), true,
                     "菜单栏设置: 读盘时宽度夹回区间、对齐只认菜单栏三档")
+    }
+
+    // ---- 菜单栏面板的格子布局(06 章决策 82):默认就是原来那两排,存盘容错,装排和拖动换位 ----
+    do {
+        typealias L = MenuBarPanelLayout
+        let d = L.default
+        expectEqual(d.tiles, [.overlay, .notch, .menuBar, .lyricsWindow, .touchBar, .lyricsManager], "面板布局: 默认六格、原来的顺序")
+        expectEqual(d.slots.allSatisfy { $0.size == .medium } && d.hiddenFooter.isEmpty, true, "面板布局: 默认都是中号、底栏全显示")
+        expectEqual(L.rows(d.slots).map { $0.map(\.tile) }, [[.overlay, .notch, .menuBar], [.lyricsWindow, .touchBar, .lyricsManager]],
+                    "面板布局: 有触控栏时两排各三格")
+        expectEqual(L.rows(d.slots.filter { $0.tile != .touchBar }).map(\.count), [3, 2], "面板布局: 没有触控栏时第二排两格")
+        expectEqual(L.widths(units: [4, 4], rowWidth: 316, spacing: 9), [153.5, 153.5], "面板布局: 没排满的一排两格各占一半(原来的样子)")
+        expectEqual(L.widths(units: [4, 4, 4], rowWidth: 316, spacing: 9).map { ($0 * 100).rounded() / 100 }, [99.33, 99.33, 99.33],
+                    "面板布局: 一排三个中号各 99pt")
+        expectEqual(L.widths(units: [8, 4], rowWidth: 309, spacing: 9), [200, 100], "面板布局: 大号是中号两倍宽")
+        expectEqual(L.rowRanges(units: [3, 3, 3, 3, 3]), [0..<4, 4..<5], "面板布局: 小号一排四个")
+        expectEqual(L.rowRanges(units: [8, 8]), [0..<1, 1..<2], "面板布局: 两个大号各占一排")
+        expectEqual(L.rowRanges(units: [4, 8, 3]), [0..<2, 2..<3], "面板布局: 装不下的换行")
+        expectEqual(L.rowRanges(units: []), [], "面板布局: 没有格子时没有排")
+        // 存盘的写法别改:rawValue 进了用户的设置文件。
+        expectEqual(L.Tile.allCases.map(\.rawValue),
+                    ["overlay", "notch", "menubar", "lyrics-window", "touchbar", "lyrics-manager", "translation", "romanization",
+                     "lock-position", "favorite", "shuffle", "repeat"], "面板布局: 格子的存盘写法")
+        expectEqual(L.decode(nil) == d && L.decode("") == d && L.decode("not json") == d, true, "面板布局: 没存过或读不出来是默认")
+        let messy = #"{"tiles":[{"id":"overlay","size":"huge"},{"id":"bogus"},{"id":"overlay","size":"small"},{"id":"favorite","size":"large"}],"hiddenFooter":["version","nope"]}"#
+        expectEqual(L.decode(messy), L(slots: [.init(tile: .overlay, size: .medium), .init(tile: .favorite, size: .large)],
+                                       hiddenFooter: [.version]),
+                    "面板布局: 认不出的格子丢掉、尺寸退回中号、重复的留第一个,认不出的底栏项丢掉")
+        expectEqual(L.decode(#"{"tiles":[]}"#).slots.isEmpty, true, "面板布局: 格子全移除也照存,不退回默认")
+        var custom = L(slots: [.init(tile: .shuffle, size: .small), .init(tile: .lyricsManager, size: .large)],
+                       hiddenFooter: [.settings, .lastfm])
+        expectEqual(L.decode(custom.encoded()), custom, "面板布局: 存了读回来一样")
+        custom.add(.shuffle, size: .large)
+        expectEqual(custom.size(of: .shuffle), .small, "面板布局: 已在网格里的不重复添加")
+        custom.add(.romanization)
+        expectEqual(custom.slots.last, .init(tile: .romanization, size: .medium), "面板布局: 新加的放最后、中号")
+        custom.remove(.shuffle)
+        custom.setSize(.small, for: .lyricsManager)
+        custom.setFooter(.settings, shown: true)
+        expectEqual(custom, L(slots: [.init(tile: .lyricsManager, size: .small), .init(tile: .romanization, size: .medium)],
+                              hiddenFooter: [.lastfm]), "面板布局: 移除、改尺寸、底栏显隐")
+        expectEqual(L.Size.small.next == .medium && L.Size.medium.next == .large && L.Size.large.next == .small, true,
+                    "面板布局: 尺寸角标小 → 中 → 大 → 小")
+        var moving = L(slots: [L.Tile.overlay, .notch, .menuBar, .favorite].map { .init(tile: $0, size: .medium) })
+        moving.move(.overlay, onto: .menuBar)
+        expectEqual(moving.tiles, [.notch, .menuBar, .overlay, .favorite], "面板布局: 往后拖,中间的往前让一位")
+        moving.move(.favorite, onto: .notch)
+        expectEqual(moving.tiles, [.favorite, .notch, .menuBar, .overlay], "面板布局: 往前拖,中间的往后让一位")
+        moving.move(.favorite, onto: .favorite)
+        moving.move(.lyricsWindow, onto: .notch)
+        expectEqual(moving.tiles, [.favorite, .notch, .menuBar, .overlay], "面板布局: 拖到自己、拖不在网格里的格子都不动")
+        expectEqual(d.addable { $0 != .touchBar }, [.translation, .romanization, .lockPosition, .favorite, .shuffle, .repeatMode],
+                    "面板布局: 可添加的是不在网格里的六种新格子")
+        expectEqual(L(slots: []).addable { $0 != .touchBar }.contains(.touchBar), false, "面板布局: 没有触控栏时不进可添加")
+
+        let frames: [String: CGRect] = ["a": CGRect(x: 0, y: 0, width: 10, height: 10), "b": CGRect(x: 20, y: 0, width: 10, height: 10)]
+        let entered = PanelGridDrag.step(pointer: CGPoint(x: 25, y: 5), dragged: "a", frames: frames, lastTarget: nil)
+        expectEqual(entered.moveOnto == "b" && entered.lastTarget == "b", true, "面板拖动: 指针进了另一格就换过去")
+        let stay = PanelGridDrag.step(pointer: CGPoint(x: 26, y: 5), dragged: "a", frames: frames, lastTarget: "b")
+        expectEqual(stay.moveOnto == nil && stay.lastTarget == "b", true, "面板拖动: 还停在刚换过的那格里不再换(大小不一的格子不来回跳)")
+        let gap = PanelGridDrag.step(pointer: CGPoint(x: 15, y: 5), dragged: "a", frames: frames, lastTarget: "b")
+        expectEqual(gap.moveOnto == nil && gap.lastTarget == nil, true, "面板拖动: 指针离开那一格就清掉,再进来能再换")
+        let own = PanelGridDrag.step(pointer: CGPoint(x: 5, y: 5), dragged: "a", frames: frames, lastTarget: "b")
+        expectEqual(own.moveOnto == nil && own.lastTarget == nil, true, "面板拖动: 指针在自己那格上不换")
+
+        // 源码契约:编辑时格子不接点按(拖动和角标归编辑那一层);「编辑」那一颗不受底栏显隐管;深链 quick=edit 进编辑;
+        // 网格里有喜欢 / 随机 / 循环时开面板回读一次。漏了不报错,只表现成拖不动、改完藏没了入口、或心的状态是旧的。
+        let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+        func source(_ rel: String) -> String { (try? String(contentsOf: root.appendingPathComponent(rel), encoding: .utf8)) ?? "" }
+        let panel = source("lyrimuse/MenuBar/MenuBarPanel.swift")
+        let router = source("lyrimuse/Settings/DeepLinkRouter.swift")
+        expectEqual(sourceHas(panel, "if !editing {\nTileMouseRouter("), true, "面板编辑: 编辑时不盖鼠标路由")
+        expectEqual(sourceHas(panel, "if !showsSettings && !showsLastfm && !showsVersion { Spacer(minLength: 0) }\neditLayoutButton"), true,
+                    "面板编辑: 「编辑」那一颗不跟着底栏显隐")
+        expectEqual(sourceHas(panel, "let showsVersion = !hidden.contains(.version) || pendingUpdate != nil"), true,
+                    "面板编辑: 藏了版本号,有新版本时升级提示照样出现")
+        expectEqual(sourceHas(router, "editing: quick == \"edit\")"), true, "面板编辑: 深链 quick=edit 打开就进编辑")
+        expectEqual(sourceHas(panel, "if AppSettings.shared.menuBarPanelLayout.slots.contains(where: { Self.extendedControlTiles.contains($0.tile) }) {\nPlaybackCoordinator.shared.refreshExtendedControls()"), true,
+                    "面板编辑: 网格里有喜欢 / 随机 / 循环时开面板回读一次")
     }
 }
