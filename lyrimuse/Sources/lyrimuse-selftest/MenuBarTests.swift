@@ -2004,13 +2004,12 @@ func runMenuBarTests() {
         typealias L = MenuBarPanelLayout
         typealias P = L.Placement
         let d = L.default
-        // 默认:形态三格(两个中号一排,菜单栏中号 + 歌词窗口、歌词管理两个小号一排),触控栏小号单起一排(没有触控栏时那一排收起)。
-        expectEqual(d.placements, [P(tile: .overlay, size: .medium, column: 0, row: 0), P(tile: .notch, size: .medium, column: 2, row: 0),
-                                   P(tile: .menuBar, size: .medium, column: 0, row: 1), P(tile: .lyricsWindow, size: .small, column: 2, row: 1),
-                                   P(tile: .lyricsManager, size: .small, column: 3, row: 1), P(tile: .touchBar, size: .small, column: 0, row: 2)],
+        // 默认尽量同原来:同样六格、同样先后,都是小号(图标在上、名字在下),排成 4 + 2;触控栏歌词放最后,没有它时第二排不空洞。
+        expectEqual(d.placements, [P(tile: .overlay, size: .small, column: 0, row: 0), P(tile: .notch, size: .small, column: 1, row: 0),
+                                   P(tile: .menuBar, size: .small, column: 2, row: 0), P(tile: .lyricsWindow, size: .small, column: 3, row: 0),
+                                   P(tile: .lyricsManager, size: .small, column: 0, row: 1), P(tile: .touchBar, size: .small, column: 1, row: 1)],
                     "面板布局: 默认坑位")
-        expectEqual(d.rowCount(), 3, "面板布局: 有触控栏时三排")
-        expectEqual(d.rowCount { $0 != .touchBar }, 2, "面板布局: 没有触控栏时只数画得出来的,最下面那排收起")
+        expectEqual(d.rowCount() == 2 && d.rowCount { $0 != .touchBar } == 2, true, "面板布局: 有没有触控栏都是两排")
         expectEqual(d.hiddenFooter.isEmpty, true, "面板布局: 默认底栏全显示")
         // 存盘的写法别改:rawValue 进了用户的设置文件。
         expectEqual(L.Tile.allCases.map(\.rawValue),

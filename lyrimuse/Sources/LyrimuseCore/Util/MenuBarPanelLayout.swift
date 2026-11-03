@@ -81,13 +81,15 @@ public struct MenuBarPanelLayout: Equatable, Sendable {
         }
     }
 
+    /// 默认尽量跟这块面板一直以来的样子一样:同样的六格、同样的先后,都是图标在上、名字在下的小号。一排只有 4 个坑位,
+    /// 排不成原来的一排三个,依次排成 4 + 2;触控栏歌词放最后,没有触控栏时第二排左边不空出一个洞。
     public static let `default` = MenuBarPanelLayout(placements: [
-        Placement(tile: .overlay, size: .medium, column: 0, row: 0),
-        Placement(tile: .notch, size: .medium, column: 2, row: 0),
-        Placement(tile: .menuBar, size: .medium, column: 0, row: 1),
-        Placement(tile: .lyricsWindow, size: .small, column: 2, row: 1),
-        Placement(tile: .lyricsManager, size: .small, column: 3, row: 1),
-        Placement(tile: .touchBar, size: .small, column: 0, row: 2),
+        Placement(tile: .overlay, size: .small, column: 0, row: 0),
+        Placement(tile: .notch, size: .small, column: 1, row: 0),
+        Placement(tile: .menuBar, size: .small, column: 2, row: 0),
+        Placement(tile: .lyricsWindow, size: .small, column: 3, row: 0),
+        Placement(tile: .lyricsManager, size: .small, column: 0, row: 1),
+        Placement(tile: .touchBar, size: .small, column: 1, row: 1),
     ])
 
     public var tiles: [Tile] { placements.map(\.tile) }
