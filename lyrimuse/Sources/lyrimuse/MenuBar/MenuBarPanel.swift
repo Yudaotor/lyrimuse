@@ -543,12 +543,13 @@ private struct MenuBarPanelView: View {
                     AppActions.shared.openWhatsNew?()
                 }, dismiss: { whatsNewVersion = nil })
             }
-            nowPlayingCard
-            // 「正在播放」卡不参与切换 —— 它是这张面板的身份,连它一起换掉就像换了一扇窗;
-            // 留着它高度落差也更小(快捷设置比两排钮块还矮一点)。
+            // 正在播放卡平时是网格里的一格(`MenuBarPanelLayout.Tile.nowPlaying`);翻到简介或快捷设置时网格整块换掉,
+            // 卡片单独留在上面 —— 它是这张面板的身份,连它一起换掉就像换了一扇窗(网格里移除了卡片就不摆)。
             if let card = shownEditorialCard {
+                if hasNowPlayingCard { nowPlayingCard(cornerRadius: Self.cardCornerRadius) }
                 PanelEditorialPage(card: card, back: { editorialKind = nil })
             } else if let quickTarget {
+                if hasNowPlayingCard { nowPlayingCard(cornerRadius: Self.cardCornerRadius) }
                 PanelQuickSettings(
                     target: quickTarget,
                     action: quickAction(for: quickTarget),
@@ -700,7 +701,7 @@ private struct MenuBarPanelView: View {
 
     // MARK: 钮块网格
 
-    /// 钮块网格,照 macOS 控制中心的摆法:一排 6 列,每格占定一块(`AppSettings.menuBarPanelLayout`),中间可以空着;
+    /// 钮块网格,照 macOS 控制中心:一排 4 个正方形坑位,每格占定一块(`AppSettings.menuBarPanelLayout`),中间可以空着;
     /// 底栏最右那颗「编辑」改它(06 章决策 82、84)。没画出来的格子(没有触控栏时的「触控栏歌词」)坑位照占着、留空;
     /// 最下面整排都空就收起来。
     private var knobGrid: some View {
@@ -719,9 +720,8 @@ private struct MenuBarPanelView: View {
                alignment: .topLeading)
     }
 
-    /// 网格的几何:面板 336 减两边各 10 的内边距(`body` 里那两处),行高 78,间距 9。小号 99 宽、中号 153 宽,
-    /// 同这块面板原来一排三个 / 一排两个的格子。
-    private static let grid = PanelGridGeometry(width: 316, rowHeight: 78, spacing: 9)
+    /// 网格的几何:面板 336 减两边各 10 的内边距(`body` 里那两处),一排 4 格、间距 12(同控制中心),坑位边长 70。
+    private static let grid = PanelGridGeometry(width: 316, rowHeight: 70, spacing: 12)
 
     /// 网格里有没有画得出来的格子(都没有时整块网格不占地方)。
     private var hasVisibleTiles: Bool {
@@ -730,6 +730,8 @@ private struct MenuBarPanelView: View {
 
     /// 「触控栏歌词」只在这台 Mac 此刻有触控栏时画(真机,或 Xcode 的触控栏模拟器开着;判据同设置页「触控栏」那一段、
     /// 右键菜单「快速开关」那一项),没有时留在布局里、不画,也不进「可添加」。见 06 章决策 37。
+    private var hasNowPlayingCard: Bool { playback.panelLayout.contains(.nowPlaying) }
+
     private func tileAvailable(_ tile: MenuBarPanelLayout.Tile) -> Bool {
         tile != .touchBar || playback.touchBarPresent
     }
@@ -737,6 +739,12 @@ private struct MenuBarPanelView: View {
     /// 每一种格子画成什么、点了做什么。网格、编辑页和「可添加」都画这一份。
     @ViewBuilder private func tileView(_ tile: MenuBarPanelLayout.Tile) -> some View {
         switch tile {
+        case .nowPlaying:
+            // 按网格给的档位画;编辑时整张卡不接点击(拖动、拉手归编辑那一层)。
+            PanelTileSizeReader { size, editing in
+                nowPlayingTile(size)
+                    .allowsHitTesting(!editing)
+            }
         case .overlay: surfaceTile(.overlay)
         case .notch: surfaceTile(.notch)
         case .menuBar: surfaceTile(.menuBar)
@@ -748,7 +756,7 @@ private struct MenuBarPanelView: View {
             // 别在这儿和背面各写一份。
             knobTile(symbol: PanelQuickTarget.lyricsWindow.symbolName,
                      title: PanelQuickTarget.lyricsWindow.panelTitle,
-                     on: false, quick: .lyricsWindow,
+                     toggle: false, on: false, quick: .lyricsWindow,
                      action: openLyricsWindowAction)
         case .touchBar:
             // 短按 = 总开关,长按 / 右键 = 它自己的快捷设置,跟三个形态同一套。
@@ -761,7 +769,7 @@ private struct MenuBarPanelView: View {
             // 短按开窗,长按 / 右键翻到背面:正在放的这首的几个动作(PanelLyricsManagerRows)。
             knobTile(symbol: PanelQuickTarget.lyricsManager.symbolName,
                      title: PanelQuickTarget.lyricsManager.panelTitle,
-                     on: false, quick: .lyricsManager,
+                     toggle: false, on: false, quick: .lyricsManager,
                      action: openLyricsManagerAction)
         case .translation:
             // 同右键菜单「快速开关」和快捷键:悬浮歌词、歌词窗口两份一起切,带回声(这首没有译文时画面不会变)。
@@ -905,8 +913,90 @@ private struct MenuBarPanelView: View {
     }
     }
 
-    private var nowPlayingCard: some View {
-        VStack(spacing: 8) {
+    /// 正在播放卡单独摆着(简介页、快捷设置上面)和加宽格子用的圆角,同控制中心的大块。
+    private static let cardCornerRadius: CGFloat = 28
+
+    /// 正在播放卡的三种画法:加宽(4×2)是完整的卡片;大号(2×2)同控制中心的「正在播放」——封面、歌名歌手、三个走带键;
+    /// 小号只在「可添加」里出现,一颗带音符的圆。
+    @ViewBuilder private func nowPlayingTile(_ size: MenuBarPanelLayout.Size) -> some View {
+        switch size {
+        case .wide:
+            nowPlayingCard(cornerRadius: Self.cardCornerRadius)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+        case .large, .medium:
+            compactNowPlaying
+                .padding(14)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                .menuBarPanelCardBackground(cornerRadius: Self.cardCornerRadius)
+        case .small:
+            Image(systemName: "music.note")
+                .font(.system(size: 20, weight: .medium))
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .menuBarPanelCardBackground(cornerRadius: Self.grid.rowHeight / 2)
+        }
+    }
+
+    /// 大号(2×2)的正在播放:左上封面、右上播放器角标,中间歌名歌手,底下三个走带键;没在放时底下是「继续播放 / 打开」。
+    private var compactNowPlaying: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(alignment: .top, spacing: 0) {
+                Button {
+                    close()
+                    AppActions.shared.openLyricsWindow?()
+                } label: {
+                    coverView(side: 44)
+                }
+                .buttonStyle(.plain)
+                .help(L10n.t("打开歌词窗口"))
+                Spacer(minLength: 0)
+                if !isIdleNoTrack, let icon = PlaybackCoordinator.shared.resolvedPlayerIcon {
+                    Button {
+                        PlaybackCoordinator.shared.openResolvedPlayer()
+                        close()
+                    } label: {
+                        Image(nsImage: icon)
+                            .resizable()
+                            .aspectRatio(contentMode: .fit)
+                            .frame(width: 18, height: 18)
+                    }
+                    .buttonStyle(.glassIcon())
+                    .modifier(OptionalHelp(text: PlaybackCoordinator.shared.resolvedPlayerDisplayName))
+                }
+            }
+            Spacer(minLength: 4)
+            Text(isIdleNoTrack ? L10n.t("未在播放") : displayTitle)
+                .font(.system(size: 13, weight: .semibold))
+                .lineLimit(1)
+            if !isIdleNoTrack {
+                Text(displayArtist)
+                    .font(.system(size: 11))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+            }
+            Spacer(minLength: 4)
+            if isIdleNoTrack {
+                idleActionButton
+            } else {
+                HStack(spacing: 0) {
+                    controlButton("backward.fill", size: 12) {
+                        MenuBarStatusItem.withMusicPermission { MusicPlaybackController.previousTrack() }
+                    }
+                    Spacer(minLength: 0)
+                    controlButton(playback.isPlayingSmoothed ? "pause.fill" : "play.fill", size: 16) {
+                        MenuBarStatusItem.withMusicPermission { PlaybackCoordinator.shared.userTogglePlayPause() }
+                    }
+                    Spacer(minLength: 0)
+                    controlButton("forward.fill", size: 12) {
+                        MenuBarStatusItem.withMusicPermission { MusicPlaybackController.nextTrack() }
+                    }
+                }
+            }
+        }
+    }
+
+    /// 完整的正在播放卡(加宽 4×2 那一档,高 152:封面 48、行距 4、内边距 10)。
+    private func nowPlayingCard(cornerRadius: CGFloat) -> some View {
+        VStack(spacing: 4) {
             // 压根没有曲目时整张卡换成 idleRow —— 上半截(封面/歌名/歌手/歌词行)全是空的,
             // 摆在那儿只剩占位图和两行空文本;进度条没时长本来就不渲染;三键里前两颗对空
             // 队列是静默 no-op。
@@ -952,8 +1042,8 @@ private struct MenuBarPanelView: View {
                 }
             }
         }
-        .padding(12)
-        .menuBarPanelCardBackground(cornerRadius: 18)
+        .padding(10)
+        .menuBarPanelCardBackground(cornerRadius: cornerRadius)
     }
 
     /// 走带那一排两侧(左随机、右循环)各占多宽。
@@ -1006,6 +1096,54 @@ private struct MenuBarPanelView: View {
         .accessibilityAddTraits(active ? .isSelected : [])
     }
 
+    /// 没在放时那颗主动作键:能接着放的播放器是「继续播放」,只能打开的是那家的图标 +「打开」。停播行和大号正在播放格共用。
+    private var idleActionButton: some View {
+        let player = IdlePlaybackActions.player
+        let canResume = IdlePlaybackActions.canResume(player)
+        let name = player.displayName
+        let act: () -> Void = {
+            if canResume {
+                IdlePlaybackActions.resume(player: player)
+            } else {
+                IdlePlaybackActions.openPlayerApp(player)
+            }
+        }
+        return Group {
+            // 静息态就带底色(baseLevel):面板里其它 Chip 都是次要入口,不悬停看不出是键没关系;
+            // 这一颗是这个状态下唯一能做的事,必须一眼认得出来。色相跟圆钮块"开"的那圈同一个
+            // Color.accentColor。
+            ChipButton(cornerRadius: 8, tint: .accentColor, baseLevel: 0.16, action: act) {
+                // 只能「打开」的播放器:键上是那家的图标 +「打开」,全名放进悬停提示 —— 写成
+                // 「打开 网易云音乐」既点名、又把左边那句挤没。
+                HStack(spacing: 5) {
+                    if canResume {
+                        Image(systemName: "play.fill")
+                            .font(.system(size: 10.5, weight: .semibold))
+                    } else if let idlePlayerIcon {
+                        Image(nsImage: idlePlayerIcon)
+                            .resizable()
+                            .frame(width: 14, height: 14)
+                    } else {
+                        Image(systemName: "arrow.up.forward.app")
+                            .font(.system(size: 10.5, weight: .semibold))
+                    }
+                    Text(canResume ? L10n.t("继续播放") : L10n.t("打开"))
+                        .font(.system(size: 11.5, weight: .medium))
+                        .lineLimit(1)
+                }
+                .foregroundStyle(Color.accentColor)
+                .padding(.horizontal, 11)
+                .frame(height: 28)
+            }
+            .fixedSize()
+            .help(canResume ? L10n.t("继续播放") : String(format: L10n.t("打开 %@"), name))
+            .accessibilityLabel(canResume ? L10n.t("继续播放") : String(format: L10n.t("打开 %@"), name))
+        }
+        .task(id: player) {
+            idlePlayerIcon = AppIconResolver.icon(forBundleID: player.bundleIdentifier)
+        }
+    }
+
     /// 压根没有曲目时这张卡的全部内容:两行状态字 + 一颗主动作键。
     ///
     /// 文案与动作跟歌词窗口停播页(`IdleStandbyView`)、灵动岛 hover 展开
@@ -1043,38 +1181,7 @@ private struct MenuBarPanelView: View {
             .lineLimit(1)
             .truncationMode(.tail)
             .frame(maxWidth: .infinity, alignment: .leading)
-            // 静息态就带底色(baseLevel):面板里其它 Chip 都是次要入口,不悬停看不出是键没关系;
-            // 这一颗是这个状态下唯一能做的事,必须一眼认得出来。色相跟圆钮块"开"的那圈同一个
-            // Color.accentColor。
-            ChipButton(cornerRadius: 8, tint: .accentColor, baseLevel: 0.16, action: act) {
-                // 只能「打开」的播放器:键上是那家的图标 +「打开」,全名放进悬停提示 —— 写成
-                // 「打开 网易云音乐」既点名、又把左边那句挤没。
-                HStack(spacing: 5) {
-                    if canResume {
-                        Image(systemName: "play.fill")
-                            .font(.system(size: 10.5, weight: .semibold))
-                    } else if let idlePlayerIcon {
-                        Image(nsImage: idlePlayerIcon)
-                            .resizable()
-                            .frame(width: 14, height: 14)
-                    } else {
-                        Image(systemName: "arrow.up.forward.app")
-                            .font(.system(size: 10.5, weight: .semibold))
-                    }
-                    Text(canResume ? L10n.t("继续播放") : L10n.t("打开"))
-                        .font(.system(size: 11.5, weight: .medium))
-                        .lineLimit(1)
-                }
-                .foregroundStyle(Color.accentColor)
-                .padding(.horizontal, 11)
-                .frame(height: 28)
-            }
-            .fixedSize()
-            .help(canResume ? L10n.t("继续播放") : String(format: L10n.t("打开 %@"), name))
-            .accessibilityLabel(canResume ? L10n.t("继续播放") : String(format: L10n.t("打开 %@"), name))
-        }
-        .task(id: player) {
-            idlePlayerIcon = AppIconResolver.icon(forBundleID: player.bundleIdentifier)
+            idleActionButton
         }
         // 有曲目时卡片靠封面撑高,这里只有一行字。给同样的下限,面板在"放着"和
         // "没放"之间切换时顶部这一块不会突然塌掉一截。
@@ -1202,9 +1309,11 @@ private struct MenuBarPanelView: View {
     }
 
     /// 封面边长。没在播放那一行的最小高度跟它一致(见 idleRow)。
-    private static let coverSide: CGFloat = 52
+    private static let coverSide: CGFloat = 48
 
-    @ViewBuilder private var coverView: some View {
+    private var coverView: some View { coverView(side: Self.coverSide) }
+
+    @ViewBuilder private func coverView(side: CGFloat) -> some View {
         // displayArtworkImage 而不是裸 artworkImage:高清替代优先,口径跟灵动岛/歌词窗口/
         // 悬浮歌词一致(见那个属性的注释;漏了它的表现是同一首歌两处封面不一样)。
         if playback.isCurrentTrackAdBreak {
@@ -1213,14 +1322,14 @@ private struct MenuBarPanelView: View {
             RoundedRectangle(cornerRadius: 9, style: .continuous)
                 .fill(LinearGradient(colors: [.blue.opacity(0.55), .purple.opacity(0.45)],
                                      startPoint: .topLeading, endPoint: .bottomTrailing))
-                .frame(width: Self.coverSide, height: Self.coverSide)
+                .frame(width: side, height: side)
                 .overlay(Image(systemName: "megaphone.fill").foregroundStyle(.white.opacity(0.85)))
         } else if let image = playback.displayArtworkImage {
             // 按封面边长 × 显示倍率预先重采样成位图再贴,不在运行期缩(半调网点封面在灵动岛小图上
             // 缩成摩尔纹黑斑,这里同一张图、同一种缩法;理由与算法见 ArtworkThumbnail / ArtworkThumbnailCache)。
             let scale = max(1, displayScale)
             Group {
-                if let bitmap = ArtworkThumbnailCache.bitmap(for: image, pixelSide: Int((Self.coverSide * scale).rounded())) {
+                if let bitmap = ArtworkThumbnailCache.bitmap(for: image, pixelSide: Int((side * scale).rounded())) {
                     Image(decorative: bitmap, scale: scale)
                 } else {
                     Image(nsImage: image)
@@ -1228,13 +1337,13 @@ private struct MenuBarPanelView: View {
                         .aspectRatio(contentMode: .fill)
                 }
             }
-                .frame(width: Self.coverSide, height: Self.coverSide)
+                .frame(width: side, height: side)
                 .clipShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
         } else {
             RoundedRectangle(cornerRadius: 9, style: .continuous)
                 .fill(LinearGradient(colors: [.blue.opacity(0.55), .purple.opacity(0.45)],
                                      startPoint: .topLeading, endPoint: .bottomTrailing))
-                .frame(width: Self.coverSide, height: Self.coverSide)
+                .frame(width: side, height: side)
                 .overlay(Image(systemName: "music.note").foregroundStyle(.white.opacity(0.85)))
         }
     }
@@ -1259,11 +1368,12 @@ private struct MenuBarPanelView: View {
     // MARK: 圆钮块
 
     /// `enabled` 为假时格子灰着、点了没反应,`help` 悬停说为什么。
-    private func knobTile(symbol: String, title: String, subtitle: String? = nil, on: Bool,
+    /// `toggle`:是开关(中号、大号报「已开启 / 已关闭」);歌词窗口、歌词管理这种点了开窗的不是。
+    private func knobTile(symbol: String, title: String, subtitle: String? = nil, toggle: Bool = true, on: Bool,
                           enabled: Bool = true, help: String? = nil,
                           quick: PanelQuickTarget? = nil,
                           action: @escaping () -> Void) -> some View {
-        KnobTile(symbol: symbol, title: title, subtitle: subtitle, on: on, enabled: enabled, help: help,
+        KnobTile(symbol: symbol, title: title, subtitle: subtitle, toggle: toggle, on: on, enabled: enabled, help: help,
                  action: action,
                  // 只有能长按的格子才接一个去处;没接的长按 / 右键就当普通按一下(见 KnobTile.body 的 onSecondary)。
                  openQuick: quick.map { target in { setQuickTarget(target) } })
@@ -1279,6 +1389,7 @@ private struct MenuBarPanelView: View {
         let symbol: String
         let title: String
         let subtitle: String?
+        let toggle: Bool
         let on: Bool
         let enabled: Bool
         let help: String?
@@ -1292,7 +1403,10 @@ private struct MenuBarPanelView: View {
         @Environment(\.panelTileSize) private var size
         @Environment(\.panelTileEditing) private var editing
 
-        private var cornerRadius: CGFloat { panelTileCornerRadius }
+        private var cornerRadius: CGFloat { size.cornerRadius(cell: MenuBarPanelView.grid.rowHeight) }
+
+        /// 小号整颗圆在开着时填强调色(同控制中心的小开关);中、大号的底是玻璃,开没开看左边那颗图标圆。
+        private var filledWhenOn: Bool { size == .small && on }
 
         var body: some View {
             content
@@ -1301,7 +1415,7 @@ private struct MenuBarPanelView: View {
                 // 收不到:鼠标事件都落在上面那层 TileMouseRouter 上;不激活 App 的面板里 `.interactive()` 玻璃悬停也几乎看不出变化)。
                 .background(
                     RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                        .fill(Color.primary.opacity(stateFillLevel))
+                        .fill(filledWhenOn ? AnyShapeStyle(Color.accentColor) : AnyShapeStyle(Color.primary.opacity(stateFillLevel)))
                 )
                 .menuBarPanelCardBackground(cornerRadius: cornerRadius)
                 .scaleEffect(reduceMotion ? 1 : stateScale)
@@ -1334,9 +1448,16 @@ private struct MenuBarPanelView: View {
                 }
         }
 
-        /// 悬停提示:灰着的原因,或「长按或右键打开设置」。
+        /// 悬停提示:小号格子先报名字(圆里只有图标),再是灰着的原因或「长按或右键打开设置」。
         private var toolTip: String? {
-            help ?? (openQuick == nil ? nil : L10n.t("长按或右键打开设置"))
+            let lines = [size == .small ? title : nil,
+                         help ?? (openQuick == nil ? nil : L10n.t("长按或右键打开设置"))].compactMap { $0 }
+            return lines.isEmpty ? nil : lines.joined(separator: "\n")
+        }
+
+        /// 中号、大号名字下面那一行:给了副标题用副标题,开关报「已开启 / 已关闭」。
+        private var detail: String? {
+            subtitle ?? (toggle ? (on ? L10n.t("已开启") : L10n.t("已关闭")) : nil)
         }
 
         /// 静止 → 悬停 → 按下三档,一档比一档实——默认的 Button + buttonStyle 什么反馈都没给,鼠标放上去看不出
@@ -1360,37 +1481,56 @@ private struct MenuBarPanelView: View {
         // 那层 NSView 上),以及三个形态格子共有的悬停高亮。真要再补,应该补一个说得明白的
         // 形态(比如首次使用时的一次性提示),而不是把这个符号原样放回来。
 
-        /// 小、中:图标在上、名字在下(同这块面板原来的格子,中号只是宽);大:图标在左上、名字在左下。
-        /// 格子尺寸由网格给,这里只排里面的东西。
+        /// 三档,同 macOS 控制中心:小 1×1 是一颗只有图标的圆;中 2×1 是胶囊,左边图标圆、右边名字和状态;
+        /// 大 2×2 左上图标圆、左下名字和状态。格子尺寸由网格给,这里只排里面的东西。
         @ViewBuilder private var content: some View {
             switch size {
-            case .small, .medium:
-                VStack(spacing: 5) {
-                    iconCircle(36, glyph: 16)
-                    titleText(size: 11, lines: 2)
+            case .small:
+                SymbolImage(name: symbol, size: 20, weight: .medium)
+                    .foregroundStyle(on ? Color.white : Color.primary)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            case .medium:
+                HStack(spacing: 10) {
+                    iconCircle(40, glyph: 17)
+                    labels(titleSize: 13)
+                    Spacer(minLength: 0)
                 }
-                .padding(.horizontal, 6)
+                .padding(.leading, 15)
+                .padding(.trailing, 12)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
-            case .large:
+            case .large, .wide:
                 VStack(alignment: .leading, spacing: 0) {
                     iconCircle(44, glyph: 19)
                     Spacer(minLength: 0)
-                    titleText(size: 13, lines: 2)
-                        .multilineTextAlignment(.leading)
+                    labels(titleSize: 14)
                 }
                 .padding(16)
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
             }
         }
 
+        /// 中、大号的图标圆:开着是强调色底配白图标,关着是浅底(同控制中心 Wi‑Fi 那颗)。
         private func iconCircle(_ diameter: CGFloat, glyph: CGFloat) -> some View {
             SymbolImage(name: symbol, size: glyph, weight: .semibold)
-                .foregroundStyle(on ? Color.white : Color.secondary)
+                .foregroundStyle(on ? Color.white : Color.primary)
                 .frame(width: diameter, height: diameter)
                 .background(
                     Circle().fill(on ? AnyShapeStyle(Color.accentColor)
                                      : AnyShapeStyle(Color(nsColor: .tertiarySystemFill)))
                 )
+        }
+
+        /// 名字(粗)和下面那一行状态(细、次要色),左对齐。
+        private func labels(titleSize: CGFloat) -> some View {
+            VStack(alignment: .leading, spacing: 1) {
+                titleText(size: titleSize, lines: detail == nil ? 2 : 1)
+                    .multilineTextAlignment(.leading)
+                if let detail {
+                    Text(detail).font(.system(size: titleSize - 2))
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
+            }
         }
 
         /// 名字。没有空格的中日文折行会拆开词,只放一行、缩字门槛放宽(见 06 章决策 79);带空格的语言按词折。
@@ -1406,7 +1546,7 @@ private struct MenuBarPanelView: View {
 
     // MARK: 编辑布局
 
-    /// 编辑页,照 macOS 控制中心的「编辑控制」:坑位都摆出来(空着的画淡格子,最下面多留一整排),每格左上「−」移除,
+    /// 编辑页,照 macOS 控制中心的「编辑控制」:坑位都摆出来(空着的画淡圆,最下面多留一整排),每格左上「−」移除,
     /// 悬停时右下角露出弧形拉手、拖它换尺寸(右键也能直接选),拖着格子换位置(落到空位,压在同尺寸的格子上两格互换,
     /// 别的情况弹回);下面「可添加」点一格放进第一个放得下的空位;再下面是底栏几项的显隐、「恢复默认」和「完成」。
     private var editingSection: some View {
@@ -1424,7 +1564,7 @@ private struct MenuBarPanelView: View {
                 }
                 if let preview = dropPreview {
                     let frame = Self.grid.frame(preview)
-                    RoundedRectangle(cornerRadius: panelTileCornerRadius, style: .continuous)
+                    RoundedRectangle(cornerRadius: preview.size.cornerRadius(cell: Self.grid.rowHeight), style: .continuous)
                         .strokeBorder(Color.accentColor, lineWidth: 2)
                         .frame(width: frame.width, height: frame.height)
                         .offset(x: frame.minX, y: frame.minY)
@@ -1439,7 +1579,7 @@ private struct MenuBarPanelView: View {
             if !addable.isEmpty {
                 PanelEditCaption(title: L10n.t("可添加"))
                 LazyVGrid(columns: Array(repeating: GridItem(.fixed(Self.grid.size(.small).width), spacing: Self.grid.spacing),
-                                         count: MenuBarPanelLayout.columns / MenuBarPanelLayout.Size.small.columns),
+                                         count: MenuBarPanelLayout.columns),
                           alignment: .leading, spacing: Self.grid.spacing) {
                     ForEach(addable, id: \.self) { tile in
                         addableTile(tile)
@@ -1454,7 +1594,7 @@ private struct MenuBarPanelView: View {
 
     private func editableTile(_ p: MenuBarPanelLayout.Placement) -> some View {
         let frame = Self.grid.frame(p)
-        let radius = panelTileCornerRadius
+        let radius = p.size.cornerRadius(cell: Self.grid.rowHeight)
         return PanelEditableTile(
             content: tileView(p.tile)
                 .environment(\.panelTileSize, p.size)
@@ -1470,7 +1610,7 @@ private struct MenuBarPanelView: View {
             .opacity(draggingTile == p.tile ? 0.3 : 1)
             .gesture(tileDragGesture(p))
             .contextMenu {
-                ForEach(MenuBarPanelLayout.Size.allCases, id: \.self) { size in
+                ForEach(p.tile.sizes, id: \.self) { size in
                     Toggle(size.panelName, isOn: Binding(
                         get: { size == p.size },
                         set: { if $0 { updateLayout { $0.resize(p.tile, to: size) } } }))
@@ -1513,7 +1653,7 @@ private struct MenuBarPanelView: View {
                 resizingTile = p.tile
                 guard let current = playback.panelLayout.placement(of: p.tile) else { return }
                 let origin = Self.grid.frame(current).origin
-                let target = Self.grid.resizedSize(origin: origin, pointer: value.location)
+                let target = Self.grid.resizedSize(origin: origin, pointer: value.location, allowed: p.tile.sizes)
                 if target != current.size {
                     updateLayout { $0.resize(p.tile, to: target) }
                 }
@@ -1536,23 +1676,35 @@ private struct MenuBarPanelView: View {
         }
     }
 
-    /// 「可添加」里的一格(小号):点一下以中号放进第一个放得下的空位,现有几排都放不下就在最下面新起一排。
+    /// 「可添加」里的一格:一颗小号的圆,名字写在圆下面(圆里只有图标)。点一下以中号放进第一个放得下的空位,
+    /// 现有几排都放不下就在最下面新起一排。
     private func addableTile(_ tile: MenuBarPanelLayout.Tile) -> some View {
-        tileView(tile)
-            .environment(\.panelTileSize, .small)
-            .environment(\.panelTileEditing, true)
-            .frame(width: Self.grid.size(.small).width, height: Self.grid.size(.small).height)
-            .contentShape(Rectangle())
-            .onTapGesture { addTile(tile) }
-            .overlay(alignment: .topLeading) {
-                PanelEditBadge(symbol: "plus", tint: .accentColor, label: L10n.t("添加")) { addTile(tile) }
-                    .offset(x: -4, y: -4)
-            }
-            .accessibilityAction(named: L10n.t("添加")) { addTile(tile) }
+        let side = Self.grid.size(.small).width
+        return VStack(spacing: 4) {
+            tileView(tile)
+                .environment(\.panelTileSize, .small)
+                .environment(\.panelTileEditing, true)
+                .frame(width: side, height: side)
+                .overlay(alignment: .topLeading) {
+                    PanelEditBadge(symbol: "plus", tint: .accentColor, label: L10n.t("添加")) { addTile(tile) }
+                        .offset(x: -4, y: -4)
+                }
+            Text(tile.panelTitle)
+                .font(.system(size: 10))
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+                // 跟圆一样宽:宽过一格会把这一列撑开,圆就跟上面的网格对不齐。
+                .frame(width: side)
+        }
+        .contentShape(Rectangle())
+        .onTapGesture { addTile(tile) }
+        .accessibilityElement(children: .combine)
+        .accessibilityAction(named: L10n.t("添加")) { addTile(tile) }
     }
 
     private func addTile(_ tile: MenuBarPanelLayout.Tile) {
-        updateLayout { $0.add(tile, size: .medium) }
+        updateLayout { $0.add(tile) }
     }
 
     /// 编辑页最下面:底栏几项的显隐(Last.fm 只在连着时才有那一项),「恢复默认」「完成」。

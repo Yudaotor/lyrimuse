@@ -686,6 +686,7 @@
 "副行" = "Segunda línea";
 "功能清单" = "Lista de funciones";
 "加入信任列表" = "Confiar en esta app";
+"加宽" = "Ancho";
 "加拿大的歌词版权公司，经由 YouTube Music 检索" = "Empresa canadiense de licencias de letras, consultada a través de YouTube Music";
 "加签密钥（可选）" = "Secreto de firma (opcional)";
 "加粗" = "Negrita";
@@ -1086,6 +1087,7 @@
 "已停止重新匹配" = "Nueva búsqueda detenida";
 "已停用" = "Desactivado";
 "已允许局域网访问，同一网络中的设备也可控制洛雪音乐" = "El acceso desde la red local está permitido, así que los dispositivos de la misma red también pueden controlar LX Music";
+"已关闭" = "Desactivado";
 "已减少推荐" = "Se sugerirá menos";
 "已分享的链接将失效" = "Los enlaces que ya compartiste dejarán de funcionar";
 "已删除" = "Eliminado";

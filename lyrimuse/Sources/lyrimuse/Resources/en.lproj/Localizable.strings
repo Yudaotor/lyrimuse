@@ -686,6 +686,7 @@
 "副行" = "Second Line";
 "功能清单" = "Feature List";
 "加入信任列表" = "Trust This App";
+"加宽" = "Wide";
 "加拿大的歌词版权公司，经由 YouTube Music 检索" = "A Canadian lyrics licensing company, searched via YouTube Music";
 "加签密钥（可选）" = "Signing Secret (Optional)";
 "加粗" = "Bold";
@@ -1086,6 +1087,7 @@
 "已停止重新匹配" = "Re-matching stopped";
 "已停用" = "Off";
 "已允许局域网访问，同一网络中的设备也可控制洛雪音乐" = "Local network access is allowed, so devices on the same network can also control LX Music";
+"已关闭" = "Off";
 "已减少推荐" = "Suggested Less";
 "已分享的链接将失效" = "Links you’ve already shared will stop working";
 "已删除" = "Deleted";

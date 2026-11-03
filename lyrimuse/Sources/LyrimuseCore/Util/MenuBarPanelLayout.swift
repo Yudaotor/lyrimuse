@@ -1,15 +1,17 @@
 import Foundation
 import CoreGraphics
 
-/// 菜单栏左键面板的格子布局,照 macOS 控制中心的摆法:网格一排 6 列,每个格子占定一块(左上角在第几列第几行、多大),
-/// 中间可以空着;底栏藏了哪几项。6 列是为了一排正好放 3 个小号或 2 个中号(这块面板原来的两排就是这样)。见 06 章决策 82、84。
+/// 菜单栏左键面板的格子布局,照 macOS 控制中心:一排 4 个正方形坑位,每个格子占定一块(左上角在第几列第几行、多大),
+/// 中间可以空着;底栏藏了哪几项。见 06 章决策 82、84、85。
 ///
 /// 存成一串 JSON(`encoded()` / `decode(_:)`)。认不出的格子丢掉、认不出的尺寸退回中号、重复的留第一个、
 /// 跟前面重叠或出了边界的挪到第一个放得下的空位;整串读不出来才退回默认。早先按顺序排、没有坑位的那种存法
-/// (没有 col / row)和 4 列网格那一版的存法(没有 `grid: 6`)都按原来的先后依次放进第一个放得下的空位。
+/// (没有 col / row)和网格列数不同的那几版存法(`grid` 不是 4)都按原来的先后依次放进第一个放得下的空位。
 public struct MenuBarPanelLayout: Equatable, Sendable {
     /// 能放进网格的格子。rawValue 是存盘和深链里的写法,别改。
     public enum Tile: String, CaseIterable, Sendable {
+        /// 正在播放卡(封面、歌名、进度、走带),同控制中心的「正在播放」模块。
+        case nowPlaying = "now-playing"
         case overlay
         case notch
         case menuBar = "menubar"
@@ -20,14 +22,29 @@ public struct MenuBarPanelLayout: Equatable, Sendable {
         case translation
         case romanization
         case lockPosition = "lock-position"
+
+        /// 这一格能用哪几档。正在播放卡只有大号(2×2,同控制中心那块)和加宽(4×2,完整的卡片),别的格子小、中、大。
+        public var sizes: [Size] {
+            self == .nowPlaying ? [.large, .wide] : [.small, .medium, .large]
+        }
+
+        /// 「可添加」点进来时用哪一档。
+        public var defaultSize: Size { self == .nowPlaying ? .wide : .medium }
     }
 
-    /// 小占 2 列(一排 3 个)、中占 3 列(一排 2 个)、大占 3 列 2 行。
+    /// 小 1×1(圆)、中 2×1(胶囊)、大 2×2、加宽 4×2(列 × 行),同控制中心。加宽只给正在播放卡。
     public enum Size: String, CaseIterable, Sendable {
-        case small, medium, large
+        case small, medium, large, wide
 
-        public var columns: Int { self == .small ? 2 : 3 }
-        public var rows: Int { self == .large ? 2 : 1 }
+        public var columns: Int {
+            switch self {
+            case .small: return 1
+            case .medium, .large: return 2
+            case .wide: return 4
+            }
+        }
+
+        public var rows: Int { self == .large || self == .wide ? 2 : 1 }
     }
 
     public struct Placement: Equatable, Hashable, Sendable {
@@ -57,7 +74,7 @@ public struct MenuBarPanelLayout: Equatable, Sendable {
         case settings, lastfm, version
     }
 
-    public static let columns = 6
+    public static let columns = 4
 
     public private(set) var placements: [Placement]
     public var hiddenFooter: Set<FooterItem>
@@ -75,15 +92,17 @@ public struct MenuBarPanelLayout: Equatable, Sendable {
         }
     }
 
-    /// 默认就是这块面板原来的样子:悬浮歌词、灵动岛、菜单栏歌词一排三个小号,歌词窗口、歌词管理一排两个中号。
-    /// 触控栏歌词单起一排(没有触控栏时这一排收起,跟原来一模一样)。
+    /// 默认:最上面是加宽的正在播放卡(跟原来面板顶上那张一样);下面照控制中心左上角那一块 —— 三种歌词展示形态是同级的
+    /// 三个开关,竖着排成左边一列胶囊(同 Wi‑Fi、蓝牙、隔空投送),右边歌词窗口、歌词管理两个圆一排,触控栏歌词的圆在下面
+    /// (没有触控栏时那个坑位空着)。
     public static let `default` = MenuBarPanelLayout(placements: [
-        Placement(tile: .overlay, size: .small, column: 0, row: 0),
-        Placement(tile: .notch, size: .small, column: 2, row: 0),
-        Placement(tile: .menuBar, size: .small, column: 4, row: 0),
-        Placement(tile: .lyricsWindow, size: .medium, column: 0, row: 1),
-        Placement(tile: .lyricsManager, size: .medium, column: 3, row: 1),
-        Placement(tile: .touchBar, size: .small, column: 0, row: 2),
+        Placement(tile: .nowPlaying, size: .wide, column: 0, row: 0),
+        Placement(tile: .overlay, size: .medium, column: 0, row: 2),
+        Placement(tile: .notch, size: .medium, column: 0, row: 3),
+        Placement(tile: .menuBar, size: .medium, column: 0, row: 4),
+        Placement(tile: .lyricsWindow, size: .small, column: 2, row: 2),
+        Placement(tile: .lyricsManager, size: .small, column: 3, row: 2),
+        Placement(tile: .touchBar, size: .small, column: 2, row: 3),
     ])
 
     public var tiles: [Tile] { placements.map(\.tile) }
@@ -109,7 +128,7 @@ public struct MenuBarPanelLayout: Equatable, Sendable {
         !placements.contains { $0.covers(column: column, row: row) }
     }
 
-    /// 编辑时画空坑位的地方:每排按小号的宽度切成 3 块,整块都空着的那几块。
+    /// 编辑时画空坑位(淡圆)的地方:空着的每一格。
     public func emptySlots(rows: Int) -> [(column: Int, row: Int)] {
         var out: [(Int, Int)] = []
         for row in 0..<max(rows, 0) {
@@ -130,10 +149,12 @@ public struct MenuBarPanelLayout: Equatable, Sendable {
         placements.removeAll { $0.tile == tile }
     }
 
-    /// 放进第一个放得下的空位(从上到下、从左到右);现有几排里放不下就放到最下面新起一排。已经在网格里就不动。
-    public mutating func add(_ tile: Tile, size: Size = .medium) {
+    /// 放进第一个放得下的空位(从上到下、从左到右);现有几排里放不下就放到最下面新起一排。已经在网格里就不动;
+    /// 这一格没有这一档就用它的默认档。
+    public mutating func add(_ tile: Tile, size: Size? = nil) {
         guard !contains(tile) else { return }
-        placements.append(firstFit(tile, size: size))
+        let wanted = size ?? tile.defaultSize
+        placements.append(firstFit(tile, size: tile.sizes.contains(wanted) ? wanted : tile.defaultSize))
     }
 
     private func firstFit(_ tile: Tile, size: Size) -> Placement {
@@ -177,13 +198,14 @@ public struct MenuBarPanelLayout: Equatable, Sendable {
         return true
     }
 
-    /// 换尺寸:左上角不动;右边放不下(出界或压到别的格子)就试着往左挪一列。都不行返回 false、布局不变。
+    /// 换尺寸:左上角不动;右边放不下(出界或压到别的格子)就往左挪,挪到放得下为止。这一格没有这一档、或都放不下,
+    /// 返回 false、布局不变。
     @discardableResult
     public mutating func resize(_ tile: Tile, to size: Size) -> Bool {
-        guard let i = placements.firstIndex(where: { $0.tile == tile }) else { return false }
+        guard tile.sizes.contains(size), let i = placements.firstIndex(where: { $0.tile == tile }) else { return false }
         let current = placements[i]
         guard current.size != size else { return true }
-        for column in [current.column, current.column - 1] {
+        for column in stride(from: current.column, through: 0, by: -1) {
             let p = Placement(tile: tile, size: size, column: column, row: current.row)
             if fits(p, ignoring: tile) {
                 placements[i] = p
@@ -208,8 +230,10 @@ public struct MenuBarPanelLayout: Equatable, Sendable {
         }
         var tiles: [StoredTile]
         var hiddenFooter: [String]?
-        /// 网格一排几列。没有这个键的是更早的存法(按顺序排的,或 4 列网格),坑位不作数。
+        /// 网格一排几列。不是现在这个数的(没有这个键的按顺序存法,或 6 列那一版)坑位不作数。
         var grid: Int?
+        /// 2 起正在播放卡也是网格里的一格;更早的存法里没有它,读回来时补在最上面。
+        var version: Int?
     }
 
     public func encoded() -> String {
@@ -218,36 +242,51 @@ public struct MenuBarPanelLayout: Equatable, Sendable {
                 Stored.StoredTile(id: $0.tile.rawValue, size: $0.size.rawValue, col: $0.column, row: $0.row)
             },
             hiddenFooter: FooterItem.allCases.filter { hiddenFooter.contains($0) }.map(\.rawValue),
-            grid: Self.columns)
+            grid: Self.columns, version: Self.storageVersion)
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.sortedKeys]
         guard let data = try? encoder.encode(stored), let json = String(data: data, encoding: .utf8) else { return "" }
         return json
     }
 
+    static let storageVersion = 2
+
     public static func decode(_ json: String?) -> MenuBarPanelLayout {
         guard let data = json?.data(using: .utf8),
               let stored = try? JSONDecoder().decode(Stored.self, from: data) else { return .default }
+        var layout = decodePlacements(stored)
+        // 正在播放卡变成格子之前存下的布局:卡片原来固定在网格上面,补回最上面(加宽),别的格子整体往下挪两排。
+        if (stored.version ?? 1) < storageVersion, !layout.contains(.nowPlaying) {
+            let shifted = layout.placements.map {
+                Placement(tile: $0.tile, size: $0.size, column: $0.column, row: $0.row + Size.wide.rows)
+            }
+            layout.placements = [Placement(tile: .nowPlaying, size: .wide, column: 0, row: 0)] + shifted
+        }
+        return layout
+    }
+
+    private static func decodePlacements(_ stored: Stored) -> MenuBarPanelLayout {
         let footer = Set((stored.hiddenFooter ?? []).compactMap(FooterItem.init(rawValue:)))
         var layout = MenuBarPanelLayout(placements: [], hiddenFooter: footer)
         guard stored.grid == Self.columns else {
-            // 更早的存法:坑位不作数,按原来的先后(有坑位的按从上到下、从左到右)依次放进第一个空位。按顺序排的那种
+            // 列数不同的存法:坑位不作数,按原来的先后(有坑位的按从上到下、从左到右)依次放进第一个空位。按顺序排的那种
             // 尺寸按长相换:它的中号、小号都是图标在上、名字在下的方块 = 现在的小号,大号是宽条 = 中号。
             let ordered = stored.tiles.enumerated().sorted {
                 ($0.element.row ?? 0, $0.element.col ?? 0, $0.offset) < ($1.element.row ?? 0, $1.element.col ?? 0, $1.offset)
             }.map(\.element)
             for raw in ordered {
                 guard let tile = Tile(rawValue: raw.id) else { continue }
-                let size: Size = raw.col == nil
+                let size: Size? = raw.col == nil
                     ? (raw.size == "large" ? .medium : .small)
-                    : (raw.size.flatMap(Size.init(rawValue:)) ?? .small)
+                    : raw.size.flatMap(Size.init(rawValue:))
                 layout.add(tile, size: size)
             }
             return layout
         }
         for raw in stored.tiles {
             guard let tile = Tile(rawValue: raw.id), !layout.contains(tile) else { continue }
-            let size = raw.size.flatMap(Size.init(rawValue:)) ?? .medium
+            let storedSize = raw.size.flatMap(Size.init(rawValue:))
+            let size = storedSize.flatMap { tile.sizes.contains($0) ? $0 : nil } ?? tile.defaultSize
             let p = Placement(tile: tile, size: size, column: raw.col ?? -1, row: raw.row ?? -1)
             if layout.fits(p, ignoring: nil) {
                 layout.placements.append(p)
@@ -300,11 +339,13 @@ public struct PanelGridGeometry: Equatable, Sendable {
         (Int((origin.x / columnStride).rounded()), Int((origin.y / rowStride).rounded()))
     }
 
-    /// 拖右下角时指针在 `pointer`、格子左上角在 `origin`:往下过了一行和两行高度的中间是大号,往右过了小号和中号宽度的中间
-    /// 是中号,其余小号。
-    public func resizedSize(origin: CGPoint, pointer: CGPoint) -> MenuBarPanelLayout.Size {
-        let small = size(.small), medium = size(.medium), large = size(.large)
-        if pointer.y - origin.y > (small.height + large.height) / 2 { return .large }
-        return pointer.x - origin.x > (small.width + medium.width) / 2 ? .medium : .small
+    /// 拖右下角时指针在 `pointer`、格子左上角在 `origin`:落到这一格能用的几档里,右下角离指针最近的那一档。
+    public func resizedSize(origin: CGPoint, pointer: CGPoint,
+                            allowed: [MenuBarPanelLayout.Size]) -> MenuBarPanelLayout.Size {
+        let dx = pointer.x - origin.x, dy = pointer.y - origin.y
+        return allowed.min {
+            let a = size($0), b = size($1)
+            return abs(a.width - dx) + abs(a.height - dy) < abs(b.width - dx) + abs(b.height - dy)
+        } ?? .small
     }
 }

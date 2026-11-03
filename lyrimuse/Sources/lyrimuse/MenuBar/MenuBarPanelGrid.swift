@@ -15,7 +15,7 @@ private struct PanelTileEditingKey: EnvironmentKey {
 }
 
 extension EnvironmentValues {
-    /// 格子按哪一档画(小、中:图标在上、名字在下;大:图标在左上、名字在左下)。
+    /// 格子按哪一档画(小 1×1:只有图标的圆;中 2×1:胶囊,图标在左、名字和状态在右;大 2×2:图标在左上、名字和状态在左下)。
     var panelTileSize: MenuBarPanelLayout.Size {
         get { self[PanelTileSizeKey.self] }
         set { self[PanelTileSizeKey.self] = newValue }
@@ -28,15 +28,18 @@ extension EnvironmentValues {
     }
 }
 
-/// 格子的圆角,三档一样(同正在播放卡下面原来那些格子)。
-let panelTileCornerRadius: CGFloat = 16
-
 extension MenuBarPanelLayout.Size {
+    /// 圆角,同控制中心:小号是圆、中号是胶囊(都是边长的一半),大号是大圆角方块。
+    func cornerRadius(cell: CGFloat) -> CGFloat {
+        self == .large ? 28 : cell / 2
+    }
+
     var panelName: String {
         switch self {
         case .small: return L10n.t("小")
         case .medium: return L10n.t("中")
         case .large: return L10n.t("大")
+        case .wide: return L10n.t("加宽")
         }
     }
 }
@@ -104,10 +107,19 @@ struct PanelResizeCorner: View {
     }
 }
 
-/// 编辑时空着的坑位:一块淡淡的格子(同控制中心编辑时的空位)。
+/// 把网格给的档位和是不是在编辑交给内容(正在播放卡按档位换画法,编辑时不接点击)。
+struct PanelTileSizeReader<Content: View>: View {
+    @Environment(\.panelTileSize) private var size
+    @Environment(\.panelTileEditing) private var editing
+    let content: (MenuBarPanelLayout.Size, Bool) -> Content
+
+    var body: some View { content(size, editing) }
+}
+
+/// 编辑时空着的坑位:一个淡淡的圆(同控制中心编辑时的空位)。
 struct PanelEmptyCell: View {
     var body: some View {
-        RoundedRectangle(cornerRadius: panelTileCornerRadius, style: .continuous)
+        Circle()
             .fill(Color.primary.opacity(0.07))
             .accessibilityHidden(true)
     }
@@ -156,6 +168,25 @@ extension MenuBarPanelLayout.FooterItem {
         case .settings: return L10n.t("设置")
         case .lastfm: return "Last.fm"
         case .version: return L10n.t("版本号")
+        }
+    }
+}
+
+@MainActor
+extension MenuBarPanelLayout.Tile {
+    /// 格子的名字,同格子上那一份(「可添加」里圆下面写的就是它)。
+    var panelTitle: String {
+        switch self {
+        case .nowPlaying: return L10n.t("正在播放")
+        case .overlay: return LyricsSurface.overlay.panelTitle
+        case .notch: return LyricsSurface.notch.panelTitle
+        case .menuBar: return LyricsSurface.menuBar.panelTitle
+        case .lyricsWindow: return PanelQuickTarget.lyricsWindow.panelTitle
+        case .touchBar: return PanelQuickTarget.touchBar.panelTitle
+        case .lyricsManager: return PanelQuickTarget.lyricsManager.panelTitle
+        case .translation: return L10n.t("显示译文")
+        case .romanization: return L10n.t("显示读音")
+        case .lockPosition: return L10n.t("锁定位置")
         }
     }
 }
