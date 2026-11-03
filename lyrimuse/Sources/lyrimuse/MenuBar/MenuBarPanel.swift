@@ -694,7 +694,7 @@ private struct MenuBarPanelView: View {
 
     // MARK: 钮块网格
 
-    /// 钮块网格,照 macOS 控制中心:一排 4 个坑位,每格占定一块(`AppSettings.menuBarPanelLayout`),中间可以空着;
+    /// 钮块网格,照 macOS 控制中心的摆法:一排 6 列,每格占定一块(`AppSettings.menuBarPanelLayout`),中间可以空着;
     /// 底栏最右那颗「编辑」改它(06 章决策 82、84)。没画出来的格子(没有触控栏时的「触控栏歌词」)坑位照占着、留空;
     /// 最下面整排都空就收起来。
     private var knobGrid: some View {
@@ -713,8 +713,9 @@ private struct MenuBarPanelView: View {
                alignment: .topLeading)
     }
 
-    /// 网格的几何:面板 336 减两边各 10 的内边距(`body` 里那两处),坑位间距 9。
-    private static let grid = PanelGridGeometry(width: 316, spacing: 9)
+    /// 网格的几何:面板 336 减两边各 10 的内边距(`body` 里那两处),行高 78,间距 9。小号 99 宽、中号 153 宽,
+    /// 同这块面板原来一排三个 / 一排两个的格子。
+    private static let grid = PanelGridGeometry(width: 316, rowHeight: 78, spacing: 9)
 
     /// 网格里有没有画得出来的格子(都没有时整块网格不占地方)。
     private var hasVisibleTiles: Bool {
@@ -1285,7 +1286,7 @@ private struct MenuBarPanelView: View {
         @Environment(\.panelTileSize) private var size
         @Environment(\.panelTileEditing) private var editing
 
-        private var cornerRadius: CGFloat { size.cornerRadius(cell: MenuBarPanelView.grid.cell) }
+        private var cornerRadius: CGFloat { panelTileCornerRadius }
 
         var body: some View {
             content
@@ -1353,26 +1354,16 @@ private struct MenuBarPanelView: View {
         // 那层 NSView 上),以及三个形态格子共有的悬停高亮。真要再补,应该补一个说得明白的
         // 形态(比如首次使用时的一次性提示),而不是把这个符号原样放回来。
 
-        /// 三档,同控制中心:小 1×1 图标在上、名字在下;中 2×1 胶囊,图标在左、名字在右;大 2×2 图标在左上、名字在左下。
-        /// 格子尺寸由网格给(坑位边长 72),这里只排里面的东西。
+        /// 小、中:图标在上、名字在下(同这块面板原来的格子,中号只是宽);大:图标在左上、名字在左下。
+        /// 格子尺寸由网格给,这里只排里面的东西。
         @ViewBuilder private var content: some View {
             switch size {
-            case .small:
-                VStack(spacing: 4) {
-                    iconCircle(30, glyph: 14)
-                    titleText(size: 10, lines: 1)
+            case .small, .medium:
+                VStack(spacing: 5) {
+                    iconCircle(36, glyph: 16)
+                    titleText(size: 11, lines: 2)
                 }
-                .padding(.horizontal, 5)
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-            case .medium:
-                HStack(spacing: 8) {
-                    iconCircle(40, glyph: 17)
-                    titleText(size: 12, lines: 2)
-                        .multilineTextAlignment(.leading)
-                    Spacer(minLength: 0)
-                }
-                .padding(.leading, 16)
-                .padding(.trailing, 12)
+                .padding(.horizontal, 6)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             case .large:
                 VStack(alignment: .leading, spacing: 0) {
@@ -1403,13 +1394,13 @@ private struct MenuBarPanelView: View {
                 .foregroundStyle(.primary)
                 .multilineTextAlignment(.center)
                 .lineLimit(unbreakable ? 1 : lines)
-                .minimumScaleFactor(unbreakable ? 0.7 : 0.8)
+                .minimumScaleFactor(unbreakable ? 0.75 : 0.85)
         }
     }
 
     // MARK: 编辑布局
 
-    /// 编辑页,照 macOS 控制中心的「编辑控制」:坑位都摆出来(空着的画淡圆,最下面多留一整排),每格左上「−」移除,
+    /// 编辑页,照 macOS 控制中心的「编辑控制」:坑位都摆出来(空着的画淡格子,最下面多留一整排),每格左上「−」移除,
     /// 悬停时右下角露出弧形拉手、拖它换尺寸(右键也能直接选),拖着格子换位置(落到空位,压在同尺寸的格子上两格互换,
     /// 别的情况弹回);下面「可添加」点一格放进第一个放得下的空位;再下面是底栏几项的显隐、「恢复默认」和「完成」。
     private var editingSection: some View {
@@ -1418,19 +1409,16 @@ private struct MenuBarPanelView: View {
         let rows = layout.rowCount() + 1
         return VStack(spacing: 9) {
             ZStack(alignment: .topLeading) {
-                ForEach(0..<rows, id: \.self) { row in
-                    ForEach(0..<MenuBarPanelLayout.columns, id: \.self) { column in
-                        if layout.isEmpty(column: column, row: row) {
-                            let frame = Self.grid.frame(column: column, row: row, size: .small)
-                            PanelEmptyCell()
-                                .frame(width: frame.width, height: frame.height)
-                                .offset(x: frame.minX, y: frame.minY)
-                        }
-                    }
+                ForEach(layout.emptySlots(rows: rows).map { $0.row * MenuBarPanelLayout.columns + $0.column }, id: \.self) { key in
+                    let frame = Self.grid.frame(column: key % MenuBarPanelLayout.columns, row: key / MenuBarPanelLayout.columns,
+                                                size: .small)
+                    PanelEmptyCell()
+                        .frame(width: frame.width, height: frame.height)
+                        .offset(x: frame.minX, y: frame.minY)
                 }
                 if let preview = dropPreview {
                     let frame = Self.grid.frame(preview)
-                    RoundedRectangle(cornerRadius: preview.size.cornerRadius(cell: Self.grid.cell), style: .continuous)
+                    RoundedRectangle(cornerRadius: panelTileCornerRadius, style: .continuous)
                         .strokeBorder(Color.accentColor, lineWidth: 2)
                         .frame(width: frame.width, height: frame.height)
                         .offset(x: frame.minX, y: frame.minY)
@@ -1444,8 +1432,8 @@ private struct MenuBarPanelView: View {
             .coordinateSpace(name: Self.editGridSpace)
             if !addable.isEmpty {
                 PanelEditCaption(title: L10n.t("可添加"))
-                LazyVGrid(columns: Array(repeating: GridItem(.fixed(Self.grid.cell), spacing: Self.grid.spacing),
-                                         count: MenuBarPanelLayout.columns),
+                LazyVGrid(columns: Array(repeating: GridItem(.fixed(Self.grid.size(.small).width), spacing: Self.grid.spacing),
+                                         count: MenuBarPanelLayout.columns / MenuBarPanelLayout.Size.small.columns),
                           alignment: .leading, spacing: Self.grid.spacing) {
                     ForEach(addable, id: \.self) { tile in
                         addableTile(tile)
@@ -1460,7 +1448,7 @@ private struct MenuBarPanelView: View {
 
     private func editableTile(_ p: MenuBarPanelLayout.Placement) -> some View {
         let frame = Self.grid.frame(p)
-        let radius = p.size.cornerRadius(cell: Self.grid.cell)
+        let radius = panelTileCornerRadius
         return PanelEditableTile(
             content: tileView(p.tile)
                 .environment(\.panelTileSize, p.size)
@@ -1511,7 +1499,7 @@ private struct MenuBarPanelView: View {
             }
     }
 
-    /// 拖右下角拉手换尺寸:指针盖住几列几行就换到哪一档(`PanelGridGeometry.resizedSize`),拖的同时就换;
+    /// 拖右下角拉手换尺寸:指针拉到哪就换到最接近的那一档(`PanelGridGeometry.resizedSize`),拖的同时就换;
     /// 放不下(出界、压到别的格子)就停在原来那一档。
     private func tileResizeGesture(_ p: MenuBarPanelLayout.Placement) -> some Gesture {
         DragGesture(minimumDistance: 1, coordinateSpace: .named(Self.editGridSpace))
@@ -1547,7 +1535,7 @@ private struct MenuBarPanelView: View {
         tileView(tile)
             .environment(\.panelTileSize, .small)
             .environment(\.panelTileEditing, true)
-            .frame(width: Self.grid.cell, height: Self.grid.cell)
+            .frame(width: Self.grid.size(.small).width, height: Self.grid.size(.small).height)
             .contentShape(Rectangle())
             .onTapGesture { addTile(tile) }
             .overlay(alignment: .topLeading) {

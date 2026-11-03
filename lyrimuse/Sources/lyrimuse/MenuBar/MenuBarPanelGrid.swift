@@ -15,7 +15,7 @@ private struct PanelTileEditingKey: EnvironmentKey {
 }
 
 extension EnvironmentValues {
-    /// 格子按哪一档画(小 1×1:图标在上、名字在下;中 2×1:图标在左、名字在右;大 2×2:图标在左上、名字在左下)。
+    /// 格子按哪一档画(小、中:图标在上、名字在下;大:图标在左上、名字在左下)。
     var panelTileSize: MenuBarPanelLayout.Size {
         get { self[PanelTileSizeKey.self] }
         set { self[PanelTileSizeKey.self] = newValue }
@@ -28,16 +28,10 @@ extension EnvironmentValues {
     }
 }
 
-/// 每一档格子的圆角:中号是胶囊,小号、大号是大圆角方块(同控制中心)。
-extension MenuBarPanelLayout.Size {
-    func cornerRadius(cell: CGFloat) -> CGFloat {
-        switch self {
-        case .small: return 22
-        case .medium: return cell / 2
-        case .large: return 28
-        }
-    }
+/// 格子的圆角,三档一样(同正在播放卡下面原来那些格子)。
+let panelTileCornerRadius: CGFloat = 16
 
+extension MenuBarPanelLayout.Size {
     var panelName: String {
         switch self {
         case .small: return L10n.t("小")
@@ -107,10 +101,10 @@ struct PanelResizeCorner: View {
     }
 }
 
-/// 编辑时空着的坑位:一个淡淡的圆(同控制中心编辑时的空位)。
+/// 编辑时空着的坑位:一块淡淡的格子(同控制中心编辑时的空位)。
 struct PanelEmptyCell: View {
     var body: some View {
-        Circle()
+        RoundedRectangle(cornerRadius: panelTileCornerRadius, style: .continuous)
             .fill(Color.primary.opacity(0.07))
             .accessibilityHidden(true)
     }
