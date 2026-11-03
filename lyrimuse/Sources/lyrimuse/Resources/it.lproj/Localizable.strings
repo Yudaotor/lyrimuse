@@ -276,7 +276,7 @@
 "「获取 Lyrimuse」" = "“Ottieni Lyrimuse”";
 "一" = "L";
 "一切就绪" = "Tutto pronto";
-"一周结束后的 %@ 推送上一周的小结" = "Inviato alle %@ a fine settimana con il riepilogo della settimana precedente";
+"一周结束后的 %@ 推送上一周的小结" = "Inviato alle %@ a fine settimana con il riepilogo settimanale";
 "一并解锁" = "Sbloccali";
 "一直显示" = "Sempre";
 "一行 1 分，最多 200" = "Un punto per riga, fino a 200";
@@ -1619,7 +1619,7 @@
 "显示 10 首" = "Mostra 10 brani";
 "显示/隐藏悬浮歌词" = "Mostra/nascondi testo fluttuante";
 "显示/隐藏灵动岛歌词" = "Mostra/nascondi testo nel notch";
-"显示/隐藏菜单栏歌词" = "Mostra/nascondi testo in barra dei menu";
+"显示/隐藏菜单栏歌词" = "Alterna testo nella barra dei menu";
 "显示/隐藏译文" = "Mostra/nascondi traduzione";
 "显示/隐藏读音" = "Mostra/nascondi pronuncia";
 "显示「更多」按钮" = "Mostra pulsante “Altro”";

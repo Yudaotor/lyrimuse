@@ -304,7 +304,7 @@ La riga attuale direttamente nella barra dei menu, che scorre quando è troppo l
 - Impostazioni: Visualizzazione testo › Barra dei menu › Layout › Posizione
 - Impostazioni: Visualizzazione testo › Barra dei menu › Contenuto › Contenuto mostrato
 - Impostazioni: Visualizzazione testo › Barra dei menu › Contenuto › Seconda riga
-- Impostazioni: Scorciatoie da tastiera › Mostra/nascondi testo in barra dei menu
+- Impostazioni: Scorciatoie da tastiera › Alterna testo nella barra dei menu
 
 <a id="feature-touch-bar-lyrics"></a>
 
@@ -1247,7 +1247,7 @@ Tutte le impostazioni della finestra Impostazioni, per posizione: 309 in tutto. 
 - **Mostra/nascondi testo fluttuante**
 - **Mostra/nascondi testo nel notch**
 - **Espandi il notch per un attimo**
-- **Mostra/nascondi testo in barra dei menu**
+- **Alterna testo nella barra dei menu**
 - **Espandi/Contrai testo Touch Bar**
 - **Nascondi/ripristina tutti i testi**
 - **Blocca/sblocca posizione**

@@ -35020,7 +35020,7 @@
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Mostra/nascondi testo in barra dei menu"
+            "value" : "Alterna testo nella barra dei menu"
           }
         },
         "ja" : {
@@ -143656,7 +143656,7 @@
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Inviato alle %@ a fine settimana con il riepilogo della settimana precedente"
+            "value" : "Inviato alle %@ a fine settimana con il riepilogo settimanale"
           }
         },
         "ja" : {
