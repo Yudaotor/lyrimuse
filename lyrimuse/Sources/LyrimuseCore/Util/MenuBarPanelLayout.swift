@@ -2,7 +2,7 @@ import Foundation
 import CoreGraphics
 
 /// 菜单栏左键面板的格子布局,照 macOS 控制中心的摆法:网格一排 6 列,每个格子占定一块(左上角在第几列第几行、多大),
-/// 中间可以空着;底栏藏了哪几项。6 列是为了一排正好放 3 个小号或 2 个中号(这块面板原来的两排就是这样)。见 06 章决策 82、84。
+/// 中间可以空着;底栏藏了哪几项。6 列是为了一排正好放 3 个小号或 2 个中号(这块面板原来的两排就是这样)。见 06 章决策 82、84、86。
 ///
 /// 存成一串 JSON(`encoded()` / `decode(_:)`)。认不出的格子丢掉、认不出的尺寸退回中号、重复的留第一个、
 /// 跟前面重叠或出了边界的挪到第一个放得下的空位;整串读不出来才退回默认。早先按顺序排、没有坑位的那种存法
@@ -28,6 +28,17 @@ public struct MenuBarPanelLayout: Equatable, Sendable {
 
         public var columns: Int { self == .small ? 2 : 3 }
         public var rows: Int { self == .large ? 2 : 1 }
+
+        /// 这一档的格子左边能落在哪几列:小号 0 / 2 / 4(一排三个),中号、大号 0 / 3(一排两个)。只落在这几列上,
+        /// 挤来挤去也不会错开半格。
+        public var alignedColumns: [Int] {
+            Array(Swift.stride(from: 0, through: MenuBarPanelLayout.columns - columns, by: columns))
+        }
+
+        /// 离 `column` 最近的那一列(一样近取左边的)。
+        public func alignedColumn(near column: Int) -> Int {
+            alignedColumns.min { abs($0 - column) < abs($1 - column) } ?? 0
+        }
     }
 
     public struct Placement: Equatable, Hashable, Sendable {
@@ -133,64 +144,73 @@ public struct MenuBarPanelLayout: Equatable, Sendable {
     /// 放进第一个放得下的空位(从上到下、从左到右);现有几排里放不下就放到最下面新起一排。已经在网格里就不动。
     public mutating func add(_ tile: Tile, size: Size = .medium) {
         guard !contains(tile) else { return }
-        placements.append(firstFit(tile, size: size))
+        placements.append(firstFit(tile, size: size, fromRow: 0, column: 0))
     }
 
-    private func firstFit(_ tile: Tile, size: Size) -> Placement {
+    /// 从 (row, column) 起往后(从左到右、从上到下)找第一个对得齐、放得下的位置;现有几排里都没有就新起一排。
+    private func firstFit(_ tile: Tile, size: Size, fromRow startRow: Int, column startColumn: Int) -> Placement {
         let rows = rowCount()
-        for row in 0...rows {
-            for column in 0...(Self.columns - size.columns) {
+        for row in max(startRow, 0)...max(rows, startRow) {
+            for column in size.alignedColumns where row > startRow || column >= startColumn {
                 let p = Placement(tile: tile, size: size, column: column, row: row)
                 if fits(p, ignoring: nil) { return p }
             }
         }
-        return Placement(tile: tile, size: size, column: 0, row: rows)
+        return Placement(tile: tile, size: size, column: 0, row: max(rows, startRow + 1))
     }
 
-    /// 拖动松手要落到哪里:左上角对准 (column, row)。空着就直接放;正好压在一个同尺寸的格子上就两格互换;
-    /// 都不行返回 nil(弹回原位)。左右越界的先夹回网格里。
-    public func dropTarget(for tile: Tile, column: Int, row: Int) -> (placement: Placement, swapWith: Tile?)? {
-        guard let current = placement(of: tile) else { return nil }
-        let clamped = Placement(tile: tile, size: current.size,
-                                column: min(max(column, 0), Self.columns - current.size.columns),
-                                row: max(row, 0))
-        if clamped.column == current.column, clamped.row == current.row { return nil }
-        if fits(clamped, ignoring: nil) { return (clamped, nil) }
-        let hit = placements.filter { $0.tile != tile && $0.overlaps(clamped) }
-        guard hit.count == 1, let other = hit.first, other.size == current.size,
-              other.column == clamped.column, other.row == clamped.row else { return nil }
-        return (clamped, other.tile)
+    /// 把 `tile` 以 `size` 放到左上角 (column, row)(列对齐到这一档能落的那几列),压到的格子让开:其余格子按从上到下、
+    /// 从左到右的先后,原位放得下就不动,放不下的往后挪到第一个对得齐的空位,后面的跟着顺延(同控制中心编辑时的挤位)。
+    /// `tile` 不在网格里就是新加进来。`swap`:正好压在一个同尺寸、左上角对齐的格子上,而那一格放得进 `tile` 原来的位置
+    /// 时两格互换,不往后挤(拖动用;换尺寸不互换)。
+    public func placing(_ tile: Tile, size: Size, column: Int, row: Int, swap: Bool = false) -> MenuBarPanelLayout {
+        let target = Placement(tile: tile, size: size, column: size.alignedColumn(near: column), row: max(row, 0))
+        let others = placements.filter { $0.tile != tile }
+        if swap, let current = placement(of: tile) {
+            let hit = others.filter { $0.overlaps(target) }
+            if hit.count == 1, let other = hit.first, other.size == size,
+               other.column == target.column, other.row == target.row {
+                var swapped = self
+                for i in swapped.placements.indices {
+                    if swapped.placements[i].tile == tile { swapped.placements[i] = target }
+                    if swapped.placements[i].tile == other.tile {
+                        swapped.placements[i].column = current.column
+                        swapped.placements[i].row = current.row
+                    }
+                }
+                return swapped
+            }
+        }
+        var result = MenuBarPanelLayout(placements: [], hiddenFooter: hiddenFooter)
+        result.placements = [target]
+        for p in others.sorted(by: { ($0.row, $0.column) < ($1.row, $1.column) }) {
+            result.placements.append(result.fits(p, ignoring: nil)
+                ? p : result.firstFit(p.tile, size: p.size, fromRow: p.row, column: p.column))
+        }
+        // 存的先后照原来的,新加进来的放最后。
+        var order: [Tile: Int] = [:]
+        for (i, t) in (placements.map(\.tile) + [tile]).enumerated() where order[t] == nil { order[t] = i }
+        result.placements.sort { (order[$0.tile] ?? 0) < (order[$1.tile] ?? 0) }
+        return result
     }
 
-    /// 执行 `dropTarget` 给出的落点。落不下返回 false、布局不变。
+    /// 拖动松手:落到 (column, row),压到的格子让开(同尺寸对齐的两格互换)。原地不动返回 false。
     @discardableResult
     public mutating func move(_ tile: Tile, toColumn column: Int, row: Int) -> Bool {
-        guard let current = placement(of: tile), let target = dropTarget(for: tile, column: column, row: row) else {
-            return false
-        }
-        if let other = target.swapWith, let j = placements.firstIndex(where: { $0.tile == other }) {
-            placements[j].column = current.column
-            placements[j].row = current.row
-        }
-        guard let i = placements.firstIndex(where: { $0.tile == tile }) else { return false }
-        placements[i] = target.placement
+        guard let current = placement(of: tile) else { return false }
+        let moved = placing(tile, size: current.size, column: column, row: row, swap: true)
+        guard moved != self else { return false }
+        self = moved
         return true
     }
 
-    /// 换尺寸:左上角不动;右边放不下(出界或压到别的格子)就试着往左挪一列。都不行返回 false、布局不变。
+    /// 换尺寸:左上角尽量不动(列对齐到这一档能落的那几列里最近的),压到的格子让开、往后顺延。
     @discardableResult
     public mutating func resize(_ tile: Tile, to size: Size) -> Bool {
-        guard let i = placements.firstIndex(where: { $0.tile == tile }) else { return false }
-        let current = placements[i]
+        guard let current = placement(of: tile) else { return false }
         guard current.size != size else { return true }
-        for column in [current.column, current.column - 1] {
-            let p = Placement(tile: tile, size: size, column: column, row: current.row)
-            if fits(p, ignoring: tile) {
-                placements[i] = p
-                return true
-            }
-        }
-        return false
+        self = placing(tile, size: size, column: current.column, row: current.row)
+        return true
     }
 
     public mutating func setFooter(_ item: FooterItem, shown: Bool) {

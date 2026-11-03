@@ -1999,7 +1999,7 @@ func runMenuBarTests() {
                     "菜单栏设置: 读盘时宽度夹回区间、对齐只认菜单栏三档")
     }
 
-    // ---- 菜单栏面板的格子布局(06 章决策 82、84):坑位网格、存盘容错、添加、拖动落点、换尺寸 ----
+    // ---- 菜单栏面板的格子布局(06 章决策 82、84、86):坑位网格、存盘容错、添加、拖动落点、换尺寸 ----
     do {
         typealias L = MenuBarPanelLayout
         typealias P = L.Placement
@@ -2033,50 +2033,74 @@ func runMenuBarTests() {
         expectEqual(L.decode(custom.encoded()), custom, "面板布局: 存了读回来一样(坑位、空着的地方都留着)")
         expectEqual(custom.emptySlots(rows: 3).map { "\($0.column),\($0.row)" }, ["4,0", "4,1", "0,2", "2,2"],
                     "面板布局: 编辑时画空坑位的地方按小号宽切块,半空的不画")
-        // 容错:认不出的、重复的丢掉,尺寸认不出退回中号,重叠或出界的挪到第一个空位。
+        // 容错:认不出的、重复的丢掉,尺寸认不出退回中号,重叠或出界的挪到第一个对得齐的空位。
         let messy = #"{"grid":6,"tiles":[{"id":"overlay","size":"small","col":0,"row":0},{"id":"bogus","col":2,"row":0},{"id":"overlay","col":2,"row":0},{"id":"notch","size":"huge","col":1,"row":0},{"id":"menubar","size":"small","col":5,"row":0}],"hiddenFooter":["version","nope"]}"#
-        expectEqual(L.decode(messy), L(placements: [P(tile: .overlay, size: .small, column: 0, row: 0), P(tile: .notch, size: .medium, column: 2, row: 0),
+        expectEqual(L.decode(messy), L(placements: [P(tile: .overlay, size: .small, column: 0, row: 0), P(tile: .notch, size: .medium, column: 3, row: 0),
                                                    P(tile: .menuBar, size: .small, column: 0, row: 1)], hiddenFooter: [.version]),
-                    "面板布局: 认不出的和重复的丢掉、尺寸退回中号、压到前面或出界的挪到第一个空位,认不出的底栏项丢掉")
+                    "面板布局: 认不出的和重复的丢掉、尺寸退回中号、压到前面或出界的挪到第一个对得齐的空位,认不出的底栏项丢掉")
         // 更早的存法:坑位不作数,按原来先后依次放;按顺序排的那种旧中号、旧小号 → 小号,旧大号 → 中号。
         let legacy = #"{"tiles":[{"id":"overlay","size":"medium"},{"id":"notch","size":"large"},{"id":"favorite","size":"small"},{"id":"menubar","size":"small"}]}"#
-        expectEqual(L.decode(legacy).placements, [P(tile: .overlay, size: .small, column: 0, row: 0), P(tile: .notch, size: .medium, column: 2, row: 0),
+        expectEqual(L.decode(legacy).placements, [P(tile: .overlay, size: .small, column: 0, row: 0), P(tile: .notch, size: .medium, column: 3, row: 0),
                                                  P(tile: .menuBar, size: .small, column: 0, row: 1)],
-                    "面板布局: 按顺序排的旧存法按长相换算、依次放,挪走的喜欢丢掉")
+                    "面板布局: 按顺序排的旧存法按长相换算、依次放进对得齐的空位,挪走的喜欢丢掉")
         let fourColumn = #"{"tiles":[{"id":"notch","size":"small","col":1,"row":0},{"id":"overlay","size":"small","col":0,"row":0}]}"#
         expectEqual(L.decode(fourColumn).tiles, [.overlay, .notch], "面板布局: 4 列网格那一版按从左到右的先后重新放")
-        // 添加:第一个放得下的空位,从上到下、从左到右;都放不下就新起一排。
+        // 对齐的列:小号 0 / 2 / 4,中号、大号 0 / 3。
+        expectEqual(L.Size.small.alignedColumns == [0, 2, 4] && L.Size.medium.alignedColumns == [0, 3] && L.Size.large.alignedColumns == [0, 3],
+                    true, "面板布局: 每一档能落的列")
+        expectEqual(L.Size.medium.alignedColumn(near: 5) == 3 && L.Size.small.alignedColumn(near: 3) == 2 && L.Size.medium.alignedColumn(near: 2) == 3,
+                    true, "面板布局: 落到最近的对齐列")
+        // 添加:第一个对得齐、放得下的空位,从上到下、从左到右;都放不下就新起一排。
         var adding = L(placements: [P(tile: .overlay, size: .small, column: 0, row: 0), P(tile: .notch, size: .medium, column: 3, row: 0)])
         adding.add(.menuBar)
         expectEqual(adding.placement(of: .menuBar), P(tile: .menuBar, size: .medium, column: 0, row: 1), "面板添加: 第一排放不下中号,放第二排开头")
         adding.add(.lyricsWindow, size: .small)
-        expectEqual(adding.placement(of: .lyricsWindow), P(tile: .lyricsWindow, size: .small, column: 3, row: 1), "面板添加: 小号填进第一个空位")
+        expectEqual(adding.placement(of: .lyricsWindow), P(tile: .lyricsWindow, size: .small, column: 4, row: 1), "面板添加: 小号填进第一个对得齐的空位")
         adding.add(.lyricsWindow, size: .large)
         expectEqual(adding.size(of: .lyricsWindow), .small, "面板添加: 已在网格里的不重复添加")
-        // 拖动落点:空位直接放;压在同尺寸、左上角对齐的格子上两格互换;别的情况落不下(返回 nil,弹回)。
-        var moving = L(placements: [P(tile: .overlay, size: .small, column: 0, row: 0), P(tile: .notch, size: .small, column: 2, row: 0),
-                                    P(tile: .menuBar, size: .medium, column: 0, row: 1)])
-        expectEqual(moving.dropTarget(for: .overlay, column: 4, row: 0)?.placement, P(tile: .overlay, size: .small, column: 4, row: 0),
-                    "面板拖动: 落到空位")
-        expectEqual(moving.dropTarget(for: .overlay, column: 2, row: 0)?.swapWith, .notch, "面板拖动: 压在同尺寸的格子上两格互换")
-        expectEqual(moving.dropTarget(for: .overlay, column: 0, row: 1) == nil, true, "面板拖动: 压在不同尺寸的格子上落不下")
-        expectEqual(moving.dropTarget(for: .overlay, column: 1, row: 0) == nil, true, "面板拖动: 半压在别的格子上落不下")
-        expectEqual(moving.dropTarget(for: .menuBar, column: 5, row: 1)?.placement.column, 3, "面板拖动: 右边越界的夹回网格里")
-        expectEqual(moving.dropTarget(for: .overlay, column: 0, row: 0) == nil, true, "面板拖动: 原地不算挪")
-        expectEqual(moving.dropTarget(for: .overlay, column: 0, row: 4)?.placement.row, 4, "面板拖动: 能拖到下面空着的排(中间留空)")
-        moving.move(.overlay, toColumn: 2, row: 0)
-        expectEqual(moving.placement(of: .overlay)?.column == 2 && moving.placement(of: .notch)?.column == 0, true, "面板拖动: 互换执行")
-        expectEqual(moving.move(.overlay, toColumn: 0, row: 1), false, "面板拖动: 落不下时不动")
-        moving.remove(.notch)
-        expectEqual(moving.isEmpty(column: 0, row: 0) && moving.isEmpty(column: 1, row: 0), true, "面板布局: 移除后坑位空着,别的格子不挪")
-        // 换尺寸:左上角不动,右边放不下就往左挪一列;都不行不变。
-        var sizing = L(placements: [P(tile: .overlay, size: .small, column: 4, row: 0), P(tile: .notch, size: .small, column: 0, row: 0),
-                                    P(tile: .menuBar, size: .small, column: 4, row: 1)])
-        expectEqual(sizing.resize(.overlay, to: .medium), true, "面板换尺寸: 最右边的小号变中号")
-        expectEqual(sizing.placement(of: .overlay), P(tile: .overlay, size: .medium, column: 3, row: 0), "面板换尺寸: 右边出界往左挪一列")
-        expectEqual(sizing.resize(.overlay, to: .large), false, "面板换尺寸: 往下压到别的格子就不变")
-        expectEqual(sizing.size(of: .overlay), .medium, "面板换尺寸: 不变")
-        expectEqual(sizing.resize(.notch, to: .large), true, "面板换尺寸: 下面空着就能变大号")
+        // 挤位:放到哪,压到的格子让开,按从上到下、从左到右往后顺延到第一个对得齐的空位;放完谁也不压谁。
+        func tidy(_ l: L) -> Bool { l.placements.allSatisfy { l.fits($0, ignoring: nil) } }
+        let base = L(placements: [P(tile: .overlay, size: .small, column: 0, row: 0), P(tile: .notch, size: .small, column: 2, row: 0),
+                                  P(tile: .menuBar, size: .small, column: 4, row: 0), P(tile: .lyricsWindow, size: .medium, column: 0, row: 1),
+                                  P(tile: .lyricsManager, size: .medium, column: 3, row: 1)])
+        let inserted = base.placing(.translation, size: .small, column: 2, row: 0)
+        expectEqual(inserted.placement(of: .translation), P(tile: .translation, size: .small, column: 2, row: 0), "面板挤位: 新格子塞到中间那一格")
+        expectEqual(inserted.placement(of: .overlay)?.column == 0 && inserted.placement(of: .notch) == P(tile: .notch, size: .small, column: 4, row: 0)
+                    && inserted.placement(of: .menuBar) == P(tile: .menuBar, size: .small, column: 0, row: 1), true,
+                    "面板挤位: 被压的那格往后挪一格,后面的跟着顺延到下一排")
+        expectEqual(tidy(inserted) && inserted.placements.count == 6, true, "面板挤位: 挤完不重叠、一格不少")
+        expectEqual(inserted.tiles.last, .translation, "面板挤位: 新加的存在最后")
+        var swapping = base
+        expectEqual(swapping.move(.overlay, toColumn: 2, row: 0), true, "面板拖动: 拖到同尺寸的格子上")
+        expectEqual(swapping.placement(of: .overlay)?.column == 2 && swapping.placement(of: .notch)?.column == 0, true,
+                    "面板拖动: 同尺寸对齐的两格互换,不往后挤")
+        var pushing = base
+        pushing.move(.lyricsManager, toColumn: 0, row: 0)
+        expectEqual(pushing.placement(of: .lyricsManager) == P(tile: .lyricsManager, size: .medium, column: 0, row: 0) && tidy(pushing), true,
+                    "面板拖动: 中号拖到第一排开头,小号们让开")
+        var empty = base
+        empty.move(.lyricsManager, toColumn: 0, row: 3)
+        expectEqual(empty.placement(of: .lyricsManager)?.row == 3 && empty.isEmpty(column: 3, row: 1) && empty.placement(of: .overlay)?.row == 0, true,
+                    "面板拖动: 拖到下面空着的排,原位空着,别的不动")
+        var still = base
+        expectEqual(still.move(.overlay, toColumn: 1, row: 0), false, "面板拖动: 对齐回原位不算挪")
+        var clamped = base
+        clamped.move(.lyricsWindow, toColumn: 5, row: 3)
+        expectEqual(clamped.placement(of: .lyricsWindow)?.column, 3, "面板拖动: 右边越界的落到最近的对齐列")
+        // 换尺寸:左上角尽量不动(列对齐),压到的格子让开、往后顺延 —— 下面、旁边有格子也拉得大。
+        var sizing = base
+        expectEqual(sizing.resize(.overlay, to: .large), true, "面板换尺寸: 下面有格子也能变大号")
+        expectEqual(sizing.placement(of: .overlay), P(tile: .overlay, size: .large, column: 0, row: 0), "面板换尺寸: 左上角不动")
+        expectEqual(tidy(sizing) && sizing.placement(of: .notch) == P(tile: .notch, size: .small, column: 4, row: 0), true,
+                    "面板换尺寸: 压到的格子让开、不重叠")
+        var edge = base
+        edge.resize(.menuBar, to: .medium)
+        expectEqual(edge.placement(of: .menuBar)?.column == 3 && tidy(edge), true, "面板换尺寸: 最右边的小号变中号,落到对齐的第 3 列")
+        expectEqual(edge.resize(.overlay, to: .small), true, "面板换尺寸: 同一档不算换")
+        var gone = base
+        gone.remove(.notch)
+        expectEqual(gone.isEmpty(column: 2, row: 0) && gone.isEmpty(column: 3, row: 0) && gone.placement(of: .menuBar)?.column == 4, true,
+                    "面板布局: 移除后坑位空着,别的格子不挪")
         expectEqual(L.default.addable { $0 != .touchBar }, [.translation, .romanization, .lockPosition], "面板布局: 可添加的三种新格子")
         expectEqual(L(placements: []).addable { $0 != .touchBar }.contains(.touchBar), false, "面板布局: 没有触控栏时不进可添加")
 

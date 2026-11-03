@@ -439,9 +439,9 @@ extension DebugDeepLinks {
             logger.notice("debug panel drag: panel is not open")
             return
         }
-        let height = window.frame.height
+        // 窗口高度每个事件现读:拖动中格子让位会多出一排,面板当场长高,拿开头那个高度换算,后面的点就整体偏一排。
         func event(_ type: NSEvent.EventType, _ p: CGPoint) -> NSEvent? {
-            NSEvent.mouseEvent(with: type, location: NSPoint(x: p.x, y: height - p.y), modifierFlags: [],
+            NSEvent.mouseEvent(with: type, location: NSPoint(x: p.x, y: window.frame.height - p.y), modifierFlags: [],
                                timestamp: ProcessInfo.processInfo.systemUptime, windowNumber: window.windowNumber,
                                context: nil, eventNumber: 0, clickCount: 1, pressure: type == .leftMouseUp ? 0 : 1)
         }

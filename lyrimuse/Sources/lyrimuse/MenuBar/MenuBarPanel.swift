@@ -508,13 +508,18 @@ private struct MenuBarPanelView: View {
 
     /// 在编辑格子布局(底栏最右那颗进、「完成」出):钮块网格和底栏换成编辑版,见 `editingSection`。
     @State private var editing: Bool
-    /// 编辑时正拖着的格子、指针位置(网格坐标)、按下点离格子左上角多远,松手会落到哪(nil = 落不下,弹回)。
+    /// 编辑时正拖着的格子(网格里的,或从「可添加」拖出来的)、它多大、指针位置(编辑页坐标)、按下点离格子左上角多远。
     @State private var draggingTile: MenuBarPanelLayout.Tile?
+    @State private var dragSize = MenuBarPanelLayout.Size.small
     @State private var dragPointer: CGPoint = .zero
     @State private var dragGrab: CGSize = .zero
-    @State private var dropPreview: MenuBarPanelLayout.Placement?
-    /// 正在拖右下角拉手换尺寸的那一格。
+    /// 拖动开始那一刻的布局,和按指针此刻对准的坑位挤好的样子(编辑页照它画,松手写进设置;nil = 拖到网格外面,不加)。
+    @State private var dragBase: MenuBarPanelLayout?
+    @State private var dragPreview: MenuBarPanelLayout?
+    @State private var dragCell: [Int] = []
+    /// 正在拖右下角拉手换尺寸的那一格,和开始拉那一刻的布局(拉大时挤开的格子,缩回去会回原位)。
     @State private var resizingTile: MenuBarPanelLayout.Tile?
+    @State private var resizeBase: MenuBarPanelLayout?
 
     init(close: @escaping () -> Void, initialQuickTarget: PanelQuickTarget? = nil, initialEditing: Bool = false) {
         self.close = close
@@ -1407,12 +1412,14 @@ private struct MenuBarPanelView: View {
     // MARK: 编辑布局
 
     /// 编辑页,照 macOS 控制中心的「编辑控制」:坑位都摆出来(空着的画淡格子,最下面多留一整排),每格左上「−」移除,
-    /// 悬停时右下角露出弧形拉手、拖它换尺寸(右键也能直接选),拖着格子换位置(落到空位,压在同尺寸的格子上两格互换,
-    /// 别的情况弹回);下面「可添加」点一格放进第一个放得下的空位;再下面是底栏几项的显隐、「恢复默认」和「完成」。
+    /// 悬停时右下角露出弧形拉手、拖它换尺寸(压到的格子让开;右键也能直接选);拖着格子(或从「可添加」拖一格进来)对准哪,
+    /// 别的格子就当场让开、往后顺延(`MenuBarPanelLayout.placing`),松手落定;「可添加」点一格放进第一个放得下的空位;
+    /// 再下面是底栏几项的显隐、「恢复默认」和「完成」。
     private var editingSection: some View {
-        let layout = playback.panelLayout
-        let addable = layout.addable(available: tileAvailable)
-        let rows = layout.rowCount() + 1
+        let layout = dragPreview ?? playback.panelLayout
+        // 「可添加」按落定的布局列:拖着的那一格留在原处(调淡),挂在它上面的拖动手势才不会半路断掉。
+        let addable = playback.panelLayout.addable(available: tileAvailable)
+        let rows = max(layout.rowCount(), (dragBase ?? playback.panelLayout).rowCount()) + 1
         return VStack(spacing: 9) {
             ZStack(alignment: .topLeading) {
                 ForEach(layout.emptySlots(rows: rows).map { $0.row * MenuBarPanelLayout.columns + $0.column }, id: \.self) { key in
@@ -1422,20 +1429,11 @@ private struct MenuBarPanelView: View {
                         .frame(width: frame.width, height: frame.height)
                         .offset(x: frame.minX, y: frame.minY)
                 }
-                if let preview = dropPreview {
-                    let frame = Self.grid.frame(preview)
-                    RoundedRectangle(cornerRadius: panelTileCornerRadius, style: .continuous)
-                        .strokeBorder(Color.accentColor, lineWidth: 2)
-                        .frame(width: frame.width, height: frame.height)
-                        .offset(x: frame.minX, y: frame.minY)
-                }
                 ForEach(layout.placements, id: \.tile) { p in
                     editableTile(p)
                 }
-                draggedTileCopy
             }
             .frame(width: Self.grid.width, height: Self.grid.height(rows: rows), alignment: .topLeading)
-            .coordinateSpace(name: Self.editGridSpace)
             if !addable.isEmpty {
                 PanelEditCaption(title: L10n.t("可添加"))
                 LazyVGrid(columns: Array(repeating: GridItem(.fixed(Self.grid.size(.small).width), spacing: Self.grid.spacing),
@@ -1448,6 +1446,9 @@ private struct MenuBarPanelView: View {
             }
             footerEditor
         }
+        // 网格是这一列的第一块,编辑页坐标就是网格坐标;「可添加」拖出来的格子也用同一套坐标判断落在网格哪一格。
+        .coordinateSpace(name: Self.editGridSpace)
+        .overlay(alignment: .topLeading) { draggedTileCopy }
     }
 
     private static let editGridSpace = "panel-edit-grid"
@@ -1466,7 +1467,7 @@ private struct MenuBarPanelView: View {
             resizing: resizingTile == p.tile,
             remove: { updateLayout { $0.remove(p.tile) } },
             resizeGesture: AnyGesture(tileResizeGesture(p).map { _ in () }))
-            // 拖着的那格原位留个淡影,跟着指针走的是上面那层 `draggedTileCopy`。
+            // 拖着的那格在要落的位置留个淡影,跟着指针走的是上面那层 `draggedTileCopy`。
             .opacity(draggingTile == p.tile ? 0.3 : 1)
             .gesture(tileDragGesture(p))
             .contextMenu {
@@ -1481,54 +1482,102 @@ private struct MenuBarPanelView: View {
             .offset(x: frame.minX, y: frame.minY)
     }
 
-    /// 拖着格子走:跟着指针的是一份拷贝,原位留淡影;此刻对准的坑位放得下就描一圈边(`dropTarget`),松手落过去,
-    /// 放不下就弹回原位。
+    /// 拖网格里的格子:跟着指针的是一份拷贝;对准的坑位压到别的格子就让它们当场让开(同尺寸对齐的两格互换),松手落定。
     private func tileDragGesture(_ p: MenuBarPanelLayout.Placement) -> some Gesture {
         DragGesture(minimumDistance: 3, coordinateSpace: .named(Self.editGridSpace))
             .onChanged { value in
-                let frame = Self.grid.frame(p)
                 if draggingTile != p.tile {
-                    dragGrab = CGSize(width: value.startLocation.x - frame.minX, height: value.startLocation.y - frame.minY)
-                    draggingTile = p.tile
+                    let frame = Self.grid.frame(p)
+                    beginDrag(p.tile, size: p.size,
+                              grab: CGSize(width: value.startLocation.x - frame.minX, height: value.startLocation.y - frame.minY))
                 }
                 dragPointer = value.location
-                let origin = CGPoint(x: value.location.x - dragGrab.width, y: value.location.y - dragGrab.height)
-                let cell = Self.grid.nearestCell(to: origin)
-                dropPreview = playback.panelLayout.dropTarget(for: p.tile, column: cell.column, row: cell.row)?.placement
+                updateDragPreview(swap: true)
             }
-            .onEnded { _ in
-                if let target = dropPreview {
-                    updateLayout { $0.move(p.tile, toColumn: target.column, row: target.row) }
-                }
-                draggingTile = nil
-                dropPreview = nil
-            }
+            .onEnded { _ in endDrag() }
     }
 
-    /// 拖右下角拉手换尺寸:指针拉到哪就换到最接近的那一档(`PanelGridGeometry.resizedSize`),拖的同时就换;
-    /// 放不下(出界、压到别的格子)就停在原来那一档。
+    /// 从「可添加」拖一格进网格:按小号拖,对准哪就塞到哪、别的格子让开;拖回网格外面松手就不加。
+    private func newTileDragGesture(_ tile: MenuBarPanelLayout.Tile) -> some Gesture {
+        DragGesture(minimumDistance: 3, coordinateSpace: .named(Self.editGridSpace))
+            .onChanged { value in
+                if draggingTile != tile {
+                    let size = Self.grid.size(.small)
+                    beginDrag(tile, size: .small, grab: CGSize(width: size.width / 2, height: size.height / 2))
+                }
+                dragPointer = value.location
+                updateDragPreview(swap: false)
+            }
+            .onEnded { _ in endDrag() }
+    }
+
+    private func beginDrag(_ tile: MenuBarPanelLayout.Tile, size: MenuBarPanelLayout.Size, grab: CGSize) {
+        draggingTile = tile
+        dragSize = size
+        dragGrab = grab
+        dragBase = playback.panelLayout
+        dragCell = []
+    }
+
+    /// 指针对准的坑位变了才重算一遍挤好的样子(同一格里晃不重排)。拖到网格下面去了:网格里的格子弹回原位,新格子不加。
+    private func updateDragPreview(swap: Bool) {
+        guard let tile = draggingTile, let base = dragBase else { return }
+        let origin = CGPoint(x: dragPointer.x - dragGrab.width, y: dragPointer.y - dragGrab.height)
+        let cell = Self.grid.nearestCell(to: origin)
+        let column = dragSize.alignedColumn(near: cell.column)
+        let outside = origin.y > Self.grid.height(rows: base.rowCount() + 1)
+        let key = outside ? [-1] : [column, max(cell.row, 0)]
+        guard key != dragCell else { return }
+        dragCell = key
+        let preview: MenuBarPanelLayout? = outside
+            ? (base.contains(tile) ? base : nil)
+            : base.placing(tile, size: dragSize, column: column, row: cell.row, swap: swap && base.contains(tile))
+        withAnimation(reduceMotion ? nil : .easeOut(duration: 0.18)) {
+            dragPreview = preview
+        }
+    }
+
+    private func endDrag() {
+        if let preview = dragPreview, preview != playback.panelLayout {
+            updateLayout { $0 = preview }
+        }
+        draggingTile = nil
+        dragBase = nil
+        dragPreview = nil
+        dragCell = []
+    }
+
+    /// 拖右下角拉手换尺寸:指针拉到哪就换到最接近的那一档(`PanelGridGeometry.resizedSize`),拖的同时就换;压到的格子让开、
+    /// 往后顺延。按开始拉那一刻的布局算:拉大挤开的格子,缩回去时回到原位。
     private func tileResizeGesture(_ p: MenuBarPanelLayout.Placement) -> some Gesture {
         DragGesture(minimumDistance: 1, coordinateSpace: .named(Self.editGridSpace))
             .onChanged { value in
-                resizingTile = p.tile
-                guard let current = playback.panelLayout.placement(of: p.tile) else { return }
-                let origin = Self.grid.frame(current).origin
-                let target = Self.grid.resizedSize(origin: origin, pointer: value.location)
-                if target != current.size {
-                    updateLayout { $0.resize(p.tile, to: target) }
+                if resizingTile != p.tile {
+                    resizingTile = p.tile
+                    resizeBase = playback.panelLayout
+                }
+                guard let base = resizeBase, let start = base.placement(of: p.tile) else { return }
+                let target = Self.grid.resizedSize(origin: Self.grid.frame(start).origin, pointer: value.location)
+                var resized = base
+                resized.resize(p.tile, to: target)
+                if resized != playback.panelLayout {
+                    updateLayout { $0 = resized }
                 }
             }
-            .onEnded { _ in resizingTile = nil }
+            .onEnded { _ in
+                resizingTile = nil
+                resizeBase = nil
+            }
     }
 
-    /// 拖动中跟着指针走的那一格。
+    /// 拖动中跟着指针走的那一格(网格里的,或从「可添加」拖出来的)。
     @ViewBuilder private var draggedTileCopy: some View {
-        if let tile = draggingTile, let p = playback.panelLayout.placement(of: tile) {
-            let frame = Self.grid.frame(p)
+        if let tile = draggingTile {
+            let size = Self.grid.size(dragSize)
             tileView(tile)
-                .environment(\.panelTileSize, p.size)
+                .environment(\.panelTileSize, dragSize)
                 .environment(\.panelTileEditing, true)
-                .frame(width: frame.width, height: frame.height)
+                .frame(width: size.width, height: size.height)
                 .scaleEffect(reduceMotion ? 1 : 1.04)
                 .shadow(color: .black.opacity(0.2), radius: 8, y: 3)
                 .offset(x: dragPointer.x - dragGrab.width, y: dragPointer.y - dragGrab.height)
@@ -1536,14 +1585,17 @@ private struct MenuBarPanelView: View {
         }
     }
 
-    /// 「可添加」里的一格(小号):点一下以中号放进第一个放得下的空位,现有几排都放不下就在最下面新起一排。
+    /// 「可添加」里的一格(小号):点一下以中号放进第一个放得下的空位(现有几排都放不下就在最下面新起一排);
+    /// 也能拖进网格,对准哪就塞到哪。
     private func addableTile(_ tile: MenuBarPanelLayout.Tile) -> some View {
         tileView(tile)
             .environment(\.panelTileSize, .small)
             .environment(\.panelTileEditing, true)
             .frame(width: Self.grid.size(.small).width, height: Self.grid.size(.small).height)
+            .opacity(draggingTile == tile ? 0.3 : 1)
             .contentShape(Rectangle())
             .onTapGesture { addTile(tile) }
+            .gesture(newTileDragGesture(tile))
             .overlay(alignment: .topLeading) {
                 PanelEditBadge(symbol: "plus", tint: .accentColor, label: L10n.t("添加")) { addTile(tile) }
                     .offset(x: -4, y: -4)
