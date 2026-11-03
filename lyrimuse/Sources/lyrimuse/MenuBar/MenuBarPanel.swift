@@ -869,7 +869,8 @@ private struct MenuBarPanelView: View {
             // (跳去别的 App 了,面板留着也只会被失焦监视器收掉,不如主动收干净)。
             //
             // 喜欢放在角标下面、跟封面底边对齐:它说的是这首歌,挨着歌名歌手;走带那一排两侧留给随机、循环。
-            VStack(alignment: .trailing, spacing: 0) {
+            // 两颗竖着居中对齐(两颗键宽度不同,靠右对齐时中线错开)。
+            VStack(alignment: .center, spacing: 0) {
                 if let icon = PlaybackCoordinator.shared.resolvedPlayerIcon {
                     Button {
                         PlaybackCoordinator.shared.openResolvedPlayer()
