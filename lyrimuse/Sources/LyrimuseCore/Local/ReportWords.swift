@@ -3,7 +3,7 @@ import Foundation
 /// 听歌报告用哪种语言写:App 的界面语言(`L10n.current`:zh-hans / zh-hant / en),写进 features.json 的
 /// `report_language` 给引擎(digestlang.go)。认不得的按简体。
 public enum ReportLanguage: String, CaseIterable, Sendable {
-    case zhHans = "zh-hans", zhHant = "zh-hant", en, ja, ko, es, fr, de, it
+    case zhHans = "zh-hans", zhHant = "zh-hant", en, ja, ko, es, fr, de, it, ptBR = "pt-br"
 
     /// features.json 里的键名,同引擎 featureFlagsFile.ReportLanguage 的 json 标签。
     public static let featuresKey = "report_language"
@@ -41,7 +41,7 @@ public struct ReportWords: Sendable {
         return out + rest
     }
 
-    /// 带数量 `{n}` 的那一句;数量是 1 且表里有 `key_one` 时用它(英文单复数)。表里有 `zero_is_one` 的语言(法语)0 也用单数,同引擎 digestWords.count。
+    /// 带数量 `{n}` 的那一句;数量是 1 且表里有 `key_one` 时用它(英文单复数)。表里有 `zero_is_one` 的语言(法语、葡萄牙语)0 也用单数,同引擎 digestWords.count。
     public func count(_ key: String, _ n: Int, _ values: [(String, String)] = []) -> String {
         let singular = n == 1 || (n == 0 && !self["zero_is_one"].isEmpty)
         return f(singular && table[key + "_one"] != nil ? key + "_one" : key, [("n", String(n))] + values)
@@ -509,6 +509,57 @@ public struct ReportWords: Sendable {
             "title_yesterday": "🎧 Report di ascolto di ieri ({date})",
             "value_hm": "{h} h {m} min",
             "value_m": "{m} min",
+        ],
+        .ptBR: [
+            "brief_line": "{label}: {name} · {n}",
+            "col_albums": "Álbuns",
+            "col_artists": "Artistas",
+            "col_tracks": "Músicas",
+            "colon": ":",
+            "compare": " ({label}: {prev}, {change})",
+            "cover": "Capa",
+            "date": "{d}/{m}",
+            "duration_hm": " · cerca de {h} h {m} min",
+            "duration_m": " · cerca de {m} min",
+            "flat": "sem variação",
+            "footer": "Lyrimuse · Dados de {source}",
+            "head_albums": "Álbuns mais ouvidos",
+            "head_artists": "Artistas mais ouvidos",
+            "head_tracks": "Músicas mais ouvidas",
+            "item": "{i}. {name} ({n})",
+            "keyword": "audição",
+            "label_album": "Álbum",
+            "label_artist": "Artista",
+            "label_track": "Música",
+            "link": "Ranking completo em {source}",
+            "month_names": "janeiro,fevereiro,março,abril,maio,junho,julho,agosto,setembro,outubro,novembro,dezembro",
+            "more": " e mais",
+            "most_played": "Mais ouvidos",
+            "name_sep": ", ",
+            "names_lead": ": ",
+            "new_artists": "{n} artistas novos",
+            "new_artists_one": "{n} artista novo",
+            "pair": "{artist} - {name}",
+            "plays": "{n} reproduções",
+            "plays_one": "{n} reprodução",
+            "plays_truncated": "Mais de {n} reproduções (são muitas; só as mais recentes foram contadas)",
+            "preset_brief": "{summary}\nArtista principal: {top_artist}\nÁlbum principal: {top_album}\nMúsica principal: {top_track}\nArtistas novos ({new_artists}): {new_artist_names}",
+            "preset_full": "{summary}\n\nArtistas mais ouvidos:\n{top_artists}\n\nÁlbuns mais ouvidos:\n{top_albums}\n\nMúsicas mais ouvidas:\n{top_tracks}\n\nArtistas novos ({new_artists}): {new_artist_names}",
+            "preset_overview": "{summary}\nArtistas novos: {new_artists}",
+            "prev_month": "em {month_name}",
+            "prev_month_year": "em {month_name} de {year}",
+            "prev_week": "semana anterior",
+            "prev_year": "em {year}",
+            "title_day": "🎧 Relatório de audição ({date})",
+            "title_month": "📅 Resumo de audição de {month_name} de {year}",
+            "title_sample": "🎧 Exemplo de relatório de audição",
+            "title_today": "🎧 Relatório de audição de hoje ({date})",
+            "title_week": "🎵 Resumo de audição da semana passada ({from} – {to})",
+            "title_year": "🏆 Resumo de audição de {year}",
+            "title_yesterday": "🎧 Relatório de audição de ontem ({date})",
+            "value_hm": "{h} h {m} min",
+            "value_m": "{m} min",
+            "zero_is_one": "1",
         ],
     ]
 }

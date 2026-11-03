@@ -1,6 +1,6 @@
 # Lyrimuse URLスキーム
 
-*[English](url-scheme.md) · [简体中文](url-scheme.zh-CN.md) · **日本語** · [한국어](url-scheme.ko.md) · [Español](url-scheme.es.md) · [Français](url-scheme.fr.md) · [Deutsch](url-scheme.de.md) · [Italiano](url-scheme.it.md)*
+*[English](url-scheme.md) · [简体中文](url-scheme.zh-CN.md) · **日本語** · [한국어](url-scheme.ko.md) · [Español](url-scheme.es.md) · [Français](url-scheme.fr.md) · [Deutsch](url-scheme.de.md) · [Italiano](url-scheme.it.md) · [Português (Brasil)](url-scheme.pt-BR.md)*
 
 `lyrimuse://` で始まるリンクを使うと、ショートカット、Raycast、Alfred、Stream Deck、ターミナル（`open 'lyrimuse://…'`）などのツールからLyrimuseを操作できます。ウインドウや設定ページを開く、歌詞の表示・非表示を切り替える、再生を操作する、タイミングを微調整する、再生中の曲の情報を取得する、といったことができます。
 

@@ -1277,6 +1277,148 @@
       "body": "286 ascolti (settimana precedente: 241, ↑19%) · circa 17 h 52 min\nNuovi artisti: 5",
       "sections": null,
       "new_line": "5 nuovi artisti"
+    },
+    {
+      "lang": "pt-br",
+      "kind": "daily",
+      "style": "full",
+      "top_n": 3,
+      "title": "🎧 Relatório de audição de hoje (20/10)",
+      "summary": "42 reproduções · cerca de 2 h 46 min",
+      "body": "42 reproduções · cerca de 2 h 46 min\n\nArtistas mais ouvidos:\n1. 周杰伦 (12)\n2. 方大同 (8)\n3. 陈绮贞 (5)\n\nÁlbuns mais ouvidos:\n1. 周杰伦 - 叶惠美 (6)\n2. 方大同 - 15 (5)\n3. 陈绮贞 - 还是会寂寞 (4)\n\nMúsicas mais ouvidas:\n1. 周杰伦 - 晴天 (4)\n2. 方大同 - 春风吹 (3)\n3. 陈绮贞 - 越洋电话 (3)\n\n2 artistas novos: Prince, D'Angelo",
+      "sections": [
+        {
+          "heading": "Artistas",
+          "title": "Artistas mais ouvidos",
+          "lines": [
+            "1. 周杰伦 · 12",
+            "2. 方大同 · 8",
+            "3. 陈绮贞 · 5"
+          ]
+        },
+        {
+          "heading": "Álbuns",
+          "title": "Álbuns mais ouvidos",
+          "lines": [
+            "1. 叶惠美 — 周杰伦 · 6",
+            "2. 15 — 方大同 · 5",
+            "3. 还是会寂寞 — 陈绮贞 · 4"
+          ]
+        },
+        {
+          "heading": "Músicas",
+          "title": "Músicas mais ouvidas",
+          "lines": [
+            "1. 晴天 — 周杰伦 · 4",
+            "2. 春风吹 — 方大同 · 3",
+            "3. 越洋电话 — 陈绮贞 · 3"
+          ]
+        }
+      ],
+      "new_line": "2 artistas novos: Prince, D'Angelo"
+    },
+    {
+      "lang": "pt-br",
+      "kind": "daily",
+      "style": "brief",
+      "top_n": 3,
+      "title": "🎧 Relatório de audição de hoje (20/10)",
+      "summary": "42 reproduções · cerca de 2 h 46 min",
+      "body": "42 reproduções · cerca de 2 h 46 min\nArtista principal: 周杰伦\nÁlbum principal: 周杰伦 - 叶惠美\nMúsica principal: 周杰伦 - 晴天\nArtistas novos (2): Prince, D'Angelo",
+      "sections": [
+        {
+          "heading": "Mais ouvidos",
+          "title": "Mais ouvidos",
+          "lines": [
+            "Artista: 周杰伦 · 12",
+            "Álbum: 叶惠美 — 周杰伦 · 6",
+            "Música: 晴天 — 周杰伦 · 4"
+          ]
+        }
+      ],
+      "new_line": "2 artistas novos: Prince, D'Angelo"
+    },
+    {
+      "lang": "pt-br",
+      "kind": "daily",
+      "style": "overview",
+      "top_n": 3,
+      "title": "🎧 Relatório de audição de hoje (20/10)",
+      "summary": "42 reproduções · cerca de 2 h 46 min",
+      "body": "42 reproduções · cerca de 2 h 46 min\nArtistas novos: 2",
+      "sections": null,
+      "new_line": "2 artistas novos"
+    },
+    {
+      "lang": "pt-br",
+      "kind": "weekly",
+      "style": "full",
+      "top_n": 3,
+      "title": "🎵 Resumo de audição da semana passada (12/10 – 18/10)",
+      "summary": "286 reproduções (semana anterior: 241, ↑19%) · cerca de 17 h 52 min",
+      "body": "286 reproduções (semana anterior: 241, ↑19%) · cerca de 17 h 52 min\n\nArtistas mais ouvidos:\n1. 方大同 (61)\n2. 周杰伦 (48)\n3. Prince (33)\n\nÁlbuns mais ouvidos:\n1. 方大同 - JTW 西游记 (29)\n2. 周杰伦 - 叶惠美 (21)\n3. Prince - For You (17)\n\nMúsicas mais ouvidas:\n1. 方大同 - NMW (11)\n2. 周杰伦 - 晴天 (9)\n3. Prince - For You (8)\n\n5 artistas novos: D'Angelo, 林忆莲, 卢广仲 e mais",
+      "sections": [
+        {
+          "heading": "Artistas",
+          "title": "Artistas mais ouvidos",
+          "lines": [
+            "1. 方大同 · 61",
+            "2. 周杰伦 · 48",
+            "3. Prince · 33"
+          ]
+        },
+        {
+          "heading": "Álbuns",
+          "title": "Álbuns mais ouvidos",
+          "lines": [
+            "1. JTW 西游记 — 方大同 · 29",
+            "2. 叶惠美 — 周杰伦 · 21",
+            "3. For You — Prince · 17"
+          ]
+        },
+        {
+          "heading": "Músicas",
+          "title": "Músicas mais ouvidas",
+          "lines": [
+            "1. NMW — 方大同 · 11",
+            "2. 晴天 — 周杰伦 · 9",
+            "3. For You — Prince · 8"
+          ]
+        }
+      ],
+      "new_line": "5 artistas novos: D'Angelo, 林忆莲, 卢广仲 e mais"
+    },
+    {
+      "lang": "pt-br",
+      "kind": "weekly",
+      "style": "brief",
+      "top_n": 3,
+      "title": "🎵 Resumo de audição da semana passada (12/10 – 18/10)",
+      "summary": "286 reproduções (semana anterior: 241, ↑19%) · cerca de 17 h 52 min",
+      "body": "286 reproduções (semana anterior: 241, ↑19%) · cerca de 17 h 52 min\nArtista principal: 方大同\nÁlbum principal: 方大同 - JTW 西游记\nMúsica principal: 方大同 - NMW\nArtistas novos (5): D'Angelo, 林忆莲, 卢广仲",
+      "sections": [
+        {
+          "heading": "Mais ouvidos",
+          "title": "Mais ouvidos",
+          "lines": [
+            "Artista: 方大同 · 61",
+            "Álbum: JTW 西游记 — 方大同 · 29",
+            "Música: NMW — 方大同 · 11"
+          ]
+        }
+      ],
+      "new_line": "5 artistas novos: D'Angelo, 林忆莲, 卢广仲 e mais"
+    },
+    {
+      "lang": "pt-br",
+      "kind": "weekly",
+      "style": "overview",
+      "top_n": 3,
+      "title": "🎵 Resumo de audição da semana passada (12/10 – 18/10)",
+      "summary": "286 reproduções (semana anterior: 241, ↑19%) · cerca de 17 h 52 min",
+      "body": "286 reproduções (semana anterior: 241, ↑19%) · cerca de 17 h 52 min\nArtistas novos: 5",
+      "sections": null,
+      "new_line": "5 artistas novos"
     }
   ]
 }

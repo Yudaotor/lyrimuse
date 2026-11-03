@@ -29,11 +29,12 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-LANGS = ("en", "zh-Hans", "zh-Hant", "ja", "ko", "es", "fr", "de", "it")
-LANG_LABELS = {"en": "English", "zh-Hans": "简体中文", "zh-Hant": "繁體中文", "ja": "日本語", "ko": "한국어", "es": "Español", "fr": "Français", "de": "Deutsch", "it": "Italiano"}
+LANGS = ("en", "zh-Hans", "zh-Hant", "ja", "ko", "es", "fr", "de", "it", "pt-BR")
+LANG_LABELS = {"en": "English", "zh-Hans": "简体中文", "zh-Hant": "繁體中文", "ja": "日本語", "ko": "한국어", "es": "Español", "fr": "Français", "de": "Deutsch", "it": "Italiano", "pt-BR": "Português (Brasil)"}
 DOC_FILES = {"en": "feature-list.md", "zh-Hans": "feature-list.zh-CN.md", "zh-Hant": "feature-list.zh-Hant.md",
              "ja": "feature-list.ja.md", "ko": "feature-list.ko.md", "es": "feature-list.es.md",
-             "fr": "feature-list.fr.md", "de": "feature-list.de.md", "it": "feature-list.it.md"}
+             "fr": "feature-list.fr.md", "de": "feature-list.de.md", "it": "feature-list.it.md",
+             "pt-BR": "feature-list.pt-BR.md"}
 BRANDS = {"ListenBrainz", "Last.fm", "Discord"}
 
 CHROME = {
@@ -217,6 +218,26 @@ CHROME = {
         "sep": ": ",
         "generated": "Generato da scripts/gen-feature-list.py a partire da shared/feature-list.json e shared/settings-catalog.json; per modificare l’elenco, modifica questi file.",
     },
+    "pt-BR": {
+        "title": "Lista de recursos do Lyrimuse",
+        "intro": "Esta lista reúne todos os recursos do Lyrimuse: o que cada um faz, onde fica nos ajustes e se vem ativado ou não depois da instalação; no final estão todos os ajustes da janela Ajustes. Ela é mantida junto com o código e atualizada a cada mudança.",
+        "toc": "Índice",
+        "off_title": "Desativados até você ativar",
+        "off_intro": "Estes recursos vêm desativados depois da instalação. Ative-os antes nos ajustes (alguns também pedem uma conta ou uma autorização):",
+        "col_feature": "Recurso",
+        "col_where": "Onde ativar",
+        "default_on": "Ativado por padrão",
+        "default_off": "Desativado por padrão",
+        "where": "Ajustes",
+        "index_title": "Todos os ajustes",
+        "index_intro": "Todos os ajustes da janela Ajustes, por local: {n} no total. Digite um nome no campo de busca no topo da barra lateral dos Ajustes para ir direto até ele.",
+        "settings": "Ajustes",
+        "labs": "Labs",
+        "mini_only": " (só Mini)",
+        "full_only": " (só Completo)",
+        "sep": ": ",
+        "generated": "Gerado por scripts/gen-feature-list.py a partir de shared/feature-list.json e shared/settings-catalog.json; para mudar a lista, edite esses arquivos.",
+    },
 }
 
 CALL_RE = re.compile(r"\b(SettingsRow|SettingsSubRow|SettingsCardHeader|SettingsChipToggle|SettingsToggleTile|SettingsControlCell)\(")
@@ -346,7 +367,7 @@ def load_model(root: Path = ROOT) -> dict:
             joined = ""
             for line in lines:
                 if joined:
-                    if lang in ("en", "ko", "es", "fr", "de", "it"):
+                    if lang in ("en", "ko", "es", "fr", "de", "it", "pt-BR"):
                         joined += " "
                     elif lang == "ja":
                         joined += "" if joined[-1] in "。：！？" else "。"

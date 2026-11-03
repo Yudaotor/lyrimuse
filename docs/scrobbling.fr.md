@@ -1,6 +1,6 @@
 # Comment Lyrimuse scrobble vers Last.fm
 
-*[English](scrobbling.md) · [简体中文](scrobbling.zh-CN.md) · [日本語](scrobbling.ja.md) · [한국어](scrobbling.ko.md) · [Español](scrobbling.es.md) · **Français** · [Deutsch](scrobbling.de.md) · [Italiano](scrobbling.it.md)*
+*[English](scrobbling.md) · [简体中文](scrobbling.zh-CN.md) · [日本語](scrobbling.ja.md) · [한국어](scrobbling.ko.md) · [Español](scrobbling.es.md) · **Français** · [Deutsch](scrobbling.de.md) · [Italiano](scrobbling.it.md) · [Português (Brasil)](scrobbling.pt-BR.md)*
 
 ## 1. Quand une écoute compte
 

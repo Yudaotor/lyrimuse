@@ -565,8 +565,8 @@ func runSettingsInteractionTests() {
             expectEqual(ReportWords.table[lang] ?? [:], wordsJSON[lang.rawValue] ?? ["": "缺"], "报告语言: \(lang.rawValue) 用语表同引擎")
         }
         expectEqual([ReportLanguage(""), ReportLanguage(" ZH-HANT "), ReportLanguage("en"), ReportLanguage("ja"), ReportLanguage("ko"), ReportLanguage("es"),
-                     ReportLanguage("fr"), ReportLanguage("de"), ReportLanguage("it"), ReportLanguage("pl")],
-                    [.zhHans, .zhHant, .en, .ja, .ko, .es, .fr, .de, .it, .zhHans],
+                     ReportLanguage("fr"), ReportLanguage("de"), ReportLanguage("it"), ReportLanguage("pt-br"), ReportLanguage(" PT-BR "), ReportLanguage("pl")],
+                    [.zhHans, .zhHant, .en, .ja, .ko, .es, .fr, .de, .it, .ptBR, .ptBR, .zhHans],
                     "报告语言: 认得的几种,其余按简体")
         expectEqual(ReportLanguage.featuresKey, "report_language", "报告语言: 键名同引擎 features.go 的 json 标签")
         expectEqual(ReportLanguage.zhHans.words.f("item", [("i", "1"), ("name", "Song {n} {name}"), ("n", "4")]), "1. Song {n} {name}（4）",
@@ -1146,7 +1146,7 @@ func runSettingsInteractionTests() {
                         + ["en", "zh-hans", "zh-hant", "ja", "ko"].map { W.windowMinWidth(enWidth, language: $0) - W.maxWidth(enWidth) },
                     [640, 640, 640, 540, 540, 540, 540, 540],
                     "设置窗最窄: 西语、法语内容区按 640(卡片列撑满 600),别的语言 540")
-        expectEqual(["de", "it"].map { W.windowMinWidth(enWidth, language: $0) - W.maxWidth(enWidth) }, [640, 640], "设置窗最窄: 德语、意大利语同样按 640")
+        expectEqual(["de", "it", "pt-br"].map { W.windowMinWidth(enWidth, language: $0) - W.maxWidth(enWidth) }, [640, 640, 640], "设置窗最窄: 德语、意大利语、巴西葡语同样按 640")
         expectEqual(W.widthToRestore(lastDefault: nil, currentDefault: W.designWidth), nil,
                     "设置侧栏宽度: 没记过上次的默认宽度时不动")
         expectEqual(W.widthToRestore(lastDefault: W.designWidth, currentDefault: W.designWidth), nil,
