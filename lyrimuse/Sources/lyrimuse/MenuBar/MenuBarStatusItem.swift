@@ -107,10 +107,9 @@ final class MenuBarStatusItem: NSObject {
         // 挂主队列、别挂 RunLoop.main:RunLoop.main 只在默认模式投递,App 自己的菜单开着、拖滑杆、拖窗口时
         // 主线程在事件跟踪模式里转,换句、播放态、对表全停在打开那一刻,关了才一起跳(见 06 章决策 56)。
         // 宽度滑杆那条 debounce 例外,故意留在 RunLoop.main(见下面那段与 01 章决策 11)。
-        // 这里订阅的是 compactLine(决定**显示哪一句**);下面另有一条 currentLine 的
-        // 订阅,那条管的是"逐字填色路径此刻可不可用" —— 提前量窗口里显示的是下一句、但它
-        // 还没开唱,karaokeFillPath 那道 `line.plainText == text` 守卫会不给路径(正确:
-        // 没唱就不该有填色);等真的开唱时 currentLine 才变,那一下要重画一次把填色挂上。
+        // 这里订阅的是 compactLine(决定**显示哪一句**);填色使用显示句自己的逐字时间轴,
+        // 提前量窗口里边界保持为 0。下面另有一条 currentLine 的订阅,等真的开唱时
+        // 重画一次把跟唱滚动挂上。
         // 两个事件在短间隙里相差不到一秒,文本相同 → 槽宽相同 → 不触发状态项重建。
         // 菜单栏这一面的「要显示的那一句 / 当前句 / 下一句」都取它自己那一份(按这一面的宽度断句,见
         // LocalPlaybackSource.menuBarLyrics),别混用逐行的 compactLine / currentLine / nextLineText。
@@ -129,8 +128,7 @@ final class MenuBarStatusItem: NSObject {
             .receive(on: DispatchQueue.main)
             .sink { [weak self] _ in self?.scheduleRefresh() }
             .store(in: &cancellables)
-        // 见上面那段:开唱那一刻要重画一次,好把逐字填色路径挂上。只关心"有没有词可染",
-        // 所以去重键只取首词时间戳。
+        // 开唱那一刻重画,接上当前演唱句的跟唱滚动;副行开着时也靠这条流更新显示内容。
         coordinator.$menuBarLyrics.map(\.line)
             // 键里多了纯文本和译文 / 罗马音:副行开着时菜单栏显示的就是 currentLine(见
             // refresh 头那段),换句、译文中途补上都要重画;单行模式下这些多出来的事件到 present() 都是
@@ -426,9 +424,8 @@ final class MenuBarStatusItem: NSObject {
         MenuBarScrollingLabel.IconBadge.current(position: AppSettings.shared.menuBarLyricsIconPosition)
     }
 
-    /// 菜单栏此刻显示的那一句是不是就是 currentLine —— 光比文字不够:副歌里相邻两行**同词不同时**,
-    /// 提前量那几秒里显示的已经是下一句(compactLine),文字却跟刚唱完的 currentLine 一模一样,拿后者的
-    /// 逐字时间轴去染,新句子一出场就是整句强调色、开唱时又退回去重染。按首词时间戳认是不是同一行。
+    /// 跟唱滚动只接当前演唱句。相邻两行同词不同时,提前显示下一句也不能沿用上句的路径,
+    /// 所以按首词时间戳认是不是同一行。
     private func displayedLineIsCurrent(_ current: SyncedLyricLine) -> Bool {
         let coordinator = PlaybackCoordinator.shared
         let displayed = AppSettings.shared.menuBarLayoutSecondaryLine.displayedLine(
@@ -436,25 +433,27 @@ final class MenuBarStatusItem: NSObject {
         return displayed?.words?.first?.startMs == current.words?.first?.startMs
     }
 
-    /// 当前句的逐字填色路径。nil = 不染:开关关着、这句没有逐字数据、或标签文本跟逐字
+    /// 显示句的逐字填色路径。提前量期间也保留路径,由播放时钟让边界保持为 0。
+    /// nil = 不染:开关关着、这句没有逐字数据、或标签文本跟逐字
     /// 数据对不上号(理论上 plainText 就是 words 拼接,这层守卫防的是两者在换句瞬间
     /// 读到不同代的数据 —— 对不上宁可不染,染错位置比不染难看得多)。
     ///
     /// 同一行接着译文时标签上是「原文 + 分隔符 + 译文」:开头是这一句的原文就染,逐字边界都落在原文那段,译文停在未唱的颜色。
     private func karaokeFillPath(for text: String) -> [MenuBarMarquee.KaraokeFillPoint]? {
         guard AppSettings.shared.menuBarLyricsKaraoke else { return nil }
-        guard let line = PlaybackCoordinator.shared.menuBarLyrics.line,
+        let coordinator = PlaybackCoordinator.shared
+        guard let line = AppSettings.shared.menuBarLayoutSecondaryLine.displayedLine(
+                  compactLine: coordinator.menuBarLyrics.compactLine, currentLine: coordinator.menuBarLyrics.line),
               let words = line.words, !words.isEmpty, let plain = line.plainText,
               rowState.inlineTranslationStart == nil
-                  ? plain == text : text.hasPrefix(plain + MenuBarLyricText.inlineSeparator),
-              displayedLineIsCurrent(line) else { return nil }
+                  ? plain == text : text.hasPrefix(plain + MenuBarLyricText.inlineSeparator) else { return nil }
         let path = MenuBarMarquee.karaokeFillPath(
             words: words, wordEndXs: MenuBarMarqueeRenderer.wordEndXs(for: words, font: rowState.mainFont))
         return path.isEmpty ? nil : path
     }
 
-    /// 跟唱滚动用的阅读位置路径。守卫跟 karaokeFillPath 同一组(有逐字数据、
-    /// 文本没跟逐字数据代际错位),但**不看**卡拉OK开关:染色是"画什么",跟唱是"滚到哪",
+    /// 跟唱滚动用的阅读位置路径。仍取当前演唱句,并验证它就是显示句;
+    /// **不看**卡拉OK开关:染色是"画什么",跟唱是"滚到哪",
     /// 不染色也要跟着唱到的位置滚。两条路径的差别见 MenuBarMarquee.followReadingPath 头注。
     /// 同一行接着译文时不给(文字跟原文不全等):跟唱只滚到原文末尾,后面的译文露不出来;改按这一句的时长匀速滚完整串。
     private func followReadingPath(for text: String) -> [MenuBarMarquee.KaraokeFillPoint]? {
