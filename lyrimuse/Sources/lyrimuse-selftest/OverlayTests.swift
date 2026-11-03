@@ -1083,6 +1083,17 @@ func runOverlayTests() {
                      sourceHas(nextRect, "upcomingWordRowsKey($0)")],
                     [true, true, true, true, true, true],
                     "悬浮淡化命中区: 下一句折行时按文字实际矩形上报,不按撑满整宽的 WrapLayout frame(04 章决策 85)")
+        let scrollRowSource = (try? String(contentsOf: sources.appendingPathComponent("lyrimuse/UI/OverlayScrollingLyricRow.swift"),
+                                           encoding: .utf8)) ?? ""
+        let scrollSizing = sourceBody("func sizeThatFits(_ proposal: ProposedViewSize, nsView: OverlayLyricScrollView", in: scrollRowSource)
+        expectEqual([sourceHas(scrollSizing, "OverlayLyricScrollView.textRect("), sourceHas(scrollSizing, "return nil"),
+                     sourceHas(sourceBody("static func textRect(spec: OverlayScrollingLyricRow.Spec", in: scrollRowSource),
+                               "OverlayRowLayout.layOut("),
+                     sourceHas(sourceBody("private func layerScrollingKaraokeRow", in: overlay), "contentRectSink: wrapContentSink"),
+                     sourceHas(sourceBody("@ViewBuilder private var translationRow", in: overlay), "reportingSinkRect("),
+                     sourceHas(sourceBody("@ViewBuilder private var romanizationRow", in: overlay), "reportingSinkRect(")],
+                    [true, true, true, true, true, true],
+                    "悬浮淡化命中区: 滚动模式的图层行按文字实际矩形上报,尺寸照旧走默认(04 章决策 86)")
         let preview = sourceBody("private func nextLinePreviewContent", in: overlay)
         let wordRows = sourceBody("private func upcomingWordRows", in: overlay)
         let breakWidths = sourceBody("private func upcomingBreakWidths", in: overlay)

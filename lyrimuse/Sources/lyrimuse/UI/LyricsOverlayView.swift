@@ -422,6 +422,9 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
     @State private var wrapContentSink = WrapContentRectSink()
     /// 下一句预览折行时(`upcomingWordRows`、换行模式的 `upcomingGroupColumns`)文字实际矩形的旁路,同上。
     @State private var upcomingContentSink = WrapContentRectSink()
+    /// 滚动模式下读音、译文那两条配速图层行(`pacedLayerRow`)文字实际矩形的旁路,同上。
+    @State private var romanizationRowSink = WrapContentRectSink()
+    @State private var translationRowSink = WrapContentRectSink()
     // 悬停展示控制按钮/长按拖动这套手势由 WindowController 用全局鼠标监听器实现
     // (背景常年点击穿透,原生 .onHover 收不到事件),这里只读它算出来的结果
     // (isHoveringForControls/isDragArmed)展示对应视觉效果,不自己维护 @State。
@@ -913,6 +916,21 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
             })
     }
 
+    /// 撑满整宽的一行(滚动模式的配速图层行)报进歌词文字矩形的并集:sink 的 owner 对得上这一行时按它收紧到文字
+    /// 实际范围,对不上按整 frame(同 reportingMainLineRect)。
+    private func reportingSinkRect<V: View>(_ v: V, sink: WrapContentRectSink, owner: AnyHashable) -> some View {
+        v.background(
+            GeometryReader { proxy in
+                let f = proxy.frame(in: .named(overlayCoordSpaceName))
+                let local = sink.owner == owner ? sink.rect : .zero
+                let rect = local == .zero
+                    ? f
+                    : CGRect(x: f.minX + local.minX, y: f.minY + local.minY,
+                             width: local.width, height: local.height)
+                return Color.clear.preference(key: LyricsTextRectPreferenceKey.self, value: rect)
+            })
+    }
+
     /// 主歌词那一支单独走:逐字行是 WrapLayout,它**撑满整宽**,直接拿 frame 会把左右两片
     /// 空白也算成歌词。用布局阶段写进 sink 的"文字实际矩形"(相对 WrapLayout 原点)去修正;
     /// 别的那几支(行级歌词、间奏的 ♪、「暂无歌词」这些状态文案)是裸 Text、frame 本身就是
@@ -1019,7 +1037,9 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
                 rate: playback.playbackRate,
                 rainbow: playback.rainbow,
                 rainbowPaused: !rainbowFlowing),
-            nowMs: Self.lyricsNowMs)
+            nowMs: Self.lyricsNowMs,
+            contentRectSink: wrapContentSink,
+            sinkOwner: overlayLineLayoutKey)
         .frame(maxWidth: .infinity)
         .frame(height: mainScrollRowHeight)
     }
@@ -1151,7 +1171,7 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
     private func pacedLayerRow(
         key: String, text: String, font: NSFont, color: Color,
         alignment: LyricDuet.Side, height: CGFloat, window: OverlayScrollingLyricRow.PacedWindow,
-        translation: Bool = false
+        translation: Bool = false, sink: WrapContentRectSink? = nil, sinkOwner: AnyHashable? = nil
     ) -> some View {
         let ns = NSColor(color)
         return OverlayScrollingLyricRow(
@@ -1170,7 +1190,9 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
                 rate: playback.playbackRate,
                 translation: translation,
                 rainbow: playback.rainbow),
-            nowMs: Self.lyricsNowMs)
+            nowMs: Self.lyricsNowMs,
+            contentRectSink: sink,
+            sinkOwner: sinkOwner)
         .frame(maxWidth: .infinity)
         .frame(height: height)
     }
@@ -1429,11 +1451,12 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
     /// (见那边的头注),不然三行只能写死同一个先后顺序。
     @ViewBuilder private var romanizationRow: some View {
         if let roma = romanizationRowText, rowPlan.romanization?.motion == .paced, let window = pacedWindow {
-            reportingTextRect(
+            reportingSinkRect(
                 pacedLayerRow(key: roma, text: roma, font: playback.overlayNSFonts.romanization,
                               color: playback.displayForegroundColor.opacity(0.6), alignment: duetSide,
                               height: playback.scrollRowHeight(playback.overlayNSFonts.romanization),
-                              window: window))
+                              window: window, sink: romanizationRowSink, sinkOwner: AnyHashable(roma)),
+                sink: romanizationRowSink, owner: AnyHashable(roma))
         } else if let roma = romanizationRowText, rowPlan.romanization?.motion == .still {
             reportingTextRect(stillUpcomingText(roma, font: playback.romanizationFont,
                                                 color: playback.displayForegroundColor.opacity(0.6)))
@@ -1451,11 +1474,12 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
     /// 译文那一行,同上——抽出来只为了换序,内容/样式一个字没变。
     @ViewBuilder private var translationRow: some View {
         if let tr = translationRowText, rowPlan.translation?.motion == .paced, let window = pacedWindow {
-            reportingTextRect(
+            reportingSinkRect(
                 pacedLayerRow(key: tr, text: tr, font: playback.overlayNSFonts.translation,
                               color: playback.displayForegroundColor.opacity(0.75), alignment: duetSide,
                               height: playback.scrollRowHeight(playback.overlayNSFonts.translation),
-                              window: window, translation: true))
+                              window: window, translation: true, sink: translationRowSink, sinkOwner: AnyHashable(tr)),
+                sink: translationRowSink, owner: AnyHashable(tr))
         } else if let tr = translationRowText, rowPlan.translation?.motion == .still {
             reportingTextRect(stillUpcomingText(tr, font: playback.translationFont,
                                                 color: playback.displayForegroundColor.opacity(0.75),
@@ -1922,7 +1946,8 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
             // 没有逐字时间轴:按这一句显示多久配速,开头停一会儿、句末前滚完,暂停就停。
             pacedLayerRow(key: text, text: text, font: playback.overlayNSFonts.main,
                           color: playback.displayForegroundColor, alignment: duetSide,
-                          height: playback.scrollRowHeight(playback.overlayNSFonts.main), window: window)
+                          height: playback.scrollRowHeight(playback.overlayNSFonts.main), window: window,
+                          sink: wrapContentSink, sinkOwner: overlayLineLayoutKey)
         } else if let text = line?.mainText {
             lyricStroke(Text(text)
                 .font(playback.mainFont)

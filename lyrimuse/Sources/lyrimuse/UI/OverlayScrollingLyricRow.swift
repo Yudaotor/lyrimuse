@@ -103,8 +103,22 @@ struct OverlayScrollingLyricRow: NSViewRepresentable {
     /// 窗口看不见时整卡也是 false;别的宿主恒为默认值 true。它是本视图的输入,翻回 true 时 SwiftUI 会
     /// 重新调 updateNSView,在那一层露面之前把这一句补画上。
     @Environment(\.notchCardLayerActive) private var layerActive
+    /// 非 nil = 量尺寸时把文字实际占据的矩形(相对这一行的原点)写进去,给悬浮歌词的鼠标命中用(同 `WrappedKaraokeRows`)。
+    var contentRectSink: WrapContentRectSink? = nil
+    var sinkOwner: AnyHashable? = nil
 
     func makeNSView(context: Context) -> OverlayLyricScrollView { OverlayLyricScrollView() }
+
+    /// 只为写命中矩形,尺寸照旧交给默认(返回 nil)。在这里写而不等 AppKit 那一趟 layout:悬浮窗读热区的
+    /// GeometryReader 在这一行定尺寸之后才求值。
+    func sizeThatFits(_ proposal: ProposedViewSize, nsView: OverlayLyricScrollView, context: Context) -> CGSize? {
+        if let sink = contentRectSink, let width = proposal.width, width.isFinite, width > 0 {
+            sink.rect = OverlayLyricScrollView.textRect(
+                spec: spec, width: width, height: proposal.height.flatMap { $0.isFinite ? $0 : nil } ?? 0)
+            sink.owner = sinkOwner
+        }
+        return nil
+    }
 
     func updateNSView(_ view: OverlayLyricScrollView, context: Context) {
         view.nowProvider = nowMs
@@ -314,6 +328,24 @@ final class OverlayLyricScrollView: NSView {
 
     /// 一行字本身的高度。必须跟 `OverlayPlayback.scrollTextHeight` 同一个式子,否则视图框和
     /// 位图对不上、字会被裁。
+    /// 文字在一行里实际占据的矩形(左上原点):放得下按对齐方式摆(同 `place` 的静置落点,从右往左的行翻转后
+    /// 落在同一侧),放不下要滚时占满整行。排版宽度跟 `layout` 同一个式子,不算阴影出血(悬浮歌词不带阴影)。
+    static func textRect(spec: OverlayScrollingLyricRow.Spec, width: CGFloat, height: CGFloat) -> CGRect {
+        let inset = spec.strokeColor == nil ? 0 : LyricsTextStrokeMetrics.inset
+        let w = OverlayRowLayout.layOut(
+            words: spec.words, groups: spec.groups, inset: inset, strokeInset: inset,
+            measureMain: { MenuBarMarqueeRenderer.width(of: $0, font: spec.font, translation: spec.translation) },
+            measureRoma: { MenuBarMarqueeRenderer.width(of: $0, font: spec.romaFont) }).boxWidth
+        guard w > 0, w < width else { return CGRect(x: 0, y: 0, width: width, height: height) }
+        let x: CGFloat
+        switch spec.alignment {
+        case .leading: x = 0
+        case .center: x = (width - w) / 2
+        case .trailing: x = width - w
+        }
+        return CGRect(x: x, y: 0, width: w, height: height)
+    }
+
     private static func textHeight(_ font: NSFont) -> CGFloat {
         ceil(font.ascender - font.descender + font.leading) + 2
     }
