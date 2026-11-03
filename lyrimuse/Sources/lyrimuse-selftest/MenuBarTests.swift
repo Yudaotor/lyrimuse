@@ -2088,8 +2088,10 @@ func runMenuBarTests() {
                     && sourceHas(panel, "if let mode = playback.playbackMode, playback.playbackModeOptions.contains(.shuffle) {")
                     && sourceHas(panel, "if let mode = playback.playbackMode, playback.playbackModeOptions.canRepeat {"), true,
                     "面板走带: 喜欢、随机、循环只在当前播放器有这回事时出现,广告时不给心")
-        expectEqual(sourceHas(panel, ".frame(width: Self.transportSideWidth, alignment: .leading)")
-                    && sourceHas(panel, ".frame(width: Self.transportSideWidth, alignment: .trailing)"), true,
-                    "面板走带: 两侧定宽,键藏起来时三个主键照样居中")
+        expectEqual(sourceHas(panel, "shuffleControl\n.frame(width: Self.transportSideWidth, alignment: .leading)")
+                    && sourceHas(panel, "repeatControl\n.frame(width: Self.transportSideWidth, alignment: .trailing)"), true,
+                    "面板走带: 左随机、右循环,两侧定宽,键藏起来时三个主键照样居中")
+        expectEqual(sourceHas(panel, "Spacer(minLength: 0)\nfavoriteControl\n}\n.frame(height: Self.coverSide)"), true,
+                    "面板走带: 喜欢在卡片右上角标下面,跟封面底边对齐")
     }
 }

@@ -867,19 +867,26 @@ private struct MenuBarPanelView: View {
             // 加点击:点角标跳到那个播放器(网页平台翻到正在放歌的那枚标签页,
             // 原生播放器激活 App —— `openResolvedPlayer` 一条路管两种),顺手收面板
             // (跳去别的 App 了,面板留着也只会被失焦监视器收掉,不如主动收干净)。
-            if let icon = PlaybackCoordinator.shared.resolvedPlayerIcon {
-                Button {
-                    PlaybackCoordinator.shared.openResolvedPlayer()
-                    close()
-                } label: {
-                    Image(nsImage: icon)
-                        .resizable()
-                        .aspectRatio(contentMode: .fit)
-                        .frame(width: 18, height: 18)
+            //
+            // 喜欢放在角标下面、跟封面底边对齐:它说的是这首歌,挨着歌名歌手;走带那一排两侧留给随机、循环。
+            VStack(alignment: .trailing, spacing: 0) {
+                if let icon = PlaybackCoordinator.shared.resolvedPlayerIcon {
+                    Button {
+                        PlaybackCoordinator.shared.openResolvedPlayer()
+                        close()
+                    } label: {
+                        Image(nsImage: icon)
+                            .resizable()
+                            .aspectRatio(contentMode: .fit)
+                            .frame(width: 18, height: 18)
+                    }
+                    .buttonStyle(.glassIcon())
+                    .modifier(OptionalHelp(text: PlaybackCoordinator.shared.resolvedPlayerDisplayName))
                 }
-                .buttonStyle(.glassIcon())
-                .modifier(OptionalHelp(text: PlaybackCoordinator.shared.resolvedPlayerDisplayName))
+                Spacer(minLength: 0)
+                favoriteControl
             }
+            .frame(height: Self.coverSide)
     }
     }
 
@@ -907,8 +914,8 @@ private struct MenuBarPanelView: View {
                     trackLyricsOffsetMs: playback.trackLyricsOffsetMs,
                     lyricsOffsetStepMs: playback.lyricsOffsetStepMs)
                 HStack(spacing: 0) {
-                    // 两侧定宽:当前播放器没有喜欢 / 随机 / 循环时键藏起来,三个主键照样在正中。
-                    favoriteControl
+                    // 两侧定宽:当前播放器没有随机 / 循环时键藏起来,三个主键照样在正中。
+                    shuffleControl
                         .frame(width: Self.transportSideWidth, alignment: .leading)
                     Spacer(minLength: 0)
                     HStack(spacing: 28) {
@@ -925,11 +932,8 @@ private struct MenuBarPanelView: View {
                         }
                     }
                     Spacer(minLength: 0)
-                    HStack(spacing: 4) {
-                        shuffleControl
-                        repeatControl
-                    }
-                    .frame(width: Self.transportSideWidth, alignment: .trailing)
+                    repeatControl
+                        .frame(width: Self.transportSideWidth, alignment: .trailing)
                 }
             }
         }
@@ -937,10 +941,10 @@ private struct MenuBarPanelView: View {
         .menuBarPanelCardBackground(cornerRadius: 18)
     }
 
-    /// 走带那一排两侧各占多宽:右边要放下随机、循环两颗。
-    private static let transportSideWidth: CGFloat = 64
+    /// 走带那一排两侧(左随机、右循环)各占多宽。
+    private static let transportSideWidth: CGFloat = 40
 
-    /// 走带左边的喜欢,同歌词窗口那颗心、灵动岛展开区那颗:当前播放器没有「喜欢」或在放广告时不出现。
+    /// 卡片右上角标下面的喜欢,同歌词窗口那颗心、灵动岛展开区那颗:当前播放器没有「喜欢」或在放广告时不出现。
     @ViewBuilder private var favoriteControl: some View {
         if let favorited = playback.isFavorited, !playback.isCurrentTrackAdBreak {
             sideControl(favorited ? "heart.fill" : "heart", active: favorited,
@@ -950,7 +954,7 @@ private struct MenuBarPanelView: View {
         }
     }
 
-    /// 走带右边的随机、循环,跟歌词窗口那两颗同一套(互斥:脚本接口只有一个播放模式;权限检查在 setPlaybackMode 里)。
+    /// 走带左边的随机、右边的循环,跟歌词窗口那两颗同一套(互斥:脚本接口只有一个播放模式;权限检查在 setPlaybackMode 里)。
     /// 这个播放器此刻切不到的那一颗不出现。
     @ViewBuilder private var shuffleControl: some View {
         if let mode = playback.playbackMode, playback.playbackModeOptions.contains(.shuffle) {
@@ -973,7 +977,7 @@ private struct MenuBarPanelView: View {
         }
     }
 
-    /// 走带两侧的小键:点亮时字形换强调色,熄灭时次要色。
+    /// 喜欢、随机、循环三颗小键:点亮时字形换强调色,熄灭时次要色。
     private func sideControl(_ symbol: String, active: Bool, label: String,
                              action: @escaping () -> Void) -> some View {
         ChipButton(cornerRadius: 13, action: action) {
