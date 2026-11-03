@@ -137,12 +137,15 @@ async function heartbeat(request, env) {
   const e = cleanEnv(body.env);
   const features = JSON.stringify(cleanFeatures(body.features));
   const country = str(request.cf && request.cf.country, 2);
+  // 新装还是从旧版本升级上来的;旧版 App 不发,判不出的也不发。第一次收到的为准。
+  const origin = body.origin === "new" || body.origin === "existing" ? body.origin : null;
   const statements = [
     env.DB.prepare(
-      `INSERT INTO installs (install_id, first_day, last_day) VALUES (?1, ?2, ?2)
+      `INSERT INTO installs (install_id, first_day, last_day, origin) VALUES (?1, ?2, ?2, ?3)
        ON CONFLICT (install_id) DO UPDATE SET last_day = max(last_day, excluded.last_day),
-                                              first_day = min(first_day, excluded.first_day)`
-    ).bind(installID, day),
+                                              first_day = min(first_day, excluded.first_day),
+                                              origin = COALESCE(installs.origin, excluded.origin)`
+    ).bind(installID, day, origin),
     env.DB.prepare(
       `INSERT INTO heartbeats (day, install_id, received_at, app_version, build, os_version, arch, ui_language,
                                system_language, country, features)
@@ -248,10 +251,12 @@ async function stats(request, env, url) {
   const db = env.DB;
   // excluded_installs 里的安装(作者自己的机器、测试机)不进任何统计;原始数据照存,删掉那一行就恢复统计。
   const kept = (col = "install_id") => `${col} NOT IN (SELECT install_id FROM excluded_installs)`;
-  const [daily, fresh, totals, latest, activity, crashes] = await Promise.all([
+  const [daily, fresh, freshByOrigin, totals, latest, activity, crashes] = await Promise.all([
     db.prepare(`SELECT day, COUNT(*) AS n FROM heartbeats WHERE day >= ?1 AND ${kept()} GROUP BY day ORDER BY day`).bind(since).all(),
     db.prepare(`SELECT first_day AS day, COUNT(*) AS n FROM installs WHERE first_day >= ?1 AND ${kept()} GROUP BY first_day ORDER BY first_day`)
       .bind(since).all(),
+    db.prepare(`SELECT first_day AS day, origin, COUNT(*) AS n FROM installs WHERE first_day >= ?1 AND ${kept()}
+                GROUP BY first_day, origin ORDER BY first_day`).bind(since).all(),
     db.prepare(`SELECT (SELECT COUNT(*) FROM installs WHERE ${kept()}) AS installs,
                        (SELECT COUNT(DISTINCT install_id) FROM heartbeats WHERE day >= ?1 AND ${kept()}) AS active7,
                        (SELECT COUNT(DISTINCT install_id) FROM heartbeats WHERE day >= ?2 AND ${kept()}) AS active_window,
@@ -285,6 +290,8 @@ async function stats(request, env, url) {
     totals: { installs: totals.installs, active_7d: totals.active7, active_window: totals.active_window, excluded: totals.excluded },
     daily_active: daily.results,
     new_installs: fresh.results,
+    // origin: new = 新下载,existing = 老用户升级后第一次上报,null = 还没报过(旧版本或判不出)
+    new_installs_by_origin: freshByOrigin.results,
     breakdown: {
       app_version: countBy(rows, (r) => r.app_version),
       os_version: countBy(rows, (r) => (r.os_version || "").split(".")[0]),

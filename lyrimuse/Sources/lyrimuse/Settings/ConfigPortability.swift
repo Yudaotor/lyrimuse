@@ -82,6 +82,7 @@ enum ConfigPortability {
         TelemetryService.Keys.sentCrashReports,
         TelemetryService.Keys.crashesSentDay,
         TelemetryService.Keys.enabledSince,
+        TelemetryService.Keys.installOrigin,
         TelemetryActivity.storageKey,
         // 更新后的提示(WhatsNewCenter):上次启动的版本、基准、面板横条出过哪一版,都是这台机器的。
         WhatsNewCenter.Keys.lastLaunchedVersion,

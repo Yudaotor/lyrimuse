@@ -23,6 +23,8 @@ final class TelemetryService {
         static let crashesSentDay = "np:telemetryCrashesSentDay"
         /// 这一次打开遥测的时刻;更早的崩溃报告不发。
         static let enabledSince = "np:telemetryEnabledSince"
+        /// `TelemetryInstallOrigin` 的取值,判不出记 `unknown`;只判一次。
+        static let installOrigin = "np:telemetryInstallOrigin"
     }
 
     static let firstCheckDelay: Duration = .seconds(60)
@@ -39,6 +41,7 @@ final class TelemetryService {
     func start() {
         guard !started, Bundle.main.bundleIdentifier == LyrimuseIdentity.bundleIdentifier else { return }
         started = true
+        decideInstallOrigin()
         apply(enabled: AppSettings.shared.telemetryEnabled)
         trustedSubscription = FeatureSettingsStore.shared.$trustedPlayers.sink { trusted in
             TelemetryActivity.shared.trustedBundleIDs = Set(trusted.keys)
@@ -82,7 +85,8 @@ final class TelemetryService {
         if Telemetry.heartbeatDue(today: today, lastSentDay: defaults.string(forKey: Keys.lastHeartbeatDay)) {
             let activity = TelemetryActivity.shared.completedDays(before: today)
             let beat = TelemetryHeartbeat(installID: installID, day: today, env: env, features: features(),
-                                          activity: activity)
+                                          activity: activity,
+                                          origin: defaults.string(forKey: Keys.installOrigin).flatMap(TelemetryInstallOrigin.init(rawValue:)))
             if let status = await post(beat, to: Telemetry.heartbeatURL, operation: "heartbeat"), (200..<300).contains(status) {
                 defaults.set(today, forKey: Keys.lastHeartbeatDay)
                 TelemetryActivity.shared.remove(days: activity.map(\.day))
@@ -128,6 +132,17 @@ final class TelemetryService {
         let parts = raw.split(separator: "|")
         guard parts.count == 2, parts[0] == today else { return 0 }
         return Int(parts[1]) ?? 0
+    }
+
+    /// 读的是上次启动留下的版本记录,所以 `start()` 必须排在 `WhatsNewCenter.shared.start()` 前面。
+    private func decideInstallOrigin() {
+        guard defaults.string(forKey: Keys.installOrigin) == nil else { return }
+        let origin = TelemetryInstallOrigin.infer(
+            hasInstallID: !(defaults.string(forKey: Keys.installID) ?? "").isEmpty,
+            lastLaunched: defaults.string(forKey: WhatsNewCenter.Keys.lastLaunchedVersion),
+            hasCompletedOnboarding: AppSettings.shared.hasCompletedOnboarding,
+            storedBaseline: defaults.string(forKey: WhatsNewCenter.Keys.baseline))
+        defaults.set(origin?.rawValue ?? "unknown", forKey: Keys.installOrigin)
     }
 
     private func installID() -> String {

@@ -78,6 +78,25 @@ public enum Telemetry {
     }
 }
 
+/// 这台机器上的 Lyrimuse 是新装的还是从旧版本升级上来的(心跳的 `origin`),统计页按它把「新增安装」拆成新下载和老用户。
+/// 见 14 章决策 165。
+public enum TelemetryInstallOrigin: String, Codable, Sendable {
+    case new, existing
+
+    /// 启动时判一次,必须在 `WhatsNewCenter.start()` 改写上次启动的版本和基准版本之前。
+    /// - 本机还没有安装 ID:上次启动记过版本或走完过引导就是升级上来的,否则是新装的。
+    /// - 已经有安装 ID(那时还不记这一项):按更新提示存着的基准版本倒推。基准是 `WhatsNew.legacyBaseline` = 第一次跑到
+    ///   基准判断那一版时已经走完过引导;基准等于上次启动的版本 = 从那一版装起、之后没升级过。都不是(中间升级过)判不出,返回 nil。
+    public static func infer(hasInstallID: Bool, lastLaunched: String?, hasCompletedOnboarding: Bool,
+                             storedBaseline: String?) -> TelemetryInstallOrigin? {
+        guard hasInstallID else { return lastLaunched != nil || hasCompletedOnboarding ? .existing : .new }
+        guard let storedBaseline else { return nil }
+        if storedBaseline == WhatsNew.legacyBaseline { return .existing }
+        if storedBaseline == lastLaunched { return .new }
+        return nil
+    }
+}
+
 /// 版本与系统。
 public struct TelemetryEnvironment: Codable, Equatable, Sendable {
     public var appVersion: String
@@ -202,18 +221,21 @@ public struct TelemetryHeartbeat: Codable, Equatable, Sendable {
     public var features: TelemetryFeatures
     /// 今天之前、还没发出去的那几天(最多 `TelemetryActivity.maxStoredDays` 天)。
     public var activity: [TelemetryActivityDay]
+    /// 判不出时不发这个键。
+    public var origin: TelemetryInstallOrigin?
 
     public init(installID: String, day: String, env: TelemetryEnvironment, features: TelemetryFeatures,
-                activity: [TelemetryActivityDay]) {
+                activity: [TelemetryActivityDay], origin: TelemetryInstallOrigin? = nil) {
         self.installID = installID
         self.day = day
         self.env = env
         self.features = features
         self.activity = activity
+        self.origin = origin
     }
 
     enum CodingKeys: String, CodingKey {
-        case v, installID = "install_id", day, env, features, activity
+        case v, installID = "install_id", day, env, features, activity, origin
     }
 }
 

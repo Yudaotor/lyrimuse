@@ -26,6 +26,12 @@ A database created before the `exception_frames` column existed needs it added o
 npx wrangler d1 execute lyrimuse-telemetry --remote --command "ALTER TABLE crashes ADD COLUMN exception_frames TEXT"
 ```
 
+Same for `installs.origin` (new install vs. upgraded from an older version):
+
+```sh
+npx wrangler d1 execute lyrimuse-telemetry --remote --command "ALTER TABLE installs ADD COLUMN origin TEXT"
+```
+
 ---
 
-接收 Lyrimuse 的匿名使用数据（设置 › 关于 › 诊断与数据「发送匿名使用数据」，默认开），跑在 Cloudflare Workers + D1 上，域名 `telemetry.yudaotor.me`。只存白名单字段，不存 IP，只存 Cloudflare 按 IP 给的国家 / 地区码。App 不发歌名、歌手、本机路径、账号名和凭据。部署步骤同上；`exception_frames` 这一列之前建的库，部署前先按上面那条 `ALTER TABLE` 补一次。
+接收 Lyrimuse 的匿名使用数据（设置 › 关于 › 诊断与数据「发送匿名使用数据」，默认开），跑在 Cloudflare Workers + D1 上，域名 `telemetry.yudaotor.me`。只存白名单字段，不存 IP，只存 Cloudflare 按 IP 给的国家 / 地区码。App 不发歌名、歌手、本机路径、账号名和凭据。部署步骤同上；`exception_frames`、`installs.origin` 这两列之前建的库，部署前先按上面两条 `ALTER TABLE` 各补一次。

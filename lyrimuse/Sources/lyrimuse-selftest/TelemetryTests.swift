@@ -170,12 +170,17 @@ func runTelemetryTests() {
             return obj.keys.sorted()
         }
         let beatKeys = keys(beat)
-        expectEqual(beatKeys, ["activity", "day", "env", "features", "install_id", "v"], "心跳: 顶层键")
+        expectEqual(beatKeys, ["activity", "day", "env", "features", "install_id", "v"], "心跳: 顶层键(判不出新装还是升级时不带 origin)")
+        var withOrigin = beat
+        withOrigin.origin = .existing
+        expectEqual(keys(withOrigin), ["activity", "day", "env", "features", "install_id", "origin", "v"], "心跳: 判得出时带 origin")
+        expectEqual(String(data: (try? JSONEncoder().encode(withOrigin)) ?? Data(), encoding: .utf8)?.contains(#""origin":"existing""#),
+                    true, "心跳: origin 的取值")
         expectEqual(keys(env), ["app_version", "arch", "build", "os_version", "system_language", "ui_language"], "心跳: env 键")
         let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
         let worker = (try? String(contentsOfFile: root.appendingPathComponent("../../telemetry-worker/src/index.js").path,
                                   encoding: .utf8)) ?? ""
-        let fields = keys(env) + keys(features) + ["install_id", "report_id", "players_played", "hangs",
+        let fields = keys(env) + keys(features) + ["install_id", "origin", "report_id", "players_played", "hangs",
                                                    "exception_type", "termination_indicator", "frames", "exception_frames"]
         let missing = fields.filter { !worker.contains($0) }
         expectEqual(missing, [], "Worker: 认得 App 发的每个字段")
@@ -196,6 +201,23 @@ func runTelemetryTests() {
         let idValues = PlaybackPlayer.allCases.map(\.rawValue) + ["com.apple.Safari", "company.thebrowser.Browser", "other"]
         expectEqual(idValues.filter { !passes(idRE, $0) }, [], "Worker: ID_RE 放过内置播放器 id 和 bundle id")
         expectEqual(passes(idRE, "bad id/x") || passes(tagRE, "<script>"), false, "Worker: 不像标识的写法照样挡掉")
+        expectEqual(sourceHas(worker, #"const origin = body.origin === "new" || body.origin === "existing" ? body.origin : null;"#), true,
+                    "Worker: origin 只收 new / existing")
+    }
+
+    do {
+        print("\n== 遥测:新装还是升级上来的 ==")
+        typealias O = TelemetryInstallOrigin
+        func infer(_ id: Bool, _ last: String?, _ onboarded: Bool, _ baseline: String?) -> O? {
+            O.infer(hasInstallID: id, lastLaunched: last, hasCompletedOnboarding: onboarded, storedBaseline: baseline)
+        }
+        expectEqual(infer(false, nil, false, nil), .new, "新装: 第一次启动,没走过引导、没记过版本")
+        expectEqual(infer(false, nil, true, nil), .existing, "升级: 从记版本之前的旧版直接升上来")
+        expectEqual(infer(false, "1.12.0", false, "1.12.0"), .existing, "升级: 记过版本(遥测关着、没有安装 ID)")
+        expectEqual(infer(true, "1.12.0", true, WhatsNew.legacyBaseline), .existing, "倒推: 基准是旧版基准 = 老用户")
+        expectEqual(infer(true, "1.12.0", true, "1.12.0"), .new, "倒推: 基准等于上次启动的版本 = 从那一版装起")
+        expectEqual(infer(true, "1.12.1", true, "1.12.0"), nil, "倒推: 中间升级过,判不出")
+        expectEqual(infer(true, "1.12.0", true, nil), nil, "倒推: 没有基准,判不出")
     }
 
     do {
@@ -244,5 +266,13 @@ func runTelemetryTests() {
                     && sourceHas(machineLocal, "TelemetryService.Keys.lastHeartbeatDay,"), true,
                     "接线: 安装 ID 等记账键是机器专属的,不随配置搬家")
         expectEqual(obsolete.contains("Telemetry"), false, "接线: 遥测的键不在过时键表里(那张表启动时就删)")
+        expectEqual(sourceHas(machineLocal, "TelemetryService.Keys.installOrigin,"), true, "接线: 新装还是升级的判定是机器专属的")
+        let delegate = sourceText("lyrimuse/AppDelegate.swift")
+        if let a = delegate.range(of: "TelemetryService.shared.start()"), let b = delegate.range(of: "WhatsNewCenter.shared.start()") {
+            expectEqual(a.lowerBound < b.lowerBound, true, "接线: 遥测先于更新提示启动(判定读的是上次启动留下的版本记录)")
+        } else {
+            expectEqual(false, true, "接线: 找得到遥测和更新提示的启动调用")
+        }
+        expectEqual(sourceHas(sourceBody("func start()", in: service), "decideInstallOrigin()"), true, "接线: 启动时判新装还是升级")
     }
 }

@@ -2,7 +2,8 @@
 CREATE TABLE IF NOT EXISTS installs (
   install_id TEXT PRIMARY KEY,
   first_day  TEXT NOT NULL,
-  last_day   TEXT NOT NULL
+  last_day   TEXT NOT NULL,
+  origin     TEXT  -- new / existing,App 判不出或旧版本不发时为空
 );
 
 CREATE TABLE IF NOT EXISTS heartbeats (
