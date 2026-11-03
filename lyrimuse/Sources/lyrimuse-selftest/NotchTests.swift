@@ -2417,6 +2417,28 @@ func runNotchTests() {
         expectEqual(sourceHas(controller, "AppSettings.shared.$showLyricsInMenuBar.removeDuplicates().sink { [weak self] on in\n            self?.menuBarLyricsOn = on")
                     && sourceHas(controller, "AppSettings.shared.$lockPosition.removeDuplicates().sink { [weak self] on in\n            self?.overlayLocked = on"), true,
                     "快捷操作契约: 菜单栏歌词、锁定位置的点亮状态跟着设置变")
+        expectEqual(sourceHas(view, "case .seekBackward, .seekForward: return PlaybackCoordinator.shared.acceptsSeek"), true,
+                    "快捷操作契约: 快退快进只在播放器能拖进度时画")
+        expectEqual(sourceHas(view, "case .volumeDown, .volumeUp, .mute: return controller.soundVolume != nil"), true,
+                    "快捷操作契约: 音量三颗只在播放器报得出音量时画")
+        expectEqual(sourceHas(view, "case .copyLine: return !(playback.currentLine?.plainText ?? \"\").isEmpty"), true,
+                    "快捷操作契约: 复制当前歌词只在这句有文字时画")
+        expectEqual(sourceHas(view, "case .lastfmLove: return controller.lastfmLoveAvailable"), true,
+                    "快捷操作契约: 在 Last.fm 上喜欢只在连着 Last.fm、在放歌时画")
+        expectEqual(sourceHas(view, "AppSettings.shared.notchSecondaryLine = NotchQuickAction.nextSecondaryLine(after: AppSettings.shared.notchSecondaryLine)"), true,
+                    "快捷操作契约: 切换副行按点下去那一刻的档位往后轮")
+        expectEqual(sourceHas(controller, "let wants = slots.placed.contains(.lastfmLove)\n        guard wants != retainsLastfmLove else { return }"), true,
+                    "快捷操作契约: 格子里放了 Last.fm 喜欢才去读状态,retain / release 成对")
+        do {
+            typealias Q = NotchQuickAction
+            expectEqual(Q.seekTarget(from: 30_000, forward: true, durationMs: 200_000), 40_000, "快进: 往后 10 秒")
+            expectEqual(Q.seekTarget(from: 5_000, forward: false, durationMs: 200_000), 0, "快退: 不早于开头")
+            expectEqual(Q.seekTarget(from: 195_000, forward: true, durationMs: 200_000), 200_000, "快进: 不晚于结尾")
+            expectEqual(Q.seekTarget(from: 30_000, forward: true, durationMs: nil), 40_000, "快进: 不知道时长只夹开头")
+            expectEqual(LyricSecondaryLine.allCases.map { Q.nextSecondaryLine(after: $0) },
+                        Array(LyricSecondaryLine.allCases.dropFirst()) + [LyricSecondaryLine.allCases[0]],
+                        "切换副行: 按顺序往后轮,最后一档回到第一档")
+        }
         do {
             typealias Q = NotchQuickAction
             expectEqual(Set(Q.paletteOrder), Set(Q.allCases), "可添加: 每一种都在候选栏里")

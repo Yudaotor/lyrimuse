@@ -1,7 +1,7 @@
 import Foundation
 
 /// 灵动岛展开卡头部右侧快捷操作里能放的东西:一颗键或一条分隔线。放在哪一格由 `NotchQuickSlots` 管,
-/// 画法和动作在 App 侧 `NotchLyricsView.trackInfoQuickActions`。见 05 章决策 130～133。
+/// 画法和动作在 App 侧 `NotchLyricsView.trackInfoQuickActions`。见 05 章决策 130～135。
 public enum NotchQuickAction: String, CaseIterable, Codable, Sendable {
     case favorite
     case searchLyrics = "search-lyrics"
@@ -25,6 +25,17 @@ public enum NotchQuickAction: String, CaseIterable, Codable, Sendable {
     case menuBarLyrics = "menubar-lyrics"
     case hideAllLyrics = "hide-all-lyrics"
     case lockOverlay = "lock-overlay"
+    case seekBackward = "seek-backward"
+    case seekForward = "seek-forward"
+    case volumeDown = "volume-down"
+    case volumeUp = "volume-up"
+    case mute
+    case copyLine = "copy-line"
+    case secondaryLine = "secondary-line"
+    case karaoke
+    case lyricList = "lyric-list"
+    case lyricsWindowMini = "lyrics-window-mini"
+    case lastfmLove = "lastfm-love"
     /// 分组竖线,占一整格,可以放不止一条。
     case divider
 
@@ -37,19 +48,46 @@ public enum NotchQuickAction: String, CaseIterable, Codable, Sendable {
 
     /// 设置里「可添加」那一栏的顺序(组内按这个排)。
     public static let paletteOrder: [NotchQuickAction] = [
-        .previous, .playPause, .next, .shuffle, .repeatMode, .favorite,
-        .searchLyrics, .toggleLyrics, .lyricsAdvance, .lyricsDelay, .lyricsOffsetReset,
-        .lyricsWindow, .lyricsManager, .shareLyrics, .toggleOverlay, .lockOverlay, .menuBarLyrics, .hideAllLyrics, .openPlayer,
-        .lastfm, .settings, .close, .divider,
+        .previous, .playPause, .next, .seekBackward, .seekForward, .shuffle, .repeatMode, .favorite,
+        .volumeDown, .volumeUp, .mute,
+        .searchLyrics, .toggleLyrics, .copyLine, .secondaryLine, .karaoke, .lyricList,
+        .lyricsAdvance, .lyricsDelay, .lyricsOffsetReset,
+        .lyricsWindow, .lyricsWindowMini, .lyricsManager, .shareLyrics, .toggleOverlay, .lockOverlay, .menuBarLyrics,
+        .hideAllLyrics, .openPlayer,
+        .lastfm, .lastfmLove, .settings, .close, .divider,
     ]
+
+    /// 快退 / 快进一下跳多少毫秒。
+    public static let seekStepMs = 10_000
+    /// 音量加 / 减一下改多少(0~100)。
+    public static let volumeStep = 10
+
+    /// 「切换副行」点一下换到哪一档:按 `LyricSecondaryLine.allCases` 的顺序往后轮,最后一档回到第一档。
+    public static func nextSecondaryLine(after current: LyricSecondaryLine) -> LyricSecondaryLine {
+        let all = LyricSecondaryLine.allCases
+        guard let i = all.firstIndex(of: current) else { return all[0] }
+        return all[(i + 1) % all.count]
+    }
+
+    /// 快退 / 快进之后落在哪:按当前位置加减一步,夹在 0 到时长之间(不知道时长只夹 0)。
+    public static func seekTarget(from positionMs: Int, forward: Bool, durationMs: Int?) -> Int {
+        let target = positionMs + (forward ? seekStepMs : -seekStepMs)
+        guard let durationMs, durationMs > 0 else { return max(0, target) }
+        return min(max(0, target), durationMs)
+    }
 
     public var paletteGroup: PaletteGroup {
         switch self {
-        case .previous, .playPause, .next, .shuffle, .repeatMode, .favorite: return .playback
-        case .searchLyrics, .toggleLyrics, .lyricsAdvance, .lyricsDelay, .lyricsOffsetReset: return .lyrics
-        case .lyricsWindow, .lyricsManager, .shareLyrics, .toggleOverlay, .lockOverlay, .menuBarLyrics, .hideAllLyrics, .openPlayer:
+        case .previous, .playPause, .next, .seekBackward, .seekForward, .shuffle, .repeatMode, .favorite,
+             .volumeDown, .volumeUp, .mute:
+            return .playback
+        case .searchLyrics, .toggleLyrics, .copyLine, .secondaryLine, .karaoke, .lyricList,
+             .lyricsAdvance, .lyricsDelay, .lyricsOffsetReset:
+            return .lyrics
+        case .lyricsWindow, .lyricsWindowMini, .lyricsManager, .shareLyrics, .toggleOverlay, .lockOverlay, .menuBarLyrics,
+             .hideAllLyrics, .openPlayer:
             return .surfaces
-        case .lastfm, .settings, .close, .divider: return .other
+        case .lastfm, .lastfmLove, .settings, .close, .divider: return .other
         }
     }
 

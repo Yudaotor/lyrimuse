@@ -181,6 +181,16 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
     /// 菜单栏歌词开着没有、悬浮歌词锁着没有:快捷操作那两颗键的点亮状态。
     @Published private(set) var menuBarLyricsOn: Bool = AppSettings.shared.showLyricsInMenuBar
     @Published private(set) var overlayLocked: Bool = AppSettings.shared.lockPosition
+    /// 播放器此刻的音量(调不了是 nil):快捷操作音量三颗键画不画、静音键点不点亮。
+    @Published private(set) var soundVolume: Int? = PlaybackCoordinator.shared.soundVolume
+    /// 卡拉OK效果、多行歌词开着没有:快捷操作那两颗键的点亮状态。
+    @Published private(set) var karaokeOn: Bool = AppSettings.shared.notchLyricsKaraoke
+    @Published private(set) var lyricListOn: Bool = AppSettings.shared.notchExpandedLyricList
+    /// 「在 Last.fm 上喜欢」能不能点(连着 Last.fm、在放歌)、当前这首喜欢了没有。格子里放了这颗键才去读状态
+    /// (`LastfmLoveModel.retain` / `release` 成对,见 `quickSlots` 的订阅)。
+    @Published private(set) var lastfmLoveAvailable: Bool = LastfmLoveModel.shared.target != nil
+    @Published private(set) var lastfmLoved: Bool? = LastfmLoveModel.shared.loved
+    private var retainsLastfmLove = false
     /// 展开时多行歌词那一格的高度(关着「多行歌词」为 0),由三项设置合成(`AppSettings.notchExpandedLyricListHeight`)。
     /// 窗口高度跟着它:订阅里先写镜像、再重算几何,`recomputeGeometry` 读镜像(同 `lyricRowHeight`)。
     @Published private(set) var expandedLyricListHeight: CGFloat = AppSettings.shared.notchExpandedLyricListHeight
@@ -665,10 +675,31 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
                 self.quickSlots = slots
                 if rowsChanged { self.recomputeGeometry(animate: false) }
             }
+            self.updateLastfmLoveRetain(slots)
         }
         .store(in: &subscriptions)
         AppSettings.shared.$classicOverlayEnabled.removeDuplicates().sink { [weak self] on in
             self?.classicOverlayOn = on
+        }
+        .store(in: &subscriptions)
+        PlaybackCoordinator.shared.$soundVolume.removeDuplicates().sink { [weak self] volume in
+            self?.soundVolume = volume
+        }
+        .store(in: &subscriptions)
+        AppSettings.shared.$notchLyricsKaraoke.removeDuplicates().sink { [weak self] on in
+            self?.karaokeOn = on
+        }
+        .store(in: &subscriptions)
+        AppSettings.shared.$notchExpandedLyricList.removeDuplicates().sink { [weak self] on in
+            self?.lyricListOn = on
+        }
+        .store(in: &subscriptions)
+        LastfmLoveModel.shared.$target.map { $0 != nil }.removeDuplicates().sink { [weak self] available in
+            self?.lastfmLoveAvailable = available
+        }
+        .store(in: &subscriptions)
+        LastfmLoveModel.shared.$loved.removeDuplicates().sink { [weak self] loved in
+            self?.lastfmLoved = loved
         }
         .store(in: &subscriptions)
         AppSettings.shared.$showLyricsInMenuBar.removeDuplicates().sink { [weak self] on in
@@ -1658,6 +1689,14 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
     // contentWidth(baseWidth:notchWidth:),展开宽在它之上再取 NotchWidthBounds.expandedWidth)。
     // 这个函数跟播放状态无关(isCollapsed 是计算属性,见那边的注释)。
     /// 只读镜像(`leftEarModule` 那组和 chrome 的设置镜像),不回读 AppSettings,见 `leftEarModule` 头注。
+    /// 格子里有「在 Last.fm 上喜欢」时才让 `LastfmLoveModel` 去读这首喜欢没喜欢,拿掉就放手(retain / release 成对)。
+    private func updateLastfmLoveRetain(_ slots: NotchQuickSlots) {
+        let wants = slots.placed.contains(.lastfmLove)
+        guard wants != retainsLastfmLove else { return }
+        retainsLastfmLove = wants
+        if wants { LastfmLoveModel.shared.retain() } else { LastfmLoveModel.shared.release() }
+    }
+
     private func recomputeGeometry(animate: Bool) {
         guard let window, let screen = resolvedScreen() else { return }
         let geo = Self.geometry(for: screen)

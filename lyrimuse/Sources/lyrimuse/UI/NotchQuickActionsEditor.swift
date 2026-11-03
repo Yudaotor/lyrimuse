@@ -28,6 +28,17 @@ extension NotchQuickAction {
         case .menuBarLyrics: return LyrimuseAction.toggleMenuBarLyricsHotkey.iconName
         case .hideAllLyrics: return LyrimuseAction.toggleAllLyricsHotkey.iconName
         case .lockOverlay: return "lock"
+        case .seekBackward: return "gobackward.10"
+        case .seekForward: return "goforward.10"
+        case .volumeDown: return "speaker.wave.1.fill"
+        case .volumeUp: return "speaker.wave.3.fill"
+        case .mute: return "speaker.slash.fill"
+        case .copyLine: return "doc.on.doc"
+        case .secondaryLine: return "character.bubble"
+        case .karaoke: return "sparkles"
+        case .lyricList: return "text.justify.left"
+        case .lyricsWindowMini: return LyrimuseAction.toggleLyricsWindowMiniHotkey.iconName
+        case .lastfmLove: return "heart.circle"
         case .divider: return "poweron"
         }
     }
@@ -57,7 +68,28 @@ extension NotchQuickAction {
         case .menuBarLyrics: return L10n.t("菜单栏歌词")
         case .hideAllLyrics: return L10n.t("隐藏/恢复全部歌词")
         case .lockOverlay: return L10n.t("锁定位置")
+        case .seekBackward: return L10n.t("快退 10 秒")
+        case .seekForward: return L10n.t("快进 10 秒")
+        case .volumeDown: return L10n.t("调低音量")
+        case .volumeUp: return L10n.t("调高音量")
+        case .mute: return L10n.t("静音")
+        case .copyLine: return L10n.t("复制当前歌词")
+        case .secondaryLine: return L10n.t("副行")
+        case .karaoke: return L10n.t("卡拉OK效果")
+        case .lyricList: return L10n.t("多行歌词")
+        case .lyricsWindowMini: return L10n.t("切换迷你/完整尺寸")
+        case .lastfmLove: return L10n.t("在 Last.fm 上喜欢")
         case .divider: return L10n.t("分隔线")
+        }
+    }
+
+    /// 副行那一档的名字(「切换副行」的悬停提示用)。
+    static func secondaryLineName(_ line: LyricSecondaryLine) -> String {
+        switch line {
+        case .off: return L10n.t("无副行")
+        case .nextLine: return L10n.t("下一句")
+        case .translation: return L10n.t("译文")
+        case .romanization: return L10n.t("读音")
         }
     }
 
@@ -78,6 +110,10 @@ extension NotchQuickAction {
         case .lastfm: return L10n.t("连接 Last.fm 后才显示")
         case .shuffle, .repeatMode: return L10n.t("播放器支持随机和循环时才显示")
         case .lockOverlay: return L10n.t("悬浮歌词开着时才显示")
+        case .seekBackward, .seekForward: return L10n.t("播放器能拖动进度时才显示")
+        case .volumeDown, .volumeUp, .mute: return L10n.t("播放器能调音量时才显示")
+        case .copyLine: return L10n.t("当前这句有歌词时才显示")
+        case .lastfmLove: return L10n.t("连接 Last.fm 后才显示")
         default: return nil
         }
     }

@@ -223,6 +223,12 @@ extension NotchLyricsView {
     ///     `fullPlaybackMode` 有值(播放器此刻两样都能切)时画。
     ///   * 歌词提前 / 延后 / 偏移归零、菜单栏歌词、隐藏 / 恢复全部歌词、锁定位置:走全局快捷键那条路(`LyrimuseActionRunner`),
     ///     回声提示也一样;锁定位置只在悬浮歌词开着时画,菜单栏歌词开着、锁着时点亮。
+    ///   * 快退 / 快进 10 秒:按此刻位置加减一步(`NotchQuickAction.seekTarget`)走 `PlaybackCoordinator.seek`,只在 `acceptsSeek` 时画。
+    ///   * 调低 / 调高音量、静音:`PlaybackCoordinator.setVolume` / `toggleMute`,只在播放器报得出音量时画,静音时点亮。
+    ///   * 复制当前歌词:当前这句的纯文本放进剪贴板、闪一条提示,这句没有文字时不画。
+    ///   * 切换副行:灵动岛自己的副行(`notchSecondaryLine`)按 下一句 → 译文 → 读音 → 关 轮着换,开着时点亮;
+    ///     卡拉OK、多行歌词:切灵动岛自己那两个开关,开着点亮。
+    ///   * 在 Last.fm 上喜欢:`LastfmLoveModel.toggle`(歌词窗口那颗同一条路),连着 Last.fm、在放歌时画,喜欢了点亮。
     ///   * Last.fm 到 设置 › Last.fm 详情页(`openLastfmSettingsPage`)。只在 `LastfmStatsService.isConnected` 时画。
     ///   * 设置 → 直接翻到 设置 › 歌词显示 › 灵动岛。
     ///   * 关闭 → 关掉「灵动岛歌词」**总开关**(`closeFromQuickAction` → `setVisible(false)`),跟悬浮歌词那颗 ✕ 同一个意思。
@@ -248,6 +254,11 @@ extension NotchLyricsView {
                 case .lastfm: return LastfmStatsService.shared.isConnected
                 case .shuffle, .repeatMode: return playback.fullPlaybackMode != nil
                 case .lockOverlay: return controller.classicOverlayOn
+                // `acceptsSeek` 不是 @Published,随下一次 body 重算取值。
+                case .seekBackward, .seekForward: return PlaybackCoordinator.shared.acceptsSeek
+                case .volumeDown, .volumeUp, .mute: return controller.soundVolume != nil
+                case .copyLine: return !(playback.currentLine?.plainText ?? "").isEmpty
+                case .lastfmLove: return controller.lastfmLoveAvailable
                 default: return true
                 }
             }
@@ -352,6 +363,54 @@ extension NotchLyricsView {
             quickActionButton(controller.overlayLocked ? "lock.fill" : "lock.open", key: "lock-overlay",
                               label: L10n.t("锁定/解锁位置"), lit: controller.overlayLocked) {
                 LyrimuseActionRunner.perform(.toggleLockPosition)
+            }
+        case .seekBackward, .seekForward:
+            let forward = action == .seekForward
+            quickActionButton(action.symbolName, label: action.displayName) {
+                let position = playback.anchor?.extrapolatedPositionMs(now: Date()) ?? playback.pausedPositionMs ?? 0
+                let duration = playback.anchor?.durationMs ?? playback.currentDurationMs
+                PlaybackCoordinator.shared.seek(toMs: NotchQuickAction.seekTarget(from: position, forward: forward, durationMs: duration))
+            }
+        case .volumeDown, .volumeUp:
+            let step = action == .volumeUp ? NotchQuickAction.volumeStep : -NotchQuickAction.volumeStep
+            quickActionButton(action.symbolName, label: action.displayName) {
+                guard let volume = controller.soundVolume else { return }
+                PlaybackCoordinator.shared.setVolume(volume + step)
+            }
+        case .mute:
+            quickActionButton(action.symbolName, label: L10n.t("静音"), lit: controller.soundVolume == 0) {
+                PlaybackCoordinator.shared.toggleMute()
+            }
+        case .copyLine:
+            quickActionButton(action.symbolName, label: L10n.t("复制当前歌词")) {
+                guard let text = playback.currentLine?.plainText, !text.isEmpty else { return }
+                NSPasteboard.general.clearContents()
+                NSPasteboard.general.setString(text, forType: .string)
+                GlobalHotkeys.flashHint(icon: "doc.on.doc", text: L10n.t("已复制当前歌词"))
+            }
+        case .secondaryLine:
+            quickActionButton(action.symbolName, key: "secondary-line",
+                              label: String(format: L10n.t("副行：%@"), NotchQuickAction.secondaryLineName(playback.secondaryLine)),
+                              lit: playback.secondaryLine != .off) {
+                AppSettings.shared.notchSecondaryLine = NotchQuickAction.nextSecondaryLine(after: AppSettings.shared.notchSecondaryLine)
+            }
+        case .karaoke:
+            quickActionButton(action.symbolName, label: L10n.t("卡拉OK效果"), lit: controller.karaokeOn) {
+                AppSettings.shared.notchLyricsKaraoke.toggle()
+            }
+        case .lyricList:
+            quickActionButton(action.symbolName, label: L10n.t("多行歌词"), lit: controller.lyricListOn) {
+                AppSettings.shared.notchExpandedLyricList.toggle()
+            }
+        case .lyricsWindowMini:
+            quickActionButton(action.symbolName, label: L10n.t("切换迷你/完整尺寸")) {
+                LyrimuseActionRunner.perform(.toggleLyricsWindowMiniHotkey)
+            }
+        case .lastfmLove:
+            let loved = controller.lastfmLoved == true
+            quickActionButton(loved ? "heart.circle.fill" : "heart.circle", key: "lastfm-love",
+                              label: loved ? L10n.t("已在 Last.fm 上喜欢") : L10n.t("在 Last.fm 上喜欢"), lit: loved) {
+                LastfmLoveModel.shared.toggle()
             }
         }
     }

@@ -684,6 +684,7 @@
 "前进" = "Adelante";
 "剩余时长" = "Restante";
 "副行" = "Segunda línea";
+"副行：%@" = "Segunda línea: %@";
 "功能清单" = "Lista de funciones";
 "加入信任列表" = "Confiar en esta app";
 "加宽" = "Ancho";
@@ -923,6 +924,7 @@
 "备份文件夹" = "Carpeta de copias";
 "备份文件夹…" = "Carpeta de copias…";
 "备用链接（IP 地址）" = "Enlace alternativo (dirección IP)";
+"复制当前歌词" = "Copiar línea actual";
 "复用其他专辑中的同一首歌曲" = "Reutilizada de la misma grabación en otro álbum";
 "复用同一首歌曲的其他歌手写法" = "Reutilizada de la misma canción con otra grafía del artista";
 "外框为示意。" = "El marco es solo ilustrativo. ";
@@ -1110,6 +1112,7 @@
 "已在播放但未显示歌词？请检查所选的播放器" = "¿Suena música pero no se muestra la letra? Revisa el reproductor seleccionado";
 "已在浏览器中打开 Last.fm 授权页面。请点按「Yes, allow access」完成授权，完成后将自动返回 Lyrimuse；如浏览器未自动跳转，也可返回此处点按下方按钮" = "La página de autorización de Last.fm está abierta en tu navegador. Haz clic allí en «Yes, allow access» para terminar y volverás a Lyrimuse automáticamente. Si tu navegador no vuelve solo, usa el botón de abajo";
 "已在设置中关闭「同曲条目共用歌词」，各条目分别匹配歌词" = "«Compartir letra entre entradas de una canción» está desactivado en Ajustes, así que cada entrada busca su letra por separado";
+"已复制当前歌词" = "Línea actual copiada";
 "已存入导入库 %@ 个文件" = "Se guardaron %@ archivos en la biblioteca de importación";
 "已存入导入库 %@ 个文件#one" = "Se guardó %@ archivo en la biblioteca de importación";
 "已安装但未运行" = "Instalado pero no en ejecución";
@@ -1293,6 +1296,7 @@
 "当前系统未提供触控栏接口" = "API de la Touch Bar no disponible";
 "当前系统未提供触控栏接口，开启后不生效" = "Esta versión de macOS no ofrece las interfaces de Touch Bar que necesita Lyrimuse, así que activarlo no tiene efecto";
 "当前网络无法直接连接 Musixmatch 的接口（TCP/TLS 均无响应），系统代理也不可用；开启代理后通常可恢复" = "No se puede acceder al servidor de la API de Musixmatch por conexión directa en esta red (sin respuesta TCP/TLS) y no hay ningún proxy del sistema que funcione; activar un proxy suele solucionarlo";
+"当前这句有歌词时才显示" = "Solo se muestra si la línea actual tiene texto";
 "当前连续" = "Racha actual";
 "当前配色尚未保存，点按保存为主题" = "Estos colores aún no se han guardado. Haz clic para guardarlos como tema";
 "当天收听 %@ 次，以下为收听最多的歌曲" = "%@ reproducciones ese día, abajo las más escuchadas";
@@ -1308,6 +1312,8 @@
 "快捷操作按钮" = "Botones de acciones rápidas";
 "快捷键" = "Atajos de teclado";
 "快捷键：⌘↩" = "Atajo: ⌘↩";
+"快进 10 秒" = "Avanzar 10 segundos";
+"快退 10 秒" = "Retroceder 10 segundos";
 "快速开关" = "Accesos rápidos";
 "总 Scrobble" = "Scrobbles totales";
 "总分 %@" = "Total %@";
@@ -1486,6 +1492,8 @@
 "播放器支持随机和循环时才显示" = "Solo se muestra si el reproductor admite aleatorio y repetición";
 "播放器未提供歌手，按歌名和时长推断" = "El reproductor no indicó el artista; se dedujo del título y la duración";
 "播放器联动" = "Abrir y salir";
+"播放器能拖动进度时才显示" = "Solo se muestra si el reproductor permite saltar";
+"播放器能调音量时才显示" = "Solo se muestra si se puede cambiar el volumen del reproductor";
 "播放器自带歌词" = "Letra del propio reproductor";
 "播放控制" = "Controles";
 "播放控制位置" = "Posición de los controles";
@@ -2588,9 +2596,11 @@
 "读音" = "Romanización";
 "读音大小" = "Tamaño romanización";
 "读音间距" = "Espaciado de romanización";
+"调低音量" = "Bajar volumen";
 "调整" = "Ajustar";
 "调整宽度" = "Ajustar ancho";
 "调整颜色后，此处将出现「自定义」，点按即可保存为主题" = "Cuando cambies algún color, aparecerá aquí una tarjeta «Personalizado». Haz clic en ella para guardarlos como tema";
+"调高音量" = "Subir volumen";
 "谷歌旗下的流媒体音乐网站，网址 music.youtube.com" = "El sitio de música en streaming de Google, en music.youtube.com";
 "账号 Token" = "Token de la cuenta";
 "账号信息" = "Información de la cuenta";

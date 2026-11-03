@@ -636,6 +636,7 @@
 "前进" = "Chuyển tiếp";
 "剩余时长" = "Còn lại";
 "副行" = "Dòng phụ";
+"副行：%@" = "Dòng phụ: %@";
 "功能清单" = "Danh sách tính năng";
 "加入信任列表" = "Tin cậy ứng dụng này";
 "加宽" = "Rộng";
@@ -870,6 +871,7 @@
 "备份文件夹" = "Thư mục sao lưu";
 "备份文件夹…" = "Thư mục sao lưu…";
 "备用链接（IP 地址）" = "Liên kết dự phòng (địa chỉ IP)";
+"复制当前歌词" = "Sao chép lời hiện tại";
 "复用其他专辑中的同一首歌曲" = "Dùng lại từ cùng bài hát trong album khác";
 "复用同一首歌曲的其他歌手写法" = "Dùng lại từ cùng bài hát với cách viết tên nghệ sĩ khác";
 "外框为示意。" = "Khung chỉ để minh họa. ";
@@ -1048,6 +1050,7 @@
 "已在播放但未显示歌词？请检查所选的播放器" = "Đang phát nhưng không thấy lời? Hãy kiểm tra trình phát đã chọn";
 "已在浏览器中打开 Last.fm 授权页面。请点按「Yes, allow access」完成授权，完成后将自动返回 Lyrimuse；如浏览器未自动跳转，也可返回此处点按下方按钮" = "Đã mở trang cấp quyền Last.fm trong trình duyệt. Bấm vào “Yes, allow access” để hoàn tất, sau đó sẽ tự động quay lại Lyrimuse; nếu trình duyệt không tự chuyển, có thể quay lại đây và bấm nút bên dưới";
 "已在设置中关闭「同曲条目共用歌词」，各条目分别匹配歌词" = "“Dùng chung lời cho các mục cùng bài” đã tắt trong Cài đặt, mỗi mục được khớp lời riêng";
+"已复制当前歌词" = "Đã sao chép lời hiện tại";
 "已存入导入库 %@ 个文件" = "Đã lưu %@ tệp vào thư viện nhập";
 "已安装但未运行" = "Đã cài nhưng không chạy";
 "已安装但未运行（上次退出码 %d）" = "Đã cài nhưng không chạy (mã thoát lần trước: %d)";
@@ -1222,6 +1225,7 @@
 "当前系统未提供触控栏接口" = "Hệ thống không cung cấp API Touch Bar";
 "当前系统未提供触控栏接口，开启后不生效" = "Phiên bản macOS này không cung cấp API Touch Bar mà Lyrimuse cần nên bật cũng không có tác dụng";
 "当前网络无法直接连接 Musixmatch 的接口（TCP/TLS 均无响应），系统代理也不可用；开启代理后通常可恢复" = "Mạng hiện tại không kết nối trực tiếp được tới API của Musixmatch (TCP/TLS đều không phản hồi) và không có proxy hệ thống khả dụng; bật proxy thường sẽ khắc phục được";
+"当前这句有歌词时才显示" = "Chỉ hiện khi dòng hiện tại có lời";
 "当前连续" = "Chuỗi hiện tại";
 "当前配色尚未保存，点按保存为主题" = "Bảng màu hiện tại chưa được lưu, bấm vào để lưu thành chủ đề";
 "当天收听 %@ 次，以下为收听最多的歌曲" = "%@ lượt phát trong ngày, dưới đây là các bài nghe nhiều nhất";
@@ -1235,6 +1239,8 @@
 "快捷操作按钮" = "Nút tác vụ nhanh";
 "快捷键" = "Phím tắt";
 "快捷键：⌘↩" = "Phím tắt: ⌘↩";
+"快进 10 秒" = "Tiến 10 giây";
+"快退 10 秒" = "Lùi 10 giây";
 "快速开关" = "Bật/tắt nhanh";
 "总 Scrobble" = "Tổng số Scrobble";
 "总分 %@" = "Tổng điểm %@";
@@ -1411,6 +1417,8 @@
 "播放器支持随机和循环时才显示" = "Chỉ hiện khi trình phát hỗ trợ xáo trộn và lặp lại";
 "播放器未提供歌手，按歌名和时长推断" = "Trình phát không cung cấp nghệ sĩ, đã suy ra từ tên bài hát và thời lượng";
 "播放器联动" = "Mở & thoát cùng trình phát";
+"播放器能拖动进度时才显示" = "Chỉ hiện khi trình phát cho phép tua";
+"播放器能调音量时才显示" = "Chỉ hiện khi có thể chỉnh âm lượng trình phát";
 "播放器自带歌词" = "Lời có sẵn của trình phát";
 "播放控制" = "Điều khiển phát";
 "播放控制位置" = "Vị trí nút điều khiển";
@@ -2498,9 +2506,11 @@
 "读音" = "Phát âm";
 "读音大小" = "Cỡ phát âm";
 "读音间距" = "Giãn cách phát âm";
+"调低音量" = "Giảm âm lượng";
 "调整" = "Điều chỉnh";
 "调整宽度" = "Chỉnh độ rộng";
 "调整颜色后，此处将出现「自定义」，点按即可保存为主题" = "Sau khi chỉnh màu, mục “Tùy chỉnh” sẽ xuất hiện ở đây, bấm vào để lưu thành chủ đề";
+"调高音量" = "Tăng âm lượng";
 "谷歌旗下的流媒体音乐网站，网址 music.youtube.com" = "Trang nghe nhạc trực tuyến của Google, địa chỉ music.youtube.com";
 "账号 Token" = "Token tài khoản";
 "账号信息" = "Thông tin tài khoản";
