@@ -20,6 +20,8 @@ public enum ReportLanguage: String, CaseIterable, Sendable {
 public struct ReportWords: Sendable {
     let table: [String: String]
 
+    public init(table: [String: String]) { self.table = table }
+
     public subscript(_ key: String) -> String { table[key] ?? "" }
 
     /// 取 key 那一句,把 `{名字}` 换成值。只扫那一句本身一遍:换进去的歌名里带 `{n}` 这类字样时原样留着(同引擎 digestWords.f)。
@@ -41,10 +43,15 @@ public struct ReportWords: Sendable {
         return out + rest
     }
 
-    /// 带数量 `{n}` 的那一句;数量是 1 且表里有 `key_one` 时用它(英文单复数)。表里有 `zero_is_one` 的语言(法语、葡萄牙语)0 也用单数,同引擎 digestWords.count。
+    /// 带数量 `{n}` 的那一句;数量属于 one / few / many 且表里有 `key_one` / `key_few` / `key_many` 时用那一句,否则用 key 本身,
+    /// 同引擎 digestWords.count。类别:表里 `plural_rule` 是 ru 的按俄语(`UILanguage.pluralCategory(_, pack: "ru")`);
+    /// 别的语言 1 是 one,表里有 `zero_is_one` 的(法语、葡萄牙语)0 也是 one。
     public func count(_ key: String, _ n: Int, _ values: [(String, String)] = []) -> String {
-        let singular = n == 1 || (n == 0 && !self["zero_is_one"].isEmpty)
-        return f(singular && table[key + "_one"] != nil ? key + "_one" : key, [("n", String(n))] + values)
+        let category: UILanguage.PluralCategory = self["plural_rule"] == "ru"
+            ? UILanguage.pluralCategory(n, pack: "ru")
+            : (n == 1 || (n == 0 && !self["zero_is_one"].isEmpty) ? .one : .other)
+        let form = key + "_" + category.rawValue
+        return f(category != .other && table[form] != nil ? form : key, [("n", String(n))] + values)
     }
 
     /// 标题里的日期,同引擎 digestWords.date。

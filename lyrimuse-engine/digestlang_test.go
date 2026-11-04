@@ -41,6 +41,30 @@ func TestDigestWordsMatchShared(t *testing.T) {
 	}
 }
 
+// 俄语式的 one / few / many(plural_rule 为 ru)和别的语言的单复数,同 Core UILanguage.pluralCategory、ReportWords.count。
+func TestDigestWordsPluralForm(t *testing.T) {
+	counts := []int{0, 1, 2, 5, 11, 21, 22, 25, 111, 12, 14, 104}
+	forms := func(w digestWords) string {
+		var out []string
+		for _, n := range counts {
+			out = append(out, w.count("plays", n))
+		}
+		return strings.Join(out, "|")
+	}
+	ru := digestWords{"plays": "{n} other", "plays_one": "{n} one", "plays_few": "{n} few", "plays_many": "{n} many", "plural_rule": "ru"}
+	if got, want := forms(ru), "0 many|1 one|2 few|5 many|11 many|21 one|22 few|25 many|111 many|12 many|14 many|104 few"; got != want {
+		t.Errorf("俄语: %s, want %s", got, want)
+	}
+	en := digestWords{"plays": "{n} other", "plays_one": "{n} one", "plays_few": "{n} few", "plays_many": "{n} many"}
+	if got, want := forms(en), "0 other|1 one|2 other|5 other|11 other|21 other|22 other|25 other|111 other|12 other|14 other|104 other"; got != want {
+		t.Errorf("没有 plural_rule 的只有 1 是 one: %s, want %s", got, want)
+	}
+	noMany := digestWords{"plays": "{n} other", "plays_one": "{n} one", "plural_rule": "ru"}
+	if got := noMany.count("plays", 5); got != "5 other" {
+		t.Errorf("表里没有 _many 时用 key 本身: %s", got)
+	}
+}
+
 func TestParseDigestLang(t *testing.T) {
 	for in, want := range map[string]digestLang{"": digestLangHans, "zh-hans": digestLangHans, " ZH-HANT ": digestLangHant, "en": digestLangEn, "ja": digestLangJa, "ko": digestLangKo, "es": digestLangEs, "fr": digestLangFr, "de": digestLangDe, "it": digestLangIt, "pt-br": digestLangPtBR, " PT-BR ": digestLangPtBR, "vi": digestLangVi, " VI ": digestLangVi, "pl": digestLangHans} {
 		if got := parseDigestLang(in); got != want {

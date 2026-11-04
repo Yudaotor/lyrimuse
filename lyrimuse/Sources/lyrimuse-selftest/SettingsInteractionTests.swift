@@ -630,6 +630,14 @@ func runSettingsInteractionTests() {
         expectEqual([0, 1, 2].map { ReportLanguage.vi.words.count("plays", $0) } + [ReportLanguage.vi.words.month("title_month", year: 2026, month: 10)],
                     ["0 lượt phát", "1 lượt phát", "2 lượt phát", "📅 Tổng kết nghe nhạc tháng 10/2026"],
                     "报告语言: 越南语不分单复数(同日韩,表里没有 _one),月份写数字")
+        let pluralCounts = [0, 1, 2, 5, 11, 21, 22, 25, 111, 12, 14, 104]
+        let pluralTable = ["plays": "{n} other", "plays_one": "{n} one", "plays_few": "{n} few", "plays_many": "{n} many"]
+        expectEqual(pluralCounts.map { ReportWords(table: pluralTable.merging(["plural_rule": "ru"]) { $1 }).count("plays", $0) }.joined(separator: "|"),
+                    "0 many|1 one|2 few|5 many|11 many|21 one|22 few|25 many|111 many|12 many|14 many|104 few",
+                    "报告语言: plural_rule 为 ru 的按俄语分 one / few / many(同引擎 TestDigestWordsPluralForm)")
+        expectEqual(pluralCounts.map { ReportWords(table: pluralTable).count("plays", $0) }.joined(separator: "|"),
+                    "0 other|1 one|2 other|5 other|11 other|21 other|22 other|25 other|111 other|12 other|14 other|104 other",
+                    "报告语言: 没有 plural_rule 的只有 1 用单数")
         expectEqual(ReportLanguage.en.words.month("title_month", year: 2026, month: 10), "📅 October 2026 Listening Digest",
                     "报告语言: 没有 month_names 的用英文月名")
         expectEqual(DigestStyle.matching(DigestTemplate.preset(.brief, lang: .en) ?? DigestTemplate(), lang: .en), .brief,

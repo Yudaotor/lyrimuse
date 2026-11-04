@@ -37,9 +37,9 @@ ENTRY = re.compile(r'^\s*"((?:[^"\\]|\\.)*)"\s*=\s*"((?:[^"\\]|\\.)*)"\s*;', re.
 # 只取前半截去比会报一条修不掉的红。\s* 让跨行写法也能命中。两条正则跟 selftest 本地化守卫
 # (Sources/lyrimuse-selftest/SourceContractTests.swift 的 callPattern / pluralPattern)逐字同款,改一边要改另一边。
 CALL = re.compile(r'L10n\.t\(\s*"((?:[^"\\]|\\.)*)"\s*\)|L10n\.plural\(\s*"((?:[^"\\]|\\.)*)"\s*,')
-# 单数变体的派生键(见 Localization/generate-strings.py 的 PLURAL_ONE_SUFFIX):只出现在写了 plural 变体的那种语言里,
-# 对拍 key 集时不算,另查它的本键在同一张表里。
-PLURAL_ONE_SUFFIX = "#one"
+# plural 变体的派生键(见 Localization/generate-strings.py 的 PLURAL_SUFFIX:键#one、键#few、键#many):只出现在写了
+# plural 变体的那种语言里,对拍 key 集时不算,另查它的本键在同一张表里。
+PLURAL_DERIVED_SUFFIXES = ("#one", "#few", "#many")
 
 
 def keys_of(path):
@@ -82,11 +82,11 @@ def main():
 
     ok = True
     for lang in list(tables):
-        derived = {k for k in tables[lang] if k.endswith(PLURAL_ONE_SUFFIX)}
-        orphans = sorted(k for k in derived if k[:-len(PLURAL_ONE_SUFFIX)] not in tables[lang])
+        derived = {k for k in tables[lang] if k.endswith(PLURAL_DERIVED_SUFFIXES)}
+        orphans = sorted(k for k in derived if k[:k.rindex("#")] not in tables[lang])
         if orphans:
             ok = False
-            print(f"\n\u2717 {lang} 有单数变体的派生键却没有本键({len(orphans)} 条) —— 生成物只能由 generate-strings.py 生成:")
+            print(f"\n\u2717 {lang} 有 plural 变体的派生键却没有本键({len(orphans)} 条) —— 生成物只能由 generate-strings.py 生成:")
             for k in orphans[:20]:
                 print(f"    {k}")
         tables[lang] = tables[lang] - derived

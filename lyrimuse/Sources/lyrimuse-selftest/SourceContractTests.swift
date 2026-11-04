@@ -300,7 +300,7 @@ func runSourceContractTests() {
                 func unit(_ node: Any?) -> String? {
                     ((node as? [String: Any])?["stringUnit"] as? [String: Any])?["value"] as? String
                 }
-                // 写成 plural 变体的语言:值取 other,one 那条生成到「键#one」(同 generate-strings.py 的 forms)。
+                // 写成 plural 变体的语言:值取 other,one / few / many 生成到「键#one」「键#few」「键#many」(同 generate-strings.py 的 forms)。
                 func plural(_ lang: String) -> [String: Any]? {
                     ((localizations?[lang] as? [String: Any])?["variations"] as? [String: Any])?["plural"] as? [String: Any]
                 }
@@ -308,7 +308,10 @@ func runSourceContractTests() {
                     if let plural = plural(lang) { return unit(plural["other"]) }
                     return unit(localizations?[lang])
                 }
-                func one(_ lang: String) -> String? { plural(lang).flatMap { unit($0["one"]) } }
+                func derived(_ lang: String) -> [(String, String)] {
+                    guard let plural = plural(lang) else { return [] }
+                    return ["one", "few", "many"].compactMap { form in unit(plural[form]).map { (form, $0) } }
+                }
                 // 源语言允许省略(值即键,跟 generate-strings.py 同一条规则);别的语言缺翻译
                 // 必须红 —— 静默回退成中文正是这套守卫要消灭的事故。
                 out.zh[key] = value("zh-Hans") ?? key
@@ -319,7 +322,7 @@ func runSourceContractTests() {
                         continue
                     }
                     out.translations[lang, default: [:]][key] = translated
-                    if let o = one(lang) { out.translations[lang, default: [:]][key + "#one"] = o }
+                    for (form, v) in derived(lang) { out.translations[lang, default: [:]][key + "#" + form] = v }
                 }
             }
             return out
@@ -349,7 +352,7 @@ func runSourceContractTests() {
                 diff(catalog.translations[lang] ?? [:], generated, pack)
             }
 
-            // 格式参数:各语言的值(含单数变体「键#one」)要跟键用同一组参数 —— 第几个参数、什么类型。调用方按键的参数表
+            // 格式参数:各语言的值(含 plural 变体的派生键「键#one / #few / #many」)要跟键用同一组参数 —— 第几个参数、什么类型。调用方按键的参数表
             // 传值,String(format:) 却按译文里的格式符取:译文把 %d 写成 %@ 会把整数当对象指针解引用(崩溃)。规则跟
             // generate-strings.py 的 format_arg_problems 同一套:%% 不算参数,不认空格标志,长度修饰同属整数。
             let spec = #/%(?:(\d+)\$)?[-+0#]*\d*(?:\.\d+)?(?:hh|ll|h|l|q|z|t|j)?([@dDiuUxXoOfeEgGcCsSpaA%])/#
@@ -385,7 +388,7 @@ func runSourceContractTests() {
             func argMismatches(_ table: [String: String], _ tag: String) -> [String] {
                 catalog.zh.keys.flatMap { key -> [String] in
                     let want = argSignature(key)
-                    return [key, key + "#one"].compactMap { k in
+                    return [key, key + "#one", key + "#few", key + "#many"].compactMap { k in
                         guard let value = table[k] else { return nil }
                         return want == nil || argSignature(value) != want ? "\(tag) \(k.prefix(60))" : nil
                     }
@@ -457,10 +460,16 @@ func runSourceContractTests() {
                         "本地化: 各地区的葡萄牙语都归巴西葡语包")
             expectEqual([resolve("vi"), resolve("vi-VN"), resolve("VI_vn"), resolve("pl-PL", "vi-VN", "en")], ["vi", "vi", "vi", "vi"],
                         "本地化: 越南语归越南语包")
-            expectEqual([0, 1, 2].map { UILanguage.usesSingular($0, pack: "it") }, [false, true, false], "本地化: 意大利语只有 1 用单数、0 用复数")
-            expectEqual([0, 1, 2].map { UILanguage.usesSingular($0, pack: "pt-br") }, [true, true, false], "本地化: 巴西葡语跟法语一样 0 和 1 用单数")
-            expectEqual([0, 1, 2].map { UILanguage.usesSingular($0, pack: "fr") } + [0, 1, 2].map { UILanguage.usesSingular($0, pack: "en") },
-                        [true, true, false, false, true, false], "本地化: 法语 0 和 1 用单数,别的语言只有 1")
+            func categories(_ pack: String, _ counts: [Int] = [0, 1, 2]) -> [String] {
+                counts.map { UILanguage.pluralCategory($0, pack: pack).rawValue }
+            }
+            expectEqual(categories("it"), ["other", "one", "other"], "本地化: 意大利语只有 1 用单数、0 用复数")
+            expectEqual(categories("pt-br"), ["one", "one", "other"], "本地化: 巴西葡语跟法语一样 0 和 1 用单数")
+            expectEqual(categories("fr") + categories("en"), ["one", "one", "other", "other", "one", "other"],
+                        "本地化: 法语 0 和 1 用单数,别的语言只有 1")
+            expectEqual(categories("ru", [0, 1, 2, 5, 11, 21, 22, 25, 111, 12, 14, 104]),
+                        ["many", "one", "few", "many", "many", "one", "few", "many", "many", "many", "many", "few"],
+                        "本地化: 俄语按 CLDR 分 one / few / many(个位 1 且不是 11、个位 2～4 且不是 12～14)")
             expectEqual(["ja", "Japanese", "ja_JP", "ko", "Korean", "ko_KR", "es", "Spanish", "es_419", "fr", "French", "fr_CA", "de", "German", "de_AT", "it", "Italian", "it_CH", "pt", "Portuguese", "pt_BR", "pt_PT", "vi", "Vietnamese", "vi_VN"].map { UILanguage.pack(forLocalization: $0) ?? "-" },
                         ["ja", "ja", "ja", "ko", "ko", "ko", "es", "es", "es", "fr", "fr", "fr", "de", "de", "de", "it", "it", "it", "pt-br", "pt-br", "pt-br", "pt-br", "vi", "vi", "vi"],
                         "本地化: 别的 App 的日语、韩语、西语、法语、德语、意大利语、葡萄牙语、越南语本地化目录归对应的包")

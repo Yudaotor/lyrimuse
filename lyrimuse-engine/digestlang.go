@@ -70,12 +70,38 @@ func (w digestWords) f(key string, kv ...string) string {
 
 var digestWordSlotRe = regexp.MustCompile(`\{[a-z_]+\}`)
 
-// count:带数量 {n} 的那一句;数量是 1 且表里有 key_one 时用它(英文单复数)。表里有 zero_is_one 的语言(法语、葡萄牙语)数量是 0 也用单数。
+// count:带数量 {n} 的那一句;数量属于 one / few / many(pluralForm)且表里有 key_one / key_few / key_many 时用那一句,
+// 否则用 key 本身(other)。
 func (w digestWords) count(key string, n int, kv ...string) string {
-	if _, ok := w[key+"_one"]; ok && (n == 1 || n == 0 && w["zero_is_one"] != "") {
-		key += "_one"
+	if form := w.pluralForm(n); form != "other" {
+		if _, ok := w[key+"_"+form]; ok {
+			key += "_" + form
+		}
 	}
 	return w.f(key, append([]string{"n", strconv.Itoa(n)}, kv...)...)
+}
+
+// pluralForm:数量 n 在这张表的语言里属于哪一类(CLDR 整数规则),同 Core UILanguage.pluralCategory。
+// 表里 plural_rule 是 ru 的按俄语:个位 1 且末两位不是 11 → one,个位 2～4 且末两位不是 12～14 → few,其余 many;
+// 别的语言 1 是 one,表里有 zero_is_one 的(法语、葡萄牙语)0 也是 one,其余 other。
+func (w digestWords) pluralForm(n int) string {
+	if w["plural_rule"] == "ru" {
+		if n < 0 {
+			n = -n
+		}
+		mod10, mod100 := n%10, n%100
+		switch {
+		case mod10 == 1 && mod100 != 11:
+			return "one"
+		case mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14):
+			return "few"
+		}
+		return "many"
+	}
+	if n == 1 || n == 0 && w["zero_is_one"] != "" {
+		return "one"
+	}
+	return "other"
 }
 
 // date:标题里的日期(本地)。

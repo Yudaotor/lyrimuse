@@ -7,7 +7,7 @@
 
 加新文案别手写 Python 读写整个 catalog(默认 json.dump 会把上万行重排),用加键子命令:
     python3 Localization/generate-strings.py --add 新键.json
-新键.json 形如 {"简体原文": {"en": "...", "zh-Hant": "...", "ja": "...", "ko": "...", "es": "...", "fr": "...", "de": "...", "it": "...", "pt-BR": "...", "vi": "..."}}(TARGETS 里简体以外的每种语言都要写);要分单复数的语言写成 {"one": "...", "other": "..."}。
+新键.json 形如 {"简体原文": {"en": "...", "zh-Hant": "...", "ja": "...", "ko": "...", "es": "...", "fr": "...", "de": "...", "it": "...", "pt-BR": "...", "vi": "..."}}(TARGETS 里简体以外的每种语言都要写);要分单复数的语言写成 {"one": "...", "other": "..."}(PLURAL_FORMS 里登记的语言写它要的几类,如俄语 {"one", "few", "many", "other"})。
 新键按文件里的次序追加到 catalog 末尾、已有的键拒绝覆盖,写回用 Xcode 的排版,然后照常生成三份 .strings。
 
 改已有文案(简体原文就是键,改简体 = 换键)用换键子命令:
@@ -65,11 +65,30 @@ OUT_DIR = os.path.join(ROOT, "..", "Sources", "lyrimuse", "Resources")
 INFO_PLIST_KEYS = {
     "NSAppleEventsUsageDescription": "Lyrimuse 需要读取播放器和浏览器中正在播放的歌曲，才能显示同步歌词。",
 }
-# 按数量分单复数:某语言写成 Xcode 的 plural 变体(variations.plural 下 one / other 两条)时,other 写进这个键,
-# one 写进「键 + PLURAL_ONE_SUFFIX」。L10n.plural(_:count:) 数量为 1 时先查后者,查不到(这个语言没分单复数)
-# 用前者。.strings 不带复数规则,所以只认 one / other 两档(英文的规则),数量由调用方传,不看格式参数。
-# 后缀跟 L10n.swift、selftest 本地化守卫、scripts/check_strings_parity.py 三处必须一致。
-PLURAL_ONE_SUFFIX = "#one"
+# 按数量分单复数:某语言写成 Xcode 的 plural 变体(variations.plural)时,other 写进这个键,其余各类写进
+# 「键 + PLURAL_SUFFIX + 类别」(键#one、键#few、键#many)。L10n.plural(_:count:) 按 UILanguage.pluralCategory
+# 算出类别,先查那条派生键,查不到(这个语言没分这一类)用键本身。.strings 不带复数规则,数量由调用方传,不看格式参数。
+# 每种语言要写哪几类:PLURAL_FORMS 里登记的按登记的(CLDR 整数规则),其余 one / other。
+# 后缀和类别名跟 L10n.swift、UILanguage.pluralCategory、selftest 本地化守卫、scripts/check_strings_parity.py 必须一致。
+PLURAL_SUFFIX = "#"
+DEFAULT_PLURAL_FORMS = ("one", "other")
+PLURAL_FORMS = {"ru": ("one", "few", "many", "other")}
+DERIVED_PLURAL_FORMS = ("one", "few", "many")
+
+
+def plural_forms(lang):
+    """这种语言的 plural 变体要写哪几类(含 other)。"""
+    return PLURAL_FORMS.get(lang, DEFAULT_PLURAL_FORMS)
+
+
+def is_plural_value(value, lang):
+    """--add / --rename 映射里这种语言的值是不是合法的 plural 写法:恰好是 plural_forms(lang) 那几类,各为非空字符串。"""
+    return isinstance(value, dict) and set(value) == set(plural_forms(lang)) \
+        and all(isinstance(v, str) and v for v in value.values())
+
+
+def plural_shape(lang):
+    return "{" + ", ".join(f'"{f}": …' for f in plural_forms(lang)) + "}"
 FORMAT_SPEC = re.compile(r"%(?:\d+\$)?[-+ 0#]*\d*(?:\.\d+)?(?:ll|l|h)?[@dDiuUxXoOfeEgGcCsSpaA%]")
 # 跨语言格式参数:各语言的值(含 plural 的 one / other)要跟键(简体原文)用同一组参数 —— 第几个参数、什么类型。
 # 调用方按键的参数表传值、String(format:) 却按译文里的格式符取:译文把 %d 写成 %@ 会把整数当对象指针解引用(崩溃),
@@ -205,32 +224,36 @@ def unit_value(node):
 
 
 def forms(entry, lang):
-    """某语言的 (值, 单数值)。写成 plural 变体时值取 other、单数值取 one;没写成变体时单数值是 None。"""
+    """某语言的 (值, {类别: 值})。写成 plural 变体时值取 other,后者是 one / few / many 里写了的那几类(按这个次序);
+    没写成变体时后者是空的。"""
     loc = ((entry or {}).get("localizations") or {}).get(lang) or {}
     plural = (loc.get("variations") or {}).get("plural")
     if plural is None:
-        return unit_value(loc), None
-    return unit_value(plural.get("other")), unit_value(plural.get("one"))
+        return unit_value(loc), {}
+    derived = {f: unit_value(plural.get(f)) for f in DERIVED_PLURAL_FORMS if unit_value(plural.get(f)) is not None}
+    return unit_value(plural.get("other")), derived
 
 
 def plural_problems(strings, source_lang):
-    """plural 变体写错的地方:源语言不分单复数(值就是键);只认 one / other 两条且都要有;两条的格式符要一样
-    (同一组参数填进哪一条都对得上);派生出来的键不能跟已有的键撞。"""
+    """plural 变体写错的地方:源语言不分单复数(值就是键);每种语言要有且只有 plural_forms(lang) 那几类、都不空;
+    各类的格式符要一样(同一组参数填进哪一条都对得上);派生出来的键不能跟已有的键撞。"""
     out = []
     for key, entry in strings.items():
-        if key.endswith(PLURAL_ONE_SUFFIX):
-            out.append(f"{key[:60]}:键不能以 {PLURAL_ONE_SUFFIX} 结尾(那是单数变体的派生键)")
+        for form in DERIVED_PLURAL_FORMS:
+            if key.endswith(PLURAL_SUFFIX + form):
+                out.append(f"{key[:60]}:键不能以 {PLURAL_SUFFIX + form} 结尾(那是 plural 变体的派生键)")
         for lang, loc in ((entry or {}).get("localizations") or {}).items():
             plural = ((loc or {}).get("variations") or {}).get("plural")
             if plural is None:
                 continue
-            other, one = unit_value(plural.get("other")), unit_value(plural.get("one"))
+            want = plural_forms(lang)
+            values = {f: unit_value(plural.get(f)) for f in plural}
             if lang == source_lang:
                 out.append(f"{key[:60]}:{lang} 是源语言,值就是键,不写 plural 变体")
-            elif set(plural) != {"one", "other"} or not other or not one:
-                out.append(f"{key[:60]}:{lang} 的 plural 变体要有且只有 one / other 两条")
-            elif sorted(FORMAT_SPEC.findall(one)) != sorted(FORMAT_SPEC.findall(other)):
-                out.append(f"{key[:60]}:{lang} 的 one / other 格式符不一样")
+            elif set(plural) != set(want) or not all(values.values()):
+                out.append(f"{key[:60]}:{lang} 的 plural 变体要有且只有 {' / '.join(want)} {len(want)} 条")
+            elif len({tuple(sorted(FORMAT_SPEC.findall(v))) for v in values.values()}) != 1:
+                out.append(f"{key[:60]}:{lang} 的 {' / '.join(want)} 格式符不一样")
     return out
 
 
@@ -272,7 +295,7 @@ def format_arg_problems(strings, source_lang):
             if plural is None:
                 values = [("", unit_value(loc))]
             else:
-                values = [(f" {form}", unit_value(plural.get(form))) for form in ("one", "other")]
+                values = [(f" {form}", unit_value(plural.get(form))) for form in plural_forms(lang)]
             for form, value in values:
                 if value is None:
                     continue
@@ -287,9 +310,11 @@ def escape(s: str) -> str:
 
 
 def localization(value):
+    """--add / --rename 的一种语言的值 → catalog 条目。plural 变体按 one、few、many、other 的次序写(Xcode 的次序)。"""
     unit = lambda v: {"stringUnit": {"state": "translated", "value": v}}
     if isinstance(value, dict):
-        return {"variations": {"plural": {form: unit(value[form]) for form in ("one", "other")}}}
+        return {"variations": {"plural": {form: unit(value[form]) for form in DERIVED_PLURAL_FORMS + ("other",)
+                                          if form in value}}}
     return unit(value)
 
 
@@ -311,10 +336,8 @@ def add_keys(catalog, path) -> int:
             errors.append(f"{key[:60]}:要写且只写 {'、'.join(sorted(want))}")
             continue
         for lang, value in langs.items():
-            ok = isinstance(value, str) and value or (isinstance(value, dict) and set(value) == {"one", "other"}
-                                                      and all(isinstance(v, str) and v for v in value.values()))
-            if not ok:
-                errors.append(f"{key[:60]}:{lang} 要么是非空字符串,要么是 {{\"one\": …, \"other\": …}}")
+            if not (isinstance(value, str) and value or is_plural_value(value, lang)):
+                errors.append(f"{key[:60]}:{lang} 要么是非空字符串,要么是 {plural_shape(lang)}")
     if not errors:
         added = {key: {"extractionState": "manual",
                        "localizations": {**{lang: localization(v) for lang, v in langs.items()},
@@ -371,10 +394,8 @@ def renamed_strings(catalog, mapping):
                           f"旧文案是「{describe_signature(arg_signature(old))}」—— 调用方按旧参数传值")
         for lang in RENAME_LANGS:
             value = spec.get(lang)
-            if lang in spec and not (isinstance(value, str) and value or (
-                    isinstance(value, dict) and set(value) == {"one", "other"}
-                    and all(isinstance(v, str) and v for v in value.values()))):
-                errors.append(f"{old[:60]}:{lang} 要么是非空字符串,要么是 {{\"one\": …, \"other\": …}}")
+            if lang in spec and not (isinstance(value, str) and value or is_plural_value(value, lang)):
+                errors.append(f"{old[:60]}:{lang} 要么是非空字符串,要么是 {plural_shape(lang)}")
     if errors:
         return None, errors
     out, renamed = {}, {}
@@ -522,6 +543,24 @@ def selftest() -> int:
     check("分单复数的译文", out is not None and out["%lld 首歌"]["localizations"]["en"] ==
           {"variations": {"plural": {"one": unit("%lld track"), "other": unit("%lld tracks")}}}, "; ".join(errors))
 
+    ru = {"one": "%lld трек", "few": "%lld трека", "many": "%lld треков", "other": "%lld трека"}
+    ru_entry = lambda v: {"%lld 首": {"localizations": {"ru": localization(v), "zh-Hans": localization("%lld 首")}}}
+    check("俄语四类复数:按 one、few、many、other 写", list(ru_entry(ru)["%lld 首"]["localizations"]["ru"]["variations"]["plural"])
+          == ["one", "few", "many", "other"])
+    check("俄语四类复数:合法", plural_problems(ru_entry(ru), "zh-Hans") == [] and is_plural_value(ru, "ru"),
+          repr(plural_problems(ru_entry(ru), "zh-Hans")))
+    check("俄语四类复数:派生键", forms(ru_entry(ru)["%lld 首"], "ru") == (
+        "%lld трека", {"one": "%lld трек", "few": "%lld трека", "many": "%lld треков"}), repr(forms(ru_entry(ru)["%lld 首"], "ru")))
+    check("英文仍只派生 #one", forms(strings["%lld 首"], "en") == ("%lld songs", {"one": "%lld song"}),
+          repr(forms(strings["%lld 首"], "en")))
+    for name, bad in {"俄语只写 one / other": {"one": "%lld трек", "other": "%lld треков"},
+                      "俄语某类格式符不一样": {**ru, "few": "%@ трека"},
+                      "俄语某类是空的": {**ru, "many": ""}}.items():
+        check(f"拒绝:{name}", plural_problems(ru_entry(bad), "zh-Hans") != [] or not is_plural_value(bad, "ru"), "没有拒绝")
+    en4 = {"one": "%lld track", "few": "%lld tracks", "many": "%lld tracks", "other": "%lld tracks"}
+    check("拒绝:英文写了 few / many", not is_plural_value(en4, "en") and plural_problems(
+        {"%lld 首": {"localizations": {"en": localization(en4)}}}, "zh-Hans") != [])
+    check("拒绝:键以 #few 结尾", plural_problems({"a#few": {"localizations": {}}}, "zh-Hans") != [])
     rejects = {
         "格式参数个数不一样": {"另存副本：%@": {"new": "另存了副本", "en": "Saved a copy", "zh-Hant": "另存了副本"}},
         "格式参数类型不一样": {"把逐字歌词改存为 %@？": {"new": "改存为第 %lld 种格式？", "en": "Save as format %lld?",
@@ -660,7 +699,7 @@ def main() -> int:
         missing = []
         for key in sorted(strings):
             entry = strings[key] or {}
-            value, one = forms(entry, lang)
+            value, derived = forms(entry, lang)
             if value is None:
                 # 源语言允许省略(值即键,Xcode 的惯例);其它语言缺翻译就大声失败,
                 # 别静默生成一个回退键 —— 那会让"缺翻译"从可见问题变成隐形问题。
@@ -674,8 +713,8 @@ def main() -> int:
                     missing.append(key)
                     continue
             lines.append(f'"{escape(key)}" = "{escape(value)}";\n')
-            if one is not None:
-                lines.append(f'"{escape(key + PLURAL_ONE_SUFFIX)}" = "{escape(one)}";\n')
+            for form, form_value in derived.items():
+                lines.append(f'"{escape(key + PLURAL_SUFFIX + form)}" = "{escape(form_value)}";\n')
         out = os.path.join(OUT_DIR, lproj, "Localizable.strings")
         with open(out, "w", encoding="utf-8") as f:
             f.writelines(lines)
