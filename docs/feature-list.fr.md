@@ -607,7 +607,7 @@ Associez une fois votre navigateur, et la musique qu’il joue a aussi ses parol
 
 ### Passer les pubs YouTube Music automatiquement
 
-Les pubs de YouTube Music dans votre navigateur sont passées dès que le bouton pour les passer apparaît. Option désactivée, vous pouvez toujours les passer vous-même depuis l’encoche. Nécessite l’autorisation Accessibilité.
+Les pubs de YouTube Music dans votre navigateur ou dans Pear Desktop sont passées dès que le bouton pour les passer apparaît. Option désactivée, vous pouvez toujours les passer vous-même depuis l’encoche. Nécessite l’autorisation Accessibilité.
 
 - Désactivée par défaut
 - Réglages : Lecteur › Web › Passer les pubs

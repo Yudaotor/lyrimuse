@@ -607,7 +607,7 @@ Pareie seu navegador uma vez e a música que toca nele também ganha letra, segu
 
 ### Pular anúncios do YouTube Music automaticamente
 
-No YouTube Music do navegador, os anúncios são pulados assim que o botão “Pular” aparece. Com a opção desativada, você ainda pode pular pelo notch. Requer a permissão de “Acessibilidade”.
+No YouTube Music do navegador ou no Pear Desktop, os anúncios são pulados assim que o botão “Pular” aparece. Com a opção desativada, você ainda pode pular pelo notch. Requer a permissão de “Acessibilidade”.
 
 - Desativado por padrão
 - Ajustes: Player › Web › Pular anúncios do YouTube Music

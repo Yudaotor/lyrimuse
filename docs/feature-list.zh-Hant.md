@@ -607,7 +607,7 @@ Apple Music、Spotify、QQ 音樂、網易雲音樂、酷狗音樂、汽水音�
 
 ### 自動略過 YouTube Music 廣告
 
-瀏覽器中的 YouTube Music 出現「略過」按鈕時自動按一下。未開啟時，也可在動態島上手動略過。需要「輔助使用」權限。
+瀏覽器中的 YouTube Music 或 Pear Desktop 出現「略過」按鈕時自動按一下。未開啟時，也可在動態島上手動略過。需要「輔助使用」權限。
 
 - 預設關閉
 - 設定位置：播放器 › 網頁版 › 自動略過 YouTube Music 廣告

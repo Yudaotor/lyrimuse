@@ -607,7 +607,7 @@ Ghép đôi trình duyệt một lần là nhạc phát trong đó cũng có l�
 
 ### Tự động bỏ qua quảng cáo YouTube Music
 
-Lyrimuse bỏ qua quảng cáo của YouTube Music trong trình duyệt ngay khi nút “Bỏ qua” xuất hiện. Khi tắt, bạn vẫn có thể tự bỏ qua từ Notch. Cần quyền Trợ năng.
+Lyrimuse bỏ qua quảng cáo của YouTube Music trong trình duyệt hoặc Pear Desktop ngay khi nút “Bỏ qua” xuất hiện. Khi tắt, bạn vẫn có thể tự bỏ qua từ Notch. Cần quyền Trợ năng.
 
 - Tắt theo mặc định
 - Cài đặt: Trình phát › Web › Tự bỏ qua quảng cáo

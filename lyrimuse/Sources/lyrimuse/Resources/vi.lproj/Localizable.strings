@@ -574,7 +574,7 @@
 "决定性差异：「%@」" = "Khác biệt quyết định: “%@”";
 "准备密钥" = "Chuẩn bị khóa API";
 "减少推荐" = "Ẩn bớt gợi ý";
-"出现「跳过」按钮时自动点按，无法跳过的广告照常播放。需要「辅助功能」权限。YouTube Music 位于后台标签页时将短暂切换至该标签页再切回，当前使用的浏览器窗口不受影响" = "Tự động bấm khi nút “Bỏ qua” xuất hiện; quảng cáo không bỏ qua được vẫn phát như thường. Cần quyền Trợ năng. Nếu YouTube Music ở tab nền, Lyrimuse sẽ chuyển nhanh sang tab đó rồi quay lại, không ảnh hưởng đến cửa sổ trình duyệt bạn đang dùng";
+"出现「跳过」按钮时自动点按，无法跳过的广告照常播放。适用于网页版和 Pear Desktop，需要「辅助功能」权限。网页版位于后台标签页时将短暂切换至该标签页再切回，当前使用的浏览器窗口不受影响" = "Tự động bấm khi nút “Bỏ qua” xuất hiện; quảng cáo không bỏ qua được vẫn phát như thường. Dùng được với bản web và Pear Desktop, cần quyền Trợ năng. Nếu bản web ở tab nền, Lyrimuse sẽ chuyển nhanh sang tab đó rồi quay lại, không ảnh hưởng đến cửa sổ trình duyệt bạn đang dùng";
 "出生日期" = "Ngày sinh";
 "分享…" = "Chia sẻ…";
 "分享歌词" = "Chia sẻ lời";

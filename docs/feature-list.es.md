@@ -607,7 +607,7 @@ Tras vincular tu navegador, la música que suena en una página web también tie
 
 ### Omitir anuncios de YouTube Music automáticamente
 
-Cuando aparece el botón «Omitir» en YouTube Music en el navegador, se pulsa automáticamente. Si está desactivado, puedes omitirlos tú desde el notch. Requiere el permiso de «Accesibilidad».
+Cuando aparece el botón «Omitir» en YouTube Music en el navegador o en Pear Desktop, se pulsa automáticamente. Si está desactivado, puedes omitirlos tú desde el notch. Requiere el permiso de «Accesibilidad».
 
 - Desactivada por omisión
 - Ajustes: Reproductor › Web › Omitir anuncios de YouTube Music

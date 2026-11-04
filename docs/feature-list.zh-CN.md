@@ -607,7 +607,7 @@ Apple Music、Spotify、QQ 音乐、网易云音乐、酷狗音乐、汽水音�
 
 ### 自动跳过 YouTube Music 广告
 
-浏览器中的 YouTube Music 出现「跳过」按钮时自动点按。未开启时，也可在灵动岛上手动跳过。需要「辅助功能」权限。
+浏览器中的 YouTube Music 或 Pear Desktop 出现「跳过」按钮时自动点按。未开启时，也可在灵动岛上手动跳过。需要「辅助功能」权限。
 
 - 默认关闭
 - 设置位置：播放器 › 网页版 › 自动跳过 YouTube Music 广告

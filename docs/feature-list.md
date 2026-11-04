@@ -607,7 +607,7 @@ Pair your browser once and music playing in it gets lyrics too, following the pa
 
 ### Skip YouTube Music ads automatically
 
-YouTube Music in your browser has its ads skipped the moment the Skip button appears. With it off, you can still skip from the notch yourself. Needs the Accessibility permission.
+YouTube Music in your browser or Pear Desktop has its ads skipped the moment the Skip button appears. With it off, you can still skip from the notch yourself. Needs the Accessibility permission.
 
 - Off by default
 - Settings: Player › Web › Skip YouTube Music Ads Automatically

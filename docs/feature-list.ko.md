@@ -607,7 +607,7 @@ Apple Music, Spotify, QQ Music, NetEase Cloud Music, Kugou, Soda Music, LX Music
 
 ### YouTube Music 광고 자동 건너뛰기
 
-브라우저의 YouTube Music에 ‘건너뛰기’ 버튼이 나타나면 자동으로 클릭합니다. 꺼져 있어도 노치에서 직접 건너뛸 수 있습니다. ‘손쉬운 사용’ 권한이 필요합니다.
+브라우저의 YouTube Music이나 Pear Desktop에 ‘건너뛰기’ 버튼이 나타나면 자동으로 클릭합니다. 꺼져 있어도 노치에서 직접 건너뛸 수 있습니다. ‘손쉬운 사용’ 권한이 필요합니다.
 
 - 기본으로 꺼짐
 - 설정 위치: 플레이어 › 웹 › YouTube Music 광고 자동 건너뛰기

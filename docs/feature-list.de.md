@@ -607,7 +607,7 @@ Kopple deinen Browser einmal, und Musik, die darin läuft, bekommt ebenfalls Lie
 
 ### YouTube Music-Werbung automatisch überspringen
 
-Bei YouTube Music im Browser wird Werbung übersprungen, sobald die Taste „Überspringen“ erscheint. Ist die Funktion aus, kannst du sie weiterhin selbst über die Notch überspringen. Erfordert die Berechtigung „Bedienungshilfen“.
+Bei YouTube Music im Browser oder in Pear Desktop wird Werbung übersprungen, sobald die Taste „Überspringen“ erscheint. Ist die Funktion aus, kannst du sie weiterhin selbst über die Notch überspringen. Erfordert die Berechtigung „Bedienungshilfen“.
 
 - Standardmäßig aus
 - Einstellungen: Player › Web › Werbung in YouTube Music überspringen

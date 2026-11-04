@@ -5126,7 +5126,7 @@ private struct YouTubeMusicAutoSkipRow: View {
     var asPanel = false
 
     private var helpText: String {
-        L10n.t("出现「跳过」按钮时自动点按，无法跳过的广告照常播放。需要「辅助功能」权限。YouTube Music 位于后台标签页时将短暂切换至该标签页再切回，当前使用的浏览器窗口不受影响")
+        L10n.t("出现「跳过」按钮时自动点按，无法跳过的广告照常播放。适用于网页版和 Pear Desktop，需要「辅助功能」权限。网页版位于后台标签页时将短暂切换至该标签页再切回，当前使用的浏览器窗口不受影响")
     }
 
     private var isOn: Binding<Bool> {
@@ -5427,6 +5427,13 @@ private struct PlayerSettingsTab: View {
                 PlayerPicker(features: FeatureSettingsStore.shared, compact: true)
             }
             .padding(.top, -6)
+            if pearAdSkipShown {
+                CardDivider()
+                YouTubeMusicAutoSkipRow(refreshTick: automationRefreshTick)
+                    .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
+                        automationRefreshTick &+= 1
+                    }
+            }
         }
     }
 
@@ -5982,6 +5989,20 @@ private struct PlayerSettingsTab: View {
     @State private var expandedBrowserBundleID: String?
     @State private var expandedBrowserPlatformID: String?
 
+    /// 跳广告开关在「网页版」卡里出现:YouTube Music 配了(且装着)浏览器。没配对就没有探针、也就没有广告可跳。
+    private var webAdSkipShown: Bool {
+        !(stores.browserPlatformPairs["youtubeMusic"] ?? [])
+            .filter({ BrowserAutomationPermission.isInstalled(bundleID: $0) }).isEmpty
+    }
+
+    /// 同一个开关也管 Pear Desktop 的广告:网页版卡里没有它、又在用 Pear(勾了或自动识别,且装着)时,
+    /// 放在「音乐 App」卡底部。同一页只出现一份。
+    private var pearAdSkipShown: Bool {
+        !webAdSkipShown
+            && (stores.players.contains(.pearDesktop) || stores.players.contains(.auto))
+            && InstalledPlayersCache.current().contains(.pearDesktop)
+    }
+
     // 网页版这张卡管的是"浏览器自己加的第二道 JS 执行开关"(跟「权限与服务」里的系统级
     // Automation/TCC 授权是两码事,见 BrowserAutomationPermission 头注)。
     //
@@ -6001,9 +6022,7 @@ private struct PlayerSettingsTab: View {
             + Array(stores.manualBrowserFamilies.keys))
             .contains { BrowserAutomationPermission.isInstalled(bundleID: $0)
                         && BrowserAutomationPermission.family(forBundleID: $0) != nil }
-        // 跳广告只在 YouTube Music 配了(且装着)浏览器时出现:没配对就没有探针、也就没有广告可跳。
-        let showsAdSkip = !(stores.browserPlatformPairs["youtubeMusic"] ?? [])
-            .filter({ BrowserAutomationPermission.isInstalled(bundleID: $0) }).isEmpty
+        let showsAdSkip = webAdSkipShown
         let platforms = BrowserPositionProbe.supportedPlatforms
         let columns = PlayerPicker<EmptyView>.compactColumnCount
         if anySupportedInstalled {

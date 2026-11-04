@@ -119731,73 +119731,73 @@
         }
       }
     },
-    "出现「跳过」按钮时自动点按，无法跳过的广告照常播放。需要「辅助功能」权限。YouTube Music 位于后台标签页时将短暂切换至该标签页再切回，当前使用的浏览器窗口不受影响" : {
+    "出现「跳过」按钮时自动点按，无法跳过的广告照常播放。适用于网页版和 Pear Desktop，需要「辅助功能」权限。网页版位于后台标签页时将短暂切换至该标签页再切回，当前使用的浏览器窗口不受影响" : {
       "extractionState" : "manual",
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Klickt auf „Überspringen“, sobald es erscheint; nicht überspringbare Werbung läuft normal. Erfordert die Berechtigung „Bedienungshilfen“. Ist YouTube Music in einem Hintergrund-Tab, wechselt Lyrimuse kurz dorthin und zurück, ohne dein aktuelles Browserfenster zu berühren"
+            "value" : "Klickt auf „Überspringen“, sobald es erscheint; nicht überspringbare Werbung läuft normal. Funktioniert mit der Webversion und Pear Desktop und erfordert die Berechtigung „Bedienungshilfen“. Ist die Webversion in einem Hintergrund-Tab, wechselt Lyrimuse kurz dorthin und zurück, ohne dein aktuelles Browserfenster zu berühren"
           }
         },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Presses Skip as soon as it appears; ads that can’t be skipped still play. Needs Accessibility permission. If YouTube Music is in a background tab, Lyrimuse briefly switches to it and back without touching the browser window you’re using"
+            "value" : "Presses Skip as soon as it appears; ads that can’t be skipped still play. Works with the web player and Pear Desktop, and needs Accessibility permission. If the web player is in a background tab, Lyrimuse briefly switches to it and back without touching the browser window you’re using"
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Pulsa «Omitir» en cuanto aparece; los anuncios que no se pueden omitir se reproducen igual. Requiere el permiso de Accesibilidad. Si YouTube Music está en una pestaña en segundo plano, Lyrimuse cambia a ella un momento y vuelve, sin tocar la ventana del navegador que estás usando"
+            "value" : "Pulsa «Omitir» en cuanto aparece; los anuncios que no se pueden omitir se reproducen igual. Funciona con la versión web y con Pear Desktop, y requiere el permiso de Accesibilidad. Si la versión web está en una pestaña en segundo plano, Lyrimuse cambia a ella un momento y vuelve, sin tocar la ventana del navegador que estás usando"
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Clique sur « Ignorer » dès qu’il apparaît ; les pubs non ignorables sont lues normalement. Nécessite l’autorisation Accessibilité. Si YouTube Music est dans un onglet en arrière-plan, Lyrimuse y bascule brièvement puis revient, sans toucher à la fenêtre de navigateur que vous utilisez"
+            "value" : "Clique sur « Ignorer » dès qu’il apparaît ; les pubs non ignorables sont lues normalement. Fonctionne avec la version web et Pear Desktop, et nécessite l’autorisation Accessibilité. Si la version web est dans un onglet en arrière-plan, Lyrimuse y bascule brièvement puis revient, sans toucher à la fenêtre de navigateur que vous utilisez"
           }
         },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Fa clic su “Salta” appena compare; le pubblicità non saltabili vengono riprodotte normalmente. Richiede il permesso Accessibilità. Se YouTube Music è in una scheda in background, Lyrimuse vi passa per un attimo e poi torna indietro, senza toccare la finestra del browser che stai usando"
+            "value" : "Fa clic su “Salta” appena compare; le pubblicità non saltabili vengono riprodotte normalmente. Funziona con la versione web e con Pear Desktop e richiede il permesso Accessibilità. Se la versione web è in una scheda in background, Lyrimuse vi passa per un attimo e poi torna indietro, senza toccare la finestra del browser che stai usando"
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "「スキップ」ボタンが表示されると自動的にクリックします。スキップできない広告は通常どおり再生されます。「アクセシビリティ」の権限が必要です。YouTube Musicがバックグラウンドのタブにある場合は、一時的にそのタブに切り替えてから戻ります。使用中のブラウザウインドウには影響しません"
+            "value" : "「スキップ」ボタンが表示されると自動的にクリックします。スキップできない広告は通常どおり再生されます。Web版とPear Desktopで使え、「アクセシビリティ」の権限が必要です。Web版がバックグラウンドのタブにある場合は、一時的にそのタブに切り替えてから戻ります。使用中のブラウザウインドウには影響しません"
           }
         },
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "‘건너뛰기’ 버튼이 나타나면 자동으로 클릭하며 건너뛸 수 없는 광고는 그대로 재생됩니다. ‘손쉬운 사용’ 권한이 필요합니다. YouTube Music이 백그라운드 탭에 있으면 잠시 해당 탭으로 전환했다가 돌아오며 사용 중인 브라우저 윈도우에는 영향을 주지 않습니다"
+            "value" : "‘건너뛰기’ 버튼이 나타나면 자동으로 클릭하며 건너뛸 수 없는 광고는 그대로 재생됩니다. 웹 버전과 Pear Desktop에서 작동하며 ‘손쉬운 사용’ 권한이 필요합니다. 웹 버전이 백그라운드 탭에 있으면 잠시 해당 탭으로 전환했다가 돌아오며 사용 중인 브라우저 윈도우에는 영향을 주지 않습니다"
           }
         },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Clica em “Pular” assim que aparece; anúncios que não podem ser pulados tocam normalmente. Requer a permissão de Acessibilidade. Se o YouTube Music estiver em uma aba em segundo plano, o Lyrimuse muda para ela por um instante e volta, sem mexer na janela do navegador que você está usando"
+            "value" : "Clica em “Pular” assim que aparece; anúncios que não podem ser pulados tocam normalmente. Funciona com a versão web e com o Pear Desktop e requer a permissão de Acessibilidade. Se a versão web estiver em uma aba em segundo plano, o Lyrimuse muda para ela por um instante e volta, sem mexer na janela do navegador que você está usando"
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Нажимает «Пропустить», как только кнопка появится; рекламу, которую нельзя пропустить, придется досмотреть. Нужно разрешение «Универсальный доступ». Если YouTube Music открыт в фоновой вкладке, Lyrimuse ненадолго переключится на нее и обратно, не трогая окно браузера, в котором вы работаете"
+            "value" : "Нажимает «Пропустить», как только кнопка появится; рекламу, которую нельзя пропустить, придется досмотреть. Работает с веб-версией и Pear Desktop, нужно разрешение «Универсальный доступ». Если веб-версия открыта в фоновой вкладке, Lyrimuse ненадолго переключится на нее и обратно, не трогая окно браузера, в котором вы работаете"
           }
         },
         "vi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Tự động bấm khi nút “Bỏ qua” xuất hiện; quảng cáo không bỏ qua được vẫn phát như thường. Cần quyền Trợ năng. Nếu YouTube Music ở tab nền, Lyrimuse sẽ chuyển nhanh sang tab đó rồi quay lại, không ảnh hưởng đến cửa sổ trình duyệt bạn đang dùng"
+            "value" : "Tự động bấm khi nút “Bỏ qua” xuất hiện; quảng cáo không bỏ qua được vẫn phát như thường. Dùng được với bản web và Pear Desktop, cần quyền Trợ năng. Nếu bản web ở tab nền, Lyrimuse sẽ chuyển nhanh sang tab đó rồi quay lại, không ảnh hưởng đến cửa sổ trình duyệt bạn đang dùng"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "出現「略過」按鈕時自動按一下，無法略過的廣告照常播放。需要「輔助使用」權限。YouTube Music 位於背景分頁時將短暫切換至該分頁再切回，目前使用的瀏覽器視窗不受影響"
+            "value" : "出現「略過」按鈕時自動按一下，無法略過的廣告照常播放。適用於網頁版和 Pear Desktop，需要「輔助使用」權限。網頁版位於背景分頁時將短暫切換至該分頁再切回，目前使用的瀏覽器視窗不受影響"
           }
         }
       }

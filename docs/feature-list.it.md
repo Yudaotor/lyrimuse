@@ -607,7 +607,7 @@ Abbina il browser una volta e anche la musica riprodotta lì avrà il testo, seg
 
 ### Salta automaticamente la pubblicità di YouTube Music
 
-Su YouTube Music nel browser la pubblicità viene saltata appena compare il pulsante “Salta”. Con l’opzione disattivata puoi comunque saltarla tu dal notch. Richiede il permesso “Accessibilità”.
+Su YouTube Music nel browser o in Pear Desktop la pubblicità viene saltata appena compare il pulsante “Salta”. Con l’opzione disattivata puoi comunque saltarla tu dal notch. Richiede il permesso “Accessibilità”.
 
 - Disattivata di default
 - Impostazioni: Player › Web › Salta pubblicità

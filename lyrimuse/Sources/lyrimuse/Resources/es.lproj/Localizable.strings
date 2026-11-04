@@ -619,7 +619,7 @@
 "决定性差异：「%@」" = "Diferencia decisiva: «%@»";
 "准备密钥" = "Obtener claves de API";
 "减少推荐" = "Sugerir menos";
-"出现「跳过」按钮时自动点按，无法跳过的广告照常播放。需要「辅助功能」权限。YouTube Music 位于后台标签页时将短暂切换至该标签页再切回，当前使用的浏览器窗口不受影响" = "Pulsa «Omitir» en cuanto aparece; los anuncios que no se pueden omitir se reproducen igual. Requiere el permiso de Accesibilidad. Si YouTube Music está en una pestaña en segundo plano, Lyrimuse cambia a ella un momento y vuelve, sin tocar la ventana del navegador que estás usando";
+"出现「跳过」按钮时自动点按，无法跳过的广告照常播放。适用于网页版和 Pear Desktop，需要「辅助功能」权限。网页版位于后台标签页时将短暂切换至该标签页再切回，当前使用的浏览器窗口不受影响" = "Pulsa «Omitir» en cuanto aparece; los anuncios que no se pueden omitir se reproducen igual. Funciona con la versión web y con Pear Desktop, y requiere el permiso de Accesibilidad. Si la versión web está en una pestaña en segundo plano, Lyrimuse cambia a ella un momento y vuelve, sin tocar la ventana del navegador que estás usando";
 "出生日期" = "Nacimiento";
 "分享…" = "Compartir…";
 "分享歌词" = "Compartir letra";

@@ -607,7 +607,7 @@ Apple Music、Spotify、QQ Music、NetEase Cloud Music、Kugou、Soda Music、LX
 
 ### YouTube Musicの広告を自動的にスキップ
 
-ブラウザのYouTube Musicに「スキップ」ボタンが表示されると自動的にクリックします。オフの場合も、ノッチから手動でスキップできます。「アクセシビリティ」の権限が必要です。
+ブラウザのYouTube MusicやPear Desktopに「スキップ」ボタンが表示されると自動的にクリックします。オフの場合も、ノッチから手動でスキップできます。「アクセシビリティ」の権限が必要です。
 
 - 初期設定でオフ
 - 設定の場所：プレーヤー › Web版 › YouTube Musicの広告を自動的にスキップ
