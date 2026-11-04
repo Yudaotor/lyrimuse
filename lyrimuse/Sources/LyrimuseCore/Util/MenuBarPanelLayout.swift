@@ -346,6 +346,16 @@ public struct PanelGridGeometry: Equatable, Sendable {
         self.spacing = spacing
     }
 
+    /// 菜单栏面板用的那一份:宽 316(面板 336 减两边各 10 的内边距),间距 9,行高取「两行高 = 三列宽」,大号(3×2)正好
+    /// 是正方形,同控制中心的大块。小号约 99 × 72、中号约 153 × 72。见 06 章决策 88。
+    public static let menuBarPanel: PanelGridGeometry = {
+        let width: CGFloat = 316, spacing: CGFloat = 9
+        let columns = CGFloat(MenuBarPanelLayout.columns)
+        let column = (width - spacing * (columns - 1)) / columns
+        let threeColumns = column * 3 + spacing * 2
+        return PanelGridGeometry(width: width, rowHeight: (threeColumns - spacing) / 2, spacing: spacing)
+    }()
+
     /// 一列多宽(列之间隔 `spacing`)。
     public var column: CGFloat {
         (width - spacing * CGFloat(MenuBarPanelLayout.columns - 1)) / CGFloat(MenuBarPanelLayout.columns)

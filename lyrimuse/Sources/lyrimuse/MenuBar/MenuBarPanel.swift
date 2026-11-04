@@ -725,9 +725,8 @@ private struct MenuBarPanelView: View {
                alignment: .topLeading)
     }
 
-    /// 网格的几何:面板 336 减两边各 10 的内边距(`body` 里那两处),行高 78,间距 9。小号 99 宽、中号 153 宽,
-    /// 同这块面板原来一排三个 / 一排两个的格子。
-    private static let grid = PanelGridGeometry(width: 316, rowHeight: 78, spacing: 9)
+    /// 网格的几何:宽 316 对的是面板 336 减两边各 10 的内边距(`body` 里那两处),行高让大号是正方形,见 `PanelGridGeometry.menuBarPanel`。
+    private static let grid = PanelGridGeometry.menuBarPanel
 
     /// 网格里有没有画得出来的格子(都没有时整块网格不占地方)。
     private var hasVisibleTiles: Bool {
@@ -1034,9 +1033,9 @@ private struct MenuBarPanelView: View {
         }
     }
 
-    /// 完整的正在播放卡(加宽 6×2 那一档,高 165:内边距 10、行距 6),内容在格子里上下居中。
+    /// 完整的正在播放卡(加宽 6×2 那一档,高 153.5:内边距 10、行距 4),内容在格子里上下居中。
     private var nowPlayingCard: some View {
-        VStack(spacing: 6) {
+        VStack(spacing: 4) {
             // 压根没有曲目时整张卡换成 idleRow —— 上半截(封面/歌名/歌手/歌词行)全是空的,
             // 摆在那儿只剩占位图和两行空文本;进度条没时长本来就不渲染;三键里前两颗对空
             // 队列是静默 no-op。

@@ -2088,6 +2088,12 @@ func runMenuBarTests() {
                     "面板拖动: 压到的格子搬进卡片空出来的地方,整块对调,上面不留空排;没压到的不动")
         expectEqual(L.Size.wide.alignedColumns, [0], "面板布局: 加宽只落在第 0 列")
         expectEqual(geo.size(.wide), CGSize(width: 316, height: 165), "面板网格: 加宽占满一排、两行高")
+        // 面板实际用的那一份:大号(卡片的大号也是)是正方形,同控制中心;宽度跟面板内边距对得上。
+        let panelGeo = PanelGridGeometry.menuBarPanel
+        expectEqual(abs(panelGeo.size(.large).width - panelGeo.size(.large).height) < 0.001 && panelGeo.width == 316, true,
+                    "面板网格: 大号是正方形")
+        expectEqual((panelGeo.size(.small).width * 100).rounded() / 100 == 99.33 && panelGeo.size(.medium).width == 153.5, true,
+                    "面板网格: 一排三个 / 两个的宽不变")
         let cardSizes = L.Tile.nowPlaying.sizes
         expectEqual(geo.resizedSize(origin: .zero, pointer: CGPoint(x: 200, y: 160), allowed: cardSizes), .large, "面板拉手: 卡片拉到中间偏左是大号")
         expectEqual(geo.resizedSize(origin: .zero, pointer: CGPoint(x: 260, y: 120), allowed: cardSizes), .wide, "面板拉手: 卡片拉到中间偏右是加宽")
