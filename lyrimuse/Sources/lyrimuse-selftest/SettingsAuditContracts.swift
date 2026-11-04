@@ -271,6 +271,12 @@ func runSettingsAuditContracts() {
                 "触控栏「文字颜色」: 四档跟标题排不下一行时换到标题下面,判据只拿标题单行宽去比(17 章决策 57)")
     expectEqual(sourceHas(menuBarStage, "icon: \"rectangle.split.1x2\",\ntitle: L10n.t(\"布局\"),"), true,
                 "菜单栏: 「布局」入口图标同歌词窗口、触控栏")
+    let readout = app("UI/EditorStageReadout.swift")
+    expectEqual(sourceHas(overlayStage, "EditorStageReadout(text: widthValueText,\nwidest: String(format: L10n.t(\"%@pt\"), \"\\(Int(Self.widthRange.upperBound))\"))")
+                && sourceHas(menuBarStage, "EditorStageReadout(text: widthValueText,\nwidest: String(format: L10n.t(\"%@pt\"), \"\\(Int(AppSettings.menuBarLyricsWidthRange.upperBound))\"))")
+                && sourceHas(readout, "ZStack(alignment: .trailing) {\nText(widest).hidden()\nText(text)\n}")
+                && sourceHas(readout, ".lineLimit(1)\n.fixedSize()"), true,
+                "编辑台宽度条: 读数按最大值那一串留宽、不折行,不写定宽(俄语「1270 пт」放不进 44pt)")
     let toolbarLabel = sourceBody("private var summaryView: some View {", in: app("UI/EditorToolbarButtonLabel.swift"))
     expectEqual(sourceHas(toolbarLabel, "let candidates = EditorToolbarSummary.candidates(summary)\nreturn ViewThatFits(in: .horizontal) {")
                 && sourceHas(toolbarLabel, "summaryLine(candidates[index]).fixedSize()")

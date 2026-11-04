@@ -238,10 +238,8 @@ struct MenuBarEditorStage: View {
             // 读成百分比(同 NotchEditorStage.widthBar)。
             .accessibilityLabel(MenuBarWidthRow.title(settings))
             .accessibilityValue(widthValueText)
-            Text(widthValueText)
-                .font(.system(size: 11, weight: .medium))
-                .monospacedDigit()
-                .frame(width: 44, alignment: .trailing)
+            EditorStageReadout(text: widthValueText,
+                               widest: String(format: L10n.t("%@pt"), "\(Int(AppSettings.menuBarLyricsWidthRange.upperBound))"))
                 // 读数是滑杆的镜像,都进无障碍树会把同一个值读两遍。
                 .accessibilityHidden(true)
         }

@@ -699,8 +699,8 @@ struct OverlayEditorStage: View {
         // 「预览两端未画全」跟调整条**同一条通道、同一个底距**,靠舞台左端摆。必须挂在这一层(舞台尺寸)
         // 的 overlay 上,不能放进上面的 ZStack:卡片超宽时 ZStack 被撑得比舞台还宽、再居中放进舞台,
         // 它的左沿落在舞台外面,贴着它摆的胶囊会被下面的圆角裁掉半截。
-        // 两者横向不重叠:调整条那条胶囊总宽 258pt(10×2 内边距 + 图标 10 + 8 + 滑杆 168
-        // + 8 + 读数 44)居中摆,这颗提示胶囊最宽是英文「Preview clipped」约 105pt;舞台最窄
+        // 两者横向不重叠:调整条那条胶囊总宽约 257pt(10×2 内边距 + 图标 10 + 8 + 滑杆 168
+        // + 8 + 读数按「1400pt」留宽,各语言 39~43)居中摆,这颗提示胶囊最宽是英文「Preview clipped」约 105pt;舞台最窄
         // 约 499pt —— 胶囊左沿 120.5、提示右沿约 117,只剩 3pt。提示文案加长、或要往这条通道里
         // 再塞第三样东西,先按这笔账重算一遍。
         .overlay(alignment: .bottomLeading) {
@@ -1126,10 +1126,8 @@ struct OverlayEditorStage: View {
             // 一个**带单位**的值 —— 不显式给 value 的话 VoiceOver 会把它读成百分比。
             .accessibilityLabel(L10n.t("悬浮歌词宽度"))
             .accessibilityValue(widthValueText)
-            Text(widthValueText)
-                .font(.system(size: 11, weight: .medium))
-                .monospacedDigit()
-                .frame(width: 44, alignment: .trailing)
+            EditorStageReadout(text: widthValueText,
+                               widest: String(format: L10n.t("%@pt"), "\(Int(Self.widthRange.upperBound))"))
                 // 读数是滑杆的镜像、不是第二个可读元素:都进无障碍树的话 VoiceOver 会把同一个
                 // 值读两遍(同 lockBadge 那条)。
                 .accessibilityHidden(true)
