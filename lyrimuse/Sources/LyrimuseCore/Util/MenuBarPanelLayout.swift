@@ -29,6 +29,26 @@ public struct MenuBarPanelLayout: Equatable, Sendable {
         case miniWindow = "mini-window"
         case fontLarger = "font-larger"
         case fontSmaller = "font-smaller"
+        /// 早先按顺序排的存法里有个 `favorite`(已挪进走带一排、读到丢掉),这一格另起 `like`,别复用那个写法。
+        case like
+        case openPlayer = "open-player"
+        case fadeOnHover = "fade-on-hover"
+        case hoverControls = "hover-controls"
+        case peekNotch = "peek-notch"
+        case notchShowLyrics = "notch-show-lyrics"
+
+        /// 「可添加」面板里归哪一组(按显示方式分)。
+        public var group: TileGroup {
+            switch self {
+            case .nowPlaying, .like, .openPlayer: return .nowPlaying
+            case .overlay, .lockPosition, .fontLarger, .fontSmaller, .fadeOnHover, .hoverControls: return .overlay
+            case .notch, .peekNotch, .notchShowLyrics: return .notch
+            case .menuBar: return .menuBar
+            case .lyricsWindow, .miniWindow: return .lyricsWindow
+            case .touchBar: return .touchBar
+            case .lyricsManager, .translation, .romanization, .hideAllLyrics, .searchLyrics: return .lyrics
+            }
+        }
 
         /// 这一格能用哪几档:正在播放卡只有大号(3×2,封面、歌名和三个走带键)和加宽(6×2,完整的卡片),别的格子小、中、大。
         public var sizes: [Size] {
@@ -39,6 +59,11 @@ public struct MenuBarPanelLayout: Equatable, Sendable {
         public var defaultSize: Size { self == .nowPlaying ? .wide : .medium }
 
         public func fitting(_ size: Size) -> Size { sizes.contains(size) ? size : defaultSize }
+    }
+
+    /// 「可添加」面板的分组,按这个顺序摆。见 06 章决策 89。
+    public enum TileGroup: String, CaseIterable, Sendable {
+        case nowPlaying, overlay, notch, menuBar, lyricsWindow, touchBar, lyrics
     }
 
     /// 小占 2 列(一排 3 个)、中占 3 列(一排 2 个)、大占 3 列 2 行,加宽占满一排 6 列、2 行(只给正在播放卡)。
@@ -166,8 +191,32 @@ public struct MenuBarPanelLayout: Equatable, Sendable {
         Tile.allCases.filter { !contains($0) && available($0) }
     }
 
+    /// 「可添加」按组排好:组按 `TileGroup.allCases`,组里按 `Tile.allCases`,空组不要。
+    public func addableGroups(available: (Tile) -> Bool) -> [(group: TileGroup, tiles: [Tile])] {
+        let tiles = addable(available: available)
+        return TileGroup.allCases.compactMap { group in
+            let inGroup = tiles.filter { $0.group == group }
+            return inGroup.isEmpty ? nil : (group, inGroup)
+        }
+    }
+
     public mutating func remove(_ tile: Tile) {
         placements.removeAll { $0.tile == tile }
+    }
+
+    /// 拿掉 `tile` 的一份(这台 Mac 此刻用不了的格子,编辑时不画、不占坑位)。
+    public func without(_ tile: Tile) -> MenuBarPanelLayout {
+        var layout = self
+        layout.remove(tile)
+        return layout
+    }
+
+    /// 把编辑前拿掉的那一格放回原位;原位已经被别的格子占了、或已经在网格里,就不放(它回到「可添加」)。
+    public func restoring(_ placement: Placement?) -> MenuBarPanelLayout {
+        guard let placement, !contains(placement.tile), fits(placement, ignoring: nil) else { return self }
+        var layout = self
+        layout.placements.append(placement)
+        return layout
     }
 
     /// 放进第一个放得下的空位(从上到下、从左到右);现有几排里放不下就放到最下面新起一排。已经在网格里就不动;

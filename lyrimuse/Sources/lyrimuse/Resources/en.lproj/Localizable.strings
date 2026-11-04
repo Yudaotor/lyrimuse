@@ -1333,6 +1333,7 @@
 "悬浮歌词、灵动岛、菜单栏和触控栏可同时开，歌词窗口按需打开" = "Floating Lyrics, Notch, Menu Bar and Touch Bar can run together; open the Lyrics Window when needed";
 "悬浮歌词宽度" = "Floating Lyrics Width";
 "悬浮歌词开着时才显示" = "Shown only while floating lyrics are on";
+"悬浮歌词未开启" = "Floating Lyrics is off";
 "成立时间" = "Formed";
 "我已完成授权，继续" = "I’ve Authorized";
 "我的主题" = "My Themes";
@@ -2789,6 +2790,7 @@
 "邮件反馈" = "Email Feedback";
 "部分写法未能获取" = "Some spellings couldn’t be loaded";
 "部分设置未能写入（%@），其余已导入。可再次导入，或检查配置文件夹的写入权限" = "Some settings couldn’t be written (%@); the rest were imported. Try importing again, or check that the config folder is writable";
+"都已添加" = "Everything is added";
 "配对浏览器" = "Pair a Browser";
 "配置尚未完成，点按查看缺少的项目" = "Setup isn’t finished — click to see what’s left";
 "配置文件 %@ 无法读取，为避免覆盖，所有保存已暂停" = "The configuration file %@ can’t be read. Saving is paused so it won’t be overwritten";

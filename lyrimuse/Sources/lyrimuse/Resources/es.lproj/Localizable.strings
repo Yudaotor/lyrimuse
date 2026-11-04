@@ -1333,6 +1333,7 @@
 "悬浮歌词、灵动岛、菜单栏和触控栏可同时开，歌词窗口按需打开" = "La letra flotante, el notch, la barra de menús y la Touch Bar pueden usarse a la vez; abre la ventana de letra cuando la necesites";
 "悬浮歌词宽度" = "Ancho de la letra flotante";
 "悬浮歌词开着时才显示" = "Solo se muestra con la letra flotante activada";
+"悬浮歌词未开启" = "«Letra flotante» está desactivada";
 "成立时间" = "Formación";
 "我已完成授权，继续" = "Ya he autorizado";
 "我的主题" = "Mis temas";
@@ -2789,6 +2790,7 @@
 "邮件反馈" = "Comentarios por correo";
 "部分写法未能获取" = "Algunas grafías no se han podido cargar";
 "部分设置未能写入（%@），其余已导入。可再次导入，或检查配置文件夹的写入权限" = "Algunos ajustes no se pudieron escribir (%@); el resto se importó. Vuelve a importar o comprueba que se puede escribir en la carpeta de configuración";
+"都已添加" = "Ya está todo añadido";
 "配对浏览器" = "Vincular navegador";
 "配置尚未完成，点按查看缺少的项目" = "La configuración no está completa: haz clic para ver qué falta";
 "配置文件 %@ 无法读取，为避免覆盖，所有保存已暂停" = "No se puede leer el archivo de configuración %@. El guardado está en pausa para no sobrescribirlo";

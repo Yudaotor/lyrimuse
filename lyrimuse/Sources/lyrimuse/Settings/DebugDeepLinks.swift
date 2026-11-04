@@ -173,8 +173,8 @@ enum DebugDeepLinks {
                 let ok = await ConfigStore.shared.save()
                 logger.notice("debug config save ok=\(ok, privacy: .public)")
             }
-        case let .panelDrag(from, to, via):
-            panelDrag(from: from, to: to, via: via)
+        case let .panelDrag(from, to, via, inGallery):
+            panelDrag(from: from, to: to, via: via, inGallery: inGallery)
         case let .panelPin(on):
             MenuBarPanelDebugState.pinned = on
             logger.notice("debug panel pin \(on, privacy: .public)")
@@ -314,7 +314,8 @@ enum DebugDeepLinks {
         let key: String
         switch name {
         case "lyrics-search": key = "lyrics-quick-search"
-        case "panel": key = "MenuBarPanelWindow"
+        case "panel": return PanelEditBridge.shared.mainWindow.flatMap { $0.isVisible ? $0 : nil }
+        case "panel-gallery": return PanelEditBridge.shared.galleryWindow.flatMap { $0.isVisible ? $0 : nil }
         default: key = name
         }
         func matches(_ w: NSWindow) -> Bool {
@@ -433,10 +434,10 @@ enum DebugDeepLinks {
 extension DebugDeepLinks {
     /// `debug/panel-drag`:往面板窗口送一串按下 → 拖动(经过 `via` 的每一段各 20 步)→ 松开,每步之间让出主线程一拍
     /// (SwiftUI 的拖动手势按事件逐个处理)。
-    static func panelDrag(from: CGPoint, to: CGPoint, via: [CGPoint] = []) {
-        guard let window = NSApp.windows.first(where: {
-            $0.isVisible && String(describing: type(of: $0)).contains("MenuBarPanelWindow")
-        }) else {
+    /// `inGallery`:按在编辑时旁边那块「可添加」面板上(坐标按那扇窗算,拖出窗外也照算)。
+    static func panelDrag(from: CGPoint, to: CGPoint, via: [CGPoint] = [], inGallery: Bool = false) {
+        let bridge = PanelEditBridge.shared
+        guard let window = inGallery ? bridge.galleryWindow : bridge.mainWindow, window.isVisible else {
             logger.notice("debug panel drag: panel is not open")
             return
         }

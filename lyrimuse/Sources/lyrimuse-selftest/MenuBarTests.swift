@@ -2014,7 +2014,8 @@ func runMenuBarTests() {
         expectEqual(d.hiddenFooter.isEmpty, true, "面板布局: 默认底栏全显示")
         expectEqual(L.Tile.allCases.map(\.rawValue),
                     ["now-playing", "overlay", "notch", "menubar", "lyrics-window", "touchbar", "lyrics-manager", "translation", "romanization",
-                     "lock-position", "hide-all-lyrics", "search-lyrics", "mini-window", "font-larger", "font-smaller"], "面板布局: 格子的存盘写法")
+                     "lock-position", "hide-all-lyrics", "search-lyrics", "mini-window", "font-larger", "font-smaller", "like", "open-player",
+                     "fade-on-hover", "hover-controls", "peek-notch", "notch-show-lyrics"], "面板布局: 格子的存盘写法")
         expectEqual(L.Size.allCases.map { "\($0.columns)x\($0.rows)" }, ["2x1", "3x1", "3x2", "6x2"],
                     "面板布局: 一排 6 列,小 2 列、中 3 列、大 3×2、加宽 6×2")
         // 几何:宽 316、行高 78、间距 9 → 小号 99.33 宽、中号 153.5 宽,同原来一排三个 / 两个。
@@ -2159,8 +2160,26 @@ func runMenuBarTests() {
         expectEqual(gone.isEmpty(column: 2, row: 0) && gone.isEmpty(column: 3, row: 0) && gone.placement(of: .menuBar)?.column == 4, true,
                     "面板布局: 移除后坑位空着,别的格子不挪")
         expectEqual(L.default.addable { $0 != .touchBar },
-                    [.translation, .romanization, .lockPosition, .hideAllLyrics, .searchLyrics, .miniWindow, .fontLarger, .fontSmaller],
+                    [.translation, .romanization, .lockPosition, .hideAllLyrics, .searchLyrics, .miniWindow, .fontLarger, .fontSmaller,
+                     .like, .openPlayer, .fadeOnHover, .hoverControls, .peekNotch, .notchShowLyrics],
                     "面板布局: 可添加的新格子")
+        // 「可添加」按显示方式分组:组按固定顺序、组里按格子顺序,空组不出;移除的主格子回到自己那一组。
+        var trimmed = L.default
+        trimmed.remove(.overlay)
+        let groups = trimmed.addableGroups { $0 != .touchBar }
+        expectEqual(groups.map(\.group), [.nowPlaying, .overlay, .notch, .lyricsWindow, .lyrics], "面板可添加: 分组顺序,空组不出")
+        expectEqual(groups.first { $0.group == .overlay }?.tiles,
+                    [.overlay, .lockPosition, .fontLarger, .fontSmaller, .fadeOnHover, .hoverControls], "面板可添加: 移除的悬浮歌词回到它那一组")
+        expectEqual(L.decode(#"{"tiles":[{"id":"favorite","size":"small"}]}"#).contains(.like), false,
+                    "面板布局: 早先存法里的 favorite 不会读成「喜欢」那一格")
+        // 没有触控栏时编辑:拿掉「触控栏歌词」排,写回时原位还空着就放回去,被占了就不放。
+        let noBar = L.default.without(.touchBar)
+        expectEqual(noBar.contains(.touchBar), false, "面板布局: 编辑时拿掉用不了的格子")
+        expectEqual(noBar.restoring(L.default.placement(of: .touchBar)), L.default, "面板布局: 原位空着,放回去")
+        var occupied = noBar
+        occupied.add(.translation, size: .small)
+        expectEqual(occupied.placement(of: .translation)?.row == 4 && occupied.restoring(L.default.placement(of: .touchBar)) == occupied, true,
+                    "面板布局: 原位被占了就不放回去")
         expectEqual(L(placements: []).addable { $0 != .touchBar }.contains(.touchBar), false, "面板布局: 没有触控栏时不进可添加")
 
         // 源码契约:编辑时格子不接点按(拖动和角标归编辑那一层);「编辑」那一颗不受底栏显隐管;深链 quick=edit 进编辑;

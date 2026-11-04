@@ -139,8 +139,9 @@ public enum LyrimuseDeepLink: Equatable, Sendable {
         case panelPin(on: Bool)
         /// 在菜单栏面板里从 (x1, y1) 按下、拖到 (x2, y2) 松开(面板窗口内的点坐标,左上角为原点),事件直接送进面板窗口,
         /// 跟手拖走同一条路:`debug/panel-drag?from=205,436&to=350,436`。验证脚本合成的系统鼠标事件进不了这扇面板。
-        /// `via=x,y;x,y` 按住不放先依次拖过这几个点再到 `to`(验一次拖动里来回调)。
-        case panelDrag(from: CGPoint, to: CGPoint, via: [CGPoint] = [])
+        /// `via=x,y;x,y` 按住不放先依次拖过这几个点再到 `to`(验一次拖动里来回调);`in=gallery` 按在编辑时旁边那块
+        /// 「可添加」面板上,坐标按那扇窗算。
+        case panelDrag(from: CGPoint, to: CGPoint, via: [CGPoint] = [], inGallery: Bool = false)
         /// 主线程原地睡这么多毫秒(`debug/stall?ms=`,1…`maxStallMs`):造出「别的窗口把主线程占住」那一下,验动画扛不扛得住。
         case stall(ms: Int)
         /// 灵动岛摆一次报喜,跟设置页「收听里程碑」旁那颗「试用」走同一条路(`debug/milestone-preview`)。
@@ -312,7 +313,7 @@ public enum LyrimuseDeepLink: Equatable, Sendable {
             let viaText = (value("via") ?? "").split(separator: ";")
             let via = viaText.compactMap(point)
             guard via.count == viaText.count else { return nil }
-            self = .debug(.panelDrag(from: from, to: to, via: via))
+            self = .debug(.panelDrag(from: from, to: to, via: via, inGallery: value("in") == "gallery"))
         case ("debug", "/panel-pin"):
             guard let on = value("on").flatMap(Self.parseBool) else { return nil }
             self = .debug(.panelPin(on: on))
@@ -548,11 +549,12 @@ public enum LyrimuseDeepLink: Equatable, Sendable {
             case let .panelLayout(json):
                 components.path = "/panel-layout"
                 if let json { components.queryItems = [URLQueryItem(name: "json", value: json)] }
-            case let .panelDrag(from, to, via):
+            case let .panelDrag(from, to, via, inGallery):
                 components.path = "/panel-drag"
                 func text(_ p: CGPoint) -> String { "\(p.x),\(p.y)" }
                 components.queryItems = [URLQueryItem(name: "from", value: text(from)), URLQueryItem(name: "to", value: text(to))]
                 if !via.isEmpty { components.queryItems?.append(URLQueryItem(name: "via", value: via.map(text).joined(separator: ";"))) }
+                if inGallery { components.queryItems?.append(URLQueryItem(name: "in", value: "gallery")) }
             case let .panelPin(on):
                 components.path = "/panel-pin"
                 components.queryItems = [URLQueryItem(name: "on", value: on ? "1" : "0")]

@@ -210,6 +210,33 @@ struct PanelEditCaption: View {
     }
 }
 
+extension MenuBarPanelLayout.TileGroup {
+    var panelTitle: String {
+        switch self {
+        case .nowPlaying: return L10n.t("正在播放")
+        case .overlay: return L10n.t("悬浮歌词")
+        case .notch: return L10n.t("灵动岛歌词")
+        case .menuBar: return L10n.t("菜单栏歌词")
+        case .lyricsWindow: return L10n.t("歌词窗口")
+        case .touchBar: return L10n.t("触控栏歌词")
+        case .lyrics: return L10n.t("歌词")
+        }
+    }
+}
+
+/// 编辑时主面板和左边「可添加」那块面板之间的连线。两扇窗各是一份 `MenuBarPanelView`:左边那份点一格直接写设置,
+/// 拖一格时把指针的屏幕坐标交给主面板那份,由它按自己网格的挤位排、松手落定。
+@MainActor
+final class PanelEditBridge {
+    static let shared = PanelEditBridge()
+    weak var mainWindow: NSWindow?
+    weak var galleryWindow: NSWindow?
+    /// 控制器挂上:进 / 出编辑时开关左边那块面板。
+    var setGalleryVisible: ((Bool) -> Void)?
+    /// 主面板编辑页挂上:左边拖着一格到了屏幕上哪儿(nil = 松手)。
+    var galleryDrag: ((MenuBarPanelLayout.Tile, CGPoint?) -> Void)?
+}
+
 extension MenuBarPanelLayout.FooterItem {
     var panelTitle: String {
         switch self {

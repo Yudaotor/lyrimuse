@@ -96,6 +96,9 @@ private final class PanelPlayback: ObservableObject {
     @Published private(set) var showsTranslation = false
     @Published private(set) var showsRomanization = false
     @Published private(set) var lockPosition = false
+    @Published private(set) var overlayFadeOnHover = false
+    @Published private(set) var overlayShowHoverControls = false
+    @Published private(set) var notchShowLyrics = false
     private var subs: [AnyCancellable] = []
 
     init() {
@@ -159,6 +162,9 @@ private final class PanelPlayback: ObservableObject {
             Publishers.CombineLatest(s.$overlayShowRomanization, s.$showRomanization).map { $0 || $1 }
                 .removeDuplicates().sink { [weak self] in self?.showsRomanization = $0 },
             s.$lockPosition.removeDuplicates().sink { [weak self] in self?.lockPosition = $0 },
+            s.$overlayFadeOnHover.removeDuplicates().sink { [weak self] in self?.overlayFadeOnHover = $0 },
+            s.$overlayShowHoverControls.removeDuplicates().sink { [weak self] in self?.overlayShowHoverControls = $0 },
+            s.$notchShowLyrics.removeDuplicates().sink { [weak self] in self?.notchShowLyrics = $0 },
         ]
     }
 }
@@ -176,6 +182,9 @@ private final class PanelPlayback: ObservableObject {
 @MainActor
 final class MenuBarPanelController {
     private var panel: MenuBarPanelWindow?
+    /// 编辑时贴在主面板旁边的「可添加」面板,和它的宿主视图(按宿主的理想尺寸摆窗口)。
+    private var gallery: MenuBarPanelWindow?
+    private var galleryHost: NSView?
     /// 面板挂在谁下面:状态栏按钮,或「菜单栏正中」那一扇的内容视图。内容变高时按它重新定位(顶边不动、往下长)。
     private weak var anchorView: NSView?
     /// 「点到别的 App 上」的收起路径:全局监视器只收得到**别的 App** 的事件。
@@ -200,6 +209,8 @@ final class MenuBarPanelController {
         anchorView = anchor
         let window = MenuBarPanelWindow()
         window.onCancel = { [weak self] in self?.close() }
+        PanelEditBridge.shared.mainWindow = window
+        PanelEditBridge.shared.setGalleryVisible = { [weak self] on in self?.setGalleryVisible(on) }
         let content = MenuBarPanelRoot(
             content: MenuBarPanelView(close: { [weak self] in self?.close() }, initialQuickTarget: quick,
                                       initialEditing: editing))
@@ -230,6 +241,7 @@ final class MenuBarPanelController {
         MenuBarPanelDebugState.quickTarget = nil
         MenuBarPanelDebugState.editing = false
         teardownDismissWatchers()
+        setGalleryVisible(false)
         EditorialNotesStore.shared.release()
         // 收起即整树释放:下次 toggle 本来就是全新建(onAppear 快照语义还依赖这一点)。
         panel = nil
@@ -253,6 +265,49 @@ final class MenuBarPanelController {
         }
         // 玻璃底(`NSGlassEffectView`)按内容的固有尺寸自己先长 / 缩一次,窗口改尺寸时又按自动缩放再改一次,高度差算了两遍:
         // 内容视图比窗口高(内容往上顶出去)或矮(内容沉到底)。每次摆完都把它对齐到窗口。见 06 章决策 52。
+        if let content = window.contentView, content.frame.size != frame.size {
+            content.frame = NSRect(origin: .zero, size: frame.size)
+        }
+        placeGallery()
+    }
+
+    /// 进编辑时在主面板左边开一块「可添加」面板(同款玻璃窗,不当 key,键盘仍归主面板),出编辑、收面板时收掉。
+    /// 见 06 章决策 89。
+    private func setGalleryVisible(_ on: Bool) {
+        guard on else {
+            gallery?.orderOut(nil)
+            gallery = nil
+            galleryHost = nil
+            PanelEditBridge.shared.galleryWindow = nil
+            return
+        }
+        guard gallery == nil, panel != nil else { return }
+        let window = MenuBarPanelWindow(becomesKey: false)
+        let host = FirstMouseHostingView(rootView: MenuBarPanelRoot(
+            content: MenuBarPanelView(close: { [weak self] in self?.close() }, gallery: true)))
+        host.sizingOptions = [.intrinsicContentSize]
+        host.onFittingSizeChange = { [weak self] _ in self?.placeGallery() }
+        gallery = window
+        galleryHost = host
+        PanelEditBridge.shared.galleryWindow = window
+        window.setContent(host)
+        placeGallery()
+        window.orderFrontRegardless()
+    }
+
+    /// 贴着主面板左边、顶边对齐,中间隔 8;左边放不下就放右边。比屏幕可用区高时截短(内容贴顶)。
+    private func placeGallery() {
+        guard let window = gallery, let host = galleryHost, let main = panel else { return }
+        let size = host.fittingSize
+        guard size.width > 0, size.height > 0 else { return }
+        let visible = (main.screen ?? NSScreen.main)?.visibleFrame ?? main.frame
+        let gap: CGFloat = 8
+        var x = main.frame.minX - gap - size.width
+        if x < visible.minX + gap { x = main.frame.maxX + gap }
+        let height = min(size.height, visible.height - gap * 2)
+        let y = max(main.frame.maxY - height, visible.minY + gap)
+        let frame = NSRect(x: x.rounded(), y: y.rounded(), width: size.width, height: height)
+        if window.frame != frame { window.setFrame(frame, display: true) }
         if let content = window.contentView, content.frame.size != frame.size {
             content.frame = NSRect(origin: .zero, size: frame.size)
         }
@@ -281,8 +336,9 @@ final class MenuBarPanelController {
         ) { [weak self, weak window] event in
             guard let self, let window else { return event }
             let target = event.window
-            // 面板自己、面板里下拉菜单的菜单窗口(level ≥ popUpMenu)都不算「点到外面」。
+            // 面板自己、编辑时旁边那块「可添加」、面板里下拉菜单的菜单窗口(level ≥ popUpMenu)都不算「点到外面」。
             if target === window { return event }
+            if let target, target === self.gallery { return event }
             if let level = target?.level, level >= .popUpMenu { return event }
             // 锚点也不算:它的点击走 toggle,在这里先收的话 toggle 紧接着又把面板打开。按点击位置认。
             if self.anchorScreenRect?.contains(NSEvent.mouseLocation) == true { return event }
@@ -335,7 +391,11 @@ private final class MenuBarPanelWindow: NSPanel {
     /// Esc 收起。
     var onCancel: (() -> Void)?
 
-    init() {
+    /// 能不能当 key。「可添加」那块不当:键盘(Esc、回车「完成」)留在主面板上。
+    private let becomesKey: Bool
+
+    init(becomesKey: Bool = true) {
+        self.becomesKey = becomesKey
         super.init(contentRect: NSRect(x: 0, y: 0, width: 336, height: 400),
                    styleMask: [.borderless, .nonactivatingPanel],
                    backing: .buffered, defer: false)
@@ -352,7 +412,7 @@ private final class MenuBarPanelWindow: NSPanel {
         animationBehavior = .none
     }
 
-    override var canBecomeKey: Bool { true }
+    override var canBecomeKey: Bool { becomesKey }
     override var canBecomeMain: Bool { false }
 
     override func cancelOperation(_ sender: Any?) {
@@ -523,11 +583,19 @@ private struct MenuBarPanelView: View {
     /// 这一次按下不在任何拉手上(网格那一层的换尺寸手势这次不管)。
     @State private var resizeMissed = false
 
-    init(close: @escaping () -> Void, initialQuickTarget: PanelQuickTarget? = nil, initialEditing: Bool = false) {
+    /// 这一份是编辑时旁边那块「可添加」面板(只画 `galleryBody`)。
+    let gallery: Bool
+    /// 主面板编辑页里网格左上角在窗口里的位置(把左边拖过来的屏幕坐标换成网格坐标用)。
+    @State private var gridOrigin: CGPoint = .zero
+
+    init(close: @escaping () -> Void, initialQuickTarget: PanelQuickTarget? = nil, initialEditing: Bool = false,
+         gallery: Bool = false) {
         self.close = close
+        self.gallery = gallery
         _quickTarget = State(initialValue: initialQuickTarget)
         let editing = initialEditing && initialQuickTarget == nil
         _editing = State(initialValue: editing)
+        guard !gallery else { return }
         MenuBarPanelDebugState.quickTarget = initialQuickTarget?.deepLinkValue
         MenuBarPanelDebugState.editing = editing
     }
@@ -542,7 +610,11 @@ private struct MenuBarPanelView: View {
     /// 视图,不为一个几天才变一次的值常驻订阅;见 versionFooterItem)。
     @State private var pendingUpdate: SparkleUpdaterManager.AvailableUpdate?
 
-    var body: some View {
+    @ViewBuilder var body: some View {
+        if gallery { galleryBody } else { mainBody }
+    }
+
+    private var mainBody: some View {
         VStack(spacing: 9) {
             if let version = whatsNewVersion {
                 WhatsNewBanner(version: version, open: {
@@ -583,6 +655,7 @@ private struct MenuBarPanelView: View {
         .onChange(of: playback.touchBarPresent) { _, present in
             if !present, quickTarget == .touchBar { setQuickTarget(nil) }
         }
+        .onChange(of: editing) { _, on in PanelEditBridge.shared.setGalleryVisible?(on) }
         // 只在弹出这一刻取一次 —— 面板每次打开都是新建的一份视图,所以"每次开窗刷新一次"
         // 已经够了,不用为它常驻订阅 ConfigStore/LastfmConnectController/状态文件观察器
         // 三个东西(这张面板的渲染路径一直刻意只依赖 AppSettings/PlaybackCoordinator)。
@@ -595,6 +668,8 @@ private struct MenuBarPanelView: View {
             // 开面板也读一次,用户在播放器里自己改过的才对得上。
             PlaybackCoordinator.shared.refreshExtendedControls()
             pendingUpdate = SparkleUpdaterManager.shared.availableUpdate
+            // 深链 quick=edit 打开就在编辑:等控制器把主面板摆好再开旁边那块。
+            if editing { DispatchQueue.main.async { PanelEditBridge.shared.setGalleryVisible?(true) } }
             lastfmStatus = destinationStatus(
                 for: .lastfm,
                 config: .shared,
@@ -817,6 +892,45 @@ private struct MenuBarPanelView: View {
             knobTile(symbol: "pip", title: L10n.t("迷你窗口"), on: mini) {
                 close()
                 LyrimuseActionRunner.perform(.toggleLyricsWindowMiniHotkey)
+            }
+        case .like:
+            // 同卡片右上角那颗心、快捷键「喜欢/取消喜欢」:当前播放器没有「喜欢」或在放广告时灰着。
+            let favorited = playback.isFavorited
+            let usable = favorited != nil && !playback.isCurrentTrackAdBreak
+            knobTile(symbol: favorited == true ? "heart.fill" : "heart", title: L10n.t("喜欢"), on: usable && favorited == true,
+                     enabled: usable, help: usable ? nil : L10n.t("当前播放器不支持喜欢")) {
+                PlaybackCoordinator.shared.toggleFavorited()
+            }
+        case .openPlayer:
+            // 同快捷键「切换到播放器」:把正在用的播放器带到前台,先收面板。
+            knobTile(symbol: "play.rectangle", title: L10n.t("切换到播放器"), on: false) {
+                close()
+                LyrimuseActionRunner.perform(.openPlayerHotkey)
+            }
+        case .fadeOnHover, .hoverControls:
+            // 悬浮歌词「行为」里那两项:开关本体(含让真窗口生效那一句)用 `OverlayBehaviorItem.binding`,不另写一份;
+            // 悬浮歌词关着时灰着。
+            let item: OverlayBehaviorItem = tile == .fadeOnHover ? .fadeOnHover : .showHoverControls
+            let overlayOn = playback.classicOverlayEnabled
+            let isOn = tile == .fadeOnHover ? playback.overlayFadeOnHover : playback.overlayShowHoverControls
+            knobTile(symbol: item.icon, title: item.title, on: overlayOn && isOn, enabled: overlayOn,
+                     help: overlayOn ? nil : L10n.t("悬浮歌词未开启")) {
+                item.binding.wrappedValue.toggle()
+            }
+        case .peekNotch:
+            // 同快捷键:灵动岛临时展开几秒。先收面板;灵动岛关着时灰着。
+            let notchOn = playback.notchOverlayEnabled
+            knobTile(symbol: "rectangle.expand.vertical", title: L10n.t("临时展开灵动岛"), on: false, enabled: notchOn,
+                     help: notchOn ? nil : L10n.t("灵动岛歌词未开启")) {
+                close()
+                LyrimuseActionRunner.perform(.peekNotchHotkey)
+            }
+        case .notchShowLyrics:
+            // 同灵动岛快捷设置里那一项;灵动岛关着时灰着。
+            let notchOn = playback.notchOverlayEnabled
+            knobTile(symbol: "text.alignleft", title: L10n.t("收起时显示歌词"), on: notchOn && playback.notchShowLyrics,
+                     enabled: notchOn, help: notchOn ? nil : L10n.t("灵动岛歌词未开启")) {
+                AppSettings.shared.notchShowLyrics.toggle()
             }
         case .fontLarger, .fontSmaller:
             // 悬浮歌词主字号一档档调(同快捷键,带回声);悬浮歌词关着时灰着,同「锁定位置」。
@@ -1551,14 +1665,12 @@ private struct MenuBarPanelView: View {
     // MARK: 编辑布局
 
     /// 编辑页,照 macOS 控制中心的「编辑控制」:坑位都摆出来(空着的画淡格子,最下面多留一整排),每格左上「−」移除,
-    /// 悬停时右下角露出弧形拉手、拖它换尺寸(压到的格子让开;右键也能直接选);拖着格子(或从「可添加」拖一格进来)对准哪,
-    /// 别的格子就当场让开、往后顺延(`MenuBarPanelLayout.placing`),松手落定;「可添加」点一格放进第一个放得下的空位;
-    /// 再下面是底栏几项的显隐、「恢复默认」和「完成」。
+    /// 悬停时右下角露出弧形拉手、拖它换尺寸(压到的格子让开;右键也能直接选);拖着格子(或从旁边「可添加」那块拖一格过来)
+    /// 对准哪,别的格子就当场让开、往后顺延(`MenuBarPanelLayout.placing`),松手落定;再下面是底栏几项的显隐、「恢复默认」
+    /// 和「完成」。「可添加」在旁边另一扇面板里(`galleryBody`)。
     private var editingSection: some View {
-        let layout = dragPreview ?? playback.panelLayout
-        // 「可添加」按落定的布局列:拖着的那一格留在原处(调淡),挂在它上面的拖动手势才不会半路断掉。
-        let addable = playback.panelLayout.addable(available: tileAvailable)
-        let rows = max(layout.rowCount(), (dragBase ?? playback.panelLayout).rowCount()) + 1
+        let layout = dragPreview ?? editLayout
+        let rows = max(layout.rowCount(), (dragBase ?? editLayout).rowCount()) + 1
         return VStack(spacing: 9) {
             ZStack(alignment: .topLeading) {
                 ForEach(layout.emptySlots(rows: rows).map { $0.row * MenuBarPanelLayout.columns + $0.column }, id: \.self) { key in
@@ -1576,21 +1688,88 @@ private struct MenuBarPanelView: View {
             }
             .frame(width: Self.grid.width, height: Self.grid.height(rows: rows), alignment: .topLeading)
             .simultaneousGesture(gridResizeGesture)
-            if !addable.isEmpty {
-                PanelEditCaption(title: L10n.t("可添加"))
-                LazyVGrid(columns: Array(repeating: GridItem(.fixed(Self.grid.size(.small).width), spacing: Self.grid.spacing),
-                                         count: MenuBarPanelLayout.columns / MenuBarPanelLayout.Size.small.columns),
-                          alignment: .leading, spacing: Self.grid.spacing) {
-                    ForEach(addable, id: \.self) { tile in
-                        addableTile(tile)
-                    }
+            .background {
+                GeometryReader { proxy in
+                    let origin = proxy.frame(in: .global).origin
+                    Color.clear
+                        .onAppear { gridOrigin = origin }
+                        .onChange(of: origin) { _, now in gridOrigin = now }
                 }
             }
             footerEditor
         }
-        // 网格是这一列的第一块,编辑页坐标就是网格坐标;「可添加」拖出来的格子也用同一套坐标判断落在网格哪一格。
+        // 网格是这一列的第一块,编辑页坐标就是网格坐标。
         .coordinateSpace(name: Self.editGridSpace)
         .overlay(alignment: .topLeading) { draggedTileCopy }
+        .onAppear { PanelEditBridge.shared.galleryDrag = { tile, screen in handleGalleryDrag(tile, screen) } }
+        .onDisappear { PanelEditBridge.shared.galleryDrag = nil }
+    }
+
+    /// 编辑用的布局:这台 Mac 此刻没有触控栏时把「触控栏歌词」拿掉(不画、不占坑位),写回时放回原位(`updateLayout`)。
+    private var editLayout: MenuBarPanelLayout {
+        playback.touchBarPresent ? playback.panelLayout : playback.panelLayout.without(.touchBar)
+    }
+
+    /// 旁边「可添加」那块拖着一格:屏幕坐标换成网格坐标,跟本面板里拖格子走同一套挤位;nil = 松手。
+    private func handleGalleryDrag(_ tile: MenuBarPanelLayout.Tile, _ screen: CGPoint?) {
+        guard let screen, let window = PanelEditBridge.shared.mainWindow else {
+            endDrag()
+            return
+        }
+        let point = CGPoint(x: screen.x - window.frame.minX - gridOrigin.x, y: window.frame.maxY - screen.y - gridOrigin.y)
+        if draggingTile != tile {
+            let size = tile.fitting(.small)
+            let frame = Self.grid.size(size)
+            beginDrag(tile, size: size, grab: CGSize(width: frame.width / 2, height: frame.height / 2))
+        }
+        dragPointer = point
+        updateDragPreview(swap: false)
+    }
+
+    /// 编辑时旁边那块「可添加」面板:按显示方式分组(`MenuBarPanelLayout.TileGroup`),点一格放进第一个放得下的空位,
+    /// 也能拖进主面板的网格。见 06 章决策 89。
+    private var galleryBody: some View {
+        let groups = editLayout.addableGroups(available: tileAvailable)
+        return VStack(alignment: .leading, spacing: 9) {
+            Text(L10n.t("可添加"))
+                .font(.system(size: 13, weight: .semibold))
+                .padding(.horizontal, 6)
+            if groups.isEmpty {
+                Text(L10n.t("都已添加"))
+                    .font(.system(size: 11))
+                    .foregroundStyle(.secondary)
+                    .padding(.horizontal, 6)
+            }
+            ForEach(groups, id: \.group) { entry in
+                PanelEditCaption(title: entry.group.panelTitle)
+                LazyVGrid(columns: Array(repeating: GridItem(.fixed(Self.grid.size(.small).width), spacing: Self.grid.spacing),
+                                         count: MenuBarPanelLayout.columns / MenuBarPanelLayout.Size.small.columns),
+                          alignment: .leading, spacing: Self.grid.spacing) {
+                    ForEach(entry.tiles, id: \.self) { tile in
+                        addableTile(tile)
+                    }
+                }
+            }
+        }
+        .padding(10)
+        .frame(width: 336, alignment: .leading)
+        .overlay(alignment: .topLeading) { galleryDragCopy }
+    }
+
+    /// 在「可添加」那块里拖着的那一格(到了主面板上方由主面板那份画)。
+    @ViewBuilder private var galleryDragCopy: some View {
+        if let tile = draggingTile {
+            let dragAs = tile.fitting(.small)
+            let size = Self.grid.size(dragAs)
+            tileView(tile)
+                .environment(\.panelTileSize, dragAs)
+                .environment(\.panelTileEditing, true)
+                .frame(width: size.width, height: size.height)
+                .scaleEffect(reduceMotion ? 1 : 1.04)
+                .shadow(color: .black.opacity(0.2), radius: 8, y: 3)
+                .offset(x: dragPointer.x - size.width / 2, y: dragPointer.y - size.height / 2)
+                .allowsHitTesting(false)
+        }
     }
 
     private static let editGridSpace = "panel-edit-grid"
@@ -1602,8 +1781,6 @@ private struct MenuBarPanelView: View {
             content: tileView(p.tile)
                 .environment(\.panelTileSize, p.size)
                 .environment(\.panelTileEditing, true)
-                // 没有触控栏时「触控栏歌词」平时不画、坑位留空;编辑时照样摆出来,淡一点。
-                .opacity(tileAvailable(p.tile) ? 1 : 0.45)
                 .frame(width: frame.width, height: frame.height),
             cornerRadius: radius,
             resizing: resizingTile == p.tile,
@@ -1641,26 +1818,28 @@ private struct MenuBarPanelView: View {
             .onEnded { _ in endDrag() }
     }
 
-    /// 从「可添加」拖一格进网格:按小号拖(没有小号的正在播放卡按加宽),对准哪就塞到哪、别的格子让开;拖回网格外面松手就不加。
+    /// 从「可添加」那块拖一格进主面板的网格:按小号拖(没有小号的正在播放卡按加宽),对准哪就塞到哪、别的格子让开;
+    /// 拖回网格外面松手就不加。指针换成屏幕坐标交给主面板那份(`PanelEditBridge.galleryDrag`)排。
     private func newTileDragGesture(_ tile: MenuBarPanelLayout.Tile) -> some Gesture {
-        DragGesture(minimumDistance: 3, coordinateSpace: .named(Self.editGridSpace))
+        DragGesture(minimumDistance: 3, coordinateSpace: .global)
             .onChanged { value in
-                if draggingTile != tile {
-                    let dragAs = tile.fitting(.small)
-                    let size = Self.grid.size(dragAs)
-                    beginDrag(tile, size: dragAs, grab: CGSize(width: size.width / 2, height: size.height / 2))
-                }
+                draggingTile = tile
                 dragPointer = value.location
-                updateDragPreview(swap: false)
+                guard let window = PanelEditBridge.shared.galleryWindow else { return }
+                let screen = CGPoint(x: window.frame.minX + value.location.x, y: window.frame.maxY - value.location.y)
+                PanelEditBridge.shared.galleryDrag?(tile, screen)
             }
-            .onEnded { _ in endDrag() }
+            .onEnded { _ in
+                draggingTile = nil
+                PanelEditBridge.shared.galleryDrag?(tile, nil)
+            }
     }
 
     private func beginDrag(_ tile: MenuBarPanelLayout.Tile, size: MenuBarPanelLayout.Size, grab: CGSize) {
         draggingTile = tile
         dragSize = size
         dragGrab = grab
-        dragBase = playback.panelLayout
+        dragBase = editLayout
         dragCell = []
     }
 
@@ -1670,7 +1849,9 @@ private struct MenuBarPanelView: View {
         let origin = CGPoint(x: dragPointer.x - dragGrab.width, y: dragPointer.y - dragGrab.height)
         let cell = Self.grid.nearestCell(to: origin)
         let column = dragSize.alignedColumn(near: cell.column)
+        // 指针出了网格左右(还在旁边「可添加」那块上)、或拖到下面去了,都算在网格外面。
         let outside = origin.y > Self.grid.height(rows: base.rowCount() + 1)
+            || dragPointer.x < -10 || dragPointer.x > Self.grid.width + 10
         let key = outside ? [-1] : [column, max(cell.row, 0)]
         guard key != dragCell else { return }
         dragCell = key
@@ -1683,7 +1864,7 @@ private struct MenuBarPanelView: View {
     }
 
     private func endDrag() {
-        if let preview = dragPreview, preview != playback.panelLayout {
+        if let preview = dragPreview, preview != editLayout {
             updateLayout { $0 = preview }
         }
         draggingTile = nil
@@ -1705,14 +1886,14 @@ private struct MenuBarPanelView: View {
                         return
                     }
                     resizingTile = hit
-                    resizeBase = playback.panelLayout
+                    resizeBase = editLayout
                 }
                 guard let tile = resizingTile, let base = resizeBase, let start = base.placement(of: tile) else { return }
                 let target = Self.grid.resizedSize(origin: Self.grid.frame(start).origin, pointer: value.location,
                                                    allowed: tile.sizes)
                 var resized = base
                 resized.resize(tile, to: target)
-                if resized != playback.panelLayout {
+                if resized != editLayout {
                     updateLayout { $0 = resized }
                 }
             }
@@ -1726,7 +1907,7 @@ private struct MenuBarPanelView: View {
     /// 按在哪一格的拉手上(格子右下角 `PanelResizeCorner.side` 见方那一块),没有返回 nil。
     private func resizeHandleTile(at point: CGPoint) -> MenuBarPanelLayout.Tile? {
         let side = PanelResizeCorner.side
-        return playback.panelLayout.placements.first { p in
+        return editLayout.placements.first { p in
             let frame = Self.grid.frame(p)
             return CGRect(x: frame.maxX - side, y: frame.maxY - side, width: side, height: side).contains(point)
         }?.tile
@@ -1821,10 +2002,14 @@ private struct MenuBarPanelView: View {
     }
 
     /// 编辑时改布局:直接写设置,面板这一刻就按新布局排。挪位、加减格子带一小段动画。
+    /// 改的是 `editLayout` 那一份:没有触控栏时先拿掉「触控栏歌词」,改完再放回原位(原位被占了就不放,它回到「可添加」)。
     private func updateLayout(_ change: (inout MenuBarPanelLayout) -> Void) {
-        var layout = AppSettings.shared.menuBarPanelLayout
+        let stored = AppSettings.shared.menuBarPanelLayout
+        let hidden = playback.touchBarPresent ? nil : stored.placement(of: .touchBar)
+        var layout = hidden == nil ? stored : stored.without(.touchBar)
         change(&layout)
-        guard layout != AppSettings.shared.menuBarPanelLayout else { return }
+        layout = layout.restoring(hidden)
+        guard layout != stored else { return }
         withAnimation(reduceMotion ? nil : .easeOut(duration: 0.16)) {
             AppSettings.shared.menuBarPanelLayout = layout
         }

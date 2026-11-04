@@ -1260,6 +1260,7 @@
 "悬浮歌词、灵动岛、菜单栏和触控栏可同时开，歌词窗口按需打开" = "Lời nổi, Notch, thanh menu và Touch Bar có thể bật cùng lúc; mở Cửa sổ lời khi cần";
 "悬浮歌词宽度" = "Độ rộng Lời nổi";
 "悬浮歌词开着时才显示" = "Chỉ hiện khi lời nổi đang bật";
+"悬浮歌词未开启" = "Lời nổi đang tắt";
 "成立时间" = "Thành lập";
 "我已完成授权，继续" = "Tôi đã cấp quyền";
 "我的主题" = "Chủ đề của tôi";
@@ -2697,6 +2698,7 @@
 "邮件反馈" = "Phản hồi qua email";
 "部分写法未能获取" = "Không tải được một số cách viết";
 "部分设置未能写入（%@），其余已导入。可再次导入，或检查配置文件夹的写入权限" = "Một số cài đặt không ghi được (%@), phần còn lại đã được nhập. Hãy nhập lại hoặc kiểm tra quyền ghi của thư mục cấu hình";
+"都已添加" = "Đã thêm hết";
 "配对浏览器" = "Ghép đôi trình duyệt";
 "配置尚未完成，点按查看缺少的项目" = "Chưa thiết lập xong, bấm vào để xem mục còn thiếu";
 "配置文件 %@ 无法读取，为避免覆盖，所有保存已暂停" = "Không thể đọc tệp cấu hình %@; để tránh ghi đè, mọi thao tác lưu đã tạm dừng";
