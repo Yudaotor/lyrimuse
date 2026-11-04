@@ -132,10 +132,9 @@ function cleanFeatures(f) {
     accounts: tags(f.accounts), trusted_players: ids(f.trusted_players), web_platforms: tags(f.web_platforms),
     show_in_dock: bool(f.show_in_dock), launch_at_login: bool(f.launch_at_login),
     beta_updates: bool(f.beta_updates),
-    // 安装渠道 homebrew / direct;有没有带刘海的屏幕、接着几块显示器;改过默认值的设置项(只有属性名);
+    // 安装渠道 homebrew / direct;改过默认值的设置项(只有属性名);
     // 勾选的播放器里缺的权限(automation.apple_music 这类)。旧版 App 不发这几项。
     install_method: f.install_method === "homebrew" || f.install_method === "direct" ? f.install_method : null,
-    has_notch: bool(f.has_notch), displays: int(f.displays, 0, 32),
     settings_changed: ids(f.settings_changed, 200), permissions_missing: tags(f.permissions_missing, 60),
   };
 }
@@ -329,10 +328,8 @@ async function stats(request, env, url) {
       trusted_players: countBy(rows, (r) => r.features.trusted_players || []),
       web_platforms: countBy(rows, (r) => r.features.web_platforms || []),
       lyrics_source_mode: countBy(rows, (r) => r.features.lyrics_source_mode),
-      // 下面四项只算报了这一项的机器(旧版本不发,记成 (unknown) 的也在里面)。
+      // 下面三项只算报了这一项的机器(旧版本不发,记成 (unknown) 的也在里面)。
       install_method: countBy(rows, (r) => r.features.install_method),
-      has_notch: countBy(rows, (r) => r.features.has_notch == null ? null : (r.features.has_notch ? "有刘海" : "没刘海")),
-      displays: countBy(rows, (r) => r.features.displays),
       settings_changed: countBy(rows, (r) => r.features.settings_changed || []),
       permissions_missing: countBy(rows, (r) => r.features.permissions_missing || []),
       flags: featureFlags.map((k) => [k, rows.filter((r) => r.features[k] === true).length]),
@@ -421,7 +418,7 @@ const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<
 try { $("token").value = localStorage.getItem("lyrimuse-telemetry-token") || ""; } catch {}
 const LABELS = { app_version: "版本", os_version: "macOS 大版本", arch: "芯片", ui_language: "界面语言", system_language: "系统语言",
   country: "国家/地区", surfaces: "开着的展示面", players_selected: "勾选的播放器", accounts: "连接的账号", trusted_players: "信任的第三方播放器", web_platforms: "网页版平台", lyrics_source_mode: "匹配算法",
-  flags: "其他开关", install_method: "安装渠道", has_notch: "刘海屏", displays: "显示器数量", settings_changed: "改过默认值的设置",
+  flags: "其他开关", install_method: "安装渠道", settings_changed: "改过默认值的设置",
   permissions_missing: "缺的权限" };
 const ACTION_LABELS = { lyrics_window: "打开歌词窗口", lyrics_picked: "手动采用歌词", offset_adjusted: "调时间偏移", share_card: "分享歌词卡" };
 function table(rows, total) {

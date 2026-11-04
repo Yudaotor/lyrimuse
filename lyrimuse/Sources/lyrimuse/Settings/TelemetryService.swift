@@ -1,4 +1,3 @@
-import AppKit
 import Combine
 import Foundation
 import LyrimuseCore
@@ -210,8 +209,6 @@ final class TelemetryService {
             installMethod: Telemetry.installMethod(caskroomExists: Telemetry.caskroomPaths.contains {
                 FileManager.default.fileExists(atPath: $0)
             }),
-            hasNotch: NSScreen.screens.contains { $0.safeAreaInsets.top > 0 },
-            displays: NSScreen.screens.count,
             settingsChanged: Telemetry.changedSettings(current: settings.telemetrySettingValues(),
                                                        defaults: AppSettings.telemetryDefaultSettingValues()),
             permissionsMissing: await PlayerHealthMonitor.telemetryPermissionGaps())

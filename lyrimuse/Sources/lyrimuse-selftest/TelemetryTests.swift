@@ -169,7 +169,7 @@ func runTelemetryTests() {
     }
 
     do {
-        print("\n== 遥测:安装渠道、硬件、改过的设置、缺的权限 ==")
+        print("\n== 遥测:安装渠道、改过的设置、缺的权限 ==")
         expectEqual(Telemetry.installMethod(caskroomExists: true), "homebrew", "安装渠道: Caskroom 里有就是 Homebrew")
         expectEqual(Telemetry.installMethod(caskroomExists: false), "direct", "安装渠道: 其余记 direct")
         expectEqual(Telemetry.caskroomPaths.allSatisfy { $0.hasSuffix("/Caskroom/lyrimuse") }, true, "安装渠道: 两个 Homebrew 位置")
@@ -191,13 +191,13 @@ func runTelemetryTests() {
         let f = TelemetryFeatures(surfaces: [], playersSelected: [], lyricsSourceMode: "smart", lyricsSourcesEnabled: 1,
                                   translation: false, romanization: false, machineTranslation: false, accounts: [],
                                   trustedPlayers: [], webPlatforms: [], showInDock: false, launchAtLogin: false, betaUpdates: false,
-                                  installMethod: "direct", hasNotch: true, displays: 2,
+                                  installMethod: "direct",
                                   settingsChanged: ["zeta", "alpha"], permissionsMissing: ["b.x", "a.x"])
         expectEqual(f.settingsChanged, ["alpha", "zeta"], "改过的设置: 排好序")
         expectEqual(f.permissionsMissing, ["a.x", "b.x"], "缺的权限: 排好序")
         let fJSON = (try? JSONEncoder().encode(f)).flatMap { String(data: $0, encoding: .utf8) } ?? ""
-        expectEqual(fJSON.contains(#""has_notch":true"#) && fJSON.contains(#""displays":2"#) && fJSON.contains(#""install_method":"direct""#),
-                    true, "负载: 刘海、显示器、安装渠道")
+        expectEqual(fJSON.contains(#""install_method":"direct""#),
+                    true, "负载: 安装渠道")
     }
 
     do {
@@ -208,7 +208,7 @@ func runTelemetryTests() {
                                          lyricsSourcesEnabled: 15, translation: true, romanization: false,
                                          machineTranslation: false, accounts: [], trustedPlayers: ["com.colliderli.iina"],
                                          webPlatforms: ["youtube-music"], showInDock: true, launchAtLogin: true,
-                                         betaUpdates: false, installMethod: "homebrew", hasNotch: true, displays: 1,
+                                         betaUpdates: false, installMethod: "homebrew",
                                          settingsChanged: ["notchGestures"], permissionsMissing: ["automation.apple_music"])
         let beat = TelemetryHeartbeat(installID: "i", day: "2026-10-31", env: env, features: features,
                                       activity: [TelemetryActivityDay(day: "2026-10-30")])
@@ -231,8 +231,8 @@ func runTelemetryTests() {
         let fields = keys(env) + keys(features) + keys(TelemetryActivityDay(day: "2026-10-30"))
             + ["install_id", "origin", "report_id", "exception_type", "termination_indicator", "frames", "exception_frames"]
             + TelemetryAction.allCases.map(\.rawValue)
-        expectEqual(["install_method", "has_notch", "displays", "settings_changed", "permissions_missing"].allSatisfy(keys(features).contains),
-                    true, "心跳: 功能快照带安装渠道、硬件、改过的设置、缺的权限")
+        expectEqual(["install_method", "settings_changed", "permissions_missing"].allSatisfy(keys(features).contains),
+                    true, "心跳: 功能快照带安装渠道、改过的设置、缺的权限")
         let missing = fields.filter { !worker.contains($0) }
         expectEqual(missing, [], "Worker: 认得 App 发的每个字段")
         // Worker 的两个白名单正则要放过 App 真实会发的每个取值(只比键名测不出取值被丢)。
@@ -332,10 +332,10 @@ func runTelemetryTests() {
         expectEqual(sourceHas(sourceBody("func start()", in: service), "decideInstallOrigin()"), true, "接线: 启动时判新装还是升级")
 
         let features = sourceBody("private func features() async -> TelemetryFeatures", in: service)
-        expectEqual(["Telemetry.caskroomPaths", "safeAreaInsets.top > 0", "NSScreen.screens.count",
+        expectEqual(["Telemetry.caskroomPaths",
                      "AppSettings.telemetryDefaultSettingValues()", "PlayerHealthMonitor.telemetryPermissionGaps()",
                      "LyricsWindowSession.shouldReopenAtLaunch, \"lyrics-window\""].filter { !sourceHas(features, $0) }, [],
-                    "接线: 功能快照取安装渠道、刘海、显示器、改过的设置、缺的权限、歌词窗口开着没有")
+                    "接线: 功能快照取安装渠道、改过的设置、缺的权限、歌词窗口开着没有")
         let offsets = sourceText("LyrimuseCore/Lyrics/LyricsOffsetStore.swift")
         expectEqual(["public func nudgeRadio(by", "public func nudge(by", "public func reset(forKey", "public func setOffset(_ ms"]
             .filter { !sourceHas(sourceBody($0, in: offsets), "TelemetryActivity.shared.noteAction(.offsetAdjusted)") }, [],

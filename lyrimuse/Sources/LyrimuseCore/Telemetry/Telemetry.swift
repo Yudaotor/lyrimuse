@@ -225,10 +225,6 @@ public struct TelemetryFeatures: Codable, Equatable, Sendable {
     public var betaUpdates: Bool
     /// homebrew / direct(`Telemetry.installMethod`)。
     public var installMethod: String?
-    /// 有没有一块带刘海的屏幕。
-    public var hasNotch: Bool?
-    /// 接着几块显示器。
-    public var displays: Int?
     /// 改过默认值的设置项(`AppSettings` 的属性名,`Telemetry.changedSettings`),只有名字。
     public var settingsChanged: [String]
     /// 勾选的播放器里缺的权限(`Telemetry.permissionTag`),只算本机装了的。
@@ -238,7 +234,7 @@ public struct TelemetryFeatures: Codable, Equatable, Sendable {
                 translation: Bool, romanization: Bool, machineTranslation: Bool, accounts: [String],
                 trustedPlayers: [String], webPlatforms: [String],
                 showInDock: Bool, launchAtLogin: Bool, betaUpdates: Bool,
-                installMethod: String? = nil, hasNotch: Bool? = nil, displays: Int? = nil,
+                installMethod: String? = nil,
                 settingsChanged: [String] = [], permissionsMissing: [String] = []) {
         self.surfaces = surfaces.sorted()
         self.playersSelected = playersSelected.sorted()
@@ -254,8 +250,6 @@ public struct TelemetryFeatures: Codable, Equatable, Sendable {
         self.launchAtLogin = launchAtLogin
         self.betaUpdates = betaUpdates
         self.installMethod = installMethod
-        self.hasNotch = hasNotch
-        self.displays = displays
         self.settingsChanged = Array(settingsChanged.sorted().prefix(Telemetry.maxChangedSettings))
         self.permissionsMissing = permissionsMissing.sorted()
     }
@@ -266,7 +260,7 @@ public struct TelemetryFeatures: Codable, Equatable, Sendable {
         case machineTranslation = "machine_translation", accounts, trustedPlayers = "trusted_players"
         case webPlatforms = "web_platforms", showInDock = "show_in_dock"
         case launchAtLogin = "launch_at_login", betaUpdates = "beta_updates"
-        case installMethod = "install_method", hasNotch = "has_notch", displays
+        case installMethod = "install_method"
         case settingsChanged = "settings_changed", permissionsMissing = "permissions_missing"
     }
 }
