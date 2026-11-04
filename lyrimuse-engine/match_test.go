@@ -149,6 +149,11 @@ func TestTitleVersionTags(t *testing.T) {
 		{"晴天 (混音)", []string{"remix"}},
 		// 假阳性陷阱同样适用于中文:词只在括号/破折号段里找。
 		{"不插电的夏天", nil},
+		// 括号里写的是某场演唱会上的录音:算 live;「演唱会主题曲」是录音室录的,不算
+		{"祝我生日快樂 (無與倫比演唱會對唱版)", []string{"live"}},
+		{"听见下雨的声音 (2014魔天伦世界巡回演唱会上海站)", []string{"live"}},
+		{"I AM（2010 IAM世界巡迴演唱會主題曲）", nil},
+		{"演唱会", nil},
 		// 补裸 "edit"(PRINCE《Diamonds and Pearls (2023 Remaster)》配了《… (Edit)》的词,
 		// 见 distinctRecordingVersionTags 处注释)。"(Radio Edit)" 现在同时命中 "radio edit" 和 "edit"。
 		{"Diamonds And Pearls (Edit)", []string{"edit"}},
@@ -1642,5 +1647,23 @@ func TestContentConsensusCopiesCountAsOneFamily(t *testing.T) {
 	}
 	if len(peers["kuwo"]) != 2 {
 		t.Errorf("kuwo 该看到 netease + kugou 两家(qq 是同一份),实际 %v", peers["kuwo"])
+	}
+}
+
+// 本地是演唱会对唱版、两个版本时长几乎一样:录音室版靠逐字时间轴压过同场的 (Live) 版,歌名括号里的「演唱會」
+// 要折成 live,录音室版才吃版本不符、(Live) 版才不被误扣。见 09 章决策 359。
+func TestConcertBracketMarksLiveVersion(t *testing.T) {
+	lt, la := "祝我生日快樂 (無與倫比演唱會對唱版)", "愛回溫新歌+精選"
+	if !versionTagsMismatch(lt, la, "祝我生日快樂", "光 新歌+經典 (阿爾發22週年)") {
+		t.Error("录音室版应判版本不符")
+	}
+	if versionTagsMismatch(lt, la, "祝我生日快乐 (Live)", "爱回温 新歌+精选") {
+		t.Error("同场 (Live) 版不该判版本不符")
+	}
+	if got := parenOnlyVersionTags(lt); !got["live"] {
+		t.Errorf("parenOnlyVersionTags(%q) = %v,want live", lt, got)
+	}
+	if got := parenOnlyVersionTags("I AM（2010 IAM世界巡迴演唱會主題曲）"); got["live"] {
+		t.Errorf("演唱会主题曲不该算 live: %v", got)
 	}
 }

@@ -551,7 +551,7 @@ const lyricOvershootToleranceSecs = 5.0
 // (按版本号可查,如决策 31/33/36/43/44/49/50/58/64/69/82)——这里不重复。
 const lyricsScoringVersion = 31
 
-const lyricsScoringRevision = 0
+const lyricsScoringRevision = 1
 
 // lyricsScoringStamp 是一条歌词按哪一版打分规则选出来的:主版本号 + 开发修订号。存成两个整数、按这两段比大小,
 // 不存小数:小数比大小时 29.10 会排在 29.9 前面。
@@ -2817,11 +2817,21 @@ func titleVersionTags(title string) map[string]bool {
 		if isContinuousMixSegment(n) {
 			out[continuousMixVersionTag] = true
 		}
+		if segmentNamesConcertRecording(n) {
+			out["live"] = true
+		}
 		if lang := languageVersionTagOfSegment(seg); lang != "" {
 			out[lang] = true
 		}
 	}
 	return out
+}
+
+// segmentNamesConcertRecording:括号段(已繁转简)写的是某场演唱会上的录音(「(無與倫比演唱會對唱版)」
+// 「(2014魔天伦世界巡回演唱会上海站)」),算 live。「演唱会主题曲」说的是为演唱会写的歌、录音室录的,不算。
+// 「演唱会」不进 distinctRecordingVersionTags:那张表没有排除词。见 09 章决策 359。
+func segmentNamesConcertRecording(simplified string) bool {
+	return strings.Contains(simplified, "演唱会") && !strings.Contains(simplified, "主题曲")
 }
 
 // isOpenBracket / isCloseBracket:歌名里算括号的字符。全角的 （）【】［］｛｝ 也算 —— 中文平台和 Apple 的
@@ -4166,6 +4176,9 @@ func segmentVersionTags(seg string) map[string]bool {
 	}
 	if isContinuousMixSegment(joined) {
 		out[continuousMixVersionTag] = true
+	}
+	if segmentNamesConcertRecording(simplifiedJoined) {
+		out["live"] = true
 	}
 	// 语种标签走专门的规范化(繁简/中英/单字形态折成同一个键),不走上面两套匹配——
 	// 上面的中文子串路径不做 toSimplified,"(粵語)" 会漏;见 languageVersionTagOfSegment。
