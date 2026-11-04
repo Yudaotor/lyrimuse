@@ -206,6 +206,42 @@ public final class PearDesktopAPI: @unchecked Sendable {
         return KasetPlayerInfo.QueueReply(currentIndex: current, repeating: repeating, tracks: tracks)
     }
 
+    /// 它的循环档(`GET /api/v1/repeat-mode` 的 NONE / ALL / ONE)换成播放模式;读不到为 nil。它没有能保持的随机档(接口的「随机」
+    /// 是把队列重新打乱一次),所以只有关、列表循环、单曲循环三档(`modeOptions`)。
+    public static func playbackMode(fromRepeat mode: String?) -> MusicPlaybackController.MusicPlaybackMode? {
+        switch mode {
+        case "NONE": return .list
+        case "ALL": return .repeatAll
+        case "ONE": return .repeatOne
+        default: return nil
+        }
+    }
+
+    public static let modeOptions: MusicPlaybackController.PlaybackModeOptions = [.repeatAll, .repeatOne]
+
+    /// 从现在这档到要的那档要按几下循环键(它按一下:关 → 列表循环 → 单曲循环 → 关)。要的是随机、或读不到现在这档时为 nil。
+    public static func repeatPresses(from current: String?, to target: MusicPlaybackController.MusicPlaybackMode) -> Int? {
+        let order = ["NONE", "ALL", "ONE"]
+        let want: String
+        switch target {
+        case .list: want = "NONE"
+        case .repeatAll: want = "ALL"
+        case .repeatOne: want = "ONE"
+        case .shuffle: return nil
+        }
+        guard let current, let from = order.firstIndex(of: current), let to = order.firstIndex(of: want) else { return nil }
+        return (to - from + order.count) % order.count
+    }
+
+    /// 读到的音量换成它播放条滑块的位置(0~100)。接口写的是滑块位置(`updateVolume`),读回来的是播放器的音量(`getVolume`),
+    /// YouTube Music 在两者之间套了一条曲线:读数 = 100 × (16^(滑块/100) − 1) / 15(实测 10→2、50→20、80→55、90→74、100→100)。
+    /// 读数只到整数,低音量那头反算会差一两格。静音算 0。
+    public static func sliderVolume(fromPlayerVolume volume: Double, muted: Bool) -> Int {
+        guard !muted, volume.isFinite, volume > 0 else { return 0 }
+        let v = min(100, volume)
+        return Int((100 * log(1 + 0.15 * v) / log(16)).rounded())
+    }
+
     /// `{"runs": [{"text": …}, …]}` 拼成一串;也认 `{"simpleText": …}`。
     static func runsText(_ value: Any?) -> String {
         guard let dict = value as? [String: Any] else { return "" }
@@ -414,6 +450,46 @@ public final class PearDesktopAPI: @unchecked Sendable {
         return Self.queueReply(queueJSON: queue, repeatMode: mode)
     }
 
+    /// 现在的播放模式(循环档);接口没开、没授权、读不到时 nil。
+    public func playbackMode() -> MusicPlaybackController.PlaybackModeState? {
+        guard let config = usableConfig() else { return nil }
+        let mode = get("/api/v1/repeat-mode", config: config)
+            .flatMap { try? JSONSerialization.jsonObject(with: $0) as? [String: Any] }?["mode"] as? String
+        return Self.playbackMode(fromRepeat: mode).map { .init(mode: $0, options: Self.modeOptions) }
+    }
+
+    /// 换到这一档:按现在这档算要按几下循环键,一次发过去,再读一次核对。
+    public func setPlaybackMode(_ mode: MusicPlaybackController.MusicPlaybackMode) -> Bool {
+        guard let config = usableConfig() else { return false }
+        let current = get("/api/v1/repeat-mode", config: config)
+            .flatMap { try? JSONSerialization.jsonObject(with: $0) as? [String: Any] }?["mode"] as? String
+        guard let presses = Self.repeatPresses(from: current, to: mode) else { return false }
+        if presses > 0, post("/api/v1/switch-repeat", body: ["iteration": presses], config: config) != 204 { return false }
+        return playbackMode()?.mode == mode
+    }
+
+    /// 现在的音量,按它播放条滑块的位置(0~100,见 `sliderVolume`);读不到 nil。
+    public func volume() -> Int? {
+        guard let config = usableConfig(),
+              let object = get("/api/v1/volume", config: config).flatMap({ try? JSONSerialization.jsonObject(with: $0) as? [String: Any] }),
+              let state = (object["state"] as? NSNumber)?.doubleValue else { return nil }
+        return Self.sliderVolume(fromPlayerVolume: state, muted: object["isMuted"] as? Bool ?? false)
+    }
+
+    /// 设它播放条滑块的位置(0~100)。
+    public func setVolume(_ value: Int) -> Bool {
+        guard let config = usableConfig() else { return false }
+        return post("/api/v1/volume", body: ["volume": min(100, max(0, value))], config: config) == 204
+    }
+
+    /// 接口开着、不是 HTTPS、该有的令牌有了,才去请求。
+    private func usableConfig() -> Config? {
+        guard let config = currentConfig(), config.enabled, !config.usesHTTPS else { return nil }
+        lock.lock()
+        defer { lock.unlock() }
+        return config.needsToken && token == nil ? nil : config
+    }
+
     // MARK: - 请求
 
     private func baseURL(_ config: Config) -> URL? {
@@ -444,6 +520,33 @@ public final class PearDesktopAPI: @unchecked Sendable {
         if result.status == 401 { self.token = nil }
         lock.unlock()
         return result.status == 200 ? result.data : nil
+    }
+
+    /// 同步 POST 一段 JSON,最多等 `requestTimeout`;返回状态码,连不上 / 超时为 nil。
+    private func post(_ path: String, body: [String: Any], config: Config) -> Int? {
+        guard let url = baseURL(config)?.appendingPathComponent(path),
+              let data = try? JSONSerialization.data(withJSONObject: body) else { return nil }
+        var request = URLRequest(url: url, timeoutInterval: Self.requestTimeout)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = data
+        lock.lock()
+        let token = self.token
+        lock.unlock()
+        if config.needsToken, let token { request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }
+        let done = DispatchSemaphore(value: 0)
+        var status: Int?
+        session.dataTask(with: request) { _, response, _ in
+            status = (response as? HTTPURLResponse)?.statusCode
+            done.signal()
+        }.resume()
+        guard done.wait(timeout: .now() + Self.requestTimeout + 0.1) == .success else { return nil }
+        if status == 401 {
+            lock.lock()
+            self.token = nil
+            lock.unlock()
+        }
+        return status
     }
 
     /// 要令牌(在后台等,第一次要时 Pear 弹框问用户)。在要、用户拒绝过、刚失败过时不再要。

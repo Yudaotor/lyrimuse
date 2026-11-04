@@ -260,7 +260,7 @@
       "positionTier": "cleanExtrapolated",
       "republishesZeroAnchor": false,
       "playingFromRate": false,
-      "artistArrivesLate": false,
+      "artistArrivesLate": true,
       "artistlessNotMusic": false,
       "dropsSessionBetweenTracks": true,
       "dropsSessionWhilePlaying": false,
@@ -271,7 +271,7 @@
       "tint": {"rgb": [0.94, 0.27, 0.40]},
       "fallbackSymbol": "music.note",
       "bundledIcon": "PearDesktopIcon",
-      "note": "YouTube Music 的开源桌面客户端(原名 th-ch/youtube-music,安装包和 bundle id 仍叫 YouTube Music):Electron 外壳跑 YouTube Music 网页版,没有 AppleScript 字典、没有沙盒,走 media-control。系统会话由 Chromium 的媒体会话发:歌名、歌手、时长、封面齐全,歌曲版带专辑,MV 的专辑为空;锚点只在开播、暂停、恢复、跳转时发,播放中不刷新,跟 Arc、汽水音乐同一类,归 cleanExtrapolated。换歌时先撤掉会话约 0.9 秒,再发一份在放、速率 0、时长 0 的占位,约半秒后才发速率 1、带时长的开播锚点,后一份才是起播点。网页播放器音量为 0 或静音时不申请音频焦点,整段不出现在系统会话里;从静音恢复时会话从那一刻按 0 秒报起,直到下一次暂停或跳转才对上。播客单集歌手一栏报节目名、专辑为空,系统会话分不出来。media-control 的播放、暂停、切歌、跳转它都响应。启动时会自己跳到前台。另有一个默认关着的本机 HTTP 接口插件(api-server,端口 26538),本仓不用。nativeLyricSource 填 lyricfind:放的是 YouTube Music 曲库。processName 13 字节。"
+      "note": "YouTube Music 的开源桌面客户端(原名 th-ch/youtube-music,安装包和 bundle id 仍叫 YouTube Music):Electron 外壳跑 YouTube Music 网页版,没有 AppleScript 字典、没有沙盒,走 media-control。系统会话由 Chromium 的媒体会话发:歌名、歌手、时长、封面齐全,歌曲版带专辑,MV 的专辑为空;锚点只在开播、暂停、恢复、跳转时发,播放中不刷新,跟 Arc、汽水音乐同一类,归 cleanExtrapolated。换歌时先撤掉会话约 0.9 秒,再发一份在放、速率 0、时长 0、歌手为空的占位,约半秒后才发速率 1、带歌手和时长的开播锚点,后一份才是起播点;占位那一帧按 artistArrivesLate 不采纳。网页播放器音量为 0 或静音时不申请音频焦点,整段不出现在系统会话里;从静音恢复时会话从那一刻按 0 秒报起,直到下一次暂停或跳转才对上。播客单集歌手一栏报节目名、专辑为空,系统会话分不出来。media-control 的播放、暂停、切歌、跳转它都响应。启动时会自己跳到前台。另有一个默认关着的本机 HTTP 接口插件(api-server,端口 26538),用户打开后当第二条腿用(PearDesktopAPI):videoId、MV / 播客 / 广告判别、队列、循环档和音量。nativeLyricSource 填 lyricfind:放的是 YouTube Music 曲库。processName 13 字节。"
     },
     {
       "id": "reamp",

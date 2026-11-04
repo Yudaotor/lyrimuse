@@ -385,18 +385,19 @@ public enum MusicPlaybackController {
     /// 「播放模式」那三项(`QQMusicMenuControl`,要辅助功能权限),没有音量;Amazon Music 只有模式,按它播放条上的键、读它的日志
     /// (`AmazonMusicModeControl`);reAMP 只有随机和列表循环,按它菜单栏 Play 里的两个开关(`ReampMenuControl`);Pine Player 只有循环,
     /// 按它菜单栏「重复模式」子菜单(`PineMenuControl`);foobar2000 有随机和两种循环,按它菜单栏「Order」子菜单(`FoobarMenuControl`),
-    /// 音量读写它窗口里的滑块(`FoobarVolume`)。网易云、酷狗等没有
+    /// 音量读写它窗口里的滑块(`FoobarVolume`);Pear Desktop 开着本机接口时有循环(没有能保持的随机档)和音量(`PearDesktopAPI`)。网易云、酷狗等没有
     /// .sdef(不可脚本化),而
     /// media-control 走的系统级 MediaRemote 只有播放控制 —— 对它们只能不显示这些控件(各家实测见 07 章决策 130)。
     public static func supportsExtendedControls(_ player: PlaybackPlayer) -> Bool {
         player == .appleMusic || player == .spotify || player == .kaset || player == .qqMusic || player == .amazonMusic
             || player == .reamp || player == .lxMusic || player == .vox || player == .pinePlayer || player == .foobar2000
+            || player == .pearDesktop
     }
 
     /// 这个播放器的循环档位里有没有「单曲循环」。见 MusicPlaybackMode.nextRepeat。
     public static func supportsRepeatOne(_ player: PlaybackPlayer) -> Bool {
         player == .appleMusic || player == .kaset || player == .qqMusic || player == .amazonMusic || player == .vox
-            || player == .pinePlayer || player == .foobar2000
+            || player == .pinePlayer || player == .foobar2000 || player == .pearDesktop
     }
 
     /// 这个播放器有没有「喜欢」:Apple Music(收藏)、Kaset(YouTube Music 的赞)、QQ 音乐、网易云音乐和酷狗音乐(菜单栏「喜欢歌曲」)、
@@ -745,6 +746,9 @@ public enum MusicPlaybackController {
             // 音量只有用户在洛雪里打开了开放 API 才有(`LXMusicOpenAPI`);播放顺序它的接口不给改,不接。
             return ExtendedControlsState(favorited: includeFavorited ? LXMusicFavoriteControl.readFavorited() : nil,
                                          mode: nil, volume: LXMusicOpenAPI.shared.currentState().flatMap(LXMusicOpenAPI.volumePercent))
+        case .pearDesktop:
+            // 循环档和音量只有用户打开了它的本机接口才有(`PearDesktopAPI`);随机它没有能保持的一档,喜欢要登录,都不接。
+            return ExtendedControlsState(favorited: nil, mode: PearDesktopAPI.shared.playbackMode(), volume: PearDesktopAPI.shared.volume())
         // 其余播放器一律没有这些控件 —— 它们的 .app 里根本没有 .sdef(不可脚本化),
         // 而 media-control 走的系统级 MediaRemote 只有播放控制、没有音量和模式的概念。
         // 写成 default 而不是逐个列举,是为了让「接一个新播放器」只需要改
@@ -864,6 +868,8 @@ public enum MusicPlaybackController {
                 .map { PlaybackModeState(mode: $0, options: voxModeOptions) }
         case .lxMusic: // 洛雪的播放顺序开放 API 不给读写,只接了音量和收藏。
             return nil
+        case .pearDesktop:
+            return PearDesktopAPI.shared.playbackMode()
         default: // 同上:没有可写 AppleScript 属性的播放器一律落这里。
             return nil
         }
@@ -950,6 +956,8 @@ public enum MusicPlaybackController {
             return runAppleScriptCapturing(voxRunningGuard + #"tell application "VOX" to set repeat state to "# + String(state)) != nil
         case .lxMusic: // 同 playbackMode(for:)。
             return false
+        case .pearDesktop:
+            return PearDesktopAPI.shared.setPlaybackMode(mode)
         default: // 同上:没有可写 AppleScript 属性的播放器一律落这里。
             return false
         }
@@ -988,6 +996,8 @@ public enum MusicPlaybackController {
             return voxControls()?.volume
         case .lxMusic: // 开放 API 开着才有,没开时 nil(胶囊换成说明怎么打开)。
             return LXMusicOpenAPI.shared.currentState().flatMap(LXMusicOpenAPI.volumePercent)
+        case .pearDesktop: // 本机接口开着才有,按它播放条滑块的位置(`PearDesktopAPI.sliderVolume`)。
+            return PearDesktopAPI.shared.volume()
         default: // 同上:没有可写 AppleScript 属性的播放器一律落这里。
             return nil
         }
@@ -1021,6 +1031,8 @@ public enum MusicPlaybackController {
             return runAppleScriptCapturing(voxRunningGuard + #"tell application "VOX" to set player volume to \#(v)"#) != nil
         case .lxMusic:
             return LXMusicOpenAPI.shared.setVolume(v)
+        case .pearDesktop:
+            return PearDesktopAPI.shared.setVolume(v)
         default: // 同上:没有可写 AppleScript 属性的播放器一律落这里。
             return false
         }

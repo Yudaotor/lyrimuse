@@ -45,6 +45,31 @@ func runPearDesktopTests() {
         expectEqual(podcast?.isPodcastEpisode, true, "Pear 歌曲: 播客单集")
     }
 
+    // ---- 循环档与音量 ----
+    do {
+        typealias Mode = MusicPlaybackController.MusicPlaybackMode
+        expectEqual([API.playbackMode(fromRepeat: "NONE"), API.playbackMode(fromRepeat: "ALL"), API.playbackMode(fromRepeat: "ONE"),
+                     API.playbackMode(fromRepeat: nil)], [Mode.list, .repeatAll, .repeatOne, nil], "Pear 循环: 三档换成播放模式")
+        expectEqual(API.modeOptions.contains(.shuffle), false, "Pear 循环: 没有能保持的随机档")
+        // 实测它按一下循环键:关 → 列表循环 → 单曲循环 → 关。
+        expectEqual(API.repeatPresses(from: "NONE", to: .repeatOne), 2, "Pear 循环: 关到单曲循环按两下")
+        expectEqual(API.repeatPresses(from: "ONE", to: .repeatAll), 2, "Pear 循环: 单曲到列表循环要绕一圈按两下")
+        expectEqual(API.repeatPresses(from: "ALL", to: .list), 2, "Pear 循环: 列表循环到关按两下")
+        expectEqual(API.repeatPresses(from: "ALL", to: .repeatAll), 0, "Pear 循环: 已经是这一档不按")
+        expectEqual(API.repeatPresses(from: "NONE", to: .shuffle), nil, "Pear 循环: 要随机不接")
+        expectEqual(API.repeatPresses(from: nil, to: .repeatAll), nil, "Pear 循环: 读不到现在这档不按")
+        // 实测(写滑块 → 读回):10→2、30→8、50→20、55→24、80→55、90→74、100→100。
+        let measured: [(slider: Int, read: Double)] = [(10, 2), (30, 8), (50, 20), (55, 24), (80, 55), (90, 74), (100, 100)]
+        expectEqual(measured.allSatisfy { abs(API.sliderVolume(fromPlayerVolume: $0.read, muted: false) - $0.slider) <= 2 }, true,
+                    "Pear 音量: 读数反算回滑块位置,跟实测写进去的差不过 2")
+        expectEqual(API.sliderVolume(fromPlayerVolume: 40, muted: true), 0, "Pear 音量: 静音算 0")
+        expectEqual(API.sliderVolume(fromPlayerVolume: 0, muted: false), 0, "Pear 音量: 0 还是 0")
+        expectEqual(MusicPlaybackController.supportsExtendedControls(.pearDesktop) && MusicPlaybackController.supportsRepeatOne(.pearDesktop)
+                    && !MusicPlaybackController.supportsFavorite(.pearDesktop), true,
+                    "Pear 控制: 有循环(含单曲)和音量,没有喜欢(要登录、接口不能取消)")
+        expectEqual(PlaybackPlayer.pearDesktop.artistArrivesLate, true, "Pear: 换歌占位那一帧歌手为空,不采纳")
+    }
+
     // ---- 广告 ----
     do {
         let next = API.Song(title: "青花瓷", artist: "周杰倫", album: "我很忙", videoID: "DxpndDEAqGk", mediaType: "AUDIO", duration: 239,

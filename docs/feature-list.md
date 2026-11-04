@@ -637,7 +637,7 @@ Apple Music, Spotify, Kaset and VOX need Automation permission to read what is p
 
 ### Playback controls and seeking
 
-Play, pause, skip and drag the progress bar from the lyrics window or the expanded notch. Shuffle, repeat, like and volume depend on the player: Apple Music, Spotify, Kaset, QQ Music, Amazon Music, reAMP, VOX, Pine Player, foobar2000 and YouTube Music in a browser each support some or all of them, and NetEase Cloud Music, Kugou Music, Soda Music and LX Music have like, with LX Music volume too once Open API is on in its settings. Play, pause, skipping and like can have global shortcuts. While something like a browser video holds Now Playing, play, pause and skipping for QQ Music, NetEase Cloud Music, Soda Music, Pine Player and foobar2000 go through their own menus or play bar, and seeking isn't available.
+Play, pause, skip and drag the progress bar from the lyrics window or the expanded notch. Shuffle, repeat, like and volume depend on the player: Apple Music, Spotify, Kaset, QQ Music, Amazon Music, reAMP, VOX, Pine Player, foobar2000, Pear Desktop and YouTube Music in a browser each support some or all of them, and NetEase Cloud Music, Kugou Music, Soda Music and LX Music have like, with LX Music volume too once Open API is on in its settings. Play, pause, skipping and like can have global shortcuts. While something like a browser video holds Now Playing, play, pause and skipping for QQ Music, NetEase Cloud Music, Soda Music, Pine Player and foobar2000 go through their own menus or play bar, and seeking isn't available.
 
 - Settings: Lyrics Display › Notch › Expanded › Show Playback Controls
 - Settings: Keyboard Shortcuts › Play/Pause

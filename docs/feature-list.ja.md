@@ -637,7 +637,7 @@ Apple Music、Spotify、Kaset、VOXは、再生状態を読み取るために「
 
 ### 再生コントロールとシーク
 
-歌詞ウインドウや展開したノッチで、再生、一時停止、曲の切り替えができ、進行状況バーをドラッグしてシークできます。シャッフル、リピート、お気に入り、音量はプレーヤーの対応状況によります。Apple Music、Spotify、Kaset、QQ Music、Amazon Music、reAMP、VOX、Pine Player、foobar2000、ブラウザのYouTube Musicはその一部またはすべてに対応し、NetEase Cloud Music、Kugou Music、Soda Music、LX Musicはお気に入りに対応します。LX Musicは、その設定でOpen APIをオンにすると音量も調整できます。再生、一時停止、曲の切り替え、お気に入りには、グローバルなキーボードショートカットも割り当てられます。ブラウザの動画などのAppがシステムの「再生中」を占有している間は、QQ Music、NetEase Cloud Music、Soda Music、Pine Player、foobar2000の再生、一時停止、曲の切り替えは各Appのメニューや再生バーを通じて操作するため、シークはできません。
+歌詞ウインドウや展開したノッチで、再生、一時停止、曲の切り替えができ、進行状況バーをドラッグしてシークできます。シャッフル、リピート、お気に入り、音量はプレーヤーの対応状況によります。Apple Music、Spotify、Kaset、QQ Music、Amazon Music、reAMP、VOX、Pine Player、foobar2000、Pear Desktop、ブラウザのYouTube Musicはその一部またはすべてに対応し、NetEase Cloud Music、Kugou Music、Soda Music、LX Musicはお気に入りに対応します。LX Musicは、その設定でOpen APIをオンにすると音量も調整できます。再生、一時停止、曲の切り替え、お気に入りには、グローバルなキーボードショートカットも割り当てられます。ブラウザの動画などのAppがシステムの「再生中」を占有している間は、QQ Music、NetEase Cloud Music、Soda Music、Pine Player、foobar2000の再生、一時停止、曲の切り替えは各Appのメニューや再生バーを通じて操作するため、シークはできません。
 
 - 設定の場所：歌詞の表示 › ノッチ › 展開時 › 再生コントロールを表示
 - 設定の場所：キーボードショートカット › 再生/一時停止

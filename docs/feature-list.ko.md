@@ -637,7 +637,7 @@ Apple Music, Spotify, Kaset, VOX는 재생 상태를 읽으려면 ‘자동화�
 
 ### 재생 제어와 진행 위치 이동
 
-가사 윈도우와 펼친 노치에서 재생, 일시 정지, 노래 넘기기를 하고 진행 막대를 드래그해 이동할 수 있습니다. 임의 재생, 반복, 즐겨찾기, 음량은 플레이어 지원 여부에 따라 다릅니다. Apple Music, Spotify, Kaset, QQ Music, Amazon Music, reAMP, VOX, Pine Player, foobar2000, 브라우저의 YouTube Music은 그중 일부 또는 전부를 지원하고, NetEase Cloud Music, Kugou Music, Soda Music, LX Music은 즐겨찾기를 지원하며, LX Music은 설정에서 Open API를 켜면 음량도 조절할 수 있습니다. 재생, 일시 정지, 노래 넘기기, 즐겨찾기에는 전역 키보드 단축키를 지정할 수도 있습니다. 브라우저 동영상 같은 앱이 시스템 ‘지금 재생 중’을 차지하고 있으면 QQ Music, NetEase Cloud Music, Soda Music, Pine Player, foobar2000의 재생, 일시 정지, 노래 넘기기는 해당 앱의 메뉴나 재생 막대를 통해 작동하며, 이때는 진행 막대를 드래그해 이동할 수 없습니다.
+가사 윈도우와 펼친 노치에서 재생, 일시 정지, 노래 넘기기를 하고 진행 막대를 드래그해 이동할 수 있습니다. 임의 재생, 반복, 즐겨찾기, 음량은 플레이어 지원 여부에 따라 다릅니다. Apple Music, Spotify, Kaset, QQ Music, Amazon Music, reAMP, VOX, Pine Player, foobar2000, Pear Desktop, 브라우저의 YouTube Music은 그중 일부 또는 전부를 지원하고, NetEase Cloud Music, Kugou Music, Soda Music, LX Music은 즐겨찾기를 지원하며, LX Music은 설정에서 Open API를 켜면 음량도 조절할 수 있습니다. 재생, 일시 정지, 노래 넘기기, 즐겨찾기에는 전역 키보드 단축키를 지정할 수도 있습니다. 브라우저 동영상 같은 앱이 시스템 ‘지금 재생 중’을 차지하고 있으면 QQ Music, NetEase Cloud Music, Soda Music, Pine Player, foobar2000의 재생, 일시 정지, 노래 넘기기는 해당 앱의 메뉴나 재생 막대를 통해 작동하며, 이때는 진행 막대를 드래그해 이동할 수 없습니다.
 
 - 설정 위치: 가사 표시 › 노치 › 펼쳤을 때 › 재생 제어 보기
 - 설정 위치: 키보드 단축키 › 재생/일시 정지
