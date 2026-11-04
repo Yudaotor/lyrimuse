@@ -452,6 +452,7 @@
 "今日、近 7 天，以及收听最多的歌手和歌曲" = "Today, the last 7 days, and your top artists and tracks";
 "今日已收听 %@ 次" = "%@ plays today";
 "今日已收听 %@ 次#one" = "%@ play today";
+"今日收听" = "Today";
 "从 Windows 移植来的老牌本地音乐播放器" = "The classic local music player from Windows, ported to Mac";
 "从「%@」导出的备份" = "Backup exported from “%@”";
 "从「应用程序」中选择，无需等待其开始播放" = "Pick one from Applications — no need to wait until it’s playing";
@@ -921,6 +922,7 @@
 "增强 LRC" = "Enhanced LRC";
 "墨字白边" = "Ink Outline";
 "声波" = "Waveform";
+"声音" = "Sound";
 "备份与迁移" = "Backup & Migration";
 "备份中包含账号凭证与密钥的明文，将保存到「%@」" = "The backup contains your account credentials and keys in plain text and is saved to “%@”";
 "备份中包含账号凭证与密钥的明文，将同步到登录同一 Apple 账户的所有设备" = "The backup contains your account credentials and keys in plain text and syncs to every device signed in to the same Apple Account";
@@ -1304,6 +1306,7 @@
 "当前系统未提供触控栏接口" = "Touch Bar API unavailable";
 "当前系统未提供触控栏接口，开启后不生效" = "This version of macOS doesn’t provide the Touch Bar interfaces Lyrimuse needs, so turning this on has no effect";
 "当前网络无法直接连接 Musixmatch 的接口（TCP/TLS 均无响应），系统代理也不可用；开启代理后通常可恢复" = "Musixmatch’s API host is unreachable over a direct connection on this network (no TCP/TLS response), and no working system proxy is available — turning on a proxy usually fixes it";
+"当前输出设备不支持调节音量" = "The current output device doesn’t support volume control";
 "当前这句有歌词时才显示" = "Shown only when the current line has text";
 "当前连续" = "Current Streak";
 "当前配色尚未保存，点按保存为主题" = "These colors aren’t saved yet. Click to save them as a theme";
@@ -2649,6 +2652,7 @@
 "辅助功能权限可显示%@的随机、循环与喜欢按钮，也可在系统媒体焦点被其他 App 占用时，通过菜单暂停、恢复和切换上一首或下一首" = "Accessibility permission enables the shuffle, repeat and Favorite buttons for %@, and lets Lyrimuse pause, resume and skip tracks through its menus while another app holds the system media focus";
 "辅助功能权限可显示%@的随机、循环按钮和音量调节，也可在系统媒体焦点被其他 App 占用时控制暂停、恢复和切换上一首或下一首" = "Accessibility permission enables shuffle, repeat and volume for %@, and lets Lyrimuse pause, resume and skip tracks when another app holds system media focus";
 "辅助功能权限可让%@拖动进度后的歌词更准、显示循环按钮和音量调节，也可在系统媒体焦点被其他 App 占用时，通过菜单暂停、恢复和切换上一首或下一首" = "Accessibility permission keeps lyrics for %@ accurate after seeking, enables its repeat button and volume control, and lets Lyrimuse pause, resume and skip tracks through its menus while another app holds the system media focus";
+"输出设备" = "Output Device";
 "过去三年的今天及前后一周均无收听记录" = "No listening on this day, or the week around it, in the past three years";
 "运行中" = "Running";
 "运行日志" = "Activity Log";

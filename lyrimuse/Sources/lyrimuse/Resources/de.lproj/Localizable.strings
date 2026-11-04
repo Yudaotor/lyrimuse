@@ -452,6 +452,7 @@
 "今日、近 7 天，以及收听最多的歌手和歌曲" = "Heute, die letzten 7 Tage und deine Top-Künstler und -Titel";
 "今日已收听 %@ 次" = "%@ Wiedergaben heute";
 "今日已收听 %@ 次#one" = "%@ Wiedergabe heute";
+"今日收听" = "Heute gehört";
 "从 Windows 移植来的老牌本地音乐播放器" = "Der klassische lokale Musikplayer von Windows, auf den Mac portiert";
 "从「%@」导出的备份" = "Backup aus „%@“";
 "从「应用程序」中选择，无需等待其开始播放" = "Wähle eine App im Ordner „Programme“, ohne zu warten, bis sie etwas abspielt";
@@ -921,6 +922,7 @@
 "增强 LRC" = "Erweitertes LRC";
 "墨字白边" = "Tintenkontur";
 "声波" = "Wellenform";
+"声音" = "Ton";
 "备份与迁移" = "Backup & Migration";
 "备份中包含账号凭证与密钥的明文，将保存到「%@」" = "Das Backup enthält deine Zugangsdaten und Schlüssel im Klartext und wird in „%@“ gesichert";
 "备份中包含账号凭证与密钥的明文，将同步到登录同一 Apple 账户的所有设备" = "Das Backup enthält deine Zugangsdaten und Schlüssel im Klartext und wird mit allen Geräten synchronisiert, die mit demselben Apple Account angemeldet sind";
@@ -1304,6 +1306,7 @@
 "当前系统未提供触控栏接口" = "Touch Bar-API nicht verfügbar";
 "当前系统未提供触控栏接口，开启后不生效" = "Diese macOS-Version bietet nicht die Touch Bar-Schnittstellen, die Lyrimuse braucht, daher hat das Einschalten keine Wirkung";
 "当前网络无法直接连接 Musixmatch 的接口（TCP/TLS 均无响应），系统代理也不可用；开启代理后通常可恢复" = "Der API-Host von Musixmatch ist in diesem Netzwerk direkt nicht erreichbar (keine TCP/TLS-Antwort), und es gibt keinen funktionierenden System-Proxy – ein Proxy hilft meist";
+"当前输出设备不支持调节音量" = "Das aktuelle Ausgabegerät unterstützt keine Lautstärkeregelung";
 "当前这句有歌词时才显示" = "Nur sichtbar, wenn die aktuelle Zeile Text hat";
 "当前连续" = "Aktuelle Serie";
 "当前配色尚未保存，点按保存为主题" = "Diese Farben sind noch nicht gesichert. Klicke, um sie als Design zu sichern";
@@ -2649,6 +2652,7 @@
 "辅助功能权限可显示%@的随机、循环与喜欢按钮，也可在系统媒体焦点被其他 App 占用时，通过菜单暂停、恢复和切换上一首或下一首" = "„Bedienungshilfen“ aktiviert die Tasten für Zufall, Wiederholen und Favorit von %@ und lässt Lyrimuse über die Menüs pausieren, fortsetzen und Titel wechseln, während eine andere App den System-Medienfokus hat";
 "辅助功能权限可显示%@的随机、循环按钮和音量调节，也可在系统媒体焦点被其他 App 占用时控制暂停、恢复和切换上一首或下一首" = "Die Bedienungshilfen-Berechtigung aktiviert Zufall, Wiederholen und Lautstärke für %@ und lässt Lyrimuse pausieren, fortsetzen und Titel wechseln, wenn eine andere App den Medienfokus des Systems hat";
 "辅助功能权限可让%@拖动进度后的歌词更准、显示循环按钮和音量调节，也可在系统媒体焦点被其他 App 占用时，通过菜单暂停、恢复和切换上一首或下一首" = "Mit der Bedienungshilfen-Berechtigung bleibt der Liedtext für %@ nach dem Spulen genau, Wiederholen und Lautstärke werden verfügbar, und Lyrimuse kann über die Menüs pausieren, fortsetzen und Titel wechseln, während eine andere App den Medienfokus des Systems hat";
+"输出设备" = "Ausgabegerät";
 "过去三年的今天及前后一周均无收听记录" = "In den letzten drei Jahren keine Wiedergaben an diesem Tag oder in der Woche drumherum";
 "运行中" = "Läuft";
 "运行日志" = "Aktivitätsprotokoll";

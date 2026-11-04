@@ -787,7 +787,17 @@ private struct MenuBarPanelView: View {
                 LyrimuseActionRunner.perform(.toggleLyricsWindowMiniHotkey)
             }
         // 这两格正面是一下一下的动作,背面头部没有开关。
-        case .overlayFont, .lyricsOffset: return {}
+        case .overlayFont, .lyricsOffset, .volume: return {}
+        }
+    }
+
+    /// 「今日收听」那一格:先收面板,把设置窗翻到 Last.fm 那一页的「统计」那一段。
+    private var openLastfmStatsAction: () -> Void {
+        {
+            close()
+            UserDefaults.standard.set(SettingsSearchCatalog.lastfmSectionDefault, forKey: SettingsSearchCatalog.lastfmSectionKey)
+            AppActions.shared.requestSettings(.account(.lastfm))
+            AppActions.shared.openSettings?()
         }
     }
 
@@ -880,8 +890,13 @@ private struct MenuBarPanelView: View {
 
     /// 「触控栏歌词」只在这台 Mac 此刻有触控栏时画(真机,或 Xcode 的触控栏模拟器开着;判据同设置页「触控栏」那一段、
     /// 右键菜单「快速开关」那一项),没有时留在布局里、不画,也不进「可添加」。见 06 章决策 37。
+    /// 「今日收听」只在连着 Last.fm 时有(数字从那来),没连时同上留在布局里、不画、不进「可添加」。
     private func tileAvailable(_ tile: MenuBarPanelLayout.Tile) -> Bool {
-        tile != .touchBar || playback.touchBarPresent
+        switch tile {
+        case .touchBar: return playback.touchBarPresent
+        case .todayListening: return LastfmStatsService.shared.isConnected
+        default: return true
+        }
     }
 
     /// 每一种格子画成什么、点了做什么。网格、编辑页和「可添加」都画这一份。
@@ -982,6 +997,27 @@ private struct MenuBarPanelView: View {
                 : tile == .lyricsDelay ? .lyricsDelayHotkey : .lyricsOffsetResetHotkey
             knobTile(symbol: action.iconName, title: L10n.t(action.titleKey), on: false, quick: .lyricsOffset) {
                 LyrimuseActionRunner.perform(action)
+            }
+        case .volume:
+            // 系统输出音量,同控制中心的「声音」:对哪个播放器都管用,不用权限。小号点一下静音、长按翻到输出设备;中号、大号是
+            // 一条滑杆。编辑时不接点击。
+            PanelTileSizeReader { size, editing in
+                PanelVolumeReader { volume in
+                    if size == .small {
+                        knobTile(symbol: volume.symbolName, title: volume.label, on: false, enabled: volume.volume != nil,
+                                 help: volume.volume == nil ? L10n.t("当前输出设备不支持调节音量") : nil, quick: .volume) {
+                            volume.toggleMute()
+                        }
+                    } else {
+                        PanelVolumeSlider(model: volume, large: size != .medium, openDevices: { setQuickTarget(.volume) })
+                            .allowsHitTesting(!editing)
+                    }
+                }
+            }
+        case .todayListening:
+            PanelTileSizeReader { size, editing in
+                PanelTodayListeningTile(size: size, open: openLastfmStatsAction)
+                    .allowsHitTesting(!editing)
             }
         case .fontLarger, .fontSmaller:
             // 悬浮歌词主字号一档档调(同快捷键,带回声);悬浮歌词关着时灰着,同「锁定位置」。

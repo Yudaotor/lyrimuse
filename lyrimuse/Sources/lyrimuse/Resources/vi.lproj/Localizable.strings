@@ -421,6 +421,7 @@
 "今年至今" = "Năm nay";
 "今日、近 7 天，以及收听最多的歌手和歌曲" = "Hôm nay, 7 ngày qua, cùng nghệ sĩ và bài hát nghe nhiều nhất";
 "今日已收听 %@ 次" = "%@ lượt phát hôm nay";
+"今日收听" = "Nghe hôm nay";
 "从 Windows 移植来的老牌本地音乐播放器" = "Trình phát nhạc trên máy lâu đời, chuyển từ Windows sang Mac";
 "从「%@」导出的备份" = "Bản sao lưu xuất từ “%@”";
 "从「应用程序」中选择，无需等待其开始播放" = "Chọn từ “Ứng dụng”, không cần đợi ứng dụng bắt đầu phát";
@@ -868,6 +869,7 @@
 "增强 LRC" = "LRC nâng cao";
 "墨字白边" = "Viền trắng";
 "声波" = "Dạng sóng";
+"声音" = "Âm thanh";
 "备份与迁移" = "Sao lưu & di chuyển";
 "备份中包含账号凭证与密钥的明文，将保存到「%@」" = "Bản sao lưu chứa thông tin đăng nhập tài khoản và khóa ở dạng văn bản thuần, sẽ được lưu vào “%@”";
 "备份中包含账号凭证与密钥的明文，将同步到登录同一 Apple 账户的所有设备" = "Bản sao lưu chứa thông tin đăng nhập tài khoản và khóa ở dạng văn bản thuần, sẽ đồng bộ đến mọi thiết bị đăng nhập cùng Tài khoản Apple";
@@ -1233,6 +1235,7 @@
 "当前系统未提供触控栏接口" = "Hệ thống không cung cấp API Touch Bar";
 "当前系统未提供触控栏接口，开启后不生效" = "Phiên bản macOS này không cung cấp API Touch Bar mà Lyrimuse cần nên bật cũng không có tác dụng";
 "当前网络无法直接连接 Musixmatch 的接口（TCP/TLS 均无响应），系统代理也不可用；开启代理后通常可恢复" = "Mạng hiện tại không kết nối trực tiếp được tới API của Musixmatch (TCP/TLS đều không phản hồi) và không có proxy hệ thống khả dụng; bật proxy thường sẽ khắc phục được";
+"当前输出设备不支持调节音量" = "Thiết bị đầu ra hiện tại không hỗ trợ chỉnh âm lượng";
 "当前这句有歌词时才显示" = "Chỉ hiện khi dòng hiện tại có lời";
 "当前连续" = "Chuỗi hiện tại";
 "当前配色尚未保存，点按保存为主题" = "Bảng màu hiện tại chưa được lưu, bấm vào để lưu thành chủ đề";
@@ -2559,6 +2562,7 @@
 "辅助功能权限可显示%@的随机、循环与喜欢按钮，也可在系统媒体焦点被其他 App 占用时，通过菜单暂停、恢复和切换上一首或下一首" = "Quyền Trợ năng giúp hiện nút Xáo trộn, Lặp lại và Ưa thích cho %@, đồng thời cho phép tạm dừng, tiếp tục và chuyển bài trước hoặc bài tiếp theo qua menu khi một ứng dụng khác giữ tiêu điểm phương tiện của hệ thống";
 "辅助功能权限可显示%@的随机、循环按钮和音量调节，也可在系统媒体焦点被其他 App 占用时控制暂停、恢复和切换上一首或下一首" = "Quyền Trợ năng giúp hiện nút xáo trộn, lặp lại và chỉnh âm lượng của %@, đồng thời cho phép tạm dừng, tiếp tục, chuyển bài trước hoặc bài sau khi ứng dụng khác đang giữ tiêu điểm phương tiện của hệ thống";
 "辅助功能权限可让%@拖动进度后的歌词更准、显示循环按钮和音量调节，也可在系统媒体焦点被其他 App 占用时，通过菜单暂停、恢复和切换上一首或下一首" = "Quyền Trợ năng giúp lời của %@ chính xác hơn sau khi tua, hiện nút lặp lại và chỉnh âm lượng, đồng thời cho phép tạm dừng, tiếp tục, chuyển bài trước hoặc bài sau qua menu khi ứng dụng khác đang giữ tiêu điểm phương tiện của hệ thống";
+"输出设备" = "Thiết bị đầu ra";
 "过去三年的今天及前后一周均无收听记录" = "Ba năm qua không có lượt phát nào vào ngày này hay tuần xung quanh";
 "运行中" = "Đang chạy";
 "运行日志" = "Nhật ký hoạt động";

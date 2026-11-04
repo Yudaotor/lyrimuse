@@ -2046,7 +2046,7 @@ func runMenuBarTests() {
         expectEqual(L.Tile.allCases.map(\.rawValue),
                     ["now-playing", "overlay", "notch", "menubar", "lyrics-window", "touchbar", "lyrics-manager", "translation", "romanization",
                      "lock-position", "hide-all-lyrics", "search-lyrics", "mini-window", "font-larger", "font-smaller", "like", "open-player",
-                     "lyrics-advance", "lyrics-delay", "lyrics-offset-reset"], "面板布局: 格子的存盘写法")
+                     "lyrics-advance", "lyrics-delay", "lyrics-offset-reset", "volume", "today-listening"], "面板布局: 格子的存盘写法")
         expectEqual(L.Size.allCases.map { "\($0.columns)x\($0.rows)" }, ["2x1", "3x1", "3x2", "6x2"],
                     "面板布局: 一排 6 列,小 2 列、中 3 列、大 3×2、加宽 6×2")
         // 几何:宽 316、行高 78、间距 9 → 小号 99.33 宽、中号 153.5 宽,同原来一排三个 / 两个。
@@ -2209,7 +2209,7 @@ func runMenuBarTests() {
                     "面板布局: 移除后坑位空着,别的格子不挪")
         expectEqual(L.default.addable { $0 != .touchBar },
                     [.translation, .romanization, .lockPosition, .hideAllLyrics, .searchLyrics, .miniWindow, .fontLarger, .fontSmaller,
-                     .like, .openPlayer, .lyricsAdvance, .lyricsDelay, .lyricsOffsetReset],
+                     .like, .openPlayer, .lyricsAdvance, .lyricsDelay, .lyricsOffsetReset, .volume, .todayListening],
                     "面板布局: 可添加的新格子")
         // 「可添加」按显示方式分组:组按固定顺序、组里按格子顺序,空组不出;移除的主格子回到自己那一组。
         var trimmed = L.default

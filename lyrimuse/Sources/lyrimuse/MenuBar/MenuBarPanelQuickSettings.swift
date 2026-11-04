@@ -54,6 +54,8 @@ enum PanelQuickTarget: Hashable {
     case lyricsOffset
     case lockPosition
     case miniWindow
+    /// 「声音」那一格:背面是输出设备。
+    case volume
 
     /// lyrimuse://menubar-panel?quick=… 里的取值。
     init?(deepLinkValue value: String) {
@@ -70,6 +72,7 @@ enum PanelQuickTarget: Hashable {
         case "lyrics-offset": self = .lyricsOffset
         case "lock-position": self = .lockPosition
         case "mini-window": self = .miniWindow
+        case "volume": self = .volume
         default: return nil
         }
     }
@@ -89,6 +92,7 @@ enum PanelQuickTarget: Hashable {
         case .lyricsOffset: return "lyrics-offset"
         case .lockPosition: return "lock-position"
         case .miniWindow: return "mini-window"
+        case .volume: return "volume"
         }
     }
 }
@@ -109,6 +113,7 @@ extension PanelQuickTarget {
         case .lyricsOffset: return "timer"
         case .lockPosition: return "lock"
         case .miniWindow: return "pip"
+        case .volume: return "speaker.wave.2.fill"
         }
     }
 
@@ -124,6 +129,7 @@ extension PanelQuickTarget {
         case .lyricsOffset: return L10n.t("时间轴偏移")
         case .lockPosition: return L10n.t("锁定位置")
         case .miniWindow: return L10n.t("迷你窗口")
+        case .volume: return L10n.t("输出设备")
         }
     }
 
@@ -134,7 +140,7 @@ extension PanelQuickTarget {
         case .surface(let surface): return surface.isEnabled
         case .lyricsWindow: return false
         case .touchBar: return AppSettings.shared.showLyricsInTouchBar
-        case .lyricsManager, .overlayFont, .lyricsOffset: return false
+        case .lyricsManager, .overlayFont, .lyricsOffset, .volume: return false
         case .translation: return AppSettings.shared.overlayShowTranslation || AppSettings.shared.showTranslation
         case .romanization: return AppSettings.shared.overlayShowRomanization || AppSettings.shared.showRomanization
         case .lockPosition: return AppSettings.shared.classicOverlayEnabled && AppSettings.shared.lockPosition
@@ -151,9 +157,12 @@ extension PanelQuickTarget {
         case .lyricsWindow, .miniWindow: return SettingsSearchCatalog.lyricsWindowSectionValue
         case .touchBar: return SettingsSearchCatalog.touchBarSectionValue
         case .overlayFont, .lockPosition: return LyricsSurface.overlay.appearanceSectionRawValue
-        case .lyricsManager, .translation, .romanization, .lyricsOffset: return nil
+        case .lyricsManager, .translation, .romanization, .lyricsOffset, .volume: return nil
         }
     }
+
+    /// 底下那颗「全部设置…」:输出设备在系统里设,Lyrimuse 的设置窗口没有对应的一页,不摆。
+    var hasSettingsPage: Bool { self != .volume }
 
     /// 「歌词」页里对应那一段的分段取值(歌词库、语言)。两个都是 nil 的(歌词偏移的步长)翻到「快捷键」页。
     var lyricsSectionValue: String? {
@@ -374,6 +383,8 @@ struct PanelQuickSettings: View {
     @ObservedObject private var settings = AppSettings.shared
     /// 译文语言在引擎那份配置里(同设置页「译文语言」)。
     @ObservedObject private var features = FeatureSettingsStore.shared
+    /// 输出设备列表和当前那台(「声音」那一格的背面,同灵动岛、歌词窗口的输出面板)。
+    @ObservedObject private var outputs = AudioOutputMonitor.shared
     /// 歌词窗口此刻开没开(`LyricsWindowSession.openKey`):开着时那颗键写「显示」,按下去是切到它。
     @AppStorage(LyricsWindowSession.openKey) private var lyricsWindowOpen = false
     /// 字号 / 宽度 / 高度滑杆拖动中节流提交(`SliderCommitThrottle`,同设置页那几根):每写一次都要整对象广播、写盘,
@@ -400,7 +411,7 @@ struct PanelQuickSettings: View {
             }
             .padding(.horizontal, 10)
             .padding(.bottom, 9)
-            footer
+            if target.hasSettingsPage { footer }
         }
         // 玻璃卡,同正在播放卡和钮块。
         .menuBarPanelCardBackground(cornerRadius: 18)
@@ -467,7 +478,7 @@ struct PanelQuickSettings: View {
                 .labelsHidden()
                 .toggleStyle(.switch)
                 .controlSize(.mini)
-        case .overlayFont, .lyricsOffset:
+        case .overlayFont, .lyricsOffset, .volume:
             EmptyView()
         }
     }
@@ -721,6 +732,21 @@ struct PanelQuickSettings: View {
             toggleRow(L10n.t("时间"), isOn: $settings.lyricsWindowMiniShowsTime)
             toggleRow(L10n.t("进度条"), help: L10n.t("关闭后，仅在悬停显示播放控制时出现"),
                       isOn: $settings.lyricsWindowMiniShowsProgress)
+        case .volume:
+            // 点哪台切到哪台,当前那台打勾;同灵动岛、歌词窗口的输出面板(`AudioOutputMonitor.select`)。
+            ForEach(outputs.devices, id: \.id) { device in
+                let current = outputs.defaultID == device.id
+                Button { outputs.select(device.id) } label: {
+                    row(device.name) {
+                        Image(systemName: current ? "checkmark" : device.symbolName)
+                            .font(.system(size: 11, weight: .semibold))
+                            .foregroundStyle(current ? Color.accentColor : Color.secondary)
+                    }
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityAddTraits(current ? .isSelected : [])
+            }
         }
     }
 

@@ -36,11 +36,15 @@ public struct MenuBarPanelLayout: Equatable, Sendable {
         case lyricsAdvance = "lyrics-advance"
         case lyricsDelay = "lyrics-delay"
         case lyricsOffsetReset = "lyrics-offset-reset"
+        /// 系统输出音量(同控制中心的「声音」)。
+        case volume
+        /// 今天在 Last.fm 上听了几首(连着 Last.fm 才有)。
+        case todayListening = "today-listening"
 
         /// 「可添加」面板里归哪一组(按显示方式分)。
         public var group: TileGroup {
             switch self {
-            case .nowPlaying, .like, .openPlayer: return .nowPlaying
+            case .nowPlaying, .like, .openPlayer, .volume, .todayListening: return .nowPlaying
             case .overlay, .lockPosition, .fontLarger, .fontSmaller: return .overlay
             case .notch: return .notch
             case .menuBar: return .menuBar

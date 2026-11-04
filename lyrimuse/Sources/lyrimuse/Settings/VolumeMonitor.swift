@@ -31,8 +31,11 @@ final class VolumeMonitor {
 
     private static let logger = Logger(subsystem: "me.yudaotor.lyrimuse", category: "volume")
 
-    /// 音量或静音状态变化时回调,参数是 0...1 的音量和是否静音。
-    private var onChange: ((Float, Bool) -> Void)?
+    /// 音量或静音状态变化时回调,参数是 0...1 的音量和是否静音。按订阅方各记一份(灵动岛的音量横幅、菜单栏面板的音量格),
+    /// 最后一个订阅方走了才拆监听。
+    private var subscribers: [ObjectIdentifier: (Float, Bool) -> Void] = [:]
+    /// 灵动岛音量横幅那一份订阅的持有方(`start` / `stop` 用)。
+    private let bannerOwner = NSObject()
 
     private var started = false
     private var device = AudioObjectID(kAudioObjectUnknown)
@@ -58,10 +61,29 @@ final class VolumeMonitor {
 
     private init() {}
 
+    /// 灵动岛音量横幅那一份(`apply(enabled:)`)。
     func start(onChange: @escaping (Float, Bool) -> Void) {
+        subscribe(bannerOwner, onChange: onChange)
+    }
+
+    func stop() {
+        unsubscribe(bannerOwner)
+    }
+
+    /// 按持有方订阅音量变化;同一个持有方再订阅就换掉它那一份。
+    func subscribe(_ owner: AnyObject, onChange: @escaping (Float, Bool) -> Void) {
+        subscribers[ObjectIdentifier(owner)] = onChange
+        startListening()
+    }
+
+    func unsubscribe(_ owner: AnyObject) {
+        subscribers[ObjectIdentifier(owner)] = nil
+        if subscribers.isEmpty { stopListening() }
+    }
+
+    private func startListening() {
         guard !started else { return }
         started = true
-        self.onChange = onChange
 
         let block: AudioObjectPropertyListenerBlock = { [weak self] _, _ in
             Task { @MainActor in self?.rebindToDefaultDevice(notify: false) }
@@ -75,7 +97,7 @@ final class VolumeMonitor {
         rebindToDefaultDevice(notify: false)
     }
 
-    func stop() {
+    private func stopListening() {
         guard started else { return }
         started = false
         if let deviceListener {
@@ -84,7 +106,6 @@ final class VolumeMonitor {
         }
         deviceListener = nil
         detachVolumeListener()
-        onChange = nil
     }
 
     // MARK: - 设备绑定
@@ -153,7 +174,7 @@ final class VolumeMonitor {
         lastMuted = muted
         guard let volume else { return }
         Self.logger.info("volume changed to \(Int(volume * 100), privacy: .public)% muted=\(muted ?? false, privacy: .public)")
-        onChange?(volume, muted ?? false)
+        for onChange in subscribers.values { onChange(volume, muted ?? false) }
     }
 
     // MARK: - 读值
@@ -213,6 +234,60 @@ final class VolumeMonitor {
         lastOwnAdjustAt = Date()
         let status = AudioObjectSetPropertyData(device, &addr, 0, nil, UInt32(MemoryLayout<Float32>.size), &next)
         if status != noErr { logger.error("set volume failed: \(status)") }
+    }
+
+    /// 默认输出设备此刻的音量和静音;这台设备的音量归下游硬件管(没有可写的音量属性)时音量是 nil。菜单栏面板音量格用。
+    static func readSystemVolume() -> (volume: Float?, muted: Bool) {
+        guard let device = defaultOutputDevice() else { return (nil, false) }
+        var muted = false
+        if var mute = muteAddress(for: device) {
+            var value = UInt32(0)
+            var size = UInt32(MemoryLayout<UInt32>.size)
+            if AudioObjectGetPropertyData(device, &mute, 0, nil, &size, &value) == noErr { muted = value != 0 }
+        }
+        guard var addr = volumeAddress(for: device) else { return (nil, muted) }
+        var settable: DarwinBoolean = false
+        guard AudioObjectIsPropertySettable(device, &addr, &settable) == noErr, settable.boolValue else { return (nil, muted) }
+        var value = Float32(0)
+        var size = UInt32(MemoryLayout<Float32>.size)
+        guard AudioObjectGetPropertyData(device, &addr, 0, nil, &size, &value) == noErr else { return (nil, muted) }
+        return (min(1, max(0, value)), muted)
+    }
+
+    /// 把系统输出音量设成 `value`(0...1),菜单栏面板音量格的滑杆用;大于 0 时顺手解除静音。同 `adjustSystemVolume`
+    /// 记下 `lastOwnAdjustAt`(「按音量键时提示」关着时灵动岛据此不弹横幅)。设备不让写时什么都不做。
+    static func setSystemVolume(_ value: Float) {
+        guard let device = defaultOutputDevice(), var addr = volumeAddress(for: device) else { return }
+        var settable: DarwinBoolean = false
+        guard AudioObjectIsPropertySettable(device, &addr, &settable) == noErr, settable.boolValue else { return }
+        var next = Float32(min(1, max(0, value)))
+        lastOwnAdjustAt = Date()
+        if next > 0 { setMuted(false, on: device) }
+        let status = AudioObjectSetPropertyData(device, &addr, 0, nil, UInt32(MemoryLayout<Float32>.size), &next)
+        if status != noErr { logger.error("set volume failed: \(status)") }
+    }
+
+    /// 静音 / 取消静音(菜单栏面板音量格)。
+    static func setSystemMuted(_ muted: Bool) {
+        guard let device = defaultOutputDevice() else { return }
+        lastOwnAdjustAt = Date()
+        setMuted(muted, on: device)
+    }
+
+    private static func setMuted(_ muted: Bool, on device: AudioObjectID) {
+        guard var mute = muteAddress(for: device) else { return }
+        var value = UInt32(muted ? 1 : 0)
+        AudioObjectSetPropertyData(device, &mute, 0, nil, UInt32(MemoryLayout<UInt32>.size), &value)
+    }
+
+    private static func defaultOutputDevice() -> AudioObjectID? {
+        var deviceAddr = defaultDeviceAddress
+        var device = AudioObjectID(kAudioObjectUnknown)
+        var size = UInt32(MemoryLayout<AudioObjectID>.size)
+        guard AudioObjectGetPropertyData(
+            AudioObjectID(kAudioObjectSystemObject), &deviceAddr, 0, nil, &size, &device) == noErr,
+            device != kAudioObjectUnknown else { return nil }
+        return device
     }
 
     private static var adjustBurst: (device: AudioObjectID, target: Float32, at: Date)?
