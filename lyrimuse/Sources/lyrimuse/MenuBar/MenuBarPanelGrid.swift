@@ -37,6 +37,7 @@ extension MenuBarPanelLayout.Size {
         case .small: return L10n.t("小")
         case .medium: return L10n.t("中")
         case .large: return L10n.t("大")
+        case .wide: return L10n.t("加宽")
         }
     }
 }
@@ -92,6 +93,19 @@ struct PanelResizeCorner: View {
         .contentShape(Rectangle())
         .accessibilityHidden(true)
     }
+}
+
+/// 把网格给这一格的档位和在不在编辑交给内容(正在播放卡按档位换画法,编辑时不接点击)。
+struct PanelTileSizeReader<Content: View>: View {
+    @Environment(\.panelTileSize) private var size
+    @Environment(\.panelTileEditing) private var editing
+    let content: (MenuBarPanelLayout.Size, Bool) -> Content
+
+    init(@ViewBuilder content: @escaping (MenuBarPanelLayout.Size, Bool) -> Content) {
+        self.content = content
+    }
+
+    var body: some View { content(size, editing) }
 }
 
 /// 编辑时空着的坑位:一块淡淡的格子(同控制中心编辑时的空位)。

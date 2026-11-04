@@ -548,12 +548,13 @@ private struct MenuBarPanelView: View {
                     AppActions.shared.openWhatsNew?()
                 }, dismiss: { whatsNewVersion = nil })
             }
-            nowPlayingCard
-            // 「正在播放」卡不参与切换 —— 它是这张面板的身份,连它一起换掉就像换了一扇窗;
-            // 留着它高度落差也更小(快捷设置比两排钮块还矮一点)。
+            // 正在播放卡平时是网格里的一格(`MenuBarPanelLayout.Tile.nowPlaying`,见 06 章决策 87);翻到简介或快捷设置时
+            // 网格整块换掉,卡片单独留在上面 —— 它是这张面板的身份,连它一起换掉就像换了一扇窗(网格里移除了卡片就不摆)。
             if let card = shownEditorialCard {
+                standaloneNowPlayingCard
                 PanelEditorialPage(card: card, back: { editorialKind = nil })
             } else if let quickTarget {
+                standaloneNowPlayingCard
                 PanelQuickSettings(
                     target: quickTarget,
                     action: quickAction(for: quickTarget),
@@ -742,6 +743,12 @@ private struct MenuBarPanelView: View {
     /// 每一种格子画成什么、点了做什么。网格、编辑页和「可添加」都画这一份。
     @ViewBuilder private func tileView(_ tile: MenuBarPanelLayout.Tile) -> some View {
         switch tile {
+        case .nowPlaying:
+            // 按网格给的档位画;编辑时整张卡不接点击(拖动、拉手归编辑那一层)。
+            PanelTileSizeReader { size, editing in
+                nowPlayingTile(size)
+                    .allowsHitTesting(!editing)
+            }
         case .overlay: surfaceTile(.overlay)
         case .notch: surfaceTile(.notch)
         case .menuBar: surfaceTile(.menuBar)
@@ -910,8 +917,92 @@ private struct MenuBarPanelView: View {
     }
     }
 
+    /// 翻到简介或快捷设置时摆在上面的那张卡:网格里有卡片才摆,按加宽那一档的大小。
+    @ViewBuilder private var standaloneNowPlayingCard: some View {
+        if playback.panelLayout.contains(.nowPlaying) {
+            let size = Self.grid.size(.wide)
+            nowPlayingCard
+                .frame(width: size.width, height: size.height)
+        }
+    }
+
+    /// 正在播放卡按档位的画法:加宽(6×2)是完整的卡片;大号(3×2)同控制中心的「正在播放」—— 封面、歌名歌手、三个走带键;
+    /// 小号、中号只在「可添加」里出现(这一格没有这两档),跟别的格子一样是图标加名字。
+    @ViewBuilder private func nowPlayingTile(_ size: MenuBarPanelLayout.Size) -> some View {
+        switch size {
+        case .wide:
+            nowPlayingCard
+        case .large:
+            compactNowPlaying
+                .padding(12)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                .menuBarPanelCardBackground(cornerRadius: panelTileCornerRadius)
+        case .small, .medium:
+            knobTile(symbol: "music.note", title: L10n.t("正在播放"), on: false, action: {})
+        }
+    }
+
+    /// 大号(3×2)的正在播放:左上封面、右上播放器角标,中间歌名歌手,底下三个走带键;没在放时底下是「继续播放 / 打开」。
+    private var compactNowPlaying: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(alignment: .top, spacing: 0) {
+                Button {
+                    close()
+                    AppActions.shared.openLyricsWindow?()
+                } label: {
+                    coverView(side: 48)
+                }
+                .buttonStyle(.plain)
+                .help(L10n.t("打开歌词窗口"))
+                Spacer(minLength: 0)
+                if !isIdleNoTrack, let icon = PlaybackCoordinator.shared.resolvedPlayerIcon {
+                    Button {
+                        PlaybackCoordinator.shared.openResolvedPlayer()
+                        close()
+                    } label: {
+                        Image(nsImage: icon)
+                            .resizable()
+                            .aspectRatio(contentMode: .fit)
+                            .frame(width: 18, height: 18)
+                    }
+                    .buttonStyle(.glassIcon())
+                    .modifier(OptionalHelp(text: PlaybackCoordinator.shared.resolvedPlayerDisplayName))
+                }
+            }
+            Spacer(minLength: 4)
+            Text(isIdleNoTrack ? L10n.t("未在播放") : displayTitle)
+                .font(.system(size: 13, weight: .semibold))
+                .lineLimit(1)
+            if !isIdleNoTrack {
+                Text(displayArtist)
+                    .font(.system(size: 11))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+            }
+            Spacer(minLength: 4)
+            if isIdleNoTrack {
+                idleActionButton
+            } else {
+                HStack(spacing: 0) {
+                    controlButton("backward.fill", size: 12) {
+                        MenuBarStatusItem.withMusicPermission { MusicPlaybackController.previousTrack() }
+                    }
+                    Spacer(minLength: 0)
+                    controlButton(playback.isPlayingSmoothed ? "pause.fill" : "play.fill", size: 16) {
+                        MenuBarStatusItem.withMusicPermission { PlaybackCoordinator.shared.userTogglePlayPause() }
+                    }
+                    Spacer(minLength: 0)
+                    controlButton("forward.fill", size: 12) {
+                        MenuBarStatusItem.withMusicPermission { MusicPlaybackController.nextTrack() }
+                    }
+                }
+            }
+        }
+    }
+
+    /// 完整的正在播放卡(加宽 6×2 那一档,高 165:内边距 10、行距 6),内容在格子里上下居中。
     private var nowPlayingCard: some View {
-        VStack(spacing: 8) {
+        VStack(spacing: 6) {
             // 压根没有曲目时整张卡换成 idleRow —— 上半截(封面/歌名/歌手/歌词行)全是空的,
             // 摆在那儿只剩占位图和两行空文本;进度条没时长本来就不渲染;三键里前两颗对空
             // 队列是静默 no-op。
@@ -957,8 +1048,9 @@ private struct MenuBarPanelView: View {
                 }
             }
         }
-        .padding(12)
-        .menuBarPanelCardBackground(cornerRadius: 18)
+        .padding(10)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .menuBarPanelCardBackground(cornerRadius: panelTileCornerRadius)
     }
 
     /// 走带那一排两侧(左随机、右循环)各占多宽。
@@ -1025,17 +1117,7 @@ private struct MenuBarPanelView: View {
     /// 点完**不收面板**:放起来之后这张卡当场变成正在播放卡,那是最好的反馈;真走到"把播放器
     /// 带到前台"那条兜底时,失焦监视器会自己把面板收掉。
     private var idleRow: some View {
-        let player = IdlePlaybackActions.player
-        let canResume = IdlePlaybackActions.canResume(player)
-        let name = player.displayName
-        let act: () -> Void = {
-            if canResume {
-                IdlePlaybackActions.resume(player: player)
-            } else {
-                IdlePlaybackActions.openPlayerApp(player)
-            }
-        }
-        return HStack(spacing: 9) {
+        HStack(spacing: 9) {
             VStack(alignment: .leading, spacing: 2) {
                 Text(L10n.t("未在播放"))
                     .font(.system(size: 12, weight: .semibold))
@@ -1048,6 +1130,26 @@ private struct MenuBarPanelView: View {
             .lineLimit(1)
             .truncationMode(.tail)
             .frame(maxWidth: .infinity, alignment: .leading)
+            idleActionButton
+        }
+        // 有曲目时卡片靠封面撑高,这里只有一行字。给同样的下限,面板在"放着"和
+        // "没放"之间切换时顶部这一块不会突然塌掉一截。
+        .frame(minHeight: Self.coverSide)
+    }
+
+    /// 没在放时那颗主动作键:能接着放的播放器是「继续播放」,只能打开的是那家的图标 +「打开」。停播行和大号正在播放格共用。
+    private var idleActionButton: some View {
+        let player = IdlePlaybackActions.player
+        let canResume = IdlePlaybackActions.canResume(player)
+        let name = player.displayName
+        let act: () -> Void = {
+            if canResume {
+                IdlePlaybackActions.resume(player: player)
+            } else {
+                IdlePlaybackActions.openPlayerApp(player)
+            }
+        }
+        return Group {
             // 静息态就带底色(baseLevel):面板里其它 Chip 都是次要入口,不悬停看不出是键没关系;
             // 这一颗是这个状态下唯一能做的事,必须一眼认得出来。色相跟圆钮块"开"的那圈同一个
             // Color.accentColor。
@@ -1081,9 +1183,6 @@ private struct MenuBarPanelView: View {
         .task(id: player) {
             idlePlayerIcon = AppIconResolver.icon(forBundleID: player.bundleIdentifier)
         }
-        // 有曲目时卡片靠封面撑高,这里只有一行字。给同样的下限,面板在"放着"和
-        // "没放"之间切换时顶部这一块不会突然塌掉一截。
-        .frame(minHeight: Self.coverSide)
     }
 
     // MARK: 当前歌词(带逐字高亮)
@@ -1209,7 +1308,9 @@ private struct MenuBarPanelView: View {
     /// 封面边长。没在播放那一行的最小高度跟它一致(见 idleRow)。
     private static let coverSide: CGFloat = 52
 
-    @ViewBuilder private var coverView: some View {
+    private var coverView: some View { coverView(side: Self.coverSide) }
+
+    @ViewBuilder private func coverView(side: CGFloat) -> some View {
         // displayArtworkImage 而不是裸 artworkImage:高清替代优先,口径跟灵动岛/歌词窗口/
         // 悬浮歌词一致(见那个属性的注释;漏了它的表现是同一首歌两处封面不一样)。
         if playback.isCurrentTrackAdBreak {
@@ -1218,14 +1319,14 @@ private struct MenuBarPanelView: View {
             RoundedRectangle(cornerRadius: 9, style: .continuous)
                 .fill(LinearGradient(colors: [.blue.opacity(0.55), .purple.opacity(0.45)],
                                      startPoint: .topLeading, endPoint: .bottomTrailing))
-                .frame(width: Self.coverSide, height: Self.coverSide)
+                .frame(width: side, height: side)
                 .overlay(Image(systemName: "megaphone.fill").foregroundStyle(.white.opacity(0.85)))
         } else if let image = playback.displayArtworkImage {
             // 按封面边长 × 显示倍率预先重采样成位图再贴,不在运行期缩(半调网点封面在灵动岛小图上
             // 缩成摩尔纹黑斑,这里同一张图、同一种缩法;理由与算法见 ArtworkThumbnail / ArtworkThumbnailCache)。
             let scale = max(1, displayScale)
             Group {
-                if let bitmap = ArtworkThumbnailCache.bitmap(for: image, pixelSide: Int((Self.coverSide * scale).rounded())) {
+                if let bitmap = ArtworkThumbnailCache.bitmap(for: image, pixelSide: Int((side * scale).rounded())) {
                     Image(decorative: bitmap, scale: scale)
                 } else {
                     Image(nsImage: image)
@@ -1233,13 +1334,13 @@ private struct MenuBarPanelView: View {
                         .aspectRatio(contentMode: .fill)
                 }
             }
-                .frame(width: Self.coverSide, height: Self.coverSide)
+                .frame(width: side, height: side)
                 .clipShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
         } else {
             RoundedRectangle(cornerRadius: 9, style: .continuous)
                 .fill(LinearGradient(colors: [.blue.opacity(0.55), .purple.opacity(0.45)],
                                      startPoint: .topLeading, endPoint: .bottomTrailing))
-                .frame(width: Self.coverSide, height: Self.coverSide)
+                .frame(width: side, height: side)
                 .overlay(Image(systemName: "music.note").foregroundStyle(.white.opacity(0.85)))
         }
     }
@@ -1376,7 +1477,7 @@ private struct MenuBarPanelView: View {
                 }
                 .padding(.horizontal, 6)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
-            case .large:
+            case .large, .wide:
                 VStack(alignment: .leading, spacing: 0) {
                     iconCircle(44, glyph: 19)
                     Spacer(minLength: 0)
@@ -1473,7 +1574,7 @@ private struct MenuBarPanelView: View {
             .opacity(draggingTile == p.tile ? 0.3 : 1)
             .gesture(tileDragGesture(p))
             .contextMenu {
-                ForEach(MenuBarPanelLayout.Size.allCases, id: \.self) { size in
+                ForEach(p.tile.sizes, id: \.self) { size in
                     Toggle(size.panelName, isOn: Binding(
                         get: { size == p.size },
                         set: { if $0 { updateLayout { $0.resize(p.tile, to: size) } } }))
@@ -1499,13 +1600,14 @@ private struct MenuBarPanelView: View {
             .onEnded { _ in endDrag() }
     }
 
-    /// 从「可添加」拖一格进网格:按小号拖,对准哪就塞到哪、别的格子让开;拖回网格外面松手就不加。
+    /// 从「可添加」拖一格进网格:按小号拖(没有小号的正在播放卡按加宽),对准哪就塞到哪、别的格子让开;拖回网格外面松手就不加。
     private func newTileDragGesture(_ tile: MenuBarPanelLayout.Tile) -> some Gesture {
         DragGesture(minimumDistance: 3, coordinateSpace: .named(Self.editGridSpace))
             .onChanged { value in
                 if draggingTile != tile {
-                    let size = Self.grid.size(.small)
-                    beginDrag(tile, size: .small, grab: CGSize(width: size.width / 2, height: size.height / 2))
+                    let dragAs = tile.fitting(.small)
+                    let size = Self.grid.size(dragAs)
+                    beginDrag(tile, size: dragAs, grab: CGSize(width: size.width / 2, height: size.height / 2))
                 }
                 dragPointer = value.location
                 updateDragPreview(swap: false)
@@ -1559,7 +1661,8 @@ private struct MenuBarPanelView: View {
                     resizeBase = playback.panelLayout
                 }
                 guard let base = resizeBase, let start = base.placement(of: p.tile) else { return }
-                let target = Self.grid.resizedSize(origin: Self.grid.frame(start).origin, pointer: value.location)
+                let target = Self.grid.resizedSize(origin: Self.grid.frame(start).origin, pointer: value.location,
+                                                   allowed: p.tile.sizes)
                 var resized = base
                 resized.resize(p.tile, to: target)
                 if resized != playback.panelLayout {
