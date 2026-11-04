@@ -477,7 +477,7 @@ final class TouchBarPreviewFeed: ObservableObject {
 
     private func refresh() {
         let p = PlaybackCoordinator.shared
-        let secondary = AppSettings.shared.touchBarSecondaryLine
+        let secondary = TouchBarLyricsCell.secondary(p, setting: AppSettings.shared.touchBarSecondaryLine)
         let content = TouchBarLyricsCell.content(p, secondary: secondary)
         start.update(content: content, lineIndex: TouchBarLyricsCell.displayedLineIndex(p, secondary: secondary),
                      nowMs: p.lyricsTimelineMs())

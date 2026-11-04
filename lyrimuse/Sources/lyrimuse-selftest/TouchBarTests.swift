@@ -92,6 +92,28 @@ func runTouchBarTests() {
                     [nil, nil], "触控栏副行的字: 广告、没曲目时没有")
     }
 
+    // ---- 副行选了译文 / 读音、这首有词却一句都没有时退成「下一句」;有一句就照旧,没有词时照旧 ----
+    do {
+        func row(_ text: String, translation: String? = nil, roma: String? = nil) -> SyncedLyricLine {
+            SyncedLyricLine(romanization: roma, translation: translation, mainText: text, words: nil, wordGroups: nil, side: nil)
+        }
+        let plain = [row("故事的小黄花"), row("从出生那年就飘着", translation: "  \n", roma: "")]
+        expectEqual(LyricSecondaryLine.translation.fallingBackToNextLine(in: plain), .nextLine,
+                    "触控栏副行: 整首没有译文(只有空白的不算)时退成下一句")
+        expectEqual(LyricSecondaryLine.romanization.fallingBackToNextLine(in: plain), .nextLine,
+                    "触控栏副行: 整首没有读音时退成下一句")
+        expectEqual(LyricSecondaryLine.translation.fallingBackToNextLine(in: plain + [row("晴天", translation: "Sunny")]),
+                    .translation, "触控栏副行: 有一句带译文就照旧显示译文")
+        expectEqual(LyricSecondaryLine.romanization.fallingBackToNextLine(in: plain + [row("晴天", translation: "Sunny")]),
+                    .nextLine, "触控栏副行: 只看选的那一档,有译文不算有读音")
+        expectEqual(LyricSecondaryLine.romanization.fallingBackToNextLine(in: plain + [row("晴天", roma: "qing tian")]),
+                    .romanization, "触控栏副行: 有一句带读音就照旧显示读音")
+        expectEqual(LyricSecondaryLine.translation.fallingBackToNextLine(in: [SyncedLyricLine]()), .translation,
+                    "触控栏副行: 没有词(还在找 / 没找到 / 设置页示例句)时照旧")
+        expectEqual([LyricSecondaryLine.off, .nextLine].map { $0.fallingBackToNextLine(in: plain) }, [.off, .nextLine],
+                    "触控栏副行: 不显示、下一句两档原样")
+    }
+
     // ---- 这一档从哪一刻起显示(配速滚动的起点):换档 / 换行下标从此刻算,往回拖跟着挪,只有非歌词档重新起滚 ----
     do {
         let a = TouchBarLyricsContent.track("晴天")
@@ -1003,6 +1025,10 @@ func runTouchBarTests() {
                             && text.contains("TouchBarLyricsCell.secondarySpec(")
                             && text.contains("TouchBarLyricsCell.playbackChanges(p)"), true,
                         "触控栏: \(name)显示哪一档、时长、副行规格、订哪些播放状态都走 TouchBarLyricsCell 那一份")
+            expectEqual(text.contains("TouchBarLyricsCell.secondary(p, setting:")
+                            && !text.contains("let secondary = settings.touchBarSecondaryLine")
+                            && !text.contains("let secondary = AppSettings.shared.touchBarSecondaryLine"), true,
+                        "触控栏: \(name)副行用哪一档走 TouchBarLyricsCell.secondary(整首没有译文 / 读音时退成下一句)")
             expectEqual(text.contains("TouchBarLyricsStyle.twoRowMainTop")
                             && text.contains("TouchBarLyricsStyle.twoRowSecondaryTop"), true,
                         "触控栏: \(name)两行的落点读 TouchBarLyricsStyle")
@@ -1079,6 +1105,11 @@ func runTouchBarTests() {
         expectEqual(cell.contains("static let adBreakArtwork = symbolTile(\"megaphone.fill\")")
                         && cell.contains("if content == .adBreak { return adBreakArtwork }"), true,
                     "触控栏广告态: 封面那一格在广告期间换成同一枚喇叭")
+        // 副行退成下一句看整首歌词:判据读 allLines,译文后到时重画也靠订着它。
+        expectEqual(sourceHas(sourceBody("static func secondary(_ p: PlaybackCoordinator, setting: LyricSecondaryLine)", in: cell),
+                              "setting.fallingBackToNextLine(in: p.allLines.lazy.map(\\.line))")
+                        && sourceHas(sourceBody("static func playbackChanges(_ p: PlaybackCoordinator)", in: cell), "signal(p.$allLines)"),
+                    true, "触控栏副行: 整首没有译文 / 读音的判据读 allLines,而且订着它")
         for (name, text) in [("预览", preview), ("控制器", controller)] {
             expectEqual(text.contains("TouchBarLyricsCell.artworkTile(p, content: content)"), true,
                         "触控栏广告态: \(name)封面那一格走 TouchBarLyricsCell.artworkTile")

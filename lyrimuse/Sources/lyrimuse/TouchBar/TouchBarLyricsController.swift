@@ -704,7 +704,7 @@ final class TouchBarLyricsController: NSObject, NSTouchBarDelegate {
         guard enabled else { return }
         let p = PlaybackCoordinator.shared
         let settings = AppSettings.shared
-        let secondary = settings.touchBarSecondaryLine
+        let secondary = TouchBarLyricsCell.secondary(p, setting: settings.touchBarSecondaryLine)
         updatePlayPause(playing: p.isPlayingNow)
         updateTransportEnabled(p.playbackControlsWithheldReason == nil)
         setRowLayout(twoRows: secondary.showsSecondaryRow)

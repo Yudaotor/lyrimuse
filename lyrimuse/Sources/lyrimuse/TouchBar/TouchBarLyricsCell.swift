@@ -114,6 +114,12 @@ enum TouchBarLyricsCell {
         secondary.showsSecondaryRow ? twoRowMainFont : font(size: fontSize)
     }
 
+    /// 副行实际用哪一档:设置里选的,这首有词却一句译文 / 读音都没有时退成「下一句」
+    /// (`LyricSecondaryLine.fallingBackToNextLine(in:)`)。本体和预览都从这里取,之后显示哪一档、副行规格都认它。
+    static func secondary(_ p: PlaybackCoordinator, setting: LyricSecondaryLine) -> LyricSecondaryLine {
+        setting.fallingBackToNextLine(in: p.allLines.lazy.map(\.line))
+    }
+
     /// 此刻显示哪一档(Core `TouchBarLyricsContent.resolve(secondary:…)`)。参数从播放状态的哪几项取,只在这里写一遍。
     /// 歌词取触控栏自己那一份(`touchBarLyrics`):开了「长句拆开」「短句合并」时按这一格的宽度断过句
     /// (`LineBreakSurface.touchBar`,宽度见 `LineLayoutBudgets.setTouchBarWidth`),都关着时就是逐行的那一份。
@@ -144,7 +150,7 @@ enum TouchBarLyricsCell {
 
     /// 歌词那一格跟着变的播放状态。本体和预览订同一批:漏一项不报错,只表现成那一项变了这一格不跟。
     static func playbackChanges(_ p: PlaybackCoordinator) -> [AnyPublisher<Void, Never>] {
-        [signal(p.$touchBarLyrics), signal(p.$rawGapWindow), signal(p.$lyricsGapMarkers),
+        [signal(p.$touchBarLyrics), signal(p.$allLines), signal(p.$rawGapWindow), signal(p.$lyricsGapMarkers),
          signal(p.$currentLineIndex), signal(p.$title), signal(p.$artist), signal(p.$isCurrentTrackAdBreak),
          signal(p.$isPlayingNow), signal(p.$anchor), signal(p.$pausedPositionMs),
          signal(p.$currentLyricsOffsetMs), signal(p.$artworkImage), signal(p.$highResArtworkImage),

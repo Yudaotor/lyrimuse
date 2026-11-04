@@ -49,6 +49,19 @@ public enum LyricSecondaryLine: String, CaseIterable, Sendable {
         }
     }
 
+    /// 这首歌副行实际用哪一档:选了译文 / 读音、这首有词却一句都没有(按 `secondaryText` 的口径)时退成「下一句」,
+    /// 不然整首副行都空着;别的情况原样。没有词(还在找、没找到、没曲目)时原样,那时两档都没字。触控栏用,见 17 章决策 58。
+    public func fallingBackToNextLine<Lines: Sequence>(in lines: Lines) -> LyricSecondaryLine
+    where Lines.Element == SyncedLyricLine {
+        guard self == .translation || self == .romanization else { return self }
+        var hasLines = false
+        for line in lines {
+            if secondaryText(currentLine: line, nextLineText: nil) != nil { return self }
+            hasLines = true
+        }
+        return hasLines ? .nextLine : self
+    }
+
     /// 副行要显示的文字:下一句 / 当前句译文 / 当前句罗马音,首尾空白剔掉、空的算没有(nil)。
     /// 灵动岛(`NotchPlayback.secondaryText`)和菜单栏(`MenuBarStatusItem.refresh`)都调这一份,
     /// 两处各写一遍 switch 迟早漂开(比如一边 trim 一边不 trim)。
