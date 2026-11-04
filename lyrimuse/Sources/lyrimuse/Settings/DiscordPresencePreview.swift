@@ -601,6 +601,7 @@ func discordApplicationIcon(_ application: DiscordPresence.Application) -> NSIma
     case .vox: player = .vox
     case .pinePlayer: player = .pinePlayer
     case .foobar2000: player = .foobar2000
+    case .pearDesktop: player = .pearDesktop
     }
     return AppIconResolver.icon(forBundleID: player.bundleIdentifier)
         ?? player.bundledIconResourceName.flatMap { AppIconResolver.icon(bundledResourceName: $0) }
