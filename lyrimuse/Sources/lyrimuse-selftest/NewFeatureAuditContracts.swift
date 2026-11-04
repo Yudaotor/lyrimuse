@@ -38,7 +38,8 @@ func runLyricShareContracts() {
     expectEqual(sourceHas(share, ".task(id: renderKey) { rendered = (renderKey, render(snapshot)) }")
                 && !sourceHas(share, "let image = render(snapshot)\nVStack(spacing: 16) {"), true,
                 "分享歌词: 出图按选择和开关缓存,刷新提示文字不重画")
-    expectEqual(sourceHas(share, "feedback = NSPasteboard.general.writeObjects([image]) ? L10n.t(\"已拷贝\") : nil"), true,
+    expectEqual(sourceHas(share, "let copied = NSPasteboard.general.writeObjects([image])")
+                && sourceHas(share, "feedback = copied ? L10n.t(\"已拷贝\") : nil"), true,
                 "分享歌词: 写进剪贴板了才说「已拷贝」")
     expectEqual(sourceHas(share, "let onHold = playback.isRadioTalkBreak || playback.isCurrentTrackAdBreak"), true,
                 "分享歌词: 口白、广告期间不取上一首的歌词")

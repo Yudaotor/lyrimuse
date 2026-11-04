@@ -171,6 +171,7 @@ func runDeepLinkTests() {
     // ---- 本机验证用的 debug/ 与 background=1 ----
     do {
         expectEqual(link("lyrimuse://debug/state"), .debug(.state), "debug: 状态快照")
+        expectEqual(link("lyrimuse://debug/telemetry-preview"), .debug(.telemetryPreview), "debug: 遥测心跳预览")
         expectEqual(link("lyrimuse://debug/snapshot?window=Lyrics-Manager"), .debug(.snapshot(window: "lyrics-manager")),
                     "debug: 窗口快照,名字转小写")
         expectEqual(link("lyrimuse://debug/snapshot") == nil && link("lyrimuse://debug/nope") == nil, true,
@@ -440,7 +441,7 @@ func runDeepLinkTests() {
             .copyLyric(includeTranslation: true), .copyLyric(includeTranslation: false),
             .setSurfaces(overlay: true, notch: false, menuBar: nil), .setLyricsOffset(ms: -300),
             .nowPlayingCallback(success: URL(string: "shortcuts://x-callback-url/ic-success")),
-            .debug(.state), .debug(.checkpoint), .debug(.restore), .debug(.snapshot(window: "panel")),
+            .debug(.state), .debug(.telemetryPreview), .debug(.checkpoint), .debug(.restore), .debug(.snapshot(window: "panel")),
             .debug(.simulate(title: "Orange Moon", artist: "Khalil", album: "", duration: 280, position: 12.5, playing: false)),
             .debug(.simulate(title: "x", artist: "y", album: "z", duration: nil, position: 0, playing: true)), .debug(.simulateOff),
             .debug(.simulate(title: "x", artist: "", album: "", duration: 30, position: 0, playing: true, ad: true)),

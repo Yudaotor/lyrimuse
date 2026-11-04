@@ -1,3 +1,4 @@
+import AppKit
 import Combine
 import Foundation
 import LyrimuseCore
@@ -84,7 +85,7 @@ final class TelemetryService {
         let today = Telemetry.day(Date())
         if Telemetry.heartbeatDue(today: today, lastSentDay: defaults.string(forKey: Keys.lastHeartbeatDay)) {
             let activity = TelemetryActivity.shared.completedDays(before: today)
-            let beat = TelemetryHeartbeat(installID: installID, day: today, env: env, features: features(),
+            let beat = TelemetryHeartbeat(installID: installID, day: today, env: env, features: await features(),
                                           activity: activity,
                                           origin: defaults.string(forKey: Keys.installOrigin).flatMap(TelemetryInstallOrigin.init(rawValue:)))
             if let status = await post(beat, to: Telemetry.heartbeatURL, operation: "heartbeat"), (200..<300).contains(status) {
@@ -93,6 +94,18 @@ final class TelemetryService {
             }
         }
         await sendNewCrashes(installID: installID, env: env, today: today)
+    }
+
+    /// 此刻会发的那条心跳(排好版的 JSON),给 `debug/telemetry-preview` 用:不发、不改记账,遥测关着也照样生成。
+    func previewHeartbeat() async throws -> Data {
+        let today = Telemetry.day(Date())
+        let beat = TelemetryHeartbeat(installID: defaults.string(forKey: Keys.installID) ?? "(no install id yet)", day: today,
+                                      env: environment(), features: await features(),
+                                      activity: TelemetryActivity.shared.completedDays(before: today),
+                                      origin: defaults.string(forKey: Keys.installOrigin).flatMap(TelemetryInstallOrigin.init(rawValue:)))
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        return try encoder.encode(beat)
     }
 
     private func sendNewCrashes(installID: String, env: TelemetryEnvironment, today: String) async {
@@ -164,7 +177,7 @@ final class TelemetryService {
             systemLanguage: TelemetryEnvironment.languageOnly(Locale.preferredLanguages.first ?? ""))
     }
 
-    private func features() -> TelemetryFeatures {
+    private func features() async -> TelemetryFeatures {
         let settings = AppSettings.shared
         let store = FeatureSettingsStore.shared
         let config = ConfigStore.shared
@@ -173,6 +186,7 @@ final class TelemetryService {
             (settings.showLyricsInMenuBar, "menubar"), (settings.showLyricsInTouchBar, "touchbar"),
             (settings.webLyricsEnabled, "web-lyrics"), (settings.obsLyricsEnabled, "obs"),
             (settings.discordPresenceEnabled, "discord"), (settings.nowPlayingNotifications, "notifications"),
+            (LyricsWindowSession.shouldReopenAtLaunch, "lyrics-window"),
         ]
         let accounts: [(Bool, String)] = [
             (!config.lastfmScrobbleSessionKey.isEmpty, "lastfm"), (config.isListenBrainzConfigured, "listenbrainz"),
@@ -192,7 +206,15 @@ final class TelemetryService {
             webPlatforms: settings.browserPlatformPairs.filter { !$0.value.isEmpty }.map(\.key),
             showInDock: settings.showInDock,
             launchAtLogin: settings.launchAtLoginEnabled,
-            betaUpdates: settings.receiveBetaUpdates)
+            betaUpdates: settings.receiveBetaUpdates,
+            installMethod: Telemetry.installMethod(caskroomExists: Telemetry.caskroomPaths.contains {
+                FileManager.default.fileExists(atPath: $0)
+            }),
+            hasNotch: NSScreen.screens.contains { $0.safeAreaInsets.top > 0 },
+            displays: NSScreen.screens.count,
+            settingsChanged: Telemetry.changedSettings(current: settings.telemetrySettingValues(),
+                                                       defaults: AppSettings.telemetryDefaultSettingValues()),
+            permissionsMissing: await PlayerHealthMonitor.telemetryPermissionGaps())
     }
 
     /// 发一条,返回 HTTP 状态码;没发(关着、编码失败)或连不上为 nil。等回应的这段时间里用户关掉了遥测,这一条照样发完,

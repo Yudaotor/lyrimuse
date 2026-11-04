@@ -27,6 +27,7 @@ CREATE TABLE IF NOT EXISTS activity (
   install_id     TEXT NOT NULL,
   players_played TEXT,
   hangs          INTEGER NOT NULL DEFAULT 0,
+  actions        TEXT,  -- {"lyrics_window": 2, …},见 index.js 的 ACTIONS
   PRIMARY KEY (day, install_id)
 );
 

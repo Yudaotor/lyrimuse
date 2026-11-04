@@ -17,6 +17,8 @@ const HEX16_RE = /^[0-9a-f]{16}$/;
 // bundle id 与 players_played 里的播放器(内置的 rawValue 带下划线)。
 const ID_RE = /^[A-Za-z0-9][A-Za-z0-9._-]{0,99}$/;
 const MAX_BODY = 32 * 1024;
+// 每日活动里记次数的动作,跟 App 侧 Core TelemetryAction 的 rawValue 一致。
+const ACTIONS = ["lyrics_window", "lyrics_picked", "offset_adjusted", "share_card"];
 const MAX_CRASHES_PER_INSTALL_DAY = 20;
 const DAY_MS = 86_400_000;
 
@@ -87,6 +89,16 @@ function ids(v, maxItems = 40) {
   return [...new Set(v.filter((x) => typeof x === "string" && ID_RE.test(x)))].slice(0, maxItems).sort();
 }
 
+function actionCounts(v) {
+  const out = {};
+  if (!v || typeof v !== "object" || Array.isArray(v)) return out;
+  for (const k of ACTIONS) {
+    const n = int(v[k], 1, 10_000);
+    if (n != null) out[k] = n;
+  }
+  return out;
+}
+
 function int(v, min, max) {
   return Number.isInteger(v) && v >= min && v <= max ? v : null;
 }
@@ -120,6 +132,11 @@ function cleanFeatures(f) {
     accounts: tags(f.accounts), trusted_players: ids(f.trusted_players), web_platforms: tags(f.web_platforms),
     show_in_dock: bool(f.show_in_dock), launch_at_login: bool(f.launch_at_login),
     beta_updates: bool(f.beta_updates),
+    // 安装渠道 homebrew / direct;有没有带刘海的屏幕、接着几块显示器;改过默认值的设置项(只有属性名);
+    // 勾选的播放器里缺的权限(automation.apple_music 这类)。旧版 App 不发这几项。
+    install_method: f.install_method === "homebrew" || f.install_method === "direct" ? f.install_method : null,
+    has_notch: bool(f.has_notch), displays: int(f.displays, 0, 32),
+    settings_changed: ids(f.settings_changed, 200), permissions_missing: tags(f.permissions_missing, 60),
   };
 }
 
@@ -162,9 +179,11 @@ async function heartbeat(request, env) {
     const back = dayDistance(day, a.day);
     if (back < 1 || back > 7) continue;
     statements.push(env.DB.prepare(
-      `INSERT INTO activity (day, install_id, players_played, hangs) VALUES (?1, ?2, ?3, ?4)
-       ON CONFLICT (day, install_id) DO UPDATE SET players_played = excluded.players_played, hangs = excluded.hangs`
-    ).bind(a.day, installID, JSON.stringify(ids(a.players_played)), int(a.hangs, 0, 10_000) ?? 0));
+      `INSERT INTO activity (day, install_id, players_played, hangs, actions) VALUES (?1, ?2, ?3, ?4, ?5)
+       ON CONFLICT (day, install_id) DO UPDATE SET players_played = excluded.players_played, hangs = excluded.hangs,
+                                                   actions = excluded.actions`
+    ).bind(a.day, installID, JSON.stringify(ids(a.players_played)), int(a.hangs, 0, 10_000) ?? 0,
+           JSON.stringify(actionCounts(a.actions))));
   }
   await env.DB.batch(statements);
   return json({ ok: true });
@@ -265,7 +284,7 @@ async function stats(request, env, url) {
     // 窗口内每台机器最近的那条心跳:版本、系统、功能分布都按它算。
     db.prepare(`SELECT h.* FROM heartbeats h JOIN (SELECT install_id, MAX(day) AS d FROM heartbeats WHERE day >= ?1 AND ${kept()}
                 GROUP BY install_id) l ON h.install_id = l.install_id AND h.day = l.d`).bind(since).all(),
-    db.prepare(`SELECT install_id, players_played, hangs FROM activity WHERE day >= ?1 AND ${kept()}`).bind(since).all(),
+    db.prepare(`SELECT install_id, players_played, hangs, actions FROM activity WHERE day >= ?1 AND ${kept()}`).bind(since).all(),
     db.prepare(`SELECT signature, process, exception_type, termination_indicator, COUNT(*) AS n,
                        COUNT(DISTINCT install_id) AS installs, GROUP_CONCAT(DISTINCT app_version) AS versions,
                        MAX(received_at) AS last_at,
@@ -279,10 +298,15 @@ async function stats(request, env, url) {
   const playedByInstall = {};
   let hangs = 0;
   const installsWithHangs = new Set();
+  const actionTotals = {}, actionInstalls = {};
   for (const a of activity.results) {
     for (const p of safeJSON(a.players_played, [])) (playedByInstall[p] ||= new Set()).add(a.install_id);
     hangs += a.hangs || 0;
     if (a.hangs > 0) installsWithHangs.add(a.install_id);
+    for (const [k, n] of Object.entries(safeJSON(a.actions, {}))) {
+      actionTotals[k] = (actionTotals[k] || 0) + n;
+      (actionInstalls[k] ||= new Set()).add(a.install_id);
+    }
   }
   return json({
     window_days: days,
@@ -305,10 +329,18 @@ async function stats(request, env, url) {
       trusted_players: countBy(rows, (r) => r.features.trusted_players || []),
       web_platforms: countBy(rows, (r) => r.features.web_platforms || []),
       lyrics_source_mode: countBy(rows, (r) => r.features.lyrics_source_mode),
+      // 下面四项只算报了这一项的机器(旧版本不发,记成 (unknown) 的也在里面)。
+      install_method: countBy(rows, (r) => r.features.install_method),
+      has_notch: countBy(rows, (r) => r.features.has_notch == null ? null : (r.features.has_notch ? "有刘海" : "没刘海")),
+      displays: countBy(rows, (r) => r.features.displays),
+      settings_changed: countBy(rows, (r) => r.features.settings_changed || []),
+      permissions_missing: countBy(rows, (r) => r.features.permissions_missing || []),
       flags: featureFlags.map((k) => [k, rows.filter((r) => r.features[k] === true).length]),
     },
     players_played: Object.entries(playedByInstall).map(([k, v]) => [k, v.size]).sort((a, b) => b[1] - a[1]),
     hangs: { total: hangs, installs: installsWithHangs.size },
+    // 每个动作:窗口内一共几次、几台机器做过。
+    actions: ACTIONS.map((k) => ({ action: k, total: actionTotals[k] || 0, installs: actionInstalls[k] ? actionInstalls[k].size : 0 })),
     machines: rows.length,
     crashes: crashes.results.map(({ versions, ...c }) => {
       const sorted = (versions || "").split(",").filter(Boolean).sort(compareVersions);
@@ -389,7 +421,9 @@ const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<
 try { $("token").value = localStorage.getItem("lyrimuse-telemetry-token") || ""; } catch {}
 const LABELS = { app_version: "版本", os_version: "macOS 大版本", arch: "芯片", ui_language: "界面语言", system_language: "系统语言",
   country: "国家/地区", surfaces: "开着的展示面", players_selected: "勾选的播放器", accounts: "连接的账号", trusted_players: "信任的第三方播放器", web_platforms: "网页版平台", lyrics_source_mode: "匹配算法",
-  flags: "其他开关" };
+  flags: "其他开关", install_method: "安装渠道", has_notch: "刘海屏", displays: "显示器数量", settings_changed: "改过默认值的设置",
+  permissions_missing: "缺的权限" };
+const ACTION_LABELS = { lyrics_window: "打开歌词窗口", lyrics_picked: "手动采用歌词", offset_adjusted: "调时间偏移", share_card: "分享歌词卡" };
 function table(rows, total) {
   if (!rows.length) return '<p class="muted">没有数据</p>';
   return "<table>" + rows.map(([k, v]) => "<tr><td>" + esc(k) + '</td><td class="n">' + v +
@@ -411,7 +445,9 @@ function render(s) {
   html += bars(s.daily_active, "每日活跃") + bars(s.new_installs, "每日新安装");
   html += '<div class="grid">' + Object.entries(s.breakdown).map(([k, rows]) =>
     '<div class="card"><h2>' + esc(LABELS[k] || k) + "</h2>" + table(rows, s.machines) + "</div>").join("") +
-    '<div class="card"><h2>放过歌的播放器</h2>' + table(s.players_played, s.machines) + "</div></div>";
+    '<div class="card"><h2>放过歌的播放器</h2>' + table(s.players_played, s.machines) + "</div>" +
+    '<div class="card"><h2>动作(次数 · 台数)</h2>' + table((s.actions || []).map((a) =>
+      [ACTION_LABELS[a.action] || a.action, a.total + " 次 · " + a.installs + " 台"])) + "</div></div>";
   html += '<div class="card"><h2>崩溃(按归并键)</h2>' + (s.crashes.length ? s.crashes.map((c) =>
     "<details><summary><b>" + c.n + " 次 · " + c.installs + " 台</b> " + esc(c.signature) + ' <span class="muted">' +
     esc(c.min_version) + (c.max_version !== c.min_version ? "–" + esc(c.max_version) : "") + "</span></summary><pre>" +

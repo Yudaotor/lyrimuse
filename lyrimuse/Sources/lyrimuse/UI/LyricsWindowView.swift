@@ -308,6 +308,12 @@ enum LyricsWindowSession {
     static let miniModeKey = "np:lyricsWindowMiniMode"
 
     static var shouldReopenAtLaunch: Bool { UserDefaults.standard.bool(forKey: openKey) }
+    /// 记「窗口开着」;从没开变成开着时给遥测记一次打开(完整 / 迷你互切、重复 attach 都不算)。
+    static func markOpen() {
+        guard !UserDefaults.standard.bool(forKey: openKey) else { return }
+        UserDefaults.standard.set(true, forKey: openKey)
+        TelemetryActivity.shared.noteAction(.lyricsWindow)
+    }
     /// 静默启动这次没重开窗口:把「开着」记成没开,「切换迷你」快捷键和下次启动才按实情判断(`LaunchWindowPlan`)。
     static func forgetOpen() { UserDefaults.standard.set(false, forKey: openKey) }
 
@@ -748,8 +754,8 @@ private final class LyricsWindowController: ObservableObject {
     /// attach 会被 updateNSView 反复调用,每次都写的话,全域的 UserDefaults 变更通知(AppSettingsMirror
     /// 靠它防抖写镜像文件)会跟着一直响;关窗后保活的视图树刷新时,也不能把「开着」写回去。
     private func markOpenIfVisible(_ window: NSWindow) {
-        guard window.isVisible, !UserDefaults.standard.bool(forKey: LyricsWindowSession.openKey) else { return }
-        UserDefaults.standard.set(true, forKey: LyricsWindowSession.openKey)
+        guard window.isVisible else { return }
+        LyricsWindowSession.markOpen()
     }
 
     /// 「设置 › 打开」要的形态跟此刻不一样就切过去。窗口还没上屏就先不取(请求留着,等上屏再来)。
@@ -1107,7 +1113,7 @@ private final class LyricsWindowController: ObservableObject {
             self?.chromeHidden = !visible
             self?.updateTrafficLightVisibility()
         }
-        UserDefaults.standard.set(true, forKey: LyricsWindowSession.openKey)
+        LyricsWindowSession.markOpen()
         // 打开 / 关闭不要系统那套缩放淡入淡出:窗口直接出现、直接消失(07 章决策 51)。
         window.animationBehavior = .none
         // 原生全屏:.windowFullScreenBehavior(.enabled) 在这版 SwiftUI 上

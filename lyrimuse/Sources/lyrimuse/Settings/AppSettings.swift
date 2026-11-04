@@ -777,7 +777,7 @@ final class AppSettings: ObservableObject {
     static let defaultTouchBarCollapseWhenPaused = false
     static let defaultTouchBarCollapseWhenNoLyrics = false
 
-    private let defaults = UserDefaults.standard
+    private let defaults: UserDefaults
 
     /// 悬浮歌词 / 灵动岛的「卡拉OK效果」:这一面要不要按逐字时间轴填色。关掉就把
     /// 有逐字数据的行压成整行高亮(`SyncedLyricLine.lineLevel`),没有逐字数据的歌本来就是整行。
@@ -2478,7 +2478,9 @@ final class AppSettings: ObservableObject {
             familyName: family, size: NotchLyricRowMetrics.secondaryFontSize, weight: lighter)
     }
 
-    private init() {
+    /// `defaults` 只有遥测造「全默认的那一份」时才传别的(`telemetryDefaultSettingValues`)。
+    init(defaults: UserDefaults = .standard) {
+        self.defaults = defaults
         // 一次性迁移:全局「卡拉OK效果」拆成三个展示面各自的开关。老用户如果把全局那颗
         // **关了**,三个面当时实际都是整行高亮 —— 拆完必须三边都还是关,兜底写 true 的话他的歌词会在
         // 某次升级后悄悄变回逐字填色、而他什么都没改过。旧键 init 末尾由 pruneObsoleteDefaults 清掉,

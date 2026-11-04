@@ -1417,6 +1417,7 @@ struct LyricsSearchSheet: View {
         applyingSource = nil
         guard subject == subjectGeneration else { return }
         if saved {
+            TelemetryActivity.shared.noteAction(.lyricsPicked)
             appliedSource = c.source
             appliedFingerprint = c.fingerprint
             autoMatchLine = nil

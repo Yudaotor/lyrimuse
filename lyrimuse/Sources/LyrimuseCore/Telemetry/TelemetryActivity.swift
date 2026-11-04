@@ -1,6 +1,6 @@
 import Foundation
 
-/// 心跳里「之前几天的活动」的记账:放过哪些播放器、主线程卡住几次,按本地自然日一天一格,存在 UserDefaults。
+/// 心跳里「之前几天的活动」的记账:放过哪些播放器、主线程卡住几次、几个动作各做了几次,按本地自然日一天一格,存在 UserDefaults。
 /// 播放源换播放器、看门狗报卡住时各记一笔;`isRecording` 为假(遥测关着)时一律不记。心跳发出去之后
 /// `remove(days:)` 删掉发过的那几天。最多留 `maxStoredDays` 天,多了丢最早的。
 public final class TelemetryActivity: @unchecked Sendable {
@@ -40,6 +40,14 @@ public final class TelemetryActivity: @unchecked Sendable {
             guard recording, lastPlayer?.day != day || lastPlayer?.tag != tag else { return }
             lastPlayer = (day, tag)
             update(day: day) { if !$0.playersPlayed.contains(tag) { $0.playersPlayed.append(tag); $0.playersPlayed.sort() } }
+        }
+    }
+
+    public func noteAction(_ action: TelemetryAction, now: Date = Date()) {
+        let day = Telemetry.day(now)
+        lock.withLock {
+            guard recording else { return }
+            update(day: day) { $0.actions[action.rawValue, default: 0] += 1 }
         }
     }
 

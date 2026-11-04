@@ -76,6 +76,63 @@ public enum Telemetry {
     public static func bundleIDTag(_ id: String) -> String? {
         id.range(of: #"^[A-Za-z0-9][A-Za-z0-9.-]{0,99}$"#, options: .regularExpression) == nil ? nil : id
     }
+
+    /// Homebrew cask 装的,Caskroom 里会有 `lyrimuse` 目录(Apple 芯片和 Intel 的 Homebrew 各一个位置)。
+    public static let caskroomPaths = ["/opt/homebrew/Caskroom/lyrimuse", "/usr/local/Caskroom/lyrimuse"]
+
+    /// 安装渠道:Homebrew cask 装的记 homebrew,其余(下载 DMG、各下载站)记 direct。
+    public static func installMethod(caskroomExists: Bool) -> String { caskroomExists ? "homebrew" : "direct" }
+
+    /// 发出去的「改过默认值的设置项」最多几个。
+    public static let maxChangedSettings = 200
+
+    /// 设置项的值写成可比较的字符串:集合、字典的 `String(describing:)` 顺序每次不同,按元素排好再拼;可选值拆开。
+    public static func settingFingerprint(_ value: Any) -> String {
+        let mirror = Mirror(reflecting: value)
+        switch mirror.displayStyle {
+        case .optional:
+            return mirror.children.first.map { settingFingerprint($0.value) } ?? "nil"
+        case .set:
+            return "{" + mirror.children.map { settingFingerprint($0.value) }.sorted().joined(separator: ",") + "}"
+        case .dictionary:
+            let pairs = mirror.children.map { child -> String in
+                let kv = Array(Mirror(reflecting: child.value).children)
+                guard kv.count == 2 else { return settingFingerprint(child.value) }
+                return settingFingerprint(kv[0].value) + ":" + settingFingerprint(kv[1].value)
+            }
+            return "[" + pairs.sorted().joined(separator: ",") + "]"
+        default:
+            return String(describing: value)
+        }
+    }
+
+    /// 跟全默认的那一份比,值不一样的设置项名字(排好序,最多 `maxChangedSettings` 个)。只比两边都有的项,只发名字、不发值。
+    public static func changedSettings(current: [String: String], defaults: [String: String]) -> [String] {
+        Array(current.filter { name, value in defaults[name].map { $0 != value } ?? false }.keys.sorted()
+            .prefix(maxChangedSettings))
+    }
+
+    /// 缺的权限在负载里的写法:`automation.apple_music`、`full-disk.qq_music`、`accessibility.kugou_music`。
+    public static func permissionTag(_ kind: TelemetryPermissionKind, _ player: PlaybackPlayer) -> String {
+        kind.rawValue + "." + player.rawValue
+    }
+}
+
+/// 播放器要的三种权限。
+public enum TelemetryPermissionKind: String, CaseIterable, Sendable {
+    case automation, fullDisk = "full-disk", accessibility
+}
+
+/// 每日活动里记次数的几个动作。
+public enum TelemetryAction: String, CaseIterable, Codable, Sendable {
+    /// 歌词窗口开出来(含启动时按上次状态重开)。
+    case lyricsWindow = "lyrics_window"
+    /// 在歌词搜索里手动采用了一份候选。
+    case lyricsPicked = "lyrics_picked"
+    /// 手动调了某首歌或某个电台的时间偏移。
+    case offsetAdjusted = "offset_adjusted"
+    /// 分享歌词卡拷贝或保存成功。
+    case shareCard = "share_card"
 }
 
 /// 这台机器上的 Lyrimuse 是新装的还是从旧版本升级上来的(心跳的 `origin`),统计页按它把「新增安装」拆成新下载和老用户。
@@ -146,7 +203,8 @@ public struct TelemetryEnvironment: Codable, Equatable, Sendable {
 
 /// 此刻开着哪些功能。只有枚举值、计数和开关。
 public struct TelemetryFeatures: Codable, Equatable, Sendable {
-    /// 开着的展示面与输出:overlay / notch / menubar / touchbar / web-lyrics / obs / discord / notifications。
+    /// 开着的展示面与输出:overlay / notch / menubar / touchbar / lyrics-window(此刻歌词窗口开着)/ web-lyrics / obs / discord /
+    /// notifications。
     public var surfaces: [String]
     /// 设置里勾着的播放器(`PlaybackPlayer` 的 rawValue,含 auto)。
     public var playersSelected: [String]
@@ -165,11 +223,23 @@ public struct TelemetryFeatures: Codable, Equatable, Sendable {
     public var showInDock: Bool
     public var launchAtLogin: Bool
     public var betaUpdates: Bool
+    /// homebrew / direct(`Telemetry.installMethod`)。
+    public var installMethod: String?
+    /// 有没有一块带刘海的屏幕。
+    public var hasNotch: Bool?
+    /// 接着几块显示器。
+    public var displays: Int?
+    /// 改过默认值的设置项(`AppSettings` 的属性名,`Telemetry.changedSettings`),只有名字。
+    public var settingsChanged: [String]
+    /// 勾选的播放器里缺的权限(`Telemetry.permissionTag`),只算本机装了的。
+    public var permissionsMissing: [String]
 
     public init(surfaces: [String], playersSelected: [String], lyricsSourceMode: String, lyricsSourcesEnabled: Int,
                 translation: Bool, romanization: Bool, machineTranslation: Bool, accounts: [String],
                 trustedPlayers: [String], webPlatforms: [String],
-                showInDock: Bool, launchAtLogin: Bool, betaUpdates: Bool) {
+                showInDock: Bool, launchAtLogin: Bool, betaUpdates: Bool,
+                installMethod: String? = nil, hasNotch: Bool? = nil, displays: Int? = nil,
+                settingsChanged: [String] = [], permissionsMissing: [String] = []) {
         self.surfaces = surfaces.sorted()
         self.playersSelected = playersSelected.sorted()
         self.lyricsSourceMode = lyricsSourceMode
@@ -183,6 +253,11 @@ public struct TelemetryFeatures: Codable, Equatable, Sendable {
         self.showInDock = showInDock
         self.launchAtLogin = launchAtLogin
         self.betaUpdates = betaUpdates
+        self.installMethod = installMethod
+        self.hasNotch = hasNotch
+        self.displays = displays
+        self.settingsChanged = Array(settingsChanged.sorted().prefix(Telemetry.maxChangedSettings))
+        self.permissionsMissing = permissionsMissing.sorted()
     }
 
     enum CodingKeys: String, CodingKey {
@@ -191,6 +266,8 @@ public struct TelemetryFeatures: Codable, Equatable, Sendable {
         case machineTranslation = "machine_translation", accounts, trustedPlayers = "trusted_players"
         case webPlatforms = "web_platforms", showInDock = "show_in_dock"
         case launchAtLogin = "launch_at_login", betaUpdates = "beta_updates"
+        case installMethod = "install_method", hasNotch = "has_notch", displays
+        case settingsChanged = "settings_changed", permissionsMissing = "permissions_missing"
     }
 }
 
@@ -201,15 +278,27 @@ public struct TelemetryActivityDay: Codable, Equatable, Sendable {
     public var playersPlayed: [String]
     /// 主线程卡住到报「unresponsive」的次数(`MainThreadWatchdog`)。
     public var hangs: Int
+    /// 几个动作各做了几次(`TelemetryAction` 的 rawValue → 次数),没做过的不写。
+    public var actions: [String: Int]
 
-    public init(day: String, playersPlayed: [String] = [], hangs: Int = 0) {
+    public init(day: String, playersPlayed: [String] = [], hangs: Int = 0, actions: [String: Int] = [:]) {
         self.day = day
         self.playersPlayed = playersPlayed
         self.hangs = hangs
+        self.actions = actions
+    }
+
+    /// 旧版本存下的活动没有 `actions`。
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        day = try c.decode(String.self, forKey: .day)
+        playersPlayed = try c.decodeIfPresent([String].self, forKey: .playersPlayed) ?? []
+        hangs = try c.decodeIfPresent(Int.self, forKey: .hangs) ?? 0
+        actions = try c.decodeIfPresent([String: Int].self, forKey: .actions) ?? [:]
     }
 
     enum CodingKeys: String, CodingKey {
-        case day, playersPlayed = "players_played", hangs
+        case day, playersPlayed = "players_played", hangs, actions
     }
 }
 

@@ -35,6 +35,7 @@ enum DebugDeepLinks {
         switch command {
         case let .snapshot(window): snapshot(window)
         case .state: writeState()
+        case .telemetryPreview: writeTelemetryPreview()
         case .checkpoint: checkpoint()
         case .restore: restore()
         case let .simulate(title, artist, album, duration, position, playing, ad):
@@ -293,6 +294,19 @@ enum DebugDeepLinks {
                  "playing": sim.isPlaying(at: Date()), "ad": sim.ad, "idle": sim.idle]
             } ?? NSNull(),
         ]
+    }
+
+    private static func writeTelemetryPreview() {
+        let url = outputDir.appendingPathComponent("telemetry-preview.json")
+        Task { @MainActor in
+            do {
+                try FileManager.default.createDirectory(at: outputDir, withIntermediateDirectories: true)
+                try await TelemetryService.shared.previewHeartbeat().write(to: url, options: .atomic)
+                logger.notice("debug telemetry preview written: \(url.path, privacy: .public)")
+            } catch {
+                logger.error("debug telemetry preview failed: \(error.localizedDescription, privacy: .public)")
+            }
+        }
     }
 
     private static func writeState() {

@@ -151,6 +151,53 @@ func runTelemetryTests() {
         expectEqual(activity.completedDays(before: "9999-12-31").count, TelemetryActivity.maxStoredDays, "记账: 最多留几天")
         activity.clear()
         expectEqual(activity.completedDays(before: "9999-12-31"), [], "记账: 关掉遥测时清空")
+
+        activity.isRecording = false
+        activity.noteAction(.shareCard, now: day1)
+        expectEqual(activity.completedDays(before: "9999-12-31"), [], "动作: 关着时不记")
+        activity.isRecording = true
+        activity.noteAction(.offsetAdjusted, now: day1)
+        activity.noteAction(.offsetAdjusted, now: day1)
+        activity.noteAction(.lyricsWindow, now: day1)
+        expectEqual(activity.completedDays(before: d2).first?.actions, ["offset_adjusted": 2, "lyrics_window": 1],
+                    "动作: 按天各自计次,没做过的不写")
+        activity.clear()
+        let old = #"[{"day":"2026-10-30","players_played":["apple_music"],"hangs":1}]"#
+        expectEqual((try? JSONDecoder().decode([TelemetryActivityDay].self, from: Data(old.utf8)))?.first,
+                    TelemetryActivityDay(day: "2026-10-30", playersPlayed: ["apple_music"], hangs: 1),
+                    "动作: 旧版本存下的活动(没有 actions)照样读得出")
+    }
+
+    do {
+        print("\n== 遥测:安装渠道、硬件、改过的设置、缺的权限 ==")
+        expectEqual(Telemetry.installMethod(caskroomExists: true), "homebrew", "安装渠道: Caskroom 里有就是 Homebrew")
+        expectEqual(Telemetry.installMethod(caskroomExists: false), "direct", "安装渠道: 其余记 direct")
+        expectEqual(Telemetry.caskroomPaths.allSatisfy { $0.hasSuffix("/Caskroom/lyrimuse") }, true, "安装渠道: 两个 Homebrew 位置")
+        let set1: Set<String> = ["b", "a", "c"], set2: Set<String> = ["c", "a", "b"]
+        expectEqual(Telemetry.settingFingerprint(set1), Telemetry.settingFingerprint(set2), "设置比较: 集合按元素排序,顺序不影响")
+        expectEqual(Telemetry.settingFingerprint(["y": 2, "x": 1]), Telemetry.settingFingerprint(["x": 1, "y": 2]),
+                    "设置比较: 字典按键排序")
+        expectEqual(Telemetry.settingFingerprint(Optional<Int>.none), "nil", "设置比较: 空的可选值")
+        expectEqual(Telemetry.settingFingerprint(Optional(3)), "3", "设置比较: 可选值拆开")
+        expectEqual(Telemetry.settingFingerprint(1.5), "1.5", "设置比较: 普通值原样")
+        expectEqual(Telemetry.changedSettings(current: ["a": "1", "b": "2", "c": "3"], defaults: ["a": "1", "b": "9", "d": "4"]),
+                    ["b"], "改过的设置: 只发跟默认不一样的,两边都有的才比")
+        let many = Dictionary(uniqueKeysWithValues: (0..<300).map { (String(format: "k%03d", $0), "1") })
+        let manyDefaults = many.mapValues { _ in "0" }
+        expectEqual(Telemetry.changedSettings(current: many, defaults: manyDefaults),
+                    Array(many.keys.sorted().prefix(Telemetry.maxChangedSettings)), "改过的设置: 排好序再截上限")
+        expectEqual(Telemetry.permissionTag(.automation, .appleMusic), "automation.apple_music", "缺的权限: 种类.播放器")
+        expectEqual(Telemetry.permissionTag(.fullDisk, .qqMusic), "full-disk." + PlaybackPlayer.qqMusic.rawValue, "缺的权限: 完全磁盘访问")
+        let f = TelemetryFeatures(surfaces: [], playersSelected: [], lyricsSourceMode: "smart", lyricsSourcesEnabled: 1,
+                                  translation: false, romanization: false, machineTranslation: false, accounts: [],
+                                  trustedPlayers: [], webPlatforms: [], showInDock: false, launchAtLogin: false, betaUpdates: false,
+                                  installMethod: "direct", hasNotch: true, displays: 2,
+                                  settingsChanged: ["zeta", "alpha"], permissionsMissing: ["b.x", "a.x"])
+        expectEqual(f.settingsChanged, ["alpha", "zeta"], "改过的设置: 排好序")
+        expectEqual(f.permissionsMissing, ["a.x", "b.x"], "缺的权限: 排好序")
+        let fJSON = (try? JSONEncoder().encode(f)).flatMap { String(data: $0, encoding: .utf8) } ?? ""
+        expectEqual(fJSON.contains(#""has_notch":true"#) && fJSON.contains(#""displays":2"#) && fJSON.contains(#""install_method":"direct""#),
+                    true, "负载: 刘海、显示器、安装渠道")
     }
 
     do {
@@ -161,7 +208,8 @@ func runTelemetryTests() {
                                          lyricsSourcesEnabled: 15, translation: true, romanization: false,
                                          machineTranslation: false, accounts: [], trustedPlayers: ["com.colliderli.iina"],
                                          webPlatforms: ["youtube-music"], showInDock: true, launchAtLogin: true,
-                                         betaUpdates: false)
+                                         betaUpdates: false, installMethod: "homebrew", hasNotch: true, displays: 1,
+                                         settingsChanged: ["notchGestures"], permissionsMissing: ["automation.apple_music"])
         let beat = TelemetryHeartbeat(installID: "i", day: "2026-10-31", env: env, features: features,
                                       activity: [TelemetryActivityDay(day: "2026-10-30")])
         func keys(_ value: some Encodable) -> [String] {
@@ -180,8 +228,11 @@ func runTelemetryTests() {
         let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
         let worker = (try? String(contentsOfFile: root.appendingPathComponent("../../telemetry-worker/src/index.js").path,
                                   encoding: .utf8)) ?? ""
-        let fields = keys(env) + keys(features) + ["install_id", "origin", "report_id", "players_played", "hangs",
-                                                   "exception_type", "termination_indicator", "frames", "exception_frames"]
+        let fields = keys(env) + keys(features) + keys(TelemetryActivityDay(day: "2026-10-30"))
+            + ["install_id", "origin", "report_id", "exception_type", "termination_indicator", "frames", "exception_frames"]
+            + TelemetryAction.allCases.map(\.rawValue)
+        expectEqual(["install_method", "has_notch", "displays", "settings_changed", "permissions_missing"].allSatisfy(keys(features).contains),
+                    true, "心跳: 功能快照带安装渠道、硬件、改过的设置、缺的权限")
         let missing = fields.filter { !worker.contains($0) }
         expectEqual(missing, [], "Worker: 认得 App 发的每个字段")
         // Worker 的两个白名单正则要放过 App 真实会发的每个取值(只比键名测不出取值被丢)。
@@ -201,6 +252,11 @@ func runTelemetryTests() {
         let idValues = PlaybackPlayer.allCases.map(\.rawValue) + ["com.apple.Safari", "company.thebrowser.Browser", "other"]
         expectEqual(idValues.filter { !passes(idRE, $0) }, [], "Worker: ID_RE 放过内置播放器 id 和 bundle id")
         expectEqual(passes(idRE, "bad id/x") || passes(tagRE, "<script>"), false, "Worker: 不像标识的写法照样挡掉")
+        let permissionTags = TelemetryPermissionKind.allCases.flatMap { kind in PlaybackPlayer.allCases.map { Telemetry.permissionTag(kind, $0) } }
+        expectEqual(permissionTags.filter { !passes(tagRE, $0) }, [], "Worker: TAG_RE 放过缺的权限的写法")
+        expectEqual(["notchVolumeBannerForVolumeKeys", "lyricsWindowMiniHeaderWidthPercent"].filter { !passes(idRE, $0) }, [],
+                    "Worker: ID_RE 放过设置项的属性名")
+        expectEqual(TelemetryAction.allCases.filter { !worker.contains("\"\($0.rawValue)\"") }, [], "Worker: ACTIONS 列着 App 的每个动作")
         expectEqual(sourceHas(worker, #"const origin = body.origin === "new" || body.origin === "existing" ? body.origin : null;"#), true,
                     "Worker: origin 只收 new / existing")
     }
@@ -274,5 +330,47 @@ func runTelemetryTests() {
             expectEqual(false, true, "接线: 找得到遥测和更新提示的启动调用")
         }
         expectEqual(sourceHas(sourceBody("func start()", in: service), "decideInstallOrigin()"), true, "接线: 启动时判新装还是升级")
+
+        let features = sourceBody("private func features() async -> TelemetryFeatures", in: service)
+        expectEqual(["Telemetry.caskroomPaths", "safeAreaInsets.top > 0", "NSScreen.screens.count",
+                     "AppSettings.telemetryDefaultSettingValues()", "PlayerHealthMonitor.telemetryPermissionGaps()",
+                     "LyricsWindowSession.shouldReopenAtLaunch, \"lyrics-window\""].filter { !sourceHas(features, $0) }, [],
+                    "接线: 功能快照取安装渠道、刘海、显示器、改过的设置、缺的权限、歌词窗口开着没有")
+        let offsets = sourceText("LyrimuseCore/Lyrics/LyricsOffsetStore.swift")
+        expectEqual(["public func nudgeRadio(by", "public func nudge(by", "public func reset(forKey", "public func setOffset(_ ms"]
+            .filter { !sourceHas(sourceBody($0, in: offsets), "TelemetryActivity.shared.noteAction(.offsetAdjusted)") }, [],
+                    "接线: 手动调偏移的四个入口各记一次(自动搬运偏移的不记)")
+        expectEqual(sourceHas(sourceBody("private func apply(_ c: LyricsSearchService.Candidate) async", in: sourceText("lyrimuse/LyricsManager/LyricsSearchSheet.swift")),
+                              "TelemetryActivity.shared.noteAction(.lyricsPicked)"), true, "接线: 手动采用候选、存成功才记")
+        let share = sourceText("lyrimuse/UI/LyricShareWindow.swift")
+        expectEqual(sourceHas(sourceBody("@MainActor private func copy(", in: share), "if copied { TelemetryActivity.shared.noteAction(.shareCard) }")
+                    && sourceHas(sourceBody("@MainActor private func save(", in: share), "TelemetryActivity.shared.noteAction(.shareCard)"),
+                    true, "接线: 分享卡拷贝、保存成功各记一次")
+        let window = sourceText("lyrimuse/UI/LyricsWindowView.swift")
+        expectEqual(sourceHas(sourceBody("static func markOpen()", in: window), "guard !UserDefaults.standard.bool(forKey: openKey) else { return }")
+                    && sourceHas(sourceBody("static func markOpen()", in: window), "TelemetryActivity.shared.noteAction(.lyricsWindow)"),
+                    true, "接线: 歌词窗口从没开变成开着才记一次")
+        expectEqual(window.contains("UserDefaults.standard.set(true, forKey: LyricsWindowSession.openKey)"), false,
+                    "接线: 记「窗口开着」都走 markOpen")
+        // 每个 @Published 设置要么拿去比、要么写明不比,新加的设置不会悄悄漏掉。
+        func captures(_ pattern: String, in text: some StringProtocol) -> Set<String> {
+            let text = String(text)
+            guard let re = try? NSRegularExpression(pattern: pattern) else { return [] }
+            return Set(re.matches(in: text, range: NSRange(text.startIndex..., in: text)).compactMap {
+                Range($0.range(at: 1), in: text).map { String(text[$0]) }
+            })
+        }
+        let published = captures(#"@Published (?:private\(set\) )?var ([A-Za-z0-9_]+)"#, in: settings)
+        let snapshotSource = sourceText("lyrimuse/Settings/AppSettings+Telemetry.swift")
+        let compared = captures(#"\("([A-Za-z0-9_]+)", \1\)"#, in: snapshotSource)
+        let excludedBody = snapshotSource.range(of: "static let telemetryExcludedSettings").map { snapshotSource[$0.upperBound...] } ?? ""
+        let excluded = captures(#""([A-Za-z0-9_]+)""#, in: excludedBody.prefix(while: { $0 != "\n" }))
+        expectEqual(published.count > 200, true, "设置快照: 读得到 AppSettings 的属性")
+        expectEqual(published.subtracting(compared).subtracting(excluded).sorted(), [],
+                    "设置快照: 每个设置要么拿去比、要么写明不比")
+        expectEqual(compared.intersection(excluded).sorted(), [], "设置快照: 同一项不会既比又不比")
+        expectEqual(compared.subtracting(published).sorted(), [], "设置快照: 比的都是真实存在的设置")
+        expectEqual(sourceHas(settings, "init(defaults: UserDefaults = .standard) {\n        self.defaults = defaults"), true,
+                    "设置快照: 全默认的那一份用临时域构造,平时照旧用系统的")
     }
 }

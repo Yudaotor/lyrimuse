@@ -190,7 +190,9 @@ struct LyricShareWindow: View {
         guard let image = currentImage(snapshot) else { return }
         NSPasteboard.general.clearContents()
         // 写不进剪贴板时不说「已拷贝」。
-        feedback = NSPasteboard.general.writeObjects([image]) ? L10n.t("已拷贝") : nil
+        let copied = NSPasteboard.general.writeObjects([image])
+        if copied { TelemetryActivity.shared.noteAction(.shareCard) }
+        feedback = copied ? L10n.t("已拷贝") : nil
     }
 
     @MainActor private func save(_ snapshot: Snapshot) {
@@ -202,6 +204,7 @@ struct LyricShareWindow: View {
         guard panel.runModal() == .OK, let url = panel.url else { return }
         do {
             try png.write(to: url, options: .atomic)
+            TelemetryActivity.shared.noteAction(.shareCard)
             feedback = L10n.t("已保存")
         } catch {
             feedback = L10n.t("保存失败，请重试")

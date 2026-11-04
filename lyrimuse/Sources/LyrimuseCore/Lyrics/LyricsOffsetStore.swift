@@ -212,6 +212,7 @@ public final class LyricsOffsetStore: ObservableObject {
     /// 那是另一件事的副作用。
     @discardableResult
     public func nudgeRadio(by deltaMs: Int, forKey key: String) -> Int {
+        TelemetryActivity.shared.noteAction(.offsetAdjusted)
         let newValue = radioOffset(forKey: key) + deltaMs
         setRadioOffset(newValue, forKey: key)
         return newValue
@@ -386,18 +387,21 @@ public final class LyricsOffsetStore: ObservableObject {
     @discardableResult
     /// 返回存下之后的值:歌词还没出来(键里没有指纹)时不存,返回的还是原值。
     public func nudge(by deltaMs: Int, forKey key: String, pinKey: String, siblings: LyricsOffsetSiblings) -> Int {
+        TelemetryActivity.shared.noteAction(.offsetAdjusted)
         let newValue = offset(forKey: key, siblings: siblings) + deltaMs
         set(newValue, forKey: key, pinKey: pinKey, siblings: siblings)
         return offset(forKey: key, siblings: siblings)
     }
 
     public func reset(forKey key: String, pinKey: String, siblings: LyricsOffsetSiblings) {
+        TelemetryActivity.shared.noteAction(.offsetAdjusted)
         set(0, forKey: key, pinKey: pinKey, siblings: siblings)
     }
 
     // 直接赋一个绝对值——供"歌词管理"里那个输入框用(用户自己敲一个具体的秒数),跟
     // nudge() 的"在现有值上累加"是两种不同的调用方式,内部走的还是同一个 set()。
     public func setOffset(_ ms: Int, forKey key: String, pinKey: String, siblings: LyricsOffsetSiblings) {
+        TelemetryActivity.shared.noteAction(.offsetAdjusted)
         set(ms, forKey: key, pinKey: pinKey, siblings: siblings)
     }
 

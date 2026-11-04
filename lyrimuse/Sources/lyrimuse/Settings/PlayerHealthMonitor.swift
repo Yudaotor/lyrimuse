@@ -67,6 +67,45 @@ final class PlayerHealthMonitor: ObservableObject {
 
     /// 立刻查一次(页面刚出现时调)。在飞时不重复起。引擎状态照样按 `EngineDaemonProbe` 的规则决定沿用还是再问 launchd;
     /// 要权威结论的(启停服务的按钮)自己等 `EngineServiceManager.waitForPendingOperations()`。
+    /// 这几家里自动化权限缺着的(查询不弹窗,超时当没被拒)。
+    static func automationMissing(_ targets: [PlaybackPlayer]) async -> Set<PlaybackPlayer> {
+        var missing: Set<PlaybackPlayer> = []
+        for player in targets {
+            let status = await MusicAutomationPermission.status(bundleID: player.bundleIdentifier, askIfNeeded: false)
+            let grant: AutomationAlert.Grant? = switch status {
+            case .authorized: .authorized
+            case .denied: .denied
+            case .notDetermined: .undetermined
+            case nil: nil
+            }
+            if PlayerHealth.automationIsMissing(
+                grant, isRunning: MusicAutomationPermission.isRunning(bundleID: player.bundleIdentifier)) {
+                missing.insert(player)
+            }
+        }
+        return missing
+    }
+
+    /// 遥测用的一次性查询:勾选的、本机装了的播放器里缺的三种权限(`Telemetry.permissionTag` 写法),跟设置页权限卡同一套判据。
+    static func telemetryPermissionGaps() async -> [String] {
+        let selection = FeatureSettingsStore.shared.players
+        let permissions = PlayerAutomationPermissions.shared
+        let targets = PlayerHealth.automationMissingPlayers(
+            selection: selection, isInstalled: permissions.isInstalled, isMissing: { _ in true })
+        let fullDisk = FullDiskAccessPermission.shared
+        fullDisk.refresh()
+        let fullDiskVisible = fullDisk.visiblePlayers(for: selection)
+        let fullDiskDenied = PlayerHealth.fullDiskAccessDeniedPlayers(visible: fullDiskVisible, grant: fullDisk.grant(fullDiskVisible))
+        let accessibility = AccessibilityPermission.shared
+        accessibility.refresh()
+        let accessibilityMissing = PlayerHealth.accessibilityMissingPlayers(
+            visible: accessibility.visiblePlayers(for: selection), trusted: accessibility.trusted)
+        let automation = await automationMissing(targets)
+        return targets.filter { automation.contains($0) }.map { Telemetry.permissionTag(.automation, $0) }
+            + fullDiskDenied.map { Telemetry.permissionTag(.fullDisk, $0) }
+            + accessibilityMissing.map { Telemetry.permissionTag(.accessibility, $0) }
+    }
+
     func refresh() {
         guard !refreshInFlight else { return }
         refreshInFlight = true
@@ -103,20 +142,7 @@ final class PlayerHealthMonitor: ObservableObject {
                 }
                 return (EngineServiceManager.state, now)
             }.value
-            var missing: Set<PlaybackPlayer> = []
-            for player in targets {
-                let status = await MusicAutomationPermission.status(bundleID: player.bundleIdentifier, askIfNeeded: false)
-                let grant: AutomationAlert.Grant? = switch status {
-                case .authorized: .authorized
-                case .denied: .denied
-                case .notDetermined: .undetermined
-                case nil: nil
-                }
-                if PlayerHealth.automationIsMissing(
-                    grant, isRunning: MusicAutomationPermission.isRunning(bundleID: player.bundleIdentifier)) {
-                    missing.insert(player)
-                }
-            }
+            let missing = await Self.automationMissing(targets)
             guard let self else { return }
             self.refreshInFlight = false
             if let queriedAt { self.lastLaunchdQueryAt = queriedAt }
