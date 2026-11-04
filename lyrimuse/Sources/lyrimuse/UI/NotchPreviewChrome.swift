@@ -62,7 +62,7 @@ final class NotchPreviewChrome: ObservableObject, NotchChromeSource {
 
     /// 「显示歌词」现读设置 —— 这一项**必须**反映真实配置(它决定卡片还剩不剩歌词行,
     /// 正是用户在这块画布上要看的东西),不能像上面几项那样为了"看样式"钉成常量。
-    /// 不用 @Published 镜像:编辑台自己观察 AppSettings,设置一变整块重画,读到的必然是新值。
+    /// 不用 @Published 镜像:设置一变由 `settingsSubscription` 发一次 objectWillChange,预览按新值重画。
     var showsLyrics: Bool { AppSettings.shared.notchShowLyrics }
     var showsLyricsSetting: Bool { AppSettings.shared.notchShowLyrics }
     /// 歌词行实际高度,同上现读:拖「行高」滑杆时预览卡片跟着变矮(舞台本身按上限留高度,不跟着动,见 `cardAreaHeight`)。
@@ -125,6 +125,22 @@ final class NotchPreviewChrome: ObservableObject, NotchChromeSource {
                 if self.hasTrack != present { self.hasTrack = present }
                 if self.isAdBreakNow != isAd { self.isAdBreakNow = isAd }
             }
+        // 这些现读设置的属性本身不发布变化。编辑台重画时 NotchLyricsView 拿到的还是同一个 chrome,body 不一定重算,
+        // 不改卡片尺寸的开关(快捷操作、格子、卡拉OK等)就停在旧样子;这里设置一变就通知一次(05 章决策 137)。
+        // 新加读 AppSettings 的计算属性,把对应的发布者也加进这一串。
+        let s = AppSettings.shared
+        func changed<T>(_ publisher: Published<T>.Publisher) -> AnyPublisher<Void, Never> {
+            publisher.dropFirst().map { _ in () }.eraseToAnyPublisher()
+        }
+        settingsSubscription = Publishers.MergeMany([
+            changed(s.$notchShowsProgressLine), changed(s.$notchProgressLineStyle), changed(s.$notchShowLyrics),
+            changed(s.$notchShowsEqualizer), changed(s.$notchEqualizerEar), changed(s.$notchExpandedShowsNextLine),
+            changed(s.$notchSecondaryLine), changed(s.$notchExpandedShowsControls), changed(s.$notchExpandedShowsArtwork),
+            changed(s.$notchExpandedShowsTrackTitle), changed(s.$notchExpandedShowsArtist), changed(s.$notchExpandedShowsAlbum),
+            changed(s.$notchExpandedShowsQuickActions), changed(s.$notchQuickSlots), changed(s.$classicOverlayEnabled),
+            changed(s.$showLyricsInMenuBar), changed(s.$lockPosition), changed(s.$notchLyricsKaraoke),
+        ])
+            .sink { [weak self] in self?.objectWillChange.send() }
         let idleTrack = NotchIdleLastTrack.shared
         idlePanelSubscription = idleTrack.$track.combineLatest(idleTrack.$quote)
             .sink { [weak self] track, quote in
@@ -137,6 +153,7 @@ final class NotchPreviewChrome: ObservableObject, NotchChromeSource {
     private var cornerSubscription: AnyCancellable?
     private var trackSubscription: AnyCancellable?
     private var idlePanelSubscription: AnyCancellable?
+    private var settingsSubscription: AnyCancellable?
 
     /// 快捷操作的 ✕ 在预览里**故意**是空实现:预览卡整块 `allowsHitTesting(false)`,点不到;真要能点到
     /// 也不该让"预览"把用户的灵动岛关掉(预览卡上的可点区域只开浮层、不产生副作用,见 05 章)。

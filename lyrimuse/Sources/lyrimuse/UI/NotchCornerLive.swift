@@ -26,10 +26,17 @@ final class NotchCornerLive: ObservableObject {
     @Published private(set) var adjusting: NotchCornerSlot?
     /// 指针正停在哪一态的那一行上(nil = 都不在)。
     @Published private(set) var hovered: NotchCornerSlot?
+    /// 深链 `debug/notch-preview` 钉住的那一态(nil = 没钉)。
+    @Published private(set) var pinned: NotchCornerSlot?
 
-    /// 编辑台预览此刻该摆成哪一态:正拖着的那一态优先,其次指针所在的那一行;nil = 交还给预览自己(`NotchPreviewChrome.isExpanded`)。
+    /// 编辑台预览此刻该摆成哪一态:正拖着的那一态优先,其次指针所在的那一行,再次深链钉住的那一态;
+    /// nil = 交还给预览自己(`NotchPreviewChrome.isExpanded`)。
     var focusPublisher: AnyPublisher<NotchCornerSlot?, Never> {
-        Publishers.CombineLatest($adjusting, $hovered).map { $0 ?? $1 }.removeDuplicates().eraseToAnyPublisher()
+        Publishers.CombineLatest3($adjusting, $hovered, $pinned).map { $0 ?? $1 ?? $2 }.removeDuplicates().eraseToAnyPublisher()
+    }
+
+    func pinPreview(_ slot: NotchCornerSlot?) {
+        if pinned != slot { pinned = slot }
     }
 
     private var collapsedObserver: AnyCancellable?

@@ -1525,8 +1525,8 @@ func runNotchTests() {
             // 调「展开圆角」时(按着滑杆,或指针停在那一行上)预览摆成展开态,移开交还给指针 / 浮层。
             expectEqual(stageSrc.contains("var isExpanded: Bool { cornerFocus.map { $0 == .expanded } ?? pointerExpanded }")
                         && stageSrc.contains("NotchCornerLive.shared.focusPublisher")
-                        && liveSrc.contains("Publishers.CombineLatest($adjusting, $hovered).map { $0 ?? $1 }"), true,
-                        "圆角契约: 正拖着或指针停在哪一态那一行上,预览就摆成哪一态(拖着的优先)")
+                        && liveSrc.contains("Publishers.CombineLatest3($adjusting, $hovered, $pinned).map { $0 ?? $1 ?? $2 }"), true,
+                        "圆角契约: 正拖着或指针停在哪一态那一行上,预览就摆成哪一态(拖着的优先,深链钉住的最后)")
             expectEqual(stageSrc.contains(".onHover { inside in corners.hover(slot, inside: inside) }"), true,
                         "圆角契约: 圆角两行都报指针进出")
             expectEqual(liveSrc.contains("} else if hovered == slot {"), true, "圆角契约: 指针离开一行只清自己,不清相邻那一行先报的「进」")

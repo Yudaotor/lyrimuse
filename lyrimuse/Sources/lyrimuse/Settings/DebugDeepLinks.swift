@@ -127,6 +127,9 @@ enum DebugDeepLinks {
                     .map { $0.split(separator: ",", omittingEmptySubsequences: false).map { $0.trimmingCharacters(in: .whitespaces) } },
                                              legacy: nil)
             logger.notice("debug notch quick slots=\(AppSettings.shared.notchQuickSlots.stored.map { $0.joined(separator: ",") }.joined(separator: "|"), privacy: .public)")
+        case let .notchPreview(state):
+            NotchCornerLive.shared.pinPreview(state == "expanded" ? .expanded : state == "collapsed" ? .collapsed : nil)
+            logger.notice("debug notch preview state=\(state, privacy: .public)")
         case let .wordFormatSwitch(state, format, done, total, removing):
             let formats = format.flatMap(LyricsWordFormat.init(rawValue:)).map { [$0] }
                 ?? Array(FeatureSettingsStore.shared.lyricsWordFormats.prefix(1))

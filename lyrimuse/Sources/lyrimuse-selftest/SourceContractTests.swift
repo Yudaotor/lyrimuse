@@ -169,6 +169,19 @@ func runSourceContractTests() {
                     "封面预算: 翻牌视图出现时和输入一变都先排上后台预算,再走翻牌规划(出现时就对一次账,不然停在构造时那一面)")
     }
 
+    // 设置页灵动岛预览:替身 chrome 里现读设置的属性不发布变化,不改卡片尺寸的开关要靠这串订阅才会重画(05 章决策 137)。
+    do {
+        let ui = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("lyrimuse/UI")
+        let chrome = (try? String(contentsOfFile: ui.appendingPathComponent("NotchPreviewChrome.swift").path, encoding: .utf8)) ?? ""
+        expectEqual(chrome.contains("settingsSubscription = Publishers.MergeMany(") && chrome.contains("self?.objectWillChange.send()"), true,
+                    "灵动岛预览: 设置一变就通知重画")
+        for key in ["notchExpandedShowsQuickActions", "notchQuickSlots", "notchLyricsKaraoke", "classicOverlayEnabled",
+                    "showLyricsInMenuBar", "lockPosition"] {
+            expectEqual(chrome.contains("changed(s.$\(key))"), true, "灵动岛预览: 快捷操作读的 \(key) 变了也重画")
+        }
+    }
+
     // 待机页「刚才在听」的封面:取数那一刻主缓存还没解码完时,歌词经「正在放的这一条」拿得到、封面拿不到,
     // 卡片又只在换歌时取一次 —— 有词没图一直挂到下一首。两头都要守:查封面也看那份快照,卡片在缓存换了内容时补封面。
     do {

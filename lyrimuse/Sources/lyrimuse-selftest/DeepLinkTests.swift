@@ -260,6 +260,9 @@ func runDeepLinkTests() {
         expectEqual(link("lyrimuse://debug/notch-quick-actions?layout=close,,settings%7Cfavorite"),
                     .debug(.notchQuickActions(layout: "close,,settings|favorite")), "debug: 灵动岛快捷操作格子")
         expectEqual(link("lyrimuse://debug/notch-quick-actions"), nil, "debug: 快捷操作排法没带 layout 不认")
+        expectEqual(link("lyrimuse://debug/notch-preview?state=expanded"),
+                    .debug(.notchPreview(state: "expanded")), "debug: 设置页灵动岛预览钉在展开态")
+        expectEqual(link("lyrimuse://debug/notch-preview?state=open"), nil, "debug: 预览状态只认 expanded / collapsed / auto")
         expectEqual(link("lyrimuse://debug/word-format-switch?state=converting&format=qrc&done=30&total=100"),
                     .debug(.wordFormatSwitch(state: "converting", format: "qrc", done: 30, total: 100)), "debug: 逐字格式切换摆到改存中")
         expectEqual(link("lyrimuse://debug/word-format-switch?state=backup&done=-3"),
@@ -458,6 +461,7 @@ func runDeepLinkTests() {
             .debug(.notchStyle(style: nil, expanded: "same")),
             .debug(.notchQuickActions(layout: "close,,settings|favorite")),
             .debug(.notchQuickActions(layout: "")),
+            .debug(.notchPreview(state: "auto")), .debug(.notchPreview(state: "collapsed")),
             .debug(.wordFormatSwitch(state: "finished", format: "ttml", done: nil, total: 17564)),
             .debug(.wordFormatSwitch(state: "queued", format: nil, done: nil, total: nil)),
             .debug(.overlayLayout(width: 640, lineChange: true)),

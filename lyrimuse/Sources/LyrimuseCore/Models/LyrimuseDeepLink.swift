@@ -158,6 +158,8 @@ public enum LyrimuseDeepLink: Equatable, Sendable {
         /// 灵动岛展开卡快捷操作的格子,跟「展开时」浮层的编辑区走同一个设置:`debug/notch-quick-actions?layout=close,,settings|favorite`
         /// (`|` 分两行,每行逗号分隔、从**最右一格**数起,空着写空串;值是 `NotchQuickAction` 的 rawValue;`default` = 恢复默认)。
         case notchQuickActions(layout: String)
+        /// 设置页灵动岛预览摆成哪一态,不用指针悬停:`debug/notch-preview?state=expanded|collapsed|auto`(`auto` = 交还给指针)。
+        case notchPreview(state: String)
         /// 悬浮歌词的宽度(pt,按设置的区间夹取、量化)、「换句动画」和下一句字号占主句的比例(按设置的区间夹取),
         /// 跟设置页走同四个设置:`debug/overlay-layout?width=1270&line-change=0|1&next-line=0.7&overflow=wrap|scroll`,
         /// 至少带一个。
@@ -401,6 +403,9 @@ public enum LyrimuseDeepLink: Equatable, Sendable {
         case ("debug", "/notch-quick-actions"):
             guard let layout = value("layout") else { return nil }
             self = .debug(.notchQuickActions(layout: layout))
+        case ("debug", "/notch-preview"):
+            guard let state = value("state"), ["expanded", "collapsed", "auto"].contains(state) else { return nil }
+            self = .debug(.notchPreview(state: state))
         case ("debug", "/word-format-switch"):
             guard let state = value("state"), !state.isEmpty else { return nil }
             let nonNegative = { (s: String?) in s.flatMap(Int.init).flatMap { $0 >= 0 ? $0 : nil } }
@@ -626,6 +631,9 @@ public enum LyrimuseDeepLink: Equatable, Sendable {
             case let .notchQuickActions(layout):
                 components.path = "/notch-quick-actions"
                 components.queryItems = [URLQueryItem(name: "layout", value: layout)]
+            case let .notchPreview(state):
+                components.path = "/notch-preview"
+                components.queryItems = [URLQueryItem(name: "state", value: state)]
             case let .notchPassThrough(x, y):
                 components.path = "/notch-pass-through"
                 components.queryItems = [URLQueryItem(name: "x", value: String(x)), URLQueryItem(name: "y", value: String(y))]
