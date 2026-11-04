@@ -181,4 +181,41 @@ func runPearDesktopTests() {
         expectEqual(sourceHas(server, "case pearQueue = \"pear_queue\"") && sourceHas(server, "PearDesktopAPI.shared.queueReply().flatMap(Self.encodedQueueReply)"),
                     true, "Pear 接线: 引擎问队列由 App 经本机接口代读")
     }
+
+    // ---- 跳过广告 ----
+    do {
+        typealias Skip = PearDesktopAdSkip
+        let pear = PlaybackPlayer.pearDesktop.bundleIdentifier
+        expectEqual(Skip.isPear(pear) && !Skip.isPear(nil) && !Skip.isPear(PlaybackPlayer.kaset.bundleIdentifier), true,
+                    "Pear 跳广告: 只认 Pear 的 bundle id")
+        expectEqual(YouTubeMusicAdSkipper.isKnownNonBrowser(reportedBundleID: pear), false,
+                    "Pear 跳广告: 门槛轮询不把 Pear 当成「没有跳过键的非浏览器」收手")
+        expectEqual(YouTubeMusicAdSkipper.isKnownNonBrowser(reportedBundleID: PlaybackPlayer.spotify.bundleIdentifier), true,
+                    "Pear 跳广告: Spotify 桌面版照旧收手")
+        expectEqual(Skip.gateRetryDelay(after: nil), Skip.notReadyRetryDelay, "Pear 跳广告: 树还没建好时按短间隔再探")
+        expectEqual(Skip.gateRetryDelay(after: .never), Skip.notReadyRetryDelay, "Pear 跳广告: 键没出现时按短间隔再探")
+        expectEqual(Skip.gateRetryDelay(after: .ready), YouTubeMusicAdProbe.adRefreshInterval, "Pear 跳广告: 键出现后按心跳盯")
+        expectEqual(Skip.notReadyRetryDelay < YouTubeMusicAdProbe.adRefreshInterval, true,
+                    "Pear 跳广告: 没有倒计时可读,靠短间隔让键放出来之后很快出现")
+
+        let core = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().appendingPathComponent("LyrimuseCore/Local")
+        let skipper = (try? String(contentsOf: core.appendingPathComponent("YouTubeMusicAdSkipper.swift"), encoding: .utf8)) ?? ""
+        expectEqual(sourceHas(sourceBody("public static func skip(reportedBundleID: String?) -> Outcome? {", in: skipper),
+                              "if PearDesktopAdSkip.isPear(reportedBundleID) { return PearDesktopAdSkip.skip() }"), true,
+                    "Pear 跳广告: 跳过动作先分给 Pear(它不能注入 JS)")
+        expectEqual(sourceHas(sourceBody("public static func probeSkippability(reportedBundleID: String?) -> Skippability? {", in: skipper),
+                              "if PearDesktopAdSkip.isPear(reportedBundleID) { return PearDesktopAdSkip.probe() }"), true,
+                    "Pear 跳广告: 门槛探测先分给 Pear")
+        let ui = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().appendingPathComponent("lyrimuse/UI")
+        func uiSrc(_ name: String) -> String { (try? String(contentsOf: ui.appendingPathComponent(name), encoding: .utf8)) ?? "" }
+        expectEqual(sourceHas(uiSrc("NotchPlayback.swift"), "|| PearDesktopAdSkip.isPear(LocalPlaybackSource.shared.lastResolvedBundleID))"), true,
+                    "Pear 跳广告: 灵动岛那颗键对 Pear 的广告也有对象")
+        let center = uiSrc("YouTubeMusicAdSkipCenter.swift")
+        expectEqual(sourceHas(center, "Task.detached(priority: .utility) { PearDesktopAdSkip.releaseTree() }")
+                    && sourceHas(center, "? PearDesktopAdSkip.gateRetryDelay(after: state)"), true,
+                    "Pear 跳广告: 广告态结束关回辅助功能树;门槛间隔按 Pear 那一档")
+        expectEqual(sourceHas(center, "if Task.isCancelled, PearDesktopAdSkip.isPear(bundleID) {")
+                    && sourceHas(center, "if stopped { PearDesktopAdSkip.releaseTree() }"), true,
+                    "Pear 跳广告: 收摊时还在跑的那次探测又开了树,探完补关")
+    }
 }

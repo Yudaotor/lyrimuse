@@ -128,6 +128,16 @@ public enum AccessibilitySkipPress {
         return .pressed(desc: desc)
     }
 
+    /// 只找不按:`bundleID` 那个 App 里 URL 含 `hostMarker` 的网页区域有没有跳过键。nil = App 没在跑、没有权限,
+    /// 或者树里没有那块网页区域(Electron 还没建好树)。给没法注入 JS 的播放器当门槛用(`PearDesktopAdSkip`)。
+    public static func skipButtonPresent(bundleID: String, hostMarker: String) -> Bool? {
+        guard isTrusted,
+              let app = NSRunningApplication.runningApplications(withBundleIdentifier: bundleID).first,
+              let webArea = locateWebArea(AXUIElementCreateApplication(app.processIdentifier), hostMarker: hostMarker)
+        else { return nil }
+        return findSkipButton(webArea, depth: 0) != nil
+    }
+
     // MARK: - AX 遍历
 
     private static let maxDepth = 60

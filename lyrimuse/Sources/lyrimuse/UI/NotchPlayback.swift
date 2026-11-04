@@ -179,7 +179,9 @@ final class NotchPlayback: ObservableObject {
     /// 因 `isCurrentTrackAdBreak` 重估时读到的就是它;广告期间那份缓存每 5 秒被刷一次。Spotify 广告
     /// (原生 / 网页)的 YT 判定恒 nil,键不出现。
     var canSkipAd: Bool {
-        isCurrentTrackAdBreak && YouTubeMusicAdSkipper.isYouTubeMusicAd(artist: artist, title: title)
+        isCurrentTrackAdBreak
+            && (YouTubeMusicAdSkipper.isYouTubeMusicAd(artist: artist, title: title)
+                || PearDesktopAdSkip.isPear(LocalPlaybackSource.shared.lastResolvedBundleID))
             && adSkipAvailable
     }
 

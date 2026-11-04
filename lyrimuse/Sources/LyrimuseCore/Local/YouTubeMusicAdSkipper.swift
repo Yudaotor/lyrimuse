@@ -230,6 +230,7 @@ public enum YouTubeMusicAdSkipper {
     /// (nil / 空)不算 —— 广告刚开始那一拍常这样,下一拍可能就是浏览器。
     public static func isKnownNonBrowser(reportedBundleID: String?) -> Bool {
         guard let reportedBundleID, !reportedBundleID.isEmpty else { return false }
+        if PearDesktopAdSkip.isPear(reportedBundleID) { return false }
         guard let host = BrowserPositionProbe.probeTargetBundleID(forReported: reportedBundleID), !host.isEmpty else { return true }
         return BrowserAutomationPermission.family(forBundleID: host) == nil
     }
@@ -243,6 +244,7 @@ public enum YouTubeMusicAdSkipper {
     /// `com.apple.WebKit.GPU` 之类),先按 `probeTargetBundleID` 折回浏览器本尊,再按 bundle 认方言 ——
     /// 跟 `YouTubeMusicAdProbe.kickIfNeeded` 同一条路。
     public static func skip(reportedBundleID: String?) -> Outcome? {
+        if PearDesktopAdSkip.isPear(reportedBundleID) { return PearDesktopAdSkip.skip() }
         guard let host = BrowserPositionProbe.probeTargetBundleID(forReported: reportedBundleID),
               !host.isEmpty,
               let family = BrowserAutomationPermission.family(forBundleID: host)
@@ -449,6 +451,7 @@ public enum YouTubeMusicAdSkipper {
     /// 跟 `skip(reportedBundleID:)` 共用同一段 `skipJS` 和同一条通道 —— 判据只有一份,
     /// "键出现没有"不会在"画不画"和"按不按得动"两处各判一次、慢慢长歪。
     public static func probeSkippability(reportedBundleID: String?) -> Skippability? {
+        if PearDesktopAdSkip.isPear(reportedBundleID) { return PearDesktopAdSkip.probe() }
         guard let host = BrowserPositionProbe.probeTargetBundleID(forReported: reportedBundleID),
               !host.isEmpty,
               let family = BrowserAutomationPermission.family(forBundleID: host)

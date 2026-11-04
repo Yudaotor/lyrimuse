@@ -76,7 +76,10 @@ final class YouTubeMusicAdSkipCenter: ObservableObject {
     private func reconcile() {
         let wanted = adBreak && (autoSkipEnabled || !notchDemand.isEmpty)
         guard wanted else {
-            if gateTask != nil { Self.logger.notice("gate: stop") }
+            if gateTask != nil {
+                Self.logger.notice("gate: stop")
+                Task.detached(priority: .utility) { PearDesktopAdSkip.releaseTree() }
+            }
             gateTask?.cancel()
             gateTask = nil
             gatedAdTitle = nil
@@ -105,13 +108,22 @@ final class YouTubeMusicAdSkipCenter: ObservableObject {
                     return
                 }
                 let state = YouTubeMusicAdSkipper.probeSkippability(reportedBundleID: bundleID)
+                // 探测途中广告态结束了:收摊时的关树可能先跑完,这一次探测又把 Pear 的辅助功能树打开了,补关一次。
+                if Task.isCancelled, PearDesktopAdSkip.isPear(bundleID) {
+                    let stopped = await MainActor.run { [weak self] in self?.gateTask == nil }
+                    if stopped { PearDesktopAdSkip.releaseTree() }
+                    return
+                }
                 await MainActor.run { [weak self] in
                     guard let self, !Task.isCancelled else { return }
                     self.apply(gateState: state)
                 }
                 // 脚本没跑成(nil)不画键、也不收摊:超时这类偶发失败下一拍就可能好。
                 if state == .notInAd { return }
-                try? await Task.sleep(for: .seconds(YouTubeMusicAdSkipper.gateRetryDelay(after: state, round: round)))
+                let delay = PearDesktopAdSkip.isPear(bundleID)
+                    ? PearDesktopAdSkip.gateRetryDelay(after: state)
+                    : YouTubeMusicAdSkipper.gateRetryDelay(after: state, round: round)
+                try? await Task.sleep(for: .seconds(delay))
             }
         }
     }
