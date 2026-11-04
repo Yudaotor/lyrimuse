@@ -30,6 +30,12 @@ public enum TouchBarLyricsStyle {
         return min(max(size, fontSizeRange.lowerBound), fontSizeRange.upperBound)
     }
 
+    /// 「字号」这一项会不会用上(设置页和面板快捷设置据此显示滑杆,还是一句「由副行决定」):副行关着时用;选了译文 / 读音、
+    /// 「无译文时 / 无读音时」选了只显示歌词时,没有那一档的歌收成一行,也用。
+    public static func fontSizeApplies(secondary: LyricSecondaryLine, fallback: LyricSecondaryFallback) -> Bool {
+        !secondary.showsSecondaryRow || (secondary.isPerLineText && fallback == .mainOnly)
+    }
+
     // MARK: - 副行开着时的两行(实测)
     //
     // 两行一起放进触控栏的 30pt 高,字号由这个高定:主行 14pt(字重同单行)、副行 11pt(细一档)。图层行的位图高是

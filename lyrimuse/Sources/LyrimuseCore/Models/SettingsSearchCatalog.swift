@@ -181,6 +181,8 @@ public enum SettingsSearchCatalog {
             RowGate(overlay, "玻璃浓淡", "overlay.glass", "毛玻璃背景"),
             RowGate(touchBar, "封面位置", "touchBar.artwork", "显示封面"),
             RowGate(touchBar, "播放控制位置", "touchBar.controls", "显示播放控制"),
+            RowGate(touchBar, "无译文时", "touchBar.secondaryTranslation", "副行"),
+            RowGate(touchBar, "无读音时", "touchBar.secondaryRomanization", "副行"),
             RowGate(window, "方向", "lyricsWindow.gradient", "背景"),
             RowGate(window, "底部颜色", "lyricsWindow.gradient", "背景"),
             RowGate(window, "玻璃浓淡", "lyricsWindow.glass", "背景"),
@@ -539,6 +541,8 @@ public enum SettingsSearchCatalog {
         // ---- 歌词显示 › 触控栏 ----
         touchBar(touchBarToggleTitleKey, kw: ["Touch Bar", "触控栏", "功能栏", "Control Strip", "开关"]),
         touchBar("副行", kw: ["下一句", "译文", "读音", "罗马音", "两行", "双行"], group: "内容"),
+        touchBar("无译文时", kw: ["没有译文", "没有翻译", "副行", "下一句", "只显示歌词", "单行", "一行"], group: "内容"),
+        touchBar("无读音时", kw: ["没有读音", "罗马音", "副行", "下一句", "只显示歌词", "单行", "一行"], group: "内容"),
         touchBar("字号", kw: ["大小", "font size"], group: "内容"),
         touchBar("对齐方式", kw: ["左对齐", "居中", "右对齐", "自动", "靠左", "靠右", "对唱"], group: "布局"),
         touchBar("卡拉OK效果", kw: ["逐字", "染色", "karaoke"], group: "颜色"),

@@ -890,7 +890,7 @@ Al massimo una volta al giorno invia versione, macOS, funzioni attive e riepilog
 
 ## Tutte le impostazioni
 
-Tutte le impostazioni della finestra Impostazioni, per posizione: 311 in tutto. Scrivi un nome nel campo di ricerca in cima alla barra laterale delle Impostazioni per andarci direttamente.
+Tutte le impostazioni della finestra Impostazioni, per posizione: 313 in tutto. Scrivi un nome nel campo di ricerca in cima alla barra laterale delle Impostazioni per andarci direttamente.
 
 ### Testo › Fonte
 
@@ -1145,6 +1145,8 @@ Tutte le impostazioni della finestra Impostazioni, per posizione: 311 in tutto. 
 ### Visualizzazione testo › Touch Bar › Contenuto
 
 - **Seconda riga**
+- **Senza traduzione**
+- **Senza pronuncia**
 - **Corpo**
 
 ### Visualizzazione testo › Touch Bar › Layout

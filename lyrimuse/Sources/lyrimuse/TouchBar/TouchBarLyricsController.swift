@@ -252,6 +252,8 @@ final class TouchBarLyricsController: NSObject, NSTouchBarDelegate {
                 .sink { [weak self] _ in self?.scheduleRefresh() },
             settings.$touchBarSecondaryLine.dropFirst().removeDuplicates()
                 .sink { [weak self] _ in self?.scheduleRefresh() },
+            settings.$touchBarSecondaryFallback.dropFirst().removeDuplicates()
+                .sink { [weak self] _ in self?.scheduleRefresh() },
             settings.$touchBarLyricsAlignment.dropFirst().removeDuplicates()
                 .sink { [weak self] _ in self?.scheduleRefresh() },
             // 自动展开 / 收起的三个开关:只换判据用的值,从下一次播放状态变化起算;关掉「暂停时自动收起」时作废等着的那一次。
@@ -704,7 +706,8 @@ final class TouchBarLyricsController: NSObject, NSTouchBarDelegate {
         guard enabled else { return }
         let p = PlaybackCoordinator.shared
         let settings = AppSettings.shared
-        let secondary = TouchBarLyricsCell.secondary(p, setting: settings.touchBarSecondaryLine)
+        let secondary = TouchBarLyricsCell.secondary(p, setting: settings.touchBarSecondaryLine,
+                                                     fallback: settings.touchBarSecondaryFallback)
         updatePlayPause(playing: p.isPlayingNow)
         updateTransportEnabled(p.playbackControlsWithheldReason == nil)
         setRowLayout(twoRows: secondary.showsSecondaryRow)

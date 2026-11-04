@@ -50,8 +50,10 @@ extension TouchBarSettingsGroup {
 
 // MARK: - 四组行视图
 
-/// 「内容」组:副行 → 字号。字号紧跟在副行下面:副行开着时两行的字号由触控栏的高定(14 / 11pt,见
-/// `TouchBarLyricsStyle`),滑杆拨了也没效果,行留着、尾部换成一句灰字「由副行决定」(同菜单栏「字号」那一行)。
+/// 「内容」组:副行 →(选了译文 / 读音时)无译文时 / 无读音时 → 字号。字号紧跟在副行下面:副行开着时两行的字号由
+/// 触控栏的高定(14 / 11pt,见 `TouchBarLyricsStyle`),滑杆拨了也没效果,行留着、尾部换成一句灰字「由副行决定」
+/// (同菜单栏「字号」那一行);「无译文时 / 无读音时」选了只显示歌词时,没有那一档的歌收成一行、用得上字号,滑杆照常显示
+/// (`TouchBarLyricsStyle.fontSizeApplies`)。
 struct TouchBarContentRows: View {
     @ObservedObject private var settings = AppSettings.shared
 
@@ -70,9 +72,24 @@ struct TouchBarContentRows: View {
                     )
                     .fixedSize()
                 }
+                // 只有译文 / 读音会整首没有;这首一句都没有时换成下一句,或收成一行(17 章决策 58)。
+                if settings.touchBarSecondaryLine.isPerLineText {
+                    CardDivider()
+                    SettingsRow(icon: "text.badge.xmark",
+                                title: LyricSecondaryFallback.rowTitle(for: settings.touchBarSecondaryLine)) {
+                        SettingsGlassMenuPicker(
+                            selection: $settings.touchBarSecondaryFallback,
+                            options: LyricSecondaryFallback.allCases,
+                            label: \.displayName,
+                            compact: true
+                        )
+                        .fixedSize()
+                    }
+                }
                 CardDivider()
                 SettingsRow(icon: "textformat.size", title: L10n.t("字号")) {
-                    if settings.touchBarSecondaryLine.showsSecondaryRow {
+                    if !TouchBarLyricsStyle.fontSizeApplies(secondary: settings.touchBarSecondaryLine,
+                                                            fallback: settings.touchBarSecondaryFallback) {
                         Text(L10n.t("由副行决定"))
                             .font(.system(size: 13))
                             .foregroundStyle(.secondary)
@@ -265,7 +282,7 @@ struct TouchBarSidePicker: View {
 
 // MARK: - 恢复默认
 
-/// 「重置 ▾」和抽屉里「恢复默认」共用的动作:四组十六项回到默认值,总开关不动。默认值跟 `AppSettings.init()` 的
+/// 「重置 ▾」和抽屉里「恢复默认」共用的动作:四组十七项回到默认值,总开关不动。默认值跟 `AppSettings.init()` 的
 /// fallback 读同一组常量(`AppSettings.defaultTouchBarXxx`,字号是 Core 的 `TouchBarLyricsStyle.defaultFontSize`)。
 @MainActor
 enum TouchBarStyleDefaults {
@@ -276,6 +293,7 @@ enum TouchBarStyleDefaults {
         let settings = AppSettings.shared
         // 「内容」
         settings.touchBarSecondaryLine = AppSettings.defaultTouchBarSecondaryLine
+        settings.touchBarSecondaryFallback = AppSettings.defaultTouchBarSecondaryFallback
         settings.touchBarLyricsFontSize = TouchBarLyricsStyle.defaultFontSize
         // 「颜色」
         settings.touchBarLyricsKaraoke = AppSettings.defaultTouchBarLyricsKaraoke
@@ -481,5 +499,20 @@ struct TouchBarAllSettingsDrawer: View {
         .accessibilityLabel(L10n.t("全部设置"))
         .accessibilityAddTraits(isExpanded ? .isSelected : [])
         .accessibilityValue(isExpanded ? L10n.t("已展开") : L10n.t("已折叠"))
+    }
+}
+
+extension LyricSecondaryFallback {
+    /// 「无译文时 / 无读音时」那一行的两个选项。
+    var displayName: String {
+        switch self {
+        case .nextLine: return L10n.t("下一句")
+        case .mainOnly: return L10n.t("只显示歌词")
+        }
+    }
+
+    /// 那一行的标题跟着副行选的那一档走;设置搜索里两个标题各登记一条(`SettingsSearchCatalog`)。
+    static func rowTitle(for secondary: LyricSecondaryLine) -> String {
+        secondary == .romanization ? L10n.t("无读音时") : L10n.t("无译文时")
     }
 }

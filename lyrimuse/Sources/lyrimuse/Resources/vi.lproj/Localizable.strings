@@ -1553,7 +1553,9 @@
 "无源应答 %@ 首" = "%@ bài không có nguồn phản hồi";
 "无符合条件的歌曲" = "Không có bài hát phù hợp";
 "无缺失" = "Không thiếu";
+"无译文时" = "Khi không có bản dịch";
 "无译文时自动翻译" = "Tự dịch khi không có bản dịch";
+"无读音时" = "Khi không có phát âm";
 "无需自动匹配的歌曲" = "Không có bài nào cần tự động tìm";
 "日均 %1$@ · %2$@ 天" = "%1$@/ngày · %2$@ ngày";
 "日文歌词自带读音，同水平候选间优先" = "Lời tiếng Nhật có sẵn phát âm, được ưu tiên giữa các kết quả ngang điểm";

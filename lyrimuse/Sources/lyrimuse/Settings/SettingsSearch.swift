@@ -201,6 +201,8 @@ final class SettingsSearchRouter: ObservableObject {
         case "overlay.glass": return s.overlayBackgroundGlass
         case "touchBar.artwork": return s.touchBarShowsArtwork
         case "touchBar.controls": return s.touchBarShowsControls
+        case "touchBar.secondaryTranslation": return s.touchBarSecondaryLine == .translation
+        case "touchBar.secondaryRomanization": return s.touchBarSecondaryLine == .romanization
         case "lyricsWindow.gradient": return windowBackground == .gradient
         case "lyricsWindow.glass": return windowBackground == .glass
         case "lyricsWindow.customText":

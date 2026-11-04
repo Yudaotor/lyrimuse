@@ -1628,7 +1628,9 @@
 "无源应答 %@ 首" = "%@ with no source response";
 "无符合条件的歌曲" = "No Matching Songs";
 "无缺失" = "Nothing missing";
+"无译文时" = "Without Translation";
 "无译文时自动翻译" = "Translate When None Is Provided";
+"无读音时" = "Without Romanization";
 "无需自动匹配的歌曲" = "No songs needed auto-matching";
 "日均 %1$@ · %2$@ 天" = "%1$@/day · %2$@ days";
 "日均 %1$@ · %2$@ 天#one" = "%1$@/day · %2$@ day";

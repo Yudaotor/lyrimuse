@@ -54,8 +54,15 @@ final class LineLayoutBudgets {
                 .sink { width, main, secondary, kind in
                     Self.reportNotch(width: width, main: main, secondary: secondary, kind: kind)
                 },
-            Publishers.CombineLatest3(touchBarWidth.removeDuplicates(), s.$touchBarLyricsFontSize,
-                                      s.$touchBarSecondaryLine)
+            // 副行按这首实际用的那一档(`TouchBarLyricsCell.secondary` 同一条规则):整首没有译文 / 读音、选了「只显示歌词」时
+            // 主行按单行的字号断句。
+            Publishers.CombineLatest4(touchBarWidth.removeDuplicates(), s.$touchBarLyricsFontSize,
+                                      Publishers.CombineLatest(s.$touchBarSecondaryLine, s.$touchBarSecondaryFallback),
+                                      PlaybackCoordinator.shared.$allLines)
+                .map { width, size, choice, lines in
+                    (width, size, choice.0.resolved(in: lines.lazy.map(\.line), fallback: choice.1))
+                }
+                .removeDuplicates { $0 == $1 }
                 .sink { width, size, kind in
                     Self.reportTouchBar(width: width, fontSize: size, kind: kind)
                 },

@@ -890,7 +890,7 @@ Como máximo una vez al día, envía al servidor del propio autor la versión, e
 
 ## Todos los ajustes
 
-Todos los ajustes de la ventana Ajustes, según dónde están: 311 en total. Escribe un nombre en el campo de búsqueda de la parte superior de la barra lateral de Ajustes para ir directamente a él.
+Todos los ajustes de la ventana Ajustes, según dónde están: 313 en total. Escribe un nombre en el campo de búsqueda de la parte superior de la barra lateral de Ajustes para ir directamente a él.
 
 ### Letra › Fuente
 
@@ -1145,6 +1145,8 @@ Todos los ajustes de la ventana Ajustes, según dónde están: 311 en total. Esc
 ### Mostrar letra › Touch Bar › Contenido
 
 - **Segunda línea**
+- **Sin traducción**
+- **Sin romanización**
 - **Tamaño**
 
 ### Mostrar letra › Touch Bar › Diseño

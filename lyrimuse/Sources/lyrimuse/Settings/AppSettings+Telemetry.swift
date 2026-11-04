@@ -76,6 +76,7 @@ extension AppSettings {
             ("touchBarShowsArtwork", touchBarShowsArtwork),
             ("touchBarShowsControls", touchBarShowsControls),
             ("touchBarSecondaryLine", touchBarSecondaryLine),
+            ("touchBarSecondaryFallback", touchBarSecondaryFallback),
             ("touchBarArtworkSide", touchBarArtworkSide),
             ("touchBarControlsSide", touchBarControlsSide),
             ("touchBarLyricsAlignment", touchBarLyricsAlignment),

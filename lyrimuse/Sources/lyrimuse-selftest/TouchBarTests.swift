@@ -92,26 +92,40 @@ func runTouchBarTests() {
                     [nil, nil], "触控栏副行的字: 广告、没曲目时没有")
     }
 
-    // ---- 副行选了译文 / 读音、这首有词却一句都没有时退成「下一句」;有一句就照旧,没有词时照旧 ----
+    // ---- 副行选了译文 / 读音、这首有词却一句都没有时按「无译文时 / 无读音时」换成下一句或不显示;有一句就照旧,没有词时照旧 ----
     do {
         func row(_ text: String, translation: String? = nil, roma: String? = nil) -> SyncedLyricLine {
             SyncedLyricLine(romanization: roma, translation: translation, mainText: text, words: nil, wordGroups: nil, side: nil)
         }
         let plain = [row("故事的小黄花"), row("从出生那年就飘着", translation: "  \n", roma: "")]
-        expectEqual(LyricSecondaryLine.translation.fallingBackToNextLine(in: plain), .nextLine,
-                    "触控栏副行: 整首没有译文(只有空白的不算)时退成下一句")
-        expectEqual(LyricSecondaryLine.romanization.fallingBackToNextLine(in: plain), .nextLine,
-                    "触控栏副行: 整首没有读音时退成下一句")
-        expectEqual(LyricSecondaryLine.translation.fallingBackToNextLine(in: plain + [row("晴天", translation: "Sunny")]),
-                    .translation, "触控栏副行: 有一句带译文就照旧显示译文")
-        expectEqual(LyricSecondaryLine.romanization.fallingBackToNextLine(in: plain + [row("晴天", translation: "Sunny")]),
-                    .nextLine, "触控栏副行: 只看选的那一档,有译文不算有读音")
-        expectEqual(LyricSecondaryLine.romanization.fallingBackToNextLine(in: plain + [row("晴天", roma: "qing tian")]),
-                    .romanization, "触控栏副行: 有一句带读音就照旧显示读音")
-        expectEqual(LyricSecondaryLine.translation.fallingBackToNextLine(in: [SyncedLyricLine]()), .translation,
+        func resolve(_ kind: LyricSecondaryLine, _ lines: [SyncedLyricLine],
+                     _ fallback: LyricSecondaryFallback = .nextLine) -> LyricSecondaryLine {
+            kind.resolved(in: lines, fallback: fallback)
+        }
+        expectEqual(resolve(.translation, plain), .nextLine, "触控栏副行: 整首没有译文(只有空白的不算)时换成下一句")
+        expectEqual(resolve(.romanization, plain), .nextLine, "触控栏副行: 整首没有读音时换成下一句")
+        expectEqual([resolve(.translation, plain, .mainOnly), resolve(.romanization, plain, .mainOnly)], [.off, .off],
+                    "触控栏副行: 选了只显示歌词时整首没有就收成一行")
+        expectEqual([resolve(.translation, plain + [row("晴天", translation: "Sunny")]),
+                     resolve(.translation, plain + [row("晴天", translation: "Sunny")], .mainOnly)],
+                    [.translation, .translation], "触控栏副行: 有一句带译文就照旧显示译文")
+        expectEqual(resolve(.romanization, plain + [row("晴天", translation: "Sunny")], .mainOnly), .off,
+                    "触控栏副行: 只看选的那一档,有译文不算有读音")
+        expectEqual(resolve(.romanization, plain + [row("晴天", roma: "qing tian")], .mainOnly), .romanization,
+                    "触控栏副行: 有一句带读音就照旧显示读音")
+        expectEqual([resolve(.translation, [], .mainOnly), resolve(.romanization, [])], [.translation, .romanization],
                     "触控栏副行: 没有词(还在找 / 没找到 / 设置页示例句)时照旧")
-        expectEqual([LyricSecondaryLine.off, .nextLine].map { $0.fallingBackToNextLine(in: plain) }, [.off, .nextLine],
+        expectEqual([LyricSecondaryLine.off, .nextLine].map { resolve($0, plain, .mainOnly) }, [.off, .nextLine],
                     "触控栏副行: 不显示、下一句两档原样")
+        expectEqual(LyricSecondaryLine.allCases.map(\.isPerLineText), [false, false, true, true],
+                    "触控栏副行: 只有译文 / 读音会整首没有")
+        expectEqual(LyricSecondaryFallback.allCases.map(\.rawValue), ["nextLine", "mainOnly"],
+                    "触控栏副行: 「无译文时」的取值落 UserDefaults,别改名")
+        // 「字号」那一行:副行关着时、或选了只显示歌词时用得上;别的两行时由触控栏的高定。
+        expectEqual(LyricSecondaryLine.allCases.map { TouchBarLyricsStyle.fontSizeApplies(secondary: $0, fallback: .nextLine) },
+                    [true, false, false, false], "触控栏字号: 默认时只有副行关着才生效")
+        expectEqual(LyricSecondaryLine.allCases.map { TouchBarLyricsStyle.fontSizeApplies(secondary: $0, fallback: .mainOnly) },
+                    [true, false, true, true], "触控栏字号: 选了只显示歌词时译文 / 读音两档也生效")
     }
 
     // ---- 这一档从哪一刻起显示(配速滚动的起点):换档 / 换行下标从此刻算,往回拖跟着挪,只有非歌词档重新起滚 ----
@@ -820,7 +834,7 @@ func runTouchBarTests() {
                     "触控栏: .touchBar 那一支装着工具栏和「全部设置」抽屉")
         for key in ["touchBarLyricsKaraoke", "touchBarLyricsColorMode", "touchBarLyricsColorHex", "touchBarLyricsDimLevel",
                     "touchBarLyricsFontSize",
-                    "touchBarShowsArtwork", "touchBarShowsControls", "touchBarSecondaryLine",
+                    "touchBarShowsArtwork", "touchBarShowsControls", "touchBarSecondaryLine", "touchBarSecondaryFallback",
                     "touchBarArtworkSide", "touchBarControlsSide", "touchBarHidesControlStrip",
                     "touchBarLyricsAlignment", "touchBarShowsMoreKey", "touchBarExpandOnPlay", "touchBarCollapseWhenPaused",
                     "touchBarCollapseWhenNoLyrics"] {
@@ -994,9 +1008,14 @@ func runTouchBarTests() {
                     "触控栏: 没有触控栏时放「这台 Mac 没有触控栏」那张说明卡")
         // 副行开着时两行字号由触控栏的高定,「字号」那一行留着、尾部换成「由副行决定」(同菜单栏),而且紧跟在「副行」下面。
         let contentRows = structBody("TouchBarContentRows")
-        expectEqual(contentRows.contains("if settings.touchBarSecondaryLine.showsSecondaryRow {")
+        expectEqual(sourceHas(contentRows, "if !TouchBarLyricsStyle.fontSizeApplies(secondary: settings.touchBarSecondaryLine,\nfallback: settings.touchBarSecondaryFallback) {")
                         && contentRows.contains("L10n.t(\"由副行决定\")"), true,
-                    "触控栏: 副行开着时「字号」那一行显示「由副行决定」")
+                    "触控栏: 两行时「字号」那一行显示「由副行决定」(判据 TouchBarLyricsStyle.fontSizeApplies)")
+        let fallbackAt = contentRows.range(of: "title: LyricSecondaryFallback.rowTitle(for: settings.touchBarSecondaryLine)")?.lowerBound
+        expectEqual(contentRows.contains("if settings.touchBarSecondaryLine.isPerLineText {") && fallbackAt != nil
+                        && contentRows.range(of: "title: L10n.t(\"副行\")").map { $0.lowerBound < fallbackAt! } == true
+                        && contentRows.range(of: "title: L10n.t(\"字号\")").map { fallbackAt! < $0.lowerBound } == true, true,
+                    "触控栏: 「无译文时 / 无读音时」只在选了译文 / 读音时出现,排在副行和字号之间")
         let secondaryAt = contentRows.range(of: "title: L10n.t(\"副行\")")?.lowerBound
         let sizeAt = contentRows.range(of: "title: L10n.t(\"字号\")")?.lowerBound
         expectEqual(secondaryAt != nil && sizeAt != nil && secondaryAt! < sizeAt!, true,
@@ -1025,7 +1044,8 @@ func runTouchBarTests() {
                             && text.contains("TouchBarLyricsCell.secondarySpec(")
                             && text.contains("TouchBarLyricsCell.playbackChanges(p)"), true,
                         "触控栏: \(name)显示哪一档、时长、副行规格、订哪些播放状态都走 TouchBarLyricsCell 那一份")
-            expectEqual(text.contains("TouchBarLyricsCell.secondary(p, setting:")
+            expectEqual(sourceHas(text, "TouchBarLyricsCell.secondary(p, setting:") && text.contains("fallback:")
+                            && text.contains("touchBarSecondaryFallback")
                             && !text.contains("let secondary = settings.touchBarSecondaryLine")
                             && !text.contains("let secondary = AppSettings.shared.touchBarSecondaryLine"), true,
                         "触控栏: \(name)副行用哪一档走 TouchBarLyricsCell.secondary(整首没有译文 / 读音时退成下一句)")
@@ -1105,11 +1125,17 @@ func runTouchBarTests() {
         expectEqual(cell.contains("static let adBreakArtwork = symbolTile(\"megaphone.fill\")")
                         && cell.contains("if content == .adBreak { return adBreakArtwork }"), true,
                     "触控栏广告态: 封面那一格在广告期间换成同一枚喇叭")
-        // 副行退成下一句看整首歌词:判据读 allLines,译文后到时重画也靠订着它。
-        expectEqual(sourceHas(sourceBody("static func secondary(_ p: PlaybackCoordinator, setting: LyricSecondaryLine)", in: cell),
-                              "setting.fallingBackToNextLine(in: p.allLines.lazy.map(\\.line))")
+        // 副行换档看整首歌词:判据读 allLines,译文后到时重画也靠订着它。
+        expectEqual(sourceHas(sourceBody("static func secondary(_ p: PlaybackCoordinator, setting: LyricSecondaryLine,", in: cell),
+                              "setting.resolved(in: p.allLines.lazy.map(\\.line), fallback: fallback)")
                         && sourceHas(sourceBody("static func playbackChanges(_ p: PlaybackCoordinator)", in: cell), "signal(p.$allLines)"),
                     true, "触控栏副行: 整首没有译文 / 读音的判据读 allLines,而且订着它")
+        // 断句预算按这首实际用的那一档:只显示歌词时主行按单行字号断句,不然断句宽度跟画出来的字号对不上。
+        let fallbackBudgets = code(appDir.appendingPathComponent("UI/LineLayoutBudgets.swift")) ?? ""
+        expectEqual(sourceHas(fallbackBudgets, "choice.0.resolved(in: lines.lazy.map(\\.line), fallback: choice.1)")
+                        && fallbackBudgets.contains("PlaybackCoordinator.shared.$allLines")
+                        && fallbackBudgets.contains("s.$touchBarSecondaryFallback"), true,
+                    "触控栏断句: 预算按这首实际用的副行档位算")
         for (name, text) in [("预览", preview), ("控制器", controller)] {
             expectEqual(text.contains("TouchBarLyricsCell.artworkTile(p, content: content)"), true,
                         "触控栏广告态: \(name)封面那一格走 TouchBarLyricsCell.artworkTile")
@@ -1207,7 +1233,9 @@ func runTouchBarTests() {
                        "alignmentRow(selection: $settings.touchBarLyricsAlignment,",
                        "secondaryLineRow(selection: $settings.touchBarSecondaryLine)",
                        "range: TouchBarLyricsStyle.fontSizeRange",
-                       "if settings.touchBarSecondaryLine.showsSecondaryRow {"] {
+                       "if settings.touchBarSecondaryLine.isPerLineText {",
+                       "PanelGlassMenuPicker(selection: $settings.touchBarSecondaryFallback,",
+                       "if !TouchBarLyricsStyle.fontSizeApplies(secondary: settings.touchBarSecondaryLine,"] {
             expectEqual(quick.contains(needle), true, "触控栏面板: 快捷设置里有 \(needle)")
         }
     }

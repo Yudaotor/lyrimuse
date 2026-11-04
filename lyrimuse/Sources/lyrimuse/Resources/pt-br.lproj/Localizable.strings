@@ -1628,7 +1628,9 @@
 "无源应答 %@ 首" = "%@ sem resposta das fontes";
 "无符合条件的歌曲" = "Nenhuma música corresponde";
 "无缺失" = "Nada faltando";
+"无译文时" = "Sem tradução";
 "无译文时自动翻译" = "Traduzir quando não houver tradução";
+"无读音时" = "Sem pronúncia";
 "无需自动匹配的歌曲" = "Nenhuma música precisava de busca automática";
 "日均 %1$@ · %2$@ 天" = "%1$@/dia · %2$@ dias";
 "日均 %1$@ · %2$@ 天#one" = "%1$@/dia · %2$@ dia";

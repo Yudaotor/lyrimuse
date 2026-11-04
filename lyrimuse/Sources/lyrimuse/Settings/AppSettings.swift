@@ -357,6 +357,7 @@ final class AppSettings: ObservableObject {
         static let touchBarShowsArtwork = "np:touchBarShowsArtwork"
         static let touchBarShowsControls = "np:touchBarShowsControls"
         static let touchBarSecondaryLine = "np:touchBarSecondaryLine"
+        static let touchBarSecondaryFallback = "np:touchBarSecondaryFallback"
         static let touchBarArtworkSide = "np:touchBarArtworkSide"
         static let touchBarControlsSide = "np:touchBarControlsSide"
         static let touchBarLyricsAlignment = "np:touchBarLyricsAlignment"
@@ -768,6 +769,7 @@ final class AppSettings: ObservableObject {
     static let defaultTouchBarShowsArtwork = false
     static let defaultTouchBarShowsControls = false
     static let defaultTouchBarSecondaryLine = LyricSecondaryLine.nextLine
+    static let defaultTouchBarSecondaryFallback = LyricSecondaryFallback.nextLine
     static let defaultTouchBarArtworkSide = TouchBarSide.leading
     static let defaultTouchBarControlsSide = TouchBarSide.leading
     static let defaultTouchBarLyricsAlignment = LyricsRestingAlignment.automatic
@@ -1179,6 +1181,11 @@ final class AppSettings: ObservableObject {
     /// (`TouchBarLyricsStyle.twoRowMainFontSize` / `twoRowSecondaryFontSize`),`touchBarLyricsFontSize` 不生效。
     @Published var touchBarSecondaryLine: LyricSecondaryLine {
         didSet { defaults.set(touchBarSecondaryLine.rawValue, forKey: Keys.touchBarSecondaryLine) }
+    }
+    /// 副行选了译文 / 读音、这首却一句都没有时:改显示下一句(默认)或只显示歌词(收成一行,`touchBarLyricsFontSize` 生效)。
+    /// 按整首判,见 Core `LyricSecondaryLine.resolved(in:fallback:)`。
+    @Published var touchBarSecondaryFallback: LyricSecondaryFallback {
+        didSet { defaults.set(touchBarSecondaryFallback.rawValue, forKey: Keys.touchBarSecondaryFallback) }
     }
     /// 触控栏展开态里封面、三键各自摆在歌词哪一边(Core `TouchBarSide`),默认都在左边。
     @Published var touchBarArtworkSide: TouchBarSide {
@@ -2658,6 +2665,8 @@ final class AppSettings: ObservableObject {
         touchBarShowsControls = (defaults.object(forKey: Keys.touchBarShowsControls) as? Bool) ?? Self.defaultTouchBarShowsControls
         touchBarSecondaryLine = defaults.string(forKey: Keys.touchBarSecondaryLine)
             .flatMap(LyricSecondaryLine.init(rawValue:)) ?? Self.defaultTouchBarSecondaryLine
+        touchBarSecondaryFallback = defaults.string(forKey: Keys.touchBarSecondaryFallback)
+            .flatMap(LyricSecondaryFallback.init(rawValue:)) ?? Self.defaultTouchBarSecondaryFallback
         touchBarArtworkSide = defaults.string(forKey: Keys.touchBarArtworkSide)
             .flatMap(TouchBarSide.init(rawValue:)) ?? Self.defaultTouchBarArtworkSide
         touchBarControlsSide = defaults.string(forKey: Keys.touchBarControlsSide)

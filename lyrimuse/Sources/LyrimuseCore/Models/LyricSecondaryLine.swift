@@ -49,17 +49,25 @@ public enum LyricSecondaryLine: String, CaseIterable, Sendable {
         }
     }
 
-    /// 这首歌副行实际用哪一档:选了译文 / 读音、这首有词却一句都没有(按 `secondaryText` 的口径)时退成「下一句」,
-    /// 不然整首副行都空着;别的情况原样。没有词(还在找、没找到、没曲目)时原样,那时两档都没字。触控栏用,见 17 章决策 58。
-    public func fallingBackToNextLine<Lines: Sequence>(in lines: Lines) -> LyricSecondaryLine
+    /// 副行的字是不是逐句跟着歌词带的(译文 / 读音):这一档有的歌整首都没有,那时按 `LyricSecondaryFallback` 处理。
+    public var isPerLineText: Bool { self == .translation || self == .romanization }
+
+    /// 这首歌副行实际用哪一档:选了译文 / 读音、这首有词却一句都没有(按 `secondaryText` 的口径)时按 `fallback` 换成
+    /// 「下一句」或「不显示」,不然整首副行都空着;别的情况原样。没有词(还在找、没找到、没曲目)时原样,那时哪档都没字。
+    /// 触控栏用,见 17 章决策 58。
+    public func resolved<Lines: Sequence>(in lines: Lines, fallback: LyricSecondaryFallback) -> LyricSecondaryLine
     where Lines.Element == SyncedLyricLine {
-        guard self == .translation || self == .romanization else { return self }
+        guard isPerLineText else { return self }
         var hasLines = false
         for line in lines {
             if secondaryText(currentLine: line, nextLineText: nil) != nil { return self }
             hasLines = true
         }
-        return hasLines ? .nextLine : self
+        guard hasLines else { return self }
+        switch fallback {
+        case .nextLine: return .nextLine
+        case .mainOnly: return .off
+        }
     }
 
     /// 副行要显示的文字:下一句 / 当前句译文 / 当前句罗马音,首尾空白剔掉、空的算没有(nil)。
@@ -192,4 +200,13 @@ public enum NotchLyricRowMetrics {
     public static func clampedMainFontSize(_ size: CGFloat) -> CGFloat {
         min(max(size, mainFontSizeRange.lowerBound), mainFontSizeRange.upperBound)
     }
+}
+
+/// 副行选了译文 / 读音、这首歌却一句都没有时怎么办(`LyricSecondaryLine.resolved(in:fallback:)`)。
+/// rawValue 直接落 UserDefaults,别改名。
+public enum LyricSecondaryFallback: String, CaseIterable, Sendable {
+    /// 副行改显示下一句,两行的版面不变。
+    case nextLine
+    /// 收成一行,主行按单行的字号排。
+    case mainOnly
 }

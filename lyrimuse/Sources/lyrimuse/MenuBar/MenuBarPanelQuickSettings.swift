@@ -626,6 +626,13 @@ struct PanelQuickSettings: View {
                          options: LyricsRestingAlignment.notchOptions,
                          label: LyricsAlignmentSegmentedControl.label(for:))
             secondaryLineRow(selection: $settings.touchBarSecondaryLine)
+            // 同设置页:选了译文 / 读音才有「无译文时 / 无读音时」(17 章决策 58)。
+            if settings.touchBarSecondaryLine.isPerLineText {
+                row(LyricSecondaryFallback.rowTitle(for: settings.touchBarSecondaryLine)) {
+                    PanelGlassMenuPicker(selection: $settings.touchBarSecondaryFallback,
+                                         options: LyricSecondaryFallback.allCases, label: { $0.displayName })
+                }
+            }
             touchBarFontSizeRow
         case .lyricsWindow:
             // 「背景」两行跟设置页那一段同序、同判据:方向只在渐变档出现(纯色没有方向可言),
@@ -971,9 +978,11 @@ struct PanelQuickSettings: View {
     }
 
     /// 触控栏「字号」行。副行开着时两行的字号由触控栏的高定(见 `TouchBarLyricsStyle`),滑杆让位成一句灰字
-    /// 「由副行决定」,跟设置页那一行同进同出(同 `menuBarFontSizeRow`)。存的是原值,读的时候夹回区间。
+    /// 「由副行决定」;「无译文时 / 无读音时」选了只显示歌词时照常显示滑杆(`TouchBarLyricsStyle.fontSizeApplies`)。
+    /// 跟设置页那一行同进同出(同 `menuBarFontSizeRow`)。存的是原值,读的时候夹回区间。
     @ViewBuilder private var touchBarFontSizeRow: some View {
-        if settings.touchBarSecondaryLine.showsSecondaryRow {
+        if !TouchBarLyricsStyle.fontSizeApplies(secondary: settings.touchBarSecondaryLine,
+                                                fallback: settings.touchBarSecondaryFallback) {
             row(L10n.t("字号")) {
                 Text(L10n.t("由副行决定"))
                     .font(.system(size: 10))

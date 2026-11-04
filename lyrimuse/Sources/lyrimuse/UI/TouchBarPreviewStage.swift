@@ -454,6 +454,7 @@ final class TouchBarPreviewFeed: ObservableObject {
             TouchBarLyricsCell.signal(p.$highResAverageHex),
             TouchBarLyricsCell.signal(LocalPlaybackSource.shared.$artworkAverageHex),
             TouchBarLyricsCell.signal(AppSettings.shared.$touchBarSecondaryLine),
+            TouchBarLyricsCell.signal(AppSettings.shared.$touchBarSecondaryFallback),
         ]
         observers = [Publishers.MergeMany(changes).sink { [weak self] in self?.scheduleRefresh() }]
         refresh()
@@ -477,7 +478,8 @@ final class TouchBarPreviewFeed: ObservableObject {
 
     private func refresh() {
         let p = PlaybackCoordinator.shared
-        let secondary = TouchBarLyricsCell.secondary(p, setting: AppSettings.shared.touchBarSecondaryLine)
+        let secondary = TouchBarLyricsCell.secondary(p, setting: AppSettings.shared.touchBarSecondaryLine,
+                                                     fallback: AppSettings.shared.touchBarSecondaryFallback)
         let content = TouchBarLyricsCell.content(p, secondary: secondary)
         start.update(content: content, lineIndex: TouchBarLyricsCell.displayedLineIndex(p, secondary: secondary),
                      nowMs: p.lyricsTimelineMs())

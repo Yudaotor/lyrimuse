@@ -890,7 +890,7 @@ At most once a day, sends the version, macOS, which features are on and crash su
 
 ## Every setting
 
-Every setting in the Settings window, by where it lives: 311 in all. Type a name into the search field at the top of the Settings sidebar to jump straight to it.
+Every setting in the Settings window, by where it lives: 313 in all. Type a name into the search field at the top of the Settings sidebar to jump straight to it.
 
 ### Lyrics › Source
 
@@ -1145,6 +1145,8 @@ Every setting in the Settings window, by where it lives: 311 in all. Type a name
 ### Lyrics Display › Touch Bar › Content
 
 - **Second Line**
+- **Without Translation**
+- **Without Romanization**
 - **Font Size**
 
 ### Lyrics Display › Touch Bar › Layout

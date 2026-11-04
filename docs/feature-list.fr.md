@@ -890,7 +890,7 @@ Au plus une fois par jour, envoie la version, macOS, les fonctions activées et 
 
 ## Tous les réglages
 
-Tous les réglages de la fenêtre Réglages, classés par emplacement : 311 au total. Tapez un nom dans le champ de recherche en haut de la barre latérale des Réglages pour y aller directement.
+Tous les réglages de la fenêtre Réglages, classés par emplacement : 313 au total. Tapez un nom dans le champ de recherche en haut de la barre latérale des Réglages pour y aller directement.
 
 ### Paroles › Source
 
@@ -1145,6 +1145,8 @@ Tous les réglages de la fenêtre Réglages, classés par emplacement : 311 au 
 ### Affichage des paroles › Touch Bar › Contenu
 
 - **Seconde ligne**
+- **Sans traduction**
+- **Sans romanisation**
 - **Taille**
 
 ### Affichage des paroles › Touch Bar › Disposition

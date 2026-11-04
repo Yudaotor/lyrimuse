@@ -890,7 +890,7 @@ No máximo uma vez por dia, envia a versão, o macOS, quais recursos estão ativ
 
 ## Todos os ajustes
 
-Todos os ajustes da janela Ajustes, por local: 311 no total. Digite um nome no campo de busca no topo da barra lateral dos Ajustes para ir direto até ele.
+Todos os ajustes da janela Ajustes, por local: 313 no total. Digite um nome no campo de busca no topo da barra lateral dos Ajustes para ir direto até ele.
 
 ### Letra › Origem
 
@@ -1145,6 +1145,8 @@ Todos os ajustes da janela Ajustes, por local: 311 no total. Digite um nome no c
 ### Exibição da letra › Touch Bar › Conteúdo
 
 - **Segunda linha**
+- **Sem tradução**
+- **Sem pronúncia**
 - **Tamanho**
 
 ### Exibição da letra › Touch Bar › Layout

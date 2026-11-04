@@ -890,7 +890,7 @@ Tối đa một lần mỗi ngày, Lyrimuse gửi phiên bản, macOS, các tín
 
 ## Toàn bộ cài đặt
 
-Toàn bộ mục trong cửa sổ Cài đặt, theo vị trí: tổng cộng 311 mục. Gõ tên vào ô tìm kiếm ở đầu thanh bên của Cài đặt để đi thẳng tới mục đó.
+Toàn bộ mục trong cửa sổ Cài đặt, theo vị trí: tổng cộng 313 mục. Gõ tên vào ô tìm kiếm ở đầu thanh bên của Cài đặt để đi thẳng tới mục đó.
 
 ### Lời bài hát › Nguồn
 
@@ -1145,6 +1145,8 @@ Toàn bộ mục trong cửa sổ Cài đặt, theo vị trí: tổng cộng 311
 ### Hiển thị lời › Touch Bar › Nội dung
 
 - **Dòng phụ**
+- **Khi không có bản dịch**
+- **Khi không có phát âm**
 - **Cỡ**
 
 ### Hiển thị lời › Touch Bar › Bố cục

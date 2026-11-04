@@ -114,10 +114,12 @@ enum TouchBarLyricsCell {
         secondary.showsSecondaryRow ? twoRowMainFont : font(size: fontSize)
     }
 
-    /// 副行实际用哪一档:设置里选的,这首有词却一句译文 / 读音都没有时退成「下一句」
-    /// (`LyricSecondaryLine.fallingBackToNextLine(in:)`)。本体和预览都从这里取,之后显示哪一档、副行规格都认它。
-    static func secondary(_ p: PlaybackCoordinator, setting: LyricSecondaryLine) -> LyricSecondaryLine {
-        setting.fallingBackToNextLine(in: p.allLines.lazy.map(\.line))
+    /// 副行实际用哪一档:设置里选的,这首有词却一句译文 / 读音都没有时按「无译文时 / 无读音时」换成下一句或不显示
+    /// (`LyricSecondaryLine.resolved(in:fallback:)`)。本体、预览、断句预算都从这里取,之后显示哪一档、一行还是两行、
+    /// 主行字号、副行规格都认它。
+    static func secondary(_ p: PlaybackCoordinator, setting: LyricSecondaryLine,
+                          fallback: LyricSecondaryFallback) -> LyricSecondaryLine {
+        setting.resolved(in: p.allLines.lazy.map(\.line), fallback: fallback)
     }
 
     /// 此刻显示哪一档(Core `TouchBarLyricsContent.resolve(secondary:…)`)。参数从播放状态的哪几项取,只在这里写一遍。
