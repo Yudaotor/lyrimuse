@@ -186,6 +186,27 @@ func runMenuBarTests() {
         expectEqual(MenuBarMarquee.karaokeFillX(atMs: 1100, path: path), 30, "填色取值: 词间空隙停住")
         expectEqual(MenuBarMarquee.karaokeFillX(atMs: 9999, path: path), 60, "填色取值: 唱完停在末端")
 
+        // 同文的下一句提前显示时使用自己的时间轴:上句已全填,新句在首字开始前保持未唱。
+        let upcomingWords = words.map {
+            SyncedLyricWord(text: $0.text, startMs: $0.startMs + 10_000, durationMs: $0.durationMs)
+        }
+        let upcomingPath = MenuBarMarquee.karaokeFillPath(words: upcomingWords, wordEndXs: [10, 30, 60])
+        for ms in [5_000, 9_000, 9_999, 10_000] {
+            expectEqual(MenuBarMarquee.karaokeFillX(atMs: ms, path: upcomingPath), 0,
+                        "提前显示: \(ms)ms 时新句仍未填色")
+        }
+        expectEqual(MenuBarMarquee.karaokeFillX(atMs: 10_250, path: upcomingPath), 5,
+                    "提前显示: 首字开唱后按新句时间轴推进,暂停时也取同一边界")
+        guard let earlyFrames = MenuBarMarquee.karaokeFillKeyframes(path: upcomingPath, nowMs: 5_000, rate: 1) else {
+            expectEqual(true, false, "提前显示: 开唱前可以挂载填色动画")
+            fatalError("unreachable")
+        }
+        expectEqual(Array(earlyFrames.widths.prefix(2)), [0, 0], "提前显示: 动画从零填色等到首字开唱")
+        expectEqual(earlyFrames.keyTimes[1], 5_000.0 / 6_500, "提前显示: 动画保留完整的五秒等待")
+        expectEqual(earlyFrames.duration, 6.5, "提前显示: 动画时长包含等待与演唱")
+        expectEqual(MenuBarMarquee.karaokeFillKeyframes(path: upcomingPath, nowMs: 9_000, rate: 0) == nil,
+                    true, "提前显示: 暂停时不启动填色动画")
+
         // 剩余关键帧:从 250ms(第一个词唱到一半)起步。
         guard let frames = MenuBarMarquee.karaokeFillKeyframes(path: path, nowMs: 250, rate: 1) else {
             expectEqual(true, false, "填色关键帧: 行没唱完却返回了 nil")
