@@ -166,6 +166,51 @@ func runTelemetryTests() {
         expectEqual((try? JSONDecoder().decode([TelemetryActivityDay].self, from: Data(old.utf8)))?.first,
                     TelemetryActivityDay(day: "2026-10-30", playersPlayed: ["apple_music"], hangs: 1),
                     "动作: 旧版本存下的活动(没有 actions)照样读得出")
+
+        activity.isRecording = false
+        activity.noteLyricsResult(track: "a", result: .word, language: .zh, now: day1)
+        expectEqual(activity.completedDays(before: "9999-12-31"), [], "歌词结果: 关着时不记")
+        activity.isRecording = true
+        activity.noteLyricsResult(track: "a", result: .line, language: .zh, now: day1)
+        activity.noteLyricsResult(track: "a", result: .line, language: .zh, now: day1)
+        activity.noteLyricsResult(track: "b", result: .none, language: nil, now: day1)
+        activity.noteLyricsResult(track: "c", result: .word, language: .en, now: day1)
+        var got = activity.completedDays(before: d2).first
+        expectEqual(got?.lyrics, ["line": 1, "none": 1, "word": 1], "歌词结果: 同一首一天只算一次")
+        expectEqual(got?.languages, ["zh": 1, "en": 1], "歌词结果: 没歌词的歌不记语言")
+        activity.noteLyricsResult(track: "a", result: .word, language: .yue, now: day1)
+        activity.noteLyricsResult(track: "b", result: .line, language: .ja, now: day1)
+        got = activity.completedDays(before: d2).first
+        expectEqual(got?.lyrics, ["word": 2, "line": 1], "歌词结果: 结果变了挪到新的一档,不多算一首")
+        expectEqual(got?.languages, ["yue": 1, "en": 1, "ja": 1], "歌词结果: 语言跟着挪")
+        activity.noteLyricsResult(track: "a", result: .word, language: .yue, now: day2)
+        expectEqual(activity.completedDays(before: "9999-12-31").last?.lyrics, ["word": 1], "歌词结果: 换天重新算")
+        activity.clear()
+        activity.noteLyricsResult(track: "a", result: .word, language: .yue, now: day2)
+        expectEqual(activity.completedDays(before: "9999-12-31").first?.lyrics, ["word": 1], "歌词结果: 清空后重新记")
+        activity.clear()
+        expectEqual(LyricsKind.allCases.map { TelemetryLyricsResult($0).rawValue },
+                    ["word", "line", "plain", "instrumental", "none"], "歌词结果: 跟 LyricsKind 一一对应")
+    }
+
+    do {
+        print("\n== 遥测:歌曲语言 ==")
+        typealias L = TelemetrySongLanguage
+        expectEqual([L(script: .chinese, text: ""), L(script: .cantonese, text: ""), L(script: .japanese, text: ""),
+                     L(script: .korean, text: ""), L(script: .russian, text: ""), L(script: .thai, text: "")],
+                    [.zh, .yue, .ja, .ko, .other, .other], "语言: 按整首文字种类分档")
+        expectEqual(L(script: .other, text: "I walk alone through the city lights tonight\nAnd I never want to go home again"), .en,
+                    "语言: 拉丁字母的英语歌")
+        expectEqual(L(script: .other, text: "Je ne regrette rien, ni le bien qu'on m'a fait\nNi le mal, tout ça m'est bien égal"), .other,
+                    "语言: 拉丁字母的别的语言算其他")
+        let engine = LyricsSyncEngine()
+        expectEqual(engine.telemetryLanguage, nil, "语言: 没歌词时不判")
+        _ = engine.load(lyrics: "[00:00.00]作词 : Someone\n[00:01.00]作曲 : Someone\n[00:10.00]I walk alone through the city lights tonight\n[00:15.00]And I never want to go home again\n[00:20.00]Hold me close until the morning comes",
+                        lyricsTr: "", lyricsRoma: "", lyricsYRC: "")
+        expectEqual(engine.telemetryLanguage, .en, "语言: 英文歌开头的中文署名行不算")
+        _ = engine.load(lyrics: "[00:10.00]海阔天空在勇敢以后\n[00:15.00]要拿执着将命运的锁打破", lyricsTr: "", lyricsRoma: "", lyricsYRC: "",
+                        songIsCantonese: true)
+        expectEqual(engine.telemetryLanguage, .yue, "语言: 粤语按引擎真值")
     }
 
     do {
@@ -257,6 +302,10 @@ func runTelemetryTests() {
         expectEqual(["notchVolumeBannerForVolumeKeys", "lyricsWindowMiniHeaderWidthPercent"].filter { !passes(idRE, $0) }, [],
                     "Worker: ID_RE 放过设置项的属性名")
         expectEqual(TelemetryAction.allCases.filter { !worker.contains("\"\($0.rawValue)\"") }, [], "Worker: ACTIONS 列着 App 的每个动作")
+        expectEqual(sourceHas(worker, "const LYRICS_RESULTS = [" + TelemetryLyricsResult.allCases.map { "\"\($0.rawValue)\"" }.joined(separator: ", ") + "];"),
+                    true, "Worker: LYRICS_RESULTS 跟 App 的歌词结果一致")
+        expectEqual(sourceHas(worker, "const SONG_LANGUAGES = [" + TelemetrySongLanguage.allCases.map { "\"\($0.rawValue)\"" }.joined(separator: ", ") + "];"),
+                    true, "Worker: SONG_LANGUAGES 跟 App 的语言一致")
         expectEqual(sourceHas(worker, #"const origin = body.origin === "new" || body.origin === "existing" ? body.origin : null;"#), true,
                     "Worker: origin 只收 new / existing")
     }
@@ -346,6 +395,11 @@ func runTelemetryTests() {
         expectEqual(sourceHas(sourceBody("@MainActor private func copy(", in: share), "if copied { TelemetryActivity.shared.noteAction(.shareCard) }")
                     && sourceHas(sourceBody("@MainActor private func save(", in: share), "TelemetryActivity.shared.noteAction(.shareCard)"),
                     true, "接线: 分享卡拷贝、保存成功各记一次")
+        let source = sourceText("LyrimuseCore/Local/LocalPlaybackSource.swift")
+        expectEqual(sourceHas(sourceBody("private func reloadCurrentLyrics()", in: source), "noteLyricsTelemetry(trackKey: reloadSnapshot.trackKey")
+                    && sourceHas(sourceBody("private func noteLyricsTelemetry(", in: source), "!isCurrentTrackAdBreak")
+                    && sourceHas(sourceBody("private func noteLyricsTelemetry(", in: source), "hasContent || instrumental || noLyrics"),
+                    true, "接线: 歌词落定时记歌词结果,广告和还在搜的不记")
         let window = sourceText("lyrimuse/UI/LyricsWindowView.swift")
         expectEqual(sourceHas(sourceBody("static func markOpen()", in: window), "guard !UserDefaults.standard.bool(forKey: openKey) else { return }")
                     && sourceHas(sourceBody("static func markOpen()", in: window), "TelemetryActivity.shared.noteAction(.lyricsWindow)"),

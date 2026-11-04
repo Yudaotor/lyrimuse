@@ -2013,6 +2013,7 @@ public final class LyricsSyncEngine {
         // 整首歌的文字种类,给"按语言开关罗马音"兜底用(逐行判不出来的纯汉字行)。
         // 粒度/样本跟上面完全一致。
         songScript = Romanizer.songScript(of: scriptSample)
+        songTextSample = scriptSample
         // 粤语汉字跟普通话汉字长得一模一样,songScript(of:) 纯靠文字分析永远只会判成
         // .chinese——粤语这一档必须由调用方喂进来的外部信号(引擎的 SongLanguage
         // 真值)覆盖,不能指望从歌词文字里分析出来。只在判成 .chinese 时才覆盖:已经因为
@@ -2053,6 +2054,8 @@ public final class LyricsSyncEngine {
 
     private var songLooksJapanese = false
     private var songScript: LyricScript = .other
+    /// 判 `songScript` 用的那份正文(去掉了署名行)。
+    private var songTextSample = ""
     /// 台语(闽南语)歌:汉字行不标罗马音。汉字罗马音只有普通话拼音和粤拼两套,按普通话读台语是错的读音
     /// (「袂」台语读 bē,拼音是 mèi);台罗要带文白异读的台语词典,没有接。引擎那边同样不生成、
     /// 不留(见 lyrimuse-engine/hokkien.go),这里管的是客户端现算那一路。日文 / 韩文行照常。
@@ -2100,6 +2103,12 @@ public final class LyricsSyncEngine {
     private var kanaAnnotation: KanaAnnotation?
 
     public var hasContent: Bool { usingWords ? !wordLines.isEmpty : !baseLines.isEmpty }
+    /// 现在显示的是逐字时间轴。
+    public var showsWordTiming: Bool { usingWords && !wordLines.isEmpty }
+    /// 这首歌的语言(遥测用),没有能显示的歌词时为 nil。
+    public var telemetryLanguage: TelemetrySongLanguage? {
+        hasContent ? TelemetrySongLanguage(script: songScript, text: songTextSample) : nil
+    }
 
     /// 说话人标签独立成行、冒号后没有真内容(如「合：」,YRC 里逐字数据把标签拆成
     /// 「合」+「：」两个字、共享同一个时间戳,见 usingWords 分支的注释)——

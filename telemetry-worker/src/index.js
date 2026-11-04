@@ -19,6 +19,9 @@ const ID_RE = /^[A-Za-z0-9][A-Za-z0-9._-]{0,99}$/;
 const MAX_BODY = 32 * 1024;
 // 每日活动里记次数的动作,跟 App 侧 Core TelemetryAction 的 rawValue 一致。
 const ACTIONS = ["lyrics_window", "lyrics_picked", "offset_adjusted", "share_card"];
+// 每日活动里放过的歌各拿到哪档歌词、是什么语言,跟 Core TelemetryLyricsResult、TelemetrySongLanguage 的 rawValue 一致。
+const LYRICS_RESULTS = ["word", "line", "plain", "instrumental", "none"];
+const SONG_LANGUAGES = ["zh", "yue", "ja", "ko", "en", "other"];
 const MAX_CRASHES_PER_INSTALL_DAY = 20;
 const DAY_MS = 86_400_000;
 
@@ -89,10 +92,10 @@ function ids(v, maxItems = 40) {
   return [...new Set(v.filter((x) => typeof x === "string" && ID_RE.test(x)))].slice(0, maxItems).sort();
 }
 
-function actionCounts(v) {
+function counts(v, keys) {
   const out = {};
   if (!v || typeof v !== "object" || Array.isArray(v)) return out;
-  for (const k of ACTIONS) {
+  for (const k of keys) {
     const n = int(v[k], 1, 10_000);
     if (n != null) out[k] = n;
   }
@@ -178,11 +181,13 @@ async function heartbeat(request, env) {
     const back = dayDistance(day, a.day);
     if (back < 1 || back > 7) continue;
     statements.push(env.DB.prepare(
-      `INSERT INTO activity (day, install_id, players_played, hangs, actions) VALUES (?1, ?2, ?3, ?4, ?5)
+      `INSERT INTO activity (day, install_id, players_played, hangs, actions, lyrics, languages) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
        ON CONFLICT (day, install_id) DO UPDATE SET players_played = excluded.players_played, hangs = excluded.hangs,
-                                                   actions = excluded.actions`
+                                                   actions = excluded.actions, lyrics = excluded.lyrics,
+                                                   languages = excluded.languages`
     ).bind(a.day, installID, JSON.stringify(ids(a.players_played)), int(a.hangs, 0, 10_000) ?? 0,
-           JSON.stringify(actionCounts(a.actions))));
+           JSON.stringify(counts(a.actions, ACTIONS)), JSON.stringify(counts(a.lyrics, LYRICS_RESULTS)),
+           JSON.stringify(counts(a.languages, SONG_LANGUAGES))));
   }
   await env.DB.batch(statements);
   return json({ ok: true });
@@ -283,7 +288,8 @@ async function stats(request, env, url) {
     // 窗口内每台机器最近的那条心跳:版本、系统、功能分布都按它算。
     db.prepare(`SELECT h.* FROM heartbeats h JOIN (SELECT install_id, MAX(day) AS d FROM heartbeats WHERE day >= ?1 AND ${kept()}
                 GROUP BY install_id) l ON h.install_id = l.install_id AND h.day = l.d`).bind(since).all(),
-    db.prepare(`SELECT install_id, players_played, hangs, actions FROM activity WHERE day >= ?1 AND ${kept()}`).bind(since).all(),
+    db.prepare(`SELECT day, install_id, players_played, hangs, actions, lyrics, languages FROM activity WHERE day >= ?1 AND ${kept()}`)
+      .bind(since).all(),
     db.prepare(`SELECT signature, process, exception_type, termination_indicator, COUNT(*) AS n,
                        COUNT(DISTINCT install_id) AS installs, GROUP_CONCAT(DISTINCT app_version) AS versions,
                        MAX(received_at) AS last_at,
@@ -298,7 +304,18 @@ async function stats(request, env, url) {
   let hangs = 0;
   const installsWithHangs = new Set();
   const actionTotals = {}, actionInstalls = {};
+  const lyricsTotals = {}, languageTotals = {}, lyricsByDay = {};
   for (const a of activity.results) {
+    const lyrics = safeJSON(a.lyrics, {});
+    if (Object.keys(lyrics).length > 0) {
+      const d = (lyricsByDay[a.day] ||= { day: a.day, installs: 0, ...Object.fromEntries(LYRICS_RESULTS.map((k) => [k, 0])) });
+      d.installs += 1;
+      for (const [k, n] of Object.entries(lyrics)) {
+        lyricsTotals[k] = (lyricsTotals[k] || 0) + n;
+        if (k in d) d[k] += n;
+      }
+    }
+    for (const [k, n] of Object.entries(safeJSON(a.languages, {}))) languageTotals[k] = (languageTotals[k] || 0) + n;
     for (const p of safeJSON(a.players_played, [])) (playedByInstall[p] ||= new Set()).add(a.install_id);
     hangs += a.hangs || 0;
     if (a.hangs > 0) installsWithHangs.add(a.install_id);
@@ -338,6 +355,10 @@ async function stats(request, env, url) {
     hangs: { total: hangs, installs: installsWithHangs.size },
     // 每个动作:窗口内一共几次、几台机器做过。
     actions: ACTIONS.map((k) => ({ action: k, total: actionTotals[k] || 0, installs: actionInstalls[k] ? actionInstalls[k].size : 0 })),
+    // 放过的歌各拿到哪档歌词、各是什么语言(窗口内首数之和;同一首一台机器一天只算一次)。lyrics_daily 每天一行,installs 是报了的机器数。
+    lyrics: LYRICS_RESULTS.map((k) => ({ result: k, songs: lyricsTotals[k] || 0 })),
+    languages: SONG_LANGUAGES.map((k) => ({ language: k, songs: languageTotals[k] || 0 })),
+    lyrics_daily: Object.values(lyricsByDay).sort((a, b) => (a.day < b.day ? -1 : 1)),
     machines: rows.length,
     crashes: crashes.results.map(({ versions, ...c }) => {
       const sorted = (versions || "").split(",").filter(Boolean).sort(compareVersions);
@@ -421,6 +442,8 @@ const LABELS = { app_version: "版本", os_version: "macOS 大版本", arch: "�
   flags: "其他开关", install_method: "安装渠道", settings_changed: "改过默认值的设置",
   permissions_missing: "缺的权限" };
 const ACTION_LABELS = { lyrics_window: "打开歌词窗口", lyrics_picked: "手动采用歌词", offset_adjusted: "调时间偏移", share_card: "分享歌词卡" };
+const LYRICS_LABELS = { word: "逐字", line: "逐行", plain: "纯文本", instrumental: "纯音乐", none: "没找到" };
+const LANGUAGE_LABELS = { zh: "中文", yue: "粤语", ja: "日语", ko: "韩语", en: "英语", other: "其他" };
 function table(rows, total) {
   if (!rows.length) return '<p class="muted">没有数据</p>';
   return "<table>" + rows.map(([k, v]) => "<tr><td>" + esc(k) + '</td><td class="n">' + v +
@@ -444,7 +467,11 @@ function render(s) {
     '<div class="card"><h2>' + esc(LABELS[k] || k) + "</h2>" + table(rows, s.machines) + "</div>").join("") +
     '<div class="card"><h2>放过歌的播放器</h2>' + table(s.players_played, s.machines) + "</div>" +
     '<div class="card"><h2>动作(次数 · 台数)</h2>' + table((s.actions || []).map((a) =>
-      [ACTION_LABELS[a.action] || a.action, a.total + " 次 · " + a.installs + " 台"])) + "</div></div>";
+      [ACTION_LABELS[a.action] || a.action, a.total + " 次 · " + a.installs + " 台"])) + "</div>" +
+    '<div class="card"><h2>歌词结果(首)</h2>' + table((s.lyrics || []).map((r) => [LYRICS_LABELS[r.result] || r.result, r.songs]),
+      (s.lyrics || []).reduce((n, r) => n + r.songs, 0)) + "</div>" +
+    '<div class="card"><h2>歌曲语言(首)</h2>' + table((s.languages || []).map((r) => [LANGUAGE_LABELS[r.language] || r.language, r.songs]),
+      (s.languages || []).reduce((n, r) => n + r.songs, 0)) + "</div></div>";
   html += '<div class="card"><h2>崩溃(按归并键)</h2>' + (s.crashes.length ? s.crashes.map((c) =>
     "<details><summary><b>" + c.n + " 次 · " + c.installs + " 台</b> " + esc(c.signature) + ' <span class="muted">' +
     esc(c.min_version) + (c.max_version !== c.min_version ? "–" + esc(c.max_version) : "") + "</span></summary><pre>" +

@@ -28,6 +28,8 @@ CREATE TABLE IF NOT EXISTS activity (
   players_played TEXT,
   hangs          INTEGER NOT NULL DEFAULT 0,
   actions        TEXT,  -- {"lyrics_window": 2, …},见 index.js 的 ACTIONS
+  lyrics         TEXT,  -- {"word": 12, "none": 1, …},见 index.js 的 LYRICS_RESULTS
+  languages      TEXT,  -- {"zh": 8, "en": 3, …},见 index.js 的 SONG_LANGUAGES
   PRIMARY KEY (day, install_id)
 );
 

@@ -5431,7 +5431,31 @@ public final class LocalPlaybackSource: ObservableObject {
         // 间奏点跟 allLines 同一时机重算 —— 纯由时间轴决定,同一首歌播放期间不变。
         let newMarkers = syncEngine.gapMarkers()
         if newMarkers != lyricsGapMarkers { lyricsGapMarkers = newMarkers }
+        noteLyricsTelemetry(trackKey: reloadSnapshot.trackKey, hasContent: newHasContent, instrumental: newInstrumental,
+                            noLyrics: newNoLyrics, plain: newPlainLyrics, isCantonese: found?.isCantonese ?? false)
         logger.debug("lyrics reloaded: hasContent=\(self.syncEngine.hasContent) found=\(found != nil)")
+    }
+
+    /// 这首歌的歌词落定了(有词、纯音乐、或搜完确实没有)就给遥测记一笔;还在搜、广告不记。
+    private func noteLyricsTelemetry(trackKey: String, hasContent: Bool, instrumental: Bool, noLyrics: Bool,
+                                     plain: String, isCantonese: Bool) {
+        guard TelemetryActivity.shared.isRecording, !isCurrentTrackAdBreak, trackKey != "||",
+              hasContent || instrumental || noLyrics else { return }
+        let result = TelemetryLyricsResult(LyricsKind.classify(
+            hasWordTiming: syncEngine.showsWordTiming, hasLyrics: hasContent,
+            hasPlainTextFallback: !plain.isEmpty, isInstrumental: instrumental))
+        let language: TelemetrySongLanguage?
+        switch result {
+        case .word, .line:
+            language = syncEngine.telemetryLanguage
+        case .plain:
+            let script = Romanizer.songScript(of: plain)
+            language = TelemetrySongLanguage(
+                script: isCantonese && (script == .chinese || script == .korean) ? .cantonese : script, text: plain)
+        case .instrumental, .none:
+            language = nil
+        }
+        TelemetryActivity.shared.noteLyricsResult(track: trackKey, result: result, language: language)
     }
 
     /// 换歌时整首歌词行(`allLines`)建了这么久就记一行日志。

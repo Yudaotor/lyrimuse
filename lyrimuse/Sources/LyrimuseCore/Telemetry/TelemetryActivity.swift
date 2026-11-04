@@ -1,6 +1,6 @@
 import Foundation
 
-/// 心跳里「之前几天的活动」的记账:放过哪些播放器、主线程卡住几次、几个动作各做了几次,按本地自然日一天一格,存在 UserDefaults。
+/// 心跳里「之前几天的活动」的记账:放过哪些播放器、主线程卡住几次、几个动作各做了几次、放过的歌各拿到哪档歌词和是什么语言,按本地自然日一天一格,存在 UserDefaults。
 /// 播放源换播放器、看门狗报卡住时各记一笔;`isRecording` 为假(遥测关着)时一律不记。心跳发出去之后
 /// `remove(days:)` 删掉发过的那几天。最多留 `maxStoredDays` 天,多了丢最早的。
 public final class TelemetryActivity: @unchecked Sendable {
@@ -16,6 +16,13 @@ public final class TelemetryActivity: @unchecked Sendable {
     private var trusted: Set<String> = []
     /// 上一次记下的播放器,同一个播放器连着报不重复写盘。
     private var lastPlayer: (day: String, tag: String)?
+    /// 今天记过歌词结果的歌(曲目键 → 记下的那一笔)。只在内存里,不写盘、不上报;换天清空。
+    private var lyricsNoted: (day: String, songs: [String: LyricsNote]) = ("", [:])
+
+    private struct LyricsNote: Equatable {
+        var result: TelemetryLyricsResult
+        var language: TelemetrySongLanguage?
+    }
 
     public init(defaults: UserDefaults, key: String = TelemetryActivity.storageKey) {
         self.defaults = defaults
@@ -51,6 +58,34 @@ public final class TelemetryActivity: @unchecked Sendable {
         }
     }
 
+    /// 一首歌的歌词落定了。同一首一天只算一次;结果变了(补出了逐字、手动换了一份)就把这首那一笔挪到新的那一档。
+    /// App 重启后内存里的记录没了,同一天再放到会再算一次。
+    public func noteLyricsResult(track: String, result: TelemetryLyricsResult, language: TelemetrySongLanguage?,
+                                 now: Date = Date()) {
+        let day = Telemetry.day(now)
+        let note = LyricsNote(result: result, language: language)
+        lock.withLock {
+            guard recording else { return }
+            if lyricsNoted.day != day { lyricsNoted = (day, [:]) }
+            let previous = lyricsNoted.songs[track]
+            guard previous != note else { return }
+            lyricsNoted.songs[track] = note
+            update(day: day) { d in
+                if let previous {
+                    Self.decrement(&d.lyrics, previous.result.rawValue)
+                    if let old = previous.language { Self.decrement(&d.languages, old.rawValue) }
+                }
+                d.lyrics[result.rawValue, default: 0] += 1
+                if let language { d.languages[language.rawValue, default: 0] += 1 }
+            }
+        }
+    }
+
+    private static func decrement(_ counts: inout [String: Int], _ key: String) {
+        let left = (counts[key] ?? 0) - 1
+        counts[key] = left > 0 ? left : nil
+    }
+
     public func noteHang(now: Date = Date()) {
         let day = Telemetry.day(now)
         lock.withLock {
@@ -75,6 +110,7 @@ public final class TelemetryActivity: @unchecked Sendable {
     public func clear() {
         lock.withLock {
             lastPlayer = nil
+            lyricsNoted = ("", [:])
             defaults.removeObject(forKey: key)
         }
     }

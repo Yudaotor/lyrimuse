@@ -1,5 +1,6 @@
 import CryptoKit
 import Foundation
+import NaturalLanguage
 
 /// 匿名遥测的纯逻辑:发什么、什么时候发、崩溃摘要怎么脱敏。发请求在 App 侧 `TelemetryService`。
 ///
@@ -133,6 +134,41 @@ public enum TelemetryAction: String, CaseIterable, Codable, Sendable {
     case offsetAdjusted = "offset_adjusted"
     /// 分享歌词卡拷贝或保存成功。
     case shareCard = "share_card"
+}
+
+/// 一首歌最后拿到的歌词是哪一档(活动里的 `lyrics`),阶梯同 `LyricsKind`。见 14 章决策 171。
+public enum TelemetryLyricsResult: String, CaseIterable, Codable, Sendable {
+    case word, line, plain, instrumental, none
+
+    public init(_ kind: LyricsKind) {
+        switch kind {
+        case .wordByWord: self = .word
+        case .lineByLine: self = .line
+        case .plainText: self = .plain
+        case .instrumental: self = .instrumental
+        case .none: self = .none
+        }
+    }
+}
+
+/// 一首歌的语言(活动里的 `languages`),只分这六档。按歌词正文判,没有歌词的歌不记。
+public enum TelemetrySongLanguage: String, CaseIterable, Codable, Sendable {
+    case zh, yue, ja, ko, en, other
+
+    /// `script` 是整首歌的文字种类(`Romanizer.songScript(of:)`,粤语已按引擎真值盖过);拉丁字母的歌再拿正文认是不是英语。
+    public init(script: LyricScript, text: String) {
+        switch script {
+        case .chinese: self = .zh
+        case .cantonese: self = .yue
+        case .japanese: self = .ja
+        case .korean: self = .ko
+        case .other:
+            let recognizer = NLLanguageRecognizer()
+            recognizer.processString(text)
+            self = recognizer.dominantLanguage == .english ? .en : .other
+        default: self = .other
+        }
+    }
 }
 
 /// 这台机器上的 Lyrimuse 是新装的还是从旧版本升级上来的(心跳的 `origin`),统计页按它把「新增安装」拆成新下载和老用户。
@@ -274,25 +310,34 @@ public struct TelemetryActivityDay: Codable, Equatable, Sendable {
     public var hangs: Int
     /// 几个动作各做了几次(`TelemetryAction` 的 rawValue → 次数),没做过的不写。
     public var actions: [String: Int]
+    /// 这一天放过的歌各拿到哪一档歌词(`TelemetryLyricsResult` 的 rawValue → 首数),同一首一天只算一次,各档之和就是放了几首。
+    public var lyrics: [String: Int]
+    /// 这一天放过的有歌词的歌各是什么语言(`TelemetrySongLanguage` 的 rawValue → 首数)。
+    public var languages: [String: Int]
 
-    public init(day: String, playersPlayed: [String] = [], hangs: Int = 0, actions: [String: Int] = [:]) {
+    public init(day: String, playersPlayed: [String] = [], hangs: Int = 0, actions: [String: Int] = [:],
+                lyrics: [String: Int] = [:], languages: [String: Int] = [:]) {
         self.day = day
         self.playersPlayed = playersPlayed
         self.hangs = hangs
         self.actions = actions
+        self.lyrics = lyrics
+        self.languages = languages
     }
 
-    /// 旧版本存下的活动没有 `actions`。
+    /// 旧版本存下的活动没有 `actions`、`lyrics`、`languages`。
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         day = try c.decode(String.self, forKey: .day)
         playersPlayed = try c.decodeIfPresent([String].self, forKey: .playersPlayed) ?? []
         hangs = try c.decodeIfPresent(Int.self, forKey: .hangs) ?? 0
         actions = try c.decodeIfPresent([String: Int].self, forKey: .actions) ?? [:]
+        lyrics = try c.decodeIfPresent([String: Int].self, forKey: .lyrics) ?? [:]
+        languages = try c.decodeIfPresent([String: Int].self, forKey: .languages) ?? [:]
     }
 
     enum CodingKeys: String, CodingKey {
-        case day, playersPlayed = "players_played", hangs, actions
+        case day, playersPlayed = "players_played", hangs, actions, lyrics, languages
     }
 }
 
