@@ -198,11 +198,21 @@ func runTelemetryTests() {
         typealias L = TelemetrySongLanguage
         expectEqual([L(script: .chinese, text: ""), L(script: .cantonese, text: ""), L(script: .japanese, text: ""),
                      L(script: .korean, text: ""), L(script: .russian, text: ""), L(script: .thai, text: "")],
-                    [.zh, .yue, .ja, .ko, .other, .other], "语言: 按整首文字种类分档")
+                    [.zh, .yue, .ja, .ko, .ru, .th], "语言: 按整首文字种类分档")
+        expectEqual(L(script: .unsupportedCyrillic, text: ""), .other, "语言: 认不出的西里尔字母算其他")
         expectEqual(L(script: .other, text: "I walk alone through the city lights tonight\nAnd I never want to go home again"), .en,
                     "语言: 拉丁字母的英语歌")
-        expectEqual(L(script: .other, text: "Je ne regrette rien, ni le bien qu'on m'a fait\nNi le mal, tout ça m'est bien égal"), .other,
-                    "语言: 拉丁字母的别的语言算其他")
+        expectEqual(L(script: .other, text: "Je ne regrette rien, ni le bien qu'on m'a fait\nNi le mal, tout ça m'est bien égal"), .fr,
+                    "语言: 拉丁字母的法语歌")
+        expectEqual(L(script: .other, text: "Despacito, quiero respirar tu cuello despacito\nDeja que te diga cosas al oído"), .es,
+                    "语言: 拉丁字母的西班牙语歌")
+        expectEqual(L(script: .other, text: "Nakupenda sana mpenzi wangu, siku zote nitakuwa nawe\nUsiku na mchana moyo wangu ni wako"), .other,
+                    "语言: 系统不认识的语言没把握,算其他")
+        expectEqual(L(script: .other, text: "Kimi no na wa nan desu ka\nSora ni kagayaku hoshi no you ni\nZutto soba ni ite hoshii"), .other,
+                    "语言: 日语罗马字不算成印尼语")
+        expectEqual(L(script: .arabic, text: ""), .ar, "语言: 阿拉伯字母只记文字种类")
+        expectEqual(Set(TelemetrySongLanguage.recognized.values).isSubset(of: Set(TelemetrySongLanguage.allCases)), true,
+                    "语言: 系统认的语言都在档里")
         let engine = LyricsSyncEngine()
         expectEqual(engine.telemetryLanguage, nil, "语言: 没歌词时不判")
         _ = engine.load(lyrics: "[00:00.00]作词 : Someone\n[00:01.00]作曲 : Someone\n[00:10.00]I walk alone through the city lights tonight\n[00:15.00]And I never want to go home again\n[00:20.00]Hold me close until the morning comes",

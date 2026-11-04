@@ -21,7 +21,7 @@ const MAX_BODY = 32 * 1024;
 const ACTIONS = ["lyrics_window", "lyrics_picked", "offset_adjusted", "share_card"];
 // 每日活动里放过的歌各拿到哪档歌词、是什么语言,跟 Core TelemetryLyricsResult、TelemetrySongLanguage 的 rawValue 一致。
 const LYRICS_RESULTS = ["word", "line", "plain", "instrumental", "none"];
-const SONG_LANGUAGES = ["zh", "yue", "ja", "ko", "en", "other"];
+const SONG_LANGUAGES = ["zh", "yue", "ja", "ko", "ru", "uk", "bg", "be", "sr", "mk", "kk", "el", "th", "ar", "hi", "bn", "pa", "gu", "ta", "te", "kn", "ml", "si", "en", "es", "pt", "fr", "de", "it", "nl", "sv", "pl", "tr", "vi", "he", "other"];
 const MAX_CRASHES_PER_INSTALL_DAY = 20;
 const DAY_MS = 86_400_000;
 
@@ -443,7 +443,11 @@ const LABELS = { app_version: "版本", os_version: "macOS 大版本", arch: "�
   permissions_missing: "缺的权限" };
 const ACTION_LABELS = { lyrics_window: "打开歌词窗口", lyrics_picked: "手动采用歌词", offset_adjusted: "调时间偏移", share_card: "分享歌词卡" };
 const LYRICS_LABELS = { word: "逐字", line: "逐行", plain: "纯文本", instrumental: "纯音乐", none: "没找到" };
-const LANGUAGE_LABELS = { zh: "中文", yue: "粤语", ja: "日语", ko: "韩语", en: "英语", other: "其他" };
+const LANGUAGE_LABELS = { zh: "中文", yue: "粤语", ja: "日语", ko: "韩语", ru: "俄语", uk: "乌克兰语", bg: "保加利亚语",
+  be: "白俄罗斯语", sr: "塞尔维亚语", mk: "马其顿语", kk: "哈萨克语", el: "希腊语", th: "泰语", ar: "阿拉伯字母", hi: "印地语等",
+  bn: "孟加拉语", pa: "旁遮普语", gu: "古吉拉特语", ta: "泰米尔语", te: "泰卢固语", kn: "卡纳达语", ml: "马拉雅拉姆语",
+  si: "僧伽罗语", en: "英语", es: "西班牙语", pt: "葡萄牙语", fr: "法语", de: "德语", it: "意大利语", nl: "荷兰语",
+  sv: "瑞典语", pl: "波兰语", tr: "土耳其语", vi: "越南语", he: "希伯来语", other: "其他" };
 function table(rows, total) {
   if (!rows.length) return '<p class="muted">没有数据</p>';
   return "<table>" + rows.map(([k, v]) => "<tr><td>" + esc(k) + '</td><td class="n">' + v +
@@ -470,7 +474,7 @@ function render(s) {
       [ACTION_LABELS[a.action] || a.action, a.total + " 次 · " + a.installs + " 台"])) + "</div>" +
     '<div class="card"><h2>歌词结果(首)</h2>' + table((s.lyrics || []).map((r) => [LYRICS_LABELS[r.result] || r.result, r.songs]),
       (s.lyrics || []).reduce((n, r) => n + r.songs, 0)) + "</div>" +
-    '<div class="card"><h2>歌曲语言(首)</h2>' + table((s.languages || []).map((r) => [LANGUAGE_LABELS[r.language] || r.language, r.songs]),
+    '<div class="card"><h2>歌曲语言(首)</h2>' + table((s.languages || []).filter((r) => r.songs > 0).map((r) => [LANGUAGE_LABELS[r.language] || r.language, r.songs]),
       (s.languages || []).reduce((n, r) => n + r.songs, 0)) + "</div></div>";
   html += '<div class="card"><h2>崩溃(按归并键)</h2>' + (s.crashes.length ? s.crashes.map((c) =>
     "<details><summary><b>" + c.n + " 次 · " + c.installs + " 台</b> " + esc(c.signature) + ' <span class="muted">' +

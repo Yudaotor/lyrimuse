@@ -151,23 +151,61 @@ public enum TelemetryLyricsResult: String, CaseIterable, Codable, Sendable {
     }
 }
 
-/// 一首歌的语言(活动里的 `languages`),只分这六档。按歌词正文判,没有歌词的歌不记。
+/// 一首歌的语言(活动里的 `languages`,ISO 639-1 代码)。按歌词正文判,没有歌词的歌不记。见 14 章决策 171。
 public enum TelemetrySongLanguage: String, CaseIterable, Codable, Sendable {
-    case zh, yue, ja, ko, en, other
+    case zh, yue, ja, ko
+    case ru, uk, bg, be, sr, mk, kk, el, th, ar
+    case hi, bn, pa, gu, ta, te, kn, ml, si
+    case en, es, pt, fr, de, it, nl, sv, pl, tr, vi, he
+    case other
 
-    /// `script` 是整首歌的文字种类(`Romanizer.songScript(of:)`,粤语已按引擎真值盖过);拉丁字母的歌再拿正文认是不是英语。
+    /// 系统认出来的语言只收这几种,别的(和认不准的)记 `other`。别加印尼语:日语罗马字、拼音、韩语罗马字、
+    /// 马来语、他加禄语都会被系统高把握地认成印尼语。
+    public static let recognized: [NLLanguage: TelemetrySongLanguage] = [
+        .english: .en, .spanish: .es, .portuguese: .pt, .french: .fr, .german: .de, .italian: .it, .dutch: .nl,
+        .swedish: .sv, .polish: .pl, .turkish: .tr, .vietnamese: .vi, .hebrew: .he,
+    ]
+    /// 系统认语言的把握低于这个就记 `other`:系统不认识的语言会被硬套成相近的一种,把握多在 0.6 上下。
+    static let minimumConfidence = 0.8
+
+    /// `script` 是整首歌的文字种类(`Romanizer.songScript(of:)`,粤语已按引擎真值盖过)。这些文字种类本身就定了语言;
+    /// 只有拉丁、希伯来这类 `.other` 再拿正文让系统认。阿拉伯字母只记文字种类(`ar`):系统把波斯语也认成阿拉伯语。
     public init(script: LyricScript, text: String) {
         switch script {
         case .chinese: self = .zh
         case .cantonese: self = .yue
         case .japanese: self = .ja
         case .korean: self = .ko
-        case .other:
-            let recognizer = NLLanguageRecognizer()
-            recognizer.processString(text)
-            self = recognizer.dominantLanguage == .english ? .en : .other
-        default: self = .other
+        case .russian: self = .ru
+        case .ukrainian: self = .uk
+        case .bulgarian: self = .bg
+        case .belarusian: self = .be
+        case .serbian: self = .sr
+        case .macedonian: self = .mk
+        case .kazakh: self = .kk
+        case .greek: self = .el
+        case .thai: self = .th
+        case .arabic: self = .ar
+        case .hindi: self = .hi
+        case .bengali: self = .bn
+        case .punjabi: self = .pa
+        case .gujarati: self = .gu
+        case .tamil: self = .ta
+        case .telugu: self = .te
+        case .kannada: self = .kn
+        case .malayalam: self = .ml
+        case .sinhala: self = .si
+        case .unsupportedCyrillic: self = .other
+        case .other: self = Self.recognize(text)
         }
+    }
+
+    static func recognize(_ text: String) -> TelemetrySongLanguage {
+        let recognizer = NLLanguageRecognizer()
+        recognizer.processString(text)
+        guard let (language, confidence) = recognizer.languageHypotheses(withMaximum: 1).first,
+              confidence >= minimumConfidence else { return .other }
+        return recognized[language] ?? .other
     }
 }
 
