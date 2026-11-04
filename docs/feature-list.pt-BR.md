@@ -889,7 +889,7 @@ No máximo uma vez por dia, envia a versão, o macOS, quais recursos estão ativ
 
 ## Todos os ajustes
 
-Todos os ajustes da janela Ajustes, por local: 309 no total. Digite um nome no campo de busca no topo da barra lateral dos Ajustes para ir direto até ele.
+Todos os ajustes da janela Ajustes, por local: 310 no total. Digite um nome no campo de busca no topo da barra lateral dos Ajustes para ir direto até ele.
 
 ### Letra › Origem
 
@@ -947,6 +947,7 @@ Todos os ajustes da janela Ajustes, por local: 309 no total. Digite um nome no c
 - **Acesso Total ao Disco**
 - **Acessibilidade**
 - **Open API do LX Music**: O Lyrimuse lê a posição de reprodução do LX Music e ajusta o volume dele por esta API
+- **API do Pear Desktop**: O Lyrimuse lê do Pear Desktop o ID e o tipo da música atual e a fila de reprodução por esta API
 - **Motor de letras**: Lê o status de reprodução e obtém a letra e a capa
 
 ### Player › Abrir e encerrar

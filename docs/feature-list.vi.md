@@ -889,7 +889,7 @@ Tối đa một lần mỗi ngày, Lyrimuse gửi phiên bản, macOS, các tín
 
 ## Toàn bộ cài đặt
 
-Toàn bộ mục trong cửa sổ Cài đặt, theo vị trí: tổng cộng 309 mục. Gõ tên vào ô tìm kiếm ở đầu thanh bên của Cài đặt để đi thẳng tới mục đó.
+Toàn bộ mục trong cửa sổ Cài đặt, theo vị trí: tổng cộng 310 mục. Gõ tên vào ô tìm kiếm ở đầu thanh bên của Cài đặt để đi thẳng tới mục đó.
 
 ### Lời bài hát › Nguồn
 
@@ -947,6 +947,7 @@ Toàn bộ mục trong cửa sổ Cài đặt, theo vị trí: tổng cộng 309
 - **Quyền truy cập đầy đủ vào ổ đĩa**
 - **Quyền Trợ năng**
 - **LX Music Open API**: Lyrimuse đọc vị trí phát của LX Music và chỉnh âm lượng qua API này
+- **API của Pear Desktop**: Lyrimuse đọc ID, loại của bài đang phát và hàng chờ phát từ Pear Desktop qua API này
 - **Công cụ lời bài hát**: Đọc trạng thái phát, lấy lời bài hát và ảnh bìa
 
 ### Trình phát › Mở & thoát

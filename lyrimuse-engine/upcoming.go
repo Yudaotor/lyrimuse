@@ -108,8 +108,8 @@ func upcomingFromQueue(artist, title, album, bundleID string, durationSecs float
 		// 列表落盘在它的配置目录里,App 代读(foobarqueue.go)。
 		return foobarUpcoming(artist, title, n)
 	case pearDesktopBundleID:
-		// 队列只在它内嵌的网页里,不读,退回同专辑预取(02 章决策 224)。
-		return nil, false
+		// 开着它的本机接口时 App 代读队列,整理成跟 Kaset 同一种回包(kasetqueue.go);没开时退回同专辑预取。
+		return pearUpcoming(artist, title, n)
 	case lxMusicBundleID:
 		return lxMusicUpcoming(artist, title, n)
 	}

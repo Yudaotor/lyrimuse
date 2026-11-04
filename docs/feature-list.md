@@ -889,7 +889,7 @@ At most once a day, sends the version, macOS, which features are on and crash su
 
 ## Every setting
 
-Every setting in the Settings window, by where it lives: 309 in all. Type a name into the search field at the top of the Settings sidebar to jump straight to it.
+Every setting in the Settings window, by where it lives: 310 in all. Type a name into the search field at the top of the Settings sidebar to jump straight to it.
 
 ### Lyrics › Source
 
@@ -947,6 +947,7 @@ Every setting in the Settings window, by where it lives: 309 in all. Type a name
 - **Full Disk Access**
 - **Accessibility**
 - **LX Music Open API**: Lyrimuse reads LX Music’s playback position and adjusts its volume through this API
+- **Pear Desktop API**: Lyrimuse reads the current song’s ID and type and the play queue from Pear Desktop through this API
 - **Lyrics Engine**: Reads playback state and fetches lyrics and artwork
 
 ### Player › Launch & Quit

@@ -5236,6 +5236,10 @@ private struct PlayerSettingsTab: View {
     /// 洛雪开放 API 那一行:它配置里开没开、端口、局域网(`LXMusicOpenAPI.currentConfig`,按修改时间缓存)。
     @State private var lxOpenAPIConfig: LXMusicOpenAPI.Config?
     @State private var showsLXOpenAPIGuide = false
+    /// Pear Desktop 本机接口那一行:开没开、授没授权、连不连得上(`PearDesktopAPI.link`)。
+    @State private var pearLink: PearDesktopAPI.Link = .off
+    @State private var pearConfig: PearDesktopAPI.Config?
+    @State private var showsPearAPIGuide = false
     @State private var isTogglingEngineService = false
     // 只在"这次点了启用、结果没启动起来"时才为真,切走这个 tab 就清掉,不会把上一次失败的
     // 提示留着误导下一次操作。没有它的话,点"启用"失败后前台只会看到红叉+"未运行",跟从没
@@ -6521,6 +6525,8 @@ private struct PlayerSettingsTab: View {
         let accessibilityTargets = accessibility.visiblePlayers(for: stores.players)
         let showsLXOpenAPI = (stores.players.contains(.lxMusic) || stores.players.contains(.auto))
             && InstalledPlayersCache.current().contains(.lxMusic)
+        let showsPearAPI = (stores.players.contains(.pearDesktop) || stores.players.contains(.auto))
+            && InstalledPlayersCache.current().contains(.pearDesktop)
         let permissionRows = !automationTargets.isEmpty || !diskTargets.isEmpty || !accessibilityTargets.isEmpty
         return SettingsCard(cornerRadius: 18) {
             SettingsCardHeader(title: L10n.t("权限与服务")) {
@@ -6533,7 +6539,8 @@ private struct PlayerSettingsTab: View {
             fullDiskAccessRows(diskTargets, afterRows: !automationTargets.isEmpty)
             accessibilityRows(accessibilityTargets, afterRows: !automationTargets.isEmpty || !diskTargets.isEmpty)
             lxOpenAPIRows(showsLXOpenAPI, afterRows: permissionRows)
-            if permissionRows || showsLXOpenAPI {
+            pearAPIRows(showsPearAPI, afterRows: permissionRows || showsLXOpenAPI)
+            if permissionRows || showsLXOpenAPI || showsPearAPI {
                 CardDivider()
             }
             engineRows
@@ -6545,6 +6552,7 @@ private struct PlayerSettingsTab: View {
             if !diskTargets.isEmpty { fullDiskAccess.refresh() }
             if !accessibilityTargets.isEmpty { accessibility.refresh() }
             if showsLXOpenAPI { lxOpenAPIConfig = LXMusicOpenAPI.shared.currentConfig() }
+            if showsPearAPI { refreshPearAPI() }
             refreshEngineState()
             refreshEngineVersionCheck()
             refreshEngineFolderFindings()
@@ -6563,6 +6571,7 @@ private struct PlayerSettingsTab: View {
                 let config = LXMusicOpenAPI.shared.currentConfig()
                 if config != lxOpenAPIConfig { lxOpenAPIConfig = config }
             }
+            if showsPearAPI { refreshPearAPI() }
         }
         // 引擎状态不能只在 onAppear 读一次。
         //
@@ -6696,6 +6705,58 @@ private struct PlayerSettingsTab: View {
                 CardDivider()
                 SettingsNote {
                     Text(L10n.t("已允许局域网访问，同一网络中的设备也可控制洛雪音乐"))
+                        .font(.system(size: 11))
+                        .foregroundStyle(.secondary)
+                }
+            }
+        }
+    }
+
+    private func refreshPearAPI() {
+        let link = PearDesktopAPI.shared.link()
+        if link != pearLink { pearLink = link }
+        let config = PearDesktopAPI.shared.currentConfig()
+        if config != pearConfig { pearConfig = config }
+    }
+
+    /// Pear Desktop 的本机接口(在它「插件」菜单里打开):开了能认出 MV 和播客、读它的队列。不是权限、不开也照常能用,所以没开时
+    /// 灰着、不算故障,侧栏不报。选了 Pear(或自动识别)、本机装了才出现。见 02 章决策 226。
+    @ViewBuilder
+    private func pearAPIRows(_ shows: Bool, afterRows: Bool) -> some View {
+        if shows {
+            let link = pearLink
+            if afterRows { CardDivider() }
+            SettingsRow(
+                icon: link == .connected ? "checkmark.circle.fill" : link == .denied ? "xmark.circle.fill" : "minus.circle.fill",
+                iconTint: link == .connected ? .green : link == .denied ? .orange : .secondary,
+                title: L10n.t("Pear Desktop 接口"),
+                subtitle: {
+                    switch link {
+                    case .off: return L10n.t("未开启 · 开启后能认出 MV 和播客，并提前准备接下来几首的歌词")
+                    case .waiting: return L10n.t("请在 Pear Desktop 中点「允许」")
+                    case .denied: return L10n.t("已拒绝")
+                    case .unreachable: return L10n.t("已开启 · 暂时连不上，请确认 Pear Desktop 正在运行")
+                    case .connected: return L10n.t("已连接")
+                    }
+                }(),
+                help: L10n.t("Lyrimuse 通过此接口读取 Pear Desktop 当前歌曲的 ID、类型和播放队列")
+            ) {
+                if link == .off {
+                    Button(L10n.t("开启方法")) { showsPearAPIGuide = true }
+                        .popover(isPresented: $showsPearAPIGuide, arrowEdge: .bottom) {
+                            PearAPIGuide { showsPearAPIGuide = false }
+                        }
+                } else if link == .denied {
+                    Button(L10n.t("重新请求")) {
+                        PearDesktopAPI.shared.requestAuthorizationAgain()
+                        refreshPearAPI()
+                    }
+                }
+            }
+            if link != .off, pearConfig?.lanReachableWithoutToken == true {
+                CardDivider()
+                SettingsNote {
+                    Text(L10n.t("已允许局域网访问且无需授权，同一网络中的设备也可控制 Pear Desktop"))
                         .font(.system(size: 11))
                         .foregroundStyle(.secondary)
                 }
@@ -8063,6 +8124,31 @@ private struct LXOpenAPIGuide: View {
             .fixedSize(horizontal: false, vertical: true)
             Button(L10n.t("打开洛雪音乐")) {
                 if let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: PlaybackPlayer.lxMusic.bundleIdentifier) {
+                    NSWorkspace.shared.openApplication(at: url, configuration: NSWorkspace.OpenConfiguration())
+                }
+                dismiss()
+            }
+            .settingsGlassButtons()
+        }
+        .padding(14)
+        .frame(width: 300, alignment: .leading)
+    }
+}
+
+/// 「开启方法」那个气泡:在 Pear Desktop 里要点的两步(菜单名取自 Pear 自己的界面),和一颗把它拉到前台的键。
+private struct PearAPIGuide: View {
+    let dismiss: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text(L10n.t("1. 在 Pear Desktop 的「插件」菜单中打开「API 服务器 [测试]」，勾选「已启用」"))
+                Text(L10n.t("2. 首次连接时，在 Pear Desktop 弹出的窗口中点「允许」"))
+            }
+            .font(.callout)
+            .fixedSize(horizontal: false, vertical: true)
+            Button(L10n.t("打开 Pear Desktop")) {
+                if let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: PlaybackPlayer.pearDesktop.bundleIdentifier) {
                     NSWorkspace.shared.openApplication(at: url, configuration: NSWorkspace.OpenConfiguration())
                 }
                 dismiss()

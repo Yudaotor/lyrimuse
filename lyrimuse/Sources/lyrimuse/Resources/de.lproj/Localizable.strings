@@ -126,8 +126,10 @@
 "%d 秒后清除" = "Nach %d Sekunden entfernen";
 "%d 项存在差异（以红色标示）" = "%d Unterschiede (rot markiert)";
 "/ %@ 页" = "von %@";
+"1. 在 Pear Desktop 的「插件」菜单中打开「API 服务器 [测试]」，勾选「已启用」" = "1. Öffne in Pear Desktop im Menü „Erweiterungen“ den Eintrag „API-Server [Beta]“ und aktiviere „Aktiviert“";
 "1. 在洛雪音乐中打开「设置」，找到「开放 API」" = "1. Öffne in LX Music die Einstellungen und suche „Open API“";
 "2. 勾选「启用开放 API 服务」" = "2. Aktiviere „Enable Open API service“";
+"2. 首次连接时，在 Pear Desktop 弹出的窗口中点「允许」" = "2. Klicke bei der ersten Verbindung im Fenster von Pear Desktop auf „Erlauben“";
 "3. 无需勾选「允许来自局域网的访问」" = "3. Lass „Allow access from LAN“ deaktiviert";
 "Amazon Music 专辑页" = "Albumseite in Amazon Music";
 "Amazon Music 曲目 ID 一致" = "Gleiche Amazon Music-Track-ID";
@@ -190,6 +192,7 @@
 "Lyrimuse 将显示正在播放的 App 的歌词，之后可随时在设置中更改" = "Lyrimuse zeigt den Liedtext der App, die gerade abspielt. Du kannst das jederzeit in den Einstellungen ändern";
 "Lyrimuse 无法写入以下位置，歌词引擎因此无法启动：" = "Lyrimuse kann an diese Orte nicht schreiben, daher startet die Liedtext-Engine nicht:";
 "Lyrimuse 标识" = "Lyrimuse-Logo";
+"Lyrimuse 通过此接口读取 Pear Desktop 当前歌曲的 ID、类型和播放队列" = "Lyrimuse liest über diese API ID und Typ des aktuellen Titels sowie die Warteschlange aus Pear Desktop";
 "Lyrimuse 通过此接口读取洛雪音乐的播放进度并调节其音量" = "Lyrimuse liest über diese API die Wiedergabeposition von LX Music und regelt seine Lautstärke";
 "Lyrimuse 需要读取播放器和浏览器中正在播放的歌曲，才能显示同步歌词。" = "Lyrimuse muss Apple Events an Medienplayer und Browser senden, um den aktuellen Titel zu lesen und synchronen Liedtext anzuzeigen.";
 "MV" = "Musikvideo";
@@ -200,6 +203,7 @@
 "OBS" = "OBS";
 "OBS 输出" = "OBS-Ausgabe";
 "POST 到你填的地址" = "POST an die eingegebene URL";
+"Pear Desktop 接口" = "Pear Desktop-API";
 "QQ 群" = "QQ-Gruppe";
 "QQ 音乐" = "QQ Music";
 "QQ 音乐专辑页" = "Albumseite in QQ Music";
@@ -1089,6 +1093,7 @@
 "已修改 %@ 处#one" = "%@ Änderung";
 "已停止重新匹配" = "Neuzuordnung gestoppt";
 "已停用" = "Aus";
+"已允许局域网访问且无需授权，同一网络中的设备也可控制 Pear Desktop" = "Zugriff im lokalen Netzwerk ist ohne Autorisierung erlaubt, daher können auch Geräte im selben Netzwerk Pear Desktop steuern";
 "已允许局域网访问，同一网络中的设备也可控制洛雪音乐" = "Zugriff im lokalen Netzwerk ist erlaubt, daher können auch Geräte im selben Netzwerk LX Music steuern";
 "已减少推荐" = "Weniger vorgeschlagen";
 "已分享的链接将失效" = "Bereits geteilte Links funktionieren dann nicht mehr";
@@ -1132,6 +1137,7 @@
 "已应用编辑器中的修改" = "Änderungen aus dem Editor übernommen";
 "已开启" = "Ein";
 "已开启 %@ / %@" = "%@ von %@ aktiv";
+"已开启 · 暂时连不上，请确认 Pear Desktop 正在运行" = "An · Gerade keine Verbindung, prüfe, ob Pear Desktop läuft";
 "已开启「隐藏歌曲信息」" = "„Titeldetails ausblenden“ ist aktiviert";
 "已开启「隐藏歌曲信息」，与歌曲相关的选项暂不生效" = "„Titeldetails ausblenden“ ist aktiviert, daher wirken titelbezogene Optionen vorerst nicht";
 "已恢复 %d 个歌词文件（新增 %d、覆盖 %d）" = "%d Liedtextdateien wiederhergestellt (%d neu, %d überschrieben)";
@@ -1361,6 +1367,7 @@
 "打开 Discord" = "Discord öffnen";
 "打开 Last.fm 网站，在「Spotify Scrobbling」一栏点按 Connect" = "Öffnet die Last.fm-Website: Klicke neben „Spotify Scrobbling“ auf „Connect“";
 "打开 Last.fm 网站，在「Spotify Scrobbling」一栏点按 Disconnect；之后仅记录这台 Mac 上播放的 Spotify" = "Öffnet die Last.fm-Website: Klicke neben „Spotify Scrobbling“ auf „Disconnect“. Danach wird nur noch Spotify auf diesem Mac erfasst";
+"打开 Pear Desktop" = "Pear Desktop öffnen";
 "打开 sct.ftqq.com，使用微信扫码登录，首页将显示 SendKey。完整地址为 https://sctapi.ftqq.com/你的SendKey.send，请将完整地址填入上方" = "Öffne sct.ftqq.com und melde dich an, indem du den QR-Code mit WeChat scannst – dein SendKey erscheint auf der Startseite. Die vollständige URL lautet https://sctapi.ftqq.com/DeinSendKey.send; füge diese ganze Adresse oben ein";
 "打开「%@」设置" = "Einstellungen für „%@“ öffnen";
 "打开备份文件夹" = "Backup-Ordner öffnen";
@@ -1768,6 +1775,7 @@
 "未应答" = "Keine Antwort";
 "未开启" = "Aus";
 "未开启 · 开启后播放进度更准确，并可调节洛雪音乐的音量" = "Aus · Aktiviere sie für genaueres Timing und Lautstärkeregelung in LX Music";
+"未开启 · 开启后能认出 MV 和播客，并提前准备接下来几首的歌词" = "Aus · Aktiviere sie, um Musikvideos und Podcasts zu erkennen und den Liedtext der nächsten Titel vorzubereiten";
 "未找到匹配的设置" = "Keine passenden Einstellungen";
 "未找到可打开文本文件的应用" = "Keine App gefunden, die Textdateien öffnen kann";
 "未找到带时间戳的版本，已自动采用纯文本歌词（可在「歌词窗口」中查看）" = "Keine Version mit Timing gefunden; reiner Text wurde automatisch übernommen (im Liedtextfenster einsehbar)";
@@ -2563,6 +2571,7 @@
 "请先播放一首歌曲，再选择「搜索歌词…」" = "Spiele einen Titel ab und wähle dann erneut „Liedtext suchen …“";
 "请启用歌词引擎，并开启以下权限；未开启的权限仅影响对应功能" = "Schalte die Liedtext-Engine und die Berechtigungen unten ein; eine fehlende Berechtigung betrifft nur ihre eigene Funktion";
 "请在 @BotFather 中核对 Token" = "Prüfe das Token bei @BotFather";
+"请在 Pear Desktop 中点「允许」" = "Klicke in Pear Desktop auf „Erlauben“";
 "请在「访问令牌」中填写以 tk_ 开头的令牌，或「用户名:密码」" = "Gib unter „Zugriffstoken“ ein Token ein, das mit tk_ beginnt, oder „Benutzername:Passwort“";
 "请在平台上重新拷贝地址" = "Kopiere die URL erneut von der Plattform";
 "请在机器人安全设置中关闭 IP 白名单，或改用签名校验" = "Deaktiviere die IP-Zulassungsliste in den Sicherheitseinstellungen des Bots oder nutze stattdessen die Signaturprüfung";
@@ -2824,6 +2833,7 @@
 "重新联网匹配，直接采用算法选出的结果，依据设置中的「匹配算法」" = "Online neu zuordnen und das Ergebnis des Algorithmus übernehmen, gemäß der Einstellung „Zuordnungsalgorithmus“";
 "重新自动匹配" = "Automatisch neu zuordnen";
 "重新自动匹配选中的 %@ 首" = "Auswahl neu zuordnen (%@)";
+"重新请求" = "Erneut anfragen";
 "重新运行引导…" = "Einrichtung erneut ausführen …";
 "重新连接" = "Neu verbinden";
 "重新连接…" = "Erneut verbinden …";

@@ -889,7 +889,7 @@ Como máximo una vez al día, envía al servidor del propio autor la versión, e
 
 ## Todos los ajustes
 
-Todos los ajustes de la ventana Ajustes, según dónde están: 309 en total. Escribe un nombre en el campo de búsqueda de la parte superior de la barra lateral de Ajustes para ir directamente a él.
+Todos los ajustes de la ventana Ajustes, según dónde están: 310 en total. Escribe un nombre en el campo de búsqueda de la parte superior de la barra lateral de Ajustes para ir directamente a él.
 
 ### Letra › Fuente
 
@@ -947,6 +947,7 @@ Todos los ajustes de la ventana Ajustes, según dónde están: 309 en total. Esc
 - **Acceso total al disco**
 - **Accesibilidad**
 - **Open API de LX Music**: Lyrimuse lee la posición de reproducción de LX Music y ajusta su volumen mediante esta API
+- **API de Pear Desktop**: Lyrimuse lee de Pear Desktop el ID y el tipo de la canción actual y la cola de reproducción a través de esta API
 - **Motor de letras**: Lee el estado de reproducción y obtiene la letra y la ilustración
 
 ### Reproductor › Abrir y salir

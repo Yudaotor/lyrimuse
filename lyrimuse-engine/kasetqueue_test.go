@@ -90,3 +90,34 @@ func TestParseKasetQueueAmbiguousAndBlankRows(t *testing.T) {
 		t.Errorf("缺歌名或歌手的跳过: ok=%v got=%v", ok, kasetTitles(got))
 	}
 }
+
+// Pear Desktop 的队列由 App 整理成同一种回包,每格多一个专辑(PearDesktopAPI.queueReply):专辑带进预解析,缓存键才跟真播时对得上。
+func TestParseKasetQueueCarriesAlbum(t *testing.T) {
+	out := `{"current_index":0,"repeating":"off","tracks":[` +
+		`{"title":"青花瓷","artist":"周杰倫","duration":239,"video_id":"Q8Tiz6INF7I","audio_video_id":"Q8Tiz6INF7I","album":"我很忙"},` +
+		`{"title":"晴天","artist":"周杰伦","duration":318,"video_id":"DYptgVvkVLQ","audio_video_id":"DYptgVvkVLQ"},` +
+		`{"title":"稻香","artist":"周杰倫","duration":223,"video_id":"sHD_z90ZKV0","audio_video_id":"sHD_z90ZKV0","album":"魔杰座"}]}`
+	got, ok := parseKasetQueue(out, "周杰倫", "青花瓷", 5)
+	if !ok || len(got) != 2 {
+		t.Fatalf("取到后两首: ok=%v got=%v", ok, kasetTitles(got))
+	}
+	if got[0].album != "" || got[1].album != "魔杰座" {
+		t.Errorf("专辑原样带上,没有的为空: %q %q", got[0].album, got[1].album)
+	}
+}
+
+func TestYouTubeMusicClient(t *testing.T) {
+	for b, want := range map[string]bool{kasetBundleID: true, pearDesktopBundleID: true, appleMusicBundleID: false, "": false} {
+		if youtubeMusicClient(b) != want {
+			t.Errorf("youtubeMusicClient(%q) 应为 %v", b, want)
+		}
+	}
+	noteKasetCurrentTrack(pearDesktopBundleID, "周杰倫", "青花瓷", "Q8Tiz6INF7I")
+	defer noteKasetCurrentTrack("", "", "", "")
+	if got := kasetVideoIDFor(pearDesktopBundleID, "周杰倫", "青花瓷"); got != "Q8Tiz6INF7I" {
+		t.Errorf("Pear Desktop 带来的 videoId 记下来: %q", got)
+	}
+	if got := kasetVideoIDFor(appleMusicBundleID, "周杰倫", "青花瓷"); got != "" {
+		t.Errorf("换成别的播放器不给: %q", got)
+	}
+}

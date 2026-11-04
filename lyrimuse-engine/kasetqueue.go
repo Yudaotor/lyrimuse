@@ -23,6 +23,8 @@ type kasetQueueReply struct {
 		Duration     float64 `json:"duration"`
 		VideoID      string  `json:"video_id"`
 		AudioVideoID string  `json:"audio_video_id"`
+		// Album:Kaset 的队列不给;Pear Desktop 的队列从署名串里取(App 侧 PearDesktopAPI.queueReply)。
+		Album string `json:"album"`
 	} `json:"tracks"`
 }
 
@@ -73,7 +75,18 @@ func kasetAudioVideoIDFor(videoID string) string {
 }
 
 func kasetUpcoming(artist, title string, n int) ([]upcomingTrack, bool) {
-	out, ok := askApp(appQueryRequest{Kind: appQueryKasetQueue}, appQueryScriptTimeout)
+	return youtubeMusicQueueUpcoming(appQueryKasetQueue, artist, title, n)
+}
+
+// pearUpcoming:Pear Desktop 的队列,App 经它的本机接口读来、整理成 kasetQueueReply(PearDesktopAPI.queueReply)。
+// 接口没开、没授权时 App 交不出,退回同专辑预取。
+func pearUpcoming(artist, title string, n int) ([]upcomingTrack, bool) {
+	return youtubeMusicQueueUpcoming(appQueryPearQueue, artist, title, n)
+}
+
+// youtubeMusicQueueUpcoming:问 App 要 YouTube Music 客户端的队列(kind 是哪一家),取当前这首之后的 n 首。
+func youtubeMusicQueueUpcoming(kind, artist, title string, n int) ([]upcomingTrack, bool) {
+	out, ok := askApp(appQueryRequest{Kind: kind}, appQueryScriptTimeout)
 	if !ok {
 		return nil, false
 	}
@@ -132,7 +145,7 @@ func parseKasetQueue(out, artist, title string, n int) ([]upcomingTrack, bool) {
 		if t.Title == "" || t.Artist == "" {
 			continue
 		}
-		res = append(res, upcomingTrack{artist: t.Artist, title: t.Title, duration: t.Duration, videoID: t.VideoID})
+		res = append(res, upcomingTrack{artist: t.Artist, title: t.Title, album: t.Album, duration: t.Duration, videoID: t.VideoID})
 	}
 	return res, true
 }

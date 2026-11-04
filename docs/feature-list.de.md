@@ -889,7 +889,7 @@ Sendet höchstens einmal täglich Version, macOS, aktivierte Funktionen und Abst
 
 ## Alle Einstellungen
 
-Alle Einstellungen des Einstellungsfensters nach Ort: insgesamt 309. Gib einen Namen in das Suchfeld oben in der Seitenleiste der Einstellungen ein, um direkt dorthin zu springen.
+Alle Einstellungen des Einstellungsfensters nach Ort: insgesamt 310. Gib einen Namen in das Suchfeld oben in der Seitenleiste der Einstellungen ein, um direkt dorthin zu springen.
 
 ### Liedtext › Quelle
 
@@ -947,6 +947,7 @@ Alle Einstellungen des Einstellungsfensters nach Ort: insgesamt 309. Gib einen N
 - **Festplattenvollzugriff**
 - **Bedienungshilfen**
 - **LX Music Open API**: Lyrimuse liest über diese API die Wiedergabeposition von LX Music und regelt seine Lautstärke
+- **Pear Desktop-API**: Lyrimuse liest über diese API ID und Typ des aktuellen Titels sowie die Warteschlange aus Pear Desktop
 - **Liedtext-Engine**: Liest den Wiedergabestatus und lädt Liedtext und Cover
 
 ### Player › Starten & Beenden

@@ -120,6 +120,11 @@ public enum MediaControlClient {
         if !players.contains(.auto), !players.contains(.kaset) { forgetKasetPreference() }
         let lxMusicWanted = players.contains(.auto) || players.contains(.lxMusic)
         if !lxMusicWanted { forgetLXMusicPreference() }
+        // Pear Desktop 开着、接口开着就先把令牌要好,不等它在系统里报:刚打开接口时人还在 Pear 里,授权框这时弹最顺。
+        if players.contains(.auto) || players.contains(.pearDesktop) {
+            PearDesktopAPI.shared.noteAppRunning(
+                !NSRunningApplication.runningApplications(withBundleIdentifier: PlaybackPlayer.pearDesktop.bundleIdentifier).isEmpty)
+        }
         if players.contains(.auto) {
             let found = fetchAutoDetectedSnapshot()
             noteSystemReading(found)
@@ -2439,6 +2444,8 @@ public enum MediaControlClient {
         // 真值,跟普通曲目一样整份顶替,只把电台标记带过去。
         let perTrackRadio = mediaControl.isRadio == true && radioTrackIsPerTrack(mediaControl.trackKey)
         guard mediaControl.isRadio != true || perTrackRadio else { return mediaControl }
+        // Pear Desktop 不读脚本,按它的本机接口补几样,不进下面那个只放脚本读数的 switch(决定表的源码契约按它点名的几家核对)。
+        if bundleID == PlaybackPlayer.pearDesktop.bundleIdentifier { return pearDesktopReading(mediaControl) }
         // 拿不到(没授「自动化」权限 / 播放器不可达 / 超时)一律退回 media-control 这份,不整个放弃。
         switch bundleID {
         case PlaybackPlayer.appleMusic.bundleIdentifier:
@@ -2471,6 +2478,34 @@ public enum MediaControlClient {
         default:
             return mediaControl
         }
+    }
+
+    /// Pear Desktop 开着本机接口时按它补上系统会话给不了的:播客单集这一拍不报(同 Kaset 的 `KasetVideoKind`),视频版打上 MV
+    /// 标记,广告打上广告标记(它的广告有自己的标题,不跟正片共用身份);videoId 由 `PearDesktopAPI` 按曲目记下,写播放状态时
+    /// 带给引擎。接口没开、对不上这一首时原样用系统那份。见 02 章决策 226。
+    private static func pearDesktopReading(_ mediaControl: MediaControlSnapshot) -> MediaControlSnapshot? {
+        guard let reading = PearDesktopAPI.shared.reading(for: mediaControl) else { return mediaControl }
+        let song: PearDesktopAPI.Song
+        switch reading {
+        case .undecided:
+            setSnapshotFailure(.targetNotPlayingMusic)
+            return nil
+        case .ad:
+            var ad = mediaControl
+            ad.isAd = true
+            return ad
+        case .song(let s):
+            song = s
+        }
+        if song.isPodcastEpisode {
+            setSnapshotFailure(.targetNotPlayingMusic)
+            return nil
+        }
+        // 明说是正片:前一拍要是按广告走了,这里让广告态回落(`LocalPlaybackSource.playerAdVerdict`)。
+        var marked = mediaControl
+        marked.isAd = false
+        if let video = song.isMusicVideo { marked.isMusicVideo = video }
+        return marked
     }
 
     // 封面图——跟 fetchSnapshot()/fetchRawMediaControlSnapshot() 完全独立的一条轻量

@@ -339,19 +339,23 @@ public enum KasetPlayerInfo {
             /// 音轨版本的 videoId(Kaset 的 `audioVideoId`):队列里那一格常是 MV / 视频版本,YouTube Music 只给音轨版本
             /// 登记专辑。没有配对的音轨时就是 `videoID` 自己。
             public let audioVideoID: String?
+            /// 专辑:Kaset 的队列不给,为 nil;Pear Desktop 的队列从署名串里取(`PearDesktopAPI.queueReply`)。
+            public let album: String?
 
             enum CodingKeys: String, CodingKey {
-                case title, artist, duration
+                case title, artist, duration, album
                 case videoID = "video_id"
                 case audioVideoID = "audio_video_id"
             }
 
-            public init(title: String, artist: String, duration: Double?, videoID: String?, audioVideoID: String? = nil) {
+            public init(title: String, artist: String, duration: Double?, videoID: String?, audioVideoID: String? = nil,
+                        album: String? = nil) {
                 self.title = title
                 self.artist = artist
                 self.duration = duration
                 self.videoID = videoID
                 self.audioVideoID = audioVideoID
+                self.album = album
             }
         }
 

@@ -446,6 +446,15 @@ public final class LocalPlaybackSource: ObservableObject {
         return MediaControlClient.kasetVideoID(forTrackKey: snapshot.trackKey)
     }
 
+    /// 这个播放器报的这首在 YouTube Music 上的 videoId:Kaset 读它的脚本接口,Pear Desktop 读它的本机接口(开着时);别家 nil。
+    nonisolated static func youtubeMusicVideoID(bundleID: String?, trackKey: String) -> String? {
+        switch bundleID {
+        case PlaybackPlayer.kaset.bundleIdentifier: return MediaControlClient.kasetVideoID(forTrackKey: trackKey)
+        case PlaybackPlayer.pearDesktop.bundleIdentifier: return PearDesktopAPI.shared.videoID(forTrackKey: trackKey)
+        default: return nil
+        }
+    }
+
     // ---- 播放位置平滑 --------------------
     //
     // 不能每次轮询都把读数直接当新锚点:QQ 音乐没有 AppleScript,elapsedTime 来自 media-control --now 的 elapsedTimeNow
@@ -2272,11 +2281,12 @@ public final class LocalPlaybackSource: ObservableObject {
         return previous == currentKey ? previous : nil
     }
 
-    /// 快照明说这一首此刻不是 MV。只认 Spotify 那一位(系统报音频,`MediaControlClient.spotifyMusicVideoMark`):同一首在
-    /// 视频、音频之间切,歌名歌手不变,不清就一直按 MV 处理。Apple Music 的 false 可能是读 `media kind` 失败,不算。
-    /// 纯函数,selftest 覆盖。
+    /// 快照明说这一首此刻不是 MV。只认 Spotify(系统报音频,`MediaControlClient.spotifyMusicVideoMark`)和 Pear Desktop(本机
+    /// 接口报歌曲版,`PearDesktopAPI.Song.isMusicVideo`)那一位:同一首在视频、音频之间切,歌名歌手不变,不清就一直按 MV 处理。
+    /// Apple Music 的 false 可能是读 `media kind` 失败,不算。纯函数,selftest 覆盖。
     public nonisolated static func snapshotSaysNotMusicVideo(_ snapshot: MediaControlSnapshot) -> Bool {
-        snapshot.isMusicVideo == false && snapshot.bundleIdentifier == PlaybackPlayer.spotify.bundleIdentifier
+        snapshot.isMusicVideo == false && (snapshot.bundleIdentifier == PlaybackPlayer.spotify.bundleIdentifier
+            || snapshot.bundleIdentifier == PlaybackPlayer.pearDesktop.bundleIdentifier)
     }
 
     /// 换歌 / 停播时清掉 MV 时间轴(偏移随下一次 applyOffsets 归零)。
@@ -3768,8 +3778,7 @@ public final class LocalPlaybackSource: ObservableObject {
                 ? AmazonMusicLogWatcher.shared.logTrackID(
                     forTrackKey: MediaControlSnapshot.trackKey(artist: snapshot.artist, title: snapshot.title))
                 : nil,
-            youtubeMusicVideoID: bundleID == PlaybackPlayer.kaset.bundleIdentifier
-                ? MediaControlClient.kasetVideoID(forTrackKey: snapshot.trackKey) : nil,
+            youtubeMusicVideoID: Self.youtubeMusicVideoID(bundleID: bundleID, trackKey: snapshot.trackKey),
             localFile: bundleID == VoxPlayerInfo.bundleID
                 ? VoxPlayerInfo.currentFilePath(artist: snapshot.artist ?? "", title: snapshot.title ?? "")
                 : bundleID == PinePlayerInfo.bundleID
@@ -4397,10 +4406,10 @@ public final class LocalPlaybackSource: ObservableObject {
             reloadCurrentLyrics()
             if !trackChanged { recheckMusicVideoTimelineIfLyricsChanged(forKey: snapshot.trackKey) }
         }
-        // Kaset 放的是视频版:跟网页播放器一样按 SponsorBlock 片段换算时间轴(同一首只查一次,见 noteMusicVideo)。
+        // Kaset、Pear Desktop 放的是视频版:跟网页播放器一样按 SponsorBlock 片段换算时间轴(同一首只查一次,见 noteMusicVideo)。
         // 要排在上面换歌清时间轴之后,不然换歌那一拍记下的「查过了」被清掉,下一拍再查一次。
-        if isMusicVideo, snapshot.bundleIdentifier == PlaybackPlayer.kaset.bundleIdentifier,
-           let videoID = MediaControlClient.kasetVideoID(forTrackKey: snapshot.trackKey) {
+        if isMusicVideo,
+           let videoID = Self.youtubeMusicVideoID(bundleID: snapshot.bundleIdentifier, trackKey: snapshot.trackKey) {
             noteMusicVideo(videoID: videoID, forKey: snapshot.trackKey)
         }
         // 换了播放器也要重算偏移 —— 上面那个 reload 的触发条件是「换歌 / 没内容 / 缓存变了」,

@@ -101,8 +101,10 @@
 "%d 秒后清除" = "Xóa sau %d giây";
 "%d 项存在差异（以红色标示）" = "%d chỗ khác biệt (tô màu đỏ)";
 "/ %@ 页" = "/ %@";
+"1. 在 Pear Desktop 的「插件」菜单中打开「API 服务器 [测试]」，勾选「已启用」" = "1. Trong menu “Trình bổ sung” của Pear Desktop, mở “Máy chủ API [Thử nghiệm]” và đánh dấu “Đã bật”";
 "1. 在洛雪音乐中打开「设置」，找到「开放 API」" = "1. Trong LX Music, mở “Settings” và tìm “Open API”";
 "2. 勾选「启用开放 API 服务」" = "2. Chọn “Enable Open API service”";
+"2. 首次连接时，在 Pear Desktop 弹出的窗口中点「允许」" = "2. Lần kết nối đầu tiên, bấm “Cho phép” trong cửa sổ Pear Desktop hiện ra";
 "3. 无需勾选「允许来自局域网的访问」" = "3. Không cần chọn “Allow access from LAN”";
 "Amazon Music 专辑页" = "Trang album Amazon Music";
 "Amazon Music 曲目 ID 一致" = "Cùng ID bài hát Amazon Music";
@@ -165,6 +167,7 @@
 "Lyrimuse 将显示正在播放的 App 的歌词，之后可随时在设置中更改" = "Lyrimuse hiển thị lời bài hát cho ứng dụng đang phát. Bạn có thể thay đổi trong Cài đặt bất kỳ lúc nào";
 "Lyrimuse 无法写入以下位置，歌词引擎因此无法启动：" = "Lyrimuse không thể ghi vào các vị trí sau nên công cụ lời bài hát không khởi động được:";
 "Lyrimuse 标识" = "Logo Lyrimuse";
+"Lyrimuse 通过此接口读取 Pear Desktop 当前歌曲的 ID、类型和播放队列" = "Lyrimuse đọc ID, loại của bài đang phát và hàng chờ phát từ Pear Desktop qua API này";
 "Lyrimuse 通过此接口读取洛雪音乐的播放进度并调节其音量" = "Lyrimuse đọc vị trí phát của LX Music và chỉnh âm lượng qua API này";
 "Lyrimuse 需要读取播放器和浏览器中正在播放的歌曲，才能显示同步歌词。" = "Lyrimuse cần đọc bài hát đang phát trong trình phát và trình duyệt để hiển thị lời đồng bộ.";
 "MV" = "Video nhạc";
@@ -175,6 +178,7 @@
 "OBS" = "OBS";
 "OBS 输出" = "Đầu ra OBS";
 "POST 到你填的地址" = "POST đến địa chỉ bạn đã nhập";
+"Pear Desktop 接口" = "API của Pear Desktop";
 "QQ 群" = "Nhóm QQ";
 "QQ 音乐" = "QQ Music";
 "QQ 音乐专辑页" = "Trang album QQ Music";
@@ -1027,6 +1031,7 @@
 "已修改 %@ 处" = "%@ thay đổi";
 "已停止重新匹配" = "Đã dừng tìm lại";
 "已停用" = "Đã tắt";
+"已允许局域网访问且无需授权，同一网络中的设备也可控制 Pear Desktop" = "Đã cho phép truy cập mạng cục bộ mà không cần xác thực, thiết bị trong cùng mạng cũng điều khiển được Pear Desktop";
 "已允许局域网访问，同一网络中的设备也可控制洛雪音乐" = "Đã cho phép truy cập mạng cục bộ, thiết bị trong cùng mạng cũng điều khiển được LX Music";
 "已减少推荐" = "Đã ẩn bớt gợi ý";
 "已分享的链接将失效" = "Các liên kết đã chia sẻ sẽ hết hiệu lực";
@@ -1067,6 +1072,7 @@
 "已应用编辑器中的修改" = "Đã áp dụng thay đổi từ trình soạn thảo";
 "已开启" = "Đã bật";
 "已开启 %@ / %@" = "Đã bật %@ / %@";
+"已开启 · 暂时连不上，请确认 Pear Desktop 正在运行" = "Đã bật · Tạm thời không kết nối được, hãy kiểm tra Pear Desktop có đang chạy không";
 "已开启「隐藏歌曲信息」" = "Đã bật “Ẩn thông tin bài hát”";
 "已开启「隐藏歌曲信息」，与歌曲相关的选项暂不生效" = "Đã bật “Ẩn thông tin bài hát”, các tùy chọn liên quan đến bài hát tạm thời không có tác dụng";
 "已恢复 %d 个歌词文件（新增 %d、覆盖 %d）" = "Đã khôi phục %d tệp lời (thêm mới %d, ghi đè %d)";
@@ -1288,6 +1294,7 @@
 "打开 Discord" = "Mở Discord";
 "打开 Last.fm 网站，在「Spotify Scrobbling」一栏点按 Connect" = "Mở trang web Last.fm, bấm Connect ở mục “Spotify Scrobbling”";
 "打开 Last.fm 网站，在「Spotify Scrobbling」一栏点按 Disconnect；之后仅记录这台 Mac 上播放的 Spotify" = "Mở trang web Last.fm, bấm Disconnect ở mục “Spotify Scrobbling”; sau đó chỉ ghi Spotify phát trên máy Mac này";
+"打开 Pear Desktop" = "Mở Pear Desktop";
 "打开 sct.ftqq.com，使用微信扫码登录，首页将显示 SendKey。完整地址为 https://sctapi.ftqq.com/你的SendKey.send，请将完整地址填入上方" = "Truy cập sct.ftqq.com, quét mã QR bằng WeChat để đăng nhập, SendKey sẽ hiện ở trang chủ. Địa chỉ đầy đủ là https://sctapi.ftqq.com/SendKeyCủaBạn.send, hãy dán toàn bộ địa chỉ đó vào ô phía trên";
 "打开「%@」设置" = "Mở cài đặt “%@”";
 "打开备份文件夹" = "Mở thư mục sao lưu";
@@ -1689,6 +1696,7 @@
 "未应答" = "Không phản hồi";
 "未开启" = "Đã tắt";
 "未开启 · 开启后播放进度更准确，并可调节洛雪音乐的音量" = "Chưa bật · Bật để tiến trình chính xác hơn và chỉnh được âm lượng LX Music";
+"未开启 · 开启后能认出 MV 和播客，并提前准备接下来几首的歌词" = "Chưa bật · Bật để nhận ra MV và podcast, và chuẩn bị sẵn lời cho mấy bài tiếp theo";
 "未找到匹配的设置" = "Không tìm thấy cài đặt phù hợp";
 "未找到可打开文本文件的应用" = "Không tìm thấy ứng dụng nào mở được tệp văn bản";
 "未找到带时间戳的版本，已自动采用纯文本歌词（可在「歌词窗口」中查看）" = "Không tìm thấy bản có dấu thời gian, đã tự dùng lời văn bản thuần (xem trong “Cửa sổ lời”)";
@@ -2473,6 +2481,7 @@
 "请先播放一首歌曲，再选择「搜索歌词…」" = "Hãy phát một bài hát trước, rồi chọn “Tìm lời bài hát…”";
 "请启用歌词引擎，并开启以下权限；未开启的权限仅影响对应功能" = "Bật công cụ lời bài hát và các quyền dưới đây; quyền nào chưa bật chỉ ảnh hưởng đến tính năng tương ứng";
 "请在 @BotFather 中核对 Token" = "Kiểm tra lại token với @BotFather";
+"请在 Pear Desktop 中点「允许」" = "Hãy bấm “Cho phép” trong Pear Desktop";
 "请在「访问令牌」中填写以 tk_ 开头的令牌，或「用户名:密码」" = "Trong “Token truy cập”, điền token bắt đầu bằng tk_, hoặc “tên người dùng:mật khẩu”";
 "请在平台上重新拷贝地址" = "Sao chép lại địa chỉ trên nền tảng";
 "请在机器人安全设置中关闭 IP 白名单，或改用签名校验" = "Tắt danh sách IP cho phép trong cài đặt bảo mật của bot, hoặc chuyển sang xác minh chữ ký";
@@ -2732,6 +2741,7 @@
 "重新联网匹配，直接采用算法选出的结果，依据设置中的「匹配算法」" = "Tìm lại trực tuyến và dùng ngay kết quả do thuật toán chọn, theo cài đặt “Thuật toán khớp”";
 "重新自动匹配" = "Tự động tìm lại";
 "重新自动匹配选中的 %@ 首" = "Tự động tìm lại %@ bài đã chọn";
+"重新请求" = "Yêu cầu lại";
 "重新运行引导…" = "Chạy lại hướng dẫn thiết lập…";
 "重新连接" = "Kết nối lại";
 "重新连接…" = "Kết nối lại…";

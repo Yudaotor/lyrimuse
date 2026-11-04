@@ -33,6 +33,7 @@ func TestKasetLyricsWorthRecheck(t *testing.T) {
 		{"词已经是自家源的", with(func(e *enrichEntry) { e.LyricsSource = "lyricfind" }),
 			kasetBundleID, "Song0000001", "Song0000001", false, true, true, false},
 		{"不是 Kaset 放的", base, "com.apple.Music", "Song0000001", "Song0000001", false, true, true, false},
+		{"Pear Desktop 放的同样按 videoId 问", base, pearDesktopBundleID, "Song0000001", "Song0000001", false, true, true, true},
 		{"没有 videoId", base, kasetBundleID, "", "", false, true, true, false},
 		{"没词交给补空那条", with(func(e *enrichEntry) { e.Lyrics = bodyText{} }),
 			kasetBundleID, "Song0000001", "Song0000001", false, true, true, false},

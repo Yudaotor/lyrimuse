@@ -889,7 +889,7 @@ Al massimo una volta al giorno invia versione, macOS, funzioni attive e riepilog
 
 ## Tutte le impostazioni
 
-Tutte le impostazioni della finestra Impostazioni, per posizione: 309 in tutto. Scrivi un nome nel campo di ricerca in cima alla barra laterale delle Impostazioni per andarci direttamente.
+Tutte le impostazioni della finestra Impostazioni, per posizione: 310 in tutto. Scrivi un nome nel campo di ricerca in cima alla barra laterale delle Impostazioni per andarci direttamente.
 
 ### Testo › Fonte
 
@@ -947,6 +947,7 @@ Tutte le impostazioni della finestra Impostazioni, per posizione: 309 in tutto. 
 - **Accesso completo al disco**
 - **Accessibilità**
 - **Open API di LX Music**: Lyrimuse legge la posizione di riproduzione di LX Music e ne regola il volume tramite questa API
+- **API di Pear Desktop**: Lyrimuse legge da Pear Desktop l’ID e il tipo del brano in riproduzione e la coda tramite questa API
 - **Motore dei testi**: Legge lo stato di riproduzione e recupera testi e illustrazioni
 
 ### Player › Avvio e uscita

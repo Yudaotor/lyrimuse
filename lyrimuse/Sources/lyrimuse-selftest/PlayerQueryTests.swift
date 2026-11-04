@@ -114,7 +114,7 @@ func runPlayerQueryTests() {
                        "output.map(site.parse)", "KasetPlayerInfo.queueReply(fromScriptOutput:"] {
             expectEqual(server.contains(needle), true, "查询(契约): 输出整理成结构再交(\(needle))")
         }
-        expectEqual(S.Kind.allCases.count, 11, "查询: 十一种,跟引擎的 appQuery 常量一一对应")
+        expectEqual(S.Kind.allCases.count, 12, "查询: 十二种,跟引擎的 appQuery 常量一一对应")
     }
 
     // ---- 盯配置目录:原子写(临时文件改名)触发回调;目录本身删掉报告失效(09 章决策 175)----

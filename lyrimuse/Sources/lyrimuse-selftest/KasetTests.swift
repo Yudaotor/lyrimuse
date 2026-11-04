@@ -750,7 +750,8 @@ func runKasetTests() {
                                      "trackPosSeconds = Self.resumeReadingNeverLeads( bundleID: lastSnapshot?.bundleIdentifier,"), true,
                     "Kaset 契约: 网页时钟跟读数对上才用;恢复那一拍按播放器决定削不削")
         let playbackSource = src("LyrimuseCore/Local/LocalPlaybackSource.swift")
-        expectEqual(playbackSource.contains("if isMusicVideo, snapshot.bundleIdentifier == PlaybackPlayer.kaset.bundleIdentifier,")
+        expectEqual(playbackSource.contains("let videoID = Self.youtubeMusicVideoID(bundleID: snapshot.bundleIdentifier, trackKey: snapshot.trackKey) {")
+                        && playbackSource.contains("case PlaybackPlayer.kaset.bundleIdentifier: return MediaControlClient.kasetVideoID(forTrackKey: trackKey)")
                         && playbackSource.contains("noteMusicVideo(videoID: videoID, forKey: snapshot.trackKey)")
                         && playbackSource.contains("noteMusicVideo(videoID: video.videoID, forKey: key)"), true,
                     "Kaset 契约: 放的是视频版时跟网页播放器走同一套 MV 时间轴")

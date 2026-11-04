@@ -2,8 +2,14 @@ package main
 
 import "sync"
 
-// Kaset 放的这首在 YouTube Music 上的歌曲页。App 把 Kaset 报的 videoId 经播放状态带过来
+// Kaset、Pear Desktop 放的这首在 YouTube Music 上的歌曲页。App 把播放器报的 videoId 经播放状态带过来
 // (`track.youtube_music_video_id`),这里记下这一拍的曲目,解析歌词那一轮按歌名歌手认出是同一首才拼成链接存进缓存。
+// 名字里的 kaset 是先接它留下的;按 videoId 做的事两家都一样(Pear 的 videoId 来自它的本机接口,见 02 章决策 226)。
+
+// youtubeMusicClient:这个播放器放的是 YouTube Music 曲库、App 会带来 videoId。
+func youtubeMusicClient(bundleID string) bool {
+	return bundleID == kasetBundleID || bundleID == pearDesktopBundleID
+}
 
 var (
 	kasetCurrentMu sync.Mutex
@@ -11,9 +17,9 @@ var (
 	kasetCurrentTrack struct{ artist, title, videoID string }
 )
 
-// noteKasetCurrentTrack 记下 App 这一拍报的当前曲目。不是 Kaset、或者没带 videoId 就清空。
+// noteKasetCurrentTrack 记下 App 这一拍报的当前曲目。不是 YouTube Music 客户端、或者没带 videoId 就清空。
 func noteKasetCurrentTrack(bundleID, artist, title, videoID string) {
-	if bundleID != kasetBundleID || videoID == "" {
+	if !youtubeMusicClient(bundleID) || videoID == "" {
 		artist, title, videoID = "", "", ""
 	}
 	kasetCurrentMu.Lock()
@@ -35,10 +41,10 @@ func youtubeMusicWatchURL(videoID string) string {
 	return "https://music.youtube.com/watch?v=" + videoID
 }
 
-// kasetVideoIDFor:正用 Kaset 放、而且 App 带来了这首的 videoId,返回它。解析那一轮拿到的歌名已经过 normEnrichTitle
+// kasetVideoIDFor:正用 Kaset 或 Pear Desktop 放、而且 App 带来了这首的 videoId,返回它。解析那一轮拿到的歌名已经过 normEnrichTitle
 // (MV 标记这类尾巴剥掉了),App 报的是原样的,两边都归一了再比。
 func kasetVideoIDFor(bundleID, artist, title string) string {
-	if bundleID != kasetBundleID {
+	if !youtubeMusicClient(bundleID) {
 		return ""
 	}
 	kasetCurrentMu.Lock()

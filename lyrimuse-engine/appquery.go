@@ -28,6 +28,7 @@ const (
 	appQuerySpotifyShuffle        = "spotify_shuffle"
 	appQueryBrowserQueue          = "browser_queue"
 	appQueryKasetQueue            = "kaset_queue"
+	appQueryPearQueue             = "pear_queue"
 	appQueryVoxRepeat             = "vox_repeat"
 	appQueryPineQueue             = "pine_queue"
 	appQueryPlaybackMode          = "playback_mode"

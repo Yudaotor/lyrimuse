@@ -889,7 +889,7 @@ Au plus une fois par jour, envoie la version, macOS, les fonctions activées et 
 
 ## Tous les réglages
 
-Tous les réglages de la fenêtre Réglages, classés par emplacement : 309 au total. Tapez un nom dans le champ de recherche en haut de la barre latérale des Réglages pour y aller directement.
+Tous les réglages de la fenêtre Réglages, classés par emplacement : 310 au total. Tapez un nom dans le champ de recherche en haut de la barre latérale des Réglages pour y aller directement.
 
 ### Paroles › Source
 
@@ -947,6 +947,7 @@ Tous les réglages de la fenêtre Réglages, classés par emplacement : 309 au 
 - **Accès complet au disque**
 - **Accessibilité**
 - **Open API de LX Music** : Lyrimuse lit la position de lecture de LX Music et règle son volume via cette API
+- **API de Pear Desktop** : Lyrimuse lit dans Pear Desktop l’identifiant et le type du morceau en cours et la file d’attente via cette API
 - **Moteur de paroles** : Lit l’état de lecture et récupère paroles et illustrations
 
 ### Lecteur › Lancer et quitter

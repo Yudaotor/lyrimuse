@@ -50,6 +50,7 @@ public final class PlayerQueryServer: @unchecked Sendable {
         case spotifyShuffle = "spotify_shuffle"
         case browserQueue = "browser_queue"
         case kasetQueue = "kaset_queue"
+        case pearQueue = "pear_queue"
         case voxRepeat = "vox_repeat"
         case pineQueue = "pine_queue"
         case playbackMode = "playback_mode"
@@ -120,6 +121,8 @@ public final class PlayerQueryServer: @unchecked Sendable {
         case browserQueue(bundleID: String, platformID: String)
         /// Kaset 的待播队列连同循环模式,整理成 `KasetPlayerInfo.QueueReply` 的 JSON。
         case kasetQueue
+        /// Pear Desktop 的待播队列连同循环模式,经它的本机接口读(`PearDesktopAPI.queueReply`),整理成跟 Kaset 同一种回包。
+        case pearQueue
         case voxRepeat
         /// Pine 的播放列表连同循环档,经辅助功能读(`PinePlaylist`)。
         case pineQueue
@@ -168,6 +171,8 @@ public final class PlayerQueryServer: @unchecked Sendable {
             return .run(.browserQueue(bundleID: bundleID, platformID: platform))
         case .kasetQueue:
             return .run(.kasetQueue)
+        case .pearQueue:
+            return .run(.pearQueue)
         case .voxRepeat:
             return .run(.voxRepeat)
         case .pineQueue:
@@ -463,6 +468,9 @@ public final class PlayerQueryServer: @unchecked Sendable {
                 KasetVideoKind.prefetch(Self.kasetKindPrefetchIDs(currentIndex: reply.currentIndex, videoIDs: reply.tracks.map(\.videoID)))
             }
             return makeReply(id: id, output: reply.flatMap(Self.encodedQueueReply), error: "queue unavailable")
+        case .pearQueue:
+            return makeReply(id: id, output: PearDesktopAPI.shared.queueReply().flatMap(Self.encodedQueueReply),
+                             error: "queue unavailable")
         case .voxRepeat:
             let output = Self.osascript(Self.voxRepeatScript, timeout: Self.shuffleTimeout)
             return makeReply(id: id, output: output.flatMap(PlayerQueryRepeat.parseVox).flatMap { Self.encodedReply($0) },

@@ -42,7 +42,7 @@ func kasetLyricsRecheckOnce(key string) bool {
 // 不看重试次数:次数用完的存量条目也给这一次,同一个 target 只来一次。MV 还没读到配对的音轨版本时先不来,按 MV 问取不到
 // 带时间轴的那份。手改过、校准过、关了自动升级、lyricfind 关着的都不动。纯函数,单测覆盖。
 func kasetLyricsWorthRecheck(e enrichEntry, bundleID, videoID, target string, pinned, autoUpgrade, nativeEnabled bool) bool {
-	if bundleID != kasetBundleID || videoID == "" || target == "" || !nativeEnabled {
+	if !youtubeMusicClient(bundleID) || videoID == "" || target == "" || !nativeEnabled {
 		return false
 	}
 	if e.Lyrics.IsZero() || e.ManualLyrics || e.Instrumental || pinned || !autoUpgrade || e.LyricsSource == "lyricfind" {

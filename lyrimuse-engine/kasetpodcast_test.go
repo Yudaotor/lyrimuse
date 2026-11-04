@@ -69,7 +69,7 @@ func TestKasetPodcastWiring(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(string(en), "if bundleID == kasetBundleID && kasetPodcastEpisodeCached(kasetVideoIDFor(bundleID, artist, title)) {") {
+	if !strings.Contains(string(en), "if youtubeMusicClient(bundleID) && kasetPodcastEpisodeCached(kasetVideoIDFor(bundleID, artist, title)) {") {
 		t.Error("首次解析的入口要挡住认出来的播客单集")
 	}
 }

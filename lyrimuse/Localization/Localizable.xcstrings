@@ -204020,6 +204020,716 @@
           }
         }
       }
+    },
+    "Pear Desktop 接口" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pear Desktop-API"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pear Desktop API"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "API de Pear Desktop"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "API de Pear Desktop"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "API di Pear Desktop"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pear Desktop API"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pear Desktop API"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "API do Pear Desktop"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "API của Pear Desktop"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pear Desktop 接口"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pear Desktop 介面"
+          }
+        }
+      }
+    },
+    "未开启 · 开启后能认出 MV 和播客，并提前准备接下来几首的歌词" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aus · Aktiviere sie, um Musikvideos und Podcasts zu erkennen und den Liedtext der nächsten Titel vorzubereiten"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Off · Turn it on to recognize music videos and podcasts and get lyrics ready for the next songs"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Desactivada · Actívala para reconocer videoclips y pódcasts y tener lista la letra de las siguientes canciones"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Désactivée · Activez-la pour reconnaître les clips et les podcasts et préparer les paroles des morceaux suivants"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Disattivata · Attivala per riconoscere video musicali e podcast e preparare il testo dei prossimi brani"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "オフ · オンにするとMVとポッドキャストを判別し、次の数曲の歌詞を先に用意します"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "꺼짐 · 켜면 뮤직비디오와 팟캐스트를 구분하고 다음 몇 곡의 가사를 미리 준비합니다"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Desativada · Ative para reconhecer clipes e podcasts e deixar pronta a letra das próximas músicas"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Chưa bật · Bật để nhận ra MV và podcast, và chuẩn bị sẵn lời cho mấy bài tiếp theo"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "未开启 · 开启后能认出 MV 和播客，并提前准备接下来几首的歌词"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "未開啟 · 開啟後能認出 MV 和 Podcast，並提前準備接下來幾首的歌詞"
+          }
+        }
+      }
+    },
+    "请在 Pear Desktop 中点「允许」" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Klicke in Pear Desktop auf „Erlauben“"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Click Allow in Pear Desktop"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Haz clic en «Permitir» en Pear Desktop"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cliquez sur « Autoriser » dans Pear Desktop"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fai clic su “Permetti” in Pear Desktop"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pear Desktopで「許可」をクリックしてください"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pear Desktop에서 ‘허용’을 클릭하세요"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Clique em “Permitir” no Pear Desktop"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hãy bấm “Cho phép” trong Pear Desktop"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "请在 Pear Desktop 中点「允许」"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "請在 Pear Desktop 中點「允許」"
+          }
+        }
+      }
+    },
+    "已开启 · 暂时连不上，请确认 Pear Desktop 正在运行" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "An · Gerade keine Verbindung, prüfe, ob Pear Desktop läuft"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "On · Can’t connect right now, make sure Pear Desktop is running"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Activada · No se puede conectar ahora, comprueba que Pear Desktop esté abierto"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Activée · Connexion impossible pour l’instant, vérifiez que Pear Desktop est ouvert"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Attivata · Al momento non si collega, verifica che Pear Desktop sia aperto"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "オン · 今は接続できません。Pear Desktopが起動しているか確認してください"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "켜짐 · 지금은 연결할 수 없습니다. Pear Desktop이 실행 중인지 확인하세요"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ativada · Não foi possível conectar agora, verifique se o Pear Desktop está aberto"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Đã bật · Tạm thời không kết nối được, hãy kiểm tra Pear Desktop có đang chạy không"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已开启 · 暂时连不上，请确认 Pear Desktop 正在运行"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已開啟 · 暫時連不上，請確認 Pear Desktop 正在執行"
+          }
+        }
+      }
+    },
+    "Lyrimuse 通过此接口读取 Pear Desktop 当前歌曲的 ID、类型和播放队列" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lyrimuse liest über diese API ID und Typ des aktuellen Titels sowie die Warteschlange aus Pear Desktop"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lyrimuse reads the current song’s ID and type and the play queue from Pear Desktop through this API"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lyrimuse lee de Pear Desktop el ID y el tipo de la canción actual y la cola de reproducción a través de esta API"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lyrimuse lit dans Pear Desktop l’identifiant et le type du morceau en cours et la file d’attente via cette API"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lyrimuse legge da Pear Desktop l’ID e il tipo del brano in riproduzione e la coda tramite questa API"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "LyrimuseはこのAPIを通じてPear Desktopの再生中の曲のID、種類、再生キューを読み取ります"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lyrimuse는 이 API로 Pear Desktop에서 현재 곡의 ID와 유형, 재생 대기열을 읽습니다"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "O Lyrimuse lê do Pear Desktop o ID e o tipo da música atual e a fila de reprodução por esta API"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lyrimuse đọc ID, loại của bài đang phát và hàng chờ phát từ Pear Desktop qua API này"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lyrimuse 通过此接口读取 Pear Desktop 当前歌曲的 ID、类型和播放队列"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lyrimuse 透過此介面讀取 Pear Desktop 目前歌曲的 ID、類型和播放佇列"
+          }
+        }
+      }
+    },
+    "重新请求" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Erneut anfragen"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ask Again"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Volver a pedir"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Redemander"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Richiedi di nuovo"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "もう一度リクエスト"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "다시 요청"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pedir de novo"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Yêu cầu lại"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "重新请求"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "重新請求"
+          }
+        }
+      }
+    },
+    "已允许局域网访问且无需授权，同一网络中的设备也可控制 Pear Desktop" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Zugriff im lokalen Netzwerk ist ohne Autorisierung erlaubt, daher können auch Geräte im selben Netzwerk Pear Desktop steuern"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Local network access is allowed without authorization, so devices on the same network can also control Pear Desktop"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Se permite el acceso desde la red local sin autorización, así que los dispositivos de la misma red también pueden controlar Pear Desktop"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "L’accès depuis le réseau local est autorisé sans authentification, les appareils du même réseau peuvent donc aussi contrôler Pear Desktop"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "L’accesso dalla rete locale è consentito senza autorizzazione, quindi anche i dispositivi della stessa rete possono controllare Pear Desktop"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "認証なしでローカルネットワークからのアクセスが許可されているため、同じネットワーク上のデバイスからもPear Desktopを操作できます"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "인증 없이 로컬 네트워크 접근이 허용되어 있어 같은 네트워크의 기기에서도 Pear Desktop을 제어할 수 있습니다"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "O acesso pela rede local está liberado sem autorização, então dispositivos na mesma rede também podem controlar o Pear Desktop"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Đã cho phép truy cập mạng cục bộ mà không cần xác thực, thiết bị trong cùng mạng cũng điều khiển được Pear Desktop"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已允许局域网访问且无需授权，同一网络中的设备也可控制 Pear Desktop"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已允許區域網路存取且無需授權，同一網路中的裝置也可控制 Pear Desktop"
+          }
+        }
+      }
+    },
+    "1. 在 Pear Desktop 的「插件」菜单中打开「API 服务器 [测试]」，勾选「已启用」" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "1. Öffne in Pear Desktop im Menü „Erweiterungen“ den Eintrag „API-Server [Beta]“ und aktiviere „Aktiviert“"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "1. In Pear Desktop’s Plugins menu, open API Server [Beta] and check Enabled"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "1. En el menú «Complementos» de Pear Desktop, abre «Servidor API [Beta]» y marca «Habilitado»"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "1. Dans le menu « Extensions » de Pear Desktop, ouvrez « Serveur API [Beta] » et cochez « Activé »"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "1. Nel menu “Plugin” di Pear Desktop, apri “API Server [Beta]” e seleziona “Attivato”"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "1. Pear Desktopの「プラグイン」メニューで「APIサーバー(Beta)」を開き、「有効」にチェックを入れます"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "1. Pear Desktop의 ‘확장’ 메뉴에서 ‘API 서버 [베타]’를 열고 ‘활성화’를 선택합니다"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "1. No menu “Plugins” do Pear Desktop, abra “Servidor API [Beta]” e marque “Ativado”"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "1. Trong menu “Trình bổ sung” của Pear Desktop, mở “Máy chủ API [Thử nghiệm]” và đánh dấu “Đã bật”"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "1. 在 Pear Desktop 的「插件」菜单中打开「API 服务器 [测试]」，勾选「已启用」"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "1. 在 Pear Desktop 的「外掛功能」選單中打開「API 伺服器 [Beta]」，勾選「已啟用」"
+          }
+        }
+      }
+    },
+    "2. 首次连接时，在 Pear Desktop 弹出的窗口中点「允许」" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "2. Klicke bei der ersten Verbindung im Fenster von Pear Desktop auf „Erlauben“"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "2. The first time Lyrimuse connects, click Allow in the window Pear Desktop shows"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "2. La primera vez que se conecte, haz clic en «Permitir» en la ventana que muestra Pear Desktop"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "2. À la première connexion, cliquez sur « Autoriser » dans la fenêtre affichée par Pear Desktop"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "2. Alla prima connessione, fai clic su “Permetti” nella finestra che mostra Pear Desktop"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "2. 初めて接続するときに、Pear Desktopに表示されるウインドウで「許可」をクリックします"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "2. 처음 연결할 때 Pear Desktop에 뜨는 창에서 ‘허용’을 클릭합니다"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "2. Na primeira conexão, clique em “Permitir” na janela que o Pear Desktop mostrar"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "2. Lần kết nối đầu tiên, bấm “Cho phép” trong cửa sổ Pear Desktop hiện ra"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "2. 首次连接时，在 Pear Desktop 弹出的窗口中点「允许」"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "2. 第一次連線時，在 Pear Desktop 跳出的視窗中點「允許」"
+          }
+        }
+      }
+    },
+    "打开 Pear Desktop" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pear Desktop öffnen"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Open Pear Desktop"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Abrir Pear Desktop"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ouvrir Pear Desktop"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Apri Pear Desktop"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pear Desktopを開く"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pear Desktop 열기"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Abrir o Pear Desktop"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mở Pear Desktop"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "打开 Pear Desktop"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "打開 Pear Desktop"
+          }
+        }
+      }
     }
   },
   "version" : "1.0"

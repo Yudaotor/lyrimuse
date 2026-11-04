@@ -53,7 +53,8 @@ public struct MediaControlSnapshot: Decodable {
     public var capturedAt: Date? = nil
     /// 这一条是 MV。Apple Music 的 JXA 快照按 Music.app 的 `media kind` == "music video" 填,Kaset 的快照按它报的封面与
     /// 两份时长填(`KasetPlayerInfo.isMusicVideo`);Apple Music 的 MV 在 media-control 的 `mediaType` 里也报 Music,认不出来
-    /// (见 02 章决策 33)。Spotify 的按系统会话类型填,false = 明说是音频(`MediaControlClient.spotifyMusicVideoMark`,见 02 章决策 216)。
+    /// (见 02 章决策 33)。Spotify 的按系统会话类型填,false = 明说是音频(`MediaControlClient.spotifyMusicVideoMark`,见 02 章决策 216);
+    /// Pear Desktop 的按它本机接口报的类型填,false 同样是明说歌曲版(`MediaControlClient.pearDesktopReading`)。
     /// 用法见 `LocalPlaybackSource.isMusicVideo`。`with…` 系列副本里只有 `withDuration` 带它(Apple Music 的快照补时长时经过它);
     /// Spotify 那份被整份顶替后由 `MediaControlClient.carryingSpotifyMusicVideoMark` 补回;其余几条路(署名 / 专辑 / 试听段 / 电台 /
     /// 空档保持)不带,丢了按 `LocalPlaybackSource.musicVideoTrackKey` 按曲目记住的那份算。
