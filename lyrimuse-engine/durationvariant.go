@@ -3,6 +3,7 @@ package main
 import (
 	"math"
 	"regexp"
+	"strings"
 	"time"
 )
 
@@ -117,8 +118,44 @@ var durationVariantSuffix = regexp.MustCompile(`~dur[0-9]+$`)
 // 按 key 重搜的后台路径(补空扫描、全量扫库、手动重新匹配)要跟它一样;写回照旧按原 key。带着标记去搜一条都搜不到,
 // 标题反查再按时长换成同歌手的另一首。见 09 章决策 318。
 func splitEnrichKeyForSearch(key string) (artist, title, album string) {
-	artist, title, album = splitEnrichKey(key)
-	return artist, titleWithoutDurationVariant(title), album
+	if base, ok := durationVariantBaseKey(key); ok {
+		key = base
+	}
+	return splitEnrichKeyFields(key)
+}
+
+// splitEnrichKeyFields:歌名、专辑里自带「|」时按 key 拆回三段(只给拿去搜的路用;key 身份换算一律 splitEnrichKey,
+// 要跟 App 侧逐字节一致)。enrichKey 的每段都经 cleanMediaTag 去掉了首尾空白,所以紧挨空白的「|」只可能是字段内容。
+// 去掉这些后还多于两个时:专辑以歌名开头(单曲专辑「Dil | Coke Studio Nu.WAV - Single」)就切在那里;专辑为空就把中间
+// 整段当歌名;都不是按前两个切,同 splitEnrichKey。见 09 章决策 358。
+func splitEnrichKeyFields(key string) (artist, title, album string) {
+	var seps []int
+	for i := 0; i < len(key); i++ {
+		if key[i] != '|' {
+			continue
+		}
+		if (i > 0 && key[i-1] == ' ') || (i+1 < len(key) && key[i+1] == ' ') {
+			continue
+		}
+		seps = append(seps, i)
+	}
+	if len(seps) < 2 {
+		return splitEnrichKey(key)
+	}
+	first := seps[0]
+	artist = key[:first]
+	if len(seps) > 2 {
+		for _, j := range seps[1:] {
+			t, al := key[first+1:j], key[j+1:]
+			if lt := normLoose(t); lt != "" && strings.HasPrefix(normLoose(al), lt) {
+				return artist, t, al
+			}
+		}
+		if last := seps[len(seps)-1]; last == len(key)-1 {
+			return artist, key[first+1 : last], ""
+		}
+	}
+	return artist, key[first+1 : seps[1]], key[seps[1]+1:]
 }
 
 // titleWithoutDurationVariant 去掉歌名末尾的「~durN」(缓存键里的时长消歧位),拿曲名本身去搜;不是变体原样返回。

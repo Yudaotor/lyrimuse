@@ -24,6 +24,37 @@ func TestSplitEnrichKeyForSearch(t *testing.T) {
 	}
 }
 
+// 歌名、专辑自带「|」的 key:紧挨空白的「|」是字段内容;还有歧义时认单曲专辑以歌名开头、专辑为空,都不是按前两个切。
+func TestSplitEnrichKeyFieldsWithPipesInFields(t *testing.T) {
+	for _, c := range []struct{ artist, title, album string }{
+		{"五月天", "入陣曲", "五月天 | 步步 | 自選作品輯 the Best of 1999-2013"},
+		{"Someone", "Song | Live at Budokan", "Live Album"},
+		{"AFUSIC & Zoha Waseem", "Dil|Coke Studio Nu.WAV", "Dil | Coke Studio Nu.WAV - Single"},
+		{"【中文流行歌曲合輯 Chinese Pop Songs Playlist】", "吉星出租 - 暮色回響『神啊』【動態歌詞|Pinyin Lyrics】【PENGUIN MUSIC】", ""},
+		{"Shania Yan", "我期待的不是雪 ( Wo Qi Dai De Bu Shi Xue)|Shania Yan Cover", ""},
+		{"Someone", "Song", "Album"},
+		{"Someone", "Song", ""},
+		{"", "Song", ""},
+	} {
+		key := enrichKey(c.artist, c.title, c.album)
+		a, ti, al := splitEnrichKeyFields(key)
+		if a != c.artist || ti != c.title || al != c.album {
+			t.Errorf("splitEnrichKeyFields(%q) = %q / %q / %q,want %q / %q / %q", key, a, ti, al, c.artist, c.title, c.album)
+		}
+	}
+	// 分不出的照旧按前两个切
+	for _, key := range []string{"有声书|001-七星鲁王宫|盗墓笔记|冠声制作", "a|b"} {
+		a, ti, al := splitEnrichKeyFields(key)
+		wa, wt, wal := splitEnrichKey(key)
+		if a != wa || ti != wt || al != wal {
+			t.Errorf("splitEnrichKeyFields(%q) = %q / %q / %q,want 同 splitEnrichKey %q / %q / %q", key, a, ti, al, wa, wt, wal)
+		}
+	}
+	if _, title, _ := splitEnrichKeyForSearch(enrichKeyDurationVariant(enrichKey("Shania Yan", "雪|Shania Yan Cover", ""), 2)); title != "雪|Shania Yan Cover" {
+		t.Errorf("变体 key 的歌名 = %q", title)
+	}
+}
+
 // 补空扫描、全量扫库、手动重新匹配按「~durN」变体 key 重搜:搜的歌名不带标记,写回的是变体那一条,基条目不凭空长出来。
 func TestBackgroundResearchSearchesVariantKeyWithoutMarker(t *testing.T) {
 	setupRescoreTest(t, []string{"musixmatch"}, nil)
