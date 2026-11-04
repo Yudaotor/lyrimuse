@@ -1697,7 +1697,7 @@ func runSourceContractSurfaceTests() {
             // 填色取显示句自己的逐字时间轴:提前量里亮出的下一句也有路径(边界停在 0)。彩虹没路径就整句全亮,
             // 开唱挂上路径又压暗重填(06 章决策 12)。跟唱滚动仍只接当前演唱句。
             let fillBody = sourceBody("private func karaokeFillPath(for text: String)", in: item)
-            expectEqual(sourceHas(fillBody, "menuBarLayoutSecondaryLine.displayedLine(\ncompactLine: coordinator.menuBarLyrics.compactLine, currentLine: coordinator.menuBarLyrics.line)"), true,
+            expectEqual(fillBody.contains(".displayedLine(") && !fillBody.contains("guard let line = PlaybackCoordinator.shared.menuBarLyrics.line"), true,
                         "菜单栏填色: 取显示句(提前量里亮出的下一句也给路径)")
             expectEqual(fillBody.contains("displayedLineIsCurrent"), false,
                         "菜单栏填色: 不要求显示句就是当前演唱句")

@@ -398,10 +398,9 @@ final class MenuBarScrollingLabel: NSView {
             && plan?.secondaryKind == next.secondaryKind
             && plan?.inlineTranslationStart == next.inlineTranslationStart
         // 滚动动画只在**滚动参数**(文字/槽宽/配速)真的变了时才重启。fillPath 从 nil 变成
-        // 非 nil **不算** —— 那是"开唱那一刻把逐字填色挂上"(菜单栏订了 compactLine 和
-        // currentLine 两条流,后者就管这一下,见 MenuBarStatusItem)。算进来的话会
-        // 连带把滚动打回开头:提前量窗口里那一句本来已经静止等着了(head 以提前量为下限),
-        // 开唱那一下再从零起一遍首停,等于把提前量白等两遍,长句更滚不完。
+        // 非 nil **不算**(逐字数据在这一句中途才补上时就是这样;提前量里亮出的那句一出场就带着
+        // 填色路径,见 MenuBarStatusItem.karaokeFillPath)。算进来的话会把正在滚的这一句打回开头、
+        // 重走一遍首停,长句更滚不完。
         // followPath 跟 fillPath 不同,它**算**滚动参数:跟唱滚动的关键帧就是
         // 从它算出来的,开唱那一刻它从 nil 变非 nil 必须把跟唱动画装上。这不会重蹈上面那个坑:
         // 此刻阅读位置还没到锚点、偏移是 0,位置无跳变;跟唱模式也没有首停可以被白等。
