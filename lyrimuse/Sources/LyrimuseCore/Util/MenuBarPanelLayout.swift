@@ -11,6 +11,7 @@ import CoreGraphics
 /// 存法(没有 `version: 2`)读回来把卡片补在最上面,别的格子整体往下挪两排。
 public struct MenuBarPanelLayout: Equatable, Sendable {
     /// 能放进网格的格子。rawValue 是存盘和深链里的写法,别改。
+    /// 只收会经常拿出来切的开关和动作;配一次就不再动的设置不做成格子(见 06 章决策 89)。
     public enum Tile: String, CaseIterable, Sendable {
         /// 正在播放卡:封面、歌名、歌词行、进度、走带。
         case nowPlaying = "now-playing"
@@ -32,26 +33,22 @@ public struct MenuBarPanelLayout: Equatable, Sendable {
         /// 早先按顺序排的存法里有个 `favorite`(已挪进走带一排、读到丢掉),这一格另起 `like`,别复用那个写法。
         case like
         case openPlayer = "open-player"
-        case fadeOnHover = "fade-on-hover"
-        case hoverControls = "hover-controls"
-        case notchShowLyrics = "notch-show-lyrics"
-        case notchKaraoke = "notch-karaoke"
-        case notchCollapseWhenPaused = "notch-collapse-when-paused"
-        case menuBarArtwork = "menubar-artwork"
-        case motionCover = "motion-cover"
-        case overlayHideInCapture = "overlay-hide-in-capture"
+        case lyricsAdvance = "lyrics-advance"
+        case lyricsDelay = "lyrics-delay"
+        case lyricsOffsetReset = "lyrics-offset-reset"
 
         /// 「可添加」面板里归哪一组(按显示方式分)。
         public var group: TileGroup {
             switch self {
             case .nowPlaying, .like, .openPlayer: return .nowPlaying
-            case .overlay, .lockPosition, .fontLarger, .fontSmaller, .fadeOnHover, .hoverControls, .overlayHideInCapture:
-                return .overlay
-            case .notch, .notchShowLyrics, .notchKaraoke, .notchCollapseWhenPaused: return .notch
-            case .menuBar, .menuBarArtwork: return .menuBar
-            case .lyricsWindow, .miniWindow, .motionCover: return .lyricsWindow
+            case .overlay, .lockPosition, .fontLarger, .fontSmaller: return .overlay
+            case .notch: return .notch
+            case .menuBar: return .menuBar
+            case .lyricsWindow, .miniWindow: return .lyricsWindow
             case .touchBar: return .touchBar
-            case .lyricsManager, .translation, .romanization, .hideAllLyrics, .searchLyrics: return .lyrics
+            case .lyricsManager, .translation, .romanization, .hideAllLyrics, .searchLyrics, .lyricsAdvance, .lyricsDelay,
+                 .lyricsOffsetReset:
+                return .lyrics
             }
         }
 

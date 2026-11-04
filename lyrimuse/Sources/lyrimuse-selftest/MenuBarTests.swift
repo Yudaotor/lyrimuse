@@ -2015,8 +2015,7 @@ func runMenuBarTests() {
         expectEqual(L.Tile.allCases.map(\.rawValue),
                     ["now-playing", "overlay", "notch", "menubar", "lyrics-window", "touchbar", "lyrics-manager", "translation", "romanization",
                      "lock-position", "hide-all-lyrics", "search-lyrics", "mini-window", "font-larger", "font-smaller", "like", "open-player",
-                     "fade-on-hover", "hover-controls", "notch-show-lyrics", "notch-karaoke", "notch-collapse-when-paused", "menubar-artwork",
-                     "motion-cover", "overlay-hide-in-capture"], "面板布局: 格子的存盘写法")
+                     "lyrics-advance", "lyrics-delay", "lyrics-offset-reset"], "面板布局: 格子的存盘写法")
         expectEqual(L.Size.allCases.map { "\($0.columns)x\($0.rows)" }, ["2x1", "3x1", "3x2", "6x2"],
                     "面板布局: 一排 6 列,小 2 列、中 3 列、大 3×2、加宽 6×2")
         // 几何:宽 316、行高 78、间距 9 → 小号 99.33 宽、中号 153.5 宽,同原来一排三个 / 两个。
@@ -2162,17 +2161,17 @@ func runMenuBarTests() {
                     "面板布局: 移除后坑位空着,别的格子不挪")
         expectEqual(L.default.addable { $0 != .touchBar },
                     [.translation, .romanization, .lockPosition, .hideAllLyrics, .searchLyrics, .miniWindow, .fontLarger, .fontSmaller,
-                     .like, .openPlayer, .fadeOnHover, .hoverControls, .notchShowLyrics, .notchKaraoke, .notchCollapseWhenPaused,
-                     .menuBarArtwork, .motionCover, .overlayHideInCapture],
+                     .like, .openPlayer, .lyricsAdvance, .lyricsDelay, .lyricsOffsetReset],
                     "面板布局: 可添加的新格子")
         // 「可添加」按显示方式分组:组按固定顺序、组里按格子顺序,空组不出;移除的主格子回到自己那一组。
         var trimmed = L.default
         trimmed.remove(.overlay)
         let groups = trimmed.addableGroups { $0 != .touchBar }
-        expectEqual(groups.map(\.group), [.nowPlaying, .overlay, .notch, .menuBar, .lyricsWindow, .lyrics], "面板可添加: 分组顺序,空组不出")
-        expectEqual(groups.first { $0.group == .overlay }?.tiles,
-                    [.overlay, .lockPosition, .fontLarger, .fontSmaller, .fadeOnHover, .hoverControls, .overlayHideInCapture],
+        expectEqual(groups.map(\.group), [.nowPlaying, .overlay, .lyricsWindow, .lyrics], "面板可添加: 分组顺序,空组不出")
+        expectEqual(groups.first { $0.group == .overlay }?.tiles, [.overlay, .lockPosition, .fontLarger, .fontSmaller],
                     "面板可添加: 移除的悬浮歌词回到它那一组")
+        expectEqual(L.decode(#"{"grid":6,"version":2,"tiles":[{"id":"notch-show-lyrics","size":"small","col":0,"row":0}]}"#).placements.isEmpty, true,
+                    "面板布局: 撤掉的设置格读到就丢掉")
         expectEqual(L.decode(#"{"grid":6,"version":2,"tiles":[{"id":"peek-notch","size":"small","col":0,"row":0}]}"#).placements.isEmpty, true,
                     "面板布局: 去掉的「临时展开灵动岛」读到就丢掉")
         expectEqual(L.decode(#"{"tiles":[{"id":"favorite","size":"small"}]}"#).contains(.like), false,
@@ -2195,6 +2194,7 @@ func runMenuBarTests() {
         let router = source("lyrimuse/Settings/DeepLinkRouter.swift")
         expectEqual(sourceHas(panel, "if !editing {\nTileMouseRouter("), true, "面板编辑: 编辑时不盖鼠标路由")
         expectEqual(sourceHas(panel, "nowPlayingTile(size)\n.allowsHitTesting(!editing)"), true, "面板编辑: 编辑时卡片不接点击,拖动和拉手归编辑那一层")
+        expectEqual(sourceHas(panel, "updateLayout { $0.add(tile, size: .small) }"), true, "面板编辑: 「可添加」点一格按小号放进来")
         expectEqual(sourceHas(panel, "ForEach(p.tile.sizes, id: \\.self) { size in") && sourceHas(panel, "allowed: tile.sizes)"), true,
                     "面板编辑: 右键换档和拉手只给这一格有的档")
         expectEqual(sourceHas(panel, ".simultaneousGesture(gridResizeGesture)") && sourceHas(panel, "guard resizingTile == nil else { return }"), true,

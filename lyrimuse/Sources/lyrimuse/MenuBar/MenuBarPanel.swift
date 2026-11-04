@@ -96,14 +96,6 @@ private final class PanelPlayback: ObservableObject {
     @Published private(set) var showsTranslation = false
     @Published private(set) var showsRomanization = false
     @Published private(set) var lockPosition = false
-    @Published private(set) var overlayFadeOnHover = false
-    @Published private(set) var overlayShowHoverControls = false
-    @Published private(set) var notchShowLyrics = false
-    @Published private(set) var notchLyricsKaraoke = false
-    @Published private(set) var notchCollapsesWhenPaused = false
-    @Published private(set) var menuBarIconShowsArtwork = false
-    @Published private(set) var motionCoverEnabled = false
-    @Published private(set) var hideDuringScreenCapture = false
     private var subs: [AnyCancellable] = []
 
     init() {
@@ -167,14 +159,6 @@ private final class PanelPlayback: ObservableObject {
             Publishers.CombineLatest(s.$overlayShowRomanization, s.$showRomanization).map { $0 || $1 }
                 .removeDuplicates().sink { [weak self] in self?.showsRomanization = $0 },
             s.$lockPosition.removeDuplicates().sink { [weak self] in self?.lockPosition = $0 },
-            s.$overlayFadeOnHover.removeDuplicates().sink { [weak self] in self?.overlayFadeOnHover = $0 },
-            s.$overlayShowHoverControls.removeDuplicates().sink { [weak self] in self?.overlayShowHoverControls = $0 },
-            s.$notchShowLyrics.removeDuplicates().sink { [weak self] in self?.notchShowLyrics = $0 },
-            s.$notchLyricsKaraoke.removeDuplicates().sink { [weak self] in self?.notchLyricsKaraoke = $0 },
-            s.$notchCollapsesWhenPaused.removeDuplicates().sink { [weak self] in self?.notchCollapsesWhenPaused = $0 },
-            s.$menuBarIconShowsArtwork.removeDuplicates().sink { [weak self] in self?.menuBarIconShowsArtwork = $0 },
-            s.$motionCoverEnabled.removeDuplicates().sink { [weak self] in self?.motionCoverEnabled = $0 },
-            s.$hideDuringScreenCapture.removeDuplicates().sink { [weak self] in self?.hideDuringScreenCapture = $0 },
         ]
     }
 }
@@ -423,6 +407,12 @@ private final class MenuBarPanelWindow: NSPanel {
     }
 
     override var canBecomeKey: Bool { becomesKey }
+
+    /// 玻璃底一直按激活外观画。「可添加」那块不当 key(键盘留在主面板),不覆写的话它的玻璃是失焦那一档(平的浅灰、没有
+    /// 投影),跟旁边的主面板一比像没获得焦点。玻璃只认这两个私有方法给的激活外观,公开的 isKeyWindow、controlActiveState
+    /// 都改不动;同 `_cornerMask` 只是覆盖一个返回值,系统不再调它时退回失焦外观,不会出错。见 06 章决策 89。
+    @objc(_hasActiveAppearance) func activeAppearance() -> Bool { true }
+    @objc(_hasActiveAppearanceIgnoringKeyFocus) func activeAppearanceIgnoringKeyFocus() -> Bool { true }
     override var canBecomeMain: Bool { false }
 
     override func cancelOperation(_ sender: Any?) {
@@ -917,53 +907,12 @@ private struct MenuBarPanelView: View {
                 close()
                 LyrimuseActionRunner.perform(.openPlayerHotkey)
             }
-        case .fadeOnHover, .hoverControls:
-            // 悬浮歌词「行为」里那两项:开关本体(含让真窗口生效那一句)用 `OverlayBehaviorItem.binding`,不另写一份;
-            // 悬浮歌词关着时灰着。
-            let item: OverlayBehaviorItem = tile == .fadeOnHover ? .fadeOnHover : .showHoverControls
-            let overlayOn = playback.classicOverlayEnabled
-            let isOn = tile == .fadeOnHover ? playback.overlayFadeOnHover : playback.overlayShowHoverControls
-            knobTile(symbol: item.icon, title: item.title, on: overlayOn && isOn, enabled: overlayOn,
-                     help: overlayOn ? nil : L10n.t("悬浮歌词未开启")) {
-                item.binding.wrappedValue.toggle()
-            }
-        case .notchKaraoke, .notchCollapseWhenPaused:
-            // 灵动岛「行为」里那两项,开关本体用 `NotchBehaviorItem.binding`;灵动岛关着时灰着。
-            let item: NotchBehaviorItem = tile == .notchKaraoke ? .karaoke : .collapseWhenPaused
-            let notchOn = playback.notchOverlayEnabled
-            let isOn = tile == .notchKaraoke ? playback.notchLyricsKaraoke : playback.notchCollapsesWhenPaused
-            knobTile(symbol: item.icon, title: item.title, on: notchOn && isOn, enabled: notchOn,
-                     help: notchOn ? nil : L10n.t("灵动岛歌词未开启")) {
-                item.binding.wrappedValue.toggle()
-            }
-        case .menuBarArtwork:
-            // 菜单栏图标用专辑封面(同设置 › 通用「专辑封面」那张卡)。先收面板再切,理由同菜单栏歌词那一格:面板开着时
-            // 状态栏项不重建,切了看不到变化。
-            knobTile(symbol: "photo", title: L10n.t("专辑封面"), on: playback.menuBarIconShowsArtwork) {
-                close()
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-                    AppSettings.shared.menuBarIconShowsArtwork.toggle()
-                }
-            }
-        case .motionCover:
-            // 歌词窗口的动态封面,同歌词窗口快捷设置那一项:拨一下当场重算,不用等下一首。
-            knobTile(symbol: "livephoto", title: L10n.t("动态封面"), on: playback.motionCoverEnabled) {
-                AppSettings.shared.motionCoverEnabled.toggle()
-            }
-        case .overlayHideInCapture:
-            // 悬浮歌词「自动隐藏」里的截屏时隐藏,开关本体用 `AutoHideItem.binding(for:)`;悬浮歌词关着时灰着。
-            let overlayOn = playback.classicOverlayEnabled
-            knobTile(symbol: AutoHideItem.duringScreenCapture.icon, title: AutoHideItem.duringScreenCapture.title(for: .desktopOverlay),
-                     on: overlayOn && playback.hideDuringScreenCapture, enabled: overlayOn,
-                     help: overlayOn ? nil : L10n.t("悬浮歌词未开启")) {
-                AutoHideItem.duringScreenCapture.binding(for: .desktopOverlay).wrappedValue.toggle()
-            }
-        case .notchShowLyrics:
-            // 同灵动岛快捷设置里那一项;灵动岛关着时灰着。
-            let notchOn = playback.notchOverlayEnabled
-            knobTile(symbol: "text.alignleft", title: L10n.t("收起时显示歌词"), on: notchOn && playback.notchShowLyrics,
-                     enabled: notchOn, help: notchOn ? nil : L10n.t("灵动岛歌词未开启")) {
-                AppSettings.shared.notchShowLyrics.toggle()
+        case .lyricsAdvance, .lyricsDelay, .lyricsOffsetReset:
+            // 同快捷键:按设置里的步长提前 / 延后这一首的歌词,或一键归零,带偏移提示。卡片缩成大号时没有 ± 两颗,用得上这几格。
+            let action: LyrimuseAction = tile == .lyricsAdvance ? .lyricsAdvanceHotkey
+                : tile == .lyricsDelay ? .lyricsDelayHotkey : .lyricsOffsetResetHotkey
+            knobTile(symbol: action.iconName, title: L10n.t(action.titleKey), on: false) {
+                LyrimuseActionRunner.perform(action)
             }
         case .fontLarger, .fontSmaller:
             // 悬浮歌词主字号一档档调(同快捷键,带回声);悬浮歌词关着时灰着,同「锁定位置」。
@@ -1763,30 +1712,44 @@ private struct MenuBarPanelView: View {
     /// 也能拖进主面板的网格。见 06 章决策 89。
     private var galleryBody: some View {
         let groups = editLayout.addableGroups(available: tileAvailable)
-        return VStack(alignment: .leading, spacing: 9) {
+        return VStack(alignment: .leading, spacing: 0) {
             Text(L10n.t("可添加"))
                 .font(.system(size: 13, weight: .semibold))
-                .padding(.horizontal, 6)
+                .padding(.horizontal, 16)
+                .padding(.top, 12)
             if groups.isEmpty {
                 Text(L10n.t("都已添加"))
                     .font(.system(size: 11))
                     .foregroundStyle(.secondary)
-                    .padding(.horizontal, 6)
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 10)
             }
-            ForEach(groups, id: \.group) { entry in
-                PanelEditCaption(title: entry.group.panelTitle)
-                LazyVGrid(columns: Array(repeating: GridItem(.fixed(Self.grid.size(.small).width), spacing: Self.grid.spacing),
-                                         count: MenuBarPanelLayout.columns / MenuBarPanelLayout.Size.small.columns),
-                          alignment: .leading, spacing: Self.grid.spacing) {
-                    ForEach(entry.tiles, id: \.self) { tile in
-                        addableTile(tile)
+            // 格子多了比屏幕还高:标题留在上面,分组在里面滚。内边距放在滚动区里面,伸出格子左上角的「+」才不被裁掉。
+            ScrollView(.vertical) {
+                VStack(alignment: .leading, spacing: 9) {
+                    ForEach(groups, id: \.group) { entry in
+                        PanelEditCaption(title: entry.group.panelTitle)
+                        LazyVGrid(columns: Array(repeating: GridItem(.fixed(Self.grid.size(.small).width), spacing: Self.grid.spacing),
+                                                 count: MenuBarPanelLayout.columns / MenuBarPanelLayout.Size.small.columns),
+                                  alignment: .leading, spacing: Self.grid.spacing) {
+                            ForEach(entry.tiles, id: \.self) { tile in
+                                addableTile(tile)
+                            }
+                        }
                     }
                 }
+                .padding(10)
             }
+            .frame(maxHeight: galleryScrollMaxHeight)
         }
-        .padding(10)
         .frame(width: 336, alignment: .leading)
         .overlay(alignment: .topLeading) { galleryDragCopy }
+    }
+
+    /// 「可添加」那块的分组区最高多高:主面板所在屏幕的可用高度减去标题和上下边距,再多就在里面滚。
+    private var galleryScrollMaxHeight: CGFloat {
+        let screen = PanelEditBridge.shared.mainWindow?.screen ?? NSScreen.main
+        return max(200, (screen?.visibleFrame.height ?? 900) - 60)
     }
 
     /// 在「可添加」那块里拖着的那一格(到了主面板上方由主面板那份画)。
@@ -1961,7 +1924,7 @@ private struct MenuBarPanelView: View {
         }
     }
 
-    /// 「可添加」里的一格(小号):点一下以中号放进第一个放得下的空位(现有几排都放不下就在最下面新起一排);
+    /// 「可添加」里的一格(小号):点一下以小号放进第一个放得下的空位(现有几排都放不下就在最下面新起一排;没有小号的正在播放卡按加宽);
     /// 也能拖进网格,对准哪就塞到哪。
     private func addableTile(_ tile: MenuBarPanelLayout.Tile) -> some View {
         tileView(tile)
@@ -1980,7 +1943,7 @@ private struct MenuBarPanelView: View {
     }
 
     private func addTile(_ tile: MenuBarPanelLayout.Tile) {
-        updateLayout { $0.add(tile, size: .medium) }
+        updateLayout { $0.add(tile, size: .small) }
     }
 
     /// 编辑页最下面:底栏几项的显隐(Last.fm 只在连着时才有那一项),「恢复默认」「完成」。
