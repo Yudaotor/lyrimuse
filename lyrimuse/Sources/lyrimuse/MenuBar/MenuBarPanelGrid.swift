@@ -28,8 +28,8 @@ extension EnvironmentValues {
     }
 }
 
-/// 格子的圆角,三档一样(同正在播放卡下面原来那些格子)。
-let panelTileCornerRadius: CGFloat = 16
+/// 格子的圆角,三档一样:跟右下角那道拉手的弧同心(弧半径 + 离边距离),拉手才贴着格子的圆角走,同控制中心。
+let panelTileCornerRadius: CGFloat = PanelResizeCorner.radius + PanelResizeCorner.inset
 
 extension MenuBarPanelLayout.Size {
     var panelName: String {
@@ -76,8 +76,8 @@ struct PanelResizeCorner: View {
     let visible: Bool
 
     private static let side: CGFloat = 34
-    private static let radius: CGFloat = 22
-    private static let inset: CGFloat = 4
+    static let radius: CGFloat = 22
+    static let inset: CGFloat = 4
 
     var body: some View {
         Canvas { context, size in
