@@ -68,12 +68,11 @@ struct PanelEditableTile<Content: View>: View {
     }
 }
 
-/// 右下角那道弧形拉手:顺着格子圆角画的一段白色粗弧,整块 30pt 见方都能按。悬停换成斜向拉伸的指针。
+/// 右下角那道弧形拉手:顺着格子圆角画的一段白色粗弧,整块 30pt 见方都能按。指针不换样子,悬停时弧线亮出来就是提示。
 /// 藏起来时只把弧线调透明,可按的那块一直在:整个视图透明度为 0 时 SwiftUI 不再把点击交给它。
 struct PanelResizeCorner: View {
     let cornerRadius: CGFloat
     let visible: Bool
-    @State private var hovering = false
 
     var body: some View {
         Canvas { context, size in
@@ -88,19 +87,7 @@ struct PanelResizeCorner: View {
         .opacity(visible ? 1 : 0)
         .frame(width: 30, height: 30)
         .contentShape(Rectangle())
-        .onHover { inside in
-            guard inside != hovering else { return }
-            hovering = inside
-            if inside { Self.cursor.push() } else { NSCursor.pop() }
-        }
-        .onDisappear { if hovering { NSCursor.pop() } }
         .accessibilityHidden(true)
-    }
-
-    /// 斜向拉伸的指针只有 macOS 15 起才有,更早的系统用十字。
-    private static var cursor: NSCursor {
-        if #available(macOS 15.0, *) { return NSCursor.frameResize(position: .bottomRight, directions: .all) }
-        return .crosshair
     }
 }
 
