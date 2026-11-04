@@ -582,6 +582,9 @@ private struct MenuBarPanelView: View {
     @State private var resizeBase: MenuBarPanelLayout?
     /// 这一次按下不在任何拉手上(网格那一层的换尺寸手势这次不管)。
     @State private var resizeMissed = false
+    /// 编辑时正左右拖着的底栏那一项,和拖了多远。
+    @State private var footerDragItem: MenuBarPanelLayout.FooterItem?
+    @State private var footerDragOffset: CGFloat = 0
 
     /// 这一份是编辑时旁边那块「可添加」面板(只画 `galleryBody`)。
     let gallery: Bool
@@ -1712,12 +1715,13 @@ private struct MenuBarPanelView: View {
     /// 也能拖进主面板的网格。见 06 章决策 89。
     private var galleryBody: some View {
         let groups = editLayout.addableGroups(available: tileAvailable)
+        let footerAddable = playback.panelLayout.addableFooter.filter { $0 != .lastfm || lastfmFooterVisible }
         return VStack(alignment: .leading, spacing: 0) {
             Text(L10n.t("可添加"))
                 .font(.system(size: 13, weight: .semibold))
                 .padding(.horizontal, 16)
                 .padding(.top, 12)
-            if groups.isEmpty {
+            if groups.isEmpty && footerAddable.isEmpty {
                 Text(L10n.t("都已添加"))
                     .font(.system(size: 11))
                     .foregroundStyle(.secondary)
@@ -1737,6 +1741,16 @@ private struct MenuBarPanelView: View {
                             }
                         }
                     }
+                    if !footerAddable.isEmpty {
+                        PanelEditCaption(title: L10n.t("底栏"))
+                        LazyVGrid(columns: Array(repeating: GridItem(.fixed(Self.grid.size(.medium).width), spacing: Self.grid.spacing),
+                                                 count: 2),
+                                  alignment: .leading, spacing: 10) {
+                            ForEach(footerAddable, id: \.self) { item in
+                                addableFooterChip(item)
+                            }
+                        }
+                    }
                 }
                 .padding(10)
             }
@@ -1744,6 +1758,11 @@ private struct MenuBarPanelView: View {
         }
         .frame(width: 336, alignment: .leading)
         .overlay(alignment: .topLeading) { galleryDragCopy }
+        // Last.fm 那一项只在连着时能加,判据同底栏;这一份不走主面板的 onAppear,自己取一次。
+        .onAppear {
+            lastfmStatus = destinationStatus(for: .lastfm, config: .shared, lastfmConnect: .shared,
+                                             mirrorInfo: LastfmMirrorStatus.current)
+        }
     }
 
     /// 「可添加」那块的分组区最高多高:主面板所在屏幕的可用高度减去标题和上下边距,再多就在里面滚。
@@ -1946,16 +1965,11 @@ private struct MenuBarPanelView: View {
         updateLayout { $0.add(tile, size: .small) }
     }
 
-    /// 编辑页最下面:底栏几项的显隐(Last.fm 只在连着时才有那一项),「恢复默认」「完成」。
+    /// 编辑页最下面:底栏本身(每项左上「−」移除,左右拖动换顺序;从旁边「可添加」那块加),「恢复默认」「完成」。
     private var footerEditor: some View {
-        VStack(spacing: 6) {
+        VStack(spacing: 8) {
             PanelEditCaption(title: L10n.t("底栏"))
-            HStack(spacing: 6) {
-                ForEach(MenuBarPanelLayout.FooterItem.allCases.filter { $0 != .lastfm || lastfmFooterVisible },
-                        id: \.self) { item in
-                    footerToggle(item)
-                }
-            }
+            footerEditRow
             HStack {
                 Button(L10n.t("恢复默认")) { updateLayout { $0 = .default } }
                     .disabled(playback.panelLayout == .default)
@@ -1970,23 +1984,94 @@ private struct MenuBarPanelView: View {
         }
     }
 
-    private func footerToggle(_ item: MenuBarPanelLayout.FooterItem) -> some View {
-        let shown = !playback.panelLayout.hiddenFooter.contains(item)
-        return ChipButton(cornerRadius: 11, pressScale: 0.97,
-                          action: { updateLayout { $0.setFooter(item, shown: !shown) } }) {
-            HStack(spacing: 4) {
-                Image(systemName: shown ? "checkmark.circle.fill" : "circle")
-                    .font(.system(size: 10.5))
-                    .foregroundStyle(shown ? Color.accentColor : Color.secondary)
+    /// 编辑时底栏那一排:跟平时一样按顺序摆(多于三项只画图标),每项左上「−」;按住一项左右拖,松手按落点换到那一格。
+    /// 没连 Last.fm 时那一项平时不画,这里也不画,换位按画出来的那几项算(`moveFooter(_:toPositionOf:)`)。
+    private var footerEditRow: some View {
+        let items = playback.panelLayout.footer.filter { $0 != .lastfm || lastfmFooterVisible }
+        let slot = Self.grid.width / CGFloat(max(items.count, 1))
+        return HStack(spacing: 0) {
+            ForEach(Array(items.enumerated()), id: \.element) { index, item in
+                footerEditChip(item, compact: items.count > 3)
+                    .frame(width: slot)
+                    .offset(x: footerDragItem == item ? footerDragOffset : 0)
+                    .zIndex(footerDragItem == item ? 1 : 0)
+                    .gesture(DragGesture(minimumDistance: 3)
+                        .onChanged { value in
+                            footerDragItem = item
+                            footerDragOffset = value.translation.width
+                        }
+                        .onEnded { value in
+                            let landed = (CGFloat(index) + 0.5) * slot + value.translation.width
+                            let target = min(max(Int(landed / slot), 0), items.count - 1)
+                            footerDragItem = nil
+                            footerDragOffset = 0
+                            guard target != index else { return }
+                            updateLayout { $0.moveFooter(item, toPositionOf: items[target]) }
+                        })
+            }
+            if items.isEmpty {
+                PanelEmptyCell()
+                    .frame(height: 26)
+            }
+        }
+        .frame(width: Self.grid.width)
+    }
+
+    private func footerEditChip(_ item: MenuBarPanelLayout.FooterItem, compact: Bool) -> some View {
+        HStack(spacing: 4) {
+            footerIcon(item)
+            if !compact {
                 Text(item.panelTitle)
                     .font(.system(size: 10.5))
-                    .foregroundStyle(.secondary)
                     .lineLimit(1)
             }
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 4)
         }
-        .accessibilityAddTraits(shown ? .isSelected : [])
+        .foregroundStyle(.secondary)
+        .frame(maxWidth: .infinity)
+        .frame(height: 26)
+        .background(RoundedRectangle(cornerRadius: 11, style: .continuous).fill(Color.primary.opacity(0.07)))
+        .padding(.horizontal, 3)
+        .contentShape(Rectangle())
+        .help(item.panelTitle)
+        .overlay(alignment: .topLeading) {
+            PanelEditBadge(symbol: "minus", tint: Color(nsColor: .systemGray), label: L10n.t("移除")) {
+                updateLayout { $0.removeFooter(item) }
+            }
+            .offset(x: -3, y: -7)
+        }
+    }
+
+    /// 底栏那一项的符号;Last.fm 是品牌图。
+    @ViewBuilder private func footerIcon(_ item: MenuBarPanelLayout.FooterItem) -> some View {
+        if item == .lastfm {
+            lastfmBadge(size: 11)
+        } else {
+            Image(systemName: item.panelSymbol).font(.system(size: 10.5))
+        }
+    }
+
+    /// 「可添加」那块里底栏能加的一项:点一下(或「+」)加到底栏最后;底栏满了灰着。
+    private func addableFooterChip(_ item: MenuBarPanelLayout.FooterItem) -> some View {
+        let full = playback.panelLayout.footer.count >= MenuBarPanelLayout.maxFooterItems
+        return HStack(spacing: 5) {
+            footerIcon(item)
+            Text(item.panelTitle)
+                .font(.system(size: 11))
+                .lineLimit(1)
+        }
+        .foregroundStyle(.secondary)
+        .frame(maxWidth: .infinity)
+        .frame(height: 30)
+        .background(RoundedRectangle(cornerRadius: 11, style: .continuous).fill(Color.primary.opacity(0.07)))
+        .opacity(full ? 0.45 : 1)
+        .contentShape(Rectangle())
+        .onTapGesture { updateLayout { $0.addFooter(item) } }
+        .overlay(alignment: .topLeading) {
+            PanelEditBadge(symbol: "plus", tint: .accentColor, label: L10n.t("添加")) { updateLayout { $0.addFooter(item) } }
+                .offset(x: -4, y: -6)
+        }
+        .help(full ? L10n.t("底栏已满") : item.panelTitle)
+        .accessibilityAction(named: L10n.t("添加")) { updateLayout { $0.addFooter(item) } }
     }
 
     private func setEditing(_ on: Bool) {
@@ -2013,32 +2098,61 @@ private struct MenuBarPanelView: View {
 
     // MARK: 底栏(低频入口;完整功能在右键菜单里)
     //
-    // 「设置…」+(连着 Last.fm 时)Last.fm 那一格 + 右下角的版本号(见 versionFooterItem)。「歌词管理」在钮块
-    // 网格里(见 knobGrid),退出留在右键菜单与 ⌘Q;完整菜单只在右键,面板里不放第二份。
+    // 摆哪几项、什么顺序由用户在编辑页排(`MenuBarPanelLayout.footer`,默认「设置…」、Last.fm、版本号),最右总是「编辑」。
+
+    /// 底栏此刻摆哪几项:按用户排的顺序;Last.fm 只在连着(或连过但出了问题)时出现;有没装的新版本时版本号那一格不在
+    /// 里面也补在最后 —— 那时它是升级提示,不只是版本号。
+    private var shownFooterItems: [MenuBarPanelLayout.FooterItem] {
+        var items = playback.panelLayout.footer.filter { $0 != .lastfm || lastfmFooterVisible }
+        if pendingUpdate != nil, !items.contains(.version) { items.append(.version) }
+        return items
+    }
 
     private var footer: some View {
-        let hidden = playback.panelLayout.hiddenFooter
-        let showsSettings = !hidden.contains(.settings)
-        let showsLastfm = lastfmFooterVisible && !hidden.contains(.lastfm)
-        // 有没装的新版本时右格照样出现:那时它是升级提示,不只是版本号。
-        let showsVersion = !hidden.contains(.version) || pendingUpdate != nil
+        let items = shownFooterItems
+        // 多于三项一格放不下名字,只画图标,名字进悬停提示。
+        let compact = items.count > 3
         return HStack(spacing: 0) {
-            if showsSettings {
-                footerButton("gearshape", L10n.t("设置…")) {
-                    close()
-                    AppActions.shared.openSettings?()
-                }
+            ForEach(Array(items.enumerated()), id: \.element) { index, item in
+                if index > 0 { footerSeparator }
+                footerView(item, compact: compact)
             }
-            if showsLastfm {
-                if showsSettings { footerSeparator }
-                lastfmFooterItem
-            }
-            if showsVersion {
-                if showsSettings || showsLastfm { footerSeparator }
-                versionFooterItem
-            }
-            if !showsSettings && !showsLastfm && !showsVersion { Spacer(minLength: 0) }
+            if items.isEmpty { Spacer(minLength: 0) }
             editLayoutButton
+        }
+    }
+
+    @ViewBuilder private func footerView(_ item: MenuBarPanelLayout.FooterItem, compact: Bool) -> some View {
+        switch item {
+        case .settings:
+            footerButton(item.panelSymbol, L10n.t("设置…"), compact: compact) {
+                close()
+                AppActions.shared.openSettings?()
+            }
+        case .lastfm:
+            lastfmFooterItem(compact: compact)
+        case .version:
+            versionFooterItem(compact: compact)
+        // 下面四项同右键菜单里那几项,走同一个动作。
+        case .whatsNew:
+            footerButton(item.panelSymbol, L10n.t("查看本次更新…"), compact: compact) {
+                close()
+                AppActions.shared.openWhatsNew?()
+            }
+        case .feedback:
+            footerButton(item.panelSymbol, L10n.t("反馈问题…"), compact: compact) {
+                close()
+                AppMenuActions.reportIssue()
+            }
+        case .about:
+            footerButton(item.panelSymbol, L10n.t("关于 Lyrimuse"), compact: compact) {
+                close()
+                AppMenuActions.openAbout()
+            }
+        case .quit:
+            footerButton(item.panelSymbol, L10n.t("退出 Lyrimuse"), compact: compact) {
+                AppExit.request(.menuQuit)
+            }
         }
     }
 
@@ -2062,9 +2176,9 @@ private struct MenuBarPanelView: View {
     /// Last.fm 出错那格换橙色三角是同一个理由:颜色和图形一起说"这里有事",一格宽度放不下
     /// 更多字。「已下载」和「有新版本」分开写:自动下载开着时 Sparkle 已经把包拉完,点开是
     /// "重启安装"而不是再等一次下载,文案要对得上用户接下来看到的窗口。
-    @ViewBuilder private var versionFooterItem: some View {
+    @ViewBuilder private func versionFooterItem(compact: Bool) -> some View {
         if let update = pendingUpdate {
-            footerItem(
+            footerItem(compact: compact,
                 // 两个 L10n.t 分开写:三目塞进 L10n.t 里,文案守卫(parity 脚本 / selftest)扫不到字面量。
                 title: String(format: update.downloaded ? L10n.t("%@ 已下载，点按安装") : L10n.t("有新版本 %@"),
                               update.version),
@@ -2078,7 +2192,7 @@ private struct MenuBarPanelView: View {
                 AppActions.shared.openSettings?()
             }
         } else {
-            footerItem(
+            footerItem(compact: compact,
                 title: String(format: L10n.t("版本 %@"), SparkleUpdaterManager.appVersionString),
                 tint: .secondary, help: L10n.t("打开软件更新"),
                 icon: { Image(systemName: "info.circle").font(.system(size: 10.5)) }
@@ -2114,10 +2228,10 @@ private struct MenuBarPanelView: View {
     ///
     /// 显示账号名而不是"已连接"三个字:名字本身就说明连上了,而且能一眼看出连的是**哪个**
     /// 账号(多账号切换过的人才知道这有多重要)。回落顺序跟设置页共用 lastfmDisplayName。
-    @ViewBuilder private var lastfmFooterItem: some View {
+    @ViewBuilder private func lastfmFooterItem(compact: Bool) -> some View {
         switch lastfmStatus {
         case .active:
-            lastfmButton(tint: .secondary, help: nil) {
+            lastfmButton(tint: .secondary, help: nil, compact: compact) {
                 // 必须走 lastfmBadge():那张 PNG 四角是不透明的白,不裁圆角的话深色模式下
                 // 就是四个白点。
                 lastfmBadge(size: 11)
@@ -2126,7 +2240,7 @@ private struct MenuBarPanelView: View {
             // 出问题时换成警告图标 + 橙色,而不是只把文字染色 —— 颜色一个人扛不住"这里
             // 出事了"这件事(色弱、以及面板整体本来就是灰调)。具体哪儿出问题交给悬停提示,
             // 这一格宽度放不下一句完整的错误。
-            lastfmButton(tint: .orange, help: message) {
+            lastfmButton(tint: .orange, help: message, compact: compact) {
                 Image(systemName: "exclamationmark.triangle.fill").font(.system(size: 10))
             }
         // .disabled 是「功能开关」那一页专用的第四态,destinationStatus 永远不构造它
@@ -2136,10 +2250,10 @@ private struct MenuBarPanelView: View {
         }
     }
 
-    private func lastfmButton<Icon: View>(tint: Color, help: String?,
+    private func lastfmButton<Icon: View>(tint: Color, help: String?, compact: Bool,
                                           @ViewBuilder icon: @escaping () -> Icon) -> some View {
         let name = lastfmDisplayName(config: .shared)
-        return footerItem(title: name.isEmpty ? "Last.fm" : name, tint: tint, help: help,
+        return footerItem(compact: compact, title: name.isEmpty ? "Last.fm" : name, tint: tint, help: help,
                           icon: icon) {
             close()
             // 一次性信箱把设置窗口直接翻到 Last.fm 那一页。
@@ -2148,16 +2262,17 @@ private struct MenuBarPanelView: View {
         }
     }
 
-    private func footerButton(_ symbol: String, _ title: String,
+    private func footerButton(_ symbol: String, _ title: String, compact: Bool,
                               action: @escaping () -> Void) -> some View {
-        footerItem(title: title, tint: .secondary, help: nil,
+        footerItem(compact: compact, title: title, tint: .secondary, help: nil,
                    icon: { Image(systemName: symbol).font(.system(size: 10.5)) },
                    action: action)
     }
 
     /// 底栏那一排的通用样式。图标做成 @ViewBuilder 是因为 Last.fm 那一项用的是**品牌图**
     /// (Image(nsImage:))而不是 SF Symbol,不能只收一个符号名。
-    private func footerItem<Icon: View>(title: String, tint: Color, help: String?,
+    /// `compact`:只画图标(底栏多于三项时),名字进悬停提示。
+    private func footerItem<Icon: View>(compact: Bool = false, title: String, tint: Color, help: String?,
                                         // @escaping:图标闭包要被 ChipButton 存下来(它带
                                         // @State,是个真正的 View 而不是就地求值的函数)。
                                         @ViewBuilder icon: @escaping () -> Icon,
@@ -2166,17 +2281,19 @@ private struct MenuBarPanelView: View {
         ChipButton(cornerRadius: 11, pressScale: 0.97, action: action) {
             HStack(spacing: 4) {
                 icon()
-                Text(title)
-                    .font(.system(size: 10.5))
-                    // 账号名可能很长(底栏一格约 105pt),截断而不是把三项挤歪。
-                    .lineLimit(1)
-                    .truncationMode(.tail)
+                if !compact {
+                    Text(title)
+                        .font(.system(size: 10.5))
+                        // 账号名可能很长(底栏一格约 105pt),截断而不是把三项挤歪。
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                }
             }
             .foregroundStyle(tint)
             .frame(maxWidth: .infinity)
             .padding(.vertical, 4)
         }
-        .modifier(OptionalHelp(text: help))
+        .modifier(OptionalHelp(text: help ?? (compact ? title : nil)))
     }
 }
 

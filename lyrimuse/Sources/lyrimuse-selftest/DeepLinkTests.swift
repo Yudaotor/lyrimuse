@@ -448,7 +448,7 @@ func runDeepLinkTests() {
             .debug(.toggleFavorite), .debug(.idleResume), .debug(.seek(seconds: 99.7)), .debug(.seek(seconds: 0)),
             .debug(.knockout(leg: .appleMusicScript, on: false)), .debug(.knockout(leg: .spotifyScript, on: true)),
             .debug(.knockout(leg: .kasetScript, on: false)), .debug(.saveConfig), .debug(.panelLayout(json: nil)), .debug(.panelPin(on: true)), .debug(.panelPin(on: false)), .debug(.panelDrag(from: CGPoint(x: 1.5, y: 2), to: CGPoint(x: 300, y: 400))), .debug(.panelDrag(from: CGPoint(x: 1, y: 2), to: CGPoint(x: 3, y: 4), via: [CGPoint(x: 5, y: 6)])), .debug(.panelDrag(from: CGPoint(x: 1, y: 2), to: CGPoint(x: 3, y: 4), inGallery: true)),
-            .debug(.panelLayout(json: MenuBarPanelLayout(placements: [.init(tile: .translation, size: .large, column: 0, row: 0)], hiddenFooter: [.version]).encoded())), .debug(.volume(percent: 0)), .debug(.volume(percent: 100)),
+            .debug(.panelLayout(json: MenuBarPanelLayout(placements: [.init(tile: .translation, size: .large, column: 0, row: 0)], footer: [.version]).encoded())), .debug(.volume(percent: 0)), .debug(.volume(percent: 100)),
             .debug(.stall(ms: 1)), .debug(.stall(ms: 2000)), .debug(.milestonePreview),
             .debug(.notchBehavior(collapseWhenPaused: true, hideWhenNotPlaying: nil)),
             .debug(.notchBehavior(collapseWhenPaused: false, hideWhenNotPlaying: true)),

@@ -2011,7 +2011,7 @@ func runMenuBarTests() {
                                    P(tile: .lyricsManager, size: .medium, column: 3, row: 3), P(tile: .touchBar, size: .small, column: 0, row: 4)],
                     "面板布局: 默认坑位")
         expectEqual(d.rowCount() == 5 && d.rowCount { $0 != .touchBar } == 4, true, "面板布局: 没有触控栏时卡片两排 + 钮块两排,同原来")
-        expectEqual(d.hiddenFooter.isEmpty, true, "面板布局: 默认底栏全显示")
+        expectEqual(d.footer, [.settings, .lastfm, .version], "面板布局: 默认底栏是设置、Last.fm、版本号")
         expectEqual(L.Tile.allCases.map(\.rawValue),
                     ["now-playing", "overlay", "notch", "menubar", "lyrics-window", "touchbar", "lyrics-manager", "translation", "romanization",
                      "lock-position", "hide-all-lyrics", "search-lyrics", "mini-window", "font-larger", "font-smaller", "like", "open-player",
@@ -2032,7 +2032,7 @@ func runMenuBarTests() {
         expectEqual(L.decode(nil) == d && L.decode("") == d && L.decode("not json") == d, true, "面板布局: 没存过或读不出来是默认")
         expectEqual(L.decode(#"{"grid":6,"version":2,"tiles":[]}"#).placements.isEmpty, true, "面板布局: 格子全移除也照存,不退回默认")
         let custom = L(placements: [P(tile: .lockPosition, size: .small, column: 4, row: 2), P(tile: .lyricsManager, size: .large, column: 0, row: 0)],
-                       hiddenFooter: [.settings, .lastfm])
+                       footer: [.quit, .version])
         expectEqual(L.decode(custom.encoded()), custom, "面板布局: 存了读回来一样(坑位、空着的地方都留着)")
         expectEqual(custom.emptySlots(rows: 3).map { "\($0.column),\($0.row)" },
                     ["3,0", "4,0", "5,0", "3,1", "4,1", "5,1", "0,2", "1,2", "2,2", "3,2"],
@@ -2040,7 +2040,7 @@ func runMenuBarTests() {
         // 容错:认不出的、重复的丢掉,尺寸认不出退回中号,重叠或出界的挪到第一个对得齐的空位。
         let messy = #"{"grid":6,"version":2,"tiles":[{"id":"overlay","size":"small","col":0,"row":0},{"id":"bogus","col":2,"row":0},{"id":"overlay","col":2,"row":0},{"id":"notch","size":"huge","col":1,"row":0},{"id":"menubar","size":"small","col":5,"row":0}],"hiddenFooter":["version","nope"]}"#
         expectEqual(L.decode(messy), L(placements: [P(tile: .overlay, size: .small, column: 0, row: 0), P(tile: .notch, size: .medium, column: 3, row: 0),
-                                                   P(tile: .menuBar, size: .small, column: 0, row: 1)], hiddenFooter: [.version]),
+                                                   P(tile: .menuBar, size: .small, column: 0, row: 1)], footer: [.settings, .lastfm]),
                     "面板布局: 认不出的和重复的丢掉、尺寸退回中号、压到前面或出界的挪到第一个对得齐的空位,认不出的底栏项丢掉")
         // 更早的存法:坑位不作数,卡片放最上面,别的按原来先后依次放;按顺序排的那种旧中号、旧小号 → 小号,旧大号 → 中号。
         let legacy = #"{"tiles":[{"id":"overlay","size":"medium"},{"id":"notch","size":"large"},{"id":"favorite","size":"small"},{"id":"menubar","size":"small"}]}"#
@@ -2059,6 +2059,23 @@ func runMenuBarTests() {
         expectEqual(L.decode(noCard.encoded()), noCard, "面板布局: 卡片是格子以后自己移除的,读回来不补")
         expectEqual(noCard.addable { _ in true }.first, .nowPlaying, "面板布局: 移除的卡片在可添加最前面")
         // 正在播放卡只有大号(3×2)和加宽(6×2):别的档换不上,添加、读盘时退回加宽。
+        // 底栏:按顺序存;更早只记「藏了哪几项」的存法换算成默认三项去掉藏的;认不出的、重复的丢掉,最多五项。
+        expectEqual(L.decode(#"{"grid":6,"version":2,"tiles":[],"footer":["quit","nope","settings","quit","about","feedback","whats-new","version"]}"#).footer,
+                    [.quit, .settings, .about, .feedback, .whatsNew], "面板底栏: 按存的顺序,认不出的和重复的丢掉,最多五项")
+        expectEqual(L.decode(#"{"grid":6,"version":2,"tiles":[],"hiddenFooter":["lastfm"]}"#).footer, [.settings, .version],
+                    "面板底栏: 早先「藏了哪几项」的存法换算过来")
+        var bar = L(placements: [])
+        bar.addFooter(.quit)
+        bar.addFooter(.about)
+        bar.addFooter(.feedback)
+        expectEqual(bar.footer, [.settings, .lastfm, .version, .quit, .about], "面板底栏: 加到最后,满五项不再加")
+        bar.moveFooter(.quit, toPositionOf: .settings)
+        expectEqual(bar.footer, [.quit, .settings, .lastfm, .version, .about], "面板底栏: 往左挪落在那一项前面")
+        bar.moveFooter(.quit, toPositionOf: .lastfm)
+        expectEqual(bar.footer, [.settings, .lastfm, .quit, .version, .about], "面板底栏: 往右挪落在那一项后面")
+        bar.removeFooter(.lastfm)
+        expectEqual(bar.addableFooter, [.lastfm, .whatsNew, .feedback], "面板底栏: 可添加的是不在底栏里的那几项")
+        expectEqual(L.decode(bar.encoded()).footer, bar.footer, "面板底栏: 存了读回来顺序不变")
         expectEqual(L.Tile.nowPlaying.sizes == [.large, .wide] && L.Tile.overlay.sizes == [.small, .medium, .large], true,
                     "面板布局: 正在播放卡只有大号和加宽")
         var card = noCard
@@ -2199,10 +2216,10 @@ func runMenuBarTests() {
                     "面板编辑: 右键换档和拉手只给这一格有的档")
         expectEqual(sourceHas(panel, ".simultaneousGesture(gridResizeGesture)") && sourceHas(panel, "guard resizingTile == nil else { return }"), true,
                     "面板编辑: 换尺寸挂在整块网格上(挂在拉手上,格子换画法时手势被丢掉、一次只能换一档),拉的时候格子不跟着挪")
-        expectEqual(sourceHas(panel, "if !showsSettings && !showsLastfm && !showsVersion { Spacer(minLength: 0) }\neditLayoutButton"), true,
+        expectEqual(sourceHas(panel, "if items.isEmpty { Spacer(minLength: 0) }\neditLayoutButton"), true,
                     "面板编辑: 「编辑」那一颗不跟着底栏显隐")
-        expectEqual(sourceHas(panel, "let showsVersion = !hidden.contains(.version) || pendingUpdate != nil"), true,
-                    "面板编辑: 藏了版本号,有新版本时升级提示照样出现")
+        expectEqual(sourceHas(panel, "if pendingUpdate != nil, !items.contains(.version) { items.append(.version) }"), true,
+                    "面板编辑: 底栏里没有版本号,有新版本时升级提示照样出现")
         expectEqual(sourceHas(router, "editing: quick == \"edit\")"), true, "面板编辑: 深链 quick=edit 打开就进编辑")
         expectEqual(sourceHas(panel, "PlaybackCoordinator.shared.refreshExtendedControls()\npendingUpdate = SparkleUpdaterManager.shared.availableUpdate"), true,
                     "面板走带: 开面板回读一次喜欢 / 随机 / 循环")

@@ -243,6 +243,23 @@ extension MenuBarPanelLayout.FooterItem {
         case .settings: return L10n.t("设置")
         case .lastfm: return "Last.fm"
         case .version: return L10n.t("版本号")
+        case .whatsNew: return L10n.t("查看本次更新…")
+        case .feedback: return L10n.t("反馈问题…")
+        case .about: return L10n.t("关于 Lyrimuse")
+        case .quit: return L10n.t("退出 Lyrimuse")
+        }
+    }
+
+    /// 底栏和编辑时那几处画的符号(Last.fm 平时画品牌图,这里是没有品牌图时的退路)。
+    var panelSymbol: String {
+        switch self {
+        case .settings: return "gearshape"
+        case .lastfm: return "dot.radiowaves.left.and.right"
+        case .version: return "info.circle"
+        case .whatsNew: return "newspaper"
+        case .feedback: return "exclamationmark.bubble"
+        case .about: return "info.square"
+        case .quit: return "rectangle.portrait.and.arrow.right"
         }
     }
 }

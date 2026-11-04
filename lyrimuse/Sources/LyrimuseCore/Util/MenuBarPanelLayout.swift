@@ -116,22 +116,31 @@ public struct MenuBarPanelLayout: Equatable, Sendable {
         }
     }
 
-    /// 底部那一排能藏的几项。「编辑」那一颗不在这里:它是改回来的唯一入口,不许藏。
+    /// 底栏能放的几项,按用户排的顺序摆。「编辑」那一颗不在这里:它是改回来的唯一入口,不许藏。见 06 章决策 90。
     public enum FooterItem: String, CaseIterable, Sendable {
         case settings, lastfm, version
+        case whatsNew = "whats-new"
+        case feedback, about, quit
     }
+
+    /// 底栏一排最多几项(「编辑」那颗另算)。
+    public static let maxFooterItems = 5
+    public static let defaultFooter: [FooterItem] = [.settings, .lastfm, .version]
 
     public static let columns = 6
     /// 存盘格式版本:2 起正在播放卡是格子。
     static let storageVersion = 2
 
     public private(set) var placements: [Placement]
-    public var hiddenFooter: Set<FooterItem>
+    /// 底栏按顺序摆哪几项。
+    public private(set) var footer: [FooterItem]
 
     /// 重复的格子留第一个;这一格没有的那一档换成它的默认档;出了边界、或跟前面的重叠的,挪到第一个放得下的空位。
-    public init(placements: [Placement], hiddenFooter: Set<FooterItem> = []) {
+    /// 底栏重复的留第一个,超过 `maxFooterItems` 的丢掉。
+    public init(placements: [Placement], footer: [FooterItem] = MenuBarPanelLayout.defaultFooter) {
         self.placements = []
-        self.hiddenFooter = hiddenFooter
+        var seen: Set<FooterItem> = []
+        self.footer = Array(footer.filter { seen.insert($0).inserted }.prefix(Self.maxFooterItems))
         for var p in placements where !contains(p.tile) {
             p.size = p.tile.fitting(p.size)
             if fits(p, ignoring: nil) {
@@ -265,7 +274,7 @@ public struct MenuBarPanelLayout: Equatable, Sendable {
             }
         }
         let vacated = swap ? placement(of: tile) : nil
-        var result = MenuBarPanelLayout(placements: [], hiddenFooter: hiddenFooter)
+        var result = MenuBarPanelLayout(placements: [], footer: footer)
         result.placements = [target]
         for p in others.sorted(by: { ($0.row, $0.column) < ($1.row, $1.column) }) {
             if result.fits(p, ignoring: nil) {
@@ -311,8 +320,24 @@ public struct MenuBarPanelLayout: Equatable, Sendable {
         return true
     }
 
-    public mutating func setFooter(_ item: FooterItem, shown: Bool) {
-        if shown { hiddenFooter.remove(item) } else { hiddenFooter.insert(item) }
+    /// 底栏里没有的几项(「可添加」那块列它们)。
+    public var addableFooter: [FooterItem] { FooterItem.allCases.filter { !footer.contains($0) } }
+
+    /// 加到底栏最后;已经在、或底栏满了(`maxFooterItems`)就不加。
+    public mutating func addFooter(_ item: FooterItem) {
+        guard !footer.contains(item), footer.count < Self.maxFooterItems else { return }
+        footer.append(item)
+    }
+
+    public mutating func removeFooter(_ item: FooterItem) {
+        footer.removeAll { $0 == item }
+    }
+
+    /// 把 `item` 挪到 `other` 现在的位置(往右挪落在它后面,往左挪落在它前面)。
+    public mutating func moveFooter(_ item: FooterItem, toPositionOf other: FooterItem) {
+        guard item != other, let from = footer.firstIndex(of: item), let to = footer.firstIndex(of: other) else { return }
+        footer.remove(at: from)
+        footer.insert(item, at: to)
     }
 
     // MARK: 存盘
@@ -325,6 +350,8 @@ public struct MenuBarPanelLayout: Equatable, Sendable {
             var row: Int?
         }
         var tiles: [StoredTile]
+        /// 底栏按顺序摆的几项。没有这个键的是更早的存法:默认那三项去掉 `hiddenFooter` 里藏的。
+        var footer: [String]?
         var hiddenFooter: [String]?
         /// 网格一排几列。没有这个键的是更早的存法(按顺序排的,或 4 列网格),坑位不作数。
         var grid: Int?
@@ -337,7 +364,8 @@ public struct MenuBarPanelLayout: Equatable, Sendable {
             tiles: placements.map {
                 Stored.StoredTile(id: $0.tile.rawValue, size: $0.size.rawValue, col: $0.column, row: $0.row)
             },
-            hiddenFooter: FooterItem.allCases.filter { hiddenFooter.contains($0) }.map(\.rawValue),
+            footer: footer.map(\.rawValue),
+            hiddenFooter: nil,
             grid: Self.columns,
             version: Self.storageVersion)
         let encoder = JSONEncoder()
@@ -349,8 +377,10 @@ public struct MenuBarPanelLayout: Equatable, Sendable {
     public static func decode(_ json: String?) -> MenuBarPanelLayout {
         guard let data = json?.data(using: .utf8),
               let stored = try? JSONDecoder().decode(Stored.self, from: data) else { return .default }
-        let footer = Set((stored.hiddenFooter ?? []).compactMap(FooterItem.init(rawValue:)))
-        var layout = MenuBarPanelLayout(placements: [], hiddenFooter: footer)
+        let hidden = Set((stored.hiddenFooter ?? []).compactMap(FooterItem.init(rawValue:)))
+        let footer = stored.footer.map { $0.compactMap(FooterItem.init(rawValue:)) }
+            ?? Self.defaultFooter.filter { !hidden.contains($0) }
+        var layout = MenuBarPanelLayout(placements: [], footer: footer)
         guard stored.grid == Self.columns else {
             // 更早的存法:坑位不作数,按原来的先后(有坑位的按从上到下、从左到右)依次放进第一个空位。按顺序排的那种
             // 尺寸按长相换:它的中号、小号都是图标在上、名字在下的方块 = 现在的小号,大号是宽条 = 中号。
