@@ -1694,6 +1694,15 @@ func runSourceContractSurfaceTests() {
                         "菜单栏双排: 自适应装得下的句子双排时也走图层渲染")
             expectEqual(item.contains("MenuBarMarqueeRenderer.mainFont(for: text, twoRows: twoRows)"), true,
                         "菜单栏双排: 主行字体只从 mainFont(for:twoRows:) 一个入口取")
+            // 填色取显示句自己的逐字时间轴:提前量里亮出的下一句也有路径(边界停在 0)。彩虹没路径就整句全亮,
+            // 开唱挂上路径又压暗重填(06 章决策 12)。跟唱滚动仍只接当前演唱句。
+            let fillBody = sourceBody("private func karaokeFillPath(for text: String)", in: item)
+            expectEqual(sourceHas(fillBody, "menuBarLayoutSecondaryLine.displayedLine(\ncompactLine: coordinator.menuBarLyrics.compactLine, currentLine: coordinator.menuBarLyrics.line)"), true,
+                        "菜单栏填色: 取显示句(提前量里亮出的下一句也给路径)")
+            expectEqual(fillBody.contains("displayedLineIsCurrent"), false,
+                        "菜单栏填色: 不要求显示句就是当前演唱句")
+            expectEqual(sourceBody("private func followReadingPath(for text: String)", in: item).contains("displayedLineIsCurrent(line)"), true,
+                        "菜单栏跟唱: 仍只接当前演唱句")
             expectEqual(item.components(separatedBy: "font: rowState.mainFont").count - 1 >= 3, true,
                         "菜单栏双排: 测宽 / 排版 / 逐字边界都用 rowState.mainFont(至少 3 处)")
             expectEqual(item.contains("settings.$menuBarSecondaryLine.dropFirst()"), true,
