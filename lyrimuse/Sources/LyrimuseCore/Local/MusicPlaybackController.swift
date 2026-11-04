@@ -385,7 +385,7 @@ public enum MusicPlaybackController {
     /// 「播放模式」那三项(`QQMusicMenuControl`,要辅助功能权限),没有音量;Amazon Music 只有模式,按它播放条上的键、读它的日志
     /// (`AmazonMusicModeControl`);reAMP 只有随机和列表循环,按它菜单栏 Play 里的两个开关(`ReampMenuControl`);Pine Player 只有循环,
     /// 按它菜单栏「重复模式」子菜单(`PineMenuControl`);foobar2000 有随机和两种循环,按它菜单栏「Order」子菜单(`FoobarMenuControl`),
-    /// 音量读写它窗口里的滑块(`FoobarVolume`);Pear Desktop 开着本机接口时有循环(没有能保持的随机档)和音量(`PearDesktopAPI`)。网易云、酷狗等没有
+    /// 音量读写它窗口里的滑块(`FoobarVolume`);Pear Desktop 开着本机接口时有随机、循环和音量(`PearDesktopAPI`)。网易云、酷狗等没有
     /// .sdef(不可脚本化),而
     /// media-control 走的系统级 MediaRemote 只有播放控制 —— 对它们只能不显示这些控件(各家实测见 07 章决策 130)。
     public static func supportsExtendedControls(_ player: PlaybackPlayer) -> Bool {
@@ -747,7 +747,7 @@ public enum MusicPlaybackController {
             return ExtendedControlsState(favorited: includeFavorited ? LXMusicFavoriteControl.readFavorited() : nil,
                                          mode: nil, volume: LXMusicOpenAPI.shared.currentState().flatMap(LXMusicOpenAPI.volumePercent))
         case .pearDesktop:
-            // 循环档和音量只有用户打开了它的本机接口才有(`PearDesktopAPI`);随机它没有能保持的一档,喜欢要登录,都不接。
+            // 随机、循环和音量只有用户打开了它的本机接口才有(`PearDesktopAPI`);喜欢要登录,不接。
             return ExtendedControlsState(favorited: nil, mode: PearDesktopAPI.shared.playbackMode(), volume: PearDesktopAPI.shared.volume())
         // 其余播放器一律没有这些控件 —— 它们的 .app 里根本没有 .sdef(不可脚本化),
         // 而 media-control 走的系统级 MediaRemote 只有播放控制、没有音量和模式的概念。

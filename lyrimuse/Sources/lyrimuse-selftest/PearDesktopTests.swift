@@ -48,16 +48,32 @@ func runPearDesktopTests() {
     // ---- 循环档与音量 ----
     do {
         typealias Mode = MusicPlaybackController.MusicPlaybackMode
-        expectEqual([API.playbackMode(fromRepeat: "NONE"), API.playbackMode(fromRepeat: "ALL"), API.playbackMode(fromRepeat: "ONE"),
-                     API.playbackMode(fromRepeat: nil)], [Mode.list, .repeatAll, .repeatOne, nil], "Pear 循环: 三档换成播放模式")
-        expectEqual(API.modeOptions.contains(.shuffle), false, "Pear 循环: 没有能保持的随机档")
-        // 实测它按一下循环键:关 → 列表循环 → 单曲循环 → 关。
-        expectEqual(API.repeatPresses(from: "NONE", to: .repeatOne), 2, "Pear 循环: 关到单曲循环按两下")
-        expectEqual(API.repeatPresses(from: "ONE", to: .repeatAll), 2, "Pear 循环: 单曲到列表循环要绕一圈按两下")
-        expectEqual(API.repeatPresses(from: "ALL", to: .list), 2, "Pear 循环: 列表循环到关按两下")
-        expectEqual(API.repeatPresses(from: "ALL", to: .repeatAll), 0, "Pear 循环: 已经是这一档不按")
-        expectEqual(API.repeatPresses(from: "NONE", to: .shuffle), nil, "Pear 循环: 要随机不接")
-        expectEqual(API.repeatPresses(from: nil, to: .repeatAll), nil, "Pear 循环: 读不到现在这档不按")
+        expectEqual([API.playbackMode(shuffle: false, repeatMode: "NONE"), API.playbackMode(shuffle: false, repeatMode: "ALL"),
+                     API.playbackMode(shuffle: false, repeatMode: "ONE"), API.playbackMode(shuffle: true, repeatMode: "NONE")],
+                    [Mode.list, .repeatAll, .repeatOne, .shuffle], "Pear 模式: 随机开关加循环档换成播放模式")
+        expectEqual(API.playbackMode(shuffle: true, repeatMode: "ALL"), .shuffle, "Pear 模式: 随机和列表循环都开着时显示随机(同 Kaset)")
+        expectEqual(API.playbackMode(shuffle: true, repeatMode: "ONE"), .repeatOne, "Pear 模式: 单曲循环优先")
+        expectEqual(API.playbackMode(shuffle: nil, repeatMode: "NONE"), nil, "Pear 模式: 随机读不到为 nil")
+        expectEqual(API.playbackMode(shuffle: false, repeatMode: nil), nil, "Pear 模式: 循环读不到为 nil")
+        expectEqual(API.modeOptions, .all, "Pear 模式: 随机、列表循环、单曲循环都有(随机是能保持的开关,实测读回)")
+        typealias Plan = API.ModePlan
+        // 实测它按一下循环键:关 → 列表循环 → 单曲循环 → 关;`POST /shuffle` 是切换。
+        expectEqual(API.modePlan(shuffle: false, repeatMode: "NONE", to: .repeatOne),
+                    Plan(toggleShuffle: false, repeatPresses: 2, shuffle: false, repeatMode: "ONE"), "Pear 模式: 关到单曲循环按两下")
+        expectEqual(API.modePlan(shuffle: false, repeatMode: "ONE", to: .repeatAll),
+                    Plan(toggleShuffle: false, repeatPresses: 2, shuffle: false, repeatMode: "ALL"), "Pear 模式: 单曲到列表循环绕一圈按两下")
+        expectEqual(API.modePlan(shuffle: false, repeatMode: "ALL", to: .repeatAll),
+                    Plan(toggleShuffle: false, repeatPresses: 0, shuffle: false, repeatMode: "ALL"), "Pear 模式: 已经是这一档不按")
+        expectEqual(API.modePlan(shuffle: false, repeatMode: "NONE", to: .shuffle),
+                    Plan(toggleShuffle: true, repeatPresses: 0, shuffle: true, repeatMode: "NONE"), "Pear 模式: 开随机按一下随机键")
+        expectEqual(API.modePlan(shuffle: false, repeatMode: "ONE", to: .shuffle),
+                    Plan(toggleShuffle: true, repeatPresses: 1, shuffle: true, repeatMode: "NONE"), "Pear 模式: 开随机时关掉单曲循环")
+        expectEqual(API.modePlan(shuffle: true, repeatMode: "ALL", to: .list),
+                    Plan(toggleShuffle: true, repeatPresses: 0, shuffle: false, repeatMode: "ALL"), "Pear 模式: 关随机时列表循环留着(同 Kaset)")
+        expectEqual(API.modePlan(shuffle: true, repeatMode: "NONE", to: .repeatOne),
+                    Plan(toggleShuffle: true, repeatPresses: 2, shuffle: false, repeatMode: "ONE"), "Pear 模式: 开循环时关掉随机(互斥)")
+        expectEqual(API.modePlan(shuffle: nil, repeatMode: "NONE", to: .shuffle), nil, "Pear 模式: 读不到随机不动")
+        expectEqual(API.modePlan(shuffle: false, repeatMode: nil, to: .repeatAll), nil, "Pear 模式: 读不到循环不动")
         // 实测(写滑块 → 读回):10→2、30→8、50→20、55→24、80→55、90→74、100→100。
         let measured: [(slider: Int, read: Double)] = [(10, 2), (30, 8), (50, 20), (55, 24), (80, 55), (90, 74), (100, 100)]
         expectEqual(measured.allSatisfy { abs(API.sliderVolume(fromPlayerVolume: $0.read, muted: false) - $0.slider) <= 2 }, true,

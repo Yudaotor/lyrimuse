@@ -1563,16 +1563,22 @@ func runPlayerIdentityTests() {
                     [Mode.list, .repeatAll, .repeatOne], "网页版: repeat-mode 三个值对上三档(大小写不论)")
         expectEqual([Y.liked(fromStatus: "LIKE"), Y.liked(fromStatus: "DISLIKE"), Y.liked(fromStatus: "INDIFFERENT"), Y.liked(fromStatus: "")],
                     [true, false, false, nil], "网页版: 赞了才算喜欢,踩过算没赞")
-        expectEqual(Y.parseRead("STATE:ALL|LIKE|37.6\n"), Y.State(mode: .repeatAll, liked: true, volume: 38),
-                    "网页版: 一次读回循环档、赞、音量条")
-        expectEqual(Y.parseRead("STATE:NONE||"), Y.State(mode: .list, liked: nil, volume: nil), "网页版: 读不到的那样为 nil")
+        expectEqual(Y.parseRead("STATE:ALL|LIKE|37.6|0\n"), Y.State(mode: .repeatAll, liked: true, volume: 38, shuffling: false, repeatMode: "ALL"),
+                    "网页版: 一次读回循环档、赞、音量条、随机")
+        expectEqual(Y.parseRead("STATE:NONE|||0"), Y.State(mode: .list, liked: nil, volume: nil, shuffling: false, repeatMode: "NONE"),
+                    "网页版: 读不到的那样为 nil")
+        expectEqual(Y.parseRead("STATE:NONE|LIKE|40|1")?.mode, .shuffle, "网页版: shuffle-on 在就是随机")
+        expectEqual(Y.parseRead("STATE:ALL|LIKE|40|1")?.mode, .shuffle, "网页版: 随机和列表循环都开着显示随机(同 Kaset)")
+        expectEqual(Y.parseRead("STATE:ONE|LIKE|40|1")?.mode, .repeatOne, "网页版: 单曲循环优先")
+        expectEqual(Y.parseRead("STATE:|LIKE|40|0")?.mode, nil, "网页版: 循环档读不到时不报档位")
+        expectEqual(Y.parseRead("STATE:ALL|LIKE|40"), nil, "网页版: 少了随机那一段读不懂")
         expectEqual(Y.parseRead("NOTFOUND"), nil, "网页版: 没有页面读不出来")
         expectEqual(Y.parseSet("SET:ONE"), .set("ONE"), "网页版: 写过回 SET 后面的值")
         expectEqual(Y.parseSet("SKIP"), .skipped, "网页版: 只有暂停的页面时第一轮不动(模板已去掉 PAUSED: 前缀)")
         expectEqual(Y.parseSet("NOTFOUND"), .failed, "网页版: 找不到页面算没写成")
-        expectEqual(Y.modeOptions.contains(.shuffle), false, "网页版: 随机是一次性动作、没有状态,随机键不显示")
+        expectEqual(Y.modeOptions, .all, "网页版: 随机(shuffle-on 能保持)、列表循环、单曲循环都有")
         expectEqual(Y.modeOptions.canRepeat, true, "网页版: 有循环键")
-        let scripts = [Y.readJS(title: "t"), Y.setRepeatJS(attribute: "ALL", title: "t", force: true),
+        let scripts = [Y.readJS(title: "t"), Y.setModeJS(.shuffle, title: "t", force: true), Y.setModeJS(.repeatAll, title: "t", force: true),
                        Y.setLikeJS(liked: true, title: "t", force: false), Y.setVolumeJS(50, title: "t", force: true)]
         expectEqual(scripts.contains { $0.contains("\"") }, false, "网页版: 注入的 JS 里没有双引号(要嵌进 AppleScript 字符串)")
         expectEqual(Y.setLikeJS(liked: true, title: "t", force: false).contains("if (true && v && v.paused) return 'PAUSED:SKIP';"), true,

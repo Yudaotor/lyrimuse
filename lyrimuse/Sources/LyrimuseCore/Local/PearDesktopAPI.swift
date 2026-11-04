@@ -207,31 +207,52 @@ public final class PearDesktopAPI: @unchecked Sendable {
         return KasetPlayerInfo.QueueReply(currentIndex: current, repeating: repeating, tracks: tracks)
     }
 
-    /// 它的循环档(`GET /api/v1/repeat-mode` 的 NONE / ALL / ONE)换成播放模式;读不到为 nil。它没有能保持的随机档(接口的「随机」
-    /// 是把队列重新打乱一次),所以只有关、列表循环、单曲循环三档(`modeOptions`)。
-    public static func playbackMode(fromRepeat mode: String?) -> MusicPlaybackController.MusicPlaybackMode? {
-        switch mode {
-        case "NONE": return .list
-        case "ALL": return .repeatAll
-        case "ONE": return .repeatOne
-        default: return nil
+    /// 随机开关(`GET /api/v1/shuffle`,读的是播放条的 `shuffle-on`,能保持)加循环档(`GET /api/v1/repeat-mode` 的 NONE / ALL / ONE)
+    /// 换成播放模式,规则同 Kaset(`MusicPlaybackController.kasetPlaybackMode`:单曲循环优先,其次随机);任一项读不到为 nil。
+    public static func playbackMode(shuffle: Bool?, repeatMode: String?) -> MusicPlaybackController.MusicPlaybackMode? {
+        let repeating: String?
+        switch repeatMode {
+        case "NONE": repeating = "off"
+        case "ALL": repeating = "all"
+        case "ONE": repeating = "one"
+        default: repeating = nil
+        }
+        return MusicPlaybackController.kasetPlaybackMode(shuffling: shuffle, repeating: repeating)
+    }
+
+    public static let modeOptions: MusicPlaybackController.PlaybackModeOptions = .all
+
+    /// 换到某一档要做什么:随机开关要不要按(`POST /api/v1/shuffle` 是切换)、循环键按几下(它按一下:关 → 列表循环 → 单曲循环 → 关),
+    /// 以及按完应该读到的两项。语义同 Kaset(`kasetPlaybackModeScript`):随机和循环互斥,「列表」「随机」只把单曲循环关掉,
+    /// 列表循环开着就留着。读不到现在的状态时为 nil。
+    public struct ModePlan: Equatable, Sendable {
+        public let toggleShuffle: Bool
+        public let repeatPresses: Int
+        public let shuffle: Bool
+        public let repeatMode: String
+
+        public init(toggleShuffle: Bool, repeatPresses: Int, shuffle: Bool, repeatMode: String) {
+            self.toggleShuffle = toggleShuffle
+            self.repeatPresses = repeatPresses
+            self.shuffle = shuffle
+            self.repeatMode = repeatMode
         }
     }
 
-    public static let modeOptions: MusicPlaybackController.PlaybackModeOptions = [.repeatAll, .repeatOne]
-
-    /// 从现在这档到要的那档要按几下循环键(它按一下:关 → 列表循环 → 单曲循环 → 关)。要的是随机、或读不到现在这档时为 nil。
-    public static func repeatPresses(from current: String?, to target: MusicPlaybackController.MusicPlaybackMode) -> Int? {
+    public static func modePlan(shuffle: Bool?, repeatMode: String?,
+                                to target: MusicPlaybackController.MusicPlaybackMode) -> ModePlan? {
         let order = ["NONE", "ALL", "ONE"]
-        let want: String
+        guard let shuffle, let repeatMode, let from = order.firstIndex(of: repeatMode) else { return nil }
+        let wantShuffle = target == .shuffle
+        let wantRepeat: String
         switch target {
-        case .list: want = "NONE"
-        case .repeatAll: want = "ALL"
-        case .repeatOne: want = "ONE"
-        case .shuffle: return nil
+        case .list, .shuffle: wantRepeat = repeatMode == "ONE" ? "NONE" : repeatMode
+        case .repeatAll: wantRepeat = "ALL"
+        case .repeatOne: wantRepeat = "ONE"
         }
-        guard let current, let from = order.firstIndex(of: current), let to = order.firstIndex(of: want) else { return nil }
-        return (to - from + order.count) % order.count
+        let to = order.firstIndex(of: wantRepeat)!
+        return ModePlan(toggleShuffle: shuffle != wantShuffle, repeatPresses: (to - from + order.count) % order.count,
+                        shuffle: wantShuffle, repeatMode: wantRepeat)
     }
 
     /// 读到的音量换成它播放条滑块的位置(0~100)。接口写的是滑块位置(`updateVolume`),读回来的是播放器的音量(`getVolume`),
@@ -451,22 +472,32 @@ public final class PearDesktopAPI: @unchecked Sendable {
         return Self.queueReply(queueJSON: queue, repeatMode: mode)
     }
 
-    /// 现在的播放模式(循环档);接口没开、没授权、读不到时 nil。
-    public func playbackMode() -> MusicPlaybackController.PlaybackModeState? {
-        guard let config = usableConfig() else { return nil }
-        let mode = get("/api/v1/repeat-mode", config: config)
+    /// 现在的随机开关和循环档;接口没开、没授权、读不到时 nil。
+    private func modeParts(_ config: Config) -> (shuffle: Bool?, repeatMode: String?) {
+        let shuffle = get("/api/v1/shuffle", config: config)
+            .flatMap { try? JSONSerialization.jsonObject(with: $0) as? [String: Any] }?["state"] as? Bool
+        let repeatMode = get("/api/v1/repeat-mode", config: config)
             .flatMap { try? JSONSerialization.jsonObject(with: $0) as? [String: Any] }?["mode"] as? String
-        return Self.playbackMode(fromRepeat: mode).map { .init(mode: $0, options: Self.modeOptions) }
+        return (shuffle, repeatMode)
     }
 
-    /// 换到这一档:按现在这档算要按几下循环键,一次发过去,再读一次核对。
+    /// 现在的播放模式(随机 + 循环);接口没开、没授权、读不到时 nil。
+    public func playbackMode() -> MusicPlaybackController.PlaybackModeState? {
+        guard let config = usableConfig() else { return nil }
+        let parts = modeParts(config)
+        return Self.playbackMode(shuffle: parts.shuffle, repeatMode: parts.repeatMode).map { .init(mode: $0, options: Self.modeOptions) }
+    }
+
+    /// 换到这一档:按 `modePlan` 切随机、按循环键,再把两项读回来,合成的档位就是要的那一档才回 true。从列表循环要「列表」时
+    /// 列表循环按规则留着,合成出来是列表循环,回 false,调用方据此回读、把乐观画上的「列表」纠回去。
     public func setPlaybackMode(_ mode: MusicPlaybackController.MusicPlaybackMode) -> Bool {
         guard let config = usableConfig() else { return false }
-        let current = get("/api/v1/repeat-mode", config: config)
-            .flatMap { try? JSONSerialization.jsonObject(with: $0) as? [String: Any] }?["mode"] as? String
-        guard let presses = Self.repeatPresses(from: current, to: mode) else { return false }
-        if presses > 0, post("/api/v1/switch-repeat", body: ["iteration": presses], config: config) != 204 { return false }
-        return playbackMode()?.mode == mode
+        let parts = modeParts(config)
+        guard let plan = Self.modePlan(shuffle: parts.shuffle, repeatMode: parts.repeatMode, to: mode) else { return false }
+        if plan.toggleShuffle, post("/api/v1/shuffle", body: [:], config: config) != 204 { return false }
+        if plan.repeatPresses > 0, post("/api/v1/switch-repeat", body: ["iteration": plan.repeatPresses], config: config) != 204 { return false }
+        let after = modeParts(config)
+        return Self.playbackMode(shuffle: after.shuffle, repeatMode: after.repeatMode) == mode
     }
 
     /// 现在的音量,按它播放条滑块的位置(0~100,见 `sliderVolume`);读不到 nil。

@@ -1,9 +1,10 @@
 import Foundation
 
-/// 浏览器里 YouTube Music 网页版的循环键、点赞、音量。都读写它自己页面上的东西,跟界面语言无关:
+/// 浏览器里 YouTube Music 网页版的随机、循环、点赞、音量。都读写它自己页面上的东西,跟界面语言无关:
 /// - 循环:播放条 `ytmusic-player-bar` 的 `repeat-mode` 属性(NONE / ALL / ONE);写入用脚本点它那颗循环键
-///   (`yt-icon-button.repeat`),点一下立即翻到下一档(关 → 全部 → 单曲 → 关)。网页版的「随机播放」是把队列打乱一次的
-///   动作、没有状态可读,随机键不显示。
+///   (`yt-icon-button.repeat`),点一下立即翻到下一档(关 → 全部 → 单曲 → 关)。
+/// - 随机:播放条的 `shuffle-on` 属性(有就是开着,能保持);写入调播放条的 `queue.shuffle()`(切换,跟 Pear Desktop 接口
+///   做的一样),没有这个方法时点随机键(`yt-icon-button.shuffle`)。随机和循环合成一档的规则同 Kaset(02 章决策 230)。
 /// - 点赞:播放条里 `ytmusic-like-button-renderer` 的 `like-status`(LIKE / DISLIKE / INDIFFERENT);写入点它的「赞」键。
 ///   踩过(DISLIKE)算没赞,点一下变成赞。
 /// - 音量:它自己的音量条 `#volume-slider`(0~100,按听感换算,跟它界面上显示的一致);写入改值再发 change 事件,
@@ -17,7 +18,9 @@ import Foundation
 /// 见 07 章决策 136、138,02 章决策 150。
 public enum YouTubeMusicWebControls {
     public static let platformID = "youtubeMusic"
-    public static let modeOptions: MusicPlaybackController.PlaybackModeOptions = [.repeatAll, .repeatOne]
+    public static let modeOptions: MusicPlaybackController.PlaybackModeOptions = .all
+    /// 切完随机到读回之间等多久:`shuffle-on` 不一定在调用返回时就翻过来。
+    static let shuffleSettle: TimeInterval = 0.6
     static let eventTimeoutSeconds = 4
     static let processTimeout: TimeInterval = 6
 
@@ -29,16 +32,21 @@ public enum YouTubeMusicWebControls {
         public let title: String
     }
 
-    /// 一次读回的三样;哪样读不懂就是 nil。
+    /// 一次读回的几样;哪样读不懂就是 nil。`mode` 由随机开关和循环档合成(`kasetPlaybackMode`)。
     public struct State: Equatable, Sendable {
         public let mode: MusicPlaybackController.MusicPlaybackMode?
         public let liked: Bool?
         public let volume: Int?
+        public let shuffling: Bool?
+        public let repeatMode: String?
 
-        public init(mode: MusicPlaybackController.MusicPlaybackMode?, liked: Bool?, volume: Int?) {
+        public init(mode: MusicPlaybackController.MusicPlaybackMode?, liked: Bool?, volume: Int?,
+                    shuffling: Bool? = nil, repeatMode: String? = nil) {
             self.mode = mode
             self.liked = liked
             self.volume = volume
+            self.shuffling = shuffling
+            self.repeatMode = repeatMode
         }
     }
 
@@ -52,13 +60,16 @@ public enum YouTubeMusicWebControls {
         }
     }
 
-    static func attribute(for mode: MusicPlaybackController.MusicPlaybackMode) -> String? {
-        switch mode {
-        case .list: return "NONE"
-        case .repeatAll: return "ALL"
-        case .repeatOne: return "ONE"
-        case .shuffle: return nil
+    /// 随机开关 + `repeat-mode` → 档位(单曲循环优先,其次随机)。任一项读不到为 nil。
+    public static func mode(shuffling: Bool?, repeatAttribute: String?) -> MusicPlaybackController.MusicPlaybackMode? {
+        let repeating: String?
+        switch repeatAttribute.map({ $0.trimmingCharacters(in: .whitespacesAndNewlines).uppercased() }) {
+        case "NONE": repeating = "off"
+        case "ALL": repeating = "all"
+        case "ONE": repeating = "one"
+        default: repeating = nil
         }
+        return MusicPlaybackController.kasetPlaybackMode(shuffling: shuffling, repeating: repeating)
     }
 
     /// `like-status` → 赞了没有(踩过算没赞)。
@@ -70,13 +81,13 @@ public enum YouTubeMusicWebControls {
         }
     }
 
-    /// 读三样,回 `STATE:<repeat-mode>|<like-status>|<音量条>`;暂停的标签页带 `PAUSED:` 前缀,模板据此先找在放的那一页。
+    /// 读四样,回 `STATE:<repeat-mode>|<like-status>|<音量条>|<随机 1/0>`;暂停的标签页带 `PAUSED:` 前缀,模板据此先找在放的那一页。
     /// 页面上放的不是 `title` 回 `NOTFOUND`。不许出现双引号(见 `BrowserTabProbeScript`)。
     public static func readJS(title: String) -> String {
         "(function(){" + titleGuardPrologue(title) + """
     var lk = bar.querySelector('ytmusic-like-button-renderer');\
     var s = document.querySelector('#volume-slider');\
-    var out = 'STATE:' + (bar.getAttribute('repeat-mode') || '') + '|' + (lk ? (lk.getAttribute('like-status') || '') : '') + '|' + (s ? String(s.value) : '');\
+    var out = 'STATE:' + (bar.getAttribute('repeat-mode') || '') + '|' + (lk ? (lk.getAttribute('like-status') || '') : '') + '|' + (s ? String(s.value) : '') + '|' + (bar.getAttribute('shuffle-on') !== null ? '1' : '0');\
     var v = document.querySelector('video');\
     return (v && v.paused) ? 'PAUSED:' + out : out;\
     })()
@@ -101,13 +112,29 @@ public enum YouTubeMusicWebControls {
         """
     }
 
-    /// 点循环键直到到目标档(最多三下),回 `SET:<repeat-mode>`。
-    public static func setRepeatJS(attribute target: String, title: String, force: Bool) -> String {
-        "(function(){" + setPrologue(title: title, force: force) + """
+    /// 切到某一档:随机开关跟目标不一样就切一下,再点循环键直到到目标(最多三下),回 `SET:<repeat-mode>`。语义同 Kaset
+    /// (`kasetPlaybackModeScript`):随机和循环互斥,「列表」「随机」只把单曲循环关掉,列表循环开着就留着。随机开关可能
+    /// 晚一拍才翻,到没到由调用方隔 `shuffleSettle` 读回核对。
+    public static func setModeJS(_ mode: MusicPlaybackController.MusicPlaybackMode, title: String, force: Bool) -> String {
+        let target: String
+        switch mode {
+        case .list, .shuffle: target = "(m === 'ONE' ? 'NONE' : m)"
+        case .repeatAll: target = "'ALL'"
+        case .repeatOne: target = "'ONE'"
+        }
+        return "(function(){" + setPrologue(title: title, force: force) + """
         var b = bar.querySelector('yt-icon-button.repeat');\
         if (!b) return 'NOTFOUND';\
+        var want = \(mode == .shuffle ? "true" : "false");\
+        if ((bar.getAttribute('shuffle-on') !== null) !== want) {\
+        if (bar.queue && bar.queue.shuffle) { bar.queue.shuffle(); } else {\
+        var sb = bar.querySelector('yt-icon-button.shuffle');\
+        if (!sb) return 'NOTFOUND';\
+        sb.click(); }\
+        }\
         var m = bar.getAttribute('repeat-mode') || '';\
-        for (var i = 0; i < 3 && m !== '\(target)'; i++) { b.click(); m = bar.getAttribute('repeat-mode') || ''; }\
+        var target = \(target);\
+        for (var i = 0; i < 3 && m !== target; i++) { b.click(); m = bar.getAttribute('repeat-mode') || ''; }\
         return 'SET:' + m;\
         })()
         """
@@ -143,9 +170,11 @@ public enum YouTubeMusicWebControls {
         let s = raw.trimmingCharacters(in: .whitespacesAndNewlines)
         guard s.hasPrefix("STATE:") else { return nil }
         let parts = s.dropFirst(6).split(separator: "|", omittingEmptySubsequences: false).map(String.init)
-        guard parts.count == 3 else { return nil }
-        return State(mode: mode(fromAttribute: parts[0]), liked: liked(fromStatus: parts[1]),
-                     volume: Double(parts[2]).map { Int($0.rounded()) })
+        guard parts.count == 4 else { return nil }
+        let shuffling: Bool? = parts[3] == "1" ? true : (parts[3] == "0" ? false : nil)
+        let repeatMode = mode(fromAttribute: parts[0]) == nil ? nil : parts[0].trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
+        return State(mode: mode(shuffling: shuffling, repeatAttribute: repeatMode), liked: liked(fromStatus: parts[1]),
+                     volume: Double(parts[2]).map { Int($0.rounded()) }, shuffling: shuffling, repeatMode: repeatMode)
     }
 
     public enum SetOutcome: Equatable, Sendable {
@@ -179,10 +208,12 @@ public enum YouTubeMusicWebControls {
         run(target, js: readJS(title: target.title)).flatMap(parseRead)
     }
 
-    /// 切循环档,返回到没到。网页版没有随机这一档,传 `.shuffle` 回 false。会阻塞,别在主线程调。
+    /// 切到某一档,隔 `shuffleSettle` 读回随机开关和循环档,合成的档位就是要的那一档才回 true(从列表循环要「列表」时列表循环
+    /// 按规则留着,回 false,调用方据此回读纠正显示)。会阻塞,别在主线程调。
     public static func setMode(_ mode: MusicPlaybackController.MusicPlaybackMode, _ target: Target) -> Bool {
-        guard let attr = attribute(for: mode) else { return false }
-        return writeUntilSet(target) { setRepeatJS(attribute: attr, title: target.title, force: $0) }.map { Self.mode(fromAttribute: $0) == mode } ?? false
+        guard writeUntilSet(target, js: { setModeJS(mode, title: target.title, force: $0) }) != nil else { return false }
+        Thread.sleep(forTimeInterval: shuffleSettle)
+        return readState(target)?.mode == mode
     }
 
     /// 赞 / 取消赞,返回到没到。会阻塞,别在主线程调。

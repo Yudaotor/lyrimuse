@@ -969,6 +969,48 @@ private func scriptServerTests() {
 // 下面在 JavaScriptCore 里跑真正注入的那段 JS,页面 DOM 用桩对象。
 
 /// 桩页面:`#movie_player` / `ytmusic-player-bar` 两个元素,`video` 暂停与否、mediaSession 标题、document.title 可调。
+/// 带状态的播放条桩:`queue.shuffle()`(有 `hasQueue` 时)或随机键翻转 `shuffle-on`,循环键按「关 → 全部 → 单曲」转。
+/// 跑一段注入脚本,回 (输出, 跑完的随机开关, 跑完的 repeat-mode)。
+private func runModeJS(_ js: String, title: String, shuffleOn: Bool, repeatMode: String, hasQueue: Bool) -> (String?, Bool, String) {
+    guard let ctx = JSContext() else { return (nil, shuffleOn, repeatMode) }
+    ctx.setObject(title, forKeyedSubscript: "__MT" as NSString)
+    ctx.setObject(shuffleOn, forKeyedSubscript: "__SH" as NSString)
+    ctx.setObject(repeatMode, forKeyedSubscript: "__RM" as NSString)
+    ctx.setObject(hasQueue, forKeyedSubscript: "__HQ" as NSString)
+    ctx.evaluateScript("""
+    var __state = { shuffle: __SH, repeat: __RM };
+    var __order = ['NONE', 'ALL', 'ONE'];
+    var __video = { paused: false };
+    var __bar = {
+      getAttribute: function(n) {
+        if (n === 'repeat-mode') return __state.repeat;
+        if (n === 'shuffle-on') return __state.shuffle ? '' : null;
+        return null;
+      },
+      querySelector: function(q) {
+        if (q === 'yt-icon-button.repeat') return { click: function() { __state.repeat = __order[(__order.indexOf(__state.repeat) + 1) % 3]; } };
+        if (q === 'yt-icon-button.shuffle') return { click: function() { __state.shuffle = !__state.shuffle; } };
+        return null;
+      }
+    };
+    if (__HQ) __bar.queue = { shuffle: function() { __state.shuffle = !__state.shuffle; } };
+    var navigator = { mediaSession: { metadata: { title: __MT } } };
+    var document = {
+      title: '',
+      querySelector: function(q) {
+        if (q === 'ytmusic-player-bar') return __bar;
+        if (q === 'video') return __video;
+        return null;
+      },
+      querySelectorAll: function(q) { return []; }
+    };
+    """)
+    let out = ctx.evaluateScript(js)?.toString()
+    let shuffle = ctx.evaluateScript("__state.shuffle")?.toBool() ?? shuffleOn
+    let rep = ctx.evaluateScript("__state.repeat")?.toString() ?? repeatMode
+    return (out, shuffle, rep)
+}
+
 private func runPageJS(_ js: String, mediaTitle: String?, documentTitle: String, paused: Bool) -> String? {
     guard let ctx = JSContext() else { return nil }
     ctx.setObject(mediaTitle.map { $0 as Any } ?? NSNull(), forKeyedSubscript: "__MT" as NSString)
@@ -1174,7 +1216,7 @@ private func webProbeTitleGuardTests() {
     expectEqual(runPageJS(Y.readJS(title: video), mediaTitle: "Liese 全新登場", documentTitle: "", paused: true),
                 "NOTFOUND", "网页版: 放的是普通视频、YT Music 页暂停在别的东西上 → 读不到,键不显示")
     expectEqual(runPageJS(Y.readJS(title: song), mediaTitle: song, documentTitle: "", paused: false),
-                "STATE:ALL|LIKE|40", "网页版: 页面放着这一首 → 照常读回")
+                "STATE:ALL|LIKE|40|0", "网页版: 页面放着这一首 → 照常读回")
     for force in [false, true] {
         expectEqual(runPageJS(Y.setLikeJS(liked: true, title: video, force: force), mediaTitle: "Liese 全新登場",
                               documentTitle: "", paused: true), "NOTFOUND",
@@ -1182,12 +1224,26 @@ private func webProbeTitleGuardTests() {
         expectEqual(runPageJS(Y.setVolumeJS(30, title: video, force: force), mediaTitle: "Liese 全新登場",
                               documentTitle: "", paused: true), "NOTFOUND",
                     "网页版: 标题对不上不写音量(force=\(force))")
-        expectEqual(runPageJS(Y.setRepeatJS(attribute: "ONE", title: video, force: force), mediaTitle: "Liese 全新登場",
+        expectEqual(runPageJS(Y.setModeJS(.repeatOne, title: video, force: force), mediaTitle: "Liese 全新登場",
                               documentTitle: "", paused: true), "NOTFOUND",
-                    "网页版: 标题对不上不切循环(force=\(force))")
+                    "网页版: 标题对不上不切随机和循环(force=\(force))")
     }
     expectEqual(runPageJS(Y.setLikeJS(liked: true, title: song, force: true), mediaTitle: song, documentTitle: "", paused: true),
                 "SET:LIKE", "网页版: 暂停着、放的就是这一首 → 第二轮照常写(暂停时也能点赞)")
     expectEqual(runPageJS(Y.setLikeJS(liked: true, title: song, force: false), mediaTitle: song, documentTitle: "", paused: true),
                 "PAUSED:SKIP", "网页版: 第一轮暂停页不动")
+
+    // ④ 网页版随机与循环:在带状态的播放条桩上真跑 setModeJS,看跑完的随机开关和循环档(规则同 Kaset)。
+    func mode(_ m: MusicPlaybackController.MusicPlaybackMode, shuffle: Bool, repeat r: String, queue: Bool = true) -> String {
+        let (out, s, rr) = runModeJS(Y.setModeJS(m, title: song, force: true), title: song, shuffleOn: shuffle, repeatMode: r, hasQueue: queue)
+        return "\(out ?? "nil")|\(s)|\(rr)"
+    }
+    expectEqual(mode(.shuffle, shuffle: false, repeat: "NONE"), "SET:NONE|true|NONE", "网页版随机: 开随机")
+    expectEqual(mode(.shuffle, shuffle: false, repeat: "NONE", queue: false), "SET:NONE|true|NONE", "网页版随机: 没有 queue.shuffle 时点随机键")
+    expectEqual(mode(.shuffle, shuffle: false, repeat: "ONE"), "SET:NONE|true|NONE", "网页版随机: 开随机时关掉单曲循环")
+    expectEqual(mode(.shuffle, shuffle: true, repeat: "ALL"), "SET:ALL|true|ALL", "网页版随机: 已经开着不再切(切换会关掉)")
+    expectEqual(mode(.list, shuffle: true, repeat: "ALL"), "SET:ALL|false|ALL", "网页版随机: 关随机时列表循环留着")
+    expectEqual(mode(.repeatOne, shuffle: true, repeat: "NONE"), "SET:ONE|false|ONE", "网页版随机: 开单曲循环时关掉随机(互斥)")
+    expectEqual(mode(.repeatAll, shuffle: false, repeat: "ONE"), "SET:ALL|false|ALL", "网页版随机: 单曲到列表循环绕一圈")
+    expectEqual(mode(.list, shuffle: false, repeat: "ONE"), "SET:NONE|false|NONE", "网页版随机: 单曲循环回到顺序")
 }
