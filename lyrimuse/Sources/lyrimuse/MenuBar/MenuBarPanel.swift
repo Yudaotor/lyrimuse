@@ -1423,8 +1423,10 @@ private struct MenuBarPanelView: View {
         return VStack(spacing: 9) {
             ZStack(alignment: .topLeading) {
                 ForEach(layout.emptySlots(rows: rows).map { $0.row * MenuBarPanelLayout.columns + $0.column }, id: \.self) { key in
-                    let frame = Self.grid.frame(column: key % MenuBarPanelLayout.columns, row: key / MenuBarPanelLayout.columns,
-                                                size: .small)
+                    // 一个空着的单格一块(一排 6 块):小号盖住 2 块、中号 3 块,看得出格子能落在哪。
+                    let frame = CGRect(x: CGFloat(key % MenuBarPanelLayout.columns) * Self.grid.columnStride,
+                                       y: CGFloat(key / MenuBarPanelLayout.columns) * Self.grid.rowStride,
+                                       width: Self.grid.column, height: Self.grid.rowHeight)
                     PanelEmptyCell()
                         .frame(width: frame.width, height: frame.height)
                         .offset(x: frame.minX, y: frame.minY)

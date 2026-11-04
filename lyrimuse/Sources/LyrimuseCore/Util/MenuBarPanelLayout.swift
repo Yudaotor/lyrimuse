@@ -120,12 +120,11 @@ public struct MenuBarPanelLayout: Equatable, Sendable {
         !placements.contains { $0.covers(column: column, row: row) }
     }
 
-    /// 编辑时画空坑位的地方:每排按小号的宽度切成 3 块,整块都空着的那几块。
+    /// 编辑时画空坑位的地方:每一个空着的单格(一排 6 格)。
     public func emptySlots(rows: Int) -> [(column: Int, row: Int)] {
         var out: [(Int, Int)] = []
         for row in 0..<max(rows, 0) {
-            for column in Swift.stride(from: 0, to: Self.columns, by: Size.small.columns)
-            where (column..<column + Size.small.columns).allSatisfy({ isEmpty(column: $0, row: row) }) {
+            for column in 0..<Self.columns where isEmpty(column: column, row: row) {
                 out.append((column, row))
             }
         }

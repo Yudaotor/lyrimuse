@@ -2031,8 +2031,9 @@ func runMenuBarTests() {
         let custom = L(placements: [P(tile: .lockPosition, size: .small, column: 4, row: 2), P(tile: .lyricsManager, size: .large, column: 0, row: 0)],
                        hiddenFooter: [.settings, .lastfm])
         expectEqual(L.decode(custom.encoded()), custom, "面板布局: 存了读回来一样(坑位、空着的地方都留着)")
-        expectEqual(custom.emptySlots(rows: 3).map { "\($0.column),\($0.row)" }, ["4,0", "4,1", "0,2", "2,2"],
-                    "面板布局: 编辑时画空坑位的地方按小号宽切块,半空的不画")
+        expectEqual(custom.emptySlots(rows: 3).map { "\($0.column),\($0.row)" },
+                    ["3,0", "4,0", "5,0", "3,1", "4,1", "5,1", "0,2", "1,2", "2,2", "3,2"],
+                    "面板布局: 编辑时每个空着的单格都画一块")
         // 容错:认不出的、重复的丢掉,尺寸认不出退回中号,重叠或出界的挪到第一个对得齐的空位。
         let messy = #"{"grid":6,"tiles":[{"id":"overlay","size":"small","col":0,"row":0},{"id":"bogus","col":2,"row":0},{"id":"overlay","col":2,"row":0},{"id":"notch","size":"huge","col":1,"row":0},{"id":"menubar","size":"small","col":5,"row":0}],"hiddenFooter":["version","nope"]}"#
         expectEqual(L.decode(messy), L(placements: [P(tile: .overlay, size: .small, column: 0, row: 0), P(tile: .notch, size: .medium, column: 3, row: 0),
