@@ -12,6 +12,11 @@ public final class TelemetryActivity: @unchecked Sendable {
     private let defaults: UserDefaults
     private let key: String
     private let lock = NSLock()
+    /// 写盘走这条串行队列,不持 `lock`:UserDefaults 写入会同步等主线程上的观察者处理完,持着 `lock` 写的话,主线程这时来拿
+    /// `lock`(读 `isRecording`)就互相等死,主线程看门狗记卡顿时就是这样卡死的(14 章决策 175)。别把写盘挪回锁里。
+    private let writeQueue = DispatchQueue(label: "me.yudaotor.lyrimuse.telemetry-activity-write")
+    /// 记下的几天的内存副本,读都走它;nil = 还没从磁盘读过。
+    private var cache: [TelemetryActivityDay]?
     private var recording = false
     private var trusted: Set<String> = []
     /// 上一次记下的播放器,同一个播放器连着报不重复写盘。
@@ -102,7 +107,7 @@ public final class TelemetryActivity: @unchecked Sendable {
     public func remove(days: [String]) {
         lock.withLock {
             let drop = Set(days)
-            save(load().filter { !drop.contains($0.day) })
+            store(load().filter { !drop.contains($0.day) })
         }
     }
 
@@ -111,8 +116,13 @@ public final class TelemetryActivity: @unchecked Sendable {
         lock.withLock {
             lastPlayer = nil
             lyricsNoted = ("", [:])
-            defaults.removeObject(forKey: key)
+            store([])
         }
+    }
+
+    /// 等排着的写盘都落地(测试读磁盘前用)。
+    public func waitForPendingWrites() {
+        writeQueue.sync {}
     }
 
     // 以下都在锁里调。
@@ -126,21 +136,29 @@ public final class TelemetryActivity: @unchecked Sendable {
             change(&fresh)
             days.append(fresh)
         }
-        save(days)
+        store(days)
     }
 
     private func load() -> [TelemetryActivityDay] {
-        guard let data = defaults.data(forKey: key),
-              let days = try? JSONDecoder().decode([TelemetryActivityDay].self, from: data) else { return [] }
+        if let cache { return cache }
+        let days = defaults.data(forKey: key)
+            .flatMap { try? JSONDecoder().decode([TelemetryActivityDay].self, from: $0) } ?? []
+        cache = days
         return days
     }
 
-    private func save(_ days: [TelemetryActivityDay]) {
+    /// 改内存副本,写盘交给 `writeQueue`(见它的注释)。
+    private func store(_ days: [TelemetryActivityDay]) {
         let kept = Array(days.sorted { $0.day < $1.day }.suffix(Self.maxStoredDays))
-        if kept.isEmpty {
-            defaults.removeObject(forKey: key)
-        } else if let data = try? JSONEncoder().encode(kept) {
-            defaults.set(data, forKey: key)
+        cache = kept
+        let data = kept.isEmpty ? nil : try? JSONEncoder().encode(kept)
+        let defaults = self.defaults, key = self.key
+        writeQueue.async {
+            if let data {
+                defaults.set(data, forKey: key)
+            } else {
+                defaults.removeObject(forKey: key)
+            }
         }
     }
 }

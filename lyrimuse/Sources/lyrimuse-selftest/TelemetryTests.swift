@@ -196,6 +196,20 @@ func runTelemetryTests() {
         activity.clear()
         expectEqual(LyricsKind.allCases.map { TelemetryLyricsResult($0).rawValue },
                     ["word", "line", "plain", "instrumental", "none"], "歌词结果: 跟 LyricsKind 一一对应")
+
+        activity.isRecording = true
+        activity.noteHang(now: day1)
+        activity.waitForPendingWrites()
+        expectEqual(TelemetryActivity(defaults: .standard, key: key).completedDays(before: "9999-12-31").map(\.hangs), [1],
+                    "写盘: 写盘在后台队列,落地后新实例读得回")
+        activity.clear()
+        activity.waitForPendingWrites()
+        expectEqual(UserDefaults.standard.data(forKey: key) == nil, true, "写盘: 清空也落到磁盘")
+        let src = (try? String(contentsOf: URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("LyrimuseCore/Telemetry/TelemetryActivity.swift"), encoding: .utf8)) ?? ""
+        expectEqual(sourceCount(src, "defaults.set(") == 1 && sourceCount(src, "defaults.removeObject(") == 1
+                    && sourceHas(sourceBody("private func store(", in: src), "writeQueue.async {"), true,
+                    "写盘: 只在 writeQueue 里写 UserDefaults,不持锁写(持锁写会跟主线程互相等死)")
     }
 
     do {
