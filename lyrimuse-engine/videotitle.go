@@ -243,6 +243,35 @@ func titleSplitIdentity(artist, title string) (splitArtist, song string, duratio
 		}
 		return v.Artist, v.Song, v.DurationUnknown, true
 	}
+	if song, ok := bracketOnlyTitleSong(title); ok {
+		return cleanMediaTag(artist), song, false, true
+	}
 	a, s, ok := albumHintTitleSplit(title)
 	return a, s, false, ok
+}
+
+// bracketOnlyTitleSong:曲名整串都是括号段、括号外没有字,其中正好一段是方头括号时,返回方头括号里的歌名
+// (「(特別演出: 派偉俊)【告白氣球 Love Confession】」取「告白氣球 Love Confession」)。方头括号是中文视频标题
+// 挂歌名的写法,别的括号段是客串署名这类附注。只有一段括号的(「(Skit)」)那就是歌名本身,不拆。见 09 章决策 356。
+func bracketOnlyTitleSong(title string) (string, bool) {
+	t := cleanMediaTag(title)
+	segs := coverBracketSegments(t)
+	if len(segs) < 2 {
+		return "", false
+	}
+	song, squares, last := "", 0, 0
+	for _, seg := range segs {
+		if strings.TrimSpace(t[last:seg.start]) != "" {
+			return "", false
+		}
+		last = seg.end
+		if strings.HasPrefix(t[seg.start:], "【") {
+			squares++
+			song = seg.inner
+		}
+	}
+	if strings.TrimSpace(t[last:]) != "" || squares != 1 || normLoose(song) == "" {
+		return "", false
+	}
+	return song, true
 }

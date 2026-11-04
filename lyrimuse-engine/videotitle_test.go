@@ -77,6 +77,16 @@ func TestTitleSplitIdentity(t *testing.T) {
 		{"某频道", "Adele - Hello Covered by 某某", "", "", false, false},
 		// 特辑照拆:常常用的就是正式版音频
 		{"Seventeen", "[SPECIAL VIDEO] 부석순 (SEVENTEEN) - 7시에 들어줘 (feat. Peder Elias)", "[SPECIAL VIDEO] 부석순 (SEVENTEEN)", "7시에 들어줘 (feat. Peder Elias)", false, true},
+		// 整串都是括号:歌名在方头括号里,歌手照用播放器报的
+		{"Jay Chou", "(特別演出: 派偉俊)【告白氣球 Love Confession】", "Jay Chou", "告白氣球 Love Confession", false, true},
+		{"Jay Chou", "【告白氣球 Love Confession】 (特別演出: 派偉俊)", "Jay Chou", "告白氣球 Love Confession", false, true},
+		// 只有一段括号的就是歌名本身;括号外有字、没有方头括号、方头括号不止一段的都不认
+		{"PUN", "(Skit)", "", "", false, false},
+		{"某歌手", "【告白氣球】", "", "", false, false},
+		{"Jay Chou", "告白氣球 (特別演出: 派偉俊)【Love Confession】", "", "", false, false},
+		{"某歌手", "(Intro)[Explicit]", "", "", false, false},
+		{"某歌手", "【A】【B】", "", "", false, false},
+		{"某歌手", "(特別演出: 某某)【 】", "", "", false, false},
 	}
 	for _, c := range cases {
 		a, s, mv, ok := titleSplitIdentity(c.artist, c.title)
