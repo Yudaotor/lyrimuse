@@ -1061,7 +1061,7 @@ func runOverlayTests() {
                                  encoding: .utf8)) ?? ""
         expectEqual([sourceHas(stage, "case .content: OverlayContentSettingsRows(showsRowSizes: true)"),
                      sourceHas(sourceBody("struct OverlayContentSettingsRows: View", in: rows),
-                               "if showsRowSizes {\n                SettingsTileGrid(columns: 3) { OverlayRowFontScaleCells() }")],
+                               "SettingsTileGrid(title: L10n.t(\"字号\"), columns: 3) { OverlayRowFontScaleCells() }")],
                     [true, true], "副行字号接线: 点预览读音 / 译文 / 下一句那块打开的「内容」浮层里也有三格大小")
         expectEqual(fonts.components(separatedBy: "size * scale.nextLine * scale.romanization").count - 1, 2,
                     "副行字号接线: 下一句逐词读音按读音比例再乘下一句比例,SwiftUI 字体和 AppKit 孪生各一次")

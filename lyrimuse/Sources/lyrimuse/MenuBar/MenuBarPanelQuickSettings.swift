@@ -828,6 +828,10 @@ struct PanelQuickSettings: View {
         settings.notchFontSize = value
     }
 
+    /// 这块面板里几根单滑杆的读数一律按四位数留宽(宽度那根最多四位):各行滑杆是同一个宽、读数又是同一个宽,
+    /// 滑杆左端才逐行对齐;按各自的最大值留宽的话,两位数那根会比四位数那根往右错一截。
+    private static var readoutWidest: String { String(format: L10n.t("%@pt"), "0000") }
+
     private func sliderRow(_ title: String, value: Binding<Double>,
                            range: ClosedRange<Double>, step: Double = 1,
                            displayValue: ((Double) -> Double)? = nil,
@@ -840,11 +844,10 @@ struct PanelQuickSettings: View {
                 SteppedSlider(value: value, in: range, step: step, onEditingChanged: onEditingChanged)
                     .controlSize(.mini)
                     .frame(width: 128)
-                Text(String(format: L10n.t("%@pt"),
-                            "\(Int(displayValue?(value.wrappedValue) ?? value.wrappedValue))"))
-                    .font(.system(size: 10).monospacedDigit())
+                StableReadout(text: String(format: L10n.t("%@pt"),
+                                           "\(Int(displayValue?(value.wrappedValue) ?? value.wrappedValue))"),
+                              widest: Self.readoutWidest, font: .system(size: 10))
                     .foregroundStyle(.tertiary)
-                    .frame(width: 38, alignment: .trailing)
             }
         }
     }
@@ -959,11 +962,9 @@ struct PanelQuickSettings: View {
                     ), in: Self.menuBarFontSizeRange, step: 1)
                         .controlSize(.mini)
                         .frame(width: 128)
-                    Text(String(format: L10n.t("%@pt"),
-                                "\(Int(MenuBarMarqueeRenderer.font.pointSize))"))
-                        .font(.system(size: 10).monospacedDigit())
+                    StableReadout(text: String(format: L10n.t("%@pt"), "\(Int(MenuBarMarqueeRenderer.font.pointSize))"),
+                                  widest: Self.readoutWidest, font: .system(size: 10))
                         .foregroundStyle(.tertiary)
-                        .frame(width: 38, alignment: .trailing)
                 }
             }
         }
@@ -1057,19 +1058,39 @@ struct PanelQuickRow<Control: View>: View {
         self.control = control()
     }
 
+    /// 标题跟控件排一行放得下就排一行(标题至多缩到 90%);放不下就把控件换到标题下面、靠右,不截标题
+    /// (长语言里分段控件本身就宽,标题会被截成「Режим…」)。见 14 章决策 172。
     var body: some View {
-        HStack(spacing: 8) {
-            Text(title)
-                .font(.system(size: 11.5))
-                .lineLimit(1)
-                .minimumScaleFactor(0.9)
-            Spacer(minLength: 6)
-            control
+        ViewThatFits(in: .horizontal) {
+            inline(titleSize: 11.5)
+            inline(titleSize: 11.5 * 0.9)
+            VStack(alignment: .leading, spacing: 4) {
+                Text(title)
+                    .font(.system(size: 11.5))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.9)
+                HStack {
+                    Spacer(minLength: 0)
+                    control
+                }
+            }
+            .padding(.vertical, 6)
         }
         .padding(.horizontal, 10)
         .frame(minHeight: 32)
         .background(Color.primary.opacity(0.05))
         .modifier(OptionalHelp(text: help))
+    }
+
+    private func inline(titleSize: CGFloat) -> some View {
+        HStack(spacing: 8) {
+            Text(title)
+                .font(.system(size: titleSize))
+                .lineLimit(1)
+                .fixedSize()
+            Spacer(minLength: 6)
+            control
+        }
     }
 }
 

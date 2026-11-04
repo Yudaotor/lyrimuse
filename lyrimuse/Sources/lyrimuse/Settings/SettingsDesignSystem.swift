@@ -853,7 +853,32 @@ struct SettingsControlCell<Control: View>: View {
     var help: String?
     @ViewBuilder let control: () -> Control
 
+    /// 名字跟控件排一行放得下就排一行;放不下就把控件换到名字下面、靠右,不截名字(长语言里分段控件本身就宽,
+    /// 名字会被截成「Длинны…」)。见 14 章决策 172。
     var body: some View {
+        ViewThatFits(in: .horizontal) {
+            HStack(spacing: 6) {
+                label(fits: true)
+                Spacer(minLength: 6)
+                control()
+            }
+            VStack(alignment: .leading, spacing: 4) {
+                label(fits: false)
+                HStack {
+                    Spacer(minLength: 0)
+                    control()
+                }
+            }
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 6)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+        .modifier(SettingsTileBackground())
+        .settingsSearchHighlight(title: title)
+    }
+
+    /// `fits`:排一行那一档按名字的完整宽度量(`fixedSize`),量不下才换到两行;两行那一档名字仍是单行、放不下照旧截断。
+    @ViewBuilder private func label(fits: Bool) -> some View {
         HStack(spacing: 6) {
             if let icon {
                 SymbolImage(name: icon, size: 12)
@@ -861,18 +886,13 @@ struct SettingsControlCell<Control: View>: View {
                     .environment(\.locale, Locale(identifier: "en"))
                     .frame(width: 16)
             }
-            Text(title)
-                .font(.system(size: 12.5))
-                .lineLimit(1)
+            if fits {
+                Text(title).font(.system(size: 12.5)).lineLimit(1).fixedSize()
+            } else {
+                Text(title).font(.system(size: 12.5)).lineLimit(1)
+            }
             if let help { HelpButton(text: help) }
-            Spacer(minLength: 6)
-            control()
         }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 6)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
-        .modifier(SettingsTileBackground())
-        .settingsSearchHighlight(title: title)
     }
 }
 

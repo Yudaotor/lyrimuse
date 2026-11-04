@@ -271,12 +271,22 @@ func runSettingsAuditContracts() {
                 "触控栏「文字颜色」: 四档跟标题排不下一行时换到标题下面,判据只拿标题单行宽去比(17 章决策 57)")
     expectEqual(sourceHas(menuBarStage, "icon: \"rectangle.split.1x2\",\ntitle: L10n.t(\"布局\"),"), true,
                 "菜单栏: 「布局」入口图标同歌词窗口、触控栏")
-    let readout = app("UI/EditorStageReadout.swift")
-    expectEqual(sourceHas(overlayStage, "EditorStageReadout(text: widthValueText,\nwidest: String(format: L10n.t(\"%@pt\"), \"\\(Int(Self.widthRange.upperBound))\"))")
-                && sourceHas(menuBarStage, "EditorStageReadout(text: widthValueText,\nwidest: String(format: L10n.t(\"%@pt\"), \"\\(Int(AppSettings.menuBarLyricsWidthRange.upperBound))\"))")
+    let readout = app("UI/StableReadout.swift")
+    let panelQuick = app("MenuBar/MenuBarPanelQuickSettings.swift")
+    expectEqual(sourceHas(overlayStage, "StableReadout(text: widthValueText,\nwidest: String(format: L10n.t(\"%@pt\"), \"\\(Int(Self.widthRange.upperBound))\"))")
+                && sourceHas(menuBarStage, "StableReadout(text: widthValueText,\nwidest: String(format: L10n.t(\"%@pt\"), \"\\(Int(AppSettings.menuBarLyricsWidthRange.upperBound))\"))")
                 && sourceHas(readout, "ZStack(alignment: .trailing) {\nText(widest).hidden()\nText(text)\n}")
-                && sourceHas(readout, ".lineLimit(1)\n.fixedSize()"), true,
-                "编辑台宽度条: 读数按最大值那一串留宽、不折行,不写定宽(俄语「1270 пт」放不进 44pt)")
+                && sourceHas(readout, ".lineLimit(1)\n.fixedSize()")
+                && sourceHas(panelQuick, "private static var readoutWidest: String { String(format: L10n.t(\"%@pt\"), \"0000\") }")
+                && panelQuick.components(separatedBy: "widest: Self.readoutWidest, font: .system(size: 10))").count == 3
+                && !sourceHas(panelQuick, ".frame(width: 38, alignment: .trailing)"), true,
+                "滑杆读数: 编辑台宽度条按最大值那一串、菜单栏面板各滑杆一律按四位数留宽(滑杆逐行对齐),不折行,不写定宽(俄语「1270 пт」放不进 44pt / 38pt)")
+    let panelRow = sourceBody("struct PanelQuickRow<Control: View>: View {", in: panelQuick)
+    let controlCell = sourceBody("struct SettingsControlCell<Control: View>: View {", in: designSystem)
+    expectEqual(sourceHas(panelRow, "ViewThatFits(in: .horizontal) {\ninline(titleSize: 11.5)\ninline(titleSize: 11.5 * 0.9)\nVStack(alignment: .leading, spacing: 4) {")
+                && sourceHas(controlCell, "ViewThatFits(in: .horizontal) {\nHStack(spacing: 6) {\nlabel(fits: true)")
+                && sourceHas(controlCell, "Text(title).font(.system(size: 12.5)).lineLimit(1).fixedSize()"), true,
+                "面板行 / 控件小格: 名字跟控件排不下一行时控件换到名字下面,不截名字")
     let toolbarLabel = sourceBody("private var summaryView: some View {", in: app("UI/EditorToolbarButtonLabel.swift"))
     expectEqual(sourceHas(toolbarLabel, "let candidates = EditorToolbarSummary.candidates(summary)\nreturn ViewThatFits(in: .horizontal) {")
                 && sourceHas(toolbarLabel, "summaryLine(candidates[index]).fixedSize()")

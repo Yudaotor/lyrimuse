@@ -62,7 +62,7 @@ Chinese music services use the names in the English string (NetEase Cloud Music,
 | 桌面悬浮歌词 / 悬浮歌词 | (Desktop) Floating Lyrics | Плавающий текст |
 | 灵动岛 | Notch | Вырез |
 | 菜单栏 | Menu Bar | Строка меню (in a sentence: строка меню) |
-| 触控栏 | Touch Bar | Touch Bar |
+| 触控栏 | Touch Bar | Touch Bar (preposition «в», as Apple: «Текст в Touch Bar», «в панели Touch Bar») |
 | 歌词窗口 | Lyrics Window | Окно текста |
 | 歌词管理 | Lyrics Manager | Менеджер текстов |
 | 歌词库 | Lyrics Library | Библиотека текстов |
@@ -71,7 +71,7 @@ Chinese music services use the names in the English string (NetEase Cloud Music,
 | 罗马音 / 读音 | Romanization / Reading | Произношение (Apple Music: «Перевод и произношение текстов песен») |
 | 逐字歌词 | Word-by-word lyrics | Текст по словам; 逐字时间轴 тайминг по словам |
 | 时间轴 | Timing | Тайминг |
-| 打卡 / scrobble | Scrobble | Скробблинг (verb скробблить, noun скроббл) |
+| 打卡 / scrobble | Scrobble | Скробблинг for the action and settings (verb скробблить); counts and lists use «прослушивания», as Last.fm’s own Russian site does (Всего прослушиваний, Недавние прослушивания) |
 | 收听 / 播放次数 | Listens / Plays | Прослушивания |
 | 收听记录 | Listening history | История прослушиваний |
 | 听歌报告 / 听歌小结 | Listening Report / Digest | Отчет о прослушивании / Итоги прослушивания |
@@ -129,7 +129,8 @@ Chinese music services use the names in the English string (NetEase Cloud Music,
 | 密钥 | Key | Ключ |
 | 钥匙串 | Keychain | Связка ключей |
 | 令牌 | Token | Токен |
-| 足迹 | Footprints | Следы |
+| 足迹 | Footprints | Хроника (收听足迹 = Хроника прослушиваний; «Следы» reads as footprints / traces, «История» clashes with История прослушиваний) |
+| 收听里程碑 | Listening Milestones | Рубежи (下一个里程碑 = Следующий рубеж; Russian news says a play count «перешёл рубеж») |
 | 深链 | Deep links | Deep links |
 | 快捷指令 | Shortcuts (app) | Быстрые команды |
 | App | App | приложение |

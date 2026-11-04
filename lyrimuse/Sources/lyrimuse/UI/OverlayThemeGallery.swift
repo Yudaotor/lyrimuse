@@ -122,6 +122,7 @@ struct ThemePreviewCard: View {
                     .font(.system(size: 11, weight: isCurrent ? .semibold : .regular))
                     .foregroundStyle(isCurrent ? Color.primary : Color.secondary)
                     .lineLimit(1)
+                    .minimumScaleFactor(0.85)
                     .truncationMode(.tail)
             }
             .contentShape(Rectangle())

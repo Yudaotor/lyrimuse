@@ -40,7 +40,7 @@
 | `/shortcuts` | Сочетания клавиш | — |
 | `/general` | Основные | — |
 | `/about` | О программе | — |
-| `/account/lastfm` | Last.fm | `/stats` Статистика, `/chart` Чарты, `/on-this-day` Следы, `/settings` Правила |
+| `/account/lastfm` | Last.fm | `/stats` Статистика, `/chart` Чарты, `/on-this-day` Хроника, `/settings` Правила |
 | `/account/listenbrainz` | ListenBrainz | — |
 | `/account/discord` | Discord | `/display` Что показывать, `/buttons` Кнопки, `/privacy` Конфиденциальность |
 | `/account/relay` | Веб-push | — |
@@ -63,7 +63,7 @@
 | `toggle-notch` | Показывает или скрывает текст в вырезе | `on` |
 | `peek-notch` | Разворачивает текст в вырезе на несколько секунд; повторный запуск закрывает его раньше | — |
 | `toggle-menubar-lyrics` | Показывает или скрывает текст в строке меню | `on` |
-| `toggle-touchbar` | Разворачивает или сворачивает текст на Touch Bar (только на Mac с Touch Bar) | — |
+| `toggle-touchbar` | Разворачивает или сворачивает текст в Touch Bar (только на Mac с Touch Bar) | — |
 | `toggle-all-lyrics` | Скрывает весь текст: из плавающего текста, текста в вырезе и в строке меню скрывается то, что было включено, а повторный запуск возвращает именно это | `on` (`0` скрывает, `1` возвращает) |
 | `toggle-lock-position` | Закрепляет или открепляет положение плавающего текста | `on` |
 | `toggle-translation` | Показывает или скрывает перевод | `on` |

@@ -1126,8 +1126,8 @@ struct OverlayEditorStage: View {
             // 一个**带单位**的值 —— 不显式给 value 的话 VoiceOver 会把它读成百分比。
             .accessibilityLabel(L10n.t("悬浮歌词宽度"))
             .accessibilityValue(widthValueText)
-            EditorStageReadout(text: widthValueText,
-                               widest: String(format: L10n.t("%@pt"), "\(Int(Self.widthRange.upperBound))"))
+            StableReadout(text: widthValueText,
+                          widest: String(format: L10n.t("%@pt"), "\(Int(Self.widthRange.upperBound))"))
                 // 读数是滑杆的镜像、不是第二个可读元素:都进无障碍树的话 VoiceOver 会把同一个
                 // 值读两遍(同 lockBadge 那条)。
                 .accessibilityHidden(true)

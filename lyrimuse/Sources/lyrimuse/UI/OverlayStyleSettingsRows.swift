@@ -247,7 +247,8 @@ struct OverlayContentSettingsRows: View {
                 SettingsToggleTile(icon: "rectangle.grid.1x2", title: L10n.t("下一句"), isOn: $settings.showNextLinePreview)
             }
             if showsRowSizes {
-                SettingsTileGrid(columns: 3) { OverlayRowFontScaleCells() }
+                // 带组标题,同「排版」里三项间距:长语言的格子名可以只写读音 / 译文 / 下一句,不重复「大小」。
+                SettingsTileGrid(title: L10n.t("字号"), columns: 3) { OverlayRowFontScaleCells() }
             }
         }
     }
