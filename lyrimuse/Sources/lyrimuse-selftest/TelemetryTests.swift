@@ -39,6 +39,11 @@ func runTelemetryTests() {
         expectEqual(TelemetryEnvironment.languageOnly("zh-Hans-CN"), "zh-Hans", "语言: 去掉地区、留文字")
         expectEqual(TelemetryEnvironment.languageOnly("en-US"), "en", "语言: 去掉地区")
         expectEqual(TelemetryEnvironment.languageOnly("ja"), "ja", "语言: 没地区原样")
+        expectEqual(TelemetryEnvironment.regionCode("CN"), "CN", "地区: 两字母原样")
+        expectEqual(TelemetryEnvironment.regionCode("tw"), "TW", "地区: 转大写")
+        expectEqual([TelemetryEnvironment.regionCode("001"), TelemetryEnvironment.regionCode("419"),
+                     TelemetryEnvironment.regionCode(""), TelemetryEnvironment.regionCode(nil),
+                     TelemetryEnvironment.regionCode("USA")], [nil, nil, nil, nil, nil], "地区: 数字区域码和非两字母不发")
         expectEqual(TelemetryEnvironment.osVersionString(OperatingSystemVersion(majorVersion: 26, minorVersion: 1, patchVersion: 0)),
                     "26.1", "系统版本: 补丁号为 0 不写")
         expectEqual(TelemetryEnvironment.osVersionString(OperatingSystemVersion(majorVersion: 15, minorVersion: 6, patchVersion: 1)),
@@ -279,11 +284,15 @@ func runTelemetryTests() {
         expectEqual(keys(withOrigin), ["activity", "day", "env", "features", "install_id", "origin", "v"], "心跳: 判得出时带 origin")
         expectEqual(String(data: (try? JSONEncoder().encode(withOrigin)) ?? Data(), encoding: .utf8)?.contains(#""origin":"existing""#),
                     true, "心跳: origin 的取值")
-        expectEqual(keys(env), ["app_version", "arch", "build", "os_version", "system_language", "ui_language"], "心跳: env 键")
+        expectEqual(keys(env), ["app_version", "arch", "build", "os_version", "system_language", "ui_language"], "心跳: 取不到地区时 env 不带")
+        var regional = env
+        regional.systemRegion = "CN"
+        expectEqual(keys(regional), ["app_version", "arch", "build", "os_version", "system_language", "system_region", "ui_language"],
+                    "心跳: env 键")
         let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
         let worker = (try? String(contentsOfFile: root.appendingPathComponent("../../telemetry-worker/src/index.js").path,
                                   encoding: .utf8)) ?? ""
-        let fields = keys(env) + keys(features) + keys(TelemetryActivityDay(day: "2026-10-30"))
+        let fields = keys(regional) + keys(features) + keys(TelemetryActivityDay(day: "2026-10-30"))
             + ["install_id", "origin", "report_id", "exception_type", "termination_indicator", "frames", "exception_frames"]
             + TelemetryAction.allCases.map(\.rawValue)
         expectEqual(["install_method", "settings_changed", "permissions_missing"].allSatisfy(keys(features).contains),

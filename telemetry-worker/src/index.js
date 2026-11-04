@@ -123,6 +123,8 @@ function cleanEnv(e) {
   return {
     app_version: str(e.app_version, 32), build: str(e.build, 32), os_version: str(e.os_version, 32),
     arch: tag(e.arch), ui_language: str(e.ui_language, 16), system_language: str(e.system_language, 16),
+    // 系统设置里的地区,两字母;旧版 App 不发。
+    system_region: typeof e.system_region === "string" && /^[A-Z]{2}$/.test(e.system_region) ? e.system_region : null,
   };
 }
 
@@ -167,13 +169,14 @@ async function heartbeat(request, env) {
     ).bind(installID, day, origin),
     env.DB.prepare(
       `INSERT INTO heartbeats (day, install_id, received_at, app_version, build, os_version, arch, ui_language,
-                               system_language, country, features)
-       VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)
+                               system_language, country, features, system_region)
+       VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)
        ON CONFLICT (day, install_id) DO UPDATE SET received_at = excluded.received_at, app_version = excluded.app_version,
          build = excluded.build, os_version = excluded.os_version, arch = excluded.arch, ui_language = excluded.ui_language,
-         system_language = excluded.system_language, country = excluded.country, features = excluded.features`
+         system_language = excluded.system_language, country = excluded.country, features = excluded.features,
+         system_region = excluded.system_region`
     ).bind(day, installID, now, e.app_version, e.build, e.os_version, e.arch, e.ui_language, e.system_language,
-           country, features),
+           country, features, e.system_region),
   ];
   const activity = Array.isArray(body.activity) ? body.activity.slice(0, 3) : [];
   for (const a of activity) {
@@ -338,6 +341,7 @@ async function stats(request, env, url) {
       arch: countBy(rows, (r) => r.arch),
       ui_language: countBy(rows, (r) => r.ui_language),
       system_language: countBy(rows, (r) => r.system_language),
+      system_region: countBy(rows, (r) => r.system_region),
       country: countBy(rows, (r) => r.country),
       surfaces: countBy(rows, (r) => r.features.surfaces || []),
       players_selected: countBy(rows, (r) => r.features.players_selected || []),
@@ -438,7 +442,7 @@ const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 try { $("token").value = localStorage.getItem("lyrimuse-telemetry-token") || ""; } catch {}
 const LABELS = { app_version: "版本", os_version: "macOS 大版本", arch: "芯片", ui_language: "界面语言", system_language: "系统语言",
-  country: "国家/地区", surfaces: "开着的展示面", players_selected: "勾选的播放器", accounts: "连接的账号", trusted_players: "信任的第三方播放器", web_platforms: "网页版平台", lyrics_source_mode: "匹配算法",
+  system_region: "地区(系统设置)", country: "出口 IP 所在地区", surfaces: "开着的展示面", players_selected: "勾选的播放器", accounts: "连接的账号", trusted_players: "信任的第三方播放器", web_platforms: "网页版平台", lyrics_source_mode: "匹配算法",
   flags: "其他开关", install_method: "安装渠道", settings_changed: "改过默认值的设置",
   permissions_missing: "缺的权限" };
 const ACTION_LABELS = { lyrics_window: "打开歌词窗口", lyrics_picked: "手动采用歌词", offset_adjusted: "调时间偏移", share_card: "分享歌词卡" };

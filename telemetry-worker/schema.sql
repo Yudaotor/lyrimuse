@@ -1,4 +1,5 @@
--- Lyrimuse 匿名遥测的 D1 表。不存 IP;country 是 Cloudflare 按 IP 给的两字母国家/地区码。
+-- Lyrimuse 匿名遥测的 D1 表。不存 IP;country 是 Cloudflare 按 IP 给的两字母国家/地区码,
+-- system_region 是 App 报的系统设置里的地区(旧版本为空)。
 CREATE TABLE IF NOT EXISTS installs (
   install_id TEXT PRIMARY KEY,
   first_day  TEXT NOT NULL,
@@ -18,6 +19,7 @@ CREATE TABLE IF NOT EXISTS heartbeats (
   system_language TEXT,
   country         TEXT,
   features        TEXT,
+  system_region   TEXT,
   PRIMARY KEY (day, install_id)
 );
 CREATE INDEX IF NOT EXISTS heartbeats_day ON heartbeats(day);

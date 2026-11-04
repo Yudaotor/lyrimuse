@@ -238,20 +238,30 @@ public struct TelemetryEnvironment: Codable, Equatable, Sendable {
     public var uiLanguage: String
     /// 系统首选语言的第一项(只要语言和文字,不要地区)。
     public var systemLanguage: String
+    /// 系统设置里的地区(两字母大写);取不到或不是两字母国家/地区码时不发。见 14 章决策 174。
+    public var systemRegion: String?
 
     public init(appVersion: String, build: String, osVersion: String, arch: String,
-                uiLanguage: String, systemLanguage: String) {
+                uiLanguage: String, systemLanguage: String, systemRegion: String? = nil) {
         self.appVersion = appVersion
         self.build = build
         self.osVersion = osVersion
         self.arch = arch
         self.uiLanguage = uiLanguage
         self.systemLanguage = systemLanguage
+        self.systemRegion = systemRegion
     }
 
     enum CodingKeys: String, CodingKey {
         case appVersion = "app_version", build, osVersion = "os_version", arch
-        case uiLanguage = "ui_language", systemLanguage = "system_language"
+        case uiLanguage = "ui_language", systemLanguage = "system_language", systemRegion = "system_region"
+    }
+
+    /// `cn` → `CN`;`001`、`419` 这类数字区域码和空值返回 nil。
+    public static func regionCode(_ identifier: String?) -> String? {
+        guard let code = identifier?.uppercased(), code.count == 2,
+              code.unicodeScalars.allSatisfy({ ("A"..."Z").contains($0) }) else { return nil }
+        return code
     }
 
     /// `zh-Hans-CN` → `zh-Hans`,`en-US` → `en`:地区不发。

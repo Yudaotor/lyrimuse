@@ -173,7 +173,8 @@ final class TelemetryService {
             osVersion: TelemetryEnvironment.osVersionString(ProcessInfo.processInfo.operatingSystemVersion),
             arch: TelemetryEnvironment.currentArch,
             uiLanguage: language == "system" ? UILanguage.resolve(preferredLanguages: Locale.preferredLanguages) : language,
-            systemLanguage: TelemetryEnvironment.languageOnly(Locale.preferredLanguages.first ?? ""))
+            systemLanguage: TelemetryEnvironment.languageOnly(Locale.preferredLanguages.first ?? ""),
+            systemRegion: TelemetryEnvironment.regionCode(Locale.autoupdatingCurrent.region?.identifier))
     }
 
     private func features() async -> TelemetryFeatures {
