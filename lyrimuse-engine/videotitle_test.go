@@ -87,6 +87,12 @@ func TestTitleSplitIdentity(t *testing.T) {
 		{"某歌手", "(Intro)[Explicit]", "", "", false, false},
 		{"某歌手", "【A】【B】", "", "", false, false},
 		{"某歌手", "(特別演出: 某某)【 】", "", "", false, false},
+		// 破折号拆出来的歌名去掉结尾的直角引号段;整个歌名都在引号里的不动
+		{"【中文流行歌曲合輯 Chinese Pop Songs Playlist】", "吉星出租 - 暮色回響『神啊可不可以讓我感受一下，看在我們對彼此都放心不下。』【動態歌詞|Pinyin Lyrics】【PENGUIN MUSIC】", "吉星出租", "暮色回響", false, true},
+		{"某频道", "Aimer - 残響散歌「鬼滅の刃」", "Aimer", "残響散歌", false, true},
+		{"某频道", "Aimer - 『残響散歌』", "Aimer", "『残響散歌』", false, true},
+		{"某频道", "Aimer - ~『残響散歌』", "Aimer", "~『残響散歌』", false, true},
+		{"某频道", "Aimer - 残響散歌『鬼滅の刃』 Remix", "Aimer", "残響散歌『鬼滅の刃』 Remix", false, true},
 	}
 	for _, c := range cases {
 		a, s, mv, ok := titleSplitIdentity(c.artist, c.title)

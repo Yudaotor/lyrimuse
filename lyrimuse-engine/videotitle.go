@@ -247,7 +247,24 @@ func titleSplitIdentity(artist, title string) (splitArtist, song string, duratio
 		return cleanMediaTag(artist), song, false, true
 	}
 	a, s, ok := albumHintTitleSplit(title)
+	if ok {
+		s = withoutTrailingCornerQuote(s)
+	}
 	return a, s, false, ok
+}
+
+// splitSongCornerQuoteTail:歌名结尾的一段直角引号(『…』「…」),前面要有字。
+var splitSongCornerQuoteTail = regexp.MustCompile(`^(.*\S)\s*(?:『[^『』]*』|「[^「」]*」)\s*$`)
+
+// withoutTrailingCornerQuote:按破折号拆出来的歌名去掉结尾那段直角引号。这个位置上是歌词摘录或作品名
+// (「暮色回響『神啊可不可以讓我感受一下…』」「残響散歌『鬼滅の刃』」),留着整串搜不到。整个歌名都在引号里的不动。
+// 见 09 章决策 357。
+func withoutTrailingCornerQuote(song string) string {
+	m := splitSongCornerQuoteTail.FindStringSubmatch(song)
+	if m == nil || normLoose(m[1]) == "" {
+		return song
+	}
+	return strings.TrimSpace(m[1])
 }
 
 // bracketOnlyTitleSong:曲名整串都是括号段、括号外没有字,其中正好一段是方头括号时,返回方头括号里的歌名
