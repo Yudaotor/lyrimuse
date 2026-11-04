@@ -159,7 +159,7 @@ struct LastfmHeatmapView: View {
                                 cellShape(fill: futureColor).help(day.label)
                             } else if let day = week.days[row], let n = stats.dailyCounts[day.key], n > 0 {
                                 cellShape(fill: color(for: n, thresholds: thresholds, levels: levels))
-                                    .help("\(day.label) · \(n.formatted()) \(L10n.t("次"))\n\(L10n.t("点按查看当天收听最多的歌曲"))")
+                                    .help(String(format: L10n.plural("%1$@ · %2$@ 次", count: n), day.label, n.formatted()) + "\n" + L10n.t("点按查看当天收听最多的歌曲"))
                                     .modifier(HeatmapCellHover())
                                     .contentShape(Rectangle())
                                     .onTapGesture {
@@ -167,7 +167,7 @@ struct LastfmHeatmapView: View {
                                     }
                             } else if let day = week.days[row] {
                                 cellShape(fill: emptyColor)
-                                    .help("\(day.label) · 0 \(L10n.t("次"))")
+                                    .help(String(format: L10n.plural("%1$@ · %2$@ 次", count: 0), day.label, 0.formatted()))
                             } else {
                                 // 年头/年尾不属于本年的格子:占位保持列对齐,完全透明。
                                 cellShape(fill: .clear)

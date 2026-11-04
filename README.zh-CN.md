@@ -6,7 +6,7 @@
 
 **桌面歌词，为 Mac 全新构想。**
 
-**语言 / Language:** [English](README.md) | **简体中文** | [繁體中文](README.zh-Hant.md) | [日本語](README.ja.md) | [한국어](README.ko.md) | [Español](README.es.md) | [Français](README.fr.md) | [Deutsch](README.de.md) | [Italiano](README.it.md) | [Português (Brasil)](README.pt-BR.md) | [Tiếng Việt](README.vi.md)
+**语言 / Language:** [English](README.md) | **简体中文** | [繁體中文](README.zh-Hant.md) | [日本語](README.ja.md) | [한국어](README.ko.md) | [Español](README.es.md) | [Français](README.fr.md) | [Deutsch](README.de.md) | [Italiano](README.it.md) | [Português (Brasil)](README.pt-BR.md) | [Tiếng Việt](README.vi.md) | [Русский](README.ru.md)
 
 ![Platform](https://img.shields.io/badge/platform-macOS%2014%2B-blue)
 ![Architecture](https://img.shields.io/badge/arch-Apple%20Silicon%20%2B%20Intel-blue)
@@ -92,7 +92,7 @@ brew install --cask lyrimuse
 - **暂停时自动收起**，不会一直占着桌面。纯音乐、没有歌词或有 App 全屏时也可以让开，悬浮歌词还能跟着你正在用的那个窗口换到它所在的屏幕。
 
 ### 日常用起来的细节
-- **简体中文、繁体中文、英文、日文、韩文、西班牙文、法文、德文、意大利文、巴西葡萄牙文、越南文界面**，切换马上生效，不用重启。翻译有不顺的地方欢迎提 PR，各语言的翻译规范在 `lyrimuse/Localization/`。
+- **简体中文、繁体中文、英文、日文、韩文、西班牙文、法文、德文、意大利文、巴西葡萄牙文、越南文、俄文界面**，切换马上生效，不用重启。翻译有不顺的地方欢迎提 PR，各语言的翻译规范在 `lyrimuse/Localization/`。
 - **macOS 26 上用液态玻璃。** 设置、菜单栏面板、歌词窗口、歌词管理和首次引导都换成了液态玻璃，其中大部分还能固定浅色或深色，不跟系统走。
 - **全局快捷键**，从隐藏全部歌词到喜欢当前这首，每个常用操作都能绑，默认一个键都不占，用哪个你自己定。每个操作也有对应的 `lyrimuse://` 链接，快捷指令、Raycast、Alfred 都能调，快捷指令还能通过链接取回正在播放的歌（[URL Scheme 说明](docs/url-scheme.zh-CN.md)）。
 - **设置可以搜**：在侧栏里打字，会直接滚到对应那一项并高亮，藏在折叠区里的也会自己展开。

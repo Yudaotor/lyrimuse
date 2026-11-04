@@ -1,6 +1,6 @@
 # Esquema de URL do Lyrimuse
 
-*[English](url-scheme.md) · [简体中文](url-scheme.zh-CN.md) · [日本語](url-scheme.ja.md) · [한국어](url-scheme.ko.md) · [Español](url-scheme.es.md) · [Français](url-scheme.fr.md) · [Deutsch](url-scheme.de.md) · [Italiano](url-scheme.it.md) · **Português (Brasil)** · [Tiếng Việt](url-scheme.vi.md)*
+*[English](url-scheme.md) · [简体中文](url-scheme.zh-CN.md) · [日本語](url-scheme.ja.md) · [한국어](url-scheme.ko.md) · [Español](url-scheme.es.md) · [Français](url-scheme.fr.md) · [Deutsch](url-scheme.de.md) · [Italiano](url-scheme.it.md) · **Português (Brasil)** · [Tiếng Việt](url-scheme.vi.md) · [Русский](url-scheme.ru.md)*
 
 Links que começam com `lyrimuse://` permitem controlar o Lyrimuse pelo app Atalhos, pelo Raycast, pelo Alfred, pelo Stream Deck, pelo Terminal (`open 'lyrimuse://…'`) e por ferramentas parecidas: abrir janelas e páginas dos Ajustes, mostrar ou ocultar a letra, controlar a reprodução, ajustar a sincronia ou saber o que está tocando.
 

@@ -1,6 +1,6 @@
 # Lyrimuse-URL-Schema
 
-*[English](url-scheme.md) · [简体中文](url-scheme.zh-CN.md) · [日本語](url-scheme.ja.md) · [한국어](url-scheme.ko.md) · [Español](url-scheme.es.md) · [Français](url-scheme.fr.md) · **Deutsch** · [Italiano](url-scheme.it.md) · [Português (Brasil)](url-scheme.pt-BR.md) · [Tiếng Việt](url-scheme.vi.md)*
+*[English](url-scheme.md) · [简体中文](url-scheme.zh-CN.md) · [日本語](url-scheme.ja.md) · [한국어](url-scheme.ko.md) · [Español](url-scheme.es.md) · [Français](url-scheme.fr.md) · **Deutsch** · [Italiano](url-scheme.it.md) · [Português (Brasil)](url-scheme.pt-BR.md) · [Tiếng Việt](url-scheme.vi.md) · [Русский](url-scheme.ru.md)*
 
 Mit Links, die mit `lyrimuse://` beginnen, steuerst du Lyrimuse aus der App „Kurzbefehle“, aus Raycast, Alfred, Stream Deck, dem Terminal (`open 'lyrimuse://…'`) und ähnlichen Tools: Fenster und Einstellungsseiten öffnen, Liedtexte ein- oder ausblenden, die Wiedergabe steuern, das Timing verschieben oder abfragen, was gerade läuft.
 

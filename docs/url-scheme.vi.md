@@ -1,6 +1,6 @@
 # Lược đồ URL của Lyrimuse
 
-*[English](url-scheme.md) · [简体中文](url-scheme.zh-CN.md) · [日本語](url-scheme.ja.md) · [한국어](url-scheme.ko.md) · [Español](url-scheme.es.md) · [Français](url-scheme.fr.md) · [Deutsch](url-scheme.de.md) · [Italiano](url-scheme.it.md) · [Português (Brasil)](url-scheme.pt-BR.md) · **Tiếng Việt***
+*[English](url-scheme.md) · [简体中文](url-scheme.zh-CN.md) · [日本語](url-scheme.ja.md) · [한국어](url-scheme.ko.md) · [Español](url-scheme.es.md) · [Français](url-scheme.fr.md) · [Deutsch](url-scheme.de.md) · [Italiano](url-scheme.it.md) · [Português (Brasil)](url-scheme.pt-BR.md) · **Tiếng Việt** · [Русский](url-scheme.ru.md)*
 
 Các liên kết bắt đầu bằng `lyrimuse://` cho phép bạn điều khiển Lyrimuse từ Phím tắt, Raycast, Alfred, Stream Deck, Terminal (`open 'lyrimuse://…'`) và các công cụ tương tự: mở cửa sổ và trang cài đặt, hiện hoặc ẩn lời bài hát, điều khiển phát, chỉnh nhanh thời gian lời hoặc lấy thông tin bài đang phát.
 

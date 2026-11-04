@@ -6,7 +6,7 @@
 
 **Liedtexte auf dem Schreibtisch, neu gedacht für den Mac.**
 
-**Language / 语言 / 語言 / 言語 / 언어 / Idioma / Langue / Sprache / Lingua:** [English](README.md) | [简体中文](README.zh-CN.md) | [繁體中文](README.zh-Hant.md) | [日本語](README.ja.md) | [한국어](README.ko.md) | [Español](README.es.md) | [Français](README.fr.md) | **Deutsch** | [Italiano](README.it.md) | [Português (Brasil)](README.pt-BR.md) | [Tiếng Việt](README.vi.md)
+**Language / 语言 / 語言 / 言語 / 언어 / Idioma / Langue / Sprache / Lingua / Язык:** [English](README.md) | [简体中文](README.zh-CN.md) | [繁體中文](README.zh-Hant.md) | [日本語](README.ja.md) | [한국어](README.ko.md) | [Español](README.es.md) | [Français](README.fr.md) | **Deutsch** | [Italiano](README.it.md) | [Português (Brasil)](README.pt-BR.md) | [Tiếng Việt](README.vi.md) | [Русский](README.ru.md)
 
 ![Platform](https://img.shields.io/badge/platform-macOS%2014%2B-blue)
 ![Architecture](https://img.shields.io/badge/arch-Apple%20Silicon%20%2B%20Intel-blue)
@@ -92,7 +92,7 @@ brew install --cask lyrimuse
 - **Blendet sich bei Pause aus**, damit er nicht untätig auf deinem Schreibtisch herumsteht. Er kann auch bei Instrumentalstellen, Titeln ohne Liedtext und Apps im Vollbild Platz machen, und der schwebende Text kann dir auf den Bildschirm des Fensters folgen, das du gerade benutzt.
 
 ### Alltägliche Details
-- **Englisch, vereinfachtes Chinesisch, traditionelles Chinesisch, Japanisch, Koreanisch, Spanisch, Französisch, Deutsch, Italienisch, brasilianisches Portugiesisch und Vietnamesisch**, und der Wechsel wirkt sofort, ohne Neustart. Eine holprige Übersetzung entdeckt? Pull Requests sind willkommen; jede Sprache hat einen Styleguide in `lyrimuse/Localization/`.
+- **Englisch, vereinfachtes Chinesisch, traditionelles Chinesisch, Japanisch, Koreanisch, Spanisch, Französisch, Deutsch, Italienisch, brasilianisches Portugiesisch, Vietnamesisch und Russisch**, und der Wechsel wirkt sofort, ohne Neustart. Eine holprige Übersetzung entdeckt? Pull Requests sind willkommen; jede Sprache hat einen Styleguide in `lyrimuse/Localization/`.
 - **Liquid Glass unter macOS 26.** Die Einstellungen, das Menüleisten-Panel, das Liedtextfenster, die Liedtext-Verwaltung und der Einrichtungsassistent sind damit gebaut, und die meisten davon können hell oder dunkel bleiben, statt dem System zu folgen.
 - **Tastaturkurzbefehle** für jede Aktion, vom Ausblenden aller Liedtexte bis zum Favorisieren des Titels. Ab Werk ist keiner belegt, du wählst die Tasten also selbst. Jede Aktion hat außerdem einen `lyrimuse://`-Link, den du aus Kurzbefehle, Raycast oder Alfred aufrufen kannst, und aus Kurzbefehle heraus kann ein Link den laufenden Titel zurückgeben ([URL-Schema](docs/url-scheme.de.md)).
 - **Suche in den Einstellungen.** Tippe in die Seitenleiste, und sie scrollt zur passenden Zeile und hebt sie hervor; eine zugeklappte Gruppe klappt sie dafür bei Bedarf auf.

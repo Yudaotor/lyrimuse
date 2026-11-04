@@ -6,7 +6,7 @@
 
 **Lời bài hát trên màn hình nền, thiết kế lại cho máy Mac.**
 
-**Language / 语言 / 語言 / 言語 / 언어 / Idioma / Langue / Sprache / Lingua:** [English](README.md) | [简体中文](README.zh-CN.md) | [繁體中文](README.zh-Hant.md) | [日本語](README.ja.md) | [한국어](README.ko.md) | [Español](README.es.md) | [Français](README.fr.md) | [Deutsch](README.de.md) | [Italiano](README.it.md) | [Português (Brasil)](README.pt-BR.md) | **Tiếng Việt**
+**Language / 语言 / 語言 / 言語 / 언어 / Idioma / Langue / Sprache / Lingua / Язык:** [English](README.md) | [简体中文](README.zh-CN.md) | [繁體中文](README.zh-Hant.md) | [日本語](README.ja.md) | [한국어](README.ko.md) | [Español](README.es.md) | [Français](README.fr.md) | [Deutsch](README.de.md) | [Italiano](README.it.md) | [Português (Brasil)](README.pt-BR.md) | **Tiếng Việt** | [Русский](README.ru.md)
 
 ![Platform](https://img.shields.io/badge/platform-macOS%2014%2B-blue)
 ![Architecture](https://img.shields.io/badge/arch-Apple%20Silicon%20%2B%20Intel-blue)
@@ -92,7 +92,7 @@ brew install --cask lyrimuse
 - **Tự ẩn khi bạn tạm dừng**, để không nằm trên màn hình nền mà chẳng làm gì. Ứng dụng cũng có thể tránh sang một bên khi phát nhạc không lời hoặc bài không có lời, và khi có ứng dụng toàn màn hình, và lời nổi có thể theo bạn sang màn hình chứa cửa sổ bạn đang dùng.
 
 ### Những chi tiết hằng ngày
-- **Tiếng Anh, tiếng Trung Giản thể, tiếng Trung Phồn thể, tiếng Nhật, tiếng Hàn, tiếng Tây Ban Nha, tiếng Pháp, tiếng Đức, tiếng Ý, tiếng Bồ Đào Nha (Brazil) và tiếng Việt**, và đổi ngôn ngữ có hiệu lực ngay, không cần khởi động lại. Thấy chỗ dịch còn vụng? Pull request luôn được chào đón; mỗi ngôn ngữ có một hướng dẫn văn phong trong `lyrimuse/Localization/`.
+- **Tiếng Anh, tiếng Trung Giản thể, tiếng Trung Phồn thể, tiếng Nhật, tiếng Hàn, tiếng Tây Ban Nha, tiếng Pháp, tiếng Đức, tiếng Ý, tiếng Bồ Đào Nha (Brazil), tiếng Việt và tiếng Nga**, và đổi ngôn ngữ có hiệu lực ngay, không cần khởi động lại. Thấy chỗ dịch còn vụng? Pull request luôn được chào đón; mỗi ngôn ngữ có một hướng dẫn văn phong trong `lyrimuse/Localization/`.
 - **Liquid Glass trên macOS 26.** Cài đặt, bảng thanh menu, Cửa sổ lời, Quản lý lời và hướng dẫn thiết lập đều dùng Liquid Glass, và hầu hết có thể giữ giao diện sáng hoặc tối thay vì theo hệ thống.
 - **Phím tắt** cho mọi thao tác, từ ẩn toàn bộ lời đến thích bài hát. Mặc định không gán phím nào, nên bạn tự chọn phím. Mọi thao tác cũng có liên kết `lyrimuse://` để gọi từ ứng dụng Phím tắt, Raycast hoặc Alfred, và từ Phím tắt, một liên kết có thể trả về bài đang phát ([URL Scheme](docs/url-scheme.vi.md)).
 - **Tìm kiếm trong Cài đặt.** Gõ vào thanh bên, ứng dụng sẽ cuộn đến hàng khớp và tô sáng hàng đó, mở cả nhóm đang thu gọn nếu cần.

@@ -29,12 +29,12 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-LANGS = ("en", "zh-Hans", "zh-Hant", "ja", "ko", "es", "fr", "de", "it", "pt-BR", "vi")
-LANG_LABELS = {"en": "English", "zh-Hans": "简体中文", "zh-Hant": "繁體中文", "ja": "日本語", "ko": "한국어", "es": "Español", "fr": "Français", "de": "Deutsch", "it": "Italiano", "pt-BR": "Português (Brasil)", "vi": "Tiếng Việt"}
+LANGS = ("en", "zh-Hans", "zh-Hant", "ja", "ko", "es", "fr", "de", "it", "pt-BR", "vi", "ru")
+LANG_LABELS = {"en": "English", "zh-Hans": "简体中文", "zh-Hant": "繁體中文", "ja": "日本語", "ko": "한국어", "es": "Español", "fr": "Français", "de": "Deutsch", "it": "Italiano", "pt-BR": "Português (Brasil)", "vi": "Tiếng Việt", "ru": "Русский"}
 DOC_FILES = {"en": "feature-list.md", "zh-Hans": "feature-list.zh-CN.md", "zh-Hant": "feature-list.zh-Hant.md",
              "ja": "feature-list.ja.md", "ko": "feature-list.ko.md", "es": "feature-list.es.md",
              "fr": "feature-list.fr.md", "de": "feature-list.de.md", "it": "feature-list.it.md",
-             "pt-BR": "feature-list.pt-BR.md", "vi": "feature-list.vi.md"}
+             "pt-BR": "feature-list.pt-BR.md", "vi": "feature-list.vi.md", "ru": "feature-list.ru.md"}
 BRANDS = {"ListenBrainz", "Last.fm", "Discord"}
 
 CHROME = {
@@ -258,6 +258,26 @@ CHROME = {
         "sep": ": ",
         "generated": "Được tạo bởi scripts/gen-feature-list.py từ shared/feature-list.json và shared/settings-catalog.json; muốn sửa danh sách, hãy sửa các tệp đó.",
     },
+    "ru": {
+        "title": "Возможности Lyrimuse",
+        "intro": "Здесь собраны все возможности Lyrimuse: что делает каждая, где она в настройках и включена ли сразу после установки; в конце — все параметры окна настроек. Список ведется вместе с исходным кодом и обновляется при каждом изменении.",
+        "toc": "Содержание",
+        "off_title": "Выключено, пока вы не включите",
+        "off_intro": "Эти возможности после установки выключены. Сначала включите их в настройках (для некоторых нужны также аккаунт или разрешение):",
+        "col_feature": "Возможность",
+        "col_where": "Где включить",
+        "default_on": "Включено по умолчанию",
+        "default_off": "Выключено по умолчанию",
+        "where": "Настройки",
+        "index_title": "Все настройки",
+        "index_intro": "Все параметры окна настроек по расположению, всего {n}. Введите название в поле поиска вверху боковой панели настроек, чтобы сразу перейти к параметру.",
+        "settings": "Настройки",
+        "labs": "Лаборатория",
+        "mini_only": " (только Мини)",
+        "full_only": " (только Полный)",
+        "sep": ": ",
+        "generated": "Создано скриптом scripts/gen-feature-list.py из shared/feature-list.json и shared/settings-catalog.json; чтобы изменить список, правьте эти файлы.",
+    },
 }
 
 CALL_RE = re.compile(r"\b(SettingsRow|SettingsSubRow|SettingsCardHeader|SettingsChipToggle|SettingsToggleTile|SettingsControlCell)\(")
@@ -387,7 +407,7 @@ def load_model(root: Path = ROOT) -> dict:
             joined = ""
             for line in lines:
                 if joined:
-                    if lang in ("en", "ko", "es", "fr", "de", "it", "pt-BR", "vi"):
+                    if lang in ("en", "ko", "es", "fr", "de", "it", "pt-BR", "vi", "ru"):
                         joined += " "
                     elif lang == "ja":
                         joined += "" if joined[-1] in "。：！？" else "。"

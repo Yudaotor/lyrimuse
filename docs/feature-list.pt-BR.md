@@ -2,9 +2,9 @@
 
 # Lista de recursos do Lyrimuse
 
-[English](feature-list.md) · [简体中文](feature-list.zh-CN.md) · [繁體中文](feature-list.zh-Hant.md) · [日本語](feature-list.ja.md) · [한국어](feature-list.ko.md) · [Español](feature-list.es.md) · [Français](feature-list.fr.md) · [Deutsch](feature-list.de.md) · [Italiano](feature-list.it.md) · Português (Brasil) · [Tiếng Việt](feature-list.vi.md)
+[English](feature-list.md) · [简体中文](feature-list.zh-CN.md) · [繁體中文](feature-list.zh-Hant.md) · [日本語](feature-list.ja.md) · [한국어](feature-list.ko.md) · [Español](feature-list.es.md) · [Français](feature-list.fr.md) · [Deutsch](feature-list.de.md) · [Italiano](feature-list.it.md) · Português (Brasil) · [Tiếng Việt](feature-list.vi.md) · [Русский](feature-list.ru.md)
 
-O Lyrimuse é um app para Mac de código aberto (GPL-3.0) de letras sincronizadas palavra por palavra, para macOS 14 ou posterior em Apple Silicon e Intel. Ele mostra a letra do Apple Music, Spotify, QQ Music, NetEase Cloud Music, Kugou, Soda Music, KKBOX, Amazon Music, LX Music, Kaset, Pear Desktop, reAMP, VOX, Pine Player, foobar2000 e do YouTube Music ou Spotify Web tocando em um navegador: flutuando sobre a mesa, ao lado do notch, na barra de menus, na Touch Bar ou em uma janela da letra completa, com tradução e pronúncia (pinyin, jyutping do cantonês, romaji do japonês, romanização do coreano). Faz scrobble no Last.fm e no ListenBrainz e pode mostrar no Discord o que você está ouvindo. A interface está disponível em inglês, chinês simplificado, chinês tradicional, japonês, coreano, espanhol, francês, alemão, italiano, português do Brasil e vietnamita.
+O Lyrimuse é um app para Mac de código aberto (GPL-3.0) de letras sincronizadas palavra por palavra, para macOS 14 ou posterior em Apple Silicon e Intel. Ele mostra a letra do Apple Music, Spotify, QQ Music, NetEase Cloud Music, Kugou, Soda Music, KKBOX, Amazon Music, LX Music, Kaset, Pear Desktop, reAMP, VOX, Pine Player, foobar2000 e do YouTube Music ou Spotify Web tocando em um navegador: flutuando sobre a mesa, ao lado do notch, na barra de menus, na Touch Bar ou em uma janela da letra completa, com tradução e pronúncia (pinyin, jyutping do cantonês, romaji do japonês, romanização do coreano). Faz scrobble no Last.fm e no ListenBrainz e pode mostrar no Discord o que você está ouvindo. A interface está disponível em inglês, chinês simplificado, chinês tradicional, japonês, coreano, espanhol, francês, alemão, italiano, português do Brasil, vietnamita e russo.
 
 Esta lista reúne todos os recursos do Lyrimuse: o que cada um faz, onde fica nos ajustes e se vem ativado ou não depois da instalação; no final estão todos os ajustes da janela Ajustes. Ela é mantida junto com o código e atualizada a cada mudança.
 
@@ -762,7 +762,7 @@ Na primeira vez que você abre o Lyrimuse, ele guia você na escolha dos players
 
 <a id="feature-language"></a>
 
-### Inglês, chinês simplificado e tradicional, japonês, coreano, espanhol, francês, alemão, italiano, português do Brasil e vietnamita
+### Inglês, chinês simplificado e tradicional, japonês, coreano, espanhol, francês, alemão, italiano, português do Brasil, vietnamita e russo
 
 Segue o sistema por padrão, e usa o inglês quando o idioma do sistema não é um desses; a troca vale na hora, sem reiniciar.
 

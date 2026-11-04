@@ -29,10 +29,10 @@ public enum SettingsSidebarWidth {
     /// 侧栏拉到最宽时右边内容区至少留这么宽:灵动岛编辑台的舞台 = 内容区 − 40,要 ≥ 499(NotchEditorStage 工具栏那段
     /// 横向账是按 499 量的,再窄四个入口的标题会被截)。
     public static let minDetailWidth: CGFloat = 540
-    /// 文字本身就长的界面语言(西语、法语、德语、意大利语、巴西葡语、越南语):内容区至少留这么宽,卡片列撑满 600(`SettingsPage.maxCardColumnWidth` + 两侧
+    /// 文字本身就长的界面语言(西语、法语、德语、意大利语、巴西葡语、越南语、俄语):内容区至少留这么宽,卡片列撑满 600(`SettingsPage.maxCardColumnWidth` + 两侧
     /// 各 20),窗口跟着变宽,不在窄列里把页头 tab 收成下拉、把工具栏摘要压成一两个字母。
     public static let roomyDetailWidth: CGFloat = 640
-    public static let roomyLanguages: Set<String> = ["es", "fr", "de", "it", "pt-br", "vi"]
+    public static let roomyLanguages: Set<String> = ["es", "fr", "de", "it", "pt-br", "vi", "ru"]
 
     /// 这种界面语言(`L10n.current` 的取值)下内容区至少多宽。
     public static func minDetailWidth(language: String) -> CGFloat {

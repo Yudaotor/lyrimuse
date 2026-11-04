@@ -1,6 +1,6 @@
 # Lyrimuse URL Scheme
 
-***English** · [简体中文](url-scheme.zh-CN.md) · [日本語](url-scheme.ja.md) · [한국어](url-scheme.ko.md) · [Español](url-scheme.es.md) · [Français](url-scheme.fr.md) · [Deutsch](url-scheme.de.md) · [Italiano](url-scheme.it.md) · [Português (Brasil)](url-scheme.pt-BR.md) · [Tiếng Việt](url-scheme.vi.md)*
+***English** · [简体中文](url-scheme.zh-CN.md) · [日本語](url-scheme.ja.md) · [한국어](url-scheme.ko.md) · [Español](url-scheme.es.md) · [Français](url-scheme.fr.md) · [Deutsch](url-scheme.de.md) · [Italiano](url-scheme.it.md) · [Português (Brasil)](url-scheme.pt-BR.md) · [Tiếng Việt](url-scheme.vi.md) · [Русский](url-scheme.ru.md)*
 
 Links that start with `lyrimuse://` let you control Lyrimuse from Shortcuts, Raycast, Alfred, Stream Deck, the terminal (`open 'lyrimuse://…'`) and similar tools: open windows and settings pages, show or hide lyrics, control playback, nudge the timing, or get what's playing.
 

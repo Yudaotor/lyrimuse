@@ -15,7 +15,7 @@ public enum LegalNoticeLinks {
     /// 仓库根的 LICENSE(GPL-3.0 全文)。关于页「开源许可证」那一行开它。
     public static let licenseOnGitHub = URL(string: repo + "/blob/main/LICENSE")!
 
-    /// `language` 是 `L10n.current` 的取值("en" / "zh-hans" / "zh-hant" / "ja" / "ko" / "es" / "fr" / "de" / "it" / "pt-br" / "vi")。中文两档开同一份中文
+    /// `language` 是 `L10n.current` 的取值("en" / "zh-hans" / "zh-hant" / "ja" / "ko" / "es" / "fr" / "de" / "it" / "pt-br" / "vi" / "ru")。中文两档开同一份中文
     /// README;认不出的值当英文。锚点是 GitHub 按标题生成的:中日韩标题原样(空格换连字符,URL 里百分号编码,
     /// `URLComponents.fragment` 会做),英文标题小写、空格换连字符 —— **改 README 里这几个标题就会把
     /// 这里的链接打断**(页面照常打开、只是不跳到那一节,肉眼看不出来),selftest contracts 组有闸。
@@ -49,6 +49,9 @@ public enum LegalNoticeLinks {
         } else if lang == "vi" {
             components.path = "/Yudaotor/lyrimuse/blob/main/README.vi.md"
             components.fragment = "giấy-phép-và-bản-quyền"
+        } else if lang == "ru" {
+            components.path = "/Yudaotor/lyrimuse/blob/main/README.ru.md"
+            components.fragment = "лицензия-и-авторские-права"
         } else {
             components.path = "/Yudaotor/lyrimuse/blob/main/README.md"
             components.fragment = "license-and-copyright"
