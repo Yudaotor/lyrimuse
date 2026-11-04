@@ -68,24 +68,27 @@ struct PanelEditableTile<Content: View>: View {
     }
 }
 
-/// 右下角那道弧形拉手:顺着格子圆角画的一段白色粗弧,整块 30pt 见方都能按。指针不换样子,悬停时弧线亮出来就是提示。
+/// 右下角那道弧形拉手,同控制中心编辑时那一道:贴着右下角的一整段四分之一圆弧(半径 22、离边 4、线宽 5,白色带一点影),
+/// 整块 34pt 见方都能按。指针不换样子,悬停时弧线亮出来就是提示。
 /// 藏起来时只把弧线调透明,可按的那块一直在:整个视图透明度为 0 时 SwiftUI 不再把点击交给它。
 struct PanelResizeCorner: View {
     let cornerRadius: CGFloat
     let visible: Bool
 
+    private static let side: CGFloat = 34
+    private static let radius: CGFloat = 22
+    private static let inset: CGFloat = 4
+
     var body: some View {
         Canvas { context, size in
-            // 弧心在格子圆角的圆心上,往里收 5pt,弧跟圆角平行。
-            let r = min(cornerRadius, size.width) - 5
-            let center = CGPoint(x: size.width - min(cornerRadius, size.width), y: size.height - min(cornerRadius, size.width))
+            let center = CGPoint(x: size.width - Self.inset - Self.radius, y: size.height - Self.inset - Self.radius)
             var path = Path()
-            path.addArc(center: center, radius: max(r, 6), startAngle: .degrees(10), endAngle: .degrees(80), clockwise: false)
-            context.stroke(path, with: .color(.white), style: StrokeStyle(lineWidth: 4, lineCap: .round))
+            path.addArc(center: center, radius: Self.radius, startAngle: .degrees(0), endAngle: .degrees(90), clockwise: false)
+            context.stroke(path, with: .color(.white), style: StrokeStyle(lineWidth: 5, lineCap: .round))
         }
-        .shadow(color: .black.opacity(0.35), radius: 1.5, y: 0.5)
+        .shadow(color: .black.opacity(0.3), radius: 2, y: 0.5)
         .opacity(visible ? 1 : 0)
-        .frame(width: 30, height: 30)
+        .frame(width: Self.side, height: Self.side)
         .contentShape(Rectangle())
         .accessibilityHidden(true)
     }
