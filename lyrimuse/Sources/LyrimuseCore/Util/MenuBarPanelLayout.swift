@@ -24,6 +24,11 @@ public struct MenuBarPanelLayout: Equatable, Sendable {
         case translation
         case romanization
         case lockPosition = "lock-position"
+        case hideAllLyrics = "hide-all-lyrics"
+        case searchLyrics = "search-lyrics"
+        case miniWindow = "mini-window"
+        case fontLarger = "font-larger"
+        case fontSmaller = "font-smaller"
 
         /// 这一格能用哪几档:正在播放卡只有大号(3×2,封面、歌名和三个走带键)和加宽(6×2,完整的卡片),别的格子小、中、大。
         public var sizes: [Size] {

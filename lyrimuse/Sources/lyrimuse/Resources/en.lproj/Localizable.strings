@@ -945,6 +945,7 @@
 "字体" = "Font";
 "字号" = "Font Size";
 "字号 %@pt" = "Font size %@pt";
+"字号仅对悬浮歌词有效" = "Font size only applies to Floating Lyrics";
 "字号快捷键仅对悬浮歌词有效" = "Font size shortcuts only apply to Floating Lyrics";
 "字节跳动旗下的音乐 App" = "ByteDance’s music app";
 "字节跳动旗下的音乐平台" = "ByteDance’s music service";
@@ -2734,6 +2735,7 @@
 "迷你尺寸顶部信息左侧的封面缩略图" = "The small artwork thumbnail beside the mini size’s top info";
 "迷你尺寸顶部显示已播放时间与歌曲时长" = "Shows elapsed time and track length at the top of the mini size";
 "迷你尺寸顶部显示歌名、歌手和专辑" = "Show the title, artist, and album at the top of the mini size";
+"迷你窗口" = "Mini Window";
 "退出 Lyrimuse" = "Quit Lyrimuse";
 "退出全屏" = "Exit Full Screen";
 "退出时安装" = "Install on Quit";
@@ -2864,6 +2866,7 @@
 "隐藏" = "Hide";
 "隐藏/恢复全部歌词" = "Hide/Restore All Lyrics";
 "隐藏…" = "Hide…";
+"隐藏全部歌词" = "Hide All Lyrics";
 "隐藏功能栏" = "Hide Control Strip";
 "隐藏歌曲信息" = "Hide Song Details";
 "隐藏歌词" = "Hide Lyrics";

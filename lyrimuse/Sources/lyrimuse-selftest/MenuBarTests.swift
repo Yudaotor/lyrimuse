@@ -2014,7 +2014,7 @@ func runMenuBarTests() {
         expectEqual(d.hiddenFooter.isEmpty, true, "面板布局: 默认底栏全显示")
         expectEqual(L.Tile.allCases.map(\.rawValue),
                     ["now-playing", "overlay", "notch", "menubar", "lyrics-window", "touchbar", "lyrics-manager", "translation", "romanization",
-                     "lock-position"], "面板布局: 格子的存盘写法")
+                     "lock-position", "hide-all-lyrics", "search-lyrics", "mini-window", "font-larger", "font-smaller"], "面板布局: 格子的存盘写法")
         expectEqual(L.Size.allCases.map { "\($0.columns)x\($0.rows)" }, ["2x1", "3x1", "3x2", "6x2"],
                     "面板布局: 一排 6 列,小 2 列、中 3 列、大 3×2、加宽 6×2")
         // 几何:宽 316、行高 78、间距 9 → 小号 99.33 宽、中号 153.5 宽,同原来一排三个 / 两个。
@@ -2152,7 +2152,9 @@ func runMenuBarTests() {
         gone.remove(.notch)
         expectEqual(gone.isEmpty(column: 2, row: 0) && gone.isEmpty(column: 3, row: 0) && gone.placement(of: .menuBar)?.column == 4, true,
                     "面板布局: 移除后坑位空着,别的格子不挪")
-        expectEqual(L.default.addable { $0 != .touchBar }, [.translation, .romanization, .lockPosition], "面板布局: 可添加的三种新格子")
+        expectEqual(L.default.addable { $0 != .touchBar },
+                    [.translation, .romanization, .lockPosition, .hideAllLyrics, .searchLyrics, .miniWindow, .fontLarger, .fontSmaller],
+                    "面板布局: 可添加的新格子")
         expectEqual(L(placements: []).addable { $0 != .touchBar }.contains(.touchBar), false, "面板布局: 没有触控栏时不进可添加")
 
         // 源码契约:编辑时格子不接点按(拖动和角标归编辑那一层);「编辑」那一颗不受底栏显隐管;深链 quick=edit 进编辑;

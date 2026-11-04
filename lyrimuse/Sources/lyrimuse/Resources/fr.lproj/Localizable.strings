@@ -945,6 +945,7 @@
 "字体" = "Police";
 "字号" = "Taille";
 "字号 %@pt" = "Taille %@ pt";
+"字号仅对悬浮歌词有效" = "La taille ne concerne que les paroles flottantes";
 "字号快捷键仅对悬浮歌词有效" = "Les raccourcis de taille ne concernent que les paroles flottantes";
 "字节跳动旗下的音乐 App" = "L’app de musique de ByteDance";
 "字节跳动旗下的音乐平台" = "Service musical de ByteDance";
@@ -2734,6 +2735,7 @@
 "迷你尺寸顶部信息左侧的封面缩略图" = "Miniature de l’illustration à côté des infos du haut, en taille Mini";
 "迷你尺寸顶部显示已播放时间与歌曲时长" = "Affiche le temps écoulé et la durée en haut, en taille Mini";
 "迷你尺寸顶部显示歌名、歌手和专辑" = "Affiche le titre, l’artiste et l’album en haut, en taille Mini";
+"迷你窗口" = "Mini-fenêtre";
 "退出 Lyrimuse" = "Quitter Lyrimuse";
 "退出全屏" = "Quitter le mode plein écran";
 "退出时安装" = "Installer en quittant";
@@ -2864,6 +2866,7 @@
 "隐藏" = "Masquer";
 "隐藏/恢复全部歌词" = "Masquer/rétablir toutes les paroles";
 "隐藏…" = "Masquer…";
+"隐藏全部歌词" = "Masquer toutes les paroles";
 "隐藏功能栏" = "Masquer la Control Strip";
 "隐藏歌曲信息" = "Masquer les détails du morceau";
 "隐藏歌词" = "Masquer les paroles";

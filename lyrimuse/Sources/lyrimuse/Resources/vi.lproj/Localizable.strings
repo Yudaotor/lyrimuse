@@ -891,6 +891,7 @@
 "字体" = "Phông chữ";
 "字号" = "Cỡ";
 "字号 %@pt" = "Cỡ chữ %@pt";
+"字号仅对悬浮歌词有效" = "Cỡ chữ chỉ áp dụng cho Lời nổi";
 "字号快捷键仅对悬浮歌词有效" = "Phím tắt cỡ chữ chỉ áp dụng cho Lời nổi";
 "字节跳动旗下的音乐 App" = "Ứng dụng nghe nhạc của ByteDance";
 "字节跳动旗下的音乐平台" = "Nền tảng nhạc của ByteDance";
@@ -2644,6 +2645,7 @@
 "迷你尺寸顶部信息左侧的封面缩略图" = "Ảnh bìa thu nhỏ bên trái thông tin phía trên của cỡ Mini";
 "迷你尺寸顶部显示已播放时间与歌曲时长" = "Hiện thời gian đã phát và thời lượng bài ở phía trên cỡ Mini";
 "迷你尺寸顶部显示歌名、歌手和专辑" = "Hiện tên bài, nghệ sĩ và album ở phía trên cỡ Mini";
+"迷你窗口" = "Cửa sổ mini";
 "退出 Lyrimuse" = "Thoát Lyrimuse";
 "退出全屏" = "Thoát toàn màn hình";
 "退出时安装" = "Cài đặt khi thoát";
@@ -2772,6 +2774,7 @@
 "隐藏" = "Ẩn";
 "隐藏/恢复全部歌词" = "Ẩn/hiện mọi lời";
 "隐藏…" = "Ẩn…";
+"隐藏全部歌词" = "Ẩn mọi lời";
 "隐藏功能栏" = "Ẩn Control Strip";
 "隐藏歌曲信息" = "Ẩn thông tin bài hát";
 "隐藏歌词" = "Ẩn lời";

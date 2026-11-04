@@ -945,6 +945,7 @@
 "字体" = "Font";
 "字号" = "Corpo";
 "字号 %@pt" = "Corpo %@ pt";
+"字号仅对悬浮歌词有效" = "La dimensione del font vale solo per il testo fluttuante";
 "字号快捷键仅对悬浮歌词有效" = "Le scorciatoie per la dimensione del font valgono solo per il testo fluttuante";
 "字节跳动旗下的音乐 App" = "L’app di musica di ByteDance";
 "字节跳动旗下的音乐平台" = "Servizio musicale di ByteDance";
@@ -2734,6 +2735,7 @@
 "迷你尺寸顶部信息左侧的封面缩略图" = "Miniatura dell’illustrazione accanto all’intestazione della vista Mini";
 "迷你尺寸顶部显示已播放时间与歌曲时长" = "Mostra il tempo trascorso e la durata del brano in alto nella vista Mini";
 "迷你尺寸顶部显示歌名、歌手和专辑" = "Mostra titolo, artista e album in alto nella vista Mini";
+"迷你窗口" = "Finestra mini";
 "退出 Lyrimuse" = "Esci da Lyrimuse";
 "退出全屏" = "Disattiva modalità a tutto schermo";
 "退出时安装" = "Installa all’uscita";
@@ -2864,6 +2866,7 @@
 "隐藏" = "Nascondi";
 "隐藏/恢复全部歌词" = "Nascondi/ripristina tutti i testi";
 "隐藏…" = "Nascondi…";
+"隐藏全部歌词" = "Nascondi tutti i testi";
 "隐藏功能栏" = "Nascondi Control Strip";
 "隐藏歌曲信息" = "Nascondi dettagli brano";
 "隐藏歌词" = "Nascondi testo";

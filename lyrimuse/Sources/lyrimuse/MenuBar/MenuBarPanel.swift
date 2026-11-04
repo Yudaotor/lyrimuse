@@ -777,11 +777,11 @@ private struct MenuBarPanelView: View {
                      action: openLyricsManagerAction)
         case .translation:
             // 同右键菜单「快速开关」和快捷键:悬浮歌词、歌词窗口两份一起切,带回声(这首没有译文时画面不会变)。
-            knobTile(symbol: "character.book.closed", title: L10n.t("显示译文"), on: playback.showsTranslation) {
+            knobTile(symbol: "translate", title: L10n.t("显示译文"), on: playback.showsTranslation) {
                 LyrimuseActionRunner.perform(.toggleTranslationHotkey)
             }
         case .romanization:
-            knobTile(symbol: "textformat.abc", title: L10n.t("显示读音"), on: playback.showsRomanization) {
+            knobTile(symbol: "character.phonetic", title: L10n.t("显示读音"), on: playback.showsRomanization) {
                 LyrimuseActionRunner.perform(.toggleRomanizationHotkey)
             }
         case .lockPosition:
@@ -791,6 +791,40 @@ private struct MenuBarPanelView: View {
             knobTile(symbol: locked ? "lock.fill" : "lock.open.fill", title: L10n.t("锁定位置"), on: locked,
                      enabled: overlayOn, help: overlayOn ? nil : L10n.t("锁定位置仅对悬浮歌词有效")) {
                 LyrimuseActionRunner.perform(.toggleLockPosition)
+            }
+        case .hideAllLyrics:
+            // 同快捷键:收起悬浮歌词、灵动岛、菜单栏歌词,再按一下照收起前的样子恢复。亮着 = 三种都收着、还记着收起前开了哪几种。
+            // 先收面板再切,理由同菜单栏歌词那一格(面板开着切菜单栏歌词,状态栏项被锚着不变宽)。
+            let hidden = !playback.classicOverlayEnabled && !playback.notchOverlayEnabled && !playback.showLyricsInMenuBar
+                && !(UserDefaults.standard.stringArray(forKey: LyrimuseActionRunner.hiddenSurfacesKey) ?? []).isEmpty
+            knobTile(symbol: "eye.slash", title: L10n.t("隐藏全部歌词"), on: hidden) {
+                close()
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                    LyrimuseActionRunner.perform(.toggleAllLyricsHotkey)
+                }
+            }
+        case .searchLyrics:
+            // 给正在放的这首手动搜歌词(同快捷键):先收面板,搜索窗要到前台。
+            knobTile(symbol: "magnifyingglass", title: L10n.t("搜索歌词"), on: false) {
+                close()
+                LyrimuseActionRunner.perform(.lyricsQuickSearchHotkey)
+            }
+        case .miniWindow:
+            // 同快捷键:歌词窗口开着就切到另一种尺寸,没开就开成迷你。亮着 = 窗口开着、是迷你。先收面板,理由同歌词窗口那一格。
+            let defaults = UserDefaults.standard
+            let mini = defaults.bool(forKey: LyricsWindowSession.openKey) && defaults.bool(forKey: LyricsWindowSession.miniModeKey)
+            knobTile(symbol: "pip", title: L10n.t("迷你窗口"), on: mini) {
+                close()
+                LyrimuseActionRunner.perform(.toggleLyricsWindowMiniHotkey)
+            }
+        case .fontLarger, .fontSmaller:
+            // 悬浮歌词主字号一档档调(同快捷键,带回声);悬浮歌词关着时灰着,同「锁定位置」。
+            let larger = tile == .fontLarger
+            let overlayOn = playback.classicOverlayEnabled
+            knobTile(symbol: larger ? "textformat.size.larger" : "textformat.size.smaller",
+                     title: larger ? L10n.t("放大字号") : L10n.t("缩小字号"), on: false,
+                     enabled: overlayOn, help: overlayOn ? nil : L10n.t("字号仅对悬浮歌词有效")) {
+                LyrimuseActionRunner.perform(larger ? .overlayFontLargerHotkey : .overlayFontSmallerHotkey)
             }
         }
     }
@@ -1489,8 +1523,11 @@ private struct MenuBarPanelView: View {
             }
         }
 
+        /// 图标一律画拉丁字形:有些符号会按界面语言换字形(`textformat.size.larger` 在中文里是「大」,`textformat.abc` 是
+        /// 「甲乙丙」),放在一排图标里读着像字不像图标。
         private func iconCircle(_ diameter: CGFloat, glyph: CGFloat) -> some View {
             SymbolImage(name: symbol, size: glyph, weight: .semibold)
+                .environment(\.locale, Locale(identifier: "en"))
                 .foregroundStyle(on ? Color.white : Color.secondary)
                 .frame(width: diameter, height: diameter)
                 .background(
