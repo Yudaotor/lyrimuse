@@ -607,6 +607,8 @@ private struct MenuBarPanelView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     /// 封面小图按像素预先重采样要知道显示倍率(见 coverView)。
     @Environment(\.displayScale) private var displayScale
+    /// Discord「正在听」的连接情况,开窗那一刻取一次快照,理由同 lastfmStatus(见 discordFooterItem)。
+    @State private var discordStatus: DestinationStatus?
     /// Last.fm 连接情况,开窗那一刻取一次快照(见 lastfmFooterItem)。
     @State private var lastfmStatus: DestinationStatus?
     /// 有没有查到还没装的新版本,开窗那一刻取一次快照(同 lastfmStatus 的理由:面板是短命
@@ -681,6 +683,7 @@ private struct MenuBarPanelView: View {
                 // 那个观察器是给**常驻**视图用的(文件被引擎自愈删掉时要能推一次
                 // 更新);这张面板活不过一次开合,读一次当下的状态正好。
                 mirrorInfo: LastfmMirrorStatus.current)
+            discordStatus = destinationStatus(for: .discord, config: .shared, lastfmConnect: .shared, mirrorInfo: nil)
         }
     }
 
@@ -1715,7 +1718,7 @@ private struct MenuBarPanelView: View {
     /// 也能拖进主面板的网格。见 06 章决策 89。
     private var galleryBody: some View {
         let groups = editLayout.addableGroups(available: tileAvailable)
-        let footerAddable = playback.panelLayout.addableFooter.filter { $0 != .lastfm || lastfmFooterVisible }
+        let footerAddable = playback.panelLayout.addableFooter.filter(footerItemAvailable)
         return VStack(alignment: .leading, spacing: 0) {
             Text(L10n.t("可添加"))
                 .font(.system(size: 13, weight: .semibold))
@@ -1762,6 +1765,7 @@ private struct MenuBarPanelView: View {
         .onAppear {
             lastfmStatus = destinationStatus(for: .lastfm, config: .shared, lastfmConnect: .shared,
                                              mirrorInfo: LastfmMirrorStatus.current)
+            discordStatus = destinationStatus(for: .discord, config: .shared, lastfmConnect: .shared, mirrorInfo: nil)
         }
     }
 
@@ -1985,9 +1989,9 @@ private struct MenuBarPanelView: View {
     }
 
     /// 编辑时底栏那一排:跟平时一样按顺序摆(多于三项只画图标),每项左上「−」;按住一项左右拖,松手按落点换到那一格。
-    /// 没连 Last.fm 时那一项平时不画,这里也不画,换位按画出来的那几项算(`moveFooter(_:toPositionOf:)`)。
+    /// 没连着的 Last.fm / Discord 平时不画,这里也不画,换位按画出来的那几项算(`moveFooter(_:toPositionOf:)`)。
     private var footerEditRow: some View {
-        let items = playback.panelLayout.footer.filter { $0 != .lastfm || lastfmFooterVisible }
+        let items = playback.panelLayout.footer.filter(footerItemAvailable)
         let slot = Self.grid.width / CGFloat(max(items.count, 1))
         return HStack(spacing: 0) {
             ForEach(Array(items.enumerated()), id: \.element) { index, item in
@@ -2045,6 +2049,8 @@ private struct MenuBarPanelView: View {
     @ViewBuilder private func footerIcon(_ item: MenuBarPanelLayout.FooterItem) -> some View {
         if item == .lastfm {
             lastfmBadge(size: 11)
+        } else if item == .discord {
+            accountIconBadge(.discord, size: 11, cornerRadius: 3)
         } else {
             Image(systemName: item.panelSymbol).font(.system(size: 10.5))
         }
@@ -2100,10 +2106,10 @@ private struct MenuBarPanelView: View {
     //
     // 摆哪几项、什么顺序由用户在编辑页排(`MenuBarPanelLayout.footer`,默认「设置…」、Last.fm、版本号),最右总是「编辑」。
 
-    /// 底栏此刻摆哪几项:按用户排的顺序;Last.fm 只在连着(或连过但出了问题)时出现;有没装的新版本时版本号那一格不在
+    /// 底栏此刻摆哪几项:按用户排的顺序;Last.fm、Discord 只在连着(或连过但出了问题)时出现;有没装的新版本时版本号那一格不在
     /// 里面也补在最后 —— 那时它是升级提示,不只是版本号。
     private var shownFooterItems: [MenuBarPanelLayout.FooterItem] {
-        var items = playback.panelLayout.footer.filter { $0 != .lastfm || lastfmFooterVisible }
+        var items = playback.panelLayout.footer.filter(footerItemAvailable)
         if pendingUpdate != nil, !items.contains(.version) { items.append(.version) }
         return items
     }
@@ -2133,6 +2139,20 @@ private struct MenuBarPanelView: View {
             lastfmFooterItem(compact: compact)
         case .version:
             versionFooterItem(compact: compact)
+        case .discord:
+            discordFooterItem(compact: compact)
+        case .shortcuts:
+            footerButton(item.panelSymbol, L10n.t("快捷键"), compact: compact) {
+                close()
+                AppActions.shared.requestSettings(.tab(.shortcuts))
+                AppActions.shared.openSettings?()
+            }
+        case .website:
+            // 同「关于」页那颗「官网」:按界面语言开对应的那一版。
+            footerButton(item.panelSymbol, L10n.t("官网"), compact: compact) {
+                close()
+                NSWorkspace.shared.open(FeedbackLinks.websiteURL(language: L10n.current))
+            }
         // 下面四项同右键菜单里那几项,走同一个动作。
         case .whatsNew:
             footerButton(item.panelSymbol, L10n.t("查看本次更新…"), compact: compact) {
@@ -2211,6 +2231,43 @@ private struct MenuBarPanelView: View {
             .font(.system(size: 10.5))
             .foregroundStyle(.tertiary)
             .accessibilityHidden(true)
+    }
+
+    /// 底栏这一项此刻能不能摆:Last.fm、Discord 只在连着(或连过但出了问题)时有;别的总有。「可添加」也按它列。
+    private func footerItemAvailable(_ item: MenuBarPanelLayout.FooterItem) -> Bool {
+        switch item {
+        case .lastfm: return lastfmFooterVisible
+        case .discord: return discordFooterVisible
+        default: return true
+        }
+    }
+
+    /// Discord「正在听」那一项出不出现:开着而且连上了,或连的时候被拒(跟 discordFooterItem 的分支同一个判据)。
+    private var discordFooterVisible: Bool {
+        switch discordStatus {
+        case .active, .error, .missingCreds, .warning: return true
+        case .notConfigured, .disabled, .none: return false
+        }
+    }
+
+    /// Discord「正在听」的连接情况,点了跳设置里的 Discord 那一页。连着画品牌图,被拒换橙色警告(原因进悬停提示),
+    /// 同 Last.fm 那一项。
+    @ViewBuilder private func discordFooterItem(compact: Bool) -> some View {
+        let open = {
+            close()
+            AppActions.shared.requestSettings(.account(.discord))
+            AppActions.shared.openSettings?()
+        }
+        switch discordStatus {
+        case .active(let detail):
+            footerItem(compact: compact, title: "Discord", tint: .secondary, help: detail,
+                       icon: { accountIconBadge(.discord, size: 11, cornerRadius: 3) }, action: open)
+        case .error(let message), .missingCreds(let message), .warning(let message):
+            footerItem(compact: compact, title: "Discord", tint: .orange, help: message,
+                       icon: { Image(systemName: "exclamationmark.triangle.fill").font(.system(size: 10)) }, action: open)
+        case .notConfigured, .disabled, .none:
+            EmptyView()
+        }
     }
 
     /// Last.fm 那一项出不出现(跟 lastfmFooterItem 的分支同一个判据),分隔点跟着它走。

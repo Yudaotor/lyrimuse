@@ -2074,7 +2074,7 @@ func runMenuBarTests() {
         bar.moveFooter(.quit, toPositionOf: .lastfm)
         expectEqual(bar.footer, [.settings, .lastfm, .quit, .version, .about], "面板底栏: 往右挪落在那一项后面")
         bar.removeFooter(.lastfm)
-        expectEqual(bar.addableFooter, [.lastfm, .whatsNew, .feedback], "面板底栏: 可添加的是不在底栏里的那几项")
+        expectEqual(bar.addableFooter, [.lastfm, .discord, .shortcuts, .whatsNew, .feedback, .website], "面板底栏: 可添加的是不在底栏里的那几项")
         expectEqual(L.decode(bar.encoded()).footer, bar.footer, "面板底栏: 存了读回来顺序不变")
         expectEqual(L.Tile.nowPlaying.sizes == [.large, .wide] && L.Tile.overlay.sizes == [.small, .medium, .large], true,
                     "面板布局: 正在播放卡只有大号和加宽")

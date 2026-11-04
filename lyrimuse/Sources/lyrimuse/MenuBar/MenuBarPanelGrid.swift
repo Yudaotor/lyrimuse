@@ -242,7 +242,10 @@ extension MenuBarPanelLayout.FooterItem {
         switch self {
         case .settings: return L10n.t("设置")
         case .lastfm: return "Last.fm"
+        case .discord: return "Discord"
         case .version: return L10n.t("版本号")
+        case .shortcuts: return L10n.t("快捷键")
+        case .website: return L10n.t("官网")
         case .whatsNew: return L10n.t("查看本次更新…")
         case .feedback: return L10n.t("反馈问题…")
         case .about: return L10n.t("关于 Lyrimuse")
@@ -255,7 +258,10 @@ extension MenuBarPanelLayout.FooterItem {
         switch self {
         case .settings: return "gearshape"
         case .lastfm: return "dot.radiowaves.left.and.right"
+        case .discord: return "bubble.left.and.bubble.right"
         case .version: return "info.circle"
+        case .shortcuts: return "command"
+        case .website: return "globe"
         case .whatsNew: return "newspaper"
         case .feedback: return "exclamationmark.bubble"
         case .about: return "info.square"

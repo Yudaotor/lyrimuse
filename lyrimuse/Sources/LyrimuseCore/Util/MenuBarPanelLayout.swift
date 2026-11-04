@@ -117,10 +117,11 @@ public struct MenuBarPanelLayout: Equatable, Sendable {
     }
 
     /// 底栏能放的几项,按用户排的顺序摆。「编辑」那一颗不在这里:它是改回来的唯一入口,不许藏。见 06 章决策 90。
+    /// 声明顺序就是「可添加」里列它们的顺序。
     public enum FooterItem: String, CaseIterable, Sendable {
-        case settings, lastfm, version
+        case settings, lastfm, discord, version, shortcuts
         case whatsNew = "whats-new"
-        case feedback, about, quit
+        case feedback, website, about, quit
     }
 
     /// 底栏一排最多几项(「编辑」那颗另算)。
