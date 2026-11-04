@@ -221,6 +221,29 @@ func runAmazonMusicTests() {
         expectEqual(afterReset.map { abs($0.audibleLead - 1.5) < 0.001 }, true, "Amazon 换输出: 重新校准出变小的提前量")
         expectEqual(P.needsLeadCalibration(P.apply(.outputReset, at: at("025100"), to: P.State())), false,
                     "Amazon 换输出: 还没认出曲目时不校准")
+        // 卡顿行攒了一阵才一起写进日志:18 对卡顿同一刻到,表几乎没停。点播 02:51:31.5 开头,02:54:10 日志时钟 158.5,
+        // 界面才 135 秒 → 日志时钟领先 23.5 秒,超出 audibleLeadRange 也要采信。
+        var batched = clicked
+        for _ in 0..<18 {
+            batched = P.apply(.stall(true), at: at("025400"), to: batched)
+            batched = P.apply(.stall(false), at: at("025400"), to: batched)
+        }
+        let batchEdge = at("025410")
+        let drifted = calibrating(batched, edge: batchEdge, secs: 135)
+        expectEqual(drifted.map { abs($0.audibleLead - 23.5) < 0.001 }, true, "Amazon 卡顿攒批: 领先二十几秒照样采信")
+        expectEqual(drifted.flatMap { P.position($0, at: batchEdge) }.map { abs($0 - 135) < 0.001 }, true,
+                    "Amazon 卡顿攒批: 校准后位置对上界面")
+        let future = batchEdge.timeIntervalSince1970 + 5
+        expectEqual(P.calibratingLead(batched, origin: future...future, at: batchEdge) == nil, true,
+                    "Amazon 卡顿攒批: 界面位置为负的读数不采信")
+        // 按这种量校准过的一段,隔 leadRefineDelay 再叠一次照样采信(那时已不算卡过)。
+        let oB = batchEdge.timeIntervalSince1970 - 135
+        let wide = P.calibratingLead(batched, origin: (oB - 0.2)...(oB + 0.2), at: batchEdge)
+        let tB = batchEdge.addingTimeInterval(P.leadRefineDelay)
+        expectEqual(wide.map { P.needsLeadRefinement($0, now: tB) }, true, "Amazon 卡顿攒批: 校准过的一段到点再叠")
+        let refined = wide.flatMap { P.calibratingLead($0, origin: (oB - 0.1)...(oB + 0.3), at: tB) }
+        expectEqual(refined.map { abs($0.audibleLead - 23.55) < 0.001 }, true, "Amazon 卡顿攒批: 叠的那次不被上限挡掉")
+        expectEqual(P.leadAcceptable(11.8, s, engine: 11.8), false, "Amazon 卡顿攒批: 没卡过的超出 audibleLeadRange 仍不采信")
 
         // 一次校准只收到 0.45 秒宽的区间,隔 leadRefineDelay 再对一次、两次区间取交集。
         // 自然连播 02:56:18.5 开播,02:56:30.3 那一刻日志时钟 11.8;真实起点区间 [..., ...] 换成提前量区间 [2.5, 2.9]。

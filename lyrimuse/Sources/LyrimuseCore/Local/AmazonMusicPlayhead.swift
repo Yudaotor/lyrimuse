@@ -263,6 +263,15 @@ public enum AmazonMusicPlayhead {
     /// 校准出的提前量超出这个范围就不采信(界面读错、读到别的曲目)。自动连播实测 1.2~3.5 秒;卡顿之后可能反过来慢,留负值。
     public static let audibleLeadRange: ClosedRange<Double> = -4...8
 
+    /// 校准出的提前量采不采信。卡顿行常是攒了一阵才一起写进日志(一批卡顿行首同一秒、各自起止),表几乎没停,日志时钟
+    /// 领先真正出声的量就是这段时间断音的总长,能到二十几秒。所以卡过之后(以及已经按这种量校准过、再叠的那次)上限放到
+    /// 「界面位置不为负」;没卡过的仍按 `audibleLeadRange`,超出的多半是读错或读到别的曲目(见 02 章决策 225)。
+    public static func leadAcceptable(_ lead: Double, _ s: State, engine: Double) -> Bool {
+        if audibleLeadRange.contains(lead) { return true }
+        let drifted = s.stalledSinceCalibration || (s.leadRange?.upperBound ?? 0) > audibleLeadRange.upperBound
+        return drifted && lead > audibleLeadRange.upperBound && lead <= engine
+    }
+
     /// 这首还要不要按界面校准:自然连播开的头还没校准过,或者校准之后又卡顿过、丢过一截输出缓冲。
     public static func needsLeadCalibration(_ s: State) -> Bool {
         s.trackID != nil && ((s.startedNaturally && !s.leadCalibrated) || s.stalledSinceCalibration)
@@ -291,7 +300,7 @@ public enum AmazonMusicPlayhead {
 
     /// 界面读出这首的真实起点落在 `origin`(epoch 秒,位置 = 时刻 − 起点)里,`t` 是算的这一刻。换成提前量的区间
     /// (日志时钟 − 真实位置),要叠就跟之前的区间取交集(交集为空说明之前那次读错了,只信这次),提前量取中点记上。
-    /// 中点不在 `audibleLeadRange` 里返回 nil(原样不动)。
+    /// 中点不采信(`leadAcceptable`)返回 nil(原样不动)。
     public static func calibratingLead(_ s: State, origin: ClosedRange<Double>, at t: Date) -> State? {
         let refining = needsLeadRefinement(s, now: t)
         guard needsLeadCalibration(s) || refining, let engine = engineTimelinePosition(s, at: t) else { return nil }
@@ -299,7 +308,7 @@ public enum AmazonMusicPlayhead {
         let measured = (origin.lowerBound + shift)...(origin.upperBound + shift)
         let range = refining ? intersectedLeadRange(s.leadRange, measured) : measured
         let lead = (range.lowerBound + range.upperBound) / 2
-        guard audibleLeadRange.contains(lead) else { return nil }
+        guard leadAcceptable(lead, s, engine: engine) else { return nil }
         var out = s
         out.audibleLead = lead
         out.leadRange = range
