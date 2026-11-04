@@ -34,17 +34,22 @@ public struct MenuBarPanelLayout: Equatable, Sendable {
         case openPlayer = "open-player"
         case fadeOnHover = "fade-on-hover"
         case hoverControls = "hover-controls"
-        case peekNotch = "peek-notch"
         case notchShowLyrics = "notch-show-lyrics"
+        case notchKaraoke = "notch-karaoke"
+        case notchCollapseWhenPaused = "notch-collapse-when-paused"
+        case menuBarArtwork = "menubar-artwork"
+        case motionCover = "motion-cover"
+        case overlayHideInCapture = "overlay-hide-in-capture"
 
         /// 「可添加」面板里归哪一组(按显示方式分)。
         public var group: TileGroup {
             switch self {
             case .nowPlaying, .like, .openPlayer: return .nowPlaying
-            case .overlay, .lockPosition, .fontLarger, .fontSmaller, .fadeOnHover, .hoverControls: return .overlay
-            case .notch, .peekNotch, .notchShowLyrics: return .notch
-            case .menuBar: return .menuBar
-            case .lyricsWindow, .miniWindow: return .lyricsWindow
+            case .overlay, .lockPosition, .fontLarger, .fontSmaller, .fadeOnHover, .hoverControls, .overlayHideInCapture:
+                return .overlay
+            case .notch, .notchShowLyrics, .notchKaraoke, .notchCollapseWhenPaused: return .notch
+            case .menuBar, .menuBarArtwork: return .menuBar
+            case .lyricsWindow, .miniWindow, .motionCover: return .lyricsWindow
             case .touchBar: return .touchBar
             case .lyricsManager, .translation, .romanization, .hideAllLyrics, .searchLyrics: return .lyrics
             }

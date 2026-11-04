@@ -99,6 +99,11 @@ private final class PanelPlayback: ObservableObject {
     @Published private(set) var overlayFadeOnHover = false
     @Published private(set) var overlayShowHoverControls = false
     @Published private(set) var notchShowLyrics = false
+    @Published private(set) var notchLyricsKaraoke = false
+    @Published private(set) var notchCollapsesWhenPaused = false
+    @Published private(set) var menuBarIconShowsArtwork = false
+    @Published private(set) var motionCoverEnabled = false
+    @Published private(set) var hideDuringScreenCapture = false
     private var subs: [AnyCancellable] = []
 
     init() {
@@ -165,6 +170,11 @@ private final class PanelPlayback: ObservableObject {
             s.$overlayFadeOnHover.removeDuplicates().sink { [weak self] in self?.overlayFadeOnHover = $0 },
             s.$overlayShowHoverControls.removeDuplicates().sink { [weak self] in self?.overlayShowHoverControls = $0 },
             s.$notchShowLyrics.removeDuplicates().sink { [weak self] in self?.notchShowLyrics = $0 },
+            s.$notchLyricsKaraoke.removeDuplicates().sink { [weak self] in self?.notchLyricsKaraoke = $0 },
+            s.$notchCollapsesWhenPaused.removeDuplicates().sink { [weak self] in self?.notchCollapsesWhenPaused = $0 },
+            s.$menuBarIconShowsArtwork.removeDuplicates().sink { [weak self] in self?.menuBarIconShowsArtwork = $0 },
+            s.$motionCoverEnabled.removeDuplicates().sink { [weak self] in self?.motionCoverEnabled = $0 },
+            s.$hideDuringScreenCapture.removeDuplicates().sink { [weak self] in self?.hideDuringScreenCapture = $0 },
         ]
     }
 }
@@ -917,13 +927,36 @@ private struct MenuBarPanelView: View {
                      help: overlayOn ? nil : L10n.t("悬浮歌词未开启")) {
                 item.binding.wrappedValue.toggle()
             }
-        case .peekNotch:
-            // 同快捷键:灵动岛临时展开几秒。先收面板;灵动岛关着时灰着。
+        case .notchKaraoke, .notchCollapseWhenPaused:
+            // 灵动岛「行为」里那两项,开关本体用 `NotchBehaviorItem.binding`;灵动岛关着时灰着。
+            let item: NotchBehaviorItem = tile == .notchKaraoke ? .karaoke : .collapseWhenPaused
             let notchOn = playback.notchOverlayEnabled
-            knobTile(symbol: "rectangle.expand.vertical", title: L10n.t("临时展开灵动岛"), on: false, enabled: notchOn,
+            let isOn = tile == .notchKaraoke ? playback.notchLyricsKaraoke : playback.notchCollapsesWhenPaused
+            knobTile(symbol: item.icon, title: item.title, on: notchOn && isOn, enabled: notchOn,
                      help: notchOn ? nil : L10n.t("灵动岛歌词未开启")) {
+                item.binding.wrappedValue.toggle()
+            }
+        case .menuBarArtwork:
+            // 菜单栏图标用专辑封面(同设置 › 通用「专辑封面」那张卡)。先收面板再切,理由同菜单栏歌词那一格:面板开着时
+            // 状态栏项不重建,切了看不到变化。
+            knobTile(symbol: "photo", title: L10n.t("专辑封面"), on: playback.menuBarIconShowsArtwork) {
                 close()
-                LyrimuseActionRunner.perform(.peekNotchHotkey)
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                    AppSettings.shared.menuBarIconShowsArtwork.toggle()
+                }
+            }
+        case .motionCover:
+            // 歌词窗口的动态封面,同歌词窗口快捷设置那一项:拨一下当场重算,不用等下一首。
+            knobTile(symbol: "livephoto", title: L10n.t("动态封面"), on: playback.motionCoverEnabled) {
+                AppSettings.shared.motionCoverEnabled.toggle()
+            }
+        case .overlayHideInCapture:
+            // 悬浮歌词「自动隐藏」里的截屏时隐藏,开关本体用 `AutoHideItem.binding(for:)`;悬浮歌词关着时灰着。
+            let overlayOn = playback.classicOverlayEnabled
+            knobTile(symbol: AutoHideItem.duringScreenCapture.icon, title: AutoHideItem.duringScreenCapture.title(for: .desktopOverlay),
+                     on: overlayOn && playback.hideDuringScreenCapture, enabled: overlayOn,
+                     help: overlayOn ? nil : L10n.t("悬浮歌词未开启")) {
+                AutoHideItem.duringScreenCapture.binding(for: .desktopOverlay).wrappedValue.toggle()
             }
         case .notchShowLyrics:
             // 同灵动岛快捷设置里那一项;灵动岛关着时灰着。
