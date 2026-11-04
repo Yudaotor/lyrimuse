@@ -169,7 +169,7 @@ final class LyricsMoreMenuModel: ObservableObject {
             if let u = links.amazonSong { out.append(.init(id: "amazon-song", title: L10n.t("Amazon Music 歌曲页"), url: u)) }
             if let u = links.amazonAlbum { out.append(.init(id: "amazon-album", title: L10n.t("Amazon Music 专辑页"), url: u)) }
             if let u = links.amazonArtist { out.append(.init(id: "amazon-artist", title: L10n.t("Amazon Music 歌手页"), url: u)) }
-        } else if bundleID == PlaybackPlayer.kaset.bundleIdentifier {
+        } else if bundleID == PlaybackPlayer.kaset.bundleIdentifier || bundleID == PlaybackPlayer.pearDesktop.bundleIdentifier {
             // 落到浏览器的网页,不是 Kaset 自己的深链(那条一打开就开始放,见 PlatformLinks.youtubeMusicSong)。
             if let u = links.youtubeMusicSong { out.append(.init(id: "ytm-song", title: L10n.t("YouTube Music 歌曲页"), url: u)) }
             if let u = links.youtubeMusicAlbum { out.append(.init(id: "ytm-album", title: L10n.t("YouTube Music 专辑页"), url: u)) }

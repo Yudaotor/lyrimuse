@@ -1,3 +1,4 @@
+import AppKit
 import Foundation
 import os
 
@@ -480,6 +481,19 @@ public final class PearDesktopAPI: @unchecked Sendable {
     public func setVolume(_ value: Int) -> Bool {
         guard let config = usableConfig() else { return false }
         return post("/api/v1/volume", body: ["volume": min(100, max(0, value))], config: config) == 204
+    }
+
+    /// 能不能直接经接口让它干活:它开着、接口开着、该有的令牌有了。不发请求,主线程上也能调。停播页据此给不给「继续播放」:
+    /// 它冷启动时自己跳到前台(同 reAMP、VOX),没开着时只给「打开」。
+    public func canControl() -> Bool {
+        guard usableConfig() != nil else { return false }
+        return !NSRunningApplication.runningApplications(withBundleIdentifier: PlaybackPlayer.pearDesktop.bundleIdentifier).isEmpty
+    }
+
+    /// 开播(`POST /api/v1/play`)。
+    public func play() -> Bool {
+        guard let config = usableConfig() else { return false }
+        return post("/api/v1/play", body: [:], config: config) == 204
     }
 
     /// 接口开着、不是 HTTPS、该有的令牌有了,才去请求。

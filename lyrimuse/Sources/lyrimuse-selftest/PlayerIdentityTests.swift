@@ -1166,7 +1166,7 @@ func runPlayerIdentityTests() {
                          .learnsAnchorLag, .arrivesWhole]),
             .pinePlayer: (nil, [.extendedControls, .repeatOne, .resume, .snapsToReportedPosition, .arrivesWhole]),
             .foobar2000: (nil, [.extendedControls, .repeatOne, .resume, .learnsAnchorLag, .arrivesWhole]),
-            .pearDesktop: (nil, [.extendedControls, .repeatOne, .lateAnchorProbe, .learnsAnchorLag]),
+            .pearDesktop: (.youtubeMusic, [.extendedControls, .repeatOne, .resume, .lateAnchorProbe, .learnsAnchorLag, .catalogMenuRows]),
         ]
         expectEqual(PlaybackPlayer.allCases.count, table.count + 1,
                     "决定表: 新增播放器要在这里补一行,逐项决定它走哪条路(+1 是 .auto)")

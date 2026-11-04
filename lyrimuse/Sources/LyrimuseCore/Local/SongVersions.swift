@@ -180,7 +180,7 @@ extension SongVersions {
         if has("kkbox_url") { out.append(PlaybackPlayer.kkbox.bundleIdentifier) }
         if has("amazon_url") { out.append(PlaybackPlayer.amazonMusic.bundleIdentifier) }
         if has("soda_url") { out.append(PlaybackPlayer.soda.bundleIdentifier) }
-        if has("youtube_music_url") { out.append(PlaybackPlayer.kaset.bundleIdentifier) }
+        // youtube_music_url 不推断:Kaset 和 Pear Desktop 都会写它。
         return (out, !out.isEmpty)
     }
 

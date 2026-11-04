@@ -25,10 +25,12 @@ enum IdlePlaybackActions {
     /// Pine 按它菜单里的播放 / 暂停、foobar2000 按 Play,冷启动后按也放上次那首(`resumeViaMenu`);洛雪直接发给它本体。reAMP、VOX、汽水一启动就
     /// 自己跳到前台,Kaset 冷启动后不到前台开不了播(隐藏或不激活启动时内嵌网页播放器一直停在加载,见 02 章决策 190),都不给;别的只能「打开」。
     /// 最近那份会话是 iPad 版报的(`PlayerProcess.sessionIsOtherClient`)也不给:它没有本体那份菜单,按了会把本体放起来。
+    /// Pear Desktop 开着、本机接口能用时给,直接经接口开播;它冷启动时自己跳到前台,没开着时只给「打开」(02 章决策 228)。
     static func canResume(_ player: PlaybackPlayer) -> Bool {
         guard !PlayerProcess.sessionIsOtherClient(bundleID: player.bundleIdentifier) else { return false }
         return switch player {
         case .appleMusic, .spotify, .kugou, .qqMusic, .netease, .pinePlayer, .foobar2000, .lxMusic: true
+        case .pearDesktop: PearDesktopAPI.shared.canControl()
         default: false
         }
     }
@@ -58,6 +60,8 @@ enum IdlePlaybackActions {
                 ok = await resumeViaMenu(player)
             case .lxMusic:
                 ok = LXMusicOpenAPI.shared.sendDirect("play", arguments: [])
+            case .pearDesktop:
+                ok = PearDesktopAPI.shared.play()
             default:
                 ok = false
             }

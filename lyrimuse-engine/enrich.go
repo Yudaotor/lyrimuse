@@ -6765,7 +6765,8 @@ func noteReportedNameLocked(e *enrichEntry, key, bundleID string, r reportedName
 
 // playerIDFields:只在用某个播放器放这首时才写进条目的那几样 id,和那个播放器。条目有其中一样,就说明那个播放器放过,
 // 跟 notePlayerLocked 当场记下的一样算数。别把按歌名搜出来的链接(NeteaseURL、QQURL、AppleURL、SpotifyURL)加进来,
-// 那几样不说明谁放过。App 侧 SongVersions.players 没有记录时按同一张表推断,两处同步改。
+// 那几样不说明谁放过;YouTubeMusicURL 也不进:Kaset 和 Pear Desktop 都会写它,分不出是谁放的(02 章决策 228)。
+// App 侧 SongVersions.players 没有记录时按同一张表推断,两处同步改。
 var playerIDFields = []struct {
 	bundleID string
 	id       func(e *enrichEntry) string
@@ -6774,7 +6775,6 @@ var playerIDFields = []struct {
 	{kkboxBundleID, func(e *enrichEntry) string { return e.KKBOXURL }},
 	{amazonMusicBundleID, func(e *enrichEntry) string { return e.AmazonURL }},
 	{sodaMusicBundleID, func(e *enrichEntry) string { return e.SodaURL }},
-	{kasetBundleID, func(e *enrichEntry) string { return e.YouTubeMusicURL }},
 }
 
 // notePlayersFromRecords:把条目里 playerIDFields 那几样 id 对应的播放器,和 PlayerCovers、PlayerSongIDs 的键(播放器自己给

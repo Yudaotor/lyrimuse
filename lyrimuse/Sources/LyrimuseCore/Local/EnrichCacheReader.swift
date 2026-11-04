@@ -116,7 +116,7 @@ public final class EnrichCacheEntry: Decodable, Sendable {
     // Amazon Music 曲目页(引擎的 enrichEntry.AmazonURL,用 Amazon Music 放这首时从它日志里的 ASIN 拼的)。
     // 只喂 PlatformLinks.amazonSong。
     let amazonURL: String?
-    // YouTube Music 歌曲页(引擎的 enrichEntry.YouTubeMusicURL,用 Kaset 放这首时按它报的 videoId 拼的)。
+    // YouTube Music 歌曲页(引擎的 enrichEntry.YouTubeMusicURL,用 Kaset 或 Pear Desktop 放这首时按它报的 videoId 拼的)。
     // 只喂 PlatformLinks.youtubeMusicSong。
     let youtubeMusicURL: String?
     // 各播放器自己给这首记下的封面地址(引擎的 enrichEntry.PlayerCovers,键是播放器 bundle id)。只喂 playerCoverURLs。

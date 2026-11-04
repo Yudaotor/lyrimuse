@@ -163,7 +163,8 @@ public struct PlatformLinks: Sendable, Equatable {
         case PlaybackPlayer.spotify.bundleIdentifier: return spotifySong.map { (.spotify, $0) }
         case PlaybackPlayer.kkbox.bundleIdentifier: return kkboxSong.map { (.kkbox, $0) }
         case PlaybackPlayer.amazonMusic.bundleIdentifier: return amazonSong.map { (.amazonMusic, $0) }
-        case PlaybackPlayer.kaset.bundleIdentifier: return youtubeMusicSong.map { (.youtubeMusic, $0) }
+        case PlaybackPlayer.kaset.bundleIdentifier, PlaybackPlayer.pearDesktop.bundleIdentifier:
+            return youtubeMusicSong.map { (.youtubeMusic, $0) }
         case PlaybackPlayer.soda.bundleIdentifier: return sodaSong.map { (.soda, $0) }
         case PlaybackPlayer.kugou.bundleIdentifier: return kugouSong.map { (.kugou, $0) }
         case PlaybackPlayer.lxMusic.bundleIdentifier:
@@ -227,7 +228,7 @@ public struct PlatformLinks: Sendable, Equatable {
         case PlaybackPlayer.spotify.bundleIdentifier: return spotifyArtist
         case PlaybackPlayer.kkbox.bundleIdentifier: return kkboxArtistWeb
         case PlaybackPlayer.amazonMusic.bundleIdentifier: return amazonArtist
-        case PlaybackPlayer.kaset.bundleIdentifier: return youtubeMusicArtist
+        case PlaybackPlayer.kaset.bundleIdentifier, PlaybackPlayer.pearDesktop.bundleIdentifier: return youtubeMusicArtist
         case PlaybackPlayer.soda.bundleIdentifier: return sodaArtist
         default: return nil
         }

@@ -56,13 +56,14 @@ func TestNotePlayersFromRecords(t *testing.T) {
 	if !notePlayersFromRecords(&e) || notePlayersFromRecords(&e) {
 		t.Fatalf("第一次补上、第二次不动: %v", e.Players)
 	}
-	if want := []string{appleMusicBundleID, spotifyBundleID, kasetBundleID}; !slices.Equal(e.Players, want) {
+	// YouTube Music 链接 Kaset 和 Pear Desktop 都会写,不说明是谁放的,不推断。
+	if want := []string{appleMusicBundleID, spotifyBundleID}; !slices.Equal(e.Players, want) {
 		t.Errorf("got %v, want %v", e.Players, want)
 	}
 	all := enrichEntry{SpotifyTrackID: "x", KKBOXURL: "x", AmazonURL: "x", SodaURL: "x", YouTubeMusicURL: "x"}
 	notePlayersFromRecords(&all)
-	if want := []string{spotifyBundleID, kkboxBundleID, amazonMusicBundleID, sodaMusicBundleID, kasetBundleID}; !slices.Equal(all.Players, want) {
-		t.Errorf("五样 id 各对应一个播放器: %v", all.Players)
+	if want := []string{spotifyBundleID, kkboxBundleID, amazonMusicBundleID, sodaMusicBundleID}; !slices.Equal(all.Players, want) {
+		t.Errorf("四样 id 各对应一个播放器,YouTube Music 链接不算: %v", all.Players)
 	}
 	// 播放器自己给这首记的封面:键就是那个播放器,按键排、跟 id 推出来的不重复记。
 	covers := enrichEntry{SpotifyTrackID: "x", PlayerCovers: map[string]string{qqMusicBundleID: "https://q", neteaseMusicBundleID: "https://n",

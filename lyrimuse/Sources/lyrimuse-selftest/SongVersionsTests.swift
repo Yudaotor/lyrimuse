@@ -106,8 +106,8 @@ func runSongVersionsTests() {
         let inferred = V.players(entry: ["spotify_track_id": "2TeLIzFBe3hxkPR5FIQZut", "kkbox_url": "https://www.kkbox.com/x",
                                          "amazon_url": "https://music.amazon.com/tracks/B0", "soda_url": "https://x", "youtube_music_url": "https://music.youtube.com/watch?v=a"])
         expectEqual(inferred.bundleIDs, [PlaybackPlayer.spotify.bundleIdentifier, PlaybackPlayer.kkbox.bundleIdentifier,
-                                         PlaybackPlayer.amazonMusic.bundleIdentifier, PlaybackPlayer.soda.bundleIdentifier,
-                                         PlaybackPlayer.kaset.bundleIdentifier], "播放器: 从播放器给的 id 推断")
+                                         PlaybackPlayer.amazonMusic.bundleIdentifier, PlaybackPlayer.soda.bundleIdentifier],
+                    "播放器: 从播放器给的 id 推断;YouTube Music 链接 Kaset 和 Pear Desktop 都会写,不推断")
         expectEqual(inferred.inferred, true, "播放器: 推断的标出来")
         let none = V.players(entry: ["apple_music_url": "https://music.apple.com/x", "players": [String]()])
         expectEqual(none.bundleIDs.isEmpty && !none.inferred, true, "播放器: 检索配的链接不算,没有就是空")
