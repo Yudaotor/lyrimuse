@@ -92,6 +92,9 @@ public enum SettingsSearchCatalog {
     /// 「歌词」页「歌词库」那一段的取值(`LyricsSettingsTab.Section.manage`)。菜单栏面板「歌词管理」那一格的
     /// 「全部设置…」拿它翻页;selftest 按源码里的枚举钉着它。
     public static let lyricsManageSectionValue = "manage"
+    /// 「歌词」页「语言」那一段的取值(`LyricsSettingsTab.Section.translation`)。菜单栏面板「显示译文」「显示读音」两格背面的
+    /// 「全部设置…」拿它翻页。
+    public static let lyricsLanguageSectionValue = "translation"
     /// Last.fm 账号页分段的 @AppStorage 键(AccountLinkingTab.swift)。它带 `np:` 前缀是历史原因,
     /// 这里只写不新建。
     public static let lastfmSectionKey = "np:lastfmDetailSection"

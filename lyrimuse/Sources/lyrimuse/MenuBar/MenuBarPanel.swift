@@ -777,6 +777,17 @@ private struct MenuBarPanelView: View {
         case .lyricsWindow: return openLyricsWindowAction
         case .touchBar: return toggleTouchBarAction
         case .lyricsManager: return openLyricsManagerAction
+        case .translation: return { LyrimuseActionRunner.perform(.toggleTranslationHotkey) }
+        case .romanization: return { LyrimuseActionRunner.perform(.toggleRomanizationHotkey) }
+        case .lockPosition: return { LyrimuseActionRunner.perform(.toggleLockPosition) }
+        // 先收面板:没开着时要把歌词窗口开成迷你,开窗会把它带到前台(同歌词窗口那一格)。
+        case .miniWindow:
+            return {
+                close()
+                LyrimuseActionRunner.perform(.toggleLyricsWindowMiniHotkey)
+            }
+        // 这两格正面是一下一下的动作,背面头部没有开关。
+        case .overlayFont, .lyricsOffset: return {}
         }
     }
 
@@ -910,11 +921,12 @@ private struct MenuBarPanelView: View {
                      action: openLyricsManagerAction)
         case .translation:
             // 同右键菜单「快速开关」和快捷键:悬浮歌词、歌词窗口两份一起切,带回声(这首没有译文时画面不会变)。
-            knobTile(symbol: "translate", title: L10n.t("显示译文"), on: playback.showsTranslation) {
+            knobTile(symbol: "translate", title: L10n.t("显示译文"), on: playback.showsTranslation, quick: .translation) {
                 LyrimuseActionRunner.perform(.toggleTranslationHotkey)
             }
         case .romanization:
-            knobTile(symbol: "character.phonetic", title: L10n.t("显示读音"), on: playback.showsRomanization) {
+            knobTile(symbol: "character.phonetic", title: L10n.t("显示读音"), on: playback.showsRomanization,
+                     quick: .romanization) {
                 LyrimuseActionRunner.perform(.toggleRomanizationHotkey)
             }
         case .lockPosition:
@@ -922,7 +934,7 @@ private struct MenuBarPanelView: View {
             let overlayOn = playback.classicOverlayEnabled
             let locked = overlayOn && playback.lockPosition
             knobTile(symbol: locked ? "lock.fill" : "lock.open.fill", title: L10n.t("锁定位置"), on: locked,
-                     enabled: overlayOn, help: overlayOn ? nil : L10n.t("锁定位置仅对悬浮歌词有效")) {
+                     enabled: overlayOn, help: overlayOn ? nil : L10n.t("锁定位置仅对悬浮歌词有效"), quick: .lockPosition) {
                 LyrimuseActionRunner.perform(.toggleLockPosition)
             }
         case .hideAllLyrics:
@@ -946,7 +958,7 @@ private struct MenuBarPanelView: View {
             // 同快捷键:歌词窗口开着就切到另一种尺寸,没开就开成迷你。亮着 = 窗口开着、是迷你。先收面板,理由同歌词窗口那一格。
             let defaults = UserDefaults.standard
             let mini = defaults.bool(forKey: LyricsWindowSession.openKey) && defaults.bool(forKey: LyricsWindowSession.miniModeKey)
-            knobTile(symbol: "pip", title: L10n.t("迷你窗口"), on: mini) {
+            knobTile(symbol: "pip", title: L10n.t("迷你窗口"), on: mini, quick: .miniWindow) {
                 close()
                 LyrimuseActionRunner.perform(.toggleLyricsWindowMiniHotkey)
             }
@@ -968,7 +980,7 @@ private struct MenuBarPanelView: View {
             // 同快捷键:按设置里的步长提前 / 延后这一首的歌词,或一键归零,带偏移提示。卡片缩成大号时没有 ± 两颗,用得上这几格。
             let action: LyrimuseAction = tile == .lyricsAdvance ? .lyricsAdvanceHotkey
                 : tile == .lyricsDelay ? .lyricsDelayHotkey : .lyricsOffsetResetHotkey
-            knobTile(symbol: action.iconName, title: L10n.t(action.titleKey), on: false) {
+            knobTile(symbol: action.iconName, title: L10n.t(action.titleKey), on: false, quick: .lyricsOffset) {
                 LyrimuseActionRunner.perform(action)
             }
         case .fontLarger, .fontSmaller:
@@ -977,7 +989,7 @@ private struct MenuBarPanelView: View {
             let overlayOn = playback.classicOverlayEnabled
             knobTile(symbol: larger ? "textformat.size.larger" : "textformat.size.smaller",
                      title: larger ? L10n.t("放大字号") : L10n.t("缩小字号"), on: false,
-                     enabled: overlayOn, help: overlayOn ? nil : L10n.t("字号仅对悬浮歌词有效")) {
+                     enabled: overlayOn, help: overlayOn ? nil : L10n.t("字号仅对悬浮歌词有效"), quick: .overlayFont) {
                 LyrimuseActionRunner.perform(larger ? .overlayFontLargerHotkey : .overlayFontSmallerHotkey)
             }
         }

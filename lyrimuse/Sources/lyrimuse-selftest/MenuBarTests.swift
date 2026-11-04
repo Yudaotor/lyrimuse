@@ -1764,8 +1764,18 @@ func runMenuBarTests() {
                     "歌词管理背面: 格子接上快捷设置,短按和头部「打开」是同一条闭包")
         expectEqual(quick.contains("case \"lyrics-manager\": self = .lyricsManager")
                     && quick.contains("PanelLyricsManagerRows(close: close)")
-                    && quick.contains("UserDefaults.standard.set(SettingsSearchCatalog.lyricsManageSectionValue,"), true,
+                    && quick.contains("case .lyricsManager: return SettingsSearchCatalog.lyricsManageSectionValue")
+                    && quick.contains("UserDefaults.standard.set(section, forKey: SettingsSearchCatalog.lyricsSectionKey)"), true,
                     "歌词管理背面: 深链取值、两组行、「全部设置…」翻到「歌词 › 歌词库」")
+        // 后加的几格也能翻面(06 章决策 92):深链取值来回认得,格子都接上了背面。
+        let newTargets = [("translation", "translation"), ("romanization", "romanization"), ("overlay-font", "overlayFont"),
+                          ("lyrics-offset", "lyricsOffset"), ("lock-position", "lockPosition"), ("mini-window", "miniWindow")]
+        expectEqual(newTargets.allSatisfy { value, name in
+            quick.contains("case \"\(value)\": self = .\(name)") && quick.contains("case .\(name): return \"\(value)\"")
+        }, true, "面板背面: 新的几格深链取值两个方向都写了")
+        expectEqual(["quick: .translation", "quick: .romanization", "quick: .overlayFont", "quick: .lyricsOffset",
+                     "quick: .lockPosition", "quick: .miniWindow"].allSatisfy { panel.contains($0) }, true,
+                    "面板背面: 译文、读音、字号、歌词偏移、锁定位置、迷你窗口几格都能长按翻面")
         expectEqual(SettingsSearchCatalog.lyricsManageSectionValue == "manage"
                     && settingsView.contains("case fetch, translation, display, manage"), true,
                     "歌词管理背面: 「管理」分段的取值跟设置页枚举对得上")

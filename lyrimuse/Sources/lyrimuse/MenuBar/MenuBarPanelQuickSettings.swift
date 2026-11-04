@@ -38,11 +38,22 @@ import LyrimuseCore
 ///
 /// 触控栏同样不进 `LyricsSurface`:它有常驻开关,但设置页分段、设置搜索目录都把它单列(selftest 钉着
 /// `touchBarSectionValue` 认不回任何形态),分段取值用现成的 `SettingsSearchCatalog.touchBarSectionValue`。
+///
+/// 后加的几格(显示译文 / 读音、悬浮歌词字号、歌词偏移、锁定位置、迷你窗口)背面放的是设置页里跟这一格直接相关的那一两项,
+/// 正面照旧是随手按的动作。见 06 章决策 92。
 enum PanelQuickTarget: Hashable {
     case surface(LyricsSurface)
     case lyricsWindow
     case touchBar
     case lyricsManager
+    case translation
+    case romanization
+    /// 放大 / 缩小字号两格共用。
+    case overlayFont
+    /// 歌词提前 / 延后 / 归零三格共用。
+    case lyricsOffset
+    case lockPosition
+    case miniWindow
 
     /// lyrimuse://menubar-panel?quick=… 里的取值。
     init?(deepLinkValue value: String) {
@@ -53,6 +64,12 @@ enum PanelQuickTarget: Hashable {
         case "lyrics-window": self = .lyricsWindow
         case "touchbar": self = .touchBar
         case "lyrics-manager": self = .lyricsManager
+        case "translation": self = .translation
+        case "romanization": self = .romanization
+        case "overlay-font": self = .overlayFont
+        case "lyrics-offset": self = .lyricsOffset
+        case "lock-position": self = .lockPosition
+        case "mini-window": self = .miniWindow
         default: return nil
         }
     }
@@ -66,6 +83,12 @@ enum PanelQuickTarget: Hashable {
         case .lyricsWindow: return "lyrics-window"
         case .touchBar: return "touchbar"
         case .lyricsManager: return "lyrics-manager"
+        case .translation: return "translation"
+        case .romanization: return "romanization"
+        case .overlayFont: return "overlay-font"
+        case .lyricsOffset: return "lyrics-offset"
+        case .lockPosition: return "lock-position"
+        case .miniWindow: return "mini-window"
         }
     }
 }
@@ -80,6 +103,12 @@ extension PanelQuickTarget {
         // 系统符号里没有触控栏,用自画的那枚;设置页那张开关卡、右键菜单「快速开关」里那一项也是它。
         case .touchBar: return SurfaceGlyph.touchBar.rawValue
         case .lyricsManager: return "music.note.list"
+        case .translation: return "translate"
+        case .romanization: return "character.phonetic"
+        case .overlayFont: return "textformat.size"
+        case .lyricsOffset: return "timer"
+        case .lockPosition: return "lock"
+        case .miniWindow: return "pip"
         }
     }
 
@@ -89,6 +118,12 @@ extension PanelQuickTarget {
         case .lyricsWindow: return L10n.t("歌词窗口")
         case .touchBar: return L10n.t("触控栏歌词")
         case .lyricsManager: return L10n.t("歌词管理")
+        case .translation: return L10n.t("显示译文")
+        case .romanization: return L10n.t("显示读音")
+        case .overlayFont: return L10n.t("字号")
+        case .lyricsOffset: return L10n.t("时间轴偏移")
+        case .lockPosition: return L10n.t("锁定位置")
+        case .miniWindow: return L10n.t("迷你窗口")
         }
     }
 
@@ -99,17 +134,33 @@ extension PanelQuickTarget {
         case .surface(let surface): return surface.isEnabled
         case .lyricsWindow: return false
         case .touchBar: return AppSettings.shared.showLyricsInTouchBar
-        case .lyricsManager: return false
+        case .lyricsManager, .overlayFont, .lyricsOffset: return false
+        case .translation: return AppSettings.shared.overlayShowTranslation || AppSettings.shared.showTranslation
+        case .romanization: return AppSettings.shared.overlayShowRomanization || AppSettings.shared.showRomanization
+        case .lockPosition: return AppSettings.shared.classicOverlayEnabled && AppSettings.shared.lockPosition
+        case .miniWindow:
+            return UserDefaults.standard.bool(forKey: LyricsWindowSession.openKey)
+                && UserDefaults.standard.bool(forKey: LyricsWindowSession.miniModeKey)
         }
     }
 
-    /// 「歌词显示」页里对应那一段的分段取值,底栏那颗「全部设置…」拿它翻页。「歌词管理」那一格不在这一页,是 nil。
+    /// 「歌词显示」页里对应那一段的分段取值,底栏那颗「全部设置…」拿它翻页。不在这一页的是 nil(见 `lyricsSectionValue`)。
     var appearanceSectionValue: String? {
         switch self {
         case .surface(let surface): return surface.appearanceSectionRawValue
-        case .lyricsWindow: return SettingsSearchCatalog.lyricsWindowSectionValue
+        case .lyricsWindow, .miniWindow: return SettingsSearchCatalog.lyricsWindowSectionValue
         case .touchBar: return SettingsSearchCatalog.touchBarSectionValue
-        case .lyricsManager: return nil
+        case .overlayFont, .lockPosition: return LyricsSurface.overlay.appearanceSectionRawValue
+        case .lyricsManager, .translation, .romanization, .lyricsOffset: return nil
+        }
+    }
+
+    /// 「歌词」页里对应那一段的分段取值(歌词库、语言)。两个都是 nil 的(歌词偏移的步长)翻到「快捷键」页。
+    var lyricsSectionValue: String? {
+        switch self {
+        case .lyricsManager: return SettingsSearchCatalog.lyricsManageSectionValue
+        case .translation, .romanization: return SettingsSearchCatalog.lyricsLanguageSectionValue
+        default: return nil
         }
     }
 }
@@ -321,6 +372,8 @@ struct PanelQuickSettings: View {
     let close: () -> Void
 
     @ObservedObject private var settings = AppSettings.shared
+    /// 译文语言在引擎那份配置里(同设置页「译文语言」)。
+    @ObservedObject private var features = FeatureSettingsStore.shared
     /// 歌词窗口此刻开没开(`LyricsWindowSession.openKey`):开着时那颗键写「显示」,按下去是切到它。
     @AppStorage(LyricsWindowSession.openKey) private var lyricsWindowOpen = false
     /// 字号 / 宽度 / 高度滑杆拖动中节流提交(`SliderCommitThrottle`,同设置页那几根):每写一次都要整对象广播、写盘,
@@ -365,7 +418,9 @@ struct PanelQuickSettings: View {
             .buttonBorderShape(.circle)
             .controlSize(.small)
             .help(L10n.t("返回"))
+            // 拉丁字形,理由同格子上那枚(`KnobTile.iconCircle`):`textformat.size` 在中文界面里画成「大小」两个字。
             SymbolImage(name: target.symbolName, size: 12, weight: .semibold)
+                .environment(\.locale, Locale(identifier: "en"))
                 .foregroundStyle(target.isEnabled ? Color.accentColor : Color.secondary)
                 .frame(width: 18)
             Text(target.panelTitle).font(.system(size: 12, weight: .semibold))
@@ -405,6 +460,15 @@ struct PanelQuickSettings: View {
             .buttonBorderShape(.capsule)
             .controlSize(.small)
             .help(L10n.t("打开歌词管理"))
+        // 后加的几格:正面是开关的,头部这颗就是同一个开关(set 一律转给 action(),同上);字号、歌词偏移正面是一下一下的
+        // 动作,没有开关可摆。
+        case .translation, .romanization, .lockPosition, .miniWindow:
+            Toggle("", isOn: Binding(get: { target.isEnabled }, set: { _ in action() }))
+                .labelsHidden()
+                .toggleStyle(.switch)
+                .controlSize(.mini)
+        case .overlayFont, .lyricsOffset:
+            EmptyView()
         }
     }
 
@@ -586,7 +650,94 @@ struct PanelQuickSettings: View {
         case .lyricsManager:
             // 行在 PanelLyricsManagerRows(带自己的小标题和分组框),body 里单独摆。
             EmptyView()
+        case .translation:
+            // 同设置页「歌词 › 语言 › 译文语言」(引擎那份配置,改完存盘),外加悬浮歌词、歌词窗口各自那一份开关。
+            row(L10n.t("译文语言")) {
+                PanelGlassMenuPicker(
+                    selection: Binding(
+                        get: { features.lyricsTranslationLanguage },
+                        set: { features.lyricsTranslationLanguage = $0; Task { await features.save() } }
+                    ),
+                    options: MusixmatchTranslationLanguage.allCases,
+                    label: \.displayName)
+            }
+            toggleRow(L10n.t("悬浮歌词"), isOn: $settings.overlayShowTranslation)
+            toggleRow(L10n.t("歌词窗口"), isOn: $settings.showTranslation)
+        case .romanization:
+            // 常用四种语言(同设置页那四格),写法同设置页:AppSettings 存盘,LocalPlaybackSource 让这一首当场重新加载。
+            // 其余语言在「全部设置…」里。
+            ForEach(Self.commonReadings, id: \.option.rawValue) { reading in
+                toggleRow(reading.title, help: reading.help, isOn: Binding(
+                    get: { settings.romanizationScripts.contains(reading.option) },
+                    set: { on in
+                        var next = settings.romanizationScripts
+                        if on { next.insert(reading.option) } else { next.remove(reading.option) }
+                        settings.romanizationScripts = next
+                        LocalPlaybackSource.shared.romanizationScripts = next
+                    }))
+            }
+            toggleRow(L10n.t("悬浮歌词"), isOn: $settings.overlayShowRomanization)
+            toggleRow(L10n.t("歌词窗口"), isOn: $settings.showRomanization)
+        case .overlayFont:
+            // 同悬浮歌词那一格背面的「字号」,一根滑杆直接拖到想要的大小。
+            sliderRow(L10n.t("字号"), value: Binding(
+                get: { overlayFontSizeThrottle.value(or: settings.fontSize) },
+                set: { overlayFontSizeThrottle.update($0, commit: commitOverlayFontSize) }
+            ), range: AppSettings.overlayFontSizeRange,
+               onEditingChanged: { overlayFontSizeThrottle.editingChanged($0, commit: commitOverlayFontSize) })
+        case .lyricsOffset:
+            // 步长同设置「快捷键 › 歌词时间轴 › 步长」(快捷键、卡片上的 ± 和面板 ↑ ↓ 都按它走);下面一行把这一首调回 0。
+            row(L10n.t("步长")) {
+                HStack(spacing: 6) {
+                    Text(String(format: L10n.t("%@ 秒"), AppSettings.formattedSeconds(ms: settings.lyricsOffsetStepMs)))
+                        .font(.system(size: 10).monospacedDigit())
+                        .foregroundStyle(.secondary)
+                    Stepper("", value: Binding(
+                        get: { Double(settings.lyricsOffsetStepMs) / 1000 },
+                        set: { settings.lyricsOffsetStepMs = Int(($0 * 1000).rounded()) }
+                    ), in: 0.05...2.0, step: 0.05)
+                    .labelsHidden()
+                    .controlSize(.mini)
+                }
+            }
+            row(L10n.t("歌词偏移归零")) {
+                Button(L10n.t("重置")) { PlaybackCoordinator.shared.resetLyricsOffset() }
+                    .settingsGlassButtons()
+                    .controlSize(.mini)
+            }
+        case .lockPosition:
+            // 悬浮歌词的摆法(同设置页「位置」:控制器订阅着这个值自己落位,直接写设置就行),自由摆放时再给「长按拖动」。
+            row(L10n.t("位置")) {
+                PanelGlassMenuPicker(selection: $settings.overlayPlacementMode,
+                                     options: OverlayPlacementMode.allCases,
+                                     label: OverlayPlacementSegmentedControl.label(for:))
+            }
+            if settings.overlayPlacementMode == .free {
+                toggleRow(L10n.t("长按拖动"), isOn: $settings.overlayDragNeedsLongPress)
+            }
+        case .miniWindow:
+            // 迷你窗口顶部显示哪几样,同设置页歌词窗口那一段迷你那几格。
+            toggleRow(L10n.t("封面"), isOn: $settings.lyricsWindowMiniShowsCover)
+            toggleRow(L10n.t("时间"), isOn: $settings.lyricsWindowMiniShowsTime)
+            toggleRow(L10n.t("进度条"), help: L10n.t("关闭后，仅在悬停显示播放控制时出现"),
+                      isOn: $settings.lyricsWindowMiniShowsProgress)
         }
+    }
+
+    /// 「显示读音」那一格背面列的常用四种,同设置页「标注读音的语言」那四格。
+    private struct Reading {
+        let title: String
+        let option: RomanizationScripts
+        let help: String
+    }
+
+    private static var commonReadings: [Reading] {
+        [
+            Reading(title: L10n.t("日语"), option: .japanese, help: L10n.t("罗马字，如 こんにちは → konnichiwa")),
+            Reading(title: L10n.t("韩语"), option: .korean, help: L10n.t("罗马字，如 안녕하세요 → annyeonghaseyo")),
+            Reading(title: L10n.t("普通话"), option: .chinese, help: L10n.t("拼音，如 你好 → nǐ hǎo")),
+            Reading(title: L10n.t("粤语"), option: .cantonese, help: L10n.t("粤拼（Jyutping），如 你好 → nei5 hou2")),
+        ]
     }
 
     /// 分组框下面那句说明,只有菜单栏那格有。
@@ -848,10 +999,11 @@ struct PanelQuickSettings: View {
             if let section = target.appearanceSectionValue {
                 UserDefaults.standard.set(section, forKey: LyricsSurface.appearanceSectionStorageKey)
                 AppActions.shared.requestSettings(.tab(.appearance))
-            } else {
-                UserDefaults.standard.set(SettingsSearchCatalog.lyricsManageSectionValue,
-                                          forKey: SettingsSearchCatalog.lyricsSectionKey)
+            } else if let section = target.lyricsSectionValue {
+                UserDefaults.standard.set(section, forKey: SettingsSearchCatalog.lyricsSectionKey)
                 AppActions.shared.requestSettings(.tab(.lyrics))
+            } else {
+                AppActions.shared.requestSettings(.tab(.shortcuts))
             }
             AppActions.shared.openSettings?()
         } label: {
