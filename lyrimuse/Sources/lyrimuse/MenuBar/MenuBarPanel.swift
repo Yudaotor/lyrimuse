@@ -520,6 +520,8 @@ private struct MenuBarPanelView: View {
     /// 正在拖右下角拉手换尺寸的那一格,和开始拉那一刻的布局(拉大时挤开的格子,缩回去会回原位)。
     @State private var resizingTile: MenuBarPanelLayout.Tile?
     @State private var resizeBase: MenuBarPanelLayout?
+    /// 这一次按下不在任何拉手上(网格那一层的换尺寸手势这次不管)。
+    @State private var resizeMissed = false
 
     init(close: @escaping () -> Void, initialQuickTarget: PanelQuickTarget? = nil, initialEditing: Bool = false) {
         self.close = close
@@ -1573,6 +1575,7 @@ private struct MenuBarPanelView: View {
                 }
             }
             .frame(width: Self.grid.width, height: Self.grid.height(rows: rows), alignment: .topLeading)
+            .simultaneousGesture(gridResizeGesture)
             if !addable.isEmpty {
                 PanelEditCaption(title: L10n.t("可添加"))
                 LazyVGrid(columns: Array(repeating: GridItem(.fixed(Self.grid.size(.small).width), spacing: Self.grid.spacing),
@@ -1605,7 +1608,8 @@ private struct MenuBarPanelView: View {
             cornerRadius: radius,
             resizing: resizingTile == p.tile,
             remove: { updateLayout { $0.remove(p.tile) } },
-            resizeGesture: AnyGesture(tileResizeGesture(p).map { _ in () }))
+            // 拉手上只挂一个什么都不做的拖动,挡住下面这一格的挪位置拖动;换尺寸归整块网格那一层(`gridResizeGesture`)。
+            resizeGesture: AnyGesture(DragGesture(minimumDistance: 1).map { _ in () }))
             // 拖着的那格在要落的位置留个淡影,跟着指针走的是上面那层 `draggedTileCopy`。
             .opacity(draggingTile == p.tile ? 0.3 : 1)
             .gesture(tileDragGesture(p))
@@ -1625,6 +1629,7 @@ private struct MenuBarPanelView: View {
     private func tileDragGesture(_ p: MenuBarPanelLayout.Placement) -> some Gesture {
         DragGesture(minimumDistance: 3, coordinateSpace: .named(Self.editGridSpace))
             .onChanged { value in
+                guard resizingTile == nil else { return }
                 if draggingTile != p.tile {
                     let frame = Self.grid.frame(p)
                     beginDrag(p.tile, size: p.size,
@@ -1687,20 +1692,26 @@ private struct MenuBarPanelView: View {
         dragCell = []
     }
 
-    /// 拖右下角拉手换尺寸:指针拉到哪就换到最接近的那一档(`PanelGridGeometry.resizedSize`),拖的同时就换;压到的格子让开、
-    /// 往后顺延。按开始拉那一刻的布局算:拉大挤开的格子,缩回去时回到原位。
-    private func tileResizeGesture(_ p: MenuBarPanelLayout.Placement) -> some Gesture {
+    /// 拖右下角拉手换尺寸:指针拉到哪就换到最接近的那一档(`PanelGridGeometry.resizedSize`),拖的同时就换,按住不放能拉大
+    /// 也能缩回;压到的格子让开、往后顺延。按开始拉那一刻的布局算:拉大挤开的格子,缩回去时回到原位。
+    /// 挂在整块网格上、按按下的位置认是哪一格的拉手,别挂回拉手自己身上:格子换档时里面换了一种画法(小中号 ↔ 大号、
+    /// 加宽卡片 ↔ 大号卡片),拉手上的拖动手势会被中途丢掉、连「结束」都不报,一次只能换一档。见 06 章决策 86。
+    private var gridResizeGesture: some Gesture {
         DragGesture(minimumDistance: 1, coordinateSpace: .named(Self.editGridSpace))
             .onChanged { value in
-                if resizingTile != p.tile {
-                    resizingTile = p.tile
+                if resizingTile == nil {
+                    guard !resizeMissed, let hit = resizeHandleTile(at: value.startLocation) else {
+                        resizeMissed = true
+                        return
+                    }
+                    resizingTile = hit
                     resizeBase = playback.panelLayout
                 }
-                guard let base = resizeBase, let start = base.placement(of: p.tile) else { return }
+                guard let tile = resizingTile, let base = resizeBase, let start = base.placement(of: tile) else { return }
                 let target = Self.grid.resizedSize(origin: Self.grid.frame(start).origin, pointer: value.location,
-                                                   allowed: p.tile.sizes)
+                                                   allowed: tile.sizes)
                 var resized = base
-                resized.resize(p.tile, to: target)
+                resized.resize(tile, to: target)
                 if resized != playback.panelLayout {
                     updateLayout { $0 = resized }
                 }
@@ -1708,7 +1719,17 @@ private struct MenuBarPanelView: View {
             .onEnded { _ in
                 resizingTile = nil
                 resizeBase = nil
+                resizeMissed = false
             }
+    }
+
+    /// 按在哪一格的拉手上(格子右下角 `PanelResizeCorner.side` 见方那一块),没有返回 nil。
+    private func resizeHandleTile(at point: CGPoint) -> MenuBarPanelLayout.Tile? {
+        let side = PanelResizeCorner.side
+        return playback.panelLayout.placements.first { p in
+            let frame = Self.grid.frame(p)
+            return CGRect(x: frame.maxX - side, y: frame.maxY - side, width: side, height: side).contains(point)
+        }?.tile
     }
 
     /// 拖动中跟着指针走的那一格(网格里的,或从「可添加」拖出来的)。

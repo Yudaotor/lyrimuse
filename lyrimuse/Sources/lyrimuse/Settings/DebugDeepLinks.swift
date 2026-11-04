@@ -173,8 +173,8 @@ enum DebugDeepLinks {
                 let ok = await ConfigStore.shared.save()
                 logger.notice("debug config save ok=\(ok, privacy: .public)")
             }
-        case let .panelDrag(from, to):
-            panelDrag(from: from, to: to)
+        case let .panelDrag(from, to, via):
+            panelDrag(from: from, to: to, via: via)
         case let .panelPin(on):
             MenuBarPanelDebugState.pinned = on
             logger.notice("debug panel pin \(on, privacy: .public)")
@@ -431,8 +431,9 @@ enum DebugDeepLinks {
 }
 
 extension DebugDeepLinks {
-    /// `debug/panel-drag`:往面板窗口送一串按下 → 20 步拖动 → 松开,每步之间让出主线程一拍(SwiftUI 的拖动手势按事件逐个处理)。
-    static func panelDrag(from: CGPoint, to: CGPoint) {
+    /// `debug/panel-drag`:往面板窗口送一串按下 → 拖动(经过 `via` 的每一段各 20 步)→ 松开,每步之间让出主线程一拍
+    /// (SwiftUI 的拖动手势按事件逐个处理)。
+    static func panelDrag(from: CGPoint, to: CGPoint, via: [CGPoint] = []) {
         guard let window = NSApp.windows.first(where: {
             $0.isVisible && String(describing: type(of: $0)).contains("MenuBarPanelWindow")
         }) else {
@@ -450,11 +451,15 @@ extension DebugDeepLinks {
             try? await Task.sleep(nanoseconds: 50_000_000)
             if let e = event(.leftMouseDown, from) { window.sendEvent(e) }
             let steps = 20
-            for i in 1...steps {
-                try? await Task.sleep(nanoseconds: 16_000_000)
-                let t = CGFloat(i) / CGFloat(steps)
-                let p = CGPoint(x: from.x + (to.x - from.x) * t, y: from.y + (to.y - from.y) * t)
-                if let e = event(.leftMouseDragged, p) { window.sendEvent(e) }
+            var start = from
+            for end in via + [to] {
+                for i in 1...steps {
+                    try? await Task.sleep(nanoseconds: 16_000_000)
+                    let t = CGFloat(i) / CGFloat(steps)
+                    let p = CGPoint(x: start.x + (end.x - start.x) * t, y: start.y + (end.y - start.y) * t)
+                    if let e = event(.leftMouseDragged, p) { window.sendEvent(e) }
+                }
+                start = end
             }
             try? await Task.sleep(nanoseconds: 50_000_000)
             if let e = event(.leftMouseUp, to) { window.sendEvent(e) }

@@ -139,7 +139,8 @@ public enum LyrimuseDeepLink: Equatable, Sendable {
         case panelPin(on: Bool)
         /// 在菜单栏面板里从 (x1, y1) 按下、拖到 (x2, y2) 松开(面板窗口内的点坐标,左上角为原点),事件直接送进面板窗口,
         /// 跟手拖走同一条路:`debug/panel-drag?from=205,436&to=350,436`。验证脚本合成的系统鼠标事件进不了这扇面板。
-        case panelDrag(from: CGPoint, to: CGPoint)
+        /// `via=x,y;x,y` 按住不放先依次拖过这几个点再到 `to`(验一次拖动里来回调)。
+        case panelDrag(from: CGPoint, to: CGPoint, via: [CGPoint] = [])
         /// 主线程原地睡这么多毫秒(`debug/stall?ms=`,1…`maxStallMs`):造出「别的窗口把主线程占住」那一下,验动画扛不扛得住。
         case stall(ms: Int)
         /// 灵动岛摆一次报喜,跟设置页「收听里程碑」旁那颗「试用」走同一条路(`debug/milestone-preview`)。
@@ -303,12 +304,15 @@ public enum LyrimuseDeepLink: Equatable, Sendable {
         case ("debug", "/panel-layout"):
             self = .debug(.panelLayout(json: value("json").flatMap { $0.isEmpty ? nil : $0 }))
         case ("debug", "/panel-drag"):
-            func point(_ name: String) -> CGPoint? {
-                let parts = (value(name) ?? "").split(separator: ",").compactMap { Double($0) }
+            func point(_ text: Substring) -> CGPoint? {
+                let parts = text.split(separator: ",").compactMap { Double($0) }
                 return parts.count == 2 ? CGPoint(x: parts[0], y: parts[1]) : nil
             }
-            guard let from = point("from"), let to = point("to") else { return nil }
-            self = .debug(.panelDrag(from: from, to: to))
+            guard let from = point(Substring(value("from") ?? "")), let to = point(Substring(value("to") ?? "")) else { return nil }
+            let viaText = (value("via") ?? "").split(separator: ";")
+            let via = viaText.compactMap(point)
+            guard via.count == viaText.count else { return nil }
+            self = .debug(.panelDrag(from: from, to: to, via: via))
         case ("debug", "/panel-pin"):
             guard let on = value("on").flatMap(Self.parseBool) else { return nil }
             self = .debug(.panelPin(on: on))
@@ -544,10 +548,11 @@ public enum LyrimuseDeepLink: Equatable, Sendable {
             case let .panelLayout(json):
                 components.path = "/panel-layout"
                 if let json { components.queryItems = [URLQueryItem(name: "json", value: json)] }
-            case let .panelDrag(from, to):
+            case let .panelDrag(from, to, via):
                 components.path = "/panel-drag"
                 func text(_ p: CGPoint) -> String { "\(p.x),\(p.y)" }
                 components.queryItems = [URLQueryItem(name: "from", value: text(from)), URLQueryItem(name: "to", value: text(to))]
+                if !via.isEmpty { components.queryItems?.append(URLQueryItem(name: "via", value: via.map(text).joined(separator: ";"))) }
             case let .panelPin(on):
                 components.path = "/panel-pin"
                 components.queryItems = [URLQueryItem(name: "on", value: on ? "1" : "0")]

@@ -2171,8 +2171,10 @@ func runMenuBarTests() {
         let router = source("lyrimuse/Settings/DeepLinkRouter.swift")
         expectEqual(sourceHas(panel, "if !editing {\nTileMouseRouter("), true, "面板编辑: 编辑时不盖鼠标路由")
         expectEqual(sourceHas(panel, "nowPlayingTile(size)\n.allowsHitTesting(!editing)"), true, "面板编辑: 编辑时卡片不接点击,拖动和拉手归编辑那一层")
-        expectEqual(sourceHas(panel, "ForEach(p.tile.sizes, id: \\.self) { size in") && sourceHas(panel, "allowed: p.tile.sizes)"), true,
+        expectEqual(sourceHas(panel, "ForEach(p.tile.sizes, id: \\.self) { size in") && sourceHas(panel, "allowed: tile.sizes)"), true,
                     "面板编辑: 右键换档和拉手只给这一格有的档")
+        expectEqual(sourceHas(panel, ".simultaneousGesture(gridResizeGesture)") && sourceHas(panel, "guard resizingTile == nil else { return }"), true,
+                    "面板编辑: 换尺寸挂在整块网格上(挂在拉手上,格子换画法时手势被丢掉、一次只能换一档),拉的时候格子不跟着挪")
         expectEqual(sourceHas(panel, "if !showsSettings && !showsLastfm && !showsVersion { Spacer(minLength: 0) }\neditLayoutButton"), true,
                     "面板编辑: 「编辑」那一颗不跟着底栏显隐")
         expectEqual(sourceHas(panel, "let showsVersion = !hidden.contains(.version) || pendingUpdate != nil"), true,

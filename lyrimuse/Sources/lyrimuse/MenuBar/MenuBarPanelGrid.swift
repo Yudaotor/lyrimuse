@@ -62,7 +62,7 @@ struct PanelEditableTile<Content: View>: View {
                     .offset(x: -4, y: -4)
             }
             .overlay(alignment: .bottomTrailing) {
-                PanelResizeCorner(cornerRadius: cornerRadius, visible: hovering || resizing)
+                PanelResizeCorner(cornerRadius: cornerRadius, visible: hovering || resizing, resizing: resizing)
                     .gesture(resizeGesture)
             }
             .onHover { hovering = $0 }
@@ -70,13 +70,18 @@ struct PanelEditableTile<Content: View>: View {
 }
 
 /// 右下角那道弧形拉手,同控制中心编辑时那一道:贴着右下角的一整段四分之一圆弧(半径 22、离边 4、线宽 5,白色带一点影),
-/// 整块 34pt 见方都能按。指针不换样子,悬停时弧线亮出来就是提示。
+/// 整块 34pt 见方都能按。指针停在上面、按住拖动的全程都是斜向拉伸的指针(`PanelResizeCursor`)。
 /// 藏起来时只把弧线调透明,可按的那块一直在:整个视图透明度为 0 时 SwiftUI 不再把点击交给它。
 struct PanelResizeCorner: View {
     let cornerRadius: CGFloat
     let visible: Bool
+    /// 正在拖这道拉手:拖动中指针离开了拉手,指针也保持拉伸的样子。
+    let resizing: Bool
+    @State private var hovering = false
+    @State private var token = PanelResizeCursor.Token()
 
-    private static let side: CGFloat = 34
+    /// 可按的那一块边长。网格那一层按它认按下的是不是拉手(`gridResizeGesture`)。
+    static let side: CGFloat = 34
     static let radius: CGFloat = 22
     static let inset: CGFloat = 4
 
@@ -91,7 +96,58 @@ struct PanelResizeCorner: View {
         .opacity(visible ? 1 : 0)
         .frame(width: Self.side, height: Self.side)
         .contentShape(Rectangle())
+        // 每次移动都重设一次:指针在这一块里移动时 AppKit 会按窗口的光标区把它换回箭头,只在进来那一下设会闪。
+        .onContinuousHover { phase in
+            switch phase {
+            case .active:
+                hovering = true
+                PanelResizeCursor.hold(token, true)
+            case .ended:
+                hovering = false
+                PanelResizeCursor.hold(token, resizing)
+            }
+        }
+        .onChange(of: resizing) { _, now in PanelResizeCursor.hold(token, now || hovering) }
+        .onDisappear { PanelResizeCursor.hold(token, false) }
         .accessibilityHidden(true)
+    }
+}
+
+/// 面板拉手的斜向拉伸指针。几个拉手共用一份:按持有方记,从一格的拉手直接移到另一格时不会被前一格先换回箭头。
+/// 持有期间每 0.05 秒重设一次,App 在后台时靠 `BackgroundCursor` 才设得上 —— 面板是不激活 App 的窗口,前台 App
+/// 重绘、窗口的光标区都会把指针换回去,只设一次会一闪一闪。
+@MainActor
+enum PanelResizeCursor {
+    final class Token {}
+
+    private static var holders: Set<ObjectIdentifier> = []
+    private static var timer: Timer?
+    private static let owner = Token()
+
+    /// 斜向拉伸的指针 macOS 15 起才有,更早的系统用十字。
+    static var cursor: NSCursor {
+        if #available(macOS 15.0, *) { return NSCursor.frameResize(position: .bottomRight, directions: .all) }
+        return .crosshair
+    }
+
+    static func hold(_ token: Token, _ on: Bool) {
+        let wasOn = !holders.isEmpty
+        if on { holders.insert(ObjectIdentifier(token)) } else { holders.remove(ObjectIdentifier(token)) }
+        let isOn = !holders.isEmpty
+        if isOn { cursor.set() }
+        guard isOn != wasOn else { return }
+        BackgroundCursor.setEnabled(isOn, for: ObjectIdentifier(owner))
+        timer?.invalidate()
+        timer = nil
+        if isOn {
+            let t = Timer(timeInterval: 0.05, repeats: true) { _ in
+                MainActor.assumeIsolated { cursor.set() }
+            }
+            RunLoop.main.add(t, forMode: .common)
+            timer = t
+        } else {
+            NSCursor.arrow.set()
+        }
     }
 }
 
