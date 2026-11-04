@@ -81,6 +81,7 @@
 | `search-lyrics` | 打开「搜索歌词」小窗 | — |
 | `open-settings` | 打开设置 | — |
 | `open-player` | 把正在用的播放器切到前台 | — |
+| `toggle-menubar-panel` | 打开或收起菜单栏面板，同点菜单栏图标 | — |
 
 ### 歌词时间轴
 

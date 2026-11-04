@@ -785,6 +785,7 @@ Mostrare o nascondere ogni tipo di testo (o tutti insieme, per riunioni e condiv
 - Impostazioni: Scorciatoie da tastiera › Apri Impostazioni
 - Impostazioni: Scorciatoie da tastiera › Nascondi/ripristina tutti i testi
 - Impostazioni: Scorciatoie da tastiera › Passa al player
+- Impostazioni: Scorciatoie da tastiera › Apri/chiudi pannello della barra dei menu
 
 <a id="feature-deep-links"></a>
 
@@ -889,7 +890,7 @@ Al massimo una volta al giorno invia versione, macOS, funzioni attive e riepilog
 
 ## Tutte le impostazioni
 
-Tutte le impostazioni della finestra Impostazioni, per posizione: 310 in tutto. Scrivi un nome nel campo di ricerca in cima alla barra laterale delle Impostazioni per andarci direttamente.
+Tutte le impostazioni della finestra Impostazioni, per posizione: 311 in tutto. Scrivi un nome nel campo di ricerca in cima alla barra laterale delle Impostazioni per andarci direttamente.
 
 ### Testo › Fonte
 
@@ -1262,6 +1263,7 @@ Tutte le impostazioni della finestra Impostazioni, per posizione: 310 in tutto. 
 - **Cerca testo**
 - **Apri Impostazioni**
 - **Passa al player**
+- **Apri/chiudi pannello della barra dei menu**
 - **Anticipa testo**
 - **Ritarda testo**
 - **Azzera offset testo**

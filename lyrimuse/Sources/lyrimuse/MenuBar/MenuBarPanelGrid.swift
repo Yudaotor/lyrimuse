@@ -235,6 +235,8 @@ final class PanelEditBridge {
     var setGalleryVisible: ((Bool) -> Void)?
     /// 主面板编辑页挂上:左边拖着一格到了屏幕上哪儿(nil = 松手)。
     var galleryDrag: ((MenuBarPanelLayout.Tile, CGPoint?) -> Void)?
+    /// 主面板此刻在平时那一页(空格、方向键归 `PanelPlaybackKeys`);编辑、快捷设置、简介页里是 false。
+    var playbackKeysEnabled = false
 }
 
 extension MenuBarPanelLayout.FooterItem {

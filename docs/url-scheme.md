@@ -81,6 +81,7 @@ These are the same actions as the keyboard shortcuts in Settings › Keyboard Sh
 | `search-lyrics` | Opens the Search Lyrics window | — |
 | `open-settings` | Opens Settings | — |
 | `open-player` | Brings the player you're using to the front | — |
+| `toggle-menubar-panel` | Opens or closes the menu bar panel, like clicking the menu bar icon | — |
 
 ### Lyrics timing
 

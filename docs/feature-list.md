@@ -785,6 +785,7 @@ Showing or hiding each kind of lyrics (or all of them at once, for meetings and 
 - Settings: Keyboard Shortcuts › Open Settings
 - Settings: Keyboard Shortcuts › Hide/Restore All Lyrics
 - Settings: Keyboard Shortcuts › Switch to Player
+- Settings: Keyboard Shortcuts › Open/Close Menu Bar Panel
 
 <a id="feature-deep-links"></a>
 
@@ -889,7 +890,7 @@ At most once a day, sends the version, macOS, which features are on and crash su
 
 ## Every setting
 
-Every setting in the Settings window, by where it lives: 310 in all. Type a name into the search field at the top of the Settings sidebar to jump straight to it.
+Every setting in the Settings window, by where it lives: 311 in all. Type a name into the search field at the top of the Settings sidebar to jump straight to it.
 
 ### Lyrics › Source
 
@@ -1262,6 +1263,7 @@ Every setting in the Settings window, by where it lives: 310 in all. Type a name
 - **Search Lyrics**
 - **Open Settings**
 - **Switch to Player**
+- **Open/Close Menu Bar Panel**
 - **Advance Lyrics**
 - **Delay Lyrics**
 - **Reset Lyrics Offset**

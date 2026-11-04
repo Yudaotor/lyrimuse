@@ -81,6 +81,7 @@ Ví dụ: `lyrimuse://settings/appearance/overlay` hoặc `lyrimuse://settings/s
 | `search-lyrics` | Mở cửa sổ “Tìm lời bài hát” | — |
 | `open-settings` | Mở Cài đặt | — |
 | `open-player` | Đưa trình phát bạn đang dùng lên phía trước | — |
+| `toggle-menubar-panel` | Mở hoặc đóng bảng trên thanh menu, giống như bấm vào biểu tượng | — |
 
 ### Thời gian lời
 

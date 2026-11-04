@@ -81,6 +81,7 @@ São as mesmas ações dos atalhos de teclado em Ajustes › Atalhos de teclado.
 | `search-lyrics` | Abre a janela “Buscar letra” | — |
 | `open-settings` | Abre os Ajustes | — |
 | `open-player` | Traz para a frente o player que você está usando | — |
+| `toggle-menubar-panel` | Abre ou fecha o painel da barra de menus, como clicar no ícone | — |
 
 ### Sincronia da letra
 

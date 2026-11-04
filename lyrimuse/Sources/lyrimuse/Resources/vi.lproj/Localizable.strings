@@ -1296,6 +1296,7 @@
 "打开 Last.fm 网站，在「Spotify Scrobbling」一栏点按 Disconnect；之后仅记录这台 Mac 上播放的 Spotify" = "Mở trang web Last.fm, bấm Disconnect ở mục “Spotify Scrobbling”; sau đó chỉ ghi Spotify phát trên máy Mac này";
 "打开 Pear Desktop" = "Mở Pear Desktop";
 "打开 sct.ftqq.com，使用微信扫码登录，首页将显示 SendKey。完整地址为 https://sctapi.ftqq.com/你的SendKey.send，请将完整地址填入上方" = "Truy cập sct.ftqq.com, quét mã QR bằng WeChat để đăng nhập, SendKey sẽ hiện ở trang chủ. Địa chỉ đầy đủ là https://sctapi.ftqq.com/SendKeyCủaBạn.send, hãy dán toàn bộ địa chỉ đó vào ô phía trên";
+"打开/收起菜单栏面板" = "Mở/đóng bảng trên thanh menu";
 "打开「%@」设置" = "Mở cài đặt “%@”";
 "打开备份文件夹" = "Mở thư mục sao lưu";
 "打开并登录后将自动连接" = "Sẽ tự động kết nối sau khi mở và đăng nhập";

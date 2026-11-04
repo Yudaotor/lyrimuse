@@ -785,6 +785,7 @@ Puedes asignar atajos para mostrar u ocultar cada tipo de letra (o toda a la vez
 - Ajustes: Atajos de teclado › Abrir ajustes
 - Ajustes: Atajos de teclado › Ocultar/restaurar todas las letras
 - Ajustes: Atajos de teclado › Cambiar al reproductor
+- Ajustes: Atajos de teclado › Abrir/cerrar panel de la barra de menús
 
 <a id="feature-deep-links"></a>
 
@@ -889,7 +890,7 @@ Como máximo una vez al día, envía al servidor del propio autor la versión, e
 
 ## Todos los ajustes
 
-Todos los ajustes de la ventana Ajustes, según dónde están: 310 en total. Escribe un nombre en el campo de búsqueda de la parte superior de la barra lateral de Ajustes para ir directamente a él.
+Todos los ajustes de la ventana Ajustes, según dónde están: 311 en total. Escribe un nombre en el campo de búsqueda de la parte superior de la barra lateral de Ajustes para ir directamente a él.
 
 ### Letra › Fuente
 
@@ -1262,6 +1263,7 @@ Todos los ajustes de la ventana Ajustes, según dónde están: 310 en total. Esc
 - **Buscar letra**
 - **Abrir ajustes**
 - **Cambiar al reproductor**
+- **Abrir/cerrar panel de la barra de menús**
 - **Adelantar letra**
 - **Retrasar letra**
 - **Restablecer desfase de la letra**

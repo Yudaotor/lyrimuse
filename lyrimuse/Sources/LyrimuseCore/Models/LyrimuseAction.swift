@@ -31,6 +31,7 @@ public enum LyrimuseAction: String, CaseIterable, Sendable {
     case toggleAllLyricsHotkey
     case toggleFavoriteHotkey
     case openPlayerHotkey
+    case toggleMenuBarPanelHotkey
 
     /// `lyrimuse://action/<linkName>` 里那一段。对外契约,改名前先看对外说过没有。
     public var linkName: String {
@@ -59,6 +60,7 @@ public enum LyrimuseAction: String, CaseIterable, Sendable {
         case .toggleAllLyricsHotkey: return "toggle-all-lyrics"
         case .toggleFavoriteHotkey: return "toggle-favorite"
         case .openPlayerHotkey: return "open-player"
+        case .toggleMenuBarPanelHotkey: return "toggle-menubar-panel"
         }
     }
 
@@ -110,7 +112,7 @@ public enum LyrimuseAction: String, CaseIterable, Sendable {
                     .toggleAllLyricsHotkey, .toggleLockPosition, .toggleTranslationHotkey, .toggleRomanizationHotkey,
                     .overlayFontLargerHotkey, .overlayFontSmallerHotkey]),
         (.window, [.openLyricsManagerHotkey, .openLyricsWindowHotkey, .toggleLyricsWindowMiniHotkey,
-                   .lyricsQuickSearchHotkey, .openSettingsHotkey, .openPlayerHotkey]),
+                   .lyricsQuickSearchHotkey, .openSettingsHotkey, .openPlayerHotkey, .toggleMenuBarPanelHotkey]),
         (.timing, [.lyricsAdvanceHotkey, .lyricsDelayHotkey, .lyricsOffsetResetHotkey]),
         (.playback, [.playPauseHotkey, .nextTrackHotkey, .previousTrackHotkey, .toggleFavoriteHotkey]),
     ]
@@ -135,6 +137,7 @@ public enum LyrimuseAction: String, CaseIterable, Sendable {
         case .lyricsQuickSearchHotkey: return "搜索歌词"
         case .openSettingsHotkey: return "打开设置"
         case .openPlayerHotkey: return "切换到播放器"
+        case .toggleMenuBarPanelHotkey: return "打开/收起菜单栏面板"
         case .lyricsAdvanceHotkey: return "歌词提前"
         case .lyricsDelayHotkey: return "歌词延后"
         case .lyricsOffsetResetHotkey: return "歌词偏移归零"
@@ -165,6 +168,7 @@ public enum LyrimuseAction: String, CaseIterable, Sendable {
         case .lyricsQuickSearchHotkey: return "magnifyingglass"
         case .openSettingsHotkey: return "gearshape"
         case .openPlayerHotkey: return "play.rectangle"
+        case .toggleMenuBarPanelHotkey: return "menubar.dock.rectangle"
         case .lyricsAdvanceHotkey: return "backward.end"
         case .lyricsDelayHotkey: return "forward.end"
         case .lyricsOffsetResetHotkey: return "arrow.counterclockwise"
@@ -195,6 +199,7 @@ public enum LyrimuseAction: String, CaseIterable, Sendable {
         case .lyricsQuickSearchHotkey: return ["手动搜索", "换歌词"]
         case .openSettingsHotkey: return ["设置窗口"]
         case .openPlayerHotkey: return ["播放器", "切换", "前台"]
+        case .toggleMenuBarPanelHotkey: return ["菜单栏", "面板", "控制中心"]
         case .lyricsAdvanceHotkey, .lyricsDelayHotkey: return ["偏移", "时间轴", "校准"]
         case .lyricsOffsetResetHotkey: return ["偏移", "重置", "时间轴"]
         case .playPauseHotkey: return ["播放控制"]

@@ -785,6 +785,7 @@ Hiện hoặc ẩn từng loại lời (hoặc tất cả cùng lúc, khi họp 
 - Cài đặt: Phím tắt › Mở Cài đặt
 - Cài đặt: Phím tắt › Ẩn/hiện mọi lời
 - Cài đặt: Phím tắt › Chuyển sang trình phát
+- Cài đặt: Phím tắt › Mở/đóng bảng trên thanh menu
 
 <a id="feature-deep-links"></a>
 
@@ -889,7 +890,7 @@ Tối đa một lần mỗi ngày, Lyrimuse gửi phiên bản, macOS, các tín
 
 ## Toàn bộ cài đặt
 
-Toàn bộ mục trong cửa sổ Cài đặt, theo vị trí: tổng cộng 310 mục. Gõ tên vào ô tìm kiếm ở đầu thanh bên của Cài đặt để đi thẳng tới mục đó.
+Toàn bộ mục trong cửa sổ Cài đặt, theo vị trí: tổng cộng 311 mục. Gõ tên vào ô tìm kiếm ở đầu thanh bên của Cài đặt để đi thẳng tới mục đó.
 
 ### Lời bài hát › Nguồn
 
@@ -1262,6 +1263,7 @@ Toàn bộ mục trong cửa sổ Cài đặt, theo vị trí: tổng cộng 310
 - **Tìm lời bài hát**
 - **Mở Cài đặt**
 - **Chuyển sang trình phát**
+- **Mở/đóng bảng trên thanh menu**
 - **Hiện lời sớm hơn**
 - **Hiện lời muộn hơn**
 - **Đặt lại độ lệch lời**

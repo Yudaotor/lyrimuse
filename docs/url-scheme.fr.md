@@ -81,6 +81,7 @@ Ce sont les mêmes actions que les raccourcis clavier de Réglages › Raccourci
 | `search-lyrics` | Ouvre la fenêtre « Rechercher les paroles » | — |
 | `open-settings` | Ouvre les Réglages | — |
 | `open-player` | Fait passer au premier plan le lecteur que vous utilisez | — |
+| `toggle-menubar-panel` | Ouvre ou ferme le panneau de la barre des menus, comme un clic sur son icône | — |
 
 ### Minutage des paroles
 

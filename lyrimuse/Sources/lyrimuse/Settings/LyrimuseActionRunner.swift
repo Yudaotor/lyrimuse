@@ -165,6 +165,9 @@ enum LyrimuseActionRunner {
             }
         case .openPlayerHotkey:
             IdlePlaybackActions.openPlayerApp(IdlePlaybackActions.player)
+        // 同左键点状态栏图标。打开的面板当 key,空格、方向键直接管用(`PanelPlaybackKeys`,06 章决策 91)。
+        case .toggleMenuBarPanelHotkey:
+            MenuBarStatusItem.shared.togglePanelFromDeepLink()
         }
     }
 

@@ -81,6 +81,7 @@ Das sind dieselben Aktionen wie die Tastaturkurzbefehle unter Einstellungen › 
 | `search-lyrics` | Öffnet das Fenster „Liedtext suchen“ | — |
 | `open-settings` | Öffnet die Einstellungen | — |
 | `open-player` | Holt den Player, den du gerade nutzt, in den Vordergrund | — |
+| `toggle-menubar-panel` | Öffnet oder schließt das Menüleisten-Panel, wie ein Klick auf das Symbol in der Menüleiste | — |
 
 ### Liedtext-Timing
 

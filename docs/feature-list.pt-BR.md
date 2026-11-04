@@ -785,6 +785,7 @@ Mostrar ou ocultar cada tipo de letra (ou todos de uma vez, para reuniões e com
 - Ajustes: Atalhos de teclado › Abrir ajustes
 - Ajustes: Atalhos de teclado › Ocultar/restaurar todas as letras
 - Ajustes: Atalhos de teclado › Ir para o player
+- Ajustes: Atalhos de teclado › Abrir/fechar painel da barra de menus
 
 <a id="feature-deep-links"></a>
 
@@ -889,7 +890,7 @@ No máximo uma vez por dia, envia a versão, o macOS, quais recursos estão ativ
 
 ## Todos os ajustes
 
-Todos os ajustes da janela Ajustes, por local: 310 no total. Digite um nome no campo de busca no topo da barra lateral dos Ajustes para ir direto até ele.
+Todos os ajustes da janela Ajustes, por local: 311 no total. Digite um nome no campo de busca no topo da barra lateral dos Ajustes para ir direto até ele.
 
 ### Letra › Origem
 
@@ -1262,6 +1263,7 @@ Todos os ajustes da janela Ajustes, por local: 310 no total. Digite um nome no c
 - **Buscar letra**
 - **Abrir ajustes**
 - **Ir para o player**
+- **Abrir/fechar painel da barra de menus**
 - **Adiantar letra**
 - **Atrasar letra**
 - **Zerar deslocamento**

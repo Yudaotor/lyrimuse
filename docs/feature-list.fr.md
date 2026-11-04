@@ -785,6 +785,7 @@ Afficher ou masquer chaque type de paroles (ou toutes à la fois, pour les réun
 - Réglages : Raccourcis clavier › Ouvrir les réglages
 - Réglages : Raccourcis clavier › Masquer/rétablir toutes les paroles
 - Réglages : Raccourcis clavier › Basculer vers le lecteur
+- Réglages : Raccourcis clavier › Ouvrir/fermer le panneau de la barre des menus
 
 <a id="feature-deep-links"></a>
 
@@ -889,7 +890,7 @@ Au plus une fois par jour, envoie la version, macOS, les fonctions activées et 
 
 ## Tous les réglages
 
-Tous les réglages de la fenêtre Réglages, classés par emplacement : 310 au total. Tapez un nom dans le champ de recherche en haut de la barre latérale des Réglages pour y aller directement.
+Tous les réglages de la fenêtre Réglages, classés par emplacement : 311 au total. Tapez un nom dans le champ de recherche en haut de la barre latérale des Réglages pour y aller directement.
 
 ### Paroles › Source
 
@@ -1262,6 +1263,7 @@ Tous les réglages de la fenêtre Réglages, classés par emplacement : 310 au 
 - **Rechercher les paroles**
 - **Ouvrir les réglages**
 - **Basculer vers le lecteur**
+- **Ouvrir/fermer le panneau de la barre des menus**
 - **Avancer les paroles**
 - **Retarder les paroles**
 - **Réinitialiser le décalage**

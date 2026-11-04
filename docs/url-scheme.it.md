@@ -81,6 +81,7 @@ Sono le stesse azioni delle scorciatoie in Impostazioni › Scorciatoie da tasti
 | `search-lyrics` | Apre la finestra “Cerca testi” | — |
 | `open-settings` | Apre Impostazioni | — |
 | `open-player` | Porta in primo piano il player che stai usando | — |
+| `toggle-menubar-panel` | Apre o chiude il pannello della barra dei menu, come un clic sulla sua icona | — |
 
 ### Timing del testo
 

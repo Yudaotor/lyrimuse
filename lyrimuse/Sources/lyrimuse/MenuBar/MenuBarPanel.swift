@@ -203,6 +203,10 @@ final class MenuBarPanelController {
         anchorView = anchor
         let window = MenuBarPanelWindow()
         window.onCancel = { [weak self] in self?.close() }
+        window.onKeyDown = { [weak window] event in
+            guard let window else { return false }
+            return PanelPlaybackKeys.handle(event, in: window)
+        }
         PanelEditBridge.shared.mainWindow = window
         PanelEditBridge.shared.setGalleryVisible = { [weak self] on in self?.setGalleryVisible(on) }
         let content = MenuBarPanelRoot(
@@ -384,6 +388,8 @@ private final class MenuBarPanelWindow: NSPanel {
     static let cornerRadius: CGFloat = 24
     /// Esc 收起。
     var onCancel: (() -> Void)?
+    /// 按键先过一遍它(`PanelPlaybackKeys`);返回 true = 吃掉,不再往下发。
+    var onKeyDown: ((NSEvent) -> Bool)?
 
     /// 能不能当 key。「可添加」那块不当:键盘(Esc、回车「完成」)留在主面板上。
     private let becomesKey: Bool
@@ -417,6 +423,12 @@ private final class MenuBarPanelWindow: NSPanel {
 
     override func cancelOperation(_ sender: Any?) {
         onCancel?()
+    }
+
+    /// 在分发前截:不截的话空格会先落到有焦点的按钮上。
+    override func sendEvent(_ event: NSEvent) {
+        if event.type == .keyDown, onKeyDown?(event) == true { return }
+        super.sendEvent(event)
     }
 
     /// 窗口阴影的形状。无边框窗口的阴影 AppKit 只认两处给的圆角:内容视图是带 `maskImage` 的 `NSVisualEffectView`
@@ -497,6 +509,38 @@ private final class FirstMouseHostingView<Content: View>: NSHostingView<Content>
         let fitting = fittingSize
         guard fitting != bounds.size else { return }
         onFittingSizeChange?(fitting)
+    }
+}
+
+/// 面板平时那一页的按键:空格播放 / 暂停,← → 上一首 / 下一首,↑ ↓ 歌词提前 / 延后一档(同卡片上的「+」「−」,
+/// 步长同设置)。带 ⌘ ⌥ ⌃ ⇧ 的、有文字输入框在接键盘时、不在平时那一页时都不管。音量不放在 ↑ ↓ 上:系统音量键本来就有,
+/// 面板里调得动音量的播放器又只有几家。见 06 章决策 91。
+@MainActor
+enum PanelPlaybackKeys {
+    private static let space: UInt16 = 49
+    private static let left: UInt16 = 123
+    private static let right: UInt16 = 124
+    private static let down: UInt16 = 125
+    private static let up: UInt16 = 126
+
+    static func handle(_ event: NSEvent, in window: NSWindow) -> Bool {
+        guard PanelEditBridge.shared.playbackKeysEnabled, !(window.firstResponder is NSText),
+              event.modifierFlags.intersection([.command, .option, .control, .shift]).isEmpty else { return false }
+        switch event.keyCode {
+        case space:
+            MenuBarStatusItem.withMusicPermission { PlaybackCoordinator.shared.userTogglePlayPause() }
+        case left:
+            MenuBarStatusItem.withMusicPermission { MusicPlaybackController.previousTrack() }
+        case right:
+            MenuBarStatusItem.withMusicPermission { MusicPlaybackController.nextTrack() }
+        case up:
+            _ = PlaybackCoordinator.shared.nudgeLyricsOffset(by: AppSettings.shared.lyricsOffsetStepMs)
+        case down:
+            _ = PlaybackCoordinator.shared.nudgeLyricsOffset(by: -AppSettings.shared.lyricsOffsetStepMs)
+        default:
+            return false
+        }
+        return true
     }
 }
 
@@ -661,6 +705,7 @@ private struct MenuBarPanelView: View {
             if !present, quickTarget == .touchBar { setQuickTarget(nil) }
         }
         .onChange(of: editing) { _, on in PanelEditBridge.shared.setGalleryVisible?(on) }
+        .onChange(of: playbackKeysOn) { _, on in PanelEditBridge.shared.playbackKeysEnabled = on }
         // 只在弹出这一刻取一次 —— 面板每次打开都是新建的一份视图,所以"每次开窗刷新一次"
         // 已经够了,不用为它常驻订阅 ConfigStore/LastfmConnectController/状态文件观察器
         // 三个东西(这张面板的渲染路径一直刻意只依赖 AppSettings/PlaybackCoordinator)。
@@ -673,6 +718,7 @@ private struct MenuBarPanelView: View {
             // 开面板也读一次,用户在播放器里自己改过的才对得上。
             PlaybackCoordinator.shared.refreshExtendedControls()
             pendingUpdate = SparkleUpdaterManager.shared.availableUpdate
+            PanelEditBridge.shared.playbackKeysEnabled = playbackKeysOn
             // 深链 quick=edit 打开就在编辑:等控制器把主面板摆好再开旁边那块。
             if editing { DispatchQueue.main.async { PanelEditBridge.shared.setGalleryVisible?(true) } }
             lastfmStatus = destinationStatus(
@@ -685,6 +731,11 @@ private struct MenuBarPanelView: View {
                 mirrorInfo: LastfmMirrorStatus.current)
             discordStatus = destinationStatus(for: .discord, config: .shared, lastfmConnect: .shared, mirrorInfo: nil)
         }
+    }
+
+    /// 空格、方向键这一刻管不管用:只在平时那一页(编辑布局、快捷设置、简介页里有滑杆和拖动,不抢它们的键)。
+    private var playbackKeysOn: Bool {
+        !editing && quickTarget == nil && editorialKind == nil
     }
 
     private var shownEditorialCard: EditorialCard? {

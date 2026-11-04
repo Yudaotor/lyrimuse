@@ -81,6 +81,7 @@ Son las mismas acciones que los atajos de teclado de Ajustes › Atajos de tecla
 | `search-lyrics` | Abre la ventana «Buscar letra» | — |
 | `open-settings` | Abre Ajustes | — |
 | `open-player` | Pasa a primer plano el reproductor que estás usando | — |
+| `toggle-menubar-panel` | Abre o cierra el panel de la barra de menús, igual que hacer clic en su icono | — |
 
 ### Sincronización de la letra
 

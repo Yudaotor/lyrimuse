@@ -785,6 +785,7 @@ Ein- und Ausblenden jeder Liedtextanzeige (oder aller zugleich, für Meetings un
 - Einstellungen: Tastaturkurzbefehle › Einstellungen öffnen
 - Einstellungen: Tastaturkurzbefehle › Alle Liedtexte aus-/einblenden
 - Einstellungen: Tastaturkurzbefehle › Zum Player wechseln
+- Einstellungen: Tastaturkurzbefehle › Menüleisten-Panel öffnen/schließen
 
 <a id="feature-deep-links"></a>
 
@@ -889,7 +890,7 @@ Sendet höchstens einmal täglich Version, macOS, aktivierte Funktionen und Abst
 
 ## Alle Einstellungen
 
-Alle Einstellungen des Einstellungsfensters nach Ort: insgesamt 310. Gib einen Namen in das Suchfeld oben in der Seitenleiste der Einstellungen ein, um direkt dorthin zu springen.
+Alle Einstellungen des Einstellungsfensters nach Ort: insgesamt 311. Gib einen Namen in das Suchfeld oben in der Seitenleiste der Einstellungen ein, um direkt dorthin zu springen.
 
 ### Liedtext › Quelle
 
@@ -1262,6 +1263,7 @@ Alle Einstellungen des Einstellungsfensters nach Ort: insgesamt 310. Gib einen N
 - **Liedtext suchen**
 - **Einstellungen öffnen**
 - **Zum Player wechseln**
+- **Menüleisten-Panel öffnen/schließen**
 - **Text früher**
 - **Text später**
 - **Liedtext-Versatz zurücksetzen**
