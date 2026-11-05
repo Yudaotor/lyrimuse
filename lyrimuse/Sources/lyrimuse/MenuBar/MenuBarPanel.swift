@@ -656,7 +656,7 @@ private struct MenuBarPanelView: View {
         MenuBarPanelDebugState.quickTarget = initialQuickTarget?.deepLinkValue
         MenuBarPanelDebugState.editing = editing
     }
-    /// 停播卡「打开」键上那枚播放器图标(见 idleRow)。按播放器取一次,不在 body 里现查。
+    /// 停播卡「打开」键上那枚播放器图标(见 idleActionButton)。按播放器取一次,不在 body 里现查。
     @State private var idlePlayerIcon: NSImage?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     /// 封面小图按像素预先重采样要知道显示倍率(见 coverView)。
@@ -1217,8 +1217,18 @@ private struct MenuBarPanelView: View {
         }
     }
 
-    /// 大号(3×2)的正在播放:左上封面、右上播放器角标,中间歌名歌手,底下三个走带键;没在放时底下是「继续播放 / 打开」。
-    private var compactNowPlaying: some View {
+    /// 大号(3×2)的正在播放:左上封面、右上播放器角标,中间歌名歌手,底下三个走带键;没有曲目时换成上次那首和「继续播放 / 打开」。
+    @ViewBuilder private var compactNowPlaying: some View {
+        if isIdleNoTrack {
+            PanelIdleNowPlaying(wide: false, coverSide: 48, openLyricsWindow: openLyricsWindowFromCard) {
+                idleActionButton()
+            }
+        } else {
+            playingCompactNowPlaying
+        }
+    }
+
+    private var playingCompactNowPlaying: some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack(alignment: .top, spacing: 0) {
                 Button {
@@ -1230,7 +1240,7 @@ private struct MenuBarPanelView: View {
                 .buttonStyle(.plain)
                 .help(L10n.t("打开歌词窗口"))
                 Spacer(minLength: 0)
-                if !isIdleNoTrack, let icon = PlaybackCoordinator.shared.resolvedPlayerIcon {
+                if let icon = PlaybackCoordinator.shared.resolvedPlayerIcon {
                     Button {
                         PlaybackCoordinator.shared.openResolvedPlayer()
                         close()
@@ -1245,48 +1255,46 @@ private struct MenuBarPanelView: View {
                 }
             }
             Spacer(minLength: 4)
-            Text(isIdleNoTrack ? L10n.t("未在播放") : displayTitle)
+            Text(displayTitle)
                 .font(.system(size: 13, weight: .semibold))
                 .lineLimit(1)
-            if !isIdleNoTrack {
-                Text(displayArtist)
-                    .font(.system(size: 11))
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-            }
+            Text(displayArtist)
+                .font(.system(size: 11))
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
             Spacer(minLength: 4)
-            if isIdleNoTrack {
-                idleActionButton
-            } else {
-                HStack(spacing: 0) {
-                    controlButton("backward.fill", size: 12) {
-                        MenuBarStatusItem.withMusicPermission { MusicPlaybackController.previousTrack() }
-                    }
-                    Spacer(minLength: 0)
-                    controlButton(playback.isPlayingSmoothed ? "pause.fill" : "play.fill", size: 16) {
-                        MenuBarStatusItem.withMusicPermission { PlaybackCoordinator.shared.userTogglePlayPause() }
-                    }
-                    Spacer(minLength: 0)
-                    controlButton("forward.fill", size: 12) {
-                        MenuBarStatusItem.withMusicPermission { MusicPlaybackController.nextTrack() }
-                    }
+            HStack(spacing: 0) {
+                controlButton("backward.fill", size: 12) {
+                    MenuBarStatusItem.withMusicPermission { MusicPlaybackController.previousTrack() }
+                }
+                Spacer(minLength: 0)
+                controlButton(playback.isPlayingSmoothed ? "pause.fill" : "play.fill", size: 16) {
+                    MenuBarStatusItem.withMusicPermission { PlaybackCoordinator.shared.userTogglePlayPause() }
+                }
+                Spacer(minLength: 0)
+                controlButton("forward.fill", size: 12) {
+                    MenuBarStatusItem.withMusicPermission { MusicPlaybackController.nextTrack() }
                 }
             }
         }
     }
 
+    /// 点卡片封面:先收面板再开歌词窗口(同「歌词窗口」格子的顺序)。
+    private func openLyricsWindowFromCard() {
+        close()
+        AppActions.shared.openLyricsWindow?()
+    }
+
     /// 完整的正在播放卡(加宽 6×2 那一档,高 153.5:内边距 10、行距 4),内容在格子里上下居中。
     private var nowPlayingCard: some View {
         VStack(spacing: 4) {
-            // 压根没有曲目时整张卡换成 idleRow —— 上半截(封面/歌名/歌手/歌词行)全是空的,
-            // 摆在那儿只剩占位图和两行空文本;进度条没时长本来就不渲染;三键里前两颗对空
-            // 队列是静默 no-op。
-            //
-            // 判据是"压根没有曲目"而不是"没有封面":播放中拿不到封面的曲目(播客/取图
-            // 失败)照旧走下面这条 —— 那时候渐变占位图是有意义的(它代表一首真的歌),而卡片
-            // 右边还有歌名/歌手撑着。广告插播同理(标题是「广告中」,有东西在放)。
+            // 压根没有曲目时整张卡换成上次那首(`PanelIdleNowPlaying`):进度条没时长不渲染,三键里前两颗对空队列是静默 no-op。
+            // 判据是"压根没有曲目"而不是"没有封面":播放中拿不到封面的曲目(播客/取图失败)照旧走下面这条,
+            // 广告插播同理(标题是「广告中」,有东西在放)。
             if isIdleNoTrack {
-                idleRow
+                PanelIdleNowPlaying(wide: true, coverSide: Self.coverSide, openLyricsWindow: openLyricsWindowFromCard) {
+                    idleActionButton(prominent: true)
+                }
             } else {
                 trackHeader
                 lyricLine
@@ -1378,42 +1386,12 @@ private struct MenuBarPanelView: View {
         .accessibilityAddTraits(active ? .isSelected : [])
     }
 
-    /// 压根没有曲目时这张卡的全部内容:两行状态字 + 一颗主动作键。
+    /// 没有曲目时那颗主动作键:能接着放的播放器是「继续播放」,只能打开的是那家的图标 +「打开」。加宽卡(`prominent`,大一号)和大号格共用。
     ///
-    /// 文案与动作跟歌词窗口停播页(`IdleStandbyView`)、灵动岛 hover 展开
-    /// (`NotchLyricsView.idleExpandedPanel`)同一套 —— 同一个 `IdlePlaybackActions` 决定
-    /// 指哪家播放器、能不能真的「继续播放」(AM / Spotify 有 AppleScript,其余只能「打开 X」)。
-    /// 三个展示面对"没在放"说同样的话,不是各写一份。
-    ///
-    /// 这里不留走带三键:没有曲目时上一首/下一首对空队列是**静默 no-op**,裸 play 同样
-    /// 打不着(`IdlePlaybackActions.resume` 为此才是三段式:裸 play → 上次那首 → 都不行就把
-    /// 播放器带到前台)。一颗点下去必有可见反应的键,比三颗按不出东西的键有用。
-    ///
-    /// 点完**不收面板**:放起来之后这张卡当场变成正在播放卡,那是最好的反馈;真走到"把播放器
-    /// 带到前台"那条兜底时,失焦监视器会自己把面板收掉。
-    private var idleRow: some View {
-        HStack(spacing: 9) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(L10n.t("未在播放"))
-                    .font(.system(size: 12, weight: .semibold))
-                // 不点名播放器:这里指的是停播前最后用的那家,而用户往往勾了好几家,点名读起来像只有
-                // 那一家才行;句子也得短到这一行放得下(同迷你窗停播页那句)。
-                Text(L10n.t("播放歌曲后，歌词将自动显示"))
-                    .font(.system(size: 10.5))
-                    .foregroundStyle(.secondary)
-            }
-            .lineLimit(1)
-            .truncationMode(.tail)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            idleActionButton
-        }
-        // 有曲目时卡片靠封面撑高,这里只有一行字。给同样的下限,面板在"放着"和
-        // "没放"之间切换时顶部这一块不会突然塌掉一截。
-        .frame(minHeight: Self.coverSide)
-    }
-
-    /// 没在放时那颗主动作键:能接着放的播放器是「继续播放」,只能打开的是那家的图标 +「打开」。停播行和大号正在播放格共用。
-    private var idleActionButton: some View {
+    /// 文案与动作跟歌词窗口停播页、灵动岛空闲面板同一套(`IdlePlaybackActions` 决定指哪家、能不能真的继续播放)。
+    /// 不留走带三键:没有曲目时上一首/下一首对空队列是静默 no-op;这一颗点下去必有可见反应(`resume` 最后兜底把播放器带到前台)。
+    /// 点完不收面板:放起来之后卡片当场变成正在播放卡;走到兜底那条时失焦监视器会收掉面板。
+    private func idleActionButton(prominent: Bool = false) -> some View {
         let player = IdlePlaybackActions.player
         let canResume = IdlePlaybackActions.canResume(player)
         let name = player.displayName
@@ -1428,7 +1406,7 @@ private struct MenuBarPanelView: View {
             // 静息态就带底色(baseLevel):面板里其它 Chip 都是次要入口,不悬停看不出是键没关系;
             // 这一颗是这个状态下唯一能做的事,必须一眼认得出来。色相跟圆钮块"开"的那圈同一个
             // Color.accentColor。
-            ChipButton(cornerRadius: 8, tint: .accentColor, baseLevel: 0.16, action: act) {
+            ChipButton(cornerRadius: prominent ? 15 : 8, tint: .accentColor, baseLevel: 0.16, action: act) {
                 // 只能「打开」的播放器:键上是那家的图标 +「打开」,全名放进悬停提示 —— 写成
                 // 「打开 网易云音乐」既点名、又把左边那句挤没。
                 HStack(spacing: 5) {
@@ -1438,18 +1416,18 @@ private struct MenuBarPanelView: View {
                     } else if let idlePlayerIcon {
                         Image(nsImage: idlePlayerIcon)
                             .resizable()
-                            .frame(width: 14, height: 14)
+                            .frame(width: prominent ? 15 : 14, height: prominent ? 15 : 14)
                     } else {
                         Image(systemName: "arrow.up.forward.app")
                             .font(.system(size: 10.5, weight: .semibold))
                     }
                     Text(canResume ? L10n.t("继续播放") : L10n.t("打开"))
-                        .font(.system(size: 11.5, weight: .medium))
+                        .font(.system(size: prominent ? 12 : 11.5, weight: .semibold))
                         .lineLimit(1)
                 }
                 .foregroundStyle(Color.accentColor)
-                .padding(.horizontal, 11)
-                .frame(height: 28)
+                .padding(.horizontal, prominent ? 18 : 11)
+                .frame(height: prominent ? 30 : 28)
             }
             .fixedSize()
             .help(canResume ? L10n.t("继续播放") : String(format: L10n.t("打开 %@"), name))
@@ -1580,7 +1558,7 @@ private struct MenuBarPanelView: View {
             + PlaybackCoordinator.shared.currentLyricsOffsetMs
     }
 
-    /// 封面边长。没在播放那一行的最小高度跟它一致(见 idleRow)。
+    /// 封面边长。
     private static let coverSide: CGFloat = 52
 
     private var coverView: some View { coverView(side: Self.coverSide) }

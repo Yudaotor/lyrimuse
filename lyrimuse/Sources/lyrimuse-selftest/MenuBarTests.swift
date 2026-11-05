@@ -2294,6 +2294,11 @@ func runMenuBarTests() {
                     "面板编辑: 此刻用不了的格子(没连 Last.fm 时的今日收听等)编辑时也拿掉,写回时放回原位")
         expectEqual(sourceHas(source("lyrimuse/MenuBar/MenuBarPanelVolume.swift"), ".accessibilityAdjustableAction { direction in"), true,
                     "面板音量: 只在按着时写音量,辅助功能的增减单独接")
+        let idleCard = source("lyrimuse/MenuBar/MenuBarPanelIdleCard.swift")
+        expectEqual(sourceHas(panel, "if isIdleNoTrack {\nPanelIdleNowPlaying(wide: true, coverSide: Self.coverSide, openLyricsWindow: openLyricsWindowFromCard) {\nidleActionButton(prominent: true)")
+                    && sourceHas(panel, "if isIdleNoTrack {\nPanelIdleNowPlaying(wide: false, coverSide: 48, openLyricsWindow: openLyricsWindowFromCard) {\nidleActionButton()")
+                    && sourceHas(idleCard, "@ObservedObject private var model = NotchIdleLastTrack.shared"), true,
+                    "面板停播: 加宽、大号两档没有曲目时都画上次那首,数据跟灵动岛空闲面板同一份")
         expectEqual(sourceHas(panel, "if items.isEmpty { Spacer(minLength: 0) }\neditLayoutButton"), true,
                     "面板编辑: 「编辑」那一颗不跟着底栏显隐")
         expectEqual(sourceHas(panel, "if pendingUpdate != nil, !items.contains(.version) { items.append(.version) }"), true,
