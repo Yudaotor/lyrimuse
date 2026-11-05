@@ -179,6 +179,8 @@ enum DebugDeepLinks {
             }
         case let .panelDrag(from, to, via, inGallery):
             panelDrag(from: from, to: to, via: via, inGallery: inGallery)
+        case let .panelClick(at, inGallery):
+            panelClick(at: at, inGallery: inGallery)
         case let .panelPin(on):
             MenuBarPanelDebugState.pinned = on
             logger.notice("debug panel pin \(on, privacy: .public)")
@@ -482,6 +484,28 @@ extension DebugDeepLinks {
             try? await Task.sleep(nanoseconds: 50_000_000)
             if let e = event(.leftMouseUp, to) { window.sendEvent(e) }
             logger.notice("debug panel drag done")
+        }
+    }
+
+    /// `debug/panel-click`:往面板窗口送一次按下 → 30 毫秒后松开(格子按住久了算长按,`panelDrag` 那样按着拖 0.4 秒点不成)。
+    static func panelClick(at point: CGPoint, inGallery: Bool = false) {
+        let bridge = PanelEditBridge.shared
+        guard let window = inGallery ? bridge.galleryWindow : bridge.mainWindow, window.isVisible else {
+            logger.notice("debug panel click: panel is not open")
+            return
+        }
+        func event(_ type: NSEvent.EventType) -> NSEvent? {
+            NSEvent.mouseEvent(with: type, location: NSPoint(x: point.x, y: window.frame.height - point.y), modifierFlags: [],
+                               timestamp: ProcessInfo.processInfo.systemUptime, windowNumber: window.windowNumber,
+                               context: nil, eventNumber: 0, clickCount: 1, pressure: type == .leftMouseUp ? 0 : 1)
+        }
+        Task { @MainActor in
+            if let e = event(.mouseMoved) { window.sendEvent(e) }
+            try? await Task.sleep(nanoseconds: 50_000_000)
+            if let e = event(.leftMouseDown) { window.sendEvent(e) }
+            try? await Task.sleep(nanoseconds: 30_000_000)
+            if let e = event(.leftMouseUp) { window.sendEvent(e) }
+            logger.notice("debug panel click done")
         }
     }
 }

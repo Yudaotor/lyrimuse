@@ -190,6 +190,12 @@ func runDeepLinkTests() {
         expectEqual(link("lyrimuse://debug/panel-drag?from=1,2&to=3,4&via=5,6;7"), nil, "debug: 途经点写错整条不认")
         expectEqual(link("lyrimuse://debug/panel-drag?from=1,2&to=3,4&in=gallery"),
                     .debug(.panelDrag(from: CGPoint(x: 1, y: 2), to: CGPoint(x: 3, y: 4), inGallery: true)), "debug: 按在「可添加」面板上拖")
+        expectEqual(link("lyrimuse://debug/panel-click?at=60,208.5"), .debug(.panelClick(at: CGPoint(x: 60, y: 208.5))),
+                    "debug: 面板里点一下")
+        expectEqual(link("lyrimuse://debug/panel-click?at=1,2&in=gallery"), .debug(.panelClick(at: CGPoint(x: 1, y: 2), inGallery: true)),
+                    "debug: 在「可添加」面板上点一下")
+        expectEqual(link("lyrimuse://debug/panel-click") == nil && link("lyrimuse://debug/panel-click?at=1") == nil, true,
+                    "debug: 点的位置缺了或写错不认")
         expectEqual(link("lyrimuse://debug/panel-drag?from=1,2") == nil && link("lyrimuse://debug/panel-drag?from=1&to=3,4") == nil, true,
                     "debug: 面板拖动缺终点或坐标不全不认")
         expectEqual(link("lyrimuse://debug/panel-layout?json=%7B%22tiles%22%3A%5B%5D%7D"), .debug(.panelLayout(json: "{\"tiles\":[]}")),
@@ -448,7 +454,7 @@ func runDeepLinkTests() {
             .debug(.simulateIdle),
             .debug(.toggleFavorite), .debug(.idleResume), .debug(.seek(seconds: 99.7)), .debug(.seek(seconds: 0)),
             .debug(.knockout(leg: .appleMusicScript, on: false)), .debug(.knockout(leg: .spotifyScript, on: true)),
-            .debug(.knockout(leg: .kasetScript, on: false)), .debug(.saveConfig), .debug(.panelLayout(json: nil)), .debug(.panelPin(on: true)), .debug(.panelPin(on: false)), .debug(.panelDrag(from: CGPoint(x: 1.5, y: 2), to: CGPoint(x: 300, y: 400))), .debug(.panelDrag(from: CGPoint(x: 1, y: 2), to: CGPoint(x: 3, y: 4), via: [CGPoint(x: 5, y: 6)])), .debug(.panelDrag(from: CGPoint(x: 1, y: 2), to: CGPoint(x: 3, y: 4), inGallery: true)),
+            .debug(.knockout(leg: .kasetScript, on: false)), .debug(.saveConfig), .debug(.panelLayout(json: nil)), .debug(.panelPin(on: true)), .debug(.panelPin(on: false)), .debug(.panelDrag(from: CGPoint(x: 1.5, y: 2), to: CGPoint(x: 300, y: 400))), .debug(.panelDrag(from: CGPoint(x: 1, y: 2), to: CGPoint(x: 3, y: 4), via: [CGPoint(x: 5, y: 6)])), .debug(.panelDrag(from: CGPoint(x: 1, y: 2), to: CGPoint(x: 3, y: 4), inGallery: true)), .debug(.panelClick(at: CGPoint(x: 1, y: 2))), .debug(.panelClick(at: CGPoint(x: 1, y: 2), inGallery: true)),
             .debug(.panelLayout(json: MenuBarPanelLayout(placements: [.init(tile: .translation, size: .large, column: 0, row: 0)], footer: [.version]).encoded())), .debug(.volume(percent: 0)), .debug(.volume(percent: 100)),
             .debug(.stall(ms: 1)), .debug(.stall(ms: 2000)), .debug(.milestonePreview),
             .debug(.notchBehavior(collapseWhenPaused: true, hideWhenNotPlaying: nil)),

@@ -144,6 +144,9 @@ public enum LyrimuseDeepLink: Equatable, Sendable {
         /// `via=x,y;x,y` 按住不放先依次拖过这几个点再到 `to`(验一次拖动里来回调);`in=gallery` 按在编辑时旁边那块
         /// 「可添加」面板上,坐标按那扇窗算。
         case panelDrag(from: CGPoint, to: CGPoint, via: [CGPoint] = [], inGallery: Bool = false)
+        /// 在菜单栏面板里 (x, y) 处点一下(按下、30 毫秒后松开,坐标同 `panelDrag`):`debug/panel-click?at=60,208`。
+        /// 格子的点按 / 长按按按住多久分,`panelDrag` 按住约 0.4 秒,会被认成长按。`in=gallery` 同 `panelDrag`。
+        case panelClick(at: CGPoint, inGallery: Bool = false)
         /// 主线程原地睡这么多毫秒(`debug/stall?ms=`,1…`maxStallMs`):造出「别的窗口把主线程占住」那一下,验动画扛不扛得住。
         case stall(ms: Int)
         /// 灵动岛摆一次报喜,跟设置页「收听里程碑」旁那颗「试用」走同一条路(`debug/milestone-preview`)。
@@ -311,15 +314,15 @@ public enum LyrimuseDeepLink: Equatable, Sendable {
         case ("debug", "/panel-layout"):
             self = .debug(.panelLayout(json: value("json").flatMap { $0.isEmpty ? nil : $0 }))
         case ("debug", "/panel-drag"):
-            func point(_ text: Substring) -> CGPoint? {
-                let parts = text.split(separator: ",").compactMap { Double($0) }
-                return parts.count == 2 ? CGPoint(x: parts[0], y: parts[1]) : nil
-            }
-            guard let from = point(Substring(value("from") ?? "")), let to = point(Substring(value("to") ?? "")) else { return nil }
+            guard let from = Self.panelPoint(Substring(value("from") ?? "")),
+                  let to = Self.panelPoint(Substring(value("to") ?? "")) else { return nil }
             let viaText = (value("via") ?? "").split(separator: ";")
-            let via = viaText.compactMap(point)
+            let via = viaText.compactMap(Self.panelPoint)
             guard via.count == viaText.count else { return nil }
             self = .debug(.panelDrag(from: from, to: to, via: via, inGallery: value("in") == "gallery"))
+        case ("debug", "/panel-click"):
+            guard let at = Self.panelPoint(Substring(value("at") ?? "")) else { return nil }
+            self = .debug(.panelClick(at: at, inGallery: value("in") == "gallery"))
         case ("debug", "/panel-pin"):
             guard let on = value("on").flatMap(Self.parseBool) else { return nil }
             self = .debug(.panelPin(on: on))
@@ -565,6 +568,10 @@ public enum LyrimuseDeepLink: Equatable, Sendable {
                 components.queryItems = [URLQueryItem(name: "from", value: text(from)), URLQueryItem(name: "to", value: text(to))]
                 if !via.isEmpty { components.queryItems?.append(URLQueryItem(name: "via", value: via.map(text).joined(separator: ";"))) }
                 if inGallery { components.queryItems?.append(URLQueryItem(name: "in", value: "gallery")) }
+            case let .panelClick(at, inGallery):
+                components.path = "/panel-click"
+                components.queryItems = [URLQueryItem(name: "at", value: "\(at.x),\(at.y)")]
+                if inGallery { components.queryItems?.append(URLQueryItem(name: "in", value: "gallery")) }
             case let .panelPin(on):
                 components.path = "/panel-pin"
                 components.queryItems = [URLQueryItem(name: "on", value: on ? "1" : "0")]
@@ -772,5 +779,13 @@ extension SettingsDeepLink {
         let page = parts.dropLast().joined(separator: "/")
         guard let entry = sectionTable[page], let value = entry.values[name] else { return nil }
         return Section(storageKey: entry.key, value: value)
+    }
+}
+
+extension LyrimuseDeepLink {
+    /// 面板调试深链里的一个点:`x,y`(面板窗口内的点坐标)。
+    static func panelPoint(_ text: Substring) -> CGPoint? {
+        let parts = text.split(separator: ",").compactMap { Double($0) }
+        return parts.count == 2 ? CGPoint(x: parts[0], y: parts[1]) : nil
     }
 }
