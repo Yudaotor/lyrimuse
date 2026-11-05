@@ -6,7 +6,7 @@ Receives Lyrimuse's anonymous usage data ("Share Anonymous Usage Data" in Settin
 |---|---|
 | `POST /v1/heartbeat` | At most one per machine per day: random install ID, app and macOS version, chip, languages, which features are on, which built-in players played music and how many hangs on previous days |
 | `POST /v1/crash` | One summary per crash report: exception, termination reason, top frames of the crashed thread and, for an uncaught exception, of the backtrace where it was thrown (paths already removed by the app) |
-| `GET /v1/stats` | Aggregates; needs `Authorization: Bearer <ADMIN_TOKEN>` |
+| `GET /v1/stats` | Aggregates; needs `Authorization: Bearer <ADMIN_TOKEN>`. `days=1..180`; `include_excluded=1` also counts the installs in `excluded_installs` (our own machines) |
 | `GET /` | Dashboard that reads `/v1/stats` with the token |
 
 Only whitelisted fields are stored; strings and lists are truncated. No IP addresses are stored, only the country code Cloudflare derives from the request. The app never sends song titles, artists, local paths, account names or credentials (see `lyrimuse/Sources/LyrimuseCore/Telemetry/Telemetry.swift`).

@@ -275,8 +275,10 @@ async function stats(request, env, url) {
   const since = utcDay(now - (days - 1) * DAY_MS);
   const since7 = utcDay(now - 6 * DAY_MS);
   const db = env.DB;
-  // excluded_installs 里的安装(作者自己的机器、测试机)不进任何统计;原始数据照存,删掉那一行就恢复统计。
-  const kept = (col = "install_id") => `${col} NOT IN (SELECT install_id FROM excluded_installs)`;
+  // excluded_installs 里的安装(作者自己的机器、测试机)默认不进任何统计;原始数据照存,删掉那一行就恢复统计。
+  // include_excluded=1 时连它们一起算(SecondBrain 面板遥测页的「含我们自己的机器」开关)。
+  const includeExcluded = url.searchParams.get("include_excluded") === "1";
+  const kept = (col = "install_id") => (includeExcluded ? "1 = 1" : `${col} NOT IN (SELECT install_id FROM excluded_installs)`);
   const [daily, fresh, freshByOrigin, totals, latest, activity, crashes] = await Promise.all([
     db.prepare(`SELECT day, COUNT(*) AS n FROM heartbeats WHERE day >= ?1 AND ${kept()} GROUP BY day ORDER BY day`).bind(since).all(),
     db.prepare(`SELECT first_day AS day, COUNT(*) AS n FROM installs WHERE first_day >= ?1 AND ${kept()} GROUP BY first_day ORDER BY first_day`)
@@ -330,6 +332,7 @@ async function stats(request, env, url) {
   return json({
     window_days: days,
     since,
+    include_excluded: includeExcluded,
     totals: { installs: totals.installs, active_7d: totals.active7, active_window: totals.active_window, excluded: totals.excluded },
     daily_active: daily.results,
     new_installs: fresh.results,
