@@ -1201,6 +1201,31 @@ func runSyncEngineTests() {
             expectEqual(D.speakers(in: ["v1：一", "v2：二"]), Set(["v1", "v2"]),
                         "对唱: 匿名声部直通整份闸(agent 是上游权威标注)")
         }
+        // 整首的比例闸:左右两边唱得少的那一边不到一成(结构化歌词源给几乎一个人唱完的歌标的第二位,只有一两句),
+        // 整首当没有对唱信息;刚好一成照旧分左右。见 08 章决策 67。
+        do {
+            func song(_ v1: Int, _ v2: Int) -> [String?] {
+                ["v1"] + Array(repeating: nil, count: v1 - 1) + ["v2"] + Array(repeating: nil, count: v2 - 1)
+            }
+            expectEqual(D.sides(for: song(80, 1)).compactMap { $0 }.isEmpty, true,
+                        "对唱比例: 80 句对 1 句不按对唱排(The System《Don't Disturb This Groove》那种)")
+            expectEqual(D.sides(for: song(91, 9)).compactMap { $0 }.isEmpty, true, "对唱比例: 9% 不算对唱")
+            expectEqual(D.sides(for: song(90, 10)).last, .trailing, "对唱比例: 刚好一成照旧分左右")
+            expectEqual(D.sides(for: song(42, 15))[42], .trailing, "对唱比例: 真对唱(26%)照旧分左右")
+            // 合唱和第一个标记之前的行不进句数:不然一首大半是合唱的歌,两位独唱各一两句也会被算成"太少"。
+            let withChorus: [String?] = ["v1", nil, "合"] + Array(repeating: nil, count: 30) + ["v2", nil]
+            expectEqual(D.sides(for: withChorus).first, .leading, "对唱比例: 合唱行不算进左右的句数")
+            // 独占一行、剥完会丢的标记行不算句数:12 句对 1 句是 1/13,不到一成;把两行标记也算上就成了 2/15,会被误放过。
+            let standalone = ["男："] + Array(repeating: "你什么都没有", count: 12) + ["女：", "电话开始躲"]
+            expectEqual(D.plan(lineTexts: standalone).dropped.filter { $0 }.count, 2, "对唱比例: 两行独占标记都会丢")
+            expectEqual(D.plan(lineTexts: standalone.map { $0 == "男：" ? "男：开场" : $0 } + ["电话开始躲"])
+                            .sides.last, .trailing, "对唱比例: 13 句对 2 句(2/15)照旧分左右")
+            expectEqual(D.plan(lineTexts: standalone).sides.compactMap { $0 }.isEmpty, true,
+                        "对唱比例: 独占一行的标记行不算句数")
+            expectEqual(D.hasBalancedVoices([.leading, .leading, .trailing, nil, .center], counted: [true, true, false, true, true]),
+                        false, "对唱比例: counted 为假的行不算(剩下 2 对 0)")
+            expectEqual(D.hasBalancedVoices([.leading, .trailing], counted: nil), true, "对唱比例: 不给 counted 时每行都算")
+        }
         // 剥离与定边是两件事:身份不够也照样剥前缀、丢独占行
         do {
             let plan = D.plan(lineTexts: ["合：", "何时想戒掉流浪", "普通一行"])

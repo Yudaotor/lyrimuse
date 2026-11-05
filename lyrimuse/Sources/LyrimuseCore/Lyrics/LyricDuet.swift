@@ -391,7 +391,10 @@ public enum LyricDuet {
     ///   不是 leading。这个区分很要紧:歌词窗口的默认排版是左对齐、悬浮窗的默认排版是
     ///   居中,把"没信息"和"左边那位"混成同一个值,悬浮窗上每一首普通歌都会莫名其妙从
     ///   居中变成靠左。各视图自己决定 nil 时用什么(`?? .leading` / `?? .center`)。
-    public static func sides(for markers: [String?]) -> [Side?] {
+    ///
+    /// 定完边还要过一道整首的比例闸(`hasBalancedVoices`):左右两边里唱得少的那一边不到 `minVoiceShare` 时整首退回
+    /// "没有对唱信息"。`counted` 标出哪些行算句数(独占一行、剥完会丢掉的标记行不算);不给时每行都算。
+    public static func sides(for markers: [String?], counted: [Bool]? = nil) -> [Side?] {
         guard hasEnoughIdentities(Set(markers.compactMap { $0 })) else {
             return markers.map { _ in nil }
         }
@@ -414,7 +417,28 @@ public enum LyricDuet {
             }
             out.append(current)
         }
+        guard hasBalancedVoices(out, counted: counted) else { return markers.map { _ in nil } }
         return out
+    }
+
+    /// 左右两边里唱得少的那一边,句数至少占左右两边合计的这一份,才按对唱分左右。
+    public static let minVoiceShare = 0.1
+
+    /// 左右两边的句数够不够得上对唱:数定完边之后靠左、靠右的行(标记向后延续的行也算,合唱和没有对唱信息的行不算)。
+    /// 结构化歌词源会给几乎一个人唱完的歌标上第二位演唱者(只有一两句和声、插话),按对唱排的话整首都贴着一条边线,
+    /// 短的译文、下一句看着就是靠左。见 08 章决策 67。
+    public static func hasBalancedVoices(_ sides: [Side?], counted: [Bool]?) -> Bool {
+        var leading = 0, trailing = 0
+        for (i, side) in sides.enumerated() where counted.map({ i < $0.count ? $0[i] : true }) ?? true {
+            switch side {
+            case .leading: leading += 1
+            case .trailing: trailing += 1
+            case .center, nil: break
+            }
+        }
+        let total = leading + trailing
+        guard total > 0 else { return true }
+        return Double(min(leading, trailing)) >= Double(total) * minVoiceShare
     }
 
     // MARK: - 整行路径
@@ -442,7 +466,7 @@ public enum LyricDuet {
             markers.append(label)
             dropped.append(rest.isEmpty)
         }
-        return (outTexts, sides(for: markers), dropped)
+        return (outTexts, sides(for: markers, counted: dropped.map { !$0 }), dropped)
     }
 
     // MARK: - 逐字路径
@@ -497,6 +521,6 @@ public enum LyricDuet {
             markers.append(label)
             dropped.append(rest.isEmpty || stripped.isEmpty)
         }
-        return (outLines, sides(for: markers), dropped)
+        return (outLines, sides(for: markers, counted: dropped.map { !$0 }), dropped)
     }
 }
