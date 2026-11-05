@@ -48,6 +48,13 @@ func isOtherTrackRound(ctx context.Context) bool {
 	return v
 }
 
+// playingRoundWantsLocalIdentity:这一轮解析的是播放器在放的这首或它的待播队列。网易云、QQ、酷狗的进程内结果缓存命中、缓存那份
+// 的身份又不是播放器本机数据给的时,这种轮次先问一次本机,认得出就不用缓存那份:同一首先经别的路查过(别的播放器放过、补空扫描、
+// 全量扫库)缓存住的是搜出来的身份,不重问的话缓存有效期里同源加权和播放器自家的无人声信号都用不上。见 09 章决策 362。
+func playingRoundWantsLocalIdentity(ctx context.Context) bool {
+	return playerSignalApplies(ctx) && !isOtherTrackRound(ctx)
+}
+
 // withoutPlayerIdentity:别的歌那一轮里,候选的身份即便读自正在放的播放器的本机数据,也不算「身份由那个播放器给定」—— 清掉
 // identityFromLocalClient(网易云那一路在 ne.FromLocalClient 上),同源加权就不给。这两个字段另一个读的人是
 // playerInstrumentalSource,它只认 forPlayingTrack 的结果,这几种轮次本来就不是。

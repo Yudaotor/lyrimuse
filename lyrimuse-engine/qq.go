@@ -69,17 +69,21 @@ func qqMusicMatchCached(ctx context.Context, artist, title, album string, durati
 	}
 	key := artist + "|" + title + "|" + album + "|" + strconv.Itoa(int(durationSecs))
 	qqURLMu.Lock()
-	if v, ok := qqURLCache[key]; ok {
-		qqURLMu.Unlock()
-		return v
-	}
+	cachedMatch, cached := qqURLCache[key]
 	qqURLMu.Unlock()
+	// 缓存那份是搜出来的、这一轮是在放的这首时先问本地曲库,见 playingRoundWantsLocalIdentity。
+	if cached && (cachedMatch.fromLocalLibrary || !playingRoundWantsLocalIdentity(ctx)) {
+		return cachedMatch
+	}
 
 	// 先问 QQ 客户端自己的本地曲库要 songmid(qqlocal.go)——命中就省掉整个 smartbox
 	// 搜索 + 候选打分,而且拿到的是客户端为这首歌记下的那个 mid,不是搜出来最像的那个。
 	// 没命中(没装 QQ / 库里没有 / 时长闸没过)照常走网络那条,行为与接这层之前一致。
 	m, viaLocal := qqLocalMatch(ctx, artist, title, album, durationSecs)
 	if !viaLocal {
+		if cached {
+			return cachedMatch
+		}
 		m = resolveQQMusicMatch(ctx, artist, title, album, durationSecs)
 	}
 	// unreliable(专辑路线网络失败、这是回落结果)不进缓存:见 qqMusicMatch.unreliable 注释。

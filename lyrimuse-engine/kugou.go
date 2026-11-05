@@ -67,11 +67,12 @@ func kugouLyric(ctx context.Context, artist, title, album string, durationSecs f
 	// 可能得出不同结果,不能共用一份缓存。
 	key := artist + "|" + title + "|" + album
 	kugouMu.Lock()
-	if v, ok := kugouCache[key]; ok {
-		kugouMu.Unlock()
-		return v
-	}
+	cachedResult, cached := kugouCache[key]
 	kugouMu.Unlock()
+	// 缓存那份是搜来的、这一轮是在放的这首时先问本地缓存,见 playingRoundWantsLocalIdentity。
+	if cached && (cachedResult.fromLocalClient || !playingRoundWantsLocalIdentity(ctx)) {
+		return cachedResult
+	}
 
 	// 先问酷狗客户端自己的本地缓存 —— 命中就省掉搜索 → 歌词库 → 下载这条链路,而且拿到的是它为用户
 	// 正在听的那一版下的那一份歌词(见 kugoulocal.go);本地缓存不带封面,只为封面再问一次搜索(kugouLocalCoverURL)。
@@ -80,6 +81,8 @@ func kugouLyric(ctx context.Context, artist, title, album string, durationSecs f
 	r, ok := kugouLocalLyric(artist, title, album, durationSecs)
 	if ok {
 		r.cover = kugouLocalCoverURL(ctx, artist, title, r.localHash)
+	} else if cached {
+		return cachedResult
 	} else {
 		r = resolveKugouLyric(ctx, artist, title, album, durationSecs)
 	}

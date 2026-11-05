@@ -398,17 +398,17 @@ func neteaseLookupAll(ctx context.Context, artist, title, album string, duration
 	key := artist + "|" + title + "|" + album + "|" + strconv.Itoa(int(durationSecs))
 	now := time.Now().Unix()
 	neteaseMu.Lock()
-	if e, ok := neteaseCache[key]; ok {
+	e, cached := neteaseCache[key]
+	neteaseMu.Unlock()
+	if cached {
 		ttl := int64(neteaseCacheTTL / time.Second)
 		if e.info.Cover == "" {
 			ttl = int64(neteaseCacheTTLNoCover / time.Second)
 		}
-		if now-e.ts < ttl {
-			neteaseMu.Unlock()
+		if now-e.ts < ttl && (e.info.FromLocalClient || !neteaseLocalOutranksCached(ctx, artist, title, album, durationSecs)) {
 			return e.info
 		}
 	}
-	neteaseMu.Unlock()
 
 	ctx, sub := withLyricSubFetch(ctx)
 	info := resolveNeteaseInfo(ctx, artist, title, album, durationSecs)
@@ -424,6 +424,16 @@ func neteaseLookupAll(ctx context.Context, artist, title, album string, duration
 		neteaseMu.Unlock()
 	}
 	return info
+}
+
+// neteaseLocalOutranksCached:缓存里那份的身份是搜出来的,这一轮又是在放的这首、网易云本机认得出它,该重走一遍
+// resolveNeteaseInfo(本机认出就不搜,只取词)。见 playingRoundWantsLocalIdentity。
+func neteaseLocalOutranksCached(ctx context.Context, artist, title, album string, durationSecs float64) bool {
+	if !playingRoundWantsLocalIdentity(ctx) {
+		return false
+	}
+	_, ok := neteaseLocalEntry(ctx, artist, title, album, durationSecs)
+	return ok
 }
 
 // isInstrumentalPlaceholderLyric 判断这份 lrc 是不是"纯音乐占位"而不是真歌词。网易云和 QQ 音乐都适用:QQ 对纯音乐曲目回的
