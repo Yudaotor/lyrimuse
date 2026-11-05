@@ -597,6 +597,10 @@ func runSettingsInteractionTests() {
                     [.zhHans, .zhHant, .en, .ja, .ko, .es, .fr, .de, .it, .ptBR, .ptBR, .vi, .ru, .uk, .zhHans],
                     "报告语言: 认得的几种,其余按简体")
         expectEqual(ReportLanguage.featuresKey, "report_language", "报告语言: 键名同引擎 features.go 的 json 标签")
+        expectEqual([ReportLanguage.featuresValue(ui: "th", pinned: nil), ReportLanguage.featuresValue(ui: "th", pinned: ""),
+                     ReportLanguage.featuresValue(ui: "th", pinned: "zh-hans"), ReportLanguage.featuresValue(ui: "en", pinned: "Weird ")],
+                    ["th", "th", "zh-hans", "Weird "], "报告语言: 没钉住写界面语言,钉住了原样写钉住的值")
+        expectEqual(ReportLanguage.debugPinKey, "np:debugPinReportLanguage", "报告语言: 钉住用的键名同验证脚本")
         expectEqual(ReportLanguage.zhHans.words.f("item", [("i", "1"), ("name", "Song {n} {name}"), ("n", "4")]), "1. Song {n} {name}（4）",
                     "报告语言: 换进去的歌名里带 {n} 原样留着(同引擎 TestDigestWordsFillOnce)")
         let langResult = Data(#"{"results":[{"id":"p1","kind":"daily","ok":false,"reason":"empty","lang":"en","at":1}]}"#.utf8)
@@ -658,9 +662,13 @@ func runSettingsInteractionTests() {
                                         encoding: .utf8)) ?? ""
         let appSettingsSrc = (try? String(contentsOf: langRoot.appendingPathComponent("lyrimuse/Sources/lyrimuse/Settings/AppSettings.swift"),
                                           encoding: .utf8)) ?? ""
-        expectEqual(sourceHas(featureStore, "case reportLanguage = \"report_language\"") && sourceHas(featureStore, "reportLanguage = ReportLanguage.ui.rawValue")
+        expectEqual(sourceHas(featureStore, "case reportLanguage = \"report_language\"") && sourceHas(featureStore, "reportLanguage = ReportLanguage.featuresValue")
+                    && sourceHas(sourceBody("public func followReportLanguage() {", in: featureStore), "let next = ReportLanguage.featuresValue")
                     && sourceHas(sourceBody("@Published var appLanguage: String {", in: appSettingsSrc), "FeatureSettingsStore.shared.followReportLanguage()"),
                     true, "报告语言(契约): 加载时按界面语言写 report_language,切换界面语言时跟着改写")
+        let portabilitySrc = (try? String(contentsOf: langRoot.appendingPathComponent("lyrimuse/Sources/lyrimuse/Settings/ConfigPortability.swift"),
+                                          encoding: .utf8)) ?? ""
+        expectEqual(sourceHas(portabilitySrc, "        ReportLanguage.debugPinKey,\n"), true, "报告语言(契约): 验证脚本的钉住键算机器状态,不进配置包")
         let json = P.webhookJSON(event: "daily_digest", title: "a<b>", body: "x\n\"y\"", sentAt: Date(timeIntervalSince1970: 0))
         let decoded = (try? JSONSerialization.jsonObject(with: Data(json.utf8))) as? [String: String]
         expectEqual(decoded, ["app": "lyrimuse", "event": "daily_digest", "title": "a<b>", "body": "x\n\"y\"", "sent_at": "1970-01-01T00:00:00Z"],

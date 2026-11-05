@@ -22,6 +22,11 @@ import LyrimuseCore
 extension ReportLanguage {
     /// 听歌报告的语言 = 当前界面语言(features.json 的 report_language 也是写它)。
     static var ui: ReportLanguage { ReportLanguage(L10n.current) }
+
+    /// 写进 features.json 的 report_language:平时就是界面语言,验证脚本钉住时是钉住的值(`debugPinKey`)。
+    static var featuresValue: String {
+        featuresValue(ui: ui.rawValue, pinned: UserDefaults.standard.string(forKey: debugPinKey))
+    }
 }
 
 enum L10n {

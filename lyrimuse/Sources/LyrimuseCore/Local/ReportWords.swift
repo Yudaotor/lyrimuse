@@ -13,6 +13,15 @@ public enum ReportLanguage: String, CaseIterable, Sendable {
     }
 
     public var words: ReportWords { ReportWords(table: ReportWords.table[self] ?? [:]) }
+
+    /// 只给验证脚本用的偏好键:切界面语言截图前写进当时的 `report_language`,截完删掉。见 14 章决策 178。
+    public static let debugPinKey = "np:debugPinReportLanguage"
+
+    /// 写进 features.json 的 `report_language`:钉住的值非空就原样写它,否则写界面语言。
+    public static func featuresValue(ui: String, pinned: String?) -> String {
+        guard let pinned, !pinned.isEmpty else { return ui }
+        return pinned
+    }
 }
 
 /// 报告里的固定用语(标题、第一行、小节名、三套预设模板、各平台排版的标签),同引擎 digestWordTable,两边对得上靠共用样例

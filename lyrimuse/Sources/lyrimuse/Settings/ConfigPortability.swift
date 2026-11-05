@@ -89,6 +89,8 @@ enum ConfigPortability {
         WhatsNewCenter.Keys.baseline,
         WhatsNewCenter.Keys.bannerShown,
         "np:romanizationDefaultMigrated",
+        // 验证脚本切界面语言期间钉住听歌报告语言用的,脚本跑完就删。
+        ReportLanguage.debugPinKey,
         "np:hasShownAutomationOnboarding",
         "np:hasOfferedICloudImport",
         "np:hasShownOverlayDragHint",

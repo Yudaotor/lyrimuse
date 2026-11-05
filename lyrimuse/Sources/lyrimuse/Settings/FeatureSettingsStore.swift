@@ -894,7 +894,7 @@ public final class FeatureSettingsStore: ObservableObject {
         document = JSONConfigDocument.load(url: Self.fileURL)
         loadFailure = nil
         systemLanguage = SystemLanguage.current()
-        reportLanguage = ReportLanguage.ui.rawValue
+        reportLanguage = ReportLanguage.featuresValue
         var decoded: FeatureFlagsFile?
         switch document.state {
         case .missing:
@@ -1160,7 +1160,7 @@ public final class FeatureSettingsStore: ObservableObject {
 
     /// 界面语言换了:报告语言跟着改,马上写盘(引擎热重读,下一份报告就换语言)。没变不写。
     public func followReportLanguage() {
-        let next = ReportLanguage.ui.rawValue
+        let next = ReportLanguage.featuresValue
         guard next != reportLanguage else { return }
         reportLanguage = next
         do {
