@@ -1152,10 +1152,10 @@ func trackEnrichment(artist, title, album, bundleID string, durationSecs float64
 			// 直接 return false。
 			enrichInflight[key] = true
 			go retryLyricsUpgrade(withLyricSearchTitle(context.Background(), searchTitle), key, artist, title, album, durationSecs, true)
-		} else if !enrichInflight[key] && appleNoVocalsFillDue(e, key, bundleID, artist, title, album) {
-			// 预取、补空存下的没词条目正用 Apple Music 放着:目录说没有人声就不等退避补一轮(见 applenovocals.go)。
+		} else if !enrichInflight[key] && playerNoVocalsFillDue(e, key, bundleID, artist, title, album) {
+			// 预取、补空存下的没词条目正被能给纯音乐信号的播放器放着:它说没有人声就不等退避补一轮(见 playernovocals.go)。
 			enrichInflight[key] = true
-			go appleNoVocalsFill(withLyricSearchTitle(context.Background(), searchTitle), key, artist, title, album, durationSecs)
+			go playerNoVocalsFill(withLyricSearchTitle(context.Background(), searchTitle), key, bundleID, artist, title, album, durationSecs)
 		} else if needsLyricsRescore(e, pinned, features().LyricsAutoUpgrade) && !enrichInflight[key] {
 			enrichInflight[key] = true
 			go rescoreLyrics(withLyricSearchTitle(context.Background(), searchTitle), key, artist, title, album, durationSecs)

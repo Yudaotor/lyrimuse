@@ -326,12 +326,12 @@ func qqLocalMatch(ctx context.Context, artist, title, album string, durationSecs
 	refreshQQIPadLocalIndexLocked(ctx)
 	ents := append(append([]qqLocalEntry(nil), qqLocalIndex[key]...), qqIPadLocalIndex[key]...)
 	qqLocalMu.Unlock()
-	if len(ents) == 0 {
-		return qqMusicMatch{}, false
-	}
 	e, ok := pickQQLocalEntry(ents, album, durationSecs)
 	if !ok {
-		return qqMusicMatch{}, false
+		// 刚点播的这首客户端还没写进曲库(或者在 60 秒节流里),而 QQ 在放它:播放列表里就是这一版,同网易云按播放队列取。
+		if e, ok = qqPlayingLocalEntry(ctx, artist, title, durationSecs); !ok {
+			return qqMusicMatch{}, false
+		}
 	}
 	// 每首歌最多一行:上游 qqMusicMatchCached 按 artist|title|album|duration 缓存,不会重复问。
 	// 这行是"这首歌的 mid 来自客户端曲库、没走 smartbox 搜索"的唯一凭据 —— 跟 kugou local
@@ -604,6 +604,27 @@ func qqPlayingSong(artist, title string, durationSecs float64) (mid, albumMid st
 	mid, _ = qqPlistField(pl.objs, song, "song_Mid").(string)
 	albumMid, _ = qqPlistField(pl.objs, qqPlistField(pl.objs, song, "albumInfo"), "albumMid").(string)
 	return strings.TrimSpace(mid), strings.TrimSpace(albumMid)
+}
+
+// qqPlayingLocalEntry:QQ 音乐在放、这次解析的是它在放的这首(不是别的歌那一轮)时,播放列表归档里这一首。认不出、时长对不上、
+// 没有 songmid 返回 ok=false。要起 plutil 子进程。见 09 章决策 361。
+func qqPlayingLocalEntry(ctx context.Context, artist, title string, durationSecs float64) (qqLocalEntry, bool) {
+	if playingPlayer() != playerQQMusic || !playerSignalApplies(ctx) || isOtherTrackRound(ctx) {
+		return qqLocalEntry{}, false
+	}
+	pl, ok := qqLoadPlayingList(artist, title)
+	if !ok {
+		return qqLocalEntry{}, false
+	}
+	t, ok := qqTrackAt(pl.objs, pl.items, pl.pos)
+	if !ok || (t.duration > 0 && durationSecs > 0 && !sourceDurationFits(durationSecs, t.duration)) {
+		return qqLocalEntry{}, false
+	}
+	mid, _ := qqPlistField(pl.objs, qqDeref(pl.objs, pl.items[pl.pos]), "song_Mid").(string)
+	if mid = strings.TrimSpace(mid); mid == "" {
+		return qqLocalEntry{}, false
+	}
+	return qqLocalEntry{mid: mid, title: t.title, artist: t.artist, album: t.album, duration: t.duration}, true
 }
 
 // qqTrackAt 取列表第 i 首;没有歌名的条目返回 ok=false。
