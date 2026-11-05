@@ -643,9 +643,13 @@
   // Chrome breaks a line between any two spans, whatever word-break says, so a span must never split a word:
   // Korean words end at a space; Japanese phrases come from the browser's word segmenter, with all-hiragana
   // words (particles, inflections) kept on the word before them and a run of katakana kept whole (without the
-  // segmenter, every character is a unit, as in Chinese).
-  const WORD = /[A-Za-z0-9'’\-]/, HANGUL = /[ᄀ-ᇿ㄰-㆏가-힯]/, TRAIL = /[，。、！？；：,.!?;:」』）]/;
-  const jaWords = document.documentElement.lang === 'ja' && window.Intl && Intl.Segmenter ? new Intl.Segmenter('ja', { granularity: 'word' }) : null;
+  // segmenter, every character is a unit, as in Chinese). Thai has no spaces between words either: its words come from
+  // the same segmenter, and without it a run of Thai up to a space is one unit. A Thai vowel or tone mark must never
+  // start a span of its own (Chrome would draw it on a dotted circle).
+  const WORD = /[A-Za-z0-9'’\-]/, HANGUL = /[ᄀ-ᇿ㄰-㆏가-힯]/, THAI = /[\u0e01-\u0e5b]/, THAI_MARK = /[\u0e31\u0e34-\u0e3a\u0e47-\u0e4e]/,
+    TRAIL = /[，。、！？；：,.!?;:」』）]/;
+  const segLang = document.documentElement.lang;
+  const jaWords = (segLang === 'ja' || segLang === 'th') && window.Intl && Intl.Segmenter ? new Intl.Segmenter(segLang, { granularity: 'word' }) : null;
   function phraseEnds(text) {
     const ends = new Set();
     if (!jaWords) return ends;
@@ -671,12 +675,13 @@
         let j = i + 1;
         if (ends.size) while (j < s.length && !ends.has(j) && !/\s/.test(s[j])) j++;
         else if (WORD.test(s[i]) || HANGUL.test(s[i])) while (j < s.length && (WORD.test(s[j]) || HANGUL.test(s[j]))) j++;
+        else if (THAI.test(s[i])) while (j < s.length && THAI.test(s[j])) j++;
         while (j < s.length && TRAIL.test(s[j])) j++;
         const c = document.createElement('span');
         c.className = 'c';
         c.textContent = s.slice(i, j).join('');
         frag.append(c);
-        const w = s.slice(i, j).reduce((sum, ch) => sum + (TRAIL.test(ch) ? 0 : WORD.test(ch) ? 0.55 : 1), 0);
+        const w = s.slice(i, j).reduce((sum, ch) => sum + (TRAIL.test(ch) || THAI_MARK.test(ch) ? 0 : WORD.test(ch) ? 0.55 : THAI.test(ch) ? 0.6 : 1), 0);
         parts.push({ el: c, w: Math.max(1, w) });
         i = j;
       }
