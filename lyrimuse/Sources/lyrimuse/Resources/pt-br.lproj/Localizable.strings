@@ -620,7 +620,7 @@
 "决定性差异：「%@」" = "Diferença decisiva: “%@”";
 "准备密钥" = "Obter chaves de API";
 "减少推荐" = "Sugerir menos";
-"出现「跳过」按钮时自动点按，无法跳过的广告照常播放。适用于网页版和 Pear Desktop，需要「辅助功能」权限。网页版位于后台标签页时将短暂切换至该标签页再切回，当前使用的浏览器窗口不受影响" = "Clica em “Pular” assim que aparece; anúncios que não podem ser pulados tocam normalmente. Funciona com a versão web e com o Pear Desktop e requer a permissão de Acessibilidade. Se a versão web estiver em uma aba em segundo plano, o Lyrimuse muda para ela por um instante e volta, sem mexer na janela do navegador que você está usando";
+"出现「跳过」按钮时自动点按，无法跳过的广告照常播放。适用于网页版和 Pear Desktop，需要「辅助功能」权限。网页版位于后台标签页时将短暂切换至该标签页再切回，当前使用的浏览器窗口不受影响。Pear Desktop 的窗口需露在屏幕上，最小化或被其他窗口完全挡住时无法跳过" = "Clica em “Pular” assim que aparece; anúncios que não podem ser pulados tocam normalmente. Funciona com a versão web e com o Pear Desktop e requer a permissão de Acessibilidade. Se a versão web estiver em uma aba em segundo plano, o Lyrimuse muda para ela por um instante e volta, sem mexer na janela do navegador que você está usando. A janela do Pear Desktop precisa estar visível na tela; minimizada ou totalmente coberta, não dá para pular";
 "出生日期" = "Nascimento";
 "分享…" = "Compartilhar…";
 "分享歌词" = "Compartilhar letra";

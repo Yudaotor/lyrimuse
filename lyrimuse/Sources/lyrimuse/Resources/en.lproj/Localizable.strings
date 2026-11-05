@@ -620,7 +620,7 @@
 "决定性差异：「%@」" = "Deciding difference: “%@”";
 "准备密钥" = "Get Your API Keys";
 "减少推荐" = "Suggest Less";
-"出现「跳过」按钮时自动点按，无法跳过的广告照常播放。适用于网页版和 Pear Desktop，需要「辅助功能」权限。网页版位于后台标签页时将短暂切换至该标签页再切回，当前使用的浏览器窗口不受影响" = "Presses Skip as soon as it appears; ads that can’t be skipped still play. Works with the web player and Pear Desktop, and needs Accessibility permission. If the web player is in a background tab, Lyrimuse briefly switches to it and back without touching the browser window you’re using";
+"出现「跳过」按钮时自动点按，无法跳过的广告照常播放。适用于网页版和 Pear Desktop，需要「辅助功能」权限。网页版位于后台标签页时将短暂切换至该标签页再切回，当前使用的浏览器窗口不受影响。Pear Desktop 的窗口需露在屏幕上，最小化或被其他窗口完全挡住时无法跳过" = "Presses Skip as soon as it appears; ads that can’t be skipped still play. Works with the web player and Pear Desktop, and needs Accessibility permission. If the web player is in a background tab, Lyrimuse briefly switches to it and back without touching the browser window you’re using. Pear Desktop’s window has to be visible on screen; it can’t skip while the window is minimized or fully covered";
 "出生日期" = "Born";
 "分享…" = "Share…";
 "分享歌词" = "Share Lyrics";

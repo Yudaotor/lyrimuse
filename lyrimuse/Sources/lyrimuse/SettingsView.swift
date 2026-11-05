@@ -5126,7 +5126,7 @@ private struct YouTubeMusicAutoSkipRow: View {
     var asPanel = false
 
     private var helpText: String {
-        L10n.t("出现「跳过」按钮时自动点按，无法跳过的广告照常播放。适用于网页版和 Pear Desktop，需要「辅助功能」权限。网页版位于后台标签页时将短暂切换至该标签页再切回，当前使用的浏览器窗口不受影响")
+        L10n.t("出现「跳过」按钮时自动点按，无法跳过的广告照常播放。适用于网页版和 Pear Desktop，需要「辅助功能」权限。网页版位于后台标签页时将短暂切换至该标签页再切回，当前使用的浏览器窗口不受影响。Pear Desktop 的窗口需露在屏幕上，最小化或被其他窗口完全挡住时无法跳过")
     }
 
     private var isOn: Binding<Bool> {
