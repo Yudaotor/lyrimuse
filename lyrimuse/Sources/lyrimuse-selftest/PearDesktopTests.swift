@@ -81,8 +81,8 @@ func runPearDesktopTests() {
         expectEqual(API.sliderVolume(fromPlayerVolume: 40, muted: true), 0, "Pear 音量: 静音算 0")
         expectEqual(API.sliderVolume(fromPlayerVolume: 0, muted: false), 0, "Pear 音量: 0 还是 0")
         expectEqual(MusicPlaybackController.supportsExtendedControls(.pearDesktop) && MusicPlaybackController.supportsRepeatOne(.pearDesktop)
-                    && !MusicPlaybackController.supportsFavorite(.pearDesktop), true,
-                    "Pear 控制: 有循环(含单曲)和音量,没有喜欢(要登录、接口不能取消)")
+                    && MusicPlaybackController.supportsFavorite(.pearDesktop), true,
+                    "Pear 控制: 有循环(含单曲)、音量和喜欢(赞是切换,能取消,实测)")
         expectEqual(PlaybackPlayer.pearDesktop.artistArrivesLate, true, "Pear: 换歌占位那一帧歌手为空,不采纳")
     }
 
@@ -197,6 +197,10 @@ func runPearDesktopTests() {
         expectEqual(sourceHas(server, "case pearQueue = \"pear_queue\"") && sourceHas(server, "PearDesktopAPI.shared.queueReply().flatMap(Self.encodedQueueReply)"),
                     true, "Pear 接线: 引擎问队列由 App 经本机接口代读")
     }
+
+    // ---- 赞 ----
+    expectEqual([API.liked(fromState: "LIKE"), API.liked(fromState: "DISLIKE"), API.liked(fromState: "INDIFFERENT"), API.liked(fromState: nil)],
+                [true, false, false, nil], "Pear 赞: 赞了才算喜欢,踩过算没赞,读不到为 nil")
 
     // ---- 跳过广告 ----
     do {

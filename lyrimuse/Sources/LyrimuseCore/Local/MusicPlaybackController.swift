@@ -401,10 +401,10 @@ public enum MusicPlaybackController {
     }
 
     /// 这个播放器有没有「喜欢」:Apple Music(收藏)、Kaset(YouTube Music 的赞)、QQ 音乐、网易云音乐和酷狗音乐(菜单栏「喜欢歌曲」)、
-    /// Amazon Music(加进资料库)、汽水音乐(底部播放条那颗心)、洛雪音乐(「我的收藏」)。
+    /// Amazon Music(加进资料库)、汽水音乐(底部播放条那颗心)、洛雪音乐(「我的收藏」)、Pear Desktop(本机接口的赞)。
     public static func supportsFavorite(_ player: PlaybackPlayer) -> Bool {
         player == .appleMusic || player == .kaset || player == .qqMusic || player == .netease || player == .kugou
-            || player == .amazonMusic || player == .soda || player == .lxMusic
+            || player == .amazonMusic || player == .soda || player == .lxMusic || player == .pearDesktop
     }
 
     /// 「喜欢」不走脚本接口、读的是别处的播放器:菜单栏那一项(`MenuTitleFavorite`,酷狗是播放条那颗心)、Amazon 的日志加资料库、
@@ -452,6 +452,7 @@ public enum MusicPlaybackController {
         case .amazonMusic: return AmazonMusicFavoriteControl.readFavorited()
         case .soda: return SodaMusicControl.readFavorited()
         case .lxMusic: return LXMusicFavoriteControl.readFavorited()
+        case .pearDesktop: return PearDesktopAPI.shared.liked()
         default: return nil
         }
     }
@@ -482,6 +483,8 @@ public enum MusicPlaybackController {
             return SodaMusicControl.setFavorited(value)
         case .lxMusic:
             return LXMusicFavoriteControl.setFavorited(value)
+        case .pearDesktop:
+            return PearDesktopAPI.shared.setLiked(value)
         default:
             return false
         }
@@ -747,8 +750,9 @@ public enum MusicPlaybackController {
             return ExtendedControlsState(favorited: includeFavorited ? LXMusicFavoriteControl.readFavorited() : nil,
                                          mode: nil, volume: LXMusicOpenAPI.shared.currentState().flatMap(LXMusicOpenAPI.volumePercent))
         case .pearDesktop:
-            // 随机、循环和音量只有用户打开了它的本机接口才有(`PearDesktopAPI`);喜欢要登录,不接。
-            return ExtendedControlsState(favorited: nil, mode: PearDesktopAPI.shared.playbackMode(), volume: PearDesktopAPI.shared.volume())
+            // 随机、循环、音量和赞只有用户打开了它的本机接口才有(`PearDesktopAPI`)。
+            return ExtendedControlsState(favorited: includeFavorited ? PearDesktopAPI.shared.liked() : nil,
+                                         mode: PearDesktopAPI.shared.playbackMode(), volume: PearDesktopAPI.shared.volume())
         // 其余播放器一律没有这些控件 —— 它们的 .app 里根本没有 .sdef(不可脚本化),
         // 而 media-control 走的系统级 MediaRemote 只有播放控制、没有音量和模式的概念。
         // 写成 default 而不是逐个列举,是为了让「接一个新播放器」只需要改

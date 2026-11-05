@@ -500,6 +500,31 @@ public final class PearDesktopAPI: @unchecked Sendable {
         return Self.playbackMode(shuffle: after.shuffle, repeatMode: after.repeatMode) == mode
     }
 
+    /// `GET /api/v1/like-state` 的值 → 赞了没有(踩过算没赞);认不出为 nil。
+    public static func liked(fromState state: String?) -> Bool? {
+        switch state {
+        case "LIKE": return true
+        case "DISLIKE", "INDIFFERENT": return false
+        default: return nil
+        }
+    }
+
+    /// 当前这首赞了没有;接口没开、没授权、读不到时 nil。
+    public func liked() -> Bool? {
+        guard let config = usableConfig() else { return nil }
+        let state = get("/api/v1/like-state", config: config)
+            .flatMap { try? JSONSerialization.jsonObject(with: $0) as? [String: Any] }?["state"] as? String
+        return Self.liked(fromState: state)
+    }
+
+    /// 赞 / 取消赞。`POST /api/v1/like` 是切换(赞过再发就取消,踩过的发了变成赞,实测),跟要的不一样才发;发完读回,
+    /// 不是要的样子就回 false(没登录 YouTube Music 时它不理这条),调用方据此回读纠正。
+    public func setLiked(_ value: Bool) -> Bool {
+        guard let config = usableConfig(), let current = liked() else { return false }
+        if current != value, post("/api/v1/like", body: [:], config: config) != 204 { return false }
+        return liked() == value
+    }
+
     /// 现在的音量,按它播放条滑块的位置(0~100,见 `sliderVolume`);读不到 nil。
     public func volume() -> Int? {
         guard let config = usableConfig(),
