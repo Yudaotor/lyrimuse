@@ -1082,6 +1082,7 @@ private final class LyricsWindowController: ObservableObject {
     // 该保持全屏"这类更复杂的模拟。置顶不受切换焦点影响,但 SwiftUI 关窗后复用同一扇窗,层级会留着,
     // 由 closeObserver 在用户关窗时清掉。
     func attach(_ window: NSWindow) {
+        LyricsWindowRemote.shared.bind(self)
         guard self.window !== window else {
             // 同一扇窗关掉再开:关窗时遮挡检测已经停了(closeObserver),这里补回来,其余观察者都还挂着。
             if window.isVisible { restoreAfterReopen(window) }
@@ -8038,5 +8039,106 @@ private extension LyricDuet.Side {
         case .center: return .center
         case .trailing: return .trailing
         }
+    }
+}
+
+/// 歌词窗口外面(菜单栏面板「歌词窗口置顶」「歌词窗口全屏」两格)读这扇窗此刻置顶没有、在不在全屏,也从外面切这两样。
+/// 窗口没开、或要全屏时开着的是迷你:先按要的形态开出来,等它上屏、切完形态再做(每 0.2 秒看一次,最多 4 秒)。
+/// 跟的是最近 attach 的那份控制器(完整和迷你各一份,互切时换着来)。见 06 章决策 95。
+@MainActor
+final class LyricsWindowRemote: ObservableObject {
+    static let shared = LyricsWindowRemote()
+    /// 窗口开着、置顶着。
+    @Published private(set) var isPinned = false
+    /// 窗口开着、在全屏里(原生全屏,或老系统的伪全屏)。
+    @Published private(set) var isFullScreen = false
+    private weak var controller: LyricsWindowController?
+    private var subscriptions: [AnyCancellable] = []
+    private var pending: Task<Void, Never>?
+
+    private init() {}
+
+    /// 窗口此刻开着(没关、没最小化)。
+    var isOpen: Bool { live != nil }
+
+    private var live: LyricsWindowController? {
+        guard let controller, controller.isOnScreen else { return nil }
+        return controller
+    }
+
+    fileprivate func bind(_ controller: LyricsWindowController) {
+        if self.controller !== controller {
+            self.controller = controller
+            // @Published 在写入之前就通知,推到下一拍再读。
+            subscriptions = [
+                controller.$isAlwaysOnTop.map { _ in () }.eraseToAnyPublisher(),
+                controller.$isNativeFullScreen.map { _ in () }.eraseToAnyPublisher(),
+                controller.$isActive.map { _ in () }.eraseToAnyPublisher(),
+                controller.$isMini.map { _ in () }.eraseToAnyPublisher(),
+                controller.$closeCount.map { _ in () }.eraseToAnyPublisher(),
+            ].map { $0.sink { [weak self] in DispatchQueue.main.async { self?.refresh() } } }
+        }
+        DispatchQueue.main.async { [weak self] in self?.refresh() }
+    }
+
+    private func refresh() {
+        let pinned = live?.isAlwaysOnTop ?? false
+        let full = live?.isFullScreenActive ?? false
+        if pinned != isPinned { isPinned = pinned }
+        if full != isFullScreen { isFullScreen = full }
+    }
+
+    /// 置顶 / 取消置顶;窗口没开时按上次的形态开出来再置顶。
+    func togglePinned() {
+        if let live {
+            live.toggleAlwaysOnTop()
+            return
+        }
+        AppActions.shared.openLyricsWindow?()
+        whenReady({ _ in true }) { if !$0.isAlwaysOnTop { $0.toggleAlwaysOnTop() } }
+    }
+
+    /// 进 / 出全屏;开着的是迷你或窗口没开时,先按完整尺寸开出来再进全屏。
+    func toggleFullScreen() {
+        if let live, !live.isMini {
+            live.toggleFullScreenFromOutside()
+            return
+        }
+        if !LyricsWindowSession.requestForm(mini: false) { AppActions.shared.openLyricsWindow?() }
+        whenReady({ !$0.isMini }) { if !$0.isFullScreenActive { $0.toggleFullScreenFromOutside() } }
+    }
+
+    /// 窗口上屏、不在切形态、`ready` 连着两次成立时做 `action`(刚上屏那一拍变形动画可能还没收尾)。
+    private func whenReady(_ ready: @escaping (LyricsWindowController) -> Bool,
+                           _ action: @escaping (LyricsWindowController) -> Void) {
+        pending?.cancel()
+        pending = Task { [weak self] in
+            var streak = 0
+            for _ in 0..<20 {
+                try? await Task.sleep(for: .milliseconds(200))
+                guard !Task.isCancelled, let self else { return }
+                guard let live = self.live, !live.isSwitchingForm, ready(live) else {
+                    streak = 0
+                    continue
+                }
+                streak += 1
+                if streak >= 2 {
+                    action(live)
+                    return
+                }
+            }
+        }
+    }
+}
+
+extension LyricsWindowController {
+    /// 这扇窗此刻上着屏(没关、没最小化)。
+    fileprivate var isOnScreen: Bool { window?.isVisible == true }
+
+    /// 从窗口外面切全屏:全屏作用在 key 窗口上,先激活 App、把这扇窗带到前台。
+    fileprivate func toggleFullScreenFromOutside() {
+        WindowActivation.activateApp()
+        window?.makeKeyAndOrderFront(nil)
+        toggle(reduceMotion: NSWorkspace.shared.accessibilityDisplayShouldReduceMotion)
     }
 }

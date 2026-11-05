@@ -96,6 +96,10 @@ private final class PanelPlayback: ObservableObject {
     @Published private(set) var showsTranslation = false
     @Published private(set) var showsRomanization = false
     @Published private(set) var lockPosition = false
+    @Published private(set) var notchSecondaryLine = LyricSecondaryLine.off
+    /// 歌词窗口开着、置顶着 / 在全屏里(`LyricsWindowRemote`)。
+    @Published private(set) var lyricsWindowPinned = false
+    @Published private(set) var lyricsWindowFullScreen = false
     private var subs: [AnyCancellable] = []
 
     init() {
@@ -159,6 +163,9 @@ private final class PanelPlayback: ObservableObject {
             Publishers.CombineLatest(s.$overlayShowRomanization, s.$showRomanization).map { $0 || $1 }
                 .removeDuplicates().sink { [weak self] in self?.showsRomanization = $0 },
             s.$lockPosition.removeDuplicates().sink { [weak self] in self?.lockPosition = $0 },
+            s.$notchSecondaryLine.removeDuplicates().sink { [weak self] in self?.notchSecondaryLine = $0 },
+            LyricsWindowRemote.shared.$isPinned.removeDuplicates().sink { [weak self] in self?.lyricsWindowPinned = $0 },
+            LyricsWindowRemote.shared.$isFullScreen.removeDuplicates().sink { [weak self] in self?.lyricsWindowFullScreen = $0 },
         ]
     }
 }
@@ -1022,6 +1029,34 @@ private struct MenuBarPanelView: View {
             PanelTileSizeReader { size, editing in
                 PanelTodayListeningTile(size: size, open: openLastfmStatsAction)
                     .allowsHitTesting(!editing)
+            }
+        case .notchSecondaryLine:
+            // 同灵动岛快捷操作里那颗「副行」:读点下去那一刻的设置往后轮一档,不是「无副行」时亮着;灵动岛歌词关着时灰着。
+            // 长按翻到灵动岛那一格的背面(副行的下拉在那里)。
+            let notchOn = playback.notchOverlayEnabled
+            let line = playback.notchSecondaryLine
+            knobTile(symbol: "character.bubble", title: L10n.t("灵动岛副行"), on: notchOn && line != .off, enabled: notchOn,
+                     help: notchOn ? String(format: L10n.t("副行：%@"), NotchQuickAction.secondaryLineName(line))
+                         : L10n.t("需先打开灵动岛歌词"),
+                     quick: .surface(.notch)) {
+                AppSettings.shared.notchSecondaryLine = NotchQuickAction.nextSecondaryLine(after: AppSettings.shared.notchSecondaryLine)
+            }
+        case .lyricsWindowPin:
+            // 同歌词窗口左上角「置于最顶层」:只在这次打开期间有效,窗口开着、置顶着时亮着(迷你默认置顶)。窗口没开时先开出来
+            // 再置顶;开窗会激活 App,先收面板(同歌词窗口那一格)。
+            let pinned = playback.lyricsWindowPinned
+            knobTile(symbol: pinned ? "pin.fill" : "pin", title: L10n.t("歌词窗口置顶"), on: pinned, quick: .lyricsWindow) {
+                if !LyricsWindowRemote.shared.isOpen { close() }
+                LyricsWindowRemote.shared.togglePinned()
+            }
+        case .lyricsWindowFullScreen:
+            // 同歌词窗口左上角的全屏键。迷你没有全屏:开着迷你、或窗口没开时先按完整尺寸开出来再进全屏。全屏要把窗口带到前台,
+            // 先收面板。
+            let full = playback.lyricsWindowFullScreen
+            knobTile(symbol: full ? "arrow.down.right.and.arrow.up.left" : "arrow.up.left.and.arrow.down.right",
+                     title: L10n.t("歌词窗口全屏"), on: full, quick: .lyricsWindow) {
+                close()
+                LyricsWindowRemote.shared.toggleFullScreen()
             }
         case .fontLarger, .fontSmaller:
             // 悬浮歌词主字号一档档调(同快捷键,带回声);悬浮歌词关着时灰着,同「锁定位置」。

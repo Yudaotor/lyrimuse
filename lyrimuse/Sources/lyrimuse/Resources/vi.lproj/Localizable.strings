@@ -1925,9 +1925,11 @@
 "歌词确定后，后台是否还会更换" = "Lời đã chốt có còn bị thay trong nền không";
 "歌词窗口" = "Cửa sổ lời";
 "歌词窗口…" = "Cửa sổ lời…";
+"歌词窗口全屏" = "Cửa sổ lời toàn màn hình";
 "歌词窗口的文字颜色；「自动」根据背景亮度在浅色与深色之间切换" = "Màu chữ của Cửa sổ lời; “Tự động” chuyển giữa sáng và tối theo độ sáng của nền";
 "歌词窗口的歌词字体（正文、译文、读音）" = "Phông chữ lời trong Cửa sổ lời (lời, bản dịch, phát âm)";
 "歌词窗口的背景：跟随封面、纯色、渐变或毛玻璃" = "Nền của Cửa sổ lời: theo ảnh bìa, màu đơn, dải màu hoặc kính mờ";
+"歌词窗口置顶" = "Cửa sổ lời luôn trên đầu";
 "歌词管理" = "Quản lý lời";
 "歌词管理…" = "Quản lý lời…";
 "歌词类型" = "Loại lời";
@@ -2115,6 +2117,7 @@
 "灰色的格子放不下，加宽展开卡片才会显示" = "Ô màu xám không vừa, sẽ hiện khi thẻ mở rộng rộng hơn";
 "灵动岛" = "Notch";
 "灵动岛、菜单栏和触控栏歌词在播放时显示" = "Lời trên Notch, thanh menu và Touch Bar hiện khi đang phát";
+"灵动岛副行" = "Dòng phụ trên Notch";
 "灵动岛和菜单栏歌词在播放时显示" = "Lời trên Notch và thanh menu hiện khi đang phát";
 "灵动岛宽度" = "Độ rộng Notch";
 "灵动岛展开宽度" = "Độ rộng Notch khi mở rộng";
@@ -2801,6 +2804,7 @@
 "隐藏歌词" = "Ẩn lời";
 "隐藏译文" = "Ẩn bản dịch";
 "隐藏读音" = "Ẩn phát âm";
+"需先打开灵动岛歌词" = "Hãy bật Lời trên Notch trước";
 "需先部署网页端并获取访问令牌。部署步骤见项目 README 的「网页端」一节：https://github.com/Yudaotor/lyrimuse#网页端" = "Cần triển khai ứng dụng web trước và lấy token truy cập. Các bước có trong README của dự án: https://github.com/Yudaotor/lyrimuse";
 "需自行部署同步服务；只连接 ListenBrainz 时网页同样能显示正在播放" = "Cần tự triển khai máy chủ đồng bộ; nếu chỉ kết nối ListenBrainz, trang web vẫn hiện được bài đang phát";
 "需要 Discord 桌面版" = "Cần ứng dụng Discord cho máy tính";

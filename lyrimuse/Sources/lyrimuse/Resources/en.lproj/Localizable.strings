@@ -2007,9 +2007,11 @@
 "歌词确定后，后台是否还会更换" = "Whether settled lyrics can still be replaced in the background";
 "歌词窗口" = "Lyrics Window";
 "歌词窗口…" = "Lyrics Window…";
+"歌词窗口全屏" = "Lyrics Window Full Screen";
 "歌词窗口的文字颜色；「自动」根据背景亮度在浅色与深色之间切换" = "The lyrics window’s text color. Auto switches between light and dark based on the background’s brightness";
 "歌词窗口的歌词字体（正文、译文、读音）" = "Lyrics font for the lyrics window (main text, translation, romanization)";
 "歌词窗口的背景：跟随封面、纯色、渐变或毛玻璃" = "The lyrics window’s background: follow artwork, solid, gradient, or frosted glass";
+"歌词窗口置顶" = "Lyrics Window on Top";
 "歌词管理" = "Lyrics Manager";
 "歌词管理…" = "Lyrics Manager…";
 "歌词类型" = "Lyrics Type";
@@ -2198,6 +2200,7 @@
 "灰色的格子放不下，加宽展开卡片才会显示" = "Gray slots don’t fit and appear once the expanded card is wider";
 "灵动岛" = "Notch";
 "灵动岛、菜单栏和触控栏歌词在播放时显示" = "Notch, menu bar and Touch Bar lyrics show up during playback";
+"灵动岛副行" = "Notch Second Line";
 "灵动岛和菜单栏歌词在播放时显示" = "Notch and menu bar lyrics show up during playback";
 "灵动岛宽度" = "Notch Card Width";
 "灵动岛展开宽度" = "Notch Card Expanded Width";
@@ -2893,6 +2896,7 @@
 "隐藏歌词" = "Hide Lyrics";
 "隐藏译文" = "Hide Translation";
 "隐藏读音" = "Hide Romanization";
+"需先打开灵动岛歌词" = "Turn on Notch Lyrics first";
 "需先部署网页端并获取访问令牌。部署步骤见项目 README 的「网页端」一节：https://github.com/Yudaotor/lyrimuse#网页端" = "Deploy the web app first and get an access token. Setup steps are in the project README: https://github.com/Yudaotor/lyrimuse";
 "需自行部署同步服务；只连接 ListenBrainz 时网页同样能显示正在播放" = "Requires a sync server you deploy yourself. With ListenBrainz connected, the web page can still show what’s playing";
 "需要 Discord 桌面版" = "Requires the Discord desktop app";

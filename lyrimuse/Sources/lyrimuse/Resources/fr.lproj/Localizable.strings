@@ -2007,9 +2007,11 @@
 "歌词确定后，后台是否还会更换" = "Si des paroles retenues peuvent encore être remplacées en arrière-plan";
 "歌词窗口" = "Fenêtre des paroles";
 "歌词窗口…" = "Fenêtre des paroles…";
+"歌词窗口全屏" = "Fenêtre des paroles en plein écran";
 "歌词窗口的文字颜色；「自动」根据背景亮度在浅色与深色之间切换" = "Couleur du texte de la fenêtre des paroles. « Auto » alterne entre clair et sombre selon la luminosité du fond";
 "歌词窗口的歌词字体（正文、译文、读音）" = "Police des paroles de la fenêtre des paroles (texte, traduction, romanisation)";
 "歌词窗口的背景：跟随封面、纯色、渐变或毛玻璃" = "Fond de la fenêtre des paroles : illustration, uni, dégradé ou dépoli";
+"歌词窗口置顶" = "Fenêtre des paroles au premier plan";
 "歌词管理" = "Gestionnaire de paroles";
 "歌词管理…" = "Gestionnaire de paroles…";
 "歌词类型" = "Type de paroles";
@@ -2198,6 +2200,7 @@
 "灰色的格子放不下，加宽展开卡片才会显示" = "Les cases grises ne tiennent pas ; elles apparaissent si la carte déployée est plus large";
 "灵动岛" = "Encoche";
 "灵动岛、菜单栏和触控栏歌词在播放时显示" = "Les paroles de l’encoche, de la barre des menus et de la Touch Bar s’affichent pendant la lecture";
+"灵动岛副行" = "Seconde ligne de l’encoche";
 "灵动岛和菜单栏歌词在播放时显示" = "Les paroles de l’encoche et de la barre des menus s’affichent pendant la lecture";
 "灵动岛宽度" = "Largeur de l’encoche";
 "灵动岛展开宽度" = "Largeur déployée de l’encoche";
@@ -2893,6 +2896,7 @@
 "隐藏歌词" = "Masquer les paroles";
 "隐藏译文" = "Masquer la traduction";
 "隐藏读音" = "Masquer la romanisation";
+"需先打开灵动岛歌词" = "Activez d’abord les paroles de l’encoche";
 "需先部署网页端并获取访问令牌。部署步骤见项目 README 的「网页端」一节：https://github.com/Yudaotor/lyrimuse#网页端" = "Déployez d’abord l’app web et obtenez un jeton d’accès. Étapes dans le README du projet : https://github.com/Yudaotor/lyrimuse";
 "需自行部署同步服务；只连接 ListenBrainz 时网页同样能显示正在播放" = "Nécessite un serveur de synchronisation que vous déployez. Avec ListenBrainz connecté, la page web peut quand même afficher la lecture en cours";
 "需要 Discord 桌面版" = "Nécessite l’app Discord pour ordinateur";

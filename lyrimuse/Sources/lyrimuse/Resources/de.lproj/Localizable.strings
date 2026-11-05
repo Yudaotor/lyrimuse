@@ -2007,9 +2007,11 @@
 "歌词确定后，后台是否还会更换" = "Ob festgelegte Liedtexte im Hintergrund noch ersetzt werden können";
 "歌词窗口" = "Liedtextfenster";
 "歌词窗口…" = "Liedtextfenster …";
+"歌词窗口全屏" = "Liedtextfenster im Vollbild";
 "歌词窗口的文字颜色；「自动」根据背景亮度在浅色与深色之间切换" = "Textfarbe des Liedtextfensters. „Auto“ wechselt je nach Helligkeit des Hintergrunds zwischen hell und dunkel";
 "歌词窗口的歌词字体（正文、译文、读音）" = "Schrift für den Text im Liedtextfenster (Haupttext, Übersetzung, Umschrift)";
 "歌词窗口的背景：跟随封面、纯色、渐变或毛玻璃" = "Hintergrund des Liedtextfensters: Cover, einfarbig, Verlauf oder Milchglas";
+"歌词窗口置顶" = "Liedtextfenster im Vordergrund";
 "歌词管理" = "Liedtext-Verwaltung";
 "歌词管理…" = "Liedtext-Verwaltung …";
 "歌词类型" = "Textart";
@@ -2198,6 +2200,7 @@
 "灰色的格子放不下，加宽展开卡片才会显示" = "Graue Felder passen nicht und erscheinen erst bei breiterer ausgeklappter Karte";
 "灵动岛" = "Notch";
 "灵动岛、菜单栏和触控栏歌词在播放时显示" = "Notch-, Menüleisten- und Touch-Bar-Text erscheinen bei Wiedergabe";
+"灵动岛副行" = "Notch-Zweitzeile";
 "灵动岛和菜单栏歌词在播放时显示" = "Notch- und Menüleisten-Text erscheinen bei Wiedergabe";
 "灵动岛宽度" = "Breite der Notch-Karte";
 "灵动岛展开宽度" = "Breite der ausgeklappten Notch";
@@ -2893,6 +2896,7 @@
 "隐藏歌词" = "Liedtext ausblenden";
 "隐藏译文" = "Übersetzung ausblenden";
 "隐藏读音" = "Umschrift ausblenden";
+"需先打开灵动岛歌词" = "Zuerst Notch-Text einschalten";
 "需先部署网页端并获取访问令牌。部署步骤见项目 README 的「网页端」一节：https://github.com/Yudaotor/lyrimuse#网页端" = "Stelle zuerst die Web-App bereit und hole ein Zugriffstoken. Die Schritte stehen im README des Projekts: https://github.com/Yudaotor/lyrimuse";
 "需自行部署同步服务；只连接 ListenBrainz 时网页同样能显示正在播放" = "Erfordert einen selbst betriebenen Sync-Server. Mit verbundenem ListenBrainz zeigt die Webseite trotzdem, was gerade läuft";
 "需要 Discord 桌面版" = "Erfordert die Discord-Desktop-App";

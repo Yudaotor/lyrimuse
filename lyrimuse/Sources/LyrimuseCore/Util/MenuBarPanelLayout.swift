@@ -40,15 +40,20 @@ public struct MenuBarPanelLayout: Equatable, Sendable {
         case volume
         /// 今天在 Last.fm 上听了几首(连着 Last.fm 才有)。
         case todayListening = "today-listening"
+        /// 灵动岛的副行(译文 / 读音 / 下一句 / 无),点一下换下一档:跟着这首歌的语言常要换。
+        case notchSecondaryLine = "notch-secondary-line"
+        /// 歌词窗口置顶 / 全屏,同窗口左上角那两颗键。
+        case lyricsWindowPin = "lyrics-window-pin"
+        case lyricsWindowFullScreen = "lyrics-window-fullscreen"
 
         /// 「可添加」面板里归哪一组(按显示方式分)。
         public var group: TileGroup {
             switch self {
             case .nowPlaying, .like, .openPlayer, .volume, .todayListening: return .nowPlaying
             case .overlay, .lockPosition, .fontLarger, .fontSmaller: return .overlay
-            case .notch: return .notch
+            case .notch, .notchSecondaryLine: return .notch
             case .menuBar: return .menuBar
-            case .lyricsWindow, .miniWindow: return .lyricsWindow
+            case .lyricsWindow, .miniWindow, .lyricsWindowPin, .lyricsWindowFullScreen: return .lyricsWindow
             case .touchBar: return .touchBar
             case .lyricsManager, .translation, .romanization, .hideAllLyrics, .searchLyrics, .lyricsAdvance, .lyricsDelay,
                  .lyricsOffsetReset:

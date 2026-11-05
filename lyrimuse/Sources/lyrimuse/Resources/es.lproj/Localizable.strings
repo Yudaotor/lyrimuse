@@ -2007,9 +2007,11 @@
 "歌词确定后，后台是否还会更换" = "Si la letra elegida aún puede cambiarse en segundo plano";
 "歌词窗口" = "Ventana de letra";
 "歌词窗口…" = "Ventana de letra…";
+"歌词窗口全屏" = "Ventana de letra a pantalla completa";
 "歌词窗口的文字颜色；「自动」根据背景亮度在浅色与深色之间切换" = "Color del texto de la ventana de letra. «Auto» alterna entre claro y oscuro según el brillo del fondo";
 "歌词窗口的歌词字体（正文、译文、读音）" = "Fuente de la ventana de letra (texto, traducción y romanización)";
 "歌词窗口的背景：跟随封面、纯色、渐变或毛玻璃" = "Fondo de la ventana de letra: según la ilustración, color sólido, degradado o vidrio esmerilado";
+"歌词窗口置顶" = "Ventana de letra en primer plano";
 "歌词管理" = "Gestor de letras";
 "歌词管理…" = "Gestor de letras…";
 "歌词类型" = "Sincronización";
@@ -2198,6 +2200,7 @@
 "灰色的格子放不下，加宽展开卡片才会显示" = "Las casillas grises no caben; aparecen al ensanchar la tarjeta expandida";
 "灵动岛" = "Notch";
 "灵动岛、菜单栏和触控栏歌词在播放时显示" = "La letra del notch, la barra de menús y la Touch Bar aparece durante la reproducción";
+"灵动岛副行" = "Segunda línea del notch";
 "灵动岛和菜单栏歌词在播放时显示" = "La letra del notch y de la barra de menús aparece durante la reproducción";
 "灵动岛宽度" = "Ancho de la tarjeta del notch";
 "灵动岛展开宽度" = "Ancho expandido del notch";
@@ -2893,6 +2896,7 @@
 "隐藏歌词" = "Ocultar letra";
 "隐藏译文" = "Ocultar traducción";
 "隐藏读音" = "Ocultar romanización";
+"需先打开灵动岛歌词" = "Activa primero la letra en el notch";
 "需先部署网页端并获取访问令牌。部署步骤见项目 README 的「网页端」一节：https://github.com/Yudaotor/lyrimuse#网页端" = "Primero despliega la app web y obtén un token de acceso. Los pasos están en el README del proyecto: https://github.com/Yudaotor/lyrimuse";
 "需自行部署同步服务；只连接 ListenBrainz 时网页同样能显示正在播放" = "Requiere un servidor de sincronización propio. Con ListenBrainz conectado, la página web puede mostrar igualmente lo que suena";
 "需要 Discord 桌面版" = "Requiere la app de escritorio de Discord";

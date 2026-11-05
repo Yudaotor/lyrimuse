@@ -2046,7 +2046,8 @@ func runMenuBarTests() {
         expectEqual(L.Tile.allCases.map(\.rawValue),
                     ["now-playing", "overlay", "notch", "menubar", "lyrics-window", "touchbar", "lyrics-manager", "translation", "romanization",
                      "lock-position", "hide-all-lyrics", "search-lyrics", "mini-window", "font-larger", "font-smaller", "like", "open-player",
-                     "lyrics-advance", "lyrics-delay", "lyrics-offset-reset", "volume", "today-listening"], "面板布局: 格子的存盘写法")
+                     "lyrics-advance", "lyrics-delay", "lyrics-offset-reset", "volume", "today-listening", "notch-secondary-line",
+                     "lyrics-window-pin", "lyrics-window-fullscreen"], "面板布局: 格子的存盘写法")
         expectEqual(L.Size.allCases.map { "\($0.columns)x\($0.rows)" }, ["2x1", "3x1", "3x2", "6x2", "6x1"],
                     "面板布局: 一排 6 列,小 2 列、中 3 列、大 3×2、加宽 6×2")
         // 几何:宽 316、行高 78、间距 9 → 小号 99.33 宽、中号 153.5 宽,同原来一排三个 / 两个。
@@ -2236,13 +2237,17 @@ func runMenuBarTests() {
                     "面板布局: 移除后坑位空着,别的格子不挪")
         expectEqual(L.default.addable { $0 != .touchBar },
                     [.translation, .romanization, .lockPosition, .hideAllLyrics, .searchLyrics, .miniWindow, .fontLarger, .fontSmaller,
-                     .like, .openPlayer, .lyricsAdvance, .lyricsDelay, .lyricsOffsetReset, .volume, .todayListening],
+                     .like, .openPlayer, .lyricsAdvance, .lyricsDelay, .lyricsOffsetReset, .volume, .todayListening,
+                     .notchSecondaryLine, .lyricsWindowPin, .lyricsWindowFullScreen],
                     "面板布局: 可添加的新格子")
         // 「可添加」按显示方式分组:组按固定顺序、组里按格子顺序,空组不出;移除的主格子回到自己那一组。
         var trimmed = L.default
         trimmed.remove(.overlay)
         let groups = trimmed.addableGroups { $0 != .touchBar }
-        expectEqual(groups.map(\.group), [.nowPlaying, .overlay, .lyricsWindow, .lyrics], "面板可添加: 分组顺序,空组不出")
+        expectEqual(groups.map(\.group), [.nowPlaying, .overlay, .notch, .lyricsWindow, .lyrics], "面板可添加: 分组顺序,空组不出")
+        expectEqual(groups.first { $0.group == .notch }?.tiles == [.notchSecondaryLine]
+                    && groups.first { $0.group == .lyricsWindow }?.tiles == [.miniWindow, .lyricsWindowPin, .lyricsWindowFullScreen], true,
+                    "面板可添加: 灵动岛副行、歌词窗口置顶 / 全屏在各自那一组")
         expectEqual(groups.first { $0.group == .overlay }?.tiles, [.overlay, .lockPosition, .fontLarger, .fontSmaller],
                     "面板可添加: 移除的悬浮歌词回到它那一组")
         expectEqual(L.decode(#"{"grid":6,"version":2,"tiles":[{"id":"notch-show-lyrics","size":"small","col":0,"row":0}]}"#).placements.isEmpty, true,
@@ -2274,6 +2279,14 @@ func runMenuBarTests() {
                     "面板编辑: 右键换档和拉手只给这一格有的档")
         expectEqual(sourceHas(panel, ".simultaneousGesture(gridResizeGesture)") && sourceHas(panel, "guard resizingTile == nil else { return }"), true,
                     "面板编辑: 换尺寸挂在整块网格上(挂在拉手上,格子换画法时手势被丢掉、一次只能换一档),拉的时候格子不跟着挪")
+        expectEqual(sourceHas(panel, "AppSettings.shared.notchSecondaryLine = NotchQuickAction.nextSecondaryLine(after: AppSettings.shared.notchSecondaryLine)")
+                    && sourceHas(panel, "if !LyricsWindowRemote.shared.isOpen { close() }\nLyricsWindowRemote.shared.togglePinned()")
+                    && sourceHas(panel, "close()\nLyricsWindowRemote.shared.toggleFullScreen()"), true,
+                    "面板格子: 副行读点下去那一刻的档位往后轮;置顶在窗口没开时、全屏一律先收面板(开窗、全屏都会激活 App)")
+        let lyricsWindow = source("lyrimuse/UI/LyricsWindowView.swift")
+        expectEqual(sourceHas(lyricsWindow, "func attach(_ window: NSWindow) {\nLyricsWindowRemote.shared.bind(self)")
+                    && sourceHas(lyricsWindow, "if !LyricsWindowSession.requestForm(mini: false) { AppActions.shared.openLyricsWindow?() }"), true,
+                    "面板格子: 歌词窗口每次 attach 都登记给面板;全屏时迷你先换完整尺寸")
         expectEqual(sourceHas(panel, "if event.isARepeat, [space, left, right].contains(event.keyCode) { return true }"), true,
                     "面板按键: 按住空格、← → 不连发(不然来回切播放 / 暂停、连跳几首)")
         expectEqual(sourceHas(panel, "Self.withoutUnavailable(playback.panelLayout, available: tileAvailable).layout")
