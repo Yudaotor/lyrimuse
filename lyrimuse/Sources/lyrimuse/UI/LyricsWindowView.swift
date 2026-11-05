@@ -7706,13 +7706,7 @@ private struct IdleLastfmSection: View {
     /// (滚动 168 小时)——三个面里唯一一处口径不同;而且最近记录改走引擎
     /// feed 之后,`overview.week` 只在 feed 不在、退回轮询时才会被刷新,读它就是读一个陈值。
     /// 首次全量同步期间退回 API 值(那时桶本身残缺)。
-    private var weekValue: Int? {
-        guard !stats.dailyFullSyncing else { return stats.overview?.week }
-        return IdleListeningStats.lastSevenDays(
-            dailyCounts: stats.dailyCounts, today: Date(),
-            todayCount: stats.overview?.today,
-            dayKey: { LastfmStatsService.dayKey($0) })
-    }
+    private var weekValue: Int? { stats.lastSevenDaysCount }
 
     var body: some View {
         if stats.isConnected {

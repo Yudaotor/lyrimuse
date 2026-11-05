@@ -88,8 +88,11 @@ struct PanelVolumeSlider: View {
     let openDevices: () -> Void
     private var large: Bool { size == .large || size == .wide }
     /// 正按着滑杆。只在按着时写系统音量:滑杆刚出现、换尺寸重排时 SwiftUI 也会调一次 set,带进来的可能是 0,
-    /// 不拦的话一换布局就把系统音量写成 0(到 0 系统还会自己静音)。
+    /// 不拦的话一换布局就把系统音量写成 0(到 0 系统还会自己静音)。辅助功能的增减不经过按着这一步,单独接
+    /// (`accessibilityAdjustableAction`)。
     @State private var dragging = false
+    /// 辅助功能每增减一下改多少,同系统音量键一格。
+    private static let accessibilityStep: Float = 1 / 16
 
     var body: some View {
         VStack(alignment: .leading, spacing: large ? 10 : 6) {
@@ -131,6 +134,15 @@ struct PanelVolumeSlider: View {
                        onEditingChanged: { dragging = $0 })
                     .controlSize(.small)
                     .accessibilityLabel(L10n.t("声音"))
+                    .accessibilityValue(model.label)
+                    .accessibilityAdjustableAction { direction in
+                        let current = model.muted ? 0 : (model.volume ?? 0)
+                        switch direction {
+                        case .increment: model.set(min(1, current + Self.accessibilityStep))
+                        case .decrement: model.set(max(0, current - Self.accessibilityStep))
+                        @unknown default: break
+                        }
+                    }
             }
             .disabled(model.volume == nil)
             if large {
@@ -162,15 +174,9 @@ struct PanelTodayListeningTile: View {
             .help(L10n.t("今日收听"))
     }
 
-    /// 「近 7 天」跟设置页 Last.fm 统计、歌词窗口待机页同一个口径(按天的收听数 + 今天,自然日对齐),三处显示同一个数。
-    /// 别读 `overview.week`:它只在统计页的基线刷新时更新,引擎那份最近记录一直新鲜时一直不动。
-    private var weekValue: Int? {
-        guard !stats.dailyFullSyncing else { return stats.overview?.week }
-        return IdleListeningStats.lastSevenDays(
-            dailyCounts: stats.dailyCounts, today: Date(),
-            todayCount: stats.overview?.today,
-            dayKey: { LastfmStatsService.dayKey($0) })
-    }
+    /// 「近 7 天」同设置页 Last.fm 统计(`LastfmStatsService.lastSevenDaysCount`)。别读 `overview.week`:它只在统计页的基线
+    /// 刷新时更新,引擎那份最近记录一直新鲜时一直不动。
+    private var weekValue: Int? { stats.lastSevenDaysCount }
 
     private func number(_ value: Int?) -> String {
         value.map { $0.formatted(.number) } ?? "—"

@@ -513,7 +513,7 @@ private final class FirstMouseHostingView<Content: View>: NSHostingView<Content>
 }
 
 /// 面板平时那一页的按键:空格播放 / 暂停,← → 上一首 / 下一首,↑ ↓ 歌词提前 / 延后一档(同卡片上的「+」「−」,
-/// 步长同设置)。带 ⌘ ⌥ ⌃ ⇧ 的、有文字输入框在接键盘时、不在平时那一页时都不管。音量不放在 ↑ ↓ 上:系统音量键本来就有,
+/// 步长同设置;按住空格、← → 不连发)。带 ⌘ ⌥ ⌃ ⇧ 的、有文字输入框在接键盘时、不在平时那一页时都不管。音量不放在 ↑ ↓ 上:系统音量键本来就有,
 /// 面板里调得动音量的播放器又只有几家。见 06 章决策 91。
 @MainActor
 enum PanelPlaybackKeys {
@@ -526,6 +526,9 @@ enum PanelPlaybackKeys {
     static func handle(_ event: NSEvent, in window: NSWindow) -> Bool {
         guard PanelEditBridge.shared.playbackKeysEnabled, !(window.firstResponder is NSText),
               event.modifierFlags.intersection([.command, .option, .control, .shift]).isEmpty else { return false }
+        // 按住不放的自动重复:空格、← → 只认按下那一下(按住空格会来回切播放 / 暂停、按住 → 会连跳几首),吃掉不往下发;
+        // ↑ ↓ 照常连着调。
+        if event.isARepeat, [space, left, right].contains(event.keyCode) { return true }
         switch event.keyCode {
         case space:
             MenuBarStatusItem.withMusicPermission { PlaybackCoordinator.shared.userTogglePlayPause() }
@@ -890,7 +893,8 @@ private struct MenuBarPanelView: View {
 
     /// 「触控栏歌词」只在这台 Mac 此刻有触控栏时画(真机,或 Xcode 的触控栏模拟器开着;判据同设置页「触控栏」那一段、
     /// 右键菜单「快速开关」那一项),没有时留在布局里、不画,也不进「可添加」。见 06 章决策 37。
-    /// 「今日收听」只在连着 Last.fm 时有(数字从那来),没连时同上留在布局里、不画、不进「可添加」。
+    /// 「今日收听」只在连着 Last.fm 时有(数字从那来),没连时同上留在布局里、不画、不进「可添加」。编辑时这几格也拿掉
+    /// (`editLayout`)。
     private func tileAvailable(_ tile: MenuBarPanelLayout.Tile) -> Bool {
         switch tile {
         case .touchBar: return playback.touchBarPresent
@@ -1792,9 +1796,17 @@ private struct MenuBarPanelView: View {
         .onDisappear { PanelEditBridge.shared.galleryDrag = nil }
     }
 
-    /// 编辑用的布局:这台 Mac 此刻没有触控栏时把「触控栏歌词」拿掉(不画、不占坑位),写回时放回原位(`updateLayout`)。
+    /// 编辑用的布局:此刻用不了的格子(`tileAvailable`:没有触控栏时的「触控栏歌词」、没连 Last.fm 时的「今日收听」)拿掉,
+    /// 不画、不占坑位,跟平时那一页看到的一样;写回时放回原位(`updateLayout`)。
     private var editLayout: MenuBarPanelLayout {
-        playback.touchBarPresent ? playback.panelLayout : playback.panelLayout.without(.touchBar)
+        Self.withoutUnavailable(playback.panelLayout, available: tileAvailable).layout
+    }
+
+    /// 拿掉 `layout` 里用不了的格子,连同它们原来的位置一起交回(写回时按原位放回)。
+    private static func withoutUnavailable(_ layout: MenuBarPanelLayout, available: (MenuBarPanelLayout.Tile) -> Bool)
+        -> (layout: MenuBarPanelLayout, hidden: [MenuBarPanelLayout.Placement]) {
+        let hidden = layout.placements.filter { !available($0.tile) }
+        return (hidden.reduce(layout) { $0.without($1.tile) }, hidden)
     }
 
     /// 旁边「可添加」那块拖着一格:屏幕坐标换成网格坐标,跟本面板里拖格子走同一套挤位;nil = 松手。
@@ -2188,13 +2200,13 @@ private struct MenuBarPanelView: View {
     }
 
     /// 编辑时改布局:直接写设置,面板这一刻就按新布局排。挪位、加减格子带一小段动画。
-    /// 改的是 `editLayout` 那一份:没有触控栏时先拿掉「触控栏歌词」,改完再放回原位(原位被占了就不放,它回到「可添加」)。
+    /// 改的是 `editLayout` 那一份:先拿掉此刻用不了的格子,改完再放回原位(原位被占了就不放,能用时它回到「可添加」)。
     private func updateLayout(_ change: (inout MenuBarPanelLayout) -> Void) {
         let stored = AppSettings.shared.menuBarPanelLayout
-        let hidden = playback.touchBarPresent ? nil : stored.placement(of: .touchBar)
-        var layout = hidden == nil ? stored : stored.without(.touchBar)
+        let split = Self.withoutUnavailable(stored, available: tileAvailable)
+        var layout = split.layout
         change(&layout)
-        layout = layout.restoring(hidden)
+        layout = split.hidden.reduce(layout) { $0.restoring($1) }
         guard layout != stored else { return }
         withAnimation(reduceMotion ? nil : .easeOut(duration: 0.16)) {
             AppSettings.shared.menuBarPanelLayout = layout

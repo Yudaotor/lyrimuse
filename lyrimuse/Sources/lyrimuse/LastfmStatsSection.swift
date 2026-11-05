@@ -219,17 +219,9 @@ struct LastfmStatsSection: View {
         }
     }
 
-    /// 「近 7 天」的数值。跟待机页 `IdleStandbyView.weekValue` 是同一份逻辑 —— 两处显示
-    /// 同一个名字的数字,口径必须一致(见 IdleListeningStats.lastSevenDays 的注释:
-    /// 从 API 的滚动 168 小时改成自然日对齐,为的是跟环比百分比同源)。
-    /// 首次全量同步期间(桶残缺)退回 API 值。
-    private var weekValue: Int? {
-        guard !stats.dailyFullSyncing else { return stats.overview?.week }
-        return IdleListeningStats.lastSevenDays(
-            dailyCounts: stats.dailyCounts, today: Date(),
-            todayCount: stats.overview?.today,
-            dayKey: { LastfmStatsService.dayKey($0) })
-    }
+    /// 「近 7 天」的数值,跟待机页、菜单栏面板读同一份(`LastfmStatsService.lastSevenDaysCount`,自然日对齐、
+    /// 跟环比百分比同源;首次全量同步期间退回 API 值)。
+    private var weekValue: Int? { stats.lastSevenDaysCount }
 
     private func statCell(value: Int?, label: String) -> some View {
         VStack(spacing: 2) {

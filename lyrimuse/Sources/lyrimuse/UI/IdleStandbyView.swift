@@ -274,13 +274,7 @@ private struct IdleOverviewCard: View {
     /// 首次全量同步期间退回 API 值:那时候桶是残缺的,拿它算只会给出一个偏低的假数字,
     /// 而这一档下面那个百分比本来也不显示(weekLabel 的 dailyFullSyncing 守卫),不存在
     /// "数值和百分比不同源"的问题。
-    private var weekValue: Int? {
-        guard !stats.dailyFullSyncing else { return stats.overview?.week }
-        return IdleListeningStats.lastSevenDays(
-            dailyCounts: stats.dailyCounts, today: Date(),
-            todayCount: stats.overview?.today,
-            dayKey: { LastfmStatsService.dayKey($0) })
-    }
+    private var weekValue: Int? { stats.lastSevenDaysCount }
 
     private var weekLabel: String {
         let base = L10n.t("近 7 天")

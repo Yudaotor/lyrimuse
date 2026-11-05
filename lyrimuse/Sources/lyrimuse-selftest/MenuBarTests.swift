@@ -2146,6 +2146,23 @@ func runMenuBarTests() {
         let panelGrid = PanelGridGeometry.menuBarPanel
         expectEqual(panelGrid.resizedSize(origin: .zero, pointer: CGPoint(x: 300, y: 70), allowed: L.Tile.volume.sizes), .bar,
                     "面板拉手: 声音往右拉到头是长条")
+        // 靠右的格子换宽后往左对齐、右边没地方拉:宽一档的分界收到面板右边缘(格子坐标 316,窗口边 326)。
+        let rightMedium = panelGrid.frame(column: 3, row: 0, size: .medium).origin
+        let rightSmall = panelGrid.frame(column: 4, row: 0, size: .small).origin
+        let oneRow = panelGrid.rowHeight - 5
+        expectEqual(panelGrid.resizedSize(origin: rightMedium, pointer: CGPoint(x: 310, y: oneRow), allowed: L.Tile.volume.sizes), .medium,
+                    "面板拉手: 右列的声音没拉到面板边上还是中号")
+        expectEqual(panelGrid.resizedSize(origin: rightMedium, pointer: CGPoint(x: 322, y: oneRow), allowed: L.Tile.volume.sizes), .bar,
+                    "面板拉手: 右列的声音拉到面板边上是长条")
+        expectEqual(panelGrid.resizedSize(origin: rightSmall, pointer: CGPoint(x: 322, y: oneRow)), .medium,
+                    "面板拉手: 最右列的小号拉到面板边上是中号")
+        expectEqual(panelGrid.resizedSize(origin: rightSmall, pointer: CGPoint(x: 330, y: oneRow), allowed: L.Tile.volume.sizes) == .medium
+                    && panelGrid.resizedSize(origin: rightSmall, pointer: CGPoint(x: 350, y: oneRow), allowed: L.Tile.volume.sizes) == .bar, true,
+                    "面板拉手: 最右列的声音过了面板边再往外一档是长条")
+        expectEqual(panelGrid.resizedSize(origin: rightMedium, pointer: CGPoint(x: 322, y: panelGrid.height(rows: 2) - 5),
+                                          allowed: L.Tile.nowPlaying.sizes), .wide, "面板拉手: 右列的卡片拉到面板边上是加宽")
+        expectEqual(panelGrid.resizedSize(origin: .zero, pointer: CGPoint(x: 200, y: 140), allowed: L.Tile.volume.sizes), .large,
+                    "面板拉手: 声音往下拉过一行半是大号")
         expectEqual(geo.size(.wide), CGSize(width: 316, height: 165), "面板网格: 加宽占满一排、两行高")
         // 面板实际用的那一份:大号(卡片的大号也是)是正方形,同控制中心;宽度跟面板内边距对得上。
         let panelGeo = PanelGridGeometry.menuBarPanel
@@ -2257,6 +2274,13 @@ func runMenuBarTests() {
                     "面板编辑: 右键换档和拉手只给这一格有的档")
         expectEqual(sourceHas(panel, ".simultaneousGesture(gridResizeGesture)") && sourceHas(panel, "guard resizingTile == nil else { return }"), true,
                     "面板编辑: 换尺寸挂在整块网格上(挂在拉手上,格子换画法时手势被丢掉、一次只能换一档),拉的时候格子不跟着挪")
+        expectEqual(sourceHas(panel, "if event.isARepeat, [space, left, right].contains(event.keyCode) { return true }"), true,
+                    "面板按键: 按住空格、← → 不连发(不然来回切播放 / 暂停、连跳几首)")
+        expectEqual(sourceHas(panel, "Self.withoutUnavailable(playback.panelLayout, available: tileAvailable).layout")
+                    && sourceHas(panel, "layout = split.hidden.reduce(layout) { $0.restoring($1) }"), true,
+                    "面板编辑: 此刻用不了的格子(没连 Last.fm 时的今日收听等)编辑时也拿掉,写回时放回原位")
+        expectEqual(sourceHas(source("lyrimuse/MenuBar/MenuBarPanelVolume.swift"), ".accessibilityAdjustableAction { direction in"), true,
+                    "面板音量: 只在按着时写音量,辅助功能的增减单独接")
         expectEqual(sourceHas(panel, "if items.isEmpty { Spacer(minLength: 0) }\neditLayoutButton"), true,
                     "面板编辑: 「编辑」那一颗不跟着底栏显隐")
         expectEqual(sourceHas(panel, "if pendingUpdate != nil, !items.contains(.version) { items.append(.version) }"), true,

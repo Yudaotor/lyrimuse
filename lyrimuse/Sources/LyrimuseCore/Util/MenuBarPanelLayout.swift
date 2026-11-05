@@ -479,19 +479,38 @@ public struct PanelGridGeometry: Equatable, Sendable {
         (Int((origin.x / columnStride).rounded()), Int((origin.y / rowStride).rounded()))
     }
 
-    /// 拖右下角时指针在 `pointer`、格子左上角在 `origin`:往下过了一行和两行高度的中间是大号,往右过了小号和中号宽度的中间
-    /// 是中号,其余小号。`allowed` 不是小、中、大三档(正在播放卡)时,挑右下角离指针最近的那一档。
+    /// 宽一档的分界落到面板右边外面时,收到 `width + overflowReach` 起、每 `overflowStep` 一档(见 `resizedSize`)。
+    public static let overflowReach: CGFloat = 4
+    public static let overflowStep: CGFloat = 24
+
+    /// 拖右下角时指针在 `pointer`、格子左上角在 `origin`,换到 `allowed` 里的哪一档。宽、高分开定:往右过了相邻两档宽度的
+    /// 中间换宽一档,往下过了一行和两行高度的中间换两行高;这一格没有那种宽高组合时保住高度、宽度取最接近的
+    /// (小号往下拉是大号)。格子靠右时宽一档的分界在面板外面(换宽后格子往左对齐,右边没地方拉),这种分界收到面板
+    /// 右边缘(`overflowReach`)起、往外每 `overflowStep` 一档:拉到面板边上就宽一档。见 06 章决策 94。
     public func resizedSize(origin: CGPoint, pointer: CGPoint,
                             allowed: [MenuBarPanelLayout.Size] = [.small, .medium, .large]) -> MenuBarPanelLayout.Size {
-        guard Set(allowed) == [.small, .medium, .large] else {
-            func distance(_ s: MenuBarPanelLayout.Size) -> CGFloat {
-                let corner = size(s)
-                return hypot(pointer.x - origin.x - corner.width, pointer.y - origin.y - corner.height)
+        let widths = Set(allowed.map(\.columns)).sorted()
+        let heights = Set(allowed.map(\.rows)).sorted()
+        guard let narrowest = widths.first, let lowest = heights.first else { return .small }
+        func span(_ count: Int, _ stride: CGFloat) -> CGFloat { CGFloat(count) * stride - spacing }
+        var columns = narrowest
+        var overflowed = 0
+        for (narrow, wide) in zip(widths, widths.dropFirst()) {
+            var boundary = origin.x + (span(narrow, columnStride) + span(wide, columnStride)) / 2
+            if boundary > width + Self.overflowReach {
+                boundary = width + Self.overflowReach + CGFloat(overflowed) * Self.overflowStep
+                overflowed += 1
             }
-            return allowed.min { distance($0) < distance($1) } ?? .small
+            guard pointer.x > boundary else { break }
+            columns = wide
         }
-        let small = size(.small), medium = size(.medium), large = size(.large)
-        if pointer.y - origin.y > (small.height + large.height) / 2 { return .large }
-        return pointer.x - origin.x > (small.width + medium.width) / 2 ? .medium : .small
+        var rows = lowest
+        for (low, high) in zip(heights, heights.dropFirst()) {
+            guard pointer.y > origin.y + (span(low, rowStride) + span(high, rowStride)) / 2 else { break }
+            rows = high
+        }
+        if let exact = allowed.first(where: { $0.columns == columns && $0.rows == rows }) { return exact }
+        return allowed.filter { $0.rows == rows }.min { abs($0.columns - columns) < abs($1.columns - columns) }
+            ?? allowed.first ?? .small
     }
 }

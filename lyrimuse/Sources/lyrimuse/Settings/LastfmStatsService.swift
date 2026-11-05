@@ -1665,6 +1665,17 @@ final class LastfmStatsService: ObservableObject {
     /// 日均、走势图、收听足迹)都不能用。增量同步期间 dailyCounts 原样保留、收尾才整体替换,
     /// 照常可用,那些地方看这个而不是 `dailySyncing`,免得每轮增量都闪一下。
     @Published private(set) var dailyFullSyncing = false
+
+    /// 「近 7 天」:按天的收听数 + 今天,自然日对齐(`IdleListeningStats.lastSevenDays`),跟环比百分比同源。设置页统计段、
+    /// 待机页、歌词窗口待机那一行、菜单栏面板「今日收听」都读这一份,别各算各的。首次全量同步期间按天的数残缺,退回 API 的
+    /// `overview.week`。
+    var lastSevenDaysCount: Int? {
+        guard !dailyFullSyncing else { return overview?.week }
+        return IdleListeningStats.lastSevenDays(
+            dailyCounts: dailyCounts, today: Date(),
+            todayCount: overview?.today,
+            dayKey: { Self.dayKey($0) })
+    }
     /// 首次全量同步的进度文案;增量同步保持 nil 不占界面。
     @Published private(set) var dailySyncProgress: String?
     @Published private(set) var dailySyncFailed = false
