@@ -15,6 +15,12 @@ func runMenuBarTests() {
         for t in ["Schwebender Text", "Menüleisten-Text", "Floating Lyrics", "메뉴 막대 가사", "Paroles de la barre des menus", ""] {
             expectEqual(TileTitleWrap.breaksInsideWords(t), false, "按词折行: \(t)")
         }
+        for t in ["Wiedergabesteuerung", "Прослуховування", "Liedtext"] {
+            expectEqual(TileTitleWrap.isSingleSpacedWord(t), true, "设置行标题一个词只排一行: \(t)")
+        }
+        for t in ["แสดงเนื้อเพลงบนแถบเมนู", "ຂໍ້ຄວາມ", "悬浮歌词", "Floating Lyrics", ""] {
+            expectEqual(TileTitleWrap.isSingleSpacedWord(t), false, "设置行标题照常折行: \(t)")
+        }
     }
     // ---- 菜单栏跑马灯:像素级偏移 ----
     do {

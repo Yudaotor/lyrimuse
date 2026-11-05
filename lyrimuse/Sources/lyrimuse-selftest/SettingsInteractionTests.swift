@@ -593,8 +593,8 @@ func runSettingsInteractionTests() {
             expectEqual(ReportWords.table[lang] ?? [:], wordsJSON[lang.rawValue] ?? ["": "缺"], "报告语言: \(lang.rawValue) 用语表同引擎")
         }
         expectEqual([ReportLanguage(""), ReportLanguage(" ZH-HANT "), ReportLanguage("en"), ReportLanguage("ja"), ReportLanguage("ko"), ReportLanguage("es"),
-                     ReportLanguage("fr"), ReportLanguage("de"), ReportLanguage("it"), ReportLanguage("pt-br"), ReportLanguage(" PT-BR "), ReportLanguage("vi"), ReportLanguage(" RU "), ReportLanguage(" UK "), ReportLanguage("pl")],
-                    [.zhHans, .zhHant, .en, .ja, .ko, .es, .fr, .de, .it, .ptBR, .ptBR, .vi, .ru, .uk, .zhHans],
+                     ReportLanguage("fr"), ReportLanguage("de"), ReportLanguage("it"), ReportLanguage("pt-br"), ReportLanguage(" PT-BR "), ReportLanguage("vi"), ReportLanguage(" RU "), ReportLanguage(" UK "), ReportLanguage(" TH "), ReportLanguage("pl")],
+                    [.zhHans, .zhHant, .en, .ja, .ko, .es, .fr, .de, .it, .ptBR, .ptBR, .vi, .ru, .uk, .th, .zhHans],
                     "报告语言: 认得的几种,其余按简体")
         expectEqual(ReportLanguage.featuresKey, "report_language", "报告语言: 键名同引擎 features.go 的 json 标签")
         expectEqual([ReportLanguage.featuresValue(ui: "th", pinned: nil), ReportLanguage.featuresValue(ui: "th", pinned: ""),
@@ -631,6 +631,9 @@ func runSettingsInteractionTests() {
         expectEqual([0, 1, 2].map { ReportLanguage.fr.words.count("plays", $0) } + [0, 1].map { ReportLanguage.es.words.count("plays", $0) },
                     ["0 écoute", "1 écoute", "2 écoutes", "0 reproducciones", "1 reproducción"],
                     "报告语言: 法语 0 也用单数(同引擎 digestWords.count),别的语言只有 1")
+        expectEqual([0, 1, 2].map { ReportLanguage.th.words.count("plays", $0) } + [ReportLanguage.th.words.month("title_month", year: 2026, month: 10)],
+                    ["เล่น 0 ครั้ง", "เล่น 1 ครั้ง", "เล่น 2 ครั้ง", "📅 รายงานการฟังประจำเดือนตุลาคม 2026"],
+                    "报告语言: 泰语不分单复数,月名照 month_names,年份公历")
         expectEqual([0, 1, 2].map { ReportLanguage.vi.words.count("plays", $0) } + [ReportLanguage.vi.words.month("title_month", year: 2026, month: 10)],
                     ["0 lượt phát", "1 lượt phát", "2 lượt phát", "📅 Tổng kết nghe nhạc tháng 10/2026"],
                     "报告语言: 越南语不分单复数(同日韩,表里没有 _one),月份写数字")

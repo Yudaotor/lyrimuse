@@ -1,6 +1,6 @@
 # URL-схема Lyrimuse
 
-*[English](url-scheme.md) · [简体中文](url-scheme.zh-CN.md) · [日本語](url-scheme.ja.md) · [한국어](url-scheme.ko.md) · [Español](url-scheme.es.md) · [Français](url-scheme.fr.md) · [Deutsch](url-scheme.de.md) · [Italiano](url-scheme.it.md) · [Português (Brasil)](url-scheme.pt-BR.md) · [Tiếng Việt](url-scheme.vi.md) · [Русский](url-scheme.ru.md) · **Українська***
+*[English](url-scheme.md) · [简体中文](url-scheme.zh-CN.md) · [日本語](url-scheme.ja.md) · [한국어](url-scheme.ko.md) · [Español](url-scheme.es.md) · [Français](url-scheme.fr.md) · [Deutsch](url-scheme.de.md) · [Italiano](url-scheme.it.md) · [Português (Brasil)](url-scheme.pt-BR.md) · [Tiếng Việt](url-scheme.vi.md) · [Русский](url-scheme.ru.md) · **Українська** · [ไทย](url-scheme.th.md)*
 
 Посилання, що починаються з `lyrimuse://`, дають змогу керувати Lyrimuse з програми «Швидкі команди», з Raycast, Alfred, Stream Deck, Термінала (`open 'lyrimuse://…'`) і подібних інструментів: відкривати вікна й сторінки параметрів, показувати чи ховати текст, керувати відтворенням, зсувати таймінг або дізнаватися, що зараз грає.
 

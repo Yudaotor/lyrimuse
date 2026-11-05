@@ -58,7 +58,10 @@ enum L10n {
     /// 还是关于用户这个人/这台机器的事实":`AppSettings.userReadsChinese`(这个人读不读中文)
     /// 和译文目标语言的"跟随系统"档(母语可能既非中也非英,而界面只有中英两版)都必须继续
     /// 跟随**系统**语言,换成界面语言反而是 bug。
-    static var locale: Locale { Locale(identifier: UILanguage.localeIdentifier(for: current)) }
+    static var locale: Locale {
+        let calendar = (Calendar.autoupdatingCurrent as NSCalendar).calendarIdentifier.rawValue
+        return Locale(identifier: UILanguage.formattingLocaleIdentifier(for: current, systemCalendar: calendar))
+    }
 
     /// 代码里拼进文案的括号用全角(中文、日文)还是半角(其余语言,前面空一格)。
     static var usesFullWidthBrackets: Bool { current.hasPrefix("zh") || current == "ja" }
@@ -110,6 +113,7 @@ enum L10n {
     /// 把几样东西拼成句子里的列表(「A、B和C」/ "A, B, and C"),按**界面语言**拼(`locale`)。
     /// 别用 `ListFormatter.localizedString(byJoining:)`:它按系统语言拼。
     static func list(_ items: [String]) -> String {
+        if current == "th", let joined = UILanguage.thaiList(items) { return joined }
         let formatter = ListFormatter()
         formatter.locale = locale
         return formatter.string(from: items) ?? items.joined(separator: t("、"))

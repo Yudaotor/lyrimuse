@@ -6,6 +6,7 @@ import (
 	"html"
 	"net/url"
 	"strings"
+	"unicode"
 	"unicode/utf8"
 )
 
@@ -159,12 +160,17 @@ func richLinkLabel(d *digestStats) string {
 func richFooter(d *digestStats) string { return dw().f("footer", "source", digestSourceName(d)) }
 
 // clipRunes:超过 n 个字符的截掉,末尾放省略号(平台对标题有长度上限,超了整条拒收)。
+// 不截在组合符号前面:泰文的元音、声调符号跟着前一个字,截下来的字要连同它的符号一起去掉。
 func clipRunes(s string, n int) string {
 	if utf8.RuneCountInString(s) <= n {
 		return s
 	}
 	r := []rune(s)
-	return string(r[:n-1]) + "…"
+	k := n - 1
+	for k > 0 && unicode.Is(unicode.Mn, r[k]) {
+		k--
+	}
+	return string(r[:k]) + "…"
 }
 
 // ---- Telegram ----

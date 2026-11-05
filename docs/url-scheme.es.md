@@ -1,6 +1,6 @@
 # Esquema de URL de Lyrimuse
 
-*[English](url-scheme.md) · [简体中文](url-scheme.zh-CN.md) · [日本語](url-scheme.ja.md) · [한국어](url-scheme.ko.md) · **Español** · [Français](url-scheme.fr.md) · [Deutsch](url-scheme.de.md) · [Italiano](url-scheme.it.md) · [Português (Brasil)](url-scheme.pt-BR.md) · [Tiếng Việt](url-scheme.vi.md) · [Русский](url-scheme.ru.md) · [Українська](url-scheme.uk.md)*
+*[English](url-scheme.md) · [简体中文](url-scheme.zh-CN.md) · [日本語](url-scheme.ja.md) · [한국어](url-scheme.ko.md) · **Español** · [Français](url-scheme.fr.md) · [Deutsch](url-scheme.de.md) · [Italiano](url-scheme.it.md) · [Português (Brasil)](url-scheme.pt-BR.md) · [Tiếng Việt](url-scheme.vi.md) · [Русский](url-scheme.ru.md) · [Українська](url-scheme.uk.md) · [ไทย](url-scheme.th.md)*
 
 Los enlaces que empiezan por `lyrimuse://` te permiten controlar Lyrimuse desde Atajos, Raycast, Alfred, Stream Deck, el Terminal (`open 'lyrimuse://…'`) y herramientas similares: abrir ventanas y páginas de ajustes, mostrar u ocultar la letra, controlar la reproducción, ajustar la sincronización u obtener lo que se está reproduciendo.
 

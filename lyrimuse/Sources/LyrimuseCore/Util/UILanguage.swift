@@ -13,7 +13,7 @@ import Foundation
 public enum UILanguage {
     /// 界面有的语言包,顺序就是语言下拉里的顺序。加一种语言:这里加一项,`localeIdentifier(for:)`、`nativeName(of:)` 加映射,
     /// generate-strings.py 的 TARGETS 登记 catalog 语言码 → 目录名(目录名一律小写,SwiftPM 打包会把它转小写)。
-    public static let packs = ["zh-hans", "zh-hant", "en", "ja", "ko", "es", "fr", "de", "it", "pt-br", "vi", "ru", "uk"]
+    public static let packs = ["zh-hans", "zh-hant", "en", "ja", "ko", "es", "fr", "de", "it", "pt-br", "vi", "ru", "uk", "th"]
 
     public static let traditionalRegions = ["-tw", "-hk", "-mo"]
 
@@ -54,6 +54,19 @@ public enum UILanguage {
         }
     }
 
+    /// 给日期格式器用的 locale 标识:泰语带上系统日历(`systemCalendar` 是日历标识,如 "gregorian"、"buddhist")。
+    /// `Locale("th")` 自带佛历,不带的话系统用公历的人也会看到 2569;其余语言同 `localeIdentifier(for:)`,日历由格式器自己跟系统。
+    public static func formattingLocaleIdentifier(for pack: String, systemCalendar: String) -> String {
+        pack == "th" && !systemCalendar.isEmpty ? "th@calendar=" + systemCalendar : localeIdentifier(for: pack)
+    }
+
+    /// 泰语列表:系统 `ListFormatter` 用空格分隔各项(「A B และ C」),项里有空格或拉丁字母(播放器名、服务名)时分不清
+    /// 哪几个词是一项,这时照 Apple 泰语并列拉丁名的写法用「, 」分隔、最后一项前加「และ」;纯泰文的项返回 nil,交给系统拼。
+    public static func thaiList(_ items: [String]) -> String? {
+        guard items.count > 1, items.contains(where: { $0.contains(where: { $0.isWhitespace || ($0.isASCII && $0.isLetter) }) }) else { return nil }
+        return items.dropLast().joined(separator: ", ") + " และ " + items[items.count - 1]
+    }
+
     /// 语言下拉里的名字:一律用这种语言自己的写法,哪种界面语言下都不翻译。
     public static func nativeName(of pack: String) -> String {
         switch pack {
@@ -70,6 +83,7 @@ public enum UILanguage {
         case "vi": return "Tiếng Việt"
         case "ru": return "Русский"
         case "uk": return "Українська"
+        case "th": return "ไทย"
         default: return pack
         }
     }
@@ -77,7 +91,7 @@ public enum UILanguage {
     /// 别的 App 的本地化目录名(「zh_CN」「zh-Hant」「English」「Japanese」这类)归哪个语言包,界面没有这种语言时为 nil。
     /// 老式的英文全称目录名先换成语言码,其余同 `pack(forTag:)`。
     public static func pack(forLocalization name: String) -> String? {
-        let legacyNames = ["english": "en", "chinese": "zh", "japanese": "ja", "korean": "ko", "spanish": "es", "french": "fr", "german": "de", "italian": "it", "portuguese": "pt", "vietnamese": "vi", "russian": "ru", "ukrainian": "uk"]
+        let legacyNames = ["english": "en", "chinese": "zh", "japanese": "ja", "korean": "ko", "spanish": "es", "french": "fr", "german": "de", "italian": "it", "portuguese": "pt", "vietnamese": "vi", "russian": "ru", "ukrainian": "uk", "thai": "th"]
         return pack(forTag: legacyNames[name.lowercased()] ?? name)
     }
 
@@ -93,7 +107,7 @@ public enum UILanguage {
     /// 这个数量在这种界面语言里属于哪一类:
     ///   - 多数语言只有 1 是 one;法语、葡萄牙语 0 和 1 都是 one(CLDR one = 0、1);
     ///   - 俄语、乌克兰语(`eastSlavicPluralPacks`,CLDR 同一套整数规则):个位 1 且末两位不是 11 → one,个位 2～4 且末两位不是 12～14 → few,其余(0、5～20、11～14 …)→ many;
-    ///   - 日、韩、越南语不分单复数,catalog 里那一条不写成 plural 变体、没有派生键,返回什么都取同一条。
+    ///   - 日、韩、越南语、泰语不分单复数,catalog 里那一条不写成 plural 变体、没有派生键,返回什么都取同一条。
     public static func pluralCategory(_ count: Int, pack: String) -> PluralCategory {
         if eastSlavicPluralPacks.contains(pack) {
             let n = abs(count), mod10 = n % 10, mod100 = n % 100

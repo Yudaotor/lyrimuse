@@ -681,17 +681,13 @@ enum SettingsRowMetrics {
 }
 
 /// 设置行的纵向内边距:在浮层里(`SettingsPopoverShell` 发下来的 `settingsInPopover`)用紧凑的一档。
-/// 标题是一个拉丁字母单词(不含空白、不含中日韩字)时只排一行,放不下就缩字号:放不下的单个单词
-/// SwiftUI 会从中间拆开折行。多个单词照常在词间折行,中日韩文字本来就能在任意字间折行。
+/// 标题是一个按空格分词的单词(`TileTitleWrap.isSingleSpacedWord`)时只排一行,放不下就缩字号:放不下的单个单词
+/// SwiftUI 会从中间拆开折行。多个单词照常在词间折行,中日韩、泰文由系统按字 / 按词典折行。
 struct SettingsTitleFit: ViewModifier {
     let title: String
 
-    static func isSingleLatinWord(_ title: String) -> Bool {
-        !title.isEmpty && !title.contains(where: \.isWhitespace) && title.unicodeScalars.allSatisfy { $0.value < 0x2E80 }
-    }
-
     func body(content: Content) -> some View {
-        if Self.isSingleLatinWord(title) {
+        if TileTitleWrap.isSingleSpacedWord(title) {
             content.lineLimit(1).minimumScaleFactor(0.7)
         } else {
             content

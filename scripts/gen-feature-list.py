@@ -29,12 +29,12 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-LANGS = ("en", "zh-Hans", "zh-Hant", "ja", "ko", "es", "fr", "de", "it", "pt-BR", "vi", "ru", "uk")
-LANG_LABELS = {"en": "English", "zh-Hans": "简体中文", "zh-Hant": "繁體中文", "ja": "日本語", "ko": "한국어", "es": "Español", "fr": "Français", "de": "Deutsch", "it": "Italiano", "pt-BR": "Português (Brasil)", "vi": "Tiếng Việt", "ru": "Русский", "uk": "Українська"}
+LANGS = ("en", "zh-Hans", "zh-Hant", "ja", "ko", "es", "fr", "de", "it", "pt-BR", "vi", "ru", "uk", "th")
+LANG_LABELS = {"en": "English", "zh-Hans": "简体中文", "zh-Hant": "繁體中文", "ja": "日本語", "ko": "한국어", "es": "Español", "fr": "Français", "de": "Deutsch", "it": "Italiano", "pt-BR": "Português (Brasil)", "vi": "Tiếng Việt", "ru": "Русский", "uk": "Українська", "th": "ไทย"}
 DOC_FILES = {"en": "feature-list.md", "zh-Hans": "feature-list.zh-CN.md", "zh-Hant": "feature-list.zh-Hant.md",
              "ja": "feature-list.ja.md", "ko": "feature-list.ko.md", "es": "feature-list.es.md",
              "fr": "feature-list.fr.md", "de": "feature-list.de.md", "it": "feature-list.it.md",
-             "pt-BR": "feature-list.pt-BR.md", "vi": "feature-list.vi.md", "ru": "feature-list.ru.md", "uk": "feature-list.uk.md"}
+             "pt-BR": "feature-list.pt-BR.md", "vi": "feature-list.vi.md", "ru": "feature-list.ru.md", "uk": "feature-list.uk.md", "th": "feature-list.th.md"}
 BRANDS = {"ListenBrainz", "Last.fm", "Discord"}
 
 CHROME = {
@@ -298,6 +298,26 @@ CHROME = {
         "sep": ": ",
         "generated": "Створено скриптом scripts/gen-feature-list.py із shared/feature-list.json і shared/settings-catalog.json; щоб змінити список, редагуйте ці файли.",
     },
+    "th": {
+        "title": "ความสามารถของ Lyrimuse",
+        "intro": "รวมความสามารถทั้งหมดของ Lyrimuse ไว้ที่นี่ ทั้งสิ่งที่แต่ละอย่างทำ อยู่ตรงไหนในการตั้งค่า และเปิดอยู่ตั้งแต่ติดตั้งหรือไม่ ท้ายหน้ามีรายการการตั้งค่าทั้งหมดในหน้าต่างการตั้งค่า รายการนี้ดูแลไปพร้อมกับซอร์สโค้ดและอัปเดตทุกครั้งที่มีการเปลี่ยนแปลง",
+        "toc": "สารบัญ",
+        "off_title": "ปิดอยู่จนกว่าจะเปิดเอง",
+        "off_intro": "ความสามารถเหล่านี้ปิดอยู่หลังติดตั้ง ต้องเปิดในการตั้งค่าก่อน (บางอย่างต้องมีบัญชีหรือสิทธิ์เพิ่มเติมด้วย):",
+        "col_feature": "ความสามารถ",
+        "col_where": "เปิดได้ที่",
+        "default_on": "เปิดอยู่ตามค่าเริ่มต้น",
+        "default_off": "ปิดอยู่ตามค่าเริ่มต้น",
+        "where": "การตั้งค่า",
+        "index_title": "การตั้งค่าทั้งหมด",
+        "index_intro": "การตั้งค่าทั้งหมดในหน้าต่างการตั้งค่า เรียงตามตำแหน่ง รวม {n} รายการ พิมพ์ชื่อในช่องค้นหาด้านบนของแถบด้านข้างเพื่อไปที่การตั้งค่านั้นทันที",
+        "settings": "การตั้งค่า",
+        "labs": "ทดลอง",
+        "mini_only": " (เฉพาะขนาดมินิ)",
+        "full_only": " (เฉพาะขนาดเต็ม)",
+        "sep": ": ",
+        "generated": "สร้างโดย scripts/gen-feature-list.py จาก shared/feature-list.json และ shared/settings-catalog.json หากต้องการแก้รายการ ให้แก้ไฟล์เหล่านั้น",
+    },
 }
 
 CALL_RE = re.compile(r"\b(SettingsRow|SettingsSubRow|SettingsCardHeader|SettingsChipToggle|SettingsToggleTile|SettingsControlCell)\(")
@@ -427,7 +447,7 @@ def load_model(root: Path = ROOT) -> dict:
             joined = ""
             for line in lines:
                 if joined:
-                    if lang in ("en", "ko", "es", "fr", "de", "it", "pt-BR", "vi", "ru", "uk"):
+                    if lang in ("en", "ko", "es", "fr", "de", "it", "pt-BR", "vi", "ru", "uk", "th"):
                         joined += " "
                     elif lang == "ja":
                         joined += "" if joined[-1] in "。：！？" else "。"

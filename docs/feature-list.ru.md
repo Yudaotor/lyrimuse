@@ -2,9 +2,9 @@
 
 # Возможности Lyrimuse
 
-[English](feature-list.md) · [简体中文](feature-list.zh-CN.md) · [繁體中文](feature-list.zh-Hant.md) · [日本語](feature-list.ja.md) · [한국어](feature-list.ko.md) · [Español](feature-list.es.md) · [Français](feature-list.fr.md) · [Deutsch](feature-list.de.md) · [Italiano](feature-list.it.md) · [Português (Brasil)](feature-list.pt-BR.md) · [Tiếng Việt](feature-list.vi.md) · Русский · [Українська](feature-list.uk.md)
+[English](feature-list.md) · [简体中文](feature-list.zh-CN.md) · [繁體中文](feature-list.zh-Hant.md) · [日本語](feature-list.ja.md) · [한국어](feature-list.ko.md) · [Español](feature-list.es.md) · [Français](feature-list.fr.md) · [Deutsch](feature-list.de.md) · [Italiano](feature-list.it.md) · [Português (Brasil)](feature-list.pt-BR.md) · [Tiếng Việt](feature-list.vi.md) · Русский · [Українська](feature-list.uk.md) · [ไทย](feature-list.th.md)
 
-Lyrimuse — приложение для Mac с открытым исходным кодом (GPL-3.0), которое показывает синхронизированный текст песен по словам; работает в macOS 14 и новее на Apple Silicon и Intel. Оно показывает текст для Apple Music, Spotify, QQ Music, NetEase Cloud Music, Kugou, Soda Music, KKBOX, Amazon Music, LX Music, Kaset, Pear Desktop, reAMP, VOX, Pine Player, foobar2000, а также для YouTube Music и Spotify Web в браузере: поверх рабочего стола, рядом с вырезом, в строке меню, в Touch Bar или в окне текста, с переводом и произношением (пиньинь, кантонский Jyutping, японский ромадзи, корейская романизация). Lyrimuse скробблит в Last.fm и ListenBrainz и может показывать в Discord, что вы слушаете. Интерфейс доступен на английском, китайском (упрощенном и традиционном), японском, корейском, испанском, французском, немецком, итальянском, португальском (Бразилия), вьетнамском, русском и украинском.
+Lyrimuse — приложение для Mac с открытым исходным кодом (GPL-3.0), которое показывает синхронизированный текст песен по словам; работает в macOS 14 и новее на Apple Silicon и Intel. Оно показывает текст для Apple Music, Spotify, QQ Music, NetEase Cloud Music, Kugou, Soda Music, KKBOX, Amazon Music, LX Music, Kaset, Pear Desktop, reAMP, VOX, Pine Player, foobar2000, а также для YouTube Music и Spotify Web в браузере: поверх рабочего стола, рядом с вырезом, в строке меню, в Touch Bar или в окне текста, с переводом и произношением (пиньинь, кантонский Jyutping, японский ромадзи, корейская романизация). Lyrimuse скробблит в Last.fm и ListenBrainz и может показывать в Discord, что вы слушаете. Интерфейс доступен на английском, китайском (упрощенном и традиционном), японском, корейском, испанском, французском, немецком, итальянском, португальском (Бразилия), вьетнамском, русском, украинском и тайском.
 
 Здесь собраны все возможности Lyrimuse: что делает каждая, где она в настройках и включена ли сразу после установки; в конце — все параметры окна настроек. Список ведется вместе с исходным кодом и обновляется при каждом изменении.
 
@@ -762,7 +762,7 @@ Apple Music, Spotify, QQ Music, NetEase Cloud Music, Kugou, Soda Music, LX Music
 
 <a id="feature-language"></a>
 
-### Английский, китайский (упрощенный и традиционный), японский, корейский, испанский, французский, немецкий, итальянский, португальский (Бразилия), вьетнамский, русский и украинский
+### Английский, китайский (упрощенный и традиционный), японский, корейский, испанский, французский, немецкий, итальянский, португальский (Бразилия), вьетнамский, русский, украинский и тайский
 
 По умолчанию — как в системе, а если язык системы не входит в этот список, — английский; переключение срабатывает сразу, без перезапуска.
 

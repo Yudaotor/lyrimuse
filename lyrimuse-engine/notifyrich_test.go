@@ -348,3 +348,22 @@ func TestNotifyLogKeepsDigestForResend(t *testing.T) {
 		t.Fatalf("%+v", f.Entries)
 	}
 }
+
+func TestClipRunesKeepsCombiningMarksWithTheirLetter(t *testing.T) {
+	for _, c := range []struct {
+		in   string
+		n    int
+		want string
+	}{
+		{"abcdef", 6, "abcdef"},
+		{"abcdefg", 6, "abcde…"},
+		{"เนื้อเพลง", 5, "เนื้…"},
+		{"เนื้อเพลง", 4, "เ…"},
+		{"เนื้อเพลง", 3, "เ…"},
+		{"เนื้อเพลง", 6, "เนื้อ…"},
+	} {
+		if got := clipRunes(c.in, c.n); got != c.want {
+			t.Errorf("clipRunes(%q, %d) = %q, want %q", c.in, c.n, got, c.want)
+		}
+	}
+}

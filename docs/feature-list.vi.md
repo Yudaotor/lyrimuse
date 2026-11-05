@@ -2,9 +2,9 @@
 
 # Danh sách tính năng của Lyrimuse
 
-[English](feature-list.md) · [简体中文](feature-list.zh-CN.md) · [繁體中文](feature-list.zh-Hant.md) · [日本語](feature-list.ja.md) · [한국어](feature-list.ko.md) · [Español](feature-list.es.md) · [Français](feature-list.fr.md) · [Deutsch](feature-list.de.md) · [Italiano](feature-list.it.md) · [Português (Brasil)](feature-list.pt-BR.md) · Tiếng Việt · [Русский](feature-list.ru.md) · [Українська](feature-list.uk.md)
+[English](feature-list.md) · [简体中文](feature-list.zh-CN.md) · [繁體中文](feature-list.zh-Hant.md) · [日本語](feature-list.ja.md) · [한국어](feature-list.ko.md) · [Español](feature-list.es.md) · [Français](feature-list.fr.md) · [Deutsch](feature-list.de.md) · [Italiano](feature-list.it.md) · [Português (Brasil)](feature-list.pt-BR.md) · Tiếng Việt · [Русский](feature-list.ru.md) · [Українська](feature-list.uk.md) · [ไทย](feature-list.th.md)
 
-Lyrimuse là ứng dụng mã nguồn mở (GPL-3.0) cho máy Mac, hiển thị lời bài hát đồng bộ theo từng chữ, dành cho macOS 14 trở lên trên Apple Silicon và Intel. Ứng dụng hiển thị lời cho Apple Music, Spotify, QQ Music, NetEase Cloud Music, Kugou, Soda Music, KKBOX, Amazon Music, LX Music, Kaset, Pear Desktop, reAMP, VOX, Pine Player, foobar2000, cùng YouTube Music hoặc Spotify Web phát trong trình duyệt: nổi trên màn hình nền, cạnh notch, trên thanh menu, trên Touch Bar hoặc trong cửa sổ lời đầy đủ, kèm bản dịch và phát âm (bính âm, Jyutping tiếng Quảng Đông, romaji tiếng Nhật, Latinh hóa tiếng Hàn). Lyrimuse scrobble lên Last.fm và ListenBrainz, và có thể hiển thị bài bạn đang phát trên Discord. Giao diện có tiếng Anh, tiếng Trung giản thể, tiếng Trung phồn thể, tiếng Nhật, tiếng Hàn, tiếng Tây Ban Nha, tiếng Pháp, tiếng Đức, tiếng Ý, tiếng Bồ Đào Nha (Brazil), tiếng Việt, tiếng Nga và tiếng Ukraina.
+Lyrimuse là ứng dụng mã nguồn mở (GPL-3.0) cho máy Mac, hiển thị lời bài hát đồng bộ theo từng chữ, dành cho macOS 14 trở lên trên Apple Silicon và Intel. Ứng dụng hiển thị lời cho Apple Music, Spotify, QQ Music, NetEase Cloud Music, Kugou, Soda Music, KKBOX, Amazon Music, LX Music, Kaset, Pear Desktop, reAMP, VOX, Pine Player, foobar2000, cùng YouTube Music hoặc Spotify Web phát trong trình duyệt: nổi trên màn hình nền, cạnh notch, trên thanh menu, trên Touch Bar hoặc trong cửa sổ lời đầy đủ, kèm bản dịch và phát âm (bính âm, Jyutping tiếng Quảng Đông, romaji tiếng Nhật, Latinh hóa tiếng Hàn). Lyrimuse scrobble lên Last.fm và ListenBrainz, và có thể hiển thị bài bạn đang phát trên Discord. Giao diện có tiếng Anh, tiếng Trung giản thể, tiếng Trung phồn thể, tiếng Nhật, tiếng Hàn, tiếng Tây Ban Nha, tiếng Pháp, tiếng Đức, tiếng Ý, tiếng Bồ Đào Nha (Brazil), tiếng Việt, tiếng Nga, tiếng Ukraina và tiếng Thái.
 
 Danh sách này tập hợp mọi tính năng của Lyrimuse: mỗi tính năng làm gì, nằm ở đâu trong cài đặt và có bật sẵn sau khi cài hay không; cuối trang là toàn bộ mục trong cửa sổ Cài đặt. Danh sách được duy trì cùng mã nguồn và cập nhật theo mỗi thay đổi.
 
@@ -762,7 +762,7 @@ Lần đầu bạn mở Lyrimuse, ứng dụng hướng dẫn bạn chọn trìn
 
 <a id="feature-language"></a>
 
-### Tiếng Anh, tiếng Trung giản thể và phồn thể, tiếng Nhật, tiếng Hàn, tiếng Tây Ban Nha, tiếng Pháp, tiếng Đức, tiếng Ý, tiếng Bồ Đào Nha (Brazil), tiếng Việt, tiếng Nga và tiếng Ukraina
+### Tiếng Anh, tiếng Trung giản thể và phồn thể, tiếng Nhật, tiếng Hàn, tiếng Tây Ban Nha, tiếng Pháp, tiếng Đức, tiếng Ý, tiếng Bồ Đào Nha (Brazil), tiếng Việt, tiếng Nga, tiếng Ukraina và tiếng Thái
 
 Mặc định theo ngôn ngữ hệ thống, và dùng tiếng Anh khi ngôn ngữ hệ thống không nằm trong số này; đổi ngôn ngữ có hiệu lực ngay, không cần khởi động lại.
 

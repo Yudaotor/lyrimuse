@@ -6,7 +6,7 @@
 
 **Les paroles sur le bureau, repensées pour le Mac.**
 
-**Language / 语言 / 語言 / 言語 / 언어 / Idioma / Langue / Sprache / Lingua / Язык / Мова:** [English](README.md) | [简体中文](README.zh-CN.md) | [繁體中文](README.zh-Hant.md) | [日本語](README.ja.md) | [한국어](README.ko.md) | [Español](README.es.md) | **Français** | [Deutsch](README.de.md) | [Italiano](README.it.md) | [Português (Brasil)](README.pt-BR.md) | [Tiếng Việt](README.vi.md) | [Русский](README.ru.md) | [Українська](README.uk.md)
+**Language / 语言 / 語言 / 言語 / 언어 / Idioma / Langue / Sprache / Lingua / Язык / Мова / ภาษา:** [English](README.md) | [简体中文](README.zh-CN.md) | [繁體中文](README.zh-Hant.md) | [日本語](README.ja.md) | [한국어](README.ko.md) | [Español](README.es.md) | **Français** | [Deutsch](README.de.md) | [Italiano](README.it.md) | [Português (Brasil)](README.pt-BR.md) | [Tiếng Việt](README.vi.md) | [Русский](README.ru.md) | [Українська](README.uk.md) | [ไทย](README.th.md)
 
 ![Platform](https://img.shields.io/badge/platform-macOS%2014%2B-blue)
 ![Architecture](https://img.shields.io/badge/arch-Apple%20Silicon%20%2B%20Intel-blue)
@@ -92,7 +92,7 @@ brew install --cask lyrimuse
 - **Se masquent quand vous mettez en pause**, pour ne pas rester sur votre bureau sans rien faire. Elles peuvent aussi s’effacer pendant les passages instrumentaux, les morceaux sans paroles et les apps en plein écran, et les paroles flottantes peuvent vous suivre sur l’écran de la fenêtre que vous utilisez.
 
 ### Détails du quotidien
-- **Anglais, chinois simplifié, chinois traditionnel, japonais, coréen, espagnol, français, allemand, italien, portugais du Brésil, vietnamien, russe et ukrainien**, et le changement s’applique immédiatement, sans redémarrage. Une traduction vous semble maladroite ? Les pull requests sont les bienvenues ; chaque langue a un guide de style dans `lyrimuse/Localization/`.
+- **Anglais, chinois simplifié, chinois traditionnel, japonais, coréen, espagnol, français, allemand, italien, portugais du Brésil, vietnamien, russe, ukrainien et thaï**, et le changement s’applique immédiatement, sans redémarrage. Une traduction vous semble maladroite ? Les pull requests sont les bienvenues ; chaque langue a un guide de style dans `lyrimuse/Localization/`.
 - **Liquid Glass sous macOS 26.** Les réglages, le panneau de la barre des menus, la Fenêtre des paroles, le Gestionnaire de paroles et l’assistant de configuration l’utilisent, et la plupart peuvent rester en clair ou en sombre au lieu de suivre le système.
 - **Raccourcis clavier** pour chaque action, du masquage de toutes les paroles au « j’aime » sur le morceau. Aucun n’est défini d’origine : c’est vous qui choisissez les touches. Chaque action a aussi un lien `lyrimuse://` que vous pouvez appeler depuis Raccourcis, Raycast ou Alfred, et depuis Raccourcis, un lien peut renvoyer le morceau en cours ([schéma d’URL](docs/url-scheme.fr.md)).
 - **Recherche dans les réglages.** Tapez dans la barre latérale : elle fait défiler jusqu’à la ligne correspondante et la met en évidence, en dépliant un groupe replié si nécessaire.

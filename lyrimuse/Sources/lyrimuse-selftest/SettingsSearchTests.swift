@@ -321,6 +321,10 @@ func runSettingsSearchTests() {
     expectEqual(SettingsSearchMatcher.rank(query: "字号", title: "字号", secondary: []), 0, "匹配: 标题整体命中 = 0")
     expectEqual(SettingsSearchMatcher.rank(query: "字", title: "字号", secondary: []), 0, "匹配: 标题前缀 = 0")
     expectEqual(SettingsSearchMatcher.rank(query: "号", title: "字号", secondary: []), 1, "匹配: 标题包含 = 1")
+    expectEqual(["เนื้อเพลง", "แถบเมนู", "แสด", "เนื", "Thai"].map { SettingsSearchMatcher.rank(query: $0, title: "แสดงเนื้อเพลงบนแถบเมนู", secondary: []) },
+                [1, 1, 0, 1, nil], "匹配: 泰文词间不空格,子串照样命中;声调符号还没打的半截词也命中")
+    expectEqual(SettingsSearchMatcher.rank(query: "Cửa", title: "Cu\u{031B}\u{0309}a so\u{0302}\u{0309} lời", secondary: []), 0,
+                "匹配: 先转 NFC,预组合和组合写法的越南语算同一个字")
     expectEqual(SettingsSearchMatcher.rank(query: "font", title: "字号", secondary: ["font size"]), 2, "匹配: 只在次要字段 = 2")
     expectEqual(SettingsSearchMatcher.rank(query: "SPOTIFY", title: "播放器", secondary: ["Spotify"]), 2, "匹配: 不区分大小写")
     expectEqual(SettingsSearchMatcher.rank(query: "xyz", title: "字号", secondary: ["font size"]), nil, "匹配: 不命中 = nil")

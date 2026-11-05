@@ -744,9 +744,9 @@ public enum SettingsSearchCatalog {
 
 /// 匹配与排序:纯函数,App 侧把本地化后的字段喂进来。
 public enum SettingsSearchMatcher {
-    /// 去首尾空白、小写、连续空白折成一个。CJK 没有大小写,这一步对它是恒等。
+    /// 去首尾空白、小写、连续空白折成一个,再转成 NFC(下面按 Unicode 标量比较,先统一组合形式)。CJK 没有大小写,这一步对它是恒等。
     public static func normalize(_ text: String) -> String {
-        text.trimmingCharacters(in: .whitespacesAndNewlines)
+        text.precomposedStringWithCanonicalMapping.trimmingCharacters(in: .whitespacesAndNewlines)
             .lowercased()
             .split(whereSeparator: { $0.isWhitespace })
             .joined(separator: " ")
@@ -754,6 +754,7 @@ public enum SettingsSearchMatcher {
 
     /// 命中等级:0 = 标题以查询开头,1 = 标题包含,2 = 只在副标题/关键词/面包屑里;nil = 不命中。
     /// 查询按空白拆成多个词,**每个词**都得在标题或次要字段里出现,等级取最好的那个词决定的标题命中。
+    /// 按 Unicode 标量比较(`.literal`),不按字形簇:泰文打到一半(「เนื」还没打声调符号)也要能命中「เนื้อเพลง」。
     public static func rank(query: String, title: String, secondary: [String]) -> Int? {
         let q = normalize(query)
         guard !q.isEmpty else { return nil }
@@ -761,10 +762,13 @@ public enum SettingsSearchMatcher {
         let t = normalize(title)
         let others = secondary.map(normalize)
         var best = 3
+        func has(_ text: String, _ term: String, anchored: Bool = false) -> Bool {
+            text.range(of: term, options: anchored ? [.literal, .anchored] : .literal) != nil
+        }
         for term in terms {
-            if t.hasPrefix(term) { best = min(best, 0); continue }
-            if t.contains(term) { best = min(best, 1); continue }
-            if others.contains(where: { $0.contains(term) }) { best = min(best, 2); continue }
+            if has(t, term, anchored: true) { best = min(best, 0); continue }
+            if has(t, term) { best = min(best, 1); continue }
+            if others.contains(where: { has($0, term) }) { best = min(best, 2); continue }
             return nil
         }
         return best == 3 ? nil : best

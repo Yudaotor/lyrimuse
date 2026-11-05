@@ -2,9 +2,9 @@
 
 # Liste des fonctionnalités de Lyrimuse
 
-[English](feature-list.md) · [简体中文](feature-list.zh-CN.md) · [繁體中文](feature-list.zh-Hant.md) · [日本語](feature-list.ja.md) · [한국어](feature-list.ko.md) · [Español](feature-list.es.md) · Français · [Deutsch](feature-list.de.md) · [Italiano](feature-list.it.md) · [Português (Brasil)](feature-list.pt-BR.md) · [Tiếng Việt](feature-list.vi.md) · [Русский](feature-list.ru.md) · [Українська](feature-list.uk.md)
+[English](feature-list.md) · [简体中文](feature-list.zh-CN.md) · [繁體中文](feature-list.zh-Hant.md) · [日本語](feature-list.ja.md) · [한국어](feature-list.ko.md) · [Español](feature-list.es.md) · Français · [Deutsch](feature-list.de.md) · [Italiano](feature-list.it.md) · [Português (Brasil)](feature-list.pt-BR.md) · [Tiếng Việt](feature-list.vi.md) · [Русский](feature-list.ru.md) · [Українська](feature-list.uk.md) · [ไทย](feature-list.th.md)
 
-Lyrimuse est une app Mac open source (GPL-3.0) de paroles synchronisées mot à mot, pour macOS 14 ou ultérieur sur Apple Silicon et Intel. Elle affiche les paroles d’Apple Music, Spotify, QQ Music, NetEase Cloud Music, Kugou, Soda Music, KKBOX, Amazon Music, LX Music, Kaset, Pear Desktop, reAMP, VOX, Pine Player, foobar2000, ainsi que de YouTube Music ou Spotify Web dans un navigateur : en flottant sur le bureau, près de l’encoche, dans la barre des menus, sur la Touch Bar ou dans une fenêtre des paroles complète, avec traductions et romanisation (pinyin, jyutping cantonais, romaji japonais, romanisation du coréen). Elle scrobble vers Last.fm et ListenBrainz et peut afficher sur Discord ce que vous écoutez. L’interface est disponible en anglais, chinois simplifié, chinois traditionnel, japonais, coréen, espagnol, français, allemand, italien, portugais du Brésil, vietnamien, russe et ukrainien.
+Lyrimuse est une app Mac open source (GPL-3.0) de paroles synchronisées mot à mot, pour macOS 14 ou ultérieur sur Apple Silicon et Intel. Elle affiche les paroles d’Apple Music, Spotify, QQ Music, NetEase Cloud Music, Kugou, Soda Music, KKBOX, Amazon Music, LX Music, Kaset, Pear Desktop, reAMP, VOX, Pine Player, foobar2000, ainsi que de YouTube Music ou Spotify Web dans un navigateur : en flottant sur le bureau, près de l’encoche, dans la barre des menus, sur la Touch Bar ou dans une fenêtre des paroles complète, avec traductions et romanisation (pinyin, jyutping cantonais, romaji japonais, romanisation du coréen). Elle scrobble vers Last.fm et ListenBrainz et peut afficher sur Discord ce que vous écoutez. L’interface est disponible en anglais, chinois simplifié, chinois traditionnel, japonais, coréen, espagnol, français, allemand, italien, portugais du Brésil, vietnamien, russe, ukrainien et thaï.
 
 Cette liste recense chaque fonctionnalité de Lyrimuse : ce qu’elle fait, où la trouver dans les Réglages et si elle est activée ou non après l’installation ; tous les réglages de la fenêtre Réglages figurent à la fin. Elle est tenue à jour avec le code à chaque changement de fonctionnalité.
 
@@ -762,7 +762,7 @@ Envoyés sur les canaux que vous configurez, autant que vous voulez : Bark, ntf
 
 <a id="feature-language"></a>
 
-### Anglais, chinois simplifié et traditionnel, japonais, coréen, espagnol, français, allemand, italien, portugais du Brésil, vietnamien, russe et ukrainien
+### Anglais, chinois simplifié et traditionnel, japonais, coréen, espagnol, français, allemand, italien, portugais du Brésil, vietnamien, russe, ukrainien et thaï
 
 Suit votre système par défaut, et passe en anglais quand la langue du système n’en fait pas partie ; le changement s’applique aussitôt, sans redémarrage.
 

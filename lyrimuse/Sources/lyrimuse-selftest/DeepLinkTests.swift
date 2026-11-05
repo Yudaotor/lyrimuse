@@ -573,9 +573,9 @@ func runDeepLinkTests() {
         expectEqual(LyrimuseDeepLink.referenceURL(language: "zh-hant").lastPathComponent, "url-scheme.zh-CN.md",
                     "对外文档: 中文界面开中文那份")
         expectEqual(LyrimuseDeepLink.referenceURL(language: "en").lastPathComponent, "url-scheme.md", "对外文档: 英文界面开英文那份")
-        expectEqual(["ja", "ko", "es", "fr", "de", "it", "pt-br", "vi", "ru", "uk", "pl"].map { LyrimuseDeepLink.referenceURL(language: $0).lastPathComponent },
-                    ["url-scheme.ja.md", "url-scheme.ko.md", "url-scheme.es.md", "url-scheme.fr.md", "url-scheme.de.md", "url-scheme.it.md", "url-scheme.pt-BR.md", "url-scheme.vi.md", "url-scheme.ru.md", "url-scheme.uk.md", "url-scheme.md"],
-                    "对外文档: 日韩西法德意葡越俄乌界面开各自那份,认不出的语言开英文")
+        expectEqual(["ja", "ko", "es", "fr", "de", "it", "pt-br", "vi", "ru", "uk", "th", "pl"].map { LyrimuseDeepLink.referenceURL(language: $0).lastPathComponent },
+                    ["url-scheme.ja.md", "url-scheme.ko.md", "url-scheme.es.md", "url-scheme.fr.md", "url-scheme.de.md", "url-scheme.it.md", "url-scheme.pt-BR.md", "url-scheme.vi.md", "url-scheme.ru.md", "url-scheme.uk.md", "url-scheme.th.md", "url-scheme.md"],
+                    "对外文档: 日韩西法德意葡越俄乌泰界面开各自那份,认不出的语言开英文")
     }
 
     // ---- App 侧接线:只有一处分派,认不出的不落进授权回调 ----
