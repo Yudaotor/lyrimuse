@@ -157,6 +157,54 @@ func runPearDesktopTests() {
                     "Pear 队列: 回包键名跟引擎 kasetQueueReply 一致(album、audio_video_id)")
     }
 
+    // ---- 系统会话里报成 Electron:按进程认回 Pear ----
+    do {
+        typealias Probe = NowPlayingClientsProbe
+        let core = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().appendingPathComponent("LyrimuseCore/Local")
+        func src(_ name: String) -> String { (try? String(contentsOf: core.appendingPathComponent(name), encoding: .utf8)) ?? "" }
+        // 缩自真机全部会话的输出:Pear 的那份 bundle id 报的是 `Electron`,进程号是它的主进程。
+        let raw = data(#"[{"bundleIdentifier":"com.spotify.client","processIdentifier":700,"responsibleProcessIdentifier":700,"title":"你還是你嗎","artist":"魏如萱","playing":false},{"bundleIdentifier":"Electron","processIdentifier":48363,"responsibleProcessIdentifier":48363,"title":"Musicology","artist":"Prince","album":"Musicology","playing":true,"playbackRate":1,"duration":264,"elapsedTime":1.6,"anchorElapsedTime":0,"timestamp":1793860985.84},{"bundleIdentifier":"Electron","processIdentifier":5000,"responsibleProcessIdentifier":5000,"title":"Call","playing":true,"playbackRate":1}]"#)
+        let sessions = (try? JSONDecoder().decode([Probe.ClientSession].self, from: raw)) ?? []
+        let names: [Int32: String] = [48363: PlaybackPlayer.pearDesktop.bundleIdentifier, 700: "com.spotify.client"]
+        let resolved = Probe.resolvingGenericClients(sessions) { names[$0] }
+        expectEqual(resolved.map { $0.bundleIdentifier ?? "" },
+                    ["com.spotify.client", PlaybackPlayer.pearDesktop.bundleIdentifier, "Electron"],
+                    "Pear 会话: 报 Electron 的按进程换成 Pear;认不出进程的别的 Electron App 原样留着")
+        expectEqual(resolved[1].playing == true && resolved[1].playbackRate == 1, true, "Pear 会话: 换名不动别的字段")
+        let payload = Probe.genericClientPayload(in: raw, pids: [48363])
+        expectEqual(payload.flatMap { Probe.decodeSnapshot($0)?.snapshot.title }, "Musicology", "Pear 会话: 按进程挑出它那一份")
+        expectEqual(Probe.genericClientPayload(in: raw, pids: [700]), nil, "Pear 会话: 只挑报通用名的,按自己 bundle id 报的不在这条路")
+        expectEqual(Probe.genericClientPayload(in: raw, pids: [1]), nil, "Pear 会话: 进程对不上不挑")
+        expectEqual(Probe.genericClientApps.contains(PlaybackPlayer.pearDesktop.bundleIdentifier), true,
+                    "Pear 会话: 按 bundle id 问不到时去全部会话里按进程认")
+        let probeSource = src("NowPlayingClientsProbe.swift")
+        expectEqual(sourceHas(sourceBody("public static func snapshotWithAnchor(forBundleID bundleID: String)", in: probeSource),
+                              "if answers.isEmpty, let found = genericClientSnapshot(forBundleID: main) { answers.append((main, found)) }")
+                    && sourceHas(sourceBody("public static func allSessions() -> [ClientSession]?", in: probeSource),
+                                 "resolvingGenericClients(sessions)"), true,
+                    "Pear 接线: 单问问不到时按进程认、全部会话里换名(暂停焦点顶替、焦点回退才找得到它)")
+        expectEqual(sourceHas(sourceBody("private static func pausedFocusReading(", in: src("MediaControlClient.swift")),
+                              "case .appleMusic?, .spotify?, .vox?, .pearDesktop?:"), true,
+                    "Pear 接线: 顶上来时照样按本机接口标广告、播客、MV")
+    }
+
+    // ---- 封面:系统那份拿不到时用接口报的专辑图 ----
+    do {
+        let raw = "https://yt3.googleusercontent.com/o0n8j_kWPJQr69o13sQKxhm6p2PYJLbezbNtx=w544-h544-l90-rj"
+        let song = API.song(from: data(#"{"title":"Pink Cashmere","videoId":"A7CzYTtshIA","imageSrc":"\#(raw)"}"#))
+        expectEqual(song?.imageURL != nil && song?.imageURL == KasetPlayerInfo.coverArtworkURL(raw), true,
+                    "Pear 封面: imageSrc 换成方形大图地址(同 Kaset)")
+        expectEqual(API.song(from: data(#"{"title":"x","videoId":"A7CzYTtshIA","imageSrc":"https://i.ytimg.com/vi/A7CzYTtshIA/hqdefault.jpg"}"#))?.imageURL,
+                    nil, "Pear 封面: 视频截图不当封面")
+        let core = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().appendingPathComponent("LyrimuseCore/Local")
+        let local = (try? String(contentsOf: core.appendingPathComponent("LocalPlaybackSource.swift"), encoding: .utf8)) ?? ""
+        let apiSource = (try? String(contentsOf: core.appendingPathComponent("PearDesktopAPI.swift"), encoding: .utf8)) ?? ""
+        expectEqual(sourceHas(sourceBody("private func fetchArtworkForCurrentTrack(", in: local),
+                              "if fromPear, !(fetched.artwork.map { Self.artworkKeyMatches($0.trackKey, expectedKey) } ?? false), let own = PearDesktopAPI.shared.artwork(forTrackKey: expectedKey) {")
+                    && sourceHas(apiSource, "lastCover = song.imageURL.map { (snapshot.identityKey, $0) }"), true,
+                    "Pear 接线: 系统那份没有这首的图时取接口那张;对上这一首时按 identityKey 记下地址")
+    }
+
     // ---- MV 标记 ----
     do {
         func snap(_ bundleID: String, mv: Bool?) -> MediaControlSnapshot {

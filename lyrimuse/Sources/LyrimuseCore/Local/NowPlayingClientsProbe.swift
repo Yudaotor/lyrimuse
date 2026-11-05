@@ -1,3 +1,4 @@
+import AppKit
 import Foundation
 import os
 
@@ -140,17 +141,72 @@ public enum NowPlayingClientsProbe {
         public let anchorElapsedTime: Double?
         public let timestamp: Double?
         public let playbackRate: Double?
+
+        func withBundleIdentifier(_ id: String) -> ClientSession {
+            ClientSession(bundleIdentifier: id, processIdentifier: processIdentifier,
+                          responsibleProcessIdentifier: responsibleProcessIdentifier, duration: duration,
+                          elapsedTime: elapsedTime, playing: playing, anchorElapsedTime: anchorElapsedTime,
+                          timestamp: timestamp, playbackRate: playbackRate)
+        }
     }
 
     /// 系统里每个注册过 now playing 的 App 各自报的一份,不按 bundle id 挑(同一个 bundle id 可能有好几份,比如每个用到网页的
     /// App 各有一个 WebKit 媒体进程)。先问常驻的 helper(空的请求行 = 不按 bundle id 挑),用不上再起一个 perl。
     /// 没装 helper、跑失败、超时返回 nil。
     public static func allSessions() -> [ClientSession]? {
+        guard let raw = allSessionsOutput(),
+              let sessions = try? JSONDecoder().decode([ClientSession].self, from: raw) else { return nil }
+        return resolvingGenericClients(sessions) { NSRunningApplication(processIdentifier: $0)?.bundleIdentifier }
+    }
+
+    /// 全部会话的原始输出(JSON 数组)。
+    private static func allSessionsOutput() -> Data? {
         guard let paths = helperPaths(),
               let r = snapshotServer.request("", timeout: timeout)
                 ?? ProcessRunner.run("/usr/bin/perl", [paths.script, paths.library], timeout: timeout), r.succeeded
         else { return nil }
-        return try? JSONDecoder().decode([ClientSession].self, from: r.stdout)
+        return r.stdout
+    }
+
+    /// 不按自己的 bundle id 报会话的 App 报的那个通用名:Electron 打包的(Pear Desktop)报成 `Electron`,按 bundle id 单问
+    /// 问不到它。见 02 章决策 234。
+    public static let genericClientIDs: Set<String> = ["Electron"]
+
+    /// 按 bundle id 问不到、要到全部会话里按进程认的 App(`snapshotWithAnchor`)。只列实测报通用名的,别家问不到时不多问一趟。
+    public static let genericClientApps: Set<String> = [PlaybackPlayer.pearDesktop.bundleIdentifier]
+
+    /// 报通用名的会话换成发布它的进程(负责进程优先)所属 App 的 bundle id;认不出的原样交回。纯函数,selftest 覆盖。
+    public static func resolvingGenericClients(_ sessions: [ClientSession],
+                                               bundleIDForPID: (Int32) -> String?) -> [ClientSession] {
+        sessions.map { session in
+            guard let id = session.bundleIdentifier, genericClientIDs.contains(id),
+                  let real = [session.responsibleProcessIdentifier, session.processIdentifier]
+                    .compactMap({ $0 }).lazy.compactMap(bundleIDForPID).first
+            else { return session }
+            return session.withBundleIdentifier(real)
+        }
+    }
+
+    /// 全部会话的原始输出里,报通用名、发布进程(或负责进程)在 `pids` 里的那一份,原样交回;没有为 nil。纯函数,selftest 覆盖。
+    public static func genericClientPayload(in raw: Data, pids: Set<Int32>) -> Data? {
+        guard !pids.isEmpty, let items = try? JSONSerialization.jsonObject(with: raw) as? [[String: Any]] else { return nil }
+        let hit = items.first { item in
+            guard let id = item["bundleIdentifier"] as? String, genericClientIDs.contains(id) else { return false }
+            return [item["responsibleProcessIdentifier"], item["processIdentifier"]]
+                .contains { ($0 as? NSNumber).map { pids.contains($0.int32Value) } ?? false }
+        }
+        return hit.flatMap { try? JSONSerialization.data(withJSONObject: $0) }
+    }
+
+    /// `genericClientApps` 里的 App 在跑、按 bundle id 问不到时:全部会话里它的进程报的那一份,bundle id 换成它自己的。
+    private static func genericClientSnapshot(forBundleID bundleID: String)
+        -> (snapshot: MediaControlSnapshot, anchor: SessionAnchor)? {
+        guard genericClientApps.contains(bundleID) else { return nil }
+        let pids = Set(NSRunningApplication.runningApplications(withBundleIdentifier: bundleID).map(\.processIdentifier))
+        guard !pids.isEmpty, let raw = allSessionsOutput(), let payload = genericClientPayload(in: raw, pids: pids),
+              var found = decodeSnapshot(payload) else { return nil }
+        found.snapshot.bundleIdentifier = bundleID
+        return found
     }
 
     /// 问某个 bundle id 此刻在报什么。拿不到(没装 helper / 超时 / 那个 App 没在报)一律 nil。
@@ -190,6 +246,7 @@ public enum NowPlayingClientsProbe {
             answers.append((id, found))
             if found.snapshot.playing == true { break }
         }
+        if answers.isEmpty, let found = genericClientSnapshot(forBundleID: main) { answers.append((main, found)) }
         guard let index = preferredAnswer(answers.map { ($0.id, $0.found.snapshot.playing == true) },
                                           remembered: MediaControlClient.reportingClient(forBundleID: main))
         else { return nil }

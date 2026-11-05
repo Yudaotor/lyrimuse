@@ -5635,6 +5635,8 @@ public final class LocalPlaybackSource: ObservableObject {
                        listed: EnrichCacheReader.playerCoverURLs(artist: self.lastSnapshot?.artist ?? "", title: self.lastSnapshot?.title ?? "",
                                                                  album: album ?? "")[PlaybackPlayer.lxMusic.bundleIdentifier])
                     : nil
+                // Pear Desktop:系统那份拿不到这首的图时用它本机接口报的那张(`PearDesktopAPI.artwork`)。
+                let fromPear = self.lastResolvedBundleID == PlaybackPlayer.pearDesktop.bundleIdentifier
                 return await Self.runOffPool(Self.artworkQueue) { () -> (Data?, String?, String?) in
                     if fromKaset {
                         guard let result = MediaControlClient.kasetArtwork(forTrackKey: expectedKey) else {
@@ -5649,6 +5651,10 @@ public final class LocalPlaybackSource: ObservableObject {
                         return (own.data, expectedKey, nil)
                     }
                     let fetched = MediaControlClient.fetchArtworkExplained()
+                    if fromPear, !(fetched.artwork.map { Self.artworkKeyMatches($0.trackKey, expectedKey) } ?? false),
+                       let own = PearDesktopAPI.shared.artwork(forTrackKey: expectedKey) {
+                        return (own.data, own.trackKey, nil)
+                    }
                     guard let result = fetched.artwork else { return (nil, nil, fetched.miss) }
                     return (result.data, result.trackKey, nil)
                 }

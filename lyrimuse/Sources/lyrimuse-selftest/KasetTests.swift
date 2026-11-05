@@ -726,7 +726,8 @@ func runKasetTests() {
                     true, "Kaset 契约: 报在放(或加载)、位置没动时才问内嵌网页在放什么;helper 给每份会话带上负责进程")
         expectEqual(client.contains("KasetPlayerInfo.coverArtworkURL(steady.first?.artworkURL) ?? KasetPlayerInfo.coverArtworkURL(reading.artworkURL)")
                         && client.contains("kasetLastArtwork = artwork.map { (snapshot.identityKey, $0) }")
-                        && client.contains(#"NetworkAuditLog.record(service: "image", operation: "kaset.artwork""#)
+                        && client.contains(#"downloadCoverArtwork(last.url, operation: "kaset.artwork")"#)
+                        && client.contains(#"NetworkAuditLog.record(service: "image", operation: operation,"#)
                         && src("LyrimuseCore/Local/LocalPlaybackSource.swift").contains(
                             "guard let result = MediaControlClient.kasetArtwork(forTrackKey: expectedKey) else {")
                         && src("LyrimuseCore/Local/LocalPlaybackSource.swift").contains(

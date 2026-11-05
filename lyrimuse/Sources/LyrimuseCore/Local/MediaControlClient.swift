@@ -670,7 +670,7 @@ public enum MediaControlClient {
         if let cached, cached.url == last.url {
             return (cached.data, PlaybackStateFile.artworkMime(cached.data), last.trackKey)
         }
-        guard let data = downloadKasetArtwork(last.url) else { return nil }
+        guard let data = downloadCoverArtwork(last.url, operation: "kaset.artwork") else { return nil }
         kasetLock.lock()
         kasetArtworkCache = (last.url, data)
         kasetLock.unlock()
@@ -706,7 +706,8 @@ public enum MediaControlClient {
         func get() -> (data: Data?, status: Int?, error: Error?) { lock.lock(); defer { lock.unlock() }; return value }
     }
 
-    private static func downloadKasetArtwork(_ url: URL) -> Data? {
+    /// 下载播放器自己报的封面地址(Kaset、Pear Desktop 都是 googleusercontent 的专辑图);`operation` 进网络审计日志。
+    static func downloadCoverArtwork(_ url: URL, operation: String) -> Data? {
         let started = Date()
         let result = DownloadResult()
         let done = DispatchSemaphore(value: 0)
@@ -716,7 +717,7 @@ public enum MediaControlClient {
         }.resume()
         _ = done.wait(timeout: .now() + kasetArtworkTimeout + 1)
         let got = result.get()
-        NetworkAuditLog.record(service: "image", operation: "kaset.artwork", host: url.host ?? "googleusercontent.com",
+        NetworkAuditLog.record(service: "image", operation: operation, host: url.host ?? "googleusercontent.com",
                                statusCode: got.status, durationMs: Date().timeIntervalSince(started) * 1000, error: got.error)
         guard got.status == 200, let data = got.data, CoverArtReplacementGate.isImage(data) else { return nil }
         return data
@@ -1092,7 +1093,7 @@ public enum MediaControlClient {
     }
 
     /// 按 bundle id 单问一家,换成能报的那份:有 AppleScript 字典的(Apple Music、Spotify、VOX)走跟焦点在它身上时同一条适配
-    /// (`adaptedSnapshot`,位置用它自己的钟,不跟单问那份的锚点叠);其余同焦点回退的第二级(Pine 过它那块表、Amazon 换成
+    /// (`adaptedSnapshot`,位置用它自己的钟,不跟单问那份的锚点叠),Pear Desktop 也走它(按本机接口标广告、播客、MV);其余同焦点回退的第二级(Pine 过它那块表、Amazon 换成
     /// 日志时钟)。过跟主路径同样的闸,挡下、问不到为 nil。这一拍的失败原因不动:调用方交回的是焦点那份,不是 nil。
     private static func pausedFocusReading(_ target: FocusFallbackTarget) -> MediaControlSnapshot? {
         guard let probed = NowPlayingClientsProbe.snapshotWithAnchor(forBundleID: target.bundleID) else { return nil }
@@ -1101,7 +1102,7 @@ public enum MediaControlClient {
         let now = Date()
         var snapshot: MediaControlSnapshot? = probed.snapshot
         switch target.player {
-        case .appleMusic?, .spotify?, .vox?:
+        case .appleMusic?, .spotify?, .vox?, .pearDesktop?:
             snapshot = adaptedSnapshot(bundleID: target.bundleID, mediaControl: probed.snapshot)
         default:
             if target.bundleID == PinePlayerInfo.bundleID {

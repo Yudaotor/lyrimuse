@@ -82,9 +82,11 @@ public final class PearDesktopAPI: @unchecked Sendable {
         public let isPaused: Bool?
         /// 整秒的进度(它窗口在后台时可能停在旧值,只拿来认「还在开头」)。
         public let elapsed: Double?
+        /// 它报的这首的专辑图,换成方形大图的地址(`imageSrc` 经 `KasetPlayerInfo.coverArtworkURL`);不是专辑图的为 nil。
+        public let imageURL: URL?
 
         public init(title: String, artist: String, album: String?, videoID: String, mediaType: String?, duration: Double?, isPaused: Bool?,
-                    elapsed: Double? = nil) {
+                    elapsed: Double? = nil, imageURL: URL? = nil) {
             self.title = title
             self.artist = artist
             self.album = album
@@ -93,6 +95,7 @@ public final class PearDesktopAPI: @unchecked Sendable {
             self.duration = duration
             self.isPaused = isPaused
             self.elapsed = elapsed
+            self.imageURL = imageURL
         }
 
         public var isPodcastEpisode: Bool { mediaType == "PODCAST_EPISODE" }
@@ -135,7 +138,8 @@ public final class PearDesktopAPI: @unchecked Sendable {
                     album: album?.isEmpty == false ? album : nil, videoID: videoID,
                     mediaType: object["mediaType"] as? String,
                     duration: duration.flatMap { $0.isFinite && $0 > 0 ? $0 : nil },
-                    isPaused: object["isPaused"] as? Bool, elapsed: (object["elapsedSeconds"] as? NSNumber)?.doubleValue)
+                    isPaused: object["isPaused"] as? Bool, elapsed: (object["elapsedSeconds"] as? NSNumber)?.doubleValue,
+                    imageURL: KasetPlayerInfo.coverArtworkURL(object["imageSrc"] as? String))
     }
 
     /// 系统会话这一首像不像广告:接口说在放的是另一首(前贴片广告期间它报的是接下来那首,进度跟着广告走、可能暂停着),而系统
@@ -323,6 +327,9 @@ public final class PearDesktopAPI: @unchecked Sendable {
     private var reachable = false
     private var lastSong: (song: Song?, at: Date)?
     private var lastVideo: (trackKey: String, videoID: String)?
+    /// 最近一次对上的那首(按快照的 `identityKey` 认)的专辑图地址,和下载过的最近一张。
+    private var lastCover: (identityKey: String, url: URL)?
+    private var coverCache: (url: URL, data: Data)?
     /// 跟接口对上过的系统会话曲目(`trackKey`),认广告时排除。
     private var matchedTrackKeys: Set<String> = []
     /// 正在看像不像广告的那一段(歌名,归一过)和开始像的时刻。
@@ -465,11 +472,31 @@ public final class PearDesktopAPI: @unchecked Sendable {
                 logger.notice("pear api: \(song.videoID, privacy: .public) is \(song.mediaType ?? "unknown", privacy: .public)")
             }
             lastVideo = (snapshot.trackKey, song.videoID)
+            lastCover = song.imageURL.map { (snapshot.identityKey, $0) }
             matchedTrackKeys.insert(snapshot.trackKey)
             if matchedTrackKeys.count > 64 { matchedTrackKeys = [snapshot.trackKey] }
             lock.unlock()
         }
         return song
+    }
+
+    /// 这首(按快照的 `identityKey` 认)的封面:接口报的那张专辑图。系统会话那份拿不到图时用:它被顶上来、焦点在别家时单问的
+    /// 那份不带图,系统封面那条腿断了时也靠它。最近一次对上的不是这首、它没报专辑图、下载失败返回 nil;同一个地址只下载一次。
+    /// 会阻塞到下载结束,别在主线程调。见 02 章决策 234。
+    public func artwork(forTrackKey key: String) -> (data: Data, mimeType: String, trackKey: String)? {
+        lock.lock()
+        let last = lastCover
+        let cached = coverCache
+        lock.unlock()
+        guard let last, last.identityKey.compare(key, options: [.caseInsensitive]) == .orderedSame else { return nil }
+        if let cached, cached.url == last.url {
+            return (cached.data, PlaybackStateFile.artworkMime(cached.data), last.identityKey)
+        }
+        guard let data = MediaControlClient.downloadCoverArtwork(last.url, operation: "pear.artwork") else { return nil }
+        lock.lock()
+        coverCache = (last.url, data)
+        lock.unlock()
+        return (data, PlaybackStateFile.artworkMime(data), last.identityKey)
     }
 
     /// 最近一次对上的那首(按快照的 `trackKey` 认)的 videoId;不是这首、没对上过为 nil。
