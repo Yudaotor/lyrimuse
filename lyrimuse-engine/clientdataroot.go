@@ -45,7 +45,7 @@ const (
 
 func neteaseDataRoots() clientDataRoots {
 	return clientDataRoots{
-		container:  homeSubdir("Library/Containers/com.netease.163music/Data/Documents"),
+		container:  otherAppContainer(homeSubdir("Library/Containers/com.netease.163music/Data/Documents")),
 		standalone: homeSubdir("Library/Application Support/com.netease.163music/Documents"),
 		files:      []string{neteaseLibraryRel, neteaseQueueRel, neteaseFMRel},
 	}
@@ -53,14 +53,14 @@ func neteaseDataRoots() clientDataRoots {
 
 func qqDataRoots() clientDataRoots {
 	return clientDataRoots{
-		container: homeSubdir("Library/Containers/com.tencent.QQMusicMac/Data/Library/Application Support/QQMusicMac"),
+		container: otherAppContainer(homeSubdir("Library/Containers/com.tencent.QQMusicMac/Data/Library/Application Support/QQMusicMac")),
 		files:     []string{qqLibraryRel, qqQueueRel, qqRRCacheRel},
 	}
 }
 
 func sodaDataRoots() clientDataRoots {
 	return clientDataRoots{
-		container:  homeSubdir("Library/Containers/com.soda.music/Data/Library/Application Support/SodaMusic"),
+		container:  otherAppContainer(homeSubdir("Library/Containers/com.soda.music/Data/Library/Application Support/SodaMusic")),
 		standalone: homeSubdir("Library/Application Support/SodaMusic"),
 		files:      []string{sodaQueueRel, sodaPreloadRel},
 	}

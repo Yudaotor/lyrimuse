@@ -32,7 +32,7 @@ func neteaseIPadKVPath() string {
 	if neteaseIPadKVOverride != "" {
 		return neteaseIPadKVOverride
 	}
-	return homeSubdir("Library/Containers/com.netease.cloudmusic/Data/Documents/UserData/music_storage_keyValue.sqlite3")
+	return otherAppContainer(homeSubdir("Library/Containers/com.netease.cloudmusic/Data/Documents/UserData/music_storage_keyValue.sqlite3"))
 }
 
 const neteaseIPadNowPlayingSQL = "SELECT json FROM miniBarLastPlay LIMIT 1"

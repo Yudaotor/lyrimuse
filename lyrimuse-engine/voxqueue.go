@@ -51,7 +51,7 @@ func voxUpcomingPath() string {
 	if err != nil {
 		return ""
 	}
-	return filepath.Join(home, "Library/Containers/com.coppertino.Vox/Data/Library/Application Support/Vox/voxdb.storedata")
+	return otherAppContainer(filepath.Join(home, "Library/Containers/com.coppertino.Vox/Data/Library/Application Support/Vox/voxdb.storedata"))
 }
 
 // voxRepeating 问 VOX 此刻的循环档,由 App 代跑(askApp,脚本在 App 侧 PlayerQueryServer,交回

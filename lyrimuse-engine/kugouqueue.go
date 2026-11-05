@@ -70,7 +70,7 @@ func kugouContainerPath(rel string) string {
 	if err != nil {
 		return ""
 	}
-	return filepath.Join(home, "Library/Containers/com.kugou.mac.Music/Data", rel)
+	return otherAppContainer(filepath.Join(home, "Library/Containers/com.kugou.mac.Music/Data", rel))
 }
 
 func kugouQueuePlistPath() string {

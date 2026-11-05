@@ -68,8 +68,8 @@ func kugouNowPlayingPath() string {
 	if err != nil {
 		return ""
 	}
-	return filepath.Join(home, "Library/Containers/com.kugou.mac.Music/Data/Library",
-		"Preferences/userCurrentPlayList.plist")
+	return otherAppContainer(filepath.Join(home, "Library/Containers/com.kugou.mac.Music/Data/Library",
+		"Preferences/userCurrentPlayList.plist"))
 }
 
 // kugouNowPlayingTrack 从解析好的 plist 里取当前曲目的署名与歌名。

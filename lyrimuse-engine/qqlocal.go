@@ -219,7 +219,7 @@ func qqIPadLocalDBPath() string {
 	if qqIPadLocalDBOverride != "" {
 		return qqIPadLocalDBOverride
 	}
-	return homeSubdir("Library/Containers/com.tencent.QQMusic/Data/Library/Application Support/com.tencent.QQMusic/iDB/qqmusic.sqlite")
+	return otherAppContainer(homeSubdir("Library/Containers/com.tencent.QQMusic/Data/Library/Application Support/com.tencent.QQMusic/iDB/qqmusic.sqlite"))
 }
 
 // 跟 Mac 版那份同一把锁(qqLocalMu)。

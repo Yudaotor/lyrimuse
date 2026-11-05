@@ -64,8 +64,8 @@ func kugouLocalLyricDir() string {
 	if err != nil {
 		return ""
 	}
-	return filepath.Join(home, "Library/Containers/com.kugou.mac.Music/Data/Library",
-		"Application Support/com.kugou.mac.Music/Caches/kgLyric")
+	return otherAppContainer(filepath.Join(home, "Library/Containers/com.kugou.mac.Music/Data/Library",
+		"Application Support/com.kugou.mac.Music/Caches/kgLyric"))
 }
 
 // kugouLocalMaxFileBytes:单个 KRC 的大小上限。实测本机最大 12KB 量级;设 1MB 是防"目录里
@@ -515,8 +515,8 @@ func kugouUpcomingPath() string {
 	if err != nil {
 		return ""
 	}
-	return filepath.Join(home, "Library/Containers/com.kugou.mac.Music/Data/Library",
-		"Preferences/currentPlayList.sqlite")
+	return otherAppContainer(filepath.Join(home, "Library/Containers/com.kugou.mac.Music/Data/Library",
+		"Preferences/currentPlayList.sqlite"))
 }
 
 // kugouUpcomingRow 是 kugouUpcomingSQL 查出来的一行。
