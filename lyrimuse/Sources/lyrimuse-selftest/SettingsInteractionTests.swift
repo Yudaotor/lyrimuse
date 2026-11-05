@@ -593,8 +593,8 @@ func runSettingsInteractionTests() {
             expectEqual(ReportWords.table[lang] ?? [:], wordsJSON[lang.rawValue] ?? ["": "缺"], "报告语言: \(lang.rawValue) 用语表同引擎")
         }
         expectEqual([ReportLanguage(""), ReportLanguage(" ZH-HANT "), ReportLanguage("en"), ReportLanguage("ja"), ReportLanguage("ko"), ReportLanguage("es"),
-                     ReportLanguage("fr"), ReportLanguage("de"), ReportLanguage("it"), ReportLanguage("pt-br"), ReportLanguage(" PT-BR "), ReportLanguage("vi"), ReportLanguage(" RU "), ReportLanguage("pl")],
-                    [.zhHans, .zhHant, .en, .ja, .ko, .es, .fr, .de, .it, .ptBR, .ptBR, .vi, .ru, .zhHans],
+                     ReportLanguage("fr"), ReportLanguage("de"), ReportLanguage("it"), ReportLanguage("pt-br"), ReportLanguage(" PT-BR "), ReportLanguage("vi"), ReportLanguage(" RU "), ReportLanguage(" UK "), ReportLanguage("pl")],
+                    [.zhHans, .zhHant, .en, .ja, .ko, .es, .fr, .de, .it, .ptBR, .ptBR, .vi, .ru, .uk, .zhHans],
                     "报告语言: 认得的几种,其余按简体")
         expectEqual(ReportLanguage.featuresKey, "report_language", "报告语言: 键名同引擎 features.go 的 json 标签")
         expectEqual(ReportLanguage.zhHans.words.f("item", [("i", "1"), ("name", "Song {n} {name}"), ("n", "4")]), "1. Song {n} {name}（4）",
@@ -634,11 +634,18 @@ func runSettingsInteractionTests() {
                         + "|" + ReportLanguage.ru.words.month("title_month", year: 2026, month: 10),
                     "0 прослушиваний|1 прослушивание|2 прослушивания|5 прослушиваний|11 прослушиваний|21 прослушивание|22 прослушивания|25 прослушиваний|111 прослушиваний|📅 Итоги прослушиваний за октябрь 2026",
                     "报告语言: 俄语按 one / few / many 选(同引擎),月报标题月名用主格")
+        expectEqual([0, 1, 2, 5, 11, 12, 14, 21, 22, 25, 104, 111].map { ReportLanguage.uk.words.count("plays", $0) }.joined(separator: "|")
+                        + "|" + ReportLanguage.uk.words.count("new_artists", 22) + "|" + ReportLanguage.uk.words.month("title_month", year: 2026, month: 10),
+                    "0 прослуховувань|1 прослуховування|2 прослуховування|5 прослуховувань|11 прослуховувань|12 прослуховувань|14 прослуховувань|21 прослуховування|22 прослуховування|25 прослуховувань|104 прослуховування|111 прослуховувань|22 нові виконавці|📅 Підсумки прослуховувань за жовтень 2026",
+                    "报告语言: 乌克兰语按 one / few / many 选(同俄语规则、同引擎),月报标题月名用主格")
         let pluralCounts = [0, 1, 2, 5, 11, 21, 22, 25, 111, 12, 14, 104]
         let pluralTable = ["plays": "{n} other", "plays_one": "{n} one", "plays_few": "{n} few", "plays_many": "{n} many"]
         expectEqual(pluralCounts.map { ReportWords(table: pluralTable.merging(["plural_rule": "ru"]) { $1 }).count("plays", $0) }.joined(separator: "|"),
                     "0 many|1 one|2 few|5 many|11 many|21 one|22 few|25 many|111 many|12 many|14 many|104 few",
                     "报告语言: plural_rule 为 ru 的按俄语分 one / few / many(同引擎 TestDigestWordsPluralForm)")
+        expectEqual(pluralCounts.map { ReportWords(table: pluralTable.merging(["plural_rule": "uk"]) { $1 }).count("plays", $0) }.joined(separator: "|"),
+                    "0 many|1 one|2 few|5 many|11 many|21 one|22 few|25 many|111 many|12 many|14 many|104 few",
+                    "报告语言: plural_rule 为 uk 的跟俄语同一套 one / few / many")
         expectEqual(pluralCounts.map { ReportWords(table: pluralTable).count("plays", $0) }.joined(separator: "|"),
                     "0 other|1 one|2 other|5 other|11 other|21 other|22 other|25 other|111 other|12 other|14 other|104 other",
                     "报告语言: 没有 plural_rule 的只有 1 用单数")
@@ -1189,7 +1196,7 @@ func runSettingsInteractionTests() {
                         + ["en", "zh-hans", "zh-hant", "ja", "ko"].map { W.windowMinWidth(enWidth, language: $0) - W.maxWidth(enWidth) },
                     [640, 640, 640, 540, 540, 540, 540, 540],
                     "设置窗最窄: 西语、法语内容区按 640(卡片列撑满 600),别的语言 540")
-        expectEqual(["de", "it", "pt-br", "vi", "ru"].map { W.windowMinWidth(enWidth, language: $0) - W.maxWidth(enWidth) }, [640, 640, 640, 640, 640], "设置窗最窄: 德语、意大利语、巴西葡语、越南语、俄语同样按 640")
+        expectEqual(["de", "it", "pt-br", "vi", "ru", "uk"].map { W.windowMinWidth(enWidth, language: $0) - W.maxWidth(enWidth) }, [640, 640, 640, 640, 640, 640], "设置窗最窄: 德语、意大利语、巴西葡语、越南语、俄语、乌克兰语同样按 640")
         expectEqual(W.widthToRestore(lastDefault: nil, currentDefault: W.designWidth), nil,
                     "设置侧栏宽度: 没记过上次的默认宽度时不动")
         expectEqual(W.widthToRestore(lastDefault: W.designWidth, currentDefault: W.designWidth), nil,

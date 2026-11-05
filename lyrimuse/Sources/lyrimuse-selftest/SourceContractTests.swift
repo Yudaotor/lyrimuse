@@ -462,6 +462,8 @@ func runSourceContractTests() {
                         "本地化: 越南语归越南语包")
             expectEqual([resolve("ru"), resolve("ru-RU"), resolve("RU_ua"), resolve("ru-KZ"), resolve("pl-PL", "ru-BY", "en")], ["ru", "ru", "ru", "ru", "ru"],
                         "本地化: 各地区的俄语都归俄语包")
+            expectEqual([resolve("uk"), resolve("uk-UA"), resolve("UK_ua"), resolve("pl-PL", "uk-UA", "en"), resolve("uk", "ru"), resolve("ru", "uk")], ["uk", "uk", "uk", "uk", "uk", "ru"],
+                        "本地化: 各地区的乌克兰语都归乌克兰语包;系统列表「uk, ru」按首选落到乌克兰语,「ru, uk」落到俄语")
             func categories(_ pack: String, _ counts: [Int] = [0, 1, 2]) -> [String] {
                 counts.map { UILanguage.pluralCategory($0, pack: pack).rawValue }
             }
@@ -472,13 +474,16 @@ func runSourceContractTests() {
             expectEqual(categories("ru", [0, 1, 2, 5, 11, 21, 22, 25, 111, 12, 14, 104]),
                         ["many", "one", "few", "many", "many", "one", "few", "many", "many", "many", "many", "few"],
                         "本地化: 俄语按 CLDR 分 one / few / many(个位 1 且不是 11、个位 2～4 且不是 12～14)")
-            expectEqual(["ja", "Japanese", "ja_JP", "ko", "Korean", "ko_KR", "es", "Spanish", "es_419", "fr", "French", "fr_CA", "de", "German", "de_AT", "it", "Italian", "it_CH", "pt", "Portuguese", "pt_BR", "pt_PT", "vi", "Vietnamese", "vi_VN", "ru", "Russian", "ru_RU"].map { UILanguage.pack(forLocalization: $0) ?? "-" },
-                        ["ja", "ja", "ja", "ko", "ko", "ko", "es", "es", "es", "fr", "fr", "fr", "de", "de", "de", "it", "it", "it", "pt-br", "pt-br", "pt-br", "pt-br", "vi", "vi", "vi", "ru", "ru", "ru"],
-                        "本地化: 别的 App 的日语、韩语、西语、法语、德语、意大利语、葡萄牙语、越南语、俄语本地化目录归对应的包")
+            expectEqual(categories("uk", [0, 1, 2, 5, 11, 12, 14, 21, 22, 25, 104, 111]),
+                        ["many", "one", "few", "many", "many", "many", "many", "one", "few", "many", "few", "many"],
+                        "本地化: 乌克兰语跟俄语同一套 CLDR 整数规则(1 трек / 2 треки / 5 треків / 21 трек)")
+            expectEqual(["ja", "Japanese", "ja_JP", "ko", "Korean", "ko_KR", "es", "Spanish", "es_419", "fr", "French", "fr_CA", "de", "German", "de_AT", "it", "Italian", "it_CH", "pt", "Portuguese", "pt_BR", "pt_PT", "vi", "Vietnamese", "vi_VN", "ru", "Russian", "ru_RU", "uk", "Ukrainian", "uk_UA"].map { UILanguage.pack(forLocalization: $0) ?? "-" },
+                        ["ja", "ja", "ja", "ko", "ko", "ko", "es", "es", "es", "fr", "fr", "fr", "de", "de", "de", "it", "it", "it", "pt-br", "pt-br", "pt-br", "pt-br", "vi", "vi", "vi", "ru", "ru", "ru", "uk", "uk", "uk"],
+                        "本地化: 别的 App 的日语、韩语、西语、法语、德语、意大利语、葡萄牙语、越南语、俄语、乌克兰语本地化目录归对应的包")
             expectEqual(UILanguage.packs.allSatisfy { resolve($0) == $0 && UILanguage.nativeName(of: $0) != $0 }, true,
                         "本地化: 每个语言包认得自己的标签、有自己写法的语言名")
             expectEqual(UILanguage.isTraditionalChineseTag("ja-JP"), false, "本地化: isTraditionalChineseTag 只管 zh 家族")
-            expectEqual(["en", "zh-hans", "zh-hant", "ja", "ko", "es", "fr", "de", "it", "pt-br", "vi", "ru"].map(UILanguage.localeIdentifier(for:)), ["en", "zh-Hans", "zh-Hant", "ja", "ko", "es", "fr", "de", "it", "pt-BR", "vi", "ru"],
+            expectEqual(["en", "zh-hans", "zh-hant", "ja", "ko", "es", "fr", "de", "it", "pt-br", "vi", "ru", "uk"].map(UILanguage.localeIdentifier(for:)), ["en", "zh-Hans", "zh-Hant", "ja", "ko", "es", "fr", "de", "it", "pt-BR", "vi", "ru", "uk"],
                         "本地化: 语言包目录名 → locale 标识")
             expectEqual(["zh_CN", "zh-Hans", "zh", "Chinese", "zh_TW", "zh_HK", "zh-Hant", "en", "en_GB", "English", "Base", "pl_PL"]
                             .map { UILanguage.pack(forLocalization: $0) ?? "-" },
@@ -3240,20 +3245,20 @@ func runSourceContractSurfaceTests() {
                     "反馈链接: 邮件正文末尾带版本、系统、播放器")
         expectEqual(FeedbackLinks.helpURL.absoluteString, "https://github.com/Yudaotor/lyrimuse/discussions/categories/q-a",
                     "反馈链接: 使用求助进讨论区问答分类")
-        expectEqual(["en", "zh-hans", "zh-hant", "ja", "ko", "es", "fr", "de", "it", "pt-br", "vi", "ru", "pl"].map { FeedbackLinks.featureListURL(language: $0).absoluteString },
+        expectEqual(["en", "zh-hans", "zh-hant", "ja", "ko", "es", "fr", "de", "it", "pt-br", "vi", "ru", "uk", "pl"].map { FeedbackLinks.featureListURL(language: $0).absoluteString },
                     ["https://yudaotor.github.io/lyrimuse/features/", "https://yudaotor.github.io/lyrimuse/zh/features/",
                      "https://yudaotor.github.io/lyrimuse/zh-Hant/features/", "https://yudaotor.github.io/lyrimuse/ja/features/",
                      "https://yudaotor.github.io/lyrimuse/ko/features/", "https://yudaotor.github.io/lyrimuse/es/features/",
                      "https://yudaotor.github.io/lyrimuse/fr/features/", "https://yudaotor.github.io/lyrimuse/de/features/",
-                     "https://yudaotor.github.io/lyrimuse/it/features/", "https://yudaotor.github.io/lyrimuse/pt-BR/features/", "https://yudaotor.github.io/lyrimuse/vi/features/", "https://yudaotor.github.io/lyrimuse/ru/features/",
+                     "https://yudaotor.github.io/lyrimuse/it/features/", "https://yudaotor.github.io/lyrimuse/pt-BR/features/", "https://yudaotor.github.io/lyrimuse/vi/features/", "https://yudaotor.github.io/lyrimuse/ru/features/", "https://yudaotor.github.io/lyrimuse/uk/features/",
                      "https://yudaotor.github.io/lyrimuse/features/"],
                     "反馈链接: 功能清单按界面语言开落地页对应的那一份,认不出的语言开英文")
-        expectEqual(["en", "zh-hans", "zh-hant", "ja", "ko", "es", "fr", "de", "it", "pt-br", "vi", "ru", "pl"].map { FeedbackLinks.websiteURL(language: $0).absoluteString },
+        expectEqual(["en", "zh-hans", "zh-hant", "ja", "ko", "es", "fr", "de", "it", "pt-br", "vi", "ru", "uk", "pl"].map { FeedbackLinks.websiteURL(language: $0).absoluteString },
                     ["https://yudaotor.github.io/lyrimuse/", "https://yudaotor.github.io/lyrimuse/zh/",
                      "https://yudaotor.github.io/lyrimuse/zh-Hant/", "https://yudaotor.github.io/lyrimuse/ja/",
                      "https://yudaotor.github.io/lyrimuse/ko/", "https://yudaotor.github.io/lyrimuse/es/",
                      "https://yudaotor.github.io/lyrimuse/fr/", "https://yudaotor.github.io/lyrimuse/de/", "https://yudaotor.github.io/lyrimuse/it/",
-                     "https://yudaotor.github.io/lyrimuse/pt-BR/", "https://yudaotor.github.io/lyrimuse/vi/", "https://yudaotor.github.io/lyrimuse/ru/", "https://yudaotor.github.io/lyrimuse/"],
+                     "https://yudaotor.github.io/lyrimuse/pt-BR/", "https://yudaotor.github.io/lyrimuse/vi/", "https://yudaotor.github.io/lyrimuse/ru/", "https://yudaotor.github.io/lyrimuse/uk/", "https://yudaotor.github.io/lyrimuse/"],
                     "反馈链接: 官网按界面语言开落地页对应的那一份,认不出的语言开英文")
         expectEqual(FeedbackLinks.macOSVersionString(OperatingSystemVersion(majorVersion: 27, minorVersion: 0, patchVersion: 1)),
                     "27.0.1", "反馈链接: 系统版本号三段")
@@ -3443,6 +3448,9 @@ func runSourceContractSurfaceTests() {
         expectEqual(LegalNoticeLinks.usageNoticeURL(language: "ru").absoluteString,
                     "https://github.com/Yudaotor/lyrimuse/blob/main/README.ru.md#%D0%BB%D0%B8%D1%86%D0%B5%D0%BD%D0%B7%D0%B8%D1%8F-%D0%B8-%D0%B0%D0%B2%D1%82%D0%BE%D1%80%D1%81%D0%BA%D0%B8%D0%B5-%D0%BF%D1%80%D0%B0%D0%B2%D0%B0",
                     "版权说明: 俄语界面开俄语 README 的「Лицензия и авторские права」(GitHub 锚点把西里尔字母转小写、保留原字母)")
+        expectEqual(LegalNoticeLinks.usageNoticeURL(language: "uk").absoluteString,
+                    "https://github.com/Yudaotor/lyrimuse/blob/main/README.uk.md#%D0%BB%D1%96%D1%86%D0%B5%D0%BD%D0%B7%D1%96%D1%8F-%D1%82%D0%B0-%D0%B0%D0%B2%D1%82%D0%BE%D1%80%D1%81%D1%8C%D0%BA%D1%96-%D0%BF%D1%80%D0%B0%D0%B2%D0%B0",
+                    "版权说明: 乌克兰语界面开乌克兰语 README 的「Ліцензія та авторські права」(GitHub 锚点转小写、保留西里尔字母)")
         expectEqual(LegalNoticeLinks.thirdPartyLicensesOnGitHub.absoluteString,
                     "https://github.com/Yudaotor/lyrimuse/blob/main/THIRD_PARTY_LICENSES", "版权说明: 第三方许可的 GitHub 兜底指向仓库根那份")
 
@@ -3461,7 +3469,7 @@ func runSourceContractSurfaceTests() {
         } else {
             expectEqual(true, false, "版权说明: 读不到 README.md(路径挪了?)")
         }
-        for (file, heading) in [("README.zh-CN.md", "许可与版权说明"), ("README.ja.md", "ライセンスと著作権"), ("README.ko.md", "라이선스 및 저작권"), ("README.es.md", "Licencia y derechos de autor"), ("README.fr.md", "Licence et droits d’auteur"), ("README.de.md", "Lizenz und Urheberrecht"), ("README.it.md", "Licenza e diritti d’autore"), ("README.pt-BR.md", "Licença e direitos autorais"), ("README.vi.md", "Giấy phép và bản quyền"), ("README.ru.md", "Лицензия и авторские права")] {
+        for (file, heading) in [("README.zh-CN.md", "许可与版权说明"), ("README.ja.md", "ライセンスと著作権"), ("README.ko.md", "라이선스 및 저작권"), ("README.es.md", "Licencia y derechos de autor"), ("README.fr.md", "Licence et droits d’auteur"), ("README.de.md", "Lizenz und Urheberrecht"), ("README.it.md", "Licenza e diritti d’autore"), ("README.pt-BR.md", "Licença e direitos autorais"), ("README.vi.md", "Giấy phép và bản quyền"), ("README.ru.md", "Лицензия и авторские права"), ("README.uk.md", "Ліцензія та авторські права")] {
             if let readme = read(repoRoot.appendingPathComponent(file)) {
                 expectEqual(readme.contains("\n## \(heading)\n"), true,
                             "版权说明: \(file) 要有「## \(heading)」—— 锚点由它生成")

@@ -7,12 +7,12 @@
 
 加新文案别手写 Python 读写整个 catalog(默认 json.dump 会把上万行重排),用加键子命令:
     python3 Localization/generate-strings.py --add 新键.json
-新键.json 形如 {"简体原文": {"en": "...", "zh-Hant": "...", "ja": "...", "ko": "...", "es": "...", "fr": "...", "de": "...", "it": "...", "pt-BR": "...", "vi": "...", "ru": {"one": "...", "few": "...", "many": "...", "other": "..."}}}(TARGETS 里简体以外的每种语言都要写);要分单复数的语言写成 {"one": "...", "other": "..."}(PLURAL_FORMS 里登记的语言写它要的几类,如俄语 {"one", "few", "many", "other"})。
+新键.json 形如 {"简体原文": {"en": "...", "zh-Hant": "...", "ja": "...", "ko": "...", "es": "...", "fr": "...", "de": "...", "it": "...", "pt-BR": "...", "vi": "...", "ru": {"one": "...", "few": "...", "many": "...", "other": "..."}, "uk": {"one": "...", "few": "...", "many": "...", "other": "..."}}}(TARGETS 里简体以外的每种语言都要写);要分单复数的语言写成 {"one": "...", "other": "..."}(PLURAL_FORMS 里登记的语言写它要的几类,如俄语、乌克兰语 {"one", "few", "many", "other"})。
 新键按文件里的次序追加到 catalog 末尾、已有的键拒绝覆盖,写回用 Xcode 的排版,然后照常生成三份 .strings。
 
 改已有文案(简体原文就是键,改简体 = 换键)用换键子命令:
     python3 Localization/generate-strings.py --rename 映射.json
-映射.json 形如 {"旧键": {"new": "新简体文案", "en": "...", "zh-Hant": "...", "ja": "...", "ko": "...", "es": "...", "fr": "...", "de": "...", "it": "...", "pt-BR": "...", "vi": "...", "ru": "..."}},哪种语言不写就保留它的原译文。
+映射.json 形如 {"旧键": {"new": "新简体文案", "en": "...", "zh-Hant": "...", "ja": "...", "ko": "...", "es": "...", "fr": "...", "de": "...", "it": "...", "pt-BR": "...", "vi": "...", "ru": "...", "uk": "..."}},哪种语言不写就保留它的原译文。
 条目留在原位、其余字段不动,显式的 zh-Hans 值跟着改成新键;旧键不存在、新键已存在、新旧文案的格式参数不一样
 都拒绝且不写盘。写完列出源码里还写着旧键的地方 —— 调用处要自己改,脚本不动源码。
 
@@ -54,6 +54,7 @@ TARGETS = {
     "pt-BR": "pt-br.lproj",
     "vi": "vi.lproj",
     "ru": "ru.lproj",
+    "uk": "uk.lproj",
 }
 # 缺翻译时允许回退到源语言(简体)的语言。**当前为空**:规则是「新加文案必须把
 # 当前支持的语言都写全」(见 AGENTS.md「容易踩的具体坑 → 本地化」),所以 zh-Hant 跟 en 一样缺译就
@@ -73,7 +74,7 @@ INFO_PLIST_KEYS = {
 # 后缀和类别名跟 L10n.swift、UILanguage.pluralCategory、selftest 本地化守卫、scripts/check_strings_parity.py 必须一致。
 PLURAL_SUFFIX = "#"
 DEFAULT_PLURAL_FORMS = ("one", "other")
-PLURAL_FORMS = {"ru": ("one", "few", "many", "other")}
+PLURAL_FORMS = {"ru": ("one", "few", "many", "other"), "uk": ("one", "few", "many", "other")}
 DERIVED_PLURAL_FORMS = ("one", "few", "many")
 
 
@@ -552,6 +553,8 @@ def selftest() -> int:
           repr(plural_problems(ru_entry(ru), "zh-Hans")))
     check("俄语四类复数:派生键", forms(ru_entry(ru)["%lld 首"], "ru") == (
         "%lld трека", {"one": "%lld трек", "few": "%lld трека", "many": "%lld треков"}), repr(forms(ru_entry(ru)["%lld 首"], "ru")))
+    uk = {"one": "%lld трек", "few": "%lld треки", "many": "%lld треків", "other": "%lld трека"}
+    check("乌克兰语四类复数:合法", is_plural_value(uk, "uk") and not is_plural_value({"one": "%lld трек", "other": "%lld треків"}, "uk"))
     check("英文仍只派生 #one", forms(strings["%lld 首"], "en") == ("%lld songs", {"one": "%lld song"}),
           repr(forms(strings["%lld 首"], "en")))
     for name, bad in {"俄语只写 one / other": {"one": "%lld трек", "other": "%lld треков"},

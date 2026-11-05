@@ -13,7 +13,7 @@ import Foundation
 public enum UILanguage {
     /// 界面有的语言包,顺序就是语言下拉里的顺序。加一种语言:这里加一项,`localeIdentifier(for:)`、`nativeName(of:)` 加映射,
     /// generate-strings.py 的 TARGETS 登记 catalog 语言码 → 目录名(目录名一律小写,SwiftPM 打包会把它转小写)。
-    public static let packs = ["zh-hans", "zh-hant", "en", "ja", "ko", "es", "fr", "de", "it", "pt-br", "vi", "ru"]
+    public static let packs = ["zh-hans", "zh-hant", "en", "ja", "ko", "es", "fr", "de", "it", "pt-br", "vi", "ru", "uk"]
 
     public static let traditionalRegions = ["-tw", "-hk", "-mo"]
 
@@ -69,6 +69,7 @@ public enum UILanguage {
         case "pt-br": return "Português (Brasil)"
         case "vi": return "Tiếng Việt"
         case "ru": return "Русский"
+        case "uk": return "Українська"
         default: return pack
         }
     }
@@ -76,22 +77,25 @@ public enum UILanguage {
     /// 别的 App 的本地化目录名(「zh_CN」「zh-Hant」「English」「Japanese」这类)归哪个语言包,界面没有这种语言时为 nil。
     /// 老式的英文全称目录名先换成语言码,其余同 `pack(forTag:)`。
     public static func pack(forLocalization name: String) -> String? {
-        let legacyNames = ["english": "en", "chinese": "zh", "japanese": "ja", "korean": "ko", "spanish": "es", "french": "fr", "german": "de", "italian": "it", "portuguese": "pt", "vietnamese": "vi", "russian": "ru"]
+        let legacyNames = ["english": "en", "chinese": "zh", "japanese": "ja", "korean": "ko", "spanish": "es", "french": "fr", "german": "de", "italian": "it", "portuguese": "pt", "vietnamese": "vi", "russian": "ru", "ukrainian": "uk"]
         return pack(forTag: legacyNames[name.lowercased()] ?? name)
     }
 
     /// 数量的 CLDR 复数类别(只管整数)。`L10n.plural` 按它取「键#one / #few / #many」,`other` 取键本身;
     /// 类别名跟 generate-strings.py 的 PLURAL_FORMS、报告用语的 `plural_rule` 必须一致。
+    /// 按 one / few / many 分的语言包;报告用语表的 `plural_rule` 也取这几个值。
+    public static let eastSlavicPluralPacks: Set<String> = ["ru", "uk"]
+
     public enum PluralCategory: String, CaseIterable {
         case one, few, many, other
     }
 
     /// 这个数量在这种界面语言里属于哪一类:
     ///   - 多数语言只有 1 是 one;法语、葡萄牙语 0 和 1 都是 one(CLDR one = 0、1);
-    ///   - 俄语:个位 1 且末两位不是 11 → one,个位 2～4 且末两位不是 12～14 → few,其余(0、5～20、11～14 …)→ many;
+    ///   - 俄语、乌克兰语(`eastSlavicPluralPacks`,CLDR 同一套整数规则):个位 1 且末两位不是 11 → one,个位 2～4 且末两位不是 12～14 → few,其余(0、5～20、11～14 …)→ many;
     ///   - 日、韩、越南语不分单复数,catalog 里那一条不写成 plural 变体、没有派生键,返回什么都取同一条。
     public static func pluralCategory(_ count: Int, pack: String) -> PluralCategory {
-        if pack == "ru" {
+        if eastSlavicPluralPacks.contains(pack) {
             let n = abs(count), mod10 = n % 10, mod100 = n % 100
             if mod10 == 1 && mod100 != 11 { return .one }
             if (2...4).contains(mod10) && !(12...14).contains(mod100) { return .few }

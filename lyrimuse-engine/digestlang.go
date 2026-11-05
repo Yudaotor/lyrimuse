@@ -28,11 +28,12 @@ const (
 	digestLangPtBR digestLang = "pt-br"
 	digestLangVi   digestLang = "vi"
 	digestLangRu   digestLang = "ru"
+	digestLangUk   digestLang = "uk"
 )
 
 func parseDigestLang(s string) digestLang {
 	switch l := digestLang(strings.ToLower(strings.TrimSpace(s))); l {
-	case digestLangHant, digestLangEn, digestLangJa, digestLangKo, digestLangEs, digestLangFr, digestLangDe, digestLangIt, digestLangPtBR, digestLangVi, digestLangRu:
+	case digestLangHant, digestLangEn, digestLangJa, digestLangKo, digestLangEs, digestLangFr, digestLangDe, digestLangIt, digestLangPtBR, digestLangVi, digestLangRu, digestLangUk:
 		return l
 	}
 	return digestLangHans
@@ -83,10 +84,10 @@ func (w digestWords) count(key string, n int, kv ...string) string {
 }
 
 // pluralForm:数量 n 在这张表的语言里属于哪一类(CLDR 整数规则),同 Core UILanguage.pluralCategory。
-// 表里 plural_rule 是 ru 的按俄语:个位 1 且末两位不是 11 → one,个位 2～4 且末两位不是 12～14 → few,其余 many;
+// 表里 plural_rule 是 ru 或 uk 的按俄语、乌克兰语(同一套整数规则):个位 1 且末两位不是 11 → one,个位 2～4 且末两位不是 12～14 → few,其余 many;
 // 别的语言 1 是 one,表里有 zero_is_one 的(法语、葡萄牙语)0 也是 one,其余 other。
 func (w digestWords) pluralForm(n int) string {
-	if w["plural_rule"] == "ru" {
+	if r := w["plural_rule"]; r == "ru" || r == "uk" {
 		if n < 0 {
 			n = -n
 		}
@@ -726,5 +727,60 @@ var digestWordTable = map[digestLang]digestWords{
 		"title_yesterday":  "🎧 Сводка прослушиваний за вчера ({date})",
 		"value_hm":         "{h} ч {m} мин",
 		"value_m":          "{m} мин",
+	},
+	digestLangUk: {
+		"brief_line":       "{label}: {name} · {n}",
+		"col_albums":       "Альбоми",
+		"col_artists":      "Виконавці",
+		"col_tracks":       "Треки",
+		"colon":            ":",
+		"compare":          " ({label}: {prev}, {change})",
+		"cover":            "Обкладинка",
+		"date":             "{dd}.{mm}",
+		"duration_hm":      " · близько {h} год {m} хв",
+		"duration_m":       " · близько {m} хв",
+		"flat":             "без змін",
+		"footer":           "Lyrimuse · Дані: {source}",
+		"head_albums":      "Топ альбомів",
+		"head_artists":     "Топ виконавців",
+		"head_tracks":      "Топ треків",
+		"item":             "{i}. {name} ({n})",
+		"keyword":          "прослуховувань",
+		"label_album":      "Альбом",
+		"label_artist":     "Виконавець",
+		"label_track":      "Трек",
+		"link":             "Повний рейтинг на {source}",
+		"month_names":      "січень,лютий,березень,квітень,травень,червень,липень,серпень,вересень,жовтень,листопад,грудень",
+		"more":             " та ін.",
+		"most_played":      "Найчастіше",
+		"name_sep":         ", ",
+		"names_lead":       ": ",
+		"new_artists":      "{n} нові виконавці",
+		"new_artists_few":  "{n} нові виконавці",
+		"new_artists_many": "{n} нових виконавців",
+		"new_artists_one":  "{n} новий виконавець",
+		"pair":             "{artist} — {name}",
+		"plays":            "{n} прослуховування",
+		"plays_few":        "{n} прослуховування",
+		"plays_many":       "{n} прослуховувань",
+		"plays_one":        "{n} прослуховування",
+		"plays_truncated":  "Прослуховувань: понад {n} (забагато, враховано лише останні)",
+		"plural_rule":      "uk",
+		"preset_brief":     "{summary}\nТоп-виконавець: {top_artist}\nТоп-альбом: {top_album}\nТоп-трек: {top_track}\nНові виконавці ({new_artists}): {new_artist_names}",
+		"preset_full":      "{summary}\n\nТоп виконавців:\n{top_artists}\n\nТоп альбомів:\n{top_albums}\n\nТоп треків:\n{top_tracks}\n\nНові виконавці ({new_artists}): {new_artist_names}",
+		"preset_overview":  "{summary}\nНові виконавці: {new_artists}",
+		"prev_month":       "{month_name}",
+		"prev_month_year":  "{month_name} {year}",
+		"prev_week":        "попередній тиждень",
+		"prev_year":        "{year} рік",
+		"title_day":        "🎧 Підсумок прослуховувань ({date})",
+		"title_month":      "📅 Підсумки прослуховувань за {month_name} {year}",
+		"title_sample":     "🎧 Зразок підсумку прослуховувань",
+		"title_today":      "🎧 Підсумок прослуховувань за сьогодні ({date})",
+		"title_week":       "🎵 Підсумки прослуховувань за минулий тиждень ({from} – {to})",
+		"title_year":       "🏆 Підсумки прослуховувань за {year} рік",
+		"title_yesterday":  "🎧 Підсумок прослуховувань за вчора ({date})",
+		"value_hm":         "{h} год {m} хв",
+		"value_m":          "{m} хв",
 	},
 }

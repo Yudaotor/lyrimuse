@@ -41,7 +41,7 @@ func TestDigestWordsMatchShared(t *testing.T) {
 	}
 }
 
-// 俄语式的 one / few / many(plural_rule 为 ru)和别的语言的单复数,同 Core UILanguage.pluralCategory、ReportWords.count。
+// 俄语式的 one / few / many(plural_rule 为 ru、uk)和别的语言的单复数,同 Core UILanguage.pluralCategory、ReportWords.count。
 func TestDigestWordsPluralForm(t *testing.T) {
 	counts := []int{0, 1, 2, 5, 11, 21, 22, 25, 111, 12, 14, 104}
 	forms := func(w digestWords) string {
@@ -59,6 +59,10 @@ func TestDigestWordsPluralForm(t *testing.T) {
 	if got, want := forms(en), "0 other|1 one|2 other|5 other|11 other|21 other|22 other|25 other|111 other|12 other|14 other|104 other"; got != want {
 		t.Errorf("没有 plural_rule 的只有 1 是 one: %s, want %s", got, want)
 	}
+	uk := digestWords{"plays": "{n} other", "plays_one": "{n} one", "plays_few": "{n} few", "plays_many": "{n} many", "plural_rule": "uk"}
+	if got, want := forms(uk), "0 many|1 one|2 few|5 many|11 many|21 one|22 few|25 many|111 many|12 many|14 many|104 few"; got != want {
+		t.Errorf("乌克兰语(同俄语规则): %s, want %s", got, want)
+	}
 	noMany := digestWords{"plays": "{n} other", "plays_one": "{n} one", "plural_rule": "ru"}
 	if got := noMany.count("plays", 5); got != "5 other" {
 		t.Errorf("表里没有 _many 时用 key 本身: %s", got)
@@ -66,7 +70,7 @@ func TestDigestWordsPluralForm(t *testing.T) {
 }
 
 func TestParseDigestLang(t *testing.T) {
-	for in, want := range map[string]digestLang{"": digestLangHans, "zh-hans": digestLangHans, " ZH-HANT ": digestLangHant, "en": digestLangEn, "ja": digestLangJa, "ko": digestLangKo, "es": digestLangEs, "fr": digestLangFr, "de": digestLangDe, "it": digestLangIt, "pt-br": digestLangPtBR, " PT-BR ": digestLangPtBR, "vi": digestLangVi, " VI ": digestLangVi, "ru": digestLangRu, " RU ": digestLangRu, "pl": digestLangHans} {
+	for in, want := range map[string]digestLang{"": digestLangHans, "zh-hans": digestLangHans, " ZH-HANT ": digestLangHant, "en": digestLangEn, "ja": digestLangJa, "ko": digestLangKo, "es": digestLangEs, "fr": digestLangFr, "de": digestLangDe, "it": digestLangIt, "pt-br": digestLangPtBR, " PT-BR ": digestLangPtBR, "vi": digestLangVi, " VI ": digestLangVi, "ru": digestLangRu, " RU ": digestLangRu, "uk": digestLangUk, " UK ": digestLangUk, "pl": digestLangHans} {
 		if got := parseDigestLang(in); got != want {
 			t.Errorf("parseDigestLang(%q) = %q, want %q", in, got, want)
 		}
@@ -229,6 +233,26 @@ func TestDigestReportInOtherLanguages(t *testing.T) {
 	if got := w.count("new_artists", 22); got != "22 новых артиста" {
 		t.Errorf("俄语新歌手: %q", got)
 	}
+
+	// 乌克兰语:同俄语的 one / few / many 规则(plural_rule uk),月名主格(「за жовтень 2026」)。
+	useDigestFeatures(t, featureFlags{DigestTopN: 2, ReportLanguage: digestLangUk})
+	w = dw()
+	if got := calendarDigestTitle(w, calendarDigestMonthly, now); got != "📅 Підсумки прослуховувань за жовтень 2026" {
+		t.Errorf("乌克兰语月报标题: %q", got)
+	}
+	if got := calendarDigestPeriod(calendarDigestMonthly, now, now, false).prevLabel; got != "вересень" {
+		t.Errorf("乌克兰语上一期: %q", got)
+	}
+	var uk []string
+	for _, n := range []int{0, 1, 2, 5, 11, 12, 14, 21, 22, 25, 104, 111} {
+		uk = append(uk, w.count("plays", n))
+	}
+	if got, want := strings.Join(uk, "|"), "0 прослуховувань|1 прослуховування|2 прослуховування|5 прослуховувань|11 прослуховувань|12 прослуховувань|14 прослуховувань|21 прослуховування|22 прослуховування|25 прослуховувань|104 прослуховування|111 прослуховувань"; got != want {
+		t.Errorf("乌克兰语单复数: %q", got)
+	}
+	if got := w.count("new_artists", 5) + "|" + w.count("new_artists", 21) + "|" + w.count("new_artists", 22); got != "5 нових виконавців|21 новий виконавець|22 нові виконавці" {
+		t.Errorf("乌克兰语新歌手: %q", got)
+	}
 }
 
 // 切成英文以后推的报告:标题是英文,推送记录里认「同一期」的键仍是简体标题,同一期再推一次认得出已经推过。
@@ -313,7 +337,7 @@ func TestDigestReportLangSample(t *testing.T) {
 	s := loadNotifyPreviewSample(t)
 	path := filepath.Join("..", "shared", "testdata", "notify", "report-lang.json")
 	var got []reportLangCase
-	for _, lang := range []digestLang{digestLangHans, digestLangHant, digestLangEn, digestLangJa, digestLangKo, digestLangEs, digestLangFr, digestLangDe, digestLangIt, digestLangPtBR, digestLangVi, digestLangRu} {
+	for _, lang := range []digestLang{digestLangHans, digestLangHant, digestLangEn, digestLangJa, digestLangKo, digestLangEs, digestLangFr, digestLangDe, digestLangIt, digestLangPtBR, digestLangVi, digestLangRu, digestLangUk} {
 		for _, kind := range []string{"daily", "weekly"} {
 			for _, style := range []string{digestStyleFull, digestStyleBrief, digestStyleOverview} {
 				got = append(got, reportLangCaseFor(t, s, lang, kind, style, 3))

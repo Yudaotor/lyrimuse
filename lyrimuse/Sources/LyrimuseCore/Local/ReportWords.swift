@@ -3,7 +3,7 @@ import Foundation
 /// 听歌报告用哪种语言写:App 的界面语言(`L10n.current`:zh-hans / zh-hant / en),写进 features.json 的
 /// `report_language` 给引擎(digestlang.go)。认不得的按简体。
 public enum ReportLanguage: String, CaseIterable, Sendable {
-    case zhHans = "zh-hans", zhHant = "zh-hant", en, ja, ko, es, fr, de, it, ptBR = "pt-br", vi, ru
+    case zhHans = "zh-hans", zhHant = "zh-hant", en, ja, ko, es, fr, de, it, ptBR = "pt-br", vi, ru, uk
 
     /// features.json 里的键名,同引擎 featureFlagsFile.ReportLanguage 的 json 标签。
     public static let featuresKey = "report_language"
@@ -44,11 +44,12 @@ public struct ReportWords: Sendable {
     }
 
     /// 带数量 `{n}` 的那一句;数量属于 one / few / many 且表里有 `key_one` / `key_few` / `key_many` 时用那一句,否则用 key 本身,
-    /// 同引擎 digestWords.count。类别:表里 `plural_rule` 是 ru 的按俄语(`UILanguage.pluralCategory(_, pack: "ru")`);
+    /// 同引擎 digestWords.count。类别:表里 `plural_rule` 是 ru / uk 的按俄语、乌克兰语(`UILanguage.pluralCategory(_, pack:)`);
     /// 别的语言 1 是 one,表里有 `zero_is_one` 的(法语、葡萄牙语)0 也是 one。
     public func count(_ key: String, _ n: Int, _ values: [(String, String)] = []) -> String {
-        let category: UILanguage.PluralCategory = self["plural_rule"] == "ru"
-            ? UILanguage.pluralCategory(n, pack: "ru")
+        let rule = self["plural_rule"]
+        let category: UILanguage.PluralCategory = UILanguage.eastSlavicPluralPacks.contains(rule)
+            ? UILanguage.pluralCategory(n, pack: rule)
             : (n == 1 || (n == 0 && !self["zero_is_one"].isEmpty) ? .one : .other)
         let form = key + "_" + category.rawValue
         return f(category != .other && table[form] != nil ? form : key, [("n", String(n))] + values)
@@ -669,6 +670,61 @@ public struct ReportWords: Sendable {
             "title_yesterday": "🎧 Сводка прослушиваний за вчера ({date})",
             "value_hm": "{h} ч {m} мин",
             "value_m": "{m} мин",
+        ],
+        .uk: [
+            "brief_line": "{label}: {name} · {n}",
+            "col_albums": "Альбоми",
+            "col_artists": "Виконавці",
+            "col_tracks": "Треки",
+            "colon": ":",
+            "compare": " ({label}: {prev}, {change})",
+            "cover": "Обкладинка",
+            "date": "{dd}.{mm}",
+            "duration_hm": " · близько {h} год {m} хв",
+            "duration_m": " · близько {m} хв",
+            "flat": "без змін",
+            "footer": "Lyrimuse · Дані: {source}",
+            "head_albums": "Топ альбомів",
+            "head_artists": "Топ виконавців",
+            "head_tracks": "Топ треків",
+            "item": "{i}. {name} ({n})",
+            "keyword": "прослуховувань",
+            "label_album": "Альбом",
+            "label_artist": "Виконавець",
+            "label_track": "Трек",
+            "link": "Повний рейтинг на {source}",
+            "month_names": "січень,лютий,березень,квітень,травень,червень,липень,серпень,вересень,жовтень,листопад,грудень",
+            "more": " та ін.",
+            "most_played": "Найчастіше",
+            "name_sep": ", ",
+            "names_lead": ": ",
+            "new_artists": "{n} нові виконавці",
+            "new_artists_few": "{n} нові виконавці",
+            "new_artists_many": "{n} нових виконавців",
+            "new_artists_one": "{n} новий виконавець",
+            "pair": "{artist} — {name}",
+            "plays": "{n} прослуховування",
+            "plays_few": "{n} прослуховування",
+            "plays_many": "{n} прослуховувань",
+            "plays_one": "{n} прослуховування",
+            "plays_truncated": "Прослуховувань: понад {n} (забагато, враховано лише останні)",
+            "plural_rule": "uk",
+            "preset_brief": "{summary}\nТоп-виконавець: {top_artist}\nТоп-альбом: {top_album}\nТоп-трек: {top_track}\nНові виконавці ({new_artists}): {new_artist_names}",
+            "preset_full": "{summary}\n\nТоп виконавців:\n{top_artists}\n\nТоп альбомів:\n{top_albums}\n\nТоп треків:\n{top_tracks}\n\nНові виконавці ({new_artists}): {new_artist_names}",
+            "preset_overview": "{summary}\nНові виконавці: {new_artists}",
+            "prev_month": "{month_name}",
+            "prev_month_year": "{month_name} {year}",
+            "prev_week": "попередній тиждень",
+            "prev_year": "{year} рік",
+            "title_day": "🎧 Підсумок прослуховувань ({date})",
+            "title_month": "📅 Підсумки прослуховувань за {month_name} {year}",
+            "title_sample": "🎧 Зразок підсумку прослуховувань",
+            "title_today": "🎧 Підсумок прослуховувань за сьогодні ({date})",
+            "title_week": "🎵 Підсумки прослуховувань за минулий тиждень ({from} – {to})",
+            "title_year": "🏆 Підсумки прослуховувань за {year} рік",
+            "title_yesterday": "🎧 Підсумок прослуховувань за вчора ({date})",
+            "value_hm": "{h} год {m} хв",
+            "value_m": "{m} хв",
         ],
     ]
 }

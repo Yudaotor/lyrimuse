@@ -1,6 +1,6 @@
 # URL-схема Lyrimuse
 
-*[English](url-scheme.md) · [简体中文](url-scheme.zh-CN.md) · [日本語](url-scheme.ja.md) · [한국어](url-scheme.ko.md) · [Español](url-scheme.es.md) · [Français](url-scheme.fr.md) · [Deutsch](url-scheme.de.md) · [Italiano](url-scheme.it.md) · [Português (Brasil)](url-scheme.pt-BR.md) · [Tiếng Việt](url-scheme.vi.md) · **Русский***
+*[English](url-scheme.md) · [简体中文](url-scheme.zh-CN.md) · [日本語](url-scheme.ja.md) · [한국어](url-scheme.ko.md) · [Español](url-scheme.es.md) · [Français](url-scheme.fr.md) · [Deutsch](url-scheme.de.md) · [Italiano](url-scheme.it.md) · [Português (Brasil)](url-scheme.pt-BR.md) · [Tiếng Việt](url-scheme.vi.md) · **Русский** · [Українська](url-scheme.uk.md)*
 
 Ссылки, которые начинаются с `lyrimuse://`, позволяют управлять Lyrimuse из Быстрых команд, Raycast, Alfred, Stream Deck, Терминала (`open 'lyrimuse://…'`) и похожих инструментов: открывать окна и страницы настроек, показывать и скрывать текст, управлять воспроизведением, сдвигать тайминг или узнавать, что сейчас играет.
 

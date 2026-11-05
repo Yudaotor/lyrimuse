@@ -332,6 +332,7 @@ func TestDocsSourceCountMatchesSourceCount(t *testing.T) {
 		{"../README.pt-BR.md", regexp.MustCompile(`\b(\d+) fontes de letras\b`), strconv.Itoa(n)},
 		{"../README.vi.md", regexp.MustCompile(`\b(\d+) nguồn lời bài hát\b`), strconv.Itoa(n)},
 		{"../README.ru.md", regexp.MustCompile(`\b(\d+) источников текстов`), strconv.Itoa(n)},
+		{"../README.uk.md", regexp.MustCompile(`\b(\d+) джерел текстів`), strconv.Itoa(n)},
 	}
 	for _, r := range readmes {
 		raw, err := os.ReadFile(r.path)

@@ -1,6 +1,6 @@
 # Schema URL di Lyrimuse
 
-*[English](url-scheme.md) · [简体中文](url-scheme.zh-CN.md) · [日本語](url-scheme.ja.md) · [한국어](url-scheme.ko.md) · [Español](url-scheme.es.md) · [Français](url-scheme.fr.md) · [Deutsch](url-scheme.de.md) · **Italiano** · [Português (Brasil)](url-scheme.pt-BR.md) · [Tiếng Việt](url-scheme.vi.md) · [Русский](url-scheme.ru.md)*
+*[English](url-scheme.md) · [简体中文](url-scheme.zh-CN.md) · [日本語](url-scheme.ja.md) · [한국어](url-scheme.ko.md) · [Español](url-scheme.es.md) · [Français](url-scheme.fr.md) · [Deutsch](url-scheme.de.md) · **Italiano** · [Português (Brasil)](url-scheme.pt-BR.md) · [Tiếng Việt](url-scheme.vi.md) · [Русский](url-scheme.ru.md) · [Українська](url-scheme.uk.md)*
 
 I link che iniziano con `lyrimuse://` ti permettono di controllare Lyrimuse da Comandi Rapidi, Raycast, Alfred, Stream Deck, dal Terminale (`open 'lyrimuse://…'`) e da strumenti simili: aprire finestre e pagine delle impostazioni, mostrare o nascondere il testo, controllare la riproduzione, regolare il timing o sapere cosa è in riproduzione.
 

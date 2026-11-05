@@ -57,7 +57,7 @@ public enum FeedbackLinks {
         URL(string: websiteURL(language: language).absoluteString + "features/")!
     }
 
-    /// 「关于」页的「官网」:落地页按界面语言开那一份,认不出的语言开英文。日、韩、西、法、德、意、葡、越、俄九种页面跟带这几种界面语言的版本同一次
+    /// 「关于」页的「官网」:落地页按界面语言开那一份,认不出的语言开英文。日、韩、西、法、德、意、葡、越、俄、乌十种页面跟带这几种界面语言的版本同一次
     /// 上线(落地页源文件的 `langs.LIVE`),用这几种界面的人拿到的版本里官网一定已经有对应那一页。
     public static func websiteURL(language: String) -> URL {
         let dir: String
@@ -73,6 +73,7 @@ public enum FeedbackLinks {
         case "pt-br": dir = "pt-BR/"
         case "vi": dir = "vi/"
         case "ru": dir = "ru/"
+        case "uk": dir = "uk/"
         default: dir = ""
         }
         return URL(string: "https://yudaotor.github.io/lyrimuse/" + dir)!

@@ -2,9 +2,9 @@
 
 # Lista de funciones de Lyrimuse
 
-[English](feature-list.md) · [简体中文](feature-list.zh-CN.md) · [繁體中文](feature-list.zh-Hant.md) · [日本語](feature-list.ja.md) · [한국어](feature-list.ko.md) · Español · [Français](feature-list.fr.md) · [Deutsch](feature-list.de.md) · [Italiano](feature-list.it.md) · [Português (Brasil)](feature-list.pt-BR.md) · [Tiếng Việt](feature-list.vi.md) · [Русский](feature-list.ru.md)
+[English](feature-list.md) · [简体中文](feature-list.zh-CN.md) · [繁體中文](feature-list.zh-Hant.md) · [日本語](feature-list.ja.md) · [한국어](feature-list.ko.md) · Español · [Français](feature-list.fr.md) · [Deutsch](feature-list.de.md) · [Italiano](feature-list.it.md) · [Português (Brasil)](feature-list.pt-BR.md) · [Tiếng Việt](feature-list.vi.md) · [Русский](feature-list.ru.md) · [Українська](feature-list.uk.md)
 
-Lyrimuse es una app de código abierto (GPL-3.0) para Mac con letra sincronizada palabra por palabra, para macOS 14 o posterior en Apple Silicon e Intel. Muestra la letra de Apple Music, Spotify, QQ Music, NetEase Cloud Music, Kugou, Soda Music, KKBOX, Amazon Music, LX Music, Kaset, Pear Desktop, reAMP, VOX, Pine Player, foobar2000, y de YouTube Music o Spotify Web en el navegador: como letra flotante en el escritorio, en el notch, en la barra de menús, en la Touch Bar o en la ventana de letra, con traducción y romanización (pinyin, jyutping cantonés, romaji japonés, romanización coreana). Hace scrobble en Last.fm y ListenBrainz, y puede mostrar en Discord lo que escuchas. La interfaz está en chino simplificado, chino tradicional, inglés, japonés, coreano, español, francés, alemán, italiano, portugués de Brasil, vietnamita y ruso.
+Lyrimuse es una app de código abierto (GPL-3.0) para Mac con letra sincronizada palabra por palabra, para macOS 14 o posterior en Apple Silicon e Intel. Muestra la letra de Apple Music, Spotify, QQ Music, NetEase Cloud Music, Kugou, Soda Music, KKBOX, Amazon Music, LX Music, Kaset, Pear Desktop, reAMP, VOX, Pine Player, foobar2000, y de YouTube Music o Spotify Web en el navegador: como letra flotante en el escritorio, en el notch, en la barra de menús, en la Touch Bar o en la ventana de letra, con traducción y romanización (pinyin, jyutping cantonés, romaji japonés, romanización coreana). Hace scrobble en Last.fm y ListenBrainz, y puede mostrar en Discord lo que escuchas. La interfaz está en chino simplificado, chino tradicional, inglés, japonés, coreano, español, francés, alemán, italiano, portugués de Brasil, vietnamita, ruso y ucraniano.
 
 Esta lista recoge cada función de Lyrimuse: qué hace, dónde está en Ajustes y si viene activada o desactivada al instalarla; al final aparecen todos los ajustes de la ventana Ajustes. Se mantiene junto con el código y se actualiza cada vez que cambian las funciones.
 
@@ -762,7 +762,7 @@ La primera vez que abres Lyrimuse, te guía paso a paso para elegir reproductore
 
 <a id="feature-language"></a>
 
-### Interfaz en chino simplificado, chino tradicional, inglés, japonés, coreano, español, francés, alemán, italiano, portugués de Brasil, vietnamita y ruso
+### Interfaz en chino simplificado, chino tradicional, inglés, japonés, coreano, español, francés, alemán, italiano, portugués de Brasil, vietnamita, ruso y ucraniano
 
 Por defecto sigue al sistema, y usa el inglés si el idioma del sistema no está entre ellos; el cambio se aplica al instante, sin reiniciar.
 
