@@ -343,6 +343,11 @@ async function stats(request, env, url) {
       os_version: countBy(rows, (r) => (r.os_version || "").split(".")[0]),
       arch: countBy(rows, (r) => r.arch),
       ui_language: countBy(rows, (r) => r.ui_language),
+      // 界面语言是跟随系统还是在设置里手动选的:看改过默认值的设置项里有没有 appLanguage(默认「跟随系统」)。
+      // 那份名单跟 install_method 是同一版 App 开始报的,没有 install_method 的旧版本判不出,记成 (unknown)。
+      ui_language_source: countBy(rows, uiLanguageSource),
+      ui_language_system: countBy(rows.filter((r) => uiLanguageSource(r) === "system"), (r) => r.ui_language),
+      ui_language_manual: countBy(rows.filter((r) => uiLanguageSource(r) === "manual"), (r) => r.ui_language),
       system_language: countBy(rows, (r) => r.system_language),
       system_region: countBy(rows, (r) => r.system_region),
       country: countBy(rows, (r) => r.country),
@@ -373,6 +378,12 @@ async function stats(request, env, url) {
                frames: safeJSON(c.frames, []), exception_frames: safeJSON(c.exception_frames, []), reasons: safeJSON(c.reasons, []) };
     }),
   });
+}
+
+// 界面语言的来源:system = 跟随系统,manual = 手动选的,null = 旧版本判不出。
+function uiLanguageSource(r) {
+  if (!r.features.install_method) return null;
+  return (r.features.settings_changed || []).includes("appLanguage") ? "manual" : "system";
 }
 
 // 按点分的数字段比较(1.9.0 < 1.12.0),预发布后缀按字符串比。
@@ -444,7 +455,9 @@ pre { white-space: pre-wrap; word-break: break-all; font-size: 12px; color: var(
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 try { $("token").value = localStorage.getItem("lyrimuse-telemetry-token") || ""; } catch {}
-const LABELS = { app_version: "版本", os_version: "macOS 大版本", arch: "芯片", ui_language: "界面语言", system_language: "系统语言",
+const LABELS = { app_version: "版本", os_version: "macOS 大版本", arch: "芯片", ui_language: "界面语言",
+  ui_language_source: "界面语言来源(system 跟随系统 / manual 手动选)", ui_language_system: "界面语言 · 跟随系统",
+  ui_language_manual: "界面语言 · 手动选", system_language: "系统语言",
   system_region: "地区(系统设置)", country: "出口 IP 所在地区", surfaces: "开着的展示面", players_selected: "勾选的播放器", accounts: "连接的账号", trusted_players: "信任的第三方播放器", web_platforms: "网页版平台", lyrics_source_mode: "匹配算法",
   flags: "其他开关", install_method: "安装渠道", settings_changed: "改过默认值的设置",
   permissions_missing: "缺的权限" };

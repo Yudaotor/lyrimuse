@@ -313,6 +313,14 @@ func runTelemetryTests() {
                     true, "心跳: 功能快照带安装渠道、改过的设置、缺的权限")
         let missing = fields.filter { !worker.contains($0) }
         expectEqual(missing, [], "Worker: 认得 App 发的每个字段")
+        // 统计端按「改过默认值的设置项里有没有 appLanguage」分界面语言跟随系统还是手动选(14 章决策 177):
+        // 属性改名、或挪进不比较的名单,统计端会静默把所有人算成跟随系统。
+        let settingsTelemetry = (try? String(contentsOfFile: root.appendingPathComponent("lyrimuse/Settings/AppSettings+Telemetry.swift").path,
+                                             encoding: .utf8)) ?? ""
+        expectEqual(sourceHas(worker, #"(r.features.settings_changed || []).includes("appLanguage") ? "manual" : "system""#)
+                        && sourceHas(settingsTelemetry, #"("appLanguage", appLanguage),"#)
+                        && !settingsTelemetry.contains(#""appLanguage", ""#) && !settingsTelemetry.contains(#""appLanguage"]"#), true,
+                    "Worker: 界面语言来源认的 appLanguage 在设置比较清单里")
         // Worker 的两个白名单正则要放过 App 真实会发的每个取值(只比键名测不出取值被丢)。
         func workerRegex(_ name: String) -> NSRegularExpression? {
             guard let line = worker.split(separator: "\n").first(where: { $0.hasPrefix("const \(name) = /") }),
