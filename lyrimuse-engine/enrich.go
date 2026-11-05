@@ -1152,6 +1152,10 @@ func trackEnrichment(artist, title, album, bundleID string, durationSecs float64
 			// 直接 return false。
 			enrichInflight[key] = true
 			go retryLyricsUpgrade(withLyricSearchTitle(context.Background(), searchTitle), key, artist, title, album, durationSecs, true)
+		} else if !enrichInflight[key] && appleNoVocalsFillDue(e, key, bundleID, artist, title, album) {
+			// 预取、补空存下的没词条目正用 Apple Music 放着:目录说没有人声就不等退避补一轮(见 applenovocals.go)。
+			enrichInflight[key] = true
+			go appleNoVocalsFill(withLyricSearchTitle(context.Background(), searchTitle), key, artist, title, album, durationSecs)
 		} else if needsLyricsRescore(e, pinned, features().LyricsAutoUpgrade) && !enrichInflight[key] {
 			enrichInflight[key] = true
 			go rescoreLyrics(withLyricSearchTitle(context.Background(), searchTitle), key, artist, title, album, durationSecs)
@@ -6316,7 +6320,14 @@ func fetchScoredLyricCandidatesStreaming(ctx context.Context, artist, title, alb
 		appleID, _ := playbackTrackIDsForRound(ctx, idArtist, idTitle, idAlbum)
 		r := applemusicLyric(ctx, artist, srcTitle, album, durationSecs, appleID, lyricSourceISRC(ctx, artist, title, album))
 		// 正在用 Apple Music 放、它自己没给这一条的歌词时,问一次这条录音有没有人声(播放器自己的信号,见 playerInstrumentalSource)。
-		appleNoVocals := forPlaying && r.lyrics == "" && appleID != "" && playingPlayer() == playerAppleMusic && applemusicCatalogNoVocals(ctx, appleID)
+		// 目录 id 开搜那一刻多半还没核对完,在放的这首等它就绪再问;待播队列、同专辑预取那几首没有提示,不等(见 applenovocals.go)。
+		appleNoVocals := false
+		if forPlaying && r.lyrics == "" && playingPlayer() == playerAppleMusic {
+			if appleID == "" && !isPlayerQueueTrack(ctx) {
+				appleID = waitPlayingAppleCatalogID(ctx, idArtist, idTitle, idAlbum)
+			}
+			appleNoVocals = appleID != "" && applemusicCatalogNoVocals(ctx, appleID)
+		}
 		resultsCh <- lyricSourceResult{noVocals: appleNoVocals, source: "applemusic", lyr: r.lyrics, yrc: r.yrc, tr: r.tr, trLang: r.trLang, roma: r.roma, bg: r.bg, songwriters: r.songwriters, matchTitle: r.title, matchArtist: r.artist, matchAlbum: r.album, matchCover: r.cover, srcDur: r.durationSecs, isrc: r.isrc, plainOnly: r.plainOnly, identityFromLocalClient: r.fromLocalClient || r.fromPlayerCatalogID || appleNoVocals}
 	}()
 	go func() {
