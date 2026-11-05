@@ -26,7 +26,7 @@ public enum PlaybackPlayer: String, CaseIterable, Identifiable, Codable, Hashabl
     case amazonMusic = "amazon_music"
     /// YouTube Music 的原生客户端:Swift 外壳加一个隐藏的 WKWebView 跑 YouTube Music 网页版放歌,有 AppleScript 字典(`get player info` 回一段 JSON:曲目、时长、位置、播放状态、videoId),没有沙盒。系统 Now Playing 里它那份靠不住:播放中把会话交给 WebKit(那份只有时长和进度、歌名歌手是空的,bundle id 报成 com.apple.WebKit.GPU),自己只在暂停、加载的空档发一份只有歌名歌手的,所以连播换歌后常停在上一首,换歌加载时整个撤掉、放起来也不一定补回。曲目与位置因此整份换成 AppleScript 那份(KasetPlayerInfo),系统那边只用来认是不是它在放,一拍都没有它时它开着就直接问。位置是网页 video.currentTime 每 0.5 秒推一次的值,读到的只会比真值晚 0~0.5 秒、不会早,跟 QQ 音乐、网易云的整秒下取整同一类,归 noisyFloored。广告与开播缓冲时报在放、位置停在 0,曲尾偶尔卡住(报在放、位置不动),都按没在走算。署名是逐个艺人用 `, ` 连起来的,界面语言是中文时会把「、」「和」这类连接词也当成艺人;专辑一栏放歌单时填的是歌单名,不用。media-control 的播放、暂停、切歌、跳转它都响应,快进 15 秒不响应。nativeLyricSource 填 lyricfind:它放的是 YouTube Music 曲库,显示的是 YouTube Music 自己的歌词(这一源只收 LyricFind 那部分)。processName 5 字节。
     case kaset = "kaset"
-    /// YouTube Music 的开源桌面客户端(原名 th-ch/youtube-music,安装包和 bundle id 仍叫 YouTube Music):Electron 外壳跑 YouTube Music 网页版,没有 AppleScript 字典、没有沙盒,走 media-control。系统会话由 Chromium 的媒体会话发:歌名、歌手、时长、封面齐全,歌曲版带专辑,MV 的专辑为空;锚点只在开播、暂停、恢复、跳转时发,播放中不刷新,跟 Arc、汽水音乐同一类,归 cleanExtrapolated。换歌时先撤掉会话约 0.9 秒,再发一份在放、速率 0、时长 0、歌手为空的占位,约半秒后才发速率 1、带歌手和时长的开播锚点,后一份才是起播点;占位那一帧按 artistArrivesLate 不采纳。网页播放器音量为 0 或静音时不申请音频焦点,整段不出现在系统会话里;从静音恢复时会话从那一刻按 0 秒报起,直到下一次暂停或跳转才对上。播客单集歌手一栏报节目名、专辑为空,系统会话分不出来。media-control 的播放、暂停、切歌、跳转它都响应。启动时会自己跳到前台。另有一个默认关着的本机 HTTP 接口插件(api-server,端口 26538),用户打开后当第二条腿用(PearDesktopAPI):videoId、MV / 播客 / 广告判别、队列、循环档和音量。nativeLyricSource 填 lyricfind:放的是 YouTube Music 曲库。processName 13 字节。
+    /// YouTube Music 的开源桌面客户端(原名 th-ch/youtube-music,安装包和 bundle id 仍叫 YouTube Music):Electron 外壳跑 YouTube Music 网页版,没有 AppleScript 字典、没有沙盒,走 media-control。系统会话由 Chromium 的媒体会话发:歌名、歌手、时长、封面齐全,歌曲版带专辑,MV 的专辑为空;锚点只在开播、暂停、恢复、跳转时发,播放中不刷新,跟 Arc、汽水音乐同一类,归 cleanExtrapolated。换歌时先撤掉会话约 0.9 秒,再发一份在放、速率 0、时长 0、歌手为空的占位,约半秒后才发速率 1、带歌手和时长的开播锚点,后一份才是起播点;占位那一帧按 artistArrivesLate 不采纳。开播锚点之后常在 0.5~0.8 秒内再发一份位置为 0 的,第一份才对得上出声(第二份晚约 0.8 秒),按 republishesZeroAnchor 不采信重发的那份。网页播放器音量为 0 或静音时不申请音频焦点,整段不出现在系统会话里;从静音恢复时会话从那一刻按 0 秒报起,直到下一次暂停或跳转才对上。播客单集歌手一栏报节目名、专辑为空,系统会话分不出来。media-control 的播放、暂停、切歌、跳转它都响应。启动时会自己跳到前台。另有一个默认关着的本机 HTTP 接口插件(api-server,端口 26538),用户打开后当第二条腿用(PearDesktopAPI):videoId、MV / 播客 / 广告判别、队列、循环档和音量。nativeLyricSource 填 lyricfind:放的是 YouTube Music 曲库。processName 13 字节。
     case pearDesktop = "pear_desktop"
     /// 仿 Winamp 的本地文件播放器,走 media-control,没有 AppleScript 字典、没有 URL scheme。系统会话里不报歌手和专辑:有歌手标签时标题是「歌手 - 歌名」,只有歌名时是歌名,没有标签时是带扩展名的文件名;App 侧按进程号找到它开着的当前文件读标签,读不到再按第一个「 - 」拆(PlayerTitleSplit)。nativeLyricSource 填 localfile:不是歌词源,是正在放的文件同目录同名的 .lrc(localfilelyrics.go)。时长只报整数秒。开播、自动连播、跳转的锚点对真实出声在 0.01 秒以内,归 cleanExtrapolated。暂停那一拍先报旧锚点、约 1 秒后才补上停住的位置,恢复那一拍先报进度 0 的锚点,暂停时 playbackRate 仍是 1。processName 5 字节。
     case reamp = "reamp"
@@ -165,6 +165,7 @@ public enum PlaybackPlayer: String, CaseIterable, Identifiable, Codable, Hashabl
         case .netease: return true
         case .soda: return true
         case .spotify: return true
+        case .pearDesktop: return true
         case .foobar2000: return true
         default: return false
         }

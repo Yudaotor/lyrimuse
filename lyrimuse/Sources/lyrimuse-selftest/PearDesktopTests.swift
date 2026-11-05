@@ -205,6 +205,25 @@ func runPearDesktopTests() {
                     "Pear 接线: 系统那份没有这首的图时取接口那张;对上这一首时按 identityKey 记下地址")
     }
 
+    // ---- 开播 0 秒锚点重发 ----
+    do {
+        typealias MC = MediaControlClient
+        func micros(_ seconds: Double) -> String { MediaControlMicros.timestampPrefix + String(Int64((seconds * 1_000_000).rounded())) }
+        let pear = PlaybackPlayer.pearDesktop.bundleIdentifier
+        // 实测样本:第一份比出声晚 0.39 秒,0.79 秒后又来一份位置为 0 的,晚 1.18 秒。
+        let first = 1_793_869_874.232397
+        let start = MC.PlayingAnchor(track: "The System|Don't Disturb This Groove", elapsed: 0, timestamp: micros(first),
+                                     instant: Date(timeIntervalSince1970: first))
+        func stale(_ ts: Double, bundleID: String = pear) -> Bool {
+            MC.isStaleAnchorRepublish(last: start, track: "The System|Don't Disturb This Groove", elapsed: 0,
+                                      timestamp: micros(ts), duration: 291, bundleID: bundleID,
+                                      now: Date(timeIntervalSince1970: ts + 0.02))
+        }
+        expectEqual(PlaybackPlayer.pearDesktop.republishesZeroAnchor, true, "Pear 开播: 0 秒锚点会重发")
+        expectEqual(stale(1_793_869_875.022432), true, "Pear 开播: 0.79 秒后重发的 0 秒锚点不采信(实测样本)")
+        expectEqual(stale(1_793_869_880.5), false, "Pear 开播: 隔 5 秒以上的 0 秒锚点是真的回到开头")
+    }
+
     // ---- MV 标记 ----
     do {
         func snap(_ bundleID: String, mv: Bool?) -> MediaControlSnapshot {
