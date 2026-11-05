@@ -1639,6 +1639,13 @@ public final class LocalPlaybackSource: ObservableObject {
         return min(max(next, 0), anchorLagMaxSecs)
     }
 
+    /// 开播按学到的锚点滞后补的那一截要不要跟着开播锚点保持(`heldToAnchor`,锚点一换就作废)。不估自然切歌超前量的源,
+    /// 偏置不保持的话下一拍就被清零,伺服再把补上的那截分几步拉回原始锚点;曲中重发锚点时量到的就成了整份滞后,
+    /// 被当残差往上加,学到的值只升不降。只列实测过的播放器。纯函数,selftest 覆盖。见 02 章决策 235。
+    public nonisolated static func holdsAnchorLagSeed(bundleID: String?) -> Bool {
+        bundleID == PlaybackPlayer.pearDesktop.bundleIdentifier
+    }
+
     /// 这个播放器学过之后往新样本靠的系数。纯函数,selftest 直接覆盖。
     public nonisolated static func anchorLagAlpha(bundleID: String?) -> Double {
         bundleID == PlaybackPlayer.soda.bundleIdentifier ? sodaAnchorLagLearnAlpha : anchorLagLearnAlpha
@@ -2460,7 +2467,9 @@ public final class LocalPlaybackSource: ObservableObject {
                         logger.notice("anchor lag seeded: \(seedLag, format: .fixed(precision: 3))s (raw \(rawReported, format: .fixed(precision: 3)))")
                     }
                 }
-                setReportedBias(natural?.bias ?? -seedLag, anchorElapsed: anchorElapsedTime)
+                setReportedBias(natural?.bias ?? -seedLag, anchorElapsed: anchorElapsedTime,
+                                heldToAnchor: natural == nil && seedLag > 0
+                                    && Self.holdsAnchorLagSeed(bundleID: lastSnapshot?.bundleIdentifier))
                 trackPosSeconds = natural?.seed ?? (rawReported + seedLag)
                 let playingSince = posResumeEpisodeAt.map { now.timeIntervalSince($0) }
                 let startLead = Self.qqLateZeroAnchorLead(

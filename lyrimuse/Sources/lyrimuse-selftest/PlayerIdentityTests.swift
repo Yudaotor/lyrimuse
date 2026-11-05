@@ -1133,6 +1133,7 @@ func runPlayerIdentityTests() {
             case gaplessLead = "自然切歌、单曲循环回绕的超前量估计(LocalPlaybackSource.carriesGaplessLead)"
             case lateAnchorProbe = "晚锚点探针(LocalPlaybackSource.shouldProbeLateAnchor)"
             case learnsAnchorLag = "锚点滞后学习(LocalPlaybackSource.learnsAnchorLag)"
+            case holdsAnchorLagSeed = "开播按学到的锚点滞后补的那截跟着锚点保持(LocalPlaybackSource.holdsAnchorLagSeed)"
             case followsRepublishedAnchors = "跟随重发锚点(LocalPlaybackSource.followsRepublishedAnchors)"
             case snapsToReportedPosition = "偏差过线直接对齐读数(LocalPlaybackSource.snapsToReportedPosition)"
             case resetAnchorCorrection = "按先到的归零锚点补晚打的开播锚点(MediaControlClient.correctsFromResetAnchor)"
@@ -1166,7 +1167,8 @@ func runPlayerIdentityTests() {
                          .learnsAnchorLag, .arrivesWhole]),
             .pinePlayer: (nil, [.extendedControls, .repeatOne, .resume, .snapsToReportedPosition, .arrivesWhole]),
             .foobar2000: (nil, [.extendedControls, .repeatOne, .resume, .learnsAnchorLag, .arrivesWhole]),
-            .pearDesktop: (.youtubeMusic, [.extendedControls, .repeatOne, .favorite, .resume, .lateAnchorProbe, .learnsAnchorLag, .catalogMenuRows]),
+            .pearDesktop: (.youtubeMusic, [.extendedControls, .repeatOne, .favorite, .resume, .lateAnchorProbe, .learnsAnchorLag,
+                                           .holdsAnchorLagSeed, .catalogMenuRows]),
         ]
         expectEqual(PlaybackPlayer.allCases.count, table.count + 1,
                     "决定表: 新增播放器要在这里补一行,逐项决定它走哪条路(+1 是 .auto)")
@@ -1194,6 +1196,7 @@ func runPlayerIdentityTests() {
                 .gaplessLead: L.carriesGaplessLead(tier: tier, bundleID: b),
                 .lateAnchorProbe: L.shouldProbeLateAnchor(reported: 10, predicted: 11, tier: tier, bundleID: b),
                 .learnsAnchorLag: L.learnsAnchorLag(bundleID: b),
+                .holdsAnchorLagSeed: L.holdsAnchorLagSeed(bundleID: b),
                 .followsRepublishedAnchors: L.followsRepublishedAnchors(bundleID: b),
                 .snapsToReportedPosition: L.snapsToReportedPosition(bundleID: b),
                 .resetAnchorCorrection: MediaControlClient.correctsFromResetAnchor(bundleID: b),

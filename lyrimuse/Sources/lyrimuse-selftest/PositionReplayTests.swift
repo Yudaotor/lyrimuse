@@ -96,6 +96,7 @@ private func mediaControl(_ bundle: String, _ title: String, anchor: Double, ela
 @MainActor
 func runPositionReplayTests() {
     replaySpotifyManualStart()
+    replayPearHeldAnchorLag()
     replaySpotifyStaleFirstReadingAfterLaunch()
     replaySpotifyAfterAd()
     replaySpotifySameTrackJump()
@@ -1130,6 +1131,38 @@ private func replaySodaAnchorLag() {
                 "回放·汽水锚点滞后: 曲中重发的真值锚点学到 0.43(\(table[soda].map { String(format: "%.3f", $0) } ?? "nil"))")
     rig.tick(mediaControl(soda, "情话", anchor: 0, elapsed: 0.2, duration: 200), at: at(104.2))
     expectEqual(near(rig.shown(at: at(104.2)), 0.2 + lag, 0.01), true, "回放·汽水锚点滞后: 下一首开播预置 +0.43")
+}
+
+/// Pear Desktop:开播锚点比真声晚约 0.4 秒、不估自然切歌超前量。开播按学到的滞后补上之后,这一截要一直保持到锚点换掉,
+/// 伺服不能拿原始锚点把它拉回去;曲中重发的准锚点跟补过的位置比,学到的是真残差(真机见 02 章决策 235)。
+@MainActor
+private func replayPearHeldAnchorLag() {
+    let pear = PlaybackPlayer.pearDesktop.bundleIdentifier
+    func run(_ name: String, learned: Double) -> (shown: [Double: Double?], table: Double?) {
+        let rig = ReplayRig(name)
+        defer { rig.tearDown() }
+        rig.defaults.set("{\"\(pear)\":\(learned)}", forKey: "np:anchorLagByPlayer")
+        var shown: [Double: Double?] = [:]
+        for t in stride(from: 0.0, through: 46, by: 1) {
+            rig.tick(mediaControl(pear, "September", anchor: 0, elapsed: 0.27 + t, duration: 215), at: at(t))
+            if [0, 6, 12, 20, 46].contains(t) { shown[t] = rig.shown(at: at(t)) }
+        }
+        rig.tick(mediaControl(pear, "September", anchor: 48.67, elapsed: 48.67, duration: 215), at: at(48))
+        return (shown, sodaLagTable(rig)[pear])
+    }
+    // 补的这一截超过伺服门槛时,不保持就会被一步步拉回原始锚点(真机:补 1.5 秒,约每 6 秒拉回 0.49)。
+    let held = run("pear-lag-held", learned: 0.9)
+    for t in [0.0, 6, 12, 20, 46] {
+        let v = held.shown[t] ?? nil
+        expectEqual(near(v, 0.27 + t + 0.9, 0.02), true,
+                    "回放·Pear 锚点滞后: 开播补的 0.9 秒在 \(Int(t)) 秒时仍在(\(v.map { String(format: "%.3f", $0) } ?? "nil"))")
+    }
+    let settled = run("pear-lag-settled", learned: 0.4)
+    expectEqual(near(settled.table, 0.4, 0.02), true,
+                "回放·Pear 锚点滞后: 曲中重发的准锚点量到的残差约 0,学到的值不涨(\(settled.table.map { String(format: "%.3f", $0) } ?? "nil"))")
+    let capped = run("pear-lag-capped", learned: 1.5)
+    expectEqual((capped.table ?? 1.5) < 1.2, true,
+                "回放·Pear 锚点滞后: 学偏到 1.5 的,曲中重发的准锚点把它往下拉(\(capped.table.map { String(format: "%.3f", $0) } ?? "nil"))")
 }
 
 private func sodaLagTable(_ rig: ReplayRig) -> [String: Double] {
