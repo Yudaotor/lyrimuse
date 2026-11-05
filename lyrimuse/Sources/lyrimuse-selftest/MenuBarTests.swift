@@ -2047,7 +2047,7 @@ func runMenuBarTests() {
                     ["now-playing", "overlay", "notch", "menubar", "lyrics-window", "touchbar", "lyrics-manager", "translation", "romanization",
                      "lock-position", "hide-all-lyrics", "search-lyrics", "mini-window", "font-larger", "font-smaller", "like", "open-player",
                      "lyrics-advance", "lyrics-delay", "lyrics-offset-reset", "volume", "today-listening"], "面板布局: 格子的存盘写法")
-        expectEqual(L.Size.allCases.map { "\($0.columns)x\($0.rows)" }, ["2x1", "3x1", "3x2", "6x2"],
+        expectEqual(L.Size.allCases.map { "\($0.columns)x\($0.rows)" }, ["2x1", "3x1", "3x2", "6x2", "6x1"],
                     "面板布局: 一排 6 列,小 2 列、中 3 列、大 3×2、加宽 6×2")
         // 几何:宽 316、行高 78、间距 9 → 小号 99.33 宽、中号 153.5 宽,同原来一排三个 / 两个。
         let geo = PanelGridGeometry(width: 316, rowHeight: 78, spacing: 9)
@@ -2136,6 +2136,16 @@ func runMenuBarTests() {
                     && cardDown.placements.allSatisfy { cardDown.fits($0, ignoring: nil) }, true,
                     "面板拖动: 压到的格子搬进卡片空出来的地方,整块对调,上面不留空排;没压到的不动")
         expectEqual(L.Size.wide.alignedColumns, [0], "面板布局: 加宽只落在第 0 列")
+        // 长条只给「声音」「今日收听」:占满一排、一行高;拉手往右拉过大号和长条中间就是长条。
+        expectEqual(L.Tile.volume.sizes.contains(.bar) && L.Tile.todayListening.sizes.contains(.bar)
+                    && !L.Tile.overlay.sizes.contains(.bar) && !L.Tile.nowPlaying.sizes.contains(.bar), true,
+                    "面板布局: 长条只给声音和今日收听")
+        var strip = L(placements: [P(tile: .volume, size: .medium, column: 0, row: 0), P(tile: .overlay, size: .medium, column: 3, row: 0)])
+        expectEqual(strip.resize(.volume, to: .bar) && strip.placement(of: .volume) == P(tile: .volume, size: .bar, column: 0, row: 0)
+                    && strip.placements.allSatisfy { strip.fits($0, ignoring: nil) }, true, "面板换尺寸: 声音拉成长条,旁边的格子让开")
+        let panelGrid = PanelGridGeometry.menuBarPanel
+        expectEqual(panelGrid.resizedSize(origin: .zero, pointer: CGPoint(x: 300, y: 70), allowed: L.Tile.volume.sizes), .bar,
+                    "面板拉手: 声音往右拉到头是长条")
         expectEqual(geo.size(.wide), CGSize(width: 316, height: 165), "面板网格: 加宽占满一排、两行高")
         // 面板实际用的那一份:大号(卡片的大号也是)是正方形,同控制中心;宽度跟面板内边距对得上。
         let panelGeo = PanelGridGeometry.menuBarPanel

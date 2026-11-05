@@ -80,12 +80,13 @@ struct PanelVolumeReader<Content: View>: View {
     }
 }
 
-/// 中号、大号的「声音」:标题、右上角一颗翻到输出设备的键,一条滑杆(左边喇叭点一下静音);大号底下再写当前输出设备。
-/// 小号用面板的圆钮块(`knobTile`),不在这里。
+/// 中号、大号、长条的「声音」:标题、右上角一颗翻到输出设备的键,一条滑杆(左边喇叭点一下静音);大号底下、长条标题右边
+/// 再写当前输出设备。小号用面板的圆钮块(`knobTile`),不在这里。
 struct PanelVolumeSlider: View {
     @ObservedObject var model: PanelSystemVolume
-    let large: Bool
+    let size: MenuBarPanelLayout.Size
     let openDevices: () -> Void
+    private var large: Bool { size == .large || size == .wide }
     /// 正按着滑杆。只在按着时写系统音量:滑杆刚出现、换尺寸重排时 SwiftUI 也会调一次 set,带进来的可能是 0,
     /// 不拦的话一换布局就把系统音量写成 0(到 0 系统还会自己静音)。
     @State private var dragging = false
@@ -95,6 +96,13 @@ struct PanelVolumeSlider: View {
             HStack(spacing: 4) {
                 Text(L10n.t("声音"))
                     .font(.system(size: 12, weight: .semibold))
+                if size == .bar, let name = model.deviceName {
+                    Text(name)
+                        .font(.system(size: 11))
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                        .padding(.leading, 4)
+                }
                 Spacer(minLength: 0)
                 Button(action: openDevices) {
                     Image(systemName: "airplay.audio")
@@ -154,6 +162,16 @@ struct PanelTodayListeningTile: View {
             .help(L10n.t("今日收听"))
     }
 
+    /// 「近 7 天」跟设置页 Last.fm 统计、歌词窗口待机页同一个口径(按天的收听数 + 今天,自然日对齐),三处显示同一个数。
+    /// 别读 `overview.week`:它只在统计页的基线刷新时更新,引擎那份最近记录一直新鲜时一直不动。
+    private var weekValue: Int? {
+        guard !stats.dailyFullSyncing else { return stats.overview?.week }
+        return IdleListeningStats.lastSevenDays(
+            dailyCounts: stats.dailyCounts, today: Date(),
+            todayCount: stats.overview?.today,
+            dayKey: { LastfmStatsService.dayKey($0) })
+    }
+
     private func number(_ value: Int?) -> String {
         value.map { $0.formatted(.number) } ?? "—"
     }
@@ -161,6 +179,17 @@ struct PanelTodayListeningTile: View {
     @ViewBuilder private var content: some View {
         let overview = stats.overview
         switch size {
+        case .bar:
+            // 长条:今天、近 7 天、总数横着三个。
+            HStack(alignment: .center) {
+                figure(number(overview?.today), L10n.t("今日收听"), size: 22)
+                Spacer(minLength: 8)
+                figure(number(weekValue), L10n.t("近 7 天"), size: 15)
+                Spacer(minLength: 8)
+                figure(number(overview?.total), L10n.t("总 Scrobble"), size: 15, trailing: true)
+            }
+            .padding(.horizontal, 16)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
         case .small:
             VStack(spacing: 3) {
                 Text(number(overview?.today))
@@ -172,7 +201,7 @@ struct PanelTodayListeningTile: View {
             HStack(alignment: .center) {
                 figure(number(overview?.today), L10n.t("今日收听"), size: 22)
                 Spacer(minLength: 6)
-                figure(number(overview?.week), L10n.t("近 7 天"), size: 15, trailing: true)
+                figure(number(weekValue), L10n.t("近 7 天"), size: 15, trailing: true)
             }
             .padding(.horizontal, 14)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -184,7 +213,7 @@ struct PanelTodayListeningTile: View {
                 Spacer(minLength: 0)
                 figure(number(overview?.today), L10n.t("今日收听"), size: 30)
                 Spacer(minLength: 8)
-                row(L10n.t("近 7 天"), number(overview?.week))
+                row(L10n.t("近 7 天"), number(weekValue))
                 row(L10n.t("总 Scrobble"), number(overview?.total))
             }
             .padding(14)

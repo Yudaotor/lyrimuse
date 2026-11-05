@@ -1009,7 +1009,7 @@ private struct MenuBarPanelView: View {
                             volume.toggleMute()
                         }
                     } else {
-                        PanelVolumeSlider(model: volume, large: size != .medium, openDevices: { setQuickTarget(.volume) })
+                        PanelVolumeSlider(model: volume, size: size, openDevices: { setQuickTarget(.volume) })
                             .allowsHitTesting(!editing)
                     }
                 }
@@ -1173,7 +1173,7 @@ private struct MenuBarPanelView: View {
                 .padding(12)
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
                 .menuBarPanelCardBackground(cornerRadius: panelTileCornerRadius)
-        case .small, .medium:
+        case .small, .medium, .bar:
             knobTile(symbol: "music.note", title: L10n.t("正在播放"), on: false, action: {})
         }
     }
@@ -1706,7 +1706,7 @@ private struct MenuBarPanelView: View {
         /// 格子尺寸由网格给,这里只排里面的东西。
         @ViewBuilder private var content: some View {
             switch size {
-            case .small, .medium:
+            case .small, .medium, .bar:
                 VStack(spacing: 5) {
                     iconCircle(36, glyph: 16)
                     titleText(size: 11, lines: 2)

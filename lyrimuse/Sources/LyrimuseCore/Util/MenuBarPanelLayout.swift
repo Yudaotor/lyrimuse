@@ -57,8 +57,13 @@ public struct MenuBarPanelLayout: Equatable, Sendable {
         }
 
         /// 这一格能用哪几档:正在播放卡只有大号(3×2,封面、歌名和三个走带键)和加宽(6×2,完整的卡片),别的格子小、中、大。
+        /// 「声音」「今日收听」再多一档长条(占满一排,滑杆、几个数字横着摆得开);开关类格子拉成一整排只是一颗大按钮,不给。
         public var sizes: [Size] {
-            self == .nowPlaying ? [.large, .wide] : [.small, .medium, .large]
+            switch self {
+            case .nowPlaying: return [.large, .wide]
+            case .volume, .todayListening: return [.small, .medium, .large, .bar]
+            default: return [.small, .medium, .large]
+            }
         }
 
         /// 要的那一档这一格没有时用哪一档。
@@ -72,15 +77,18 @@ public struct MenuBarPanelLayout: Equatable, Sendable {
         case nowPlaying, overlay, notch, menuBar, lyricsWindow, touchBar, lyrics
     }
 
-    /// 小占 2 列(一排 3 个)、中占 3 列(一排 2 个)、大占 3 列 2 行,加宽占满一排 6 列、2 行(只给正在播放卡)。
+    /// 小占 2 列(一排 3 个)、中占 3 列(一排 2 个)、大占 3 列 2 行,加宽占满一排 6 列、2 行(只给正在播放卡),
+    /// 长条占满一排、1 行(只给「声音」「今日收听」)。
     public enum Size: String, CaseIterable, Sendable {
         case small, medium, large, wide
+        /// 长条:占满一排 6 列、1 行(只给 `Tile.sizes` 里列了它的格子)。
+        case bar
 
         public var columns: Int {
             switch self {
             case .small: return 2
             case .medium, .large: return 3
-            case .wide: return 6
+            case .wide, .bar: return 6
             }
         }
 

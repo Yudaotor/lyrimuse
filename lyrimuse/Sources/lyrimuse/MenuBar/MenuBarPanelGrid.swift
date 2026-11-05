@@ -38,6 +38,7 @@ extension MenuBarPanelLayout.Size {
         case .medium: return L10n.t("中")
         case .large: return L10n.t("大")
         case .wide: return L10n.t("加宽")
+        case .bar: return L10n.t("长条")
         }
     }
 }
