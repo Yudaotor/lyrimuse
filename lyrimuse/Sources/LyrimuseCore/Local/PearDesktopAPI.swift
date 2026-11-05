@@ -169,60 +169,15 @@ public final class PearDesktopAPI: @unchecked Sendable {
     /// 的 `primaryRenderer` 里(那种还带着另一个版本:歌曲版 / 视频版);放的是 `primaryRenderer`。当前这首是 `selected` 的那一格。
     /// 署名那一串(`longBylineText`)是「歌手 • 专辑 • 年份」,歌手取第一个「 • 」之前的,专辑取跳到专辑页的那一段。
     public static func queueReply(queueJSON: Data?, repeatMode: String?) -> KasetPlayerInfo.QueueReply? {
-        queueItems(queueJSON).flatMap { queueReply(items: $0, repeatMode: repeatMode) }
-    }
-
-    /// 队列应答里的各格;解不开、没有格子时 nil。
-    static func queueItems(_ queueJSON: Data?) -> [[String: Any]]? {
         guard let queueJSON, let object = try? JSONSerialization.jsonObject(with: queueJSON) as? [String: Any],
               let items = object["items"] as? [[String: Any]], !items.isEmpty else { return nil }
-        return items
-    }
-
-    /// 这一格放的那个版本(`playlistPanelVideoRenderer` 本身,或 wrapper 的 `primaryRenderer`)。
-    static func primaryRenderer(_ item: [String: Any]) -> [String: Any]? {
-        (item["playlistPanelVideoRenderer"] as? [String: Any])
-            ?? (((item["playlistPanelVideoWrapperRenderer"] as? [String: Any])?["primaryRenderer"] as? [String: Any])?[
-                "playlistPanelVideoRenderer"] as? [String: Any])
-    }
-
-    /// 队列里认得出的各格,按接口 `/song` 的写法交成 `Song`(类型由这一格的版本类型换算,同 Pear 自己的 `mediaType`)。换歌那一拍
-    /// 接口还停在上一首时拿它认新歌(`reading(for:)`)。纯函数,selftest 覆盖。
-    public static func queueSongs(queueJSON: Data?) -> [Song] {
-        queueItems(queueJSON).map(queueSongs(items:)) ?? []
-    }
-
-    static func queueSongs(items: [[String: Any]]) -> [Song] {
-        items.compactMap { item in
-            guard let r = primaryRenderer(item), let id = r["videoId"] as? String, isVideoID(id) else { return nil }
-            let title = runsText(r["title"]).trimmingCharacters(in: .whitespacesAndNewlines)
-            guard !title.isEmpty else { return nil }
-            let byline = bylineParts(r["longBylineText"])
-            return Song(title: title, artist: byline.artist, album: byline.album, videoID: id,
-                        mediaType: musicVideoType(r).flatMap { queueMediaTypes[$0] },
-                        duration: durationSecs(runsText(r["lengthText"])), isPaused: nil)
-        }
-    }
-
-    /// 队列格的版本类型 → 接口 `mediaType`;不在表里的给 nil(说不上是不是视频版)。
-    static let queueMediaTypes = [
-        "MUSIC_VIDEO_TYPE_ATV": "AUDIO",
-        "MUSIC_VIDEO_TYPE_OMV": "ORIGINAL_MUSIC_VIDEO",
-        "MUSIC_VIDEO_TYPE_UGC": "USER_GENERATED_CONTENT",
-        "MUSIC_VIDEO_TYPE_PODCAST_EPISODE": "PODCAST_EPISODE",
-    ]
-
-    /// 队列里歌名跟系统会话这一首一样的那一格(不分大小写、去首尾空白);只认歌名,同一张专辑里时长相近的别的歌不算。纯函数,selftest 覆盖。
-    public static func queuedSong(in songs: [Song], title: String?) -> Song? {
-        songs.first { describes($0, title: title, artist: nil, duration: nil) }
-    }
-
-    static func queueReply(items: [[String: Any]], repeatMode: String?) -> KasetPlayerInfo.QueueReply? {
         var tracks: [KasetPlayerInfo.QueueReply.Track] = []
         var current: Int?
         for item in items {
             let wrapper = item["playlistPanelVideoWrapperRenderer"] as? [String: Any]
-            guard let r = primaryRenderer(item) else {
+            let primary = (item["playlistPanelVideoRenderer"] as? [String: Any])
+                ?? ((wrapper?["primaryRenderer"] as? [String: Any])?["playlistPanelVideoRenderer"] as? [String: Any])
+            guard let r = primary else {
                 tracks.append(.init(title: "", artist: "", duration: nil, videoID: nil))
                 continue
             }
@@ -372,10 +327,6 @@ public final class PearDesktopAPI: @unchecked Sendable {
     private var matchedTrackKeys: Set<String> = []
     /// 正在看像不像广告的那一段(歌名,归一过)和开始像的时刻。
     private var adCandidate: (title: String, since: Date)?
-    /// 最近一次读到的队列(引擎预取代读时、或换歌那一拍现读时存下)。
-    private var queueCache: [Song]?
-    /// 现读过一次队列也没找到的那个歌名(归一过):同一段不再现读,广告期间不会每拍拉一次整个队列。
-    private var queueMissTitle: String?
     private let session: URLSession = {
         let configuration = URLSessionConfiguration.ephemeral
         configuration.timeoutIntervalForRequest = PearDesktopAPI.authorizationTimeout
@@ -464,80 +415,30 @@ public final class PearDesktopAPI: @unchecked Sendable {
         case undecided
     }
 
-    /// 系统会话这一拍报的是 Pear:读它此刻的这首(`songReuseSecs` 内复用),是同一首就记下 videoId;不是同一首时先到队列里找,
-    /// 找不到再看是不是广告。接口没开、没授权、连不上、对不上又不像广告时 nil。在轮询线程上调,每次读接口最多等 `requestTimeout`。
+    /// 系统会话这一拍报的是 Pear:读它此刻的这首(`songReuseSecs` 内复用),是同一首就记下 videoId;不是同一首时看是不是广告。
+    /// 接口没开、没授权、连不上、对不上又不像广告时 nil。在轮询线程上调,最多等 `requestTimeout`。
     public func reading(for snapshot: MediaControlSnapshot) -> Reading? {
-        if let song = song(matching: snapshot) {
+        guard let song = song(matching: snapshot) else {
             lock.lock()
-            adCandidate = nil
-            lock.unlock()
-            return .song(song)
+            defer { lock.unlock() }
+            guard let api = lastSong?.song,
+                  Self.looksLikeAd(systemTitle: snapshot.title, systemArtist: snapshot.artist, systemDuration: snapshot.duration,
+                                   apiSong: api, everMatched: matchedTrackKeys.contains(snapshot.trackKey)) else {
+                adCandidate = nil
+                return nil
+            }
+            // 按歌名认是不是同一段:广告第一帧常常没有歌手、下一帧才补上,两种写法的快照还会交替出现,按 trackKey 认会一直重来。
+            let title = (snapshot.title ?? "").trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+            guard let candidate = adCandidate, candidate.title == title else {
+                adCandidate = (title, Date())
+                return .undecided
+            }
+            return Date().timeIntervalSince(candidate.since) >= Self.adSettleSecs ? .ad : .undecided
         }
         lock.lock()
-        let everMatched = matchedTrackKeys.contains(snapshot.trackKey)
-        let suspicious = lastSong?.song.map {
-            Self.looksLikeAd(systemTitle: snapshot.title, systemArtist: snapshot.artist, systemDuration: snapshot.duration,
-                             apiSong: $0, everMatched: everMatched)
-        } ?? false
-        if !suspicious { adCandidate = nil }
+        adCandidate = nil
         lock.unlock()
-        guard suspicious else { return nil }
-        // 换歌时系统会话比接口的 `/song` 早一秒多换成新歌:新歌在队列里就按那一格认,不等接口;广告不在队列里(02 章决策 233)。
-        if let queued = queuedSong(matching: snapshot) {
-            noteMatched(queued, snapshot: snapshot, via: "queue")
-            lock.lock()
-            adCandidate = nil
-            lock.unlock()
-            return .song(queued)
-        }
-        lock.lock()
-        defer { lock.unlock() }
-        // 按歌名认是不是同一段:广告第一帧常常没有歌手、下一帧才补上,两种写法的快照还会交替出现,按 trackKey 认会一直重来。
-        let title = Self.normalizedTitle(snapshot.title)
-        guard let candidate = adCandidate, candidate.title == title else {
-            adCandidate = (title, Date())
-            return .undecided
-        }
-        return Date().timeIntervalSince(candidate.since) >= Self.adSettleSecs ? .ad : .undecided
-    }
-
-    static func normalizedTitle(_ title: String?) -> String {
-        (title ?? "").trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-    }
-
-    /// 队列里跟系统会话这一首同名的那一格:先查存下的队列,没有再现读一次(同一个歌名只现读一次)。
-    private func queuedSong(matching snapshot: MediaControlSnapshot) -> Song? {
-        let title = Self.normalizedTitle(snapshot.title)
-        guard !title.isEmpty else { return nil }
-        lock.lock()
-        let cached = queueCache
-        let missed = queueMissTitle == title
-        lock.unlock()
-        if let hit = cached.flatMap({ Self.queuedSong(in: $0, title: snapshot.title) }) { return hit }
-        guard !missed, let config = currentConfig(), config.enabled, !config.usesHTTPS else { return nil }
-        lock.lock()
-        let missingToken = config.needsToken && token == nil
-        lock.unlock()
-        guard !missingToken, let data = get("/api/v1/queue", config: config) else { return nil }
-        let songs = Self.queueSongs(queueJSON: data)
-        let hit = Self.queuedSong(in: songs, title: snapshot.title)
-        lock.lock()
-        queueCache = songs
-        queueMissTitle = hit == nil ? title : nil
-        lock.unlock()
-        return hit
-    }
-
-    /// 记下系统会话这一首对上了哪个 videoId(写播放状态时带给引擎,认广告时排除它)。
-    private func noteMatched(_ song: Song, snapshot: MediaControlSnapshot, via source: String) {
-        lock.lock()
-        defer { lock.unlock() }
-        if lastVideo?.videoID != song.videoID {
-            logger.notice("pear api: \(song.videoID, privacy: .public) is \(song.mediaType ?? "unknown", privacy: .public) (\(source, privacy: .public))")
-        }
-        lastVideo = (snapshot.trackKey, song.videoID)
-        matchedTrackKeys.insert(snapshot.trackKey)
-        if matchedTrackKeys.count > 64 { matchedTrackKeys = [snapshot.trackKey] }
+        return .song(song)
     }
 
     private func song(matching snapshot: MediaControlSnapshot) -> Song? {
@@ -558,7 +459,16 @@ public final class PearDesktopAPI: @unchecked Sendable {
             lock.unlock()
             song = fetched.flatMap { Self.describes($0, title: snapshot.title, artist: snapshot.artist, duration: snapshot.duration) ? $0 : nil }
         }
-        if let song { noteMatched(song, snapshot: snapshot, via: "song") }
+        if let song {
+            lock.lock()
+            if lastVideo?.videoID != song.videoID {
+                logger.notice("pear api: \(song.videoID, privacy: .public) is \(song.mediaType ?? "unknown", privacy: .public)")
+            }
+            lastVideo = (snapshot.trackKey, song.videoID)
+            matchedTrackKeys.insert(snapshot.trackKey)
+            if matchedTrackKeys.count > 64 { matchedTrackKeys = [snapshot.trackKey] }
+            lock.unlock()
+        }
         return song
     }
 
@@ -579,13 +489,7 @@ public final class PearDesktopAPI: @unchecked Sendable {
         guard !missingToken, let queue = get("/api/v1/queue", config: config) else { return nil }
         let mode = get("/api/v1/repeat-mode", config: config)
             .flatMap { try? JSONSerialization.jsonObject(with: $0) as? [String: Any] }?["mode"] as? String
-        guard let items = Self.queueItems(queue) else { return nil }
-        let songs = Self.queueSongs(items: items)
-        lock.lock()
-        queueCache = songs
-        queueMissTitle = nil
-        lock.unlock()
-        return Self.queueReply(items: items, repeatMode: mode)
+        return Self.queueReply(queueJSON: queue, repeatMode: mode)
     }
 
     /// 现在的随机开关和循环档;接口没开、没授权、读不到时 nil。
