@@ -152,6 +152,15 @@ func runPearDesktopTests() {
         expectEqual(API.queueReply(queueJSON: data(#"{"items":[]}"#), repeatMode: nil), nil, "Pear 队列: 空队列不交")
         expectEqual(API.queueReply(queueJSON: queue, repeatMode: nil)?.repeating, "off", "Pear 队列: 读不到循环模式按不循环")
         expectEqual(API.queueReply(queueJSON: queue, repeatMode: "ONE")?.repeating, "one", "Pear 队列: 单曲循环")
+        // 换歌那一拍接口还停在上一首:按队列认新歌。
+        let songs = API.queueSongs(queueJSON: queue)
+        expectEqual(songs.map(\.videoID), ["DYptgVvkVLQ", "Q8Tiz6INF7I", "MVMVMVMVMV1"], "Pear 队列认歌: 放的那个版本,认不出的格子跳过")
+        expectEqual(songs.map(\.isMusicVideo), [true, false, true], "Pear 队列认歌: 版本类型换成接口的 mediaType")
+        expectEqual(songs[1].album, "我很忙", "Pear 队列认歌: 带专辑")
+        expectEqual(API.queuedSong(in: songs, title: " 青花瓷 ")?.videoID, "Q8Tiz6INF7I", "Pear 队列认歌: 歌名一样(去空白)就认")
+        expectEqual(API.queuedSong(in: songs, title: "Google AI Pro: Wrangle The Sunday Scaries"), nil, "Pear 队列认歌: 广告不在队列里")
+        expectEqual(API.queuedSong(in: songs, title: "青花瓷 (Live)"), nil, "Pear 队列认歌: 只认歌名,不按歌手和时长凑")
+        expectEqual(API.queueSongs(queueJSON: data(#"{"items":[]}"#)).isEmpty, true, "Pear 队列认歌: 空队列")
         let encoded = reply.flatMap { try? JSONEncoder().encode($0) }.flatMap { String(data: $0, encoding: .utf8) } ?? ""
         expectEqual(encoded.contains(#""album":"我很忙""#) && encoded.contains(#""audio_video_id":"AUAUAUAUAU1""#), true,
                     "Pear 队列: 回包键名跟引擎 kasetQueueReply 一致(album、audio_video_id)")
@@ -193,6 +202,14 @@ func runPearDesktopTests() {
                     "Pear 接线: 播放状态带上 Pear 的 videoId(引擎按它取歌词、拼链接)")
         expectEqual(sourceHas(source, "case PlaybackPlayer.pearDesktop.bundleIdentifier: return PearDesktopAPI.shared.videoID(forTrackKey: trackKey)"),
                     true, "Pear 接线: videoId 来自本机接口按曲目记下的那份")
+        let api = src("PearDesktopAPI.swift")
+        let readingBody = sourceBody("public func reading(for snapshot: MediaControlSnapshot) -> Reading?", in: api)
+        expectEqual(sourceHas(readingBody, "guard suspicious else { return nil }")
+                    && (readingBody.range(of: "queuedSong(matching: snapshot)")?.lowerBound ?? readingBody.endIndex)
+                        < (readingBody.range(of: "adCandidate = (title, Date())")?.lowerBound ?? readingBody.startIndex), true,
+                    "Pear 接线: 对不上接口时先查队列、查不到才开始认广告")
+        expectEqual(sourceHas(sourceBody("public func queueReply() -> KasetPlayerInfo.QueueReply?", in: api), "queueCache = songs"), true,
+                    "Pear 接线: 引擎预取代读队列时顺手存下,换歌那一拍不用现读")
         let server = src("PlayerQueryServer.swift")
         expectEqual(sourceHas(server, "case pearQueue = \"pear_queue\"") && sourceHas(server, "PearDesktopAPI.shared.queueReply().flatMap(Self.encodedQueueReply)"),
                     true, "Pear 接线: 引擎问队列由 App 经本机接口代读")
