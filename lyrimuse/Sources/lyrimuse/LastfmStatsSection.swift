@@ -581,6 +581,13 @@ struct LastfmStatsSection: View {
         if let url = links?.kaset, Self.isInstalled(.kaset) {
             Button(String(format: L10n.t("在 %@ 中播放"), "Kaset")) { NSWorkspace.shared.open(url) }
         }
+        // Pear Desktop 经本机接口插在当前这首后面(「播放」再按一次下一首),不换掉它的队列;只在它开着、接口能用时出。
+        if let pear = Self.pearTarget(links: links, track: track) {
+            Button(String(format: L10n.t("在 %@ 中播放"), PlaybackPlayer.pearDesktop.displayName)) { Self.playInPear(pear, now: true) }
+            Button(String(format: L10n.t("添加到 %@ 的稍后播放"), PlaybackPlayer.pearDesktop.displayName)) {
+                Self.playInPear(pear, now: false)
+            }
+        }
         // QQ 音乐同样只有「播放这一首」一种外部入口,点击时才去查链接要的数字歌曲 ID。
         if let mid = links?.qqSongMID, Self.isInstalled(.qqMusic) {
             Button(String(format: L10n.t("在 %@ 中播放"), PlaybackPlayer.qqMusic.displayName)) { Self.playInQQMusic(mid: mid) }
@@ -622,6 +629,7 @@ struct LastfmStatsSection: View {
 
     fileprivate static func appLinksHaveMenu(_ links: ChartAppLinks?, track: LXMusicLinks.Track? = nil, search: String? = nil) -> Bool {
         if track != nil || search != nil, Self.isInstalled(.lxMusic) { return true }
+        if pearTarget(links: links, track: track) != nil { return true }
         guard let links else { return false }
         return links.appleMusic != nil || links.artistAlbum != nil || links.artistMBID != nil
             || links.artistPages?.appleMusic != nil
@@ -629,6 +637,23 @@ struct LastfmStatsSection: View {
             || (links.kkbox != nil && Self.isInstalled(.kkbox))
             || (links.kaset != nil && Self.isInstalled(.kaset))
             || (links.qqSongMID != nil && Self.isInstalled(.qqMusic))
+    }
+
+    /// 在 Pear Desktop 里放哪一首:缓存里有 YouTube Music 链接就用它的 videoId,没有就按歌名歌手搜。它没开着、接口不能用、
+    /// 两样都没有时 nil(菜单不出这两项)。
+    fileprivate static func pearTarget(links: ChartAppLinks?, track: LXMusicLinks.Track?)
+        -> (videoID: String?, title: String, artist: String)? {
+        guard Self.isInstalled(.pearDesktop), PearDesktopAPI.shared.canControl() else { return nil }
+        let videoID = PearDesktopAPI.videoID(fromLink: links?.kaset)
+        guard videoID != nil || track != nil else { return nil }
+        return (videoID, track?.title ?? "", track?.artist ?? "")
+    }
+
+    fileprivate static func playInPear(_ target: (videoID: String?, title: String, artist: String), now: Bool) {
+        Task.detached(priority: .userInitiated) {
+            guard !PearDesktopAPI.shared.playOrQueue(videoID: target.videoID, title: target.title, artist: target.artist, now: now) else { return }
+            await MainActor.run { NSSound.beep() }
+        }
     }
 
     /// 装没装这个播放器,按 bundle id 记 30 秒:榜单每一行渲染都要问(Top 50 时一次渲染最多上百次),而整张卡

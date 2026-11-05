@@ -138,6 +138,39 @@ public enum AccessibilitySkipPress {
         return findSkipButton(webArea, depth: 0) != nil
     }
 
+    /// 广告徽章那行字(「赞助商广告 1/2 ·」):在网页区域里找 DOM class 以 `ytp-ad-simple-ad-badge` / `ytp-ad-badge` 开头的元素,
+    /// 把它和它下面的文字拼起来。找不到为 nil。给没法注入 JS 的播放器读「第几条」用(`PearDesktopAdSkip`)。
+    public static func adBadgeText(bundleID: String, hostMarker: String) -> String? {
+        guard isTrusted,
+              let app = NSRunningApplication.runningApplications(withBundleIdentifier: bundleID).first,
+              let webArea = locateWebArea(AXUIElementCreateApplication(app.processIdentifier), hostMarker: hostMarker),
+              let badge = findElement(webArea, depth: 0, where: { classes in
+                  classes.contains { $0.hasPrefix("ytp-ad-simple-ad-badge") || $0 == "ytp-ad-badge" || $0.hasPrefix("ytp-ad-badge--") }
+              })
+        else { return nil }
+        var parts: [String] = []
+        collectText(badge, depth: 0, into: &parts)
+        let text = parts.joined(separator: " ").trimmingCharacters(in: .whitespacesAndNewlines)
+        return text.isEmpty ? nil : text
+    }
+
+    private static func findElement(_ element: AXUIElement, depth: Int, where matches: ([String]) -> Bool) -> AXUIElement? {
+        guard depth <= maxDepth else { return nil }
+        if matches((attribute(element, "AXDOMClassList") as? [String]) ?? []) { return element }
+        for child in children(element) {
+            if let hit = findElement(child, depth: depth + 1, where: matches) { return hit }
+        }
+        return nil
+    }
+
+    private static func collectText(_ element: AXUIElement, depth: Int, into parts: inout [String]) {
+        guard depth <= 8 else { return }
+        for name in [kAXValueAttribute, kAXTitleAttribute, kAXDescriptionAttribute] {
+            if let text = attribute(element, name) as? String, !text.isEmpty, !parts.contains(text) { parts.append(text) }
+        }
+        for child in children(element) { collectText(child, depth: depth + 1, into: &parts) }
+    }
+
     // MARK: - AX 遍历
 
     private static let maxDepth = 60

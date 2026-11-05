@@ -36,6 +36,19 @@ public enum PearDesktopAdSkip {
     /// 我们给哪个 Pear 进程打开过 `AXManualAccessibility`。Electron 读不回这个属性(读出来总是没开),
     /// 只能自己记;Pear 重启换了进程就作废。
     nonisolated(unsafe) private static var openedForPID: pid_t?
+    /// 门槛探测时顺手读到的「第几条 / 共几条」和读到的时刻。
+    nonisolated(unsafe) private static var lastSlot: (slot: YouTubeMusicAdProbe.AdSlot, at: Date)?
+
+    /// 读到的计数多久内算数:门槛键出现前 1 秒一探、出现后 5 秒一探,留一点余量。
+    public static let slotMaxAge: TimeInterval = 8
+
+    /// 当前这条广告是第几条 / 共几条(徽章「赞助商广告 1/2」);广告态没在探、读不到、读到的太旧时 nil。
+    public static func adSlot(now: Date = Date()) -> YouTubeMusicAdProbe.AdSlot? {
+        lock.lock()
+        defer { lock.unlock() }
+        guard let lastSlot, now.timeIntervalSince(lastSlot.at) <= slotMaxAge else { return nil }
+        return lastSlot.slot
+    }
 
     /// 探一次:跳过键在不在。nil = Pear 没在跑、没有辅助功能权限,或网页还没挂进树(下一拍再探)。
     public static func probe() -> YouTubeMusicAdSkipper.Skippability? {
@@ -44,8 +57,13 @@ public enum PearDesktopAdSkip {
             logger.notice("gate: pear web area not in the AX tree yet")
             return nil
         }
+        let slot = AccessibilitySkipPress.adBadgeText(bundleID: bundleID, hostMarker: YouTubeMusicAdProbe.hostMarker)
+            .flatMap(YouTubeMusicAdProbe.AdSlot.init(badgeText:))
+        lock.lock()
+        lastSlot = slot.map { ($0, Date()) }
+        lock.unlock()
         let state: YouTubeMusicAdSkipper.Skippability = present ? .ready : .never
-        logger.notice("gate: \(String(describing: state), privacy: .public) (pear)")
+        logger.notice("gate: \(String(describing: state), privacy: .public) (pear, slot \(slot.map { "\($0.index)/\($0.total)" } ?? "-", privacy: .public))")
         return state
     }
 
@@ -77,6 +95,7 @@ public enum PearDesktopAdSkip {
     public static func releaseTree() {
         lock.lock()
         defer { lock.unlock() }
+        lastSlot = nil
         guard let pid = openedForPID else { return }
         openedForPID = nil
         guard NSRunningApplication(processIdentifier: pid)?.bundleIdentifier == bundleID else { return }

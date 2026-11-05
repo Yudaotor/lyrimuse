@@ -15,6 +15,8 @@ public final class PearDesktopAPI: @unchecked Sendable {
     public static let defaultPort = 26538
     /// 一次读歌曲 / 队列最多等这么久。都在本机,连不上是立刻拒绝,慢只可能是它在忙。
     public static let requestTimeout: TimeInterval = 0.5
+    /// 搜索(`POST /api/v1/search`)要它向 YouTube Music 问一趟,实测一两秒。只在用户点了「在 Pear Desktop 中播放」时用。
+    public static let searchTimeout: TimeInterval = 8
     /// 要令牌最多等这么久:第一次要时 Pear 弹框,等用户点。
     public static let authorizationTimeout: TimeInterval = 120
     /// 读到的这首在这么久内直接复用(系统会话每拍都会来问)。
@@ -370,10 +372,28 @@ public final class PearDesktopAPI: @unchecked Sendable {
         return reachable && !config.usesHTTPS ? .connected : .unreachable
     }
 
-    /// 每拍轮询时调(设置认 Pear 时):Pear 开着、接口开着、要授权又还没令牌,就去要。读配置按修改时间缓存,没开时只是一次 stat。
+    /// 每拍轮询时调(设置认 Pear 时):Pear 开着、接口开着、要授权又还没令牌,就去要;推送(`PearDesktopPush`)能连就保持连着,
+    /// Pear 没开、接口不能用时断开。读配置按修改时间缓存,没开时只是一次 stat。
     public func noteAppRunning(_ running: Bool) {
-        guard running, let config = currentConfig(), config.enabled, config.needsToken, !config.usesHTTPS else { return }
-        authorizeIfNeeded(config)
+        if running, let config = currentConfig(), config.enabled, config.needsToken, !config.usesHTTPS {
+            authorizeIfNeeded(config)
+        }
+        PearDesktopPush.shared.keepAlive(url: running ? pushURL() : nil)
+    }
+
+    /// 推送的地址:`ws://<接口地址>/api/v1/ws`,要授权时带上令牌。接口不能用、还没令牌时 nil。
+    func pushURL() -> URL? {
+        guard let config = usableConfig(), let base = baseURL(config)?.appendingPathComponent("/api/v1/ws"),
+              var components = URLComponents(url: base, resolvingAgainstBaseURL: false) else { return nil }
+        components.scheme = "ws"
+        if config.needsToken {
+            lock.lock()
+            let token = self.token
+            lock.unlock()
+            guard let token else { return nil }
+            components.queryItems = [URLQueryItem(name: "token", value: token)]
+        }
+        return components.url
     }
 
     /// 设置里「重新请求」:清掉拒绝的记录,马上再要一次令牌。
@@ -546,6 +566,70 @@ public final class PearDesktopAPI: @unchecked Sendable {
         return !NSRunningApplication.runningApplications(withBundleIdentifier: PlaybackPlayer.pearDesktop.bundleIdentifier).isEmpty
     }
 
+    /// 搜索结果(`POST /api/v1/search` 回的 YouTube Music 搜索应答)里歌名对得上的那首歌的 videoId:只认标成「歌曲」的音轨版
+    /// (`MUSIC_VIDEO_TYPE_ATV`),排第一的热门结果常是 MV,不拿。歌名先找去掉空白和大小写后完全一样的,没有再找以它开头的
+    /// (「晴天 (Live)」这类)。纯函数,selftest 覆盖。
+    public static func songVideoID(inSearch data: Data, title: String) -> String? {
+        guard let root = try? JSONSerialization.jsonObject(with: data) else { return nil }
+        var songs: [(title: String, videoID: String)] = []
+        func firstString(_ key: String, in object: Any) -> String? {
+            if let dict = object as? [String: Any] {
+                if let value = dict[key] as? String { return value }
+                for value in dict.values { if let hit = firstString(key, in: value) { return hit } }
+            } else if let array = object as? [Any] {
+                for value in array { if let hit = firstString(key, in: value) { return hit } }
+            }
+            return nil
+        }
+        func walk(_ object: Any) {
+            if let dict = object as? [String: Any] {
+                if let item = dict["musicResponsiveListItemRenderer"] as? [String: Any] {
+                    let columns = item["flexColumns"] as? [[String: Any]]
+                    let runs = ((columns?.first?["musicResponsiveListItemFlexColumnRenderer"] as? [String: Any])?["text"]
+                        as? [String: Any])?["runs"] as? [[String: Any]]
+                    if firstString("musicVideoType", in: item) == "MUSIC_VIDEO_TYPE_ATV",
+                       let name = runs?.first?["text"] as? String,
+                       let videoID = (item["playlistItemData"] as? [String: Any])?["videoId"] as? String ?? firstString("videoId", in: item) {
+                        songs.append((name, videoID))
+                    }
+                    return
+                }
+                dict.values.forEach(walk)
+            } else if let array = object as? [Any] {
+                array.forEach(walk)
+            }
+        }
+        walk(root)
+        func folded(_ s: String) -> String { s.lowercased().filter { !$0.isWhitespace } }
+        let want = folded(title)
+        guard !want.isEmpty else { return nil }
+        return songs.first { folded($0.title) == want }?.videoID ?? songs.first { folded($0.title).hasPrefix(want) }?.videoID
+    }
+
+    /// 链接里的 videoId(`kaset://play?v=…`、`music.youtube.com/watch?v=…` 都认)。
+    public static func videoID(fromLink url: URL?) -> String? {
+        guard let url, let v = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems?.first(where: { $0.name == "v" })?.value,
+              !v.isEmpty else { return nil }
+        return v
+    }
+
+    /// 在它里面放这一首:有 videoId 用它,没有就按歌名歌手搜(`songVideoID(inSearch:title:)`)。插在当前这首后面;`now` 为真时
+    /// 再按一次下一首(下一首放的就是队列里的下一格,实测),否则就是「稍后播放」。会阻塞,别在主线程调。
+    public func playOrQueue(videoID: String?, title: String, artist: String, now: Bool) -> Bool {
+        guard let config = usableConfig() else { return false }
+        var id = videoID
+        if id == nil {
+            let query = [artist, title].filter { !$0.isEmpty }.joined(separator: " ")
+            id = postData("/api/v1/search", body: ["query": query], config: config).flatMap { Self.songVideoID(inSearch: $0, title: title) }
+        }
+        guard let id else {
+            logger.notice("queue: no song for \(title, privacy: .public)")
+            return false
+        }
+        guard post("/api/v1/queue", body: ["videoId": id, "insertPosition": "INSERT_AFTER_CURRENT_VIDEO"], config: config) == 204 else { return false }
+        return !now || post("/api/v1/next", body: [:], config: config) == 204
+    }
+
     /// 开播(`POST /api/v1/play`)。
     public func play() -> Bool {
         guard let config = usableConfig() else { return false }
@@ -594,9 +678,20 @@ public final class PearDesktopAPI: @unchecked Sendable {
 
     /// 同步 POST 一段 JSON,最多等 `requestTimeout`;返回状态码,连不上 / 超时为 nil。
     private func post(_ path: String, body: [String: Any], config: Config) -> Int? {
+        postRaw(path, body: body, config: config, timeout: Self.requestTimeout)?.status
+    }
+
+    /// 同 `post`,200 时交回正文(搜索要等它向 YouTube Music 问一趟,最多等 `searchTimeout`)。
+    private func postData(_ path: String, body: [String: Any], config: Config) -> Data? {
+        guard let reply = postRaw(path, body: body, config: config, timeout: Self.searchTimeout), reply.status == 200 else { return nil }
+        return reply.data
+    }
+
+    private func postRaw(_ path: String, body: [String: Any], config: Config,
+                         timeout: TimeInterval) -> (status: Int?, data: Data?)? {
         guard let url = baseURL(config)?.appendingPathComponent(path),
               let data = try? JSONSerialization.data(withJSONObject: body) else { return nil }
-        var request = URLRequest(url: url, timeoutInterval: Self.requestTimeout)
+        var request = URLRequest(url: url, timeoutInterval: timeout)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.httpBody = data
@@ -606,17 +701,19 @@ public final class PearDesktopAPI: @unchecked Sendable {
         if config.needsToken, let token { request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }
         let done = DispatchSemaphore(value: 0)
         var status: Int?
-        session.dataTask(with: request) { _, response, _ in
+        var reply: Data?
+        session.dataTask(with: request) { data, response, _ in
             status = (response as? HTTPURLResponse)?.statusCode
+            reply = data
             done.signal()
         }.resume()
-        guard done.wait(timeout: .now() + Self.requestTimeout + 0.1) == .success else { return nil }
+        guard done.wait(timeout: .now() + timeout + 0.1) == .success else { return nil }
         if status == 401 {
             lock.lock()
             self.token = nil
             lock.unlock()
         }
-        return status
+        return (status, reply)
     }
 
     /// 要令牌(在后台等,第一次要时 Pear 弹框问用户)。在要、用户拒绝过、刚失败过时不再要。

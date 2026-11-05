@@ -202,6 +202,79 @@ func runPearDesktopTests() {
     expectEqual([API.liked(fromState: "LIKE"), API.liked(fromState: "DISLIKE"), API.liked(fromState: "INDIFFERENT"), API.liked(fromState: nil)],
                 [true, false, false, nil], "Pear 赞: 赞了才算喜欢,踩过算没赞,读不到为 nil")
 
+    // ---- 在 Pear 中播放:搜歌、链接 ----
+    do {
+        // 照真机 `POST /api/v1/search` 应答缩下来的形状:热门结果是 MV(OMV),歌曲是音轨版(ATV),还有歌手、视频。
+        func row(_ title: String, _ id: String?, _ type: String?) -> String {
+            let vid = id.map { #","playlistItemData":{"videoId":"\#($0)"}"# } ?? ""
+            let mvt = type.map { #","overlay":{"x":{"watchEndpoint":{"videoId":"\#(id ?? "")","watchEndpointMusicSupportedConfigs":{"watchEndpointMusicConfig":{"musicVideoType":"\#($0)"}}}}}"# } ?? ""
+            return #"{"musicResponsiveListItemRenderer":{"flexColumns":[{"musicResponsiveListItemFlexColumnRenderer":{"text":{"runs":[{"text":"\#(title)"}]}}}]\#(vid)\#(mvt)}}"#
+        }
+        let card = #"{"musicCardShelfRenderer":{"title":{"runs":[{"text":"晴天","navigationEndpoint":{"watchEndpoint":{"videoId":"DYptgVvkVLQ","watchEndpointMusicSupportedConfigs":{"watchEndpointMusicConfig":{"musicVideoType":"MUSIC_VIDEO_TYPE_OMV"}}}}}]}}}"#
+        let rows = [card, row("周杰倫", nil, nil), row("晴天 (Live)", "LIVE0000000", "MUSIC_VIDEO_TYPE_ATV"),
+                    row("晴天", "SJKoWAd5ySo", "MUSIC_VIDEO_TYPE_ATV"), row("晴天", "UGC00000000", "MUSIC_VIDEO_TYPE_UGC")]
+        let search = data(#"{"contents":{"tabbedSearchResultsRenderer":{"tabs":[{"tabRenderer":{"content":{"sectionListRenderer":{"contents":[{"musicShelfRenderer":{"contents":["# + rows.joined(separator: ",") + #"]}}]}}}}]}}}"#)
+        expectEqual(API.songVideoID(inSearch: search, title: "晴天"), "SJKoWAd5ySo", "Pear 搜歌: 只认歌曲(音轨版),热门结果的 MV 和视频不拿,歌名完全一样的优先")
+        expectEqual(API.songVideoID(inSearch: search, title: " 晴 天 "), "SJKoWAd5ySo", "Pear 搜歌: 歌名比较去空白")
+        let liveOnly = data(#"{"contents":["# + row("晴天 (Live)", "LIVE0000000", "MUSIC_VIDEO_TYPE_ATV") + "]}")
+        expectEqual(API.songVideoID(inSearch: liveOnly, title: "晴天"), "LIVE0000000", "Pear 搜歌: 没有完全一样的取以它开头的")
+        expectEqual(API.songVideoID(inSearch: data(#"{"contents":["# + row("七里香", "QILIXIANG00", "MUSIC_VIDEO_TYPE_ATV") + "]}"),
+                                    title: "晴天"), nil, "Pear 搜歌: 歌名对不上不拿")
+        expectEqual(API.songVideoID(inSearch: data("not json"), title: "晴天"), nil, "Pear 搜歌: 读不懂为 nil")
+        expectEqual(API.videoID(fromLink: URL(string: "kaset://play?v=SJKoWAd5ySo")), "SJKoWAd5ySo", "Pear 链接: Kaset 那种链接取 v")
+        expectEqual(API.videoID(fromLink: URL(string: "https://music.youtube.com/watch?v=abc&list=x")), "abc", "Pear 链接: 网页链接取 v")
+        expectEqual(API.videoID(fromLink: URL(string: "https://music.youtube.com/browse/x")), nil, "Pear 链接: 没有 v 为 nil")
+    }
+
+    // ---- 广告第几条 ----
+    do {
+        typealias Slot = YouTubeMusicAdProbe.AdSlot
+        expectEqual(Slot(badgeText: "赞助商广告 2/2 · 2:29"), Slot(index: 2, total: 2), "Pear 广告计数: 去掉时长取两个数")
+        expectEqual(Slot(badgeText: "Sponsored 1 of 2 ·"), Slot(index: 1, total: 2), "Pear 广告计数: 英文界面「1 of 2」")
+        expectEqual(Slot(badgeText: "赞助商广告 · 0:15"), nil, "Pear 广告计数: 只有一条时没有计数")
+        expectEqual(Slot(badgeText: "Ad 3/2"), nil, "Pear 广告计数: 序号大于总数不认")
+    }
+
+    // ---- 推送 ----
+    do {
+        typealias Push = PearDesktopPush
+        expectEqual(Push.message(from: #"{"type":"PLAYER_STATE_CHANGED","isPlaying":true,"position":12.5}"#),
+                    Push.Message(type: "PLAYER_STATE_CHANGED", isPlaying: true, position: 12.5), "Pear 推送: 解出类型、在不在放、进度")
+        expectEqual(Push.message(from: "oops"), nil, "Pear 推送: 不是 JSON 为 nil")
+        var t = Push.PositionTracker()
+        let t0 = Date(timeIntervalSince1970: 1_000)
+        func msg(_ type: String, playing: Bool? = nil, pos: Double? = nil) -> Push.Message { .init(type: type, isPlaying: playing, position: pos) }
+        expectEqual(t.handle(msg("PLAYER_INFO", playing: true, pos: 10), at: t0), nil, "Pear 推送: 连上那份只记状态")
+        expectEqual(t.handle(msg("POSITION_CHANGED", pos: 11), at: t0.addingTimeInterval(1)), nil, "Pear 推送: 每秒那条照常走不算拖")
+        expectEqual(t.handle(msg("POSITION_CHANGED", pos: 12.4), at: t0.addingTimeInterval(2)), nil, "Pear 推送: 几百毫秒的抖动不算拖")
+        expectEqual(t.handle(msg("POSITION_CHANGED", pos: 60), at: t0.addingTimeInterval(3)), .seeked, "Pear 推送: 进度跳了算拖")
+        expectEqual(t.handle(msg("PLAYER_STATE_CHANGED", playing: false, pos: 60), at: t0.addingTimeInterval(4)),
+                    .playState(playing: false), "Pear 推送: 暂停")
+        expectEqual(t.handle(msg("POSITION_CHANGED", pos: 60), at: t0.addingTimeInterval(9)), nil, "Pear 推送: 暂停时进度不走不算拖")
+        expectEqual(t.handle(msg("POSITION_CHANGED", pos: 30), at: t0.addingTimeInterval(10)), .seeked, "Pear 推送: 暂停时往回拖算拖")
+        expectEqual(t.handle(msg("VIDEO_CHANGED", pos: 0), at: t0.addingTimeInterval(11)), .trackChanged, "Pear 推送: 换歌")
+        expectEqual(t.handle(msg("VOLUME_CHANGED"), at: t0.addingTimeInterval(12)), nil, "Pear 推送: 音量这类不发")
+    }
+
+    // ---- 推送、计数、点歌的接线 ----
+    do {
+        let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+        func src(_ name: String) -> String { (try? String(contentsOf: root.appendingPathComponent(name), encoding: .utf8)) ?? "" }
+        let api = src("LyrimuseCore/Local/PearDesktopAPI.swift")
+        expectEqual(sourceHas(sourceBody("public func noteAppRunning(", in: api), "PearDesktopPush.shared.keepAlive(url: running ? pushURL() : nil)"),
+                    true, "Pear 接线: 每拍维持推送连接,Pear 没开时断开")
+        let source = src("LyrimuseCore/Local/LocalPlaybackSource.swift")
+        expectEqual(sourceHas(source, "PearDesktopPush.shared.setEventHandler { [weak self] event in\nguard !SourceKnockout.isOut(.pearPush) else { return }"),
+                    true, "Pear 接线: 推送叫播放源补查,拔腿开关能关掉")
+        expectEqual(sourceHas(source, "? PearDesktopAdSkip.adSlot()"), true, "Pear 接线: Pear 的广告计数取跳广告门槛读到的徽章")
+        let menu = src("lyrimuse/LastfmStatsSection.swift")
+        expectEqual(sourceHas(menu, "if let pear = Self.pearTarget(links: links, track: track) {")
+                    && sourceHas(sourceBody("fileprivate static func appLinksHaveMenu(", in: menu), "if pearTarget(links: links, track: track) != nil { return true }"),
+                    true, "Pear 接线: 榜单右键给「在 Pear Desktop 中播放 / 稍后播放」,有它时这一行能弹菜单")
+        expectEqual(sourceHas(sourceBody("fileprivate static func pearTarget(", in: menu), "PearDesktopAPI.shared.canControl()"), true,
+                    "Pear 接线: 只在它开着、接口能用时出")
+    }
+
     // ---- 跳过广告 ----
     do {
         typealias Skip = PearDesktopAdSkip

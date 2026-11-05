@@ -3217,6 +3217,20 @@ public final class LocalPlaybackSource: ObservableObject {
                 NotificationCenter.default.post(name: LXMusicOpenAPI.controlsChangedNotification, object: nil)
             }
         }
+        // Pear Desktop 的推送:换歌、播放 / 暂停、拖进度同样补查一次 poll()(见 PearDesktopPush)。
+        PearDesktopPush.shared.setEventHandler { [weak self] event in
+            guard !SourceKnockout.isOut(.pearPush) else { return }
+            Task { @MainActor [weak self] in
+                switch event {
+                case .trackChanged:
+                    self?.handlePlayerInfoChanged(freezeExtrapolation: false, stateSignal: false)
+                case .playState(let playing):
+                    self?.handlePlayerInfoChanged(freezeExtrapolation: !playing, stateSignal: true, resumeSignal: playing)
+                case .seeked:
+                    self?.handlePlayerInfoChanged(freezeExtrapolation: false, stateSignal: true)
+                }
+            }
+        }
         let watcher = MediaControlStreamWatcher { [weak self] pauseSignal, resumeSignal in
             guard !SourceKnockout.isOut(.streamEvents) else { return }
             MainActor.assumeIsolated {
@@ -4313,8 +4327,11 @@ public final class LocalPlaybackSource: ObservableObject {
         // 上面那条 `cachedBadgeVerdict` 是同一次读数的两个字段,不会出现"判定说广告、计数
         // 却来自另一拍"的错位。徽章从 1/2 翻到 2/2 最多滞后一个探测周期(广告期间 5 秒一探),
         // 可以接受:为一个装饰性计数把 AppleEvent 往返频率翻倍不值。
+        // Pear Desktop 的计数是跳广告门槛遍历它的辅助功能树时顺手读的徽章(`PearDesktopAdSkip.adSlot`)。
         let nextAdSlot = nextAd
-            ? YouTubeMusicAdProbe.shared.cachedReading(forKey: youTubeMusicAdKey)?.adSlot
+            ? (PearDesktopAdSkip.isPear(snapshot.bundleIdentifier)
+                ? PearDesktopAdSkip.adSlot()
+                : YouTubeMusicAdProbe.shared.cachedReading(forKey: youTubeMusicAdKey)?.adSlot)
             : nil
         if currentAdSlot != nextAdSlot { currentAdSlot = nextAdSlot }
         let nextCountdown = AdCountdown.next(

@@ -360,6 +360,15 @@ public final class YouTubeMusicAdProbe: @unchecked Sendable {
             self.index = index
             self.total = total
         }
+
+        /// 从徽章文字(「赞助商广告 1/2 · 2:29」)里取:先去掉「分:秒」,再取头两个隔开的数字,同探针 JS 那段。
+        public init?(badgeText: String) {
+            let text = badgeText.replacingOccurrences(of: "[0-9]+:[0-9]+", with: "", options: .regularExpression)
+            guard let range = text.range(of: "[0-9]+[^0-9]{1,12}[0-9]+", options: .regularExpression) else { return nil }
+            let numbers = text[range].split(whereSeparator: { !$0.isNumber })
+            guard numbers.count == 2 else { return nil }
+            self.init(rawPair: "\(numbers[0])/\(numbers[1])")
+        }
     }
 
     /// 把探针的裸文本输出解成一次读数。纯函数,可单测。

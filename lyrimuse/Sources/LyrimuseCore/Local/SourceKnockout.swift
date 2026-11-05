@@ -33,6 +33,9 @@ public enum SourceKnockout {
         case amazonLog = "amazon-log"
         /// Amazon Music 界面上的播放时间(连播提前量、自记时的对表,`AmazonMusicUIProbe`):关掉后当成没授「辅助功能」权限。
         case amazonScreen = "amazon-screen"
+        /// Pear Desktop 本机接口的 WebSocket 推送(换歌、播放 / 暂停、拖进度的即时信号,`PearDesktopPush`):关掉后只剩轮询和
+        /// 系统事件流。
+        case pearPush = "pear-push"
     }
 
     private static let logger = Logger(subsystem: LyrimuseIdentity.logSubsystem, category: "knockout")
