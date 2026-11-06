@@ -86,9 +86,6 @@ func main() {
 	// 不打时间前缀)。常驻模式写自己打开的日志文件,子命令写 stderr。
 	installLogSink(isDaemonInvocation(os.Args))
 	ensureCacheDir()
-	if !isDaemonInvocation(os.Args) {
-		gateOtherAppContainers(configFilePath(clientName + "-local-cache-access.json"))
-	}
 	// `lyrimuse-engine version`:一次性子命令,只打印 clientVersion 就退出——App 侧设置页
 	// "后台采集服务"卡片靠它检测"App 本体版本"跟"实际打包进这份 App 的引擎版本"
 	// 是否一致。这是唯一能让用户/开发者看见两者不一致的地方(版本号注入失效、或 App 里

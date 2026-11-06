@@ -74,13 +74,22 @@ func localCacheProbeTargets(paths map[string][]string) map[string][]string {
 
 // probeLocalCacheAccess 由 main() 在设好状态文件路径之后调一次。容器目录不存在(没装 / 没打开过)
 // 的来源跳过,不发布任何结论;只列目录、不读内容。此刻读的是容器外那一份的来源不探容器,记成不用授权。
+// 没有「完全磁盘访问」时连目录也不列(列容器里的目录就会弹框),容器在的来源直接记成被拒。
 func probeLocalCacheAccess() {
-	targets := localCacheProbeTargets(localCacheClientPaths())
+	standalone := map[string]bool{}
 	for source, roots := range clientDataRootsBySource() {
 		if roots.usesStandalone() {
-			delete(targets, source)
+			standalone[source] = true
 			noteLocalCacheUnprotected(source)
 		}
+	}
+	if !hasFullDiskAccess() {
+		noteContainersDeniedWithoutFullDiskAccess(standalone)
+		return
+	}
+	targets := localCacheProbeTargets(localCacheClientPaths())
+	for source := range standalone {
+		delete(targets, source)
 	}
 	probeLocalCacheTargets(targets)
 }

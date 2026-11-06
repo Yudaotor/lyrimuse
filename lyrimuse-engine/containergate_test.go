@@ -1,65 +1,126 @@
 package main
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strings"
 	"testing"
+	"time"
 )
 
-func resetContainerGate(t *testing.T) {
+// withFullDiskAccess 换掉授权判定,用完换回、清掉缓存的结论。
+func withFullDiskAccess(t *testing.T, ok bool) {
 	t.Helper()
+	prev := fullDiskAccessCheck
+	reset := func() {
+		fullDiskAccessMemo.Lock()
+		fullDiskAccessMemo.at = time.Time{}
+		fullDiskAccessMemo.Unlock()
+	}
+	fullDiskAccessCheck = func() bool { return ok }
+	reset()
 	t.Cleanup(func() {
-		containerGate.Lock()
-		containerGate.on, containerGate.allowed = false, nil
-		containerGate.Unlock()
+		fullDiskAccessCheck = prev
+		reset()
 	})
 }
 
-func TestOtherAppContainerUngatedByDefault(t *testing.T) {
-	resetContainerGate(t)
-	p := "/Users/u/Library/Containers/com.tencent.QQMusicMac/Data/Library/x.sqlite"
-	if got := otherAppContainer(p); got != p {
-		t.Fatalf("常驻引擎不设闸: got %q", got)
-	}
-}
-
-func TestOtherAppContainerGateFollowsReadableSources(t *testing.T) {
-	resetContainerGate(t)
-	state := filepath.Join(t.TempDir(), "access.json")
-	if err := os.WriteFile(state, []byte(`{"updatedAt":1,"denied":["qq"],"readable":["kugou"]}`), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	gateOtherAppContainers(state)
+func TestOtherAppContainerFollowsFullDiskAccess(t *testing.T) {
 	home := "/Users/u/Library/Containers/"
-	cases := map[string]bool{
-		home + "com.kugou.mac.Music/Data/Library/Preferences/currentPlayList.sqlite":                    true,
-		home + "com.tencent.QQMusicMac/Data/Library/Application Support/QQMusicMac/qqmusic.sqlite":      false,
-		home + "com.netease.163music/Data/Documents/storage/sqlite_storage.sqlite3":                     false,
-		home + "com.tencent.QQMusic/Data/Library/Application Support/com.tencent.QQMusic/iDB/qq.sqlite": false,
-		"/Users/u/Library/Application Support/com.netease.163music/Documents/x":                         true,
-		"/Users/u/Library/Caches/com.apple.Music/x":                                                     true,
+	inside := []string{
+		home + "com.kugou.mac.Music/Data/Library/Preferences/currentPlayList.sqlite",
+		home + "com.tencent.QQMusicMac/Data/Library/Application Support/QQMusicMac/qqmusic.sqlite",
+		home + "com.tencent.QQMusic/Data/Library/Application Support/com.tencent.QQMusic/iDB/qq.sqlite",
 	}
-	for p, keep := range cases {
-		got := otherAppContainer(p)
-		if keep && got != p || !keep && got != "" {
-			t.Errorf("%s: got %q, keep=%v", p, got, keep)
+	outside := []string{
+		"/Users/u/Library/Application Support/com.netease.163music/Documents/x",
+		"/Users/u/Library/Caches/com.apple.Music/x",
+	}
+	withFullDiskAccess(t, false)
+	for _, p := range inside {
+		if got := otherAppContainer(p); got != "" {
+			t.Errorf("没授权时不读容器: %s → %q", p, got)
 		}
 	}
-	if qqDataRoots().path(qqLibraryRel) != "" {
-		t.Error("QQ 没确认读得到时,子命令不该读它的容器")
+	for _, p := range outside {
+		if got := otherAppContainer(p); got != p {
+			t.Errorf("容器外的路径原样: %s → %q", p, got)
+		}
+	}
+	if qqDataRoots().path(qqLibraryRel) != "" || kugouContainerPath("Library/x") != "" {
+		t.Error("QQ 数据根、酷狗容器路径没授权时都该落空")
+	}
+	withFullDiskAccess(t, true)
+	for _, p := range inside {
+		if got := otherAppContainer(p); got != p {
+			t.Errorf("有授权时原样: %s → %q", p, got)
+		}
 	}
 }
 
-func TestOtherAppContainerGateClosedWithoutState(t *testing.T) {
-	resetContainerGate(t)
-	gateOtherAppContainers(filepath.Join(t.TempDir(), "missing.json"))
-	if otherAppContainer("/Users/u/Library/Containers/com.kugou.mac.Music/Data/x") != "" {
-		t.Error("没有状态文件时所有容器都不读")
+func TestFullDiskAccessVerdictIsCached(t *testing.T) {
+	calls := 0
+	prev := fullDiskAccessCheck
+	fullDiskAccessCheck = func() bool { calls++; return false }
+	fullDiskAccessMemo.Lock()
+	fullDiskAccessMemo.at = time.Time{}
+	fullDiskAccessMemo.Unlock()
+	t.Cleanup(func() {
+		fullDiskAccessCheck = prev
+		fullDiskAccessMemo.Lock()
+		fullDiskAccessMemo.at = time.Time{}
+		fullDiskAccessMemo.Unlock()
+	})
+	for i := 0; i < 5; i++ {
+		hasFullDiskAccess()
 	}
-	if kugouContainerPath("Library/x") != "" {
-		t.Error("酷狗的容器路径也要经过闸")
+	if calls != 1 {
+		t.Fatalf("有效期内只判一次,判了 %d 次", calls)
+	}
+}
+
+func TestProbeWithoutFullDiskAccessMarksInstalledDenied(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	if err := os.MkdirAll(filepath.Join(home, "Library/Containers/com.tencent.QQMusicMac/Data"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	read := resetLocalCacheAccessForTest(t)
+	withFullDiskAccess(t, false)
+	probeLocalCacheAccess()
+	got := read()
+	if len(got.Denied) != 1 || got.Denied[0] != "qq" || len(got.Readable) != 0 {
+		t.Fatalf("装了 QQ(容器在)的记被拒,没装的不记: %+v", got)
+	}
+}
+
+func TestLocalCacheContainerBundlesMatchClientPaths(t *testing.T) {
+	withFullDiskAccess(t, true)
+	want := map[string][]string{}
+	for source, paths := range localCacheClientPaths() {
+		seen := map[string]bool{}
+		for _, p := range paths {
+			if root := containerDataRoot(p); root != "" {
+				seen[filepath.Base(filepath.Dir(root))] = true
+			}
+		}
+		for b := range seen {
+			want[source] = append(want[source], b)
+		}
+		sort.Strings(want[source])
+	}
+	got := map[string][]string{}
+	for source, bundles := range localCacheContainerBundles {
+		got[source] = append([]string(nil), bundles...)
+		sort.Strings(got[source])
+	}
+	wantJSON, _ := json.Marshal(want)
+	gotJSON, _ := json.Marshal(got)
+	if string(wantJSON) != string(gotJSON) {
+		t.Fatalf("localCacheContainerBundles 跟 localCacheClientPaths 对不上:\n got  %s\n want %s", gotJSON, wantJSON)
 	}
 }
 
