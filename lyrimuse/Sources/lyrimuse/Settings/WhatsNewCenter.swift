@@ -16,10 +16,20 @@ final class WhatsNewCenter {
         static let baseline = "np:whatsNewBaseline"
         /// 面板顶部「已更新」出过的是哪一版。
         static let bannerShown = "np:whatsNewShownVersion"
+        /// 上次启动时有哪些语言包(Core `NewLanguageOffer`)。
+        static let knownLanguagePacks = "np:knownLanguagePacks"
+        /// 还没处理的「改用这种语言」提示:语言包名;切过去或点 ✕ 后删掉。
+        static let languageOffer = "np:newLanguageOffer"
     }
 
     /// 面板顶部该出「已更新到 X」时是当前版本,否则 nil。
     private(set) var bannerVersion: String?
+
+    /// 面板顶部该提示改用哪个语言包,否则 nil。见 14 章决策 180。
+    var languageOffer: String? {
+        let pending = defaults.string(forKey: Keys.languageOffer)
+        return NewLanguageOffer.stillApplies(pending: pending, chosen: L10n.languageOverride) ? pending : nil
+    }
 
     private let defaults = UserDefaults.standard
     private var started = false
@@ -30,7 +40,14 @@ final class WhatsNewCenter {
         guard !started else { return }
         started = true
         let current = SparkleUpdaterManager.appVersionString
-        let baseline = WhatsNew.baseline(current: current, lastLaunched: defaults.string(forKey: Keys.lastLaunchedVersion),
+        let lastLaunched = defaults.string(forKey: Keys.lastLaunchedVersion)
+        if let offer = NewLanguageOffer.offer(chosen: L10n.languageOverride, preferredLanguages: Locale.preferredLanguages,
+                                              knownPacks: defaults.stringArray(forKey: Keys.knownLanguagePacks),
+                                              isExistingUser: lastLaunched != nil || AppSettings.shared.hasCompletedOnboarding) {
+            defaults.set(offer, forKey: Keys.languageOffer)
+        }
+        defaults.set(UILanguage.packs, forKey: Keys.knownLanguagePacks)
+        let baseline = WhatsNew.baseline(current: current, lastLaunched: lastLaunched,
                                          stored: defaults.string(forKey: Keys.baseline),
                                          shownVersion: defaults.string(forKey: Keys.bannerShown),
                                          hasCompletedOnboarding: AppSettings.shared.hasCompletedOnboarding)
@@ -38,6 +55,12 @@ final class WhatsNewCenter {
         defaults.set(current, forKey: Keys.lastLaunchedVersion)
         bannerVersion = WhatsNew.bannerPending(current: current, baseline: baseline,
                                                shownVersion: defaults.string(forKey: Keys.bannerShown)) ? current : nil
+    }
+
+    /// 「改用这种语言」那一条:切过去(`switchTo` 为真)或点了 ✕,都不再出。
+    func languageOfferHandled(switchTo: Bool) {
+        if switchTo, let pack = languageOffer { AppSettings.shared.appLanguage = pack }
+        defaults.removeObject(forKey: Keys.languageOffer)
     }
 
     /// 面板把横条摆出来了:这一版不再出。正开着的面板自己留着那一条到收起。

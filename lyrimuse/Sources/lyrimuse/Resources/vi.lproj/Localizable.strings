@@ -167,6 +167,7 @@
 "Lyrimuse 将显示正在播放的 App 的歌词，之后可随时在设置中更改" = "Lyrimuse hiển thị lời bài hát cho ứng dụng đang phát. Bạn có thể thay đổi trong Cài đặt bất kỳ lúc nào";
 "Lyrimuse 无法写入以下位置，歌词引擎因此无法启动：" = "Lyrimuse không thể ghi vào các vị trí sau nên công cụ lời bài hát không khởi động được:";
 "Lyrimuse 标识" = "Logo Lyrimuse";
+"Lyrimuse 现已支持简体中文" = "Lyrimuse đã có giao diện tiếng Việt";
 "Lyrimuse 通过此接口读取 Pear Desktop 当前歌曲的 ID、类型和播放队列" = "Lyrimuse đọc ID, loại của bài đang phát và hàng chờ phát từ Pear Desktop qua API này";
 "Lyrimuse 通过此接口读取洛雪音乐的播放进度并调节其音量" = "Lyrimuse đọc vị trí phát của LX Music và chỉnh âm lượng qua API này";
 "Lyrimuse 需要读取播放器和浏览器中正在播放的歌曲，才能显示同步歌词。" = "Lyrimuse cần đọc bài hát đang phát trong trình phát và trình duyệt để hiển thị lời đồng bộ.";
@@ -593,6 +594,7 @@
 "分行不同" = "khác cách ngắt dòng";
 "分隔线" = "Đường phân cách";
 "分项合计 %1$d，按下限计为 %2$d" = "Tổng các mục là %1$d, tính theo mức sàn là %2$d";
+"切换" = "Chuyển";
 "切换到其他歌曲前是否保存修改？" = "Lưu thay đổi trước khi chuyển sang bài khác?";
 "切换到播放器" = "Chuyển sang trình phát";
 "切换回 iCloud" = "Chuyển lại về iCloud";

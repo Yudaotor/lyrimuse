@@ -192,6 +192,7 @@
 "Lyrimuse 将显示正在播放的 App 的歌词，之后可随时在设置中更改" = "Lyrimuse affiche les paroles de l’app en cours de lecture. Vous pouvez changer cela à tout moment dans Réglages";
 "Lyrimuse 无法写入以下位置，歌词引擎因此无法启动：" = "Lyrimuse ne peut pas écrire dans ces emplacements, le moteur de paroles ne peut donc pas démarrer :";
 "Lyrimuse 标识" = "Logo Lyrimuse";
+"Lyrimuse 现已支持简体中文" = "Lyrimuse est désormais disponible en français";
 "Lyrimuse 通过此接口读取 Pear Desktop 当前歌曲的 ID、类型和播放队列" = "Lyrimuse lit dans Pear Desktop l’identifiant et le type du morceau en cours et la file d’attente via cette API";
 "Lyrimuse 通过此接口读取洛雪音乐的播放进度并调节其音量" = "Lyrimuse lit la position de lecture de LX Music et règle son volume via cette API";
 "Lyrimuse 需要读取播放器和浏览器中正在播放的歌曲，才能显示同步歌词。" = "Lyrimuse doit envoyer des Apple Events aux lecteurs et aux navigateurs pour lire le morceau en cours et afficher les paroles synchronisées.";
@@ -640,6 +641,7 @@
 "分行不同" = "découpage en lignes différent";
 "分隔线" = "Séparateur";
 "分项合计 %1$d，按下限计为 %2$d" = "Total des critères : %1$d ; plancher appliqué : %2$d";
+"切换" = "Changer";
 "切换到其他歌曲前是否保存修改？" = "Enregistrer vos modifications avant de passer à un autre morceau ?";
 "切换到播放器" = "Basculer vers le lecteur";
 "切换回 iCloud" = "Revenir à iCloud";

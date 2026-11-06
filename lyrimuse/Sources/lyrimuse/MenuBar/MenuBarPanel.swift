@@ -602,6 +602,51 @@ private struct WhatsNewBanner: View {
     }
 }
 
+// MARK: - 「改用这种语言」横条
+
+/// 升级后多了这个人系统语言的界面、他又手动选过别的界面语言时,面板顶部那一条(`WhatsNewCenter.languageOffer`):
+/// 整条用那种语言写;「切换」改界面语言,✕ 收起,两样都不再出。见 14 章决策 180。
+struct LanguageOfferBanner: View {
+    let pack: String
+    let handled: (_ switchTo: Bool) -> Void
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "globe")
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(Color.accentColor)
+                .accessibilityHidden(true)
+            Text(L10n.t("Lyrimuse 现已支持简体中文", language: pack))
+                .font(.system(size: 12.5, weight: .medium))
+                .lineLimit(2)
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            Button { handled(true) } label: {
+                Text(L10n.t("切换", language: pack))
+                    .font(.system(size: 12.5, weight: .semibold))
+                    .foregroundStyle(Color.accentColor)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .fixedSize()
+            Button { handled(false) } label: {
+                Image(systemName: "xmark")
+                    .font(.system(size: 10, weight: .semibold))
+                    .frame(width: 18, height: 18)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(.secondary)
+            .accessibilityLabel(L10n.t("关闭", language: pack))
+        }
+        .padding(.leading, 12)
+        .padding(.trailing, 8)
+        .padding(.vertical, 8)
+        .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(Color.accentColor.opacity(0.14)))
+        .environment(\.locale, Locale(identifier: UILanguage.localeIdentifier(for: pack)))
+    }
+}
+
 // MARK: - 面板本体
 
 private struct MenuBarPanelView: View {
@@ -619,6 +664,8 @@ private struct MenuBarPanelView: View {
     @ObservedObject private var editorial = EditorialNotesStore.shared
     /// 面板顶部「已更新到 X」(见 WhatsNewBanner):开面板那一刻取一次,这次开着期间一直在,✕ 收起。
     @State private var whatsNewVersion = WhatsNewCenter.shared.bannerVersion
+    /// 面板顶部「改用这种语言」(见 LanguageOfferBanner):开面板那一刻取一次。
+    @State private var languageOffer = WhatsNewCenter.shared.languageOffer
 
     /// 在编辑格子布局(底栏最右那颗进、「完成」出):钮块网格和底栏换成编辑版,见 `editingSection`。
     @State private var editing: Bool
@@ -675,6 +722,12 @@ private struct MenuBarPanelView: View {
 
     private var mainBody: some View {
         VStack(spacing: 9) {
+            if let pack = languageOffer {
+                LanguageOfferBanner(pack: pack) { switchTo in
+                    WhatsNewCenter.shared.languageOfferHandled(switchTo: switchTo)
+                    languageOffer = nil
+                }
+            }
             if let version = whatsNewVersion {
                 WhatsNewBanner(version: version, open: {
                     close()

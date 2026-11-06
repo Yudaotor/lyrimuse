@@ -91,6 +91,12 @@ enum L10n {
         bundle.localizedString(forKey: key, value: key, table: nil)
     }
 
+    /// 不管界面语言,按指定语言包取文案(「改用这种语言」的提示要用那种语言写)。没有这个语言包时同 `t(_:)`。
+    static func t(_ key: String, language pack: String) -> String {
+        guard let path = Bundle.main.path(forResource: pack, ofType: "lproj"), let b = Bundle(path: path) else { return t(key) }
+        return b.localizedString(forKey: key, value: key, table: nil)
+    }
+
     /// 带数量的文案。按 `UILanguage.pluralCategory` 算出这个数量的类别:catalog 里写成 plural 变体的语言,
     /// generate-strings.py 把 one / few / many 生成到「键#one」「键#few」「键#many」、other 生成到键本身;
     /// 类别是 other、或这个语言没写这一类时取键本身那条。

@@ -153,6 +153,47 @@ func runWhatsNewTests() {
         } ?? ""
         expectEqual(sourceHas(machineLocal, "WhatsNewCenter.Keys.lastLaunchedVersion,")
                     && sourceHas(machineLocal, "WhatsNewCenter.Keys.baseline,")
-                    && sourceHas(machineLocal, "WhatsNewCenter.Keys.bannerShown,"), true, "接线: 这几个键是机器专属的")
+                    && sourceHas(machineLocal, "WhatsNewCenter.Keys.bannerShown,")
+                    && sourceHas(machineLocal, "WhatsNewCenter.Keys.knownLanguagePacks,")
+                    && sourceHas(machineLocal, "WhatsNewCenter.Keys.languageOffer,"), true, "接线: 这几个键是机器专属的")
+
+        print("\n== 升级后提示改用新加的界面语言 ==")
+        typealias O = NewLanguageOffer
+        let old = O.legacyPacks
+        expectEqual(O.offer(chosen: "en", preferredLanguages: ["th-TH", "en-US"], knownPacks: nil, isExistingUser: true), "th",
+                    "提示: 老用户手动选了英文,系统首选是这次才有的泰语")
+        expectEqual(O.offer(chosen: "zh-hans", preferredLanguages: ["pt-PT"], knownPacks: old, isExistingUser: true), "pt-br",
+                    "提示: 葡萄牙语系统归巴西葡语包")
+        expectEqual(O.offer(chosen: "en", preferredLanguages: ["uk", "ru"], knownPacks: old, isExistingUser: true), "uk",
+                    "提示: 系统列表「uk, ru」提示乌克兰语")
+        expectEqual(O.offer(chosen: nil, preferredLanguages: ["th"], knownPacks: old, isExistingUser: true), nil,
+                    "不提示: 没选过界面语言(跟随系统),升级后自己就换了")
+        expectEqual(O.offer(chosen: "system", preferredLanguages: ["th"], knownPacks: old, isExistingUser: true), nil,
+                    "不提示: 选的是跟随系统")
+        expectEqual(O.offer(chosen: "en", preferredLanguages: ["th"], knownPacks: UILanguage.packs, isExistingUser: true), nil,
+                    "不提示: 上次启动时就有这种语言,他是特意选了别的")
+        expectEqual(O.offer(chosen: "en", preferredLanguages: ["ja-JP"], knownPacks: nil, isExistingUser: true), nil,
+                    "不提示: 日语是旧版本就有的")
+        expectEqual(O.offer(chosen: "en", preferredLanguages: ["th"], knownPacks: nil, isExistingUser: false), nil,
+                    "不提示: 新装的")
+        expectEqual(O.offer(chosen: "en", preferredLanguages: ["en-GB", "th"], knownPacks: old, isExistingUser: true), nil,
+                    "不提示: 系统首选就是他选的英文")
+        expectEqual(O.offer(chosen: "th", preferredLanguages: ["th"], knownPacks: old, isExistingUser: true), nil,
+                    "不提示: 已经是这种语言")
+        expectEqual(O.offer(chosen: "en", preferredLanguages: ["nb-NO"], knownPacks: old, isExistingUser: true), nil,
+                    "不提示: 系统语言没有语言包,协商落到英文")
+        expectEqual(Set(old).isSubset(of: Set(UILanguage.packs)), true, "旧版本的语言包都还在")
+        expectEqual([O.stillApplies(pending: "th", chosen: "en"), O.stillApplies(pending: "th", chosen: "th"),
+                     O.stillApplies(pending: "th", chosen: "system"), O.stillApplies(pending: "th", chosen: nil),
+                     O.stillApplies(pending: nil, chosen: "en"), O.stillApplies(pending: "xx", chosen: "en")],
+                    [true, false, false, false, false, false], "存着的提示: 切过去了、改回跟随系统、包没了都不再出")
+        let center = sourceText("lyrimuse/Settings/WhatsNewCenter.swift")
+        expectEqual(sourceHas(center, "defaults.set(UILanguage.packs, forKey: Keys.knownLanguagePacks)")
+                    && sourceHas(center, "isExistingUser: lastLaunched != nil || AppSettings.shared.hasCompletedOnboarding"), true,
+                    "接线: 启动时先算提示、再记下这一版的语言包")
+        let offerPanel = sourceText("lyrimuse/MenuBar/MenuBarPanel.swift")
+        expectEqual(sourceHas(offerPanel, "L10n.t(\"Lyrimuse 现已支持简体中文\", language: pack)")
+                    && sourceHas(offerPanel, "L10n.t(\"切换\", language: pack)")
+                    && sourceHas(offerPanel, "LanguageOfferBanner(pack: pack)"), true, "接线: 面板顶部的横条用那种语言写")
     }
 }
