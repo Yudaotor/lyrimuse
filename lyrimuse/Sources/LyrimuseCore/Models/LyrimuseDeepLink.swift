@@ -632,10 +632,12 @@ public enum LyrimuseDeepLink: Equatable, Sendable {
                                          URLQueryItem(name: "x", value: String(x)), URLQueryItem(name: "y", value: String(y))]
             case let .overlayLayout(width, lineChange, nextLine, overflow):
                 components.path = "/overlay-layout"
-                components.queryItems = (width.map { [URLQueryItem(name: "width", value: String($0))] } ?? [])
-                    + (lineChange.map { [URLQueryItem(name: "line-change", value: $0 ? "1" : "0")] } ?? [])
-                    + (nextLine.map { [URLQueryItem(name: "next-line", value: String($0))] } ?? [])
-                    + (overflow.map { [URLQueryItem(name: "overflow", value: $0.rawValue)] } ?? [])
+                var items: [URLQueryItem] = []
+                if let width { items.append(URLQueryItem(name: "width", value: String(width))) }
+                if let lineChange { items.append(URLQueryItem(name: "line-change", value: lineChange ? "1" : "0")) }
+                if let nextLine { items.append(URLQueryItem(name: "next-line", value: String(nextLine))) }
+                if let overflow { items.append(URLQueryItem(name: "overflow", value: overflow.rawValue)) }
+                components.queryItems = items
             case let .notchStyle(style, expanded):
                 components.path = "/notch-style"
                 components.queryItems = (style.map { [URLQueryItem(name: "style", value: $0)] } ?? [])
