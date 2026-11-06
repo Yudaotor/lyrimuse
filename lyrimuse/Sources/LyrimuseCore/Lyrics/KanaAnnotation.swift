@@ -19,9 +19,10 @@ import Foundation
 ///     以后做逐音节填色);
 ///   - 读音为空表示这几个字没有标注。
 ///
-/// 条目按顺序对齐正文里的**待标字符**(汉字 + 叠字符号 `々`),**不是**逐字覆盖全文 ——
-/// 假名/拉丁字母/标点都不占条目。实测 First Love:正文 82 个待标字符、条目覆盖 82 个,
-/// 严丝合缝;而 `々` 一开始漏算就会从「百々政幸」那里开始整体错位一格,后面全歪。
+/// 条目按顺序对齐正文里的**标注单元**(`annotationUnits`),**不是**逐字覆盖全文 ——
+/// 假名/拉丁字母/标点都不占条目。单元是一个汉字(含兼容汉字区)、`々` `〆` `ヶ`,或者一串连着的数字
+/// (半角、全角都算,整串一个单元,读音常为空)。漏算任何一类都会从那个字开始整体错位,后面全歪,
+/// 总数校验对不上整份弃用。见 10 章决策 71。
 ///
 /// `2あした` 这条正是关键:数字 2 表示这个读音覆盖**两个**汉字(明+日),这是分词器给不出
 /// 的信息。
@@ -67,6 +68,38 @@ public struct KanaAnnotation {
         return c.unicodeScalars.contains { CharacterSet.ideographicHan.contains($0) }
     }
 
+    /// 跟 `[kana:]` 条目对齐时单独占一个单元的字符:待标字之外,还有 `〆` `ヶ` 和兼容汉字区。
+    /// 引擎 lyricsfile.go 的 kanaAlignBase 是它的镜像,两边必须同步改。
+    static func isAlignmentBase(_ c: Character) -> Bool {
+        if needsAnnotation(c) || c == "〆" || c == "ヶ" { return true }
+        return c.unicodeScalars.contains { (0xF900...0xFAFF).contains($0.value) }
+    }
+
+    /// 半角、全角数字。连着的一串在对齐时算一个单元。
+    static func isAlignmentDigit(_ c: Character) -> Bool {
+        guard c.unicodeScalars.count == 1, let v = c.unicodeScalars.first?.value else { return false }
+        return (0x30...0x39).contains(v) || (0xFF10...0xFF19).contains(v)
+    }
+
+    /// 一行里的标注单元(行内 UTF-16 区间),按先后。
+    static func annotationUnits(in line: String) -> [(start: Int, end: Int)] {
+        var out: [(start: Int, end: Int)] = []
+        var pos = 0
+        var inDigits = false
+        for ch in line {
+            let w = utf16Width(ch)
+            if isAlignmentDigit(ch) {
+                if inDigits { out[out.count - 1].end += w } else { out.append((pos, pos + w)) }
+                inDigits = true
+            } else {
+                inDigits = false
+                if isAlignmentBase(ch) { out.append((pos, pos + w)) }
+            }
+            pos += w
+        }
+        return out
+    }
+
     /// 从整份 LRC 里解析。没有 `[kana:]` 标签、或对不齐时返回 nil。
     public static func parse(lrc: String) -> KanaAnnotation? {
         guard let raw = kanaTag(in: lrc) else { return nil }
@@ -77,7 +110,7 @@ public struct KanaAnnotation {
         // 先做总数校验 —— 对不上就整份弃用,不冒着"从某一行开始全歪"的风险硬塞。
         // 补进正文的演唱者标签(Musixmatch 的「合：」)不在条目里:总数对不上时剥掉行首标签再对一次,对上才用。
         let total = entries.reduce(0, { $0 + $1.count })
-        func need(_ lines: [String]) -> Int { lines.reduce(0) { $0 + $1.filter(needsAnnotation).count } }
+        func need(_ lines: [String]) -> Int { lines.reduce(0) { $0 + annotationUnits(in: $1).count } }
         if need(lines) != total {
             lines = lines.map { line in
                 guard let (_, rest, _) = LyricDuet.splitLabel(line), !rest.isEmpty else { return line }
@@ -88,49 +121,31 @@ public struct KanaAnnotation {
 
         var byLine: [String: [Mark]] = [:]
         var entryIdx = 0
-        var pendingInEntry = 0 // 当前条目还剩几个字没消费(跨行的整词标注)
+        var pendingInEntry = 0 // 当前条目还剩几个单元没消费(跨行的整词标注)
         for line in lines {
             var marks: [Mark] = []
-            var utf16Pos = 0
-            var i = line.startIndex
-            while i < line.endIndex {
-                let ch = line[i]
-                let w = utf16Width(ch)
-                guard needsAnnotation(ch) else {
-                    utf16Pos += w
-                    i = line.index(after: i)
-                    continue
+            // 一条读音可能覆盖好几个单元(「明日」→ あした),这几个单元连同夹在中间的字并成一个 Mark。
+            var open: (start: Int, end: Int)?
+            func close() {
+                if let o = open, !entries[entryIdx].reading.isEmpty {
+                    marks.append(Mark(utf16Start: o.start, utf16Length: o.end - o.start, reading: entries[entryIdx].reading))
                 }
+                open = nil
+            }
+            for unit in annotationUnits(in: line) {
                 if pendingInEntry == 0 {
                     guard entryIdx < entries.count else { return nil }
                     pendingInEntry = entries[entryIdx].count
                 }
-                // 一条读音可能覆盖好几个字(「明日」→ あした),把这几个字并成一个 Mark。
-                let start = utf16Pos
-                var length = 0
-                var consumed = 0
-                while i < line.endIndex, consumed < pendingInEntry {
-                    let c = line[i]
-                    let cw = utf16Width(c)
-                    if needsAnnotation(c) { consumed += 1 }
-                    length += cw
-                    utf16Pos += cw
-                    i = line.index(after: i)
-                    // 覆盖的字数够了就停,别把后面跟着的假名也吃进这个 Mark
-                    if consumed == pendingInEntry { break }
-                }
-                let reading = entries[entryIdx].reading
-                if !reading.isEmpty {
-                    marks.append(Mark(utf16Start: start, utf16Length: length, reading: reading))
-                }
-                if consumed == pendingInEntry {
+                open = (open?.start ?? unit.start, unit.end)
+                pendingInEntry -= 1
+                if pendingInEntry == 0 {
+                    close()
                     entryIdx += 1
-                    pendingInEntry = 0
-                } else {
-                    // 这条标注跨到了下一行(理论上不该发生),剩下的留给下一行继续消费
-                    pendingInEntry -= consumed
                 }
             }
+            // 这条标注跨到了下一行(理论上不该发生):这一行先标上,剩下的单元留给下一行继续消费
+            if open != nil { close() }
             if !marks.isEmpty { byLine[line] = marks }
         }
         // 显示的行剥掉了行首的演唱者标签:按剥掉之后的文字另登记一份,偏移挪到标签之后。

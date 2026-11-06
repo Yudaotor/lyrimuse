@@ -528,6 +528,24 @@ func runRomanizationTests() {
         expectEqual(KanaAnnotation.needsAnnotation("々"), true, "々 必须算作待标字符")
         expectEqual(KanaAnnotation.needsAnnotation("明"), true, "汉字是待标字符")
         expectEqual(KanaAnnotation.needsAnnotation("の"), false, "假名不占标注条目")
+
+        // 标注单元:一串连着的数字(半角、全角)算一个,〆、ヶ 各算一个。署名行「4s4ki」的两串数字各占一个空读音条目,
+        // 漏算会让整份标注对不齐作废。
+        let units = KanaAnnotation.parse(lrc: "[00:01.00]作词：4s4ki 藤原\n[00:02.00]１０００回 2人で\n[00:03.00]関ヶ原〆切\n"
+            + "[kana:1さく1し111ふじ1はら1せん1かい1ふた1り1せき1が1はら1しめ1きり]")
+        func spans(_ line: String) -> [String] {
+            (units?.marks(forLine: line) ?? []).map { "\($0.utf16Start),\($0.utf16Length),\($0.reading)" }
+        }
+        expectEqual(spans("作词：4s4ki 藤原"), ["0,1,さく", "1,1,し", "9,1,ふじ", "10,1,はら"],
+                    "数字串各占一个空读音条目,后面的汉字照常对上")
+        expectEqual(spans("１０００回 2人で"), ["0,4,せん", "4,1,かい", "6,1,ふた", "7,1,り"],
+                    "一串数字整串一个单元、带一个读音")
+        expectEqual(spans("関ヶ原〆切"), ["0,1,せき", "1,1,が", "2,1,はら", "3,1,しめ", "4,1,きり"], "ヶ、〆 各占一个单元")
+        let futari = Romanizer.romanize("2人で", japanese: true,
+                                        marks: KanaAnnotation.parse(lrc: "[00:01.00]2人で\n[kana:1ふた1り]")?.marks(forLine: "2人で") ?? []) ?? ""
+        expectEqual(futari.hasPrefix("futari"), true, "数字上的标注读音进罗马音:\(futari)")
+        expectEqual(KanaAnnotation.parse(lrc: "[00:01.00]4s4ki 藤原\n[kana:1ふじ1はら]") == nil, true,
+                    "数字串没有对应条目时总数对不上,整份弃用")
     }
 
     // 一首歌开头那一堆制作人信息该被过滤掉 —— 用户实报。原有的关键词表只收了

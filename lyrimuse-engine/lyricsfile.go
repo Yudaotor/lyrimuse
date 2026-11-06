@@ -212,9 +212,9 @@ func lyricsfileRomaLRC(lines []any, romaID string) string {
 }
 
 // lyricsfileKanaLine 按 synced 的正文行(带时间戳、去掉时间戳后非空,跟 App 的 KanaAnnotation.bodyLines 同一口径)
-// 拼 `[kana:…]` 行:条目是「覆盖几个待标字的单个数字 + 读音」,按顺序对齐正文里的待标字(kanaNeedsAnnotation)。
+// 拼 `[kana:…]` 行:条目是「覆盖几个标注单元的单个数字 + 读音」,按顺序对齐正文里的标注单元(kanaUnitCount)。
 // 这一行在 lyricsfile 里有逐字、词带假名读音时按词出条目(去掉跟读音头尾相同的假名,只留汉字那段的读音);读音缺失、
-// 拆不出、或这一行找不到逐字时,这几个字出空读音条目占位,保证对齐。一个带读音的条目都没有时返回空串。
+// 拆不出、或这一行找不到逐字时,这几个单元出空读音条目占位,保证对齐。一个带读音的条目都没有时返回空串。
 func lyricsfileKanaLine(lines []any, kanaID, synced string) string {
 	if kanaID == "" || synced == "" {
 		return ""
@@ -242,11 +242,7 @@ func lyricsfileKanaLine(lines []any, kanaID, synced string) string {
 	var b strings.Builder
 	annotated := false
 	emitBlank := func(s string) {
-		for _, r := range s {
-			if kanaNeedsAnnotation(r) {
-				b.WriteString("1")
-			}
-		}
+		b.WriteString(strings.Repeat("1", kanaUnitCount(s)))
 	}
 	for _, body := range kanaBodyLines(synced) {
 		ws, ok := byText[body]
@@ -272,26 +268,28 @@ func lyricsfileKanaLine(lines []any, kanaID, synced string) string {
 	return "[kana:" + b.String() + "]"
 }
 
-// kanaEntryFor:一个词的条目。n 是词里待标字的个数;待标字连成一段时 clean 为真,reading 是汉字那段的读音:读音头尾
-// 带着跟词里相同的假名(「教え」→おしえ)就去掉,不带(「失っ」→うしな,只注了汉字)原样用;读音缺失时为空串。待标字
-// 被假名隔开(「引き返す」)、或剩下的读音不全是平假名时 clean 为假,调用方逐字出空条目。
+// kanaEntryFor:一个词的条目。n 是词里标注单元的个数;单元连成一段时 clean 为真,reading 是这一段的读音:读音头尾
+// 带着跟词里相同的假名(「教え」→おしえ)就去掉,不带(「失っ」→うしな,只注了汉字)原样用;读音缺失时为空串。单元
+// 被假名隔开(「引き返す」)、或剩下的读音不全是平假名时 clean 为假,调用方逐个单元出空条目。
 func kanaEntryFor(text, reading string) (n int, kanaReading string, clean bool) {
 	runes := []rune(text)
 	first, last := -1, -1
 	for i, r := range runes {
-		if kanaNeedsAnnotation(r) {
-			n++
+		if kanaAlignRune(r) {
 			if first < 0 {
 				first = i
 			}
 			last = i
 		}
 	}
+	n = kanaUnitCount(text)
 	if n == 0 {
 		return 0, "", true
 	}
-	if last-first+1 != n {
-		return n, "", false
+	for _, r := range runes[first : last+1] {
+		if !kanaAlignRune(r) {
+			return n, "", false
+		}
 	}
 	if reading == "" {
 		return n, "", true
@@ -320,6 +318,35 @@ func kanaEntryFor(text, reading string) (n int, kanaReading string, clean bool) 
 // 同步改(对不齐时 App 整份弃用、不报错),TestKanaAnnotationMirrorsSwift 钉着。
 func kanaNeedsAnnotation(r rune) bool {
 	return r == '々' || (r >= 0x4E00 && r <= 0x9FFF) || (r >= 0x3400 && r <= 0x4DBF)
+}
+
+// kanaAlignBase:跟 `[kana:]` 条目对齐时单独占一个单元的字符:待标字之外还有「〆」「ヶ」和兼容汉字区。
+// 跟 App 的 KanaAnnotation.isAlignmentBase 同步改,理由同上。
+func kanaAlignBase(r rune) bool {
+	return kanaNeedsAnnotation(r) || r == '〆' || r == 'ヶ' || (r >= 0xF900 && r <= 0xFAFF)
+}
+
+// kanaAlignDigit:半角、全角数字。连着的一串在对齐时算一个单元(App 的 KanaAnnotation.isAlignmentDigit)。
+func kanaAlignDigit(r rune) bool {
+	return (r >= '0' && r <= '9') || (r >= '０' && r <= '９')
+}
+
+// kanaAlignRune:参与对齐的字符(单元本身或数字串里的一位)。
+func kanaAlignRune(r rune) bool { return kanaAlignBase(r) || kanaAlignDigit(r) }
+
+// kanaUnitCount:一段文字里的标注单元数,跟 App 的 KanaAnnotation.annotationUnits 同一口径:kanaAlignBase 的字各算一个,
+// 连着的一串数字算一个。
+func kanaUnitCount(s string) int {
+	n := 0
+	inDigits := false
+	for _, r := range s {
+		d := kanaAlignDigit(r)
+		if (d && !inDigits) || kanaAlignBase(r) {
+			n++
+		}
+		inDigits = d
+	}
+	return n
 }
 
 // kanaBodyLines:LRC 的正文行(带时间戳、去掉时间戳后非空)。必须跟 App 的 KanaAnnotation.bodyLines 同步改,理由同上。

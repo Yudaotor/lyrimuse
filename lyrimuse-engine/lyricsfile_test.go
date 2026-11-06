@@ -382,6 +382,10 @@ func TestKanaEntryFor(t *testing.T) {
 		{"引き返す", "ひきかえす", "", 2, false}, // 汉字被假名隔开,拆不出
 		{"つ", "つ", "", 0, true},
 		{"夜", "yoru", "", 1, false},
+		{"2人", "ふたり", "ふたり", 2, true},      // 数字串和汉字连成一段
+		{"1000", "せん", "せん", 1, true},      // 一串数字一个单元
+		{"関ヶ原", "せきがはら", "せきがはら", 3, true}, // ヶ 占一个单元
+		{"1つ目", "ひとつめ", "", 2, false},      // 被假名隔开
 	} {
 		n, got, clean := kanaEntryFor(c.text, c.reading)
 		if n != c.n || got != c.want || clean != c.clean {
@@ -451,9 +455,10 @@ func TestKanaAnnotationMirrorsSwift(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, lit := range []string{"0x4E00", "0x9FFF", "0x3400", "0x4DBF", `c == "々"`, `pattern: #"\[\d{1,2}:\d{2}(?:[.:]\d{1,3})?\]"#`} {
+	for _, lit := range []string{"0x4E00", "0x9FFF", "0x3400", "0x4DBF", `c == "々"`, `pattern: #"\[\d{1,2}:\d{2}(?:[.:]\d{1,3})?\]"#`,
+		`c == "〆"`, `c == "ヶ"`, "(0xF900...0xFAFF)", "(0x30...0x39)", "(0xFF10...0xFF19)", "annotationUnits(in: $1).count"} {
 		if !strings.Contains(string(src), lit) {
-			t.Errorf("KanaAnnotation.swift 里找不到 %s —— 两边的判定改过,lyricsfile.go 的 kanaNeedsAnnotation / kanaBodyLines 要同步", lit)
+			t.Errorf("KanaAnnotation.swift 里找不到 %s —— 两边的判定改过,lyricsfile.go 的 kanaNeedsAnnotation / kanaAlignBase / kanaUnitCount / kanaBodyLines 要同步", lit)
 		}
 	}
 	if kanaLRCTimeTag.String() != `\[\d{1,2}:\d{2}(?:[.:]\d{1,3})?\]` {

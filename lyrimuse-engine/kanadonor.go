@@ -90,8 +90,8 @@ func kanaTargetLines(lyrics, yrc string) []string {
 		if t == "" || seen[t] || !strings.ContainsFunc(t, kanaNeedsAnnotation) {
 			return
 		}
-		// 带同形异码字(康熙部首「⾒」)的行不借:App 先换回标准字再数待标字,会比这里多,整份标注对不齐作废。
-		if kanaNeedCount(normalizeHanCompat(t)) != kanaNeedCount(t) {
+		// 带同形异码字(康熙部首「⾒」)的行不借:App 先换回标准字再数标注单元,会比这里多,整份标注对不齐作废。
+		if kanaUnitCount(normalizeHanCompat(t)) != kanaUnitCount(t) {
 			return
 		}
 		seen[t] = true
@@ -107,7 +107,7 @@ func kanaTargetLines(lyrics, yrc string) []string {
 }
 
 // kanaEntriesByLineKey:把一份带 `[kana:]` 的 LRC 拆成「正文行的归一键 → 这一行对应的那段原始条目」。条目要按
-// 整份正文的待标字对齐(跟 App KanaAnnotation.parse 同一口径):总数对不上返回 nil;一个条目跨了行的那两行不收;
+// 整份正文的标注单元对齐(跟 App KanaAnnotation.parse 同一口径):总数对不上返回 nil;一个条目跨了行的那两行不收;
 // 归一键相同、条目不同的行(同一句两处标得不一样)都不收。
 func kanaEntriesByLineKey(lrc string) map[string]string {
 	raw := ""
@@ -129,7 +129,7 @@ func kanaEntriesByLineKey(lrc string) map[string]string {
 	}
 	need := 0
 	for _, l := range lines {
-		need += kanaNeedCount(l)
+		need += kanaUnitCount(l)
 	}
 	if need != total {
 		return nil
@@ -139,7 +139,7 @@ func kanaEntriesByLineKey(lrc string) map[string]string {
 	idx := 0
 	carry := 0 // 上一行最后一个条目还没盖完的字数:这一行开头先把它们盖掉,这一行不收
 	for _, l := range lines {
-		n := kanaNeedCount(l)
+		n := kanaUnitCount(l)
 		clean := carry == 0
 		take := min(carry, n)
 		carry -= take
@@ -220,27 +220,25 @@ func kanaDigitValue(r rune) int {
 	return 1
 }
 
-func kanaNeedCount(line string) int {
-	n := 0
-	for _, r := range line {
-		if kanaNeedsAnnotation(r) {
-			n++
-		}
-	}
-	return n
-}
-
 // kanaLineKey:一行歌词的归一键 —— 去掉空白、标点、符号,全角 ASCII 换成半角,拉丁字母小写。汉字和假名原样留着,
-// 所以键相同的两行,待标字的个数和先后一定相同,对方那一行的条目能原样对到这一行上。
+// 两串数字之间去掉了东西时留一个 `|` 隔开(「1,000」跟「1000」是两个单元和一个单元),所以键相同的两行,标注单元的
+// 个数和先后一定相同,对方那一行的条目能原样对到这一行上。
 func kanaLineKey(line string) string {
 	var b strings.Builder
+	lastDigit, dropped := false, false
 	for _, r := range line {
 		if r >= 0xFF01 && r <= 0xFF5E {
 			r -= 0xFEE0
 		}
 		if unicode.IsSpace(r) || unicode.IsPunct(r) || unicode.IsSymbol(r) {
+			dropped = true
 			continue
 		}
+		d := kanaAlignDigit(r)
+		if d && lastDigit && dropped {
+			b.WriteByte('|')
+		}
+		lastDigit, dropped = d, false
 		b.WriteRune(unicode.ToLower(r))
 	}
 	return b.String()
@@ -248,7 +246,7 @@ func kanaLineKey(line string) string {
 
 // lyricsKanaVersion:借假名标注的版本。一轮解析里问到过带标注的源(酷狗 / QQ 过了身份关的候选)、或者补问过一次,
 // 条目的 LyricsKanaChecked 记成它。
-const lyricsKanaVersion = 1
+const lyricsKanaVersion = 2
 
 // kanaDonorSources:会在正文里带 `[kana:]` 的源。
 var kanaDonorSources = map[string]bool{"kugou": true, "qq": true, "lrclib": true}

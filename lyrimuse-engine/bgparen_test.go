@@ -372,6 +372,11 @@ func TestSplitParenBackgroundKeepsKanaAligned(t *testing.T) {
 	if !strings.Contains(sp.bg, "yeah") || strings.Contains(sp.bg, "愛") {
 		t.Errorf("bg = %q", sp.bg)
 	}
+	// 括号里只有数字也不拆:一串数字同样占一个标注单元。
+	digits := "[kana:1あい11]\n[00:01.00]Love you (愛)\n[00:05.00]Count (1 2)"
+	if sp, ok := splitParenBackground(digits, yrcLine(1000, "Love you (愛)")+"\n"+yrcLine(5000, "Count (1 2)")); ok && !strings.Contains(sp.lrc, "(1 2)") {
+		t.Errorf("括号里的数字被拆走: %q", sp.lrc)
+	}
 	// 不带标注的同样两行,括号里的汉字照拆。
 	if sp, ok := splitParenBackground("[00:01.00]Love you (愛)", yrcLine(1000, "Love you (愛)")); !ok || sp.lrc != "[00:01.00]Love you" {
 		t.Errorf("没有标注时照拆: %+v %v", sp, ok)

@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"os"
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -37,6 +38,22 @@ func TestKanaLineKey(t *testing.T) {
 	if kanaLineKey("君と") == kanaLineKey("君を") {
 		t.Error("假名不同的两行不该同键")
 	}
+	if kanaLineKey("１０００回") != kanaLineKey("1000回") {
+		t.Error("全角、半角数字该同键")
+	}
+	if kanaLineKey("1,000回") == kanaLineKey("1000回") {
+		t.Error("中间隔开的两串数字是两个标注单元,不该跟一串数字同键")
+	}
+}
+
+func TestKanaUnitCount(t *testing.T) {
+	for s, want := range map[string]int{
+		"作词：4s4ki 藤原": 6, "１０００回 2人で": 4, "関ヶ原〆切": 5, "1,000": 2, "見﨑": 2, "Love you": 0,
+	} {
+		if got := kanaUnitCount(s); got != want {
+			t.Errorf("kanaUnitCount(%q) = %d, want %d", s, got, want)
+		}
+	}
 }
 
 func TestKanaEntriesByLineKey(t *testing.T) {
@@ -57,6 +74,11 @@ func TestKanaEntriesByLineKey(t *testing.T) {
 	split := "[kana:1き2あした1ゆめ]\n[00:01.00]君と明\n[00:02.00]日へ\n[00:03.00]夢\n"
 	if got := kanaEntriesByLineKey(split); len(got) != 1 || got[kanaLineKey("夢")] != "1ゆめ" {
 		t.Errorf("跨行: %v", got)
+	}
+	// 数字串占一个空读音条目:署名行里的数字不让整份对不齐。
+	digits := "[kana:1さく1し111ふじ1はら1ゆめ]\n[00:01.00]作词：4s4ki 藤原\n[00:02.00]夢\n"
+	if got := kanaEntriesByLineKey(digits); got[kanaLineKey("作词：4s4ki 藤原")] != "1さく1し111ふじ1はら" || got[kanaLineKey("夢")] != "1ゆめ" {
+		t.Errorf("数字串: %v", got)
 	}
 	// 同一句两处标得不一样:都不收。
 	conflict := "[kana:1き1きみ1ゆめ]\n[00:01.00]君\n[00:02.00]君\n[00:03.00]夢\n"
@@ -144,7 +166,7 @@ func TestRefreshKana(t *testing.T) {
 func TestLyricsKanaSerialization(t *testing.T) {
 	e := leanForIndex(enrichEntry{Lyrics: bt("[00:01.00]a"), LyricsKana: "[kana:1き]\n[00:00.00]君", LyricsKanaChecked: lyricsKanaVersion}, 7)
 	b, _ := json.Marshal(e)
-	if !strings.Contains(string(b), `"lyrics_kana":"[kana:1き]\n[00:00.00]君","lyrics_kana_checked":1`) {
+	if !strings.Contains(string(b), `"lyrics_kana":"[kana:1き]\n[00:00.00]君","lyrics_kana_checked":`+strconv.Itoa(lyricsKanaVersion)) {
 		t.Errorf("索引里没有借来的标注: %s", b)
 	}
 }
