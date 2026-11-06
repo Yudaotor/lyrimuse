@@ -910,7 +910,8 @@ final class PlaybackCoordinator: ObservableObject {
     ///
     /// 权限检查用 askIfNeeded: true —— 这是用户主动点的,该问就问,跟播放控制那三个按钮同一套
     /// (见 LyricsOverlayWindowController.withMusicPermission)。
-    func toggleFavorited() {
+    /// `written`:写入有了结果时回调一次(播放器接了 true,没写、没接 false);网页版那一支不回调。
+    func toggleFavorited(written: (@MainActor @Sendable (Bool) -> Void)? = nil) {
         if favoritePlayer == nil, let web = youtubeMusicWebTarget {
             // 网页版的赞,取舍同下面:乐观更新、写成了不回读、没写成回读纠正。
             let target = !(isFavorited ?? false)
@@ -922,7 +923,10 @@ final class PlaybackCoordinator: ObservableObject {
             }
             return
         }
-        guard let player = favoritePlayer, !favoriteBlockedForTrack else { return }
+        guard let player = favoritePlayer, !favoriteBlockedForTrack else {
+            written?(false)
+            return
+        }
         let target = !(isFavorited ?? false)
         isFavorited = target
         favoritedActionSeq &+= 1
@@ -936,7 +940,10 @@ final class PlaybackCoordinator: ObservableObject {
             if delay > 0 {
                 try? await Task.sleep(for: .seconds(delay))
                 guard await MainActor.run(body: { [weak self] in self?.currentTrackKey == trackKey }) else {
-                    await MainActor.run { [weak self] in self?.refreshFavorited() }
+                    await MainActor.run { [weak self] in
+                        self?.refreshFavorited()
+                        written?(false)
+                    }
                     return
                 }
             }
@@ -945,12 +952,16 @@ final class PlaybackCoordinator: ObservableObject {
             // 实际在播的就是 Apple Music,必须真的查一次权限,否则下面的 AppleScript 会静默失败。
             if player == .appleMusic,
                await !MusicAutomationPermission.checkAppleMusicSafely(askIfNeeded: true) {
-                await MainActor.run { [weak self] in self?.refreshFavorited() }
+                await MainActor.run { [weak self] in
+                    self?.refreshFavorited()
+                    written?(false)
+                }
                 return
             }
             // 跟播放模式同一个道理:写被接受了就别马上回读,Music.app 的 getter 会滞后。Kaset 没登录时不理这条命令,
             // 那时 setFavorited 回 false,照样回读纠正。
             guard !MusicPlaybackController.setFavorited(target, for: player) else {
+                if let written { await MainActor.run { written(true) } }
                 // Music.app 的写入要好几秒才生效,这期间反向再写一次会被吞掉。过了滞后期这次仍是最后一次写、还是这一首时
                 // 回读一次,跟写的不一样就补写。见 07 章决策 175。
                 guard MusicPlaybackController.reconcilesFavoriteAfterWrite(player) else { return }
@@ -964,9 +975,10 @@ final class PlaybackCoordinator: ObservableObject {
                 return
             }
             await MainActor.run { [weak self] in
+                written?(false)
                 guard let self else { return }
-                // 读别处状态的播放器按下去没生效:多半是没登录(弹了登录窗口)、界面上找不到那颗键,这一首不再显示心、不再按。
-                if MusicPlaybackController.favoriteSettlesAfterTrackChange(player), self.currentTrackKey == trackKey {
+                // 按下去没生效:多半是没登录(弹了登录窗口、接口不理)、界面上找不到那颗键,这一首不再显示心、不再按。
+                if MusicPlaybackController.hidesFavoriteWhenWriteIgnored(player), self.currentTrackKey == trackKey {
                     logger.notice("toggleFavorited: favorite did not change for \(player.rawValue, privacy: .public), hiding the heart for this track")
                     self.favoriteUnavailableTrackKey = trackKey
                 }
@@ -1009,8 +1021,13 @@ final class PlaybackCoordinator: ObservableObject {
                 }
                 let now = self.isFavorited ?? false
                 let target = on ?? !now
-                if target != now { self.toggleFavorited() }
-                done(target ? .liked : .unliked)
+                let result: ShortcutFavoriteResult = target ? .liked : .unliked
+                guard target != now else { return done(result) }
+                guard MusicPlaybackController.shortcutAwaitsFavoriteWrite(player) else {
+                    self.toggleFavorited()
+                    return done(result)
+                }
+                self.toggleFavorited { ok in done(ok ? result : .unsupported) }
             }
         }
     }

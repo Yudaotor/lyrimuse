@@ -1510,6 +1510,11 @@ func runPlayerIdentityTests() {
         expectEqual(PlaybackPlayer.allCases.filter(C.favoriteSettlesAfterTrackChange),
                     [.qqMusic, .netease, .kugou, .soda, .amazonMusic].filter { PlaybackPlayer.allCases.contains($0) },
                     "读别处状态的喜欢: QQ 音乐、网易云、酷狗、汽水和 Amazon")
+        expectEqual(PlaybackPlayer.allCases.filter(C.hidesFavoriteWhenWriteIgnored),
+                    [.qqMusic, .netease, .kugou, .soda, .amazonMusic, .pearDesktop].filter { PlaybackPlayer.allCases.contains($0) },
+                    "喜欢按了没生效藏心: 读别处状态的那几家加 Pear Desktop(登出后接口照报没赞、赞不理)")
+        expectEqual(PlaybackPlayer.allCases.filter(C.shortcutAwaitsFavoriteWrite), [.pearDesktop],
+                    "快捷键喜欢等写入结果再提示: 只有本机接口几毫秒就有结果的 Pear Desktop")
         // 汽水底部那颗心两张图标,带 show 的是正在显示的那张:第一张 = 喜欢了(07 章决策 151)。
         typealias Soda = SodaMusicControl
         expectEqual([Soda.favorited(iconClasses: [["icon", "show"], ["icon"]]), Soda.favorited(iconClasses: [["icon"], ["icon", "show"]]),

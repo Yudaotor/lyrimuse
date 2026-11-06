@@ -612,7 +612,7 @@ private func wiringContracts() {
                     && coordinator.contains("guard await MainActor.run(body: { [weak self] in self?.currentTrackKey == trackKey }) else {")
                     && coordinator.contains("self.scheduleSettledFavoriteRefresh()")
                     && coordinator.contains("self.favoriteUnavailableTrackKey = trackKey")
-                    && coordinator.contains("guard let player = favoritePlayer, !favoriteBlockedForTrack else { return }")
+                    && coordinator.contains("guard let player = favoritePlayer, !favoriteBlockedForTrack else {\n            written?(false)\n            return")
                     && coordinator.contains("let value = includeFavorited && !self.favoriteBlockedForTrack ? state.favorited : nil"), true,
                 "菜单标题喜欢: 换歌后推迟读写、没写成这一首藏起心")
     // Music.app 的写入要好几秒才生效,期间反向再写会被吞掉(07 章决策 175):写完过了滞后期、仍是最后一次写时回读补写;
@@ -623,6 +623,11 @@ private func wiringContracts() {
                 "喜欢对账: 写完过了滞后期回读补写,快捷键回读不盖刚写的")
     expectEqual(coordinator.contains("if MusicPlaybackController.shortcutFavoriteUnknown(readback: current, local: self.isFavorited) {\n                    return done(.unsupported)"), true,
                 "快捷键喜欢: 回读和本地都没有这一首的状态时回报不支持,不报「已喜欢」")
+    expectEqual(coordinator.contains("if MusicPlaybackController.hidesFavoriteWhenWriteIgnored(player), self.currentTrackKey == trackKey {")
+                    && coordinator.contains("self.toggleFavorited { ok in done(ok ? result : .unsupported) }")
+                    && coordinator.contains("guard MusicPlaybackController.shortcutAwaitsFavoriteWrite(player) else {")
+                    && coordinator.contains("if let written { await MainActor.run { written(true) } }"), true,
+                "喜欢没生效: 按名单藏心;快捷键对等得起结果的播放器写成了才报喜欢、没成报不支持")
 }
 
 // ---- 桌面版 Spotify 的 Connect 镜像 ----

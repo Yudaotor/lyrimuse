@@ -409,10 +409,22 @@ public enum MusicPlaybackController {
 
     /// 「喜欢」不走脚本接口、读的是别处的播放器:菜单栏那一项(`MenuTitleFavorite`,酷狗是播放条那颗心)、Amazon 的日志加资料库、
     /// 汽水的界面。
-    /// 换歌后那份状态要过一会儿才换成新那首的(网易云实测 0.16~0.27 秒),这段时间里读、写都按 `favoriteSettleSeconds` 往后推;
-    /// 按了没生效(没登录等)这一首藏起心。见 07 章决策 147。
+    /// 换歌后那份状态要过一会儿才换成新那首的(网易云实测 0.16~0.27 秒),这段时间里读、写都按 `favoriteSettleSeconds` 往后推。
+    /// 见 07 章决策 147。
     public static func favoriteSettlesAfterTrackChange(_ player: PlaybackPlayer) -> Bool {
         player == .qqMusic || player == .netease || player == .kugou || player == .amazonMusic || player == .soda
+    }
+
+    /// 按了「喜欢」没生效(没登录等)这一首藏起心、不再按:上面那几家,加上 Pear Desktop(登出后本机接口照报没赞、赞的请求不理)。
+    /// 见 07 章决策 147、193。
+    public static func hidesFavoriteWhenWriteIgnored(_ player: PlaybackPlayer) -> Bool {
+        favoriteSettlesAfterTrackChange(player) || player == .pearDesktop
+    }
+
+    /// 快捷键「喜欢」等写入有了结果再提示:写入是本机接口一来一回、几毫秒就知道成没成的(Pear Desktop),没成提示不支持。
+    /// 其余照旧先提示,写入要等标题翻、等滞后的不拖慢提示。见 07 章决策 193。
+    public static func shortcutAwaitsFavoriteWrite(_ player: PlaybackPlayer) -> Bool {
+        player == .pearDesktop
     }
 
     /// 换歌后多久那份状态才算换成了新那首的。
