@@ -10,6 +10,7 @@ import os
 ///   (脚本、界面拖进度条,两份锚点都不报),或者锚点偏了:差得远的按「报的值 + 0.5」重起一段,差得近的挪进那一秒的边上,
 ///   再盯一次跳变。
 /// - 已经量准的表遇到同一件事的另一份锚点(系统那份和通知各报一次),推出来的位置跟它差不过 `sameEventSlackSecs` 就不换。
+/// - 量准的表每过 `recheckSecs` 再盯一次跳变:播放中跳转不到一秒的,整秒核对看不出来,靠这一次纠回。
 /// - 暂停着的位置就是暂停锚点报的(两份一致,恢复时声音从这里接着出)。
 ///
 /// 见 02 章决策 241。
@@ -93,6 +94,8 @@ public enum SwinsianPlayhead {
     public static let tickSlackSecs: Double = 1.2
     /// 一段最多盯几次跳变。
     public static let maxTickAttempts = 3
+    /// 量准的表隔这么久再盯一次跳变。
+    public static let recheckSecs: TimeInterval = 20
 
     // MARK: 纯函数
 
@@ -175,6 +178,15 @@ public enum SwinsianPlayhead {
         return next
     }
 
+    /// 量准的表在走、离上次对时过了 `recheckSecs`:再盯一次跳变(还算准,盯到了从跳变起算)。纯函数,selftest 覆盖。
+    public static func rechecked(_ clock: Clock, now: Date) -> Clock {
+        guard clock.precise, clock.playing, !clock.wantsTick, now.timeIntervalSince(clock.baseAt) >= recheckSecs else { return clock }
+        var out = clock
+        out.wantsTick = true
+        out.tickAttempts = 0
+        return out
+    }
+
     /// 这一拍该不该去盯跳变。纯函数,selftest 覆盖。
     public static func wantsTick(_ clock: Clock) -> Bool {
         clock.playing && clock.wantsTick && clock.tickAttempts < maxTickAttempts
@@ -205,7 +217,9 @@ public enum SwinsianPlayhead {
                                now: Date = Date()) -> Reading? {
         let (clock, before) = state.withLock { s -> (Clock?, Clock?) in
             let previous = s
-            s = advance(s, track: track, playing: playing, system: system, notice: notice, check: check)
+            s = advance(s, track: track, playing: playing, system: system, notice: notice, check: check).map {
+                rechecked($0, now: now)
+            }
             return (s, previous)
         }
         guard let clock else { return nil }

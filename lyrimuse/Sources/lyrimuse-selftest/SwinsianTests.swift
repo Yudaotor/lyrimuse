@@ -96,6 +96,16 @@ func runSwinsianTests() {
         let far = H.calibrated(clock, tick: H.Tick(value: 9, at: t(12)))
         expectEqual([far.precise ? 1 : 0, far.wantsTick ? 1 : 0, far.tickAttempts], [0, 1, 1],
                     "Swinsian 跳变: 跟这一段差太多的不采信,下一拍再盯")
+        var live = precise
+        live.playing = true
+        let due = H.rechecked(live, now: t(12.042 + H.recheckSecs))
+        expectEqual([due.precise ? 1 : 0, due.wantsTick ? 1 : 0], [1, 1],
+                    "Swinsian 复核: 量准的表隔一段再盯一次跳变(不到一秒的跳转整秒核对看不出来),盯的时候仍算准")
+        expectEqual(H.rechecked(live, now: t(12.042 + H.recheckSecs - 1)), live, "Swinsian 复核: 没到时候不盯")
+        expectEqual(H.rechecked(clock, now: t(60)), clock, "Swinsian 复核: 还没量准的不另起复核")
+        let corrected = H.calibrated(due, tick: H.Tick(value: 22, at: t(33.4)))
+        expectEqual([corrected.base, corrected.precise ? 1 : 0, corrected.wantsTick ? 1 : 0], [22, 1, 0],
+                    "Swinsian 复核: 盯到的跳变跟表差零点几秒,按跳变改过来")
         var tries = clock
         for _ in 0..<H.maxTickAttempts { tries = H.calibrated(tries, tick: nil) }
         expectEqual([H.wantsTick(tries) ? 1 : 0, tries.tickAttempts], [0, H.maxTickAttempts], "Swinsian 跳变: 盯满次数不再盯")
