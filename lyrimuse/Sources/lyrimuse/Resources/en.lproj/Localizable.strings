@@ -387,6 +387,7 @@
 "为其他播放器单独设置" = "Set for Another Player";
 "为勾选的语言标注读音" = "Adds romanization for the languages you check";
 "为勾选的语言标注读音；是否显示在「歌词显示」中设置" = "Adds pronunciation for the selected languages; whether it shows is set in Lyrics Display";
+"为大曲库设计的本地音乐播放器" = "A local music player built for large libraries";
 "为当前配色命名" = "Name these colors";
 "为歌手和专辑添加前缀" = "Label Artist and Album";
 "主打无损和高解析音质的本地音乐播放器" = "A local music player built for lossless and hi-res audio";

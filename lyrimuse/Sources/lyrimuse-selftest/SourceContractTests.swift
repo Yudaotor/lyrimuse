@@ -954,7 +954,7 @@ func runSourceContractTests() {
                 // 电台放到歌也没有歌词。这一侧的 duration 只影响进度条分母,不写歌词缓存。
                 expectEqual(mcc.contains("duration: isRadio ? nil"), false,
                             "电台: App 侧不能把 duration 置空 —— 进度锚点以 duration > 0 为闸,置空等于整档没歌词")
-                expectEqual(mcc.contains("elapsedTime: amazonPosition ?? radioPosition ?? pine?.position ?? foobarLoop ?? stretched"), true,
+                expectEqual(mcc.contains("elapsedTime: amazonPosition ?? radioPosition ?? pine?.position ?? swinsian?.position ?? foobarLoop ?? stretched"), true,
                             "电台: 位置要用自己那块单曲表,取不到再退回原读数")
                 expectEqual(mcc.contains("guard mediaControl.isRadio != true || perTrackRadio else { return mediaControl }"), true,
                             "电台: 整档节目口径的台不能借 AppleScript 那份位置(它同样是整档节目的);只有判成单曲位置的那首才借")

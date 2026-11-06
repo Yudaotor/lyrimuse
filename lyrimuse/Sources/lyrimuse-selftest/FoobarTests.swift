@@ -281,9 +281,9 @@ func runFoobarTests() {
                     "foobar 接线: 拔了 player-file 不写 local_file")
         expectEqual(sourceHas(openFile, "out.republishDueBy = snapshot.republishDueBy"), true,
                     "foobar 接线: 换成标签那份要带上补查时刻,不然曲尾那一查排不上")
-        expectEqual(sourceHas(client, "elapsedTime: amazonPosition ?? radioPosition ?? pine?.position ?? foobarLoop ?? stretched,"), true,
+        expectEqual(sourceHas(client, "elapsedTime: amazonPosition ?? radioPosition ?? pine?.position ?? swinsian?.position ?? foobarLoop ?? stretched,"), true,
                     "foobar 接线: 解码那一拍位置换成取余后的")
-        expectEqual(sourceHas(openFile, "acceptsBaseName: foobar)"), true,
+        expectEqual(sourceHas(openFile, "acceptsBaseName: baseName)") && sourceHas(openFile, "static let baseNameBundleIDs: Set<String> = [\nPlaybackPlayer.foobar2000.bundleIdentifier,"), true,
                     "foobar 接线: 认当前文件时没写标签的按不带扩展名的文件名拆")
     }
 }

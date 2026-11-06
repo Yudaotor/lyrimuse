@@ -22,7 +22,7 @@
 
 https://github.com/user-attachments/assets/f9416bca-8e13-49c0-9295-654130a9b0f9
 
-Lyrimuse 是一款開源的 Mac 桌面歌詞軟體。它待在選單列裡，跟著播放逐字標亮歌詞，可以常駐最上層、浮在所有視窗之上，也可以放進選單列、瀏海下的動態島膠囊、觸控列或完整的歌詞視窗。支援 Apple Music、Spotify、KKBOX、Amazon Music、YouTube Music 播放器 Kaset 等十六款播放器和瀏覽器裡的網頁播放器，並從十五個歌詞來源中評分挑選最合適的版本，還能顯示翻譯和讀音。另外還內建 Last.fm 聆聽檔案與播放記錄。
+Lyrimuse 是一款開源的 Mac 桌面歌詞軟體。它待在選單列裡，跟著播放逐字標亮歌詞，可以常駐最上層、浮在所有視窗之上，也可以放進選單列、瀏海下的動態島膠囊、觸控列或完整的歌詞視窗。支援 Apple Music、Spotify、KKBOX、Amazon Music、YouTube Music 播放器 Kaset 等十七款播放器和瀏覽器裡的網頁播放器，並從十五個歌詞來源中評分挑選最合適的版本，還能顯示翻譯和讀音。另外還內建 Last.fm 聆聽檔案與播放記錄。
 
 **從 LyricsX 過來？** LyricsX 自 2022 年 4 月後就沒有再發布新版本。Lyrimuse 涵蓋了它的核心功能並持續更新，還補上了華語播放器、KKBOX、Amazon Music、Kaset、Pear Desktop、reAMP、VOX、Pine Player、foobar2000 和網頁播放器的支援。詳細差異見這份逐項查證過的[與 LyricsX、Lyric Fever 的對比](docs/lyrics-apps-comparison.zh-CN.md)（簡體中文）。
 
@@ -211,7 +211,7 @@ QQ 音樂／網易雲音樂／酷狗音樂／汽水音樂／KKBOX／Amazon Music
 
 ### 不管選哪種方案
 
-從 `/Applications` 打開 Lyrimuse，首次啟動的設定引導會帶你完成：選播放器（Apple Music、QQ 音樂、網易雲音樂、酷狗音樂、汽水音樂、KKBOX、Amazon Music、Spotify、Kaset、Pear Desktop、reAMP、VOX、Pine Player、foobar2000、洛雪音樂、微信讀書，或者自動偵測），選了 Apple Music、Spotify、Kaset 或 VOX 的話再授予對它的「自動化」權限（其他幾個讀取基本曲目資訊不需要權限），以及啟用它的背景常駐擷取服務（這樣就算把視窗關掉，歌詞／封面也會持續解析）。走完引導歌詞馬上就會顯示出來（更多建置選項見 [lyrimuse/README.md](lyrimuse/README.md)）。
+從 `/Applications` 打開 Lyrimuse，首次啟動的設定引導會帶你完成：選播放器（Apple Music、QQ 音樂、網易雲音樂、酷狗音樂、汽水音樂、KKBOX、Amazon Music、Spotify、Kaset、Pear Desktop、reAMP、VOX、Pine Player、foobar2000、Swinsian、洛雪音樂、微信讀書，或者自動偵測），選了 Apple Music、Spotify、Kaset、VOX 或 Swinsian 的話再授予對它的「自動化」權限（其他幾個讀取基本曲目資訊不需要權限），以及啟用它的背景常駐擷取服務（這樣就算把視窗關掉，歌詞／封面也會持續解析）。走完引導歌詞馬上就會顯示出來（更多建置選項見 [lyrimuse/README.md](lyrimuse/README.md)）。
 
 看歌詞只需要這些。上面那些附加功能，之後想用了再到設定裡打開就行。
 
@@ -239,7 +239,7 @@ QQ 音樂／網易雲音樂／酷狗音樂／汽水音樂／KKBOX／Amazon Music
 能。瀏覽器裡的影片這類 App 占著系統的「正在播放」時，系統的播放鍵會落到它身上；這時 Lyrimuse 改按 QQ 音樂、網易雲音樂自己選單列裡，或汽水音樂播放列上的播放 / 暫停、上一首、下一首，播放器留在背景。這要「輔助使用」權限（設定 → 播放器），沒授權時按這幾顆鍵會打開那一頁；這時拖移進度列跳轉不了。macOS 27 上這項權限在 **系統設定 → 隱私權與安全性 → 裝置控制和資料取用**，更早的版本叫 **輔助使用**。
 
 ### 只支援 Apple Music 嗎，Spotify、QQ 音樂、網易雲音樂能用嗎？
-都能用，另外還有酷狗音樂、汽水音樂、KKBOX、Amazon Music、YouTube Music 播放器 Kaset、開源的 YouTube Music 桌面用戶端 Pear Desktop、仿 Winamp 的 reAMP、主打無損和高解析音質的本機播放器 VOX、免費且格式支援很全的本機播放器 Pine Player、從 Windows 移植來的老牌本機播放器 foobar2000 和開源的洛雪音樂，一共十六個播放器，還有瀏覽器裡的網頁版 YouTube Music / Spotify；也可以交給自動偵測，macOS 顯示哪個在「正在播放」就跟哪個。Apple Music、Spotify、Kaset 和 VOX 需要「自動化」權限（Spotify、Kaset 和 VOX 用它取得精確進度、控制播放），其他十二個透過 macOS 的 MediaRemote 讀取基本曲目資訊，不需要權限；QQ 音樂、網易雲音樂、酷狗音樂、汽水音樂和 Amazon Music 的隨機、循環、喜歡這類按鍵，以及 reAMP 和 foobar2000 的隨機、循環和音量，要「輔助使用」權限；Pine Player 回報的進度只到整秒，Lyrimuse 用這項權限讀它介面上的進度條校準。用 KKBOX、Amazon Music 或洛雪音樂播放時，它們自己存下的這首歌詞也會拿來比較，Lyrimuse 不會向這幾家發出任何請求。
+都能用，另外還有酷狗音樂、汽水音樂、KKBOX、Amazon Music、YouTube Music 播放器 Kaset、開源的 YouTube Music 桌面用戶端 Pear Desktop、仿 Winamp 的 reAMP、主打無損和高解析音質的本機播放器 VOX、免費且格式支援很全的本機播放器 Pine Player、從 Windows 移植來的老牌本機播放器 foobar2000、為大型曲庫設計的本機播放器 Swinsian 和開源的洛雪音樂，一共十七個播放器，還有瀏覽器裡的網頁版 YouTube Music / Spotify；也可以交給自動偵測，macOS 顯示哪個在「正在播放」就跟哪個。Apple Music、Spotify、Kaset、VOX 和 Swinsian 需要「自動化」權限（Spotify、Kaset 和 VOX 用它取得精確進度、控制播放），其他十二個透過 macOS 的 MediaRemote 讀取基本曲目資訊，不需要權限；QQ 音樂、網易雲音樂、酷狗音樂、汽水音樂和 Amazon Music 的隨機、循環、喜歡這類按鍵，以及 reAMP 和 foobar2000 的隨機、循環和音量，要「輔助使用」權限；Pine Player 回報的進度只到整秒，Lyrimuse 用這項權限讀它介面上的進度條校準。用 KKBOX、Amazon Music 或洛雪音樂播放時，它們自己存下的這首歌詞也會拿來比較，Lyrimuse 不會向這幾家發出任何請求。
 
 ### KKBOX、Amazon Music 在 Mac 上能顯示桌面歌詞嗎？
 可以。這兩家都透過 macOS 的 MediaRemote 讀取，不用給權限，歌詞和其他播放器一樣能顯示在桌面浮動視窗、選單列、動態島膠囊和歌詞視窗裡。如果 KKBOX 或 Amazon Music 自己已經存了這首歌的歌詞，也會拿來一起比較，並且額外加分。Lyrimuse 不登入這兩家的帳號，也不向它們發出請求。其他歌詞來源照樣會查，哪家的版本更好（例如帶逐字時間軸），就用哪家的。

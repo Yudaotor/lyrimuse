@@ -4,7 +4,7 @@
 
 [English](feature-list.md) · [简体中文](feature-list.zh-CN.md) · [繁體中文](feature-list.zh-Hant.md) · 日本語 · [한국어](feature-list.ko.md) · [Español](feature-list.es.md) · [Français](feature-list.fr.md) · [Deutsch](feature-list.de.md) · [Italiano](feature-list.it.md) · [Português (Brasil)](feature-list.pt-BR.md) · [Tiếng Việt](feature-list.vi.md) · [Русский](feature-list.ru.md) · [Українська](feature-list.uk.md) · [ไทย](feature-list.th.md)
 
-Lyrimuseは、オープンソース（GPL-3.0）のmacOS用の単語ごとの歌詞Appです。macOS 14以降に対応し、Apple SiliconとIntelのどちらでも動作します。Apple Music、Spotify、QQ Music、NetEase Cloud Music、Kugou、Soda Music、KKBOX、Amazon Music、LX Music、Kaset、Pear Desktop、reAMP、VOX、Pine Player、foobar2000、そしてブラウザで再生するYouTube MusicとSpotify Web版の歌詞を単語ごとに同期して、デスクトップのフローティング歌詞、ノッチ、メニューバー、Touch Bar、歌詞ウインドウに表示します。翻訳とローマ字表記（ピンイン、粤拼、日本語のローマ字、韓国語のローマ字）にも対応し、再生履歴をLast.fmとListenBrainzにScrobbleしたり、再生中の曲をDiscordに表示したりできます。インターフェイスは簡体字中国語、繁体字中国語、英語、日本語、韓国語、スペイン語、フランス語、ドイツ語、イタリア語、ポルトガル語（ブラジル）、ベトナム語、ロシア語、ウクライナ語、タイ語に対応しています。
+Lyrimuseは、オープンソース（GPL-3.0）のmacOS用の単語ごとの歌詞Appです。macOS 14以降に対応し、Apple SiliconとIntelのどちらでも動作します。Apple Music、Spotify、QQ Music、NetEase Cloud Music、Kugou、Soda Music、KKBOX、Amazon Music、LX Music、Kaset、Pear Desktop、reAMP、VOX、Pine Player、foobar2000、Swinsian、そしてブラウザで再生するYouTube MusicとSpotify Web版の歌詞を単語ごとに同期して、デスクトップのフローティング歌詞、ノッチ、メニューバー、Touch Bar、歌詞ウインドウに表示します。翻訳とローマ字表記（ピンイン、粤拼、日本語のローマ字、韓国語のローマ字）にも対応し、再生履歴をLast.fmとListenBrainzにScrobbleしたり、再生中の曲をDiscordに表示したりできます。インターフェイスは簡体字中国語、繁体字中国語、英語、日本語、韓国語、スペイン語、フランス語、ドイツ語、イタリア語、ポルトガル語（ブラジル）、ベトナム語、ロシア語、ウクライナ語、タイ語に対応しています。
 
 Lyrimuse のすべての機能について、何ができるか、設定のどこにあるか、インストール直後にオンかオフかをまとめています。最後に設定ウインドウの全項目を載せています。この一覧はコードと一緒に管理し、機能が増減するたびに更新します。
 
@@ -124,7 +124,7 @@ NetEase Cloud Music、QQ Music、Kugou、Kuwo、Migu、Musixmatch、LRCLIB、Lyr
 
 ### プレーヤーがこのMacに保存した歌詞をそのまま使用
 
-Apple Music、Spotify、Kugou Music、KKBOX、Amazon Music、LX MusicがこのMacに保存した歌詞はそのまま使用でき、プレーヤーに表示されるものと同じバージョンをより速く表示できます（Apple MusicとSpotifyは、プレーヤーで歌詞を表示したことのある曲のみ）。QQ MusicとNetEase Cloud Musicでは、ローカルのライブラリから再生中の曲を識別するため、検索せずに同じバージョンの歌詞を取得できます。reAMP、VOX、Pine Player、foobar2000で再生するときや、Apple Musicでライブラリ内のローカルファイルを、LX Musicでローカルリストの曲を再生するときは、ファイルに埋め込まれた歌詞または同じ名前の.lrcファイルを使用します。QQ Music、NetEase Cloud Music、Kugou Musicでは、システム設定でLyrimuseに「フルディスクアクセス」を許可する必要があります。許可しなくてもオンラインで歌詞を検索できます。
+Apple Music、Spotify、Kugou Music、KKBOX、Amazon Music、LX MusicがこのMacに保存した歌詞はそのまま使用でき、プレーヤーに表示されるものと同じバージョンをより速く表示できます（Apple MusicとSpotifyは、プレーヤーで歌詞を表示したことのある曲のみ）。QQ MusicとNetEase Cloud Musicでは、ローカルのライブラリから再生中の曲を識別するため、検索せずに同じバージョンの歌詞を取得できます。reAMP、VOX、Pine Player、foobar2000、Swinsianで再生するときや、Apple Musicでライブラリ内のローカルファイルを、LX Musicでローカルリストの曲を再生するときは、ファイルに埋め込まれた歌詞または同じ名前の.lrcファイルを使用します。QQ Music、NetEase Cloud Music、Kugou Musicでは、システム設定でLyrimuseに「フルディスクアクセス」を許可する必要があります。許可しなくてもオンラインで歌詞を検索できます。
 
 - 初期設定でオフ
 - 設定の場所：プレーヤー › 権限とサービス › フルディスクアクセス
@@ -588,9 +588,9 @@ Spotifyで曲にループ動画（Canvas）がある場合、フルサイズの�
 
 <a id="feature-players"></a>
 
-### 15のプレーヤーに対応、複数選択または自動検出
+### 17のプレーヤーに対応、複数選択または自動検出
 
-Apple Music、Spotify、QQ Music、NetEase Cloud Music、Kugou、Soda Music、LX Music、KKBOX、Amazon Music、Winamp風のreAMP、ロスレスやハイレゾ音質に特化したローカルプレーヤーVOX、無料で幅広いフォーマットに対応するローカルプレーヤーPine Player、Windowsから移植された定番のローカルプレーヤーfoobar2000、YouTube MusicクライアントのKaset、オープンソースのYouTube MusicデスクトップアプリPear Desktop。複数を同時に選択することも、自動検出のままmacOSの「再生中」に表示されるプレーヤーに追従させることもできます。Apple Musicのラジオにも対応し、DJが話している間はステーション名とロゴを表示します。
+Apple Music、Spotify、QQ Music、NetEase Cloud Music、Kugou、Soda Music、LX Music、KKBOX、Amazon Music、Winamp風のreAMP、ロスレスやハイレゾ音質に特化したローカルプレーヤーVOX、無料で幅広いフォーマットに対応するローカルプレーヤーPine Player、Windowsから移植された定番のローカルプレーヤーfoobar2000、大規模ライブラリ向けのローカルプレーヤーSwinsian、YouTube MusicクライアントのKaset、オープンソースのYouTube MusicデスクトップアプリPear Desktop。複数を同時に選択することも、自動検出のままmacOSの「再生中」に表示されるプレーヤーに追従させることもできます。Apple Musicのラジオにも対応し、DJが話している間はステーション名とロゴを表示します。
 
 - 設定の場所：プレーヤー › 音楽App
 
@@ -627,7 +627,7 @@ Apple Music、Spotify、QQ Music、NetEase Cloud Music、Kugou、Soda Music、LX
 
 ### 必要なときだけ権限を要求
 
-Apple Music、Spotify、Kaset、VOXは、再生状態を読み取るために「オートメーション」の権限が必要です。QQ Music、NetEase Cloud Music、Kugou Musicは、ローカルの歌詞と再生キューを使うために「フルディスクアクセス」が必要で、Soda MusicとVOXは再生キューを読み取るためにこの権限が必要です。Amazon MusicとPine Playerの再生位置の補正、Pine Playerのプレイリスト、QQ Music、NetEase Cloud Music、Kugou Music、Soda Music、Amazon Music、reAMP、Pine Player、foobar2000のシャッフル、リピート、お気に入りボタン、foobar2000の音量、およびほかのAppが「再生中」を占有しているときのQQ Music、NetEase Cloud Music、Soda Music、Pine Player、foobar2000の再生ボタンには、「アクセシビリティ」の権限が必要です。ブラウザのWebプレーヤーには、ブラウザに対する「オートメーション」の権限と、ブラウザで「AppleイベントからのJavaScriptを許可」をオンにすることが必要です。そのほかのプレーヤーには権限は不要です。設定には各項目の現在の許可状態が表示されます。
+Apple Music、Spotify、Kaset、VOX、Swinsianは、再生状態を読み取るために「オートメーション」の権限が必要です。QQ Music、NetEase Cloud Music、Kugou Musicは、ローカルの歌詞と再生キューを使うために「フルディスクアクセス」が必要で、Soda MusicとVOXは再生キューを読み取るためにこの権限が必要です。Amazon MusicとPine Playerの再生位置の補正、Pine Playerのプレイリスト、QQ Music、NetEase Cloud Music、Kugou Music、Soda Music、Amazon Music、reAMP、Pine Player、foobar2000のシャッフル、リピート、お気に入りボタン、foobar2000の音量、およびほかのAppが「再生中」を占有しているときのQQ Music、NetEase Cloud Music、Soda Music、Pine Player、foobar2000の再生ボタンには、「アクセシビリティ」の権限が必要です。ブラウザのWebプレーヤーには、ブラウザに対する「オートメーション」の権限と、ブラウザで「AppleイベントからのJavaScriptを許可」をオンにすることが必要です。そのほかのプレーヤーには権限は不要です。設定には各項目の現在の許可状態が表示されます。
 
 - 設定の場所：プレーヤー › 権限とサービス › オートメーション権限
 - 設定の場所：プレーヤー › 権限とサービス › フルディスクアクセス

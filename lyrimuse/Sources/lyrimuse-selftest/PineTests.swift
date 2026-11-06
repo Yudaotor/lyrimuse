@@ -463,7 +463,7 @@ func runPineTests() {
             (try? String(contentsOfFile: root.appendingPathComponent(path).path, encoding: .utf8)) ?? ""
         }
         let client = sourceText("LyrimuseCore/Local/MediaControlClient.swift")
-        expectEqual(sourceHas(client, "elapsedTime: amazonPosition ?? radioPosition ?? pine?.position ?? foobarLoop ?? stretched"), true,
+        expectEqual(sourceHas(client, "elapsedTime: amazonPosition ?? radioPosition ?? pine?.position ?? swinsian?.position ?? foobarLoop ?? stretched"), true,
                     "Pine 接线: 解码那一拍位置换成 PinePlayhead")
         expectEqual(sourceHas(client, "PlayerTitleSplit.applied(to: PinePlayerInfo.adapted(PlayerSubtitles.adapted(raw)))"), true,
                     "Pine 接线: 曲目在公开出口换,主路径、焦点回退、通道坏了三条路都过")

@@ -36,6 +36,11 @@ public enum SourceKnockout {
         /// Pear Desktop 本机接口的 WebSocket 推送(换歌、播放 / 暂停、拖进度的即时信号,`PearDesktopPush`):关掉后只剩轮询和
         /// 系统事件流。
         case pearPush = "pear-push"
+        /// Swinsian 的脚本读数(每拍核对整秒、盯整秒跳变,`SwinsianPlayhead`;当前文件的一条退路):关掉后当成没授「自动化」权限,
+        /// 位置只按两份锚点走。
+        case swinsianScript = "swinsian-script"
+        /// Swinsian 的分布式通知(开播、恢复、暂停、换歌、循环绕回的锚点和即时信号,当前文件的一条退路)。
+        case swinsianNotice = "swinsian-notice"
     }
 
     private static let logger = Logger(subsystem: LyrimuseIdentity.logSubsystem, category: "knockout")

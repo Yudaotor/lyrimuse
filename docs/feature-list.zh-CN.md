@@ -4,7 +4,7 @@
 
 [English](feature-list.md) · 简体中文 · [繁體中文](feature-list.zh-Hant.md) · [日本語](feature-list.ja.md) · [한국어](feature-list.ko.md) · [Español](feature-list.es.md) · [Français](feature-list.fr.md) · [Deutsch](feature-list.de.md) · [Italiano](feature-list.it.md) · [Português (Brasil)](feature-list.pt-BR.md) · [Tiếng Việt](feature-list.vi.md) · [Русский](feature-list.ru.md) · [Українська](feature-list.uk.md) · [ไทย](feature-list.th.md)
 
-Lyrimuse 是一款开源（GPL-3.0）的 macOS 逐字歌词 App，支持 macOS 14 及以上版本，兼容 Apple Silicon 和 Intel 芯片。它为 Apple Music、Spotify、QQ 音乐、网易云音乐、酷狗音乐、汽水音乐、KKBOX、Amazon Music、洛雪音乐、Kaset、Pear Desktop、reAMP、VOX、Pine Player、foobar2000，以及浏览器中的 YouTube Music 和 Spotify 网页版显示逐字同步的歌词：可显示在桌面悬浮歌词、灵动岛、菜单栏、触控栏和歌词窗口中，并提供译文和读音标注（拼音、粤拼、日语罗马音、韩语罗马字），还可将收听记录打卡到 Last.fm 和 ListenBrainz，并在 Discord 上显示正在收听的歌曲。界面支持简体中文、繁体中文、英文、日文、韩文、西班牙文、法文、德文、意大利文、巴西葡萄牙文、越南文、俄文、乌克兰文和泰文。
+Lyrimuse 是一款开源（GPL-3.0）的 macOS 逐字歌词 App，支持 macOS 14 及以上版本，兼容 Apple Silicon 和 Intel 芯片。它为 Apple Music、Spotify、QQ 音乐、网易云音乐、酷狗音乐、汽水音乐、KKBOX、Amazon Music、洛雪音乐、Kaset、Pear Desktop、reAMP、VOX、Pine Player、foobar2000、Swinsian，以及浏览器中的 YouTube Music 和 Spotify 网页版显示逐字同步的歌词：可显示在桌面悬浮歌词、灵动岛、菜单栏、触控栏和歌词窗口中，并提供译文和读音标注（拼音、粤拼、日语罗马音、韩语罗马字），还可将收听记录打卡到 Last.fm 和 ListenBrainz，并在 Discord 上显示正在收听的歌曲。界面支持简体中文、繁体中文、英文、日文、韩文、西班牙文、法文、德文、意大利文、巴西葡萄牙文、越南文、俄文、乌克兰文和泰文。
 
 这份清单列出 Lyrimuse 的每一项功能：做什么、在设置的哪里、装好后默认开着还是关着；最后附上设置窗口里的全部设置项。清单跟代码一起维护，功能有增减时同步更新。
 
@@ -124,7 +124,7 @@ Lyrimuse 是一款开源（GPL-3.0）的 macOS 逐字歌词 App，支持 macOS 1
 
 ### 直接使用播放器保存在本机的歌词
 
-Apple Music、Spotify、酷狗音乐、KKBOX、Amazon Music 和洛雪音乐保存在本机的歌词可直接使用，与播放器显示的版本一致，速度也更快（Apple Music 和 Spotify 只有在播放器中显示过歌词的歌曲才有）；QQ 音乐和网易云音乐按本机曲库认出正在播放的是哪一首，省去搜索，直接取用同一版本的歌词；reAMP、VOX、Pine Player 和 foobar2000 播放时，以及 Apple Music 播放资料库中的本地文件、洛雪音乐播放本地列表中的歌曲时，使用文件内嵌的歌词或同名 .lrc 文件。QQ 音乐、网易云音乐、酷狗音乐需要在系统设置中为 Lyrimuse 开启「完全磁盘访问权限」；未授权时仍可联网查找歌词。
+Apple Music、Spotify、酷狗音乐、KKBOX、Amazon Music 和洛雪音乐保存在本机的歌词可直接使用，与播放器显示的版本一致，速度也更快（Apple Music 和 Spotify 只有在播放器中显示过歌词的歌曲才有）；QQ 音乐和网易云音乐按本机曲库认出正在播放的是哪一首，省去搜索，直接取用同一版本的歌词；reAMP、VOX、Pine Player、foobar2000 和 Swinsian 播放时，以及 Apple Music 播放资料库中的本地文件、洛雪音乐播放本地列表中的歌曲时，使用文件内嵌的歌词或同名 .lrc 文件。QQ 音乐、网易云音乐、酷狗音乐需要在系统设置中为 Lyrimuse 开启「完全磁盘访问权限」；未授权时仍可联网查找歌词。
 
 - 默认关闭
 - 设置位置：播放器 › 权限与服务 › 完全磁盘访问权限
@@ -588,9 +588,9 @@ Apple Music、QQ 音乐或网易云音乐上带动态封面的专辑，在完整
 
 <a id="feature-players"></a>
 
-### 十六款播放器，可多选或自动识别
+### 十七款播放器，可多选或自动识别
 
-Apple Music、Spotify、QQ 音乐、网易云音乐、酷狗音乐、汽水音乐、洛雪音乐、KKBOX、Amazon Music、仿 Winamp 的 reAMP、主打无损和高解析音质的本地播放器 VOX、免费且格式支持很全的本地播放器 Pine Player、从 Windows 移植来的老牌本地播放器 foobar2000、YouTube Music 客户端 Kaset，以及开源的 YouTube Music 桌面客户端 Pear Desktop。可同时选择多个，也可保持自动识别，跟随 macOS「正在播放」中的播放器。支持 Apple Music 电台，主持人讲话时显示电台名称和台标。
+Apple Music、Spotify、QQ 音乐、网易云音乐、酷狗音乐、汽水音乐、洛雪音乐、KKBOX、Amazon Music、仿 Winamp 的 reAMP、主打无损和高解析音质的本地播放器 VOX、免费且格式支持很全的本地播放器 Pine Player、从 Windows 移植来的老牌本地播放器 foobar2000、为大曲库设计的本地播放器 Swinsian、YouTube Music 客户端 Kaset，以及开源的 YouTube Music 桌面客户端 Pear Desktop。可同时选择多个，也可保持自动识别，跟随 macOS「正在播放」中的播放器。支持 Apple Music 电台，主持人讲话时显示电台名称和台标。
 
 - 设置位置：播放器 › 音乐 App
 
@@ -627,7 +627,7 @@ Apple Music、Spotify、QQ 音乐、网易云音乐、酷狗音乐、汽水音�
 
 ### 按需申请权限
 
-Apple Music、Spotify、Kaset 和 VOX 需要「自动化」权限才能读取播放状态；QQ 音乐、网易云音乐、酷狗音乐需要「完全磁盘访问权限」才能使用本机歌词和播放队列，汽水音乐和 VOX 需要该权限读取播放队列；Amazon Music 和 Pine Player 的进度校准，Pine Player 的播放列表，QQ 音乐、网易云音乐、酷狗音乐、汽水音乐、Amazon Music、reAMP、Pine Player 和 foobar2000 的随机、循环、喜欢按钮，foobar2000 的音量，以及其他 App 占用「正在播放」时 QQ 音乐、网易云音乐、汽水音乐、Pine Player 和 foobar2000 的播放按钮，需要「辅助功能」权限；浏览器中的网页播放器需要为浏览器开启「自动化」权限，并在浏览器中开启「允许 Apple 事件中的 JavaScript」。其他播放器无需权限。设置中会标明每项的当前授权状态。
+Apple Music、Spotify、Kaset、VOX 和 Swinsian 需要「自动化」权限才能读取播放状态；QQ 音乐、网易云音乐、酷狗音乐需要「完全磁盘访问权限」才能使用本机歌词和播放队列，汽水音乐和 VOX 需要该权限读取播放队列；Amazon Music 和 Pine Player 的进度校准，Pine Player 的播放列表，QQ 音乐、网易云音乐、酷狗音乐、汽水音乐、Amazon Music、reAMP、Pine Player 和 foobar2000 的随机、循环、喜欢按钮，foobar2000 的音量，以及其他 App 占用「正在播放」时 QQ 音乐、网易云音乐、汽水音乐、Pine Player 和 foobar2000 的播放按钮，需要「辅助功能」权限；浏览器中的网页播放器需要为浏览器开启「自动化」权限，并在浏览器中开启「允许 Apple 事件中的 JavaScript」。其他播放器无需权限。设置中会标明每项的当前授权状态。
 
 - 设置位置：播放器 › 权限与服务 › 自动化权限
 - 设置位置：播放器 › 权限与服务 › 完全磁盘访问权限

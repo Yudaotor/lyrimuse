@@ -1112,6 +1112,9 @@ public enum MediaControlClient {
             if target.bundleID == PlaybackPlayer.foobar2000.bundleIdentifier {
                 snapshot = foobarProbedSnapshot(probed.snapshot, now: now)
             }
+            if target.bundleID == SwinsianPlayerInfo.bundleID {
+                snapshot = swinsianProbedSnapshot(probed.snapshot, anchor: probed.anchor, now: now)
+            }
             if let reading = amazonMusicReading(
                 bundleID: target.bundleID, trackKey: probed.snapshot.trackKey, title: probed.snapshot.title,
                 metadataTimestamp: probed.anchor.timestamp.map { Date(timeIntervalSince1970: $0) },
@@ -1660,7 +1663,7 @@ public enum MediaControlClient {
         return ProcessRunner.run(binaryPath, ["get"] + arguments, timeout: timeout)
     }
 
-    /// 常驻 osascript 跑的 JXA:每读到一行请求名(`music` / `spotify` / `kaset` / `vox`)就跑对应那份快照脚本,把它返回的字符串原样
+    /// 常驻 osascript 跑的 JXA:每读到一行请求名(`music` / `spotify` / `kaset` / `vox` / `swinsian`)就跑对应那份快照脚本,把它返回的字符串原样
     /// 写到 stdout,再写结束行;脚本抛错时状态码为 1。stdin 读到 EOF 就退出。
     /// JXA 把 NSData 的 `length` 桥成字符串,判 EOF 必须先转数字:写成 `data.length === 0` 永远不成立,EOF 之后空转占满一个核。
     public static let appleScriptServerScript = """
@@ -1669,7 +1672,8 @@ public enum MediaControlClient {
         music: () => \(script),
         spotify: () => \(spotifyScript),
         kaset: () => \(kasetScript),
-        vox: () => \(VoxPlayerInfo.script)
+        vox: () => \(VoxPlayerInfo.script),
+        swinsian: () => \(SwinsianPlayerInfo.script)
     };
     const input = $.NSFileHandle.fileHandleWithStandardInput;
     const output = $.NSFileHandle.fileHandleWithStandardOutput;
@@ -2108,6 +2112,9 @@ public enum MediaControlClient {
             }
             if target.bundleID == PlaybackPlayer.foobar2000.bundleIdentifier {
                 snapshot = snapshot.map { foobarProbedSnapshot($0, now: now) }
+            }
+            if target.bundleID == SwinsianPlayerInfo.bundleID {
+                snapshot = swinsianProbedSnapshot(probed.snapshot, anchor: probed.anchor, now: now)
             }
             if let reading = amazonMusicReading(
                 bundleID: target.bundleID, trackKey: probed.snapshot.trackKey, title: probed.snapshot.title,
@@ -2597,6 +2604,47 @@ public enum MediaControlClient {
         }
         return ((imageData, raw.artworkMimeType ?? "image/jpeg",
                  PlayerArtistFix.correctedTrackKey(bundle: bundleID, artist: keyArtist, title: keyTitle)), nil)
+    }
+
+    /// Swinsian 这一拍的位置:系统那份锚点、它的通知、在放时问一次脚本的整秒,交给 `SwinsianPlayhead`。主路径与焦点回退都走这里。
+    private static func swinsianReading(track: String, title: String?, artist: String?, playing: Bool,
+                                        anchorElapsed: Double?, anchorAt: Date?, now: Date) -> SwinsianPlayhead.Reading? {
+        let system = anchorElapsed.flatMap { elapsed in
+            anchorAt.map { SwinsianPlayhead.Anchor(track: track, elapsed: elapsed, at: $0, playing: playing) }
+        }
+        let notice = SourceKnockout.isOut(.swinsianNotice) ? nil
+            : SwinsianPlayerInfo.anchor(from: SwinsianPlayerInfo.latestNotice(), track: track, title: title, artist: artist)
+        let check = playing ? readSwinsianCheck(title: title) : nil
+        return SwinsianPlayhead.reading(track: track, playing: playing, system: system, notice: notice, check: check, now: now)
+    }
+
+    /// 问一次 Swinsian 的脚本(`SwinsianPlayerInfo.script`),换成位置表的核对。没在放、不是这一首、问不到为 nil。
+    private static func readSwinsianCheck(title: String?) -> SwinsianPlayhead.Check? {
+        guard !SourceKnockout.isOut(.swinsianScript) else { return nil }
+        let from = Date()
+        guard let r = runPlayerScript("swinsian", source: SwinsianPlayerInfo.script), r.succeeded,
+              let reading = SwinsianPlayerInfo.scriptReading(from: r.stdout) else { return nil }
+        let to = Date()
+        SwinsianPlayerInfo.remember(reading)
+        return SwinsianPlayerInfo.check(reading, title: title, from: from, to: to)
+    }
+
+    /// 按 bundle id 单问到的 Swinsian 那份(焦点被别的 App 占着时):位置过主路径同一块表。单问那份没有原始锚点时原样交回。
+    private static func swinsianProbedSnapshot(_ probed: MediaControlSnapshot, anchor: NowPlayingClientsProbe.SessionAnchor,
+                                               now: Date) -> MediaControlSnapshot {
+        var snapshot = probed
+        if snapshot.processIdentifier == nil { snapshot.processIdentifier = anchor.processIdentifier.map { Int($0) } }
+        if let reading = swinsianReading(
+            track: probed.trackKey, title: probed.title, artist: probed.artist, playing: probed.playing == true,
+            anchorElapsed: probed.anchorElapsedTime, anchorAt: anchor.timestamp.map { Date(timeIntervalSince1970: $0) },
+            now: now) {
+            let pid = snapshot.processIdentifier
+            snapshot = snapshot.withPlayerClock(reading.position, capturedAt: now)
+            snapshot.processIdentifier = pid
+            if reading.precise { snapshot.positionIsPrecise = true }
+            snapshot.republishDueBy = reading.dueBy
+        }
+        return snapshot
     }
 
     /// 按 bundle id 单问到的 Pine 那份(焦点被别的 App 占着时):位置过主路径同一块表(`PinePlayhead`);曲目在公开出口换
@@ -3740,6 +3788,11 @@ public enum MediaControlClient {
             ? PinePlayhead.reading(track: trackKey, playing: playing == true, anchorElapsed: raw.elapsedTime,
                                    anchorAt: timestampDate, duration: raw.duration, pid: raw.processIdentifier, now: sampledAt)
             : nil
+        // Swinsian 的位置换成 SwinsianPlayhead 那块表:按脚本整秒的跳变对时,理由同 Amazon。
+        let swinsian = bundleID == SwinsianPlayerInfo.bundleID && !isRadio
+            ? swinsianReading(track: trackKey, title: raw.title, artist: raw.artist, playing: playing == true,
+                              anchorElapsed: raw.elapsedTime, anchorAt: timestampDate, now: sampledAt)
+            : nil
         // foobar2000 开着 DSP 变速时它照报速率 1:按进度条量出的速度外推(见 FoobarStretch)。
         let foobarRate = bundleID == PlaybackPlayer.foobar2000.bundleIdentifier && !isRadio
             ? FoobarStretch.rate(anchorKey: anchorKey, playing: playing == true && republish.hold == nil,
@@ -3759,7 +3812,7 @@ public enum MediaControlClient {
             artist: raw.artist,
             album: raw.album,
             duration: raw.duration,
-            elapsedTime: amazonPosition ?? radioPosition ?? pine?.position ?? foobarLoop ?? stretched,
+            elapsedTime: amazonPosition ?? radioPosition ?? pine?.position ?? swinsian?.position ?? foobarLoop ?? stretched,
             playing: held ? false : playing,
             playbackRate: held ? 0 : (foobarRate != 1 && playing == true ? foobarRate : raw.playbackRate),
             // 复用这个字段原本的语义("这是当前选定播放器的一份有效快照",见
@@ -3775,13 +3828,13 @@ public enum MediaControlClient {
         )
         // 读到之后主线程可能要等一两百毫秒才处理(换歌那一刻加载封面 / 歌词,实测 0.21s),位置得按读到的时刻
         // 补到处理那一刻(见 MediaControlSnapshot.capturedAt)。只对实测过的播放器开(02 章决策 41)。
-        if Self.stampsCaptureTime(bundleID: bundleID) || amazonPosition != nil || pine != nil
+        if Self.stampsCaptureTime(bundleID: bundleID) || amazonPosition != nil || pine != nil || swinsian != nil
             || bundleID == PlaybackPlayer.foobar2000.bundleIdentifier {
             snapshot.capturedAt = sampledAt
         }
         if held { snapshot.isWaitingToPlay = true }
-        if pine?.precise == true { snapshot.positionIsPrecise = true }
-        snapshot.republishDueBy = republish.dueBy ?? pine?.dueBy
+        if pine?.precise == true || swinsian?.precise == true { snapshot.positionIsPrecise = true }
+        snapshot.republishDueBy = republish.dueBy ?? pine?.dueBy ?? swinsian?.dueBy
             ?? Self.foobarLoopCheckAt(bundleID: bundleID, playing: playing, position: foobarLoop ?? stretched,
                                       duration: raw.duration, now: sampledAt)
         snapshot.processIdentifier = raw.processIdentifier

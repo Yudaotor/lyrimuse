@@ -271,7 +271,16 @@ private func checkDiscordActivity() {
         expectEqual(DiscordPresence.applicationID(forBundleID: player.bundleIdentifier, webPlatformID: nil),
                     DiscordPresence.applicationID, "Discord 应用: \(player) 只放有声内容、不推 Discord,不建应用")
     }
-    let builtInIDs = PlaybackPlayer.allCases.filter { $0 != .auto && !neverPresented.contains($0) }.map {
+    // 还没在 Discord 开发者后台建应用的播放器(建应用要作者过人机验证),暂时用 Lyrimuse 那个;建好之后把 ID 补进
+    // DiscordPresence 再从这里拿掉。
+    let awaitingApplication: Set<PlaybackPlayer> = [.swinsian]
+    for player in awaitingApplication {
+        expectEqual(DiscordPresence.applicationID(forBundleID: player.bundleIdentifier, webPlatformID: nil),
+                    DiscordPresence.applicationID, "Discord 应用: \(player) 还没建应用,用 Lyrimuse 那个")
+    }
+    let builtInIDs = PlaybackPlayer.allCases.filter {
+        $0 != .auto && !neverPresented.contains($0) && !awaitingApplication.contains($0)
+    }.map {
         DiscordPresence.applicationID(forBundleID: $0.bundleIdentifier, webPlatformID: nil)
     }
     expectEqual(builtInIDs.allSatisfy { !$0.isEmpty && $0.allSatisfy(\.isNumber) }, true,
