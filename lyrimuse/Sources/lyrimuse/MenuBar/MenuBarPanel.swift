@@ -1220,7 +1220,8 @@ private struct MenuBarPanelView: View {
     /// 大号(3×2)的正在播放:左上封面、右上播放器角标,中间歌名歌手,底下三个走带键;没有曲目时换成上次那首和「继续播放 / 打开」。
     @ViewBuilder private var compactNowPlaying: some View {
         if isIdleNoTrack {
-            PanelIdleNowPlaying(wide: false, coverSide: 48, openLyricsWindow: openLyricsWindowFromCard) {
+            PanelIdleNowPlaying(wide: false, coverSide: 48, openLyricsWindow: openLyricsWindowFromCard,
+                                openPlayer: openIdlePlayer, transport: { compactTransportRow }) {
                 idleActionButton()
             }
         } else {
@@ -1263,19 +1264,33 @@ private struct MenuBarPanelView: View {
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
             Spacer(minLength: 4)
-            HStack(spacing: 0) {
-                controlButton("backward.fill", size: 12) {
-                    MenuBarStatusItem.withMusicPermission { MusicPlaybackController.previousTrack() }
-                }
-                Spacer(minLength: 0)
-                controlButton(playback.isPlayingSmoothed ? "pause.fill" : "play.fill", size: 16) {
-                    MenuBarStatusItem.withMusicPermission { PlaybackCoordinator.shared.userTogglePlayPause() }
-                }
-                Spacer(minLength: 0)
-                controlButton("forward.fill", size: 12) {
-                    MenuBarStatusItem.withMusicPermission { MusicPlaybackController.nextTrack() }
-                }
+            compactTransportRow
+        }
+    }
+
+    /// 大号那一格的三个走带键;停播卡(`PanelIdleNowPlaying`)用同一排。
+    private var compactTransportRow: some View {
+        HStack(spacing: 0) {
+            controlButton("backward.fill", size: 12) {
+                MenuBarStatusItem.withMusicPermission { MusicPlaybackController.previousTrack() }
             }
+            Spacer(minLength: 0)
+            controlButton(playback.isPlayingSmoothed ? "pause.fill" : "play.fill", size: 16, action: playPauseOrResume)
+            Spacer(minLength: 0)
+            controlButton("forward.fill", size: 12) {
+                MenuBarStatusItem.withMusicPermission { MusicPlaybackController.nextTrack() }
+            }
+        }
+    }
+
+    /// 走带中间那颗:有曲目时切播放 / 暂停;没有曲目时接着放上次那首(`IdlePlaybackActions.resume`,
+    /// 只能打开的播放器在里面退回打开它)。点完不收面板:放起来之后卡片当场变成正在播放卡。
+    private func playPauseOrResume() {
+        if isIdleNoTrack {
+            IdlePlaybackActions.resume(player: IdlePlaybackActions.player)
+        } else {
+            // 乐观回声版:歌词窗封面缩放/图标点击即动(见 userTogglePlayPause)。
+            MenuBarStatusItem.withMusicPermission { PlaybackCoordinator.shared.userTogglePlayPause() }
         }
     }
 
@@ -1285,6 +1300,12 @@ private struct MenuBarPanelView: View {
         AppActions.shared.openLyricsWindow?()
     }
 
+    /// 停播卡右上角的播放器角标:打开那家并收面板,同有曲目时那枚。
+    private func openIdlePlayer() {
+        IdlePlaybackActions.openPlayerApp(IdlePlaybackActions.player)
+        close()
+    }
+
     /// 完整的正在播放卡(加宽 6×2 那一档,高 153.5:内边距 10、行距 4),内容在格子里上下居中。
     private var nowPlayingCard: some View {
         VStack(spacing: 4) {
@@ -1292,7 +1313,8 @@ private struct MenuBarPanelView: View {
             // 判据是"压根没有曲目"而不是"没有封面":播放中拿不到封面的曲目(播客/取图失败)照旧走下面这条,
             // 广告插播同理(标题是「广告中」,有东西在放)。
             if isIdleNoTrack {
-                PanelIdleNowPlaying(wide: true, coverSide: Self.coverSide, openLyricsWindow: openLyricsWindowFromCard) {
+                PanelIdleNowPlaying(wide: true, coverSide: Self.coverSide, openLyricsWindow: openLyricsWindowFromCard,
+                                    openPlayer: openIdlePlayer, transport: { transportRow }) {
                     idleActionButton(prominent: true)
                 }
             } else {
@@ -1307,28 +1329,7 @@ private struct MenuBarPanelView: View {
                     seekable: PlaybackCoordinator.shared.acceptsSeek,
                     trackLyricsOffsetMs: playback.trackLyricsOffsetMs,
                     lyricsOffsetStepMs: playback.lyricsOffsetStepMs)
-                HStack(spacing: 0) {
-                    // 两侧定宽:当前播放器没有随机 / 循环时键藏起来,三个主键照样在正中。
-                    shuffleControl
-                        .frame(width: Self.transportSideWidth, alignment: .leading)
-                    Spacer(minLength: 0)
-                    HStack(spacing: 28) {
-                        // 三个键跟状态栏悬停三键同一道「点了才校验权限」(没授权时响一声,不是静默失败)。
-                        controlButton("backward.fill", size: 13) {
-                            MenuBarStatusItem.withMusicPermission { MusicPlaybackController.previousTrack() }
-                        }
-                        controlButton(playback.isPlayingSmoothed ? "pause.fill" : "play.fill", size: 18) {
-                            // 乐观回声版:歌词窗封面缩放/图标点击即动(见 userTogglePlayPause)。
-                            MenuBarStatusItem.withMusicPermission { PlaybackCoordinator.shared.userTogglePlayPause() }
-                        }
-                        controlButton("forward.fill", size: 13) {
-                            MenuBarStatusItem.withMusicPermission { MusicPlaybackController.nextTrack() }
-                        }
-                    }
-                    Spacer(minLength: 0)
-                    repeatControl
-                        .frame(width: Self.transportSideWidth, alignment: .trailing)
-                }
+                transportRow
             }
         }
         .padding(10)
@@ -1338,6 +1339,29 @@ private struct MenuBarPanelView: View {
 
     /// 走带那一排两侧(左随机、右循环)各占多宽。
     private static let transportSideWidth: CGFloat = 40
+
+    /// 加宽卡的走带一排;停播卡(`PanelIdleNowPlaying`)用同一排。
+    private var transportRow: some View {
+        HStack(spacing: 0) {
+            // 两侧定宽:当前播放器没有随机 / 循环时键藏起来,三个主键照样在正中。
+            shuffleControl
+                .frame(width: Self.transportSideWidth, alignment: .leading)
+            Spacer(minLength: 0)
+            HStack(spacing: 28) {
+                // 三个键跟状态栏悬停三键同一道「点了才校验权限」(没授权时响一声,不是静默失败)。
+                controlButton("backward.fill", size: 13) {
+                    MenuBarStatusItem.withMusicPermission { MusicPlaybackController.previousTrack() }
+                }
+                controlButton(playback.isPlayingSmoothed ? "pause.fill" : "play.fill", size: 18, action: playPauseOrResume)
+                controlButton("forward.fill", size: 13) {
+                    MenuBarStatusItem.withMusicPermission { MusicPlaybackController.nextTrack() }
+                }
+            }
+            Spacer(minLength: 0)
+            repeatControl
+                .frame(width: Self.transportSideWidth, alignment: .trailing)
+        }
+    }
 
     /// 卡片右上角标下面的喜欢,同歌词窗口那颗心、灵动岛展开区那颗:当前播放器没有「喜欢」或在放广告时不出现。
     @ViewBuilder private var favoriteControl: some View {
@@ -1386,10 +1410,10 @@ private struct MenuBarPanelView: View {
         .accessibilityAddTraits(active ? .isSelected : [])
     }
 
-    /// 没有曲目时那颗主动作键:能接着放的播放器是「继续播放」,只能打开的是那家的图标 +「打开」。加宽卡(`prominent`,大一号)和大号格共用。
+    /// 从没放过歌时的那颗键:能接着放的播放器是「继续播放」,只能打开的是那家的图标 +「打开」。加宽卡(`prominent`,大一号)和大号格共用。
     ///
     /// 文案与动作跟歌词窗口停播页、灵动岛空闲面板同一套(`IdlePlaybackActions` 决定指哪家、能不能真的继续播放)。
-    /// 不留走带三键:没有曲目时上一首/下一首对空队列是静默 no-op;这一颗点下去必有可见反应(`resume` 最后兜底把播放器带到前台)。
+    /// 这一颗点下去必有可见反应(`resume` 最后兜底把播放器带到前台)。
     /// 点完不收面板:放起来之后卡片当场变成正在播放卡;走到兜底那条时失焦监视器会收掉面板。
     private func idleActionButton(prominent: Bool = false) -> some View {
         let player = IdlePlaybackActions.player

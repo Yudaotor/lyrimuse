@@ -2304,8 +2304,12 @@ public final class LocalPlaybackSource: ObservableObject {
         musicVideoOffsetMs = 0
     }
 
+    /// 上一次写 `np:lastTrackPlayedAt` 是哪首、什么时候(见 apply 里那一段的节流)。
+    private var lastPlayedAtWrite: (key: String, at: Date) = ("", .distantPast)
+
     /// 「上次在听」这一拍写进去之前的样子(见 apply 里 np:lastTrack* 那一段)。只留最近一次。
-    private var lastTrackBeforeWrite: (key: String, title: String?, artist: String?, album: String?, persistedTitle: String?)?
+    private var lastTrackBeforeWrite: (key: String, title: String?, artist: String?, album: String?, playedAt: Double?,
+                                       persistedTitle: String?)?
 
     /// 晚到的广告确认:这一首刚被记成「上次在听」,撤回成写之前的那首。
     private func revertLastTrackAfterAd(key: String) {
@@ -2314,6 +2318,11 @@ public final class LocalPlaybackSource: ObservableObject {
         let defaults = UserDefaults.standard
         for (k, v) in [("np:lastTrackTitle", prev.title), ("np:lastTrackArtist", prev.artist), ("np:lastTrackAlbum", prev.album)] {
             if let v { defaults.set(v, forKey: k) } else { defaults.removeObject(forKey: k) }
+        }
+        if let playedAt = prev.playedAt {
+            defaults.set(playedAt, forKey: "np:lastTrackPlayedAt")
+        } else {
+            defaults.removeObject(forKey: "np:lastTrackPlayedAt")
         }
         lastPersistedTrackTitle = prev.persistedTitle
         logger.notice("spotify ad confirmed late; last-played track reverted")
@@ -4296,6 +4305,7 @@ public final class LocalPlaybackSource: ObservableObject {
                                     title: defaults.string(forKey: "np:lastTrackTitle"),
                                     artist: defaults.string(forKey: "np:lastTrackArtist"),
                                     album: defaults.string(forKey: "np:lastTrackAlbum"),
+                                    playedAt: defaults.object(forKey: "np:lastTrackPlayedAt") as? Double,
                                     persistedTitle: lastPersistedTrackTitle)
             UserDefaults.standard.set(newTitle, forKey: "np:lastTrackTitle")
             UserDefaults.standard.set(newArtist, forKey: "np:lastTrackArtist")
@@ -4304,6 +4314,15 @@ public final class LocalPlaybackSource: ObservableObject {
             // 旧安装第一次打开新版停播页时这个键还不存在 —— 消费方按「空就只显示歌手」处理。
             UserDefaults.standard.set(newAlbum, forKey: "np:lastTrackAlbum")
             lastPersistedTrackTitle = newTitle
+        }
+        // 菜单栏面板停播卡的「上次播放 · 时间」:最后一次真在放这首的时刻。换歌那一拍写一次,之后在放时最多每分钟写一次。
+        // 只在真在放时写:App 重启后认到同一首暂停着的歌,不能把时刻刷成重启那一刻。
+        if newIsPlayingNow, !newTitle.isEmpty, !adByFields, !spotifyNoticeSaysAd, !knownAdThisTrack, !PlaybackSimulation.isActive {
+            let now = Date()
+            if snapshot.trackKey != lastPlayedAtWrite.key || now.timeIntervalSince(lastPlayedAtWrite.at) >= 60 {
+                UserDefaults.standard.set(now.timeIntervalSince1970, forKey: "np:lastTrackPlayedAt")
+                lastPlayedAtWrite = (snapshot.trackKey, now)
+            }
         }
         // Spotify 广告插播判断(字段启发式 + 同曲棘轮 + AppleScript 权威)。
         // 不能每一拍都按"当下字段"重判:广告字段会闪变(开播 album 空、几拍后补齐),看走眼的那几拍 UI 会退回"歌名 + 搜索歌词中"。

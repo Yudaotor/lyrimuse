@@ -2307,10 +2307,19 @@ func runMenuBarTests() {
         expectEqual(sourceHas(source("lyrimuse/MenuBar/MenuBarPanelVolume.swift"), ".accessibilityAdjustableAction { direction in"), true,
                     "面板音量: 只在按着时写音量,辅助功能的增减单独接")
         let idleCard = source("lyrimuse/MenuBar/MenuBarPanelIdleCard.swift")
-        expectEqual(sourceHas(panel, "if isIdleNoTrack {\nPanelIdleNowPlaying(wide: true, coverSide: Self.coverSide, openLyricsWindow: openLyricsWindowFromCard) {\nidleActionButton(prominent: true)")
-                    && sourceHas(panel, "if isIdleNoTrack {\nPanelIdleNowPlaying(wide: false, coverSide: 48, openLyricsWindow: openLyricsWindowFromCard) {\nidleActionButton()")
+        expectEqual(sourceHas(panel, "if isIdleNoTrack {\nPanelIdleNowPlaying(wide: true, coverSide: Self.coverSide, openLyricsWindow: openLyricsWindowFromCard,\nopenPlayer: openIdlePlayer, transport: { transportRow }) {\nidleActionButton(prominent: true)")
+                    && sourceHas(panel, "if isIdleNoTrack {\nPanelIdleNowPlaying(wide: false, coverSide: 48, openLyricsWindow: openLyricsWindowFromCard,\nopenPlayer: openIdlePlayer, transport: { compactTransportRow }) {\nidleActionButton()")
                     && sourceHas(idleCard, "@ObservedObject private var model = NotchIdleLastTrack.shared"), true,
                     "面板停播: 加宽、大号两档没有曲目时都画上次那首,数据跟灵动岛空闲面板同一份")
+        expectEqual(sourceHas(idleCard, "transport()\n}\n.frame(maxWidth: .infinity, maxHeight: .infinity)\n}")
+                    && sourceHas(panel, "private func playPauseOrResume() {\nif isIdleNoTrack {\nIdlePlaybackActions.resume(player: IdlePlaybackActions.player)")
+                    && sourceHas(panel, "controlButton(playback.isPlayingSmoothed ? \"pause.fill\" : \"play.fill\", size: 18, action: playPauseOrResume)")
+                    && sourceHas(panel, "controlButton(playback.isPlayingSmoothed ? \"pause.fill\" : \"play.fill\", size: 16, action: playPauseOrResume)"), true,
+                    "面板停播: 有上次那首时走带键就是播放时那一排,中间那颗停播时接着放上次那首")
+        let playbackSource = source("LyrimuseCore/Local/LocalPlaybackSource.swift")
+        expectEqual(sourceHas(playbackSource, "if newIsPlayingNow, !newTitle.isEmpty, !adByFields, !spotifyNoticeSaysAd, !knownAdThisTrack, !PlaybackSimulation.isActive {\nlet now = Date()\nif snapshot.trackKey != lastPlayedAtWrite.key || now.timeIntervalSince(lastPlayedAtWrite.at) >= 60 {\nUserDefaults.standard.set(now.timeIntervalSince1970, forKey: \"np:lastTrackPlayedAt\")")
+                    && sourceHas(playbackSource, "defaults.set(playedAt, forKey: \"np:lastTrackPlayedAt\")"), true,
+                    "面板停播: 「上次播放」的时刻只在真在放时写(重启后认到暂停着的同一首不刷),晚到的广告确认一起撤回")
         expectEqual(sourceHas(panel, "if items.isEmpty { Spacer(minLength: 0) }\neditLayoutButton"), true,
                     "面板编辑: 「编辑」那一颗不跟着底栏显隐")
         expectEqual(sourceHas(panel, "if pendingUpdate != nil, !items.contains(.version) { items.append(.version) }"), true,

@@ -9,6 +9,8 @@ struct IdleLastTrack: Equatable {
     let artist: String
     /// 旧安装第一次停播前是空的(这个键比另外两个晚加),空就只显示歌手。
     let album: String
+    /// 最后一次真在放这首的时刻(`np:lastTrackPlayedAt`,在放时最多每分钟写一次)。比这个键早的安装没有。
+    var playedAt: Date?
 
     var key: String { artist + "|" + title + "|" + album }
 
@@ -16,7 +18,8 @@ struct IdleLastTrack: Equatable {
         let d = UserDefaults.standard
         return IdleLastTrack(title: d.string(forKey: "np:lastTrackTitle") ?? "",
                              artist: d.string(forKey: "np:lastTrackArtist") ?? "",
-                             album: d.string(forKey: "np:lastTrackAlbum") ?? "")
+                             album: d.string(forKey: "np:lastTrackAlbum") ?? "",
+                             playedAt: (d.object(forKey: "np:lastTrackPlayedAt") as? Double).map(Date.init(timeIntervalSince1970:)))
     }
 
     /// 缓存里这首的封面地址。EnrichCacheReader 只许在主线程用(静态缓存没有锁)。
