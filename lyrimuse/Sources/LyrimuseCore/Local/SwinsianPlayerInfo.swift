@@ -72,15 +72,15 @@ public enum SwinsianPlayerInfo {
 
     // MARK: 脚本
 
-    /// 每拍核对用的 JXA 快照:没在跑、停住时回 `null`,不会把它拉起来。位置放在最后读。播客单集读歌名会抛错,
-    /// 歌名、路径、类各自兜住,别让一项读不出把整份读数丢掉。
+    /// 每拍核对用的 JXA 快照:没在跑、停住时回 `null`,不会把它拉起来。位置放在最后读。属性直接从 `S.currentTrack`
+    /// 这个引用上读,别先求值成 `S.currentTrack()`:播客单集的类码是空的,求值就抛错。歌名、路径、类各自兜住。
     public static let script = """
     (() => {
         \(JXARunningApp.attach("S", player: .swinsian, notRunning: "JSON.stringify(null)"))
         try {
             const state = S.playerState();
             if (state !== "playing" && state !== "paused") return JSON.stringify(null);
-            const track = S.currentTrack();
+            const track = S.currentTrack;
             const read = (f) => { try { return f() || ""; } catch (e) { return ""; } };
             const reading = { state: state, title: read(() => track.name()), path: read(() => track.path()),
                               kind: read(() => track.class()) };

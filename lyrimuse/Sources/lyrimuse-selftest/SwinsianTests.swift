@@ -51,8 +51,9 @@ func runSwinsianTests() {
         expectEqual(I.tick(from: Data(#"{"value":1,"before":1793959912033,"after":1793959912051}"#.utf8)),
                     H.Tick(value: 1, at: t(12.042)), "Swinsian 脚本: 跳变时刻取前后两次读数的中间")
         expectEqual(I.tick(from: Data("null".utf8)) == nil, true, "Swinsian 脚本: 没盯到")
-        expectEqual(sourceHas(I.script, "title: read(() => track.name())") && sourceHas(I.script, "kind: read(() => track.class())"),
-                    true, "Swinsian 脚本: 歌名、类各自兜住(播客单集读歌名会抛错)")
+        expectEqual(sourceHas(I.script, "const track = S.currentTrack;")
+                    && sourceHas(I.script, "title: read(() => track.name())") && sourceHas(I.script, "kind: read(() => track.class())"),
+                    true, "Swinsian 脚本: 从引用上读、不先求值(播客单集求值就抛错),歌名、类各自兜住")
     }
 
     // ---- 播客单集 ----
