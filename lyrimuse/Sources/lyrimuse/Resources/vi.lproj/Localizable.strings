@@ -498,6 +498,7 @@
 "僧伽罗语" = "Tiếng Sinhala";
 "允许局域网访问" = "Cho phép truy cập mạng cục bộ";
 "允许远程控制" = "Cho phép điều khiển từ xa";
+"光标在输入框里时收起，露出输入法候选和输入建议，离开输入框后展开；需要「辅助功能」权限" = "Thu gọn khi con trỏ ở trong ô nhập để hiện gợi ý của bộ gõ và gợi ý nhập, mở rộng lại khi rời ô nhập. Cần quyền “Trợ năng”";
 "光盘" = "Đĩa";
 "免费、格式支持很全的本地音乐播放器" = "Trình phát nhạc trên máy miễn phí, hỗ trợ gần như mọi định dạng";
 "免费开放的社区歌词库" = "Kho lời cộng đồng, miễn phí và mở";
@@ -1000,6 +1001,7 @@
 "尚未确认" = "Chưa xác nhận";
 "尚未缓存任何歌词。播放歌曲后，Lyrimuse 会自动搜索并保存歌词" = "Chưa lưu lời nào vào bộ nhớ đệm. Khi bạn phát bài hát, Lyrimuse sẽ tự động tìm và lưu lời";
 "尚未获得「辅助功能」权限，自动跳过无法生效" = "Chưa có quyền “Trợ năng” nên không thể tự động bỏ qua";
+"尚未获得「辅助功能」权限，输入时收起无法生效" = "Chưa có quyền “Trợ năng” nên không thể thu gọn khi nhập";
 "尚未连接 Apple Music。可在「歌词来源」卡片底部点按「连接」登录（需要 Apple Music 订阅）" = "Chưa kết nối Apple Music. Bấm vào “Kết nối” ở cuối thẻ “Nguồn lời bài hát” để đăng nhập (cần gói đăng ký Apple Music)";
 "尚未连接 Last.fm 账号" = "Chưa kết nối tài khoản Last.fm";
 "局域网" = "Mạng cục bộ";
@@ -2576,6 +2578,8 @@
 "辅助功能权限可显示%@的随机、循环与喜欢按钮，也可在系统媒体焦点被其他 App 占用时，通过菜单暂停、恢复和切换上一首或下一首" = "Quyền Trợ năng giúp hiện nút Xáo trộn, Lặp lại và Ưa thích cho %@, đồng thời cho phép tạm dừng, tiếp tục và chuyển bài trước hoặc bài tiếp theo qua menu khi một ứng dụng khác giữ tiêu điểm phương tiện của hệ thống";
 "辅助功能权限可显示%@的随机、循环按钮和音量调节，也可在系统媒体焦点被其他 App 占用时控制暂停、恢复和切换上一首或下一首" = "Quyền Trợ năng giúp hiện nút xáo trộn, lặp lại và chỉnh âm lượng của %@, đồng thời cho phép tạm dừng, tiếp tục, chuyển bài trước hoặc bài sau khi ứng dụng khác đang giữ tiêu điểm phương tiện của hệ thống";
 "辅助功能权限可让%@拖动进度后的歌词更准、显示循环按钮和音量调节，也可在系统媒体焦点被其他 App 占用时，通过菜单暂停、恢复和切换上一首或下一首" = "Quyền Trợ năng giúp lời của %@ chính xác hơn sau khi tua, hiện nút lặp lại và chỉnh âm lượng, đồng thời cho phép tạm dừng, tiếp tục, chuyển bài trước hoặc bài sau qua menu khi ứng dụng khác đang giữ tiêu điểm phương tiện của hệ thống";
+"输入收起" = "Thu gọn khi nhập";
+"输入时收起" = "Thu gọn khi nhập";
 "输出设备" = "Thiết bị đầu ra";
 "过去三年的今天及前后一周均无收听记录" = "Ba năm qua không có lượt phát nào vào ngày này hay tuần xung quanh";
 "运行中" = "Đang chạy";

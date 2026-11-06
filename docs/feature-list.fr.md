@@ -36,6 +36,7 @@ Ces fonctionnalités restent désactivées après l’installation. Activez-les 
 | [Paroles de l’encoche](#feature-notch-lyrics) | Réglages › Affichage des paroles › Encoche › Paroles de l’encoche |
 | [Paroles de la barre des menus](#feature-menu-bar-lyrics) | Réglages › Affichage des paroles › Barre des menus › Paroles de la barre des menus |
 | [Paroles Touch Bar](#feature-touch-bar-lyrics) | Réglages › Affichage des paroles › Touch Bar › Paroles Touch Bar |
+| [La Touch Bar s’efface pendant la saisie](#feature-touch-bar-collapse-while-typing) | Réglages › Affichage des paroles › Touch Bar › Comportement › Réduire pendant la saisie |
 | [Surbrillance HDR de la fenêtre des paroles](#feature-lyrics-window-hdr) | Réglages › Affichage des paroles › Fenêtre des paroles › Couleur › Surbrillance HDR |
 | [Fenêtre mini masquée en pause ou en plein écran](#feature-mini-window-auto-hide) | Réglages › Affichage des paroles › Fenêtre des paroles › Comportement › Masquer en pause |
 | [Fond Spotify Canvas](#feature-spotify-canvas) | Réglages › Affichage des paroles › Fenêtre des paroles › Fond › Spotify Canvas |
@@ -319,6 +320,15 @@ Sur un MacBook Pro avec Touch Bar, la ligne en cours défile au fil du chant, av
 - Réglages : Affichage des paroles › Touch Bar › Couleur › Couleur du texte
 - Réglages : Affichage des paroles › Touch Bar › Comportement › Développer au début de la lecture
 - Réglages : Affichage des paroles › Touch Bar › Disposition › Afficher le bouton « Plus »
+
+<a id="feature-touch-bar-collapse-while-typing"></a>
+
+### La Touch Bar s’efface pendant la saisie
+
+Tant que le curseur est dans un champ de texte, les paroles de la Touch Bar peuvent se réduire pour laisser voir les candidats de la méthode de saisie et les suggestions, puis se redévelopper quand vous en sortez. Nécessite l’autorisation « Accessibilité ».
+
+- Désactivée par défaut
+- Réglages : Affichage des paroles › Touch Bar › Comportement › Réduire pendant la saisie
 
 <a id="feature-lyrics-window"></a>
 
@@ -900,7 +910,7 @@ Au plus une fois par jour, envoie la version, macOS, les fonctions activées et 
 
 ## Tous les réglages
 
-Tous les réglages de la fenêtre Réglages, classés par emplacement : 314 au total. Tapez un nom dans le champ de recherche en haut de la barre latérale des Réglages pour y aller directement.
+Tous les réglages de la fenêtre Réglages, classés par emplacement : 315 au total. Tapez un nom dans le champ de recherche en haut de la barre latérale des Réglages pour y aller directement.
 
 ### Paroles › Source
 
@@ -1182,6 +1192,7 @@ Tous les réglages de la fenêtre Réglages, classés par emplacement : 314 au 
 - **Développer au début de la lecture** : Affiche les paroles à la reprise après une pause. Changer de morceau pendant la lecture ne les développe pas, et les paroles réduites manuellement le restent
 - **Réduire en pause** : Se réduit au bouton de la Control Strip après 10 secondes de pause, et se développe à la reprise
 - **Réduire si instrumental ou sans paroles** : Se réduit seulement une fois l’absence de paroles confirmée, et se développe dès que des paroles sont trouvées. Reste affiché pendant la recherche
+- **Réduire pendant la saisie** : Se réduit tant que le curseur est dans un champ de texte pour laisser voir les candidats de la méthode de saisie et les suggestions, puis se développe quand vous en sortez. Nécessite l’autorisation « Accessibilité »
 
 ### Affichage des paroles › Fenêtre des paroles
 

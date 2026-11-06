@@ -36,6 +36,7 @@ Các tính năng này tắt sau khi cài. Hãy bật chúng trong cài đặt tr
 | [Lời trên Notch](#feature-notch-lyrics) | Cài đặt › Hiển thị lời › Notch › Lời trên Notch |
 | [Lời trên thanh menu](#feature-menu-bar-lyrics) | Cài đặt › Hiển thị lời › Thanh menu › Lời trên thanh menu |
 | [Lời trên Touch Bar](#feature-touch-bar-lyrics) | Cài đặt › Hiển thị lời › Touch Bar › Lời trên Touch Bar |
+| [Touch Bar nhường chỗ khi nhập](#feature-touch-bar-collapse-while-typing) | Cài đặt › Hiển thị lời › Touch Bar › Hành vi › Thu gọn khi nhập |
 | [Tô sáng HDR cho cửa sổ lời](#feature-lyrics-window-hdr) | Cài đặt › Hiển thị lời › Cửa sổ lời › Màu › Tô sáng HDR |
 | [Cửa sổ mini ẩn khi tạm dừng hoặc toàn màn hình](#feature-mini-window-auto-hide) | Cài đặt › Hiển thị lời › Cửa sổ lời › Hành vi › Ẩn khi tạm dừng |
 | [Nền Spotify Canvas](#feature-spotify-canvas) | Cài đặt › Hiển thị lời › Cửa sổ lời › Nền › Spotify Canvas |
@@ -319,6 +320,15 @@ Trên MacBook Pro có Touch Bar, dòng hiện tại cuộn theo lời đang hát
 - Cài đặt: Hiển thị lời › Touch Bar › Màu › Màu chữ
 - Cài đặt: Hiển thị lời › Touch Bar › Hành vi › Tự mở rộng khi bắt đầu phát
 - Cài đặt: Hiển thị lời › Touch Bar › Bố cục › Hiện nút “Thêm”
+
+<a id="feature-touch-bar-collapse-while-typing"></a>
+
+### Touch Bar nhường chỗ khi nhập
+
+Khi con trỏ ở trong ô nhập, lời trên Touch Bar có thể tự thu gọn để hiện gợi ý của bộ gõ và gợi ý nhập, rồi mở rộng lại khi rời ô nhập. Cần quyền “Trợ năng”.
+
+- Tắt theo mặc định
+- Cài đặt: Hiển thị lời › Touch Bar › Hành vi › Thu gọn khi nhập
 
 <a id="feature-lyrics-window"></a>
 
@@ -900,7 +910,7 @@ Tối đa một lần mỗi ngày, Lyrimuse gửi phiên bản, macOS, các tín
 
 ## Toàn bộ cài đặt
 
-Toàn bộ mục trong cửa sổ Cài đặt, theo vị trí: tổng cộng 314 mục. Gõ tên vào ô tìm kiếm ở đầu thanh bên của Cài đặt để đi thẳng tới mục đó.
+Toàn bộ mục trong cửa sổ Cài đặt, theo vị trí: tổng cộng 315 mục. Gõ tên vào ô tìm kiếm ở đầu thanh bên của Cài đặt để đi thẳng tới mục đó.
 
 ### Lời bài hát › Nguồn
 
@@ -1182,6 +1192,7 @@ Toàn bộ mục trong cửa sổ Cài đặt, theo vị trí: tổng cộng 314
 - **Tự mở rộng khi bắt đầu phát**: Hiện lời khi tiếp tục phát sau khi tạm dừng. Chuyển bài trong lúc phát không mở rộng, lời bạn đã thu gọn sẽ giữ thu gọn
 - **Tự thu gọn khi tạm dừng**: Thu gọn thành nút trên Control Strip sau 10 giây tạm dừng, tự mở rộng lại khi tiếp tục phát
 - **Thu gọn khi nhạc không lời/không có lời**: Chỉ thu gọn khi đã xác nhận không có lời, tự mở rộng lại khi tìm thấy lời. Vẫn hiện bình thường trong lúc tìm
+- **Thu gọn khi nhập**: Thu gọn khi con trỏ ở trong ô nhập để hiện gợi ý của bộ gõ và gợi ý nhập, mở rộng lại khi rời ô nhập. Cần quyền “Trợ năng”
 
 ### Hiển thị lời › Cửa sổ lời
 

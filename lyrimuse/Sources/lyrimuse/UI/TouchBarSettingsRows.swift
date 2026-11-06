@@ -243,10 +243,11 @@ struct TouchBarLayoutRows: View {
     }
 }
 
-/// 「行为」组:自动展开 / 收起的三个开关(默认都关)。只在情况变的那一刻动一次,手动展开、收起之后保持原样;
-/// 怎么判见 Core `TouchBarAutoPresent`(17 章决策 45)。
+/// 「行为」组:自动展开 / 收起的四个开关(默认都关)。只在情况变的那一刻动一次,手动展开、收起之后保持原样;
+/// 怎么判见 Core `TouchBarAutoPresent`(17 章决策 45、59)。「输入时收起」要「辅助功能」权限,开着又没授权时下面一行提示。
 struct TouchBarBehaviorRows: View {
     @ObservedObject private var settings = AppSettings.shared
+    @ObservedObject private var accessibility = AccessibilityPermission.shared
 
     var body: some View {
         SettingsTileGrid {
@@ -259,6 +260,24 @@ struct TouchBarBehaviorRows: View {
             SettingsToggleTile(icon: "text.badge.xmark", title: L10n.t("纯音乐/无歌词时收起"),
                                help: L10n.t("确认无歌词后才收起，找到歌词后自动展开；搜索期间照常显示"),
                                isOn: $settings.touchBarCollapseWhenNoLyrics)
+            SettingsToggleTile(icon: "keyboard", title: L10n.t("输入时收起"),
+                               help: L10n.t("光标在输入框里时收起，露出输入法候选和输入建议，离开输入框后展开；需要「辅助功能」权限"),
+                               isOn: $settings.touchBarCollapseWhileTyping)
+        }
+        if settings.touchBarCollapseWhileTyping && !accessibility.trusted {
+            HStack(spacing: 6) {
+                Text(L10n.t("尚未获得「辅助功能」权限，输入时收起无法生效"))
+                    .font(.system(size: 11))
+                    .foregroundStyle(.orange)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .help(accessibility.steps)
+                Spacer(minLength: 4)
+                Button(accessibility.actionTitle) { accessibility.handleAction() }
+                    .controlSize(.small)
+                    .settingsGlassButtons()
+                    .buttonBorderShape(.capsule)
+            }
+            .onAppear { accessibility.refresh() }
         }
     }
 }
@@ -312,6 +331,7 @@ enum TouchBarStyleDefaults {
         settings.touchBarExpandOnPlay = AppSettings.defaultTouchBarExpandOnPlay
         settings.touchBarCollapseWhenPaused = AppSettings.defaultTouchBarCollapseWhenPaused
         settings.touchBarCollapseWhenNoLyrics = AppSettings.defaultTouchBarCollapseWhenNoLyrics
+        settings.touchBarCollapseWhileTyping = AppSettings.defaultTouchBarCollapseWhileTyping
     }
 }
 
@@ -422,6 +442,7 @@ struct TouchBarEditorToolbar: View {
                 (title: L10n.t("自动展开"), isOn: settings.touchBarExpandOnPlay),
                 (title: L10n.t("暂停收起"), isOn: settings.touchBarCollapseWhenPaused),
                 (title: L10n.t("无歌词收起"), isOn: settings.touchBarCollapseWhenNoLyrics),
+                (title: L10n.t("输入收起"), isOn: settings.touchBarCollapseWhileTyping),
             ])
         }
     }

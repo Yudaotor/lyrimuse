@@ -530,6 +530,7 @@
 "僧伽罗语" = "Cingalés";
 "允许局域网访问" = "Permitir acceso desde la red local";
 "允许远程控制" = "Permitir control remoto";
+"光标在输入框里时收起，露出输入法候选和输入建议，离开输入框后展开；需要「辅助功能」权限" = "Se contrae mientras el cursor está en un campo de texto para mostrar los candidatos del método de entrada y las sugerencias de escritura, y se expande al salir. Requiere el permiso de «Accesibilidad»";
 "光盘" = "Disco";
 "免费、格式支持很全的本地音乐播放器" = "Reproductor de música local gratuito que reproduce casi cualquier formato";
 "免费开放的社区歌词库" = "Base de datos de letras libre y abierta, gestionada por su comunidad";
@@ -1060,6 +1061,7 @@
 "尚未确认" = "Sin confirmar";
 "尚未缓存任何歌词。播放歌曲后，Lyrimuse 会自动搜索并保存歌词" = "Aún no hay letras en caché. Cuando reproduces una canción, Lyrimuse busca y guarda su letra automáticamente";
 "尚未获得「辅助功能」权限，自动跳过无法生效" = "Sin permiso de «Accesibilidad», la omisión automática no está disponible";
+"尚未获得「辅助功能」权限，输入时收起无法生效" = "Sin permiso de «Accesibilidad», no se puede contraer al escribir";
 "尚未连接 Apple Music。可在「歌词来源」卡片底部点按「连接」登录（需要 Apple Music 订阅）" = "Apple Music aún no está conectado. Inicia sesión con «Conectar», al final de la tarjeta «Fuentes de letras» (requiere suscripción a Apple Music)";
 "尚未连接 Last.fm 账号" = "La cuenta de Last.fm aún no está conectada";
 "局域网" = "Red local";
@@ -2666,6 +2668,8 @@
 "辅助功能权限可显示%@的随机、循环与喜欢按钮，也可在系统媒体焦点被其他 App 占用时，通过菜单暂停、恢复和切换上一首或下一首" = "El permiso de accesibilidad activa los botones de aleatorio, repetir y favorito para %@, y permite a Lyrimuse pausar, reanudar y saltar canciones desde sus menús mientras otra app tiene el foco multimedia del sistema";
 "辅助功能权限可显示%@的随机、循环按钮和音量调节，也可在系统媒体焦点被其他 App 占用时控制暂停、恢复和切换上一首或下一首" = "El permiso de Accesibilidad activa aleatorio, repetición y volumen en %@, y permite a Lyrimuse pausar, reanudar y cambiar de canción cuando otra app tiene el foco multimedia del sistema";
 "辅助功能权限可让%@拖动进度后的歌词更准、显示循环按钮和音量调节，也可在系统媒体焦点被其他 App 占用时，通过菜单暂停、恢复和切换上一首或下一首" = "El permiso de Accesibilidad mantiene precisa la letra de %@ tras saltar a otro punto, activa su botón de repetición y su control de volumen, y permite a Lyrimuse pausar, reanudar y cambiar de canción desde sus menús cuando otra app tiene el foco multimedia del sistema";
+"输入收起" = "Contraer al escribir";
+"输入时收起" = "Contraer al escribir";
 "输出设备" = "Dispositivo de salida";
 "过去三年的今天及前后一周均无收听记录" = "Sin escuchas en este día ni en la semana de alrededor en los últimos tres años";
 "运行中" = "En ejecución";

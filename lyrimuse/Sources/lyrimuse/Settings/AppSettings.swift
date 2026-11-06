@@ -367,6 +367,7 @@ final class AppSettings: ObservableObject {
         static let touchBarShowsMoreKey = "np:touchBarShowsMoreKey"
         static let touchBarCollapseWhenPaused = "np:touchBarCollapseWhenPaused"
         static let touchBarCollapseWhenNoLyrics = "np:touchBarCollapseWhenNoLyrics"
+        static let touchBarCollapseWhileTyping = "np:touchBarCollapseWhileTyping"
         static let menuBarLyricsMaxChars = "np:menuBarLyricsMaxChars"
         static let menuBarLyricsWidth = "np:menuBarLyricsMaxWidth"
         static let menuBarLyricsWidthMode = "np:menuBarLyricsWidthMode"
@@ -779,6 +780,7 @@ final class AppSettings: ObservableObject {
     static let defaultTouchBarShowsMoreKey = true
     static let defaultTouchBarCollapseWhenPaused = false
     static let defaultTouchBarCollapseWhenNoLyrics = false
+    static let defaultTouchBarCollapseWhileTyping = false
 
     private let defaults: UserDefaults
 
@@ -1220,6 +1222,10 @@ final class AppSettings: ObservableObject {
     }
     @Published var touchBarCollapseWhenNoLyrics: Bool {
         didSet { defaults.set(touchBarCollapseWhenNoLyrics, forKey: Keys.touchBarCollapseWhenNoLyrics) }
+    }
+    /// 触控栏歌词在键盘焦点进了输入框时收起、离开时展开回来;要「辅助功能」权限(`FocusedTextInputMonitor`)。
+    @Published var touchBarCollapseWhileTyping: Bool {
+        didSet { defaults.set(touchBarCollapseWhileTyping, forKey: Keys.touchBarCollapseWhileTyping) }
     }
     // 状态栏歌词行超过这个字数就截断+悬停 tooltip 补全,不超过就整行显示——做成可调的
     // 上限而不是写死一个数字。
@@ -2690,6 +2696,8 @@ final class AppSettings: ObservableObject {
             ?? Self.defaultTouchBarCollapseWhenPaused
         touchBarCollapseWhenNoLyrics = (defaults.object(forKey: Keys.touchBarCollapseWhenNoLyrics) as? Bool)
             ?? Self.defaultTouchBarCollapseWhenNoLyrics
+        touchBarCollapseWhileTyping = (defaults.object(forKey: Keys.touchBarCollapseWhileTyping) as? Bool)
+            ?? Self.defaultTouchBarCollapseWhileTyping
         menuBarLyricsMaxChars = (defaults.object(forKey: Keys.menuBarLyricsMaxChars) as? Int) ?? 60
         // 默认 250pt:大约中文 19 个字、英文 37 个字,菜单栏上占一小条,不至于把右边
         // 其它 App 的图标挤走。从 200 改上来 —— 用户把自己在用的这一版菜单栏

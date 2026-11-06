@@ -530,6 +530,7 @@
 "僧伽罗语" = "Singhalesisch";
 "允许局域网访问" = "Zugriff im lokalen Netzwerk erlauben";
 "允许远程控制" = "Fernsteuerung erlauben";
+"光标在输入框里时收起，露出输入法候选和输入建议，离开输入框后展开；需要「辅助功能」权限" = "Klappt ein, solange der Cursor in einem Textfeld steht, damit Kandidaten der Eingabemethode und Eingabevorschläge sichtbar sind, und klappt nach dem Verlassen wieder aus. Erfordert die Berechtigung „Bedienungshilfen“";
 "光盘" = "Disc";
 "免费、格式支持很全的本地音乐播放器" = "Ein kostenloser lokaler Musikplayer für fast jedes Format";
 "免费开放的社区歌词库" = "Freie, offene Liedtextdatenbank der Community";
@@ -1060,6 +1061,7 @@
 "尚未确认" = "Noch nicht bestätigt";
 "尚未缓存任何歌词。播放歌曲后，Lyrimuse 会自动搜索并保存歌词" = "Noch keine Liedtexte zwischengespeichert. Wenn du einen Titel abspielst, sucht und sichert Lyrimuse den Liedtext automatisch";
 "尚未获得「辅助功能」权限，自动跳过无法生效" = "Keine Berechtigung für „Bedienungshilfen“, daher ist automatisches Überspringen nicht verfügbar";
+"尚未获得「辅助功能」权限，输入时收起无法生效" = "Keine Berechtigung für „Bedienungshilfen“, daher ist Einklappen beim Tippen nicht verfügbar";
 "尚未连接 Apple Music。可在「歌词来源」卡片底部点按「连接」登录（需要 Apple Music 订阅）" = "Apple Music ist noch nicht verbunden – melde dich einmal über „Verbinden“ unten in der Karte „Liedtextquellen“ an (Apple Music-Abo erforderlich)";
 "尚未连接 Last.fm 账号" = "Last.fm-Account noch nicht verbunden";
 "局域网" = "Lokales Netzwerk";
@@ -2666,6 +2668,8 @@
 "辅助功能权限可显示%@的随机、循环与喜欢按钮，也可在系统媒体焦点被其他 App 占用时，通过菜单暂停、恢复和切换上一首或下一首" = "„Bedienungshilfen“ aktiviert die Tasten für Zufall, Wiederholen und Favorit von %@ und lässt Lyrimuse über die Menüs pausieren, fortsetzen und Titel wechseln, während eine andere App den System-Medienfokus hat";
 "辅助功能权限可显示%@的随机、循环按钮和音量调节，也可在系统媒体焦点被其他 App 占用时控制暂停、恢复和切换上一首或下一首" = "Die Bedienungshilfen-Berechtigung aktiviert Zufall, Wiederholen und Lautstärke für %@ und lässt Lyrimuse pausieren, fortsetzen und Titel wechseln, wenn eine andere App den Medienfokus des Systems hat";
 "辅助功能权限可让%@拖动进度后的歌词更准、显示循环按钮和音量调节，也可在系统媒体焦点被其他 App 占用时，通过菜单暂停、恢复和切换上一首或下一首" = "Mit der Bedienungshilfen-Berechtigung bleibt der Liedtext für %@ nach dem Spulen genau, Wiederholen und Lautstärke werden verfügbar, und Lyrimuse kann über die Menüs pausieren, fortsetzen und Titel wechseln, während eine andere App den Medienfokus des Systems hat";
+"输入收起" = "Beim Tippen einklappen";
+"输入时收起" = "Beim Tippen einklappen";
 "输出设备" = "Ausgabegerät";
 "过去三年的今天及前后一周均无收听记录" = "In den letzten drei Jahren keine Wiedergaben an diesem Tag oder in der Woche drumherum";
 "运行中" = "Läuft";

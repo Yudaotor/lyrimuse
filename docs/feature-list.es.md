@@ -36,6 +36,7 @@ Estas funciones siguen desactivadas después de instalar. Actívalas primero en 
 | [Letra del notch](#feature-notch-lyrics) | Ajustes › Mostrar letra › Notch › Letra en el notch |
 | [Letra en la barra de menús](#feature-menu-bar-lyrics) | Ajustes › Mostrar letra › Barra de menús › Letra en la barra de menús |
 | [Letra en la Touch Bar](#feature-touch-bar-lyrics) | Ajustes › Mostrar letra › Touch Bar › Letra en la Touch Bar |
+| [La Touch Bar se aparta al escribir](#feature-touch-bar-collapse-while-typing) | Ajustes › Mostrar letra › Touch Bar › Comportamiento › Contraer al escribir |
 | [Resaltado HDR en la ventana de letra](#feature-lyrics-window-hdr) | Ajustes › Mostrar letra › Ventana de letra › Color › Resaltado HDR |
 | [Ocultar la ventana mini en pausa o pantalla completa](#feature-mini-window-auto-hide) | Ajustes › Mostrar letra › Ventana de letra › Comportamiento › Ocultar en pausa |
 | [Fondo de Spotify Canvas](#feature-spotify-canvas) | Ajustes › Mostrar letra › Ventana de letra › Fondo › Spotify Canvas |
@@ -319,6 +320,15 @@ En un MacBook Pro con Touch Bar, la línea actual se desplaza a medida que se ca
 - Ajustes: Mostrar letra › Touch Bar › Color › Color del texto
 - Ajustes: Mostrar letra › Touch Bar › Comportamiento › Expandir al empezar a reproducir
 - Ajustes: Mostrar letra › Touch Bar › Diseño › Mostrar botón «Más»
+
+<a id="feature-touch-bar-collapse-while-typing"></a>
+
+### La Touch Bar se aparta al escribir
+
+Mientras el cursor está en un campo de texto, la letra de la Touch Bar puede contraerse para mostrar los candidatos del método de entrada y las sugerencias de escritura, y volver a expandirse al salir. Requiere el permiso de «Accesibilidad».
+
+- Desactivada por omisión
+- Ajustes: Mostrar letra › Touch Bar › Comportamiento › Contraer al escribir
 
 <a id="feature-lyrics-window"></a>
 
@@ -900,7 +910,7 @@ Como máximo una vez al día, envía al servidor del propio autor la versión, e
 
 ## Todos los ajustes
 
-Todos los ajustes de la ventana Ajustes, según dónde están: 314 en total. Escribe un nombre en el campo de búsqueda de la parte superior de la barra lateral de Ajustes para ir directamente a él.
+Todos los ajustes de la ventana Ajustes, según dónde están: 315 en total. Escribe un nombre en el campo de búsqueda de la parte superior de la barra lateral de Ajustes para ir directamente a él.
 
 ### Letra › Fuente
 
@@ -1182,6 +1192,7 @@ Todos los ajustes de la ventana Ajustes, según dónde están: 314 en total. Esc
 - **Expandir al empezar a reproducir**: Muestra la letra al reanudar tras una pausa. Cambiar de canción durante la reproducción no la expande, y la letra que contraigas sigue contraída
 - **Contraer en pausa**: Se contrae al botón de la Control Strip tras 10 segundos en pausa y se expande de nuevo al reanudar
 - **Contraer en instrumentales y sin letra**: Solo se contrae tras confirmar que no hay letra y se expande de nuevo al encontrarla. Se sigue mostrando durante la búsqueda
+- **Contraer al escribir**: Se contrae mientras el cursor está en un campo de texto para mostrar los candidatos del método de entrada y las sugerencias de escritura, y se expande al salir. Requiere el permiso de «Accesibilidad»
 
 ### Mostrar letra › Ventana de letra
 

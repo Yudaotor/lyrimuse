@@ -36,6 +36,7 @@ Diese Funktionen bleiben nach der Installation aus. Schalte sie zuerst in den Ei
 | [Liedtext an der Notch](#feature-notch-lyrics) | Einstellungen › Liedtext-Anzeige › Notch › Notch-Text |
 | [Liedtext in der Menüleiste](#feature-menu-bar-lyrics) | Einstellungen › Liedtext-Anzeige › Menüleiste › Menüleisten-Text |
 | [Liedtext auf der Touch Bar](#feature-touch-bar-lyrics) | Einstellungen › Liedtext-Anzeige › Touch Bar › Touch Bar-Liedtext |
+| [Touch Bar macht beim Tippen Platz](#feature-touch-bar-collapse-while-typing) | Einstellungen › Liedtext-Anzeige › Touch Bar › Verhalten › Beim Tippen einklappen |
 | [HDR-Hervorhebung im Liedtextfenster](#feature-lyrics-window-hdr) | Einstellungen › Liedtext-Anzeige › Liedtextfenster › Farbe › HDR-Hervorhebung |
 | [Mini-Fenster blendet sich bei Pause oder Vollbild aus](#feature-mini-window-auto-hide) | Einstellungen › Liedtext-Anzeige › Liedtextfenster › Verhalten › Bei Pause ausblenden |
 | [Spotify Canvas als Hintergrund](#feature-spotify-canvas) | Einstellungen › Liedtext-Anzeige › Liedtextfenster › Hintergrund › Spotify Canvas |
@@ -319,6 +320,15 @@ Auf einem MacBook Pro mit Touch Bar läuft die aktuelle Zeile mit, während sie 
 - Einstellungen: Liedtext-Anzeige › Touch Bar › Farbe › Textfarbe
 - Einstellungen: Liedtext-Anzeige › Touch Bar › Verhalten › Bei Wiedergabe ausklappen
 - Einstellungen: Liedtext-Anzeige › Touch Bar › Layout › Taste „Mehr“ anzeigen
+
+<a id="feature-touch-bar-collapse-while-typing"></a>
+
+### Touch Bar macht beim Tippen Platz
+
+Solange der Cursor in einem Textfeld steht, kann der Liedtext auf der Touch Bar einklappen, damit Kandidaten der Eingabemethode und Eingabevorschläge sichtbar sind, und nach dem Verlassen wieder ausklappen. Erfordert die Berechtigung „Bedienungshilfen“.
+
+- Standardmäßig aus
+- Einstellungen: Liedtext-Anzeige › Touch Bar › Verhalten › Beim Tippen einklappen
 
 <a id="feature-lyrics-window"></a>
 
@@ -900,7 +910,7 @@ Sendet höchstens einmal täglich Version, macOS, aktivierte Funktionen und Abst
 
 ## Alle Einstellungen
 
-Alle Einstellungen des Einstellungsfensters nach Ort: insgesamt 314. Gib einen Namen in das Suchfeld oben in der Seitenleiste der Einstellungen ein, um direkt dorthin zu springen.
+Alle Einstellungen des Einstellungsfensters nach Ort: insgesamt 315. Gib einen Namen in das Suchfeld oben in der Seitenleiste der Einstellungen ein, um direkt dorthin zu springen.
 
 ### Liedtext › Quelle
 
@@ -1182,6 +1192,7 @@ Alle Einstellungen des Einstellungsfensters nach Ort: insgesamt 314. Gib einen N
 - **Bei Wiedergabe ausklappen**: Zeigt den Liedtext, wenn die Wiedergabe nach einer Pause weitergeht. Ein Titelwechsel während der Wiedergabe klappt ihn nicht aus, und eingeklappter Text bleibt eingeklappt
 - **Bei Pause einklappen**: Klappt nach 10 Sekunden Pause zur Control Strip-Taste ein und bei Wiedergabe wieder aus
 - **Bei Instrumental & ohne Text einklappen**: Klappt erst ein, wenn sicher kein Liedtext existiert, und wieder aus, sobald einer gefunden wird. Bleibt während der Suche sichtbar
+- **Beim Tippen einklappen**: Klappt ein, solange der Cursor in einem Textfeld steht, damit Kandidaten der Eingabemethode und Eingabevorschläge sichtbar sind, und klappt nach dem Verlassen wieder aus. Erfordert die Berechtigung „Bedienungshilfen“
 
 ### Liedtext-Anzeige › Liedtextfenster
 

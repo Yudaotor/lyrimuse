@@ -101,6 +101,14 @@ final class TouchBarLyricsController: NSObject, NSTouchBarDelegate {
     private var pauseCollapseTask: Task<Void, Never>?
     /// 开始播放触发的展开等着再确认的那一次计时(`TouchBarAutoPresent.settleExpandDelayMs`)。
     private var settleExpandTask: Task<Void, Never>?
+    /// 「输入时收起」:盯键盘焦点在不在输入框里(开着这一项、触控栏歌词也开着时才在跑),读到的值,防抖那一次计时,
+    /// 和调试深链指定的值(nil = 照读到的)。
+    private var typingMonitor: FocusedTextInputMonitor?
+    private var detectedTyping = false
+    private var typingDebounceTask: Task<Void, Never>?
+    private var typingOverride: Bool?
+    /// 焦点进出输入框防抖这么久:在几个控件之间连着跳(按 Tab、点开下拉)时不来回收、展。
+    private static let typingDebounceMs = 300
     /// 自己发起的展开 / 收起等着哪个可见状态、什么时候发起的:`visibilityChanged` 看到的变化跟它对得上、又在
     /// `expectedVisibilityTimeout` 之内,就是自己做的,否则是用户动的(功能栏图标、✕、收起键、快捷键)。有时限是因为
     /// 系统不一定报这次变化(比如被别的 App 的展开条盖着),留着不清的话,用户下一次手动收起会被当成自动的。
@@ -256,13 +264,15 @@ final class TouchBarLyricsController: NSObject, NSTouchBarDelegate {
                 .sink { [weak self] _ in self?.scheduleRefresh() },
             settings.$touchBarLyricsAlignment.dropFirst().removeDuplicates()
                 .sink { [weak self] _ in self?.scheduleRefresh() },
-            // 自动展开 / 收起的三个开关:只换判据用的值,从下一次播放状态变化起算;关掉「暂停时自动收起」时作废等着的那一次。
-            Publishers.CombineLatest3(settings.$touchBarExpandOnPlay, settings.$touchBarCollapseWhenPaused,
-                                      settings.$touchBarCollapseWhenNoLyrics)
-                .sink { [weak self] expand, pause, noLyrics in
+            // 自动展开 / 收起的四个开关:只换判据用的值,从下一次播放状态变化起算;关掉「暂停时自动收起」时作废等着的那一次;
+            // 「输入时收起」开 / 关时起停盯焦点的那一个。
+            Publishers.CombineLatest4(settings.$touchBarExpandOnPlay, settings.$touchBarCollapseWhenPaused,
+                                      settings.$touchBarCollapseWhenNoLyrics, settings.$touchBarCollapseWhileTyping)
+                .sink { [weak self] expand, pause, noLyrics, typing in
                     self?.autoOptions = .init(expandOnPlay: expand, collapseWhenPaused: pause,
-                                              collapseWhenNoLyrics: noLyrics)
+                                              collapseWhenNoLyrics: noLyrics, collapseWhileTyping: typing)
                     if !pause { self?.cancelPauseCollapse() }
+                    self?.updateTypingMonitor()
                 },
         ]
         setEnabled(settings.showLyricsInTouchBar && availability.isPresent, presentNow: false)
@@ -391,6 +401,7 @@ final class TouchBarLyricsController: NSObject, NSTouchBarDelegate {
             lastVisible = bar.isVisible
             startAuto(presentingNow: presentNow)
             observePlayback()
+            updateTypingMonitor()
             visibilityObservation = bar.observe(\.isVisible, options: [.new]) { _, _ in
                 DispatchQueue.main.async { TouchBarLyricsController.shared.visibilityChanged() }
             }
@@ -409,6 +420,7 @@ final class TouchBarLyricsController: NSObject, NSTouchBarDelegate {
             hint = nil
             cancelPauseCollapse()
             cancelSettleExpand()
+            updateTypingMonitor()
             autoPresent = TouchBarAutoPresent()
             expectedVisibility = nil
             TouchBarPrivateAPI.dismissSystemModal(bar)
@@ -646,6 +658,46 @@ final class TouchBarLyricsController: NSObject, NSTouchBarDelegate {
     private func cancelPauseCollapse() {
         pauseCollapseTask?.cancel()
         pauseCollapseTask = nil
+    }
+
+    // MARK: - 输入时收起(17 章决策 59)
+
+    /// 开着「输入时收起」、触控栏歌词也开着时盯焦点,否则停掉;停掉时当作离开了输入框(自己收的展开回来)。
+    private func updateTypingMonitor() {
+        let wanted = enabled && autoOptions.collapseWhileTyping
+        if wanted, typingMonitor == nil {
+            typingMonitor = FocusedTextInputMonitor { [weak self] typing, role in
+                logger.notice("[TouchBarLyricsController.typing] focused text input=\(typing) role=\(role ?? "nil", privacy: .public)")
+                self?.detectedTyping = typing
+                self?.scheduleTypingChange()
+            }
+        } else if !wanted, let monitor = typingMonitor {
+            monitor.stop()
+            typingMonitor = nil
+            detectedTyping = false
+            if enabled { scheduleTypingChange() } else { typingDebounceTask?.cancel() }
+        }
+    }
+
+    /// 调试深链:当作焦点在 / 不在输入框里;nil = 交还给读到的值。
+    func setTypingOverride(_ value: Bool?) {
+        typingOverride = value
+        scheduleTypingChange()
+    }
+
+    private func scheduleTypingChange() {
+        typingDebounceTask?.cancel()
+        typingDebounceTask = Task { [weak self] in
+            try? await Task.sleep(for: .milliseconds(Self.typingDebounceMs))
+            guard !Task.isCancelled, let self, self.enabled else { return }
+            self.typingDebounceTask = nil
+            let p = PlaybackCoordinator.shared
+            let typing = self.typingOverride ?? self.detectedTyping
+            if typing { self.cancelPauseCollapse() }
+            self.performAuto(self.autoPresent.typingChanged(
+                isTyping: typing, isPlaying: p.isPlayingNow, lacksLyrics: p.currentTrackLacksLyrics,
+                visible: self.bar.isVisible, options: self.autoOptions))
+        }
     }
 
     private func cancelSettleExpand() {

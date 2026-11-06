@@ -308,6 +308,12 @@ func runDeepLinkTests() {
         expectEqual(link("lyrimuse://debug/rainbow"), nil, "debug: 彩虹什么都没带不认")
         expectEqual(link("lyrimuse://debug/touchbar-display?color=Rainbow"), .debug(.touchBarDisplay(color: .rainbow)),
                     "debug: 触控栏歌词颜色切彩虹(大小写不敏感)")
+        expectEqual([link("lyrimuse://debug/touchbar-typing?state=on"), link("lyrimuse://debug/touchbar-typing?state=OFF"),
+                     link("lyrimuse://debug/touchbar-typing?state=auto")],
+                    [.debug(.touchBarTyping(override: true)), .debug(.touchBarTyping(override: false)),
+                     .debug(.touchBarTyping(override: nil))], "debug: 触控栏当作在 / 不在输入框里、交还")
+        expectEqual(link("lyrimuse://debug/touchbar-typing?state=maybe") == nil
+                    && link("lyrimuse://debug/touchbar-typing") == nil, true, "debug: 触控栏输入状态认不出的、没带都不认")
         expectEqual(link("lyrimuse://debug/touchbar-display?color=pink") == nil
                     && link("lyrimuse://debug/touchbar-display") == nil, true, "debug: 触控栏颜色认不出的、没带都不认")
         expectEqual(LyrimuseDeepLink.wantsBackground(URL(string: "lyrimuse://lyrics-manager?background=1")!), true, "后台开窗: 带了")
@@ -490,6 +496,7 @@ func runDeepLinkTests() {
             .debug(.menuBarCenter(center: nil, ignoreNotch: nil, hover: false, click: "left")),
             .debug(.japaneseReading(.kana)), .debug(.japaneseReading(.romaji)),
             .debug(.touchBarDisplay(color: .rainbow)), .debug(.touchBarDisplay(color: .cover)),
+            .debug(.touchBarTyping(override: true)), .debug(.touchBarTyping(override: false)), .debug(.touchBarTyping(override: nil)),
             .debug(.rainbow(overlay: true, notch: nil)), .debug(.rainbow(overlay: false, notch: true)),
             .debug(.rainbow(overlay: nil, notch: nil, menuBar: false)),
             .debug(.menuBarDisplay(artwork: true, content: nil)), .debug(.menuBarDisplay(artwork: nil, content: "title")),

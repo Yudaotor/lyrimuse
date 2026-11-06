@@ -1319,6 +1319,53 @@
           ]
         },
         {
+          "id": "touch-bar-collapse-while-typing",
+          "title": {
+            "en": "Touch Bar steps aside while typing",
+            "zh-Hans": "打字时让出触控栏",
+            "zh-Hant": "打字時讓出觸控列",
+            "ja": "入力中はTouch Barを譲る",
+            "ko": "입력 중에는 Touch Bar 양보",
+            "es": "La Touch Bar se aparta al escribir",
+            "fr": "La Touch Bar s’efface pendant la saisie",
+            "de": "Touch Bar macht beim Tippen Platz",
+            "it": "La Touch Bar si fa da parte mentre scrivi",
+            "pt-BR": "A Touch Bar abre espaço ao digitar",
+            "vi": "Touch Bar nhường chỗ khi nhập",
+            "ru": "Touch Bar уступает место при вводе",
+            "uk": "Touch Bar поступається під час введення",
+            "th": "Touch Bar หลีกทางเมื่อพิมพ์"
+          },
+          "desc": {
+            "en": "While the cursor is in a text field, the Touch Bar lyrics can collapse so input method candidates and typing suggestions show, then expand again when you leave the field. Requires Accessibility permission.",
+            "zh-Hans": "光标在输入框里时，触控栏歌词可自动收起，露出输入法候选和输入建议，离开输入框后再展开。需要「辅助功能」权限。",
+            "zh-Hant": "游標在輸入框裡時，觸控列歌詞可自動收起，露出輸入法候選字和輸入建議，離開輸入框後再展開。需要「輔助使用」權限。",
+            "ja": "カーソルが入力欄にある間、Touch Barの歌詞を自動で折りたたんで入力候補や予測変換を表示し、入力欄を離れるとまた展開します。「アクセシビリティ」の権限が必要です。",
+            "ko": "커서가 입력란에 있는 동안 Touch Bar 가사를 자동으로 접어 입력기 후보와 입력 제안을 보여 주고, 입력란을 벗어나면 다시 펼칩니다. ‘손쉬운 사용’ 권한이 필요합니다.",
+            "es": "Mientras el cursor está en un campo de texto, la letra de la Touch Bar puede contraerse para mostrar los candidatos del método de entrada y las sugerencias de escritura, y volver a expandirse al salir. Requiere el permiso de «Accesibilidad».",
+            "fr": "Tant que le curseur est dans un champ de texte, les paroles de la Touch Bar peuvent se réduire pour laisser voir les candidats de la méthode de saisie et les suggestions, puis se redévelopper quand vous en sortez. Nécessite l’autorisation « Accessibilité ».",
+            "de": "Solange der Cursor in einem Textfeld steht, kann der Liedtext auf der Touch Bar einklappen, damit Kandidaten der Eingabemethode und Eingabevorschläge sichtbar sind, und nach dem Verlassen wieder ausklappen. Erfordert die Berechtigung „Bedienungshilfen“.",
+            "it": "Mentre il cursore è in un campo di testo, il testo sulla Touch Bar può comprimersi per mostrare i candidati del metodo di input e i suggerimenti, e riespandersi all’uscita dal campo. Richiede il permesso “Accessibilità”.",
+            "pt-BR": "Enquanto o cursor está em um campo de texto, a letra na Touch Bar pode se recolher para mostrar os candidatos do método de entrada e as sugestões de digitação, e expandir de novo ao sair dele. Requer a permissão de “Acessibilidade”.",
+            "vi": "Khi con trỏ ở trong ô nhập, lời trên Touch Bar có thể tự thu gọn để hiện gợi ý của bộ gõ và gợi ý nhập, rồi mở rộng lại khi rời ô nhập. Cần quyền “Trợ năng”.",
+            "ru": "Пока курсор в поле ввода, текст в Touch Bar может сворачиваться, чтобы были видны варианты метода ввода и подсказки, и снова раскрываться, когда вы из него выходите. Нужно разрешение «Универсальный доступ».",
+            "uk": "Поки курсор у полі введення, текст на Touch Bar може згортатися, щоб було видно варіанти методу введення й підказки, і знову розгортатися, коли ви з нього виходите. Потрібен дозвіл «Доступність».",
+            "th": "ขณะเคอร์เซอร์อยู่ในช่องป้อนข้อความ เนื้อเพลงใน Touch Bar ยุบอัตโนมัติได้เพื่อแสดงคำแนะนำของวิธีป้อนข้อมูลและคำแนะนำการพิมพ์ แล้วขยายอีกครั้งเมื่อออกจากช่อง ต้องใช้สิทธิ์ “การช่วยการเข้าถึง”"
+          },
+          "default": "off",
+          "check": {
+            "appSetting": "touchBarCollapseWhileTyping"
+          },
+          "settings": [
+            [
+              "歌词显示",
+              "触控栏",
+              "行为",
+              "输入时收起"
+            ]
+          ]
+        },
+        {
           "id": "lyrics-window",
           "title": {
             "en": "Lyrics window",

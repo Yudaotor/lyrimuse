@@ -1,6 +1,6 @@
 import Foundation
 
-/// 触控栏歌词的自动展开 / 收起(设置 › 歌词显示 › 触控栏 › 行为,三个开关默认都关,见 17 章决策 45)。
+/// 触控栏歌词的自动展开 / 收起(设置 › 歌词显示 › 触控栏 › 行为,四个开关默认都关,见 17 章决策 45、59)。
 ///
 /// 只在情况变了的那一刻判一次:开始播放、暂停满 `pauseCollapseDelayMs`、这首确认没有歌词、之后又有了。不按此刻的状态
 /// 一直压着 —— 手动展开 / 收起之后保持原样,等下一次变化。展开会占掉前台 App 自己的触控栏按钮,所以:
@@ -11,8 +11,12 @@ import Foundation
 ///   过一会儿才认出不是歌;认出来要多久不固定(实测 1.4 秒到 8.9 秒),所以这样展开后的 `provisionalExpandMs` 里
 ///   一旦判定没在放歌,当场收回去,不等「暂停时自动收起」(17 章决策 49)。
 ///
-/// 控制器每次播放状态变了调 `update`,暂停满时长调 `pauseDelayElapsed`,看到不是自己发起的展开 / 收起时调
-/// `userChangedVisibility`;返回的动作照做。
+/// 「输入时收起」:键盘焦点进了输入框就收起,露出前台 App 自己的触控栏(输入法候选、输入建议);离开时只把自己收的展开回来,
+/// 这时正暂停着(开着「暂停时自动收起」)或这首没歌词(开着「无歌词时收起」)的改记成那个原因、不展开。焦点在输入框里期间,
+/// 别的原因要展开的(开始播放、继续播放、有了歌词)先压着,改记成因为输入收着,离开时再展开。
+///
+/// 控制器每次播放状态变了调 `update`,暂停满时长调 `pauseDelayElapsed`,焦点进出输入框调 `typingChanged`,看到不是自己
+/// 发起的展开 / 收起时调 `userChangedVisibility`;返回的动作照做。
 public struct TouchBarAutoPresent: Equatable, Sendable {
     public struct Options: Equatable, Sendable {
         /// 开始播放时自动展开。
@@ -21,11 +25,15 @@ public struct TouchBarAutoPresent: Equatable, Sendable {
         public var collapseWhenPaused: Bool
         /// 纯音乐 / 无歌词时收起(判据 `NoLyricsAutoHide.lacksLyrics`),之后有歌词时展开回来。
         public var collapseWhenNoLyrics: Bool
+        /// 键盘焦点在输入框里时收起,离开时展开回来。
+        public var collapseWhileTyping: Bool
 
-        public init(expandOnPlay: Bool, collapseWhenPaused: Bool, collapseWhenNoLyrics: Bool) {
+        public init(expandOnPlay: Bool, collapseWhenPaused: Bool, collapseWhenNoLyrics: Bool,
+                    collapseWhileTyping: Bool = false) {
             self.expandOnPlay = expandOnPlay
             self.collapseWhenPaused = collapseWhenPaused
             self.collapseWhenNoLyrics = collapseWhenNoLyrics
+            self.collapseWhileTyping = collapseWhileTyping
         }
     }
 
@@ -43,6 +51,8 @@ public struct TouchBarAutoPresent: Equatable, Sendable {
     public enum Reason: Equatable, Sendable {
         case paused
         case noLyrics
+        /// 焦点在输入框里(收起的,或者期间该展开、先压着的)。
+        case typing
     }
 
     /// 暂停多久收起。在触控栏上按了暂停、想再按播放,收得太快就得先点功能栏图标。
@@ -64,6 +74,8 @@ public struct TouchBarAutoPresent: Equatable, Sendable {
     private var awaitingSettle = false
     /// 开始播放触发的那次展开到哪一刻为止算临时的;nil = 不是。
     private var provisionalUntilMs: Int?
+    /// 键盘焦点此刻在输入框里。
+    private var typing = false
 
     public init() {}
 
@@ -118,17 +130,17 @@ public struct TouchBarAutoPresent: Equatable, Sendable {
             // 自动收起的(暂停时收的;或者没歌词收的、暂停期间换到了有歌词的一首)都展开回来。
             if autoCollapsed != nil {
                 autoCollapsed = nil
-                return .expand
+                return heldWhileTyping(.expand, options: options)
             }
             guard options.expandOnPlay, pausedFor >= Self.resumeDebounceMs else { return .none }
             awaitingSettle = true
-            return .expandAfterSettle
+            return heldWhileTyping(.expandAfterSettle, options: options)
         }
         // 没歌词收起的,换到下一首(搜索期间照常算有)、或者这首后来有了歌词:展开回来。暂停着又开了「暂停时自动收起」的不展开。
         if !lacksLyrics, lacked || newTrack, autoCollapsed == .noLyrics, !visible {
             guard isPlaying || !options.collapseWhenPaused else { return .none }
             autoCollapsed = nil
-            return .expand
+            return heldWhileTyping(.expand, options: options)
         }
         return .none
     }
@@ -140,8 +152,44 @@ public struct TouchBarAutoPresent: Equatable, Sendable {
         guard awaitingSettle else { return .none }
         awaitingSettle = false
         guard isPlaying, !visible, options.expandOnPlay, !(lacksLyrics && options.collapseWhenNoLyrics) else { return .none }
+        if typing, options.collapseWhileTyping {
+            autoCollapsed = .typing
+            return .none
+        }
         provisionalUntilMs = nowMs + Self.provisionalExpandMs
         return .expand
+    }
+
+    /// 键盘焦点进出输入框(调用方已防抖)。进:开着「输入时收起」、展开着就收起。出:只有因为输入收着的才展开回来;
+    /// 这时正暂停着(开着「暂停时自动收起」)或这首没歌词(开着「无歌词时收起」)的改记成那个原因,等它解除再展开。
+    public mutating func typingChanged(isTyping: Bool, isPlaying: Bool, lacksLyrics: Bool, visible: Bool,
+                                       options: Options) -> Action {
+        guard isTyping != typing else { return .none }
+        typing = isTyping
+        if isTyping {
+            guard options.collapseWhileTyping, visible else { return .none }
+            autoCollapsed = .typing
+            return .collapse
+        }
+        guard autoCollapsed == .typing, !visible else { return .none }
+        if lacksLyrics, options.collapseWhenNoLyrics {
+            autoCollapsed = .noLyrics
+            return .none
+        }
+        if !isPlaying, options.collapseWhenPaused {
+            autoCollapsed = .paused
+            return .none
+        }
+        autoCollapsed = nil
+        return .expand
+    }
+
+    /// 焦点在输入框里、又开着「输入时收起」时,要展开的先压着:记成因为输入收着,离开输入框时再展开。
+    private mutating func heldWhileTyping(_ action: Action, options: Options) -> Action {
+        guard typing, options.collapseWhileTyping, action == .expand || action == .expandAfterSettle else { return action }
+        awaitingSettle = false
+        autoCollapsed = .typing
+        return .none
     }
 
     /// 暂停满 `pauseCollapseDelayMs`:还在暂停、还展开着、开关还开着就收起。

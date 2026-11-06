@@ -130,6 +130,9 @@ public enum LyrimuseDeepLink: Equatable, Sendable {
         case japaneseReading(JapaneseReadingStyle)
         /// 触控栏「歌词颜色」那一档,跟设置页走同一个设置(`debug/touchbar-display?color=white|cover|custom|rainbow`)。
         case touchBarDisplay(color: TouchBarLyricsColorMode)
+        /// 当作键盘焦点在 / 不在输入框里,不看辅助功能读到的(`debug/touchbar-typing?state=on|off|auto`,`auto` = 交还给它)。
+        /// 不动用户的焦点验「输入时收起」。nil = auto。
+        case touchBarTyping(override: Bool?)
         /// 悬浮歌词、灵动岛、菜单栏的彩虹开关,跟设置页走同一个设置(`debug/rainbow?overlay=0|1&notch=0|1&menubar=0|1`,
         /// 至少带一个)。
         case rainbow(overlay: Bool?, notch: Bool?, menuBar: Bool? = nil)
@@ -443,6 +446,13 @@ public enum LyrimuseDeepLink: Equatable, Sendable {
             let menuBar = value("menubar").flatMap(Self.parseBool)
             guard overlay != nil || notch != nil || menuBar != nil else { return nil }
             self = .debug(.rainbow(overlay: overlay, notch: notch, menuBar: menuBar))
+        case ("debug", "/touchbar-typing"):
+            switch value("state")?.lowercased() {
+            case "on": self = .debug(.touchBarTyping(override: true))
+            case "off": self = .debug(.touchBarTyping(override: false))
+            case "auto": self = .debug(.touchBarTyping(override: nil))
+            default: return nil
+            }
         case ("debug", "/touchbar-display"):
             guard let color = value("color").flatMap({ TouchBarLyricsColorMode(rawValue: $0.lowercased()) }) else { return nil }
             self = .debug(.touchBarDisplay(color: color))
@@ -682,6 +692,9 @@ public enum LyrimuseDeepLink: Equatable, Sendable {
             case let .touchBarDisplay(color):
                 components.path = "/touchbar-display"
                 components.queryItems = [URLQueryItem(name: "color", value: color.rawValue)]
+            case let .touchBarTyping(override):
+                components.path = "/touchbar-typing"
+                components.queryItems = [URLQueryItem(name: "state", value: override.map { $0 ? "on" : "off" } ?? "auto")]
             }
         case .lastfmAuthCallback:
             components.host = "lastfm-auth-callback"

@@ -86,6 +86,7 @@ extension AppSettings {
             ("touchBarExpandOnPlay", touchBarExpandOnPlay),
             ("touchBarCollapseWhenPaused", touchBarCollapseWhenPaused),
             ("touchBarCollapseWhenNoLyrics", touchBarCollapseWhenNoLyrics),
+            ("touchBarCollapseWhileTyping", touchBarCollapseWhileTyping),
             ("menuBarLyricsMaxChars", menuBarLyricsMaxChars),
             ("menuBarLyricsWidth", menuBarLyricsWidth),
             ("menuBarLyricsAlignment", menuBarLyricsAlignment),

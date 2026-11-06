@@ -36,6 +36,7 @@ These features stay off after you install. Turn them on in Settings first (some 
 | [Notch lyrics](#feature-notch-lyrics) | Settings › Lyrics Display › Notch › Notch Lyrics |
 | [Menu bar lyrics](#feature-menu-bar-lyrics) | Settings › Lyrics Display › Menu Bar › Menu Bar Lyrics |
 | [Touch Bar lyrics](#feature-touch-bar-lyrics) | Settings › Lyrics Display › Touch Bar › Touch Bar Lyrics |
+| [Touch Bar steps aside while typing](#feature-touch-bar-collapse-while-typing) | Settings › Lyrics Display › Touch Bar › Behavior › Collapse While Typing |
 | [Lyrics window HDR highlight](#feature-lyrics-window-hdr) | Settings › Lyrics Display › Lyrics Window › Color › HDR Highlight |
 | [Mini window hides when paused or in full screen](#feature-mini-window-auto-hide) | Settings › Lyrics Display › Lyrics Window › Behavior › Hide When Paused |
 | [Spotify Canvas background](#feature-spotify-canvas) | Settings › Lyrics Display › Lyrics Window › Background › Spotify Canvas |
@@ -319,6 +320,15 @@ On a MacBook Pro with a Touch Bar, the current line scrolls along as it is sung,
 - Settings: Lyrics Display › Touch Bar › Color › Text Color
 - Settings: Lyrics Display › Touch Bar › Behavior › Expand When Playback Starts
 - Settings: Lyrics Display › Touch Bar › Layout › Show More Button
+
+<a id="feature-touch-bar-collapse-while-typing"></a>
+
+### Touch Bar steps aside while typing
+
+While the cursor is in a text field, the Touch Bar lyrics can collapse so input method candidates and typing suggestions show, then expand again when you leave the field. Requires Accessibility permission.
+
+- Off by default
+- Settings: Lyrics Display › Touch Bar › Behavior › Collapse While Typing
 
 <a id="feature-lyrics-window"></a>
 
@@ -900,7 +910,7 @@ At most once a day, sends the version, macOS, which features are on and crash su
 
 ## Every setting
 
-Every setting in the Settings window, by where it lives: 314 in all. Type a name into the search field at the top of the Settings sidebar to jump straight to it.
+Every setting in the Settings window, by where it lives: 315 in all. Type a name into the search field at the top of the Settings sidebar to jump straight to it.
 
 ### Lyrics › Source
 
@@ -1182,6 +1192,7 @@ Every setting in the Settings window, by where it lives: 314 in all. Type a name
 - **Expand When Playback Starts**: Shows the lyrics when playback resumes from pause. Switching songs during playback doesn’t expand them, and lyrics you collapsed stay collapsed
 - **Collapse When Paused**: Collapses to the Control Strip button after 10 seconds paused, and expands again when playback resumes
 - **Collapse for Instrumentals & No Lyrics**: Collapses only after confirming there are no lyrics, and expands again once lyrics are found. Stays shown while searching
+- **Collapse While Typing**: Collapses while the cursor is in a text field so input method candidates and typing suggestions show, and expands after you leave it. Requires Accessibility permission
 
 ### Lyrics Display › Lyrics Window
 

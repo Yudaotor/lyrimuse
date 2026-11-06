@@ -36,6 +36,7 @@ Queste funzioni restano disattivate dopo l’installazione. Attivale prima nelle
 | [Testo nel notch](#feature-notch-lyrics) | Impostazioni › Visualizzazione testo › Notch › Testo nel notch |
 | [Testo nella barra dei menu](#feature-menu-bar-lyrics) | Impostazioni › Visualizzazione testo › Barra dei menu › Testo nella barra dei menu |
 | [Testo sulla Touch Bar](#feature-touch-bar-lyrics) | Impostazioni › Visualizzazione testo › Touch Bar › Testo Touch Bar |
+| [La Touch Bar si fa da parte mentre scrivi](#feature-touch-bar-collapse-while-typing) | Impostazioni › Visualizzazione testo › Touch Bar › Comportamento › Comprimi durante la digitazione |
 | [Evidenziazione HDR nella finestra testo](#feature-lyrics-window-hdr) | Impostazioni › Visualizzazione testo › Finestra testo › Colore › Evidenziazione HDR |
 | [La finestra Mini si nasconde in pausa o a tutto schermo](#feature-mini-window-auto-hide) | Impostazioni › Visualizzazione testo › Finestra testo › Comportamento › Nascondi in pausa |
 | [Sfondo Spotify Canvas](#feature-spotify-canvas) | Impostazioni › Visualizzazione testo › Finestra testo › Sfondo › Spotify Canvas |
@@ -319,6 +320,15 @@ Su un MacBook Pro con Touch Bar, la riga attuale scorre mentre viene cantata, co
 - Impostazioni: Visualizzazione testo › Touch Bar › Colore › Colore testo
 - Impostazioni: Visualizzazione testo › Touch Bar › Comportamento › Espandi all’avvio della riproduzione
 - Impostazioni: Visualizzazione testo › Touch Bar › Layout › Mostra pulsante “Altro”
+
+<a id="feature-touch-bar-collapse-while-typing"></a>
+
+### La Touch Bar si fa da parte mentre scrivi
+
+Mentre il cursore è in un campo di testo, il testo sulla Touch Bar può comprimersi per mostrare i candidati del metodo di input e i suggerimenti, e riespandersi all’uscita dal campo. Richiede il permesso “Accessibilità”.
+
+- Disattivata di default
+- Impostazioni: Visualizzazione testo › Touch Bar › Comportamento › Comprimi durante la digitazione
 
 <a id="feature-lyrics-window"></a>
 
@@ -900,7 +910,7 @@ Al massimo una volta al giorno invia versione, macOS, funzioni attive e riepilog
 
 ## Tutte le impostazioni
 
-Tutte le impostazioni della finestra Impostazioni, per posizione: 314 in tutto. Scrivi un nome nel campo di ricerca in cima alla barra laterale delle Impostazioni per andarci direttamente.
+Tutte le impostazioni della finestra Impostazioni, per posizione: 315 in tutto. Scrivi un nome nel campo di ricerca in cima alla barra laterale delle Impostazioni per andarci direttamente.
 
 ### Testo › Fonte
 
@@ -1182,6 +1192,7 @@ Tutte le impostazioni della finestra Impostazioni, per posizione: 314 in tutto. 
 - **Espandi all’avvio della riproduzione**: Mostra il testo quando la riproduzione riprende dalla pausa. Cambiare brano durante la riproduzione non lo espande, e il testo che hai compresso resta compresso
 - **Comprimi in pausa**: Si comprime nel pulsante della Control Strip dopo 10 secondi di pausa e si espande di nuovo alla ripresa
 - **Comprimi per strumentali e senza testo**: Si comprime solo dopo aver confermato che non c’è testo e si espande di nuovo quando viene trovato. Resta visibile durante la ricerca
+- **Comprimi durante la digitazione**: Si comprime mentre il cursore è in un campo di testo, così compaiono i candidati del metodo di input e i suggerimenti, e si espande all’uscita dal campo. Richiede il permesso “Accessibilità”
 
 ### Visualizzazione testo › Finestra testo
 

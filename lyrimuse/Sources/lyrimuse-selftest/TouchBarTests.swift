@@ -563,6 +563,126 @@ func runTouchBarTests() {
         }
     }
 
+    // ---- 输入时收起:焦点进出输入框(TouchBarAutoPresent.typingChanged、TextInputFocus,17 章决策 59)----
+    do {
+        expectEqual([TextInputFocus.isTextInput(role: "AXTextField", subrole: nil),
+                     TextInputFocus.isTextInput(role: "AXTextField", subrole: "AXSearchField"),
+                     TextInputFocus.isTextInput(role: "AXTextArea", subrole: nil),
+                     TextInputFocus.isTextInput(role: "AXComboBox", subrole: nil)], [true, true, true, true],
+                    "输入框判据: 文本框、搜索框、多行文本、组合框算")
+        expectEqual([TextInputFocus.isTextInput(role: "AXTextField", subrole: "AXSecureTextField"),
+                     TextInputFocus.isTextInput(role: "AXWebArea", subrole: nil),
+                     TextInputFocus.isTextInput(role: "AXButton", subrole: nil),
+                     TextInputFocus.isTextInput(role: "AXGroup", subrole: nil),
+                     TextInputFocus.isTextInput(role: nil, subrole: nil)], [false, false, false, false, false],
+                    "输入框判据: 密码框、网页区域、按钮、分组、读不到都不算")
+
+        typealias Auto = TouchBarAutoPresent
+        let on = Auto.Options(expandOnPlay: false, collapseWhenPaused: false, collapseWhenNoLyrics: false, collapseWhileTyping: true)
+        let off = Auto.Options(expandOnPlay: false, collapseWhenPaused: false, collapseWhenNoLyrics: false)
+        let all = Auto.Options(expandOnPlay: true, collapseWhenPaused: true, collapseWhenNoLyrics: true, collapseWhileTyping: true)
+        func playing(_ options: Auto.Options) -> Auto {
+            var a = Auto()
+            _ = a.start(isPlaying: true, lacksLyrics: false, trackKey: "A", nowMs: 0, visible: true, options: options)
+            return a
+        }
+        do {
+            var a = playing(on)
+            expectEqual(a.typingChanged(isTyping: true, isPlaying: true, lacksLyrics: false, visible: true, options: on), .collapse,
+                        "输入时收起: 进输入框、展开着,收起")
+            expectEqual(a.autoCollapsed, .typing, "输入时收起: 记成因为输入收的")
+            expectEqual(a.typingChanged(isTyping: true, isPlaying: true, lacksLyrics: false, visible: false, options: on), .none,
+                        "输入时收起: 同一个值重复报不重复动作")
+            expectEqual(a.typingChanged(isTyping: false, isPlaying: true, lacksLyrics: false, visible: false, options: on), .expand,
+                        "输入时收起: 离开输入框,展开回来")
+            expectEqual(a.autoCollapsed, nil, "输入时收起: 展开回来后原因清掉")
+        }
+        do {
+            var a = playing(off)
+            expectEqual(a.typingChanged(isTyping: true, isPlaying: true, lacksLyrics: false, visible: true, options: off), .none,
+                        "输入时收起: 开关关着不收")
+            a = playing(on)
+            expectEqual(a.typingChanged(isTyping: true, isPlaying: true, lacksLyrics: false, visible: false, options: on), .none,
+                        "输入时收起: 本来就收着(用户收的)不动")
+            expectEqual(a.typingChanged(isTyping: false, isPlaying: true, lacksLyrics: false, visible: false, options: on), .none,
+                        "输入时收起: 不是自己收的,离开时不展开")
+        }
+        do {
+            var a = playing(on)
+            _ = a.typingChanged(isTyping: true, isPlaying: true, lacksLyrics: false, visible: true, options: on)
+            a.userChangedVisibility()
+            expectEqual(a.typingChanged(isTyping: false, isPlaying: true, lacksLyrics: false, visible: true, options: on), .none,
+                        "输入时收起: 输入期间用户自己展开了,离开时不再动")
+        }
+        do {
+            var a = playing(all)
+            _ = a.typingChanged(isTyping: true, isPlaying: true, lacksLyrics: false, visible: true, options: all)
+            expectEqual(a.update(isPlaying: false, lacksLyrics: false, trackKey: "A", nowMs: 5_000, visible: false, options: all),
+                        .none, "输入时收起: 输入期间暂停(已经收着)不另起暂停收起")
+            expectEqual(a.typingChanged(isTyping: false, isPlaying: false, lacksLyrics: false, visible: false, options: all), .none,
+                        "输入时收起: 离开时正暂停着、开着暂停收起,不展开")
+            expectEqual(a.autoCollapsed, .paused, "输入时收起: 改记成暂停收的")
+            expectEqual(a.update(isPlaying: true, lacksLyrics: false, trackKey: "A", nowMs: 9_000, visible: false, options: all),
+                        .expand, "输入时收起: 之后继续播放照常展开回来")
+        }
+        do {
+            var a = playing(all)
+            _ = a.typingChanged(isTyping: true, isPlaying: true, lacksLyrics: false, visible: true, options: all)
+            _ = a.update(isPlaying: true, lacksLyrics: true, trackKey: "B", nowMs: 5_000, visible: false, options: all)
+            expectEqual(a.typingChanged(isTyping: false, isPlaying: true, lacksLyrics: true, visible: false, options: all), .none,
+                        "输入时收起: 离开时这首没歌词、开着无歌词收起,不展开")
+            expectEqual(a.autoCollapsed, .noLyrics, "输入时收起: 改记成没歌词收的")
+        }
+        do {
+            // 暂停收起的,输入期间继续播放:先压着,离开输入框再展开。
+            var a = Auto()
+            _ = a.start(isPlaying: true, lacksLyrics: false, trackKey: "A", nowMs: 0, visible: true, options: all)
+            _ = a.update(isPlaying: false, lacksLyrics: false, trackKey: "A", nowMs: 1_000, visible: true, options: all)
+            _ = a.pauseDelayElapsed(isPlaying: false, visible: true, options: all)
+            expectEqual(a.typingChanged(isTyping: true, isPlaying: false, lacksLyrics: false, visible: false, options: all), .none,
+                        "输入时收起: 暂停收着时进输入框不动")
+            expectEqual(a.update(isPlaying: true, lacksLyrics: false, trackKey: "A", nowMs: 20_000, visible: false, options: all),
+                        .none, "输入时收起: 输入期间继续播放,先不展开")
+            expectEqual(a.autoCollapsed, .typing, "输入时收起: 压着的记成因为输入")
+            expectEqual(a.typingChanged(isTyping: false, isPlaying: true, lacksLyrics: false, visible: false, options: all), .expand,
+                        "输入时收起: 离开输入框再展开")
+        }
+        do {
+            // 开始播放的再确认赶上在输入框里:压着,离开时展开。
+            var a = Auto()
+            _ = a.start(isPlaying: false, lacksLyrics: false, trackKey: "A", nowMs: 0, visible: false, options: all)
+            _ = a.typingChanged(isTyping: true, isPlaying: false, lacksLyrics: false, visible: false, options: all)
+            expectEqual(a.update(isPlaying: true, lacksLyrics: false, trackKey: "A", nowMs: 10_000, visible: false, options: all),
+                        .none, "输入时收起: 输入期间开始播放,不等再确认")
+            expectEqual(a.typingChanged(isTyping: false, isPlaying: true, lacksLyrics: false, visible: false, options: all), .expand,
+                        "输入时收起: 离开输入框时还在放,展开")
+        }
+        do {
+            var a = Auto()
+            _ = a.start(isPlaying: true, lacksLyrics: false, trackKey: "A", nowMs: 0, visible: false, options: all)
+            _ = a.typingChanged(isTyping: true, isPlaying: true, lacksLyrics: false, visible: false, options: all)
+            expectEqual(a.settleElapsed(isPlaying: true, lacksLyrics: false, nowMs: 2_500, visible: false, options: all), .none,
+                        "输入时收起: 再确认到点时在输入框里,先不展开")
+            expectEqual(a.typingChanged(isTyping: false, isPlaying: true, lacksLyrics: false, visible: false, options: all), .expand,
+                        "输入时收起: 离开输入框再展开")
+        }
+        // 接线(契约):开关开、触控栏歌词也开时才盯焦点;防抖后交给状态表;盯焦点的在自己线程上、每次查询有超时。
+        let src = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+        func read(_ rel: String) -> String { (try? String(contentsOf: src.appendingPathComponent(rel), encoding: .utf8)) ?? "" }
+        let controller = read("lyrimuse/TouchBar/TouchBarLyricsController.swift")
+        let monitor = read("lyrimuse/TouchBar/FocusedTextInputMonitor.swift")
+        expectEqual(sourceHas(sourceBody("private func updateTypingMonitor()", in: controller),
+                              "let wanted = enabled && autoOptions.collapseWhileTyping"), true,
+                    "输入时收起(契约): 开关和触控栏歌词都开着才盯焦点")
+        expectEqual(sourceHas(sourceBody("private func scheduleTypingChange()", in: controller),
+                              "try? await Task.sleep(for: .milliseconds(Self.typingDebounceMs))"), true,
+                    "输入时收起(契约): 焦点进出防抖后再交给状态表")
+        expectEqual(sourceHas(monitor, "AXUIElementSetMessagingTimeout(app, FocusedTextInputMonitor.messagingTimeout)")
+                    && sourceHas(monitor, "thread.name = \"lyrimuse.focused-text-input\"")
+                    && sourceHas(monitor, "guard let pid, pid != getpid(), AXIsProcessTrusted() else {"), true,
+                    "输入时收起(契约): 在自己的线程上读、查询有超时,没权限和本 App 在前台时不读")
+    }
+
     // ---- 自动展开 / 收起(TouchBarAutoPresent,17 章决策 45)----
     do {
         typealias Auto = TouchBarAutoPresent

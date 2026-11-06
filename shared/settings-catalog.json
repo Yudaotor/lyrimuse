@@ -1523,6 +1523,15 @@
       "dest" : "tab:appearance",
       "path" : [
         "歌词显示",
+        "触控栏",
+        "行为"
+      ],
+      "title" : "输入时收起"
+    },
+    {
+      "dest" : "tab:appearance",
+      "path" : [
+        "歌词显示",
         "触控栏"
       ],
       "subtitle" : "不含「触控栏歌词」开关",

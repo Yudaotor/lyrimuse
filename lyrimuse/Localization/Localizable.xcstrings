@@ -262639,6 +262639,362 @@
           }
         }
       }
+    },
+    "输入时收起" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Beim Tippen einklappen"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Collapse While Typing"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Contraer al escribir"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Réduire pendant la saisie"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Comprimi durante la digitazione"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "入力中は折りたたむ"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "입력 중 접기"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Recolher ao digitar"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Сворачивать при вводе"
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ยุบเมื่อพิมพ์"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Згортати під час введення"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Thu gọn khi nhập"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "输入时收起"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "輸入時收起"
+          }
+        }
+      }
+    },
+    "输入收起" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Beim Tippen einklappen"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Collapse While Typing"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Contraer al escribir"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Réduire en saisie"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Comprimi digitando"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "入力中に折りたたむ"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "입력 시 접기"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Recolher ao digitar"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Сворачивать при вводе"
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ยุบเมื่อพิมพ์"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Згортати при введенні"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Thu gọn khi nhập"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "输入收起"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "輸入收起"
+          }
+        }
+      }
+    },
+    "光标在输入框里时收起，露出输入法候选和输入建议，离开输入框后展开；需要「辅助功能」权限" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Klappt ein, solange der Cursor in einem Textfeld steht, damit Kandidaten der Eingabemethode und Eingabevorschläge sichtbar sind, und klappt nach dem Verlassen wieder aus. Erfordert die Berechtigung „Bedienungshilfen“"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Collapses while the cursor is in a text field so input method candidates and typing suggestions show, and expands after you leave it. Requires Accessibility permission"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Se contrae mientras el cursor está en un campo de texto para mostrar los candidatos del método de entrada y las sugerencias de escritura, y se expande al salir. Requiere el permiso de «Accesibilidad»"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Se réduit tant que le curseur est dans un champ de texte pour laisser voir les candidats de la méthode de saisie et les suggestions, puis se développe quand vous en sortez. Nécessite l’autorisation « Accessibilité »"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Si comprime mentre il cursore è in un campo di testo, così compaiono i candidati del metodo di input e i suggerimenti, e si espande all’uscita dal campo. Richiede il permesso “Accessibilità”"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "カーソルが入力欄にある間は折りたたんで入力候補や予測変換を表示し、入力欄を離れると展開します。「アクセシビリティ」の権限が必要です"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "커서가 입력란에 있는 동안 접어서 입력기 후보와 입력 제안을 보여 주고, 입력란을 벗어나면 펼칩니다. ‘손쉬운 사용’ 권한이 필요합니다"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Recolhe enquanto o cursor está em um campo de texto para mostrar os candidatos do método de entrada e as sugestões de digitação, e expande ao sair dele. Requer a permissão de “Acessibilidade”"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Сворачивается, пока курсор в поле ввода, чтобы были видны варианты метода ввода и подсказки, и раскрывается, когда вы из него выходите. Нужно разрешение «Универсальный доступ»"
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ยุบขณะเคอร์เซอร์อยู่ในช่องป้อนข้อความเพื่อแสดงคำแนะนำของวิธีป้อนข้อมูลและคำแนะนำการพิมพ์ แล้วขยายเมื่อออกจากช่อง ต้องใช้สิทธิ์ “การช่วยการเข้าถึง”"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Згортається, поки курсор у полі введення, щоб було видно варіанти методу введення й підказки, і розгортається, коли ви з нього виходите. Потрібен дозвіл «Доступність»"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Thu gọn khi con trỏ ở trong ô nhập để hiện gợi ý của bộ gõ và gợi ý nhập, mở rộng lại khi rời ô nhập. Cần quyền “Trợ năng”"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "光标在输入框里时收起，露出输入法候选和输入建议，离开输入框后展开；需要「辅助功能」权限"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "游標在輸入框裡時收起，露出輸入法候選字和輸入建議，離開輸入框後展開；需要「輔助使用」權限"
+          }
+        }
+      }
+    },
+    "尚未获得「辅助功能」权限，输入时收起无法生效" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Keine Berechtigung für „Bedienungshilfen“, daher ist Einklappen beim Tippen nicht verfügbar"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Accessibility permission hasn’t been granted, so collapsing while typing is unavailable"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sin permiso de «Accesibilidad», no se puede contraer al escribir"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sans l’autorisation « Accessibilité », la réduction pendant la saisie est indisponible"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Il permesso “Accessibilità” non è stato concesso, quindi la compressione durante la digitazione non è disponibile"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "「アクセシビリティ」の権限がないため、入力中の折りたたみは使用できません"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "‘손쉬운 사용’ 권한이 없어 입력 중 접기를 사용할 수 없습니다"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sem a permissão de “Acessibilidade”, não é possível recolher ao digitar"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Нет разрешения «Универсальный доступ», поэтому сворачивание при вводе не работает"
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ยังไม่ได้รับสิทธิ์ “การช่วยการเข้าถึง” จึงยุบเมื่อพิมพ์ไม่ได้"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Немає дозволу «Доступність», тому згортання під час введення не працює"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Chưa có quyền “Trợ năng” nên không thể thu gọn khi nhập"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "尚未获得「辅助功能」权限，输入时收起无法生效"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "尚未取得「輔助使用」權限，輸入時收起無法生效"
+          }
+        }
+      }
     }
   },
   "version" : "1.0"

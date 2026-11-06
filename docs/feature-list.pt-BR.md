@@ -36,6 +36,7 @@ Estes recursos vêm desativados depois da instalação. Ative-os antes nos ajust
 | [Letra no notch](#feature-notch-lyrics) | Ajustes › Exibição da letra › Notch › Letra no notch |
 | [Letra na barra de menus](#feature-menu-bar-lyrics) | Ajustes › Exibição da letra › Barra de menus › Letra na barra de menus |
 | [Letra na Touch Bar](#feature-touch-bar-lyrics) | Ajustes › Exibição da letra › Touch Bar › Letra na Touch Bar |
+| [A Touch Bar abre espaço ao digitar](#feature-touch-bar-collapse-while-typing) | Ajustes › Exibição da letra › Touch Bar › Comportamento › Recolher ao digitar |
 | [Destaque HDR na janela da letra](#feature-lyrics-window-hdr) | Ajustes › Exibição da letra › Janela da letra › Cor › Destaque HDR |
 | [Janela mini some na pausa ou em tela cheia](#feature-mini-window-auto-hide) | Ajustes › Exibição da letra › Janela da letra › Comportamento › Ocultar na pausa |
 | [Fundo Spotify Canvas](#feature-spotify-canvas) | Ajustes › Exibição da letra › Janela da letra › Fundo › Spotify Canvas |
@@ -319,6 +320,15 @@ Num MacBook Pro com Touch Bar, a linha atual rola enquanto é cantada, com capa 
 - Ajustes: Exibição da letra › Touch Bar › Cor › Cor do texto
 - Ajustes: Exibição da letra › Touch Bar › Comportamento › Expandir ao iniciar a reprodução
 - Ajustes: Exibição da letra › Touch Bar › Layout › Mostrar botão “Mais”
+
+<a id="feature-touch-bar-collapse-while-typing"></a>
+
+### A Touch Bar abre espaço ao digitar
+
+Enquanto o cursor está em um campo de texto, a letra na Touch Bar pode se recolher para mostrar os candidatos do método de entrada e as sugestões de digitação, e expandir de novo ao sair dele. Requer a permissão de “Acessibilidade”.
+
+- Desativado por padrão
+- Ajustes: Exibição da letra › Touch Bar › Comportamento › Recolher ao digitar
 
 <a id="feature-lyrics-window"></a>
 
@@ -900,7 +910,7 @@ No máximo uma vez por dia, envia a versão, o macOS, quais recursos estão ativ
 
 ## Todos os ajustes
 
-Todos os ajustes da janela Ajustes, por local: 314 no total. Digite um nome no campo de busca no topo da barra lateral dos Ajustes para ir direto até ele.
+Todos os ajustes da janela Ajustes, por local: 315 no total. Digite um nome no campo de busca no topo da barra lateral dos Ajustes para ir direto até ele.
 
 ### Letra › Origem
 
@@ -1182,6 +1192,7 @@ Todos os ajustes da janela Ajustes, por local: 314 no total. Digite um nome no c
 - **Expandir ao iniciar a reprodução**: Mostra a letra quando a reprodução é retomada após uma pausa. Trocar de música durante a reprodução não a expande, e a letra que você recolheu continua recolhida
 - **Recolher na pausa**: Recolhe-se no botão da Control Strip após 10 segundos em pausa e expande de novo quando a reprodução é retomada
 - **Recolher em instrumentais e sem letra**: Só recolhe depois de confirmar que não há letra e expande de novo quando ela é encontrada. Continua visível durante a busca
+- **Recolher ao digitar**: Recolhe enquanto o cursor está em um campo de texto para mostrar os candidatos do método de entrada e as sugestões de digitação, e expande ao sair dele. Requer a permissão de “Acessibilidade”
 
 ### Exibição da letra › Janela da letra
 
