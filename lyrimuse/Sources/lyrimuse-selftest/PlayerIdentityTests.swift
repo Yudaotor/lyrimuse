@@ -1548,6 +1548,10 @@ func runPlayerIdentityTests() {
                      C.adoptsFavoriteReadback(true, local: nil, sinceLocalWrite: nil)],
                     [false, true, true, false, false, true],
                     "快捷键喜欢: 刚写过这一首时不拿回读盖本地(getter 滞后),过了滞后期、没写过才认回读")
+        expectEqual([C.shortcutFavoriteUnknown(readback: nil, local: nil), C.shortcutFavoriteUnknown(readback: false, local: nil),
+                     C.shortcutFavoriteUnknown(readback: nil, local: true), C.shortcutFavoriteUnknown(readback: true, local: false)],
+                    [true, false, false, false],
+                    "快捷键喜欢: 回读和本地都读不到这一首的状态(没登录)才按不支持回报,有一边读得到照常切")
         expectEqual([C.reconcilesFavoriteAfterWrite(.appleMusic), C.reconcilesFavoriteAfterWrite(.netease),
                      C.reconcilesFavoriteAfterWrite(.kaset)], [true, false, false],
                     "喜欢对账: 只有 Apple Music 写完过了滞后期回读补写")

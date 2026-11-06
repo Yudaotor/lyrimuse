@@ -441,6 +441,12 @@ public enum MusicPlaybackController {
         return sinceLocalWrite >= favoriteReadbackLagSeconds
     }
 
+    /// 快捷键「喜欢」回读和本地都没有这一首的状态(播放器没登录、读不到):不猜着去写,按不支持回报,界面上那颗心这时也藏着。
+    /// 纯函数,selftest 覆盖。见 07 章决策 193。
+    public static func shortcutFavoriteUnknown(readback: Bool?, local: Bool?) -> Bool {
+        readback == nil && local == nil
+    }
+
     /// 按播放器读当前曲目的「喜欢」状态;不支持、读不到返回 nil。会阻塞到子进程结束,不要在主线程调用。
     public static func favoritedState(for player: PlaybackPlayer) -> Bool? {
         switch player {

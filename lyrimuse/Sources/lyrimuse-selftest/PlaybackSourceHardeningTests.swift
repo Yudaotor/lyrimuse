@@ -621,6 +621,8 @@ private func wiringContracts() {
                     && coordinator.contains("self?.lastFavoriteWrite?.at == writtenAt && self?.currentTrackKey == trackKey")
                     && coordinator.contains("MusicPlaybackController.adoptsFavoriteReadback(current, local: self.isFavorited,"), true,
                 "喜欢对账: 写完过了滞后期回读补写,快捷键回读不盖刚写的")
+    expectEqual(coordinator.contains("if MusicPlaybackController.shortcutFavoriteUnknown(readback: current, local: self.isFavorited) {\n                    return done(.unsupported)"), true,
+                "快捷键喜欢: 回读和本地都没有这一首的状态时回报不支持,不报「已喜欢」")
 }
 
 // ---- 桌面版 Spotify 的 Connect 镜像 ----

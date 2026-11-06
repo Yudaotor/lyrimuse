@@ -998,6 +998,9 @@ final class PlaybackCoordinator: ObservableObject {
             let current = MusicPlaybackController.favoritedState(for: player)
             await MainActor.run { [weak self] in
                 guard let self, self.currentTrackKey == trackKey else { return }
+                if MusicPlaybackController.shortcutFavoriteUnknown(readback: current, local: self.isFavorited) {
+                    return done(.unsupported)
+                }
                 let sinceWrite = self.lastFavoriteWrite.flatMap { $0.trackKey == trackKey ? Date().timeIntervalSince($0.at) : nil }
                 if let current, MusicPlaybackController.adoptsFavoriteReadback(current, local: self.isFavorited,
                                                                                sinceLocalWrite: sinceWrite) {
