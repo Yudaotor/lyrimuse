@@ -440,7 +440,7 @@
       "subtitlesInArtist": true,
       "dropsSessionBetweenTracks": false,
       "dropsSessionWhilePlaying": false,
-      "ignoresSeekCommand": false,
+      "ignoresSeekCommand": true,
       "needsAutomationPermission": false,
       "needsFullDiskAccess": false,
       "needsAccessibilityPermission": false,
@@ -453,7 +453,7 @@
       },
       "fallbackSymbol": "book",
       "bundledIcon": "WeReadIcon",
-      "note": "微信读书的 iPad 版(Apple 芯片的 Mac 上从 App Store 装,Wrapper 包),没有 AppleScript 字典,走 media-control。听书时系统会话的歌名是这一集(AI 朗读是章节名,真人有声书是「16 雪国 第16集」这类集名),专辑是书名,歌手一栏装的是正在念的那一小段原文(AI 朗读按标点切、每段十几个字;真人有声书是自动生成的字幕,带错字),每换一段就带着新锚点重发一次,锚点就是这段的起点(真人有声书按 0.25 秒取整),按 subtitlesInArtist 收成字幕、不进身份。没有作者一栏。时长是这一集的,锚点在每段开头刷新,属 cleanExtrapolated。整段是有声内容,不记收听、不搜歌词。media-control 的播放、暂停它都响应。窗口最小化、被挡住时照样往系统会话里推字幕。processName 6 字节。"
+      "note": "微信读书的 iPad 版(Apple 芯片的 Mac 上从 App Store 装,Wrapper 包),没有 AppleScript 字典,走 media-control。听书时系统会话的歌名是这一集(AI 朗读是章节名,真人有声书是「16 雪国 第16集」这类集名),专辑是书名,歌手一栏装的是正在念的那一小段原文(AI 朗读按标点切、每段十几个字;真人有声书是自动生成的字幕,带错字),每换一段就带着新锚点重发一次,锚点就是这段的起点(真人有声书按 0.25 秒取整),按 subtitlesInArtist 收成字幕、不进身份。没有作者一栏。时长是这一集的,锚点在每段开头刷新,属 cleanExtrapolated。整段是有声内容,不记收听、不搜歌词。media-control 的播放、暂停它都响应,跳转不理;上一首 / 下一首是后退 / 快进约 15 秒、不换集。窗口最小化、被挡住时照样往系统会话里推字幕。processName 6 字节。"
     },
     {
       "id": "auto",
