@@ -65,6 +65,10 @@ step "generate-strings.py 自检"
 step "Localizable.strings 一致性"
 /usr/bin/python3 -B lyrimuse/scripts/check_strings_parity.py
 
+# 可选数组用 + 连成三段以上的长链,本机编得过、CI 上类型检查超时(本地 swift build 拦不住)。只读、不到一秒。
+step "Swift 可选数组 + 链"
+/usr/bin/python3 -B scripts/check-swift-plus-chains.py
+
 step "swift build"
 (cd lyrimuse && swift build)
 if [ -n "${PRIVATE_COMMIT_COMPILED_MARK:-}" ] && [ -n "${PRIVATE_COMMIT_TREE:-}" ]; then
