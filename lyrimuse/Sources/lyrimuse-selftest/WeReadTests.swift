@@ -84,5 +84,10 @@ func runWeReadTests() {
                     true, "微信读书字幕: 每拍收尾见到新字幕就重载歌词")
         expectEqual(sourceHas(source, "if PlayerSubtitles.carriesSubtitles(bundleID: snapshot.bundleIdentifier) {\napplySpokenAudio(true, mid: \"subtitles\")"),
                     true, "微信读书字幕: 一开播就按有声内容处理(不推 Discord、播放状态写有声)")
+        let quitWatcher = src("lyrimuse/Settings/PlayerQuitWatcher.swift")
+        expectEqual(sourceHas(quitWatcher, "DispatchSource.makeProcessSource(identifier: pid, eventMask: .exit, queue: .main)")
+                    && sourceHas(quitWatcher, "for app in NSWorkspace.shared.runningApplications { watchExit(of: app) }")
+                    && sourceHas(quitWatcher, "MainActor.assumeIsolated { self?.exited(bundleID, pid: pid) }"),
+                    true, "微信读书: iPad 版退出时系统不发退出通知,跟随退出另按进程号盯")
     }
 }

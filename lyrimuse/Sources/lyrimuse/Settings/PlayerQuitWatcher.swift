@@ -21,6 +21,11 @@ final class PlayerQuitWatcher {
     private var pendingQuit: DispatchWorkItem?
     /// 到点那一刻被 Lyrimuse 自己的窗口挡下了,等窗口关掉再判。
     private var deferredForWindows = false
+    /// iPad 版 App(Wrapper 包)退出时系统不发 `didTerminateApplicationNotification`,只发启动的那条;
+    /// 内置播放器的进程另按进程号盯退出(见 02 章决策 240)。
+    private var exitSources: [pid_t: DispatchSourceProcess] = [:]
+    /// 同一个进程的退出两条路(系统通知、按进程号盯的)都可能报,只认先到的那条。
+    private var reportedExits: [pid_t] = []
 
     /// 窗口关掉之后再等多久重判。留一点余量给"关掉设置、紧接着从菜单栏打开歌词窗口"这种连续操作,
     /// 不在两扇窗交接的空当里把 App 退掉。
@@ -36,13 +41,18 @@ final class PlayerQuitWatcher {
             guard let app = note.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication,
                   let bundleID = app.bundleIdentifier.map(PlayerBundleAliases.canonical) else { return }
             let pid = app.processIdentifier
-            MainActor.assumeIsolated { self?.playerTerminated(bundleID, pid: pid) }
+            MainActor.assumeIsolated { self?.exited(bundleID, pid: pid) }
         })
         observers.append(center.addObserver(forName: NSWorkspace.didLaunchApplicationNotification,
                                             object: nil, queue: .main) { [weak self] note in
-            guard let bundleID = Self.bundleID(from: note) else { return }
-            MainActor.assumeIsolated { self?.playerLaunched(bundleID) }
+            guard let app = note.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication,
+                  let bundleID = app.bundleIdentifier.map(PlayerBundleAliases.canonical) else { return }
+            MainActor.assumeIsolated {
+                self?.watchExit(of: app)
+                self?.playerLaunched(bundleID)
+            }
         })
+        for app in NSWorkspace.shared.runningApplications { watchExit(of: app) }
         // 被窗口挡下的那一次退出,靠这两条通知接回来。willClose 发出时窗口还算可见,所以不在这里当场判,
         // 而是排一次延迟重判(到点时 fireIfStillDue 会重新看窗口)。
         for name in [NSWindow.willCloseNotification, NSWindow.didMiniaturizeNotification] {
@@ -52,9 +62,27 @@ final class PlayerQuitWatcher {
         }
     }
 
-    private static func bundleID(from note: Notification) -> String? {
-        ((note.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication)?.bundleIdentifier)
-            .map(PlayerBundleAliases.canonical)
+    /// 内置播放器的进程按进程号盯退出;别的 App 不盯。
+    private func watchExit(of app: NSRunningApplication) {
+        let pid = app.processIdentifier
+        guard pid > 0, exitSources[pid] == nil, !app.isTerminated,
+              let bundleID = app.bundleIdentifier.map(PlayerBundleAliases.canonical),
+              PlaybackPlayer.builtin(forBundleID: bundleID) != nil else { return }
+        let source = DispatchSource.makeProcessSource(identifier: pid, eventMask: .exit, queue: .main)
+        source.setEventHandler { [weak self] in
+            MainActor.assumeIsolated { self?.exited(bundleID, pid: pid) }
+        }
+        exitSources[pid] = source
+        source.resume()
+    }
+
+    /// 两条退出信号的汇合处:同一个进程只往下报一次。
+    private func exited(_ bundleID: String, pid: pid_t) {
+        exitSources.removeValue(forKey: pid)?.cancel()
+        guard !reportedExits.contains(pid) else { return }
+        reportedExits.append(pid)
+        if reportedExits.count > 32 { reportedExits.removeFirst(reportedExits.count - 32) }
+        playerTerminated(bundleID, pid: pid)
     }
 
     /// 此刻真正生效的绑定(用户勾的 ∩ 当前候选),换成 bundle id。
