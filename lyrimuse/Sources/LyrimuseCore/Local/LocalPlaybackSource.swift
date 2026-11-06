@@ -2335,7 +2335,8 @@ public final class LocalPlaybackSource: ObservableObject {
     private func classifySpotifyViaAppleScript(forKey key: String, title: String?, artist: String?) {
         Task.detached(priority: .utility) {
             guard let r = ProcessRunner.run(
-                "/usr/bin/osascript", ["-e", "tell application \"Spotify\" to spotify url of current track"],
+                "/usr/bin/osascript",
+                ["-e", MusicPlaybackController.spotifyRunningGuard + #"tell application "Spotify" to spotify url of current track"#],
                 timeout: MusicPlaybackController.appleScriptTimeout),
                 r.succeeded
             else { return }

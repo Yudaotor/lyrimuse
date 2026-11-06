@@ -217,6 +217,9 @@ public enum BrowserAutomationPermission {
         guard let family = family(forBundleID: bundleID) else { return .unsupported }
         switch family {
         case .safari:
+            // Safari 的偏好在它自己的容器里。没有「完全磁盘访问」时读到的本来就是 nil,还可能以 Lyrimuse 的名义
+            // 弹「想访问其他 App 的数据」,所以不读。见 02 章决策 239。
+            guard FullDiskAccessProbe.isGranted() else { return .unknown }
             return safariStatus(fromPrefValue:
                 CFPreferencesCopyAppValue(safariPrefKey, safariBundleID as CFString))
         case .chromium:

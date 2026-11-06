@@ -446,6 +446,18 @@ func runPlayerIdentityTests() {
                     "Safari 开关: NSNumber 1 → enabled")
         expectEqual(P.safariStatus(fromPrefValue: NSNumber(value: 0) as CFPropertyList), P.Status.disabled,
                     "Safari 开关: NSNumber 0 → disabled")
+        let sources = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+        func code(_ rel: String) -> String {
+            (try? String(contentsOfFile: sources.appendingPathComponent(rel).path, encoding: .utf8)) ?? ""
+        }
+        let browser = code("LyrimuseCore/Local/BrowserAutomationPermission.swift")
+        expectEqual(sourceHas(browser, "guard FullDiskAccessProbe.isGranted() else { return .unknown }\n return safariStatus(fromPrefValue:"),
+                    true, "Safari 开关: 没有完全磁盘访问时不读 Safari 容器里的偏好(02 章决策 239)")
+        let playback = code("LyrimuseCore/Local/LocalPlaybackSource.swift")
+        expectEqual(sourceHas(playback, "MusicPlaybackController.spotifyRunningGuard + #\"tell application \"Spotify\" to spotify url of current track\"#"),
+                    true, "Spotify 广告判定: 先判在不在跑,别把退出了的 Spotify 拉起来")
+        expectEqual(FullDiskAccessProbe.paths.allSatisfy { $0.hasSuffix("/com.apple.TCC/TCC.db") }, true,
+                    "完全磁盘访问: 只探系统权限库,不碰别的 App 的数据")
     }
 
     // ---- 「这不是一首歌」守卫:信任的 App 报空歌手/空专辑就丢掉 ----
