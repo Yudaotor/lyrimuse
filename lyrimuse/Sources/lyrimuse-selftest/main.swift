@@ -59,6 +59,7 @@ let groups: [TestGroup] = [
     TestGroup(name: "vox", summary: "VOX:AppleScript 读数解读 / 没写标签的文件名·乱码·精确时长 / 换歌撕裂 / 系统那份的歌手专辑 / 循环音量 / 接线契约", run: runVoxTests),
     TestGroup(name: "pine", summary: "Pine Player:系统那份歌手一栏的拆法 / 按开着的文件认曲目 / 整秒锚点换成准的位置 / 失焦时的菜单项 / 接线契约", run: runPineTests),
     TestGroup(name: "pear", summary: "Pear Desktop 本机接口:配置 / 歌曲应答 / 对曲 / 队列整理成 Kaset 回包 / MV 与播客 / 接线契约", run: runPearDesktopTests),
+    TestGroup(name: "weread", summary: "微信读书听书:歌手栏的字幕收成歌词 / 身份换成书名 / 并句规则 / LRC / 接线契约", run: runWeReadTests),
     TestGroup(name: "foobar", summary: "foobar2000:开播锚点随封面重报那一份不采信 / 按开着的文件认当前文件 / 光盘占位图 / 播放顺序与音量 / 失焦时的菜单 / 播放列表 / 接线契约", run: runFoobarTests),
     TestGroup(name: "playback-state", summary: "播放状态文件(App 写、引擎读):契约样例(与引擎共用)/ 序号与位置 / 撕裂快照守卫 / 封面标识", run: runPlaybackStateTests),
     TestGroup(name: "player-query", summary: "App 代引擎跑的播放器查询:请求判定 / 固定脚本的守卫 / 网页队列 JS / 契约键名", run: runPlayerQueryTests),

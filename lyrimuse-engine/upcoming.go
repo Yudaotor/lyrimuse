@@ -112,6 +112,9 @@ func upcomingFromQueue(artist, title, album, bundleID string, durationSecs float
 		return pearUpcoming(artist, title, n)
 	case lxMusicBundleID:
 		return lxMusicUpcoming(artist, title, n)
+	case weReadBundleID:
+		// 听书整段按有声内容处理、开播就不预取(playerMarksSpoken);走到这里也没有可预取的歌,不退回同专辑预取。
+		return nil, true
 	}
 	return browserUpcoming(artist, title, bundleID, durationSecs, n)
 }

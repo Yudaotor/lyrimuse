@@ -22,7 +22,7 @@
 
 https://github.com/user-attachments/assets/88b951ee-4ecf-4985-b1cb-eee6afdd5510
 
-Lyrimuseは、macOS向けのオープンソースのデスクトップ歌詞アプリです。メニューバーに常駐し、曲の再生に合わせて歌詞を単語ごとにハイライトします。表示場所は、すべてのウインドウの最前面に浮かぶフローティング表示、メニューバー、ノッチ下のDynamic Island風カプセル、Touch Bar、そして独立した歌詞ウインドウから選べます。Apple Music、Spotify、Amazon Music、YouTube MusicアプリのKasetなど15のプレーヤーと、ブラウザのWebプレーヤーに対応し、15の歌詞ソースから最も合う歌詞を選びます。必要なら翻訳やローマ字も表示できます。さらに、Last.fmのリスニングプロフィールを表示し、再生をScrobbleします。
+Lyrimuseは、macOS向けのオープンソースのデスクトップ歌詞アプリです。メニューバーに常駐し、曲の再生に合わせて歌詞を単語ごとにハイライトします。表示場所は、すべてのウインドウの最前面に浮かぶフローティング表示、メニューバー、ノッチ下のDynamic Island風カプセル、Touch Bar、そして独立した歌詞ウインドウから選べます。Apple Music、Spotify、Amazon Music、YouTube MusicアプリのKasetなど16のプレーヤーと、ブラウザのWebプレーヤーに対応し、15の歌詞ソースから最も合う歌詞を選びます。必要なら翻訳やローマ字も表示できます。さらに、Last.fmのリスニングプロフィールを表示し、再生をScrobbleします。
 
 **LyricsXからの乗り換えにも**。LyricsXは2022年4月以降、新しいリリースが出ていません。Lyrimuseは、LyricsXでできたことをカバーしたうえでアップデートを続けており、中国語圏のプレーヤー、KKBOX、Amazon Music、Kaset、Pear Desktop、reAMP、VOX、Pine Player、foobar2000、Webプレーヤーにも対応しています。詳しくは、事実確認済みの[LyricsXおよびLyric Feverとの比較](docs/lyrics-apps-comparison.md)をご覧ください。
 
@@ -242,7 +242,7 @@ QQ Music／NetEase Cloud Music／Kugou Music／Soda Music／KKBOX／Amazon Music
 はい。ブラウザの動画などがmacOSの「再生中」を握っていると、システムのメディアキーはそちらに送られます。そのときLyrimuseは、QQ MusicやNetEase Cloud Music自身のメニューバー、あるいはSoda Musicの再生バーにある再生／一時停止、前へ、次へを代わりに押し、プレーヤーはバックグラウンドのままにします。これにはアクセシビリティの権限が必要です（設定 → プレーヤー）。権限がない場合、これらのボタンを押すとそのページが開きます。この状態ではシークは使えません。macOS 27ではこの権限は**システム設定 → プライバシーとセキュリティ → デバイスの制御とデータへのアクセス**にあり、それ以前のリリースでは**アクセシビリティ**という名前です。
 
 ### Spotify、QQ Music、NetEase Cloud Musicにも対応していますか？それともApple Musicだけですか？
-すべてに対応しています。さらにKugou Music、Soda Music、KKBOX、Amazon Music、Kaset（YouTube Musicアプリ）、オープンソースのYouTube MusicデスクトップアプリPear Desktop、Winamp風のプレーヤーreAMP、ロスレスやハイレゾに強いローカルプレーヤーVOX、ほぼすべてのフォーマットを再生できる無料のローカルプレーヤーPine Player、Windowsから移植された定番のローカルプレーヤーfoobar2000、オープンソースのLX Musicにも対応し、全部で15のプレーヤーに対応しています。macOSが「再生中」として表示しているものを自動検出させることもできます。Apple Music、Spotify、Kaset、VOXはオートメーション権限を求めます（Spotify、Kaset、VOXは正確なタイミングと再生ボタンのために使います）。残りの11のプレーヤーは、macOSのMediaRemote経由で基本的な曲情報を読み取るのに権限は不要です。ただし、QQ Music、NetEase Cloud Music、Kugou Music、Soda Music、Amazon Musicのシャッフル、リピート、お気に入りのボタンと、reAMPとfoobar2000のシャッフル、リピート、音量にはアクセシビリティの権限が必要です。Pine Playerは再生位置を秒単位でしか報告しないため、再生バーを読み取るのにこの権限を使います。KKBOX、Amazon Music、LX Musicでは、そのアプリが曲について保存済みの歌詞も候補に入りますが、それらのサービスに接続することは一切ありません。
+すべてに対応しています。さらにKugou Music、Soda Music、KKBOX、Amazon Music、Kaset（YouTube Musicアプリ）、オープンソースのYouTube MusicデスクトップアプリPear Desktop、Winamp風のプレーヤーreAMP、ロスレスやハイレゾに強いローカルプレーヤーVOX、ほぼすべてのフォーマットを再生できる無料のローカルプレーヤーPine Player、Windowsから移植された定番のローカルプレーヤーfoobar2000、オープンソースのLX Musicにも対応し、全部で16のプレーヤーに対応しています。macOSが「再生中」として表示しているものを自動検出させることもできます。Apple Music、Spotify、Kaset、VOXはオートメーション権限を求めます（Spotify、Kaset、VOXは正確なタイミングと再生ボタンのために使います）。残りの12のプレーヤーは、macOSのMediaRemote経由で基本的な曲情報を読み取るのに権限は不要です。ただし、QQ Music、NetEase Cloud Music、Kugou Music、Soda Music、Amazon Musicのシャッフル、リピート、お気に入りのボタンと、reAMPとfoobar2000のシャッフル、リピート、音量にはアクセシビリティの権限が必要です。Pine Playerは再生位置を秒単位でしか報告しないため、再生バーを読み取るのにこの権限を使います。KKBOX、Amazon Music、LX Musicでは、そのアプリが曲について保存済みの歌詞も候補に入りますが、それらのサービスに接続することは一切ありません。
 
 ### KKBOXやAmazon Musicの歌詞をMacで表示できますか？
 はい。どちらもmacOSのMediaRemote経由で読み取るので、許可が必要な権限はなく、歌詞はほかのプレーヤーと同じようにフローティング表示、メニューバー、カプセル、歌詞ウインドウに表示されます。KKBOXやAmazon Musicが曲の歌詞をすでに保存していれば、それも候補に入り、重みが加算されます。Lyrimuseがどちらのサービスにサインインしたり、何かを送信したりすることはありません。ほかのソースも引き続き検索されるので、単語ごとのタイミングがあるなど、よりよい歌詞があればそちらが選ばれます。

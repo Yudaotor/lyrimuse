@@ -12,10 +12,14 @@ func awaitsSpokenVerdict(s snapshot, startedAt, now time.Time) bool {
 	return s.SpokenPending && now.Sub(startedAt) < spokenVerdictWait
 }
 
-// playerMarksSpoken:播放器本机数据把这一首记成有声内容(酷狗:sqlite 那份队列里它是听书条目,见 kugouPlayingSongInfo)。
+// playerMarksSpoken:播放器本机数据把这一首记成有声内容(酷狗:sqlite 那份队列里它是听书条目,见 kugouPlayingSongInfo);
+// 歌手栏装字幕的听书播放器(playerSubtitlesInArtist)放的整段都是有声内容。
 // 开播那一拍同步判,正在播放、待播预取之前就有结论,不等 App。跟 trackEnrichment 用同一组参数,结果走 playerCatalogIDsFor
 // 的记忆,随后那次取 id 不再读一遍。见 02 章决策 195。
 func playerMarksSpoken(s snapshot) bool {
+	if playerSubtitlesInArtist[s.Bundle] {
+		return true
+	}
 	return s.Bundle == kugouMusicBundleID &&
 		playerCatalogIDsFor(s.Bundle, s.Artist, s.Title, s.Album, s.lyricsDurationSecs()).spoken
 }

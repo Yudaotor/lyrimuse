@@ -46,6 +46,9 @@ CI 跑 `--check` 保证生成物没被手改、也没忘记重新生成。
 - artistlessNotMusic  歌手空、时长 > 0、在放的快照是非歌曲内容(播客单集),不当成一首歌;auto 为 null
                 只给**实测见过**的播放器置 true(KKBOX、Amazon Music 放播客都是这样)。判定在 Swift 侧
                 TrustedPlayers.artistlessContent;Go 侧只在歌词解析入口挡掉这类内容(enrich.go)
+- subtitlesInArtist  系统会话的歌手栏装的是正在念的那句字幕(听书),每句换一次、锚点是这句的起点;auto 为 null
+                只给**实测见过**的播放器置 true(微信读书的 AI 朗读和真人有声书)。App 侧把那一栏当字幕收起来拼成歌词、
+                身份里不带它(PlayerSubtitles);Go 侧换集时不搜歌词、整段按有声内容处理(poller.go)
 - dropsSessionBetweenTracks  切歌时先撤掉 Now Playing、隔几秒才发下一首;auto 为 null
                 只给**实测见过**的播放器置 true(KKBOX 约 4 秒)。上一首来自它时,这几秒里别的播放器暂停着的
                 旧会话不当成「换播放器了」,判定在 PlayerGapHold。只生成 Swift 侧
@@ -94,7 +97,7 @@ ICON_DIR = ROOT / "lyrimuse" / "Sources" / "lyrimuse" / "Resources"
 FIELDS = (
     "id", "swiftCase", "goConst", "bundleID", "goBundleConst", "processName", "displayName", "scrobbleLabel",
     "nativeLyricSource", "positionTier", "republishesZeroAnchor", "playingFromRate", "artistArrivesLate",
-    "artistlessNotMusic", "dropsSessionBetweenTracks", "dropsSessionWhilePlaying", "ignoresSeekCommand", "needsAutomationPermission",
+    "artistlessNotMusic", "subtitlesInArtist", "dropsSessionBetweenTracks", "dropsSessionWhilePlaying", "ignoresSeekCommand", "needsAutomationPermission",
     "needsFullDiskAccess", "needsAccessibilityPermission", "tint", "fallbackSymbol", "bundledIcon", "note",
 )
 
@@ -268,6 +271,14 @@ def render_go(spec, players):
             out.append("\t%s: true,\n" % p["goBundleConst"])
     out.append("}\n")
 
+    out.append("\n// playerSubtitlesInArtist 是「bundle id → 系统会话的歌手栏装的是正在念的那句字幕(听书)」。\n"
+               "// 只列**实测见过**的播放器。换集时不搜歌词、按有声内容处理;字幕由 App 侧收起来显示(PlayerSubtitles)。\n"
+               "var playerSubtitlesInArtist = map[string]bool{\n")
+    for p in concrete:
+        if p.get("subtitlesInArtist") and p.get("goBundleConst"):
+            out.append("\t%s: true,\n" % p["goBundleConst"])
+    out.append("}\n")
+
     out.append("\n// mediaProxyOwners 是「媒体进程 bundle id → 宿主 App bundle id」:Safari 报 Now Playing 用的是\n"
                "// WebKit GPU 进程,查信任列表、Last.fm 排除名单、网页播放器配对之前先换回宿主。\n"
                "// Swift 侧 TrustedPlayers.mediaProxyOwners 同源。\n"
@@ -375,6 +386,14 @@ def render_core_swift(spec, players):
                "    public var artistlessNotMusic: Bool {\n        switch self {\n")
     for p in concrete:
         if p.get("artistlessNotMusic"):
+            out.append("        case .%s: return true\n" % p["swiftCase"])
+    out.append("        default: return false\n        }\n    }\n")
+
+    out.append("\n    /// 系统会话的歌手栏装的是正在念的那句字幕(听书)。只有**实测见过**的播放器为 true。\n"
+               "    /// 字幕收集和身份见 `PlayerSubtitles`;Go 侧 playerSubtitlesInArtist 同源(换集时不搜歌词)。\n"
+               "    public var subtitlesInArtist: Bool {\n        switch self {\n")
+    for p in concrete:
+        if p.get("subtitlesInArtist"):
             out.append("        case .%s: return true\n" % p["swiftCase"])
     out.append("        default: return false\n        }\n    }\n")
 

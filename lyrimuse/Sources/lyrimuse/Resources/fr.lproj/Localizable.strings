@@ -1321,6 +1321,7 @@
 "循环最多：《%1$@》— %2$@（%3$@ 次）" = "Le plus écouté : %1$@ — %2$@ (%3$@ écoutes)";
 "循环最多：《%1$@》— %2$@（%3$@ 次）#one" = "Le plus écouté : %1$@ — %2$@ (%3$@ écoute)";
 "微信提醒" = "Alerte WeChat";
+"微信读书" = "WeRead";
 "快捷操作" = "Actions rapides";
 "快捷操作按钮" = "Boutons d’actions rapides";
 "快捷键" = "Raccourcis clavier";
@@ -2425,6 +2426,7 @@
 "背景" = "Fond";
 "背景颜色" = "Couleur de fond";
 "胜者" = "Gagnant";
+"腾讯旗下的读书 App，听书时把正在念的原文当字幕显示" = "L’app de lecture de Tencent ; à l’écoute, le texte lu s’affiche en sous-titres";
 "腾讯旗下的音乐 App" = "L’app de musique de Tencent";
 "腾讯旗下的音乐平台" = "Service musical de Tencent";
 "腾讯音乐旗下的音乐 App" = "Une app de musique de Tencent Music";

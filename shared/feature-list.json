@@ -2735,9 +2735,9 @@
         {
           "id": "players",
           "title": {
-            "en": "Fifteen players, pick several or detect automatically",
-            "zh-Hans": "十五款播放器，可多选或自动识别",
-            "zh-Hant": "十五款播放器，可多選或自動辨識",
+            "en": "Sixteen players, pick several or detect automatically",
+            "zh-Hans": "十六款播放器，可多选或自动识别",
+            "zh-Hant": "十六款播放器，可多選或自動辨識",
             "ja": "15のプレーヤーに対応、複数選択または自動検出",
             "ko": "15개 플레이어, 여러 개 선택 또는 자동 감지",
             "es": "Quince reproductores, varios a la vez o detección automática",

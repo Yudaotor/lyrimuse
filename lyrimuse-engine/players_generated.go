@@ -23,6 +23,7 @@ const (
 	playerVox         = "vox"
 	playerPinePlayer  = "pine_player"
 	playerFoobar2000  = "foobar2000"
+	playerWeRead      = "weread"
 	playerAuto        = "auto"
 )
 
@@ -43,6 +44,7 @@ const (
 	voxBundleID          = "com.coppertino.Vox"
 	pinePlayerBundleID   = "com.digipine.pineplayer"
 	foobar2000BundleID   = "com.foobar2000.mac"
+	weReadBundleID       = "com.tencent.weread"
 )
 
 // allPlayerIDs 是 "players" 字段的全部合法取值(含 auto),isValidPlayerValue 用。
@@ -62,6 +64,7 @@ var allPlayerIDs = []string{
 	playerVox,
 	playerPinePlayer,
 	playerFoobar2000,
+	playerWeRead,
 	playerAuto,
 }
 
@@ -83,6 +86,7 @@ var playerBundleIDs = map[string]string{
 	playerVox:         voxBundleID,
 	playerPinePlayer:  pinePlayerBundleID,
 	playerFoobar2000:  foobar2000BundleID,
+	playerWeRead:      weReadBundleID,
 }
 
 // builtinPlayerBundleIDs 是内置播放器的 bundle id 集合 —— isKnownPlayerBundleID
@@ -103,6 +107,7 @@ var builtinPlayerBundleIDs = map[string]bool{
 	voxBundleID:          true,
 	pinePlayerBundleID:   true,
 	foobar2000BundleID:   true,
+	weReadBundleID:       true,
 }
 
 // playerProcessNames 是「播放器标识 → 可执行文件名」,companion-launch 的 pgrep -x 用。
@@ -123,6 +128,7 @@ var playerProcessNames = map[string]string{
 	playerVox:         "VOX",
 	playerPinePlayer:  "Pine Player",
 	playerFoobar2000:  "foobar2000",
+	playerWeRead:      "WeRead",
 }
 
 // playerOtherProcessNames 是同一个播放器其他版本的可执行文件名,跟随启动跟上表一起盯。
@@ -131,7 +137,7 @@ var playerOtherProcessNames = map[string][]string{
 }
 
 // knownPlayerProcessNames 是上面两张表的全部取值 —— 选了「自动识别」时盯全部。
-var knownPlayerProcessNames = []string{"Music", "QQMusic", "NeteaseMusic", "neteasemusic", "酷狗音乐", "汽水音乐", "KKBOX", "Spotify", "Amazon Music", "Kaset", "YouTube Music", "Reamp", "lx-music-desktop", "VOX", "Pine Player", "foobar2000"}
+var knownPlayerProcessNames = []string{"Music", "QQMusic", "NeteaseMusic", "neteasemusic", "酷狗音乐", "汽水音乐", "KKBOX", "Spotify", "Amazon Music", "Kaset", "YouTube Music", "Reamp", "lx-music-desktop", "VOX", "Pine Player", "foobar2000", "WeRead"}
 
 // playerScrobbleLabels 是「bundle id → ListenBrainz 的 media_player 标签」。
 var playerScrobbleLabels = map[string]string{
@@ -150,6 +156,7 @@ var playerScrobbleLabels = map[string]string{
 	voxBundleID:          "VOX (macOS)",
 	pinePlayerBundleID:   "Pine Player (macOS)",
 	foobar2000BundleID:   "foobar2000 (macOS)",
+	weReadBundleID:       "WeRead (macOS)",
 }
 
 // defaultScrobbleLabel:既不是内置播放器、也不在信任列表里时的兜底标签。
@@ -191,6 +198,12 @@ var playerNeedsFullDiskAccess = map[string]bool{
 var playerArtistlessNotMusic = map[string]bool{
 	kkboxBundleID:       true,
 	amazonMusicBundleID: true,
+}
+
+// playerSubtitlesInArtist 是「bundle id → 系统会话的歌手栏装的是正在念的那句字幕(听书)」。
+// 只列**实测见过**的播放器。换集时不搜歌词、按有声内容处理;字幕由 App 侧收起来显示(PlayerSubtitles)。
+var playerSubtitlesInArtist = map[string]bool{
+	weReadBundleID: true,
 }
 
 // mediaProxyOwners 是「媒体进程 bundle id → 宿主 App bundle id」:Safari 报 Now Playing 用的是

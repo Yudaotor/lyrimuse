@@ -152,8 +152,9 @@ public final class LocalPlaybackSource: ObservableObject {
     /// QQ 音乐、酷狗这一首判成了有声书 / 有声节目(QQ 见 QQSpokenAudio,酷狗见 EnrichCacheReader.kugouSpokenVerdict):
     /// 字幕照常显示,Discord 不显示,引擎不当歌。
     @Published public private(set) var isCurrentTrackSpokenAudio: Bool = false
-    /// 会判有声内容的播放器。
-    static let spokenAudioPlayers: Set<String> = [PlaybackPlayer.qqMusic.bundleIdentifier, PlaybackPlayer.kugou.bundleIdentifier]
+    /// 会判有声内容的播放器。歌手栏装字幕的听书播放器(`PlayerSubtitles`)放的都是有声内容,不用等结论。
+    static let spokenAudioPlayers: Set<String> = [PlaybackPlayer.qqMusic.bundleIdentifier, PlaybackPlayer.kugou.bundleIdentifier,
+                                                  PlaybackPlayer.weread.bundleIdentifier]
     /// 这一首(身份)的结论;nil = 还没判出来。不是上面那几家时 key 为 nil。
     private var spokenAudioKey: String?
     private var spokenAudioVerdict: Bool?
@@ -630,10 +631,12 @@ public final class LocalPlaybackSource: ObservableObject {
     ///
     /// Amazon Music 不问:它的读数往回退一截是界面校准扣掉出声延迟(`AmazonMusicUIProbe`),
     /// 不是晚锚点,伺服按 `snapsToReportedPosition` 直接吸附过去;这里再问 Spotify 探针是白问。见 02 章决策 68。
+    /// 听书播放器(`PlayerSubtitles`)同样不问:每段字幕都带一份新锚点,往回退的只会是它自己的锚点。
     public nonisolated static func shouldProbeLateAnchor(
         reported: Double, predicted: Double, tier: PositionSourceTier, bundleID: String? = nil
     ) -> Bool {
-        guard tier == .cleanExtrapolated, bundleID != PlaybackPlayer.amazonMusic.bundleIdentifier else { return false }
+        guard tier == .cleanExtrapolated, bundleID != PlaybackPlayer.amazonMusic.bundleIdentifier,
+              !PlayerSubtitles.carriesSubtitles(bundleID: bundleID) else { return false }
         let backwards = predicted - reported
         return backwards > lateAnchorProbeToleranceSecs && backwards <= seekJumpToleranceSecs
     }
@@ -1151,7 +1154,10 @@ public final class LocalPlaybackSource: ObservableObject {
     ///
     /// Pear Desktop 不开:同洛雪,换歌先撤会话、新歌先发一份速率 0 的占位再发开播锚点,锚点落后真声;
     /// 晚的那一截由锚点滞后学习补(暂停那一拍报的是真实位置)。见 02 章决策 224。
+    ///
+    /// 歌手栏装字幕的听书播放器(`PlayerSubtitles`)不开:字幕的起点就是它发的锚点,按锚点走才跟字幕对得上。
     public nonisolated static func carriesGaplessLead(tier: PositionSourceTier, bundleID: String?) -> Bool {
+        if PlayerSubtitles.carriesSubtitles(bundleID: bundleID) { return false }
         if bundleID == PlaybackPlayer.kugou.bundleIdentifier { return false }
         if bundleID == PlaybackPlayer.amazonMusic.bundleIdentifier { return false }
         if bundleID == PlaybackPlayer.lxMusic.bundleIdentifier { return false }
@@ -1730,9 +1736,12 @@ public final class LocalPlaybackSource: ObservableObject {
     /// 开播晚到的那一截由 `lateStartAnchorLead` / `lxMusicNaturalStartLead` 逐首补。见 02 章决策 128。
     ///
     /// Pine Player 不走:同洛雪,播放中不重发锚点;开播两份锚点取哪份、整秒锚点补多少都在 `PinePlayhead` 里定了。
+    ///
+    /// 听书播放器(`PlayerSubtitles`)不走:字幕按它发的锚点对时,补上锚点比出声晚的那截反而跟字幕错开。
     public nonisolated static func learnsAnchorLag(bundleID: String?) -> Bool {
         bundleID != PlaybackPlayer.kugou.bundleIdentifier && bundleID != PlaybackPlayer.reamp.bundleIdentifier
             && bundleID != PlaybackPlayer.lxMusic.bundleIdentifier && bundleID != PlaybackPlayer.pinePlayer.bundleIdentifier
+            && !PlayerSubtitles.carriesSubtitles(bundleID: bundleID)
     }
 
     /// 这个播放器播放中会持续重发准的锚点,外推只是两次重发之间的补间:KKBOX 约每 1.06s 一次、逐次一致,
@@ -3955,6 +3964,7 @@ public final class LocalPlaybackSource: ObservableObject {
     private func finishPoll() {
         refreshPlaybackControlsWithheld()
         refreshSpokenAudio()
+        refreshPlayerSubtitles()
         syncKasetWebWatch()
         if pollFlight.finish() { poll() }
     }
@@ -3976,6 +3986,11 @@ public final class LocalPlaybackSource: ObservableObject {
             if isCurrentTrackSpokenAudio { isCurrentTrackSpokenAudio = false }
         }
         guard spokenAudioVerdict == nil else { return }
+        if PlayerSubtitles.carriesSubtitles(bundleID: snapshot.bundleIdentifier) {
+            applySpokenAudio(true, mid: "subtitles")
+            publishPlaybackState()
+            return
+        }
         if snapshot.bundleIdentifier == PlaybackPlayer.kugou.bundleIdentifier {
             // 酷狗:引擎开播时读它的队列判,结论跟着这一首的缓存条目过来(见 EnrichCacheReader.kugouSpokenVerdict)。
             guard let verdict = EnrichCacheReader.kugouSpokenVerdict(artist: artist, title: title, album: album) else { return }
@@ -3993,6 +4008,16 @@ public final class LocalPlaybackSource: ObservableObject {
                 self.publishPlaybackState()
             }
         }
+    }
+
+    /// 听书播放器又来了一句字幕(`PlayerSubtitles.revision` 变了):按新拼的 LRC 重载这一集的歌词。
+    private var playerSubtitlesRevision = -1
+    private func refreshPlayerSubtitles() {
+        guard PlayerSubtitles.carriesSubtitles(bundleID: lastSnapshot?.bundleIdentifier) else { return }
+        let revision = PlayerSubtitles.revision
+        guard revision != playerSubtitlesRevision else { return }
+        playerSubtitlesRevision = revision
+        reloadCurrentLyrics()
     }
 
     private func applySpokenAudio(_ verdict: Bool, mid: String) {
@@ -5298,7 +5323,9 @@ public final class LocalPlaybackSource: ObservableObject {
 
     private func reloadCurrentLyrics() {
         guard let snapshot = lastSnapshot else { return }
-        let found = EnrichCacheReader.lookup(
+        // 听书播放器的歌词是它推过来的字幕(见 PlayerSubtitles),不查缓存。
+        let found = PlayerSubtitles.lyrics(bundleID: snapshot.bundleIdentifier, album: snapshot.album, title: snapshot.title)
+            ?? EnrichCacheReader.lookup(
             artist: snapshot.artist ?? "",
             title: snapshot.title ?? "",
             album: snapshot.album ?? ""

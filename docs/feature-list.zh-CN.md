@@ -588,7 +588,7 @@ Apple Music、QQ 音乐或网易云音乐上带动态封面的专辑，在完整
 
 <a id="feature-players"></a>
 
-### 十五款播放器，可多选或自动识别
+### 十六款播放器，可多选或自动识别
 
 Apple Music、Spotify、QQ 音乐、网易云音乐、酷狗音乐、汽水音乐、洛雪音乐、KKBOX、Amazon Music、仿 Winamp 的 reAMP、主打无损和高解析音质的本地播放器 VOX、免费且格式支持很全的本地播放器 Pine Player、从 Windows 移植来的老牌本地播放器 foobar2000、YouTube Music 客户端 Kaset，以及开源的 YouTube Music 桌面客户端 Pear Desktop。可同时选择多个，也可保持自动识别，跟随 macOS「正在播放」中的播放器。支持 Apple Music 电台，主持人讲话时显示电台名称和台标。
 

@@ -843,6 +843,10 @@ func trackEnrichment(artist, title, album, bundleID string, durationSecs float64
 	if artist == "" && playerArtistlessNotMusic[bundleID] {
 		return nil
 	}
+	// 歌手栏装字幕的听书播放器(微信读书):放的都是有声内容,字幕由 App 从系统会话收(PlayerSubtitles),不搜歌词、不写缓存。
+	if playerSubtitlesInArtist[bundleID] {
+		return nil
+	}
 	// Kaset、Pear Desktop 放的是播客单集(YouTube Music 登记的类型)也不是歌,同上。App 那边认出来就不报它(KasetVideoKind、
 	// Pear 本机接口给的类型),这里挡的是它还没认出来、照常报过来的那几拍。
 	if youtubeMusicClient(bundleID) && kasetPodcastEpisodeCached(kasetVideoIDFor(bundleID, artist, title)) {

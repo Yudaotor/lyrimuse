@@ -97,9 +97,10 @@ public enum MediaControlClient {
         // 汽水非会员试听换回原曲口径(见 PlayerPreviewFix);排在署名纠正之后,比对用的署名与引擎发布时一致。
         // 把「歌手 - 歌名」拼在标题里的播放器先拆回来(见 PlayerTitleSplit),Pine Player 按它开着的文件换回歌手和专辑
         // (见 PinePlayerInfo),QQ 音乐、网易云、酷狗、Spotify 放本机文件时按它开着的文件换成标签(见 PlayerOpenFile),排在最前。
+        // 歌手栏装字幕的听书播放器最先把那一栏收成字幕、换成书名(见 PlayerSubtitles),后面各层看到的身份不随字幕变。
         let fixState = PlayerArtistFix.current
         let snapshot = PlayerPreviewFix.applied(
-            to: PlayerArtistFix.applied(to: PlayerOpenFile.applied(to: PlayerTitleSplit.applied(to: PinePlayerInfo.adapted(raw))), state: fixState))
+            to: PlayerArtistFix.applied(to: PlayerOpenFile.applied(to: PlayerTitleSplit.applied(to: PinePlayerInfo.adapted(PlayerSubtitles.adapted(raw)))), state: fixState))
         guard let raw else { return (snapshot, nil) }
         let bundleID = raw.bundleIdentifier ?? ""
         let rawTitle = raw.title ?? "", rawArtist = raw.artist ?? ""

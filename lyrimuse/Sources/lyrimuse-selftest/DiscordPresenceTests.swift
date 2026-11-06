@@ -267,7 +267,8 @@ private func checkDiscordActivity() {
                 "Discord 应用: Lyrimuse 那个的 ID")
     // 还没在 Discord 开发者后台建应用的播放器(建应用要作者过人机验证),暂时用 Lyrimuse 那个;建好之后把 ID 补进
     // DiscordPresence 再从这里拿掉。
-    let awaitingApplication: Set<PlaybackPlayer> = []
+    // 微信读书放的全是有声内容,本来就不推 Discord(isCurrentTrackSpokenAudio)。
+    let awaitingApplication: Set<PlaybackPlayer> = [.weread]
     for player in awaitingApplication {
         expectEqual(DiscordPresence.applicationID(forBundleID: player.bundleIdentifier, webPlatformID: nil),
                     DiscordPresence.applicationID, "Discord 应用: \(player) 还没建应用,用 Lyrimuse 那个")

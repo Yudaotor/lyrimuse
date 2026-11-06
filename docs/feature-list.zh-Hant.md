@@ -588,7 +588,7 @@ Apple Music、QQ 音樂或網易雲音樂上帶動態封面的專輯，在完整
 
 <a id="feature-players"></a>
 
-### 十五款播放器，可多選或自動辨識
+### 十六款播放器，可多選或自動辨識
 
 Apple Music、Spotify、QQ 音樂、網易雲音樂、酷狗音樂、汽水音樂、洛雪音樂、KKBOX、Amazon Music、仿 Winamp 的 reAMP、主打無損和高解析音質的本機播放器 VOX、免費且格式支援很全的本機播放器 Pine Player、從 Windows 移植來的老牌本機播放器 foobar2000、YouTube Music 用戶端 Kaset，以及開源的 YouTube Music 桌面用戶端 Pear Desktop。可同時選擇多個，也可保持自動辨識，跟隨 macOS「正在播放」中的播放器。支援 Apple Music 電台，主持人講話時顯示電台名稱和台標。
 

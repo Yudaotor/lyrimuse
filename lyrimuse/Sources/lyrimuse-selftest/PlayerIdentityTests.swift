@@ -179,7 +179,7 @@ func runPlayerIdentityTests() {
             expectEqual(reader.contains(#"case playerSpoken = "player_spoken""#)
                         && reader.contains("playerSongID: entry.playerSongIDs?[PlaybackPlayer.kugou.bundleIdentifier])"), true,
                         "酷狗有声: 读引擎的 player_spoken 和酷狗那一项歌曲 id")
-            expectEqual(source.contains("static let spokenAudioPlayers: Set<String> = [PlaybackPlayer.qqMusic.bundleIdentifier, PlaybackPlayer.kugou.bundleIdentifier]")
+            expectEqual(source.contains("static let spokenAudioPlayers: Set<String> = [PlaybackPlayer.qqMusic.bundleIdentifier, PlaybackPlayer.kugou.bundleIdentifier,\n")
                         && source.contains("spoken: Self.spokenAudioPlayers.contains(bundleID) && spokenAudioKey == snapshot.identityKey")
                         && sourceHas(source, "guard let verdict = EnrichCacheReader.kugouSpokenVerdict(artist: artist, title: title, album: album) else { return }\n"
                                      + "applySpokenAudio(verdict, mid: \"kugou\")\nif verdict { publishPlaybackState() }"), true,
@@ -538,6 +538,7 @@ func runPlayerIdentityTests() {
             .pinePlayer: ("pine_player", "com.digipine.pineplayer"),
             .foobar2000: ("foobar2000", "com.foobar2000.mac"),
             .pearDesktop: ("pear_desktop", "com.github.th-ch.youtube-music"),
+            .weread: ("weread", "com.tencent.weread"),
         ]
         for (player, want) in expected {
             expectEqual(player.rawValue, want.raw, "播放器契约: \(player) 的 rawValue")
@@ -1036,7 +1037,7 @@ func runPlayerIdentityTests() {
             expectEqual(sourceBytes(text("PlayerOpenFile.swift"),
                                     contain: "pid: snapshot.processIdentifier ?? PlayerProcess.pid(bundleID: bundleID)"),
                         true, "开着的文件 接线: 快照没带进程号(Spotify 走脚本)时按 bundle id 找主进程")
-            expectEqual(sourceBytes(client, contain: "to: PlayerOpenFile.applied(to: PlayerTitleSplit.applied(to: PinePlayerInfo.adapted(raw))), state: fixState))")
+            expectEqual(sourceBytes(client, contain: "to: PlayerOpenFile.applied(to: PlayerTitleSplit.applied(to: PinePlayerInfo.adapted(PlayerSubtitles.adapted(raw)))), state: fixState))")
                         && sourceBytes(client, contain: "?? PlayerOpenFile.currentFilePath(bundleID: bundleID, rawArtist: raw.artist, rawTitle: raw.title)"),
                         true, "开着的文件 接线: 快照公开出口换身份、封面按它找同目录的图")
             expectEqual(sourceBytes(text("LocalPlaybackSource.swift"),
@@ -1179,6 +1180,7 @@ func runPlayerIdentityTests() {
                          .learnsAnchorLag, .arrivesWhole]),
             .pinePlayer: (nil, [.extendedControls, .repeatOne, .resume, .snapsToReportedPosition, .arrivesWhole]),
             .foobar2000: (nil, [.extendedControls, .repeatOne, .resume, .learnsAnchorLag, .arrivesWhole]),
+            .weread: (nil, []),
             .pearDesktop: (.youtubeMusic, [.extendedControls, .repeatOne, .favorite, .resume, .lateAnchorProbe, .learnsAnchorLag,
                                            .holdsAnchorLagSeed, .catalogMenuRows]),
         ]

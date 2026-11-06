@@ -307,7 +307,7 @@ func runLyricsOffsetTests() {
         // selftest 只链 LyrimuseCore,够不到),只验证参数**确实生效**:传一个跟 allCases
         // 不同的顺序,输出要跟着换,而不是内部悄悄还是按 allCases 排。
         let reordered = [PlaybackPlayer.spotify, .kaset, .pearDesktop, .reamp, .vox, .pinePlayer, .foobar2000, .lxMusic, .amazonMusic, .kkbox, .kugou, .soda,
-                         .netease, .qqMusic, .appleMusic, .auto]
+                         .netease, .qqMusic, .appleMusic, .weread, .auto]
         let customOrder = LyricsOffsetScope.options(builtInOrder: reordered, trusted: [:], configured: [], nowPlaying: nil)
         expectEqual(customOrder.first, PlaybackPlayer.spotify.bundleIdentifier,
                     "偏移作用域: builtInOrder 参数生效,内置那组按传入的顺序排,不是 allCases 的声明顺序")
