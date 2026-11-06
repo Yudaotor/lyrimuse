@@ -647,7 +647,7 @@ Apple Music, Spotify, Kaset, VOX và Swinsian cần quyền Tự động hóa đ
 
 ### Điều khiển phát và tua
 
-Phát, tạm dừng, chuyển bài và kéo thanh tiến trình từ cửa sổ lời hoặc Notch khi mở rộng. Xáo trộn, lặp lại, thích và âm lượng tùy theo trình phát: Apple Music, Spotify, Kaset, QQ Music, Amazon Music, reAMP, VOX, Pine Player, foobar2000, Pear Desktop và YouTube Music trong trình duyệt hỗ trợ một phần hoặc tất cả; NetEase Cloud Music, Kugou Music, Soda Music và LX Music có nút thích, LX Music còn có âm lượng khi bật Open API trong cài đặt của nó. Phát, tạm dừng, chuyển bài và thích có thể gán phím tắt toàn cục. Khi một thứ như video trong trình duyệt đang giữ Đang phát, việc phát, tạm dừng và chuyển bài của QQ Music, NetEase Cloud Music, Soda Music, Pine Player và foobar2000 đi qua menu hoặc thanh phát của chính chúng, và không tua được.
+Phát, tạm dừng, chuyển bài và kéo thanh tiến trình từ cửa sổ lời hoặc Notch khi mở rộng. Xáo trộn, lặp lại, thích và âm lượng tùy theo trình phát: Apple Music, Spotify, Kaset, QQ Music, Amazon Music, reAMP, VOX, Pine Player, foobar2000, Swinsian, Pear Desktop và YouTube Music trong trình duyệt hỗ trợ một phần hoặc tất cả; NetEase Cloud Music, Kugou Music, Soda Music và LX Music có nút thích, LX Music còn có âm lượng khi bật Open API trong cài đặt của nó. Phát, tạm dừng, chuyển bài và thích có thể gán phím tắt toàn cục. Khi một thứ như video trong trình duyệt đang giữ Đang phát, việc phát, tạm dừng và chuyển bài của QQ Music, NetEase Cloud Music, Soda Music, Pine Player và foobar2000 đi qua menu hoặc thanh phát của chính chúng, và không tua được.
 
 - Cài đặt: Hiển thị lời › Notch › Khi mở rộng › Hiện điều khiển
 - Cài đặt: Phím tắt › Phát/Tạm dừng

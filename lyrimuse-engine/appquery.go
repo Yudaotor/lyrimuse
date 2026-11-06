@@ -34,6 +34,7 @@ const (
 	appQueryPlaybackMode          = "playback_mode"
 	appQueryReampQueue            = "reamp_queue"
 	appQueryFoobarQueue           = "foobar_queue"
+	appQuerySwinsianQueue         = "swinsian_queue"
 
 	appQuerySchema = 2
 

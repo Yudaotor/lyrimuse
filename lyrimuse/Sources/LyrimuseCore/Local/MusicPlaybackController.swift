@@ -385,19 +385,20 @@ public enum MusicPlaybackController {
     /// 「播放模式」那三项(`QQMusicMenuControl`,要辅助功能权限),没有音量;Amazon Music 只有模式,按它播放条上的键、读它的日志
     /// (`AmazonMusicModeControl`);reAMP 只有随机和列表循环,按它菜单栏 Play 里的两个开关(`ReampMenuControl`);Pine Player 只有循环,
     /// 按它菜单栏「重复模式」子菜单(`PineMenuControl`);foobar2000 有随机和两种循环,按它菜单栏「Order」子菜单(`FoobarMenuControl`),
-    /// 音量读写它窗口里的滑块(`FoobarVolume`);Pear Desktop 开着本机接口时有随机、循环和音量(`PearDesktopAPI`)。网易云、酷狗等没有
+    /// 音量读写它窗口里的滑块(`FoobarVolume`);Pear Desktop 开着本机接口时有随机、循环和音量(`PearDesktopAPI`);Swinsian 的随机、
+    /// 两种循环和音量都是可写的脚本属性。网易云、酷狗等没有
     /// .sdef(不可脚本化),而
     /// media-control 走的系统级 MediaRemote 只有播放控制 —— 对它们只能不显示这些控件(各家实测见 07 章决策 130)。
     public static func supportsExtendedControls(_ player: PlaybackPlayer) -> Bool {
         player == .appleMusic || player == .spotify || player == .kaset || player == .qqMusic || player == .amazonMusic
             || player == .reamp || player == .lxMusic || player == .vox || player == .pinePlayer || player == .foobar2000
-            || player == .pearDesktop
+            || player == .pearDesktop || player == .swinsian
     }
 
     /// 这个播放器的循环档位里有没有「单曲循环」。见 MusicPlaybackMode.nextRepeat。
     public static func supportsRepeatOne(_ player: PlaybackPlayer) -> Bool {
         player == .appleMusic || player == .kaset || player == .qqMusic || player == .amazonMusic || player == .vox
-            || player == .pinePlayer || player == .foobar2000 || player == .pearDesktop
+            || player == .pinePlayer || player == .foobar2000 || player == .pearDesktop || player == .swinsian
     }
 
     /// 这个播放器有没有「喜欢」:Apple Music(收藏)、Kaset(YouTube Music 的赞)、QQ 音乐、网易云音乐和酷狗音乐(菜单栏「喜欢歌曲」)、
@@ -539,6 +540,69 @@ public enum MusicPlaybackController {
         guard parts.count == 2, let repeatState = Int(parts[0]) else { return nil }
         return (repeatState, Double(parts[1].replacingOccurrences(of: ",", with: ".")).map { Int($0.rounded()) })
     }
+
+    /// Swinsian 的随机、单曲循环、列表循环、音量一次读回。没在跑、读不出为 nil。
+    private static func swinsianControls() -> (mode: MusicPlaybackMode?, volume: Int?)? {
+        guard let out = runAppleScriptCapturing(swinsianRunningGuard + #"""
+            tell application id "com.swinsian.Swinsian" to return ((shuffle) as text) & "|" & ((repeat single) as text) & "|" & ((repeat queue) as text) & "|" & ((sound volume) as text)
+            """#) else { return nil }
+        return swinsianControls(fromScriptOutput: out)
+    }
+
+    /// `shuffle|repeat single|repeat queue|sound volume` → 档位和音量。档位跟 Apple Music 同一套优先级:单曲循环 > 随机 > 列表循环 > 列表;
+    /// 认不出的为 nil。音量是带小数的数(逗号地区写成逗号),四舍五入。纯函数,selftest 覆盖。
+    public static func swinsianControls(fromScriptOutput out: String) -> (mode: MusicPlaybackMode?, volume: Int?)? {
+        let parts = out.trimmingCharacters(in: .whitespacesAndNewlines).components(separatedBy: "|")
+        guard parts.count == 4 else { return nil }
+        let shuffle = parts[0], single = parts[1], queue = parts[2]
+        var mode: MusicPlaybackMode?
+        if ["true", "false"].contains(single), ["true", "false"].contains(queue),
+           ["none", "track shuffle", "album shuffle"].contains(shuffle) {
+            mode = single == "true" ? .repeatOne : shuffle != "none" ? .shuffle : queue == "true" ? .repeatAll : .list
+        }
+        let volume = Double(parts[3].replacingOccurrences(of: ",", with: ".")).map { Int($0.rounded()) }
+        return (mode, volume)
+    }
+
+    /// 停播页「继续播放」:发 `play`(停住时从当前这首起放),隔一会儿读回在放才算。没在跑、没放起来为 false。阻塞约 1 秒,
+    /// **不要在主线程调用**。
+    public static func resumeSwinsianPlayback() -> Bool {
+        guard runAppleScriptCapturing(swinsianRunningGuard + #"tell application id "com.swinsian.Swinsian" to play"#) != nil else {
+            return false
+        }
+        Thread.sleep(forTimeInterval: 0.8)
+        let state = runAppleScriptCapturing(swinsianRunningGuard + #"tell application id "com.swinsian.Swinsian" to return (player state) as text"#)
+        return state?.trimmingCharacters(in: .whitespacesAndNewlines) == "playing"
+    }
+
+    /// 失焦时发给 Swinsian 的那一条。纯函数,selftest 覆盖。
+    public static func swinsianControlScript(_ command: PlaybackMenuControl.Command) -> String {
+        let verb = switch command {
+        case .playPause: "playpause"
+        case .nextTrack: "next track"
+        case .previousTrack: "previous track"
+        }
+        return "tell application id \"com.swinsian.Swinsian\" to " + verb
+    }
+
+    /// 切到某一档的脚本。点亮循环就关随机(跟 Apple Music 同一个互斥约定),随机按曲目打乱。纯函数,selftest 覆盖。
+    public static func swinsianModeScript(for mode: MusicPlaybackMode) -> String {
+        let body: String
+        switch mode {
+        case .list: body = "set shuffle to none\nset repeat single to false\nset repeat queue to false"
+        case .shuffle: body = "set shuffle to track shuffle\nset repeat single to false"
+        case .repeatAll: body = "set shuffle to none\nset repeat single to false\nset repeat queue to true"
+        case .repeatOne: body = "set shuffle to none\nset repeat single to true"
+        }
+        return "tell application id \"com.swinsian.Swinsian\"\n" + body + "\nend tell"
+    }
+
+    private static let swinsianRunningGuard = #"""
+        if application id "com.swinsian.Swinsian" is not running then
+            return ""
+        end if
+
+        """#
 
     /// VOX 能切的档:单曲循环、列表循环。它的「随机」是把播放列表打乱一次的命令,读不出开没开,不接。
     public static let voxModeOptions: PlaybackModeOptions = [.repeatAll, .repeatOne]
@@ -763,6 +827,10 @@ public enum MusicPlaybackController {
                                          mode: voxPlaybackMode(repeatState: c.repeatState)
                                              .map { PlaybackModeState(mode: $0, options: voxModeOptions) },
                                          volume: c.volume)
+        case .swinsian:
+            guard let c = swinsianControls() else { return .empty }
+            return ExtendedControlsState(favorited: nil, mode: c.mode.map { PlaybackModeState(mode: $0, options: .all) },
+                                         volume: c.volume)
         case .lxMusic:
             // 音量只有用户在洛雪里打开了开放 API 才有(`LXMusicOpenAPI`);播放顺序它的接口不给改,不接。
             return ExtendedControlsState(favorited: includeFavorited ? LXMusicFavoriteControl.readFavorited() : nil,
@@ -888,6 +956,8 @@ public enum MusicPlaybackController {
         case .vox:
             return voxControls().flatMap { voxPlaybackMode(repeatState: $0.repeatState) }
                 .map { PlaybackModeState(mode: $0, options: voxModeOptions) }
+        case .swinsian:
+            return swinsianControls()?.mode.map { PlaybackModeState(mode: $0, options: .all) }
         case .lxMusic: // 洛雪的播放顺序开放 API 不给读写,只接了音量和收藏。
             return nil
         case .pearDesktop:
@@ -976,6 +1046,8 @@ public enum MusicPlaybackController {
         case .vox:
             guard let state = voxRepeatState(for: mode) else { return false }
             return runAppleScriptCapturing(voxRunningGuard + #"tell application "VOX" to set repeat state to "# + String(state)) != nil
+        case .swinsian:
+            return runAppleScriptCapturing(swinsianRunningGuard + swinsianModeScript(for: mode)) != nil
         case .lxMusic: // 同 playbackMode(for:)。
             return false
         case .pearDesktop:
@@ -1016,6 +1088,8 @@ public enum MusicPlaybackController {
             return FoobarVolume.read()
         case .vox:
             return voxControls()?.volume
+        case .swinsian:
+            return swinsianControls()?.volume
         case .lxMusic: // 开放 API 开着才有,没开时 nil(胶囊换成说明怎么打开)。
             return LXMusicOpenAPI.shared.currentState().flatMap(LXMusicOpenAPI.volumePercent)
         case .pearDesktop: // 本机接口开着才有,按它播放条滑块的位置(`PearDesktopAPI.sliderVolume`)。
@@ -1051,6 +1125,8 @@ public enum MusicPlaybackController {
             return FoobarVolume.set(v)
         case .vox:
             return runAppleScriptCapturing(voxRunningGuard + #"tell application "VOX" to set player volume to \#(v)"#) != nil
+        case .swinsian:
+            return runAppleScriptCapturing(swinsianRunningGuard + "tell application id \"\(PlaybackPlayer.swinsian.bundleIdentifier)\" to set sound volume to \(v)") != nil
         case .lxMusic:
             return LXMusicOpenAPI.shared.setVolume(v)
         case .pearDesktop:
@@ -1156,13 +1232,16 @@ public enum MusicPlaybackController {
         /// 直接发给洛雪本体:开放 API 连着走它,不行退到 `lxmusic://player/…`(`LXMusicOpenAPI.sendDirect`)。读数是开放 API
         /// 顶替来的、或焦点不在它身上而屏上这首是它的时候走这条。
         case lxMusicDirect
+        /// 焦点被占、屏上这首是 Swinsian 时,播放 / 暂停、上下首发它自己的脚本;跳转不走这条(脚本只收整数秒)。
+        case swinsianScript(PlaybackMenuControl.Command)
         /// 不发。焦点被别的 App 占着、屏上这首又没有 AppleScript 可发:media-control 的指令会落在占用者身上。
         /// 按 bundle id 定向发(`MRMediaRemoteSendCommandToApp`)也不行 —— 目标不接时它不报错,照样落到焦点上,
         /// 见 02 章决策 51。
         case withheld
     }
 
-    /// 按实际回退目标决定控制通路。QQ / 网易云 / 酷狗 / 汽水 / Pine Player / reAMP / foobar2000 直查回退只允许三个已验证的 AX 动作;
+    /// 按实际回退目标决定控制通路。QQ / 网易云 / 酷狗 / 汽水 / Pine Player / reAMP / foobar2000 直查回退只允许三个已验证的 AX 动作,
+    /// Swinsian 同样三个动作改发它自己的脚本;
     /// 其它无定向通路的命令仍不发。选择列表和前台窗口不能充当回退目标。
     public static func controlRoute(exclusivelyAppleMusic: Bool, focusFallback: PlaybackPlayer?,
                                     focusHeldElsewhere: Bool = false, directQueryFallback: PlaybackPlayer? = nil,
@@ -1182,6 +1261,9 @@ public enum MusicPlaybackController {
             }
             if directQueryFallback == .lxMusic, LXMusicOpenAPI.directControlCommands.contains(mediaControlCommand) {
                 return .lxMusicDirect
+            }
+            if directQueryFallback == .swinsian, let command = PlaybackMenuControl.Command(rawValue: mediaControlCommand) {
+                return .swinsianScript(command)
             }
             return .withheld
         }
@@ -1252,6 +1334,8 @@ public enum MusicPlaybackController {
             runKasetDirectSeek(kasetDirectSeek, fallbackCommand: mediaControlCommand, fallbackArguments: mediaControlArguments)
         case .menuAccessibility(let player, let command):
             dispatchMenuAccessibility(command, for: player, completion: completion)
+        case .swinsianScript(let command):
+            runAppleScript(swinsianRunningGuard + swinsianControlScript(command))
         case .lxMusicDirect:
             let arguments = mediaControlArguments
             commandQueue.async {

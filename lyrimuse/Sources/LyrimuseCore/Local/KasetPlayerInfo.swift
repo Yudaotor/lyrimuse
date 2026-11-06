@@ -341,21 +341,24 @@ public enum KasetPlayerInfo {
             public let audioVideoID: String?
             /// 专辑:Kaset 的队列不给,为 nil;Pear Desktop 的队列从署名串里取(`PearDesktopAPI.queueReply`)。
             public let album: String?
+            /// 待播那个文件:只有放本地文件的 Swinsian 给(`SwinsianPlayerInfo.queueReply`)。
+            public let path: String?
 
             enum CodingKeys: String, CodingKey {
-                case title, artist, duration, album
+                case title, artist, duration, album, path
                 case videoID = "video_id"
                 case audioVideoID = "audio_video_id"
             }
 
             public init(title: String, artist: String, duration: Double?, videoID: String?, audioVideoID: String? = nil,
-                        album: String? = nil) {
+                        album: String? = nil, path: String? = nil) {
                 self.title = title
                 self.artist = artist
                 self.duration = duration
                 self.videoID = videoID
                 self.audioVideoID = audioVideoID
                 self.album = album
+                self.path = path
             }
         }
 

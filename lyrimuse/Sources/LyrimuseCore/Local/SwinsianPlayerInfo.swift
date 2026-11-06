@@ -163,6 +163,85 @@ public enum SwinsianPlayerInfo {
         return tick(from: r.stdout)
     }
 
+    // MARK: 待播队列
+
+    /// 读播放队列的 JXA:队列从当前这首起、只剩还没放的(放过的会出队),开着随机时就是打乱后的顺序。取前 `queueLimit` 首,
+    /// 按下标逐首读(整段取范围读不了)。没在跑回 `null`。
+    public static let queueScript = """
+    (() => {
+        \(JXARunningApp.attach("S", player: .swinsian, notRunning: "JSON.stringify(null)"))
+        try {
+            const queue = S.playbackQueue.tracks;
+            const count = Math.min(Number(queue.length), \(queueLimit));
+            const tracks = [];
+            for (let i = 0; i < count; i++) {
+                const t = queue[i];
+                tracks.push({ name: t.name() || "", artist: t.artist() || "", album: t.album() || "",
+                              duration: t.duration() || 0, path: t.path() || "" });
+            }
+            let current = "";
+            try { current = S.currentTrack().path() || ""; } catch (e) {}
+            return JSON.stringify({ tracks: tracks, current: current, repeatSingle: S.repeatSingle() === true });
+        } catch (e) {
+            return JSON.stringify(null);
+        }
+    })()
+    """
+
+    /// 队列最多读几首(当前这首加上往后 20 首)。
+    public static let queueLimit = 21
+
+    struct QueueScriptOutput: Decodable {
+        struct Track: Decodable {
+            let name: String
+            let artist: String
+            let album: String
+            let duration: Double
+            let path: String
+        }
+        let tracks: [Track]
+        let current: String
+        let repeatSingle: Bool
+    }
+
+    /// 队列里一首的身份,跟它放到时快照里的一样(`PlayerOpenFile`):文件标签里有歌名用标签(修好乱码),没有标签按去扩展名的
+    /// 文件名在「 - 」处拆,都不行用它报的。纯函数,selftest 覆盖。
+    public static func queueTrack(name: String, artist: String, album: String, duration: Double?, path: String,
+                                  tags: LocalAudioFileTags?) -> KasetPlayerInfo.QueueReply.Track {
+        if let tags, let id = PlayerTitleSplit.identity(from: tags) {
+            return .init(title: id.title, artist: id.artist, duration: id.duration ?? duration, videoID: nil,
+                         album: id.album.isEmpty ? album : id.album, path: path)
+        }
+        if !path.isEmpty, let id = PlayerOpenFile.fileNameIdentity(
+            reportedArtist: artist, reportedTitle: name, fileName: URL(fileURLWithPath: path).lastPathComponent,
+            duration: duration, acceptsBaseName: true) {
+            return .init(title: id.title, artist: id.artist, duration: duration, videoID: nil, album: album, path: path)
+        }
+        return .init(title: name, artist: artist, duration: duration, videoID: nil, album: album, path: path.isEmpty ? nil : path)
+    }
+
+    /// 脚本输出 → 交给引擎的队列(跟 Kaset 那份同一种回包)。当前这首按路径认;循环只报单曲循环(队列里只剩没放的,列表循环
+    /// 绕回开头之后放什么不知道,当不循环)。会读盘(每首读一次标签)。
+    public static func queueReply(fromScriptOutput data: Data,
+                                  readTags: (String) -> LocalAudioFileTags? = { LocalAudioFileTags.read(path: $0) })
+        -> KasetPlayerInfo.QueueReply? {
+        guard let out = try? JSONDecoder().decode(QueueScriptOutput.self, from: data), !out.tracks.isEmpty else { return nil }
+        let tracks = out.tracks.map { t in
+            queueTrack(name: t.name, artist: t.artist, album: t.album, duration: t.duration > 0 ? t.duration : nil,
+                       path: t.path, tags: t.path.isEmpty ? nil : readTags(t.path))
+        }
+        let current = out.current.isEmpty ? nil : out.tracks.firstIndex { $0.path == out.current }
+        return KasetPlayerInfo.QueueReply(currentIndex: current, repeating: out.repeatSingle ? "one" : "off", tracks: tracks)
+    }
+
+    /// 跑一次队列脚本。阻塞最多 `timeout`。
+    public static func queueReply(timeout: TimeInterval) -> KasetPlayerInfo.QueueReply? {
+        guard !SourceKnockout.isOut(.swinsianScript),
+              let r = ProcessRunner.run("/usr/bin/osascript", ["-l", "JavaScript", "-e", queueScript], timeout: timeout),
+              r.succeeded else { return nil }
+        return queueReply(fromScriptOutput: r.stdout)
+    }
+
     // MARK: 当前文件
 
     /// 通知或脚本最近报的那个文件,说的是播放器原样报的这一首(`rawTitle`)时才给;通知关掉了只看脚本。

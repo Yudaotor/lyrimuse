@@ -179,6 +179,69 @@ func runSwinsianTests() {
                     "Swinsian 封面: 文件里没嵌、同目录也没有,用匹配到的封面")
     }
 
+    // ---- 循环、随机、音量 ----
+    do {
+        typealias C = MusicPlaybackController
+        func parsed(_ out: String) -> String {
+            guard let r = C.swinsianControls(fromScriptOutput: out) else { return "nil" }
+            return "\(r.mode.map { "\($0)" } ?? "nil")/\(r.volume.map(String.init) ?? "nil")"
+        }
+        expectEqual(parsed("none|false|false|60.0"), "list/60", "Swinsian 模式: 都关是列表")
+        expectEqual(parsed("track shuffle|false|true|0.0"), "shuffle/0", "Swinsian 模式: 随机优先于列表循环")
+        expectEqual(parsed("album shuffle|true|false|100"), "repeatOne/100", "Swinsian 模式: 单曲循环最优先")
+        expectEqual(parsed("none|false|true|33,4"), "repeatAll/33", "Swinsian 模式: 列表循环;逗号小数的音量也认")
+        expectEqual(parsed("whatever|false|false|50"), "nil/50", "Swinsian 模式: 认不出的随机档不猜")
+        expectEqual(parsed(""), "nil", "Swinsian 模式: 没在跑")
+        expectEqual(C.swinsianModeScript(for: .repeatOne),
+                    "tell application id \"com.swinsian.Swinsian\"\nset shuffle to none\nset repeat single to true\nend tell",
+                    "Swinsian 模式: 单曲循环关随机")
+        expectEqual(C.swinsianModeScript(for: .list).contains("set repeat queue to false"), true, "Swinsian 模式: 列表把两种循环都关")
+        expectEqual([C.supportsExtendedControls(.swinsian), C.supportsRepeatOne(.swinsian), C.supportsFavorite(.swinsian)],
+                    [true, true, false], "Swinsian 模式: 有循环随机音量,没有喜欢")
+    }
+
+    // ---- 焦点被占时的播放控制 ----
+    do {
+        typealias C = MusicPlaybackController
+        func route(_ command: String) -> C.ControlRoute {
+            C.controlRoute(exclusivelyAppleMusic: false, focusFallback: nil, focusHeldElsewhere: true,
+                           directQueryFallback: .swinsian, mediaControlCommand: command)
+        }
+        expectEqual([route("toggle-play-pause"), route("next-track"), route("previous-track")],
+                    [.swinsianScript(.playPause), .swinsianScript(.nextTrack), .swinsianScript(.previousTrack)],
+                    "Swinsian 控制: 焦点被占时三个动作发它自己的脚本")
+        expectEqual(route("seek"), .withheld, "Swinsian 控制: 跳转不发(脚本只收整数秒,发给系统会落在别人身上)")
+        expectEqual(C.controlRoute(exclusivelyAppleMusic: false, focusFallback: nil, focusHeldElsewhere: false,
+                                   directQueryFallback: .swinsian, mediaControlCommand: "next-track"), .mediaControl,
+                    "Swinsian 控制: 焦点在它身上照旧走系统指令")
+        expectEqual(C.swinsianControlScript(.previousTrack), "tell application id \"com.swinsian.Swinsian\" to previous track",
+                    "Swinsian 控制: 上一首那条")
+    }
+
+    // ---- 待播队列 ----
+    do {
+        let tagged = LocalAudioFileTags(title: "Orange Moon", artist: "方大同", album: "橙月", duration: 335.6)
+        let big5 = LocalAudioFileTags(title: "ÁcÅéºq¦W´ú¸Õ", artist: "´ú¸Õºq¤â", album: "", duration: 40)
+        let a = I.queueTrack(name: "Orange Moon", artist: "方大同", album: "橙月", duration: 335, path: "/m/a.mp3", tags: tagged)
+        expectEqual([a.title, a.artist, a.album, a.path], ["Orange Moon", "方大同", "橙月", "/m/a.mp3"], "Swinsian 队列: 有标签用标签")
+        let b = I.queueTrack(name: "ÁcÅéºq¦W´ú¸Õ", artist: "´ú¸Õºq¤â", album: "", duration: 40, path: "/m/big5-a.mp3", tags: big5)
+        expectEqual([b.title, b.artist], ["繁體歌名測試", "測試歌手"], "Swinsian 队列: Big5 乱码跟放到时一样修回")
+        let c = I.queueTrack(name: "AJR - Karma", artist: "", album: "", duration: 203, path: "/m/AJR - Karma.mp3", tags: nil)
+        expectEqual([c.title, c.artist], ["Karma", "AJR"], "Swinsian 队列: 没写标签按去扩展名的文件名拆")
+        let json = #"{"tracks":[{"name":"Orange Moon","artist":"方大同","album":"橙月","duration":335,"path":"/m/a.mp3"},"#
+            + #"{"name":"红豆","artist":"王菲","album":"唱游","duration":256,"path":"/m/b.mp3"}],"current":"/m/a.mp3","repeatSingle":false}"#
+        let reply = I.queueReply(fromScriptOutput: Data(json.utf8), readTags: { _ in nil })
+        expectEqual([reply?.currentIndex.map(String.init), reply?.repeating, reply?.tracks.last?.title], ["0", "off", "红豆"],
+                    "Swinsian 队列: 当前这首按路径认,不循环")
+        let one = I.queueReply(fromScriptOutput: Data(json.replacingOccurrences(of: "\"repeatSingle\":false", with: "\"repeatSingle\":true").utf8),
+                               readTags: { _ in nil })
+        expectEqual(one?.repeating, "one", "Swinsian 队列: 单曲循环报 one(引擎不预取)")
+        expectEqual(I.queueReply(fromScriptOutput: Data("null".utf8)) == nil, true, "Swinsian 队列: 没在跑")
+        let encoded = reply.flatMap(PlayerQueryServer.encodedQueueReply) ?? ""
+        expectEqual(encoded.contains("\"path\":\"/m/b.mp3\""), true,
+                    "Swinsian 队列: 交给引擎的带上待播那个文件(键名跟 kasetqueue.go 的 path 一起改)")
+    }
+
     // ---- 接线 ----
     do {
         let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
@@ -200,6 +263,10 @@ func runSwinsianTests() {
                     true, "Swinsian 接线: 主路径的位置换成那块表,量准了标精确")
         expectEqual(sourceHas(client, "if target.bundleID == SwinsianPlayerInfo.bundleID {\nsnapshot = swinsianProbedSnapshot(probed.snapshot, anchor: probed.anchor, now: now)"),
                     true, "Swinsian 接线: 焦点被占时单问到的那份也过那块表")
+        let idle = src("lyrimuse/UI/IdlePlaybackActions.swift")
+        expectEqual(sourceHas(idle, "case .swinsian: PlayerProcess.pid(bundleID: player.bundleIdentifier) != nil")
+                    && sourceHas(idle, "ok = MusicPlaybackController.resumeSwinsianPlayback()"),
+                    true, "Swinsian 接线: 停播页开着它时给「继续播放」,发它的脚本")
         let head = src("LyrimuseCore/Local/SwinsianPlayhead.swift")
         expectEqual(sourceHas(head, "guard !SourceKnockout.isOut(.swinsianScript) else { return false }"), true,
                     "Swinsian 接线: 盯跳变能拔掉")

@@ -56,6 +56,7 @@ public final class PlayerQueryServer: @unchecked Sendable {
         case playbackMode = "playback_mode"
         case reampQueue = "reamp_queue"
         case foobarQueue = "foobar_queue"
+        case swinsianQueue = "swinsian_queue"
     }
 
     public struct Request: Codable, Equatable, Sendable {
@@ -132,6 +133,8 @@ public final class PlayerQueryServer: @unchecked Sendable {
         case reampQueue
         /// foobar2000 落盘的播放列表里含着当前文件的那一份,连同菜单里的档(`FoobarPlaylist`)。
         case foobarQueue
+        /// Swinsian 的播放队列(从当前这首起),整理成跟 Kaset 同一种回包(`SwinsianPlayerInfo.queueReply`)。
+        case swinsianQueue
     }
 
     public enum Decision: Equatable, Sendable {
@@ -187,6 +190,8 @@ public final class PlayerQueryServer: @unchecked Sendable {
             return .run(.reampQueue)
         case .foobarQueue:
             return .run(.foobarQueue)
+        case .swinsianQueue:
+            return .run(.swinsianQueue)
         }
     }
 
@@ -484,6 +489,9 @@ public final class PlayerQueryServer: @unchecked Sendable {
             return makeReply(id: id, output: ReampPlaylist.queueReply().flatMap { Self.encodedReply($0) }, error: "playlist unavailable")
         case .foobarQueue:
             return makeReply(id: id, output: FoobarPlaylist.queueReply().flatMap { Self.encodedReply($0) }, error: "playlist unavailable")
+        case .swinsianQueue:
+            return makeReply(id: id, output: SwinsianPlayerInfo.queueReply(timeout: Self.scriptTimeout).flatMap(Self.encodedQueueReply),
+                             error: "queue unavailable")
         }
     }
 

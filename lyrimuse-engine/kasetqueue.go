@@ -25,6 +25,8 @@ type kasetQueueReply struct {
 		AudioVideoID string  `json:"audio_video_id"`
 		// Album:Kaset 的队列不给;Pear Desktop 的队列从署名串里取(App 侧 PearDesktopAPI.queueReply)。
 		Album string `json:"album"`
+		// Path:放本地文件的 Swinsian 给(待播那个文件,解析时按它读本地歌词、文件里的曲目 id);Kaset、Pear 没有。
+		Path string `json:"path"`
 	} `json:"tracks"`
 }
 
@@ -145,7 +147,8 @@ func parseKasetQueue(out, artist, title string, n int) ([]upcomingTrack, bool) {
 		if t.Title == "" || t.Artist == "" {
 			continue
 		}
-		res = append(res, upcomingTrack{artist: t.Artist, title: t.Title, album: t.Album, duration: t.Duration, videoID: t.VideoID})
+		res = append(res, upcomingTrack{artist: t.Artist, title: t.Title, album: t.Album, duration: t.Duration, videoID: t.VideoID,
+			path: t.Path})
 	}
 	return res, true
 }
