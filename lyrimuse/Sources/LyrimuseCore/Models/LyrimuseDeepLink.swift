@@ -165,10 +165,11 @@ public enum LyrimuseDeepLink: Equatable, Sendable {
         case notchQuickActions(layout: String)
         /// 设置页灵动岛预览摆成哪一态,不用指针悬停:`debug/notch-preview?state=expanded|collapsed|auto`(`auto` = 交还给指针)。
         case notchPreview(state: String)
-        /// 悬浮歌词的宽度(pt,按设置的区间夹取、量化)、「换句动画」和下一句字号占主句的比例(按设置的区间夹取),
-        /// 跟设置页走同四个设置:`debug/overlay-layout?width=1270&line-change=0|1&next-line=0.7&overflow=wrap|scroll`,
+        /// 悬浮歌词的宽度(pt,按设置的区间夹取、量化)、「换句动画」、下一句字号占主句的比例(按设置的区间夹取)、长句处理和下一句排法,
+        /// 跟设置页走同五个设置:`debug/overlay-layout?width=1270&line-change=0|1&next-line=0.7&overflow=wrap|scroll&next-arrangement=below|alternate`,
         /// 至少带一个。
-        case overlayLayout(width: Double?, lineChange: Bool?, nextLine: Double? = nil, overflow: OverlayLineOverflow? = nil)
+        case overlayLayout(width: Double?, lineChange: Bool?, nextLine: Double? = nil, overflow: OverlayLineOverflow? = nil,
+                           nextArrangement: OverlayNextLineArrangement? = nil)
         /// 把标题为 `title` 的那扇 App 窗口挪到 (x, y):全局坐标、左上角原点(同 `check-windows.swift` 打印的),不改大小、
         /// 不激活。`debug/move-window?title=搜索歌词…&x=-200&y=-1200`:把预览会停表的窗口挪到没被盖住的屏上再录帧。
         case moveWindow(title: String, x: Double, y: Double)
@@ -400,8 +401,10 @@ public enum LyrimuseDeepLink: Equatable, Sendable {
             let lineChange = value("line-change").flatMap(Self.parseBool)
             let nextLine = value("next-line").flatMap(Double.init).flatMap { $0.isFinite && $0 > 0 ? $0 : nil }
             let overflow = value("overflow").flatMap(OverlayLineOverflow.init(rawValue:))
-            guard width != nil || lineChange != nil || nextLine != nil || overflow != nil else { return nil }
-            self = .debug(.overlayLayout(width: width, lineChange: lineChange, nextLine: nextLine, overflow: overflow))
+            let arrangement = value("next-arrangement").flatMap(OverlayNextLineArrangement.init(rawValue:))
+            guard width != nil || lineChange != nil || nextLine != nil || overflow != nil || arrangement != nil else { return nil }
+            self = .debug(.overlayLayout(width: width, lineChange: lineChange, nextLine: nextLine, overflow: overflow,
+                                         nextArrangement: arrangement))
         case ("debug", "/notch-style"):
             let style = value("style").flatMap { $0.isEmpty ? nil : $0 }
             let expanded = value("expanded").flatMap { $0.isEmpty ? nil : $0 }
@@ -630,13 +633,14 @@ public enum LyrimuseDeepLink: Equatable, Sendable {
                 components.path = "/move-window"
                 components.queryItems = [URLQueryItem(name: "title", value: title),
                                          URLQueryItem(name: "x", value: String(x)), URLQueryItem(name: "y", value: String(y))]
-            case let .overlayLayout(width, lineChange, nextLine, overflow):
+            case let .overlayLayout(width, lineChange, nextLine, overflow, arrangement):
                 components.path = "/overlay-layout"
                 var items: [URLQueryItem] = []
                 if let width { items.append(URLQueryItem(name: "width", value: String(width))) }
                 if let lineChange { items.append(URLQueryItem(name: "line-change", value: lineChange ? "1" : "0")) }
                 if let nextLine { items.append(URLQueryItem(name: "next-line", value: String(nextLine))) }
                 if let overflow { items.append(URLQueryItem(name: "overflow", value: overflow.rawValue)) }
+                if let arrangement { items.append(URLQueryItem(name: "next-arrangement", value: arrangement.rawValue)) }
                 components.queryItems = items
             case let .notchStyle(style, expanded):
                 components.path = "/notch-style"

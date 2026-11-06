@@ -339,6 +339,7 @@ final class AppSettings: ObservableObject {
         static let overlayDuetAlignmentOverride = "np:overlayDuetAlignmentOverride"
         static let overlayLineOverflow = "np:overlayLineOverflow"
         static let overlayLineChangeAnimation = "np:overlayLineChangeAnimation"
+        static let overlayNextLineArrangement = "np:overlayNextLineArrangement"
         static let overlayRomanizationSpacing = "np:overlayRomanizationSpacing"
         static let overlayTranslationSpacing = "np:overlayTranslationSpacing"
         static let overlayNextLineSpacing = "np:overlayNextLineSpacing"
@@ -1103,6 +1104,10 @@ final class AppSettings: ObservableObject {
     /// 悬浮歌词换句时,下一句从它的位置移到当前行(仿 LyricsX)。只有 `LyricsOverlayView` 读它,见 04 章决策 52。
     @Published var overlayLineChangeAnimation: Bool {
         didSet { defaults.set(overlayLineChangeAnimation, forKey: Keys.overlayLineChangeAnimation) }
+    }
+    /// 悬浮歌词的下一句跟在下面,还是跟当前句上下交替(见 `OverlayNextLineArrangement`)。只有 `LyricsOverlayView` 读它。
+    @Published var overlayNextLineArrangement: OverlayNextLineArrangement {
+        didSet { defaults.set(overlayNextLineArrangement.rawValue, forKey: Keys.overlayNextLineArrangement) }
     }
     /// 悬浮歌词卡片里读音 / 译文 / 下一句各自离上一行多远(pt)。存原值,读的地方夹回范围,见 `OverlayRowSpacing`。
     @Published var overlayRomanizationSpacing: Double {
@@ -2637,6 +2642,8 @@ final class AppSettings: ObservableObject {
             .flatMap(OverlayLineOverflow.init(rawValue:)) ?? .wrap
         // 默认关:换句一直是直接换掉,升级上来的人看到的不变。
         overlayLineChangeAnimation = (defaults.object(forKey: Keys.overlayLineChangeAnimation) as? Bool) ?? false
+        overlayNextLineArrangement = defaults.string(forKey: Keys.overlayNextLineArrangement)
+            .flatMap(OverlayNextLineArrangement.init(rawValue:)) ?? .below
         overlayRomanizationSpacing = (defaults.object(forKey: Keys.overlayRomanizationSpacing) as? Double)
             ?? OverlayRowSpacing.defaultValue
         overlayTranslationSpacing = (defaults.object(forKey: Keys.overlayTranslationSpacing) as? Double)

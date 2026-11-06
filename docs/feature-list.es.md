@@ -40,6 +40,7 @@ Estas funciones siguen desactivadas después de instalar. Actívalas primero en 
 | [Ocultar la ventana mini en pausa o pantalla completa](#feature-mini-window-auto-hide) | Ajustes › Mostrar letra › Ventana de letra › Comportamiento › Ocultar en pausa |
 | [Fondo de Spotify Canvas](#feature-spotify-canvas) | Ajustes › Mostrar letra › Ventana de letra › Fondo › Spotify Canvas |
 | [Transición de líneas](#feature-line-transition) | Ajustes › Mostrar letra › Letra flotante › Diseño › Transición de líneas |
+| [Dos líneas alternas](#feature-alternate-next-line) | Ajustes › Mostrar letra › Letra flotante › Contenido › Disposición de la línea siguiente |
 | [Atenuar al pasar el puntero](#feature-fade-on-hover) | Ajustes › Mostrar letra › Letra flotante › Comportamiento › Atenuar al pasar el puntero |
 | [Bloquear posición, mantener pulsado para arrastrar](#feature-lock-position) | Ajustes › Mostrar letra › Letra flotante › Comportamiento › Bloquear posición |
 | [Ocultar en capturas, grabaciones y pantalla compartida](#feature-hide-in-screenshots) | Ajustes › Mostrar letra › Letra flotante › Comportamiento › Ocultar en capturas |
@@ -419,6 +420,15 @@ Cuando la letra flotante pasa a la siguiente línea, la anterior sale hacia arri
 
 - Desactivada por omisión
 - Ajustes: Mostrar letra › Letra flotante › Diseño › Transición de líneas
+
+<a id="feature-alternate-next-line"></a>
+
+### Dos líneas alternas
+
+La letra flotante puede mostrar también la línea siguiente al mismo tamaño, una a la izquierda y otra a la derecha, por turnos como el karaoke de escritorio clásico: la línea ya cantada se sustituye por la que va después de la siguiente y la que se está cantando no se mueve.
+
+- Desactivada por omisión
+- Ajustes: Mostrar letra › Letra flotante › Contenido › Disposición de la línea siguiente
 
 <a id="feature-fade-on-hover"></a>
 
@@ -890,7 +900,7 @@ Como máximo una vez al día, envía al servidor del propio autor la versión, e
 
 ## Todos los ajustes
 
-Todos los ajustes de la ventana Ajustes, según dónde están: 313 en total. Escribe un nombre en el campo de búsqueda de la parte superior de la barra lateral de Ajustes para ir directamente a él.
+Todos los ajustes de la ventana Ajustes, según dónde están: 314 en total. Escribe un nombre en el campo de búsqueda de la parte superior de la barra lateral de Ajustes para ir directamente a él.
 
 ### Letra › Fuente
 
@@ -1007,6 +1017,7 @@ Todos los ajustes de la ventana Ajustes, según dónde están: 313 en total. Esc
 - **Romanización**
 - **Traducción**
 - **Línea siguiente**
+- **Disposición de la línea siguiente**: Alternar: las dos líneas al mismo tamaño, una a la izquierda y otra a la derecha; la que se acaba de cantar pasa a la que va después de la siguiente. Se ocultan la traducción y la romanización de línea; los duetos se muestran como siempre
 
 ### Mostrar letra › Letra flotante › Diseño
 

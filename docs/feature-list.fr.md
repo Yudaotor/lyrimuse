@@ -40,6 +40,7 @@ Ces fonctionnalités restent désactivées après l’installation. Activez-les 
 | [Fenêtre mini masquée en pause ou en plein écran](#feature-mini-window-auto-hide) | Réglages › Affichage des paroles › Fenêtre des paroles › Comportement › Masquer en pause |
 | [Fond Spotify Canvas](#feature-spotify-canvas) | Réglages › Affichage des paroles › Fenêtre des paroles › Fond › Spotify Canvas |
 | [Transition des lignes](#feature-line-transition) | Réglages › Affichage des paroles › Paroles flottantes › Disposition › Transition des lignes |
+| [Deux lignes en alternance](#feature-alternate-next-line) | Réglages › Affichage des paroles › Paroles flottantes › Contenu › Disposition de la ligne suivante |
 | [Estomper au survol](#feature-fade-on-hover) | Réglages › Affichage des paroles › Paroles flottantes › Comportement › Estomper au survol |
 | [Verrouiller la position, maintenir pour déplacer](#feature-lock-position) | Réglages › Affichage des paroles › Paroles flottantes › Comportement › Verrouiller la position |
 | [Masquées dans les captures et le partage d’écran](#feature-hide-in-screenshots) | Réglages › Affichage des paroles › Paroles flottantes › Comportement › Masquer dans les captures |
@@ -419,6 +420,15 @@ Quand les paroles flottantes passent à la ligne suivante, l’ancienne glisse v
 
 - Désactivée par défaut
 - Réglages : Affichage des paroles › Paroles flottantes › Disposition › Transition des lignes
+
+<a id="feature-alternate-next-line"></a>
+
+### Deux lignes en alternance
+
+Les paroles flottantes peuvent afficher la ligne suivante à la même taille, l’une à gauche, l’autre à droite, à tour de rôle comme le karaoké de bureau classique : la ligne chantée laisse place à celle d’après, et la ligne en cours ne bouge pas.
+
+- Désactivée par défaut
+- Réglages : Affichage des paroles › Paroles flottantes › Contenu › Disposition de la ligne suivante
 
 <a id="feature-fade-on-hover"></a>
 
@@ -890,7 +900,7 @@ Au plus une fois par jour, envoie la version, macOS, les fonctions activées et 
 
 ## Tous les réglages
 
-Tous les réglages de la fenêtre Réglages, classés par emplacement : 313 au total. Tapez un nom dans le champ de recherche en haut de la barre latérale des Réglages pour y aller directement.
+Tous les réglages de la fenêtre Réglages, classés par emplacement : 314 au total. Tapez un nom dans le champ de recherche en haut de la barre latérale des Réglages pour y aller directement.
 
 ### Paroles › Source
 
@@ -1007,6 +1017,7 @@ Tous les réglages de la fenêtre Réglages, classés par emplacement : 313 au 
 - **Romanisation**
 - **Traduction**
 - **Ligne suivante**
+- **Disposition de la ligne suivante** : Alterner : deux lignes de même taille, l’une à gauche, l’autre à droite ; la ligne chantée laisse place à celle d’après. La traduction et la romanisation de ligne sont masquées ; les duos gardent la disposition habituelle
 
 ### Affichage des paroles › Paroles flottantes › Disposition
 

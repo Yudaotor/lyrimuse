@@ -2355,8 +2355,8 @@ func runSourceContractSurfaceTests() {
         if let view = read("UI/LyricsOverlayView.swift") {
             // 换句动画(样子见 04 章决策 52,做法见 04 章决策 54):开关关着、或开了「减弱动态效果」时不用舞台;开着时两格交给
             // OverlayLineChangeStage,位移、放大、淡入淡出由它装 Core Animation 动画,卡片上不挂 SwiftUI 的配对 / 过渡动画。
-            expectEqual(view.contains("private var animatesLineChange: Bool { playback.lineChangeAnimation && !reduceMotion }")
-                        && sourceHas(view, "            if animatesLineChange {\n                lineChangeRows\n            } else {")
+            expectEqual(sourceHas(sourceBody("private var animatesLineChange: Bool", in: view), "playback.lineChangeAnimation && !reduceMotion")
+                        && sourceHas(view, "            if animatesLineChange {\n                lineChangeRows\n            } else if let alternate = alternatePlacement {")
                         && view.contains("OverlayLineChangeStage(")
                         && view.contains("private var nextSlotID: String { \"line\\((playback.lineIndex ?? -1) + 1)\" }")
                         && !view.contains("matchedGeometryEffect")
@@ -2373,7 +2373,7 @@ func runSourceContractSurfaceTests() {
                 expectEqual(stage.contains("layer.add(Self.fade(from: Float(riseStartOpacity), to: 1, duration: OverlayLineRise.duration,")
                             && !stage.contains("lineCrossfade")
                             && view.contains("riseStartOpacity: OverlayLineRise.startOpacity(")
-                            && view.contains("let color = playback.displayForegroundColor.opacity(OverlayLineRise.previewOpacity)"), true,
+                            && view.contains(": playback.displayForegroundColor.opacity(OverlayLineRise.previewOpacity)"), true,
                             "悬浮换句动画: 走上来的那一句按预览的亮度起步、边走边变实,不跟旧下一句交叉淡化")
                 // 主句下面的读音、译文跟主句同一个变换走上来,另外从透明渐显(起步时常在窗口底边以外,整块实着走会露出被裁掉的半截);
                 // 上一拍下一句那一格本来就带着它们(前奏 / 间奏)时不渐显。

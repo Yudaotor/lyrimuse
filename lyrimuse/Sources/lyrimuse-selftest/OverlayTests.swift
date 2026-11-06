@@ -8,6 +8,42 @@ import Foundation
 @MainActor
 func runOverlayTests() {
     checkOverlayFullScreenHide()
+    // ---- 下一句上下交替:当前句按下标奇偶占上下两行,对唱 / 没有当前句 / 没有下一句时照常排(04 章决策 89) ----
+    do {
+        typealias A = OverlayNextLineArrangement
+        func place(_ arrangement: A = .alternate, shows: Bool = true, index: Int? = 0, hasLine: Bool = true,
+                   hasNext: Bool = true, side: LyricDuet.Side? = nil, nextSide: LyricDuet.Side? = nil) -> A.AlternatePlacement? {
+            A.alternatePlacement(arrangement: arrangement, showsNextLine: shows, lineIndex: index, hasLine: hasLine,
+                                 hasNextLine: hasNext, currentSide: side, nextSide: nextSide)
+        }
+        expectEqual(place(index: 0), A.AlternatePlacement(currentOnTop: true), "上下交替: 第 0 句在上一行")
+        expectEqual(place(index: 1), A.AlternatePlacement(currentOnTop: false), "上下交替: 第 1 句在下一行")
+        expectEqual(place(index: 6)?.currentOnTop, true, "上下交替: 偶数句在上一行")
+        expectEqual(place(index: 7)?.currentOnTop, false, "上下交替: 奇数句在下一行")
+        expectEqual([place(index: 0)?.currentSide, place(index: 0)?.nextSide], [.leading, .trailing],
+                    "上下交替: 上一行靠左、下一行靠右")
+        expectEqual([place(index: 1)?.currentSide, place(index: 1)?.nextSide], [.trailing, .leading],
+                    "上下交替: 当前句在下一行时靠右,下一句在上一行靠左")
+        expectEqual(place(.below), nil, "上下交替: 排法选「跟在下面」照常排")
+        expectEqual(place(shows: false), nil, "上下交替: 下一句关着照常排")
+        expectEqual(place(index: nil), nil, "上下交替: 没有当前句下标照常排")
+        expectEqual(place(hasLine: false), nil, "上下交替: 前奏 / 间奏没有当前句照常排")
+        expectEqual(place(hasNext: false), nil, "上下交替: 最后一句没有下一句照常排")
+        expectEqual(place(side: .leading), nil, "上下交替: 当前句有声部(对唱)照常排")
+        expectEqual(place(nextSide: .center), nil, "上下交替: 下一句有声部(对唱)照常排")
+        expectEqual(place(index: -1), nil, "上下交替: 下标是负数照常排")
+
+        let src = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+        let view = (try? String(contentsOf: src.appendingPathComponent("lyrimuse/UI/LyricsOverlayView.swift"), encoding: .utf8)) ?? ""
+        expectEqual(sourceHas(sourceBody("private var nextLinePreviewFont: Font", in: view),
+                              "if alternatePlacement != nil { return playback.mainFont }"), true,
+                    "上下交替(契约): 下一句用主字号,开唱时只换颜色")
+        expectEqual(sourceHas(sourceBody("private var animatesLineChange: Bool", in: view),
+                              "!(playback.showNextLinePreview && playback.nextLineArrangement == .alternate)"), true,
+                    "上下交替(契约): 交替开着时不做换句动画")
+        expectEqual(sourceHas(view, "private var translationRowText: String? { alternatePlacement == nil ? rowPlan.translation?.text : nil }"),
+                    true, "上下交替(契约): 交替时不显示译文")
+    }
     // ---- GapDotsCurve.opacityKeyframes:间奏三点交给 Core Animation 的亮度关键帧 ----
     do {
         let start = 10_000, end = 22_000

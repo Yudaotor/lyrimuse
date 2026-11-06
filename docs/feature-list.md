@@ -40,6 +40,7 @@ These features stay off after you install. Turn them on in Settings first (some 
 | [Mini window hides when paused or in full screen](#feature-mini-window-auto-hide) | Settings › Lyrics Display › Lyrics Window › Behavior › Hide When Paused |
 | [Spotify Canvas background](#feature-spotify-canvas) | Settings › Lyrics Display › Lyrics Window › Background › Spotify Canvas |
 | [Line transition](#feature-line-transition) | Settings › Lyrics Display › Floating Lyrics › Layout › Line Transition |
+| [Alternating two-line layout](#feature-alternate-next-line) | Settings › Lyrics Display › Floating Lyrics › Content › Next Line Layout |
 | [Fade when the pointer is over it](#feature-fade-on-hover) | Settings › Lyrics Display › Floating Lyrics › Behavior › Fade on Hover |
 | [Lock position, long-press to drag](#feature-lock-position) | Settings › Lyrics Display › Floating Lyrics › Behavior › Lock Position |
 | [Hidden from screenshots and screen sharing](#feature-hide-in-screenshots) | Settings › Lyrics Display › Floating Lyrics › Behavior › Hide in Screenshots |
@@ -419,6 +420,15 @@ When floating lyrics move to the next line, the old line slides up and the new o
 
 - Off by default
 - Settings: Lyrics Display › Floating Lyrics › Layout › Line Transition
+
+<a id="feature-alternate-next-line"></a>
+
+### Alternating two-line layout
+
+Floating lyrics can show the next line at full size, one line on the left and one on the right, taking turns like classic desktop karaoke lyrics: the line just sung is replaced by the one after next, and the line being sung stays put.
+
+- Off by default
+- Settings: Lyrics Display › Floating Lyrics › Content › Next Line Layout
 
 <a id="feature-fade-on-hover"></a>
 
@@ -890,7 +900,7 @@ At most once a day, sends the version, macOS, which features are on and crash su
 
 ## Every setting
 
-Every setting in the Settings window, by where it lives: 313 in all. Type a name into the search field at the top of the Settings sidebar to jump straight to it.
+Every setting in the Settings window, by where it lives: 314 in all. Type a name into the search field at the top of the Settings sidebar to jump straight to it.
 
 ### Lyrics › Source
 
@@ -1007,6 +1017,7 @@ Every setting in the Settings window, by where it lives: 313 in all. Type a name
 - **Romanization**
 - **Translation**
 - **Next Line**
+- **Next Line Layout**: Alternate: both lines at the same size, one on the left and one on the right; the line just sung becomes the one after next. Translation and line romanization are hidden; duets keep the usual layout
 
 ### Lyrics Display › Floating Lyrics › Layout
 

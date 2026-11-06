@@ -262283,6 +262283,362 @@
           }
         }
       }
+    },
+    "下一句排法" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Anordnung der nächsten Zeile"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Next Line Layout"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Disposición de la línea siguiente"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Disposition de la ligne suivante"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Disposizione riga successiva"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "次の行の配置"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "다음 줄 배치"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Disposição da próxima linha"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Расположение следующей строки"
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "การจัดวางบรรทัดถัดไป"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Розташування наступного рядка"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bố cục dòng tiếp theo"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "下一句排法"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "下一句排法"
+          }
+        }
+      }
+    },
+    "跟在下面" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Darunter"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Below"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Debajo"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "En dessous"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sotto"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "下に表示"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "아래에"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Abaixo"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Снизу"
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ด้านล่าง"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Знизу"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bên dưới"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "跟在下面"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "跟在下面"
+          }
+        }
+      }
+    },
+    "上下交替" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Abwechselnd"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Alternate"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Alternar"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Alterner"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Alternate"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "交互"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "번갈아"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Alternar"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Поочерёдно"
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "สลับกัน"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Почергово"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Xen kẽ"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "上下交替"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "上下交替"
+          }
+        }
+      }
+    },
+    "上下交替：两句一样大，一左一右轮流唱，唱完的那句换成再下一句；不显示译文和整行读音，对唱时照常排" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Abwechselnd: Beide Zeilen gleich groß, eine links, eine rechts; die gesungene Zeile wird durch die übernächste ersetzt. Übersetzung und Zeilen-Umschrift werden ausgeblendet; Duette bleiben wie gewohnt"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Alternate: both lines at the same size, one on the left and one on the right; the line just sung becomes the one after next. Translation and line romanization are hidden; duets keep the usual layout"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Alternar: las dos líneas al mismo tamaño, una a la izquierda y otra a la derecha; la que se acaba de cantar pasa a la que va después de la siguiente. Se ocultan la traducción y la romanización de línea; los duetos se muestran como siempre"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Alterner : deux lignes de même taille, l’une à gauche, l’autre à droite ; la ligne chantée laisse place à celle d’après. La traduction et la romanisation de ligne sont masquées ; les duos gardent la disposition habituelle"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Alternate: due righe della stessa dimensione, una a sinistra e una a destra; la riga appena cantata lascia il posto a quella dopo la successiva. Traduzione e pronuncia di riga sono nascoste; i duetti restano come sempre"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "交互：2行を同じ大きさで左右交互に表示し、歌い終えた行はその次の行に入れ替わります。翻訳と行ごとのローマ字は表示せず、デュエットはいつもの配置です"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "번갈아: 두 줄을 같은 크기로 왼쪽과 오른쪽에 번갈아 표시하고, 다 부른 줄은 그다음 줄로 바뀝니다. 번역과 줄 단위 로마자 표기는 숨기며, 듀엣은 평소처럼 배치합니다"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Alternar: as duas linhas no mesmo tamanho, uma à esquerda e outra à direita; a linha já cantada dá lugar à que vem depois da próxima. A tradução e a pronúncia da linha ficam ocultas; duetos mantêm o layout de sempre"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Поочерёдно: обе строки одного размера, одна слева, другая справа; спетая строка сменяется строкой через одну. Перевод и произношение строки скрыты; дуэты показываются как обычно"
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "สลับกัน: สองบรรทัดขนาดเท่ากัน บรรทัดหนึ่งชิดซ้าย อีกบรรทัดชิดขวา บรรทัดที่ร้องจบจะเปลี่ยนเป็นบรรทัดถัดจากบรรทัดถัดไป ซ่อนคำแปลและการออกเสียงทั้งบรรทัด เพลงร้องคู่ยังแสดงตามปกติ"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Почергово: обидва рядки однакового розміру, один ліворуч, інший праворуч; заспіваний рядок змінюється рядком через один. Переклад і вимову рядка приховано; дуети показуються як зазвичай"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Xen kẽ: hai dòng cùng cỡ, một bên trái một bên phải; dòng vừa hát xong được thay bằng dòng sau dòng kế tiếp. Ẩn bản dịch và phát âm cả dòng; bài song ca vẫn hiển thị như thường"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "上下交替：两句一样大，一左一右轮流唱，唱完的那句换成再下一句；不显示译文和整行读音，对唱时照常排"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "上下交替：兩句一樣大，一左一右輪流唱，唱完的那句換成再下一句；不顯示譯文和整行讀音，對唱時照常排"
+          }
+        }
+      }
     }
   },
   "version" : "1.0"

@@ -448,6 +448,7 @@ public enum SettingsSearchCatalog {
         surface(.overlay, "读音", kw: ["罗马音", "罗马字", "注音", "拼音", "粤拼", "发音", "显示读音"], group: "内容"),
         surface(.overlay, "译文", kw: ["翻译", "显示译文"], group: "内容"),
         surface(.overlay, "下一句", kw: ["双行显示", "双行歌词", "两行", "副行"], group: "内容"),
+        surface(.overlay, "下一句排法", kw: ["交替", "上下交替", "双行交替", "左右交替", "千千静听", "KTV", "桌面歌词"], group: "内容"),
         surface(.overlay, "对齐方式", kw: ["居中", "左对齐", "右对齐"], group: "排版"),
         surface(.overlay, "长句处理", kw: ["换行", "滚动", "跑马灯", "折行", "长句", "太长"], group: "排版"),
         surface(.overlay, "换句动画", kw: ["动画", "过渡", "换行动画", "上移", "LyricsX"], group: "排版"),

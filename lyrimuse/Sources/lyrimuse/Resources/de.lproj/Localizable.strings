@@ -297,6 +297,8 @@
 "上一页" = "Vorherige";
 "上一首" = "Vorheriger Titel";
 "上一首、播放/暂停、下一首和设置按钮" = "Zurück, Wiedergabe/Pause und Weiter, plus eine Einstellungstaste";
+"上下交替" = "Abwechselnd";
+"上下交替：两句一样大，一左一右轮流唱，唱完的那句换成再下一句；不显示译文和整行读音，对唱时照常排" = "Abwechselnd: Beide Zeilen gleich groß, eine links, eine rechts; die gesungene Zeile wird durch die übernächste ersetzt. Übersetzung und Zeilen-Umschrift werden ausgeblendet; Duette bleiben wie gewohnt";
 "上屏" = "Angezeigt";
 "上屏延迟" = "Anzeigeverzögerung";
 "上方的「Scrobble 到 Last.fm」已关闭，此处设置暂不生效" = "„An Last.fm scrobbeln“ oben ist aus, daher wirken diese Einstellungen derzeit nicht";
@@ -321,6 +323,7 @@
 "下一个里程碑" = "Nächster Meilenstein";
 "下一句" = "Nächste Zeile";
 "下一句大小" = "Größe nächste Zeile";
+"下一句排法" = "Anordnung der nächsten Zeile";
 "下一句间距" = "Abstand nächste Zeile";
 "下一步" = "Weiter";
 "下一页" = "Nächste";
@@ -2634,6 +2637,7 @@
 "超薄" = "Ultradünn";
 "足迹" = "Spuren";
 "跟上一期比的涨跌，如「↑12%」" = "Veränderung zum vorherigen Zeitraum, z. B. „↑12%“";
+"跟在下面" = "Darunter";
 "跟随「全部播放器」" = "Folgt „Alle Player“";
 "跟随「全部播放器」：%@" = "Folgt „Alle Player“: %@";
 "跟随刘海" = "Wie Notch";

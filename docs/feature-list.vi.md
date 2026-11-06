@@ -40,6 +40,7 @@ Các tính năng này tắt sau khi cài. Hãy bật chúng trong cài đặt tr
 | [Cửa sổ mini ẩn khi tạm dừng hoặc toàn màn hình](#feature-mini-window-auto-hide) | Cài đặt › Hiển thị lời › Cửa sổ lời › Hành vi › Ẩn khi tạm dừng |
 | [Nền Spotify Canvas](#feature-spotify-canvas) | Cài đặt › Hiển thị lời › Cửa sổ lời › Nền › Spotify Canvas |
 | [Hiệu ứng chuyển dòng](#feature-line-transition) | Cài đặt › Hiển thị lời › Lời nổi › Bố cục › Hiệu ứng chuyển dòng |
+| [Hai dòng xen kẽ](#feature-alternate-next-line) | Cài đặt › Hiển thị lời › Lời nổi › Nội dung › Bố cục dòng tiếp theo |
 | [Mờ đi khi con trỏ ở trên](#feature-fade-on-hover) | Cài đặt › Hiển thị lời › Lời nổi › Hành vi › Làm mờ khi di chuột qua |
 | [Khóa vị trí, nhấn giữ để kéo](#feature-lock-position) | Cài đặt › Hiển thị lời › Lời nổi › Hành vi › Khóa vị trí |
 | [Ẩn khỏi ảnh chụp màn hình và chia sẻ màn hình](#feature-hide-in-screenshots) | Cài đặt › Hiển thị lời › Lời nổi › Hành vi › Ẩn khi chụp màn hình |
@@ -419,6 +420,15 @@ Khi lời nổi chuyển sang dòng tiếp theo, dòng cũ trượt lên và dò
 
 - Tắt theo mặc định
 - Cài đặt: Hiển thị lời › Lời nổi › Bố cục › Hiệu ứng chuyển dòng
+
+<a id="feature-alternate-next-line"></a>
+
+### Hai dòng xen kẽ
+
+Lời nổi có thể hiển thị cả dòng tiếp theo với cùng cỡ chữ, một bên trái một bên phải, luân phiên như lời karaoke trên máy tính kiểu cũ: dòng vừa hát xong được thay bằng dòng sau đó, dòng đang hát giữ nguyên.
+
+- Tắt theo mặc định
+- Cài đặt: Hiển thị lời › Lời nổi › Nội dung › Bố cục dòng tiếp theo
 
 <a id="feature-fade-on-hover"></a>
 
@@ -890,7 +900,7 @@ Tối đa một lần mỗi ngày, Lyrimuse gửi phiên bản, macOS, các tín
 
 ## Toàn bộ cài đặt
 
-Toàn bộ mục trong cửa sổ Cài đặt, theo vị trí: tổng cộng 313 mục. Gõ tên vào ô tìm kiếm ở đầu thanh bên của Cài đặt để đi thẳng tới mục đó.
+Toàn bộ mục trong cửa sổ Cài đặt, theo vị trí: tổng cộng 314 mục. Gõ tên vào ô tìm kiếm ở đầu thanh bên của Cài đặt để đi thẳng tới mục đó.
 
 ### Lời bài hát › Nguồn
 
@@ -1007,6 +1017,7 @@ Toàn bộ mục trong cửa sổ Cài đặt, theo vị trí: tổng cộng 313
 - **Phát âm**
 - **Bản dịch**
 - **Dòng tiếp theo**
+- **Bố cục dòng tiếp theo**: Xen kẽ: hai dòng cùng cỡ, một bên trái một bên phải; dòng vừa hát xong được thay bằng dòng sau dòng kế tiếp. Ẩn bản dịch và phát âm cả dòng; bài song ca vẫn hiển thị như thường
 
 ### Hiển thị lời › Lời nổi › Bố cục
 

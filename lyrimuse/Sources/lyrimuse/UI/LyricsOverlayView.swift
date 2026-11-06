@@ -98,6 +98,8 @@ private final class OverlayPlayback: ObservableObject {
     @Published private(set) var showNextLinePreview = true
     /// 换句动画(见 AppSettings.overlayLineChangeAnimation)。
     @Published private(set) var lineChangeAnimation = false
+    /// 下一句跟在下面还是上下交替(见 `OverlayNextLineArrangement`)。
+    @Published private(set) var nextLineArrangement: OverlayNextLineArrangement = .below
     @Published private(set) var duetAlignmentOverride: OverlayDuetAlignmentOverride = .automatic
     /// 一行放不下时换行还是滚动(见 `OverlayLineOverflow`)。
     @Published private(set) var lineOverflow: OverlayLineOverflow = .wrap
@@ -238,6 +240,7 @@ private final class OverlayPlayback: ObservableObject {
             s.$overlayShowTranslation.removeDuplicates().sink { [weak self] in self?.showTranslation = $0 },
             s.$showNextLinePreview.removeDuplicates().sink { [weak self] in self?.showNextLinePreview = $0 },
             s.$overlayLineChangeAnimation.removeDuplicates().sink { [weak self] in self?.lineChangeAnimation = $0 },
+            s.$overlayNextLineArrangement.removeDuplicates().sink { [weak self] in self?.nextLineArrangement = $0 },
             s.$overlayDuetAlignmentOverride.removeDuplicates().sink { [weak self] in self?.duetAlignmentOverride = $0 },
             s.$overlayLineOverflow.removeDuplicates().sink { [weak self] in self?.lineOverflow = $0 },
             Publishers.CombineLatest3(s.$overlayRomanizationSpacing, s.$overlayTranslationSpacing, s.$overlayNextLineSpacing)
@@ -728,7 +731,20 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
     /// 不要把这个值传进 duetInsets —— 那里要的是"对唱留白按哪个声部算",跟"往哪边对齐"是两件事,
     /// 非自动模式下留白必须归零(见 `OverlayDuetAlignmentOverride.effectiveDecorationSide`)。
     private var duetSide: LyricDuet.Side {
-        playback.duetAlignmentOverride.effectiveAlignmentSide(realSide: line?.side)
+        if let alternate = alternatePlacement { return alternate.currentSide }
+        return playback.duetAlignmentOverride.effectiveAlignmentSide(realSide: line?.side)
+    }
+
+    /// 上下交替这一刻怎么摆(04 章决策 89);nil = 下一句照常跟在下面。设置页示例行按第一句摆(当前句在上)。
+    /// 「对齐方式」不是「自动」时不按声部分左右,两句的声部不算对唱。
+    private var alternatePlacement: OverlayNextLineArrangement.AlternatePlacement? {
+        let bySide = playback.duetAlignmentOverride == .automatic
+        return OverlayNextLineArrangement.alternatePlacement(
+            arrangement: playback.nextLineArrangement, showsNextLine: playback.showNextLinePreview,
+            lineIndex: showingPreviewLine ? 0 : playback.lineIndex,
+            hasLine: line != nil, hasNextLine: nextLineText != nil,
+            currentSide: bySide ? line?.side : nil,
+            nextSide: bySide && !showingPreviewLine ? playback.nextLineSide : nil)
     }
 
     /// 下一句预览摆哪一边——**独立于当前行的 duetSide 算**,不能假定下一句跟当前句是
@@ -736,7 +752,8 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
     /// 换边;固定继承 duetSide 的话,视觉上会永远像是当前这位接着唱下一句。
     /// 同样套过对齐方式覆盖,理由跟 duetSide 一致。
     private var nextLineDuetSide: LyricDuet.Side {
-        playback.duetAlignmentOverride.effectiveAlignmentSide(realSide: playback.nextLineSide)
+        if let alternate = alternatePlacement { return alternate.nextSide }
+        return playback.duetAlignmentOverride.effectiveAlignmentSide(realSide: playback.nextLineSide)
     }
 
     /// 控制排(播放控制胶囊 / 锁定态的解锁按钮)算横向落点时用的**原始**声部。
@@ -844,6 +861,8 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
         // 当前行的预告小字,跟下面对唱换人那条理由(提前预告位置跳变)不是一回事,不受
         // duetAlignmentOverride 影响,始终用 mainFont。
         guard line != nil else { return playback.mainFont }
+        // 上下交替:两句一样大,开唱时只换颜色。
+        if alternatePlacement != nil { return playback.mainFont }
         guard playback.duetAlignmentOverride == .automatic,
               let nextSide = playback.nextLineSide, nextSide != line?.side
         else {
@@ -1274,10 +1293,10 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
     /// 有逐词标注(`usesPerWordRomanization`)时读音已经标在每个词正下方,这一整行不再重复。
     /// `line` 为 nil(前奏/间奏「•••」下方没有当前行陪衬)时退到 `nextLineRomanization`——
     /// 那句其实就是接下来的第一句本身,该按正常行的规格展示。
-    private var romanizationRowText: String? { rowPlan.romanization?.text }
+    private var romanizationRowText: String? { alternatePlacement == nil ? rowPlan.romanization?.text : nil }
 
     /// 译文那一行的文字,没有就是 nil。`line` 为 nil 时的退路同 `romanizationRowText`。
-    private var translationRowText: String? { rowPlan.translation?.text }
+    private var translationRowText: String? { alternatePlacement == nil ? rowPlan.translation?.text : nil }
 
     private var lyricsCardContent: some View {
         // 行与行之间的间距由各行自己的 `.padding(.top:)` 给(读音 / 译文 / 下一句各一项,见 OverlayRowSpacing),
@@ -1285,6 +1304,19 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
         VStack(alignment: duetAlignment, spacing: 0) {
             if animatesLineChange {
                 lineChangeRows
+            } else if let alternate = alternatePlacement {
+                // 上下交替:当前句和下一句按当前句的奇偶轮流占上下两行,中间隔「下一句间距」。
+                if alternate.currentOnTop {
+                    reportingMainLineRect(mainLine)
+                        .reportsContentRow(.main, in: contentRowRectsSpace)
+                    nextLinePreviewRow.reportsContentRow(.nextLine, in: contentRowRectsSpace)
+                        .padding(.top, CGFloat(rowSpacing.nextLine))
+                } else {
+                    nextLinePreviewRow.reportsContentRow(.nextLine, in: contentRowRectsSpace)
+                    reportingMainLineRect(mainLine)
+                        .reportsContentRow(.main, in: contentRowRectsSpace)
+                        .padding(.top, CGFloat(rowSpacing.nextLine))
+                }
             } else {
                 reportingMainLineRect(mainLine)
                     .reportsContentRow(.main, in: contentRowRectsSpace)
@@ -1429,7 +1461,12 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
     // MARK: - 换句动画(见 04 章决策 52)
 
     /// 设置开着、系统没开「减弱动态效果」。
-    private var animatesLineChange: Bool { playback.lineChangeAnimation && !reduceMotion }
+    /// 上下交替开着时不做:下一句不往上挪(见 `OverlayNextLineArrangement`)。按设置判、不按这一刻摆不摆交替,
+    /// 不然前奏 / 对唱退回照常排的那几句会在舞台和普通卡片之间来回换。
+    private var animatesLineChange: Bool {
+        playback.lineChangeAnimation && !reduceMotion
+            && !(playback.showNextLinePreview && playback.nextLineArrangement == .alternate)
+    }
 
     /// 主句那一格的编号:唱着的那句按它在这一面的下标编,「•••」和各种状态文案另起一套,跟句子编号不撞。
     private var mainSlotID: String {
@@ -1562,7 +1599,10 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
     /// 图层行(`OverlayRowLayout.layOut`)同一种版式,开唱那一刻只换颜色、不挪位置;整行罗马音那一行随之让位。
     @ViewBuilder
     private func nextLinePreviewContent(_ next: String) -> some View {
-        let color = playback.displayForegroundColor.opacity(OverlayLineRise.previewOpacity)
+        // 上下交替时下一句用「没唱到」的颜色:开唱那一刻只是从这个颜色开始填。
+        let color = alternatePlacement != nil
+            ? playback.displayKaraokeUnsungColor
+            : playback.displayForegroundColor.opacity(OverlayLineRise.previewOpacity)
         let still = rowPlan.next?.motion == .still
         if still, let groups = upcomingWordGroups {
             // 逐词列放不下时从开头显示、右边裁掉(列没法打「…」);放得下时交给外层按声部对齐。

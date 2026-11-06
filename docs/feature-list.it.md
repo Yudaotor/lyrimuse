@@ -40,6 +40,7 @@ Queste funzioni restano disattivate dopo l’installazione. Attivale prima nelle
 | [La finestra Mini si nasconde in pausa o a tutto schermo](#feature-mini-window-auto-hide) | Impostazioni › Visualizzazione testo › Finestra testo › Comportamento › Nascondi in pausa |
 | [Sfondo Spotify Canvas](#feature-spotify-canvas) | Impostazioni › Visualizzazione testo › Finestra testo › Sfondo › Spotify Canvas |
 | [Transizione righe](#feature-line-transition) | Impostazioni › Visualizzazione testo › Testo fluttuante › Layout › Transizione righe |
+| [Due righe alternate](#feature-alternate-next-line) | Impostazioni › Visualizzazione testo › Testo fluttuante › Contenuto › Disposizione riga successiva |
 | [Sfuma al passaggio del mouse](#feature-fade-on-hover) | Impostazioni › Visualizzazione testo › Testo fluttuante › Comportamento › Sfuma al passaggio del mouse |
 | [Blocca la posizione, tieni premuto per trascinare](#feature-lock-position) | Impostazioni › Visualizzazione testo › Testo fluttuante › Comportamento › Blocca posizione |
 | [Nascosto negli screenshot e nella condivisione dello schermo](#feature-hide-in-screenshots) | Impostazioni › Visualizzazione testo › Testo fluttuante › Comportamento › Nascondi negli screenshot |
@@ -419,6 +420,15 @@ Quando il testo fluttuante passa alla riga successiva, la vecchia riga scorre ve
 
 - Disattivata di default
 - Impostazioni: Visualizzazione testo › Testo fluttuante › Layout › Transizione righe
+
+<a id="feature-alternate-next-line"></a>
+
+### Due righe alternate
+
+Il testo fluttuante può mostrare anche la riga successiva a grandezza piena, una a sinistra e una a destra, a turno come il classico karaoke da desktop: la riga appena cantata viene sostituita da quella dopo la successiva e quella in corso resta ferma.
+
+- Disattivata di default
+- Impostazioni: Visualizzazione testo › Testo fluttuante › Contenuto › Disposizione riga successiva
 
 <a id="feature-fade-on-hover"></a>
 
@@ -890,7 +900,7 @@ Al massimo una volta al giorno invia versione, macOS, funzioni attive e riepilog
 
 ## Tutte le impostazioni
 
-Tutte le impostazioni della finestra Impostazioni, per posizione: 313 in tutto. Scrivi un nome nel campo di ricerca in cima alla barra laterale delle Impostazioni per andarci direttamente.
+Tutte le impostazioni della finestra Impostazioni, per posizione: 314 in tutto. Scrivi un nome nel campo di ricerca in cima alla barra laterale delle Impostazioni per andarci direttamente.
 
 ### Testo › Fonte
 
@@ -1007,6 +1017,7 @@ Tutte le impostazioni della finestra Impostazioni, per posizione: 313 in tutto. 
 - **Pronuncia**
 - **Traduzione**
 - **Riga successiva**
+- **Disposizione riga successiva**: Alternate: due righe della stessa dimensione, una a sinistra e una a destra; la riga appena cantata lascia il posto a quella dopo la successiva. Traduzione e pronuncia di riga sono nascoste; i duetti restano come sempre
 
 ### Visualizzazione testo › Testo fluttuante › Layout
 

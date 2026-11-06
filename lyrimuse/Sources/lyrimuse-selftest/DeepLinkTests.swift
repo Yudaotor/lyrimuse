@@ -290,6 +290,9 @@ func runDeepLinkTests() {
         expectEqual(link("lyrimuse://debug/overlay-layout?overflow=scroll"),
                     .debug(.overlayLayout(width: nil, lineChange: nil, overflow: .scroll)), "debug: 只设长句换行 / 滚动")
         expectEqual(link("lyrimuse://debug/overlay-layout?overflow=marquee"), nil, "debug: 长句处理不认的值不认")
+        expectEqual(link("lyrimuse://debug/overlay-layout?next-arrangement=alternate"),
+                    .debug(.overlayLayout(width: nil, lineChange: nil, nextArrangement: .alternate)), "debug: 只设下一句排法")
+        expectEqual(link("lyrimuse://debug/overlay-layout?next-arrangement=zigzag"), nil, "debug: 下一句排法不认的值不认")
         expectEqual(link("lyrimuse://debug/overlay-layout?width=abc") == nil
                     && link("lyrimuse://debug/overlay-layout?width=-5") == nil
                     && link("lyrimuse://debug/overlay-layout") == nil, true, "debug: 宽度不是正数、什么都没带不认")
@@ -476,6 +479,7 @@ func runDeepLinkTests() {
             .debug(.overlayLayout(width: nil, lineChange: false)),
             .debug(.overlayLayout(width: nil, lineChange: nil, nextLine: 0.75)),
             .debug(.overlayLayout(width: nil, lineChange: nil, overflow: .wrap)),
+            .debug(.overlayLayout(width: nil, lineChange: nil, nextArrangement: .below)),
             .debug(.notchPassThrough(x: 120.5, y: 48)), .debug(.notchPassThroughOff), .debug(.notchPointer(x: 30, y: 12.5)),
             .debug(.notchBehavior(collapseWhenPaused: nil, hideWhenNotPlaying: nil, showLyrics: true)),
             .debug(.notchBehavior(collapseWhenPaused: nil, hideWhenNotPlaying: nil, lyricRowFade: false)),

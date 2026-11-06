@@ -284,8 +284,8 @@ func runSettingsSearchTests() {
     func contentGroupTitles(_ section: String) -> Set<String> {
         Set(entries.filter { $0.sectionValue == section && $0.pathKeys.last == "内容" }.map(\.titleKey))
     }
-    expectEqual(contentGroupTitles(LyricsSurface.overlay.appearanceSectionRawValue), ["读音", "译文", "下一句"],
-                "设置搜索: 悬浮歌词「内容」三行都登记在悬浮歌词那一段")
+    expectEqual(contentGroupTitles(LyricsSurface.overlay.appearanceSectionRawValue), ["读音", "译文", "下一句", "下一句排法"],
+                "设置搜索: 悬浮歌词「内容」几行都登记在悬浮歌词那一段")
     expectEqual(contentGroupTitles(SettingsSearchCatalog.lyricsWindowSectionValue), ["读音", "进度条", "译文"],
                 "设置搜索: 歌词窗口「内容」三行都登记在歌词窗口那一段(进度条只在迷你)")
     let allowlistedButIndexed = intentionallyUnindexed.filter { indexedTitles.contains($0) }.sorted()

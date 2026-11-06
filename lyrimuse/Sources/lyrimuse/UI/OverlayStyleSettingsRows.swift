@@ -246,6 +246,21 @@ struct OverlayContentSettingsRows: View {
                 SettingsToggleTile(icon: "text.bubble", title: L10n.t("译文"), isOn: $settings.overlayShowTranslation)
                 SettingsToggleTile(icon: "rectangle.grid.1x2", title: L10n.t("下一句"), isOn: $settings.showNextLinePreview)
             }
+            SettingsRowGroup {
+                SettingsRow(
+                    icon: "arrow.left.arrow.right",
+                    title: L10n.t("下一句排法"),
+                    help: L10n.t("上下交替：两句一样大，一左一右轮流唱，唱完的那句换成再下一句；不显示译文和整行读音，对唱时照常排")
+                ) {
+                    SettingsPillSegmentedControl(
+                        selection: $settings.overlayNextLineArrangement,
+                        options: OverlayNextLineArrangement.allCases,
+                        label: OverlayNextLineArrangementLabel.text(for:),
+                        minWidth: 40
+                    )
+                }
+                .disabled(!settings.showNextLinePreview)
+            }
             if showsRowSizes {
                 // 带组标题,同「排版」里三项间距:长语言的格子名可以只写读音 / 译文 / 下一句,不重复「大小」。
                 SettingsTileGrid(title: L10n.t("字号"), columns: 3) { OverlayRowFontScaleCells() }
@@ -305,6 +320,8 @@ struct OverlayLayoutSettingsRows: View {
                     help: L10n.t("换句时，下一句从原来的位置移到当前行；关闭时直接切换"),
                     isOn: $settings.overlayLineChangeAnimation
                 )
+                // 上下交替时下一句不往上挪,这一项不起作用(见 OverlayNextLineArrangement)。
+                .disabled(settings.showNextLinePreview && settings.overlayNextLineArrangement == .alternate)
             }
             // 主行下面三行各自离上一行多远,按卡片里从上到下的顺序,三格一行。那一行在「内容」里关着时这一格不起作用,
             // 置灰。范围与默认值见 OverlayRowSpacing(04 章决策 48);拖动中只改临时值,见 OverlayRowSpacingDraft。
@@ -338,6 +355,16 @@ struct OverlayLayoutSettingsRows: View {
             // OverlayAlignmentSegmentedControl——每个选项固定 minWidth,尺寸完全由自己
             // 控制,不经过任何系统分段控件的内部尺寸/动画逻辑。
             OverlayAlignmentSegmentedControl(selection: $settings.overlayDuetAlignmentOverride)
+        }
+    }
+}
+
+/// 「下一句排法」两档的显示名。枚举本体在 Core,文案留在界面层。
+enum OverlayNextLineArrangementLabel {
+    static func text(for value: OverlayNextLineArrangement) -> String {
+        switch value {
+        case .below: return L10n.t("跟在下面")
+        case .alternate: return L10n.t("上下交替")
         }
     }
 }

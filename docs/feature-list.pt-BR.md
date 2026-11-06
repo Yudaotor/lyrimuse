@@ -40,6 +40,7 @@ Estes recursos vêm desativados depois da instalação. Ative-os antes nos ajust
 | [Janela mini some na pausa ou em tela cheia](#feature-mini-window-auto-hide) | Ajustes › Exibição da letra › Janela da letra › Comportamento › Ocultar na pausa |
 | [Fundo Spotify Canvas](#feature-spotify-canvas) | Ajustes › Exibição da letra › Janela da letra › Fundo › Spotify Canvas |
 | [Transição de linha](#feature-line-transition) | Ajustes › Exibição da letra › Letra flutuante › Layout › Transição de linha |
+| [Duas linhas alternadas](#feature-alternate-next-line) | Ajustes › Exibição da letra › Letra flutuante › Conteúdo › Disposição da próxima linha |
 | [Esmaecer ao passar o ponteiro](#feature-fade-on-hover) | Ajustes › Exibição da letra › Letra flutuante › Comportamento › Esmaecer ao passar o ponteiro |
 | [Bloquear posição, pressionamento longo para arrastar](#feature-lock-position) | Ajustes › Exibição da letra › Letra flutuante › Comportamento › Bloquear posição |
 | [Oculta em capturas e no compartilhamento de tela](#feature-hide-in-screenshots) | Ajustes › Exibição da letra › Letra flutuante › Comportamento › Ocultar em capturas de tela |
@@ -419,6 +420,15 @@ Quando a letra flutuante passa para a próxima linha, a linha antiga sobe e a no
 
 - Desativado por padrão
 - Ajustes: Exibição da letra › Letra flutuante › Layout › Transição de linha
+
+<a id="feature-alternate-next-line"></a>
+
+### Duas linhas alternadas
+
+A letra flutuante pode mostrar a próxima linha no mesmo tamanho, uma à esquerda e outra à direita, alternando como o karaokê de desktop clássico: a linha já cantada dá lugar à que vem depois da próxima, e a que está sendo cantada fica parada.
+
+- Desativado por padrão
+- Ajustes: Exibição da letra › Letra flutuante › Conteúdo › Disposição da próxima linha
 
 <a id="feature-fade-on-hover"></a>
 
@@ -890,7 +900,7 @@ No máximo uma vez por dia, envia a versão, o macOS, quais recursos estão ativ
 
 ## Todos os ajustes
 
-Todos os ajustes da janela Ajustes, por local: 313 no total. Digite um nome no campo de busca no topo da barra lateral dos Ajustes para ir direto até ele.
+Todos os ajustes da janela Ajustes, por local: 314 no total. Digite um nome no campo de busca no topo da barra lateral dos Ajustes para ir direto até ele.
 
 ### Letra › Origem
 
@@ -1007,6 +1017,7 @@ Todos os ajustes da janela Ajustes, por local: 313 no total. Digite um nome no c
 - **Pronúncia**
 - **Tradução**
 - **Próxima linha**
+- **Disposição da próxima linha**: Alternar: as duas linhas no mesmo tamanho, uma à esquerda e outra à direita; a linha já cantada dá lugar à que vem depois da próxima. A tradução e a pronúncia da linha ficam ocultas; duetos mantêm o layout de sempre
 
 ### Exibição da letra › Letra flutuante › Layout
 

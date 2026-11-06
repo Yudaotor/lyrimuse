@@ -297,6 +297,8 @@
 "上一页" = "Previous";
 "上一首" = "Previous Track";
 "上一首、播放/暂停、下一首和设置按钮" = "Previous, Play/Pause and Next, plus a settings button";
+"上下交替" = "Alternate";
+"上下交替：两句一样大，一左一右轮流唱，唱完的那句换成再下一句；不显示译文和整行读音，对唱时照常排" = "Alternate: both lines at the same size, one on the left and one on the right; the line just sung becomes the one after next. Translation and line romanization are hidden; duets keep the usual layout";
 "上屏" = "Shown";
 "上屏延迟" = "Display delay";
 "上方的「Scrobble 到 Last.fm」已关闭，此处设置暂不生效" = "“Scrobble to Last.fm” above is off, so these settings have no effect right now";
@@ -321,6 +323,7 @@
 "下一个里程碑" = "Next Milestone";
 "下一句" = "Next Line";
 "下一句大小" = "Next Line Size";
+"下一句排法" = "Next Line Layout";
 "下一句间距" = "Next Line Spacing";
 "下一步" = "Next";
 "下一页" = "Next";
@@ -2634,6 +2637,7 @@
 "超薄" = "Ultra Thin";
 "足迹" = "Footprint";
 "跟上一期比的涨跌，如「↑12%」" = "Change from the previous period, such as “↑12%”";
+"跟在下面" = "Below";
 "跟随「全部播放器」" = "Following “All Players”";
 "跟随「全部播放器」：%@" = "Following “All Players”: %@";
 "跟随刘海" = "Match Notch";

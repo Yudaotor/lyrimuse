@@ -60,6 +60,7 @@ extension AppSettings {
             ("overlayDuetAlignmentOverride", overlayDuetAlignmentOverride),
             ("overlayLineOverflow", overlayLineOverflow),
             ("overlayLineChangeAnimation", overlayLineChangeAnimation),
+            ("overlayNextLineArrangement", overlayNextLineArrangement),
             ("overlayRomanizationSpacing", overlayRomanizationSpacing),
             ("overlayTranslationSpacing", overlayTranslationSpacing),
             ("overlayNextLineSpacing", overlayNextLineSpacing),

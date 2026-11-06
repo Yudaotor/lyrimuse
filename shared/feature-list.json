@@ -1855,6 +1855,50 @@
           ]
         },
         {
+          "id": "alternate-next-line",
+          "title": {
+            "en": "Alternating two-line layout",
+            "zh-Hans": "双行交替",
+            "zh-Hant": "雙行交替",
+            "ja": "2 行交互表示",
+            "ko": "두 줄 번갈아 표시",
+            "es": "Dos líneas alternas",
+            "fr": "Deux lignes en alternance",
+            "de": "Zwei Zeilen im Wechsel",
+            "it": "Due righe alternate",
+            "pt-BR": "Duas linhas alternadas",
+            "vi": "Hai dòng xen kẽ",
+            "ru": "Две строки поочерёдно",
+            "uk": "Два рядки почергово",
+            "th": "สองบรรทัดสลับกัน"
+          },
+          "desc": {
+            "en": "Floating lyrics can show the next line at full size, one line on the left and one on the right, taking turns like classic desktop karaoke lyrics: the line just sung is replaced by the one after next, and the line being sung stays put.",
+            "zh-Hans": "悬浮歌词可以把下一句也用同样大的字显示，一左一右轮流唱，像经典的桌面卡拉OK歌词：唱完的那句原地换成再下一句，正在唱的那句不动。",
+            "zh-Hant": "浮動歌詞可以把下一句也用同樣大的字顯示，一左一右輪流唱，像經典的桌面卡拉OK歌詞：唱完的那句原地換成再下一句，正在唱的那句不動。",
+            "ja": "フローティング歌詞で次の行も同じ大きさで表示し、左右交互に切り替えられます。昔ながらのデスクトップのカラオケ歌詞のように、歌い終えた行がその次の行に入れ替わり、歌っている行は動きません。",
+            "ko": "플로팅 가사에서 다음 줄도 같은 크기로 보여 주고 왼쪽과 오른쪽을 번갈아 쓸 수 있습니다. 예전 데스크톱 노래방 가사처럼 다 부른 줄은 그다음 줄로 바뀌고, 부르고 있는 줄은 그대로 있습니다.",
+            "es": "La letra flotante puede mostrar también la línea siguiente al mismo tamaño, una a la izquierda y otra a la derecha, por turnos como el karaoke de escritorio clásico: la línea ya cantada se sustituye por la que va después de la siguiente y la que se está cantando no se mueve.",
+            "fr": "Les paroles flottantes peuvent afficher la ligne suivante à la même taille, l’une à gauche, l’autre à droite, à tour de rôle comme le karaoké de bureau classique : la ligne chantée laisse place à celle d’après, et la ligne en cours ne bouge pas.",
+            "de": "Der schwebende Text kann auch die nächste Zeile in voller Größe zeigen, eine links, eine rechts, im Wechsel wie klassische Desktop-Karaoke-Texte: Die gesungene Zeile wird durch die übernächste ersetzt, die gerade gesungene bleibt stehen.",
+            "it": "Il testo fluttuante può mostrare anche la riga successiva a grandezza piena, una a sinistra e una a destra, a turno come il classico karaoke da desktop: la riga appena cantata viene sostituita da quella dopo la successiva e quella in corso resta ferma.",
+            "pt-BR": "A letra flutuante pode mostrar a próxima linha no mesmo tamanho, uma à esquerda e outra à direita, alternando como o karaokê de desktop clássico: a linha já cantada dá lugar à que vem depois da próxima, e a que está sendo cantada fica parada.",
+            "vi": "Lời nổi có thể hiển thị cả dòng tiếp theo với cùng cỡ chữ, một bên trái một bên phải, luân phiên như lời karaoke trên máy tính kiểu cũ: dòng vừa hát xong được thay bằng dòng sau đó, dòng đang hát giữ nguyên.",
+            "ru": "Плавающий текст может показывать и следующую строку тем же размером, одну слева, другую справа, по очереди, как классическое караоке на рабочем столе: спетая строка сменяется строкой через одну, а текущая остаётся на месте.",
+            "uk": "Плаваючий текст може показувати й наступний рядок тим самим розміром, один ліворуч, інший праворуч, по черзі, як класичне караоке на робочому столі: заспіваний рядок змінюється рядком через один, а поточний лишається на місці.",
+            "th": "เนื้อเพลงแบบลอยแสดงบรรทัดถัดไปด้วยขนาดเท่ากันได้ บรรทัดหนึ่งชิดซ้าย อีกบรรทัดชิดขวา สลับกันแบบเนื้อคาราโอเกะบนเดสก์ท็อปแบบดั้งเดิม บรรทัดที่ร้องจบจะเปลี่ยนเป็นบรรทัดถัดจากบรรทัดถัดไป ส่วนบรรทัดที่กำลังร้องอยู่กับที่"
+          },
+          "default": "off",
+          "settings": [
+            [
+              "歌词显示",
+              "悬浮歌词",
+              "内容",
+              "下一句排法"
+            ]
+          ]
+        },
+        {
           "id": "fade-on-hover",
           "title": {
             "en": "Fade when the pointer is over it",

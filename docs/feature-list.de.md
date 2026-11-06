@@ -40,6 +40,7 @@ Diese Funktionen bleiben nach der Installation aus. Schalte sie zuerst in den Ei
 | [Mini-Fenster blendet sich bei Pause oder Vollbild aus](#feature-mini-window-auto-hide) | Einstellungen › Liedtext-Anzeige › Liedtextfenster › Verhalten › Bei Pause ausblenden |
 | [Spotify Canvas als Hintergrund](#feature-spotify-canvas) | Einstellungen › Liedtext-Anzeige › Liedtextfenster › Hintergrund › Spotify Canvas |
 | [Zeilenwechsel](#feature-line-transition) | Einstellungen › Liedtext-Anzeige › Schwebender Text › Layout › Zeilenwechsel |
+| [Zwei Zeilen im Wechsel](#feature-alternate-next-line) | Einstellungen › Liedtext-Anzeige › Schwebender Text › Inhalt › Anordnung der nächsten Zeile |
 | [Abblenden, wenn der Zeiger darauf zeigt](#feature-fade-on-hover) | Einstellungen › Liedtext-Anzeige › Schwebender Text › Verhalten › Beim Überfahren abblenden |
 | [Position sperren, zum Ziehen lange drücken](#feature-lock-position) | Einstellungen › Liedtext-Anzeige › Schwebender Text › Verhalten › Position sperren |
 | [Unsichtbar in Bildschirmfotos und bei Bildschirmfreigabe](#feature-hide-in-screenshots) | Einstellungen › Liedtext-Anzeige › Schwebender Text › Verhalten › In Bildschirmfotos ausblenden |
@@ -419,6 +420,15 @@ Wechselt der schwebende Text zur nächsten Zeile, gleitet die alte Zeile nach ob
 
 - Standardmäßig aus
 - Einstellungen: Liedtext-Anzeige › Schwebender Text › Layout › Zeilenwechsel
+
+<a id="feature-alternate-next-line"></a>
+
+### Zwei Zeilen im Wechsel
+
+Der schwebende Text kann auch die nächste Zeile in voller Größe zeigen, eine links, eine rechts, im Wechsel wie klassische Desktop-Karaoke-Texte: Die gesungene Zeile wird durch die übernächste ersetzt, die gerade gesungene bleibt stehen.
+
+- Standardmäßig aus
+- Einstellungen: Liedtext-Anzeige › Schwebender Text › Inhalt › Anordnung der nächsten Zeile
 
 <a id="feature-fade-on-hover"></a>
 
@@ -890,7 +900,7 @@ Sendet höchstens einmal täglich Version, macOS, aktivierte Funktionen und Abst
 
 ## Alle Einstellungen
 
-Alle Einstellungen des Einstellungsfensters nach Ort: insgesamt 313. Gib einen Namen in das Suchfeld oben in der Seitenleiste der Einstellungen ein, um direkt dorthin zu springen.
+Alle Einstellungen des Einstellungsfensters nach Ort: insgesamt 314. Gib einen Namen in das Suchfeld oben in der Seitenleiste der Einstellungen ein, um direkt dorthin zu springen.
 
 ### Liedtext › Quelle
 
@@ -1007,6 +1017,7 @@ Alle Einstellungen des Einstellungsfensters nach Ort: insgesamt 313. Gib einen N
 - **Umschrift**
 - **Übersetzung**
 - **Nächste Zeile**
+- **Anordnung der nächsten Zeile**: Abwechselnd: Beide Zeilen gleich groß, eine links, eine rechts; die gesungene Zeile wird durch die übernächste ersetzt. Übersetzung und Zeilen-Umschrift werden ausgeblendet; Duette bleiben wie gewohnt
 
 ### Liedtext-Anzeige › Schwebender Text › Layout
 

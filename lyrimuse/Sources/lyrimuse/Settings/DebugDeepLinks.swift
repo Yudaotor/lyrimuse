@@ -99,7 +99,7 @@ enum DebugDeepLinks {
             }
             window.setFrameOrigin(NSPoint(x: x, y: mainHeight - y - window.frame.height))
             logger.notice("debug move window \(title, privacy: .public) to \(x, privacy: .public),\(y, privacy: .public)")
-        case let .overlayLayout(width, lineChange, nextLine, overflow):
+        case let .overlayLayout(width, lineChange, nextLine, overflow, arrangement):
             if let width {
                 let snapped = OverlayEditorStage.snappedWidth(width)
                 AppSettings.shared.overlayWidth = snapped
@@ -111,7 +111,8 @@ enum DebugDeepLinks {
                 AppSettings.shared.overlayNextLineScale = OverlayRowFontScale.clamped(nextLine, item: .nextLine)
             }
             if let overflow { AppSettings.shared.overlayLineOverflow = overflow }
-            logger.notice("debug overlay layout width=\(width.map { String($0) } ?? "nil", privacy: .public) lineChange=\(String(describing: lineChange), privacy: .public) nextLine=\(nextLine.map { String($0) } ?? "nil", privacy: .public) overflow=\(overflow?.rawValue ?? "nil", privacy: .public)")
+            if let arrangement { AppSettings.shared.overlayNextLineArrangement = arrangement }
+            logger.notice("debug overlay layout width=\(width.map { String($0) } ?? "nil", privacy: .public) lineChange=\(String(describing: lineChange), privacy: .public) nextLine=\(nextLine.map { String($0) } ?? "nil", privacy: .public) overflow=\(overflow?.rawValue ?? "nil", privacy: .public) nextArrangement=\(arrangement?.rawValue ?? "nil", privacy: .public)")
         case let .notchStyle(style, expanded):
             if let style, let parsed = NotchCardStyle(rawValue: style) { AppSettings.shared.notchCardStyle = parsed }
             if let expanded {
