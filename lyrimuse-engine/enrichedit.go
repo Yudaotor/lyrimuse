@@ -142,7 +142,10 @@ type enrichEditOutcome struct {
 	edited []string
 	// followers:changed 里跟着原件一起改的手改副本,回报给 App 的改动数不算它们(界面上说的是「几首」)。
 	followers int
-	err       error
+	// emptied:exports 里改完正文是空的 key。导出只写有正文的条目,它们导出过的歌词文件要挪进废纸篓,不然下次
+	// 启动导入按文件头把正文导回来(「清空 → 恢复」那条路)。见 11 章决策 158。
+	emptied []string
+	err     error
 }
 
 // applyEnrichEdit 执行一份请求:改内存缓存、存盘、同步歌词文件。常驻进程和 CLI 子命令共用。
@@ -199,6 +202,11 @@ func applyEnrichEdit(req enrichEditRequest) enrichEditResult {
 				touched = append(touched, req.Key)
 			}
 			markEnrichEditedLocked(req.Op == "clear_all", touched...)
+			for _, k := range out.exports {
+				if e, ok := enrichCache[k]; ok && e.Lyrics.IsZero() {
+					out.emptied = append(out.emptied, k)
+				}
+			}
 		}
 		enrichMu.Unlock()
 	}
@@ -223,6 +231,11 @@ func applyEnrichEdit(req enrichEditRequest) enrichEditResult {
 		}
 		if out.trashAll {
 			trashAllLyricsFiles()
+		}
+		for _, k := range out.emptied {
+			for _, path := range lyricsFilesOwnedBy(k) {
+				trashFile(path)
+			}
 		}
 		saveErr := saveEnrichCacheChecked()
 		exportLyricsFilesFor(out.exports...)

@@ -260,6 +260,47 @@ func TestDeleteTrashesFilesAndSkipsUnknownKeys(t *testing.T) {
 	}
 }
 
+// 正文存成空的:条目留着,导出过的歌词文件挪进废纸篓,下次启动导入不把正文导回来。见 11 章决策 158。
+func TestSaveEditEmptyLyricsTrashesExportedFiles(t *testing.T) {
+	other := enrichKey("Other", "Song", "Album")
+	lyrics, trash := setUpEnrichEditTest(t, map[string]enrichEntry{
+		editKey: {Lyrics: bt("[00:01.00]old"), LyricsTr: bt("[00:01.00]旧")},
+		other:   {Lyrics: bt("[00:01.00]stay")},
+	})
+	exportLyricsFiles()
+	name := "Edit Artist - Edit Song - Edit Album.lrc"
+	if _, err := os.Stat(filepath.Join(lyrics, name)); err != nil {
+		t.Fatalf("先要有导出的文件 err=%v", err)
+	}
+	res := applyEnrichEdit(enrichEditRequest{Op: "save_edit", Key: editKey, Lyrics: "", Tr: "", MarkManual: true})
+	if !res.OK || res.Changed != 1 {
+		t.Fatalf("res=%+v", res)
+	}
+	if _, ok := cacheEntry(t, editKey); !ok {
+		t.Fatal("条目应留着")
+	}
+	if left := lyricsFilesOwnedBy(editKey); len(left) != 0 {
+		t.Errorf("这首导出过的文件应全挪走 剩 %v", left)
+	}
+	if _, err := os.Stat(filepath.Join(trash, name)); err != nil {
+		t.Errorf("歌词文件应进废纸篓 err=%v", err)
+	}
+	if _, err := os.Stat(filepath.Join(lyrics, "Other - Song - Album.lrc")); err != nil {
+		t.Errorf("别的歌的文件不该动 err=%v", err)
+	}
+	importLyricsFromFiles()
+	if e, _ := cacheEntry(t, editKey); !e.Lyrics.IsZero() {
+		t.Errorf("导入不该把正文导回来 got %q", e.Lyrics.String())
+	}
+	// 存一份有正文的照常导出,不挪。
+	if res := applyEnrichEdit(enrichEditRequest{Op: "save_edit", Key: editKey, Lyrics: "[00:01.00]new"}); !res.OK {
+		t.Fatalf("res=%+v", res)
+	}
+	if _, err := os.Stat(filepath.Join(lyrics, name)); err != nil {
+		t.Errorf("有正文的照常导出 err=%v", err)
+	}
+}
+
 func TestClearAllEmptiesCacheAndLyricsFilesOnly(t *testing.T) {
 	lyrics, _ := setUpEnrichEditTest(t, map[string]enrichEntry{editKey: {Lyrics: bt("[00:01.00]x")}})
 	exportLyricsFiles()
