@@ -149,6 +149,7 @@ public enum MediaControlClient {
     /// 这一拍是「播放器在放、但不是音乐」(KKBOX / Amazon 的播客单集,见 `TrustedPlayers.artistlessContent`;网易云的
     /// 播客单集,见 `NeteasePodcastQueue`;Spotify 的播客单集与 DJ 口播,见 `spotifyNoticeSaysNotMusic`;reAMP 电台流连上、攒缓冲
     /// 那几拍,见 `PlayerTitleSplit.streamPlaceholder`;Pine 放网络电台、放视频,见 `PinePlayerInfo.isNetworkRadio` / `isVideo`;
+    /// Swinsian 的播客单集,见 `SwinsianPlayerInfo.isPodcastEpisode`;
     /// 网易云放 MV 时拿 App 名当歌名,见 `TrustedPlayers.appNameAsTitle`)就当没在放:
     /// 切歌间隙保持当场放手(不然会把上一首撑满整个窗口),调用方直接交回 nil、不退回去问别家的暂停会话。
     private static func playerContentNotMusic(bundleID: String, snapshot: MediaControlSnapshot) -> Bool {
@@ -160,6 +161,7 @@ public enum MediaControlClient {
                 || PlayerTitleSplit.streamPlaceholder(bundleID: bundleID, title: snapshot.title, artist: snapshot.artist,
                                                       duration: snapshot.duration, playing: snapshot.playing)
                 || PinePlayerInfo.isNetworkRadio(snapshot) || PinePlayerInfo.isVideo(snapshot)
+                || SwinsianPlayerInfo.isPodcastEpisode(snapshot)
         else { return false }
         setSnapshotFailure(.targetNotPlayingMusic)
         gapHoldLock.lock()

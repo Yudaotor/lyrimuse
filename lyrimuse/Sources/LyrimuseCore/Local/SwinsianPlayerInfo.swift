@@ -72,7 +72,8 @@ public enum SwinsianPlayerInfo {
 
     // MARK: 脚本
 
-    /// 每拍核对用的 JXA 快照:没在跑、停住时回 `null`,不会把它拉起来。位置放在最后读。
+    /// 每拍核对用的 JXA 快照:没在跑、停住时回 `null`,不会把它拉起来。位置放在最后读。播客单集读歌名会抛错,
+    /// 歌名、路径、类各自兜住,别让一项读不出把整份读数丢掉。
     public static let script = """
     (() => {
         \(JXARunningApp.attach("S", player: .swinsian, notRunning: "JSON.stringify(null)"))
@@ -80,7 +81,9 @@ public enum SwinsianPlayerInfo {
             const state = S.playerState();
             if (state !== "playing" && state !== "paused") return JSON.stringify(null);
             const track = S.currentTrack();
-            const reading = { state: state, title: track.name() || "", path: track.path() || "" };
+            const read = (f) => { try { return f() || ""; } catch (e) { return ""; } };
+            const reading = { state: state, title: read(() => track.name()), path: read(() => track.path()),
+                              kind: read(() => track.class()) };
             reading.position = S.playerPosition();
             return JSON.stringify(reading);
         } catch (e) {
@@ -89,11 +92,12 @@ public enum SwinsianPlayerInfo {
     })()
     """
 
-    /// 一次脚本读数。
+    /// 一次脚本读数。`kind` 是当前这首的类:库里的歌 `libraryTrack`,播客单集 `track`。
     public struct ScriptReading: Decodable, Equatable, Sendable {
         public var state: String
         public var title: String
         public var path: String
+        public var kind: String?
         public var position: Int
 
         public var playing: Bool { state == "playing" }
@@ -240,6 +244,64 @@ public enum SwinsianPlayerInfo {
               let r = ProcessRunner.run("/usr/bin/osascript", ["-l", "JavaScript", "-e", queueScript], timeout: timeout),
               r.succeeded else { return nil }
         return queueReply(fromScriptOutput: r.stdout)
+    }
+
+    // MARK: 播客单集
+
+    /// 脚本给播客单集报的类(库里的歌是 `libraryTrack`)。
+    public static let podcastScriptClass = "track"
+
+    /// 它的库:订阅的播客单集登记在 `podcastitem` 表(`path` 是下载下来的文件,`url` 是源地址)。
+    static var libraryDatabase: String { NSHomeDirectory() + "/Library/Application Support/Swinsian/Library.sqlite" }
+
+    private static let podcastFiles = OSAllocatedUnfairLock<[String: Bool]>(initialState: [:])
+    private static let podcastFilesLimit = 64
+
+    /// 在放播客单集:跟别家的播客一样当没在放音乐(`MediaControlClient.playerContentNotMusic`)。当前文件取通知(或脚本)
+    /// 给的路径;脚本报了这个文件的类就按类判,没有(脚本拔掉、还没读到)查它的播客表。同一个文件只判一次。见 02 章决策 241。
+    static func isPodcastEpisode(_ snapshot: MediaControlSnapshot) -> Bool {
+        guard snapshot.bundleIdentifier == bundleID, let title = snapshot.title, !title.isEmpty else { return false }
+        let notice = SourceKnockout.isOut(.swinsianNotice) ? nil : latestNotice()
+        let script = SourceKnockout.isOut(.swinsianScript) ? nil : lastScript.withLock { $0 }
+        guard let path = currentPath(title: title, artist: snapshot.artist, notice: notice, script: script) else { return false }
+        if let known = podcastFiles.withLock({ $0[path] }) { return known }
+        guard let verdict = podcastVerdict(path: path, script: script)
+                ?? podcastTableLists(path: path, database: libraryDatabase) else { return false }
+        podcastFiles.withLock { cache in
+            if cache.count >= podcastFilesLimit { cache.removeAll() }
+            cache[path] = verdict
+        }
+        if verdict { logger.notice("swinsian: podcast episode, not reported as a song") }
+        return verdict
+    }
+
+    /// 系统那份说的这一首是哪个文件:通知说的是这一首就用它的 `path`;否则用脚本的(歌名一样,或读不出歌名的播客单集)。
+    /// 纯函数,selftest 覆盖。
+    public static func currentPath(title: String, artist: String?, notice: Notice?, script: ScriptReading?) -> String? {
+        if let notice, matches(notice, title: title, artist: artist), let path = notice.path { return path }
+        guard let script, !script.path.isEmpty else { return nil }
+        if script.title == title { return script.path }
+        return script.title.isEmpty && script.kind == podcastScriptClass ? script.path : nil
+    }
+
+    /// 脚本说得清这个文件是什么:读数是这个文件、报了类。说不清为 nil。纯函数,selftest 覆盖。
+    public static func podcastVerdict(path: String, script: ScriptReading?) -> Bool? {
+        guard let script, script.path == path, let kind = script.kind, !kind.isEmpty else { return nil }
+        return kind == podcastScriptClass
+    }
+
+    /// 查它播客表的 SQL:下载下来的文件或源地址是这个的有几条。纯函数,selftest 覆盖。
+    public static func podcastTableQuery(path: String) -> String {
+        let quoted = "'" + path.replacingOccurrences(of: "'", with: "''") + "'"
+        return "SELECT count(*) FROM podcastitem WHERE path = \(quoted) OR url = \(quoted);"
+    }
+
+    /// 这个文件在不在它的播客表里。库读不到、查不成为 nil。只读打开,阻塞最多 2 秒。
+    static func podcastTableLists(path: String, database: String) -> Bool? {
+        guard FileManager.default.isReadableFile(atPath: database),
+              let r = ProcessRunner.run("/usr/bin/sqlite3", ["-readonly", database, podcastTableQuery(path: path)], timeout: 2),
+              r.succeeded, let count = Int(r.stdoutText.trimmingCharacters(in: .whitespacesAndNewlines)) else { return nil }
+        return count > 0
     }
 
     // MARK: 当前文件

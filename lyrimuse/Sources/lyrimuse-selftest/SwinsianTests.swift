@@ -51,6 +51,32 @@ func runSwinsianTests() {
         expectEqual(I.tick(from: Data(#"{"value":1,"before":1793959912033,"after":1793959912051}"#.utf8)),
                     H.Tick(value: 1, at: t(12.042)), "Swinsian 脚本: 跳变时刻取前后两次读数的中间")
         expectEqual(I.tick(from: Data("null".utf8)) == nil, true, "Swinsian 脚本: 没盯到")
+        expectEqual(sourceHas(I.script, "title: read(() => track.name())") && sourceHas(I.script, "kind: read(() => track.class())"),
+                    true, "Swinsian 脚本: 歌名、类各自兜住(播客单集读歌名会抛错)")
+    }
+
+    // ---- 播客单集 ----
+    do {
+        let song = I.scriptReading(from: Data(#"{"state":"playing","title":"Click A","path":"/m/Click A.wav","kind":"libraryTrack","position":4}"#.utf8))
+        let episode = I.scriptReading(from: Data(#"{"state":"playing","title":"","path":"/p/ep1.mp3","kind":"track","position":4}"#.utf8))
+        let old = I.scriptReading(from: Data(#"{"state":"playing","title":"Click A","path":"/m/Click A.wav","position":4}"#.utf8))
+        expectEqual([I.podcastVerdict(path: "/m/Click A.wav", script: song), I.podcastVerdict(path: "/p/ep1.mp3", script: episode)],
+                    [false, true], "Swinsian 播客: 脚本报 track 是播客单集,libraryTrack 是库里的歌")
+        expectEqual([I.podcastVerdict(path: "/p/ep1.mp3", script: song), I.podcastVerdict(path: "/m/Click A.wav", script: old),
+                     I.podcastVerdict(path: "/m/Click A.wav", script: nil)], [nil, nil, nil],
+                    "Swinsian 播客: 读数不是这个文件、没报类、没有读数,说不清(去查播客表)")
+        let notice = I.Notice(name: I.playingNotification, userInfo: ["title": "第一集", "artist": "主播", "path": "/p/ep1.mp3",
+                                                                      "currentTime": NSNumber(value: 0)], at: t(0))
+        expectEqual(I.currentPath(title: "第一集", artist: "主播", notice: notice, script: song), "/p/ep1.mp3",
+                    "Swinsian 播客: 通知说的是这一首,文件取通知的")
+        expectEqual([I.currentPath(title: "第一集", artist: "主播", notice: nil, script: episode),
+                     I.currentPath(title: "Click A", artist: "", notice: notice, script: song),
+                     I.currentPath(title: "Click B", artist: "", notice: notice, script: song)],
+                    ["/p/ep1.mp3", "/m/Click A.wav", nil],
+                    "Swinsian 播客: 没有通知时用脚本的(歌名一样,或读不出歌名的单集);都对不上不猜")
+        expectEqual(I.podcastTableQuery(path: "/p/it's.mp3"),
+                    "SELECT count(*) FROM podcastitem WHERE path = '/p/it''s.mp3' OR url = '/p/it''s.mp3';",
+                    "Swinsian 播客: 查播客表按下载的文件或源地址,单引号转义")
     }
 
     // ---- 位置表的几个零件 ----
@@ -263,6 +289,13 @@ func runSwinsianTests() {
                     true, "Swinsian 接线: 主路径的位置换成那块表,量准了标精确")
         expectEqual(sourceHas(client, "if target.bundleID == SwinsianPlayerInfo.bundleID {\nsnapshot = swinsianProbedSnapshot(probed.snapshot, anchor: probed.anchor, now: now)"),
                     true, "Swinsian 接线: 焦点被占时单问到的那份也过那块表")
+        expectEqual(sourceHas(sourceBody("private static func playerContentNotMusic(", in: client),
+                              "|| SwinsianPlayerInfo.isPodcastEpisode(snapshot)"), true,
+                    "Swinsian 接线: 播客单集走「不是音乐」那道闸")
+        let info = src("LyrimuseCore/Local/SwinsianPlayerInfo.swift")
+        expectEqual(sourceHas(info, "guard let verdict = podcastVerdict(path: path, script: script)\n?? podcastTableLists(path: path, database: libraryDatabase) else { return false }")
+                    && sourceHas(info, "[\"-readonly\", database, podcastTableQuery(path: path)]"),
+                    true, "Swinsian 接线: 脚本说不清时只读查它的播客表")
         let idle = src("lyrimuse/UI/IdlePlaybackActions.swift")
         expectEqual(sourceHas(idle, "case .swinsian: PlayerProcess.pid(bundleID: player.bundleIdentifier) != nil")
                     && sourceHas(idle, "ok = MusicPlaybackController.resumeSwinsianPlayback()"),
