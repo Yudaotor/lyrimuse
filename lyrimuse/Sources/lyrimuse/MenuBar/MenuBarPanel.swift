@@ -1755,14 +1755,28 @@ private struct MenuBarPanelView: View {
                 )
         }
 
-        /// 名字。没有空格的中日文折行会拆开词,只放一行、缩字门槛放宽(见 06 章决策 79);带空格的语言按词折。
-        private func titleText(size fontSize: CGFloat, lines: Int) -> some View {
-            let unbreakable = TileTitleWrap.breaksInsideWords(title)
-            return Text(title).font(.system(size: fontSize, weight: .semibold))
+        /// 名字。没有空格的中日文折行会拆开词,只放一行、缩字门槛放宽(见 06 章决策 79);泰文这类按词典断行的先试一行、
+        /// 缩到八成还放不下才折行(见 06 章决策 97);带空格的语言按词折。
+        @ViewBuilder private func titleText(size fontSize: CGFloat, lines: Int) -> some View {
+            if TileTitleWrap.prefersOneLine(title) {
+                ViewThatFits(in: .horizontal) {
+                    titleLabel(fontSize).lineLimit(1).fixedSize()
+                    titleLabel(fontSize * 0.9).lineLimit(1).fixedSize()
+                    titleLabel(fontSize * 0.8).lineLimit(1).fixedSize()
+                    titleLabel(fontSize).lineLimit(lines).minimumScaleFactor(0.85)
+                }
+            } else {
+                let unbreakable = TileTitleWrap.breaksInsideWords(title)
+                titleLabel(fontSize)
+                    .lineLimit(unbreakable ? 1 : lines)
+                    .minimumScaleFactor(unbreakable ? 0.75 : 0.85)
+            }
+        }
+
+        private func titleLabel(_ fontSize: CGFloat) -> some View {
+            Text(title).font(.system(size: fontSize, weight: .semibold))
                 .foregroundStyle(.primary)
                 .multilineTextAlignment(.center)
-                .lineLimit(unbreakable ? 1 : lines)
-                .minimumScaleFactor(unbreakable ? 0.75 : 0.85)
         }
     }
 

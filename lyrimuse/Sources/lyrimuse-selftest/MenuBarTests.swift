@@ -21,6 +21,12 @@ func runMenuBarTests() {
         for t in ["แสดงเนื้อเพลงบนแถบเมนู", "ຂໍ້ຄວາມ", "悬浮歌词", "Floating Lyrics", ""] {
             expectEqual(TileTitleWrap.isSingleSpacedWord(t), false, "设置行标题照常折行: \(t)")
         }
+        for t in ["เนื้อเพลงในแถบเมนู", "ຂໍ້ຄວາມ", "ចម្រៀង", "သီချင်း"] {
+            expectEqual(TileTitleWrap.prefersOneLine(t), true, "格子名先试一行: \(t)")
+        }
+        for t in ["เนื้อเพลงใน Touch Bar", "บรรทัดรอง: %@", "悬浮歌词", "Floating Lyrics", "Schwebender Text", ""] {
+            expectEqual(TileTitleWrap.prefersOneLine(t), false, "格子名照旧排: \(t)")
+        }
     }
     // ---- 菜单栏跑马灯:像素级偏移 ----
     do {
