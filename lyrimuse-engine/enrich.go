@@ -6337,8 +6337,9 @@ func fetchScoredLyricCandidatesStreaming(ctx context.Context, artist, title, alb
 		}
 		// 曲目 id 先取汽水客户端的播放队列缓存,拿不到再按歌手 + 歌名搜索(见 soda.go 头注)。取词走无签名的 seo_track。
 		r, noLyrics := sodaLyric(ctx, artist, srcTitle, album, durationSecs)
-		// 曲目 id 来自汽水客户端的播放队列缓存时,同一份缓存里的 vocal==2 就是这一条没有人声(见 sodalocal.go)。
-		noVocals := r.fromLocalClient && sodaLocalInstrumental(artist, srcTitle, album, durationSecs)
+		// 曲目 id 来自汽水客户端(播放队列缓存或预载缓存)时,seo_track 或队列缓存里的 vocal==2 就是这一条没有人声
+		// (见 sodalocal.go、09 章决策 363)。
+		noVocals := r.fromLocalClient && (r.noVocals || sodaLocalInstrumental(artist, srcTitle, album, durationSecs))
 		resultsCh <- lyricSourceResult{source: "soda", lyr: r.lyrics, yrc: r.yrc, tr: r.tr, matchTitle: r.title, matchArtist: r.artist, matchAlbum: r.album, matchCover: r.cover, srcDur: r.durationSecs, trackFoundNoLyrics: noLyrics, noVocals: noVocals, identityFromLocalClient: r.fromLocalClient}
 	}()
 	go func() {

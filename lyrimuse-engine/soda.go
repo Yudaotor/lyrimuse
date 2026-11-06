@@ -89,6 +89,9 @@ type sodaResult struct {
 	// 条件之一。 **不进 sodaCache** —— 那份缓存按 track id 存,同一个 id 两条路都可能
 	// 取到;标记是"这一次怎么拿到的",由 sodaLyric 在缓存之外置位(值拷贝,不污染缓存)。
 	fromLocalClient bool
+	// noVocals:seo_track 说这条录音没有人声(sodaSeoTrackNoVocals),只在没给词时置位。是不是在放的这首由调用方
+	// 按 fromLocalClient 判。见 09 章决策 363。
+	noVocals bool
 }
 
 func (r sodaResult) empty() bool { return r.lyrics == "" && r.yrc == "" }
@@ -106,7 +109,12 @@ type sodaSeoTrackResponse struct {
 			ID       string `json:"id"`
 			Name     string `json:"name"`
 			Duration int64  `json:"duration"` // 毫秒
-			Artists  []struct {
+			// Vocal 为 2 是纯音乐(汽水界面据此显示「纯音乐」),FirstVocal 是人声起点,口径同 sodaLocalTrack。
+			Vocal      int `json:"vocal"`
+			FirstVocal *struct {
+				Start int64 `json:"start"`
+			} `json:"first_vocal"`
+			Artists []struct {
 				Name string `json:"name"`
 			} `json:"artists"`
 			Album struct {
@@ -185,6 +193,9 @@ func sodaLyric(ctx context.Context, artist, title, album string, durationSecs fl
 		// 在 sodaCache 之外置位:返回的是值拷贝,标记记的是"这一次的 id 哪来的",
 		// 不是那份正文的属性。搜索路径拿到同一个 id 时不会继承它。
 		r.fromLocalClient = true
+		if r.noVocals {
+			log.Printf("soda: %q - %q (id %s) is instrumental per seo_track", artist, title, trackID)
+		}
 		return r, noLyrics
 	}
 	return sodaLyricBySearch(ctx, artist, title, album, durationSecs)
@@ -480,7 +491,7 @@ func sodaParseSeoTrack(body sodaSeoTrackResponse) (res sodaResult, trackFoundNoL
 		content = body.SeoTrack.Lyric.Content
 	}
 	if strings.TrimSpace(content) == "" {
-		return sodaResult{}, true, false
+		return sodaResult{noVocals: sodaSeoTrackNoVocals(body)}, true, false
 	}
 	// 跟酷狗 KRC 正文同构,两个现成函数直接用,见头注。
 	lrc, yrc := krcToLRC(content), krcToYRC(content)
@@ -491,7 +502,7 @@ func sodaParseSeoTrack(body sodaSeoTrackResponse) (res sodaResult, trackFoundNoL
 	if lrc == "" {
 		// 没有计时行 = 拿到的是个没法用的壳,口径同 krcToLRC 里那条守卫。曲目本身是在的,
 		// 所以归"有这首歌、没有可用歌词",不是端点坏了。
-		return sodaResult{}, true, false
+		return sodaResult{noVocals: sodaSeoTrackNoVocals(body)}, true, false
 	}
 	t := body.SeoTrack.Track
 	names := make([]string, 0, len(t.Artists))
@@ -514,6 +525,12 @@ func sodaParseSeoTrack(body sodaSeoTrackResponse) (res sodaResult, trackFoundNoL
 		cover:        sodaCoverURL(t.Album.URLCover.URI, t.Album.URLCover.URLs, t.Album.URLCover.TemplatePrefix),
 		durationSecs: float64(t.Duration) / 1000,
 	}, false, false
+}
+
+// sodaSeoTrackNoVocals:seo_track 那条曲目标成纯音乐,判据同 sodaLocalInstrumental(vocal==2,带人声起点的不信)。
+func sodaSeoTrackNoVocals(body sodaSeoTrackResponse) bool {
+	t := body.SeoTrack.Track
+	return t.Vocal == sodaLocalVocalInstrumental && (t.FirstVocal == nil || t.FirstVocal.Start <= 0)
 }
 
 // sodaCoverURL 把 album.url_cover 的 uri / urls / template_prefix 拼成可取的图片地址。

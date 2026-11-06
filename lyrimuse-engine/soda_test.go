@@ -345,3 +345,31 @@ func TestSodaParseSharePageRejectsUnrecognized(t *testing.T) {
 		t.Errorf("没有歌词应判 trackFoundNoLyrics: noLyrics=%v broken=%v", noLyrics, broken)
 	}
 }
+
+// seo_track 的 vocal==2 只在没给词时带出来,带人声起点的不信(口径同 sodaLocalInstrumental)。只认 id 来自汽水客户端
+// 那一次的接线由 TestPlayerInstrumentalSignalsAreWired 钉着。见 09 章决策 363。
+func TestSodaParseSeoTrackNoVocals(t *testing.T) {
+	parse := func(raw string) (sodaResult, bool) {
+		var body sodaSeoTrackResponse
+		if err := json.Unmarshal([]byte(raw), &body); err != nil {
+			t.Fatal(err)
+		}
+		r, noLyrics, broken := sodaParseSeoTrack(body)
+		if broken {
+			t.Fatalf("%s 不该判 broken", raw)
+		}
+		return r, noLyrics
+	}
+	if r, noLyrics := parse(`{"seo_track":{"track":{"id":"7683131776009291818","vocal":2}}}`); !r.noVocals || !noLyrics || !r.empty() {
+		t.Errorf("vocal==2 没词应判 noVocals: %+v noLyrics=%v", r, noLyrics)
+	}
+	if r, _ := parse(`{"lyric":{"content":"[ti:x]"},"seo_track":{"track":{"id":"1","vocal":2}}}`); !r.noVocals {
+		t.Error("只有头部标签的壳同样是没给词,vocal==2 应判 noVocals")
+	}
+	if r, _ := parse(`{"seo_track":{"track":{"id":"1","vocal":2,"first_vocal":{"start":21120}}}}`); r.noVocals {
+		t.Error("带人声起点的 vocal==2 不该信")
+	}
+	if r, _ := parse(`{"seo_track":{"track":{"id":"1","vocal":1}}}`); r.noVocals {
+		t.Error("vocal==1 不是纯音乐")
+	}
+}
