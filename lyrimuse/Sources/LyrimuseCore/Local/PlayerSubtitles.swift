@@ -44,11 +44,15 @@ public enum PlayerSubtitles {
     public static func adapted(_ snapshot: MediaControlSnapshot?) -> MediaControlSnapshot? {
         guard let snapshot, carriesSubtitles(bundleID: snapshot.bundleIdentifier) else { return snapshot }
         let book = snapshot.album ?? ""
+        var out = snapshot.withArtist(book)
         if let at = snapshot.anchorElapsedTime ?? snapshot.elapsedTime, at.isFinite, at >= 0 {
             record(key: trackKey(album: snapshot.album, title: snapshot.title),
                    text: snapshot.artist ?? "", ms: Int((at * 1000).rounded()))
+            // 报的时长是估的,一集念到最后常比它长;位置按时长封顶,
+            // 不抬上去的话时长之后收到的字幕一句也显示不出来。
+            if let duration = snapshot.duration, at > duration { out = out.withDuration(at) }
         }
-        return snapshot.withArtist(book)
+        return out
     }
 
     /// 记下一句。换了一集就从头记。

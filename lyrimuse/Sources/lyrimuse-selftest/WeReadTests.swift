@@ -53,6 +53,9 @@ func runWeReadTests() {
         let lyrics = S.lyrics(bundleID: weread, album: "雪国", title: "16 雪国 第16集")
         expectEqual([lyrics?.lyrics, lyrics.map { String($0.resolved) }], ["[05:21.25]可正因为太过平常了\n[05:23.75]反倒让岛村感到出乎意外", "true"],
                     "微信读书字幕: 这一集的歌词就是收到的字幕")
+        expectEqual([S.adapted(snap(weread, artist: "杨武能", album: "雪国", title: "16 雪国 第16集", anchor: 370))?.duration,
+                     S.adapted(snap(weread, artist: "反倒让岛村感到出乎意外", album: "雪国", title: "16 雪国 第16集", anchor: 323.75))?.duration],
+                    [370, 362.381], "微信读书字幕: 念到报的时长之后,时长抬到锚点(不然位置封顶、后面的字幕显示不出来);没超的不动")
         let revision = S.revision
         _ = S.adapted(snap(weread, artist: "第一段", album: "雪国", title: "17 雪国 第17集", anchor: 0))
         expectEqual([S.lines(forKey: key).count, S.lines(forKey: S.trackKey(album: "雪国", title: "17 雪国 第17集")).count], [0, 1],
