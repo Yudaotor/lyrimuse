@@ -249,35 +249,42 @@ struct TouchBarBehaviorRows: View {
     @ObservedObject private var settings = AppSettings.shared
     @ObservedObject private var accessibility = AccessibilityPermission.shared
 
+    // 开关两列小块;「输入时收起」开着又没有授权时,下面单独一框提示(跟小块对齐,不贴着浮层边)。
     var body: some View {
-        SettingsTileGrid {
-            SettingsToggleTile(icon: "play.circle", title: L10n.t("开始播放时自动展开"),
-                               help: L10n.t("从暂停恢复播放时展开歌词；播放中切歌不展开，手动收起后保持收起"),
-                               isOn: $settings.touchBarExpandOnPlay)
-            SettingsToggleTile(icon: "pause.circle", title: L10n.t("暂停时自动收起"),
-                               help: L10n.t("暂停 10 秒后收起为功能栏图标，恢复播放时自动展开"),
-                               isOn: $settings.touchBarCollapseWhenPaused)
-            SettingsToggleTile(icon: "text.badge.xmark", title: L10n.t("纯音乐/无歌词时收起"),
-                               help: L10n.t("确认无歌词后才收起，找到歌词后自动展开；搜索期间照常显示"),
-                               isOn: $settings.touchBarCollapseWhenNoLyrics)
-            SettingsToggleTile(icon: "keyboard", title: L10n.t("输入时收起"),
-                               help: L10n.t("光标在输入框里时收起，露出输入法候选和输入建议，离开输入框后展开；需要「辅助功能」权限"),
-                               isOn: $settings.touchBarCollapseWhileTyping)
-        }
-        if settings.touchBarCollapseWhileTyping && !accessibility.trusted {
-            HStack(spacing: 6) {
-                Text(L10n.t("尚未获得「辅助功能」权限，输入时收起无法生效"))
-                    .font(.system(size: 11))
-                    .foregroundStyle(.orange)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .help(accessibility.steps)
-                Spacer(minLength: 4)
-                Button(accessibility.actionTitle) { accessibility.handleAction() }
-                    .controlSize(.small)
-                    .settingsGlassButtons()
-                    .buttonBorderShape(.capsule)
+        SettingsRowGroupStack {
+            SettingsTileGrid {
+                SettingsToggleTile(icon: "play.circle", title: L10n.t("开始播放时自动展开"),
+                                   help: L10n.t("从暂停恢复播放时展开歌词；播放中切歌不展开，手动收起后保持收起"),
+                                   isOn: $settings.touchBarExpandOnPlay)
+                SettingsToggleTile(icon: "pause.circle", title: L10n.t("暂停时自动收起"),
+                                   help: L10n.t("暂停 10 秒后收起为功能栏图标，恢复播放时自动展开"),
+                                   isOn: $settings.touchBarCollapseWhenPaused)
+                SettingsToggleTile(icon: "text.badge.xmark", title: L10n.t("纯音乐/无歌词时收起"),
+                                   help: L10n.t("确认无歌词后才收起，找到歌词后自动展开；搜索期间照常显示"),
+                                   isOn: $settings.touchBarCollapseWhenNoLyrics)
+                SettingsToggleTile(icon: "keyboard", title: L10n.t("输入时收起"),
+                                   help: L10n.t("光标在输入框里时收起，露出输入法候选和输入建议，离开输入框后展开；需要「辅助功能」权限"),
+                                   isOn: $settings.touchBarCollapseWhileTyping)
             }
-            .onAppear { accessibility.refresh() }
+            if settings.touchBarCollapseWhileTyping && !accessibility.trusted {
+                SettingsRowGroup {
+                    SettingsRawRow(insetToText: true, icon: "exclamationmark.triangle") {
+                        HStack(spacing: 6) {
+                            Text(L10n.t("尚未获得「辅助功能」权限，输入时收起无法生效"))
+                                .font(.system(size: 11))
+                                .foregroundStyle(.orange)
+                                .fixedSize(horizontal: false, vertical: true)
+                                .help(accessibility.steps)
+                            Spacer(minLength: 4)
+                            Button(accessibility.actionTitle) { accessibility.handleAction() }
+                                .controlSize(.small)
+                                .settingsGlassButtons()
+                                .buttonBorderShape(.capsule)
+                        }
+                    }
+                }
+                .onAppear { accessibility.refresh() }
+            }
         }
     }
 }
