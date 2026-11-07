@@ -22,6 +22,8 @@ struct NotchWindowRoot: View {
     @State private var frameClock = FrameClock()
     /// 光标上一次是不是在卡片上 —— 只为了让触觉反馈在"进入"那一下触发一次,不是状态源。
     @State private var hoveringCard = false
+    /// 上一次 `.active` 给的点:认指针是不是被系统从刘海一侧挪到了另一侧(`NotchHoverHit.crossesNotch`)。
+    @State private var lastHoverPoint: CGPoint?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     /// 弹簧按"正在做哪件事"选:
@@ -207,11 +209,19 @@ struct NotchWindowRoot: View {
                 //
                 // 稳态顶行以下那一截只显示、不接指针:落在那里不算进卡片,交给控制器切穿透(见 NotchLyricRowPassThrough)。
                 case .active(let point):
+                    let notch = controller.hoverNotch
                     let region = NotchHoverHit.region(point: point, cardWidth: cardWidth, cardHeight: cardHeight,
-                                                      passThroughBelow: controller.passThroughBandTop)
+                                                      passThroughBelow: controller.passThroughBandTop, notch: notch)
                     updateHover(inside: region == .card, point: point)
                     if region == .passThrough { controller.beginLyricPassThrough() }
-                case .ended: updateHover(inside: false, point: nil)
+                    if region == .card, let notch, let last = lastHoverPoint,
+                       NotchHoverHit.crossesNotch(from: last, to: point, cardWidth: cardWidth, notch: notch) {
+                        controller.expandFromNotchCrossing()
+                    }
+                    lastHoverPoint = point
+                case .ended:
+                    lastHoverPoint = nil
+                    updateHover(inside: false, point: nil)
                 }
             }
             // 贴顶 + 水平居中。窗口本身是按刘海中心点摆的,所以"在窗口里居中"就等于

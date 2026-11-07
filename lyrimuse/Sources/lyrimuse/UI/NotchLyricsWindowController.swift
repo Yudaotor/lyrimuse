@@ -911,6 +911,17 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
     /// 控制器此刻认不认为指针在卡片上。`NotchWindowRoot.updateHover` 拿它跟自己的边沿记忆对账。
     var isCardHovered: Bool { cardHovered }
 
+    /// 悬停判定用的刘海位置(卡片局部坐标);没有真刘海时 nil。见 `NotchHoverHit.notchCatchDepth`。
+    var hoverNotch: NotchHoverHit.Notch? {
+        notchWidth > 0 ? NotchHoverHit.Notch(width: notchWidth, bottom: contentTopInset) : nil
+    }
+
+    /// 指针在顶行里被系统从刘海一侧挪到另一侧(`NotchHoverHit.crossesNotch`):不等进入延迟,马上展开。
+    func expandFromNotchCrossing() {
+        guard cardHovered, !hoverExpanded else { return }
+        applyHoverIntent(immediately: true)
+    }
+
     /// 只显示那一截的上沿(卡片局部 y,即顶行下沿);nil = 整张卡都接指针:「悬停时淡化」关着、展开态(从顶行展开后要往下够
     /// 三键、进度条)、没有曲目、广告(那一格右端有「跳过广告」键)。见 05 章决策 121。
     var passThroughBandTop: CGFloat? {
@@ -929,7 +940,8 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
         let local = CGPoint(x: screenPoint.x - frame.minX, y: frame.maxY - screenPoint.y)
         let top = passThroughBandTop
         return NotchLyricRowPassThrough.Hit(
-            region: NotchHoverHit.region(point: local, cardWidth: frame.width, cardHeight: frame.height, passThroughBelow: top),
+            region: NotchHoverHit.region(point: local, cardWidth: frame.width, cardHeight: frame.height, passThroughBelow: top,
+                                         notch: hoverNotch),
             cardSize: frame.size, bandTop: top)
     }
 
@@ -1003,7 +1015,7 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
         BackgroundCursor.setEnabled(false, for: ObjectIdentifier(self))
     }
 
-    private func applyHoverIntent() {
+    private func applyHoverIntent(immediately: Bool = false) {
         let expanded = cardHovered || editorialHovered
         // 每次新的 hover 事件都先撤掉上一次还没兑现的意图 —— "进了又出"必须净效果为零,
         // 而不是两个延迟各自到期、先展开再收起地闪一下。
@@ -1028,6 +1040,10 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
             if expanded && !wasExpanded {
                 NSHapticFeedbackManager.defaultPerformer.perform(.generic, performanceTime: .now)
             }
+        }
+        guard !immediately else {
+            work.perform()
+            return
         }
         pendingHoverWork = work
         DispatchQueue.main.asyncAfter(

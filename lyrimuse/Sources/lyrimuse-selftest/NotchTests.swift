@@ -760,6 +760,33 @@ func runNotchTests() {
         expectEqual(H.region(point: CGPoint(x: 120, y: 150), cardWidth: 482, cardHeight: 191, passThroughBelow: nil),
                     .card, "灵动岛命中: 展开态往下够三键、进度条")
 
+        // 指针进不了刘海那一块:刘海正下方那一条算顶行,收起的卡片(底边就是刘海下沿)从下往上也够得着;横着被系统挪过刘海算往里推。
+        let notch = H.Notch(width: 185, bottom: 32)
+        let collapsed = (w: CGFloat(256), h: CGFloat(32))
+        expectEqual(H.region(point: CGPoint(x: 128, y: 33), cardWidth: collapsed.w, cardHeight: collapsed.h, passThroughBelow: nil, notch: notch),
+                    .card, "灵动岛命中: 收起的卡片,刘海正下方那一条算顶行")
+        expectEqual(H.region(point: CGPoint(x: 128, y: 33), cardWidth: collapsed.w, cardHeight: collapsed.h, passThroughBelow: nil),
+                    .outside, "灵动岛命中: 不给刘海时照旧不算")
+        expectEqual(H.region(point: CGPoint(x: 128, y: 32 + H.notchCatchDepth + 1), cardWidth: collapsed.w, cardHeight: collapsed.h,
+                             passThroughBelow: nil, notch: notch), .outside, "灵动岛命中: 那一条只有 notchCatchDepth 深")
+        expectEqual(H.region(point: CGPoint(x: 20, y: 33), cardWidth: collapsed.w, cardHeight: collapsed.h, passThroughBelow: nil, notch: notch),
+                    .outside, "灵动岛命中: 耳朵正下方不算(指针够得着耳朵)")
+        expectEqual(H.region(point: CGPoint(x: 128, y: 35), cardWidth: steady.w, cardHeight: steady.h, passThroughBelow: top, notch: notch),
+                    .card, "灵动岛命中: 开着悬停淡化,刘海正下方那一条也算顶行")
+        expectEqual(H.region(point: CGPoint(x: 20, y: 35), cardWidth: steady.w, cardHeight: steady.h, passThroughBelow: top, notch: notch),
+                    .passThrough, "灵动岛命中: 歌词行其余部分照旧只显示")
+        expectEqual([H.crossesNotch(from: CGPoint(x: 230, y: 20), to: CGPoint(x: 30, y: 20), cardWidth: collapsed.w, notch: notch),
+                     H.crossesNotch(from: CGPoint(x: 30, y: 20), to: CGPoint(x: 225, y: 21), cardWidth: collapsed.w, notch: notch),
+                     H.crossesNotch(from: CGPoint(x: 230, y: 20), to: CGPoint(x: 225, y: 20), cardWidth: collapsed.w, notch: notch),
+                     H.crossesNotch(from: CGPoint(x: 230, y: 40), to: CGPoint(x: 30, y: 40), cardWidth: collapsed.w, notch: notch),
+                     H.crossesNotch(from: CGPoint(x: 230, y: 20), to: CGPoint(x: 30, y: 20), cardWidth: collapsed.w, notch: H.Notch(width: 0, bottom: 32))],
+                    [true, true, false, false, false], "灵动岛命中: 顶行里从刘海一侧到另一侧算被挪过刘海;同侧、顶行以下、没刘海都不算")
+        let root = (try? String(contentsOf: URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("lyrimuse/UI/NotchWindowRoot.swift"), encoding: .utf8)) ?? ""
+        expectEqual(sourceHas(root, "passThroughBelow: controller.passThroughBandTop, notch: notch)")
+                    && sourceHas(root, "NotchHoverHit.crossesNotch(from: last, to: point, cardWidth: cardWidth, notch: notch) {\ncontroller.expandFromNotchCrossing()"), true,
+                    "灵动岛命中接线: 悬停按刘海那一条判,被挪过刘海时马上展开")
+
         // 「悬浮淡化」淡到的值跟悬浮歌词同一档。
         expectEqual(NotchPassThroughFade.opacity, 0.15, "灵动岛悬浮淡化: 淡到 15%,同悬浮歌词")
     }
@@ -2270,7 +2297,7 @@ func runNotchTests() {
         // 离开、窗口收走、副本拆掉都要放手,定时器自己也核指针还在不在卡片 / 浮框上。
         let cursorBody: String = {
             guard let a = controller.range(of: "private func syncCardCursor()"),
-                  let b = controller.range(of: "private func applyHoverIntent()", range: a.upperBound..<controller.endIndex)
+                  let b = controller.range(of: "private func applyHoverIntent(", range: a.upperBound..<controller.endIndex)
             else { return "" }
             return String(controller[a.lowerBound..<b.lowerBound])
         }()
