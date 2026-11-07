@@ -400,13 +400,18 @@ func neteaseLookupAll(ctx context.Context, artist, title, album string, duration
 	neteaseMu.Lock()
 	e, cached := neteaseCache[key]
 	neteaseMu.Unlock()
+	// bypassed:缓存那份还有效,只是这一轮要按本机身份重走。
+	bypassed := false
 	if cached {
 		ttl := int64(neteaseCacheTTL / time.Second)
 		if e.info.Cover == "" {
 			ttl = int64(neteaseCacheTTLNoCover / time.Second)
 		}
-		if now-e.ts < ttl && (e.info.FromLocalClient || !neteaseLocalOutranksCached(ctx, artist, title, album, durationSecs)) {
-			return e.info
+		if now-e.ts < ttl {
+			if e.info.FromLocalClient || !neteaseLocalOutranksCached(ctx, artist, title, album, durationSecs) {
+				return e.info
+			}
+			bypassed = true
 		}
 	}
 
@@ -422,6 +427,10 @@ func neteaseLookupAll(ctx context.Context, artist, title, album string, duration
 		neteaseMu.Lock()
 		neteaseCache[key] = neteaseCacheEntry{info: info, ts: now}
 		neteaseMu.Unlock()
+	}
+	// 按本机身份重走没取到词(多半被限流):手上那份有词的缓存照用,别让这一轮网易云这一路(唯一给译文 / 罗马音的源)空着。
+	if bypassed && e.info.Lyrics != "" && (info.Lyrics == "" || !sub.complete(ctx)) {
+		return e.info
 	}
 	return info
 }

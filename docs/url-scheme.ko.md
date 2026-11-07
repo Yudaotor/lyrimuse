@@ -23,7 +23,7 @@
 | `lyrimuse://lyrics-manager` | 가사 관리자를 엽니다 |
 | `lyrimuse://lyrics-search` | 현재 노래의 가사 검색 윈도우를 엽니다 |
 | `lyrimuse://menubar-panel` | 메뉴 막대 패널을 열거나 닫습니다 |
-| `lyrimuse://menubar-panel?quick=overlay` | 메뉴 막대 패널을 특정 타일의 빠른 설정 화면으로 엽니다(열기만 하고 닫지 않음). `quick`은 `overlay`, `notch`, `menubar`, `touchbar`, `lyrics-window`, `lyrics-manager` 중 하나입니다 |
+| `lyrimuse://menubar-panel?quick=overlay` | 메뉴 막대 패널을 특정 타일의 빠른 설정 화면으로 엽니다(열기만 하고 닫지 않음). `quick`은 `overlay`, `notch`, `menubar`, `touchbar`, `lyrics-window`, `lyrics-manager`, `translation`, `romanization`, `overlay-font`, `lyrics-offset`, `lock-position`, `mini-window`, `volume` 중 하나입니다 |
 | `lyrimuse://menubar-menu` | 메뉴 막대 아이콘의 메뉴를 띄웁니다 |
 | `lyrimuse://onboarding` | 시작 가이드를 엽니다 |
 | `lyrimuse://whats-new` | 설치된 버전의 새로운 기능을 보여 줍니다 |

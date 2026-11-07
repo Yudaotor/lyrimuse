@@ -610,7 +610,7 @@ Lời bài hát trong trình duyệt web. “Lời trên web” hiển thị đ�
 
 ### 18 trình phát, chọn nhiều hoặc tự động nhận diện
 
-Apple Music, Spotify, QQ Music, NetEase Cloud Music, Kugou, Soda Music, LX Music, KKBOX, Amazon Music, reAMP (theo phong cách Winamp), VOX (trình phát cục bộ cho nhạc lossless và hi-res), Pine Player (trình phát cục bộ miễn phí, phát được gần như mọi định dạng), foobar2000 (trình phát cục bộ kinh điển chuyển từ Windows sang), Swinsian (trình phát cục bộ dành cho thư viện nhạc lớn), Plexamp (trình phát nhạc của Plex cho máy chủ riêng), Kaset (ứng dụng YouTube Music) và Pear Desktop (ứng dụng YouTube Music mã nguồn mở cho máy tính). Chọn nhiều trình phát cùng lúc, hoặc để tự động theo trình phát mà macOS hiển thị trong Đang phát. Radio Apple Music cũng được hỗ trợ, hiển thị tên và logo đài khi người dẫn chương trình nói.
+Apple Music, Spotify, QQ Music, NetEase Cloud Music, Kugou, Soda Music, LX Music, KKBOX, Amazon Music, reAMP (theo phong cách Winamp), VOX (trình phát cục bộ cho nhạc lossless và hi-res), Pine Player (trình phát cục bộ miễn phí, phát được gần như mọi định dạng), foobar2000 (trình phát cục bộ kinh điển chuyển từ Windows sang), Swinsian (trình phát cục bộ dành cho thư viện nhạc lớn), Plexamp (trình phát nhạc của Plex cho máy chủ riêng), Kaset (ứng dụng YouTube Music), Pear Desktop (ứng dụng YouTube Music mã nguồn mở cho máy tính) và WeRead để nghe sách nói. Chọn nhiều trình phát cùng lúc, hoặc để tự động theo trình phát mà macOS hiển thị trong Đang phát. Radio Apple Music cũng được hỗ trợ, hiển thị tên và logo đài khi người dẫn chương trình nói.
 
 - Cài đặt: Trình phát › Ứng dụng nhạc
 
@@ -820,6 +820,15 @@ Liên kết lyrimuse:// mở bất kỳ trang nào trong Cài đặt, cửa sổ
 ### Tìm kiếm trong cài đặt
 
 Gõ ở đầu thanh bên của Cài đặt để nhảy thẳng tới một cài đặt và tô sáng nó, kể cả trong các mục đang thu gọn. Tìm bằng tiếng Anh hoặc tiếng Trung.
+
+<a id="feature-menu-bar-panel"></a>
+
+### Bảng trên thanh menu
+
+Bấm biểu tượng trên thanh menu để mở bảng mô phỏng Trung tâm điều khiển của macOS: thẻ đang phát có ảnh bìa, lời bài hát, tiến trình và nút điều khiển, cùng các ô bật hoặc tắt từng kiểu hiển thị lời và cửa sổ. Nhấn giữ hoặc bấm chuột phải vào một ô để lật ra mặt sau với các cài đặt hay dùng. Sắp xếp theo ý bạn: kéo ô để di chuyển, kéo góc để đổi kích thước, thêm hoặc bớt ô và nút ở thanh dưới cùng. Phím cách và phím mũi tên điều khiển phát nhạc và chỉnh thời gian lời, và có thể gán phím tắt để mở bảng.
+
+- Bật theo mặc định
+- Cài đặt: Phím tắt › Mở/đóng bảng trên thanh menu
 
 <a id="feature-menu-bar-icon"></a>
 

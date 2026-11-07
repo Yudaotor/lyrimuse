@@ -1049,8 +1049,9 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
         if next != isExpanded { isExpanded = next }
         if hoverOpening, !hasTrack { NotchIdleLastTrack.shared.rerollQuote() }
         // 展开区的随机 / 循环键(只给随机、循环此刻都能切的播放器)跟播放器对一次表:用户可能在那边自己改过模式,
-        // 没有事件通知得到。只在两颗键会出现时读,别的播放器不为这次悬停起脚本子进程。
-        if hoverOpening, expandedShowsControls,
+        // 没有事件通知得到。只在两颗键会出现时读(播放控制那一排,或快捷操作格子里放了它们),别的播放器不为这次悬停起脚本子进程。
+        let placed = expandedShowsQuickActions ? quickSlots.placed : []
+        if hoverOpening, expandedShowsControls || placed.contains(.shuffle) || placed.contains(.repeatMode),
            PlaybackCoordinator.shared.playbackModeOptions.contains(.shuffle),
            PlaybackCoordinator.shared.playbackModeOptions.canRepeat {
             PlaybackCoordinator.shared.refreshPlaybackMode()
@@ -1058,6 +1059,10 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
         // 头部那颗「喜欢」同理:用户可能在播放器里自己点过。没有「喜欢」的播放器 refreshFavorited 不起子进程。
         if hoverOpening, expandedShowsQuickActions, !isAdBreakNow {
             PlaybackCoordinator.shared.refreshFavorited()
+        }
+        // 格子里的调音量、静音键按此刻的音量加减:用户可能在播放器里拖过音量,同样对一次表。
+        if hoverOpening, !isAdBreakNow, !placed.isDisjoint(with: [.volumeUp, .volumeDown, .mute]) {
+            PlaybackCoordinator.shared.refreshVolume()
         }
         if next {
             // 展开头部本来就有歌名,掉出来的那条收掉。
@@ -1659,6 +1664,10 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
         releaseCardCursor()
         subscriptions.removeAll()
         setEditorialDemand(false)
+        if retainsLastfmLove {
+            retainsLastfmLove = false
+            LastfmLoveModel.shared.release()
+        }
         NotchEditorialPanel.shared.close(ifOwner: window)
         revealGate.cancel()
         stopRevealWait()

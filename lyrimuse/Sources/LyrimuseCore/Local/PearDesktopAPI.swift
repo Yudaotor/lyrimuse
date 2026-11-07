@@ -448,13 +448,24 @@ public final class PearDesktopAPI: @unchecked Sendable {
         return .song(song)
     }
 
+    private func forgetLastSong() {
+        lock.lock()
+        lastSong = nil
+        lock.unlock()
+    }
+
     private func song(matching snapshot: MediaControlSnapshot) -> Song? {
-        guard let config = currentConfig(), config.enabled, !config.usesHTTPS else { return nil }
+        // 问不了接口的这几拍把上次读到的那首清掉:`reading` 拿它判广告,留着旧的会把之后每首新歌都判成广告。
+        guard let config = currentConfig(), config.enabled, !config.usesHTTPS else {
+            forgetLastSong()
+            return nil
+        }
         lock.lock()
         let needsToken = config.needsToken && token == nil
         let reuse = lastSong.flatMap { Date().timeIntervalSince($0.at) < Self.songReuseSecs ? $0.song : nil }
         lock.unlock()
         if needsToken {
+            forgetLastSong()
             authorizeIfNeeded(config)
             return nil
         }

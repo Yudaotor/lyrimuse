@@ -610,7 +610,7 @@ Il testo in un browser web. “Testo web” mostra esattamente ciò che mostra l
 
 ### Diciotto player, scegline più di uno o rilevali automaticamente
 
-Apple Music, Spotify, QQ Music, NetEase Cloud Music, Kugou, Soda Music, LX Music, KKBOX, Amazon Music, reAMP in stile Winamp, VOX, player locale lossless e hi-res, Pine Player, player locale gratuito che riproduce quasi ogni formato, foobar2000, il classico player locale arrivato da Windows, Swinsian, player locale pensato per librerie di grandi dimensioni, Plexamp, il lettore musicale di Plex per il proprio server, Kaset, l’app di YouTube Music, e Pear Desktop, un’app desktop open source per YouTube Music. Scegline più di uno insieme, o lascia il rilevamento automatico per seguire ciò che macOS mostra come “In riproduzione”. Funziona anche la radio di Apple Music, con nome e logo della stazione mentre parla il conduttore.
+Apple Music, Spotify, QQ Music, NetEase Cloud Music, Kugou, Soda Music, LX Music, KKBOX, Amazon Music, reAMP in stile Winamp, VOX, player locale lossless e hi-res, Pine Player, player locale gratuito che riproduce quasi ogni formato, foobar2000, il classico player locale arrivato da Windows, Swinsian, player locale pensato per librerie di grandi dimensioni, Plexamp, il lettore musicale di Plex per il proprio server, Kaset, l’app di YouTube Music, Pear Desktop, un’app desktop open source per YouTube Music, e WeRead per gli audiolibri. Scegline più di uno insieme, o lascia il rilevamento automatico per seguire ciò che macOS mostra come “In riproduzione”. Funziona anche la radio di Apple Music, con nome e logo della stazione mentre parla il conduttore.
 
 - Impostazioni: Player › App musicali
 
@@ -820,6 +820,15 @@ I link lyrimuse:// aprono qualsiasi pagina delle impostazioni, la finestra testo
 ### Ricerca nelle impostazioni
 
 Digita in cima alla barra laterale delle impostazioni per andare dritto a un’impostazione, evidenziata, anche dentro le sezioni compresse. Puoi cercare in inglese o in cinese.
+
+<a id="feature-menu-bar-panel"></a>
+
+### Pannello della barra dei menu
+
+Fai clic sull’icona nella barra dei menu per aprire un pannello ispirato al Centro di Controllo di macOS: una scheda di riproduzione con illustrazione, testo, avanzamento e controlli, e riquadri che attivano o disattivano ogni tipo di testo e finestra. Tieni premuto o fai clic destro su un riquadro per girarlo e vedere le sue impostazioni più usate. Disponilo come preferisci: trascina i riquadri per spostarli, trascina un angolo per ridimensionarli e aggiungi o rimuovi riquadri e pulsanti della barra in basso. La barra spaziatrice e le frecce controllano la riproduzione e spostano la sincronizzazione del testo, e una scorciatoia può aprire il pannello.
+
+- Attiva di default
+- Impostazioni: Scorciatoie da tastiera › Apri/chiudi pannello della barra dei menu
 
 <a id="feature-menu-bar-icon"></a>
 

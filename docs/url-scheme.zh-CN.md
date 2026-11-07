@@ -23,7 +23,7 @@
 | `lyrimuse://lyrics-manager` | 打开歌词管理 |
 | `lyrimuse://lyrics-search` | 打开「搜索歌词」小窗（搜的是正在放的这首） |
 | `lyrimuse://menubar-panel` | 打开或关闭菜单栏面板 |
-| `lyrimuse://menubar-panel?quick=overlay` | 打开菜单栏面板，并翻到某一格的快捷设置（只打开、不关闭）。`quick` 可选 `overlay`、`notch`、`menubar`、`touchbar`、`lyrics-window`、`lyrics-manager` |
+| `lyrimuse://menubar-panel?quick=overlay` | 打开菜单栏面板，并翻到某一格的快捷设置（只打开、不关闭）。`quick` 可选 `overlay`、`notch`、`menubar`、`touchbar`、`lyrics-window`、`lyrics-manager`、`translation`、`romanization`、`overlay-font`、`lyrics-offset`、`lock-position`、`mini-window`、`volume` |
 | `lyrimuse://menubar-menu` | 弹出菜单栏图标的菜单 |
 | `lyrimuse://onboarding` | 打开欢迎引导 |
 | `lyrimuse://whats-new` | 打开「本次更新」卡片，列出当前版本的更新内容 |

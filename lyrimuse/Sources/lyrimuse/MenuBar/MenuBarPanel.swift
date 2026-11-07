@@ -538,6 +538,16 @@ enum PanelPlaybackKeys {
     private static let down: UInt16 = 125
     private static let up: UInt16 = 126
 
+    /// 卡片中间那颗键和空格共用:没有曲目时接着放上次那首(只能打开的播放器退回打开),有曲目时播放 / 暂停。
+    static func playPauseOrResume(idleNoTrack: Bool) {
+        if idleNoTrack {
+            IdlePlaybackActions.resume(player: IdlePlaybackActions.player)
+        } else {
+            // 乐观回声版:歌词窗封面缩放/图标点击即动(见 userTogglePlayPause)。
+            MenuBarStatusItem.withMusicPermission { PlaybackCoordinator.shared.userTogglePlayPause() }
+        }
+    }
+
     static func handle(_ event: NSEvent, in window: NSWindow) -> Bool {
         guard PanelEditBridge.shared.playbackKeysEnabled, !(window.firstResponder is NSText),
               event.modifierFlags.intersection([.command, .option, .control, .shift]).isEmpty else { return false }
@@ -546,7 +556,8 @@ enum PanelPlaybackKeys {
         if event.isARepeat, [space, left, right].contains(event.keyCode) { return true }
         switch event.keyCode {
         case space:
-            MenuBarStatusItem.withMusicPermission { PlaybackCoordinator.shared.userTogglePlayPause() }
+            let c = PlaybackCoordinator.shared
+            playPauseOrResume(idleNoTrack: c.title.isEmpty && c.artist.isEmpty && !c.isCurrentTrackAdBreak)
         case left:
             MenuBarStatusItem.withMusicPermission { MusicPlaybackController.previousTrack() }
         case right:
@@ -689,6 +700,8 @@ private struct MenuBarPanelView: View {
     /// 正在拖右下角拉手换尺寸的那一格,和开始拉那一刻的布局(拉大时挤开的格子,缩回去会回原位)。
     @State private var resizingTile: MenuBarPanelLayout.Tile?
     @State private var resizeBase: MenuBarPanelLayout?
+    /// 开始拉那一刻存着的布局:此刻用不了的格子按它放回原位,拉大压到它、缩回去它还在。
+    @State private var resizeStored: MenuBarPanelLayout?
     /// 这一次按下不在任何拉手上(网格那一层的换尺寸手势这次不管)。
     @State private var resizeMissed = false
     /// 编辑时正左右拖着的底栏那一项,和拖了多远。
@@ -1347,12 +1360,7 @@ private struct MenuBarPanelView: View {
     /// 走带中间那颗:有曲目时切播放 / 暂停;没有曲目时接着放上次那首(`IdlePlaybackActions.resume`,
     /// 只能打开的播放器在里面退回打开它)。点完不收面板:放起来之后卡片当场变成正在播放卡。
     private func playPauseOrResume() {
-        if isIdleNoTrack {
-            IdlePlaybackActions.resume(player: IdlePlaybackActions.player)
-        } else {
-            // 乐观回声版:歌词窗封面缩放/图标点击即动(见 userTogglePlayPause)。
-            MenuBarStatusItem.withMusicPermission { PlaybackCoordinator.shared.userTogglePlayPause() }
-        }
+        PanelPlaybackKeys.playPauseOrResume(idleNoTrack: isIdleNoTrack)
     }
 
     /// 点卡片封面:先收面板再开歌词窗口(同「歌词窗口」格子的顺序)。
@@ -2129,6 +2137,7 @@ private struct MenuBarPanelView: View {
                     }
                     resizingTile = hit
                     resizeBase = editLayout
+                    resizeStored = AppSettings.shared.menuBarPanelLayout
                 }
                 guard let tile = resizingTile, let base = resizeBase, let start = base.placement(of: tile) else { return }
                 let target = Self.grid.resizedSize(origin: Self.grid.frame(start).origin, pointer: value.location,
@@ -2136,12 +2145,13 @@ private struct MenuBarPanelView: View {
                 var resized = base
                 resized.resize(tile, to: target)
                 if resized != editLayout {
-                    updateLayout { $0 = resized }
+                    updateLayout(hiddenFrom: resizeStored) { $0 = resized }
                 }
             }
             .onEnded { _ in
                 resizingTile = nil
                 resizeBase = nil
+                resizeStored = nil
                 resizeMissed = false
             }
     }
@@ -2198,7 +2208,12 @@ private struct MenuBarPanelView: View {
             PanelEditCaption(title: L10n.t("底栏"))
             footerEditRow
             HStack {
-                Button(L10n.t("恢复默认")) { updateLayout { $0 = .default } }
+                // 直接写默认布局,不走 updateLayout:那会把此刻用不了的格子按原位放回去,结果不等于默认。
+                Button(L10n.t("恢复默认")) {
+                    withAnimation(reduceMotion ? nil : .easeOut(duration: 0.16)) {
+                        AppSettings.shared.menuBarPanelLayout = .default
+                    }
+                }
                     .disabled(playback.panelLayout == .default)
                 Spacer(minLength: 0)
                 Button(L10n.t("完成")) { setEditing(false) }
@@ -2213,12 +2228,14 @@ private struct MenuBarPanelView: View {
 
     /// 编辑时底栏那一排:跟平时一样按顺序摆(多于三项只画图标),每项左上「−」;按住一项左右拖,松手按落点换到那一格。
     /// 没连着的 Last.fm / Discord 平时不画,这里也不画,换位按画出来的那几项算(`moveFooter(_:toPositionOf:)`)。
+    /// 存下来的每一项都画(此刻用不了的调淡):底栏满不满按存下的项数算,看不见的项也要删得掉。
     private var footerEditRow: some View {
-        let items = playback.panelLayout.footer.filter(footerItemAvailable)
+        let items = playback.panelLayout.footer
         let slot = Self.grid.width / CGFloat(max(items.count, 1))
         return HStack(spacing: 0) {
             ForEach(Array(items.enumerated()), id: \.element) { index, item in
                 footerEditChip(item, compact: items.count > 3)
+                    .opacity(footerItemAvailable(item) ? 1 : 0.45)
                     .frame(width: slot)
                     .offset(x: footerDragItem == item ? footerDragOffset : 0)
                     .zIndex(footerDragItem == item ? 1 : 0)
@@ -2306,19 +2323,31 @@ private struct MenuBarPanelView: View {
     private func setEditing(_ on: Bool) {
         if on { setQuickTarget(nil) }
         editing = on
+        // 视图被移走时 SwiftUI 不报拖动结束(按着拉手时按回车「完成」),拖动、换尺寸的中间状态都在这里清掉。
         draggingTile = nil
+        dragBase = nil
+        dragPreview = nil
+        dragCell = []
+        resizingTile = nil
+        resizeBase = nil
+        resizeStored = nil
+        resizeMissed = false
+        footerDragItem = nil
+        footerDragOffset = 0
         MenuBarPanelDebugState.editing = on
         panelLogger.debug("panel editing: \(on, privacy: .public)")
     }
 
     /// 编辑时改布局:直接写设置,面板这一刻就按新布局排。挪位、加减格子带一小段动画。
     /// 改的是 `editLayout` 那一份:先拿掉此刻用不了的格子,改完再放回原位(原位被占了就不放,能用时它回到「可添加」)。
-    private func updateLayout(_ change: (inout MenuBarPanelLayout) -> Void) {
+    /// `hiddenFrom`:用不了的格子按这份布局里的原位放回(拉拉手换尺寸时传开始拉那一刻的,中间压到过的格子缩回去还能回来)。
+    private func updateLayout(hiddenFrom: MenuBarPanelLayout? = nil, _ change: (inout MenuBarPanelLayout) -> Void) {
         let stored = AppSettings.shared.menuBarPanelLayout
         let split = Self.withoutUnavailable(stored, available: tileAvailable)
+        let hidden = hiddenFrom.map { Self.withoutUnavailable($0, available: tileAvailable).hidden } ?? split.hidden
         var layout = split.layout
         change(&layout)
-        layout = split.hidden.reduce(layout) { $0.restoring($1) }
+        layout = hidden.reduce(layout) { $0.restoring($1) }
         guard layout != stored else { return }
         withAnimation(reduceMotion ? nil : .easeOut(duration: 0.16)) {
             AppSettings.shared.menuBarPanelLayout = layout

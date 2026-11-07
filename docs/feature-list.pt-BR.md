@@ -610,7 +610,7 @@ A letra em um navegador. “Letra na web” mostra exatamente o que a janela da 
 
 ### Dezoito players: escolha vários ou detecte automaticamente
 
-Apple Music, Spotify, QQ Music, NetEase Cloud Music, Kugou, Soda Music, LX Music, KKBOX, Amazon Music, o reAMP no estilo Winamp, o VOX, player local sem perdas e de alta resolução, o Pine Player, player local gratuito que toca quase todos os formatos, o clássico player local foobar2000, trazido do Windows, o player local Swinsian, feito para bibliotecas grandes, o Plexamp, player de música da Plex para o seu próprio servidor, o Kaset, app do YouTube Music, e o Pear Desktop, app de desktop de código aberto para o YouTube Music. Escolha vários de uma vez ou deixe no automático para seguir o que o macOS mostra em Reproduzindo. O rádio do Apple Music também funciona, mostrando o nome e o logotipo da estação enquanto o apresentador fala.
+Apple Music, Spotify, QQ Music, NetEase Cloud Music, Kugou, Soda Music, LX Music, KKBOX, Amazon Music, o reAMP no estilo Winamp, o VOX, player local sem perdas e de alta resolução, o Pine Player, player local gratuito que toca quase todos os formatos, o clássico player local foobar2000, trazido do Windows, o player local Swinsian, feito para bibliotecas grandes, o Plexamp, player de música da Plex para o seu próprio servidor, o Kaset, app do YouTube Music, o Pear Desktop, app de desktop de código aberto para o YouTube Music, e o WeRead para audiolivros. Escolha vários de uma vez ou deixe no automático para seguir o que o macOS mostra em Reproduzindo. O rádio do Apple Music também funciona, mostrando o nome e o logotipo da estação enquanto o apresentador fala.
 
 - Ajustes: Player › Apps de música
 
@@ -820,6 +820,15 @@ Os links lyrimuse:// abrem qualquer página dos Ajustes, a janela da letra ou o 
 ### Busca nos ajustes
 
 Digite no topo da barra lateral dos Ajustes para ir direto a um ajuste, destacado, mesmo dentro de seções recolhidas. Busque em inglês ou em chinês.
+
+<a id="feature-menu-bar-panel"></a>
+
+### Painel da barra de menus
+
+Clique no ícone da barra de menus para abrir um painel inspirado na Central de Controle do macOS: um cartão do que está tocando com capa, letra, progresso e controles, e blocos que ativam ou desativam cada tipo de letra e janela. Mantenha pressionado ou clique com o botão direito em um bloco para virá-lo e ver os ajustes mais usados. Organize do seu jeito: arraste os blocos para movê-los, arraste um canto para mudar o tamanho e adicione ou remova blocos e botões da barra inferior. A barra de espaço e as setas controlam a reprodução e ajustam o tempo da letra, e um atalho pode abrir o painel.
+
+- Ativado por padrão
+- Ajustes: Atalhos de teclado › Abrir/fechar painel da barra de menus
 
 <a id="feature-menu-bar-icon"></a>
 

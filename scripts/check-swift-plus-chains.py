@@ -13,19 +13,27 @@ import sys
 
 LIMIT = 3
 CONT = re.compile(r"\s*\+\s*\(")
+JOIN = re.compile(r"\?\? \[\]\)\s*\+\s*\(")
+
+
+def segments(line):
+    """这一行里用 + 连着的可选数组段数:行内每个 `?? []) + (` 接上一段,再加上行里最后那一段。注释行、没有 `?? [])` 的行算 0。"""
+    if line.lstrip().startswith("//") or "?? [])" not in line:
+        return 0
+    return len(JOIN.findall(line)) + 1
 
 
 def scan(path):
     lines = open(path, encoding="utf-8").read().split("\n")
     hits, i = [], 0
     while i < len(lines):
-        n = lines[i].count("?? [])")
+        n = segments(lines[i])
         if not n:
             i += 1
             continue
         j = i + 1
-        while j < len(lines) and CONT.match(lines[j]) and "?? [])" in lines[j]:
-            n += lines[j].count("?? [])")
+        while j < len(lines) and CONT.match(lines[j]) and segments(lines[j]):
+            n += segments(lines[j])
             j += 1
         if n >= LIMIT:
             hits.append((i + 1, n))

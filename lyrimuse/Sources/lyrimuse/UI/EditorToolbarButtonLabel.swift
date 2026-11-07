@@ -180,17 +180,24 @@ extension EditorToolbarButtonLabel {
     /// 压到底时摘要那一截全让出来(连间隔点和它前面的间距,`EditorToolbarSummarySlot` 整截藏掉)。
     static let summaryFloor: CGFloat = -10
 
-    /// 按工具栏的字号量摘要的宽,估出它能让出多少。字号跟各工具栏外层的 `.font(.system(size: 12))` 一致,改一处要一起改。
-    static func summarySlack(_ summary: String) -> CGFloat {
-        max(min(textWidth(summary), summaryWidth) - summaryFloor, 0)
+    /// 「· 值」那一截排出来的宽:文字宽加上间隔点和它前后的间距(`-summaryFloor`),封顶 `summaryWidth`(视图上那一截的上限)。
+    /// 字号跟各工具栏外层的 `.font(.system(size: 12))` 一致,改一处要一起改。
+    static func summaryLineWidth(_ text: String) -> CGFloat {
+        min(textWidth(text) - summaryFloor, summaryWidth)
     }
 
-    /// 各档比理想宽度窄多少,给 `EditorToolbarContentWidthRow` 落档用:少掉末尾值的几档按文字差算、多留 1pt
-    /// (量出来的跟实际排版差零点几 pt,宁可宽一点,别差一丝落到下一档);藏掉那一档同 `summarySlack`。长名字不分档。
+    /// 摘要整截藏掉能让出多少:就是它此刻那一截的宽。
+    static func summarySlack(_ summary: String) -> CGFloat {
+        summaryLineWidth(summary)
+    }
+
+    /// 各档比理想宽度窄多少,给 `EditorToolbarContentWidthRow` 落档用:少掉末尾值的几档按那一截的宽差算(都带间隔点、
+    /// 都夹在上限里,长摘要的理想宽度是上限而不是文字宽),多留 1pt(量出来的跟实际排版差零点几 pt,宁可宽一点,
+    /// 别差一丝落到下一档);藏掉那一档同 `summarySlack`。长名字不分档。
     static func summarySteps(_ summary: String) -> [CGFloat] {
         guard !allowsTailTruncation(summary) else { return [] }
-        let full = min(textWidth(summary), summaryWidth)
-        let shorter = EditorToolbarSummary.candidates(summary).dropFirst().map { max(full - textWidth($0) - 1, 0) }
+        let full = summaryLineWidth(summary)
+        let shorter = EditorToolbarSummary.candidates(summary).dropFirst().map { max(full - summaryLineWidth($0) - 1, 0) }
         return [0] + shorter + [summarySlack(summary)]
     }
 

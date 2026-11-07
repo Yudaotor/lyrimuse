@@ -1607,6 +1607,7 @@ final class AppSettings: ObservableObject {
     @Published var appLanguage: String {
         didSet {
             defaults.set(appLanguage, forKey: Keys.appLanguage)
+            WhatsNewCenter.shared.languageChosen(appLanguage)
             followLanguageForDefaultRomanization()
             FeatureSettingsStore.shared.followReportLanguage()
         }

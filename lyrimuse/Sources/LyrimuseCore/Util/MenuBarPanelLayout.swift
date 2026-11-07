@@ -146,6 +146,8 @@ public struct MenuBarPanelLayout: Equatable, Sendable {
     public static let defaultFooter: [FooterItem] = [.settings, .lastfm, .version]
 
     public static let columns = 6
+    /// 读存盘时认的最大行号,再往下的当坏数据。格子总数有限,正常排不到这么深。
+    public static let maxStoredRow = 64
     /// 存盘格式版本:2 起正在播放卡是格子。
     static let storageVersion = 2
 
@@ -196,7 +198,7 @@ public struct MenuBarPanelLayout: Equatable, Sendable {
 
     /// 这个位置放不放得下:不出左右边界、行不为负,不跟别的格子(`ignoring` 那一格除外)重叠。
     public func fits(_ p: Placement, ignoring: Tile?) -> Bool {
-        guard p.column >= 0, p.row >= 0, p.column + p.size.columns <= Self.columns else { return false }
+        guard p.column >= 0, p.row >= 0, p.column <= Self.columns, p.column + p.size.columns <= Self.columns else { return false }
         return !placements.contains { $0.tile != ignoring && $0.tile != p.tile && $0.overlaps(p) }
     }
 
@@ -422,7 +424,11 @@ public struct MenuBarPanelLayout: Equatable, Sendable {
         for raw in stored.tiles {
             guard let tile = Tile(rawValue: raw.id), !layout.contains(tile) else { continue }
             let size = tile.fitting(raw.size.flatMap(Size.init(rawValue:)) ?? .medium)
-            let p = Placement(tile: tile, size: size, column: raw.col ?? -1, row: raw.row.map { $0 + shift } ?? -1)
+            // 存盘可能被导入配置改坏:列先夹进网格再对齐到这一档能落的列,行超出 `maxStoredRow` 的当没坑位,交给 `add` 找空位。
+            // 不夹的话极大的数在 `fits` / `overlaps` 里一加就溢出,启动读设置时直接崩。
+            let column = raw.col.map { size.alignedColumn(near: min(max($0, 0), Self.columns)) } ?? -1
+            let row = raw.row.flatMap { (0...Self.maxStoredRow).contains($0) ? $0 + shift : nil } ?? -1
+            let p = Placement(tile: tile, size: size, column: column, row: row)
             if layout.fits(p, ignoring: nil) {
                 layout.placements.append(p)
             } else {

@@ -23,7 +23,7 @@ Les plus courants se copient depuis **Liens profonds**, en bas de Réglages › 
 | `lyrimuse://lyrics-manager` | Ouvre le Gestionnaire de paroles |
 | `lyrimuse://lyrics-search` | Ouvre la fenêtre « Rechercher les paroles » pour le morceau en cours |
 | `lyrimuse://menubar-panel` | Ouvre ou ferme le panneau de la barre des menus |
-| `lyrimuse://menubar-panel?quick=overlay` | Ouvre le panneau de la barre des menus sur les réglages rapides d’une vignette (ouvre seulement, ne ferme jamais). `quick` vaut `overlay`, `notch`, `menubar`, `touchbar`, `lyrics-window` ou `lyrics-manager` |
+| `lyrimuse://menubar-panel?quick=overlay` | Ouvre le panneau de la barre des menus sur les réglages rapides d’une vignette (ouvre seulement, ne ferme jamais). `quick` vaut `overlay`, `notch`, `menubar`, `touchbar`, `lyrics-window`, `lyrics-manager`, `translation`, `romanization`, `overlay-font`, `lyrics-offset`, `lock-position`, `mini-window` ou `volume` |
 | `lyrimuse://menubar-menu` | Affiche le menu de l’icône de la barre des menus |
 | `lyrimuse://onboarding` | Ouvre le guide de bienvenue |
 | `lyrimuse://whats-new` | Affiche les nouveautés de la version installée |

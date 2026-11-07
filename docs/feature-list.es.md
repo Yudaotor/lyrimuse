@@ -610,7 +610,7 @@ Muestra la letra en un navegador. «Letra web» muestra lo mismo que la ventana 
 
 ### Dieciocho reproductores, varios a la vez o detección automática
 
-Apple Music, Spotify, QQ Music, NetEase Cloud Music, Kugou, Soda Music, LX Music, KKBOX, Amazon Music, reAMP (al estilo de Winamp), VOX (reproductor local centrado en audio sin pérdida y de alta resolución), Pine Player (reproductor local gratuito compatible con casi cualquier formato), foobar2000 (veterano reproductor local llegado de Windows), Swinsian (reproductor local pensado para bibliotecas grandes), Plexamp (el reproductor de música de Plex para tu propio servidor), Kaset, una app de YouTube Music, y Pear Desktop, una app de escritorio de código abierto para YouTube Music. Puedes elegir varios a la vez o dejar la detección automática, que sigue al reproductor que aparece en «Reproduciendo» de macOS. Admite la radio de Apple Music: cuando habla el locutor, muestra el nombre y el logotipo de la emisora.
+Apple Music, Spotify, QQ Music, NetEase Cloud Music, Kugou, Soda Music, LX Music, KKBOX, Amazon Music, reAMP (al estilo de Winamp), VOX (reproductor local centrado en audio sin pérdida y de alta resolución), Pine Player (reproductor local gratuito compatible con casi cualquier formato), foobar2000 (veterano reproductor local llegado de Windows), Swinsian (reproductor local pensado para bibliotecas grandes), Plexamp (el reproductor de música de Plex para tu propio servidor), Kaset, una app de YouTube Music, Pear Desktop, una app de escritorio de código abierto para YouTube Music, y WeRead para audiolibros. Puedes elegir varios a la vez o dejar la detección automática, que sigue al reproductor que aparece en «Reproduciendo» de macOS. Admite la radio de Apple Music: cuando habla el locutor, muestra el nombre y el logotipo de la emisora.
 
 - Ajustes: Reproductor › Apps de música
 
@@ -820,6 +820,15 @@ Los enlaces lyrimuse:// abren cualquier página de Ajustes, la ventana de letra 
 ### Buscar en Ajustes
 
 Escribe en la parte superior de la barra lateral de Ajustes para saltar al ajuste correspondiente, resaltado, incluso dentro de secciones contraídas. Admite búsquedas en chino e inglés.
+
+<a id="feature-menu-bar-panel"></a>
+
+### Panel de la barra de menús
+
+Al hacer clic en el icono de la barra de menús se abre un panel inspirado en el Centro de control de macOS: una tarjeta de reproducción con ilustración, letra, progreso y controles, y mosaicos que activan o desactivan cada tipo de letra y ventana. Mantén pulsado o haz clic derecho en un mosaico para darle la vuelta y ver sus ajustes habituales. Ordénalo a tu gusto: arrastra los mosaicos para moverlos, arrastra una esquina para cambiar su tamaño y añade o quita mosaicos y botones de la barra inferior. La barra espaciadora y las flechas controlan la reproducción y ajustan el tiempo de la letra, y un atajo puede abrir el panel.
+
+- Activada por omisión
+- Ajustes: Atajos de teclado › Abrir/cerrar panel de la barra de menús
 
 <a id="feature-menu-bar-icon"></a>
 

@@ -23,7 +23,7 @@
 | `lyrimuse://lyrics-manager` | เปิดตัวจัดการเนื้อเพลง |
 | `lyrimuse://lyrics-search` | เปิดหน้าต่าง “ค้นหาเนื้อเพลง” สำหรับเพลงปัจจุบัน |
 | `lyrimuse://menubar-panel` | เปิดหรือปิดแผงในแถบเมนู |
-| `lyrimuse://menubar-panel?quick=overlay` | เปิดแผงในแถบเมนูที่การตั้งค่าด่วนของการ์ดหนึ่ง (เปิดอย่างเดียว ไม่ปิด) `quick` เป็นค่าใดค่าหนึ่งใน `overlay`, `notch`, `menubar`, `touchbar`, `lyrics-window`, `lyrics-manager` |
+| `lyrimuse://menubar-panel?quick=overlay` | เปิดแผงในแถบเมนูที่การตั้งค่าด่วนของการ์ดหนึ่ง (เปิดอย่างเดียว ไม่ปิด) `quick` เป็นค่าใดค่าหนึ่งใน `overlay`, `notch`, `menubar`, `touchbar`, `lyrics-window`, `lyrics-manager`, `translation`, `romanization`, `overlay-font`, `lyrics-offset`, `lock-position`, `mini-window`, `volume` |
 | `lyrimuse://menubar-menu` | แสดงเมนูของไอคอนในแถบเมนู |
 | `lyrimuse://onboarding` | เปิดตัวช่วยตั้งค่า |
 | `lyrimuse://whats-new` | แสดงว่ามีอะไรใหม่ในเวอร์ชั่นที่ติดตั้งอยู่ |

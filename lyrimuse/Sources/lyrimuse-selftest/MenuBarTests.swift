@@ -2086,6 +2086,13 @@ func runMenuBarTests() {
         expectEqual(L.decode(messy), L(placements: [P(tile: .overlay, size: .small, column: 0, row: 0), P(tile: .notch, size: .medium, column: 3, row: 0),
                                                    P(tile: .menuBar, size: .small, column: 0, row: 1)], footer: [.settings, .lastfm]),
                     "面板布局: 认不出的和重复的丢掉、尺寸退回中号、压到前面或出界的挪到第一个对得齐的空位,认不出的底栏项丢掉")
+        // 被导入配置改坏的存盘:极大 / 极小的行列不溢出崩溃,当没坑位挪到空位;半格的列对齐到这一档能落的列。
+        let broken = #"{"grid":6,"version":2,"tiles":[{"id":"overlay","size":"small","col":9223372036854775807,"row":0},{"id":"notch","size":"small","col":0,"row":9223372036854775807},{"id":"menubar","size":"small","col":-9223372036854775808,"row":100000},{"id":"lyrics-window","size":"small","col":1,"row":3}]}"#
+        let fixed = L.decode(broken)
+        expectEqual(fixed.placements.count, 4, "面板布局: 坏行列的格子照样留着")
+        expectEqual(fixed.placements.allSatisfy { $0.column >= 0 && $0.column + $0.size.columns <= L.columns && $0.row >= 0 && $0.row <= L.maxStoredRow }, true,
+                    "面板布局: 坏行列夹进网格,不会算出 10 万行")
+        expectEqual(fixed.placement(of: .lyricsWindow).map { "\($0.column),\($0.row)" }, "0,3", "面板布局: 半格的列对齐到最近那一列")
         // 更早的存法:坑位不作数,卡片放最上面,别的按原来先后依次放;按顺序排的那种旧中号、旧小号 → 小号,旧大号 → 中号。
         let legacy = #"{"tiles":[{"id":"overlay","size":"medium"},{"id":"notch","size":"large"},{"id":"favorite","size":"small"},{"id":"menubar","size":"small"}]}"#
         expectEqual(L.decode(legacy).placements, [P(tile: .nowPlaying, size: .wide, column: 0, row: 0),
@@ -2302,8 +2309,19 @@ func runMenuBarTests() {
         expectEqual(sourceHas(panel, "if event.isARepeat, [space, left, right].contains(event.keyCode) { return true }"), true,
                     "面板按键: 按住空格、← → 不连发(不然来回切播放 / 暂停、连跳几首)")
         expectEqual(sourceHas(panel, "Self.withoutUnavailable(playback.panelLayout, available: tileAvailable).layout")
-                    && sourceHas(panel, "layout = split.hidden.reduce(layout) { $0.restoring($1) }"), true,
+                    && sourceHas(panel, "layout = hidden.reduce(layout) { $0.restoring($1) }"), true,
                     "面板编辑: 此刻用不了的格子(没连 Last.fm 时的今日收听等)编辑时也拿掉,写回时放回原位")
+        expectEqual(sourceHas(panel, "updateLayout(hiddenFrom: resizeStored) { $0 = resized }")
+                    && sourceHas(panel, "resizeBase = editLayout\nresizeStored = AppSettings.shared.menuBarPanelLayout"), true,
+                    "面板编辑: 拉拉手换尺寸时用不了的格子按开始拉那一刻的原位放回,中途压到过的缩回去还在")
+        expectEqual(sourceHas(panel, "AppSettings.shared.menuBarPanelLayout = .default")
+                    && !panel.contains("updateLayout { $0 = .default }"), true,
+                    "面板编辑: 恢复默认直接写默认布局,不把用不了的格子放回去")
+        expectEqual(sourceHas(panel, "draggingTile = nil\ndragBase = nil\ndragPreview = nil\ndragCell = []\nresizingTile = nil\nresizeBase = nil"), true,
+                    "面板编辑: 进出编辑清掉拖动、换尺寸的中间状态")
+        expectEqual(sourceHas(panel, "let items = playback.panelLayout.footer\n")
+                    && sourceHas(panel, ".opacity(footerItemAvailable(item) ? 1 : 0.45)"), true,
+                    "面板编辑: 编辑页底栏画出存下的每一项,用不了的调淡,满不满按存下的项数")
         expectEqual(sourceHas(source("lyrimuse/MenuBar/MenuBarPanelVolume.swift"), ".accessibilityAdjustableAction { direction in"), true,
                     "面板音量: 只在按着时写音量,辅助功能的增减单独接")
         let idleCard = source("lyrimuse/MenuBar/MenuBarPanelIdleCard.swift")
@@ -2312,10 +2330,12 @@ func runMenuBarTests() {
                     && sourceHas(idleCard, "@ObservedObject private var model = NotchIdleLastTrack.shared"), true,
                     "面板停播: 加宽、大号两档没有曲目时都画上次那首,数据跟灵动岛空闲面板同一份")
         expectEqual(sourceHas(idleCard, "transport()\n}\n.frame(maxWidth: .infinity, maxHeight: .infinity)\n}")
-                    && sourceHas(panel, "private func playPauseOrResume() {\nif isIdleNoTrack {\nIdlePlaybackActions.resume(player: IdlePlaybackActions.player)")
+                    && sourceHas(panel, "private func playPauseOrResume() {\nPanelPlaybackKeys.playPauseOrResume(idleNoTrack: isIdleNoTrack)")
+                    && sourceHas(panel, "static func playPauseOrResume(idleNoTrack: Bool) {\nif idleNoTrack {\nIdlePlaybackActions.resume(player: IdlePlaybackActions.player)")
+                    && sourceHas(panel, "case space:\nlet c = PlaybackCoordinator.shared\nplayPauseOrResume(idleNoTrack: c.title.isEmpty && c.artist.isEmpty && !c.isCurrentTrackAdBreak)")
                     && sourceHas(panel, "controlButton(playback.isPlayingSmoothed ? \"pause.fill\" : \"play.fill\", size: 18, action: playPauseOrResume)")
                     && sourceHas(panel, "controlButton(playback.isPlayingSmoothed ? \"pause.fill\" : \"play.fill\", size: 16, action: playPauseOrResume)"), true,
-                    "面板停播: 有上次那首时走带键就是播放时那一排,中间那颗停播时接着放上次那首")
+                    "面板停播: 有上次那首时走带键就是播放时那一排,中间那颗和空格停播时都接着放上次那首")
         let playbackSource = source("LyrimuseCore/Local/LocalPlaybackSource.swift")
         expectEqual(sourceHas(playbackSource, "if newIsPlayingNow, !newTitle.isEmpty, !adByFields, !spotifyNoticeSaysAd, !knownAdThisTrack, !PlaybackSimulation.isActive {\nlet now = Date()\nif snapshot.trackKey != lastPlayedAtWrite.key || now.timeIntervalSince(lastPlayedAtWrite.at) >= 60 {\nUserDefaults.standard.set(now.timeIntervalSince1970, forKey: \"np:lastTrackPlayedAt\")")
                     && sourceHas(playbackSource, "defaults.set(playedAt, forKey: \"np:lastTrackPlayedAt\")"), true,

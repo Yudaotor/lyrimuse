@@ -48,8 +48,8 @@ import (
 // 全程 fail-soft:目录不在 / 读不动 / 格式变了 / 解不开,一律当作没命中。它读的是**另一个
 // App 的缓存目录**,那个 App 升级随时可能改路径或换格式,不能让它拖垮歌词主流程。
 //
-// 读这个目录**不需要**「完全磁盘访问」—— 实测一个拿不到 TCC.db 的进程(即没有 FDA)
-// 照样读得到:它不在 TCC 保护的那几个位置里。
+// 目录在酷狗的私有容器里,经 `otherAppContainer` 取:没有「完全磁盘访问」时不读,不然 macOS 会以 Lyrimuse 的名义弹
+// 「想访问其他 App 的数据」。见 02 章决策 238。
 
 // kugouLocalDirOverride 让单测把目录指到临时路径。空 = 用真实路径。
 var kugouLocalDirOverride string

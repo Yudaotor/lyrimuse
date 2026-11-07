@@ -67,6 +67,8 @@ public enum SwinsianPlayhead {
         public var wantsTick: Bool
         /// 这一段已经盯过几次跳变(读不到、对不上都算),到 `maxTickAttempts` 不再盯。
         public var tickAttempts: Int
+        /// 上一次开始复核的时刻。复核盯满次数都没盯到时 `baseAt` 不动,下一次复核从这里起算,别每拍重开。
+        public var recheckedAt: Date?
 
         public init(anchor: Anchor, base: Double, baseAt: Date, playing: Bool, precise: Bool = false,
                     wantsTick: Bool = false, tickAttempts: Int = 0) {
@@ -180,10 +182,12 @@ public enum SwinsianPlayhead {
 
     /// 量准的表在走、离上次对时过了 `recheckSecs`:再盯一次跳变(还算准,盯到了从跳变起算)。纯函数,selftest 覆盖。
     public static func rechecked(_ clock: Clock, now: Date) -> Clock {
-        guard clock.precise, clock.playing, !clock.wantsTick, now.timeIntervalSince(clock.baseAt) >= recheckSecs else { return clock }
+        let since = max(clock.baseAt, clock.recheckedAt ?? .distantPast)
+        guard clock.precise, clock.playing, !clock.wantsTick, now.timeIntervalSince(since) >= recheckSecs else { return clock }
         var out = clock
         out.wantsTick = true
         out.tickAttempts = 0
+        out.recheckedAt = now
         return out
     }
 

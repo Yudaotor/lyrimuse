@@ -292,6 +292,11 @@ func runSettingsAuditContracts() {
                 && sourceHas(toolbarLabel, "summaryLine(candidates[index]).fixedSize()")
                 && sourceHas(toolbarLabel, "hideBelow: Self.allowsTailTruncation(summary) ? EditorToolbarSummarySlot.hideBelow : .infinity"), true,
                 "编辑台工具栏摘要: 整句、少掉末尾的值几档逐个试,都放不下就整截藏掉,只有放不全的长名字才截断(04 章决策 87)")
+    let toolbarLabelFile = app("UI/EditorToolbarButtonLabel.swift")
+    expectEqual(sourceHas(toolbarLabelFile, "min(textWidth(text) - summaryFloor, summaryWidth)")
+                && sourceHas(toolbarLabelFile, "let full = summaryLineWidth(summary)")
+                && sourceHas(toolbarLabelFile, ".map { max(full - summaryLineWidth($0) - 1, 0) }"), true,
+                "编辑台工具栏摘要: 落档按「间隔点 + 文字」那一截的宽算、夹在上限里,长摘要不多估能让出的宽")
     let overlayColors = sourceBody("struct OverlayColorSettingsRows: View {", in: styleRows)
     expectEqual(sourceHas(overlayColors, "title: pairedKaraokeColors ? L10n.t(\"已唱颜色\") : L10n.t(\"文字颜色\")) {")
                 && sourceHas(overlayColors, "label: { $0 ? L10n.t(\"跟随封面\") : L10n.t(\"自定义\") },"), true,

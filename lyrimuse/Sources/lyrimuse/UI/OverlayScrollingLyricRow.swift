@@ -326,8 +326,6 @@ final class OverlayLyricScrollView: NSView {
         window?.backingScaleFactor ?? NSScreen.screens.first?.backingScaleFactor ?? 2
     }
 
-    /// 一行字本身的高度。必须跟 `OverlayPlayback.scrollTextHeight` 同一个式子,否则视图框和
-    /// 位图对不上、字会被裁。
     /// 文字在一行里实际占据的矩形(左上原点):放得下按对齐方式摆(同 `place` 的静置落点,从右往左的行翻转后
     /// 落在同一侧),放不下要滚时占满整行。排版宽度跟 `layout` 同一个式子,不算阴影出血(悬浮歌词不带阴影)。
     static func textRect(spec: OverlayScrollingLyricRow.Spec, width: CGFloat, height: CGFloat) -> CGRect {
@@ -346,6 +344,8 @@ final class OverlayLyricScrollView: NSView {
         return CGRect(x: x, y: 0, width: w, height: height)
     }
 
+    /// 一行字本身的高度。必须跟 `OverlayPlayback.scrollTextHeight` 同一个式子,否则视图框和
+    /// 位图对不上、字会被裁。
     private static func textHeight(_ font: NSFont) -> CGFloat {
         ceil(font.ascender - font.descender + font.leading) + 2
     }

@@ -23,7 +23,7 @@ Os mais comuns podem ser copiados em **Deep links**, no fim de Ajustes › Atalh
 | `lyrimuse://lyrics-manager` | Abre o Gerenciador de letras |
 | `lyrimuse://lyrics-search` | Abre a janela “Buscar letra” para a música atual |
 | `lyrimuse://menubar-panel` | Abre ou fecha o painel da barra de menus |
-| `lyrimuse://menubar-panel?quick=overlay` | Abre o painel da barra de menus nos ajustes rápidos de um bloco (só abre, nunca fecha). `quick` é um destes: `overlay`, `notch`, `menubar`, `touchbar`, `lyrics-window`, `lyrics-manager` |
+| `lyrimuse://menubar-panel?quick=overlay` | Abre o painel da barra de menus nos ajustes rápidos de um bloco (só abre, nunca fecha). `quick` é um destes: `overlay`, `notch`, `menubar`, `touchbar`, `lyrics-window`, `lyrics-manager`, `translation`, `romanization`, `overlay-font`, `lyrics-offset`, `lock-position`, `mini-window`, `volume` |
 | `lyrimuse://menubar-menu` | Abre o menu do ícone na barra de menus |
 | `lyrimuse://onboarding` | Abre o guia de boas-vindas |
 | `lyrimuse://whats-new` | Mostra as novidades da versão instalada |

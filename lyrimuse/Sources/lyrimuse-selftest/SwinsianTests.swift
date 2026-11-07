@@ -133,6 +133,13 @@ func runSwinsianTests() {
         let corrected = H.calibrated(due, tick: H.Tick(value: 22, at: t(33.4)))
         expectEqual([corrected.base, corrected.precise ? 1 : 0, corrected.wantsTick ? 1 : 0], [22, 1, 0],
                     "Swinsian 复核: 盯到的跳变跟表差零点几秒,按跳变改过来")
+        var missed = due
+        for _ in 0..<H.maxTickAttempts { missed = H.calibrated(missed, tick: nil) }
+        expectEqual(H.wantsTick(missed), false, "前提:复核盯满次数都没盯到")
+        expectEqual(H.wantsTick(H.rechecked(missed, now: t(12.042 + H.recheckSecs + 1))), false,
+                    "Swinsian 复核: 盯满次数没盯到,不马上重开(不然每拍起一次脚本)")
+        expectEqual(H.wantsTick(H.rechecked(missed, now: t(12.042 + 2 * H.recheckSecs))), true,
+                    "Swinsian 复核: 从上次复核起再隔一段才重开")
         var tries = clock
         for _ in 0..<H.maxTickAttempts { tries = H.calibrated(tries, tick: nil) }
         expectEqual([H.wantsTick(tries) ? 1 : 0, tries.tickAttempts], [0, H.maxTickAttempts], "Swinsian 跳变: 盯满次数不再盯")

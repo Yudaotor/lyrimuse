@@ -19,6 +19,12 @@ public enum NewLanguageOffer {
         return known.contains(candidate) ? nil : candidate
     }
 
+    /// 用户自己在设置里选了界面语言:选的就是提示的那种、或改回了跟随系统,这条提示就算处理过了(之后再改回别的也不再出)。
+    public static func settles(pending: String?, chosen: String) -> Bool {
+        guard let pending else { return false }
+        return chosen == pending || chosen == "system"
+    }
+
     /// 存着的提示还该不该出:他已经切到那种语言、改回了跟随系统,或者那个语言包没了,就不出。
     public static func stillApplies(pending: String?, chosen: String?) -> Bool {
         guard let pending, let chosen, chosen != "system" else { return false }

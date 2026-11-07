@@ -410,6 +410,25 @@ func TestLyricsfileTransliterationIDs(t *testing.T) {
 }
 
 // 没有假名读音可用时不出 [kana:] 行。
+// 一串数字被逐字拆进两个词:整行数是一个单元(跟 App 的 KanaAnnotation 同一数法),条目总数对得上才不会整份作废。
+func TestLyricsfileKanaDigitsSplitAcrossWords(t *testing.T) {
+	word := func(text, reading string) any {
+		w := map[string]any{"text": text}
+		if reading != "" {
+			w["transliteration"] = map[string]any{"k": reading}
+		}
+		return w
+	}
+	lines := []any{map[string]any{"words": []any{word("20", ""), word("24", ""), word("年", "ねん"), word("の", ""), word("夏", "なつ")}}}
+	got := lyricsfileKanaLine(lines, "k", "[00:01.00]2024年の夏")
+	if want := "[kana:11ねん1なつ]"; got != want {
+		t.Errorf("got %q want %q", got, want)
+	}
+	if units := kanaUnitCount("2024年の夏"); units != 3 {
+		t.Fatalf("前提:整行 3 个单元, got %d", units)
+	}
+}
+
 func TestLyricsfileKanaRequiresReadings(t *testing.T) {
 	doc := strings.ReplaceAll(lyricsfileTranslitDoc, "hira:", "other:")
 	if k := lyricsfileExtrasFrom(doc, lyricsfileTranslitSynced).kana; k != "" {

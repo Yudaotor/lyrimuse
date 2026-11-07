@@ -23,7 +23,7 @@ Các liên kết thông dụng có thể sao chép từ mục **Deep link** ở 
 | `lyrimuse://lyrics-manager` | Mở Quản lý lời |
 | `lyrimuse://lyrics-search` | Mở cửa sổ “Tìm lời bài hát” cho bài hát hiện tại |
 | `lyrimuse://menubar-panel` | Mở hoặc đóng bảng thanh menu |
-| `lyrimuse://menubar-panel?quick=overlay` | Mở bảng thanh menu ở phần cài đặt nhanh của một ô (chỉ mở, không bao giờ đóng). `quick` là một trong `overlay`, `notch`, `menubar`, `touchbar`, `lyrics-window`, `lyrics-manager` |
+| `lyrimuse://menubar-panel?quick=overlay` | Mở bảng thanh menu ở phần cài đặt nhanh của một ô (chỉ mở, không bao giờ đóng). `quick` là một trong `overlay`, `notch`, `menubar`, `touchbar`, `lyrics-window`, `lyrics-manager`, `translation`, `romanization`, `overlay-font`, `lyrics-offset`, `lock-position`, `mini-window`, `volume` |
 | `lyrimuse://menubar-menu` | Mở menu của biểu tượng trên thanh menu |
 | `lyrimuse://onboarding` | Mở hướng dẫn thiết lập |
 | `lyrimuse://whats-new` | Hiện tính năng mới trong phiên bản đã cài |

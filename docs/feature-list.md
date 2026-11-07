@@ -610,7 +610,7 @@ Lyrics in a web browser. Web Lyrics shows exactly what the lyrics window shows; 
 
 ### Eighteen players, pick several or detect automatically
 
-Apple Music, Spotify, QQ Music, NetEase Cloud Music, Kugou, Soda Music, LX Music, KKBOX, Amazon Music, the Winamp-style reAMP, the lossless and hi-res local player VOX, the free local player Pine Player, which plays nearly every format, the classic local player foobar2000, ported from Windows, the local player Swinsian, built for large libraries, Plexamp, Plex's music player for your own server, the YouTube Music app Kaset, and the open-source YouTube Music desktop app Pear Desktop. Choose several at once, or leave it on automatic to follow whatever macOS shows as Now Playing. Apple Music radio works too, showing the station name and logo while the host talks.
+Apple Music, Spotify, QQ Music, NetEase Cloud Music, Kugou, Soda Music, LX Music, KKBOX, Amazon Music, the Winamp-style reAMP, the lossless and hi-res local player VOX, the free local player Pine Player, which plays nearly every format, the classic local player foobar2000, ported from Windows, the local player Swinsian, built for large libraries, Plexamp, Plex's music player for your own server, the YouTube Music app Kaset, the open-source YouTube Music desktop app Pear Desktop, and WeRead for audiobooks. Choose several at once, or leave it on automatic to follow whatever macOS shows as Now Playing. Apple Music radio works too, showing the station name and logo while the host talks.
 
 - Settings: Player › Music Apps
 
@@ -820,6 +820,15 @@ lyrimuse:// links open any Settings page, the lyrics window or Lyrics Manager, a
 ### Searchable settings
 
 Type at the top of the settings sidebar to jump straight to a setting, highlighted, even inside collapsed sections. Search in English or Chinese.
+
+<a id="feature-menu-bar-panel"></a>
+
+### Menu bar panel
+
+Click the menu bar icon for a panel modeled on macOS Control Center: a now-playing card with artwork, lyrics, progress and playback controls, and tiles that turn each kind of lyrics and window on or off. Long-press or right-click a tile to flip it over for its common settings. Arrange it your way: drag tiles to move them, drag a corner to resize, add or remove tiles and bottom-bar buttons. Space and the arrow keys control playback and nudge the lyrics timing, and a shortcut can open the panel.
+
+- On by default
+- Settings: Keyboard Shortcuts › Open/Close Menu Bar Panel
 
 <a id="feature-menu-bar-icon"></a>
 

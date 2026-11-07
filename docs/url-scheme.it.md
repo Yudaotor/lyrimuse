@@ -23,7 +23,7 @@ Quelli più comuni si possono copiare da **Deep link**, in fondo a Impostazioni 
 | `lyrimuse://lyrics-manager` | Apre Gestione testi |
 | `lyrimuse://lyrics-search` | Apre la finestra “Cerca testi” per il brano attuale |
 | `lyrimuse://menubar-panel` | Apre o chiude il pannello della barra dei menu |
-| `lyrimuse://menubar-panel?quick=overlay` | Apre il pannello della barra dei menu sulle impostazioni rapide di un riquadro (lo apre soltanto, non lo chiude mai). `quick` è uno tra `overlay`, `notch`, `menubar`, `touchbar`, `lyrics-window`, `lyrics-manager` |
+| `lyrimuse://menubar-panel?quick=overlay` | Apre il pannello della barra dei menu sulle impostazioni rapide di un riquadro (lo apre soltanto, non lo chiude mai). `quick` è uno tra `overlay`, `notch`, `menubar`, `touchbar`, `lyrics-window`, `lyrics-manager`, `translation`, `romanization`, `overlay-font`, `lyrics-offset`, `lock-position`, `mini-window`, `volume` |
 | `lyrimuse://menubar-menu` | Apre il menu dell’icona nella barra dei menu |
 | `lyrimuse://onboarding` | Apre la guida di configurazione |
 | `lyrimuse://whats-new` | Mostra le novità della versione installata |

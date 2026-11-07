@@ -1,5 +1,6 @@
 import AppKit
 import SwiftUI
+import LyrimuseCore
 
 /// 自制的轻量取色器,取代系统 `ColorPicker` 弹出的 `NSColorPanel`。
 ///
@@ -216,7 +217,7 @@ struct AppColorPicker: View {
     /// 工作状态 —— 面板内部的拖拽/输入全部只读写这份状态,只有 `commit()` 才回写 `selection`,
     /// 这样面板打开期间的每一次微小拖动不用反复做"Color → HSB → Color"的有损往返。
     private func loadFromSelection() {
-        let rgb = NSColor(selection.wrappedValue).usingColorSpace(.sRGB) ?? .white
+        let rgb = NSColor(selection.wrappedValue).sRGBOrWhite
         hue = Double(rgb.hueComponent)
         saturation = Double(rgb.saturationComponent)
         brightness = Double(rgb.brightnessComponent)

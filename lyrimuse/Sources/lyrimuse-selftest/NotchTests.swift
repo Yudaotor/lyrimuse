@@ -2429,6 +2429,8 @@ func runNotchTests() {
                     "快捷操作契约: 切换副行按点下去那一刻的档位往后轮")
         expectEqual(sourceHas(controller, "let wants = slots.placed.contains(.lastfmLove)\n        guard wants != retainsLastfmLove else { return }"), true,
                     "快捷操作契约: 格子里放了 Last.fm 喜欢才去读状态,retain / release 成对")
+        expectEqual(sourceHas(controller, "setEditorialDemand(false)\n        if retainsLastfmLove {\n            retainsLastfmLove = false\n            LastfmLoveModel.shared.release()"), true,
+                    "快捷操作契约: 副本 / 锁屏实例拆掉时放掉自己那份 Last.fm 喜欢")
         do {
             typealias Q = NotchQuickAction
             expectEqual(Q.seekTarget(from: 30_000, forward: true, durationMs: 200_000), 40_000, "快进: 往后 10 秒")
@@ -2529,8 +2531,10 @@ func runNotchTests() {
         expectEqual(sourceHas(controller, "if hoverOpening, expandedShowsQuickActions, !isAdBreakNow {\n            PlaybackCoordinator.shared.refreshFavorited()"), true,
                     "快捷操作契约: 展开时回读一次喜欢状态")
         expectEqual(controller.contains("let hoverOpening = opening && hoverExpanded && !alertHold && !milestoneHold")
-                    && controller.contains("if hoverOpening, expandedShowsControls,"), true,
-                    "展开回读契约: 只在指针悬停展开时回读播放模式 / 喜欢,提醒、报喜撑开时不读")
+                    && controller.contains("if hoverOpening, expandedShowsControls || placed.contains(.shuffle) || placed.contains(.repeatMode),"), true,
+                    "展开回读契约: 只在指针悬停展开时回读播放模式 / 喜欢,提醒、报喜撑开时不读;格子里放了随机 / 循环键也回读模式")
+        expectEqual(sourceHas(controller, "if hoverOpening, !isAdBreakNow, !placed.isDisjoint(with: [.volumeUp, .volumeDown, .mute]) {\n            PlaybackCoordinator.shared.refreshVolume()"), true,
+                    "展开回读契约: 格子里有调音量 / 静音键时回读音量")
         // 卡片宽度只有协议扩展一份公式,真窗口和控制器算屏幕矩形都读它。
         expectEqual(root.contains("private var cardWidth: CGFloat { controller.cardWidth }")
                     && view.contains("var cardWidth: CGFloat { cardLayout.cardWidth }")

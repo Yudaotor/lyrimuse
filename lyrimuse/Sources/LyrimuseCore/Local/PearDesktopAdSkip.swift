@@ -105,12 +105,14 @@ public enum PearDesktopAdSkip {
 
     /// 让 Pear 的网页挂进 AX 树:原来没开就打开、等到网页出现或 `treeWait` 超时。Pear 没在跑为 false。
     private static func openTree() -> Bool {
-        lock.lock()
-        defer { lock.unlock() }
         guard let pid = NSRunningApplication.runningApplications(withBundleIdentifier: bundleID).first?.processIdentifier else { return false }
-        guard openedForPID != pid else { return true }
+        // 锁只管 `openedForPID`:下面等网页挂进树最多 `treeWait`,主线程每拍要取同一把锁读 `adSlot`,不能拿着它等。
+        lock.lock()
+        let alreadyOpen = openedForPID == pid
+        if !alreadyOpen { openedForPID = pid }
+        lock.unlock()
+        guard !alreadyOpen else { return true }
         AXUIElementSetAttributeValue(AXUIElementCreateApplication(pid), "AXManualAccessibility" as CFString, kCFBooleanTrue)
-        openedForPID = pid
         logger.notice("pear: AXManualAccessibility on")
         let deadline = Date().addingTimeInterval(treeWait)
         while AccessibilitySkipPress.skipButtonPresent(bundleID: bundleID, hostMarker: YouTubeMusicAdProbe.hostMarker) == nil,

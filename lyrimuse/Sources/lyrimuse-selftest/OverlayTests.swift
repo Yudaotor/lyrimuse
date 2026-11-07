@@ -1119,6 +1119,10 @@ func runOverlayTests() {
                      sourceHas(nextRect, "upcomingWordRowsKey($0)")],
                     [true, true, true, true, true, true],
                     "悬浮淡化命中区: 下一句折行时按文字实际矩形上报,不按撑满整宽的 WrapLayout frame(04 章决策 85)")
+        expectEqual(sourceHas(overlay, "romaGap: perWordReadingGap,\noverflow: playback.lineOverflow))")
+                    && sourceHas(overlay, "romaFont: nextLinePreviewFont, romaGap: 0, overflow: playback.lineOverflow),")
+                    && sourceHas(overlay, "romaGap: rowSpacing.perWordReadingGap, overflow: playback.lineOverflow),"), true,
+                    "悬浮淡化命中区: 主行、下一句的矩形身份带着长句处理,换了模式不读上一种模式写的矩形")
         let scrollRowSource = (try? String(contentsOf: sources.appendingPathComponent("lyrimuse/UI/OverlayScrollingLyricRow.swift"),
                                            encoding: .utf8)) ?? ""
         let scrollSizing = sourceBody("func sizeThatFits(_ proposal: ProposedViewSize, nsView: OverlayLyricScrollView", in: scrollRowSource)

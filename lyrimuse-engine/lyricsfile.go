@@ -250,7 +250,20 @@ func lyricsfileKanaLine(lines []any, kanaID, synced string) string {
 			emitBlank(body)
 			continue
 		}
+		// 一串数字被逐字时间轴拆进相邻两个词(「20」「24」)时,按整行数(kanaUnitCount)它们是同一个单元:后一个词开头那段
+		// 数字不再单独算,前一个词已经替它出过条目。
+		prevDigit := false
 		for _, w := range ws {
+			joined := prevDigit && kanaStartsWithDigit(w.text)
+			if w.text != "" {
+				prevDigit = kanaEndsWithDigit(w.text)
+			}
+			if joined {
+				if n := kanaUnitCount(w.text) - 1; n > 0 {
+					b.WriteString(strings.Repeat("1", n))
+				}
+				continue
+			}
 			n, reading, clean := kanaEntryFor(w.text, w.reading)
 			switch {
 			case n == 0:
@@ -347,6 +360,16 @@ func kanaUnitCount(s string) int {
 		inDigits = d
 	}
 	return n
+}
+
+func kanaStartsWithDigit(s string) bool {
+	r, _ := utf8.DecodeRuneInString(s)
+	return kanaAlignDigit(r)
+}
+
+func kanaEndsWithDigit(s string) bool {
+	r, _ := utf8.DecodeLastRuneInString(s)
+	return kanaAlignDigit(r)
 }
 
 // kanaBodyLines:LRC 的正文行(带时间戳、去掉时间戳后非空)。必须跟 App 的 KanaAnnotation.bodyLines 同步改,理由同上。

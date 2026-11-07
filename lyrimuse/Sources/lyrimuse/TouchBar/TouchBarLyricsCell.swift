@@ -218,8 +218,7 @@ enum TouchBarLyricsCell {
     /// 黑底上打 `opacity` 这个折的歌词色(未唱的部分、副行),不暗于白字打同一个折;算法见 Core
     /// `TouchBarLyricsStyle.dimmedOnBlack`。
     static func dimmedOnBlack(_ color: NSColor, opacity: CGFloat) -> NSColor {
-        // 转不到 sRGB 的(图案色)读分量会抛 Objective-C 异常,退回白色。
-        let c = color.usingColorSpace(.sRGB) ?? .white
+        let c = color.sRGBOrWhite
         let d = TouchBarLyricsStyle.dimmedOnBlack(r: Double(c.redComponent), g: Double(c.greenComponent),
                                                  b: Double(c.blueComponent), opacity: Double(opacity))
         return NSColor(srgbRed: d.r, green: d.g, blue: d.b, alpha: 1)

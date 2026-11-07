@@ -157,7 +157,7 @@ final class WebLyricsObsFeed {
     }
 
     private static func css(_ color: Color) -> String {
-        let c = NSColor(color).usingColorSpace(.sRGB) ?? .white
+        let c = NSColor(color).sRGBOrWhite
         return WebLyricsObsPayload.cssColor(red: c.redComponent, green: c.greenComponent, blue: c.blueComponent, alpha: c.alphaComponent)
     }
 

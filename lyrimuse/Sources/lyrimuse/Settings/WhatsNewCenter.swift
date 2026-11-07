@@ -63,6 +63,12 @@ final class WhatsNewCenter {
         defaults.removeObject(forKey: Keys.languageOffer)
     }
 
+    /// 用户在设置里改了界面语言:改成提示的那种、或改回跟随系统,提示就删掉,之后再改回别的也不再出。
+    func languageChosen(_ chosen: String) {
+        guard NewLanguageOffer.settles(pending: defaults.string(forKey: Keys.languageOffer), chosen: chosen) else { return }
+        defaults.removeObject(forKey: Keys.languageOffer)
+    }
+
     /// 面板把横条摆出来了:这一版不再出。正开着的面板自己留着那一条到收起。
     func bannerShown() {
         guard let bannerVersion else { return }

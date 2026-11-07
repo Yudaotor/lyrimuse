@@ -610,7 +610,7 @@ Apple Music、QQ 音樂或網易雲音樂上帶動態封面的專輯，在完整
 
 ### 十八款播放器，可多選或自動辨識
 
-Apple Music、Spotify、QQ 音樂、網易雲音樂、酷狗音樂、汽水音樂、洛雪音樂、KKBOX、Amazon Music、仿 Winamp 的 reAMP、主打無損和高解析音質的本機播放器 VOX、免費且格式支援很全的本機播放器 Pine Player、從 Windows 移植來的老牌本機播放器 foobar2000、為大型曲庫設計的本機播放器 Swinsian、播放自建 Plex 伺服器曲庫的 Plexamp、YouTube Music 用戶端 Kaset，以及開源的 YouTube Music 桌面用戶端 Pear Desktop。可同時選擇多個，也可保持自動辨識，跟隨 macOS「正在播放」中的播放器。支援 Apple Music 電台，主持人講話時顯示電台名稱和台標。
+Apple Music、Spotify、QQ 音樂、網易雲音樂、酷狗音樂、汽水音樂、洛雪音樂、KKBOX、Amazon Music、仿 Winamp 的 reAMP、主打無損和高解析音質的本機播放器 VOX、免費且格式支援很全的本機播放器 Pine Player、從 Windows 移植來的老牌本機播放器 foobar2000、為大型曲庫設計的本機播放器 Swinsian、播放自建 Plex 伺服器曲庫的 Plexamp、YouTube Music 用戶端 Kaset，開源的 YouTube Music 桌面用戶端 Pear Desktop，以及聽書用的微信讀書。可同時選擇多個，也可保持自動辨識，跟隨 macOS「正在播放」中的播放器。支援 Apple Music 電台，主持人講話時顯示電台名稱和台標。
 
 - 設定位置：播放器 › 音樂 App
 
@@ -820,6 +820,15 @@ lyrimuse:// 連結可打開設定的任意頁面、歌詞視窗和歌詞管理�
 ### 設定搜尋
 
 在設定視窗側邊欄頂部輸入關鍵字，即可跳轉到對應設定項並醒目標示，收合的分組也會自動展開。支援中文和英文搜尋。
+
+<a id="feature-menu-bar-panel"></a>
+
+### 選單列面板
+
+點選單列圖像彈出，仿照 macOS 控制中心：正在播放卡片帶封面、歌詞、進度和播放控制，下面是各類歌詞和視窗的開關格子，長按或右鍵可翻到背面調常用設定。格子可以自己排：拖動換位置、拖右下角改大小，也能增刪格子和底欄按鈕。面板裡可用空白鍵和方向鍵控制播放、微調歌詞時間軸，也可綁定快速鍵打開面板。
+
+- 預設開啟
+- 設定位置：快速鍵 › 打開/收起選單列面板
 
 <a id="feature-menu-bar-icon"></a>
 

@@ -610,7 +610,7 @@ Liedtext im Webbrowser. „Web-Liedtext“ zeigt genau, was das Liedtextfenster 
 
 ### 18 Player, mehrere wählbar oder automatisch erkannt
 
-Apple Music, Spotify, QQ Music, NetEase Cloud Music, Kugou, Soda Music, LX Music, KKBOX, Amazon Music, reAMP im Winamp-Stil, der verlustfreie Hi-Res-Player VOX für lokale Dateien, der kostenlose lokale Player Pine Player, der fast jedes Format abspielt, der klassische lokale Player foobar2000, von Windows portiert, der lokale Player Swinsian für große Bibliotheken, Plexamp, der Musikplayer von Plex für den eigenen Server, die YouTube Music-App Kaset und die Open-Source-Desktop-App Pear Desktop für YouTube Music. Wähle mehrere gleichzeitig oder lass die automatische Erkennung an, um dem zu folgen, was macOS unter „Jetzt läuft“ zeigt. Auch Radio in Apple Music funktioniert und zeigt Sendername und Logo, während moderiert wird.
+Apple Music, Spotify, QQ Music, NetEase Cloud Music, Kugou, Soda Music, LX Music, KKBOX, Amazon Music, reAMP im Winamp-Stil, der verlustfreie Hi-Res-Player VOX für lokale Dateien, der kostenlose lokale Player Pine Player, der fast jedes Format abspielt, der klassische lokale Player foobar2000, von Windows portiert, der lokale Player Swinsian für große Bibliotheken, Plexamp, der Musikplayer von Plex für den eigenen Server, die YouTube Music-App Kaset, die Open-Source-Desktop-App Pear Desktop für YouTube Music und WeRead für Hörbücher. Wähle mehrere gleichzeitig oder lass die automatische Erkennung an, um dem zu folgen, was macOS unter „Jetzt läuft“ zeigt. Auch Radio in Apple Music funktioniert und zeigt Sendername und Logo, während moderiert wird.
 
 - Einstellungen: Player › Musik-Apps
 
@@ -820,6 +820,15 @@ lyrimuse://-Links öffnen jede Seite der Einstellungen, das Liedtextfenster oder
 ### Durchsuchbare Einstellungen
 
 Tippe oben in der Seitenleiste der Einstellungen, um direkt zu einer Einstellung zu springen, die dann hervorgehoben wird, auch in eingeklappten Bereichen. Suche auf Englisch oder Chinesisch.
+
+<a id="feature-menu-bar-panel"></a>
+
+### Menüleisten-Panel
+
+Ein Klick auf das Menüleistensymbol öffnet ein Panel nach dem Vorbild des Kontrollzentrums von macOS: eine Karte für den laufenden Titel mit Cover, Liedtext, Fortschritt und Steuerung sowie Kacheln, die jede Art von Liedtext und Fenster ein- oder ausschalten. Halte eine Kachel gedrückt oder klicke sie mit rechts, um sie umzudrehen und ihre gängigen Einstellungen zu sehen. Ordne alles nach deinen Wünschen: Kacheln zum Verschieben ziehen, an der Ecke ziehen, um die Größe zu ändern, und Kacheln sowie Tasten der unteren Leiste hinzufügen oder entfernen. Leertaste und Pfeiltasten steuern die Wiedergabe und verschieben das Liedtext-Timing, und ein Kurzbefehl kann das Panel öffnen.
+
+- Standardmäßig ein
+- Einstellungen: Tastaturkurzbefehle › Menüleisten-Panel öffnen/schließen
 
 <a id="feature-menu-bar-icon"></a>
 

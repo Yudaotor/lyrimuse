@@ -143,7 +143,8 @@ func looksLikeShiftJIS(b []byte) bool {
 
 // looksLikeEUCKR:是不是韩文 EUC-KR(含 CP949 的扩展区)。标准区两个字节都在 A1–FE,韩文音节在首字节 B0–C8,韩文里的汉字
 // 在 CA–FD;CP949 扩展区(首字节 81–C6、尾字节落在 41–5A、61–7A、81–A0)全是音节。韩文歌词几乎全是音节,中文 GBK 正文按
-// 这张表读有一半上下落进汉字区,所以音节要占九成以上才算。
+// 这张表读有一半上下落进汉字区,所以音节要占九成以上才算。短的中文(「告白气球」这类四个字的歌名)常常整串落在音节区,
+// 所以音节少于 `eucKRMinSyllables` 个的不认:认错会把原本转得对的 GBK 转成韩文乱码,漏认只是维持原样(同 looksLikeBig5)。
 func looksLikeEUCKR(b []byte) bool {
 	var hangul, hanja int
 	for i := 0; i < len(b); {
@@ -171,8 +172,11 @@ func looksLikeEUCKR(b []byte) bool {
 		}
 		i += 2
 	}
-	return hangul >= 4 && hangul*10 >= (hangul+hanja)*9
+	return hangul >= eucKRMinSyllables && hangul*10 >= (hangul+hanja)*9
 }
+
+// eucKRMinSyllables:认 EUC-KR 至少要的音节数。一句韩文歌词就有十几二十个音节。
+const eucKRMinSyllables = 16
 
 // gb18030ToUTF8 / big5ToUTF8 用系统自带的 iconv 转码:引擎不引入外部依赖,这条路只有遇到非 UTF-8 的歌词文件才走到。单测替换。
 // Big5 按 CP950(微软的 Big5)转:Windows 上产出的繁体歌词文件多是它。

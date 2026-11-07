@@ -610,7 +610,7 @@ Apple Music, QQ Music 또는 NetEase Cloud Music에서 움직이는 아트워크
 
 ### 18개 플레이어, 여러 개 선택 또는 자동 감지
 
-Apple Music, Spotify, QQ Music, NetEase Cloud Music, Kugou, Soda Music, LX Music, KKBOX, Amazon Music, Winamp 스타일의 reAMP, 무손실 및 고해상도 음질을 내세운 로컬 플레이어 VOX, 무료이면서 거의 모든 형식을 지원하는 로컬 플레이어 Pine Player, Windows에서 이식된 전통 있는 로컬 플레이어 foobar2000, 대용량 라이브러리를 위한 로컬 플레이어 Swinsian, 직접 운영하는 서버의 라이브러리를 재생하는 Plex 음악 플레이어 Plexamp, YouTube Music 앱 Kaset, 그리고 오픈 소스 YouTube Music 데스크톱 앱 Pear Desktop. 여러 개를 동시에 선택하거나, 자동 감지로 두어 macOS ‘지금 재생 중’의 플레이어를 따를 수 있습니다. Apple Music 라디오를 지원하며, 진행자가 말하는 동안 방송국 이름과 로고를 표시합니다.
+Apple Music, Spotify, QQ Music, NetEase Cloud Music, Kugou, Soda Music, LX Music, KKBOX, Amazon Music, Winamp 스타일의 reAMP, 무손실 및 고해상도 음질을 내세운 로컬 플레이어 VOX, 무료이면서 거의 모든 형식을 지원하는 로컬 플레이어 Pine Player, Windows에서 이식된 전통 있는 로컬 플레이어 foobar2000, 대용량 라이브러리를 위한 로컬 플레이어 Swinsian, 직접 운영하는 서버의 라이브러리를 재생하는 Plex 음악 플레이어 Plexamp, YouTube Music 앱 Kaset, 오픈 소스 YouTube Music 데스크톱 앱 Pear Desktop, 그리고 오디오북을 듣는 WeRead. 여러 개를 동시에 선택하거나, 자동 감지로 두어 macOS ‘지금 재생 중’의 플레이어를 따를 수 있습니다. Apple Music 라디오를 지원하며, 진행자가 말하는 동안 방송국 이름과 로고를 표시합니다.
 
 - 설정 위치: 플레이어 › 음악 앱
 
@@ -820,6 +820,15 @@ lyrimuse:// 링크로 설정의 모든 페이지, 가사 윈도우, 가사 관�
 ### 설정 검색
 
 설정 윈도우 사이드바 상단에 키워드를 입력하면 해당 설정 항목으로 이동해 강조 표시하며, 접힌 그룹도 자동으로 펼쳐집니다. 중국어와 영어로 검색할 수 있습니다.
+
+<a id="feature-menu-bar-panel"></a>
+
+### 메뉴 막대 패널
+
+메뉴 막대 아이콘을 클릭하면 macOS 제어 센터를 본뜬 패널이 열립니다. 아트워크, 가사, 진행 상황, 재생 제어가 있는 재생 중 카드와 각 가사 표시와 윈도우를 켜고 끄는 타일이 있으며, 타일을 길게 누르거나 오른쪽 클릭하면 뒤집혀 자주 쓰는 설정을 바꿀 수 있습니다. 타일은 원하는 대로 배치할 수 있어, 드래그로 옮기고 오른쪽 아래 모서리를 드래그해 크기를 바꾸며, 타일과 하단 버튼을 추가하거나 뺄 수 있습니다. 패널에서 스페이스 바와 화살표 키로 재생을 제어하고 가사 타이밍을 조절할 수 있고, 패널을 여는 단축키도 지정할 수 있습니다.
+
+- 기본으로 켜짐
+- 설정 위치: 키보드 단축키 › 메뉴 막대 패널 열기/닫기
 
 <a id="feature-menu-bar-icon"></a>
 

@@ -23,7 +23,7 @@ Die gängigsten kannst du unter **Deep Links** unten in Einstellungen › Tastat
 | `lyrimuse://lyrics-manager` | Öffnet die Liedtext-Verwaltung |
 | `lyrimuse://lyrics-search` | Öffnet das Fenster „Liedtext suchen“ für den aktuellen Titel |
 | `lyrimuse://menubar-panel` | Öffnet oder schließt das Menüleisten-Panel |
-| `lyrimuse://menubar-panel?quick=overlay` | Öffnet das Menüleisten-Panel bei den Schnelleinstellungen einer Kachel (öffnet nur, schließt nie). `quick` ist einer der Werte `overlay`, `notch`, `menubar`, `touchbar`, `lyrics-window`, `lyrics-manager` |
+| `lyrimuse://menubar-panel?quick=overlay` | Öffnet das Menüleisten-Panel bei den Schnelleinstellungen einer Kachel (öffnet nur, schließt nie). `quick` ist einer der Werte `overlay`, `notch`, `menubar`, `touchbar`, `lyrics-window`, `lyrics-manager`, `translation`, `romanization`, `overlay-font`, `lyrics-offset`, `lock-position`, `mini-window`, `volume` |
 | `lyrimuse://menubar-menu` | Öffnet das Menü des Menüleistensymbols |
 | `lyrimuse://onboarding` | Öffnet die Einrichtung |
 | `lyrimuse://whats-new` | Zeigt, was in der installierten Version neu ist |

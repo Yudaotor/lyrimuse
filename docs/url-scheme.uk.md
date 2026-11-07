@@ -23,7 +23,7 @@
 | `lyrimuse://lyrics-manager` | Відкриває менеджер текстів |
 | `lyrimuse://lyrics-search` | Відкриває вікно «Шукати текст» для поточної пісні |
 | `lyrimuse://menubar-panel` | Відкриває або закриває панель на смузі меню |
-| `lyrimuse://menubar-panel?quick=overlay` | Відкриває панель на смузі меню одразу на швидких параметрах однієї плитки (лише відкриває, ніколи не закриває). `quick` — одне зі значень `overlay`, `notch`, `menubar`, `touchbar`, `lyrics-window`, `lyrics-manager` |
+| `lyrimuse://menubar-panel?quick=overlay` | Відкриває панель на смузі меню одразу на швидких параметрах однієї плитки (лише відкриває, ніколи не закриває). `quick` — одне зі значень `overlay`, `notch`, `menubar`, `touchbar`, `lyrics-window`, `lyrics-manager`, `translation`, `romanization`, `overlay-font`, `lyrics-offset`, `lock-position`, `mini-window`, `volume` |
 | `lyrimuse://menubar-menu` | Показує меню значка на смузі меню |
 | `lyrimuse://onboarding` | Відкриває помічника початкового налаштування |
 | `lyrimuse://whats-new` | Показує, що нового в інстальованій версії |

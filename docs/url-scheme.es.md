@@ -23,7 +23,7 @@ Los más habituales se pueden copiar desde **Enlaces profundos**, al final de Aj
 | `lyrimuse://lyrics-manager` | Abre el gestor de letras |
 | `lyrimuse://lyrics-search` | Abre la ventana «Buscar letra» para la canción actual |
 | `lyrimuse://menubar-panel` | Abre o cierra el panel de la barra de menús |
-| `lyrimuse://menubar-panel?quick=overlay` | Abre el panel de la barra de menús en los ajustes rápidos de un mosaico (solo abre, nunca cierra). `quick` es uno de `overlay`, `notch`, `menubar`, `touchbar`, `lyrics-window`, `lyrics-manager` |
+| `lyrimuse://menubar-panel?quick=overlay` | Abre el panel de la barra de menús en los ajustes rápidos de un mosaico (solo abre, nunca cierra). `quick` es uno de `overlay`, `notch`, `menubar`, `touchbar`, `lyrics-window`, `lyrics-manager`, `translation`, `romanization`, `overlay-font`, `lyrics-offset`, `lock-position`, `mini-window`, `volume` |
 | `lyrimuse://menubar-menu` | Despliega el menú del icono de la barra de menús |
 | `lyrimuse://onboarding` | Abre la guía de bienvenida |
 | `lyrimuse://whats-new` | Muestra las novedades de la versión instalada |

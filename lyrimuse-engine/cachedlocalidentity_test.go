@@ -35,6 +35,15 @@ func TestNeteaseCachedSearchIdentityYieldsToLocalForPlayingTrack(t *testing.T) {
 	if info := neteaseLookupAll(ctx, "林忆莲", "至少还有你", "属于我的林忆莲", 275); !info.FromLocalClient || info.SongID != 256468 {
 		t.Errorf("在放这首、本机认得出:换成本机认的那一条: %+v", info)
 	}
+	// 缓存那份有词、按本机身份重走没取到词:照用缓存那份,别让这一轮空着。
+	withLyrics := searched
+	withLyrics.info.Lyrics = "[00:01.00]至少还有你"
+	neteaseMu.Lock()
+	neteaseCache["林忆莲|至少还有你|属于我的林忆莲|275"] = withLyrics
+	neteaseMu.Unlock()
+	if info := neteaseLookupAll(ctx, "林忆莲", "至少还有你", "属于我的林忆莲", 275); info.SongID != 256621 || info.Lyrics == "" {
+		t.Errorf("重走没取到词时退回有词的缓存: %+v", info)
+	}
 }
 
 func TestQQCachedSearchIdentityYieldsToLocalForPlayingTrack(t *testing.T) {

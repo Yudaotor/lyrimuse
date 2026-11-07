@@ -610,7 +610,7 @@ Les paroles dans un navigateur web. « Paroles web » affiche exactement ce qu
 
 ### 18 lecteurs, au choix ou détectés automatiquement
 
-Apple Music, Spotify, QQ Music, NetEase Cloud Music, Kugou, Soda Music, LX Music, KKBOX, Amazon Music, reAMP dans l’esprit de Winamp, VOX, lecteur local sans perte et haute résolution, Pine Player, lecteur local gratuit qui lit presque tous les formats, foobar2000, lecteur local classique venu de Windows, Swinsian, lecteur local conçu pour les grandes bibliothèques, Plexamp, le lecteur de musique de Plex pour votre propre serveur, Kaset, l’app YouTube Music, et Pear Desktop, une app de bureau open source pour YouTube Music. Choisissez-en plusieurs à la fois, ou laissez le mode automatique suivre ce que macOS affiche comme « À l’écoute ». La radio d’Apple Music fonctionne aussi : le nom et le logo de la station s’affichent pendant que l’animateur parle.
+Apple Music, Spotify, QQ Music, NetEase Cloud Music, Kugou, Soda Music, LX Music, KKBOX, Amazon Music, reAMP dans l’esprit de Winamp, VOX, lecteur local sans perte et haute résolution, Pine Player, lecteur local gratuit qui lit presque tous les formats, foobar2000, lecteur local classique venu de Windows, Swinsian, lecteur local conçu pour les grandes bibliothèques, Plexamp, le lecteur de musique de Plex pour votre propre serveur, Kaset, l’app YouTube Music, Pear Desktop, une app de bureau open source pour YouTube Music, et WeRead pour les livres audio. Choisissez-en plusieurs à la fois, ou laissez le mode automatique suivre ce que macOS affiche comme « À l’écoute ». La radio d’Apple Music fonctionne aussi : le nom et le logo de la station s’affichent pendant que l’animateur parle.
 
 - Réglages : Lecteur › Apps de musique
 
@@ -820,6 +820,15 @@ Les liens lyrimuse:// ouvrent n’importe quelle page des Réglages, la fenêtre
 ### Recherche dans les réglages
 
 Tapez en haut de la barre latérale des réglages pour aller directement à un réglage, mis en évidence, même dans les sections repliées. Recherche en anglais ou en chinois.
+
+<a id="feature-menu-bar-panel"></a>
+
+### Panneau de la barre des menus
+
+Cliquez sur l’icône de la barre des menus pour ouvrir un panneau inspiré du centre de contrôle de macOS : une carte de lecture avec pochette, paroles, progression et commandes, et des tuiles qui activent ou désactivent chaque type de paroles et de fenêtre. Maintenez une tuile enfoncée ou faites un clic droit pour la retourner et accéder à ses réglages courants. Organisez-le à votre façon : faites glisser les tuiles pour les déplacer, un coin pour les redimensionner, et ajoutez ou retirez des tuiles et des boutons de la barre du bas. La barre d’espace et les flèches contrôlent la lecture et décalent les paroles, et un raccourci peut ouvrir le panneau.
+
+- Activée par défaut
+- Réglages : Raccourcis clavier › Ouvrir/fermer le panneau de la barre des menus
 
 <a id="feature-menu-bar-icon"></a>
 

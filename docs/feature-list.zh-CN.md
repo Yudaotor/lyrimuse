@@ -610,7 +610,7 @@ Apple Music、QQ 音乐或网易云音乐上带动态封面的专辑，在完整
 
 ### 十八款播放器，可多选或自动识别
 
-Apple Music、Spotify、QQ 音乐、网易云音乐、酷狗音乐、汽水音乐、洛雪音乐、KKBOX、Amazon Music、仿 Winamp 的 reAMP、主打无损和高解析音质的本地播放器 VOX、免费且格式支持很全的本地播放器 Pine Player、从 Windows 移植来的老牌本地播放器 foobar2000、为大曲库设计的本地播放器 Swinsian、播放自建 Plex 服务器曲库的 Plexamp、YouTube Music 客户端 Kaset，以及开源的 YouTube Music 桌面客户端 Pear Desktop。可同时选择多个，也可保持自动识别，跟随 macOS「正在播放」中的播放器。支持 Apple Music 电台，主持人讲话时显示电台名称和台标。
+Apple Music、Spotify、QQ 音乐、网易云音乐、酷狗音乐、汽水音乐、洛雪音乐、KKBOX、Amazon Music、仿 Winamp 的 reAMP、主打无损和高解析音质的本地播放器 VOX、免费且格式支持很全的本地播放器 Pine Player、从 Windows 移植来的老牌本地播放器 foobar2000、为大曲库设计的本地播放器 Swinsian、播放自建 Plex 服务器曲库的 Plexamp、YouTube Music 客户端 Kaset，开源的 YouTube Music 桌面客户端 Pear Desktop，以及听书用的微信读书。可同时选择多个，也可保持自动识别，跟随 macOS「正在播放」中的播放器。支持 Apple Music 电台，主持人讲话时显示电台名称和台标。
 
 - 设置位置：播放器 › 音乐 App
 
@@ -820,6 +820,15 @@ lyrimuse:// 链接可打开设置的任意页面、歌词窗口和歌词管理�
 ### 设置搜索
 
 在设置窗口侧栏顶部输入关键词，即可跳转到对应设置项并高亮显示，折叠的分组也会自动展开。支持中文和英文搜索。
+
+<a id="feature-menu-bar-panel"></a>
+
+### 菜单栏面板
+
+点菜单栏图标弹出，仿照 macOS 控制中心：正在播放卡片带封面、歌词、进度和播放控制，下面是各类歌词和窗口的开关格子，长按或右键可翻到背面调常用设置。格子可以自己排：拖动换位置、拖右下角改大小，也能增删格子和底栏按钮。面板里可用空格和方向键控制播放、微调歌词时间轴，也可绑定快捷键打开面板。
+
+- 默认开启
+- 设置位置：快捷键 › 打开/收起菜单栏面板
 
 <a id="feature-menu-bar-icon"></a>
 

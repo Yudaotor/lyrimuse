@@ -187,6 +187,12 @@ func runWhatsNewTests() {
                      O.stillApplies(pending: "th", chosen: "system"), O.stillApplies(pending: "th", chosen: nil),
                      O.stillApplies(pending: nil, chosen: "en"), O.stillApplies(pending: "xx", chosen: "en")],
                     [true, false, false, false, false, false], "存着的提示: 切过去了、改回跟随系统、包没了都不再出")
+        expectEqual([O.settles(pending: "th", chosen: "th"), O.settles(pending: "th", chosen: "system"),
+                     O.settles(pending: "th", chosen: "en"), O.settles(pending: nil, chosen: "th")],
+                    [true, true, false, false], "自己在设置里切到那种语言或改回跟随系统:提示删掉,之后切回别的也不再出")
+        expectEqual(sourceHas(sourceText("lyrimuse/Settings/AppSettings.swift"),
+                              "defaults.set(appLanguage, forKey: Keys.appLanguage)\nWhatsNewCenter.shared.languageChosen(appLanguage)"), true,
+                    "接线: 改界面语言时让提示自己判断要不要删")
         let center = sourceText("lyrimuse/Settings/WhatsNewCenter.swift")
         expectEqual(sourceHas(center, "defaults.set(UILanguage.packs, forKey: Keys.knownLanguagePacks)")
                     && sourceHas(center, "isExistingUser: lastLaunched != nil || AppSettings.shared.hasCompletedOnboarding"), true,

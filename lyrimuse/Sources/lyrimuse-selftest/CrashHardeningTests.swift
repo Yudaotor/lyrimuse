@@ -1,3 +1,4 @@
+import AppKit
 import Foundation
 import LyrimuseCore
 
@@ -32,6 +33,15 @@ func runCrashHardeningTests() {
     expectEqual(SafeSerialization.isPropertyListValue(NSNull()), false, "isPropertyListValue: NSNull 不行")
     expectEqual(SafeSerialization.isPropertyListValue([1, NSNull()] as [Any]), false, "isPropertyListValue: 数组里夹 NSNull 不行")
     expectEqual(SafeSerialization.isPropertyListValue(["k": [1, 2]] as [String: Any]), true, "isPropertyListValue: 普通字典可以")
+
+    print("\n== 读颜色分量不抛异常 ==")
+    do {
+        let pattern = NSColor(patternImage: NSImage(size: NSSize(width: 2, height: 2)))
+        expectEqual(pattern.usingColorSpace(.sRGB) == nil, true, "前提:图案色转不到 sRGB")
+        let c = pattern.sRGBOrWhite
+        expectEqual([c.redComponent, c.greenComponent, c.blueComponent], [1, 1, 1], "sRGBOrWhite: 图案色退回 sRGB 白,读分量不抛")
+        expectEqual(NSColor(srgbRed: 0.2, green: 0.4, blue: 0.6, alpha: 1).sRGBOrWhite.greenComponent, 0.4, "sRGBOrWhite: 普通颜色照常转")
+    }
 
     print("\n== 越界不取子串 ==")
     let ns = "あいう" as NSString
@@ -75,14 +85,14 @@ func runCrashHardeningTests() {
                 // MediaControlClient 里嵌的 JXA 脚本(`input.availableData`)跑在 osascript 进程里,不算。
                 if code.hasPrefix("//") || code.contains("input.availableData") { continue }
                 if code.contains(".availableData") || code.contains("readDataToEndOfFile()")
-                    || code.contains("JSONSerialization.data(withJSONObject") {
+                    || code.contains("JSONSerialization.data(withJSONObject") || code.contains("usingColorSpace(.sRGB) ?? .white") {
                     offenders.append(rel)
                     break
                 }
             }
         }
     }
-    expectEqual(offenders.sorted(), [String](), "旧读法 / 不查合法的 JSON 序列化:都换成 PipeRead / SafeSerialization")
+    expectEqual(offenders.sorted(), [String](), "旧读法 / 不查合法的 JSON 序列化 / 退回灰度白:都换成 PipeRead / SafeSerialization / sRGBOrWhite")
     let portability = source("lyrimuse/Settings/ConfigPortability.swift")
     expectEqual(sourceHas(portability, "guard SafeSerialization.isPropertyListValue(value) else {")
                 && sourceHas(portability, "guard SafeSerialization.isJSONValue(value) else {"), true,

@@ -38,6 +38,19 @@ func TestDecodeLyricBytesGB18030(t *testing.T) {
 	}
 }
 
+// 短的 GBK 歌名整串落在韩文音节区(「告白气球」「不能放开」),不能认成 EUC-KR 转成韩文乱码。
+func TestDecodeLyricBytesShortGBKIsNotKorean(t *testing.T) {
+	for _, c := range []struct{ hex, want string }{
+		{"5b74693ab8e6b0d7c6f8c7f25d", "[ti:告白气球]"},
+		{"5b74693ab2bbc4dcb7c5bfaa5d", "[ti:不能放开]"},
+	} {
+		data := append(mustHex(t, c.hex), []byte("\n[00:01.00]第一句")...)
+		if text, ok := decodeLyricBytes(data); !ok || text != c.want+"\n[00:01.00]第一句" {
+			t.Errorf("%s: %q %v", c.want, text, ok)
+		}
+	}
+}
+
 // 合法 UTF-8 原样返回、不起转码进程;转码失败时把非法字节换掉,并报告既不是 UTF-8 也不是 GB18030。
 func TestDecodeLyricBytesFallbacks(t *testing.T) {
 	saved := gb18030ToUTF8

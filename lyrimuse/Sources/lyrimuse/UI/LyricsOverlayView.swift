@@ -1708,7 +1708,7 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
     private func upcomingWordRowsKey(_ words: [SyncedLyricWord]) -> AnyHashable {
         AnyHashable(UpcomingBreakKey(
             line: OverlayLineKey(text: words.map(\.text).joined(), roma: false, mainFont: nextLinePreviewFont,
-                                 romaFont: nextLinePreviewFont, romaGap: 0),
+                                 romaFont: nextLinePreviewFont, romaGap: 0, overflow: playback.lineOverflow),
             breakFont: playback.mainFont, breakRomaFont: playback.romanizationFont,
             stroked: playback.textStrokeEnabled))
     }
@@ -1717,7 +1717,7 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
         AnyHashable(UpcomingBreakKey(
             line: OverlayLineKey(
                 text: key, roma: true, mainFont: nextLinePreviewFont, romaFont: nextLineReadingFont,
-                romaGap: rowSpacing.perWordReadingGap),
+                romaGap: rowSpacing.perWordReadingGap, overflow: playback.lineOverflow),
             breakFont: playback.mainFont, breakRomaFont: playback.romanizationFont,
             stroked: playback.textStrokeEnabled))
     }
@@ -2133,7 +2133,8 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
             roma: usesPerWordRomanization,
             mainFont: playback.mainFont,
             romaFont: playback.romanizationFont,
-            romaGap: perWordReadingGap))
+            romaGap: perWordReadingGap,
+            overflow: playback.lineOverflow))
     }
 
     private struct OverlayLineKey: Hashable {
@@ -2143,6 +2144,8 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
         let romaFont: Font
         /// 逐词读音的间距改行高,也算排版身份(`WrapLayout` 按这个 key 缓存子视图尺寸)。
         let romaGap: CGFloat
+        /// 长句处理(滚动 / 换行)决定走哪一支:有的支写 sink、有的不写,不带它的话换了模式还读得到上一种模式写的矩形。
+        let overflow: OverlayLineOverflow
     }
 
     /// 下一句预览的排版身份:除了画出来的字,定断点用的主行字体和描边(量列宽时的读音留白)变了也要重排。
