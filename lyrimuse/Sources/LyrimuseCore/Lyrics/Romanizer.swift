@@ -629,8 +629,9 @@ public enum Romanizer {
         let line = text as NSString
         var segs: [JapaneseSegment] = []
         for span in spans {
-            let latin = roman.substring(with: NSRange(location: span.romanStart, length: span.romanEnd - span.romanStart))
-            let piece = line.substring(with: NSRange(location: span.textStart, length: span.textEnd - span.textStart))
+            guard let latin = roman.substringIfInBounds(location: span.romanStart, length: span.romanEnd - span.romanStart),
+                  let piece = line.substringIfInBounds(location: span.textStart, length: span.textEnd - span.textStart)
+            else { return nil }
             if let syllables = koreanSyllableSegments(piece, start: span.textStart, reading: latin) {
                 segs.append(contentsOf: syllables)
             } else {
@@ -987,8 +988,8 @@ public enum Romanizer {
         guard segs.contains(where: { containsHan($0.latin) }) else { return segs }
         let ns = text as NSString
         return segs.map { seg in
-            guard containsHan(seg.latin) else { return seg }
-            let piece = ns.substring(with: NSRange(location: seg.utf16Start, length: seg.utf16Length))
+            guard containsHan(seg.latin),
+                  let piece = ns.substringIfInBounds(location: seg.utf16Start, length: seg.utf16Length) else { return seg }
             guard let variant = piece.applyingTransform(StringTransform("Hans-Hant"), reverse: false),
                 variant != piece
             else { return seg }

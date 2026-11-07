@@ -887,7 +887,7 @@ func runWebLyricsTests() {
                         && sourceHas(pagesSource, "if (new URLSearchParams(location.search).get('deband') === '0') return;"), true,
                     "网页歌词去色带: 传纹理加绘制超过帧间隔的四分之三、某种帧传不上去、上下文丢了都改回 2D 画布;deband=0 关掉")
         expectEqual(sourceHas(app("WebLyrics/WebLyricsScreen.swift"),
-                              "JSONSerialization.data(withJSONObject: [\"type\": \"links\", \"items\": items], options: [.sortedKeys]),"), true,
+                              "SafeSerialization.jsonData([\"type\": \"links\", \"items\": items], options: [.sortedKeys]),"), true,
                     "网页歌词: 链接位置消息按排好序的键序列化,没变就不重发")
         expectEqual(sourceHas(sourceBody("function nextRow(next, em, weight) {", in: pagesSource),
                               "if (perWord(next)) return row(columns(next, false, 1), { ...opts, cols: true });"), true,

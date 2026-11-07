@@ -95,8 +95,9 @@ public final class KasetWebSessionWatcher {
         let pipe = Pipe()
         proc.standardOutput = pipe
         proc.standardError = FileHandle.nullDevice
+        let fd = pipe.fileHandleForReading.fileDescriptor
         pipe.fileHandleForReading.readabilityHandler = { [weak self] handle in
-            let chunk = handle.availableData
+            let chunk = PipeRead.chunk(fd: fd)
             // EOF:摘掉自己再交给 terminationHandler,留着的话会拿空数据一直回调。
             guard !chunk.isEmpty else { handle.readabilityHandler = nil; return }
             Task { @MainActor [weak self] in self?.consume(chunk) }

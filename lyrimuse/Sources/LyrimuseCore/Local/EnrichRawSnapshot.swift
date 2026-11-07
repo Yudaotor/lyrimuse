@@ -26,7 +26,7 @@ public struct EnrichRawSnapshot: Sendable {
             data[key].flatMap { try? JSONSerialization.jsonObject(with: $0) as? [String: Any] }
         }
         set {
-            guard let newValue, let bytes = try? JSONSerialization.data(withJSONObject: newValue) else {
+            guard let newValue, let bytes = SafeSerialization.jsonData(newValue) else {
                 data[key] = nil
                 pickedKeys.remove(key)
                 return

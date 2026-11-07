@@ -999,8 +999,11 @@ final class LyricsLayerListView: NSView {
 /// (渲染服务原生实现);取不到时退回 `CIGaussianBlur`,同样的半径在渲染服务里要过 Core Image,帧率掉一半(07 章决策 111)。
 enum LyricsLayerBlur {
     static func make() -> Any {
+        // 私有类:先问它认不认这个类方法,系统拿掉它时走回退,不发出 unrecognized selector(抛 Objective-C 异常)。
+        let selector = NSSelectorFromString("filterWithType:")
         if let type = NSClassFromString("CAFilter") as? NSObject.Type,
-           let f = type.perform(NSSelectorFromString("filterWithType:"), with: "gaussianBlur")?.takeUnretainedValue() as? NSObject {
+           type.responds(to: selector),
+           let f = type.perform(selector, with: "gaussianBlur")?.takeUnretainedValue() as? NSObject {
             f.setValue("blur", forKey: "name")
             f.setValue(0, forKey: "inputRadius")
             return f

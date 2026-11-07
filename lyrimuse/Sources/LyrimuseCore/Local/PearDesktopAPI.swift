@@ -717,7 +717,7 @@ public final class PearDesktopAPI: @unchecked Sendable {
     private func postRaw(_ path: String, body: [String: Any], config: Config,
                          timeout: TimeInterval) -> (status: Int?, data: Data?)? {
         guard let url = baseURL(config)?.appendingPathComponent(path),
-              let data = try? JSONSerialization.data(withJSONObject: body) else { return nil }
+              let data = SafeSerialization.jsonData(body) else { return nil }
         var request = URLRequest(url: url, timeoutInterval: timeout)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")

@@ -610,7 +610,7 @@ final class EditorialNotesStore: ObservableObject {
         // 只读本机文件,几百毫秒内完事;10 秒兜底防卡死。
         let watchdog = DispatchWorkItem { if process.isRunning { process.terminate() } }
         DispatchQueue.global(qos: .utility).asyncAfter(deadline: .now() + 10, execute: watchdog)
-        let data = pipe.fileHandleForReading.readDataToEndOfFile()
+        let data = PipeRead.toEnd(pipe.fileHandleForReading)
         process.waitUntilExit()
         watchdog.cancel()
         guard process.terminationStatus == 0,

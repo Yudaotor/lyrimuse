@@ -83,9 +83,15 @@ struct WindowResizeEnabler: NSViewRepresentable {
 
     func updateNSView(_ nsView: NSView, context: Context) {
         guard let probe = nsView as? Probe else { return }
-        probe.minSize = NSSize(width: minWidth, height: minHeight)
-        // 下限变大(同曲条目拖宽左栏)时窗口跟着撑开,同刚弹出时比下限小的那一支。
-        if let window = probe.window { probe.apply(to: window) }
+        let minSize = NSSize(width: minWidth, height: minHeight)
+        guard probe.minSize != minSize else { return }
+        probe.minSize = minSize
+        // 下限变大(同曲条目拖宽左栏)时窗口跟着撑开,同刚弹出时比下限小的那一支。挪到下一拍:这里还在 SwiftUI 的更新里,
+        // 当场改窗口尺寸会让宿主视图在同一轮布局里再排一次。
+        DispatchQueue.main.async { [weak probe] in
+            guard let probe, let window = probe.window else { return }
+            probe.apply(to: window)
+        }
     }
 }
 

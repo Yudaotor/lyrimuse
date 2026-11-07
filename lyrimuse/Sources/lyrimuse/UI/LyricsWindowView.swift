@@ -532,7 +532,7 @@ private final class LyricsWindowController: ObservableObject {
     /// 迷你窗口的默认尺寸(从没拖过迷你窗时用它)。
     static var miniSize: CGSize { LyricsWindowMiniMetrics.size }
     /// 迷你下限,跟 body 根容器那层 `.frame(minWidth:minHeight:)` 的迷你一档必须一致。
-    static let miniMinSize = CGSize(width: 300, height: 110)
+    static let miniMinSize = LyricsMiniPanel.minimumContentSize
     /// 用户拖出来的迷你尺寸。
     private static let miniSizeKey = "np:lyricsWindowMiniSize"
     /// 迷你窗在屏幕上的位置(左下角,绝对屏幕坐标)+ 所在屏幕的稳定 ID。跟尺寸分开存:尺寸换台

@@ -98,7 +98,7 @@ public enum LyricsBackupArchive {
             out[key] = entry
         }
         guard !out.isEmpty else { return nil }
-        return try? JSONSerialization.data(withJSONObject: out, options: [.sortedKeys])
+        return SafeSerialization.jsonData(out, options: [.sortedKeys])
     }
 
     /// 配置包名里的这一段换成下面那个,就是 sidecar 名 —— 同名同时间戳,一眼看得出是一对。

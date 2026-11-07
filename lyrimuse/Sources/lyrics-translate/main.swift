@@ -176,7 +176,7 @@ func detectSourceLanguage(_ lines: [String]) -> String? {
 @main
 struct LyricsTranslate {
     static func main() async {
-        guard let data = FileHandle.standardInput.readDataToEndOfFile() as Data?,
+        guard let data = try? FileHandle.standardInput.readToEnd(),
             let input = try? JSONDecoder().decode(Input.self, from: data)
         else {
             emit(Output(ok: false, reason: "bad-input"))

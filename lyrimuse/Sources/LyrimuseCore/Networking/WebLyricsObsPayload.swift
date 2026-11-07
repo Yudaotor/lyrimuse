@@ -191,7 +191,7 @@ public enum WebLyricsObsPayload {
     }
 
     private static func json(_ object: [String: Any]) -> String {
-        guard let data = try? JSONSerialization.data(withJSONObject: object, options: [.sortedKeys]),
+        guard let data = SafeSerialization.jsonData(object, options: [.sortedKeys]),
               let text = String(data: data, encoding: .utf8) else { return "{}" }
         return text
     }

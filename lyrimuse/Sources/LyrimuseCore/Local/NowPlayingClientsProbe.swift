@@ -195,7 +195,7 @@ public enum NowPlayingClientsProbe {
             return [item["responsibleProcessIdentifier"], item["processIdentifier"]]
                 .contains { ($0 as? NSNumber).map { pids.contains($0.int32Value) } ?? false }
         }
-        return hit.flatMap { try? JSONSerialization.data(withJSONObject: $0) }
+        return hit.flatMap { SafeSerialization.jsonData($0) }
     }
 
     /// `genericClientApps` 里的 App 在跑、按 bundle id 问不到时:全部会话里它的进程报的那一份,bundle id 换成它自己的。

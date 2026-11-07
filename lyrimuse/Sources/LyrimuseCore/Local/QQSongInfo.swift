@@ -31,7 +31,7 @@ public enum QQSongInfo {
                 "param": ["song_type": 0, "song_mid": songMID],
             ],
         ]
-        return try? JSONSerialization.data(withJSONObject: body, options: [.sortedKeys])
+        return SafeSerialization.jsonData(body, options: [.sortedKeys])
     }
 
     /// 歌曲详情 → 简介(`songinfo.data.info.intro.content[].value`;多段之间空一行,每段保留原文的分行)。

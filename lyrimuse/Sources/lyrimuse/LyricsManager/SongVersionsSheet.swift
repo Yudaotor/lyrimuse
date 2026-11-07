@@ -463,7 +463,11 @@ struct SongVersionsSheet: View {
             }
             .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).stroke(Color.primary.opacity(0.1)))
         }
-        .onGeometryChange(for: Bool.self, of: { $0.size.width >= Self.tableWideMinWidth }) { tableIsWide = $0 }
+        .onGeometryChange(for: CGFloat.self, of: { $0.size.width }) { width in
+            // 带回差:宽度停在阈值附近(传统滚动条出没会让宽度差十几点)时不在一行和两行之间来回切。
+            let wide = LayoutHysteresis.isWide(width: width, wasWide: tableIsWide, threshold: Self.tableWideMinWidth)
+            if wide != tableIsWide { tableIsWide = wide }
+        }
     }
 
     /// 表宽到这么多才一行排一条(名字那列还剩约 180 点);窄了每条拆两行:上面图标和完整的名字,

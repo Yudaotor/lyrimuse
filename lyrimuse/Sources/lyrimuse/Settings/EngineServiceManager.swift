@@ -365,7 +365,7 @@ public enum EngineServiceManager {
         p.standardOutput = outPipe
         p.standardError = mergeStderr ? outPipe : FileHandle.nullDevice
         guard FileIO.attempt("launch", URL(fileURLWithPath: path), { try p.run() }) else { return (-1, "") }
-        let data = outPipe.fileHandleForReading.readDataToEndOfFile()
+        let data = PipeRead.toEnd(outPipe.fileHandleForReading)
         p.waitUntilExit()
         return (p.terminationStatus, String(data: data, encoding: .utf8) ?? "")
     }

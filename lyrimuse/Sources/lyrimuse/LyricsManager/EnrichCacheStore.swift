@@ -605,7 +605,7 @@ public final class EnrichCacheStore: ObservableObject {
     /// 一律 nil,不影响其余字段。
     private static func decodeDecision(_ value: Any?) -> LyricsResolutionDecision? {
         guard let dict = value as? [String: Any],
-              let data = try? JSONSerialization.data(withJSONObject: dict) else { return nil }
+              let data = SafeSerialization.jsonData(dict) else { return nil }
         let decoder = JSONDecoder()
         decoder.keyDecodingStrategy = .convertFromSnakeCase
         return try? decoder.decode(LyricsResolutionDecision.self, from: data)

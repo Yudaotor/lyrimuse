@@ -79,8 +79,9 @@ enum WordKaraokeGradient {
     /// sRGB 分量线性插值,t=0 是 a、t=1 是 b。只用来在"未唱色"和"已唱色"之间过渡——
     /// 不追求感知均匀空间那一套,过渡带只有 wordEdgeSoftenBand(0.08)宽,肉眼分不出差别。
     private static func mix(_ a: Color, _ b: Color, t: Double) -> Color {
-        let ca = NSColor(a).usingColorSpace(.sRGB) ?? NSColor(a)
-        let cb = NSColor(b).usingColorSpace(.sRGB) ?? NSColor(b)
+        // 转不到 sRGB 的(图案色)读分量会抛 Objective-C 异常,退回白色。
+        let ca = NSColor(a).usingColorSpace(.sRGB) ?? .white
+        let cb = NSColor(b).usingColorSpace(.sRGB) ?? .white
         func lerp(_ x: CGFloat, _ y: CGFloat) -> CGFloat { x + (y - x) * CGFloat(t) }
         return Color(nsColor: NSColor(
             srgbRed: lerp(ca.redComponent, cb.redComponent),

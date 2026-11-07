@@ -4227,7 +4227,7 @@ final class LastfmStatsService: ObservableObject {
                     try? await Task.sleep(nanoseconds: 25_000_000_000)
                     if !Task.isCancelled, process.isRunning { process.terminate() }
                 }
-                let data = pipe.fileHandleForReading.readDataToEndOfFile()
+                let data = PipeRead.toEnd(pipe.fileHandleForReading)
                 process.waitUntilExit()
                 watchdog.cancel()
                 guard process.terminationStatus == 0,
@@ -4478,7 +4478,7 @@ final class LastfmStatsService: ObservableObject {
                 try? await Task.sleep(nanoseconds: 75_000_000_000)
                 if !Task.isCancelled, process.isRunning { process.terminate() }
             }
-            let data = pipe.fileHandleForReading.readDataToEndOfFile()
+            let data = PipeRead.toEnd(pipe.fileHandleForReading)
             process.waitUntilExit()
             watchdog.cancel()
             guard let map = try? JSONSerialization.jsonObject(with: data) as? [String: String] else {
@@ -4668,7 +4668,7 @@ private final class PipeDrain: @unchecked Sendable {
 
     init(_ handle: FileHandle) {
         DispatchQueue.global(qos: .utility).async {
-            let read = handle.readDataToEndOfFile()
+            let read = PipeRead.toEnd(handle)
             self.lock.lock()
             self.data = read
             self.lock.unlock()

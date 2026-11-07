@@ -102,7 +102,7 @@ public enum CredentialVault {
     /// 条目里存的文本:键排序的 JSON 再 base64。base64 只有字母数字和 `+/=`,放进 `security -i` 那一行不用转义。
     public static func encode(_ vault: [String: Any]) throws -> String {
         guard JSONSerialization.isValidJSONObject(vault) else { throw KeychainCLI.Failure.badArgument }
-        return try JSONSerialization.data(withJSONObject: vault, options: [.sortedKeys]).base64EncodedString()
+        return try SafeSerialization.jsonDataThrowing(vault, options: [.sortedKeys]).base64EncodedString()
     }
 
     public static func decode(_ text: String) -> [String: Any]? {

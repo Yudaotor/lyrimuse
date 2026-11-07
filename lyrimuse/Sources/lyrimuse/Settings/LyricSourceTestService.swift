@@ -135,9 +135,9 @@ final class LyricSourceTestService {
 
             readGroup.enter()
             readQueue.async {
-                let handle = stdoutPipe.fileHandleForReading
+                let fd = stdoutPipe.fileHandleForReading.fileDescriptor
                 while true {
-                    let chunk = handle.availableData
+                    let chunk = PipeRead.chunk(fd: fd)
                     if chunk.isEmpty { break } // EOF
                     box.outBuffer.append(chunk)
                     drainCompleteLines()
@@ -150,7 +150,7 @@ final class LyricSourceTestService {
             let stderrQueue = DispatchQueue(label: "me.yudaotor.lyrimuse.test-lyric-sources.stderr", qos: .utility)
             readGroup.enter()
             stderrQueue.async {
-                box.errBuffer = stderrPipe.fileHandleForReading.readDataToEndOfFile()
+                box.errBuffer = PipeRead.toEnd(stderrPipe.fileHandleForReading)
                 readGroup.leave()
             }
 

@@ -142,7 +142,7 @@ func emit(_ out: Output) -> Never {
     exit(out.ok ? 0 : 1)
 }
 
-let data = FileHandle.standardInput.readDataToEndOfFile()
+let data = PipeRead.toEnd(FileHandle.standardInput)
 guard let input = try? JSONDecoder().decode(Input.self, from: data) else {
     emit(Output(ok: false, reason: "bad-input"))
 }

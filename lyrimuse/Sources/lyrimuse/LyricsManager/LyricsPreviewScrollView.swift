@@ -116,7 +116,7 @@ struct LyricsPreviewScrollView<Content: View>: NSViewRepresentable {
         /// 文档视图跟可视区一样宽,高度按内容在这个宽度下排出来的高度。
         func relayout(force: Bool = false) {
             guard let scrollView, let document, let host else { return }
-            let width = scrollView.contentSize.width
+            let width = Self.documentWidth(scrollView)
             guard width > 0 else { return }
             let height = ceil(host.sizeThatFits(in: CGSize(width: width, height: .greatestFiniteMagnitude)).height)
             guard force || width != laidOutWidth || height != laidOutHeight else { return }
@@ -125,6 +125,15 @@ struct LyricsPreviewScrollView<Content: View>: NSViewRepresentable {
             let size = CGSize(width: width, height: max(height, 1))
             if document.frame.size != size { document.setFrameSize(size) }
             if host.view.frame != document.bounds { host.view.frame = document.bounds }
+        }
+
+        /// 按「竖滚动条一直占着位置」的宽度排:传统滚动条出没会改 `contentSize.width`,按它排的话内容高度跟着变,
+        /// 又决定滚动条出不出来。悬浮滚动条不占宽度,两种算法一样。
+        static func documentWidth(_ scrollView: NSScrollView) -> CGFloat {
+            guard scrollView.hasVerticalScroller, scrollView.scrollerStyle == .legacy else { return scrollView.contentSize.width }
+            return NSScrollView.contentSize(forFrameSize: scrollView.frame.size, horizontalScrollerClass: nil,
+                                            verticalScrollerClass: NSScroller.self, borderType: scrollView.borderType,
+                                            controlSize: .regular, scrollerStyle: .legacy).width
         }
 
         func applyPending() {

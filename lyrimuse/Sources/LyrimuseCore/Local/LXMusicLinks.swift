@@ -30,7 +30,7 @@ public enum LXMusicLinks {
             let total = Int(secs.rounded())
             payload["interval"] = String(format: "%02d:%02d", total / 60, total % 60)
         }
-        guard let data = try? JSONSerialization.data(withJSONObject: payload, options: [.sortedKeys]),
+        guard let data = SafeSerialization.jsonData(payload, options: [.sortedKeys]),
               let json = String(data: data, encoding: .utf8),
               let encoded = json.addingPercentEncoding(withAllowedCharacters: dataAllowed) else { return nil }
         return URL(string: "lxmusic://music/searchPlay?data=" + encoded)
@@ -43,7 +43,7 @@ public enum LXMusicLinks {
     public static func searchURL(keywords: String) -> URL? {
         let text = String(keywords.trimmingCharacters(in: .whitespacesAndNewlines).prefix(searchMaxLength))
         guard !text.isEmpty,
-              let data = try? JSONSerialization.data(withJSONObject: ["keywords": text], options: [.sortedKeys]),
+              let data = SafeSerialization.jsonData(["keywords": text], options: [.sortedKeys]),
               let json = String(data: data, encoding: .utf8),
               let encoded = json.addingPercentEncoding(withAllowedCharacters: dataAllowed) else { return nil }
         return URL(string: "lxmusic://music/search?data=" + encoded)

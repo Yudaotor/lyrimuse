@@ -75,7 +75,7 @@ public enum QQIPadNowPlaying {
                                      album: object["album"] as? String), bundleID: Self.bundleID)
         object["title"] = names.title ?? NSNull()
         if let album = names.album { object["album"] = album }
-        return (try? JSONSerialization.data(withJSONObject: object)) ?? data
+        return (SafeSerialization.jsonData(object)) ?? data
     }
 
     /// 媒体事件流的合并状态里的 title / album 换成整理过的,别的键原样留着。

@@ -111,11 +111,11 @@ public enum ProcessRunner {
         let errDone = DispatchSemaphore(value: 0)
         if let errPipe {
             DispatchQueue.global(qos: helperQoS).async {
-                errBox.set(errPipe.fileHandleForReading.readDataToEndOfFile())
+                errBox.set(PipeRead.toEnd(errPipe.fileHandleForReading))
                 errDone.signal()
             }
         }
-        let data = outPipe.fileHandleForReading.readDataToEndOfFile()
+        let data = PipeRead.toEnd(outPipe.fileHandleForReading)
         if errPipe != nil { errDone.wait() }
         process.waitUntilExit()
         killer.cancel()

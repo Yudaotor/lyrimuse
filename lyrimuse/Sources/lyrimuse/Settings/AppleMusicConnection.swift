@@ -82,7 +82,7 @@ public final class AppleMusicConnection: ObservableObject {
             return
         }
         obj.removeValue(forKey: CredentialVault.mediaUserTokenKey)
-        if let stripped = try? JSONSerialization.data(withJSONObject: obj, options: [.prettyPrinted]),
+        if let stripped = SafeSerialization.jsonData(obj, options: [.prettyPrinted]),
            FileIO.attempt("write", tokenURL, { try AppleMusicLoginWindowController.writeCredentialFile(stripped, to: tokenURL) }) {
             logger.notice("apple music: moved the user token from the file into the keychain")
         }
@@ -253,7 +253,7 @@ final class AppleMusicLoginWindowController: NSWindowController, WKNavigationDel
             logger.error("apple music: keychain write failed, token kept in the file: \(String(describing: error), privacy: .public)")
         }
         let payload = AppleMusicTokenFile.payload(token: fileToken, storefront: storefront, savedAt: Date(), expiresAt: expiresAt)
-        guard let data = try? JSONSerialization.data(withJSONObject: payload, options: [.prettyPrinted]),
+        guard let data = SafeSerialization.jsonData(payload, options: [.prettyPrinted]),
               FileIO.attempt("write", tokenURL, { try Self.writeCredentialFile(data, to: tokenURL) })
         else {
             // 落盘失败(磁盘满/权限)时当作没连上——宁可让用户再点一次,也不要显示成"已连接"却查不到歌词。

@@ -1751,7 +1751,11 @@ struct LyricsSearchSheet: View {
             }
             lyricsPreview(c, rows: rows, comparison: sideBySide ? comparison : nil)
         }
-        .onGeometryChange(for: Bool.self, of: { $0.size.width >= Self.compareMinWidth }) { previewIsWide = $0 }
+        .onGeometryChange(for: CGFloat.self, of: { $0.size.width }) { width in
+            // 带回差:宽度停在阈值附近时不在并排和单栏之间来回切。
+            let wide = LayoutHysteresis.isWide(width: width, wasWide: previewIsWide, threshold: Self.compareMinWidth)
+            if wide != previewIsWide { previewIsWide = wide }
+        }
     }
 
     /// 右边预览栏宽到这么多,对照才并排摆(时间、两栏歌词、时间差);窄了只留上面那句对照小结。

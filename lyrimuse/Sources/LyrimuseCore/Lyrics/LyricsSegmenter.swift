@@ -435,11 +435,13 @@ public enum LyricsSegmenter {
             }
             let roman = romanization as NSString
             let bounds = [0] + romanCuts + [roman.length]
-            let pieces = bounds.indices.dropLast().map { k in
-                roman.substring(with: NSRange(location: bounds[k], length: bounds[k + 1] - bounds[k]))
+            let slices = bounds.indices.dropLast().map { k in
+                roman.substringIfInBounds(location: bounds[k], length: bounds[k + 1] - bounds[k])?
                     .trimmingCharacters(in: .whitespaces)
             }
-            guard pieces.allSatisfy({ !$0.isEmpty && row.measure($0) <= maxWidth + fitTolerance }) else { return nil }
+            // 切口不单调或越界(对齐器、读音缓存跟这行对不上)时退回整行,不切。
+            let pieces = slices.compactMap { $0 }
+            guard pieces.count == slices.count, pieces.allSatisfy({ !$0.isEmpty && row.measure($0) <= maxWidth + fitTolerance }) else { return nil }
             return pieces
         }
         let groupMode = budget.wordRomanization != nil && line.groups != nil

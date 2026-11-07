@@ -129,7 +129,7 @@ public enum NetEaseIPadNowPlaying {
                 if let value = seconds(key) { write(key, value + lead) }
             }
         }
-        return (try? JSONSerialization.data(withJSONObject: object)) ?? data
+        return (SafeSerialization.jsonData(object)) ?? data
     }
 
     /// 媒体事件流的合并状态(键名同 media-control 输出,时间已换成秒)里的 title / artist / duration / elapsedTime 换成整理过的,

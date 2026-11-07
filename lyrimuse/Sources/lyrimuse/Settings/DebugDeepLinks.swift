@@ -319,7 +319,7 @@ enum DebugDeepLinks {
         let url = outputDir.appendingPathComponent("state.json")
         do {
             try FileManager.default.createDirectory(at: outputDir, withIntermediateDirectories: true)
-            let data = try JSONSerialization.data(withJSONObject: state(), options: [.prettyPrinted, .sortedKeys])
+            let data = try SafeSerialization.jsonDataThrowing(state(), options: [.prettyPrinted, .sortedKeys])
             try data.write(to: url, options: .atomic)
             logger.notice("debug state written: \(url.path, privacy: .public)")
         } catch {

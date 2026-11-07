@@ -73,7 +73,10 @@ enum MenuBarSceneActions {
         let window = NSWindow(
             contentRect: NSRect(x: -20000, y: -20000, width: 1, height: 1),
             styleMask: [.borderless], backing: .buffered, defer: false)
-        window.contentView = NSHostingView(rootView: SceneActionRegistrar())
+        let host = NSHostingView(rootView: SceneActionRegistrar())
+        // 不让 SwiftUI 按内容改这扇 1×1 的锚点窗口。
+        host.sizingOptions = []
+        window.contentView = host
         // 下面几行都是"让它彻底消失在系统的各种窗口清单里":不进 Cmd-Tab/调度中心的
         // 循环、不进「窗口」菜单、不吃鼠标事件、关掉也不释放(这扇窗要活到进程结束)。
         window.alphaValue = 0

@@ -91,6 +91,7 @@ let groups: [TestGroup] = [
     TestGroup(name: "contracts-identity", summary: "跨文件契约(扫源码文本):身份与路径 / 主题 / 诊断导出 / omitempty / 日志规范 / 设置页判定 / 排字语言", run: runSourceContractIdentityTests),
     TestGroup(name: "docs-local", summary: "只留本地的文档对得上:署名轮次计数 / 项目级 skill / releasing.md、AGENTS.md(CI 与提交校验里没有这些文件,整组跳过)", run: runLocalDocsTests),
     TestGroup(name: "ops-diagnostics", summary: "诊断脱敏 / 备份发现 / 导入策略 / 安全写文件 / launchd / 进程", run: runOpsDiagnosticsTests),
+    TestGroup(name: "crash-hardening", summary: "崩溃防护:读管道 / 序列化 / 取子串不抛 Objective-C 异常,布局回调改尺寸加像素容差、回差、封顶", run: runCrashHardeningTests),
 ]
 
 // ---- 参数 ----

@@ -641,8 +641,10 @@ struct SettingsView: View {
         // 侧栏比设计宽度(205)宽出来多少(英文),窗口的默认宽度就加多少,右边内容区的宽度不跟着变窄。最窄宽度是侧栏
         // 拉到最宽再加 540(SettingsSidebarWidth.windowMinWidth):灵动岛编辑台的舞台在窗口最窄时还要有 499;西语、法语这类
         // 文字长的语言加到 640,整页按正常尺寸排,不靠收窄控件塞进去。
+        // 高度按屏幕可用高度封顶(`SettingsWindowHeight`):最小高度比屏幕还高时,按内容定尺寸的设置窗口跟系统来回拉扯。
         .frame(minWidth: windowMinWidth, idealWidth: max(860 + sidebarExtraWidth, windowMinWidth),
-               minHeight: 690, idealHeight: 720)
+               minHeight: SettingsWindowHeight.minimum(visibleHeight: NSScreen.main?.visibleFrame.height),
+               idealHeight: SettingsWindowHeight.ideal(visibleHeight: NSScreen.main?.visibleFrame.height))
         // 设置搜索的两路信号只在这扇窗口的子树里有值;别处复用行组件拿到的是默认值,不受影响。
         .environment(\.settingsSearchHighlightedTitles, searchRouter.highlightedTitles)
         .environment(\.settingsSearchPendingDrawer, searchRouter.pendingDrawer)

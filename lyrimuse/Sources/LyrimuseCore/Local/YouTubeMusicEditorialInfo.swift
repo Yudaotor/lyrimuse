@@ -104,13 +104,13 @@ public enum YouTubeMusicEditorialInfo {
         var body = context(hl: hl, now: now)
         body["query"] = query
         body["params"] = albumsFilterParams
-        return try? JSONSerialization.data(withJSONObject: body, options: [.sortedKeys])
+        return SafeSerialization.jsonData(body, options: [.sortedKeys])
     }
 
     public static func browseBody(browseID: String, hl: String?, now: Date = Date()) -> Data? {
         var body = context(hl: hl, now: now)
         body["browseId"] = browseID
-        return try? JSONSerialization.data(withJSONObject: body, options: [.sortedKeys])
+        return SafeSerialization.jsonData(body, options: [.sortedKeys])
     }
 
     // MARK: - 解析

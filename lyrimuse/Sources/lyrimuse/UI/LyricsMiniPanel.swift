@@ -10,6 +10,9 @@ import SwiftUI
 ///
 /// 不当 key(`becomesKeyOnlyIfNeeded`):点歌词、点播控键都不会把键盘从用户正在用的 App 拿走,代价是迷你时空格 / ← → 不控制播放。
 final class LyricsMiniPanel: NSPanel {
+    /// 迷你窗内容的最小尺寸(`LyricsWindowController.miniMinSize` 取的就是它)。
+    static let minimumContentSize = CGSize(width: 300, height: 110)
+
     init(frame: NSRect) {
         super.init(contentRect: frame,
                    styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView, .nonactivatingPanel],
@@ -50,8 +53,10 @@ enum LyricsMiniPanelHost {
         }
         let panel = LyricsMiniPanel(frame: frame)
         let host = LyricsMiniHostingView(rootView: LyricsWindowView(hostsMiniPanel: true))
-        // 只让 SwiftUI 那层给出最小尺寸,别让它按内容的理想尺寸改面板大小。
-        host.sizingOptions = [.minSize]
+        // 尺寸全由我们自己管(摆位、恢复、换屏都是 setFrame),最小尺寸也自己设:让 SwiftUI 按内容推最小尺寸的话,
+        // 内容的真实下限比声明的大时它在布局回调里改面板,跟我们的 setFrame 争。
+        host.sizingOptions = []
+        panel.contentMinSize = LyricsMiniPanel.minimumContentSize
         panel.contentView = host
         panel.setFrame(frame, display: false)
         self.panel = panel

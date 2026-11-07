@@ -162,12 +162,12 @@ public enum LyricsRematch {
 
     /// 请求文件的内容。纯函数,selftest 覆盖(引擎侧 parseLyricsRematchRequest 是它的读方)。
     public static func requestBody(id: String, key: String) -> Data {
-        (try? JSONSerialization.data(withJSONObject: ["id": id, "key": key], options: [.sortedKeys])) ?? Data()
+        (SafeSerialization.jsonData(["id": id, "key": key], options: [.sortedKeys])) ?? Data()
     }
 
     public static func cancelBody(id: String) -> Data {
         let body: [String: Any] = ["id": id, "cancel": true]
-        return (try? JSONSerialization.data(withJSONObject: body, options: [.sortedKeys])) ?? Data()
+        return (SafeSerialization.jsonData(body, options: [.sortedKeys])) ?? Data()
     }
 
     /// 请引擎对 key 跑一轮。返回写文件是否成功。

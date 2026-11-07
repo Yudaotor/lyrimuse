@@ -22,7 +22,7 @@ public enum WebLyricsStats {
         if let bitRate { object["kbps"] = bitRate / 1000 }
         if let encoderBitRate { object["enc"] = encoderBitRate / 1000 }
         if let queueMs { object["queue"] = queueMs }
-        guard let data = try? JSONSerialization.data(withJSONObject: object, options: [.sortedKeys]),
+        guard let data = SafeSerialization.jsonData(object, options: [.sortedKeys]),
               let text = String(data: data, encoding: .utf8) else { return "{\"type\":\"stats\"}" }
         return text
     }

@@ -276,11 +276,11 @@ public enum NotificationTest {
     }
 
     public static func testBody(id: String, channel: NotificationChannel) -> Data {
-        (try? JSONSerialization.data(withJSONObject: ["id": id, "channel": channel.jsonObject], options: [.sortedKeys])) ?? Data()
+        (SafeSerialization.jsonData(["id": id, "channel": channel.jsonObject], options: [.sortedKeys])) ?? Data()
     }
 
     public static func resendBody(id: String, entryID: String) -> Data {
-        (try? JSONSerialization.data(withJSONObject: ["id": id, "resend": entryID], options: [.sortedKeys])) ?? Data()
+        (SafeSerialization.jsonData(["id": id, "resend": entryID], options: [.sortedKeys])) ?? Data()
     }
 
     // MARK: 预览(引擎 digestpreview.go)
@@ -290,7 +290,7 @@ public enum NotificationTest {
 
     /// 请引擎按真推送同一套取数算一份这一期的报告(不推送)。
     public static func previewBody(id: String, kind: NotificationPreview.Kind) -> Data {
-        (try? JSONSerialization.data(withJSONObject: ["id": id, "preview": kind.rawValue], options: [.sortedKeys])) ?? Data()
+        (SafeSerialization.jsonData(["id": id, "preview": kind.rawValue], options: [.sortedKeys])) ?? Data()
     }
 
     public struct PreviewResult: Equatable, Sendable {

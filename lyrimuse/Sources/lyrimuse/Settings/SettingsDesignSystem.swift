@@ -1625,7 +1625,7 @@ struct SettingsPopoverShell<Content: View>: View {
             .padding(.horizontal, SettingsRowMetrics.horizontalPadding)
             .padding(.top, 12)
             .padding(.bottom, 6)
-            .onGeometryChange(for: CGFloat.self, of: { $0.size.height }) { headerHeight = $0 }
+            .onGeometryChange(for: CGFloat.self, of: { $0.size.height }) { if abs(headerHeight - $0) >= 0.5 { headerHeight = $0 } }
             // 内容超高时要让人看得出能滚:滚动条常显、上下没露出来的那一侧渐隐、底部浮一颗「更多」(点了滚到底)。
             // 不给提示的话,浮层底边正好切在两行之间时看起来就像内容到此为止。
             ScrollViewReader { reader in

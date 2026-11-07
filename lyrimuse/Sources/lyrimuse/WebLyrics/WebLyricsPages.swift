@@ -1309,7 +1309,7 @@ enum WebLyricsPages {
     }
 
     private static func jsonStrings(_ dict: [String: String]) -> String {
-        guard let data = try? JSONSerialization.data(withJSONObject: dict, options: [.sortedKeys]),
+        guard let data = SafeSerialization.jsonData(dict, options: [.sortedKeys]),
               let text = String(data: data, encoding: .utf8) else { return "{}" }
         return text.replacingOccurrences(of: "</", with: "<\\/")
     }

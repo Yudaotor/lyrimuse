@@ -283,6 +283,11 @@ enum ConfigPortability {
         for (key, value) in UserDefaults.standard.dictionaryRepresentation() {
             guard key.hasPrefix("np:") || key.hasPrefix("KeyboardShortcuts_") else { continue }
             guard !excludedDefaultsKeys.contains(key) else { continue }
+            // 存成日期、二进制数据这类 JSON 放不下的值整份导出就会失败,跳过这一个键。
+            guard SafeSerialization.isJSONValue(value) else {
+                logger.notice("exportableAppSettings: skipped non-JSON value for \(key, privacy: .public)")
+                continue
+            }
             out[key] = value
         }
         return out
@@ -296,6 +301,11 @@ enum ConfigPortability {
         var applied = 0
         for (key, value) in appSettings {
             guard !excludedDefaultsKeys.contains(key) else { continue }
+            // 包里的 null(或夹着 null 的数组 / 字典)写进 UserDefaults 会抛 Objective-C 异常,跳过这一个键。
+            guard SafeSerialization.isPropertyListValue(value) else {
+                logger.notice("applyAppSettings: skipped non-property-list value for \(key, privacy: .public)")
+                continue
+            }
             UserDefaults.standard.set(value, forKey: key)
             applied += 1
         }
@@ -345,7 +355,7 @@ enum ConfigPortability {
 
         bundle["appSettings"] = exportableAppSettings()
 
-        return try? JSONSerialization.data(withJSONObject: bundle, options: [.prettyPrinted, .sortedKeys])
+        return SafeSerialization.jsonData(bundle, options: [.prettyPrinted, .sortedKeys])
     }
 
     // 导入不做任何"活的"reload——config.json/features.json 各自的 Store 都有 load()
@@ -400,7 +410,7 @@ enum ConfigPortability {
 
         if let configObj = bundle["config"] as? [String: Any] {
             let sanitized = sanitizeImportedConfig(configObj)
-            if let configData = try? JSONSerialization.data(withJSONObject: sanitized, options: [.prettyPrinted]) {
+            if let configData = SafeSerialization.jsonData(sanitized, options: [.prettyPrinted]) {
                 do {
                     // 含全部账号凭据 —— 走 writeSecurely 收紧到 0600,见那边的注释。
                     try configData.writeSecurely(to: configURL)
@@ -443,7 +453,7 @@ enum ConfigPortability {
                 dict["lyrics_dir"] = nil
                 featuresObj = dict
             }
-            if let featuresData = try? JSONSerialization.data(withJSONObject: featuresObj, options: [.prettyPrinted]) {
+            if let featuresData = SafeSerialization.jsonData(featuresObj, options: [.prettyPrinted]) {
                 do {
                     try featuresData.write(to: featuresURL, options: .atomic)
                     // 内存里的功能设置也换成刚导入的这份,理由同上面 ConfigStore.load():不换的话①紧接着的

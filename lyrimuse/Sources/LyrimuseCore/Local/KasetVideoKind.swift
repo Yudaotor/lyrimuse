@@ -121,7 +121,7 @@ public enum KasetVideoKind {
             "videoId": videoID,
             "isAudioOnly": true,
         ]
-        return try? JSONSerialization.data(withJSONObject: body)
+        return SafeSerialization.jsonData(body)
     }
 
     private static func fetch(_ videoID: String) {

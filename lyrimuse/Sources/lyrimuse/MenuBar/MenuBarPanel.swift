@@ -226,7 +226,7 @@ final class MenuBarPanelController {
         // 先登记再装内容:内容第一次布局就会报尺寸(onFittingSizeChange),那时 panel 还是 nil 的话这次摆位会被跳过。
         panel = window
         window.setContent(host)
-        place(size: host.fittingSize)
+        place(size: LayoutHysteresis.ceilToPixels(host.fittingSize, scale: window.backingScaleFactor))
         installDismissWatchers(for: window)
         // 面板开着时预取简介:歌名、歌手名、专辑名只在有简介时可点,得提前知道。与 close 里的 release 成对。
         EditorialNotesStore.shared.retain()
@@ -511,11 +511,19 @@ private final class FirstMouseHostingView<Content: View>: NSHostingView<Content>
 
     override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
 
+    /// 正在报尺寸(摆窗口)时同步进来的那次布局不再报,免得在一轮布局里反复改窗口。
+    private var reportingFittingSize = false
+
     override func layout() {
         super.layout()
-        let fitting = fittingSize
-        guard fitting != bounds.size else { return }
+        guard !reportingFittingSize else { return }
+        // 按设备像素取整再比:窗口尺寸落在像素上,差不到一个像素也报的话,每轮布局都会再摆一次窗口。
+        let scale = window?.backingScaleFactor ?? 2
+        let fitting = LayoutHysteresis.ceilToPixels(fittingSize, scale: scale)
+        guard LayoutHysteresis.differsByPixel(fitting, bounds.size, scale: scale) else { return }
+        reportingFittingSize = true
         onFittingSizeChange?(fitting)
+        reportingFittingSize = false
     }
 }
 

@@ -20,7 +20,7 @@ public enum QQMotionCover {
             "comm": ["ct": 24, "cv": 0],
             "req": ["module": "music.stream.MvUrlProxy", "method": "GetMvUrls", "param": ["vids": [vid]]],
         ]
-        return try? JSONSerialization.data(withJSONObject: body, options: [.sortedKeys])
+        return SafeSerialization.jsonData(body, options: [.sortedKeys])
     }
 
     /// 各档的宽度(像素)。

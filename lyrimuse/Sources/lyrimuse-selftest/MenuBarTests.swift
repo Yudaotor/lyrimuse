@@ -1802,7 +1802,7 @@ func runMenuBarTests() {
                     "歌词管理背面: 不收歌词库那一组,也不收外部编辑器")
         // 窗口跟着内容长高:尺寸由宿主视图在 layout() 里报。GeometryReader + PreferenceKey 那条在内容比窗口高时不来(06 章决策 44)。
         expectEqual(panel.contains("host.onFittingSizeChange = { [weak self] size in self?.place(size: size) }")
-                    && sourceHas(panel, "guard fitting != bounds.size else { return }\n        onFittingSizeChange?(fitting)")
+                    && sourceHas(panel, "guard LayoutHysteresis.differsByPixel(fitting, bounds.size, scale: scale) else { return }\nreportingFittingSize = true\nonFittingSizeChange?(fitting)")
                     // 编辑布局时收集各格位置(拖动判定用)那一处不管尺寸,放行;别的 onPreferenceChange 一律不许。
                     && panel.components(separatedBy: "onPreferenceChange(").count
                         == panel.components(separatedBy: "onPreferenceChange(PanelTileFramesKey.self)").count, true,

@@ -190,8 +190,9 @@ public final class MediaControlStreamWatcher {
         proc.standardOutput = pipe
         proc.standardError = FileHandle.nullDevice
 
+        let fd = pipe.fileHandleForReading.fileDescriptor
         pipe.fileHandleForReading.readabilityHandler = { [weak self] handle in
-            let chunk = handle.availableData
+            let chunk = PipeRead.chunk(fd: fd)
             // 到达时刻在这条读管道的线程上立刻取:hop 到主线程可能被 20Hz 渲染挡住几十毫秒,
             // 而锚点目击要的就是这几十毫秒的精度(见 MediaControlClient.streamAnchorLatency)。
             let arrivedAt = Date()

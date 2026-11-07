@@ -39,7 +39,7 @@ enum EnrichEditChannel {
         var body = fields
         body["op"] = op
         guard JSONSerialization.isValidJSONObject(body),
-              let data = try? JSONSerialization.data(withJSONObject: body) else {
+              let data = SafeSerialization.jsonData(body) else {
             return Result(ok: false, changed: 0, error: "invalid request")
         }
         // 交出去之后不跟调用方一起取消:请求可能已经被执行,结果得等回来;调用方任务被取消时 Task.sleep 立刻抛错,

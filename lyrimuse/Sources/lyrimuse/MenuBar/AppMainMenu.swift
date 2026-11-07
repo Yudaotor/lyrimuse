@@ -70,14 +70,19 @@ enum HelpMenuFeedbackItem {
 
     /// App 启动时调一次。
     static func installRemoval() {
-        // queue: nil = 在插入它的那个线程(主线程)上同步收到,菜单画出来之前就移掉。
+        // queue: nil = 在插入它的那个线程(主线程)上同步收到。不在通知里当场删:插入方返回后可能还按原下标接着操作这个菜单,
+        // 删掉一项会让它越界抛 NSRangeException。挪到这一轮 run loop 之后(common 模式,菜单跟踪期间也会跑),删前按 action 重找。
         NotificationCenter.default.addObserver(forName: NSMenu.didAddItemNotification, object: nil, queue: nil) { note in
-            MainActor.assumeIsolated {
-                guard let menu = note.object as? NSMenu,
-                      let index = note.userInfo?["NSMenuItemIndex"] as? Int,
-                      menu.items.indices.contains(index),
-                      menu.items[index].action == action else { return }
-                menu.removeItem(at: index)
+            guard let menu = note.object as? NSMenu,
+                  let index = note.userInfo?["NSMenuItemIndex"] as? Int,
+                  menu.items.indices.contains(index),
+                  menu.items[index].action == action else { return }
+            RunLoop.main.perform(inModes: [.common]) {
+                MainActor.assumeIsolated {
+                    if let current = menu.items.firstIndex(where: { $0.action == action }) {
+                        menu.removeItem(at: current)
+                    }
+                }
             }
         }
     }
