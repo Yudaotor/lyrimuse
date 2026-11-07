@@ -1555,13 +1555,18 @@ public enum MediaControlClient {
             artist = qqNames.artist
             album = qqNames.album
             duration = names.duration
-            timestamp = times.timestamp
             var lead = 0.0
             if let normalized = names.elapsed, let reported = times.elapsedTime { lead = normalized - reported }
+            // Plexamp 4.50 起那份锚点后面紧跟一份清空位置的,补回上一份锚点(见 PlexampSessionAnchor)。
+            let plexamp = PlexampSessionAnchor.filled(
+                bundleID: bundleIdentifier, identity: [title ?? "", artist ?? "", album ?? ""].joined(separator: "|"),
+                playing: playing, elapsed: names.elapsed, timestamp: times.timestamp, rate: rate)
+            timestamp = plexamp.timestamp
             // VOX 那份播放中缺位置、恢复后速率报 0,补成能外推的锚点(见 VoxPlayerInfo.systemAnchor)。
             let anchor = VoxPlayerInfo.systemAnchor(
-                bundleID: bundleIdentifier, playing: playing, elapsed: names.elapsed,
-                elapsedNow: times.elapsedTimeNow.map { $0 + lead }, rate: rate, hasTimestamp: times.timestamp != nil)
+                bundleID: bundleIdentifier, playing: playing, elapsed: plexamp.elapsed,
+                elapsedNow: plexamp.elapsed == names.elapsed ? times.elapsedTimeNow.map { $0 + lead } : nil,
+                rate: plexamp.rate, hasTimestamp: plexamp.timestamp != nil)
             elapsedTime = anchor.elapsed
             elapsedTimeNow = anchor.elapsedNow
             playbackRate = anchor.rate

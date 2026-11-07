@@ -477,8 +477,8 @@ func runNetEaseIPadTests() {
                      sourceHas(watcher, "\"bundleIdentifier\", \"duration\", \"album\"] where payload.keys.contains(key) {")],
                     [true, true, true, true], "iPad 网易云 接线: 事件流判换歌、算锚点身份用整理过的,合并状态存专辑")
         expectEqual([sourceHas(client, "elapsed: times.elapsedTime, timestamp: times.timestamp),"),
-                     sourceHas(client, "bundleID: bundleIdentifier, playing: playing, elapsed: names.elapsed,"),
-                     sourceHas(client, "elapsedNow: times.elapsedTimeNow.map { $0 + lead }, rate: rate,"),
+                     sourceHas(client, "playing: playing, elapsed: names.elapsed, timestamp: times.timestamp, rate: rate)"),
+                     sourceHas(client, "elapsedNow: plexamp.elapsed == names.elapsed ? times.elapsedTimeNow.map { $0 + lead } : nil,"),
                      sourceHas(watcher, "NetEaseIPadNowPlaying.noteBareStart(timestamp: timestamp, full: payload[\"elapsedTime\"] != nil)"),
                      sourceHas(watcher, "let elapsed = (identity[\"elapsedTime\"] as? NSNumber)?.doubleValue")],
                     [true, true, true, true, true], "iPad 网易云 接线: 开播提前量轮询、事件流两路都用整理过的进度")

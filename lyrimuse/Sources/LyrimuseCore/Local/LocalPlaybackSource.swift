@@ -801,9 +801,11 @@ public final class LocalPlaybackSource: ObservableObject {
 
     /// Plexamp 新起一首(界面点播、经它的播放器接口点播):「在放、进度 0」一帧报齐、没有更早的在放信号,声音却比这个锚点早
     /// `plexampFreshStartLeadSecs` 左右。上一首放到头接过来的(自然连播)锚点反而早于声音,交给 `carriesGaplessLead` 那条估,
-    /// 这里不补;锚点不是 0 的(从某个位置点播)不补。见 02 章决策 242。纯函数,selftest 直接覆盖。
-    public nonisolated static func plexampFreshStartLead(bundleID: String?, anchorElapsed: Double?, previousPlayedToEnd: Bool) -> Double {
-        guard bundleID == PlaybackPlayer.plexamp.bundleIdentifier, anchorElapsed == 0, !previousPlayedToEnd else { return 0 }
+    /// 这里不补;锚点不是 0 的(从某个位置点播)不补。只有 Electron 那一代(4.13 及以前)这样,4.50 起(Tauri)新起一首的锚点
+    /// 只早约 0.1 秒、不补。见 02 章决策 242。纯函数,selftest 直接覆盖。
+    public nonisolated static func plexampFreshStartLead(bundleID: String?, anchorElapsed: Double?, previousPlayedToEnd: Bool,
+                                                         electron: Bool) -> Double {
+        guard bundleID == PlaybackPlayer.plexamp.bundleIdentifier, electron, anchorElapsed == 0, !previousPlayedToEnd else { return 0 }
         return plexampFreshStartLeadSecs
     }
 
@@ -2545,7 +2547,9 @@ public final class LocalPlaybackSource: ObservableObject {
                         playingSince: playingSince, previousPlayedToEnd: previousPlayedToEnd)
                     + Self.plexampFreshStartLead(
                         bundleID: lastSnapshot?.bundleIdentifier, anchorElapsed: anchorElapsedTime,
-                        previousPlayedToEnd: previousPlayedToEnd || plexampFollowsWrap)
+                        previousPlayedToEnd: previousPlayedToEnd || plexampFollowsWrap,
+                        electron: lastSnapshot?.bundleIdentifier == PlaybackPlayer.plexamp.bundleIdentifier
+                            && PlexampPlayerAPI.isElectronBuild(pid: lastSnapshot?.processIdentifier))
                 if let bundle = lastSnapshot?.bundleIdentifier,
                    bundle == PlaybackPlayer.qqMusic.bundleIdentifier || Self.lateStartAnchorPlayers.contains(bundle)
                     || bundle == PlaybackPlayer.plexamp.bundleIdentifier {
