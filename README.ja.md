@@ -22,9 +22,9 @@
 
 https://github.com/user-attachments/assets/88b951ee-4ecf-4985-b1cb-eee6afdd5510
 
-Lyrimuseは、macOS向けのオープンソースのデスクトップ歌詞アプリです。メニューバーに常駐し、曲の再生に合わせて歌詞を単語ごとにハイライトします。表示場所は、すべてのウインドウの最前面に浮かぶフローティング表示、メニューバー、ノッチ下のDynamic Island風カプセル、Touch Bar、そして独立した歌詞ウインドウから選べます。Apple Music、Spotify、Amazon Music、YouTube MusicアプリのKasetなど16のプレーヤーと、ブラウザのWebプレーヤーに対応し、15の歌詞ソースから最も合う歌詞を選びます。必要なら翻訳やローマ字も表示できます。さらに、Last.fmのリスニングプロフィールを表示し、再生をScrobbleします。
+Lyrimuseは、macOS向けのオープンソースのデスクトップ歌詞アプリです。メニューバーに常駐し、曲の再生に合わせて歌詞を単語ごとにハイライトします。表示場所は、すべてのウインドウの最前面に浮かぶフローティング表示、メニューバー、ノッチ下のDynamic Island風カプセル、Touch Bar、そして独立した歌詞ウインドウから選べます。Apple Music、Spotify、Amazon Music、YouTube MusicアプリのKasetなど17のプレーヤーと、ブラウザのWebプレーヤーに対応し、15の歌詞ソースから最も合う歌詞を選びます。必要なら翻訳やローマ字も表示できます。さらに、Last.fmのリスニングプロフィールを表示し、再生をScrobbleします。
 
-**LyricsXからの乗り換えにも**。LyricsXは2022年4月以降、新しいリリースが出ていません。Lyrimuseは、LyricsXでできたことをカバーしたうえでアップデートを続けており、中国語圏のプレーヤー、KKBOX、Amazon Music、Kaset、Pear Desktop、reAMP、VOX、Pine Player、foobar2000、Webプレーヤーにも対応しています。詳しくは、事実確認済みの[LyricsXおよびLyric Feverとの比較](docs/lyrics-apps-comparison.md)をご覧ください。
+**LyricsXからの乗り換えにも**。LyricsXは2022年4月以降、新しいリリースが出ていません。Lyrimuseは、LyricsXでできたことをカバーしたうえでアップデートを続けており、中国語圏のプレーヤー、KKBOX、Amazon Music、Kaset、Pear Desktop、reAMP、VOX、Pine Player、MyGo Music、foobar2000、Webプレーヤーにも対応しています。詳しくは、事実確認済みの[LyricsXおよびLyric Feverとの比較](docs/lyrics-apps-comparison.md)をご覧ください。
 
 **インストール**はHomebrewで行えます（Apple Silicon、Intelの両方に対応）。初回起動時のGatekeeperの警告も自動で解除されます。自分でダウンロードしたい場合は、[最新リリース](https://github.com/Yudaotor/lyrimuse/releases/latest)を入手し、[はじめに](#はじめに)をご覧ください。
 
@@ -214,7 +214,7 @@ QQ Music／NetEase Cloud Music／Kugou Music／Soda Music／KKBOX／Amazon Music
 
 ### どの方法でも、そのあとは
 
-`/Applications`からLyrimuseを開きます。初回起動時のウィザードが、プレーヤーの選択（Apple Music、QQ Music、NetEase Cloud Music、Kugou Music、Soda Music、KKBOX、Amazon Music、Spotify、Kaset、Pear Desktop、reAMP、VOX、Pine Player、foobar2000、LX Music、または自動検出）、Apple Music、Spotify、Kaset、VOXを選んだ場合のオートメーション権限の許可（ほかのプレーヤーは、基本的な曲情報の読み取りに権限は不要です）、歌詞エンジンの有効化（ウインドウを閉じていても歌詞やアートワークの取得が続くようにするため）を順に案内します。ウィザードを終えると、すぐに歌詞が表示されます（ほかのビルドオプションは[lyrimuse/README.md](lyrimuse/README.md)を参照してください）。
+`/Applications`からLyrimuseを開きます。初回起動時のウィザードが、プレーヤーの選択（Apple Music、QQ Music、NetEase Cloud Music、Kugou Music、Soda Music、KKBOX、Amazon Music、Spotify、Kaset、Pear Desktop、reAMP、VOX、Pine Player、MyGo Music、foobar2000、WeRead、LX Music、または自動検出）、Apple Music、Spotify、Kaset、VOXを選んだ場合のオートメーション権限の許可（ほかのプレーヤーは、基本的な曲情報の読み取りに権限は不要です）、歌詞エンジンの有効化（ウインドウを閉じていても歌詞やアートワークの取得が続くようにするため）を順に案内します。ウィザードを終えると、すぐに歌詞が表示されます（ほかのビルドオプションは[lyrimuse/README.md](lyrimuse/README.md)を参照してください）。
 
 歌詞を表示するだけなら、これで準備は完了です。オプションの追加機能は、必要になったときにいつでも設定から設定できます。
 
@@ -239,10 +239,10 @@ QQ Music／NetEase Cloud Music／Kugou Music／Soda Music／KKBOX／Amazon Music
 はい。GPL-3.0のオープンソースです。有料版、アプリ内課金、登録が必要なアカウントはありません。Last.fmなどのサービスを使うかどうかはあなた次第です。役に立っていて応援したいと思ったら、[GitHubでスポンサーになる](https://github.com/sponsors/Yudaotor)か、AlipayやWeChat Payで[作者にコーヒーをおごる](https://yudaotor.github.io/donate/)こともできます。
 
 ### ほかのアプリがシステムのメディアフォーカスを持っているときでも、QQ Music、NetEase Cloud Music、Soda Musicを操作できますか？
-はい。ブラウザの動画などがmacOSの「再生中」を握っていると、システムのメディアキーはそちらに送られます。そのときLyrimuseは、QQ MusicやNetEase Cloud Music自身のメニューバー、あるいはSoda Musicの再生バーにある再生／一時停止、前へ、次へを代わりに押し、プレーヤーはバックグラウンドのままにします。これにはアクセシビリティの権限が必要です（設定 → プレーヤー）。権限がない場合、これらのボタンを押すとそのページが開きます。この状態ではシークは使えません。macOS 27ではこの権限は**システム設定 → プライバシーとセキュリティ → デバイスの制御とデータへのアクセス**にあり、それ以前のリリースでは**アクセシビリティ**という名前です。
+はい。ブラウザの動画などがmacOSの「再生中」を握っていると、システムのメディアキーはそちらに送られます。そのときLyrimuseは、QQ Music、MyGo Music、NetEase Cloud Music自身のメニューバー、あるいはSoda Musicの再生バーにある再生／一時停止、前へ、次へを代わりに押し、プレーヤーはバックグラウンドのままにします。これにはアクセシビリティの権限が必要です（設定 → プレーヤー）。権限がない場合、これらのボタンを押すとそのページが開きます。この状態ではシークは使えません。macOS 27ではこの権限は**システム設定 → プライバシーとセキュリティ → デバイスの制御とデータへのアクセス**にあり、それ以前のリリースでは**アクセシビリティ**という名前です。
 
 ### Spotify、QQ Music、NetEase Cloud Musicにも対応していますか？それともApple Musicだけですか？
-すべてに対応しています。さらにKugou Music、Soda Music、KKBOX、Amazon Music、Kaset（YouTube Musicアプリ）、オープンソースのYouTube MusicデスクトップアプリPear Desktop、Winamp風のプレーヤーreAMP、ロスレスやハイレゾに強いローカルプレーヤーVOX、ほぼすべてのフォーマットを再生できる無料のローカルプレーヤーPine Player、Windowsから移植された定番のローカルプレーヤーfoobar2000、オープンソースのLX Musicにも対応し、全部で16のプレーヤーに対応しています。macOSが「再生中」として表示しているものを自動検出させることもできます。Apple Music、Spotify、Kaset、VOXはオートメーション権限を求めます（Spotify、Kaset、VOXは正確なタイミングと再生ボタンのために使います）。残りの12のプレーヤーは、macOSのMediaRemote経由で基本的な曲情報を読み取るのに権限は不要です。ただし、QQ Music、NetEase Cloud Music、Kugou Music、Soda Music、Amazon Musicのシャッフル、リピート、お気に入りのボタンと、reAMPとfoobar2000のシャッフル、リピート、音量にはアクセシビリティの権限が必要です。Pine Playerは再生位置を秒単位でしか報告しないため、再生バーを読み取るのにこの権限を使います。KKBOX、Amazon Music、LX Musicでは、そのアプリが曲について保存済みの歌詞も候補に入りますが、それらのサービスに接続することは一切ありません。
+すべてに対応しています。さらにMyGo Music、Kugou Music、Soda Music、KKBOX、Amazon Music、Kaset（YouTube Musicアプリ）、オープンソースのYouTube MusicデスクトップアプリPear Desktop、Winamp風のプレーヤーreAMP、ロスレスやハイレゾに強いローカルプレーヤーVOX、ほぼすべてのフォーマットを再生できる無料のローカルプレーヤーPine Player、Windowsから移植された定番のローカルプレーヤーfoobar2000、オープンソースのLX Musicにも対応し、全部で17のプレーヤーに対応しています。macOSが「再生中」として表示しているものを自動検出させることもできます。Apple Music、Spotify、Kaset、VOXはオートメーション権限を求めます（Spotify、Kaset、VOXは正確なタイミングと再生ボタンのために使います）。残りの13のプレーヤーは、macOSのMediaRemote経由で基本的な曲情報を読み取るのに権限は不要です。ただし、QQ Music、NetEase Cloud Music、Kugou Music、Soda Music、Amazon Musicのシャッフル、リピート、お気に入りのボタンと、reAMPとfoobar2000のシャッフル、リピート、音量にはアクセシビリティの権限が必要です。Pine Playerは再生位置を秒単位でしか報告しないため、再生バーを読み取るのにこの権限を使います。KKBOX、Amazon Music、LX Musicでは、そのアプリが曲について保存済みの歌詞も候補に入りますが、それらのサービスに接続することは一切ありません。 MyGo Musicはオートメーションやフルディスクアクセスの許可は不要で、お気に入り、シャッフル、リピート、音量の操作には対応しません。 アクセシビリティを許可すると、ほかのAppがシステムのメディアフォーカスを持つ間も、MyGo Musicのメニューから一時停止、再開、前の曲や次の曲への切り替えができます。許可しなくても、基本的な歌詞表示と、プレーヤーがフォーカスを持つ間の再生操作には影響しません。フォーカスがない間はシークできません。 WeReadのオーディオブックでは、読み上げ中の原文を字幕として表示します。
 
 ### KKBOXやAmazon Musicの歌詞をMacで表示できますか？
 はい。どちらもmacOSのMediaRemote経由で読み取るので、許可が必要な権限はなく、歌詞はほかのプレーヤーと同じようにフローティング表示、メニューバー、カプセル、歌詞ウインドウに表示されます。KKBOXやAmazon Musicが曲の歌詞をすでに保存していれば、それも候補に入り、重みが加算されます。Lyrimuseがどちらのサービスにサインインしたり、何かを送信したりすることはありません。ほかのソースも引き続き検索されるので、単語ごとのタイミングがあるなど、よりよい歌詞があればそちらが選ばれます。
@@ -291,7 +291,7 @@ macOS 14 Sonoma以降（Sequoia、Tahoe、およびそれ以降）で、Apple Si
 すでに保存されています。歌詞のある曲にはすべて行単位のタイミング付きの`.lrc`ファイルが作られ、翻訳やローマ字がある場合は、それぞれ`.tr.lrc`と`.roma.lrc`も作られます。単語ごとのタイミングは別に保存され、デフォルトではTTML形式です。設定で`.yrc`（NetEaseのYRC形式）、Enhanced LRC、QRC、KRCに切り替えてほかのプレーヤーで読めるようにしたり、複数の形式を保存したりできます。ファイルは`~/Library/Application Support/me.yudaotor.lyrimuse/lyrics/`にあり、フォルダの場所は設定で変更できます。
 
 ### LyricsXは今もメンテナンスされていますか？LyrimuseはLyricsXやLyric Feverと何が違いますか？
-LyricsXの最後のリリースは、2022年4月のv1.6.3です。macOS 10.11以降で動作し、Apple Music、Spotify、いくつかの古いプレーヤーに対応しています。Lyric FeverはSpotifyとApple Musicに特化しており、macOS 15が必要です。LyrimuseはmacOS 14が必要で、さらにQQ Music、NetEase Cloud Music、Kugou、Soda Music、KKBOX、Amazon Music、Kaset、Pear Desktop、reAMP、VOX、Pine Player、foobar2000、LX Music、ブラウザのプレーヤーに対応し、行ごとのピンイン／広東語の粤拼／日本語と韓国語のローマ字、ロシア語やタイ語など18言語の読み、自分のリスニング統計付きのLast.fm／ListenBrainzへのScrobbleを備えています。項目ごとの比較表は[比較ページ](docs/lyrics-apps-comparison.md)にあります。
+LyricsXの最後のリリースは、2022年4月のv1.6.3です。macOS 10.11以降で動作し、Apple Music、Spotify、いくつかの古いプレーヤーに対応しています。Lyric FeverはSpotifyとApple Musicに特化しており、macOS 15が必要です。LyrimuseはmacOS 14が必要で、さらにQQ Music、NetEase Cloud Music、Kugou、Soda Music、KKBOX、Amazon Music、Kaset、Pear Desktop、reAMP、VOX、Pine Player、MyGo Music、foobar2000、LX Music、ブラウザのプレーヤーに対応し、行ごとのピンイン／広東語の粤拼／日本語と韓国語のローマ字、ロシア語やタイ語など18言語の読み、自分のリスニング統計付きのLast.fm／ListenBrainzへのScrobbleを備えています。項目ごとの比較表は[比較ページ](docs/lyrics-apps-comparison.md)にあります。
 ## ライセンスと著作権
 
 - **Lyrimuse本体は[GPL-3.0](LICENSE)です**。アプリに同梱しているオープンソースのコンポーネントと辞書データ（media-control、Sparkle、KeyboardShortcuts、OpenCCとrime-cantoneseの辞書）は、それぞれ独自のライセンスに従います。全文は[THIRD_PARTY_LICENSES](THIRD_PARTY_LICENSES)にあり、アプリにも同梱されていて、**設定 → 情報 → サードパーティのライセンス**から開けます。

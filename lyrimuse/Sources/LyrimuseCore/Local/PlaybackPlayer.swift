@@ -232,6 +232,8 @@ extension PlaybackPlayer {
         /// 两家失焦时都按播放控制菜单(`PlaybackMenuControl`);汽水读、按底部播放条上那颗心,失焦时按同一条播放条上的三颗
         /// 播放键(`SodaMusicControl`)。都没有模式键。
         case controlsPlayback
+        /// MyGo Music 只按主菜单的播放 / 暂停、上一首、下一首,不读取喜欢或模式状态。
+        case controlsTransport
         /// 读、按菜单栏 Play 里的随机 / 循环(reAMP `ReampMenuControl`),读写音量滑块(`ReampVolume`),失焦时按同一个菜单里的
         /// 暂停、上一首、下一首(`PlaybackMenuControl`)。foobar2000 同样:菜单「Order」(`FoobarMenuControl`)、音量滑块
         /// (`FoobarVolume`)、失焦时按 Playback 菜单。
@@ -247,6 +249,7 @@ extension PlaybackPlayer {
         switch self {
         case .qqMusic: return .switchesPlayMode
         case .netease, .kugou, .soda: return .controlsPlayback
+        case .mygoMusic: return .controlsTransport
         case .amazonMusic: return .calibratesProgress
         case .reamp, .foobar2000: return .pressesPlayMode
         case .pinePlayer: return .refinesProgress

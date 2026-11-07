@@ -62,16 +62,16 @@ func TestDocsListEveryPlayer(t *testing.T) {
 		t.Fatal("shared/players.json 里一个播放器都没读出来")
 	}
 	enWords := []string{"zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten",
-		"eleven", "twelve", "thirteen", "fourteen", "fifteen", "sixteen"}
+		"eleven", "twelve", "thirteen", "fourteen", "fifteen", "sixteen", "seventeen"}
 	zhDigits := []string{"零", "一", "二", "三", "四", "五", "六", "七", "八", "九", "十",
-		"十一", "十二", "十三", "十四", "十五", "十六"}
+		"十一", "十二", "十三", "十四", "十五", "十六", "十七"}
 	if n >= len(enWords) {
 		t.Fatalf("播放器数量是 %d,没有对应的中英数字——请在两张表里补上再跑这个测试", n)
 	}
 	esWords := []string{"cero", "uno", "dos", "tres", "cuatro", "cinco", "seis", "siete", "ocho", "nueve", "diez",
-		"once", "doce", "trece", "catorce", "quince", "dieciséis"}
-	esNum := `(dos|tres|cuatro|cinco|seis|siete|ocho|nueve|diez|once|doce|trece|catorce|quince|dieciséis|\d+)`
-	enNum := `(one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|\d+)`
+		"once", "doce", "trece", "catorce", "quince", "dieciséis", "diecisiete"}
+	esNum := `(dos|tres|cuatro|cinco|seis|siete|ocho|nueve|diez|once|doce|trece|catorce|quince|dieciséis|diecisiete|\d+)`
+	enNum := `(one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|\d+)`
 	zhNum := `([一二三四五六七八九十]+|\d+)`
 
 	readmes := []struct {

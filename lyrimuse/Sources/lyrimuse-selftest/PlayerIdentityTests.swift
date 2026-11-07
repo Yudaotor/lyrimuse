@@ -8,6 +8,40 @@ import Foundation
 @MainActor
 func runPlayerIdentityTests() {
     pausedFocusChecks()
+    // MyGo 的系统控制与失焦主菜单控制共用既有通路,固定的菜单标题不提供播放状态。
+    do {
+        typealias Menu = PlaybackMenuControl
+        typealias Route = MusicPlaybackController.ControlRoute
+        let player = PlaybackPlayer.mygoMusic
+        for (title, command) in [("播放/暂停", Menu.Command.playPause), ("Play/Pause", .playPause),
+                                 ("下一首", .nextTrack), ("Next", .nextTrack), ("上一首", .previousTrack), ("Previous", .previousTrack)] {
+            expectEqual(Menu.command(forMenuTitle: title, player: player), command, "MyGo 主菜单: 精确匹配 \(title)")
+        }
+        for title in ["Play", "Pause", "播放", "暂停", "Like/Unlike", "Shuffle", "Change Repeat Mode", "Next Playlist"] {
+            expectEqual(Menu.command(forMenuTitle: title, player: player), nil, "MyGo 主菜单: 不推断其它动作 \(title)")
+        }
+        expectEqual(Menu.titleShowsState(player), false, "MyGo: 固定的 toggle 标题不作播放真值")
+        for command in [Menu.Command.playPause, .nextTrack, .previousTrack] {
+            expectEqual(MusicPlaybackController.controlRoute(exclusivelyAppleMusic: false, focusFallback: nil,
+                directQueryFallback: player, mediaControlCommand: command.rawValue), Route.mediaControl,
+                "MyGo: 正常焦点不依赖 AX 权限")
+            expectEqual(MusicPlaybackController.controlRoute(exclusivelyAppleMusic: false, focusFallback: nil,
+                focusHeldElsewhere: true, directQueryFallback: player, mediaControlCommand: command.rawValue),
+                Route.menuAccessibility(player, command), "MyGo: 失焦只按自身菜单")
+            expectEqual(MusicPlaybackController.controlRoute(exclusivelyAppleMusic: false, focusFallback: nil,
+                focusHeldElsewhere: true, mediaControlCommand: command.rawValue), Route.withheld,
+                "MyGo: 没有实际回退目标时不猜选中的播放器")
+        }
+        for command in ["seek", "", "unknown"] {
+            expectEqual(MusicPlaybackController.controlRoute(exclusivelyAppleMusic: false, focusFallback: nil,
+                focusHeldElsewhere: true, directQueryFallback: player, mediaControlCommand: command), Route.withheld,
+                "MyGo: 失焦无定向通路时不控制媒体焦点占用者")
+        }
+        expectEqual(MediaControlClient.directQueryPlayer(forBundleID: player.bundleIdentifier), player,
+                    "MyGo: 失焦后可按 bundle ID 读取自身会话")
+        expectEqual(LocalPlaybackSource.acceptsSeek(bundleID: player.bundleIdentifier), true, "MyGo: 正常焦点允许跳转")
+        expectEqual(player.nativeLyricSource, nil, "MyGo: 多音源播放器不猜歌词来源")
+    }
     // ---- bundleID → 数据源档位映射 ----
     do {
         typealias L = LocalPlaybackSource
@@ -238,7 +272,7 @@ func runPlayerIdentityTests() {
             expectEqual(shown(menuRoute, true, false, false), false, "播放键反馈: 菜单连按第二下按显示的翻回去")
             expectEqual(shown(menuRoute, true, false, true), true, "播放键反馈: 菜单回报前回读已到 → 跟真值,不再翻")
             expectEqual(shown(menuRoute, false, true, false), false, "播放键反馈: 回读先到的是暂停 → 跟真值")
-            expectEqual(PlaybackMenuControl.players, [.qqMusic, .netease, .kugou, .soda, .pinePlayer, .reamp, .foobar2000],
+            expectEqual(PlaybackMenuControl.players, [.qqMusic, .netease, .kugou, .soda, .pinePlayer, .reamp, .foobar2000, .mygoMusic],
                         "失焦按界面控制: QQ 音乐、网易云、酷狗、Pine Player、reAMP 按菜单,汽水按播放条")
             for command in [Command.playPause, .nextTrack, .previousTrack] {
                 expectEqual(MusicPlaybackController.controlRoute(exclusivelyAppleMusic: false, focusFallback: nil,
@@ -539,6 +573,7 @@ func runPlayerIdentityTests() {
             .foobar2000: ("foobar2000", "com.foobar2000.mac"),
             .pearDesktop: ("pear_desktop", "com.github.th-ch.youtube-music"),
             .weread: ("weread", "com.tencent.weread"),
+            .mygoMusic: ("mygo_music", "dev.egoist.music"),
         ]
         for (player, want) in expected {
             expectEqual(player.rawValue, want.raw, "播放器契约: \(player) 的 rawValue")
@@ -1181,6 +1216,7 @@ func runPlayerIdentityTests() {
             .pinePlayer: (nil, [.extendedControls, .repeatOne, .resume, .snapsToReportedPosition, .arrivesWhole]),
             .foobar2000: (nil, [.extendedControls, .repeatOne, .resume, .learnsAnchorLag, .arrivesWhole]),
             .weread: (nil, []),
+            .mygoMusic: (nil, [.gaplessLead, .lateAnchorProbe, .learnsAnchorLag]),
             .pearDesktop: (.youtubeMusic, [.extendedControls, .repeatOne, .favorite, .resume, .lateAnchorProbe, .learnsAnchorLag,
                                            .holdsAnchorLagSeed, .catalogMenuRows]),
         ]
@@ -1435,19 +1471,21 @@ func runPlayerIdentityTests() {
     do {
         typealias P = Set<PlaybackPlayer>
         expectEqual(PlaybackPlayer.allCases.filter(\.needsAccessibilityPermission),
-                    [.qqMusic, .netease, .kugou, .soda, .amazonMusic, .reamp, .pinePlayer, .foobar2000],
+                    [.qqMusic, .netease, .kugou, .soda, .amazonMusic, .reamp, .pinePlayer, .foobar2000, .mygoMusic],
                     "辅助功能判据: 读界面的 Amazon Music / Pine Player、按菜单控制的 QQ 音乐/网易云/酷狗/reAMP、按播放条控制的汽水(改 shared/players.json 的 needsAccessibilityPermission)")
         expectEqual(PlaybackPlayer.allCases.compactMap(\.accessibilityUse),
                     [.switchesPlayMode, .controlsPlayback, .controlsPlayback, .controlsPlayback, .calibratesProgress, .pressesPlayMode,
-                     .refinesProgress, .pressesPlayMode],
+                     .refinesProgress, .pressesPlayMode, .controlsTransport],
                     "辅助功能判据: QQ 音乐是切模式、网易云/酷狗/汽水是喜欢加失焦播放、Amazon Music 是读进度加随机循环、reAMP 只有随机循环、Pine Player 是读进度条补位置加失焦播放,授权说明和体检提示按这个分开写")
         expectEqual(PlaybackPlayer.allCases.compactMap(\.automationUse), [.refinesProgress, .refinesProgress, .readsTrack, .readsTrack],
                     "自动化判据: Apple Music、Spotify 只让进度更准,Kaset、VOX 的曲目整份靠它,引导页和设置页的说明按这个分开写")
-        expectEqual(P([.auto]).playersNeedingAccessibility, [.qqMusic, .netease, .kugou, .soda, .amazonMusic, .reamp, .pinePlayer, .foobar2000],
+        expectEqual(P([.auto]).playersNeedingAccessibility, [.qqMusic, .netease, .kugou, .soda, .amazonMusic, .reamp, .pinePlayer, .foobar2000, .mygoMusic],
                     "辅助功能判据: 纯 auto 按超集算")
         expectEqual(P([.kugou]).playersNeedingAccessibility, [.kugou], "酷狗单选也显示 AX 授权入口(喜欢键、失焦播放控制要它)")
         expectEqual(P([.netease]).playersNeedingAccessibility, [.netease], "网易云单选也显示 AX 授权入口")
         expectEqual(PlaybackPlayer.netease.accessibilityUse, .controlsPlayback, "网易云授权用途不承诺模式或进度")
+        expectEqual(P([.mygoMusic]).playersNeedingAccessibility, [.mygoMusic], "MyGo: 单选显示 AX 授权入口")
+        expectEqual(PlaybackPlayer.mygoMusic.accessibilityUse, .controlsTransport, "MyGo: 权限用途只承诺失焦三项控制")
         expectEqual(PlaybackPlayer.soda.accessibilityUse, .controlsPlayback, "汽水授权用途: 喜欢加失焦时按播放条控制播放")
         expectEqual(P([.amazonMusic, .spotify]).playersNeedingAccessibility, [.amazonMusic],
                     "辅助功能判据: 多选里只挑出要授权的那一家")
@@ -3271,7 +3309,7 @@ private func menuControlDispatchTests() {
     typealias Controller = MusicPlaybackController
     typealias Command = PlaybackMenuControl.Command
     typealias Outcome = PlaybackMenuControl.Outcome
-    for player in [PlaybackPlayer.qqMusic, .netease, .soda] {
+    for player in [PlaybackPlayer.qqMusic, .netease, .soda, .mygoMusic] {
         let original = Controller.onControlWithheld
         var reasons: [Controller.WithheldReason] = []
         Controller.onControlWithheld = { reasons.append($0) }

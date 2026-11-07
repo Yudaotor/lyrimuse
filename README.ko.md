@@ -22,9 +22,9 @@
 
 https://github.com/user-attachments/assets/88b951ee-4ecf-4985-b1cb-eee6afdd5510
 
-Lyrimuse는 macOS용 오픈 소스 데스크탑 가사 앱입니다. 메뉴 막대에 상주하며, 노래가 재생되는 동안 가사를 단어 단위로 하이라이트합니다. 다른 윈도우 위에 항상 떠 있는 플로팅 가사, 메뉴 막대, 노치 아래의 다이내믹 아일랜드 스타일 캡슐, Touch Bar, 전체 가사 윈도우 중 원하는 곳에 표시할 수 있습니다. Apple Music, Spotify, Amazon Music, YouTube Music 앱 Kaset을 포함한 16개 플레이어와 브라우저의 웹 플레이어를 지원하고, 15개 가사 소스 중에서 가장 잘 맞는 가사를 골라 주며, 원하면 번역과 로마자 표기도 함께 표시합니다. Last.fm 청취 프로필을 보여 주고 재생 기록을 스크로블하는 기능도 갖추고 있습니다.
+Lyrimuse는 macOS용 오픈 소스 데스크탑 가사 앱입니다. 메뉴 막대에 상주하며, 노래가 재생되는 동안 가사를 단어 단위로 하이라이트합니다. 다른 윈도우 위에 항상 떠 있는 플로팅 가사, 메뉴 막대, 노치 아래의 다이내믹 아일랜드 스타일 캡슐, Touch Bar, 전체 가사 윈도우 중 원하는 곳에 표시할 수 있습니다. Apple Music, Spotify, Amazon Music, YouTube Music 앱 Kaset을 포함한 17개 플레이어와 브라우저의 웹 플레이어를 지원하고, 15개 가사 소스 중에서 가장 잘 맞는 가사를 골라 주며, 원하면 번역과 로마자 표기도 함께 표시합니다. Last.fm 청취 프로필을 보여 주고 재생 기록을 스크로블하는 기능도 갖추고 있습니다.
 
-**LyricsX를 사용하셨습니까?** LyricsX는 2022년 4월 이후 새 버전이 나오지 않았습니다. Lyrimuse는 LyricsX가 하던 일을 모두 해내면서 꾸준히 업데이트되고 있으며, 중국어권 플레이어, KKBOX, Amazon Music, Kaset, Pear Desktop, reAMP, VOX, Pine Player, foobar2000, 웹 플레이어 지원도 더했습니다. 자세한 내용은 사실 확인을 거친 [LyricsX 및 Lyric Fever와의 비교](docs/lyrics-apps-comparison.md)를 참고하십시오.
+**LyricsX를 사용하셨습니까?** LyricsX는 2022년 4월 이후 새 버전이 나오지 않았습니다. Lyrimuse는 LyricsX가 하던 일을 모두 해내면서 꾸준히 업데이트되고 있으며, 중국어권 플레이어, KKBOX, Amazon Music, Kaset, Pear Desktop, reAMP, VOX, Pine Player, MyGo Music, foobar2000, 웹 플레이어 지원도 더했습니다. 자세한 내용은 사실 확인을 거친 [LyricsX 및 Lyric Fever와의 비교](docs/lyrics-apps-comparison.md)를 참고하십시오.
 
 Apple Silicon과 Intel 모두 Homebrew로 **설치**할 수 있습니다. 첫 실행 시 나타나는 Gatekeeper 경고도 함께 해결해 줍니다. 직접 다운로드하려면 [최신 릴리스](https://github.com/Yudaotor/lyrimuse/releases/latest)를 받은 다음 [시작하기](#시작하기)를 참고하십시오.
 
@@ -214,7 +214,7 @@ QQ Music / NetEase Cloud Music / Kugou Music / Soda Music / KKBOX / Amazon Music
 
 ### 어느 방법이든 설치한 다음
 
-`/Applications`에서 Lyrimuse를 엽니다. 첫 실행 마법사가 플레이어 선택(Apple Music, QQ Music, NetEase Cloud Music, Kugou Music, Soda Music, KKBOX, Amazon Music, Spotify, Kaset, Pear Desktop, reAMP, VOX, Pine Player, foobar2000, LX Music 또는 자동 감지), Apple Music, Spotify, Kaset, VOX를 골랐을 때의 자동화 권한 허용(다른 플레이어는 기본 트랙 정보를 읽는 데 권한이 필요 없음), 가사 엔진 활성화(윈도우를 닫아도 가사와 아트워크를 계속 가져오기 위함)를 차례로 안내합니다. 마법사를 마치면 바로 가사가 나타납니다(다른 빌드 옵션은 [lyrimuse/README.md](lyrimuse/README.md)를 참고하십시오).
+`/Applications`에서 Lyrimuse를 엽니다. 첫 실행 마법사가 플레이어 선택(Apple Music, QQ Music, NetEase Cloud Music, Kugou Music, Soda Music, KKBOX, Amazon Music, Spotify, Kaset, Pear Desktop, reAMP, VOX, Pine Player, MyGo Music, foobar2000, WeRead, LX Music 또는 자동 감지), Apple Music, Spotify, Kaset, VOX를 골랐을 때의 자동화 권한 허용(다른 플레이어는 기본 트랙 정보를 읽는 데 권한이 필요 없음), 가사 엔진 활성화(윈도우를 닫아도 가사와 아트워크를 계속 가져오기 위함)를 차례로 안내합니다. 마법사를 마치면 바로 가사가 나타납니다(다른 빌드 옵션은 [lyrimuse/README.md](lyrimuse/README.md)를 참고하십시오).
 
 가사를 보는 데 필요한 것은 이것이 전부입니다. 선택 기능은 나중에 원할 때 설정에서 켜면 됩니다.
 
@@ -239,10 +239,10 @@ QQ Music / NetEase Cloud Music / Kugou Music / Soda Music / KKBOX / Amazon Music
 예. GPL-3.0 라이선스의 오픈 소스입니다. 유료 버전, 앱 내 구입, 가입해야 하는 계정이 없습니다. Last.fm 등 다른 서비스 사용 여부는 자유입니다. 유용하게 쓰고 있고 지원하고 싶다면 [GitHub에서 후원](https://github.com/sponsors/Yudaotor)하거나 Alipay 또는 WeChat Pay로 [개발자에게 커피를 사 줄](https://yudaotor.github.io/donate/) 수 있습니다.
 
 ### 다른 앱이 시스템 미디어 포커스를 가지고 있을 때 QQ Music, NetEase Cloud Music, Soda Music을 제어할 수 있습니까?
-예. 브라우저 영상 같은 것이 macOS의 ‘지금 재생 중’을 차지하고 있으면 시스템 미디어 키는 그쪽으로 갑니다. 이때 Lyrimuse는 QQ Music이나 NetEase Cloud Music의 자체 메뉴 막대, 또는 Soda Music의 재생 막대에서 재생/일시 정지, 이전, 다음을 대신 눌러 주며, 플레이어는 백그라운드에 그대로 둡니다. 이 기능에는 손쉬운 사용 권한이 필요합니다(설정 → 플레이어). 권한이 없으면 해당 버튼을 눌렀을 때 그 페이지가 열립니다. 이 상태에서는 탐색을 사용할 수 없습니다. macOS 27에서는 이 권한이 **시스템 설정 → 개인정보 보호 및 보안 → 기기 제어 및 데이터 접근**에 있으며, 이전 버전에서는 **손쉬운 사용**이라고 부릅니다.
+예. 브라우저 영상 같은 것이 macOS의 ‘지금 재생 중’을 차지하고 있으면 시스템 미디어 키는 그쪽으로 갑니다. 이때 Lyrimuse는 QQ Music, MyGo Music, NetEase Cloud Music의 자체 메뉴 막대, 또는 Soda Music의 재생 막대에서 재생/일시 정지, 이전, 다음을 대신 눌러 주며, 플레이어는 백그라운드에 그대로 둡니다. 이 기능에는 손쉬운 사용 권한이 필요합니다(설정 → 플레이어). 권한이 없으면 해당 버튼을 눌렀을 때 그 페이지가 열립니다. 이 상태에서는 탐색을 사용할 수 없습니다. macOS 27에서는 이 권한이 **시스템 설정 → 개인정보 보호 및 보안 → 기기 제어 및 데이터 접근**에 있으며, 이전 버전에서는 **손쉬운 사용**이라고 부릅니다.
 
 ### Spotify, QQ Music, NetEase Cloud Music에서도 작동합니까, 아니면 Apple Music 전용입니까?
-모두 작동합니다. 여기에 Kugou Music, Soda Music, KKBOX, Amazon Music, Kaset(YouTube Music 앱), 오픈 소스 YouTube Music 데스크톱 앱 Pear Desktop, Winamp 스타일 플레이어 reAMP, 무손실·하이레조 로컬 플레이어 VOX, 거의 모든 포맷을 재생하는 무료 로컬 플레이어 Pine Player, Windows에서 이식된 고전 로컬 플레이어 foobar2000, 오픈 소스 LX Music까지 더해 모두 16개 플레이어를 지원합니다. 또는 macOS가 ‘지금 재생 중’으로 표시하는 것을 자동 감지하게 할 수도 있습니다. Apple Music, Spotify, Kaset, VOX는 자동화 권한을 요청합니다(Spotify, Kaset, VOX는 정확한 타이밍과 재생 버튼에 사용). 나머지 12개는 macOS의 MediaRemote로 기본 트랙 정보를 읽으므로 권한이 필요 없습니다. QQ Music, NetEase Cloud Music, Kugou Music, Soda Music, Amazon Music의 임의 재생, 반복 재생, 좋아요 버튼과 reAMP, foobar2000의 임의 재생, 반복 재생, 음량에는 손쉬운 사용 권한이 필요하며, Pine Player는 재생 위치를 초 단위로만 알려 주므로 진행 막대를 읽는 데 이 권한을 사용합니다. KKBOX, Amazon Music, LX Music에서는 그 앱이 이미 저장해 둔 노래 가사도 후보로 고려하며, 이 앱들의 서버에는 전혀 접속하지 않습니다.
+모두 작동합니다. 여기에 MyGo Music, Kugou Music, Soda Music, KKBOX, Amazon Music, Kaset(YouTube Music 앱), 오픈 소스 YouTube Music 데스크톱 앱 Pear Desktop, Winamp 스타일 플레이어 reAMP, 무손실·하이레조 로컬 플레이어 VOX, 거의 모든 포맷을 재생하는 무료 로컬 플레이어 Pine Player, Windows에서 이식된 고전 로컬 플레이어 foobar2000, 오픈 소스 LX Music까지 더해 모두 17개 플레이어를 지원합니다. 또는 macOS가 ‘지금 재생 중’으로 표시하는 것을 자동 감지하게 할 수도 있습니다. Apple Music, Spotify, Kaset, VOX는 자동화 권한을 요청합니다(Spotify, Kaset, VOX는 정확한 타이밍과 재생 버튼에 사용). 나머지 13개는 macOS의 MediaRemote로 기본 트랙 정보를 읽으므로 권한이 필요 없습니다. QQ Music, NetEase Cloud Music, Kugou Music, Soda Music, Amazon Music의 임의 재생, 반복 재생, 좋아요 버튼과 reAMP, foobar2000의 임의 재생, 반복 재생, 음량에는 손쉬운 사용 권한이 필요하며, Pine Player는 재생 위치를 초 단위로만 알려 주므로 진행 막대를 읽는 데 이 권한을 사용합니다. KKBOX, Amazon Music, LX Music에서는 그 앱이 이미 저장해 둔 노래 가사도 후보로 고려하며, 이 앱들의 서버에는 전혀 접속하지 않습니다. MyGo Music은 자동화나 전체 디스크 접근 권한이 필요하지 않으며 즐겨찾기, 임의 재생, 반복, 음량 제어를 제공하지 않습니다. 손쉬운 사용 권한을 허용하면 다른 앱이 시스템 미디어 포커스를 가진 동안에도 MyGo Music의 메뉴를 통해 일시 정지, 재개, 이전 곡과 다음 곡으로 전환할 수 있습니다. 허용하지 않아도 기본 가사 표시와 플레이어에 포커스가 있을 때의 재생 제어에는 영향이 없습니다. 포커스가 없을 때는 재생 위치를 이동할 수 없습니다. WeRead 오디오북에서는 읽어 주는 원문을 자막으로 표시합니다.
 
 ### Mac에서 KKBOX나 Amazon Music 가사를 표시할 수 있습니까?
 예. 둘 다 macOS의 MediaRemote로 읽으므로 허용할 권한이 없으며, 다른 플레이어와 마찬가지로 플로팅 가사, 메뉴 막대, 캡슐, 가사 윈도우에 가사가 표시됩니다. KKBOX나 Amazon Music이 이미 그 노래의 가사를 저장해 두었다면 그 가사도 후보로 고려되며 가중치를 더 받습니다. Lyrimuse는 두 서비스 모두에 로그인하거나 무엇을 보내지 않습니다. 다른 소스도 여전히 검색하므로, 단어별 타이밍처럼 더 나은 가사가 있으면 그것이 선택됩니다.
@@ -291,7 +291,7 @@ Apple Silicon 또는 Intel에서 macOS 14 Sonoma 이상(Sequoia, Tahoe 및 이�
 이미 저장되어 있습니다. 가사가 있는 모든 노래에는 줄 단위 타이밍의 `.lrc` 파일이 만들어지고, 번역과 로마자 표기가 있으면 `.tr.lrc`와 `.roma.lrc`도 만들어집니다. 단어별 타이밍은 별도로 저장되며 기본 형식은 TTML입니다. 설정에서 다른 플레이어가 읽을 수 있도록 `.yrc`(NetEase의 YRC 형식), Enhanced LRC, QRC, KRC로 바꿀 수 있고, 여러 형식을 함께 저장할 수도 있습니다. 파일은 `~/Library/Application Support/me.yudaotor.lyrimuse/lyrics/`에 있으며, 설정에서 폴더를 옮길 수 있습니다.
 
 ### LyricsX는 아직 관리되고 있습니까? Lyrimuse는 LyricsX나 Lyric Fever와 무엇이 다릅니까?
-LyricsX의 마지막 릴리스는 2022년 4월의 v1.6.3입니다. macOS 10.11 이상에서 실행되며 Apple Music, Spotify, 그리고 몇몇 오래된 플레이어를 지원합니다. Lyric Fever는 Spotify와 Apple Music에 집중하며 macOS 15가 필요합니다. Lyrimuse는 macOS 14가 필요하며, QQ Music, NetEase Cloud Music, Kugou, Soda Music, KKBOX, Amazon Music, Kaset, Pear Desktop, reAMP, VOX, Pine Player, foobar2000, LX Music, 브라우저의 플레이어, 줄 단위 병음 / 광둥어 Jyutping / 일본어·한국어 로마자 표기와 러시아어, 태국어 등 18개 언어의 읽는 법, 그리고 자신의 청취 통계를 갖춘 Last.fm / ListenBrainz 스크로블을 더했습니다. 나란히 비교한 표는 [비교 페이지](docs/lyrics-apps-comparison.md)에 있습니다.
+LyricsX의 마지막 릴리스는 2022년 4월의 v1.6.3입니다. macOS 10.11 이상에서 실행되며 Apple Music, Spotify, 그리고 몇몇 오래된 플레이어를 지원합니다. Lyric Fever는 Spotify와 Apple Music에 집중하며 macOS 15가 필요합니다. Lyrimuse는 macOS 14가 필요하며, QQ Music, NetEase Cloud Music, Kugou, Soda Music, KKBOX, Amazon Music, Kaset, Pear Desktop, reAMP, VOX, Pine Player, MyGo Music, foobar2000, LX Music, 브라우저의 플레이어, 줄 단위 병음 / 광둥어 Jyutping / 일본어·한국어 로마자 표기와 러시아어, 태국어 등 18개 언어의 읽는 법, 그리고 자신의 청취 통계를 갖춘 Last.fm / ListenBrainz 스크로블을 더했습니다. 나란히 비교한 표는 [비교 페이지](docs/lyrics-apps-comparison.md)에 있습니다.
 ## 라이선스 및 저작권
 
 - **Lyrimuse 자체는 [GPL-3.0](LICENSE)입니다.** 앱에 포함된 오픈 소스 구성 요소와 사전 데이터(media-control, Sparkle, KeyboardShortcuts, OpenCC 및 rime-cantonese 사전)는 각자의 라이선스를 따릅니다. 전문은 [THIRD_PARTY_LICENSES](THIRD_PARTY_LICENSES)에 있으며, 이 파일은 앱에도 포함되어 있어 **설정 → 정보 → 타사 라이선스**에서 열 수 있습니다.

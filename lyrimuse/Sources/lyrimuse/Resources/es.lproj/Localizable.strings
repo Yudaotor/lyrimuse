@@ -1282,6 +1282,7 @@
 "开机时自动启动 Lyrimuse" = "Abrir Lyrimuse al iniciar sesión";
 "开源推送服务：在手机或电脑上安装 ntfy 并订阅主题即可接收，无需注册，也可自建服务器" = "Servicio push de código abierto. Instala ntfy en tu teléfono o tu Mac y suscríbete a un tema; sin registro, y puedes alojarlo tú mismo";
 "开源的 YouTube Music 桌面客户端" = "Cliente de escritorio de código abierto para YouTube Music";
+"开源的多音源音乐播放器" = "Un reproductor de música de código abierto con múltiples fuentes";
 "开源的音乐播放器，曲库来自国内各大平台" = "Reproductor de código abierto para música de plataformas chinas";
 "开源组件与词典" = "Componentes y diccionarios de código abierto";
 "开源许可证" = "Licencia de código abierto";
@@ -1458,6 +1459,7 @@
 "换行（默认）：一行显示不下时折行显示\n滚动：每句只占一行，超出部分横向滚动；有逐字时间轴时随演唱进度滚动" = "Ajustar (predeterminado): las líneas largas continúan en la siguiente\nDesplazar: cada línea ocupa una sola fila y lo que sobra se desplaza en horizontal, siguiendo el canto si la línea tiene tiempos por palabra";
 "换行（默认）：一行显示不下时折行显示，窗口随之增高\n滚动：每句只占一行，超出部分横向滚动；有逐字时间轴时随演唱进度滚动" = "Ajustar (predeterminado): las líneas largas continúan en la línea siguiente y la ventana crece\nDesplazar: cada línea ocupa una sola línea y lo que sobra se desplaza en horizontal, siguiendo el canto si la línea tiene tiempos por palabra";
 "授权可能已在 Last.fm 网站上被撤销，重新连接即可恢复" = "Puede que la autorización se haya revocado en la web de Last.fm. Vuelve a conectarte para reanudar";
+"授权后，Lyrimuse 可在系统媒体焦点被其他 App 占用时，通过%@的菜单暂停、恢复和切换上一首或下一首。未授权时，基础歌词和正常焦点下的播放控制不受影响。失去焦点时不提供进度跳转" = "Con permiso de Accesibilidad, Lyrimuse puede usar los menús de %@ para pausar, reanudar y pasar a la canción anterior o siguiente cuando otra app tiene el foco multimedia del sistema. Sin él, las letras básicas y los controles cuando el reproductor tiene el foco siguen funcionando. No se puede cambiar la posición sin el foco multimedia.";
 "授权后，Lyrimuse 将读取%@的随机和循环状态，并在你点按这两个按钮时代为操作其菜单中的对应项，也可读取和调节其音量；系统媒体焦点被其他 App 占用时，也可暂停、恢复和切换上一首或下一首。未授权时仍可显示歌词，但不提供随机、循环按钮和音量调节，失去焦点时也无法控制播放" = "Con permiso, Lyrimuse lee si el modo aleatorio y la repetición están activados en %@ y usa el elemento de menú correspondiente cuando haces clic en uno de esos botones, lee y ajusta su volumen, y puede pausar, reanudar y cambiar de canción cuando otra app tiene el foco multimedia del sistema. La letra funciona sin permiso, pero no están disponibles los controles de aleatorio, repetición y volumen, ni se puede controlar la reproducción sin el foco multimedia";
 "授权后，Lyrimuse 将读取并操作%@的界面，以显示和切换喜欢状态；系统媒体焦点被其他 App 占用时，也可暂停、恢复和切换上一首或下一首。未授权时仍可显示歌词，但不提供喜欢按钮，失去焦点时也无法控制播放，且暂不支持跳转进度" = "Con permiso, Lyrimuse lee y usa los controles de %@ para mostrar y cambiar favorito, y puede pausar, reanudar y saltar canciones mientras otra app tiene el foco multimedia del sistema. La letra funciona sin permiso, pero el botón de favorito no está disponible, la reproducción no se puede controlar sin el foco multimedia y no se puede saltar a otra posición sin él";
 "授权已失效" = "Autorización caducada";
@@ -1816,6 +1818,7 @@
 "未获得辅助功能权限，%@ 不显示喜欢按钮，失去系统媒体焦点时也无法控制暂停、恢复和切换上一首或下一首" = "Falta el permiso de accesibilidad: %@ no tiene botón de favorito y no puede pausar, reanudar ni saltar canciones sin el foco multimedia del sistema";
 "未获得辅助功能权限，%@ 不显示随机、循环与喜欢按钮，失去焦点时也无法控制播放" = "Sin permiso de accesibilidad; los botones de aleatorio, repetir y favorito de %@ están ocultos y la reproducción no se puede controlar sin el foco";
 "未获得辅助功能权限，%@ 不显示随机、循环按钮和音量调节，失去系统媒体焦点时也无法控制暂停、恢复和切换上一首或下一首" = "Falta el permiso de Accesibilidad: %@ no tiene controles de aleatorio, repetición ni volumen, y no puede pausar, reanudar ni cambiar de canción sin el foco multimedia del sistema";
+"未获得辅助功能权限，%@ 在其他 App 占用系统媒体焦点时无法暂停、恢复或切换上一首或下一首；基础歌词和正常焦点下的播放控制不受影响，失去焦点时不提供进度跳转" = "Sin permiso de Accesibilidad, %@ no puede pausar, reanudar ni pasar a la canción anterior o siguiente cuando otra app tiene el foco multimedia del sistema. Las letras básicas y los controles cuando el reproductor tiene el foco siguen funcionando. No se puede cambiar la posición sin el foco multimedia.";
 "未获得辅助功能权限，%@ 拖动进度后歌词可能差半秒左右，不显示循环按钮和音量调节，失去焦点时也无法控制播放" = "Sin permiso de Accesibilidad, la letra de %@ puede desfasarse medio segundo tras saltar a otro punto, se ocultan el botón de repetición y el control de volumen, y no se puede controlar la reproducción si el foco está en otra app";
 "未获得辅助功能权限，无法校准 %@ 的播放进度" = "Sin permiso de accesibilidad; no se puede calibrar el progreso de %@";
 "未获授权" = "No concedido";

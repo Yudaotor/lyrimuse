@@ -38,6 +38,8 @@ public enum PlaybackPlayer: String, CaseIterable, Identifiable, Codable, Hashabl
     case pinePlayer = "pine_player"
     /// foobar2000 的 Mac 版,本地音乐播放器,不带沙盒,没有 AppleScript 字典、没有 URL scheme,走 media-control。系统会话字段齐全:歌名、歌手、专辑分开报,时长精确到毫秒,没写标签时歌名是不带扩展名的文件名、歌手和专辑不报;GBK / Big5 标签照 Latin-1 读成乱码。锚点只在开播、暂停、恢复、跳转、换歌时发,跟真实出声差 0.02~0.06 秒,归 precise。文件有封面时开播先报它自己的光盘占位图(KnownPlaceholderArtwork),约 0.5 秒后换上真封面,同时把开播锚点重报一遍(位置 0 或零点几秒、时刻换成那一刻),这一份晚了约半秒,第一份才准,所以 republishesZeroAnchor 为 true,不为 0 的那种另按 MediaControlClient.isFoobarArtworkRepublish 认。列表放完、停住时整个撤掉会话。App 侧按进程号找它开着的当前文件(PlayerOpenFile),没写标签时按不带扩展名的文件名拆歌手歌名;随机、循环读写菜单 Playback › Order 的勾(FoobarMenuControl),音量读写窗口里的滑块(FoobarVolume),焦点被别的 App 占着时按 Playback 菜单的 Pause / Next / Previous,都要辅助功能权限;播放列表由 App 代读给预解析(FoobarPlaylist)。nativeLyricSource 填 localfile:正在放的文件同目录同名的 .lrc 与内嵌歌词(localfilelyrics.go)。processName 10 字节。
     case foobar2000 = "foobar2000"
+    /// 开源的多音源播放器,本地文件与插件音源共用系统媒体会话。曲目信息、封面、状态和进度走 media-control,播放、暂停、上下首和跳转响应系统命令;位置沿用 cleanExtrapolated。失焦时通过自身主菜单的播放/暂停、下一首、上一首控制(PlaybackMenuControl),需要辅助功能权限,不接失焦跳转。菜单标题不报告喜欢、随机或循环状态,不提供这些扩展控制;系统会话不报当前音源和歌曲 id,没有固定的原生歌词源。
+    case mygoMusic = "mygo_music"
     /// 微信读书的 iPad 版(Apple 芯片的 Mac 上从 App Store 装,Wrapper 包),没有 AppleScript 字典,走 media-control。听书时系统会话的歌名是这一集(AI 朗读是章节名,真人有声书是「16 雪国 第16集」这类集名),专辑是书名,歌手一栏装的是正在念的那一小段原文(AI 朗读按标点切、每段十几个字;真人有声书是自动生成的字幕,带错字),每换一段就带着新锚点重发一次,锚点就是这段的起点(真人有声书按 0.25 秒取整),按 subtitlesInArtist 收成字幕、不进身份。没有作者一栏。时长是这一集的,锚点在每段开头刷新,属 cleanExtrapolated。整段是有声内容,不记收听、不搜歌词。media-control 的播放、暂停它都响应,跳转不理;上一首 / 下一首是后退 / 快进约 15 秒、不换集。窗口最小化、被挡住时照样往系统会话里推字幕。processName 6 字节。
     case weread = "weread"
     /// 不是一个具体 App——把「谁在报 Now Playing」交给系统仲裁。bundleID 空字符串是刻意的,调用方据此 no-op 掉需要具体 App 的联动。
@@ -64,6 +66,7 @@ public enum PlaybackPlayer: String, CaseIterable, Identifiable, Codable, Hashabl
         case .vox: return "com.coppertino.Vox"
         case .pinePlayer: return "com.digipine.pineplayer"
         case .foobar2000: return "com.foobar2000.mac"
+        case .mygoMusic: return "dev.egoist.music"
         case .weread: return "com.tencent.weread"
         case .auto: return ""
         }
@@ -111,6 +114,7 @@ public enum PlaybackPlayer: String, CaseIterable, Identifiable, Codable, Hashabl
         case .vox: return "precise"
         case .pinePlayer: return "precise"
         case .foobar2000: return "precise"
+        case .mygoMusic: return "cleanExtrapolated"
         case .weread: return "cleanExtrapolated"
         default: return nil
         }
@@ -156,6 +160,7 @@ public enum PlaybackPlayer: String, CaseIterable, Identifiable, Codable, Hashabl
         case .reamp: return true
         case .pinePlayer: return true
         case .foobar2000: return true
+        case .mygoMusic: return true
         default: return false
         }
     }

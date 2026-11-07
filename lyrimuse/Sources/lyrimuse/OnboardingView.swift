@@ -955,6 +955,11 @@ struct OnboardingView: View {
             lines.append(L10n.formatNames(L10n.t("辅助功能权限可显示%@的喜欢按钮，也可在系统媒体焦点被其他 App 占用时控制暂停、恢复和切换上一首或下一首"),
                                 accessibility.playerNames(playbackTargets)))
         }
+        let transportTargets = pendingAccessibility.filter { $0.accessibilityUse == .controlsTransport }
+        if !transportTargets.isEmpty {
+            lines.append(L10n.formatNames(L10n.t("授权后，Lyrimuse 可在系统媒体焦点被其他 App 占用时，通过%@的菜单暂停、恢复和切换上一首或下一首。未授权时，基础歌词和正常焦点下的播放控制不受影响。失去焦点时不提供进度跳转"),
+                                accessibility.playerNames(transportTargets)))
+        }
         let modeOnlyTargets = pendingAccessibility.filter { $0.accessibilityUse == .pressesPlayMode }
         if !modeOnlyTargets.isEmpty {
             lines.append(L10n.formatNames(L10n.t("辅助功能权限可显示%@的随机、循环按钮和音量调节，也可在系统媒体焦点被其他 App 占用时控制暂停、恢复和切换上一首或下一首"),
@@ -1631,6 +1636,7 @@ struct OnboardingView: View {
             let progress = targets.filter { $0.accessibilityUse == .calibratesProgress }
             let playMode = targets.filter { $0.accessibilityUse == .switchesPlayMode }
             let playback = targets.filter { $0.accessibilityUse == .controlsPlayback }
+            let transport = targets.filter { $0.accessibilityUse == .controlsTransport }
             let modeOnly = targets.filter { $0.accessibilityUse == .pressesPlayMode }
             let refines = targets.filter { $0.accessibilityUse == .refinesProgress }
             var lines: [String] = []
@@ -1647,6 +1653,10 @@ struct OnboardingView: View {
             if !playback.isEmpty {
                 lines.append(L10n.formatNames(L10n.t("请开启此权限，以显示%@的喜欢按钮，并在失去系统媒体焦点时控制暂停、恢复和切换上一首或下一首"),
                                     accessibility.playerNames(playback)))
+            }
+            if !transport.isEmpty {
+                lines.append(L10n.formatNames(L10n.t("授权后，Lyrimuse 可在系统媒体焦点被其他 App 占用时，通过%@的菜单暂停、恢复和切换上一首或下一首。未授权时，基础歌词和正常焦点下的播放控制不受影响。失去焦点时不提供进度跳转"),
+                                    accessibility.playerNames(transport)))
             }
             if !modeOnly.isEmpty {
                 lines.append(L10n.formatNames(L10n.t("请开启此权限，以显示%@的随机、循环按钮和音量调节，并在失去系统媒体焦点时控制暂停、恢复和切换上一首或下一首"),

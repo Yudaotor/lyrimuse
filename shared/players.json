@@ -421,6 +421,33 @@
       "note": "foobar2000 的 Mac 版,本地音乐播放器,不带沙盒,没有 AppleScript 字典、没有 URL scheme,走 media-control。系统会话字段齐全:歌名、歌手、专辑分开报,时长精确到毫秒,没写标签时歌名是不带扩展名的文件名、歌手和专辑不报;GBK / Big5 标签照 Latin-1 读成乱码。锚点只在开播、暂停、恢复、跳转、换歌时发,跟真实出声差 0.02~0.06 秒,归 precise。文件有封面时开播先报它自己的光盘占位图(KnownPlaceholderArtwork),约 0.5 秒后换上真封面,同时把开播锚点重报一遍(位置 0 或零点几秒、时刻换成那一刻),这一份晚了约半秒,第一份才准,所以 republishesZeroAnchor 为 true,不为 0 的那种另按 MediaControlClient.isFoobarArtworkRepublish 认。列表放完、停住时整个撤掉会话。App 侧按进程号找它开着的当前文件(PlayerOpenFile),没写标签时按不带扩展名的文件名拆歌手歌名;随机、循环读写菜单 Playback › Order 的勾(FoobarMenuControl),音量读写窗口里的滑块(FoobarVolume),焦点被别的 App 占着时按 Playback 菜单的 Pause / Next / Previous,都要辅助功能权限;播放列表由 App 代读给预解析(FoobarPlaylist)。nativeLyricSource 填 localfile:正在放的文件同目录同名的 .lrc 与内嵌歌词(localfilelyrics.go)。processName 10 字节。"
     },
     {
+      "id": "mygo_music",
+      "swiftCase": "mygoMusic",
+      "goConst": "playerMyGoMusic",
+      "bundleID": "dev.egoist.music",
+      "goBundleConst": "myGoMusicBundleID",
+      "processName": "MyGo Music",
+      "displayName": {"literal": "MyGo Music"},
+      "scrobbleLabel": "MyGo Music (macOS)",
+      "nativeLyricSource": null,
+      "positionTier": "cleanExtrapolated",
+      "republishesZeroAnchor": false,
+      "playingFromRate": false,
+      "artistArrivesLate": false,
+      "artistlessNotMusic": false,
+      "subtitlesInArtist": false,
+      "dropsSessionBetweenTracks": false,
+      "dropsSessionWhilePlaying": false,
+      "ignoresSeekCommand": false,
+      "needsAutomationPermission": false,
+      "needsFullDiskAccess": false,
+      "needsAccessibilityPermission": true,
+      "tint": {"rgb": [0.39, 0.49, 0.76]},
+      "fallbackSymbol": "music.note",
+      "bundledIcon": null,
+      "note": "开源的多音源播放器,本地文件与插件音源共用系统媒体会话。曲目信息、封面、状态和进度走 media-control,播放、暂停、上下首和跳转响应系统命令;位置沿用 cleanExtrapolated。失焦时通过自身主菜单的播放/暂停、下一首、上一首控制(PlaybackMenuControl),需要辅助功能权限,不接失焦跳转。菜单标题不报告喜欢、随机或循环状态,不提供这些扩展控制;系统会话不报当前音源和歌曲 id,没有固定的原生歌词源。"
+    },
+    {
       "id": "weread",
       "swiftCase": "weread",
       "goConst": "playerWeRead",
@@ -485,8 +512,8 @@
   ],
   "displayOrder": {
     "$comment": "图标网格(引导页 + 设置页)的摆放顺序。Apple Music 恒第一、auto 恒垫底;中间按语境排。",
-    "simplifiedChinese": ["apple_music", "qq_music", "netease_music", "kugou_music", "soda_music", "lx_music", "kkbox", "spotify", "amazon_music", "kaset", "pear_desktop", "reamp", "vox", "pine_player", "foobar2000", "weread", "auto"],
-    "default": ["apple_music", "spotify", "amazon_music", "kaset", "pear_desktop", "kkbox", "qq_music", "netease_music", "kugou_music", "soda_music", "lx_music", "reamp", "vox", "pine_player", "foobar2000", "weread", "auto"]
+    "simplifiedChinese": ["apple_music", "qq_music", "netease_music", "kugou_music", "soda_music", "lx_music", "kkbox", "spotify", "amazon_music", "kaset", "pear_desktop", "reamp", "vox", "pine_player", "foobar2000", "mygo_music", "weread", "auto"],
+    "default": ["apple_music", "spotify", "amazon_music", "kaset", "pear_desktop", "kkbox", "qq_music", "netease_music", "kugou_music", "soda_music", "lx_music", "reamp", "vox", "pine_player", "foobar2000", "mygo_music", "weread", "auto"]
   },
   "mediaProxyOwners": {
     "$comment": "媒体进程 bundle id → 宿主 App bundle id。MediaRemote 报「现在谁在放」时,Safari 报的是替它解码播放的 WebKit GPU 进程,信任列表、Last.fm 排除名单、网页播放器配对里存的却是宿主,查这些表之前先按这张表换回宿主。Chromium 系(Arc/Chrome/Edge)报浏览器自己的 bundle id,不用登记。只登记实测见过的;为什么用别名而不是把媒体进程写进信任列表,见 LyrimuseCore/Local/TrustedPlayers.swift。",

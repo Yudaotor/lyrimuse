@@ -88,6 +88,7 @@ struct PlayerChoiceCard: View {
         case .vox: return L10n.t("主打无损和高解析音质的本地音乐播放器")
         case .pinePlayer: return L10n.t("免费、格式支持很全的本地音乐播放器")
         case .foobar2000: return L10n.t("从 Windows 移植来的老牌本地音乐播放器")
+        case .mygoMusic: return L10n.t("开源的多音源音乐播放器")
         case .lxMusic: return L10n.t("开源的音乐播放器，曲库来自国内各大平台")
         case .weread: return L10n.t("腾讯旗下的读书 App，听书时把正在念的原文当字幕显示")
         case .auto: return nil

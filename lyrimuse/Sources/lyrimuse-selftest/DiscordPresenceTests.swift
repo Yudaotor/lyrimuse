@@ -271,7 +271,9 @@ private func checkDiscordActivity() {
         expectEqual(DiscordPresence.applicationID(forBundleID: player.bundleIdentifier, webPlatformID: nil),
                     DiscordPresence.applicationID, "Discord 应用: \(player) 只放有声内容、不推 Discord,不建应用")
     }
-    let builtInIDs = PlaybackPlayer.allCases.filter { $0 != .auto && !neverPresented.contains($0) }.map {
+    // MyGo 没有单独登记的 Discord 应用,沿用它作为信任播放器时的 Lyrimuse 应用,仍可显示歌曲状态。
+    expectEqual(app(.mygoMusic), .lyrimuse, "Discord 应用: MyGo 沿用 Lyrimuse,不虚构应用 ID")
+    let builtInIDs = PlaybackPlayer.allCases.filter { $0 != .auto && $0 != .mygoMusic && !neverPresented.contains($0) }.map {
         DiscordPresence.applicationID(forBundleID: $0.bundleIdentifier, webPlatformID: nil)
     }
     expectEqual(builtInIDs.allSatisfy { !$0.isEmpty && $0.allSatisfy(\.isNumber) }, true,

@@ -2,11 +2,11 @@ import AppKit
 import ApplicationServices
 import Foundation
 
-/// QQ / 网易云 / 酷狗 / Pine Player / reAMP / foobar2000 失去系统媒体焦点时,只按目标进程菜单栏里的播放 / 暂停、上一首、下一首;汽水的菜单栏里没有这几项,
+/// QQ / 网易云 / 酷狗 / Pine Player / reAMP / foobar2000 / MyGo Music 失去系统媒体焦点时,只按目标进程菜单栏里的播放 / 暂停、上一首、下一首;汽水的菜单栏里没有这几项,
 /// 按它底部播放条上的键(`SodaMusicControl.press`)。不激活 App、不模拟按键,不回落到全局媒体控制,没有跳转。
 public enum PlaybackMenuControl {
     /// 失焦时能这样控制的播放器。路由(`MusicPlaybackController.controlRoute`)和 `press` 都按它,selftest 覆盖。
-    public static let players: Set<PlaybackPlayer> = [.qqMusic, .netease, .kugou, .soda, .pinePlayer, .reamp, .foobar2000]
+    public static let players: Set<PlaybackPlayer> = [.qqMusic, .netease, .kugou, .soda, .pinePlayer, .reamp, .foobar2000, .mygoMusic]
 
     public enum Command: String, Equatable, Sendable {
         case playPause = "toggle-play-pause"
@@ -49,6 +49,13 @@ public enum PlaybackMenuControl {
             case "播放/暂停": return .playPause
             case "下一曲": return .nextTrack
             case "上一曲": return .previousTrack
+            default: return nil
+            }
+        case .mygoMusic:
+            switch title {
+            case "播放/暂停", "Play/Pause": return .playPause
+            case "下一首", "Next": return .nextTrack
+            case "上一首", "Previous": return .previousTrack
             default: return nil
             }
         case .reamp:
@@ -160,8 +167,7 @@ public enum PlaybackMenuControl {
         _ command: Command, titled: String? = nil, requireEnabled: Bool = true, for player: PlaybackPlayer,
         body: (AXUIElement, (AXUIElement, String) -> AnyObject?, () -> Bool) -> Outcome
     ) -> Outcome {
-        guard player == .qqMusic || player == .netease || player == .kugou || player == .pinePlayer || player == .reamp
-            || player == .foobar2000 else {
+        guard players.contains(player) else {
             return .menuUnavailable
         }
         guard AXIsProcessTrusted() else { return .notTrusted }

@@ -47,6 +47,7 @@ func TestPlayersNeedFullDiskAccessMatchesClientPaths(t *testing.T) {
 		playerPearDesktop: "",
 		playerLXMusic:     "lxmusic",
 		playerWeRead:      "",
+		playerMyGoMusic:   "",
 	}
 	paths := localCacheClientPaths()
 	for _, player := range allPlayerIDs {
