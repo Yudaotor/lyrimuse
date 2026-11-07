@@ -110,13 +110,6 @@ public final class PlexampPlayerAPI: @unchecked Sendable {
         return request("/player/playback/setParameters", query: [("volume", String(clamped)), ("type", "music")]) != nil
     }
 
-    /// 停播页「继续播放」:发 play,隔一会儿读回在放才算。连不上、没放起来为 false。阻塞约 1 秒,别在主线程调。
-    public func resume() -> Bool {
-        guard request("/player/playback/play", query: [("type", "music")]) != nil else { return false }
-        Thread.sleep(forTimeInterval: 0.8)
-        return timeline()?.state == "playing"
-    }
-
     /// 失焦时的播放 / 暂停、上下首。连不上为 false。
     @discardableResult
     public func send(_ command: PlaybackMenuControl.Command) -> Bool {

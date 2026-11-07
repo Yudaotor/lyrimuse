@@ -1186,7 +1186,7 @@ func runPlayerIdentityTests() {
             .foobar2000: (nil, [.extendedControls, .repeatOne, .resume, .learnsAnchorLag, .arrivesWhole]),
             .weread: (nil, []),
             .swinsian: (nil, [.extendedControls, .repeatOne, .resume, .snapsToReportedPosition, .arrivesWhole]),
-            .plexamp: (nil, [.extendedControls, .repeatOne, .resume, .learnsAnchorLag, .arrivesWhole]),
+            .plexamp: (nil, [.extendedControls, .repeatOne, .gaplessLead, .learnsAnchorLag, .arrivesWhole]),
             .pearDesktop: (.youtubeMusic, [.extendedControls, .repeatOne, .favorite, .resume, .lateAnchorProbe, .learnsAnchorLag,
                                            .holdsAnchorLagSeed, .catalogMenuRows]),
         ]

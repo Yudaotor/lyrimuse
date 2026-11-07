@@ -474,6 +474,9 @@ public final class LocalPlaybackSource: ObservableObject {
     /// 先把进度归零、0.3~0.4 秒后才换歌名;换歌那一拍旧曲的位置已经被回绕归零,不能再拿来算越界量,沿用这一笔
     /// (见 spotifyRenameFollowsWrap)。
     private var spotifyRecentWrap: (at: Date, kind: SpotifyStartKind, clockOverrun: Double)?
+    /// Plexamp 最近一次按回绕重估的时刻:它自然连播时新歌的「进度 0」锚点先带着上一首的歌名到,约 0.5 秒后歌名才换,
+    /// 换歌那一拍接着用回绕估出的钟(见 plexampRenameFollowsWrapSecs)。
+    private var plexampRecentWrapAt: Date?
     private var posWasPlaying = false
     private var posPrevWall: Date?
     // 上一轮的报告值 —— 冻结检测(isFrozenReport)用它算"这一轮报告值前进了多少"。
@@ -795,6 +798,25 @@ public final class LocalPlaybackSource: ObservableObject {
 
     /// 见 lxMusicNaturalStartLead。只录洛雪的声音、跳回 0 秒量出开头的静音扣掉,四次自然连播早 0.36~0.39 秒。
     public nonisolated static let lxMusicNaturalStartLeadSecs: Double = 0.38
+
+    /// Plexamp 新起一首(界面点播、经它的播放器接口点播):「在放、进度 0」一帧报齐、没有更早的在放信号,声音却比这个锚点早
+    /// `plexampFreshStartLeadSecs` 左右。上一首放到头接过来的(自然连播)锚点反而早于声音,交给 `carriesGaplessLead` 那条估,
+    /// 这里不补;锚点不是 0 的(从某个位置点播)不补。见 02 章决策 242。纯函数,selftest 直接覆盖。
+    public nonisolated static func plexampFreshStartLead(bundleID: String?, anchorElapsed: Double?, previousPlayedToEnd: Bool) -> Double {
+        guard bundleID == PlaybackPlayer.plexamp.bundleIdentifier, anchorElapsed == 0, !previousPlayedToEnd else { return 0 }
+        return plexampFreshStartLeadSecs
+    }
+
+    /// 见 plexampFreshStartLead。咔哒文件对出声,界面点播晚 0.44 秒、接口点播晚 0.39 秒。
+    public nonisolated static let plexampFreshStartLeadSecs: Double = 0.4
+
+    /// Plexamp 自然连播:回绕重估之后这么久之内换了歌名,算同一次自然过渡(实测歌名晚 0.5 秒左右到)。纯函数,selftest 覆盖。
+    public nonisolated static func plexampRenameFollowsWrap(wrapAt: Date, now: Date) -> Bool {
+        let age = now.timeIntervalSince(wrapAt)
+        return age >= 0 && age <= plexampRenameFollowsWrapSecs
+    }
+
+    public nonisolated static let plexampRenameFollowsWrapSecs: TimeInterval = 2
 
     /// 洛雪停了十来秒以上再放(或闲着时点播):先报在放,锚点是那一刻的进度,可它这时才重新打开音频输出,输出设备闲着
     /// (蓝牙耳机睡了)时还要 0.4~0.8 秒才出声,进度停在锚点上等着,之后也不补报锚点。在放信号到时默认输出设备没在转,
@@ -1160,8 +1182,11 @@ public final class LocalPlaybackSource: ObservableObject {
     /// 晚的那一截由锚点滞后学习补(暂停那一拍报的是真实位置)。见 02 章决策 224。
     ///
     /// 歌手栏装字幕的听书播放器(`PlayerSubtitles`)不开:字幕的起点就是它发的锚点,按锚点走才跟字幕对得上。
+    ///
+    /// Plexamp 开:精确档,但自然连播、单曲循环回绕时新曲的「进度 0」锚点比声音早约 0.5 秒,之后不再重发。见 02 章决策 242。
     public nonisolated static func carriesGaplessLead(tier: PositionSourceTier, bundleID: String?) -> Bool {
         if PlayerSubtitles.carriesSubtitles(bundleID: bundleID) { return false }
+        if bundleID == PlaybackPlayer.plexamp.bundleIdentifier { return true }
         if bundleID == PlaybackPlayer.kugou.bundleIdentifier { return false }
         if bundleID == PlaybackPlayer.amazonMusic.bundleIdentifier { return false }
         if bundleID == PlaybackPlayer.lxMusic.bundleIdentifier { return false }
@@ -2444,11 +2469,22 @@ public final class LocalPlaybackSource: ObservableObject {
                 var spotifyClockOverrun: Double?
                 let recentWrap = spotifyRecentWrap
                 spotifyRecentWrap = nil
+                let plexampWrapAt = plexampRecentWrapAt
+                plexampRecentWrapAt = nil
+                var plexampFollowsWrap = false
                 if isSpotifyPlayerClock, let wrap = recentWrap,
                    Self.spotifyRenameFollowsWrap(wrapAt: wrap.at, now: now, raw: rawReported) {
                     spotifyKind = wrap.kind
                     spotifyClockOverrun = wrap.clockOverrun
                     logger.notice("spotify rename after wrap: \(now.timeIntervalSince(wrap.at), format: .fixed(precision: 3))s later, keeping kind=\(wrap.kind.rawValue, privacy: .public)")
+                } else if let wrapAt = plexampWrapAt, Self.plexampRenameFollowsWrap(wrapAt: wrapAt, now: now),
+                          lastSnapshot?.bundleIdentifier == PlaybackPlayer.plexamp.bundleIdentifier,
+                          posWasPlaying, let prevWall = posPrevWall {
+                    // 自然连播:回绕那一拍已经按新歌的「进度 0」锚点量过超前量,这里接着那只钟走。
+                    let seed = trackPosSeconds + now.timeIntervalSince(prevWall) * (rate > 0 ? rate : 1)
+                    corrected = (seed, rawReported - seed)
+                    plexampFollowsWrap = true
+                    logger.notice("plexamp rename after wrap: \(now.timeIntervalSince(wrapAt), format: .fixed(precision: 3))s later, seed \(seed, format: .fixed(precision: 3))s")
                 } else if let bundle = gaplessLeadBundleID, bundle == posPrevGaplessLeadBundleID,
                    posWasPlaying, let prevWall = posPrevWall,
                    posPrevDurationSecs > 0 {
@@ -2507,12 +2543,17 @@ public final class LocalPlaybackSource: ObservableObject {
                     + Self.lxMusicNaturalStartLead(
                         bundleID: lastSnapshot?.bundleIdentifier, anchorElapsed: anchorElapsedTime, rawReported: rawReported,
                         playingSince: playingSince, previousPlayedToEnd: previousPlayedToEnd)
+                    + Self.plexampFreshStartLead(
+                        bundleID: lastSnapshot?.bundleIdentifier, anchorElapsed: anchorElapsedTime,
+                        previousPlayedToEnd: previousPlayedToEnd || plexampFollowsWrap)
                 if let bundle = lastSnapshot?.bundleIdentifier,
-                   bundle == PlaybackPlayer.qqMusic.bundleIdentifier || Self.lateStartAnchorPlayers.contains(bundle) {
+                   bundle == PlaybackPlayer.qqMusic.bundleIdentifier || Self.lateStartAnchorPlayers.contains(bundle)
+                    || bundle == PlaybackPlayer.plexamp.bundleIdentifier {
                     logger.notice("start anchor: raw=\(rawReported, format: .fixed(precision: 3)) anchorElapsed=\(anchorElapsedTime ?? -1, format: .fixed(precision: 3)) playingSince=\(playingSince ?? -1, format: .fixed(precision: 3))s previousPlayedToEnd=\(previousPlayedToEnd) lead=\(startLead, format: .fixed(precision: 3))")
                 }
                 trackPosSeconds += startLead
-                if startLead != 0, lastSnapshot?.bundleIdentifier == PlaybackPlayer.lxMusic.bundleIdentifier {
+                if startLead != 0, lastSnapshot?.bundleIdentifier == PlaybackPlayer.lxMusic.bundleIdentifier
+                    || lastSnapshot?.bundleIdentifier == PlaybackPlayer.plexamp.bundleIdentifier {
                     // 补上的这一截折进偏置,伺服不拿锚点外推把它拉回去。见 02 章决策 129。
                     setReportedBias(posReportedBiasSecs - startLead, anchorElapsed: anchorElapsedTime, heldToAnchor: true)
                 }
@@ -2682,6 +2723,7 @@ public final class LocalPlaybackSource: ObservableObject {
         if !isSpotifyPlayerClock, gaplessLeadBundleID != nil, posPrevDurationSecs > 0,
            let corr = Self.naturalAdvanceCorrection(reported: rawReported, overrun: predicted - posPrevDurationSecs) {
             logger.notice("repeat-one wrap: seed \(corr.seed, format: .fixed(precision: 3))s, anchor leads audio by \(corr.bias, format: .fixed(precision: 3))s (raw \(rawReported, format: .fixed(precision: 3)))")
+            if lastSnapshot?.bundleIdentifier == PlaybackPlayer.plexamp.bundleIdentifier { plexampRecentWrapAt = now }
             setReportedBias(corr.bias, anchorElapsed: anchorElapsedTime)
             trackPosSeconds = corr.seed
             posErrEMA = 0

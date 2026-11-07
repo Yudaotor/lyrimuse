@@ -54,6 +54,26 @@ func runPlexampTests() {
                     .mediaControl, "Plexamp 焦点正常: 照旧走系统指令")
     }
 
+    // ---- 开播锚点 ----
+    do {
+        typealias L = LocalPlaybackSource
+        let b = PlaybackPlayer.plexamp.bundleIdentifier
+        expectEqual([L.plexampFreshStartLead(bundleID: b, anchorElapsed: 0, previousPlayedToEnd: false),
+                     L.plexampFreshStartLead(bundleID: b, anchorElapsed: 0, previousPlayedToEnd: true),
+                     L.plexampFreshStartLead(bundleID: b, anchorElapsed: 214, previousPlayedToEnd: false),
+                     L.plexampFreshStartLead(bundleID: b, anchorElapsed: nil, previousPlayedToEnd: false),
+                     L.plexampFreshStartLead(bundleID: PlaybackPlayer.foobar2000.bundleIdentifier, anchorElapsed: 0, previousPlayedToEnd: false)],
+                    [0.4, 0, 0, 0, 0], "Plexamp 开播: 新起一首、锚点 0 补 0.4 秒;自然连播、从中段点播、别的播放器不补")
+        expectEqual(L.carriesGaplessLead(tier: .precise, bundleID: b), true, "Plexamp 开播: 自然连播 / 单曲循环回绕按连续性估超前量")
+        let w = Date(timeIntervalSince1970: 1_794_000_000)
+        expectEqual([L.plexampRenameFollowsWrap(wrapAt: w, now: w.addingTimeInterval(0.5)),
+                     L.plexampRenameFollowsWrap(wrapAt: w, now: w.addingTimeInterval(2.5)),
+                     L.plexampRenameFollowsWrap(wrapAt: w, now: w.addingTimeInterval(-0.1))],
+                    [true, false, false], "Plexamp 开播: 回绕后 2 秒内换歌名算同一次自然过渡")
+        expectEqual(L.carriesGaplessLead(tier: .precise, bundleID: PlaybackPlayer.foobar2000.bundleIdentifier), false,
+                    "Plexamp 开播: 别的精确档照旧不开")
+    }
+
     // ---- 接线 ----
     do {
         let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
@@ -67,8 +87,6 @@ func runPlexampTests() {
                     && sourceHas(controller, "case .plexamp:\nreturn PlexampPlayerAPI.shared.setVolume(v)"), true,
                     "Plexamp 接线: 循环档和音量写到本机接口")
         let idle = src("lyrimuse/UI/IdlePlaybackActions.swift")
-        expectEqual(sourceHas(idle, "case .plexamp: PlayerProcess.pid(bundleID: player.bundleIdentifier) != nil")
-                    && sourceHas(idle, "case .plexamp:\nok = PlexampPlayerAPI.shared.resume()"), true,
-                    "Plexamp 接线: 停播页「继续播放」开着才给,判开没开不发网络请求")
+        expectEqual(sourceHas(idle, "case .plexamp"), false, "Plexamp 接线: 停播页不给「继续播放」(列表放完后发 play 放不起来)")
     }
 }
