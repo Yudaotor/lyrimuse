@@ -386,19 +386,19 @@ public enum MusicPlaybackController {
     /// (`AmazonMusicModeControl`);reAMP 只有随机和列表循环,按它菜单栏 Play 里的两个开关(`ReampMenuControl`);Pine Player 只有循环,
     /// 按它菜单栏「重复模式」子菜单(`PineMenuControl`);foobar2000 有随机和两种循环,按它菜单栏「Order」子菜单(`FoobarMenuControl`),
     /// 音量读写它窗口里的滑块(`FoobarVolume`);Pear Desktop 开着本机接口时有随机、循环和音量(`PearDesktopAPI`);Swinsian 的随机、
-    /// 两种循环和音量都是可写的脚本属性。网易云、酷狗等没有
+    /// 两种循环和音量都是可写的脚本属性;Plexamp 的两种循环和音量走它的本机播放器接口(`PlexampPlayerAPI`,随机写不进)。网易云、酷狗等没有
     /// .sdef(不可脚本化),而
     /// media-control 走的系统级 MediaRemote 只有播放控制 —— 对它们只能不显示这些控件(各家实测见 07 章决策 130)。
     public static func supportsExtendedControls(_ player: PlaybackPlayer) -> Bool {
         player == .appleMusic || player == .spotify || player == .kaset || player == .qqMusic || player == .amazonMusic
             || player == .reamp || player == .lxMusic || player == .vox || player == .pinePlayer || player == .foobar2000
-            || player == .pearDesktop || player == .swinsian
+            || player == .pearDesktop || player == .swinsian || player == .plexamp
     }
 
     /// 这个播放器的循环档位里有没有「单曲循环」。见 MusicPlaybackMode.nextRepeat。
     public static func supportsRepeatOne(_ player: PlaybackPlayer) -> Bool {
         player == .appleMusic || player == .kaset || player == .qqMusic || player == .amazonMusic || player == .vox
-            || player == .pinePlayer || player == .foobar2000 || player == .pearDesktop || player == .swinsian
+            || player == .pinePlayer || player == .foobar2000 || player == .pearDesktop || player == .swinsian || player == .plexamp
     }
 
     /// 这个播放器有没有「喜欢」:Apple Music(收藏)、Kaset(YouTube Music 的赞)、QQ 音乐、网易云音乐和酷狗音乐(菜单栏「喜欢歌曲」)、
@@ -827,6 +827,11 @@ public enum MusicPlaybackController {
                                          mode: voxPlaybackMode(repeatState: c.repeatState)
                                              .map { PlaybackModeState(mode: $0, options: voxModeOptions) },
                                          volume: c.volume)
+        case .plexamp:
+            guard let t = PlexampPlayerAPI.shared.timeline() else { return .empty }
+            return ExtendedControlsState(favorited: nil, mode: PlexampPlayerAPI.playbackMode(repeatMode: t.repeatMode)
+                                            .map { PlaybackModeState(mode: $0, options: PlexampPlayerAPI.modeOptions) },
+                                         volume: t.volume)
         case .swinsian:
             guard let c = swinsianControls() else { return .empty }
             return ExtendedControlsState(favorited: nil, mode: c.mode.map { PlaybackModeState(mode: $0, options: .all) },
@@ -956,6 +961,8 @@ public enum MusicPlaybackController {
         case .vox:
             return voxControls().flatMap { voxPlaybackMode(repeatState: $0.repeatState) }
                 .map { PlaybackModeState(mode: $0, options: voxModeOptions) }
+        case .plexamp:
+            return PlexampPlayerAPI.shared.playbackMode()
         case .swinsian:
             return swinsianControls()?.mode.map { PlaybackModeState(mode: $0, options: .all) }
         case .lxMusic: // 洛雪的播放顺序开放 API 不给读写,只接了音量和收藏。
@@ -1046,6 +1053,8 @@ public enum MusicPlaybackController {
         case .vox:
             guard let state = voxRepeatState(for: mode) else { return false }
             return runAppleScriptCapturing(voxRunningGuard + #"tell application "VOX" to set repeat state to "# + String(state)) != nil
+        case .plexamp:
+            return PlexampPlayerAPI.shared.setPlaybackMode(mode)
         case .swinsian:
             return runAppleScriptCapturing(swinsianRunningGuard + swinsianModeScript(for: mode)) != nil
         case .lxMusic: // 同 playbackMode(for:)。
@@ -1088,6 +1097,8 @@ public enum MusicPlaybackController {
             return FoobarVolume.read()
         case .vox:
             return voxControls()?.volume
+        case .plexamp:
+            return PlexampPlayerAPI.shared.volume()
         case .swinsian:
             return swinsianControls()?.volume
         case .lxMusic: // 开放 API 开着才有,没开时 nil(胶囊换成说明怎么打开)。
@@ -1125,6 +1136,8 @@ public enum MusicPlaybackController {
             return FoobarVolume.set(v)
         case .vox:
             return runAppleScriptCapturing(voxRunningGuard + #"tell application "VOX" to set player volume to \#(v)"#) != nil
+        case .plexamp:
+            return PlexampPlayerAPI.shared.setVolume(v)
         case .swinsian:
             return runAppleScriptCapturing(swinsianRunningGuard + "tell application id \"\(PlaybackPlayer.swinsian.bundleIdentifier)\" to set sound volume to \(v)") != nil
         case .lxMusic:
@@ -1234,6 +1247,8 @@ public enum MusicPlaybackController {
         case lxMusicDirect
         /// 焦点被占、屏上这首是 Swinsian 时,播放 / 暂停、上下首发它自己的脚本;跳转不走这条(脚本只收整数秒)。
         case swinsianScript(PlaybackMenuControl.Command)
+        /// 焦点被占、屏上这首是 Plexamp 时,播放 / 暂停、上下首发到它的本机播放器接口(`PlexampPlayerAPI`)。
+        case plexampAPI(PlaybackMenuControl.Command)
         /// 不发。焦点被别的 App 占着、屏上这首又没有 AppleScript 可发:media-control 的指令会落在占用者身上。
         /// 按 bundle id 定向发(`MRMediaRemoteSendCommandToApp`)也不行 —— 目标不接时它不报错,照样落到焦点上,
         /// 见 02 章决策 51。
@@ -1241,7 +1256,7 @@ public enum MusicPlaybackController {
     }
 
     /// 按实际回退目标决定控制通路。QQ / 网易云 / 酷狗 / 汽水 / Pine Player / reAMP / foobar2000 直查回退只允许三个已验证的 AX 动作,
-    /// Swinsian 同样三个动作改发它自己的脚本;
+    /// Swinsian 同样三个动作改发它自己的脚本,Plexamp 发到它的本机播放器接口;
     /// 其它无定向通路的命令仍不发。选择列表和前台窗口不能充当回退目标。
     public static func controlRoute(exclusivelyAppleMusic: Bool, focusFallback: PlaybackPlayer?,
                                     focusHeldElsewhere: Bool = false, directQueryFallback: PlaybackPlayer? = nil,
@@ -1264,6 +1279,9 @@ public enum MusicPlaybackController {
             }
             if directQueryFallback == .swinsian, let command = PlaybackMenuControl.Command(rawValue: mediaControlCommand) {
                 return .swinsianScript(command)
+            }
+            if directQueryFallback == .plexamp, let command = PlaybackMenuControl.Command(rawValue: mediaControlCommand) {
+                return .plexampAPI(command)
             }
             return .withheld
         }
@@ -1336,6 +1354,8 @@ public enum MusicPlaybackController {
             dispatchMenuAccessibility(command, for: player, completion: completion)
         case .swinsianScript(let command):
             runAppleScript(swinsianRunningGuard + swinsianControlScript(command))
+        case .plexampAPI(let command):
+            commandQueue.async { PlexampPlayerAPI.shared.send(command) }
         case .lxMusicDirect:
             let arguments = mediaControlArguments
             commandQueue.async {

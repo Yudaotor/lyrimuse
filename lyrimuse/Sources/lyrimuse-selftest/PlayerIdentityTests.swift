@@ -292,9 +292,10 @@ func runPlayerIdentityTests() {
                 focusHeldElsewhere: true, directQueryFallback: .soda, mediaControlCommand: "seek"),
                 Route.withheld, "汽水失焦: 跳转没有通路")
             expectEqual(PlaybackMenuControl.command(forMenuTitle: "播放", player: .soda), nil, "汽水没有菜单标题表(按播放条)")
-            // 洛雪不按菜单,失焦时直接发给它本体(另测,见「控制分派」那几条);Swinsian 发它自己的脚本(SwinsianTests)。
+            // 洛雪不按菜单,失焦时直接发给它本体(另测,见「控制分派」那几条);Swinsian 发它自己的脚本(SwinsianTests),
+            // Plexamp 发到它的本机播放器接口(PlexampTests)。
             for player in PlaybackPlayer.allCases where !PlaybackMenuControl.players.contains(player) && player != .lxMusic
-                && player != .swinsian {
+                && player != .swinsian && player != .plexamp {
                 for command in [Command.playPause, .nextTrack, .previousTrack] {
                     expectEqual(MusicPlaybackController.controlRoute(exclusivelyAppleMusic: false, focusFallback: nil,
                         focusHeldElsewhere: true, directQueryFallback: player, mediaControlCommand: command.rawValue),
@@ -1185,7 +1186,7 @@ func runPlayerIdentityTests() {
             .foobar2000: (nil, [.extendedControls, .repeatOne, .resume, .learnsAnchorLag, .arrivesWhole]),
             .weread: (nil, []),
             .swinsian: (nil, [.extendedControls, .repeatOne, .resume, .snapsToReportedPosition, .arrivesWhole]),
-            .plexamp: (nil, [.learnsAnchorLag, .arrivesWhole]),
+            .plexamp: (nil, [.extendedControls, .repeatOne, .resume, .learnsAnchorLag, .arrivesWhole]),
             .pearDesktop: (.youtubeMusic, [.extendedControls, .repeatOne, .favorite, .resume, .lateAnchorProbe, .learnsAnchorLag,
                                            .holdsAnchorLagSeed, .catalogMenuRows]),
         ]

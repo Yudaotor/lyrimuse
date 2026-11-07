@@ -27,12 +27,14 @@ enum IdlePlaybackActions {
     /// 最近那份会话是 iPad 版报的(`PlayerProcess.sessionIsOtherClient`)也不给:它没有本体那份菜单,按了会把本体放起来。
     /// Pear Desktop 开着、本机接口能用时给,直接经接口开播;它冷启动时自己跳到前台,没开着时只给「打开」(02 章决策 228)。
     /// Swinsian 同理:开着时发它的脚本 `play`,冷启动会自己跳到前台,没开着只给「打开」(02 章决策 241)。
+    /// Plexamp 开着时经它的本机播放器接口开播,没开着只给「打开」。
     static func canResume(_ player: PlaybackPlayer) -> Bool {
         guard !PlayerProcess.sessionIsOtherClient(bundleID: player.bundleIdentifier) else { return false }
         return switch player {
         case .appleMusic, .spotify, .kugou, .qqMusic, .netease, .pinePlayer, .foobar2000, .lxMusic: true
         case .pearDesktop: PearDesktopAPI.shared.canControl()
         case .swinsian: PlayerProcess.pid(bundleID: player.bundleIdentifier) != nil
+        case .plexamp: PlayerProcess.pid(bundleID: player.bundleIdentifier) != nil
         default: false
         }
     }
@@ -66,6 +68,8 @@ enum IdlePlaybackActions {
                 ok = PearDesktopAPI.shared.play()
             case .swinsian:
                 ok = MusicPlaybackController.resumeSwinsianPlayback()
+            case .plexamp:
+                ok = PlexampPlayerAPI.shared.resume()
             default:
                 ok = false
             }
