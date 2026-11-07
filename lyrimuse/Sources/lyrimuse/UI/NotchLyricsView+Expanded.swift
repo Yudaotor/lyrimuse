@@ -143,6 +143,7 @@ extension NotchLyricsView {
                 .modifier(QuickActionTooltipOverlay(hovered: hoveredQuickAction,
                                                     shown: $shownQuickActionTooltip,
                                                     tint: accentOrWhite, edge: .bottom))
+                .task(id: controller.isExpanded) { await runQuickActionsTip() }
                 // 左右内边距是展开态那一列内容的边界(歌词首字、进度条、控制键同一条),展开态的顶行也收到这里(topRowPadding)。
                 .padding(.horizontal, NotchMetrics.expandedContentInset)
                 // 顶部间距:头部紧挨在 topRow 下面,没有它标题首行会贴到上面边。这份间距已经在 `expandedTrackInfoHeaderHeight`/
@@ -150,6 +151,24 @@ extension NotchLyricsView {
                 // 实现成看得见的留白;`.frame(alignment: .top)` 会把这段 padding 之后的内容继续钉在分配到的那块高度顶部。
                 .padding(.top, NotchExpandedMetrics.trackInfoTopSpacing)
         }
+    }
+
+    /// 第一次展开时在那排快捷键下面弹一次「这排按钮可在设置里自定义」,停 `visibleSeconds` 秒;收起、指针移到某颗键上
+    /// 都会换掉它。展开不满 `delayMs` 就收起的、指针正停在某颗键上的,这次不弹、标记不动。
+    private func runQuickActionsTip() async {
+        let tipKey = NotchQuickActionsTip.anchorKey
+        guard controller.isExpanded else {
+            if hoveredQuickAction?.key == tipKey { hoveredQuickAction = nil }
+            return
+        }
+        guard offersQuickActionsTip, controller.expandedShowsQuickActions, NotchQuickActionsTip.shouldOffer() else { return }
+        try? await Task.sleep(for: .milliseconds(NotchQuickActionsTip.delayMs))
+        guard !Task.isCancelled, controller.isExpanded, hoveredQuickAction == nil,
+              NotchQuickActionsTip.shouldOffer() else { return }
+        NotchQuickActionsTip.markShown()
+        hoveredQuickAction = QuickActionHint(key: tipKey, text: L10n.t("这排按钮可在设置里自定义"))
+        try? await Task.sleep(for: .seconds(NotchQuickActionsTip.visibleSeconds))
+        if hoveredQuickAction?.key == tipKey { hoveredQuickAction = nil }
     }
 
     /// 头部里的封面缩略图,复用 `artworkThumbnail`(点击打开歌词窗口的行为跟着一起继承)。
@@ -278,6 +297,8 @@ extension NotchLyricsView {
                     .frame(height: NotchExpandedMetrics.trackInfoActionsHeight)
                 }
             }
+            // 整排的位置,给一次性提示对准(`NotchQuickActionsTip`)。
+            .anchorPreference(key: QuickActionAnchorKey.self, value: .bounds) { [NotchQuickActionsTip.anchorKey: $0] }
         }
     }
 

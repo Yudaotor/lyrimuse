@@ -1864,8 +1864,28 @@ func runNotchTests() {
         expectEqual(view.contains(".onAppear { playback.syncAdSkipGate(adBreak: drivesAdSkipGate && controller.isAdBreakNow) }"), true,
                     "广告态契约: 窗口出现时已经在放广告也要起轮询(onChange 只认变化)")
         let root = (try? String(contentsOfFile: ui.appendingPathComponent("NotchWindowRoot.swift").path, encoding: .utf8)) ?? ""
-        expectEqual(sourceHas(root, "drivesAdSkipGate: true)") && !stage.contains("drivesAdSkipGate: true"), true,
+        expectEqual(sourceHas(root, "drivesAdSkipGate: true") && !stage.contains("drivesAdSkipGate: true"), true,
                     "广告态契约: 只有真窗口替门槛轮询登记,编辑台预览不传")
+        // 快捷操作那排的一次性提示:只有真窗口弹(预览弹了会烧掉标记),对准整排,弹之前再判一次,标记按机器记。
+        let expandedSrc = (try? String(contentsOfFile: ui.appendingPathComponent("NotchLyricsView+Expanded.swift").path,
+                                       encoding: .utf8)) ?? ""
+        let tipSrc = (try? String(contentsOfFile: ui.appendingPathComponent("NotchQuickActions.swift").path, encoding: .utf8)) ?? ""
+        let portability = (try? String(contentsOfFile: ui.deletingLastPathComponent()
+            .appendingPathComponent("Settings/ConfigPortability.swift").path, encoding: .utf8)) ?? ""
+        expectEqual(sourceHas(root, "offersQuickActionsTip: true") && !stage.contains("offersQuickActionsTip"), true,
+                    "快捷操作提示契约: 只有真窗口弹,编辑台预览不传")
+        let tipBody = sourceBody("private func runQuickActionsTip() async", in: expandedSrc)
+        expectEqual(sourceHas(tipBody, "guard offersQuickActionsTip, controller.expandedShowsQuickActions, NotchQuickActionsTip.shouldOffer() else { return }")
+                    && sourceHas(tipBody, "guard !Task.isCancelled, controller.isExpanded, hoveredQuickAction == nil,")
+                    && sourceHas(tipBody, "NotchQuickActionsTip.markShown()")
+                    && sourceHas(expandedSrc, ".task(id: controller.isExpanded) { await runQuickActionsTip() }")
+                    && sourceHas(expandedSrc, "{ [NotchQuickActionsTip.anchorKey: $0] }"), true,
+                    "快捷操作提示契约: 展开满延迟、没指着某颗键、还该弹才弹并记下,对准整排")
+        expectEqual(sourceHas(sourceBody("static func shouldOffer() -> Bool", in: tipSrc),
+                              "AppSettings.shared.notchQuickSlots == .default")
+                    && sourceHas(sourceBody("static func shouldOffer() -> Bool", in: tipSrc), "AppSettings.shared.hasCompletedOnboarding")
+                    && sourceHas(portability, "NotchQuickActionsTip.shownKey,"), true,
+                    "快捷操作提示契约: 自己排过的、引导没走完的不弹;标记不随配置搬家")
         expectEqual(view.contains(".onDisappear { playback.syncAdSkipGate(adBreak: false) }"), true,
                     "广告态契约: 窗口没了要撤掉需求,不然灵动岛关了轮询还在跑")
         expectEqual(view.contains("YouTubeMusicAdSkipCenter.shared.setNotchDemand(adSkipDemandID, active: adBreak)"), true,

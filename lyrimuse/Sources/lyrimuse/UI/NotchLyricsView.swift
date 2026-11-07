@@ -23,6 +23,10 @@ struct NotchLyricsView<Chrome: NotchChromeSource>: View {
     /// 广告态时向 `YouTubeMusicAdSkipCenter` 登记要门槛结果。只有真窗口传 true:编辑台预览也会进广告态,但它一登记,
     /// 设置页开着时就会跟着真广告对用户的浏览器发 AppleScript —— 预览不产生副作用。
     var drivesAdSkipGate = false
+
+    /// 第一次展开时弹「这排按钮可在设置里自定义」(`NotchQuickActionsTip`)。只有真窗口传 true:编辑台预览也会展开,
+    /// 在那儿弹会烧掉标记,真灵动岛上就再也看不到。
+    var offersQuickActionsTip = false
     // 不整对象订阅 PlaybackCoordinator/AppSettings —— 见 NotchPlayback 的注释。
     // NotchTransientCenter 也不在这里订阅:banner 只被歌词行 / 多行歌词那一格消费,订阅下沉到
     // NotchTransientHost 子视图,横幅出现/消失只失效那一格,不打醒整卡。

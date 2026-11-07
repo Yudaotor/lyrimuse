@@ -32,6 +32,29 @@ struct WithheldControlHint: ViewModifier {
     }
 }
 
+/// 展开卡快捷操作那排的一次性提示「这排按钮可在设置里自定义」(05 章决策 138)。借悬停气泡那一套
+/// (`QuickActionTooltipOverlay`),对准整排而不是某一颗。标记按机器记(`ConfigPortability.machineLocalDefaultsKeys`)。
+enum NotchQuickActionsTip {
+    static let shownKey = "np:hasShownNotchQuickActionsTip"
+    /// 整排在 `QuickActionAnchorKey` 里的名字。别跟哪颗键的 SF Symbol 名撞上。
+    static let anchorKey = "quickActionsRow"
+    /// 展开后停留这么久才弹:指针从刘海上扫过去时不弹、也不烧掉标记。
+    static let delayMs = 600
+    static let visibleSeconds = 5
+
+    /// 没提示过、引导走完了、排法还是默认(自己排过的人已经知道)才提示。
+    @MainActor
+    static func shouldOffer() -> Bool {
+        !UserDefaults.standard.bool(forKey: shownKey)
+            && AppSettings.shared.hasCompletedOnboarding
+            && AppSettings.shared.notchQuickSlots == .default
+    }
+
+    static func markShown() {
+        UserDefaults.standard.set(true, forKey: shownKey)
+    }
+}
+
 /// 快捷操作那排键上此刻被指到的那一颗。`key` 用 SF Symbol 名(每颗键都不重复、且**不随状态变**),
 /// `text` 是要弹的那句 —— 「显示 / 隐藏歌词」那颗的文案会跟着开关翻,所以两者得分开存:靠 key 认人,
 /// 靠 text 显示(见 `quickActionButton` 里那条 `onChange`)。
