@@ -539,6 +539,7 @@ func runPlayerIdentityTests() {
             .pinePlayer: ("pine_player", "com.digipine.pineplayer"),
             .foobar2000: ("foobar2000", "com.foobar2000.mac"),
             .swinsian: ("swinsian", "com.swinsian.Swinsian"),
+            .plexamp: ("plexamp", "tv.plex.plexamp"),
             .pearDesktop: ("pear_desktop", "com.github.th-ch.youtube-music"),
             .weread: ("weread", "com.tencent.weread"),
         ]
@@ -1184,11 +1185,14 @@ func runPlayerIdentityTests() {
             .foobar2000: (nil, [.extendedControls, .repeatOne, .resume, .learnsAnchorLag, .arrivesWhole]),
             .weread: (nil, []),
             .swinsian: (nil, [.extendedControls, .repeatOne, .resume, .snapsToReportedPosition, .arrivesWhole]),
+            .plexamp: (nil, [.learnsAnchorLag, .arrivesWhole]),
             .pearDesktop: (.youtubeMusic, [.extendedControls, .repeatOne, .favorite, .resume, .lateAnchorProbe, .learnsAnchorLag,
                                            .holdsAnchorLagSeed, .catalogMenuRows]),
         ]
         expectEqual(PlaybackPlayer.allCases.count, table.count + 1,
                     "决定表: 新增播放器要在这里补一行,逐项决定它走哪条路(+1 是 .auto)")
+        expectEqual(LocalPlaybackSource.resumeReadingNeverLeads(bundleID: PlaybackPlayer.plexamp.bundleIdentifier), true,
+                    "Plexamp: 恢复那一拍原样采信(暂停锚点偏小,按它封顶会把准的恢复锚点削掉)")
         /// 表里某一列开着的那几家,按名字排好。
         func players(_ column: On) -> [String] {
             table.filter { $0.value.on.contains(column) }.keys.map { "\($0)" }.sorted()

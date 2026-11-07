@@ -262995,6 +262995,95 @@
           }
         }
       }
+    },
+    "Plex 的音乐播放器，播放自建服务器上的曲库" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Musikplayer von Plex für Bibliotheken auf dem eigenen Server"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Plex’s music player for libraries on your own server"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Reproductor de música de Plex para bibliotecas en tu propio servidor"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lecteur de musique de Plex pour les bibliothèques sur votre propre serveur"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lettore musicale di Plex per librerie sul proprio server"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "自前のサーバーにあるライブラリを再生するPlexの音楽プレーヤー"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "직접 운영하는 서버의 라이브러리를 재생하는 Plex 음악 플레이어"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Player de música da Plex para bibliotecas no seu próprio servidor"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Музыкальный плеер Plex для медиатек на собственном сервере"
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "เครื่องเล่นเพลงของ Plex สำหรับคลังเพลงบนเซิร์ฟเวอร์ของตัวเอง"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Музичний плеєр Plex для медіатек на власному сервері"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Trình phát nhạc của Plex, phát thư viện nhạc trên máy chủ riêng"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Plex 的音乐播放器，播放自建服务器上的曲库"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Plex 的音樂播放器，播放自建伺服器上的曲庫"
+          }
+        }
+      }
     }
   },
   "version" : "1.0"

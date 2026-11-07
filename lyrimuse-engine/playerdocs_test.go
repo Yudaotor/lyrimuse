@@ -62,16 +62,16 @@ func TestDocsListEveryPlayer(t *testing.T) {
 		t.Fatal("shared/players.json 里一个播放器都没读出来")
 	}
 	enWords := []string{"zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten",
-		"eleven", "twelve", "thirteen", "fourteen", "fifteen", "sixteen", "seventeen"}
+		"eleven", "twelve", "thirteen", "fourteen", "fifteen", "sixteen", "seventeen", "eighteen"}
 	zhDigits := []string{"零", "一", "二", "三", "四", "五", "六", "七", "八", "九", "十",
-		"十一", "十二", "十三", "十四", "十五", "十六", "十七"}
+		"十一", "十二", "十三", "十四", "十五", "十六", "十七", "十八"}
 	if n >= len(enWords) {
 		t.Fatalf("播放器数量是 %d,没有对应的中英数字——请在两张表里补上再跑这个测试", n)
 	}
 	esWords := []string{"cero", "uno", "dos", "tres", "cuatro", "cinco", "seis", "siete", "ocho", "nueve", "diez",
-		"once", "doce", "trece", "catorce", "quince", "dieciséis", "diecisiete"}
-	esNum := `(dos|tres|cuatro|cinco|seis|siete|ocho|nueve|diez|once|doce|trece|catorce|quince|dieciséis|diecisiete|\d+)`
-	enNum := `(one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|\d+)`
+		"once", "doce", "trece", "catorce", "quince", "dieciséis", "diecisiete", "dieciocho"}
+	esNum := `(dos|tres|cuatro|cinco|seis|siete|ocho|nueve|diez|once|doce|trece|catorce|quince|dieciséis|diecisiete|dieciocho|\d+)`
+	enNum := `(one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|\d+)`
 	zhNum := `([一二三四五六七八九十]+|\d+)`
 
 	readmes := []struct {
@@ -139,7 +139,7 @@ func TestDocsListEveryPlayer(t *testing.T) {
 	}{
 		{"../README.ja.md", regexp.MustCompile(`(?:^|[^の\d])(\d+)のプレーヤー`), regexp.MustCompile(`残りの(\d+)の`)},
 		{"../README.ko.md", regexp.MustCompile(`(\d+)개 플레이어`), regexp.MustCompile(`나머지 (\d+)개`)},
-		{"../README.es.md", regexp.MustCompile(`(?i)\b` + esNum + ` reproductores\b`), regexp.MustCompile(`(?i)\botros ` + esNum + `\b`)},
+		{"../README.es.md", regexp.MustCompile(`(?i)\b` + esNum + ` reproductores\b`), regexp.MustCompile(`(?i)\botros ` + esNum + ` no\b`)},
 		{"../README.fr.md", regexp.MustCompile(`\b(\d+) lecteurs\b`), regexp.MustCompile(`(?i)\bles (\d+) autres\b`)},
 		{"../README.de.md", regexp.MustCompile(`\b(\d+) Player\b`), regexp.MustCompile(`(?i)\bdie übrigen (\d+)\b`)},
 		{"../README.it.md", regexp.MustCompile(`\b(\d+) player\b`), regexp.MustCompile(`(?i)\bgli altri (\d+)\b`)},

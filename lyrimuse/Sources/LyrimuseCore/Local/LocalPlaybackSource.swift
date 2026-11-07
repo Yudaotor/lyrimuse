@@ -1063,6 +1063,8 @@ public final class LocalPlaybackSource: ObservableObject {
     /// 恢复认得晚(没等到恢复信号、靠暂停档轮询才看到)时,上限按兜底的 2 秒算,会把准的读数削掉一截(见 02 章决策 152)。
     /// Pine Player 的位置是 `PinePlayhead` 从它恢复那份锚点起算的(暂停前的位置接上,或进度条校准过),同样原样采信。
     /// Swinsian 的位置是 `SwinsianPlayhead` 从它恢复的锚点起算、再按脚本整秒的跳变对时的,同样原样采信。
+    /// Plexamp 暂停那条锚点比实际停下处少约 0.3 秒,恢复那条是准的:按暂停位置封顶会把恢复后的位置压慢 0.2 秒、直到下一份
+    /// 锚点,同样原样采信(见 02 章决策 242)。
     /// iPad 版网易云(`client`:这份会话实际是谁报的)恢复那一拍的锚点对真值在 0.01 秒上下,换歌开播那一拍补过提前量
     /// (`NetEaseIPadNowPlaying.bareStartLead` / `fullStartLead`),同样原样采信,不然提前量被削成信号至今那一截。见 02 章决策 198。
     /// iPad 版 QQ 音乐开播后那一帧改写帧带着准的进度,常正好落在速率翻 1 那一拍,同样原样采信。见 02 章决策 204。
@@ -1070,6 +1072,7 @@ public final class LocalPlaybackSource: ObservableObject {
     public nonisolated static func resumeReadingNeverLeads(bundleID: String?, client: String? = nil) -> Bool {
         bundleID == PlaybackPlayer.kaset.bundleIdentifier || bundleID == PlaybackPlayer.vox.bundleIdentifier
             || bundleID == PlaybackPlayer.pinePlayer.bundleIdentifier || bundleID == PlaybackPlayer.swinsian.bundleIdentifier
+            || bundleID == PlaybackPlayer.plexamp.bundleIdentifier
             || client == NetEaseIPadNowPlaying.bundleID || client == QQIPadNowPlaying.bundleID
     }
 

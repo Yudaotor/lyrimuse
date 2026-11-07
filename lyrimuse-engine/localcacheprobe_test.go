@@ -45,6 +45,7 @@ func TestPlayersNeedFullDiskAccessMatchesClientPaths(t *testing.T) {
 		playerPinePlayer:  "",
 		playerFoobar2000:  "",
 		playerSwinsian:    "",
+		playerPlexamp:     "",
 		playerPearDesktop: "",
 		playerLXMusic:     "lxmusic",
 		playerWeRead:      "",

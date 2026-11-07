@@ -104,6 +104,9 @@ func upcomingFromQueue(artist, title, album, bundleID string, durationSecs float
 	case pinePlayerBundleID:
 		// 没有脚本接口、列表不落盘,App 经辅助功能读它界面上的播放列表(pinequeue.go)。
 		return pineUpcoming(artist, title, n)
+	case plexampBundleID:
+		// 队列在 Plex 服务器上,读它要账号令牌,退回同专辑预取。
+		return nil, false
 	case swinsianBundleID:
 		// App 代问它的播放队列(swinsianqueue.go)。
 		return swinsianUpcoming(artist, title, n)

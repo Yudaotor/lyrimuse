@@ -4,7 +4,7 @@
 
 [English](feature-list.md) · [简体中文](feature-list.zh-CN.md) · [繁體中文](feature-list.zh-Hant.md) · [日本語](feature-list.ja.md) · [한국어](feature-list.ko.md) · [Español](feature-list.es.md) · [Français](feature-list.fr.md) · [Deutsch](feature-list.de.md) · [Italiano](feature-list.it.md) · [Português (Brasil)](feature-list.pt-BR.md) · [Tiếng Việt](feature-list.vi.md) · [Русский](feature-list.ru.md) · [Українська](feature-list.uk.md) · ไทย
 
-Lyrimuse เป็นแอปโอเพนซอร์ส (GPL-3.0) สำหรับ Mac ที่แสดงเนื้อเพลงแบบคำต่อคำตรงตามจังหวะ ใช้ได้กับ macOS 14 ขึ้นไปบน Apple Silicon และ Intel แสดงเนื้อเพลงให้ Apple Music, Spotify, QQ Music, NetEase Cloud Music, Kugou, Soda Music, KKBOX, Amazon Music, LX Music, Kaset, Pear Desktop, reAMP, VOX, Pine Player, foobar2000, Swinsian รวมถึง YouTube Music หรือ Spotify Web ที่เล่นในเบราว์เซอร์ ได้ทั้งแบบลอยบนเดสก์ท็อป ข้างรอยบาก ในแถบเมนู บน Touch Bar หรือในหน้าต่างเนื้อเพลงแบบเต็มหน้า พร้อมคำแปลและการออกเสียง (พินอิน Jyutping ภาษากวางตุ้ง โรมะจิภาษาญี่ปุ่น และอักษรโรมันภาษาเกาหลี) Lyrimuse Scrobble ไปยัง Last.fm และ ListenBrainz และแสดงเพลงที่คุณกำลังฟังบน Discord ได้ แอปมีให้เลือกเป็นภาษาอังกฤษ จีนตัวย่อ จีนตัวเต็ม ญี่ปุ่น เกาหลี สเปน ฝรั่งเศส เยอรมัน อิตาลี โปรตุเกส (บราซิล) เวียดนาม รัสเซีย ยูเครน และไทย
+Lyrimuse เป็นแอปโอเพนซอร์ส (GPL-3.0) สำหรับ Mac ที่แสดงเนื้อเพลงแบบคำต่อคำตรงตามจังหวะ ใช้ได้กับ macOS 14 ขึ้นไปบน Apple Silicon และ Intel แสดงเนื้อเพลงให้ Apple Music, Spotify, QQ Music, NetEase Cloud Music, Kugou, Soda Music, KKBOX, Amazon Music, LX Music, Kaset, Pear Desktop, reAMP, VOX, Pine Player, foobar2000, Swinsian, Plexamp รวมถึง YouTube Music หรือ Spotify Web ที่เล่นในเบราว์เซอร์ ได้ทั้งแบบลอยบนเดสก์ท็อป ข้างรอยบาก ในแถบเมนู บน Touch Bar หรือในหน้าต่างเนื้อเพลงแบบเต็มหน้า พร้อมคำแปลและการออกเสียง (พินอิน Jyutping ภาษากวางตุ้ง โรมะจิภาษาญี่ปุ่น และอักษรโรมันภาษาเกาหลี) Lyrimuse Scrobble ไปยัง Last.fm และ ListenBrainz และแสดงเพลงที่คุณกำลังฟังบน Discord ได้ แอปมีให้เลือกเป็นภาษาอังกฤษ จีนตัวย่อ จีนตัวเต็ม ญี่ปุ่น เกาหลี สเปน ฝรั่งเศส เยอรมัน อิตาลี โปรตุเกส (บราซิล) เวียดนาม รัสเซีย ยูเครน และไทย
 
 รวมความสามารถทั้งหมดของ Lyrimuse ไว้ที่นี่ ทั้งสิ่งที่แต่ละอย่างทำ อยู่ตรงไหนในการตั้งค่า และเปิดอยู่ตั้งแต่ติดตั้งหรือไม่ ท้ายหน้ามีรายการการตั้งค่าทั้งหมดในหน้าต่างการตั้งค่า รายการนี้ดูแลไปพร้อมกับซอร์สโค้ดและอัปเดตทุกครั้งที่มีการเปลี่ยนแปลง
 
@@ -608,9 +608,9 @@ NetEase Cloud Music, QQ Music, Kugou, Kuwo, Migu, Musixmatch, LRCLIB, LyricFind,
 
 <a id="feature-players"></a>
 
-### เครื่องเล่น 17 ตัว เลือกหลายตัวหรือตรวจหาอัตโนมัติ
+### เครื่องเล่น 18 ตัว เลือกหลายตัวหรือตรวจหาอัตโนมัติ
 
-Apple Music, Spotify, QQ Music, NetEase Cloud Music, Kugou, Soda Music, LX Music, KKBOX, Amazon Music, reAMP เครื่องเล่นสไตล์ Winamp, VOX เครื่องเล่นไฟล์ในเครื่องแบบ Lossless และ Hi-Res, Pine Player เครื่องเล่นไฟล์ในเครื่องฟรีที่เล่นได้แทบทุกรูปแบบ, foobar2000 เครื่องเล่นไฟล์ในเครื่องรุ่นคลาสสิกที่พอร์ตมาจาก Windows, Swinsian เครื่องเล่นไฟล์ในเครื่องสำหรับคลังเพลงขนาดใหญ่, Kaset แอป YouTube Music และ Pear Desktop แอป YouTube Music บนเดสก์ท็อปแบบโอเพนซอร์ส เลือกหลายตัวพร้อมกันได้ หรือปล่อยเป็นอัตโนมัติเพื่อตามสิ่งที่ macOS แสดงใน “กำลังเล่นอยู่” วิทยุของ Apple Music ก็ใช้ได้ โดยแสดงชื่อสถานีและโลโก้ระหว่างที่ผู้ดำเนินรายการพูด
+Apple Music, Spotify, QQ Music, NetEase Cloud Music, Kugou, Soda Music, LX Music, KKBOX, Amazon Music, reAMP เครื่องเล่นสไตล์ Winamp, VOX เครื่องเล่นไฟล์ในเครื่องแบบ Lossless และ Hi-Res, Pine Player เครื่องเล่นไฟล์ในเครื่องฟรีที่เล่นได้แทบทุกรูปแบบ, foobar2000 เครื่องเล่นไฟล์ในเครื่องรุ่นคลาสสิกที่พอร์ตมาจาก Windows, Swinsian เครื่องเล่นไฟล์ในเครื่องสำหรับคลังเพลงขนาดใหญ่, Plexamp เครื่องเล่นเพลงของ Plex สำหรับเซิร์ฟเวอร์ของตัวเอง, Kaset แอป YouTube Music และ Pear Desktop แอป YouTube Music บนเดสก์ท็อปแบบโอเพนซอร์ส เลือกหลายตัวพร้อมกันได้ หรือปล่อยเป็นอัตโนมัติเพื่อตามสิ่งที่ macOS แสดงใน “กำลังเล่นอยู่” วิทยุของ Apple Music ก็ใช้ได้ โดยแสดงชื่อสถานีและโลโก้ระหว่างที่ผู้ดำเนินรายการพูด
 
 - การตั้งค่า: เครื่องเล่น › แอปเพลง
 

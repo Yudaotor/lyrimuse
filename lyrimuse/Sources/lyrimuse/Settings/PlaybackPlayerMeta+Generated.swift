@@ -28,6 +28,7 @@ extension PlaybackPlayer {
         case .pinePlayer: return "Pine Player"
         case .foobar2000: return "foobar2000"
         case .swinsian: return "Swinsian"
+        case .plexamp: return "Plexamp"
         case .weread: return L10n.t("微信读书")
         case .auto: return L10n.t("自动识别")
         }
@@ -53,6 +54,7 @@ extension PlaybackPlayer {
         case .pinePlayer: return Color(red: 0.36, green: 0.66, blue: 0.24)
         case .foobar2000: return Color(red: 0.6, green: 0.6, blue: 0.62)
         case .swinsian: return Color(red: 0.95, green: 0.67, blue: 0.13)
+        case .plexamp: return Color(red: 0.9, green: 0.63, blue: 0.05)
         case .weread: return Color(red: 0.16, green: 0.6, blue: 0.98)
         case .auto: return .secondary
         }
@@ -76,6 +78,7 @@ extension PlaybackPlayer {
         case .pinePlayer: return "music.note"
         case .foobar2000: return "music.note"
         case .swinsian: return "waveform"
+        case .plexamp: return "music.note.house"
         case .weread: return "book"
         case .auto: return "wand.and.stars"
         }
@@ -101,12 +104,13 @@ extension PlaybackPlayer {
         case .pinePlayer: return "PinePlayerIcon"
         case .foobar2000: return "Foobar2000Icon"
         case .swinsian: return "SwinsianIcon"
+        case .plexamp: return "PlexampIcon"
         case .weread: return "WeReadIcon"
         case .auto: return nil
         }
     }
 
-    public static let displayOrderForSimplifiedChinese: [PlaybackPlayer] = [.appleMusic, .qqMusic, .netease, .kugou, .soda, .lxMusic, .kkbox, .spotify, .amazonMusic, .kaset, .pearDesktop, .reamp, .vox, .pinePlayer, .foobar2000, .swinsian, .weread, .auto]
+    public static let displayOrderForSimplifiedChinese: [PlaybackPlayer] = [.appleMusic, .qqMusic, .netease, .kugou, .soda, .lxMusic, .kkbox, .spotify, .amazonMusic, .kaset, .pearDesktop, .reamp, .vox, .pinePlayer, .foobar2000, .swinsian, .plexamp, .weread, .auto]
 
-    public static let displayOrderDefault: [PlaybackPlayer] = [.appleMusic, .spotify, .amazonMusic, .kaset, .pearDesktop, .kkbox, .qqMusic, .netease, .kugou, .soda, .lxMusic, .reamp, .vox, .pinePlayer, .foobar2000, .swinsian, .weread, .auto]
+    public static let displayOrderDefault: [PlaybackPlayer] = [.appleMusic, .spotify, .amazonMusic, .kaset, .pearDesktop, .kkbox, .qqMusic, .netease, .kugou, .soda, .lxMusic, .reamp, .vox, .pinePlayer, .foobar2000, .swinsian, .plexamp, .weread, .auto]
 }
