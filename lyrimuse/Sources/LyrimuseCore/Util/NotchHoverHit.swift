@@ -46,7 +46,7 @@ public enum NotchHoverHit {
 
     /// 刘海下沿往下这么深、跟刘海一样宽的一条也算顶行。指针进不了刘海那一块:从下往上移会停在刘海下沿,横着移会被直接挪到
     /// 刘海另一侧。卡片收起时中间那一段全在刘海里,不留这一条的话从刘海正下方移上去永远够不着卡片。见 05 章决策 140。
-    public static let notchCatchDepth: CGFloat = 6
+    public static let notchCatchDepth: CGFloat = 4
 
     /// 指针落在卡片哪一块。`passThroughBelow` 是只显示的那一截的上沿(卡片局部 y,即顶行下沿),nil = 整张卡都接指针。
     /// 上沿那条线本身算顶行。见 05 章决策 121。`notch` 给了就把刘海正下方那一条(`notchCatchDepth`)也算顶行。

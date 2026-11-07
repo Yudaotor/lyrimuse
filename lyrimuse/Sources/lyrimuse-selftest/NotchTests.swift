@@ -786,6 +786,10 @@ func runNotchTests() {
         expectEqual(sourceHas(root, "passThroughBelow: controller.passThroughBandTop, notch: notch)")
                     && sourceHas(root, "NotchHoverHit.crossesNotch(from: last, to: point, cardWidth: cardWidth, notch: notch) {\ncontroller.expandFromNotchCrossing()"), true,
                     "灵动岛命中接线: 悬停按刘海那一条判,被挪过刘海时马上展开")
+        expectEqual(sourceHas(root, ".overlay(alignment: .top) { notchCatchStrip }")
+                    && sourceHas(root, "if let notch = controller.hoverNotch, !controller.isExpanded, controller.isSurfaceVisible, !controller.isVanished,\ncardHeight <= notch.bottom + 0.5 {")
+                    && sourceHas(root, ".frame(width: notch.width, height: NotchHoverHit.notchCatchDepth)\n.contentShape(Rectangle())"), true,
+                    "灵动岛命中接线: 卡片收起、底边就是刘海下沿时,刘海正下方单独放一块接收区(卡片矩形外 SwiftUI 不给悬停),展开后撤掉")
 
         // 「悬浮淡化」淡到的值跟悬浮歌词同一档。
         expectEqual(NotchPassThroughFade.opacity, 0.15, "灵动岛悬浮淡化: 淡到 15%,同悬浮歌词")

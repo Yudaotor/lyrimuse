@@ -227,6 +227,7 @@ struct NotchWindowRoot: View {
             // 贴顶 + 水平居中。窗口本身是按刘海中心点摆的,所以"在窗口里居中"就等于
             // "对齐刘海中心"。
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+            .overlay(alignment: .top) { notchCatchStrip }
             // 三种形态切换用三条**不同**的弹簧,理由见 cardAnimation。
             .animation(cardAnimation, value: cardHeight)
             .animation(cardAnimation, value: cardWidth)
@@ -243,6 +244,27 @@ struct NotchWindowRoot: View {
             .onChange(of: controller.isSurfaceVisible) { _, visible in
                 if !visible { hoveringCard = false }
             }
+    }
+
+    /// 刘海正下方那一条接指针的区域(`NotchHoverHit.notchCatchDepth`):卡片收起、底边就是刘海下沿时,指针从下面推上来停在
+    /// 刘海下沿外面,碰不到卡片;卡片矩形以外 SwiftUI 不给悬停事件,所以单独放一块跟刘海一样宽的透明接收区。只在这种时候出现,
+    /// 展开后撤掉(卡片盖住它时两边的悬停会来回打架)。它会接住落在这一小条上的点击,别加高。见 05 章决策 140。
+    @ViewBuilder private var notchCatchStrip: some View {
+        if let notch = controller.hoverNotch, !controller.isExpanded, controller.isSurfaceVisible, !controller.isVanished,
+           cardHeight <= notch.bottom + 0.5 {
+            Color.clear
+                .frame(width: notch.width, height: NotchHoverHit.notchCatchDepth)
+                .contentShape(Rectangle())
+                .onContinuousHover(coordinateSpace: .local) { phase in
+                    switch phase {
+                    case .active(let point):
+                        updateHover(inside: true, point: CGPoint(x: (cardWidth - notch.width) / 2 + point.x, y: notch.bottom + point.y))
+                    case .ended:
+                        updateHover(inside: false, point: nil)
+                    }
+                }
+                .offset(y: cardHeight)
+        }
     }
 
     /// `point` 是 `.active` 给的卡片局部坐标,`.ended` 时为 nil;只进边沿日志。
