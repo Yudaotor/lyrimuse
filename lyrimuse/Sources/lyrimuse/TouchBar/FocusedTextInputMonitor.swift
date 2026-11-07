@@ -6,10 +6,13 @@ import LyrimuseCore
 ///
 /// 盯前台 App 的「焦点元素变了」「焦点窗口变了」两个辅助功能通知,一变就读焦点元素的角色交给 `TextInputFocus` 判;
 /// 前台换了 App 就改盯新的那个。辅助功能的调用会卡在没响应的 App 上,全放在自己的线程里做、每次查询最多等
-/// `messagingTimeout` 秒,结果切回主线程报,同一个值不重复报。没有辅助功能权限时报 false,前台下一次换 App 时再试;
-/// 本 App 自己在前台时报 false。
+/// `messagingTimeout` 秒,结果切回主线程报,同一个值不重复报。读焦点元素出错(不是「没有焦点元素」)时报 false,
+/// 每隔 `retryInterval` 秒再读,最多 `maxRetries` 次,期间来了通知照常读。没有辅助功能权限时报 false,前台下一次换 App
+/// 时再试;本 App 自己在前台时报 false。
 final class FocusedTextInputMonitor {
     static let messagingTimeout: Float = 0.25
+    static let retryInterval: CFTimeInterval = 0.25
+    static let maxRetries = 4
 
     private let worker: Worker
     private var activationObserver: NSObjectProtocol?
@@ -42,6 +45,8 @@ final class FocusedTextInputMonitor {
         private var observer: AXObserver?
         private var app: AXUIElement?
         private var last: (value: Bool, role: String?)?
+        private var retryTimer: CFRunLoopTimer?
+        private var retries = 0
 
         init(report: @escaping (Bool, String?) -> Void) {
             self.report = report
@@ -101,13 +106,15 @@ final class FocusedTextInputMonitor {
 
         func read() {
             guard let app else { return }
+            cancelRetry()
             var focused: CFTypeRef?
-            guard AXUIElementCopyAttributeValue(app, kAXFocusedUIElementAttribute as CFString, &focused) == .success,
-                  let focused, CFGetTypeID(focused) == AXUIElementGetTypeID()
-            else {
+            let error = AXUIElementCopyAttributeValue(app, kAXFocusedUIElementAttribute as CFString, &focused)
+            guard error == .success, let focused, CFGetTypeID(focused) == AXUIElementGetTypeID() else {
                 send(false, role: nil)
+                if error != .success, error != .noValue { scheduleRetry() }
                 return
             }
+            retries = 0
             let element = focused as! AXUIElement
             AXUIElementSetMessagingTimeout(element, FocusedTextInputMonitor.messagingTimeout)
             let role = string(element, kAXRoleAttribute)
@@ -115,7 +122,28 @@ final class FocusedTextInputMonitor {
             send(TextInputFocus.isTextInput(role: role, subrole: subrole), role: role)
         }
 
+        /// 刚换到前台的 App 常常还答不上来:隔一会儿再读,不等下一次焦点通知。
+        private func scheduleRetry() {
+            guard retries < FocusedTextInputMonitor.maxRetries else { return }
+            retries += 1
+            let timer = CFRunLoopTimerCreateWithHandler(
+                nil, CFAbsoluteTimeGetCurrent() + FocusedTextInputMonitor.retryInterval, 0, 0, 0
+            ) { [weak self] _ in
+                self?.retryTimer = nil
+                self?.read()
+            }
+            CFRunLoopAddTimer(CFRunLoopGetCurrent(), timer, .defaultMode)
+            retryTimer = timer
+        }
+
+        private func cancelRetry() {
+            if let retryTimer { CFRunLoopTimerInvalidate(retryTimer) }
+            retryTimer = nil
+        }
+
         private func detach() {
+            cancelRetry()
+            retries = 0
             if let observer {
                 CFRunLoopRemoveSource(CFRunLoopGetCurrent(), AXObserverGetRunLoopSource(observer), .defaultMode)
             }

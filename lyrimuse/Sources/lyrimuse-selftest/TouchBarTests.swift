@@ -681,6 +681,12 @@ func runTouchBarTests() {
                     && sourceHas(monitor, "thread.name = \"lyrimuse.focused-text-input\"")
                     && sourceHas(monitor, "guard let pid, pid != getpid(), AXIsProcessTrusted() else {"), true,
                     "输入时收起(契约): 在自己的线程上读、查询有超时,没权限和本 App 在前台时不读")
+        expectEqual(sourceHas(sourceBody("func read()", in: monitor),
+                              "if error != .success, error != .noValue { scheduleRetry() }")
+                    && sourceHas(sourceBody("private func scheduleRetry()", in: monitor),
+                                 "guard retries < FocusedTextInputMonitor.maxRetries else { return }")
+                    && sourceHas(sourceBody("private func detach()", in: monitor), "cancelRetry()"), true,
+                    "输入时收起(契约): 读焦点出错(不是没有焦点元素)时隔一会儿重读、有次数上限,换 App 时作废")
     }
 
     // ---- 自动展开 / 收起(TouchBarAutoPresent,17 章决策 45)----
