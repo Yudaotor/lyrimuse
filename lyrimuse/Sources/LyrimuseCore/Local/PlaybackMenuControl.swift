@@ -167,7 +167,8 @@ public enum PlaybackMenuControl {
         _ command: Command, titled: String? = nil, requireEnabled: Bool = true, for player: PlaybackPlayer,
         body: (AXUIElement, (AXUIElement, String) -> AnyObject?, () -> Bool) -> Outcome
     ) -> Outcome {
-        guard players.contains(player) else {
+        // `players` 含汽水:它按播放条,不进菜单遍历。漏掉这句会去翻汽水的菜单栏。
+        guard players.contains(player), player != .soda else {
             return .menuUnavailable
         }
         guard AXIsProcessTrusted() else { return .notTrusted }
