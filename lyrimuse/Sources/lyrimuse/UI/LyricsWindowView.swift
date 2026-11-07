@@ -5022,10 +5022,7 @@ struct LyricsWindowView: View {
         // 字体、粗细、文字颜色、对齐跟这一尺寸的设置走;粗细比正文细几档,正文默认档推出来是常规字重。
         let side = lyricForcedSide ?? .leading
         ScrollView {
-            VStack(alignment: side.horizontalAlignment, spacing: 18) {
-                Label(L10n.t("此歌词无时间戳，无法随播放高亮或自动滚动"), systemImage: "exclamationmark.triangle.fill")
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundStyle(hasArtworkBackground ? .white.opacity(0.75) : Color.orange)
+            VStack(alignment: side.horizontalAlignment, spacing: 28) {
                 Text(playback.currentTrackPlainLyrics)
                     .font(.overlayFont(familyName: activeFontFamily, size: lyricFontSize * 0.62,
                                        weight: lyricFontWeight.lighter(by: OverlayFontWeight.lyricsWindowPlainLyricsSteps)))
@@ -5034,6 +5031,11 @@ struct LyricsWindowView: View {
                     .multilineTextAlignment(side.textAlignment)
                     .foregroundStyle(lyricTextColor.opacity(hasArtworkBackground ? 0.92 : 1))
                     .textSelection(.enabled)
+                // 没有时间轴的说明放在整首末尾、跟正文同色调淡,不放顶上抢眼(见 07 章决策 194)。
+                Text(L10n.t("此歌词无时间戳，无法随播放高亮或自动滚动"))
+                    .font(.system(size: 11))
+                    .multilineTextAlignment(side.textAlignment)
+                    .foregroundStyle(lyricTextColor.opacity(0.4))
             }
             .padding(.top, 40)
             .padding(.bottom, 60)
