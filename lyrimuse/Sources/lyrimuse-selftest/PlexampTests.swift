@@ -111,12 +111,37 @@ func runPlexampTests() {
         expectEqual(afterEcho.elapsed, 0, "Plexamp 会话补全: 已经跟过回声的锚点不当自然连播接走")
     }
 
+    // ---- 本机接口的端口:优先 32500,被占时换端口,按进程找正在监听的 ----
+    do {
+        let fd = socket(AF_INET, SOCK_STREAM, 0)
+        var addr = sockaddr_in()
+        addr.sin_family = sa_family_t(AF_INET)
+        addr.sin_addr.s_addr = inet_addr("127.0.0.1")
+        addr.sin_port = 0
+        let bound = withUnsafePointer(to: &addr) {
+            $0.withMemoryRebound(to: sockaddr.self, capacity: 1) { bind(fd, $0, socklen_t(MemoryLayout<sockaddr_in>.size)) }
+        }
+        _ = listen(fd, 1)
+        var got = sockaddr_in()
+        var len = socklen_t(MemoryLayout<sockaddr_in>.size)
+        _ = withUnsafeMutablePointer(to: &got) { $0.withMemoryRebound(to: sockaddr.self, capacity: 1) { getsockname(fd, $0, &len) } }
+        let port = Int(UInt16(bigEndian: got.sin_port))
+        expectEqual(bound == 0 && port > 0 && ProcessOpenFiles.listeningTCPPorts(pid: getpid()).contains(port), true,
+                    "Plexamp 端口: 按进程读得到正在监听的 TCP 端口")
+        close(fd)
+        expectEqual(ProcessOpenFiles.listeningTCPPorts(pid: getpid()).contains(port), false, "Plexamp 端口: 关掉的不再列出")
+        expectEqual(A.preferredPort, 32500, "Plexamp 端口: 优先 32500")
+    }
+
     // ---- 接线 ----
     do {
         let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
         func src(_ path: String) -> String {
             (try? String(contentsOfFile: root.appendingPathComponent(path).path, encoding: .utf8)) ?? ""
         }
+        let api = src("LyrimuseCore/Local/PlexampPlayerAPI.swift")
+        expectEqual(sourceHas(api, "if let data = request(path, query: query, port: current) { return data }\nguard let found = discoverPort(), found != current else { return nil }"), true,
+                    "Plexamp 接线: 连不上时找一次端口再试")
         let controller = src("LyrimuseCore/Local/MusicPlaybackController.swift")
         expectEqual(sourceHas(controller, "case .plexampAPI(let command):\ncommandQueue.async { PlexampPlayerAPI.shared.send(command) }"), true,
                     "Plexamp 接线: 失焦控制在命令队列上发,不卡主线程")

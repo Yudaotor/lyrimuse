@@ -1,13 +1,16 @@
 import AppKit
 import Foundation
 
-/// Plexamp 在本机 32500 端口开着的 Plex 播放器接口(不要令牌):读它的时间线(状态、曲目、循环、随机、音量),
+/// Plexamp 在本机开着的 Plex 播放器接口(优先 32500,被占时换端口;不要令牌):读它的时间线(状态、曲目、循环、随机、音量),
 /// 发播放 / 暂停、上下首、循环档、音量。随机读得到、写不进(它报的可控项里没有 shuffle)。
 /// 时间线里的进度约每秒才更新一次,不拿来当位置。见 02 章决策 242。
 public final class PlexampPlayerAPI: @unchecked Sendable {
     public static let shared = PlexampPlayerAPI()
 
-    public static let port = 32500
+    /// 它优先开的端口;被占着时换一个随机端口(实测 64239),连不上就按进程找(`discoverPort`)。
+    public static let preferredPort = 32500
+    /// 两次找端口至少隔这么久:Plexamp 没开、远程控制关着时每次都连不上,别每次都去扫。
+    static let discoverIntervalSecs: TimeInterval = 10
     /// 本机回环,应答在几毫秒内;连不上(Plexamp 没开)时也很快失败。
     public static let requestTimeout: TimeInterval = 0.5
     static let clientIdentifier = "lyrimuse"
@@ -31,6 +34,8 @@ public final class PlexampPlayerAPI: @unchecked Sendable {
 
     private let lock = NSLock()
     private var commandID = 0
+    private var port = PlexampPlayerAPI.preferredPort
+    private var lastDiscovery: Date?
     private let session: URLSession = {
         let configuration = URLSessionConfiguration.ephemeral
         configuration.timeoutIntervalForRequest = PlexampPlayerAPI.requestTimeout
@@ -136,8 +141,44 @@ public final class PlexampPlayerAPI: @unchecked Sendable {
         return request(Self.commandPath(command, state: state), query: [("type", "music")]) != nil
     }
 
-    /// 同步 GET,最多等 `requestTimeout`;200 才交回正文。每次带递增的 `commandID` 和客户端标识(Plex 播放器接口按它们认请求方)。
+    /// 同步 GET,最多等 `requestTimeout`;200 才交回正文。连不上时找一次端口再试(见 `discoverPort`)。
     private func request(_ path: String, query: [(String, String)]) -> Data? {
+        lock.lock()
+        let current = port
+        lock.unlock()
+        if let data = request(path, query: query, port: current) { return data }
+        guard let found = discoverPort(), found != current else { return nil }
+        return request(path, query: query, port: found)
+    }
+
+    /// Plexamp 的本机接口这会儿在哪个端口:32500,或它主进程、子进程(Electron 那一代开在渲染进程里)正在监听的端口里
+    /// 回 `/resources` 说自己是 Plexamp 的那个。找到了记下;隔 `discoverIntervalSecs` 内不重找。
+    private func discoverPort() -> Int? {
+        lock.lock()
+        if let last = lastDiscovery, Date().timeIntervalSince(last) < Self.discoverIntervalSecs {
+            lock.unlock()
+            return nil
+        }
+        lastDiscovery = Date()
+        lock.unlock()
+        guard let main = PlayerProcess.pid(bundleID: PlaybackPlayer.plexamp.bundleIdentifier) else { return nil }
+        var candidates = [Self.preferredPort]
+        for pid in [main] + ProcessOpenFiles.childPIDs(of: main) {
+            for p in ProcessOpenFiles.listeningTCPPorts(pid: pid) where !candidates.contains(p) { candidates.append(p) }
+        }
+        for candidate in candidates {
+            guard let data = request("/resources", query: [], port: candidate),
+                  String(data: data, encoding: .utf8)?.contains("product=\"Plexamp\"") == true else { continue }
+            lock.lock()
+            port = candidate
+            lock.unlock()
+            return candidate
+        }
+        return nil
+    }
+
+    /// 同步 GET 一个端口,最多等 `requestTimeout`;200 才交回正文。每次带递增的 `commandID` 和客户端标识(Plex 播放器接口按它们认请求方)。
+    private func request(_ path: String, query: [(String, String)], port: Int) -> Data? {
         lock.lock()
         commandID += 1
         let id = commandID
@@ -145,7 +186,7 @@ public final class PlexampPlayerAPI: @unchecked Sendable {
         var components = URLComponents()
         components.scheme = "http"
         components.host = "127.0.0.1"
-        components.port = Self.port
+        components.port = port
         components.path = path
         components.queryItems = query.map { URLQueryItem(name: $0.0, value: $0.1) } + [URLQueryItem(name: "commandID", value: String(id))]
         guard let url = components.url else { return nil }
