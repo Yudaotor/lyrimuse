@@ -726,14 +726,6 @@ struct LyricsSearchSheet: View {
             .controlSize(.large)
             .settingsGlassButtons()
             .disabled(title.trimmingCharacters(in: .whitespaces).isEmpty)
-            Button { chooseImportFiles() } label: {
-                Label(L10n.t("导入文件…"), systemImage: "square.and.arrow.down")
-            }
-            .controlSize(.large)
-            .settingsGlassButtons()
-            .fixedSize()
-            .help(L10n.t("导入本机的歌词文件（LRC、TTML、YRC、QRC、KRC 或纯文本），也可拖入窗口"))
-            .disabled(importing)
             if isDirty {
                 Button(L10n.t("恢复原信息")) {
                     artist = originalArtist
@@ -1519,7 +1511,25 @@ struct LyricsSearchSheet: View {
             .frame(minWidth: 0, idealWidth: 0, maxWidth: .infinity, alignment: .leading)
             autoMatchButton(iconOnly: iconOnly)
             instrumentalButton(iconOnly: iconOnly)
+            moreMenuButton
         }
+    }
+
+    /// 右上角「⋯」:不常用的「导入文件…」收在这里,样式同歌词管理详情页那颗(11 章决策 68)。把文件拖进窗口也能导入。
+    private var moreMenuButton: some View {
+        Menu {
+            Button { chooseImportFiles() } label: {
+                Label(L10n.t("导入文件…"), systemImage: "square.and.arrow.down")
+            }
+            .disabled(importing)
+        } label: {
+            Text(Image(systemName: "ellipsis"))
+        }
+        .menuIndicator(.hidden)
+        .settingsGlassMenu()
+        .fixedSize()
+        .accessibilityLabel(L10n.t("更多"))
+        .help(L10n.t("更多"))
     }
 
     /// 标题行按钮的标签:`iconOnly` 时只留图标(标题仍是无障碍标签)。
