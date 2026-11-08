@@ -4,7 +4,7 @@
 
 [English](feature-list.md) · [简体中文](feature-list.zh-CN.md) · [繁體中文](feature-list.zh-Hant.md) · [日本語](feature-list.ja.md) · 한국어 · [Español](feature-list.es.md) · [Français](feature-list.fr.md) · [Deutsch](feature-list.de.md) · [Italiano](feature-list.it.md) · [Português (Brasil)](feature-list.pt-BR.md) · [Tiếng Việt](feature-list.vi.md) · [Русский](feature-list.ru.md) · [Українська](feature-list.uk.md) · [ไทย](feature-list.th.md)
 
-Lyrimuse는 macOS 14 이상을 지원하고 Apple Silicon과 Intel 칩 모두와 호환되는 오픈 소스(GPL-3.0) macOS 단어별 가사 앱입니다. Apple Music, Spotify, QQ Music, NetEase Cloud Music, Kugou, Soda Music, KKBOX, Amazon Music, LX Music, Kaset, Pear Desktop, reAMP, VOX, Pine Player, foobar2000, Swinsian, Plexamp, 그리고 브라우저에서 재생하는 YouTube Music과 Spotify 웹 플레이어의 가사를 단어 단위로 동기화해 표시합니다. 데스크탑 플로팅 가사, 노치, 메뉴 막대, Touch Bar, 가사 윈도우에 표시할 수 있고, 번역과 로마자 표기(병음, 광둥어 Jyutping, 일본어 로마자, 한국어 로마자)를 제공하며, 재생 기록을 Last.fm과 ListenBrainz에 스크로블하고 Discord에 지금 듣고 있는 노래를 표시할 수도 있습니다. 인터페이스는 중국어 간체, 중국어 번체, 영어, 일본어, 한국어, 스페인어, 프랑스어, 독일어, 이탈리아어, 브라질 포르투갈어, 베트남어, 러시아어, 우크라이나어, 태국어를 지원합니다.
+Lyrimuse는 macOS 14 이상을 지원하고 Apple Silicon과 Intel 칩 모두와 호환되는 오픈 소스(GPL-3.0) macOS 단어별 가사 앱입니다. Apple Music, Spotify, QQ Music, NetEase Cloud Music, Kugou, Soda Music, KKBOX, Amazon Music, LX Music, Kaset, Pear Desktop, reAMP, VOX, Pine Player, foobar2000, Swinsian, Plexamp, MyGo Music, 그리고 브라우저에서 재생하는 YouTube Music과 Spotify 웹 플레이어의 가사를 단어 단위로 동기화해 표시합니다. 데스크탑 플로팅 가사, 노치, 메뉴 막대, Touch Bar, 가사 윈도우에 표시할 수 있고, 번역과 로마자 표기(병음, 광둥어 Jyutping, 일본어 로마자, 한국어 로마자)를 제공하며, 재생 기록을 Last.fm과 ListenBrainz에 스크로블하고 Discord에 지금 듣고 있는 노래를 표시할 수도 있습니다. 인터페이스는 중국어 간체, 중국어 번체, 영어, 일본어, 한국어, 스페인어, 프랑스어, 독일어, 이탈리아어, 브라질 포르투갈어, 베트남어, 러시아어, 우크라이나어, 태국어를 지원합니다.
 
 Lyrimuse의 모든 기능을 무엇을 하는지, 설정의 어디에 있는지, 설치 직후 켜져 있는지 꺼져 있는지와 함께 정리했습니다. 마지막에는 설정 윈도우의 모든 항목을 실었습니다. 이 목록은 코드와 함께 관리되며 기능이 바뀔 때마다 갱신됩니다.
 
@@ -608,9 +608,9 @@ Apple Music, QQ Music 또는 NetEase Cloud Music에서 움직이는 아트워크
 
 <a id="feature-players"></a>
 
-### 18개 플레이어, 여러 개 선택 또는 자동 감지
+### 19개 플레이어, 여러 개 선택 또는 자동 감지
 
-Apple Music, Spotify, QQ Music, NetEase Cloud Music, Kugou, Soda Music, LX Music, KKBOX, Amazon Music, Winamp 스타일의 reAMP, 무손실 및 고해상도 음질을 내세운 로컬 플레이어 VOX, 무료이면서 거의 모든 형식을 지원하는 로컬 플레이어 Pine Player, Windows에서 이식된 전통 있는 로컬 플레이어 foobar2000, 대용량 라이브러리를 위한 로컬 플레이어 Swinsian, 직접 운영하는 서버의 라이브러리를 재생하는 Plex 음악 플레이어 Plexamp, YouTube Music 앱 Kaset, 오픈 소스 YouTube Music 데스크톱 앱 Pear Desktop, 그리고 오디오북을 듣는 WeRead. 여러 개를 동시에 선택하거나, 자동 감지로 두어 macOS ‘지금 재생 중’의 플레이어를 따를 수 있습니다. Apple Music 라디오를 지원하며, 진행자가 말하는 동안 방송국 이름과 로고를 표시합니다.
+Apple Music, Spotify, QQ Music, NetEase Cloud Music, Kugou, Soda Music, LX Music, KKBOX, Amazon Music, Winamp 스타일의 reAMP, 무손실 및 고해상도 음질을 내세운 로컬 플레이어 VOX, 무료이면서 거의 모든 형식을 지원하는 로컬 플레이어 Pine Player, Windows에서 이식된 전통 있는 로컬 플레이어 foobar2000, 대용량 라이브러리를 위한 로컬 플레이어 Swinsian, 직접 운영하는 서버의 라이브러리를 재생하는 Plex 음악 플레이어 Plexamp, 로컬 파일을 재생하고 다른 음원은 플러그인으로 추가하는 오픈 소스 MyGo Music, YouTube Music 앱 Kaset, 오픈 소스 YouTube Music 데스크톱 앱 Pear Desktop, 그리고 오디오북을 듣는 WeRead. 여러 개를 동시에 선택하거나, 자동 감지로 두어 macOS ‘지금 재생 중’의 플레이어를 따를 수 있습니다. Apple Music 라디오를 지원하며, 진행자가 말하는 동안 방송국 이름과 로고를 표시합니다.
 
 - 설정 위치: 플레이어 › 음악 앱
 
@@ -647,7 +647,7 @@ Apple Music, Spotify, QQ Music, NetEase Cloud Music, Kugou, Soda Music, LX Music
 
 ### 필요할 때만 권한 요청
 
-Apple Music, Spotify, Kaset, VOX, Swinsian은 재생 상태를 읽으려면 ‘자동화’ 권한이 필요합니다. QQ Music, NetEase Cloud Music, Kugou는 이 Mac의 가사와 재생 대기열을 사용하려면 ‘전체 디스크 접근 권한’이 필요하고, Soda Music과 VOX는 재생 대기열을 읽는 데 이 권한이 필요합니다. Amazon Music과 Pine Player의 진행 보정, Pine Player의 재생 목록, QQ Music, NetEase Cloud Music, Kugou, Soda Music, Amazon Music, reAMP, Pine Player, foobar2000의 임의 재생·반복·즐겨찾기 버튼, foobar2000의 음량, 그리고 다른 앱이 ‘지금 재생 중’을 차지하고 있을 때 QQ Music, NetEase Cloud Music, Soda Music, Pine Player, foobar2000의 재생 버튼에는 ‘손쉬운 사용’ 권한이 필요합니다. 브라우저의 웹 플레이어는 브라우저에 ‘자동화’ 권한을 허용하고, 브라우저에서 ‘Apple 이벤트의 JavaScript 허용’을 켜야 합니다. 다른 플레이어는 권한이 필요 없습니다. 설정에 항목별 현재 권한 상태가 표시됩니다.
+Apple Music, Spotify, Kaset, VOX, Swinsian은 재생 상태를 읽으려면 ‘자동화’ 권한이 필요합니다. QQ Music, NetEase Cloud Music, Kugou는 이 Mac의 가사와 재생 대기열을 사용하려면 ‘전체 디스크 접근 권한’이 필요하고, Soda Music과 VOX는 재생 대기열을 읽는 데 이 권한이 필요합니다. Amazon Music과 Pine Player의 진행 보정, Pine Player의 재생 목록, QQ Music, NetEase Cloud Music, Kugou, Soda Music, Amazon Music, reAMP, Pine Player, foobar2000의 임의 재생·반복·즐겨찾기 버튼, foobar2000의 음량, 그리고 다른 앱이 ‘지금 재생 중’을 차지하고 있을 때 QQ Music, NetEase Cloud Music, Soda Music, Pine Player, foobar2000, MyGo Music의 재생 버튼에는 ‘손쉬운 사용’ 권한이 필요합니다. 브라우저의 웹 플레이어는 브라우저에 ‘자동화’ 권한을 허용하고, 브라우저에서 ‘Apple 이벤트의 JavaScript 허용’을 켜야 합니다. 다른 플레이어는 권한이 필요 없습니다. 설정에 항목별 현재 권한 상태가 표시됩니다.
 
 - 설정 위치: 플레이어 › 권한 및 서비스 › 자동화 권한
 - 설정 위치: 플레이어 › 권한 및 서비스 › 전체 디스크 접근 권한
@@ -657,7 +657,7 @@ Apple Music, Spotify, Kaset, VOX, Swinsian은 재생 상태를 읽으려면 ‘�
 
 ### 재생 제어와 진행 위치 이동
 
-가사 윈도우와 펼친 노치에서 재생, 일시 정지, 노래 넘기기를 하고 진행 막대를 드래그해 이동할 수 있습니다. 임의 재생, 반복, 즐겨찾기, 음량은 플레이어 지원 여부에 따라 다릅니다. Apple Music, Spotify, Kaset, QQ Music, Amazon Music, reAMP, VOX, Pine Player, foobar2000, Swinsian, Plexamp, Pear Desktop, 브라우저의 YouTube Music은 그중 일부 또는 전부를 지원하고, NetEase Cloud Music, Kugou Music, Soda Music, LX Music은 즐겨찾기를 지원하며, LX Music은 설정에서 Open API를 켜면 음량도 조절할 수 있습니다. 재생, 일시 정지, 노래 넘기기, 즐겨찾기에는 전역 키보드 단축키를 지정할 수도 있습니다. 브라우저 동영상 같은 앱이 시스템 ‘지금 재생 중’을 차지하고 있으면 QQ Music, NetEase Cloud Music, Soda Music, Pine Player, foobar2000의 재생, 일시 정지, 노래 넘기기는 해당 앱의 메뉴나 재생 막대를 통해 작동하며, 이때는 진행 막대를 드래그해 이동할 수 없습니다.
+가사 윈도우와 펼친 노치에서 재생, 일시 정지, 노래 넘기기를 하고 진행 막대를 드래그해 이동할 수 있습니다. 임의 재생, 반복, 즐겨찾기, 음량은 플레이어 지원 여부에 따라 다릅니다. Apple Music, Spotify, Kaset, QQ Music, Amazon Music, reAMP, VOX, Pine Player, foobar2000, Swinsian, Plexamp, Pear Desktop, 브라우저의 YouTube Music은 그중 일부 또는 전부를 지원하고, NetEase Cloud Music, Kugou Music, Soda Music, LX Music은 즐겨찾기를 지원하며, LX Music은 설정에서 Open API를 켜면 음량도 조절할 수 있습니다. 재생, 일시 정지, 노래 넘기기, 즐겨찾기에는 전역 키보드 단축키를 지정할 수도 있습니다. 브라우저 동영상 같은 앱이 시스템 ‘지금 재생 중’을 차지하고 있으면 QQ Music, NetEase Cloud Music, Soda Music, Pine Player, foobar2000, MyGo Music의 재생, 일시 정지, 노래 넘기기는 해당 앱의 메뉴나 재생 막대를 통해 작동하며, 이때는 진행 막대를 드래그해 이동할 수 없습니다.
 
 - 설정 위치: 가사 표시 › 노치 › 펼쳤을 때 › 재생 제어 보기
 - 설정 위치: 키보드 단축키 › 재생/일시 정지
