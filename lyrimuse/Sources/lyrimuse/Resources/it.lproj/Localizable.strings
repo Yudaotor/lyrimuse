@@ -1289,6 +1289,7 @@
 "开机时自动启动 Lyrimuse" = "Apri Lyrimuse al login";
 "开源推送服务：在手机或电脑上安装 ntfy 并订阅主题即可接收，无需注册，也可自建服务器" = "Servizio push open source. Installa ntfy sul telefono o sul computer e iscriviti a un argomento; nessuna registrazione, e puoi ospitarlo tu stesso";
 "开源的 YouTube Music 桌面客户端" = "Un client desktop open source per YouTube Music";
+"开源的多音源音乐播放器" = "Un player musicale open source con più fonti audio";
 "开源的音乐播放器，曲库来自国内各大平台" = "Player open source per la musica delle piattaforme cinesi";
 "开源组件与词典" = "Componenti e dizionari open source";
 "开源许可证" = "Licenza open source";
@@ -1465,6 +1466,7 @@
 "换行（默认）：一行显示不下时折行显示\n滚动：每句只占一行，超出部分横向滚动；有逐字时间轴时随演唱进度滚动" = "A capo (default): le righe lunghe continuano sulla riga successiva\nScorri: ogni riga resta su una sola riga e la parte in eccesso scorre in orizzontale, seguendo il canto se la riga ha il timing parola per parola";
 "换行（默认）：一行显示不下时折行显示，窗口随之增高\n滚动：每句只占一行，超出部分横向滚动；有逐字时间轴时随演唱进度滚动" = "A capo (default): le righe lunghe vanno a capo e la finestra si allunga\nScorri: ogni riga resta su una sola riga e l’eccedenza scorre in orizzontale, seguendo il canto se la riga ha il timing parola per parola";
 "授权可能已在 Last.fm 网站上被撤销，重新连接即可恢复" = "L’autorizzazione potrebbe essere stata revocata sul sito di Last.fm. Riconnettiti per riprendere";
+"授权后，Lyrimuse 可在系统媒体焦点被其他 App 占用时，通过%@的菜单暂停、恢复和切换上一首或下一首。未授权时，基础歌词和正常焦点下的播放控制不受影响。失去焦点时不提供进度跳转" = "Con il permesso Accessibilità, Lyrimuse può usare i menu di %@ per mettere in pausa, riprendere e passare al brano precedente o successivo quando un’altra app ha il controllo multimediale del sistema. Senza il permesso, i testi di base e i comandi quando il player ha il controllo continuano a funzionare. Non è possibile spostarsi nel brano quando il player non ha il controllo multimediale.";
 "授权后，Lyrimuse 将读取%@的随机和循环状态，并在你点按这两个按钮时代为操作其菜单中的对应项，也可读取和调节其音量；系统媒体焦点被其他 App 占用时，也可暂停、恢复和切换上一首或下一首。未授权时仍可显示歌词，但不提供随机、循环按钮和音量调节，失去焦点时也无法控制播放" = "Con il permesso, Lyrimuse legge se Casuale e Ripeti sono attivi in %@ e usa la voce di menu corrispondente quando fai clic su uno dei due pulsanti, legge e regola il volume e può mettere in pausa, riprendere e cambiare brano quando un’altra app ha il focus multimediale di sistema. Senza permesso il testo funziona comunque, ma i controlli Casuale, Ripeti e volume non sono disponibili e la riproduzione non è controllabile senza il focus multimediale";
 "授权后，Lyrimuse 将读取并操作%@的界面，以显示和切换喜欢状态；系统媒体焦点被其他 App 占用时，也可暂停、恢复和切换上一首或下一首。未授权时仍可显示歌词，但不提供喜欢按钮，失去焦点时也无法控制播放，且暂不支持跳转进度" = "Con il permesso, Lyrimuse legge e usa i controlli di %@ per mostrare e cambiare lo stato dei preferiti, e può mettere in pausa, riprendere e saltare brani mentre un’altra app ha il focus multimediale del sistema. Il testo funziona anche senza permesso, ma il pulsante dei preferiti non è disponibile, la riproduzione non si può controllare senza il focus multimediale e non è possibile spostare la posizione senza di esso";
 "授权已失效" = "Autorizzazione scaduta";
@@ -1823,6 +1825,7 @@
 "未获得辅助功能权限，%@ 不显示喜欢按钮，失去系统媒体焦点时也无法控制暂停、恢复和切换上一首或下一首" = "Manca il permesso Accessibilità: %@ non ha il pulsante dei preferiti e non può mettere in pausa, riprendere o saltare brani senza il focus multimediale del sistema";
 "未获得辅助功能权限，%@ 不显示随机、循环与喜欢按钮，失去焦点时也无法控制播放" = "Nessun permesso Accessibilità: i pulsanti Casuale, Ripeti e Preferito di %@ sono nascosti e la riproduzione non si può controllare senza il focus";
 "未获得辅助功能权限，%@ 不显示随机、循环按钮和音量调节，失去系统媒体焦点时也无法控制暂停、恢复和切换上一首或下一首" = "Manca il permesso Accessibilità: %@ non ha i controlli Casuale, Ripeti e volume e non può mettere in pausa, riprendere o cambiare brano senza il focus multimediale di sistema";
+"未获得辅助功能权限，%@ 在其他 App 占用系统媒体焦点时无法暂停、恢复或切换上一首或下一首；基础歌词和正常焦点下的播放控制不受影响，失去焦点时不提供进度跳转" = "Senza il permesso Accessibilità, %@ non può mettere in pausa, riprendere o passare al brano precedente o successivo quando un’altra app ha il controllo multimediale del sistema. I testi di base e i comandi quando il player ha il controllo continuano a funzionare. Non è possibile spostarsi nel brano quando il player non ha il controllo multimediale.";
 "未获得辅助功能权限，%@ 拖动进度后歌词可能差半秒左右，不显示循环按钮和音量调节，失去焦点时也无法控制播放" = "Nessun permesso Accessibilità; il testo di %@ può sfasarsi di circa mezzo secondo dopo un salto nel brano, il pulsante Ripeti e il controllo del volume sono nascosti e la riproduzione non è controllabile quando il focus è altrove";
 "未获得辅助功能权限，无法校准 %@ 的播放进度" = "Nessun permesso Accessibilità; impossibile calibrare la posizione di %@";
 "未获授权" = "Non concesso";

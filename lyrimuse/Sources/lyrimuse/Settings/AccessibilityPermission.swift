@@ -126,6 +126,11 @@ struct AccessibilityPermissionGuide: View {
             lines.append(String(format: L10n.t("授权后，Lyrimuse 将读取并操作%@的界面，以显示和切换喜欢状态；系统媒体焦点被其他 App 占用时，也可暂停、恢复和切换上一首或下一首。未授权时仍可显示歌词，但不提供喜欢按钮，失去焦点时也无法控制播放，且暂不支持跳转进度"),
                                 model.playerNames(playback)))
         }
+        let transport = players.filter { $0.accessibilityUse == .controlsTransport }
+        if !transport.isEmpty {
+            lines.append(String(format: L10n.t("授权后，Lyrimuse 可在系统媒体焦点被其他 App 占用时，通过%@的菜单暂停、恢复和切换上一首或下一首。未授权时，基础歌词和正常焦点下的播放控制不受影响。失去焦点时不提供进度跳转"),
+                                model.playerNames(transport)))
+        }
         let modeOnly = players.filter { $0.accessibilityUse == .pressesPlayMode }
         if !modeOnly.isEmpty {
             lines.append(String(format: L10n.t("授权后，Lyrimuse 将读取%@的随机和循环状态，并在你点按这两个按钮时代为操作其菜单中的对应项，也可读取和调节其音量；系统媒体焦点被其他 App 占用时，也可暂停、恢复和切换上一首或下一首。未授权时仍可显示歌词，但不提供随机、循环按钮和音量调节，失去焦点时也无法控制播放"),

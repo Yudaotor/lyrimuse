@@ -25,6 +25,7 @@ const (
 	playerFoobar2000  = "foobar2000"
 	playerSwinsian    = "swinsian"
 	playerPlexamp     = "plexamp"
+	playerMyGoMusic   = "mygo_music"
 	playerWeRead      = "weread"
 	playerAuto        = "auto"
 )
@@ -48,6 +49,7 @@ const (
 	foobar2000BundleID   = "com.foobar2000.mac"
 	swinsianBundleID     = "com.swinsian.Swinsian"
 	plexampBundleID      = "tv.plex.plexamp"
+	myGoMusicBundleID    = "dev.egoist.music"
 	weReadBundleID       = "com.tencent.weread"
 )
 
@@ -70,6 +72,7 @@ var allPlayerIDs = []string{
 	playerFoobar2000,
 	playerSwinsian,
 	playerPlexamp,
+	playerMyGoMusic,
 	playerWeRead,
 	playerAuto,
 }
@@ -94,6 +97,7 @@ var playerBundleIDs = map[string]string{
 	playerFoobar2000:  foobar2000BundleID,
 	playerSwinsian:    swinsianBundleID,
 	playerPlexamp:     plexampBundleID,
+	playerMyGoMusic:   myGoMusicBundleID,
 	playerWeRead:      weReadBundleID,
 }
 
@@ -117,6 +121,7 @@ var builtinPlayerBundleIDs = map[string]bool{
 	foobar2000BundleID:   true,
 	swinsianBundleID:     true,
 	plexampBundleID:      true,
+	myGoMusicBundleID:    true,
 	weReadBundleID:       true,
 }
 
@@ -140,6 +145,7 @@ var playerProcessNames = map[string]string{
 	playerFoobar2000:  "foobar2000",
 	playerSwinsian:    "Swinsian",
 	playerPlexamp:     "Plexamp",
+	playerMyGoMusic:   "MyGo Music",
 	playerWeRead:      "WeRead",
 }
 
@@ -149,7 +155,7 @@ var playerOtherProcessNames = map[string][]string{
 }
 
 // knownPlayerProcessNames 是上面两张表的全部取值 —— 选了「自动识别」时盯全部。
-var knownPlayerProcessNames = []string{"Music", "QQMusic", "NeteaseMusic", "neteasemusic", "酷狗音乐", "汽水音乐", "KKBOX", "Spotify", "Amazon Music", "Kaset", "YouTube Music", "Reamp", "lx-music-desktop", "VOX", "Pine Player", "foobar2000", "Swinsian", "Plexamp", "WeRead"}
+var knownPlayerProcessNames = []string{"Music", "QQMusic", "NeteaseMusic", "neteasemusic", "酷狗音乐", "汽水音乐", "KKBOX", "Spotify", "Amazon Music", "Kaset", "YouTube Music", "Reamp", "lx-music-desktop", "VOX", "Pine Player", "foobar2000", "Swinsian", "Plexamp", "MyGo Music", "WeRead"}
 
 // playerScrobbleLabels 是「bundle id → ListenBrainz 的 media_player 标签」。
 var playerScrobbleLabels = map[string]string{
@@ -170,6 +176,7 @@ var playerScrobbleLabels = map[string]string{
 	foobar2000BundleID:   "foobar2000 (macOS)",
 	swinsianBundleID:     "Swinsian (macOS)",
 	plexampBundleID:      "Plexamp (macOS)",
+	myGoMusicBundleID:    "MyGo Music (macOS)",
 	weReadBundleID:       "WeRead (macOS)",
 }
 

@@ -1238,7 +1238,7 @@ public enum MusicPlaybackController {
         case kasetScript
         case voxScript
         case mediaControl
-        /// QQ / 网易云 / 酷狗 / Pine Player / reAMP / foobar2000 失焦时只按目标进程的播放菜单,汽水按它播放条上的键;跳转不走这条。
+        /// QQ / 网易云 / 酷狗 / Pine Player / reAMP / foobar2000 / MyGo Music 失焦时只按目标进程的播放菜单,汽水按它播放条上的键;跳转不走这条。
         case menuAccessibility(PlaybackPlayer, PlaybackMenuControl.Command)
         /// 跳转定向发给 Kaset 本体那份会话(`NowPlayingClientsProbe.sendSeek`),不发给系统当前会话。只有跳转走这条,见 `seekRoute`。
         case kasetDirect
@@ -1255,7 +1255,7 @@ public enum MusicPlaybackController {
         case withheld
     }
 
-    /// 按实际回退目标决定控制通路。QQ / 网易云 / 酷狗 / 汽水 / Pine Player / reAMP / foobar2000 直查回退只允许三个已验证的 AX 动作,
+    /// 按实际回退目标决定控制通路。QQ / 网易云 / 酷狗 / 汽水 / Pine Player / reAMP / foobar2000 / MyGo Music 直查回退只允许三个已验证的 AX 动作,
     /// Swinsian 同样三个动作改发它自己的脚本,Plexamp 发到它的本机播放器接口;
     /// 其它无定向通路的命令仍不发。选择列表和前台窗口不能充当回退目标。
     public static func controlRoute(exclusivelyAppleMusic: Bool, focusFallback: PlaybackPlayer?,
