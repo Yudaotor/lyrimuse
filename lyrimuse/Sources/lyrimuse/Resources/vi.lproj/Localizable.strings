@@ -1391,9 +1391,9 @@
 "换行（默认）：一行显示不下时折行显示\n滚动：每句只占一行，超出部分横向滚动；有逐字时间轴时随演唱进度滚动" = "Xuống dòng (mặc định): dòng quá dài sẽ ngắt sang dòng mới\nCuộn: mỗi câu chỉ chiếm một dòng, phần thừa cuộn ngang; nếu có thời gian theo từng chữ thì cuộn theo tiến độ hát";
 "换行（默认）：一行显示不下时折行显示，窗口随之增高\n滚动：每句只占一行，超出部分横向滚动；有逐字时间轴时随演唱进度滚动" = "Xuống dòng (mặc định): dòng quá dài được ngắt sang dòng sau, cửa sổ cao lên theo\nCuộn: mỗi dòng chỉ chiếm một hàng, phần dư cuộn ngang; với lời có thời gian theo từng chữ, cuộn theo tiến độ hát";
 "授权可能已在 Last.fm 网站上被撤销，重新连接即可恢复" = "Quyền có thể đã bị thu hồi trên trang web Last.fm. Kết nối lại để tiếp tục";
-"授权后，Lyrimuse 可在系统媒体焦点被其他 App 占用时，通过%@的菜单暂停、恢复和切换上一首或下一首。未授权时，基础歌词和正常焦点下的播放控制不受影响。失去焦点时不提供进度跳转" = "Khi được cấp quyền Trợ năng, Lyrimuse có thể dùng menu của %@ để tạm dừng, tiếp tục và chuyển về bài trước hoặc sang bài sau khi ứng dụng khác giữ quyền điều khiển phương tiện của hệ thống. Nếu không cấp quyền, lời cơ bản và điều khiển phát khi trình phát đang giữ quyền điều khiển vẫn hoạt động bình thường. Không thể tua khi trình phát mất quyền điều khiển.";
 "授权后，Lyrimuse 将读取%@的随机和循环状态，并在你点按这两个按钮时代为操作其菜单中的对应项，也可读取和调节其音量；系统媒体焦点被其他 App 占用时，也可暂停、恢复和切换上一首或下一首。未授权时仍可显示歌词，但不提供随机、循环按钮和音量调节，失去焦点时也无法控制播放" = "Khi được cấp quyền, Lyrimuse đọc trạng thái xáo trộn và lặp lại của %@, thao tác mục tương ứng trong menu của nó khi bạn bấm hai nút này, đọc và chỉnh âm lượng; khi ứng dụng khác đang giữ tiêu điểm phương tiện của hệ thống, vẫn có thể tạm dừng, tiếp tục, chuyển bài trước hoặc bài sau. Không cấp quyền vẫn hiện lời, nhưng không có nút xáo trộn, lặp lại và chỉnh âm lượng, không điều khiển được phát khi mất tiêu điểm";
 "授权后，Lyrimuse 将读取并操作%@的界面，以显示和切换喜欢状态；系统媒体焦点被其他 App 占用时，也可暂停、恢复和切换上一首或下一首。未授权时仍可显示歌词，但不提供喜欢按钮，失去焦点时也无法控制播放，且暂不支持跳转进度" = "Khi được cấp quyền, Lyrimuse đọc và dùng giao diện của %@ để hiện và bật/tắt Ưa thích; khi một ứng dụng khác giữ tiêu điểm phương tiện của hệ thống, Lyrimuse vẫn có thể tạm dừng, tiếp tục và chuyển bài trước hoặc bài tiếp theo. Không cấp quyền vẫn hiện được lời, nhưng không có nút Ưa thích, không thể điều khiển phát khi mất tiêu điểm và chưa hỗ trợ tua";
+"授权后，系统媒体焦点被其他 App 占用时，Lyrimuse 可通过%@的菜单暂停、恢复和切换上一首或下一首。未授权时仍可显示歌词，但失去焦点时无法控制播放" = "Khi được cấp quyền, Lyrimuse có thể dùng menu của %@ để tạm dừng, tiếp tục và chuyển bài trước hoặc bài tiếp theo khi một ứng dụng khác giữ tiêu điểm phương tiện của hệ thống. Không cấp quyền vẫn hiện được lời, nhưng không thể điều khiển phát khi mất tiêu điểm";
 "授权已失效" = "Ủy quyền đã hết hạn";
 "授权已失效。请在「系统设置 › 隐私与安全性 › %@」中移除旧条目，重新添加当前运行的 Lyrimuse.app，然后重启 Lyrimuse" = "Quyền đã mất hiệu lực. Trong “Cài đặt hệ thống › Quyền riêng tư & Bảo mật › %@”, xóa mục cũ, thêm lại Lyrimuse.app đang chạy rồi khởi động lại Lyrimuse";
 "授权已失效，Scrobble 已暂停" = "Quyền đã mất hiệu lực, Scrobble đã tạm dừng";
@@ -1746,7 +1746,7 @@
 "未获得辅助功能权限，%@ 不显示喜欢按钮，失去系统媒体焦点时也无法控制暂停、恢复和切换上一首或下一首" = "Chưa có quyền Trợ năng: %@ không hiện nút Ưa thích, và không thể tạm dừng, tiếp tục hay chuyển bài khi mất tiêu điểm phương tiện của hệ thống";
 "未获得辅助功能权限，%@ 不显示随机、循环与喜欢按钮，失去焦点时也无法控制播放" = "Chưa có quyền Trợ năng: %@ không hiện nút Xáo trộn, Lặp lại và Ưa thích, và không thể điều khiển phát khi mất tiêu điểm";
 "未获得辅助功能权限，%@ 不显示随机、循环按钮和音量调节，失去系统媒体焦点时也无法控制暂停、恢复和切换上一首或下一首" = "Chưa có quyền Trợ năng: %@ không có nút xáo trộn, lặp lại và chỉnh âm lượng, không thể tạm dừng, tiếp tục, chuyển bài trước hoặc bài sau khi mất tiêu điểm phương tiện của hệ thống";
-"未获得辅助功能权限，%@ 在其他 App 占用系统媒体焦点时无法暂停、恢复或切换上一首或下一首；基础歌词和正常焦点下的播放控制不受影响，失去焦点时不提供进度跳转" = "Chưa có quyền Trợ năng nên %@ không thể tạm dừng, tiếp tục hay chuyển về bài trước hoặc sang bài sau khi ứng dụng khác giữ quyền điều khiển phương tiện của hệ thống. Lời cơ bản và điều khiển phát khi trình phát đang giữ quyền điều khiển vẫn hoạt động bình thường. Không thể tua khi trình phát mất quyền điều khiển.";
+"未获得辅助功能权限，%@ 失去系统媒体焦点时无法控制暂停、恢复和切换上一首或下一首" = "Chưa có quyền Trợ năng: không thể tạm dừng, tiếp tục hay chuyển bài trong %@ khi mất tiêu điểm phương tiện của hệ thống";
 "未获得辅助功能权限，%@ 拖动进度后歌词可能差半秒左右，不显示循环按钮和音量调节，失去焦点时也无法控制播放" = "Chưa có quyền Trợ năng: lời của %@ có thể lệch khoảng nửa giây sau khi tua, không có nút lặp lại và chỉnh âm lượng, không điều khiển được phát khi mất tiêu điểm";
 "未获得辅助功能权限，无法校准 %@ 的播放进度" = "Chưa có quyền Trợ năng, không thể hiệu chỉnh vị trí phát của %@";
 "未获授权" = "Chưa được cấp quyền";
@@ -2514,6 +2514,7 @@
 "请尝试其他筛选条件或关键词" = "Hãy thử bộ lọc hoặc từ khóa khác";
 "请开启此权限，以便准确识别正在播放的歌曲，并可在歌词上直接控制播放" = "Bật quyền này để nhận diện đúng bài hát đang phát và điều khiển phát ngay trên lời bài hát";
 "请开启此权限，以便直接使用本机已有的歌词，并预先准备下一首歌曲" = "Bật quyền này để dùng lời bài hát có sẵn trên máy Mac này và chuẩn bị trước bài tiếp theo";
+"请开启此权限，以在失去系统媒体焦点时控制%@暂停、恢复和切换上一首或下一首" = "Bật quyền này để tạm dừng, tiếp tục, chuyển bài trước hoặc bài tiếp theo trong %@ khi mất tiêu điểm phương tiện của hệ thống";
 "请开启此权限，以提高%@自动连播时播放进度的准确性，并显示%@的随机、循环与喜欢按钮及失去焦点时的播放控制" = "Bật quyền này để vị trí phát của %@ chính xác hơn khi tự động phát tiếp, đồng thời hiện nút Xáo trộn, Lặp lại và Ưa thích cho %@ và điều khiển phát khi mất tiêu điểm";
 "请开启此权限，以提高%@自动连播时播放进度的准确性，并显示随机、循环按钮" = "Bật quyền này để vị trí phát của %@ chính xác hơn khi tự động phát tiếp và hiện nút Xáo trộn, Lặp lại";
 "请开启此权限，以提高播放进度的准确性，并可在歌词上直接控制播放" = "Bật quyền này để tiến độ phát chính xác hơn và điều khiển phát ngay trên lời bài hát";
@@ -2577,6 +2578,7 @@
 "较粗" = "Hơi đậm";
 "辅助功能" = "Trợ năng";
 "辅助功能权限" = "Quyền Trợ năng";
+"辅助功能权限可在系统媒体焦点被其他 App 占用时控制%@暂停、恢复和切换上一首或下一首" = "Quyền Trợ năng cho phép tạm dừng, tiếp tục và chuyển bài trước hoặc bài tiếp theo trong %@ khi một ứng dụng khác giữ tiêu điểm phương tiện của hệ thống";
 "辅助功能权限可提高%@播放进度的准确性，并显示随机、循环按钮" = "Quyền Trợ năng giúp vị trí phát của %@ chính xác hơn và hiện nút Xáo trộn, Lặp lại";
 "辅助功能权限可显示%@的喜欢按钮，也可在系统媒体焦点被其他 App 占用时控制暂停、恢复和切换上一首或下一首" = "Quyền Trợ năng giúp hiện nút Ưa thích cho %@, đồng thời cho phép tạm dừng, tiếp tục và chuyển bài trước hoặc bài tiếp theo khi một ứng dụng khác giữ tiêu điểm phương tiện của hệ thống";
 "辅助功能权限可显示%@的随机、循环与喜欢按钮，也可在系统媒体焦点被其他 App 占用时，通过菜单暂停、恢复和切换上一首或下一首" = "Quyền Trợ năng giúp hiện nút Xáo trộn, Lặp lại và Ưa thích cho %@, đồng thời cho phép tạm dừng, tiếp tục và chuyển bài trước hoặc bài tiếp theo qua menu khi một ứng dụng khác giữ tiêu điểm phương tiện của hệ thống";

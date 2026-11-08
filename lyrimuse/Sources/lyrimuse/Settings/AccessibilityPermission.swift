@@ -128,7 +128,7 @@ struct AccessibilityPermissionGuide: View {
         }
         let transport = players.filter { $0.accessibilityUse == .controlsTransport }
         if !transport.isEmpty {
-            lines.append(String(format: L10n.t("授权后，Lyrimuse 可在系统媒体焦点被其他 App 占用时，通过%@的菜单暂停、恢复和切换上一首或下一首。未授权时，基础歌词和正常焦点下的播放控制不受影响。失去焦点时不提供进度跳转"),
+            lines.append(String(format: L10n.t("授权后，系统媒体焦点被其他 App 占用时，Lyrimuse 可通过%@的菜单暂停、恢复和切换上一首或下一首。未授权时仍可显示歌词，但失去焦点时无法控制播放"),
                                 model.playerNames(transport)))
         }
         let modeOnly = players.filter { $0.accessibilityUse == .pressesPlayMode }

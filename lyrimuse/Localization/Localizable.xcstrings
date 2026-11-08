@@ -263263,180 +263263,358 @@
         }
       }
     },
-    "授权后，Lyrimuse 可在系统媒体焦点被其他 App 占用时，通过%@的菜单暂停、恢复和切换上一首或下一首。未授权时，基础歌词和正常焦点下的播放控制不受影响。失去焦点时不提供进度跳转" : {
+    "授权后，系统媒体焦点被其他 App 占用时，Lyrimuse 可通过%@的菜单暂停、恢复和切换上一首或下一首。未授权时仍可显示歌词，但失去焦点时无法控制播放" : {
       "extractionState" : "manual",
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Mit der Berechtigung „Bedienungshilfen“ kann Lyrimuse über die Menüs von %@ pausieren, fortsetzen und zum vorherigen oder nächsten Titel wechseln, während eine andere App den Medienfokus des Systems hat. Ohne die Berechtigung funktionieren die grundlegende Liedtextanzeige und die Wiedergabesteuerung bei aktivem Medienfokus weiterhin. Ohne Medienfokus ist Spulen nicht verfügbar."
+            "value" : "Mit der Berechtigung kann Lyrimuse über das Menü von %@ pausieren, fortsetzen und Titel wechseln, während eine andere App den System-Medienfokus hat. Ohne sie funktionieren die Songtexte weiter, die Wiedergabe lässt sich ohne Medienfokus aber nicht steuern"
           }
         },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "With Accessibility access, Lyrimuse can use the menus in %@ to pause, resume and skip to the previous or next track while another app holds the system media focus. Without it, basic lyrics and playback controls while the player has focus are unaffected. Seeking is unavailable while the player is out of focus."
+            "value" : "Once allowed, Lyrimuse can use the menu in %@ to pause, resume and skip tracks while another app holds system media focus. Without it, lyrics still show, but playback can’t be controlled without focus"
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Con permiso de Accesibilidad, Lyrimuse puede usar los menús de %@ para pausar, reanudar y pasar a la canción anterior o siguiente cuando otra app tiene el foco multimedia del sistema. Sin él, las letras básicas y los controles cuando el reproductor tiene el foco siguen funcionando. No se puede cambiar la posición sin el foco multimedia."
+            "value" : "Con permiso, Lyrimuse puede usar el menú de %@ para pausar, reanudar y saltar canciones mientras otra app tiene el foco multimedia del sistema. La letra funciona sin permiso, pero la reproducción no se puede controlar sin el foco multimedia"
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Avec l’autorisation Accessibilité, Lyrimuse peut utiliser les menus de %@ pour mettre en pause, reprendre et passer au morceau précédent ou suivant quand une autre app détient le contrôle multimédia du système. Sans cette autorisation, les paroles de base et les commandes lorsque le lecteur détient ce contrôle fonctionnent toujours. La navigation dans le morceau est indisponible lorsque le lecteur n’a pas ce contrôle."
+            "value" : "Avec l’autorisation, Lyrimuse peut utiliser le menu de %@ pour mettre en pause, reprendre et changer de morceau quand une autre app détient le focus multimédia du système. Les paroles fonctionnent sans autorisation, mais la lecture ne peut pas être contrôlée sans le focus multimédia"
           }
         },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Con il permesso Accessibilità, Lyrimuse può usare i menu di %@ per mettere in pausa, riprendere e passare al brano precedente o successivo quando un’altra app ha il controllo multimediale del sistema. Senza il permesso, i testi di base e i comandi quando il player ha il controllo continuano a funzionare. Non è possibile spostarsi nel brano quando il player non ha il controllo multimediale."
+            "value" : "Con il permesso, Lyrimuse può usare il menu di %@ per mettere in pausa, riprendere e saltare brani mentre un’altra app ha il focus multimediale del sistema. Il testo funziona anche senza permesso, ma la riproduzione non si può controllare senza il focus multimediale"
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "アクセシビリティを許可すると、ほかのAppがシステムのメディアフォーカスを持つ間も、%@のメニューから一時停止、再開、前の曲や次の曲への切り替えができます。許可しなくても、基本的な歌詞表示と、プレーヤーがフォーカスを持つ間の再生操作には影響しません。フォーカスがない間はシークできません。"
+            "value" : "許可すると、システムのメディアフォーカスがほかのAppにある間も、Lyrimuseが%@のメニューで一時停止、再開、前後の曲への移動を行えます。許可しなくても歌詞は表示されますが、フォーカスがないときは再生を操作できません"
           }
         },
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "손쉬운 사용 권한을 허용하면 다른 앱이 시스템 미디어 포커스를 가진 동안에도 %@의 메뉴를 통해 일시 정지, 재개, 이전 곡과 다음 곡으로 전환할 수 있습니다. 허용하지 않아도 기본 가사 표시와 플레이어에 포커스가 있을 때의 재생 제어에는 영향이 없습니다. 포커스가 없을 때는 재생 위치를 이동할 수 없습니다."
+            "value" : "권한을 허용하면 다른 앱이 시스템 미디어 포커스를 사용 중일 때도 Lyrimuse가 %@의 메뉴로 일시 정지, 재개, 이전 곡 또는 다음 곡으로 넘기기를 할 수 있습니다. 권한이 없어도 가사는 표시되지만 포커스를 잃었을 때 재생을 제어할 수 없습니다"
           }
         },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Com a permissão de Acessibilidade, o Lyrimuse pode usar os menus do %@ para pausar, retomar e ir à faixa anterior ou seguinte enquanto outro app detém o foco de mídia do sistema. Sem ela, as letras básicas e os controles quando o player tem o foco continuam funcionando. Não é possível mudar a posição sem o foco de mídia."
+            "value" : "Com permissão, o Lyrimuse pode usar o menu do %@ para pausar, retomar e pular músicas enquanto outro app tem o foco de mídia do sistema. A letra funciona sem permissão, mas não é possível controlar a reprodução sem o foco de mídia"
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "С разрешением «Универсальный доступ» Lyrimuse может через меню %@ приостанавливать и возобновлять воспроизведение, переходить к предыдущему или следующему треку, когда системный медиафокус принадлежит другому приложению. Без разрешения обычное отображение текста и управление при наличии медиафокуса работают по-прежнему. Без медиафокуса перемотка недоступна."
+            "value" : "С разрешением Lyrimuse может через меню приложения %@ ставить на паузу, возобновлять и переключать треки, пока системный медиафокус занят другим приложением. Без разрешения текст работает, но без медиафокуса воспроизведением управлять нельзя"
           }
         },
         "th" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "เมื่อให้สิทธิ์การช่วยการเข้าถึง Lyrimuse จะใช้เมนูของ %@ เพื่อหยุดพัก เล่นต่อ และเปลี่ยนไปเพลงก่อนหน้าหรือถัดไปได้ขณะที่แอปอื่นครองโฟกัสสื่อของระบบ หากไม่ให้สิทธิ์ เนื้อเพลงพื้นฐานและการควบคุมขณะที่เครื่องเล่นมีโฟกัสยังทำงานตามปกติ เมื่อเครื่องเล่นไม่มีโฟกัสจะเลื่อนตำแหน่งไม่ได้"
+            "value" : "เมื่ออนุญาตแล้ว Lyrimuse จะใช้เมนูของ %@ เพื่อหยุดพัก เล่นต่อ และข้ามไปเพลงก่อนหน้าหรือถัดไปได้ เมื่อแอปอื่นครองโฟกัสสื่อของระบบอยู่ หากไม่อนุญาต ยังคงแสดงเนื้อเพลงได้ แต่ควบคุมการเล่นไม่ได้เมื่อเสียโฟกัส"
           }
         },
         "uk" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "З дозволом «Доступність» Lyrimuse може через меню %@ призупиняти й відновлювати відтворення, переходити до попереднього чи наступного треку, коли системний медіафокус має інша програма. Без дозволу звичайне відображення тексту й керування за наявності медіафокуса працюють як раніше. Без медіафокуса перемотування недоступне."
+            "value" : "З дозволом Lyrimuse може через меню програми %@ призупиняти, поновлювати й перемикати треки, коли системний медіафокус займає інша програма. Без дозволу текст працює, але без медіафокуса відтворенням не можна керувати"
           }
         },
         "vi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Khi được cấp quyền Trợ năng, Lyrimuse có thể dùng menu của %@ để tạm dừng, tiếp tục và chuyển về bài trước hoặc sang bài sau khi ứng dụng khác giữ quyền điều khiển phương tiện của hệ thống. Nếu không cấp quyền, lời cơ bản và điều khiển phát khi trình phát đang giữ quyền điều khiển vẫn hoạt động bình thường. Không thể tua khi trình phát mất quyền điều khiển."
+            "value" : "Khi được cấp quyền, Lyrimuse có thể dùng menu của %@ để tạm dừng, tiếp tục và chuyển bài trước hoặc bài tiếp theo khi một ứng dụng khác giữ tiêu điểm phương tiện của hệ thống. Không cấp quyền vẫn hiện được lời, nhưng không thể điều khiển phát khi mất tiêu điểm"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "授权后，Lyrimuse 可在系统媒体焦点被其他 App 占用时，通过%@的菜单暂停、恢复和切换上一首或下一首。未授权时，基础歌词和正常焦点下的播放控制不受影响。失去焦点时不提供进度跳转"
+            "value" : "授权后，系统媒体焦点被其他 App 占用时，Lyrimuse 可通过%@的菜单暂停、恢复和切换上一首或下一首。未授权时仍可显示歌词，但失去焦点时无法控制播放"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "授權後，Lyrimuse 可在系統媒體焦點被其他 App 佔用時，透過%@的選單暫停、恢復和切換上一首或下一首。未授權時，基本歌詞和正常焦點下的播放控制不受影響。失去焦點時不提供進度跳轉"
+            "value" : "授權後，系統媒體焦點被其他 App 佔用時，Lyrimuse 可透過%@的選單暫停、恢復和切換上一首或下一首。未授權時仍可顯示歌詞，但失去焦點時無法控制播放"
           }
         }
       }
     },
-    "未获得辅助功能权限，%@ 在其他 App 占用系统媒体焦点时无法暂停、恢复或切换上一首或下一首；基础歌词和正常焦点下的播放控制不受影响，失去焦点时不提供进度跳转" : {
+    "未获得辅助功能权限，%@ 失去系统媒体焦点时无法控制暂停、恢复和切换上一首或下一首" : {
       "extractionState" : "manual",
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Ohne die Berechtigung „Bedienungshilfen“ kann %@ nicht pausieren, fortsetzen oder zum vorherigen oder nächsten Titel wechseln, während eine andere App den Medienfokus des Systems hat. Die grundlegende Liedtextanzeige und die Wiedergabesteuerung bei aktivem Medienfokus funktionieren weiterhin. Ohne Medienfokus ist Spulen nicht verfügbar."
+            "value" : "Bedienungshilfen-Berechtigung fehlt: %@ kann ohne System-Medienfokus nicht pausieren, fortsetzen oder Titel wechseln"
           }
         },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Without Accessibility access, %@ cannot pause, resume or skip to the previous or next track while another app holds the system media focus; basic lyrics and playback controls while the player has focus are unaffected. Seeking is unavailable while the player is out of focus."
+            "value" : "Accessibility permission is missing: %@ can’t pause, resume or skip tracks without system media focus"
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Sin permiso de Accesibilidad, %@ no puede pausar, reanudar ni pasar a la canción anterior o siguiente cuando otra app tiene el foco multimedia del sistema. Las letras básicas y los controles cuando el reproductor tiene el foco siguen funcionando. No se puede cambiar la posición sin el foco multimedia."
+            "value" : "Falta el permiso de accesibilidad: %@ no puede pausar, reanudar ni saltar canciones sin el foco multimedia del sistema"
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Sans l’autorisation Accessibilité, %@ ne peut pas mettre en pause, reprendre ou passer au morceau précédent ou suivant quand une autre app détient le contrôle multimédia du système. Les paroles de base et les commandes lorsque le lecteur détient ce contrôle fonctionnent toujours. La navigation dans le morceau est indisponible lorsque le lecteur n’a pas ce contrôle."
+            "value" : "Autorisation Accessibilité manquante : %@ ne peut pas mettre en pause, reprendre ni changer de morceau sans le focus multimédia du système"
           }
         },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Senza il permesso Accessibilità, %@ non può mettere in pausa, riprendere o passare al brano precedente o successivo quando un’altra app ha il controllo multimediale del sistema. I testi di base e i comandi quando il player ha il controllo continuano a funzionare. Non è possibile spostarsi nel brano quando il player non ha il controllo multimediale."
+            "value" : "Manca il permesso Accessibilità: %@ non può mettere in pausa, riprendere o saltare brani senza il focus multimediale del sistema"
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "アクセシビリティの許可がないため、ほかのAppがシステムのメディアフォーカスを持つ間は%@の一時停止、再開、前の曲や次の曲への切り替えができません。基本的な歌詞表示と、プレーヤーがフォーカスを持つ間の再生操作には影響しません。フォーカスがない間はシークできません。"
+            "value" : "アクセシビリティの権限がないため、システムのメディアフォーカスがないときは%@の一時停止、再開、前後の曲への移動ができません"
           }
         },
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "손쉬운 사용 권한이 없어 다른 앱이 시스템 미디어 포커스를 가진 동안에는 %@의 일시 정지, 재개, 이전 곡과 다음 곡으로 전환을 할 수 없습니다. 기본 가사 표시와 플레이어에 포커스가 있을 때의 재생 제어에는 영향이 없습니다. 포커스가 없을 때는 재생 위치를 이동할 수 없습니다."
+            "value" : "손쉬운 사용 권한이 없어 시스템 미디어 포커스를 잃었을 때 %@의 일시 정지, 재개, 이전 곡 또는 다음 곡으로 넘기기를 제어할 수 없습니다"
           }
         },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Sem a permissão de Acessibilidade, o %@ não pode pausar, retomar nem ir à faixa anterior ou seguinte enquanto outro app detém o foco de mídia do sistema. As letras básicas e os controles quando o player tem o foco continuam funcionando. Não é possível mudar a posição sem o foco de mídia."
+            "value" : "Falta a permissão de Acessibilidade: não é possível pausar, retomar nem pular músicas no %@ sem o foco de mídia do sistema"
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Без разрешения «Универсальный доступ» %@ не может приостанавливать и возобновлять воспроизведение, переходить к предыдущему или следующему треку, когда системный медиафокус принадлежит другому приложению. Обычное отображение текста и управление при наличии медиафокуса работают по-прежнему. Без медиафокуса перемотка недоступна."
+            "value" : "Нет разрешения «Универсальный доступ»: без системного медиафокуса нельзя ставить %@ на паузу, возобновлять и переключать треки"
           }
         },
         "th" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "ยังไม่ได้รับสิทธิ์การช่วยการเข้าถึง %@ จึงหยุดพัก เล่นต่อ หรือเปลี่ยนไปเพลงก่อนหน้าหรือถัดไปไม่ได้ขณะที่แอปอื่นครองโฟกัสสื่อของระบบ เนื้อเพลงพื้นฐานและการควบคุมขณะที่เครื่องเล่นมีโฟกัสยังทำงานตามปกติ เมื่อเครื่องเล่นไม่มีโฟกัสจะเลื่อนตำแหน่งไม่ได้"
+            "value" : "ไม่มีสิทธิ์การช่วยการเข้าถึง จึงควบคุมการหยุดพัก เล่นต่อ และข้ามไปเพลงก่อนหน้าหรือถัดไปใน %@ ไม่ได้เมื่อเสียโฟกัสสื่อของระบบ"
           }
         },
         "uk" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Без дозволу «Доступність» %@ не може призупиняти й відновлювати відтворення, переходити до попереднього чи наступного треку, коли системний медіафокус має інша програма. Звичайне відображення тексту й керування за наявності медіафокуса працюють як раніше. Без медіафокуса перемотування недоступне."
+            "value" : "Немає дозволу «Доступність»: без системного медіафокуса не можна призупиняти, поновлювати й перемикати треки в програмі %@"
           }
         },
         "vi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Chưa có quyền Trợ năng nên %@ không thể tạm dừng, tiếp tục hay chuyển về bài trước hoặc sang bài sau khi ứng dụng khác giữ quyền điều khiển phương tiện của hệ thống. Lời cơ bản và điều khiển phát khi trình phát đang giữ quyền điều khiển vẫn hoạt động bình thường. Không thể tua khi trình phát mất quyền điều khiển."
+            "value" : "Chưa có quyền Trợ năng: không thể tạm dừng, tiếp tục hay chuyển bài trong %@ khi mất tiêu điểm phương tiện của hệ thống"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "未获得辅助功能权限，%@ 在其他 App 占用系统媒体焦点时无法暂停、恢复或切换上一首或下一首；基础歌词和正常焦点下的播放控制不受影响，失去焦点时不提供进度跳转"
+            "value" : "未获得辅助功能权限，%@ 失去系统媒体焦点时无法控制暂停、恢复和切换上一首或下一首"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "未取得輔助使用權限，%@ 在其他 App 佔用系統媒體焦點時無法暫停、恢復或切換上一首或下一首；基本歌詞和正常焦點下的播放控制不受影響，失去焦點時不提供進度跳轉"
+            "value" : "未取得輔助使用權限，%@ 失去系統媒體焦點時無法控制暫停、恢復和切換上一首或下一首"
+          }
+        }
+      }
+    },
+    "辅助功能权限可在系统媒体焦点被其他 App 占用时控制%@暂停、恢复和切换上一首或下一首" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "„Bedienungshilfen“ lässt Lyrimuse %@ pausieren, fortsetzen und Titel wechseln, wenn eine andere App den System-Medienfokus hat"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Accessibility permission lets Lyrimuse pause, resume and skip tracks in %@ when another app holds system media focus"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "El permiso de accesibilidad permite a Lyrimuse pausar, reanudar y saltar canciones en %@ cuando otra app tiene el foco multimedia del sistema"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "L’autorisation Accessibilité permet à Lyrimuse de mettre en pause, reprendre et changer de morceau dans %@ quand une autre app détient le focus multimédia du système"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Il permesso Accessibilità consente a Lyrimuse di mettere in pausa, riprendere e saltare brani in %@ quando un’altra app ha il focus multimediale del sistema"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "アクセシビリティの権限があると、システムのメディアフォーカスがほかのAppにある場合も%@の一時停止、再開、前後の曲への移動ができます"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "손쉬운 사용 권한이 있으면 다른 앱이 시스템 미디어 포커스를 사용 중일 때도 %@의 일시 정지, 재개, 이전 곡 또는 다음 곡으로 넘기기를 제어할 수 있습니다"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "A permissão de Acessibilidade permite que o Lyrimuse pause, retome e pule músicas no %@ quando outro app tem o foco de mídia do sistema"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Универсальный доступ позволяет ставить %@ на паузу, возобновлять и переключать треки, когда системный медиафокус занят другим приложением"
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "สิทธิ์การช่วยการเข้าถึงทำให้ควบคุมการหยุดพัก เล่นต่อ และข้ามไปเพลงก่อนหน้าหรือถัดไปใน %@ ได้ เมื่อแอปอื่นครองโฟกัสสื่อของระบบอยู่"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Дозвіл «Доступність» дає змогу призупиняти, поновлювати й перемикати треки в програмі %@, коли системний медіафокус займає інша програма"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Quyền Trợ năng cho phép tạm dừng, tiếp tục và chuyển bài trước hoặc bài tiếp theo trong %@ khi một ứng dụng khác giữ tiêu điểm phương tiện của hệ thống"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "辅助功能权限可在系统媒体焦点被其他 App 占用时控制%@暂停、恢复和切换上一首或下一首"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "輔助使用權限可在系統媒體焦點被其他 App 佔用時控制%@暫停、恢復和切換上一首或下一首"
+          }
+        }
+      }
+    },
+    "请开启此权限，以在失去系统媒体焦点时控制%@暂停、恢复和切换上一首或下一首" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aktiviere diese Berechtigung, um %@ ohne System-Medienfokus zu pausieren, fortzusetzen und Titel zu wechseln"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Enable this permission to pause, resume and skip tracks in %@ when it loses system media focus"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Activa este permiso para pausar, reanudar y saltar canciones en %@ cuando pierde el foco multimedia del sistema"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Activez cette autorisation pour mettre en pause, reprendre et changer de morceau dans %@ quand il perd le focus multimédia du système"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Attiva questo permesso per mettere in pausa, riprendere e saltare brani in %@ quando perde il focus multimediale del sistema"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "この権限をオンにすると、システムのメディアフォーカスを失ったときも%@の一時停止、再開、前後の曲への移動ができます"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "시스템 미디어 포커스를 잃었을 때 %@의 일시 정지, 재개, 이전 곡 또는 다음 곡으로 넘기기를 제어하려면 이 권한을 켜십시오"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ative esta permissão para pausar, retomar e pular músicas no %@ quando ele perder o foco de mídia do sistema"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Включите это разрешение, чтобы ставить %@ на паузу, возобновлять и переключать треки без системного медиафокуса"
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "โปรดเปิดสิทธิ์นี้เพื่อควบคุมการหยุดพัก เล่นต่อ และข้ามไปเพลงก่อนหน้าหรือถัดไปใน %@ ได้ เมื่อเสียโฟกัสสื่อของระบบ"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Увімкніть цей дозвіл, щоб призупиняти, поновлювати й перемикати треки в програмі %@, коли вона втрачає системний медіафокус"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bật quyền này để tạm dừng, tiếp tục, chuyển bài trước hoặc bài tiếp theo trong %@ khi mất tiêu điểm phương tiện của hệ thống"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "请开启此权限，以在失去系统媒体焦点时控制%@暂停、恢复和切换上一首或下一首"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "請開啟此權限，以在失去系統媒體焦點時控制%@暫停、恢復和切換上一首或下一首"
           }
         }
       }

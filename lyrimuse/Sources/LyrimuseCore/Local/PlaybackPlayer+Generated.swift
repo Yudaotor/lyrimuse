@@ -42,7 +42,7 @@ public enum PlaybackPlayer: String, CaseIterable, Identifiable, Codable, Hashabl
     case swinsian = "swinsian"
     /// Plex 的音乐播放器(官网 / Homebrew 分发),播放 Plex Media Server 上的曲库,歌不在本机文件里。桌面版 4.13 是 Electron,4.50 起换成 Tauri;两版的 bundle id 都是 tv.plex.plexamp,系统会话由主进程报。字段:歌名、歌手、专辑、时长、封面(jpeg)、微秒级锚点;开播、跳转、暂停、恢复、换歌各发一条,播放中不重发,换歌时不撤会话。锚点比真实出声早 0.09~0.17 秒,暂停那条比实际停下处少约 0.3 秒、恢复时补回。系统远程跳转指令生效。没有 AppleScript 字典;它在 32500 端口开着 Plex 播放器接口(不要令牌),时间线约每秒更新一次。processName 7 字节。
     case plexamp = "plexamp"
-    /// 开源的多音源播放器,本地文件与插件音源共用系统媒体会话。曲目信息、封面、状态和进度走 media-control,播放、暂停、上下首和跳转响应系统命令;位置沿用 cleanExtrapolated。失焦时通过自身主菜单的播放/暂停、下一首、上一首控制(PlaybackMenuControl),需要辅助功能权限,不接失焦跳转。菜单标题不报告喜欢、随机或循环状态,不提供这些扩展控制;系统会话不报当前音源和歌曲 id,没有固定的原生歌词源。
+    /// 开源的多音源播放器,本地文件与插件音源共用系统媒体会话。曲目信息、封面、状态和进度走 media-control,播放、暂停、上下首和跳转响应系统命令;位置沿用 cleanExtrapolated,开始出声那一刻报的锚点按它的混音缓冲和设备延迟往后挪(MyGoSessionAnchor)。失焦时通过自身主菜单的播放/暂停、下一首、上一首控制(PlaybackMenuControl),需要辅助功能权限,不接失焦跳转。菜单标题不报告喜欢、随机或循环状态,不提供这些扩展控制;系统会话不报当前音源和歌曲 id,没有固定的原生歌词源。
     case mygoMusic = "mygo_music"
     /// 微信读书的 iPad 版(Apple 芯片的 Mac 上从 App Store 装,Wrapper 包),没有 AppleScript 字典,走 media-control。听书时系统会话的歌名是这一集(AI 朗读是章节名,真人有声书是「16 雪国 第16集」这类集名),专辑是书名,歌手一栏装的是正在念的那一小段原文(AI 朗读按标点切、每段十几个字;真人有声书是自动生成的字幕,带错字),每换一段就带着新锚点重发一次,锚点就是这段的起点(真人有声书按 0.25 秒取整),按 subtitlesInArtist 收成字幕、不进身份。没有作者一栏。时长是这一集的,锚点在每段开头刷新,属 cleanExtrapolated。整段是有声内容,不记收听、不搜歌词。media-control 的播放、暂停它都响应,跳转不理;上一首 / 下一首是后退 / 快进约 15 秒、不换集。窗口最小化、被挡住时照样往系统会话里推字幕。processName 6 字节。
     case weread = "weread"

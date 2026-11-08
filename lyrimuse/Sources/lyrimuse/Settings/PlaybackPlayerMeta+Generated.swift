@@ -56,7 +56,7 @@ extension PlaybackPlayer {
         case .foobar2000: return Color(red: 0.6, green: 0.6, blue: 0.62)
         case .swinsian: return Color(red: 0.95, green: 0.67, blue: 0.13)
         case .plexamp: return Color(red: 0.9, green: 0.63, blue: 0.05)
-        case .mygoMusic: return Color(red: 0.39, green: 0.49, blue: 0.76)
+        case .mygoMusic: return Color(red: 0.95, green: 0.27, blue: 0.27)
         case .weread: return Color(red: 0.16, green: 0.6, blue: 0.98)
         case .auto: return .secondary
         }
@@ -108,7 +108,7 @@ extension PlaybackPlayer {
         case .foobar2000: return "Foobar2000Icon"
         case .swinsian: return "SwinsianIcon"
         case .plexamp: return "PlexampIcon"
-        case .mygoMusic: return nil
+        case .mygoMusic: return "MyGoMusicIcon"
         case .weread: return "WeReadIcon"
         case .auto: return nil
         }

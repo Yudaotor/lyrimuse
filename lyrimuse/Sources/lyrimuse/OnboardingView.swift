@@ -957,7 +957,7 @@ struct OnboardingView: View {
         }
         let transportTargets = pendingAccessibility.filter { $0.accessibilityUse == .controlsTransport }
         if !transportTargets.isEmpty {
-            lines.append(L10n.formatNames(L10n.t("授权后，Lyrimuse 可在系统媒体焦点被其他 App 占用时，通过%@的菜单暂停、恢复和切换上一首或下一首。未授权时，基础歌词和正常焦点下的播放控制不受影响。失去焦点时不提供进度跳转"),
+            lines.append(L10n.formatNames(L10n.t("辅助功能权限可在系统媒体焦点被其他 App 占用时控制%@暂停、恢复和切换上一首或下一首"),
                                 accessibility.playerNames(transportTargets)))
         }
         let modeOnlyTargets = pendingAccessibility.filter { $0.accessibilityUse == .pressesPlayMode }
@@ -1655,7 +1655,7 @@ struct OnboardingView: View {
                                     accessibility.playerNames(playback)))
             }
             if !transport.isEmpty {
-                lines.append(L10n.formatNames(L10n.t("授权后，Lyrimuse 可在系统媒体焦点被其他 App 占用时，通过%@的菜单暂停、恢复和切换上一首或下一首。未授权时，基础歌词和正常焦点下的播放控制不受影响。失去焦点时不提供进度跳转"),
+                lines.append(L10n.formatNames(L10n.t("请开启此权限，以在失去系统媒体焦点时控制%@暂停、恢复和切换上一首或下一首"),
                                     accessibility.playerNames(transport)))
             }
             if !modeOnly.isEmpty {
