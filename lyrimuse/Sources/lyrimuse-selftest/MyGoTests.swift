@@ -1,0 +1,110 @@
+import Foundation
+import LyrimuseCore
+
+/// MyGo Music:开始出声那一刻报的锚点按混音缓冲和设备延迟往后挪(输出关掉后重开按另一档)、封面那份锚点沿用开播那份,
+/// 以及接线契约。
+@MainActor
+func runMyGoTests() {
+    typealias A = MyGoSessionAnchor
+    let base = 1_794_163_589.901163
+    func ts(_ offset: Double) -> String { MediaControlMicros.timestampString((base + offset) * 1_000_000)! }
+    func secs(_ s: String?) -> Double { s.flatMap { MediaControlMicros.date(fromTimestampString: $0)?.timeIntervalSince1970 } ?? -1 }
+    func near(_ s: String?, _ want: Double) -> Bool { abs(secs(s) - want) < 0.000_01 }
+    let latency = 0.026
+    let shift = A.mixAheadSecs + latency
+
+    // ---- 在放的锚点往后挪 ----
+    do {
+        let out = A.fill(identity: "|Click A|", playing: true, elapsed: 0.018, timestamp: ts(0), rate: 1, outputLatency: latency,
+                         state: A.State())
+        expectEqual(out.elapsed, 0.018, "MyGo 锚点: 位置不动")
+        expectEqual(near(out.timestamp, base + shift), true, "MyGo 锚点: 时刻往后挪混音缓冲加设备延迟")
+        expectEqual(out.state.anchor?.rawTimestamp, ts(0), "MyGo 锚点: 记下原时刻")
+        let again = A.fill(identity: "|Click A|", playing: true, elapsed: 0.018, timestamp: ts(0), rate: 1, outputLatency: latency,
+                           state: out.state)
+        expectEqual(again.timestamp, out.timestamp, "MyGo 锚点: 同一份锚点再解码一次不再挪")
+        let seek = A.fill(identity: "|Click A|", playing: true, elapsed: 19, timestamp: ts(6), rate: 1, outputLatency: latency,
+                          state: out.state)
+        expectEqual(near(seek.timestamp, base + 6 + shift), true, "MyGo 锚点: 跳转那份同样挪")
+        let negative = A.fill(identity: "|Click A|", playing: true, elapsed: 3, timestamp: ts(0), rate: 1, outputLatency: -1,
+                              state: A.State())
+        expectEqual(near(negative.timestamp, base + A.mixAheadSecs), true, "MyGo 锚点: 设备延迟读成负数按 0 算")
+        let fresh = A.fill(identity: "|Click A|", playing: true, elapsed: 0, timestamp: ts(0), rate: 1, outputLatency: latency,
+                           state: A.State())
+        expectEqual(near(fresh.timestamp, base + shift), true, "MyGo: 没见过它停下(刚接手)按输出开着挪")
+    }
+
+    // ---- 暂停帧不动,记下停下的时刻 ----
+    do {
+        let last = A.Anchor(identity: "|Click A|", elapsed: 0.018, rawTimestamp: ts(0), timestamp: ts(shift), rate: 1)
+        let paused = A.fill(identity: "|Click A|", playing: false, elapsed: 5.851, timestamp: ts(6), rate: 0, outputLatency: latency,
+                            state: A.State(anchor: last))
+        expectEqual(paused.elapsed, 5.851, "MyGo 暂停帧: 位置原样")
+        expectEqual(paused.timestamp, ts(6), "MyGo 暂停帧: 时刻原样")
+        expectEqual(paused.state.anchor == nil, true, "MyGo 暂停帧: 不留开播锚点")
+        expectEqual(abs((paused.state.pausedAt ?? 0) - (base + 6)) < 0.000_01, true, "MyGo 暂停帧: 记下停下的时刻")
+        expectEqual(paused.state.pausedIdentity, "|Click A|", "MyGo 暂停帧: 记下停下的是哪一首")
+        let rateZero = A.fill(identity: "|Click A|", playing: true, elapsed: 5.851, timestamp: ts(6), rate: 0, outputLatency: latency,
+                              state: A.State())
+        expectEqual(rateZero.timestamp, ts(6), "MyGo: 在放但速率 0 的不挪")
+        expectEqual(rateZero.state.pausedAt != nil, true, "MyGo: 在放但速率 0 的同样算停下")
+        let starting = A.fill(identity: "|Click B|", playing: false, elapsed: 0, timestamp: ts(20), rate: 1, outputLatency: latency,
+                              state: A.State(pausedAt: base + 6, pausedIdentity: "|Click A|"))
+        expectEqual(near(starting.timestamp, base + 20 + shift), true, "MyGo: 暂停中换歌,新歌先以没在放、速率 1 到的那一拍同样挪")
+        let confirmed = A.fill(identity: "|Click B|", playing: true, elapsed: 0, timestamp: ts(20), rate: 1, outputLatency: latency,
+                               state: starting.state)
+        expectEqual(confirmed.timestamp, starting.timestamp, "MyGo: 随后在放的那一拍是同一份锚点,不再挪")
+        let coldStarting = A.fill(identity: "|Click A|", playing: false, elapsed: 6.1, timestamp: ts(66), rate: 1, outputLatency: latency,
+                                  state: A.State(pausedAt: base + 6, pausedIdentity: "|Click A|"))
+        expectEqual(near(coldStarting.timestamp, base + 66 + A.coldLeadSecs + latency), true, "MyGo: 同一首停久了先以速率 1 到的那一拍按重开输出那一档")
+    }
+
+    // ---- 停下不到 / 超过输出关闭的时长再出声 ----
+    do {
+        let warm = A.fill(identity: "|Click A|", playing: true, elapsed: 6.1, timestamp: ts(10), rate: 1, outputLatency: latency,
+                          state: A.State(pausedAt: base + 6, pausedIdentity: "|Click A|"))
+        expectEqual(near(warm.timestamp, base + 10 + shift), true, "MyGo 恢复: 停了 4 秒,输出还开着,照常挪")
+        let cold = A.fill(identity: "|Click A|", playing: true, elapsed: 6.1, timestamp: ts(66), rate: 1, outputLatency: latency,
+                          state: A.State(pausedAt: base + 6, pausedIdentity: "|Click A|"))
+        expectEqual(near(cold.timestamp, base + 66 + A.coldLeadSecs + latency), true, "MyGo 恢复: 停了一分钟,输出已关,按重开输出那一档挪")
+        expectEqual(cold.state.pausedAt == nil, true, "MyGo 恢复: 用过的停下时刻清掉")
+        let coldNext = A.fill(identity: "|Click B|", playing: true, elapsed: 0, timestamp: ts(66), rate: 1, outputLatency: latency,
+                              state: A.State(pausedAt: base + 6, pausedIdentity: "|Click A|"))
+        expectEqual(near(coldNext.timestamp, base + 66 + shift), true, "MyGo: 停久了换成别的歌照常挪(新歌载入跟输出开着时一样早)")
+    }
+
+    // ---- 封面那份锚点 ----
+    do {
+        let start = A.fill(identity: "陈奕迅|浮夸|Solidays", playing: true, elapsed: 0.001, timestamp: ts(0), rate: 1,
+                           outputLatency: latency, state: A.State())
+        let cover = A.fill(identity: "陈奕迅|浮夸|Solidays", playing: true, elapsed: 0.000, timestamp: ts(0.544), rate: 1,
+                           outputLatency: latency, state: start.state)
+        expectEqual(cover.timestamp, start.timestamp, "MyGo 封面锚点: 开播后约 0.5 秒那份沿用开播那份的时刻")
+        expectEqual(cover.elapsed, 0.001, "MyGo 封面锚点: 沿用开播那份的位置")
+        let late = A.fill(identity: "陈奕迅|浮夸|Solidays", playing: true, elapsed: 0.000, timestamp: ts(1.5), rate: 1,
+                          outputLatency: latency, state: start.state)
+        expectEqual(near(late.timestamp, base + 1.5 + shift), true, "MyGo 封面锚点: 隔得久的不算(跳回开头)")
+        let other = A.fill(identity: "陈奕迅|K歌之王|你的陈奕迅", playing: true, elapsed: 0.001, timestamp: ts(0.5), rate: 1,
+                           outputLatency: latency, state: start.state)
+        expectEqual(near(other.timestamp, base + 0.5 + shift), true, "MyGo 封面锚点: 换了一首的不算")
+        let midway = A.fill(identity: "陈奕迅|浮夸|Solidays", playing: true, elapsed: 8, timestamp: ts(0.6), rate: 1,
+                            outputLatency: latency, state: start.state)
+        expectEqual(near(midway.timestamp, base + 0.6 + shift), true, "MyGo 封面锚点: 位置不在开头的不算(跳转)")
+    }
+
+    // ---- 接线 ----
+    do {
+        typealias L = LocalPlaybackSource
+        let mygo = PlaybackPlayer.mygoMusic.bundleIdentifier
+        expectEqual(L.resumeReadingNeverLeads(bundleID: mygo), true, "MyGo 接线: 锚点挪过之后恢复那一拍原样采信,不按暂停位置封顶")
+        expectEqual(L.learnsAnchorLag(bundleID: mygo), false, "MyGo 接线: 锚点在解码时已挪准,不再学锚点滞后")
+        let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+        let client = (try? String(contentsOfFile: root.appendingPathComponent("LyrimuseCore/Local/MediaControlClient.swift").path,
+                                  encoding: .utf8)) ?? ""
+        expectEqual(sourceHas(client, "let mygo = MyGoSessionAnchor.filled("), true, "MyGo 接线: 解码系统会话时挪锚点")
+        expectEqual(sourceHas(client, "timestamp = mygo.timestamp"), true, "MyGo 接线: 下游拿到的是挪过的时刻")
+        if let latency = AudioOutputRoute.outputLatencySecs() {
+            expectEqual(latency >= 0 && latency < 1, true, "MyGo 接线: 默认输出设备的延迟读得到、在合理范围")
+        }
+    }
+}

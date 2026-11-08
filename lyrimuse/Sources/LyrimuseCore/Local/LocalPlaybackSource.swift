@@ -1096,7 +1096,7 @@ public final class LocalPlaybackSource: ObservableObject {
     public nonisolated static func resumeReadingNeverLeads(bundleID: String?, client: String? = nil) -> Bool {
         bundleID == PlaybackPlayer.kaset.bundleIdentifier || bundleID == PlaybackPlayer.vox.bundleIdentifier
             || bundleID == PlaybackPlayer.pinePlayer.bundleIdentifier || bundleID == PlaybackPlayer.swinsian.bundleIdentifier
-            || bundleID == PlaybackPlayer.plexamp.bundleIdentifier
+            || bundleID == PlaybackPlayer.plexamp.bundleIdentifier || bundleID == PlaybackPlayer.mygoMusic.bundleIdentifier
             || client == NetEaseIPadNowPlaying.bundleID || client == QQIPadNowPlaying.bundleID
     }
 
@@ -1774,7 +1774,8 @@ public final class LocalPlaybackSource: ObservableObject {
     public nonisolated static func learnsAnchorLag(bundleID: String?) -> Bool {
         bundleID != PlaybackPlayer.kugou.bundleIdentifier && bundleID != PlaybackPlayer.reamp.bundleIdentifier
             && bundleID != PlaybackPlayer.lxMusic.bundleIdentifier && bundleID != PlaybackPlayer.pinePlayer.bundleIdentifier
-            && bundleID != PlaybackPlayer.swinsian.bundleIdentifier && !PlayerSubtitles.carriesSubtitles(bundleID: bundleID)
+            && bundleID != PlaybackPlayer.swinsian.bundleIdentifier && bundleID != PlaybackPlayer.mygoMusic.bundleIdentifier
+            && !PlayerSubtitles.carriesSubtitles(bundleID: bundleID)
     }
 
     /// 这个播放器播放中会持续重发准的锚点,外推只是两次重发之间的补间:KKBOX 约每 1.06s 一次、逐次一致,

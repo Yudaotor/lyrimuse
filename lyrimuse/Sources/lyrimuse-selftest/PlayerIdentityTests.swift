@@ -1222,7 +1222,7 @@ func runPlayerIdentityTests() {
             .weread: (nil, []),
             .swinsian: (nil, [.extendedControls, .repeatOne, .resume, .snapsToReportedPosition, .arrivesWhole]),
             .plexamp: (nil, [.extendedControls, .repeatOne, .gaplessLead, .learnsAnchorLag, .arrivesWhole]),
-            .mygoMusic: (nil, [.gaplessLead, .lateAnchorProbe, .learnsAnchorLag]),
+            .mygoMusic: (nil, [.gaplessLead, .lateAnchorProbe]),
             .pearDesktop: (.youtubeMusic, [.extendedControls, .repeatOne, .favorite, .resume, .lateAnchorProbe, .learnsAnchorLag,
                                            .holdsAnchorLagSeed, .catalogMenuRows]),
         ]

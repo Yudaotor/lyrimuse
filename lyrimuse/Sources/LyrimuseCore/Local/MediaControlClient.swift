@@ -1561,11 +1561,16 @@ public enum MediaControlClient {
             let plexamp = PlexampSessionAnchor.filled(
                 bundleID: bundleIdentifier, identity: [title ?? "", artist ?? "", album ?? ""].joined(separator: "|"),
                 playing: playing, elapsed: names.elapsed, timestamp: times.timestamp, rate: rate)
-            timestamp = plexamp.timestamp
+            // MyGo 开始出声那一刻报的锚点按它的混音缓冲和设备延迟往后挪(见 MyGoSessionAnchor)。
+            let mygo = MyGoSessionAnchor.filled(
+                bundleID: bundleIdentifier, identity: [title ?? "", artist ?? "", album ?? ""].joined(separator: "|"),
+                playing: playing, elapsed: plexamp.elapsed, timestamp: plexamp.timestamp, rate: plexamp.rate)
+            timestamp = mygo.timestamp
             // VOX 那份播放中缺位置、恢复后速率报 0,补成能外推的锚点(见 VoxPlayerInfo.systemAnchor)。
             let anchor = VoxPlayerInfo.systemAnchor(
-                bundleID: bundleIdentifier, playing: playing, elapsed: plexamp.elapsed,
-                elapsedNow: plexamp.elapsed == names.elapsed ? times.elapsedTimeNow.map { $0 + lead } : nil,
+                bundleID: bundleIdentifier, playing: playing, elapsed: mygo.elapsed,
+                elapsedNow: plexamp.elapsed == names.elapsed && mygo.timestamp == plexamp.timestamp
+                    ? times.elapsedTimeNow.map { $0 + lead } : nil,
                 rate: plexamp.rate, hasTimestamp: plexamp.timestamp != nil)
             elapsedTime = anchor.elapsed
             elapsedTimeNow = anchor.elapsedNow

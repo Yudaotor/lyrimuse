@@ -67,6 +67,38 @@ public enum AudioOutputRoute {
         return Current(uid: uid, name: string(kAudioObjectPropertyName, of: id) ?? "", transport: transport)
     }
 
+    /// 默认输出设备从送进去到出声的延迟(秒):设备延迟 + 安全余量 + 输出流延迟 + IO 缓冲,按设备的采样率换算。
+    /// 拿不到返回 nil。
+    public static func outputLatencySecs() -> Double? {
+        var addr = address(kAudioHardwarePropertyDefaultOutputDevice)
+        var id = AudioDeviceID(0)
+        var size = UInt32(MemoryLayout<AudioDeviceID>.size)
+        guard AudioObjectGetPropertyData(AudioObjectID(kAudioObjectSystemObject), &addr, 0, nil, &size, &id) == noErr,
+              id != 0 else { return nil }
+        func value<T: FixedWidthInteger>(_ object: AudioObjectID, _ selector: AudioObjectPropertySelector,
+                                         _ scope: AudioObjectPropertyScope, _ type: T.Type) -> T {
+            var a = AudioObjectPropertyAddress(mSelector: selector, mScope: scope, mElement: kAudioObjectPropertyElementMain)
+            var v = T.zero
+            var s = UInt32(MemoryLayout<T>.size)
+            return AudioObjectGetPropertyData(object, &a, 0, nil, &s, &v) == noErr ? v : .zero
+        }
+        var rateAddr = address(kAudioDevicePropertyNominalSampleRate)
+        var rate = Float64(0)
+        var rateSize = UInt32(MemoryLayout<Float64>.size)
+        guard AudioObjectGetPropertyData(id, &rateAddr, 0, nil, &rateSize, &rate) == noErr, rate > 0 else { return nil }
+        var frames = UInt64(value(id, kAudioDevicePropertyLatency, kAudioObjectPropertyScopeOutput, UInt32.self))
+            + UInt64(value(id, kAudioDevicePropertySafetyOffset, kAudioObjectPropertyScopeOutput, UInt32.self))
+            + UInt64(value(id, kAudioDevicePropertyBufferFrameSize, kAudioObjectPropertyScopeGlobal, UInt32.self))
+        var streamsAddr = AudioObjectPropertyAddress(mSelector: kAudioDevicePropertyStreams, mScope: kAudioObjectPropertyScopeOutput,
+                                                     mElement: kAudioObjectPropertyElementMain)
+        var stream = AudioStreamID(0)
+        var streamSize = UInt32(MemoryLayout<AudioStreamID>.size)
+        if AudioObjectGetPropertyData(id, &streamsAddr, 0, nil, &streamSize, &stream) == noErr, stream != 0 {
+            frames += UInt64(value(stream, kAudioStreamPropertyLatency, kAudioObjectPropertyScopeGlobal, UInt32.self))
+        }
+        return Double(frames) / rate
+    }
+
     /// 默认输出设备变化时回调(在主队列上)。只装一次;重复调用忽略。
     private static var listening = false
     public static func startObserving(_ onChange: @escaping @Sendable () -> Void) {
