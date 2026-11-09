@@ -1934,7 +1934,7 @@ func runPlaybackPositionTests() {
         expectEqual([fbProc?.process, lxProc?.process], [PlaybackPlayer.foobar2000.bundleIdentifier, "cn.toside.music.desktop.helper"],
                     "冷恢复送声进程: foobar2000 是它自己,洛雪是它的 Helper")
         expectEqual([fbProc?.leadSecs, lxProc?.leadSecs, fbProc?.closesAfterPauseSecs, lxProc?.closesAfterPauseSecs],
-                    [0.13, 0.21, 7.7, 10.1], "冷恢复送声进程: 开始送声到出声取蓝牙唤醒快慢两档中间 0.13 / 0.21 秒,暂停后 7.7 / 10.1 秒关输出(实测)")
+                    [0.2, 0.2, 7.7, 10.1], "冷恢复送声进程: 开始送声(洛雪是在放信号那一刻)到出声按实测多数情况取 0.2 秒,暂停后 7.7 / 10.1 秒关输出(实测)")
         expectEqual(LPS.coldStartWatchedProcesses(lxOutputsToDefault: false).map(\.player), [PlaybackPlayer.foobar2000.bundleIdentifier],
                     "冷恢复送声进程: 洛雪选了别的输出设备时不看它")
         expectEqual(LPS.coldStartWatchedProcesses(lxOutputsToDefault: true).count, 2, "冷恢复送声进程: 洛雪走默认设备时两个都看")

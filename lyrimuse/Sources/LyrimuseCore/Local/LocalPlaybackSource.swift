@@ -859,8 +859,9 @@ public final class LocalPlaybackSource: ObservableObject {
     }
 
     /// 冷恢复等设备的播放器各自往设备送声的进程:`leadSecs` 是进程开始送声到真出声隔多久(设备的在转信号不可信时按它估),
-    /// `closesAfterPauseSecs` 是暂停后多久关输出。只录各自的声音、在 AirPods Max 上量:蓝牙唤醒分快慢两档(送声后约 0.05 秒、
-    /// 约 0.22 秒出声,运行时分不出是哪一档),取两档中间;洛雪(送声的是它的 Helper 进程)自己起播再多 0.1 秒。
+    /// `closesAfterPauseSecs` 是暂停后多久关输出。只录各自的声音、在 AirPods Max 上量,送声到出声时快时慢、运行时分不出,
+    /// 取多数情况的中间:foobar2000 0.04~0.29 秒;洛雪(送声的是它的 Helper 进程)在放信号比它开始送声晚到约 0.1 秒,
+    /// 信号到时已在送声、开始时刻记成信号那一刻,从那一刻算 0.02~0.45 秒,多数约 0.2。
     /// 暂停后 foobar2000 约 7.7 秒、洛雪约 10.1 秒关输出。见 02 章决策 246。
     public struct ColdStartAudioProcess: Sendable, Equatable {
         public let player: String
@@ -871,9 +872,9 @@ public final class LocalPlaybackSource: ObservableObject {
 
     public nonisolated static let coldStartAudioProcesses: [ColdStartAudioProcess] = [
         ColdStartAudioProcess(player: PlaybackPlayer.foobar2000.bundleIdentifier,
-                              process: PlaybackPlayer.foobar2000.bundleIdentifier, leadSecs: 0.13, closesAfterPauseSecs: 7.7),
+                              process: PlaybackPlayer.foobar2000.bundleIdentifier, leadSecs: 0.2, closesAfterPauseSecs: 7.7),
         ColdStartAudioProcess(player: PlaybackPlayer.lxMusic.bundleIdentifier,
-                              process: "cn.toside.music.desktop.helper", leadSecs: 0.21, closesAfterPauseSecs: 10.1),
+                              process: "cn.toside.music.desktop.helper", leadSecs: 0.2, closesAfterPauseSecs: 10.1),
     ]
 
     /// 要看的送声进程:洛雪在它设置里选了别的输出设备时不看它(它的输出不说明默认设备怎样)。纯函数,selftest 覆盖。
