@@ -57,6 +57,28 @@ CREATE TABLE IF NOT EXISTS crashes (
 );
 CREATE INDEX IF NOT EXISTS crashes_day ON crashes(day);
 
+-- 主线程卡顿的概况(心跳活动里的 hang_details,每台每天最多 3 条);取值见 index.js 的 HANG_* 名单。
+-- app_version / os_version / arch 取带它来的那条心跳的。
+CREATE TABLE IF NOT EXISTS hang_events (
+  day          TEXT NOT NULL,
+  install_id   TEXT NOT NULL,
+  seq          INTEGER NOT NULL,
+  received_at  INTEGER NOT NULL,
+  app_version  TEXT,
+  os_version   TEXT,
+  arch         TEXT,
+  duration     TEXT,
+  since_launch TEXT,
+  since_wake   TEXT,
+  player       TEXT,
+  windows      TEXT,
+  thermal      TEXT,
+  stack        TEXT,
+  signature    TEXT,
+  PRIMARY KEY (day, install_id, seq)
+);
+CREATE INDEX IF NOT EXISTS hang_events_day ON hang_events(day);
+
 -- 不进统计的安装(作者自己的机器、测试机):/v1/stats 的每条查询都跳过它们,原始数据照存;删掉一行即恢复统计。
 CREATE TABLE IF NOT EXISTS excluded_installs (
   install_id TEXT PRIMARY KEY,

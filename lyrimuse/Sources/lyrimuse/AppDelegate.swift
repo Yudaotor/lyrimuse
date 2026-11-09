@@ -199,7 +199,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // 引擎预解析要问播放器的那几样(Music 的队列与专辑曲目、Spotify 随机、网页版队列)由 App 代跑,
         // 引擎自己不发 AppleEvent(见 PlayerQueryServer)。
         PlayerQueryServer.shared.start()
-        // 主线程卡住几秒就记一行、卡久了采一次调用栈(见 MainThreadWatchdog)。
+        // 主线程卡住几秒就记一行、卡久了采一次调用栈(见 MainThreadWatchdog)。窗口提供者给遥测的卡顿概况报开着哪些窗口。
+        MainThreadWatchdog.shared.setWindowProvider {
+            NSApp.windows.filter(\.isVisible).compactMap { $0.identifier?.rawValue }
+                + (MenuBarStatusItem.shared.isPanelOpen ? ["menubar-panel"] : [])
+        }
         MainThreadWatchdog.shared.start()
         // 匿名遥测:开着时每天一条心跳、有新的崩溃报告各发一条(见 TelemetryService)。
         TelemetryService.shared.start()

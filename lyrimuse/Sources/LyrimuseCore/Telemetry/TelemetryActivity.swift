@@ -1,6 +1,6 @@
 import Foundation
 
-/// 心跳里「之前几天的活动」的记账:放过哪些播放器、主线程卡住几次、几个动作各做了几次、放过的歌各拿到哪档歌词和是什么语言,按本地自然日一天一格,存在 UserDefaults。
+/// 心跳里「之前几天的活动」的记账:放过哪些播放器、主线程卡住几次(前几次带概况)、几个动作各做了几次、放过的歌各拿到哪档歌词和是什么语言,按本地自然日一天一格,存在 UserDefaults。
 /// 播放源换播放器、看门狗报卡住时各记一笔;`isRecording` 为假(遥测关着)时一律不记。心跳发出去之后
 /// `remove(days:)` 删掉发过的那几天。最多留 `maxStoredDays` 天,多了丢最早的。
 public final class TelemetryActivity: @unchecked Sendable {
@@ -8,6 +8,8 @@ public final class TelemetryActivity: @unchecked Sendable {
 
     public static let storageKey = "np:telemetryActivity"
     public static let maxStoredDays = 3
+    /// 每天最多记几次卡顿的概况(次数照记);心跳带最多 `maxStoredDays` 天,负载要在 Worker 的 MAX_BODY 以内。
+    public static let maxHangDetailsPerDay = 3
 
     private let defaults: UserDefaults
     private let key: String
@@ -21,6 +23,8 @@ public final class TelemetryActivity: @unchecked Sendable {
     private var trusted: Set<String> = []
     /// 上一次记下的播放器,同一个播放器连着报不重复写盘。
     private var lastPlayer: (day: String, tag: String)?
+    /// 最近记下的那条卡顿概况在哪一天的第几条:恢复时补时长、采样完补调用栈都补到它。只在内存里。
+    private var openHang: (day: String, index: Int)?
     /// 今天记过歌词结果的歌(曲目键 → 记下的那一笔)。只在内存里,不写盘、不上报;换天清空。
     private var lyricsNoted: (day: String, songs: [String: LyricsNote]) = ("", [:])
 
@@ -91,11 +95,42 @@ public final class TelemetryActivity: @unchecked Sendable {
         counts[key] = left > 0 ? left : nil
     }
 
-    public func noteHang(now: Date = Date()) {
+    /// 主线程卡住一次。`detail` 给了且当天还没记满,记下概况(播放器填最近一次放歌的那个),之后的 `finishHang` /
+    /// `attachHangStack` 补到这一条。
+    public func noteHang(_ detail: TelemetryHang? = nil, now: Date = Date()) {
         let day = Telemetry.day(now)
         lock.withLock {
             guard recording else { return }
-            update(day: day) { $0.hangs += 1 }
+            openHang = nil
+            update(day: day) { d in
+                d.hangs += 1
+                guard var detail, d.hangDetails.count < Self.maxHangDetailsPerDay else { return }
+                if detail.player == nil { detail.player = lastPlayer?.tag }
+                d.hangDetails.append(detail)
+                openHang = (day, d.hangDetails.count - 1)
+            }
+        }
+    }
+
+    /// 最近那次卡顿恢复了,一共卡了 `seconds` 秒。
+    public func finishHang(seconds: TimeInterval) {
+        changeOpenHang { $0.duration = TelemetryHang.durationBucket(seconds: seconds) }
+    }
+
+    /// 最近那次卡顿采到了调用栈(只补一次)。
+    public func attachHangStack(_ stack: [TelemetryCrash.Frame]) {
+        guard !stack.isEmpty else { return }
+        changeOpenHang { if $0.stack.isEmpty { $0.stack = stack } }
+    }
+
+    private func changeOpenHang(_ change: (inout TelemetryHang) -> Void) {
+        lock.withLock {
+            guard recording, let open = openHang else { return }
+            var days = load()
+            guard let i = days.firstIndex(where: { $0.day == open.day }), open.index < days[i].hangDetails.count else { return }
+            let before = days[i].hangDetails[open.index]
+            change(&days[i].hangDetails[open.index])
+            if days[i].hangDetails[open.index] != before { store(days) }
         }
     }
 
@@ -115,6 +150,7 @@ public final class TelemetryActivity: @unchecked Sendable {
     public func clear() {
         lock.withLock {
             lastPlayer = nil
+            openHang = nil
             lyricsNoted = ("", [:])
             store([])
         }

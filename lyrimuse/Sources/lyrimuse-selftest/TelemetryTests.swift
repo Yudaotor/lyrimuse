@@ -213,6 +213,99 @@ func runTelemetryTests() {
     }
 
     do {
+        print("\n== 遥测:卡顿概况 ==")
+        typealias H = TelemetryHang
+        expectEqual([5.2, 9.9, 10, 29.9, 30, 400].map { H.durationBucket(seconds: $0) },
+                    ["5-10s", "5-10s", "10-30s", "10-30s", "30s+", "30s+"], "分档: 卡了多久")
+        expectEqual([0, 59, 60, 599, 600, 3599, 3600, 21_599, 21_600].map { H.elapsedBucket(seconds: $0) },
+                    ["<1m", "<1m", "1-10m", "1-10m", "10-60m", "10-60m", "1-6h", "1-6h", "6h+"], "分档: 启动 / 唤醒后多久")
+        expectEqual(Set(([5, 15, 60] as [TimeInterval]).map { H.durationBucket(seconds: $0) } + [H.unrecovered]), Set(H.durationBuckets),
+                    "分档: 时长取值都在名单里")
+        expectEqual([ProcessInfo.ThermalState.nominal, .fair, .serious, .critical].map(H.thermalTag), H.thermalStates, "温度状态")
+        expectEqual(H.windowTags(identifiers: ["com_apple_SwiftUI_Settings_window", "lyrics-manager-AppWindow-1", "lyrics-window-AppWindow-1",
+                                               "lyrics-window-AppWindow-2", "menubar-center-lyrics", "menubar-panel", ""]),
+                    ["lyrics-manager", "lyrics-window", "menubar-panel", "settings"], "窗口: 按场景 id 认、去重排序,认不出的不报")
+        expectEqual(H.windowTag(identifier: "x-menubar-panel-y"), nil, "窗口: 菜单栏面板只认 App 给的那个标签")
+
+        let sample = """
+        Analysis of sampling lyrimuse (pid 123) every 1 millisecond
+        Call graph:
+            1542 Thread_1   DispatchQueue_1: com.apple.main-thread  (serial)
+            + 1542 start  (in dyld) + 6688  [0x18204be88]
+            +   1542 ???  (in lyrimuse)  load address 0x10022c000 + 0x8f9648  [0x100b25648]
+            +     1542 -[NSApplication run]  (in AppKit) + 396  [0x186a8290c]
+            +       1500 ???  (in lyrimuse)  load address 0x10022c000 + 0x1a2b  [0x10022da2b]
+            +       ! 1500 ???  (in lyrimuse)  load address 0x10022c000 + 0x3c4d  [0x10022fc4d]
+            +       !   1500 closure #1 in Foo.bar()  (in lyrimuse) + 24  [0x100230000]
+            +       !     1500 _pthread_mutex_firstfit_lock_wait  (in libsystem_pthread.dylib) + 84  [0x1823aa3c0]
+            +       !       1500 __psynch_mutexwait  (in libsystem_kernel.dylib) + 8  [0x18236c5e8]
+            +       !       12 __psynch_cvwait  (in libsystem_kernel.dylib) + 8  [0x18236d000]
+            +       42 ???  (in lyrimuse)  load address 0x10022c000 + 0x5e6f  [0x100231e6f]
+            +         42 mach_msg2_trap  (in libsystem_kernel.dylib) + 8  [0x182365c34]
+            1542 Thread_2   DispatchQueue_9: lyrimuse.playback.artwork  (serial)
+            + 1542 start_wqthread  (in libsystem_pthread.dylib) + 8  [0x18239eb80]
+        """
+        let stack = H.mainThreadStack(fromSample: sample, executable: "lyrimuse")
+        expectEqual(stack.map { $0.symbol ?? "+\($0.offset ?? -1)" },
+                    ["__psynch_mutexwait", "_pthread_mutex_firstfit_lock_wait", "closure #1 in Foo.bar()", "+15437", "+6699", "+9410120"],
+                    "采样: 走最重的那条路径,最深三帧接最深的三个自家帧,自家帧没符号时报偏移")
+        expectEqual(stack.map(\.image), ["libsystem_kernel.dylib", "libsystem_pthread.dylib", "lyrimuse", "lyrimuse", "lyrimuse", "lyrimuse"],
+                    "采样: 镜像名")
+        expectEqual(H.mainThreadStack(fromSample: "no call graph here", executable: "lyrimuse"), [], "采样: 认不出格式时返回空")
+        let noMain = sample.replacingOccurrences(of: "com.apple.main-thread", with: "x")
+        expectEqual(H.mainThreadStack(fromSample: noMain, executable: "lyrimuse").first?.symbol, "__psynch_mutexwait",
+                    "采样: 没标主线程时取第一个线程")
+
+        var wake = WakeDetector()
+        wake.observe(uptime: 100, continuous: 1000)
+        wake.observe(uptime: 102, continuous: 1002.5)
+        expectEqual(wake.lastWakeUptime, nil, "唤醒: 两边走得一样多不算睡过")
+        wake.observe(uptime: 104, continuous: 1004.5 + WakeDetector.minimumSleep)
+        expectEqual(wake.lastWakeUptime, 104, "唤醒: 含睡眠的时钟多走出一截,记这一刻为唤醒")
+
+        let key = "selftest.telemetryHang.\(getpid())"
+        defer { UserDefaults.standard.removeObject(forKey: key) }
+        let activity = TelemetryActivity(defaults: .standard, key: key)
+        let day1 = Date(timeIntervalSince1970: 1_793_300_000)
+        let d2 = Telemetry.day(day1.addingTimeInterval(86_400))
+        let base = H(sinceLaunch: "1-10m", sinceWake: nil, windows: ["settings"], thermal: "nominal")
+        activity.noteHang(base, now: day1)
+        activity.finishHang(seconds: 12)
+        expectEqual(activity.completedDays(before: d2), [], "记账: 关着时不记概况")
+        activity.isRecording = true
+        activity.notePlayer(bundleID: PlaybackPlayer.spotify.bundleIdentifier, now: day1)
+        activity.noteHang(base, now: day1)
+        var details = activity.completedDays(before: d2).first?.hangDetails ?? []
+        expectEqual(details.map(\.duration), [H.unrecovered], "记账: 刚卡住记成没恢复")
+        expectEqual(details.first?.player, PlaybackPlayer.spotify.rawValue, "记账: 播放器填最近放歌的那个")
+        activity.attachHangStack([TelemetryCrash.Frame(image: "lyrimuse", symbol: nil, offset: 42)])
+        activity.attachHangStack([TelemetryCrash.Frame(image: "lyrimuse", symbol: nil, offset: 7)])
+        activity.finishHang(seconds: 12)
+        details = activity.completedDays(before: d2).first?.hangDetails ?? []
+        expectEqual(details.first?.duration, "10-30s", "记账: 恢复后补上时长")
+        expectEqual(details.first?.stack.map(\.offset), [42], "记账: 调用栈只补第一份")
+        for _ in 0..<5 { activity.noteHang(base, now: day1) }
+        let got = activity.completedDays(before: d2).first
+        expectEqual(got?.hangs, 6, "记账: 次数照记")
+        expectEqual(got?.hangDetails.count, TelemetryActivity.maxHangDetailsPerDay, "记账: 概况每天最多记几条")
+        activity.finishHang(seconds: 40)
+        expectEqual(activity.completedDays(before: d2).first?.hangDetails.last?.duration, H.unrecovered,
+                    "记账: 超出名额的那次恢复了不改前一条")
+        activity.noteHang(nil, now: day1)
+        activity.finishHang(seconds: 40)
+        expectEqual(activity.completedDays(before: d2).first?.hangDetails.map(\.duration), ["10-30s", H.unrecovered, H.unrecovered],
+                    "记账: 不带概况的那次之后不补到旧的一条")
+        activity.clear()
+        activity.waitForPendingWrites()
+        let encoded = try? JSONEncoder().encode(TelemetryActivityDay(day: "2026-11-09", hangs: 1, hangDetails: [base]))
+        expectEqual(encoded.flatMap { try? JSONDecoder().decode(TelemetryActivityDay.self, from: $0) }?.hangDetails, [base],
+                    "记账: 概况能存能读")
+        let old = #"{"day":"2026-10-30","players_played":[],"hangs":2}"#
+        expectEqual((try? JSONDecoder().decode(TelemetryActivityDay.self, from: Data(old.utf8)))?.hangDetails, [],
+                    "记账: 旧版本存下的活动没有概况")
+    }
+
+    do {
         print("\n== 遥测:歌曲语言 ==")
         typealias L = TelemetrySongLanguage
         expectEqual([L(script: .chinese, text: ""), L(script: .cantonese, text: ""), L(script: .japanese, text: ""),
@@ -306,13 +399,26 @@ func runTelemetryTests() {
         let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
         let worker = (try? String(contentsOfFile: root.appendingPathComponent("../../telemetry-worker/src/index.js").path,
                                   encoding: .utf8)) ?? ""
-        let fields = keys(regional) + keys(features) + keys(TelemetryActivityDay(day: "2026-10-30"))
+        let hang = TelemetryHang(sinceLaunch: "<1m", sinceWake: "<1m", player: "spotify", windows: [], thermal: "fair")
+        expectEqual(keys(hang), ["duration", "player", "since_launch", "since_wake", "stack", "thermal", "windows"], "卡顿概况: 键名")
+        let fields = keys(regional) + keys(features) + keys(TelemetryActivityDay(day: "2026-10-30")) + keys(hang)
             + ["install_id", "origin", "report_id", "exception_type", "termination_indicator", "frames", "exception_frames"]
             + TelemetryAction.allCases.map(\.rawValue)
         expectEqual(["install_method", "settings_changed", "permissions_missing"].allSatisfy(keys(features).contains),
                     true, "心跳: 功能快照带安装渠道、改过的设置、缺的权限")
         let missing = fields.filter { !worker.contains($0) }
         expectEqual(missing, [], "Worker: 认得 App 发的每个字段")
+        // 卡顿概况的取值 Worker 按白名单收,名单跟 Core 不一致的那一档会被静默丢掉。
+        func workerList(_ name: String) -> [String] {
+            guard let line = worker.split(separator: "\n").first(where: { $0.hasPrefix("const \(name) = [") }) else { return [] }
+            let text = String(line)
+            let re = try? NSRegularExpression(pattern: #""([^"]+)""#)
+            return (re?.matches(in: text, range: NSRange(text.startIndex..., in: text)) ?? [])
+                .compactMap { Range($0.range(at: 1), in: text).map { String(text[$0]) } }.sorted()
+        }
+        expectEqual([workerList("HANG_DURATIONS"), workerList("HANG_ELAPSED"), workerList("HANG_THERMAL"), workerList("HANG_WINDOWS")],
+                    [TelemetryHang.durationBuckets.sorted(), TelemetryHang.elapsedBuckets.sorted(), TelemetryHang.thermalStates.sorted(),
+                     TelemetryHang.windowTags.sorted()], "Worker: 卡顿概况的取值名单跟 Core 一致")
         // 统计端按「改过默认值的设置项里有没有 appLanguage」分界面语言跟随系统还是手动选(14 章决策 177):
         // 属性改名、或挪进不比较的名单,统计端会静默把所有人算成跟随系统。
         let settingsTelemetry = (try? String(contentsOfFile: root.appendingPathComponent("lyrimuse/Settings/AppSettings+Telemetry.swift").path,
@@ -377,8 +483,18 @@ func runTelemetryTests() {
         expectEqual(sourceHas(sourceText("LyrimuseCore/Local/LocalPlaybackSource.swift"),
                               "if trackChanged || bundleID != lastAppliedBundleID { TelemetryActivity.shared.notePlayer(bundleID: bundleID) }"),
                     true, "接线: 换歌、换播放器都记一笔(连着几天用同一个播放器也每天记到)")
-        expectEqual(sourceHas(sourceText("LyrimuseCore/Diagnostics/MainThreadWatchdog.swift"),
-                              "TelemetryActivity.shared.noteHang()"), true, "接线: 主线程卡住记一笔")
+        let watchdog = sourceText("LyrimuseCore/Diagnostics/MainThreadWatchdog.swift")
+        let handleBody = sourceBody("private func handle(", in: watchdog)
+        expectEqual(sourceHas(handleBody, "TelemetryActivity.shared.noteHang(hangContext(at: now))")
+                        && sourceHas(handleBody, "if tracker.reportedStill { TelemetryActivity.shared.finishHang(seconds: seconds) }"),
+                    true, "接线: 主线程卡住记一笔概况,恢复时补时长(没卡满的不补)")
+        expectEqual(sourceHas(sourceBody("private func takeSample()", in: watchdog),
+                              "TelemetryActivity.shared.attachHangStack(TelemetryHang.mainThreadStack(fromSample: text, executable: executable))")
+                        && sourceHas(sourceBody("private func tick()", in: watchdog), "wake.observe(uptime: now, continuous: WakeDetector.continuousNow)")
+                        && sourceHas(sourceBody("private func tick()", in: watchdog), "if let windows { self.lastWindows = windows }"),
+                    true, "接线: 采样补调用栈、每拍认唤醒、主线程还能动时记下开着的窗口")
+        expectEqual(sourceHas(sourceText("lyrimuse/AppDelegate.swift"), "MainThreadWatchdog.shared.setWindowProvider {"), true,
+                    "接线: App 给看门狗窗口提供者")
         expectEqual(sourceHas(sourceText("lyrimuse/SettingsView.swift"), "Toggle(\"\", isOn: $settings.telemetryEnabled)"), true,
                     "接线: 设置页开关")
         expectEqual(sourceHas(sourceText("lyrimuse/OnboardingView.swift"), "isOn: $settings.telemetryEnabled"), true,

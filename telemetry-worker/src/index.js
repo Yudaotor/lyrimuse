@@ -1,6 +1,6 @@
 // Lyrimuse 匿名遥测的接收端(Cloudflare Worker + D1)。
 //
-// POST /v1/heartbeat  每台机器每天一条:安装 ID、版本与系统、开着哪些功能、之前几天的活动
+// POST /v1/heartbeat  每台机器每天一条:安装 ID、版本与系统、开着哪些功能、之前几天的活动(含前几次卡顿的概况)
 // POST /v1/crash      每份崩溃报告一条摘要(App 侧已把路径换成 <path>)
 // GET  /v1/stats      汇总,要 Authorization: Bearer <ADMIN_TOKEN>
 // GET  /              统计页(输入令牌后读 /v1/stats)
@@ -16,12 +16,19 @@ const TAG_RE = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/;
 const HEX16_RE = /^[0-9a-f]{16}$/;
 // bundle id 与 players_played 里的播放器(内置的 rawValue 带下划线)。
 const ID_RE = /^[A-Za-z0-9][A-Za-z0-9._-]{0,99}$/;
-const MAX_BODY = 32 * 1024;
+const MAX_BODY = 64 * 1024;
 // 每日活动里记次数的动作,跟 App 侧 Core TelemetryAction 的 rawValue 一致。
 const ACTIONS = ["lyrics_window", "lyrics_picked", "offset_adjusted", "share_card"];
 // 每日活动里放过的歌各拿到哪档歌词、是什么语言,跟 Core TelemetryLyricsResult、TelemetrySongLanguage 的 rawValue 一致。
 const LYRICS_RESULTS = ["word", "line", "plain", "instrumental", "none"];
 const SONG_LANGUAGES = ["zh", "yue", "ja", "ko", "ru", "uk", "bg", "be", "sr", "mk", "kk", "el", "th", "ar", "hi", "bn", "pa", "gu", "ta", "te", "kn", "ml", "si", "en", "es", "pt", "fr", "de", "it", "nl", "sv", "pl", "tr", "vi", "he", "other"];
+// 卡顿概况(Core TelemetryHang)的取值,跟 Core 那几份名单一致,selftest telemetry 组核对。
+const HANG_DURATIONS = ["5-10s", "10-30s", "30s+", "unrecovered"];
+const HANG_ELAPSED = ["<1m", "1-10m", "10-60m", "1-6h", "6h+"];
+const HANG_THERMAL = ["nominal", "fair", "serious", "critical"];
+const HANG_WINDOWS = ["settings", "lyrics-manager", "lyrics-window", "lyrics-quick-search", "lyrics-share", "whats-new", "onboarding", "menubar-panel"];
+const MAX_HANG_DETAILS_PER_DAY = 3;
+const MAX_HANG_FRAMES = 6;
 const MAX_CRASHES_PER_INSTALL_DAY = 20;
 const DAY_MS = 86_400_000;
 
@@ -191,9 +198,43 @@ async function heartbeat(request, env) {
     ).bind(a.day, installID, JSON.stringify(ids(a.players_played)), int(a.hangs, 0, 10_000) ?? 0,
            JSON.stringify(counts(a.actions, ACTIONS)), JSON.stringify(counts(a.lyrics, LYRICS_RESULTS)),
            JSON.stringify(counts(a.languages, SONG_LANGUAGES))));
+    // 那一天的卡顿概况整批替换(同一天重发时以新的为准)。版本与系统取这条心跳的,活动是之前几天的,升级当天可能差一版。
+    statements.push(env.DB.prepare(`DELETE FROM hang_events WHERE day = ?1 AND install_id = ?2`).bind(a.day, installID));
+    const details = Array.isArray(a.hang_details) ? a.hang_details.slice(0, MAX_HANG_DETAILS_PER_DAY) : [];
+    details.map(cleanHang).filter(Boolean).forEach((h, seq) => statements.push(env.DB.prepare(
+      `INSERT INTO hang_events (day, install_id, seq, received_at, app_version, os_version, arch, duration, since_launch,
+                                since_wake, player, windows, thermal, stack, signature)
+       VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15)`
+    ).bind(a.day, installID, seq, now, e.app_version, e.os_version, e.arch, h.duration, h.since_launch, h.since_wake,
+           h.player, JSON.stringify(h.windows), h.thermal, JSON.stringify(h.stack), hangSignature(h.stack))));
   }
   await env.DB.batch(statements);
   return json({ ok: true });
+}
+
+function oneOf(v, list) {
+  return typeof v === "string" && list.includes(v) ? v : null;
+}
+
+function cleanHang(h) {
+  if (!h || typeof h !== "object" || Array.isArray(h)) return null;
+  const duration = oneOf(h.duration, HANG_DURATIONS), sinceLaunch = oneOf(h.since_launch, HANG_ELAPSED);
+  if (!duration || !sinceLaunch) return null;
+  return {
+    duration, since_launch: sinceLaunch, since_wake: oneOf(h.since_wake, HANG_ELAPSED),
+    player: typeof h.player === "string" && ID_RE.test(h.player) ? h.player : null,
+    windows: Array.isArray(h.windows) ? [...new Set(h.windows.filter((w) => HANG_WINDOWS.includes(w)))].sort() : [],
+    thermal: oneOf(h.thermal, HANG_THERMAL),
+    stack: cleanFrames(h.stack).slice(0, MAX_HANG_FRAMES),
+  };
+}
+
+// 卡顿的归并键:最深那一帧(卡在什么上:等锁、等跨进程回复、画图……)+ 栈里前两个自家帧(谁在那儿等)。没采样的单独一组。
+function hangSignature(stack) {
+  if (!stack.length) return "(no stack)";
+  const name = (f) => f.symbol || `${f.image}+${f.offset}`;
+  const own = stack.slice(1).filter((f) => f.image && OWN_IMAGE_RE.test(f.image)).slice(0, 2);
+  return [stack[0], ...own].map(name).join(" | ").slice(0, 500);
 }
 
 function cleanFrames(v) {
@@ -290,7 +331,7 @@ async function stats(request, env, url) {
   // include_excluded=1 时连它们一起算(SecondBrain 面板遥测页的「含我们自己的机器」开关)。
   const includeExcluded = url.searchParams.get("include_excluded") === "1";
   const kept = (col = "install_id") => (includeExcluded ? "1 = 1" : `${col} NOT IN (SELECT install_id FROM excluded_installs)`);
-  const [daily, fresh, freshByOrigin, totals, latest, activity, crashes] = await Promise.all([
+  const [daily, fresh, freshByOrigin, totals, latest, activity, crashes, hangEvents] = await Promise.all([
     db.prepare(`SELECT day, COUNT(*) AS n FROM heartbeats WHERE day >= ?1 AND ${kept()} GROUP BY day ORDER BY day`).bind(since).all(),
     db.prepare(`SELECT first_day AS day, COUNT(*) AS n FROM installs WHERE first_day >= ?1 AND ${kept()} GROUP BY first_day ORDER BY first_day`)
       .bind(since).all(),
@@ -313,6 +354,8 @@ async function stats(request, env, url) {
                        (SELECT termination_reasons FROM crashes c3 WHERE c3.signature = c.signature AND ${kept("c3.install_id")} ORDER BY received_at DESC LIMIT 1) AS reasons,
                        (SELECT exception_frames FROM crashes c4 WHERE c4.signature = c.signature AND ${kept("c4.install_id")} ORDER BY received_at DESC LIMIT 1) AS exception_frames
                 FROM crashes c WHERE day >= ?1 AND ${kept("c.install_id")} GROUP BY signature ORDER BY n DESC LIMIT 50`).bind(since).all(),
+    db.prepare(`SELECT install_id, app_version, duration, since_launch, since_wake, player, windows, thermal, stack, signature, received_at
+                FROM hang_events WHERE day >= ?1 AND ${kept()}`).bind(since).all(),
   ]);
   const rows = latest.results.map((r) => ({ ...r, features: safeJSON(r.features, {}) }));
   const featureFlags = ["translation", "romanization", "machine_translation", "show_in_dock", "launch_at_login", "beta_updates"];
@@ -375,7 +418,8 @@ async function stats(request, env, url) {
       flags: featureFlags.map((k) => [k, rows.filter((r) => r.features[k] === true).length]),
     },
     players_played: Object.entries(playedByInstall).map(([k, v]) => [k, v.size]).sort((a, b) => b[1] - a[1]),
-    hangs: { total: hangs, installs: installsWithHangs.size },
+    // detailed:带了概况的那几次(新版本才有,每台每天最多 3 次);context 是这几次的情况分布,hotspots 按卡住的位置归并。
+    hangs: { total: hangs, installs: installsWithHangs.size, ...hangSummary(hangEvents.results) },
     // 每个动作:窗口内一共几次、几台机器做过。
     actions: ACTIONS.map((k) => ({ action: k, total: actionTotals[k] || 0, installs: actionInstalls[k] ? actionInstalls[k].size : 0 })),
     // 放过的歌各拿到哪档歌词、各是什么语言(窗口内首数之和;同一首一台机器一天只算一次)。lyrics_daily 每天一行,installs 是报了的机器数。
@@ -389,6 +433,31 @@ async function stats(request, env, url) {
                frames: safeJSON(c.frames, []), exception_frames: safeJSON(c.exception_frames, []), reasons: safeJSON(c.reasons, []) };
     }),
   });
+}
+
+function hangSummary(events) {
+  const parsed = events.map((h) => ({ ...h, windows: safeJSON(h.windows, []), stack: safeJSON(h.stack, []) }));
+  const context = {
+    duration: countBy(parsed, (h) => h.duration),
+    since_launch: countBy(parsed, (h) => h.since_launch),
+    since_wake: countBy(parsed, (h) => h.since_wake || "(no sleep)"),
+    player: countBy(parsed, (h) => h.player),
+    windows: countBy(parsed, (h) => (h.windows.length ? h.windows : ["(none)"])),
+    thermal: countBy(parsed, (h) => h.thermal),
+  };
+  const groups = {};
+  for (const h of parsed) (groups[h.signature] ||= []).push(h);
+  const hotspots = Object.entries(groups).map(([signature, list]) => {
+    const latest = list.reduce((a, b) => (b.received_at > a.received_at ? b : a));
+    const sorted = [...new Set(list.map((h) => h.app_version).filter(Boolean))].sort(compareVersions);
+    return {
+      signature, n: list.length, installs: new Set(list.map((h) => h.install_id)).size,
+      min_version: sorted[0] || null, max_version: sorted[sorted.length - 1] || null, last_at: latest.received_at,
+      stack: latest.stack, duration: countBy(list, (h) => h.duration), since_wake: countBy(list, (h) => h.since_wake || "(no sleep)"),
+      player: countBy(list, (h) => h.player), windows: countBy(list, (h) => (h.windows.length ? h.windows : ["(none)"])),
+    };
+  }).sort((a, b) => b.n - a.n).slice(0, 50);
+  return { detailed: parsed.length, context, hotspots };
 }
 
 // 界面语言的来源:system = 跟随系统,manual = 手动选的,null = 旧版本判不出。
@@ -507,6 +576,19 @@ function render(s) {
       (s.lyrics || []).reduce((n, r) => n + r.songs, 0)) + "</div>" +
     '<div class="card"><h2>歌曲语言(首)</h2>' + table((s.languages || []).filter((r) => r.songs > 0).map((r) => [LANGUAGE_LABELS[r.language] || r.language, r.songs]),
       (s.languages || []).reduce((n, r) => n + r.songs, 0)) + "</div></div>";
+  const hg = s.hangs || {};
+  if (hg.detailed) {
+    const ctx = hg.context || {};
+    html += '<div class="grid">' + [["duration", "卡顿时长"], ["since_launch", "启动后多久"], ["since_wake", "唤醒后多久"],
+      ["player", "最近放歌的播放器"], ["windows", "开着的窗口"], ["thermal", "温度状态"]].map(([k, label]) =>
+      '<div class="card"><h2>' + label + "(带概况的 " + hg.detailed + " 次)</h2>" + table(ctx[k] || [], hg.detailed) + "</div>").join("") + "</div>";
+    html += '<div class="card"><h2>卡顿(按卡住的位置)</h2>' + (hg.hotspots || []).map((h) =>
+      "<details><summary><b>" + h.n + " 次 · " + h.installs + " 台</b> " + esc(h.signature) + ' <span class="muted">' +
+      esc(h.min_version) + (h.max_version !== h.min_version ? "–" + esc(h.max_version) : "") + "</span></summary><pre>" +
+      esc([...(h.stack || []).map(frameLine), "时长: " + h.duration.map(([k, v]) => k + " " + v).join(" · "),
+           "唤醒后: " + h.since_wake.map(([k, v]) => k + " " + v).join(" · "),
+           "窗口: " + h.windows.map(([k, v]) => k + " " + v).join(" · ")].join("\\n")) + "</pre></details>").join("") + "</div>";
+  }
   html += '<div class="card"><h2>崩溃(按归并键)</h2>' + (s.crashes.length ? s.crashes.map((c) =>
     "<details><summary><b>" + c.n + " 次 · " + c.installs + " 台</b> " + esc(c.signature) + ' <span class="muted">' +
     esc(c.min_version) + (c.max_version !== c.min_version ? "–" + esc(c.max_version) : "") + "</span></summary><pre>" +

@@ -6,7 +6,7 @@ import NaturalLanguage
 ///
 /// 两种事件,都 POST JSON 给作者自建的 Cloudflare Worker(仓库 `telemetry-worker/`):
 /// - 心跳:每个本地自然日最多一条,带随机安装 ID、版本与系统、此刻开着哪些功能,以及之前几天记下的活动(放过哪些
-///   播放器、主线程卡住几次)。
+///   播放器、主线程卡住几次和前几次卡顿的概况)。
 /// - 崩溃:App 和引擎的 .ips 报告各发一条摘要(异常类型、终止原因、故障线程的帧),每天最多 `maxCrashesPerDay` 条。
 ///
 /// 不发歌名、歌手、专辑、本机路径、账号名和凭据:负载里只有枚举值、版本号、计数和开关;崩溃摘要里的路径一律换成
@@ -356,6 +356,8 @@ public struct TelemetryActivityDay: Codable, Equatable, Sendable {
     public var playersPlayed: [String]
     /// 主线程卡住到报「unresponsive」的次数(`MainThreadWatchdog`)。
     public var hangs: Int
+    /// 其中前 `TelemetryActivity.maxHangDetailsPerDay` 次的概况。
+    public var hangDetails: [TelemetryHang]
     /// 几个动作各做了几次(`TelemetryAction` 的 rawValue → 次数),没做过的不写。
     public var actions: [String: Int]
     /// 这一天放过的歌各拿到哪一档歌词(`TelemetryLyricsResult` 的 rawValue → 首数),同一首一天只算一次,各档之和就是放了几首。
@@ -363,29 +365,31 @@ public struct TelemetryActivityDay: Codable, Equatable, Sendable {
     /// 这一天放过的有歌词的歌各是什么语言(`TelemetrySongLanguage` 的 rawValue → 首数)。
     public var languages: [String: Int]
 
-    public init(day: String, playersPlayed: [String] = [], hangs: Int = 0, actions: [String: Int] = [:],
-                lyrics: [String: Int] = [:], languages: [String: Int] = [:]) {
+    public init(day: String, playersPlayed: [String] = [], hangs: Int = 0, hangDetails: [TelemetryHang] = [],
+                actions: [String: Int] = [:], lyrics: [String: Int] = [:], languages: [String: Int] = [:]) {
         self.day = day
         self.playersPlayed = playersPlayed
         self.hangs = hangs
+        self.hangDetails = hangDetails
         self.actions = actions
         self.lyrics = lyrics
         self.languages = languages
     }
 
-    /// 旧版本存下的活动没有 `actions`、`lyrics`、`languages`。
+    /// 旧版本存下的活动没有 `actions`、`lyrics`、`languages`、`hang_details`。
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         day = try c.decode(String.self, forKey: .day)
         playersPlayed = try c.decodeIfPresent([String].self, forKey: .playersPlayed) ?? []
         hangs = try c.decodeIfPresent(Int.self, forKey: .hangs) ?? 0
+        hangDetails = try c.decodeIfPresent([TelemetryHang].self, forKey: .hangDetails) ?? []
         actions = try c.decodeIfPresent([String: Int].self, forKey: .actions) ?? [:]
         lyrics = try c.decodeIfPresent([String: Int].self, forKey: .lyrics) ?? [:]
         languages = try c.decodeIfPresent([String: Int].self, forKey: .languages) ?? [:]
     }
 
     enum CodingKeys: String, CodingKey {
-        case day, playersPlayed = "players_played", hangs, actions, lyrics, languages
+        case day, playersPlayed = "players_played", hangs, hangDetails = "hang_details", actions, lyrics, languages
     }
 }
 

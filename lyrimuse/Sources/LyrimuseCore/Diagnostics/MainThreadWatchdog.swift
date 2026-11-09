@@ -6,6 +6,10 @@ import os
 /// (覆盖写,`sampleCooldown` 秒内最多采一次)。播放状态的保活挂在主线程上(PlaybackStatePublisher),
 /// 卡满 15 秒引擎就判 App 不可用、进待机。
 ///
+/// 卡满 `sampleAfter` 时给遥测记一条概况(`TelemetryHang`:启动 / 唤醒后多久、开着哪些窗口、温度状态),恢复时补上卡了多久,
+/// 采样完补上主线程调用栈。开着哪些窗口在主线程还能动的时候记(每次探测任务被执行到时问 `windowIdentifiers`),
+/// 卡住之后再问就问不到了。
+///
 /// 计时用不含睡眠的系统运行时长(`systemUptime`):睡前投出去的任务醒来才被执行到,不算卡顿。
 /// 只在以 Lyrimuse.app 身份运行时启动:selftest 与 `swift run` 起的进程不采样。
 ///
@@ -77,6 +81,11 @@ public final class MainThreadWatchdog: @unchecked Sendable {
     private var timer: DispatchSourceTimer?
     private var tracker: Tracker
     private var lastSampleAt: TimeInterval?
+    private var startedAt: TimeInterval?
+    private var wake = WakeDetector()
+    /// 最近一次探测任务被执行到时开着的窗口(标识)。
+    private var lastWindows: [String] = []
+    private var windowProvider: (@MainActor @Sendable () -> [String])?
 
     private init() {
         enabled = Bundle.main.bundleIdentifier == LyrimuseIdentity.bundleIdentifier
@@ -94,10 +103,16 @@ public final class MainThreadWatchdog: @unchecked Sendable {
         tracker = Tracker(stallThreshold: stallThreshold, sampleAfter: sampleAfter)
     }
 
+    /// App 给的「此刻开着哪些窗口」(窗口标识,`TelemetryHang.windowTag` 认),在主线程上调。
+    public func setWindowProvider(_ provider: @escaping @MainActor @Sendable () -> [String]) {
+        queue.async { [self] in windowProvider = provider }
+    }
+
     public func start() {
         guard enabled else { return }
         queue.async { [self] in
             guard timer == nil else { return }
+            startedAt = ProcessInfo.processInfo.systemUptime
             let source = DispatchSource.makeTimerSource(queue: queue)
             source.schedule(deadline: .now() + interval, repeating: interval,
                             leeway: .milliseconds(max(Int(interval * 200), 1)))
@@ -117,12 +132,17 @@ public final class MainThreadWatchdog: @unchecked Sendable {
 
     private func tick() {
         let now = ProcessInfo.processInfo.systemUptime
+        wake.observe(uptime: now, continuous: WakeDetector.continuousNow)
         if let event = tracker.check(now: now) { handle(event, at: now) }
         guard tracker.shouldProbe(now: now) else { return }
+        let provider = windowProvider
         DispatchQueue.main.async { [weak self] in
             let answeredAt = ProcessInfo.processInfo.systemUptime
+            let windows = provider.map { provider in MainActor.assumeIsolated { provider() } }
             self?.queue.async {
-                guard let self, let event = self.tracker.answered(now: answeredAt) else { return }
+                guard let self else { return }
+                if let windows { self.lastWindows = windows }
+                guard let event = self.tracker.answered(now: answeredAt) else { return }
                 self.handle(event, at: answeredAt)
             }
         }
@@ -136,8 +156,10 @@ public final class MainThreadWatchdog: @unchecked Sendable {
         switch event {
         case .recovered(let seconds):
             logger.notice("main thread: stalled for \(String(format: "%.1f", seconds), privacy: .public)s")
+            // 报过 unresponsive 的那次才补时长;没卡满 sampleAfter 的不算一次卡顿。
+            if tracker.reportedStill { TelemetryActivity.shared.finishHang(seconds: seconds) }
         case .stillStalled(let seconds):
-            TelemetryActivity.shared.noteHang()
+            TelemetryActivity.shared.noteHang(hangContext(at: now))
             let sample = lastSampleAt.map { now - $0 >= Self.sampleCooldown } ?? true
             logger.error("main thread: unresponsive for \(Int(seconds), privacy: .public)s\(sample ? ", sampling its stack" : "", privacy: .public)")
             if sample {
@@ -147,14 +169,26 @@ public final class MainThreadWatchdog: @unchecked Sendable {
         }
     }
 
+    /// 卡住这一刻的概况(时长先记成没恢复,恢复时再补)。
+    private func hangContext(at now: TimeInterval) -> TelemetryHang {
+        TelemetryHang(sinceLaunch: TelemetryHang.elapsedBucket(seconds: now - (startedAt ?? now)),
+                      sinceWake: wake.lastWakeUptime.map { TelemetryHang.elapsedBucket(seconds: now - $0) },
+                      windows: TelemetryHang.windowTags(identifiers: lastWindows),
+                      thermal: TelemetryHang.thermalTag(ProcessInfo.processInfo.thermalState))
+    }
+
     private func takeSample() {
         let path = LogFiles.mainThreadStall.path
         let args = [String(getpid()), String(Self.sampleSeconds), "-mayDie", "-file", path]
         let logger = logger
+        let executable = Bundle.main.executableURL?.lastPathComponent ?? "lyrimuse"
         sampleQueue.async {
             let result = ProcessRunner.run("/usr/bin/sample", args, timeout: 30, captureStderr: true)
             if result?.succeeded == true {
                 logger.notice("main thread: stall sample written to \(LogFiles.mainThreadStall.lastPathComponent, privacy: .public)")
+                if let text = try? String(contentsOfFile: path, encoding: .utf8) {
+                    TelemetryActivity.shared.attachHangStack(TelemetryHang.mainThreadStack(fromSample: text, executable: executable))
+                }
             } else {
                 logger.error("main thread: could not sample the stall, status=\(result?.status ?? -1, privacy: .public) timed_out=\(result?.timedOut ?? false, privacy: .public)")
             }

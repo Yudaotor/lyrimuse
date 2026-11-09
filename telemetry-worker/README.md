@@ -41,6 +41,12 @@ npx wrangler d1 execute lyrimuse-telemetry --remote --command "ALTER TABLE activ
 npx wrangler d1 execute lyrimuse-telemetry --remote --command "ALTER TABLE heartbeats ADD COLUMN system_region TEXT"
 ```
 
+The `hang_events` table (per-hang summaries carried in each day's activity) is created by `schema.sql`; on an existing database run the file again before deploying (every statement is `IF NOT EXISTS`):
+
+```sh
+npx wrangler d1 execute lyrimuse-telemetry --remote --file schema.sql
+```
+
 ---
 
 接收 Lyrimuse 的匿名使用数据（设置 › 关于 › 诊断与数据「发送匿名使用数据」，默认开），跑在 Cloudflare Workers + D1 上，域名 `telemetry.yudaotor.me`。只存白名单字段，不存 IP，只存 Cloudflare 按 IP 给的国家 / 地区码；App 另报系统设置里的地区（`system_region`）。App 不发歌名、歌手、本机路径、账号名和凭据。部署步骤同上；上面列的这几列之前建的库，部署前先按对应的 `ALTER TABLE` 各补一次。
