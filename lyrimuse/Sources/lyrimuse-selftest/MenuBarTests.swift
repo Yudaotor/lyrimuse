@@ -2007,8 +2007,8 @@ func runMenuBarTests() {
         expectEqual(menu.contains("if !coordinator.title.isEmpty, !coordinator.isCurrentTrackAdBreak, !coordinator.isRadioTalkBreak {"), true,
                     "右键菜单: 广告、电台串场不给偏移和搜索歌词")
         let quick = src("MenuBarPanelQuickSettings.swift")
-        expectEqual(quick.components(separatedBy: "= SliderCommitThrottle()").count - 1, 6,
-                    "面板快捷设置: 字号 / 宽度 / 高度六根滑杆拖动中节流提交")
+        expectEqual(quick.components(separatedBy: "= SliderCommitThrottle()").count - 1, 7,
+                    "面板快捷设置: 字号 / 宽度 / 高度七根滑杆拖动中节流提交")
         expectEqual(sourceHas(sourceBody("override func mouseDown(with event: NSEvent)", in: quick),
                               "if event.modifierFlags.contains(.control) {\nholdWork?.cancel()\ndispatch(press.handle(.secondaryClick))"), true,
                     "面板钮块: ⌃左键当右键,翻出快捷设置")

@@ -1881,6 +1881,34 @@ func runSourceContractSurfaceTests() {
                         "面板旋钮: 别把 AppColorPicker 搬进面板(嵌套 popover 会把 .transient 面板点没)")
             expectEqual(panel.contains("FontFamilyPicker("), false,
                         "面板旋钮: 别把 FontFamilyPicker 搬进面板(同上,它也是 .popover)")
+            // ⑨ 盘点补的四处(06 章决策 100):绑的跟设置页是同一个属性、同一套写法,别另写一份。
+            let settingsView = read("SettingsView.swift") ?? ""
+            let styleRows = read("UI/OverlayStyleSettingsRows.swift") ?? ""
+            expectEqual(panel.contains("row(L10n.t(\"主题\")) { PanelThemeMenu() }")
+                        && panel.contains("theme.applyKeepingUnsaved(to: settings)")
+                        && panel.contains("(ColorTheme.builtInPresets + settings.customColorThemes).first { $0.hasSameColors(as: current) }")
+                        && panel.contains("Section(L10n.t(\"我的主题\")) { items(settings.customColorThemes, selected: selected) }")
+                        && panel.contains("Text(OverlayThemeSettingsRows.currentThemeLabel)")
+                        && styleRows.contains("theme.applyKeepingUnsaved(to: settings)"), true,
+                        "面板旋钮: 悬浮歌词那格要有「主题」(内置 + 我的主题,勾当前那套,套用同设置页)")
+            expectEqual(panel.contains("toggleRow(L10n.t(\"下一句\"), isOn: $settings.showNextLinePreview)")
+                        && styleRows.contains("title: L10n.t(\"下一句\"), isOn: $settings.showNextLinePreview)"), true,
+                        "面板旋钮: 悬浮歌词那格要有「下一句」,跟设置页同一个属性")
+            expectEqual(panel.contains("alignmentRow(selection: $settings.lyricsWindowLyricsAlignment,")
+                        && settingsView.contains("alignment: $settings.lyricsWindowLyricsAlignment,"), true,
+                        "面板旋钮: 歌词窗口那格要有「对齐方式」,跟设置页同一个属性")
+            expectEqual(panel.contains("get: { miniFontSizeThrottle.value(or: settings.lyricsWindowMiniFontSize) },")
+                        && panel.contains("range: AppSettings.lyricsWindowMiniFontSizeRange,")
+                        && settingsView.contains("fontSize: $settings.lyricsWindowMiniFontSize,"), true,
+                        "面板旋钮: 迷你窗口那格要有「字号」(完整尺寸的字号随窗口推出、没有滑杆),跟设置页同一个属性和区间")
+            let machine = "set: { features.lyricsMachineTranslation = $0; Task { await features.save() } }"
+            expectEqual(panel.contains(machine) && settingsView.contains(machine), true,
+                        "面板旋钮: 译文那格要有「无译文时自动翻译」,跟设置页一样写引擎配置并存盘")
+            expectEqual(panel.contains("if reading.option == .japanese, settings.romanizationScripts.contains(.japanese) {")
+                        && panel.contains("LocalPlaybackSource.shared.japaneseReading = newValue")
+                        && settingsView.contains("if settings.romanizationScripts.contains(.japanese) {")
+                        && settingsView.contains("local.japaneseReading = newValue"), true,
+                        "面板旋钮: 读音那格要有「日语读音」,日语勾着才出现、改了当场重载,同设置页")
         } else {
             expectEqual(true, false, "面板旋钮: 读不到 MenuBar/MenuBarPanelQuickSettings.swift(路径挪了?)")
         }

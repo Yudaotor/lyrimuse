@@ -395,6 +395,7 @@ struct PanelQuickSettings: View {
     @State private var notchRowHeightThrottle = SliderCommitThrottle()
     @State private var menuBarWidthThrottle = SliderCommitThrottle()
     @State private var menuBarFontSizeThrottle = SliderCommitThrottle()
+    @State private var miniFontSizeThrottle = SliderCommitThrottle()
 
     var body: some View {
         VStack(spacing: 0) {
@@ -489,6 +490,8 @@ struct PanelQuickSettings: View {
     @ViewBuilder private var rows: some View {
         switch target {
         case .surface(.overlay):
+            // 「主题」排第一,同设置页那一段:整块画廊放不下,用下拉(`PanelThemeMenu`)。各格补了哪几行见 06 章决策 100。
+            row(L10n.t("主题")) { PanelThemeMenu() }
             // 写入走节流 + 相等守卫(commitOverlayFontSize / commitOverlayWidth)。
             sliderRow(L10n.t("字号"), value: Binding(
                 get: { overlayFontSizeThrottle.value(or: settings.fontSize) },
@@ -505,6 +508,8 @@ struct PanelQuickSettings: View {
             alignmentRow(selection: $settings.overlayDuetAlignmentOverride,
                          options: Array(OverlayDuetAlignmentOverride.allCases),
                          label: OverlayAlignmentSegmentedControl.label(for:))
+            // 同设置页「内容 › 下一句」那一格,同一个属性。
+            toggleRow(L10n.t("下一句"), isOn: $settings.showNextLinePreview)
             toggleRow(L10n.t("锁定位置"),
                       help: L10n.t("解锁后点按将穿透到桌面；拖动方式见设置中的「长按拖动」"),
                       isOn: Binding(
@@ -666,6 +671,11 @@ struct PanelQuickSettings: View {
             toggleRow(L10n.t("动态封面"),
                       help: L10n.t("仅部分专辑提供；低电量或「减弱动态效果」时自动暂停"),
                       isOn: $settings.motionCoverEnabled)
+            // 同设置页「布局 › 对齐方式」(完整尺寸)。完整尺寸没有字号可调(字号随窗口大小推出),迷你的字号在「迷你窗口」那一格。
+            alignmentRow(selection: $settings.lyricsWindowLyricsAlignment,
+                         options: LyricsRestingAlignment.notchOptions,
+                         label: LyricsAlignmentSegmentedControl.label(for:),
+                         help: L10n.t("「自动」按对唱声部对齐，合唱居中，无对唱信息时靠左"))
         case .lyricsManager:
             // 行在 PanelLyricsManagerRows(带自己的小标题和分组框),body 里单独摆。
             EmptyView()
@@ -680,6 +690,12 @@ struct PanelQuickSettings: View {
                     options: MusixmatchTranslationLanguage.allCases,
                     label: \.displayName)
             }
+            // 同设置页那一行(引擎那份配置,改完存盘),排在译文语言下面同设置页。
+            toggleRow(L10n.t("无译文时自动翻译"), help: L10n.t("优先在本机翻译，无法翻译时再联网翻译"),
+                      isOn: Binding(
+                        get: { features.lyricsMachineTranslation },
+                        set: { features.lyricsMachineTranslation = $0; Task { await features.save() } }
+                      ))
             toggleRow(L10n.t("悬浮歌词"), isOn: $settings.overlayShowTranslation)
             toggleRow(L10n.t("歌词窗口"), isOn: $settings.showTranslation)
         case .romanization:
@@ -694,6 +710,10 @@ struct PanelQuickSettings: View {
                         settings.romanizationScripts = next
                         LocalPlaybackSource.shared.romanizationScripts = next
                     }))
+                // 「日语读音」紧跟日语那一行,日语勾着才出现,同设置页那一行(写法也同:存盘 + 当场重新加载这一首)。
+                if reading.option == .japanese, settings.romanizationScripts.contains(.japanese) {
+                    japaneseReadingRow
+                }
             }
             toggleRow(L10n.t("悬浮歌词"), isOn: $settings.overlayShowRomanization)
             toggleRow(L10n.t("歌词窗口"), isOn: $settings.showRomanization)
@@ -740,6 +760,13 @@ struct PanelQuickSettings: View {
             toggleRow(L10n.t("时间"), isOn: $settings.lyricsWindowMiniShowsTime)
             toggleRow(L10n.t("进度条"), help: L10n.t("关闭后，仅在悬停显示播放控制时出现"),
                       isOn: $settings.lyricsWindowMiniShowsProgress)
+            // 同设置页迷你那一段「字体 › 字号」(上限,窗口小了文字跟着缩),同一个属性、同一个区间。
+            sliderRow(L10n.t("字号"), value: Binding(
+                get: { miniFontSizeThrottle.value(or: settings.lyricsWindowMiniFontSize) },
+                set: { miniFontSizeThrottle.update($0, commit: commitMiniFontSize) }
+            ), range: AppSettings.lyricsWindowMiniFontSizeRange,
+               help: L10n.t("此为上限：窗口足够大时使用此字号，窗口缩小时文字随之缩小，以免超出窗口"),
+               onEditingChanged: { miniFontSizeThrottle.editingChanged($0, commit: commitMiniFontSize) })
         case .volume:
             // 点哪台切到哪台,当前那台打勾;同灵动岛、歌词窗口的输出面板(`AudioOutputMonitor.select`)。
             ForEach(outputs.devices, id: \.id) { device in
@@ -836,6 +863,35 @@ struct PanelQuickSettings: View {
         settings.notchFontSize = value
     }
 
+    private func commitMiniFontSize(_ value: Double) {
+        guard value != settings.lyricsWindowMiniFontSize else { return }
+        settings.lyricsWindowMiniFontSize = value
+    }
+
+    /// 「日语读音」:罗马字 / 假名两档,说明随选中那档(同设置页那一行的副标题)。写法同设置页:存盘,再让本地播放源当场按新写法重载这一首。
+    /// 用下拉不用分段:英文、俄文的标题加两档分段排不下一行,会换到标题下面多占一行高。
+    private var japaneseReadingRow: some View {
+        row(L10n.t("日语读音"),
+            help: settings.japaneseReadingStyle == .kana ? L10n.t("只给汉字标注平假名") : L10n.t("整句标注罗马字")) {
+            PanelGlassMenuPicker(
+                selection: Binding(
+                    get: { settings.japaneseReadingStyle },
+                    set: { newValue in
+                        settings.japaneseReadingStyle = newValue
+                        LocalPlaybackSource.shared.japaneseReading = newValue
+                    }
+                ),
+                options: JapaneseReadingStyle.allCases,
+                label: { style in
+                    switch style {
+                    case .romaji: return L10n.t("罗马字")
+                    case .kana: return L10n.t("假名")
+                    }
+                }
+            )
+        }
+    }
+
     /// 这块面板里几根单滑杆的读数一律按四位数留宽(宽度那根最多四位):各行滑杆是同一个宽、读数又是同一个宽,
     /// 滑杆左端才逐行对齐;按各自的最大值留宽的话,两位数那根会比四位数那根往右错一截。
     private static var readoutWidest: String { String(format: L10n.t("%@pt"), "0000") }
@@ -843,8 +899,9 @@ struct PanelQuickSettings: View {
     private func sliderRow(_ title: String, value: Binding<Double>,
                            range: ClosedRange<Double>, step: Double = 1,
                            displayValue: ((Double) -> Double)? = nil,
+                           help: String? = nil,
                            onEditingChanged: @escaping (Bool) -> Void = { _ in }) -> some View {
-        row(title) {
+        row(title, help: help) {
             HStack(spacing: 6) {
                 // SteppedSlider 而不是原生带步长的构造器:后者会在轨道下面画一排刻度点
                 // (「没有意义,不好看」)。这一根尤其明显 —— 面板总宽
@@ -1020,9 +1077,9 @@ struct PanelQuickSettings: View {
     ///      `LyricsAlignmentSegmentedControl` 头注)。在一块定宽面板里那是会把整行挤变形的;
     ///   ③ 这个文件里已有的宽选项行(灵动岛「风格」)用的就是 `.menu`,同一套语言。
     private func alignmentRow<Value: Hashable>(
-        selection: Binding<Value>, options: [Value], label: @escaping (Value) -> String
+        selection: Binding<Value>, options: [Value], label: @escaping (Value) -> String, help: String? = nil
     ) -> some View {
-        row(L10n.t("对齐方式")) {
+        row(L10n.t("对齐方式"), help: help) {
             PanelGlassMenuPicker(selection: selection, options: options, label: label)
         }
     }
@@ -1126,12 +1183,50 @@ private struct PanelGlassMenuPicker<T: Hashable>: View {
         } label: {
             Text(label(selection)).font(.system(size: 11))
         }
-        .menuStyle(.borderlessButton)
-        .menuIndicator(.visible)
-        .fixedSize()
-        .padding(.horizontal, 9)
-        .frame(height: 22)
-        .settingsGlassMenuCapsule()
+        .modifier(PanelMenuCapsule())
+    }
+}
+
+/// 面板下拉的外形:无边框菜单 + 玻璃胶囊,`PanelGlassMenuPicker` 和 `PanelThemeMenu` 共用。
+private struct PanelMenuCapsule: ViewModifier {
+    func body(content: Content) -> some View {
+        content
+            .menuStyle(.borderlessButton)
+            .menuIndicator(.visible)
+            .fixedSize()
+            .padding(.horizontal, 9)
+            .frame(height: 22)
+            .settingsGlassMenuCapsule()
+    }
+}
+
+/// 悬浮歌词「主题」的下拉:内置几套,再是「我的主题」,跟设置页那块画廊、⚙ 菜单的主题子菜单同一份列表。
+/// 当前配色对得上哪套就勾哪套,标题同工具栏摘要(`currentThemeLabel`,都对不上写「自定义」);选了走 `applyKeepingUnsaved`
+/// (手调没存的那套留着能恢复),点已勾的那套再套用一次。系统菜单而不是画廊:296pt 放不下预览卡,理由同 `PanelGlassMenuPicker`。
+private struct PanelThemeMenu: View {
+    @ObservedObject private var settings = AppSettings.shared
+
+    var body: some View {
+        let current = ColorTheme.current(settings)
+        let selected = (ColorTheme.builtInPresets + settings.customColorThemes).first { $0.hasSameColors(as: current) }
+        Menu {
+            items(ColorTheme.builtInPresets, selected: selected)
+            if !settings.customColorThemes.isEmpty {
+                Section(L10n.t("我的主题")) { items(settings.customColorThemes, selected: selected) }
+            }
+        } label: {
+            Text(OverlayThemeSettingsRows.currentThemeLabel).font(.system(size: 11))
+        }
+        .modifier(PanelMenuCapsule())
+    }
+
+    private func items(_ themes: [ColorTheme], selected: ColorTheme?) -> some View {
+        ForEach(themes) { theme in
+            Toggle(isOn: Binding(get: { theme.id == selected?.id },
+                                 set: { _ in theme.applyKeepingUnsaved(to: settings) })) {
+                Label { Text(theme.name) } icon: { Image(nsImage: theme.swatchImage()) }
+            }
+        }
     }
 }
 
