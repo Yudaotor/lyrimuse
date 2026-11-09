@@ -116,4 +116,14 @@ public enum OverlayCardGeometry {
         let k = min(1, max(0, scale))
         return (card.leading * k + cardHorizontalPadding, card.trailing * k + cardHorizontalPadding)
     }
+
+    /// 只有整行文字的下一句预览(小字号)拿多宽去折行,好让断点跟开唱后主字号在整宽里折的一致(04 章决策 84、93)。
+    /// `width` 是这一行拿到的宽(含两侧描边预留 `inset`);`ratio` = 这一句预览字号宽 ÷ 主字号宽;`unscaledWidth` 是这一句
+    /// 用主字号不折行多宽(含描边预留)。主字号一行放得下就不收窄(小字号更放得下,收窄只会把贴边的句子挤成两行);
+    /// 放不下时文字那一截按比例收窄,描边预留不跟着缩。
+    public static func previewBreakWidth(width: CGFloat, ratio: CGFloat, inset: CGFloat, unscaledWidth: CGFloat?) -> CGFloat {
+        guard ratio < 1 else { return width }
+        if let unscaledWidth, unscaledWidth <= width { return width }
+        return max(0, width - 2 * inset) * max(0, ratio) + 2 * inset
+    }
 }

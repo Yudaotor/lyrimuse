@@ -1162,8 +1162,17 @@ func runOverlayTests() {
                     [true, true, true, true, true, true, true],
                     "下一句断行: 逐词列和逐字的下一句按开唱后主行的字宽、同一个量法定断点")
         expectEqual([sourceHas(preview, "lyricStroke(upcomingWordRows(words, color: color))"),
-                     sourceHas(preview, "lyricStroke(ScaledWidthProposal(ratio: nextLineBreakWidthRatio) {")],
-                    [true, true], "下一句断行: 换行模式下逐字的下一句走按主行断点的那一支,整行文字按宽度比收窄")
+                     sourceHas(preview, "ScaledWidthProposal(ratio: nextLineBreakWidthRatio, inset: strokeInset,\n                                unscaledWidth: nextLineMainNaturalWidth.map { $0 + strokeInset * 2 }) {\n                lyricStroke(Text(next)")],
+                    [true, true], "下一句断行: 换行模式下逐字的下一句走按主行断点的那一支,整行文字按宽度比收窄,收窄套在描边外面")
+        typealias G = OverlayCardGeometry
+        expectEqual(G.previewBreakWidth(width: 404.8, ratio: 0.7, inset: 2.4, unscaledWidth: 380), 404.8,
+                    "下一句断行: 主字号一行放得下就不收窄")
+        expectEqual(abs(G.previewBreakWidth(width: 404.8, ratio: 0.5, inset: 2.4, unscaledWidth: 600) - (400 * 0.5 + 4.8)) < 0.001, true,
+                    "下一句断行: 放不下时文字那一截按比例收窄,描边预留不缩")
+        expectEqual(G.previewBreakWidth(width: 300, ratio: 1, inset: 2.4, unscaledWidth: 900), 300,
+                    "下一句断行: 比例是 1(同字号)不收窄")
+        expectEqual(G.previewBreakWidth(width: 300, ratio: 0.5, inset: 0, unscaledWidth: nil), 150,
+                    "下一句断行: 不知道主字号多宽时照比例收窄")
         expectEqual(sourceHas(wordRows, ".frame(width: MenuBarMarqueeRenderer.width(of: w.text, font: nextLinePreviewNSFont), alignment: .leading)"),
                     true, "下一句断行: 逐字的下一句每个字按 AppKit 量宽,字尾空格不丢")
         expectEqual([sourceHas(columns, ".frame(width: upcomingColumnWidth(g), alignment: .leading)"),
@@ -1175,7 +1184,7 @@ func runOverlayTests() {
                     [true, true], "下一句断行: 字尾空格不进 Text,靠右对齐时字不被顶右一格")
         let ratio = sourceBody("private var nextLineBreakWidthRatio: CGFloat", in: overlay)
         expectEqual([sourceHas(ratio, "OverlayNaturalWidth.width(next, font: nextLinePreviewNSFont) / main"),
-                     sourceHas(ratio, "nextLinePreviewNSFont != playback.overlayNSFonts.main else { return 1 }")],
+                     sourceHas(ratio, "guard let next = nextLineText, nextLinePreviewNSFont != playback.overlayNSFonts.main,")],
                     [true, true], "下一句断行: 收窄比例 = 这一句预览字号宽 / 主字号宽,下一句用主字号时不收窄")
     }
 

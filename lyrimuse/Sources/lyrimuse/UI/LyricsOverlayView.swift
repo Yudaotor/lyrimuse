@@ -1587,11 +1587,18 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
     /// 下一句预览的断点按开唱后的主行定:主字号、同一个可用宽度、同一个折行函数,画的时候用预览字号(04 章决策 84)。
     /// 只有整行文字(没有逐字)时主行是系统折行,预览的折行宽度按这一句预览字号与主字号的宽度比收窄。
     private var nextLineBreakWidthRatio: CGFloat {
-        guard let next = nextLineText, nextLinePreviewNSFont != playback.overlayNSFonts.main else { return 1 }
-        let main = OverlayNaturalWidth.width(next, font: playback.overlayNSFonts.main)
-        guard main > 0 else { return 1 }
+        guard let next = nextLineText, nextLinePreviewNSFont != playback.overlayNSFonts.main,
+              let main = nextLineMainNaturalWidth, main > 0 else { return 1 }
         return min(1, OverlayNaturalWidth.width(next, font: nextLinePreviewNSFont) / main)
     }
+
+    /// 下一句按主字号不折行多宽(不含描边预留)。
+    private var nextLineMainNaturalWidth: CGFloat? {
+        nextLineText.map { OverlayNaturalWidth.width($0, font: playback.overlayNSFonts.main) }
+    }
+
+    /// 描边开着时每行四周的预留(`OptionalTextStroke` 的 padding);关着为 0。
+    private var strokeInset: CGFloat { playback.textStrokeEnabled ? LyricsTextStrokeMetrics.inset : 0 }
 
     static func droppingTrailingWhitespace(_ text: String) -> String {
         String(text.reversed().drop { $0.isWhitespace }.reversed())
@@ -1659,13 +1666,15 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
         } else if let words = upcomingWords {
             lyricStroke(upcomingWordRows(words, color: color))
         } else {
-            lyricStroke(ScaledWidthProposal(ratio: nextLineBreakWidthRatio) {
-                Text(next)
+            // 收窄套在描边外面:描边在画布里把内容再排一遍,收窄套在里面的话那一遍又乘一次比例,描边跟字折得不一样、错位。
+            ScaledWidthProposal(ratio: nextLineBreakWidthRatio, inset: strokeInset,
+                                unscaledWidth: nextLineMainNaturalWidth.map { $0 + strokeInset * 2 }) {
+                lyricStroke(Text(next)
                     .font(nextLinePreviewFont)
                     .foregroundStyle(color)
                     .lyricTypesetting(next)
-                    .overlayLineFit(playback.lineOverflow)
-            })
+                    .overlayLineFit(playback.lineOverflow))
+            }
         }
     }
 
@@ -2706,12 +2715,16 @@ struct WrapLayout: Layout {
 
 /// 把宽度提案按比例收窄再交给唯一的子视图,报子视图自己的尺寸。下一句预览只有整行文字时用:
 /// 小字号在收窄后的宽度里折行,断点跟开唱后主字号在整宽里折的一致(04 章决策 84)。
+/// 收多少看 `OverlayCardGeometry.previewBreakWidth`(主字号放得下就不收,描边预留不跟着缩)。
 struct ScaledWidthProposal: Layout {
     var ratio: CGFloat
+    var inset: CGFloat = 0
+    var unscaledWidth: CGFloat? = nil
 
     private func narrowed(_ proposal: ProposedViewSize) -> ProposedViewSize {
         guard let width = proposal.width, width.isFinite else { return proposal }
-        return ProposedViewSize(width: width * ratio, height: proposal.height)
+        return ProposedViewSize(width: OverlayCardGeometry.previewBreakWidth(
+            width: width, ratio: ratio, inset: inset, unscaledWidth: unscaledWidth), height: proposal.height)
     }
 
     func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
