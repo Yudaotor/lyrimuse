@@ -131,6 +131,29 @@ func runMyGoTests() {
                         .map { ($0.timeIntervalSince(t) * 1000).rounded() / 1000 }, 2.15, "MyGo 循环: 离曲尾不到 3 秒时排一次补查")
     }
 
+    // ---- 插件流没有时长:按它进度条的最大值补 ----
+    do {
+        typealias S = PineVolume.Slider
+        expectEqual(MyGoPlayerUI.progressMax([S(min: 0, max: 315.193469387, value: 0)]), 315.193469387,
+                    "MyGo 时长: 进度条的最大值就是解出来的时长(李志插件那首系统那份没有时长,进度条 315.19)")
+        expectEqual(MyGoPlayerUI.progressMax([S(min: 0, max: 1, value: 0.05), S(min: 0, max: 259.3, value: 12)]), 259.3,
+                    "MyGo 时长: 音量条(0~1)不算")
+        expectEqual(MyGoPlayerUI.progressMax([S(min: 0, max: 200, value: 0), S(min: 0, max: 300, value: 0)]) == nil, true,
+                    "MyGo 时长: 不止一根像进度条的不猜")
+        expectEqual(MyGoPlayerUI.progressMax([S(min: 0, max: .infinity, value: 0)]) == nil, true, "MyGo 时长: 无限长不算")
+        expectEqual(MyGoPlayerUI.progressMax([]) == nil, true, "MyGo 时长: 读不到滑块为 nil")
+        var s = MediaControlSnapshot.forReplay(title: "山阴路的夏天", artist: "李志", album: "108个关键词", duration: nil,
+                                               elapsedTime: 3, playing: true, playbackRate: 1,
+                                               bundleIdentifier: PlaybackPlayer.mygoMusic.bundleIdentifier, anchorElapsedTime: 3)
+        s.processIdentifier = 75789
+        s.republishDueBy = Date(timeIntervalSince1970: 5)
+        s.positionIsPrecise = true
+        let filled = MediaControlClient.withFilledDuration(s, 315.2)
+        expectEqual([filled.trackDuration, filled.elapsedTime], [315.2, 3], "MyGo 时长: 补上时长,位置不动")
+        expectEqual(filled.processIdentifier == 75789 && filled.republishDueBy == s.republishDueBy && filled.positionIsPrecise == true, true,
+                    "MyGo 时长: 进程号、补查时刻、精确档跟着带过去")
+    }
+
     // ---- 接线 ----
     do {
         typealias L = LocalPlaybackSource
@@ -144,6 +167,8 @@ func runMyGoTests() {
         expectEqual(sourceHas(client, "timestamp = mygo.timestamp"), true, "MyGo 接线: 下游拿到的是挪过的时刻")
         expectEqual(sourceHas(client, "snapshot.republishDueBy = foobarLoopCheckAt(bundleID: probed.bundleIdentifier"), true,
                     "MyGo 接线: 焦点被占时单问那份同样取余、排补查")
+        expectEqual(client.components(separatedBy: "MyGoPlayerUI.duration(trackKey: ").count - 1, 2,
+                    "MyGo 接线: 主路和焦点被占时单问那份都按进度条补时长")
         expectEqual(client.components(separatedBy: "snapshot = mygoProbedSnapshot(probed.snapshot, anchor: probed.anchor, now: now)").count - 1,
                     2, "MyGo 接线: 焦点被占时两处单问(暂停焦点顶替、焦点回退第二级)都过同一套挪法")
         if let latency = AudioOutputRoute.outputLatencySecs() {

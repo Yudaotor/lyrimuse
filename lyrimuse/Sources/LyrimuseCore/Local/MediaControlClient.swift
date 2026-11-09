@@ -2665,8 +2665,18 @@ public enum MediaControlClient {
         return snapshot
     }
 
+    /// `withDuration` 的副本,外加解码那一拍设好的几项(进程号、补查时刻、精确档、在加载)。
+    public nonisolated static func withFilledDuration(_ snapshot: MediaControlSnapshot, _ duration: Double) -> MediaControlSnapshot {
+        var out = snapshot.withDuration(duration)
+        out.processIdentifier = snapshot.processIdentifier
+        out.republishDueBy = snapshot.republishDueBy
+        out.positionIsPrecise = snapshot.positionIsPrecise
+        out.isWaitingToPlay = snapshot.isWaitingToPlay
+        return out
+    }
+
     /// 按 bundle id 单问到的 MyGo 那份(焦点被别的 App 占着时):锚点过主路同一套挪法(`MyGoSessionAnchor.probedPosition`),
-    /// 位置按挪过的锚点推到此刻,单曲循环越过曲长时取余、离曲尾不到 3 秒排补查(同主路);没在走的原样交回。
+    /// 位置按挪过的锚点推到此刻,单曲循环越过曲长时取余、离曲尾不到 3 秒排补查,没有时长时按进度条补(同主路);没在走的原样交回。
     private static func mygoProbedSnapshot(_ probed: MediaControlSnapshot, anchor: NowPlayingClientsProbe.SessionAnchor,
                                            now: Date) -> MediaControlSnapshot {
         var snapshot = probed
@@ -2683,6 +2693,9 @@ public enum MediaControlClient {
         snapshot.processIdentifier = pid
         snapshot.republishDueBy = foobarLoopCheckAt(bundleID: probed.bundleIdentifier, playing: probed.playing,
                                                     position: position, duration: probed.duration, now: now)
+        if snapshot.trackDuration == nil, let duration = MyGoPlayerUI.duration(trackKey: probed.trackKey, now: now) {
+            snapshot = withFilledDuration(snapshot, duration)
+        }
         return snapshot
     }
 
@@ -3883,6 +3896,11 @@ public enum MediaControlClient {
                                       duration: raw.duration, now: sampledAt)
         snapshot.processIdentifier = raw.processIdentifier
         snapshot.isMusicVideo = Self.spotifyMusicVideoMark(bundleID: bundleID, mediaType: raw.mediaType)
+        // MyGo 的插件流常不报时长,位置一直算不了:按它进度条的最大值补(见 MyGoPlayerUI)。
+        if bundleID == PlaybackPlayer.mygoMusic.bundleIdentifier, playing == true, snapshot.trackDuration == nil,
+           let duration = MyGoPlayerUI.duration(trackKey: trackKey, now: sampledAt) {
+            snapshot = Self.withFilledDuration(snapshot, duration)
+        }
         return (snapshot, bundleID)
     }
 
