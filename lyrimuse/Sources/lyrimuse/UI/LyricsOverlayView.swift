@@ -1620,6 +1620,13 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
         return groups
     }
 
+    /// 上下交替时下一句的图层规格:跟当前句同一份(`wrappedKaraokeSpec`),按下一句自己的对齐,停表(还没开唱,不用逐帧画)。
+    private func alternateNextSpec(_ next: String, words: [SyncedLyricWord]) -> WrappedKaraokeRows.Spec {
+        var spec = wrappedKaraokeSpec(lineKey: next, words: words, groups: upcomingWordGroups, rowAlignment: nextLineRowAlignment)
+        spec.paused = true
+        return spec
+    }
+
     /// 下一句预览的内容。有逐词分组时按「一组一列:字在上、读音在下」排,跟这句变成当前行之后的
     /// 图层行(`OverlayRowLayout.layOut`)同一种版式,开唱那一刻只换颜色、不挪位置;整行罗马音那一行随之让位。
     @ViewBuilder
@@ -1629,7 +1636,12 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
             ? playback.displayKaraokeUnsungColor
             : playback.displayForegroundColor.opacity(OverlayLineRise.previewOpacity)
         let still = rowPlan.next?.motion == .still
-        if still, let groups = upcomingWordGroups {
+        if alternatePlacement != nil, !still, let words = upcomingWords {
+            // 上下交替:下一句就是开唱后那一行的图层原样画成没唱到的颜色,行高、描边预留、字的位置跟当前句同一套,
+            // 开唱时不挪(SwiftUI 的字不占描边那圈,图层行占,换过去会往下沉一圈描边,见 04 章决策 92)。
+            WrappedKaraokeRows(spec: alternateNextSpec(next, words: words), nowMs: Self.lyricsNowMs,
+                               contentRectSink: upcomingContentSink, sinkOwner: upcomingWordRowsKey(words))
+        } else if still, let groups = upcomingWordGroups {
             // 逐词列放不下时从开头显示、右边裁掉(列没法打「…」);放得下时交给外层按声部对齐。
             // `minWidth: 0` 不能省:否则 frame 取列的整宽、被外层居中,变成两头都裁。
             ViewThatFits(in: .horizontal) {

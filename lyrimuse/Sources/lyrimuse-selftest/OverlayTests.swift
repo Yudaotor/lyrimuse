@@ -49,6 +49,11 @@ func runOverlayTests() {
                     && sourceHas(sourceBody("private var alternateBlockWidth: CGFloat", in: view),
                                  "return max(widest + strokeInset * 2, cardNaturalWidth)"), true,
                     "上下交替(契约): 两行收在按整首最宽一段定宽的一块里,块放在对齐方式那一侧(自动 / 居中放正中)")
+        expectEqual(sourceHas(sourceBody("private func nextLinePreviewContent(_ next: String) -> some View", in: view),
+                              "if alternatePlacement != nil, !still, let words = upcomingWords {\n            // 上下交替")
+                    && sourceHas(sourceBody("private func alternateNextSpec(_ next: String, words: [SyncedLyricWord]) -> WrappedKaraokeRows.Spec", in: view),
+                                 "var spec = wrappedKaraokeSpec(lineKey: next, words: words, groups: upcomingWordGroups, rowAlignment: nextLineRowAlignment)"),
+                    true, "上下交替(契约): 带逐字的下一句跟当前句同一套图层画,开唱时不挪")
     }
     // ---- GapDotsCurve.opacityKeyframes:间奏三点交给 Core Animation 的亮度关键帧 ----
     do {
