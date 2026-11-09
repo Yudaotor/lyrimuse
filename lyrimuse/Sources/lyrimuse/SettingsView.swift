@@ -2816,7 +2816,6 @@ private struct AppearanceSettingsTab: View {
     /// 歌词窗口迷你那三根滑杆拖动中节流提交(`SliderCommitThrottle`):每写一次,设置页里的预览和真窗口都重排一遍。
     @State private var miniFontSizeThrottle = SliderCommitThrottle()
     @State private var miniHeaderWidthThrottle = SliderCommitThrottle()
-    @State private var controlScaleThrottle = SliderCommitThrottle()
     @State private var miniHeaderHeightThrottle = SliderCommitThrottle()
     /// 歌词窗口此刻开没开(`LyricsWindowSession.openKey`):开着时「打开」那颗键写「显示」,按下去是切到它。
     @AppStorage(LyricsWindowSession.openKey) private var lyricsWindowOpen = false
@@ -3491,11 +3490,6 @@ private struct AppearanceSettingsTab: View {
     }
 
     /// 相等守卫:拖动中量化后的等值赋值不再广播。
-    private func commitControlScale(_ v: Double) {
-        guard v != settings.lyricsWindowControlScalePercent else { return }
-        settings.lyricsWindowControlScalePercent = v
-    }
-
     private func commitMiniHeaderWidth(_ v: Double) {
         guard v != settings.lyricsWindowMiniHeaderWidthPercent else { return }
         settings.lyricsWindowMiniHeaderWidthPercent = v
@@ -3910,19 +3904,7 @@ private struct AppearanceSettingsTab: View {
                     title: L10n.t("控件大小"),
                     help: L10n.t("放大播放控制和其他按钮，网页歌词同样生效")
                 ) {
-                    HStack(spacing: 8) {
-                        SteppedSlider(value: Binding(
-                            get: { controlScaleThrottle.value(or: settings.lyricsWindowControlScalePercent) },
-                            set: { controlScaleThrottle.update($0, commit: commitControlScale) }
-                        ), in: LyricsWindowControlScale.percentRange, step: LyricsWindowControlScale.percentStep,
-                           onEditingChanged: { controlScaleThrottle.editingChanged($0, commit: commitControlScale) })
-                            .frame(width: 130)
-                        Text(verbatim: "\(Int(controlScaleThrottle.value(or: settings.lyricsWindowControlScalePercent).rounded()))%")
-                            .foregroundStyle(.secondary)
-                            .monospacedDigit()
-                            // 按最宽的「200%」留位,拖动时滑杆不左右挪。
-                            .frame(width: 38, alignment: .trailing)
-                    }
+                    LyricsWindowControlScaleSlider()
                 }
             }
         }

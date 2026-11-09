@@ -1256,9 +1256,23 @@ func runLyricsWindowTests() {
                     && sourceBytes(layerList, contain: "bottomInset = spec?.indicatorBottomInset ?? 40"),
                     true, "控件大小: 放大后歌词滚动条停在右下那排上方,100% 时照旧离底 40")
         expectEqual(sourceHas(appSettings, "lyricsWindowControlScalePercent = Self.clamped(\n            (defaults.object(forKey: Keys.lyricsWindowControlScalePercent) as? Double)\n                ?? LyricsWindowControlScale.defaultPercent,\n            to: LyricsWindowControlScale.percentRange)")
-                    && sourceBytes(settingsView, contain: "in: LyricsWindowControlScale.percentRange, step: LyricsWindowControlScale.percentStep,")
+                    && sourceBytes(source("lyrimuse/UI/LyricsWindowControlScaleDraft.swift"),
+                                   contain: "in: LyricsWindowControlScale.percentRange, step: LyricsWindowControlScale.percentStep,")
+                    && sourceBytes(settingsView, contain: "LyricsWindowControlScaleSlider()")
                     && SettingsSearchCatalog.lyricsWindowFullOnlyTitles.contains("控件大小"),
                     true, "控件大小: 读盘夹回范围、默认 100%,设置页是滑杆,设置搜索只在完整尺寸")
+        // 拖动中只写草稿给设置页预览、松手才写设置(07 章决策 198):逐格写设置会连带重排真窗口、整页设置和网页歌词。
+        let scaleDraft = source("lyrimuse/UI/LyricsWindowControlScaleDraft.swift")
+        let previewStage = source("lyrimuse/UI/LyricsWindowPreviewStage.swift")
+        expectEqual(sourceHas(scaleDraft, "if dragging {\n                        if draft.percent != v { draft.percent = v }\n                    } else {\n                        commit(v)\n                    }")
+                    && sourceHas(scaleDraft, "guard !began else { return }\n                if let v = draft.percent { commit(v) }\n                draft.percent = nil"),
+                    true, "控件大小拖动: 拖动中只写草稿,松手写设置并清草稿,键盘增减直接写")
+        expectEqual(sourceBytes(previewStage, contain: ".environment(\\.lyricsWindowControlScaleOverride, controlScaleDraft.percent.map(LyricsWindowControlScale.factor(percent:)))")
+                    && sourceBytes(window, contain: "private var controlFactor: CGFloat { controlScaleOverride ?? playback.fullControlScale }"),
+                    true, "控件大小拖动: 草稿只经预览的环境值生效,真窗口照设置")
+        expectEqual(sourceBytes(settingsView, contain: "LyricsWindowControlScaleDraft")
+                    || sourceBytes(window, contain: "LyricsWindowControlScaleDraft"),
+                    false, "控件大小拖动: 整个设置页和歌词窗口都不观察草稿(只有滑杆那一行和预览舞台观察)")
         let sizeHits = SettingsSearchMatcher.ranked(SettingsSearchCatalog.entries, query: "控件大小", title: { $0.titleKey },
                                                     secondary: { $0.keywords + $0.pathKeys })
         expectEqual(sizeHits.first.map { $0.sectionValue == SettingsSearchCatalog.lyricsWindowSectionValue && $0.lyricsWindowMini == false },

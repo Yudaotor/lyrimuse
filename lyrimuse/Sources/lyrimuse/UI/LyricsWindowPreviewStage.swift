@@ -34,6 +34,7 @@ struct LyricsWindowPreviewStage: View {
     /// 看的是哪个形态。存进 AppStorage 而不是 @State:切过去看迷你、下次回到这一页还在迷你,
     /// 不用每次重选。纯 UI 偏好,不进 AppSettings(引擎不需要知道)。
     @AppStorage(showsMiniStorageKey) private var showsMini = false
+    @ObservedObject private var controlScaleDraft = LyricsWindowControlScaleDraft.shared
 
     /// 画完整尺寸还是迷你尺寸(由上面那个偏好驱动,留参数是为了将来能从别处指定)。
     private var mini: Bool { showsMini }
@@ -137,6 +138,8 @@ struct LyricsWindowPreviewStage: View {
         return LyricsWindowView(previewMode: true, previewMini: mini)
             // 玻璃里的内容不吃下面的 scaleEffect 和裁切,会按原尺寸画到预览框外面;预览里一律不用玻璃(07 章决策 156)。
             .environment(\.settingsGlassDisabled, true)
+            // 拖「控件大小」滑杆时还没写进设置的值只在这里生效(LyricsWindowControlScaleDraft)。
+            .environment(\.lyricsWindowControlScaleOverride, controlScaleDraft.percent.map(LyricsWindowControlScale.factor(percent:)))
             .frame(width: contentSize.width, height: contentSize.height)
             // 在缩放之前取范围:这里拿到的是内容坐标,下面叠可点区域时再乘 scale。
             .overlayPreferenceValue(LyricsWindowPreviewHeaderAnchorKey.self) { anchor in

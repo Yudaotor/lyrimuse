@@ -302,6 +302,8 @@ func runDeepLinkTests() {
                     && link("lyrimuse://debug/japanese-reading") == nil, true, "debug: 认不出的样式、没带都不认")
         expectEqual(link("lyrimuse://debug/lyrics-window-controls?percent=135"), .debug(.lyricsWindowControls(percent: 135)),
                     "debug: 歌词窗口控件大小设成 135%")
+        expectEqual(link("lyrimuse://debug/lyrics-window-controls?percent=150&draft=1"),
+                    .debug(.lyricsWindowControls(percent: 150, draft: true)), "debug: 控件大小只给预览(同拖动途中)")
         expectEqual(link("lyrimuse://debug/lyrics-window-controls?percent=90") == nil
                     && link("lyrimuse://debug/lyrics-window-controls?percent=abc") == nil
                     && link("lyrimuse://debug/lyrics-window-controls") == nil, true, "debug: 控件大小越界、不是数、没带都不认")
@@ -501,6 +503,7 @@ func runDeepLinkTests() {
             .debug(.menuBarCenter(center: nil, ignoreNotch: nil, hover: false, click: "left")),
             .debug(.japaneseReading(.kana)), .debug(.japaneseReading(.romaji)),
             .debug(.lyricsWindowControls(percent: 100)), .debug(.lyricsWindowControls(percent: 162.5)),
+            .debug(.lyricsWindowControls(percent: 140, draft: true)),
             .debug(.touchBarDisplay(color: .rainbow)), .debug(.touchBarDisplay(color: .cover)),
             .debug(.touchBarTyping(override: true)), .debug(.touchBarTyping(override: false)), .debug(.touchBarTyping(override: nil)),
             .debug(.rainbow(overlay: true, notch: nil)), .debug(.rainbow(overlay: false, notch: true)),

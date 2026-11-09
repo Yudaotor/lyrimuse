@@ -4439,7 +4439,9 @@ struct LyricsWindowView: View {
         LyricsTransportMetrics(width: controlScale, requested: controlFactor)
     }
     /// 「控件大小」的倍数:歌名旁圆钮、右下那排按钮直接乘它;播放控制那一排走 `transportMetrics`。
-    private var controlFactor: CGFloat { playback.fullControlScale }
+    private var controlFactor: CGFloat { controlScaleOverride ?? playback.fullControlScale }
+    /// 设置页预览里拖「控件大小」滑杆时还没写进设置的倍数;真窗口里恒为 nil。
+    @Environment(\.lyricsWindowControlScaleOverride) private var controlScaleOverride
 
     /// 主三键的不透明度,照 Apple Music 同窗口截图(07 章决策 93):播放键 0.85、上 / 下一首 0.72,
     /// 不是纯白。随机 / 循环熄灭态见 modeToggleButton。
