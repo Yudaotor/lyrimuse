@@ -1117,6 +1117,9 @@ public enum MediaControlClient {
             if target.bundleID == SwinsianPlayerInfo.bundleID {
                 snapshot = swinsianProbedSnapshot(probed.snapshot, anchor: probed.anchor, now: now)
             }
+            if target.bundleID == PlaybackPlayer.mygoMusic.bundleIdentifier {
+                snapshot = mygoProbedSnapshot(probed.snapshot, anchor: probed.anchor, now: now)
+            }
             if let reading = amazonMusicReading(
                 bundleID: target.bundleID, trackKey: probed.snapshot.trackKey, title: probed.snapshot.title,
                 metadataTimestamp: probed.anchor.timestamp.map { Date(timeIntervalSince1970: $0) },
@@ -2128,6 +2131,9 @@ public enum MediaControlClient {
             if target.bundleID == SwinsianPlayerInfo.bundleID {
                 snapshot = swinsianProbedSnapshot(probed.snapshot, anchor: probed.anchor, now: now)
             }
+            if target.bundleID == PlaybackPlayer.mygoMusic.bundleIdentifier {
+                snapshot = mygoProbedSnapshot(probed.snapshot, anchor: probed.anchor, now: now)
+            }
             if let reading = amazonMusicReading(
                 bundleID: target.bundleID, trackKey: probed.snapshot.trackKey, title: probed.snapshot.title,
                 metadataTimestamp: probed.anchor.timestamp.map { Date(timeIntervalSince1970: $0) },
@@ -2656,6 +2662,23 @@ public enum MediaControlClient {
             if reading.precise { snapshot.positionIsPrecise = true }
             snapshot.republishDueBy = reading.dueBy
         }
+        return snapshot
+    }
+
+    /// 按 bundle id 单问到的 MyGo 那份(焦点被别的 App 占着时):锚点过主路同一套挪法(`MyGoSessionAnchor.probedPosition`),
+    /// 位置按挪过的锚点推到此刻;没在走的原样交回。
+    private static func mygoProbedSnapshot(_ probed: MediaControlSnapshot, anchor: NowPlayingClientsProbe.SessionAnchor,
+                                           now: Date) -> MediaControlSnapshot {
+        var snapshot = probed
+        if snapshot.processIdentifier == nil { snapshot.processIdentifier = anchor.processIdentifier.map { Int($0) } }
+        guard let position = MyGoSessionAnchor.probedPosition(
+            identity: [probed.title ?? "", probed.artist ?? "", probed.album ?? ""].joined(separator: "|"),
+            playing: probed.playing, elapsed: probed.anchorElapsedTime, anchorAt: anchor.timestamp,
+            rate: probed.playbackRate, now: now)
+        else { return snapshot }
+        let pid = snapshot.processIdentifier
+        snapshot = snapshot.withPlayerClock(position, capturedAt: now)
+        snapshot.processIdentifier = pid
         return snapshot
     }
 

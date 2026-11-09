@@ -92,6 +92,26 @@ func runMyGoTests() {
         expectEqual(near(midway.timestamp, base + 0.6 + shift), true, "MyGo 封面锚点: 位置不在开头的不算(跳转)")
     }
 
+    // ---- 焦点被占时单问的那份 ----
+    do {
+        let raw = MediaControlMicros.timestampString(base * 1_000_000)
+        expectEqual(raw, ts(0), "MyGo 单问: 锚点秒数换成跟主路同一种时刻写法(同一份锚点两边认得出)")
+        let out = A.fill(identity: "|Click M|", playing: true, elapsed: 0.2, timestamp: raw, rate: 1, outputLatency: latency,
+                         state: A.State())
+        let at = Date(timeIntervalSince1970: base + 3)
+        let pos = A.position(elapsed: out.elapsed, timestamp: out.timestamp, rate: 1, playing: true, now: at) ?? -1
+        expectEqual(abs(pos - (0.2 + 3 - shift)) < 0.000_01, true, "MyGo 单问: 位置按挪过的锚点推到此刻")
+        let early = A.position(elapsed: 0, timestamp: out.timestamp, rate: 1, playing: true,
+                               now: Date(timeIntervalSince1970: base + 0.1))
+        expectEqual(early, 0, "MyGo 单问: 还没出声时不推到 0 以前")
+        expectEqual(A.position(elapsed: 5, timestamp: ts(0), rate: 0, playing: false, now: at) == nil, true,
+                    "MyGo 单问: 停着的不推,照单问那份原样用")
+        expectEqual(A.position(elapsed: 5, timestamp: nil, rate: 1, playing: true, now: at) == nil, true,
+                    "MyGo 单问: 缺锚点时刻的不推")
+        let half = A.position(elapsed: 10, timestamp: ts(0), rate: 0.5, playing: true, now: at) ?? -1
+        expectEqual(abs(half - 11.5) < 0.000_01, true, "MyGo 单问: 按速率推")
+    }
+
     // ---- 接线 ----
     do {
         typealias L = LocalPlaybackSource
@@ -103,6 +123,8 @@ func runMyGoTests() {
                                   encoding: .utf8)) ?? ""
         expectEqual(sourceHas(client, "let mygo = MyGoSessionAnchor.filled("), true, "MyGo 接线: 解码系统会话时挪锚点")
         expectEqual(sourceHas(client, "timestamp = mygo.timestamp"), true, "MyGo 接线: 下游拿到的是挪过的时刻")
+        expectEqual(client.components(separatedBy: "snapshot = mygoProbedSnapshot(probed.snapshot, anchor: probed.anchor, now: now)").count - 1,
+                    2, "MyGo 接线: 焦点被占时两处单问(暂停焦点顶替、焦点回退第二级)都过同一套挪法")
         if let latency = AudioOutputRoute.outputLatencySecs() {
             expectEqual(latency >= 0 && latency < 1, true, "MyGo 接线: 默认输出设备的延迟读得到、在合理范围")
         }

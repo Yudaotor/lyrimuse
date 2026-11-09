@@ -80,6 +80,23 @@ public enum MyGoSessionAnchor {
         return (elapsed, shifted, State(anchor: anchor))
     }
 
+    /// 焦点被别的 App 占着时按 bundle id 单问到的那份:它不走主路的解码,锚点(1970 年起的秒数)在这里过同一套挪法,
+    /// 返回按挪过的锚点推到 `now` 的位置。没在走、缺锚点为 nil(照单问那份原样用)。
+    static func probedPosition(identity: String, playing: Bool?, elapsed: Double?, anchorAt: Double?, rate: Double?, now: Date)
+        -> Double? {
+        let raw = anchorAt.flatMap { MediaControlMicros.timestampString($0 * 1_000_000) }
+        let out = filled(bundleID: PlaybackPlayer.mygoMusic.bundleIdentifier, identity: identity, playing: playing,
+                         elapsed: elapsed, timestamp: raw, rate: rate)
+        return position(elapsed: out.elapsed, timestamp: out.timestamp, rate: rate, playing: playing, now: now)
+    }
+
+    /// 锚点推到 `now` 的位置:没在走、缺锚点为 nil,不推到 0 以前。纯函数,selftest 覆盖。
+    public static func position(elapsed: Double?, timestamp: String?, rate: Double?, playing: Bool?, now: Date) -> Double? {
+        let speed = rate ?? (playing == true ? 1 : 0)
+        guard speed > 0, let elapsed, let at = timestamp.flatMap(seconds) else { return nil }
+        return max(0, elapsed + (now.timeIntervalSince1970 - at) * speed)
+    }
+
     /// 解码系统会话时调:不是 MyGo 的原样交回。
     static func filled(bundleID: String?, identity: String, playing: Bool?, elapsed: Double?, timestamp: String?, rate: Double?)
         -> (elapsed: Double?, timestamp: String?) {
