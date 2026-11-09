@@ -69,6 +69,9 @@ public final class LocalPlaybackSource: ObservableObject {
     /// 菜单栏自适应宽度给整首定的起步槽宽(文字部分):开了按宽度断句是整首最宽的一行(LyricsSyncEngine.widestRow),
     /// 没开是按 `MenuBarSlotPolicy.songRowQuantile` 取的那一行(LyricsSyncEngine.rowWidth)。nil = 还不知道。
     @Published public private(set) var menuBarSongRowWidth: CGFloat?
+    /// 悬浮歌词整首主行最宽的那一段(按悬浮歌词报的宽度量,不算下一句 / 译文 / 罗马音)。「上下交替」拿它定两行那一块的宽,
+    /// 见 04 章决策 91。nil = 还不知道。
+    @Published public private(set) var overlayWidestMainRow: CGFloat?
     /// 单行展示面(灵动岛 / 菜单栏)该显示的那一行(「唱完就切到下一句,
     /// 好提前看到歌词跟唱」)。跟 currentLine 的区别是**唱完就切走**;长间奏中段为 nil,
     /// 由 compactShowsPlaceholder 区分成因。规则见 CompactLyricLead —— 它跟歌词窗口的
@@ -290,6 +293,7 @@ public final class LocalPlaybackSource: ObservableObject {
     public func setLineLayoutBudget(_ budget: LineLayoutBudget?, for surface: LineBreakSurface) {
         guard syncEngine.setLayoutBudget(budget, for: surface) else { return }
         if surface == .menuBar { updateMenuBarSongRowWidth() }
+        if surface == .overlay { updateOverlayWidestMainRow() }
         if !lyricLinesSuppressed, let pos = anchor?.extrapolatedPositionMs() ?? pausedPositionMs {
             publishSurfaceLyrics(atRawMs: pos)
         }
@@ -301,6 +305,13 @@ public final class LocalPlaybackSource: ObservableObject {
             ? syncEngine.widestRow(.menuBar)
             : syncEngine.rowWidth(.menuBar, atQuantile: MenuBarSlotPolicy.songRowQuantile)
         if width != menuBarSongRowWidth { menuBarSongRowWidth = width }
+    }
+
+    private func updateOverlayWidestMainRow() {
+        let width = lineBreaks.isActive
+            ? syncEngine.widestRow(.overlay, mainOnly: true)
+            : syncEngine.rowWidth(.overlay, atQuantile: 1, mainOnly: true)
+        if width != overlayWidestMainRow { overlayWidestMainRow = width }
     }
 
     /// 按悬浮歌词断好的整首歌词(长句拆分 / 短句合并之后),每段带开始时刻。网页歌词 OBS 那条用。
@@ -5629,6 +5640,7 @@ public final class LocalPlaybackSource: ObservableObject {
             lineBreaks: lineBreaks
         )
         updateMenuBarSongRowWidth()
+        updateOverlayWidestMainRow()
         // 以前按带 BOM 的正文算过指纹、存下的校正值,先挪到新 key 上(见 LyricsOffsetStore.adoptLegacyKey)。
         // 单曲校正值按显示的这份正文算 key:换用播放器自家那份时它有自己的校正值,不跟主歌词的混。
         LyricsOffsetStore.shared.adoptLegacyKey(

@@ -100,6 +100,8 @@ private final class OverlayPlayback: ObservableObject {
     @Published private(set) var lineChangeAnimation = false
     /// 下一句跟在下面还是上下交替(见 `OverlayNextLineArrangement`)。
     @Published private(set) var nextLineArrangement: OverlayNextLineArrangement = .below
+    /// 整首主行最宽那一段(`PlaybackCoordinator.overlayWidestMainRow`),「上下交替」定两行那一块的宽。
+    @Published private(set) var songWidestMainRow: CGFloat?
     @Published private(set) var duetAlignmentOverride: OverlayDuetAlignmentOverride = .automatic
     /// 一行放不下时换行还是滚动(见 `OverlayLineOverflow`)。
     @Published private(set) var lineOverflow: OverlayLineOverflow = .wrap
@@ -184,6 +186,7 @@ private final class OverlayPlayback: ObservableObject {
                 .removeDuplicates()
                 .sink { [weak self] in self?.currentLine = $0 },
             p.$overlayLyrics.map(\.lineIndex).removeDuplicates().sink { [weak self] in self?.lineIndex = $0 },
+            p.$overlayWidestMainRow.removeDuplicates().sink { [weak self] in self?.songWidestMainRow = $0 },
             p.$overlayLyrics.map(\.nextText).removeDuplicates().sink { [weak self] in self?.nextLineText = $0 },
             p.$overlayLyrics.map(\.nextSide).removeDuplicates().sink { [weak self] in self?.nextLineSide = $0 },
             p.$overlayLyrics.map(\.nextRomanization).removeDuplicates().sink { [weak self] in self?.nextLineRomanization = $0 },
@@ -747,6 +750,23 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
             nextSide: bySide && !showingPreviewLine ? playback.nextLineSide : nil)
     }
 
+    /// 上下交替时两行那一块的宽:整首主行最宽那一段加描边预留,一首歌里不变,换句时正在唱的那一行不跟着挪;
+    /// 不比眼下这两句窄(逐词读音按组排时比只量文字宽)。还不知道整首多宽时撑满卡片。
+    private var alternateBlockWidth: CGFloat {
+        guard let widest = playback.songWidestMainRow, widest > 0 else { return .infinity }
+        let strokeInset = playback.textStrokeEnabled ? LyricsTextStrokeMetrics.inset : 0
+        return max(widest + strokeInset * 2, cardNaturalWidth)
+    }
+
+    /// 那一块放哪:「对齐方式」选了左 / 右就贴那一边,自动和居中放正中。
+    private var alternateBlockAlignment: Alignment {
+        switch playback.duetAlignmentOverride {
+        case .leading: return .leading
+        case .trailing: return .trailing
+        case .automatic, .center: return .center
+        }
+    }
+
     /// 下一句预览摆哪一边——**独立于当前行的 duetSide 算**,不能假定下一句跟当前句是
     /// 同一位演唱者。对唱歌交替演唱时(比如逐句男/女/男/女切换的歌),下一句几乎每次都
     /// 换边;固定继承 duetSide 的话,视觉上会永远像是当前这位接着唱下一句。
@@ -1305,18 +1325,23 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
             if animatesLineChange {
                 lineChangeRows
             } else if let alternate = alternatePlacement {
-                // 上下交替:当前句和下一句按当前句的奇偶轮流占上下两行,中间隔「下一句间距」。
-                if alternate.currentOnTop {
-                    reportingMainLineRect(mainLine)
-                        .reportsContentRow(.main, in: contentRowRectsSpace)
-                    nextLinePreviewRow.reportsContentRow(.nextLine, in: contentRowRectsSpace)
-                        .padding(.top, CGFloat(rowSpacing.nextLine))
-                } else {
-                    nextLinePreviewRow.reportsContentRow(.nextLine, in: contentRowRectsSpace)
-                    reportingMainLineRect(mainLine)
-                        .reportsContentRow(.main, in: contentRowRectsSpace)
-                        .padding(.top, CGFloat(rowSpacing.nextLine))
+                // 上下交替:当前句和下一句按当前句的奇偶轮流占上下两行,中间隔「下一句间距」。两行收在
+                // `alternateBlockWidth` 宽的一块里、上一行贴块左、下一行贴块右,块放在卡片正中(见 04 章决策 91)。
+                VStack(alignment: duetAlignment, spacing: 0) {
+                    if alternate.currentOnTop {
+                        reportingMainLineRect(mainLine)
+                            .reportsContentRow(.main, in: contentRowRectsSpace)
+                        nextLinePreviewRow.reportsContentRow(.nextLine, in: contentRowRectsSpace)
+                            .padding(.top, CGFloat(rowSpacing.nextLine))
+                    } else {
+                        nextLinePreviewRow.reportsContentRow(.nextLine, in: contentRowRectsSpace)
+                        reportingMainLineRect(mainLine)
+                            .reportsContentRow(.main, in: contentRowRectsSpace)
+                            .padding(.top, CGFloat(rowSpacing.nextLine))
+                    }
                 }
+                .frame(maxWidth: alternateBlockWidth)
+                .frame(maxWidth: .infinity, alignment: alternateBlockAlignment)
             } else {
                 reportingMainLineRect(mainLine)
                     .reportsContentRow(.main, in: contentRowRectsSpace)

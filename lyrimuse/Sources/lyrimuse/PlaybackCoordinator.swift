@@ -139,6 +139,7 @@ final class PlaybackCoordinator: ObservableObject {
     @Published private(set) var menuBarLyrics = LyricsSyncEngine.SurfaceLyrics.empty
     @Published private(set) var touchBarLyrics = LyricsSyncEngine.SurfaceLyrics.empty
     @Published private(set) var menuBarSongRowWidth: CGFloat?
+    @Published private(set) var overlayWidestMainRow: CGFloat?
     // 单行展示面(灵动岛/菜单栏)专用的三个值,见 LocalPlaybackSource 同名属性与 CompactLyricLead。
     @Published private(set) var compactLine: SyncedLyricLine?
     @Published private(set) var compactShowsPlaceholder: Bool = false
@@ -1165,6 +1166,7 @@ final class PlaybackCoordinator: ObservableObject {
             s.$menuBarLyrics.assign(to: \.menuBarLyrics, on: self),
             s.$touchBarLyrics.assign(to: \.touchBarLyrics, on: self),
             s.$menuBarSongRowWidth.assign(to: \.menuBarSongRowWidth, on: self),
+            s.$overlayWidestMainRow.assign(to: \.overlayWidestMainRow, on: self),
             s.$compactLine.assign(to: \.compactLine, on: self),
             s.$compactShowsPlaceholder.assign(to: \.compactShowsPlaceholder, on: self),
             s.$compactDwellMs.assign(to: \.compactDwellMs, on: self),

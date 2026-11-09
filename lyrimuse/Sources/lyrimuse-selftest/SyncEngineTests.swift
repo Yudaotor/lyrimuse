@@ -540,6 +540,7 @@ func runSyncEngineTests() {
         expectEqual(oneLine?.plainText, "5", "按宽度断句: 切不开的主行整句一段")
         expectEqual(oneLine?.translation, "这是一句特…", "按宽度断句: 放不下的译文截断")
         expectEqual(oneChar.widestRow(.overlay), 60, "按宽度断句: 整首最宽一行按主行与各行量")
+        expectEqual(oneChar.widestRow(.overlay, mainOnly: true), measure("yes"), "按宽度断句: 只量主行时不算译文")
         expectEqual(LyricsSyncEngine().widestRow(.menuBar), nil, "按宽度断句: 没报宽度时不给整首最宽")
 
         // 没开重新断句:按原句量,取从窄到宽第九成那一行;译文算进这一行的宽,空行不算。
@@ -555,6 +556,8 @@ func runSyncEngineTests() {
         expectEqual(plain.widestRow(.menuBar), nil, "起步槽宽: 没开重新断句时不给整首最宽")
         expectEqual(plain.rowWidth(.menuBar, atQuantile: 0.9), measure(String(repeating: "j", count: 10)),
                     "起步槽宽: 取第九成那一行")
+        expectEqual(plain.rowWidth(.menuBar, atQuantile: 1, mainOnly: true), measure(String(repeating: "j", count: 10)),
+                    "起步槽宽: 只量主行时不算译文")
         expectEqual(plain.rowWidth(.menuBar, atQuantile: 1), measure("一句十二个字那么长的一句译文"),
                     "起步槽宽: 译文算进这一行的宽")
 

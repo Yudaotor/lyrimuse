@@ -43,6 +43,12 @@ func runOverlayTests() {
                     "上下交替(契约): 交替开着时不做换句动画")
         expectEqual(sourceHas(view, "private var translationRowText: String? { alternatePlacement == nil ? rowPlan.translation?.text : nil }"),
                     true, "上下交替(契约): 交替时不显示译文")
+        expectEqual(sourceHas(view, ".frame(maxWidth: alternateBlockWidth)\n                .frame(maxWidth: .infinity, alignment: alternateBlockAlignment)")
+                    && sourceHas(sourceBody("private var alternateBlockWidth: CGFloat", in: view),
+                                 "guard let widest = playback.songWidestMainRow, widest > 0 else { return .infinity }")
+                    && sourceHas(sourceBody("private var alternateBlockWidth: CGFloat", in: view),
+                                 "return max(widest + strokeInset * 2, cardNaturalWidth)"), true,
+                    "上下交替(契约): 两行收在按整首最宽一段定宽的一块里,块放在对齐方式那一侧(自动 / 居中放正中)")
     }
     // ---- GapDotsCurve.opacityKeyframes:间奏三点交给 Core Animation 的亮度关键帧 ----
     do {
