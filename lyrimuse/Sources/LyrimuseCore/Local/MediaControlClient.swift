@@ -2666,19 +2666,23 @@ public enum MediaControlClient {
     }
 
     /// 按 bundle id 单问到的 MyGo 那份(焦点被别的 App 占着时):锚点过主路同一套挪法(`MyGoSessionAnchor.probedPosition`),
-    /// 位置按挪过的锚点推到此刻;没在走的原样交回。
+    /// 位置按挪过的锚点推到此刻,单曲循环越过曲长时取余、离曲尾不到 3 秒排补查(同主路);没在走的原样交回。
     private static func mygoProbedSnapshot(_ probed: MediaControlSnapshot, anchor: NowPlayingClientsProbe.SessionAnchor,
                                            now: Date) -> MediaControlSnapshot {
         var snapshot = probed
         if snapshot.processIdentifier == nil { snapshot.processIdentifier = anchor.processIdentifier.map { Int($0) } }
-        guard let position = MyGoSessionAnchor.probedPosition(
+        guard let extrapolated = MyGoSessionAnchor.probedPosition(
             identity: [probed.title ?? "", probed.artist ?? "", probed.album ?? ""].joined(separator: "|"),
             playing: probed.playing, elapsed: probed.anchorElapsedTime, anchorAt: anchor.timestamp,
             rate: probed.playbackRate, now: now)
         else { return snapshot }
+        let position = foobarLoopPosition(bundleID: probed.bundleIdentifier, playing: probed.playing, position: extrapolated,
+                                          duration: probed.duration) ?? extrapolated
         let pid = snapshot.processIdentifier
         snapshot = snapshot.withPlayerClock(position, capturedAt: now)
         snapshot.processIdentifier = pid
+        snapshot.republishDueBy = foobarLoopCheckAt(bundleID: probed.bundleIdentifier, playing: probed.playing,
+                                                    position: position, duration: probed.duration, now: now)
         return snapshot
     }
 
@@ -3507,19 +3511,24 @@ public enum MediaControlClient {
         return true
     }
 
-    /// foobar2000 单曲循环(或列表只有一首时的列表循环)绕回开头,只有第一圈重发开播锚点,之后不再发,按旧锚点外推一直越过曲长,
-    /// 屏上停在曲尾。它的循环是无缝的(实测每圈正好一个曲长):在放、实时位置越过曲长 `foobarLoopSlackSecs` 以上时按曲长取余。
-    /// 不循环时它会换歌或撤会话,到不了这里;第一圈它自己重发的锚点晚 0.07~0.13 秒,余量留在那之后。只对 foobar2000,
-    /// 见 02 章决策 209。纯函数,selftest 覆盖。
+    /// 单曲循环绕回开头时不发新锚点的播放器(`loopsWithoutNewAnchor`)按旧锚点外推一直越过曲长,屏上停在曲尾。它们的循环是
+    /// 无缝的(实测每圈正好一个曲长):在放、实时位置越过曲长 `foobarLoopSlackSecs` 以上时按曲长取余。不循环时它们会换歌、
+    /// 报暂停或撤会话,到不了这里;foobar2000 第一圈自己重发的锚点晚 0.07~0.13 秒,余量留在那之后。见 02 章决策 209、244。
+    /// 纯函数,selftest 覆盖。
     public nonisolated static func foobarLoopPosition(bundleID: String?, playing: Bool?, position: Double?,
                                                       duration: Double?) -> Double? {
-        guard bundleID == PlaybackPlayer.foobar2000.bundleIdentifier, playing == true, let position, let duration,
+        guard loopsWithoutNewAnchor(bundleID: bundleID), playing == true, let position, let duration,
               duration > 1, position > duration + foobarLoopSlackSecs else { return nil }
         return position.truncatingRemainder(dividingBy: duration)
     }
 
     /// 见 `foobarLoopPosition`。
     public static let foobarLoopSlackSecs: Double = 0.15
+
+    /// 单曲循环绕回开头时不发新锚点:foobar2000 只有第一圈重发,MyGo Music 一次都不发(回绕只把输出拨回开头)。
+    public nonisolated static func loopsWithoutNewAnchor(bundleID: String?) -> Bool {
+        bundleID == PlaybackPlayer.foobar2000.bundleIdentifier || bundleID == PlaybackPlayer.mygoMusic.bundleIdentifier
+    }
 
     nonisolated(unsafe) private static var lastLoggedFoobarLoop: String?
     /// 每一圈只记一行。
@@ -3531,11 +3540,11 @@ public enum MediaControlClient {
         return true
     }
 
-    /// foobar2000 在放、离曲尾不到 3 秒时,刚过绕回点(曲长加 `foobarLoopSlackSecs`)那一刻补查一次:不然绕回之后要等下一拍
-    /// 轮询才按曲长取余,屏上在曲尾停最多一拍。不循环时这一查看到的是下一首,也无害。纯函数,selftest 覆盖。
+    /// `loopsWithoutNewAnchor` 的播放器在放、离曲尾不到 3 秒时,刚过绕回点(曲长加 `foobarLoopSlackSecs`)那一刻补查一次:
+    /// 不然绕回之后要等下一拍轮询才按曲长取余,屏上在曲尾停最多一拍。不循环时这一查看到的是下一首,也无害。纯函数,selftest 覆盖。
     public nonisolated static func foobarLoopCheckAt(bundleID: String?, playing: Bool?, position: Double?, duration: Double?,
                                                      now: Date) -> Date? {
-        guard bundleID == PlaybackPlayer.foobar2000.bundleIdentifier, playing == true, let position, let duration,
+        guard loopsWithoutNewAnchor(bundleID: bundleID), playing == true, let position, let duration,
               duration > 1 else { return nil }
         let remaining = duration + foobarLoopSlackSecs - position
         guard remaining > 0, remaining <= 3 else { return nil }
@@ -3839,7 +3848,7 @@ public enum MediaControlClient {
         let foobarLoop = Self.foobarLoopPosition(bundleID: bundleID, playing: playing, position: stretched, duration: raw.duration)
         if let foobarLoop, let stretched, let duration = raw.duration,
            Self.noteFoobarLoopLogged(trackKey + "|" + String(Int(stretched / duration))) {
-            logger.notice("foobar2000 loop: \(raw.title ?? "", privacy: .public) past the end without a new anchor, extrapolated=\(stretched, format: .fixed(precision: 3)) duration=\(duration, format: .fixed(precision: 3)) → \(foobarLoop, format: .fixed(precision: 3))")
+            logger.notice("repeat-one loop (\(bundleID ?? "", privacy: .public)): \(raw.title ?? "", privacy: .public) past the end without a new anchor, extrapolated=\(stretched, format: .fixed(precision: 3)) duration=\(duration, format: .fixed(precision: 3)) → \(foobarLoop, format: .fixed(precision: 3))")
         }
         let held = republish.hold != nil || pine?.waiting == true
         var snapshot = MediaControlSnapshot(

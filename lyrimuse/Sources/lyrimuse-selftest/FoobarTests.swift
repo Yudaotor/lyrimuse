@@ -47,7 +47,7 @@ func runFoobarTests() {
         expectEqual(loop(12.1), nil, "foobar 循环: 第一圈它自己会重发锚点(晚 0.07~0.13 秒),余量之内不动")
         expectEqual(loop(11.9), nil, "foobar 循环: 没越过曲长不动")
         expectEqual(loop(26.5, playing: false), nil, "foobar 循环: 暂停着不动")
-        expectEqual(loop(26.5, bundle: PlaybackPlayer.pinePlayer.bundleIdentifier), nil, "foobar 循环: 只对 foobar2000")
+        expectEqual(loop(26.5, bundle: PlaybackPlayer.pinePlayer.bundleIdentifier), nil, "foobar 循环: 回绕时会发新锚点的播放器不动")
         expectEqual(loop(26.5, duration: nil), nil, "foobar 循环: 没有时长(电台)不动")
         let t = Date(timeIntervalSince1970: 1_000)
         func check(_ position: Double) -> Double? {

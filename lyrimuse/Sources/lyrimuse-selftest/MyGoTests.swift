@@ -68,6 +68,10 @@ func runMyGoTests() {
                           state: A.State(pausedAt: base + 6, pausedIdentity: "|Click A|"))
         expectEqual(near(cold.timestamp, base + 66 + A.coldLeadSecs + latency), true, "MyGo 恢复: 停了一分钟,输出已关,按重开输出那一档挪")
         expectEqual(cold.state.pausedAt == nil, true, "MyGo 恢复: 用过的停下时刻清掉")
+        let bluetooth = A.fill(identity: "|Click A|", playing: true, elapsed: 6.1, timestamp: ts(66), rate: 1, outputLatency: latency,
+                               outputBuiltIn: false, state: A.State(pausedAt: base + 6, pausedIdentity: "|Click A|"))
+        expectEqual(near(bluetooth.timestamp, base + 66 + shift), true,
+                    "MyGo 恢复: 输出不是内置扬声器(蓝牙耳机)时重开输出不比开着时晚,停久了照常挪(实测早 0.31~0.54 秒)")
         let coldNext = A.fill(identity: "|Click B|", playing: true, elapsed: 0, timestamp: ts(66), rate: 1, outputLatency: latency,
                               state: A.State(pausedAt: base + 6, pausedIdentity: "|Click A|"))
         expectEqual(near(coldNext.timestamp, base + 66 + shift), true, "MyGo: 停久了换成别的歌照常挪(新歌载入跟输出开着时一样早)")
@@ -112,6 +116,21 @@ func runMyGoTests() {
         expectEqual(abs(half - 11.5) < 0.000_01, true, "MyGo 单问: 按速率推")
     }
 
+    // ---- 单曲循环回绕(它回绕时一份锚点都不发) ----
+    do {
+        typealias MC = MediaControlClient
+        let mygo = PlaybackPlayer.mygoMusic.bundleIdentifier
+        expectEqual(MC.loopsWithoutNewAnchor(bundleID: mygo), true, "MyGo 循环: 回绕时不发新锚点,在名单里")
+        let looped = MC.foobarLoopPosition(bundleID: mygo, playing: true, position: 30.1, duration: 22)
+        expectEqual(looped.map { ($0 * 1000).rounded() / 1000 }, 8.1, "MyGo 循环: 越过曲长按曲长取余(实测每圈正好一个曲长,回绕间隙约 0.01 秒)")
+        expectEqual(MC.foobarLoopPosition(bundleID: mygo, playing: true, position: 66.5, duration: 22)
+                        .map { ($0 * 1000).rounded() / 1000 }, 0.5, "MyGo 循环: 第三圈起同样取余")
+        expectEqual(MC.foobarLoopPosition(bundleID: mygo, playing: false, position: 30.1, duration: 22), nil, "MyGo 循环: 停着不动")
+        let t = Date(timeIntervalSince1970: 2_000)
+        expectEqual(MC.foobarLoopCheckAt(bundleID: mygo, playing: true, position: 20, duration: 22, now: t)
+                        .map { ($0.timeIntervalSince(t) * 1000).rounded() / 1000 }, 2.15, "MyGo 循环: 离曲尾不到 3 秒时排一次补查")
+    }
+
     // ---- 接线 ----
     do {
         typealias L = LocalPlaybackSource
@@ -123,6 +142,8 @@ func runMyGoTests() {
                                   encoding: .utf8)) ?? ""
         expectEqual(sourceHas(client, "let mygo = MyGoSessionAnchor.filled("), true, "MyGo 接线: 解码系统会话时挪锚点")
         expectEqual(sourceHas(client, "timestamp = mygo.timestamp"), true, "MyGo 接线: 下游拿到的是挪过的时刻")
+        expectEqual(sourceHas(client, "snapshot.republishDueBy = foobarLoopCheckAt(bundleID: probed.bundleIdentifier"), true,
+                    "MyGo 接线: 焦点被占时单问那份同样取余、排补查")
         expectEqual(client.components(separatedBy: "snapshot = mygoProbedSnapshot(probed.snapshot, anchor: probed.anchor, now: now)").count - 1,
                     2, "MyGo 接线: 焦点被占时两处单问(暂停焦点顶替、焦点回退第二级)都过同一套挪法")
         if let latency = AudioOutputRoute.outputLatencySecs() {
