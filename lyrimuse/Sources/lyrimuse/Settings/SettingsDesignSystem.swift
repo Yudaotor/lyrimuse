@@ -177,9 +177,18 @@ extension View {
     /// 歌词窗口里那些浮在内容之上的玻璃胶囊(音量、窗口操作)。跟卡片同一套写法(玻璃 + 一条发丝描边),
     /// 描边的理由见 settingsCardBackground:液态玻璃的可见度完全取决于背后有什么,而歌词
     /// 窗口的背景是被高斯模糊过的专辑封面,亮暗随歌变化 —— 没有描边时边界时有时无。
-    @ViewBuilder
     func clearGlassCapsule(rim: Color) -> some View {
-        if #available(macOS 26.0, *) {
+        modifier(ClearGlassCapsule(rim: rim))
+    }
+}
+
+/// `clearGlassCapsule` 的本体,理由同 `SettingsCardBackground`:设置页歌词窗口预览里也有这种胶囊(「搜索歌词…」)。
+private struct ClearGlassCapsule: ViewModifier {
+    let rim: Color
+    @Environment(\.settingsGlassDisabled) private var glassDisabled
+
+    func body(content: Content) -> some View {
+        if #available(macOS 26.0, *), !glassDisabled {
             // 用 .clear 不是 .regular。
             //
             // Liquid Glass 有两档材质:.regular 是磨砂,给普通 UI 用,在深色背景上就是一块
@@ -190,10 +199,10 @@ extension View {
             //
             // 官方guidance 说 .clear 通常需要配一层压暗来保证对比度 —— 这里的图标和滑块
             // 本来就是白色系,压暗那一层由 rim 描边和滑块自身的阴影兜住,不额外加。
-            glassEffect(.clear, in: Capsule())
+            content.glassEffect(.clear, in: Capsule())
                 .overlay(Capsule().strokeBorder(rim, lineWidth: 0.5))
         } else {
-            background(Capsule().fill(.ultraThinMaterial))
+            content.background(Capsule().fill(.ultraThinMaterial))
                 .overlay(Capsule().strokeBorder(rim, lineWidth: 0.5))
         }
     }
