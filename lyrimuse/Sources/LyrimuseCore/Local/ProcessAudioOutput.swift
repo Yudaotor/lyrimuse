@@ -15,13 +15,19 @@ public enum ProcessAudioOutput {
     }
 
     /// 默认输出设备此刻在不在转(有没有哪个 App 在往它送声音)。蓝牙耳机闲着时为假,开始出声前那一刻才转起来。读不到时 nil。
+    /// 有的设备出着声也一直报没在转(实测 AirPods Max),要信它的地方自己判(见 `LocalPlaybackSource.outputFlagBroken`)。
     public static func defaultOutputDeviceIsRunning() -> Bool? {
+        defaultOutputDeviceState()?.running
+    }
+
+    /// 默认输出设备的设备号和此刻在不在转,见 defaultOutputDeviceIsRunning。读不到时 nil。
+    public static func defaultOutputDeviceState() -> (device: UInt32, running: Bool)? {
         var addr = address(kAudioHardwarePropertyDefaultOutputDevice)
         var device = AudioObjectID(0)
         var size = UInt32(MemoryLayout<AudioObjectID>.size)
         guard AudioObjectGetPropertyData(AudioObjectID(kAudioObjectSystemObject), &addr, 0, nil, &size, &device) == noErr,
-              device != 0 else { return nil }
-        return uint32Property(device, kAudioDevicePropertyDeviceIsRunningSomewhere).map { $0 != 0 }
+              device != 0, let running = uint32Property(device, kAudioDevicePropertyDeviceIsRunningSomewhere) else { return nil }
+        return (device, running != 0)
     }
 
     private static func address(_ selector: AudioObjectPropertySelector) -> AudioObjectPropertyAddress {

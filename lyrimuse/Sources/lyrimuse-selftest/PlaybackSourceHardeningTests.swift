@@ -485,6 +485,15 @@ private func wiringContracts() {
                  source.components(separatedBy: "Self.waitsForOutputDeviceOnColdStart(bundleID:").count - 1],
                 [true, true, 1] as [AnyHashable],
                 "洛雪冷恢复: 洛雪选了别的输出设备时只有洛雪的读数不等默认设备,foobar2000 照等;两处用读数的地方都走这一条")
+    expectEqual([sourceHas(source, "if !resumeSignal {\n                lastPauseSignalAt = Date()\n                learnOutputFlagReliability()"),
+                 sourceHas(source, "if lxColdStart == nil, let device = ProcessAudioOutput.defaultOutputDeviceState(), !device.running {"),
+                 sourceHas(source, "if let warm = open.first(where: { Self.coldStartOutputStillOpen(pauseAt: lastPauseSignalAt, signalAt: signalAt,"),
+                 sourceHas(source, "let audioAt = Self.coldStartEstimatedAudioAt(outputAt: started, leadSecs: p.leadSecs,\n"
+                                   + "                                                                       flagKnownBroken: knownBroken, now: now)"),
+                 sourceHas(source, "let knownBroken = device.map { outputFlagBrokenDevices.contains($0) } ?? false"),
+                 sourceHas(source, "if let device, outputFlagBrokenDevices.remove(device) != nil {")],
+                [true, true, true, true, true, true],
+                "冷恢复设备信号不可信: 暂停那一拍学这台设备;送声进程暂停后一直开着就不等;后台按送声进程估出声;设备报了在转就重新信它")
     expectEqual(sourceHas(source, "if let lxTrack, let own = Self.lxMusicOwnArtwork(title: lxTrack.title, artist: lxTrack.artist, listed: lxTrack.listed) {\n"
                             + "                        if Self.lxOwnArtworkLoggedKey.withLock({ last in defer { last = expectedKey }; return last != expectedKey }) {\n"
                             + "                            logger.notice(\"artwork: using LX Music's own cover for \\(expectedKey, privacy: .public) (from \\(own.from, privacy: .public))\")\n"

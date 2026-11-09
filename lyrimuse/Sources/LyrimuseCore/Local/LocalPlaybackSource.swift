@@ -501,6 +501,10 @@ public final class LocalPlaybackSource: ObservableObject {
     /// foobar2000 照等,它自己选的设备读不到(见 02 章决策 213)。
     private var lxColdStartSkipsLXMusic = false
     private var lxColdStartWatch: Task<Void, Never>?
+    /// 在转信号不可信的默认输出设备(设备号,见 outputFlagBroken),本次运行内记着;哪次报了在转就去掉。
+    private var outputFlagBrokenDevices: Set<UInt32> = []
+    /// 最近一次暂停信号到的时刻,冷恢复判送声进程关没关过输出用(见 coldStartOutputStillOpen)。
+    private var lastPauseSignalAt: Date?
     /// 洛雪中途改速度(见 lxMusicRateCorrected):这一拍按哪次改速度修正过读数,`lxRateAnchoredChange` 是已经按它重锚过的那次。
     private var lxRateChange: Date?
     private var lxRateAnchoredChange: Date?
@@ -842,6 +846,56 @@ public final class LocalPlaybackSource: ObservableObject {
     public nonisolated static func waitsForOutputDeviceOnColdStart(bundleID: String?) -> Bool {
         bundleID == PlaybackPlayer.lxMusic.bundleIdentifier || bundleID == PlaybackPlayer.foobar2000.bundleIdentifier
     }
+
+    /// 冷恢复等设备的播放器各自往设备送声的进程:`leadSecs` 是进程开始送声到真出声隔多久(设备的在转信号不可信时按它估),
+    /// `closesAfterPauseSecs` 是暂停后多久关输出。只录各自的声音、在 AirPods Max 上量:蓝牙唤醒分快慢两档(送声后约 0.05 秒、
+    /// 约 0.22 秒出声,运行时分不出是哪一档),取两档中间;洛雪(送声的是它的 Helper 进程)自己起播再多 0.1 秒。
+    /// 暂停后 foobar2000 约 7.7 秒、洛雪约 10.1 秒关输出。见 02 章决策 246。
+    public struct ColdStartAudioProcess: Sendable, Equatable {
+        public let player: String
+        public let process: String
+        public let leadSecs: Double
+        public let closesAfterPauseSecs: Double
+    }
+
+    public nonisolated static let coldStartAudioProcesses: [ColdStartAudioProcess] = [
+        ColdStartAudioProcess(player: PlaybackPlayer.foobar2000.bundleIdentifier,
+                              process: PlaybackPlayer.foobar2000.bundleIdentifier, leadSecs: 0.13, closesAfterPauseSecs: 7.7),
+        ColdStartAudioProcess(player: PlaybackPlayer.lxMusic.bundleIdentifier,
+                              process: "cn.toside.music.desktop.helper", leadSecs: 0.21, closesAfterPauseSecs: 10.1),
+    ]
+
+    /// 要看的送声进程:洛雪在它设置里选了别的输出设备时不看它(它的输出不说明默认设备怎样)。纯函数,selftest 覆盖。
+    public nonisolated static func coldStartWatchedProcesses(lxOutputsToDefault: Bool) -> [ColdStartAudioProcess] {
+        coldStartAudioProcesses.filter { lxOutputsToDefault || $0.player != PlaybackPlayer.lxMusic.bundleIdentifier }
+    }
+
+    /// 默认输出设备的在转信号可不可信,在暂停那一拍判:报在转就可信;报没在转、要看的进程里却有还在送声的(刚暂停,输出还开着)
+    /// 就不可信(实测 AirPods Max 出着声也一直报没在转)。都没在送声时说不准(nil)。纯函数,selftest 覆盖。
+    public nonisolated static func outputFlagBroken(deviceRunning: Bool, processOutputting: Bool) -> Bool? {
+        if deviceRunning { return false }
+        return processOutputting ? true : nil
+    }
+
+    /// 在放信号到时某个进程已经在送声:暂停后还没到它关输出的时候,是热恢复(当场出声);暂停够久了或没见过暂停,是它刚重新打开、
+    /// 按冷的算。纯函数,selftest 覆盖。
+    public nonisolated static func coldStartOutputStillOpen(pauseAt: Date?, signalAt: Date, closesAfterPauseSecs: Double) -> Bool {
+        guard let pauseAt else { return false }
+        return signalAt.timeIntervalSince(pauseAt) < closesAfterPauseSecs
+    }
+
+    /// 设备的在转信号不可信时,冷恢复的出声时刻按「进程开始送声 + `leadSecs`」估;`outputAt` 是进程开始送声的时刻。
+    /// 已知这台不可信:到了估的时刻才交出来(早交屏上会先走)。还不知道:进程开始送声 `coldStartFlagGraceSecs` 后设备仍报没在转
+    /// 才算不可信,交出估的时刻补算(好的设备开始送声后 0.2~0.6 秒内报在转)。纯函数,selftest 覆盖。
+    public nonisolated static func coldStartEstimatedAudioAt(outputAt: Date?, leadSecs: Double, flagKnownBroken: Bool,
+                                                             now: Date) -> Date? {
+        guard let outputAt else { return nil }
+        let audioAt = outputAt.addingTimeInterval(leadSecs)
+        if flagKnownBroken { return now >= audioAt ? audioAt : nil }
+        return now.timeIntervalSince(outputAt) >= coldStartFlagGraceSecs ? audioAt : nil
+    }
+
+    public nonisolated static let coldStartFlagGraceSecs: TimeInterval = 2
 
     /// 洛雪播放中途改速度:它只改音频元素、不重报会话,系统那份速度和锚点都还是旧的。`setting` 是它配置里的速度和改的时刻
     /// (见 `LXMusicPlaybackRate`)。在放、两份速度不一样时,读数从改的那一刻起换成新速度。它暂停、恢复、跳转、换歌时按新速度
@@ -3088,16 +3142,33 @@ public final class LocalPlaybackSource: ObservableObject {
             && !(lxColdStartSkipsLXMusic && bundleID == PlaybackPlayer.lxMusic.bundleIdentifier)
     }
 
-    /// 见 lxMusicColdStartPosition。`watch` 为真时在后台每 10 毫秒看一次默认输出设备,转起来就记下时刻、马上轮询一次。
-    private func beginLXMusicColdStart(signalAt: Date, watch: Bool) {
+    /// 见 lxMusicColdStartPosition。`watch` 为真时在后台每 10 毫秒看一次默认输出设备,转起来就记下时刻、马上轮询一次;
+    /// 同时记 `watched` 里的进程什么时候开始送声(`outputAt` 是信号到时已经刚开始送声的),设备的在转信号不可信时按
+    /// coldStartEstimatedAudioAt 估出声时刻。
+    private func beginLXMusicColdStart(signalAt: Date, watch: Bool, device: UInt32? = nil, watched: [ColdStartAudioProcess] = [],
+                                       outputAt: [String: Date] = [:]) {
         lxColdStartWatch?.cancel()
         lxColdStart = (signalAt, lastSnapshot?.anchorElapsedTime, nil)
         guard watch else { return }
         let deadline = signalAt.addingTimeInterval(Self.lxMusicColdStartWaitSecs)
+        let knownBroken = device.map { outputFlagBrokenDevices.contains($0) } ?? false
         lxColdStartWatch = Task.detached(priority: .userInitiated) { [weak self] in
+            var outputAt = outputAt
             while Date() < deadline, !Task.isCancelled {
+                let now = Date()
                 if ProcessAudioOutput.defaultOutputDeviceIsRunning() == true {
-                    await self?.noteLXMusicAudioStarted(at: Date(), signalAt: signalAt)
+                    await self?.noteLXMusicAudioStarted(at: now, signalAt: signalAt, device: device)
+                    return
+                }
+                for p in watched where outputAt[p.process] == nil && ProcessAudioOutput.isRunningOutput(bundleID: p.process) {
+                    outputAt[p.process] = now
+                }
+                for p in watched {
+                    guard let started = outputAt[p.process],
+                          let audioAt = Self.coldStartEstimatedAudioAt(outputAt: started, leadSecs: p.leadSecs,
+                                                                       flagKnownBroken: knownBroken, now: now) else { continue }
+                    await self?.noteLXMusicAudioEstimated(at: audioAt, signalAt: signalAt, process: p, outputAt: started,
+                                                          device: device, learned: !knownBroken)
                     return
                 }
                 try? await Task.sleep(for: .milliseconds(10))
@@ -3106,10 +3177,45 @@ public final class LocalPlaybackSource: ObservableObject {
         }
     }
 
-    private func noteLXMusicAudioStarted(at date: Date, signalAt: Date) {
+    private func noteLXMusicAudioStarted(at date: Date, signalAt: Date, device: UInt32? = nil) {
+        if let device, outputFlagBrokenDevices.remove(device) != nil {
+            logger.notice("output device \(device, privacy: .public) reported running, trusting its running flag again")
+        }
         guard lxColdStart?.signalAt == signalAt else { return }
         lxColdStart?.audioAt = date
         poll()
+    }
+
+    /// 设备的在转信号不可信,出声时刻按送声进程估(见 coldStartEstimatedAudioAt)。`learned` 为真是这一次才判出这台不可信。
+    private func noteLXMusicAudioEstimated(at date: Date, signalAt: Date, process: ColdStartAudioProcess, outputAt: Date,
+                                           device: UInt32?, learned: Bool) {
+        guard lxColdStart?.signalAt == signalAt else { return }
+        if learned, let device, outputFlagBrokenDevices.insert(device).inserted {
+            logger.notice("output device \(device, privacy: .public) still reports idle \(Self.coldStartFlagGraceSecs, format: .fixed(precision: 1))s after \(process.process, privacy: .public) started its output, not trusting its running flag")
+        }
+        logger.notice("lx cold start: output device never reported running, \(process.process, privacy: .public) output started +\(outputAt.timeIntervalSince(signalAt), format: .fixed(precision: 3))s after the playing signal, audio taken at +\(date.timeIntervalSince(signalAt), format: .fixed(precision: 3))s")
+        lxColdStart?.audioAt = date
+        poll()
+    }
+
+    /// 暂停那一拍判默认输出设备的在转信号可不可信(见 outputFlagBroken)。
+    private func learnOutputFlagReliability() {
+        guard let device = ProcessAudioOutput.defaultOutputDeviceState() else { return }
+        let watched = Self.coldStartWatchedProcesses(
+            lxOutputsToDefault: LXMusicOpenAPI.outputsToDefaultDevice(LXMusicOpenAPI.shared.currentConfig()))
+        let outputting = watched.first { ProcessAudioOutput.isRunningOutput(bundleID: $0.process) }
+        switch Self.outputFlagBroken(deviceRunning: device.running, processOutputting: outputting != nil) {
+        case true?:
+            if outputFlagBrokenDevices.insert(device.device).inserted {
+                logger.notice("output device \(device.device, privacy: .public) reports idle while \(outputting?.process ?? "", privacy: .public) is still outputting, not trusting its running flag")
+            }
+        case false?:
+            if outputFlagBrokenDevices.remove(device.device) != nil {
+                logger.notice("output device \(device.device, privacy: .public) reported running, trusting its running flag again")
+            }
+        case nil:
+            break
+        }
     }
 
     private func expireLXMusicColdStart(signalAt: Date) {
@@ -3386,19 +3492,33 @@ public final class LocalPlaybackSource: ObservableObject {
         if freezeExtrapolation, stateSignal {
             posResumeEpisodeAt = nil
             clearLXMusicColdStart()
+            if !resumeSignal {
+                lastPauseSignalAt = Date()
+                learnOutputFlagReliability()
+            }
         }
         if resumeSignal {
             posResumeSignalAt = Date()
             if posResumeEpisodeAt == nil { posResumeEpisodeAt = posResumeSignalAt }
             // 不看上一份是不是洛雪:打开洛雪点歌时 App 记着的还是别的播放器。只在洛雪、foobar2000 的读数上用,见调用处。洛雪在它设置里
             // 选了别的输出设备时不等默认设备:那台可能一直闲着,等满 3 秒歌词就定住 3 秒(见 02 章决策 134)。
+            // 设备报没在转、送声进程却是暂停后一直开着输出的(在转信号不可信的设备上的热恢复):当场出声,不等。
             dropStaleLXMusicColdStart(now: Date())
-            if lxColdStart == nil, ProcessAudioOutput.defaultOutputDeviceIsRunning() == false {
+            if lxColdStart == nil, let device = ProcessAudioOutput.defaultOutputDeviceState(), !device.running {
+                let signalAt = Date()
                 lxColdStartSkipsLXMusic = !LXMusicOpenAPI.outputsToDefaultDevice(LXMusicOpenAPI.shared.currentConfig())
-                if lxColdStartSkipsLXMusic {
-                    logger.notice("lx cold start: LX Music outputs to a device of its own choosing, only other players wait for the default one")
+                let watched = Self.coldStartWatchedProcesses(lxOutputsToDefault: !lxColdStartSkipsLXMusic)
+                let open = watched.filter { ProcessAudioOutput.isRunningOutput(bundleID: $0.process) }
+                if let warm = open.first(where: { Self.coldStartOutputStillOpen(pauseAt: lastPauseSignalAt, signalAt: signalAt,
+                                                                                 closesAfterPauseSecs: $0.closesAfterPauseSecs) }) {
+                    logger.notice("lx cold start: \(warm.process, privacy: .public) kept its output open since the pause, not waiting for the device")
+                } else {
+                    if lxColdStartSkipsLXMusic {
+                        logger.notice("lx cold start: LX Music outputs to a device of its own choosing, only other players wait for the default one")
+                    }
+                    beginLXMusicColdStart(signalAt: signalAt, watch: true, device: device.device, watched: watched,
+                                          outputAt: Dictionary(uniqueKeysWithValues: open.map { ($0.process, signalAt) }))
                 }
-                beginLXMusicColdStart(signalAt: Date(), watch: true)
             }
         }
         if freezeExtrapolation { freezeExtrapolationUntilNextPoll() }

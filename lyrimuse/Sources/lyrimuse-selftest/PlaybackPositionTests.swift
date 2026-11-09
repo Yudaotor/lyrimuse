@@ -1927,6 +1927,39 @@ func runPlaybackPositionTests() {
                     "洛雪冷启动: 设备转起来太久还没用上的不算(不按很久以前的时刻把整首推后)")
         expectEqual(cold(60, 28.83, t0.addingTimeInterval(1 - LocalPlaybackSource.lxMusicColdStartMaxAgeSecs + 0.1)).map { near4($0, 64.9) },
                     true, "洛雪冷启动: 限龄之内照算")
+        // 冷恢复时设备的在转信号不可信(AirPods Max 出着声也报没在转):按送声进程估出声时刻。
+        typealias LPS = LocalPlaybackSource
+        let fbProc = LPS.coldStartAudioProcesses.first { $0.player == PlaybackPlayer.foobar2000.bundleIdentifier }
+        let lxProc = LPS.coldStartAudioProcesses.first { $0.player == lx }
+        expectEqual([fbProc?.process, lxProc?.process], [PlaybackPlayer.foobar2000.bundleIdentifier, "cn.toside.music.desktop.helper"],
+                    "冷恢复送声进程: foobar2000 是它自己,洛雪是它的 Helper")
+        expectEqual([fbProc?.leadSecs, lxProc?.leadSecs, fbProc?.closesAfterPauseSecs, lxProc?.closesAfterPauseSecs],
+                    [0.13, 0.21, 7.7, 10.1], "冷恢复送声进程: 开始送声到出声取蓝牙唤醒快慢两档中间 0.13 / 0.21 秒,暂停后 7.7 / 10.1 秒关输出(实测)")
+        expectEqual(LPS.coldStartWatchedProcesses(lxOutputsToDefault: false).map(\.player), [PlaybackPlayer.foobar2000.bundleIdentifier],
+                    "冷恢复送声进程: 洛雪选了别的输出设备时不看它")
+        expectEqual(LPS.coldStartWatchedProcesses(lxOutputsToDefault: true).count, 2, "冷恢复送声进程: 洛雪走默认设备时两个都看")
+        expectEqual([LPS.outputFlagBroken(deviceRunning: true, processOutputting: true),
+                     LPS.outputFlagBroken(deviceRunning: true, processOutputting: false),
+                     LPS.outputFlagBroken(deviceRunning: false, processOutputting: true),
+                     LPS.outputFlagBroken(deviceRunning: false, processOutputting: false)], [false, false, true, nil],
+                    "设备在转信号: 报在转就可信;报没在转而进程还在送声就不可信;都没在送声说不准")
+        let still = { (pause: Double?) in
+            LPS.coldStartOutputStillOpen(pauseAt: pause.map { t0.addingTimeInterval($0) }, signalAt: t0.addingTimeInterval(10),
+                                         closesAfterPauseSecs: 7.7)
+        }
+        expectEqual([still(5), still(2.5), still(2), still(nil)], [true, true, false, false],
+                    "冷恢复热冷: 暂停 5、7.5 秒输出还开着是热的;暂停 8 秒它关过又刚重开、没见过暂停的按冷的算")
+        let est = { (output: Double?, known: Bool, now: Double) in
+            LPS.coldStartEstimatedAudioAt(outputAt: output.map { t0.addingTimeInterval($0) }, leadSecs: 0.22, flagKnownBroken: known,
+                                          now: t0.addingTimeInterval(now))
+        }
+        expectEqual(est(0.1, true, 0.2), nil, "冷恢复估出声: 已知不可信,还没到估的时刻不交(早交屏上先走)")
+        expectEqual(est(0.1, true, 0.33).map { near4($0.timeIntervalSince(t0), 0.32) }, true,
+                    "冷恢复估出声: 已知不可信,到点交出 开始送声 + 0.22")
+        expectEqual(est(0.1, false, 1.5), nil, "冷恢复估出声: 还不知道可不可信,开始送声 2 秒内照等设备")
+        expectEqual(est(0.1, false, 2.15).map { near4($0.timeIntervalSince(t0), 0.32) }, true,
+                    "冷恢复估出声: 开始送声 2 秒后设备仍报没在转,按估的时刻补算")
+        expectEqual(est(nil, true, 2.5), nil, "冷恢复估出声: 进程还没开始送声不估")
         // 洛雪播放中途改速度:系统那份还是旧速度,读数从改的那一刻起换成配置里的新速度。
         func lxReading(_ elapsed: Double, rate: Double = 1, playing: Bool = true, bundle: String = lx) -> MediaControlSnapshot {
             .forReplay(title: "特别的人", artist: "方大同", duration: 259, elapsedTime: elapsed, playing: playing,
