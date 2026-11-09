@@ -728,6 +728,12 @@ func TestLyricTitleAccepted(t *testing.T) {
 		{"纯英文前缀关系仍不认(Love/Love Song 是两首歌)", "Love Song", "Love", false},
 		{"尾巴带数字不认(起源2 是另一首歌)", "起源2", "起源", false},
 		{"尾巴含汉字不认(起源之战 是另一首歌)", "起源之战", "起源", false},
+		// 外文原名在前、中文名在括号里:LRCLIB 里李志《美丽的梭罗河》登记成「Bengawan Solo (美丽的梭罗河)」
+		{"双语前缀:外文原名在前、中文名在括号里,认", "Bengawan Solo (美丽的梭罗河)", "美丽的梭罗河", true},
+		{"双语前缀:不带括号,认", "Bengawan Solo 美丽的梭罗河", "美丽的梭罗河", true},
+		{"双语前缀:反向(本地带原名),认", "美丽的梭罗河", "Bengawan Solo (美丽的梭罗河)", true},
+		{"头上含汉字不认(最后的起源 是另一首歌)", "最后的起源", "起源", false},
+		{"头上带数字不认", "2 起源", "起源", false},
 	}
 	for _, c := range cases {
 		if got := lyricTitleAccepted(c.candidate, c.want); got != c.accept {

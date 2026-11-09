@@ -203,6 +203,12 @@ func TestBilingualTitleTailIsNotAVersionTag(t *testing.T) {
 	if !bilingualTitleEqual("稻香", "稻香ricefield") {
 		t.Error("真正的英文别名照旧认")
 	}
+	if bilingualTitleEqual("稻香", "live稻香") || bilingualTitleEqual("稻香", "remix稻香") {
+		t.Error("头上是版本词的同样不是外文原名")
+	}
+	if !bilingualTitleEqual("美丽的梭罗河", "bengawansolo美丽的梭罗河") {
+		t.Error("外文原名在前的照样认")
+	}
 	if !strings.Contains(normLoose("稻香 Live"), "live") {
 		t.Fatal("前提:normLoose 保留拉丁字母")
 	}

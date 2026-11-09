@@ -4325,7 +4325,8 @@ func romaScriptOf(lyrics string) lyricScript {
 }
 
 // bilingualTitleEqual 判两个 normLoose 之后的标题是不是「同名的中英双语写法」:
-// 短的是长的前缀,短的含汉字,长的多出的尾巴**全是拉丁字母**。
+// 短的是长的前缀,短的含汉字,长的多出的尾巴**全是拉丁字母**;外文原名在前、中文名缀在后
+// (「Bengawan Solo (美丽的梭罗河)」)同样认,短的是长的后缀、多出的头**全是拉丁字母**。见 09 章决策 365。
 //
 // 三个约束各挡一类误伤:
 //   - 「前缀含汉字」:纯英文歌不适用 —— "Love" vs "Love Song" 是两首歌,不能因为
@@ -4338,22 +4339,28 @@ func bilingualTitleEqual(a, b string) bool {
 	if len(short) > len(long) {
 		short, long = long, short
 	}
-	if short == "" || len(short) == len(long) || !strings.HasPrefix(long, short) {
+	if short == "" || len(short) == len(long) || !containsHan(short) {
 		return false
 	}
-	if !containsHan(short) {
-		return false
+	switch {
+	case strings.HasPrefix(long, short):
+		return latinAliasPart(long[len(short):])
+	case strings.HasSuffix(long, short):
+		return latinAliasPart(long[:len(long)-len(short)])
 	}
-	tail := long[len(short):]
-	for _, r := range tail {
+	return false
+}
+
+// latinAliasPart:双语标题里多出来的那一段能不能当外文别名 —— 全是拉丁字母,而且不正好是一个版本限定词
+// (「稻香 Live」「Remix 稻香」这种不带括号的写法是另一个版本,不是别名)。
+func latinAliasPart(part string) bool {
+	for _, r := range part {
 		if r < 'a' || r > 'z' {
 			return false
 		}
 	}
-	// 尾巴正好是一个版本限定词(「稻香 Live」「稻香 Remix」这种不带括号的写法)时那是另一个版本,
-	// 不是英文别名。
 	for _, tag := range distinctRecordingVersionTags {
-		if isASCIITag(tag) && tail == normLoose(tag) {
+		if isASCIITag(tag) && part == normLoose(tag) {
 			return false
 		}
 	}
