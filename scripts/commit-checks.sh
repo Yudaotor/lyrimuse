@@ -65,6 +65,10 @@ step "generate-strings.py 自检"
 step "Localizable.strings 一致性"
 /usr/bin/python3 -B lyrimuse/scripts/check_strings_parity.py
 
+# 新加的设置要写明菜单栏面板、灵动岛的按钮要不要跟着加或改(shared/quick-controls-ledger.json,14 章决策 184)。只读、不到一秒。
+step "面板 / 灵动岛按钮台账"
+/usr/bin/python3 -B scripts/check-quick-controls.py
+
 # 可选数组用 + 连成三段以上的长链,本机编得过、CI 上类型检查超时(本地 swift build 拦不住)。只读、不到一秒。
 step "Swift 可选数组 + 链"
 /usr/bin/python3 -B scripts/check-swift-plus-chains.py
