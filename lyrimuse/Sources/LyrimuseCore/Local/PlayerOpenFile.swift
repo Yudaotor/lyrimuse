@@ -2,23 +2,31 @@ import Foundation
 import os
 
 /// QQ 音乐、网易云、酷狗用「打开文件」、Spotify 从它的「本地文件」列表放本机的音频文件时,以及 foobar2000、Swinsian(只放本机文件,
-/// 只开着正在放的那一个;它们自己报的标签已经齐全,这里主要为了拿到路径),按快照里的进程号找到它开着的
+/// 只开着正在放的那一个;它们自己报的标签已经齐全,这里主要为了拿到路径)、MyGo Music 放本机文件时,按快照里的进程号找到它开着的
 /// 那个文件(`ProcessOpenFiles`;快照没带进程号时按 bundle id 找主进程,Spotify 的快照来自脚本、不带):
 /// 路径写进播放状态(`local_file`,引擎读同名 .lrc 和文件里的歌词)、没报封面时用同目录的图;标签里有歌名时换成标签里的
 /// 歌手、歌名、专辑和精确时长(网易云把带扩展名的文件名报成歌名,酷狗不读标签、按文件名拆歌手歌名)。
 /// 在线播放时它们开着的是自己的缓存(网易云 `.uc!`、Spotify 没有扩展名的缓存文件),不在 `PlayerTitleSplit.audioExtensions`
-/// 里,不会认成本机文件。见 02 章决策 188、196、206、241。
+/// 里,不会认成本机文件;MyGo 插件音源的缓存是带完整标签的 .mp3,按目录排除(`isPlayerCache`)。见 02 章决策 188、196、206、241、248。
 public enum PlayerOpenFile {
     public static let bundleIDs: Set<String> = [
         PlaybackPlayer.qqMusic.bundleIdentifier, PlaybackPlayer.netease.bundleIdentifier,
         PlaybackPlayer.kugou.bundleIdentifier, PlaybackPlayer.spotify.bundleIdentifier,
         PlaybackPlayer.foobar2000.bundleIdentifier, PlaybackPlayer.swinsian.bundleIdentifier,
+        PlaybackPlayer.mygoMusic.bundleIdentifier,
     ]
 
     /// 没写歌名的文件报成不带扩展名的文件名的播放器(`fileNameIdentity` 的 `acceptsBaseName`)。
     static let baseNameBundleIDs: Set<String> = [
         PlaybackPlayer.foobar2000.bundleIdentifier, PlaybackPlayer.swinsian.bundleIdentifier,
+        PlaybackPlayer.mygoMusic.bundleIdentifier,
     ]
+
+    /// 播放器放在线音源时开着的缓存文件:MyGo 插件音源下到 `~/Library/Caches/MyGo Music/songs/`,文件带完整标签、按标签对得上,
+    /// 不算本机文件(不交引擎读 .lrc、不拿正在下的文件估时长)。纯函数,selftest 覆盖。
+    public static func isPlayerCache(_ path: String) -> Bool {
+        path.contains("/Library/Caches/MyGo Music/")
+    }
 
     private static let logger = Logger(subsystem: LyrimuseIdentity.logSubsystem, category: "player-file")
 
@@ -153,7 +161,7 @@ public enum PlayerOpenFile {
     private static func lookUp(artist: String, title: String, duration: Double?, pid: pid_t,
                                foobar: Bool, baseName: Bool) -> (identity: PlayerTitleSplit.FileIdentity?, path: String)? {
         let candidates = ProcessOpenFiles.paths(pid: pid)
-            .filter { PlayerTitleSplit.audioExtensions.contains(URL(fileURLWithPath: $0).pathExtension.lowercased()) }
+            .filter { PlayerTitleSplit.audioExtensions.contains(URL(fileURLWithPath: $0).pathExtension.lowercased()) && !isPlayerCache($0) }
         guard !candidates.isEmpty else { return nil }
         for path in candidates {
             let fileName = URL(fileURLWithPath: path).lastPathComponent

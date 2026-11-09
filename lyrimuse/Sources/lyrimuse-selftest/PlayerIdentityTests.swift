@@ -40,7 +40,8 @@ func runPlayerIdentityTests() {
         expectEqual(MediaControlClient.directQueryPlayer(forBundleID: player.bundleIdentifier), player,
                     "MyGo: 失焦后可按 bundle ID 读取自身会话")
         expectEqual(LocalPlaybackSource.acceptsSeek(bundleID: player.bundleIdentifier), true, "MyGo: 正常焦点允许跳转")
-        expectEqual(player.nativeLyricSource, nil, "MyGo: 多音源播放器不猜歌词来源")
+        expectEqual(player.nativeLyricSource, "localfile",
+                    "MyGo: 同源歌词是正在放的本机文件旁的 .lrc 和内嵌歌词(它自己显示的那份);放插件音源时没有这一路候选,不算落选")
     }
     // ---- bundleID → 数据源档位映射 ----
     do {

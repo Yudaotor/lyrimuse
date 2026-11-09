@@ -483,7 +483,7 @@
       "processName": "MyGo Music",
       "displayName": {"literal": "MyGo Music"},
       "scrobbleLabel": "MyGo Music (macOS)",
-      "nativeLyricSource": null,
+      "nativeLyricSource": "localfile",
       "positionTier": "cleanExtrapolated",
       "republishesZeroAnchor": false,
       "playingFromRate": false,
@@ -499,7 +499,7 @@
       "tint": {"rgb": [0.95, 0.27, 0.27]},
       "fallbackSymbol": "music.note",
       "bundledIcon": "MyGoMusicIcon",
-      "note": "开源的多音源播放器,本地文件与插件音源共用系统媒体会话。曲目信息、封面、状态和进度走 media-control,播放、暂停、上下首和跳转响应系统命令;位置沿用 cleanExtrapolated,开始出声那一刻报的锚点按它的混音缓冲和设备延迟往后挪(MyGoSessionAnchor)。失焦时通过自身主菜单的播放/暂停、下一首、上一首控制(PlaybackMenuControl),需要辅助功能权限,不接失焦跳转。菜单标题不报告喜欢、随机或循环状态,不提供这些扩展控制;系统会话不报当前音源和歌曲 id,没有固定的原生歌词源。"
+      "note": "开源的多音源播放器,本地文件与插件音源共用系统媒体会话。曲目信息、封面、状态和进度走 media-control,播放、暂停、上下首和跳转响应系统命令;位置沿用 cleanExtrapolated,开始出声那一刻报的锚点按它的混音缓冲和设备延迟往后挪(MyGoSessionAnchor)。失焦时通过自身主菜单的播放/暂停、下一首、上一首控制(PlaybackMenuControl),需要辅助功能权限,不接失焦跳转。菜单标题不报告喜欢、随机或循环状态,不提供这些扩展控制;系统会话不报当前音源和歌曲 id。放本机文件时 App 按进程号找它开着的当前文件(PlayerOpenFile,插件音源在缓存目录里的不算),没写标签时按不带扩展名的文件名拆歌手歌名;nativeLyricSource 填 localfile:正在放的文件同目录同名的 .lrc 与内嵌歌词(它自己显示的也是这一份)。"
     },
     {
       "id": "weread",

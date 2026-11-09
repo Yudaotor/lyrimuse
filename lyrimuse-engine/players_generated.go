@@ -202,6 +202,7 @@ var playerNativeLyricSources = map[string]string{
 	playerPinePlayer:  "localfile",
 	playerFoobar2000:  "localfile",
 	playerSwinsian:    "localfile",
+	playerMyGoMusic:   "localfile",
 }
 
 // playerNeedsFullDiskAccess 是「播放器标识 → 引擎读它的客户端文件要不要

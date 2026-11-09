@@ -166,6 +166,25 @@ func runMyGoTests() {
                     "MyGo 时长: 进程号、补查时刻、精确档跟着带过去")
     }
 
+    // ---- 放本机文件:按开着的文件认,路径交引擎读同名 .lrc ----
+    do {
+        let mygo = PlaybackPlayer.mygoMusic.bundleIdentifier
+        expectEqual(PlayerOpenFile.bundleIDs.contains(mygo), true, "MyGo 当前文件: 按它开着的文件认,路径交引擎读 .lrc")
+        expectEqual(PlayerOpenFile.isPlayerCache("/Users/u/Library/Caches/MyGo Music/songs/0eab1fe41b41a19a61584eda41c89604-high.mp3"),
+                    true, "MyGo 当前文件: 插件音源的缓存不算本机文件(带完整标签,按标签对得上)")
+        expectEqual(PlayerOpenFile.isPlayerCache("/Users/u/Music/MyGo/陈奕迅 - 浮夸.mp3"), false, "MyGo 当前文件: 曲库里的文件照认")
+        func matches(_ artist: String, _ title: String, _ file: String) -> Bool {
+            PlayerOpenFile.fileMatches(reportedArtist: artist, reportedTitle: title, reportedDuration: nil, tags: nil, fileName: file)
+        }
+        expectEqual([matches("陈奕迅", "浮夸", "陈奕迅 - 浮夸.mp3"), matches("", "MyGo Click A", "MyGo Click A.wav"),
+                     matches("", "01 - Intro", "01 - Intro.flac"), matches("", "浮夸", "陈奕迅 - 浮夸.mp3")],
+                    [true, true, true, false],
+                    "MyGo 当前文件: 没标签时它按第一个「 - 」拆成歌手、歌名,左边是音轨号就整个当歌名;只报歌名不报歌手的拆法对不上")
+        expectEqual(PlayerOpenFile.fileNameIdentity(reportedArtist: "", reportedTitle: "MyGo Click A", fileName: "MyGo Click A.wav",
+                                                    duration: 30, acceptsBaseName: true)?.title, "MyGo Click A",
+                    "MyGo 当前文件: 报的是不带扩展名的文件名,也换成文件那份身份")
+    }
+
     // ---- 接线 ----
     do {
         typealias L = LocalPlaybackSource
@@ -176,6 +195,12 @@ func runMyGoTests() {
         let client = (try? String(contentsOfFile: root.appendingPathComponent("LyrimuseCore/Local/MediaControlClient.swift").path,
                                   encoding: .utf8)) ?? ""
         expectEqual(sourceHas(client, "let mygo = MyGoSessionAnchor.filled("), true, "MyGo 接线: 解码系统会话时挪锚点")
+        let openFile = (try? String(contentsOfFile: root.appendingPathComponent("LyrimuseCore/Local/PlayerOpenFile.swift").path,
+                                    encoding: .utf8)) ?? ""
+        expectEqual([sourceHas(openFile, "static let baseNameBundleIDs: Set<String> = [ PlaybackPlayer.foobar2000.bundleIdentifier, "
+                                         + "PlaybackPlayer.swinsian.bundleIdentifier, PlaybackPlayer.mygoMusic.bundleIdentifier, ]"),
+                     sourceHas(openFile, "pathExtension.lowercased()) && !isPlayerCache($0) }")], [true, true],
+                    "MyGo 接线: 没标签时按不带扩展名的文件名拆;找开着的文件时跳过插件缓存")
         expectEqual(sourceHas(client, "timestamp = mygo.timestamp"), true, "MyGo 接线: 下游拿到的是挪过的时刻")
         expectEqual(sourceHas(client, "snapshot.republishDueBy = foobarLoopCheckAt(bundleID: probed.bundleIdentifier"), true,
                     "MyGo 接线: 焦点被占时单问那份同样取余、排补查")
