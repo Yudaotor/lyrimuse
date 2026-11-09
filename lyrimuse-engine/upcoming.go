@@ -119,9 +119,8 @@ func upcomingFromQueue(artist, title, album, bundleID string, durationSecs float
 	case lxMusicBundleID:
 		return lxMusicUpcoming(artist, title, n)
 	case myGoMusicBundleID:
-		// 没有脚本字典或对外队列接口。session.json 里虽然有队列,但它是最多 30 秒写一次的恢复快照,
-		// 不是这一刻接下来要播的顺序,不拿它当预取队列。
-		return nil, false
+		// 没有对外队列接口,读它的会话快照(mygoqueue.go;最多晚 30 秒,当前这首对不上就退回)。
+		return myGoUpcoming(artist, title, n)
 	case weReadBundleID:
 		// 听书整段按有声内容处理、开播就不预取(playerMarksSpoken);走到这里也没有可预取的歌,不退回同专辑预取。
 		return nil, true
@@ -248,6 +247,8 @@ func upcomingQueueStamp(bundleID string) string {
 		return lxMusicQueueStamp()
 	case foobar2000BundleID:
 		return foobarQueueStamp()
+	case myGoMusicBundleID:
+		return myGoQueueStamp()
 	}
 	return ""
 }

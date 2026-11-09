@@ -238,12 +238,6 @@ func TestUpcomingFromQueueSpotifyAndUnknownPlayers(t *testing.T) {
 
 // MyGo 的 session.json 有队列,但最多 30 秒才写一次,是退出后恢复用的,不是这一刻的播放顺序。
 // 预解析必须当它没有实时队列,退回同专辑预取;报 true 会把过期队列当成接下来要播的歌。
-func TestMyGoUpcomingDoesNotTreatTheRestoreSnapshotAsLive(t *testing.T) {
-	if _, ok := upcomingFromQueue("甲", "乙", "丙", myGoMusicBundleID, 120, 5); ok {
-		t.Fatal("MyGo 没有实时队列,不该报取到了")
-	}
-}
-
 // 每个内置播放器在分发里都要有自己的 case。Go 的 switch 不查写没写全:漏了的那家落到最后的浏览器分支
 // (browserUpcoming),读不到就退回同专辑预取 —— 上面两条拦不住,浏览器分支对它同样返回 false。所以这里直接
 // 读 upcomingFromQueue 的 case。查实拿不到队列的播放器也给它一个 case,在里面写明为什么、直接返回 nil, false。
