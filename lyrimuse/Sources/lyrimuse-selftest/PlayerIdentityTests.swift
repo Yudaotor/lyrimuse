@@ -1223,7 +1223,7 @@ func runPlayerIdentityTests() {
             .weread: (nil, []),
             .swinsian: (nil, [.extendedControls, .repeatOne, .resume, .snapsToReportedPosition, .arrivesWhole]),
             .plexamp: (nil, [.extendedControls, .repeatOne, .gaplessLead, .learnsAnchorLag, .arrivesWhole]),
-            .mygoMusic: (nil, [.gaplessLead, .lateAnchorProbe]),
+            .mygoMusic: (nil, [.favorite, .gaplessLead, .lateAnchorProbe]),
             .pearDesktop: (.youtubeMusic, [.extendedControls, .repeatOne, .favorite, .resume, .lateAnchorProbe, .learnsAnchorLag,
                                            .holdsAnchorLagSeed, .catalogMenuRows]),
         ]
@@ -1558,10 +1558,10 @@ func runPlayerIdentityTests() {
         // 换歌后菜单标题要过一会儿才换成新那首(网易云实测 0.16~0.27 秒):靠菜单标题的播放器写「喜欢」往后推(07 章决策 147)。
         typealias C = MusicPlaybackController
         expectEqual(PlaybackPlayer.allCases.filter(C.favoriteSettlesAfterTrackChange),
-                    [.qqMusic, .netease, .kugou, .soda, .amazonMusic].filter { PlaybackPlayer.allCases.contains($0) },
-                    "读别处状态的喜欢: QQ 音乐、网易云、酷狗、汽水和 Amazon")
+                    [.qqMusic, .netease, .kugou, .soda, .amazonMusic, .mygoMusic].filter { PlaybackPlayer.allCases.contains($0) },
+                    "读别处状态的喜欢: QQ 音乐、网易云、酷狗、汽水、Amazon 和 MyGo(本地库)")
         expectEqual(PlaybackPlayer.allCases.filter(C.hidesFavoriteWhenWriteIgnored),
-                    [.qqMusic, .netease, .kugou, .soda, .amazonMusic, .pearDesktop].filter { PlaybackPlayer.allCases.contains($0) },
+                    [.qqMusic, .netease, .kugou, .soda, .amazonMusic, .pearDesktop, .mygoMusic].filter { PlaybackPlayer.allCases.contains($0) },
                     "喜欢按了没生效藏心: 读别处状态的那几家加 Pear Desktop(登出后接口照报没赞、赞不理)")
         expectEqual(PlaybackPlayer.allCases.filter(C.shortcutAwaitsFavoriteWrite), [.pearDesktop],
                     "快捷键喜欢等写入结果再提示: 只有本机接口几毫秒就有结果的 Pear Desktop")

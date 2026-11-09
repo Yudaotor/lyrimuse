@@ -124,6 +124,15 @@ public enum PlaybackMenuControl {
         }
     }
 
+    /// 在播放控制那个菜单里按标题是 `title` 的那一项(要启用着),MyGo 的「喜欢/取消喜欢」用。会阻塞跨进程调用,不要在主线程调。
+    public static func pressItem(titled title: String, for player: PlaybackPlayer) -> Outcome {
+        withTransportItem(.playPause, titled: title, for: player) { item, _, inBudget in
+            guard inBudget() else { return .menuUnavailable }
+            let result = AXUIElementPerformAction(item, kAXPressAction as CFString)
+            return result == .success ? .pressed : .pressFailed(code: result.rawValue)
+        }
+    }
+
     /// 停着的播放器开播时按哪一项(标题):foobar2000 停住或冷启动后按 Pause 什么都不做,按 Play 才开播(冷启动后放上次那首);
     /// 别的播放器为 nil,照旧按播放 / 暂停那一项。纯函数,selftest 覆盖。
     public static func startTitle(for player: PlaybackPlayer) -> String? { player == .foobar2000 ? "Play" : nil }

@@ -402,18 +402,20 @@ public enum MusicPlaybackController {
     }
 
     /// 这个播放器有没有「喜欢」:Apple Music(收藏)、Kaset(YouTube Music 的赞)、QQ 音乐、网易云音乐和酷狗音乐(菜单栏「喜欢歌曲」)、
-    /// Amazon Music(加进资料库)、汽水音乐(底部播放条那颗心)、洛雪音乐(「我的收藏」)、Pear Desktop(本机接口的赞)。
+    /// Amazon Music(加进资料库)、汽水音乐(底部播放条那颗心)、洛雪音乐(「我的收藏」)、Pear Desktop(本机接口的赞)、
+    /// MyGo Music(本机曲目的喜欢,插件音源读不到、不显示)。
     public static func supportsFavorite(_ player: PlaybackPlayer) -> Bool {
         player == .appleMusic || player == .kaset || player == .qqMusic || player == .netease || player == .kugou
-            || player == .amazonMusic || player == .soda || player == .lxMusic || player == .pearDesktop
+            || player == .amazonMusic || player == .soda || player == .lxMusic || player == .pearDesktop || player == .mygoMusic
     }
 
     /// 「喜欢」不走脚本接口、读的是别处的播放器:菜单栏那一项(`MenuTitleFavorite`,酷狗是播放条那颗心)、Amazon 的日志加资料库、
-    /// 汽水的界面。
+    /// 汽水的界面、MyGo 的本地库(换歌后要等这一首对上开着的文件才认得出是哪个文件)。
     /// 换歌后那份状态要过一会儿才换成新那首的(网易云实测 0.16~0.27 秒),这段时间里读、写都按 `favoriteSettleSeconds` 往后推。
     /// 见 07 章决策 147。
     public static func favoriteSettlesAfterTrackChange(_ player: PlaybackPlayer) -> Bool {
         player == .qqMusic || player == .netease || player == .kugou || player == .amazonMusic || player == .soda
+            || player == .mygoMusic
     }
 
     /// 按了「喜欢」没生效(没登录等)这一首藏起心、不再按:上面那几家,加上 Pear Desktop(登出后本机接口照报没赞、赞的请求不理)。
@@ -472,6 +474,7 @@ public enum MusicPlaybackController {
         case .soda: return SodaMusicControl.readFavorited()
         case .lxMusic: return LXMusicFavoriteControl.readFavorited()
         case .pearDesktop: return PearDesktopAPI.shared.liked()
+        case .mygoMusic: return MyGoFavoriteControl.readFavorited()
         default: return nil
         }
     }
@@ -504,6 +507,8 @@ public enum MusicPlaybackController {
             return LXMusicFavoriteControl.setFavorited(value)
         case .pearDesktop:
             return PearDesktopAPI.shared.setLiked(value)
+        case .mygoMusic:
+            return MyGoFavoriteControl.setFavorited(value)
         default:
             return false
         }

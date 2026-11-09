@@ -150,6 +150,22 @@ func runMyGoTests() {
                     "MyGo 当前文件: 报的是不带扩展名的文件名,也换成文件那份身份")
     }
 
+    // ---- 本机曲目的喜欢:读本地库,写按菜单 ----
+    do {
+        typealias F = MyGoFavoriteControl
+        expectEqual([F.trackID(path: "/Users/chenyuhao/Music/Lyrimuse测试/MyGo/MyGo Click M.mp3"),
+                     F.trackID(path: "/Users/chenyuhao/Music/Lyrimuse测试/MyGo/MyGo Click B.wav")],
+                    ["34b2897a8e6d7690", "75f8939f2d4b2040"], "MyGo 喜欢: 曲目 ID 跟它会话里的一致(本机实测)")
+        let lib = #"{"folders":["/Music"],"likes":["75f8939f2d4b2040","34b2897a8e6d7690"]}"#
+        expectEqual(F.likes(libraryData: Data(lib.utf8)), ["75f8939f2d4b2040", "34b2897a8e6d7690"], "MyGo 喜欢: 读本地库的 likes")
+        expectEqual(F.likes(libraryData: Data(#"{"folders":["/Music"]}"#.utf8)), [], "MyGo 喜欢: 没喜欢过任何一首是空表")
+        expectEqual(F.likes(libraryData: Data("not json".utf8)), nil, "MyGo 喜欢: 解不开为 nil(不当成没喜欢)")
+        expectEqual(F.menuTitles, ["喜欢/取消喜欢", "Like/Unlike"], "MyGo 喜欢: 菜单标题取自它的语言包(只有简体、英文)")
+        typealias C = MusicPlaybackController
+        expectEqual([C.supportsFavorite(.mygoMusic), C.favoriteSettlesAfterTrackChange(.mygoMusic), C.hidesFavoriteWhenWriteIgnored(.mygoMusic)],
+                    [true, true, true], "MyGo 喜欢: 支持;换歌后等认出当前文件再读写;按了没生效这一首藏心")
+    }
+
     // ---- 接线 ----
     do {
         typealias L = LocalPlaybackSource
@@ -160,6 +176,15 @@ func runMyGoTests() {
         let client = (try? String(contentsOfFile: root.appendingPathComponent("LyrimuseCore/Local/MediaControlClient.swift").path,
                                   encoding: .utf8)) ?? ""
         expectEqual(sourceHas(client, "let mygo = MyGoSessionAnchor.filled("), true, "MyGo 接线: 解码系统会话时挪锚点")
+        let controller = (try? String(contentsOfFile: root.appendingPathComponent("LyrimuseCore/Local/MusicPlaybackController.swift").path,
+                                      encoding: .utf8)) ?? ""
+        let favorite = (try? String(contentsOfFile: root.appendingPathComponent("LyrimuseCore/Local/MyGoFavoriteControl.swift").path,
+                                    encoding: .utf8)) ?? ""
+        expectEqual([sourceHas(controller, "case .mygoMusic: return MyGoFavoriteControl.readFavorited()"),
+                     sourceHas(controller, "case .mygoMusic: return MyGoFavoriteControl.setFavorited(value)"),
+                     sourceHas(favorite, "if now == value { return true }\nguard pressMenuItem() == .pressed else { return false }"),
+                     sourceHas(favorite, "if liked(id: id) == value { return true }")], [true, true, true, true],
+                    "MyGo 接线: 喜欢读写接进分发;一样就不按;按完等本地库真的变过来才算写成")
         let openFile = (try? String(contentsOfFile: root.appendingPathComponent("LyrimuseCore/Local/PlayerOpenFile.swift").path,
                                     encoding: .utf8)) ?? ""
         expectEqual([sourceHas(openFile, "static let baseNameBundleIDs: Set<String> = [ PlaybackPlayer.foobar2000.bundleIdentifier, "
