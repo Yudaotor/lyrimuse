@@ -182,6 +182,8 @@ struct LyricsWindowActionsCapsule: View {
     /// 广告、电台串场这类不是一首歌的时候三颗都不能点。
     let enabled: Bool
     let onSearch: () -> Void
+    /// 「控件大小」的倍数(`LyricsWindowControlSize.factor`),图标、格子、胶囊高一起放大。
+    var scale: CGFloat = 1
     @ObservedObject private var rematch = LyricsWindowRematch.shared
     @ObservedObject private var menu = LyricsWindowActionMenu.shared
     /// 指针在箭头上 / 在弹出的小菜单上。两处都离开一会儿才收,从箭头往上挪到菜单的半路不收。
@@ -201,13 +203,13 @@ struct LyricsWindowActionsCapsule: View {
             arrowSlot
         }
         .padding(.horizontal, 3)
-        .frame(height: 36)
+        .frame(height: 36 * scale)
         .clearGlassCapsule(rim: rim)
         // 小菜单挂在胶囊外面(挂进去就是玻璃套玻璃,采样不到背景),右缘对齐胶囊,正好居中在箭头上方。
         .overlay(alignment: .bottomTrailing) {
             if menu.isOpen {
                 menuPanel
-                    .offset(y: -36)
+                    .offset(y: -36 * scale)
                     .transition(.opacity.combined(with: .scale(scale: 0.85, anchor: .bottom)))
             }
         }
@@ -235,9 +237,9 @@ struct LyricsWindowActionsCapsule: View {
     private func slot(symbol: String, label: String, shortcut: KeyEquivalent, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Image(systemName: symbol)
-                .font(.system(size: 14, weight: .semibold))
+                .font(.system(size: 14 * scale, weight: .semibold))
                 .foregroundStyle(iconColor)
-                .frame(width: 30, height: 30)
+                .frame(width: 30 * scale, height: 30 * scale)
                 .contentShape(Circle())
         }
         .buttonStyle(SettingsGlassHoverButtonStyle(pressScale: 0.9))
@@ -255,10 +257,10 @@ struct LyricsWindowActionsCapsule: View {
             setMenu(!menu.isOpen)
         } label: {
             Image(systemName: "chevron.up")
-                .font(.system(size: 14, weight: .semibold))
+                .font(.system(size: 14 * scale, weight: .semibold))
                 .foregroundStyle(iconColor)
                 .rotationEffect(.degrees(menu.isOpen ? 180 : 0))
-                .frame(width: 30, height: 30)
+                .frame(width: 30 * scale, height: 30 * scale)
                 .contentShape(Circle())
         }
         .buttonStyle(SettingsGlassHoverButtonStyle(pressScale: 0.9))
@@ -277,9 +279,9 @@ struct LyricsWindowActionsCapsule: View {
                 openEditor()
             } label: {
                 Image(systemName: "square.and.pencil")
-                    .font(.system(size: 14, weight: .semibold))
+                    .font(.system(size: 14 * scale, weight: .semibold))
                     .foregroundStyle(iconColor)
-                    .frame(width: 30, height: 30)
+                    .frame(width: 30 * scale, height: 30 * scale)
                     .contentShape(Circle())
             }
             .buttonStyle(SettingsGlassHoverButtonStyle(pressScale: 0.9))
@@ -339,17 +341,17 @@ struct LyricsWindowActionsCapsule: View {
                             .stroke(iconColor, style: StrokeStyle(lineWidth: 2, lineCap: .round))
                             .rotationEffect(.degrees(-90))
                         Image(systemName: "stop.fill")
-                            .font(.system(size: 7, weight: .bold))
+                            .font(.system(size: 7 * scale, weight: .bold))
                             .foregroundStyle(iconColor)
                     }
-                    .frame(width: 17, height: 17)
+                    .frame(width: 17 * scale, height: 17 * scale)
                 } else {
                     Image(systemName: "arrow.triangle.2.circlepath")
-                        .font(.system(size: 14, weight: .semibold))
+                        .font(.system(size: 14 * scale, weight: .semibold))
                         .foregroundStyle(iconColor)
                 }
             }
-            .frame(width: 30, height: 30)
+            .frame(width: 30 * scale, height: 30 * scale)
             .contentShape(Circle())
         }
         .buttonStyle(SettingsGlassHoverButtonStyle(pressScale: 0.9))

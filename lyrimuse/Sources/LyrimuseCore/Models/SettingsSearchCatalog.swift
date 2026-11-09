@@ -118,8 +118,10 @@ public enum SettingsSearchCatalog {
         "字号", "歌词布局", "长句处理", "悬停时淡化", "淡化时点按穿透", "暂停时隐藏",
         "纯音乐/无歌词时隐藏", "全屏时隐藏", "歌名", "歌手", "专辑", "封面", "时间", "宽度", "高度", "进度条",
     ]
-    /// 只在完整预览下才有的行:「封面」那一组、「布局」里的对齐方式、「文字」里的 HDR 高亮、「背景」里的 Spotify Canvas。
-    public static let lyricsWindowFullOnlyTitles: Set<String> = ["动态封面", "动态封面缓存", "对齐方式", "HDR 高亮", "Spotify Canvas"]
+    /// 只在完整预览下才有的行:「封面」那一组、「布局」里的对齐方式和控件大小、「文字」里的 HDR 高亮、「背景」里的 Spotify Canvas。
+    public static let lyricsWindowFullOnlyTitles: Set<String> = [
+        "动态封面", "动态封面缓存", "对齐方式", "控件大小", "HDR 高亮", "Spotify Canvas",
+    ]
 
     /// 「歌词显示」页「触控栏」那一段的分段取值(`AppearanceSettingsTab.Section.touchBar`)。跟歌词窗口一样
     /// 不是一个 `LyricsSurface`(见 `touchBar(_:sub:kw:)`),单独定义一份。
@@ -622,6 +624,8 @@ public enum SettingsSearchCatalog {
         // 跟灵动岛、菜单栏、触控栏那几条同名、不同段,各自跳到自己那一段。
         lyricsWindow("对齐方式", sub: "完整尺寸歌词的对齐；「自动」按对唱声部对齐",
                      kw: ["对齐", "左对齐", "居中", "右对齐", "靠左", "靠右", "对唱", "alignment"], group: "布局"),
+        lyricsWindow("控件大小", sub: "放大播放控制和其他按钮，网页歌词同样生效",
+                     kw: ["按钮", "放大", "缩放", "播放控制", "触屏", "投屏", "手机", "完整", "control size"], group: "布局"),
         lyricsWindow("读音", kw: ["罗马音", "罗马字", "注音", "拼音", "粤拼", "发音", "显示读音"], group: "内容"),
         lyricsWindow("译文", kw: ["翻译", "显示译文"], group: "内容"),
         lyricsWindow("进度条", sub: "关闭后，仅在悬停显示播放控制时出现",

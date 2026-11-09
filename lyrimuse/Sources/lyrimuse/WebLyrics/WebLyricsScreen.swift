@@ -709,7 +709,7 @@ final class WebLyricsScreenRenderer {
     private var phoneStackedPaneRect: CGRect {
         let side = min(width * 0.56, height * 0.3).rounded()
         return CGRect(x: ((width - side) / 2).rounded(), y: 16 + safeTop, width: side,
-                      height: WebLyricsPlayerPane.columnHeight(width: side))
+                      height: WebLyricsPlayerPane.columnHeight(width: side, controlScale: playback.fullControlSize.factor))
     }
     private var listX: CGFloat { width * 0.111 + coverWidth }
     /// 左栏在画面里的框(左上为原点,y 向下,同指针坐标);设给图层时经 `wrapperFrame` 翻一次。
@@ -718,6 +718,19 @@ final class WebLyricsScreenRenderer {
     /// 和视图 y 向上。占满整高的框翻不翻都一样,竖排时顶上那一块、下面的歌词不翻就上下颠倒。
     private func wrapperFrame(_ r: CGRect) -> CGRect {
         CGRect(x: r.minX, y: height - r.maxY, width: r.width, height: r.height)
+    }
+    /// 右下那排往上抬多少:手机那种排法给底部播放条让位,其余贴安全区。
+    private var bottomRowLift: CGFloat {
+        arrangement == .compact && !pane.isHidden ? max(0, height - pane.transportFrame.minY) : 0
+    }
+    /// 歌词滚动指示条下端离列表底边多远:标准档右下那排不在它底下,照原样 40;放大后停在那排上沿再往上 8
+    /// (那排的位置同 `WebLyricsChrome.layoutBottomRow`)。
+    private var indicatorBottomInset: CGFloat {
+        let factor = playback.fullControlSize.factor
+        guard factor > 1 else { return 40 }
+        let lift = bottomRowLift > 0 ? bottomRowLift : CGFloat(viewport.safeArea.bottom)
+        let rowTop = height - 11 - 36 * factor - lift
+        return max(40, listFrame.maxY - (rowTop - 8))
     }
     /// 歌词列表(和空状态)占的那一块(y 向下):左右两栏时是右栏;竖排、手机时在顶上那一块下面、占满整宽。
     private var listFrame: CGRect {
@@ -1021,7 +1034,8 @@ final class WebLyricsScreenRenderer {
                     reduceMotion: NSWorkspace.shared.accessibilityDisplayShouldReduceMotion),
                 favorited: playback.isFavorited,
                 countText: countText,
-                onArtwork: onArtwork))
+                onArtwork: onArtwork,
+                controlScale: playback.fullControlSize.factor))
         }
         syncMoreMenu()
         let primary = onArtwork ? NSColor.white : resolved(.primary)
@@ -1043,10 +1057,11 @@ final class WebLyricsScreenRenderer {
             charts: menu == .charts ? chartsState() : nil,
             panelScroll: panelScroll,
             accent: resolved(.accentColor),
-            bottomInset: arrangement == .compact && !pane.isHidden ? max(0, height - pane.transportFrame.minY) : 0,
+            bottomInset: bottomRowLift,
             safeArea: viewport.safeArea,
             size: CGSize(width: width, height: height),
-            scale: CGFloat(viewport.pixelWidth) / width))
+            scale: CGFloat(viewport.pixelWidth) / width,
+            controlScale: playback.fullControlSize.factor))
         sendLinks()
         CATransaction.commit()
 
@@ -1067,6 +1082,7 @@ final class WebLyricsScreenRenderer {
             list.apply(LyricsLayerList.Spec(
                 lines: playback.allLines, gapMarkers: playback.lyricsGapMarkersByIndex, songwriters: playback.songwriters,
                 style: style, lineSpacing: fs * 0.98, showsScrollIndicator: arrangement != .phoneStacked,
+                indicatorBottomInset: indicatorBottomInset,
                 leading: listLeading, trailing: listTrailing, onArtwork: onArtwork, suspendsBlur: false,
                 currentLineIndex: lookahead.map(\.index) ?? playback.currentLineIndex,
                 scrollLineIndex: lookahead.map(\.scrollIndex) ?? playback.scrollLineIndex,
@@ -1716,6 +1732,8 @@ final class WebLyricsPlayerPane: CALayer {
         /// 时间行正中的「收听次数」,nil 不画。
         var countText: String?
         var onArtwork: Bool
+        /// 「控件大小」的倍数(歌词窗口完整尺寸那一档):播放键、标题旁圆钮跟着放大。
+        var controlScale: CGFloat
 
         /// 前景色是深色(浅色外观、没有封面背景),底部播放条的底跟着取浅色。
         var isDarkPrimary: Bool {
@@ -1838,19 +1856,20 @@ final class WebLyricsPlayerPane: CALayer {
 
     /// 「封面在上」那一列整组多高:封面 + 歌名两行 + 进度、时间 + 播放键,间距照歌词窗口左栏。`layoutColumn` 和手机竖放时
     /// 顶上那一块的高都按它,两处不各算一遍。
-    static func columnHeight(width w: CGFloat) -> CGFloat {
-        w + 19 + 41 + 19 + 6 + 5 + 13 + 17 + columnControlsHeight(width: w)
+    static func columnHeight(width w: CGFloat, controlScale: CGFloat) -> CGFloat {
+        w + 19 + 41 + 19 + 6 + 5 + 13 + 17 + controlsHeight(width: w, controlScale: controlScale)
     }
 
-    private static func columnControlsHeight(width w: CGFloat) -> CGFloat {
-        (min(33, max(17, w * 0.079)) * 1.21).rounded()
+    /// 播放键那一行的高:播放字形的字号 × 1.21。
+    private static func controlsHeight(width w: CGFloat, controlScale: CGFloat) -> CGFloat {
+        (LyricsTransportMetrics(width: w, requested: controlScale).playFontSize * 1.21).rounded()
     }
 
     /// 歌词窗口左栏:封面在上,下面歌名、进度、播放键,整组竖直居中。
     private func layoutColumn(_ next: Content, scale: CGFloat) {
         let w = bounds.width
-        let controlsHeight = Self.columnControlsHeight(width: w)
-        let total = Self.columnHeight(width: w)
+        let controlsHeight = Self.controlsHeight(width: w, controlScale: next.controlScale)
+        let total = Self.columnHeight(width: w, controlScale: next.controlScale)
         let top = ((next.height - total) / 2 - next.verticalOffset).rounded()
         placeCover(next, side: w, origin: CGPoint(x: 0, y: top), small: false)
         var y = top + w + 19
@@ -1866,8 +1885,7 @@ final class WebLyricsPlayerPane: CALayer {
         placeCover(next, side: side, origin: .zero, small: false)
         let x = side + 24
         let w = bounds.width - x
-        let play = min(33, max(17, w * 0.079))
-        let controlsHeight = (play * 1.21).rounded()
+        let controlsHeight = Self.controlsHeight(width: w, controlScale: next.controlScale)
         let total = 41 + 18 + 6 + 5 + 13 + 16 + controlsHeight
         var y = ((side - total) / 2).rounded()
         layoutTitleRow(next, x: x, rowTop: y, width: w, scale: scale)
@@ -1889,8 +1907,7 @@ final class WebLyricsPlayerPane: CALayer {
         let barLeft = margin + CGFloat(safe.left)
         let panelWidth = bounds.width - margin * 2 - CGFloat(safe.left + safe.right)
         let inner = panelWidth - 28
-        let play = min(33, max(17, inner * 0.079))
-        let controlsHeight = (play * 1.21).rounded()
+        let controlsHeight = Self.controlsHeight(width: inner, controlScale: next.controlScale)
         let panelHeight = 14 + 6 + 5 + 13 + 10 + controlsHeight + 10
         transportFrame = CGRect(x: barLeft, y: bounds.height - max(margin, CGFloat(safe.bottom)) - panelHeight,
                                 width: panelWidth, height: panelHeight)
@@ -1995,9 +2012,11 @@ final class WebLyricsPlayerPane: CALayer {
 
     /// 标题行(同 `trackInfoRow`):左边歌名、歌手两行跑马灯(各 22 高、叠 −3,左端渐隐 24、右端 32),右边 26 的圆钮
     /// 星、「…」间隔 8,跟两行字整体竖直居中;字和圆钮之间至少 12 + 8 + 12。圆底有封面背景时白 0.16、否则前景色 0.08,
-    /// 字形 14pt 半粗、前景色 0.9。
+    /// 字形 14pt 半粗、前景色 0.9。圆钮和字形按「控件大小」放大。
     private func layoutTitleRow(_ next: Content, x: CGFloat, rowTop y: CGFloat, width w: CGFloat, scale: CGFloat) {
-        let buttons: CGFloat = next.favorited == nil ? 26 : 26 + 8 + 26
+        let d = 26 * next.controlScale
+        let glyphSize = 14 * next.controlScale
+        let buttons: CGFloat = next.favorited == nil ? d : d + 8 + d
         let textWidth = max(40, w - buttons - 32)
         let animating = !next.controls.reduceMotion
         titleLayer.show(next.title, font: .systemFont(ofSize: 17, weight: .semibold), color: next.primary,
@@ -2009,17 +2028,18 @@ final class WebLyricsPlayerPane: CALayer {
         let centerY = y + 41 / 2
         let fill = (next.onArtwork ? NSColor.white.withAlphaComponent(0.16) : next.primary.withAlphaComponent(0.08)).cgColor
         let ink = next.primary.withAlphaComponent(0.9)
-        moreButtonFrame = CGRect(x: x + w - 26, y: centerY - 13, width: 26, height: 26)
+        moreButtonFrame = CGRect(x: x + w - d, y: centerY - d / 2, width: d, height: d)
         circle(moreCircle, moreGlyph, frame: moreButtonFrame, fill: fill,
-               glyph: WebLyricsDraw.symbol("ellipsis", size: 14, weight: .semibold, color: ink, scale: scale), scale: scale)
+               glyph: WebLyricsDraw.symbol("ellipsis", size: glyphSize, weight: .semibold, color: ink, scale: scale),
+               scale: scale)
         favoriteCircle.isHidden = next.favorited == nil
         favoriteGlyph.isHidden = next.favorited == nil
         favoriteButtonFrame = nil
         if let favorited = next.favorited {
-            let frame = CGRect(x: moreButtonFrame.minX - 8 - 26, y: moreButtonFrame.minY, width: 26, height: 26)
+            let frame = CGRect(x: moreButtonFrame.minX - 8 - d, y: moreButtonFrame.minY, width: d, height: d)
             favoriteButtonFrame = frame
             circle(favoriteCircle, favoriteGlyph, frame: frame, fill: fill,
-                   glyph: WebLyricsDraw.symbol(favorited ? "star.fill" : "star", size: 14, weight: .semibold, color: ink,
+                   glyph: WebLyricsDraw.symbol(favorited ? "star.fill" : "star", size: glyphSize, weight: .semibold, color: ink,
                                                scale: scale), scale: scale)
         }
     }
@@ -2088,9 +2108,11 @@ final class WebLyricsPlayerPane: CALayer {
                                 scale: CGFloat) {
         let c = next.controls
         controlsX = x
-        let skipFont = WebLyricsControlsLayout(width: w, rowTop: rowTop, rowHeight: rowHeight, skipGlyphWidth: 0).skipFontSize
+        let skipFont = WebLyricsControlsLayout(width: w, rowTop: rowTop, rowHeight: rowHeight, skipGlyphWidth: 0,
+                                               factor: next.controlScale).skipFontSize
         let skipWidth = Self.glyph("backward.fill", size: skipFont, color: next.primary, scale: scale)?.size.width ?? skipFont
-        let layout = WebLyricsControlsLayout(width: w, rowTop: rowTop, rowHeight: rowHeight, skipGlyphWidth: skipWidth)
+        let layout = WebLyricsControlsLayout(width: w, rowTop: rowTop, rowHeight: rowHeight, skipGlyphWidth: skipWidth,
+                                             factor: next.controlScale)
         controlsLayout = layout
         let mainOpacity: Float = c.withheld ? Float(PlaybackCoordinator.withheldControlOpacity) : 1
         let items: [(WebLyricsControlsLayout.Button, String, CGFloat, Float, Bool)] = [

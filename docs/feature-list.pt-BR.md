@@ -340,6 +340,7 @@ Letra em página inteira inspirada na visualização de letras do Apple Music: c
 - Ajustes: Exibição da letra › Janela da letra › Fundo › Fundo
 - Ajustes: Atalhos de teclado › Abrir janela da letra
 - Ajustes: Exibição da letra › Janela da letra › Layout › Alinhamento
+- Ajustes: Exibição da letra › Janela da letra › Layout › Tamanho dos controles
 
 <a id="feature-lyrics-window-hdr"></a>
 
@@ -919,7 +920,7 @@ No máximo uma vez por dia, envia a versão, o macOS, quais recursos estão ativ
 
 ## Todos os ajustes
 
-Todos os ajustes da janela Ajustes, por local: 315 no total. Digite um nome no campo de busca no topo da barra lateral dos Ajustes para ir direto até ele.
+Todos os ajustes da janela Ajustes, por local: 316 no total. Digite um nome no campo de busca no topo da barra lateral dos Ajustes para ir direto até ele.
 
 ### Letra › Origem
 
@@ -1238,6 +1239,7 @@ Todos os ajustes da janela Ajustes, por local: 315 no total. Digite um nome no c
 - **Linhas longas** (só Mini): Se as linhas longas quebram ou rolam no tamanho mini
 - **Layout da letra** (só Mini): Uma linha: só a linha atual Duas linhas: a linha atual e a próxima Várias linhas: uma página de letra com rolagem, como no tamanho completo
 - **Alinhamento** (só Completo): Alinhamento da letra no tamanho completo; “Auto” segue as vozes do dueto
+- **Tamanho dos controles** (só Completo): Aumenta os controles de reprodução e os outros botões, inclusive na letra na web
 
 ### Exibição da letra › Janela da letra › Comportamento
 

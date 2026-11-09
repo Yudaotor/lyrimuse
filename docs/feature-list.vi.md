@@ -340,6 +340,7 @@ Lời toàn trang theo phong cách màn hình lời bài hát của Apple Music:
 - Cài đặt: Hiển thị lời › Cửa sổ lời › Nền › Nền
 - Cài đặt: Phím tắt › Mở Cửa sổ lời
 - Cài đặt: Hiển thị lời › Cửa sổ lời › Bố cục › Căn chỉnh
+- Cài đặt: Hiển thị lời › Cửa sổ lời › Bố cục › Cỡ nút điều khiển
 
 <a id="feature-lyrics-window-hdr"></a>
 
@@ -919,7 +920,7 @@ Tối đa một lần mỗi ngày, Lyrimuse gửi phiên bản, macOS, các tín
 
 ## Toàn bộ cài đặt
 
-Toàn bộ mục trong cửa sổ Cài đặt, theo vị trí: tổng cộng 315 mục. Gõ tên vào ô tìm kiếm ở đầu thanh bên của Cài đặt để đi thẳng tới mục đó.
+Toàn bộ mục trong cửa sổ Cài đặt, theo vị trí: tổng cộng 316 mục. Gõ tên vào ô tìm kiếm ở đầu thanh bên của Cài đặt để đi thẳng tới mục đó.
 
 ### Lời bài hát › Nguồn
 
@@ -1238,6 +1239,7 @@ Toàn bộ mục trong cửa sổ Cài đặt, theo vị trí: tổng cộng 315
 - **Dòng dài** (chỉ Mini): Xuống dòng hoặc cuộn khi một dòng quá dài ở cỡ Mini
 - **Bố cục lời** (chỉ Mini): Một dòng: chỉ hiện dòng hiện tại Hai dòng: hiện dòng hiện tại và dòng tiếp theo Nhiều dòng: giống cỡ đầy đủ, cuộn cả trang lời
 - **Căn chỉnh** (chỉ Đầy đủ): Căn lề lời ở cỡ đầy đủ; “Tự động” căn theo bè song ca
+- **Cỡ nút điều khiển** (chỉ Đầy đủ): Phóng to nút điều khiển phát và các nút khác, áp dụng cả cho lời trên web
 
 ### Hiển thị lời › Cửa sổ lời › Hành vi
 

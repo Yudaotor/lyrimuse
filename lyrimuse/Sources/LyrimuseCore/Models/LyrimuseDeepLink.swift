@@ -128,6 +128,8 @@ public enum LyrimuseDeepLink: Equatable, Sendable {
                             hoverControls: Bool? = nil, secondary: String? = nil, alignment: String? = nil)
         /// 日语读音标罗马字还是假名,跟设置页「日语读音」走同一条路(`debug/japanese-reading?style=romaji|kana`)。
         case japaneseReading(JapaneseReadingStyle)
+        /// 歌词窗口完整尺寸的「控件大小」,跟设置页走同一个设置(`debug/lyrics-window-controls?size=standard|large|extraLarge`)。
+        case lyricsWindowControls(size: LyricsWindowControlSize)
         /// 触控栏「歌词颜色」那一档,跟设置页走同一个设置(`debug/touchbar-display?color=white|cover|custom|rainbow`)。
         case touchBarDisplay(color: TouchBarLyricsColorMode)
         /// 当作键盘焦点在 / 不在输入框里,不看辅助功能读到的(`debug/touchbar-typing?state=on|off|auto`,`auto` = 交还给它)。
@@ -440,6 +442,10 @@ public enum LyrimuseDeepLink: Equatable, Sendable {
         case ("debug", "/japanese-reading"):
             guard let style = value("style").flatMap({ JapaneseReadingStyle(rawValue: $0.lowercased()) }) else { return nil }
             self = .debug(.japaneseReading(style))
+        case ("debug", "/lyrics-window-controls"):
+            guard let raw = value("size")?.lowercased(),
+                  let size = LyricsWindowControlSize.allCases.first(where: { $0.rawValue.lowercased() == raw }) else { return nil }
+            self = .debug(.lyricsWindowControls(size: size))
         case ("debug", "/rainbow"):
             let overlay = value("overlay").flatMap(Self.parseBool)
             let notch = value("notch").flatMap(Self.parseBool)
@@ -682,6 +688,9 @@ public enum LyrimuseDeepLink: Equatable, Sendable {
             case let .japaneseReading(style):
                 components.path = "/japanese-reading"
                 components.queryItems = [URLQueryItem(name: "style", value: style.rawValue)]
+            case let .lyricsWindowControls(size):
+                components.path = "/lyrics-window-controls"
+                components.queryItems = [URLQueryItem(name: "size", value: size.rawValue)]
             case let .rainbow(overlay, notch, menuBar):
                 components.path = "/rainbow"
                 var items: [URLQueryItem] = []

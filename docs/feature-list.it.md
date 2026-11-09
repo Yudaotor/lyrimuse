@@ -340,6 +340,7 @@ Testo a tutta pagina ispirato alla vista del testo di Apple Music: illustrazione
 - Impostazioni: Visualizzazione testo › Finestra testo › Sfondo › Sfondo
 - Impostazioni: Scorciatoie da tastiera › Apri finestra testo
 - Impostazioni: Visualizzazione testo › Finestra testo › Layout › Allineamento
+- Impostazioni: Visualizzazione testo › Finestra testo › Layout › Dimensioni dei controlli
 
 <a id="feature-lyrics-window-hdr"></a>
 
@@ -919,7 +920,7 @@ Al massimo una volta al giorno invia versione, macOS, funzioni attive e riepilog
 
 ## Tutte le impostazioni
 
-Tutte le impostazioni della finestra Impostazioni, per posizione: 315 in tutto. Scrivi un nome nel campo di ricerca in cima alla barra laterale delle Impostazioni per andarci direttamente.
+Tutte le impostazioni della finestra Impostazioni, per posizione: 316 in tutto. Scrivi un nome nel campo di ricerca in cima alla barra laterale delle Impostazioni per andarci direttamente.
 
 ### Testo › Fonte
 
@@ -1238,6 +1239,7 @@ Tutte le impostazioni della finestra Impostazioni, per posizione: 315 in tutto. 
 - **Righe lunghe** (solo Mini): Se nella vista Mini le righe lunghe vanno a capo o scorrono
 - **Layout testo** (solo Mini): Una riga: solo la riga attuale Due righe: la riga attuale e la successiva Multiriga: una pagina di testo che scorre, come nella vista Completa
 - **Allineamento** (solo Completa): Allineamento del testo nella dimensione Completa; “Auto” segue le parti del duetto
+- **Dimensioni dei controlli** (solo Completa): Ingrandisce i controlli di riproduzione e gli altri pulsanti, anche nel testo web
 
 ### Visualizzazione testo › Finestra testo › Comportamento
 

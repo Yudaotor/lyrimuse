@@ -340,6 +340,7 @@ Letra a página completa inspirada en la vista de letras de Apple Music: la ilus
 - Ajustes: Mostrar letra › Ventana de letra › Fondo › Fondo
 - Ajustes: Atajos de teclado › Abrir ventana de letra
 - Ajustes: Mostrar letra › Ventana de letra › Diseño › Alineación
+- Ajustes: Mostrar letra › Ventana de letra › Diseño › Tamaño de los controles
 
 <a id="feature-lyrics-window-hdr"></a>
 
@@ -919,7 +920,7 @@ Como máximo una vez al día, envía al servidor del propio autor la versión, e
 
 ## Todos los ajustes
 
-Todos los ajustes de la ventana Ajustes, según dónde están: 315 en total. Escribe un nombre en el campo de búsqueda de la parte superior de la barra lateral de Ajustes para ir directamente a él.
+Todos los ajustes de la ventana Ajustes, según dónde están: 316 en total. Escribe un nombre en el campo de búsqueda de la parte superior de la barra lateral de Ajustes para ir directamente a él.
 
 ### Letra › Fuente
 
@@ -1238,6 +1239,7 @@ Todos los ajustes de la ventana Ajustes, según dónde están: 315 en total. Esc
 - **Líneas largas** (solo tamaño mini): Si las líneas largas se ajustan o se desplazan en el tamaño mini
 - **Diseño de la letra** (solo tamaño mini): Una línea: solo la línea actual Dos líneas: la actual y la siguiente Varias líneas: una página de letra con desplazamiento, como en el tamaño completo
 - **Alineación** (solo tamaño completo): Alineación de la letra en tamaño completo; «Auto» sigue las voces del dueto
+- **Tamaño de los controles** (solo tamaño completo): Agranda los controles de reproducción y otros botones, también en la letra web
 
 ### Mostrar letra › Ventana de letra › Comportamiento
 

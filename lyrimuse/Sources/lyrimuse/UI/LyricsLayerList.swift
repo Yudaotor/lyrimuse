@@ -20,6 +20,8 @@ struct LyricsLayerList: NSViewRepresentable {
         var lineSpacing: CGFloat
         /// 右边的滚动指示条;迷你「多行」不画。
         var showsScrollIndicator: Bool
+        /// 指示条下端离列表底边多远。右下那排按钮放大(「控件大小」)后会伸到指示条底下,由外面按那排的上沿算。
+        var indicatorBottomInset: CGFloat = 40
         /// 歌词这一列离列表左右边的距离(同 SwiftUI 版 VStack 的 leading / trailing padding)。
         var leading: CGFloat
         var trailing: CGFloat
@@ -849,7 +851,7 @@ final class LyricsLayerListView: NSView {
     /// 自绘指示条(暗轨道 6pt + 滑块 12pt、常显,中心距右缘 59pt,同 SwiftUI 版 `LyricsScrollIndicator`)。不在渐隐遮罩里。
     private func updateIndicator(animated: Bool) {
         let viewH = bounds.height
-        let topInset: CGFloat = 90, bottomInset: CGFloat = 40
+        let topInset: CGFloat = 90, bottomInset = spec?.indicatorBottomInset ?? 40
         let trackH = viewH - topInset - bottomInset
         let content = contentHeight
         let visible = (spec?.showsScrollIndicator ?? false) && content > viewH + 4 && trackH > 80

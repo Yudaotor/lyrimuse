@@ -1824,6 +1824,17 @@
     },
     {
       "dest" : "tab:appearance",
+      "lyricsWindowMini" : false,
+      "path" : [
+        "歌词显示",
+        "歌词窗口",
+        "布局"
+      ],
+      "subtitle" : "放大播放控制和其他按钮，网页歌词同样生效",
+      "title" : "控件大小"
+    },
+    {
+      "dest" : "tab:appearance",
       "path" : [
         "歌词显示",
         "歌词窗口",

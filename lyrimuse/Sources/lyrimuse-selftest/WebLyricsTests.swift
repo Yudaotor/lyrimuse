@@ -432,9 +432,9 @@ func runWebLyricsTests() {
         let screenSource = (try? String(contentsOf: URL(fileURLWithPath: #filePath).deletingLastPathComponent()
             .deletingLastPathComponent().appendingPathComponent("lyrimuse/WebLyrics/WebLyricsScreen.swift"), encoding: .utf8)) ?? ""
         expectEqual(sourceHas(screenSource, "case .phoneStacked: return .column")
-                        && sourceHas(screenSource, "height: WebLyricsPlayerPane.columnHeight(width: side))")
+                        && sourceHas(screenSource, "height: WebLyricsPlayerPane.columnHeight(width: side, controlScale: playback.fullControlSize.factor))")
                         && sourceHas(screenSource, "let top = phoneStackedPaneRect.maxY + 16")
-                        && sourceHas(screenSource, "let total = Self.columnHeight(width: w)")
+                        && sourceHas(screenSource, "let total = Self.columnHeight(width: w, controlScale: next.controlScale)")
                         && sourceHas(screenSource, "showsScrollIndicator: arrangement != .phoneStacked,"), true,
                     "网页歌词: 手机竖放顶上那一块用歌词窗口左栏那一列,块高和那一列整组高同一个函数,歌词从它下面开始、不画滚动指示条")
         expectEqual(sourceHas(screenSource, "centered: false, wordRise: true,")
@@ -517,6 +517,28 @@ func runWebLyricsTests() {
         let gapX = ((cells[.previous] ?? .zero).maxX + play.minX) / 2
         let between = layout.button(at: CGPoint(x: gapX, y: 516))
         expectEqual(between == .previous || between == .playPause, true, "网页歌词: 两键之间只归一颗")
+        // 「控件大小」:播放键跟歌词窗口同一份尺寸,放大后仍随机贴左、循环贴右、播放居中,三键不压到两侧。
+        let big = WebLyricsControlsLayout(width: 329, rowTop: 500, rowHeight: 40, skipGlyphWidth: 24 * 1.3, factor: 1.3)
+        expectEqual(big.playFontSize > layout.playFontSize * 1.29 && big.skipFontSize > layout.skipFontSize * 1.29, true,
+                    "网页歌词: 控件大小「大」时播放键跟着放大")
+        expectEqual(abs((big.cells[.playPause] ?? .zero).midX - 329 / 2) < 0.01
+                        && (big.cells[.previous] ?? .zero).minX > (big.cells[.shuffle] ?? .zero).maxX
+                        && (big.cells[.next] ?? .zero).maxX < (big.cells[.repeatMode] ?? .zero).minX, true,
+                    "网页歌词: 放大后主三键居中、不压到随机 / 循环")
+        let sizedScreen = (try? String(contentsOf: URL(fileURLWithPath: #filePath).deletingLastPathComponent()
+            .deletingLastPathComponent().appendingPathComponent("lyrimuse/WebLyrics/WebLyricsScreen.swift"), encoding: .utf8)) ?? ""
+        let sizedChrome = (try? String(contentsOf: URL(fileURLWithPath: #filePath).deletingLastPathComponent()
+            .deletingLastPathComponent().appendingPathComponent("lyrimuse/WebLyrics/WebLyricsChrome.swift"), encoding: .utf8)) ?? ""
+        expectEqual(sourceBytes(sizedScreen, contain: "controlScale: playback.fullControlSize.factor))")
+                        && sourceHas(sizedScreen, "let layout = WebLyricsControlsLayout(width: w, rowTop: rowTop, rowHeight: rowHeight, skipGlyphWidth: skipWidth,\n                                             factor: next.controlScale)"),
+                    true, "网页歌词: 播放键按歌词窗口那一档「控件大小」排")
+        expectEqual(sourceHas(sizedScreen, "let d = 26 * next.controlScale")
+                        && sourceHas(sizedChrome, "let d = 36 * k")
+                        && sourceHas(sizedChrome, "lyricsSlot.frame = capsule.insetBy(dx: 3 * k, dy: 3 * k)"), true,
+                    "网页歌词: 标题旁圆钮、右下一排跟着放大")
+        expectEqual(sourceHas(sizedScreen, "indicatorBottomInset: indicatorBottomInset,")
+                        && sourceHas(sizedScreen, "let rowTop = height - 11 - 36 * factor - lift"), true,
+                    "网页歌词: 放大后歌词滚动条停在右下一排上方")
     }
 
     // ---- 端口与链接 ----

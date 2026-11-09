@@ -1478,6 +1478,7 @@
 "排队" = "Queued";
 "接收" = "Download";
 "接近平分，但内容印证不完整" = "Nearly tied, but not fully corroborated";
+"控件大小" = "Control Size";
 "推到" = "Send to";
 "推荐。为每个歌词源评分，选用最高分的结果" = "Recommended. Scores every source and keeps the best match";
 "推送内容" = "Message Content";
@@ -1552,6 +1553,7 @@
 "改过歌词或调过时间轴偏移的歌曲" = "Songs whose lyrics you edited or whose timing offset you adjusted";
 "放大字号" = "Increase Font Size";
 "放大悬浮歌词字号" = "Increase Floating Lyrics Font Size";
+"放大播放控制和其他按钮，网页歌词同样生效" = "Enlarges the playback controls and other buttons, Web Lyrics included";
 "放帧余量" = "Playout buffer";
 "放弃修改" = "Discard Changes";
 "数据文件夹" = "Data Folder";
@@ -2242,6 +2244,7 @@
 "版本尾缀写法" = "Version suffix style";
 "版权说明" = "Copyright Notice";
 "特厚" = "Ultra Thick";
+"特大" = "Extra Large";
 "特粗" = "Heavy";
 "状态文字" = "Status Text";
 "状态未知" = "Status unknown";

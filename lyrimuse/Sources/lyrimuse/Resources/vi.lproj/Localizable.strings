@@ -1403,6 +1403,7 @@
 "排队" = "Đang chờ";
 "接收" = "Nhận";
 "接近平分，但内容印证不完整" = "Gần như hòa, nhưng nội dung chưa được xác nhận đầy đủ";
+"控件大小" = "Cỡ nút điều khiển";
 "推到" = "Gửi đến";
 "推荐。为每个歌词源评分，选用最高分的结果" = "Khuyên dùng. Chấm điểm từng nguồn lời và chọn kết quả điểm cao nhất";
 "推送内容" = "Nội dung gửi";
@@ -1477,6 +1478,7 @@
 "改过歌词或调过时间轴偏移的歌曲" = "Bài hát bạn đã sửa lời hoặc chỉnh độ lệch thời gian";
 "放大字号" = "Tăng cỡ chữ";
 "放大悬浮歌词字号" = "Tăng cỡ Lời nổi";
+"放大播放控制和其他按钮，网页歌词同样生效" = "Phóng to nút điều khiển phát và các nút khác, áp dụng cả cho lời trên web";
 "放帧余量" = "Bộ đệm phát";
 "放弃修改" = "Hủy bỏ thay đổi";
 "数据文件夹" = "Thư mục dữ liệu";
@@ -2159,6 +2161,7 @@
 "版本尾缀写法" = "Cách ghi hậu tố phiên bản";
 "版权说明" = "Thông báo bản quyền";
 "特厚" = "Siêu dày";
+"特大" = "Rất lớn";
 "特粗" = "Rất đậm";
 "状态文字" = "Văn bản trạng thái";
 "状态未知" = "Không rõ trạng thái";

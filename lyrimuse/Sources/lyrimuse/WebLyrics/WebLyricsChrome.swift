@@ -266,6 +266,8 @@ final class WebLyricsChromeLayer: CALayer {
         var safeArea: WebLyricsViewport.SafeArea
         var size: CGSize
         var scale: CGFloat
+        /// 「控件大小」的倍数(歌词窗口完整尺寸那一档):右下一排跟着放大。
+        var controlScale: CGFloat
     }
 
     private let volumeGroup = CALayer()
@@ -435,21 +437,24 @@ final class WebLyricsChromeLayer: CALayer {
 
     /// 右下一排:贴右 10、底 11(在安全区里);最右是 [歌词] 胶囊(36 高、一格 30 圆,显示着歌词时是白圆 + 深色字形),
     /// 左边隔 8.5 是 36 圆的翻译钮(译文正在显示时是白圆 + 深色字形)。播放记录那一格、歌词操作胶囊不画。
+    /// 胶囊、圆、字形按「控件大小」放大,边距和间隔不变。
     private func layoutBottomRow(_ s: State, rim: NSColor, iconColor: NSColor) {
         bottomGroup.frame = CGRect(origin: .zero, size: s.size)
-        let y = s.size.height - 11 - 36 - (s.bottomInset > 0 ? s.bottomInset : CGFloat(s.safeArea.bottom))
+        let k = s.controlScale
+        let d = 36 * k
+        let y = s.size.height - 11 - d - (s.bottomInset > 0 ? s.bottomInset : CGFloat(s.safeArea.bottom))
         var right = s.size.width - 10 - CGFloat(s.safeArea.right)
         lyricsCapsule.isHidden = !s.showsLyricsToggle
         lyricsSlot.isHidden = !s.showsLyricsToggle
         lyricsGlyph.isHidden = !s.showsLyricsToggle
         if s.showsLyricsToggle {
-            let capsule = CGRect(x: right - 36, y: y, width: 36, height: 36)
+            let capsule = CGRect(x: right - d, y: y, width: d, height: d)
             glass(lyricsCapsule, frame: capsule, rim: rim, onArtwork: s.onArtwork)
-            lyricsSlot.frame = capsule.insetBy(dx: 3, dy: 3)
-            lyricsSlot.cornerRadius = 15
+            lyricsSlot.frame = capsule.insetBy(dx: 3 * k, dy: 3 * k)
+            lyricsSlot.cornerRadius = 15 * k
             lyricsSlot.backgroundColor = s.lyricsShown ? NSColor.white.withAlphaComponent(0.84).cgColor : nil
             let color = s.lyricsShown ? NSColor.black.withAlphaComponent(0.75) : iconColor
-            WebLyricsDraw.place(lyricsGlyph, WebLyricsDraw.symbol("quote.bubble.fill", size: 14, weight: .semibold,
+            WebLyricsDraw.place(lyricsGlyph, WebLyricsDraw.symbol("quote.bubble.fill", size: 14 * k, weight: .semibold,
                                                                   color: color, scale: s.scale),
                                 center: CGPoint(x: capsule.midX, y: capsule.midY), scale: s.scale)
             hits.append((.lyricsToggle, capsule))
@@ -458,17 +463,17 @@ final class WebLyricsChromeLayer: CALayer {
         translationCircle.isHidden = !s.showsTranslationButton
         translationGlyph.isHidden = !s.showsTranslationButton
         if s.showsTranslationButton {
-            let circle = CGRect(x: right - 36, y: y, width: 36, height: 36)
+            let circle = CGRect(x: right - d, y: y, width: d, height: d)
             if s.translationActive {
                 translationCircle.frame = circle
-                translationCircle.cornerRadius = 18
+                translationCircle.cornerRadius = d / 2
                 translationCircle.backgroundColor = NSColor.white.withAlphaComponent(0.84).cgColor
                 translationCircle.borderWidth = 0
             } else {
                 glass(translationCircle, frame: circle, rim: rim, onArtwork: s.onArtwork)
             }
             let color = s.translationActive ? NSColor.black.withAlphaComponent(0.75) : iconColor
-            WebLyricsDraw.place(translationGlyph, WebLyricsDraw.symbol("translate", size: 16, weight: .semibold,
+            WebLyricsDraw.place(translationGlyph, WebLyricsDraw.symbol("translate", size: 16 * k, weight: .semibold,
                                                                        color: color, scale: s.scale),
                                 center: CGPoint(x: circle.midX, y: circle.midY), scale: s.scale)
             hits.append((.translation, circle))

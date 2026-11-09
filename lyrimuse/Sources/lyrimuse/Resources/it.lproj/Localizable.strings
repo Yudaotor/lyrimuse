@@ -1478,6 +1478,7 @@
 "排队" = "In coda";
 "接收" = "Download";
 "接近平分，但内容印证不完整" = "Quasi pari, ma conferma incompleta";
+"控件大小" = "Dimensioni dei controlli";
 "推到" = "Invia a";
 "推荐。为每个歌词源评分，选用最高分的结果" = "Consigliato. Assegna un punteggio a ogni fonte e tiene il risultato migliore";
 "推送内容" = "Contenuto del messaggio";
@@ -1552,6 +1553,7 @@
 "改过歌词或调过时间轴偏移的歌曲" = "Brani di cui hai modificato il testo o regolato l’offset del timing";
 "放大字号" = "Aumenta dimensione font";
 "放大悬浮歌词字号" = "Ingrandisci testo fluttuante";
+"放大播放控制和其他按钮，网页歌词同样生效" = "Ingrandisce i controlli di riproduzione e gli altri pulsanti, anche nel testo web";
 "放帧余量" = "Buffer di riproduzione";
 "放弃修改" = "Scarta modifiche";
 "数据文件夹" = "Cartella dati";
@@ -2242,6 +2244,7 @@
 "版本尾缀写法" = "Stile del suffisso di versione";
 "版权说明" = "Avviso di copyright";
 "特厚" = "Ultraspesso";
+"特大" = "Molto grande";
 "特粗" = "Pesante";
 "状态文字" = "Testo di stato";
 "状态未知" = "Stato sconosciuto";

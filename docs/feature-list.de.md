@@ -340,6 +340,7 @@ Ganzseitiger Liedtext nach dem Vorbild der Liedtextansicht von Apple Music: unsc
 - Einstellungen: Liedtext-Anzeige › Liedtextfenster › Hintergrund › Hintergrund
 - Einstellungen: Tastaturkurzbefehle › Liedtextfenster öffnen
 - Einstellungen: Liedtext-Anzeige › Liedtextfenster › Layout › Ausrichtung
+- Einstellungen: Liedtext-Anzeige › Liedtextfenster › Layout › Größe der Bedienelemente
 
 <a id="feature-lyrics-window-hdr"></a>
 
@@ -919,7 +920,7 @@ Sendet höchstens einmal täglich Version, macOS, aktivierte Funktionen und Abst
 
 ## Alle Einstellungen
 
-Alle Einstellungen des Einstellungsfensters nach Ort: insgesamt 315. Gib einen Namen in das Suchfeld oben in der Seitenleiste der Einstellungen ein, um direkt dorthin zu springen.
+Alle Einstellungen des Einstellungsfensters nach Ort: insgesamt 316. Gib einen Namen in das Suchfeld oben in der Seitenleiste der Einstellungen ein, um direkt dorthin zu springen.
 
 ### Liedtext › Quelle
 
@@ -1238,6 +1239,7 @@ Alle Einstellungen des Einstellungsfensters nach Ort: insgesamt 315. Gib einen N
 - **Überlauf** (nur Mini): Ob lange Zeilen in der Mini-Größe umbrechen oder scrollen
 - **Liedtext-Layout** (nur Mini): Einzeilig: nur die aktuelle Zeile Zweizeilig: aktuelle und nächste Zeile Mehrzeilig: eine scrollende Seite mit Liedtext wie bei Vollgröße
 - **Ausrichtung** (nur Vollgröße): Ausrichtung des Liedtexts in Vollgröße; „Auto“ folgt den Duettstimmen
+- **Größe der Bedienelemente** (nur Vollgröße): Vergrößert die Wiedergabesteuerung und andere Tasten, auch im Web-Liedtext
 
 ### Liedtext-Anzeige › Liedtextfenster › Verhalten
 

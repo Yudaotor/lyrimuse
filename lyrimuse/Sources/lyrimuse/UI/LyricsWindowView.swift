@@ -49,6 +49,8 @@ final class WindowPlayback: ObservableObject {
     @Published private(set) var fullKaraokeFill: LyricsWindowKaraokeFill = .text
     @Published private(set) var fullKaraokeFillColor = AppSettings.defaultLyricsWindowMiniKaraokeFillColorFallback
     @Published private(set) var fullAlignment: LyricsRestingAlignment = .automatic
+    /// 完整尺寸能点的控件多大(「控件大小」,07 章决策 195)。
+    @Published private(set) var fullControlSize: LyricsWindowControlSize = .standard
     @Published private(set) var fullHDRHighlight = false
     /// 封面均值色(十六进制,高清替代那份优先),「已唱颜色 › 跟随封面」用。
     @Published private(set) var coverAverageHex: String?
@@ -177,6 +179,7 @@ final class WindowPlayback: ObservableObject {
                     hexWithAlpha: hex, fallback: AppSettings.defaultLyricsWindowMiniKaraokeFillColorFallback)
             },
             s.$lyricsWindowLyricsAlignment.removeDuplicates().sink { [weak self] in self?.fullAlignment = $0 },
+            s.$lyricsWindowControlSize.removeDuplicates().sink { [weak self] in self?.fullControlSize = $0 },
             Publishers.CombineLatest(LocalPlaybackSource.shared.$artworkAverageHex, p.$highResAverageHex)
                 .map { system, highRes in highRes ?? system }
                 .removeDuplicates()
@@ -3079,7 +3082,7 @@ struct LyricsWindowView: View {
                         // 搜索歌词 / 重新自动匹配 / 用外部编辑器改歌词(07 章决策 112)。广告、电台串场时置灰。
                         if !previewMode, !isIdle {
                             LyricsWindowActionsCapsule(onArtwork: hasArtworkBackground, enabled: !lyricsOnHold,
-                                                       onSearch: { openLyricsSearch() })
+                                                       onSearch: { openLyricsSearch() }, scale: controlFactor)
                         }
                         if !previewMode, !isIdle,
                             playback.hasLyricsContent && (trackHasTranslation || trackHasRomanization)
@@ -3106,7 +3109,7 @@ struct LyricsWindowView: View {
                         LyricsWindowActionCaption(currentTitle: playback.title, onArtwork: hasArtworkBackground)
                             .frame(maxWidth: min(380, max(200, geo.size.width - 40)), alignment: .trailing)
                             .padding(.trailing, 10)
-                            .padding(.bottom, 11 + 36 + 8)
+                            .padding(.bottom, 11 + 36 * controlFactor + 8)
                     }
                 }
                 // 「翻译与发音」菜单:同「⋯」菜单的窗级自绘玻璃面板机制,悬在按钮上方、
@@ -3575,7 +3578,10 @@ struct LyricsWindowView: View {
                              weight: lyricFontWeight,
                              fillColor: karaokeFillColor.map { NSColor($0) }, forcedSide: lyricForcedSide,
                              hdrHighlight: !showsMiniLayout && playback.fullHDRHighlight),
-                lineSpacing: lyricLineSpacing, showsScrollIndicator: !centered, leading: leading, trailing: trailing,
+                lineSpacing: lyricLineSpacing, showsScrollIndicator: !centered,
+                // 标准档右下那排不在指示条底下,照原样离底 40;放大后停在那排上沿再往上 8。
+                indicatorBottomInset: controlFactor > 1 ? 11 + 36 * controlFactor + 8 : 40,
+                leading: leading, trailing: trailing,
                 onArtwork: hasArtworkBackground, suspendsBlur: windowController.isLiveResizing,
                 currentLineIndex: playback.currentLineIndex, scrollLineIndex: playback.scrollLineIndex,
                 overlapping: Set(playback.overlappingLineIndices), currentGapIndex: playback.currentGapIndex,
@@ -4107,16 +4113,16 @@ struct LyricsWindowView: View {
         return Group {
             if active {
                 Image(systemName: "translate")
-                    .font(.system(size: 16, weight: .semibold))
+                    .font(.system(size: 16 * controlFactor, weight: .semibold))
                     .foregroundStyle(Color.black.opacity(0.75))
-                    .frame(width: 36, height: 36)
+                    .frame(width: 36 * controlFactor, height: 36 * controlFactor)
                     // 0.84:AM 激活态填充实测亮度 ~220/255,透着背景暖底,纯白 0.92 偏刺眼。
                     .background(Circle().fill(Color.white.opacity(0.84)))
             } else {
                 Image(systemName: "translate")
-                    .font(.system(size: 16, weight: .semibold))
+                    .font(.system(size: 16 * controlFactor, weight: .semibold))
                     .foregroundStyle(capsuleIconColor)
-                    .frame(width: 36, height: 36)
+                    .frame(width: 36 * controlFactor, height: 36 * controlFactor)
                     .clearGlassCapsule(
                         rim: hasArtworkBackground ? Color.white.opacity(0.28) : Color.primary.opacity(0.10))
             }
@@ -4164,7 +4170,7 @@ struct LyricsWindowView: View {
                 }
             }
             .padding(.horizontal, 3)
-            .frame(height: 36)
+            .frame(height: 36 * controlFactor)
             .clearGlassCapsule(
                 rim: hasArtworkBackground ? Color.white.opacity(0.28) : Color.primary.opacity(0.10))
         } else {
@@ -4175,7 +4181,7 @@ struct LyricsWindowView: View {
                            help: L10n.t(showsListenHistory ? "显示歌词" : "播放记录")) {
                 withAnimation(.smooth(duration: 0.35)) { showsListenHistory.toggle() }
             }
-            .frame(width: 36, height: 36)
+            .frame(width: 36 * controlFactor, height: 36 * controlFactor)
             .clearGlassCapsule(
                 rim: hasArtworkBackground ? Color.white.opacity(0.28) : Color.primary.opacity(0.10))
         }
@@ -4187,10 +4193,10 @@ struct LyricsWindowView: View {
                                 action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Image(systemName: icon)
-                .font(.system(size: 14, weight: .semibold))
+                .font(.system(size: 14 * controlFactor, weight: .semibold))
                 .foregroundStyle(active ? AnyShapeStyle(Color.black.opacity(0.75))
                                         : AnyShapeStyle(capsuleIconColor))
-                .frame(width: 30, height: 30)
+                .frame(width: 30 * controlFactor, height: 30 * controlFactor)
                 .background(Circle().fill(active ? Color.white.opacity(0.84) : Color.clear))
                 .contentShape(Circle())
         }
@@ -4346,7 +4352,7 @@ struct LyricsWindowView: View {
 
     private func circleIcon(_ name: String) -> some View {
         circleIconGlyph(name)
-            .frame(width: 26, height: 26)
+            .frame(width: 26 * controlFactor, height: 26 * controlFactor)
             .background(Circle().fill(circleIconFill))
             .contentShape(Circle())
     }
@@ -4361,7 +4367,7 @@ struct LyricsWindowView: View {
         Image(systemName: name)
             // 14:对照 AM 特写 —— AM 的星形约占圆钮内 60%+,12pt 只有五成出头。
             // 圆底 26pt 与 AM 一致,不动。
-            .font(.system(size: 14, weight: .semibold))
+            .font(.system(size: 14 * controlFactor, weight: .semibold))
             .foregroundStyle(primaryTextColor.opacity(0.9))
     }
 
@@ -4427,9 +4433,12 @@ struct LyricsWindowView: View {
     // 尺寸就会在窄窗口下溢出被裁、在宽窗口下小得跟封面不成比例。夹值的上下界是按"最窄能用"
     // 和"再大就傻了"定的,不是等比无限放大。
     private var controlScale: CGFloat { artworkWidth > 0 ? artworkWidth : 300 }
-    private func ctrl(_ ratio: CGFloat, _ lo: CGFloat, _ hi: CGFloat) -> CGFloat {
-        min(hi, max(lo, controlScale * ratio))
+    /// 播放控制那一排的各档尺寸,已乘上「控件大小」;一排放不下时倍数自动收小(`LyricsTransportMetrics`)。
+    private var transportMetrics: LyricsTransportMetrics {
+        LyricsTransportMetrics(width: controlScale, requested: controlFactor)
     }
+    /// 「控件大小」的倍数:歌名旁圆钮、右下那排按钮直接乘它;播放控制那一排走 `transportMetrics`。
+    private var controlFactor: CGFloat { playback.fullControlSize.factor }
 
     /// 主三键的不透明度,照 Apple Music 同窗口截图(07 章决策 93):播放键 0.85、上 / 下一首 0.72,
     /// 不是纯白。随机 / 循环熄灭态见 modeToggleButton。
@@ -4440,15 +4449,16 @@ struct LyricsWindowView: View {
         // 布局对照 AM:五键**不是等间距**——随机贴列左缘、循环贴右缘(AM 里 shuffle 中心离
         // 进度条左缘仅 ~13pt),主三键按原间距居中成组。图标档位也是对拍量的:AM 上/下一首
         // 字形 64px@2x、播放 52px 高、随机/循环 38px 宽 —— 换算成字号比例 上下一首 0.060、
-        // 播放 0.079(帧 0.10)、随机/循环 0.043。
-        HStack(spacing: 0) {
+        // 播放 0.079(帧 0.10)、随机/循环 0.043(`LyricsTransportMetrics`)。
+        let metrics = transportMetrics
+        return HStack(spacing: 0) {
             shuffleButton
             Spacer(minLength: 12)
-            HStack(spacing: ctrl(0.116, 18, 48)) {
+            HStack(spacing: metrics.spacing) {
             Button {
                 MusicPlaybackController.previousTrack()
             } label: {
-                Image(systemName: "backward.fill").font(.system(size: ctrl(0.060, 13, 25)))
+                Image(systemName: "backward.fill").font(.system(size: metrics.skipFontSize))
                     .opacity(Self.skipButtonOpacity)
             }
             .help(playback.controlsWithheldReason ?? L10n.t("上一首"))
@@ -4461,9 +4471,9 @@ struct LyricsWindowView: View {
                 // 图标跟观感层 isPlayingSmoothed 走(不是 isPlayingNow 真值):点击瞬间
                 // 翻转,还顺带吸掉切歌间隙真值抖 false 时图标闪一下的毛病。
                 Image(systemName: playback.isPlayingSmoothed ? "pause.fill" : "play.fill")
-                    .font(.system(size: ctrl(0.079, 17, 33)))
+                    .font(.system(size: metrics.playFontSize))
                     // 播放/暂停两个图标宽度不同,固定住避免两侧按钮跟着跳动
-                    .frame(width: ctrl(0.10, 22, 38))
+                    .frame(width: metrics.playCellWidth)
                     .opacity(Self.playButtonOpacity)
             }
             .help(playback.controlsWithheldReason ?? L10n.t("播放/暂停"))
@@ -4471,7 +4481,7 @@ struct LyricsWindowView: View {
             Button {
                 MusicPlaybackController.nextTrack()
             } label: {
-                Image(systemName: "forward.fill").font(.system(size: ctrl(0.060, 13, 25)))
+                Image(systemName: "forward.fill").font(.system(size: metrics.skipFontSize))
                     .opacity(Self.skipButtonOpacity)
             }
             .help(playback.controlsWithheldReason ?? L10n.t("下一首"))
@@ -4647,7 +4657,7 @@ struct LyricsWindowView: View {
             if shown {
                 Button(action: action) {
                     Image(systemName: icon)
-                        .font(.system(size: ctrl(0.043, 11, 18)))
+                        .font(.system(size: transportMetrics.modeFontSize))
                         .opacity(active ? 1 : 0.55)
                         // 3(对拍:随机贴列左缘/循环贴列右缘,此前 6pt 内衬
                         // 把两颗字形各往内推了 6px@2x,shuffle cx 362 vs AM 352)。
@@ -4671,7 +4681,7 @@ struct LyricsWindowView: View {
         // 定宽=字号+8:这个占位框才是随机/循环字形横向落点的真正旋钮 —— 字形在框内居中,
         // AM 随机字形中心离列左缘 13pt,框宽 ≈26 才对得上(0.062+14=37 那种公式会把两颗各
         // 往内推 5px@2x)。
-        .frame(width: ctrl(0.043, 11, 18) + 8)
+        .frame(width: transportMetrics.modeCellWidth)
     }
 
     // ---- 颜色:有封面背景时全窗白色系,没有时退回系统色(浅色外观可读性) ------------

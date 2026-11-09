@@ -340,6 +340,7 @@ Des paroles en pleine page inspirées de la vue paroles d’Apple Music : illus
 - Réglages : Affichage des paroles › Fenêtre des paroles › Fond › Fond
 - Réglages : Raccourcis clavier › Ouvrir la fenêtre des paroles
 - Réglages : Affichage des paroles › Fenêtre des paroles › Disposition › Alignement
+- Réglages : Affichage des paroles › Fenêtre des paroles › Disposition › Taille des commandes
 
 <a id="feature-lyrics-window-hdr"></a>
 
@@ -919,7 +920,7 @@ Au plus une fois par jour, envoie la version, macOS, les fonctions activées et 
 
 ## Tous les réglages
 
-Tous les réglages de la fenêtre Réglages, classés par emplacement : 315 au total. Tapez un nom dans le champ de recherche en haut de la barre latérale des Réglages pour y aller directement.
+Tous les réglages de la fenêtre Réglages, classés par emplacement : 316 au total. Tapez un nom dans le champ de recherche en haut de la barre latérale des Réglages pour y aller directement.
 
 ### Paroles › Source
 
@@ -1238,6 +1239,7 @@ Tous les réglages de la fenêtre Réglages, classés par emplacement : 315 au 
 - **Lignes longues** (taille mini uniquement) : Retour à la ligne ou défilement des lignes longues en taille Mini
 - **Disposition des paroles** (taille mini uniquement) : Une ligne : ligne actuelle uniquement Deux lignes : ligne actuelle et suivante Multiligne : page de paroles défilante, comme en taille complète
 - **Alignement** (taille complète uniquement) : Alignement des paroles en taille complète ; « Auto » suit les voix du duo
+- **Taille des commandes** (taille complète uniquement) : Agrandit les commandes de lecture et les autres boutons, y compris dans les paroles web
 
 ### Affichage des paroles › Fenêtre des paroles › Comportement
 

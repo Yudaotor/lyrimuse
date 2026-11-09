@@ -3298,11 +3298,13 @@ private struct AppearanceSettingsTab: View {
                     (title: L10n.t("全屏时隐藏"), isOn: settings.lyricsWindowMiniHideInFullScreen),
                 ]))
         case .layout:
-            // 完整尺寸的「布局」只有对齐方式一项,摘要就报它(「自动」报「自动对齐」)。
+            // 完整尺寸的「布局」摘要报对齐方式(「自动」报「自动对齐」);控件大小不是标准档时追加。
             guard mini else {
-                return EditorToolbarButtonLabel(
-                    icon: "rectangle.split.1x2", title: L10n.t("布局"),
-                    summary: LyricsAlignmentSegmentedControl.summary(for: settings.lyricsWindowLyricsAlignment))
+                var summary = LyricsAlignmentSegmentedControl.summary(for: settings.lyricsWindowLyricsAlignment)
+                if settings.lyricsWindowControlSize != .standard {
+                    summary += " · " + LyricsWindowControlSizeLabel.text(for: settings.lyricsWindowControlSize)
+                }
+                return EditorToolbarButtonLabel(icon: "rectangle.split.1x2", title: L10n.t("布局"), summary: summary)
             }
             // 「单行 / 双行」档下长句处理改成了滚动才追加 —— 默认值不报,跟菜单栏「布局」摘要同一条规则。
             var summary = LyricsWindowMiniLyricsLayoutLabel.text(for: settings.lyricsWindowMiniLyricsLayout)
@@ -3612,7 +3614,8 @@ private struct AppearanceSettingsTab: View {
                     set: { settings.lyricsWindowKaraokeFillColorHex = $0.hexStringWithAlpha }),
                 hdrHighlight: $settings.lyricsWindowHDRHighlight,
                 spotifyCanvas: $settings.spotifyCanvasEnabled,
-                alignment: $settings.lyricsWindowLyricsAlignment)
+                alignment: $settings.lyricsWindowLyricsAlignment,
+                controlSize: $settings.lyricsWindowControlSize)
         }
     }
 
@@ -3646,7 +3649,9 @@ private struct AppearanceSettingsTab: View {
         /// 只有完整尺寸传:「Spotify Canvas」(07 章决策 183)。
         spotifyCanvas: Binding<Bool>? = nil,
         /// 只有完整尺寸传:迷你单行 / 双行居中、多行是完整布局那份列表的迷你版,不给对齐。
-        alignment: Binding<LyricsRestingAlignment>? = nil
+        alignment: Binding<LyricsRestingAlignment>? = nil,
+        /// 只有完整尺寸传:「控件大小」(07 章决策 195)。迷你的控制条另有一套,不跟。
+        controlSize: Binding<LyricsWindowControlSize>? = nil
     ) -> some View {
         switch part {
         case .background:
@@ -3877,13 +3882,14 @@ private struct AppearanceSettingsTab: View {
                 }
             }
             if let alignment {
-                lyricsWindowAlignmentRows(alignment)
+                lyricsWindowAlignmentRows(alignment, controlSize: controlSize)
             }
         }
     }
 
-    /// 完整尺寸「布局」那一组:对齐方式(四档,同灵动岛)。只有完整尺寸有,设置搜索那份名单靠这个函数认它。
-    private func lyricsWindowAlignmentRows(_ alignment: Binding<LyricsRestingAlignment>) -> some View {
+    /// 完整尺寸「布局」那一组:对齐方式(四档,同灵动岛)、控件大小(三档)。只有完整尺寸有,设置搜索那份名单靠这个函数认它们。
+    private func lyricsWindowAlignmentRows(_ alignment: Binding<LyricsRestingAlignment>,
+                                           controlSize: Binding<LyricsWindowControlSize>?) -> some View {
         SettingsRowGroup {
             SettingsRow(
                 icon: "text.alignleft",
@@ -3891,6 +3897,18 @@ private struct AppearanceSettingsTab: View {
                 help: L10n.t("「自动」按对唱声部对齐，合唱居中，无对唱信息时靠左")
             ) {
                 LyricsAlignmentSegmentedControl(selection: alignment, options: LyricsRestingAlignment.notchOptions)
+            }
+            if let controlSize {
+                SettingsRow(
+                    icon: "hand.tap",
+                    title: L10n.t("控件大小"),
+                    help: L10n.t("放大播放控制和其他按钮，网页歌词同样生效")
+                ) {
+                    SettingsPillSegmentedControl(
+                        selection: controlSize,
+                        options: LyricsWindowControlSize.allCases,
+                        label: LyricsWindowControlSizeLabel.text(for:))
+                }
             }
         }
     }
@@ -4694,6 +4712,16 @@ private struct MotionCoverCacheRow: View {
 }
 
 /// 「歌词布局」三档的显示名(枚举本体在 Core、不带界面文案)。
+enum LyricsWindowControlSizeLabel {
+    static func text(for value: LyricsWindowControlSize) -> String {
+        switch value {
+        case .standard: return L10n.t("标准")
+        case .large: return L10n.t("大")
+        case .extraLarge: return L10n.t("特大")
+        }
+    }
+}
+
 enum LyricsWindowMiniLyricsLayoutLabel {
     static func text(for value: LyricsWindowMiniLyricsLayout) -> String {
         switch value {
@@ -4751,6 +4779,7 @@ enum LyricsWindowStyleDefaults {
             s.lyricsWindowKaraokeFill = .text
             s.lyricsWindowKaraokeFillColorHex = AppSettings.defaultLyricsWindowMiniKaraokeFillColorHex
             s.lyricsWindowLyricsAlignment = .automatic
+            s.lyricsWindowControlSize = .standard
             s.lyricsWindowHDRHighlight = false
             s.motionCoverEnabled = AppSettings.defaultMotionCoverEnabled
             s.spotifyCanvasEnabled = AppSettings.defaultSpotifyCanvasEnabled

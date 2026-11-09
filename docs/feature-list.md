@@ -340,6 +340,7 @@ Full-page lyrics modelled on Apple Music's lyrics view: blurred artwork behind, 
 - Settings: Lyrics Display › Lyrics Window › Background › Background
 - Settings: Keyboard Shortcuts › Open Lyrics Window
 - Settings: Lyrics Display › Lyrics Window › Layout › Alignment
+- Settings: Lyrics Display › Lyrics Window › Layout › Control Size
 
 <a id="feature-lyrics-window-hdr"></a>
 
@@ -919,7 +920,7 @@ At most once a day, sends the version, macOS, which features are on and crash su
 
 ## Every setting
 
-Every setting in the Settings window, by where it lives: 315 in all. Type a name into the search field at the top of the Settings sidebar to jump straight to it.
+Every setting in the Settings window, by where it lives: 316 in all. Type a name into the search field at the top of the Settings sidebar to jump straight to it.
 
 ### Lyrics › Source
 
@@ -1238,6 +1239,7 @@ Every setting in the Settings window, by where it lives: 315 in all. Type a name
 - **Long Lines** (mini size only): Whether long lines wrap or scroll in the mini size
 - **Lyrics Layout** (mini size only): One Line: only the current line Two Lines: the current line and the next one Multi-Line: a scrolling page of lyrics, like the full size
 - **Alignment** (full size only): Lyrics alignment in the full size; Auto follows the duet parts
+- **Control Size** (full size only): Enlarges the playback controls and other buttons, Web Lyrics included
 
 ### Lyrics Display › Lyrics Window › Behavior
 

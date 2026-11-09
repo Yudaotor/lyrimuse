@@ -67,7 +67,8 @@ public enum WebLyricsVisibility {
 }
 
 /// 副屏左栏那排播放控制的位置,照 `LyricsWindowView.playbackControls`:随机贴左缘、循环贴右缘,
-/// 上一首 / 播放 / 下一首成组居中;各档尺寸按封面边长算再夹值(同 `ctrl(_:_:_:)`)。坐标是左栏自己的,y 向下。
+/// 上一首 / 播放 / 下一首成组居中;各档尺寸同歌词窗口那一份 `LyricsTransportMetrics`(按封面边长算再夹值,乘「控件大小」)。
+/// 坐标是左栏自己的,y 向下。
 public struct WebLyricsControlsLayout: Equatable, Sendable {
     public enum Button: CaseIterable, Sendable { case shuffle, previous, playPause, next, repeatMode }
 
@@ -82,15 +83,15 @@ public struct WebLyricsControlsLayout: Equatable, Sendable {
     /// 每颗键占的格子(字形在格子里居中)。
     public let cells: [Button: CGRect]
 
-    /// `skipGlyphWidth` 是上 / 下一首字形按 `skipFontSize` 排出来的宽(App 量好传进来)。
-    public init(width w: CGFloat, rowTop: CGFloat, rowHeight: CGFloat, skipGlyphWidth: CGFloat) {
-        func ctrl(_ ratio: CGFloat, _ lo: CGFloat, _ hi: CGFloat) -> CGFloat { min(hi, max(lo, w * ratio)) }
-        modeFontSize = ctrl(0.043, 11, 18)
-        skipFontSize = ctrl(0.060, 13, 25)
-        playFontSize = ctrl(0.079, 17, 33)
-        let modeCell = modeFontSize + 8
-        let playCell = ctrl(0.10, 22, 38)
-        let spacing = ctrl(0.116, 18, 48)
+    /// `skipGlyphWidth` 是上 / 下一首字形按 `skipFontSize` 排出来的宽(App 量好传进来);`factor` 是「控件大小」的倍数。
+    public init(width w: CGFloat, rowTop: CGFloat, rowHeight: CGFloat, skipGlyphWidth: CGFloat, factor: CGFloat = 1) {
+        let metrics = LyricsTransportMetrics(width: w, requested: factor)
+        modeFontSize = metrics.modeFontSize
+        skipFontSize = metrics.skipFontSize
+        playFontSize = metrics.playFontSize
+        let modeCell = metrics.modeCellWidth
+        let playCell = metrics.playCellWidth
+        let spacing = metrics.spacing
         let group = skipGlyphWidth * 2 + playCell + spacing * 2
         var x = (w - group) / 2
         func cell(_ x: CGFloat, _ width: CGFloat) -> CGRect { CGRect(x: x, y: rowTop, width: width, height: rowHeight) }
