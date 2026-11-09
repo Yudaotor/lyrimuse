@@ -96,6 +96,9 @@ public enum PlayerOpenFile {
 
     private static func cacheKey(artist: String?, title: String) -> String { (artist ?? "") + "\u{1F}" + title }
 
+    /// MyGo 上一拍报的那一首(缓存键);换了就重找。
+    private static let lastMyGoKey = OSAllocatedUnfairLock<String?>(initialState: nil)
+
     /// 换到快照上:对上了开着的文件、标签里有歌名就换成标签那份;都不用换时原样返回。会读盘(同一首只读一次),在轮询的后台线程上调。
     public static func applied(to snapshot: MediaControlSnapshot?, now: Date = Date()) -> MediaControlSnapshot? {
         guard let snapshot, !SourceKnockout.isOut(.playerFile), let bundleID = snapshot.bundleIdentifier, bundleIDs.contains(bundleID),
@@ -103,7 +106,8 @@ public enum PlayerOpenFile {
               let file = fileIdentity(artist: snapshot.artist, title: title, duration: snapshot.duration,
                                       pid: snapshot.processIdentifier ?? PlayerProcess.pid(bundleID: bundleID).map { Int($0) },
                                       foobar: bundleID == PlaybackPlayer.foobar2000.bundleIdentifier,
-                                      baseName: baseNameBundleIDs.contains(bundleID), now: now) else { return snapshot }
+                                      baseName: baseNameBundleIDs.contains(bundleID),
+                                      mygo: bundleID == PlaybackPlayer.mygoMusic.bundleIdentifier, now: now) else { return snapshot }
         var out = snapshot.withTitle(file.title)
         if !file.artist.isEmpty { out = out.withArtist(file.artist) }
         if !file.album.isEmpty { out = out.withAlbum(file.album) }
@@ -113,17 +117,24 @@ public enum PlayerOpenFile {
     }
 
     /// `pid` 只在要读盘时才取(缓存命中时不找进程)。`foobar`:标签里的控制字符按 `_` 比;`baseName`:不带扩展名的文件名也拆。
+    /// `mygo`:MyGo 放过的本机文件一直开着,插件音源放同名同歌手的歌时按(歌手、歌名)记的那份会认错:每换一首重找一次,
+    /// 缓存目录里开着的文件对得上这一首就是插件音源、不算本机文件(`matchingOpenFile`)。见 02 章决策 251。
     static func fileIdentity(artist: String?, title: String, duration: Double?, pid: @autoclosure () -> Int?,
-                             foobar: Bool = false, baseName: Bool = false, now: Date = Date()) -> PlayerTitleSplit.FileIdentity? {
+                             foobar: Bool = false, baseName: Bool = false, mygo: Bool = false,
+                             now: Date = Date()) -> PlayerTitleSplit.FileIdentity? {
         let key = cacheKey(artist: artist, title: title)
-        if let hit = cache.withLock({ $0[key] }),
+        let newTrack = mygo && lastMyGoKey.withLock { last in
+            defer { last = key }
+            return last != key
+        }
+        if !newTrack, let hit = cache.withLock({ $0[key] }),
            !PlayerTitleSplit.shouldLookUpFile(found: hit.path != nil, attempts: hit.attempts,
                                               sinceChecked: now.timeIntervalSince(hit.checkedAt)) {
             return hit.identity
         }
         guard let pid = pid(), pid > 0 else { return nil }
         let found = lookUp(artist: artist ?? "", title: title, duration: duration, pid: pid_t(pid), foobar: foobar,
-                           baseName: baseName)
+                           baseName: baseName, skipsWhenCacheMatches: mygo)
         cache.withLock { entries in
             if entries.count > 64 { entries.removeAll() }
             let previous = entries[key]?.attempts ?? 0
@@ -158,23 +169,68 @@ public enum PlayerOpenFile {
         }
     }
 
-    private static func lookUp(artist: String, title: String, duration: Double?, pid: pid_t,
-                               foobar: Bool, baseName: Bool) -> (identity: PlayerTitleSplit.FileIdentity?, path: String)? {
-        let candidates = ProcessOpenFiles.paths(pid: pid)
-            .filter { PlayerTitleSplit.audioExtensions.contains(URL(fileURLWithPath: $0).pathExtension.lowercased()) && !isPlayerCache($0) }
-        guard !candidates.isEmpty else { return nil }
-        for path in candidates {
-            let fileName = URL(fileURLWithPath: path).lastPathComponent
-            let tags = LocalAudioFileTags.read(path: path)
-            guard fileMatches(reportedArtist: artist, reportedTitle: title, reportedDuration: duration, tags: tags,
-                              fileName: fileName, underscoresControls: foobar) else { continue }
-            let found = tags.flatMap(PlayerTitleSplit.identity(from:))
-                ?? fileNameIdentity(reportedArtist: artist, reportedTitle: title, fileName: fileName, duration: tags?.duration,
-                                    acceptsBaseName: baseName)
-            logger.notice("player file: \(fileName, privacy: .public) matches the reported track, tags \(found == nil ? "absent" : "used", privacy: .public)")
-            return (found, path)
+    /// 当场按播放器开着的文件再核一次:报的这一首此刻对上的就是 `path`(缓存目录里没有对得上的)。改播放器里的数据之前用,
+    /// 不信按(歌手、歌名)记下的那份。会读盘,不要在主线程调用。
+    public static func confirmsCurrentFile(bundleID: String, path: String, artist: String, title: String) -> Bool {
+        guard let pid = PlayerProcess.pid(bundleID: bundleID) else { return false }
+        let audio = ProcessOpenFiles.paths(pid: pid)
+            .filter { PlayerTitleSplit.audioExtensions.contains(URL(fileURLWithPath: $0).pathExtension.lowercased()) }
+        let match = matchingOpenFile(paths: audio, artist: artist, title: title, duration: nil,
+                                     foobar: bundleID == PlaybackPlayer.foobar2000.bundleIdentifier,
+                                     baseName: baseNameBundleIDs.contains(bundleID), skipsWhenCacheMatches: true,
+                                     tags: { LocalAudioFileTags.read(path: $0) })
+        if case .file(_, let found) = match { return found == path }
+        return false
+    }
+
+    private static func lookUp(artist: String, title: String, duration: Double?, pid: pid_t, foobar: Bool, baseName: Bool,
+                               skipsWhenCacheMatches: Bool) -> (identity: PlayerTitleSplit.FileIdentity?, path: String)? {
+        let audio = ProcessOpenFiles.paths(pid: pid)
+            .filter { PlayerTitleSplit.audioExtensions.contains(URL(fileURLWithPath: $0).pathExtension.lowercased()) }
+        let match = matchingOpenFile(paths: audio, artist: artist, title: title, duration: duration, foobar: foobar,
+                                     baseName: baseName, skipsWhenCacheMatches: skipsWhenCacheMatches,
+                                     tags: { LocalAudioFileTags.read(path: $0) })
+        switch match {
+        case .file(let identity, let path):
+            logger.notice("player file: \(URL(fileURLWithPath: path).lastPathComponent, privacy: .public) matches the reported track, tags \(identity == nil ? "absent" : "used", privacy: .public)")
+            return (identity, path)
+        case .playerCache:
+            logger.notice("player file: an open player cache file matches the reported track, not a local file")
+            return nil
+        case .none:
+            if audio.contains(where: { !isPlayerCache($0) }) {
+                logger.notice("player file: none of the open audio files matches the reported track")
+            }
+            return nil
         }
-        logger.notice("player file: none of \(candidates.count) open audio files matches the reported track")
-        return nil
+    }
+
+    public enum OpenFileMatch: Equatable {
+        case file(identity: PlayerTitleSplit.FileIdentity?, path: String)
+        /// 播放器缓存目录里开着的文件对得上这一首:在放的是在线音源。
+        case playerCache
+        case none
+    }
+
+    /// 播放器开着的音频文件里哪个是报的这一首。缓存目录里的不算本机文件;`skipsWhenCacheMatches` 时缓存目录里有对得上的,
+    /// 就是在放那一份(MyGo 放过的本机文件一直开着,同名同歌手的本机文件不算)。`tags` 读一个文件的标签。纯函数,selftest 覆盖。
+    public static func matchingOpenFile(paths: [String], artist: String, title: String, duration: Double?, foobar: Bool,
+                                        baseName: Bool, skipsWhenCacheMatches: Bool,
+                                        tags: (String) -> LocalAudioFileTags?) -> OpenFileMatch {
+        func matches(_ path: String, _ fileTags: LocalAudioFileTags?) -> Bool {
+            fileMatches(reportedArtist: artist, reportedTitle: title, reportedDuration: duration, tags: fileTags,
+                        fileName: URL(fileURLWithPath: path).lastPathComponent, underscoresControls: foobar)
+        }
+        if skipsWhenCacheMatches, paths.contains(where: { isPlayerCache($0) && matches($0, tags($0)) }) { return .playerCache }
+        for path in paths where !isPlayerCache(path) {
+            let fileTags = tags(path)
+            guard matches(path, fileTags) else { continue }
+            let found = fileTags.flatMap(PlayerTitleSplit.identity(from:))
+                ?? fileNameIdentity(reportedArtist: artist, reportedTitle: title,
+                                    fileName: URL(fileURLWithPath: path).lastPathComponent, duration: fileTags?.duration,
+                                    acceptsBaseName: baseName)
+            return .file(identity: found, path: path)
+        }
+        return .none
     }
 }

@@ -781,11 +781,23 @@ func runNotchTests() {
                      H.crossesNotch(from: CGPoint(x: 230, y: 40), to: CGPoint(x: 30, y: 40), cardWidth: collapsed.w, notch: notch),
                      H.crossesNotch(from: CGPoint(x: 230, y: 20), to: CGPoint(x: 30, y: 20), cardWidth: collapsed.w, notch: H.Notch(width: 0, bottom: 32))],
                     [true, true, false, false, false], "灵动岛命中: 顶行里从刘海一侧到另一侧算被挪过刘海;同侧、顶行以下、没刘海都不算")
+        // 过刘海展开后接着往同一边走出收起卡片的外沿:横扫路过(05 章决策 141)。展开卡 482 宽、收起卡 256 宽,同一个中心。
+        expectEqual([H.sweptPastSteadyCard(rightward: true, x: 241 + 128 + 9, cardWidth: 482, steadyWidth: 256),
+                     H.sweptPastSteadyCard(rightward: true, x: 241 + 128 + 7, cardWidth: 482, steadyWidth: 256),
+                     H.sweptPastSteadyCard(rightward: false, x: 241 - 128 - 9, cardWidth: 482, steadyWidth: 256),
+                     H.sweptPastSteadyCard(rightward: true, x: 241 - 128 - 9, cardWidth: 482, steadyWidth: 256)],
+                    [true, false, true, false], "灵动岛命中: 往过刘海那一边走出收起卡片外沿 8pt 才算横扫路过,反方向不算")
         let root = (try? String(contentsOf: URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
             .appendingPathComponent("lyrimuse/UI/NotchWindowRoot.swift"), encoding: .utf8)) ?? ""
         expectEqual(sourceHas(root, "passThroughBelow: controller.passThroughBandTop, notch: notch)")
                     && sourceHas(root, "NotchHoverHit.crossesNotch(from: last, to: point, cardWidth: cardWidth, notch: notch) {\ncontroller.expandFromNotchCrossing()"), true,
                     "灵动岛命中接线: 悬停按刘海那一条判,被挪过刘海时马上展开")
+        let controllerSrc = (try? String(contentsOf: URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("lyrimuse/UI/NotchLyricsWindowController.swift"), encoding: .utf8)) ?? ""
+        expectEqual(sourceHas(root, "steadyWidth: controller.steadyCardWidth) {\nnotchCrossing = nil\ncontroller.collapseAfterSweep()")
+                    && sourceHas(controllerSrc, "let expanded = (cardHovered && !hoverSuppressedUntilLeave) || editorialHovered")
+                    && sourceHas(controllerSrc, "didSet { if !cardHovered { hoverSuppressedUntilLeave = false } }"), true,
+                    "灵动岛命中接线: 过刘海展开后横扫走出去就收回,指针离开卡片前不再因悬停展开")
         expectEqual(sourceHas(root, ".overlay(alignment: .top) { notchCatchStrip }")
                     && sourceHas(root, "if let notch = controller.hoverNotch, !controller.isExpanded, controller.isSurfaceVisible, !controller.isVanished,\ncardHeight <= notch.bottom + 0.5 {")
                     && sourceHas(root, ".frame(width: notch.width, height: NotchHoverHit.notchCatchDepth)\n.contentShape(Rectangle())"), true,
@@ -1910,7 +1922,8 @@ func runNotchTests() {
                     && sourceHas(tipBody, "guard !Task.isCancelled, controller.isExpanded, hoveredQuickAction == nil,")
                     && sourceHas(tipBody, "NotchQuickActionsTip.markShown()")
                     && sourceHas(expandedSrc, ".task(id: controller.isExpanded) { await runQuickActionsTip() }")
-                    && sourceHas(expandedSrc, "{ [NotchQuickActionsTip.anchorKey: $0] }"), true,
+                    && sourceHas(expandedSrc, ".transformAnchorPreference(key: QuickActionAnchorKey.self, value: .bounds) { $0[NotchQuickActionsTip.anchorKey] = $1 }")
+                    && !sourceHas(expandedSrc, "{ [NotchQuickActionsTip.anchorKey: $0] }"), true,
                     "快捷操作提示契约: 展开满延迟、没指着某颗键、还该弹才弹并记下,对准整排")
         expectEqual(sourceHas(sourceBody("static func shouldOffer() -> Bool", in: tipSrc),
                               "AppSettings.shared.notchQuickSlots == .default")
@@ -2741,7 +2754,7 @@ func runNotchTests() {
                     "歌曲简介契约: 灵动岛那三行的读屏标签按类型给(不是专辑就当歌手的二选一)")
         expectEqual(view.contains("let clickable = tappable && !text.isEmpty && store.card(kind) != nil"), true,
                     "简介契约: 灵动岛的歌手名 / 专辑名只在这首有对应简介时可点")
-        expectEqual(controller.contains("let expanded = cardHovered || editorialHovered"), true,
+        expectEqual(controller.contains("let expanded = (cardHovered && !hoverSuppressedUntilLeave) || editorialHovered"), true,
                     "简介契约: 指针停在浮框上时卡片不收")
         expectEqual(controller.contains("NotchEditorialPanel.shared.close(ifOwner: window)"), true,
                     "简介契约: 卡片收起就关浮框,不单独留在屏幕上")

@@ -723,7 +723,7 @@ final class WebLyricsScreenRenderer {
     private var bottomRowLift: CGFloat {
         arrangement == .compact && !pane.isHidden ? max(0, height - pane.transportFrame.minY) : 0
     }
-    /// 歌词滚动指示条下端离列表底边多远:标准档右下那排不在它底下,照原样 40;放大后停在那排上沿再往上 8
+    /// 歌词滚动指示条下端离列表底边多远:100% 时右下那排不在它底下,照原样 40;放大后停在那排上沿再往上 8
     /// (那排的位置同 `WebLyricsChrome.layoutBottomRow`)。
     private var indicatorBottomInset: CGFloat {
         let factor = playback.fullControlScale

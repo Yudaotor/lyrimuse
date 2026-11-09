@@ -558,6 +558,23 @@ func runSyncEngineTests() {
                     "起步槽宽: 取第九成那一行")
         expectEqual(plain.rowWidth(.menuBar, atQuantile: 1, mainOnly: true), measure(String(repeating: "j", count: 10)),
                     "起步槽宽: 只量主行时不算译文")
+
+        // 只量主行时有逐字就逐字相加与整串取大:整串量会丢掉跨切口的字距,比画出来的逐字行窄(04 章决策 94)。
+        let syllableWidth: (String) -> CGFloat = { CGFloat($0.count) * 10 - CGFloat(max(0, $0.count - 1)) }
+        let syllables = LyricsSyncEngine()
+        syllables.load(lyrics: "", lyricsTr: "", lyricsRoma: "",
+                       lyricsYRC: "[1000,1500](1000,500,0)A(1500,500,0)VA(2000,500,0)TAR\n[3000,500](3000,500,0)x\n")
+        syllables.setLayoutBudget(LineLayoutBudget(key: "k", main: .init(maxWidth: 400, measure: syllableWidth)), for: .overlay)
+        expectEqual(syllables.rowWidth(.overlay, atQuantile: 1, mainOnly: true), syllableWidth("A") + syllableWidth("VA") + syllableWidth("TAR"),
+                    "整首最宽(只量主行): 逐字相加比整串宽时取逐字相加")
+        expectEqual(syllables.rowWidth(.overlay, atQuantile: 1), syllableWidth("AVATAR"), "整首最宽(含各行): 照旧按整串量")
+        let syllablesSplit = LyricsSyncEngine()
+        syllablesSplit.load(lyrics: "", lyricsTr: "", lyricsRoma: "",
+                            lyricsYRC: "[1000,1500](1000,500,0)A(1500,500,0)VA(2000,500,0)TAR\n[3000,500](3000,500,0)x\n",
+                            lineBreaks: .all)
+        syllablesSplit.setLayoutBudget(LineLayoutBudget(key: "k", main: .init(maxWidth: 400, measure: syllableWidth)), for: .overlay)
+        expectEqual(syllablesSplit.widestRow(.overlay, mainOnly: true), syllableWidth("A") + syllableWidth("VA") + syllableWidth("TAR"),
+                    "整首最宽(重新断句、只量主行): 逐字相加比整串宽时取逐字相加")
         expectEqual(plain.rowWidth(.menuBar, atQuantile: 1), measure("一句十二个字那么长的一句译文"),
                     "起步槽宽: 译文算进这一行的宽")
 

@@ -216,13 +216,18 @@ public enum PlexampSessionAnchor {
         public var rate: Double
         /// 跟着这份锚点来的那份清空位置的会话的时刻;之后读到同一个时刻的都是它。
         public var echoTimestamp: String?
+        /// 这份的位置接得上同一首上一份锚点推到这一刻的位置:是这首自己报的(暂停、恢复、换歌前报停下的位置),
+        /// 不是新歌带着旧歌名先到的那份。
+        public var continuesLast: Bool
 
-        public init(identity: String, elapsed: Double, timestamp: String, rate: Double, echoTimestamp: String? = nil) {
+        public init(identity: String, elapsed: Double, timestamp: String, rate: Double, echoTimestamp: String? = nil,
+                    continuesLast: Bool = false) {
             self.identity = identity
             self.elapsed = elapsed
             self.timestamp = timestamp
             self.rate = rate
             self.echoTimestamp = echoTimestamp
+            self.continuesLast = continuesLast
         }
     }
 
@@ -232,6 +237,9 @@ public enum PlexampSessionAnchor {
     public static let naturalStartLeadSecs: Double = 0.5
     /// 自然连播那份锚点的位置是新歌刚开头(实测 1.6 秒);换歌前先报旧歌停下位置的(点播另一首)大得多,不接。
     public static let naturalStartMaxElapsedSecs: Double = 4
+    /// 带位置的锚点跟同一首上一份推到这一刻的位置差在这之内,算这首自己接着报的(`Anchor.continuesLast`)。旧歌刚放几秒就点播
+    /// 另一首时,报的停下位置也只有几秒,只按位置大小分不出来。见 02 章决策 251。
+    public static let continuationToleranceSecs: Double = 1
 
     private static let lock = NSLock()
     nonisolated(unsafe) private static var last: Anchor?
@@ -248,11 +256,17 @@ public enum PlexampSessionAnchor {
         -> (elapsed: Double?, timestamp: String?, rate: Double?, remember: Anchor?) {
         let effectiveRate = rate ?? (playing == true ? 1 : 0)
         if let elapsed, let timestamp {
-            let anchor = Anchor(identity: identity, elapsed: elapsed, timestamp: timestamp, rate: effectiveRate)
+            var continues = false
+            if let last, last.identity == identity, let t = seconds(timestamp), let a = seconds(last.timestamp), t >= a {
+                continues = abs(last.elapsed + (t - a) * last.rate - elapsed) <= continuationToleranceSecs
+            }
+            let anchor = Anchor(identity: identity, elapsed: elapsed, timestamp: timestamp, rate: effectiveRate,
+                                continuesLast: continues)
             return (elapsed, timestamp, effectiveRate, anchor)
         }
         guard elapsed == nil else { return (elapsed, timestamp, rate, last) }
-        if let last, last.identity != identity, last.echoTimestamp == nil, last.elapsed <= naturalStartMaxElapsedSecs,
+        if let last, last.identity != identity, last.echoTimestamp == nil, !last.continuesLast,
+           last.elapsed <= naturalStartMaxElapsedSecs,
            let ts = timestamp,
            let t = seconds(ts), let a = seconds(last.timestamp), t >= a, t - a <= echoWindowSecs {
             // 自然连播:上一份锚点是这首新歌的(先带着上一首的歌名到),接过来、扣掉它的超前量。

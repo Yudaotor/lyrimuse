@@ -521,24 +521,57 @@ func lrcFromSYLT(body []byte) (string, bool) {
 	if !ok {
 		return "", false
 	}
-	var b strings.Builder
-	lines := 0
+	var raws [][]byte
+	var times []uint32
 	for len(rest) > 0 {
 		raw, after, ok := splitID3Terminated(enc, rest)
 		if !ok || len(after) < 4 {
 			break
 		}
-		ms := binary.BigEndian.Uint32(after[:4])
+		raws = append(raws, raw)
+		times = append(times, binary.BigEndian.Uint32(after[:4]))
 		rest = after[4:]
-		text, ok := decodeID3Text(enc, raw)
-		if !ok {
+	}
+	texts := decodeSYLTTexts(enc, raws)
+	var b strings.Builder
+	lines := 0
+	for i, text := range texts {
+		if text == nil {
 			continue
 		}
-		text = strings.TrimSpace(strings.TrimLeft(text, "\n"))
-		fmt.Fprintf(&b, "[%02d:%02d.%02d]%s\n", ms/60000, ms/1000%60, ms%1000/10, text)
+		ms := times[i]
+		line := strings.TrimSpace(strings.TrimLeft(*text, "\n"))
+		fmt.Fprintf(&b, "[%02d:%02d.%02d]%s\n", ms/60000, ms/1000%60, ms%1000/10, line)
 		lines++
 	}
 	return b.String(), lines > 0
+}
+
+// decodeSYLTTexts:SYLT 各行的文字,解不出的为 nil。Latin-1 / UTF-8 档整帧一起交给 decodeLyricBytes:它按坏行拼起来认编码,
+// 一行韩文只有几个音节、单看一行认不出 EUC-KR(looksLikeEUCKR 要 eucKRMinSyllables 个)。行里的换行换成空格,拼起来按换行
+// 拆回去;拆出来行数对不上、或有的行转不了,退回一行一行解。见 09 章决策 366。
+func decodeSYLTTexts(enc byte, raws [][]byte) []*string {
+	out := make([]*string, len(raws))
+	if enc == 0 || enc == 3 {
+		cleaned := make([][]byte, len(raws))
+		for i, raw := range raws {
+			cleaned[i] = bytes.ReplaceAll(bytes.TrimRight(raw, "\x00"), []byte("\n"), []byte(" "))
+		}
+		if text, ok := decodeLyricBytes(bytes.Join(cleaned, []byte("\n"))); ok {
+			if parts := strings.Split(text, "\n"); len(parts) == len(raws) {
+				for i := range parts {
+					out[i] = &parts[i]
+				}
+				return out
+			}
+		}
+	}
+	for i, raw := range raws {
+		if text, ok := decodeID3Text(enc, raw); ok {
+			out[i] = &text
+		}
+	}
+	return out
 }
 
 // splitID3Terminated:按编码找结束符(Latin-1 / UTF-8 一个 0,UTF-16 两个 0 且对齐),交回结束符之前和之后。

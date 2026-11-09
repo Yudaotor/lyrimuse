@@ -3298,7 +3298,7 @@ private struct AppearanceSettingsTab: View {
                     (title: L10n.t("全屏时隐藏"), isOn: settings.lyricsWindowMiniHideInFullScreen),
                 ]))
         case .layout:
-            // 完整尺寸的「布局」摘要报对齐方式(「自动」报「自动对齐」);控件大小不是标准档时追加。
+            // 完整尺寸的「布局」摘要报对齐方式(「自动」报「自动对齐」);控件大小不是 100% 时追加。
             guard mini else {
                 var summary = LyricsAlignmentSegmentedControl.summary(for: settings.lyricsWindowLyricsAlignment)
                 if settings.lyricsWindowControlScalePercent != LyricsWindowControlScale.defaultPercent {

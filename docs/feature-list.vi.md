@@ -126,7 +126,7 @@ Lyrimuse đọc hàng đợi của trình phát và tìm trước lời cho vài
 
 ### Dùng lời mà trình phát đã lưu sẵn
 
-Lời bài hát mà Apple Music, Spotify, Kugou, KKBOX, Amazon Music và LX Music đã lưu trên máy Mac này có thể dùng trực tiếp: đúng phiên bản trình phát hiển thị, lại nhanh hơn (với Apple Music và Spotify, chỉ có ở những bài mà trình phát đã từng hiển thị lời). Với QQ Music và NetEase Cloud Music, bài hát được nhận diện qua thư viện cục bộ của trình phát, nên Lyrimuse lấy đúng phiên bản đó mà không cần tìm kiếm. Với reAMP, VOX, Pine Player, foobar2000 và Swinsian, cũng như khi Apple Music hoặc LX Music phát một tệp cục bộ trong thư viện hoặc danh sách cục bộ, Lyrimuse dùng lời nhúng trong tệp đang phát hoặc tệp .lrc cùng tên. QQ Music, NetEase Cloud Music và Kugou cần bật Quyền truy cập đầy đủ vào ổ đĩa cho Lyrimuse trong Cài đặt hệ thống; nếu không, lời vẫn được tìm trên mạng.
+Lời bài hát mà Apple Music, Spotify, Kugou, KKBOX, Amazon Music và LX Music đã lưu trên máy Mac này có thể dùng trực tiếp: đúng phiên bản trình phát hiển thị, lại nhanh hơn (với Apple Music và Spotify, chỉ có ở những bài mà trình phát đã từng hiển thị lời). Với QQ Music và NetEase Cloud Music, bài hát được nhận diện qua thư viện cục bộ của trình phát, nên Lyrimuse lấy đúng phiên bản đó mà không cần tìm kiếm. Với reAMP, VOX, Pine Player, foobar2000, Swinsian và MyGo Music, cũng như khi Apple Music hoặc LX Music phát một tệp cục bộ trong thư viện hoặc danh sách cục bộ, Lyrimuse dùng lời nhúng trong tệp đang phát hoặc tệp .lrc cùng tên. QQ Music, NetEase Cloud Music và Kugou cần bật Quyền truy cập đầy đủ vào ổ đĩa cho Lyrimuse trong Cài đặt hệ thống; nếu không, lời vẫn được tìm trên mạng.
 
 - Tắt theo mặc định
 - Cài đặt: Trình phát › Quyền & dịch vụ › Quyền truy cập đầy đủ vào ổ đĩa
@@ -658,7 +658,7 @@ Apple Music, Spotify, Kaset, VOX và Swinsian cần quyền Tự động hóa đ
 
 ### Điều khiển phát và tua
 
-Phát, tạm dừng, chuyển bài và kéo thanh tiến trình từ cửa sổ lời hoặc Notch khi mở rộng. Xáo trộn, lặp lại, thích và âm lượng tùy theo trình phát: Apple Music, Spotify, Kaset, QQ Music, Amazon Music, reAMP, VOX, Pine Player, foobar2000, Swinsian, Plexamp, Pear Desktop và YouTube Music trong trình duyệt hỗ trợ một phần hoặc tất cả; NetEase Cloud Music, Kugou Music, Soda Music và LX Music có nút thích, LX Music còn có âm lượng khi bật Open API trong cài đặt của nó. Phát, tạm dừng, chuyển bài và thích có thể gán phím tắt toàn cục. Khi một thứ như video trong trình duyệt đang giữ Đang phát, việc phát, tạm dừng và chuyển bài của QQ Music, NetEase Cloud Music, Soda Music, Pine Player, foobar2000 và MyGo Music đi qua menu hoặc thanh phát của chính chúng, và không tua được.
+Phát, tạm dừng, chuyển bài và kéo thanh tiến trình từ cửa sổ lời hoặc Notch khi mở rộng. Xáo trộn, lặp lại, thích và âm lượng tùy theo trình phát: Apple Music, Spotify, Kaset, QQ Music, Amazon Music, reAMP, VOX, Pine Player, foobar2000, Swinsian, Plexamp, Pear Desktop và YouTube Music trong trình duyệt hỗ trợ một phần hoặc tất cả; NetEase Cloud Music, Kugou Music, Soda Music, LX Music và MyGo Music có nút thích, LX Music còn có âm lượng khi bật Open API trong cài đặt của nó. Phát, tạm dừng, chuyển bài và thích có thể gán phím tắt toàn cục. Khi một thứ như video trong trình duyệt đang giữ Đang phát, việc phát, tạm dừng và chuyển bài của QQ Music, NetEase Cloud Music, Soda Music, Pine Player, foobar2000 và MyGo Music đi qua menu hoặc thanh phát của chính chúng, và không tua được.
 
 - Cài đặt: Hiển thị lời › Notch › Khi mở rộng › Hiện điều khiển
 - Cài đặt: Phím tắt › Phát/Tạm dừng

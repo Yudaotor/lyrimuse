@@ -34,11 +34,16 @@ public enum MyGoFavoriteControl {
         return object["likes"] as? [String] ?? []
     }
 
-    /// 系统此刻报的是 MyGo、而且放的是对上了本机文件的那一首时,那个文件的曲目 ID。
-    static func currentLocalTrackID() -> String? {
+    /// 系统此刻报的是 MyGo、而且放的是对上了本机文件的那一首时,那个文件的曲目 ID。`confirm`:按它开着的文件当场再核一次
+    /// (`PlayerOpenFile.confirmsCurrentFile`)。按菜单之前要核:按下去切的是 MyGo 当前那首,放的若是插件音源的同名歌,
+    /// 改的是插件那边(可能是在线账号)的收藏。
+    static func currentLocalTrackID(confirm: Bool = false) -> String? {
         guard let now = MediaControlClient.currentNowPlayingIdentifiers(), now.bundleID == bundleID, !now.title.isEmpty,
               let path = PlayerOpenFile.currentFilePath(bundleID: bundleID, rawArtist: now.artist, rawTitle: now.title)
         else { return nil }
+        if confirm, !PlayerOpenFile.confirmsCurrentFile(bundleID: bundleID, path: path, artist: now.artist, title: now.title) {
+            return nil
+        }
         return trackID(path: path)
     }
 
@@ -55,7 +60,7 @@ public enum MyGoFavoriteControl {
 
     /// 设「喜欢」,返回写成没有。会阻塞(跨进程按菜单、等本地库),不要在主线程调用。
     public static func setFavorited(_ value: Bool) -> Bool {
-        guard let id = currentLocalTrackID(), let now = liked(id: id) else { return false }
+        guard let id = currentLocalTrackID(confirm: true), let now = liked(id: id) else { return false }
         if now == value { return true }
         guard pressMenuItem() == .pressed else { return false }
         let deadline = Date().addingTimeInterval(writeSettleSeconds)

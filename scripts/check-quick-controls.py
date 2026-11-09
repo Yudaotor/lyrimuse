@@ -5,7 +5,7 @@
 - baseline:台账建立时设置搜索目录里已有的设置,不逐条要求。
 - reviewed:之后新加(或改名)的设置,每条写
     {"panel": [面板格子 id…], "panelQuick": [面板长按快捷设置的去处…], "notch": [灵动岛快捷按钮 id…], "note": "加了什么 / 为什么不加"}
-  三个数组可以都空(不加按钮),note 必填。id 取 MenuBarPanelLayout.Tile、PanelQuickTarget、NotchQuickAction 的值。
+  三个数组可以都空(不加按钮),note 必填。id 取 MenuBarPanelLayout.Tile、NotchQuickAction 的原始值和 PanelQuickTarget 的深链取值(`init?(deepLinkValue:)` 里的字符串)。
 设置的键是设置搜索目录(shared/settings-catalog.json)里一条的「路径 › 标题」。
 
 用法(仓库根目录):
@@ -47,6 +47,22 @@ def enum_values(path, enum):
     return values
 
 
+def deep_link_values(path, type_name):
+    """`<类型>` 里 `init?(deepLinkValue value: String)` 认的那几个字符串(`case "x":`)。"""
+    src = open(path, encoding="utf-8").read()
+    start = src.index(f"enum {type_name}")
+    init = src.index("init?(deepLinkValue", start)
+    body = src[src.index("{", init) + 1:]
+    depth, end = 1, 0
+    for i, ch in enumerate(body):
+        depth += ch == "{"
+        depth -= ch == "}"
+        if depth == 0:
+            end = i
+            break
+    return set(re.findall(r'case\s+"([^"]+)"\s*:', body[:end]))
+
+
 def catalog_keys():
     entries = json.load(open(CATALOG, encoding="utf-8"))["entries"]
     return [" › ".join(e["path"] + [e["title"]]) for e in entries]
@@ -67,7 +83,7 @@ def main(argv):
     current = set(keys)
     for k in sorted((baseline | set(reviewed)) - current):
         problems.append(f"目录里已没有(删了或改名了,从台账里删掉): {k}")
-    valid = {"panel": enum_values(TILES, "Tile"), "panelQuick": enum_values(QUICK, "PanelQuickTarget"),
+    valid = {"panel": enum_values(TILES, "Tile"), "panelQuick": deep_link_values(QUICK, "PanelQuickTarget"),
              "notch": enum_values(NOTCH, "NotchQuickAction")}
     for k, v in reviewed.items():
         if not str(v.get("note", "")).strip():

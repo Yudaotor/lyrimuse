@@ -126,7 +126,7 @@ Lyrimuse 是一款開源（GPL-3.0）的 macOS 逐字歌詞 App，支援 macOS 1
 
 ### 直接使用播放器儲存在本機的歌詞
 
-Apple Music、Spotify、酷狗音樂、KKBOX、Amazon Music 和洛雪音樂儲存在本機的歌詞可直接使用，與播放器顯示的版本一致，速度也更快（Apple Music 和 Spotify 只有在播放器中顯示過歌詞的歌曲才有）；QQ 音樂和網易雲音樂依本機曲庫認出正在播放的是哪一首，省去搜尋，直接取用同一版本的歌詞；reAMP、VOX、Pine Player、foobar2000 和 Swinsian 播放時，以及 Apple Music 播放資料庫中的本機檔案、洛雪音樂播放本機列表中的歌曲時，使用檔案內嵌的歌詞或同名 .lrc 檔案。QQ 音樂、網易雲音樂、酷狗音樂需要在系統設定中為 Lyrimuse 開啟「完整磁碟取用權限」；未授權時仍可連線尋找歌詞。
+Apple Music、Spotify、酷狗音樂、KKBOX、Amazon Music 和洛雪音樂儲存在本機的歌詞可直接使用，與播放器顯示的版本一致，速度也更快（Apple Music 和 Spotify 只有在播放器中顯示過歌詞的歌曲才有）；QQ 音樂和網易雲音樂依本機曲庫認出正在播放的是哪一首，省去搜尋，直接取用同一版本的歌詞；reAMP、VOX、Pine Player、foobar2000、Swinsian 和 MyGo Music 播放時，以及 Apple Music 播放資料庫中的本機檔案、洛雪音樂播放本機列表中的歌曲時，使用檔案內嵌的歌詞或同名 .lrc 檔案。QQ 音樂、網易雲音樂、酷狗音樂需要在系統設定中為 Lyrimuse 開啟「完整磁碟取用權限」；未授權時仍可連線尋找歌詞。
 
 - 預設關閉
 - 設定位置：播放器 › 權限與服務 › 完整磁碟取用權限
@@ -658,7 +658,7 @@ Apple Music、Spotify、Kaset、VOX 和 Swinsian 需要「自動化」權限才�
 
 ### 播放控制與進度跳轉
 
-在歌詞視窗和展開的動態島上播放、暫停、切歌，拖移進度列跳轉。隨機、循環、喜歡和音量取決於播放器的支援情況：Apple Music、Spotify、Kaset、QQ 音樂、Amazon Music、reAMP、VOX、Pine Player、foobar2000、Swinsian、Plexamp、Pear Desktop 和瀏覽器中的 YouTube Music 支援其中部分或全部功能，網易雲音樂、酷狗音樂、汽水音樂和洛雪音樂支援喜歡，洛雪音樂在其設定中開啟開放 API 後還可調整音量。播放、暫停、切歌和喜歡也可設定全域快速鍵。瀏覽器影片等 App 佔用系統「正在播放」時，QQ 音樂、網易雲音樂、汽水音樂、Pine Player、foobar2000 和 MyGo Music 的播放、暫停和切歌改為透過其自身的選單或播放列操作，此時無法拖移進度跳轉。
+在歌詞視窗和展開的動態島上播放、暫停、切歌，拖移進度列跳轉。隨機、循環、喜歡和音量取決於播放器的支援情況：Apple Music、Spotify、Kaset、QQ 音樂、Amazon Music、reAMP、VOX、Pine Player、foobar2000、Swinsian、Plexamp、Pear Desktop 和瀏覽器中的 YouTube Music 支援其中部分或全部功能，網易雲音樂、酷狗音樂、汽水音樂、洛雪音樂和 MyGo Music 支援喜歡，洛雪音樂在其設定中開啟開放 API 後還可調整音量。播放、暫停、切歌和喜歡也可設定全域快速鍵。瀏覽器影片等 App 佔用系統「正在播放」時，QQ 音樂、網易雲音樂、汽水音樂、Pine Player、foobar2000 和 MyGo Music 的播放、暫停和切歌改為透過其自身的選單或播放列操作，此時無法拖移進度跳轉。
 
 - 設定位置：歌詞顯示 › 動態島 › 展開時 › 顯示播放控制
 - 設定位置：快速鍵 › 播放/暫停

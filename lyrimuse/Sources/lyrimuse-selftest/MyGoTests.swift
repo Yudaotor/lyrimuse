@@ -23,6 +23,14 @@ func runMyGoTests() {
         let again = A.fill(identity: "|Click A|", playing: true, elapsed: 0.018, timestamp: ts(0), rate: 1, outputLatency: latency,
                            state: out.state)
         expectEqual(again.timestamp, out.timestamp, "MyGo 锚点: 同一份锚点再解码一次不再挪")
+        // 冷档挪过的那份,焦点被抢走后单问交来同一份锚点的原始浮点(位置多几位小数、时刻截到整微秒前后差一点):沿用,不按温档重挪。
+        let paused = A.State(pausedAt: base - 10, pausedIdentity: "|Click A|")
+        let cold = A.fill(identity: "|Click A|", playing: true, elapsed: 83.116371, timestamp: ts(0), rate: 1,
+                          outputLatency: latency, state: paused)
+        expectEqual(near(cold.timestamp, base + A.coldLeadSecs + latency), true, "MyGo 锚点: 内置扬声器停满 5 秒后恢复同一首按冷档挪")
+        let probed = A.fill(identity: "|Click A|", playing: true, elapsed: 83.116_371_04, timestamp: ts(0.000_000_4), rate: 1,
+                            outputLatency: latency, state: cold.state)
+        expectEqual(probed.timestamp, cold.timestamp, "MyGo 锚点: 同一份锚点换一种写法(单问的原始浮点)也认得,不重挪")
         let seek = A.fill(identity: "|Click A|", playing: true, elapsed: 19, timestamp: ts(6), rate: 1, outputLatency: latency,
                           state: out.state)
         expectEqual(near(seek.timestamp, base + 6 + shift), true, "MyGo 锚点: 跳转那份同样挪")
@@ -138,6 +146,26 @@ func runMyGoTests() {
         expectEqual(PlayerOpenFile.isPlayerCache("/Users/u/Library/Caches/MyGo Music/songs/0eab1fe41b41a19a61584eda41c89604-high.mp3"),
                     true, "MyGo 当前文件: 插件音源的缓存不算本机文件(带完整标签,按标签对得上)")
         expectEqual(PlayerOpenFile.isPlayerCache("/Users/u/Music/MyGo/陈奕迅 - 浮夸.mp3"), false, "MyGo 当前文件: 曲库里的文件照认")
+        // 放过的本机《浮夸》还开着,插件音源又放同名同歌手的那首:缓存里那份对得上,在放的是插件音源。
+        let local = "/Users/u/Music/MyGo/陈奕迅 - 浮夸.mp3"
+        let cached = "/Users/u/Library/Caches/MyGo Music/songs/0eab1fe41b41a19a61584eda41c89604-high.mp3"
+        let tagged = LocalAudioFileTags(title: "浮夸", artist: "陈奕迅", album: "U87", duration: 285)
+        let match = { (paths: [String], mygo: Bool) in
+            PlayerOpenFile.matchingOpenFile(paths: paths, artist: "陈奕迅", title: "浮夸", duration: nil, foobar: false,
+                                            baseName: true, skipsWhenCacheMatches: mygo, tags: { _ in tagged })
+        }
+        expectEqual(match([local, cached], true), .playerCache, "MyGo 当前文件: 缓存里有对得上的就是插件音源,本机同名文件不算")
+        if case .file(_, let path) = match([local], true) {
+            expectEqual(path, local, "MyGo 当前文件: 只开着本机文件时认它")
+        } else {
+            expectEqual(true, false, "MyGo 当前文件: 只开着本机文件时认它")
+        }
+        if case .file(_, let path) = match([local, cached], false) {
+            expectEqual(path, local, "当前文件: 不看缓存的播放器照旧认本机文件、跳过缓存")
+        } else {
+            expectEqual(true, false, "当前文件: 不看缓存的播放器照旧认本机文件、跳过缓存")
+        }
+        expectEqual(match([cached], false), .none, "当前文件: 只开着缓存文件时不认")
         func matches(_ artist: String, _ title: String, _ file: String) -> Bool {
             PlayerOpenFile.fileMatches(reportedArtist: artist, reportedTitle: title, reportedDuration: nil, tags: nil, fileName: file)
         }
@@ -189,8 +217,12 @@ func runMyGoTests() {
                                     encoding: .utf8)) ?? ""
         expectEqual([sourceHas(openFile, "static let baseNameBundleIDs: Set<String> = [ PlaybackPlayer.foobar2000.bundleIdentifier, "
                                          + "PlaybackPlayer.swinsian.bundleIdentifier, PlaybackPlayer.mygoMusic.bundleIdentifier, ]"),
-                     sourceHas(openFile, "pathExtension.lowercased()) && !isPlayerCache($0) }")], [true, true],
-                    "MyGo 接线: 没标签时按不带扩展名的文件名拆;找开着的文件时跳过插件缓存")
+                     sourceHas(openFile, "for path in paths where !isPlayerCache(path) {")
+                        && sourceHas(openFile, "mygo: bundleID == PlaybackPlayer.mygoMusic.bundleIdentifier, now: now)")
+                        && sourceHas(openFile, "baseName: baseName, skipsWhenCacheMatches: mygo)")], [true, true],
+                    "MyGo 接线: 没标签时按不带扩展名的文件名拆;找开着的文件时跳过插件缓存,缓存里有对得上的就不认本机文件")
+        expectEqual(sourceHas(favorite, "guard let id = currentLocalTrackID(confirm: true), let now = liked(id: id) else { return false }"),
+                    true, "MyGo 接线: 按「喜欢」菜单之前按开着的文件当场再核一次放的是本机文件")
         expectEqual(sourceHas(client, "timestamp = mygo.timestamp"), true, "MyGo 接线: 下游拿到的是挪过的时刻")
         expectEqual(sourceHas(client, "snapshot.republishDueBy = foobarLoopCheckAt(bundleID: probed.bundleIdentifier"), true,
                     "MyGo 接线: 焦点被占时单问那份同样取余、排补查")

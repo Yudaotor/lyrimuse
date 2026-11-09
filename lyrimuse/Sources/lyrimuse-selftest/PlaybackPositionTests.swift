@@ -1943,12 +1943,13 @@ func runPlaybackPositionTests() {
                      LPS.outputFlagBroken(deviceRunning: false, processOutputting: true),
                      LPS.outputFlagBroken(deviceRunning: false, processOutputting: false)], [false, false, true, nil],
                     "设备在转信号: 报在转就可信;报没在转而进程还在送声就不可信;都没在送声说不准")
-        let still = { (pause: Double?) in
-            LPS.coldStartOutputStillOpen(pauseAt: pause.map { t0.addingTimeInterval($0) }, signalAt: t0.addingTimeInterval(10),
-                                         closesAfterPauseSecs: 7.7)
+        let still = { (pause: Double?, outputting: Bool) in
+            LPS.coldStartOutputStillOpen(pauseAt: pause.map { t0.addingTimeInterval($0) }, outputtingAtPause: outputting,
+                                         signalAt: t0.addingTimeInterval(10), closesAfterPauseSecs: 7.7)
         }
-        expectEqual([still(5), still(2.5), still(2), still(nil)], [true, true, false, false],
+        expectEqual([still(5, true), still(2.5, true), still(2, true), still(nil, true)], [true, true, false, false],
                     "冷恢复热冷: 暂停 5、7.5 秒输出还开着是热的;暂停 8 秒它关过又刚重开、没见过暂停的按冷的算")
+        expectEqual(still(5, false), false, "冷恢复热冷: 暂停的是别的播放器(那一拍它没在送声),接着点播它按冷的算")
         let est = { (output: Double?, known: Bool, now: Double) in
             LPS.coldStartEstimatedAudioAt(outputAt: output.map { t0.addingTimeInterval($0) }, leadSecs: 0.22, flagKnownBroken: known,
                                           now: t0.addingTimeInterval(now))

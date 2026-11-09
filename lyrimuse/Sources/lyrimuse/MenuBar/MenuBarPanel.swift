@@ -2227,8 +2227,8 @@ private struct MenuBarPanelView: View {
     }
 
     /// 编辑时底栏那一排:跟平时一样按顺序摆(多于三项只画图标),每项左上「−」;按住一项左右拖,松手按落点换到那一格。
-    /// 没连着的 Last.fm / Discord 平时不画,这里也不画,换位按画出来的那几项算(`moveFooter(_:toPositionOf:)`)。
-    /// 存下来的每一项都画(此刻用不了的调淡):底栏满不满按存下的项数算,看不见的项也要删得掉。
+    /// 存下来的每一项都画(此刻用不了的调淡),换位按存下的全部项算(`moveFooter(_:toPositionOf:)`):底栏满不满按存下的项数算,
+    /// 看不见的项也要删得掉。
     private var footerEditRow: some View {
         let items = playback.panelLayout.footer
         let slot = Self.grid.width / CGFloat(max(items.count, 1))

@@ -906,7 +906,11 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
     }
 
     /// 卡片自己、简介浮框,任一被指针停着就算悬停。两路都走同一套进入 / 收起延迟。
-    private var cardHovered = false
+    private var cardHovered = false {
+        didSet { if !cardHovered { hoverSuppressedUntilLeave = false } }
+    }
+    /// 过刘海展开后判成横扫路过(`collapseAfterSweep`):指针离开卡片之前,停在卡片上也不展开。
+    private var hoverSuppressedUntilLeave = false
     private var editorialHovered = false
     /// 控制器此刻认不认为指针在卡片上。`NotchWindowRoot.updateHover` 拿它跟自己的边沿记忆对账。
     var isCardHovered: Bool { cardHovered }
@@ -919,6 +923,14 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
     /// 指针在顶行里被系统从刘海一侧挪到另一侧(`NotchHoverHit.crossesNotch`):不等进入延迟,马上展开。
     func expandFromNotchCrossing() {
         guard cardHovered, !hoverExpanded else { return }
+        applyHoverIntent(immediately: true)
+    }
+
+    /// 过刘海展开之后指针接着往同一边走出去了(`NotchHoverHit.sweptPastSteadyCard`):是横扫路过,当场收回。
+    func collapseAfterSweep() {
+        guard cardHovered, !hoverSuppressedUntilLeave else { return }
+        hoverSuppressedUntilLeave = true
+        Self.hoverLog.notice("hover swept past the notch, collapsing")
         applyHoverIntent(immediately: true)
     }
 
@@ -1016,7 +1028,7 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
     }
 
     private func applyHoverIntent(immediately: Bool = false) {
-        let expanded = cardHovered || editorialHovered
+        let expanded = (cardHovered && !hoverSuppressedUntilLeave) || editorialHovered
         // 每次新的 hover 事件都先撤掉上一次还没兑现的意图 —— "进了又出"必须净效果为零,
         // 而不是两个延迟各自到期、先展开再收起地闪一下。
         pendingHoverWork?.cancel()

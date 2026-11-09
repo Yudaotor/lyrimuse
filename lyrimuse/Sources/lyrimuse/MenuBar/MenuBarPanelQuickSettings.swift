@@ -994,17 +994,6 @@ struct PanelQuickSettings: View {
         }
     }
 
-    /// 菜单栏「字号」行。三件事跟设置页那行(`MenuBarFontSizeRow`)一字不差,别在
-    /// 这里简化:
-    ///   ① 读的是**生效字号**(`MenuBarMarqueeRenderer.font.pointSize`)而不是存储值 —— 存 0 表示
-    ///      "跟随系统",直接把 0 喂给滑杆滑块会跑到最左边;
-    ///   ② 拖回系统字号那一格时**存 0** 而不是那个数字,这样没有单独的「跟随系统」按钮也保住语义;
-    ///   ③ 相等守卫不能省:拖动中每个鼠标事件都调一次 set,量化后大量等值赋值照样广播
-    ///      objectWillChange,而菜单栏那边订阅着这个值、每次都会 refresh()。
-    ///
-    /// 副行开着时两行字号由行高推出(10 / 9pt)、滑杆翻了也没效果 —— 跟设置页一样**行留着、把滑杆
-    /// 换成一句灰字「由副行决定」**,不整行隐藏(那会变成"字号去哪了")。原因就在它正上方一行,
-    /// 符合这块面板"停用/隐藏一个旋钮的前提是把为什么摆在它上面"那条(见菜单栏「对齐方式」处)。
     /// 拖回系统字号那一格存 0;相等守卫,同一个值不再广播。拖动中由 `menuBarFontSizeThrottle` 节流调用。
     private func commitMenuBarFontSize(_ newValue: Double) {
         let range = MenuBarMarqueeRenderer.fontSizeRange
@@ -1014,6 +1003,17 @@ struct PanelQuickSettings: View {
         settings.menuBarLyricsFontSize = stored
     }
 
+    /// 菜单栏「字号」行。三件事跟设置页那行(`MenuBarFontSizeRow`)一字不差,别在
+    /// 这里简化:
+    ///   ① 读的是**生效字号**(`MenuBarMarqueeRenderer.font.pointSize`)而不是存储值 —— 存 0 表示
+    ///      "跟随系统",直接把 0 喂给滑杆滑块会跑到最左边;
+    ///   ② 拖回系统字号那一格时**存 0** 而不是那个数字,这样没有单独的「跟随系统」按钮也保住语义;
+    ///   ③ 拖动中经 `menuBarFontSizeThrottle` 节流再写,写之前还有相等守卫:量化后的等值赋值照样广播
+    ///      objectWillChange,而菜单栏那边订阅着这个值、每次都会 refresh()。
+    ///
+    /// 副行开着时两行字号由行高推出(10 / 9pt)、滑杆翻了也没效果 —— 跟设置页一样**行留着、把滑杆
+    /// 换成一句灰字「由副行决定」**,不整行隐藏(那会变成"字号去哪了")。原因就在它正上方一行,
+    /// 符合这块面板"停用/隐藏一个旋钮的前提是把为什么摆在它上面"那条(见菜单栏「对齐方式」处)。
     @ViewBuilder private var menuBarFontSizeRow: some View {
         row(L10n.t("字号")) {
             if settings.menuBarUsesTwoRows {

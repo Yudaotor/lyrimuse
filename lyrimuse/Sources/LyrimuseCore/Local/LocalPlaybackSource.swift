@@ -516,6 +516,9 @@ public final class LocalPlaybackSource: ObservableObject {
     private var outputFlagBrokenDevices: Set<UInt32> = []
     /// 最近一次暂停信号到的时刻,冷恢复判送声进程关没关过输出用(见 coldStartOutputStillOpen)。
     private var lastPauseSignalAt: Date?
+    /// 最近一次暂停那一拍,冷恢复要看的进程里哪些在送声。别的播放器暂停时洛雪、foobar2000 没在送声,接着点播它们是冷的。
+    /// 见 02 章决策 251。
+    private var pauseOutputProcesses: Set<String> = []
     /// 洛雪中途改速度(见 lxMusicRateCorrected):这一拍按哪次改速度修正过读数,`lxRateAnchoredChange` 是已经按它重锚过的那次。
     private var lxRateChange: Date?
     private var lxRateAnchoredChange: Date?
@@ -889,10 +892,11 @@ public final class LocalPlaybackSource: ObservableObject {
         return processOutputting ? true : nil
     }
 
-    /// 在放信号到时某个进程已经在送声:暂停后还没到它关输出的时候,是热恢复(当场出声);暂停够久了或没见过暂停,是它刚重新打开、
-    /// 按冷的算。纯函数,selftest 覆盖。
-    public nonisolated static func coldStartOutputStillOpen(pauseAt: Date?, signalAt: Date, closesAfterPauseSecs: Double) -> Bool {
-        guard let pauseAt else { return false }
+    /// 在放信号到时某个进程已经在送声:暂停那一拍它就在送声、暂停后还没到它关输出的时候,是热恢复(当场出声);暂停够久了、没见过暂停,
+    /// 或暂停的是别的播放器(那一拍它没在送声),是它刚重新打开、按冷的算。纯函数,selftest 覆盖。
+    public nonisolated static func coldStartOutputStillOpen(pauseAt: Date?, outputtingAtPause: Bool, signalAt: Date,
+                                                            closesAfterPauseSecs: Double) -> Bool {
+        guard let pauseAt, outputtingAtPause else { return false }
         return signalAt.timeIntervalSince(pauseAt) < closesAfterPauseSecs
     }
 
@@ -3212,10 +3216,12 @@ public final class LocalPlaybackSource: ObservableObject {
 
     /// 暂停那一拍判默认输出设备的在转信号可不可信(见 outputFlagBroken)。
     private func learnOutputFlagReliability() {
-        guard let device = ProcessAudioOutput.defaultOutputDeviceState() else { return }
         let watched = Self.coldStartWatchedProcesses(
             lxOutputsToDefault: LXMusicOpenAPI.outputsToDefaultDevice(LXMusicOpenAPI.shared.currentConfig()))
-        let outputting = watched.first { ProcessAudioOutput.isRunningOutput(bundleID: $0.process) }
+        let outputtingAll = watched.filter { ProcessAudioOutput.isRunningOutput(bundleID: $0.process) }
+        pauseOutputProcesses = Set(outputtingAll.map(\.process))
+        guard let device = ProcessAudioOutput.defaultOutputDeviceState() else { return }
+        let outputting = outputtingAll.first
         switch Self.outputFlagBroken(deviceRunning: device.running, processOutputting: outputting != nil) {
         case true?:
             if outputFlagBrokenDevices.insert(device.device).inserted {
@@ -3521,8 +3527,9 @@ public final class LocalPlaybackSource: ObservableObject {
                 lxColdStartSkipsLXMusic = !LXMusicOpenAPI.outputsToDefaultDevice(LXMusicOpenAPI.shared.currentConfig())
                 let watched = Self.coldStartWatchedProcesses(lxOutputsToDefault: !lxColdStartSkipsLXMusic)
                 let open = watched.filter { ProcessAudioOutput.isRunningOutput(bundleID: $0.process) }
-                if let warm = open.first(where: { Self.coldStartOutputStillOpen(pauseAt: lastPauseSignalAt, signalAt: signalAt,
-                                                                                 closesAfterPauseSecs: $0.closesAfterPauseSecs) }) {
+                if let warm = open.first(where: { Self.coldStartOutputStillOpen(
+                    pauseAt: lastPauseSignalAt, outputtingAtPause: pauseOutputProcesses.contains($0.process),
+                    signalAt: signalAt, closesAfterPauseSecs: $0.closesAfterPauseSecs) }) {
                     logger.notice("lx cold start: \(warm.process, privacy: .public) kept its output open since the pause, not waiting for the device")
                 } else {
                     if lxColdStartSkipsLXMusic {

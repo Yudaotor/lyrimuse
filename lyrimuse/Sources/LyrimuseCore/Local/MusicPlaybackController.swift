@@ -1360,7 +1360,12 @@ public enum MusicPlaybackController {
         case .swinsianScript(let command):
             runAppleScript(swinsianRunningGuard + swinsianControlScript(command))
         case .plexampAPI(let command):
-            commandQueue.async { PlexampPlayerAPI.shared.send(command) }
+            commandQueue.async {
+                commandSerial &+= 1
+                if !PlexampPlayerAPI.shared.send(command) {
+                    _ = withhold(mediaControlCommand, reason: "Plexamp: player API unreachable")
+                }
+            }
         case .lxMusicDirect:
             let arguments = mediaControlArguments
             commandQueue.async {

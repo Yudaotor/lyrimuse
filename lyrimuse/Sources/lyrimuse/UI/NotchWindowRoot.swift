@@ -24,6 +24,8 @@ struct NotchWindowRoot: View {
     @State private var hoveringCard = false
     /// 上一次 `.active` 给的点:认指针是不是被系统从刘海一侧挪到了另一侧(`NotchHoverHit.crossesNotch`)。
     @State private var lastHoverPoint: CGPoint?
+    /// 最近一次横着过刘海:往哪边、什么时候。见 `NotchHoverHit.sweptPastSteadyCard`。
+    @State private var notchCrossing: (rightward: Bool, at: Date)?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     /// 弹簧按"正在做哪件事"选:
@@ -217,10 +219,20 @@ struct NotchWindowRoot: View {
                     if region == .card, let notch, let last = lastHoverPoint,
                        NotchHoverHit.crossesNotch(from: last, to: point, cardWidth: cardWidth, notch: notch) {
                         controller.expandFromNotchCrossing()
+                        notchCrossing = (point.x > last.x, Date())
+                    } else if let crossing = notchCrossing {
+                        if Date().timeIntervalSince(crossing.at) > NotchHoverHit.sweepWindowSecs {
+                            notchCrossing = nil
+                        } else if NotchHoverHit.sweptPastSteadyCard(rightward: crossing.rightward, x: point.x, cardWidth: cardWidth,
+                                                                    steadyWidth: controller.steadyCardWidth) {
+                            notchCrossing = nil
+                            controller.collapseAfterSweep()
+                        }
                     }
                     lastHoverPoint = point
                 case .ended:
                     lastHoverPoint = nil
+                    notchCrossing = nil
                     updateHover(inside: false, point: nil)
                 }
             }

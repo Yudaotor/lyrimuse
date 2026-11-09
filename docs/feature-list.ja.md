@@ -126,7 +126,7 @@ NetEase Cloud Music、QQ Music、Kugou、Kuwo、Migu、Musixmatch、LRCLIB、Lyr
 
 ### プレーヤーがこのMacに保存した歌詞をそのまま使用
 
-Apple Music、Spotify、Kugou Music、KKBOX、Amazon Music、LX MusicがこのMacに保存した歌詞はそのまま使用でき、プレーヤーに表示されるものと同じバージョンをより速く表示できます（Apple MusicとSpotifyは、プレーヤーで歌詞を表示したことのある曲のみ）。QQ MusicとNetEase Cloud Musicでは、ローカルのライブラリから再生中の曲を識別するため、検索せずに同じバージョンの歌詞を取得できます。reAMP、VOX、Pine Player、foobar2000、Swinsianで再生するときや、Apple Musicでライブラリ内のローカルファイルを、LX Musicでローカルリストの曲を再生するときは、ファイルに埋め込まれた歌詞または同じ名前の.lrcファイルを使用します。QQ Music、NetEase Cloud Music、Kugou Musicでは、システム設定でLyrimuseに「フルディスクアクセス」を許可する必要があります。許可しなくてもオンラインで歌詞を検索できます。
+Apple Music、Spotify、Kugou Music、KKBOX、Amazon Music、LX MusicがこのMacに保存した歌詞はそのまま使用でき、プレーヤーに表示されるものと同じバージョンをより速く表示できます（Apple MusicとSpotifyは、プレーヤーで歌詞を表示したことのある曲のみ）。QQ MusicとNetEase Cloud Musicでは、ローカルのライブラリから再生中の曲を識別するため、検索せずに同じバージョンの歌詞を取得できます。reAMP、VOX、Pine Player、foobar2000、Swinsian、MyGo Musicで再生するときや、Apple Musicでライブラリ内のローカルファイルを、LX Musicでローカルリストの曲を再生するときは、ファイルに埋め込まれた歌詞または同じ名前の.lrcファイルを使用します。QQ Music、NetEase Cloud Music、Kugou Musicでは、システム設定でLyrimuseに「フルディスクアクセス」を許可する必要があります。許可しなくてもオンラインで歌詞を検索できます。
 
 - 初期設定でオフ
 - 設定の場所：プレーヤー › 権限とサービス › フルディスクアクセス
@@ -658,7 +658,7 @@ Apple Music、Spotify、Kaset、VOX、Swinsianは、再生状態を読み取る�
 
 ### 再生コントロールとシーク
 
-歌詞ウインドウや展開したノッチで、再生、一時停止、曲の切り替えができ、進行状況バーをドラッグしてシークできます。シャッフル、リピート、お気に入り、音量はプレーヤーの対応状況によります。Apple Music、Spotify、Kaset、QQ Music、Amazon Music、reAMP、VOX、Pine Player、foobar2000、Swinsian、Plexamp、Pear Desktop、ブラウザのYouTube Musicはその一部またはすべてに対応し、NetEase Cloud Music、Kugou Music、Soda Music、LX Musicはお気に入りに対応します。LX Musicは、その設定でOpen APIをオンにすると音量も調整できます。再生、一時停止、曲の切り替え、お気に入りには、グローバルなキーボードショートカットも割り当てられます。ブラウザの動画などのAppがシステムの「再生中」を占有している間は、QQ Music、NetEase Cloud Music、Soda Music、Pine Player、foobar2000、MyGo Musicの再生、一時停止、曲の切り替えは各Appのメニューや再生バーを通じて操作するため、シークはできません。
+歌詞ウインドウや展開したノッチで、再生、一時停止、曲の切り替えができ、進行状況バーをドラッグしてシークできます。シャッフル、リピート、お気に入り、音量はプレーヤーの対応状況によります。Apple Music、Spotify、Kaset、QQ Music、Amazon Music、reAMP、VOX、Pine Player、foobar2000、Swinsian、Plexamp、Pear Desktop、ブラウザのYouTube Musicはその一部またはすべてに対応し、NetEase Cloud Music、Kugou Music、Soda Music、LX Music、MyGo Musicはお気に入りに対応します。LX Musicは、その設定でOpen APIをオンにすると音量も調整できます。再生、一時停止、曲の切り替え、お気に入りには、グローバルなキーボードショートカットも割り当てられます。ブラウザの動画などのAppがシステムの「再生中」を占有している間は、QQ Music、NetEase Cloud Music、Soda Music、Pine Player、foobar2000、MyGo Musicの再生、一時停止、曲の切り替えは各Appのメニューや再生バーを通じて操作するため、シークはできません。
 
 - 設定の場所：歌詞の表示 › ノッチ › 展開時 › 再生コントロールを表示
 - 設定の場所：キーボードショートカット › 再生/一時停止

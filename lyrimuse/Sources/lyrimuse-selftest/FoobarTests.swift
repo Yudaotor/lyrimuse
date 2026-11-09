@@ -271,7 +271,7 @@ func runFoobarTests() {
         let openFile = sourceText("LyrimuseCore/Local/PlayerOpenFile.swift")
         expectEqual(sourceHas(openFile, "foobar: bundleID == PlaybackPlayer.foobar2000.bundleIdentifier,"), true,
                     "foobar 接线: 按开着的文件认曲目时打开 foobar 那两条(不带扩展名的文件名、控制字符换下划线)")
-        expectEqual(sourceHas(openFile, "fileName: fileName, underscoresControls: foobar)"), true,
+        expectEqual(sourceHas(openFile, "fileName: URL(fileURLWithPath: path).lastPathComponent, underscoresControls: foobar)"), true,
                     "foobar 接线: 找文件时把控制字符那条交给比对")
         expectEqual(sourceHas(openFile, "guard let snapshot, !SourceKnockout.isOut(.playerFile),"), true,
                     "foobar 接线: 开着的文件那条腿能拔(player-file)")

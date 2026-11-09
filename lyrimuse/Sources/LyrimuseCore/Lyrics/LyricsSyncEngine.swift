@@ -3488,17 +3488,19 @@ public final class LyricsSyncEngine {
         var widest: CGFloat?
         for seg in segments {
             let lines = (seg.firstLine...seg.lastLine).compactMap { segmenterLine(surface, $0, budget: budget) }
-            let text: String, translation: String?, romanization: String?
+            let text: String, translation: String?, romanization: String?, words: [SyncedLyricWord]?
             if let part = seg.part {
                 text = part.text
+                words = part.estimated ? nil : part.words
                 translation = part.translation ?? lines.first?.translation
                 romanization = part.romanization ?? lines.first?.romanization
             } else {
-                text = LyricsSegmenter.mergedText(lines, words: LyricsSegmenter.joinedWords(lines))
+                words = LyricsSegmenter.joinedWords(lines)
+                text = LyricsSegmenter.mergedText(lines, words: words)
                 translation = LyricsSegmenter.joinedText(lines.map(\.translation))
                 romanization = LyricsSegmenter.joinedText(lines.map(\.romanization))
             }
-            var w = budget.main.measure(text)
+            var w = mainOnly ? Self.mainRowWidth(words: words, text: text, budget: budget) : budget.main.measure(text)
             if !mainOnly {
                 if let row = budget.preview { w = max(w, row.measure(text)) }
                 if let row = budget.translation, let tr = translation { w = max(w, row.measure(tr)) }
@@ -3507,6 +3509,12 @@ public final class LyricsSyncEngine {
             widest = max(widest ?? 0, w)
         }
         return widest
+    }
+
+    /// 只量主行时一行多宽:有逐字时逐字相加与整串取大(`LyricsSegmenter.mainWidth`,同画出来的逐字行),音节切开会丢跨切口的字距,
+    /// 只量整串会比画出来的窄几点。见 04 章决策 94。
+    private static func mainRowWidth(words: [SyncedLyricWord]?, text: String, budget: LineLayoutBudget) -> CGFloat {
+        LyricsSegmenter.mainWidth(words: words, groups: nil, text: text, measure: budget.main.measure, wordRomanization: nil)
     }
 
     /// 一个展示面按原句(不重新断句)量出的每一行的宽,从窄到宽排好后取第 `quantile` 处的那个。一行的宽是
@@ -3519,7 +3527,8 @@ public final class LyricsSyncEngine {
             let text = displayLineText(i)
             guard !text.trimmingCharacters(in: .whitespaces).isEmpty else { continue }
             let lookupMs = usingWords ? wordLines[i].timeMs : baseLines[i].timeMs
-            var w = budget.main.measure(text)
+            var w = mainOnly ? Self.mainRowWidth(words: usingWords ? singleLineWords(i) : nil, text: text, budget: budget)
+                : budget.main.measure(text)
             if !mainOnly, let row = budget.translation, let tr = translationText(timeMs: lookupMs, plainText: text) {
                 w = max(w, row.measure(tr))
             }

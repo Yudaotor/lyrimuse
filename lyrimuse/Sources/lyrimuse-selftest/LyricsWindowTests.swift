@@ -1221,6 +1221,20 @@ func runLyricsWindowTests() {
                     "控件大小: 百分比按线性换成倍数")
         expectEqual([40, 250, .nan].map { LyricsWindowControlScale.factor(percent: $0) }, [1, 2, 1],
                     "控件大小: 越界的值夹回 100%～200%,坏值按 100%")
+        // 歌名旁圆钮:左栏窄、倍数大时收小,歌名那两行至少留 80(07 章决策 200)。
+        typealias CS = LyricsWindowControlScale
+        let titleNarrow = CS.titleButtonsFactor(columnWidth: 250, buttons: 3, requested: 2)
+        expectEqual(titleNarrow < 2 && titleNarrow > 1, true, "歌名旁圆钮: 左栏 250、三颗、200% 时收小")
+        expectEqual(abs(250 - (CS.titleMinTextWidth + 20 + 2 * 8 + 3 * 26 * titleNarrow)) < 0.001, true,
+                    "歌名旁圆钮: 收到歌名正好留 80")
+        expectEqual(CS.titleButtonsFactor(columnWidth: 178.6, buttons: 3, requested: 2), 1,
+                    "歌名旁圆钮: 640 宽窗口(左栏 178.6)放不下放大的,按 100% 画")
+        expectEqual([CS.titleButtonsFactor(columnWidth: 400, buttons: 3, requested: 2),
+                     CS.titleButtonsFactor(columnWidth: 178.6, buttons: 3, requested: 1),
+                     CS.titleButtonsFactor(columnWidth: 60, buttons: 3, requested: 2)], [2, 1, 1],
+                    "歌名旁圆钮: 放得下照给;100% 不动;再窄也不小于 100%")
+        expectEqual(CS.titleButtonsFactor(columnWidth: 250, buttons: 2, requested: 2) > titleNarrow, true,
+                    "歌名旁圆钮: 没有星(两颗)时能放得更大")
         expectEqual(LyricsWindowControlScale.percentRange == 100...200 && LyricsWindowControlScale.percentStep == 5
                     && LyricsWindowControlScale.defaultPercent == 100, true, "控件大小: 滑杆 100%～200%、一格 5%、默认 100%")
         func legacy(_ w: CGFloat) -> [CGFloat] {
@@ -1248,10 +1262,11 @@ func runLyricsWindowTests() {
         expectEqual(sourceHas(window, "s.$lyricsWindowControlScalePercent.map(LyricsWindowControlScale.factor(percent:)).removeDuplicates()\n                .sink { [weak self] in self?.fullControlScale = $0 }")
                     && sourceBytes(window, contain: "LyricsTransportMetrics(width: controlScale, requested: controlFactor)")
                     && !sourceBytes(window, contain: "ctrl(0.")
-                    && sourceBytes(window, contain: ".frame(width: 26 * controlFactor, height: 26 * controlFactor)")
+                    && sourceBytes(window, contain: ".frame(width: LyricsWindowControlScale.titleButtonSide * titleButtonFactor,")
+                    && sourceBytes(window, contain: "LyricsWindowControlScale.titleButtonsFactor(columnWidth: controlScale, buttons: playback.isFavorited == nil ? 2 : 3,")
                     && sourceBytes(window, contain: "onSearch: { openLyricsSearch() }, scale: controlFactor)")
                     && sourceBytes(window, contain: ".padding(.bottom, 11 + 36 * controlFactor + 8)"),
-                    true, "控件大小: 播放控制走共用尺寸,圆钮、右下那排、说明条位置跟着倍数")
+                    true, "控件大小: 播放控制走共用尺寸,圆钮(放不下时收小)、右下那排、说明条位置跟着倍数")
         expectEqual(sourceBytes(window, contain: "indicatorBottomInset: controlFactor > 1 ? 11 + 36 * controlFactor + 8 : 40,")
                     && sourceBytes(layerList, contain: "bottomInset = spec?.indicatorBottomInset ?? 40"),
                     true, "控件大小: 放大后歌词滚动条停在右下那排上方,100% 时照旧离底 40")

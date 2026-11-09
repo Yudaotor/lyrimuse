@@ -126,7 +126,7 @@ Reads your player's queue and finds lyrics for the next few songs ahead of time;
 
 ### Use the lyrics your player already saved
 
-Lyrics that Apple Music, Spotify, Kugou, KKBOX, Amazon Music and LX Music already saved on this Mac can be used directly: the same version the player shows, and faster (for Apple Music and Spotify, only songs whose lyrics the player has shown). For QQ Music and NetEase Cloud Music, the song is recognized from the player's local library, so that exact version is fetched without searching. For reAMP, VOX, Pine Player, foobar2000 and Swinsian, and with Apple Music or LX Music when it plays a local file from your library or local list, the lyrics inside the playing file or a .lrc file of the same name are used. QQ Music, NetEase Cloud Music and Kugou need Full Disk Access for Lyrimuse in System Settings; without it lyrics are still found online.
+Lyrics that Apple Music, Spotify, Kugou, KKBOX, Amazon Music and LX Music already saved on this Mac can be used directly: the same version the player shows, and faster (for Apple Music and Spotify, only songs whose lyrics the player has shown). For QQ Music and NetEase Cloud Music, the song is recognized from the player's local library, so that exact version is fetched without searching. For reAMP, VOX, Pine Player, foobar2000, Swinsian and MyGo Music, and with Apple Music or LX Music when it plays a local file from your library or local list, the lyrics inside the playing file or a .lrc file of the same name are used. QQ Music, NetEase Cloud Music and Kugou need Full Disk Access for Lyrimuse in System Settings; without it lyrics are still found online.
 
 - Off by default
 - Settings: Player › Permissions & Services › Full Disk Access
@@ -658,7 +658,7 @@ Apple Music, Spotify, Kaset, VOX and Swinsian need Automation permission to read
 
 ### Playback controls and seeking
 
-Play, pause, skip and drag the progress bar from the lyrics window or the expanded notch. Shuffle, repeat, like and volume depend on the player: Apple Music, Spotify, Kaset, QQ Music, Amazon Music, reAMP, VOX, Pine Player, foobar2000, Swinsian, Plexamp, Pear Desktop and YouTube Music in a browser each support some or all of them, and NetEase Cloud Music, Kugou Music, Soda Music and LX Music have like, with LX Music volume too once Open API is on in its settings. Play, pause, skipping and like can have global shortcuts. While something like a browser video holds Now Playing, play, pause and skipping for QQ Music, NetEase Cloud Music, Soda Music, Pine Player, foobar2000 and MyGo Music go through their own menus or play bar, and seeking isn't available.
+Play, pause, skip and drag the progress bar from the lyrics window or the expanded notch. Shuffle, repeat, like and volume depend on the player: Apple Music, Spotify, Kaset, QQ Music, Amazon Music, reAMP, VOX, Pine Player, foobar2000, Swinsian, Plexamp, Pear Desktop and YouTube Music in a browser each support some or all of them, and NetEase Cloud Music, Kugou Music, Soda Music, LX Music and MyGo Music have like, with LX Music volume too once Open API is on in its settings. Play, pause, skipping and like can have global shortcuts. While something like a browser video holds Now Playing, play, pause and skipping for QQ Music, NetEase Cloud Music, Soda Music, Pine Player, foobar2000 and MyGo Music go through their own menus or play bar, and seeking isn't available.
 
 - Settings: Lyrics Display › Notch › Expanded › Show Playback Controls
 - Settings: Keyboard Shortcuts › Play/Pause

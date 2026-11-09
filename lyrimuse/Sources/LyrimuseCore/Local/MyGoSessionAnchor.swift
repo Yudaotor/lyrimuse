@@ -35,6 +35,8 @@ public enum MyGoSessionAnchor {
     public static let coverEchoWindowSecs: Double = 1.2
     /// 封面那份和开播那份的位置都在这之内才算(都是这首刚开头)。
     public static let coverEchoMaxElapsedSecs: Double = 0.3
+    /// 时刻、位置都差不到这么多就是同一份锚点:主路按整微秒解码,单问交来的是原始浮点,同一份两边写法不一样。
+    public static let sameAnchorToleranceSecs: Double = 0.001
 
     /// 要跨帧记住的:上一份在放的锚点,最近一次暂停帧的时刻(秒)和那时是哪一首。
     public struct State: Equatable, Sendable {
@@ -68,6 +70,10 @@ public enum MyGoSessionAnchor {
         }
         if let last = state.anchor, last.identity == identity {
             if last.rawTimestamp == timestamp, last.elapsed == elapsed { return (last.elapsed, last.timestamp, state) }
+            if let a = seconds(last.rawTimestamp), abs(t - a) < sameAnchorToleranceSecs,
+               abs(last.elapsed - elapsed) < sameAnchorToleranceSecs {
+                return (last.elapsed, last.timestamp, state)
+            }
             if let a = seconds(last.rawTimestamp), t > a, t - a <= coverEchoWindowSecs,
                last.elapsed <= coverEchoMaxElapsedSecs, elapsed <= coverEchoMaxElapsedSecs {
                 return (last.elapsed, last.timestamp, state)

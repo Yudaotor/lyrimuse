@@ -68,6 +68,20 @@ public enum NotchHoverHit {
         let span = notch.span(cardWidth: cardWidth)
         return (from.x <= span.lowerBound && to.x >= span.upperBound) || (from.x >= span.upperBound && to.x <= span.lowerBound)
     }
+
+    /// 过刘海展开之后这么久之内,接着往同一边走出收起时卡片的外沿,算沿菜单栏横扫路过(去点刘海另一边的状态栏图标),
+    /// 不是要看灵动岛:收回,指针离开卡片前不再因悬停展开。展开卡片两侧比耳朵宽得多,不收的话那一截状态栏图标点不到。
+    /// 见 05 章决策 141。
+    public static let sweepWindowSecs: Double = 0.6
+    /// 越过收起卡片外沿多少才算走出去。
+    public static let sweepMargin: CGFloat = 8
+
+    /// 指针(此刻卡片的局部 x,卡片宽 `cardWidth`)是不是已经往过刘海那一边(`rightward`)走出了收起时卡片(宽 `steadyWidth`,
+    /// 跟此刻的卡片同一个中心)的外沿。纯函数,selftest 覆盖。
+    public static func sweptPastSteadyCard(rightward: Bool, x: CGFloat, cardWidth: CGFloat, steadyWidth: CGFloat) -> Bool {
+        let center = cardWidth / 2, half = steadyWidth / 2
+        return rightward ? x > center + half + sweepMargin : x < center - half - sweepMargin
+    }
 }
 
 /// 只显示那一截在指针压上来时淡到多少、多久淡完。跟悬浮歌词「悬浮淡化」同一个值。

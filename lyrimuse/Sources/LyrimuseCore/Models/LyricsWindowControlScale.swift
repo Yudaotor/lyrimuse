@@ -13,6 +13,23 @@ public enum LyricsWindowControlScale {
         guard percent.isFinite else { return 1 }
         return CGFloat(min(max(percent, percentRange.lowerBound), percentRange.upperBound) / 100)
     }
+
+    /// 歌名旁圆钮的边长(100% 时)、圆钮之间的间距。
+    public static let titleButtonSide: CGFloat = 26
+    public static let titleButtonSpacing: CGFloat = 8
+    /// 圆钮放大后歌名、「歌手 — 专辑」那两行至少还留这么宽。
+    public static let titleMinTextWidth: CGFloat = 80
+    /// 文字块跟圆钮之间:外层 HStack 的间距 12 + `Spacer(minLength: 8)`。
+    static let titleRowGaps: CGFloat = 12 + 8
+
+    /// 歌名旁 `buttons` 颗圆钮实际用的倍数:左栏(宽 `columnWidth`)放不下时收小,给文字留 `titleMinTextWidth`,最小收到 1。
+    /// 纯函数,selftest 覆盖。见 07 章决策 200。
+    public static func titleButtonsFactor(columnWidth: CGFloat, buttons: Int, requested: CGFloat) -> CGFloat {
+        guard buttons > 0, requested > 1 else { return max(1, requested) }
+        let fixed = titleMinTextWidth + titleRowGaps + CGFloat(buttons - 1) * titleButtonSpacing
+        let fit = (columnWidth - fixed) / (CGFloat(buttons) * titleButtonSide)
+        return max(1, min(requested, fit))
+    }
 }
 
 /// 播放控制那一排(随机 | 上一首 播放 下一首 | 循环)的尺寸。各档按左栏宽度(封面边长)算再夹值,

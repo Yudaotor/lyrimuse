@@ -297,8 +297,9 @@ extension NotchLyricsView {
                     .frame(height: NotchExpandedMetrics.trackInfoActionsHeight)
                 }
             }
-            // 整排的位置,给一次性提示对准(`NotchQuickActionsTip`)。
-            .anchorPreference(key: QuickActionAnchorKey.self, value: .bounds) { [NotchQuickActionsTip.anchorKey: $0] }
+            // 整排的位置,给一次性提示对准(`NotchQuickActionsTip`)。只能往里添:`.anchorPreference` 会整份替换各键报上来的锚点,
+            // 悬停说明就一条都对不上了。
+            .transformAnchorPreference(key: QuickActionAnchorKey.self, value: .bounds) { $0[NotchQuickActionsTip.anchorKey] = $1 }
         }
     }
 

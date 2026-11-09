@@ -3580,7 +3580,7 @@ struct LyricsWindowView: View {
                              fillColor: karaokeFillColor.map { NSColor($0) }, forcedSide: lyricForcedSide,
                              hdrHighlight: !showsMiniLayout && playback.fullHDRHighlight),
                 lineSpacing: lyricLineSpacing, showsScrollIndicator: !centered,
-                // 标准档右下那排不在指示条底下,照原样离底 40;放大后停在那排上沿再往上 8。
+                // 100% 时右下那排不在指示条底下,照原样离底 40;放大后停在那排上沿再往上 8。
                 indicatorBottomInset: controlFactor > 1 ? 11 + 36 * controlFactor + 8 : 40,
                 leading: leading, trailing: trailing,
                 onArtwork: hasArtworkBackground, suspendsBlur: windowController.isLiveResizing,
@@ -3806,7 +3806,7 @@ struct LyricsWindowView: View {
     /// 心形是它的旧设计)。星只有 Apple Music 和 Kaset 有(isFavorited 为 nil 不显示),
     /// 「…」始终在 —— 它装的是这扇窗自己的动作,与播放器无关。
     private var titleSideButtons: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: LyricsWindowControlScale.titleButtonSpacing) {
             if let favorited = playback.isFavorited {
                 Button {
                     PlaybackCoordinator.shared.toggleFavorited()
@@ -4353,7 +4353,8 @@ struct LyricsWindowView: View {
 
     private func circleIcon(_ name: String) -> some View {
         circleIconGlyph(name)
-            .frame(width: 26 * controlFactor, height: 26 * controlFactor)
+            .frame(width: LyricsWindowControlScale.titleButtonSide * titleButtonFactor,
+                   height: LyricsWindowControlScale.titleButtonSide * titleButtonFactor)
             .background(Circle().fill(circleIconFill))
             .contentShape(Circle())
     }
@@ -4368,7 +4369,7 @@ struct LyricsWindowView: View {
         Image(systemName: name)
             // 14:对照 AM 特写 —— AM 的星形约占圆钮内 60%+,12pt 只有五成出头。
             // 圆底 26pt 与 AM 一致,不动。
-            .font(.system(size: 14 * controlFactor, weight: .semibold))
+            .font(.system(size: 14 * titleButtonFactor, weight: .semibold))
             .foregroundStyle(primaryTextColor.opacity(0.9))
     }
 
@@ -4438,8 +4439,13 @@ struct LyricsWindowView: View {
     private var transportMetrics: LyricsTransportMetrics {
         LyricsTransportMetrics(width: controlScale, requested: controlFactor)
     }
-    /// 「控件大小」的倍数:歌名旁圆钮、右下那排按钮直接乘它;播放控制那一排走 `transportMetrics`。
+    /// 「控件大小」的倍数:右下那排按钮直接乘它;播放控制那一排走 `transportMetrics`,歌名旁圆钮走 `titleButtonFactor`。
     private var controlFactor: CGFloat { controlScaleOverride ?? playback.fullControlScale }
+    /// 歌名旁圆钮的倍数:左栏窄、倍数大时收小,歌名那两行至少留 80pt(`LyricsWindowControlScale.titleButtonsFactor`)。
+    private var titleButtonFactor: CGFloat {
+        LyricsWindowControlScale.titleButtonsFactor(columnWidth: controlScale, buttons: playback.isFavorited == nil ? 2 : 3,
+                                                    requested: controlFactor)
+    }
     /// 设置页预览里拖「控件大小」滑杆时还没写进设置的倍数;真窗口里恒为 nil。
     @Environment(\.lyricsWindowControlScaleOverride) private var controlScaleOverride
 

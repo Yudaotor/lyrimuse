@@ -102,6 +102,30 @@ func TestEmbeddedLyricsSYLT(t *testing.T) {
 	}
 }
 
+// 标成 Latin-1、实为 CP949 的韩文 SYLT:一行只有几个音节,单看一行认不出 EUC-KR,按整帧认。
+func TestEmbeddedLyricsSYLTKoreanShortLines(t *testing.T) {
+	body := []byte{0, 'k', 'o', 'r', 2, 1, 0}
+	for _, line := range []struct {
+		hex string
+		ms  uint32
+	}{
+		{"bab8b0ed20bdcdb4d9", 1000},
+		{"c0ccb7b8b0d420b8bbc7cfb4cfb1ee", 5000},
+		{"b4f520bab8b0ed20bdcdb4d9", 9000},
+		{"b3cac8f120bbe7c1f8c0bb", 13000},
+	} {
+		body = append(body, mustHex(t, line.hex)...)
+		body = append(body, 0)
+		body = binary.BigEndian.AppendUint32(body, line.ms)
+	}
+	tag := id3Tag(3, id3Frame(3, "SYLT", body))
+	got, ok := embeddedLyricsFromID3(tag[:10], tag[10:])
+	want := "[00:01.00]보고 싶다\n[00:05.00]이렇게 말하니까\n[00:09.00]더 보고 싶다\n[00:13.00]너희 사진을\n"
+	if !ok || got != want {
+		t.Fatalf("韩文 SYLT:得到 %q,想要 %q", got, want)
+	}
+}
+
 func TestLocalFileLyricsFallsBackToEmbedded(t *testing.T) {
 	dir := t.TempDir()
 	audio := filepath.Join(dir, "Song.mp3")

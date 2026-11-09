@@ -487,7 +487,9 @@ private func wiringContracts() {
                 "洛雪冷恢复: 洛雪选了别的输出设备时只有洛雪的读数不等默认设备,foobar2000 照等;两处用读数的地方都走这一条")
     expectEqual([sourceHas(source, "if !resumeSignal {\n                lastPauseSignalAt = Date()\n                learnOutputFlagReliability()"),
                  sourceHas(source, "if lxColdStart == nil, let device = ProcessAudioOutput.defaultOutputDeviceState(), !device.running {"),
-                 sourceHas(source, "if let warm = open.first(where: { Self.coldStartOutputStillOpen(pauseAt: lastPauseSignalAt, signalAt: signalAt,"),
+                 sourceHas(source, "if let warm = open.first(where: { Self.coldStartOutputStillOpen(\n"
+                                   + "                    pauseAt: lastPauseSignalAt, outputtingAtPause: pauseOutputProcesses.contains($0.process),")
+                    && sourceHas(source, "pauseOutputProcesses = Set(outputtingAll.map(\\.process))"),
                  sourceHas(source, "let audioAt = Self.coldStartEstimatedAudioAt(outputAt: started, leadSecs: p.leadSecs,\n"
                                    + "                                                                       flagKnownBroken: knownBroken, now: now)"),
                  sourceHas(source, "let knownBroken = device.map { outputFlagBrokenDevices.contains($0) } ?? false"),

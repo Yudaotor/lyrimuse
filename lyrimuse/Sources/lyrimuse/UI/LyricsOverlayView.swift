@@ -825,7 +825,7 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
             let font = nextLinePreviewNSFont, readingFont = nextLineReadingNSFont
             let groups = upcomingWordGroups
             widest = max(widest, LyricsSegmenter.mainWidth(
-                words: groups == nil ? nil : playback.nextLineWords, groups: groups, text: next,
+                words: playback.nextLineWords, groups: groups, text: next,
                 measure: { OverlayNaturalWidth.width($0, font: font) },
                 wordRomanization: .init(measure: { OverlayNaturalWidth.width($0, font: readingFont) },
                                         sidePadding: OverlayRowLayout.romaSidePadding(strokeInset: strokeInset))))

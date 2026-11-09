@@ -106,6 +106,14 @@ func runPlexampTests() {
         let stopAt = S.fill(identity: "a", playing: true, elapsed: 109.179, timestamp: ts(3.518), rate: 1, last: nil)
         let picked = S.fill(identity: "e", playing: true, elapsed: nil, timestamp: ts(4.061), rate: 1, last: stopAt.remember)
         expectEqual(picked.elapsed, 0, "Plexamp 会话补全: 点播另一首时旧歌停下的位置不接,新歌从 0 起算")
+        // 旧歌刚放 2.5 秒就点播另一首:停下的位置也小,但接得上旧歌自己推到这一刻的位置,不当自然连播
+        let justStarted = S.fill(identity: "f", playing: true, elapsed: nil, timestamp: ts(40), rate: 1, last: nil)
+        let stoppedEarly = S.fill(identity: "f", playing: true, elapsed: 2.5, timestamp: ts(42.5), rate: 1,
+                                  last: justStarted.remember)
+        expectEqual(stoppedEarly.remember?.continuesLast, true, "Plexamp 会话补全: 位置接得上上一份推到这一刻的,算这首自己报的")
+        let pickedEarly = S.fill(identity: "g", playing: true, elapsed: nil, timestamp: ts(43), rate: 1, last: stoppedEarly.remember)
+        expectEqual(pickedEarly.elapsed, 0, "Plexamp 会话补全: 旧歌开头几秒就点播另一首,新歌从 0 起算、不接旧歌的锚点")
+        expectEqual(early.remember?.continuesLast, false, "Plexamp 会话补全: 新歌带着旧歌名先到的那份接不上旧歌的位置")
         // 跟过回声的锚点不再被下一首接走
         let afterEcho = S.fill(identity: "d", playing: true, elapsed: nil, timestamp: ts(22.5), rate: 1, last: echo.remember)
         expectEqual(afterEcho.elapsed, 0, "Plexamp 会话补全: 已经跟过回声的锚点不当自然连播接走")
@@ -143,8 +151,8 @@ func runPlexampTests() {
         expectEqual(sourceHas(api, "if let data = request(path, query: query, port: current) { return data }\nguard let found = discoverPort(), found != current else { return nil }"), true,
                     "Plexamp 接线: 连不上时找一次端口再试")
         let controller = src("LyrimuseCore/Local/MusicPlaybackController.swift")
-        expectEqual(sourceHas(controller, "case .plexampAPI(let command):\ncommandQueue.async { PlexampPlayerAPI.shared.send(command) }"), true,
-                    "Plexamp 接线: 失焦控制在命令队列上发,不卡主线程")
+        expectEqual(sourceHas(controller, "case .plexampAPI(let command):\ncommandQueue.async {\ncommandSerial &+= 1\nif !PlexampPlayerAPI.shared.send(command) {\n_ = withhold(mediaControlCommand, reason: \"Plexamp: player API unreachable\")"), true,
+                    "Plexamp 接线: 失焦控制在命令队列上发,不卡主线程;送不到时报控制不可用")
         expectEqual(sourceHas(controller, "case .plexamp:\nreturn PlexampPlayerAPI.shared.setPlaybackMode(mode)")
                     && sourceHas(controller, "case .plexamp:\nreturn PlexampPlayerAPI.shared.setVolume(v)"), true,
                     "Plexamp 接线: 循环档和音量写到本机接口")
