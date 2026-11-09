@@ -203,13 +203,24 @@ function cleanFrames(v) {
   }));
 }
 
-// 同一种崩溃的归并键:进程 + 异常类型 + 前三帧落在自家镜像里的符号(没有就前三帧),再不行用终止原因。
+// 同一种崩溃的归并键:进程 + 异常类型 + 前三帧落在自家镜像里的符号;没有自家帧就跳过 abort / 断言 / 异常重抛这类
+// 收尾帧再取前三帧(不跳的话不同崩溃都并成 `__pthread_kill | pthread_kill | abort`),再不行用终止原因。
+// dyld 启动失败(缺库、签名)没有有用的帧,用终止原因第一句(`Library not loaded: …`)。
 // 带异常调用栈的(未捕获的 Objective-C 异常)按异常调用栈取帧:故障线程那几帧每份都是 abort / 重抛。
+const OWN_IMAGE_RE = /^(lyrimuse|lyrimuse-engine|collector|LyrimuseCore)/i;
+const TEARDOWN_IMAGE_RE = /^(libsystem_kernel|libsystem_pthread|libc\+\+abi|libobjc\.A)\.dylib$/;
+const TEARDOWN_SYMBOL_RE = /^(abort|__abort|abort_with_payload|__assert_rtn|__cxa_(re)?throw|objc_exception_(re)?throw|_objc_terminate|.*precondition_failure|.*(_assertionFailure|_fatalErrorMessage))\b/;
+
 function crashSignature(c) {
-  const pool = c.exception_frames.length ? c.exception_frames : c.frames;
-  const own = pool.filter((f) => f.image && /^(lyrimuse|lyrimuse-engine|collector|LyrimuseCore)/i.test(f.image));
-  const picked = (own.length ? own : pool).slice(0, 3).map((f) => f.symbol || `${f.image}+${f.offset}`);
   const head = [c.process, c.exception_type || c.termination_namespace || "?"].join(" ");
+  if (c.termination_namespace === "DYLD" && c.termination_reasons.length) {
+    return `${head} :: ${c.termination_reasons[0]}`.slice(0, 500);
+  }
+  const pool = c.exception_frames.length ? c.exception_frames : c.frames;
+  const own = pool.filter((f) => f.image && OWN_IMAGE_RE.test(f.image));
+  const meaningful = pool.filter((f) => !TEARDOWN_IMAGE_RE.test(f.image || "") && !TEARDOWN_SYMBOL_RE.test(f.symbol || ""));
+  const source = own.length ? own : (meaningful.length ? meaningful : pool);
+  const picked = source.slice(0, 3).map((f) => f.symbol || `${f.image}+${f.offset}`);
   const tail = picked.length ? picked.join(" | ") : (c.termination_indicator || "no frames");
   return `${head} :: ${tail}`.slice(0, 500);
 }
