@@ -2007,8 +2007,8 @@ func runMenuBarTests() {
         expectEqual(menu.contains("if !coordinator.title.isEmpty, !coordinator.isCurrentTrackAdBreak, !coordinator.isRadioTalkBreak {"), true,
                     "右键菜单: 广告、电台串场不给偏移和搜索歌词")
         let quick = src("MenuBarPanelQuickSettings.swift")
-        expectEqual(quick.components(separatedBy: "= SliderCommitThrottle()").count - 1, 5,
-                    "面板快捷设置: 字号 / 宽度 / 高度五根滑杆拖动中节流提交")
+        expectEqual(quick.components(separatedBy: "= SliderCommitThrottle()").count - 1, 6,
+                    "面板快捷设置: 字号 / 宽度 / 高度六根滑杆拖动中节流提交")
         expectEqual(sourceHas(sourceBody("override func mouseDown(with event: NSEvent)", in: quick),
                               "if event.modifierFlags.contains(.control) {\nholdWork?.cancel()\ndispatch(press.handle(.secondaryClick))"), true,
                     "面板钮块: ⌃左键当右键,翻出快捷设置")
@@ -2018,8 +2018,8 @@ func runMenuBarTests() {
         let ui = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
             .appendingPathComponent("lyrimuse")
         let stage = (try? String(contentsOf: ui.appendingPathComponent("UI/MenuBarEditorStage.swift"), encoding: .utf8)) ?? ""
-        expectEqual(stage.components(separatedBy: "= SliderCommitThrottle()").count - 1, 2,
-                    "菜单栏编辑台: 舞台宽度条和「最大宽度」行拖动中节流提交")
+        expectEqual(stage.components(separatedBy: "= SliderCommitThrottle()").count - 1, 3,
+                    "菜单栏编辑台: 舞台宽度条、「最大宽度」行、字号行拖动中节流提交")
         // 预览上的可点区域(06 章决策 69):主行开「字体」,副行和歌词旁的图标开「内容」,正中时右边那枚图标开「布局」,
         // 浮层同工具栏那一份并换回窗口的深浅色。漏了不报错,只表现成点了没反应、浮层字和底同一档读不清,或旁白读不到。
         let preview = (try? String(contentsOf: ui.appendingPathComponent("UI/SectionPreviewBars.swift"), encoding: .utf8)) ?? ""

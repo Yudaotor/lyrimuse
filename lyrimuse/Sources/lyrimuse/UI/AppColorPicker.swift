@@ -38,6 +38,9 @@ struct AppColorPicker: View {
     @State private var brightness: Double = 1
     @State private var opacity: Double = 1
     @State private var hexText: String = ""
+    /// 拖色盘、色相条、不透明度时上一次真写设置的时刻(`commitWhileDragging`)。
+    @State private var lastDragCommit: CFTimeInterval = 0
+    @State private var draggingOpacity = false
 
     var body: some View {
         Button {
@@ -106,8 +109,9 @@ struct AppColorPicker: View {
                 DragGesture(minimumDistance: 0).onChanged { value in
                     saturation = Double(clamp(value.location.x / geo.size.width))
                     brightness = Double(1 - clamp(value.location.y / geo.size.height))
-                    commit()
+                    commitWhileDragging()
                 }
+                .onEnded { _ in commit() }
             )
         }
     }
@@ -137,8 +141,9 @@ struct AppColorPicker: View {
             .gesture(
                 DragGesture(minimumDistance: 0).onChanged { value in
                     hue = Double(clamp(value.location.x / geo.size.width))
-                    commit()
+                    commitWhileDragging()
                 }
+                .onEnded { _ in commit() }
             )
         }
     }
@@ -198,7 +203,13 @@ struct AppColorPicker: View {
             Text(L10n.t("不透明度"))
                 .font(.system(size: 11))
                 .foregroundStyle(.secondary)
-            Slider(value: Binding(get: { opacity }, set: { opacity = $0; commit() }), in: 0...1)
+            Slider(value: Binding(get: { opacity }, set: { v in
+                opacity = v
+                if draggingOpacity { commitWhileDragging() } else { commit() }
+            }), in: 0...1, onEditingChanged: { editing in
+                draggingOpacity = editing
+                if !editing { commit() }
+            })
             Text("\(Int(opacity * 100))%")
                 .font(.system(size: 11))
                 .monospacedDigit()
@@ -233,6 +244,18 @@ struct AppColorPicker: View {
     /// 换算成 hex 跟现值一样就不写:拖动时每个鼠标事件都会进来,而绑定那头是 AppSettings(一次写 = 一次
     /// UserDefaults + 整个设置对象广播,订阅它的整页和对应展示面都跟着重算),8 位一档的 hex 让相邻好几个
     /// 事件落在同一个值上。宽度、字号滑杆早就是「值没变不写」。
+    /// 拖动中节流写设置:最多每 `SliderCommitThrottle.interval` 秒写一次(同滑杆),松手由 `commit()` 补写最后的值;
+    /// 面板里的读数(hex)每次都跟着更新。
+    private func commitWhileDragging() {
+        let now = CACurrentMediaTime()
+        guard now - lastDragCommit >= SliderCommitThrottle.interval else {
+            syncHexText()
+            return
+        }
+        lastDragCommit = now
+        commit()
+    }
+
     private func commit() {
         let next = currentColor
         if next.hexStringWithAlpha != selection.wrappedValue.hexStringWithAlpha {

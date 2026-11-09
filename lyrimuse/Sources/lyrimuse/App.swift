@@ -3,9 +3,9 @@ import SwiftUI
 /// 入口在 `AppEntry`(StorageMigrationRunner.swift):先搬数据目录,再调这里的 `main()`。
 struct LyrimuseApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
-    // 只为了让"歌词管理"这个 Window 的标题在手动切换语言时跟着重新解析——App.body
-    // 原来不观察任何东西,加了才会在 appLanguage 变化时重新构造 Scene 树。
-    @ObservedObject private var languageSettings: AppSettings
+    // 只为了让各个 Window 的标题在手动切换语言时跟着重新解析:界面语言一变就重新构造 Scene 树。
+    // 只订阅语言这一项,别整体观察 AppSettings:那样任何一项设置变化都会让所有窗口场景重算(14 章决策 185)。
+    @ObservedObject private var languageSettings: AppLanguageObserver
 
     init() {
         // 这是整个进程第一次碰 AppSettings.shared 的地方(比 applicationDidFinishLaunching 早):它的 init()
@@ -14,7 +14,7 @@ struct LyrimuseApp: App {
         // 所以不能写成 `= AppSettings.shared`。
         _ = CustomFontStore.shared
         HelpMenuFeedbackItem.installRemoval()
-        _languageSettings = ObservedObject(wrappedValue: AppSettings.shared)
+        _languageSettings = ObservedObject(wrappedValue: AppLanguageObserver.shared)
     }
 
     var body: some Scene {

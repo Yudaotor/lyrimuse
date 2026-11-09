@@ -1310,4 +1310,5 @@ private func runPermissionGuideContracts() {
     }
 
     runSettingsAuditContracts()
+    runSettingsWritePressureContracts()
 }

@@ -56,6 +56,8 @@ extension TouchBarSettingsGroup {
 /// (`TouchBarLyricsStyle.fontSizeApplies`)。
 struct TouchBarContentRows: View {
     @ObservedObject private var settings = AppSettings.shared
+    /// 拖动中节流写设置,同别的字号滑杆。
+    @State private var fontSizeThrottle = SliderCommitThrottle()
 
     var body: some View {
         SettingsRowGroup {
@@ -96,15 +98,13 @@ struct TouchBarContentRows: View {
                     } else {
                         HStack(spacing: 8) {
                             SteppedSlider(value: Binding(
-                                get: { TouchBarLyricsStyle.clampedFontSize(settings.touchBarLyricsFontSize) },
-                                set: { newValue in
-                                    guard newValue != settings.touchBarLyricsFontSize else { return }
-                                    settings.touchBarLyricsFontSize = newValue
-                                }
-                            ), in: TouchBarLyricsStyle.fontSizeRange, step: 1)
+                                get: { fontSizeThrottle.value(or: TouchBarLyricsStyle.clampedFontSize(settings.touchBarLyricsFontSize)) },
+                                set: { fontSizeThrottle.update($0, commit: commitFontSize) }
+                            ), in: TouchBarLyricsStyle.fontSizeRange, step: 1,
+                               onEditingChanged: { fontSizeThrottle.editingChanged($0, commit: commitFontSize) })
                             .frame(width: 150)
                             Text(String(format: L10n.t("%@pt"),
-                                        "\(Int(TouchBarLyricsStyle.clampedFontSize(settings.touchBarLyricsFontSize)))"))
+                                        "\(Int(fontSizeThrottle.value(or: TouchBarLyricsStyle.clampedFontSize(settings.touchBarLyricsFontSize))))"))
                                 .foregroundStyle(.secondary)
                                 .monospacedDigit()
                                 .frame(width: 46, alignment: .trailing)
@@ -114,6 +114,12 @@ struct TouchBarContentRows: View {
             }
         }
     }
+
+    /// 相等守卫:同一个值不再广播。
+    private func commitFontSize(_ v: Double) {
+        guard v != settings.touchBarLyricsFontSize else { return }
+        settings.touchBarLyricsFontSize = v
+    }
 }
 
 /// 「颜色」组:卡拉OK效果、文字颜色(白色 / 跟随封面 / 自定义 / 彩虹,自定义时挂色块;四档跟标题排不下一行时换到标题下面,17 章决策 57)、暗部亮度。底色恒黑,自选色照原色画,
@@ -121,6 +127,8 @@ struct TouchBarContentRows: View {
 /// 说明这时不逐字填色(17 章决策 43)。
 struct TouchBarColorRows: View {
     @ObservedObject private var settings = AppSettings.shared
+    /// 拖动中节流写设置,同别的滑杆。
+    @State private var dimThrottle = SliderCommitThrottle()
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
@@ -163,14 +171,12 @@ struct TouchBarColorRows: View {
                             subtitle: L10n.t("未唱部分与副行的亮度")) {
                     HStack(spacing: 8) {
                         SteppedSlider(value: Binding(
-                            get: { TouchBarLyricsStyle.clampedDimLevel(settings.touchBarLyricsDimLevel) },
-                            set: { newValue in
-                                guard newValue != settings.touchBarLyricsDimLevel else { return }
-                                settings.touchBarLyricsDimLevel = newValue
-                            }
-                        ), in: TouchBarLyricsStyle.dimLevelRange, step: 0.05)
+                            get: { dimThrottle.value(or: TouchBarLyricsStyle.clampedDimLevel(settings.touchBarLyricsDimLevel)) },
+                            set: { dimThrottle.update($0, commit: commitDimLevel) }
+                        ), in: TouchBarLyricsStyle.dimLevelRange, step: 0.05,
+                           onEditingChanged: { dimThrottle.editingChanged($0, commit: commitDimLevel) })
                         .frame(width: 150)
-                        Text(verbatim: "\(Int((TouchBarLyricsStyle.clampedDimLevel(settings.touchBarLyricsDimLevel) * 100).rounded()))%")
+                        Text(verbatim: "\(Int((dimThrottle.value(or: TouchBarLyricsStyle.clampedDimLevel(settings.touchBarLyricsDimLevel)) * 100).rounded()))%")
                             .foregroundStyle(.secondary)
                             .monospacedDigit()
                             .frame(width: 46, alignment: .trailing)
@@ -178,6 +184,12 @@ struct TouchBarColorRows: View {
                 }
             }
         }
+    }
+
+    /// 相等守卫:同一个值不再广播。
+    private func commitDimLevel(_ v: Double) {
+        guard v != settings.touchBarLyricsDimLevel else { return }
+        settings.touchBarLyricsDimLevel = v
     }
 }
 

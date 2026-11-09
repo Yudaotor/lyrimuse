@@ -848,6 +848,8 @@ struct MenuBarSecondaryLineRow: View {
 /// objectWillChange,菜单栏那边订阅着这个值、每次都会 refresh()。
 struct MenuBarFontSizeRow: View {
     @ObservedObject private var settings = AppSettings.shared
+    /// 拖动中节流写设置,同别的字号滑杆(每写一次菜单栏歌词整条重排、设置页跟着重算)。
+    @State private var throttle = SliderCommitThrottle()
 
     var body: some View {
         SettingsRow(
@@ -866,23 +868,27 @@ struct MenuBarFontSizeRow: View {
             } else {
                 HStack(spacing: 8) {
                     SteppedSlider(value: Binding(
-                        get: { Double(MenuBarMarqueeRenderer.font.pointSize) },
-                        set: { newValue in
-                            let range = MenuBarMarqueeRenderer.fontSizeRange
-                            let quantized = min(max(CGFloat(newValue.rounded()), range.lowerBound), range.upperBound)
-                            let stored: CGFloat = quantized == MenuBarMarqueeRenderer.systemPointSize ? 0 : quantized
-                            guard stored != settings.menuBarLyricsFontSize else { return }
-                            settings.menuBarLyricsFontSize = stored
-                        }
-                    ), in: Double(MenuBarMarqueeRenderer.fontSizeRange.lowerBound)...Double(MenuBarMarqueeRenderer.fontSizeRange.upperBound), step: 1)
+                        get: { throttle.value(or: Double(MenuBarMarqueeRenderer.font.pointSize)) },
+                        set: { throttle.update($0, commit: commitFontSize) }
+                    ), in: Double(MenuBarMarqueeRenderer.fontSizeRange.lowerBound)...Double(MenuBarMarqueeRenderer.fontSizeRange.upperBound), step: 1,
+                       onEditingChanged: { throttle.editingChanged($0, commit: commitFontSize) })
                         .frame(width: 150)
-                    Text(String(format: L10n.t("%@pt"), "\(Int(MenuBarMarqueeRenderer.font.pointSize))"))
+                    Text(String(format: L10n.t("%@pt"), "\(Int(throttle.value(or: Double(MenuBarMarqueeRenderer.font.pointSize))))"))
                         .foregroundStyle(.secondary)
                         .monospacedDigit()
                         .frame(width: 46, alignment: .trailing)
                 }
             }
         }
+    }
+
+    /// 系统字号存 0(跟系统走);相等守卫,同一个值不再广播。
+    private func commitFontSize(_ newValue: Double) {
+        let range = MenuBarMarqueeRenderer.fontSizeRange
+        let quantized = min(max(CGFloat(newValue.rounded()), range.lowerBound), range.upperBound)
+        let stored: CGFloat = quantized == MenuBarMarqueeRenderer.systemPointSize ? 0 : quantized
+        guard stored != settings.menuBarLyricsFontSize else { return }
+        settings.menuBarLyricsFontSize = stored
     }
 }
 

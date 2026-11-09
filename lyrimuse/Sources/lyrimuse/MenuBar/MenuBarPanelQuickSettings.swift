@@ -394,6 +394,7 @@ struct PanelQuickSettings: View {
     @State private var notchFontSizeThrottle = SliderCommitThrottle()
     @State private var notchRowHeightThrottle = SliderCommitThrottle()
     @State private var menuBarWidthThrottle = SliderCommitThrottle()
+    @State private var menuBarFontSizeThrottle = SliderCommitThrottle()
 
     var body: some View {
         VStack(spacing: 0) {
@@ -947,6 +948,15 @@ struct PanelQuickSettings: View {
     /// 副行开着时两行字号由行高推出(10 / 9pt)、滑杆翻了也没效果 —— 跟设置页一样**行留着、把滑杆
     /// 换成一句灰字「由副行决定」**,不整行隐藏(那会变成"字号去哪了")。原因就在它正上方一行,
     /// 符合这块面板"停用/隐藏一个旋钮的前提是把为什么摆在它上面"那条(见菜单栏「对齐方式」处)。
+    /// 拖回系统字号那一格存 0;相等守卫,同一个值不再广播。拖动中由 `menuBarFontSizeThrottle` 节流调用。
+    private func commitMenuBarFontSize(_ newValue: Double) {
+        let range = MenuBarMarqueeRenderer.fontSizeRange
+        let quantized = min(max(CGFloat(newValue.rounded()), range.lowerBound), range.upperBound)
+        let stored: CGFloat = quantized == MenuBarMarqueeRenderer.systemPointSize ? 0 : quantized
+        guard stored != settings.menuBarLyricsFontSize else { return }
+        settings.menuBarLyricsFontSize = stored
+    }
+
     @ViewBuilder private var menuBarFontSizeRow: some View {
         row(L10n.t("字号")) {
             if settings.menuBarUsesTwoRows {
@@ -956,20 +966,13 @@ struct PanelQuickSettings: View {
             } else {
                 HStack(spacing: 6) {
                     SteppedSlider(value: Binding(
-                        get: { Double(MenuBarMarqueeRenderer.font.pointSize) },
-                        set: { newValue in
-                            let range = MenuBarMarqueeRenderer.fontSizeRange
-                            let quantized = min(max(CGFloat(newValue.rounded()), range.lowerBound),
-                                                range.upperBound)
-                            let stored: CGFloat =
-                                quantized == MenuBarMarqueeRenderer.systemPointSize ? 0 : quantized
-                            guard stored != settings.menuBarLyricsFontSize else { return }
-                            settings.menuBarLyricsFontSize = stored
-                        }
-                    ), in: Self.menuBarFontSizeRange, step: 1)
+                        get: { menuBarFontSizeThrottle.value(or: Double(MenuBarMarqueeRenderer.font.pointSize)) },
+                        set: { menuBarFontSizeThrottle.update($0, commit: commitMenuBarFontSize) }
+                    ), in: Self.menuBarFontSizeRange, step: 1,
+                       onEditingChanged: { menuBarFontSizeThrottle.editingChanged($0, commit: commitMenuBarFontSize) })
                         .controlSize(.mini)
                         .frame(width: 128)
-                    StableReadout(text: String(format: L10n.t("%@pt"), "\(Int(MenuBarMarqueeRenderer.font.pointSize))"),
+                    StableReadout(text: String(format: L10n.t("%@pt"), "\(Int(menuBarFontSizeThrottle.value(or: Double(MenuBarMarqueeRenderer.font.pointSize))))"),
                                   widest: Self.readoutWidest, font: .system(size: 10))
                         .foregroundStyle(.tertiary)
                 }
