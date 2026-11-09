@@ -491,7 +491,7 @@ final class AppSettings: ObservableObject {
         static let lyricsWindowKaraokeFillColorHex = "np:lyricsWindowKaraokeFillColorHex"
         static let lyricsWindowHDRHighlight = "np:lyricsWindowHDRHighlight"
         static let lyricsWindowLyricsAlignment = "np:lyricsWindowLyricsAlignment"
-        static let lyricsWindowControlSize = "np:lyricsWindowControlSize"
+        static let lyricsWindowControlScalePercent = "np:lyricsWindowControlScalePercent"
         static let lyricsWindowMiniHeaderFields = "np:lyricsWindowMiniHeaderFields"
         static let lyricsWindowMiniShowsTime = "np:lyricsWindowMiniShowsTime"
         static let lyricsWindowMiniShowsCover = "np:lyricsWindowMiniShowsCover"
@@ -1818,8 +1818,8 @@ final class AppSettings: ObservableObject {
         didSet { defaults.set(lyricsWindowLyricsAlignment.rawValue, forKey: Keys.lyricsWindowLyricsAlignment) }
     }
     /// 完整尺寸能点的控件(播放控制、歌名旁圆钮、右下那排按钮)多大,网页歌词跟着同一档。迷你尺寸没有这一项。
-    @Published var lyricsWindowControlSize: LyricsWindowControlSize {
-        didSet { defaults.set(lyricsWindowControlSize.rawValue, forKey: Keys.lyricsWindowControlSize) }
+    @Published var lyricsWindowControlScalePercent: Double {
+        didSet { defaults.set(lyricsWindowControlScalePercent, forKey: Keys.lyricsWindowControlScalePercent) }
     }
     // MARK: 迷你尺寸自己那一套外观
     //
@@ -2897,8 +2897,10 @@ final class AppSettings: ObservableObject {
                                              fallback: Self.defaultLyricsWindowMiniKaraokeFillColorFallback)
         lyricsWindowLyricsAlignment = defaults.string(forKey: Keys.lyricsWindowLyricsAlignment)
             .flatMap(LyricsRestingAlignment.init(rawValue:)) ?? .automatic
-        lyricsWindowControlSize = defaults.string(forKey: Keys.lyricsWindowControlSize)
-            .flatMap(LyricsWindowControlSize.init(rawValue:)) ?? .standard
+        lyricsWindowControlScalePercent = Self.clamped(
+            (defaults.object(forKey: Keys.lyricsWindowControlScalePercent) as? Double)
+                ?? LyricsWindowControlScale.defaultPercent,
+            to: LyricsWindowControlScale.percentRange)
         lyricsWindowHDRHighlight = (defaults.object(forKey: Keys.lyricsWindowHDRHighlight) as? Bool) ?? false
         // 没存过(全新安装 / 老用户升级)才落默认档。不能用 `integer(forKey:)` 直接取 ——
         // 它对"没存过"和"存了 0(一样都不显示)"返回同一个 0,后者是合法选择,会被悄悄改回默认。

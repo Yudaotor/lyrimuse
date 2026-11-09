@@ -1203,12 +1203,12 @@ func runLyricsWindowTests() {
                                 + "            s.lyricsWindowFontWeight = .bold\n            s.lyricsWindowKaraokeFill = .text\n"
                                 + "            s.lyricsWindowKaraokeFillColorHex = AppSettings.defaultLyricsWindowMiniKaraokeFillColorHex\n"
                                 + "            s.lyricsWindowLyricsAlignment = .automatic\n"
-                                + "            s.lyricsWindowControlSize = .standard\n"
+                                + "            s.lyricsWindowControlScalePercent = LyricsWindowControlScale.defaultPercent\n"
                                 + "            s.lyricsWindowHDRHighlight = false\n"),
                     true, "完整尺寸: 「重置」恢复这几项,含 HDR 高亮")
         expectEqual(sourceHas(settingsView, "karaoke: $settings.lyricsWindowLyricsKaraoke,\n                fontWeight: $settings.lyricsWindowFontWeight,\n"
                                 + "                karaokeFill: $settings.lyricsWindowKaraokeFill,")
-                    && sourceBytes(settingsView, contain: "alignment: $settings.lyricsWindowLyricsAlignment,\n                controlSize: $settings.lyricsWindowControlSize)")
+                    && sourceBytes(settingsView, contain: "alignment: $settings.lyricsWindowLyricsAlignment,\n                showsControlScale: true)")
                     && sourceBytes(settingsView, contain: "LyricsAlignmentSegmentedControl(selection: alignment, options: LyricsRestingAlignment.notchOptions)"),
                     true, "完整尺寸: 设置页绑完整那一套,对齐四档含自动")
         let hits = SettingsSearchMatcher.ranked(SettingsSearchCatalog.entries, query: "对齐方式", title: { $0.titleKey },
@@ -1216,8 +1216,13 @@ func runLyricsWindowTests() {
         expectEqual(hits.contains { $0.sectionValue == SettingsSearchCatalog.lyricsWindowSectionValue && $0.lyricsWindowMini == false },
                     true, "完整对齐: 设置搜索搜得到,命中时预览切到完整尺寸")
 
-        // 「控件大小」:标准档跟原来一模一样;放大的是播放控制、歌名旁圆钮、右下那排,不动歌词和封面。
-        expectEqual(LyricsWindowControlSize.allCases.map(\.factor), [1, 1.3, 1.6], "控件大小: 三档倍数")
+        // 「控件大小」:100% 跟原来一模一样;放大的是播放控制、歌名旁圆钮、右下那排,不动歌词和封面。
+        expectEqual([100, 130, 165, 200].map { LyricsWindowControlScale.factor(percent: $0) }, [1, 1.3, 1.65, 2],
+                    "控件大小: 百分比按线性换成倍数")
+        expectEqual([40, 250, .nan].map { LyricsWindowControlScale.factor(percent: $0) }, [1, 2, 1],
+                    "控件大小: 越界的值夹回 100%～200%,坏值按 100%")
+        expectEqual(LyricsWindowControlScale.percentRange == 100...200 && LyricsWindowControlScale.percentStep == 5
+                    && LyricsWindowControlScale.defaultPercent == 100, true, "控件大小: 滑杆 100%～200%、一格 5%、默认 100%")
         func legacy(_ w: CGFloat) -> [CGFloat] {
             func ctrl(_ r: CGFloat, _ lo: CGFloat, _ hi: CGFloat) -> CGFloat { min(hi, max(lo, w * r)) }
             return [ctrl(0.043, 11, 18), ctrl(0.060, 13, 25), ctrl(0.079, 17, 33), ctrl(0.10, 22, 38), ctrl(0.116, 18, 48)]
@@ -1226,9 +1231,9 @@ func runLyricsWindowTests() {
             [m.modeFontSize, m.skipFontSize, m.playFontSize, m.playCellWidth, m.spacing]
         }
         expectEqual([120, 178, 300, 410, 460].allSatisfy { values(LyricsTransportMetrics(width: $0)) == legacy($0) }, true,
-                    "控件大小: 标准档的播放控制尺寸跟原公式完全一样")
+                    "控件大小: 100% 时播放控制尺寸跟原公式完全一样")
         let wide = LyricsTransportMetrics(width: 410, requested: 1.6)
-        expectEqual(wide.factor, 1.6, "控件大小: 封面够宽时「特大」照 1.6 放大")
+        expectEqual(wide.factor, 1.6, "控件大小: 封面够宽时 160% 照 1.6 倍放大")
         expectEqual(abs(wide.playFontSize - legacy(410)[2] * 1.6) < 0.001 && abs(wide.spacing - legacy(410)[4] * 1.3) < 0.001,
                     true, "控件大小: 键按倍数放大,间距只放大一半")
         func rowWidth(_ m: LyricsTransportMetrics) -> CGFloat {
@@ -1238,9 +1243,9 @@ func runLyricsWindowTests() {
         expectEqual(narrow.factor < 1.6 && narrow.factor >= 1 && rowWidth(narrow) <= 200.001, true,
                     "控件大小: 窄窗口里放不下就收小倍数,一排不超出左栏")
         expectEqual(LyricsTransportMetrics(width: 120, requested: 1.6).factor, 1,
-                    "控件大小: 连标准档都挤的窄窗口不往小缩,保持原样")
+                    "控件大小: 连 100% 都挤的窄窗口不往小缩,保持原样")
         expectEqual(LyricsTransportMetrics(width: 410, requested: 0.5).factor, 1, "控件大小: 倍数不低于 1")
-        expectEqual(sourceBytes(window, contain: "s.$lyricsWindowControlSize.removeDuplicates().sink { [weak self] in self?.fullControlSize = $0 }")
+        expectEqual(sourceHas(window, "s.$lyricsWindowControlScalePercent.map(LyricsWindowControlScale.factor(percent:)).removeDuplicates()\n                .sink { [weak self] in self?.fullControlScale = $0 }")
                     && sourceBytes(window, contain: "LyricsTransportMetrics(width: controlScale, requested: controlFactor)")
                     && !sourceBytes(window, contain: "ctrl(0.")
                     && sourceBytes(window, contain: ".frame(width: 26 * controlFactor, height: 26 * controlFactor)")
@@ -1249,11 +1254,11 @@ func runLyricsWindowTests() {
                     true, "控件大小: 播放控制走共用尺寸,圆钮、右下那排、说明条位置跟着倍数")
         expectEqual(sourceBytes(window, contain: "indicatorBottomInset: controlFactor > 1 ? 11 + 36 * controlFactor + 8 : 40,")
                     && sourceBytes(layerList, contain: "bottomInset = spec?.indicatorBottomInset ?? 40"),
-                    true, "控件大小: 放大后歌词滚动条停在右下那排上方,标准档照旧离底 40")
-        expectEqual(sourceBytes(appSettings, contain: ".flatMap(LyricsWindowControlSize.init(rawValue:)) ?? .standard")
-                    && sourceBytes(settingsView, contain: "options: LyricsWindowControlSize.allCases,")
+                    true, "控件大小: 放大后歌词滚动条停在右下那排上方,100% 时照旧离底 40")
+        expectEqual(sourceHas(appSettings, "lyricsWindowControlScalePercent = Self.clamped(\n            (defaults.object(forKey: Keys.lyricsWindowControlScalePercent) as? Double)\n                ?? LyricsWindowControlScale.defaultPercent,\n            to: LyricsWindowControlScale.percentRange)")
+                    && sourceBytes(settingsView, contain: "in: LyricsWindowControlScale.percentRange, step: LyricsWindowControlScale.percentStep,")
                     && SettingsSearchCatalog.lyricsWindowFullOnlyTitles.contains("控件大小"),
-                    true, "控件大小: 默认标准、设置页三档、设置搜索只在完整尺寸")
+                    true, "控件大小: 读盘夹回范围、默认 100%,设置页是滑杆,设置搜索只在完整尺寸")
         let sizeHits = SettingsSearchMatcher.ranked(SettingsSearchCatalog.entries, query: "控件大小", title: { $0.titleKey },
                                                     secondary: { $0.keywords + $0.pathKeys })
         expectEqual(sizeHits.first.map { $0.sectionValue == SettingsSearchCatalog.lyricsWindowSectionValue && $0.lyricsWindowMini == false },

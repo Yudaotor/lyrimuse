@@ -1,28 +1,22 @@
 import CoreGraphics
 
-/// 歌词窗口完整尺寸(和照它画的网页歌词)里能点的那些控件多大:播放控制那一排、歌名旁的圆钮、右下那排按钮
-/// 一起按 `factor` 放大;歌词、封面、排版比例不变。窗口投到手机这类小屏上时按钮太小、点不准,调大一档。
-/// 见 07 章决策 195。
-///
-/// case 的声明顺序就是设置页分段控件的顺序;存盘值是 case 名,改了已存的设置会落回默认。
-public enum LyricsWindowControlSize: String, Codable, Hashable, CaseIterable, Sendable, Identifiable {
-    case standard
-    case large
-    case extraLarge
+/// 歌词窗口完整尺寸(和照它画的网页歌词)里能点的那些控件放大到百分之几(设置里「控件大小」那根滑杆):播放控制那一排、
+/// 歌名旁的圆钮、右下那排按钮一起按 `factor(percent:)` 放大;歌词、封面、排版比例不变。窗口投到手机这类小屏上时
+/// 按钮太小、点不准,往大调。见 07 章决策 195、196。
+public enum LyricsWindowControlScale {
+    public static let percentRange: ClosedRange<Double> = 100...200
+    public static let percentStep: Double = 5
+    public static let defaultPercent: Double = 100
 
-    public var id: Self { self }
-
-    public var factor: CGFloat {
-        switch self {
-        case .standard: 1
-        case .large: 1.3
-        case .extraLarge: 1.6
-        }
+    /// 百分比换成倍数。先夹进范围:存坏的值、别的版本写进来的越界值都按边界算。
+    public static func factor(percent: Double) -> CGFloat {
+        guard percent.isFinite else { return 1 }
+        return CGFloat(min(max(percent, percentRange.lowerBound), percentRange.upperBound) / 100)
     }
 }
 
 /// 播放控制那一排(随机 | 上一首 播放 下一首 | 循环)的尺寸。各档按左栏宽度(封面边长)算再夹值,
-/// 再乘上「控件大小」的倍数;一排放不下时倍数自动收小,最小收到 1(标准档原样)。
+/// 再乘上「控件大小」的倍数;一排放不下时倍数自动收小,最小收到 1(100% 原样)。
 /// 歌词窗口 `playbackControls` 和网页歌词 `WebLyricsControlsLayout` 共用这一份,两边不各写一遍。
 public struct LyricsTransportMetrics: Equatable, Sendable {
     /// 实际用上的倍数(请求的倍数被一排的宽度收过之后)。

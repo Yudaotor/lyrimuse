@@ -215,9 +215,9 @@ enum DebugDeepLinks {
             AppSettings.shared.japaneseReadingStyle = style
             LocalPlaybackSource.shared.japaneseReading = style
             logger.notice("debug japanese reading \(style.rawValue, privacy: .public)")
-        case let .lyricsWindowControls(size):
-            AppSettings.shared.lyricsWindowControlSize = size
-            logger.notice("debug lyrics window controls \(size.rawValue, privacy: .public)")
+        case let .lyricsWindowControls(percent):
+            AppSettings.shared.lyricsWindowControlScalePercent = percent
+            logger.notice("debug lyrics window controls \(percent, privacy: .public)%")
         case let .rainbow(overlay, notch, menuBar):
             if let overlay { AppSettings.shared.overlayRainbow = overlay }
             if let notch { AppSettings.shared.notchLyricsColor = notch ? .rainbow : .accent }

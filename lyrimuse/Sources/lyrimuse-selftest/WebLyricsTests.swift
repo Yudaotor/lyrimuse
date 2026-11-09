@@ -432,7 +432,7 @@ func runWebLyricsTests() {
         let screenSource = (try? String(contentsOf: URL(fileURLWithPath: #filePath).deletingLastPathComponent()
             .deletingLastPathComponent().appendingPathComponent("lyrimuse/WebLyrics/WebLyricsScreen.swift"), encoding: .utf8)) ?? ""
         expectEqual(sourceHas(screenSource, "case .phoneStacked: return .column")
-                        && sourceHas(screenSource, "height: WebLyricsPlayerPane.columnHeight(width: side, controlScale: playback.fullControlSize.factor))")
+                        && sourceHas(screenSource, "height: WebLyricsPlayerPane.columnHeight(width: side, controlScale: playback.fullControlScale))")
                         && sourceHas(screenSource, "let top = phoneStackedPaneRect.maxY + 16")
                         && sourceHas(screenSource, "let total = Self.columnHeight(width: w, controlScale: next.controlScale)")
                         && sourceHas(screenSource, "showsScrollIndicator: arrangement != .phoneStacked,"), true,
@@ -529,7 +529,7 @@ func runWebLyricsTests() {
             .deletingLastPathComponent().appendingPathComponent("lyrimuse/WebLyrics/WebLyricsScreen.swift"), encoding: .utf8)) ?? ""
         let sizedChrome = (try? String(contentsOf: URL(fileURLWithPath: #filePath).deletingLastPathComponent()
             .deletingLastPathComponent().appendingPathComponent("lyrimuse/WebLyrics/WebLyricsChrome.swift"), encoding: .utf8)) ?? ""
-        expectEqual(sourceBytes(sizedScreen, contain: "controlScale: playback.fullControlSize.factor))")
+        expectEqual(sourceBytes(sizedScreen, contain: "controlScale: playback.fullControlScale))")
                         && sourceHas(sizedScreen, "let layout = WebLyricsControlsLayout(width: w, rowTop: rowTop, rowHeight: rowHeight, skipGlyphWidth: skipWidth,\n                                             factor: next.controlScale)"),
                     true, "网页歌词: 播放键按歌词窗口那一档「控件大小」排")
         expectEqual(sourceHas(sizedScreen, "let d = 26 * next.controlScale")

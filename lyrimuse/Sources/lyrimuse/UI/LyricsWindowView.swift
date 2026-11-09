@@ -49,8 +49,8 @@ final class WindowPlayback: ObservableObject {
     @Published private(set) var fullKaraokeFill: LyricsWindowKaraokeFill = .text
     @Published private(set) var fullKaraokeFillColor = AppSettings.defaultLyricsWindowMiniKaraokeFillColorFallback
     @Published private(set) var fullAlignment: LyricsRestingAlignment = .automatic
-    /// 完整尺寸能点的控件多大(「控件大小」,07 章决策 195)。
-    @Published private(set) var fullControlSize: LyricsWindowControlSize = .standard
+    /// 完整尺寸能点的控件放大的倍数(「控件大小」,07 章决策 195、196)。
+    @Published private(set) var fullControlScale: CGFloat = 1
     @Published private(set) var fullHDRHighlight = false
     /// 封面均值色(十六进制,高清替代那份优先),「已唱颜色 › 跟随封面」用。
     @Published private(set) var coverAverageHex: String?
@@ -179,7 +179,8 @@ final class WindowPlayback: ObservableObject {
                     hexWithAlpha: hex, fallback: AppSettings.defaultLyricsWindowMiniKaraokeFillColorFallback)
             },
             s.$lyricsWindowLyricsAlignment.removeDuplicates().sink { [weak self] in self?.fullAlignment = $0 },
-            s.$lyricsWindowControlSize.removeDuplicates().sink { [weak self] in self?.fullControlSize = $0 },
+            s.$lyricsWindowControlScalePercent.map(LyricsWindowControlScale.factor(percent:)).removeDuplicates()
+                .sink { [weak self] in self?.fullControlScale = $0 },
             Publishers.CombineLatest(LocalPlaybackSource.shared.$artworkAverageHex, p.$highResAverageHex)
                 .map { system, highRes in highRes ?? system }
                 .removeDuplicates()
@@ -4438,7 +4439,7 @@ struct LyricsWindowView: View {
         LyricsTransportMetrics(width: controlScale, requested: controlFactor)
     }
     /// 「控件大小」的倍数:歌名旁圆钮、右下那排按钮直接乘它;播放控制那一排走 `transportMetrics`。
-    private var controlFactor: CGFloat { playback.fullControlSize.factor }
+    private var controlFactor: CGFloat { playback.fullControlScale }
 
     /// 主三键的不透明度,照 Apple Music 同窗口截图(07 章决策 93):播放键 0.85、上 / 下一首 0.72,
     /// 不是纯白。随机 / 循环熄灭态见 modeToggleButton。

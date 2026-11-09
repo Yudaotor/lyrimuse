@@ -709,7 +709,7 @@ final class WebLyricsScreenRenderer {
     private var phoneStackedPaneRect: CGRect {
         let side = min(width * 0.56, height * 0.3).rounded()
         return CGRect(x: ((width - side) / 2).rounded(), y: 16 + safeTop, width: side,
-                      height: WebLyricsPlayerPane.columnHeight(width: side, controlScale: playback.fullControlSize.factor))
+                      height: WebLyricsPlayerPane.columnHeight(width: side, controlScale: playback.fullControlScale))
     }
     private var listX: CGFloat { width * 0.111 + coverWidth }
     /// 左栏在画面里的框(左上为原点,y 向下,同指针坐标);设给图层时经 `wrapperFrame` 翻一次。
@@ -726,7 +726,7 @@ final class WebLyricsScreenRenderer {
     /// 歌词滚动指示条下端离列表底边多远:标准档右下那排不在它底下,照原样 40;放大后停在那排上沿再往上 8
     /// (那排的位置同 `WebLyricsChrome.layoutBottomRow`)。
     private var indicatorBottomInset: CGFloat {
-        let factor = playback.fullControlSize.factor
+        let factor = playback.fullControlScale
         guard factor > 1 else { return 40 }
         let lift = bottomRowLift > 0 ? bottomRowLift : CGFloat(viewport.safeArea.bottom)
         let rowTop = height - 11 - 36 * factor - lift
@@ -1035,7 +1035,7 @@ final class WebLyricsScreenRenderer {
                 favorited: playback.isFavorited,
                 countText: countText,
                 onArtwork: onArtwork,
-                controlScale: playback.fullControlSize.factor))
+                controlScale: playback.fullControlScale))
         }
         syncMoreMenu()
         let primary = onArtwork ? NSColor.white : resolved(.primary)
@@ -1061,7 +1061,7 @@ final class WebLyricsScreenRenderer {
             safeArea: viewport.safeArea,
             size: CGSize(width: width, height: height),
             scale: CGFloat(viewport.pixelWidth) / width,
-            controlScale: playback.fullControlSize.factor))
+            controlScale: playback.fullControlScale))
         sendLinks()
         CATransaction.commit()
 

@@ -300,10 +300,11 @@ func runDeepLinkTests() {
                     "debug: 日语读音切到假名,大小写不敏感")
         expectEqual(link("lyrimuse://debug/japanese-reading?style=furigana") == nil
                     && link("lyrimuse://debug/japanese-reading") == nil, true, "debug: 认不出的样式、没带都不认")
-        expectEqual(link("lyrimuse://debug/lyrics-window-controls?size=ExtraLarge"), .debug(.lyricsWindowControls(size: .extraLarge)),
-                    "debug: 歌词窗口控件大小切到特大,大小写不敏感")
-        expectEqual(link("lyrimuse://debug/lyrics-window-controls?size=huge") == nil
-                    && link("lyrimuse://debug/lyrics-window-controls") == nil, true, "debug: 控件大小认不出、没带都不认")
+        expectEqual(link("lyrimuse://debug/lyrics-window-controls?percent=135"), .debug(.lyricsWindowControls(percent: 135)),
+                    "debug: 歌词窗口控件大小设成 135%")
+        expectEqual(link("lyrimuse://debug/lyrics-window-controls?percent=90") == nil
+                    && link("lyrimuse://debug/lyrics-window-controls?percent=abc") == nil
+                    && link("lyrimuse://debug/lyrics-window-controls") == nil, true, "debug: 控件大小越界、不是数、没带都不认")
         expectEqual(link("lyrimuse://debug/rainbow?overlay=1"), .debug(.rainbow(overlay: true, notch: nil)), "debug: 只开悬浮歌词彩虹")
         expectEqual(link("lyrimuse://debug/rainbow?overlay=0&notch=1"), .debug(.rainbow(overlay: false, notch: true)),
                     "debug: 悬浮歌词、灵动岛彩虹一起设")
@@ -499,7 +500,7 @@ func runDeepLinkTests() {
             .debug(.menuBarCenter(center: true, ignoreNotch: nil, screen: "37D8832A-2D66-02CA-B9F7-8F30A301B230")),
             .debug(.menuBarCenter(center: nil, ignoreNotch: nil, hover: false, click: "left")),
             .debug(.japaneseReading(.kana)), .debug(.japaneseReading(.romaji)),
-            .debug(.lyricsWindowControls(size: .standard)), .debug(.lyricsWindowControls(size: .extraLarge)),
+            .debug(.lyricsWindowControls(percent: 100)), .debug(.lyricsWindowControls(percent: 162.5)),
             .debug(.touchBarDisplay(color: .rainbow)), .debug(.touchBarDisplay(color: .cover)),
             .debug(.touchBarTyping(override: true)), .debug(.touchBarTyping(override: false)), .debug(.touchBarTyping(override: nil)),
             .debug(.rainbow(overlay: true, notch: nil)), .debug(.rainbow(overlay: false, notch: true)),

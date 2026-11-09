@@ -182,7 +182,7 @@ struct LyricsWindowActionsCapsule: View {
     /// 广告、电台串场这类不是一首歌的时候三颗都不能点。
     let enabled: Bool
     let onSearch: () -> Void
-    /// 「控件大小」的倍数(`LyricsWindowControlSize.factor`),图标、格子、胶囊高一起放大。
+    /// 「控件大小」的倍数(`LyricsWindowControlScale.factor(percent:)`),图标、格子、胶囊高一起放大。
     var scale: CGFloat = 1
     @ObservedObject private var rematch = LyricsWindowRematch.shared
     @ObservedObject private var menu = LyricsWindowActionMenu.shared

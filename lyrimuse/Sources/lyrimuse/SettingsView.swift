@@ -2816,6 +2816,7 @@ private struct AppearanceSettingsTab: View {
     /// 歌词窗口迷你那三根滑杆拖动中节流提交(`SliderCommitThrottle`):每写一次,设置页里的预览和真窗口都重排一遍。
     @State private var miniFontSizeThrottle = SliderCommitThrottle()
     @State private var miniHeaderWidthThrottle = SliderCommitThrottle()
+    @State private var controlScaleThrottle = SliderCommitThrottle()
     @State private var miniHeaderHeightThrottle = SliderCommitThrottle()
     /// 歌词窗口此刻开没开(`LyricsWindowSession.openKey`):开着时「打开」那颗键写「显示」,按下去是切到它。
     @AppStorage(LyricsWindowSession.openKey) private var lyricsWindowOpen = false
@@ -3301,8 +3302,8 @@ private struct AppearanceSettingsTab: View {
             // 完整尺寸的「布局」摘要报对齐方式(「自动」报「自动对齐」);控件大小不是标准档时追加。
             guard mini else {
                 var summary = LyricsAlignmentSegmentedControl.summary(for: settings.lyricsWindowLyricsAlignment)
-                if settings.lyricsWindowControlSize != .standard {
-                    summary += " · " + LyricsWindowControlSizeLabel.text(for: settings.lyricsWindowControlSize)
+                if settings.lyricsWindowControlScalePercent != LyricsWindowControlScale.defaultPercent {
+                    summary += " · \(Int(settings.lyricsWindowControlScalePercent.rounded()))%"
                 }
                 return EditorToolbarButtonLabel(icon: "rectangle.split.1x2", title: L10n.t("布局"), summary: summary)
             }
@@ -3490,6 +3491,11 @@ private struct AppearanceSettingsTab: View {
     }
 
     /// 相等守卫:拖动中量化后的等值赋值不再广播。
+    private func commitControlScale(_ v: Double) {
+        guard v != settings.lyricsWindowControlScalePercent else { return }
+        settings.lyricsWindowControlScalePercent = v
+    }
+
     private func commitMiniHeaderWidth(_ v: Double) {
         guard v != settings.lyricsWindowMiniHeaderWidthPercent else { return }
         settings.lyricsWindowMiniHeaderWidthPercent = v
@@ -3615,7 +3621,7 @@ private struct AppearanceSettingsTab: View {
                 hdrHighlight: $settings.lyricsWindowHDRHighlight,
                 spotifyCanvas: $settings.spotifyCanvasEnabled,
                 alignment: $settings.lyricsWindowLyricsAlignment,
-                controlSize: $settings.lyricsWindowControlSize)
+                showsControlScale: true)
         }
     }
 
@@ -3651,7 +3657,7 @@ private struct AppearanceSettingsTab: View {
         /// 只有完整尺寸传:迷你单行 / 双行居中、多行是完整布局那份列表的迷你版,不给对齐。
         alignment: Binding<LyricsRestingAlignment>? = nil,
         /// 只有完整尺寸传:「控件大小」(07 章决策 195)。迷你的控制条另有一套,不跟。
-        controlSize: Binding<LyricsWindowControlSize>? = nil
+        showsControlScale: Bool = false
     ) -> some View {
         switch part {
         case .background:
@@ -3882,14 +3888,14 @@ private struct AppearanceSettingsTab: View {
                 }
             }
             if let alignment {
-                lyricsWindowAlignmentRows(alignment, controlSize: controlSize)
+                lyricsWindowAlignmentRows(alignment, showsControlScale: showsControlScale)
             }
         }
     }
 
-    /// 完整尺寸「布局」那一组:对齐方式(四档,同灵动岛)、控件大小(三档)。只有完整尺寸有,设置搜索那份名单靠这个函数认它们。
+    /// 完整尺寸「布局」那一组:对齐方式(四档,同灵动岛)、控件大小(100%～200% 滑杆)。只有完整尺寸有,设置搜索那份名单靠这个函数认它们。
     private func lyricsWindowAlignmentRows(_ alignment: Binding<LyricsRestingAlignment>,
-                                           controlSize: Binding<LyricsWindowControlSize>?) -> some View {
+                                           showsControlScale: Bool) -> some View {
         SettingsRowGroup {
             SettingsRow(
                 icon: "text.alignleft",
@@ -3898,16 +3904,25 @@ private struct AppearanceSettingsTab: View {
             ) {
                 LyricsAlignmentSegmentedControl(selection: alignment, options: LyricsRestingAlignment.notchOptions)
             }
-            if let controlSize {
+            if showsControlScale {
                 SettingsRow(
                     icon: "hand.tap",
                     title: L10n.t("控件大小"),
                     help: L10n.t("放大播放控制和其他按钮，网页歌词同样生效")
                 ) {
-                    SettingsPillSegmentedControl(
-                        selection: controlSize,
-                        options: LyricsWindowControlSize.allCases,
-                        label: LyricsWindowControlSizeLabel.text(for:))
+                    HStack(spacing: 8) {
+                        SteppedSlider(value: Binding(
+                            get: { controlScaleThrottle.value(or: settings.lyricsWindowControlScalePercent) },
+                            set: { controlScaleThrottle.update($0, commit: commitControlScale) }
+                        ), in: LyricsWindowControlScale.percentRange, step: LyricsWindowControlScale.percentStep,
+                           onEditingChanged: { controlScaleThrottle.editingChanged($0, commit: commitControlScale) })
+                            .frame(width: 130)
+                        Text(verbatim: "\(Int(controlScaleThrottle.value(or: settings.lyricsWindowControlScalePercent).rounded()))%")
+                            .foregroundStyle(.secondary)
+                            .monospacedDigit()
+                            // 按最宽的「200%」留位,拖动时滑杆不左右挪。
+                            .frame(width: 38, alignment: .trailing)
+                    }
                 }
             }
         }
@@ -4712,16 +4727,6 @@ private struct MotionCoverCacheRow: View {
 }
 
 /// 「歌词布局」三档的显示名(枚举本体在 Core、不带界面文案)。
-enum LyricsWindowControlSizeLabel {
-    static func text(for value: LyricsWindowControlSize) -> String {
-        switch value {
-        case .standard: return L10n.t("标准")
-        case .large: return L10n.t("大")
-        case .extraLarge: return L10n.t("特大")
-        }
-    }
-}
-
 enum LyricsWindowMiniLyricsLayoutLabel {
     static func text(for value: LyricsWindowMiniLyricsLayout) -> String {
         switch value {
@@ -4779,7 +4784,7 @@ enum LyricsWindowStyleDefaults {
             s.lyricsWindowKaraokeFill = .text
             s.lyricsWindowKaraokeFillColorHex = AppSettings.defaultLyricsWindowMiniKaraokeFillColorHex
             s.lyricsWindowLyricsAlignment = .automatic
-            s.lyricsWindowControlSize = .standard
+            s.lyricsWindowControlScalePercent = LyricsWindowControlScale.defaultPercent
             s.lyricsWindowHDRHighlight = false
             s.motionCoverEnabled = AppSettings.defaultMotionCoverEnabled
             s.spotifyCanvasEnabled = AppSettings.defaultSpotifyCanvasEnabled

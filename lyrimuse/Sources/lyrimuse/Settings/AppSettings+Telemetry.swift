@@ -162,7 +162,7 @@ extension AppSettings {
             ("lyricsWindowKaraokeFillColorHex", lyricsWindowKaraokeFillColorHex),
             ("lyricsWindowHDRHighlight", lyricsWindowHDRHighlight),
             ("lyricsWindowLyricsAlignment", lyricsWindowLyricsAlignment),
-            ("lyricsWindowControlSize", lyricsWindowControlSize),
+            ("lyricsWindowControlScalePercent", lyricsWindowControlScalePercent),
             ("lyricsWindowMiniBackgroundMode", lyricsWindowMiniBackgroundMode),
             ("lyricsWindowMiniBackgroundColorHex", lyricsWindowMiniBackgroundColorHex),
             ("lyricsWindowMiniBackgroundColorEndHex", lyricsWindowMiniBackgroundColorEndHex),
