@@ -3,8 +3,9 @@ import Foundation
 
 /// MyGo Music 推给系统的会话里,时长取的是音源报的那个;有的插件报 0(按文件大小算长度的流),系统那份就一直没有时长,
 /// 位置也就一直算不了。它自己界面上进度条的最大值是解码得出的时长(带小数),在放、系统那份没有时长时从这里补。
-/// 要辅助功能权限;窗口关着(只留菜单栏图标)时读不到。换歌后 `settleSecs` 之内进度条可能还是上一首的,这段不读。
-/// 会阻塞跨进程调用,别在主线程调。见 02 章决策 244。
+/// 要辅助功能权限;窗口关着(只留菜单栏图标)时读不到。换歌后 `settleSecs` 之内进度条可能还是上一首的,这段不读;
+/// 有的流它换歌后进度条一直停在上一首的长度,跟上一首时长一样的读数不认(`accepts`)。
+/// 会阻塞跨进程调用,别在主线程调。见 02 章决策 244、02 章决策 245。
 public enum MyGoPlayerUI {
     /// 换歌后多久才信进度条。
     public static let settleSecs: TimeInterval = 1
@@ -17,9 +18,28 @@ public enum MyGoPlayerUI {
         return hits.count == 1 ? hits[0].max : nil
     }
 
+    /// 跟上一首的时长差不到这么多,就当进度条还停在上一首。
+    public static let staleToleranceSecs: Double = 0.5
+
+    /// 进度条读到的最大值能不能当这一首的时长:`previous` 是上一首的时长(系统那份报的或进度条读到的),差不到
+    /// `staleToleranceSecs` 的不认,这一首就当没有时长。纯函数,selftest 覆盖。
+    public static func accepts(_ max: Double, previous: Double?) -> Bool {
+        guard let previous else { return true }
+        return abs(max - previous) >= staleToleranceSecs
+    }
+
     private static let lock = NSLock()
-    nonisolated(unsafe) private static var firstSeen: (key: String, at: Date)?
+    nonisolated(unsafe) private static var firstSeen: (key: String, at: Date, previous: Double?)?
     nonisolated(unsafe) private static var cached: (key: String, duration: Double)?
+    /// 最近一首有时长的歌:换歌时它就是「上一首」(`accepts`)。
+    nonisolated(unsafe) private static var last: (key: String, duration: Double)?
+
+    /// 系统那份带着时长的 MyGo 读数:记下来,下一首拿它比进度条是不是还停在这一首。
+    public static func noteDuration(trackKey: String, duration: Double) {
+        lock.lock()
+        last = (trackKey, duration)
+        lock.unlock()
+    }
 
     /// 这一首的时长:同一首读到过就用记着的;刚换歌不到 `settleSecs`、读不到为 nil。
     public static func duration(trackKey: String, now: Date) -> Double? {
@@ -28,12 +48,14 @@ public enum MyGoPlayerUI {
             lock.unlock()
             return cached.duration
         }
-        if firstSeen?.key != trackKey { firstSeen = (trackKey, now) }
+        if firstSeen?.key != trackKey { firstSeen = (trackKey, now, last.flatMap { $0.key == trackKey ? nil : $0.duration }) }
         let ready = now.timeIntervalSince(firstSeen?.at ?? now) >= settleSecs
+        let previous = firstSeen?.previous
         lock.unlock()
-        guard ready, let duration = progressMax(sliders()) else { return nil }
+        guard ready, let duration = progressMax(sliders()), accepts(duration, previous: previous) else { return nil }
         lock.lock()
         cached = (trackKey, duration)
+        last = (trackKey, duration)
         lock.unlock()
         return duration
     }

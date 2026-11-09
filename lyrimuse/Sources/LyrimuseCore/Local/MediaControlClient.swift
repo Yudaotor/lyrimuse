@@ -2693,7 +2693,9 @@ public enum MediaControlClient {
         snapshot.processIdentifier = pid
         snapshot.republishDueBy = foobarLoopCheckAt(bundleID: probed.bundleIdentifier, playing: probed.playing,
                                                     position: position, duration: probed.duration, now: now)
-        if snapshot.trackDuration == nil, let duration = MyGoPlayerUI.duration(trackKey: probed.trackKey, now: now) {
+        if let duration = snapshot.trackDuration {
+            MyGoPlayerUI.noteDuration(trackKey: probed.trackKey, duration: duration)
+        } else if let duration = MyGoPlayerUI.duration(trackKey: probed.trackKey, now: now) {
             snapshot = withFilledDuration(snapshot, duration)
         }
         return snapshot
@@ -3896,9 +3898,11 @@ public enum MediaControlClient {
                                       duration: raw.duration, now: sampledAt)
         snapshot.processIdentifier = raw.processIdentifier
         snapshot.isMusicVideo = Self.spotifyMusicVideoMark(bundleID: bundleID, mediaType: raw.mediaType)
-        // MyGo 的插件流常不报时长,位置一直算不了:按它进度条的最大值补(见 MyGoPlayerUI)。
-        if bundleID == PlaybackPlayer.mygoMusic.bundleIdentifier, playing == true, snapshot.trackDuration == nil,
-           let duration = MyGoPlayerUI.duration(trackKey: trackKey, now: sampledAt) {
+        // MyGo 的插件流常不报时长,位置一直算不了:按它进度条的最大值补;报了时长的记下,给下一首认进度条是不是还停在这首(见 MyGoPlayerUI)。
+        if bundleID == PlaybackPlayer.mygoMusic.bundleIdentifier, let duration = snapshot.trackDuration {
+            MyGoPlayerUI.noteDuration(trackKey: trackKey, duration: duration)
+        } else if bundleID == PlaybackPlayer.mygoMusic.bundleIdentifier, playing == true,
+                  let duration = MyGoPlayerUI.duration(trackKey: trackKey, now: sampledAt) {
             snapshot = Self.withFilledDuration(snapshot, duration)
         }
         return (snapshot, bundleID)

@@ -142,6 +142,11 @@ func runMyGoTests() {
                     "MyGo 时长: 不止一根像进度条的不猜")
         expectEqual(MyGoPlayerUI.progressMax([S(min: 0, max: .infinity, value: 0)]) == nil, true, "MyGo 时长: 无限长不算")
         expectEqual(MyGoPlayerUI.progressMax([]) == nil, true, "MyGo 时长: 读不到滑块为 nil")
+        expectEqual(MyGoPlayerUI.accepts(223.268571428, previous: 223.268571428), false,
+                    "MyGo 时长: 换歌后进度条还是上一首的长度不认(《天空之城》→《家乡》一直停在 223.27,实际 343.3)")
+        expectEqual(MyGoPlayerUI.accepts(223.27, previous: 223.06), false, "MyGo 时长: 上一首的时长是系统那份报的,差零点几秒也算同一个")
+        expectEqual(MyGoPlayerUI.accepts(343.3, previous: 223.27), true, "MyGo 时长: 跟上一首不一样的照常采用")
+        expectEqual(MyGoPlayerUI.accepts(315.19, previous: nil), true, "MyGo 时长: 不知道上一首多长时照常采用")
         var s = MediaControlSnapshot.forReplay(title: "山阴路的夏天", artist: "李志", album: "108个关键词", duration: nil,
                                                elapsedTime: 3, playing: true, playbackRate: 1,
                                                bundleIdentifier: PlaybackPlayer.mygoMusic.bundleIdentifier, anchorElapsedTime: 3)
@@ -169,6 +174,11 @@ func runMyGoTests() {
                     "MyGo 接线: 焦点被占时单问那份同样取余、排补查")
         expectEqual(client.components(separatedBy: "MyGoPlayerUI.duration(trackKey: ").count - 1, 2,
                     "MyGo 接线: 主路和焦点被占时单问那份都按进度条补时长")
+        expectEqual(client.components(separatedBy: "MyGoPlayerUI.noteDuration(trackKey: ").count - 1, 2,
+                    "MyGo 接线: 主路和焦点被占时单问那份都记下报了的时长,给下一首认进度条是不是旧的")
+        let ui = (try? String(contentsOfFile: root.appendingPathComponent("LyrimuseCore/Local/MyGoPlayerUI.swift").path,
+                              encoding: .utf8)) ?? ""
+        expectEqual(sourceHas(ui, "accepts(duration, previous: previous)"), true, "MyGo 接线: 进度条读数先跟上一首比过再采用")
         expectEqual(client.components(separatedBy: "snapshot = mygoProbedSnapshot(probed.snapshot, anchor: probed.anchor, now: now)").count - 1,
                     2, "MyGo 接线: 焦点被占时两处单问(暂停焦点顶替、焦点回退第二级)都过同一套挪法")
         if let latency = AudioOutputRoute.outputLatencySecs() {
