@@ -62,6 +62,7 @@ let groups: [TestGroup] = [
     TestGroup(name: "weread", summary: "微信读书听书:歌手栏的字幕收成歌词 / 身份换成书名 / 并句规则 / LRC / 接线契约", run: runWeReadTests),
     TestGroup(name: "swinsian", summary: "Swinsian:通知与脚本读数 / 两份锚点取最新、整秒核对出跳转、盯跳变对时(真机录到的一段回放)/ 按开着的文件认曲目 / 接线契约", run: runSwinsianTests),
     TestGroup(name: "mygo", summary: "MyGo Music:开播锚点按混音缓冲和设备延迟后挪 / 封面锚点沿用开播那份 / 接线契约", run: runMyGoTests),
+    TestGroup(name: "progress-bar-duration", summary: "系统会话不报时长时按播放器界面进度条补:认哪根滑块 / 换歌头一秒不读 / 界面停住或长度没更新不认 / 只对开了开关的播放器 / 接线契约", run: runProgressBarDurationTests),
     TestGroup(name: "plexamp", summary: "Plexamp:本机播放器接口的时间线解析 / 循环档 / 失焦控制路径 / 接线契约", run: runPlexampTests),
     TestGroup(name: "foobar", summary: "foobar2000:开播锚点随封面重报那一份不采信 / 按开着的文件认当前文件 / 光盘占位图 / 播放顺序与音量 / 失焦时的菜单 / 播放列表 / 接线契约", run: runFoobarTests),
     TestGroup(name: "playback-state", summary: "播放状态文件(App 写、引擎读):契约样例(与引擎共用)/ 序号与位置 / 撕裂快照守卫 / 封面标识", run: runPlaybackStateTests),

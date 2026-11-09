@@ -131,41 +131,6 @@ func runMyGoTests() {
                         .map { ($0.timeIntervalSince(t) * 1000).rounded() / 1000 }, 2.15, "MyGo 循环: 离曲尾不到 3 秒时排一次补查")
     }
 
-    // ---- 插件流没有时长:按它进度条的最大值补 ----
-    do {
-        typealias S = PineVolume.Slider
-        expectEqual(MyGoPlayerUI.progressMax([S(min: 0, max: 315.193469387, value: 0)]), 315.193469387,
-                    "MyGo 时长: 进度条的最大值就是解出来的时长(李志插件那首系统那份没有时长,进度条 315.19)")
-        expectEqual(MyGoPlayerUI.progressMax([S(min: 0, max: 1, value: 0.05), S(min: 0, max: 259.3, value: 12)]), 259.3,
-                    "MyGo 时长: 音量条(0~1)不算")
-        expectEqual(MyGoPlayerUI.progressMax([S(min: 0, max: 200, value: 0), S(min: 0, max: 300, value: 0)]) == nil, true,
-                    "MyGo 时长: 不止一根像进度条的不猜")
-        expectEqual(MyGoPlayerUI.progressMax([S(min: 0, max: .infinity, value: 0)]) == nil, true, "MyGo 时长: 无限长不算")
-        expectEqual(MyGoPlayerUI.progressMax([]) == nil, true, "MyGo 时长: 读不到滑块为 nil")
-        expectEqual(MyGoPlayerUI.accepts(223.268571428, previous: 223.268571428), false,
-                    "MyGo 时长: 换歌后进度条还是上一首的长度不认(《天空之城》→《家乡》一直停在 223.27,实际 343.3)")
-        expectEqual(MyGoPlayerUI.accepts(223.27, previous: 223.06), false, "MyGo 时长: 上一首的时长是系统那份报的,差零点几秒也算同一个")
-        expectEqual(MyGoPlayerUI.accepts(343.3, previous: 223.27), true, "MyGo 时长: 跟上一首不一样的照常采用")
-        expectEqual(MyGoPlayerUI.accepts(315.19, previous: nil), true, "MyGo 时长: 不知道上一首多长时照常采用")
-        expectEqual(MyGoPlayerUI.progressSlider([S(min: 0, max: 1, value: 0.5), S(min: 0, max: 223.27, value: 131.04)]),
-                    S(min: 0, max: 223.27, value: 131.04), "MyGo 时长: 进度条连当前值一起交出")
-        expectEqual(MyGoPlayerUI.matchesPosition(barValue: 131.04, position: 12.5), false,
-                    "MyGo 时长: 界面停住了(系统那份已换到下一首放到 12 秒,进度条还是上一首的 131 秒)不认")
-        expectEqual(MyGoPlayerUI.matchesPosition(barValue: 12.1, position: 13.4), true, "MyGo 时长: 当前值跟位置差一两秒照常认")
-        expectEqual(MyGoPlayerUI.matchesPosition(barValue: 9.9, position: 13.4), false, "MyGo 时长: 差 3 秒以上不认")
-        expectEqual(MyGoPlayerUI.matchesPosition(barValue: 12, position: nil), false, "MyGo 时长: 不知道位置时不认")
-        var s = MediaControlSnapshot.forReplay(title: "山阴路的夏天", artist: "李志", album: "108个关键词", duration: nil,
-                                               elapsedTime: 3, playing: true, playbackRate: 1,
-                                               bundleIdentifier: PlaybackPlayer.mygoMusic.bundleIdentifier, anchorElapsedTime: 3)
-        s.processIdentifier = 75789
-        s.republishDueBy = Date(timeIntervalSince1970: 5)
-        s.positionIsPrecise = true
-        let filled = MediaControlClient.withFilledDuration(s, 315.2)
-        expectEqual([filled.trackDuration, filled.elapsedTime], [315.2, 3], "MyGo 时长: 补上时长,位置不动")
-        expectEqual(filled.processIdentifier == 75789 && filled.republishDueBy == s.republishDueBy && filled.positionIsPrecise == true, true,
-                    "MyGo 时长: 进程号、补查时刻、精确档跟着带过去")
-    }
-
     // ---- 放本机文件:按开着的文件认,路径交引擎读同名 .lrc ----
     do {
         let mygo = PlaybackPlayer.mygoMusic.bundleIdentifier
@@ -204,18 +169,7 @@ func runMyGoTests() {
         expectEqual(sourceHas(client, "timestamp = mygo.timestamp"), true, "MyGo 接线: 下游拿到的是挪过的时刻")
         expectEqual(sourceHas(client, "snapshot.republishDueBy = foobarLoopCheckAt(bundleID: probed.bundleIdentifier"), true,
                     "MyGo 接线: 焦点被占时单问那份同样取余、排补查")
-        expectEqual(client.components(separatedBy: "MyGoPlayerUI.duration(trackKey: ").count - 1, 2,
-                    "MyGo 接线: 主路和焦点被占时单问那份都按进度条补时长")
-        expectEqual(client.components(separatedBy: "MyGoPlayerUI.noteDuration(trackKey: ").count - 1, 2,
-                    "MyGo 接线: 主路和焦点被占时单问那份都记下报了的时长,给下一首认进度条是不是旧的")
-        let ui = (try? String(contentsOfFile: root.appendingPathComponent("LyrimuseCore/Local/MyGoPlayerUI.swift").path,
-                              encoding: .utf8)) ?? ""
-        expectEqual(sourceHas(ui, "guard fresh, accepts(bar.max, previous: previous) else {"), true,
-                    "MyGo 接线: 进度条读数先对过这一刻的位置、再跟上一首比过才采用")
-        expectEqual(sourceHas(ui, "matchesPosition(barValue: bar.value, position: position)"), true,
-                    "MyGo 接线: 进度条当前值先跟这一刻的位置对过再采用")
-        expectEqual(client.components(separatedBy: "position: snapshot.elapsedTime, now: ").count - 1, 2,
-                    "MyGo 接线: 主路和单问那份都把这一刻的位置交给进度条核对")
+        expectEqual(PlaybackPlayer.mygoMusic.durationFromProgressBar, true, "MyGo 接线: 插件流不报时长时按界面进度条补")
         expectEqual(client.components(separatedBy: "snapshot = mygoProbedSnapshot(probed.snapshot, anchor: probed.anchor, now: now)").count - 1,
                     2, "MyGo 接线: 焦点被占时两处单问(暂停焦点顶替、焦点回退第二级)都过同一套挪法")
         if let latency = AudioOutputRoute.outputLatencySecs() {

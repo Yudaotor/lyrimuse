@@ -58,6 +58,9 @@ CI 跑 `--check` 保证生成物没被手改、也没忘记重新生成。
 - ignoresSeekCommand  外部的跳转指令(media-control `seek`)它不响应;auto 为 null。只生成 Swift 侧(引擎不发跳转)。
                 只给**实测见过**的播放器置 true(Amazon Music:界面上也没有可设值的进度条)。这类播放器上
                 进度条只显示不能拖、点歌词不跳,`LocalPlaybackSource.seek` 直接不动
+- durationFromProgressBar  系统会话在放却不报时长时,从它界面上的进度条补时长;auto 为 null。只生成 Swift 侧。
+                只给**实测见过**「系统那份不报时长、进度条最大值是解码出来的时长」的播放器置 true(MyGo Music 的插件流)。
+                读取和三道闸在 ProgressBarDuration,接线在 MediaControlClient.progressBarFilled;要辅助功能权限
 - needsAutomationPermission  这个播放器要不要 macOS 的「自动化」权限(我们向它发 Apple Event);auto 为 null
                 = 它有 AppleScript 字典、且本仓真的在用。只生成 Swift 侧:Apple Event 都由 App 发,
                 引擎预解析要问播放器的那几样也由 App 代跑(PlayerQueryServer)
@@ -97,7 +100,8 @@ ICON_DIR = ROOT / "lyrimuse" / "Sources" / "lyrimuse" / "Resources"
 FIELDS = (
     "id", "swiftCase", "goConst", "bundleID", "goBundleConst", "processName", "displayName", "scrobbleLabel",
     "nativeLyricSource", "positionTier", "republishesZeroAnchor", "playingFromRate", "artistArrivesLate",
-    "artistlessNotMusic", "subtitlesInArtist", "dropsSessionBetweenTracks", "dropsSessionWhilePlaying", "ignoresSeekCommand", "needsAutomationPermission",
+    "artistlessNotMusic", "subtitlesInArtist", "dropsSessionBetweenTracks", "dropsSessionWhilePlaying", "ignoresSeekCommand", "durationFromProgressBar",
+    "needsAutomationPermission",
     "needsFullDiskAccess", "needsAccessibilityPermission", "tint", "fallbackSymbol", "bundledIcon", "note",
 )
 
@@ -402,6 +406,14 @@ def render_core_swift(spec, players):
                "    public var ignoresSeekCommand: Bool {\n        switch self {\n")
     for p in concrete:
         if p.get("ignoresSeekCommand"):
+            out.append("        case .%s: return true\n" % p["swiftCase"])
+    out.append("        default: return false\n        }\n    }\n")
+
+    out.append("\n    /// 系统会话在放却不报时长时,从它界面上的进度条补时长。只有**实测见过**的播放器为 true。\n"
+               "    /// 读取和闸在 `ProgressBarDuration`,接线在 `MediaControlClient.progressBarFilled`。\n"
+               "    public var durationFromProgressBar: Bool {\n        switch self {\n")
+    for p in concrete:
+        if p.get("durationFromProgressBar"):
             out.append("        case .%s: return true\n" % p["swiftCase"])
     out.append("        default: return false\n        }\n    }\n")
 

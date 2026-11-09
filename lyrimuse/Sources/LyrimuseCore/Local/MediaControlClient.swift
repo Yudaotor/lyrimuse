@@ -1129,6 +1129,11 @@ public enum MediaControlClient {
                 snapshot = probed.snapshot.withPlayerClock(reading.position, capturedAt: now)
             }
         }
+        snapshot = snapshot.map {
+            progressBarFilled($0, bundleID: target.bundleID, trackKey: $0.trackKey,
+                              position: ProgressBarDuration.probedPosition($0, anchorTimestamp: probed.anchor.timestamp, now: now),
+                              now: now)
+        }
         guard let s = snapshot,
               !playerContentNotMusic(bundleID: target.bundleID, snapshot: s),
               !artistNotYetReported(bundleID: target.bundleID, snapshot: s),
@@ -2145,6 +2150,11 @@ public enum MediaControlClient {
                 }
                 snapshot = probed.snapshot.withPlayerClock(reading.position, capturedAt: now)
             }
+            snapshot = snapshot.map {
+                progressBarFilled($0, bundleID: target.bundleID, trackKey: $0.trackKey,
+                                  position: ProgressBarDuration.probedPosition($0, anchorTimestamp: probed.anchor.timestamp, now: now),
+                                  now: now)
+            }
         }
         // 回退问到的这一份跟主路径过同一道闸:KKBOX / Amazon 在放播客单集、
         // 开播那一帧还没有歌手的,主路径会挡下,从这里绕进来的却会被当成一首歌去查歌词、换一次曲目身份丢一次封面。
@@ -2665,6 +2675,25 @@ public enum MediaControlClient {
         return snapshot
     }
 
+    /// 开了 `durationFromProgressBar` 的播放器:报了时长的记下(给下一首认进度条是不是停在上一首),在放却没有时长的按它界面上
+    /// 进度条的最大值补(见 `ProgressBarDuration`);别的播放器原样交回。`position` 是系统那份这一刻的位置。主路和焦点被占时
+    /// 两处单问都过这里。
+    public nonisolated static func progressBarFilled(_ snapshot: MediaControlSnapshot, bundleID: String?, trackKey: String,
+                                                     position: Double?, now: Date,
+                                                     read: (String) -> [PineVolume.Slider] = ProgressBarDuration.sliders(bundleID:))
+        -> MediaControlSnapshot {
+        guard let bundleID, PlaybackPlayer.builtin(forBundleID: bundleID)?.durationFromProgressBar == true else { return snapshot }
+        if let duration = snapshot.trackDuration {
+            ProgressBarDuration.noteDuration(bundleID: bundleID, trackKey: trackKey, duration: duration)
+            return snapshot
+        }
+        guard snapshot.playing == true,
+              let duration = ProgressBarDuration.duration(bundleID: bundleID, trackKey: trackKey, position: position, now: now,
+                                                          read: read)
+        else { return snapshot }
+        return withFilledDuration(snapshot, duration)
+    }
+
     /// `withDuration` 的副本,外加解码那一拍设好的几项(进程号、补查时刻、精确档、在加载)。
     public nonisolated static func withFilledDuration(_ snapshot: MediaControlSnapshot, _ duration: Double) -> MediaControlSnapshot {
         var out = snapshot.withDuration(duration)
@@ -2676,7 +2705,7 @@ public enum MediaControlClient {
     }
 
     /// 按 bundle id 单问到的 MyGo 那份(焦点被别的 App 占着时):锚点过主路同一套挪法(`MyGoSessionAnchor.probedPosition`),
-    /// 位置按挪过的锚点推到此刻,单曲循环越过曲长时取余、离曲尾不到 3 秒排补查,没有时长时按进度条补(同主路);没在走的原样交回。
+    /// 位置按挪过的锚点推到此刻,单曲循环越过曲长时取余、离曲尾不到 3 秒排补查(同主路);没在走的原样交回。
     private static func mygoProbedSnapshot(_ probed: MediaControlSnapshot, anchor: NowPlayingClientsProbe.SessionAnchor,
                                            now: Date) -> MediaControlSnapshot {
         var snapshot = probed
@@ -2693,11 +2722,6 @@ public enum MediaControlClient {
         snapshot.processIdentifier = pid
         snapshot.republishDueBy = foobarLoopCheckAt(bundleID: probed.bundleIdentifier, playing: probed.playing,
                                                     position: position, duration: probed.duration, now: now)
-        if let duration = snapshot.trackDuration {
-            MyGoPlayerUI.noteDuration(trackKey: probed.trackKey, duration: duration)
-        } else if let duration = MyGoPlayerUI.duration(trackKey: probed.trackKey, position: snapshot.elapsedTime, now: now) {
-            snapshot = withFilledDuration(snapshot, duration)
-        }
         return snapshot
     }
 
@@ -3898,13 +3922,9 @@ public enum MediaControlClient {
                                       duration: raw.duration, now: sampledAt)
         snapshot.processIdentifier = raw.processIdentifier
         snapshot.isMusicVideo = Self.spotifyMusicVideoMark(bundleID: bundleID, mediaType: raw.mediaType)
-        // MyGo 的插件流常不报时长,位置一直算不了:按它进度条的最大值补;报了时长的记下,给下一首认进度条是不是还停在这首(见 MyGoPlayerUI)。
-        if bundleID == PlaybackPlayer.mygoMusic.bundleIdentifier, let duration = snapshot.trackDuration {
-            MyGoPlayerUI.noteDuration(trackKey: trackKey, duration: duration)
-        } else if bundleID == PlaybackPlayer.mygoMusic.bundleIdentifier, playing == true,
-                  let duration = MyGoPlayerUI.duration(trackKey: trackKey, position: snapshot.elapsedTime, now: sampledAt) {
-            snapshot = Self.withFilledDuration(snapshot, duration)
-        }
+        // 系统那份不报时长的播放器按它界面上的进度条补(见 progressBarFilled)。
+        snapshot = Self.progressBarFilled(snapshot, bundleID: bundleID, trackKey: trackKey, position: snapshot.elapsedTime,
+                                          now: sampledAt)
         return (snapshot, bundleID)
     }
 
