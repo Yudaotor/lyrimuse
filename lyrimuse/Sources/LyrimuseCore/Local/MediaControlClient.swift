@@ -2695,7 +2695,7 @@ public enum MediaControlClient {
                                                     position: position, duration: probed.duration, now: now)
         if let duration = snapshot.trackDuration {
             MyGoPlayerUI.noteDuration(trackKey: probed.trackKey, duration: duration)
-        } else if let duration = MyGoPlayerUI.duration(trackKey: probed.trackKey, now: now) {
+        } else if let duration = MyGoPlayerUI.duration(trackKey: probed.trackKey, position: snapshot.elapsedTime, now: now) {
             snapshot = withFilledDuration(snapshot, duration)
         }
         return snapshot
@@ -3902,7 +3902,7 @@ public enum MediaControlClient {
         if bundleID == PlaybackPlayer.mygoMusic.bundleIdentifier, let duration = snapshot.trackDuration {
             MyGoPlayerUI.noteDuration(trackKey: trackKey, duration: duration)
         } else if bundleID == PlaybackPlayer.mygoMusic.bundleIdentifier, playing == true,
-                  let duration = MyGoPlayerUI.duration(trackKey: trackKey, now: sampledAt) {
+                  let duration = MyGoPlayerUI.duration(trackKey: trackKey, position: snapshot.elapsedTime, now: sampledAt) {
             snapshot = Self.withFilledDuration(snapshot, duration)
         }
         return (snapshot, bundleID)
