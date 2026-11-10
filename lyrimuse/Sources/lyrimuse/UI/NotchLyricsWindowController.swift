@@ -670,7 +670,8 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
             var transaction = Transaction()
             transaction.disablesAnimations = true
             withTransaction(transaction) {
-                let rowsChanged = slots.usedRowCount != self.quickSlots.usedRowCount
+                let rowsChanged = slots.usedRowCount(visibleSlots: self.expandedQuickVisibleSlots)
+                    != self.quickSlots.usedRowCount(visibleSlots: self.expandedQuickVisibleSlots)
                 self.quickSlots = slots
                 if rowsChanged { self.recomputeGeometry(animate: false) }
             }

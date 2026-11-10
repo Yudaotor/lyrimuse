@@ -162,9 +162,11 @@ public struct NotchQuickSlots: Equatable, Sendable {
     /// 存设置用的样子:空格写 ""。
     public var stored: [[String]] { rows.map { $0.map { $0?.rawValue ?? "" } } }
 
-    /// 头部按几行留高度:第二行有东西就是两行。只看格子,不看这一刻哪颗键画得出来、宽度够不够 ——
-    /// 高度跟着设置走,不因为换了一首没有「喜欢」的歌就抽一下。
-    public var usedRowCount: Int { rows[1].contains { $0 != nil } ? 2 : 1 }
+    /// 头部按几行留高度:第二行看得见的那几格(`visibleSlots`,按宽度算)里有东西就是两行。不看这一刻哪颗键画得出来 ——
+    /// 高度跟着设置走,不因为换了一首没有「喜欢」的歌就抽一下;第二行的键全在看不见的格子里时不空留一行(05 章决策 143)。
+    public func usedRowCount(visibleSlots: Int) -> Int {
+        rows[1].prefix(min(max(visibleSlots, 0), Self.slotsPerRow)).contains { $0 != nil } ? 2 : 1
+    }
 
     /// 已经放进格子的键(分隔线不算)。
     public var placed: Set<NotchQuickAction> { Set(rows.joined().compactMap { $0 }.filter { !$0.isDivider }) }

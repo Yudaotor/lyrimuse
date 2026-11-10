@@ -2456,17 +2456,21 @@ func runNotchTests() {
                     "快捷操作契约: 灵动岛按格子画,看得见几格按宽度算,画不出的键当空格")
         expectEqual(sourceHas(view, "Color.clear.frame(width: CGFloat(NotchQuickAction.cellWidth),"), true,
                     "快捷操作契约: 空格子照样占一格的宽")
-        expectEqual(sourceHas(view, "contentWidth: Double(controller.expandedCardWidth - 2 * NotchMetrics.expandedContentInset),"), true,
+        let chrome = read("NotchChromeSource.swift")
+        expectEqual(sourceHas(chrome, "contentWidth: Double(expandedCardWidth - 2 * NotchMetrics.expandedContentInset),"), true,
                     "快捷操作契约: 一行看得见几格按展开卡的真实宽度算")
-        expectEqual(sourceHas(view, "showsArtwork: controller.expandedTrackInfoShowsArtwork,"), true,
+        expectEqual(sourceHas(chrome, "showsArtwork: expandedTrackInfoShowsArtwork,"), true,
                     "快捷操作契约: 格子数按设置算,不随广告态变(广告期间文字不画也不多出格子)")
-        expectEqual(sourceHas(controller, "let rowsChanged = slots.usedRowCount != self.quickSlots.usedRowCount\n                self.quickSlots = slots\n                if rowsChanged { self.recomputeGeometry(animate: false) }"), true,
+        expectEqual(sourceHas(view, "let visibleSlots = controller.expandedQuickVisibleSlots")
+                    && sourceHas(view, "ForEach(0..<slots.usedRowCount(visibleSlots: visibleSlots), id: \\.self) { row in"), true,
+                    "快捷操作契约: 画格子和留头部高度读同一个可见格数")
+        expectEqual(sourceHas(controller, "!= self.quickSlots.usedRowCount(visibleSlots: self.expandedQuickVisibleSlots)\n                self.quickSlots = slots\n                if rowsChanged { self.recomputeGeometry(animate: false) }"), true,
                     "快捷操作契约: 控制器镜像格子,用的行数变了重算几何(两行头部更高)")
-        expectEqual(sourceHas(controller, "transaction.disablesAnimations = true\n            withTransaction(transaction) {\n                let rowsChanged = slots.usedRowCount != self.quickSlots.usedRowCount"), true,
+        expectEqual(sourceHas(controller, "transaction.disablesAnimations = true\n            withTransaction(transaction) {\n                let rowsChanged = slots.usedRowCount(visibleSlots: self.expandedQuickVisibleSlots)"), true,
                     "快捷操作契约: 格子变化在关掉动画的事务里应用(带着动画改灵动岛窗口尺寸会布局循环崩溃)")
         expectEqual(read("NotchQuickActionsEditor.swift").contains("withAnimation("), false,
                     "快捷操作契约: 编辑区改格子不包 withAnimation")
-        expectEqual(sourceHas(read("NotchChromeSource.swift"), "expandedQuickActionRows: quickSlots.usedRowCount"), true,
+        expectEqual(sourceHas(read("NotchChromeSource.swift"), "expandedQuickActionRows: quickSlots.usedRowCount(visibleSlots: expandedQuickVisibleSlots)"), true,
                     "快捷操作契约: 卡片布局按用了几行留头部高度")
         expectEqual(sourceHas(read("../SettingsView.swift"), "NotchBehaviorToggleTile(item: .expandedShowsQuickActions)\n            }\n            NotchQuickActionsEditor()"), true,
                     "快捷操作契约: 「展开时」浮层里快捷操作开关下面是格子编辑区")
@@ -2533,8 +2537,10 @@ func runNotchTests() {
             expectEqual(S.fromStored(S.default.stored, legacy: nil), .default, "格子: 存了再读回来一样")
             expectEqual(S.fromStored([], legacy: ["close"]).rows[0], row([]), "格子: 有格子就不看旧排法")
             // 行数与已放的键
-            expectEqual(S.default.usedRowCount, 1, "格子: 第二行空着是一行")
-            expectEqual(S(rows: [[], [nil, nil, .close]]).usedRowCount, 2, "格子: 第二行有东西就是两行")
+            expectEqual(S.default.usedRowCount(visibleSlots: 12), 1, "格子: 第二行空着是一行")
+            expectEqual(S(rows: [[], [nil, nil, .close]]).usedRowCount(visibleSlots: 12), 2, "格子: 第二行看得见的格子里有东西就是两行")
+            expectEqual(S(rows: [[], [nil, nil, .close]]).usedRowCount(visibleSlots: 2), 1,
+                        "格子: 第二行的键全在看不见的格子里(卡片调窄后)不空留一行(05 章决策 143)")
             expectEqual(S.default.placed, [.close, .settings, .lastfm, .toggleLyrics, .searchLyrics, .favorite], "格子: 已放的键不算分隔线")
             expectEqual(S(rows: [[nil, .close, nil, .settings]]).lastFilled(row: 0), 3, "格子: 最左一格有东西的位置")
             // 放、挪、清

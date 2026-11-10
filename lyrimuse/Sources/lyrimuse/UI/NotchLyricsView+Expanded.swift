@@ -257,14 +257,7 @@ extension NotchLyricsView {
     private var trackInfoQuickActions: some View {
         if controller.expandedShowsQuickActions {
             let favorited = playback.isFavorited
-            // 按设置算、不看广告态:广告期间文字项不画,按那时的宽度算格子数会多出几格,格子位置跟着跳。
-            let capacity = NotchQuickAction.capacity(
-                contentWidth: Double(controller.expandedCardWidth - 2 * NotchMetrics.expandedContentInset),
-                showsArtwork: controller.expandedTrackInfoShowsArtwork,
-                showsText: controller.expandedTrackInfoShowsTitle || controller.expandedTrackInfoShowsArtist
-                    || controller.expandedTrackInfoShowsAlbum,
-                artworkSide: Double(NotchExpandedMetrics.trackInfoArtworkSide))
-            let visibleSlots = NotchQuickAction.slotsThatFit(capacity: capacity)
+            let visibleSlots = controller.expandedQuickVisibleSlots
             let slots = controller.quickSlots
             let available: (NotchQuickAction) -> Bool = { action in
                 switch action {
@@ -282,7 +275,7 @@ extension NotchLyricsView {
                 }
             }
             VStack(alignment: .trailing, spacing: NotchExpandedMetrics.trackInfoActionRowSpacing) {
-                ForEach(0..<slots.usedRowCount, id: \.self) { row in
+                ForEach(0..<slots.usedRowCount(visibleSlots: visibleSlots), id: \.self) { row in
                     HStack(spacing: CGFloat(NotchQuickAction.cellSpacing)) {
                         ForEach(Array(slots.visibleRow(row, visibleSlots: visibleSlots, available: available).enumerated()),
                                 id: \.offset) { _, cell in

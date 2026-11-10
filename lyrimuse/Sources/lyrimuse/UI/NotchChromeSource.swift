@@ -225,7 +225,17 @@ extension NotchChromeSource {
             trackInfoShowsArtwork: expandedTrackInfoShowsArtwork, trackInfoShowsTitle: expandedTrackInfoShowsTitle,
             trackInfoShowsArtist: expandedTrackInfoShowsArtist, trackInfoShowsAlbum: expandedTrackInfoShowsAlbum,
             expandedShowsQuickActions: expandedShowsQuickActions,
-            expandedQuickActionRows: quickSlots.usedRowCount, idlePanelHeight: idlePanelHeight)
+            expandedQuickActionRows: quickSlots.usedRowCount(visibleSlots: expandedQuickVisibleSlots), idlePanelHeight: idlePanelHeight)
+    }
+
+    /// 展开卡头部快捷操作一行看得见几格:按展开卡的真实宽度、封面和文字开着没有算(按设置算、不看广告态:广告期间文字项
+    /// 不画,按那时的宽度算会多出几格,格子位置跟着跳)。画格子和留头部高度都读它,两处不能各算一份。
+    var expandedQuickVisibleSlots: Int {
+        NotchQuickAction.slotsThatFit(capacity: NotchQuickAction.capacity(
+            contentWidth: Double(expandedCardWidth - 2 * NotchMetrics.expandedContentInset),
+            showsArtwork: expandedTrackInfoShowsArtwork,
+            showsText: expandedTrackInfoShowsTitle || expandedTrackInfoShowsArtist || expandedTrackInfoShowsAlbum,
+            artworkSide: Double(NotchExpandedMetrics.trackInfoArtworkSide)))
     }
 
     var showsLyricRow: Bool { cardLayout.showsLyricRow }
