@@ -289,6 +289,13 @@ enum DebugDeepLinks {
                              "editing": MenuBarPanelDebugState.editing,
                              "layout": AppSettings.shared.menuBarPanelLayout.encoded()],
             "knockedOut": SourceKnockout.knockedOut,
+            // 设置页「网页版」卡每个平台配了哪些浏览器、「+」菜单列哪些(跟菜单同一个函数)、
+            // 引导页「配对浏览器」那一步铺哪些(含已配对),都按界面上的顺序。
+            "webPlayers": Dictionary(uniqueKeysWithValues: BrowserPositionProbe.supportedPlatforms.map { platform in
+                (platform.id, ["paired": BrowserPairing.pairedBrowsers(platformID: platform.id),
+                               "menu": BrowserPairing.addableBrowsers(platformID: platform.id),
+                               "candidates": BrowserPairing.candidateBrowsers(platformID: platform.id)])
+            }),
             // 播放源交出来的那张封面(高清替代之前),验证封面退到了哪一条来源时跟文件的哈希对。
             "artwork": LocalPlaybackSource.shared.artworkData.map { data -> Any in
                 ["bytes": data.count,
