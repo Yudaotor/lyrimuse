@@ -158,6 +158,15 @@ enum DebugDeepLinks {
         case .notchPassThroughOff:
             NotchLyricsWindowController.shared.simulatePassThrough(at: nil)
             logger.notice("debug notch pass-through off")
+        case let .notchHover(path, stepSecs):
+            NotchLyricsWindowController.shared.simulateHover(path: path, stepSecs: stepSecs)
+            logger.notice("debug notch hover points=\(path.count, privacy: .public) step=\(stepSecs, privacy: .public)")
+        case .notchHoverOff:
+            NotchLyricsWindowController.shared.endSimulatedHover()
+            logger.notice("debug notch hover off")
+        case let .notchHint(key):
+            NotchDebugHover.hintKeys.send(key)
+            logger.notice("debug notch hint key=\(key ?? "-", privacy: .public)")
         case .importLibrary:
             AppActions.shared.requestLyricsManagerSheet(.importLibrary, open: false)
             logger.notice("debug import library")

@@ -1,3 +1,4 @@
+import Combine
 import LyrimuseCore
 import SwiftUI
 
@@ -202,40 +203,8 @@ struct NotchWindowRoot: View {
             //    (卡片 77pt 高,hover 的进入事件 y 给到 177),所以下面那个 .active 分支必须
             //    自己再拿坐标比一次,不能把"收到 .active"当成"在卡片上"。
             .contentShape(Rectangle())
-            .onContinuousHover(coordinateSpace: .local) { phase in
-                switch phase {
-                // **不能**把 .active 直接当"在卡片上":local 的原点是卡片左上角、
-                // x 被约束在卡片宽内,但 y 覆盖整扇窗(191pt,为容纳展开态常驻最大尺寸,
-                // 卡片下面全是透明区,卡片本身只有 77pt 高)——上面那道 contentShape
-                // 只管住了横向,纵向的命中区仍是整扇窗。判据与实测数据见 NotchHoverHit。
-                //
-                // 稳态顶行以下那一截只显示、不接指针:落在那里不算进卡片,交给控制器切穿透(见 NotchLyricRowPassThrough)。
-                case .active(let point):
-                    let notch = controller.hoverNotch
-                    let region = NotchHoverHit.region(point: point, cardWidth: cardWidth, cardHeight: cardHeight,
-                                                      passThroughBelow: controller.passThroughBandTop, notch: notch)
-                    updateHover(inside: region == .card, point: point)
-                    if region == .passThrough { controller.beginLyricPassThrough() }
-                    if region == .card, let notch, let last = lastHoverPoint,
-                       NotchHoverHit.crossesNotch(from: last, to: point, cardWidth: cardWidth, notch: notch) {
-                        controller.expandFromNotchCrossing()
-                        notchCrossing = (point.x > last.x, Date())
-                    } else if let crossing = notchCrossing {
-                        if Date().timeIntervalSince(crossing.at) > NotchHoverHit.sweepWindowSecs {
-                            notchCrossing = nil
-                        } else if NotchHoverHit.sweptPastSteadyCard(rightward: crossing.rightward, x: point.x, cardWidth: cardWidth,
-                                                                    steadyWidth: controller.steadyCardWidth) {
-                            notchCrossing = nil
-                            controller.collapseAfterSweep()
-                        }
-                    }
-                    lastHoverPoint = point
-                case .ended:
-                    lastHoverPoint = nil
-                    notchCrossing = nil
-                    updateHover(inside: false, point: nil)
-                }
-            }
+            .onContinuousHover(coordinateSpace: .local) { handleHover($0) }
+            .onReceive(NotchDebugHover.phases) { handleHover($0) }
             // 贴顶 + 水平居中。窗口本身是按刘海中心点摆的,所以"在窗口里居中"就等于
             // "对齐刘海中心"。
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
@@ -276,6 +245,42 @@ struct NotchWindowRoot: View {
                     }
                 }
                 .offset(y: cardHeight)
+        }
+    }
+
+    /// 卡片的悬停:真指针(`onContinuousHover`)和 `debug/notch-hover` 的模拟指针都走这里。
+    private func handleHover(_ phase: HoverPhase) {
+        switch phase {
+        // **不能**把 .active 直接当"在卡片上":local 的原点是卡片左上角、
+        // x 被约束在卡片宽内,但 y 覆盖整扇窗(191pt,为容纳展开态常驻最大尺寸,
+        // 卡片下面全是透明区,卡片本身只有 77pt 高)——body 里卡片上那道 contentShape
+        // 只管住了横向,纵向的命中区仍是整扇窗。判据与实测数据见 NotchHoverHit。
+        //
+        // 稳态顶行以下那一截只显示、不接指针:落在那里不算进卡片,交给控制器切穿透(见 NotchLyricRowPassThrough)。
+        case .active(let point):
+            let notch = controller.hoverNotch
+            let region = NotchHoverHit.region(point: point, cardWidth: cardWidth, cardHeight: cardHeight,
+                                              passThroughBelow: controller.passThroughBandTop, notch: notch)
+            updateHover(inside: region == .card, point: point)
+            if region == .passThrough { controller.beginLyricPassThrough() }
+            if region == .card, let notch, let last = lastHoverPoint,
+               NotchHoverHit.crossesNotch(from: last, to: point, cardWidth: cardWidth, notch: notch) {
+                controller.expandFromNotchCrossing()
+                notchCrossing = (point.x > last.x, Date())
+            } else if let crossing = notchCrossing {
+                if Date().timeIntervalSince(crossing.at) > NotchHoverHit.sweepWindowSecs {
+                    notchCrossing = nil
+                } else if NotchHoverHit.sweptPastSteadyCard(rightward: crossing.rightward, x: point.x, cardWidth: cardWidth,
+                                                            steadyWidth: controller.steadyCardWidth) {
+                    notchCrossing = nil
+                    controller.collapseAfterSweep()
+                }
+            }
+            lastHoverPoint = point
+        case .ended:
+            lastHoverPoint = nil
+            notchCrossing = nil
+            updateHover(inside: false, point: nil)
         }
     }
 

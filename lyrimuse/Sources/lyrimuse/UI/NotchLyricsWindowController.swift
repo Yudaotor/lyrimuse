@@ -978,6 +978,44 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
         passThrough.refresh()
     }
 
+    /// `debug/notch-hover` 的模拟指针(屏幕坐标)。设着时「指针还在不在卡片上」的复查看它、不看真指针。
+    private var simulatedHoverPointer: NSPoint?
+    private var simulatedHoverTimer: Timer?
+
+    /// `debug/notch-hover`:沿 `path`(相对卡片顶边中点)每 `stepSecs` 秒走一点,换成卡片局部坐标喂给
+    /// `NotchWindowRoot` 的悬停处理;走完停在最后一点,直到 `endSimulatedHover`。
+    func simulateHover(path: [CGPoint], stepSecs: Double) {
+        simulatedHoverTimer?.invalidate()
+        var remaining = path[...]
+        let timer = Timer(timeInterval: stepSecs, repeats: true) { [weak self] timer in
+            MainActor.assumeIsolated {
+                guard let self, let next = remaining.popFirst() else {
+                    timer.invalidate()
+                    return
+                }
+                self.feedSimulatedHover(next)
+            }
+        }
+        RunLoop.main.add(timer, forMode: .common)
+        simulatedHoverTimer = timer
+    }
+
+    func endSimulatedHover() {
+        simulatedHoverTimer?.invalidate()
+        simulatedHoverTimer = nil
+        simulatedHoverPointer = nil
+        NotchDebugHover.phases.send(.ended)
+    }
+
+    private func feedSimulatedHover(_ offset: CGPoint) {
+        guard let window, let frame = cardScreenFrame else { return }
+        let local = CGPoint(x: frame.width / 2 + offset.x, y: offset.y)
+        simulatedHoverPointer = NSPoint(x: frame.midX + offset.x, y: frame.maxY - offset.y)
+        // 卡片的命中区横向是卡片宽、纵向是整扇窗(见 NotchWindowRoot 的 contentShape),出了这块视图收到的就是离开。
+        let inside = (0...frame.width).contains(local.x) && (0...window.frame.height).contains(local.y)
+        NotchDebugHover.phases.send(inside ? .active(local) : .ended)
+    }
+
     /// `debug/state` 里灵动岛那一节。
     var debugState: [String: Any] {
         ["passThrough": passThrough?.isActive ?? false, "ignoresMouseEvents": window?.ignoresMouseEvents ?? false,
@@ -1006,7 +1044,7 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
     /// 「离开」事件丢了也不能一直改别人窗口上的光标:指针已经不在卡片接指针的部分和浮框上就放手,悬停一起放掉
     /// (穿透结束时控制器自己补的那次进入,视图那边的边沿不一定跟得上);落在只显示的那一截上就转去穿透。
     private func reassertCardCursor() {
-        let mouse = NSEvent.mouseLocation
+        let mouse = simulatedHoverPointer ?? NSEvent.mouseLocation
         let hit = (window?.isVisible ?? false) ? passThroughHit(at: mouse) : nil
         let onPanel = NotchEditorialPanel.shared.frame(ifOwner: window)?.contains(mouse) ?? false
         if hit?.region == .card || onPanel {

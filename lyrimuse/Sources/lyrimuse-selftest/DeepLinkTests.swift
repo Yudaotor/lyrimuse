@@ -250,6 +250,19 @@ func runDeepLinkTests() {
         expectEqual(link("lyrimuse://debug/notch-pointer?x=200&y=20"), .debug(.notchPointer(x: 200, y: 20)),
                     "debug: 灵动岛一直当作指针停在卡片一点上")
         expectEqual(link("lyrimuse://debug/notch-pointer?y=20"), nil, "debug: 灵动岛常驻模拟指针缺 x 不认")
+        expectEqual(link("lyrimuse://debug/notch-hover?path=-150,10;40.5,12"),
+                    .debug(.notchHover(path: [CGPoint(x: -150, y: 10), CGPoint(x: 40.5, y: 12)], stepSecs: 0.03)),
+                    "debug: 灵动岛模拟指针走一串点,步长缺省")
+        expectEqual(link("lyrimuse://debug/notch-hover?path=0,10&step=0.1"),
+                    .debug(.notchHover(path: [CGPoint(x: 0, y: 10)], stepSecs: 0.1)), "debug: 灵动岛模拟指针带步长")
+        expectEqual(link("lyrimuse://debug/notch-hover?off=1"), .debug(.notchHoverOff), "debug: 灵动岛结束模拟悬停")
+        expectEqual(link("lyrimuse://debug/notch-hover?path=0,10;5"), nil, "debug: 灵动岛模拟悬停有一点缺 y 不认")
+        expectEqual(link("lyrimuse://debug/notch-hover?path=0,nan"), nil, "debug: 灵动岛模拟悬停不是有限数不认")
+        expectEqual(link("lyrimuse://debug/notch-hover?path=0,10&step=5"), nil, "debug: 灵动岛模拟悬停步长超范围不认")
+        expectEqual(link("lyrimuse://debug/notch-hover"), nil, "debug: 灵动岛模拟悬停没有路径不认")
+        expectEqual(link("lyrimuse://debug/notch-hint?key=gearshape.fill"), .debug(.notchHint(key: "gearshape.fill")),
+                    "debug: 灵动岛当作指针停在这颗快捷键上")
+        expectEqual(link("lyrimuse://debug/notch-hint"), .debug(.notchHint(key: nil)), "debug: 灵动岛收起快捷键说明")
         expectEqual(link("lyrimuse://debug/notch-behavior?progress-line=Ears"),
                     .debug(.notchBehavior(collapseWhenPaused: nil, hideWhenNotPlaying: nil, progressLine: .ears)),
                     "debug: 灵动岛进度线只带样式")
@@ -494,6 +507,8 @@ func runDeepLinkTests() {
             .debug(.overlayLayout(width: nil, lineChange: nil, overflow: .wrap)),
             .debug(.overlayLayout(width: nil, lineChange: nil, nextArrangement: .below)),
             .debug(.notchPassThrough(x: 120.5, y: 48)), .debug(.notchPassThroughOff), .debug(.notchPointer(x: 30, y: 12.5)),
+            .debug(.notchHover(path: [CGPoint(x: -150, y: 10), CGPoint(x: 220.25, y: 0)], stepSecs: 0.05)), .debug(.notchHoverOff),
+            .debug(.notchHint(key: "heart")), .debug(.notchHint(key: nil)),
             .debug(.notchBehavior(collapseWhenPaused: nil, hideWhenNotPlaying: nil, showLyrics: true)),
             .debug(.notchBehavior(collapseWhenPaused: nil, hideWhenNotPlaying: nil, lyricRowFade: false)),
             .debug(.knockout(leg: .voxScript, on: false)), .debug(.knockout(leg: .systemArtwork, on: true)),

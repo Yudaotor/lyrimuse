@@ -63,6 +63,15 @@ struct QuickActionHint: Equatable {
     let text: String
 }
 
+/// `debug/notch-hover`、`debug/notch-hint` 往灵动岛视图里送模拟的悬停(SwiftUI 的悬停只认真指针,见 05 章决策 142)。
+@MainActor
+enum NotchDebugHover {
+    /// 卡片的悬停事件,`NotchWindowRoot` 跟真指针走同一个处理。
+    static let phases = PassthroughSubject<HoverPhase, Never>()
+    /// 当作指针停在这颗快捷键上(`quickActionButton` 认键的名字);nil = 收起。
+    static let hintKeys = PassthroughSubject<String?, Never>()
+}
+
 /// 快捷操作那排图标键的悬浮文案提示。
 ///
 /// 不能靠 `.help`:AppKit 的 tooltip(`NSToolTipManager`)只在前台 App 的窗口上显示,而 lyrimuse 是 LSUIElement、灵动岛这扇

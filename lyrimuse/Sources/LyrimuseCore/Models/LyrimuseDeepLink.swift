@@ -187,6 +187,15 @@ public enum LyrimuseDeepLink: Equatable, Sendable {
         case notchPointer(x: Double, y: Double)
         /// 结束上面两条模拟,交还真指针(`debug/notch-pass-through?off=1`)。
         case notchPassThroughOff
+        /// 模拟指针在灵动岛上沿一串点走,喂给卡片自己的悬停处理(进出、过刘海展开、横扫收回),每 `step` 秒一个点,
+        /// 走完停在最后一点直到 `debug/notch-hover?off=1`:`debug/notch-hover?path=-150,10;-40,10;40,10;220,10&step=0.03`。
+        /// 每点相对卡片顶边中点(`x` 往右为正、`y` 往下为正),按卡片此刻的宽换成卡片局部坐标,卡片展开变宽时指针在屏上不动。
+        case notchHover(path: [CGPoint], stepSecs: Double)
+        /// 结束上面那条模拟,当作指针离开卡片(`debug/notch-hover?off=1`)。
+        case notchHoverOff
+        /// 当作指针停在灵动岛快捷操作的这颗键上、弹它的悬停说明(`debug/notch-hint?key=gearshape.fill`,`key` 同
+        /// `quickActionButton` 认键用的名字);不带 `key` = 收起。
+        case notchHint(key: String?)
         /// 把设置页「逐字歌词格式」那一行摆到换格式的某一步,不真换、不碰歌词文件:
         /// `debug/word-format-switch?state=backup|waiting|converting|finished|queued|idle&format=qrc&done=3214&total=17564`
         /// (`format` 是 `LyricsWordFormat` 的 rawValue,缺省 = 当前主格式;`done` / `total` 只在 converting / finished 时用;
@@ -440,6 +449,17 @@ public enum LyrimuseDeepLink: Equatable, Sendable {
             guard let x = value("x").flatMap(Double.init), let y = value("y").flatMap(Double.init),
                   x.isFinite, y.isFinite else { return nil }
             self = .debug(.notchPointer(x: x, y: y))
+        case ("debug", "/notch-hover"):
+            if value("off").flatMap(Self.parseBool) == true {
+                self = .debug(.notchHoverOff)
+                break
+            }
+            guard let path = value("path").flatMap(Self.parseHoverPath) else { return nil }
+            let step = value("step").map { Double($0) } ?? Self.notchHoverDefaultStepSecs
+            guard let step, Self.notchHoverStepRange.contains(step) else { return nil }
+            self = .debug(.notchHover(path: path, stepSecs: step))
+        case ("debug", "/notch-hint"):
+            self = .debug(.notchHint(key: value("key").flatMap { $0.isEmpty ? nil : $0 }))
         case ("debug", "/japanese-reading"):
             guard let style = value("style").flatMap({ JapaneseReadingStyle(rawValue: $0.lowercased()) }) else { return nil }
             self = .debug(.japaneseReading(style))
@@ -678,6 +698,18 @@ public enum LyrimuseDeepLink: Equatable, Sendable {
             case .notchPassThroughOff:
                 components.path = "/notch-pass-through"
                 components.queryItems = [URLQueryItem(name: "off", value: "1")]
+            case let .notchHover(path, stepSecs):
+                components.path = "/notch-hover"
+                components.queryItems = [
+                    URLQueryItem(name: "path", value: path.map { "\(String(Double($0.x))),\(String(Double($0.y)))" }.joined(separator: ";")),
+                    URLQueryItem(name: "step", value: String(stepSecs)),
+                ]
+            case .notchHoverOff:
+                components.path = "/notch-hover"
+                components.queryItems = [URLQueryItem(name: "off", value: "1")]
+            case let .notchHint(key):
+                components.path = "/notch-hint"
+                components.queryItems = key.map { [URLQueryItem(name: "key", value: $0)] }
             case let .wordFormatSwitch(state, format, done, total, removing):
                 components.path = "/word-format-switch"
                 var items = [URLQueryItem(name: "state", value: state)]
@@ -751,6 +783,24 @@ public enum LyrimuseDeepLink: Equatable, Sendable {
             URLQueryItem(name: "player", value: player), URLQueryItem(name: "playing", value: playing ? "1" : "0"),
         ]
         return components.url
+    }
+
+    static let notchHoverDefaultStepSecs = 0.03
+    static let notchHoverStepRange = 0.005...1.0
+    static let notchHoverMaxPoints = 400
+
+    /// `debug/notch-hover` 的 `path`:`x,y;x,y;…`,至少一点、至多 `notchHoverMaxPoints` 点,有一点不是有限数就整条不认。
+    static func parseHoverPath(_ raw: String) -> [CGPoint]? {
+        let pairs = raw.split(separator: ";", omittingEmptySubsequences: true)
+        guard !pairs.isEmpty, pairs.count <= notchHoverMaxPoints else { return nil }
+        var points: [CGPoint] = []
+        for pair in pairs {
+            let parts = pair.split(separator: ",", omittingEmptySubsequences: false)
+            guard parts.count == 2, let x = Double(parts[0].trimmingCharacters(in: .whitespaces)),
+                  let y = Double(parts[1].trimmingCharacters(in: .whitespaces)), x.isFinite, y.isFinite else { return nil }
+            points.append(CGPoint(x: x, y: y))
+        }
+        return points
     }
 
     /// `on=` 认 1 / 0、true / false、on / off(大小写不敏感),别的当没带。

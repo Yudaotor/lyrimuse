@@ -556,6 +556,13 @@ extension NotchLyricsView {
             // 「22 + spacing 2 + 分隔线」再手写一份坐标(那种两处各算一份的数迟早会漂)。
             .anchorPreference(key: QuickActionAnchorKey.self, value: .bounds) { [hintKey: $0] }
             .accessibilityLabel(label)
+            .onReceive(NotchDebugHover.hintKeys) { key in
+                if key == hintKey {
+                    hoveredQuickAction = QuickActionHint(key: hintKey, text: label)
+                } else if hoveredQuickAction?.key == hintKey {
+                    hoveredQuickAction = nil
+                }
+            }
     }
 
     private var nextLineDisplayText: String {
