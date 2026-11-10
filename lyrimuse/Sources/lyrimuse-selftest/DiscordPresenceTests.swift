@@ -262,6 +262,7 @@ private func checkDiscordActivity() {
                 "Discord 应用: 网页版 Spotify 归 Spotify")
     expectEqual(app(.pearDesktop), .pearDesktop, "Discord 应用: Pear Desktop 归自己的应用,不跟 Kaset 合用 YouTube Music 那个")
     expectEqual(app(.mygoMusic), .mygoMusic, "Discord 应用: MyGo Music 归自己的应用")
+    expectEqual(app(.audirvana), .audirvana, "Discord 应用: Audirvana 归自己的应用")
     expectEqual(DiscordPresence.application(forBundleID: "com.example.player", webPlatformID: nil), .lyrimuse,
                 "Discord 应用: 认不出的播放器用 Lyrimuse 那个")
     expectEqual(DiscordPresence.applicationID(forBundleID: "com.example.player", webPlatformID: nil), DiscordPresence.applicationID,
@@ -274,7 +275,7 @@ private func checkDiscordActivity() {
     }
     // 还没在 Discord 开发者后台建应用的播放器(建应用要作者过人机验证),暂时用 Lyrimuse 那个;建好之后把 ID 补进
     // DiscordPresence 再从这里拿掉。
-    let awaitingApplication: Set<PlaybackPlayer> = [.audirvana]
+    let awaitingApplication: Set<PlaybackPlayer> = []
     for player in awaitingApplication {
         expectEqual(DiscordPresence.applicationID(forBundleID: player.bundleIdentifier, webPlatformID: nil),
                     DiscordPresence.applicationID, "Discord 应用: \(player) 还没建应用,用 Lyrimuse 那个")
