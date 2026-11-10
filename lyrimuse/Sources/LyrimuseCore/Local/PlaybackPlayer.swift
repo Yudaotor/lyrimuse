@@ -241,6 +241,8 @@ extension PlaybackPlayer {
         /// 读界面进度条把整秒的位置补准(Pine Player `PinePlayhead`),读播放列表给预解析(`PinePlaylist`),按菜单切循环(`PineMenuControl`),
         /// 读写音量滑块(`PineVolume`),失焦时按播放控制菜单(`PlaybackMenuControl`)。
         case refinesProgress
+        /// 读、按主窗口播放条上的随机 / 循环键,读写音量滑块(Audirvana `AudirvanaControls`);播放控制走它的脚本,不要这项权限。
+        case adjustsModeAndVolume
     }
 
     /// 不要这项权限的播放器为 nil(`needsAccessibilityPermission`,源头 shared/players.json)。
@@ -253,6 +255,7 @@ extension PlaybackPlayer {
         case .amazonMusic: return .calibratesProgress
         case .reamp, .foobar2000: return .pressesPlayMode
         case .pinePlayer: return .refinesProgress
+        case .audirvana: return .adjustsModeAndVolume
         default: return nil
         }
     }

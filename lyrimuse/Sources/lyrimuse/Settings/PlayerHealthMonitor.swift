@@ -203,6 +203,10 @@ final class PlayerHealthMonitor: ObservableObject {
             if !refines.isEmpty {
                 parts.append(String(format: L10n.t("未获得辅助功能权限，%@ 拖动进度后歌词可能差半秒左右，不显示循环按钮和音量调节，失去焦点时也无法控制播放"), names(refines)))
             }
+            let windowControls = accessibilityMissingPlayers.filter { $0.accessibilityUse == .adjustsModeAndVolume }
+            if !windowControls.isEmpty {
+                parts.append(String(format: L10n.t("未获得辅助功能权限，%@ 不显示随机、循环按钮和音量调节"), names(windowControls)))
+            }
             return parts.joined(separator: L10n.t("；"))
         }
     }

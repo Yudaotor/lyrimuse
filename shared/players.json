@@ -544,11 +544,11 @@
       "durationFromProgressBar": false,
       "needsAutomationPermission": true,
       "needsFullDiskAccess": false,
-      "needsAccessibilityPermission": false,
+      "needsAccessibilityPermission": true,
       "tint": {"rgb": [0.47, 0.44, 0.9]},
       "fallbackSymbol": "waveform",
       "bundledIcon": "AudirvanaIcon",
-      "note": "Audirvana 的本地与流媒体播放器(官网分发,要登录 Audirvana 账号;订阅版 Studio 和买断版 Origin 脚本字典逐字相同,两个都认,读数都记在 Studio 这个 bundle id 名下,Origin 的进程名在 otherProcessNames),不往系统 Now Playing 报,曲目、状态、位置全靠 AppleScript 字典(Audirvana.sdef):歌名、歌手、专辑、整秒时长、当前地址、播放状态和带小数的位置,位置跟真实出声差 0.01~0.03 秒,开播、恢复、跳转、自动连播都量过。系统那边没人在放时直接问它(MediaControlClient.preferringPlayingAudirvana),播放控制也发它自己的脚本。把 event types reported 设成 TrackChanged 后它发分布式通知 com.audirvana.audirvana-plus.playerStatus(开播、恢复、暂停、换歌、放完停住),只当提前读一次的信号:换歌那一条报的状态可能是 Paused,播放中跳转、按上一首回到开头都不发。当前地址的斜杠也被百分号编码(file://%2FUsers%2F…)。没写标签的文件歌名是去掉扩展名的文件名、歌手和专辑空。nativeLyricSource 填 localfile:当前文件同目录同名的 .lrc 与内嵌歌词。processName、Origin 的进程名都是 16 字节。"
+      "note": "Audirvana 的本地与流媒体播放器(官网分发,要登录 Audirvana 账号;订阅版 Studio 和买断版 Origin 脚本字典逐字相同,两个都认,读数都记在 Studio 这个 bundle id 名下,Origin 的进程名在 otherProcessNames),不往系统 Now Playing 报,曲目、状态、位置全靠 AppleScript 字典(Audirvana.sdef):歌名、歌手、专辑、整秒时长、当前地址、播放状态和带小数的位置,位置跟真实出声差 0.01~0.03 秒,开播、恢复、跳转、自动连播都量过。系统那边没人在放时直接问它(MediaControlClient.preferringPlayingAudirvana),播放控制也发它自己的脚本。把 event types reported 设成 TrackChanged 后它发分布式通知 com.audirvana.audirvana-plus.playerStatus(开播、恢复、暂停、换歌、放完停住),只当提前读一次的信号:换歌那一条报的状态可能是 Paused,播放中跳转、按上一首回到开头都不发。当前地址的斜杠也被百分号编码(file://%2FUsers%2F…)。随机、循环(三档:不循环 / 列表 / 单曲)和音量脚本里没有,读写它主窗口播放条上的控件(AudirvanaControls),要辅助功能权限;循环档只认控件描述,它的值不跟档位走。没写标签的文件歌名是去掉扩展名的文件名、歌手和专辑空。nativeLyricSource 填 localfile:当前文件同目录同名的 .lrc 与内嵌歌词。processName、Origin 的进程名都是 16 字节。"
     },
     {
       "id": "weread",

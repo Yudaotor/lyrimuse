@@ -169,4 +169,53 @@ func runAudirvanaTests() {
                     "Audirvana 判据: 恢复那一拍原样采信、不学锚点滞后、没封面时用匹配到的那张")
         expectEqual(PlaybackPlayer.audirvana.automationUse, .readsTrack, "Audirvana 判据: 曲目整份靠自动化权限")
     }
+
+    // ---- 随机、循环、音量(主窗口播放条上的控件) ----
+    do {
+        typealias X = AudirvanaControls
+        expectEqual([X.shuffleOn(description: "Shuffle Playback Button: Active"),
+                     X.shuffleOn(description: "Shuffle Playback Button: Not active"),
+                     X.shuffleOn(description: "Shuffle Playback Button"),
+                     X.shuffleOn(description: "Loop Playback Button: Not active")], [true, false, nil, nil],
+                    "Audirvana 随机: 按描述后缀认开关,「Not active」也以「Active」结尾、先判它")
+        expectEqual([X.loop(description: "Loop Playback Button: Not active"),
+                     X.loop(description: "Loop Playback Button: Set to Repeat All"),
+                     X.loop(description: "Loop Playback Button: Set to Repeat One"),
+                     X.loop(description: "Loop Playback Button: Something"),
+                     X.loop(description: "Shuffle Playback Button: Not active")], [.off, .all, .one, nil, nil],
+                    "Audirvana 循环: 三档按描述后缀认,认不出的为 nil")
+        let order: [X.Loop] = [.off, .all, .one]
+        var presses: [Int] = []
+        for from in order { for to in order { presses.append(X.presses(from: from, to: to)) } }
+        expectEqual(presses, [0, 1, 2, 2, 0, 1, 1, 2, 0], "Audirvana 循环: 按一下换一档,三档轮转")
+        expectEqual([X.mode(shuffle: false, loop: .off), X.mode(shuffle: false, loop: .all), X.mode(shuffle: false, loop: .one),
+                     X.mode(shuffle: true, loop: .off), X.mode(shuffle: true, loop: .all)],
+                    [.list, .repeatAll, .repeatOne, .shuffle, .shuffle],
+                    "Audirvana 模式: 随机开着就是随机,否则按循环档")
+        let roundTrip = C.MusicPlaybackMode.allCases.map { m -> C.MusicPlaybackMode in
+            let t = X.target(for: m)
+            return X.mode(shuffle: t.shuffle, loop: t.loop)
+        }
+        expectEqual(roundTrip, C.MusicPlaybackMode.allCases, "Audirvana 模式: 切到哪一档读回来就是哪一档")
+        expectEqual([X.target(for: .repeatAll).shuffle, X.target(for: .shuffle).loop == .off], [false, true],
+                    "Audirvana 模式: 点亮循环就关随机,选随机就关循环")
+        expectEqual(C.supportsExtendedControls(.audirvana) && C.supportsRepeatOne(.audirvana) && !C.supportsFavorite(.audirvana),
+                    true, "Audirvana 能力: 随机、两种循环、音量,没有喜欢(收藏键按了不生效)")
+        expectEqual(PlaybackPlayer.audirvana.accessibilityUse, .adjustsModeAndVolume,
+                    "Audirvana 权限: 只为随机、循环、音量要辅助功能,播放控制走脚本")
+        let controller = String(decoding: (try? Data(contentsOf: URL(fileURLWithPath: #filePath).deletingLastPathComponent()
+            .deletingLastPathComponent().appendingPathComponent("LyrimuseCore/Local/MusicPlaybackController.swift"))) ?? Data(), as: UTF8.self)
+        expectEqual(sourceHas(sourceBody("public static func setPlaybackMode(", in: controller), "case .audirvana:\nreturn AudirvanaControls.setMode(mode)")
+                        && sourceHas(sourceBody("public static func setSoundVolume(", in: controller), "case .audirvana:\nreturn AudirvanaControls.setVolume(v)")
+                        && sourceHas(sourceBody("public static func soundVolume(", in: controller), "case .audirvana:\nreturn AudirvanaControls.readVolume()")
+                        && sourceHas(sourceBody("public static func playbackMode(", in: controller), "case .audirvana:\nreturn AudirvanaControls.readMode()"),
+                    true, "Audirvana 契约: 模式、音量的读写都走 AudirvanaControls")
+        let controls = String(decoding: (try? Data(contentsOf: URL(fileURLWithPath: #filePath).deletingLastPathComponent()
+            .deletingLastPathComponent().appendingPathComponent("LyrimuseCore/Local/AudirvanaControls.swift"))) ?? Data(), as: UTF8.self)
+        expectEqual(sourceHas(controls, "== \"MainWindow\" {") && sourceHas(controls, "AudirvanaPlayerInfo.runningBundleID()"),
+                    true, "Audirvana 契约: 只找在跑的那个版本的主窗口")
+        expectEqual(sourceHas(sourceBody("public static func setMode(", in: controls),
+                              "return shuffleOn(description: description(shuffleKey)) == want.shuffle && loop(description: description(loopKey)) == want.loop"),
+                    true, "Audirvana 契约: 按完读回描述到了目标档才算成")
+    }
 }

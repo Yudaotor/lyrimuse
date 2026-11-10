@@ -1225,7 +1225,7 @@ func runPlayerIdentityTests() {
             .swinsian: (nil, [.extendedControls, .repeatOne, .resume, .snapsToReportedPosition, .arrivesWhole]),
             .plexamp: (nil, [.extendedControls, .repeatOne, .gaplessLead, .learnsAnchorLag, .arrivesWhole]),
             .mygoMusic: (nil, [.favorite, .gaplessLead, .lateAnchorProbe]),
-            .audirvana: (nil, [.arrivesWhole]),
+            .audirvana: (nil, [.extendedControls, .repeatOne, .arrivesWhole]),
             .pearDesktop: (.youtubeMusic, [.extendedControls, .repeatOne, .favorite, .resume, .lateAnchorProbe, .learnsAnchorLag,
                                            .holdsAnchorLagSeed, .catalogMenuRows]),
         ]
@@ -1482,16 +1482,16 @@ func runPlayerIdentityTests() {
     do {
         typealias P = Set<PlaybackPlayer>
         expectEqual(PlaybackPlayer.allCases.filter(\.needsAccessibilityPermission),
-                    [.qqMusic, .netease, .kugou, .soda, .amazonMusic, .reamp, .pinePlayer, .foobar2000, .mygoMusic],
-                    "辅助功能判据: 读界面的 Amazon Music / Pine Player、按菜单控制的 QQ 音乐/网易云/酷狗/reAMP、按播放条控制的汽水(改 shared/players.json 的 needsAccessibilityPermission)")
+                    [.qqMusic, .netease, .kugou, .soda, .amazonMusic, .reamp, .pinePlayer, .foobar2000, .mygoMusic, .audirvana],
+                    "辅助功能判据: 读界面的 Amazon Music / Pine Player、按菜单控制的 QQ 音乐/网易云/酷狗/reAMP、按播放条控制的汽水和 Audirvana(改 shared/players.json 的 needsAccessibilityPermission)")
         expectEqual(PlaybackPlayer.allCases.compactMap(\.accessibilityUse),
                     [.switchesPlayMode, .controlsPlayback, .controlsPlayback, .controlsPlayback, .calibratesProgress, .pressesPlayMode,
-                     .refinesProgress, .pressesPlayMode, .controlsTransport],
+                     .refinesProgress, .pressesPlayMode, .controlsTransport, .adjustsModeAndVolume],
                     "辅助功能判据: QQ 音乐是切模式、网易云/酷狗/汽水是喜欢加失焦播放、Amazon Music 是读进度加随机循环、reAMP 只有随机循环、Pine Player 是读进度条补位置加失焦播放,授权说明和体检提示按这个分开写")
         expectEqual(PlaybackPlayer.allCases.compactMap(\.automationUse),
                     [.refinesProgress, .refinesProgress, .readsTrack, .readsTrack, .refinesProgress, .readsTrack],
                     "自动化判据: Apple Music、Spotify、Swinsian 只让进度更准,Kaset、VOX、Audirvana 的曲目整份靠它,引导页和设置页的说明按这个分开写")
-        expectEqual(P([.auto]).playersNeedingAccessibility, [.qqMusic, .netease, .kugou, .soda, .amazonMusic, .reamp, .pinePlayer, .foobar2000, .mygoMusic],
+        expectEqual(P([.auto]).playersNeedingAccessibility, [.qqMusic, .netease, .kugou, .soda, .amazonMusic, .reamp, .pinePlayer, .foobar2000, .mygoMusic, .audirvana],
                     "辅助功能判据: 纯 auto 按超集算")
         expectEqual(P([.kugou]).playersNeedingAccessibility, [.kugou], "酷狗单选也显示 AX 授权入口(喜欢键、失焦播放控制要它)")
         expectEqual(P([.netease]).playersNeedingAccessibility, [.netease], "网易云单选也显示 AX 授权入口")
