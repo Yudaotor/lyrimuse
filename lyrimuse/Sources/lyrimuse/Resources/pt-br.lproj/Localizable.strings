@@ -1442,6 +1442,7 @@
 "按住 ⌘ 拖移此图标，可将其移到菜单栏中的任意位置" = "Mantenha ⌘ pressionada e arraste este ícone para movê-lo para qualquer lugar da barra de menus";
 "按住歌词即可拖动位置" = "Segure a letra para movê-la";
 "按你写的模板，以纯文本推送" = "Usa seu modelo, enviado como texto simples";
+"按播放器报的时长没有可用候选，这一份是不看时长搜到的：可能是其他版本，也可能是播放器报的时长有误" = "Nenhum resultado utilizável correspondia à duração informada pelo player, então este foi encontrado sem ela: pode ser outra versão ou a duração do player pode estar errada";
 "按收听最多的前 %1$@ 位歌手统计，占此期间收听量的 %2$@" = "Com base no seu top %1$@ de artistas, %2$@ das reproduções no período";
 "按收听最多的前 %1$@ 位歌手统计，占此期间收听量的 %2$@#one" = "Com base no seu top %1$@ de artistas, %2$@ das reproduções no período";
 "按收听最多的前 %@ 位歌手统计" = "Com base no seu top %@ de artistas";
@@ -1658,6 +1659,7 @@
 "时长 %@" = "Duração %@";
 "时长不符" = "Duração diferente";
 "时长不符，但其他歌词源也在同一时间结束，予以采信" = "A duração não confere, mas outras fontes de letras terminam no mesmo momento, então ela é aceita";
+"时长与正在播放的不符" = "Duração diferente da que está tocando";
 "时长吻合" = "Duração confere";
 "时长明显不符，且无其他源印证" = "Duração muito diferente, sem confirmação";
 "时间" = "Tempo";

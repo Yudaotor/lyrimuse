@@ -1369,6 +1369,7 @@
 "按住 ⌘ 拖移此图标，可将其移到菜单栏中的任意位置" = "Giữ ⌘ và kéo biểu tượng này để di chuyển đến bất kỳ vị trí nào trên thanh menu";
 "按住歌词即可拖动位置" = "Nhấn giữ lời để kéo đến vị trí khác";
 "按你写的模板，以纯文本推送" = "Theo mẫu của bạn, gửi dạng văn bản thuần túy";
+"按播放器报的时长没有可用候选，这一份是不看时长搜到的：可能是其他版本，也可能是播放器报的时长有误" = "Không có kết quả dùng được khớp với thời lượng trình phát báo, nên bản này được tìm mà không xét thời lượng: có thể là phiên bản khác, hoặc thời lượng trình phát báo bị sai";
 "按收听最多的前 %1$@ 位歌手统计，占此期间收听量的 %2$@" = "Dựa trên %1$@ nghệ sĩ được nghe nhiều nhất, chiếm %2$@ lượt phát trong giai đoạn này";
 "按收听最多的前 %@ 位歌手统计" = "Dựa trên %@ nghệ sĩ được nghe nhiều nhất";
 "按歌名和歌手识别" = "Nhận diện theo tên bài và nghệ sĩ";
@@ -1582,6 +1583,7 @@
 "时长 %@" = "Thời lượng %@";
 "时长不符" = "Thời lượng không khớp";
 "时长不符，但其他歌词源也在同一时间结束，予以采信" = "Thời lượng không khớp, nhưng các nguồn lời khác cũng kết thúc cùng lúc, nên vẫn được tin cậy";
+"时长与正在播放的不符" = "Thời lượng không khớp với bài đang phát";
 "时长吻合" = "Thời lượng khớp";
 "时长明显不符，且无其他源印证" = "Thời lượng lệch rõ rệt, không có nguồn khác xác nhận";
 "时间" = "Thời gian";

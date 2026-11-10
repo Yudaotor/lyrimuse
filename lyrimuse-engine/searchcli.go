@@ -8,6 +8,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 )
 
@@ -253,6 +254,22 @@ func runSearchLyricsCLI(args []string) {
 	// 条目里记着带编号的歌名时,跟自动解析一样交给各歌词源(见 withLyricSourceTitle);改过歌名再搜的对不上 key,不带。
 	searchCtx = withLyricSourceTitle(searchCtx, lyricSearchTitleOrStored(searchCtx, storedSearchTitle, queryTitle), *artist, queryTitle, searchAlbum)
 	_, results := scoredLyricCandidatesStreaming(searchCtx, sArtist, sTitle, sAlbum, effectiveDuration, emit)
+	// 按这个时长一个能用的都没有:换个时长再搜一轮,搜到的判成「时长跟正在放的对不上」落进弹窗「不可用」那组,
+	// 能预览、能手动采用。播放器报的时长不准时,不然弹窗上一条都没有、看不出是时长挡掉的。换的时长取 Apple 目录里
+	// 这首的(跟这个差得多才用),查不到就不带时长:不带时长时标题反查和几家按时长挑结果的那几步都用不上,常常还是空。
+	// 见 11 章决策 159。
+	if effectiveDuration > 0 && !manualSearchFoundUsable(filterEnabledLyricSources(results)) {
+		retryDuration := 0.0
+		if m := appleMusicMatchCached(context.Background(), sArtist, sTitle, sAlbum, 0); durationOffRetryUsable(m.durationSecs, effectiveDuration) {
+			retryDuration = m.durationSecs
+		}
+		log.Printf("search-lyrics: no usable candidate at %.3fs, searching again at %.3fs", effectiveDuration, retryDuration)
+		_, loose := scoredLyricCandidatesStreaming(searchCtx, sArtist, sTitle, sAlbum, retryDuration,
+			func(ne neteaseInfo, rs []scoredLyricCandidateResult, done, total int) {
+				emit(ne, durationOffRound(rs), done, total)
+			})
+		results = mergeDurationOffRound(results, durationOffRound(loose))
+	}
 	// 苹果侧元数据:搜索里的 applecover goroutine 用同一组关键词查过、通常已写热
 	// appleURLCache(同 key)。这里**只读缓存**——查无此歌时它不写缓存,真去查会在
 	// "这轮搜索结束了"那行之前同步重跑一整轮 CN+US 搜索,把收尾挂住几秒(审阅);
@@ -275,6 +292,55 @@ func runSearchLyricsCLI(args []string) {
 		}
 	}
 	emit(neteaseInfo{}, results, enabledLyricSourceCount(), enabledLyricSourceCount())
+}
+
+// manualSearchFoundUsable:手动搜索这一轮有没有一条能自动选用的候选(分数不是 -1、有歌词正文)。纯音乐标记算「有结论」,
+// 也当有:那时不该再换时长搜一轮。
+func manualSearchFoundUsable(results []scoredLyricCandidateResult) bool {
+	for _, r := range results {
+		if r.Instrumental || (r.Score >= 0 && !r.TrackFoundNoLyrics && strings.TrimSpace(r.Lyrics) != "") {
+			return true
+		}
+	}
+	return false
+}
+
+// durationOffRound 把换了时长那一轮搜到的能用候选改判成 scoreRejectSourceDurationOff(分数 -1,原因只留这一条):
+// 弹窗把它们放进「不可用」那组,自动匹配不选。别的(本来就判废的、纯音乐、有歌无词)原样留着。不改传进来的切片。
+func durationOffRound(results []scoredLyricCandidateResult) []scoredLyricCandidateResult {
+	out := make([]scoredLyricCandidateResult, len(results))
+	copy(out, results)
+	for i := range out {
+		r := &out[i]
+		if r.Instrumental || r.TrackFoundNoLyrics || r.Score < 0 || strings.TrimSpace(r.Lyrics) == "" {
+			continue
+		}
+		r.Score = -1
+		r.ScoreTerms = []scoreTerm{{Kind: scoreRejectSourceDurationOff}}
+	}
+	return out
+}
+
+// durationOffRetryUsable:Apple 目录给的时长能不能拿来补搜 —— 有,而且跟播放器报的差出 durationMismatch 那一截
+// (差不多的话换了也是同样的结果)。纯函数。
+func durationOffRetryUsable(catalog, playing float64) bool {
+	return catalog > 0 && durationMismatch(catalog, playing)
+}
+
+// mergeDurationOffRound:换了时长那一轮的结果在前,第一轮里那一轮没有的源(判废的那些)接在后面,同一个源只留一条。
+func mergeDurationOffRound(first, loose []scoredLyricCandidateResult) []scoredLyricCandidateResult {
+	out := append([]scoredLyricCandidateResult{}, loose...)
+	have := map[string]bool{}
+	for _, r := range loose {
+		have[r.Source] = true
+	}
+	for _, r := range first {
+		if !have[r.Source] {
+			out = append(out, r)
+			have[r.Source] = true
+		}
+	}
+	return out
 }
 
 // searchLyricsUpdate 是 search-lyrics 每行 stdout 输出的实际结构——从裸

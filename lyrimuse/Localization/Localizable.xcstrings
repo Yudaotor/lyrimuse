@@ -263796,6 +263796,184 @@
           }
         }
       }
+    },
+    "时长与正在播放的不符" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Länge passt nicht zur Wiedergabe"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Length doesn’t match what’s playing"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "La duración no coincide con lo que suena"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Durée différente de celle en lecture"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Durata diversa da quella in riproduzione"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "再生中の曲と長さが一致しません"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "재생 중인 곡과 길이가 다릅니다"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Duração diferente da que está tocando"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Длительность не совпадает с играющим треком"
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ความยาวไม่ตรงกับเพลงที่กำลังเล่น"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Тривалість не збігається з тим, що грає"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Thời lượng không khớp với bài đang phát"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "时长与正在播放的不符"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "時長與正在播放的不符"
+          }
+        }
+      }
+    },
+    "按播放器报的时长没有可用候选，这一份是不看时长搜到的：可能是其他版本，也可能是播放器报的时长有误" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Zur vom Player gemeldeten Länge gab es keinen brauchbaren Treffer, dieser wurde ohne Länge gefunden: vielleicht eine andere Version, oder die Länge des Players stimmt nicht"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No usable result matched the length the player reports, so this one was found without it: it may be another version, or the player’s length may be wrong"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ningún resultado útil coincidía con la duración que indica el reproductor, así que este se encontró sin ella: puede ser otra versión o la duración del reproductor puede estar mal"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aucun résultat utilisable ne correspondait à la durée indiquée par le lecteur, celui-ci a donc été trouvé sans en tenir compte : autre version possible, ou durée du lecteur erronée"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nessun risultato utilizzabile corrispondeva alla durata indicata dal lettore, quindi questo è stato trovato senza considerarla: può essere un’altra versione, oppure la durata del lettore è errata"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "プレーヤーが報告した長さでは使える候補がなく、これは長さを無視して見つけたものです。別バージョンか、プレーヤーの長さが誤っている可能性があります"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "플레이어가 알려 준 길이로는 쓸 수 있는 후보가 없어 길이를 무시하고 찾은 결과입니다. 다른 버전이거나 플레이어가 알려 준 길이가 틀렸을 수 있습니다"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nenhum resultado utilizável correspondia à duração informada pelo player, então este foi encontrado sem ela: pode ser outra versão ou a duração do player pode estar errada"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "С длительностью, которую сообщает плеер, подходящих результатов нет, этот найден без её учёта: возможно, это другая версия или плеер сообщает неверную длительность"
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ไม่มีผลลัพธ์ที่ใช้ได้ตรงกับความยาวที่เพลเยอร์รายงาน รายการนี้จึงค้นหาโดยไม่ดูความยาว อาจเป็นเวอร์ชั่นอื่น หรือความยาวที่เพลเยอร์รายงานอาจผิด"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "З тривалістю, яку повідомляє плеєр, придатних результатів немає, цей знайдено без її врахування: можливо, це інша версія або плеєр повідомляє неправильну тривалість"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Không có kết quả dùng được khớp với thời lượng trình phát báo, nên bản này được tìm mà không xét thời lượng: có thể là phiên bản khác, hoặc thời lượng trình phát báo bị sai"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "按播放器报的时长没有可用候选，这一份是不看时长搜到的：可能是其他版本，也可能是播放器报的时长有误"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "按播放器回報的時長沒有可用候選，這一份是不看時長搜到的：可能是其他版本，也可能是播放器回報的時長有誤"
+          }
+        }
+      }
     }
   },
   "version" : "1.0"

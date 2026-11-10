@@ -221,6 +221,8 @@ final class LyricsSearchService {
             // 那个是"疑似解析失败",这个是"这个源明确说了只有纯文本,压根没有带时间戳的版本"
             // (见引擎 match.go 的 scoreRejectPlainTextOnly 头注)。
             case "rejectPlainTextOnly": return L10n.t("仅有纯文本，无时间戳")
+            // 见引擎 match.go 的 scoreRejectSourceDurationOff 头注。
+            case "rejectSourceDurationOff": return L10n.t("时长与正在播放的不符")
             // 见引擎 match.go 的 scoreRejectContinuousMix 头注。
             case "rejectContinuousMix": return L10n.t("连续混音版，与原版编排不同")
             // 见引擎 match.go 的 scoreRejectInstrumentalTrack 头注。
@@ -268,6 +270,8 @@ final class LyricsSearchService {
                 return L10n.t("最后一句的时间与曲长相差 25% 以上，可能是其他版本")
             case "rejectPlainTextOnly":
                 return L10n.t("该歌词源收录了这首歌曲，但仅有无时间戳的纯文本，可在「歌词窗口」中作为静态文字阅读，无法随播放逐字 / 逐行高亮")
+            case "rejectSourceDurationOff":
+                return L10n.t("按播放器报的时长没有可用候选，这一份是不看时长搜到的：可能是其他版本，也可能是播放器报的时长有误")
             case "rejectInstrumentalTrack":
                 return L10n.t("当前播放的是伴奏版（歌名或专辑标注为伴奏、纯音乐或 Instrumental），不采用人声版歌词，按纯音乐显示")
             case "rejectContinuousMix":

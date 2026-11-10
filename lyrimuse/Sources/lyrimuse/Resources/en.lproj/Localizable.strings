@@ -1442,6 +1442,7 @@
 "按住 ⌘ 拖移此图标，可将其移到菜单栏中的任意位置" = "Hold ⌘ and drag this icon to move it anywhere in the menu bar";
 "按住歌词即可拖动位置" = "Hold the lyrics to reposition";
 "按你写的模板，以纯文本推送" = "Uses your template, sent as plain text";
+"按播放器报的时长没有可用候选，这一份是不看时长搜到的：可能是其他版本，也可能是播放器报的时长有误" = "No usable result matched the length the player reports, so this one was found without it: it may be another version, or the player’s length may be wrong";
 "按收听最多的前 %1$@ 位歌手统计，占此期间收听量的 %2$@" = "Based on your top %1$@ artists, %2$@ of your plays in this period";
 "按收听最多的前 %1$@ 位歌手统计，占此期间收听量的 %2$@#one" = "Based on your top %1$@ artist, %2$@ of your plays in this period";
 "按收听最多的前 %@ 位歌手统计" = "Based on your top %@ artists";
@@ -1658,6 +1659,7 @@
 "时长 %@" = "Duration %@";
 "时长不符" = "Duration mismatch";
 "时长不符，但其他歌词源也在同一时间结束，予以采信" = "The duration doesn’t match, but other sources end at the same time, so it is trusted";
+"时长与正在播放的不符" = "Length doesn’t match what’s playing";
 "时长吻合" = "Duration match";
 "时长明显不符，且无其他源印证" = "Duration clearly off, not corroborated";
 "时间" = "Time";

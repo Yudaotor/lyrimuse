@@ -735,6 +735,10 @@ const (
 	// 弹窗能给出不一样的提示文案("仅纯文本,不能同步显示"而不是含糊的"没有时间戳")——
 	// 分数依旧是 -1,跟 scoreRejectNotTimed 一样绝不会被自动路径选中。
 	scoreRejectPlainTextOnly = "rejectPlainTextOnly"
+	// scoreRejectSourceDurationOff:手动搜索按播放器报的时长一个能用的候选都没有,换个时长补搜一轮搜到的
+	// (searchcli.go 的 durationOffRound)。可能是另一个版本,也可能是播放器报的时长不准,只给用户手动选,
+	// 自动路径不产生它。
+	scoreRejectSourceDurationOff = "rejectSourceDurationOff"
 	// scoreRejectContinuousMix:加。本地在放的是**连续混音**里的一段
 	// (Apple Music「DJ Mix」专辑:曲名后缀「[Mixed]」、专辑名带「(DJ Mix)」),而这条候选
 	// 不是 —— 判"不能用"而不是像别的版本不符那样重扣,是因为这一类跟 live/remix 有个

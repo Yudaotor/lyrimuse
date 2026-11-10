@@ -8,6 +8,20 @@ import Foundation
 @MainActor
 func runLyricsManagerTests() {
     checkLyricsManagerAudit()
+    // ---- 搜索候选:按播放器的时长一个能用的都没有时,不看时长补搜到的那几条在弹窗里有说法 ----
+    do {
+        let repo = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+            .deletingLastPathComponent().deletingLastPathComponent()
+        func read(_ path: String) -> String {
+            (try? String(contentsOf: repo.appendingPathComponent(path), encoding: .utf8)) ?? ""
+        }
+        let match = read("lyrimuse-engine/match.go")
+        let service = read("lyrimuse/Sources/lyrimuse/LyricsManager/LyricsSearchService.swift")
+        expectEqual(sourceHas(match, #"scoreRejectSourceDurationOff = "rejectSourceDurationOff""#), true,
+                    "搜索候选: 引擎把不看时长补搜到的判成 rejectSourceDurationOff")
+        expectEqual(sourceCount(service, #"case "rejectSourceDurationOff":"#), 2,
+                    "搜索候选: 弹窗给「时长与正在播放的不符」配了名字和说明(两处)")
+    }
     // ---- 列表:没有 canonical_artist 的条目借同一张专辑、同一原始写法下认出来的名字(CanonicalArtistBorrow) ----
     do {
         typealias B = CanonicalArtistBorrow
