@@ -1037,7 +1037,7 @@ Every setting in the Settings window, by where it lives: 316 in all. Type a name
 - **Romanization**
 - **Translation**
 - **Next Line**
-- **Next Line Layout**: Alternate: both lines at the same size, one on the left and one on the right; the line just sung becomes the one after next. Translation and line romanization are hidden; duets keep the usual layout
+- **Next Line Layout**: Staggered: both lines at the same size, one on the left and one on the right; the line just sung becomes the one after next. Translation and line romanization are hidden; duets keep the usual layout
 
 ### Lyrics Display › Floating Lyrics › Layout
 

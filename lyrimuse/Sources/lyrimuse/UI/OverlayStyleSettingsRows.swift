@@ -250,7 +250,7 @@ struct OverlayContentSettingsRows: View {
                 SettingsRow(
                     icon: "arrow.left.arrow.right",
                     title: L10n.t("下一句排法"),
-                    help: L10n.t("上下交替：两句一样大，一左一右轮流唱，唱完的那句换成再下一句；不显示译文和整行读音，对唱时照常排")
+                    help: L10n.t("交错：两句一样大，一左一右轮流唱，唱完的那句换成再下一句；不显示译文和整行读音，对唱时照常排")
                 ) {
                     SettingsPillSegmentedControl(
                         selection: $settings.overlayNextLineArrangement,
@@ -363,8 +363,8 @@ struct OverlayLayoutSettingsRows: View {
 enum OverlayNextLineArrangementLabel {
     static func text(for value: OverlayNextLineArrangement) -> String {
         switch value {
-        case .below: return L10n.t("跟在下面")
-        case .alternate: return L10n.t("上下交替")
+        case .below: return L10n.t("跟随")
+        case .alternate: return L10n.t("交错")
         }
     }
 }

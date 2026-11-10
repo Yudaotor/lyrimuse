@@ -273,8 +273,6 @@
 "上一页" = "Trang trước";
 "上一首" = "Bài trước";
 "上一首、播放/暂停、下一首和设置按钮" = "Nút Trước, Phát/Tạm dừng, Tiếp và nút cài đặt";
-"上下交替" = "Xen kẽ";
-"上下交替：两句一样大，一左一右轮流唱，唱完的那句换成再下一句；不显示译文和整行读音，对唱时照常排" = "Xen kẽ: hai dòng cùng cỡ, một bên trái một bên phải; dòng vừa hát xong được thay bằng dòng sau dòng kế tiếp. Ẩn bản dịch và phát âm cả dòng; bài song ca vẫn hiển thị như thường";
 "上屏" = "Đã hiện";
 "上屏延迟" = "Độ trễ hiển thị";
 "上方的「Scrobble 到 Last.fm」已关闭，此处设置暂不生效" = "“Scrobble lên Last.fm” ở trên đang tắt, các cài đặt ở đây tạm thời không có tác dụng";
@@ -383,6 +381,8 @@
 "乌克兰语" = "Tiếng Ukraina";
 "五" = "T6";
 "亚马逊的流媒体音乐 App" = "Ứng dụng nghe nhạc trực tuyến của Amazon";
+"交错" = "So le";
+"交错：两句一样大，一左一右轮流唱，唱完的那句换成再下一句；不显示译文和整行读音，对唱时照常排" = "So le: hai dòng cùng cỡ, một bên trái một bên phải; dòng vừa hát xong được thay bằng dòng sau dòng kế tiếp. Ẩn bản dịch và phát âm cả dòng; bài song ca vẫn hiển thị như thường";
 "人工修正" = "Chỉnh sửa thủ công";
 "人工修正 %@ 首" = "%@ bài chỉnh sửa thủ công";
 "人工修正过的歌词删除后无法恢复" = "Lời đã chỉnh sửa thủ công không thể khôi phục sau khi xóa";
@@ -2556,7 +2556,7 @@
 "超薄" = "Siêu mỏng";
 "足迹" = "Dấu chân";
 "跟上一期比的涨跌，如「↑12%」" = "Tăng giảm so với kỳ trước, như “↑12%”";
-"跟在下面" = "Bên dưới";
+"跟随" = "Bên dưới";
 "跟随「全部播放器」" = "Theo “Tất cả trình phát”";
 "跟随「全部播放器」：%@" = "Theo “Tất cả trình phát”: %@";
 "跟随刘海" = "Theo notch";

@@ -298,8 +298,6 @@
 "上一页" = "Anterior";
 "上一首" = "Faixa anterior";
 "上一首、播放/暂停、下一首和设置按钮" = "Anterior, Reproduzir/Pausar e Seguinte, mais um botão de ajustes";
-"上下交替" = "Alternar";
-"上下交替：两句一样大，一左一右轮流唱，唱完的那句换成再下一句；不显示译文和整行读音，对唱时照常排" = "Alternar: as duas linhas no mesmo tamanho, uma à esquerda e outra à direita; a linha já cantada dá lugar à que vem depois da próxima. A tradução e a pronúncia da linha ficam ocultas; duetos mantêm o layout de sempre";
 "上屏" = "Exibidos";
 "上屏延迟" = "Atraso de exibição";
 "上方的「Scrobble 到 Last.fm」已关闭，此处设置暂不生效" = "“Scrobble no Last.fm” acima está desativado, então estes ajustes não têm efeito agora";
@@ -411,6 +409,8 @@
 "乌克兰语" = "Ucraniano";
 "五" = "S";
 "亚马逊的流媒体音乐 App" = "O app de streaming de música da Amazon";
+"交错" = "Escalonado";
+"交错：两句一样大，一左一右轮流唱，唱完的那句换成再下一句；不显示译文和整行读音，对唱时照常排" = "Escalonado: as duas linhas no mesmo tamanho, uma à esquerda e outra à direita; a linha já cantada dá lugar à que vem depois da próxima. A tradução e a pronúncia da linha ficam ocultas; duetos mantêm o layout de sempre";
 "人工修正" = "Editadas manualmente";
 "人工修正 %@ 首" = "Editadas manualmente: %@";
 "人工修正过的歌词删除后无法恢复" = "Letras editadas manualmente não podem ser recuperadas depois de apagadas";
@@ -2646,7 +2646,7 @@
 "超薄" = "Ultrafino";
 "足迹" = "Pegada";
 "跟上一期比的涨跌，如「↑12%」" = "Variação em relação ao período anterior, como “↑12%”";
-"跟在下面" = "Abaixo";
+"跟随" = "Abaixo";
 "跟随「全部播放器」" = "Segue “Todos os players”";
 "跟随「全部播放器」：%@" = "Seguindo “Todos os players”: %@";
 "跟随刘海" = "Igual ao notch";

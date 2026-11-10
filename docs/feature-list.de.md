@@ -1037,7 +1037,7 @@ Alle Einstellungen des Einstellungsfensters nach Ort: insgesamt 316. Gib einen N
 - **Umschrift**
 - **Übersetzung**
 - **Nächste Zeile**
-- **Anordnung der nächsten Zeile**: Abwechselnd: Beide Zeilen gleich groß, eine links, eine rechts; die gesungene Zeile wird durch die übernächste ersetzt. Übersetzung und Zeilen-Umschrift werden ausgeblendet; Duette bleiben wie gewohnt
+- **Anordnung der nächsten Zeile**: Versetzt: Beide Zeilen gleich groß, eine links, eine rechts; die gesungene Zeile wird durch die übernächste ersetzt. Übersetzung und Zeilen-Umschrift werden ausgeblendet; Duette bleiben wie gewohnt
 
 ### Liedtext-Anzeige › Schwebender Text › Layout
 
