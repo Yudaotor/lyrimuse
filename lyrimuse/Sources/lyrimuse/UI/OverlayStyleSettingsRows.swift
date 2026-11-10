@@ -280,8 +280,9 @@ struct OverlayRowFontScaleCells: View {
             .disabled(!settings.overlayShowRomanization)
         OverlayRowFontScaleCell(item: .translation, title: L10n.t("译文大小"))
             .disabled(!settings.overlayShowTranslation)
+        // 交错时两句一样大,这一格不起作用。
         OverlayRowFontScaleCell(item: .nextLine, title: L10n.t("下一句大小"))
-            .disabled(!settings.showNextLinePreview)
+            .disabled(!settings.showNextLinePreview || settings.overlayNextLineArrangement == .alternate)
     }
 }
 

@@ -1322,6 +1322,25 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
     /// 译文那一行的文字,没有就是 nil。`line` 为 nil 时的退路同 `romanizationRowText`。
     private var translationRowText: String? { alternatePlacement == nil ? rowPlan.translation?.text : nil }
 
+    /// 上下交替时当前句那一行。前奏 / 间奏时是「•••」,撑到一行歌词的高:换成歌词时另一行不跟着上下挪。
+    private var alternateMainSlot: some View {
+        reportingMainLineRect(mainLine)
+            .frame(minHeight: line == nil ? alternateRowHeight : nil)
+            .reportsContentRow(.main, in: contentRowRectsSpace)
+    }
+
+    /// 上下交替时下一句那一行。最后一句没有下一句时空着、占一行歌词的高,当前句不挪、窗口不变矮。
+    @ViewBuilder private var alternateNextSlot: some View {
+        if nextLineText != nil {
+            nextLinePreviewRow.reportsContentRow(.nextLine, in: contentRowRectsSpace)
+        } else {
+            Color.clear.frame(height: alternateRowHeight)
+        }
+    }
+
+    /// 上下交替时一行歌词(主字号、单行)的高,同图层行的行高式子。
+    private var alternateRowHeight: CGFloat { playback.scrollRowHeight(playback.overlayNSFonts.main) }
+
     private var lyricsCardContent: some View {
         // 行与行之间的间距由各行自己的 `.padding(.top:)` 给(读音 / 译文 / 下一句各一项,见 OverlayRowSpacing),
         // VStack 自己不加,不然两份叠在一起。
@@ -1333,15 +1352,11 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
                 // `alternateBlockWidth` 宽的一块里、上一行贴块左、下一行贴块右,块放在卡片正中(见 04 章决策 91)。
                 VStack(alignment: duetAlignment, spacing: 0) {
                     if alternate.currentOnTop {
-                        reportingMainLineRect(mainLine)
-                            .reportsContentRow(.main, in: contentRowRectsSpace)
-                        nextLinePreviewRow.reportsContentRow(.nextLine, in: contentRowRectsSpace)
-                            .padding(.top, CGFloat(rowSpacing.nextLine))
+                        alternateMainSlot
+                        alternateNextSlot.padding(.top, CGFloat(rowSpacing.nextLine))
                     } else {
-                        nextLinePreviewRow.reportsContentRow(.nextLine, in: contentRowRectsSpace)
-                        reportingMainLineRect(mainLine)
-                            .reportsContentRow(.main, in: contentRowRectsSpace)
-                            .padding(.top, CGFloat(rowSpacing.nextLine))
+                        alternateNextSlot
+                        alternateMainSlot.padding(.top, CGFloat(rowSpacing.nextLine))
                     }
                 }
                 .frame(maxWidth: alternateBlockWidth)
@@ -1491,7 +1506,7 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
 
     /// 设置开着、系统没开「减弱动态效果」。
     /// 上下交替开着时不做:下一句不往上挪(见 `OverlayNextLineArrangement`)。按设置判、不按这一刻摆不摆交替,
-    /// 不然前奏 / 对唱退回照常排的那几句会在舞台和普通卡片之间来回换。
+    /// 不然状态文案退回照常排的那几刻会在舞台和普通卡片之间来回换。
     private var animatesLineChange: Bool {
         playback.lineChangeAnimation && !reduceMotion
             && !(playback.showNextLinePreview && playback.nextLineArrangement == .alternate)
@@ -1638,6 +1653,36 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
         return spec
     }
 
+    /// 上下交替、滚动模式时的下一句:开唱后那一行同一种图层行(有逐字是跟唱行,没有是整行配速行),静止、整行未唱色。
+    /// 行高、描边预留、对齐跟开唱后一样,开唱时字不挪(同换行模式那条,见 04 章决策 92、97)。
+    private func alternateNextScrollRow(_ next: String) -> some View {
+        let words = upcomingWords
+        let groups = words == nil ? nil : upcomingWordGroups
+        let fonts = playback.overlayNSFonts
+        let ink = karaokeUnsungInk
+        let roma = groups == nil ? nil : playback.scrollTextHeight(fonts.romanization)
+        return OverlayScrollingLyricRow(
+            spec: .init(
+                lineKey: next,
+                words: words ?? [SyncedLyricWord(text: next, startMs: 0, durationMs: 0)],
+                groups: groups,
+                romaGap: perWordReadingGap,
+                font: fonts.main,
+                romaFont: fonts.romanization,
+                baseColor: ink, fillColor: ink, romaBaseColor: ink, romaFillColor: ink,
+                strokeColor: playback.textStrokeEnabled ? NSColor(playback.textStrokeColor) : nil,
+                alignment: nextLineDuetSide,
+                paused: true,
+                still: true,
+                rainbow: playback.rainbow),
+            nowMs: Self.lyricsNowMs,
+            contentRectSink: upcomingContentSink,
+            sinkOwner: words.map { upcomingWordRowsKey($0) } ?? upcomingGroupColumnsKey(next))
+        .frame(maxWidth: .infinity)
+        .frame(height: OverlayRowLayout.blockHeight(main: playback.scrollTextHeight(fonts.main), roma: roma,
+                                                     romaGap: perWordReadingGap) + playback.scrollStrokePadding)
+    }
+
     /// 下一句预览的内容。有逐词分组时按「一组一列:字在上、读音在下」排,跟这句变成当前行之后的
     /// 图层行(`OverlayRowLayout.layOut`)同一种版式,开唱那一刻只换颜色、不挪位置;整行罗马音那一行随之让位。
     @ViewBuilder
@@ -1652,6 +1697,8 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
             // 开唱时不挪(SwiftUI 的字不占描边那圈,图层行占,换过去会往下沉一圈描边,见 04 章决策 92)。
             WrappedKaraokeRows(spec: alternateNextSpec(next, words: words), nowMs: Self.lyricsNowMs,
                                contentRectSink: upcomingContentSink, sinkOwner: upcomingWordRowsKey(words))
+        } else if alternatePlacement != nil, still {
+            alternateNextScrollRow(next)
         } else if still, let groups = upcomingWordGroups {
             // 逐词列放不下时从开头显示、右边裁掉(列没法打「…」);放得下时交给外层按声部对齐。
             // `minWidth: 0` 不能省:否则 frame 取列的整宽、被外层居中,变成两头都裁。

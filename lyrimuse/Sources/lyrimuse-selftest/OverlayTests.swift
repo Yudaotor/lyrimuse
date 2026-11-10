@@ -8,7 +8,7 @@ import Foundation
 @MainActor
 func runOverlayTests() {
     checkOverlayFullScreenHide()
-    // ---- 下一句上下交替:当前句按下标奇偶占上下两行,没有当前句 / 没有下一句时照常排,对唱也交替(04 章决策 89、96) ----
+    // ---- 下一句上下交替:当前句按下标奇偶占上下两行,前奏 / 间奏 / 最后一句也按奇偶摆,对唱也交替(04 章决策 89、96、97) ----
     do {
         typealias A = OverlayNextLineArrangement
         func place(_ arrangement: A = .alternate, shows: Bool = true, index: Int? = 0, hasLine: Bool = true,
@@ -27,8 +27,13 @@ func runOverlayTests() {
         expectEqual(place(.below), nil, "上下交替: 排法选「跟在下面」照常排")
         expectEqual(place(shows: false), nil, "上下交替: 下一句关着照常排")
         expectEqual(place(index: nil), nil, "上下交替: 没有当前句下标照常排")
-        expectEqual(place(hasLine: false), nil, "上下交替: 前奏 / 间奏没有当前句照常排")
-        expectEqual(place(hasNext: false), nil, "上下交替: 最后一句没有下一句照常排")
+        expectEqual(place(index: nil, hasLine: false), A.AlternatePlacement(currentOnTop: false),
+                    "上下交替: 前奏时第 0 句等在上一行,「•••」在下一行")
+        expectEqual([place(index: 3, hasLine: false)?.currentOnTop, place(index: 4, hasLine: false)?.currentOnTop],
+                    [false, true], "上下交替: 间奏时「•••」占刚唱完那一句的行,下一句落在自己那一行")
+        expectEqual(place(index: -2, hasLine: false), nil, "上下交替: 间奏下标不合理照常排")
+        expectEqual(place(index: 5, hasNext: false)?.currentOnTop, false, "上下交替: 最后一句没有下一句照样留在自己那一行")
+        expectEqual(place(hasLine: false, hasNext: false), nil, "上下交替: 既没有当前句也没有下一句(状态文案)照常排")
         expectEqual(A.effectiveAlignment(.automatic, arrangement: .alternate, showsNextLine: true), .center,
                     "上下交替: 对齐方式「自动」当居中,对唱歌不按声部分左右、照样交替")
         expectEqual([A.effectiveAlignment(.leading, arrangement: .alternate, showsNextLine: true),
@@ -43,6 +48,20 @@ func runOverlayTests() {
         let view = (try? String(contentsOf: src.appendingPathComponent("lyrimuse/UI/LyricsOverlayView.swift"), encoding: .utf8)) ?? ""
         expectEqual(view.components(separatedBy: "playback.duetAlignmentOverride").count - 1, 2,
                     "上下交替(契约): 视图只在 alignmentOverride 里读设置的对齐方式(注释一处 + 代码一处),别处都读交错折算过的那份")
+        expectEqual(sourceHas(sourceBody("private func nextLinePreviewContent(_ next: String) -> some View", in: view),
+                              "} else if alternatePlacement != nil, still {\n            alternateNextScrollRow(next)")
+                    && sourceHas(sourceBody("private func alternateNextScrollRow(_ next: String) -> some View", in: view), "still: true")
+                    && sourceHas(sourceBody("private func alternateNextScrollRow(_ next: String) -> some View", in: view),
+                                 "alignment: nextLineDuetSide"), true,
+                    "上下交替(契约): 滚动模式的下一句用开唱后同一种图层行、静止,开唱时不挪")
+        expectEqual(sourceHas(sourceBody("@ViewBuilder private var alternateNextSlot: some View", in: view),
+                              "Color.clear.frame(height: alternateRowHeight)")
+                    && sourceHas(sourceBody("private var alternateMainSlot: some View", in: view),
+                                 ".frame(minHeight: line == nil ? alternateRowHeight : nil)"), true,
+                    "上下交替(契约): 没有下一句时空一行、「•••」撑到一行歌词的高,另一行不挪")
+        let rowsSrc = (try? String(contentsOf: src.appendingPathComponent("lyrimuse/UI/OverlayStyleSettingsRows.swift"), encoding: .utf8)) ?? ""
+        expectEqual(sourceHas(rowsSrc, ".disabled(!settings.showNextLinePreview || settings.overlayNextLineArrangement == .alternate)"), true,
+                    "上下交替(契约): 交错时「下一句大小」置灰")
         expectEqual(sourceHas(sourceBody("private var nextLinePreviewFont: Font", in: view),
                               "if alternatePlacement != nil { return playback.mainFont }"), true,
                     "上下交替(契约): 下一句用主字号,开唱时只换颜色")
