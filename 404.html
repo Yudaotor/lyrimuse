@@ -73,11 +73,41 @@ p { margin: 0; color: var(--ink-2); }
     <p>Der Link ist vielleicht falsch geschrieben, oder die Seite wurde verschoben.</p>
     <p class="nf-links"><a class="primary" href="https://yudaotor.github.io/lyrimuse/de/">Zur Startseite</a><a href="https://yudaotor.github.io/lyrimuse/de/changelog/">Versionshinweise</a><a href="https://github.com/Yudaotor/lyrimuse">GitHub</a></p>
   </section>
+  <section class="nf" lang="it" data-title="Pagina non trovata · Lyrimuse">
+    <h1>Questa pagina non esiste</h1>
+    <p>Il link potrebbe contenere un errore, oppure la pagina è stata spostata.</p>
+    <p class="nf-links"><a class="primary" href="https://yudaotor.github.io/lyrimuse/it/">Torna alla home</a><a href="https://yudaotor.github.io/lyrimuse/it/changelog/">Registro modifiche</a><a href="https://github.com/Yudaotor/lyrimuse">GitHub</a></p>
+  </section>
+  <section class="nf" lang="pt-BR" data-title="Página não encontrada · Lyrimuse">
+    <h1>Esta página não existe</h1>
+    <p>O link pode ter sido digitado errado, ou a página mudou de lugar.</p>
+    <p class="nf-links"><a class="primary" href="https://yudaotor.github.io/lyrimuse/pt-BR/">Voltar ao início</a><a href="https://yudaotor.github.io/lyrimuse/pt-BR/changelog/">Novidades</a><a href="https://github.com/Yudaotor/lyrimuse">GitHub</a></p>
+  </section>
+  <section class="nf" lang="vi" data-title="Không tìm thấy trang · Lyrimuse">
+    <h1>Trang này không tồn tại</h1>
+    <p>Liên kết có thể bị gõ sai, hoặc trang đã được chuyển đi.</p>
+    <p class="nf-links"><a class="primary" href="https://yudaotor.github.io/lyrimuse/vi/">Về trang chủ</a><a href="https://yudaotor.github.io/lyrimuse/vi/changelog/">Nhật ký thay đổi</a><a href="https://github.com/Yudaotor/lyrimuse">GitHub</a></p>
+  </section>
+  <section class="nf" lang="ru" data-title="Страница не найдена · Lyrimuse">
+    <h1>Такой страницы нет</h1>
+    <p>Возможно, в ссылке опечатка или страница переехала.</p>
+    <p class="nf-links"><a class="primary" href="https://yudaotor.github.io/lyrimuse/ru/">На главную</a><a href="https://yudaotor.github.io/lyrimuse/ru/changelog/">История изменений</a><a href="https://github.com/Yudaotor/lyrimuse">GitHub</a></p>
+  </section>
+  <section class="nf" lang="uk" data-title="Сторінку не знайдено · Lyrimuse">
+    <h1>Такої сторінки немає</h1>
+    <p>Можливо, у посиланні помилка або сторінку переміщено.</p>
+    <p class="nf-links"><a class="primary" href="https://yudaotor.github.io/lyrimuse/uk/">На головну</a><a href="https://yudaotor.github.io/lyrimuse/uk/changelog/">Історія змін</a><a href="https://github.com/Yudaotor/lyrimuse">GitHub</a></p>
+  </section>
+  <section class="nf" lang="th" data-title="ไม่พบหน้า · Lyrimuse">
+    <h1>ไม่มีหน้านี้</h1>
+    <p>ลิงก์อาจพิมพ์ผิด หรือหน้านี้ย้ายไปแล้ว</p>
+    <p class="nf-links"><a class="primary" href="https://yudaotor.github.io/lyrimuse/th/">กลับหน้าแรก</a><a href="https://yudaotor.github.io/lyrimuse/th/changelog/">บันทึกการเปลี่ยนแปลง</a><a href="https://github.com/Yudaotor/lyrimuse">GitHub</a></p>
+  </section>
 </main>
-<script>(function(){var want='en',p=location.pathname,dirs={"zh-Hans":"zh/","zh-Hant":"zh-Hant/","ja":"ja/","ko":"ko/","es":"es/","fr":"fr/","de":"de/"},k;
+<script>(function(){var want='en',p=location.pathname,dirs={"zh-Hans":"zh/","zh-Hant":"zh-Hant/","ja":"ja/","ko":"ko/","es":"es/","fr":"fr/","de":"de/","it":"it/","pt-BR":"pt-BR/","vi":"vi/","ru":"ru/","uk":"uk/","th":"th/"},k;
 for(k in dirs)if(p.indexOf('/'+dirs[k])>=0){want=k;break}
-if(want==='en'&&!/\/(zh|zh-Hant|ja|ko|es|fr|de)\//.test(p)){var s=null;try{s=localStorage.getItem('lyrimuse.lang')}catch(e){}
-if(s==='en'||dirs.hasOwnProperty(s))want=s;else{var list=navigator.languages&&navigator.languages.length?navigator.languages:[navigator.language||''];for(var i=0;i<list.length;i++){var x=String(list[i]).toLowerCase();if(x==='en'||x.indexOf('en-')===0)break;if(x==='zh'||x.indexOf('zh-')===0){if(dirs.hasOwnProperty('zh-Hans')){want=/-hant\b|-(tw|hk|mo)\b/.test(x)&&!/-hans\b/.test(x)?'zh-Hant':'zh-Hans';break}continue}var px=x.split('-')[0];if(dirs.hasOwnProperty(px)){want=px;break}}}}
+if(want==='en'&&!/\/(zh|zh-Hant|ja|ko|es|fr|de|it|pt-BR|vi|ru|uk|th)\//.test(p)){var s=null;try{s=localStorage.getItem('lyrimuse.lang')}catch(e){}
+if(s==='en'||dirs.hasOwnProperty(s))want=s;else{var list=navigator.languages&&navigator.languages.length?navigator.languages:[navigator.language||''];for(var i=0;i<list.length;i++){var x=String(list[i]).toLowerCase();if(x==='en'||x.indexOf('en-')===0)break;if(x==='zh'||x.indexOf('zh-')===0){if(dirs.hasOwnProperty('zh-Hans')){want=/-hant\b|-(tw|hk|mo)\b/.test(x)&&!/-hans\b/.test(x)?'zh-Hant':'zh-Hans';break}continue}if(x==='pt'||x.indexOf('pt-')===0){if(dirs.hasOwnProperty('pt-BR')){want='pt-BR';break}continue}var px=x.split('-')[0];if(dirs.hasOwnProperty(px)){want=px;break}}}}
 var blocks=document.querySelectorAll('.nf');for(var n=0;n<blocks.length;n++){
 if(blocks[n].getAttribute('lang')===want){document.title=blocks[n].getAttribute('data-title');document.documentElement.lang=want}
 else blocks[n].hidden=true}})()</script>

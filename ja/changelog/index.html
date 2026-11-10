@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Lyrimuseの更新履歴：各バージョンの新機能</title>
-<meta name="description" content="v1.5.0以降、Lyrimuseの各リリースで変わったこと（新機能、改善、修正）。最新はv1.12.0（2026年11月1日リリース）。">
+<meta name="description" content="v1.5.0以降、Lyrimuseの各リリースで変わったこと（新機能、改善、修正）。最新はv1.13.0（2026年11月11日リリース）。">
 <link rel="canonical" href="https://yudaotor.github.io/lyrimuse/ja/changelog/">
 <link rel="alternate" hreflang="en" href="https://yudaotor.github.io/lyrimuse/changelog/">
 <link rel="alternate" hreflang="zh-Hans" href="https://yudaotor.github.io/lyrimuse/zh/changelog/">
@@ -14,13 +14,19 @@
 <link rel="alternate" hreflang="es" href="https://yudaotor.github.io/lyrimuse/es/changelog/">
 <link rel="alternate" hreflang="fr" href="https://yudaotor.github.io/lyrimuse/fr/changelog/">
 <link rel="alternate" hreflang="de" href="https://yudaotor.github.io/lyrimuse/de/changelog/">
+<link rel="alternate" hreflang="it" href="https://yudaotor.github.io/lyrimuse/it/changelog/">
+<link rel="alternate" hreflang="pt-BR" href="https://yudaotor.github.io/lyrimuse/pt-BR/changelog/">
+<link rel="alternate" hreflang="vi" href="https://yudaotor.github.io/lyrimuse/vi/changelog/">
+<link rel="alternate" hreflang="ru" href="https://yudaotor.github.io/lyrimuse/ru/changelog/">
+<link rel="alternate" hreflang="uk" href="https://yudaotor.github.io/lyrimuse/uk/changelog/">
+<link rel="alternate" hreflang="th" href="https://yudaotor.github.io/lyrimuse/th/changelog/">
 <link rel="alternate" hreflang="x-default" href="https://yudaotor.github.io/lyrimuse/changelog/">
 <link rel="icon" type="image/png" sizes="64x64" href="../../assets/img/favicon.png">
 <link rel="apple-touch-icon" href="../../assets/img/apple-touch-icon.png">
 <meta name="color-scheme" content="light dark">
 <meta name="theme-color" content="#fbfbfd" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#000000" media="(prefers-color-scheme: dark)">
-<script src="../../assets/sub.js?v=202611022138" defer fetchpriority="high"></script>
+<script src="../../assets/sub.js?v=202611110151" defer fetchpriority="high"></script>
 <style>:root {
 --bg: #fbfbfd;
 --bg-alt: #f5f5f7;
@@ -386,20 +392,26 @@ opacity: 0; transition: opacity .25s, transform .35s var(--ease-out);
 position: absolute; width: 76px; height: 76px; filter: drop-shadow(0 14px 22px rgba(60, 20, 50, .22));
 animation: flpop .7s cubic-bezier(.3, 1.45, .5, 1) backwards; animation-delay: calc(.25s + var(--k, 0) * 35ms);
 }
-.fl-1 { left: -54px; top: 16%; transform: rotate(-8deg); }
-.fl-2 { left: -30px; top: 62%; width: 64px; height: 64px; }
-.fl-3 { right: -48px; top: 12%; width: 70px; height: 70px; }
-.fl-4 { right: -60px; top: 55%; width: 78px; height: 78px; }
-.fl-5 { left: 8%; bottom: -34px; width: 60px; height: 60px; }
-.fl-6 { right: 12%; bottom: -30px; width: 62px; height: 62px; }
-.fl-7 { left: -44px; top: 39%; width: 60px; height: 60px; transform: rotate(6deg); }
-.fl-8 { right: -40px; top: 31%; width: 58px; height: 58px; transform: rotate(-6deg); }
-.fl-9 { left: 36%; bottom: -30px; width: 58px; height: 58px; }
-.fl-10 { left: 64%; bottom: -32px; width: 56px; height: 56px; transform: rotate(-4deg); }
-.fl-11 { right: -36px; top: 78%; width: 56px; height: 56px; transform: rotate(5deg); }
+.fl-1 { left: -54px; top: 4%; transform: rotate(-8deg); }
+.fl-2 { left: -30px; top: 52%; width: 64px; height: 64px; }
+.fl-3 { right: -48px; top: 2%; width: 70px; height: 70px; }
+.fl-4 { right: -60px; top: 50%; width: 78px; height: 78px; }
+.fl-5 { left: 4%; bottom: -34px; width: 60px; height: 60px; }
+.fl-6 { right: 7%; bottom: -30px; width: 62px; height: 62px; }
+.fl-7 { left: -44px; top: 36%; width: 60px; height: 60px; transform: rotate(6deg); }
+.fl-8 { right: -40px; top: 18%; width: 58px; height: 58px; transform: rotate(-6deg); }
+.fl-9 { left: 26%; bottom: -30px; width: 58px; height: 58px; }
+.fl-10 { left: 59%; bottom: -32px; width: 56px; height: 56px; transform: rotate(-4deg); }
+.fl-11 { right: -36px; top: 68%; width: 56px; height: 56px; transform: rotate(5deg); }
 .fl-12 { left: -40px; top: 84%; width: 58px; height: 58px; transform: rotate(-5deg); }
-.fl-13 { left: 22%; bottom: -36px; width: 56px; height: 56px; transform: rotate(5deg); }
-.fl-14 { left: 50%; bottom: -30px; width: 58px; height: 58px; transform: rotate(-3deg); }
+.fl-13 { left: 15%; bottom: -36px; width: 56px; height: 56px; transform: rotate(5deg); }
+.fl-14 { left: 48%; bottom: -30px; width: 58px; height: 58px; transform: rotate(-3deg); }
+.fl-15 { left: -36px; top: 20%; width: 62px; height: 62px; transform: rotate(4deg); }
+.fl-16 { left: -46px; top: 68%; width: 60px; height: 60px; transform: rotate(-4deg); }
+.fl-17 { right: -52px; top: 34%; width: 64px; height: 64px; transform: rotate(4deg); }
+.fl-18 { right: -44px; top: 84%; width: 60px; height: 60px; transform: rotate(-5deg); }
+.fl-19 { left: 37%; bottom: -34px; width: 58px; height: 58px; transform: rotate(4deg); }
+.fl-20 { left: 70%; bottom: -30px; width: 56px; height: 56px; transform: rotate(-5deg); }
 @keyframes flpop { from { opacity: 0; scale: .3; } }
 .players { padding: 56px 0 72px; text-align: center; }
 .kicker { margin: 0 0 22px; font-size: 13px; font-weight: 600; letter-spacing: .08em; color: var(--ink-3); text-transform: uppercase; }
@@ -1314,7 +1326,7 @@ background: var(--card); color: var(--ink); box-shadow: 0 30px 80px rgba(0, 0, 0
 .warm.far, .warm.far *, .warm.far *::before, .warm.far *::after,
 .hero.far, .hero.far *, .hero.far *::before, .hero.far *::after { animation-play-state: paused !important; }
 .ch.watch { contain-intrinsic-size: auto 960px; }
-.ch-more { contain-intrinsic-size: auto 680px; }
+.ch-more { contain-intrinsic-size: auto 780px; }
 .ch-duo { contain-intrinsic-size: auto 1080px; }
 .ch-voices { contain-intrinsic-size: auto 720px; }
 .news { contain-intrinsic-size: auto 170px; }
@@ -1323,7 +1335,7 @@ background: var(--card); color: var(--ink); box-shadow: 0 30px 80px rgba(0, 0, 0
 @media (max-width: 820px) {
 .ch { contain-intrinsic-size: auto 620px; }
 .ch.watch { contain-intrinsic-size: auto 470px; }
-.ch-more { contain-intrinsic-size: auto 950px; }
+.ch-more { contain-intrinsic-size: auto 1140px; }
 .ch-duo { contain-intrinsic-size: auto 1500px; }
 .ch-voices { contain-intrinsic-size: auto 1450px; }
 .news { contain-intrinsic-size: auto 450px; }
@@ -1379,9 +1391,9 @@ transition: transform .3s var(--ease-out), background .2s, opacity .2s;
 .links { display: none; }
 .nav-in { gap: 8px; }
 .fl { width: 44px !important; height: 44px !important; }
-.fl-1, .fl-2, .fl-7, .fl-12 { left: -12px; }
-.fl-3, .fl-4, .fl-8, .fl-11 { right: -12px; }
-.fl-5, .fl-6, .fl-9, .fl-10, .fl-13, .fl-14 { bottom: -18px; }
+.fl-1, .fl-2, .fl-7, .fl-12, .fl-15, .fl-16 { left: -12px; }
+.fl-3, .fl-4, .fl-8, .fl-11, .fl-17, .fl-18 { right: -12px; }
+.fl-5, .fl-6, .fl-9, .fl-10, .fl-13, .fl-14, .fl-19, .fl-20 { bottom: -18px; }
 .mb-left span { display: none; }
 .ch { padding-top: 104px; }
 #display { padding-top: 40px; }
@@ -1409,6 +1421,10 @@ transition: transform .3s var(--ease-out), background .2s, opacity .2s;
 @media (max-width: 480px) {
 .hero { padding-top: 28px; }
 .fl { width: 36px !important; height: 36px !important; }
+.fl-15, .fl-16, .fl-17, .fl-18, .fl-19, .fl-20 { display: none; }
+.fl-1 { top: 16%; } .fl-7 { top: 39%; } .fl-2 { top: 62%; } .fl-12 { top: 84%; }
+.fl-3 { top: 12%; } .fl-8 { top: 31%; } .fl-4 { top: 55%; } .fl-11 { top: 78%; }
+.fl-5 { left: 8%; } .fl-13 { left: 22%; } .fl-9 { left: 36%; } .fl-14 { left: 50%; } .fl-10 { left: 64%; } .fl-6 { right: 12%; }
 .btn:not(.btn-sm) { height: 46px; padding: 0 20px; }
 .brand span { display: none; }
 .ch-stage { aspect-ratio: 3 / 3.4; --wz: 240% !important; }
@@ -1739,12 +1755,18 @@ color: var(--ink); transition: box-shadow .25s, transform .25s;
       <a class="dl-item" role="menuitem" lang="es" href="../../es/changelog/">Español</a>
       <a class="dl-item" role="menuitem" lang="fr" href="../../fr/changelog/">Français</a>
       <a class="dl-item" role="menuitem" lang="de" href="../../de/changelog/">Deutsch</a>
+      <a class="dl-item" role="menuitem" lang="it" href="../../it/changelog/">Italiano</a>
+      <a class="dl-item" role="menuitem" lang="pt-BR" href="../../pt-BR/changelog/">Português (Brasil)</a>
+      <a class="dl-item" role="menuitem" lang="vi" href="../../vi/changelog/">Tiếng Việt</a>
+      <a class="dl-item" role="menuitem" lang="ru" href="../../ru/changelog/">Русский</a>
+      <a class="dl-item" role="menuitem" lang="uk" href="../../uk/changelog/">Українська</a>
+      <a class="dl-item" role="menuitem" lang="th" href="../../th/changelog/">ไทย</a>
     </div></div>
     <div class="dl dl-end dl-download"><a class="btn btn-dark btn-sm dl-trigger" href="https://github.com/Yudaotor/lyrimuse/releases/latest" aria-haspopup="menu" aria-expanded="false">ダウンロード<svg class="chev" viewBox="0 0 12 12" aria-hidden="true"><path d="m3 4.5 3 3 3-3" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></a>
     <div class="dl-menu" role="menu">
-      <p class="dl-head">最新バージョン <span class="dl-ver">v1.12.0</span></p>
-      <a class="dl-item" role="menuitem" data-arch="arm" href="https://github.com/Yudaotor/lyrimuse/releases/download/v1.12.0/Lyrimuse-v1.12.0-macos.dmg"><span class="dl-ico"><svg viewBox="0 0 20 20" aria-hidden="true"><rect x="5" y="5" width="10" height="10" rx="2.2" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M8 2.5V5M12 2.5V5M8 15v2.5M12 15v2.5M2.5 8H5M2.5 12H5M15 8h2.5M15 12h2.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></span><span class="dl-txt"><b>Apple Silicon<span class="dl-rec">おすすめ</span></b><em>M1以降 · DMG · <span class="dl-size">20 MB</span></em></span></a>
-      <a class="dl-item" role="menuitem" data-arch="x86" href="https://github.com/Yudaotor/lyrimuse/releases/download/v1.12.0/Lyrimuse-v1.12.0-macos-intel.dmg"><span class="dl-ico"><svg viewBox="0 0 20 20" aria-hidden="true"><rect x="5" y="5" width="10" height="10" rx="2.2" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M8 2.5V5M12 2.5V5M8 15v2.5M12 15v2.5M2.5 8H5M2.5 12H5M15 8h2.5M15 12h2.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></span><span class="dl-txt"><b>Intel<span class="dl-rec">おすすめ</span></b><em>Intel搭載のMac · DMG · <span class="dl-size">38 MB</span></em></span></a>
+      <p class="dl-head">最新バージョン <span class="dl-ver">v1.13.0</span></p>
+      <a class="dl-item" role="menuitem" data-arch="arm" href="https://github.com/Yudaotor/lyrimuse/releases/download/v1.13.0/Lyrimuse-v1.13.0-macos.dmg"><span class="dl-ico"><svg viewBox="0 0 20 20" aria-hidden="true"><rect x="5" y="5" width="10" height="10" rx="2.2" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M8 2.5V5M12 2.5V5M8 15v2.5M12 15v2.5M2.5 8H5M2.5 12H5M15 8h2.5M15 12h2.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></span><span class="dl-txt"><b>Apple Silicon<span class="dl-rec">おすすめ</span></b><em>M1以降 · DMG · <span class="dl-size">22 MB</span></em></span></a>
+      <a class="dl-item" role="menuitem" data-arch="x86" href="https://github.com/Yudaotor/lyrimuse/releases/download/v1.13.0/Lyrimuse-v1.13.0-macos-intel.dmg"><span class="dl-ico"><svg viewBox="0 0 20 20" aria-hidden="true"><rect x="5" y="5" width="10" height="10" rx="2.2" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M8 2.5V5M12 2.5V5M8 15v2.5M12 15v2.5M2.5 8H5M2.5 12H5M15 8h2.5M15 12h2.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></span><span class="dl-txt"><b>Intel<span class="dl-rec">おすすめ</span></b><em>Intel搭載のMac · DMG · <span class="dl-size">41 MB</span></em></span></a>
       <a class="dl-item" role="menuitem" href="https://github.com/Yudaotor/lyrimuse/releases/latest"><span class="dl-ico"><svg viewBox="0 0 20 20" aria-hidden="true"><path fill="currentColor" d="M10 1.8a8.2 8.2 0 0 0-2.6 16c.4.1.6-.2.6-.4v-1.5c-2.3.5-2.8-1-2.8-1-.4-.9-.9-1.2-.9-1.2-.7-.5.1-.5.1-.5.8.1 1.3.9 1.3.9.7 1.3 2 .9 2.4.7.1-.5.3-.9.5-1.1-1.8-.2-3.7-.9-3.7-4 0-.9.3-1.6.9-2.2-.1-.2-.4-1 .1-2.2 0 0 .7-.2 2.3.9a7.9 7.9 0 0 1 4.1 0c1.6-1.1 2.3-.9 2.3-.9.4 1.2.2 2 .1 2.2.5.6.9 1.3.9 2.2 0 3.2-1.9 3.8-3.7 4 .3.3.6.8.6 1.5v2.3c0 .2.1.5.6.4A8.2 8.2 0 0 0 10 1.8z"/></svg></span><span class="dl-txt"><b>GitHubですべてのダウンロードを見る</b><em>全バージョン、ZIP、チェックサム</em></span></a>
       <p class="dl-note">LyrimuseはAppleの公証を受けていないため、DMGからの初回起動はmacOSにブロックされます。「システム設定」→「プライバシーとセキュリティ」を開き、「このまま開く」をクリックしてください。Homebrewでインストールした場合、この操作は不要です。</p>
     </div></div>
@@ -1759,8 +1781,12 @@ color: var(--ink); transition: box-shadow .25s, transform .25s;
   <p class="sub-lede">各バージョンの更新内容は英語で掲載しています。</p>
 </section>
 <section class="cl" lang="en">
-<details class="cl-ver" id="v1.12.0" open>
-  <summary class="cl-sum"><h2 class="cl-v">v1.12.0</h2><span class="cl-badge">最新</span><time class="cl-date" datetime="2026-11-01">2026年11月1日</time><span class="cl-count">新機能 30 · 改善 23 · 修正 20</span><i class="cl-chev" aria-hidden="true"></i></summary>
+<details class="cl-ver" id="v1.13.0" open>
+  <summary class="cl-sum"><h2 class="cl-v">v1.13.0</h2><span class="cl-badge">最新</span><time class="cl-date" datetime="2026-11-11">2026年11月11日</time><span class="cl-count">新機能 19 · 改善 12 · 修正 13</span><i class="cl-chev" aria-hidden="true"></i></summary>
+  <div class="cl-body"><section class="cl-g cl-new"><h3>新機能</h3><ul><li>Added Italiano, Português (Brasil), Tiếng Việt, Русский, Українська and ไทย as interface languages</li><li>Added a prompt to switch when your system language becomes available, if you picked a language by hand</li><li>Added Pear Desktop, Swinsian, Plexamp, MyGo Music and Audirvana Studio and Origin as built-in players</li><li>Added WeRead audiobooks, showing the passage being read as subtitles, bringing built-in players to twenty</li><li>Added ad skipping, likes and shuffle for Pear Desktop, plus shuffle for YouTube Music on the web</li><li>Added lyrics from local files, likes and upcoming-song prefetching for MyGo Music</li><li>You can now customize the menu bar panel like Control Center: arrange, resize, add and remove tiles</li><li>Added more panel tiles, including Sound, Today, translation, readings, font size and lyrics window controls</li><li>You can now customize the panel's bottom bar and long-press the newer tiles for quick settings</li><li>Added keyboard control to the panel, plus a global shortcut to open it</li><li>You can now arrange the notch's quick-action buttons in two rows of slots, with many more to choose from</li><li>Added an option to stop the keyboard volume keys from showing the notch volume banner</li><li>You can now adjust the size of readings, translations and the next line separately</li><li>Added a Staggered next-line layout, alternating the current and next line left and right</li><li>Added a Control Size slider from 100% to 200% to the full lyrics window and web lyrics</li><li>You can now show the next line on the Touch Bar when a song has no translation or reading</li><li>Added Collapse While Typing, hiding Touch Bar lyrics to reveal typing suggestions in text fields</li><li>Added a second search with a different length when no lyrics match the player's song length</li><li>Added Arc to the browser menu for web players</li></ul></section><section class="cl-g cl-improved"><h3>改善</h3><ul><li>Improved the panel when nothing is playing, showing the last song in the same layout as during playback</li><li>Improved the next-line preview with per-word readings and the same line breaks as when sung</li><li>Improved Spotify timing so lyrics stay in sync after pausing and when switching output devices</li><li>Improved instrumental detection in Apple Music, QQ Music, Soda Music and other players</li><li>Improved matching for titles in brackets, bilingual titles and concert recordings</li><li>Improved readings: one syllable per Chinese character, and borrowed Japanese kana aligned around digits</li><li>Improved lyric search to show which lyrics are actually in use for the playing song</li><li>Moved Import File… into the ⋯ menu in the lyric search title bar</li><li>Improved the icon-only menu bar item to use the standard system width</li><li>Improved Settings layout in longer languages so summaries and values are no longer cut off</li><li>Moved the no-timestamp note in plain lyrics to the end, in a quieter style</li><li>Improved responsiveness while dragging sliders and color pickers in Settings</li></ul></section><section class="cl-g cl-fixed"><h3>修正</h3><ul><li>Fixed repeated prompts to access other apps' data, such as when playing new songs in QQ Music</li><li>Fixed a crash at launch on macOS 15 and earlier with HDR Highlight turned on in the lyrics window</li><li>Fixed several rare crashes found through anonymous crash reports</li><li>Fixed hand-picked lyrics being replaced by the player's own lyrics</li><li>Fixed Amazon Music lyrics drifting out of sync after playback stalls</li><li>Fixed lyrics running ahead after resuming on AirPods Max in foobar2000 and LX Music</li><li>Fixed songs with a brief second voice being laid out as duets</li><li>Fixed rainbow word-by-word menu bar lyrics highlighting the whole line early</li><li>Fixed Fade on Hover dimming floating lyrics when the pointer was over blank space beside the text</li><li>Fixed several lyric import issues, including garbled Japanese and Korean files and empty files</li><li>Fixed the notch shrinking on screens without a notch during ads</li><li>Fixed the pointer not reaching the notch card from below or when moved across it</li><li>Fixed Settings shifting left when a scroll bar appears</li></ul></section><p class="cl-gh"><a href="https://github.com/Yudaotor/lyrimuse/releases/tag/v1.13.0">GitHubでリリースノートとダウンロードを見る ›</a></p></div>
+</details>
+<details class="cl-ver" id="v1.12.0">
+  <summary class="cl-sum"><h2 class="cl-v">v1.12.0</h2><time class="cl-date" datetime="2026-11-01">2026年11月1日</time><span class="cl-count">新機能 30 · 改善 23 · 修正 20</span><i class="cl-chev" aria-hidden="true"></i></summary>
   <div class="cl-body"><section class="cl-g cl-new"><h3>新機能</h3><ul><li>Added Japanese, Korean, Spanish, French and German as interface languages</li><li>Added a What's New card after updates, also available from the menu bar right-click menu</li><li>Added VOX, Pine Player and foobar2000 as built-in players, bringing the total to fourteen</li><li>Added support for the iPad versions of NetEase Cloud Music and QQ Music on Apple silicon Macs</li><li>Added PetitLyrics as the fifteenth lyric source, for word-by-word Japanese lyrics</li><li>Added readings for 18 more languages, including Russian, Greek, Thai, Hindi and Tamil, following each language's official romanization</li><li>Added kana readings for Japanese: hiragana above kanji, in place of romaji</li><li>Added background-vocal lines split out of parentheses for every word-timed lyric source, with their own readings</li><li>Added a flowing rainbow lyric color for floating lyrics, the notch, menu bar, Touch Bar and OBS</li><li>Added a menu bar center position for lyrics, with a choice of displays</li><li>You can now show just the song title, just the translation, or lyrics and translation together in the menu bar</li><li>You can now use the current album art as the menu bar icon and choose the icon size</li><li>Added multi-line lyrics to the expanded notch; click a line to jump to it</li><li>Added a notch progress line along the ear edges, play count and player modules, and a peek shortcut</li><li>Added trackpad gestures on the notch to skip and change volume, plus an output device banner</li><li>You can now show the notch on the active window's display, or on the Lock Screen</li><li>Added Fade on Hover, a separate expanded background and a last-played idle panel to the notch</li><li>Added separate switches to hide floating lyrics and collapse the notch during ads</li><li>Added lyric sharing: pick up to four lines and save or share them as an image card</li><li>Added animated covers from QQ Music, NetEase and Kugou, and an optional Spotify Canvas lyrics window background</li><li>Added artist bios from Spotify, and album notes and artist bios from Kuwo and Kugou</li><li>You can now use lyrics in or beside local song files in more players, and prefer them over online sources</li><li>You can now import lyric files or whole folders, keep an import library and watch a folder</li><li>You can now choose the word-timed lyric file format: TTML, YRC, Enhanced LRC, QRC or KRC</li><li>Added a proxy setting that retries overseas lyric sources when direct connections fail</li><li>Added an optional title card to the OBS page, and an IP link QR code for Android phones</li><li>You can now pick a full, brief or summary listening report per channel, or write your own with placeholders</li><li>Added a Clean Up button in Settings to clear re-downloadable caches</li><li>Added anonymous usage data, on by default, with no song titles or accounts; turn it off in Settings › About</li><li>Added a QQ group link and a Website button to the About page</li></ul></section><section class="cl-g cl-improved"><h3>改善</h3><ul><li>Moved data, caches and logs into the standard Library folders, and account credentials into the Keychain</li><li>Moved Push Alerts out of Labs, with a push time, per-report channels, and previews and tests using real data</li><li>Improved listening reports with comparisons, new artists and listening time, in your language and each platform's style</li><li>Improved readings: borrowed kana for Japanese, standard Korean rules, and Cantonese for colloquial lyrics</li><li>Improved lyrics by borrowing missing translations and masked words from other sources, and removing credit lines</li><li>Improved exported .roma.lrc files to use the readings shown on screen</li><li>Improved matching for Spotify, QQ Music, titles with a version after a dash, and NetEase downloads</li><li>Improved timing by using a player's own lyrics when other sources run offset from its recording</li><li>Re-search songs without lyrics right away when you turn on a lyric source</li><li>Improved prefetching of upcoming songs for VOX, Pine Player, foobar2000, reAMP, KKBOX and QQ Music</li><li>Extended the idle page's Resume button to Kugou, QQ Music, NetEase, LX Music, Pine Player and foobar2000</li><li>Improved control of Kugou and reAMP while another app holds media focus, and added reAMP volume</li><li>Improved Spotify Web playback position to millisecond precision</li><li>Improved Kugou audiobooks and crosstalk so they are treated as spoken audio, not songs</li><li>Improved web lyrics with a full-screen phone layout and smoother video in Firefox and Chrome</li><li>Improved Settings by warning when the firewall blocks other devices from web lyrics</li><li>Improved wording, grouping and layout across Settings, with the Lyrics page reorganized by purpose</li><li>Removed the lyric source health warnings from the sources grid</li><li>Improved the lyrics window's album art background to match Apple Music's Now Playing look</li><li>You can now hide the mini window's progress bar, or the whole window for instrumentals</li><li>Improved the notch with smoother curved edges and better alignment in the expanded view</li><li>Improved the lyrics manager preview with smoother scrolling and word fill from the first word</li><li>Improved the menu bar editor: click the preview to open settings, and alignment in adaptive width</li></ul></section><section class="cl-g cl-fixed"><h3>修正</h3><ul><li>Fixed a repeated prompt asking to access other apps' data after updating to 1.11.0</li><li>Fixed Launch with Player not recognizing players with Chinese names</li><li>Fixed Lyrimuse not quitting with the player, and Spotify, Apple Music or Kaset reopening after you quit them</li><li>Fixed the website builds of NetEase, QQ Music and Soda Music not being read, and wrong disk access prompts</li><li>Fixed the wrong player taking over when system focus sat on a paused player</li><li>Fixed Apple Music library songs missing Apple Music's own lyrics, and Dolby Atmos timing</li><li>Fixed music videos in Spotify and NetEase Cloud Music being treated as songs</li><li>Fixed Soda Music lyrics running about 0.4 seconds late in the first songs</li><li>Fixed lyrics occasionally being swapped for a live or different version in the background</li><li>Fixed lyrics running slightly late when several sources had the same text</li><li>Fixed title and artist header lines showing as the first lyric line</li><li>Fixed right-to-left lyrics running backwards and Thai tone marks being clipped in word-by-word lines</li><li>Fixed per-word readings not lining up under the words, in the app and on the OBS page</li><li>Fixed local .lrc files showing only the translation, timestamps as text, or garbled Big5 characters</li><li>Fixed a false unsaved-changes prompt in the lyrics manager</li><li>Fixed menu bar lyrics pausing while a menu was open</li><li>Fixed the close button on other displays' notches and lines without word timing jumping back</li><li>Fixed Touch Bar and web lyrics running on briefly after pausing</li><li>Fixed listen numbers disappearing on later pages of recent Last.fm scrobbles</li><li>Fixed Settings sometimes opening as an invisible window</li></ul></section><p class="cl-gh"><a href="https://github.com/Yudaotor/lyrimuse/releases/tag/v1.12.0">GitHubでリリースノートとダウンロードを見る ›</a></p></div>
 </details>
 <details class="cl-ver" id="v1.11.0">
@@ -1802,9 +1828,9 @@ color: var(--ink); transition: box-shadow .25s, transform .25s;
     <div class="cta">
       <div class="dl dl-download"><a class="btn btn-white dl-trigger mag" href="https://github.com/Yudaotor/lyrimuse/releases/latest" aria-haspopup="menu" aria-expanded="false">Lyrimuseをダウンロード<svg class="chev" viewBox="0 0 12 12" aria-hidden="true"><path d="m3 4.5 3 3 3-3" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></a>
       <div class="dl-menu" role="menu">
-      <p class="dl-head">最新バージョン <span class="dl-ver">v1.12.0</span></p>
-      <a class="dl-item" role="menuitem" data-arch="arm" href="https://github.com/Yudaotor/lyrimuse/releases/download/v1.12.0/Lyrimuse-v1.12.0-macos.dmg"><span class="dl-ico"><svg viewBox="0 0 20 20" aria-hidden="true"><rect x="5" y="5" width="10" height="10" rx="2.2" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M8 2.5V5M12 2.5V5M8 15v2.5M12 15v2.5M2.5 8H5M2.5 12H5M15 8h2.5M15 12h2.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></span><span class="dl-txt"><b>Apple Silicon<span class="dl-rec">おすすめ</span></b><em>M1以降 · DMG · <span class="dl-size">20 MB</span></em></span></a>
-      <a class="dl-item" role="menuitem" data-arch="x86" href="https://github.com/Yudaotor/lyrimuse/releases/download/v1.12.0/Lyrimuse-v1.12.0-macos-intel.dmg"><span class="dl-ico"><svg viewBox="0 0 20 20" aria-hidden="true"><rect x="5" y="5" width="10" height="10" rx="2.2" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M8 2.5V5M12 2.5V5M8 15v2.5M12 15v2.5M2.5 8H5M2.5 12H5M15 8h2.5M15 12h2.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></span><span class="dl-txt"><b>Intel<span class="dl-rec">おすすめ</span></b><em>Intel搭載のMac · DMG · <span class="dl-size">38 MB</span></em></span></a>
+      <p class="dl-head">最新バージョン <span class="dl-ver">v1.13.0</span></p>
+      <a class="dl-item" role="menuitem" data-arch="arm" href="https://github.com/Yudaotor/lyrimuse/releases/download/v1.13.0/Lyrimuse-v1.13.0-macos.dmg"><span class="dl-ico"><svg viewBox="0 0 20 20" aria-hidden="true"><rect x="5" y="5" width="10" height="10" rx="2.2" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M8 2.5V5M12 2.5V5M8 15v2.5M12 15v2.5M2.5 8H5M2.5 12H5M15 8h2.5M15 12h2.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></span><span class="dl-txt"><b>Apple Silicon<span class="dl-rec">おすすめ</span></b><em>M1以降 · DMG · <span class="dl-size">22 MB</span></em></span></a>
+      <a class="dl-item" role="menuitem" data-arch="x86" href="https://github.com/Yudaotor/lyrimuse/releases/download/v1.13.0/Lyrimuse-v1.13.0-macos-intel.dmg"><span class="dl-ico"><svg viewBox="0 0 20 20" aria-hidden="true"><rect x="5" y="5" width="10" height="10" rx="2.2" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M8 2.5V5M12 2.5V5M8 15v2.5M12 15v2.5M2.5 8H5M2.5 12H5M15 8h2.5M15 12h2.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></span><span class="dl-txt"><b>Intel<span class="dl-rec">おすすめ</span></b><em>Intel搭載のMac · DMG · <span class="dl-size">41 MB</span></em></span></a>
       <a class="dl-item" role="menuitem" href="https://github.com/Yudaotor/lyrimuse/releases/latest"><span class="dl-ico"><svg viewBox="0 0 20 20" aria-hidden="true"><path fill="currentColor" d="M10 1.8a8.2 8.2 0 0 0-2.6 16c.4.1.6-.2.6-.4v-1.5c-2.3.5-2.8-1-2.8-1-.4-.9-.9-1.2-.9-1.2-.7-.5.1-.5.1-.5.8.1 1.3.9 1.3.9.7 1.3 2 .9 2.4.7.1-.5.3-.9.5-1.1-1.8-.2-3.7-.9-3.7-4 0-.9.3-1.6.9-2.2-.1-.2-.4-1 .1-2.2 0 0 .7-.2 2.3.9a7.9 7.9 0 0 1 4.1 0c1.6-1.1 2.3-.9 2.3-.9.4 1.2.2 2 .1 2.2.5.6.9 1.3.9 2.2 0 3.2-1.9 3.8-3.7 4 .3.3.6.8.6 1.5v2.3c0 .2.1.5.6.4A8.2 8.2 0 0 0 10 1.8z"/></svg></span><span class="dl-txt"><b>GitHubですべてのダウンロードを見る</b><em>全バージョン、ZIP、チェックサム</em></span></a>
       <p class="dl-note">LyrimuseはAppleの公証を受けていないため、DMGからの初回起動はmacOSにブロックされます。「システム設定」→「プライバシーとセキュリティ」を開き、「このまま開く」をクリックしてください。Homebrewでインストールした場合、この操作は不要です。</p>
     </div></div>
@@ -1827,7 +1853,7 @@ color: var(--ink); transition: box-shadow .25s, transform .25s;
         <div class="foot-col"><p class="foot-h">製品</p><ul><li><a href="../features/">機能一覧</a></li><li><a href="../players/">対応プレーヤー</a></li><li><a href="./">更新履歴</a></li><li><a href="https://github.com/Yudaotor/lyrimuse/releases">Releases</a></li></ul></div>
         <div class="foot-col"><p class="foot-h">ヘルプ</p><ul><li><a href="../#faq">よくある質問</a></li><li><a href="https://github.com/Yudaotor/lyrimuse/issues/new/choose">問題を報告</a></li><li><a href="https://github.com/Yudaotor/lyrimuse/discussions/categories/q-a">質問する</a></li><li><a href="../privacy/">プライバシー</a></li><li><a href="../terms/">利用規約</a></li></ul></div>
         <div class="foot-col"><p class="foot-h">情報</p><ul><li><a href="https://github.com/Yudaotor/lyrimuse/blob/main/README.ja.md">GitHub</a></li><li><a href="https://youtu.be/0CRK4arrBOc">紹介ビデオ</a></li><li><a href="https://github.com/sponsors/Yudaotor">スポンサー</a></li><li><a href="https://github.com/Yudaotor/lyrimuse/blob/main/LICENSE">GPL-3.0</a></li></ul></div>
-        <div class="foot-col"><p class="foot-h">言語</p><ul><li><a href="../../changelog/" lang="en">English</a></li><li><a href="../../zh/changelog/" lang="zh-Hans">简体中文</a></li><li><a href="../../zh-Hant/changelog/" lang="zh-Hant">繁體中文</a></li><li><a href="./" lang="ja" aria-current="page">日本語</a></li><li><a href="../../ko/changelog/" lang="ko">한국어</a></li><li><a href="../../es/changelog/" lang="es">Español</a></li><li><a href="../../fr/changelog/" lang="fr">Français</a></li><li><a href="../../de/changelog/" lang="de">Deutsch</a></li></ul></div>
+        <div class="foot-col"><p class="foot-h">言語</p><ul><li><a href="../../changelog/" lang="en">English</a></li><li><a href="../../zh/changelog/" lang="zh-Hans">简体中文</a></li><li><a href="../../zh-Hant/changelog/" lang="zh-Hant">繁體中文</a></li><li><a href="./" lang="ja" aria-current="page">日本語</a></li><li><a href="../../ko/changelog/" lang="ko">한국어</a></li><li><a href="../../es/changelog/" lang="es">Español</a></li><li><a href="../../fr/changelog/" lang="fr">Français</a></li><li><a href="../../de/changelog/" lang="de">Deutsch</a></li><li><a href="../../it/changelog/" lang="it">Italiano</a></li><li><a href="../../pt-BR/changelog/" lang="pt-BR">Português (Brasil)</a></li><li><a href="../../vi/changelog/" lang="vi">Tiếng Việt</a></li><li><a href="../../ru/changelog/" lang="ru">Русский</a></li><li><a href="../../uk/changelog/" lang="uk">Українська</a></li><li><a href="../../th/changelog/" lang="th">ไทย</a></li></ul></div>
       </nav>
     </div>
     <p class="foot-note">Apple Music、Spotify、KKBOXなどの名称とアイコンは、それぞれの所有者に帰属します。Lyrimuseは独立したオープンソースプロジェクトであり、これらのいずれとも提携していません。</p>

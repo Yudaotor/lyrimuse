@@ -14,13 +14,19 @@
 <link rel="alternate" hreflang="es" href="https://yudaotor.github.io/lyrimuse/es/compare/">
 <link rel="alternate" hreflang="fr" href="https://yudaotor.github.io/lyrimuse/fr/compare/">
 <link rel="alternate" hreflang="de" href="https://yudaotor.github.io/lyrimuse/de/compare/">
+<link rel="alternate" hreflang="it" href="https://yudaotor.github.io/lyrimuse/it/compare/">
+<link rel="alternate" hreflang="pt-BR" href="https://yudaotor.github.io/lyrimuse/pt-BR/compare/">
+<link rel="alternate" hreflang="vi" href="https://yudaotor.github.io/lyrimuse/vi/compare/">
+<link rel="alternate" hreflang="ru" href="https://yudaotor.github.io/lyrimuse/ru/compare/">
+<link rel="alternate" hreflang="uk" href="https://yudaotor.github.io/lyrimuse/uk/compare/">
+<link rel="alternate" hreflang="th" href="https://yudaotor.github.io/lyrimuse/th/compare/">
 <link rel="alternate" hreflang="x-default" href="https://yudaotor.github.io/lyrimuse/compare/">
 <link rel="icon" type="image/png" sizes="64x64" href="../../assets/img/favicon.png">
 <link rel="apple-touch-icon" href="../../assets/img/apple-touch-icon.png">
 <meta name="color-scheme" content="light dark">
 <meta name="theme-color" content="#fbfbfd" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#000000" media="(prefers-color-scheme: dark)">
-<script src="../../assets/sub.js?v=202611022138" defer fetchpriority="high"></script>
+<script src="../../assets/sub.js?v=202611110151" defer fetchpriority="high"></script>
 <style>:root {
 --bg: #fbfbfd;
 --bg-alt: #f5f5f7;
@@ -386,20 +392,26 @@ opacity: 0; transition: opacity .25s, transform .35s var(--ease-out);
 position: absolute; width: 76px; height: 76px; filter: drop-shadow(0 14px 22px rgba(60, 20, 50, .22));
 animation: flpop .7s cubic-bezier(.3, 1.45, .5, 1) backwards; animation-delay: calc(.25s + var(--k, 0) * 35ms);
 }
-.fl-1 { left: -54px; top: 16%; transform: rotate(-8deg); }
-.fl-2 { left: -30px; top: 62%; width: 64px; height: 64px; }
-.fl-3 { right: -48px; top: 12%; width: 70px; height: 70px; }
-.fl-4 { right: -60px; top: 55%; width: 78px; height: 78px; }
-.fl-5 { left: 8%; bottom: -34px; width: 60px; height: 60px; }
-.fl-6 { right: 12%; bottom: -30px; width: 62px; height: 62px; }
-.fl-7 { left: -44px; top: 39%; width: 60px; height: 60px; transform: rotate(6deg); }
-.fl-8 { right: -40px; top: 31%; width: 58px; height: 58px; transform: rotate(-6deg); }
-.fl-9 { left: 36%; bottom: -30px; width: 58px; height: 58px; }
-.fl-10 { left: 64%; bottom: -32px; width: 56px; height: 56px; transform: rotate(-4deg); }
-.fl-11 { right: -36px; top: 78%; width: 56px; height: 56px; transform: rotate(5deg); }
+.fl-1 { left: -54px; top: 4%; transform: rotate(-8deg); }
+.fl-2 { left: -30px; top: 52%; width: 64px; height: 64px; }
+.fl-3 { right: -48px; top: 2%; width: 70px; height: 70px; }
+.fl-4 { right: -60px; top: 50%; width: 78px; height: 78px; }
+.fl-5 { left: 4%; bottom: -34px; width: 60px; height: 60px; }
+.fl-6 { right: 7%; bottom: -30px; width: 62px; height: 62px; }
+.fl-7 { left: -44px; top: 36%; width: 60px; height: 60px; transform: rotate(6deg); }
+.fl-8 { right: -40px; top: 18%; width: 58px; height: 58px; transform: rotate(-6deg); }
+.fl-9 { left: 26%; bottom: -30px; width: 58px; height: 58px; }
+.fl-10 { left: 59%; bottom: -32px; width: 56px; height: 56px; transform: rotate(-4deg); }
+.fl-11 { right: -36px; top: 68%; width: 56px; height: 56px; transform: rotate(5deg); }
 .fl-12 { left: -40px; top: 84%; width: 58px; height: 58px; transform: rotate(-5deg); }
-.fl-13 { left: 22%; bottom: -36px; width: 56px; height: 56px; transform: rotate(5deg); }
-.fl-14 { left: 50%; bottom: -30px; width: 58px; height: 58px; transform: rotate(-3deg); }
+.fl-13 { left: 15%; bottom: -36px; width: 56px; height: 56px; transform: rotate(5deg); }
+.fl-14 { left: 48%; bottom: -30px; width: 58px; height: 58px; transform: rotate(-3deg); }
+.fl-15 { left: -36px; top: 20%; width: 62px; height: 62px; transform: rotate(4deg); }
+.fl-16 { left: -46px; top: 68%; width: 60px; height: 60px; transform: rotate(-4deg); }
+.fl-17 { right: -52px; top: 34%; width: 64px; height: 64px; transform: rotate(4deg); }
+.fl-18 { right: -44px; top: 84%; width: 60px; height: 60px; transform: rotate(-5deg); }
+.fl-19 { left: 37%; bottom: -34px; width: 58px; height: 58px; transform: rotate(4deg); }
+.fl-20 { left: 70%; bottom: -30px; width: 56px; height: 56px; transform: rotate(-5deg); }
 @keyframes flpop { from { opacity: 0; scale: .3; } }
 .players { padding: 56px 0 72px; text-align: center; }
 .kicker { margin: 0 0 22px; font-size: 13px; font-weight: 600; letter-spacing: .08em; color: var(--ink-3); text-transform: uppercase; }
@@ -1314,7 +1326,7 @@ background: var(--card); color: var(--ink); box-shadow: 0 30px 80px rgba(0, 0, 0
 .warm.far, .warm.far *, .warm.far *::before, .warm.far *::after,
 .hero.far, .hero.far *, .hero.far *::before, .hero.far *::after { animation-play-state: paused !important; }
 .ch.watch { contain-intrinsic-size: auto 960px; }
-.ch-more { contain-intrinsic-size: auto 680px; }
+.ch-more { contain-intrinsic-size: auto 780px; }
 .ch-duo { contain-intrinsic-size: auto 1080px; }
 .ch-voices { contain-intrinsic-size: auto 720px; }
 .news { contain-intrinsic-size: auto 170px; }
@@ -1323,7 +1335,7 @@ background: var(--card); color: var(--ink); box-shadow: 0 30px 80px rgba(0, 0, 0
 @media (max-width: 820px) {
 .ch { contain-intrinsic-size: auto 620px; }
 .ch.watch { contain-intrinsic-size: auto 470px; }
-.ch-more { contain-intrinsic-size: auto 950px; }
+.ch-more { contain-intrinsic-size: auto 1140px; }
 .ch-duo { contain-intrinsic-size: auto 1500px; }
 .ch-voices { contain-intrinsic-size: auto 1450px; }
 .news { contain-intrinsic-size: auto 450px; }
@@ -1379,9 +1391,9 @@ transition: transform .3s var(--ease-out), background .2s, opacity .2s;
 .links { display: none; }
 .nav-in { gap: 8px; }
 .fl { width: 44px !important; height: 44px !important; }
-.fl-1, .fl-2, .fl-7, .fl-12 { left: -12px; }
-.fl-3, .fl-4, .fl-8, .fl-11 { right: -12px; }
-.fl-5, .fl-6, .fl-9, .fl-10, .fl-13, .fl-14 { bottom: -18px; }
+.fl-1, .fl-2, .fl-7, .fl-12, .fl-15, .fl-16 { left: -12px; }
+.fl-3, .fl-4, .fl-8, .fl-11, .fl-17, .fl-18 { right: -12px; }
+.fl-5, .fl-6, .fl-9, .fl-10, .fl-13, .fl-14, .fl-19, .fl-20 { bottom: -18px; }
 .mb-left span { display: none; }
 .ch { padding-top: 104px; }
 #display { padding-top: 40px; }
@@ -1409,6 +1421,10 @@ transition: transform .3s var(--ease-out), background .2s, opacity .2s;
 @media (max-width: 480px) {
 .hero { padding-top: 28px; }
 .fl { width: 36px !important; height: 36px !important; }
+.fl-15, .fl-16, .fl-17, .fl-18, .fl-19, .fl-20 { display: none; }
+.fl-1 { top: 16%; } .fl-7 { top: 39%; } .fl-2 { top: 62%; } .fl-12 { top: 84%; }
+.fl-3 { top: 12%; } .fl-8 { top: 31%; } .fl-4 { top: 55%; } .fl-11 { top: 78%; }
+.fl-5 { left: 8%; } .fl-13 { left: 22%; } .fl-9 { left: 36%; } .fl-14 { left: 50%; } .fl-10 { left: 64%; } .fl-6 { right: 12%; }
 .btn:not(.btn-sm) { height: 46px; padding: 0 20px; }
 .brand span { display: none; }
 .ch-stage { aspect-ratio: 3 / 3.4; --wz: 240% !important; }
@@ -1739,12 +1755,18 @@ color: var(--ink); transition: box-shadow .25s, transform .25s;
       <a class="dl-item" role="menuitem" lang="es" href="../../es/compare/">Español</a>
       <a class="dl-item" role="menuitem" lang="fr" href="../../fr/compare/">Français</a>
       <a class="dl-item" role="menuitem" lang="de" href="../../de/compare/">Deutsch</a>
+      <a class="dl-item" role="menuitem" lang="it" href="../../it/compare/">Italiano</a>
+      <a class="dl-item" role="menuitem" lang="pt-BR" href="../../pt-BR/compare/">Português (Brasil)</a>
+      <a class="dl-item" role="menuitem" lang="vi" href="../../vi/compare/">Tiếng Việt</a>
+      <a class="dl-item" role="menuitem" lang="ru" href="../../ru/compare/">Русский</a>
+      <a class="dl-item" role="menuitem" lang="uk" href="../../uk/compare/">Українська</a>
+      <a class="dl-item" role="menuitem" lang="th" href="../../th/compare/">ไทย</a>
     </div></div>
     <div class="dl dl-end dl-download"><a class="btn btn-dark btn-sm dl-trigger" href="https://github.com/Yudaotor/lyrimuse/releases/latest" aria-haspopup="menu" aria-expanded="false">다운로드<svg class="chev" viewBox="0 0 12 12" aria-hidden="true"><path d="m3 4.5 3 3 3-3" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></a>
     <div class="dl-menu" role="menu">
-      <p class="dl-head">최신 버전 <span class="dl-ver">v1.12.0</span></p>
-      <a class="dl-item" role="menuitem" data-arch="arm" href="https://github.com/Yudaotor/lyrimuse/releases/download/v1.12.0/Lyrimuse-v1.12.0-macos.dmg"><span class="dl-ico"><svg viewBox="0 0 20 20" aria-hidden="true"><rect x="5" y="5" width="10" height="10" rx="2.2" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M8 2.5V5M12 2.5V5M8 15v2.5M12 15v2.5M2.5 8H5M2.5 12H5M15 8h2.5M15 12h2.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></span><span class="dl-txt"><b>Apple Silicon<span class="dl-rec">추천</span></b><em>M1 이상 · DMG · <span class="dl-size">20 MB</span></em></span></a>
-      <a class="dl-item" role="menuitem" data-arch="x86" href="https://github.com/Yudaotor/lyrimuse/releases/download/v1.12.0/Lyrimuse-v1.12.0-macos-intel.dmg"><span class="dl-ico"><svg viewBox="0 0 20 20" aria-hidden="true"><rect x="5" y="5" width="10" height="10" rx="2.2" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M8 2.5V5M12 2.5V5M8 15v2.5M12 15v2.5M2.5 8H5M2.5 12H5M15 8h2.5M15 12h2.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></span><span class="dl-txt"><b>Intel<span class="dl-rec">추천</span></b><em>Intel 기반 Mac · DMG · <span class="dl-size">38 MB</span></em></span></a>
+      <p class="dl-head">최신 버전 <span class="dl-ver">v1.13.0</span></p>
+      <a class="dl-item" role="menuitem" data-arch="arm" href="https://github.com/Yudaotor/lyrimuse/releases/download/v1.13.0/Lyrimuse-v1.13.0-macos.dmg"><span class="dl-ico"><svg viewBox="0 0 20 20" aria-hidden="true"><rect x="5" y="5" width="10" height="10" rx="2.2" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M8 2.5V5M12 2.5V5M8 15v2.5M12 15v2.5M2.5 8H5M2.5 12H5M15 8h2.5M15 12h2.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></span><span class="dl-txt"><b>Apple Silicon<span class="dl-rec">추천</span></b><em>M1 이상 · DMG · <span class="dl-size">22 MB</span></em></span></a>
+      <a class="dl-item" role="menuitem" data-arch="x86" href="https://github.com/Yudaotor/lyrimuse/releases/download/v1.13.0/Lyrimuse-v1.13.0-macos-intel.dmg"><span class="dl-ico"><svg viewBox="0 0 20 20" aria-hidden="true"><rect x="5" y="5" width="10" height="10" rx="2.2" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M8 2.5V5M12 2.5V5M8 15v2.5M12 15v2.5M2.5 8H5M2.5 12H5M15 8h2.5M15 12h2.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></span><span class="dl-txt"><b>Intel<span class="dl-rec">추천</span></b><em>Intel 기반 Mac · DMG · <span class="dl-size">41 MB</span></em></span></a>
       <a class="dl-item" role="menuitem" href="https://github.com/Yudaotor/lyrimuse/releases/latest"><span class="dl-ico"><svg viewBox="0 0 20 20" aria-hidden="true"><path fill="currentColor" d="M10 1.8a8.2 8.2 0 0 0-2.6 16c.4.1.6-.2.6-.4v-1.5c-2.3.5-2.8-1-2.8-1-.4-.9-.9-1.2-.9-1.2-.7-.5.1-.5.1-.5.8.1 1.3.9 1.3.9.7 1.3 2 .9 2.4.7.1-.5.3-.9.5-1.1-1.8-.2-3.7-.9-3.7-4 0-.9.3-1.6.9-2.2-.1-.2-.4-1 .1-2.2 0 0 .7-.2 2.3.9a7.9 7.9 0 0 1 4.1 0c1.6-1.1 2.3-.9 2.3-.9.4 1.2.2 2 .1 2.2.5.6.9 1.3.9 2.2 0 3.2-1.9 3.8-3.7 4 .3.3.6.8.6 1.5v2.3c0 .2.1.5.6.4A8.2 8.2 0 0 0 10 1.8z"/></svg></span><span class="dl-txt"><b>GitHub에서 모든 다운로드 보기</b><em>모든 버전, ZIP 및 체크섬</em></span></a>
       <p class="dl-note">Lyrimuse는 Apple의 공증을 받지 않았기 때문에 DMG로 설치하면 macOS가 처음 실행을 차단합니다. 시스템 설정 → 개인정보 보호 및 보안에서 ‘그래도 열기’를 클릭하십시오. Homebrew로 설치하면 이 과정이 필요 없습니다.</p>
     </div></div>
@@ -1759,11 +1781,11 @@ color: var(--ink); transition: box-shadow .25s, transform .25s;
   <p class="sub-lede">Mac용 오픈 소스 가사 앱 세 가지를 각 프로젝트의 저장소, README, 릴리스 노트에 적힌 내용을 기준으로 비교합니다.</p>
   <p class="sub-meta">확인 날짜: 2026년 11월 1일</p>
 </section>
-<section class="app-cards"><article class="app-card me"><h2>Lyrimuse</h2><p class="app-sub">GPL-3.0 · v1.12.0 · macOS 14 이상</p><p>플레이어 14개를 지원하며, 중국 앱은 물론 브라우저의 YouTube Music과 Spotify에서도 작동합니다. 가사 소스 15곳의 결과를 함께 채점합니다. Touch Bar를 포함한 화면 다섯 곳에 가사를 띄우고, 휴대폰이나 태블릿에서도 볼 수 있습니다.</p></article><article class="app-card"><h2>LyricsX</h2><p class="app-sub">MPL-2.0 · v1.6.3 · macOS 10.11 이상</p><p>Apple Music, Spotify와 몇몇 로컬 플레이어를 지원하는 오래된 Mac 가사 앱입니다. 마지막 릴리스는 2022년 4월에 나왔습니다.</p></article><article class="app-card"><h2>Lyric Fever</h2><p class="app-sub">MIT · v3.3 · macOS 15 이상</p><p>Spotify와 Apple Music을 중심으로 만들어졌으며, 전체 화면 보기와 가라오케 팝업이 있습니다. 가사는 주로 Spotify에서 가져옵니다.</p></article></section>
+<section class="app-cards"><article class="app-card me"><h2>Lyrimuse</h2><p class="app-sub">GPL-3.0 · v1.13.0 · macOS 14 이상</p><p>플레이어 20개를 지원하며, 중국 앱은 물론 브라우저의 YouTube Music과 Spotify에서도 작동합니다. 가사 소스 15곳의 결과를 함께 채점합니다. Touch Bar를 포함한 화면 다섯 곳에 가사를 띄우고, 휴대폰이나 태블릿에서도 볼 수 있습니다.</p></article><article class="app-card"><h2>LyricsX</h2><p class="app-sub">MPL-2.0 · v1.6.3 · macOS 10.11 이상</p><p>Apple Music, Spotify와 몇몇 로컬 플레이어를 지원하는 오래된 Mac 가사 앱입니다. 마지막 릴리스는 2022년 4월에 나왔습니다.</p></article><article class="app-card"><h2>Lyric Fever</h2><p class="app-sub">MIT · v3.3 · macOS 15 이상</p><p>Spotify와 Apple Music을 중심으로 만들어졌으며, 전체 화면 보기와 가라오케 팝업이 있습니다. 가사는 주로 Spotify에서 가져옵니다.</p></article></section>
 <p class="callout cmp-callout"><strong>고지:</strong> 이 페이지는 Lyrimuse 개발자가 관리합니다. 모든 칸의 내용은 해당 프로젝트의 저장소, README, 릴리스 노트에서 가져왔습니다. 대시(—)는 공개 자료에 그 기능이 언급되지 않았다는 뜻이며, 그 기능이 없다는 뜻은 아닙니다. 틀린 부분을 발견하셨다면 <a href="https://github.com/Yudaotor/lyrimuse/issues">이슈를 등록해 주십시오</a>.</p>
 <section class="cmp-sec" id="table">
   <h2 class="sec-h">항목별 비교</h2>
-  <div class="tbl-wrap"><table class="tbl cmp"><thead><tr><th scope="col"><span class="vh">항목</span></th><th scope="col" class="me">Lyrimuse</th><th scope="col">LyricsX</th><th scope="col">Lyric Fever</th></tr></thead><tbody><tr><th scope="row">라이선스</th><td data-label="Lyrimuse" class="me">GPL-3.0</td><td data-label="LyricsX">MPL-2.0</td><td data-label="Lyric Fever">MIT</td></tr><tr><th scope="row">최신 릴리스</th><td data-label="Lyrimuse" class="me">v1.12.0(2026년 11월)</td><td data-label="LyricsX">v1.6.3(2022년 4월)</td><td data-label="Lyric Fever">v3.3(2025년 11월)</td></tr><tr><th scope="row">요구 사항</th><td data-label="Lyrimuse" class="me">macOS 14 이상, Apple Silicon 및 Intel</td><td data-label="LyricsX">macOS 10.11 이상</td><td data-label="Lyric Fever">macOS 15 이상</td></tr><tr><th scope="row">설치</th><td data-label="Lyrimuse" class="me">Homebrew(개발자의 자체 tap) 또는 DMG. Apple의 공증을 받지 않아 DMG로 설치하면 처음 실행할 때 시스템 설정 → 개인정보 보호 및 보안 → ‘그래도 열기’를 눌러야 합니다. Homebrew로 설치하면 이 과정이 필요 없습니다</td><td data-label="LyricsX">Homebrew 공식 cask 저장소 또는 GitHub에서 다운로드</td><td data-label="Lyric Fever">Homebrew 공식 cask 저장소 또는 DMG</td></tr><tr><th scope="row">플레이어</th><td data-label="Lyrimuse" class="me">Apple Music, Spotify, Amazon Music, KKBOX, QQ Music, NetEase Cloud Music, Kugou, Soda Music, LX Music, reAMP, VOX, Pine Player, foobar2000, 그리고 YouTube Music 앱 Kaset. 여러 개를 선택하거나, 재생 중인 플레이어를 자동으로 따라가게 할 수 있습니다</td><td data-label="LyricsX">Apple Music, Spotify, Vox, Audirvana, Swinsian</td><td data-label="Lyric Fever">Spotify, Apple Music</td></tr><tr><th scope="row">웹 플레이어</th><td data-label="Lyrimuse" class="me">YouTube Music, Spotify 웹 플레이어. 웹 페이지의 실제 재생 위치를 따라갑니다</td><td data-label="LyricsX" data-none="1">—</td><td data-label="Lyric Fever" data-none="1">—</td></tr><tr><th scope="row">가사 소스</th><td data-label="Lyrimuse" class="me">15개: NetEase, QQ Music, Kugou, Kuwo, Migu, Soda Music, Musixmatch, LRCLIB, LyricFind, Deezer, AMLL, VIBE, Genie, PetitLyrics, 그리고 계정을 연결하면 Apple Music</td><td data-label="LyricsX">여러 개(LyricsKit 구성 요소를 통해)</td><td data-label="Lyric Fever">Spotify, LRCLIB, NetEase</td></tr><tr><th scope="row">가사 선택 방식</th><td data-label="Lyrimuse" class="me">모든 소스의 후보를 하나의 기준(제목, 아티스트, 앨범, 길이, 단어별 타이밍 등)으로 채점합니다. 곡마다 점수를 열어 볼 수 있으며, 직접 선택한 가사는 그대로 유지됩니다</td><td data-label="LyricsX" data-none="1">—</td><td data-label="Lyric Fever">Spotify 우선, 없으면 LRCLIB, 그다음 NetEase</td></tr><tr><th scope="row">단어별 동기화</th><td data-label="Lyrimuse" class="me">지원합니다. 여러 소스에 걸쳐 작동하며, Apple Music 자체 단어별 타이밍과 사람이 직접 만든 AMLL 라이브러리도 포함합니다</td><td data-label="LyricsX">지원(가사 소스에 있는 경우)</td><td data-label="Lyric Fever" data-none="1">—</td></tr><tr><th scope="row">번역</th><td data-label="Lyrimuse" class="me">가사 소스 자체 번역을 우선 사용하고, 없으면 Apple 기기 내 번역으로 17개 언어로 번역합니다. 온라인 대체 번역도 선택할 수 있습니다</td><td data-label="LyricsX">가사 소스 자체 번역 표시</td><td data-label="Lyric Fever">Apple 기기 내 번역, 곡별 원문 언어 지정 가능</td></tr><tr><th scope="row">로마자 표기</th><td data-label="Lyrimuse" class="me">일본어는 로마지 또는 가나, 한국어는 로마자, 표준 중국어는 병음, 광둥어는 Jyutping, 그 밖에 러시아어, 그리스어, 태국어 등 18개 언어는 각 언어의 공식 로마자 표기. 줄 단위로 판단하며 언어별로 따로 켜고 끌 수 있습니다</td><td data-label="LyricsX" data-none="1">—</td><td data-label="Lyric Fever">일본어 로마자 표기</td></tr><tr><th scope="row">간체·번체 중국어</th><td data-label="Lyrimuse" class="me">양방향으로 변환하며, 인터페이스 언어와 따로 설정합니다</td><td data-label="LyricsX">지원</td><td data-label="Lyric Fever">지원(홍콩·대만 번체 포함)</td></tr><tr><th scope="row">듀엣</th><td data-label="Lyrimuse" class="me">가사 소스에 누가 부르는지 표시되어 있으면 가수별로 줄을 나눠 표시합니다</td><td data-label="LyricsX" data-none="1">—</td><td data-label="Lyric Fever" data-none="1">—</td></tr><tr><th scope="row">재생 기록</th><td data-label="Lyrimuse" class="me">Last.fm, ListenBrainz 스크로블, 로컬 재생 기록, 차트, 1년 히트맵</td><td data-label="LyricsX" data-none="1">—</td><td data-label="Lyric Fever" data-none="1">—</td></tr><tr><th scope="row">가사 표시 위치</th><td data-label="Lyrimuse" class="me">데스크탑 플로팅 가사, 노치 아래, 메뉴 막대, Touch Bar, 미니 플레이어로 줄어드는 가사 윈도우. 가사 윈도우는 휴대폰이나 태블릿의 브라우저에서도 열 수 있으며, OBS에서 브라우저 소스로 가사를 띄울 수 있습니다</td><td data-label="LyricsX">데스크탑, 메뉴 막대, Touch Bar</td><td data-label="Lyric Fever">메뉴 막대, 전체 화면, 가라오케 팝업</td></tr><tr><th scope="row">Discord 상태</th><td data-label="Lyrimuse" class="me">Discord 프로필에 노래, 아티스트, 앨범, 아트워크, 재생 위치를 표시하고, 원하면 지금 부르는 가사 줄도 표시합니다. 기본적으로 꺼져 있으며, Mac의 Discord 앱하고만 통신합니다</td><td data-label="LyricsX" data-none="1">—</td><td data-label="Lyric Fever" data-none="1">—</td></tr><tr><th scope="row">인터페이스 언어</th><td data-label="Lyrimuse" class="me">영어, 중국어 간체, 중국어 번체, 일본어, 한국어, 스페인어, 프랑스어, 독일어</td><td data-label="LyricsX">다양함(Crowdin에서 커뮤니티가 번역)</td><td data-label="Lyric Fever">영어, 중국어 간체, 중국어 번체</td></tr></tbody></table></div>
+  <div class="tbl-wrap"><table class="tbl cmp"><thead><tr><th scope="col"><span class="vh">항목</span></th><th scope="col" class="me">Lyrimuse</th><th scope="col">LyricsX</th><th scope="col">Lyric Fever</th></tr></thead><tbody><tr><th scope="row">라이선스</th><td data-label="Lyrimuse" class="me">GPL-3.0</td><td data-label="LyricsX">MPL-2.0</td><td data-label="Lyric Fever">MIT</td></tr><tr><th scope="row">최신 릴리스</th><td data-label="Lyrimuse" class="me">v1.13.0(2026년 11월)</td><td data-label="LyricsX">v1.6.3(2022년 4월)</td><td data-label="Lyric Fever">v3.3(2025년 11월)</td></tr><tr><th scope="row">요구 사항</th><td data-label="Lyrimuse" class="me">macOS 14 이상, Apple Silicon 및 Intel</td><td data-label="LyricsX">macOS 10.11 이상</td><td data-label="Lyric Fever">macOS 15 이상</td></tr><tr><th scope="row">설치</th><td data-label="Lyrimuse" class="me">Homebrew(개발자의 자체 tap) 또는 DMG. Apple의 공증을 받지 않아 DMG로 설치하면 처음 실행할 때 시스템 설정 → 개인정보 보호 및 보안 → ‘그래도 열기’를 눌러야 합니다. Homebrew로 설치하면 이 과정이 필요 없습니다</td><td data-label="LyricsX">Homebrew 공식 cask 저장소 또는 GitHub에서 다운로드</td><td data-label="Lyric Fever">Homebrew 공식 cask 저장소 또는 DMG</td></tr><tr><th scope="row">플레이어</th><td data-label="Lyrimuse" class="me">Apple Music, Spotify, Amazon Music, KKBOX, QQ Music, NetEase Cloud Music, Kugou, Soda Music, LX Music, reAMP, VOX, Pine Player, foobar2000, Swinsian, Plexamp, MyGo Music, Audirvana, YouTube Music 앱 Kaset과 Pear Desktop, 그리고 WeRead 오디오북. 여러 개를 선택하거나, 재생 중인 플레이어를 자동으로 따라가게 할 수 있습니다</td><td data-label="LyricsX">Apple Music, Spotify, Vox, Audirvana, Swinsian</td><td data-label="Lyric Fever">Spotify, Apple Music</td></tr><tr><th scope="row">웹 플레이어</th><td data-label="Lyrimuse" class="me">YouTube Music, Spotify 웹 플레이어. 웹 페이지의 실제 재생 위치를 따라갑니다</td><td data-label="LyricsX" data-none="1">—</td><td data-label="Lyric Fever" data-none="1">—</td></tr><tr><th scope="row">가사 소스</th><td data-label="Lyrimuse" class="me">15개: NetEase, QQ Music, Kugou, Kuwo, Migu, Soda Music, Musixmatch, LRCLIB, LyricFind, Deezer, AMLL, VIBE, Genie, PetitLyrics, 그리고 계정을 연결하면 Apple Music</td><td data-label="LyricsX">여러 개(LyricsKit 구성 요소를 통해)</td><td data-label="Lyric Fever">Spotify, LRCLIB, NetEase</td></tr><tr><th scope="row">가사 선택 방식</th><td data-label="Lyrimuse" class="me">모든 소스의 후보를 하나의 기준(제목, 아티스트, 앨범, 길이, 단어별 타이밍 등)으로 채점합니다. 곡마다 점수를 열어 볼 수 있으며, 직접 선택한 가사는 그대로 유지됩니다</td><td data-label="LyricsX" data-none="1">—</td><td data-label="Lyric Fever">Spotify 우선, 없으면 LRCLIB, 그다음 NetEase</td></tr><tr><th scope="row">단어별 동기화</th><td data-label="Lyrimuse" class="me">지원합니다. 여러 소스에 걸쳐 작동하며, Apple Music 자체 단어별 타이밍과 사람이 직접 만든 AMLL 라이브러리도 포함합니다</td><td data-label="LyricsX">지원(가사 소스에 있는 경우)</td><td data-label="Lyric Fever" data-none="1">—</td></tr><tr><th scope="row">번역</th><td data-label="Lyrimuse" class="me">가사 소스 자체 번역을 우선 사용하고, 없으면 Apple 기기 내 번역으로 17개 언어로 번역합니다. 온라인 대체 번역도 선택할 수 있습니다</td><td data-label="LyricsX">가사 소스 자체 번역 표시</td><td data-label="Lyric Fever">Apple 기기 내 번역, 곡별 원문 언어 지정 가능</td></tr><tr><th scope="row">로마자 표기</th><td data-label="Lyrimuse" class="me">일본어는 로마지 또는 가나, 한국어는 로마자, 표준 중국어는 병음, 광둥어는 Jyutping, 그 밖에 러시아어, 그리스어, 태국어 등 18개 언어는 각 언어의 공식 로마자 표기. 줄 단위로 판단하며 언어별로 따로 켜고 끌 수 있습니다</td><td data-label="LyricsX" data-none="1">—</td><td data-label="Lyric Fever">일본어 로마자 표기</td></tr><tr><th scope="row">간체·번체 중국어</th><td data-label="Lyrimuse" class="me">양방향으로 변환하며, 인터페이스 언어와 따로 설정합니다</td><td data-label="LyricsX">지원</td><td data-label="Lyric Fever">지원(홍콩·대만 번체 포함)</td></tr><tr><th scope="row">듀엣</th><td data-label="Lyrimuse" class="me">가사 소스에 누가 부르는지 표시되어 있으면 가수별로 줄을 나눠 표시합니다</td><td data-label="LyricsX" data-none="1">—</td><td data-label="Lyric Fever" data-none="1">—</td></tr><tr><th scope="row">재생 기록</th><td data-label="Lyrimuse" class="me">Last.fm, ListenBrainz 스크로블, 로컬 재생 기록, 차트, 1년 히트맵</td><td data-label="LyricsX" data-none="1">—</td><td data-label="Lyric Fever" data-none="1">—</td></tr><tr><th scope="row">가사 표시 위치</th><td data-label="Lyrimuse" class="me">데스크탑 플로팅 가사, 노치 아래, 메뉴 막대, Touch Bar, 미니 플레이어로 줄어드는 가사 윈도우. 가사 윈도우는 휴대폰이나 태블릿의 브라우저에서도 열 수 있으며, OBS에서 브라우저 소스로 가사를 띄울 수 있습니다</td><td data-label="LyricsX">데스크탑, 메뉴 막대, Touch Bar</td><td data-label="Lyric Fever">메뉴 막대, 전체 화면, 가라오케 팝업</td></tr><tr><th scope="row">Discord 상태</th><td data-label="Lyrimuse" class="me">Discord 프로필에 노래, 아티스트, 앨범, 아트워크, 재생 위치를 표시하고, 원하면 지금 부르는 가사 줄도 표시합니다. 기본적으로 꺼져 있으며, Mac의 Discord 앱하고만 통신합니다</td><td data-label="LyricsX" data-none="1">—</td><td data-label="Lyric Fever" data-none="1">—</td></tr><tr><th scope="row">인터페이스 언어</th><td data-label="Lyrimuse" class="me">영어, 중국어 간체, 중국어 번체, 일본어, 한국어, 스페인어, 프랑스어, 독일어, 이탈리아어, 브라질 포르투갈어, 베트남어, 러시아어, 우크라이나어, 태국어</td><td data-label="LyricsX">다양함(Crowdin에서 커뮤니티가 번역)</td><td data-label="Lyric Fever">영어, 중국어 간체, 중국어 번체</td></tr></tbody></table></div>
   <p class="tbl-note">대시(—)는 해당 프로젝트의 공개 자료에 언급이 없다는 뜻입니다.</p>
 </section>
 <section class="cmp-sec cmp-panel">
@@ -1791,7 +1813,7 @@ color: var(--ink); transition: box-shadow .25s, transform .25s;
         <p class="dp-foot"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="m8 5 5 5-5 5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>소스 15개 중 5개 응답</p>
       </div></div></div></div>
 </section>
-<section class="cmp-sec cmp-qa"><div class="qa-item"><h3>LyricsX는 아직 유지 관리되고 있습니까?</h3><p>마지막 릴리스는 2022년 4월 29일에 나온 v1.6.3입니다. 메인 브랜치는 2022년 5월에 마지막으로 변경되었고, 그 이후로는 커뮤니티 번역을 동기화하는 브랜치만 갱신되고 있습니다. 지금도 설치할 수 있으며, 세 앱 중 macOS 13 이하에서 실행되는 유일한 앱입니다.</p></div><div class="qa-item"><h3>나에게 맞는 앱은?</h3><ul><li>주로 Spotify나 Apple Music으로 듣고, Mac이 macOS 15 이상이며, 메뉴 막대나 전체 화면에서 가사를 보고 싶다면 Lyric Fever가 잘 맞습니다. Homebrew 명령 하나로 설치할 수 있습니다.</li><li>QQ Music, NetEase Cloud Music, Kugou, Soda Music, KKBOX, Amazon Music, Kaset으로 음악을 재생하거나 브라우저에서 YouTube Music을 듣는다면, 세 앱 중 이를 지원하는 앱은 Lyrimuse뿐입니다.</li><li>단어별 강조 표시, 병음이나 Jyutping, 노치 옆 가사, 덤으로 Last.fm 스크로블까지 원한다면 Lyrimuse를 선택하십시오.</li><li>Mac이 macOS 14라면 Lyric Fever는 macOS 15 이상이 필요하므로, 실행되는 앱은 Lyrimuse입니다.</li><li>Mac이 macOS 13 이하라면 LyricsX를 여전히 설치할 수 있습니다. 다만 2022년 이후로 새 릴리스는 없습니다.</li></ul></div></section>
+<section class="cmp-sec cmp-qa"><div class="qa-item"><h3>LyricsX는 아직 유지 관리되고 있습니까?</h3><p>마지막 릴리스는 2022년 4월 29일에 나온 v1.6.3입니다. 메인 브랜치는 2022년 5월에 마지막으로 변경되었고, 그 이후로는 커뮤니티 번역을 동기화하는 브랜치만 갱신되고 있습니다. 지금도 설치할 수 있으며, 세 앱 중 macOS 13 이하에서 실행되는 유일한 앱입니다.</p></div><div class="qa-item"><h3>나에게 맞는 앱은?</h3><ul><li>주로 Spotify나 Apple Music으로 듣고, Mac이 macOS 15 이상이며, 메뉴 막대나 전체 화면에서 가사를 보고 싶다면 Lyric Fever가 잘 맞습니다. Homebrew 명령 하나로 설치할 수 있습니다.</li><li>QQ Music, NetEase Cloud Music, Kugou, Soda Music, KKBOX, Amazon Music, Kaset, Pear Desktop, Plexamp, MyGo Music으로 음악을 재생하거나, WeRead로 책을 듣거나, 브라우저에서 YouTube Music을 듣는다면, 세 앱 중 이를 지원하는 앱은 Lyrimuse뿐입니다.</li><li>단어별 강조 표시, 병음이나 Jyutping, 노치 옆 가사, 덤으로 Last.fm 스크로블까지 원한다면 Lyrimuse를 선택하십시오.</li><li>Mac이 macOS 14라면 Lyric Fever는 macOS 15 이상이 필요하므로, 실행되는 앱은 Lyrimuse입니다.</li><li>Mac이 macOS 13 이하라면 LyricsX를 여전히 설치할 수 있습니다. 다만 2022년 이후로 새 릴리스는 없습니다.</li></ul></div></section>
 
 <section class="final">
   <div class="final-card">
@@ -1801,9 +1823,9 @@ color: var(--ink); transition: box-shadow .25s, transform .25s;
     <div class="cta">
       <div class="dl dl-download"><a class="btn btn-white dl-trigger mag" href="https://github.com/Yudaotor/lyrimuse/releases/latest" aria-haspopup="menu" aria-expanded="false">Lyrimuse 다운로드<svg class="chev" viewBox="0 0 12 12" aria-hidden="true"><path d="m3 4.5 3 3 3-3" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></a>
       <div class="dl-menu" role="menu">
-      <p class="dl-head">최신 버전 <span class="dl-ver">v1.12.0</span></p>
-      <a class="dl-item" role="menuitem" data-arch="arm" href="https://github.com/Yudaotor/lyrimuse/releases/download/v1.12.0/Lyrimuse-v1.12.0-macos.dmg"><span class="dl-ico"><svg viewBox="0 0 20 20" aria-hidden="true"><rect x="5" y="5" width="10" height="10" rx="2.2" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M8 2.5V5M12 2.5V5M8 15v2.5M12 15v2.5M2.5 8H5M2.5 12H5M15 8h2.5M15 12h2.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></span><span class="dl-txt"><b>Apple Silicon<span class="dl-rec">추천</span></b><em>M1 이상 · DMG · <span class="dl-size">20 MB</span></em></span></a>
-      <a class="dl-item" role="menuitem" data-arch="x86" href="https://github.com/Yudaotor/lyrimuse/releases/download/v1.12.0/Lyrimuse-v1.12.0-macos-intel.dmg"><span class="dl-ico"><svg viewBox="0 0 20 20" aria-hidden="true"><rect x="5" y="5" width="10" height="10" rx="2.2" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M8 2.5V5M12 2.5V5M8 15v2.5M12 15v2.5M2.5 8H5M2.5 12H5M15 8h2.5M15 12h2.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></span><span class="dl-txt"><b>Intel<span class="dl-rec">추천</span></b><em>Intel 기반 Mac · DMG · <span class="dl-size">38 MB</span></em></span></a>
+      <p class="dl-head">최신 버전 <span class="dl-ver">v1.13.0</span></p>
+      <a class="dl-item" role="menuitem" data-arch="arm" href="https://github.com/Yudaotor/lyrimuse/releases/download/v1.13.0/Lyrimuse-v1.13.0-macos.dmg"><span class="dl-ico"><svg viewBox="0 0 20 20" aria-hidden="true"><rect x="5" y="5" width="10" height="10" rx="2.2" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M8 2.5V5M12 2.5V5M8 15v2.5M12 15v2.5M2.5 8H5M2.5 12H5M15 8h2.5M15 12h2.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></span><span class="dl-txt"><b>Apple Silicon<span class="dl-rec">추천</span></b><em>M1 이상 · DMG · <span class="dl-size">22 MB</span></em></span></a>
+      <a class="dl-item" role="menuitem" data-arch="x86" href="https://github.com/Yudaotor/lyrimuse/releases/download/v1.13.0/Lyrimuse-v1.13.0-macos-intel.dmg"><span class="dl-ico"><svg viewBox="0 0 20 20" aria-hidden="true"><rect x="5" y="5" width="10" height="10" rx="2.2" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M8 2.5V5M12 2.5V5M8 15v2.5M12 15v2.5M2.5 8H5M2.5 12H5M15 8h2.5M15 12h2.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></span><span class="dl-txt"><b>Intel<span class="dl-rec">추천</span></b><em>Intel 기반 Mac · DMG · <span class="dl-size">41 MB</span></em></span></a>
       <a class="dl-item" role="menuitem" href="https://github.com/Yudaotor/lyrimuse/releases/latest"><span class="dl-ico"><svg viewBox="0 0 20 20" aria-hidden="true"><path fill="currentColor" d="M10 1.8a8.2 8.2 0 0 0-2.6 16c.4.1.6-.2.6-.4v-1.5c-2.3.5-2.8-1-2.8-1-.4-.9-.9-1.2-.9-1.2-.7-.5.1-.5.1-.5.8.1 1.3.9 1.3.9.7 1.3 2 .9 2.4.7.1-.5.3-.9.5-1.1-1.8-.2-3.7-.9-3.7-4 0-.9.3-1.6.9-2.2-.1-.2-.4-1 .1-2.2 0 0 .7-.2 2.3.9a7.9 7.9 0 0 1 4.1 0c1.6-1.1 2.3-.9 2.3-.9.4 1.2.2 2 .1 2.2.5.6.9 1.3.9 2.2 0 3.2-1.9 3.8-3.7 4 .3.3.6.8.6 1.5v2.3c0 .2.1.5.6.4A8.2 8.2 0 0 0 10 1.8z"/></svg></span><span class="dl-txt"><b>GitHub에서 모든 다운로드 보기</b><em>모든 버전, ZIP 및 체크섬</em></span></a>
       <p class="dl-note">Lyrimuse는 Apple의 공증을 받지 않았기 때문에 DMG로 설치하면 macOS가 처음 실행을 차단합니다. 시스템 설정 → 개인정보 보호 및 보안에서 ‘그래도 열기’를 클릭하십시오. Homebrew로 설치하면 이 과정이 필요 없습니다.</p>
     </div></div>
@@ -1826,7 +1848,7 @@ color: var(--ink); transition: box-shadow .25s, transform .25s;
         <div class="foot-col"><p class="foot-h">제품</p><ul><li><a href="../features/">기능 목록</a></li><li><a href="../players/">지원하는 플레이어</a></li><li><a href="../changelog/">업데이트 내역</a></li><li><a href="https://github.com/Yudaotor/lyrimuse/releases">Releases</a></li></ul></div>
         <div class="foot-col"><p class="foot-h">도움말</p><ul><li><a href="../#faq">FAQ</a></li><li><a href="https://github.com/Yudaotor/lyrimuse/issues/new/choose">문제 신고</a></li><li><a href="https://github.com/Yudaotor/lyrimuse/discussions/categories/q-a">질문하기</a></li><li><a href="../privacy/">개인정보 처리방침</a></li><li><a href="../terms/">이용 약관</a></li></ul></div>
         <div class="foot-col"><p class="foot-h">정보</p><ul><li><a href="https://github.com/Yudaotor/lyrimuse/blob/main/README.ko.md">GitHub</a></li><li><a href="https://youtu.be/0CRK4arrBOc">동영상 소개</a></li><li><a href="https://github.com/sponsors/Yudaotor">후원</a></li><li><a href="https://github.com/Yudaotor/lyrimuse/blob/main/LICENSE">GPL-3.0</a></li></ul></div>
-        <div class="foot-col"><p class="foot-h">언어</p><ul><li><a href="../../compare/" lang="en">English</a></li><li><a href="../../zh/compare/" lang="zh-Hans">简体中文</a></li><li><a href="../../zh-Hant/compare/" lang="zh-Hant">繁體中文</a></li><li><a href="../../ja/compare/" lang="ja">日本語</a></li><li><a href="./" lang="ko" aria-current="page">한국어</a></li><li><a href="../../es/compare/" lang="es">Español</a></li><li><a href="../../fr/compare/" lang="fr">Français</a></li><li><a href="../../de/compare/" lang="de">Deutsch</a></li></ul></div>
+        <div class="foot-col"><p class="foot-h">언어</p><ul><li><a href="../../compare/" lang="en">English</a></li><li><a href="../../zh/compare/" lang="zh-Hans">简体中文</a></li><li><a href="../../zh-Hant/compare/" lang="zh-Hant">繁體中文</a></li><li><a href="../../ja/compare/" lang="ja">日本語</a></li><li><a href="./" lang="ko" aria-current="page">한국어</a></li><li><a href="../../es/compare/" lang="es">Español</a></li><li><a href="../../fr/compare/" lang="fr">Français</a></li><li><a href="../../de/compare/" lang="de">Deutsch</a></li><li><a href="../../it/compare/" lang="it">Italiano</a></li><li><a href="../../pt-BR/compare/" lang="pt-BR">Português (Brasil)</a></li><li><a href="../../vi/compare/" lang="vi">Tiếng Việt</a></li><li><a href="../../ru/compare/" lang="ru">Русский</a></li><li><a href="../../uk/compare/" lang="uk">Українська</a></li><li><a href="../../th/compare/" lang="th">ไทย</a></li></ul></div>
       </nav>
     </div>
     <p class="foot-note">Apple Music, Spotify, KKBOX 등의 이름과 아이콘은 각 소유자에게 있습니다. Lyrimuse는 독립적인 오픈 소스 프로젝트이며 이들 중 어느 곳과도 제휴 관계가 없습니다.</p>
