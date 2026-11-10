@@ -1207,6 +1207,20 @@ func runOverlayTests() {
         expectEqual(rowIndices(WrapLayoutMath.rows(sizes: [sz(30), sz(30), sz(30)], maxWidth: 100, horizontalSpacing: 10)),
                     [[0, 1], [2]], "WrapLayout: 间距要计入换行判断")
 
+        // 宽度按整句量、正好卡满:13 个等宽字按词块累加比逐字累加大最后几位(《米店》上下交替实测,30pt 半粗),也要放成一行。
+        do {
+            let glyph: CGFloat = 28.50563909774436055
+            let exact = (0..<13).reduce(CGFloat(0)) { acc, _ in acc + glyph }
+            let clusters = [true, true, false, true, false, true, false, true, false, true, false, true, false]
+            expectEqual([rowIndices(WrapLayoutMath.rows(sizes: Array(repeating: sz(glyph), count: 13), maxWidth: exact,
+                                                        horizontalSpacing: 0, breakBefore: clusters)).count,
+                         rowIndices(WrapLayoutMath.rows(sizes: Array(repeating: sz(glyph), count: 13), maxWidth: exact,
+                                                        horizontalSpacing: 0)).count,
+                         rowIndices(WrapLayoutMath.rows(sizes: Array(repeating: sz(glyph), count: 13), maxWidth: exact - 1,
+                                                        horizontalSpacing: 0, breakBefore: clusters)).count],
+                        [1, 1, 2], "WrapLayout: 宽度正好卡满时浮点误差不折行;真差 1pt 照样折")
+        }
+
         // 单个元素本身就超宽时，必须独占一行且**保留**——这正是"长歌词行整行变成一串
         // 省略号"那个 bug 的修法。谁要是在这里加个"太宽就跳过"，这条会立刻红。
         expectEqual(rowIndices(WrapLayoutMath.rows(sizes: [sz(500)], maxWidth: 100, horizontalSpacing: 0)),
@@ -1248,12 +1262,12 @@ func runOverlayTests() {
         expectEqual(WrapLayoutMath.drawWidth(sized: 261.1, bounds: 260.5), 261.1, "折行宽: 只差像素对齐那一点时按定高度那次的宽度")
         expectEqual(WrapLayoutMath.drawWidth(sized: 261.1, bounds: 300), 300, "折行宽: 真换了宽度就按实际宽度")
         expectEqual(WrapLayoutMath.drawWidth(sized: nil, bounds: 260.5), 260.5, "折行宽: 没量过就按实际宽度")
-        // 8 个 32pt 的字、两侧各 2.4pt 描边预留:按提议宽度折是一行,按对齐后少 0.6pt 的宽度折是两行(高度只留了一行,
-        // 多出来那行就压到下面);按 drawWidth 折跟定高度时一样是一行。
+        // 8 个 32pt 的字、两侧各 2.4pt 描边预留:按提议宽度折是一行,按 1 倍屏对齐到 260pt 的宽度折是两行(差 0.8pt,
+        // 超过折行容差;高度只留了一行,多出来那行就压到下面);按 drawWidth 折跟定高度时一样是一行。
         let eight = Array(repeating: sz(32), count: 8)
         expectEqual(WrapLayoutMath.rows(sizes: eight, maxWidth: 261.1 - 4.8, horizontalSpacing: 0).count, 1,
                     "折行宽: 定高度时按提议宽度折成一行")
-        expectEqual(WrapLayoutMath.rows(sizes: eight, maxWidth: 260.5 - 4.8, horizontalSpacing: 0).count, 2,
+        expectEqual(WrapLayoutMath.rows(sizes: eight, maxWidth: 260 - 4.8, horizontalSpacing: 0).count, 2,
                     "折行宽: 按对齐后的宽度会多折一行")
         expectEqual(WrapLayoutMath.rows(sizes: eight, maxWidth: WrapLayoutMath.drawWidth(sized: 261.1, bounds: 260.5) - 4.8,
                                         horizontalSpacing: 0).count, 1,

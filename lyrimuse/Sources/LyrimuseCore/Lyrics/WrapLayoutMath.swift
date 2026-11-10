@@ -28,6 +28,11 @@ public enum WrapLayoutMath {
         public let size: CGSize
     }
 
+    /// 「塞不塞得下」比较时放宽这么多(pt),跟断句器判一行放不放得下同一个值:断句器说放得下的,这里不能折开。
+    /// 宽度常是按同一句话量出来、正好卡满的(上下交替的块宽取整首最宽那句),逐项、逐块累加的和跟整句一次量的差在
+    /// 最后几位,不放宽就会把正好放得下的末尾一个词折下去。见 04 章决策 95。
+    public static let fitTolerance: CGFloat = LyricsSegmenter.fitTolerance
+
     /// 按顺序把子视图塞进每行,塞不下就换行。
     ///
     /// 单个子视图本身就比 maxWidth 宽时,它**独占一行并且原样保留**,不会被丢掉也不
@@ -52,7 +57,7 @@ public enum WrapLayoutMath {
         var height: CGFloat = 0
         for (i, size) in sizes.enumerated() {
             let spacingIfContinuing = indices.isEmpty ? 0 : horizontalSpacing
-            if !indices.isEmpty && width + spacingIfContinuing + size.width > maxWidth {
+            if !indices.isEmpty && width + spacingIfContinuing + size.width > maxWidth + fitTolerance {
                 rows.append(Row(indices: indices, width: width, height: height))
                 indices = []
                 width = 0
@@ -114,11 +119,11 @@ public enum WrapLayoutMath {
             while end < sizes.count, !breakBefore[end] { end += 1 }
             let clusterWidth = sizes[start..<end].reduce(CGFloat(0)) { $0 + $1.width }
                 + CGFloat(end - start - 1) * horizontalSpacing
-            if !indices.isEmpty, width + horizontalSpacing + clusterWidth > maxWidth { flush() }
-            if indices.isEmpty, clusterWidth > maxWidth {
+            if !indices.isEmpty, width + horizontalSpacing + clusterWidth > maxWidth + fitTolerance { flush() }
+            if indices.isEmpty, clusterWidth > maxWidth + fitTolerance {
                 // 一整块独占一行都放不下:块内逐项贪心。
                 for i in start..<end {
-                    if !indices.isEmpty, width + horizontalSpacing + sizes[i].width > maxWidth { flush() }
+                    if !indices.isEmpty, width + horizontalSpacing + sizes[i].width > maxWidth + fitTolerance { flush() }
                     append(i)
                 }
             } else {
