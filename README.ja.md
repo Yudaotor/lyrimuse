@@ -24,7 +24,7 @@ https://github.com/user-attachments/assets/88b951ee-4ecf-4985-b1cb-eee6afdd5510
 
 Lyrimuseは、macOS向けのオープンソースのデスクトップ歌詞アプリです。メニューバーに常駐し、曲の再生に合わせて歌詞を単語ごとにハイライトします。表示場所は、すべてのウインドウの最前面に浮かぶフローティング表示、メニューバー、ノッチ下のDynamic Island風カプセル、Touch Bar、そして独立した歌詞ウインドウから選べます。Apple Music、Spotify、Amazon Music、YouTube MusicアプリのKasetなど19のプレーヤーと、ブラウザのWebプレーヤーに対応し、15の歌詞ソースから最も合う歌詞を選びます。必要なら翻訳やローマ字も表示できます。さらに、Last.fmのリスニングプロフィールを表示し、再生をScrobbleします。
 
-**LyricsXからの乗り換えにも**。LyricsXは2022年4月以降、新しいリリースが出ていません。Lyrimuseは、LyricsXでできたことをカバーしたうえでアップデートを続けており、中国語圏のプレーヤー、KKBOX、Amazon Music、Kaset、Pear Desktop、reAMP、VOX、Pine Player、foobar2000、Webプレーヤーにも対応しています。詳しくは、事実確認済みの[LyricsXおよびLyric Feverとの比較](docs/lyrics-apps-comparison.md)をご覧ください。
+**LyricsXからの乗り換えにも**。LyricsXは2022年4月以降、新しいリリースが出ていません。Lyrimuseは、LyricsXでできたことをカバーしたうえでアップデートを続けており、中国語圏のプレーヤー、KKBOX、Amazon Music、Kaset、Pear Desktop、reAMP、Pine Player、foobar2000、Plexamp、MyGo Music、WeRead、Webプレーヤーにも対応しています。詳しくは、事実確認済みの[LyricsXおよびLyric Feverとの比較](docs/lyrics-apps-comparison.md)をご覧ください。
 
 **インストール**はHomebrewで行えます（Apple Silicon、Intelの両方に対応）。初回起動時のGatekeeperの警告も自動で解除されます。自分でダウンロードしたい場合は、[最新リリース](https://github.com/Yudaotor/lyrimuse/releases/latest)を入手し、[はじめに](#はじめに)をご覧ください。
 
@@ -291,7 +291,7 @@ macOS 14 Sonoma以降（Sequoia、Tahoe、およびそれ以降）で、Apple Si
 すでに保存されています。歌詞のある曲にはすべて行単位のタイミング付きの`.lrc`ファイルが作られ、翻訳やローマ字がある場合は、それぞれ`.tr.lrc`と`.roma.lrc`も作られます。単語ごとのタイミングは別に保存され、デフォルトではTTML形式です。設定で`.yrc`（NetEaseのYRC形式）、Enhanced LRC、QRC、KRCに切り替えてほかのプレーヤーで読めるようにしたり、複数の形式を保存したりできます。ファイルは`~/Library/Application Support/me.yudaotor.lyrimuse/lyrics/`にあり、フォルダの場所は設定で変更できます。
 
 ### LyricsXは今もメンテナンスされていますか？LyrimuseはLyricsXやLyric Feverと何が違いますか？
-LyricsXの最後のリリースは、2022年4月のv1.6.3です。macOS 10.11以降で動作し、Apple Music、Spotify、いくつかの古いプレーヤーに対応しています。Lyric FeverはSpotifyとApple Musicに特化しており、macOS 15が必要です。LyrimuseはmacOS 14が必要で、さらにQQ Music、NetEase Cloud Music、Kugou、Soda Music、KKBOX、Amazon Music、Kaset、Pear Desktop、reAMP、VOX、Pine Player、foobar2000、LX Music、ブラウザのプレーヤーに対応し、行ごとのピンイン／広東語の粤拼／日本語と韓国語のローマ字、ロシア語やタイ語など18言語の読み、自分のリスニング統計付きのLast.fm／ListenBrainzへのScrobbleを備えています。項目ごとの比較表は[比較ページ](docs/lyrics-apps-comparison.md)にあります。
+LyricsXの最後のリリースは、2022年4月のv1.6.3です。macOS 10.11以降で動作し、Apple Music、Spotify、いくつかの古いプレーヤーに対応しています。Lyric FeverはSpotifyとApple Musicに特化しており、macOS 15が必要です。LyrimuseはmacOS 14が必要で、さらにQQ Music、NetEase Cloud Music、Kugou、Soda Music、KKBOX、Amazon Music、Kaset、Pear Desktop、reAMP、Pine Player、foobar2000、Plexamp、MyGo Music、WeRead、LX Music、ブラウザのプレーヤーに対応し、行ごとのピンイン／広東語の粤拼／日本語と韓国語のローマ字、ロシア語やタイ語など18言語の読み、自分のリスニング統計付きのLast.fm／ListenBrainzへのScrobbleを備えています。項目ごとの比較表は[比較ページ](docs/lyrics-apps-comparison.md)にあります。
 ## ライセンスと著作権
 
 - **Lyrimuse本体は[GPL-3.0](LICENSE)です**。アプリに同梱しているオープンソースのコンポーネントと辞書データ（media-control、Sparkle、KeyboardShortcuts、OpenCCとrime-cantoneseの辞書）は、それぞれ独自のライセンスに従います。全文は[THIRD_PARTY_LICENSES](THIRD_PARTY_LICENSES)にあり、アプリにも同梱されていて、**設定 → 情報 → サードパーティのライセンス**から開けます。

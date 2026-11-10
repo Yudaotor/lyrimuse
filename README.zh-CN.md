@@ -24,7 +24,7 @@ https://github.com/user-attachments/assets/56317c1c-3a60-4091-bea7-8f933832334c
 
 Lyrimuse 是一款开源的 Mac 桌面歌词软件。它待在菜单栏里，跟随播放逐字高亮歌词，可以常驻置顶、悬浮在所有窗口之上，也可以放进菜单栏、刘海下的灵动岛胶囊、触控栏或完整的歌词窗口。支持 Apple Music、Spotify、QQ 音乐、网易云音乐、YouTube Music 客户端 Kaset 等十九款播放器和浏览器里的网页播放器，并从十五个歌词源中打分挑选最合适的版本，还能显示翻译和读音。另外还内置 Last.fm 听歌档案和打卡。
 
-**从 LyricsX 过来？** LyricsX 自 2022 年 4 月后就没有再发布新版本。Lyrimuse 覆盖了它的核心功能并持续更新，还补上了国内播放器、KKBOX、Amazon Music、Kaset、Pear Desktop、reAMP、VOX、Pine Player、foobar2000 和网页播放器的支持。详细差异见这份逐项核实过的[与 LyricsX、Lyric Fever 的对比](docs/lyrics-apps-comparison.zh-CN.md)。
+**从 LyricsX 过来？** LyricsX 自 2022 年 4 月后就没有再发布新版本。Lyrimuse 覆盖了它的核心功能并持续更新，还补上了国内播放器、KKBOX、Amazon Music、Kaset、Pear Desktop、reAMP、Pine Player、foobar2000、Plexamp、MyGo Music、微信读书和网页播放器的支持。详细差异见这份逐项核实过的[与 LyricsX、Lyric Fever 的对比](docs/lyrics-apps-comparison.zh-CN.md)。
 
 **安装：** 推荐用 Homebrew，Apple Silicon 和 Intel 通用，还会顺手处理首次打开时的 Gatekeeper 拦截。想手动安装，可以从[最新 Release](https://github.com/Yudaotor/lyrimuse/releases/latest) 下载，步骤见[快速开始](#快速开始)。
 
@@ -290,7 +290,7 @@ macOS 14 Sonoma 及以上（Sequoia、Tahoe 以及更新的版本都行），App
 本来就存着。每首找到歌词的歌都有一份逐行时间的 `.lrc`；有译文、读音的，另外还有 `.tr.lrc` 和 `.roma.lrc`。逐字时间轴单独存一份，默认是 TTML；可以在设置里改成 `.yrc`（网易云的 YRC 格式）、增强 LRC、QRC 或 KRC，方便别的播放器读，也可以几种同时存。文件放在 `~/Library/Application Support/me.yudaotor.lyrimuse/lyrics/`，位置可以在设置里改。
 
 ### LyricsX 还在维护吗？Lyrimuse 和 LyricsX、Lyric Fever 有什么区别？
-LyricsX 最后一个版本是 2022 年 4 月的 v1.6.3，支持 macOS 10.11 及以上，能配合 Apple Music、Spotify 和几个老牌播放器用。Lyric Fever 主要做 Spotify 和 Apple Music，需要 macOS 15 及以上。Lyrimuse 需要 macOS 14 及以上，另外支持 QQ 音乐、网易云音乐、酷狗、汽水音乐、KKBOX、Amazon Music、Kaset、Pear Desktop、reAMP、VOX、Pine Player、foobar2000、洛雪音乐和浏览器里的播放器，能逐行标拼音、粤拼、日文和韩文的罗马音，以及俄语、泰语等另外十八种语言的读音，还能打卡到 Last.fm / ListenBrainz，并在本地统计你的听歌数据。逐项核实过的对照表见[对比页](docs/lyrics-apps-comparison.zh-CN.md)。
+LyricsX 最后一个版本是 2022 年 4 月的 v1.6.3，支持 macOS 10.11 及以上，能配合 Apple Music、Spotify 和几个老牌播放器用。Lyric Fever 主要做 Spotify 和 Apple Music，需要 macOS 15 及以上。Lyrimuse 需要 macOS 14 及以上，另外支持 QQ 音乐、网易云音乐、酷狗、汽水音乐、KKBOX、Amazon Music、Kaset、Pear Desktop、reAMP、Pine Player、foobar2000、Plexamp、MyGo Music、微信读书、洛雪音乐和浏览器里的播放器，能逐行标拼音、粤拼、日文和韩文的罗马音，以及俄语、泰语等另外十八种语言的读音，还能打卡到 Last.fm / ListenBrainz，并在本地统计你的听歌数据。逐项核实过的对照表见[对比页](docs/lyrics-apps-comparison.zh-CN.md)。
 ## 许可与版权说明
 
 - **Lyrimuse 本身以 [GPL-3.0](LICENSE) 授权。** 随 App 一起分发的开源组件与词典数据（media-control、Sparkle、KeyboardShortcuts、OpenCC 与 rime-cantonese 词典）各自保留原许可证，全文见 [THIRD_PARTY_LICENSES](THIRD_PARTY_LICENSES)；这个文件也打进了 App 包里，**设置 → 关于 → 第三方许可**能直接打开。

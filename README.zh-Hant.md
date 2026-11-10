@@ -24,7 +24,7 @@ https://github.com/user-attachments/assets/f9416bca-8e13-49c0-9295-654130a9b0f9
 
 Lyrimuse 是一款開源的 Mac 桌面歌詞軟體。它待在選單列裡，跟著播放逐字標亮歌詞，可以常駐最上層、浮在所有視窗之上，也可以放進選單列、瀏海下的動態島膠囊、觸控列或完整的歌詞視窗。支援 Apple Music、Spotify、KKBOX、Amazon Music、YouTube Music 播放器 Kaset 等十九款播放器和瀏覽器裡的網頁播放器，並從十五個歌詞來源中評分挑選最合適的版本，還能顯示翻譯和讀音。另外還內建 Last.fm 聆聽檔案與播放記錄。
 
-**從 LyricsX 過來？** LyricsX 自 2022 年 4 月後就沒有再發布新版本。Lyrimuse 涵蓋了它的核心功能並持續更新，還補上了華語播放器、KKBOX、Amazon Music、Kaset、Pear Desktop、reAMP、VOX、Pine Player、foobar2000 和網頁播放器的支援。詳細差異見這份逐項查證過的[與 LyricsX、Lyric Fever 的對比](docs/lyrics-apps-comparison.zh-CN.md)（簡體中文）。
+**從 LyricsX 過來？** LyricsX 自 2022 年 4 月後就沒有再發布新版本。Lyrimuse 涵蓋了它的核心功能並持續更新，還補上了華語播放器、KKBOX、Amazon Music、Kaset、Pear Desktop、reAMP、Pine Player、foobar2000、Plexamp、MyGo Music、微信讀書和網頁播放器的支援。詳細差異見這份逐項查證過的[與 LyricsX、Lyric Fever 的對比](docs/lyrics-apps-comparison.zh-CN.md)（簡體中文）。
 
 **安裝：** 推薦用 Homebrew，Apple Silicon 和 Intel 通用，還會順手處理第一次打開時的 Gatekeeper 攔截。想手動安裝，可以從[最新 Release](https://github.com/Yudaotor/lyrimuse/releases/latest) 下載，步驟見[快速開始](#快速開始)。
 
@@ -288,7 +288,7 @@ macOS 14 Sonoma 以上（Sequoia、Tahoe 以及更新的版本都可以），App
 本來就存著。每首找到歌詞的歌都有一份逐行時間的 `.lrc`；有譯文、讀音的，另外還有 `.tr.lrc` 和 `.roma.lrc`。逐字時間軸單獨存一份，預設是 TTML；可以在設定裡改成 `.yrc`（網易雲的 YRC 格式）、增強 LRC、QRC 或 KRC，方便其他播放器讀，也可以幾種同時存。檔案放在 `~/Library/Application Support/me.yudaotor.lyrimuse/lyrics/`，位置可以在設定裡改。
 
 ### LyricsX 還在維護嗎？Lyrimuse 和 LyricsX、Lyric Fever 有什麼差別？
-LyricsX 最後一個版本是 2022 年 4 月的 v1.6.3，支援 macOS 10.11 以上，能搭配 Apple Music、Spotify 和幾個老牌播放器使用。Lyric Fever 主要做 Spotify 和 Apple Music，需要 macOS 15 以上。Lyrimuse 需要 macOS 14 以上，另外支援 QQ 音樂、網易雲音樂、酷狗、汽水音樂、KKBOX、Amazon Music、Kaset、Pear Desktop、reAMP、VOX、Pine Player、foobar2000、洛雪音樂和瀏覽器裡的播放器，能逐行標拼音、粵拼、日文和韓文的羅馬拼音，以及俄文、泰文等另外十八種語言的讀音，還能把播放記錄（scrobble）送到 Last.fm / ListenBrainz，並在本機統計你的聆聽數據。逐項查證過的對照表見[對比頁](docs/lyrics-apps-comparison.zh-CN.md)（簡體中文）。
+LyricsX 最後一個版本是 2022 年 4 月的 v1.6.3，支援 macOS 10.11 以上，能搭配 Apple Music、Spotify 和幾個老牌播放器使用。Lyric Fever 主要做 Spotify 和 Apple Music，需要 macOS 15 以上。Lyrimuse 需要 macOS 14 以上，另外支援 QQ 音樂、網易雲音樂、酷狗、汽水音樂、KKBOX、Amazon Music、Kaset、Pear Desktop、reAMP、Pine Player、foobar2000、Plexamp、MyGo Music、微信讀書、洛雪音樂和瀏覽器裡的播放器，能逐行標拼音、粵拼、日文和韓文的羅馬拼音，以及俄文、泰文等另外十八種語言的讀音，還能把播放記錄（scrobble）送到 Last.fm / ListenBrainz，並在本機統計你的聆聽數據。逐項查證過的對照表見[對比頁](docs/lyrics-apps-comparison.zh-CN.md)（簡體中文）。
 ## 授權與版權說明
 
 - **Lyrimuse 本身以 [GPL-3.0](LICENSE) 授權。** 隨 App 一起發佈的開源元件與詞典資料（media-control、Sparkle、KeyboardShortcuts、OpenCC 與 rime-cantonese 詞典）各自保留原授權條款，全文見 [THIRD_PARTY_LICENSES](THIRD_PARTY_LICENSES)；這個檔案也打進了 App 包裡，**設定 → 關於 → 第三方授權**能直接打開。
