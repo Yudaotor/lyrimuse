@@ -70,7 +70,7 @@ func TestSearchCLIRetriesAtAnotherDurationWhenNothingUsable(t *testing.T) {
 		"durationOffRetryUsable(m.durationSecs, effectiveDuration) {",
 		"retryDuration = m.durationSecs",
 		"_, loose := scoredLyricCandidatesStreaming(searchCtx, sArtist, sTitle, sAlbum, retryDuration,",
-		"emit(ne, durationOffRound(rs), done, total)",
+		"emit(ne, mergeDurationOffRound(results, durationOffRound(rs)), done, total)",
 		"results = mergeDurationOffRound(results, durationOffRound(loose))",
 	} {
 		if !containsCode(string(src), want) {

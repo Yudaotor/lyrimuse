@@ -265,8 +265,10 @@ func runSearchLyricsCLI(args []string) {
 		}
 		log.Printf("search-lyrics: no usable candidate at %.3fs, searching again at %.3fs", effectiveDuration, retryDuration)
 		_, loose := scoredLyricCandidatesStreaming(searchCtx, sArtist, sTitle, sAlbum, retryDuration,
+			// 中途那几行也并上第一轮判废的:弹窗按每一行整份替换列表,只交这一轮的话第一轮那几条在补搜的十来秒里会消失,
+			// 收尾才回来(11 章决策 160)。
 			func(ne neteaseInfo, rs []scoredLyricCandidateResult, done, total int) {
-				emit(ne, durationOffRound(rs), done, total)
+				emit(ne, mergeDurationOffRound(results, durationOffRound(rs)), done, total)
 			})
 		results = mergeDurationOffRound(results, durationOffRound(loose))
 	}
