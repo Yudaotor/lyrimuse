@@ -410,7 +410,7 @@
 "五" = "V";
 "亚马逊的流媒体音乐 App" = "La app de música en streaming de Amazon";
 "交错" = "Escalonado";
-"交错：两句一样大，一左一右轮流唱，唱完的那句换成再下一句；不显示译文和整行读音，对唱时照常排" = "Escalonado: las dos líneas al mismo tamaño, una a la izquierda y otra a la derecha; la que se acaba de cantar pasa a la que va después de la siguiente. Se ocultan la traducción y la romanización de línea; los duetos se muestran como siempre";
+"交错：两句一样大，一左一右轮流唱，唱完的那句换成再下一句；不显示译文和整行读音" = "Escalonado: las dos líneas al mismo tamaño, una a la izquierda y otra a la derecha; la que se acaba de cantar pasa a la que va después de la siguiente. Se ocultan la traducción y la romanización de línea";
 "人工修正" = "Editadas manualmente";
 "人工修正 %@ 首" = "%@ editadas manualmente";
 "人工修正过的歌词删除后无法恢复" = "Las letras editadas manualmente no se pueden recuperar una vez eliminadas";

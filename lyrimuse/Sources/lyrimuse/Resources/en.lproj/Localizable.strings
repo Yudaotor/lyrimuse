@@ -410,7 +410,7 @@
 "五" = "F";
 "亚马逊的流媒体音乐 App" = "Amazon’s music streaming app";
 "交错" = "Staggered";
-"交错：两句一样大，一左一右轮流唱，唱完的那句换成再下一句；不显示译文和整行读音，对唱时照常排" = "Staggered: both lines at the same size, one on the left and one on the right; the line just sung becomes the one after next. Translation and line romanization are hidden; duets keep the usual layout";
+"交错：两句一样大，一左一右轮流唱，唱完的那句换成再下一句；不显示译文和整行读音" = "Staggered: both lines at the same size, one on the left and one on the right; the line just sung becomes the one after next. Translation and line romanization are hidden";
 "人工修正" = "Manually Edited";
 "人工修正 %@ 首" = "%@ manually edited";
 "人工修正过的歌词删除后无法恢复" = "Manually edited lyrics can’t be recovered once deleted";

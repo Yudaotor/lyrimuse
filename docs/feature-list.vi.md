@@ -1037,7 +1037,7 @@ Toàn bộ mục trong cửa sổ Cài đặt, theo vị trí: tổng cộng 316
 - **Phát âm**
 - **Bản dịch**
 - **Dòng tiếp theo**
-- **Bố cục dòng tiếp theo**: So le: hai dòng cùng cỡ, một bên trái một bên phải; dòng vừa hát xong được thay bằng dòng sau dòng kế tiếp. Ẩn bản dịch và phát âm cả dòng; bài song ca vẫn hiển thị như thường
+- **Bố cục dòng tiếp theo**: So le: hai dòng cùng cỡ, một bên trái một bên phải; dòng vừa hát xong được thay bằng dòng sau dòng kế tiếp. Ẩn bản dịch và phát âm cả dòng
 
 ### Hiển thị lời › Lời nổi › Bố cục
 

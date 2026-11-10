@@ -382,7 +382,7 @@
 "五" = "T6";
 "亚马逊的流媒体音乐 App" = "Ứng dụng nghe nhạc trực tuyến của Amazon";
 "交错" = "So le";
-"交错：两句一样大，一左一右轮流唱，唱完的那句换成再下一句；不显示译文和整行读音，对唱时照常排" = "So le: hai dòng cùng cỡ, một bên trái một bên phải; dòng vừa hát xong được thay bằng dòng sau dòng kế tiếp. Ẩn bản dịch và phát âm cả dòng; bài song ca vẫn hiển thị như thường";
+"交错：两句一样大，一左一右轮流唱，唱完的那句换成再下一句；不显示译文和整行读音" = "So le: hai dòng cùng cỡ, một bên trái một bên phải; dòng vừa hát xong được thay bằng dòng sau dòng kế tiếp. Ẩn bản dịch và phát âm cả dòng";
 "人工修正" = "Chỉnh sửa thủ công";
 "人工修正 %@ 首" = "%@ bài chỉnh sửa thủ công";
 "人工修正过的歌词删除后无法恢复" = "Lời đã chỉnh sửa thủ công không thể khôi phục sau khi xóa";

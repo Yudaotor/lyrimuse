@@ -262551,91 +262551,91 @@
         }
       }
     },
-    "交错：两句一样大，一左一右轮流唱，唱完的那句换成再下一句；不显示译文和整行读音，对唱时照常排" : {
+    "交错：两句一样大，一左一右轮流唱，唱完的那句换成再下一句；不显示译文和整行读音" : {
       "extractionState" : "manual",
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Versetzt: Beide Zeilen gleich groß, eine links, eine rechts; die gesungene Zeile wird durch die übernächste ersetzt. Übersetzung und Zeilen-Umschrift werden ausgeblendet; Duette bleiben wie gewohnt"
+            "value" : "Versetzt: Beide Zeilen gleich groß, eine links, eine rechts; die gesungene Zeile wird durch die übernächste ersetzt. Übersetzung und Zeilen-Umschrift werden ausgeblendet"
           }
         },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Staggered: both lines at the same size, one on the left and one on the right; the line just sung becomes the one after next. Translation and line romanization are hidden; duets keep the usual layout"
+            "value" : "Staggered: both lines at the same size, one on the left and one on the right; the line just sung becomes the one after next. Translation and line romanization are hidden"
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Escalonado: las dos líneas al mismo tamaño, una a la izquierda y otra a la derecha; la que se acaba de cantar pasa a la que va después de la siguiente. Se ocultan la traducción y la romanización de línea; los duetos se muestran como siempre"
+            "value" : "Escalonado: las dos líneas al mismo tamaño, una a la izquierda y otra a la derecha; la que se acaba de cantar pasa a la que va después de la siguiente. Se ocultan la traducción y la romanización de línea"
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Décalé : deux lignes de même taille, l’une à gauche, l’autre à droite ; la ligne chantée laisse place à celle d’après. La traduction et la romanisation de ligne sont masquées ; les duos gardent la disposition habituelle"
+            "value" : "Décalé : deux lignes de même taille, l’une à gauche, l’autre à droite ; la ligne chantée laisse place à celle d’après. La traduction et la romanisation de ligne sont masquées"
           }
         },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Sfalsato: due righe della stessa dimensione, una a sinistra e una a destra; la riga appena cantata lascia il posto a quella dopo la successiva. Traduzione e pronuncia di riga sono nascoste; i duetti restano come sempre"
+            "value" : "Sfalsato: due righe della stessa dimensione, una a sinistra e una a destra; la riga appena cantata lascia il posto a quella dopo la successiva. Traduzione e pronuncia di riga sono nascoste"
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "互い違い：2行を同じ大きさで左右交互に表示し、歌い終えた行はその次の行に入れ替わります。翻訳と行ごとのローマ字は表示せず、デュエットはいつもの配置です"
+            "value" : "互い違い：2行を同じ大きさで左右交互に表示し、歌い終えた行はその次の行に入れ替わります。翻訳と行ごとのローマ字は表示しません"
           }
         },
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "엇갈림: 두 줄을 같은 크기로 왼쪽과 오른쪽에 번갈아 표시하고, 다 부른 줄은 그다음 줄로 바뀝니다. 번역과 줄 단위 로마자 표기는 숨기며, 듀엣은 평소처럼 배치합니다"
+            "value" : "엇갈림: 두 줄을 같은 크기로 왼쪽과 오른쪽에 번갈아 표시하고, 다 부른 줄은 그다음 줄로 바뀝니다. 번역과 줄 단위 로마자 표기는 숨깁니다"
           }
         },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Escalonado: as duas linhas no mesmo tamanho, uma à esquerda e outra à direita; a linha já cantada dá lugar à que vem depois da próxima. A tradução e a pronúncia da linha ficam ocultas; duetos mantêm o layout de sempre"
+            "value" : "Escalonado: as duas linhas no mesmo tamanho, uma à esquerda e outra à direita; a linha já cantada dá lugar à que vem depois da próxima. A tradução e a pronúncia da linha ficam ocultas"
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Лесенкой: обе строки одного размера, одна слева, другая справа; спетая строка сменяется строкой через одну. Перевод и произношение строки скрыты; дуэты показываются как обычно"
+            "value" : "Лесенкой: обе строки одного размера, одна слева, другая справа; спетая строка сменяется строкой через одну. Перевод и произношение строки скрыты"
           }
         },
         "th" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "สลับฟันปลา: สองบรรทัดขนาดเท่ากัน บรรทัดหนึ่งชิดซ้าย อีกบรรทัดชิดขวา บรรทัดที่ร้องจบจะเปลี่ยนเป็นบรรทัดถัดจากบรรทัดถัดไป ซ่อนคำแปลและการออกเสียงทั้งบรรทัด เพลงร้องคู่ยังแสดงตามปกติ"
+            "value" : "สลับฟันปลา: สองบรรทัดขนาดเท่ากัน บรรทัดหนึ่งชิดซ้าย อีกบรรทัดชิดขวา บรรทัดที่ร้องจบจะเปลี่ยนเป็นบรรทัดถัดจากบรรทัดถัดไป ซ่อนคำแปลและการออกเสียงทั้งบรรทัด"
           }
         },
         "uk" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Драбинкою: обидва рядки однакового розміру, один ліворуч, інший праворуч; заспіваний рядок змінюється рядком через один. Переклад і вимову рядка приховано; дуети показуються як зазвичай"
+            "value" : "Драбинкою: обидва рядки однакового розміру, один ліворуч, інший праворуч; заспіваний рядок змінюється рядком через один. Переклад і вимову рядка приховано"
           }
         },
         "vi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "So le: hai dòng cùng cỡ, một bên trái một bên phải; dòng vừa hát xong được thay bằng dòng sau dòng kế tiếp. Ẩn bản dịch và phát âm cả dòng; bài song ca vẫn hiển thị như thường"
+            "value" : "So le: hai dòng cùng cỡ, một bên trái một bên phải; dòng vừa hát xong được thay bằng dòng sau dòng kế tiếp. Ẩn bản dịch và phát âm cả dòng"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "交错：两句一样大，一左一右轮流唱，唱完的那句换成再下一句；不显示译文和整行读音，对唱时照常排"
+            "value" : "交错：两句一样大，一左一右轮流唱，唱完的那句换成再下一句；不显示译文和整行读音"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "交錯：兩句一樣大，一左一右輪流唱，唱完的那句換成再下一句；不顯示譯文和整行讀音，對唱時照常排"
+            "value" : "交錯：兩句一樣大，一左一右輪流唱，唱完的那句換成再下一句；不顯示譯文和整行讀音"
           }
         }
       }

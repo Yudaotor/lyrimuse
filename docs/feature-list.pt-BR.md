@@ -1037,7 +1037,7 @@ Todos os ajustes da janela Ajustes, por local: 316 no total. Digite um nome no c
 - **Pronúncia**
 - **Tradução**
 - **Próxima linha**
-- **Disposição da próxima linha**: Escalonado: as duas linhas no mesmo tamanho, uma à esquerda e outra à direita; a linha já cantada dá lugar à que vem depois da próxima. A tradução e a pronúncia da linha ficam ocultas; duetos mantêm o layout de sempre
+- **Disposição da próxima linha**: Escalonado: as duas linhas no mesmo tamanho, uma à esquerda e outra à direita; a linha já cantada dá lugar à que vem depois da próxima. A tradução e a pronúncia da linha ficam ocultas
 
 ### Exibição da letra › Letra flutuante › Layout
 

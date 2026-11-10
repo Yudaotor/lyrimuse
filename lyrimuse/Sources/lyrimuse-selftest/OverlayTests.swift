@@ -8,13 +8,13 @@ import Foundation
 @MainActor
 func runOverlayTests() {
     checkOverlayFullScreenHide()
-    // ---- 下一句上下交替:当前句按下标奇偶占上下两行,对唱 / 没有当前句 / 没有下一句时照常排(04 章决策 89) ----
+    // ---- 下一句上下交替:当前句按下标奇偶占上下两行,没有当前句 / 没有下一句时照常排,对唱也交替(04 章决策 89、96) ----
     do {
         typealias A = OverlayNextLineArrangement
         func place(_ arrangement: A = .alternate, shows: Bool = true, index: Int? = 0, hasLine: Bool = true,
-                   hasNext: Bool = true, side: LyricDuet.Side? = nil, nextSide: LyricDuet.Side? = nil) -> A.AlternatePlacement? {
+                   hasNext: Bool = true) -> A.AlternatePlacement? {
             A.alternatePlacement(arrangement: arrangement, showsNextLine: shows, lineIndex: index, hasLine: hasLine,
-                                 hasNextLine: hasNext, currentSide: side, nextSide: nextSide)
+                                 hasNextLine: hasNext)
         }
         expectEqual(place(index: 0), A.AlternatePlacement(currentOnTop: true), "上下交替: 第 0 句在上一行")
         expectEqual(place(index: 1), A.AlternatePlacement(currentOnTop: false), "上下交替: 第 1 句在下一行")
@@ -29,12 +29,20 @@ func runOverlayTests() {
         expectEqual(place(index: nil), nil, "上下交替: 没有当前句下标照常排")
         expectEqual(place(hasLine: false), nil, "上下交替: 前奏 / 间奏没有当前句照常排")
         expectEqual(place(hasNext: false), nil, "上下交替: 最后一句没有下一句照常排")
-        expectEqual(place(side: .leading), nil, "上下交替: 当前句有声部(对唱)照常排")
-        expectEqual(place(nextSide: .center), nil, "上下交替: 下一句有声部(对唱)照常排")
+        expectEqual(A.effectiveAlignment(.automatic, arrangement: .alternate, showsNextLine: true), .center,
+                    "上下交替: 对齐方式「自动」当居中,对唱歌不按声部分左右、照样交替")
+        expectEqual([A.effectiveAlignment(.leading, arrangement: .alternate, showsNextLine: true),
+                     A.effectiveAlignment(.trailing, arrangement: .alternate, showsNextLine: true)], [.leading, .trailing],
+                    "上下交替: 选了左 / 右照选的")
+        expectEqual([A.effectiveAlignment(.automatic, arrangement: .below, showsNextLine: true),
+                     A.effectiveAlignment(.automatic, arrangement: .alternate, showsNextLine: false)], [.automatic, .automatic],
+                    "上下交替: 跟随排法或下一句关着时「自动」照旧按声部")
         expectEqual(place(index: -1), nil, "上下交替: 下标是负数照常排")
 
         let src = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
         let view = (try? String(contentsOf: src.appendingPathComponent("lyrimuse/UI/LyricsOverlayView.swift"), encoding: .utf8)) ?? ""
+        expectEqual(view.components(separatedBy: "playback.duetAlignmentOverride").count - 1, 2,
+                    "上下交替(契约): 视图只在 alignmentOverride 里读设置的对齐方式(注释一处 + 代码一处),别处都读交错折算过的那份")
         expectEqual(sourceHas(sourceBody("private var nextLinePreviewFont: Font", in: view),
                               "if alternatePlacement != nil { return playback.mainFont }"), true,
                     "上下交替(契约): 下一句用主字号,开唱时只换颜色")

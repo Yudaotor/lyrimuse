@@ -735,19 +735,23 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
     /// 非自动模式下留白必须归零(见 `OverlayDuetAlignmentOverride.effectiveDecorationSide`)。
     private var duetSide: LyricDuet.Side {
         if let alternate = alternatePlacement { return alternate.currentSide }
-        return playback.duetAlignmentOverride.effectiveAlignmentSide(realSide: line?.side)
+        return alignmentOverride.effectiveAlignmentSide(realSide: line?.side)
+    }
+
+    /// 实际按哪种「对齐方式」排:交错开着时「自动」当「居中」(见 `OverlayNextLineArrangement.effectiveAlignment`)。
+    /// 视图里跟声部有关的对齐、留白、下一句字号一律读这个,别直接读 `playback.duetAlignmentOverride`。
+    private var alignmentOverride: OverlayDuetAlignmentOverride {
+        OverlayNextLineArrangement.effectiveAlignment(
+            playback.duetAlignmentOverride, arrangement: playback.nextLineArrangement,
+            showsNextLine: playback.showNextLinePreview)
     }
 
     /// 上下交替这一刻怎么摆(04 章决策 89);nil = 下一句照常跟在下面。设置页示例行按第一句摆(当前句在上)。
-    /// 「对齐方式」不是「自动」时不按声部分左右,两句的声部不算对唱。
     private var alternatePlacement: OverlayNextLineArrangement.AlternatePlacement? {
-        let bySide = playback.duetAlignmentOverride == .automatic
-        return OverlayNextLineArrangement.alternatePlacement(
+        OverlayNextLineArrangement.alternatePlacement(
             arrangement: playback.nextLineArrangement, showsNextLine: playback.showNextLinePreview,
             lineIndex: showingPreviewLine ? 0 : playback.lineIndex,
-            hasLine: line != nil, hasNextLine: nextLineText != nil,
-            currentSide: bySide ? line?.side : nil,
-            nextSide: bySide && !showingPreviewLine ? playback.nextLineSide : nil)
+            hasLine: line != nil, hasNextLine: nextLineText != nil)
     }
 
     /// 上下交替时两行那一块的宽:整首主行最宽那一段加描边预留,一首歌里不变,换句时正在唱的那一行不跟着挪;
@@ -760,7 +764,7 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
 
     /// 那一块放哪:「对齐方式」选了左 / 右就贴那一边,自动和居中放正中。
     private var alternateBlockAlignment: Alignment {
-        switch playback.duetAlignmentOverride {
+        switch alignmentOverride {
         case .leading: return .leading
         case .trailing: return .trailing
         case .automatic, .center: return .center
@@ -773,7 +777,7 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
     /// 同样套过对齐方式覆盖,理由跟 duetSide 一致。
     private var nextLineDuetSide: LyricDuet.Side {
         if let alternate = alternatePlacement { return alternate.nextSide }
-        return playback.duetAlignmentOverride.effectiveAlignmentSide(realSide: playback.nextLineSide)
+        return alignmentOverride.effectiveAlignmentSide(realSide: playback.nextLineSide)
     }
 
     /// 控制排(播放控制胶囊 / 锁定态的解锁按钮)算横向落点时用的**原始**声部。
@@ -790,7 +794,7 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
     /// `controlsRealSide`(可能是冻住的那一份)。
     private var controlsFrameAlignment: Alignment {
         guard controlsFollowLyrics else { return .center }
-        return frameAlignment(for: playback.duetAlignmentOverride.effectiveAlignmentSide(realSide: controlsRealSide))
+        return frameAlignment(for: alignmentOverride.effectiveAlignmentSide(realSide: controlsRealSide))
     }
 
     /// 控制排横向跟不跟歌词块走。背景透明时跟(看得见的只有字,按钮排要落在字的上方);
@@ -853,7 +857,7 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
     private var controlsInsets: (leading: CGFloat, trailing: CGFloat) {
         guard controlsFollowLyrics else { return (0, 0) }
         return OverlayCardGeometry.controlsInsets(
-            for: playback.duetAlignmentOverride.effectiveDecorationSide(realSide: controlsRealSide),
+            for: alignmentOverride.effectiveDecorationSide(realSide: controlsRealSide),
             unit: playback.duetInsetUnit,
             stageInset: playback.duetStageInset,
             scale: duetInsetScale,
@@ -883,7 +887,7 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
         guard line != nil else { return playback.mainFont }
         // 上下交替:两句一样大,开唱时只换颜色。
         if alternatePlacement != nil { return playback.mainFont }
-        guard playback.duetAlignmentOverride == .automatic,
+        guard alignmentOverride == .automatic,
               let nextSide = playback.nextLineSide, nextSide != line?.side
         else {
             return playback.previewFont
@@ -1011,7 +1015,7 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
     }
 
     private var duetInsets: (leading: CGFloat, trailing: CGFloat) {
-        duetInsets(for: playback.duetAlignmentOverride.effectiveDecorationSide(realSide: line?.side))
+        duetInsets(for: alignmentOverride.effectiveDecorationSide(realSide: line?.side))
     }
 
     /// 这一行两侧实际留的白(乘过 `duetInsetScale`)。
@@ -1039,7 +1043,7 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
     /// `nextInsets − currentInsets`,两者相加就等于预览独立按 `nextInsets` 摆放,跟它变成
     /// 当前行时会用到的 insets 完全一致,切换时不跳。
     private var nextLineInsetsDelta: (leading: CGFloat, trailing: CGFloat) {
-        let override = playback.duetAlignmentOverride
+        let override = alignmentOverride
         let current = duetInsets(for: override.effectiveDecorationSide(realSide: line?.side))
         let next = duetInsets(for: override.effectiveDecorationSide(realSide: playback.nextLineSide))
         // 外层卡片加的是**乘过** `duetInsetScale` 的当前行留白(见 lyricsCard 那两行 padding),差值也得按同一个
