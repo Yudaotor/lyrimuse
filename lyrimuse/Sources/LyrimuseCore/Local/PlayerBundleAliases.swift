@@ -11,6 +11,7 @@ public enum PlayerBundleAliases {
     public static let aliases: [String: PlaybackPlayer] = [
         "com.digipine.pineplayer.pro": .pinePlayer,
         "com.digipine.pineplayer.origin": .pinePlayer,
+        "com.audirvana.Audirvana-Origin": .audirvana,
         NetEaseIPadNowPlaying.bundleID: .netease,
         QQIPadNowPlaying.bundleID: .qqMusic,
     ]

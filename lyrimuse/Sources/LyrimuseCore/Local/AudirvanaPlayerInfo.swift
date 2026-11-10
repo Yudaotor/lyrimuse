@@ -1,7 +1,8 @@
+import AppKit
 import Foundation
 import os
 
-/// Audirvana Studio 的 AppleScript 读数。它不往系统 Now Playing 报,曲目、播放状态、位置都只能从它的脚本字典
+/// Audirvana(订阅版 Studio、买断版 Origin)的 AppleScript 读数。它不往系统 Now Playing 报,曲目、播放状态、位置都只能从它的脚本字典
 /// (`Audirvana.sdef`)读:系统那边没人在放时 `MediaControlClient.preferringPlayingAudirvana` 直接问它一次,读数合成一份快照。
 ///
 /// 实测(放本地文件,只录它自己的声音对真值):
@@ -13,9 +14,20 @@ import os
 /// - 把 `event types reported` 设成 TrackChanged 后,开播、恢复、暂停、换歌、放完都发 `noticeName` 这条分布式通知;
 ///   换歌那一条报的状态可能是 Paused(其实在放),播放中跳转、按上一首回到开头都不发。所以通知只当「马上读一次」的信号。
 ///
+/// Origin 跟 Studio 是同一个程序的两个版本:脚本字典逐字相同、发同一条通知,只是 bundle id 和进程名不同,两个不能同时开
+/// (共用数据目录,后开的那个起不来)。两个都认,读数一律记成 `bundleID`(Studio 那个,`PlaybackPlayer.audirvana`),
+/// 歌词缓存、设置勾选都按同一个播放器算;发脚本(读数、封面、控制)时按此刻在跑的那个(`runningBundleID`)。
+///
 /// 见 02 章决策 254。
 public enum AudirvanaPlayerInfo {
     public static var bundleID: String { PlaybackPlayer.audirvana.bundleIdentifier }
+    /// 两个版本的 bundle id,Studio 在前(Origin 登记在 `PlayerBundleAliases`,找进程、判装没装、启动它时也都认)。
+    public static let editionBundleIDs = PlayerBundleAliases.all(for: PlaybackPlayer.audirvana.bundleIdentifier)
+
+    /// 此刻在跑的那个版本;都没在跑为 nil。
+    public static func runningBundleID() -> String? {
+        editionBundleIDs.first { !NSRunningApplication.runningApplications(withBundleIdentifier: $0).isEmpty }
+    }
     /// 设了 TrackChanged 之后它发的分布式通知。
     public static let noticeName = "com.audirvana.audirvana-plus.playerStatus"
 
@@ -23,8 +35,15 @@ public enum AudirvanaPlayerInfo {
     /// `event types reported` 设成 TrackChanged(只影响它发不发上面那条通知)。位置放在最后读。
     public static let script = """
     (() => {
-        \(JXARunningApp.attach("A", player: .audirvana, notRunning: "JSON.stringify(null)"))
+        if (!globalThis.lyrimuseAppKit) { ObjC.import('AppKit'); globalThis.lyrimuseAppKit = true; }
+        let ARunning = null;
+        for (const id of [\(editionBundleIDs.map { "\"\($0)\"" }.joined(separator: ", "))]) {
+            const found = $.NSRunningApplication.runningApplicationsWithBundleIdentifier(id);
+            if (Number(found.count) > 0) { ARunning = found; break; }
+        }
+        if (ARunning === null) return JSON.stringify(null);
         const pid = Number(ARunning.objectAtIndex(0).processIdentifier);
+        const A = Application(pid);
         if (globalThis.lyrimuseAudirvanaEvents !== pid) {
             try { A.eventTypesReported = "TrackChanged"; globalThis.lyrimuseAudirvanaEvents = pid; } catch (e) {}
         }
@@ -151,11 +170,12 @@ public enum AudirvanaPlayerInfo {
     // MARK: 封面
 
     /// 读它此刻那首显示的封面(`playing track airfoillogo`,TIFF:文件嵌着的,没有就是它挑的同目录图)写进 argv 第一项那个文件,
-    /// 回它此刻报的歌名;没在跑、没有图回空串。先判在不在跑,`tell` 不会把它拉起来。
-    public static let artworkScriptLines = [
+    /// 回它此刻报的歌名;没在跑、没有图回空串。先判在不在跑,`tell` 不会把它拉起来。`appID` 是此刻在跑的那个版本:
+    /// 脚本按它编译字典里的属性名,不能写成运行时才定的变量。纯函数,selftest 覆盖。
+    public static func artworkScriptLines(appID: String) -> [String] { [
         "on run argv",
-        "if application id \"com.audirvana.Audirvana-Studio\" is not running then return \"\"",
-        "tell application id \"com.audirvana.Audirvana-Studio\"",
+        "if application id \"\(appID)\" is not running then return \"\"",
+        "tell application id \"\(appID)\"",
         "set t to playing track title",
         "set d to playing track airfoillogo",
         "end tell",
@@ -168,15 +188,15 @@ public enum AudirvanaPlayerInfo {
         "close access fh",
         "return t",
         "end run",
-    ]
+    ] }
 
     /// 记下的这首的封面(转成 JPEG)。脚本回的歌名对不上(这期间换了歌)、没有图、关掉了脚本这条腿为 nil。会阻塞,不要在主线程调用。
     static func scriptArtwork(for entry: (title: String, path: String?)) -> Data? {
-        guard !SourceKnockout.isOut(.audirvanaScript) else { return nil }
+        guard !SourceKnockout.isOut(.audirvanaScript), let appID = runningBundleID() else { return nil }
         let file = FileManager.default.temporaryDirectory
             .appendingPathComponent("lyrimuse-audirvana-artwork-\(ProcessInfo.processInfo.processIdentifier)-\(UUID().uuidString).tiff")
         defer { try? FileManager.default.removeItem(at: file) }
-        let arguments = artworkScriptLines.flatMap { ["-e", $0] } + [file.path]
+        let arguments = artworkScriptLines(appID: appID).flatMap { ["-e", $0] } + [file.path]
         guard let r = ProcessRunner.run("/usr/bin/osascript", arguments, timeout: MusicPlaybackController.appleScriptTimeout),
               r.succeeded,
               let rawTitle = String(data: r.stdout, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines),
@@ -196,9 +216,9 @@ public enum AudirvanaPlayerInfo {
 
     // MARK: 播放控制
 
-    /// 一条播放控制(media-control 的指令名)换成发给它的脚本;字典里没有的动作为 nil。跳转按秒写(它的位置带小数)。
+    /// 一条播放控制(media-control 的指令名)换成发给 `appID` 那个版本的脚本;字典里没有的动作为 nil。跳转按秒写(它的位置带小数)。
     /// 纯函数,selftest 覆盖。
-    public static func controlScript(_ command: String, arguments: [String]) -> String? {
+    public static func controlScript(_ command: String, arguments: [String], appID: String = bundleID) -> String? {
         let verb: String
         switch command {
         case "toggle-play-pause": verb = "playpause"
@@ -211,7 +231,7 @@ public enum AudirvanaPlayerInfo {
             verb = "set player position to " + MusicPlaybackController.seekArgument(forSeconds: seconds)
         default: return nil
         }
-        return "tell application id \"\(PlaybackPlayer.audirvana.bundleIdentifier)\" to " + verb
+        return "if application id \"\(appID)\" is not running then return \"\"\ntell application id \"\(appID)\" to " + verb
     }
 
     /// 能发给它的播放控制。

@@ -602,13 +602,6 @@ public enum MusicPlaybackController {
         return "tell application id \"com.swinsian.Swinsian\"\n" + body + "\nend tell"
     }
 
-    private static let audirvanaRunningGuard = #"""
-        if application id "com.audirvana.Audirvana-Studio" is not running then
-            return ""
-        end if
-
-        """#
-
     private static let swinsianRunningGuard = #"""
         if application id "com.swinsian.Swinsian" is not running then
             return ""
@@ -1371,10 +1364,14 @@ public enum MusicPlaybackController {
         case .swinsianScript(let command):
             runAppleScript(swinsianRunningGuard + swinsianControlScript(command))
         case .audirvanaScript:
-            guard let script = AudirvanaPlayerInfo.controlScript(mediaControlCommand, arguments: mediaControlArguments) else {
+            guard let appID = AudirvanaPlayerInfo.runningBundleID() else {
+                return withhold(mediaControlCommand, reason: "Audirvana is not running")
+            }
+            guard let script = AudirvanaPlayerInfo.controlScript(mediaControlCommand, arguments: mediaControlArguments,
+                                                                 appID: appID) else {
                 return withhold(mediaControlCommand, reason: "Audirvana has no AppleScript command for it")
             }
-            runAppleScript(audirvanaRunningGuard + script)
+            runAppleScript(script)
         case .plexampAPI(let command):
             commandQueue.async {
                 commandSerial &+= 1

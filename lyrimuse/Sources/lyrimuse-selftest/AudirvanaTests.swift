@@ -88,13 +88,16 @@ func runAudirvanaTests() {
                      I.artworkBelongs(rawTitle: "别的歌", to: ("浮夸", "/m/a.mp3")),
                      I.artworkBelongs(rawTitle: "", to: ("浮夸", nil))], [true, true, false, false],
                     "Audirvana 封面: 脚本回的歌名是记下的这首(拆过的按文件名认)才用,换了歌、没有图都不用")
-        expectEqual(I.artworkScriptLines.contains("if application id \"com.audirvana.Audirvana-Studio\" is not running then return \"\""),
+        let origin = "com.audirvana.Audirvana-Origin"
+        expectEqual(I.artworkScriptLines(appID: origin).contains("if application id \"\(origin)\" is not running then return \"\""),
                     true, "Audirvana 封面: 先判在不在跑,不把它拉起来")
+        expectEqual(I.artworkScriptLines(appID: origin).contains("tell application id \"\(origin)\""), true,
+                    "Audirvana 封面: 问的是此刻在跑的那个版本(Origin)")
     }
 
     // ---- 播放控制 ----
     do {
-        let tell = "tell application id \"com.audirvana.Audirvana-Studio\" to "
+        let tell = "if application id \"com.audirvana.Audirvana-Studio\" is not running then return \"\"\ntell application id \"com.audirvana.Audirvana-Studio\" to "
         expectEqual([I.controlScript("toggle-play-pause", arguments: []), I.controlScript("play", arguments: []),
                      I.controlScript("pause", arguments: []), I.controlScript("next-track", arguments: []),
                      I.controlScript("previous-track", arguments: [])],
@@ -102,6 +105,15 @@ func runAudirvanaTests() {
                     "Audirvana 控制: 各指令对上字典里的命令")
         expectEqual(I.controlScript("seek", arguments: ["21.5"]), tell + "set player position to 21.500",
                     "Audirvana 控制: 跳转写带小数的秒数")
+        expectEqual(I.controlScript("pause", arguments: [], appID: "com.audirvana.Audirvana-Origin"),
+                    "if application id \"com.audirvana.Audirvana-Origin\" is not running then return \"\"\ntell application id \"com.audirvana.Audirvana-Origin\" to pause",
+                    "Audirvana 控制: 开着的是 Origin 就发给 Origin,先判在不在跑")
+        expectEqual(I.editionBundleIDs, ["com.audirvana.Audirvana-Studio", "com.audirvana.Audirvana-Origin"],
+                    "Audirvana 版本: Studio、Origin 两个都认,Studio 在前")
+        expectEqual(PlayerBundleAliases.canonical("com.audirvana.Audirvana-Origin"), "com.audirvana.Audirvana-Studio",
+                    "Audirvana 版本: Origin 登记成别名,找进程、判装没装、启动时也认它")
+        expectEqual(I.script.contains("for (const id of [\"com.audirvana.Audirvana-Studio\", \"com.audirvana.Audirvana-Origin\"])"), true,
+                    "Audirvana 版本: 读数脚本两个版本都找")
         expectEqual([I.controlScript("seek", arguments: []), I.controlScript("seek", arguments: ["-1"]),
                      I.controlScript("seek", arguments: ["nan"]), I.controlScript("set-shuffle", arguments: [])],
                     [nil, nil, nil, nil], "Audirvana 控制: 没给秒数、负数、非数、字典里没有的动作都不发")
@@ -126,7 +138,7 @@ func runAudirvanaTests() {
         }
         let client = code("LyrimuseCore/Local/MediaControlClient.swift")
         let body = sourceBody("private static func preferringAudirvana(", in: client)
-        expectEqual(sourceHas(body, "if !asked, runningPID(AudirvanaPlayerInfo.bundleID) != nil, let reading = readAudirvanaSnapshot(),"),
+        expectEqual(sourceHas(body, "if !asked, AudirvanaPlayerInfo.runningBundleID() != nil, let reading = readAudirvanaSnapshot(),"),
                     true, "Audirvana 契约: 只在它开着时才发 Apple Event(不拉起它、不凭空弹权限框)")
         expectEqual(sourceHas(body, "if wanted, found?.playing != true, found?.bundleIdentifier != AudirvanaPlayerInfo.bundleID {"),
                     true, "Audirvana 契约: 系统那边有别家在放就不问它")

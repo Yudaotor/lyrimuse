@@ -974,7 +974,7 @@ public enum MediaControlClient {
             let loading = otherPlayerLoadingThisRound
             kasetLock.unlock()
             let otherLoading = loading || (found == nil && otherPlayerJustDropped(besides: AudirvanaPlayerInfo.bundleID))
-            if !asked, runningPID(AudirvanaPlayerInfo.bundleID) != nil, let reading = readAudirvanaSnapshot(),
+            if !asked, AudirvanaPlayerInfo.runningBundleID() != nil, let reading = readAudirvanaSnapshot(),
                kasetWins(over: found, kaset: reading, otherPlayerLoading: otherLoading, alreadyPreferred: alreadyPreferred) {
                 picked = reading
             }
