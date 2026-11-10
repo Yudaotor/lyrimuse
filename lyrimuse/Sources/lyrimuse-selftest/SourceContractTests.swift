@@ -1885,12 +1885,15 @@ func runSourceContractSurfaceTests() {
             let settingsView = read("SettingsView.swift") ?? ""
             let styleRows = read("UI/OverlayStyleSettingsRows.swift") ?? ""
             expectEqual(panel.contains("row(L10n.t(\"主题\")) { PanelThemeMenu() }")
-                        && panel.contains("theme.applyKeepingUnsaved(to: settings)")
-                        && panel.contains("(ColorTheme.builtInPresets + settings.customColorThemes).first { $0.hasSameColors(as: current) }")
-                        && panel.contains("Section(L10n.t(\"我的主题\")) { items(settings.customColorThemes, selected: selected) }")
-                        && panel.contains("Text(OverlayThemeSettingsRows.currentThemeLabel)")
+                        && panel.contains("let themes = ColorTheme.builtInPresets + settings.customColorThemes")
+                        && panel.contains("let selected = themes.first { $0.hasSameColors(as: current) }?.id")
+                        && panel.contains("?.applyKeepingUnsaved(to: settings) }),")
+                        && panel.contains("OverlayThemeSettingsRows.currentThemeLabel")
                         && styleRows.contains("theme.applyKeepingUnsaved(to: settings)"), true,
-                        "面板旋钮: 悬浮歌词那格要有「主题」(内置 + 我的主题,勾当前那套,套用同设置页)")
+                        "面板旋钮: 悬浮歌词那格要有「主题」(内置 + 自存,勾当前那套,套用同设置页)")
+            let panelCode = panel.split(separator: "\n").filter { !$0.trimmingCharacters(in: .whitespaces).hasPrefix("//") }.joined(separator: "\n")
+            expectEqual(panelCode.contains("Toggle(isOn: Binding(") || panelCode.contains("Image(nsImage:"), false,
+                        "面板旋钮: 面板下拉条目只用纯文字 Picker,Menu 里的 Toggle 条目 / NSImage 图标实测让整份菜单画不出来(04 章决策 21)")
             expectEqual(panel.contains("toggleRow(L10n.t(\"下一句\"), isOn: $settings.showNextLinePreview)")
                         && styleRows.contains("title: L10n.t(\"下一句\"), isOn: $settings.showNextLinePreview)"), true,
                         "面板旋钮: 悬浮歌词那格要有「下一句」,跟设置页同一个属性")

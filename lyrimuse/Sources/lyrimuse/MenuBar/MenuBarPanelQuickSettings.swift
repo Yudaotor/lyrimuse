@@ -1187,7 +1187,7 @@ private struct PanelGlassMenuPicker<T: Hashable>: View {
     }
 }
 
-/// 面板下拉的外形:无边框菜单 + 玻璃胶囊,`PanelGlassMenuPicker` 和 `PanelThemeMenu` 共用。
+/// 面板下拉的外形:无边框菜单 + 玻璃胶囊。
 private struct PanelMenuCapsule: ViewModifier {
     func body(content: Content) -> some View {
         content
@@ -1200,33 +1200,23 @@ private struct PanelMenuCapsule: ViewModifier {
     }
 }
 
-/// 悬浮歌词「主题」的下拉:内置几套,再是「我的主题」,跟设置页那块画廊、⚙ 菜单的主题子菜单同一份列表。
+/// 悬浮歌词「主题」的下拉:内置几套,再是自存的,跟设置页那块画廊、⚙ 菜单的主题子菜单同一份列表。
 /// 当前配色对得上哪套就勾哪套,标题同工具栏摘要(`currentThemeLabel`,都对不上写「自定义」);选了走 `applyKeepingUnsaved`
-/// (手调没存的那套留着能恢复),点已勾的那套再套用一次。系统菜单而不是画廊:296pt 放不下预览卡,理由同 `PanelGlassMenuPicker`。
+/// (手调没存的那套留着能恢复)。系统菜单而不是画廊:296pt 放不下预览卡,理由同 `PanelGlassMenuPicker`。
+/// 条目只用 `PanelGlassMenuPicker` 那种纯文字 Picker:SwiftUI `Menu` 里放 `Toggle` 条目或 `Image(nsImage:)` 图标,
+/// 实测整份菜单画不出条目,见 04 章决策 21。
 private struct PanelThemeMenu: View {
     @ObservedObject private var settings = AppSettings.shared
 
     var body: some View {
+        let themes = ColorTheme.builtInPresets + settings.customColorThemes
         let current = ColorTheme.current(settings)
-        let selected = (ColorTheme.builtInPresets + settings.customColorThemes).first { $0.hasSameColors(as: current) }
-        Menu {
-            items(ColorTheme.builtInPresets, selected: selected)
-            if !settings.customColorThemes.isEmpty {
-                Section(L10n.t("我的主题")) { items(settings.customColorThemes, selected: selected) }
-            }
-        } label: {
-            Text(OverlayThemeSettingsRows.currentThemeLabel).font(.system(size: 11))
-        }
-        .modifier(PanelMenuCapsule())
-    }
-
-    private func items(_ themes: [ColorTheme], selected: ColorTheme?) -> some View {
-        ForEach(themes) { theme in
-            Toggle(isOn: Binding(get: { theme.id == selected?.id },
-                                 set: { _ in theme.applyKeepingUnsaved(to: settings) })) {
-                Label { Text(theme.name) } icon: { Image(nsImage: theme.swatchImage()) }
-            }
-        }
+        let selected = themes.first { $0.hasSameColors(as: current) }?.id
+        PanelGlassMenuPicker(
+            selection: Binding(get: { selected },
+                               set: { id in themes.first(where: { $0.id == id })?.applyKeepingUnsaved(to: settings) }),
+            options: themes.map { Optional($0.id) },
+            label: { id in themes.first(where: { $0.id == id })?.name ?? OverlayThemeSettingsRows.currentThemeLabel })
     }
 }
 
