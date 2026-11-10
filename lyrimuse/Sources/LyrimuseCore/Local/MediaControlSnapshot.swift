@@ -85,6 +85,10 @@ public struct MediaControlSnapshot: Decodable {
     /// 不带它。reAMP 按它找正在放的文件读标签(`PlayerTitleSplit`),放本机文件的流媒体客户端按它找开着的文件
     /// (`PlayerOpenFile`,没带时按 bundle id 找主进程)。
     public var processIdentifier: Int? = nil
+    /// 系统会话这一条的标识(media-control 的 `contentItemIdentifier`):播放器每发布一次就换一个(MyGo 换歌、暂停、继续、
+    /// 跳转都会换),同一次发布期间不变。只有 media-control 主路在构造时填,`with…` 系列副本里只有 `withFilledDuration` 带它。
+    /// MyGo 按它判要不要重找开着的文件(`PlayerOpenFile.mygoLookUpKey`)。
+    public var nowPlayingItemID: String? = nil
 
     public var trackKey: String { Self.trackKey(artist: artist, title: title) }
 

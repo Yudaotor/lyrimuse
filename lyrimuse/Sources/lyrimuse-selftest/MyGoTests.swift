@@ -176,6 +176,19 @@ func runMyGoTests() {
         expectEqual(PlayerOpenFile.fileNameIdentity(reportedArtist: "", reportedTitle: "MyGo Click A", fileName: "MyGo Click A.wav",
                                                     duration: 30, acceptsBaseName: true)?.title, "MyGo Click A",
                     "MyGo 当前文件: 报的是不带扩展名的文件名,也换成文件那份身份")
+        // 本机《米店》放完接着放插件音源的同名同歌手那首:(歌手、歌名)一样,只有系统会话的条目标识换了。
+        let key = MediaControlSnapshot.trackKey(artist: "李志", title: "米店")
+        typealias P = PlayerOpenFile
+        expectEqual([P.mygoLookUpKey(trackKey: key, item: "BFAE83C7") == P.mygoLookUpKey(trackKey: key, item: "CDA6B0CC"),
+                     P.mygoLookUpKey(trackKey: key, item: "BFAE83C7") == P.mygoLookUpKey(trackKey: key, item: "BFAE83C7"),
+                     P.mygoLookUpKey(trackKey: key, item: nil) == P.mygoLookUpKey(trackKey: "李志|爱", item: nil)],
+                    [false, true, false], "MyGo 当前文件: 同名同歌手换了条目标识也重找;同一条不重找;没有标识时按(歌手、歌名)")
+        expectEqual([P.sourceChanged(previous: .some("/Music/李志 - 米店.mp3"), found: nil),
+                     P.sourceChanged(previous: .some(nil), found: "/Music/李志 - 米店.mp3"),
+                     P.sourceChanged(previous: .some("/Music/李志 - 米店.mp3"), found: "/Music/李志 - 米店.mp3"),
+                     P.sourceChanged(previous: .none, found: "/Music/李志 - 米店.mp3")],
+                    [true, true, false, false],
+                    "MyGo 当前文件: 重找后本机文件换成插件音源、插件音源换成本机文件都报;没变不报;头一回找不报")
     }
 
     // ---- 本机曲目的喜欢:读本地库,写按菜单 ----
@@ -218,9 +231,19 @@ func runMyGoTests() {
         expectEqual([sourceHas(openFile, "static let baseNameBundleIDs: Set<String> = [ PlaybackPlayer.foobar2000.bundleIdentifier, "
                                          + "PlaybackPlayer.swinsian.bundleIdentifier, PlaybackPlayer.mygoMusic.bundleIdentifier, ]"),
                      sourceHas(openFile, "for path in paths where !isPlayerCache(path) {")
-                        && sourceHas(openFile, "mygo: bundleID == PlaybackPlayer.mygoMusic.bundleIdentifier, now: now)")
+                        && sourceHas(openFile, "mygo: bundleID == PlaybackPlayer.mygoMusic.bundleIdentifier, item: snapshot.nowPlayingItemID,")
                         && sourceHas(openFile, "baseName: baseName, skipsWhenCacheMatches: mygo)")], [true, true],
                     "MyGo 接线: 没标签时按不带扩展名的文件名拆;找开着的文件时跳过插件缓存,缓存里有对得上的就不认本机文件")
+        let coordinator = (try? String(contentsOfFile: root.appendingPathComponent("lyrimuse/PlaybackCoordinator.swift").path,
+                                       encoding: .utf8)) ?? ""
+        expectEqual([sourceHas(client, "snapshot.nowPlayingItemID = raw.contentItemIdentifier"),
+                     sourceHas(client, "out.nowPlayingItemID = snapshot.nowPlayingItemID"),
+                     sourceHas(openFile, "let lookUpKey = mygoLookUpKey(trackKey: key, item: item)"),
+                     sourceHas(openFile, "if mygo, sourceChanged(previous: previousPath, found: found?.path) {"),
+                     sourceHas(coordinator, "NotificationCenter.default.publisher(for: PlayerOpenFile.mygoSourceChangedNotification)")
+                        && sourceHas(coordinator, "if self.favoriteBlockedForTrack { self.favoriteUnavailableTrackKey = nil }\nself.refreshFavorited()")],
+                    [true, true, true, true, true],
+                    "MyGo 接线: 条目标识从解码带到找文件;按它判重找;对上的文件变了重读「喜欢」、放出藏起来的心")
         expectEqual(sourceHas(favorite, "guard let id = currentLocalTrackID(confirm: true), let now = liked(id: id) else { return false }"),
                     true, "MyGo 接线: 按「喜欢」菜单之前按开着的文件当场再核一次放的是本机文件")
         expectEqual(sourceHas(client, "timestamp = mygo.timestamp"), true, "MyGo 接线: 下游拿到的是挪过的时刻")

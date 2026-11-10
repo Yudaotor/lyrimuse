@@ -96,8 +96,24 @@ public enum PlayerOpenFile {
 
     private static func cacheKey(artist: String?, title: String) -> String { (artist ?? "") + "\u{1F}" + title }
 
-    /// MyGo 上一拍报的那一首(缓存键);换了就重找。
+    /// MyGo 上一拍的 `mygoLookUpKey`;变了就重找。
     private static let lastMyGoKey = OSAllocatedUnfairLock<String?>(initialState: nil)
+
+    /// MyGo 同一首(歌手、歌名)重找之后对上的文件变了(本机文件和插件音源前后接着放,曲目身份不变、换歌的回读不会来)。
+    /// 在轮询的后台线程上发。
+    public static let mygoSourceChangedNotification = Notification.Name("lyrimuse.playerOpenFile.mygoSourceChanged")
+
+    /// MyGo 这一拍拿来判「换没换、要不要重找开着的文件」的键:(歌手、歌名)加系统会话这一条的标识。同名同歌手的本机文件和插件
+    /// 音源前后接着放时只有后者变;暂停、跳转也会换标识,多找一次,结果不变。见 02 章决策 252。
+    public static func mygoLookUpKey(trackKey: String, item: String?) -> String {
+        trackKey + "\u{1F}" + (item ?? "")
+    }
+
+    /// 重找之后要不要报「对上的文件变了」:这一首之前找过(`previous` 非 nil),且这次对上的路径跟上次不同。
+    public static func sourceChanged(previous: String??, found: String?) -> Bool {
+        guard let previous else { return false }
+        return previous != found
+    }
 
     /// 换到快照上:对上了开着的文件、标签里有歌名就换成标签那份;都不用换时原样返回。会读盘(同一首只读一次),在轮询的后台线程上调。
     public static func applied(to snapshot: MediaControlSnapshot?, now: Date = Date()) -> MediaControlSnapshot? {
@@ -107,7 +123,8 @@ public enum PlayerOpenFile {
                                       pid: snapshot.processIdentifier ?? PlayerProcess.pid(bundleID: bundleID).map { Int($0) },
                                       foobar: bundleID == PlaybackPlayer.foobar2000.bundleIdentifier,
                                       baseName: baseNameBundleIDs.contains(bundleID),
-                                      mygo: bundleID == PlaybackPlayer.mygoMusic.bundleIdentifier, now: now) else { return snapshot }
+                                      mygo: bundleID == PlaybackPlayer.mygoMusic.bundleIdentifier, item: snapshot.nowPlayingItemID,
+                                      now: now) else { return snapshot }
         var out = snapshot.withTitle(file.title)
         if !file.artist.isEmpty { out = out.withArtist(file.artist) }
         if !file.album.isEmpty { out = out.withAlbum(file.album) }
@@ -119,13 +136,15 @@ public enum PlayerOpenFile {
     /// `pid` 只在要读盘时才取(缓存命中时不找进程)。`foobar`:标签里的控制字符按 `_` 比;`baseName`:不带扩展名的文件名也拆。
     /// `mygo`:MyGo 放过的本机文件一直开着,插件音源放同名同歌手的歌时按(歌手、歌名)记的那份会认错:每换一首重找一次,
     /// 缓存目录里开着的文件对得上这一首就是插件音源、不算本机文件(`matchingOpenFile`)。见 02 章决策 251。
+    /// `item`:系统会话这一条的标识,MyGo 按 `mygoLookUpKey` 判换没换。
     static func fileIdentity(artist: String?, title: String, duration: Double?, pid: @autoclosure () -> Int?,
-                             foobar: Bool = false, baseName: Bool = false, mygo: Bool = false,
+                             foobar: Bool = false, baseName: Bool = false, mygo: Bool = false, item: String? = nil,
                              now: Date = Date()) -> PlayerTitleSplit.FileIdentity? {
         let key = cacheKey(artist: artist, title: title)
+        let lookUpKey = mygoLookUpKey(trackKey: key, item: item)
         let newTrack = mygo && lastMyGoKey.withLock { last in
-            defer { last = key }
-            return last != key
+            defer { last = lookUpKey }
+            return last != lookUpKey
         }
         if !newTrack, let hit = cache.withLock({ $0[key] }),
            !PlayerTitleSplit.shouldLookUpFile(found: hit.path != nil, attempts: hit.attempts,
@@ -135,11 +154,15 @@ public enum PlayerOpenFile {
         guard let pid = pid(), pid > 0 else { return nil }
         let found = lookUp(artist: artist ?? "", title: title, duration: duration, pid: pid_t(pid), foobar: foobar,
                            baseName: baseName, skipsWhenCacheMatches: mygo)
-        cache.withLock { entries in
+        let previousPath: String?? = cache.withLock { entries in
             if entries.count > 64 { entries.removeAll() }
-            let previous = entries[key]?.attempts ?? 0
-            let attempts = previous >= PlayerTitleSplit.maxAttempts ? 1 : previous + 1
+            let previous = entries[key]
+            let attempts = (previous?.attempts ?? 0) >= PlayerTitleSplit.maxAttempts ? 1 : (previous?.attempts ?? 0) + 1
             entries[key] = CacheEntry(identity: found?.identity, path: found?.path, checkedAt: now, attempts: attempts)
+            return previous.map { $0.path }
+        }
+        if mygo, sourceChanged(previous: previousPath, found: found?.path) {
+            NotificationCenter.default.post(name: mygoSourceChangedNotification, object: nil)
         }
         return found?.identity
     }

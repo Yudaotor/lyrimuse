@@ -1052,6 +1052,15 @@ final class PlaybackCoordinator: ObservableObject {
                     guard self?.currentPlayer == .lxMusic else { return }
                     LXMusicOpenAPI.shared.noteDisplayedLine(text, at: Date())
                 },
+            // MyGo 同名同歌手的本机文件和插件音源前后接着放:曲目身份没变、换歌那次回读不会来,对上的文件一变就重读「喜欢」,
+            // 上一份写不进去时藏起来的心也放出来(见 02 章决策 252)。
+            NotificationCenter.default.publisher(for: PlayerOpenFile.mygoSourceChangedNotification)
+                .receive(on: DispatchQueue.main)
+                .sink { [weak self] _ in
+                    guard let self, self.currentPlayer == .mygoMusic else { return }
+                    if self.favoriteBlockedForTrack { self.favoriteUnavailableTrackKey = nil }
+                    self.refreshFavorited()
+                },
             // 洛雪开放 API 推来收藏、音量的变化(在洛雪里点的也算):回读这两项。
             NotificationCenter.default.publisher(for: LXMusicOpenAPI.controlsChangedNotification)
                 .receive(on: DispatchQueue.main)

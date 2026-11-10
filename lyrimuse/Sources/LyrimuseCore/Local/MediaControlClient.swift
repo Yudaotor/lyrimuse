@@ -1522,10 +1522,12 @@ public enum MediaControlClient {
         let uniqueIdentifier: Int64?
         let trackNumber: Int?
         let mediaType: String?
+        /// 系统会话这一条的标识,见 `MediaControlSnapshot.nowPlayingItemID`。
+        let contentItemIdentifier: String?
 
         private enum CodingKeys: String, CodingKey {
             case title, artist, album, bundleIdentifier, playing, playbackRate, radioStationHash, processIdentifier
-            case uniqueIdentifier, trackNumber, mediaType
+            case uniqueIdentifier, trackNumber, mediaType, contentItemIdentifier
         }
 
         /// 带 `--micros` 调用时四个时间键会被**替换**成微秒版,交给 `MediaControlMicros.TimeFields`
@@ -1549,6 +1551,7 @@ public enum MediaControlClient {
             }
             trackNumber = try? c.decodeIfPresent(Int.self, forKey: .trackNumber)
             mediaType = try? c.decodeIfPresent(String.self, forKey: .mediaType)
+            contentItemIdentifier = try? c.decodeIfPresent(String.self, forKey: .contentItemIdentifier)
             let times = try MediaControlMicros.TimeFields(from: decoder)
             // iPad 版网易云「锁屏歌词」开着时 title 是歌词、artist 是「歌手/歌名」,先还原成真名;开播晚的那种锚点补上提前量
             // (见 NetEaseIPadNowPlaying)。
@@ -2701,6 +2704,7 @@ public enum MediaControlClient {
         out.republishDueBy = snapshot.republishDueBy
         out.positionIsPrecise = snapshot.positionIsPrecise
         out.isWaitingToPlay = snapshot.isWaitingToPlay
+        out.nowPlayingItemID = snapshot.nowPlayingItemID
         return out
     }
 
@@ -3921,6 +3925,7 @@ public enum MediaControlClient {
             ?? Self.foobarLoopCheckAt(bundleID: bundleID, playing: playing, position: foobarLoop ?? stretched,
                                       duration: raw.duration, now: sampledAt)
         snapshot.processIdentifier = raw.processIdentifier
+        snapshot.nowPlayingItemID = raw.contentItemIdentifier
         snapshot.isMusicVideo = Self.spotifyMusicVideoMark(bundleID: bundleID, mediaType: raw.mediaType)
         // 系统那份不报时长的播放器按它界面上的进度条补(见 progressBarFilled)。
         snapshot = Self.progressBarFilled(snapshot, bundleID: bundleID, trackKey: trackKey, position: snapshot.elapsedTime,
