@@ -85,6 +85,7 @@ public enum MediaControlClient {
         setSnapshotFailure(nil)
         kasetLock.lock()
         kasetAskedThisRound = false
+        audirvanaAskedThisRound = false
         kasetNotSongThisRound = false
         kasetLoadingThisRound = false
         otherPlayerLoadingThisRound = false
@@ -121,6 +122,8 @@ public enum MediaControlClient {
         if !players.contains(.auto), !players.contains(.kaset) { forgetKasetPreference() }
         let lxMusicWanted = players.contains(.auto) || players.contains(.lxMusic)
         if !lxMusicWanted { forgetLXMusicPreference() }
+        let audirvanaWanted = players.contains(.auto) || players.contains(.audirvana)
+        if !audirvanaWanted { forgetAudirvanaPreference() }
         // Pear Desktop 开着、接口开着就先把令牌要好,不等它在系统里报:刚打开接口时人还在 Pear 里,授权框这时弹最顺。
         if players.contains(.auto) || players.contains(.pearDesktop) {
             PearDesktopAPI.shared.noteAppRunning(
@@ -130,7 +133,8 @@ public enum MediaControlClient {
             let found = fetchAutoDetectedSnapshot()
             noteSystemReading(found)
             let withPlaying = preferringPlayingOverPausedFocus(found, players: players)
-            return heldAcrossPlayerGap(preferringLXMusicOpenAPI(preferringPlayingKaset(withPlaying), wanted: true))
+            return heldAcrossPlayerGap(preferringLXMusicOpenAPI(
+                preferringAudirvana(preferringPlayingKaset(withPlaying), wanted: true), wanted: true))
         }
         if players == [.appleMusic] {
             forgetPausedFocusPreference()
@@ -141,7 +145,8 @@ public enum MediaControlClient {
         noteSystemReading(selected)
         let withPlaying = preferringPlayingOverPausedFocus(selected, players: players)
         let withKaset = players.contains(.kaset) ? preferringPlayingKaset(withPlaying) : withPlaying
-        return heldAcrossPlayerGap(preferringLXMusicOpenAPI(withKaset, wanted: lxMusicWanted))
+        let withAudirvana = preferringAudirvana(withKaset, wanted: audirvanaWanted)
+        return heldAcrossPlayerGap(preferringLXMusicOpenAPI(withAudirvana, wanted: lxMusicWanted))
     }
 
     // MARK: - 切歌间隙保持(见 PlayerGapHold)
@@ -599,6 +604,13 @@ public enum MediaControlClient {
     /// 此刻正顶替系统那边、改用 Kaset 的读数时,系统报的是谁("nothing" = 什么都没报);没在顶替为 nil。
     /// 播放控制据此直接发给 Kaset(`focusControlContext`),日志在它变化时打一条。
     private static var kasetPreferredOver: String?
+    /// 这一拍已经问过 Audirvana 了(`fetchSnapshotWithProvenance` 入口清零),同一拍不问第二次。只在 `kasetLock` 里读写。
+    private static var audirvanaAskedThisRound = false
+    /// 此刻正顶替系统那边、改用 Audirvana 脚本读数时,系统报的是谁("nothing" = 什么都没报);没在顶替为 nil。
+    /// 播放控制据此直接发给 Audirvana(`focusControlContext`)。只在 `kasetLock` 里读写。
+    private static var audirvanaPreferredOver: String?
+    /// 上一次问 Audirvana 卡住了,到这个时刻之前不再问(`AudirvanaPlayerInfo.stallBackoffSecs`)。只在 `kasetLock` 里读写。
+    private static var audirvanaRetryAt: Date?
 
     /// 问一次 Kaset。拿不到(没在跑、没有当前曲目、没授「自动化」权限、超时)返回 nil,不记失败原因:
     /// 两个调用方各自决定这算不算这一拍的失败。
@@ -948,6 +960,83 @@ public enum MediaControlClient {
             }
         }
         return lx ?? found
+    }
+
+    /// 别的来源这一拍没给出在放的歌、Audirvana 又开着,就用它的脚本读一次合成一份(`AudirvanaPlayerInfo`)。它从不往系统
+    /// Now Playing 报,不这样问就一直认不出来。取舍同 Kaset(`kasetWins`):别的来源什么都没有时它暂停着的那首也报;别的来源有一首
+    /// 暂停着的,只在它在放时才换过去。只在它开着时才发 Apple Event,不用它的人不会凭空多弹「自动化」权限框。见 02 章决策 254。
+    private static func preferringAudirvana(_ found: MediaControlSnapshot?, wanted: Bool) -> MediaControlSnapshot? {
+        var picked: MediaControlSnapshot?
+        if wanted, found?.playing != true, found?.bundleIdentifier != AudirvanaPlayerInfo.bundleID {
+            kasetLock.lock()
+            let asked = audirvanaAskedThisRound
+            let alreadyPreferred = audirvanaPreferredOver != nil
+            let loading = otherPlayerLoadingThisRound
+            kasetLock.unlock()
+            let otherLoading = loading || (found == nil && otherPlayerJustDropped(besides: AudirvanaPlayerInfo.bundleID))
+            if !asked, runningPID(AudirvanaPlayerInfo.bundleID) != nil, let reading = readAudirvanaSnapshot(),
+               kasetWins(over: found, kaset: reading, otherPlayerLoading: otherLoading, alreadyPreferred: alreadyPreferred) {
+                picked = reading
+            }
+        }
+        let other = picked == nil ? nil : (found?.bundleIdentifier ?? "nothing")
+        kasetLock.lock()
+        let changed = audirvanaPreferredOver != other
+        audirvanaPreferredOver = other
+        kasetLock.unlock()
+        if changed {
+            if let other {
+                logger.notice("now playing: the system reports \(other, privacy: .public); reading Audirvana via AppleScript")
+            } else {
+                logger.notice("now playing: stopped reading Audirvana via AppleScript")
+            }
+        }
+        return picked ?? found
+    }
+
+    /// 问一次 Audirvana(`AudirvanaPlayerInfo.script`)。拿不到(没在跑、停住、没授「自动化」权限、超时、关掉了这条腿)返回 nil。
+    private static func readAudirvanaSnapshot() -> MediaControlSnapshot? {
+        let started = Date()
+        kasetLock.lock()
+        audirvanaAskedThisRound = true
+        let backingOff = audirvanaRetryAt.map { started < $0 } ?? false
+        kasetLock.unlock()
+        guard !backingOff, !SourceKnockout.isOut(.audirvanaScript) else { return nil }
+        let r = runPlayerScript("audirvana", source: AudirvanaPlayerInfo.script)
+        let timeout = MusicPlaybackController.appleScriptTimeout
+        if AudirvanaPlayerInfo.stalled(succeeded: r?.succeeded == true, elapsed: Date().timeIntervalSince(started), timeout: timeout) {
+            kasetLock.lock()
+            audirvanaRetryAt = Date().addingTimeInterval(AudirvanaPlayerInfo.stallBackoffSecs)
+            kasetLock.unlock()
+            logger.notice("audirvana: AppleScript read stalled for \(Date().timeIntervalSince(started), format: .fixed(precision: 1), privacy: .public)s; not asking again for \(Int(AudirvanaPlayerInfo.stallBackoffSecs), privacy: .public)s")
+            return nil
+        }
+        guard let r, r.succeeded,
+              let reading = AudirvanaPlayerInfo.reading(fromScriptOutput: r.stdout, capturedAt: Date())
+        else { return nil }
+        AudirvanaPlayerInfo.remember(reading)
+        return reading.snapshot
+    }
+
+    /// Audirvana 这首的封面(它显示的那张,没有就找当前文件同目录的图)。最近一次读到的不是这首(按快照的 `identityKey` 认)为 nil。
+    /// 会阻塞,不要在主线程调用。
+    public static func audirvanaArtwork(forTrackKey key: String) -> (data: Data, mimeType: String, trackKey: String)? {
+        guard let entry = AudirvanaPlayerInfo.currentEntry(), !entry.title.isEmpty else { return nil }
+        let entryKey = MediaControlSnapshot(
+            title: entry.title, artist: entry.artist.isEmpty ? nil : entry.artist, album: nil, duration: nil, elapsedTime: nil,
+            playing: nil, playbackRate: nil, isMusicApp: nil, bundleIdentifier: nil, anchorElapsedTime: nil, isRadio: nil).identityKey
+        guard entryKey.compare(key, options: [.caseInsensitive]) == .orderedSame else { return nil }
+        if let jpeg = AudirvanaPlayerInfo.scriptArtwork(for: (entry.title, entry.path)) { return (jpeg, "image/jpeg", key) }
+        if let path = entry.path, let cover = PlayerTitleSplit.folderCover(forAudioFile: path) {
+            return (cover.data, cover.mimeType, key)
+        }
+        return nil
+    }
+
+    private static func forgetAudirvanaPreference() {
+        kasetLock.lock()
+        audirvanaPreferredOver = nil
+        kasetLock.unlock()
     }
 
     private static func forgetLXMusicPreference() {
@@ -1686,7 +1775,7 @@ public enum MediaControlClient {
         return ProcessRunner.run(binaryPath, ["get"] + arguments, timeout: timeout)
     }
 
-    /// 常驻 osascript 跑的 JXA:每读到一行请求名(`music` / `spotify` / `kaset` / `vox` / `swinsian`)就跑对应那份快照脚本,把它返回的字符串原样
+    /// 常驻 osascript 跑的 JXA:每读到一行请求名(`music` / `spotify` / `kaset` / `vox` / `audirvana` / `swinsian`)就跑对应那份快照脚本,把它返回的字符串原样
     /// 写到 stdout,再写结束行;脚本抛错时状态码为 1。stdin 读到 EOF 就退出。
     /// JXA 把 NSData 的 `length` 桥成字符串,判 EOF 必须先转数字:写成 `data.length === 0` 永远不成立,EOF 之后空转占满一个核。
     public static let appleScriptServerScript = """
@@ -1696,6 +1785,7 @@ public enum MediaControlClient {
         spotify: () => \(spotifyScript),
         kaset: () => \(kasetScript),
         vox: () => \(VoxPlayerInfo.script),
+        audirvana: () => \(AudirvanaPlayerInfo.script),
         swinsian: () => \(SwinsianPlayerInfo.script)
     };
     const input = $.NSFileHandle.fileHandleWithStandardInput;
@@ -1952,6 +2042,7 @@ public enum MediaControlClient {
         kasetLock.lock()
         let kasetPreferred = kasetPreferredOver != nil
         let lxMusicPreferred = lxMusicPreferredOver != nil
+        let audirvanaPreferred = audirvanaPreferredOver != nil
         kasetLock.unlock()
         let substitute = pausedFocusSubstitute()
         appleMusicFocusLock.lock()
@@ -1974,17 +2065,18 @@ public enum MediaControlClient {
             heldElsewhere: heldElsewhere)
         let scriptTarget = routed.scriptTarget
         let target = controlScriptTarget(kasetPreferred: kasetPreferred, lxMusicPreferred: lxMusicPreferred,
+                                         audirvanaPreferred: audirvanaPreferred,
                                          holdingAcrossGap: holdingAcrossGap, scriptTarget: scriptTarget)
         return (target, routed.directQueryTarget, routed.heldElsewhere)
     }
 
-    /// 播放控制按哪家的脚本发。Kaset / 洛雪顶替了系统那边的读数时发给它们;但切歌间隙保持(`heldAcrossPlayerGap`)把屏上
+    /// 播放控制按哪家的脚本发。Kaset / 洛雪 / Audirvana 顶替了系统那边的读数时发给它们;但切歌间隙保持(`heldAcrossPlayerGap`)把屏上
     /// 留在别的播放器时,顶替是这一拍按「系统什么都没报」判出来的,屏上并不是它们 —— 这时照回退目标发,不然按播放会把暂停着的
     /// Kaset / 洛雪放起来,跟保持着的那家同时出声。见 02 章决策 149。纯函数,selftest 覆盖。
-    public static func controlScriptTarget(kasetPreferred: Bool, lxMusicPreferred: Bool, holdingAcrossGap: Bool,
-                                           scriptTarget: PlaybackPlayer?) -> PlaybackPlayer? {
+    public static func controlScriptTarget(kasetPreferred: Bool, lxMusicPreferred: Bool, audirvanaPreferred: Bool = false,
+                                           holdingAcrossGap: Bool, scriptTarget: PlaybackPlayer?) -> PlaybackPlayer? {
         guard !holdingAcrossGap else { return scriptTarget }
-        return kasetPreferred ? .kaset : lxMusicPreferred ? .lxMusic : scriptTarget
+        return kasetPreferred ? .kaset : lxMusicPreferred ? .lxMusic : audirvanaPreferred ? .audirvana : scriptTarget
     }
 
     /// 回退查询失败只关闭读取开关,不证明焦点恢复。targetGone 由被接受的快照清零;

@@ -289,6 +289,6 @@ extension PlaybackPlayer {
     /// 不要这项权限的播放器为 nil(`needsAutomationPermission`,源头 shared/players.json)。
     public var automationUse: AutomationUse? {
         guard needsAutomationPermission else { return nil }
-        return self == .kaset || self == .vox ? .readsTrack : .refinesProgress
+        return self == .kaset || self == .vox || self == .audirvana ? .readsTrack : .refinesProgress
     }
 }

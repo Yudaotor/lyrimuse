@@ -110,6 +110,9 @@ func upcomingFromQueue(artist, title, album, bundleID string, durationSecs float
 	case swinsianBundleID:
 		// App 代问它的播放队列(swinsianqueue.go)。
 		return swinsianUpcoming(artist, title, n)
+	case audirvanaBundleID:
+		// 脚本字典里没有播放队列,退回同专辑预取(02 章决策 254)。
+		return nil, false
 	case foobar2000BundleID:
 		// 列表落盘在它的配置目录里,App 代读(foobarqueue.go)。
 		return foobarUpcoming(artist, title, n)

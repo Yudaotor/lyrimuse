@@ -520,6 +520,36 @@
       "note": "开源的多音源播放器,本地文件与插件音源共用系统媒体会话。曲目信息、封面、状态和进度走 media-control,播放、暂停、上下首和跳转响应系统命令;位置沿用 cleanExtrapolated,开始出声那一刻报的锚点按它的混音缓冲和设备延迟往后挪(MyGoSessionAnchor)。失焦时通过自身主菜单的播放/暂停、下一首、上一首控制(PlaybackMenuControl),需要辅助功能权限,不接失焦跳转。菜单标题不报告随机或循环状态,不提供这两项扩展控制;本机曲目的喜欢读写它的本地库(MyGoFavoriteControl,按「控制」菜单的喜欢/取消喜欢切换),插件音源的曲目不显示喜欢;系统会话不报当前音源和歌曲 id。放本机文件时 App 按进程号找它开着的当前文件(PlayerOpenFile,插件音源在缓存目录里的不算),没写标签时按不带扩展名的文件名拆歌手歌名;nativeLyricSource 填 localfile:正在放的文件同目录同名的 .lrc 与内嵌歌词(它自己显示的也是这一份)。插件流的系统会话不报时长,按它界面进度条的最大值补(durationFromProgressBar,换歌后进度条会停在上一首、界面会整个停住,这两种不认)。"
     },
     {
+      "id": "audirvana",
+      "swiftCase": "audirvana",
+      "goConst": "playerAudirvana",
+      "bundleID": "com.audirvana.Audirvana-Studio",
+      "goBundleConst": "audirvanaBundleID",
+      "processName": "Audirvana Studio",
+      "displayName": {
+        "literal": "Audirvana"
+      },
+      "scrobbleLabel": "Audirvana (macOS)",
+      "nativeLyricSource": "localfile",
+      "positionTier": "precise",
+      "republishesZeroAnchor": false,
+      "playingFromRate": false,
+      "artistArrivesLate": false,
+      "artistlessNotMusic": false,
+      "subtitlesInArtist": false,
+      "dropsSessionBetweenTracks": false,
+      "dropsSessionWhilePlaying": false,
+      "ignoresSeekCommand": false,
+      "durationFromProgressBar": false,
+      "needsAutomationPermission": true,
+      "needsFullDiskAccess": false,
+      "needsAccessibilityPermission": false,
+      "tint": {"rgb": [0.47, 0.44, 0.9]},
+      "fallbackSymbol": "waveform",
+      "bundledIcon": "AudirvanaIcon",
+      "note": "Audirvana Studio 的本地与流媒体播放器(官网分发,要登录 Audirvana 账号),不往系统 Now Playing 报,曲目、状态、位置全靠 AppleScript 字典(Audirvana.sdef):歌名、歌手、专辑、整秒时长、当前地址、播放状态和带小数的位置,位置跟真实出声差 0.01~0.03 秒,开播、恢复、跳转、自动连播都量过。系统那边没人在放时直接问它(MediaControlClient.preferringPlayingAudirvana),播放控制也发它自己的脚本。把 event types reported 设成 TrackChanged 后它发分布式通知 com.audirvana.audirvana-plus.playerStatus(开播、恢复、暂停、换歌、放完停住),只当提前读一次的信号:换歌那一条报的状态可能是 Paused,播放中跳转、按上一首回到开头都不发。当前地址的斜杠也被百分号编码(file://%2FUsers%2F…)。没写标签的文件歌名是去掉扩展名的文件名、歌手和专辑空。nativeLyricSource 填 localfile:当前文件同目录同名的 .lrc 与内嵌歌词。processName 16 字节。"
+    },
+    {
       "id": "weread",
       "swiftCase": "weread",
       "goConst": "playerWeRead",
@@ -586,8 +616,8 @@
   ],
   "displayOrder": {
     "$comment": "图标网格(引导页 + 设置页)的摆放顺序。Apple Music 恒第一、auto 恒垫底;中间按语境排。",
-    "simplifiedChinese": ["apple_music", "qq_music", "netease_music", "kugou_music", "soda_music", "lx_music", "kkbox", "spotify", "amazon_music", "kaset", "pear_desktop", "reamp", "vox", "pine_player", "foobar2000", "swinsian", "plexamp", "mygo_music", "weread", "auto"],
-    "default": ["apple_music", "spotify", "amazon_music", "kaset", "pear_desktop", "kkbox", "qq_music", "netease_music", "kugou_music", "soda_music", "lx_music", "reamp", "vox", "pine_player", "foobar2000", "swinsian", "plexamp", "mygo_music", "weread", "auto"]
+    "simplifiedChinese": ["apple_music", "qq_music", "netease_music", "kugou_music", "soda_music", "lx_music", "kkbox", "spotify", "amazon_music", "kaset", "pear_desktop", "reamp", "vox", "pine_player", "foobar2000", "swinsian", "plexamp", "mygo_music", "audirvana", "weread", "auto"],
+    "default": ["apple_music", "spotify", "amazon_music", "kaset", "pear_desktop", "kkbox", "qq_music", "netease_music", "kugou_music", "soda_music", "lx_music", "reamp", "vox", "pine_player", "foobar2000", "swinsian", "plexamp", "mygo_music", "audirvana", "weread", "auto"]
   },
   "mediaProxyOwners": {
     "$comment": "媒体进程 bundle id → 宿主 App bundle id。MediaRemote 报「现在谁在放」时,Safari 报的是替它解码播放的 WebKit GPU 进程,信任列表、Last.fm 排除名单、网页播放器配对里存的却是宿主,查这些表之前先按这张表换回宿主。Chromium 系(Arc/Chrome/Edge)报浏览器自己的 bundle id,不用登记。只登记实测见过的;为什么用别名而不是把媒体进程写进信任列表,见 LyrimuseCore/Local/TrustedPlayers.swift。",

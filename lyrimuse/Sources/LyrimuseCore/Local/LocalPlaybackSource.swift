@@ -1157,6 +1157,7 @@ public final class LocalPlaybackSource: ObservableObject {
     /// 恢复认得晚(没等到恢复信号、靠暂停档轮询才看到)时,上限按兜底的 2 秒算,会把准的读数削掉一截(见 02 章决策 152)。
     /// Pine Player 的位置是 `PinePlayhead` 从它恢复那份锚点起算的(暂停前的位置接上,或进度条校准过),同样原样采信。
     /// Swinsian 的位置是 `SwinsianPlayhead` 从它恢复的锚点起算、再按脚本整秒的跳变对时的,同样原样采信。
+    /// Audirvana 的位置是它脚本报的播放头,跟真实出声差 0.01~0.03 秒、暂停期间不走,同样原样采信。
     /// Plexamp 暂停那条锚点比实际停下处少约 0.3 秒,恢复那条是准的:按暂停位置封顶会把恢复后的位置压慢 0.2 秒、直到下一份
     /// 锚点,同样原样采信(见 02 章决策 242)。
     /// iPad 版网易云(`client`:这份会话实际是谁报的)恢复那一拍的锚点对真值在 0.01 秒上下,换歌开播那一拍补过提前量
@@ -1167,6 +1168,7 @@ public final class LocalPlaybackSource: ObservableObject {
         bundleID == PlaybackPlayer.kaset.bundleIdentifier || bundleID == PlaybackPlayer.vox.bundleIdentifier
             || bundleID == PlaybackPlayer.pinePlayer.bundleIdentifier || bundleID == PlaybackPlayer.swinsian.bundleIdentifier
             || bundleID == PlaybackPlayer.plexamp.bundleIdentifier || bundleID == PlaybackPlayer.mygoMusic.bundleIdentifier
+            || bundleID == PlaybackPlayer.audirvana.bundleIdentifier
             || client == NetEaseIPadNowPlaying.bundleID || client == QQIPadNowPlaying.bundleID
     }
 
@@ -1840,11 +1842,14 @@ public final class LocalPlaybackSource: ObservableObject {
     ///
     /// Swinsian 不走:位置按脚本整秒的跳变对时(`SwinsianPlayhead`),锚点早晚多少已经量掉了,再学一遍是扣两次。
     ///
+    /// Audirvana 不走:没有锚点,每一拍都是脚本报的播放头。
+    ///
     /// 听书播放器(`PlayerSubtitles`)不走:字幕按它发的锚点对时,补上锚点比出声晚的那截反而跟字幕错开。
     public nonisolated static func learnsAnchorLag(bundleID: String?) -> Bool {
         bundleID != PlaybackPlayer.kugou.bundleIdentifier && bundleID != PlaybackPlayer.reamp.bundleIdentifier
             && bundleID != PlaybackPlayer.lxMusic.bundleIdentifier && bundleID != PlaybackPlayer.pinePlayer.bundleIdentifier
             && bundleID != PlaybackPlayer.swinsian.bundleIdentifier && bundleID != PlaybackPlayer.mygoMusic.bundleIdentifier
+            && bundleID != PlaybackPlayer.audirvana.bundleIdentifier
             && !PlayerSubtitles.carriesSubtitles(bundleID: bundleID)
     }
 
@@ -3011,6 +3016,7 @@ public final class LocalPlaybackSource: ObservableObject {
     private var spotifyInfoObserver: NSObjectProtocol?
     private var voxTrackObserver: NSObjectProtocol?
     private var swinsianObservers: [NSObjectProtocol] = []
+    private var audirvanaObserver: NSObjectProtocol?
     /// 这一段暂停从什么时候起(在放时为 nil)。恢复只有一条即时信号的播放器按它决定暂停时轮询的快慢,见 `pollsFastWhilePaused`。
     private var pausedObservedAt: Date?
     /// Spotify 最近一条 PlaybackStateChanged 通知里的分类提示(Track ID / Name / Artist),给换曲那一拍的
@@ -3286,10 +3292,12 @@ public final class LocalPlaybackSource: ObservableObject {
 
     public func stop() {
         pollTimer?.invalidate(); pollTimer = nil
-        for observer in [playerInfoObserver, spotifyInfoObserver, voxTrackObserver].compactMap({ $0 }) + swinsianObservers {
+        for observer in [playerInfoObserver, spotifyInfoObserver, voxTrackObserver, audirvanaObserver].compactMap({ $0 })
+            + swinsianObservers {
             DistributedNotificationCenter.default().removeObserver(observer)
         }
         swinsianObservers = []
+        audirvanaObserver = nil
         playerInfoObserver = nil
         spotifyInfoObserver = nil
         voxTrackObserver = nil
@@ -3424,6 +3432,14 @@ public final class LocalPlaybackSource: ObservableObject {
                 }
             }
         }
+        // Audirvana 开播、恢复、暂停、换歌、放完停住都发(`AudirvanaPlayerInfo.noticeName`),但换歌那一条报的状态可能是 Paused,
+        // 跳转不发:只当提前读一次脚本的信号,不冻结外推、不记成状态变化。
+        audirvanaObserver = center.addObserver(
+            forName: NSNotification.Name(AudirvanaPlayerInfo.noticeName),
+            object: nil, queue: .main) { [weak self] _ in
+                guard !SourceKnockout.isOut(.audirvanaNotice) else { return }
+                MainActor.assumeIsolated { self?.handlePlayerInfoChanged(freezeExtrapolation: false, stateSignal: false) }
+            }
     }
 
     // media-control 事件流跟两条分布式通知走**同一条**去抖动补查路径:三个来源都只是
@@ -4032,6 +4048,8 @@ public final class LocalPlaybackSource: ObservableObject {
             youtubeMusicVideoID: Self.youtubeMusicVideoID(bundleID: bundleID, trackKey: snapshot.trackKey),
             localFile: bundleID == VoxPlayerInfo.bundleID
                 ? VoxPlayerInfo.currentFilePath(artist: snapshot.artist ?? "", title: snapshot.title ?? "")
+                : bundleID == AudirvanaPlayerInfo.bundleID
+                ? AudirvanaPlayerInfo.currentFilePath(artist: snapshot.artist ?? "", title: snapshot.title ?? "")
                 : bundleID == PinePlayerInfo.bundleID
                 ? PinePlayerInfo.currentFilePath(artist: snapshot.artist ?? "", title: snapshot.title ?? "")
                 : bundleID == PlaybackPlayer.appleMusic.bundleIdentifier
@@ -5907,12 +5925,20 @@ public final class LocalPlaybackSource: ObservableObject {
                        listed: EnrichCacheReader.playerCoverURLs(artist: self.lastSnapshot?.artist ?? "", title: self.lastSnapshot?.title ?? "",
                                                                  album: album ?? "")[PlaybackPlayer.lxMusic.bundleIdentifier])
                     : nil
+                // Audirvana 不往系统报,封面是它脚本给的那张(`MediaControlClient.audirvanaArtwork`)。
+                let fromAudirvana = self.lastResolvedBundleID == PlaybackPlayer.audirvana.bundleIdentifier
                 // Pear Desktop:系统那份拿不到这首的图时用它本机接口报的那张(`PearDesktopAPI.artwork`)。
                 let fromPear = self.lastResolvedBundleID == PlaybackPlayer.pearDesktop.bundleIdentifier
                 return await Self.runOffPool(Self.artworkQueue) { () -> (Data?, String?, String?) in
                     if fromKaset {
                         guard let result = MediaControlClient.kasetArtwork(forTrackKey: expectedKey) else {
                             return (nil, nil, "Kaset's own cover for this track is not read yet")
+                        }
+                        return (result.data, result.trackKey, nil)
+                    }
+                    if fromAudirvana {
+                        guard let result = MediaControlClient.audirvanaArtwork(forTrackKey: expectedKey) else {
+                            return (nil, nil, "Audirvana has no cover for this track")
                         }
                         return (result.data, result.trackKey, nil)
                     }

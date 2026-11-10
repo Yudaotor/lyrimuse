@@ -860,7 +860,7 @@ func runKasetTests() {
                     true, "Kaset 契约: 封面每次取都按此刻认下的播放器挑")
         expectEqual(sourceHas(client, "if snapshot == nil, target.player != .kaset,\n           let probed = NowPlayingClientsProbe.snapshotWithAnchor(forBundleID: target.bundleID) {"), true,
                     "Kaset 契约: 焦点回退不拿系统按 bundle id 存的那份(换歌后常停在上一首)")
-        expectEqual(sourceHas(client, "let found = fetchAutoDetectedSnapshot()\n            noteSystemReading(found)\n            let withPlaying = preferringPlayingOverPausedFocus(found, players: players)\n            return heldAcrossPlayerGap(preferringLXMusicOpenAPI(preferringPlayingKaset(withPlaying), wanted: true))"), true,
+        expectEqual(sourceHas(client, "let found = fetchAutoDetectedSnapshot()\n            noteSystemReading(found)\n            let withPlaying = preferringPlayingOverPausedFocus(found, players: players)\n            return heldAcrossPlayerGap(preferringLXMusicOpenAPI(\n                preferringAudirvana(preferringPlayingKaset(withPlaying), wanted: true), wanted: true))"), true,
                     "Kaset 契约: 自动识别时系统那边没在放就问它")
         expectEqual(sourceHas(client, "let otherLoading = loading || (found == nil && otherPlayerJustDropped(besides: PlaybackPlayer.kaset.bundleIdentifier))")
                         && sourceHas(client, "|| (found == nil && otherPlayerJustDropped(besides: PlaybackPlayer.lxMusic.bundleIdentifier))")
@@ -872,7 +872,7 @@ func runKasetTests() {
         expectEqual(client.contains("if !players.contains(.auto), !players.contains(.kaset) { forgetKasetPreference() }"), true,
                     "Kaset 契约: 设置不认 Kaset 时清掉顶替记录(播放控制别再发给它)")
         expectEqual(client.contains("let holdingAcrossGap = gapHoldingSince != nil")
-                        && sourceHas(client, "let target = controlScriptTarget(kasetPreferred: kasetPreferred, lxMusicPreferred: lxMusicPreferred,\n                                         holdingAcrossGap: holdingAcrossGap, scriptTarget: scriptTarget)")
+                        && sourceHas(client, "let target = controlScriptTarget(kasetPreferred: kasetPreferred, lxMusicPreferred: lxMusicPreferred,\n                                         audirvanaPreferred: audirvanaPreferred,\n                                         holdingAcrossGap: holdingAcrossGap, scriptTarget: scriptTarget)")
                         && client.contains("return preferred && !holdingAcrossGap"), true,
                     "Kaset 契约: 顶替系统那边时播放控制直接发给它,切歌间隙保持着别家时不发,收藏也不按洛雪认")
         expectEqual(sourceHas(client, "guard !asked,\n              runningPID(PlaybackPlayer.kaset.bundleIdentifier) != nil,")

@@ -4,7 +4,7 @@
 
 [English](feature-list.md) · [简体中文](feature-list.zh-CN.md) · 繁體中文 · [日本語](feature-list.ja.md) · [한국어](feature-list.ko.md) · [Español](feature-list.es.md) · [Français](feature-list.fr.md) · [Deutsch](feature-list.de.md) · [Italiano](feature-list.it.md) · [Português (Brasil)](feature-list.pt-BR.md) · [Tiếng Việt](feature-list.vi.md) · [Русский](feature-list.ru.md) · [Українська](feature-list.uk.md) · [ไทย](feature-list.th.md)
 
-Lyrimuse 是一款開源（GPL-3.0）的 macOS 逐字歌詞 App，支援 macOS 14 及以上版本，相容 Apple Silicon 和 Intel 晶片。它為 Apple Music、Spotify、QQ 音樂、網易雲音樂、酷狗音樂、汽水音樂、KKBOX、Amazon Music、洛雪音樂、Kaset、Pear Desktop、reAMP、VOX、Pine Player、foobar2000、Swinsian、Plexamp、MyGo Music，以及瀏覽器中的 YouTube Music 和 Spotify 網頁版顯示逐字同步的歌詞：可顯示在桌面浮動歌詞、動態島、選單列、觸控列和歌詞視窗中，並提供譯文和讀音標註（拼音、粵拼、日文羅馬拼音、韓文羅馬字），還可將聆聽記錄打卡到 Last.fm 和 ListenBrainz，並在 Discord 上顯示正在聆聽的歌曲。介面支援簡體中文、繁體中文、英文、日文、韓文、西班牙文、法文、德文、義大利文、巴西葡萄牙文、越南文、俄文、烏克蘭文和泰文。
+Lyrimuse 是一款開源（GPL-3.0）的 macOS 逐字歌詞 App，支援 macOS 14 及以上版本，相容 Apple Silicon 和 Intel 晶片。它為 Apple Music、Spotify、QQ 音樂、網易雲音樂、酷狗音樂、汽水音樂、KKBOX、Amazon Music、洛雪音樂、Kaset、Pear Desktop、reAMP、VOX、Pine Player、foobar2000、Swinsian、Plexamp、MyGo Music、Audirvana，以及瀏覽器中的 YouTube Music 和 Spotify 網頁版顯示逐字同步的歌詞：可顯示在桌面浮動歌詞、動態島、選單列、觸控列和歌詞視窗中，並提供譯文和讀音標註（拼音、粵拼、日文羅馬拼音、韓文羅馬字），還可將聆聽記錄打卡到 Last.fm 和 ListenBrainz，並在 Discord 上顯示正在聆聽的歌曲。介面支援簡體中文、繁體中文、英文、日文、韓文、西班牙文、法文、德文、義大利文、巴西葡萄牙文、越南文、俄文、烏克蘭文和泰文。
 
 這份清單列出 Lyrimuse 的每一項功能：做什麼、在設定的哪裡、安裝後預設開著還是關著；最後附上設定視窗裡的全部設定項目。清單跟程式碼一起維護，功能有增減時同步更新。
 
@@ -126,7 +126,7 @@ Lyrimuse 是一款開源（GPL-3.0）的 macOS 逐字歌詞 App，支援 macOS 1
 
 ### 直接使用播放器儲存在本機的歌詞
 
-Apple Music、Spotify、酷狗音樂、KKBOX、Amazon Music 和洛雪音樂儲存在本機的歌詞可直接使用，與播放器顯示的版本一致，速度也更快（Apple Music 和 Spotify 只有在播放器中顯示過歌詞的歌曲才有）；QQ 音樂和網易雲音樂依本機曲庫認出正在播放的是哪一首，省去搜尋，直接取用同一版本的歌詞；reAMP、VOX、Pine Player、foobar2000、Swinsian 和 MyGo Music 播放時，以及 Apple Music 播放資料庫中的本機檔案、洛雪音樂播放本機列表中的歌曲時，使用檔案內嵌的歌詞或同名 .lrc 檔案。QQ 音樂、網易雲音樂、酷狗音樂需要在系統設定中為 Lyrimuse 開啟「完整磁碟取用權限」；未授權時仍可連線尋找歌詞。
+Apple Music、Spotify、酷狗音樂、KKBOX、Amazon Music 和洛雪音樂儲存在本機的歌詞可直接使用，與播放器顯示的版本一致，速度也更快（Apple Music 和 Spotify 只有在播放器中顯示過歌詞的歌曲才有）；QQ 音樂和網易雲音樂依本機曲庫認出正在播放的是哪一首，省去搜尋，直接取用同一版本的歌詞；reAMP、VOX、Pine Player、foobar2000、Swinsian、MyGo Music 和 Audirvana 播放時，以及 Apple Music 播放資料庫中的本機檔案、洛雪音樂播放本機列表中的歌曲時，使用檔案內嵌的歌詞或同名 .lrc 檔案。QQ 音樂、網易雲音樂、酷狗音樂需要在系統設定中為 Lyrimuse 開啟「完整磁碟取用權限」；未授權時仍可連線尋找歌詞。
 
 - 預設關閉
 - 設定位置：播放器 › 權限與服務 › 完整磁碟取用權限
@@ -609,9 +609,9 @@ Apple Music、QQ 音樂或網易雲音樂上帶動態封面的專輯，在完整
 
 <a id="feature-players"></a>
 
-### 十九款播放器，可多選或自動辨識
+### 二十款播放器，可多選或自動辨識
 
-Apple Music、Spotify、QQ 音樂、網易雲音樂、酷狗音樂、汽水音樂、洛雪音樂、KKBOX、Amazon Music、仿 Winamp 的 reAMP、主打無損和高解析音質的本機播放器 VOX、免費且格式支援很全的本機播放器 Pine Player、從 Windows 移植來的老牌本機播放器 foobar2000、為大型曲庫設計的本機播放器 Swinsian、播放自建 Plex 伺服器曲庫的 Plexamp、播放本機檔案並靠外掛接入其他音源的開源播放器 MyGo Music、YouTube Music 用戶端 Kaset，開源的 YouTube Music 桌面用戶端 Pear Desktop，以及聽書用的微信讀書。可同時選擇多個，也可保持自動辨識，跟隨 macOS「正在播放」中的播放器。支援 Apple Music 電台，主持人講話時顯示電台名稱和台標。
+Apple Music、Spotify、QQ 音樂、網易雲音樂、酷狗音樂、汽水音樂、洛雪音樂、KKBOX、Amazon Music、仿 Winamp 的 reAMP、主打無損和高解析音質的本機播放器 VOX、免費且格式支援很全的本機播放器 Pine Player、從 Windows 移植來的老牌本機播放器 foobar2000、為大型曲庫設計的本機播放器 Swinsian、播放自建 Plex 伺服器曲庫的 Plexamp、播放本機檔案並靠外掛接入其他音源的開源播放器 MyGo Music、面向發燒友的高解析音訊播放器 Audirvana、YouTube Music 用戶端 Kaset，開源的 YouTube Music 桌面用戶端 Pear Desktop，以及聽書用的微信讀書。可同時選擇多個，也可保持自動辨識，跟隨 macOS「正在播放」中的播放器。支援 Apple Music 電台，主持人講話時顯示電台名稱和台標。
 
 - 設定位置：播放器 › 音樂 App
 
@@ -648,7 +648,7 @@ Apple Music、Spotify、QQ 音樂、網易雲音樂、酷狗音樂、汽水音�
 
 ### 依需求申請權限
 
-Apple Music、Spotify、Kaset、VOX 和 Swinsian 需要「自動化」權限才能讀取播放狀態；QQ 音樂、網易雲音樂、酷狗音樂需要「完整磁碟取用權限」才能使用本機歌詞和播放佇列，汽水音樂和 VOX 需要該權限讀取播放佇列；Amazon Music 和 Pine Player 的進度校正，Pine Player 的播放列表，QQ 音樂、網易雲音樂、酷狗音樂、汽水音樂、Amazon Music、reAMP、Pine Player 和 foobar2000 的隨機、循環、喜歡按鈕，foobar2000 的音量，以及其他 App 佔用「正在播放」時 QQ 音樂、網易雲音樂、汽水音樂、Pine Player、foobar2000 和 MyGo Music 的播放按鈕，需要「輔助使用」權限；瀏覽器中的網頁播放器需要為瀏覽器開啟「自動化」權限，並在瀏覽器中開啟「允許 Apple 事件中的 JavaScript」。其他播放器無需權限。設定中會標明每項的目前授權狀態。
+Apple Music、Spotify、Kaset、VOX、Swinsian 和 Audirvana 需要「自動化」權限才能讀取播放狀態；QQ 音樂、網易雲音樂、酷狗音樂需要「完整磁碟取用權限」才能使用本機歌詞和播放佇列，汽水音樂和 VOX 需要該權限讀取播放佇列；Amazon Music 和 Pine Player 的進度校正，Pine Player 的播放列表，QQ 音樂、網易雲音樂、酷狗音樂、汽水音樂、Amazon Music、reAMP、Pine Player 和 foobar2000 的隨機、循環、喜歡按鈕，foobar2000 的音量，以及其他 App 佔用「正在播放」時 QQ 音樂、網易雲音樂、汽水音樂、Pine Player、foobar2000 和 MyGo Music 的播放按鈕，需要「輔助使用」權限；瀏覽器中的網頁播放器需要為瀏覽器開啟「自動化」權限，並在瀏覽器中開啟「允許 Apple 事件中的 JavaScript」。其他播放器無需權限。設定中會標明每項的目前授權狀態。
 
 - 設定位置：播放器 › 權限與服務 › 自動化權限
 - 設定位置：播放器 › 權限與服務 › 完整磁碟取用權限

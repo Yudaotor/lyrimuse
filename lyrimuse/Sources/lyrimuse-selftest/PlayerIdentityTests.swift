@@ -579,6 +579,7 @@ func runPlayerIdentityTests() {
             .pearDesktop: ("pear_desktop", "com.github.th-ch.youtube-music"),
             .weread: ("weread", "com.tencent.weread"),
             .mygoMusic: ("mygo_music", "dev.egoist.music"),
+            .audirvana: ("audirvana", "com.audirvana.Audirvana-Studio"),
         ]
         for (player, want) in expected {
             expectEqual(player.rawValue, want.raw, "播放器契约: \(player) 的 rawValue")
@@ -1224,6 +1225,7 @@ func runPlayerIdentityTests() {
             .swinsian: (nil, [.extendedControls, .repeatOne, .resume, .snapsToReportedPosition, .arrivesWhole]),
             .plexamp: (nil, [.extendedControls, .repeatOne, .gaplessLead, .learnsAnchorLag, .arrivesWhole]),
             .mygoMusic: (nil, [.favorite, .gaplessLead, .lateAnchorProbe]),
+            .audirvana: (nil, [.arrivesWhole]),
             .pearDesktop: (.youtubeMusic, [.extendedControls, .repeatOne, .favorite, .resume, .lateAnchorProbe, .learnsAnchorLag,
                                            .holdsAnchorLagSeed, .catalogMenuRows]),
         ]
@@ -1413,8 +1415,8 @@ func runPlayerIdentityTests() {
     // 回设置里却找不到入口,更新/重签名导致 TCC 授权失效之后就再也没有地方能重新授权。
     do {
         typealias P = Set<PlaybackPlayer>
-        expectEqual(P([.auto]).playersNeedingAutomation, [.appleMusic, .spotify, .kaset, .vox, .swinsian],
-                    "自动化权限判据: 纯 auto(默认值)按超集算,五家都要")
+        expectEqual(P([.auto]).playersNeedingAutomation, [.appleMusic, .spotify, .kaset, .vox, .swinsian, .audirvana],
+                    "自动化权限判据: 纯 auto(默认值)按超集算,六家都要")
         expectEqual(P([.appleMusic]).playersNeedingAutomation, [.appleMusic],
                     "自动化权限判据: 只勾 Apple Music,只要它那一份")
         expectEqual(P([.spotify]).playersNeedingAutomation, [.spotify],
@@ -1423,7 +1425,7 @@ func runPlayerIdentityTests() {
                     "自动化权限判据: 多选里只挑出真正需要的那几家,别把 QQ 音乐也列上")
         expectEqual(P([.appleMusic, .spotify]).playersNeedingAutomation, [.appleMusic, .spotify],
                     "自动化权限判据: 两家都勾就两行")
-        expectEqual(P([.qqMusic, .auto]).playersNeedingAutomation, [.appleMusic, .spotify, .kaset, .vox, .swinsian],
+        expectEqual(P([.qqMusic, .auto]).playersNeedingAutomation, [.appleMusic, .spotify, .kaset, .vox, .swinsian, .audirvana],
                     "自动化权限判据: 含 auto 就是超集,跟同时勾了谁无关")
         // 顺序固定(allCases),两个界面按同一个顺序排,别让卡片里的行随集合迭代顺序跳。
         expectEqual(P([.spotify, .appleMusic]).playersNeedingAutomation, [.appleMusic, .spotify],
@@ -1440,8 +1442,8 @@ func runPlayerIdentityTests() {
         // 每家该不该要这份权限,来自生成表,不是手抄 —— 新接一个有 AppleScript 字典的播放器时,
         // 改 shared/players.json 就够,两个界面自动跟上。
         expectEqual(PlaybackPlayer.allCases.filter(\.needsAutomationPermission),
-                    [.appleMusic, .spotify, .kaset, .vox, .swinsian],
-                    "自动化权限判据: 需要权限的就这五家(改 shared/players.json 的 needsAutomationPermission)")
+                    [.appleMusic, .spotify, .kaset, .vox, .swinsian, .audirvana],
+                    "自动化权限判据: 需要权限的就这六家(改 shared/players.json 的 needsAutomationPermission)")
         expectEqual(PlaybackPlayer.auto.needsAutomationPermission, false,
                     "自动化权限判据: auto 自己不是一个 App,不对应任何权限目标")
         // 跟 isExclusivelyAppleMusic **不是**一回事 —— 混用会让多选/auto 下的播放控制
@@ -1487,8 +1489,8 @@ func runPlayerIdentityTests() {
                      .refinesProgress, .pressesPlayMode, .controlsTransport],
                     "辅助功能判据: QQ 音乐是切模式、网易云/酷狗/汽水是喜欢加失焦播放、Amazon Music 是读进度加随机循环、reAMP 只有随机循环、Pine Player 是读进度条补位置加失焦播放,授权说明和体检提示按这个分开写")
         expectEqual(PlaybackPlayer.allCases.compactMap(\.automationUse),
-                    [.refinesProgress, .refinesProgress, .readsTrack, .readsTrack, .refinesProgress],
-                    "自动化判据: Apple Music、Spotify、Swinsian 只让进度更准,Kaset、VOX 的曲目整份靠它,引导页和设置页的说明按这个分开写")
+                    [.refinesProgress, .refinesProgress, .readsTrack, .readsTrack, .refinesProgress, .readsTrack],
+                    "自动化判据: Apple Music、Spotify、Swinsian 只让进度更准,Kaset、VOX、Audirvana 的曲目整份靠它,引导页和设置页的说明按这个分开写")
         expectEqual(P([.auto]).playersNeedingAccessibility, [.qqMusic, .netease, .kugou, .soda, .amazonMusic, .reamp, .pinePlayer, .foobar2000, .mygoMusic],
                     "辅助功能判据: 纯 auto 按超集算")
         expectEqual(P([.kugou]).playersNeedingAccessibility, [.kugou], "酷狗单选也显示 AX 授权入口(喜欢键、失焦播放控制要它)")
@@ -1869,7 +1871,7 @@ func runPlayerIdentityTests() {
                     [.init(player: .spotify, launchIfNeeded: false)],
                     "勾选即请求: 勾自动识别只问已经在跑的那几家,且不拉起")
         expectEqual(Plan.onSelect(.auto, isInstalled: { $0 != .spotify }, isRunning: everything).map(\.player),
-                    [.appleMusic, .kaset, .vox, .swinsian], "勾选即请求: 勾自动识别时没装的同样不问")
+                    [.appleMusic, .kaset, .vox, .swinsian, .audirvana], "勾选即请求: 勾自动识别时没装的同样不问")
         expectEqual(Plan.onSelect(.auto, isInstalled: everything, isRunning: everything).map(\.player),
                     Set<PlaybackPlayer>([.auto]).playersNeedingAutomation,
                     "勾选即请求: 都装了都在跑时,问的就是自动识别那份权限列表")

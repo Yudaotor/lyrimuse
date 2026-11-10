@@ -41,6 +41,10 @@ public enum SourceKnockout {
         case swinsianScript = "swinsian-script"
         /// Swinsian 的分布式通知(开播、恢复、暂停、换歌、循环绕回的锚点和即时信号,当前文件的一条退路)。
         case swinsianNotice = "swinsian-notice"
+        /// Audirvana 的脚本读数(曲目、状态、位置、当前文件、封面、播放控制都靠它;它不往系统报):关掉后它整个认不出来。
+        case audirvanaScript = "audirvana-script"
+        /// Audirvana 的分布式通知(开播、恢复、暂停、换歌的即时信号):关掉后只剩按节拍读脚本。
+        case audirvanaNotice = "audirvana-notice"
     }
 
     private static let logger = Logger(subsystem: LyrimuseIdentity.logSubsystem, category: "knockout")

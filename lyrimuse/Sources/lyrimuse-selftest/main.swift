@@ -61,6 +61,7 @@ let groups: [TestGroup] = [
     TestGroup(name: "pear", summary: "Pear Desktop 本机接口:配置 / 歌曲应答 / 对曲 / 队列整理成 Kaset 回包 / MV 与播客 / 接线契约", run: runPearDesktopTests),
     TestGroup(name: "weread", summary: "微信读书听书:歌手栏的字幕收成歌词 / 身份换成书名 / 并句规则 / LRC / 接线契约", run: runWeReadTests),
     TestGroup(name: "swinsian", summary: "Swinsian:通知与脚本读数 / 两份锚点取最新、整秒核对出跳转、盯跳变对时(真机录到的一段回放)/ 按开着的文件认曲目 / 接线契约", run: runSwinsianTests),
+    TestGroup(name: "audirvana", summary: "Audirvana:脚本读数(斜杠也编码的地址、没写标签的文件、精确位置、文件时长)/ 封面归属 / 播放控制脚本与通路 / 接线契约", run: runAudirvanaTests),
     TestGroup(name: "mygo", summary: "MyGo Music:开播锚点按混音缓冲和设备延迟后挪 / 封面锚点沿用开播那份 / 接线契约", run: runMyGoTests),
     TestGroup(name: "progress-bar-duration", summary: "系统会话不报时长时按播放器界面进度条补:认哪根滑块 / 换歌头一秒不读 / 界面停住或长度没更新不认 / 只对开了开关的播放器 / 接线契约", run: runProgressBarDurationTests),
     TestGroup(name: "plexamp", summary: "Plexamp:本机播放器接口的时间线解析 / 循环档 / 失焦控制路径 / 接线契约", run: runPlexampTests),

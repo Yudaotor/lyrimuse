@@ -602,6 +602,13 @@ public enum MusicPlaybackController {
         return "tell application id \"com.swinsian.Swinsian\"\n" + body + "\nend tell"
     }
 
+    private static let audirvanaRunningGuard = #"""
+        if application id "com.audirvana.Audirvana-Studio" is not running then
+            return ""
+        end if
+
+        """#
+
     private static let swinsianRunningGuard = #"""
         if application id "com.swinsian.Swinsian" is not running then
             return ""
@@ -1254,6 +1261,9 @@ public enum MusicPlaybackController {
         case swinsianScript(PlaybackMenuControl.Command)
         /// 焦点被占、屏上这首是 Plexamp 时,播放 / 暂停、上下首发到它的本机播放器接口(`PlexampPlayerAPI`)。
         case plexampAPI(PlaybackMenuControl.Command)
+        /// 读数是 Audirvana 脚本顶替来的(它不往系统 Now Playing 报):播放 / 暂停、上下首、跳转都发它自己的脚本
+        /// (`AudirvanaPlayerInfo.controlScript`)。
+        case audirvanaScript
         /// 不发。焦点被别的 App 占着、屏上这首又没有 AppleScript 可发:media-control 的指令会落在占用者身上。
         /// 按 bundle id 定向发(`MRMediaRemoteSendCommandToApp`)也不行 —— 目标不接时它不报错,照样落到焦点上,
         /// 见 02 章决策 51。
@@ -1273,6 +1283,7 @@ public enum MusicPlaybackController {
         case .kaset: return .kasetScript
         case .vox: return .voxScript
         case .lxMusic where LXMusicOpenAPI.directControlCommands.contains(mediaControlCommand): return .lxMusicDirect
+        case .audirvana where AudirvanaPlayerInfo.controlCommands.contains(mediaControlCommand): return .audirvanaScript
         default:
             guard focusHeldElsewhere else { return .mediaControl }
             if let player = directQueryFallback, PlaybackMenuControl.players.contains(player),
@@ -1359,6 +1370,11 @@ public enum MusicPlaybackController {
             dispatchMenuAccessibility(command, for: player, completion: completion)
         case .swinsianScript(let command):
             runAppleScript(swinsianRunningGuard + swinsianControlScript(command))
+        case .audirvanaScript:
+            guard let script = AudirvanaPlayerInfo.controlScript(mediaControlCommand, arguments: mediaControlArguments) else {
+                return withhold(mediaControlCommand, reason: "Audirvana has no AppleScript command for it")
+            }
+            runAppleScript(audirvanaRunningGuard + script)
         case .plexampAPI(let command):
             commandQueue.async {
                 commandSerial &+= 1

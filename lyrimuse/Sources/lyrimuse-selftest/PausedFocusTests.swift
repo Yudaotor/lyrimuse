@@ -117,7 +117,7 @@ func pausedFocusChecks() {
             (try? String(contentsOfFile: sourcesRoot.appendingPathComponent(path).path, encoding: .utf8)) ?? ""
         }
         let client = code("LyrimuseCore/Local/MediaControlClient.swift")
-        expectEqual(sourceHas(client, "let withPlaying = preferringPlayingOverPausedFocus(found, players: players)\n            return heldAcrossPlayerGap(preferringLXMusicOpenAPI(preferringPlayingKaset(withPlaying), wanted: true))")
+        expectEqual(sourceHas(client, "let withPlaying = preferringPlayingOverPausedFocus(found, players: players)\n            return heldAcrossPlayerGap(preferringLXMusicOpenAPI(\n                preferringAudirvana(preferringPlayingKaset(withPlaying), wanted: true), wanted: true))")
                         && sourceHas(client, "let withPlaying = preferringPlayingOverPausedFocus(selected, players: players)\n        let withKaset = players.contains(.kaset) ? preferringPlayingKaset(withPlaying) : withPlaying"),
                     true, "焦点暂停契约: 自动识别、多选两条路都先顶替,再轮到 Kaset / 洛雪,最后过切歌间隙保持")
         let body = sourceBody("private static func preferringPlayingOverPausedFocus(", in: client)
