@@ -3157,7 +3157,7 @@ func runSourceContractSurfaceTests() {
             }
 
             // ⑫ 引导页的「配对浏览器」必须有"自己挑一个"的出口。只铺 knownBrowserBundleIDs
-            //    的话,Brave / Vivaldi / Opera / Arc 用户在引导里完全走不通。
+            //    的话,Vivaldi / Opera 这类用户在引导里完全走不通。
             expectEqual(onboarding.contains("BrowserPairing.chooseFromApplications("), true,
                         "引导页配对有出口: 少了「从应用程序中选择…」,默认名单只有 Chrome/Edge/Safari 三个")
         }

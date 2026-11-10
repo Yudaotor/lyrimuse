@@ -5795,7 +5795,7 @@ private struct PlayerSettingsTab: View {
 
     /// 让用户自己从 /Applications 里挑一个浏览器。
     ///
-    /// 为什么需要这条路:`knownBrowserBundleIDs` 只默认列四个,而那不是 UI 偷懒 ——
+    /// 为什么需要这条路:`knownBrowserBundleIDs` 只默认列五个,而那不是 UI 偷懒 ——
     /// `chromiumPrefsPaths` 只登记验证过的浏览器(见那边注释)。Vivaldi / Opera /
     /// Chromium / 各种 Beta 通道其实都是 Chrome 的分支、继承了同一份脚本字典,本来就驱得动,
     /// 只是没人验过它们的 Preferences 路径。
@@ -5821,8 +5821,8 @@ private struct PlayerSettingsTab: View {
     ///
     /// **内置名单里的直接跳过**:它们本来就默认展示,再记一份是冗余状态,而
     /// `addablePlatformBrowsers` 拼菜单时又要把它们从手动那段里滤掉,两处口径容易走散。
-    /// 反过来,**不在内置名单、但 `family(...)` 本来就认识的(Arc)必须记** —— 那正是这个
-    /// 函数存在的理由,见 `knownBrowserBundleIDs` 头注。
+    /// 反过来,**不在内置名单、但 `family(...)` 本来就认识的必须记**,否则选完之后仍不出现在
+    /// 「+」菜单里。
     /// 本体在 `BrowserPairing`(引导页那一步也要用),这里只转发。
     private func rememberManualBrowser(_ bundleID: String, family: BrowserAutomationPermission.Family) {
         BrowserPairing.rememberManualBrowser(bundleID, family: family)

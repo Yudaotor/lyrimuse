@@ -65,18 +65,13 @@ public enum BrowserAutomationPermission {
     /// **这是一份"默认展示"名单,不是"支持"名单 —— 两件事别混**。这里没有
     /// 的浏览器照样驱得动:能不能驱动由 `family(forBundleID:)` 说了算,而它认的是
     /// `chromiumPrefsPaths` / Safari / 用户手动加过的那批,跟这份展示名单是两套东西。
-    ///
-    /// **Arc 就是这么被拿掉的**(「arc 不要留着,但是我们代码里对他的
-    /// 适配都留着,只是不在这里显示,如果用户自己选了 arc,那就依旧按我们适配好的来走」)。
-    /// Arc 在 `chromiumPrefsPaths` 里**原样留着**,`family(...)` 照样返回 `.chromium`、
-    /// 那道 JS 开关的状态照样读得出来、`browserManualEnableHint` 里那条 Arc 专属菜单路径
-    /// 也原样留着 —— 用户从「从应用程序中选择…」挑中它时,走的是**完整的既有适配**,一步
-    /// 都不降级。少的只是"默认摆在菜单里"这一条。**别因为它不在这份名单里就去删 Arc 的
-    /// 适配代码。**
+    /// 往这里加的浏览器必须同时在 `chromiumPrefsPaths` 里登记过(或是 Safari),否则菜单里
+    /// 列得出、`family(...)` 却判不出引擎族。见 02 章决策 253。
     public static let knownBrowserBundleIDs: [String] = [
         "com.google.Chrome",
         "com.microsoft.edgemac", // Edge
         "com.brave.Browser", // Brave
+        "company.thebrowser.Browser", // Arc
         safariBundleID,
     ]
 

@@ -2499,19 +2499,19 @@ func runPlayerIdentityTests() {
     }
 
     // ---- 「默认展示名单」≠「支持名单」 ----
-    // 把 Arc 从「+」菜单的默认候选里拿掉,但**代码里对它的适配全部保留** —— 用户自己从
-    // 「应用程序」里挑中它时要走完整的既有适配。这几条断言就是钉住这个区分:
-    // 光看 `knownBrowserBundleIDs` 里没有 Arc 就去删 Arc 的适配,会当场红。
+    // `knownBrowserBundleIDs` 只决定「+」菜单默认列谁;能不能驱动由 `family(forBundleID:)` 说了算。
+    // 02 章决策 253。
     do {
         let arc = "company.thebrowser.Browser"
-        expectEqual(BrowserAutomationPermission.knownBrowserBundleIDs.contains(arc), false,
-                    "浏览器默认名单: Arc 不该出现在「+」菜单的默认候选里")
         expectEqual(BrowserAutomationPermission.family(forBundleID: arc), .chromium,
-                    "浏览器适配: Arc 的引擎族判定必须原样保留(不在默认名单 ≠ 不支持)")
-        // Chrome / Edge / Brave / Safari 仍然默认展示 —— 免得"拿掉 Arc"被顺手扩大成"清空名单"。
-        for id in ["com.google.Chrome", "com.microsoft.edgemac", "com.brave.Browser", "com.apple.Safari"] {
-            expectEqual(BrowserAutomationPermission.knownBrowserBundleIDs.contains(id), true,
-                        "浏览器默认名单: \(id) 应该仍在默认候选里")
+                    "浏览器适配: Arc 判成 Chromium 系")
+        let expectedOrder = ["com.google.Chrome", "com.microsoft.edgemac", "com.brave.Browser", arc, "com.apple.Safari"]
+        expectEqual(BrowserAutomationPermission.knownBrowserBundleIDs, expectedOrder,
+                    "浏览器默认名单: Chrome / Edge / Brave / Arc / Safari,按这个顺序默认展示")
+        // 默认列出来的每一个都必须判得出引擎族,否则菜单里选得到、选完却驱不动。
+        for id in BrowserAutomationPermission.knownBrowserBundleIDs {
+            expectEqual(BrowserAutomationPermission.family(forBundleID: id) != nil, true,
+                        "浏览器默认名单: \(id) 必须判得出引擎族")
         }
         // Brave 是实测登记过的 Chromium 系(脚本字典 CrSuExJa、pref key 同名、Preferences 路径两层厂商目录)。
         expectEqual(BrowserAutomationPermission.family(forBundleID: "com.brave.Browser"), .chromium,

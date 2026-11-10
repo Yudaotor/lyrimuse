@@ -664,11 +664,7 @@ struct OnboardingView: View {
             if candidates.isEmpty {
                 // 默认候选一个都没有。实践中几乎进不来这个分支(macOS 上 Safari 恒存在,
                 // 而 `candidateBrowsers` 只过滤"装没装"),留着是因为它比一个空网格诚实。
-                //
-                // 这句原来写的是「Safari、Chrome、Edge、**Arc** 这类」—— 那跟
-                // 的产品决定正好相反:Arc 被有意从 `knownBrowserBundleIDs` 里拿掉了(适配
-                // 全留着,只是不默认展示,见那边头注),点名它等于承诺一个这里不会出现的选项。
-                // 改成如实说明"默认只列这几个,别的自己挑",正好接上下面那个按钮。
+                // 括号里点名的浏览器只能取自 `knownBrowserBundleIDs`。
                 Text(L10n.t("未在这台 Mac 上找到默认列出的浏览器（Safari、Chrome、Edge）。其他浏览器可通过下方的「从应用程序中选择…」添加"))
                     .font(.callout)
                     .foregroundStyle(.secondary)
@@ -693,8 +689,8 @@ struct OnboardingView: View {
                 // 这行小字只是补充说明,不是那个 bug 的修复本体。
             }
             // 「从应用程序中选择…」。在此之前引导页只铺得出
-            // `knownBrowserBundleIDs` 里装了的那几个(Chrome / Edge / Brave / Safari),而
-            // Vivaldi / Opera / Chromium 各分支、以及被有意拿出默认名单的 Arc 都驱得动 ——
+            // `knownBrowserBundleIDs` 里装了的那几个(Chrome / Edge / Brave / Arc / Safari),而
+            // Vivaldi / Opera / Chromium 各分支都驱得动 ——
             // 这批用户在引导里**完全走不通**,只能靠正文那句"随时可以在设置里再改"兜底。
             // 设置页早就有这条路,引导页缺它没有道理。
             //
