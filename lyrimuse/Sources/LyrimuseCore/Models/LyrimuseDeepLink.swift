@@ -84,9 +84,9 @@ public enum LyrimuseDeepLink: Equatable, Sendable {
         /// 回到最近一次 `checkpoint`:关掉之后开出来的窗口,开关设回原值。
         case restore
         /// 模拟播放(`PlaybackSimulation`):不读播放器,按这首驱动界面。时长、位置以秒计,`playing=0` 停在 `position`,
-        /// `ad=1` 这一首按广告报。
+        /// `ad=1` 这一首按广告报;`artwork=<本机图片的绝对路径>` 给这一首一张封面(验跟随封面的背景、配色)。
         case simulate(title: String, artist: String, album: String, duration: Double?, position: Double, playing: Bool,
-                      ad: Bool = false)
+                      ad: Bool = false, artworkPath: String? = nil)
         /// 模拟什么都没在放(停播页,`debug/simulate?idle=1`)。
         case simulateIdle
         /// 结束模拟,交还真实播放器(`debug/simulate?off=1`)。
@@ -307,7 +307,8 @@ public enum LyrimuseDeepLink: Equatable, Sendable {
                 self = .debug(.simulate(
                     title: title, artist: value("artist") ?? "", album: value("album") ?? "",
                     duration: seconds("duration").flatMap { $0 > 0 ? $0 : nil }, position: seconds("position") ?? 0,
-                    playing: value("playing").flatMap(Self.parseBool) ?? true, ad: value("ad").flatMap(Self.parseBool) ?? false))
+                    playing: value("playing").flatMap(Self.parseBool) ?? true, ad: value("ad").flatMap(Self.parseBool) ?? false,
+                    artworkPath: value("artwork").flatMap { $0.hasPrefix("/") ? $0 : nil }))
             }
         case ("debug", "/favorite"):
             self = .debug(.toggleFavorite)
@@ -566,7 +567,7 @@ public enum LyrimuseDeepLink: Equatable, Sendable {
             case .telemetryPreview: components.path = "/telemetry-preview"
             case .checkpoint: components.path = "/checkpoint"
             case .restore: components.path = "/restore"
-            case let .simulate(title, artist, album, duration, position, playing, ad):
+            case let .simulate(title, artist, album, duration, position, playing, ad, artworkPath):
                 components.path = "/simulate"
                 components.queryItems = [
                     URLQueryItem(name: "title", value: title), URLQueryItem(name: "artist", value: artist),
@@ -575,6 +576,7 @@ public enum LyrimuseDeepLink: Equatable, Sendable {
                     URLQueryItem(name: "position", value: String(position)),
                     URLQueryItem(name: "playing", value: playing ? "1" : "0"),
                 ] + (ad ? [URLQueryItem(name: "ad", value: "1")] : [])
+                    + (artworkPath.map { [URLQueryItem(name: "artwork", value: $0)] } ?? [])
             case .simulateIdle:
                 components.path = "/simulate"
                 components.queryItems = [URLQueryItem(name: "idle", value: "1")]

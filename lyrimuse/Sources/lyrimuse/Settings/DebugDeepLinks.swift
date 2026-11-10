@@ -38,9 +38,16 @@ enum DebugDeepLinks {
         case .telemetryPreview: writeTelemetryPreview()
         case .checkpoint: checkpoint()
         case .restore: restore()
-        case let .simulate(title, artist, album, duration, position, playing, ad):
+        case let .simulate(title, artist, album, duration, position, playing, ad, artworkPath):
+            // 封面只读本机文件,限 20MB;读不到就当没有封面。
+            let artwork = artworkPath.flatMap { path -> Data? in
+                let url = URL(fileURLWithPath: path)
+                guard let size = (try? url.resourceValues(forKeys: [.fileSizeKey]))?.fileSize, size <= 20_000_000 else { return nil }
+                return FileIO.read(url)
+            }
             PlaybackSimulation.begin(PlaybackSimulation(
-                title: title, artist: artist, album: album, duration: duration, position: position, playing: playing, ad: ad))
+                title: title, artist: artist, album: album, duration: duration, position: position, playing: playing, ad: ad,
+                artwork: artwork))
             LocalPlaybackSource.shared.simulationChanged()
             logger.notice("debug simulate on ad=\(ad, privacy: .public)")
         case .simulateIdle:

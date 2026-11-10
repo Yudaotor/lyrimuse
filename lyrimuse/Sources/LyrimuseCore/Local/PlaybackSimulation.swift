@@ -28,9 +28,11 @@ public struct PlaybackSimulation: Equatable, Sendable {
     public var ad: Bool
     /// 什么都没在放:每拍交空快照,走播放器撤掉正在播放的那一路(停播页)。
     public var idle: Bool
+    /// 这一首的封面(图片原始字节);nil = 没有封面。取封面时直接交这一份,不读播放器。
+    public var artwork: Data?
 
     public init(title: String, artist: String, album: String, duration: Double?, position: Double, playing: Bool,
-                ad: Bool = false, idle: Bool = false, anchoredAt: Date = Date()) {
+                ad: Bool = false, idle: Bool = false, artwork: Data? = nil, anchoredAt: Date = Date()) {
         self.title = title
         self.artist = artist
         self.album = album
@@ -39,6 +41,7 @@ public struct PlaybackSimulation: Equatable, Sendable {
         self.playing = playing
         self.ad = ad
         self.idle = idle
+        self.artwork = artwork
         self.anchoredAt = anchoredAt
     }
 

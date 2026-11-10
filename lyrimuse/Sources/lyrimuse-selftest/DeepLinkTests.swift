@@ -350,6 +350,12 @@ func runDeepLinkTests() {
         expectEqual(link("lyrimuse://debug/simulate?title=x&ad=1"),
                     .debug(.simulate(title: "x", artist: "", album: "", duration: nil, position: 0, playing: true, ad: true)),
                     "模拟播放: 这一首按广告报")
+        expectEqual(link("lyrimuse://debug/simulate?title=x&artwork=%2FUsers%2Fme%2Fcover.jpg"),
+                    .debug(.simulate(title: "x", artist: "", album: "", duration: nil, position: 0, playing: true,
+                                     artworkPath: "/Users/me/cover.jpg")), "模拟播放: 带封面路径")
+        expectEqual(link("lyrimuse://debug/simulate?title=x&artwork=cover.jpg"),
+                    .debug(.simulate(title: "x", artist: "", album: "", duration: nil, position: 0, playing: true)),
+                    "模拟播放: 封面路径不是绝对路径不认")
         expectEqual(link("lyrimuse://action/play-mode?mode=Repeat-All"), .setPlayMode(.repeatAll), "播放模式: 取值不分大小写")
         expectEqual(link("lyrimuse://action/play-mode?mode=loop") == nil && link("lyrimuse://action/play-mode") == nil, true,
                     "播放模式: 认不出的取值、没带取值都认不出")
@@ -480,6 +486,8 @@ func runDeepLinkTests() {
             .debug(.simulate(title: "Orange Moon", artist: "Khalil", album: "", duration: 280, position: 12.5, playing: false)),
             .debug(.simulate(title: "x", artist: "y", album: "z", duration: nil, position: 0, playing: true)), .debug(.simulateOff),
             .debug(.simulate(title: "x", artist: "", album: "", duration: 30, position: 0, playing: true, ad: true)),
+            .debug(.simulate(title: "x", artist: "", album: "", duration: nil, position: 0, playing: true,
+                             artworkPath: "/tmp/cover 1.jpg")),
             .debug(.simulateIdle),
             .debug(.toggleFavorite), .debug(.idleResume), .debug(.seek(seconds: 99.7)), .debug(.seek(seconds: 0)),
             .debug(.knockout(leg: .appleMusicScript, on: false)), .debug(.knockout(leg: .spotifyScript, on: true)),

@@ -5894,6 +5894,10 @@ public final class LocalPlaybackSource: ObservableObject {
             // 那一刻再算(仍在后台,见 hexFor)。
             // miss:没取到图时为什么,进日志(见 artworkMissDescription)。
             @MainActor func attempt() async -> (data: Data?, payloadKey: String?, miss: String?) {
+                // 模拟播放带了封面(debug/simulate?artwork=):直接交这一份,不读播放器。
+                if let simulated = PlaybackSimulation.current, simulated.artwork != nil {
+                    return (simulated.artwork, expectedKey, nil)
+                }
                 // Kaset 的系统会话里从不带图,封面是它自己报的那张(`MediaControlClient.kasetArtwork`)。每次取都按此刻认下的播放器挑:
                 // 换歌那一拍记在了别的来源名下,后面的重试照样取得到 Kaset 那张(02 章决策 91)。
                 let fromKaset = self.lastResolvedBundleID == PlaybackPlayer.kaset.bundleIdentifier
