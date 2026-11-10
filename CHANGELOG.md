@@ -20,6 +20,156 @@ each version's git tag annotation and on its
   完整流程见 docs/releasing.md。
 -->
 
+## v1.13.0
+
+New / 新功能
+- Added Italiano, Português (Brasil), Tiếng Việt, Русский, Українська and
+  ไทย as interface languages
+  新增意大利语、巴西葡萄牙语、越南语、俄语、乌克兰语与泰语界面
+- Added a prompt to switch when your system language becomes available,
+  if you picked a language by hand
+  手动选过界面语言的，升级后有了自己系统语言的界面时会提示改用
+- Added Pear Desktop, Swinsian, Plexamp, MyGo Music and Audirvana Studio
+  and Origin as built-in players
+  新增内置播放器 Pear Desktop、Swinsian、Plexamp、MyGo Music 与 Audirvana（Studio 与 Origin）
+- Added WeRead audiobooks, showing the passage being read as subtitles,
+  bringing built-in players to twenty
+  新增微信读书听书，正在朗读的段落作为字幕显示，内置播放器增至 20 款
+- Added ad skipping, likes and shuffle for Pear Desktop, plus shuffle for
+  YouTube Music on the web
+  Pear Desktop 支持跳过广告和「喜欢」，它与网页版 YouTube Music 都支持随机播放
+- Added lyrics from local files, likes and upcoming-song prefetching for
+  MyGo Music
+  MyGo Music 放本机文件时可用文件旁的 .lrc 与内嵌歌词，支持「喜欢」，并会预先解析接下来的歌
+- You can now customize the menu bar panel like Control Center: arrange,
+  resize, add and remove tiles
+  菜单栏面板可以像「控制中心」一样自定义：拖动排列、调整大小、添加或移除格子，正在播放卡片也是其中一格
+- Added more panel tiles, including Sound, Today, translation, readings,
+  font size and lyrics window controls
+  新增「声音」「今日收听」、显示译文、显示读音、字号、歌词窗口置顶与全屏等面板格子
+- You can now customize the panel's bottom bar and long-press the newer
+  tiles for quick settings
+  面板底栏的项目可以增删、排序，新增的格子也能长按或右键翻面调整设置
+- Added keyboard control to the panel, plus a global shortcut to open it
+  面板里可以用键盘播放／暂停、切歌、调歌词偏移，并新增打开面板的全局快捷键
+- You can now arrange the notch's quick-action buttons in two rows of
+  slots, with many more to choose from
+  灵动岛展开卡头部的快捷操作可以自己排：两行固定格子、可以留空，可选的按钮也多了很多
+- Added an option to stop the keyboard volume keys from showing the notch
+  volume banner
+  新增「按音量键时提示」开关，关闭后按键盘音量键不再弹出灵动岛的音量横幅
+- You can now adjust the size of readings, translations and the next line
+  separately
+  悬浮歌词的读音、译文与下一句字号可以分别调整
+- Added a Staggered next-line layout, alternating the current and next
+  line left and right
+  悬浮歌词的下一句新增「交错」排法：两句同字号，一左一右轮流唱
+- Added a Control Size slider from 100% to 200% to the full lyrics window
+  and web lyrics
+  歌词窗口完整尺寸新增「控件大小」（100%～200%），网页歌词跟着一起放大
+- You can now show the next line on the Touch Bar when a song has no
+  translation or reading
+  触控栏副行选了译文或读音、这首歌却没有时，可改为显示下一句或只显示歌词
+- Added Collapse While Typing, hiding Touch Bar lyrics to reveal typing
+  suggestions in text fields
+  触控栏新增「输入时收起」，在输入框里打字时收起歌词、露出输入法候选与输入建议
+- Added a second search with a different length when no lyrics match the
+  player's song length
+  搜索候选歌词里没有一条与播放器时长相符时，会换个时长补搜，结果列在「不可用」里并注明时长不符
+- Added Arc to the browser menu for web players
+  网页播放器的浏览器菜单里重新默认列出 Arc
+
+Improved / 改进
+- Improved the panel when nothing is playing, showing the last song in
+  the same layout as during playback
+  没有在放歌时，菜单栏面板照常显示上一首的封面、歌名、歌词与走带键，并注明上次播放时间
+- Improved the next-line preview with per-word readings and the same line
+  breaks as when sung
+  悬浮歌词的下一句预览也逐词标读音，折行位置与唱到这一句时一致
+- Improved Spotify timing so lyrics stay in sync after pausing and when
+  switching output devices
+  改进 Spotify 的进度：暂停后恢复、切换输出设备后，歌词不再整体偏移
+- Improved instrumental detection in Apple Music, QQ Music, Soda Music and
+  other players
+  改进纯音乐识别：Apple Music 的古典乐不再卡在「搜索中」或误报暂无歌词，QQ 音乐、汽水音乐等刚点播的歌也能认出
+- Improved matching for titles in brackets, bilingual titles and concert
+  recordings
+  改进整串带括号的歌名、外文名在前的双语歌名，以及演唱会录音的歌词匹配
+- Improved readings: one syllable per Chinese character, and borrowed
+  Japanese kana aligned around digits
+  中文与粤语逐字歌词的读音一字对一个音节；借用的日语假名遇到数字等字符也能对齐
+- Improved lyric search to show which lyrics are actually in use for the
+  playing song
+  搜索候选歌词的「当前使用」照实标出正在放的这首实际用的是哪份
+- Moved Import File… into the ⋯ menu in the lyric search title bar
+  「导入文件…」移入搜索候选歌词标题栏的 ⋯ 菜单
+- Improved the icon-only menu bar item to use the standard system width
+  菜单栏只显示图标时改用系统标准宽度，不再两侧留空
+- Improved Settings layout in longer languages so summaries and values are
+  no longer cut off
+  设置页在文字较长的语言下，工具栏摘要与数值读数不再被截断
+- Moved the no-timestamp note in plain lyrics to the end, in a quieter
+  style
+  纯文本歌词的「此歌词无时间戳」提示移到末尾并调淡
+- Improved responsiveness while dragging sliders and color pickers in
+  Settings
+  在设置里拖动滑杆和颜色选择器时不再卡顿
+
+Fixed / 修复
+- Fixed repeated prompts to access other apps' data, such as when playing
+  new songs in QQ Music
+  修复播放 QQ 音乐等播放器里没放过的歌时，反复弹窗请求读取其他 App 数据的问题
+- Fixed a crash at launch on macOS 15 and earlier with HDR Highlight
+  turned on in the lyrics window
+  修复 macOS 15 及更早系统上，歌词窗口开着「HDR 高亮」时每次启动都崩溃的问题
+- Fixed several rare crashes found through anonymous crash reports
+  修复几处偶发崩溃
+- Fixed hand-picked lyrics being replaced by the player's own lyrics
+  修复手动选定的歌词被换成播放器自家歌词的问题
+- Fixed Amazon Music lyrics drifting out of sync after playback stalls
+  修复 Amazon Music 卡顿后歌词进度不准的问题
+- Fixed lyrics running ahead after resuming on AirPods Max in foobar2000
+  and LX Music
+  修复在 AirPods Max 上恢复播放后，foobar2000 与洛雪音乐的歌词整体超前的问题
+- Fixed songs with a brief second voice being laid out as duets
+  修复第二声部只唱很少几句的歌被当成对唱、译文忽左忽中的问题
+- Fixed rainbow word-by-word menu bar lyrics highlighting the whole line
+  early
+  修复菜单栏彩虹色逐字歌词换句时整句提前高亮的问题
+- Fixed Fade on Hover dimming floating lyrics when the pointer was over
+  blank space beside the text
+  修复指针停在悬浮歌词文字两侧的空白处时，「悬停时淡化」就让歌词变淡的问题
+- Fixed several lyric import issues, including garbled Japanese and Korean
+  files and empty files
+  修复歌词导入的几处问题，包括非 UTF-8 的日文、韩文文件乱码，以及空文件被当成歌词
+- Fixed the notch shrinking on screens without a notch during ads
+  修复没有刘海的屏幕上，广告期间灵动岛缩得很小的问题
+- Fixed the pointer not reaching the notch card from below or when moved
+  across it
+  修复指针从下方移不进灵动岛、横向移过时直接滑过去的问题
+- Fixed Settings shifting left when a scroll bar appears
+  修复出现滚动条时设置页整体往左挤的问题
+
+| Chip / 芯片 | dmg | zip |
+|---|---|---|
+| **Apple Silicon** (M1 and later, recommended) / **Apple M 系列**（推荐） | [Lyrimuse-v1.13.0-macos.dmg](https://github.com/Yudaotor/lyrimuse/releases/download/v1.13.0/Lyrimuse-v1.13.0-macos.dmg) | [Lyrimuse-v1.13.0-macos.zip](https://github.com/Yudaotor/lyrimuse/releases/download/v1.13.0/Lyrimuse-v1.13.0-macos.zip) |
+| **Intel** / **Intel 芯片**（也能在 Apple Silicon 上跑，但体积更大、没必要） | [Lyrimuse-v1.13.0-macos-intel.dmg](https://github.com/Yudaotor/lyrimuse/releases/download/v1.13.0/Lyrimuse-v1.13.0-macos-intel.dmg) | [Lyrimuse-v1.13.0-macos-intel.zip](https://github.com/Yudaotor/lyrimuse/releases/download/v1.13.0/Lyrimuse-v1.13.0-macos-intel.zip) |
+
+Not sure which one? Check your chip under **About This Mac**.
+不确定该下哪个？打开「关于本机」看芯片是 Apple M… 还是 Intel Core…
+
+Contributors / 贡献者
+- Thanks to @youximi for their first contribution, fixing rainbow menu bar
+  lyrics highlighting the whole line early (#69)
+  感谢 @youximi 的首次贡献，修复菜单栏彩虹色逐字歌词换句时整句提前高亮的问题（#69）
+- Thanks to @wutongyuonce for their contribution, adding MyGo Music and the
+  standard icon-only menu bar width (#66, #74)
+  感谢 @wutongyuonce 的贡献，接入 MyGo Music，并让只显示图标的菜单栏项改用系统标准宽度（#66、#74）
+
+222 commits since v1.12.0.
+
+**Full Changelog**: https://github.com/Yudaotor/lyrimuse/compare/v1.12.0...v1.13.0
+
 ## v1.12.0
 
 New / 新功能
