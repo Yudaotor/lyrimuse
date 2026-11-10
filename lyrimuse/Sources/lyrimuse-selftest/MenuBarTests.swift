@@ -2226,6 +2226,10 @@ func runMenuBarTests() {
         pushing.move(.lyricsManager, toColumn: 0, row: 0)
         expectEqual(pushing.placement(of: .lyricsManager) == P(tile: .lyricsManager, size: .medium, column: 0, row: 0) && tidy(pushing), true,
                     "面板拖动: 中号拖到第一排开头,小号们让开")
+        func aligned(_ l: L) -> Bool { l.placements.allSatisfy { $0.size.alignedColumns.contains($0.column) } }
+        expectEqual(aligned(pushing) && pushing.placement(of: .overlay) == P(tile: .overlay, size: .small, column: 4, row: 1), true,
+                    "面板拖动: 小号搬进中号空出来的那块,落在对得齐的列上、不落半格(06 章决策 101)")
+        expectEqual(L.decode(pushing.encoded()), pushing, "面板拖动: 挤完存盘再读回不变")
         var empty = base
         empty.move(.lyricsManager, toColumn: 0, row: 3)
         expectEqual(empty.placement(of: .lyricsManager)?.row == 3 && empty.isEmpty(column: 3, row: 1) && empty.placement(of: .overlay)?.row == 0, true,

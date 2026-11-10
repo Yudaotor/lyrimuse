@@ -301,16 +301,9 @@ public struct MenuBarPanelLayout: Equatable, Sendable {
                 result.placements.append(p)
                 continue
             }
-            if let vacated {
-                let moved = Placement(tile: p.tile, size: p.size, column: p.column - target.column + vacated.column,
-                                      row: p.row - target.row + vacated.row)
-                if moved.column >= vacated.column, moved.row >= vacated.row,
-                   moved.column + moved.size.columns <= vacated.column + vacated.size.columns,
-                   moved.row + moved.size.rows <= vacated.row + vacated.size.rows,
-                   result.fits(moved, ignoring: nil) {
-                    result.placements.append(moved)
-                    continue
-                }
+            if let vacated, let moved = Self.relocated(p, from: target, into: vacated), result.fits(moved, ignoring: nil) {
+                result.placements.append(moved)
+                continue
             }
             result.placements.append(result.firstFit(p.tile, size: p.size, fromRow: p.row, column: p.column))
         }
@@ -319,6 +312,20 @@ public struct MenuBarPanelLayout: Equatable, Sendable {
         for (i, t) in (placements.map(\.tile) + [tile]).enumerated() where order[t] == nil { order[t] = i }
         result.placements.sort { (order[$0.tile] ?? 0) < (order[$1.tile] ?? 0) }
         return result
+    }
+
+    /// 压到的格子 `p` 按跟落点 `target` 的相对位置搬进拖走的格子空出来的 `vacated`:列取这一档对得齐、整块落在 `vacated`
+    /// 里、离相对位置最近的那一列(两格宽度不同时相对位置可能落在半格上,不能照搬,见 06 章决策 101);行照相对位置。
+    /// 放不进去为 nil。
+    private static func relocated(_ p: Placement, from target: Placement, into vacated: Placement) -> Placement? {
+        let column = p.column - target.column + vacated.column
+        let row = p.row - target.row + vacated.row
+        guard row >= vacated.row, row + p.size.rows <= vacated.row + vacated.size.rows else { return nil }
+        let candidates = p.size.alignedColumns.filter {
+            $0 >= vacated.column && $0 + p.size.columns <= vacated.column + vacated.size.columns
+        }
+        guard let aligned = candidates.min(by: { abs($0 - column) < abs($1 - column) }) else { return nil }
+        return Placement(tile: p.tile, size: p.size, column: aligned, row: row)
     }
 
     /// 拖动松手:落到 (column, row),压到的格子让开(同尺寸对齐的两格互换)。原地不动返回 false。
