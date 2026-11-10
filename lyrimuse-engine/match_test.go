@@ -927,6 +927,56 @@ func lrcEndingAt(lastSecs int, lines int) string {
 	return b.String()
 }
 
+// 方大同《Peace (feat. Tia Ray)》:专辑版 332 秒,末句 238 秒,后面是一段长尾奏;各源的专辑版都停在 238 秒。
+// 酷我那份是另一次录音(iTunes Session,源自报 282 秒),末句 275 秒、离 332 秒差 17%,算「吻合」。
+// 它不该证伪「这一版的歌词本来就早早结束」:自报曲长对不上的不算吻合,专辑版照常互证、拿回豁免。
+func TestCorroborationIgnoresAnotherRecordingThatHappensToFit(t *testing.T) {
+	const dur = 332.107
+	qq := lyricCandidate{source: "qq", lyrics: lrcEndingAt(238, 40), sourceReportedDurationSecs: 332}
+	kugou := lyricCandidate{source: "kugou", lyrics: lrcEndingAt(238, 40), sourceReportedDurationSecs: 332}
+	session := lyricCandidate{source: "kuwo", lyrics: lrcEndingAt(275, 44), sourceReportedDurationSecs: 282}
+
+	corr := corroboratedEndings([]lyricCandidate{qq, kugou, session}, dur)
+	if !corr["qq"] || !corr["kugou"] {
+		t.Fatalf("另一次录音碰巧吻合,不该取消专辑版的互证豁免, got %v", corr)
+	}
+	qqScore, _ := scoreLyricCandidateDetailed("方大同", "Peace (feat. Tia Ray)", "危險世界", dur, qq, corr["qq"], 0)
+	sessionScore, sessionTerms := scoreLyricCandidateDetailed("方大同", "Peace (feat. Tia Ray)", "危險世界", dur, session, corr["kuwo"], 0)
+	if qqScore <= sessionScore {
+		t.Errorf("专辑版该赢过另一次录音: qq %d vs kuwo %d", qqScore, sessionScore)
+	}
+	found := false
+	for _, term := range sessionTerms {
+		found = found || term.Kind == scoreTermSourceDurationOff
+	}
+	if !found {
+		t.Error("另一次录音照旧吃 sourceDurationOff")
+	}
+
+	// 自报曲长对得上的吻合候选照旧取消豁免(Valentina 那一形态不受影响)。
+	fits := lyricCandidate{source: "lrclib", lyrics: lrcEndingAt(275, 44), sourceReportedDurationSecs: 332}
+	if corr := corroboratedEndings([]lyricCandidate{qq, kugou, fits}, dur); len(corr) != 0 {
+		t.Errorf("自报曲长对得上的吻合候选照旧取消豁免, got %v", corr)
+	}
+	// 不报曲长的吻合候选同样照旧:没有证据不等于反面证据。
+	unknown := lyricCandidate{source: "lrclib", lyrics: lrcEndingAt(275, 44)}
+	if corr := corroboratedEndings([]lyricCandidate{qq, kugou, unknown}, dur); len(corr) != 0 {
+		t.Errorf("不报曲长的吻合候选照旧取消豁免, got %v", corr)
+	}
+}
+
+func TestSourceReportsAnotherRecording(t *testing.T) {
+	cases := []struct {
+		src, dur float64
+		want     bool
+	}{{282, 332.107, true}, {332, 332.107, false}, {0, 332, false}, {300, 0, false}, {300, 338, false}}
+	for _, c := range cases {
+		if got := sourceReportsAnotherRecording(c.src, c.dur); got != c.want {
+			t.Errorf("sourceReportsAnotherRecording(%v, %v) = %v, want %v", c.src, c.dur, got, c.want)
+		}
+	}
+}
+
 // 「两个源一起抓错版本、互相印证」——实测抓到的真实翻车。
 //
 // Valentina (feat. Rick Ross) [Bonus] 是 237s,QQ 和酷狗都抓到了普通版(都停在 143s),

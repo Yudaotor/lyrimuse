@@ -417,6 +417,16 @@ const lyricEndingCorroborationToleranceSecs = 5.0
 // 只差几个百分点——阈值定太松会放过污染候选,定太紧会错杀真实但尾奏长的候选。
 const durationFitTolerance = 0.25
 
+// sourceReportsAnotherRecording:源自报的曲长跟本地差出 sourceDurationMismatchTolerance —— 这份候选挂在另一次录音上。
+// 打分的 scoreTermSourceDurationOff 和 corroboratedEndings 的「有没有候选吻合」共用它。任一方不知道时长时为 false:
+// 没有证据不等于反面证据。
+func sourceReportsAnotherRecording(sourceSecs, durationSecs float64) bool {
+	if durationSecs <= 0 || sourceSecs <= 0 {
+		return false
+	}
+	return math.Abs(sourceSecs-durationSecs)/math.Max(sourceSecs, durationSecs) > sourceDurationMismatchTolerance
+}
+
 // durationFits 是"这份歌词的长度跟这首歌对得上吗"的**唯一**判据。
 //
 // corroboratedEndings 和 scoreLyricCandidateDetailed 必须共用它:前者靠"有没有任何一条
@@ -451,20 +461,25 @@ func durationFits(lastSecs, durationSecs float64) bool {
 // 早结束"。所以只要**batch 里有任何一条候选的时长是吻合的**,就不再给任何人发豁免:
 // 那条吻合的候选本身走 ratio<=durationFitTolerance 那一档,不需要豁免;剩下那些差一大截
 // 的,该扣就扣。
+//
+// 源自报曲长跟本地差出 sourceDurationMismatchTolerance 的候选不算「吻合」:它自己说了挂在另一次录音上,
+// 末句贴近本地曲长只是巧合,证伪不了「这一版的歌词本来就早早结束」。不排除它的话,一份别的录音就能
+// 让一整批长尾奏的正确候选全吃 durationOff,自己反而胜出。见 09 章决策 367。
 func corroboratedEndings(candidates []lyricCandidate, durationSecs float64) map[string]bool {
 	type ending struct {
-		source string
-		secs   float64
+		source           string
+		secs             float64
+		anotherRecording bool
 	}
 	var endings []ending
 	for _, c := range candidates {
 		if secs, ok := lastLRCTimestampSecs(c.lyrics); ok {
-			endings = append(endings, ending{c.source, secs})
+			endings = append(endings, ending{c.source, secs, sourceReportsAnotherRecording(c.sourceReportedDurationSecs, durationSecs)})
 		}
 	}
 	if durationSecs > 0 {
 		for _, e := range endings {
-			if durationFits(e.secs, durationSecs) {
+			if durationFits(e.secs, durationSecs) && !e.anotherRecording {
 				return map[string]bool{}
 			}
 		}
@@ -551,7 +566,7 @@ const lyricOvershootToleranceSecs = 5.0
 // (按版本号可查,如决策 31/33/36/43/44/49/50/58/64/69/82)——这里不重复。
 const lyricsScoringVersion = 31
 
-const lyricsScoringRevision = 1
+const lyricsScoringRevision = 2
 
 // lyricsScoringStamp 是一条歌词按哪一版打分规则选出来的:主版本号 + 开发修订号。存成两个整数、按这两段比大小,
 // 不存小数:小数比大小时 29.10 会排在 29.9 前面。
@@ -979,11 +994,8 @@ func scoreLyricCandidateDetailed(
 	// (代理),这里判的是"这份歌词挂在哪一次录音上"(直接测量)。两者都成立时会叠加扣分,
 	// 这是有意的 —— 那种候选既没铺满又自报是别的录音,证据是相互印证的,不是重复计罚。
 	// 源没自报时长(0)一律不扣:没有证据不等于反面证据。
-	if durationSecs > 0 && c.sourceReportedDurationSecs > 0 {
-		larger := math.Max(c.sourceReportedDurationSecs, durationSecs)
-		if math.Abs(c.sourceReportedDurationSecs-durationSecs)/larger > sourceDurationMismatchTolerance {
-			add(scoreTermSourceDurationOff, -sourceDurationMismatchPenalty)
-		}
+	if sourceReportsAnotherRecording(c.sourceReportedDurationSecs, durationSecs) {
+		add(scoreTermSourceDurationOff, -sourceDurationMismatchPenalty)
 	}
 	if c.hasWordTiming {
 		add(scoreTermWordTiming, wordTimingPoints)
