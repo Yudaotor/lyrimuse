@@ -70,6 +70,15 @@ func runAudirvanaTests() {
                                capturedAt: at)
         expectEqual([stream?.filePath == nil, stream?.snapshot.duration == nil], [true, true],
                     "Audirvana 读数: 流媒体没有文件,时长 0 当没报")
+        let radio = I.reading(fromScriptOutput: json(#"{"title":"收音机 URL: http://127.0.0.1:8765/radio","artist":"","album":"收音机 URL: http://127.0.0.1:8765/radio","duration":-969240693,"playing":true,"url":"http://127.0.0.1:8765/radio","position":2.554195011338}"#),
+                              capturedAt: at)
+        expectEqual([radio?.isRadio, playing?.isRadio, stream?.isRadio], [true, false, true],
+                    "Audirvana 读数: 真机电台读数(地址不是文件、时长是负的乱值)判成电台,本地文件不是")
+        expectEqual([I.isRadio(url: "http://x/r", duration: -9.69e8), I.isRadio(url: "http://x/r", duration: nil),
+                     I.isRadio(url: "https://x/r", duration: .infinity), I.isRadio(url: "https://x/ep.mp3", duration: 1320),
+                     I.isRadio(url: "file://%2Fm%2Fa.mp3", duration: -1), I.isRadio(url: "", duration: -1), I.isRadio(url: nil, duration: nil)],
+                    [true, true, true, false, false, false, false],
+                    "Audirvana 电台: 不是本地文件且时长不是正的有限数才算;有时长的网络曲目、本地文件、没有地址的都不算")
     }
 
     // ---- 卡住时退避 ----
@@ -140,6 +149,12 @@ func runAudirvanaTests() {
         let body = sourceBody("private static func preferringAudirvana(", in: client)
         expectEqual(sourceHas(body, "if !asked, AudirvanaPlayerInfo.runningBundleID() != nil, let reading = readAudirvanaSnapshot(),"),
                     true, "Audirvana 契约: 只在它开着时才发 Apple Event(不拉起它、不凭空弹权限框)")
+        expectEqual(sourceHas(body, "if reading.isRadio { radio = true } else { picked = reading.snapshot }")
+                        && sourceHas(body, "if radio {\nsetSnapshotFailure(.targetNotPlayingMusic)\nreturn nil\n}"),
+                    true, "Audirvana 契约: 网络电台照样过顶替判断,顶上了就什么都不报,不退回别家暂停着的会话")
+        expectEqual(sourceHas(sourceBody("private static func readAudirvanaSnapshot(", in: client),
+                              "if reading.isRadio {"),
+                    true, "Audirvana 契约: 电台不记成当前这首(封面、当前文件不跟着它走)")
         expectEqual(sourceHas(body, "if wanted, found?.playing != true, found?.bundleIdentifier != AudirvanaPlayerInfo.bundleID {"),
                     true, "Audirvana 契约: 系统那边有别家在放就不问它")
         expectEqual(sourceHas(client, "let withAudirvana = preferringAudirvana(withKaset, wanted: audirvanaWanted)")

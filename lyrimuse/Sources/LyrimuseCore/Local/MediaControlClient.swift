@@ -611,6 +611,8 @@ public enum MediaControlClient {
     private static var audirvanaPreferredOver: String?
     /// 上一次问 Audirvana 卡住了,到这个时刻之前不再问(`AudirvanaPlayerInfo.stallBackoffSecs`)。只在 `kasetLock` 里读写。
     private static var audirvanaRetryAt: Date?
+    /// 打过「在放网络电台」日志的那个台(脚本报的歌名),同一个台只打一条。只在 `kasetLock` 里读写。
+    private static var audirvanaRadioLoggedTitle: String?
 
     /// 问一次 Kaset。拿不到(没在跑、没有当前曲目、没授「自动化」权限、超时)返回 nil,不记失败原因:
     /// 两个调用方各自决定这算不算这一拍的失败。
@@ -967,6 +969,7 @@ public enum MediaControlClient {
     /// 暂停着的,只在它在放时才换过去。只在它开着时才发 Apple Event,不用它的人不会凭空多弹「自动化」权限框。见 02 章决策 254。
     private static func preferringAudirvana(_ found: MediaControlSnapshot?, wanted: Bool) -> MediaControlSnapshot? {
         var picked: MediaControlSnapshot?
+        var radio = false
         if wanted, found?.playing != true, found?.bundleIdentifier != AudirvanaPlayerInfo.bundleID {
             kasetLock.lock()
             let asked = audirvanaAskedThisRound
@@ -975,8 +978,8 @@ public enum MediaControlClient {
             kasetLock.unlock()
             let otherLoading = loading || (found == nil && otherPlayerJustDropped(besides: AudirvanaPlayerInfo.bundleID))
             if !asked, AudirvanaPlayerInfo.runningBundleID() != nil, let reading = readAudirvanaSnapshot(),
-               kasetWins(over: found, kaset: reading, otherPlayerLoading: otherLoading, alreadyPreferred: alreadyPreferred) {
-                picked = reading
+               kasetWins(over: found, kaset: reading.snapshot, otherPlayerLoading: otherLoading, alreadyPreferred: alreadyPreferred) {
+                if reading.isRadio { radio = true } else { picked = reading.snapshot }
             }
         }
         let other = picked == nil ? nil : (found?.bundleIdentifier ?? "nothing")
@@ -991,11 +994,17 @@ public enum MediaControlClient {
                 logger.notice("now playing: stopped reading Audirvana via AppleScript")
             }
         }
+        // 它在放网络电台时什么都不报,别报别家暂停着的会话(同 Kaset 的播客单集)。
+        if radio {
+            setSnapshotFailure(.targetNotPlayingMusic)
+            return nil
+        }
         return picked ?? found
     }
 
     /// 问一次 Audirvana(`AudirvanaPlayerInfo.script`)。拿不到(没在跑、停住、没授「自动化」权限、超时、关掉了这条腿)返回 nil。
-    private static func readAudirvanaSnapshot() -> MediaControlSnapshot? {
+    /// 网络电台照样交回(`isRadio`),不记成当前这首。
+    private static func readAudirvanaSnapshot() -> AudirvanaPlayerInfo.Reading? {
         let started = Date()
         kasetLock.lock()
         audirvanaAskedThisRound = true
@@ -1014,8 +1023,18 @@ public enum MediaControlClient {
         guard let r, r.succeeded,
               let reading = AudirvanaPlayerInfo.reading(fromScriptOutput: r.stdout, capturedAt: Date())
         else { return nil }
+        if reading.isRadio {
+            kasetLock.lock()
+            let log = audirvanaRadioLoggedTitle != reading.snapshot.title
+            if log { audirvanaRadioLoggedTitle = reading.snapshot.title }
+            kasetLock.unlock()
+            if log {
+                logger.notice("audirvana: internet radio, not reported as a song title=\(reading.snapshot.title ?? "", privacy: .public)")
+            }
+            return reading
+        }
         AudirvanaPlayerInfo.remember(reading)
-        return reading.snapshot
+        return reading
     }
 
     /// Audirvana 这首的封面(它显示的那张,没有就找当前文件同目录的图)。最近一次读到的不是这首(按快照的 `identityKey` 认)为 nil。

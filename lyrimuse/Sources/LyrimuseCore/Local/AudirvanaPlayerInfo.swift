@@ -84,6 +84,16 @@ public enum AudirvanaPlayerInfo {
         public var snapshot: MediaControlSnapshot
         /// 当前文件的路径;放的不是本地文件(流媒体)为 nil。
         public var filePath: String?
+        /// 放的是网络电台(`isRadio(url:duration:)`)。
+        public var isRadio = false
+    }
+
+    /// 放的是网络电台:地址不是本地文件,时长又不是正数(电台报 -9.7e8 这类值)。这时歌名是「收音机 URL: 地址」,ICY 标题脚本里没有,
+    /// 播放条上那份只在第一次见到某个标题时更新,当不了这一首的身份,所以电台不当歌报。见 02 章决策 254。纯函数,selftest 覆盖。
+    public static func isRadio(url: String?, duration: Double?) -> Bool {
+        guard let url, !url.isEmpty, filePath(fromTrackURL: url) == nil else { return false }
+        guard let duration else { return true }
+        return !(duration > 0) || !duration.isFinite
     }
 
     /// 脚本输出 → 读数;`null`、解不开、没有位置为 nil。身份与时长在这里换好(`identity`、精确时长)。
@@ -102,7 +112,7 @@ public enum AudirvanaPlayerInfo {
             duration: duration, elapsedTime: position, playing: raw.playing, playbackRate: raw.playing ? 1 : 0,
             isMusicApp: true, bundleIdentifier: bundleID, anchorElapsedTime: nil, isRadio: nil, capturedAt: capturedAt)
         if raw.playing { snapshot.positionIsPrecise = true }
-        return Reading(snapshot: snapshot, filePath: path)
+        return Reading(snapshot: snapshot, filePath: path, isRadio: isRadio(url: raw.url, duration: raw.duration))
     }
 
     /// `playing track url` → 文件路径。它连斜杠都编码(`file://%2FUsers%2F…`),标准写法(`file:///Users/…`)也认;
