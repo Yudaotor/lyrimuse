@@ -44,6 +44,34 @@ def is_zh(line: str) -> bool:
     return cjk_ratio(line) > 0.25
 
 
+def one_sided_bullets(src: str) -> list:
+    """交错式里判不出英文行或中文行的条目（只看 "- " 开头、两空格缩进续行的那一段）。
+
+    中文行里拉丁专名多了（"新增内置播放器 Pear Desktop、Swinsian、…"）占比到不了阈值，
+    整条会被当成英文、中文版里丢一条；这类条目一律拒收，改写中文行让汉字超过四分之一。见 15 章决策 107。
+    """
+    bad, cur = [], None
+
+    def check(item):
+        if is_zh(item[0]) or not any(is_zh(l) for l in item[1:]):
+            bad.append(" ".join(l.strip() for l in item))
+
+    for line in src.splitlines():
+        if line.startswith("- "):
+            if cur:
+                check(cur)
+            cur = [line]
+        elif cur is not None and line.startswith("  ") and line.strip():
+            cur.append(line)
+        else:
+            if cur:
+                check(cur)
+            cur = None
+    if cur:
+        check(cur)
+    return bad
+
+
 HEADER_RE = re.compile(r"^(#*\s*)?\S.* / .+$")
 
 
@@ -318,6 +346,12 @@ def main() -> int:
     out_dir = pathlib.Path(sys.argv[2])
     out_dir.mkdir(parents=True, exist_ok=True)
     by_marker = split_notes_by_marker(src)
+    if not by_marker:
+        one_sided = one_sided_bullets(src)
+        if one_sided:
+            for item in one_sided:
+                print(f"!! 这一条拆不出英文行 + 中文行（中文行的汉字要超过四分之一）：{item[:160]}", file=sys.stderr)
+            return 1
     en_lines, zh_lines = by_marker if by_marker else split_notes(src)
     en_plain = own_text(en_lines)
     zh_plain = own_text(zh_lines)
