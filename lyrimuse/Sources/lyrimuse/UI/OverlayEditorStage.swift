@@ -257,6 +257,7 @@ struct OverlayEditorStage: View {
                 mainText: L10n.t("这里是一句歌词示例"),
                 words: nil, wordGroups: nil, side: nil),
             nextLineText: L10n.t("这里是下一句歌词示例"),
+            nextLineRomanization: L10n.t("这里是读音示例"),
             nextLineTranslation: L10n.t("这里是译文示例"))
     }
 

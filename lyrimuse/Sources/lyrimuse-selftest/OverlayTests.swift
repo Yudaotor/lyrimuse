@@ -70,32 +70,42 @@ func runOverlayTests() {
                     "上下交替(契约): 交替开着时不做换句动画")
         expectEqual(sourceHas(sourceBody("private var translationRowText: String?", in: view),
                               "alternatePlacement == nil || line != nil ? rowPlan.translation?.text : nil")
+                    && sourceHas(sourceBody("private var romanizationRowText: String?", in: view),
+                                 "alternatePlacement == nil || line != nil ? rowPlan.romanization?.text : nil")
+                    && sourceHas(sourceBody("private var alternateMainSlot: some View", in: view),
+                                 "romanizationRow.reportsContentRow(.romanization, in: contentRowRectsSpace)")
                     && sourceHas(sourceBody("private var alternateMainSlot: some View", in: view),
                                  "translationRow.reportsContentRow(.translation, in: contentRowRectsSpace)"),
-                    true, "上下交替(契约): 当前句带自己的译文,「•••」那一格不带")
+                    true, "上下交替(契约): 当前句带自己的整行读音和译文,「•••」那一格不带")
         expectEqual(sourceHas(sourceBody("@ViewBuilder private var alternateNextSlot: some View", in: view),
-                              "if let tr = alternateNextTranslation {\n                alternateNextTranslationRow(tr)")
+                              "if let roma = alternateNextRomanization {\n                alternateNextSecondaryRow(roma, translation: false)")
+                    && sourceHas(sourceBody("@ViewBuilder private var alternateNextSlot: some View", in: view),
+                                 "if let tr = alternateNextTranslation {\n                alternateNextSecondaryRow(tr, translation: true)")
+                    && sourceHas(sourceBody("private var alternateNextRomanization: String?", in: view),
+                                 "!rowPlan.nextPerWordRomanization else { return nil }")
                     && sourceHas(sourceBody("private var alternateNextTranslation: String?", in: view),
                                  "showingPreviewLine ? previewLine?.nextLineTranslation : playback.nextLineTranslation"),
-                    true, "上下交替(契约): 下一句带自己的译文,设置页示例行用示例那句的")
+                    true, "上下交替(契约): 下一句带自己的整行读音(逐词标了就不带)和译文,设置页示例行用示例那句的")
         expectEqual(sourceHas(sourceBody("private var alternateReservesTranslation: Bool", in: view),
                               "alternatePlacement != nil && (translationRowText != nil || alternateNextTranslation != nil)")
+                    && sourceHas(sourceBody("private var alternateReservesRomanization: Bool", in: view),
+                                 "alternatePlacement != nil && (romanizationRowText != nil || alternateNextRomanization != nil)")
                     && sourceBody("private var alternateMainSlot: some View", in: view)
-                        .contains("Color.clear.frame(height: alternateTranslationRowHeight)")
+                        .components(separatedBy: "Color.clear.frame(height: alternateSecondaryRowHeight(").count == 3
                     && sourceBody("@ViewBuilder private var alternateNextSlot: some View", in: view)
-                        .contains("Color.clear.frame(height: alternateTranslationRowHeight)"),
-                    true, "上下交替(契约): 两句里有一句带译文,两格都留出译文那一行,唱着的那句不被挤动")
-        expectEqual(sourceHas(sourceBody("@ViewBuilder private func alternateNextTranslationRow(_ tr: String) -> some View", in: view),
+                        .components(separatedBy: "Color.clear.frame(height: alternateSecondaryRowHeight(").count == 3,
+                    true, "上下交替(契约): 两句里有一句带读音 / 译文,两格都留出那一行,唱着的那句不被挤动")
+        expectEqual(sourceHas(sourceBody("@ViewBuilder private func alternateNextSecondaryRow(_ text: String, translation: Bool) -> some View", in: view),
                               "still: true")
-                    && sourceHas(sourceBody("@ViewBuilder private func alternateNextTranslationRow(_ tr: String) -> some View", in: view),
+                    && sourceHas(sourceBody("@ViewBuilder private func alternateNextSecondaryRow(_ text: String, translation: Bool) -> some View", in: view),
                                  "alignment: nextLineDuetSide"),
-                    true, "上下交替(契约): 滚动模式下一句的译文用静止图层行,开唱换成配速行时不挪")
+                    true, "上下交替(契约): 滚动模式下一句的读音 / 译文用静止图层行,开唱换成配速行时不挪")
         let sourceSrc = (try? String(contentsOf: src.appendingPathComponent("LyrimuseCore/Local/LocalPlaybackSource.swift"), encoding: .utf8)) ?? ""
         expectEqual(sourceHas(sourceBody("private func updateOverlayWidestMainRow()", in: sourceSrc),
-                              "syncEngine.widestRow(.overlay, mainOnly: true, withTranslation: true)")
+                              "syncEngine.widestRow(.overlay, mainOnly: true, withSecondaryRows: true)")
                     && sourceHas(sourceBody("private func updateOverlayWidestMainRow()", in: sourceSrc),
-                                 "syncEngine.rowWidth(.overlay, atQuantile: 1, mainOnly: true, withTranslation: true)"),
-                    true, "上下交替(契约): 两行那一块按整首主行和译文行里最宽的定宽,一首歌里不变")
+                                 "syncEngine.rowWidth(.overlay, atQuantile: 1, mainOnly: true, withSecondaryRows: true)"),
+                    true, "上下交替(契约): 两行那一块按整首主行和读音 / 译文行里最宽的定宽,一首歌里不变")
         expectEqual(sourceHas(view, ".frame(maxWidth: alternateBlockWidth)\n                .frame(maxWidth: .infinity, alignment: alternateBlockAlignment)")
                     && sourceHas(sourceBody("private var alternateBlockWidth: CGFloat", in: view),
                                  "guard let widest = playback.songWidestMainRow, widest > 0 else { return .infinity }")

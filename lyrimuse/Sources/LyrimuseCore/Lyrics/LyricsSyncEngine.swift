@@ -3481,8 +3481,8 @@ public final class LyricsSyncEngine {
     /// 一个展示面整首里最宽的一行:每一段的主行,和这个面显示的下一句 / 译文 / 罗马音那一行,按它的预算量,
     /// 取最宽的。没开重新断句、那个面没报宽度、没有歌词时为 nil。菜单栏自适应宽度拿它给整首定一个槽宽。
     /// 只用断句时的那份文字、译文、罗马音量,不建显示行(建显示行要算读音和逐词分组)。`mainOnly` 只量主行,
-    /// 再带 `withTranslation` 时主行和译文那一行(这个面显示译文时)里取宽的。
-    public func widestRow(_ surface: LineBreakSurface, mainOnly: Bool = false, withTranslation: Bool = false) -> CGFloat? {
+    /// 再带 `withSecondaryRows` 时主行和整行罗马音 / 译文那两行(这个面显示它们时)里取宽的。
+    public func widestRow(_ surface: LineBreakSurface, mainOnly: Bool = false, withSecondaryRows: Bool = false) -> CGFloat? {
         guard let budget = surfaceBreaks[surface]?.budget else { return nil }
         extendSegments(surface, coveringMs: nil)
         guard let segments = surfaceBreaks[surface]?.segments else { return nil }
@@ -3502,7 +3502,10 @@ public final class LyricsSyncEngine {
                 romanization = LyricsSegmenter.joinedText(lines.map(\.romanization))
             }
             var w = mainOnly ? Self.mainRowWidth(words: words, text: text, budget: budget) : budget.main.measure(text)
-            if mainOnly, withTranslation, let row = budget.translation, let tr = translation { w = max(w, row.measure(tr)) }
+            if mainOnly, withSecondaryRows {
+                if let row = budget.translation, let tr = translation { w = max(w, row.measure(tr)) }
+                if let row = budget.romanization, let ro = romanization { w = max(w, row.measure(ro)) }
+            }
             if !mainOnly {
                 if let row = budget.preview { w = max(w, row.measure(text)) }
                 if let row = budget.translation, let tr = translation { w = max(w, row.measure(tr)) }
@@ -3522,9 +3525,9 @@ public final class LyricsSyncEngine {
     /// 一个展示面按原句(不重新断句)量出的每一行的宽,从窄到宽排好后取第 `quantile` 处的那个。一行的宽是
     /// 主行和这个面显示的译文 / 罗马音那一行里宽的那个;「下一句」不算,同 `MenuBarSlotPolicy.naturalWidth`。
     /// 那个面没报宽度、没有歌词时为 nil。菜单栏自适应宽度在没开重新断句时拿它给整首定起步槽宽。`mainOnly` 只量主行,
-    /// `withTranslation` 同 `widestRow`。
+    /// `withSecondaryRows` 同 `widestRow`。
     public func rowWidth(_ surface: LineBreakSurface, atQuantile quantile: Double, mainOnly: Bool = false,
-                         withTranslation: Bool = false) -> CGFloat? {
+                         withSecondaryRows: Bool = false) -> CGFloat? {
         guard let budget = layoutBudgets[surface], budget.main.maxWidth > 0 else { return nil }
         var widths: [CGFloat] = []
         for i in 0..<displayLineCount {
@@ -3533,11 +3536,12 @@ public final class LyricsSyncEngine {
             let lookupMs = usingWords ? wordLines[i].timeMs : baseLines[i].timeMs
             var w = mainOnly ? Self.mainRowWidth(words: usingWords ? singleLineWords(i) : nil, text: text, budget: budget)
                 : budget.main.measure(text)
-            if !mainOnly || withTranslation, let row = budget.translation,
+            if !mainOnly || withSecondaryRows, let row = budget.translation,
                let tr = translationText(timeMs: lookupMs, plainText: text) {
                 w = max(w, row.measure(tr))
             }
-            if !mainOnly, let row = budget.romanization, let ro = romanizationText(timeMs: lookupMs, plainText: text) {
+            if !mainOnly || withSecondaryRows, let row = budget.romanization,
+               let ro = romanizationText(timeMs: lookupMs, plainText: text) {
                 w = max(w, row.measure(ro))
             }
             widths.append(w)

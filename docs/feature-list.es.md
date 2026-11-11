@@ -1037,7 +1037,7 @@ Todos los ajustes de la ventana Ajustes, según dónde están: 316 en total. Esc
 - **Romanización**
 - **Traducción**
 - **Línea siguiente**
-- **Disposición de la línea siguiente**: Escalonado: las dos líneas al mismo tamaño, una a la izquierda y otra a la derecha; la que se acaba de cantar pasa a la que va después de la siguiente. Se oculta la romanización de línea
+- **Disposición de la línea siguiente**: Escalonado: las dos líneas al mismo tamaño, una a la izquierda y otra a la derecha; la que se acaba de cantar pasa a la que va después de la siguiente
 
 ### Mostrar letra › Letra flotante › Diseño
 

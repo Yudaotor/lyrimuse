@@ -1037,7 +1037,7 @@ Tutte le impostazioni della finestra Impostazioni, per posizione: 316 in tutto. 
 - **Pronuncia**
 - **Traduzione**
 - **Riga successiva**
-- **Disposizione riga successiva**: Sfalsato: due righe della stessa dimensione, una a sinistra e una a destra; la riga appena cantata lascia il posto a quella dopo la successiva. La pronuncia di riga è nascosta
+- **Disposizione riga successiva**: Sfalsato: due righe della stessa dimensione, una a sinistra e una a destra; la riga appena cantata lascia il posto a quella dopo la successiva
 
 ### Visualizzazione testo › Testo fluttuante › Layout
 

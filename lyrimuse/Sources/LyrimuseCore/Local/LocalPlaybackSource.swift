@@ -69,7 +69,7 @@ public final class LocalPlaybackSource: ObservableObject {
     /// 菜单栏自适应宽度给整首定的起步槽宽(文字部分):开了按宽度断句是整首最宽的一行(LyricsSyncEngine.widestRow),
     /// 没开是按 `MenuBarSlotPolicy.songRowQuantile` 取的那一行(LyricsSyncEngine.rowWidth)。nil = 还不知道。
     @Published public private(set) var menuBarSongRowWidth: CGFloat?
-    /// 悬浮歌词整首最宽的那一段:主行,开着译文时连它的译文行一起量(不算下一句 / 整行罗马音)。「上下交替」拿它定两行那一块的宽,
+    /// 悬浮歌词整首最宽的那一段:主行,开着读音 / 译文时连它的整行罗马音和译文行一起量(不算下一句)。「上下交替」拿它定两行那一块的宽,
     /// 每句带译文时块宽也一首歌里不变,见 04 章决策 91、98。nil = 还不知道。
     @Published public private(set) var overlayWidestMainRow: CGFloat?
     /// 单行展示面(灵动岛 / 菜单栏)该显示的那一行(「唱完就切到下一句,
@@ -309,8 +309,8 @@ public final class LocalPlaybackSource: ObservableObject {
 
     private func updateOverlayWidestMainRow() {
         let width = lineBreaks.isActive
-            ? syncEngine.widestRow(.overlay, mainOnly: true, withTranslation: true)
-            : syncEngine.rowWidth(.overlay, atQuantile: 1, mainOnly: true, withTranslation: true)
+            ? syncEngine.widestRow(.overlay, mainOnly: true, withSecondaryRows: true)
+            : syncEngine.rowWidth(.overlay, atQuantile: 1, mainOnly: true, withSecondaryRows: true)
         if width != overlayWidestMainRow { overlayWidestMainRow = width }
     }
 

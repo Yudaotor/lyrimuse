@@ -250,7 +250,7 @@ struct OverlayContentSettingsRows: View {
                 SettingsRow(
                     icon: "arrow.left.arrow.right",
                     title: L10n.t("下一句排法"),
-                    help: L10n.t("交错：两句一样大，一左一右轮流唱，唱完的那句换成再下一句；不显示整行读音")
+                    help: L10n.t("交错：两句一样大，一左一右轮流唱，唱完的那句换成再下一句")
                 ) {
                     SettingsPillSegmentedControl(
                         selection: $settings.overlayNextLineArrangement,

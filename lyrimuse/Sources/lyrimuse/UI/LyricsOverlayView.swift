@@ -100,7 +100,7 @@ private final class OverlayPlayback: ObservableObject {
     @Published private(set) var lineChangeAnimation = false
     /// 下一句跟在下面还是上下交替(见 `OverlayNextLineArrangement`)。
     @Published private(set) var nextLineArrangement: OverlayNextLineArrangement = .below
-    /// 整首最宽那一段,开着译文时连译文行(`PlaybackCoordinator.overlayWidestMainRow`),「上下交替」定两行那一块的宽。
+    /// 整首最宽那一段,开着读音 / 译文时连那两行(`PlaybackCoordinator.overlayWidestMainRow`),「上下交替」定两行那一块的宽。
     @Published private(set) var songWidestMainRow: CGFloat?
     @Published private(set) var duetAlignmentOverride: OverlayDuetAlignmentOverride = .automatic
     /// 一行放不下时换行还是滚动(见 `OverlayLineOverflow`)。
@@ -393,7 +393,8 @@ struct OverlayPreviewLine {
     /// 下一句预览的文字。它在真窗口来自 `PlaybackCoordinator.nextLineText`、不在
     /// `SyncedLyricLine` 里,所以这里单独带一份。
     var nextLineText: String?
-    /// 下一句的译文。只在「交错」时画在下一句下面。
+    /// 下一句的整行读音和译文。只在「交错」时画在下一句下面。
+    var nextLineRomanization: String? = nil
     var nextLineTranslation: String? = nil
 }
 
@@ -826,6 +827,7 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
                 ?? (line == nil && upcomingWordGroups != nil ? playback.nextLineRomanization : nil),
             font: fonts.romanization))
         widest = max(widest, OverlayNaturalWidth.width(translationRowText, font: fonts.translation, translation: true))
+        widest = max(widest, OverlayNaturalWidth.width(alternateNextRomanization, font: fonts.romanization))
         widest = max(widest, OverlayNaturalWidth.width(alternateNextTranslation, font: fonts.translation, translation: true))
         if playback.showNextLinePreview, let next = nextLineText {
             // 下一句预览换人唱时会放大到主字号(见 nextLinePreviewFont),量宽要跟着换;逐词标读音时按组量,量法同主行。
@@ -1320,12 +1322,21 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
     /// 有逐词标注(`usesPerWordRomanization`)时读音已经标在每个词正下方,这一整行不再重复。
     /// `line` 为 nil(前奏/间奏「•••」下方没有当前行陪衬)时退到 `nextLineRomanization`——
     /// 那句其实就是接下来的第一句本身,该按正常行的规格展示。
-    private var romanizationRowText: String? { alternatePlacement == nil ? rowPlan.romanization?.text : nil }
+    /// 上下交替时只是当前句自己的:「•••」那一格不带,下一句的在它自己那一格(`alternateNextRomanization`)。
+    private var romanizationRowText: String? {
+        alternatePlacement == nil || line != nil ? rowPlan.romanization?.text : nil
+    }
 
-    /// 译文那一行的文字,没有就是 nil。`line` 为 nil 时的退路同 `romanizationRowText`。
-    /// 上下交替时只是当前句自己的译文:「•••」那一格不带,下一句的译文在它自己那一格(`alternateNextTranslation`)。
+    /// 译文那一行的文字,没有就是 nil。`line` 为 nil 时的退路、上下交替时只给当前句,同 `romanizationRowText`。
     private var translationRowText: String? {
         alternatePlacement == nil || line != nil ? rowPlan.translation?.text : nil
+    }
+
+    /// 上下交替时下一句的整行读音,画在下一句下面;下一句逐词标了读音就不要这一行(04 章决策 98)。
+    private var alternateNextRomanization: String? {
+        guard alternatePlacement != nil, playback.showRomanization, nextLineText != nil,
+              !rowPlan.nextPerWordRomanization else { return nil }
+        return showingPreviewLine ? previewLine?.nextLineRomanization : playback.nextLineRomanization
     }
 
     /// 上下交替时下一句的译文,画在下一句下面(04 章决策 98)。
@@ -1334,28 +1345,40 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
         return showingPreviewLine ? previewLine?.nextLineTranslation : playback.nextLineTranslation
     }
 
-    /// 上下交替时两格都留出译文那一行:这两句里有一句带译文,没带的那一格空着占一行译文的高,
-    /// 唱着的那一句不被另一格的译文挤得上下挪。
+    /// 上下交替时两格都留出读音 / 译文那一行:这两句里有一句带,没带的那一格空着占一行的高,
+    /// 唱着的那一句不被另一格挤得上下挪。
+    private var alternateReservesRomanization: Bool {
+        alternatePlacement != nil && (romanizationRowText != nil || alternateNextRomanization != nil)
+    }
     private var alternateReservesTranslation: Bool {
         alternatePlacement != nil && (translationRowText != nil || alternateNextTranslation != nil)
     }
 
-    /// 上下交替时当前句那一格:当前句和它的译文。前奏 / 间奏时是「•••」,撑到一行歌词的高:换成歌词时另一行不跟着上下挪。
+    /// 上下交替时当前句那一格:当前句、它的读音和译文,顺序同不交替时。前奏 / 间奏时是「•••」,撑到一行歌词的高:
+    /// 换成歌词时另一行不跟着上下挪。
     private var alternateMainSlot: some View {
         VStack(alignment: duetAlignment, spacing: 0) {
             reportingMainLineRect(mainLine)
                 .frame(minHeight: line == nil ? alternateRowHeight : nil)
                 .reportsContentRow(.main, in: contentRowRectsSpace)
+            if romanizationRowText != nil {
+                romanizationRow.reportsContentRow(.romanization, in: contentRowRectsSpace)
+                    .padding(.top, CGFloat(rowSpacing.romanization))
+            } else if alternateReservesRomanization {
+                Color.clear.frame(height: alternateSecondaryRowHeight(translation: false))
+                    .padding(.top, CGFloat(rowSpacing.romanization))
+            }
             if translationRowText != nil {
                 translationRow.reportsContentRow(.translation, in: contentRowRectsSpace)
                     .padding(.top, CGFloat(rowSpacing.translation))
             } else if alternateReservesTranslation {
-                Color.clear.frame(height: alternateTranslationRowHeight).padding(.top, CGFloat(rowSpacing.translation))
+                Color.clear.frame(height: alternateSecondaryRowHeight(translation: true))
+                    .padding(.top, CGFloat(rowSpacing.translation))
             }
         }
     }
 
-    /// 上下交替时下一句那一格:下一句和它的译文。最后一句没有下一句时空着、占一行歌词的高,当前句不挪、窗口不变矮。
+    /// 上下交替时下一句那一格:下一句、它的读音和译文。最后一句没有下一句时空着、占一行歌词的高,当前句不挪、窗口不变矮。
     @ViewBuilder private var alternateNextSlot: some View {
         VStack(alignment: horizontalAlignment(for: nextLineDuetSide), spacing: 0) {
             if nextLineText != nil {
@@ -1363,42 +1386,49 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
             } else {
                 Color.clear.frame(height: alternateRowHeight)
             }
+            if let roma = alternateNextRomanization {
+                alternateNextSecondaryRow(roma, translation: false).padding(.top, CGFloat(rowSpacing.romanization))
+            } else if alternateReservesRomanization {
+                Color.clear.frame(height: alternateSecondaryRowHeight(translation: false))
+                    .padding(.top, CGFloat(rowSpacing.romanization))
+            }
             if let tr = alternateNextTranslation {
-                alternateNextTranslationRow(tr).padding(.top, CGFloat(rowSpacing.translation))
+                alternateNextSecondaryRow(tr, translation: true).padding(.top, CGFloat(rowSpacing.translation))
             } else if alternateReservesTranslation {
-                Color.clear.frame(height: alternateTranslationRowHeight).padding(.top, CGFloat(rowSpacing.translation))
+                Color.clear.frame(height: alternateSecondaryRowHeight(translation: true))
+                    .padding(.top, CGFloat(rowSpacing.translation))
             }
         }
     }
 
-    /// 上下交替时下一句的译文。滚动模式用开唱后那一行同一种图层行(静止):开唱时换成配速图层行,字不挪
-    /// (同下一句那一行,见 04 章决策 97);换行模式跟当前句的译文同一种折行的字。
-    @ViewBuilder private func alternateNextTranslationRow(_ tr: String) -> some View {
-        let color = playback.displayForegroundColor.opacity(0.75)
+    /// 上下交替时下一句的整行读音 / 译文,字号和颜色同当前句那两行。滚动模式用开唱后那一行同一种图层行(静止):
+    /// 开唱时换成配速图层行,字不挪(同下一句那一行,见 04 章决策 97);换行模式跟当前句那两行同一种折行的字。
+    @ViewBuilder private func alternateNextSecondaryRow(_ text: String, translation: Bool) -> some View {
+        let color = playback.displayForegroundColor.opacity(translation ? 0.75 : 0.6)
         if playback.lineOverflow == .scroll {
             let ns = NSColor(color)
             OverlayScrollingLyricRow(
                 spec: .init(
-                    lineKey: tr,
-                    words: [SyncedLyricWord(text: tr, startMs: 0, durationMs: 0)],
+                    lineKey: text,
+                    words: [SyncedLyricWord(text: text, startMs: 0, durationMs: 0)],
                     groups: nil,
-                    font: playback.overlayNSFonts.translation,
+                    font: translation ? playback.overlayNSFonts.translation : playback.overlayNSFonts.romanization,
                     romaFont: playback.overlayNSFonts.romanization,
                     baseColor: ns, fillColor: ns, romaBaseColor: ns, romaFillColor: ns,
                     strokeColor: playback.textStrokeEnabled ? NSColor(playback.textStrokeColor) : nil,
                     alignment: nextLineDuetSide,
                     paused: true,
-                    translation: true,
+                    translation: translation,
                     still: true,
                     rainbow: playback.rainbow),
                 nowMs: Self.lyricsNowMs)
             .frame(maxWidth: .infinity)
-            .frame(height: alternateTranslationRowHeight)
+            .frame(height: alternateSecondaryRowHeight(translation: translation))
         } else {
-            lyricStroke(Text(tr)
-                .font(playback.translationFont)
+            lyricStroke(Text(text)
+                .font(translation ? playback.translationFont : playback.romanizationFont)
                 .foregroundStyle(color)
-                .lyricTypesetting(tr, translation: true)
+                .lyricTypesetting(text, translation: translation)
                 .overlayLineFit(playback.lineOverflow))
                 .frame(maxWidth: .infinity, alignment: frameAlignment(for: nextLineDuetSide))
                 .multilineTextAlignment(textAlignment(for: nextLineDuetSide))
@@ -1408,8 +1438,10 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
     /// 上下交替时一行歌词(主字号、单行)的高,同图层行的行高式子。
     private var alternateRowHeight: CGFloat { playback.scrollRowHeight(playback.overlayNSFonts.main) }
 
-    /// 上下交替时一行译文的高,同译文图层行的行高。
-    private var alternateTranslationRowHeight: CGFloat { playback.scrollRowHeight(playback.overlayNSFonts.translation) }
+    /// 上下交替时一行整行读音 / 译文的高,同它们图层行的行高。
+    private func alternateSecondaryRowHeight(translation: Bool) -> CGFloat {
+        playback.scrollRowHeight(translation ? playback.overlayNSFonts.translation : playback.overlayNSFonts.romanization)
+    }
 
     private var lyricsCardContent: some View {
         // 行与行之间的间距由各行自己的 `.padding(.top:)` 给(读音 / 译文 / 下一句各一项,见 OverlayRowSpacing),

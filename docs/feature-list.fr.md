@@ -1037,7 +1037,7 @@ Tous les réglages de la fenêtre Réglages, classés par emplacement : 316 au 
 - **Romanisation**
 - **Traduction**
 - **Ligne suivante**
-- **Disposition de la ligne suivante** : Décalé : deux lignes de même taille, l’une à gauche, l’autre à droite ; la ligne chantée laisse place à celle d’après. La romanisation de ligne est masquée
+- **Disposition de la ligne suivante** : Décalé : deux lignes de même taille, l’une à gauche, l’autre à droite ; la ligne chantée laisse place à celle d’après
 
 ### Affichage des paroles › Paroles flottantes › Disposition
 
