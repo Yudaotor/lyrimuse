@@ -121,6 +121,11 @@ function utcDay(ms) {
   return new Date(ms).toISOString().slice(0, 10);
 }
 
+// 统计窗口和崩溃按北京时间(UTC+8)划日;心跳和活动的日期是各机器自己报的本地自然日。
+function bjDay(ms) {
+  return utcDay(ms + 8 * 3600 * 1000);
+}
+
 function dayDistance(a, b) {
   return Math.round((Date.parse(a + "T00:00:00Z") - Date.parse(b + "T00:00:00Z")) / DAY_MS);
 }
@@ -273,7 +278,7 @@ async function crash(request, env) {
   if (typeof installID !== "string" || !UUID_RE.test(installID)) return json({ error: "bad install_id" }, 400);
   if (typeof body.report_id !== "string" || !HEX16_RE.test(body.report_id)) return json({ error: "bad report_id" }, 400);
   const now = Date.now();
-  const day = utcDay(now);
+  const day = bjDay(now);
   const { n } = await env.DB.prepare(`SELECT COUNT(*) AS n FROM crashes WHERE install_id = ?1 AND day = ?2`)
     .bind(installID, day).first();
   if (n >= MAX_CRASHES_PER_INSTALL_DAY) return json({ ok: true, dropped: "daily limit" });
@@ -324,8 +329,8 @@ async function stats(request, env, url) {
   if (!authorized(request, env)) return json({ error: "unauthorized" }, 401);
   const days = Math.min(Math.max(parseInt(url.searchParams.get("days") || "30", 10) || 30, 1), 180);
   const now = Date.now();
-  const since = utcDay(now - (days - 1) * DAY_MS);
-  const since7 = utcDay(now - 6 * DAY_MS);
+  const since = bjDay(now - (days - 1) * DAY_MS);
+  const since7 = bjDay(now - 6 * DAY_MS);
   const db = env.DB;
   // excluded_installs 里的安装(作者自己的机器、测试机)默认不进任何统计;原始数据照存,删掉那一行就恢复统计。
   // include_excluded=1 时连它们一起算(SecondBrain 面板遥测页的「含我们自己的机器」开关)。
@@ -607,7 +612,7 @@ async function load() {
   const r = await fetch("/v1/stats?days=" + $("days").value, { headers: { authorization: "Bearer " + token } });
   if (!r.ok) { $("msg").textContent = r.status === 401 ? "令牌不对" : "读取失败(" + r.status + ")"; return; }
   const s = await r.json();
-  $("msg").textContent = "窗口:" + s.since + " 起 " + s.window_days + " 天 · " + s.machines + " 台机器";
+  $("msg").textContent = "窗口:" + s.since + " 起(北京时间) " + s.window_days + " 天 · " + s.machines + " 台机器";
   render(s);
 }
 $("f").addEventListener("submit", (e) => { e.preventDefault(); load(); });
