@@ -3573,14 +3573,23 @@ private struct AppearanceSettingsTab: View {
         }
     }
 
-    /// 「动态封面 › 来源」里的一处,可多选,最后一处取消不掉(置灰)。
+    /// 「动态封面 › 来源」里的一处,可多选,最后一处取消不掉(置灰)。文字单独画、点文字也切换:子行尾部整体 `labelsHidden()`,
+    /// 写成 Toggle 自己的标题会被吃掉,只剩一个勾。
     private func motionCoverSourceToggle(_ source: MotionCoverSource, label: String) -> some View {
         let on = features.motionCoverSources.contains(source)
-        return Toggle(label, isOn: Binding(
-            get: { on },
-            set: { if $0 != on { features.toggleMotionCoverSource(source) } }))
-            .toggleStyle(.checkbox)
-            .disabled(on && features.motionCoverSources.count == 1)
+        let locked = on && features.motionCoverSources.count == 1
+        return HStack(spacing: 5) {
+            Toggle(label, isOn: Binding(
+                get: { on },
+                set: { if $0 != on { features.toggleMotionCoverSource(source) } }))
+                .toggleStyle(.checkbox)
+            Text(label)
+                .font(.system(size: 13))
+                .contentShape(Rectangle())
+                .onTapGesture { features.toggleMotionCoverSource(source) }
+                .accessibilityHidden(true)
+        }
+        .disabled(locked)
     }
 
     /// 按预览停在哪个尺寸,把外观行绑到那一套字段上。
