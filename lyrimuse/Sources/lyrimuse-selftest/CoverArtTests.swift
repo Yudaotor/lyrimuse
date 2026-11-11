@@ -1293,6 +1293,29 @@ func runCoverArtTests() {
                         "酷狗动态封面(契约): 读本机文件、跟下载来的走同一道终审,中段帧对不上再比首帧")
         }
 
+        // 动态封面来源(03 章决策 71):Apple / 其他平台按地址认,features.json 里缺失或都认不得时两处都找,最后一处取消不掉;
+        // App 按来源当场筛,设置页两个复选框各走一遍 toggleMotionCoverSource。
+        do {
+            typealias S = MotionCoverSource
+            expectEqual(["https://mvod.itunes.apple.com/a/master.m3u8", "qqmv:013nB0VB44pnzC", "ncmv:186016", "kgmv:969063"]
+                            .map { S(master: URL(string: $0)!) }, [.apple, .other, .other, .other],
+                        "动态封面来源: QQ / 网易云 / 酷狗的自定义地址是其他平台,其余是 Apple")
+            expectEqual([S.resolve(nil), S.resolve([]), S.resolve(["x"]), S.resolve(["other"]), S.resolve(["apple", "x"])],
+                        [S.all, S.all, S.all, [.other], [.apple]], "动态封面来源: 缺失 / 都认不得时两处都找")
+            expectEqual([S.fileValue(S.all), S.fileValue([.apple]), S.fileValue([.other])], [nil, ["apple"], ["other"]],
+                        "动态封面来源: 两处都找不写键")
+            expectEqual([S.all.toggling(.apple), Set([S.other]).toggling(.other), Set([S.other]).toggling(.apple)],
+                        [[.other], [.other], S.all], "动态封面来源: 最后一处取消不掉")
+            let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+            let coordinator = (try? String(contentsOf: root.appendingPathComponent("lyrimuse/PlaybackCoordinator.swift"), encoding: .utf8)) ?? ""
+            let settingsView = (try? String(contentsOf: root.appendingPathComponent("lyrimuse/SettingsView.swift"), encoding: .utf8)) ?? ""
+            expectEqual(sourceHas(coordinator, "(sources ?? FeatureSettingsStore.shared.motionCoverSources).contains(MotionCoverSource(master: found.master))")
+                            && sourceHas(coordinator, "FeatureSettingsStore.shared.$motionCoverSources")
+                            && sourceHas(settingsView, "motionCoverSourceToggle(.apple, label: L10n.t(\"Apple Music\"))")
+                            && sourceHas(settingsView, "motionCoverSourceToggle(.other, label: L10n.t(\"其他平台\"))"), true,
+                        "动态封面来源(契约): 按来源筛、改了当场重算,设置页两项都接上")
+        }
+
         // 网易云歌曲动态封面(03 章决策 68):`ncmv:<id>` 下载时带游客身份现换 mp4 地址;身份跟引擎共用一份文件,被拒就换一个再问。
         do {
             typealias N = NeteaseMotionCover

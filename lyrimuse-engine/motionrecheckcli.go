@@ -227,6 +227,7 @@ func recheckOneMotionCoverKey(ctx context.Context, apply bool, key string) strin
 	cur.MotionPreviewURL = e.MotionPreviewURL
 	cur.MotionCoverIdentityVerified = e.MotionCoverIdentityVerified
 	cur.MotionCoverFor = e.MotionCoverFor
+	cur.MotionCoverSources = e.MotionCoverSources
 	enrichCache[key] = cur
 	enrichDirty = true
 	enrichMu.Unlock()

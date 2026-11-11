@@ -160,7 +160,7 @@ func TestQQMotionCoverIsWired(t *testing.T) {
 		"case motionDecisionReject:\n\t\treturn e.motionVerdictFromQQ(ctx, true)",
 		"if motionVerdictCurrent(*e) && !motionCoverFallbackUnasked(*e) {",
 		"if !ok || (motionVerdictCurrent(e) && !motionCoverFallbackUnasked(e)) {",
-		"} else if (motionVerdictStale(e) || motionCoverFallbackUnasked(e)) && !motionRecheckTried[key] && !enrichInflight[key] {",
+		"} else if (motionVerdictStale(e) || motionVerdictSourcesChanged(e) || motionCoverFallbackUnasked(e)) && !motionRecheckTried[motionRecheckKey(key)] && !enrichInflight[key] {",
 	} {
 		if !containsCode(src, want) {
 			t.Errorf("enrich.go 缺 %q", strings.SplitN(want, "\n", 2)[0])

@@ -374,10 +374,11 @@ La finestra Mini può sparire in pausa o quando non c’è riproduzione e tornar
 
 ### Illustrazione animata
 
-Gli album con illustrazione animata su Apple Music, QQ Music o NetEase Cloud Music si animano anche nella finestra testo in dimensione Completa, così come gli album di cui Kugou Music ha salvato l’illustrazione animata quando li hai ascoltati lì. Va in pausa con Risparmio energetico o con “Riduci movimento” attivo. Puoi vedere quanto spazio occupano le animazioni scaricate ed eliminarle.
+Gli album con illustrazione animata su Apple Music, QQ Music o NetEase Cloud Music si animano anche nella finestra testo in dimensione Completa, così come gli album di cui Kugou Music ha salvato l’illustrazione animata quando li hai ascoltati lì. Va in pausa con Risparmio energetico o con “Riduci movimento” attivo. Puoi vedere quanto spazio occupano le animazioni scaricate ed eliminarle. Puoi scegliere più fonti: Apple Music e altre piattaforme.
 
 - Attiva di default
 - Impostazioni: Visualizzazione testo › Finestra testo › Illustrazione › Illustrazione animata
+- Impostazioni: Visualizzazione testo › Finestra testo › Illustrazione › Fonte
 - Impostazioni: Visualizzazione testo › Finestra testo › Illustrazione › Cache illustrazioni animate
 
 <a id="feature-spotify-canvas"></a>
@@ -920,7 +921,7 @@ Al massimo una volta al giorno invia versione, macOS, funzioni attive e riepilog
 
 ## Tutte le impostazioni
 
-Tutte le impostazioni della finestra Impostazioni, per posizione: 316 in tutto. Scrivi un nome nel campo di ricerca in cima alla barra laterale delle Impostazioni per andarci direttamente.
+Tutte le impostazioni della finestra Impostazioni, per posizione: 317 in tutto. Scrivi un nome nel campo di ricerca in cima alla barra laterale delle Impostazioni per andarci direttamente.
 
 ### Testo › Fonte
 
@@ -1276,6 +1277,7 @@ Tutte le impostazioni della finestra Impostazioni, per posizione: 316 in tutto. 
 ### Visualizzazione testo › Finestra testo › Illustrazione
 
 - **Illustrazione animata** (solo Completa): Solo su alcuni album; in pausa con Risparmio energetico o con “Riduci movimento” attivo
+- **Fonte** (solo Completa)
 - **Cache illustrazioni animate** (solo Completa): Spazio su disco delle illustrazioni animate scaricate; ciò che viene cancellato si riscarica alla prossima visualizzazione
 
 ### Scorciatoie da tastiera

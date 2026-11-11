@@ -4493,6 +4493,10 @@ func runSourceContractSettingsTests() {
                 expectEqual(previewCopies == pinCopies, true,
                             "动态封面对照封面: \(name) 里每处拷 MotionPreviewURL 的地方都得带上 MotionCoverFor"
                             + "(拷地址 \(previewCopies) 处 / 写对照封面 \(pinCopies) 处)")
+                let sourcesCopies = lines.filter { $0.contains("MotionCoverSources = ") }.count
+                expectEqual(previewCopies == sourcesCopies, true,
+                            "动态封面来源: \(name) 里每处拷 MotionPreviewURL 的地方都得带上 MotionCoverSources(03 章决策 71)"
+                            + "(拷地址 \(previewCopies) 处 / 写来源 \(sourcesCopies) 处)")
             }
             expectEqual(coordinator.contains("let engineCover = found.identityVerified ? found.cover.map(EnrichCacheReader.nativeSizedCoverURL) : nil")
                             && coordinator.contains("reference: compareFrame ? reference : nil"), true,

@@ -2813,6 +2813,7 @@ private struct PrioritySourceFramesKey: PreferenceKey {
 
 private struct AppearanceSettingsTab: View {
     @ObservedObject private var settings = AppSettings.shared
+    @ObservedObject private var features = FeatureSettingsStore.shared
     /// 歌词窗口迷你那三根滑杆拖动中节流提交(`SliderCommitThrottle`):每写一次,设置页里的预览和真窗口都重排一遍。
     @State private var miniFontSizeThrottle = SliderCommitThrottle()
     @State private var miniHeaderWidthThrottle = SliderCommitThrottle()
@@ -3556,8 +3557,30 @@ private struct AppearanceSettingsTab: View {
                 Toggle("", isOn: $settings.motionCoverEnabled)
             }
             CardDivider()
+            SettingsSubRow(
+                title: L10n.t("来源"),
+                help: String(format: L10n.t("其他平台包括 %@"),
+                             L10n.list([L10n.t("QQ 音乐"), L10n.t("网易云音乐"), L10n.t("酷狗音乐")]))
+            ) {
+                HStack(spacing: 12) {
+                    motionCoverSourceToggle(.apple, label: L10n.t("Apple Music"))
+                    motionCoverSourceToggle(.other, label: L10n.t("其他平台"))
+                }
+                .disabled(!settings.motionCoverEnabled)
+            }
+            CardDivider()
             MotionCoverCacheRow()
         }
+    }
+
+    /// 「动态封面 › 来源」里的一处,可多选,最后一处取消不掉(置灰)。
+    private func motionCoverSourceToggle(_ source: MotionCoverSource, label: String) -> some View {
+        let on = features.motionCoverSources.contains(source)
+        return Toggle(label, isOn: Binding(
+            get: { on },
+            set: { if $0 != on { features.toggleMotionCoverSource(source) } }))
+            .toggleStyle(.checkbox)
+            .disabled(on && features.motionCoverSources.count == 1)
     }
 
     /// 按预览停在哪个尺寸,把外观行绑到那一套字段上。

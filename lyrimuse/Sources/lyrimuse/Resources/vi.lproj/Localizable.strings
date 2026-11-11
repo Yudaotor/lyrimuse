@@ -563,6 +563,8 @@
 "其他 App" = "Ứng dụng khác";
 "其他 App 正占用播放焦点，暂时无法控制「%@」" = "Ứng dụng khác đang giữ quyền điều khiển phát, tạm thời không thể điều khiển “%@”";
 "其他 App 正占用播放焦点，暂时无法控制播放" = "Ứng dụng khác đang giữ quyền điều khiển phát, tạm thời không thể điều khiển việc phát";
+"其他平台" = "Nền tảng khác";
+"其他平台包括 %@" = "Nền tảng khác: %@";
 "其他折叠规则" = "Quy tắc gộp khác";
 "其他文字" = "Chữ viết khác";
 "其他歌词源仍在搜索中…" = "Vẫn đang tìm ở các nguồn lời khác…";

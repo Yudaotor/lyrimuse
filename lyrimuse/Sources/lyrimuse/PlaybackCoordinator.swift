@@ -1250,6 +1250,11 @@ final class PlaybackCoordinator: ObservableObject {
             settings.$motionCoverEnabled
                 .dropFirst()
                 .sink { [weak self] enabled in self?.refreshMotionCover(enabled: enabled) },
+            // 来源勾选变了同样当场重算:关掉的那一处这一首立刻不叠,不等引擎播到时重核。
+            FeatureSettingsStore.shared.$motionCoverSources
+                .dropFirst()
+                .removeDuplicates()
+                .sink { [weak self] sources in self?.refreshMotionCover(sources: sources) },
             // 动态封面要跟显示的封面比:高清替代换上、撤掉都重新比一次(见 refreshMotionCover)。
             $highResArtworkImage
                 .dropFirst()
@@ -1647,7 +1652,7 @@ final class PlaybackCoordinator: ObservableObject {
     ///     那一级 —— 在这里退一步拿到的是**另一张专辑的动画**,比一张静态错图扎眼得多；
     ///   * 同一张专辑的下一首:盘上那份已经在播就先留着,比完对不上再撤,不闪回静态图。
     /// - Parameter enabled: 开关刚拨动时由订阅传进来的新值(那一刻 AppSettings 里还是旧值);其余调用读设置。
-    private func refreshMotionCover(onlyIfMissing: Bool = false, enabled: Bool? = nil) {
+    private func refreshMotionCover(onlyIfMissing: Bool = false, enabled: Bool? = nil, sources: Set<MotionCoverSource>? = nil) {
         if onlyIfMissing, motionCoverFile != nil { return }
         motionCoverTask?.cancel()
         motionCoverTask = nil
@@ -1676,7 +1681,9 @@ final class PlaybackCoordinator: ObservableObject {
             clear()
             return
         }
-        guard let found = EnrichCacheReader.albumMatchedMotionCover(artist: artist, title: title, album: album) else {
+        // 设置里没勾的那一处不叠。引擎记的结论是按当时那组来源核的,换了一组要等播到时重核,这里先按地址的来源筛掉。
+        guard let found = EnrichCacheReader.albumMatchedMotionCover(artist: artist, title: title, album: album),
+              (sources ?? FeatureSettingsStore.shared.motionCoverSources).contains(MotionCoverSource(master: found.master)) else {
             clear()
             return
         }

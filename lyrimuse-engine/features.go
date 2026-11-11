@@ -199,6 +199,9 @@ type featureFlagsFile struct {
 	// LyricsWordFormats:歌词文件夹里逐字歌词写成哪几种格式(lyricsWordFormat 的值),第一个是主格式(文件夹里以它为准),
 	// 其余是另外多存的副本。缺失 / 一个都认不得时只写 YRC。
 	LyricsWordFormats []string `json:"lyrics_word_formats,omitempty"`
+	// MotionCoverSources:动态封面从哪几处找,motionCoverSourceApple / motionCoverSourceOther 的子集。缺失 / 一个都认不得时
+	// 两处都找。见 resolveMotionCoverSources。
+	MotionCoverSources []string `json:"motion_cover_sources,omitempty"`
 	// LyricsTranslationLanguage："auto"(跟随系统语言,默认)或 ISO 639-1 两位小写代码
 	// (如"en"/"es"/"ja")——Musixmatch 译文(crowd.track.translations.get)的目标语言。
 	// 网易云/QQ 音乐的译文固定是中文,只有 Musixmatch 这个源支持指定任意语言。
@@ -330,6 +333,9 @@ type featureFlags struct {
 	LyricsDir string
 	// LyricsWordFormats 已经去掉认不得的、重复的,至少有一个(主格式在最前)。见 resolveLyricsWordFormats。
 	LyricsWordFormats []lyricsWordFormat
+	// 动态封面跳过 Apple Music 那支、跳过其余几支(QQ 音乐、网易云、酷狗本机),不会两个都为 true;零值是两处都找。
+	// 见 resolveMotionCoverSources。
+	MotionCoverSkipApple, MotionCoverSkipOther bool
 	// LyricsTranslationLanguage 是已经解析过的具体 ISO 639-1 代码(不会是"auto"或空值,
 	// 见 resolveLyricsTranslationLanguage)。三处读取,含义都是"译文要什么语言":
 	// musixmatchTranslationLRC(musixmatch.go)向 Musixmatch 索取该语言的社区译文;
@@ -437,6 +443,7 @@ func readFeatureFlags(path string) (featureFlags, error) {
 // 两条读取路径(启动 / 热重读)共用它,免得缺省值在两边各写一份、迟早漂移。
 func buildFeatureFlags(f featureFlagsFile) featureFlags {
 	match := resolveLastfmMatch(f)
+	motionApple, motionOther := resolveMotionCoverSources(f.MotionCoverSources)
 	return featureFlags{
 		Players:        resolvePlayers(f.Players),
 		TrustedPlayers: resolveTrustedPlayers(f.TrustedPlayers),
@@ -475,6 +482,8 @@ func buildFeatureFlags(f featureFlagsFile) featureFlags {
 		LyricsSourceOrder:         resolveLyricsSourceOrder(f.LyricsSourceOrder),
 		LyricsDir:                 f.LyricsDir,
 		LyricsWordFormats:         resolveLyricsWordFormats(f.LyricsWordFormats),
+		MotionCoverSkipApple:      !motionApple,
+		MotionCoverSkipOther:      !motionOther,
 		LyricsTranslationLanguage: resolveLyricsTranslationLanguage(f.LyricsTranslationLanguage, f.SystemLanguage),
 		SystemLanguage:            strings.ToLower(strings.TrimSpace(f.SystemLanguage)),
 		ReportLanguage:            parseDigestLang(f.ReportLanguage),
@@ -834,6 +843,7 @@ func logFeatureSnapshot() {
 		"lyrics_source_mode", orDash(features().LyricsSourceMode),
 		"lyrics_source_order", orDash(strings.Join(features().LyricsSourceOrder, ",")),
 		"lyrics_dir", lyricsDirMode,
+		"motion_cover_sources", orDash(motionCoverSourcesKey(features())),
 		"lyrics_translation_language", orDash(features().LyricsTranslationLanguage),
 		"lyrics_machine_translation", features().LyricsMachineTranslation,
 		"lyrics_decision_trace", features().LyricsDecisionTrace,

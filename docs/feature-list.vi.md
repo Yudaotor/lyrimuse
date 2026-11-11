@@ -374,10 +374,11 @@ Cửa sổ mini có thể biến mất khi tạm dừng hoặc không phát và 
 
 ### Ảnh bìa động
 
-Album có ảnh bìa động trên Apple Music, QQ Music hoặc NetEase Cloud Music cũng chuyển động trong cửa sổ lời cỡ Đầy đủ, cả những album mà Kugou Music đã lưu ảnh bìa động khi bạn phát ở đó. Ảnh bìa động tạm dừng ở Chế độ nguồn điện thấp hoặc khi bật Giảm chuyển động. Bạn có thể xem các ảnh động đã tải về chiếm bao nhiêu dung lượng và xóa chúng.
+Album có ảnh bìa động trên Apple Music, QQ Music hoặc NetEase Cloud Music cũng chuyển động trong cửa sổ lời cỡ Đầy đủ, cả những album mà Kugou Music đã lưu ảnh bìa động khi bạn phát ở đó. Ảnh bìa động tạm dừng ở Chế độ nguồn điện thấp hoặc khi bật Giảm chuyển động. Bạn có thể xem các ảnh động đã tải về chiếm bao nhiêu dung lượng và xóa chúng. Có thể chọn nhiều nguồn: Apple Music, nền tảng khác.
 
 - Bật theo mặc định
 - Cài đặt: Hiển thị lời › Cửa sổ lời › Ảnh bìa › Ảnh bìa động
+- Cài đặt: Hiển thị lời › Cửa sổ lời › Ảnh bìa › Nguồn
 - Cài đặt: Hiển thị lời › Cửa sổ lời › Ảnh bìa › Bộ nhớ đệm ảnh bìa động
 
 <a id="feature-spotify-canvas"></a>
@@ -920,7 +921,7 @@ Tối đa một lần mỗi ngày, Lyrimuse gửi phiên bản, macOS, các tín
 
 ## Toàn bộ cài đặt
 
-Toàn bộ mục trong cửa sổ Cài đặt, theo vị trí: tổng cộng 316 mục. Gõ tên vào ô tìm kiếm ở đầu thanh bên của Cài đặt để đi thẳng tới mục đó.
+Toàn bộ mục trong cửa sổ Cài đặt, theo vị trí: tổng cộng 317 mục. Gõ tên vào ô tìm kiếm ở đầu thanh bên của Cài đặt để đi thẳng tới mục đó.
 
 ### Lời bài hát › Nguồn
 
@@ -1276,6 +1277,7 @@ Toàn bộ mục trong cửa sổ Cài đặt, theo vị trí: tổng cộng 316
 ### Hiển thị lời › Cửa sổ lời › Ảnh bìa
 
 - **Ảnh bìa động** (chỉ Đầy đủ): Chỉ một số album có; tự tạm dừng khi ở Chế độ nguồn điện thấp hoặc khi bật “Giảm chuyển động”
+- **Nguồn** (chỉ Đầy đủ)
 - **Bộ nhớ đệm ảnh bìa động** (chỉ Đầy đủ): Dung lượng ổ đĩa do ảnh bìa động đã tải về sử dụng; sau khi xóa sẽ tải lại khi hiển thị lần sau
 
 ### Phím tắt

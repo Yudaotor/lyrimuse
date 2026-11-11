@@ -606,6 +606,8 @@
 "其他 App" = "Otras apps";
 "其他 App 正占用播放焦点，暂时无法控制「%@」" = "No se puede controlar «%@» mientras otra app tiene el foco de reproducción";
 "其他 App 正占用播放焦点，暂时无法控制播放" = "No se puede controlar la reproducción mientras otra app tiene el foco de reproducción";
+"其他平台" = "Otras plataformas";
+"其他平台包括 %@" = "Otras plataformas: %@";
 "其他折叠规则" = "Otra regla de agrupación";
 "其他文字" = "Otras escrituras";
 "其他歌词源仍在搜索中…" = "Se sigue buscando en otras fuentes…";

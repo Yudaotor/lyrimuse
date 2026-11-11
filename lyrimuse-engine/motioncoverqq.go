@@ -137,6 +137,10 @@ func qqMotionCoverIdentity(ctx context.Context, mid, coverURL string) motionCove
 // 也没给出(没有 mid、没有动态封面、身份对不上)时再按网易云歌曲核(motionVerdictFromNetease)。
 // appleChecked:Apple 那支核出了「没有」(而不是根本没有专辑 ID 可核),原样交给网易云那支。
 func (e *enrichEntry) motionVerdictFromQQ(ctx context.Context, appleChecked bool) bool {
+	if features().MotionCoverSkipOther {
+		e.motionVerdictNone(appleChecked)
+		return true
+	}
 	mid := e.QQAlbumMid
 	if !qqAlbumMidShape.MatchString(mid) {
 		return e.motionVerdictFromNetease(ctx, appleChecked)

@@ -374,10 +374,11 @@ La ventana mini se oculta en pausa o sin reproducción y vuelve al empezar a rep
 
 ### Ilustración animada
 
-Los álbumes con ilustración animada en Apple Music, QQ Music o NetEase Cloud Music también se mueven en la ventana de letra a tamaño completo, igual que los álbumes cuya ilustración animada guardó Kugou Music al reproducirlos allí. Se detiene en modo de bajo consumo o con «Reducir movimiento» activado. Puedes ver cuánto espacio ocupan las ilustraciones animadas descargadas y borrarlas.
+Los álbumes con ilustración animada en Apple Music, QQ Music o NetEase Cloud Music también se mueven en la ventana de letra a tamaño completo, igual que los álbumes cuya ilustración animada guardó Kugou Music al reproducirlos allí. Se detiene en modo de bajo consumo o con «Reducir movimiento» activado. Puedes ver cuánto espacio ocupan las ilustraciones animadas descargadas y borrarlas. Puedes elegir varias fuentes: Apple Music y otras plataformas.
 
 - Activada por omisión
 - Ajustes: Mostrar letra › Ventana de letra › Ilustración › Ilustración animada
+- Ajustes: Mostrar letra › Ventana de letra › Ilustración › Fuente
 - Ajustes: Mostrar letra › Ventana de letra › Ilustración › Caché de ilustraciones animadas
 
 <a id="feature-spotify-canvas"></a>
@@ -920,7 +921,7 @@ Como máximo una vez al día, envía al servidor del propio autor la versión, e
 
 ## Todos los ajustes
 
-Todos los ajustes de la ventana Ajustes, según dónde están: 316 en total. Escribe un nombre en el campo de búsqueda de la parte superior de la barra lateral de Ajustes para ir directamente a él.
+Todos los ajustes de la ventana Ajustes, según dónde están: 317 en total. Escribe un nombre en el campo de búsqueda de la parte superior de la barra lateral de Ajustes para ir directamente a él.
 
 ### Letra › Fuente
 
@@ -1276,6 +1277,7 @@ Todos los ajustes de la ventana Ajustes, según dónde están: 316 en total. Esc
 ### Mostrar letra › Ventana de letra › Ilustración
 
 - **Ilustración animada** (solo tamaño completo): Solo en algunos álbumes; se pausa en modo de bajo consumo o con «Reducir movimiento» activado
+- **Fuente** (solo tamaño completo)
 - **Caché de ilustraciones animadas** (solo tamaño completo): Espacio en disco que ocupan las ilustraciones animadas descargadas; lo que borres se volverá a descargar la próxima vez que se muestre
 
 ### Atajos de teclado

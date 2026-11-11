@@ -118,9 +118,9 @@ public enum SettingsSearchCatalog {
         "字号", "歌词布局", "长句处理", "悬停时淡化", "淡化时点按穿透", "暂停时隐藏",
         "纯音乐/无歌词时隐藏", "全屏时隐藏", "歌名", "歌手", "专辑", "封面", "时间", "宽度", "高度", "进度条",
     ]
-    /// 只在完整预览下才有的行:「封面」那一组、「布局」里的对齐方式和控件大小、「文字」里的 HDR 高亮、「背景」里的 Spotify Canvas。
+    /// 只在完整预览下才有的行:「封面」那一组(含「动态封面」下面的「来源」)、「布局」里的对齐方式和控件大小、「文字」里的 HDR 高亮、「背景」里的 Spotify Canvas。
     public static let lyricsWindowFullOnlyTitles: Set<String> = [
-        "动态封面", "动态封面缓存", "对齐方式", "控件大小", "HDR 高亮", "Spotify Canvas",
+        "动态封面", "来源", "动态封面缓存", "对齐方式", "控件大小", "HDR 高亮", "Spotify Canvas",
     ]
 
     /// 「歌词显示」页「触控栏」那一段的分段取值(`AppearanceSettingsTab.Section.touchBar`)。跟歌词窗口一样
@@ -649,6 +649,7 @@ public enum SettingsSearchCatalog {
         lyricsWindow("底部颜色", kw: ["渐变", "颜色", "背景"], group: "背景"),
         lyricsWindow("动态封面", sub: "仅部分专辑提供；低电量或「减弱动态效果」时自动暂停",
                      kw: ["封面", "动画", "motion", "artwork", "会动", "视频"], group: "封面"),
+        lyricsWindow("来源", kw: ["动态封面", "Apple Music", "其他平台", "QQ 音乐", "网易云", "酷狗", "多选"], group: "封面"),
         lyricsWindow("动态封面缓存", sub: "已下载的动态封面占用的磁盘空间；清除后再次显示时会重新下载",
                      kw: ["缓存", "磁盘", "空间", "占用", "清除", "清理", "存储", "动态封面"], group: "封面"),
 

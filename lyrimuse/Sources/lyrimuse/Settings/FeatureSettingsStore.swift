@@ -350,6 +350,8 @@ struct FeatureFlagsFile: Codable, Equatable {
     var lyricsDir: String?
     // 歌词文件夹里逐字歌词写成哪几种格式(LyricsWordFormat 的值),第一个是主格式。nil = 只写 YRC。
     var lyricsWordFormats: [String]?
+    // 动态封面从哪几处找(MotionCoverSource 的值)。nil = 两处都找。
+    var motionCoverSources: [String]?
     // "auto"(跟随系统语言,默认)或具体 ISO 639-1 代码("en"/"zh"/"ja"...)——见
     // MusixmatchTranslationLanguage 注释,引擎侧负责把 "auto" 解析成具体代码。
     var lyricsTranslationLanguage: String?
@@ -434,6 +436,7 @@ struct FeatureFlagsFile: Codable, Equatable {
         case preferLocalFileLyrics = "prefer_local_file_lyrics"
         case lyricsDir = "lyrics_dir"
         case lyricsWordFormats = "lyrics_word_formats"
+        case motionCoverSources = "motion_cover_sources"
         case lyricsTranslationLanguage = "lyrics_translation_language"
         case systemLanguage = "system_language"
         case reportLanguage = "report_language"
@@ -496,6 +499,15 @@ public final class FeatureSettingsStore: ObservableObject {
         let next = players.toggling(player)
         guard next != players else { return }
         players = next
+        Task { await save() }
+    }
+
+    /// 动态封面勾上 / 取消一处来源并落盘,最后一处取消不掉。引擎热重读后跳过关掉的那几支,App 当场按来源筛(PlaybackCoordinator)。
+    @MainActor
+    public func toggleMotionCoverSource(_ source: MotionCoverSource) {
+        let next = motionCoverSources.toggling(source)
+        guard next != motionCoverSources else { return }
+        motionCoverSources = next
         Task { await save() }
     }
 
@@ -634,6 +646,8 @@ public final class FeatureSettingsStore: ObservableObject {
     /// 歌词文件夹里逐字歌词的格式,至少一个,第一个是主格式(见 LyricsWordFormat)。全新装机、歌词文件夹还空着时
     /// load() 写成 TTML;老配置缺这个键照旧是 YRC(11 章决策 144)。
     @Published public var lyricsWordFormats: [LyricsWordFormat] = [.yrc]
+    /// 动态封面从哪几处找,至少一个(见 MotionCoverSource)。改了用 `toggleMotionCoverSource`。
+    @Published public var motionCoverSources: Set<MotionCoverSource> = MotionCoverSource.all
     // 只影响 Musixmatch 这个源的译文语言,详见 MusixmatchTranslationLanguage 注释。
     @Published public var lyricsTranslationLanguage: MusixmatchTranslationLanguage = .auto
     /// 本机系统语言,每次 load() 读一遍(见 FeatureFlagsFile.systemLanguage)。「翻译语言包」那一行按它算
@@ -769,6 +783,7 @@ public final class FeatureSettingsStore: ObservableObject {
             preferLocalFileLyrics: preferLocalFileLyrics,
             lyricsDir: lyricsDir.isEmpty ? nil : lyricsDir,
             lyricsWordFormats: lyricsWordFormats == [.yrc] ? nil : lyricsWordFormats.map(\.rawValue),
+            motionCoverSources: MotionCoverSource.fileValue(motionCoverSources),
             lyricsTranslationLanguage: lyricsTranslationLanguage.rawValue,
             systemLanguage: systemLanguage.isEmpty ? nil : systemLanguage,
             reportLanguage: reportLanguage.isEmpty ? nil : reportLanguage,
@@ -1071,6 +1086,7 @@ public final class FeatureSettingsStore: ObservableObject {
         networkProxyServer = f.networkProxyServer ?? ""
         lyricsDir = f.lyricsDir ?? ""
         lyricsWordFormats = LyricsWordFormat.resolve(f.lyricsWordFormats)
+        motionCoverSources = MotionCoverSource.resolve(f.motionCoverSources)
         lyricsTranslationLanguage = f.lyricsTranslationLanguage.flatMap(MusixmatchTranslationLanguage.init(rawValue:)) ?? .auto
         if let raw = f.launchLyrimuseOnPlayers {
             launchLyrimuseOnPlayers = Set(raw.compactMap(PlaybackPlayer.init(rawValue:)))

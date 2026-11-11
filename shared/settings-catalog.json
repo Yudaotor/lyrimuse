@@ -1973,6 +1973,16 @@
         "歌词窗口",
         "封面"
       ],
+      "title" : "来源"
+    },
+    {
+      "dest" : "tab:appearance",
+      "lyricsWindowMini" : false,
+      "path" : [
+        "歌词显示",
+        "歌词窗口",
+        "封面"
+      ],
       "subtitle" : "已下载的动态封面占用的磁盘空间；清除后再次显示时会重新下载",
       "title" : "动态封面缓存"
     },

@@ -374,10 +374,11 @@ La fenêtre mini peut disparaître en pause ou à l’arrêt et revenir au débu
 
 ### Illustration animée
 
-Les albums avec une illustration animée sur Apple Music, QQ Music ou NetEase Cloud Music s’animent aussi dans la fenêtre des paroles en taille complète, tout comme les albums dont Kugou Music a enregistré l’illustration animée quand vous les y avez écoutés. L’animation se met en pause en mode Économie d’énergie ou avec « Réduire les animations ». Vous pouvez voir la place prise par les animations téléchargées et les effacer.
+Les albums avec une illustration animée sur Apple Music, QQ Music ou NetEase Cloud Music s’animent aussi dans la fenêtre des paroles en taille complète, tout comme les albums dont Kugou Music a enregistré l’illustration animée quand vous les y avez écoutés. L’animation se met en pause en mode Économie d’énergie ou avec « Réduire les animations ». Vous pouvez voir la place prise par les animations téléchargées et les effacer. Vous pouvez choisir plusieurs sources : Apple Music et autres plateformes.
 
 - Activée par défaut
 - Réglages : Affichage des paroles › Fenêtre des paroles › Illustration › Illustration animée
+- Réglages : Affichage des paroles › Fenêtre des paroles › Illustration › Source
 - Réglages : Affichage des paroles › Fenêtre des paroles › Illustration › Cache des illustrations animées
 
 <a id="feature-spotify-canvas"></a>
@@ -920,7 +921,7 @@ Au plus une fois par jour, envoie la version, macOS, les fonctions activées et 
 
 ## Tous les réglages
 
-Tous les réglages de la fenêtre Réglages, classés par emplacement : 316 au total. Tapez un nom dans le champ de recherche en haut de la barre latérale des Réglages pour y aller directement.
+Tous les réglages de la fenêtre Réglages, classés par emplacement : 317 au total. Tapez un nom dans le champ de recherche en haut de la barre latérale des Réglages pour y aller directement.
 
 ### Paroles › Source
 
@@ -1276,6 +1277,7 @@ Tous les réglages de la fenêtre Réglages, classés par emplacement : 316 au 
 ### Affichage des paroles › Fenêtre des paroles › Illustration
 
 - **Illustration animée** (taille complète uniquement) : Sur certains albums seulement ; en pause en mode Économie d’énergie ou avec « Réduire les animations »
+- **Source** (taille complète uniquement)
 - **Cache des illustrations animées** (taille complète uniquement) : Espace disque des illustrations animées téléchargées ; ce qui est effacé sera retéléchargé au prochain affichage
 
 ### Raccourcis clavier

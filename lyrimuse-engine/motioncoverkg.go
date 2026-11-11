@@ -126,10 +126,8 @@ func (e *enrichEntry) motionVerdictFromKugou(checked bool) bool {
 			return false
 		}
 		e.recordMotionVerdict(kugouMotionCoverScheme+id, "", false)
-	case checked:
-		e.recordMotionVerdict("", "", false)
 	default:
-		e.clearMotionVerdict()
+		e.motionVerdictNone(checked)
 	}
 	return true
 }

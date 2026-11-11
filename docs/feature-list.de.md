@@ -374,10 +374,11 @@ Das Mini-Fenster kann bei Pause oder Leerlauf verschwinden und bei Wiedergabebeg
 
 ### Animiertes Cover
 
-Alben mit animiertem Cover auf Apple Music, QQ Music oder NetEase Cloud Music bewegen sich auch im Liedtextfenster in Vollgröße, ebenso Alben, deren animiertes Cover Kugou Music beim Abspielen dort gespeichert hat. Im Stromsparmodus oder mit „Bewegung reduzieren“ pausiert es. Du siehst, wie viel Platz die geladenen Animationen belegen, und kannst sie löschen.
+Alben mit animiertem Cover auf Apple Music, QQ Music oder NetEase Cloud Music bewegen sich auch im Liedtextfenster in Vollgröße, ebenso Alben, deren animiertes Cover Kugou Music beim Abspielen dort gespeichert hat. Im Stromsparmodus oder mit „Bewegung reduzieren“ pausiert es. Du siehst, wie viel Platz die geladenen Animationen belegen, und kannst sie löschen. Quellen sind kombinierbar: Apple Music und andere Plattformen.
 
 - Standardmäßig ein
 - Einstellungen: Liedtext-Anzeige › Liedtextfenster › Cover › Animiertes Cover
+- Einstellungen: Liedtext-Anzeige › Liedtextfenster › Cover › Quelle
 - Einstellungen: Liedtext-Anzeige › Liedtextfenster › Cover › Cache für animierte Cover
 
 <a id="feature-spotify-canvas"></a>
@@ -920,7 +921,7 @@ Sendet höchstens einmal täglich Version, macOS, aktivierte Funktionen und Abst
 
 ## Alle Einstellungen
 
-Alle Einstellungen des Einstellungsfensters nach Ort: insgesamt 316. Gib einen Namen in das Suchfeld oben in der Seitenleiste der Einstellungen ein, um direkt dorthin zu springen.
+Alle Einstellungen des Einstellungsfensters nach Ort: insgesamt 317. Gib einen Namen in das Suchfeld oben in der Seitenleiste der Einstellungen ein, um direkt dorthin zu springen.
 
 ### Liedtext › Quelle
 
@@ -1276,6 +1277,7 @@ Alle Einstellungen des Einstellungsfensters nach Ort: insgesamt 316. Gib einen N
 ### Liedtext-Anzeige › Liedtextfenster › Cover
 
 - **Animiertes Cover** (nur Vollgröße): Nur bei manchen Alben; pausiert im Stromsparmodus oder mit „Bewegung reduzieren“
+- **Quelle** (nur Vollgröße)
 - **Cache für animierte Cover** (nur Vollgröße): Speicherplatz der geladenen animierten Cover; Gelöschtes wird bei der nächsten Anzeige neu geladen
 
 ### Tastaturkurzbefehle

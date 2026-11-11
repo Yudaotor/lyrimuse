@@ -374,10 +374,11 @@ The mini window can disappear while paused or idle and come back when playback s
 
 ### Animated artwork
 
-Albums with animated artwork on Apple Music, QQ Music or NetEase Cloud Music move in the full-size lyrics window too, as do albums whose animated artwork Kugou Music saved when you played them there. It pauses in Low Power Mode or with Reduce Motion on. You can see how much space the downloaded animations take and clear them.
+Albums with animated artwork on Apple Music, QQ Music or NetEase Cloud Music move in the full-size lyrics window too, as do albums whose animated artwork Kugou Music saved when you played them there. It pauses in Low Power Mode or with Reduce Motion on. You can see how much space the downloaded animations take and clear them. Sources can be mixed: Apple Music, other platforms.
 
 - On by default
 - Settings: Lyrics Display › Lyrics Window › Artwork › Animated Artwork
+- Settings: Lyrics Display › Lyrics Window › Artwork › Source
 - Settings: Lyrics Display › Lyrics Window › Artwork › Animated Artwork Cache
 
 <a id="feature-spotify-canvas"></a>
@@ -920,7 +921,7 @@ At most once a day, sends the version, macOS, which features are on and crash su
 
 ## Every setting
 
-Every setting in the Settings window, by where it lives: 316 in all. Type a name into the search field at the top of the Settings sidebar to jump straight to it.
+Every setting in the Settings window, by where it lives: 317 in all. Type a name into the search field at the top of the Settings sidebar to jump straight to it.
 
 ### Lyrics › Source
 
@@ -1276,6 +1277,7 @@ Every setting in the Settings window, by where it lives: 316 in all. Type a name
 ### Lyrics Display › Lyrics Window › Artwork
 
 - **Animated Artwork** (full size only): Available on some albums only; pauses in Low Power Mode or with Reduce Motion on
+- **Source** (full size only)
 - **Animated Artwork Cache** (full size only): Disk space used by downloaded animated artwork; anything cleared downloads again the next time it’s shown
 
 ### Keyboard Shortcuts

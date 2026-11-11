@@ -643,7 +643,8 @@ func motionCoverNeedsRecheckAgainstOwnCover(freshApplies bool, e enrichEntry) bo
 // motionVerdictCurrent:这条有动态封面结论(有地址,或核过),而且是对着它现在这张封面核的(MotionCoverFor)。封面后来换过、
 // 或结论早于记下对照封面的,都不算:App 不用,引擎重核(motionVerdictStale)。见 03 章决策 53。
 func motionVerdictCurrent(e enrichEntry) bool {
-	return (e.MotionCoverChecked || e.MotionCoverURL != "") && e.MotionCoverFor == e.CoverURL
+	return (e.MotionCoverChecked || e.MotionCoverURL != "") && e.MotionCoverFor == e.CoverURL &&
+		e.MotionCoverSources == motionCoverSourcesKey(features())
 }
 
 // motionVerdictStale:有动态封面结论,但不是对着现在这张封面核的。
@@ -653,7 +654,7 @@ func motionVerdictStale(e enrichEntry) bool {
 
 // clearMotionVerdict:动态封面这一组整组清掉。
 func (e *enrichEntry) clearMotionVerdict() {
-	e.MotionCoverURL, e.MotionPreviewURL, e.MotionCoverFor = "", "", ""
+	e.MotionCoverURL, e.MotionPreviewURL, e.MotionCoverFor, e.MotionCoverSources = "", "", "", ""
 	e.MotionCoverChecked, e.MotionCoverIdentityVerified = false, false
 }
 
@@ -662,10 +663,16 @@ func (e *enrichEntry) recordMotionVerdict(master, preview string, identity bool)
 	e.MotionCoverURL, e.MotionPreviewURL = master, preview
 	e.MotionCoverChecked, e.MotionCoverIdentityVerified = true, identity
 	e.MotionCoverFor = e.CoverURL
+	e.MotionCoverSources = motionCoverSourcesKey(features())
 }
 
-// motionRecheckTried:这次启动里播到时已经重核过作废结论的条目(trackEnrichment 判)。调用方持有 enrichMu。
+// motionRecheckTried:这次启动里播到时已经重核过作废结论的条目(trackEnrichment 判),键是 motionRecheckKey。调用方持有 enrichMu。
 var motionRecheckTried = map[string]bool{}
+
+// motionRecheckKey:条目 key 加上现在这组动态封面来源,换一组来源就是新的一次。
+func motionRecheckKey(key string) string {
+	return key + "\x00" + motionCoverSourcesKey(features())
+}
 
 // recheckPlayingMotionCover:播到这首时重核作废的动态封面结论,收工时放掉 enrichInflight。
 func recheckPlayingMotionCover(key, title, album string) {
@@ -712,7 +719,7 @@ func motionCoverAlbumHasKnownVideo(e enrichEntry, artist, title, album string) b
 // 最后那半条是刻意的,理由跟 `missingQQMids` 那条注释同源:动态封面的覆盖率只有三成上下,
 // 把"这张专辑就是没有"也算成缺,那七成条目会白重试 5 轮、每轮把开着的歌词源全部重查一遍。
 func motionCoverWorthBackfill(e enrichEntry, artist, title, album string) bool {
-	if e.MotionCoverURL != "" || e.MotionCoverChecked {
+	if e.MotionCoverURL != "" || e.MotionCoverChecked || features().MotionCoverSkipApple {
 		return false
 	}
 	// 两条来路跟 fillMotionCover 一致(锚点优先、退到 apple_music_url),否则非 Apple Music

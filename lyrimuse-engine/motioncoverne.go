@@ -152,6 +152,9 @@ func neteaseMotionCoverUnasked(e enrichEntry) bool {
 // motionCoverFallbackUnasked:QQ、网易云两支里有一支对这条还没问过(见 qqMotionCoverUnasked、neteaseMotionCoverUnasked),
 // 或者酷狗本机后来有了这张专辑的动态封面(kugouMotionCoverUnasked)。
 func motionCoverFallbackUnasked(e enrichEntry) bool {
+	if features().MotionCoverSkipOther {
+		return false
+	}
 	return qqMotionCoverUnasked(e) || neteaseMotionCoverUnasked(e) || kugouMotionCoverUnasked(e)
 }
 

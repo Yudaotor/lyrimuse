@@ -374,10 +374,11 @@ A janela mini pode sumir na pausa ou sem reprodução e voltar quando a reprodu�
 
 ### Capa animada
 
-Álbuns com capa animada no Apple Music, QQ Music ou NetEase Cloud Music também se movem na janela da letra em tamanho completo, assim como álbuns cuja capa animada o Kugou Music salvou quando você os tocou nele. A animação pausa no Modo Pouca Energia ou com “Reduzir Movimento” ativado. Você pode ver quanto espaço as animações baixadas ocupam e limpá-las.
+Álbuns com capa animada no Apple Music, QQ Music ou NetEase Cloud Music também se movem na janela da letra em tamanho completo, assim como álbuns cuja capa animada o Kugou Music salvou quando você os tocou nele. A animação pausa no Modo Pouca Energia ou com “Reduzir Movimento” ativado. Você pode ver quanto espaço as animações baixadas ocupam e limpá-las. Você pode escolher mais de uma fonte: Apple Music e outras plataformas.
 
 - Ativado por padrão
 - Ajustes: Exibição da letra › Janela da letra › Capa › Capa animada
+- Ajustes: Exibição da letra › Janela da letra › Capa › Origem
 - Ajustes: Exibição da letra › Janela da letra › Capa › Cache de capas animadas
 
 <a id="feature-spotify-canvas"></a>
@@ -920,7 +921,7 @@ No máximo uma vez por dia, envia a versão, o macOS, quais recursos estão ativ
 
 ## Todos os ajustes
 
-Todos os ajustes da janela Ajustes, por local: 316 no total. Digite um nome no campo de busca no topo da barra lateral dos Ajustes para ir direto até ele.
+Todos os ajustes da janela Ajustes, por local: 317 no total. Digite um nome no campo de busca no topo da barra lateral dos Ajustes para ir direto até ele.
 
 ### Letra › Origem
 
@@ -1276,6 +1277,7 @@ Todos os ajustes da janela Ajustes, por local: 316 no total. Digite um nome no c
 ### Exibição da letra › Janela da letra › Capa
 
 - **Capa animada** (só Completo): Só em alguns álbuns; pausa no Modo Pouca Energia ou com “Reduzir movimento” ativado
+- **Origem** (só Completo)
 - **Cache de capas animadas** (só Completo): Espaço em disco usado pelas capas animadas baixadas; o que for limpo será baixado de novo na próxima exibição
 
 ### Atalhos de teclado

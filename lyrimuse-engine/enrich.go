@@ -156,6 +156,9 @@ type enrichEntry struct {
 	// 哪张封面(CoverURL)核出来的。跟 CoverURL 不一样就是封面后来换过,结论作废(motionVerdictCurrent):App 不用它,引擎按现在
 	// 这张重核。见 03 章决策 53。
 	MotionCoverFor string `json:"motion_cover_for,omitempty"`
+	// MotionCoverSources:这组结论按哪组来源核的(motionCoverSourcesKey,两处都找为空)。设置里改了来源,结论就不算数
+	// (motionVerdictCurrent),播到时按新的重核。
+	MotionCoverSources string `json:"motion_cover_sources,omitempty"`
 	// MotionCoverIdentityVerified:这条的动态封面是靠**专辑身份核验**放行的 —— 首帧跟封面
 	// 对不上,但这条的封面就是 Apple 那张专辑的官方封面(专辑 ID 确定无误),见
 	// decideMotionCover。App 侧据此**跳过**中段帧终审:那道终审跟首帧比对是同一个代理判据,
@@ -1129,10 +1132,10 @@ func trackEnrichment(artist, title, album, bundleID string, durationSecs float64
 			enrichInflight[key] = true
 			go upgradeSmallDeviceCover(withPlayerCover(context.Background(), playerCover), key, e.CoverURL,
 				artist, title, album, durationSecs)
-		} else if (motionVerdictStale(e) || motionCoverFallbackUnasked(e)) && !motionRecheckTried[key] && !enrichInflight[key] {
+		} else if (motionVerdictStale(e) || motionVerdictSourcesChanged(e) || motionCoverFallbackUnasked(e)) && !motionRecheckTried[motionRecheckKey(key)] && !enrichInflight[key] {
 			// 动态封面结论是对着别的封面核的(封面后来换过),或者核出「没有」时 QQ / 网易云那支还没问过、酷狗本机后来有了:按现在这张重核。每个条目每次
-			// 启动只试一次,没查成的留给后台补封面那一遍。
-			motionRecheckTried[key] = true
+			// 启动只试一次(设置里换了一组来源再算一次),没查成的留给后台补封面那一遍。
+			motionRecheckTried[motionRecheckKey(key)] = true
 			enrichInflight[key] = true
 			go recheckPlayingMotionCover(key, title, album)
 		} else if (needsPeripheralBackfill(e, artist, album) ||
@@ -3539,6 +3542,7 @@ func recheckMotionCoverAgainstCurrentCover(ctx context.Context, key, title, albu
 	cur.MotionPreviewURL = e.MotionPreviewURL
 	cur.MotionCoverIdentityVerified = e.MotionCoverIdentityVerified
 	cur.MotionCoverFor = e.MotionCoverFor
+	cur.MotionCoverSources = e.MotionCoverSources
 	enrichCache[key] = cur
 	enrichDirty = true
 	enrichMu.Unlock()
@@ -3684,6 +3688,7 @@ func backfillPeripheralFields(ctx context.Context, key, artist, title, album str
 		e.MotionCoverURL, e.MotionPreviewURL = fresh.MotionCoverURL, fresh.MotionPreviewURL
 		e.MotionCoverChecked, e.MotionCoverIdentityVerified = true, fresh.MotionCoverIdentityVerified
 		e.MotionCoverFor = fresh.MotionCoverFor
+		e.MotionCoverSources = fresh.MotionCoverSources
 	}
 	// 这一轮的结论一位都没落下时,得拿这条记录自己那张封面补算一次,判据与理由见
 	// motionCoverNeedsRecheckAgainstOwnCover。真正的重算放在锁外(见函数末尾),这里只
@@ -4097,7 +4102,8 @@ func finishTrackEnrichment(ctx context.Context, e enrichEntry, scored []scoredLy
 // (motionVerdictCurrent)直接返回。
 //
 // 现在认的专辑给不出动画、而这条原来挂着一段时,再拿那段的首帧跟现在这张封面比一次,还是同一张图就留着它:Apple 链接、
-// 目录锚点会换成同一张专辑的别的版本(标准版 / 加长版),那个版本不一定有动画。
+// 目录锚点会换成同一张专辑的别的版本(标准版 / 加长版),那个版本不一定有动画。原来那段是 Apple 的(带首帧),设置里关了 Apple 那支
+// 就不留。
 func (e *enrichEntry) fillMotionCover(ctx context.Context, artist, title, album string) bool {
 	if motionVerdictCurrent(*e) && !motionCoverFallbackUnasked(*e) {
 		return true
@@ -4106,7 +4112,7 @@ func (e *enrichEntry) fillMotionCover(ctx context.Context, artist, title, album 
 	if !e.motionVerdictFromAlbum(ctx, artist, title, album) {
 		return false
 	}
-	if e.MotionCoverURL != "" || before.MotionCoverURL == "" || before.MotionPreviewURL == "" {
+	if e.MotionCoverURL != "" || before.MotionCoverURL == "" || before.MotionPreviewURL == "" || features().MotionCoverSkipApple {
 		return true
 	}
 	matched, verified := motionCoverMatchesCover(ctx, before.MotionPreviewURL, e.CoverURL)
@@ -4115,6 +4121,7 @@ func (e *enrichEntry) fillMotionCover(ctx context.Context, artist, title, album 
 		e.MotionCoverURL, e.MotionPreviewURL = before.MotionCoverURL, before.MotionPreviewURL
 		e.MotionCoverChecked, e.MotionCoverIdentityVerified = before.MotionCoverChecked, before.MotionCoverIdentityVerified
 		e.MotionCoverFor = before.MotionCoverFor
+		e.MotionCoverSources = before.MotionCoverSources
 		return false
 	case matched:
 		e.recordMotionVerdict(before.MotionCoverURL, before.MotionPreviewURL, false)
@@ -4128,7 +4135,11 @@ func (e *enrichEntry) fillMotionCover(ctx context.Context, artist, title, album 
 // 曲目才有;② 这条记下的 apple_music_url 里那个 ID,覆盖所有播放器,但来自文字匹配,可能指向另一个版本的专辑(03 章决策 16)。
 // ② 敢用全靠两道图像校验(首帧比对 / 专辑身份核验,并联,见 decideMotionCover):错的专辑给出的首帧和官方封面跟这条的
 // 封面都不会是同一张。Apple 这边没有给出动态封面时再按 QQ 专辑、网易云歌曲、酷狗本机那份核(motionVerdictFromQQ);都没有可以核的东西时整组清掉。
+// 设置里关了 Apple 那支时直接从 QQ 那支开始,关了其余几支时到 Apple 为止(features().MotionCoverSkipApple / MotionCoverSkipOther)。
 func (e *enrichEntry) motionVerdictFromAlbum(ctx context.Context, artist, title, album string) bool {
+	if features().MotionCoverSkipApple {
+		return e.motionVerdictFromQQ(ctx, false)
+	}
 	albumID, viaAnchor := appleCatalogAlbumIDFor(artist, title, album)
 	if !viaAnchor {
 		albumID = motionCoverAlbumIDFromAppleURL(e.AppleURL)
