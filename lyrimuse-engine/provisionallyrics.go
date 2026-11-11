@@ -143,7 +143,7 @@ func lyricsEntryFromScored(decisionPath, artist, title, album string, durationSe
 	e.LyricsBG, e.LyricsBGChecked = bt(picked.LyricsBG), lyricsBGParserVersion
 	refreshSpeakers(&e, scored)
 	refreshKana(&e, scored)
-	e.SongLanguage = entrySongLanguage(picked.Lyrics, scored)
+	e.SongLanguage = entrySongLanguage(picked.Lyrics, picked.LyricsRoma, scored)
 	e.dropHokkienRoma()
 	e.dropUnusableCantoneseRoma()
 	// 这里只做粤拼(纯查表)。helper 那一步要起子进程,排在出词之后由 resolveTrackEnrichment 补。

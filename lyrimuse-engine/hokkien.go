@@ -82,11 +82,12 @@ func lyricsLookHokkien(lyrics string) bool {
 	return false
 }
 
-// entrySongLanguage:条目的 SongLanguage。源上报了粤语、或者歌词是粤语口语(lyricsLookCantonese)就是粤语;
-// 否则歌词像台语就记台语;再否则照源上报的。歌词判出来的压过源上报的「普通话」:平台常把台语歌、粤语独白标成国语。
-func entrySongLanguage(lyrics string, scored []scoredLyricCandidateResult) string {
+// entrySongLanguage:条目的 SongLanguage。源上报了粤语、歌词是粤语口语(lyricsLookCantonese)、或者冠军自带的读音
+// 在汉字行上是粤拼(romaLooksJyutping)就是粤语;否则歌词像台语就记台语;再否则照源上报的。歌词判出来的压过源上报的
+// 「普通话」:平台常把台语歌、粤语独白标成国语。roma 是冠军候选自带的罗马音,不是引擎生成的。
+func entrySongLanguage(lyrics, roma string, scored []scoredLyricCandidateResult) string {
 	lang := songLanguageFromScored(scored)
-	if lang != songLanguageCantonese && lyricsLookCantonese(lyrics) {
+	if lang != songLanguageCantonese && (lyricsLookCantonese(lyrics) || romaLooksJyutping(lyrics, roma)) {
 		return songLanguageCantonese
 	}
 	if lang != songLanguageCantonese && lyricsLookHokkien(lyrics) {

@@ -2220,7 +2220,7 @@ func retryLyricsUpgradeWith(ctx context.Context, key, artist, title, album strin
 	// 罗马音兜底可能要起子进程,在上锁之前算好(见 maybeGenerateRoma);只在这一轮会换正文时才算。
 	var preparedRoma string
 	if picked != nil && picked.LyricsRoma == "" && !startLyrics.EqualString(picked.Lyrics) {
-		preparedRoma = generatedRomaFor(picked.Lyrics, "", entrySongLanguage(picked.Lyrics, scored),
+		preparedRoma = generatedRomaFor(picked.Lyrics, "", entrySongLanguage(picked.Lyrics, picked.LyricsRoma, scored),
 			nextLyricsKana(startKana, picked.Lyrics, picked.LyricsYRC, scored))
 	}
 	// 换上去会让正在播的这首丢掉能用的译文时,先把新正文翻好,跟正文同一次换上。
@@ -2367,7 +2367,7 @@ func retryLyricsUpgradeWith(ctx context.Context, key, artist, title, album strin
 			e.LyricsRoma = keptRoma
 		}
 		e.LyricsBG, e.LyricsBGChecked = bt(picked.LyricsBG), lyricsBGParserVersion
-		e.SongLanguage = entrySongLanguage(picked.Lyrics, scored)
+		e.SongLanguage = entrySongLanguage(picked.Lyrics, picked.LyricsRoma, scored)
 		e.dropHokkienRoma()
 		e.dropUnusableCantoneseRoma()
 		e.applyPregeneratedRoma(preparedRoma)
@@ -2653,7 +2653,7 @@ func rescoreLyricsWith(ctx context.Context, key, artist, title, album string, du
 	// 罗马音兜底在上锁之前算好,同 retryLyricsUpgrade。
 	var preparedRoma string
 	if decidable && picked != nil && picked.LyricsRoma == "" && !startLyrics.EqualString(picked.Lyrics) {
-		preparedRoma = generatedRomaFor(picked.Lyrics, "", entrySongLanguage(picked.Lyrics, scored),
+		preparedRoma = generatedRomaFor(picked.Lyrics, "", entrySongLanguage(picked.Lyrics, picked.LyricsRoma, scored),
 			nextLyricsKana(startKana, picked.Lyrics, picked.LyricsYRC, scored))
 	}
 	// 同 retryLyricsUpgrade:换正文会让正在播的这首丢掉能用的译文时先翻好。判据对着下面 default 分支换正文那一支。
@@ -2862,7 +2862,7 @@ func rescoreLyricsWith(ctx context.Context, key, artist, title, album string, du
 			e.Lyrics = bt(picked.Lyrics)
 			e.LyricsTr, e.LyricsRoma, e.LyricsYRC = bt(picked.LyricsTr), bt(picked.LyricsRoma), bt(picked.LyricsYRC)
 			e.LyricsBG, e.LyricsBGChecked = bt(picked.LyricsBG), lyricsBGParserVersion
-			e.SongLanguage = entrySongLanguage(picked.Lyrics, scored)
+			e.SongLanguage = entrySongLanguage(picked.Lyrics, picked.LyricsRoma, scored)
 			e.dropHokkienRoma()
 			e.dropUnusableCantoneseRoma()
 			e.applyPregeneratedRoma(preparedRoma)

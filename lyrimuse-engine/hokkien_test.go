@@ -62,7 +62,7 @@ func TestEntrySongLanguage(t *testing.T) {
 		{"源说粤语:照粤语", hok, withLang(songLanguageCantonese), songLanguageCantonese},
 		{"普通话歌", cmn, withLang(songLanguageMandarin), songLanguageMandarin},
 	} {
-		if got := entrySongLanguage(c.lyrics, c.scored); got != c.want {
+		if got := entrySongLanguage(c.lyrics, "", c.scored); got != c.want {
 			t.Errorf("%s: got %q want %q", c.name, got, c.want)
 		}
 	}
@@ -118,8 +118,8 @@ func TestMigrateHokkienSongLanguage(t *testing.T) {
 func TestHokkienIsWired(t *testing.T) {
 	for file, needles := range map[string][]string{
 		"../lyrimuse/Sources/LyrimuseCore/Local/EnrichCacheReader.swift": {`private let songLanguageHokkien = "` + songLanguageHokkien + `"`},
-		"enrich.go":            {"preparedRoma = generatedRomaFor(picked.Lyrics, \"\", entrySongLanguage(picked.Lyrics, scored),"},
-		"provisionallyrics.go": {"e.SongLanguage = entrySongLanguage(picked.Lyrics, scored)\n\te.dropHokkienRoma()"},
+		"enrich.go":            {"preparedRoma = generatedRomaFor(picked.Lyrics, \"\", entrySongLanguage(picked.Lyrics, picked.LyricsRoma, scored),"},
+		"provisionallyrics.go": {"e.SongLanguage = entrySongLanguage(picked.Lyrics, picked.LyricsRoma, scored)\n\te.dropHokkienRoma()"},
 		"main.go":              {`startupStep("migrateHokkienSongLanguage", migrateHokkienSongLanguage)`},
 		"../lyrimuse/Sources/LyrimuseCore/Lyrics/LyricsSyncEngine.swift": {"if songIsHokkien, script == .chinese { return false }"},
 	} {
@@ -134,7 +134,7 @@ func TestHokkienIsWired(t *testing.T) {
 		}
 	}
 	data, _ := os.ReadFile("enrich.go")
-	if n := strings.Count(string(data), "e.SongLanguage = entrySongLanguage(picked.Lyrics, scored)"); n != 2 {
+	if n := strings.Count(string(data), "e.SongLanguage = entrySongLanguage(picked.Lyrics, picked.LyricsRoma, scored)"); n != 2 {
 		t.Errorf("enrich.go 里写 SongLanguage 的两处(升级重试 / 重评分)都要走 entrySongLanguage,找到 %d 处", n)
 	}
 	if strings.Contains(string(data), "e.SongLanguage = songLanguageFromScored(scored)") {

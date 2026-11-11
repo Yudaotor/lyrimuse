@@ -521,7 +521,7 @@ func songShareApplyChoice(e *enrichEntry, c *scoredLyricCandidateResult, r *song
 	e.Lyrics = bt(c.Lyrics)
 	e.LyricsTr, e.LyricsRoma, e.LyricsYRC = bt(c.LyricsTr), bt(c.LyricsRoma), bt(c.LyricsYRC)
 	e.LyricsBG, e.LyricsBGChecked = bt(c.LyricsBG), lyricsBGParserVersion
-	e.SongLanguage = entrySongLanguage(c.Lyrics, r.Scored)
+	e.SongLanguage = entrySongLanguage(c.Lyrics, c.LyricsRoma, r.Scored)
 	e.dropHokkienRoma()
 	e.dropUnusableCantoneseRoma()
 	e.applyPregeneratedRoma(roma)
@@ -641,7 +641,7 @@ func applyShareRound(keys []string, own []*songPlanLyrics, snap []enrichEntry, s
 	var d *lyricsDecision
 	if len(targets) > 0 {
 		if top.LyricsRoma == "" {
-			roma = generatedRomaFor(top.Lyrics, "", entrySongLanguage(top.Lyrics, round.Scored),
+			roma = generatedRomaFor(top.Lyrics, "", entrySongLanguage(top.Lyrics, top.LyricsRoma, round.Scored),
 				nextLyricsKana("", top.Lyrics, top.LyricsYRC, round.Scored))
 		}
 		d = buildLyricsDecision(lyricsDecisionPathSongEntityShare, round.Artist, round.Title, round.Album, round.Duration, round.Scored, top, true)

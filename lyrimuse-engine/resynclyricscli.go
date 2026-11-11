@@ -143,7 +143,7 @@ func runResyncLyrics(keys []string, apply bool) int {
 			continue
 		}
 		// 罗马音兜底在上锁之前算好(可能起 lyrics-romanize 子进程),同 rescoreLyrics。
-		songLanguage := entrySongLanguage(picked.Lyrics, scored)
+		songLanguage := entrySongLanguage(picked.Lyrics, picked.LyricsRoma, scored)
 		var preparedRoma string
 		if !plan.lyricsSame && picked.LyricsRoma == "" {
 			preparedRoma = generatedRomaFor(picked.Lyrics, "", songLanguage,

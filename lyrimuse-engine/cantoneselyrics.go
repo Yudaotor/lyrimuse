@@ -2,6 +2,7 @@ package main
 
 import (
 	"log"
+	"regexp"
 	"strings"
 	"unicode"
 )
@@ -58,7 +59,86 @@ func lyricsLookCantonese(lyrics string) bool {
 	return float64(marked) >= float64(hanLines)*cantoneseMinLineShare
 }
 
-// migrateCantoneseSongLanguage:存量里歌词是粤语口语、却没记成粤语的歌补记粤语,普通话拼音换成粤拼。运行期在源头
+// 读音是粤拼的歌记成粤语歌。
+//
+// Apple Music 这类不报语种的源,粤语歌给的读音就是粤拼。粤语段是书面语、整首又夹着英文的,口语字判不出来,
+// 记不成粤语,App 就按普通话那一档管它的读音。粤拼有几种拼法普通话拼音里从来没有:收 -p/-t/-k、带 eo/oe/aa、
+// 声母 gw/kw/ng、j 后面跟 a/e/o/y。只数正文里整行是汉字的那几行对着的读音(英文行、日文行、阿拉伯文行的
+// 读音会混进这些拼法)。阈值的标定见 10 章决策 73。
+const (
+	jyutpingRomaMinSyllables = 8    // 汉字行的读音音节少于这么多不判
+	jyutpingRomaMinShare     = 0.25 // 其中粤拼才有的拼法至少占这么多
+)
+
+// speakerPrefixRe:对唱署名前缀(「v1：」「合：」),去掉再看这行是不是整行汉字。
+var speakerPrefixRe = regexp.MustCompile(`^[^\s:：]{1,12}[:：]\s*`)
+
+// jyutpingOnlySyllable:这个音节(去掉声调数字)的拼法只有粤拼有,普通话拼音没有。
+func jyutpingOnlySyllable(s string) bool {
+	s = strings.TrimRight(s, "123456")
+	if len(s) < 2 {
+		return false
+	}
+	switch s[len(s)-1] {
+	case 'p', 't', 'k':
+		return true
+	}
+	return strings.Contains(s, "eo") || strings.Contains(s, "oe") || strings.Contains(s, "aa") ||
+		strings.HasPrefix(s, "gw") || strings.HasPrefix(s, "kw") || strings.HasPrefix(s, "ng") ||
+		(s[0] == 'j' && strings.ContainsRune("aeoy", rune(s[1])))
+}
+
+// romaLooksJyutping:源自带的读音在整行汉字的正文行上是粤拼。读音行按时间标签跟正文行对上。
+func romaLooksJyutping(lyrics, roma string) bool {
+	if roma == "" || lyrics == "" {
+		return false
+	}
+	romaByTag := map[string]string{}
+	for _, l := range parseLRCLines(roma) {
+		romaByTag[l.tag] = l.text
+	}
+	var syllables []string
+	kana := 0
+	for _, l := range parseLRCLines(lyrics) {
+		body := speakerPrefixRe.ReplaceAllString(l.text, "")
+		letters, han := 0, 0
+		for _, r := range body {
+			if unicode.In(r, unicode.Hiragana, unicode.Katakana) {
+				kana++
+			}
+			if unicode.IsLetter(r) {
+				letters++
+				if unicode.Is(unicode.Han, r) {
+					han++
+				}
+			}
+		}
+		r, ok := romaByTag[l.tag]
+		if !ok || han < 2 || han != letters {
+			continue
+		}
+		for _, f := range strings.Fields(strings.ToLower(r)) {
+			if f = strings.Trim(f, ",.!?;:'\"()"); f != "" && unicode.IsLetter(rune(f[0])) {
+				syllables = append(syllables, f)
+			}
+		}
+	}
+	if kana >= cantoneseMaxKana || len(syllables) < jyutpingRomaMinSyllables {
+		return false
+	}
+	if looksMandarinPinyin(strings.Join(syllables, " ")) {
+		return false
+	}
+	only := 0
+	for _, s := range syllables {
+		if jyutpingOnlySyllable(s) {
+			only++
+		}
+	}
+	return float64(only) >= float64(len(syllables))*jyutpingRomaMinShare
+}
+
+// migrateCantoneseSongLanguage:存量里歌词是粤语口语、或者读音是粤拼(romaLooksJyutping),却没记成粤语的歌补记粤语,普通话拼音换成粤拼。运行期在源头
 // 已经这样做(entrySongLanguage),所以是一次性的,挂水位闸。读音的清和补跟运行期同一套:dropUnusableCantoneseRoma
 // 只清普通话拼音和没标声调的(用户手改过的不动),maybeGenerateJyutpingRoma 只在空着时补。
 // 位置(main.go):import 与 export 之间 —— 换掉的罗马音由 exportLyricsFiles 同步成新的 .roma.lrc。
@@ -70,7 +150,8 @@ func migrateCantoneseSongLanguage() {
 	enrichMu.Lock()
 	marked := 0
 	for k, e := range scope.entries() {
-		if e.Lyrics.IsZero() || e.SongLanguage == songLanguageCantonese || !lyricsLookCantonese(e.Lyrics.String()) {
+		if e.Lyrics.IsZero() || e.SongLanguage == songLanguageCantonese ||
+			!(lyricsLookCantonese(e.Lyrics.String()) || romaLooksJyutping(e.Lyrics.String(), e.LyricsRoma.String())) {
 			continue
 		}
 		e.SongLanguage = songLanguageCantonese
