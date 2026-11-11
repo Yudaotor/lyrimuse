@@ -270,3 +270,51 @@ func TestJyutpingDictsKeptWhileRecentlyUsed(t *testing.T) {
 		t.Fatalf("刚用过就放掉了或没再排检查: kept=%v rescheduled=%v", kept, rescheduled)
 	}
 }
+
+func TestJyutpingLRCStripsSpeakerLabels(t *testing.T) {
+	got := jyutpingLRC(mixedLyrics)
+	if strings.Contains(got, "v2") || strings.Contains(got, "v1") {
+		t.Errorf("粤拼带着对唱署名:\n%s", got)
+	}
+	if !strings.Contains(got, "[00:03.00]ze2 ci3 gwai3 hau6 fung1") {
+		t.Errorf("剥掉署名后的粤拼不对:\n%s", got)
+	}
+	if old := jyutpingLRCWith(mixedLyrics, nil); !strings.Contains(old, "v2：") {
+		t.Errorf("不剥署名的那份应该带着署名:\n%s", old)
+	}
+}
+
+func TestMigrateJyutpingSpeakerLabels(t *testing.T) {
+	old := jyutpingLRCWith(mixedLyrics, nil)
+	withEnrichCache(t, map[string]enrichEntry{
+		"a|旧生成|":  {Lyrics: bt(mixedLyrics), LyricsRoma: bt(old), SongLanguage: songLanguageCantonese},
+		"b|源给的|":  {Lyrics: bt(mixedLyrics), LyricsRoma: bt(mixedJyutping), SongLanguage: songLanguageCantonese},
+		"c|手改|":   {Lyrics: bt(mixedLyrics), LyricsRoma: bt(old), SongLanguage: songLanguageCantonese, ManualLyrics: true},
+		"d|不是粤语|": {Lyrics: bt(mixedLyrics), LyricsRoma: bt(old)},
+	})
+	migrateJyutpingSpeakerLabels()
+	enrichMu.Lock()
+	defer enrichMu.Unlock()
+	if e := enrichCache["a|旧生成|"]; !e.LyricsRoma.EqualString(jyutpingLRC(mixedLyrics)) {
+		t.Errorf("旧生成的换成剥掉署名的: %+v", e)
+	}
+	if e := enrichCache["b|源给的|"]; !e.LyricsRoma.EqualString(mixedJyutping) {
+		t.Errorf("源给的不动: %+v", e)
+	}
+	if e := enrichCache["c|手改|"]; !e.LyricsRoma.EqualString(old) {
+		t.Errorf("手改过的不动: %+v", e)
+	}
+	if e := enrichCache["d|不是粤语|"]; !e.LyricsRoma.EqualString(old) {
+		t.Errorf("不是粤语的不动: %+v", e)
+	}
+}
+
+func TestJyutpingSpeakerLabelsIsWired(t *testing.T) {
+	data, err := os.ReadFile("main.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(data), `startupStep("migrateJyutpingSpeakerLabels", migrateJyutpingSpeakerLabels)`) {
+		t.Error("main.go 没接存量迁移")
+	}
+}

@@ -125,6 +125,9 @@ const (
 	// 已经这样做,不再产生。改了 lacksJyutpingTones 的判据就 +1。
 	migrationTonelessCantoneseRoma        = "toneless_cantonese_roma"
 	migrationTonelessCantoneseRomaVersion = 1
+	// migrationJyutpingSpeakerLabels:存量里引擎生成的粤拼带着对唱署名的重新生成(jyutping.go)。
+	migrationJyutpingSpeakerLabels        = "jyutping_speaker_labels"
+	migrationJyutpingSpeakerLabelsVersion = 1
 	// migrationKuwoSharedStampTranslation:存量酷我正文里挂在下一句时间戳上的烘入译文行(bakedtranslation.go)。
 	// 新抓的在候选装配处就摘,运行期不再产生。改了 splitSharedStampTranslation 的判据就 +1。
 	migrationKuwoSharedStampTranslation        = "kuwo_shared_stamp_translation"

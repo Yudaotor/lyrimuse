@@ -377,13 +377,19 @@ func toJyutpingLine(text string) string {
 // jyutpingLRC 把整份逐行 LRC 歌词转写成粤拼逐行 LRC,时间戳与原文逐行对齐——复用
 // translate.go 的 parseLRCLines/assembleTranslationLRC,跟机器翻译走同一套"保留原
 // 时间戳、转不出内容就整体放弃"逻辑,不是重新发明一套。「转出来的够不够」只数带汉字的行:
-// 英文行本来就没有粤拼,算进分母的话英文多的粤语歌整份作废。
+// 英文行本来就没有粤拼,算进分母的话英文多的粤语歌整份作废。行首的对唱署名(「v2：」)先剥掉,同译文
+// (withoutSpeakerLabel);不剥的话读音行原样带着「v2：」显示出来。
 func jyutpingLRC(lyrics string) string {
+	return jyutpingLRCWith(lyrics, lyricSpeakerLabels(lyrics))
+}
+
+// jyutpingLRCWith:speakers 里的演唱者标签先剥掉再转,nil 就不剥。
+func jyutpingLRCWith(lyrics string, speakers map[string]bool) string {
 	lines := parseLRCLines(lyrics)
 	texts := make([]string, len(lines))
 	withHan := 0
 	for i, l := range lines {
-		texts[i] = toJyutpingLine(l.text)
+		texts[i] = toJyutpingLine(withoutSpeakerLabel(l.text, speakers))
 		if strings.ContainsFunc(l.text, isHanRune) {
 			withHan++
 		}
@@ -474,4 +480,42 @@ func migrateTonelessCantoneseRoma() {
 		saveEnrichCache()
 	}
 	markMigrationDone(migrationTonelessCantoneseRoma, migrationTonelessCantoneseRomaVersion)
+}
+
+// migrateJyutpingSpeakerLabels:存量里引擎生成的粤拼带着对唱署名的,按剥掉署名的生成结果重写。只换跟「不剥署名
+// 生成出来的」逐字一样的那份,源给的、用户手改的都不动。位置(main.go):import 与 export 之间,换掉的罗马音由
+// exportLyricsFiles 同步成新的 .roma.lrc。见 10 章决策 75。
+func migrateJyutpingSpeakerLabels() {
+	scope := migrationScopeOf(migrationJyutpingSpeakerLabels, migrationJyutpingSpeakerLabelsVersion)
+	if scope.skip() {
+		return
+	}
+	enrichMu.Lock()
+	replaced := 0
+	for k, e := range scope.entries() {
+		if e.SongLanguage != songLanguageCantonese || e.LyricsRoma.IsZero() || e.lyricsHandEdited() {
+			continue
+		}
+		lyrics := e.Lyrics.String()
+		speakers := lyricSpeakerLabels(lyrics)
+		if len(speakers) == 0 || !e.LyricsRoma.EqualString(jyutpingLRCWith(lyrics, nil)) {
+			continue
+		}
+		fresh := jyutpingLRCWith(lyrics, speakers)
+		if fresh == "" || e.LyricsRoma.EqualString(fresh) {
+			continue
+		}
+		e.LyricsRoma = bt(fresh)
+		enrichCache[k] = e
+		replaced++
+	}
+	if replaced > 0 {
+		enrichDirty = true // 同 migrateHokkienSongLanguage:不置脏 saveEnrichCache 不写盘
+	}
+	enrichMu.Unlock()
+	if replaced > 0 {
+		log.Printf("jyutping speaker labels: regenerated jyutping on %d entries", replaced)
+		saveEnrichCache()
+	}
+	markMigrationDone(migrationJyutpingSpeakerLabels, migrationJyutpingSpeakerLabelsVersion)
 }
