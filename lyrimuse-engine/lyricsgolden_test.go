@@ -368,6 +368,7 @@ var goldenRequiredCategories = map[string]string{
 	"timeline-offset":           "时间轴相对时长对得上的几家整体平移的候选吃 timelineOffset,冠军交给对齐的那份(v23)",
 	"timeline-intrusion":        "时长对得上的几家都空着的间奏里多出一段复制来的歌词的候选吃 timelineIntrusion,冠军交给参照组那份(v24)",
 	"source-duration-near-miss": "别的源报出了本地曲长时,自报曲长差 5%~12% 的另一次录音吃 sourceDurationNearMiss,冠军交给曲长吻合的那份(v30.1)",
+	"garbled-text":              "正文里有替换字符等还原不了的乱码的候选吃 garbledText,冠军交给别家干净的那份(v32.1)",
 	"version-tag-mismatch":      "版本限定词错配的候选吃 versionTags -600",
 	"version-tag-edit":          "「(Edit)」单曲剪辑版被识别为另一次录音(v12,2026-09-04 用户报的 Diamonds and Pearls 案)",
 	"language-version":          "粤语/国语语种版本:标了语种、与本地推断一致的候选不吃 versionTags 且标题拿精确档;自报另一语种的候选吃 versionTags(v15,2026-09-07 K歌之王 案)",
@@ -948,6 +949,18 @@ func goldenCategoryCheck(fx *goldenFixture, category string, e goldenExpect) err
 			return c.Source != e.Winner && hasTerm(c, scoreTermTimelineIntrusion)
 		}) {
 			return fmt.Errorf("要求:有非冠军候选吃到 timelineIntrusion")
+		}
+	case "garbled-text":
+		if err := needWinner(); err != nil {
+			return err
+		}
+		if hasTerm(*winner, scoreTermGarbledText) {
+			return fmt.Errorf("要求:冠军不吃 garbledText")
+		}
+		if !anyCand(func(c goldenRankedCandidate) bool {
+			return c.Source != e.Winner && hasTerm(c, scoreTermGarbledText)
+		}) {
+			return fmt.Errorf("要求:有非冠军候选吃到 garbledText")
 		}
 	case "source-duration-near-miss":
 		if err := needWinner(); err != nil {

@@ -27,7 +27,7 @@
 //	3. **置乱保形**:置乱前后 rankLyricSourceResults 的结果逐项相同(冠军、判决、分数、分项、附属);
 //	4. **样本自洽**:写出的 JSON 读回来、按 TestLyricsGolden 同一条路跑一遍,diff 为零。
 //
-// ~/.config/lyrimuse 下的数据文件(enrich 缓存、歌手别名/主名/Apple 目录/QQ 歌手名缓存)只读——
+// 真实数据目录(goldenRealConfigDir)下的数据文件(enrich 缓存、正文小文件、歌手别名/主名/Apple 目录/QQ 歌手名缓存)只读——
 // 加载进内存后把回写路径清空。跟跑一次 search-lyrics 一样,Musixmatch 匿名 token 与代理提示这类
 // 运行缓存可能被刷新,那不是用户数据。
 package main
@@ -59,6 +59,19 @@ type goldenCacheEntry struct {
 	} `json:"lyrics_decision_applied"`
 }
 
+// goldenRealConfigDir:真实家目录下引擎实际在用的数据目录,规则同 configDir(paths.go):旧目录 ~/.config/lyrimuse 是真目录
+// (不是指向新目录的软链接)且里面有主缓存时用它,其余用 ~/Library/Application Support/<bundle id>。不能直接调 configDir:
+// TestMain 已经把 HOME 换成了沙箱。
+func goldenRealConfigDir(home string) string {
+	legacy := filepath.Join(home, ".config", clientName)
+	if fi, err := os.Lstat(legacy); err == nil && fi.IsDir() {
+		if _, err := os.Stat(filepath.Join(legacy, clientName+"-enrich-cache.json")); err == nil {
+			return legacy
+		}
+	}
+	return filepath.Join(home, "Library", "Application Support", appBundleID())
+}
+
 func TestLyricsGoldenCapture(t *testing.T) {
 	if os.Getenv("LYRICS_GOLDEN_CAPTURE") == "" {
 		t.Skip("LYRICS_GOLDEN_CAPTURE 未设置,跳过联网采集")
@@ -88,7 +101,7 @@ func TestLyricsGoldenCapture(t *testing.T) {
 	if home == "" {
 		t.Fatal("取不到真实家目录")
 	}
-	cfgDir := filepath.Join(home, ".config", clientName)
+	cfgDir := goldenRealConfigDir(home)
 	rawCache, err := os.ReadFile(filepath.Join(cfgDir, clientName+"-enrich-cache.json"))
 	if err != nil {
 		t.Fatalf("读 enrich 缓存: %v", err)
@@ -100,6 +113,16 @@ func TestLyricsGoldenCapture(t *testing.T) {
 	entry, ok := cache[key]
 	if !ok {
 		t.Fatalf("缓存里没有 key=%q", key)
+	}
+	if entry.Lyrics == "" {
+		// 精简格式的主缓存不带正文,正文在同目录的正文小文件里(enrichbodyload.go)。
+		body, err := readEnrichBodyChecked(filepath.Join(enrichBodiesDirFor(filepath.Join(cfgDir, clientName+"-enrich-cache.json")), decisionSidecarName(key)))
+		if err != nil {
+			t.Fatalf("读正文小文件: %v", err)
+		}
+		if body != nil {
+			entry.Lyrics = body.Lyrics
+		}
 	}
 	if entry.ManualLyrics {
 		t.Logf("注意:这条是用户手选的(manual_lyrics),缓存正文是人挑的、不是自动决策的产物")

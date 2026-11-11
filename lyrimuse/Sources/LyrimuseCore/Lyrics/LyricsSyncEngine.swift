@@ -2223,11 +2223,12 @@ public final class LyricsSyncEngine {
 
     /// 译文查找的统一入口,说话人标签行不认领(理由见 isBareSpeakerTag 的注释)。先按这一行的原文精确查 trTextByPlainText
     /// (不依赖任何时间戳,不受 YRC/LRC 时间基准不一致影响),查不到(对唱歌被剥过说话人标记的行、或这行内容跟服务端 LRC
-    /// 字面对不上)才退回 nearestText 时间最近邻。
+    /// 字面对不上)才退回 nearestText 时间最近邻。带替换字符 U+FFFD 的译文行(源里存坏了、字节已经丢了)不挂,见 10 章决策 74。
     private func translationText(timeMs: Int, plainText: String) -> String? {
         guard !Self.isBareSpeakerTag(plainText),
               let found = translationCandidate(timeMs: timeMs, plainText: plainText),
-              !Self.translationRestatesOriginal(found, plainText) else { return nil }
+              !Self.translationRestatesOriginal(found, plainText),
+              !found.unicodeScalars.contains("\u{FFFD}") else { return nil }
         return found
     }
 

@@ -2104,6 +2104,8 @@
 "正在首次同步历史记录，完整数据稍后将自动显示" = "Primeira sincronização do histórico; os dados completos aparecem em breve";
 "正在验证…" = "Verificando…";
 "正文" = "Corpo";
+"正文有乱码" = "Caracteres corrompidos na letra";
+"正文里有乱码（问号框或错乱的字母），是歌词源存的数据坏了；有其他正常的候选时排在它们后面" = "A letra contém caracteres corrompidos (quadrados com ponto de interrogação ou letras embaralhadas) porque os dados da fonte estão danificados; fica atrás de qualquer candidato íntegro";
 "此 Mac 未安装 Discord" = "O Discord não está instalado neste Mac";
 "此 Mac 未配备触控栏" = "Este Mac não tem Touch Bar";
 "此为上限：窗口足够大时使用此字号，窗口缩小时文字随之缩小，以免超出窗口" = "É um limite: o texto usa este tamanho quando a janela é grande o bastante e diminui com ela para nunca transbordar";

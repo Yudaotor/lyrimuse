@@ -91,10 +91,12 @@ func decodeLyricEntitiesOnce(s string) string {
 // (lyrics_decision 里每条候选的 title / artist / album)零命中,而且它们参与标题 / 歌手比对,
 // 不该在这里顺手改。
 //
-// 同一个门口顺带统一换行和开头的 BOM(normalizeLyricText):酷狗的歌词几乎全是 CRLF、三分之一开头带 BOM,QQ 偶有
+// 同一个门口顺带还原 UTF-8 被当 Windows-1252 解出来的乱码(repairLyricMojibake,见 lyricmojibake.go)。
+//
+// 也顺带统一换行和开头的 BOM(normalizeLyricText):酷狗的歌词几乎全是 CRLF、三分之一开头带 BOM,QQ 偶有
 // CRLF。存量由 migrateLyricLineEndings 统一成同一个样子,两头一致,重评才不会把「只差换行」当成正文变了。
 func decodeLyricSourceResultEntities(r lyricSourceResult) lyricSourceResult {
-	clean := func(s string) string { return decodeLyricEntities(normalizeLyricText(s)) }
+	clean := func(s string) string { return repairLyricMojibake(decodeLyricEntities(normalizeLyricText(s))) }
 	r.lyr = clean(r.lyr)
 	r.yrc = clean(r.yrc)
 	r.tr = clean(r.tr)

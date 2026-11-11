@@ -2104,6 +2104,8 @@
 "正在首次同步历史记录，完整数据稍后将自动显示" = "Erster Verlaufsabgleich – alle Daten erscheinen in Kürze";
 "正在验证…" = "Wird geprüft …";
 "正文" = "Text";
+"正文有乱码" = "Fehlerhafte Zeichen im Text";
+"正文里有乱码（问号框或错乱的字母），是歌词源存的数据坏了；有其他正常的候选时排在它们后面" = "Der Text enthält fehlerhafte Zeichen (Kästchen mit Fragezeichen oder verstümmelte Buchstaben), weil die Daten der Quelle beschädigt sind. Er wird hinter jedem fehlerfreien Kandidaten eingereiht";
 "此 Mac 未安装 Discord" = "Discord ist auf diesem Mac nicht installiert";
 "此 Mac 未配备触控栏" = "Dieser Mac hat keine Touch Bar";
 "此为上限：窗口足够大时使用此字号，窗口缩小时文字随之缩小，以免超出窗口" = "Das ist eine Obergrenze: Der Text nutzt diese Größe, wenn das Fenster groß genug ist, und wird mit dem Fenster kleiner, damit er nie überläuft";

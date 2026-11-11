@@ -264597,6 +264597,184 @@
           }
         }
       }
+    },
+    "正文有乱码" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fehlerhafte Zeichen im Text"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Garbled characters in the lyrics"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Caracteres dañados en la letra"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Caractères corrompus dans les paroles"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Caratteri corrotti nel testo"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "本文に文字化けがあります"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "가사에 깨진 문자 있음"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Caracteres corrompidos na letra"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Испорченные символы в тексте"
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "เนื้อเพลงมีอักขระเสีย"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Пошкоджені символи в тексті"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lời có ký tự lỗi"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "正文有乱码"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "正文有亂碼"
+          }
+        }
+      }
+    },
+    "正文里有乱码（问号框或错乱的字母），是歌词源存的数据坏了；有其他正常的候选时排在它们后面" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Der Text enthält fehlerhafte Zeichen (Kästchen mit Fragezeichen oder verstümmelte Buchstaben), weil die Daten der Quelle beschädigt sind. Er wird hinter jedem fehlerfreien Kandidaten eingereiht"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The lyrics contain garbled characters (question-mark boxes or scrambled letters) because the source’s own data is corrupted; ranked below any intact candidate"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "La letra contiene caracteres dañados (recuadros con signo de interrogación o letras alteradas) porque los datos de la fuente están corruptos; queda por detrás de cualquier candidato intacto"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Les paroles contiennent des caractères corrompus (carrés avec point d’interrogation ou lettres altérées), car les données de la source sont endommagées ; classées après tout candidat intact"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Il testo contiene caratteri corrotti (riquadri con punto interrogativo o lettere alterate) perché i dati della fonte sono danneggiati; viene messo dopo qualsiasi candidato integro"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "本文に文字化け（？の四角や崩れた文字）があり、歌詞ソース側のデータが壊れています。正常な候補があればその後ろに並びます"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "가사에 깨진 문자(물음표 상자나 뒤섞인 글자)가 있습니다. 가사 소스에 저장된 데이터가 손상된 것으로, 정상적인 후보가 있으면 그 뒤에 놓입니다"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "A letra contém caracteres corrompidos (quadrados com ponto de interrogação ou letras embaralhadas) porque os dados da fonte estão danificados; fica atrás de qualquer candidato íntegro"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "В тексте есть испорченные символы (квадраты с вопросительным знаком или искаженные буквы): данные источника повреждены. Ставится после любого исправного варианта"
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "เนื้อเพลงมีอักขระเสีย (กล่องเครื่องหมายคำถามหรือตัวอักษรเพี้ยน) เพราะข้อมูลของแหล่งเนื้อเพลงเสียหาย จะจัดไว้หลังตัวเลือกที่ปกติทั้งหมด"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "У тексті є пошкоджені символи (квадрати зі знаком питання або спотворені літери): дані джерела пошкоджені. Ставиться після будь-якого справного варіанта"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lời có ký tự lỗi (ô dấu hỏi hoặc chữ bị xáo trộn) do dữ liệu của nguồn bị hỏng; được xếp sau mọi ứng viên bình thường"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "正文里有乱码（问号框或错乱的字母），是歌词源存的数据坏了；有其他正常的候选时排在它们后面"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "正文裡有亂碼（問號框或錯亂的字母），是歌詞來源存的資料壞了；有其他正常的候選時排在它們後面"
+          }
+        }
+      }
     }
   },
   "version" : "1.0"

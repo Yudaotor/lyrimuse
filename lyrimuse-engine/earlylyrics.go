@@ -35,14 +35,16 @@ var earlyLyricsPenaltyTerms = map[string]bool{
 	scoreTermTimelineOffset:         true,
 	scoreTermTimelineIntrusion:      true,
 	scoreTermSourceDurationNearMiss: true,
+	scoreTermGarbledText:            true,
 }
 
 // titleMatchFullPoints:titleMatch 满档(精确同名,或括号里只有不算版本的噪音)的分值,跟着 titleMatchTierPoints 走。
 var titleMatchFullPoints = titleMatchTierPoints("a", "a")
 
-// earlyLyricsAcceptable:没被判废、一项扣分都没有、歌名至少沾得上边(titleMatch 有分,含从正文互证伙伴继承的)。
+// earlyLyricsAcceptable:没被判废、一项扣分都没有、正文没有乱码、歌名至少沾得上边(titleMatch 有分,含从正文互证伙伴继承的)。
+// 乱码单独判:garbledText 是批级扣分,只到一家时扣不上。
 func earlyLyricsAcceptable(c *scoredLyricCandidateResult) bool {
-	if c == nil || c.Score < 0 {
+	if c == nil || c.Score < 0 || lyricBodyGarbled(c.Lyrics) {
 		return false
 	}
 	for _, t := range c.ScoreTerms {

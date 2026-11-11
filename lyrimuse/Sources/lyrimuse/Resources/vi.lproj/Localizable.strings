@@ -2022,6 +2022,8 @@
 "正在首次同步历史记录，完整数据稍后将自动显示" = "Đang đồng bộ lịch sử nghe lần đầu, dữ liệu đầy đủ sẽ tự động hiển thị sau";
 "正在验证…" = "Đang xác minh…";
 "正文" = "Nội dung";
+"正文有乱码" = "Lời có ký tự lỗi";
+"正文里有乱码（问号框或错乱的字母），是歌词源存的数据坏了；有其他正常的候选时排在它们后面" = "Lời có ký tự lỗi (ô dấu hỏi hoặc chữ bị xáo trộn) do dữ liệu của nguồn bị hỏng; được xếp sau mọi ứng viên bình thường";
 "此 Mac 未安装 Discord" = "Máy Mac này chưa cài Discord";
 "此 Mac 未配备触控栏" = "Máy Mac này không có Touch Bar";
 "此为上限：窗口足够大时使用此字号，窗口缩小时文字随之缩小，以免超出窗口" = "Đây là mức tối đa: khi cửa sổ đủ lớn sẽ dùng cỡ chữ này, khi thu nhỏ cửa sổ chữ cũng nhỏ theo để không tràn ra ngoài";

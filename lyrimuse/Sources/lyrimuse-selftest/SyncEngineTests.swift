@@ -1772,6 +1772,15 @@ func runSyncEngineTests() {
         expectEqual(restatedYRC.surfaceTick(.overlay, atMs: 1500).line?.translation, nil,
                     "译文照抄原文: 逐字行同样不挂(悬浮歌词走的是这条)")
 
+        // 译文行带替换字符(源里存坏了)的不挂,同一首里好的照挂(见 10 章决策 74)。
+        let garbledTr = LyricsSyncEngine()
+        garbledTr.load(
+            lyrics: "[00:01.00]They go with the flow\n[00:04.00]Not like us",
+            lyricsTr: "[00:01.00]他们随波逐流 \u{FFFD}非我辈\n[00:04.00]不像我们",
+            lyricsRoma: "", lyricsYRC: "")
+        expectEqual(garbledTr.allLines(idPrefix: "t").map(\.line.translation), [nil, "不像我们"],
+                    "译文行带替换字符: 那一行不挂,别的行照挂")
+
         // ③.6e 内容键查不到时的就近兜底(SecondaryLineFallback):已经显示在原句下面的那条不再挂到不相干的行上;
         // 改过几个字的同一句照挂;附近没有的从没显示过的整行里补。网易云形状:译文跟着整行走,逐字整体晚 1.2 秒。
         func pairing(_ lrc: String, _ tr: String, _ yrc: String, roma: String = "") -> [(String, String?, String?)] {

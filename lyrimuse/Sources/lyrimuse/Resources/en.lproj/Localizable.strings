@@ -2104,6 +2104,8 @@
 "正在首次同步历史记录，完整数据稍后将自动显示" = "First-time history sync — the full data will appear shortly";
 "正在验证…" = "Checking…";
 "正文" = "Body";
+"正文有乱码" = "Garbled characters in the lyrics";
+"正文里有乱码（问号框或错乱的字母），是歌词源存的数据坏了；有其他正常的候选时排在它们后面" = "The lyrics contain garbled characters (question-mark boxes or scrambled letters) because the source’s own data is corrupted; ranked below any intact candidate";
 "此 Mac 未安装 Discord" = "Discord isn’t installed on this Mac";
 "此 Mac 未配备触控栏" = "This Mac Doesn’t Have a Touch Bar";
 "此为上限：窗口足够大时使用此字号，窗口缩小时文字随之缩小，以免超出窗口" = "This is a ceiling: the text uses this size when the window is large enough, and shrinks with the window so it never overflows";

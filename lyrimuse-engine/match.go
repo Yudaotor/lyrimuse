@@ -566,7 +566,7 @@ const lyricOvershootToleranceSecs = 5.0
 // (按版本号可查,如决策 31/33/36/43/44/49/50/58/64/69/82)——这里不重复。
 const lyricsScoringVersion = 32
 
-const lyricsScoringRevision = 0
+const lyricsScoringRevision = 1
 
 // lyricsScoringStamp 是一条歌词按哪一版打分规则选出来的:主版本号 + 开发修订号。存成两个整数、按这两段比大小,
 // 不存小数:小数比大小时 29.10 会排在 29.9 前面。
@@ -646,6 +646,8 @@ const (
 	scoreTermTimelineIntrusion = "timelineIntrusion" // 时长对得上的几家都空着的间奏里多出一段复制来的歌词,重扣(lyrictimelineintrusion.go)
 	// v30.1 新增:
 	scoreTermSourceDurationNearMiss = "sourceDurationNearMiss" // 别的源报出了本地曲长时,自报曲长差 5% 以上,重扣(sourcedurationanchor.go)
+	// v32.1 新增:
+	scoreTermGarbledText = "garbledText" // 正文有还原不了的乱码、别家有干净的,重扣(lyricmojibake.go)
 	// 只给导入库里的那份(importstore.go),不改别的候选的分,不换版本号:
 	scoreTermImported = "imported" // 用户导入的歌词
 )
@@ -664,7 +666,7 @@ func lyricScoreTermKinds() []string {
 		scoreTermTitleMatch, scoreTermConsensus, scoreTermTranslation,
 		scoreTermRoma, scoreTermSourceDurationOff, scoreTermWordTimingOverride,
 		scoreTermLiveAlbumConflict, scoreTermTimelineOffset, scoreTermTimelineIntrusion,
-		scoreTermSourceDurationNearMiss, scoreTermImported,
+		scoreTermSourceDurationNearMiss, scoreTermGarbledText, scoreTermImported,
 	}
 }
 
