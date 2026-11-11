@@ -541,6 +541,8 @@ func runSyncEngineTests() {
         expectEqual(oneLine?.translation, "这是一句特…", "按宽度断句: 放不下的译文截断")
         expectEqual(oneChar.widestRow(.overlay), 60, "按宽度断句: 整首最宽一行按主行与各行量")
         expectEqual(oneChar.widestRow(.overlay, mainOnly: true), measure("yes"), "按宽度断句: 只量主行时不算译文")
+        expectEqual(oneChar.widestRow(.overlay, mainOnly: true, withTranslation: true), measure("这是一句特…"),
+                    "按宽度断句: 主行带译文时译文行也量(截断后那份)")
         expectEqual(LyricsSyncEngine().widestRow(.menuBar), nil, "按宽度断句: 没报宽度时不给整首最宽")
 
         // 没开重新断句:按原句量,取从窄到宽第九成那一行;译文算进这一行的宽,空行不算。
@@ -558,6 +560,8 @@ func runSyncEngineTests() {
                     "起步槽宽: 取第九成那一行")
         expectEqual(plain.rowWidth(.menuBar, atQuantile: 1, mainOnly: true), measure(String(repeating: "j", count: 10)),
                     "起步槽宽: 只量主行时不算译文")
+        expectEqual(plain.rowWidth(.menuBar, atQuantile: 1, mainOnly: true, withTranslation: true),
+                    measure("一句十二个字那么长的一句译文"), "起步槽宽: 主行带译文时译文行也量")
 
         // 只量主行时有逐字就逐字相加与整串取大:整串量会丢掉跨切口的字距,比画出来的逐字行窄(04 章决策 94)。
         let syllableWidth: (String) -> CGFloat = { CGFloat($0.count) * 10 - CGFloat(max(0, $0.count - 1)) }

@@ -256,7 +256,8 @@ struct OverlayEditorStage: View {
                 translation: L10n.t("这里是译文示例"),
                 mainText: L10n.t("这里是一句歌词示例"),
                 words: nil, wordGroups: nil, side: nil),
-            nextLineText: L10n.t("这里是下一句歌词示例"))
+            nextLineText: L10n.t("这里是下一句歌词示例"),
+            nextLineTranslation: L10n.t("这里是译文示例"))
     }
 
     /// 宽度调整条那根滑杆有多长、整条胶囊离舞台底边留多远。

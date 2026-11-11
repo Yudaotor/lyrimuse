@@ -68,8 +68,34 @@ func runOverlayTests() {
         expectEqual(sourceHas(sourceBody("private var animatesLineChange: Bool", in: view),
                               "!(playback.showNextLinePreview && playback.nextLineArrangement == .alternate)"), true,
                     "上下交替(契约): 交替开着时不做换句动画")
-        expectEqual(sourceHas(view, "private var translationRowText: String? { alternatePlacement == nil ? rowPlan.translation?.text : nil }"),
-                    true, "上下交替(契约): 交替时不显示译文")
+        expectEqual(sourceHas(sourceBody("private var translationRowText: String?", in: view),
+                              "alternatePlacement == nil || line != nil ? rowPlan.translation?.text : nil")
+                    && sourceHas(sourceBody("private var alternateMainSlot: some View", in: view),
+                                 "translationRow.reportsContentRow(.translation, in: contentRowRectsSpace)"),
+                    true, "上下交替(契约): 当前句带自己的译文,「•••」那一格不带")
+        expectEqual(sourceHas(sourceBody("@ViewBuilder private var alternateNextSlot: some View", in: view),
+                              "if let tr = alternateNextTranslation {\n                alternateNextTranslationRow(tr)")
+                    && sourceHas(sourceBody("private var alternateNextTranslation: String?", in: view),
+                                 "showingPreviewLine ? previewLine?.nextLineTranslation : playback.nextLineTranslation"),
+                    true, "上下交替(契约): 下一句带自己的译文,设置页示例行用示例那句的")
+        expectEqual(sourceHas(sourceBody("private var alternateReservesTranslation: Bool", in: view),
+                              "alternatePlacement != nil && (translationRowText != nil || alternateNextTranslation != nil)")
+                    && sourceBody("private var alternateMainSlot: some View", in: view)
+                        .contains("Color.clear.frame(height: alternateTranslationRowHeight)")
+                    && sourceBody("@ViewBuilder private var alternateNextSlot: some View", in: view)
+                        .contains("Color.clear.frame(height: alternateTranslationRowHeight)"),
+                    true, "上下交替(契约): 两句里有一句带译文,两格都留出译文那一行,唱着的那句不被挤动")
+        expectEqual(sourceHas(sourceBody("@ViewBuilder private func alternateNextTranslationRow(_ tr: String) -> some View", in: view),
+                              "still: true")
+                    && sourceHas(sourceBody("@ViewBuilder private func alternateNextTranslationRow(_ tr: String) -> some View", in: view),
+                                 "alignment: nextLineDuetSide"),
+                    true, "上下交替(契约): 滚动模式下一句的译文用静止图层行,开唱换成配速行时不挪")
+        let sourceSrc = (try? String(contentsOf: src.appendingPathComponent("LyrimuseCore/Local/LocalPlaybackSource.swift"), encoding: .utf8)) ?? ""
+        expectEqual(sourceHas(sourceBody("private func updateOverlayWidestMainRow()", in: sourceSrc),
+                              "syncEngine.widestRow(.overlay, mainOnly: true, withTranslation: true)")
+                    && sourceHas(sourceBody("private func updateOverlayWidestMainRow()", in: sourceSrc),
+                                 "syncEngine.rowWidth(.overlay, atQuantile: 1, mainOnly: true, withTranslation: true)"),
+                    true, "上下交替(契约): 两行那一块按整首主行和译文行里最宽的定宽,一首歌里不变")
         expectEqual(sourceHas(view, ".frame(maxWidth: alternateBlockWidth)\n                .frame(maxWidth: .infinity, alignment: alternateBlockAlignment)")
                     && sourceHas(sourceBody("private var alternateBlockWidth: CGFloat", in: view),
                                  "guard let widest = playback.songWidestMainRow, widest > 0 else { return .infinity }")
