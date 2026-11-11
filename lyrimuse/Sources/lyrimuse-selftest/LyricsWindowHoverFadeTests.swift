@@ -154,6 +154,22 @@ func checkLyricsWindowChromeIdle() {
     s.voiceOver = false
     expectEqual(C.nextCheck(s, now: t0.addingTimeInterval(100)), nil, "闲置隐藏: 收着时不排检查")
 
+    var reopened = C.State()
+    reopened.pointerInside = true
+    reopened.lastActivity = t0
+    reopened.closed()
+    expectEqual(reopened.pointerInside || reopened.lastActivity != nil, false, "闲置隐藏: 关窗把指针状态一起复位")
+    let shownAt = t0.addingTimeInterval(60)
+    expectEqual(reopened.shown(now: shownAt), true, "闲置隐藏: 关了再开,上屏那一刻给刚打开那一段")
+    expectEqual(C.isVisible(reopened, now: shownAt.addingTimeInterval(2.9)), true, "闲置隐藏: 关了再开先露 3 秒")
+    expectEqual(C.nextCheck(reopened, now: shownAt), shownAt.addingTimeInterval(C.idleSeconds),
+                "闲置隐藏: 关了再开排上到期检查(否则指针不进窗就一直露着)")
+    expectEqual(C.isVisible(reopened, now: shownAt.addingTimeInterval(3)), false, "闲置隐藏: 关了再开 3 秒后收起")
+    expectEqual(reopened.shown(now: shownAt.addingTimeInterval(10)), false, "闲置隐藏: 同一次打开里再报上屏(遮挡变化、视图刷新)不再给那一段")
+    expectEqual(C.isVisible(reopened, now: shownAt.addingTimeInterval(10)), false, "闲置隐藏: 再报上屏不把收起的按钮叫回来")
+    var fresh = C.State()
+    expectEqual(fresh.shown(now: t0), false, "闲置隐藏: 没关过窗的报上屏不算(第一次打开由 attach 给)")
+
     let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
     func source(_ path: String) -> String {
         (try? String(contentsOf: root.appendingPathComponent(path), encoding: .utf8)) ?? ""
@@ -178,6 +194,11 @@ func checkLyricsWindowChromeIdle() {
                 "闲置隐藏: 红绿灯跟着收,迷你不管")
     expectEqual(sourceBytes(window, contain: "chromeFade.attach(window, isMini: $isMini.eraseToAnyPublisher())")
                 && sourceBytes(window, contain: "self?.chromeFade.windowClosed()")
-                && sourceBytes(window, contain: "MainActor.assumeIsolated { chromeFade.reveal() }"), true,
-                "闲置隐藏: attach 接上、关窗复位、同一扇窗再打开先露 3 秒")
+                && sourceBytes(window, contain: "if window.isVisible { MainActor.assumeIsolated { chromeFade.windowShown() } }")
+                && sourceBytes(window, contain: "self?.markOpenIfVisible(win)\n                self?.chromeFade.windowShown()"), true,
+                "闲置隐藏: attach 接上、关窗复位;同一扇窗关了再开(不一定再 attach)由遮挡观察者补上先露 3 秒")
+    expectEqual(sourceBytes(fade, contain: "state.closed()") && sourceBytes(fade, contain: "guard state.shown(now: Date()) else { return }"), true,
+                "闲置隐藏: 关窗记下待上屏,上屏只在关窗后第一次给那一段")
+    expectEqual(sourceBytes(window, contain: "self?.chromeFade.windowShown()\n                if let self { LyricsWindowRemote.shared.bind(self) }"), true,
+                "复用的窗口上屏时重新登记给菜单栏面板(出迷你回来不走 attach,登记的还是迷你那份)")
 }

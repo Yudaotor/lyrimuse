@@ -1092,7 +1092,7 @@ private final class LyricsWindowController: ObservableObject {
             if window.isVisible { restoreAfterReopen(window) }
             if !(window is LyricsMiniPanel) { LyricsWindowSession.deliverFullWindow(window) }
             markOpenIfVisible(window)
-            MainActor.assumeIsolated { chromeFade.reveal() }
+            if window.isVisible { MainActor.assumeIsolated { chromeFade.windowShown() } }
             if LyricsWindowSession.hasPendingFormRequest {
                 DispatchQueue.main.async { [weak self] in self?.applyFormRequest() }
             }
@@ -1236,10 +1236,12 @@ private final class LyricsWindowController: ObservableObject {
                 self?.occlusionVisible = win.occlusionState.contains(.visible)
                 self?.refreshSurfaceVisible()
                 // 关了再开同一扇窗时 attach 不一定再走一遍,上屏这一下由这里补记「开着」、
-                // 补上「设置 › 打开」要的形态。
+                // 补上「设置 › 打开」要的形态、按钮组先露那一段,并重新登记给菜单栏面板(出迷你回来时登记的还是迷你那份)。
                 guard win.isVisible else { return }
                 self?.restoreAfterReopen(win)
                 self?.markOpenIfVisible(win)
+                self?.chromeFade.windowShown()
+                if let self { LyricsWindowRemote.shared.bind(self) }
                 if LyricsWindowSession.hasPendingFormRequest { self?.applyFormRequest() }
             }
         }
@@ -8081,6 +8083,9 @@ final class LyricsWindowRemote: ObservableObject {
 
     /// 窗口此刻开着(没关、没最小化)。
     var isOpen: Bool { live != nil }
+
+    /// `debug/state` 的 `lyricsWindowChrome` 一项:最近 attach 的那份控制器的按钮组露 / 收(关着也报)。
+    var chromeDebugState: Any { controller?.chromeFade.debugState ?? NSNull() }
 
     private var live: LyricsWindowController? {
         guard let controller, controller.isOnScreen else { return nil }

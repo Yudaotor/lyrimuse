@@ -76,6 +76,7 @@ final class LyricsWindowChromeFade: ObservableObject {
     /// 窗口打开、从迷你回来:先露 `idleSeconds`,让人看见有哪些按钮。
     func reveal() {
         state.revealUntil = Date().addingTimeInterval(LyricsWindowChromeIdle.idleSeconds)
+        state.awaitingShow = false
         evaluate()
     }
 
@@ -110,13 +111,27 @@ final class LyricsWindowChromeFade: ObservableObject {
         evaluate()
     }
 
-    /// 关窗时调:下次打开从露着开始。
+    /// 关窗时调:下次打开从露着开始,上屏那一刻(`windowShown`)起算那一段。
     func windowClosed() {
         checkWork?.cancel()
         checkWork = nil
-        state = LyricsWindowChromeIdle.State()
+        state.closed()
         hoveredGroups.removeAll()
         if !visible { visible = true }
+    }
+
+    /// 关了再开的窗口上屏时调(遮挡观察者、同一扇窗再 attach 都会报,只有关窗后的第一次算)。
+    func windowShown() {
+        guard state.shown(now: Date()) else { return }
+        evaluate()
+    }
+
+    /// `debug/state` 的 `lyricsWindowChrome` 一项。
+    var debugState: [String: Any] {
+        let revealLeft = state.revealUntil.map { max(0, $0.timeIntervalSinceNow) } ?? 0
+        return ["visible": visible, "pointerInside": state.pointerInside, "held": state.held,
+                "awaitingShow": state.awaitingShow, "revealLeftMs": Int(revealLeft * 1000),
+                "checkScheduled": checkWork != nil, "attached": window != nil]
     }
 
     private func evaluate() {

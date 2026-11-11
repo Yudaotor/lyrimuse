@@ -282,6 +282,7 @@ enum DebugDeepLinks {
             "windows": windows,
             "menuBarCenter": MenuBarStatusItem.shared.centerDebugState,
             "notch": NotchLyricsWindowController.shared.debugState,
+            "lyricsWindowChrome": LyricsWindowRemote.shared.chromeDebugState,
             // 悬浮歌词关着时不碰 `.shared`:读一下就会建出窗口。
             "overlay": AppSettings.shared.classicOverlayEnabled ? LyricsOverlayWindowController.shared.debugState as Any : NSNull(),
             "menuBarPanel": ["open": MenuBarStatusItem.shared.isPanelOpen,

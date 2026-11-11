@@ -21,8 +21,25 @@ public enum LyricsWindowChromeIdle {
         public var held = false
         public var mouseDown = false
         public var voiceOver = false
+        /// 关窗之后还没再上屏:下一次上屏(`shown`)给刚打开那一段。
+        public var awaitingShow = false
 
         public init() {}
+
+        /// 窗口关了:其余全部复位,下次上屏先露 `idleSeconds`。
+        public mutating func closed() {
+            self = State()
+            awaitingShow = true
+        }
+
+        /// 窗口上屏了(关了再开)。只有关窗后的第一次给刚打开那一段、返回 true;之后再报(遮挡变化、视图刷新)不算。
+        /// 关了再开的那扇窗是复用的,不一定再 attach,上屏要由这里补。见 07 章决策 201。
+        public mutating func shown(now: Date) -> Bool {
+            guard awaitingShow else { return false }
+            awaitingShow = false
+            revealUntil = now.addingTimeInterval(LyricsWindowChromeIdle.idleSeconds)
+            return true
+        }
     }
 
     public static func isVisible(_ state: State, now: Date) -> Bool {
