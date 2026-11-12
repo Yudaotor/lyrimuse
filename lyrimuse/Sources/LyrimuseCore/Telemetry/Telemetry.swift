@@ -313,13 +313,16 @@ public struct TelemetryFeatures: Codable, Equatable, Sendable {
     public var settingsChanged: [String]
     /// 勾选的播放器里缺的权限(`Telemetry.permissionTag`),只算本机装了的。
     public var permissionsMissing: [String]
+    /// 歌词文件夹里逐字歌词存成的格式(`LyricsWordFormat` 的 rawValue),保持设置里的顺序:第一个是主格式。
+    /// 认不得的、重复的去掉。
+    public var lyricsWordFormats: [String]
 
     public init(surfaces: [String], playersSelected: [String], lyricsSourceMode: String, lyricsSourcesEnabled: Int,
                 translation: Bool, romanization: Bool, machineTranslation: Bool, accounts: [String],
                 trustedPlayers: [String], webPlatforms: [String],
                 showInDock: Bool, launchAtLogin: Bool, betaUpdates: Bool,
                 installMethod: String? = nil,
-                settingsChanged: [String] = [], permissionsMissing: [String] = []) {
+                settingsChanged: [String] = [], permissionsMissing: [String] = [], lyricsWordFormats: [String] = []) {
         self.surfaces = surfaces.sorted()
         self.playersSelected = playersSelected.sorted()
         self.lyricsSourceMode = lyricsSourceMode
@@ -336,6 +339,9 @@ public struct TelemetryFeatures: Codable, Equatable, Sendable {
         self.installMethod = installMethod
         self.settingsChanged = Array(settingsChanged.sorted().prefix(Telemetry.maxChangedSettings))
         self.permissionsMissing = permissionsMissing.sorted()
+        var formats: [String] = []
+        for name in lyricsWordFormats where LyricsWordFormat(rawValue: name) != nil && !formats.contains(name) { formats.append(name) }
+        self.lyricsWordFormats = formats
     }
 
     enum CodingKeys: String, CodingKey {
@@ -346,6 +352,7 @@ public struct TelemetryFeatures: Codable, Equatable, Sendable {
         case launchAtLogin = "launch_at_login", betaUpdates = "beta_updates"
         case installMethod = "install_method"
         case settingsChanged = "settings_changed", permissionsMissing = "permissions_missing"
+        case lyricsWordFormats = "lyrics_word_formats"
     }
 }
 

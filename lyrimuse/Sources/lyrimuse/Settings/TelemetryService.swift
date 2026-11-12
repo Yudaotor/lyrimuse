@@ -212,7 +212,8 @@ final class TelemetryService {
             }),
             settingsChanged: Telemetry.changedSettings(current: settings.telemetrySettingValues(),
                                                        defaults: AppSettings.telemetryDefaultSettingValues()),
-            permissionsMissing: await PlayerHealthMonitor.telemetryPermissionGaps())
+            permissionsMissing: await PlayerHealthMonitor.telemetryPermissionGaps(),
+            lyricsWordFormats: store.lyricsWordFormats.map(\.rawValue))
     }
 
     /// 发一条,返回 HTTP 状态码;没发(关着、编码失败)或连不上为 nil。等回应的这段时间里用户关掉了遥测,这一条照样发完,

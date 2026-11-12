@@ -365,6 +365,19 @@ func runTelemetryTests() {
         let fJSON = (try? JSONEncoder().encode(f)).flatMap { String(data: $0, encoding: .utf8) } ?? ""
         expectEqual(fJSON.contains(#""install_method":"direct""#),
                     true, "负载: 安装渠道")
+        let formats = TelemetryFeatures(surfaces: [], playersSelected: [], lyricsSourceMode: "smart", lyricsSourcesEnabled: 1,
+                                        translation: false, romanization: false, machineTranslation: false, accounts: [],
+                                        trustedPlayers: [], webPlatforms: [], showInDock: false, launchAtLogin: false, betaUpdates: false,
+                                        lyricsWordFormats: ["ttml", "enhanced-lrc", "bogus", "ttml", "yrc"])
+        expectEqual(formats.lyricsWordFormats, ["ttml", "enhanced-lrc", "yrc"], "逐字歌词格式: 保持设置里的顺序(第一个是主格式),去掉认不得的和重复的")
+        expectEqual(LyricsWordFormat.allCases.map(\.rawValue).allSatisfy {
+            TelemetryFeatures(surfaces: [], playersSelected: [], lyricsSourceMode: "smart", lyricsSourcesEnabled: 1,
+                              translation: false, romanization: false, machineTranslation: false, accounts: [],
+                              trustedPlayers: [], webPlatforms: [], showInDock: false, launchAtLogin: false, betaUpdates: false,
+                              lyricsWordFormats: [$0]).lyricsWordFormats == [$0]
+        }, true, "逐字歌词格式: 每种格式都发得出去")
+        let formatsJSON = (try? JSONEncoder().encode(formats)).flatMap { String(data: $0, encoding: .utf8) } ?? ""
+        expectEqual(formatsJSON.contains(#""lyrics_word_formats":["ttml","enhanced-lrc","yrc"]"#), true, "负载: 逐字歌词格式")
     }
 
     do {
@@ -376,7 +389,8 @@ func runTelemetryTests() {
                                          machineTranslation: false, accounts: [], trustedPlayers: ["com.colliderli.iina"],
                                          webPlatforms: ["youtube-music"], showInDock: true, launchAtLogin: true,
                                          betaUpdates: false, installMethod: "homebrew",
-                                         settingsChanged: ["notchGestures"], permissionsMissing: ["automation.apple_music"])
+                                         settingsChanged: ["notchGestures"], permissionsMissing: ["automation.apple_music"],
+                                         lyricsWordFormats: ["ttml"])
         let beat = TelemetryHeartbeat(installID: "i", day: "2026-10-31", env: env, features: features,
                                       activity: [TelemetryActivityDay(day: "2026-10-30")])
         func keys(_ value: some Encodable) -> [String] {
@@ -404,8 +418,8 @@ func runTelemetryTests() {
         let fields = keys(regional) + keys(features) + keys(TelemetryActivityDay(day: "2026-10-30")) + keys(hang)
             + ["install_id", "origin", "report_id", "exception_type", "termination_indicator", "frames", "exception_frames"]
             + TelemetryAction.allCases.map(\.rawValue)
-        expectEqual(["install_method", "settings_changed", "permissions_missing"].allSatisfy(keys(features).contains),
-                    true, "心跳: 功能快照带安装渠道、改过的设置、缺的权限")
+        expectEqual(["install_method", "settings_changed", "permissions_missing", "lyrics_word_formats"].allSatisfy(keys(features).contains),
+                    true, "心跳: 功能快照带安装渠道、改过的设置、缺的权限、逐字歌词格式")
         let missing = fields.filter { !worker.contains($0) }
         expectEqual(missing, [], "Worker: 认得 App 发的每个字段")
         // 卡顿概况的取值 Worker 按白名单收,名单跟 Core 不一致的那一档会被静默丢掉。
@@ -419,6 +433,8 @@ func runTelemetryTests() {
         expectEqual([workerList("HANG_DURATIONS"), workerList("HANG_ELAPSED"), workerList("HANG_THERMAL"), workerList("HANG_WINDOWS")],
                     [TelemetryHang.durationBuckets.sorted(), TelemetryHang.elapsedBuckets.sorted(), TelemetryHang.thermalStates.sorted(),
                      TelemetryHang.windowTags.sorted()], "Worker: 卡顿概况的取值名单跟 Core 一致")
+        expectEqual(workerList("LYRICS_WORD_FORMATS"), LyricsWordFormat.allCases.map(\.rawValue).sorted(),
+                    "Worker: 逐字歌词格式的取值名单跟 Core LyricsWordFormat 一致")
         // 统计端按「改过默认值的设置项里有没有 appLanguage」分界面语言跟随系统还是手动选(14 章决策 177):
         // 属性改名、或挪进不比较的名单,统计端会静默把所有人算成跟随系统。
         let settingsTelemetry = (try? String(contentsOfFile: root.appendingPathComponent("lyrimuse/Settings/AppSettings+Telemetry.swift").path,
@@ -516,6 +532,9 @@ func runTelemetryTests() {
                     true, "接线: 发过的崩溃报告按文件名先跳过,不再读")
         expectEqual(sourceHas(service, "TelemetryActivity.shared.trustedBundleIDs = Set(trusted.keys)"), true,
                     "接线: 信任列表变了同步给活动记账")
+        expectEqual(sourceHas(sourceBody("private func features() async -> TelemetryFeatures", in: service),
+                              "lyricsWordFormats: store.lyricsWordFormats.map(\\.rawValue)"), true,
+                    "接线: 功能快照的逐字歌词格式取设置里的原顺序")
         let portability = sourceText("lyrimuse/Settings/ConfigPortability.swift")
         func section(_ start: String, _ end: String) -> Substring {
             guard let a = portability.range(of: start), let b = portability.range(of: end, range: a.upperBound..<portability.endIndex)

@@ -22,6 +22,8 @@ const MAX_BODY = 64 * 1024;
 const ACTIONS = ["lyrics_window", "lyrics_picked", "offset_adjusted", "share_card"];
 // 每日活动里放过的歌各拿到哪档歌词、是什么语言,跟 Core TelemetryLyricsResult、TelemetrySongLanguage 的 rawValue 一致。
 const LYRICS_RESULTS = ["word", "line", "plain", "instrumental", "none"];
+// 歌词文件夹里逐字歌词存成的格式,跟 Core LyricsWordFormat 的 rawValue 一致;心跳里第一个是主格式。
+const LYRICS_WORD_FORMATS = ["yrc", "ttml", "qrc", "krc", "enhanced-lrc"];
 const SONG_LANGUAGES = ["zh", "yue", "ja", "ko", "ru", "uk", "bg", "be", "sr", "mk", "kk", "el", "th", "ar", "hi", "bn", "pa", "gu", "ta", "te", "kn", "ml", "si", "en", "es", "pt", "fr", "de", "it", "nl", "sv", "pl", "tr", "vi", "he", "other"];
 // 卡顿概况(Core TelemetryHang)的取值,跟 Core 那几份名单一致,selftest telemetry 组核对。
 const HANG_DURATIONS = ["5-10s", "10-30s", "30s+", "unrecovered"];
@@ -155,6 +157,9 @@ function cleanFeatures(f) {
     // 勾选的播放器里缺的权限(automation.apple_music 这类)。旧版 App 不发这几项。
     install_method: f.install_method === "homebrew" || f.install_method === "direct" ? f.install_method : null,
     settings_changed: ids(f.settings_changed, 200), permissions_missing: tags(f.permissions_missing, 60),
+    // 逐字歌词格式:保持 App 给的顺序(第一个是主格式),只收名单里的、去重。旧版 App 不发,记成空。
+    lyrics_word_formats: Array.isArray(f.lyrics_word_formats)
+      ? [...new Set(f.lyrics_word_formats.filter((v) => LYRICS_WORD_FORMATS.includes(v)))] : [],
   };
 }
 
@@ -385,6 +390,7 @@ async function loadStatsRows(db, since) {
   heartbeats.results.forEach(mark);
   installs.results.forEach(mark);
   crashes.results.forEach(mark);
+  const originByIx = new Map(installs.results.map((r) => [r.ix, r.origin ?? null]));
   // 每台机器最近的那条心跳:窗口一直开到今天,所以窗口内最近的一条就是它(只要它落在窗口里)。
   const latestByInstall = new Map();
   for (const h of heartbeats.results) {
@@ -399,7 +405,7 @@ async function loadStatsRows(db, since) {
   }));
   const parsedHangs = hangEvents.results.map(mark).map((h) => ({ ...h, windows: safeJSON(h.windows, []), stack: safeJSON(h.stack, []) }));
   return { heartbeats: heartbeats.results, latest, installs: installs.results, activity: parsedActivity,
-           crashes: crashes.results, hangEvents: parsedHangs, excluded: excludedIDs, installCount: index.size };
+           crashes: crashes.results, hangEvents: parsedHangs, excluded: excludedIDs, installCount: index.size, originByIx };
 }
 
 function countRows(rows, key) {
@@ -521,6 +527,13 @@ function computeStats(raw, { days, now, includeExcluded }) {
       install_method: countBy(rows, (r) => r.features.install_method),
       settings_changed: countBy(rows, (r) => r.features.settings_changed || []),
       permissions_missing: countBy(rows, (r) => r.features.permissions_missing || []),
+      // 逐字歌词格式:主格式(旧版本记成 (unknown))与勾选的全部(多选计数)。默认值分两种:1.12.0 起新装的是 TTML,
+      // 更早装的老用户是 YRC,所以主格式再按这台是新下载还是老用户升级(installs.origin)各数一份,判不出的不进这两份。
+      lyrics_word_format: countBy(rows, primaryWordFormat),
+      lyrics_word_formats: countBy(rows, (r) => r.features.lyrics_word_formats || []),
+      lyrics_word_format_new: countBy(rows.filter((r) => primaryWordFormat(r) && raw.originByIx.get(r.ix) === "new"), primaryWordFormat),
+      lyrics_word_format_existing: countBy(rows.filter((r) => primaryWordFormat(r) && raw.originByIx.get(r.ix) === "existing"),
+                                           primaryWordFormat),
       flags: featureFlags.map((k) => [k, rows.filter((r) => r.features[k] === true).length]),
     },
     players_played: Object.entries(playedByInstall).map(([k, v]) => [k, v.size]).sort((a, b) => b[1] - a[1]),
@@ -564,6 +577,10 @@ function hangSummary(parsed) {
     };
   }).sort((a, b) => b.n - a.n).slice(0, 50);
   return { detailed: parsed.length, context, hotspots };
+}
+
+function primaryWordFormat(r) {
+  return (r.features.lyrics_word_formats || [])[0] ?? null;
 }
 
 // 界面语言的来源:system = 跟随系统,manual = 手动选的,null = 旧版本判不出。
@@ -646,7 +663,8 @@ const LABELS = { app_version: "版本", os_version: "macOS 大版本", arch: "�
   ui_language_manual: "界面语言 · 手动选", system_language: "系统语言",
   system_region: "地区(系统设置)", country: "出口 IP 所在地区", surfaces: "开着的展示面", players_selected: "勾选的播放器", accounts: "连接的账号", trusted_players: "信任的第三方播放器", web_platforms: "网页版平台", lyrics_source_mode: "匹配算法",
   flags: "其他开关", install_method: "安装渠道", settings_changed: "改过默认值的设置",
-  permissions_missing: "缺的权限" };
+  permissions_missing: "缺的权限", lyrics_word_format: "逐字歌词格式(主格式)", lyrics_word_formats: "逐字歌词格式(勾选的全部)",
+  lyrics_word_format_new: "逐字歌词主格式 · 新下载(默认 TTML)", lyrics_word_format_existing: "逐字歌词主格式 · 老用户(默认 YRC)" };
 const ACTION_LABELS = { lyrics_window: "打开歌词窗口", lyrics_picked: "手动采用歌词", offset_adjusted: "调时间偏移", share_card: "分享歌词卡" };
 const LYRICS_LABELS = { word: "逐字", line: "逐行", plain: "纯文本", instrumental: "纯音乐", none: "没找到" };
 const LANGUAGE_LABELS = { zh: "中文", yue: "粤语", ja: "日语", ko: "韩语", ru: "俄语", uk: "乌克兰语", bg: "保加利亚语",
