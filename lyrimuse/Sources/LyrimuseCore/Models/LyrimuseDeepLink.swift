@@ -79,6 +79,8 @@ public enum LyrimuseDeepLink: Equatable, Sendable {
         case state
         /// 把此刻会发的那条遥测心跳写成 JSON(`telemetry-preview.json`),不发出去、不动记账。
         case telemetryPreview
+        /// 不弹保存面板,把诊断包写进 debug 输出目录(`diagnostics-<时刻>.zip`),内容同「导出诊断信息」。
+        case diagnostics
         /// 记下此刻的窗口与开关,`restore` 时按它恢复。
         case checkpoint
         /// 回到最近一次 `checkpoint`:关掉之后开出来的窗口,开关设回原值。
@@ -298,6 +300,8 @@ public enum LyrimuseDeepLink: Equatable, Sendable {
             self = .debug(.state)
         case ("debug", "/telemetry-preview"):
             self = .debug(.telemetryPreview)
+        case ("debug", "/diagnostics"):
+            self = .debug(.diagnostics)
         case ("debug", "/checkpoint"):
             self = .debug(.checkpoint)
         case ("debug", "/restore"):
@@ -581,6 +585,7 @@ public enum LyrimuseDeepLink: Equatable, Sendable {
                 components.queryItems = [URLQueryItem(name: "window", value: window)]
             case .state: components.path = "/state"
             case .telemetryPreview: components.path = "/telemetry-preview"
+            case .diagnostics: components.path = "/diagnostics"
             case .checkpoint: components.path = "/checkpoint"
             case .restore: components.path = "/restore"
             case let .simulate(title, artist, album, duration, position, playing, ad, artworkPath, localFile, localFilePlayer):

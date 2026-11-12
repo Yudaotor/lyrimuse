@@ -48,27 +48,11 @@ enum DiagnosticsExporter {
             .appendingPathComponent("Desktop")
         guard panel.runModal() == .OK, let url = panel.url else { return }
 
-        let secrets = ConfigStore.shared.secretsForRedaction
-        // 当前曲目的歌词解析状态也要在这里先算好——EnrichCacheReader 整个类型是
-        // @MainActor(只有少数纯换算函数显式 nonisolated),`sourceInfo`/`lookup`/
-        // `resolvedKey` 都不在那份白名单里,不能挪到下面的 Task.detached 里调。
-        let currentTrackLines = currentTrackLyricsLines()
-        // zip 里的顶层目录跟着用户在保存面板里敲的名字走,解压出来是一个文件夹,
-        // 不是三个散文件落进下载目录。
-        let bundleName = url.deletingPathExtension().lastPathComponent
         let startedAt = Date()
         status.isExporting = true
         Task { @MainActor in
             defer { status.isExporting = false }
-            // 状态段要读 @MainActor 的单例,在主线程取;自动化权限先 await 出来传进去,
-            // 不能在主线程上同步查(见 `automationLine`)。日志段(慢的那部分)扔后台。
-            let head = stateLines(automation: await automationLine(), engineState: await engineStateOffMain())
-            let entityAliasGaps = await EnrichCacheReader.songEntityAliasGapsText()
-            await Task.detached(priority: .userInitiated) {
-                writeDiagnosticsBundle(to: url, bundleName: bundleName, head: head,
-                                       secrets: secrets, currentTrackLines: currentTrackLines,
-                                       entityAliasGaps: entityAliasGaps)
-            }.value
+            await export(to: url)
             // 写包的每一步都是 try?:按结果判断有没有写成(文件在、而且是这次写的),没写成就明说,
             // 不要照样打开访达、让人对着一个空文件夹或上一次的旧文件。
             let modified = (try? FileManager.default.attributesOfItem(atPath: url.path))?[.modificationDate] as? Date
@@ -80,6 +64,30 @@ enum DiagnosticsExporter {
             }
             NSWorkspace.shared.activateFileViewerSelecting([url])
         }
+    }
+
+    /// 不弹面板,把诊断包写到 `url`。交互式导出和 `debug/diagnostics` 共用;没写成不报错,调用方按文件时间判断。
+    @MainActor
+    static func export(to url: URL) async {
+        let secrets = ConfigStore.shared.secretsForRedaction
+        // 当前曲目的歌词解析状态也要在这里先算好——EnrichCacheReader 整个类型是
+        // @MainActor(只有少数纯换算函数显式 nonisolated),`sourceInfo`/`lookup`/
+        // `resolvedKey` 都不在那份白名单里,不能挪到下面的 Task.detached 里调。
+        let currentTrackLines = currentTrackLyricsLines()
+        // zip 里的顶层目录跟着用户在保存面板里敲的名字走,解压出来是一个文件夹,
+        // 不是三个散文件落进下载目录。
+        let bundleName = url.deletingPathExtension().lastPathComponent
+        // 状态段要读 @MainActor 的单例,在主线程取;自动化权限先 await 出来传进去,
+        // 不能在主线程上同步查(见 `automationLine`)。日志段(慢的那部分)扔后台。
+        let head = stateLines(automation: await automationLine(), engineState: await engineStateOffMain())
+        // 要查的播放器各自在不在跑、在不在出声、按 bundle id 单问到什么:要起 helper 子进程,在后台取。
+        let reporting = await Task.detached(priority: .userInitiated) { PlayerReportingDiagnostics.reportLines() }.value
+        let entityAliasGaps = await EnrichCacheReader.songEntityAliasGapsText()
+        await Task.detached(priority: .userInitiated) {
+            writeDiagnosticsBundle(to: url, bundleName: bundleName, head: head + reporting + [""],
+                                   secrets: secrets, currentTrackLines: currentTrackLines,
+                                   entityAliasGaps: entityAliasGaps)
+        }.value
     }
 
     /// 一次拿到整份文本(日志段在主 actor 上读)。留着给"就是要一次拿到整份文本"的场景;

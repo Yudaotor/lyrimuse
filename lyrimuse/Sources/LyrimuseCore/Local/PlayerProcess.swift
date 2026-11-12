@@ -32,6 +32,11 @@ public enum PlayerProcess {
         firstPID(ids: includingAliases ? PlayerBundleAliases.all(for: bundleID) : [bundleID], excludingPID: gone) != nil
     }
 
+    /// 只认这一个 bundle id(不展开别的版本、不看会话是谁报的)的进程号,没在跑为 nil。诊断包列各版本各自在不在跑用。
+    public static func pid(exactBundleID bundleID: String) -> pid_t? {
+        bundleID.isEmpty ? nil : firstPID(ids: [bundleID], excludingPID: nil)
+    }
+
     /// 内核看这个进程还在(没权限发信号也算在)。
     public static func isAlive(_ pid: pid_t) -> Bool {
         kill(pid, 0) == 0 || errno == EPERM

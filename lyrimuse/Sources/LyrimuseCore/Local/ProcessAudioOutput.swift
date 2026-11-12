@@ -30,18 +30,57 @@ public enum ProcessAudioOutput {
         return (device, running != 0)
     }
 
+    /// 一个 App 此刻的出声状态,诊断用。判据同 `isRunningOutput`,另外分出读不到的两种。
+    public enum OutputState: Equatable, Sendable {
+        case outputting
+        /// 有进程对象(开过音频),此刻没在输出。
+        case silent
+        /// 进程对象里没有它:没开过音频,或进程不在。
+        case noAudioObject
+        /// 读不到进程对象表(系统不支持或调用失败)。
+        case unavailable
+    }
+
+    /// 进程对象表里每个对象的 bundle id 和在不在输出;读不到表为 nil。
+    public static func processOutputTable() -> [(bundleID: String, outputting: Bool)]? {
+        processObjectList()?.compactMap { object in
+            stringProperty(object, kAudioProcessPropertyBundleID).map {
+                ($0, (uint32Property(object, kAudioProcessPropertyIsRunningOutput) ?? 0) != 0)
+            }
+        }
+    }
+
+    /// 这几个 bundle id(同一个播放器的各版本)合起来的出声状态:任一个在输出就是在出声。
+    public static func outputState(bundleIDs: [String]) -> OutputState {
+        outputState(bundleIDs: bundleIDs, table: processOutputTable())
+    }
+
+    /// 同上,进程对象表由调用方给。纯函数,selftest 覆盖。
+    public static func outputState(bundleIDs: [String], table: [(bundleID: String, outputting: Bool)]?) -> OutputState {
+        guard let table else { return .unavailable }
+        let rows = table.filter { bundleIDs.contains($0.bundleID) }
+        if rows.contains(where: \.outputting) { return .outputting }
+        return rows.isEmpty ? .noAudioObject : .silent
+    }
+
     private static func address(_ selector: AudioObjectPropertySelector) -> AudioObjectPropertyAddress {
         AudioObjectPropertyAddress(mSelector: selector, mScope: kAudioObjectPropertyScopeGlobal,
                                    mElement: kAudioObjectPropertyElementMain)
     }
 
     private static func processObjects() -> [AudioObjectID] {
+        processObjectList() ?? []
+    }
+
+    /// 读不到进程对象表(系统不支持、调用失败)为 nil;表是空的为空数组。
+    private static func processObjectList() -> [AudioObjectID]? {
         let system = AudioObjectID(kAudioObjectSystemObject)
         var addr = address(kAudioHardwarePropertyProcessObjectList)
         var size: UInt32 = 0
-        guard AudioObjectGetPropertyDataSize(system, &addr, 0, nil, &size) == noErr, size > 0 else { return [] }
+        guard AudioObjectGetPropertyDataSize(system, &addr, 0, nil, &size) == noErr else { return nil }
+        guard size > 0 else { return [] }
         var ids = [AudioObjectID](repeating: 0, count: Int(size) / MemoryLayout<AudioObjectID>.size)
-        guard AudioObjectGetPropertyData(system, &addr, 0, nil, &size, &ids) == noErr else { return [] }
+        guard AudioObjectGetPropertyData(system, &addr, 0, nil, &size, &ids) == noErr else { return nil }
         return Array(ids.prefix(Int(size) / MemoryLayout<AudioObjectID>.size))
     }
 

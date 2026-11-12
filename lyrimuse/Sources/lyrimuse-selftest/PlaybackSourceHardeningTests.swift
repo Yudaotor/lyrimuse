@@ -297,8 +297,14 @@ private func wiringContracts() {
     expectEqual(poll.contains("defer { self.finishPoll() }"), true, "单飞接线: 每一轮(含被丢弃的)收尾都放开单飞")
     expectEqual(poll.contains("await Self.runOffPool(Self.pollQueue)"), true, "单飞接线: 阻塞取数挪到专用队列,不占协作线程池")
     expectEqual(poll.contains("let fetched = MediaControlClient.fetchSnapshotWithProvenance()")
-                    && poll.contains("return (fetched.snapshot, fetched.provenance, MediaControlClient.lastSnapshotFailure)"), true,
+                    && poll.contains("let failure = MediaControlClient.lastSnapshotFailure")
+                    && poll.contains("return (fetched.snapshot, fetched.provenance, failure, unreported)"), true,
                 "单飞接线: 失败原因、快照与它的来源在同一条队列上一起取,回主线程再读可能已是别一轮的")
+    expectEqual(poll.contains("fetched.snapshot == nil && failure == .nobodyReporting")
+                    && poll.contains("PlayerReportingDiagnostics.outputtingPlayers()")
+                    && poll.contains("self.unreportedOutputThrottle.due(unreportedOutput.map(\\.bundleID), now: Date())")
+                    && poll.contains("is outputting audio but not reporting Now Playing"), true,
+                "在出声却没报: 只在没有 App 在报的那一拍查出声,按节流记日志(02 章决策 255)")
     expectEqual(sourceBody("private func finishPoll() {", in: source).contains("if pollFlight.finish() { poll() }"), true,
                 "单飞接线: 收尾时期间有人要过就补跑")
     let seek = sourceBody("public func seek(toMs targetMs: Int) {", in: source)

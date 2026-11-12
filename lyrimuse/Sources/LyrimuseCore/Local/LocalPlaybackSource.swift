@@ -4295,6 +4295,8 @@ public final class LocalPlaybackSource: ObservableObject {
     private var nilStreakStartedAt: Date?
     /// 这一串空快照的原因是播放器在加载下一首(`MediaControlClient.SnapshotFailure.targetLoading`)。
     private var nilStreakIsLoading = false
+    /// 「要查的播放器在出声、却没有任何 App 在报 Now Playing」那行日志的节流,见 `PlayerReportingDiagnostics`。
+    private var unreportedOutputThrottle = PlayerReportingDiagnostics.UnreportedOutputThrottle()
 
     private func poll() {
         guard pollFlight.begin() else { return }
@@ -4304,23 +4306,32 @@ public final class LocalPlaybackSource: ObservableObject {
         // 失败原因跟快照在同一条队列上一起取:它是 MediaControlClient 的全局量,回到主线程再读就可能已经不是这一轮的。
         Task {
             defer { self.finishPoll() }
-            let polled: (MediaControlSnapshot?, MediaControlClient.SnapshotProvenance?, MediaControlClient.SnapshotFailure?)
+            let polled: (MediaControlSnapshot?, MediaControlClient.SnapshotProvenance?, MediaControlClient.SnapshotFailure?,
+                         [(name: String, bundleID: String)])
             if let simulated = PlaybackSimulation.current {
                 // 模拟播放(见 14 章决策 98)时不读播放器,这一拍按模拟那一份造。
-                polled = (simulated.snapshot(at: Date()), nil, nil)
+                polled = (simulated.snapshot(at: Date()), nil, nil, [])
             } else {
                 polled = await Self.runOffPool(Self.pollQueue) {
                     let fetched = MediaControlClient.fetchSnapshotWithProvenance()
-                    return (fetched.snapshot, fetched.provenance, MediaControlClient.lastSnapshotFailure)
+                    let failure = MediaControlClient.lastSnapshotFailure
+                    // 没有任何 App 在报时顺带看要查的播放器在不在出声,只读 CoreAudio 进程对象、不起子进程。
+                    let unreported = fetched.snapshot == nil && failure == .nobodyReporting
+                        ? PlayerReportingDiagnostics.outputtingPlayers() : []
+                    return (fetched.snapshot, fetched.provenance, failure, unreported)
                 }
             }
-            let (snapshot, provenance, snapshotFailure) = polled
+            let (snapshot, provenance, snapshotFailure, unreportedOutput) = polled
             guard Self.pollResultIsCurrent(generation: generation, appliedGeneration: self.pollAppliedGeneration,
                                            invalidatedThrough: self.pollInvalidatedThrough) else {
                 logger.debug("poll result discarded: stale generation (\(generation) vs applied \(self.pollAppliedGeneration), invalidated through \(self.pollInvalidatedThrough))")
                 return
             }
             self.pollAppliedGeneration = generation
+            let dueUnreported = self.unreportedOutputThrottle.due(unreportedOutput.map(\.bundleID), now: Date())
+            for player in unreportedOutput where dueUnreported.contains(player.bundleID) {
+                logger.notice("\(player.name, privacy: .public) (\(player.bundleID, privacy: .public)) is outputting audio but not reporting Now Playing")
+            }
             guard let snapshot else {
                 // 返回 nil 不只是"调用失败"(比如没有"自动化"权限),更常见的是真的没有
                 // 任何曲目在加载(比如 Music.app 处于 stopped 而不是 paused——paused 时

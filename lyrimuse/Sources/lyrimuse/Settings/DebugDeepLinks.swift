@@ -38,6 +38,7 @@ enum DebugDeepLinks {
         case let .snapshot(window): snapshot(window)
         case .state: writeState()
         case .telemetryPreview: writeTelemetryPreview()
+        case .diagnostics: writeDiagnostics()
         case .checkpoint: checkpoint()
         case .restore: restore()
         case let .simulate(title, artist, album, duration, position, playing, ad, artworkPath, localFile, localFilePlayer):
@@ -349,6 +350,17 @@ enum DebugDeepLinks {
                  "playing": sim.isPlaying(at: Date()), "ad": sim.ad, "idle": sim.idle]
             } ?? NSNull(),
         ]
+    }
+
+    private static func writeDiagnostics() {
+        let stamp = ISO8601DateFormatter().string(from: Date()).replacingOccurrences(of: ":", with: "")
+        let url = outputDir.appendingPathComponent("diagnostics-\(stamp).zip")
+        Task { @MainActor in
+            guard FileIO.createDirectory(outputDir) else { return }
+            await DiagnosticsExporter.export(to: url)
+            let written = FileManager.default.fileExists(atPath: url.path)
+            logger.notice("debug diagnostics \(written ? "written" : "failed", privacy: .public): \(url.path, privacy: .public)")
+        }
     }
 
     private static func writeTelemetryPreview() {

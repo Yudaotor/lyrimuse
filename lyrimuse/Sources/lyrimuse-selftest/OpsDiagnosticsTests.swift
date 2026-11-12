@@ -8,6 +8,7 @@ import Foundation
 @MainActor
 func runOpsDiagnosticsTests() {
     credentialVaultChecks()
+    playerReportingDiagnosticsChecks()
     // ---- LogRedactor(诊断包脱敏) ----
     //
     // 这一组断言守的是一条会被贴进公开 GitHub issue 的输出:实测坐实,诊断报告

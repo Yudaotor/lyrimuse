@@ -256,6 +256,42 @@ public enum NowPlayingClientsProbe {
         return found
     }
 
+    /// 诊断包里按 bundle id 单问一次的结果。
+    public enum DiagnosticAnswer: Equatable, Sendable {
+        case helperMissing
+        /// helper 跑失败或超时。
+        case failed
+        /// 那个 App 没在系统里报会话(helper 输出 null)。
+        case notReporting
+        case reporting(playing: Bool?, hasTitle: Bool, duration: Double?, elapsed: Double?)
+        /// 输出解不出来。
+        case undecodable
+    }
+
+    /// 单问这一个 bundle id,诊断用:每次起一个新的 perl、不走常驻 helper,不改记下的报会话版本(`noteReportingClient`),
+    /// 别名不展开,标题空的也照实交回。会阻塞到 helper 退出,别在主线程上调。
+    public static func diagnosticAnswer(forBundleID bundleID: String, ratePlaying: Bool) -> DiagnosticAnswer {
+        guard !bundleID.isEmpty, let paths = helperPaths() else { return .helperMissing }
+        var arguments = [paths.script, paths.library, bundleID]
+        if ratePlaying { arguments.append("rate-playing") }
+        guard let r = ProcessRunner.run("/usr/bin/perl", arguments, timeout: timeout), r.succeeded else { return .failed }
+        return decodeDiagnosticAnswer(r.stdout)
+    }
+
+    /// 解出诊断单问的输出。纯函数,selftest 覆盖。
+    public static func decodeDiagnosticAnswer(_ raw: Data) -> DiagnosticAnswer {
+        if String(decoding: raw, as: UTF8.self).trimmingCharacters(in: .whitespacesAndNewlines) == "null" { return .notReporting }
+        guard let d = try? JSONDecoder().decode(DiagnosticPayload.self, from: raw) else { return .undecodable }
+        return .reporting(playing: d.playing, hasTitle: !(d.title ?? "").isEmpty, duration: d.duration, elapsed: d.elapsedTime)
+    }
+
+    private struct DiagnosticPayload: Decodable {
+        let title: String?
+        let playing: Bool?
+        let duration: Double?
+        let elapsedTime: Double?
+    }
+
     /// 同一个播放器的几个版本都答上时用哪一份:在放的那份;都没在放时取最近一份会话实际报的那个版本(`remembered`);再不然第一份。
     /// 一份都没有为 nil。纯函数,selftest 覆盖。
     public static func preferredAnswer(_ answers: [(id: String, playing: Bool)], remembered: String?) -> Int? {
