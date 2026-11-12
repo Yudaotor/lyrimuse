@@ -75,6 +75,8 @@ public enum LyrimuseDeepLink: Equatable, Sendable {
     public enum DebugCommand: Equatable, Sendable {
         /// 把一扇窗画成 PNG(App 自己画,不需要屏幕录制权限,窗口在别的桌面空间也画得出)。
         case snapshot(window: String)
+        /// 把一扇窗此刻交给窗口服务器的拖窗区写成 JSON(`drag-region-<名字>.json`):标题栏哪几段按住能拖窗、哪些视图把哪块排除在外。
+        case dragRegion(window: String)
         /// 把界面状态写成 JSON(开着哪些窗口、面板翻在哪一格、当前播放与第几句、各开关)。
         case state
         /// 把此刻会发的那条遥测心跳写成 JSON(`telemetry-preview.json`),不发出去、不动记账。
@@ -299,6 +301,9 @@ public enum LyrimuseDeepLink: Equatable, Sendable {
         case ("debug", "/snapshot"):
             guard let window = value("window"), !window.isEmpty else { return nil }
             self = .debug(.snapshot(window: window.lowercased()))
+        case ("debug", "/drag-region"):
+            guard let window = value("window"), !window.isEmpty else { return nil }
+            self = .debug(.dragRegion(window: window.lowercased()))
         case ("debug", "/state"):
             self = .debug(.state)
         case ("debug", "/telemetry-preview"):
@@ -592,6 +597,9 @@ public enum LyrimuseDeepLink: Equatable, Sendable {
             switch command {
             case let .snapshot(window):
                 components.path = "/snapshot"
+                components.queryItems = [URLQueryItem(name: "window", value: window)]
+            case let .dragRegion(window):
+                components.path = "/drag-region"
                 components.queryItems = [URLQueryItem(name: "window", value: window)]
             case .state: components.path = "/state"
             case .telemetryPreview: components.path = "/telemetry-preview"

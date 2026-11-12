@@ -21,4 +21,13 @@ public enum TitlebarDoubleClickAction: Equatable, Sendable {
         resolve(action: defaults.string(forKey: "AppleActionOnDoubleClick"),
                 miniaturizeOnDoubleClick: defaults.bool(forKey: "AppleMiniaturizeOnDoubleClick"))
     }
+
+    /// 控件矩形往外让出的余量:点在胶囊描边上不算空白。
+    public static let controlSlop: CGFloat = 2
+
+    /// 这一下落在标题栏那一条的空白处:窗口左上原点、y 向下,在标题栏高度以内,不在任何一颗控件(外扩 `controlSlop`)里。
+    public static func isBlankTitlebar(_ point: CGPoint, titlebarHeight: CGFloat, controls: [CGRect]) -> Bool {
+        guard titlebarHeight > 0, point.y >= 0, point.y < titlebarHeight else { return false }
+        return !controls.contains { $0.insetBy(dx: -controlSlop, dy: -controlSlop).contains(point) }
+    }
 }

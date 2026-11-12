@@ -38,6 +38,7 @@ enum DebugDeepLinks {
         }
         switch command {
         case let .snapshot(window): snapshot(window)
+        case let .dragRegion(window): writeDragRegion(window)
         case .state: writeState()
         case .telemetryPreview: writeTelemetryPreview()
         case .diagnostics: writeDiagnostics()

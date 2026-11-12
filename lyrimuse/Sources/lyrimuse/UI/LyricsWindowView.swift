@@ -1014,6 +1014,41 @@ private final class LyricsWindowController: ObservableObject {
         }
     }
 
+    /// 标题栏那一行里 SwiftUI 画的控件此刻的矩形(SwiftUI 全局坐标,左上原点),双击落在这些上面不算标题栏空白。
+    private var titlebarControlRects: [CGRect] = []
+    private var titlebarDoubleClickMonitor: Any?
+    private var titlebarDoubleClickArmed = false
+
+    func setTitlebarControlRects(_ rects: [CGRect]) {
+        titlebarControlRects = rects
+    }
+
+    /// 标题栏空白处的双击。不能在 SwiftUI 里垫一块接双击的透明条:SwiftUI 把标题栏里可命中的视图整块报成
+    /// 「按下不拖窗」,那一条就整条拖不动(07 章决策 202)。这里只旁听送进来的按下,不吞事件。
+    private func installTitlebarDoubleClick() {
+        guard titlebarDoubleClickMonitor == nil else { return }
+        titlebarDoubleClickMonitor = NSEvent.addLocalMonitorForEvents(matching: [.leftMouseDown]) { [weak self] event in
+            guard let self, let window = self.window, event.window === window else { return event }
+            // 一次点击序列只认一下:第一下上膛,紧跟的第二下才算双击,同一序列里重复送来的第二下不再触发。
+            if event.clickCount == 1 { self.titlebarDoubleClickArmed = true }
+            guard event.clickCount == 2, self.titlebarDoubleClickArmed,
+                  self.isBlankTitlebar(event.locationInWindow, in: window) else { return event }
+            self.titlebarDoubleClickArmed = false
+            self.titlebarDoubleClicked()
+            return event
+        }
+    }
+
+    /// `point` 是窗口坐标。红绿灯是 AppKit 按钮,按命中测试排除;两颗胶囊按 `titlebarControlRects` 排除。
+    private func isBlankTitlebar(_ point: NSPoint, in window: NSWindow) -> Bool {
+        guard let content = window.contentView, let frameView = content.superview else { return false }
+        if frameView.hitTest(point) is NSControl { return false }
+        let local = content.convert(point, from: nil)
+        let topDown = content.isFlipped ? local : NSPoint(x: local.x, y: content.bounds.height - local.y)
+        return TitlebarDoubleClickAction.isBlankTitlebar(
+            topDown, titlebarHeight: window.frame.height - window.contentLayoutRect.maxY, controls: titlebarControlRects)
+    }
+
     /// 音量胶囊此刻在窗口里的矩形(SwiftUI 全局坐标,左上原点),nil = 没摆。
     private var volumeCapsuleRect: CGRect?
     private var volumeDragHole: TitlebarDragHole?
@@ -1114,6 +1149,7 @@ private final class LyricsWindowController: ObservableObject {
         MainActor.assumeIsolated { transportKeys.install(on: window) }
         MainActor.assumeIsolated { hoverFade.attach(window, isMini: $isMini.eraseToAnyPublisher()) }
         MainActor.assumeIsolated { chromeFade.attach(window, isMini: $isMini.eraseToAnyPublisher()) }
+        installTitlebarDoubleClick()
         chromeFadeObserver = chromeFade.$visible.removeDuplicates().sink { [weak self] visible in
             self?.chromeHidden = !visible
             self?.updateTrafficLightVisibility()
@@ -1498,6 +1534,7 @@ private final class LyricsWindowController: ObservableObject {
     deinit {
         if let escapeMonitor { NSEvent.removeMonitor(escapeMonitor) }
         if let nativeFullScreenEscapeMonitor { NSEvent.removeMonitor(nativeFullScreenEscapeMonitor) }
+        if let titlebarDoubleClickMonitor { NSEvent.removeMonitor(titlebarDoubleClickMonitor) }
         // attach 里挂的观察者一个不落地摘掉(新加观察者时这里同步加一行)。
         for observer in [closeObserver, resignKeyObserver, becomeKeyObserver, enterFullScreenObserver,
                          exitFullScreenObserver, fullScreenCapabilityObserver, frameObserver, resizeObserver,
@@ -2880,16 +2917,6 @@ struct LyricsWindowView: View {
                     }
                     .animation(.easeInOut(duration: 0.45), value: isIdle)
                     .ignoresSafeArea())
-                // 标题栏那一条的空白处接双击(07 章决策 171)。挂在两颗胶囊的 overlay 之前,胶囊、红绿灯叠在上面照旧接自己的点按。
-                .overlay(alignment: .top) {
-                    if !previewMode, !showsMiniLayout, geo.safeAreaInsets.top > 0 {
-                        Color.clear
-                            .frame(height: geo.safeAreaInsets.top)
-                            .contentShape(Rectangle())
-                            .onTapGesture(count: 2) { windowController.titlebarDoubleClicked() }
-                            .offset(y: -geo.safeAreaInsets.top)
-                    }
-                }
                 // 音量胶囊必须**浮在内容之上**,不能放进 .toolbar。
                 //
                 // Liquid Glass 的规则(见 LiquidGlassReference:"Glass cannot sample other glass"、
@@ -2919,6 +2946,7 @@ struct LyricsWindowView: View {
                         // 胶囊的位置交给窗口层报给控制器,在标题栏里垫占位用(见 VolumeCapsuleBoundsKey):
                         // 窗口宽窄、AirPlay 键出没都会挪它。锚点挂在 offset 里面,取到的才是挪过之后的位置。
                         .anchorPreference(key: VolumeCapsuleBoundsKey.self, value: .bounds) { $0 }
+                        .anchorPreference(key: TitlebarControlBoundsKey.self, value: .bounds) { [$0] }
                         // 贴右缘 5pt(AM 胶囊亮缘离窗缘 8px@2x,布局缘取 5 让亮缘落到同位)。
                         .padding(.trailing, 5)
                         // 跟红绿灯、左上那颗胶囊同一行(顶 8pt、中心约 26pt)。这一行落在标题栏那一段里,
@@ -2938,6 +2966,7 @@ struct LyricsWindowView: View {
                     // 单列模式下根本不显示,而迷你窗必然是单列。胶囊自己会在迷你时收成两颗。
                     if !previewMode {
                         windowActionsCapsule()
+                            .anchorPreference(key: TitlebarControlBoundsKey.self, value: .bounds) { [$0] }
                             .padding(.leading, 102)
                             .offset(y: -geo.safeAreaInsets.top + 8)
                             .lyricsWindowChromeFade(windowController.chromeFade, group: "window")
@@ -2951,6 +2980,18 @@ struct LyricsWindowView: View {
                 // 在这个闭包里 —— 直接消费 geo[anchor] 会把整块玻璃面板焊在几何依赖链上,抓到过一次
                 // 开着菜单时主线程 2472/2485 采样全忙的整窗逐帧重排。矩形取整后经 onChange 落进
                 // @State,没动就一个字节都不写,面板在下面的普通 .overlay 里只随真实状态重建。
+                // 标题栏里两颗胶囊的全局矩形报给控制器:标题栏空白处的双击由控制器在 AppKit 这一层认,
+                // 点在胶囊上的不算(见 LyricsWindowController.installTitlebarDoubleClick)。
+                .overlayPreferenceValue(TitlebarControlBoundsKey.self) { anchors in
+                    GeometryReader { proxy in
+                        let origin = proxy.frame(in: .global).origin
+                        let rects = anchors.map { proxy[$0].offsetBy(dx: origin.x, dy: origin.y).integral }
+                        Color.clear
+                            .allowsHitTesting(false)
+                            .onAppear { windowController.setTitlebarControlRects(rects) }
+                            .onChange(of: rects) { _, r in windowController.setTitlebarControlRects(r) }
+                    }
+                }
                 // 音量胶囊的全局矩形报给控制器(见 LyricsWindowController.placeVolumeDragHole)。没画时锚点为 nil,
                 // 一路跟着 onChange 走;别改回在胶囊上挂 onAppear / onDisappear:胶囊拿到音量前是空视图,
                 // 同一个视图重挂时出现回调先于消失回调,占位会被撤掉。
@@ -6791,6 +6832,14 @@ private struct WindowVolumeCapsule: View {
             guard step != 0 else { return }
             PlaybackCoordinator.shared.setVolume(min(100, max(0, volume + step)))
         }
+    }
+}
+
+/// 完整布局标题栏那一行里的控件(左上窗口控件胶囊、右上音量胶囊)的边框。
+private struct TitlebarControlBoundsKey: PreferenceKey {
+    static let defaultValue: [Anchor<CGRect>] = []
+    static func reduce(value: inout [Anchor<CGRect>], nextValue: () -> [Anchor<CGRect>]) {
+        value.append(contentsOf: nextValue())
     }
 }
 

@@ -41,6 +41,29 @@ func runLyricsWindowTests() {
             expectEqual(A.current(d), .minimize, "标题栏双击: 从偏好里读")
             d.removePersistentDomain(forName: suite)
         }
+        let capsules = [CGRect(x: 102, y: 8, width: 100, height: 36), CGRect(x: 1300, y: 8, width: 165, height: 36)]
+        expectEqual(A.isBlankTitlebar(CGPoint(x: 338, y: 19.5), titlebarHeight: 32, controls: capsules), true,
+                    "标题栏双击: 两颗胶囊之间的空白算")
+        expectEqual(A.isBlankTitlebar(CGPoint(x: 150, y: 20), titlebarHeight: 32, controls: capsules), false,
+                    "标题栏双击: 点在左上胶囊上不算")
+        expectEqual(A.isBlankTitlebar(CGPoint(x: 101, y: 20), titlebarHeight: 32, controls: capsules), false,
+                    "标题栏双击: 胶囊描边外 2pt 以内不算")
+        expectEqual(A.isBlankTitlebar(CGPoint(x: 338, y: 32), titlebarHeight: 32, controls: capsules), false,
+                    "标题栏双击: 标题栏以下不算")
+        expectEqual(A.isBlankTitlebar(CGPoint(x: 338, y: 10), titlebarHeight: 0, controls: []), false,
+                    "标题栏双击: 没有标题栏(全屏)不算")
+    }
+
+    // ---- 标题栏双击不能靠 SwiftUI 垫透明条(源码契约) ----
+    do {
+        let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+        let window = (try? String(contentsOf: root.appendingPathComponent("lyrimuse/UI/LyricsWindowView.swift"),
+                                  encoding: .utf8)) ?? ""
+        expectEqual(window.isEmpty, false, "标题栏双击(契约): 读到源码")
+        expectEqual(sourceHas(window, ".onTapGesture(count: 2) { windowController.titlebarDoubleClicked() }"), false,
+                    "标题栏双击(契约): 不在 SwiftUI 里垫接双击的透明条 —— 可命中的视图会让整条标题栏拖不动")
+        expectEqual(sourceHas(window, "installTitlebarDoubleClick()\n        chromeFadeObserver ="), true,
+                    "标题栏双击(契约): 窗口挂上来时装 AppKit 那一层的双击旁听")
     }
 
     checkLyricsWindowHoverFade()
