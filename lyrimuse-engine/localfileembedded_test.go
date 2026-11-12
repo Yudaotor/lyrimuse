@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"unicode/utf16"
 )
 
 // id3Frame 拼一帧:v2.3 用普通大端长度,v2.4 用同步安全整数。
@@ -354,5 +355,86 @@ func TestEmbeddedLyricsTXXX(t *testing.T) {
 	tag = id3Tag(3, id3Frame(3, "TXXX", other))
 	if _, ok := embeddedLyricsFromID3(tag[:10], tag[10:]); ok {
 		t.Error("别的描述的 TXXX 不当歌词")
+	}
+}
+
+// id3v22Frame 拼一帧 v2.2:3 字节帧名 + 3 字节大端长度,没有帧标志。
+func id3v22Frame(id string, body []byte) []byte {
+	n := len(body)
+	return append([]byte{id[0], id[1], id[2], byte(n >> 16), byte(n >> 8), byte(n)}, body...)
+}
+
+// utf16BOM:带 BOM 的 UTF-16LE,末尾带两字节结束符。
+func utf16BOM(s string) []byte {
+	out := []byte{0xFF, 0xFE}
+	for _, u := range utf16.Encode([]rune(s)) {
+		out = append(out, byte(u), byte(u>>8))
+	}
+	return append(out, 0, 0)
+}
+
+// v2.2 的 ULT / SLT / TXX / COM 跟 v2.3 的 USLT / SYLT / TXXX / COMM 一样读;前面垫几帧别的,帧头长度算错就对不齐。
+func TestEmbeddedLyricsID3v22(t *testing.T) {
+	plain := "稻香\n对这个世界\n"
+	lead := [][]byte{id3v22Frame("TT2", append([]byte{1}, utf16BOM("稻香")...)), id3v22Frame("TP1", []byte{0, 'J', 'a', 'y'})}
+	ult := func(text string) []byte {
+		// Apple Music 写的样子:带 BOM 的 UTF-16、语言 eng、空描述。
+		return id3v22Frame("ULT", append(append([]byte{1, 'e', 'n', 'g'}, utf16BOM("")...), utf16BOM(text)...))
+	}
+	for _, c := range []struct {
+		name, text string
+	}{{"ULT 纯文本", plain}, {"ULT 写着 LRC", embeddedLRC}} {
+		tag := id3Tag(2, append(append([][]byte{}, lead...), ult(c.text))...)
+		if got, ok := embeddedLyricsFromID3(tag[:10], tag[10:]); !ok || got != c.text {
+			t.Errorf("v2.2 %s:得到 %q, ok=%v", c.name, got, ok)
+		}
+	}
+
+	slt := []byte{1, 'c', 'h', 'i', 2, 1}
+	slt = append(slt, utf16BOM("")...)
+	for _, line := range []struct {
+		text string
+		ms   uint32
+	}{{"第一句", 1000}, {"第二句", 65230}} {
+		slt = append(slt, utf16BOM(line.text)...)
+		slt = binary.BigEndian.AppendUint32(slt, line.ms)
+	}
+	tag := id3Tag(2, append(append([][]byte{}, lead...), ult(plain), id3v22Frame("SLT", slt))...)
+	if got, ok := embeddedLyricsFromID3(tag[:10], tag[10:]); !ok || got != "[00:01.00]第一句\n[01:05.23]第二句\n" {
+		t.Errorf("v2.2 SLT 换成 LRC、压过纯文本的 ULT:得到 %q, ok=%v", got, ok)
+	}
+
+	for _, c := range []struct {
+		name, desc, text string
+	}{{"TXX:LYRICS 纯文本", "LYRICS", plain}, {"TXX:UNSYNCEDLYRICS 写着 LRC", "UNSYNCEDLYRICS", embeddedLRC}} {
+		txx := append(append([]byte{0}, c.desc...), 0)
+		tag := id3Tag(2, append(append([][]byte{}, lead...), id3v22Frame("TXX", append(txx, c.text...)))...)
+		if got, ok := embeddedLyricsFromID3(tag[:10], tag[10:]); !ok || got != c.text {
+			t.Errorf("v2.2 %s:得到 %q, ok=%v", c.name, got, ok)
+		}
+	}
+
+	com := append([]byte{0, 'e', 'n', 'g', 0}, realNeteaseFileKey...)
+	tag = id3Tag(2, id3v22Frame("COM", com), ult(embeddedLRC))
+	if got := tagsFromID3(tag[:10], tag[10:]); got.lyrics != embeddedLRC || len(got.comments) != 1 || got.comments[0] != realNeteaseFileKey {
+		t.Errorf("v2.2 COM 当注释:%+v", got)
+	}
+
+	// 四字母帧名写进 v2.2 标签不认(帧头只有 6 字节,按 v2.3 读会错位)。
+	tag = id3Tag(2, id3Frame(3, "USLT", usltBody(3, []byte(embeddedLRC))))
+	if _, ok := embeddedLyricsFromID3(tag[:10], tag[10:]); ok {
+		t.Error("v2.2 标签里的四字母帧名不该认出歌词")
+	}
+
+	// 标了整个标签压缩过的不读,哪怕按 v2.3 扩展头跳过 4 字节后正好像一帧。
+	compressed := id3Tag(2, []byte{0, 0, 0, 0}, ult(embeddedLRC))
+	compressed[5] |= 0x40
+	if _, ok := embeddedLyricsFromID3(compressed[:10], compressed[10:]); ok {
+		t.Error("v2.2 标了整个标签压缩的不读")
+	}
+
+	file := id3Tag(2, append(append([][]byte{}, lead...), ult(embeddedLRC))...)
+	if got, ok := localFileEmbeddedLyrics(writeTemp(t, "v22.mp3", append(file, 0xFF, 0xFB))); !ok || got != embeddedLRC {
+		t.Errorf("v2.2 的 MP3 文件:得到 %q, ok=%v", got, ok)
 	}
 }

@@ -14,8 +14,9 @@ import (
 // 正在放的文件自己标签里的歌词:同目录没有同名 .lrc 时的退路(见 localFileLyrics)。写成 LRC(带时间标签)的优先 ——
 // 不少中文歌曲文件把整份 LRC 塞在歌词字段里;没有才交不带时间的那份,由调用方当纯文本兜底(localFileLyricsFor)。
 // 同一遍顺带取注释(网易云下载的文件在这里写曲目身份,见 neteasefilekey.go)。按扩展名认格式:
-//   - MP3:开头的 ID3v2(v2.3 / v2.4;v2.2 三字母帧名不认)。SYLT 逐行带时间,换成 LRC;USLT;TXXX 里描述叫 LYRICS /
-//     UNSYNCEDLYRICS / USLT 的(有的工具把歌词写成这种自定义帧)。注释是 COMM。
+//   - MP3:开头的 ID3v2(v2.2 / v2.3 / v2.4)。SYLT 逐行带时间,换成 LRC;USLT;TXXX 里描述叫 LYRICS /
+//     UNSYNCEDLYRICS / USLT 的(有的工具把歌词写成这种自定义帧)。注释是 COMM。v2.2 的三字母帧 SLT / ULT / TXX / COM
+//     帧体布局相同,按 id3v22FrameIDs 换成四字母名同样处理(见 09 章决策 369)。
 //   - AIFF / WAV:块里嵌着的那份 ID3v2(`ID3 ` / `id3 ` 块),同 MP3。
 //   - FLAC:VORBIS_COMMENT 块;OGG / Opus:第二个包(Vorbis 的注释头、OpusTags)。都是 LYRICS / UNSYNCEDLYRICS 这类键,
 //     注释是 COMMENT / DESCRIPTION。
@@ -391,16 +392,28 @@ func fileExt(path string) string {
 	return ""
 }
 
+// id3v22FrameIDs:v2.2 用到的三字母帧名 → 同布局的 v2.3 / v2.4 帧名。
+var id3v22FrameIDs = map[string]string{"SLT": "SYLT", "ULT": "USLT", "TXX": "TXXX", "COM": "COMM"}
+
 // tagsFromID3:标签头(10 字节)和标签区 → 歌词和注释。纯函数,单测覆盖。
 func tagsFromID3(header, tag []byte) localFileTags {
 	var out localFileTags
 	version, flags := header[3], header[5]
-	if version != 3 && version != 4 {
+	if version < 2 || version > 4 {
+		return out
+	}
+	if version == 2 && flags&0x40 != 0 {
+		// v2.2 的这一位是整个标签压缩过,标准没定压缩算法,读不了。
 		return out
 	}
 	if flags&0x80 != 0 {
 		// 整个标签做过反同步:0xFF 0x00 还原成 0xFF。
 		tag = bytes.ReplaceAll(tag, []byte{0xFF, 0x00}, []byte{0xFF})
+	}
+	// 帧头:v2.2 是 3 字节帧名 + 3 字节大端长度,没有帧标志;v2.3 / v2.4 是 4 字节帧名 + 4 字节长度 + 2 字节标志。
+	frameHead := 10
+	if version == 2 {
+		frameHead = 6
 	}
 	pos := 0
 	if flags&0x40 != 0 && len(tag) >= 4 {
@@ -423,18 +436,24 @@ func tagsFromID3(header, tag []byte) localFileTags {
 			plain = text
 		}
 	}
-	for pos+10 <= len(tag) {
-		id := string(tag[pos : pos+4])
+	for pos+frameHead <= len(tag) {
 		if tag[pos] == 0 {
 			break
 		}
+		var id string
 		var size int
-		if version == 4 {
+		switch version {
+		case 2:
+			id = id3v22FrameIDs[string(tag[pos:pos+3])]
+			size = int(tag[pos+3])<<16 | int(tag[pos+4])<<8 | int(tag[pos+5])
+		case 4:
+			id = string(tag[pos : pos+4])
 			size = syncsafeInt(tag[pos+4 : pos+8])
-		} else {
+		default:
+			id = string(tag[pos : pos+4])
 			size = int(binary.BigEndian.Uint32(tag[pos+4 : pos+8]))
 		}
-		body := tag[pos+10:]
+		body := tag[pos+frameHead:]
 		if size < 0 || size > len(body) {
 			break
 		}
@@ -465,7 +484,7 @@ func tagsFromID3(header, tag []byte) localFileTags {
 				out.comments = append(out.comments, text)
 			}
 		}
-		pos += 10 + size
+		pos += frameHead + size
 	}
 	out.lyrics = timed
 	if out.lyrics == "" {
