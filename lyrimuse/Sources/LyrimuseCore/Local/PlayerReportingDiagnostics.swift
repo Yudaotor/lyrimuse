@@ -66,9 +66,12 @@ public enum PlayerReportingDiagnostics {
     /// 一个播放器的结论;说不出结论为 nil。纯函数,selftest 覆盖。
     public static func verdict(output: ProcessAudioOutput.OutputState,
                                answers: [NowPlayingClientsProbe.DiagnosticAnswer]) -> String? {
-        if answers.contains(where: { if case .reporting = $0 { return true } else { return false } }) {
-            return "reporting to Now Playing"
+        let titles = answers.compactMap { answer -> Bool? in
+            if case let .reporting(_, hasTitle, _, _) = answer { return hasTitle } else { return nil }
         }
+        if titles.contains(true) { return "reporting to Now Playing" }
+        // 标题空的会话主链路按没在报处理(`decodeSnapshot`)。
+        if !titles.isEmpty { return "registered with Now Playing but no track title" }
         if output == .outputting, !answers.isEmpty, answers.allSatisfy({ $0 == .notReporting }) {
             return "producing audio but not reporting Now Playing"
         }

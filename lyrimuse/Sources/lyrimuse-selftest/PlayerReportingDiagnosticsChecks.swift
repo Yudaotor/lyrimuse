@@ -59,6 +59,8 @@ func playerReportingDiagnosticsChecks() {
         expectEqual(lines(.silent, .notReporting).contains { $0.contains("=>") }, false, "报告: 没出声、没报不下结论")
         expectEqual(lines(.silent, .reporting(playing: false, hasTitle: true, duration: nil, elapsed: nil)).last,
                     "    => reporting to Now Playing", "报告: 在报")
+        expectEqual(lines(.silent, .reporting(playing: false, hasTitle: false, duration: nil, elapsed: nil)).last,
+                    "    => registered with Now Playing but no track title", "报告: 有会话但标题空,主链路当没在报")
         var asked: [String] = []
         expectEqual(D.reportLines(selected: [.qqMusic], lastFailure: nil, pid: { _ in nil }, output: { _ in .outputting },
                                   ask: { id, _ in asked.append(id); return .notReporting }).last,
