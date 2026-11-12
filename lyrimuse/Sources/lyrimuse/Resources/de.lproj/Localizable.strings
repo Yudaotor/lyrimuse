@@ -405,6 +405,7 @@
 "之前手动选定的 %@ 首歌曲，歌词已被自动更新，不再是当初选定的版本，因此未锁定#one" = "Der %@ früher gewählte Titel wurde inzwischen automatisch aktualisiert – es ist nicht mehr die gewählte Version, daher nicht gesperrt";
 "之前的自动决策" = "Frühere automatische Entscheidung";
 "之前的自定义" = "Vorherige Anpassung";
+"之后的自动搜索或评分变化仍可能替换这份歌词" = "Spätere automatische Suchen oder Bewertungsänderungen können diesen Liedtext noch ersetzen";
 "乌克兰国家体系（联合国推荐），如 Привіт → Pryvit" = "Ukrainisches nationales System (UN-empfohlen), z. B. Привіт → Pryvit";
 "乌克兰语" = "Ukrainisch";
 "五" = "F";
@@ -1374,6 +1375,8 @@
 "所选条目无逐字时间轴" = "Der ausgewählte Eintrag hat kein Wort-Timing";
 "手动" = "Manuell";
 "手动调整" = "Manuell angepasst";
+"手动选定" = "Manuell gewählt";
+"手动选定 · 已锁定" = "Manuell gewählt · Gesperrt";
 "手动选定的歌词不会被自动匹配替换" = "Manuell gewählte Liedtexte werden nie durch die automatische Zuordnung ersetzt";
 "手动重新匹配" = "Manuell neu zuordnen";
 "手势" = "Gesten";
@@ -2460,6 +2463,7 @@
 "自动化权限可让 Lyrimuse 准确识别%@正在播放的歌曲，并可在歌词上直接控制播放" = "Mit Automation erkennt Lyrimuse, welchen Titel %@ abspielt, und du kannst die Wiedergabe direkt auf dem Liedtext steuern";
 "自动匹配 %@ 首缺失的歌词" = "Liedtexte für %@ fehlende Titel zuordnen";
 "自动匹配 %@ 首缺失的歌词#one" = "Liedtext für %@ fehlenden Titel zuordnen";
+"自动匹配不会更改这份歌词" = "Die automatische Zuordnung ändert diesen Liedtext nicht";
 "自动匹配中 %1$@/%2$@" = "Zuordnung läuft %1$@/%2$@";
 "自动匹配完成" = "Automatische Zuordnung abgeschlossen";
 "自动匹配完成，找到 %@ 首" = "Automatische Zuordnung abgeschlossen: %@ gefunden";

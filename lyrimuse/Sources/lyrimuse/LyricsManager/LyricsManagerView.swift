@@ -2152,12 +2152,7 @@ struct LyricsManagerView: View {
     /// 「搜索候选歌词」开「搜索歌词…」独立窗口,搜这一首(不一定是正在放的那首),跟悬浮窗 ⚙、歌词窗口那几个入口同一扇
     /// (见 11 章决策 131)。打开那一刻拍下歌名、歌手、专辑和时长,窗口开着期间不随列表重读改动(见 11 章决策 92)。
     private func openSearchWindow(_ summary: EnrichCacheStore.Summary) {
-        // 歌名先去掉时长变体的 `~durN`(缓存键里的消歧位,拿它去各源搜什么都搜不到),再过 normalizedTitle:缓存键存的是
-        // 播放器原样的完整歌名,自动解析和「搜索歌词…」跟随播放那一路交给各源的都是剥过结尾说明括号的,这里得是同一份。写回仍按 key。
-        AppActions.shared.openLyricsSearch(for: LyricsSearchTarget(
-            key: summary.key, artist: summary.artist,
-            title: EnrichCacheKeys.normalizedTitle(EnrichCacheKeys.strippingDurationVariantTitle(summary.title)),
-            album: summary.displayAlbum, durationSecs: summary.durationSecs))
+        AppActions.shared.openLyricsSearch(for: LyricsSearchTarget(summary: summary))
     }
 
     /// 「⋯」里的「导入歌词文件…」、把文件拖到详情页:开这首的「搜索歌词…」窗口,文件交给它导入(没给文件时窗口弹选文件框),
@@ -3662,7 +3657,15 @@ struct LyricsManagerView: View {
                 LyricsManagerTag(icon: "textformat.abc", text: romanizationAvailable ? L10n.t("读音") : L10n.t("已缓存读音"),
                                  tint: romanizationAvailable ? LyricsFeatureTint.romanization : .secondary, latinIcon: true)
             }
-            if summary.isManualOriginal {
+            // 手动选定:采纳候选时留下的指纹跟此刻载入的正文对得上才标(ManualPickLock.mark),开着「锁定手选歌词」采纳的
+            // 也置了 manual_lyrics,标成「手动选定 · 已锁定」,不再说成「人工修正」。
+            let pick = summary.manualOrigin.isEmpty && editingKey == summary.key
+                ? ManualPickLock.mark(sha: summary.manualPickSHA, lyrics: loadedLyrics, manualLyrics: summary.isManual)
+                : .none
+            if let text = pick.badgeText {
+                LyricsManagerTag(icon: pick.badgeIcon, text: text, tint: LyricsFeatureTint.manualPick)
+                    .help(pick.badgeHelp)
+            } else if summary.isManualOriginal {
                 LyricsManagerTag(icon: "pencil.circle.fill", text: L10n.t("人工修正"), tint: LyricsFeatureTint.manual)
             } else if summary.isManual {
                 LyricsManagerTag(icon: "pencil.circle", text: L10n.t("沿用同曲条目的修正"), tint: LyricsFeatureTint.manual)

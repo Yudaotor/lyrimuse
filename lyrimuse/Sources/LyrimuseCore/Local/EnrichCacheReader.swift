@@ -168,6 +168,8 @@ public final class EnrichCacheEntry: Decodable, Sendable {
     let manualLyrics: Bool?
     let lyricsScore: Int?
     let bodyFields: Int?
+    // 手动采纳时写下的正文指纹(引擎 manual_pick_sha),「当前使用」挂手动选定标记用(ManualPickLock.mark)。
+    let manualPickSHA: String?
 
     enum CodingKeys: String, CodingKey {
         case lyrics
@@ -236,6 +238,7 @@ public final class EnrichCacheEntry: Decodable, Sendable {
         case manualLyrics = "manual_lyrics"
         case lyricsScore = "lyrics_score"
         case bodyFields = "body_fields"
+        case manualPickSHA = "manual_pick_sha"
         case reported
     }
 
@@ -321,6 +324,7 @@ public final class EnrichCacheEntry: Decodable, Sendable {
         manualLyrics = try c.decodeIfPresent(Bool.self, forKey: .manualLyrics)
         lyricsScore = try c.decodeIfPresent(Int.self, forKey: .lyricsScore)
         bodyFields = try c.decodeIfPresent(Int.self, forKey: .bodyFields)
+        manualPickSHA = try? c.decodeIfPresent(String.self, forKey: .manualPickSHA)
         reportedTitles = ((try? c.decodeIfPresent([String: ReportedName].self, forKey: .reported)) ?? [:])
             .values.compactMap(\.title)
     }
@@ -931,6 +935,13 @@ public enum EnrichCacheReader {
         public let lyricsSource: String?
         /// false = 正文小文件读不回来,上面几块正文不全,别拿去存回去。
         public let complete: Bool
+        /// 手动采纳留下的正文指纹(`manual_pick_sha`),没有时为空。
+        public var manualPickSHA: String = ""
+
+        /// 当前这份是不是用户手动选定的、锁没锁。正文没读全时不标。
+        public var manualPickMark: ManualPickLock.Mark {
+            complete ? ManualPickLock.mark(sha: manualPickSHA, lyrics: lyrics, manualLyrics: manualLyrics) : .none
+        }
     }
 
     /// 按播放器报的三段取(匹配同 `lookup`);缓存里没有,或者缓存此刻没加载(见 `isCurrent`)返回 nil。
@@ -972,7 +983,7 @@ public enum EnrichCacheReader {
         }
         return StoredEntry(key: key, lyrics: lyrics, lyricsTr: tr, lyricsRoma: roma, lyricsYRC: yrc, plainLyrics: plain,
                            lyricsKana: entry.lyricsKana ?? "", instrumental: entry.instrumental ?? false, manualLyrics: entry.manualLyrics ?? false,
-                           lyricsSource: entry.lyricsSource, complete: complete)
+                           lyricsSource: entry.lyricsSource, complete: complete, manualPickSHA: entry.manualPickSHA ?? "")
     }
 
     /// 精确 key 没命中时,再按"忽略空格/大小写/繁简"找一次。

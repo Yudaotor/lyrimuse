@@ -209,6 +209,9 @@ public enum LyrimuseDeepLink: Equatable, Sendable {
         case importLyricsFolder(path: String)
         /// 歌词管理弹「导入库」面板(`debug/import-library`),歌词管理窗口要开着。
         case importLibrary
+        /// 按这条写法键开「搜索歌词…」窗口,跟歌词管理「搜索候选歌词」同一条路(`debug/lyrics-search?key=<写法键>`)。
+        /// 歌名、时长取歌词管理的列表,歌词管理要开着(先 `lyrics-manager?background=1`)。
+        case lyricsSearch(key: String)
         /// 设监视文件夹(`debug/import-watch?path=<绝对路径>`),`debug/import-watch?off=1` 停止监视。
         case importWatch(path: String?)
     }
@@ -350,6 +353,9 @@ public enum LyrimuseDeepLink: Equatable, Sendable {
             self = .debug(.milestonePreview)
         case ("debug", "/import-library"):
             self = .debug(.importLibrary)
+        case ("debug", "/lyrics-search"):
+            guard let key = value("key"), !key.isEmpty else { return nil }
+            self = .debug(.lyricsSearch(key: key))
         case ("debug", "/import-watch"):
             if value("off").flatMap(Self.parseBool) == true {
                 self = .debug(.importWatch(path: nil))
@@ -628,6 +634,9 @@ public enum LyrimuseDeepLink: Equatable, Sendable {
                 components.path = "/import-lyrics-folder"
                 components.queryItems = [URLQueryItem(name: "path", value: path)]
             case .importLibrary: components.path = "/import-library"
+            case let .lyricsSearch(key):
+                components.path = "/lyrics-search"
+                components.queryItems = [URLQueryItem(name: "key", value: key)]
             case let .importWatch(path):
                 components.path = "/import-watch"
                 components.queryItems = [path.map { URLQueryItem(name: "path", value: $0) } ?? URLQueryItem(name: "off", value: "1")]

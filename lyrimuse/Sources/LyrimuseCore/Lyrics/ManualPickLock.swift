@@ -114,4 +114,17 @@ public enum ManualPickLock {
     ) -> Bool {
         state(sha: sha, lyrics: lyrics) == .original && isLocked != locking
     }
+
+    /// 界面上给「当前使用」那份挂的标记(搜索候选面板、歌词管理详情页):正文还是当初采纳的那一份才算手动选定,
+    /// 被自动换掉的(`.replaced`)不标。锁没锁看条目的 `manual_lyrics`。
+    public enum Mark: Equatable, Sendable {
+        case none
+        case picked
+        case pickedLocked
+    }
+
+    public static func mark(sha: String?, lyrics: String, manualLyrics: Bool) -> Mark {
+        guard state(sha: sha, lyrics: lyrics) == .original else { return .none }
+        return manualLyrics ? .pickedLocked : .picked
+    }
 }

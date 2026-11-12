@@ -825,6 +825,16 @@ func runLyricsManagerTests() {
                     "手动选定锁: shouldFlip 与三态判定一致(locked=\(locked) locking=\(locking))")
             }
         }
+
+        // ---- 「当前使用」挂的手动选定标记 ----
+        expectEqual(ManualPickLock.mark(sha: sha, lyrics: lyricsB, manualLyrics: false), .picked,
+                    "手动选定标记: 排版被规范化后仍标手动选定")
+        expectEqual(ManualPickLock.mark(sha: sha, lyrics: lyricsA, manualLyrics: true), .pickedLocked,
+                    "手动选定标记: 采纳时锁定的标「已锁定」")
+        expectEqual(ManualPickLock.mark(sha: sha, lyrics: lyricsC, manualLyrics: true), .none,
+                    "手动选定标记: 词已被换掉 → 不标(哪怕 manual_lyrics 为真)")
+        expectEqual(ManualPickLock.mark(sha: nil, lyrics: lyricsA, manualLyrics: true), .none,
+                    "手动选定标记: 手改正文锁的(没有指纹)不标手动选定")
     }
 
     // ---- LyricsSortOrder(「歌词管理」列表排序) ----

@@ -774,7 +774,7 @@ func runKasetTests() {
                     "Kaset 契约: 歌词管理的列表、筛选、排序、搜索按给人看的专辑")
         let manager = src("lyrimuse/LyricsManager/LyricsManagerView.swift")
         expectEqual(manager.contains(": albumDisplay(summary.displayAlbum),")
-                        && manager.contains("album: summary.displayAlbum,")
+                        && src("lyrimuse/LyricsManager/LyricsQuickSearchWindow.swift").contains("album: summary.displayAlbum,")
                         && manager.contains(": albumDisplay(summary.displayAlbum))")
                         && manager.contains("displayAlbum: displayAlbum,"), true,
                     "Kaset 契约: 歌词管理的列表行、详情、搜歌词预填、占位行用给人看的专辑")

@@ -399,6 +399,10 @@ func runDeepLinkTests() {
                      link("lyrimuse://debug/import-watch?off=1")],
                     [.debug(.importLibrary), .debug(.importWatch(path: "/Users/a/x")), .debug(.importWatch(path: nil))],
                     "debug: 导入库面板、设监视文件夹、停止监视")
+        expectEqual(link("lyrimuse://debug/lyrics-search?key=A%7CB%7CC"), .debug(.lyricsSearch(key: "A|B|C")),
+                    "debug: 按写法键开搜索歌词窗口,键原样")
+        expectEqual(link("lyrimuse://debug/lyrics-search") == nil && link("lyrimuse://debug/lyrics-search?key=") == nil, true,
+                    "debug: 搜索歌词窗口没带写法键认不出")
         expectEqual(link("lyrimuse://debug/import-watch") == nil && link("lyrimuse://debug/import-watch?path=rel") == nil, true,
                     "debug: 监视文件夹没带绝对路径也没说停止,认不出")
 
@@ -542,6 +546,7 @@ func runDeepLinkTests() {
             .debug(.importLyrics(paths: ["/tmp/歌 词.lrc", "/tmp/歌 词.tr.lrc"])),
             .debug(.importLyricsFolder(path: "/tmp/歌 词")),
             .debug(.importLibrary), .debug(.importWatch(path: "/tmp/歌 词")), .debug(.importWatch(path: nil)),
+            .debug(.lyricsSearch(key: "Michael Jackson|Blood on the Dance Floor|HIStory ~dur254")),
             .debug(.editNotifyChannel(id: nil)), .debug(.editNotifyChannel(id: "Legacy-1")),
             .setPlayMode(.list), .setPlayMode(.shuffle), .setPlayMode(.repeatAll), .setPlayMode(.repeatOne),
         ] + LyrimuseAction.allCases.map { .action($0, on: nil, stepSeconds: nil) }

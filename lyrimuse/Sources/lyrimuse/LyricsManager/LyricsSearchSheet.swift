@@ -35,6 +35,8 @@ struct LyricsSearchSheet: View {
     /// 「当前使用」徽标是来源 + 词双判据(LyricsCandidateDuplicates.isCurrent):同源但
     /// 正文被手改过的不再标当前;拿不到指纹时退回只比来源。宿主必须传(contracts 组守卫钉着)。
     let currentFingerprint: String?
+    /// 宿主读到的当前那份是不是用户手动选定的(「当前使用」那条挂「手动选定」标签)。
+    let currentPick: ManualPickLock.Mark
     /// 曲目真实时长(秒),0 表示未知。必须传:打分里时长匹配那一档权重很重,传 0 时整档对所有候选跳过,面板里的排名
     /// 就跟自动选歌词时用的那组分数对不上。候选的源自报曲长也拿它比(`durationLabel`)。
     let durationSecs: Double
@@ -71,6 +73,8 @@ struct LyricsSearchSheet: View {
     @State private var appliedSource: String?
     /// 跟 appliedSource 配对:刚采纳那条的指纹,「当前使用」双判据的另一半。
     @State private var appliedFingerprint: String?
+    /// 跟 appliedSource 配对:刚采纳那条落盘后的手动选定标记。
+    @State private var appliedPick: ManualPickLock.Mark = .none
     @State private var applyFeedback: ApplyFeedback?
     @State private var applyFeedbackGeneration = 0
     /// 本次面板存活期间切过的纯音乐标记;nil = 没切过,认宿主给的。换歌、宿主给的值变了都重置。
@@ -502,15 +506,18 @@ struct LyricsSearchSheet: View {
         var source: String?
         var fingerprint: String?
         var instrumental: Bool
+        var pick: ManualPickLock.Mark
 
-        init(source: String?, fingerprint: String?, instrumental: Bool) {
+        init(source: String?, fingerprint: String?, instrumental: Bool, pick: ManualPickLock.Mark) {
             self.source = source
             self.fingerprint = fingerprint
             self.instrumental = instrumental
+            self.pick = pick
         }
     }
 
     init(artist: String, title: String, album: String, songKey: String, currentSource: String?, currentFingerprint: String? = nil,
+         currentPick: ManualPickLock.Mark = .none,
          durationSecs: Double,
          isMarkedInstrumental: Bool, onSetInstrumental: @escaping (Bool) async -> Bool,
          onAutoMatch: @escaping (@escaping (Int, Int) -> Void) async -> LyricsRematch.Line?,
@@ -521,10 +528,11 @@ struct LyricsSearchSheet: View {
         self.songKey = songKey
         self.currentSource = currentSource
         self.currentFingerprint = currentFingerprint
+        self.currentPick = currentPick
         self.durationSecs = durationSecs
         self.isMarkedInstrumental = isMarkedInstrumental
         self._host = State(initialValue: HostValues(source: currentSource, fingerprint: currentFingerprint,
-                                                    instrumental: isMarkedInstrumental))
+                                                    instrumental: isMarkedInstrumental, pick: currentPick))
         self.onSetInstrumental = onSetInstrumental
         self.onAutoMatch = onAutoMatch
         self.onApply = onApply
@@ -577,6 +585,7 @@ struct LyricsSearchSheet: View {
             // 换了歌,上一首采纳过什么跟这一首无关;回声也别留着误导。
             appliedSource = nil
             appliedFingerprint = nil
+            appliedPick = .none
             applyFeedback = nil
             instrumentalOverride = nil
             autoMatchLine = nil
@@ -598,6 +607,7 @@ struct LyricsSearchSheet: View {
             host.source = value
             appliedSource = nil
             appliedFingerprint = nil
+            appliedPick = .none
             storedCandidate = makeStoredCandidate()
             autoSelect()
         }
@@ -605,8 +615,15 @@ struct LyricsSearchSheet: View {
             host.fingerprint = value
             appliedSource = nil
             appliedFingerprint = nil
+            appliedPick = .none
             storedCandidate = makeStoredCandidate()
             autoSelect()
+        }
+        .onChange(of: currentPick) { _, value in
+            host.pick = value
+            appliedSource = nil
+            appliedFingerprint = nil
+            appliedPick = .none
         }
         .onChange(of: isMarkedInstrumental) { _, value in
             host.instrumental = value
@@ -1330,6 +1347,8 @@ struct LyricsSearchSheet: View {
     private var effectiveCurrentSource: String? { appliedSource ?? host.source }
     /// 跟 effectiveCurrentSource 配对:采纳过就是刚采纳那条的指纹,否则是打开时调用方算的。
     private var effectiveCurrentFingerprint: String? { appliedSource != nil ? appliedFingerprint : host.fingerprint }
+    /// 跟 effectiveCurrentSource 配对:「当前使用」那条是不是手动选定的。
+    private var effectiveCurrentPick: ManualPickLock.Mark { appliedSource != nil ? appliedPick : host.pick }
 
     private func isCurrentCandidate(_ c: LyricsSearchService.Candidate) -> Bool {
         // 标成纯音乐时这首没有在用的歌词。
@@ -1412,6 +1431,9 @@ struct LyricsSearchSheet: View {
             TelemetryActivity.shared.noteAction(.lyricsPicked)
             appliedSource = c.source
             appliedFingerprint = c.fingerprint
+            // 跟宿主 onApply 的写法对上:仅纯文本走 savePlainTextEdit、不留选定指纹;导入的文件和开着「锁定手选歌词」时锁定。
+            appliedPick = c.isPlainTextOnly ? .none
+                : c.isImported || AppSettings.shared.manualPickLocksLyrics ? .pickedLocked : .picked
             autoMatchLine = nil
             // 存进歌词时引擎顺带撤掉纯音乐标记(enrichedit.go 的 save_edit / save_plain_text)。
             instrumentalOverride = false
@@ -2032,6 +2054,10 @@ struct LyricsSearchSheet: View {
                         .help(duplicate.sameTimeline
                               ? L10n.t("歌词文字和每行时间均相同（未比较逐字时间和译文）；该候选仍可能包含其他来源没有的逐字时间轴或译文")
                               : L10n.t("歌词文字相同，每行时间不同；该候选仍可能包含其他来源没有的逐字时间轴或译文"))
+                }
+                if isCurrent, let text = effectiveCurrentPick.badgeText {
+                    characteristicBadge(text, effectiveCurrentPick.badgeIcon, LyricsFeatureTint.manualPick)
+                        .help(effectiveCurrentPick.badgeHelp)
                 }
                 if isCurrent {
                     // 这首歌眼下真正在用的就是这一条。实心填充,跟上面几个描述性标签区分开 ——

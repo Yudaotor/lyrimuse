@@ -59,6 +59,8 @@ public final class EnrichCacheStore: ObservableObject {
         /// 用户在「联网搜索候选歌词」里选定的源(引擎侧 `lyrics_source_choice`)。
         /// 空 = 没选过,由算法自由选。跟 `isManual` 是两件独立的事,详情页各显示各的徽章。
         public let sourceChoice: String
+        /// 手动采纳留下的正文指纹(`manual_pick_sha`),空 = 没有。跟正文比对才知道还是不是那一份(ManualPickLock.mark)。
+        public let manualPickSHA: String
         // 译文是机翻补的(见引擎的 translate.go)还是歌词源自带的社区翻译。
         // 空 = 社区翻译(老条目没有这个字段,读成空正是事实)。
         public let lyricsTrSource: String
@@ -166,6 +168,7 @@ public final class EnrichCacheStore: ObservableObject {
             isManual: Bool,
             manualOrigin: String = "",
             sourceChoice: String,
+            manualPickSHA: String = "",
             lyricsTrSource: String,
             hasTranslation: Bool,
             hasRomanization: Bool,
@@ -202,6 +205,7 @@ public final class EnrichCacheStore: ObservableObject {
             self.isManual = isManual
             self.manualOrigin = manualOrigin
             self.sourceChoice = sourceChoice
+            self.manualPickSHA = manualPickSHA
             self.lyricsTrSource = lyricsTrSource
             self.hasTranslation = hasTranslation
             self.hasRomanization = hasRomanization
@@ -908,6 +912,7 @@ public final class EnrichCacheStore: ObservableObject {
                 isManual: entry["manual_lyrics"] as? Bool ?? false,
                 manualOrigin: entry["lyrics_entity_origin"] as? String ?? "",
                 sourceChoice: entry["lyrics_source_choice"] as? String ?? "",
+                manualPickSHA: entry["manual_pick_sha"] as? String ?? "",
                 lyricsTrSource: entry["lyrics_tr_source"] as? String ?? "",
                 hasTranslation: bodyFields.contains(.tr),
                 hasRomanization: bodyFields.contains(.roma),

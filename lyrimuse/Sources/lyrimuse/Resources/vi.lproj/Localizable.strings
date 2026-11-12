@@ -377,6 +377,7 @@
 "之前手动选定的 %@ 首歌曲，歌词已被自动更新，不再是当初选定的版本，因此未锁定" = "%@ bài chọn thủ công trước đó đã được tự động cập nhật lời, không còn là phiên bản đã chọn ban đầu nên không khóa";
 "之前的自动决策" = "Quyết định tự động trước đó";
 "之前的自定义" = "Tùy chỉnh trước đó";
+"之后的自动搜索或评分变化仍可能替换这份歌词" = "Lần tìm tự động hoặc thay đổi điểm sau này vẫn có thể thay lời này";
 "乌克兰国家体系（联合国推荐），如 Привіт → Pryvit" = "Hệ thống quốc gia Ukraina (Liên Hợp Quốc khuyến nghị), ví dụ Привіт → Pryvit";
 "乌克兰语" = "Tiếng Ukraina";
 "五" = "T6";
@@ -1301,6 +1302,8 @@
 "所选条目无逐字时间轴" = "Mục đã chọn không có thời gian theo từng chữ";
 "手动" = "Thủ công";
 "手动调整" = "Đã chỉnh thủ công";
+"手动选定" = "Đã chọn thủ công";
+"手动选定 · 已锁定" = "Đã chọn thủ công · Đã khóa";
 "手动选定的歌词不会被自动匹配替换" = "Lời chọn thủ công không bao giờ bị thay khi tự động khớp";
 "手动重新匹配" = "Tìm lại thủ công";
 "手势" = "Cử chỉ";
@@ -2371,6 +2374,7 @@
 "自动化权限可提高%@播放进度的准确性，并可在歌词上直接控制播放" = "Quyền Tự động hóa giúp tiến độ phát của %@ chính xác hơn và cho phép điều khiển phát ngay trên lời bài hát";
 "自动化权限可让 Lyrimuse 准确识别%@正在播放的歌曲，并可在歌词上直接控制播放" = "Quyền Tự động hóa giúp Lyrimuse nhận diện chính xác bài hát %@ đang phát và cho phép điều khiển phát ngay trên lời bài hát";
 "自动匹配 %@ 首缺失的歌词" = "Tự động tìm lời cho %@ bài còn thiếu";
+"自动匹配不会更改这份歌词" = "Tự động khớp sẽ không thay đổi lời này";
 "自动匹配中 %1$@/%2$@" = "Đang tự động tìm %1$@/%2$@";
 "自动匹配完成" = "Đã tự động tìm xong";
 "自动匹配完成，找到 %@ 首" = "Đã tự động tìm xong, tìm thấy %@ bài";

@@ -177,6 +177,13 @@ enum DebugDeepLinks {
         case .importLibrary:
             AppActions.shared.requestLyricsManagerSheet(.importLibrary, open: false)
             logger.notice("debug import library")
+        case let .lyricsSearch(key):
+            guard let summary = EnrichCacheStore.shared.summary(forKey: key) else {
+                logger.notice("debug lyrics search: key not in lyrics manager list")
+                return
+            }
+            AppActions.shared.openLyricsSearch(for: LyricsSearchTarget(summary: summary))
+            logger.notice("debug lyrics search")
         case let .importWatch(path):
             LyricsImportWatcher.shared.setFolder(path.map { URL(fileURLWithPath: $0, isDirectory: true) })
             logger.notice("debug import watch on=\(path != nil, privacy: .public)")

@@ -42,9 +42,27 @@ enum LyricsFeatureTint {
     static let romanization = Color.purple
     static let manual = Color.orange
     static let sourceChoice = Color.indigo
+    static let manualPick = Color.indigo
     static let pinned = Color.teal
     static let plainTextOnly = Color.orange
     static let noLyrics = Color.red
+}
+
+/// 「当前使用」那份是用户手动选定的时挂的标签:搜索候选歌词面板和歌词管理详情页共用文字、图标和悬停说明。
+extension ManualPickLock.Mark {
+    var badgeText: String? {
+        switch self {
+        case .none: return nil
+        case .picked: return L10n.t("手动选定")
+        case .pickedLocked: return L10n.t("手动选定 · 已锁定")
+        }
+    }
+
+    var badgeIcon: String { self == .pickedLocked ? "lock.fill" : "hand.point.up.left.fill" }
+
+    var badgeHelp: String {
+        self == .pickedLocked ? L10n.t("自动匹配不会更改这份歌词") : L10n.t("之后的自动搜索或评分变化仍可能替换这份歌词")
+    }
 }
 
 /// 正在放的那一句(歌词原始时间轴上的起点和它的逐字时间)、播没播、暂停在哪,给预览的「跟随播放」和当前句逐字染色用。

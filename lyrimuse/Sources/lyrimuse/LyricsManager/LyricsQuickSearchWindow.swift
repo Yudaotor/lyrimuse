@@ -43,6 +43,8 @@ struct LyricsQuickSearchWindow: View {
         let durationSecs: Double
         /// 这首眼下是不是标成了纯音乐(搜索面板里纯音乐按钮和说明条的初值)。
         let isInstrumental: Bool
+        /// 当前这份是不是用户手动选定的(「当前使用」那条的标记)。
+        let currentPick: ManualPickLock.Mark
     }
 
     var body: some View {
@@ -56,6 +58,7 @@ struct LyricsQuickSearchWindow: View {
                 LyricsSearchSheet(
                     artist: context.artist, title: context.title, album: context.album, songKey: context.key,
                     currentSource: context.currentSource, currentFingerprint: context.currentFingerprint,
+                    currentPick: context.currentPick,
                     durationSecs: context.durationSecs,
                     isMarkedInstrumental: context.isInstrumental,
                     onSetInstrumental: { value in await EnrichCacheStore.shared.setInstrumental(key: context.key, value) },
@@ -146,11 +149,11 @@ struct LyricsQuickSearchWindow: View {
         guard old.followsPlayback else {
             let marker = Self.storedMarker(key: old.key)
             guard marker.source != old.currentSource || marker.fingerprint != old.currentFingerprint
-                    || marker.instrumental != old.isInstrumental else { return }
+                    || marker.instrumental != old.isInstrumental || marker.pick != old.currentPick else { return }
             context = Context(
                 followsPlayback: false, artist: old.artist, title: old.title, album: old.album, key: old.key,
                 currentSource: marker.source, currentFingerprint: marker.fingerprint, durationSecs: old.durationSecs,
-                isInstrumental: marker.instrumental)
+                isInstrumental: marker.instrumental, currentPick: marker.pick)
             return
         }
         let p = PlaybackCoordinator.shared
@@ -163,12 +166,14 @@ struct LyricsQuickSearchWindow: View {
         let lyrics = cached?.storedLyrics ?? ""
         let fingerprint = lyrics.isEmpty ? nil : ManualPickLock.fingerprint(lyrics: lyrics)
         let instrumental = cached?.instrumental ?? false
+        let pick = Self.pickMark(key: key)
         guard source != old.currentSource || fingerprint != old.currentFingerprint || instrumental != old.isInstrumental
+                || pick != old.currentPick
         else { return }
         context = Context(
             followsPlayback: true, artist: old.artist, title: old.title, album: old.album, key: old.key,
             currentSource: source, currentFingerprint: fingerprint, durationSecs: old.durationSecs,
-            isInstrumental: instrumental)
+            isInstrumental: instrumental, currentPick: pick)
     }
 
     private func loadContext() {
@@ -177,7 +182,7 @@ struct LyricsQuickSearchWindow: View {
             context = Context(
                 followsPlayback: false, artist: target.artist, title: target.title, album: target.album, key: target.key,
                 currentSource: marker.source, currentFingerprint: marker.fingerprint, durationSecs: target.durationSecs,
-                isInstrumental: marker.instrumental)
+                isInstrumental: marker.instrumental, currentPick: marker.pick)
             return
         }
         let p = PlaybackCoordinator.shared
@@ -196,16 +201,22 @@ struct LyricsQuickSearchWindow: View {
             followsPlayback: true, artist: artist, title: EnrichCacheKeys.normalizedTitle(title),
             album: LocalPlaybackSource.albumOrListed(album: album, youtubeMusicAlbum: LocalPlaybackSource.shared.youtubeMusicAlbum),
             key: key, currentSource: source, currentFingerprint: fingerprint, durationSecs: durationSecs,
-            isInstrumental: cached?.instrumental ?? false)
+            isInstrumental: cached?.instrumental ?? false, currentPick: Self.pickMark(key: key))
     }
 
     /// 指定的那一首此刻的「当前使用」来源、正文指纹和纯音乐标记,按 key 原样从缓存取:lookup 会按正在播放的快照、时长变体去认,
     /// 同名的另一份录音在放时取到的是那一条。指纹取条目里存着的正文,标了纯音乐也照给。别借歌词管理的内存快照
     /// (`EnrichCacheStore.summary`):歌词管理关掉几秒后它就放了,这扇窗口照样开着;两边重读的先后也对不上。
-    private static func storedMarker(key: String) -> (source: String?, fingerprint: String?, instrumental: Bool) {
+    private static func storedMarker(key: String)
+        -> (source: String?, fingerprint: String?, instrumental: Bool, pick: ManualPickLock.Mark) {
         let stored = EnrichCacheReader.storedEntry(forKey: key)
         let fingerprint = stored.map { ManualPickLock.fingerprint(lyrics: $0.lyrics) }.flatMap { $0.isEmpty ? nil : $0 }
-        return (stored?.lyricsSource, fingerprint, stored?.instrumental ?? false)
+        return (stored?.lyricsSource, fingerprint, stored?.instrumental ?? false, stored?.manualPickMark ?? .none)
+    }
+
+    /// 正在放的那首按写回用的 key 取手动选定标记:标记要跟条目里存着的正文比,`lookup` 交出来的那份不带指纹。
+    private static func pickMark(key: String) -> ManualPickLock.Mark {
+        EnrichCacheReader.storedEntry(forKey: key)?.manualPickMark ?? .none
     }
 }
 
@@ -216,6 +227,17 @@ struct LyricsSearchTarget: Equatable {
     let title: String
     let album: String
     let durationSecs: Double
+}
+
+extension LyricsSearchTarget {
+    /// 歌词管理列表里的那一首。歌名先去掉时长变体的 `~durN`(缓存键里的消歧位,拿它去各源搜什么都搜不到),再过
+    /// normalizedTitle:缓存键存的是播放器原样的完整歌名,自动解析和「搜索歌词…」跟随播放那一路交给各源的都是剥过结尾
+    /// 说明括号的,这里得是同一份。写回仍按 key。
+    init(summary: EnrichCacheStore.Summary) {
+        self.init(key: summary.key, artist: summary.artist,
+                  title: EnrichCacheKeys.normalizedTitle(EnrichCacheKeys.strippingDurationVariantTitle(summary.title)),
+                  album: summary.displayAlbum, durationSecs: summary.durationSecs)
+    }
 }
 
 /// 「搜索歌词…」窗口里「重新自动匹配」的结论,带是哪一首(`AppActions.lyricsSearchRematched`)。

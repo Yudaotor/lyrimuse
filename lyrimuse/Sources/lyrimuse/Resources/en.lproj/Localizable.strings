@@ -405,6 +405,7 @@
 "之前手动选定的 %@ 首歌曲，歌词已被自动更新，不再是当初选定的版本，因此未锁定#one" = "The %@ song you picked earlier has since been updated automatically — it is no longer the version you chose, so it was not locked";
 "之前的自动决策" = "Earlier Automatic Decision";
 "之前的自定义" = "Previous Custom";
+"之后的自动搜索或评分变化仍可能替换这份歌词" = "Later automatic searches or score changes may still replace these lyrics";
 "乌克兰国家体系（联合国推荐），如 Привіт → Pryvit" = "Ukrainian national system (UN-recommended), e.g. Привіт → Pryvit";
 "乌克兰语" = "Ukrainian";
 "五" = "F";
@@ -1374,6 +1375,8 @@
 "所选条目无逐字时间轴" = "The selected entry has no word timing";
 "手动" = "Manual";
 "手动调整" = "Manually Adjusted";
+"手动选定" = "Hand-Picked";
+"手动选定 · 已锁定" = "Hand-Picked · Locked";
 "手动选定的歌词不会被自动匹配替换" = "Lyrics you pick manually are never replaced by auto-matching";
 "手动重新匹配" = "Manual re-match";
 "手势" = "Gestures";
@@ -2460,6 +2463,7 @@
 "自动化权限可让 Lyrimuse 准确识别%@正在播放的歌曲，并可在歌词上直接控制播放" = "Automation access lets Lyrimuse tell which song %@ is playing and lets you control playback right from the lyrics";
 "自动匹配 %@ 首缺失的歌词" = "Auto-Match Lyrics for %@ Missing Songs";
 "自动匹配 %@ 首缺失的歌词#one" = "Auto-Match Lyrics for %@ Missing Song";
+"自动匹配不会更改这份歌词" = "Auto-matching won’t change these lyrics";
 "自动匹配中 %1$@/%2$@" = "Auto-matching %1$@/%2$@";
 "自动匹配完成" = "Auto-Match Finished";
 "自动匹配完成，找到 %@ 首" = "Auto-match finished: %@ found";

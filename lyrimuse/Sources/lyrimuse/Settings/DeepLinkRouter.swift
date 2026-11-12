@@ -80,7 +80,8 @@ enum DeepLinkRouter {
         case .lyricsManager, .lyricsManagerSongVersions, .action(.openLyricsManagerHotkey, _, _): return "lyrics-manager"
         case .lyricsWindow, .action(.openLyricsWindowHotkey, _, _),
              .action(.toggleLyricsWindowMiniHotkey, _, _): return "lyrics-window"
-        case .lyricsSearch, .lyricsWindowSearch, .action(.lyricsQuickSearchHotkey, _, _): return "lyrics-quick-search"
+        case .lyricsSearch, .lyricsWindowSearch, .action(.lyricsQuickSearchHotkey, _, _),
+             .debug(.lyricsSearch): return "lyrics-quick-search"
         case .lyricsShare: return "lyrics-share"
         case .whatsNew: return WhatsNewWindow.sceneID
         case .onboarding: return "onboarding"
