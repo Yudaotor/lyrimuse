@@ -327,7 +327,7 @@
 "下一步" = "Weiter";
 "下一页" = "Nächste";
 "下一首" = "Nächster Titel";
-"下列播放器均会自动识别；如需仅识别部分播放器，请关闭右上角开关后手动勾选" = "Alle Player unten werden automatisch erkannt. Um nur einige zu erkennen, deaktiviere den Schalter oben rechts und wähle sie manuell aus";
+"下列播放器均会自动识别。若要仅识别部分播放器，请先勾选它们，再关闭右上角开关" = "Alle Player unten werden automatisch erkannt. Um nur einige zu erkennen, wähle sie zuerst aus und deaktiviere dann den Schalter oben rechts";
 "下移" = "Nach unten";
 "下载 Discord…" = "Discord laden …";
 "下载中…" = "Wird geladen …";

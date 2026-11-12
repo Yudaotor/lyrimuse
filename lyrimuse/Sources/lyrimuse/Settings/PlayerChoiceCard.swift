@@ -387,7 +387,7 @@ struct WebPlatformChoiceCard: View {
 // MARK: - 紧凑小格(设置页)
 
 /// 设置页用的方块格外壳(图标在上、名字在下,居中)。选中是浅色实底 + 发丝描边(`accent` 时换成强调色描边 +
-/// 一层很淡的强调色底,「音乐 App」手动勾选用),没选中只剩一圈细线,`flat`(「自动识别」开着、勾选不生效时)
+/// 一层很淡的强调色底,「音乐 App」手动勾选用),没选中只剩一圈细线,`flat`(由自动识别接管的未选卡片)
 /// 是一层中性浅底、不描边。指针压在上面叠一层淡底。
 /// 选中别用 `settingsCardBackground` 的玻璃:玻璃自带阴影,一卡十几格叠在一起显得重。
 /// 别改成图标和名字横排的长条:作者要的是方块。右上角的勾 / 「…」由各格自己用 `compactTileCorner` 叠。
@@ -503,8 +503,7 @@ private struct ColumnSpanKey: LayoutValueKey {
 
 /// `PlayerChoiceCard` 的设置页版:方块格,图标 + 名字。悬停说明、无障碍特征同大卡。
 /// 手动勾选时,选中是强调色描边 + 淡强调色底,没选中图标去色压淡、名字最淡一档 —— 靠整格颜色区分,不画勾。
-/// `isCoveredByAuto`(「自动识别」开着)时整格换成 `flat` 底,点了也不改勾选 —— 那时勾选不生效,
-/// 卡头下那条提示让用户先关掉开关。
+/// 由自动识别接管的未选卡片用 `flat` 底，仍可勾选。关掉自动识别后才按手动勾选的范围识别。
 struct PlayerCompactTile: View {
     let player: PlaybackPlayer
     let isSelected: Bool
@@ -513,18 +512,14 @@ struct PlayerCompactTile: View {
     let onSelect: () -> Void
 
     var body: some View {
-        Button {
-            guard !isCoveredByAuto else { return }
-            onSelect()
-        } label: {
+        Button(action: onSelect) {
             let faded = !isCoveredByAuto && !isSelected
             CompactTileLabel(title: player.displayName, dimmed: !isInstalled, faint: faded) {
                 PlayerIconView(player: player, size: 26)
                     .saturation(faded ? 0 : 1)
                     .opacity(faded || !isInstalled ? 0.45 : 1)
             }
-            .compactTileChrome(isSelected: isSelected, highlightsOnHover: !isCoveredByAuto, flat: isCoveredByAuto,
-                               accent: true)
+            .compactTileChrome(isSelected: isSelected, flat: isCoveredByAuto, accent: true)
         }
         .buttonStyle(.plain)
         .accessibilityAddTraits(isSelected ? .isSelected : [])

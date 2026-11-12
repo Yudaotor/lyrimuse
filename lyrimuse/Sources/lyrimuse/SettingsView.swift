@@ -5429,7 +5429,7 @@ private struct PlayerSettingsTab: View {
                     autoDetectSwitch
                 }
             }
-            // 开着「自动识别」时说清格子为什么不分选中、想只认几个该怎么做;关着时一行灰字讲清现在的规则。
+            // 开着「自动识别」时说明如何预先勾选播放器，关着时说明手动识别的范围。
             SettingsRawRow {
                 if isAuto {
                     autoDetectBanner
@@ -5460,7 +5460,7 @@ private struct PlayerSettingsTab: View {
         VStack(alignment: .leading, spacing: 4) {
             (Text(L10n.t("自动识别中")).fontWeight(.semibold).foregroundStyle(Color.accentColor)
                 + Text("  ")
-                + Text(L10n.t("下列播放器均会自动识别；如需仅识别部分播放器，请关闭右上角开关后手动勾选")))
+                + Text(L10n.t("下列播放器均会自动识别。若要仅识别部分播放器，请先勾选它们，再关闭右上角开关")))
             Text(L10n.t("未列出的 App 会在检测到时提示添加。此类 App 未经专门适配，兼容性无法保证，部分功能可能不可用"))
         }
             .font(.system(size: 11.5))
@@ -5489,6 +5489,7 @@ private struct PlayerSettingsTab: View {
                 .controlSize(.mini)
                 .labelsHidden()
                 .accessibilityLabel(PlaybackPlayer.auto.displayName)
+                .disabled(stores.players == [.auto])
             HelpButton(text: L10n.t("开启后识别所有内置播放器和「其他 App」中的 App"))
         }
     }

@@ -182704,91 +182704,91 @@
         }
       }
     },
-    "下列播放器均会自动识别；如需仅识别部分播放器，请关闭右上角开关后手动勾选" : {
+    "下列播放器均会自动识别。若要仅识别部分播放器，请先勾选它们，再关闭右上角开关" : {
       "extractionState" : "manual",
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Alle Player unten werden automatisch erkannt. Um nur einige zu erkennen, deaktiviere den Schalter oben rechts und wähle sie manuell aus"
+            "value" : "Alle Player unten werden automatisch erkannt. Um nur einige zu erkennen, wähle sie zuerst aus und deaktiviere dann den Schalter oben rechts"
           }
         },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "All players below are detected automatically. To detect only some of them, turn off the switch at the top right and select them manually"
+            "value" : "All players below are detected automatically. To detect only some of them, select those players first, then turn off the switch at the top right"
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Todos los reproductores de abajo se detectan automáticamente. Para detectar solo algunos, desactiva el interruptor de arriba a la derecha y selecciónalos manualmente"
+            "value" : "Todos los reproductores de abajo se detectan automáticamente. Para detectar solo algunos, selecciónalos primero y después desactiva el interruptor de arriba a la derecha"
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Tous les lecteurs ci-dessous sont détectés automatiquement. Pour n’en détecter que certains, désactivez l’interrupteur en haut à droite et cochez-les manuellement"
+            "value" : "Tous les lecteurs ci-dessous sont détectés automatiquement. Pour n’en détecter que certains, cochez-les d’abord, puis désactivez l’interrupteur en haut à droite"
           }
         },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Tutti i player qui sotto vengono rilevati automaticamente. Per rilevarne solo alcuni, disattiva l’interruttore in alto a destra e selezionali manualmente"
+            "value" : "Tutti i player qui sotto vengono rilevati automaticamente. Per rilevarne solo alcuni, selezionali prima e poi disattiva l’interruttore in alto a destra"
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "下のプレーヤーはすべて自動で検出されます。一部のみを検出するには、右上のスイッチをオフにして手動で選択してください"
+            "value" : "下のプレーヤーはすべて自動で検出されます。一部だけを検出するには、先に対象を選択してから右上のスイッチをオフにしてください"
           }
         },
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "아래 플레이어는 모두 자동으로 감지됩니다. 일부만 감지하려면 오른쪽 상단의 스위치를 끄고 직접 선택하십시오"
+            "value" : "아래 플레이어는 모두 자동으로 감지됩니다. 일부만 감지하려면 원하는 플레이어를 먼저 선택한 다음 오른쪽 상단의 스위치를 끄십시오"
           }
         },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Todos os players abaixo são detectados automaticamente. Para detectar só alguns, desative o botão no canto superior direito e marque-os manualmente"
+            "value" : "Todos os players abaixo são detectados automaticamente. Para detectar só alguns, marque-os primeiro e depois desative o botão no canto superior direito"
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Все плееры ниже распознаются автоматически. Чтобы распознавать только некоторые, выключите переключатель справа вверху и отметьте нужные"
+            "value" : "Все плееры ниже распознаются автоматически. Чтобы распознавать только некоторые, сначала отметьте нужные, а затем выключите переключатель справа вверху"
           }
         },
         "th" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "ตรวจหาเครื่องเล่นด้านล่างทั้งหมดโดยอัตโนมัติ หากต้องการตรวจหาเพียงบางตัว ให้ปิดสวิตช์ที่มุมขวาบนแล้วเลือกเอง"
+            "value" : "ตรวจหาเครื่องเล่นด้านล่างทั้งหมดโดยอัตโนมัติ หากต้องการตรวจหาเพียงบางตัว ให้เลือกเครื่องเล่นที่ต้องการก่อน แล้วปิดสวิตช์ที่มุมขวาบน"
           }
         },
         "uk" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Усі програвачі нижче розпізнаються автоматично. Щоб розпізнавати лише деякі, вимкніть перемикач угорі праворуч і позначте потрібні"
+            "value" : "Усі програвачі нижче розпізнаються автоматично. Щоб розпізнавати лише деякі, спочатку позначте потрібні, а потім вимкніть перемикач угорі праворуч"
           }
         },
         "vi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Mọi trình phát bên dưới đều được tự động nhận diện. Để chỉ nhận diện một số, hãy tắt công tắc ở góc trên bên phải rồi chọn thủ công"
+            "value" : "Mọi trình phát bên dưới đều được tự động nhận diện. Để chỉ nhận diện một số, hãy chọn các trình phát đó trước rồi tắt công tắc ở góc trên bên phải"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "下列播放器均会自动识别；如需仅识别部分播放器，请关闭右上角开关后手动勾选"
+            "value" : "下列播放器均会自动识别。若要仅识别部分播放器，请先勾选它们，再关闭右上角开关"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "下列播放器均會自動識別；如需僅識別部分播放器，請關閉右上角開關後手動勾選"
+            "value" : "下列播放器均會自動識別。若要僅識別部分播放器，請先勾選它們，再關閉右上角開關"
           }
         }
       }

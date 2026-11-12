@@ -327,7 +327,7 @@
 "下一步" = "Suivant";
 "下一页" = "Suivant";
 "下一首" = "Morceau suivant";
-"下列播放器均会自动识别；如需仅识别部分播放器，请关闭右上角开关后手动勾选" = "Tous les lecteurs ci-dessous sont détectés automatiquement. Pour n’en détecter que certains, désactivez l’interrupteur en haut à droite et cochez-les manuellement";
+"下列播放器均会自动识别。若要仅识别部分播放器，请先勾选它们，再关闭右上角开关" = "Tous les lecteurs ci-dessous sont détectés automatiquement. Pour n’en détecter que certains, cochez-les d’abord, puis désactivez l’interrupteur en haut à droite";
 "下移" = "Descendre";
 "下载 Discord…" = "Télécharger Discord…";
 "下载中…" = "Téléchargement…";
