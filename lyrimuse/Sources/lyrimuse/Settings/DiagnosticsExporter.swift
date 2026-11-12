@@ -77,14 +77,14 @@ enum DiagnosticsExporter {
         // zip 里的顶层目录跟着用户在保存面板里敲的名字走,解压出来是一个文件夹,
         // 不是三个散文件落进下载目录。
         let bundleName = url.deletingPathExtension().lastPathComponent
-        // 状态段要读 @MainActor 的单例,在主线程取;自动化权限先 await 出来传进去,
-        // 不能在主线程上同步查(见 `automationLine`)。日志段(慢的那部分)扔后台。
-        let head = stateLines(automation: await automationLine(), engineState: await engineStateOffMain())
+        // 状态段要读 @MainActor 的单例,在主线程取。日志段(慢的那部分)扔后台。
+        let head = stateLines(engineState: await engineStateOffMain())
         // 要查的播放器各自在不在跑、在不在出声、按 bundle id 单问到什么:要起 helper 子进程,在后台取。
         let reporting = await Task.detached(priority: .userInitiated) { PlayerReportingDiagnostics.reportLines() }.value
+        let permissions = await permissionLines()
         let entityAliasGaps = await EnrichCacheReader.songEntityAliasGapsText()
         await Task.detached(priority: .userInitiated) {
-            writeDiagnosticsBundle(to: url, bundleName: bundleName, head: head + reporting + [""],
+            writeDiagnosticsBundle(to: url, bundleName: bundleName, head: head + reporting + [""] + permissions + [""],
                                    secrets: secrets, currentTrackLines: currentTrackLines,
                                    entityAliasGaps: entityAliasGaps)
         }.value
@@ -94,7 +94,8 @@ enum DiagnosticsExporter {
     /// 交互式导出请用 `exportInteractively()`,别在主线程上等这个。
     @MainActor
     static func buildReport() async -> String {
-        return (stateLines(automation: await automationLine(), engineState: await engineStateOffMain()) + logLines(secrets: ConfigStore.shared.secretsForRedaction,
+        let permissions = await permissionLines()
+        return (stateLines(engineState: await engineStateOffMain()) + permissions + [""] + logLines(secrets: ConfigStore.shared.secretsForRedaction,
                                         currentTrackLines: currentTrackLyricsLines()))
             .joined(separator: "\n")
     }
@@ -108,12 +109,48 @@ enum DiagnosticsExporter {
         }
     }
 
-    /// 报告里自动化权限那一行。查询走 `MusicAutomationPermission.status`(专用线程 + 超时):
-    /// 那次系统调用可能永远不返回,在主线程同步等会把整个 App 冻住(02 章决策 8)。
-    private static func automationLine() async -> String {
-        let status = await MusicAutomationPermission.status(
-            bundleID: PlaybackPlayer.appleMusic.bundleIdentifier, askIfNeeded: false)
-        return "Automation permission: " + (status.map { "\($0)" } ?? "timed out")
+    /// 「自动化」和「辅助功能 / 完全磁盘访问」两段(`PermissionDiagnostics`,02 章决策 256)。授权状态只读、不弹窗:
+    /// 自动化走 `MusicAutomationPermission.status`(专用线程 + 超时,那次系统调用可能永远不返回,02 章决策 8),只问在跑的播放器
+    /// (没在跑时系统答不出,用它上次运行时的结论);脚本只读探测和进程表在后台跑。
+    @MainActor
+    private static func permissionLines() async -> [String] {
+        let selected = PlaybackPlayerPreference.selected
+        func grant(_ status: MusicAutomationPermissionStatus) -> AutomationAlert.Grant {
+            switch status {
+            case .authorized: return .authorized
+            case .denied: return .denied
+            case .notDetermined: return .undetermined
+            }
+        }
+        var running: [PlaybackPlayer: String] = [:]
+        var grants: [PlaybackPlayer: AutomationAlert.Grant] = [:]
+        var lastKnown: [PlaybackPlayer: AutomationAlert.Grant] = [:]
+        for player in PlaybackPlayer.allCases where player.needsAutomationPermission {
+            lastKnown[player] = AutomationLastStatusMemory.last(player).map(grant)
+            guard let id = PlayerBundleAliases.all(for: player.bundleIdentifier)
+                .first(where: { MusicAutomationPermission.isRunning(bundleID: $0) }) else { continue }
+            running[player] = id
+            if let status = await MusicAutomationPermission.status(bundleID: id, askIfNeeded: false) {
+                grants[player] = grant(status)
+            }
+        }
+        let accessibilityTrusted = AccessibilitySkipPress.isTrusted
+        let accessibilityEver = PermissionGrantMemory.everGranted(PermissionGrantMemory.accessibilityKey)
+        let fullDiskEver = PermissionGrantMemory.everGranted(PermissionGrantMemory.fullDiskAccessKey)
+        let snapshot = (running, grants, lastKnown)
+        return await Task.detached(priority: .userInitiated) {
+            let (running, grants, lastKnown) = snapshot
+            let automation = PermissionDiagnostics.automationLines(
+                selected: selected, runningBundleID: { running[$0] }, grant: { grants[$0] },
+                lastKnown: { lastKnown[$0] }, probe: { AutomationReadProbe.run($0, bundleID: $1) })
+            let access = PermissionDiagnostics.accessLines(
+                selected: selected,
+                isRunning: { PlayerBundleAliases.all(for: $0.bundleIdentifier).contains { PlayerProcess.pid(exactBundleID: $0) != nil } },
+                accessibilityTrusted: accessibilityTrusted, accessibilityEverGranted: accessibilityEver,
+                appFullDiskAccess: FullDiskAccessProbe.isGranted(), fullDiskAccessEverGranted: fullDiskEver,
+                engineState: LocalCacheAccess.current)
+            return automation + [""] + access
+        }.value
     }
 
     /// launchd 里那条服务的状态。`EngineServiceManager.state` 会起 `launchctl print` 子进程并同步等它退出,
@@ -124,7 +161,7 @@ enum DiagnosticsExporter {
 
     /// 报告的状态段 —— 全部来自 @MainActor 隔离的单例,但都是内存读,很便宜(launchd 状态由调用方在后台取好传进来)。
     @MainActor
-    private static func stateLines(automation: String, engineState: LaunchdJobState) -> [String] {
+    private static func stateLines(engineState: LaunchdJobState) -> [String] {
         var lines: [String] = []
 
         lines.append("Lyrimuse Diagnostics")
@@ -160,7 +197,6 @@ enum DiagnosticsExporter {
         lines.append("== State ==")
         let settings = AppSettings.shared
         let config = ConfigStore.shared
-        lines.append(automation)
         // media-control 私有通道的自检结果。QQ 音乐/网易云的一切都经它读,一旦系统更新
         // 把那套私有 API 改坏,现象是"歌词不动",而这跟"没在放歌"从表象上分不开 ——
         // 报告里必须有这一行,否则排查会从歌词源一路白查到网络。见 MediaControlHealth。
