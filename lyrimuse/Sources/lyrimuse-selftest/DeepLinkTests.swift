@@ -401,6 +401,19 @@ func runDeepLinkTests() {
                     "debug: 导入库面板、设监视文件夹、停止监视")
         expectEqual(link("lyrimuse://debug/lyrics-search?key=A%7CB%7CC"), .debug(.lyricsSearch(key: "A|B|C")),
                     "debug: 按写法键开搜索歌词窗口,键原样")
+        expectEqual([link("lyrimuse://debug/lyrics-writeback?step=open"), link("lyrimuse://debug/lyrics-writeback?step=confirm"),
+                     link("lyrimuse://debug/lyrics-writeback?step=cancel")],
+                    [.debug(.lyricsWriteback(step: "open")), .debug(.lyricsWriteback(step: "confirm")),
+                     .debug(.lyricsWriteback(step: "cancel"))], "debug: 写入歌曲文件的三步")
+        expectEqual(link("lyrimuse://debug/lyrics-writeback") == nil && link("lyrimuse://debug/lyrics-writeback?step=write") == nil, true,
+                    "debug: 写入歌曲文件认不出的步骤不收")
+        expectEqual(link("lyrimuse://debug/simulate?title=x&file=/Users/a/b%20c.mp3&file_player=com.apple.Music"),
+                    .debug(.simulate(title: "x", artist: "", album: "", duration: nil, position: 0, playing: true,
+                                     localFile: "/Users/a/b c.mp3", localFilePlayer: "com.apple.Music")),
+                    "debug: 模拟播放带本地文件和它的播放器")
+        expectEqual(link("lyrimuse://debug/simulate?title=x&file=rel.mp3"),
+                    .debug(.simulate(title: "x", artist: "", album: "", duration: nil, position: 0, playing: true)),
+                    "debug: 模拟播放的本地文件不是绝对路径就不认")
         expectEqual(link("lyrimuse://debug/lyrics-search") == nil && link("lyrimuse://debug/lyrics-search?key=") == nil, true,
                     "debug: 搜索歌词窗口没带写法键认不出")
         expectEqual(link("lyrimuse://debug/import-watch") == nil && link("lyrimuse://debug/import-watch?path=rel") == nil, true,
@@ -492,6 +505,9 @@ func runDeepLinkTests() {
             .debug(.simulate(title: "x", artist: "", album: "", duration: 30, position: 0, playing: true, ad: true)),
             .debug(.simulate(title: "x", artist: "", album: "", duration: nil, position: 0, playing: true,
                              artworkPath: "/tmp/cover 1.jpg")),
+            .debug(.simulate(title: "x", artist: "", album: "", duration: nil, position: 0, playing: true,
+                             localFile: "/tmp/a b.flac", localFilePlayer: "com.apple.Music")),
+            .debug(.lyricsWriteback(step: "open")), .debug(.lyricsWriteback(step: "confirm")),
             .debug(.simulateIdle),
             .debug(.toggleFavorite), .debug(.idleResume), .debug(.seek(seconds: 99.7)), .debug(.seek(seconds: 0)),
             .debug(.knockout(leg: .appleMusicScript, on: false)), .debug(.knockout(leg: .spotifyScript, on: true)),

@@ -4000,9 +4000,11 @@ public final class LocalPlaybackSource: ObservableObject {
     /// 每拍轮询的出口与拖动之后各调一次;保活由发布方自己的计时器做,不走这里。
     /// 身份按引擎的口径清洗(`EnrichCacheKeys.cleanTag`),位置不含歌词偏移。
     private func publishPlaybackState(now: Date = Date()) {
-        // 模拟播放不写给引擎(引擎据此打卡、推送):引擎照旧当在放模拟之前那首,保活由发布方自己续。
+        // 模拟播放不写给引擎(引擎据此打卡、推送):引擎照旧当在放模拟之前那首,保活由发布方自己续。正在放的本地文件
+        // 由模拟深链自己设(DebugDeepLinks)。
         guard !PlaybackSimulation.isActive else { return }
         guard !title.isEmpty, let snapshot = lastSnapshot else {
+            NowPlayingLocalFileModel.shared.update(nil)
             PlaybackStatePublisher.shared.publish(.idle(), now: now)
             return
         }
@@ -4063,6 +4065,7 @@ public final class LocalPlaybackSource: ObservableObject {
             spoken: Self.spokenAudioPlayers.contains(bundleID) && spokenAudioKey == snapshot.identityKey
                 ? spokenAudioVerdict : nil,
             appleCatalogStream: appleLibraryTrack?.catalogStream == true ? true : nil)
+        NowPlayingLocalFileModel.shared.update(input.localFile.map { NowPlayingLocalFile(player: bundleID, path: $0) })
         PlaybackStatePublisher.shared.publish(input, now: now)
     }
 

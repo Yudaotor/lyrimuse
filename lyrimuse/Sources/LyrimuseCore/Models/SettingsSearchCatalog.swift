@@ -35,6 +35,8 @@ public struct SettingsSearchEntry: Hashable, Sendable, Identifiable {
         case account(String)
         /// 「软件更新」页:不属于六分类,App 侧是 `SettingsSidebarItem.softwareUpdate`。
         case softwareUpdate
+        /// 「实验室」总览页本身(上面的开关行),App 侧是 `SettingsSidebarItem.labs`。
+        case labs
     }
 
     public let destination: Destination
@@ -72,6 +74,7 @@ public struct SettingsSearchEntry: Hashable, Sendable, Identifiable {
         case .tab(let raw): dest = "tab:\(raw)"
         case .account(let name): dest = "account:\(name)"
         case .softwareUpdate: dest = "softwareUpdate"
+        case .labs: dest = "labs"
         }
         return "\(dest)|\(sectionValue ?? "")|\(pathKeys.joined(separator: "/"))|\(titleKey)"
     }
@@ -334,6 +337,10 @@ public enum SettingsSearchCatalog {
                                        group: String?) -> SettingsSearchEntry {
         SettingsSearchEntry(destination: .softwareUpdate, titleKey: title, subtitleKey: sub, keywords: kw,
                             pathKeys: ["软件更新"] + (group.map { [$0] } ?? []))
+    }
+
+    private static func labs(_ title: String, sub: String? = nil, kw: [String] = []) -> SettingsSearchEntry {
+        SettingsSearchEntry(destination: .labs, titleKey: title, subtitleKey: sub, keywords: kw, pathKeys: ["实验室"])
     }
 
     private static func account(_ name: String, path: [String], sectionValue: String? = nil, _ title: String,
@@ -676,6 +683,8 @@ public enum SettingsSearchCatalog {
 
         // ---- 关于 ----
         // 「软件更新」页。「软件更新」同时也是「关于 › 更新与帮助」卡里那一行入口的标题,目的地都是这一页。
+        labs("自动写入歌曲文件", sub: "播放本地 MP3 或 FLAC 时，把确定的歌词写进文件，不覆盖其他软件写入的歌词",
+             kw: ["写回", "内嵌歌词", "USLT", "标签", "歌词写入文件"]),
         softwareUpdate("软件更新", kw: ["更新", "Sparkle", "版本", "检查更新", "升级"], group: nil),
         softwareUpdate("自动检查", sub: "每天检查一次新版本", kw: ["更新", "自动"], group: "更新设置"),
         softwareUpdate("自动下载并安装", sub: "在后台下载，退出 Lyrimuse 时安装", kw: ["更新", "自动"], group: "更新设置"),

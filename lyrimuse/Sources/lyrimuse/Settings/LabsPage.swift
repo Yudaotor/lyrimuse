@@ -70,10 +70,25 @@ struct LabsPage: View {
     @ObservedObject private var relayStatus = RelayPushStatusWatcher.shared
     @ObservedObject private var lbStatus = ListenBrainzSubmitStatusWatcher.shared
     @ObservedObject private var notifyLog = NotificationDeliveryWatcher.shared
+    @ObservedObject private var features = FeatureSettingsStore.shared
 
     var body: some View {
         SettingsPage(title: L10n.t("实验室"), subtitle: L10n.t("尚在试验阶段的功能，后续可能调整、重构或移除")) {
             VStack(spacing: 14) {
+                // 「自动写入歌曲文件」:闸门在引擎 lyricsautowriteback.go(features LyricsAutoWriteback),规则见 11 章决策 163。
+                SettingsCard {
+                    SettingsRow(
+                        icon: "square.and.arrow.down.on.square",
+                        title: L10n.t("自动写入歌曲文件"),
+                        subtitle: L10n.t("播放本地 MP3 或 FLAC 时，把确定的歌词写进文件，不覆盖其他软件写入的歌词")
+                    ) {
+                        Toggle("", isOn: Binding(
+                            get: { features.lyricsAutoWriteback },
+                            set: { features.lyricsAutoWriteback = $0; Task { await features.save() } }
+                        ))
+                        .labelsHidden()
+                    }
+                }
                 SettingsCard {
                     let destinations = AccountDestination.allCases.filter(\.livesInLabs)
                     ForEach(Array(destinations.enumerated()), id: \.element) { index, destination in

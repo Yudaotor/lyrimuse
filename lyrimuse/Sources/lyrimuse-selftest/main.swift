@@ -86,6 +86,7 @@ let groups: [TestGroup] = [
     TestGroup(name: "telemetry", summary: "匿名遥测:心跳判据 / 播放器写法 / 路径脱敏 / 崩溃摘要 / 每日活动记账 / 负载键名跟 Worker 对得上 / 接线", run: runTelemetryTests),
     TestGroup(name: "update-channel", summary: "更新频道:版本号 / 构建号(与 build-version.sh 交叉校验)/ Release 列表 / 测试版该读哪份 appcast", run: runUpdateChannelTests),
     TestGroup(name: "settings-ui", summary: "设置页交互纯逻辑:顺序优先列表拖拽排序(滞回 / 让位 / 写回)/ 导入字体 / 配置包自报信息 / 系统语言(样例与引擎共用)/ 设置深链 / 设置窗侧栏宽度与收不起", run: runSettingsInteractionTests),
+    TestGroup(name: "lyrics-writeback", summary: "歌词写回:能不能写的判定、Apple Music 只写文字、错误码文案与引擎对拍", run: runLyricsWritebackTests),
     TestGroup(name: "deep-links", summary: "lyrimuse:// 路由表:老链接兼容 / 认不出不落进授权回调 / 往返 / 设置二级分段对得上 App 枚举", run: runDeepLinkTests),
     TestGroup(name: "settings-search", summary: "设置搜索:目录 ↔ 源码调用点 ↔ catalog 三方对账 / 匹配排序", run: runSettingsSearchTests),
     TestGroup(name: "onboarding", summary: "首启引导:步骤序列 / 翻页防越界 / 锁与收尾 / 体检清单 / 收尾页顺序 / 开场时间轴与月桂冠 / 撒花几何", run: runOnboardingTests),

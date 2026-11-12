@@ -135,7 +135,7 @@ func runSettingsSearchTests() {
         switch entry.destination {
         case .tab(let raw): if !tabCases.contains(raw) { badDestinations.append("\(entry.titleKey)→tab:\(raw)") }
         case .account(let name): if !accountCases.contains(name) { badDestinations.append("\(entry.titleKey)→account:\(name)") }
-        case .softwareUpdate: break   // 单页,没有枚举值要对
+        case .softwareUpdate, .labs: break   // 单页,没有枚举值要对
         }
         switch (entry.sectionKey, entry.sectionValue) {
         case (nil, nil): break
@@ -302,6 +302,7 @@ func runSettingsSearchTests() {
         case .tab(let raw): dest = "tab:\(raw)"
         case .account(let name): dest = "account:\(name)"
         case .softwareUpdate: dest = "softwareUpdate"
+        case .labs: dest = "labs"
         }
         var row: [String: Any] = ["dest": dest, "path": entry.pathKeys, "title": entry.titleKey]
         if let subtitle = entry.subtitleKey { row["subtitle"] = subtitle }

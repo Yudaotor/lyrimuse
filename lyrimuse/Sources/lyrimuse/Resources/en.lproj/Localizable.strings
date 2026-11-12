@@ -138,6 +138,7 @@
 "Android" = "Android";
 "Apple Music" = "Apple Music";
 "Apple Music 播放的曲目 ID 一致" = "Same Apple Music track ID from playback";
+"Apple Music 曲目只写入歌词文字" = "For Apple Music tracks, only the lyric text is written";
 "Apple Music 检索结果为同一曲目" = "Same track found by Apple Music search";
 "Apple Music 登录已失效（已过期或被撤销），请重新连接" = "Your Apple Music sign-in is no longer valid (expired or revoked). Reconnect to continue";
 "Apple Music 的官方歌词，连接账号后可用" = "Apple Music’s own lyrics, available after you connect your account";
@@ -408,6 +409,7 @@
 "之后的自动搜索或评分变化仍可能替换这份歌词" = "Later automatic searches or score changes may still replace these lyrics";
 "乌克兰国家体系（联合国推荐），如 Привіт → Pryvit" = "Ukrainian national system (UN-recommended), e.g. Привіт → Pryvit";
 "乌克兰语" = "Ukrainian";
+"云盘里的文件暂不支持写入" = "Files in cloud storage can’t be written to yet";
 "五" = "F";
 "亚马逊的流媒体音乐 App" = "Amazon’s music streaming app";
 "交错" = "Staggered";
@@ -623,10 +625,15 @@
 "内容获印证" = "Content corroborated";
 "内建屏幕" = "Built-in";
 "内部数据不是有效的 JSON，已取消保存" = "The data isn’t valid JSON, so nothing was saved";
+"写入" = "Write";
 "写入 config.json 失败：%@" = "Couldn’t write config.json: %@";
 "写入功能开关文件失败：%@" = "Couldn’t write the feature flags file: %@";
+"写入后的校验没有通过" = "The check after writing didn’t pass";
+"写入失败" = "Couldn’t write";
+"写入时文件被其他程序改动" = "Another app changed the file while it was being written";
 "写入本地记录文件失败，歌词引擎未能执行此次修改" = "Couldn’t write the local records file; the lyrics engine couldn’t apply this change";
 "写入本地记录文件失败：%@" = "Couldn’t write the local records file: %@";
+"写入歌曲文件…" = "Write to Song File…";
 "决定性差异：「%@」" = "Deciding difference: “%@”";
 "准备密钥" = "Get Your API Keys";
 "减少推荐" = "Suggest Less";
@@ -744,6 +751,7 @@
 "原文" = "Original";
 "原文 + 译文" = "Original + Translation";
 "原文 + 读音" = "Original + Romanization";
+"原文件没有改动" = "The original file wasn’t changed";
 "原来的 %@ 文件可以留作副本，删除前会先自动备份" = "Keep the existing %@ files as copies, or delete them. A backup is made before deleting";
 "去年今日收听 %@ 次，以下为循环最多的歌曲" = "A year ago today: %@ plays, most on repeat";
 "去年今日收听 %@ 次，以下为循环最多的歌曲#one" = "A year ago today: %@ play, most on repeat";
@@ -785,6 +793,7 @@
 "只显示歌词源自带的读音" = "Shows only romanization supplied by the lyrics source";
 "只有播放次数、时长和新听了几位歌手" = "Just plays, listening time and how many new artists";
 "只给汉字标注平假名" = "Hiragana for kanji only";
+"只能写入正在播放的本地 MP3 或 FLAC 文件" = "Only a local MP3 or FLAC file that’s playing can be written to";
 "只补没有歌词的歌曲" = "Only Songs Without Lyrics";
 "可以直接粘贴完整地址，会自动识别是哪个平台" = "Paste the full URL and the platform is recognized automatically";
 "可同时开启多项" = "You can turn on more than one";
@@ -1039,6 +1048,7 @@
 "将播放记录同步到 Last.fm" = "Syncs what you play to Last.fm";
 "将播放记录同步到 ListenBrainz" = "Syncs what you play to ListenBrainz";
 "将文件夹中的歌词文件对应到歌词库中的歌曲，导入前可预览" = "Matches the lyrics files in a folder to songs in your library, with a preview before importing";
+"将歌词写入歌曲文件？" = "Write Lyrics to the Song File?";
 "将此句恢复为编辑前的内容" = "Revert this line to how it was when editing began";
 "将消息转发到微信的服务：使用微信扫码登录获取 SendKey，报告将显示在微信「方糖」服务号中" = "A service that forwards messages to WeChat. Scan the QR code with WeChat to get a SendKey; reports arrive in the Fangtang official account";
 "将清除 %d 首歌曲的手动时间轴校准，此操作无法撤销。歌词内容和设置中的「时间轴偏移」不受影响。清除后，这些歌曲将恢复自动更新歌词源" = "This clears the manual timing calibration for %d songs and can’t be undone. The lyrics and the Timing Offset setting are unaffected. Afterwards these songs resume automatic lyrics source updates";
@@ -1109,6 +1119,7 @@
 "已停用" = "Off";
 "已允许局域网访问且无需授权，同一网络中的设备也可控制 Pear Desktop" = "Local network access is allowed without authorization, so devices on the same network can also control Pear Desktop";
 "已允许局域网访问，同一网络中的设备也可控制洛雪音乐" = "Local network access is allowed, so devices on the same network can also control LX Music";
+"已写入 %@" = "Written to %@";
 "已减少推荐" = "Suggested Less";
 "已分享的链接将失效" = "Links you’ve already shared will stop working";
 "已删除" = "Deleted";
@@ -1409,10 +1420,12 @@
 "扫描间隔" = "Scan Interval";
 "批量匹配" = "Batch Matching";
 "找不到该会话（Chat ID 有误，或尚未向机器人发送过消息）" = "Chat not found (incorrect Chat ID, or you haven’t messaged the bot yet)";
+"找不到这个文件" = "The file can’t be found";
 "找到 %1$@ · 未找到 %2$@ · 跳过 %3$@" = "Found %1$@ · Not found %2$@ · Skipped %3$@";
 "找到 %@ 首" = "%@ Found";
 "把「默认正文」换成概况、三份榜单、新歌手几段，可以逐段删改、调整顺序" = "Replace the default body with its parts (summary, the three charts, new artists) so you can edit, remove or reorder each one";
 "把下面的按钮拖进格子，格子可以留空" = "Drag buttons from below into the slots; slots can stay empty";
+"把这首歌词写进正在播放的歌曲文件" = "Write these lyrics into the song file that’s playing";
 "报告内容" = "Report Content";
 "拆分" = "Split";
 "拆分…" = "Split…";
@@ -1532,6 +1545,7 @@
 "播放控制" = "Controls";
 "播放控制位置" = "Controls Position";
 "播放时显示动画，暂停时静止" = "Animates while music plays and stays still when paused";
+"播放本地 MP3 或 FLAC 时，把确定的歌词写进文件，不覆盖其他软件写入的歌词" = "When a local MP3 or FLAC file plays, writes the settled lyrics into it without overwriting lyrics written by other apps";
 "播放本机文件时，先用同名 .lrc 或文件里内嵌的歌词" = "When playing a local file, use its same-name .lrc or embedded lyrics first";
 "播放来源" = "Played In";
 "播放次数" = "Plays";
@@ -1574,9 +1588,11 @@
 "整行时间轴" = "Line timing";
 "文件中包含账号凭证与密钥的明文，请妥善保管，请勿分享。歌词库将另存为同名的第二个文件，迁移时请一并拷贝" = "The file contains your account credentials and keys in plain text. Keep it safe and don’t share it. The lyrics library is saved as a second file with a matching name; copy both when moving to a new Mac";
 "文件中尚无歌词，未保存" = "The file has no lyrics yet; not saved";
+"文件中已有的歌词将被替换" = "The lyrics already in the file will be replaced";
 "文件夹中新增或修改的歌词文件会自动导入：对应的歌曲没有歌词时直接补上，已有歌词的不变" = "New or changed lyrics files in the folder are imported automatically: songs without lyrics get them right away, songs with lyrics stay unchanged";
 "文件夹中没有可识别的歌词文件" = "No recognizable lyrics files in this folder";
 "文件夹导入方式" = "Folder Import";
+"文件所在的磁盘是只读的" = "The disk the file is on is read-only";
 "文件过多（上限 %@ 个、200 MB），请分批导入" = "Too many files (limit %@ files, 200 MB). Import them in batches";
 "文件过大，不像是歌词，未保存" = "The file is too large to be lyrics; not saved";
 "文件过大，无法导入" = "The file is too large to import";
@@ -1757,6 +1773,7 @@
 "更新时间 旧→新" = "Updated Oldest→Newest";
 "更新设置" = "Update Settings";
 "更早的记录尚未加载，这些行暂不编号" = "Older plays aren’t loaded yet, so those rows aren’t numbered";
+"替换" = "Replace";
 "替换并锁定" = "Replace and Lock";
 "替换现有歌词" = "Replace Current Lyrics";
 "最后一句晚于歌曲结束 5 秒以上，可能是完整版歌词对应了精简版曲目" = "The last line falls more than 5 seconds after the track ends; likely full-version lyrics for an edited track";
@@ -2155,8 +2172,10 @@
 "汽水音乐歌曲 ID 一致" = "Same Soda Music song ID";
 "汽水音乐歌曲页" = "Soda Music song page";
 "汽水音乐的歌词接口返回了无法识别的内容（接口可能已变更），并非这首歌曲无歌词，通常将在后续版本中修复" = "Soda Music’s lyrics API returned unrecognized content (the API may have changed). This doesn’t mean the song has no lyrics; a later update usually fixes it";
+"没有写入这个文件的权限" = "No permission to write to this file";
 "没有封面时显示「%@」" = "Shows “%@” when there’s no artwork";
 "没有封面时显示所选图标" = "Shows the chosen icon when there is no artwork";
+"没能写入歌曲文件" = "Couldn’t Write to the Song File";
 "没能取到真实数据（网络或后台服务未响应），先用测试数据示意" = "Couldn’t fetch real data (network or background service not responding), so sample data is shown";
 "沿用同曲条目「%@」的时间轴校准，在此调整后将保存到当前条目" = "Uses the timing calibration from “%@”, another entry of this song. Adjusting it here saves it to this entry";
 "沿用同曲条目的人工修正" = "Uses the manual correction from another entry of this song";
@@ -2285,6 +2304,7 @@
 "监视文件夹不能是歌词文件夹，也不能包含它或在它里面" = "The watched folder can’t be the lyrics folder, contain it, or be inside it";
 "监视文件夹与歌词文件夹重叠，已暂停自动导入" = "The watched folder overlaps the lyrics folder, so automatic import is paused";
 "监视的文件夹已不存在" = "The watched folder no longer exists";
+"目前只支持 MP3 和 FLAC 文件" = "Only MP3 and FLAC files are supported for now";
 "直连失败时，经下方代理服务器重试" = "If a direct connection fails, retry through the proxy server below";
 "直连失败时，经系统代理或本机检测到的代理重试" = "If a direct connection fails, retry through the system proxy or a proxy detected on this Mac";
 "相邻短句可容纳于一行时合并显示" = "Adjacent short lines are merged when they fit on one line";
@@ -2424,6 +2444,7 @@
 "网络不可用，已搜索 %1$@ 首、找到 %2$@ 首后停止#one" = "No connection: stopped after %1$@ song, %2$@ found";
 "网络不可用，已暂停，稍后将自动继续" = "Paused: no connection; it resumes automatically";
 "网络不可用，稍后重试…" = "No connection, retrying shortly…";
+"网络位置上的文件暂不支持写入" = "Files on network locations can’t be written to yet";
 "网络可能不可用，本轮未找到任何候选" = "The network may be unavailable; no candidates were found this round";
 "网络无法连接，暂时无法获取歌词" = "Can’t reach the network — no lyrics yet";
 "网络请求全部失败（DNS / 连接问题），本轮探测未能执行" = "All network requests failed (DNS/connection issue), so this probe round could not run";
@@ -2458,6 +2479,7 @@
 "自动" = "Auto";
 "自动 Scrobble" = "Automatic Scrobbling";
 "自动下载并安装" = "Download and Install Automatically";
+"自动写入歌曲文件" = "Write to Song Files Automatically";
 "自动化权限" = "Automation Permission";
 "自动化权限可提高%@播放进度的准确性，并可在歌词上直接控制播放" = "Automation access keeps %@’s playback progress accurate and lets you control playback right from the lyrics";
 "自动化权限可让 Lyrimuse 准确识别%@正在播放的歌曲，并可在歌词上直接控制播放" = "Automation access lets Lyrimuse tell which song %@ is playing and lets you control playback right from the lyrics";
@@ -2723,8 +2745,11 @@
 "这一期的最后一天" = "Last day of this period";
 "这一期的第一天" = "First day of this period";
 "这一期还没有收听记录，先用测试数据示意" = "No listens in this period yet, so sample data is shown";
+"这不是普通的音频文件" = "This isn’t a regular audio file";
 "这个地址看起来是%@的。要换平台，请删除这个渠道后重新添加" = "This URL looks like %@. To change platform, delete this channel and add it again";
 "这个播放器放的是另一个母版，换用它自家平台的歌词才对得上" = "This player streams a different master, so its own platform’s lyrics line up with it";
+"这个文件有多个硬链接，写入会把它们拆开" = "This file has multiple hard links, and writing would split them apart";
+"这个文件的标签格式暂不支持写入" = "This file’s tag format can’t be written to yet";
 "这也是你最长的连续记录" = "Your longest streak yet";
 "这些歌词源连续失败，本轮暂未查询" = "These sources failed repeatedly and were not queried this round";
 "这些记录无歌词，且无歌手或时长超过 20 分钟，通常为广告、播客或有声书。人工修正、标为纯音乐、已校准时间轴的记录和正在播放的歌曲不包含在内；再次播放时将重新匹配" = "These entries have no lyrics and either no artist or a duration over 20 minutes — usually ads, podcasts, or audiobooks. Manually edited, instrumental, and calibrated entries and the song now playing aren’t included. They’ll be matched again if played";
@@ -2761,6 +2786,7 @@
 "这首歌曲的歌词经过手动修改或选定，更换后将被覆盖" = "These lyrics were edited or chosen manually and will be replaced";
 "这首歌曲的语言未在设置的「标注读音的语言」中开启" = "This song’s language is turned off in Settings › Romanization Languages";
 "这首歌曲调整过歌词时间轴（%@），更换歌词后该校准可能失效" = "You’ve adjusted this song’s lyrics timing (%@); with new lyrics that adjustment may no longer fit";
+"这首歌没有可写入的歌词" = "This song has no lyrics to write";
 "进入全屏" = "Enter Full Screen";
 "进入迷你尺寸" = "Enter Mini Size";
 "进度条" = "Progress Bar";

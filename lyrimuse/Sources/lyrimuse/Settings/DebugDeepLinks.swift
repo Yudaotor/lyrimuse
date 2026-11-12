@@ -18,6 +18,8 @@ enum DebugDeepLinks {
     static var isEnabled: Bool { UserDefaults.standard.bool(forKey: enabledKey) }
     /// `debug/settings-search` 的搜索词,设置窗口收到后按搜索结果的第一条跳过去。
     static let settingsSearchNotification = Notification.Name("lyrimuse.debug.settingsSearch")
+    /// `debug/lyrics-writeback` 的步骤(open / confirm / cancel),歌词管理收到后对正显示的那首照做。
+    static let lyricsWritebackNotification = Notification.Name("lyrimuse.debug.lyricsWriteback")
     /// `debug/notify-channel` 的渠道 id(空串 = 第一个),推送渠道卡收到后打开那个渠道的编辑弹窗。
     static let editNotifyChannelNotification = Notification.Name("lyrimuse.debug.editNotifyChannel")
 
@@ -38,7 +40,7 @@ enum DebugDeepLinks {
         case .telemetryPreview: writeTelemetryPreview()
         case .checkpoint: checkpoint()
         case .restore: restore()
-        case let .simulate(title, artist, album, duration, position, playing, ad, artworkPath):
+        case let .simulate(title, artist, album, duration, position, playing, ad, artworkPath, localFile, localFilePlayer):
             // 封面只读本机文件,限 20MB;读不到就当没有封面。
             let artwork = artworkPath.flatMap { path -> Data? in
                 let url = URL(fileURLWithPath: path)
@@ -48,10 +50,14 @@ enum DebugDeepLinks {
             PlaybackSimulation.begin(PlaybackSimulation(
                 title: title, artist: artist, album: album, duration: duration, position: position, playing: playing, ad: ad,
                 artwork: artwork))
+            NowPlayingLocalFileModel.shared.update(localFile.map {
+                NowPlayingLocalFile(player: localFilePlayer ?? PlaybackSimulation.bundleIdentifier, path: $0)
+            })
             LocalPlaybackSource.shared.simulationChanged()
             logger.notice("debug simulate on ad=\(ad, privacy: .public)")
         case .simulateIdle:
             PlaybackSimulation.begin(.nothingPlaying())
+            NowPlayingLocalFileModel.shared.update(nil)
             LocalPlaybackSource.shared.simulationChanged()
             logger.notice("debug simulate idle")
         case .simulateOff:
@@ -184,6 +190,9 @@ enum DebugDeepLinks {
             }
             AppActions.shared.openLyricsSearch(for: LyricsSearchTarget(summary: summary))
             logger.notice("debug lyrics search")
+        case let .lyricsWriteback(step):
+            NotificationCenter.default.post(name: lyricsWritebackNotification, object: step)
+            logger.notice("debug lyrics writeback step=\(step, privacy: .public)")
         case let .importWatch(path):
             LyricsImportWatcher.shared.setFolder(path.map { URL(fileURLWithPath: $0, isDirectory: true) })
             logger.notice("debug import watch on=\(path != nil, privacy: .public)")
@@ -457,6 +466,7 @@ enum DebugDeepLinks {
     private static func endSimulation() {
         guard PlaybackSimulation.isActive else { return }
         PlaybackSimulation.end()
+        NowPlayingLocalFileModel.shared.update(nil)
         LocalPlaybackSource.shared.simulationChanged()
         logger.notice("debug simulate off")
     }

@@ -30,6 +30,7 @@ Queste funzioni restano disattivate dopo l’installazione. Attivale prima nelle
 | [I testi di Apple Music](#feature-apple-music-lyrics) | Impostazioni › Testo › Fonte › Fonti dei testi |
 | [Usa i testi già salvati dal player](#feature-player-local-lyrics) | Impostazioni › Player › Permessi e servizi › Accesso completo al disco |
 | [Preferisci il testo del file del brano](#feature-prefer-local-file-lyrics) | Impostazioni › Testo › Fonte › Preferisci il testo del file del brano |
+| [Scrivere il testo nei file dei brani](#feature-lyrics-writeback) | Impostazioni › Lab › Scrivi automaticamente nei file dei brani |
 | [Blocca testi scelti a mano](#feature-lock-hand-picked) | Impostazioni › Testo › Fonte › Blocca testi scelti a mano |
 | [Traduci se manca](#feature-machine-translation) | Impostazioni › Testo › Lingua › Traduci se manca |
 | [Dividi le righe lunghe, unisci quelle brevi](#feature-split-join-lines) | Impostazioni › Testo › Timing e a capo › Dividi righe lunghe |
@@ -139,6 +140,15 @@ Quando il brano in riproduzione è un file su questo Mac, il suo .lrc con lo ste
 
 - Disattivata di default
 - Impostazioni: Testo › Fonte › Preferisci il testo del file del brano
+
+<a id="feature-lyrics-writeback"></a>
+
+### Scrivere il testo nei file dei brani
+
+Durante la riproduzione di un MP3 o FLAC locale, il menu ⋯ della Gestione testi può scrivere il testo del brano nel file, così anche altri player lo mostrano. Il file viene sostituito solo dopo aver scritto e verificato una copia, senza disturbare il player che lo sta leggendo. Per i brani di Apple Music viene scritto solo il testo, senza tempi. Con l’opzione del Laboratorio attiva, il testo viene scritto automaticamente appena è definito, senza sovrascrivere quello scritto da altre app.
+
+- Disattivata di default
+- Impostazioni: Lab › Scrivi automaticamente nei file dei brani
 
 <a id="feature-lock-hand-picked"></a>
 
@@ -921,7 +931,7 @@ Al massimo una volta al giorno invia versione, macOS, funzioni attive e riepilog
 
 ## Tutte le impostazioni
 
-Tutte le impostazioni della finestra Impostazioni, per posizione: 317 in tutto. Scrivi un nome nel campo di ricerca in cima alla barra laterale delle Impostazioni per andarci direttamente.
+Tutte le impostazioni della finestra Impostazioni, per posizione: 318 in tutto. Scrivi un nome nel campo di ricerca in cima alla barra laterale delle Impostazioni per andarci direttamente.
 
 ### Testo › Fonte
 
@@ -1338,6 +1348,10 @@ Tutte le impostazioni della finestra Impostazioni, per posizione: 317 in tutto. 
 - **Backup iCloud**
 - **File impostazioni**: Include credenziali in chiaro. Esporta impostazioni e libreria testi in due file; l’importazione sostituisce tutte le impostazioni
 - **Cancella tutte le impostazioni**: Cancella solo le impostazioni su questo Mac; backup e file esportati restano. Non si può annullare
+
+### Lab
+
+- **Scrivi automaticamente nei file dei brani**: Durante la riproduzione di un MP3 o FLAC locale, scrive nel file il testo scelto senza sovrascrivere quello scritto da altre app
 
 ### Aggiornamento software
 

@@ -840,6 +840,9 @@ struct LyricsManagerView: View {
     @State private var showFilterPopover = false
     /// 正在放的这首在列表里对应哪一条(含占位行),见 resolveNowPlayingKey。
     @State private var nowPlayingKey: String?
+    /// 「⋯ → 写入歌曲文件…」的状态和动作;正在放的本地文件从 NowPlayingLocalFileModel 来(11 章决策 162)。
+    @StateObject private var writeback = LyricsWritebackController()
+    @ObservedObject private var nowPlayingLocalFile = NowPlayingLocalFileModel.shared
 
     /// 右边是预览还是在编辑,见 LyricsManagerEditMode。
     @State private var editMode: LyricsManagerEditMode = .preview
@@ -3500,6 +3503,25 @@ struct LyricsManagerView: View {
         .settingsGlassMenu()
         .accessibilityLabel(L10n.t("更多"))
         .help(L10n.t("更多"))
+        .modifier(writebackHooks(summary))
+    }
+
+    /// 「写入歌曲文件」挂在「⋯」上的几样:正在放的文件换了就重查(菜单项灰不灰),确认框、失败框,`debug/lyrics-writeback`。
+    private func writebackHooks(_ summary: EnrichCacheStore.Summary) -> LyricsWritebackHooks {
+        LyricsWritebackHooks(
+            controller: writeback,
+            probePath: summary.key == nowPlayingKey && summary.hasLyrics && !summary.isInstrumental
+                ? nowPlayingLocalFile.current?.path : nil,
+            begin: { beginWriteback(summary) })
+    }
+
+    private func beginWriteback(_ summary: EnrichCacheStore.Summary) {
+        guard summary.key == nowPlayingKey else {
+            writeback.failure = L10n.t(LyricsWriteback.reasonKey(.notPlayingLocalFile))
+            return
+        }
+        let file = nowPlayingLocalFile.current
+        Task { await writeback.begin(key: summary.key, file: file) }
     }
 
     @ViewBuilder
@@ -3579,6 +3601,11 @@ struct LyricsManagerView: View {
                 LyricsExternalEditor.shared.open(artist: summary.artist, title: summary.shownTitle, album: summary.album, key: summary.key)
             }
             Button(L10n.t("在访达中显示歌词文件")) { revealLyricsFile(summary.key) }
+            // 只有正在放的本地 MP3 / FLAC 能写,别的灰掉、悬停说原因(LyricsWriteback.unavailable)。
+            let writebackReason = writeback.unavailable(isNowPlaying: summary.key == nowPlayingKey, file: nowPlayingLocalFile.current)
+            Button(L10n.t("写入歌曲文件…")) { beginWriteback(summary) }
+                .disabled(writebackReason != nil || writeback.busy || editMode != .preview)
+                .help(writebackReason.map { L10n.t(LyricsWriteback.reasonKey($0)) } ?? L10n.t("把这首歌词写进正在播放的歌曲文件"))
         }
         Divider()
         Button(L10n.t("删除本地记录…"), role: .destructive) { requestDelete([summary.key]) }
@@ -3881,6 +3908,18 @@ struct LyricsManagerView: View {
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .padding(.top, 8)
+        }
+        if let note = writeback.note {
+            HStack(spacing: 10) {
+                Label(String(format: L10n.t("已写入 %@"), (note.path as NSString).lastPathComponent),
+                      systemImage: "checkmark.circle.fill")
+                    .foregroundStyle(.green)
+                Button(L10n.t("在访达中显示")) { writeback.revealNoteFile() }
+                    .buttonStyle(.link)
+            }
+            .font(.caption)
+            .padding(.top, 8)
+            .transition(.opacity)
         }
     }
 
@@ -4747,5 +4786,39 @@ private struct DecisionUnavailableSheet: View {
         }
         .padding(20)
         .frame(width: 360, height: 220)
+    }
+}
+
+/// 「写入歌曲文件」挂在歌词管理「⋯」按钮上的修饰:按正在放的文件重查、确认框、失败框、调试深链。
+private struct LyricsWritebackHooks: ViewModifier {
+    @ObservedObject var controller: LyricsWritebackController
+    let probePath: String?
+    let begin: () -> Void
+
+    func body(content: Content) -> some View {
+        content
+            .task(id: probePath) { await controller.refreshProbe(path: probePath) }
+            .alert(L10n.t("将歌词写入歌曲文件？"), isPresented: Binding(
+                get: { controller.plan != nil }, set: { if !$0 { controller.cancel() } }),
+                   presenting: controller.plan) { plan in
+                Button(plan.hasLyrics ? L10n.t("替换") : L10n.t("写入")) { Task { await controller.confirm() } }
+                Button(L10n.t("取消"), role: .cancel) { controller.cancel() }
+            } message: { plan in
+                Text(LyricsWritebackController.confirmMessage(plan))
+            }
+            .alert(L10n.t("没能写入歌曲文件"), isPresented: Binding(
+                get: { controller.failure != nil }, set: { if !$0 { controller.failure = nil } })) {
+                Button(L10n.t("好")) { controller.failure = nil }
+            } message: {
+                Text(controller.failure ?? "")
+            }
+            .onReceive(NotificationCenter.default.publisher(for: DebugDeepLinks.lyricsWritebackNotification)) { note in
+                switch note.object as? String {
+                case "open": begin()
+                case "confirm": Task { await controller.confirm() }
+                case "cancel": controller.cancel()
+                default: break
+                }
+            }
     }
 }

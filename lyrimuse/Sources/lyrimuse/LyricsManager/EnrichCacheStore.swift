@@ -1328,6 +1328,18 @@ public final class EnrichCacheStore: ObservableObject {
         await commit("set_instrumental", ["key": key, "value": value]).ok
     }
 
+    /// 「写入歌曲文件」写之前:引擎查这个文件能不能写、里面原本有没有歌词,不写东西(11 章决策 162)。
+    func probeFileLyrics(path: String) async -> EnrichEditChannel.Result {
+        await EnrichEditChannel.send("probe_file_lyrics", ["file_path": path])
+    }
+
+    /// 把这一首的歌词写进它的本地文件;`overwrite` 为假时文件里已有歌词就不写。不改缓存,不用重读。`player` 是放这个文件的
+    /// 播放器,Apple Music 的曲目引擎只写歌词文字。
+    func writeFileLyrics(key: String, path: String, player: String, overwrite: Bool) async -> EnrichEditChannel.Result {
+        await EnrichEditChannel.send("write_file_lyrics",
+                                     ["key": key, "file_path": path, "player": player, "value": overwrite])
+    }
+
     /// 多选「全部标为纯音乐」:一次请求带上全部 key,引擎一次改完,App 也只重读一遍缓存。别逐首调上面那个:每首都要整份
     /// 重读一次缓存,选几百首要等好几分钟,列表跟着反复重建(见 11 章决策 92)。
     @discardableResult

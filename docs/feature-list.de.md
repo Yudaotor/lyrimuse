@@ -30,6 +30,7 @@ Diese Funktionen bleiben nach der Installation aus. Schalte sie zuerst in den Ei
 | [Liedtexte direkt von Apple Music](#feature-apple-music-lyrics) | Einstellungen › Liedtext › Quelle › Liedtextquellen |
 | [Vom Player gespeicherte Liedtexte nutzen](#feature-player-local-lyrics) | Einstellungen › Player › Berechtigungen & Dienste › Festplattenvollzugriff |
 | [Liedtext aus der Datei bevorzugen](#feature-prefer-local-file-lyrics) | Einstellungen › Liedtext › Quelle › Liedtext aus der Datei bevorzugen |
+| [Liedtexte in Songdateien schreiben](#feature-lyrics-writeback) | Einstellungen › Labor › Automatisch in Songdateien schreiben |
 | [Manuell gewählte Texte sperren](#feature-lock-hand-picked) | Einstellungen › Liedtext › Quelle › Manuell gewählte Texte sperren |
 | [Übersetzen, wenn keine Übersetzung vorliegt](#feature-machine-translation) | Einstellungen › Liedtext › Sprache › Übersetzen, wenn keine vorhanden |
 | [Lange Zeilen teilen, kurze zusammenfassen](#feature-split-join-lines) | Einstellungen › Liedtext › Timing und Umbrüche › Lange Zeilen teilen |
@@ -139,6 +140,15 @@ Ist der laufende Titel eine Datei auf diesem Mac, wird zuerst ihre gleichnamige 
 
 - Standardmäßig aus
 - Einstellungen: Liedtext › Quelle › Liedtext aus der Datei bevorzugen
+
+<a id="feature-lyrics-writeback"></a>
+
+### Liedtexte in Songdateien schreiben
+
+Während eine lokale MP3- oder FLAC-Datei läuft, kann das ⋯-Menü der Liedtextverwaltung den Liedtext in die Datei schreiben, sodass auch andere Player ihn anzeigen. Die Datei wird erst ersetzt, nachdem eine Kopie geschrieben und geprüft wurde, ein Player, der sie gerade liest, wird also nicht gestört. Bei Apple Music-Titeln wird nur der Text ohne Zeitstempel geschrieben. Mit der Labor-Option wird der Liedtext automatisch geschrieben, sobald er feststeht, ohne von anderen Apps geschriebene Liedtexte zu überschreiben.
+
+- Standardmäßig aus
+- Einstellungen: Labor › Automatisch in Songdateien schreiben
 
 <a id="feature-lock-hand-picked"></a>
 
@@ -921,7 +931,7 @@ Sendet höchstens einmal täglich Version, macOS, aktivierte Funktionen und Abst
 
 ## Alle Einstellungen
 
-Alle Einstellungen des Einstellungsfensters nach Ort: insgesamt 317. Gib einen Namen in das Suchfeld oben in der Seitenleiste der Einstellungen ein, um direkt dorthin zu springen.
+Alle Einstellungen des Einstellungsfensters nach Ort: insgesamt 318. Gib einen Namen in das Suchfeld oben in der Seitenleiste der Einstellungen ein, um direkt dorthin zu springen.
 
 ### Liedtext › Quelle
 
@@ -1338,6 +1348,10 @@ Alle Einstellungen des Einstellungsfensters nach Ort: insgesamt 317. Gib einen N
 - **iCloud-Backup**
 - **Einstellungsdatei**: Enthält Zugangsdaten im Klartext. Exportiert Einstellungen und Liedtext-Bibliothek als zwei Dateien; der Import ersetzt alle Einstellungen
 - **Alle Einstellungen löschen**: Löscht nur die Einstellungen auf diesem Mac; Backups und exportierte Dateien bleiben erhalten. Kann nicht widerrufen werden
+
+### Labor
+
+- **Automatisch in Songdateien schreiben**: Schreibt beim Abspielen einer lokalen MP3- oder FLAC-Datei den festgelegten Liedtext hinein, ohne von anderen Apps geschriebene Liedtexte zu überschreiben
 
 ### Softwareupdate
 

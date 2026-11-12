@@ -193,6 +193,8 @@ type featureFlagsFile struct {
 	// PreferLocalFileLyrics:放本机文件时先用文件自带的歌词(同名 .lrc、内嵌歌词),两种匹配算法通用。缺失时跟着匹配算法:
 	// 顺序优先为 true(同名 .lrc 一直排第一),智能算法为 false(按分数比)。见 resolvePreferLocalFileLyrics。
 	PreferLocalFileLyrics *bool `json:"prefer_local_file_lyrics,omitempty"`
+	// LyricsAutoWriteback:实验室「自动写入歌曲文件」,正在放的本地文件的歌词定下来后写进文件(lyricsautowriteback.go)。缺失为关。
+	LyricsAutoWriteback bool `json:"lyrics_auto_writeback,omitempty"`
 	// LyricsDir：歌词文件夹("歌词文件夹作为权威源"读写的那个文件夹)的自定义位置。
 	// 留空则用默认位置(config.json 同目录下的 lyrics/,main.go 里兜底)。
 	LyricsDir string `json:"lyrics_dir,omitempty"`
@@ -328,6 +330,8 @@ type featureFlags struct {
 	// 见 featureFlagsFile.PreferLocalFileLyrics,已按匹配算法补齐缺省。
 	PreferLocalFileLyrics bool
 	LyricsSourceOrder     []string
+	// 见 featureFlagsFile.LyricsAutoWriteback。
+	LyricsAutoWriteback bool
 	// LyricsDir 空字符串表示"用默认位置",由 main.go 里设置包级变量 lyricsDir() 时兜底,
 	// 不在这里(loadFeatureFlags)展开成绝对路径——那时候 *cfgPath 还没解析完。
 	LyricsDir string
@@ -480,6 +484,7 @@ func buildFeatureFlags(f featureFlagsFile) featureFlags {
 		LyricsSourceMode:          resolveLyricsSourceMode(f.LyricsSourceMode),
 		PreferLocalFileLyrics:     resolvePreferLocalFileLyrics(f.PreferLocalFileLyrics, f.LyricsSourceMode),
 		LyricsSourceOrder:         resolveLyricsSourceOrder(f.LyricsSourceOrder),
+		LyricsAutoWriteback:       f.LyricsAutoWriteback,
 		LyricsDir:                 f.LyricsDir,
 		LyricsWordFormats:         resolveLyricsWordFormats(f.LyricsWordFormats),
 		MotionCoverSkipApple:      !motionApple,

@@ -30,6 +30,7 @@ Các tính năng này tắt sau khi cài. Hãy bật chúng trong cài đặt tr
 | [Lời bài hát của chính Apple Music](#feature-apple-music-lyrics) | Cài đặt › Lời bài hát › Nguồn › Nguồn lời bài hát |
 | [Dùng lời mà trình phát đã lưu sẵn](#feature-player-local-lyrics) | Cài đặt › Trình phát › Quyền & dịch vụ › Quyền truy cập đầy đủ vào ổ đĩa |
 | [Ưu tiên lời trong tệp bài hát](#feature-prefer-local-file-lyrics) | Cài đặt › Lời bài hát › Nguồn › Ưu tiên lời trong tệp bài hát |
+| [Ghi lời vào tệp bài hát](#feature-lyrics-writeback) | Cài đặt › Thử nghiệm › Tự động ghi vào tệp bài hát |
 | [Khóa lời đã chọn thủ công](#feature-lock-hand-picked) | Cài đặt › Lời bài hát › Nguồn › Khóa lời đã chọn thủ công |
 | [Tự dịch khi không có bản dịch](#feature-machine-translation) | Cài đặt › Lời bài hát › Ngôn ngữ › Tự dịch khi không có bản dịch |
 | [Tách dòng dài, gộp dòng ngắn](#feature-split-join-lines) | Cài đặt › Lời bài hát › Thời gian & ngắt câu › Tách dòng dài |
@@ -139,6 +140,15 @@ Khi bài đang phát là một tệp trên máy Mac này, Lyrimuse dùng trướ
 
 - Tắt theo mặc định
 - Cài đặt: Lời bài hát › Nguồn › Ưu tiên lời trong tệp bài hát
+
+<a id="feature-lyrics-writeback"></a>
+
+### Ghi lời vào tệp bài hát
+
+Khi đang phát tệp MP3 hoặc FLAC cục bộ, menu ⋯ của Quản lý lời có thể ghi lời bài hát vào tệp để trình phát khác cũng hiển thị được. Tệp chỉ được thay sau khi đã ghi và kiểm tra một bản sao, nên trình phát đang đọc tệp không bị ảnh hưởng. Với bài trong Apple Music, chỉ ghi phần chữ, không kèm mốc thời gian. Khi bật tùy chọn trong Phòng thí nghiệm, lời được tự động ghi khi đã chốt, không ghi đè lời do ứng dụng khác ghi.
+
+- Tắt theo mặc định
+- Cài đặt: Thử nghiệm › Tự động ghi vào tệp bài hát
 
 <a id="feature-lock-hand-picked"></a>
 
@@ -921,7 +931,7 @@ Tối đa một lần mỗi ngày, Lyrimuse gửi phiên bản, macOS, các tín
 
 ## Toàn bộ cài đặt
 
-Toàn bộ mục trong cửa sổ Cài đặt, theo vị trí: tổng cộng 317 mục. Gõ tên vào ô tìm kiếm ở đầu thanh bên của Cài đặt để đi thẳng tới mục đó.
+Toàn bộ mục trong cửa sổ Cài đặt, theo vị trí: tổng cộng 318 mục. Gõ tên vào ô tìm kiếm ở đầu thanh bên của Cài đặt để đi thẳng tới mục đó.
 
 ### Lời bài hát › Nguồn
 
@@ -1338,6 +1348,10 @@ Toàn bộ mục trong cửa sổ Cài đặt, theo vị trí: tổng cộng 317
 - **Sao lưu iCloud**
 - **Tệp cài đặt**: Chứa thông tin xác thực dạng văn bản thuần; xuất thành hai tệp cài đặt và thư viện lời, nhập sẽ ghi đè toàn bộ cài đặt
 - **Xóa tất cả cài đặt**: Chỉ xóa cài đặt trên máy Mac này, bản sao lưu và tệp đã xuất không bị ảnh hưởng; không thể hoàn tác
+
+### Thử nghiệm
+
+- **Tự động ghi vào tệp bài hát**: Khi phát tệp MP3 hoặc FLAC cục bộ, ghi lời đã chọn vào tệp, không ghi đè lời do ứng dụng khác ghi
 
 ### Cập nhật phần mềm
 

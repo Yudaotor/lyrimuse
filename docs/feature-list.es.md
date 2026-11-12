@@ -30,6 +30,7 @@ Estas funciones siguen desactivadas después de instalar. Actívalas primero en 
 | [Letra oficial de Apple Music](#feature-apple-music-lyrics) | Ajustes › Letra › Fuente › Fuentes de letras |
 | [Usar la letra que tu reproductor ya guardó](#feature-player-local-lyrics) | Ajustes › Reproductor › Permisos y servicios › Acceso total al disco |
 | [Preferir la letra del archivo de la canción](#feature-prefer-local-file-lyrics) | Ajustes › Letra › Fuente › Preferir la letra del archivo de la canción |
+| [Escribir la letra en los archivos de canciones](#feature-lyrics-writeback) | Ajustes › Laboratorio › Escribir automáticamente en los archivos de canciones |
 | [Bloquear letra elegida a mano](#feature-lock-hand-picked) | Ajustes › Letra › Fuente › Bloquear letra elegida a mano |
 | [Traducir si no hay traducción](#feature-machine-translation) | Ajustes › Letra › Idioma › Traducir si no hay traducción |
 | [Dividir líneas largas, unir líneas cortas](#feature-split-join-lines) | Ajustes › Letra › Tiempos y cortes › Dividir líneas largas |
@@ -139,6 +140,15 @@ Al reproducir un archivo de música de este Mac, se usa primero su .lrc del mism
 
 - Desactivada por omisión
 - Ajustes: Letra › Fuente › Preferir la letra del archivo de la canción
+
+<a id="feature-lyrics-writeback"></a>
+
+### Escribir la letra en los archivos de canciones
+
+Mientras suena un MP3 o FLAC local, el menú ⋯ del Gestor de letras puede escribir la letra de la canción en el archivo para que otros reproductores también la muestren. El archivo solo se reemplaza después de escribir y comprobar una copia, así que no molesta al reproductor que lo está leyendo. En las pistas de Apple Music se escribe solo el texto, sin marcas de tiempo. Con la opción de Laboratorio activada, la letra se escribe sola en cuanto queda fijada, sin sobrescribir la que hayan escrito otras apps.
+
+- Desactivada por omisión
+- Ajustes: Laboratorio › Escribir automáticamente en los archivos de canciones
 
 <a id="feature-lock-hand-picked"></a>
 
@@ -921,7 +931,7 @@ Como máximo una vez al día, envía al servidor del propio autor la versión, e
 
 ## Todos los ajustes
 
-Todos los ajustes de la ventana Ajustes, según dónde están: 317 en total. Escribe un nombre en el campo de búsqueda de la parte superior de la barra lateral de Ajustes para ir directamente a él.
+Todos los ajustes de la ventana Ajustes, según dónde están: 318 en total. Escribe un nombre en el campo de búsqueda de la parte superior de la barra lateral de Ajustes para ir directamente a él.
 
 ### Letra › Fuente
 
@@ -1338,6 +1348,10 @@ Todos los ajustes de la ventana Ajustes, según dónde están: 317 en total. Esc
 - **Copia de seguridad de iCloud**
 - **Archivo de ajustes**: Incluye credenciales en texto sin cifrar. Exporta los ajustes y la biblioteca de letras como dos archivos; al importar se sustituyen todos los ajustes
 - **Borrar todos los ajustes**: Solo borra los ajustes de este Mac; las copias de seguridad y los archivos exportados se conservan. No se puede deshacer
+
+### Laboratorio
+
+- **Escribir automáticamente en los archivos de canciones**: Al reproducir un MP3 o FLAC local, escribe la letra elegida en el archivo sin sobrescribir la que hayan escrito otras apps
 
 ### Actualización de software
 

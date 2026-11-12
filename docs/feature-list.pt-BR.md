@@ -30,6 +30,7 @@ Estes recursos vêm desativados depois da instalação. Ative-os antes nos ajust
 | [As letras do próprio Apple Music](#feature-apple-music-lyrics) | Ajustes › Letra › Origem › Fontes de letras |
 | [Usar a letra que o seu player já salvou](#feature-player-local-lyrics) | Ajustes › Player › Permissões e serviços › Acesso Total ao Disco |
 | [Preferir a letra do arquivo da música](#feature-prefer-local-file-lyrics) | Ajustes › Letra › Origem › Preferir a letra do arquivo da música |
+| [Gravar a letra nos arquivos das músicas](#feature-lyrics-writeback) | Ajustes › Labs › Gravar automaticamente nos arquivos das músicas |
 | [Bloquear letra escolhida à mão](#feature-lock-hand-picked) | Ajustes › Letra › Origem › Bloquear letra escolhida à mão |
 | [Traduzir quando não houver tradução](#feature-machine-translation) | Ajustes › Letra › Idioma › Traduzir quando não houver tradução |
 | [Dividir linhas longas, juntar as curtas](#feature-split-join-lines) | Ajustes › Letra › Tempo e divisão › Dividir linhas longas |
@@ -139,6 +140,15 @@ Quando a música que está tocando é um arquivo neste Mac, o .lrc com o mesmo n
 
 - Desativado por padrão
 - Ajustes: Letra › Origem › Preferir a letra do arquivo da música
+
+<a id="feature-lyrics-writeback"></a>
+
+### Gravar a letra nos arquivos das músicas
+
+Enquanto um MP3 ou FLAC local toca, o menu ⋯ do Gerenciador de letras pode gravar a letra da música no arquivo, para que outros players também a mostrem. O arquivo só é substituído depois que uma cópia é gravada e verificada, sem atrapalhar o player que o está lendo. Em faixas do Apple Music, só o texto é gravado, sem marcações de tempo. Com a opção do Laboratório ativada, a letra é gravada automaticamente assim que é definida, sem sobrescrever a que outros apps gravaram.
+
+- Desativado por padrão
+- Ajustes: Labs › Gravar automaticamente nos arquivos das músicas
 
 <a id="feature-lock-hand-picked"></a>
 
@@ -921,7 +931,7 @@ No máximo uma vez por dia, envia a versão, o macOS, quais recursos estão ativ
 
 ## Todos os ajustes
 
-Todos os ajustes da janela Ajustes, por local: 317 no total. Digite um nome no campo de busca no topo da barra lateral dos Ajustes para ir direto até ele.
+Todos os ajustes da janela Ajustes, por local: 318 no total. Digite um nome no campo de busca no topo da barra lateral dos Ajustes para ir direto até ele.
 
 ### Letra › Origem
 
@@ -1338,6 +1348,10 @@ Todos os ajustes da janela Ajustes, por local: 317 no total. Digite um nome no c
 - **Backup do iCloud**
 - **Arquivo de ajustes**: Inclui credenciais em texto simples. Exporta os ajustes e a biblioteca de letras em dois arquivos; importar substitui todos os ajustes
 - **Apagar todos os ajustes**: Apaga só os ajustes deste Mac; backups e arquivos exportados são mantidos. Não pode ser desfeito
+
+### Labs
+
+- **Gravar automaticamente nos arquivos das músicas**: Ao tocar um MP3 ou FLAC local, grava a letra escolhida no arquivo sem sobrescrever a que outros apps gravaram
 
 ### Atualização de software
 

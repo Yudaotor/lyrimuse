@@ -12,6 +12,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"syscall"
 )
@@ -460,12 +461,13 @@ func writebackPadding(audioBytes int64) int {
 	return int(p)
 }
 
-// lyricsWritebackText:缓存里这一首要写进文件的歌词:有逐行歌词写 LRC,没有就写纯文本。调用方不持 enrichMu。
-func lyricsWritebackText(key string) (string, error) {
+// lyricsWritebackText:缓存里这一首要写进文件的歌词:有逐行歌词写 LRC,没有就写纯文本;plain 为真时 LRC 也去掉时间标签
+// 只写文字。标了纯音乐的不写。交回的是 normalizeWritebackLyrics 之后的正文。调用方不持 enrichMu。
+func lyricsWritebackText(key string, plain bool) (string, error) {
 	enrichMu.Lock()
 	e, ok := enrichCache[key]
 	enrichMu.Unlock()
-	if !ok {
+	if !ok || e.Instrumental {
 		return "", wbErr(wbErrNoLyrics, nil)
 	}
 	for _, body := range []bodyText{e.Lyrics, e.PlainLyrics} {
@@ -476,11 +478,48 @@ func lyricsWritebackText(key string) (string, error) {
 		if err != nil {
 			return "", wbErr(wbErrIO, err)
 		}
-		if strings.TrimSpace(s) != "" {
+		if plain {
+			s = lrcToPlainText(s)
+		}
+		if s = normalizeWritebackLyrics(s); s != "" {
 			return s, nil
 		}
 	}
 	return "", wbErr(wbErrNoLyrics, nil)
+}
+
+// writebackWantsPlainText:写给这个播放器放的文件时只写歌词文字。Apple Music 把文件里的歌词原样当纯文本显示,
+// 时间标签会一行行露出来;它的曲目写去掉时间标签的文字。见 11 章决策 163。
+func writebackWantsPlainText(bundleID string) bool {
+	return bundleID == appleMusicBundleID
+}
+
+var (
+	lrcLeadingTimestamps = regexp.MustCompile(`^(?:\s*\[\d{1,3}:\d{1,2}(?:[.:]\d{1,3})?\])+`)
+	lrcWordTimestamps    = regexp.MustCompile(`<\d{1,3}:\d{1,2}(?:[.:]\d{1,3})?>`)
+	lrcMetadataLine      = regexp.MustCompile(`^\s*\[[A-Za-z][A-Za-z0-9_-]*:[^\]]*\]\s*$`)
+)
+
+// lrcToPlainText 去掉 LRC 的时间标签:行首的时间、行内逐字的 <时间>、整行的元信息标签([ar:] [offset:] 之类)都删,
+// 只有时间没有字的行删掉。不是 LRC 的原样交回。
+func lrcToPlainText(s string) string {
+	if !localFileLRCTimestamp.MatchString(s) {
+		return s
+	}
+	var out []string
+	for _, line := range strings.Split(strings.ReplaceAll(s, "\r\n", "\n"), "\n") {
+		if lrcMetadataLine.MatchString(line) {
+			continue
+		}
+		stripped := lrcLeadingTimestamps.ReplaceAllString(line, "")
+		timed := stripped != line
+		stripped = strings.TrimSpace(lrcWordTimestamps.ReplaceAllString(stripped, ""))
+		if timed && stripped == "" {
+			continue
+		}
+		out = append(out, stripped)
+	}
+	return strings.Join(out, "\n")
 }
 
 // applyLyricsWritebackEdit 执行编辑通道的 probe_file_lyrics / write_file_lyrics。不动歌词缓存:文件改完,
@@ -503,7 +542,7 @@ func applyLyricsWritebackEdit(req enrichEditRequest) enrichEditResult {
 	if req.Key == "" {
 		return fail(fmt.Errorf("%s: empty key", req.Op))
 	}
-	text, err := lyricsWritebackText(req.Key)
+	text, err := lyricsWritebackText(req.Key, writebackWantsPlainText(req.Player))
 	if err != nil {
 		return fail(err)
 	}
@@ -511,6 +550,7 @@ func applyLyricsWritebackEdit(req enrichEditRequest) enrichEditResult {
 	if err != nil {
 		return fail(err)
 	}
+	noteLyricsWrittenBack(real, text)
 	res.OK, res.Changed, res.FilePath = true, 1, real
 	log.Printf("enrich edit: op=%s changed=1", req.Op)
 	return res

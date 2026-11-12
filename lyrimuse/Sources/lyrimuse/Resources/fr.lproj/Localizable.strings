@@ -138,6 +138,7 @@
 "Android" = "Android";
 "Apple Music" = "Apple Music";
 "Apple Music 播放的曲目 ID 一致" = "Même ID de morceau Apple Music à la lecture";
+"Apple Music 曲目只写入歌词文字" = "Pour les morceaux Apple Music, seul le texte des paroles est écrit";
 "Apple Music 检索结果为同一曲目" = "Même morceau trouvé par la recherche Apple Music";
 "Apple Music 登录已失效（已过期或被撤销），请重新连接" = "Votre connexion Apple Music n’est plus valide (expirée ou révoquée). Reconnectez-vous pour continuer";
 "Apple Music 的官方歌词，连接账号后可用" = "Paroles officielles d’Apple Music, disponibles après connexion de votre compte";
@@ -408,6 +409,7 @@
 "之后的自动搜索或评分变化仍可能替换这份歌词" = "Des recherches automatiques ou changements de score ultérieurs peuvent encore remplacer ces paroles";
 "乌克兰国家体系（联合国推荐），如 Привіт → Pryvit" = "Système national ukrainien (recommandé par l’ONU), ex. Привіт → Pryvit";
 "乌克兰语" = "Ukrainien";
+"云盘里的文件暂不支持写入" = "Les fichiers stockés dans le cloud ne sont pas encore pris en charge en écriture";
 "五" = "V";
 "亚马逊的流媒体音乐 App" = "L’app de streaming musical d’Amazon";
 "交错" = "Décalé";
@@ -623,10 +625,15 @@
 "内容获印证" = "Contenu confirmé";
 "内建屏幕" = "Intégré";
 "内部数据不是有效的 JSON，已取消保存" = "Les données ne sont pas un JSON valide, rien n’a été enregistré";
+"写入" = "Écrire";
 "写入 config.json 失败：%@" = "Impossible d’écrire config.json : %@";
 "写入功能开关文件失败：%@" = "Impossible d’écrire le fichier des options de fonctionnalités : %@";
+"写入后的校验没有通过" = "La vérification après écriture a échoué";
+"写入失败" = "Écriture impossible";
+"写入时文件被其他程序改动" = "Une autre app a modifié le fichier pendant l’écriture";
 "写入本地记录文件失败，歌词引擎未能执行此次修改" = "Impossible d’écrire le fichier d’enregistrements local ; le moteur de paroles n’a pas pu appliquer la modification";
 "写入本地记录文件失败：%@" = "Impossible d’écrire le fichier des enregistrements locaux : %@";
+"写入歌曲文件…" = "Écrire dans le fichier du morceau…";
 "决定性差异：「%@」" = "Écart décisif : « %@ »";
 "准备密钥" = "Obtenir vos clés API";
 "减少推荐" = "Suggérer moins souvent";
@@ -744,6 +751,7 @@
 "原文" = "Original";
 "原文 + 译文" = "Original + traduction";
 "原文 + 读音" = "Original + romanisation";
+"原文件没有改动" = "Le fichier d’origine n’a pas été modifié";
 "原来的 %@ 文件可以留作副本，删除前会先自动备份" = "Conservez les fichiers %@ existants comme copies, ou supprimez-les. Une sauvegarde est faite avant suppression";
 "去年今日收听 %@ 次，以下为循环最多的歌曲" = "Il y a un an jour pour jour : %@ écoutes, vos morceaux les plus écoutés";
 "去年今日收听 %@ 次，以下为循环最多的歌曲#one" = "Il y a un an jour pour jour : %@ écoute, vos morceaux les plus écoutés";
@@ -785,6 +793,7 @@
 "只显示歌词源自带的读音" = "N’affiche que la romanisation fournie par la source de paroles";
 "只有播放次数、时长和新听了几位歌手" = "Seulement les écoutes, le temps d’écoute et le nombre de nouveaux artistes";
 "只给汉字标注平假名" = "Hiragana sur les kanji seulement";
+"只能写入正在播放的本地 MP3 或 FLAC 文件" = "Seul un fichier MP3 ou FLAC local en cours de lecture peut être modifié";
 "只补没有歌词的歌曲" = "Seulement les morceaux sans paroles";
 "可以直接粘贴完整地址，会自动识别是哪个平台" = "Collez l’URL complète, la plateforme est reconnue automatiquement";
 "可同时开启多项" = "Vous pouvez en activer plusieurs";
@@ -1039,6 +1048,7 @@
 "将播放记录同步到 Last.fm" = "Synchronise vos écoutes avec Last.fm";
 "将播放记录同步到 ListenBrainz" = "Synchronise vos écoutes avec ListenBrainz";
 "将文件夹中的歌词文件对应到歌词库中的歌曲，导入前可预览" = "Associe les fichiers de paroles d’un dossier aux morceaux de votre bibliothèque, avec un aperçu avant l’importation";
+"将歌词写入歌曲文件？" = "Écrire les paroles dans le fichier du morceau ?";
 "将此句恢复为编辑前的内容" = "Rétablir cette ligne telle qu’elle était avant la modification";
 "将消息转发到微信的服务：使用微信扫码登录获取 SendKey，报告将显示在微信「方糖」服务号中" = "Service qui transfère les messages vers WeChat. Scannez le code QR avec WeChat pour obtenir une SendKey ; les bilans arrivent dans le compte officiel Fangtang";
 "将清除 %d 首歌曲的手动时间轴校准，此操作无法撤销。歌词内容和设置中的「时间轴偏移」不受影响。清除后，这些歌曲将恢复自动更新歌词源" = "Efface le calibrage manuel du minutage de %d morceaux. Action irréversible. Les paroles et le réglage « Décalage du minutage » ne changent pas. Ces morceaux reprendront ensuite la mise à jour auto de leur source de paroles";
@@ -1109,6 +1119,7 @@
 "已停用" = "Désactivé";
 "已允许局域网访问且无需授权，同一网络中的设备也可控制 Pear Desktop" = "L’accès depuis le réseau local est autorisé sans authentification, les appareils du même réseau peuvent donc aussi contrôler Pear Desktop";
 "已允许局域网访问，同一网络中的设备也可控制洛雪音乐" = "L’accès du réseau local est autorisé : les appareils du même réseau peuvent aussi contrôler LX Music";
+"已写入 %@" = "Écrit dans %@";
 "已减少推荐" = "Suggéré moins souvent";
 "已分享的链接将失效" = "Les liens déjà partagés cesseront de fonctionner";
 "已删除" = "Supprimé";
@@ -1409,10 +1420,12 @@
 "扫描间隔" = "Intervalle d’analyse";
 "批量匹配" = "Association par lot";
 "找不到该会话（Chat ID 有误，或尚未向机器人发送过消息）" = "Discussion introuvable (Chat ID incorrect, ou vous n’avez pas encore écrit au bot)";
+"找不到这个文件" = "Le fichier est introuvable";
 "找到 %1$@ · 未找到 %2$@ · 跳过 %3$@" = "Trouvés %1$@ · Introuvables %2$@ · Ignorés %3$@";
 "找到 %@ 首" = "Trouvés : %@";
 "把「默认正文」换成概况、三份榜单、新歌手几段，可以逐段删改、调整顺序" = "Remplace le corps par défaut par ses parties (résumé, les trois classements, nouveaux artistes) pour modifier, supprimer ou réordonner chacune";
 "把下面的按钮拖进格子，格子可以留空" = "Faites glisser les boutons ci-dessous dans les cases ; des cases peuvent rester vides";
+"把这首歌词写进正在播放的歌曲文件" = "Écrit ces paroles dans le fichier du morceau en cours de lecture";
 "报告内容" = "Contenu du bilan";
 "拆分" = "Séparer";
 "拆分…" = "Séparer…";
@@ -1532,6 +1545,7 @@
 "播放控制" = "Commandes";
 "播放控制位置" = "Position des commandes";
 "播放时显示动画，暂停时静止" = "S’anime pendant la lecture et reste immobile en pause";
+"播放本地 MP3 或 FLAC 时，把确定的歌词写进文件，不覆盖其他软件写入的歌词" = "Pendant la lecture d’un MP3 ou FLAC local, écrit les paroles retenues dans le fichier sans écraser celles écrites par d’autres apps";
 "播放本机文件时，先用同名 .lrc 或文件里内嵌的歌词" = "Pour un fichier local, utiliser d’abord le .lrc du même nom ou les paroles intégrées";
 "播放来源" = "Lu dans";
 "播放次数" = "Écoutes";
@@ -1574,9 +1588,11 @@
 "整行时间轴" = "Minutage par ligne";
 "文件中包含账号凭证与密钥的明文，请妥善保管，请勿分享。歌词库将另存为同名的第二个文件，迁移时请一并拷贝" = "Le fichier contient les identifiants et clés de vos comptes en clair. Conservez-le en lieu sûr et ne le partagez pas. La bibliothèque de paroles est enregistrée dans un second fichier au nom correspondant ; copiez les deux pour passer à un nouveau Mac";
 "文件中尚无歌词，未保存" = "Le fichier ne contient pas encore de paroles ; non enregistré";
+"文件中已有的歌词将被替换" = "Les paroles déjà présentes dans le fichier seront remplacées";
 "文件夹中新增或修改的歌词文件会自动导入：对应的歌曲没有歌词时直接补上，已有歌词的不变" = "Les fichiers de paroles ajoutés ou modifiés dans le dossier sont importés automatiquement : les morceaux sans paroles les reçoivent aussitôt, les autres restent inchangés";
 "文件夹中没有可识别的歌词文件" = "Aucun fichier de paroles reconnaissable dans ce dossier";
 "文件夹导入方式" = "Importation de dossiers";
+"文件所在的磁盘是只读的" = "Le disque contenant le fichier est en lecture seule";
 "文件过多（上限 %@ 个、200 MB），请分批导入" = "Trop de fichiers (limite de %@ fichiers, 200 Mo). Importez-les en plusieurs fois";
 "文件过大，不像是歌词，未保存" = "Fichier trop volumineux pour des paroles ; non enregistré";
 "文件过大，无法导入" = "Le fichier est trop volumineux pour être importé";
@@ -1757,6 +1773,7 @@
 "更新时间 旧→新" = "Mis à jour : ancien→récent";
 "更新设置" = "Réglages de mise à jour";
 "更早的记录尚未加载，这些行暂不编号" = "Les écoutes plus anciennes ne sont pas encore chargées, ces lignes ne sont donc pas numérotées";
+"替换" = "Remplacer";
 "替换并锁定" = "Remplacer et verrouiller";
 "替换现有歌词" = "Remplacer les paroles actuelles";
 "最后一句晚于歌曲结束 5 秒以上，可能是完整版歌词对应了精简版曲目" = "La dernière ligne tombe plus de 5 secondes après la fin du morceau ; sans doute les paroles complètes d’une version abrégée";
@@ -2155,8 +2172,10 @@
 "汽水音乐歌曲 ID 一致" = "Même ID de morceau Soda Music";
 "汽水音乐歌曲页" = "Page du morceau sur Soda Music";
 "汽水音乐的歌词接口返回了无法识别的内容（接口可能已变更），并非这首歌曲无歌词，通常将在后续版本中修复" = "L’API de paroles de Soda Music a renvoyé un contenu non reconnu (l’API a peut-être changé). Le morceau a sans doute des paroles ; une mise à jour corrige généralement le problème";
+"没有写入这个文件的权限" = "Aucune autorisation d’écriture sur ce fichier";
 "没有封面时显示「%@」" = "Affiche « %@ » en l’absence d’illustration";
 "没有封面时显示所选图标" = "Affiche l’icône choisie en l’absence d’illustration";
+"没能写入歌曲文件" = "Impossible d’écrire dans le fichier du morceau";
 "没能取到真实数据（网络或后台服务未响应），先用测试数据示意" = "Impossible de récupérer les données réelles (réseau ou service d’arrière-plan sans réponse), données d’exemple affichées";
 "沿用同曲条目「%@」的时间轴校准，在此调整后将保存到当前条目" = "Utilise le calibrage du minutage de « %@ », une autre entrée de ce morceau. L’ajuster ici l’enregistre pour cette entrée";
 "沿用同曲条目的人工修正" = "Utilise la correction manuelle d’une autre entrée de ce morceau";
@@ -2285,6 +2304,7 @@
 "监视文件夹不能是歌词文件夹，也不能包含它或在它里面" = "Le dossier surveillé ne peut pas être le dossier des paroles, le contenir ni s’y trouver";
 "监视文件夹与歌词文件夹重叠，已暂停自动导入" = "Le dossier surveillé chevauche le dossier des paroles : l’importation automatique est en pause";
 "监视的文件夹已不存在" = "Le dossier surveillé n’existe plus";
+"目前只支持 MP3 和 FLAC 文件" = "Seuls les fichiers MP3 et FLAC sont pris en charge pour l’instant";
 "直连失败时，经下方代理服务器重试" = "Si la connexion directe échoue, réessayer via le serveur proxy ci-dessous";
 "直连失败时，经系统代理或本机检测到的代理重试" = "Si la connexion directe échoue, réessayer via le proxy du système ou un proxy détecté sur ce Mac";
 "相邻短句可容纳于一行时合并显示" = "Les lignes courtes voisines sont fusionnées si elles tiennent sur une ligne";
@@ -2424,6 +2444,7 @@
 "网络不可用，已搜索 %1$@ 首、找到 %2$@ 首后停止#one" = "Pas de connexion : arrêt après %1$@ morceau, trouvés : %2$@";
 "网络不可用，已暂停，稍后将自动继续" = "En pause : pas de connexion ; reprise automatique";
 "网络不可用，稍后重试…" = "Pas de connexion, nouvel essai bientôt…";
+"网络位置上的文件暂不支持写入" = "Les fichiers situés sur le réseau ne sont pas encore pris en charge en écriture";
 "网络可能不可用，本轮未找到任何候选" = "Le réseau est peut-être indisponible ; aucun résultat trouvé cette fois";
 "网络无法连接，暂时无法获取歌词" = "Réseau inaccessible : pas encore de paroles";
 "网络请求全部失败（DNS / 连接问题），本轮探测未能执行" = "Toutes les requêtes réseau ont échoué (problème DNS/connexion) : ce test n’a pas pu s’exécuter";
@@ -2458,6 +2479,7 @@
 "自动" = "Auto";
 "自动 Scrobble" = "Scrobble automatique";
 "自动下载并安装" = "Télécharger et installer automatiquement";
+"自动写入歌曲文件" = "Écrire automatiquement dans les fichiers des morceaux";
 "自动化权限" = "Autorisation d’automatisation";
 "自动化权限可提高%@播放进度的准确性，并可在歌词上直接控制播放" = "L’automatisation rend la progression de %@ plus précise et permet de contrôler la lecture depuis les paroles";
 "自动化权限可让 Lyrimuse 准确识别%@正在播放的歌曲，并可在歌词上直接控制播放" = "L’automatisation permet à Lyrimuse de savoir quel morceau %@ lit et de contrôler la lecture depuis les paroles";
@@ -2723,8 +2745,11 @@
 "这一期的最后一天" = "Dernier jour de cette période";
 "这一期的第一天" = "Premier jour de cette période";
 "这一期还没有收听记录，先用测试数据示意" = "Aucune écoute sur cette période, données d’exemple affichées";
+"这不是普通的音频文件" = "Ce n’est pas un fichier audio ordinaire";
 "这个地址看起来是%@的。要换平台，请删除这个渠道后重新添加" = "Cette URL semble provenir de %@. Pour changer de plateforme, supprimez ce canal et ajoutez-le à nouveau";
 "这个播放器放的是另一个母版，换用它自家平台的歌词才对得上" = "Ce lecteur diffuse un autre master ; les paroles de sa propre plateforme s’y calent";
+"这个文件有多个硬链接，写入会把它们拆开" = "Ce fichier a plusieurs liens physiques, l’écriture les séparerait";
+"这个文件的标签格式暂不支持写入" = "Le format des balises de ce fichier n’est pas encore pris en charge en écriture";
 "这也是你最长的连续记录" = "Votre plus longue série à ce jour";
 "这些歌词源连续失败，本轮暂未查询" = "Ces sources ont échoué à plusieurs reprises et n’ont pas été interrogées cette fois";
 "这些记录无歌词，且无歌手或时长超过 20 分钟，通常为广告、播客或有声书。人工修正、标为纯音乐、已校准时间轴的记录和正在播放的歌曲不包含在内；再次播放时将重新匹配" = "Ces entrées n’ont pas de paroles et soit pas d’artiste, soit une durée de plus de 20 minutes : souvent des pubs, podcasts ou livres audio. Les entrées modifiées manuellement, instrumentales ou calibrées et le morceau en cours ne sont pas concernés. Elles seront réassociées à leur prochaine lecture";
@@ -2761,6 +2786,7 @@
 "这首歌曲的歌词经过手动修改或选定，更换后将被覆盖" = "Ces paroles ont été modifiées ou choisies à la main et seront remplacées";
 "这首歌曲的语言未在设置的「标注读音的语言」中开启" = "La langue de ce morceau est désactivée dans Réglages › Langues de romanisation";
 "这首歌曲调整过歌词时间轴（%@），更换歌词后该校准可能失效" = "Vous avez ajusté le minutage de ce morceau (%@) ; avec de nouvelles paroles, cet ajustement risque de ne plus convenir";
+"这首歌没有可写入的歌词" = "Ce morceau n’a pas de paroles à écrire";
 "进入全屏" = "Activer le mode plein écran";
 "进入迷你尺寸" = "Passer en taille mini";
 "进度条" = "Barre de progression";

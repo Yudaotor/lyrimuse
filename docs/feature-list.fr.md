@@ -30,6 +30,7 @@ Ces fonctionnalités restent désactivées après l’installation. Activez-les 
 | [Les paroles d’Apple Music](#feature-apple-music-lyrics) | Réglages › Paroles › Source › Sources de paroles |
 | [Utiliser les paroles déjà enregistrées par le lecteur](#feature-player-local-lyrics) | Réglages › Lecteur › Autorisations et services › Accès complet au disque |
 | [Privilégier les paroles du fichier](#feature-prefer-local-file-lyrics) | Réglages › Paroles › Source › Privilégier les paroles du fichier |
+| [Écrire les paroles dans les fichiers des morceaux](#feature-lyrics-writeback) | Réglages › Labo › Écrire automatiquement dans les fichiers des morceaux |
 | [Verrouiller les paroles choisies](#feature-lock-hand-picked) | Réglages › Paroles › Source › Verrouiller les paroles choisies |
 | [Traduire si aucune traduction](#feature-machine-translation) | Réglages › Paroles › Langue › Traduire si non fournie |
 | [Couper les lignes longues, joindre les courtes](#feature-split-join-lines) | Réglages › Paroles › Minutage et coupures › Couper les lignes longues |
@@ -139,6 +140,15 @@ Quand le morceau lu est un fichier sur ce Mac, son .lrc du même nom ou ses paro
 
 - Désactivée par défaut
 - Réglages : Paroles › Source › Privilégier les paroles du fichier
+
+<a id="feature-lyrics-writeback"></a>
+
+### Écrire les paroles dans les fichiers des morceaux
+
+Pendant la lecture d’un MP3 ou FLAC local, le menu ⋯ du Gestionnaire de paroles peut écrire les paroles du morceau dans le fichier, pour que d’autres lecteurs les affichent aussi. Le fichier n’est remplacé qu’une fois une copie écrite et vérifiée, sans gêner le lecteur qui le lit. Pour les morceaux Apple Music, seul le texte est écrit, sans horodatage. Avec l’option du Labo activée, les paroles sont écrites automatiquement dès qu’elles sont fixées, sans écraser celles écrites par d’autres apps.
+
+- Désactivée par défaut
+- Réglages : Labo › Écrire automatiquement dans les fichiers des morceaux
 
 <a id="feature-lock-hand-picked"></a>
 
@@ -921,7 +931,7 @@ Au plus une fois par jour, envoie la version, macOS, les fonctions activées et 
 
 ## Tous les réglages
 
-Tous les réglages de la fenêtre Réglages, classés par emplacement : 317 au total. Tapez un nom dans le champ de recherche en haut de la barre latérale des Réglages pour y aller directement.
+Tous les réglages de la fenêtre Réglages, classés par emplacement : 318 au total. Tapez un nom dans le champ de recherche en haut de la barre latérale des Réglages pour y aller directement.
 
 ### Paroles › Source
 
@@ -1338,6 +1348,10 @@ Tous les réglages de la fenêtre Réglages, classés par emplacement : 317 au 
 - **Sauvegarde iCloud**
 - **Fichier de réglages** : Contient des identifiants en clair. Exporte les réglages et la bibliothèque de paroles en deux fichiers ; l’importation remplace tous les réglages
 - **Effacer tous les réglages** : Efface seulement les réglages de ce Mac ; sauvegardes et fichiers exportés conservés. Action irréversible
+
+### Labo
+
+- **Écrire automatiquement dans les fichiers des morceaux** : Pendant la lecture d’un MP3 ou FLAC local, écrit les paroles retenues dans le fichier sans écraser celles écrites par d’autres apps
 
 ### Mise à jour du logiciel
 

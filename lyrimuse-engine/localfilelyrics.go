@@ -28,8 +28,8 @@ const localFileLyricsMaxBytes = 1 << 20
 
 var (
 	localFileCurrentMu sync.Mutex
-	// localFileCurrent:App 此刻报的当前曲目和它的文件(只对放本地文件的播放器记)。
-	localFileCurrent struct{ artist, title, path string }
+	// localFileCurrent:App 此刻报的当前曲目、播放器和它的文件(只对放本地文件的播放器记)。
+	localFileCurrent struct{ bundle, artist, title, path string }
 )
 
 // playsLocalFiles:这个播放器会放用户自己的文件:players.json 里 nativeLyricSource 填 localfile 的(reAMP、VOX、Pine),
@@ -54,11 +54,19 @@ func playsLocalFilesBesidesStreaming(player string) bool {
 // noteLocalFileCurrentTrack:每拍读到 App 的播放状态时记下当前曲目的文件。不是放本地文件的播放器或没有文件时清掉。
 func noteLocalFileCurrentTrack(bundleID, artist, title, path string) {
 	if !playsLocalFiles(bundleID) || path == "" {
-		artist, title, path = "", "", ""
+		bundleID, artist, title, path = "", "", "", ""
 	}
 	localFileCurrentMu.Lock()
 	defer localFileCurrentMu.Unlock()
-	localFileCurrent.artist, localFileCurrent.title, localFileCurrent.path = artist, title, path
+	localFileCurrent.bundle, localFileCurrent.artist, localFileCurrent.title, localFileCurrent.path = bundleID, artist, title, path
+}
+
+// localFileCurrentTrack:App 此刻报的当前曲目的播放器、歌手、歌名和文件;不是放本地文件为空。
+func localFileCurrentTrack() (bundleID, artist, title, path string) {
+	localFileCurrentMu.Lock()
+	defer localFileCurrentMu.Unlock()
+	c := localFileCurrent
+	return c.bundle, c.artist, c.title, c.path
 }
 
 // localFileCurrentPath:App 此刻报的当前曲目就是这首(歌手、歌名不分大小写相同)时它的文件,否则 ""。

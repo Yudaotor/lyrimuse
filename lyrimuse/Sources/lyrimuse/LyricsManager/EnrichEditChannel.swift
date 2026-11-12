@@ -20,6 +20,10 @@ enum EnrichEditChannel {
         var error: String?
         /// error 是不是已经本地化的、可以直接给用户看的一句(这边自己的超时、系统错误);引擎回的是英文内部错误。
         var errorIsLocalized = false
+        /// probe_file_lyrics / write_file_lyrics:引擎的错误码(`LyricsWriteback.errorKey`)、解开软链接后的文件、文件里原本有没有歌词。
+        var errorCode: String?
+        var filePath: String?
+        var fileHasLyrics = false
     }
 
     /// 跟引擎 main.go 里 setEnrichEditDir 的目录名逐字节一致。
@@ -157,6 +161,9 @@ enum EnrichEditChannel {
         }
         return Result(ok: obj["ok"] as? Bool ?? false,
                       changed: (obj["changed"] as? NSNumber)?.intValue ?? 0,
-                      error: obj["error"] as? String)
+                      error: obj["error"] as? String,
+                      errorCode: obj["error_code"] as? String,
+                      filePath: obj["file_path"] as? String,
+                      fileHasLyrics: obj["file_has_lyrics"] as? Bool ?? false)
     }
 }

@@ -30,6 +30,7 @@ These features stay off after you install. Turn them on in Settings first (some 
 | [Apple Music's own lyrics](#feature-apple-music-lyrics) | Settings › Lyrics › Source › Lyrics Sources |
 | [Use the lyrics your player already saved](#feature-player-local-lyrics) | Settings › Player › Permissions & Services › Full Disk Access |
 | [Prefer lyrics from the song file](#feature-prefer-local-file-lyrics) | Settings › Lyrics › Source › Prefer Lyrics from the Song File |
+| [Write lyrics into song files](#feature-lyrics-writeback) | Settings › Labs › Write to Song Files Automatically |
 | [Lock hand-picked lyrics](#feature-lock-hand-picked) | Settings › Lyrics › Source › Lock Hand-Picked Lyrics |
 | [Translate when none is provided](#feature-machine-translation) | Settings › Lyrics › Language › Translate When None Is Provided |
 | [Split long lines, join short ones](#feature-split-join-lines) | Settings › Lyrics › Timing & Breaks › Split Long Lines |
@@ -139,6 +140,15 @@ When the song playing is a file on this Mac, its same-name .lrc or embedded lyri
 
 - Off by default
 - Settings: Lyrics › Source › Prefer Lyrics from the Song File
+
+<a id="feature-lyrics-writeback"></a>
+
+### Write lyrics into song files
+
+While a local MP3 or FLAC file is playing, Lyrics Manager’s ⋯ menu can write the song's lyrics into the file, so other players can show them too. The file is replaced only after a copy has been written and checked, so a player reading it isn’t disturbed. Apple Music tracks get the lyric text without timestamps. With the Labs option on, the lyrics are written automatically once they’re settled, without overwriting lyrics written by other apps.
+
+- Off by default
+- Settings: Labs › Write to Song Files Automatically
 
 <a id="feature-lock-hand-picked"></a>
 
@@ -921,7 +931,7 @@ At most once a day, sends the version, macOS, which features are on and crash su
 
 ## Every setting
 
-Every setting in the Settings window, by where it lives: 317 in all. Type a name into the search field at the top of the Settings sidebar to jump straight to it.
+Every setting in the Settings window, by where it lives: 318 in all. Type a name into the search field at the top of the Settings sidebar to jump straight to it.
 
 ### Lyrics › Source
 
@@ -1338,6 +1348,10 @@ Every setting in the Settings window, by where it lives: 317 in all. Type a name
 - **iCloud Backup**
 - **Settings File**: Includes plain-text credentials. Exports settings and the lyrics library as two files; importing replaces all settings
 - **Erase All Settings**: Erases settings on this Mac only; backups and exported files are kept. Can’t be undone
+
+### Labs
+
+- **Write to Song Files Automatically**: When a local MP3 or FLAC file plays, writes the settled lyrics into it without overwriting lyrics written by other apps
 
 ### Software Update
 

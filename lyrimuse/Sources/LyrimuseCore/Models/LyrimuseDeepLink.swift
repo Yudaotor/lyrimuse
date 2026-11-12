@@ -84,9 +84,11 @@ public enum LyrimuseDeepLink: Equatable, Sendable {
         /// 回到最近一次 `checkpoint`:关掉之后开出来的窗口,开关设回原值。
         case restore
         /// 模拟播放(`PlaybackSimulation`):不读播放器,按这首驱动界面。时长、位置以秒计,`playing=0` 停在 `position`,
-        /// `ad=1` 这一首按广告报;`artwork=<本机图片的绝对路径>` 给这一首一张封面(验跟随封面的背景、配色)。
+        /// `ad=1` 这一首按广告报;`artwork=<本机图片的绝对路径>` 给这一首一张封面(验跟随封面的背景、配色);
+        /// `file=<本机音频文件的绝对路径>` 当成这一首正在放的本地文件(歌词管理「写入歌曲文件」认它,`NowPlayingLocalFile`),
+        /// `file_player=<bundle id>` 是放它的播放器,缺省是模拟播放器自己。都不写给引擎。
         case simulate(title: String, artist: String, album: String, duration: Double?, position: Double, playing: Bool,
-                      ad: Bool = false, artworkPath: String? = nil)
+                      ad: Bool = false, artworkPath: String? = nil, localFile: String? = nil, localFilePlayer: String? = nil)
         /// 模拟什么都没在放(停播页,`debug/simulate?idle=1`)。
         case simulateIdle
         /// 结束模拟,交还真实播放器(`debug/simulate?off=1`)。
@@ -212,6 +214,9 @@ public enum LyrimuseDeepLink: Equatable, Sendable {
         /// 按这条写法键开「搜索歌词…」窗口,跟歌词管理「搜索候选歌词」同一条路(`debug/lyrics-search?key=<写法键>`)。
         /// 歌名、时长取歌词管理的列表,歌词管理要开着(先 `lyrics-manager?background=1`)。
         case lyricsSearch(key: String)
+        /// 歌词管理详情页的「写入歌曲文件」(`debug/lyrics-writeback?step=open|confirm|cancel`):`open` 同点「⋯ → 写入歌曲文件…」
+        /// (查文件、弹确认框),`confirm` / `cancel` 同点确认框的写入 / 取消。歌词管理要开着、正显示正在放的那首。
+        case lyricsWriteback(step: String)
         /// 设监视文件夹(`debug/import-watch?path=<绝对路径>`),`debug/import-watch?off=1` 停止监视。
         case importWatch(path: String?)
     }
@@ -311,7 +316,9 @@ public enum LyrimuseDeepLink: Equatable, Sendable {
                     title: title, artist: value("artist") ?? "", album: value("album") ?? "",
                     duration: seconds("duration").flatMap { $0 > 0 ? $0 : nil }, position: seconds("position") ?? 0,
                     playing: value("playing").flatMap(Self.parseBool) ?? true, ad: value("ad").flatMap(Self.parseBool) ?? false,
-                    artworkPath: value("artwork").flatMap { $0.hasPrefix("/") ? $0 : nil }))
+                    artworkPath: value("artwork").flatMap { $0.hasPrefix("/") ? $0 : nil },
+                    localFile: value("file").flatMap { $0.hasPrefix("/") ? $0 : nil },
+                    localFilePlayer: value("file_player").flatMap { $0.isEmpty ? nil : $0 }))
             }
         case ("debug", "/favorite"):
             self = .debug(.toggleFavorite)
@@ -356,6 +363,9 @@ public enum LyrimuseDeepLink: Equatable, Sendable {
         case ("debug", "/lyrics-search"):
             guard let key = value("key"), !key.isEmpty else { return nil }
             self = .debug(.lyricsSearch(key: key))
+        case ("debug", "/lyrics-writeback"):
+            guard let step = value("step"), ["open", "confirm", "cancel"].contains(step) else { return nil }
+            self = .debug(.lyricsWriteback(step: step))
         case ("debug", "/import-watch"):
             if value("off").flatMap(Self.parseBool) == true {
                 self = .debug(.importWatch(path: nil))
@@ -573,16 +583,20 @@ public enum LyrimuseDeepLink: Equatable, Sendable {
             case .telemetryPreview: components.path = "/telemetry-preview"
             case .checkpoint: components.path = "/checkpoint"
             case .restore: components.path = "/restore"
-            case let .simulate(title, artist, album, duration, position, playing, ad, artworkPath):
+            case let .simulate(title, artist, album, duration, position, playing, ad, artworkPath, localFile, localFilePlayer):
                 components.path = "/simulate"
-                components.queryItems = [
+                var items = [
                     URLQueryItem(name: "title", value: title), URLQueryItem(name: "artist", value: artist),
                     URLQueryItem(name: "album", value: album),
-                ] + (duration.map { [URLQueryItem(name: "duration", value: String($0))] } ?? []) + [
-                    URLQueryItem(name: "position", value: String(position)),
-                    URLQueryItem(name: "playing", value: playing ? "1" : "0"),
-                ] + (ad ? [URLQueryItem(name: "ad", value: "1")] : [])
-                    + (artworkPath.map { [URLQueryItem(name: "artwork", value: $0)] } ?? [])
+                ]
+                if let duration { items.append(URLQueryItem(name: "duration", value: String(duration))) }
+                items.append(URLQueryItem(name: "position", value: String(position)))
+                items.append(URLQueryItem(name: "playing", value: playing ? "1" : "0"))
+                if ad { items.append(URLQueryItem(name: "ad", value: "1")) }
+                if let artworkPath { items.append(URLQueryItem(name: "artwork", value: artworkPath)) }
+                if let localFile { items.append(URLQueryItem(name: "file", value: localFile)) }
+                if let localFilePlayer { items.append(URLQueryItem(name: "file_player", value: localFilePlayer)) }
+                components.queryItems = items
             case .simulateIdle:
                 components.path = "/simulate"
                 components.queryItems = [URLQueryItem(name: "idle", value: "1")]
@@ -637,6 +651,9 @@ public enum LyrimuseDeepLink: Equatable, Sendable {
             case let .lyricsSearch(key):
                 components.path = "/lyrics-search"
                 components.queryItems = [URLQueryItem(name: "key", value: key)]
+            case let .lyricsWriteback(step):
+                components.path = "/lyrics-writeback"
+                components.queryItems = [URLQueryItem(name: "step", value: step)]
             case let .importWatch(path):
                 components.path = "/import-watch"
                 components.queryItems = [path.map { URLQueryItem(name: "path", value: $0) } ?? URLQueryItem(name: "off", value: "1")]

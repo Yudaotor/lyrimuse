@@ -347,6 +347,8 @@ struct FeatureFlagsFile: Codable, Equatable {
     var lyricsSourceOrder: [String]?
     // 放本机文件时先用文件自带的歌词。nil = 没写过,按匹配算法取缺省(见 effectivePreferLocalFileLyrics)。
     var preferLocalFileLyrics: Bool?
+    // 实验室「自动写入歌曲文件」:正在放的本地文件的歌词定下来后由引擎写进文件(lyricsautowriteback.go)。nil = 关。
+    var lyricsAutoWriteback: Bool?
     var lyricsDir: String?
     // 歌词文件夹里逐字歌词写成哪几种格式(LyricsWordFormat 的值),第一个是主格式。nil = 只写 YRC。
     var lyricsWordFormats: [String]?
@@ -434,6 +436,7 @@ struct FeatureFlagsFile: Codable, Equatable {
         case lyricsSourceMode = "lyrics_source_mode"
         case lyricsSourceOrder = "lyrics_source_order"
         case preferLocalFileLyrics = "prefer_local_file_lyrics"
+        case lyricsAutoWriteback = "lyrics_auto_writeback"
         case lyricsDir = "lyrics_dir"
         case lyricsWordFormats = "lyrics_word_formats"
         case motionCoverSources = "motion_cover_sources"
@@ -624,6 +627,8 @@ public final class FeatureSettingsStore: ObservableObject {
     @Published public var lyricsSourceMode: LyricsSourceMode = .smart
     /// 「优先用歌曲文件自带的歌词」写进文件的值;nil = 没碰过开关。界面和行为都看 `effectivePreferLocalFileLyrics`。
     @Published public var preferLocalFileLyrics: Bool?
+    /// 实验室「自动写入歌曲文件」,默认关。见 FeatureFlagsFile.lyricsAutoWriteback。
+    @Published public var lyricsAutoWriteback = false
     /// 没碰过开关时跟着匹配算法:顺序优先为开(同名 .lrc 一直排第一),智能算法为关。引擎 resolvePreferLocalFileLyrics
     /// 同一条规则,见 09 章决策 346。
     public var effectivePreferLocalFileLyrics: Bool { preferLocalFileLyrics ?? (lyricsSourceMode == .priority) }
@@ -781,6 +786,7 @@ public final class FeatureSettingsStore: ObservableObject {
             lyricsSourceMode: lyricsSourceMode.rawValue,
             lyricsSourceOrder: lyricsPriorityOrder.map(\.rawValue) + unknownLyricsOrder,
             preferLocalFileLyrics: preferLocalFileLyrics,
+            lyricsAutoWriteback: lyricsAutoWriteback ? true : nil,
             lyricsDir: lyricsDir.isEmpty ? nil : lyricsDir,
             lyricsWordFormats: lyricsWordFormats == [.yrc] ? nil : lyricsWordFormats.map(\.rawValue),
             motionCoverSources: MotionCoverSource.fileValue(motionCoverSources),
@@ -1065,6 +1071,7 @@ public final class FeatureSettingsStore: ObservableObject {
         lyricsSources = enabled
         lyricsSourceMode = f.lyricsSourceMode.flatMap(LyricsSourceMode.init(rawValue:)) ?? .smart
         preferLocalFileLyrics = f.preferLocalFileLyrics
+        lyricsAutoWriteback = f.lyricsAutoWriteback ?? false
         // 顺序表跟全部源对不上(刚加了新源、旧文件的顺序表还没有它;文件被手改过)时,用户排过的那几位原样保留,
         // 缺的按默认顺序补在末尾(见 completedLyricsPriorityOrder),补完随整份写回。
         lyricsPriorityOrder = Self.completedLyricsPriorityOrder(

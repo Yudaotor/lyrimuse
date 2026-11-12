@@ -120,8 +120,9 @@ type enrichEditRequest struct {
 	// adopt_restore:从自动快照恢复时快照是什么时候打的(Unix 秒),那之后才存进导入库的记录一起作废。
 	SnapshotAt int64 `json:"snapshot_at,omitempty"`
 	// probe_file_lyrics / write_file_lyrics(lyricswriteback.go):本地音频文件的绝对路径;write 时 Value 为真才覆盖文件里
-	// 已有的歌词。
+	// 已有的歌词。Player 是正在放这个文件的播放器(bundle id),Apple Music 的曲目只写歌词文字(writebackWantsPlainText)。
 	FilePath string `json:"file_path,omitempty"`
+	Player   string `json:"player,omitempty"`
 	// importPrepared:import_lyrics_batch 在拿锁之前读好、解析好的暂存(prepareImportBatch),不从请求文件里来。
 	importPrepared *importBatchPrepared
 }

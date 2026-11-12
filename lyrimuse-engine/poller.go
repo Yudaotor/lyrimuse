@@ -1903,6 +1903,7 @@ func (p *poller) applyAppPlaybackTick(now time.Time, t appPlaybackTick) (reancho
 		localFile = lxMusicLocalFilePath(p.cur.Artist, p.cur.Title, p.cur.Duration)
 	}
 	noteLocalFileCurrentTrack(p.cur.Bundle, p.cur.Artist, p.cur.Title, localFile)
+	maybeAutoWritebackLyrics()
 	if p.cur.Radio {
 		noteRadioDuration(p.cur.Artist, p.cur.Title, p.cur.Album, p.cur.Duration)
 	}

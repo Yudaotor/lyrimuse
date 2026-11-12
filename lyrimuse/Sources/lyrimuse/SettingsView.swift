@@ -469,6 +469,8 @@ struct SettingsView: View {
             if let tab = SettingsTab(rawValue: raw) { selection = .tab(tab) }
         case .softwareUpdate:
             selection = .softwareUpdate
+        case .labs:
+            selection = .labs
         case .account(let name):
             if let destination = AccountDestination.allCases.first(where: { String(describing: $0) == name }) {
                 selection = .account(destination)

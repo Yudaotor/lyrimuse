@@ -2293,6 +2293,14 @@
       "title" : "清除全部设置"
     },
     {
+      "dest" : "labs",
+      "path" : [
+        "实验室"
+      ],
+      "subtitle" : "播放本地 MP3 或 FLAC 时，把确定的歌词写进文件，不覆盖其他软件写入的歌词",
+      "title" : "自动写入歌曲文件"
+    },
+    {
       "dest" : "softwareUpdate",
       "path" : [
         "软件更新"
