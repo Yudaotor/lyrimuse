@@ -119,6 +119,9 @@ type enrichEditRequest struct {
 	WatchFiles  []string `json:"watch_files,omitempty"`
 	// adopt_restore:从自动快照恢复时快照是什么时候打的(Unix 秒),那之后才存进导入库的记录一起作废。
 	SnapshotAt int64 `json:"snapshot_at,omitempty"`
+	// probe_file_lyrics / write_file_lyrics(lyricswriteback.go):本地音频文件的绝对路径;write 时 Value 为真才覆盖文件里
+	// 已有的歌词。
+	FilePath string `json:"file_path,omitempty"`
 	// importPrepared:import_lyrics_batch 在拿锁之前读好、解析好的暂存(prepareImportBatch),不从请求文件里来。
 	importPrepared *importBatchPrepared
 }
@@ -128,6 +131,11 @@ type enrichEditResult struct {
 	OK      bool   `json:"ok"`
 	Error   string `json:"error,omitempty"`
 	Changed int    `json:"changed"`
+	// probe_file_lyrics / write_file_lyrics:ErrorCode 是 lyricswriteback.go 里的错误码,FilePath 是解开软链接之后的
+	// 文件,FileHasLyrics 是文件里原本有没有歌词(probe)。
+	ErrorCode     string `json:"error_code,omitempty"`
+	FilePath      string `json:"file_path,omitempty"`
+	FileHasLyrics bool   `json:"file_has_lyrics,omitempty"`
 }
 
 // enrichEditOutcome 是一次改动之后要在锁外做的事。
@@ -181,6 +189,9 @@ func applyEnrichEdit(req enrichEditRequest) enrichEditResult {
 		out = splitSongEdit(req.Keys, time.Now())
 	case "resolve_manual_conflict":
 		out = resolveManualConflictEdit(req.Key, time.Now())
+	case "probe_file_lyrics", "write_file_lyrics":
+		// 只改音频文件,不动缓存;读缓存、写文件都在锁外。
+		return applyLyricsWritebackEdit(req)
 	case "unsplit_song":
 		// 只改用户判断文件,不动缓存:重建之后按证据重新合。
 		n, err := unsplitSongEdit(req.Keys)
