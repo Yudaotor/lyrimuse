@@ -335,6 +335,12 @@ func runDeepLinkTests() {
                      .debug(.touchBarTyping(override: nil))], "debug: 触控栏当作在 / 不在输入框里、交还")
         expectEqual(link("lyrimuse://debug/touchbar-typing?state=maybe") == nil
                     && link("lyrimuse://debug/touchbar-typing") == nil, true, "debug: 触控栏输入状态认不出的、没带都不认")
+        expectEqual([link("lyrimuse://debug/manager-visibility?state=hidden"), link("lyrimuse://debug/manager-visibility?state=Visible"),
+                     link("lyrimuse://debug/manager-visibility?state=auto")],
+                    [.debug(.managerVisibility(override: false)), .debug(.managerVisibility(override: true)),
+                     .debug(.managerVisibility(override: nil))], "debug: 歌词管理当作挡住 / 露出来 / 交还")
+        expectEqual(link("lyrimuse://debug/manager-visibility?state=on") == nil
+                    && link("lyrimuse://debug/manager-visibility") == nil, true, "debug: 歌词管理可见性认不出的、没带都不认")
         expectEqual(link("lyrimuse://debug/touchbar-display?color=pink") == nil
                     && link("lyrimuse://debug/touchbar-display") == nil, true, "debug: 触控栏颜色认不出的、没带都不认")
         expectEqual(LyrimuseDeepLink.wantsBackground(URL(string: "lyrimuse://lyrics-manager?background=1")!), true, "后台开窗: 带了")
@@ -550,6 +556,7 @@ func runDeepLinkTests() {
             .debug(.lyricsWindowControls(percent: 140, draft: true)),
             .debug(.touchBarDisplay(color: .rainbow)), .debug(.touchBarDisplay(color: .cover)),
             .debug(.touchBarTyping(override: true)), .debug(.touchBarTyping(override: false)), .debug(.touchBarTyping(override: nil)),
+            .debug(.managerVisibility(override: true)), .debug(.managerVisibility(override: false)), .debug(.managerVisibility(override: nil)),
             .debug(.rainbow(overlay: true, notch: nil)), .debug(.rainbow(overlay: false, notch: true)),
             .debug(.rainbow(overlay: nil, notch: nil, menuBar: false)),
             .debug(.menuBarDisplay(artwork: true, content: nil)), .debug(.menuBarDisplay(artwork: nil, content: "title")),

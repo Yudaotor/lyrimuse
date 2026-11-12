@@ -1886,8 +1886,10 @@ struct LyricsManagerView: View {
             // 关闭时的旧内容(或空的),定位逻辑要按最新磁盘内容匹配当前
             // 播放的这首歌。reload() 是 async(读文件+解析在后台线程,避免
             // 缓存文件变大之后开窗卡顿),这里用 Task 包一层、await 完了再定位。
+            // 按指纹读:列表轮询的 `.task(id: windowSurface.isVisible)` 开窗同一刻也起一次读盘,搭它的车;显式读会等它读完
+            // 再整份读一遍,开窗白付一次几秒的整份解析(见 11 章决策 164)。快照放掉了(关窗 5 秒后)照样整份读。
             Task {
-                await store.reload()
+                await store.reload(onlyIfChanged: true)
                 // 跟 pendingAutoFocus 那道闸分开:占位行每次开窗/回到前台都要
                 // 重新核对(不像自动定位只做一次)——收起来的旧占位行可能早就
                 // 该顶替成真实条目了,也可能换了首新歌还在搜。
@@ -2318,11 +2320,13 @@ struct LyricsManagerView: View {
                 // (windowSurface)时整个停掉,重新看得见时从头来一遍(先按指纹读一次,再接着轮询)。
                 .task(id: windowSurface.isVisible) {
                     guard windowSurface.isVisible else { return }
+                    let revealStart = CFAbsoluteTimeGetCurrent()
                     // 两份状态文件先读,再重读缓存:后读的话扫描明明在跑,进度卡头几秒是空着的。
                     fillSweepStatus = LyricsFillSweep.current
                     fullScanState = LyricsFullScan.current
                     await store.reload(onlyIfChanged: true)
                     refreshPlaceholder()
+                    await LyricsManagerBaseline.logReveal(since: revealStart)
                     while !Task.isCancelled {
                         // 扫描跑着时 2 秒一次(进度文件每条都推进,进度卡要跟着动),刚点了自动匹配、
                         // 等引擎接手那几秒 1 秒一次,没在跑就 5 秒。
@@ -2363,6 +2367,9 @@ struct LyricsManagerView: View {
         .background(EmptyUnifiedToolbar())
         // 零尺寸探针拿真实 NSWindow 交给 windowFrame——只借视图树把 NSView 挂进窗口,不参与布局。
         .background(LyricsManagerWindowCapture(controller: windowFrame, surface: windowSurface).frame(width: 0, height: 0))
+        .onReceive(NotificationCenter.default.publisher(for: DebugDeepLinks.managerVisibilityNotification)) {
+            windowSurface.debugOverride = ($0.object as? NSNumber)?.boolValue
+        }
         .background(shortcutButtons)
         // 刻意挂在最外层 —— 跟侧栏上的「清空全部缓存」、List 上的「删除」、详情那一栏的放弃修改
         // 分处不同层级。同一条修饰符链上叠多个呈现修饰符历史上有

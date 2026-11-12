@@ -151,6 +151,10 @@ public final class EnrichCacheStore: ObservableObject {
         let searchAlbumLower: String
         /// 各播放器原样报的写法(跟写法键不一样时才有),歌词管理显示「原始写法」用。
         let reportedNames: [SongVersions.ReportedName]
+        /// `EnrichCacheKeys.looseKey(key)`,建好存着:每次读盘都要按它重排宽松索引,三万条现算要三百多 ms(繁简转换)。
+        let looseKey: String
+        /// 条目上的实体 id(`song`),没有为空。同曲写法计数(`songVersionCounts`)按它数。
+        let songID: String
 
         init(
             key: String,
@@ -188,7 +192,8 @@ public final class EnrichCacheStore: ObservableObject {
             searchDisplayArtistLower: String,
             searchTitleLower: String,
             searchAlbumLower: String,
-            reportedNames: [SongVersions.ReportedName] = []
+            reportedNames: [SongVersions.ReportedName] = [],
+            songID: String = ""
         ) {
             self.key = key
             self.artist = artist
@@ -226,6 +231,8 @@ public final class EnrichCacheStore: ObservableObject {
             self.searchTitleLower = searchTitleLower
             self.searchAlbumLower = searchAlbumLower
             self.reportedNames = reportedNames
+            self.looseKey = EnrichCacheKeys.looseKey(key)
+            self.songID = songID
         }
 
         /// 只给排序/筛选归并用(normPrimaryArtist、EnrichCacheStore.artistMap→distinctArtists→筛选下拉),
@@ -234,6 +241,15 @@ public final class EnrichCacheStore: ObservableObject {
         /// 筛选依然按这个统一名归并(选一位歌手,两条都要出来),"这一列具体显示哪个字符串"如实展示
         /// 每条记录自己的原始写法。
         var displayArtist: String { canonicalArtist.isEmpty ? shownArtist : canonicalArtist }
+
+        /// 两条摘要每个存储属性都一样(按反射逐个比,加字段不用改这里)。增量补读拿它判这一行有没有真的变:引擎多数写盘只改
+        /// 记账字段,列表行不变就沿用原来的对象,整表一行都没变就不发布新数组,主线程不用为三万行重新比对。
+        static func sameContent(_ a: Summary, _ b: Summary) -> Bool {
+            let x = Mirror(reflecting: a).children, y = Mirror(reflecting: b).children
+            return x.count == y.count && zip(x, y).allSatisfy {
+                $0.label == $1.label && String(describing: $0.value) == String(describing: $1.value)
+            }
+        }
         /// 列表、详情里歌手那一位:键里的歌手,没有时用引擎认出来的;都没有为空,界面写「未知歌手」。
         var shownArtist: String { artist.isEmpty ? inferredArtist : artist }
     }
@@ -384,6 +400,26 @@ public final class EnrichCacheStore: ObservableObject {
         var size: Int64
     }
 
+    /// 被动补读(`reload(onlyIfChanged: true)`,轮询、窗口重新露出来)接着用的底子:列表这一版读的那份索引每条的校验值、
+    /// 上面叠了哪几条待落盘 / 正在播放的条目、借名那一份跨条目的状态。有它时只解码变了的那几条、只重建这几行,别的行
+    /// 原样留着(`reloadIncrementally`);没有(从没读过、读的是主缓存、快照放掉了、读盘失败)就整份读。显式刷新照旧整份读。
+    /// 见 11 章决策 164。
+    private struct ReloadBase: Sendable {
+        var fingerprints: EnrichIndexDiff.Fingerprints
+        var overlaidKeys: Set<String>
+        var borrow: BorrowState
+    }
+    private var reloadBase: ReloadBase?
+
+    /// 借名(`CanonicalArtistBorrow`)跨条目的那一份:每条的槽位、有自己 canonical 的那几条、借名表。
+    struct BorrowState: Sendable {
+        /// key → 槽位;写法或专辑为空的没有。
+        var slots: [String: String] = [:]
+        /// 有自己 canonical 的那几条。
+        var inputs: [String: CanonicalArtistBorrow.Input] = [:]
+        var table: [String: String] = [:]
+    }
+
     private nonisolated static func fileFingerprint(_ url: URL) -> FileFingerprint? {
         guard let attrs = try? FileManager.default.attributesOfItem(atPath: url.path),
               let mtime = attrs[.modificationDate] as? Date else { return nil }
@@ -406,7 +442,7 @@ public final class EnrichCacheStore: ObservableObject {
     ///
     /// - Parameter onlyIfChanged: true = 缓存文件的 (mtime, size) 指纹没变就什么都不做(App 每次激活都触发
     ///   一次 reload,而绝大多数激活时文件根本没变,整份重读+解析+重建+summaries 重发布 → List 全量 diff 全是
-    ///   白跑;EnrichCacheReader 有同款 mtime 门控)。开窗 onAppear 和侧栏「刷新」保持默认 false(显式刷新语义)。
+    ///   白跑;EnrichCacheReader 有同款 mtime 门控)。侧栏「刷新」、改动交给引擎之后保持默认 false(显式刷新语义)。
     public func reload(onlyIfChanged: Bool = false) async {
         if onlyIfChanged, let inFlight = inFlightReload {
             await inFlight.value
@@ -442,6 +478,11 @@ public final class EnrichCacheStore: ObservableObject {
         // detached task 里让 summaries 多等一轮 lyrics/ 目录扫描:用 refreshSizeBytes()(delete 完刷新占用数字
         // 用的同一条路径)独立算、独立更新。
         refreshSizeBytes()
+        let reloadStart = CFAbsoluteTimeGetCurrent()
+        if onlyIfChanged, !isReleased, let base = reloadBase,
+           await reloadIncrementally(base: base, start: reloadStart) {
+            return
+        }
         // @Published 同值赋值也会发变更通知,观察这个 store 的整个窗口跟着重算一遍 body:只在真的变了时赋值。
         if summaries.isEmpty, !isLoading { isLoading = true }
         defer { if isLoading { isLoading = false } }
@@ -452,6 +493,7 @@ public final class EnrichCacheStore: ObservableObject {
             var pendingFingerprint: FileFingerprint?
             var playingFingerprint: FileFingerprint?
             var digest: LibraryDigest?
+            var base: ReloadBase?
             var parseFailed = false
             // 基线埋点(临时,见 LyricsManagerBaseline)——分段耗时在 detached 闭包里量,
             // 借这个盒子捎回 MainActor 一起打一条日志。
@@ -461,7 +503,6 @@ public final class EnrichCacheStore: ObservableObject {
             var buildMS = 0.0
         }
         let box = ResultBox()
-        let reloadStart = CFAbsoluteTimeGetCurrent()
         // 在进 Task.detached 之前取好:lyricsDir 读的是 FeatureSettingsStore.shared(MainActor),detached 闭包跑在
         // 后台线程,不能在里面同步访问它。真正的目录枚举(I/O)在 buildSummaries 里、也就是后台跑。
         let lyricsDir = Self.lyricsDir
@@ -475,8 +516,9 @@ public final class EnrichCacheStore: ObservableObject {
                 box.parseFailed = snapshot.parseFailed
                 return
             }
-            // 只留 obj 这一个引用,下面 dropMainLyrics 才是就地改、不复制整份。
             snapshot.obj = nil
+            let encoded = snapshot.encoded ?? [:]
+            snapshot.encoded = nil
             // 比整份新的待落盘条目、单条快照叠上去(见 EnrichPendingEntries / PlayingEntrySnapshot):整份最多攒 30 分钟才落盘。
             // 两份都新时先叠旧的那份,同一条以后写的为准。
             let cacheMTime = box.fingerprint?.mtime
@@ -492,22 +534,25 @@ public final class EnrichCacheStore: ObservableObject {
             if !playingLast, let playing { obj[playing.key] = playing.entry }
             for (k, v) in pending ?? [:] { obj[k] = v }
             if playingLast, let playing { obj[playing.key] = playing.entry }
+            var overlaid = Set((pending ?? [:]).keys.map(Self.nativeKey))
+            if let playing { overlaid.insert(Self.nativeKey(playing.key)) }
             let tBuild = CFAbsoluteTimeGetCurrent()
             // summaries 的构建+排序也在后台做掉(别挪回 MainActor 同步跑,每次开窗/激活要吃几十到一二百 ms
             // 主线程),主线程只收结果赋值。
-            box.bundle = Self.buildSummaries(from: obj, lyricsDir: lyricsDir)
-            if let summaries = box.bundle?.summaries {
-                box.digest = LibraryDigest(counts: LyricsLibraryStats.counts(summaries),
-                                           retryable: summaries.filter(Self.isFillSweepRetryable).count,
-                                           fingerprint: box.fingerprint)
-            }
+            let bundle = Self.buildSummaries(from: obj, lyricsDir: lyricsDir)
+            box.bundle = bundle
+            box.digest = Self.digest(bundle.summaries, fingerprint: box.fingerprint)
             box.buildMS = LyricsManagerBaseline.ms(since: tBuild)
             // 摘要建好了,主歌词不用整份留着(约 40 MB),点开哪一首 hydrate 再从正文小文件补(EnrichCacheSlim.dropMainLyrics)。
-            EnrichCacheSlim.dropMainLyrics(&obj)
-            box.raw = EnrichRawSnapshot(obj)
+            // 别的条目直接存索引里切出来的那段字节,不解了再编。
+            box.raw = EnrichRawSnapshot.assemble(entries: obj, encoded: encoded, reencode: overlaid)
+            if let fingerprints = snapshot.fingerprints {
+                box.base = ReloadBase(fingerprints: fingerprints, overlaidKeys: overlaid, borrow: bundle.borrow)
+            }
         }.value
         if let snapshot = box.raw, let bundle = box.bundle {
             raw = snapshot
+            reloadBase = box.base
             lastLoadedFingerprint = box.fingerprint
             loadedOverlayFingerprints = (box.pendingFingerprint, box.playingFingerprint)
             isReleased = false
@@ -521,6 +566,7 @@ public final class EnrichCacheStore: ObservableObject {
                 totalMS: LyricsManagerBaseline.ms(since: reloadStart))
         } else {
             raw = EnrichRawSnapshot()
+            reloadBase = nil
             lastLoadedFingerprint = nil
             // 内存里没有可用快照(见 isReleased 的注释):删除按传入的 key 交给引擎,不按空的 raw 算成「没有可删的」。
             isReleased = true
@@ -529,6 +575,189 @@ public final class EnrichCacheStore: ObservableObject {
             applySummaries(SummariesBundle(summaries: [], albumDisplayMap: [:], distinctArtists: [], distinctAlbums: []))
             setLibraryDigest(nil)
         }
+    }
+
+    /// 增量补读一次的结果,在后台算好、回主线程一次换上。
+    private struct IncrementalResult: Sendable {
+        var raw: EnrichRawSnapshot
+        /// nil = 列表一行都没变(碰到的条目只改了列表不显示的字段),不发布。
+        var bundle: SummariesBundle?
+        var digest: LibraryDigest?
+        var base: ReloadBase
+        var fingerprint: FileFingerprint?
+        var pendingFingerprint: FileFingerprint?
+        var playingFingerprint: FileFingerprint?
+        var touched: Int
+        var rebuilt: Int
+        var rowsChanged: Int
+        var diffMS: Double
+    }
+
+    /// 被动补读只解码变了的那几条(见 `ReloadBase`)。返回 false = 这次做不了(索引比主缓存旧、切不开、改得太多……),
+    /// 调用方接着整份读。
+    private func reloadIncrementally(base: ReloadBase, start: CFAbsoluteTime) async -> Bool {
+        let cacheURL = Self.cacheURL
+        let lyricsDir = Self.lyricsDir
+        let previousRaw = raw
+        let previousSummaries = summaries
+        final class Box: @unchecked Sendable { var result: IncrementalResult? }
+        let box = Box()
+        await Task.detached(priority: .userInitiated) {
+            box.result = Self.incrementalReload(base: base, raw: previousRaw, summaries: previousSummaries,
+                                                cacheURL: cacheURL, lyricsDir: lyricsDir)
+        }.value
+        guard let result = box.result else { return false }
+        raw = result.raw
+        reloadBase = result.base
+        lastLoadedFingerprint = result.fingerprint
+        loadedOverlayFingerprints = (result.pendingFingerprint, result.playingFingerprint)
+        isReleased = false
+        if loadError != nil { loadError = nil }
+        if let bundle = result.bundle {
+            applySummaries(bundle)
+            setLibraryDigest(result.digest)
+        } else if var digest = libraryDigest {
+            // 列表没变,统计数也没变;记上这一版的指纹,设置页「歌词库」卡不用为它再来补读。
+            digest.fingerprint = result.fingerprint
+            setLibraryDigest(digest)
+        }
+        scheduleReleaseIfUnheld()
+        LyricsManagerBaseline.logIncrementalReload(
+            touched: result.touched, rebuilt: result.rebuilt, rowsChanged: result.rowsChanged, count: result.raw.count,
+            diffMS: result.diffMS, totalMS: LyricsManagerBaseline.ms(since: start))
+        return true
+    }
+
+    /// `reloadIncrementally` 的后台那一步:按校验值比出索引里改了、新增、删掉的条目,连同上次和这次叠上去的条目
+    /// 一起算「碰到的」;只给碰到的那几行重建摘要(借名表因此变了的槽位里那几行也重建),别的行沿用原来的对象,
+    /// 再整表重排、重建索引。结果跟对这一版整份读一样,只有没碰到的行沿用上次列的歌词文件修改时间。
+    private nonisolated static func incrementalReload(
+        base: ReloadBase, raw previousRaw: EnrichRawSnapshot, summaries previous: [Summary], cacheURL: URL, lyricsDir: URL
+    ) -> IncrementalResult? {
+        let tDiff = CFAbsoluteTimeGetCurrent()
+        guard let fingerprint = fileFingerprint(cacheURL), let data = freshIndexData(cacheURL: cacheURL) else { return nil }
+        let pendingFingerprint = fileFingerprint(EnrichPendingEntries.url)
+        let playingFingerprint = fileFingerprint(PlayingEntrySnapshot.url)
+        let pending = PlayingEntrySnapshot.supersedes(snapshotMTime: pendingFingerprint?.mtime, cacheMTime: fingerprint.mtime)
+            ? EnrichPendingEntries.read() : nil
+        let playing = PlayingEntrySnapshot.supersedes(snapshotMTime: playingFingerprint?.mtime, cacheMTime: fingerprint.mtime)
+            ? PlayingEntrySnapshot.read() : nil
+        var overlaid = Set((pending ?? [:]).keys.map(nativeKey))
+        if let playing { overlaid.insert(nativeKey(playing.key)) }
+        let unlaid = base.overlaidKeys.subtracting(overlaid)
+        guard let changes = EnrichIndexDiff.rawChanges(data, since: base.fingerprints, alsoExtract: unlaid),
+              fileFingerprint(cacheURL)?.mtime == fingerprint.mtime else { return nil }
+        // 碰到的条目:索引里改了 / 新增 / 删掉的,上次叠着、这次不叠了的(换回索引里那条,索引里没有就删),这次叠上去的。
+        var touched: [String: [String: Any]?] = [:]
+        for (key, bytes) in changes.changed.merging(changes.extracted, uniquingKeysWith: { a, _ in a }) {
+            guard let entry = (try? JSONSerialization.jsonObject(with: bytes)) as? [String: Any] else { return nil }
+            touched[key] = .some(entry)
+        }
+        for key in changes.removed.union(unlaid) where touched[key] == nil { touched[key] = .some(nil) }
+        let playingLast = (playingFingerprint?.mtime ?? .distantPast) >= (pendingFingerprint?.mtime ?? .distantPast)
+        if !playingLast, let playing { touched[nativeKey(playing.key)] = .some(playing.entry) }
+        for (k, v) in pending ?? [:] { touched[nativeKey(k)] = .some(v) }
+        if playingLast, let playing { touched[nativeKey(playing.key)] = .some(playing.entry) }
+        let diffMS = LyricsManagerBaseline.ms(since: tDiff)
+
+        var newRaw = previousRaw
+        for (key, entry) in touched { newRaw[key] = entry.map(EnrichCacheSlim.droppingMainLyrics) }
+
+        // 借名:碰到的条目改了自己的 canonical(或增删)才重算借名表;表里变了的槽位里、没有自己 canonical 的行也要重建。
+        var borrow = base.borrow
+        var normCache: [String: String] = [:]
+        func norm(_ s: String) -> String {
+            if let v = normCache[s] { return v }
+            let v = toSimplified(s).lowercased()
+            normCache[s] = v
+            return v
+        }
+        var parts: [String: (artist: String, title: String, album: String)] = [:]
+        var inputsChanged = false
+        for (key, entry) in touched {
+            let split = entry == nil ? nil : splitKey(key)
+            parts[key] = split
+            let slot = split.flatMap { CanonicalArtistBorrow.slotKey(artist: $0.artist, album: $0.album, key: norm) }
+            borrow.slots[key] = slot
+            let input = CanonicalArtistBorrow.input(slot: slot, canonical: entry?["canonical_artist"] as? String ?? "", key: norm)
+            if borrow.inputs[key] != input {
+                borrow.inputs[key] = input
+                inputsChanged = true
+            }
+        }
+        var rebuildKeys = Set<String>()
+        if inputsChanged {
+            borrow.table = CanonicalArtistBorrow.table(borrow.inputs.values)
+            let changedSlots = Set(borrow.table.keys).union(base.borrow.table.keys)
+                .filter { borrow.table[$0] != base.borrow.table[$0] }
+            if !changedSlots.isEmpty {
+                for (key, slot) in borrow.slots where touched[key] == nil && borrow.inputs[key] == nil
+                    && changedSlots.contains(slot) {
+                    rebuildKeys.insert(key)
+                }
+            }
+        }
+
+        // 歌词文件修改时间:碰到的少就逐条看这几条的文件,多了还是整个目录列一遍。
+        let listedDates: [String: Date]? = touched.count > 300 ? lyricsFileModificationDates(in: lyricsDir) : nil
+        func updatedAt(_ key: String) -> Date? {
+            if let listedDates {
+                return listedDates[EnrichCacheKeys.sanitizeFilename(key).lowercased()]
+                    ?? listedDates[EnrichCacheKeys.disambiguatedName(forKey: key).lowercased()]
+            }
+            return lyricsFileModificationDate(forKey: key, in: lyricsDir)
+        }
+        var items: [Summary] = []
+        items.reserveCapacity(previous.count + touched.count)
+        var replaced: [String: Summary] = [:]
+        for s in previous {
+            if touched[s.key] != nil || rebuildKeys.contains(s.key) {
+                replaced[s.key] = s
+                continue
+            }
+            items.append(s)
+        }
+        // 重建出来的跟原来那行一样就沿用原来的对象。
+        var rowsChanged = 0
+        func keep(_ fresh: Summary) {
+            if let old = replaced.removeValue(forKey: fresh.key), Summary.sameContent(old, fresh) {
+                items.append(old)
+            } else {
+                items.append(fresh)
+                rowsChanged += 1
+            }
+        }
+        for (key, entry) in touched {
+            guard let entry, let split = parts[key] ?? nil else { continue }
+            keep(makeSummary(key: key, parts: split, entry: entry,
+                             canonical: resolvedCanonical(entry: entry, slot: borrow.slots[key], table: borrow.table),
+                             lyricsUpdatedAt: updatedAt(key)))
+        }
+        for key in rebuildKeys {
+            guard let entry = newRaw[key], let split = splitKey(key) else { continue }
+            keep(makeSummary(key: key, parts: split, entry: entry,
+                             canonical: resolvedCanonical(entry: entry, slot: borrow.slots[key], table: borrow.table),
+                             lyricsUpdatedAt: replaced[key]?.lyricsUpdatedAt))
+        }
+        // 剩下的是这一版里没有了的行。
+        rowsChanged += replaced.count
+        var bundle: SummariesBundle?
+        if rowsChanged > 0 {
+            var assembled = assemble(items)
+            assembled.borrow = borrow
+            bundle = assembled
+        }
+        return IncrementalResult(
+            raw: newRaw, bundle: bundle, digest: bundle.map { digest($0.summaries, fingerprint: fingerprint) },
+            base: ReloadBase(fingerprints: changes.fingerprints, overlaidKeys: overlaid, borrow: borrow),
+            fingerprint: fingerprint, pendingFingerprint: pendingFingerprint, playingFingerprint: playingFingerprint,
+            touched: touched.count, rebuilt: rebuildKeys.count, rowsChanged: rowsChanged, diffMS: diffMS)
+    }
+
+    private nonisolated static func digest(_ summaries: [Summary], fingerprint: FileFingerprint?) -> LibraryDigest {
+        LibraryDigest(counts: LyricsLibraryStats.counts(summaries),
+                      retryable: summaries.filter(Self.isFillSweepRetryable).count,
+                      fingerprint: fingerprint)
     }
 
     /// 「保存修改」核对之前调:整份缓存、待落盘条目、单条快照里有一份跟这份快照读进来时不一样就整份重读,拿盘上此刻的
@@ -645,6 +874,8 @@ public final class EnrichCacheStore: ObservableObject {
         /// 条目里出现过、但不在 `LyricsSource` 里的来源:播放器自带的那份歌词(KKBOX、Spotify)。
         var extraSources: [String] = []
         var songVersionCounts: [String: Int] = [:]
+        /// 借名那一份跨条目的状态,增量补读接着用(见 `ReloadBase`)。
+        var borrow = BorrowState()
     }
 
     /// 把一份构建结果发布出去。跟 buildSummaries 拆开:构建是纯函数,在 reload 的后台任务里跑;
@@ -701,6 +932,7 @@ public final class EnrichCacheStore: ObservableObject {
               editsInFlight == 0, !isReleased else { return }
         let count = raw.count
         raw = EnrichRawSnapshot()
+        reloadBase = nil
         lastLoadedFingerprint = nil
         isReleased = true
         applySummaries(SummariesBundle(summaries: [], albumDisplayMap: [:], distinctArtists: [], distinctAlbums: []))
@@ -711,6 +943,9 @@ public final class EnrichCacheStore: ObservableObject {
 
     private struct SlimSnapshot {
         var obj: [String: [String: Any]]?
+        /// 读的是索引时,每条 value 的原文和这一版的校验值表(`EnrichIndexDiff.split`);读的是主缓存时为 nil。
+        var encoded: [String: Data]?
+        var fingerprints: EnrichIndexDiff.Fingerprints?
         /// obj 为 nil 时:true = 读到了但解不开,false = 读不出来。只带标志不带文案:这里跑在后台线程,
         /// L10n.t 的缓存没有加锁,文案回主线程再取。
         var parseFailed = false
@@ -737,6 +972,10 @@ public final class EnrichCacheStore: ObservableObject {
                 if let obj = try? JSONSerialization.jsonObject(with: data) as? [String: [String: Any]],
                    EnrichCacheSlim.indexHasFields(obj),
                    fileFingerprint(cacheURL)?.mtime == main { // 解的这段时间主缓存没被换掉
+                    if let split = EnrichIndexDiff.split(data) {
+                        out.encoded = split.values
+                        out.fingerprints = split.fingerprints
+                    }
                     out.parseMS = LyricsManagerBaseline.ms(since: tParse)
                     out.bytes = data.count
                     out.obj = obj
@@ -766,6 +1005,19 @@ public final class EnrichCacheStore: ObservableObject {
         out.obj = obj.mapValues(EnrichCacheSlim.slim)
         out.parseMS = LyricsManagerBaseline.ms(since: tParse)
         return out
+    }
+
+    /// 增量补读读的索引:要不比主缓存旧(同 `loadSlimSnapshot`,正赶上引擎写完主缓存、还没换索引那半秒就等一等)。
+    /// 读不到、等不到是 nil,调用方整份读。
+    private nonisolated static func freshIndexData(cacheURL: URL) -> Data? {
+        let indexURL = LyrimusePaths.configFile(EnrichCacheReader.indexFileName)
+        for attempt in 0..<8 {
+            guard let main = fileFingerprint(cacheURL)?.mtime, let idx = fileFingerprint(indexURL)?.mtime else { return nil }
+            if idx >= main { return FileIO.read(indexURL) }
+            guard attempt < 7, Date().timeIntervalSince(main) < 3 else { return nil }
+            Thread.sleep(forTimeInterval: 0.4)
+        }
+        return nil
     }
 
     private nonisolated static func loadBody(forKey key: String) -> EnrichCacheBody? {
@@ -857,6 +1109,21 @@ public final class EnrichCacheStore: ObservableObject {
         return dates
     }
 
+    /// 一条的歌词文件里最新的修改时间,口径同 `lyricsFileModificationDates`:先认普通名那一组,一个文件都没有再认消歧名那一组。
+    /// 增量补读只看碰到的那几条,不列整个目录。
+    private nonisolated static func lyricsFileModificationDate(forKey key: String, in dir: URL) -> Date? {
+        for base in [EnrichCacheKeys.sanitizeFilename(key), EnrichCacheKeys.disambiguatedName(forKey: key)] {
+            var latest: Date?
+            for suffix in EnrichCacheKeys.lyricsFileSuffixes {
+                guard let date = (try? FileManager.default.attributesOfItem(
+                    atPath: dir.appendingPathComponent(base + suffix).path))?[.modificationDate] as? Date else { continue }
+                if latest.map({ date > $0 }) ?? true { latest = date }
+            }
+            if let latest { return latest }
+        }
+        return nil
+    }
+
     /// 见 lyricsFileModificationDates 里那段「从长到短」的说明。
     private static let lyricsFileSuffixesLongestFirst =
         EnrichCacheKeys.lyricsFileSuffixes.sorted { $0.count > $1.count }
@@ -867,78 +1134,115 @@ public final class EnrichCacheStore: ObservableObject {
         from raw: [String: [String: Any]], lyricsDir: URL
     ) -> SummariesBundle {
         let lyricsFileDates = Self.lyricsFileModificationDates(in: lyricsDir)
-        let artistKey: (String) -> String = { toSimplified($0).lowercased() }
-        let borrowedCanonicals = CanonicalArtistBorrow.table(raw.compactMap { key, entry in
-            guard let parts = Self.splitKey(key) else { return nil }
-            return (parts.artist, parts.album, entry["canonical_artist"] as? String ?? "")
-        }, key: artistKey)
-        var items = raw.keys.compactMap { key -> Summary? in
-            guard let parts = Self.splitKey(key) else { return nil }
-            let entry = raw[key] ?? [:]
-            // 四块正文有没有:精简条目看位图(EnrichCacheSlim),不去读正文。
-            let bodyFields = EnrichCacheSlim.presentFields(entry)
-            let canonical = CanonicalArtistBorrow.resolve(
-                artist: parts.artist, album: parts.album, own: entry["canonical_artist"] as? String ?? "",
-                table: borrowedCanonicals, key: artistKey)
-            // 键里没有歌手时才用引擎认出来的歌手 / 专辑,规则同 InferredTrackIdentity(歌词窗口、悬浮歌词那几处显示位)。
-            let inferredArtist = parts.artist.isEmpty
-                ? (entry["inferred_artist"] as? String)?.trimmingCharacters(in: .whitespaces) ?? "" : ""
-            let display = canonical.isEmpty ? (parts.artist.isEmpty ? inferredArtist : parts.artist) : canonical
-            let listedAlbum = LocalPlaybackSource.albumOrListed(
-                album: parts.album,
-                youtubeMusicAlbum: (entry["youtube_music_album"] as? String)?.trimmingCharacters(in: .whitespaces) ?? "")
-            let displayAlbum = listedAlbum.isEmpty && !inferredArtist.isEmpty
-                ? (entry["inferred_album"] as? String)?.trimmingCharacters(in: .whitespaces) ?? "" : listedAlbum
-            return Summary(
-                key: Self.nativeKey(key),
-                artist: parts.artist,
-                canonicalArtist: canonical,
-                inferredArtist: inferredArtist,
-                // 优先 resolved_duration_secs:duration_secs 是引擎那边"只在当前为 0 才写"的粘性字段,第一次解析
-                // 凑巧读到一个错的时长就永远冻结在那个错值上;resolved_duration_secs 每次自动匹配换上更好的候选都会
-                // 同步刷新,永远反映"当前这份歌词是按多少秒校验选出来的"。这条 Summary 喂给"搜索候选歌词"弹窗当
-                // 打分依据,用冻结的错值会让全部候选在时长匹配这两档(durationOff/sourceDurationOff)同时被重扣。
-                // resolved_duration_secs 缺失(老条目/从没成功匹配过)才退回 duration_secs,
-                // 两个都没有就是 0(打分跳过整个时长档,而不是被错误时长带偏)。
-                durationSecs: (entry["resolved_duration_secs"] as? Double).flatMap { $0 > 0 ? $0 : nil }
-                    ?? entry["duration_secs"] as? Double ?? 0,
-                title: parts.title,
-                album: parts.album,
-                displayAlbum: displayAlbum,
-                isListedMV: displayAlbum.isEmpty && (entry["youtube_music_mv"] as? Bool ?? false),
-                coverURL: ManagerCoverURL.from(entry),
-                lyricsSource: entry["lyrics_source"] as? String ?? "",
-                hasWordTiming: bodyFields.contains(.yrc),
-                isManual: entry["manual_lyrics"] as? Bool ?? false,
-                manualOrigin: entry["lyrics_entity_origin"] as? String ?? "",
-                sourceChoice: entry["lyrics_source_choice"] as? String ?? "",
-                manualPickSHA: entry["manual_pick_sha"] as? String ?? "",
-                lyricsTrSource: entry["lyrics_tr_source"] as? String ?? "",
-                hasTranslation: bodyFields.contains(.tr),
-                hasRomanization: bodyFields.contains(.roma),
-                hasLyrics: EnrichCacheSlim.hasMainLyrics(entry),
-                isInstrumental: entry["instrumental"] as? Bool ?? false,
-                hasPlainTextFallback: bodyFields.contains(.plain),
-                knownOnSources: Self.knownOnSources(entry),
-                lastRoundHadNoResponder: Self.lastRoundHadNoResponder(entry),
-                sourcesRespondedCount: (entry["lyrics_sources_responded"] as? [Any])?.count ?? 0,
-                isSearching: false, // 这一条来自 raw,真实存在;占位行的构造点在 LyricsManagerView
-                hasDecision: entry["lyrics_decision"] != nil || entry["lyrics_decision_applied"] != nil,
-                // 两次 O(1) 查找:普通名、以及带哈希后缀的消歧名(引擎导出时 —— 到底
-                // 用哪个取决于有没有别的 key 折叠后同名,那个判断本身是 O(n),不能在这个
-                // 逐条循环里做)。都查不到 = 磁盘上没有这条的歌词文件。
-                lyricsUpdatedAt: lyricsFileDates[EnrichCacheKeys.sanitizeFilename(key).lowercased()]
-                    ?? lyricsFileDates[EnrichCacheKeys.disambiguatedName(forKey: key).lowercased()],
-                resolvedAt: EnrichLookupTime.latest(in: entry),
-                normPrimaryArtist: toSimplified(primaryArtist(display)).lowercased(),
-                normAlbum: toSimplified(displayAlbum).lowercased(),
-                searchArtistLower: parts.artist.lowercased(),
-                searchDisplayArtistLower: display.lowercased(),
-                searchTitleLower: parts.title.lowercased(),
-                searchAlbumLower: displayAlbum.lowercased(),
-                reportedNames: SongVersions.reportedNames(entry: entry)
-            )
+        // 同一位歌手、同一张专辑的写法反复出现,归一化(繁简转换)按原串记住。
+        var normCache: [String: String] = [:]
+        func norm(_ s: String) -> String {
+            if let v = normCache[s] { return v }
+            let v = toSimplified(s).lowercased()
+            normCache[s] = v
+            return v
         }
+        var borrow = BorrowState()
+        var rows: [(key: String, parts: (artist: String, title: String, album: String), entry: [String: Any])] = []
+        rows.reserveCapacity(raw.count)
+        for (rawKey, entry) in raw {
+            guard let parts = Self.splitKey(rawKey) else { continue }
+            let key = Self.nativeKey(rawKey)
+            rows.append((key, parts, entry))
+            guard let slot = CanonicalArtistBorrow.slotKey(artist: parts.artist, album: parts.album, key: norm) else { continue }
+            borrow.slots[key] = slot
+            borrow.inputs[key] = CanonicalArtistBorrow.input(
+                slot: slot, canonical: entry["canonical_artist"] as? String ?? "", key: norm)
+        }
+        borrow.table = CanonicalArtistBorrow.table(borrow.inputs.values)
+        let items = rows.map { row in
+            makeSummary(key: row.key, parts: row.parts, entry: row.entry,
+                        canonical: resolvedCanonical(entry: row.entry, slot: borrow.slots[row.key], table: borrow.table),
+                        // 两次 O(1) 查找:普通名、以及带哈希后缀的消歧名(引擎导出时 —— 到底
+                        // 用哪个取决于有没有别的 key 折叠后同名,那个判断本身是 O(n),不能在这个
+                        // 逐条循环里做)。都查不到 = 磁盘上没有这条的歌词文件。
+                        lyricsUpdatedAt: lyricsFileDates[EnrichCacheKeys.sanitizeFilename(row.key).lowercased()]
+                            ?? lyricsFileDates[EnrichCacheKeys.disambiguatedName(forKey: row.key).lowercased()])
+        }
+        var bundle = assemble(items)
+        bundle.borrow = borrow
+        return bundle
+    }
+
+    /// 列表里用的 canonical:自己有就用自己的,没有时按槽位查借名表(`CanonicalArtistBorrow.resolve` 的拆开版)。
+    private nonisolated static func resolvedCanonical(entry: [String: Any], slot: String?, table: [String: String]) -> String {
+        let own = entry["canonical_artist"] as? String ?? ""
+        if !own.isEmpty { return own }
+        return slot.flatMap { table[$0] } ?? ""
+    }
+
+    /// 一条的列表摘要。只读这一条和传进来的借名结果、歌词文件修改时间,整份读和增量补读共用。
+    private nonisolated static func makeSummary(
+        key: String, parts: (artist: String, title: String, album: String), entry: [String: Any],
+        canonical: String, lyricsUpdatedAt: Date?
+    ) -> Summary {
+        // 四块正文有没有:精简条目看位图(EnrichCacheSlim),不去读正文。
+        let bodyFields = EnrichCacheSlim.presentFields(entry)
+        // 键里没有歌手时才用引擎认出来的歌手 / 专辑,规则同 InferredTrackIdentity(歌词窗口、悬浮歌词那几处显示位)。
+        let inferredArtist = parts.artist.isEmpty
+            ? (entry["inferred_artist"] as? String)?.trimmingCharacters(in: .whitespaces) ?? "" : ""
+        let display = canonical.isEmpty ? (parts.artist.isEmpty ? inferredArtist : parts.artist) : canonical
+        let listedAlbum = LocalPlaybackSource.albumOrListed(
+            album: parts.album,
+            youtubeMusicAlbum: (entry["youtube_music_album"] as? String)?.trimmingCharacters(in: .whitespaces) ?? "")
+        let displayAlbum = listedAlbum.isEmpty && !inferredArtist.isEmpty
+            ? (entry["inferred_album"] as? String)?.trimmingCharacters(in: .whitespaces) ?? "" : listedAlbum
+        return Summary(
+            key: Self.nativeKey(key),
+            artist: parts.artist,
+            canonicalArtist: canonical,
+            inferredArtist: inferredArtist,
+            // 优先 resolved_duration_secs:duration_secs 是引擎那边"只在当前为 0 才写"的粘性字段,第一次解析
+            // 凑巧读到一个错的时长就永远冻结在那个错值上;resolved_duration_secs 每次自动匹配换上更好的候选都会
+            // 同步刷新,永远反映"当前这份歌词是按多少秒校验选出来的"。这条 Summary 喂给"搜索候选歌词"弹窗当
+            // 打分依据,用冻结的错值会让全部候选在时长匹配这两档(durationOff/sourceDurationOff)同时被重扣。
+            // resolved_duration_secs 缺失(老条目/从没成功匹配过)才退回 duration_secs,
+            // 两个都没有就是 0(打分跳过整个时长档,而不是被错误时长带偏)。
+            durationSecs: (entry["resolved_duration_secs"] as? Double).flatMap { $0 > 0 ? $0 : nil }
+                ?? entry["duration_secs"] as? Double ?? 0,
+            title: parts.title,
+            album: parts.album,
+            displayAlbum: displayAlbum,
+            isListedMV: displayAlbum.isEmpty && (entry["youtube_music_mv"] as? Bool ?? false),
+            coverURL: ManagerCoverURL.from(entry),
+            lyricsSource: entry["lyrics_source"] as? String ?? "",
+            hasWordTiming: bodyFields.contains(.yrc),
+            isManual: entry["manual_lyrics"] as? Bool ?? false,
+            manualOrigin: entry["lyrics_entity_origin"] as? String ?? "",
+            sourceChoice: entry["lyrics_source_choice"] as? String ?? "",
+            manualPickSHA: entry["manual_pick_sha"] as? String ?? "",
+            lyricsTrSource: entry["lyrics_tr_source"] as? String ?? "",
+            hasTranslation: bodyFields.contains(.tr),
+            hasRomanization: bodyFields.contains(.roma),
+            hasLyrics: EnrichCacheSlim.hasMainLyrics(entry),
+            isInstrumental: entry["instrumental"] as? Bool ?? false,
+            hasPlainTextFallback: bodyFields.contains(.plain),
+            knownOnSources: Self.knownOnSources(entry),
+            lastRoundHadNoResponder: Self.lastRoundHadNoResponder(entry),
+            sourcesRespondedCount: (entry["lyrics_sources_responded"] as? [Any])?.count ?? 0,
+            isSearching: false, // 这一条来自 raw,真实存在;占位行的构造点在 LyricsManagerView
+            hasDecision: entry["lyrics_decision"] != nil || entry["lyrics_decision_applied"] != nil,
+            lyricsUpdatedAt: lyricsUpdatedAt,
+            resolvedAt: EnrichLookupTime.latest(in: entry),
+            normPrimaryArtist: toSimplified(primaryArtist(display)).lowercased(),
+            normAlbum: toSimplified(displayAlbum).lowercased(),
+            searchArtistLower: parts.artist.lowercased(),
+            searchDisplayArtistLower: display.lowercased(),
+            searchTitleLower: parts.title.lowercased(),
+            searchAlbumLower: displayAlbum.lowercased(),
+            reportedNames: SongVersions.reportedNames(entry: entry),
+            songID: entry["song"] as? String ?? ""
+        )
+    }
+
+    /// 整表排序、建各个索引和筛选候选。只读摘要上存好的字段,不再碰条目。
+    private nonisolated static func assemble(_ unsorted: [Summary]) -> SummariesBundle {
+        var items = unsorted
         // 排序键必须跟"列表上看到的那套分组"用**同一套归并规则**(canonical → primaryArtist → 折简体 + 小写),
         // 否则会出现"显示层合并了、排序层还按原始写法把同一张专辑劈成两半"(播放器把同一张专辑的曲目分别报成
         // 不同语言的歌手名、繁简两种专辑名)。归一化键在构建时预存进 Summary(normPrimaryArtist/normAlbum),
@@ -946,8 +1250,10 @@ public final class EnrichCacheStore: ObservableObject {
         //
         // 专辑归并键跟展示值分开:同一张专辑偶尔因歌词源候选写法大小写/繁简不一致而在 s.album 里长得不一样,
         // 排序/归并按归一化键走;展示名取排序后首见的原写法(albumDisplayMap),列表/详情/筛选下拉三处共用同一份。
+        // 最后按 key 断平局:不然顺序跟着输入顺序(字典遍历、增量补读拼接)走,同一张专辑几种写法里「首见」的那个
+        // (albumDisplayMap、筛选下拉)会随读盘方式翻来翻去。
         items.sort {
-            ($0.normPrimaryArtist, $0.normAlbum, $0.title) < ($1.normPrimaryArtist, $1.normAlbum, $1.title)
+            ($0.normPrimaryArtist, $0.normAlbum, $0.title, $0.key) < ($1.normPrimaryArtist, $1.normAlbum, $1.title, $1.key)
         }
         // 归并展示名按排序后顺序首见。
         var albumMap: [String: String] = [:]
@@ -961,8 +1267,7 @@ public final class EnrichCacheStore: ObservableObject {
         for (index, s) in items.enumerated() {
             summaryIndex[s.key] = index
             if !s.lyricsSource.isEmpty, !knownSources.contains(s.lyricsSource) { extraSources.insert(s.lyricsSource) }
-            let loose = EnrichCacheKeys.looseKey(s.key)
-            if looseIndex[loose] == nil { looseIndex[loose] = s.key }
+            if looseIndex[s.looseKey] == nil { looseIndex[s.looseKey] = s.key }
             if !s.displayAlbum.isEmpty, albumMap[s.normAlbum] == nil { albumMap[s.normAlbum] = s.displayAlbum }
             let rawArtist = primaryArtist(s.displayArtist)
             if !rawArtist.isEmpty, artistMap[s.normPrimaryArtist] == nil {
@@ -970,8 +1275,9 @@ public final class EnrichCacheStore: ObservableObject {
             }
         }
         var songVersionCounts: [String: Int] = [:]
-        for entry in raw.values {
-            if let song = entry["song"] as? String, !song.isEmpty {
+        for s in items {
+            let song = s.songID
+            if !song.isEmpty {
                 songVersionCounts[song, default: 0] += 1
             }
         }

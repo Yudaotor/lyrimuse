@@ -86,13 +86,24 @@ public enum EnrichCacheSlim {
     /// hydrate 时补回。整份快照里主歌词约 40 MB。带 `manual_pick_sha` 的留着(「手动选定后锁定」要逐条比主歌词,只有
     /// 几条);不是精简条目的(没有正文小文件)也留着。就地改:先复制一份的话,整份快照要多占几十 MB。见 11 章决策 93。
     public static func dropMainLyrics(_ snapshot: inout [String: [String: Any]]) {
-        func droppable(_ entry: [String: Any]) -> Bool {
-            isSlim(entry) && entry["manual_pick_sha"] == nil && !((entry["lyrics"] as? String) ?? "").isEmpty
-        }
-        for i in snapshot.values.indices where droppable(snapshot.values[i]) {
+        for i in snapshot.values.indices where mainLyricsDroppable(snapshot.values[i]) {
             snapshot.values[i].removeValue(forKey: "lyrics")
             snapshot.values[i][lyricsInBodyKey] = true
         }
+    }
+
+    /// 单条版的 `dropMainLyrics`。
+    public static func droppingMainLyrics(_ entry: [String: Any]) -> [String: Any] {
+        guard mainLyricsDroppable(entry) else { return entry }
+        var out = entry
+        out.removeValue(forKey: "lyrics")
+        out[lyricsInBodyKey] = true
+        return out
+    }
+
+    /// `dropMainLyrics` 会不会改这一条。不改的条目可以原样存缓存文件里那段字节(`EnrichRawSnapshot.setEncoded`)。
+    public static func mainLyricsDroppable(_ entry: [String: Any]) -> Bool {
+        isSlim(entry) && entry["manual_pick_sha"] == nil && !((entry["lyrics"] as? String) ?? "").isEmpty
     }
 
     /// 这一条有没有主歌词:字段本身、dropMainLyrics 留下的标记,或者精简条目位图里的主歌词位。

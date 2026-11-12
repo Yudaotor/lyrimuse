@@ -109,6 +109,81 @@ public enum EnrichIndexDiff {
         }
     }
 
+    /// 整份切开:每条 value 的原文和这一版的校验值表,不解码条目。切不开、或者有两条 key 解码后相同时给 nil。
+    public static func split(_ data: Data) -> (values: [String: Data], fingerprints: Fingerprints)? {
+        data.withUnsafeBytes { raw -> (values: [String: Data], fingerprints: Fingerprints)? in
+            guard let slots = slots(raw) else { return nil }
+            var out: [String: Data] = [:]
+            var values: [Sum: Sum] = [:]
+            var keys: [Sum: String] = [:]
+            out.reserveCapacity(slots.count)
+            values.reserveCapacity(slots.count)
+            keys.reserveCapacity(slots.count)
+            for s in slots {
+                guard values.updateValue(s.valueSum, forKey: s.keySum) == nil, let key = decodeKey(raw, s.key),
+                      out.updateValue(Data(UnsafeRawBufferPointer(rebasing: raw[s.value])), forKey: key) == nil else { return nil }
+                keys[s.keySum] = key
+            }
+            return (out, Fingerprints(values: values, keys: keys))
+        }
+    }
+
+    /// 一版文件相对已读进来那一版改了哪几条,只切分、比校验值,不解码条目(「歌词管理」补读用)。
+    public struct RawChanges: Sendable {
+        /// 改了、新增的条目:key → value 原文。
+        public let changed: [String: Data]
+        /// 这一版里没有了的 key。
+        public let removed: Set<String>
+        /// `alsoExtract` 点名的 key 里,这一版还在、本身没变的那几条的原文。
+        public let extracted: [String: Data]
+        public let fingerprints: Fingerprints
+    }
+
+    /// 做不了(切不开、key 撞了、改得太多、key 解不开)给 nil,由调用方整份读。
+    /// - Parameter alsoExtract: 没变也要取原文的几条(上次读进来时叠在上面、这次不再叠的待落盘条目)。
+    public static func rawChanges(_ data: Data, since old: Fingerprints, alsoExtract: Set<String> = []) -> RawChanges? {
+        data.withUnsafeBytes { raw -> RawChanges? in
+            guard let slots = slots(raw) else { return nil }
+            var wanted = Set<Sum>()
+            if !alsoExtract.isEmpty {
+                for (sum, key) in old.keys where alsoExtract.contains(key) { wanted.insert(sum) }
+            }
+            var values: [Sum: Sum] = [:]
+            values.reserveCapacity(slots.count)
+            var changedSlots: [Slot] = []
+            var extracted: [String: Data] = [:]
+            for s in slots {
+                guard values.updateValue(s.valueSum, forKey: s.keySum) == nil else { return nil }
+                if old.values[s.keySum] != s.valueSum {
+                    changedSlots.append(s)
+                } else if wanted.contains(s.keySum), let key = old.keys[s.keySum] {
+                    extracted[key] = Data(UnsafeRawBufferPointer(rebasing: raw[s.value]))
+                }
+            }
+            guard changedSlots.count <= max(maxChangedFloor, slots.count / 4) else { return nil }
+            var keys = old.keys
+            var changed: [String: Data] = [:]
+            var oldKeySet: Set<String>?
+            for s in changedSlots {
+                guard let key = decodeKey(raw, s.key) else { return nil }
+                if old.values[s.keySum] == nil {
+                    // 新 key 原文跟旧的某条解码后相同(同一个 key 换了转义写法):按增删拼会丢条目,整份读。
+                    if oldKeySet == nil { oldKeySet = Set(old.keys.values) }
+                    guard oldKeySet?.contains(key) != true, changed[key] == nil else { return nil }
+                }
+                changed[key] = Data(UnsafeRawBufferPointer(rebasing: raw[s.value]))
+                keys[s.keySum] = key
+            }
+            var removed = Set<String>()
+            for sum in old.values.keys where values[sum] == nil {
+                guard let key = keys.removeValue(forKey: sum) else { return nil }
+                removed.insert(key)
+            }
+            return RawChanges(changed: changed, removed: removed, extracted: extracted,
+                              fingerprints: Fingerprints(values: values, keys: keys))
+        }
+    }
+
     /// 派生索引的输入:`buildDerivedIndexes` 读的封面两项,加上 `betterEntry` 排序用的几项。改那两处的输入要同步改这里。
     static func sameDerivedInputs(_ a: EnrichCacheEntry, _ b: EnrichCacheEntry) -> Bool {
         a.coverURL == b.coverURL && a.coverAlbum == b.coverAlbum && a.manualLyrics == b.manualLyrics

@@ -22,6 +22,8 @@ enum DebugDeepLinks {
     static let lyricsWritebackNotification = Notification.Name("lyrimuse.debug.lyricsWriteback")
     /// `debug/notify-channel` 的渠道 id(空串 = 第一个),推送渠道卡收到后打开那个渠道的编辑弹窗。
     static let editNotifyChannelNotification = Notification.Name("lyrimuse.debug.editNotifyChannel")
+    /// `debug/manager-visibility`:object 是 NSNumber(true = 当作露出来,false = 当作挡住),nil = 交还给遮挡状态。
+    static let managerVisibilityNotification = Notification.Name("lyrimuse.debug.managerVisibility")
 
     static var outputDir: URL {
         let caches = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first
@@ -267,6 +269,9 @@ enum DebugDeepLinks {
         case let .touchBarTyping(override):
             TouchBarLyricsController.shared.setTypingOverride(override)
             logger.notice("debug touch bar typing override=\(override.map { String($0) } ?? "auto", privacy: .public)")
+        case let .managerVisibility(override):
+            NotificationCenter.default.post(name: managerVisibilityNotification, object: override.map { NSNumber(value: $0) })
+            logger.notice("debug manager visibility override=\(override.map { String($0) } ?? "auto", privacy: .public)")
         }
     }
 

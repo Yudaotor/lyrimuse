@@ -55,6 +55,32 @@ enum LyricsManagerBaseline {
             """)
     }
 
+    /// 被动补读走增量那一条(`EnrichCacheStore.reloadIncrementally`):碰到几条、因借名表变了多重建几行、比对用了多久。
+    static func logIncrementalReload(touched: Int, rebuilt: Int, rowsChanged: Int, count: Int, diffMS: Double, totalMS: Double) {
+        logger.notice("""
+            baseline: reload incremental touched=\(touched, privacy: .public) rebuilt=\(rebuilt, privacy: .public) \
+            rows=\(rowsChanged, privacy: .public) \
+            entries=\(count, privacy: .public) \
+            diff=\(diffMS, format: .fixed(precision: 1), privacy: .public)ms \
+            total=\(totalMS, format: .fixed(precision: 1), privacy: .public)ms \
+            rss=\(residentMB(), format: .fixed(precision: 0), privacy: .public)MB
+            """)
+    }
+
+    /// 窗口重新露出来(轮询任务重启)到列表换成新的:`reload` 是补读那次 `reload(onlyIfChanged:)` 返回时,`settled` 是
+    /// 那之后主线程两次让出都排到了的时刻,包含列表按新摘要比对行(SwiftUI 在主线程上做)。
+    @MainActor
+    static func logReveal(since start: CFAbsoluteTime) async {
+        let reloadMS = ms(since: start)
+        await withCheckedContinuation { (done: CheckedContinuation<Void, Never>) in
+            DispatchQueue.main.async { DispatchQueue.main.async { done.resume() } }
+        }
+        logger.notice("""
+            baseline: reveal reload=\(reloadMS, format: .fixed(precision: 1), privacy: .public)ms \
+            settled=\(ms(since: start), format: .fixed(precision: 1), privacy: .public)ms
+            """)
+    }
+
     /// 交互那条轴之一:筛选/搜索重算。只在**缓存未命中、真的重算了**时才记 —— 命中缓存
     /// 那条路一次 body 求值就走好几遍,记了会把日志刷爆、也没有信息量。
     static func logFilter(inCount: Int, outCount: Int, elapsedMS: Double) {

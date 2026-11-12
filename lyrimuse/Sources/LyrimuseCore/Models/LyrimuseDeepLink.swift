@@ -140,6 +140,9 @@ public enum LyrimuseDeepLink: Equatable, Sendable {
         /// 当作键盘焦点在 / 不在输入框里,不看辅助功能读到的(`debug/touchbar-typing?state=on|off|auto`,`auto` = 交还给它)。
         /// 不动用户的焦点验「输入时收起」。nil = auto。
         case touchBarTyping(override: Bool?)
+        /// 歌词管理当作被挡住 / 露出来,不看遮挡状态和桌面空间(`debug/manager-visibility?state=hidden|visible|auto`,`auto` = 交还给它)。
+        /// 不切桌面、不动别的窗口就能验「看不见时停轮询、重新露出来补读」。nil = auto。
+        case managerVisibility(override: Bool?)
         /// 悬浮歌词、灵动岛、菜单栏的彩虹开关,跟设置页走同一个设置(`debug/rainbow?overlay=0|1&notch=0|1&menubar=0|1`,
         /// 至少带一个)。
         case rainbow(overlay: Bool?, notch: Bool?, menuBar: Bool? = nil)
@@ -501,6 +504,13 @@ public enum LyrimuseDeepLink: Equatable, Sendable {
             case "auto": self = .debug(.touchBarTyping(override: nil))
             default: return nil
             }
+        case ("debug", "/manager-visibility"):
+            switch value("state")?.lowercased() {
+            case "visible": self = .debug(.managerVisibility(override: true))
+            case "hidden": self = .debug(.managerVisibility(override: false))
+            case "auto": self = .debug(.managerVisibility(override: nil))
+            default: return nil
+            }
         case ("debug", "/touchbar-display"):
             guard let color = value("color").flatMap({ TouchBarLyricsColorMode(rawValue: $0.lowercased()) }) else { return nil }
             self = .debug(.touchBarDisplay(color: color))
@@ -772,6 +782,9 @@ public enum LyrimuseDeepLink: Equatable, Sendable {
             case let .touchBarTyping(override):
                 components.path = "/touchbar-typing"
                 components.queryItems = [URLQueryItem(name: "state", value: override.map { $0 ? "on" : "off" } ?? "auto")]
+            case let .managerVisibility(override):
+                components.path = "/manager-visibility"
+                components.queryItems = [URLQueryItem(name: "state", value: override.map { $0 ? "visible" : "hidden" } ?? "auto")]
             }
         case .lastfmAuthCallback:
             components.host = "lastfm-auth-callback"

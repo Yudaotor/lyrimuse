@@ -191,8 +191,9 @@ func runCacheKeyTests() {
         let storeSource = (try? String(contentsOf: URL(fileURLWithPath: #filePath).deletingLastPathComponent()
             .deletingLastPathComponent().appendingPathComponent("lyrimuse/LyricsManager/EnrichCacheStore.swift"),
                                        encoding: .utf8)) ?? ""
-        let buildAt = storeSource.range(of: "box.bundle = Self.buildSummaries(from: obj, lyricsDir: lyricsDir)")?.lowerBound
-        let dropAt = storeSource.range(of: "EnrichCacheSlim.dropMainLyrics(&obj)")?.lowerBound
+        let buildAt = storeSource.range(of: "let bundle = Self.buildSummaries(from: obj, lyricsDir: lyricsDir)")?.lowerBound
+        let dropAt = storeSource.range(of: "box.raw = EnrichRawSnapshot.assemble(entries: obj, encoded: encoded, reencode: overlaid)")?
+            .lowerBound
         expectEqual(buildAt.flatMap { b in dropAt.map { b < $0 } }, true, "精简条目(契约): 建完摘要才拿掉主歌词")
         expectEqual(storeSource.contains("hasLyrics: EnrichCacheSlim.hasMainLyrics(entry)"), true,
                     "精简条目(契约): 摘要的「有没有词」认标记")
@@ -217,7 +218,7 @@ func runCacheKeyTests() {
         expectEqual(EnrichRawSnapshot(marked)["slim"]?[EnrichCacheSlim.lyricsInBodyKey] as? Bool, true,
                     "整份快照: 主歌词拿掉的标记读回来还是布尔")
         expectEqual(storeSource.contains("private var raw = EnrichRawSnapshot()")
-                        && storeSource.contains("box.raw = EnrichRawSnapshot(obj)")
+                        && storeSource.contains("box.raw = EnrichRawSnapshot.assemble(entries: obj, encoded: encoded, reencode: overlaid)")
                         && storeSource.contains("for entry in raw.pickedEntries {"), true,
                     "整份快照(契约): 歌词管理按条存字节,锁定开关只看有选定指纹的")
         expectEqual(storeSource.contains("public final class Summary: Identifiable, Sendable {"), true,
@@ -233,6 +234,85 @@ func runCacheKeyTests() {
             .deletingLastPathComponent().appendingPathComponent("LyrimuseCore/Local/EnrichRawSnapshot.swift"), encoding: .utf8)) ?? ""
         expectEqual(rawSource.contains("data[key] = bytes.withUnsafeBytes { Data($0) }"), true,
                     "整份快照(契约): 按实际长度复制再存,不带 JSONSerialization 的扩容余量")
+
+        // 「歌词管理」被动补读(轮询、窗口重新露出来)只解码索引里变了的那几条,只重建这几行(11 章决策 164)。
+        do {
+            typealias D = EnrichIndexDiff
+            func entry(_ i: Int, cover: String = "c") -> String {
+                #""k|\#(i)|a":{"cover_url":"\#(cover)\#(i)","body_crc":\#(i + 1),"body_fields":129}"#
+            }
+            func file(_ ids: some Sequence<Int>, cover: (Int) -> String = { _ in "c" }) -> Data {
+                Data(("{" + ids.map { entry($0, cover: cover($0)) }.joined(separator: ",") + "}").utf8)
+            }
+            func decoded(_ d: Data?) -> NSDictionary? {
+                d.flatMap { (try? JSONSerialization.jsonObject(with: $0)) as? [String: Any] }.map { NSDictionary(dictionary: $0) }
+            }
+            let v1 = file(0..<1200)
+            let whole1 = (try? JSONSerialization.jsonObject(with: v1)) as? [String: [String: Any]] ?? [:]
+            let split = D.split(v1)
+            expectEqual(split.map { s in s.values.count == 1200 && s.values.allSatisfy { decoded($0.value) == whole1[$0.key].map { NSDictionary(dictionary: $0) } } },
+                        true, "补读: 整份切开的每条原文解出来跟整份解码的那条一样")
+            expectEqual(split?.fingerprints == D.fingerprints(of: v1), true, "补读: 切开时顺带算的校验值表跟单独算的一样")
+            // 新的一份:改两条、删一条、加一条,其余一千多条原样。
+            let v2 = file(Array(0..<1200).filter { $0 != 7 } + [1200], cover: { [5, 6].contains($0) ? "x" : "c" })
+            let whole2 = (try? JSONSerialization.jsonObject(with: v2)) as? [String: [String: Any]] ?? [:]
+            if let fp1 = split?.fingerprints {
+                let changes = D.rawChanges(v2, since: fp1, alsoExtract: ["k|9|a", "k|7|a", "none"])
+                expectEqual(changes.map { Set($0.changed.keys) }, ["k|5|a", "k|6|a", "k|1200|a"],
+                            "补读: 只切出改了、新增的那几条,没变的一千多条不在里面")
+                expectEqual(changes?.removed, ["k|7|a"], "补读: 删掉的认出来")
+                expectEqual(changes.map { c in c.changed.allSatisfy { decoded($0.value) == whole2[$0.key].map { NSDictionary(dictionary: $0) } } },
+                            true, "补读: 切出来的原文就是新一版里那条")
+                expectEqual(changes.map { Set($0.extracted.keys) }, ["k|9|a"],
+                            "补读: 点名要的几条里只取还在、没变的(删掉的、本来就没有的不取)")
+                expectEqual(changes?.fingerprints == D.fingerprints(of: v2), true, "补读: 新的校验值表跟整份算的一样,下一次接着比")
+                expectEqual(D.rawChanges(file(0..<2400, cover: { _ in "z" }), since: D.fingerprints(of: file(0..<2400))!) == nil, true,
+                            "补读: 改得太多(超过 2000 条且超过四分之一)整份读")
+                expectEqual(D.rawChanges(Data(#"{"k|1|a":{"#.utf8), since: fp1) == nil, true, "补读: 新的一版切不开整份读")
+                let amp = D.fingerprints(of: Data(#"{"a&b":{"v":1}}"#.utf8))!
+                expectEqual(D.rawChanges(Data(#"{"a\u0026b":{"v":2}}"#.utf8), since: amp) == nil, true,
+                            "补读: 同一个 key 换了转义写法(按增删拼会丢条目)整份读")
+            }
+            // 拼快照:原文能直接存的直接存,拿掉主歌词的、叠加条目换掉的重编;逐条读出来跟原来的做法一样。
+            var overlay = bare
+            overlay["lyrics_source"] = "overlay"
+            var picked = slim
+            picked["manual_pick_sha"] = "abc"
+            let entries: [String: [String: Any]] = ["slim": slim, "picked": picked, "bare": bare, "over": overlay]
+            var encoded: [String: Data] = [:]
+            for (k, v) in entries { encoded[k] = SafeSerialization.jsonData(k == "over" ? bare : v) }
+            var dropped = entries
+            EnrichCacheSlim.dropMainLyrics(&dropped)
+            let reference = EnrichRawSnapshot(dropped)
+            let assembled = EnrichRawSnapshot.assemble(entries: entries, encoded: encoded, reencode: ["over"])
+            expectEqual(entries.keys.allSatisfy { k in assembled[k].map { NSDictionary(dictionary: $0) } == reference[k].map { NSDictionary(dictionary: $0) } },
+                        true, "补读: 拼出来的快照逐条跟「先拿掉主歌词再整份编」一样(叠加条目用字典那份)")
+            expectEqual(assembled.pickedKeys, reference.pickedKeys, "补读: 拼出来的快照选定名单一样")
+            // 借名表:预先算好槽位和归一写法的版本跟原版一样。
+            let norm: (String) -> String = { OpenCCT2S.toSimplified($0).lowercased() }
+            let rows: [(artist: String, album: String, canonical: String)] = [
+                ("A", "X", "Alpha"), ("a", "x", " alpha "), ("B", "Y", "Beta"), ("B", "Y", "Bravo"), ("C", "", "Gamma"), ("D", "Z", "")]
+            let inputs = rows.compactMap {
+                CanonicalArtistBorrow.input(slot: CanonicalArtistBorrow.slotKey(artist: $0.artist, album: $0.album, key: norm),
+                                            canonical: $0.canonical, key: norm)
+            }
+            expectEqual(inputs.count, 4, "补读: 借名输入只记有 canonical、写法和专辑都不空的")
+            expectEqual(CanonicalArtistBorrow.table(inputs), ["a\u{1F}x": "Alpha"], "补读: 借名表按预先算好的输入重算(同槽认出两个名字的谁都不借)")
+            expectEqual(CanonicalArtistBorrow.table(inputs), CanonicalArtistBorrow.table(rows, key: norm),
+                        "补读: 预先算好输入的借名表跟原版一样")
+        }
+        expectEqual(sourceBytes(storeSource, contain: "        if onlyIfChanged, !isReleased, let base = reloadBase,\n           await reloadIncrementally(base: base, start: reloadStart) {"),
+                    true, "补读(契约): 只有被动补读先试增量,显式刷新照旧整份读")
+        expectEqual(sourceBytes(storeSource, contain: "EnrichIndexDiff.rawChanges(data, since: base.fingerprints, alsoExtract: unlaid)")
+                    && sourceBytes(storeSource, contain: "            if touched[s.key] != nil || rebuildKeys.contains(s.key) {")
+                    && sourceBytes(storeSource, contain: "            items.append(s)\n"), true,
+                    "补读(契约): 只解码变了的条目,没碰到的行沿用原来的摘要对象")
+        expectEqual(sourceBytes(storeSource, contain: "if let old = replaced.removeValue(forKey: fresh.key), Summary.sameContent(old, fresh) {")
+                    && sourceBytes(storeSource, contain: "        if rowsChanged > 0 {")
+                    && sourceBytes(storeSource, contain: "        if let bundle = result.bundle {\n            applySummaries(bundle)"), true,
+                    "补读(契约): 重建出来跟原来一样的行沿用原对象,整表没变就不发布(主线程不重比三万行)")
+        expectEqual(storeSource.components(separatedBy: "reloadBase = nil").count - 1, 2,
+                    "补读(契约): 快照放掉、读盘失败时底子一起清,下次整份读")
 
         // 引擎不再往主缓存里写主歌词:精简条目只有位图的主歌词位(32),主歌词在正文小文件里(见 15 章决策 29)。
         var noMain = slim

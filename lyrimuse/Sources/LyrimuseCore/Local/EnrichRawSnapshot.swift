@@ -41,6 +41,33 @@ public struct EnrichRawSnapshot: Sendable {
         }
     }
 
+    /// 存一条现成的 JSON 字节(缓存文件里切出来的那段,`EnrichIndexDiff.split`),不解了再编:三万条重编一遍要一秒多 CPU。
+    /// `entry` 是同一段字节解出来的字典,只用来判选定指纹;调用方保证两者一致。
+    public mutating func setEncoded(_ bytes: Data, forKey key: String, entry: [String: Any]) {
+        data[key] = bytes
+        if let sha = entry["manual_pick_sha"] as? String, !sha.isEmpty {
+            pickedKeys.insert(key)
+        } else {
+            pickedKeys.remove(key)
+        }
+    }
+
+    /// 读盘拼快照:条目已经解成字典(`entries`),缓存文件里切出来的原文在 `encoded`。`dropMainLyrics` 不改、也没被叠加条目
+    /// 换掉(不在 `reencode` 里)的直接存原文,其余拿掉主歌词再编。结果跟 `EnrichRawSnapshot(dropMainLyrics 之后的 entries)` 逐条读出来一样。
+    public static func assemble(entries: [String: [String: Any]], encoded: [String: Data],
+                                reencode: Set<String>) -> EnrichRawSnapshot {
+        var out = EnrichRawSnapshot()
+        out.data.reserveCapacity(entries.count)
+        for (key, entry) in entries {
+            if !reencode.contains(key), let bytes = encoded[key], !EnrichCacheSlim.mainLyricsDroppable(entry) {
+                out.setEncoded(bytes, forKey: key, entry: entry)
+            } else {
+                out[key] = EnrichCacheSlim.droppingMainLyrics(entry)
+            }
+        }
+        return out
+    }
+
     /// 有选定指纹的那几条。
     public var pickedEntries: [[String: Any]] { pickedKeys.compactMap { self[$0] } }
 }

@@ -1589,8 +1589,8 @@ func runLyricsWindowTests() {
                                    encoding: .utf8)) ?? ""
         expectEqual(surface.contains("coverageMonitor = WindowCoverageMonitor(window: window)"), true,
                     "设置窗口可见性(契约): 接上窗口时挂遮挡检测")
-        expectEqual(surface.contains("let visible = occlusionVisible && !coveredByOthers"), true,
-                    "设置窗口可见性(契约): 系统报可见、且没被整扇盖住才算看得见")
+        expectEqual(surface.contains("let visible = debugOverride ?? (occlusionVisible && !coveredByOthers)"), true,
+                    "设置窗口可见性(契约): 系统报可见、且没被整扇盖住才算看得见(只有 debug 深链能盖过它)")
     }
     // 快捷键回声能不能落到歌词窗口(07 章决策 132):完整那扇和迷你面板各报各的、关窗只撤自己那一条。共用一个布尔、
     // 关窗就清的话,形态交接时旧窗后关会把新窗刚报的「看得见」抹掉。

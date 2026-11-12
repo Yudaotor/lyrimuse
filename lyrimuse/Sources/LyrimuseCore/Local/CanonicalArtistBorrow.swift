@@ -11,20 +11,44 @@ public enum CanonicalArtistBorrow {
     ///   - key: 归一化函数,写法、专辑、canonical 都过它比较(折繁简、大小写)。
     public static func table(_ entries: [(artist: String, album: String, canonical: String)],
                              key: (String) -> String) -> [String: String] {
+        table(entries.compactMap {
+            input(slot: slotKey(artist: $0.artist, album: $0.album, key: key), canonical: $0.canonical, key: key)
+        })
+    }
+
+    /// 一条有自己 canonical 的记录在借名表里那一份:槽位、原写法(去掉首尾空格)、归一后的写法。预先算好存着,
+    /// 增量补读时重算借名表不用再逐条归一化。
+    public struct Input: Equatable, Sendable {
+        public let slot: String
+        public let name: String
+        public let norm: String
+
+        public init(slot: String, name: String, norm: String) {
+            self.slot = slot
+            self.name = name
+            self.norm = norm
+        }
+    }
+
+    /// canonical 去掉首尾空格后为空、或者没有槽位时为 nil。
+    public static func input(slot: String?, canonical: String, key: (String) -> String) -> Input? {
+        let name = canonical.trimmingCharacters(in: .whitespaces)
+        guard !name.isEmpty, let slot else { return nil }
+        return Input(slot: slot, name: name, norm: key(name))
+    }
+
+    /// 同 `table(_:key:)`,输入已经算好槽位和归一写法。
+    public static func table<S: Sequence>(_ inputs: S) -> [String: String] where S.Element == Input {
         var picked: [String: (name: String, norm: String)] = [:]
         var ambiguous: Set<String> = []
-        for entry in entries {
-            let canonical = entry.canonical.trimmingCharacters(in: .whitespaces)
-            guard !canonical.isEmpty, let slot = slotKey(artist: entry.artist, album: entry.album, key: key),
-                  !ambiguous.contains(slot) else { continue }
-            let norm = key(canonical)
-            if let seen = picked[slot] {
-                if seen.norm != norm {
-                    picked[slot] = nil
-                    ambiguous.insert(slot)
+        for input in inputs where !ambiguous.contains(input.slot) {
+            if let seen = picked[input.slot] {
+                if seen.norm != input.norm {
+                    picked[input.slot] = nil
+                    ambiguous.insert(input.slot)
                 }
             } else {
-                picked[slot] = (canonical, norm)
+                picked[input.slot] = (input.name, input.norm)
             }
         }
         return picked.mapValues(\.name)
@@ -38,7 +62,8 @@ public enum CanonicalArtistBorrow {
         return table[slot] ?? ""
     }
 
-    private static func slotKey(artist: String, album: String, key: (String) -> String) -> String? {
+    /// (写法, 专辑) 在 `table` 里的键;任一为空是 nil(这条不借也不被借)。
+    public static func slotKey(artist: String, album: String, key: (String) -> String) -> String? {
         let artist = artist.trimmingCharacters(in: .whitespaces)
         let album = album.trimmingCharacters(in: .whitespaces)
         guard !artist.isEmpty, !album.isEmpty else { return nil }

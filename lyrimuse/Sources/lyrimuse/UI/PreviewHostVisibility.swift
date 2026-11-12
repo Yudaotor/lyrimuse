@@ -34,6 +34,10 @@ final class SettingsWindowSurface: ObservableObject {
     private var observer: NSObjectProtocol?
     private var coverageMonitor: WindowCoverageMonitor?
     private weak var window: NSWindow?
+    /// `debug/manager-visibility` 设的:非 nil 时不看遮挡状态,按它算看不看得见。
+    var debugOverride: Bool? {
+        didSet { refresh() }
+    }
 
     /// 同一扇窗口重复接是空操作(`updateNSView` 每次重新求值都会调)。
     func attach(_ window: NSWindow) {
@@ -62,7 +66,7 @@ final class SettingsWindowSurface: ObservableObject {
     }
 
     private func refresh() {
-        let visible = occlusionVisible && !coveredByOthers
+        let visible = debugOverride ?? (occlusionVisible && !coveredByOthers)
         if isVisible != visible { isVisible = visible }
     }
 
