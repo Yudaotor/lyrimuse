@@ -3,6 +3,7 @@
 // POST /v1/heartbeat  每台机器每天一条:安装 ID、版本与系统、开着哪些功能、之前几天的活动(含前几次卡顿的概况)
 // POST /v1/crash      每份崩溃报告一条摘要(App 侧已把路径换成 <path>)
 // GET  /v1/stats      汇总,要 Authorization: Bearer <ADMIN_TOKEN>
+// GET  /v1/stats/bundle  一次给出几个窗口的汇总(含与不含自己的机器各一份),同样要令牌
 // GET  /              统计页(输入令牌后读 /v1/stats)
 //
 // 只认白名单字段,其余丢掉;字符串截长度、列表截条数。不存 IP,只存 Cloudflare 按 IP 给的国家/地区码。
@@ -50,6 +51,7 @@ export default {
       if (request.method === "POST" && url.pathname === "/v1/heartbeat") return await heartbeat(request, env);
       if (request.method === "POST" && url.pathname === "/v1/crash") return await crash(request, env);
       if (request.method === "GET" && url.pathname === "/v1/stats") return await stats(request, env, url);
+      if (request.method === "GET" && url.pathname === "/v1/stats/bundle") return await statsBundle(request, env, url);
       if (request.method === "GET" && url.pathname === "/") {
         return new Response(DASHBOARD, {
           headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-store",
@@ -327,42 +329,141 @@ function countBy(rows, pick) {
 
 async function stats(request, env, url) {
   if (!authorized(request, env)) return json({ error: "unauthorized" }, 401);
-  const days = Math.min(Math.max(parseInt(url.searchParams.get("days") || "30", 10) || 30, 1), 180);
+  const days = clampDays(url.searchParams.get("days") || "30");
   const now = Date.now();
-  const since = bjDay(now - (days - 1) * DAY_MS);
-  const since7 = bjDay(now - 6 * DAY_MS);
-  const db = env.DB;
+  const raw = await loadStatsRows(env.DB, earliestDay(now, [days]));
+  return json(computeStats(raw, { days, now, includeExcluded: url.searchParams.get("include_excluded") === "1" }));
+}
+
+// 一次给出好几个窗口、含与不含自己的机器各一份(SecondBrain 面板每小时拉的就是这 2 × N 份):
+// { windows: { "7": <同 /v1/stats>, … }, windows_all: { "7": <同 /v1/stats?include_excluded=1>, … } }。
+async function statsBundle(request, env, url) {
+  if (!authorized(request, env)) return json({ error: "unauthorized" }, 401);
+  const list = [...new Set((url.searchParams.get("days") || "7,30,90,180").split(",").slice(0, 6).map(clampDays))];
+  const now = Date.now();
+  const raw = await loadStatsRows(env.DB, earliestDay(now, list));
+  const pick = (includeExcluded) => Object.fromEntries(list.map((days) => [String(days), computeStats(raw, { days, now, includeExcluded })]));
+  return json({ windows: pick(false), windows_all: pick(true) });
+}
+
+function clampDays(v) {
+  return Math.min(Math.max(parseInt(v, 10) || 30, 1), 180);
+}
+
+function windowSince(now, days) {
+  return bjDay(now - (days - 1) * DAY_MS);
+}
+
+// 要读到的最早一天:最长的窗口,且不晚于「近 7 天活跃」要的那天。
+function earliestDay(now, list) {
+  return windowSince(now, Math.max(7, ...list));
+}
+
+// 每张表按 since 只读一遍,各窗口、含不含自己的机器都在内存里从这一份算。D1 按扫过的行数计读取额度,
+// 别改回每个数字各写一条 SQL:那样每份统计要把心跳表扫好几遍(见 14 章决策 187)。
+async function loadStatsRows(db, since) {
+  const [heartbeats, installs, activity, crashes, hangEvents, excluded] = await Promise.all([
+    db.prepare(`SELECT * FROM heartbeats WHERE day >= ?1`).bind(since).all(),
+    db.prepare(`SELECT install_id, first_day, origin FROM installs`).all(),
+    db.prepare(`SELECT day, install_id, players_played, hangs, actions, lyrics, languages FROM activity WHERE day >= ?1`).bind(since).all(),
+    db.prepare(`SELECT day, install_id, received_at, signature, process, exception_type, termination_indicator, app_version, frames,
+                       termination_reasons, exception_frames FROM crashes WHERE day >= ?1`).bind(since).all(),
+    db.prepare(`SELECT day, install_id, app_version, duration, since_launch, since_wake, player, windows, thermal, stack, signature, received_at
+                FROM hang_events WHERE day >= ?1`).bind(since).all(),
+    db.prepare(`SELECT install_id FROM excluded_installs`).all(),
+  ]);
+  // 每行标上安装的序号(ix,去重计数用)和是不是自己的机器(own),各份统计不再按字符串查集合。
+  const excludedIDs = new Set(excluded.results.map((r) => r.install_id));
+  const index = new Map();
+  const mark = (r) => {
+    let ix = index.get(r.install_id);
+    if (ix === undefined) index.set(r.install_id, (ix = index.size));
+    r.ix = ix;
+    r.own = excludedIDs.has(r.install_id);
+    return r;
+  };
+  heartbeats.results.forEach(mark);
+  installs.results.forEach(mark);
+  crashes.results.forEach(mark);
+  // 每台机器最近的那条心跳:窗口一直开到今天,所以窗口内最近的一条就是它(只要它落在窗口里)。
+  const latestByInstall = new Map();
+  for (const h of heartbeats.results) {
+    const cur = latestByInstall.get(h.ix);
+    if (!cur || h.day > cur.day) latestByInstall.set(h.ix, h);
+  }
+  const latest = [...latestByInstall.values()].map((r) => ({ ...r, features: safeJSON(r.features, {}) }));
+  // JSON 列在这里解析一次,一次请求要算好几份统计,别在每份里再解析。
+  const parsedActivity = activity.results.map(mark).map((a) => ({
+    ix: a.ix, own: a.own, day: a.day, install_id: a.install_id, hangs: a.hangs, players_played: safeJSON(a.players_played, []),
+    actions: safeJSON(a.actions, {}), lyrics: safeJSON(a.lyrics, {}), languages: safeJSON(a.languages, {}),
+  }));
+  const parsedHangs = hangEvents.results.map(mark).map((h) => ({ ...h, windows: safeJSON(h.windows, []), stack: safeJSON(h.stack, []) }));
+  return { heartbeats: heartbeats.results, latest, installs: installs.results, activity: parsedActivity,
+           crashes: crashes.results, hangEvents: parsedHangs, excluded: excludedIDs, installCount: index.size };
+}
+
+function countRows(rows, key) {
+  const out = new Map();
+  for (const r of rows) {
+    const k = key(r);
+    out.set(k, (out.get(k) || 0) + 1);
+  }
+  return out;
+}
+
+function byText(a, b) {
+  return a < b ? -1 : a > b ? 1 : 0;
+}
+
+function crashGroups(crashes) {
+  const groups = new Map();
+  for (const c of crashes) {
+    let g = groups.get(c.signature);
+    if (!g) groups.set(c.signature, (g = { n: 0, ids: new Set(), versions: new Set(), last: c }));
+    g.n += 1;
+    g.ids.add(c.ix);
+    if (c.app_version) g.versions.add(c.app_version);
+    if (c.received_at > g.last.received_at) g.last = c;
+  }
+  return [...groups.entries()].map(([signature, g]) => ({
+    signature, process: g.last.process, exception_type: g.last.exception_type, termination_indicator: g.last.termination_indicator,
+    n: g.n, installs: g.ids.size, versions: [...g.versions].join(","), last_at: g.last.received_at,
+    frames: g.last.frames, reasons: g.last.termination_reasons, exception_frames: g.last.exception_frames,
+  })).sort((a, b) => b.n - a.n || b.last_at - a.last_at).slice(0, 50);
+}
+
+function distinct(rows, size) {
+  const seen = new Uint8Array(size);
+  let n = 0;
+  for (const r of rows) if (!seen[r.ix]) { seen[r.ix] = 1; n += 1; }
+  return n;
+}
+
+function computeStats(raw, { days, now, includeExcluded }) {
+  const since = windowSince(now, days);
+  const since7 = windowSince(now, 7);
   // excluded_installs 里的安装(作者自己的机器、测试机)默认不进任何统计;原始数据照存,删掉那一行就恢复统计。
   // include_excluded=1 时连它们一起算(SecondBrain 面板遥测页的「含我们自己的机器」开关)。
-  const includeExcluded = url.searchParams.get("include_excluded") === "1";
-  const kept = (col = "install_id") => (includeExcluded ? "1 = 1" : `${col} NOT IN (SELECT install_id FROM excluded_installs)`);
-  const [daily, fresh, freshByOrigin, totals, latest, activity, crashes, hangEvents] = await Promise.all([
-    db.prepare(`SELECT day, COUNT(*) AS n FROM heartbeats WHERE day >= ?1 AND ${kept()} GROUP BY day ORDER BY day`).bind(since).all(),
-    db.prepare(`SELECT first_day AS day, COUNT(*) AS n FROM installs WHERE first_day >= ?1 AND ${kept()} GROUP BY first_day ORDER BY first_day`)
-      .bind(since).all(),
-    db.prepare(`SELECT first_day AS day, origin, COUNT(*) AS n FROM installs WHERE first_day >= ?1 AND ${kept()}
-                GROUP BY first_day, origin ORDER BY first_day`).bind(since).all(),
-    db.prepare(`SELECT (SELECT COUNT(*) FROM installs WHERE ${kept()}) AS installs,
-                       (SELECT COUNT(DISTINCT install_id) FROM heartbeats WHERE day >= ?1 AND ${kept()}) AS active7,
-                       (SELECT COUNT(DISTINCT install_id) FROM heartbeats WHERE day >= ?2 AND ${kept()}) AS active_window,
-                       (SELECT COUNT(*) FROM excluded_installs) AS excluded`)
-      .bind(since7, since).first(),
-    // 窗口内每台机器最近的那条心跳:版本、系统、功能分布都按它算。
-    db.prepare(`SELECT h.* FROM heartbeats h JOIN (SELECT install_id, MAX(day) AS d FROM heartbeats WHERE day >= ?1 AND ${kept()}
-                GROUP BY install_id) l ON h.install_id = l.install_id AND h.day = l.d`).bind(since).all(),
-    db.prepare(`SELECT day, install_id, players_played, hangs, actions, lyrics, languages FROM activity WHERE day >= ?1 AND ${kept()}`)
-      .bind(since).all(),
-    db.prepare(`SELECT signature, process, exception_type, termination_indicator, COUNT(*) AS n,
-                       COUNT(DISTINCT install_id) AS installs, GROUP_CONCAT(DISTINCT app_version) AS versions,
-                       MAX(received_at) AS last_at,
-                       (SELECT frames FROM crashes c2 WHERE c2.signature = c.signature AND ${kept("c2.install_id")} ORDER BY received_at DESC LIMIT 1) AS frames,
-                       (SELECT termination_reasons FROM crashes c3 WHERE c3.signature = c.signature AND ${kept("c3.install_id")} ORDER BY received_at DESC LIMIT 1) AS reasons,
-                       (SELECT exception_frames FROM crashes c4 WHERE c4.signature = c.signature AND ${kept("c4.install_id")} ORDER BY received_at DESC LIMIT 1) AS exception_frames
-                FROM crashes c WHERE day >= ?1 AND ${kept("c.install_id")} GROUP BY signature ORDER BY n DESC LIMIT 50`).bind(since).all(),
-    db.prepare(`SELECT install_id, app_version, duration, since_launch, since_wake, player, windows, thermal, stack, signature, received_at
-                FROM hang_events WHERE day >= ?1 AND ${kept()}`).bind(since).all(),
-  ]);
-  const rows = latest.results.map((r) => ({ ...r, features: safeJSON(r.features, {}) }));
+  const kept = (r) => includeExcluded || !r.own;
+  const inWindow = (r) => r.day >= since && kept(r);
+  const beats = raw.heartbeats.filter(inWindow);
+  const daily = { results: [...countRows(beats, (r) => r.day)].sort((a, b) => byText(a[0], b[0])).map(([day, n]) => ({ day, n })) };
+  const newInstalls = raw.installs.filter((r) => r.first_day >= since && kept(r));
+  const fresh = { results: [...countRows(newInstalls, (r) => r.first_day)].sort((a, b) => byText(a[0], b[0])).map(([day, n]) => ({ day, n })) };
+  const freshByOrigin = { results: [...countRows(newInstalls, (r) => JSON.stringify([r.first_day, r.origin ?? null]))]
+    .map(([k, n]) => { const [day, origin] = JSON.parse(k); return { day, origin, n }; })
+    .sort((a, b) => byText(a.day, b.day) || byText(a.origin ?? "", b.origin ?? "")) };
+  const totals = {
+    installs: raw.installs.filter(kept).length,
+    active7: distinct(raw.heartbeats.filter((r) => r.day >= since7 && kept(r)), raw.installCount),
+    active_window: distinct(beats, raw.installCount),
+    excluded: raw.excluded.size,
+  };
+  const latest = { results: raw.latest.filter(inWindow) };
+  const activity = { results: raw.activity.filter(inWindow) };
+  const crashes = { results: crashGroups(raw.crashes.filter(inWindow)) };
+  const hangEvents = { results: raw.hangEvents.filter(inWindow) };
+  const rows = latest.results;
   const featureFlags = ["translation", "romanization", "machine_translation", "show_in_dock", "launch_at_login", "beta_updates"];
   const playedByInstall = {};
   let hangs = 0;
@@ -370,7 +471,7 @@ async function stats(request, env, url) {
   const actionTotals = {}, actionInstalls = {};
   const lyricsTotals = {}, languageTotals = {}, lyricsByDay = {};
   for (const a of activity.results) {
-    const lyrics = safeJSON(a.lyrics, {});
+    const lyrics = a.lyrics;
     if (Object.keys(lyrics).length > 0) {
       const d = (lyricsByDay[a.day] ||= { day: a.day, installs: 0, ...Object.fromEntries(LYRICS_RESULTS.map((k) => [k, 0])) });
       d.installs += 1;
@@ -379,16 +480,16 @@ async function stats(request, env, url) {
         if (k in d) d[k] += n;
       }
     }
-    for (const [k, n] of Object.entries(safeJSON(a.languages, {}))) languageTotals[k] = (languageTotals[k] || 0) + n;
-    for (const p of safeJSON(a.players_played, [])) (playedByInstall[p] ||= new Set()).add(a.install_id);
+    for (const [k, n] of Object.entries(a.languages)) languageTotals[k] = (languageTotals[k] || 0) + n;
+    for (const p of a.players_played) (playedByInstall[p] ||= new Set()).add(a.ix);
     hangs += a.hangs || 0;
-    if (a.hangs > 0) installsWithHangs.add(a.install_id);
-    for (const [k, n] of Object.entries(safeJSON(a.actions, {}))) {
+    if (a.hangs > 0) installsWithHangs.add(a.ix);
+    for (const [k, n] of Object.entries(a.actions)) {
       actionTotals[k] = (actionTotals[k] || 0) + n;
-      (actionInstalls[k] ||= new Set()).add(a.install_id);
+      (actionInstalls[k] ||= new Set()).add(a.ix);
     }
   }
-  return json({
+  return {
     window_days: days,
     since,
     include_excluded: includeExcluded,
@@ -437,11 +538,11 @@ async function stats(request, env, url) {
       return { ...c, min_version: sorted[0] || null, max_version: sorted[sorted.length - 1] || null,
                frames: safeJSON(c.frames, []), exception_frames: safeJSON(c.exception_frames, []), reasons: safeJSON(c.reasons, []) };
     }),
-  });
+  };
 }
 
-function hangSummary(events) {
-  const parsed = events.map((h) => ({ ...h, windows: safeJSON(h.windows, []), stack: safeJSON(h.stack, []) }));
+// events 的 windows / stack 已解析(loadStatsRows)。
+function hangSummary(parsed) {
   const context = {
     duration: countBy(parsed, (h) => h.duration),
     since_launch: countBy(parsed, (h) => h.since_launch),
@@ -456,7 +557,7 @@ function hangSummary(events) {
     const latest = list.reduce((a, b) => (b.received_at > a.received_at ? b : a));
     const sorted = [...new Set(list.map((h) => h.app_version).filter(Boolean))].sort(compareVersions);
     return {
-      signature, n: list.length, installs: new Set(list.map((h) => h.install_id)).size,
+      signature, n: list.length, installs: new Set(list.map((h) => h.ix)).size,
       min_version: sorted[0] || null, max_version: sorted[sorted.length - 1] || null, last_at: latest.received_at,
       stack: latest.stack, duration: countBy(list, (h) => h.duration), since_wake: countBy(list, (h) => h.since_wake || "(no sleep)"),
       player: countBy(list, (h) => h.player), windows: countBy(list, (h) => (h.windows.length ? h.windows : ["(none)"])),
