@@ -327,7 +327,7 @@
 "下一步" = "Next";
 "下一页" = "Next";
 "下一首" = "Next Track";
-"下列播放器均会自动识别；如需仅识别部分播放器，请关闭右上角开关后手动勾选" = "All players below are detected automatically. To detect only some of them, turn off the switch at the top right and select them manually";
+"下列播放器均会自动识别。若要仅识别部分播放器，请先勾选它们，再关闭右上角开关" = "All players below are detected automatically. To detect only some of them, select those players first, then turn off the switch at the top right";
 "下移" = "Move Down";
 "下载 Discord…" = "Download Discord…";
 "下载中…" = "Downloading…";

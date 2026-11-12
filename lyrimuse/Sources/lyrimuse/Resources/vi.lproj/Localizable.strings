@@ -301,7 +301,7 @@
 "下一步" = "Tiếp";
 "下一页" = "Trang sau";
 "下一首" = "Bài tiếp theo";
-"下列播放器均会自动识别；如需仅识别部分播放器，请关闭右上角开关后手动勾选" = "Mọi trình phát bên dưới đều được tự động nhận diện. Để chỉ nhận diện một số, hãy tắt công tắc ở góc trên bên phải rồi chọn thủ công";
+"下列播放器均会自动识别。若要仅识别部分播放器，请先勾选它们，再关闭右上角开关" = "Mọi trình phát bên dưới đều được tự động nhận diện. Để chỉ nhận diện một số, hãy chọn các trình phát đó trước rồi tắt công tắc ở góc trên bên phải";
 "下移" = "Di chuyển xuống";
 "下载 Discord…" = "Tải về Discord…";
 "下载中…" = "Đang tải về…";
