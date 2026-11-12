@@ -3099,6 +3099,14 @@ func runSourceContractSurfaceTests() {
             } else {
                 expectEqual(true, false, "设置页权限卡: 读不到 SettingsView.swift(路径挪了?)")
             }
+            // 自动识别是唯一选项时，必须能先从设置页勾选一个具体播放器。
+            if let cards = read("Settings/PlayerChoiceCard.swift"),
+               let compactTile = cards.range(of: "struct PlayerCompactTile: View") {
+                expectEqual(cards[compactTile.upperBound...].contains("Button(action: onSelect)"), true,
+                            "设置页播放器卡: 自动识别开启时也要把点击交给勾选逻辑")
+            } else {
+                expectEqual(true, false, "设置页播放器卡: 读不到 PlayerCompactTile")
+            }
             // 两个界面都不许再各自 new 一份状态:`PlayerAutomationPermissions.shared` 是单例,
             // 各写各的 @State 会让"设置页里刚授权完、引导页还显示未授权"这种矛盾重新长出来。
             for (file, text) in [("OnboardingView.swift", onboarding),

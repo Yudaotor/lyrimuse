@@ -6,6 +6,10 @@ import LyrimuseCore
 func runPlayerPickerTests() {
     let order: [PlaybackPlayer] = [.appleMusic, .spotify, .qqMusic, .netease, .kugou, .soda, .auto]
 
+    let preselected = Set<PlaybackPlayer>([.auto]).toggling(.qqMusic)
+    expectEqual(preselected, [.auto, .qqMusic], "播放器网格: 开着自动识别时可以先勾选 QQ 音乐")
+    expectEqual(preselected.toggling(.auto), [.qqMusic], "播放器网格: 关闭自动识别后只保留手动勾选的 QQ 音乐")
+
     // ---- 勾着自动识别:规则不变,勾着没装的照样摆出来(卡片随时能勾,得有地方取消) ----
     do {
         let tiles = PlayerPickerLayout.tiles(order: order,

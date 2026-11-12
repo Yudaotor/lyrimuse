@@ -79,9 +79,10 @@ struct PlayerPicker<Trailing: View>: View {
     private func compactGrid(_ tiles: PlayerPickerLayout.Tiles) -> some View {
         LazyVGrid(columns: Self.compactColumns, spacing: 8) {
             ForEach(tiles.main) { player in
+                let isSelected = features.players.contains(player)
                 PlayerCompactTile(player: player,
-                                  isSelected: features.players.contains(player),
-                                  isCoveredByAuto: isAutoDetect,
+                                  isSelected: isSelected,
+                                  isCoveredByAuto: isAutoDetect && !isSelected,
                                   isInstalled: installed.contains(player)) {
                     toggle(player)
                 }
