@@ -71,10 +71,11 @@ final class AppActions {
         lyricsImportRequests.send()
     }
 
-    /// 要歌词管理弹的导入面板:「导入歌词文件夹」的预览(带选好的文件夹)、「导入库」。
+    /// 要歌词管理弹的面板:「导入歌词文件夹」的预览(带选好的文件夹)、「导入库」、某一条的「解析决策」(nil = 详情页正显示的那条)。
     enum LyricsManagerSheetRequest {
         case importFolder(URL)
         case importLibrary
+        case decision(key: String?)
     }
 
     /// 同 `pendingSongVersions` 两条路:信箱管窗口还没建出来(读完缓存后取),subject 管已经开着;只认 60 秒以内的。

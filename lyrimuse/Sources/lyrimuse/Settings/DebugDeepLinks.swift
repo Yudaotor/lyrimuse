@@ -187,6 +187,9 @@ enum DebugDeepLinks {
         case .importLibrary:
             AppActions.shared.requestLyricsManagerSheet(.importLibrary, open: false)
             logger.notice("debug import library")
+        case let .managerDecision(key):
+            AppActions.shared.requestLyricsManagerSheet(.decision(key: key), open: false)
+            logger.notice("debug manager decision key=\(key == nil ? "selected" : "given", privacy: .public)")
         case let .lyricsSearch(key):
             guard let summary = EnrichCacheStore.shared.summary(forKey: key) else {
                 logger.notice("debug lyrics search: key not in lyrics manager list")

@@ -417,6 +417,10 @@ func runDeepLinkTests() {
                      link("lyrimuse://debug/import-watch?off=1")],
                     [.debug(.importLibrary), .debug(.importWatch(path: "/Users/a/x")), .debug(.importWatch(path: nil))],
                     "debug: 导入库面板、设监视文件夹、停止监视")
+        expectEqual([link("lyrimuse://debug/manager-decision"), link("lyrimuse://debug/manager-decision?key="),
+                     link("lyrimuse://debug/manager-decision?key=A%7CB%7CC")],
+                    [.debug(.managerDecision(key: nil)), .debug(.managerDecision(key: nil)), .debug(.managerDecision(key: "A|B|C"))],
+                    "debug: 歌词管理解析决策面板,没带 key / 空 key 是详情页那条,键原样")
         expectEqual(link("lyrimuse://debug/lyrics-search?key=A%7CB%7CC"), .debug(.lyricsSearch(key: "A|B|C")),
                     "debug: 按写法键开搜索歌词窗口,键原样")
         expectEqual([link("lyrimuse://debug/lyrics-writeback?step=open"), link("lyrimuse://debug/lyrics-writeback?step=confirm"),
@@ -584,6 +588,7 @@ func runDeepLinkTests() {
             .debug(.importLyrics(paths: ["/tmp/歌 词.lrc", "/tmp/歌 词.tr.lrc"])),
             .debug(.importLyricsFolder(path: "/tmp/歌 词")),
             .debug(.importLibrary), .debug(.importWatch(path: "/tmp/歌 词")), .debug(.importWatch(path: nil)),
+            .debug(.managerDecision(key: nil)), .debug(.managerDecision(key: "Michael Jackson|Billie Jean|Thriller")),
             .debug(.lyricsSearch(key: "Michael Jackson|Blood on the Dance Floor|HIStory ~dur254")),
             .debug(.editNotifyChannel(id: nil)), .debug(.editNotifyChannel(id: "Legacy-1")),
             .setPlayMode(.list), .setPlayMode(.shuffle), .setPlayMode(.repeatAll), .setPlayMode(.repeatOne),

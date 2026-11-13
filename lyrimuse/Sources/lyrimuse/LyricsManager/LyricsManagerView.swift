@@ -3739,7 +3739,7 @@ struct LyricsManagerView: View {
         }
     }
 
-    /// 取走要弹的导入面板(`AppActions.requestLyricsManagerSheet`)。已经开着别的面板时不弹,请求作废。
+    /// 取走要弹的面板(`AppActions.requestLyricsManagerSheet`)。已经开着别的面板时不弹,请求作废。
     private func consumeLyricsManagerSheetRequest() {
         guard let pending = AppActions.shared.pendingLyricsManagerSheet else { return }
         AppActions.shared.pendingLyricsManagerSheet = nil
@@ -3748,6 +3748,8 @@ struct LyricsManagerView: View {
         switch pending.request {
         case let .importFolder(url): batchImportRequest = LyricsBatchImportRequest(folder: url)
         case .importLibrary: showImportLibrary = true
+        case let .decision(key):
+            if let key = key ?? singleSelectedKey { openDecision(for: key) }
         }
     }
 
