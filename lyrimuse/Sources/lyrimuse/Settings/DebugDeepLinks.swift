@@ -146,6 +146,12 @@ enum DebugDeepLinks {
                     .map { $0.split(separator: ",", omittingEmptySubsequences: false).map { $0.trimmingCharacters(in: .whitespaces) } },
                                              legacy: nil)
             logger.notice("debug notch quick slots=\(AppSettings.shared.notchQuickSlots.stored.map { $0.joined(separator: ",") }.joined(separator: "|"), privacy: .public)")
+        case let .labsWriteback(auto, overwrite):
+            let features = FeatureSettingsStore.shared
+            if let auto { features.lyricsAutoWriteback = auto }
+            if let overwrite { features.lyricsAutoWritebackOverwrite = overwrite }
+            Task { await features.save() }
+            logger.notice("debug labs writeback auto=\(features.lyricsAutoWriteback, privacy: .public) overwrite=\(features.lyricsAutoWritebackOverwrite, privacy: .public)")
         case let .notchPreview(state):
             NotchCornerLive.shared.pinPreview(state == "expanded" ? .expanded : state == "collapsed" ? .collapsed : nil)
             logger.notice("debug notch preview state=\(state, privacy: .public)")

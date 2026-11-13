@@ -186,6 +186,9 @@ public enum LyrimuseDeepLink: Equatable, Sendable {
         case notchQuickActions(layout: String)
         /// 设置页灵动岛预览摆成哪一态,不用指针悬停:`debug/notch-preview?state=expanded|collapsed|auto`(`auto` = 交还给指针)。
         case notchPreview(state: String)
+        /// 实验室「自动写入歌曲文件」和它的子开关「覆盖其他软件写入的歌词」,跟实验室页走同两个设置:
+        /// `debug/labs-writeback?auto=0|1&overwrite=0|1`,至少带一个。
+        case labsWriteback(auto: Bool?, overwrite: Bool?)
         /// 悬浮歌词的宽度(pt,按设置的区间夹取、量化)、「换句动画」、下一句字号占主句的比例(按设置的区间夹取)、长句处理和下一句排法,
         /// 跟设置页走同五个设置:`debug/overlay-layout?width=1270&line-change=0|1&next-line=0.7&overflow=wrap|scroll&next-arrangement=below|alternate`,
         /// 至少带一个。
@@ -471,6 +474,11 @@ public enum LyrimuseDeepLink: Equatable, Sendable {
         case ("debug", "/notch-quick-actions"):
             guard let layout = value("layout") else { return nil }
             self = .debug(.notchQuickActions(layout: layout))
+        case ("debug", "/labs-writeback"):
+            let auto = value("auto").flatMap(Self.parseBool)
+            let overwrite = value("overwrite").flatMap(Self.parseBool)
+            guard auto != nil || overwrite != nil else { return nil }
+            self = .debug(.labsWriteback(auto: auto, overwrite: overwrite))
         case ("debug", "/notch-preview"):
             guard let state = value("state"), ["expanded", "collapsed", "auto"].contains(state) else { return nil }
             self = .debug(.notchPreview(state: state))
@@ -760,6 +768,10 @@ public enum LyrimuseDeepLink: Equatable, Sendable {
             case let .notchQuickActions(layout):
                 components.path = "/notch-quick-actions"
                 components.queryItems = [URLQueryItem(name: "layout", value: layout)]
+            case let .labsWriteback(auto, overwrite):
+                components.path = "/labs-writeback"
+                components.queryItems = (auto.map { [URLQueryItem(name: "auto", value: $0 ? "1" : "0")] } ?? [])
+                    + (overwrite.map { [URLQueryItem(name: "overwrite", value: $0 ? "1" : "0")] } ?? [])
             case let .notchPreview(state):
                 components.path = "/notch-preview"
                 components.queryItems = [URLQueryItem(name: "state", value: state)]

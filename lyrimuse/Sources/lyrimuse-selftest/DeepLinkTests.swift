@@ -287,6 +287,11 @@ func runDeepLinkTests() {
         expectEqual(link("lyrimuse://debug/notch-preview?state=expanded"),
                     .debug(.notchPreview(state: "expanded")), "debug: 设置页灵动岛预览钉在展开态")
         expectEqual(link("lyrimuse://debug/notch-preview?state=open"), nil, "debug: 预览状态只认 expanded / collapsed / auto")
+        expectEqual(link("lyrimuse://debug/labs-writeback?auto=1&overwrite=0"),
+                    .debug(.labsWriteback(auto: true, overwrite: false)), "debug: 实验室自动写入和覆盖子开关一起设")
+        expectEqual(link("lyrimuse://debug/labs-writeback?overwrite=on"),
+                    .debug(.labsWriteback(auto: nil, overwrite: true)), "debug: 只设覆盖子开关")
+        expectEqual(link("lyrimuse://debug/labs-writeback?auto=maybe"), nil, "debug: 实验室写回开关什么都没认出来不认")
         expectEqual(link("lyrimuse://debug/word-format-switch?state=converting&format=qrc&done=30&total=100"),
                     .debug(.wordFormatSwitch(state: "converting", format: "qrc", done: 30, total: 100)), "debug: 逐字格式切换摆到改存中")
         expectEqual(link("lyrimuse://debug/word-format-switch?state=backup&done=-3"),
@@ -563,6 +568,7 @@ func runDeepLinkTests() {
             .debug(.notchQuickActions(layout: "close,,settings|favorite")),
             .debug(.notchQuickActions(layout: "")),
             .debug(.notchPreview(state: "auto")), .debug(.notchPreview(state: "collapsed")),
+            .debug(.labsWriteback(auto: true, overwrite: nil)), .debug(.labsWriteback(auto: false, overwrite: true)),
             .debug(.wordFormatSwitch(state: "finished", format: "ttml", done: nil, total: 17564)),
             .debug(.wordFormatSwitch(state: "queued", format: nil, done: nil, total: nil)),
             .debug(.overlayLayout(width: 640, lineChange: true)),
