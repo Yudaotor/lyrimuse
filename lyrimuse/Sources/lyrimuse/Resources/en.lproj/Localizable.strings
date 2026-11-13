@@ -2847,7 +2847,7 @@
 "选择要分享的句子" = "Pick the lines to share";
 "选择要监视的歌词文件夹" = "Choose the lyrics folder to watch";
 "透明" = "Transparent";
-"逐字" = "Word-by-Word";
+"逐字" = "Word-timed";
 "逐字填色时已唱部分使用此颜色" = "The color of the sung part as lyrics fill word by word";
 "逐字时间轴" = "Word timing";
 "逐字时间轴 %@ 首" = "%@ with word timing";
@@ -2858,7 +2858,7 @@
 "逐字歌词格式" = "Word-by-Word Lyrics Format";
 "逐字歌词随演唱逐字高亮；无逐字数据的歌曲整行高亮" = "Word-by-word lyrics: each word lights up as it is sung. Songs without word timings highlight the whole line";
 "逐帧 JPEG" = "Per-frame JPEG";
-"逐行" = "Line-by-Line";
+"逐行" = "Line-timed";
 "逐行歌词" = "Line-by-line";
 "逐行歌词对比" = "Line-by-Line Lyrics Comparison";
 "逐首联网搜索，每首间隔约 5 秒；跳过纯音乐和人工修正过的歌曲" = "Searches one song at a time, about 5 seconds apart. Instrumentals and manually edited songs are skipped";

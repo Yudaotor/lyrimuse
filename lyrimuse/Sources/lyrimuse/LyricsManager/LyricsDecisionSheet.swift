@@ -1107,7 +1107,7 @@ struct LyricsDecisionSheet: View {
                 .foregroundStyle(sourceColor(c.source))
                 .padding(.horizontal, 7).padding(.vertical, 2)
                 .background(sourceColor(c.source).opacity(0.12), in: Capsule())
-            // 两个小标签不折行:英文「Winner」「Word-by-Word」被拆成两行会断在词中间。
+            // 两个小标签不折行:英文「Winner」「Word-timed」被拆成两行会断在词中间。
             if isChampion {
                 Group {
                     if crownOnly {

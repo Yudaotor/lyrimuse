@@ -89307,7 +89307,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Word-by-Word"
+            "value" : "Word-timed"
           }
         },
         "es" : {
@@ -101265,7 +101265,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Line-by-Line"
+            "value" : "Line-timed"
           }
         },
         "es" : {
