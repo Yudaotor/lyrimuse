@@ -4,19 +4,25 @@ import Foundation
 /// 只读顶层盒子头和 `moov` 本身(`mdat` 跳过);`moov` 超过 `moovLimit` 不读、当没有。读不出(不是这种格式、截断)为 false。
 public enum MP4VideoTrack {
     static let moovLimit: UInt64 = 16 << 20
+    /// 顶层盒子最多看几个才找到 `moov`。普通文件顶层只有几个盒子,分片的 `moov` 在 `moof` 前面;坏文件全是 8 字节小盒子时
+    /// 每个盒子都要读一次盘,见 02 章决策 260。
+    static let maxTopLevelBoxes = 4096
 
     /// 会读盘,别在主线程调。
     public static func present(path: String) -> Bool {
         moov(path: path, limit: moovLimit).map(moovHasVideo) ?? false
     }
 
-    /// 顶层 `moov` 的内容(不含盒子头);没有、超过 `limit`、读不出为 nil。只读顶层盒子头,别的盒子跳过。会读盘。
+    /// 顶层 `moov` 的内容(不含盒子头);没有、超过 `limit`、前 `maxTopLevelBoxes` 个盒子里没有、读不出为 nil。只读顶层盒子头,
+    /// 别的盒子跳过。会读盘。
     static func moov(path: String, limit: UInt64) -> [UInt8]? {
         guard let handle = FileHandle(forReadingAtPath: path) else { return nil }
         defer { try? handle.close() }
         guard let size = try? handle.seekToEnd() else { return nil }
         var offset: UInt64 = 0
-        while offset + 8 <= size {
+        var boxes = 0
+        while offset + 8 <= size, boxes < maxTopLevelBoxes {
+            boxes += 1
             guard (try? handle.seek(toOffset: offset)) != nil,
                   let head = try? handle.read(upToCount: 16),
                   let box = header([UInt8](head), remaining: size - offset) else { return nil }

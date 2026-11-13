@@ -207,6 +207,15 @@ func checkLocalAudioFileArtwork() {
     expectEqual(read(write("song.m4a", ftyp + mdat + box("moov", moov(covr([red]))))), red, "嵌入封面 文件: M4A,moov 在 mdat 后面")
     expectEqual(A.read(path: write("plain.m4a", ftyp + box("moov", moov([])) + mdat)) == nil, true, "嵌入封面 文件: M4A 没有封面")
     expectEqual(A.read(path: write("corrupt.m4a", ftyp + box("moov", moov(covr([broken]))))) == nil, true, "嵌入封面 文件: M4A 封面坏了")
+    let freeBox = box("free", [])
+    expectEqual(read(write("boxes-ok.m4a", ftyp + freeBox.repeated(100) + box("moov", moov(covr([red]))))), red,
+                "畸形 M4A: moov 前面有 100 个小盒子照读")
+    let tinyBoxes = write("tiny-boxes.m4a", ftyp + freeBox.repeated(512 << 10))
+    let tinyStart = Date()
+    expectEqual(A.read(path: tinyBoxes) == nil && !MP4VideoTrack.present(path: tinyBoxes), true, "畸形 M4A: 4MB 全是 8 字节小盒子")
+    expectEqual(Date().timeIntervalSince(tinyStart) < 0.2, true, "畸形 M4A: 顶层盒子数有上限,不逐个盒子读到底(耗时有上限)")
+    expectEqual(A.read(path: write("boxes-many.m4a", ftyp + freeBox.repeated(5000) + box("moov", moov(covr([red]))))) == nil, true,
+                "畸形 M4A: 顶层盒子超过上限就停")
     expectEqual(read(write("song.opus", oggOpus(picture: pictureBlock(blue, type: 3)))), blue,
                 "嵌入封面 AudioToolbox: Ogg Opus 的 METADATA_BLOCK_PICTURE")
     expectEqual(A.read(path: write("plain.opus", oggOpus(picture: nil))) == nil, true, "嵌入封面 AudioToolbox: Ogg Opus 没有封面")
