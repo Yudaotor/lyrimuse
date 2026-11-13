@@ -175,16 +175,23 @@ private enum LyricsSortOption: String, CaseIterable, Identifiable {
 
     /// 按这个选项给一份已经筛选完的列表排序。
     ///
-    /// 排序键**一次性算好再排**,不在比较器里现算:`sourceDisplayName` 要走一次 L10n
-    /// 查表,放进 O(N·logN) 的比较里会被调用上万次(跟 Summary 里那几个 norm* 字段
-    /// 预算好的动机一样)。其余字段都是 Summary 上现成的,只是搬进一个
-    /// 值类型里。
+    /// 排序键**一次性算好再排**,不在比较器里现算。来源展示名要查本地化表(一次约 7µs),按来源记住、每种只查一次,
+    /// 别逐行查:三万行时光这一步就要两三百毫秒,窗口重新露出来、列表换新的时候在主线程上。排的是下标,不是
+    /// (排序键, 摘要) 元组:归并时要反复搬元素,搬一次排序键就要 retain / release 好几个字符串。见 11 章决策 165。
     func sorted(_ items: [EnrichCacheStore.Summary]) -> [EnrichCacheStore.Summary] {
         let order = coreOrder
-        return items
-            .map { (key: $0.lyricsSortKey, item: $0) }
-            .sorted { order.less($0.key, $1.key) }
-            .map(\.item)
+        var sourceNames: [String: String] = [:]
+        let keys = items.map { s -> LyricsSortKey in
+            let name: String
+            if let known = sourceNames[s.lyricsSource] {
+                name = known
+            } else {
+                name = sourceDisplayName(s.lyricsSource)
+                sourceNames[s.lyricsSource] = name
+            }
+            return s.lyricsSortKey(sourceDisplayName: name)
+        }
+        return keys.indices.sorted { order.less(keys[$0], keys[$1]) }.map { items[$0] }
     }
 }
 
@@ -193,13 +200,14 @@ extension EnrichCacheStore.Summary {
     /// 折过简体+小写)而不是列表里展示的原始写法——理由见 `Summary.displayArtist` 的注释:"筛选/排序继续按统一名归并不变,只是这一列如实展示每条记录
     /// 自己的原始歌手名"。同一位歌手因为原始标签写法不同(简繁/大小写)被拆成两条记录时,
     /// 按归一化键排还能让它们挨在一起;按展示字符串排就会被拆到列表两端。
-    var lyricsSortKey: LyricsSortKey {
+    /// - Parameter name: 这条来源的展示名(`sourceDisplayName(lyricsSource)`),调用方按来源记住了传进来。
+    func lyricsSortKey(sourceDisplayName name: String) -> LyricsSortKey {
         LyricsSortKey(
             normPrimaryArtist: normPrimaryArtist,
             normAlbum: normAlbum,
             title: title,
             searchTitleLower: searchTitleLower,
-            sourceDisplayName: sourceDisplayName(lyricsSource),
+            sourceDisplayName: name,
             hasSource: !lyricsSource.isEmpty,
             lyricsUpdatedAt: lyricsUpdatedAt,
             resolvedAt: resolvedAt,

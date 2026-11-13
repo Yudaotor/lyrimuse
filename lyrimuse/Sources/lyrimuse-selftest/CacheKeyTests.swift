@@ -314,6 +314,13 @@ func runCacheKeyTests() {
             .deletingLastPathComponent().appendingPathComponent("lyrimuse/LyricsManager/LyricsManagerView.swift"), encoding: .utf8)) ?? ""
         expectEqual(sourceBytes(managerViewSource, contain: "    private func refreshWithFeedback() {\n        Task {\n            await store.reload()\n"), true,
                     "操作后重读(契约): 侧栏「刷新」仍是整份读的兜底")
+        // 列表换新时主线程上的重排:来源展示名按来源只查一次本地化表,排下标不排(键, 摘要)元组(11 章决策 165)。
+        let sortedBody = sourceBody("func sorted(_ items: [EnrichCacheStore.Summary]) -> [EnrichCacheStore.Summary] {", in: managerViewSource)
+        expectEqual(sourceHas(sortedBody, "if let known = sourceNames[s.lyricsSource] {")
+                    && sourceHas(sortedBody, "sourceNames[s.lyricsSource] = name")
+                    && sourceHas(sortedBody, "return keys.indices.sorted { order.less(keys[$0], keys[$1]) }.map { items[$0] }")
+                    && !managerViewSource.contains("sourceDisplayName: sourceDisplayName(lyricsSource)"), true,
+                    "列表重排(契约): 来源展示名按来源记住,不逐行查本地化表;排下标")
         expectEqual(sourceBytes(storeSource, contain: "EnrichIndexDiff.rawChanges(data, since: base.fingerprints, alsoExtract: unlaid)")
                     && sourceBytes(storeSource, contain: "            if touched[s.key] != nil || rebuildKeys.contains(s.key) {")
                     && sourceBytes(storeSource, contain: "            items.append(s)\n"), true,
