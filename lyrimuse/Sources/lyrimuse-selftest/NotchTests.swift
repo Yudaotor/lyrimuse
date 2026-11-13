@@ -685,9 +685,12 @@ func runNotchTests() {
         let view = notchCardSource(read)
         let stage = notchStageSource(read)
         let scrubber = sourceBody("private func scrubberAndTimes(", in: view)
-        expectEqual(scrubber.contains(".offset(x: -ProgressFillGeometry.leadingOffset(") && scrubber.contains(".clipShape(Capsule())")
-                    && !scrubber.contains(".frame(width: proxy.size.width *"), true,
-                    "展开区进度条: 满宽填充按 offset 移出、按胶囊裁,不每帧改布局宽度")
+        let paint = sourceBody("Canvas { context, size in", in: scrubber)
+        expectEqual(paint.contains("context.fill(track,")
+                    && paint.contains("ProgressFillGeometry.leadingOffset(")
+                    && paint.contains("clipped.clip(to: track)")
+                    && paint.contains("clipped.fill(played,"), true,
+                    "展开区进度条: 在同一个 Canvas 内画底轨和已播段,进度不改布局宽度")
         expectEqual(controller.contains(
             "AppSettings.shared.$notchLyricRowHeight, AppSettings.shared.$notchFontSize, AppSettings.shared.$notchSecondaryLine")
                     && controller.contains("height: max(geo.notchHeight + max(lyricRowHeight, expandedLyricListHeight) + expandedExtraHeightMax,"), true,

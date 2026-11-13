@@ -7,7 +7,7 @@ import os
 /// 展开卡里的进度条 + 时间行,独立子视图,两件事:
 /// ① 拖动的三个交互状态(@GestureState/测宽/悬停)在这里自持:挂在 NotchLyricsView 根上的话,拖动时每个指针事件(60~120Hz)都
 ///    整卡重估,实际要变的只有这十来个视图;
-/// ② 逐帧时钟是 `FrameTimeline`(30Hz 上限,同其余逐字填色口径),只包住已播段和两个时间数字;中间那组歌词偏移按钮不在时钟里,
+/// ② 逐帧时钟是 `FrameTimeline`(30Hz 上限,同其余逐字填色口径),只包住进度条和两个时间数字;中间那组歌词偏移按钮不在时钟里,
 ///    只随父视图更新(05 章决策 62)。
 ///
 /// 两种数据来源,跟「歌词窗口」的 progressSection 同一套三态口径:
@@ -62,30 +62,27 @@ struct NotchScrubber: View {
     private func scrubberAndTimes(durationMs: Int, ticking: Bool,
                                   positionMs: @escaping (Date) -> Int) -> some View {
         VStack(spacing: 3) {
-            GeometryReader { proxy in
-                ZStack(alignment: .leading) {
-                    Capsule().fill(tint.opacity(0.18))
-                    // 满宽填充往左移出、外面按满宽胶囊裁一次:随进度变的只有 offset(不参与布局),别写回
-                    // `.frame(width:)` —— 那样每帧都要重新布局。几何同歌词窗口那条,见 ProgressFillGeometry。
-                    FrameTimeline(minimumInterval: WordKaraokeGradient.refreshInterval, paused: !ticking) { now in
-                        Capsule().fill(tint.opacity(0.85))
-                            .offset(x: -ProgressFillGeometry.leadingOffset(
-                                containerWidth: proxy.size.width,
-                                fraction: CGFloat(Double(positionMs(now)) / Double(durationMs))))
-                    }
-                    .clipShape(Capsule())
+            FrameTimeline(minimumInterval: WordKaraokeGradient.refreshInterval, paused: !ticking) { now in
+                let fraction = CGFloat(Double(positionMs(now)) / Double(durationMs))
+                // 底轨和已播段在同一次绘制里完成,进度只改变绘制位置。
+                Canvas { context, size in
+                    let bounds = CGRect(origin: .zero, size: size)
+                    let track = Capsule().path(in: bounds)
+                    context.fill(track, with: .color(tint.opacity(0.18)))
+
+                    let inset = ProgressFillGeometry.leadingOffset(containerWidth: size.width, fraction: fraction)
+                    let played = Capsule().path(in: bounds.offsetBy(dx: -inset, dy: 0))
+                    var clipped = context
+                    clipped.clip(to: track)
+                    clipped.fill(played, with: .color(tint.opacity(0.85)))
                 }
-                // 变粗只发生在下面那个**恒定高度的槽**里(垂直居中),布局上不占多一分 ——
-                // 别让 .frame(height: scrubberHeight) 直接参与布局:悬停 3→5 那 2pt 会把
-                // 时间行和三键整块往下推一下。
-                .frame(height: scrubberHeight)
-                .frame(maxHeight: .infinity)
-                // reduceMotion 下仍然变粗(那是功能反馈,不是装饰),只是不补间。
-                .animation(reduceMotion ? nil : .spring(response: 0.22, dampingFraction: 0.7),
-                           value: scrubberHeight)
             }
-            // 布局槽恒为最粗形态(拖动中的 6pt)的高度,悬停/拖动只改槽内的条,不动邻居。
+            .frame(height: scrubberHeight)
+            // 变粗只发生在 6pt 高的槽内,不推开下面的时间行和播放键。
             .frame(height: 6)
+            // reduceMotion 下仍然变粗(那是功能反馈,不是装饰),只是不补间。
+            .animation(reduceMotion ? nil : .spring(response: 0.22, dampingFraction: 0.7),
+                       value: scrubberHeight)
             // 命中区只覆盖进度条这一行,不含下面的时间行:挂在整块上的话,
             // 点右侧"剩余时间"文字就等于 seek 到 ~94%(把这首歌跳过去)。
             // 上下各撑 8pt 让 3pt 的条好按,再用等量负 padding 抵消布局:
