@@ -364,6 +364,14 @@ extension UnknownPlayerNotifier: UNUserNotificationCenterDelegate {
             }
             return
         }
+        // 播放器自己的开关让它不报 Now Playing:点正文把那个播放器叫到前台,开关在它的设置里。
+        if category == ReportingSwitchNotifier.categoryID {
+            if response.actionIdentifier == UNNotificationDefaultActionIdentifier,
+               let bundleID = response.notification.request.content.userInfo[ReportingSwitchNotifier.bundleIDKey] as? String {
+                await MainActor.run { ReportingSwitchNotifier.openPlayer(bundleID: bundleID) }
+            }
+            return
+        }
         // ListenBrainz 令牌被拒:点正文打开设置里的 ListenBrainz 账号页(令牌在那张卡里换)。
         if category == ListenBrainzAuthNotifier.categoryID {
             if response.actionIdentifier == UNNotificationDefaultActionIdentifier {

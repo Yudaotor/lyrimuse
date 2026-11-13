@@ -267445,6 +267445,451 @@
           }
         }
       }
+    },
+    "读不到 QQ 音乐的播放信息" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wiedergabe von QQ Music nicht lesbar"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Can’t read what QQ Music is playing"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No se puede leer qué reproduce QQ Music"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Impossible de lire la lecture en cours de QQ Music"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Impossibile leggere cosa riproduce QQ Music"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "QQ Music の再生情報を読み取れません"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "QQ Music의 재생 정보를 읽을 수 없음"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Não é possível ler o que o QQ Music está tocando"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Не удаётся прочитать, что играет в QQ Music"
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "อ่านข้อมูลการเล่นของ QQ Music ไม่ได้"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Не вдається прочитати, що грає в QQ Music"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Không đọc được thông tin phát của QQ Music"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "读不到 QQ 音乐的播放信息"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "讀不到 QQ 音樂的播放資訊"
+          }
+        }
+      }
+    },
+    "读不到网易云音乐的播放信息" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wiedergabe von NetEase Cloud Music nicht lesbar"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Can’t read what NetEase Cloud Music is playing"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No se puede leer qué reproduce NetEase Cloud Music"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Impossible de lire la lecture en cours de NetEase Cloud Music"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Impossibile leggere cosa riproduce NetEase Cloud Music"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "NetEase Cloud Music の再生情報を読み取れません"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "NetEase Cloud Music의 재생 정보를 읽을 수 없음"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Não é possível ler o que o NetEase Cloud Music está tocando"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Не удаётся прочитать, что играет в NetEase Cloud Music"
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "อ่านข้อมูลการเล่นของ NetEase Cloud Music ไม่ได้"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Не вдається прочитати, що грає в NetEase Cloud Music"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Không đọc được thông tin phát của NetEase Cloud Music"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "读不到网易云音乐的播放信息"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "讀不到網易雲音樂的播放資訊"
+          }
+        }
+      }
+    },
+    "可能是 QQ 音乐设置里没勾选「启用媒体键/远程控制事件」" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "„启用媒体键/远程控制事件“ (Medientasten und Fernsteuerung) ist in den Einstellungen von QQ Music eventuell aus"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "“启用媒体键/远程控制事件” (media keys and remote control) may be off in QQ Music settings"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Puede que «启用媒体键/远程控制事件» (teclas multimedia y control remoto) esté desactivado en los ajustes de QQ Music"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "L’option « 启用媒体键/远程控制事件 » (touches multimédias et télécommande) est peut-être désactivée dans les réglages de QQ Music"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Forse “启用媒体键/远程控制事件” (tasti multimediali e controllo remoto) è disattivato nelle impostazioni di QQ Music"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "QQ Music の設定で「启用媒体键/远程控制事件」（メディアキーとリモートコントロール）がオフになっている可能性があります"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "QQ Music 설정에서 ‘启用媒体键/远程控制事件’(미디어 키 및 원격 제어)가 꺼져 있을 수 있음"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Talvez “启用媒体键/远程控制事件” (teclas de mídia e controle remoto) esteja desativado nos ajustes do QQ Music"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Возможно, в настройках QQ Music выключен параметр «启用媒体键/远程控制事件» (медиаклавиши и дистанционное управление)"
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "อาจปิด “启用媒体键/远程控制事件” (ปุ่มสื่อและการควบคุมระยะไกล) ไว้ในการตั้งค่าของ QQ Music"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Можливо, у параметрах QQ Music вимкнено «启用媒体键/远程控制事件» (медіаклавіші та дистанційне керування)"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Có thể “启用媒体键/远程控制事件” (phím phương tiện và điều khiển từ xa) đang tắt trong cài đặt QQ Music"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "可能是 QQ 音乐设置里没勾选「启用媒体键/远程控制事件」"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "可能是 QQ 音樂設定裡沒勾選「启用媒体键/远程控制事件」"
+          }
+        }
+      }
+    },
+    "可能是 QQ 音乐 iPad 版设置里开了「允许多应用同时播放」" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "„允许多应用同时播放“ (gleichzeitig mit anderen Apps abspielen) ist in den Einstellungen von QQ Music für iPad eventuell an"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "“允许多应用同时播放” (play alongside other apps) may be on in QQ Music for iPad settings"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Puede que «允许多应用同时播放» (reproducir junto con otras apps) esté activado en los ajustes de QQ Music para iPad"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "L’option « 允许多应用同时播放 » (lecture simultanée avec d’autres apps) est peut-être activée dans les réglages de QQ Music pour iPad"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Forse “允许多应用同时播放” (riproduzione insieme ad altre app) è attivato nelle impostazioni di QQ Music per iPad"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "iPad 版 QQ Music の設定で「允许多应用同时播放」（他のアプリと同時に再生）がオンになっている可能性があります"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "iPad용 QQ Music 설정에서 ‘允许多应用同时播放’(다른 앱과 동시 재생)이 켜져 있을 수 있음"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Talvez “允许多应用同时播放” (tocar junto com outros apps) esteja ativado nos ajustes do QQ Music para iPad"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Возможно, в настройках QQ Music для iPad включён параметр «允许多应用同时播放» (воспроизведение вместе с другими приложениями)"
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "อาจเปิด “允许多应用同时播放” (เล่นพร้อมกับแอปอื่น) ไว้ในการตั้งค่าของ QQ Music สำหรับ iPad"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Можливо, у параметрах QQ Music для iPad увімкнено «允许多应用同时播放» (відтворення разом з іншими програмами)"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Có thể “允许多应用同时播放” (phát cùng lúc với ứng dụng khác) đang bật trong cài đặt QQ Music cho iPad"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "可能是 QQ 音乐 iPad 版设置里开了「允许多应用同时播放」"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "可能是 QQ 音樂 iPad 版設定裡開了「允许多应用同时播放」"
+          }
+        }
+      }
+    },
+    "可能是网易云音乐 iPad 版设置里开了「允许与其他应用同时播放」" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "„允许与其他应用同时播放“ (gleichzeitig mit anderen Apps abspielen) ist in den Einstellungen von NetEase Cloud Music für iPad eventuell an"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "“允许与其他应用同时播放” (play alongside other apps) may be on in NetEase Cloud Music for iPad settings"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Puede que «允许与其他应用同时播放» (reproducir junto con otras apps) esté activado en los ajustes de NetEase Cloud Music para iPad"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "L’option « 允许与其他应用同时播放 » (lecture simultanée avec d’autres apps) est peut-être activée dans les réglages de NetEase Cloud Music pour iPad"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Forse “允许与其他应用同时播放” (riproduzione insieme ad altre app) è attivato nelle impostazioni di NetEase Cloud Music per iPad"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "iPad 版 NetEase Cloud Music の設定で「允许与其他应用同时播放」（他のアプリと同時に再生）がオンになっている可能性があります"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "iPad용 NetEase Cloud Music 설정에서 ‘允许与其他应用同时播放’(다른 앱과 동시 재생)이 켜져 있을 수 있음"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Talvez “允许与其他应用同时播放” (tocar junto com outros apps) esteja ativado nos ajustes do NetEase Cloud Music para iPad"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Возможно, в настройках NetEase Cloud Music для iPad включён параметр «允许与其他应用同时播放» (воспроизведение вместе с другими приложениями)"
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "อาจเปิด “允许与其他应用同时播放” (เล่นพร้อมกับแอปอื่น) ไว้ในการตั้งค่าของ NetEase Cloud Music สำหรับ iPad"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Можливо, у параметрах NetEase Cloud Music для iPad увімкнено «允许与其他应用同时播放» (відтворення разом з іншими програмами)"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Có thể “允许与其他应用同时播放” (phát cùng lúc với ứng dụng khác) đang bật trong cài đặt NetEase Cloud Music cho iPad"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "可能是网易云音乐 iPad 版设置里开了「允许与其他应用同时播放」"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "可能是網易雲音樂 iPad 版設定裡開了「允许与其他应用同时播放」"
+          }
+        }
+      }
     }
   },
   "version" : "1.0"

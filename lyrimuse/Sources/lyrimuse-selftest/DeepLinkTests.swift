@@ -383,6 +383,10 @@ func runDeepLinkTests() {
             expectEqual(link("lyrimuse://debug/knockout?leg=\(leg)&on=0").map { "\($0)" }?.contains("knockout") ?? false, true,
                         "debug: 拔腿开关认得 \(leg)")
         }
+        expectEqual(link("lyrimuse://debug/reporting-switch-hint?bundle=com.tencent.QQMusicMac"),
+                    .debug(.reportingSwitchHint(bundleID: "com.tencent.QQMusicMac")), "debug: 播放器开关提示")
+        expectEqual(link("lyrimuse://debug/reporting-switch-hint") == nil && link("lyrimuse://debug/reporting-switch-hint?bundle=") == nil,
+                    true, "debug: 播放器开关提示没带 bundle 认不出")
         expectEqual(link("lyrimuse://debug/volume?percent=35"), .debug(.volume(percent: 35)), "debug: 音量")
         expectEqual(link("lyrimuse://debug/volume?percent=101") == nil && link("lyrimuse://debug/volume") == nil, true,
                     "debug: 音量超出 0…100、没带取值都认不出")
@@ -555,6 +559,7 @@ func runDeepLinkTests() {
             .debug(.notchBehavior(collapseWhenPaused: nil, hideWhenNotPlaying: nil, showLyrics: true)),
             .debug(.notchBehavior(collapseWhenPaused: nil, hideWhenNotPlaying: nil, lyricRowFade: false)),
             .debug(.knockout(leg: .voxScript, on: false)), .debug(.knockout(leg: .systemArtwork, on: true)),
+            .debug(.reportingSwitchHint(bundleID: "com.tencent.QQMusic")),
             .debug(.menuBarCenter(center: true, ignoreNotch: true)), .debug(.menuBarCenter(center: false, ignoreNotch: nil)),
             .debug(.menuBarCenter(center: nil, ignoreNotch: false)),
             .debug(.menuBarCenter(center: true, ignoreNotch: nil, screen: "37D8832A-2D66-02CA-B9F7-8F30A301B230")),

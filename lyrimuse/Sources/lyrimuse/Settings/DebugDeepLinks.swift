@@ -224,6 +224,10 @@ enum DebugDeepLinks {
         case let .panelLayout(json):
             AppSettings.shared.menuBarPanelLayout = MenuBarPanelLayout.decode(json)
             logger.notice("debug panel layout \(AppSettings.shared.menuBarPanelLayout.encoded(), privacy: .public)")
+        case let .reportingSwitchHint(bundleID):
+            NotificationCenter.default.post(name: PlayerReportingDiagnostics.reportingSwitchHintNotification, object: nil,
+                                            userInfo: [PlayerReportingDiagnostics.reportingSwitchBundleIDKey: bundleID])
+            logger.notice("debug reporting switch hint \(bundleID, privacy: .public)")
         case let .knockout(leg, on):
             SourceKnockout.set(leg, out: !on)
             LocalPlaybackSource.shared.simulationChanged()

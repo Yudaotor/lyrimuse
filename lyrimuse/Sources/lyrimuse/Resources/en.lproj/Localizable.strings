@@ -802,6 +802,9 @@
 "可在快捷指令、Raycast、Alfred 等工具中打开；将指针悬停在上方的快捷键上，可拷贝对应操作的链接" = "Open these from Shortcuts, Raycast, Alfred and similar tools. Hover over a shortcut above to copy the link for that action";
 "可拖到任意位置" = "Drag it anywhere";
 "可添加" = "Available";
+"可能是 QQ 音乐 iPad 版设置里开了「允许多应用同时播放」" = "“允许多应用同时播放” (play alongside other apps) may be on in QQ Music for iPad settings";
+"可能是 QQ 音乐设置里没勾选「启用媒体键/远程控制事件」" = "“启用媒体键/远程控制事件” (media keys and remote control) may be off in QQ Music settings";
+"可能是网易云音乐 iPad 版设置里开了「允许与其他应用同时播放」" = "“允许与其他应用同时播放” (play alongside other apps) may be on in NetEase Cloud Music for iPad settings";
 "可跳过的广告出现时自动跳过" = "Skippable ads are skipped as soon as they appear";
 "可重新获取的封面与查询结果" = "Artwork and lookups that can be fetched again";
 "台湾、香港常用的流媒体音乐 App" = "A music streaming app popular in Taiwan and Hong Kong";
@@ -2663,6 +2666,8 @@
 "请求系统授权" = "Request Access";
 "请确认已登录 Discord；如仍无法连接，请退出 Discord 后重新打开" = "Make sure you’re signed in to Discord. If it still won’t connect, quit Discord and open it again";
 "请稍后重试" = "Try again later";
+"读不到 QQ 音乐的播放信息" = "Can’t read what QQ Music is playing";
+"读不到网易云音乐的播放信息" = "Can’t read what NetEase Cloud Music is playing";
 "读取失败，请重试" = "Couldn’t read the folder. Try again";
 "读取播放状态，获取歌词和封面" = "Reads playback state and fetches lyrics and artwork";
 "读取本地记录文件失败" = "Couldn’t read the local records file";

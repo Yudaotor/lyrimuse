@@ -6131,6 +6131,18 @@ func runSourceContractIdentityTests() {
                     && code("Settings/UnknownPlayerNotifier.swift").contains("if category == MediaChannelNotifier.categoryID {")
                     && code("SettingsView.swift").contains("MediaControlClient.channelFallbackCandidates(selected: [.auto]).map(\\.displayName)"), true,
                     "媒体通道: 启动订阅通知、点通知去播放器页、设置页按替代名单列名字")
+        // 播放器自己的开关让它不报 Now Playing:启动订阅提示信号,点通知把那个播放器叫到前台,文案只给有开关的那几个。
+        let switchNotifier = code("Settings/ReportingSwitchNotifier.swift")
+        expectEqual(code("AppDelegate.swift").contains("ReportingSwitchNotifier.shared.start()")
+                    && code("Settings/UnknownPlayerNotifier.swift").contains("if category == ReportingSwitchNotifier.categoryID {")
+                    && switchNotifier.contains("forName: PlayerReportingDiagnostics.reportingSwitchHintNotification")
+                    && switchNotifier.contains("PlayerReportingDiagnostics.shouldHintReportingSwitch(bundleID: bundleID, version: version, hinted: hinted)"),
+                    true, "播放器开关提示: 启动订阅、点通知分流、按版本去重")
+        for id in PlayerReportingDiagnostics.reportingSwitchCauses.keys {
+            let literal = id == QQIPadNowPlaying.bundleID ? "case QQIPadNowPlaying.bundleID:"
+                : id == NetEaseIPadNowPlaying.bundleID ? "case NetEaseIPadNowPlaying.bundleID:" : "case \"\(id)\":"
+            expectEqual(switchNotifier.contains(literal), true, "播放器开关提示: \(id) 有文案")
+        }
         // 诊断导出带上本机播放器的版本号(按播放器实测的时间轴常数失准时,对得上是哪次更新)。
         expectEqual(sourceHas(code("Settings/DiagnosticsExporter.swift"), "lines.append(\"== Players ==\")\n        lines.append(contentsOf: installedPlayerVersionLines())"), true,
                     "诊断导出: 有「Players」一段,列本机播放器的版本号")

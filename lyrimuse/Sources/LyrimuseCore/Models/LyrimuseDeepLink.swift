@@ -117,6 +117,9 @@ public enum LyrimuseDeepLink: Equatable, Sendable {
         case saveConfig
         /// 关掉 / 接回一条来源(`debug/knockout?leg=<名字>&on=0|1`,`on=0` 关掉):验证退路撑不撑得住,见 `SourceKnockout`。
         case knockout(leg: SourceKnockout.Leg, on: Bool)
+        /// 当作这个播放器已经在出声却没报 Now Playing 满了提示的时长,发一次跟轮询同一条的提示信号
+        /// (`debug/reporting-switch-hint?bundle=<bundle id>`,见 `PlayerReportingDiagnostics.reportingSwitchHintNotification`)。
+        case reportingSwitchHint(bundleID: String)
         /// 菜单栏歌词放正中 / 放回图标旁(`center`)、正中放哪几块屏(`screen`:all / auto / 屏幕身份串,同设置页「显示在」),
         /// 以及当作没有刘海、直接压在屏幕正中(`ignoreNotch`,不落盘,App 重启复原):
         /// `debug/menubar-center?center=1&screen=all&ignore-notch=1`,至少带一个。刘海屏的开发机靠它验无刘海屏的摆法。
@@ -400,6 +403,9 @@ public enum LyrimuseDeepLink: Equatable, Sendable {
             self = .debug(.settingsSearch(query: query))
         case ("debug", "/notify-channel"):
             self = .debug(.editNotifyChannel(id: value("id").flatMap { $0.isEmpty ? nil : $0 }))
+        case ("debug", "/reporting-switch-hint"):
+            guard let bundleID = value("bundle"), !bundleID.isEmpty else { return nil }
+            self = .debug(.reportingSwitchHint(bundleID: bundleID))
         case ("debug", "/knockout"):
             guard let leg = value("leg").flatMap({ SourceKnockout.Leg(rawValue: $0.lowercased()) }),
                   let on = value("on").flatMap(Self.parseBool) else { return nil }
@@ -686,6 +692,9 @@ public enum LyrimuseDeepLink: Equatable, Sendable {
             case let .importWatch(path):
                 components.path = "/import-watch"
                 components.queryItems = [path.map { URLQueryItem(name: "path", value: $0) } ?? URLQueryItem(name: "off", value: "1")]
+            case let .reportingSwitchHint(bundleID):
+                components.path = "/reporting-switch-hint"
+                components.queryItems = [URLQueryItem(name: "bundle", value: bundleID)]
             case let .knockout(leg, on):
                 components.path = "/knockout"
                 components.queryItems = [URLQueryItem(name: "leg", value: leg.rawValue), URLQueryItem(name: "on", value: on ? "1" : "0")]

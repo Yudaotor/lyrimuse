@@ -54,7 +54,17 @@ func playerReportingDiagnosticsChecks() {
                     "报告: 本体在跑、单问没在报")
         expectEqual(silentReporter.contains("    \(qqIPad): not running | Now Playing asked by bundle id: not reporting"), true,
                     "报告: 别的版本各列一行")
-        expectEqual(silentReporter.last, "    => producing audio but not reporting Now Playing", "报告: 在出声却没报")
+        expectEqual(Array(silentReporter.suffix(2)),
+                    ["    => producing audio but not reporting Now Playing",
+                     "    possible cause (\(qq)): \(D.reportingSwitchCauses[qq]!)"],
+                    "报告: 在出声却没报,在跑的那个版本有开关就写可能原因")
+        expectEqual(D.reportLines(selected: [.qqMusic], lastFailure: nil, pid: { $0 == qqIPad ? 9 : nil },
+                                  output: { _ in .outputting }, ask: { _, _ in .notReporting }).last,
+                    "    possible cause (\(qqIPad)): \(D.reportingSwitchCauses[qqIPad]!)", "报告: 只有 iPad 版在跑时写它那个开关")
+        expectEqual(D.reportLines(selected: [.spotify], lastFailure: nil, pid: { $0 == PlaybackPlayer.spotify.bundleIdentifier ? 9 : nil },
+                                  output: { _ in .outputting }, ask: { _, _ in .notReporting }).last,
+                    "    => producing audio but not reporting Now Playing", "报告: 没有那种开关的播放器不写可能原因")
+        expectEqual(lines(.silent, .notReporting).contains { $0.contains("possible cause") }, false, "报告: 没在出声不写可能原因")
         expectEqual(lines(.outputting, .helperMissing).contains { $0.contains("=>") }, false, "报告: helper 不在时不下结论")
         expectEqual(lines(.silent, .notReporting).contains { $0.contains("=>") }, false, "报告: 没出声、没报不下结论")
         expectEqual(lines(.silent, .reporting(playing: false, hasTitle: true, duration: nil, elapsed: nil)).last,
@@ -90,5 +100,47 @@ func playerReportingDiagnosticsChecks() {
                     "节流: 持续到间隔再记一次")
         expectEqual(throttle.due([], now: t0.addingTimeInterval(400)), [], "节流: 离开")
         expectEqual(throttle.due([qq], now: t0.addingTimeInterval(401)), [qq], "节流: 离开后再进来重新记")
+    }
+
+    // ---- 播放器自己的开关让它不报:提示 ----
+    do {
+        typealias D = PlayerReportingDiagnostics
+        let neteaseIPad = NetEaseIPadNowPlaying.bundleID
+        expectEqual(Set(D.reportingSwitchCauses.keys), [qq, qqIPad, neteaseIPad], "开关提示: 只认 QQ 两版和网易云 iPad 版")
+        expectEqual(D.reportingSwitchCandidates(unreported: [("qq_music", qq)], outputting: [qq]), [qq], "开关提示: QQ Mac 版在出声")
+        expectEqual(D.reportingSwitchCandidates(unreported: [("qq_music", qq)], outputting: [qqIPad]), [qqIPad],
+                    "开关提示: 按实际出声的版本认,不折成本体")
+        expectEqual(D.reportingSwitchCandidates(unreported: [("netease", PlaybackPlayer.netease.bundleIdentifier)],
+                                                outputting: [PlaybackPlayer.netease.bundleIdentifier]), [],
+                    "开关提示: 网易云 Mac 版没有那种开关")
+        expectEqual(D.reportingSwitchCandidates(unreported: [("netease", PlaybackPlayer.netease.bundleIdentifier)],
+                                                outputting: [neteaseIPad]), [neteaseIPad], "开关提示: 网易云 iPad 版")
+        expectEqual(D.reportingSwitchCandidates(unreported: [("spotify", PlaybackPlayer.spotify.bundleIdentifier)],
+                                                outputting: [PlaybackPlayer.spotify.bundleIdentifier]), [],
+                    "开关提示: 别的播放器不提示")
+        expectEqual(D.reportingSwitchCandidates(unreported: [], outputting: [qq]), [], "开关提示: 没勾选(不在没报的名单里)不提示")
+
+        var timer = D.ReportingSwitchHintTimer()
+        let t0 = Date(timeIntervalSince1970: 2_000_000)
+        let wait = D.ReportingSwitchHintTimer.hintAfterSeconds
+        expectEqual(timer.due([qq], now: t0), [], "开关提示: 刚进入不提示")
+        expectEqual(timer.due([qq], now: t0.addingTimeInterval(wait - 0.1)), [], "开关提示: 不满时长不提示")
+        expectEqual(timer.due([qq], now: t0.addingTimeInterval(wait)), [qq], "开关提示: 持续满时长提示")
+        expectEqual(timer.due([qq], now: t0.addingTimeInterval(wait * 10)), [], "开关提示: 同一段只提示一次")
+        expectEqual(timer.due([], now: t0.addingTimeInterval(wait * 10 + 1)), [], "开关提示: 离开")
+        expectEqual(timer.due([qq], now: t0.addingTimeInterval(wait * 10 + 2)), [], "开关提示: 再进来从头算")
+        expectEqual(timer.due([qq], now: t0.addingTimeInterval(wait * 11 + 2)), [qq], "开关提示: 再满时长再交一次")
+        var gap = D.ReportingSwitchHintTimer()
+        _ = gap.due([qq], now: t0)
+        _ = gap.due([], now: t0.addingTimeInterval(8))
+        expectEqual(gap.due([qq], now: t0.addingTimeInterval(16)), [], "开关提示: 中间断过一拍不算持续")
+
+        expectEqual(D.shouldHintReportingSwitch(bundleID: qq, version: "11.11.0", hinted: [:]), true, "开关提示去重: 没提示过")
+        expectEqual(D.shouldHintReportingSwitch(bundleID: qq, version: "11.11.0", hinted: [qq: "11.11.0"]), false,
+                    "开关提示去重: 同一版本只一次")
+        expectEqual(D.shouldHintReportingSwitch(bundleID: qq, version: "11.12.0", hinted: [qq: "11.11.0"]), true,
+                    "开关提示去重: 播放器更新后再提示")
+        expectEqual(D.shouldHintReportingSwitch(bundleID: qqIPad, version: "11.11.0", hinted: [qq: "11.11.0"]), true,
+                    "开关提示去重: 两个版本各算各的")
     }
 }

@@ -350,6 +350,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         LastfmMirrorNotifier.shared.start()
         ListenBrainzAuthNotifier.shared.start()
         MediaChannelNotifier.shared.start()
+        // 播放器在出声却一直没报 Now Playing、它自己有开关会这样时,提示一次去看那个开关。
+        ReportingSwitchNotifier.shared.start()
         // Last.fm 账号跟 Spotify 的连接:设置里提示会不会重复记,排除了 Spotify 又过期时弹通知。
         LastfmSpotifyLinkMonitor.shared.start()
         // 换歌时弹一条系统通知(默认关,设置 › 通用 › 通知)。点通知的分流在 UnknownPlayerNotifier 的 delegate。
