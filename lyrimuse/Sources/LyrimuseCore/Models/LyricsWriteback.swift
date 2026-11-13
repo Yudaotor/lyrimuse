@@ -67,6 +67,6 @@ public enum LyricsWriteback {
     public static let engineErrorCodes: [String] = [
         "unsupported_format", "unsupported_tag", "not_found", "not_regular", "hard_linked", "not_writable",
         "read_only_volume", "cloud_location", "network_location", "file_has_lyrics", "no_lyrics", "no_file",
-        "file_changed", "audio_mismatch", "readback_mismatch", "tags_not_preserved", "io",
+        "file_changed", "audio_mismatch", "readback_mismatch", "tags_not_preserved", "backup_failed", "io",
     ]
 }

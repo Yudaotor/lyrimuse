@@ -20,7 +20,7 @@ import (
 // 里、同一时刻只跑一份。规则(见 11 章决策 163):
 //   - 只写 MP3 / FLAC,写法、自校验、拒写的位置同单首写入(writeLyricsToFile);
 //   - 标了纯音乐、没有歌词、首次解析还在跑的不写;Apple Music 的曲目只写歌词文字(writebackWantsPlainText);
-//   - 文件里原本有歌词、又不是 Lyrimuse 上次写进去的(写入记录里这个文件的正文哈希对不上):默认不覆盖;打开「覆盖其他软件
+//   - 文件里原本有歌词、又不是 Lyrimuse 上次写进去的(fileLyricsAgainst 判成 fileLyricsForeign):默认不覆盖;打开「覆盖其他软件
 //     写入的歌词」(features LyricsAutoWritebackOverwrite)时先把原歌词备份(backupForeignLyrics),备份成了才写,见 11 章决策 166;
 //   - 文件里的歌词已经跟要写的一样,不重写;
 //   - 同一个文件、同一份正文只试一次(不论成败),换了正文或换了歌再试;失败只记日志。
@@ -203,6 +203,50 @@ func backupForeignLyrics(path, lyrics string) error {
 	return nil
 }
 
+// fileLyricsState:文件里原有的歌词跟这次要写的比。
+type fileLyricsState int
+
+const (
+	fileLyricsNone    fileLyricsState = iota // 文件里没有歌词
+	fileLyricsSame                           // 已经是这次要写的那份
+	fileLyricsOwn                            // Lyrimuse 上次写进去的(写入记录的正文哈希对得上)
+	fileLyricsForeign                        // 别的软件写的
+)
+
+// fileLyricsAgainst 判断 probe 那个文件里原有的歌词是哪一种(sha 是这次要写的正文哈希),顺带交回引擎读法读到的原歌词。
+// 自动写入和单首写入共用:只有 fileLyricsForeign 要在覆盖前备份。
+func fileLyricsAgainst(probe lyricsWritebackProbe, sha string) (fileLyricsState, string) {
+	if !probe.hasLyrics {
+		return fileLyricsNone, ""
+	}
+	existing := readLocalFileTags(probe.path).lyrics
+	switch writebackTextSHA(normalizeWritebackLyrics(existing)) {
+	case sha:
+		return fileLyricsSame, existing
+	case lyricsWrittenBackSHA(probe.path):
+		return fileLyricsOwn, existing
+	}
+	return fileLyricsForeign, existing
+}
+
+// backupBeforeManualWriteback:单首写入要覆盖时,文件里是别的软件写的歌词就先备份(backupForeignLyrics),
+// 备份不成交回 backup_failed、不能写。文件里没有歌词、已是这份、是 Lyrimuse 上次写的都不备份。见 11 章决策 166。
+func backupBeforeManualWriteback(path, text string) error {
+	probe, err := probeLyricsWriteback(path)
+	if err != nil {
+		return err
+	}
+	state, existing := fileLyricsAgainst(probe, writebackTextSHA(text))
+	if state != fileLyricsForeign {
+		return nil
+	}
+	if err := backupForeignLyrics(probe.path, existing); err != nil {
+		return wbErr(wbErrBackupFailed, err)
+	}
+	log.Printf("lyrics writeback: backed up lyrics written by another app before replacing path=%s", tildeHome(probe.path))
+	return nil
+}
+
 var (
 	autoWritebackRunning atomic.Bool
 	autoWritebackMu      sync.Mutex
@@ -288,23 +332,19 @@ func autoWritebackLyricsOnce() autoWritebackOutcome {
 		return autoWBSkipped
 	}
 	foreign := false
-	if probe.hasLyrics {
-		existing := readLocalFileTags(probe.path).lyrics
-		switch writebackTextSHA(normalizeWritebackLyrics(existing)) {
-		case sha:
-			return autoWBUpToDate
-		case lyricsWrittenBackSHA(probe.path):
-		default:
-			if !overwrite {
-				log.Printf("lyrics writeback: auto skipped path=%s: file already carries lyrics not written by lyrimuse", tildeHome(probe.path))
-				return autoWBForeign
-			}
-			if err := backupForeignLyrics(probe.path, existing); err != nil {
-				warnf("lyrics writeback: auto skipped path=%s: backing up existing lyrics failed: %v", tildeHome(probe.path), err)
-				return autoWBWriteFailed
-			}
-			foreign = true
+	switch state, existing := fileLyricsAgainst(probe, sha); state {
+	case fileLyricsSame:
+		return autoWBUpToDate
+	case fileLyricsForeign:
+		if !overwrite {
+			log.Printf("lyrics writeback: auto skipped path=%s: file already carries lyrics not written by lyrimuse", tildeHome(probe.path))
+			return autoWBForeign
 		}
+		if err := backupForeignLyrics(probe.path, existing); err != nil {
+			warnf("lyrics writeback: auto skipped path=%s: backing up existing lyrics failed: %v", tildeHome(probe.path), err)
+			return autoWBWriteFailed
+		}
+		foreign = true
 	}
 	real, err := writeLyricsToFile(path, text, true)
 	if err != nil {

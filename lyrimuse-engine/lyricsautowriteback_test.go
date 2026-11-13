@@ -351,3 +351,94 @@ func TestFeaturesLyricsAutoWritebackOverwrite(t *testing.T) {
 		}
 	}
 }
+
+func TestManualWritebackBacksUpForeignLyrics(t *testing.T) {
+	const key, other = "a|manual|", "a|manual2|"
+	setUpAutoWriteback(t, map[string]enrichEntry{key: {Lyrics: bt(writebackLRC)}, other: {PlainLyrics: bt(writebackPlain)}})
+	const theirs = "[00:01.00]别人写的歌词\n[00:02.00]第二行"
+	foreign := append(id3TagPadded(4, 64, id3Frame(4, "USLT", usltBody(3, []byte(theirs)))), writebackAudio(3000)...)
+	path := writeTemp(t, "m.mp3", foreign)
+	real, _ := filepath.EvalSymlinks(path)
+
+	res := applyEnrichEdit(enrichEditRequest{Op: "write_file_lyrics", Key: key, FilePath: path})
+	if res.OK || res.ErrorCode != wbErrHasLyrics {
+		t.Fatalf("没带覆盖时拒绝:%+v", res)
+	}
+	if n := len(readBackupIndex(t).Backups); n != 0 {
+		t.Errorf("没带覆盖:不备份,得到 %d 份", n)
+	}
+
+	res = applyEnrichEdit(enrichEditRequest{Op: "write_file_lyrics", Key: key, FilePath: path, Value: true})
+	if !res.OK {
+		t.Fatalf("覆盖别的软件写的歌词:%+v", res)
+	}
+	if got := readLocalFileTags(path).lyrics; got != writebackLRC {
+		t.Errorf("覆盖成这首的歌词:%q", got)
+	}
+	idx := readBackupIndex(t)
+	if len(idx.Backups) != 1 {
+		t.Fatalf("覆盖前留一份备份,得到 %d 份", len(idx.Backups))
+	}
+	e := idx.Backups[0]
+	if e.Path != real || e.SHA != writebackTextSHA(theirs) || filepath.Ext(e.File) != ".lrc" {
+		t.Errorf("备份索引记下原文件、原歌词哈希,带时间标签存 .lrc:%+v", e)
+	}
+	if got, _ := os.ReadFile(filepath.Join(lyricsWritebackBackupDir(), e.File)); string(got) != theirs {
+		t.Errorf("备份是原歌词一字不改:%q", got)
+	}
+
+	if res = applyEnrichEdit(enrichEditRequest{Op: "write_file_lyrics", Key: key, FilePath: path, Value: true}); !res.OK {
+		t.Fatalf("再写同一份:%+v", res)
+	}
+	if n := len(readBackupIndex(t).Backups); n != 1 {
+		t.Errorf("文件里已是这份:不备份,得到 %d 份", n)
+	}
+	if res = applyEnrichEdit(enrichEditRequest{Op: "write_file_lyrics", Key: other, FilePath: path, Value: true}); !res.OK {
+		t.Fatalf("换一份写:%+v", res)
+	}
+	if n := len(readBackupIndex(t).Backups); n != 1 {
+		t.Errorf("文件里是 Lyrimuse 上次写的:不备份,得到 %d 份", n)
+	}
+
+	if err := os.WriteFile(path, foreign, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if res = applyEnrichEdit(enrichEditRequest{Op: "write_file_lyrics", Key: key, FilePath: path, Value: true}); !res.OK {
+		t.Fatalf("别的软件又写回同一份后覆盖:%+v", res)
+	}
+	if n := len(readBackupIndex(t).Backups); n != 1 {
+		t.Errorf("同一个文件同一份原歌词只备份一次,得到 %d 份", n)
+	}
+
+	empty := writeTemp(t, "e.mp3", writebackAudio(3000))
+	if res = applyEnrichEdit(enrichEditRequest{Op: "write_file_lyrics", Key: key, FilePath: empty, Value: true}); !res.OK {
+		t.Fatalf("没有歌词的文件:%+v", res)
+	}
+	if n := len(readBackupIndex(t).Backups); n != 1 {
+		t.Errorf("文件里没有歌词:不备份,得到 %d 份", n)
+	}
+}
+
+func TestManualWritebackRefusesWithoutBackup(t *testing.T) {
+	const key = "a|manualnobackup|"
+	setUpAutoWriteback(t, map[string]enrichEntry{key: {Lyrics: bt(writebackLRC)}})
+	foreign := append(id3TagPadded(4, 64, id3Frame(4, "USLT", usltBody(3, []byte("别人写的歌词")))), writebackAudio(2000)...)
+	for _, dir := range []string{"", "file"} {
+		path := writeTemp(t, "n.mp3", foreign)
+		backups := ""
+		if dir != "" {
+			backups = writeTemp(t, "not-a-dir", []byte("x"))
+		}
+		lyricsWritebackBackupDir = func() string { return backups }
+		res := applyEnrichEdit(enrichEditRequest{Op: "write_file_lyrics", Key: key, FilePath: path, Value: true})
+		if res.OK || res.ErrorCode != wbErrBackupFailed {
+			t.Errorf("备份目录=%q:备份不成就不写、报 backup_failed,得到 %+v", dir, res)
+		}
+		if out, _ := os.ReadFile(path); !bytes.Equal(out, foreign) {
+			t.Errorf("备份目录=%q:备份不成,文件不动", dir)
+		}
+		if real, _ := filepath.EvalSymlinks(path); lyricsWrittenBackSHA(real) != "" {
+			t.Errorf("备份目录=%q:没写成不进写入记录", dir)
+		}
+	}
+}

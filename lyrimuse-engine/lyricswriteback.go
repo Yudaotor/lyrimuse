@@ -59,6 +59,7 @@ const (
 	wbErrAudioMismatch     = "audio_mismatch"     // 自校验:音频区跟原文件不一致
 	wbErrReadbackMismatch  = "readback_mismatch"  // 自校验:回读的歌词跟要写的不一样
 	wbErrTagsNotPreserved  = "tags_not_preserved" // 自校验:歌词以外的帧 / 块变了
+	wbErrBackupFailed      = "backup_failed"      // 覆盖别的软件写的歌词之前没能备份原歌词,没写
 	wbErrIO                = "io"                 // 其余读写失败
 )
 
@@ -522,7 +523,8 @@ func lrcToPlainText(s string) string {
 	return strings.Join(out, "\n")
 }
 
-// applyLyricsWritebackEdit 执行编辑通道的 probe_file_lyrics / write_file_lyrics。不动歌词缓存:文件改完,
+// applyLyricsWritebackEdit 执行编辑通道的 probe_file_lyrics / write_file_lyrics。带覆盖写入时,文件里别的软件写的歌词先备份
+// (backupBeforeManualWriteback),备份不成不写。不动歌词缓存:文件改完,
 // 引擎读内嵌歌词的缓存按大小和修改时间自己作废(localFileTagsMemo)。
 func applyLyricsWritebackEdit(req enrichEditRequest) enrichEditResult {
 	res := enrichEditResult{ID: req.ID, FilePath: req.FilePath}
@@ -545,6 +547,11 @@ func applyLyricsWritebackEdit(req enrichEditRequest) enrichEditResult {
 	text, err := lyricsWritebackText(req.Key, writebackWantsPlainText(req.Player))
 	if err != nil {
 		return fail(err)
+	}
+	if req.Value {
+		if err := backupBeforeManualWriteback(req.FilePath, text); err != nil {
+			return fail(err)
+		}
 	}
 	real, err := writeLyricsToFile(req.FilePath, text, req.Value)
 	if err != nil {
