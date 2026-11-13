@@ -64,7 +64,8 @@ struct NotchScrubber: View {
         VStack(spacing: 3) {
             FrameTimeline(minimumInterval: WordKaraokeGradient.refreshInterval, paused: !ticking) { now in
                 let fraction = CGFloat(Double(positionMs(now)) / Double(durationMs))
-                // 底轨和已播段在同一次绘制里完成,进度只改变绘制位置。
+                // 底轨和已播段画在同一个 Canvas 里:随进度变的只有绘制位置。别改回按进度设 frame 宽度(每帧重新布局),
+                // 也别改回满宽胶囊 offset 再套 clipShape(后台换曲后已播段整条不画,见 05 章决策 144)
                 Canvas { context, size in
                     let bounds = CGRect(origin: .zero, size: size)
                     let track = Capsule().path(in: bounds)

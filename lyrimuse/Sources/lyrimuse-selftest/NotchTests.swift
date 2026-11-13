@@ -689,8 +689,9 @@ func runNotchTests() {
         expectEqual(paint.contains("context.fill(track,")
                     && paint.contains("ProgressFillGeometry.leadingOffset(")
                     && paint.contains("clipped.clip(to: track)")
-                    && paint.contains("clipped.fill(played,"), true,
-                    "展开区进度条: 在同一个 Canvas 内画底轨和已播段,进度不改布局宽度")
+                    && paint.contains("clipped.fill(played,")
+                    && !scrubber.contains(".frame(width:") && !scrubber.contains(".clipShape(Capsule())"), true,
+                    "展开区进度条: 在同一个 Canvas 内画底轨和已播段,进度不改布局宽度、不靠 offset 加胶囊裁")
         expectEqual(controller.contains(
             "AppSettings.shared.$notchLyricRowHeight, AppSettings.shared.$notchFontSize, AppSettings.shared.$notchSecondaryLine")
                     && controller.contains("height: max(geo.notchHeight + max(lyricRowHeight, expandedLyricListHeight) + expandedExtraHeightMax,"), true,
