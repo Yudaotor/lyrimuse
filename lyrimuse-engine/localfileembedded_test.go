@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 	"unicode/utf16"
 )
 
@@ -436,5 +437,96 @@ func TestEmbeddedLyricsID3v22(t *testing.T) {
 	file := id3Tag(2, append(append([][]byte{}, lead...), ult(embeddedLRC))...)
 	if got, ok := localFileEmbeddedLyrics(writeTemp(t, "v22.mp3", append(file, 0xFF, 0xFB))); !ok || got != embeddedLRC {
 		t.Errorf("v2.2 的 MP3 文件:得到 %q, ok=%v", got, ok)
+	}
+}
+
+// v2.4 标签里帧长写成普通大端整数(iTunes 等老写法)时按落点认出来,不把歌词读成前一截;规范的同步安全写法照旧。见 02 章决策 260。
+func TestEmbeddedLyricsID3v24PlainFrameSize(t *testing.T) {
+	header := func(tag []byte) []byte {
+		n := len(tag)
+		return []byte{'I', 'D', '3', 4, 0, 0, byte(n >> 21 & 0x7F), byte(n >> 14 & 0x7F), byte(n >> 7 & 0x7F), byte(n & 0x7F)}
+	}
+	plainFrame := func(id string, body []byte) []byte {
+		return append(append([]byte(id), binary.BigEndian.AppendUint32(nil, uint32(len(body)))...), append([]byte{0, 0}, body...)...)
+	}
+	album := id3Frame(4, "TALB", append([]byte{3}, "专辑"...))
+	// 帧长字节带最高位(200 = 0xC8),后面跟着杂字节:只看最高位就认得出是普通整数。
+	high := "[00:01.00]" + strings.Repeat("一", 61) + ".."
+	if len(usltBody(3, []byte(high))) != 200 {
+		t.Fatalf("测试帧长应为 200,得到 %d", len(usltBody(3, []byte(high))))
+	}
+	tag := append(plainFrame("USLT", usltBody(3, []byte(high))), 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12)
+	if got, ok := embeddedLyricsFromID3(header(tag), tag); !ok || got != high {
+		t.Errorf("v2.4 普通大端帧长(字节带最高位):得到 %q", got)
+	}
+	// 帧长 0x523 的四个字节都没有最高位:按同步安全读是 675,落在歌词里那串 Z 上(像帧 ID,帧长却超出标签区)。
+	low := "[00:01.00]" + strings.Repeat("Z", 0x523-15)
+	lowBody := usltBody(3, []byte(low))
+	if len(lowBody) != 0x523 {
+		t.Fatalf("测试帧长应为 0x523,得到 %d", len(lowBody))
+	}
+	for _, c := range []struct {
+		name string
+		tag  []byte
+	}{
+		{"后面接着下一帧", append(plainFrame("USLT", lowBody), album...)},
+		{"后面是补白", append(plainFrame("USLT", lowBody), make([]byte, 64)...)},
+		{"正好到标签区末尾", plainFrame("USLT", lowBody)},
+		{"规范的同步安全写法", append(id3Frame(4, "USLT", lowBody), album...)},
+	} {
+		if got, ok := embeddedLyricsFromID3(header(c.tag), c.tag); !ok || got != low {
+			t.Errorf("v2.4 帧长,%s:得到 %d 字节, ok=%v", c.name, len(got), ok)
+		}
+	}
+}
+
+// 块头连着是 0 的坏文件每块只前进 4 / 8 字节:FLAC、MP4、WAV 都要有块数上限,不逐块读到文件尾。见 02 章决策 260。
+func TestEmbeddedLyricsMalformedBlocksBounded(t *testing.T) {
+	block := func(kind byte, last bool, body []byte) []byte {
+		if last {
+			kind |= 0x80
+		}
+		return append([]byte{kind, byte(len(body) >> 16), byte(len(body) >> 8), byte(len(body))}, body...)
+	}
+	repeat := func(b []byte, n int) []byte { return bytes.Repeat(b, n) }
+	comment := block(4, true, vorbisComment("LYRICS="+embeddedLRC))
+	head := append([]byte("fLaC"), block(0, false, make([]byte, 34))...)
+	le := func(n int) []byte { return binary.LittleEndian.AppendUint32(nil, uint32(n)) }
+	ftyp := append(binary.BigEndian.AppendUint32(nil, 16), "ftypM4A \x00\x00\x00\x00"...)
+	free := append(binary.BigEndian.AppendUint32(nil, 8), "free"...)
+	lyr := []byte("\x00\x00\x00\x00")
+	moov := func() []byte {
+		atom := func(kind string, body ...[]byte) []byte {
+			var b []byte
+			for _, x := range body {
+				b = append(b, x...)
+			}
+			return append(append(binary.BigEndian.AppendUint32(nil, uint32(8+len(b))), kind...), b...)
+		}
+		return atom("moov", atom("udta", atom("meta", lyr, atom("ilst", atom("\xa9lyr", atom("data", []byte{0, 0, 0, 1, 0, 0, 0, 0}, []byte(embeddedLRC)))))))
+	}()
+	for _, c := range []struct {
+		name, file string
+		data       []byte
+		want       bool
+	}{
+		{"FLAC 全是 0", "zeros.flac", append([]byte("fLaC"), make([]byte, 4<<20)...), false},
+		{"FLAC 100 块以内照读", "ok.flac", append(append(head, repeat(block(1, false, nil), 100)...), comment...), true},
+		{"FLAC 块数超过上限就停", "many.flac", append(append(head, repeat(block(1, false, nil), 200)...), comment...), false},
+		{"FLAC 遇到类型 127 就停", "127.flac", append(append(head, block(127, false, nil)...), comment...), false},
+		{"FLAC 第二块又是 STREAMINFO 就停", "si.flac", append(append(head, block(0, false, make([]byte, 34))...), comment...), false},
+		{"MP4 全是 8 字节小原子", "tiny.m4a", append(ftyp, repeat(free, 512<<10)...), false},
+		{"MP4 moov 前面有 100 个小原子照读", "ok.m4a", append(append(ftyp, repeat(free, 100)...), moov...), true},
+		{"MP4 顶层原子超过上限就停", "many.m4a", append(append(ftyp, repeat(free, 5000)...), moov...), false},
+		{"WAV 全是空块", "empty.wav", append(append(append([]byte("RIFF"), le(0)...), "WAVE"...), repeat(append([]byte("junk"), le(0)...), 512<<10)...), false},
+	} {
+		start := time.Now()
+		_, ok := localFileEmbeddedLyrics(writeTemp(t, c.file, c.data))
+		if ok != c.want {
+			t.Errorf("%s:有歌词=%v,应为 %v", c.name, ok, c.want)
+		}
+		if took := time.Since(start); took > 200*time.Millisecond {
+			t.Errorf("%s:耗时 %v,块数没有上限", c.name, took)
+		}
 	}
 }

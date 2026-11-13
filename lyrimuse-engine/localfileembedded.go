@@ -25,6 +25,13 @@ import (
 // localFileEmbeddedMaxTagBytes:标签区大过这个就不读(多半塞了大图,歌词帧不会这么大)。
 const localFileEmbeddedMaxTagBytes = 16 << 20
 
+// localFileEmbeddedMaxBlocks:FLAC 元数据块、MP4 顶层原子、AIFF / WAV 块最多看几个。坏文件的块头连着是 0 时每块只前进
+// 4 / 8 字节,不设上限就逐块读到文件尾;正常文件远到不了。见 02 章决策 260。
+const localFileEmbeddedMaxBlocks = 4096
+
+// flacMaxMetadataBlocks:FLAC 元数据块最多看几块(同 App 侧 LocalAudioFileArtwork.maxFLACBlocks)。
+const flacMaxMetadataBlocks = 128
+
 // localFileTags:一个文件标签区里读到的歌词(带时间的优先)和各条注释。
 type localFileTags struct {
 	lyrics    string
@@ -95,7 +102,7 @@ func chunkedID3Tags(f io.ReadSeeker, riff bool) localFileTags {
 	if !riff && (string(head[:4]) != "FORM" || (string(head[8:12]) != "AIFF" && string(head[8:12]) != "AIFC")) {
 		return localFileTags{}
 	}
-	for {
+	for i := 0; i < localFileEmbeddedMaxBlocks; i++ {
 		ch := make([]byte, 8)
 		if _, err := io.ReadFull(f, ch); err != nil {
 			return localFileTags{}
@@ -116,20 +123,25 @@ func chunkedID3Tags(f io.ReadSeeker, riff bool) localFileTags {
 			return localFileTags{}
 		}
 	}
+	return localFileTags{}
 }
 
-// flacTags:FLAC 元数据块里的 VORBIS_COMMENT(类型 4);图片之类的块跳过。
+// flacTags:FLAC 元数据块里的 VORBIS_COMMENT(类型 4);图片之类的块跳过。遇到类型 127(非法)、不在第一块的 STREAMINFO
+// (类型 0)或看满 flacMaxMetadataBlocks 块就停。
 func flacTags(f io.ReadSeeker) localFileTags {
 	magic := make([]byte, 4)
 	if _, err := io.ReadFull(f, magic); err != nil || string(magic) != "fLaC" {
 		return localFileTags{}
 	}
-	for {
+	for i := 0; i < flacMaxMetadataBlocks; i++ {
 		bh := make([]byte, 4)
 		if _, err := io.ReadFull(f, bh); err != nil {
 			return localFileTags{}
 		}
 		last, kind := bh[0]&0x80 != 0, bh[0]&0x7F
+		if kind == 127 || kind == 0 && i > 0 {
+			return localFileTags{}
+		}
 		size := int(bh[1])<<16 | int(bh[2])<<8 | int(bh[3])
 		if kind == 4 {
 			body := make([]byte, size)
@@ -145,6 +157,7 @@ func flacTags(f io.ReadSeeker) localFileTags {
 			return localFileTags{}
 		}
 	}
+	return localFileTags{}
 }
 
 // oggTags:OGG 第一个逻辑流的第二个包(Vorbis 注释头 `\x03vorbis`、Opus 的 `OpusTags`)。包可能跨页,按分段表拼。
@@ -275,7 +288,7 @@ func isLyricsTagKey(key string) bool {
 
 // mp4Tags:顶层找 moov(mdat 跳过,moov 在文件末尾也找得到),再顺着 udta › meta › ilst 往下。
 func mp4Tags(f io.ReadSeeker) localFileTags {
-	for {
+	for i := 0; i < localFileEmbeddedMaxBlocks; i++ {
 		kind, size, err := mp4AtomHeader(f)
 		if err != nil {
 			return localFileTags{}
@@ -305,6 +318,7 @@ func mp4Tags(f io.ReadSeeker) localFileTags {
 			return localFileTags{}
 		}
 	}
+	return localFileTags{}
 }
 
 // mp4AtomHeader:读一个原子头,交回类型和正文长度(去掉头);64 位长度也认,长度 0(到文件末尾)交回 -1。
@@ -448,7 +462,7 @@ func tagsFromID3(header, tag []byte) localFileTags {
 			size = int(tag[pos+3])<<16 | int(tag[pos+4])<<8 | int(tag[pos+5])
 		case 4:
 			id = string(tag[pos : pos+4])
-			size = syncsafeInt(tag[pos+4 : pos+8])
+			size = id3v24FrameSize(tag, pos)
 		default:
 			id = string(tag[pos : pos+4])
 			size = int(binary.BigEndian.Uint32(tag[pos+4 : pos+8]))
@@ -492,6 +506,56 @@ func tagsFromID3(header, tag []byte) localFileTags {
 	}
 	out.hasLyrics = out.lyrics != ""
 	return out
+}
+
+// id3v24FrameSize:v2.4 的帧长按规范是同步安全整数,iTunes 等老写法写的是普通大端整数。两种读法不一样时,看哪种读完正好落在
+// 下一个帧头、全 0 的补白或标签区末尾(同 mutagen 的兼容做法),同步安全优先;字节里有最高位的只可能是普通整数。
+// 同 App 侧 LocalAudioFileArtwork.v24FrameSize,见 02 章决策 260。纯函数,单测覆盖。
+func id3v24FrameSize(tag []byte, pos int) int {
+	raw := tag[pos+4 : pos+8]
+	plain := int(binary.BigEndian.Uint32(raw))
+	for _, b := range raw {
+		if b&0x80 != 0 {
+			return plain
+		}
+	}
+	safe := syncsafeInt(raw)
+	if safe == plain || id3v24FrameLands(tag, pos, safe) || !id3v24FrameLands(tag, pos, plain) {
+		return safe
+	}
+	return plain
+}
+
+// id3v24FrameLands:pos 处的帧按 size 读完落在下一个帧头、全 0 的补白或标签区末尾。
+func id3v24FrameLands(tag []byte, pos, size int) bool {
+	end := pos + 10 + size
+	switch {
+	case end == len(tag):
+		return true
+	case end > len(tag):
+		return false
+	case end+10 <= len(tag) && isID3v24FrameHeader(tag[end:end+10], len(tag)-end-10):
+		return true
+	}
+	for _, b := range tag[end:] {
+		if b != 0 {
+			return false
+		}
+	}
+	return true
+}
+
+// isID3v24FrameHeader:像一个帧头:ID 是四个大写字母或数字、打头的是字母,帧长按两种读法至少有一种不超出剩下的 room 字节。
+func isID3v24FrameHeader(head []byte, room int) bool {
+	if head[0] < 'A' || head[0] > 'Z' {
+		return false
+	}
+	for _, b := range head[:4] {
+		if !(b >= 'A' && b <= 'Z' || b >= '0' && b <= '9') {
+			return false
+		}
+	}
+	return syncsafeInt(head[4:8]) <= room || int(binary.BigEndian.Uint32(head[4:8])) <= room
 }
 
 func syncsafeInt(b []byte) int {
