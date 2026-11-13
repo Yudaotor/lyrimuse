@@ -1008,6 +1008,41 @@ func runPlayerIdentityTests() {
             expectEqual(open("Tag Artist", "Tag Title", 60, tagged), false, "开着的文件: 时长差太多不是这首")
             expectEqual(open("Milky Day", "Let Me", 185, tagged), false, "开着的文件: 在线放的别的歌对不上")
             expectEqual(open("", "Name Artist - Name Song", nil, nil), true, "开着的文件: 读不出标签时按文件名对")
+
+            // GBK 标签:AudioToolbox 按 Latin-1 解,foobar2000 按 Windows-1252 解(0x81 / 0x90 / 0x9D 这类没定义的显示成「?」),
+            // 字节取自真机样本(「鄧麗君測試曲」「丂亐亖測」,GBK 扩展区的首字节、尾字节落在 0x80~0x9F)。
+            func latin1(_ bytes: [UInt8]) -> String { String(String.UnicodeScalarView(bytes.map { Unicode.Scalar($0) })) }
+            let extTitle: [UInt8] = [0xE0, 0x87, 0xFB, 0x90, 0xBE, 0xFD, 0x9C, 0x79, 0xD4, 0x87, 0xC7, 0xFA]
+            let extArtist: [UInt8] = [0xE0, 0x87, 0xFB, 0x90, 0xBE, 0xFD]
+            let extB: [UInt8] = [0x81, 0x40, 0x81, 0x80, 0x81, 0x81, 0x9C, 0x79]
+            let gbkExt = Tags(title: latin1(extTitle), artist: latin1(extArtist), album: "", duration: 40.05)
+            let gbkExtB = Tags(title: latin1(extB), artist: latin1(extArtist), album: "", duration: 40.05)
+            let fooTitle = "\u{E0}\u{2021}\u{FB}?\u{BE}\u{FD}\u{153}y\u{D4}\u{2021}\u{C7}\u{FA}"
+            let fooArtist = "\u{E0}\u{2021}\u{FB}?\u{BE}\u{FD}"
+            expectEqual(PlayerTitleSplit.windows1252Shown(latin1(extTitle)), fooTitle,
+                        "开着的文件: Latin-1 乱码换成 Windows-1252 的样子,没定义的 0x90 是「?」")
+            expectEqual(PlayerTitleSplit.windows1252Shown(latin1(extB)), "?@?\u{20AC}??\u{153}y",
+                        "开着的文件: 0x81 是「?」,0x80 是欧元符号")
+            expectEqual(PlayerTitleSplit.windows1252Shown("Beyonc\u{E9} \u{CC}\u{BD}"), "Beyonc\u{E9} \u{CC}\u{BD}",
+                        "开着的文件: 0xA0 以上两种解法一样,不动")
+            expectEqual(open(fooArtist, fooTitle, 40, gbkExt, file: "LyrimuseGBKExtA.mp3"), true,
+                        "开着的文件: foobar2000 按 Windows-1252 解的 GBK 扩展区对得上 AudioToolbox 的 Latin-1")
+            expectEqual(open(fooArtist, "?@?\u{20AC}??\u{153}y", 40, gbkExtB, file: "LyrimuseGBKExtB.mp3"), true,
+                        "开着的文件: 歌名全是没定义的字节也对得上")
+            expectEqual(open(latin1(extArtist), latin1(extTitle), 40, gbkExt, file: "LyrimuseGBKExtA.mp3"), true,
+                        "开着的文件: 播放器也按 Latin-1 解,照旧对得上")
+            expectEqual(open("鄧麗君", "鄧麗君測試曲", 40, gbkExt, file: "LyrimuseGBKExtA.mp3"), true,
+                        "开着的文件: 播放器自己解出中文,标签还原乱码后对得上")
+            expectEqual(P.identity(from: gbkExt).map { "\($0.artist)|\($0.title)" }, "鄧麗君|鄧麗君測試曲",
+                        "开着的文件: 对上之后用的身份是还原过的中文")
+            expectEqual(open(fooArtist, "?@?\u{20AC}??\u{153}y", 40, gbkExt, file: "LyrimuseGBKExtA.mp3"), false,
+                        "开着的文件: 同一个歌手的另一首对不上")
+            expectEqual(open("\u{E6}R\u{E6}\u{201A}?\u{FD}", fooTitle, 40, gbkExt, file: "LyrimuseGBKExtA.mp3"), false,
+                        "开着的文件: 歌名一样、歌手按 Windows-1252 也对不上的不是这首")
+            expectEqual(open("别人", "鄧麗君測試曲", 40, gbkExt, file: "LyrimuseGBKExtA.mp3"), false,
+                        "开着的文件: 还原后歌名一样、歌手不同不是这首")
+            expectEqual(open(fooArtist, fooTitle, 60, gbkExt, file: "LyrimuseGBKExtA.mp3"), false,
+                        "开着的文件: 乱码对上了时长差太多照样不是")
             let named = O.fileNameIdentity(reportedArtist: "", reportedTitle: "01 - 方大同 - Love Song.mp3",
                                            fileName: "01 - 方大同 - Love Song.mp3", duration: 250)
             expectEqual(named.map { "\($0.artist)|\($0.title)|\($0.duration ?? 0)" }, "方大同|Love Song|250.0",

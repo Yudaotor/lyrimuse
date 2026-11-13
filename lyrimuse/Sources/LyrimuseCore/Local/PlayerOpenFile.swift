@@ -33,7 +33,10 @@ public enum PlayerOpenFile {
 
     /// 播放器报的这一首是不是这个文件。三种报法都认:标签里的歌名(QQ;报了歌手时还得跟标签一致)、带或不带扩展名的
     /// 文件名(网易云)、文件名在第一个 `-` 处拆开去掉空白的歌手和歌名(酷狗)。两边连续空白压成一个比;两边都有时长时差
-    /// 1.5 秒以内。`underscoresControls`:标签先照 `underscoringControls` 换过再比(foobar2000)。纯函数,selftest 覆盖。
+    /// 1.5 秒以内。`underscoresControls`:标签先照 `underscoringControls` 换过再比(foobar2000)。
+    /// 按 GBK / Big5 存的老标签,AudioToolbox 按 Latin-1 解成乱码,播放器的解法不一定一样,三种都认(`sameTag`):乱码原样相同、
+    /// 标签按 Windows-1252 显示后相同(foobar2000,0x80~0x9F 跟 Latin-1 不同)、两边各自还原乱码后相同(播放器自己解出了中文)。
+    /// 见 02 章决策 260。纯函数,selftest 覆盖。
     public static func fileMatches(reportedArtist: String, reportedTitle: String, reportedDuration: Double?,
                                    tags: LocalAudioFileTags?, fileName: String, underscoresControls: Bool = false) -> Bool {
         if let reportedDuration, let duration = tags?.duration, abs(duration - reportedDuration) > 1.5 { return false }
@@ -43,7 +46,8 @@ public enum PlayerOpenFile {
         func shown(_ tag: String) -> String {
             PlayerTitleSplit.collapsedWhitespace(underscoresControls ? underscoringControls(tag) : tag)
         }
-        if let tags, !tags.title.isEmpty, shown(tags.title) == title, artist.isEmpty || shown(tags.artist) == artist { return true }
+        if let tags, !tags.title.isEmpty, sameTag(artist: shown(tags.artist), title: shown(tags.title), reportedArtist: artist,
+                                                  reportedTitle: title) { return true }
         let base = PlayerTitleSplit.strippingAudioExtension(fileName)
         if title == PlayerTitleSplit.collapsedWhitespace(fileName) || title == PlayerTitleSplit.collapsedWhitespace(base) {
             return true
@@ -54,6 +58,17 @@ public enum PlayerOpenFile {
             if !left.isEmpty, left == artist, right == title { return true }
         }
         return false
+    }
+
+    /// 文件标签的歌手、歌名跟播放器报的是同一串;`reportedArtist` 为空时只比歌名。见 `fileMatches`。
+    static func sameTag(artist: String, title: String, reportedArtist: String, reportedTitle: String) -> Bool {
+        func same(_ tag: String, _ reported: String) -> Bool {
+            tag == reported || PlayerTitleSplit.windows1252Shown(tag) == reported
+        }
+        if same(title, reportedTitle), reportedArtist.isEmpty || same(artist, reportedArtist) { return true }
+        let fixed = PlayerTitleSplit.repairingCJKMojibake([artist, title])
+        let fixedReported = PlayerTitleSplit.repairingCJKMojibake([reportedArtist, reportedTitle])
+        return fixed[1] == fixedReported[1] && (reportedArtist.isEmpty || fixed[0] == fixedReported[0])
     }
 
     /// foobar2000 报标签时每个控制字符(换行、回车、制表符)各换成一个 `_`(`\r\n` 是两个),见 02 章决策 210。纯函数,selftest 覆盖。

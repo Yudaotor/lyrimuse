@@ -470,6 +470,29 @@ public enum PlayerTitleSplit {
         repairingCJKMojibake([title])[0]
     }
 
+    /// Windows-1252 在 0x80~0x9F 的字;nil 是这一档没定义的 0x81、0x8D、0x8F、0x90、0x9D。
+    private static let windows1252High: [Unicode.Scalar?] = [
+        "\u{20AC}", nil, "\u{201A}", "\u{0192}", "\u{201E}", "\u{2026}", "\u{2020}", "\u{2021}",
+        "\u{02C6}", "\u{2030}", "\u{0160}", "\u{2039}", "\u{0152}", nil, "\u{017D}", nil,
+        nil, "\u{2018}", "\u{2019}", "\u{201C}", "\u{201D}", "\u{2022}", "\u{2013}", "\u{2014}",
+        "\u{02DC}", "\u{2122}", "\u{0161}", "\u{203A}", "\u{0153}", nil, "\u{017E}", "\u{0178}",
+    ]
+
+    /// 按 Latin-1 解出来的字串(AudioToolbox 读老标签)换成同一串字节按 Windows-1252 解的样子:U+0080~U+009F 换成
+    /// Windows-1252 在那一档的字,没定义的换成「?」(foobar2000 的显示)。别的字符不动。纯函数,selftest 覆盖。
+    public static func windows1252Shown(_ text: String) -> String {
+        guard text.unicodeScalars.contains(where: { (0x80...0x9F).contains($0.value) }) else { return text }
+        var out = String.UnicodeScalarView()
+        for scalar in text.unicodeScalars {
+            if (0x80...0x9F).contains(scalar.value) {
+                out.append(windows1252High[Int(scalar.value) - 0x80] ?? "?")
+            } else {
+                out.append(scalar)
+            }
+        }
+        return String(out)
+    }
+
     /// 高位字节全是带重音的字母(0xC0~0xFF,× ÷ 除外),而且至少有一个词(连着的字母)同时有 ASCII 字母和带重音的字母:
     /// 像 `Mötley Crüe`、`Sigur Rós - Þú` 这样的西文,不当乱码。汉字的乱码总有高位字节落在 0xC0 以下,或者一个汉字也没跟
     /// ASCII 字母连写。
