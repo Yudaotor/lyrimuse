@@ -863,6 +863,7 @@ private func scriptServerTests() {
     // 进程被前一个请求占着:等锁也算在 timeout 里,等不到交 nil(调用方起子进程),不排到前一个答完。
     let busy = server(recycle: 100)
     _ = busy.request("warm", timeout: 5)
+    let launchesBeforeHang = busy.launchCount
     // 占锁的请求要比断言窗口长得多:CI 机器慢,线程起来、拿到锁都可能要上百毫秒。
     let hanging = Thread { _ = busy.request("hang", timeout: 2) }
     hanging.start()
@@ -870,7 +871,54 @@ private func scriptServerTests() {
     let waitStarted = Date()
     let queued = busy.request("x", timeout: 0.1)
     expectEqual(queued == nil && Date().timeIntervalSince(waitStarted) < 1, true, "常驻脚本: 等锁超时交 nil")
+    let whileBusy = busy.send("y", timeout: 0.1)
+    if case .busy = whileBusy {
+        // launchCount 要等占锁的那次超时放手才读得到。
+        expectEqual(busy.launchCount, launchesBeforeHang, "常驻脚本: 被占着交 busy,不另起进程")
+    } else {
+        expectEqual("\(whileBusy)", "busy", "常驻脚本: 被占着交 busy,不另起进程")
+    }
     busy.stop()
+    if case .unavailable = server(recycle: 100).send("x\ny", timeout: 5) {} else {
+        expectEqual(true, false, "常驻脚本: 用不上(带换行)交 unavailable")
+    }
+
+    // 播放器读数:每家一个常驻 osascript,一家卡住只杀它自己那个;被占着不另起 osascript;实测会卡的几家卡住后退避。
+    typealias Stall = PlayerScriptStall
+    expectEqual([Stall.stalled(succeeded: false, elapsed: 10.0, timeout: 5), Stall.stalled(succeeded: false, elapsed: 4.6, timeout: 5),
+                 Stall.stalled(succeeded: false, elapsed: 0.2, timeout: 5), Stall.stalled(succeeded: true, elapsed: 6, timeout: 5)],
+                [true, true, false, false],
+                "读数退避: 没问成又等到超时才算卡住;很快回 null(没在跑、停住)、慢但问成了都不算")
+    expectEqual(Stall.backoffSecs >= 10 && Stall.players == ["audirvana", "swinsian"], true,
+                "读数退避: 只对实测会卡很久的 Audirvana、Swinsian 开,隔一段再问")
+    let t0 = Date(timeIntervalSince1970: 1_000_000)
+    Stall.clear("swinsian")
+    Stall.clear("music")
+    let swinsianStalled = Stall.note("swinsian", succeeded: false, elapsed: 5, timeout: 5, now: t0)
+    let musicStalled = Stall.note("music", succeeded: false, elapsed: 5, timeout: 5, now: t0)
+    expectEqual([swinsianStalled, Stall.backingOff("swinsian", now: t0.addingTimeInterval(1)),
+                 Stall.backingOff("swinsian", now: t0.addingTimeInterval(Stall.backoffSecs + 0.1)),
+                 musicStalled, Stall.backingOff("music", now: t0.addingTimeInterval(1))],
+                [true, true, false, false, false],
+                "读数退避: 卡住那一家退避到期为止;不在名单里的(Music)不退避")
+    Stall.clear("swinsian")
+    expectEqual(Set(MediaControlClient.appleScriptServers.keys), Set(MediaControlClient.appleScriptServerNames), "读数常驻: 每个请求名一个")
+    expectEqual(MediaControlClient.appleScriptServerNames.allSatisfy { sourceHas(MediaControlClient.appleScriptServerScript, "\($0): () =>") }
+                    && Set(MediaControlClient.appleScriptServers.values.map { ObjectIdentifier($0) }).count == MediaControlClient.appleScriptServerNames.count,
+                true, "读数常驻: 请求名都在脚本的 handlers 里,各家是各自的进程")
+    let runScript = sourceBody("private static func runPlayerScript(", in: (try? String(contentsOf: URL(fileURLWithPath: #filePath)
+        .deletingLastPathComponent().deletingLastPathComponent()
+        .appendingPathComponent("LyrimuseCore/Local/MediaControlClient.swift"), encoding: .utf8)) ?? "")
+    expectEqual(sourceHas(runScript, "if PlayerScriptStall.backingOff(name) { return nil }")
+                    && sourceHas(runScript, "switch appleScriptServers[name]?.send(name, timeout: timeout) ?? .unavailable {")
+                    && sourceHas(runScript, "case .busy: result = nil")
+                    && sourceHas(runScript, "if PlayerScriptStall.note(name, succeeded: result?.succeeded == true, elapsed: elapsed, timeout: timeout) {"),
+                true, "读数常驻(契约): 先看退避;问这一家自己的进程;被占着不另起 osascript;卡住记退避")
+    let swinsianSampling = sourceBody("private static func startSampling(", in: (try? String(contentsOf: URL(fileURLWithPath: #filePath)
+        .deletingLastPathComponent().deletingLastPathComponent()
+        .appendingPathComponent("LyrimuseCore/Local/SwinsianPlayhead.swift"), encoding: .utf8)) ?? "")
+    expectEqual(sourceHas(swinsianSampling, "!PlayerScriptStall.backingOff(\"swinsian\")"), true,
+                "读数退避(契约): Swinsian 退避中不另起 osascript 盯跳变")
     let clientSource = (try? String(contentsOf: URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
         .appendingPathComponent("LyrimuseCore/Local/MediaControlClient.swift"), encoding: .utf8)) ?? ""
     expectEqual(sourceBytes(clientSource, contain: "guard let r = artworkServer.request(\"now\", timeout: artworkTimeout)\n                ?? ProcessRunner.run(binaryPath, [\"get\", \"--now\"], timeout: artworkTimeout),"), true,

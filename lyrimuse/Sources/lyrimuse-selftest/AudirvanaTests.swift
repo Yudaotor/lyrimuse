@@ -81,14 +81,8 @@ func runAudirvanaTests() {
                     "Audirvana 电台: 不是本地文件且时长不是正的有限数才算;有时长的网络曲目、本地文件、没有地址的都不算")
     }
 
-    // ---- 卡住时退避 ----
-    do {
-        expectEqual([I.stalled(succeeded: false, elapsed: 10.0, timeout: 5), I.stalled(succeeded: false, elapsed: 4.6, timeout: 5),
-                     I.stalled(succeeded: false, elapsed: 0.2, timeout: 5), I.stalled(succeeded: true, elapsed: 6, timeout: 5)],
-                    [true, true, false, false],
-                    "Audirvana 退避: 没问成又等到超时才算卡住;很快回 null(没在跑、停住)、慢但问成了都不算")
-        expectEqual(I.stallBackoffSecs >= 10, true, "Audirvana 退避: 卡住后隔一段再问,别每拍都等满超时")
-    }
+    // ---- 卡住时退避(判据与时长在 PlayerScriptStall,那边的组测) ----
+    expectEqual(PlayerScriptStall.players.contains("audirvana"), true, "Audirvana 退避: 卡住后隔一段再问,别每拍都等满超时")
 
     // ---- 封面归属 ----
     do {
@@ -161,9 +155,9 @@ func runAudirvanaTests() {
                         && sourceHas(client, "if !audirvanaWanted { forgetAudirvanaPreference() }"),
                     true, "Audirvana 契约: 多选勾了它也问,设置不认它时清掉顶替记录")
         let read = sourceBody("private static func readAudirvanaSnapshot(", in: client)
-        expectEqual(sourceHas(read, "guard !backingOff, !SourceKnockout.isOut(.audirvanaScript) else { return nil }")
-                        && sourceHas(read, "audirvanaRetryAt = Date().addingTimeInterval(AudirvanaPlayerInfo.stallBackoffSecs)"),
-                    true, "Audirvana 契约: 问它卡住后退避一段,不让常驻 osascript 每拍被杀重启")
+        expectEqual(sourceHas(read, "guard !SourceKnockout.isOut(.audirvanaScript) else { return nil }")
+                        && sourceHas(read, "let r = runPlayerScript(\"audirvana\", source: AudirvanaPlayerInfo.script)"),
+                    true, "Audirvana 契约: 读数走 runPlayerScript(卡住退避在那里)")
         expectEqual(sourceHas(client, "audirvana: () => \\(AudirvanaPlayerInfo.script),"), true,
                     "Audirvana 契约: 读数走常驻 osascript")
         expectEqual(sourceHas(sourceBody("public static func fetchSnapshotWithProvenance(", in: client), "audirvanaAskedThisRound = false"),

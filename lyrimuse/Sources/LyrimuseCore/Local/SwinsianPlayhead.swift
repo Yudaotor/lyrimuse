@@ -240,9 +240,10 @@ public enum SwinsianPlayhead {
         return Reading(position: position(clock, now: now), precise: clock.precise && clock.playing, dueBy: due)
     }
 
-    /// 在后台盯一次脚本的整秒跳变,盯到就校准同一首的表。脚本关掉了返回 false;已经在盯返回 true。
+    /// 在后台盯一次脚本的整秒跳变,盯到就校准同一首的表。脚本关掉了、它的脚本读数卡住在退避中(`PlayerScriptStall`)返回 false;
+    /// 已经在盯返回 true。
     private static func startSampling(track: String) -> Bool {
-        guard !SourceKnockout.isOut(.swinsianScript) else { return false }
+        guard !SourceKnockout.isOut(.swinsianScript), !PlayerScriptStall.backingOff("swinsian") else { return false }
         guard sampling.withLock({ busy -> Bool in
             if busy { return false }
             busy = true

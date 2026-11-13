@@ -309,7 +309,7 @@ func runSwinsianTests() {
                     && sourceHas(idle, "ok = MusicPlaybackController.resumeSwinsianPlayback()"),
                     true, "Swinsian 接线: 停播页开着它时给「继续播放」,发它的脚本")
         let head = src("LyrimuseCore/Local/SwinsianPlayhead.swift")
-        expectEqual(sourceHas(head, "guard !SourceKnockout.isOut(.swinsianScript) else { return false }"), true,
+        expectEqual(sourceHas(head, "guard !SourceKnockout.isOut(.swinsianScript), !PlayerScriptStall.backingOff(\"swinsian\") else { return false }"), true,
                     "Swinsian 接线: 盯跳变能拔掉")
     }
 }

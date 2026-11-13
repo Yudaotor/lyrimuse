@@ -145,17 +145,6 @@ public enum AudirvanaPlayerInfo {
         return (outTitle, outArtist, outAlbum)
     }
 
-    // MARK: 卡住时退避
-
-    /// 问它一次等满超时(它主线程卡住、或者整机过载)之后,隔这么久再问。不退避的话每一拍都等满超时,常驻 osascript 被反复
-    /// 杀掉重启,用同一个常驻进程的别家播放器读数跟着断。
-    public static let stallBackoffSecs: TimeInterval = 20
-
-    /// 这一次问它算不算卡住:没问成、而且耗时到了超时的九成。没在跑、停住这种很快回 `null` 的不算。纯函数,selftest 覆盖。
-    public static func stalled(succeeded: Bool, elapsed: TimeInterval, timeout: TimeInterval) -> Bool {
-        !succeeded && elapsed >= timeout * 0.9
-    }
-
     // MARK: 最近一次读数
 
     private static let current = OSAllocatedUnfairLock<(title: String, artist: String, path: String?)?>(initialState: nil)

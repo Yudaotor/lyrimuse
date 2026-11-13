@@ -609,8 +609,6 @@ public enum MediaControlClient {
     /// 此刻正顶替系统那边、改用 Audirvana 脚本读数时,系统报的是谁("nothing" = 什么都没报);没在顶替为 nil。
     /// 播放控制据此直接发给 Audirvana(`focusControlContext`)。只在 `kasetLock` 里读写。
     private static var audirvanaPreferredOver: String?
-    /// 上一次问 Audirvana 卡住了,到这个时刻之前不再问(`AudirvanaPlayerInfo.stallBackoffSecs`)。只在 `kasetLock` 里读写。
-    private static var audirvanaRetryAt: Date?
     /// 打过「在放网络电台」日志的那个台(脚本报的歌名),同一个台只打一条。只在 `kasetLock` 里读写。
     private static var audirvanaRadioLoggedTitle: String?
 
@@ -1002,24 +1000,15 @@ public enum MediaControlClient {
         return picked ?? found
     }
 
-    /// 问一次 Audirvana(`AudirvanaPlayerInfo.script`)。拿不到(没在跑、停住、没授「自动化」权限、超时、关掉了这条腿)返回 nil。
+    /// 问一次 Audirvana(`AudirvanaPlayerInfo.script`)。拿不到(没在跑、停住、没授「自动化」权限、超时、卡住后退避中、关掉了这条腿)返回 nil。
     /// 网络电台照样交回(`isRadio`),不记成当前这首。
     private static func readAudirvanaSnapshot() -> AudirvanaPlayerInfo.Reading? {
-        let started = Date()
         kasetLock.lock()
         audirvanaAskedThisRound = true
-        let backingOff = audirvanaRetryAt.map { started < $0 } ?? false
         kasetLock.unlock()
-        guard !backingOff, !SourceKnockout.isOut(.audirvanaScript) else { return nil }
+        guard !SourceKnockout.isOut(.audirvanaScript) else { return nil }
+        // 卡住后的退避在 runPlayerScript 里(PlayerScriptStall)。
         let r = runPlayerScript("audirvana", source: AudirvanaPlayerInfo.script)
-        let timeout = MusicPlaybackController.appleScriptTimeout
-        if AudirvanaPlayerInfo.stalled(succeeded: r?.succeeded == true, elapsed: Date().timeIntervalSince(started), timeout: timeout) {
-            kasetLock.lock()
-            audirvanaRetryAt = Date().addingTimeInterval(AudirvanaPlayerInfo.stallBackoffSecs)
-            kasetLock.unlock()
-            logger.notice("audirvana: AppleScript read stalled for \(Date().timeIntervalSince(started), format: .fixed(precision: 1), privacy: .public)s; not asking again for \(Int(AudirvanaPlayerInfo.stallBackoffSecs), privacy: .public)s")
-            return nil
-        }
         guard let r, r.succeeded,
               let reading = AudirvanaPlayerInfo.reading(fromScriptOutput: r.stdout, capturedAt: Date())
         else { return nil }
@@ -1729,6 +1718,8 @@ public enum MediaControlClient {
     static let artworkServerRecycleAfterRequests = 60
     /// 常驻 osascript 每答这么多次换一个:每答一次,进程涨 24~72KB。
     static let appleScriptServerRecycleAfterRequests = 100
+    /// 某一家的常驻 osascript 这么久没被问过就关掉(那家退出了、或者一直有别的来源顶着),下次问再起。
+    static let appleScriptServerIdleStop: TimeInterval = 300
 
     /// 常驻取数进程跑的 perl:加载适配框架一次,之后每读到一行请求(适配器的选项名,空格分隔)就按它设好选项环境变量、
     /// 调一次 `adapter_get_env`(回答由适配器直接写 stdout,跟 `media-control get` 最后调的是同一个函数),再写结束行。
@@ -1831,17 +1822,51 @@ public enum MediaControlClient {
     }
     """
 
-    static let appleScriptServer = PersistentScriptServer(
-        label: "osascript snapshot server", endMarker: scriptServerEndMarker,
-        recycleAfterRequests: appleScriptServerRecycleAfterRequests,
-        launch: { .init(executable: "/usr/bin/osascript", arguments: ["-l", "JavaScript", "-e", appleScriptServerScript]) })
+    /// 常驻 osascript 认的请求名,跟 `appleScriptServerScript` 里的 handlers 一一对应。
+    public static let appleScriptServerNames = ["music", "spotify", "kaset", "vox", "audirvana", "swinsian"]
 
-    /// 跑一份播放器快照脚本:`name` 是常驻 osascript 里的请求名,`source` 是同一份脚本。先问常驻 osascript,这次用不上
-    /// 再起一个 osascript。
+    /// 每家播放器一个常驻 osascript(用到才起):一家卡住超时,杀掉重开的只是它自己那个,别家的读数不跟着断、不用冷启动。
+    /// 共用一个时,一家卡满超时会把同一个进程上排在后面的别家一起拖住,杀掉后所有家都要重新起进程。见 02 章决策 258。
+    public static let appleScriptServers: [String: PersistentScriptServer] = Dictionary(uniqueKeysWithValues: appleScriptServerNames.map { name in
+        (name, PersistentScriptServer(
+            label: "osascript snapshot server (\(name))", endMarker: scriptServerEndMarker,
+            recycleAfterRequests: appleScriptServerRecycleAfterRequests,
+            launch: { .init(executable: "/usr/bin/osascript", arguments: ["-l", "JavaScript", "-e", appleScriptServerScript]) }))
+    })
+
+    /// 各家常驻 osascript 最近一次被问的时刻。
+    private static let appleScriptServerLastUse = OSAllocatedUnfairLock<[String: Date]>(initialState: [:])
+
+    /// 跑一份播放器快照脚本:`name` 是常驻 osascript 里的请求名,`source` 是同一份脚本。先问这一家的常驻 osascript,
+    /// 这次用不上再起一个 osascript;这一家上一次还没答完(被占着)就不再起,交 nil。
+    /// `PlayerScriptStall.players` 里的几家卡满超时后退避一段,退避中直接交 nil。
     private static func runPlayerScript(_ name: String, source: String) -> ProcessRunner.Result? {
         let timeout = MusicPlaybackController.appleScriptTimeout
-        if let result = appleScriptServer.request(name, timeout: timeout) { return result }
-        return ProcessRunner.run("/usr/bin/osascript", ["-l", "JavaScript", "-e", source], timeout: timeout)
+        if PlayerScriptStall.backingOff(name) { return nil }
+        let started = Date()
+        stopIdleAppleScriptServers(now: started, using: name)
+        let result: ProcessRunner.Result?
+        switch appleScriptServers[name]?.send(name, timeout: timeout) ?? .unavailable {
+        case .answered(let answered): result = answered
+        case .busy: result = nil
+        case .unavailable: result = ProcessRunner.run("/usr/bin/osascript", ["-l", "JavaScript", "-e", source], timeout: timeout)
+        }
+        appleScriptServerLastUse.withLock { $0[name] = Date() }
+        let elapsed = Date().timeIntervalSince(started)
+        if PlayerScriptStall.note(name, succeeded: result?.succeeded == true, elapsed: elapsed, timeout: timeout) {
+            logger.notice("\(name, privacy: .public): AppleScript read stalled for \(elapsed, format: .fixed(precision: 1), privacy: .public)s; not asking again for \(Int(PlayerScriptStall.backoffSecs), privacy: .public)s")
+        }
+        return result
+    }
+
+    /// 关掉闲了 `appleScriptServerIdleStop` 的别家常驻 osascript。
+    private static func stopIdleAppleScriptServers(now: Date, using name: String) {
+        let idle = appleScriptServerLastUse.withLock { uses -> [String] in
+            let names = uses.filter { $0.key != name && now.timeIntervalSince($0.value) >= appleScriptServerIdleStop }.map(\.key)
+            for idleName in names { uses[idleName] = nil }
+            return names
+        }
+        for idleName in idle { appleScriptServers[idleName]?.stop() }
     }
 
     // 只认一个 bundle id 的读取:真正跑 media-control 子进程、解析原始输出的逻辑收在 fetchRawMediaControlSnapshot 里,

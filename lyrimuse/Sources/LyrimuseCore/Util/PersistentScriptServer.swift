@@ -16,7 +16,7 @@ private let logger = Logger(subsystem: LyrimuseIdentity.logSubsystem, category: 
 /// - 起不来、半路退出:这次返回 nil,调用方自己退回每次起子进程那条路。连着 `disableAfterFailures` 次就停用
 ///   `disabledInterval`,这段时间一律返回 nil、不起进程。
 /// - 脚本必须在 stdin 读到 EOF 时自己退出:App 退出(含被杀)时靠这一条不留孤儿。
-/// - 请求串行处理,同一时刻只有一次在飞;等前一次的时间也算在这次的 timeout 里,等不到交 nil。会阻塞调用线程,别在主线程上调。
+/// - 请求串行处理,同一时刻只有一次在飞;等前一次的时间也算在这次的 timeout 里,等不到交 nil(`send` 交 `.busy`)。会阻塞调用线程,别在主线程上调。
 public final class PersistentScriptServer: @unchecked Sendable {
     public struct Launch: Sendable {
         public var executable: String
@@ -77,15 +77,31 @@ public final class PersistentScriptServer: @unchecked Sendable {
         return process?.processIdentifier
     }
 
-    /// 问一次。nil = 这次用不上(停用中、起不来、半路退出、请求里带换行),调用方自己退回起子进程。
+    /// 一次请求的去向。
+    public enum Outcome {
+        /// 进程答了,或者超时被杀(`timedOut = true`)。
+        case answered(ProcessRunner.Result)
+        /// 前一次请求一直占着进程,等到截止也没轮上。
+        case busy
+        /// 这次用不上:停用中、起不来、半路退出、请求里带换行。
+        case unavailable
+    }
+
+    /// 问一次。nil = 这次用不上或被前一次占着,调用方自己退回起子进程。
     public func request(_ line: String, timeout: TimeInterval) -> ProcessRunner.Result? {
-        guard !line.contains("\n") else { return nil }
-        // 等锁也算在 timeout 里:前一次请求占着进程时等不到就交 nil,调用方自己起子进程。
+        guard case .answered(let result) = send(line, timeout: timeout) else { return nil }
+        return result
+    }
+
+    /// 问一次,交回去向:调用方要分清「被占着」和「用不上」时用这个(被占着时再起一个子进程,只会往同一个卡住的目标再塞一条)。
+    public func send(_ line: String, timeout: TimeInterval) -> Outcome {
+        guard !line.contains("\n") else { return .unavailable }
+        // 等锁也算在 timeout 里:前一次请求占着进程时等不到就交 busy。
         let deadline = Date().addingTimeInterval(timeout)
-        guard lock.lock(before: deadline) else { return nil }
+        guard lock.lock(before: deadline) else { return .busy }
         defer { lock.unlock() }
         if let until = disabledUntil {
-            guard Date() >= until else { return nil }
+            guard Date() >= until else { return .unavailable }
             disabledUntil = nil
         }
         if process == nil, !startLocked() { return failLocked("could not start") }
@@ -102,11 +118,11 @@ public final class PersistentScriptServer: @unchecked Sendable {
                 logger.notice("\(self.label, privacy: .public) recycled after \(self.answeredByCurrent) requests, \(self.bytesByCurrent) bytes")
                 stopLocked(force: false)
             }
-            return ProcessRunner.Result(status: status, stdout: body, stderr: Data(), timedOut: false)
+            return .answered(ProcessRunner.Result(status: status, stdout: body, stderr: Data(), timedOut: false))
         case .timedOut:
             logger.notice("\(self.label, privacy: .public) timed out after \(timeout, format: .fixed(precision: 1))s; killed")
             stopLocked(force: true)
-            return ProcessRunner.Result(status: SIGKILL, stdout: Data(), stderr: Data(), timedOut: true)
+            return .answered(ProcessRunner.Result(status: SIGKILL, stdout: Data(), stderr: Data(), timedOut: true))
         case .closed:
             stopLocked(force: true)
             return failLocked("exited before answering")
@@ -183,16 +199,16 @@ public final class PersistentScriptServer: @unchecked Sendable {
         }
     }
 
-    private func failLocked(_ reason: String) -> ProcessRunner.Result? {
+    private func failLocked(_ reason: String) -> Outcome {
         consecutiveFailures += 1
         guard consecutiveFailures >= disableAfterFailures else {
             logger.notice("\(self.label, privacy: .public) unavailable (\(reason, privacy: .public)); this request falls back")
-            return nil
+            return .unavailable
         }
         consecutiveFailures = 0
         disabledUntil = Date().addingTimeInterval(disabledInterval)
         logger.notice("\(self.label, privacy: .public) disabled for \(Int(self.disabledInterval))s after \(self.disableAfterFailures) failures in a row (last: \(reason, privacy: .public))")
-        return nil
+        return .unavailable
     }
 
     // MARK: - 读写
