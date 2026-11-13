@@ -1,7 +1,7 @@
 import Foundation
 import LyrimuseCore
 
-// 诊断包「Automation permission」「Accessibility / Full Disk Access」两段的判据。由 runOpsDiagnosticsTests 调用。
+// 诊断包「Automation permission」「Browser permissions」「Accessibility / Full Disk Access」三段的判据。由 runOpsDiagnosticsTests 调用。
 @MainActor
 func permissionDiagnosticsChecks() {
     print("\n== 权限诊断 ==")
@@ -106,5 +106,60 @@ func permissionDiagnosticsChecks() {
                                   accessibilityEverGranted: true, appFullDiskAccess: true, fullDiskAccessEverGranted: true,
                                   engineState: nil).contains { $0.hasPrefix("  - amazon_music: reads the on-screen time") },
                     true, "访问段: 自动识别加在跑的")
+    }
+
+    // ---- 网页播放器配对的浏览器 ----
+    do {
+        let chrome = "com.google.Chrome", safari = "com.apple.Safari", firefox = "org.mozilla.firefox"
+        let at = Date(timeIntervalSince1970: 1_700_000_000)
+        func facts(_ family: BrowserAutomationPermission.Family? = .chromium, installed: Bool = true, running: Bool = true,
+                   grant: AutomationAlert.Grant? = .authorized, pref: BrowserAutomationPermission.Status = .enabled,
+                   known: Bool = true, fda: Bool = true, selfTest: Date? = nil,
+                   page: (platformID: String, at: Date)? = nil) -> D.BrowserFacts {
+            D.BrowserFacts(family: family, installed: installed, running: running, grant: grant, jsPref: pref,
+                           prefsLocationKnown: known, appFullDiskAccess: fda, selfTestPassedAt: selfTest, lastPageRead: page)
+        }
+        let pairs: [String: Set<String>] = ["spotifyWeb": [chrome, safari], "youtubeMusic": [chrome]]
+        let ok = D.browserLines(pairs: pairs) { id in
+            id == chrome ? facts(selfTest: at, page: ("youtubeMusic", at))
+                : facts(.safari, running: false, grant: nil, pref: .unknown, fda: false)
+        }
+        expectEqual(ok, ["== Browser permissions (paired web players) ==",
+                         "- \(safari) (paired for spotifyWeb): not running | TCC: not queried (only answered for a running app)",
+                         "    JavaScript from Apple Events: pref (applies on next launch): unknown (reading it needs Full Disk Access) | last self-test pass: none | last page read this session: none",
+                         "- \(chrome) (paired for spotifyWeb, youtubeMusic): running | TCC: authorized",
+                         "    JavaScript from Apple Events: pref (applies on next launch): enabled | last self-test pass: 2023-11-14T22:13:20Z | last page read this session: 2023-11-14T22:13:20Z (youtubeMusic)"],
+                    "浏览器段: 每个浏览器一行授权、一行 JS 开关,平台合在一起")
+        expectEqual(D.browserLines(pairs: [:]) { _ in facts() },
+                    ["== Browser permissions (paired web players) ==", "(no web player is paired with a browser)"], "浏览器段: 没配对")
+        func one(_ f: D.BrowserFacts) -> [String] { Array(D.browserLines(pairs: ["spotifyWeb": [chrome]]) { _ in f }.dropFirst()) }
+        expectEqual(one(facts(grant: nil)).first?.hasSuffix("running | TCC: query timed out"), true, "浏览器段: 查询超时")
+        expectEqual(one(facts(grant: .denied)).first?.hasSuffix("TCC: denied"), true, "浏览器段: 拒绝")
+        expectEqual(one(facts(grant: .undetermined)).first?.hasSuffix("TCC: not determined"), true, "浏览器段: 没问过")
+        expectEqual(one(facts(installed: false)), ["- \(chrome) (paired for spotifyWeb): not installed"], "浏览器段: 没装只一行")
+        expectEqual(D.browserLines(pairs: ["spotifyWeb": [firefox]]) { _ in facts(nil, pref: .unsupported) }.last,
+                    "- \(firefox) (paired for spotifyWeb): not scriptable (no JavaScript command in its scripting dictionary)",
+                    "浏览器段: 驱不动的只一行")
+        func pref(_ f: D.BrowserFacts) -> String { D.describePref(f) }
+        expectEqual(pref(facts(pref: .disabled)), "disabled", "浏览器段: 关着")
+        expectEqual(pref(facts(pref: .unknown, known: false)), "unknown (where this browser stores it is not registered)",
+                    "浏览器段: 手动加的没登记位置")
+        expectEqual(pref(facts(pref: .unknown, fda: false)), "unknown (reading it needs Full Disk Access)", "浏览器段: 没有完全磁盘访问")
+        expectEqual(pref(facts(pref: .unknown)), "unknown (preferences file missing or unreadable)", "浏览器段: Chromium 文件读不到")
+        expectEqual(pref(facts(.safari, pref: .unknown)), "unknown (no value set)", "浏览器段: Safari 没设过")
+        expectEqual(BrowserAutomationPermission.hasKnownPrefsLocation(forBundleID: safari), true, "浏览器段: Safari 位置已登记")
+        expectEqual(BrowserAutomationPermission.hasKnownPrefsLocation(forBundleID: "com.vivaldi.Vivaldi"), false,
+                    "浏览器段: 手动加的没登记")
+
+        let exporter = (try? String(contentsOf: URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("lyrimuse/Settings/DiagnosticsExporter.swift"), encoding: .utf8)) ?? ""
+        let body = sourceBody("private static func permissionLines()", in: exporter)
+        expectEqual(sourceHas(body, "MusicAutomationPermission.status(bundleID: id, askIfNeeded: false)"), true,
+                    "浏览器段: 授权只读、不弹窗")
+        expectEqual(sourceHas(body, "guard running, BrowserAutomationPermission.family(forBundleID: id) != nil else { continue }"), true,
+                    "浏览器段: 没在跑的不问")
+        expectEqual(["selfTest(", "requestWithTimeout", "askIfNeeded: true", "javascript"].filter { body.contains($0) }, [],
+                    "浏览器段: 不执行 JavaScript、不申请授权")
+        expectEqual(sourceHas(body, "return automation + [\"\"] + browsers + [\"\"] + access"), true, "浏览器段: 排在自动化段后面")
     }
 }

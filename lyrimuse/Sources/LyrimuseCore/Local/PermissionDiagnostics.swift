@@ -3,6 +3,8 @@ import Foundation
 /// 诊断包里的两段权限诊断,只读、只出诊断,不碰权限申请流程(见 02 章决策 256):
 /// - `automationLines`:要查的播放器里靠脚本接口取数的那几家,各自的「自动化」授权状态;在跑且已授权的再用脚本只读问一次
 ///   播放状态和有没有歌名(`AutomationReadProbe`)。
+/// - `browserLines`:「网页播放器」卡配对的各浏览器:Lyrimuse 对它的「自动化」授权,和它自己那道「允许 Apple 事件中的 JavaScript」
+///   开关(见 02 章决策 257)。
 /// - `accessLines`:Lyrimuse 自己的「辅助功能」与「完全磁盘访问」授权状态,以及要查的播放器里哪几家的哪些能力靠它们。
 ///
 /// 要查的播放器跟 `PlayerReportingDiagnostics.watchedPlayers` 同一个口径。
@@ -80,6 +82,90 @@ public enum PermissionDiagnostics {
             }
         case .timedOut: return "timed out"
         case let .failed(reason): return "failed: \(reason)"
+        }
+    }
+
+    // MARK: - 网页播放器配对的浏览器
+
+    /// 一个配对浏览器此刻查到的事实。只读得来:TCC 只问在跑的、`askIfNeeded: false`;开关读的是偏好文件
+    /// (`BrowserAutomationPermission.status`,不执行 JavaScript);另两条是已存的证据。
+    public struct BrowserFacts: Equatable, Sendable {
+        public var family: BrowserAutomationPermission.Family?
+        public var installed: Bool
+        public var running: Bool
+        /// 在跑时的授权状态;nil = 没在跑没问,或查询超时。
+        public var grant: AutomationAlert.Grant?
+        public var jsPref: BrowserAutomationPermission.Status
+        public var prefsLocationKnown: Bool
+        public var appFullDiskAccess: Bool
+        /// 设置里「检测是否已生效」上次通过的时刻(明确失败会抹掉)。
+        public var selfTestPassedAt: Date?
+        /// 这次运行里最近一次有页面脚本读到它的标签页。
+        public var lastPageRead: (platformID: String, at: Date)?
+
+        public init(family: BrowserAutomationPermission.Family?, installed: Bool, running: Bool,
+                    grant: AutomationAlert.Grant?, jsPref: BrowserAutomationPermission.Status,
+                    prefsLocationKnown: Bool, appFullDiskAccess: Bool,
+                    selfTestPassedAt: Date?, lastPageRead: (platformID: String, at: Date)?) {
+            self.family = family
+            self.installed = installed
+            self.running = running
+            self.grant = grant
+            self.jsPref = jsPref
+            self.prefsLocationKnown = prefsLocationKnown
+            self.appFullDiskAccess = appFullDiskAccess
+            self.selfTestPassedAt = selfTestPassedAt
+            self.lastPageRead = lastPageRead
+        }
+
+        public static func == (a: BrowserFacts, b: BrowserFacts) -> Bool {
+            a.family == b.family && a.installed == b.installed && a.running == b.running && a.grant == b.grant
+                && a.jsPref == b.jsPref && a.prefsLocationKnown == b.prefsLocationKnown
+                && a.appFullDiskAccess == b.appFullDiskAccess && a.selfTestPassedAt == b.selfTestPassedAt
+                && a.lastPageRead?.platformID == b.lastPageRead?.platformID && a.lastPageRead?.at == b.lastPageRead?.at
+        }
+    }
+
+    /// 「网页播放器配对的浏览器」那一段。`pairs` 是平台 → 浏览器 bundle id(`AppSettings.browserPlatformPairs`),
+    /// 每个浏览器一行授权、一行 JS 开关。纯函数,selftest 覆盖。
+    public static func browserLines(pairs: [String: Set<String>], facts: (String) -> BrowserFacts) -> [String] {
+        var lines = ["== Browser permissions (paired web players) =="]
+        var platformsByBrowser: [String: [String]] = [:]
+        for (platformID, browsers) in pairs {
+            for browser in browsers { platformsByBrowser[browser, default: []].append(platformID) }
+        }
+        if platformsByBrowser.isEmpty { lines.append("(no web player is paired with a browser)") }
+        let iso = ISO8601DateFormatter()
+        for bundleID in platformsByBrowser.keys.sorted() {
+            let f = facts(bundleID)
+            let head = "- \(bundleID) (paired for \(platformsByBrowser[bundleID, default: []].sorted().joined(separator: ", ")))"
+            guard f.installed else { lines.append(head + ": not installed"); continue }
+            guard f.family != nil else {
+                lines.append(head + ": not scriptable (no JavaScript command in its scripting dictionary)")
+                continue
+            }
+            if f.running {
+                lines.append(head + ": running | TCC: " + (f.grant.map(describe) ?? "query timed out"))
+            } else {
+                lines.append(head + ": not running | TCC: not queried (only answered for a running app)")
+            }
+            let selfTest = f.selfTestPassedAt.map { iso.string(from: $0) } ?? "none"
+            let pageRead = f.lastPageRead.map { "\(iso.string(from: $0.at)) (\($0.platformID))" } ?? "none"
+            lines.append("    JavaScript from Apple Events: pref (applies on next launch): \(describePref(f))"
+                         + " | last self-test pass: \(selfTest) | last page read this session: \(pageRead)")
+        }
+        return lines
+    }
+
+    public static func describePref(_ f: BrowserFacts) -> String {
+        switch f.jsPref {
+        case .enabled: return "enabled"
+        case .disabled: return "disabled"
+        case .unsupported: return "unknown (not a registered browser)"
+        case .unknown:
+            if !f.prefsLocationKnown { return "unknown (where this browser stores it is not registered)" }
+            if !f.appFullDiskAccess { return "unknown (reading it needs Full Disk Access)" }
+            return f.family == .safari ? "unknown (no value set)" : "unknown (preferences file missing or unreadable)"
         }
     }
 

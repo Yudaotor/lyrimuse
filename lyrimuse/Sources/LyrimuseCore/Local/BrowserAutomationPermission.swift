@@ -38,7 +38,7 @@ import Foundation
 public enum BrowserAutomationPermission {
     /// rawValue 用来持久化(见 `manuallyAddedFamilies` 那段的双写模式),别改这两个字符串 ——
     /// 改了等于让用户已经加过的浏览器在下次启动时解不出来、静默消失。
-    public enum Family: String, Equatable {
+    public enum Family: String, Equatable, Sendable {
         case chromium
         case safari
     }
@@ -192,7 +192,7 @@ public enum BrowserAutomationPermission {
         PlayerProcess.isRunning(bundleID: bundleID, includingAliases: false)
     }
 
-    public enum Status: Equatable {
+    public enum Status: Equatable, Sendable {
         case enabled
         case disabled
         /// 开关状态**查不到**:Chromium 系是 Preferences 文件读不到/解析不出来(装了但从没
@@ -206,6 +206,11 @@ public enum BrowserAutomationPermission {
         /// 那段注释。
         case unknown
         case unsupported
+    }
+
+    /// 那道开关存在哪是登记过的:Safari 和 `chromiumPrefsPaths` 里那几家是,手动加进来的 Chromium 系不是(恒为 `.unknown`)。
+    public static func hasKnownPrefsLocation(forBundleID bundleID: String) -> Bool {
+        bundleID == safariBundleID || chromiumPrefsPaths[bundleID] != nil
     }
 
     public static func status(forBundleID bundleID: String) -> Status {

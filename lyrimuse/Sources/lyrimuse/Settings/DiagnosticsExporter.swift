@@ -109,9 +109,9 @@ enum DiagnosticsExporter {
         }
     }
 
-    /// 「自动化」和「辅助功能 / 完全磁盘访问」两段(`PermissionDiagnostics`,02 章决策 256)。授权状态只读、不弹窗:
-    /// 自动化走 `MusicAutomationPermission.status`(专用线程 + 超时,那次系统调用可能永远不返回,02 章决策 8),只问在跑的播放器
-    /// (没在跑时系统答不出,用它上次运行时的结论);脚本只读探测和进程表在后台跑。
+    /// 「自动化」「网页播放器配对的浏览器」「辅助功能 / 完全磁盘访问」三段(`PermissionDiagnostics`,02 章决策 256、257)。
+    /// 授权状态只读、不弹窗:自动化走 `MusicAutomationPermission.status`(专用线程 + 超时,那次系统调用可能永远不返回,02 章决策 8),
+    /// 只问在跑的播放器和浏览器(没在跑时系统答不出,播放器用它上次运行时的结论);脚本只读探测、浏览器偏好文件和进程表在后台读。
     @MainActor
     private static func permissionLines() async -> [String] {
         let selected = PlaybackPlayerPreference.selected
@@ -134,6 +134,19 @@ enum DiagnosticsExporter {
                 grants[player] = grant(status)
             }
         }
+        let browserPairs = AppSettings.shared.browserPlatformPairs
+        let selfTestPassedAt = AppSettings.shared.browserJSVerifiedAt
+        var browserRunning: [String: Bool] = [:]
+        var browserGrants: [String: AutomationAlert.Grant] = [:]
+        for id in Set(browserPairs.values.flatMap { $0 }) {
+            let running = MusicAutomationPermission.isRunning(bundleID: id)
+            browserRunning[id] = running
+            guard running, BrowserAutomationPermission.family(forBundleID: id) != nil else { continue }
+            if let status = await MusicAutomationPermission.status(bundleID: id, askIfNeeded: false) {
+                browserGrants[id] = grant(status)
+            }
+        }
+        let browserSnapshot = (browserRunning, browserGrants)
         let accessibilityTrusted = AccessibilitySkipPress.isTrusted
         let accessibilityEver = PermissionGrantMemory.everGranted(PermissionGrantMemory.accessibilityKey)
         let fullDiskEver = PermissionGrantMemory.everGranted(PermissionGrantMemory.fullDiskAccessKey)
@@ -143,13 +156,25 @@ enum DiagnosticsExporter {
             let automation = PermissionDiagnostics.automationLines(
                 selected: selected, runningBundleID: { running[$0] }, grant: { grants[$0] },
                 lastKnown: { lastKnown[$0] }, probe: { AutomationReadProbe.run($0, bundleID: $1) })
+            let (browserRunning, browserGrants) = browserSnapshot
+            let appFullDiskAccess = FullDiskAccessProbe.isGranted()
+            let browsers = PermissionDiagnostics.browserLines(pairs: browserPairs) { id in
+                let family = BrowserAutomationPermission.family(forBundleID: id)
+                return PermissionDiagnostics.BrowserFacts(
+                    family: family, installed: BrowserAutomationPermission.isInstalled(bundleID: id),
+                    running: browserRunning[id] ?? false, grant: browserGrants[id],
+                    jsPref: family == nil ? .unsupported : BrowserAutomationPermission.status(forBundleID: id),
+                    prefsLocationKnown: BrowserAutomationPermission.hasKnownPrefsLocation(forBundleID: id),
+                    appFullDiskAccess: appFullDiskAccess, selfTestPassedAt: selfTestPassedAt[id],
+                    lastPageRead: BrowserPositionProbe.shared.lastPageRead(forBundleID: id))
+            }
             let access = PermissionDiagnostics.accessLines(
                 selected: selected,
                 isRunning: { PlayerBundleAliases.all(for: $0.bundleIdentifier).contains { PlayerProcess.pid(exactBundleID: $0) != nil } },
                 accessibilityTrusted: accessibilityTrusted, accessibilityEverGranted: accessibilityEver,
-                appFullDiskAccess: FullDiskAccessProbe.isGranted(), fullDiskAccessEverGranted: fullDiskEver,
+                appFullDiskAccess: appFullDiskAccess, fullDiskAccessEverGranted: fullDiskEver,
                 engineState: LocalCacheAccess.current)
-            return automation + [""] + access
+            return automation + [""] + browsers + [""] + access
         }.value
     }
 

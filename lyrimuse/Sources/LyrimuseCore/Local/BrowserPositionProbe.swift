@@ -577,6 +577,14 @@ public final class BrowserPositionProbe: @unchecked Sendable {
         return pairedPlatformIDs.count == 1 ? pairedPlatformIDs.first : nil
     }
 
+    /// 这个浏览器最近一次有页面脚本读到标签页(进度探测或认平台)的平台和时刻。只在内存里,App 重启后为 nil。
+    public func lastPageRead(forBundleID bundleID: String) -> (platformID: String, at: Date)? {
+        lock.lock()
+        defer { lock.unlock() }
+        guard let lastMatch, lastMatch.bundleID == bundleID else { return nil }
+        return (lastMatch.platformID, lastMatch.at)
+    }
+
     // MARK: - 暂停时认平台
 
     /// 「认平台」按曲目 key 记账:每首歌最多问一次,问没问到都算。和 `lastMatch` 同一把锁。
