@@ -42,10 +42,18 @@ enum L10n {
     static var languageOverride: String? { UserDefaults.standard.string(forKey: languageOverrideKey) }
 
     /// 「跟随系统」(默认)时按系统首选语言列表协商,规则在 LyrimuseCore 的 `UILanguage`(selftest 钉着各种标签的分流)。
+    /// 手动选的界面语言每次照读(切换当场生效);跟随系统时的协商结果记住 1 秒(`SystemUILanguageCache`),系统语言或地区
+    /// 改了当场作废。每次都取 `Locale.preferredLanguages` 的话,三万行逐行查文案就是几百毫秒(见 14 章决策 190)。
     static var current: String {
         if let override = languageOverride, UILanguage.packs.contains(override) { return override }
-        return UILanguage.resolve(preferredLanguages: Locale.preferredLanguages)
+        _ = localeObserver
+        return systemLanguage.language()
     }
+
+    private static let systemLanguage = SystemUILanguageCache()
+    private static let localeObserver = NotificationCenter.default.addObserver(
+        forName: NSLocale.currentLocaleDidChangeNotification, object: nil, queue: nil
+    ) { _ in systemLanguage.invalidate() }
 
     /// 界面语言对应的 `Locale` —— 给那些**不走 .strings 表、但仍该跟着界面语言变**的系统
     /// API 用,典型是 `Locale.localizedString(forIdentifier:)` 生成的语言名/地区名。

@@ -434,6 +434,36 @@ func runSourceContractTests() {
             expectEqual(resolve("zh-SG"), "zh-hans", "本地化: zh-SG → 简体包")
             expectEqual(resolve("zh-Hant-TW"), "zh-hant", "本地化: zh-Hant-TW → 繁体包")
             expectEqual(resolve("zh-TW"), "zh-hant", "本地化: zh-TW → 繁体包")
+
+            // ---- 跟随系统时的协商结果记 1 秒,手动选的界面语言每次照读(14 章决策 190)----
+            do {
+                var clock: TimeInterval = 100
+                var tags = ["ja-JP"]
+                var reads = 0
+                let cache = SystemUILanguageCache(now: { clock }, preferredLanguages: { reads += 1; return tags })
+                let first = (0..<500).map { _ in cache.language() }
+                expectEqual(Set(first) == ["ja"] && cache.resolveCount == 1 && reads == 1, true,
+                            "界面语言缓存: 1 秒内查五百次只协商一次")
+                tags = ["fr-FR"]
+                clock += SystemUILanguageCache.ttl - 0.01
+                expectEqual(cache.language(), "ja", "界面语言缓存: 不到 1 秒沿用上次的结果")
+                clock += 0.02
+                expectEqual([cache.language(), "\(cache.resolveCount)"], ["fr", "2"], "界面语言缓存: 过了 1 秒按新的系统语言重算")
+                tags = ["de-DE"]
+                cache.invalidate()
+                expectEqual(cache.language(), "de", "界面语言缓存: 系统语言 / 地区变了作废之后当场重算")
+                clock -= 10
+                tags = ["ko-KR"]
+                expectEqual(cache.language(), "ko", "界面语言缓存: 时钟往回调不沿用旧结果")
+                let l10nSource = (try? String(contentsOf: URL(fileURLWithPath: #filePath).deletingLastPathComponent()
+                    .deletingLastPathComponent().appendingPathComponent("lyrimuse/L10n.swift"), encoding: .utf8)) ?? ""
+                expectEqual(sourceHas(l10nSource, "static var current: String {\n        if let override = languageOverride, UILanguage.packs.contains(override) { return override }")
+                            && sourceHas(l10nSource, "static var languageOverride: String? { UserDefaults.standard.string(forKey: languageOverrideKey) }")
+                            && sourceHas(l10nSource, "return systemLanguage.language()")
+                            && sourceHas(l10nSource, "forName: NSLocale.currentLocaleDidChangeNotification")
+                            && !l10nSource.contains("UILanguage.resolve(preferredLanguages: Locale.preferredLanguages)"), true,
+                            "界面语言缓存(契约): 手动选的界面语言每次照读、切换当场生效;只有跟随系统时走缓存,系统地区变了作废")
+            }
             expectEqual(resolve("zh-HK"), "zh-hant", "本地化: zh-HK → 繁体包")
             expectEqual(resolve("zh-MO"), "zh-hant", "本地化: zh-MO → 繁体包")
             expectEqual(resolve("zh-Hans-HK"), "zh-hans", "本地化: zh-Hans-HK 显式 Hans 优先于地区码 → 简体包")
