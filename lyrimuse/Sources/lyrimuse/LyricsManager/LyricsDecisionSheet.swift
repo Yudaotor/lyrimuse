@@ -1120,13 +1120,16 @@ struct LyricsDecisionSheet: View {
                         .foregroundStyle(sourceColor(c.source))
                         .padding(.horizontal, 7).padding(.vertical, 2)
                         .background(sourceColor(c.source).opacity(0.12), in: Capsule())
+                    // 两个小标签不折行,挤的时候让来源名折:英文「Winner」「Word-by-Word」被拆成两行会断在词中间。
                     if isChampion {
                         Label(L10n.t("胜者"), systemImage: "crown.fill")
                             .font(.caption.weight(.semibold))
                             .foregroundStyle(.orange)
+                            .fixedSize()
                     }
                     if c.hasWordTiming == true {
                         Text(L10n.t("逐字")).font(.caption2)
+                            .fixedSize()
                             .padding(.horizontal, 5).padding(.vertical, 1)
                             .background(Color.secondary.opacity(0.12), in: Capsule())
                     }
