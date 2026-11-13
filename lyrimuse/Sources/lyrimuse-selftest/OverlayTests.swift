@@ -1142,6 +1142,8 @@ func runOverlayTests() {
         expectEqual(O.range.lowerBound > 0 && O.range.upperBound == 1, true, "文字不透明度: 淡不到看不见,也不超过原样")
         expectEqual([O.percentText(0.4), O.percentText(1), O.percentText(0.35)], ["40%", "100%", "35%"],
                     "文字不透明度: 读数是百分比")
+        expectEqual([O.summaryText(1), O.summaryText(0.999), O.summaryText(0.95), O.summaryText(0.2)], [nil, nil, "95%", "20%"],
+                    "文字不透明度: 编辑台摘要只在不是 100% 时带读数")
 
         let sources = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
         func src(_ rel: String) -> String {
@@ -1154,8 +1156,16 @@ func runOverlayTests() {
         expectEqual(sourceHas(overlay, "s.$overlayTextOpacity.map { OverlayTextOpacity.clamped($0) }.removeDuplicates()\n .sink { [weak self] in self?.textOpacity = $0 },"),
                     true, "文字不透明度接线: 悬浮窗只从这一项设置取,不看文字颜色从哪来")
         let card = sourceBody("private var lyricsCard: some View", in: overlay)
-        expectEqual(sourceHas(card, "lyricsCardContent\n .compositingGroup()\n .opacity(playback.textOpacity)\n .padding(.leading,"),
-                    true, "文字不透明度接线: 先合成再淡,整块文字连描边一起,套在背景之前(跟随封面、自定义、彩虹都吃)")
+        let content = sourceBody("private var lyricsCardContent: some View", in: overlay)
+        expectEqual([sourceHas(card, "lyricsCardContent\n .padding(.leading,"), sourceHas(card, "textOpacity"),
+                     sourceHas(content, "lyricsRows\n .compositingGroup()\n .opacity(playback.textOpacity)\n hintRow\n }")],
+                    [true, false, true], "文字不透明度接线: 歌词各行先合成再淡,连描边一起,套在背景之前(跟随封面、自定义、彩虹都吃)")
+        let lyricsRows = sourceBody("private var lyricsRows: some View", in: overlay)
+        let hintRow = sourceBody("private var hintRow: some View", in: overlay)
+        expectEqual([lyricsRows.isEmpty, sourceHas(lyricsRows, "transientHint"), sourceHas(lyricsRows, "showDragHint"),
+                     sourceHas(hintRow, "overlayController.transientHint"), sourceHas(hintRow, "overlayController.showDragHint"),
+                     sourceHas(hintRow, "opacity(playback.textOpacity")],
+                    [false, false, false, true, true, false], "文字不透明度接线: 操作回声和拖动提示在被淡的那一块外面,调低了照样看得清")
         expectEqual(sourceCount(overlay, "playback.textOpacity"), 1, "文字不透明度接线: 只在卡片内容那一处用,不按颜色来源分支")
         expectEqual(sourceHas(sourceBody("private var overlayBackground", in: overlay), "textOpacity"), false,
                     "文字不透明度接线: 背景不跟着淡")
@@ -1167,6 +1177,9 @@ func runOverlayTests() {
                     [true, false, false], "文字不透明度接线: 滑杆在「颜色」组里常驻,不只在「自定义」颜色下出现")
         expectEqual(sourceHas(rows, "settings.overlayTextOpacity = OverlayTextOpacity.defaultValue"), true,
                     "文字不透明度接线: 「恢复默认文字与配色」带上它")
+        expectEqual(sourceHas(sourceBody("static var color: String", in: rows),
+                              "[text, background, OverlayTextOpacity.summaryText(s.overlayTextOpacity)].compactMap { $0 }.joined(separator: \" · \")"),
+                    true, "文字不透明度接线: 「颜色」按钮摘要末尾接上不是 100% 的读数")
     }
 
     // ---- 副行字号比例:读音 / 译文 / 下一句各占主句多少 ----

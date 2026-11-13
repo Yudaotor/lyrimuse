@@ -1282,10 +1282,7 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
         //
         // 换句动画开着时这份留白不加在卡片外面,由舞台每一格各自带上(`lineChangeRows`):加在外面的话换人唱时舞台跟着横移,
         // 正在淡出的旧句被带着横跳(见 04 章决策 59)。
-        // 文字不透明度整块套在内容上、背景之外:先合成一层再淡,描边剪影不从半透明的字底下透出来(04 章决策 99)。
         lyricsCardContent
-            .compositingGroup()
-            .opacity(playback.textOpacity)
             .padding(.leading, animatesLineChange ? 0 : duetPadding.leading)
             .padding(.trailing, animatesLineChange ? 0 : duetPadding.trailing)
             .padding(.horizontal, OverlayPlayback.cardHorizontalPadding)
@@ -1450,7 +1447,23 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
         playback.scrollRowHeight(translation ? playback.overlayNSFonts.translation : playback.overlayNSFonts.romanization)
     }
 
+    /// 卡片内容:歌词各行在上,操作回声 / 拖动提示在下。
+    ///
+    /// 文字不透明度只套在歌词各行那一块上、背景之外:先合成一层再淡,描边剪影不从半透明的字底下透出来。
+    /// 回声和拖动提示排在被淡的那一块外面,不透明度调低时照样看得清(04 章决策 99)。
     private var lyricsCardContent: some View {
+        VStack(alignment: duetAlignment, spacing: 0) {
+            lyricsRows
+                .compositingGroup()
+                .opacity(playback.textOpacity)
+            hintRow
+        }
+        // 对唱歌词按演唱者分左右。不带标记的歌 duetSide 恒为 .center;「对齐方式」覆盖
+        // 生效时 duetSide 固定成用户选的方向,不带标记的普通歌也跟着一起改对齐。
+        .multilineTextAlignment(duetTextAlignment)
+    }
+
+    private var lyricsRows: some View {
         // 行与行之间的间距由各行自己的 `.padding(.top:)` 给(读音 / 译文 / 下一句各一项,见 OverlayRowSpacing),
         // VStack 自己不加,不然两份叠在一起。
         VStack(alignment: duetAlignment, spacing: 0) {
@@ -1516,36 +1529,37 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
                         .padding(.top, CGFloat(rowSpacing.nextLine))
                 }
             }
-            // 第一次解锁「锁定位置」时短暂弹一次的手势提示,4 秒后自动消失,只弹一次
-            // (见 LyricsOverlayWindowController.hasShownDragHintKey 处的注释)。排在歌词下面,
-            // 只在有内容时出现,不额外占用固定空间。
-            // 同一个位置还兼做全局快捷键的操作回声(见 transientHint):只开桌面悬浮歌词的用户按
-            // 「歌词提前/延后」也要看得到累计值。
-            if let hint = overlayController.transientHint {
-                Text(hint)
-                    .font(.caption)
-                    .foregroundStyle(playback.displayForegroundColor.opacity(0.8))
-                    .lyricsTextStroke(playback.textStrokeEnabled, color: playback.textStrokeColor)
-                    .padding(.top, 4)
-                    .padding(.leading, hintDuetPadding.leading)
-                    .padding(.trailing, hintDuetPadding.trailing)
-                    .transition(.opacity)
-            } else if overlayController.showDragHint {
-                Text(AppSettings.shared.overlayDragNeedsLongPress
-                        ? L10n.t("长按即可拖动位置")
-                        : L10n.t("按住歌词即可拖动位置"))
-                    .font(.caption)
-                    .foregroundStyle(playback.displayForegroundColor.opacity(0.8))
-                    .lyricsTextStroke(playback.textStrokeEnabled, color: playback.textStrokeColor)
-                    .padding(.top, 4)
-                    .padding(.leading, hintDuetPadding.leading)
-                    .padding(.trailing, hintDuetPadding.trailing)
-                    .transition(.opacity)
-            }
         }
-        // 对唱歌词按演唱者分左右。不带标记的歌 duetSide 恒为 .center;「对齐方式」覆盖
-        // 生效时 duetSide 固定成用户选的方向,不带标记的普通歌也跟着一起改对齐。
-        .multilineTextAlignment(duetTextAlignment)
+    }
+
+    @ViewBuilder
+    private var hintRow: some View {
+        // 第一次解锁「锁定位置」时短暂弹一次的手势提示,4 秒后自动消失,只弹一次
+        // (见 LyricsOverlayWindowController.hasShownDragHintKey 处的注释)。排在歌词下面,
+        // 只在有内容时出现,不额外占用固定空间。
+        // 同一个位置还兼做全局快捷键的操作回声(见 transientHint):只开桌面悬浮歌词的用户按
+        // 「歌词提前/延后」也要看得到累计值。
+        if let hint = overlayController.transientHint {
+            Text(hint)
+                .font(.caption)
+                .foregroundStyle(playback.displayForegroundColor.opacity(0.8))
+                .lyricsTextStroke(playback.textStrokeEnabled, color: playback.textStrokeColor)
+                .padding(.top, 4)
+                .padding(.leading, hintDuetPadding.leading)
+                .padding(.trailing, hintDuetPadding.trailing)
+                .transition(.opacity)
+        } else if overlayController.showDragHint {
+            Text(AppSettings.shared.overlayDragNeedsLongPress
+                    ? L10n.t("长按即可拖动位置")
+                    : L10n.t("按住歌词即可拖动位置"))
+                .font(.caption)
+                .foregroundStyle(playback.displayForegroundColor.opacity(0.8))
+                .lyricsTextStroke(playback.textStrokeEnabled, color: playback.textStrokeColor)
+                .padding(.top, 4)
+                .padding(.leading, hintDuetPadding.leading)
+                .padding(.trailing, hintDuetPadding.trailing)
+                .transition(.opacity)
+        }
     }
 
     /// 换句动画开着时卡片里的两格(样子见 04 章决策 52,做法见 04 章决策 54)。读音、译文跟着自己那一句走:第一格是这一句

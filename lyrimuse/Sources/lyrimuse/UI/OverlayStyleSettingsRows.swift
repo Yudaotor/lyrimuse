@@ -918,11 +918,11 @@ enum OverlayStyleSummary {
     ///    同一个字符串",而那个字符串现在也不再是占位符(理由见 `OverlayThemeSettingsRows` 头注)。
     static var theme: String { OverlayThemeSettingsRows.currentThemeLabel }
 
-    /// 「颜色」按钮的摘要:文字色从哪来 + 背景是什么,例「跟随封面 · 透明」。
+    /// 「颜色」按钮的摘要:文字色从哪来 + 背景是什么,文字不透明度不是 100% 时再接上读数,例「跟随封面 · 透明 · 40%」。
     static var color: String {
         let s = AppSettings.shared
         let text = s.overlayRainbow ? L10n.t("彩虹") : (s.followsCoverArt ? L10n.t("跟随封面") : L10n.t("自定义颜色"))
-        return "\(text) · \(background)"
+        return [text, background, OverlayTextOpacity.summaryText(s.overlayTextOpacity)].compactMap { $0 }.joined(separator: " · ")
     }
 
     /// 例:「毛玻璃」/「纯色」/「透明」。报的是**背景当前是什么材质**,不是颜色值本身 ——
