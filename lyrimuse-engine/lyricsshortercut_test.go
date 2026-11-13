@@ -73,20 +73,20 @@ func TestManualRematchSearchesAtTheLongerRecordedDuration(t *testing.T) {
 		{"差在 12% 以内", 250, 241},
 	} {
 		t.Run(c.name, func(t *testing.T) {
-			setupRescoreTest(t, []string{"musixmatch"}, nil)
+			setupRescoreTest(t, []string{"deezer"}, nil)
 			var mu sync.Mutex
 			var searched float64
-			stub := musixmatchResolve
-			musixmatchResolve = func(ctx context.Context, artist, title string, d float64, trLang, isrc string) musixmatchResult {
+			stub := deezerResolve
+			deezerResolve = func(ctx context.Context, artist, title, album string, d float64, isrc string) deezerResult {
 				mu.Lock()
 				searched = d
 				mu.Unlock()
-				return stub(ctx, artist, title, d, trLang, isrc)
+				return stub(ctx, artist, title, album, d, isrc)
 			}
 			key := enrichKey(rescoreTestArtist, "Longer Cut", "Some Album")
 			enrichMu.Lock()
 			enrichCache = map[string]enrichEntry{key: {
-				Lyrics: bt("[00:05.00]Old line"), LyricsSource: "musixmatch", LyricsScoringVersion: lyricsScoringVersion - 1,
+				Lyrics: bt("[00:05.00]Old line"), LyricsSource: "deezer", LyricsScoringVersion: lyricsScoringVersion - 1,
 				ResolvedDurationSecs: 241, DurationSecs: c.recorded,
 			}}
 			enrichMu.Unlock()
@@ -116,17 +116,17 @@ func TestRescoreDoesNotShieldLyricsChosenForAShorterCut(t *testing.T) {
 		{"留下逐字那份时不改记选词时长", 401.7, 401.7, "[5000,1000](5000,1000,0)Old", false, 241},
 	} {
 		t.Run(c.name, func(t *testing.T) {
-			setupRescoreTest(t, []string{"musixmatch"}, nil)
-			stub := musixmatchResolve
-			musixmatchResolve = func(ctx context.Context, artist, title string, d float64, trLang, isrc string) musixmatchResult {
-				r := stub(ctx, artist, title, d, trLang, isrc)
+			setupRescoreTest(t, []string{"deezer"}, nil)
+			stub := deezerResolve
+			deezerResolve = func(ctx context.Context, artist, title, album string, d float64, isrc string) deezerResult {
+				r := stub(ctx, artist, title, album, d, isrc)
 				r.durationSecs = c.playing
 				return r
 			}
 			key := enrichKey(rescoreTestArtist, "Shorter Cut", "Some Album")
 			enrichMu.Lock()
 			enrichCache = map[string]enrichEntry{key: {
-				Lyrics: bt(old), LyricsYRC: bt(c.yrc), LyricsSource: "musixmatch", LyricsScore: 5000,
+				Lyrics: bt(old), LyricsYRC: bt(c.yrc), LyricsSource: "deezer", LyricsScore: 5000,
 				LyricsScoringVersion: lyricsScoringVersion, LyricsScoringRevision: lyricsScoringRevision,
 				ResolvedDurationSecs: 241, DurationSecs: c.recorded,
 			}}
@@ -147,17 +147,17 @@ func TestRescoreDoesNotShieldLyricsChosenForAShorterCut(t *testing.T) {
 // 这一轮的,lyricsOutrunPlayback 以后还认得出它。
 func TestRescoreKeepsOutrunMarkWhenKeepingWordTiming(t *testing.T) {
 	const old = "[00:05.00]Old line one\n[05:30.00]Old line two"
-	setupRescoreTest(t, []string{"musixmatch"}, nil)
-	stub := musixmatchResolve
-	musixmatchResolve = func(ctx context.Context, artist, title string, d float64, trLang, isrc string) musixmatchResult {
-		r := stub(ctx, artist, title, d, trLang, isrc)
+	setupRescoreTest(t, []string{"deezer"}, nil)
+	stub := deezerResolve
+	deezerResolve = func(ctx context.Context, artist, title, album string, d float64, isrc string) deezerResult {
+		r := stub(ctx, artist, title, album, d, isrc)
 		r.durationSecs = 308
 		return r
 	}
 	key := enrichKey(rescoreTestArtist, "Outrun Cut", "Some Album")
 	enrichMu.Lock()
 	enrichCache = map[string]enrichEntry{key: {
-		Lyrics: bt(old), LyricsYRC: bt("[5000,1000](5000,1000,0)Old"), LyricsSource: "musixmatch", LyricsScore: 5000,
+		Lyrics: bt(old), LyricsYRC: bt("[5000,1000](5000,1000,0)Old"), LyricsSource: "deezer", LyricsScore: 5000,
 		LyricsScoringVersion: lyricsScoringVersion, LyricsScoringRevision: lyricsScoringRevision,
 		ResolvedDurationSecs: 337.7, DurationSecs: 308,
 	}}

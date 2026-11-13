@@ -39,7 +39,6 @@
       "lrclib": true,
       "lyricfind": true,
       "migu": true,
-      "musixmatch": true,
       "netease": true,
       "petitlyrics": true,
       "qq": true,
@@ -51,7 +50,6 @@
       "kugou",
       "netease",
       "qq",
-      "musixmatch",
       "lrclib",
       "amll",
       "lyricfind",
@@ -93,10 +91,9 @@
     },
     "lyricfind": {},
     "migu": {},
-    "musixmatch": {},
     "netease": {
       "netease": {
-        "cover": "https://p1.music.126.net/8_7syf_bg96G3_cOERiBkQ==/109951165630031309.jpg?imageView\u0026thumbnail=3000y3000\u0026type=jpg\u0026quality=90",
+        "cover": "https://p1.music.126.net/8_7syf_bg96G3_cOERiBkQ==/109951165630031309.jpg?imageView&thumbnail=3000y3000&type=jpg&quality=90",
         "song_url": "https://music.163.com/song?id=1812095738",
         "duration_secs": 201.024,
         "artist": "Treaty Oak Revival",

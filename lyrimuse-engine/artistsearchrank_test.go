@@ -80,7 +80,7 @@ func TestArtistSearchRankCutoffRejectsCatalogCollision(t *testing.T) {
 	}
 
 	// 改动后:只有前 5 名够格,而前 5 名里一条都落不进 2s 容差 → 整体弃权。
-	// 弃权是**正确**结果:上层还有 musixmatch 那条按本地标题搜到的正确候选兜着。
+	// 弃权是**正确**结果:上层还有别的源按本地标题搜到的正确候选兜着。
 	if got, _, ok := bestAlbumTrackByDurationDetailed(
 		topSearchRanked(all, retryTitleFromArtistSearchMaxRank), localDuration); ok {
 		t.Fatalf("名次截断后应当弃权,实际选出了 %q", got)

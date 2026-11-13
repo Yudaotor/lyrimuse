@@ -139,7 +139,7 @@ All’interno di Lyrimuse, i conteggi degli ascolti, le classifiche e i numeri �
 ## 7. Domande frequenti
 
 **Posso usare Lyrimuse senza fare scrobble?**
-Sì, è l’impostazione predefinita: non viene scrobblato nulla finché non colleghi un account Last.fm in Impostazioni → Servizi collegati. La ricerca di testi e illustrazioni è una cosa separata: invia il nome dell’artista e del brano ai fornitori pubblici di testi (Netease, QQ, Kugou, LRCLIB, Musixmatch, AMLL) che un account sia collegato o no. Queste fonti si possono limitare o disattivare in Impostazioni.
+Sì, è l’impostazione predefinita: non viene scrobblato nulla finché non colleghi un account Last.fm in Impostazioni → Servizi collegati. La ricerca di testi e illustrazioni è una cosa separata: invia il nome dell’artista e del brano ai fornitori pubblici di testi (Netease, QQ, Kugou, LRCLIB, AMLL) che un account sia collegato o no. Queste fonti si possono limitare o disattivare in Impostazioni.
 
 **Perché lo stesso artista compare due volte nel mio profilo Last.fm?**
 Il tuo player ha riportato due nomi diversi, ed entrambi sono stati inviati come riportati. Lyrimuse li unisce nelle sue statistiche; per unirli su Last.fm bisogna modificare lì gli scrobble.

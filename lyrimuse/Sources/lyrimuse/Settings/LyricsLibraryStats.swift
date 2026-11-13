@@ -24,7 +24,7 @@ enum LyricsLibraryStats {
     struct Counts: Equatable, Codable {
         var total = 0
         var byKind: [String: Int] = [:]
-        /// 歌词源自带的社区译文(网易云 / Musixmatch)。
+        /// 歌词源自带的社区译文(网易云等)。
         var communityTranslation = 0
         /// 引擎机翻补的译文(端上 Apple 翻译 helper,或网络兜底 Google / MyMemory)。
         var machineTranslation = 0

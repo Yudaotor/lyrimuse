@@ -74,7 +74,7 @@ func writtenInCJKScript(lyrics string) bool {
 
 // needsRomanizationRetry 判断"要不要为了拿罗马音/语种信号,多试几个艺人名变体"。
 //
-// 存在的理由:本地标签往往是罗马化艺名(側田 → "Justin Lo"),用它搜时 musixmatch+lrclib
+// 存在的理由:本地标签往往是罗马化艺名(側田 → "Justin Lo"),用它搜时 lrclib
 // 这类源就已经凑够 targetSources 的门槛,"首歌手变体轮"根本不会触发 —— 而这类歌真正需要的
 // 是让 QQ/酷狗(全仓库唯一会上报 Language 字段、间接触发粤语粤拼自动生成
 // maybeGenerateJyutpingRoma 的两个源)用本名再搜一次。
@@ -208,7 +208,7 @@ type enrichEntry struct {
 	// 字段更新触发的)重新落盘时不被悄悄丢掉 —— json.Marshal 只认结构体里声明过的字段,
 	// 不声明就等于每次 Go 重新序列化都会把 Swift 刚写进去的这份纯文本冲掉。
 	PlainLyrics bodyText `json:"plain_lyrics,omitzero"`
-	// PlainLyricsSource:PlainLyrics 来自哪个源(lrclib 与 musixmatch 会给,见
+	// PlainLyricsSource:PlainLyrics 来自哪个源(lrclib 等会给,见
 	// lrclibResult.plainOnly 头注)。写入方是 Swift 侧的 EnrichCacheStore.savePlainTextEdit,
 	// 这里声明只为直通保留,理由同上。
 	PlainLyricsSource string `json:"plain_lyrics_source,omitempty"`
@@ -230,12 +230,6 @@ type enrichEntry struct {
 	// 完整歌词窗口末尾显示成「创作者：…」。它描述的是这首歌、不是哪一份歌词:取自这一轮全部候选、不跟着胜出源走,
 	// 换源、手改正文都不清它;一轮里没有哪个源给出名单时保留原值。
 	LyricsSongwriters []string `json:"lyrics_songwriters,omitempty"`
-	// LyricsSpeakers:当前正文每一行是谁唱的(Musixmatch 的演唱者标注换算过来,见 lyricspeakers.go),绑着正文指纹,
-	// App 核对过才补成对唱标记。正文自带演唱者标记的条目没有它。不在正文小文件里。
-	LyricsSpeakers *lyricSpeakers `json:"lyrics_speakers,omitempty"`
-	// LyricsSpeakersChecked:这条按哪一版演唱者标注(lyricsSpeakersVersion)问过 Musixmatch。0 = 还没有,符合条件的
-	// 条目播放到时补问一次(speakersbackfill.go)。
-	LyricsSpeakersChecked int `json:"lyrics_speakers_checked,omitempty"`
 	// PlayerLyrics:按播放器(bundle id)记的「在它里面放时改用它自家平台那份」,绑着主歌词指纹(见 playerlyrics.go)。
 	// 不在正文小文件里。
 	PlayerLyrics map[string]playerLyricsAlt `json:"player_lyrics,omitempty"`
@@ -364,14 +358,14 @@ type enrichEntry struct {
 	// 解析这条时用的曲目真实时长(秒)。给"歌词管理"的手动搜索用:打分里时长匹配那一档权重很重,手动搜索浏览的是
 	// 任意历史缓存条目、拿不到时长,传 0 的话弹窗里的排名跟当初真正做决定用的那组分数对不上。
 	DurationSecs float64 `json:"duration_secs,omitempty"`
-	// LyricsTrSource 记录 lyrics_tr 是哪来的:空 = 歌词源自带的社区翻译(网易云/Musixmatch),
+	// LyricsTrSource 记录 lyrics_tr 是哪来的:空 = 歌词源自带的社区翻译(网易云等),
 	// "machine" = translate.go 机翻补的,"borrowed:<源>" = 从那个源的候选借来的社区翻译(borrowtranslation.go)。UI 据此如实标注,不让机翻冒充社区翻译 —— 跟页脚
 	// "歌词来自 XX" 是同一个原则。老条目没有这个字段,读成空 = 社区翻译,正是事实。
 	LyricsTrSource string `json:"lyrics_tr_source,omitempty"`
 	// LyricsTrLang 是 lyrics_tr 实际所用的语言(ISO 639-1,可带地区)。
 	//
 	// 存它是因为**译文的语言未必是用户当前想要的那个**:网易云的社区译文永远是中文,
-	// Musixmatch 的是抓取当时设置里的那个语言,机翻的是当时的目标语言 —— 三者都可能跟
+	// AMLL 的是它自己标的语言,机翻的是当时的目标语言 —— 三者都可能跟
 	// 现在的设置对不上。没有这个字段就只能"有译文就当数",于是设成日语的用户拿到一首
 	// 网易云歌词时,永远只会看到那份中文社区译文(见 needsTranslationBackfill)。
 	//
@@ -1176,10 +1170,6 @@ func trackEnrichment(artist, title, album, bundleID string, durationSecs float64
 			// 存量 amll / applemusic 条目补背景人声,只重取那一个源、不动正文(见 bgbackfill.go)。
 			enrichInflight[key] = true
 			go backfillBackgroundVocals(key, artist, title, album, durationSecs)
-		} else if needsLyricSpeakersBackfill(e, artist, title) && !enrichInflight[key] && speakersBackfillOnce(key) {
-			// 存量条目补演唱者标注,只问一次 Musixmatch、不动正文(见 speakersbackfill.go)。
-			enrichInflight[key] = true
-			go backfillLyricSpeakers(key, artist, title, album, durationSecs)
 		} else if needsLyricsKanaBackfill(e) && !enrichInflight[key] && kanaBackfillOnce(key, e) {
 			// 日文歌补借假名标注、让生成的罗马音用上它,不动正文(见 kanabackfill.go)。
 			enrichInflight[key] = true
@@ -2059,12 +2049,10 @@ func needsLyricsRetry(e enrichEntry, wrongDuration, pinned, autoUpgrade bool) bo
 	// 就是结论(它只有逐行,输给逐字源是常态),走这条会让每首用 KKBOX 放的歌都白白全源重搜到次数上限。它什么时候值得
 	// 重来一次由 kkboxLyricsWorthRecheck 管。lyricfind 在条目记下按 videoId 问过它(LyricsNativeVideoID)之后同理:那一轮
 	// 已经带着同源加权比过,再搜结论不变;什么时候值得再按 videoId 问一次由 kasetLyricsWorthRecheck 管。
-	// musixmatch(Spotify 的自家源)同样不走:只有按 Spotify 曲目 ID 认出的那条带同源加权,按歌名搜到的落选了再搜还是落选,
-	// 缓存里用 Spotify 放过的歌会一首首白白重搜到次数上限。
 	nativeMissedOut := hasNativeLyricSource() && !isNativeLyricSource(e.LyricsSource) &&
 		slices.ContainsFunc(e.LyricsSourcesSeen, func(s string) bool {
 			return isNativeLyricSource(s) && s != kkboxLocalLyricsSource && s != amazonLocalLyricsSource &&
-				s != localFileLyricsSource && s != lxMusicLocalLyricsSource && s != lyricSourceMusixmatch &&
+				s != localFileLyricsSource && s != lxMusicLocalLyricsSource &&
 				(s != lyricSourceLyricFind || e.LyricsNativeVideoID == "")
 		})
 	// 版本时长对不上(预取用了另一个版本的时长做校验)跟"同源落选"一样,本身就是重来
@@ -2435,7 +2423,6 @@ func retryLyricsUpgradeWith(ctx context.Context, key, artist, title, album strin
 		log.Printf("lyrics: %s  %s gained a translation from %s", key, e.LyricsSource, strings.TrimPrefix(e.LyricsTrSource, lyricsTrSourceBorrowedPrefix))
 		lyricsChanged = true
 	}
-	refreshSpeakers(&e, scored)
 	refreshKana(&e, scored)
 	if rematchClearsInstrumental(opts.manual, before, e) {
 		e.Instrumental = false
@@ -2480,7 +2467,7 @@ func plainTextFallbackFromScored(scored []scoredLyricCandidateResult) (lyrics, s
 // 歌词还标纯音乐是自相矛盾。
 //
 // 两级,顺序不能反:
-//  1. scored 里搭车带来的联网信号(lrclib / 网易云 / QQ / Musixmatch),这是主力。
+//  1. scored 里搭车带来的联网信号(lrclib / 网易云 / QQ),这是主力。
 //  2. 都没有时,才问汽水客户端的本地队列缓存(sodalocal.go)。
 //
 // 第 2 级在最后是因为它只覆盖汽水队列缓存里的歌,比四个联网源窄得多。反过来,它命中时
@@ -2913,7 +2900,6 @@ func rescoreLyricsWith(ctx context.Context, key, artist, title, album string, du
 		log.Printf("lyrics: %s  %s gained a translation from %s", key, e.LyricsSource, strings.TrimPrefix(e.LyricsTrSource, lyricsTrSourceBorrowedPrefix))
 		lyricsChanged = true
 	}
-	refreshSpeakers(&e, scored)
 	refreshKana(&e, scored)
 	if rematchClearsInstrumental(opts.manual, before, e) {
 		e.Instrumental = false
@@ -3782,8 +3768,8 @@ func resolveTrackEnrichment(ctx context.Context, artist, title, album string, du
 	// 用户在设置里关掉网易云歌词源时这一路**不查**(「没启用肯定就不查」压过下面那句
 	// "基础展示信息无条件"):封面落到第②级 Apple Music,网易云链接留空,
 	// needsPeripheralBackfill 对此不算缺项。下面几段注释里的"无条件"都以此为前提。
-	// 开着歌词功能时,这次网易云查询在 scoredLyricCandidates 内部,跟 qq/酷狗/Musixmatch/
-	// LRCLIB 四个源一起并发发出去 —— 别改回"本函数先同步查一遍、查完那四个才开始跑",那等于
+	// 开着歌词功能时,这次网易云查询在 scoredLyricCandidates 内部,跟 qq/酷狗/
+	// LRCLIB 等源一起并发发出去 —— 别改回"本函数先同步查一遍、查完那四个才开始跑",那等于
 	// 把网易云自己最坏能到小三十秒的串行耗时原样叠加在整体等待时间最前面。只有歌词功能关掉、
 	// 根本不需要凑齐各个歌词源时,才单独查这一次。
 	var ne neteaseInfo
@@ -4434,8 +4420,6 @@ type scoredLyricCandidateResult struct {
 	// Songwriters:词曲作者名单(amll / applemusic 的 TTML,deezer 的 Lyrics.writers)。不参与打分,
 	// 只用来写条目的 lyrics_songwriters(songwritersFromScored)。
 	Songwriters []string `json:"songwriters,omitempty"`
-	// Performers:演唱者标注(只有 musixmatch 给)。不参与打分,只用来写条目的 lyrics_speakers(speakersFromScored)。
-	Performers []musixmatchPerformerSpan `json:"-"`
 	// Language:源自己上报的语种(songLanguageMandarin/songLanguageCantonese/空),
 	// 透传,不参与打分,见 lyricCandidate.language。
 	Language string `json:"language,omitempty"`
@@ -4507,7 +4491,7 @@ type scoredLyricCandidateResult struct {
 
 // lyricSearchDeadline 给 fetchScoredLyricCandidatesStreaming 整体加一个上限。各源的 HTTP client 都有自己的超时
 // (4~10 秒不等),但单个源内部可能串行链好几次请求才死心(网易云最多试 4 个搜索变体 + 详情 + 歌词,最坏能吃掉小
-// 三十秒;Musixmatch token 过期后重新申请若被限流会 sleep 10 秒再试),极端情况下一轮能卡到快一分钟。20 秒给足了
+// 三十秒),极端情况下一轮能卡到快一分钟。20 秒给足了
 // 每个源独立超时的空间,到点还没回来的源这一轮就不参与候选。
 //
 // 迟到的结果不会被用上:缓存没有 TTL、歌词解析一次就永久保留,缓存命中直接返回存好的那条。所以这道截止线有代价:
@@ -4930,7 +4914,7 @@ func scoredLyricCandidatesStreaming(ctx context.Context, artist, title, album st
 	}
 	// 还缺着的源换一种曲名写法再问一次,见 titleVariantRound。
 	ne, results = titleVariantRound(ctx, artist, title, album, durationSecs, ne, results, onUpdate)
-	// 按 ISRC 补取:还缺着的 deezer / musixmatch 拿已被认可的 Apple Music 候选报的 ISRC 直取,见 isrcretry.go。
+	// 按 ISRC 补取:还缺着的 deezer 拿已被认可的 Apple Music 候选报的 ISRC 直取,见 isrcretry.go。
 	// 放在所有轮次之后:别名轮可能才让 Apple Music 查到这首(曲库里署名跟本地不同)。
 	if isrc, sources := isrcRetryPlan(ctx, results, durationSecs); isrc != "" {
 		// 补来的候选正文要跟前面几轮已认可的对得上才并进来,中途推给界面的结果同样先筛,见 isrcRetryReference。
@@ -4975,7 +4959,7 @@ func hasUsableLyricCandidate(scored []scoredLyricCandidateResult) bool {
 
 // lyricSourcesWorthAliasRetry:这一轮**值得**拿别名再查一次的源 —— 启用、没给出可用候选、
 // 而且失败原因不是"换个名字也没用"的那几类:传输层连不上(DNS / 连接 / 5xx,sourcebreaker 的
-// transportFailureCodes,进程内累计)、lyricfind 的地区限制、Musixmatch 的限流 / 直连被堵
+// transportFailureCodes,进程内累计)、lyricfind 的地区限制
 // (各自的 xxxLastFailureReasonNow 旁路)。amll 不发搜索请求(按曲目 ID 直取,按名字只在本地索引里找),
 // 它在别名轮里会跟着网易云 / QQ 的别名结果拿到新 ID,所以照常算进来
 // —— 网易云 / QQ 不在名单里时由 dropAMLLWithoutIDSource 剔掉。
@@ -5013,10 +4997,6 @@ func lyricSourcesWorthRetry(ctx context.Context, scored []scoredLyricCandidateRe
 		switch s {
 		case "lyricfind":
 			if ytmusicLastFailureReasonNow() != "" {
-				continue
-			}
-		case "musixmatch":
-			if musixmatchLastFailureReasonNow() != "" {
 				continue
 			}
 		case "deezer":
@@ -5318,14 +5298,14 @@ func keepShownRoundUpdate(onUpdate lyricSearchUpdateFunc, base []scoredLyricCand
 
 // lyricSourceNames 是全部歌词源的名字,每个源一个并发 goroutine。顺序只决定「有歌没词」标记、日志和设置项里的源序;
 // 同分候选谁赢看 lyricCandidateTieOrder,不看这里。
-var lyricSourceNames = []string{"netease", "qq", "kugou", "lrclib", "musixmatch", "amll", "lyricfind", "kuwo", "migu", "deezer", "applemusic", "soda", "vibe", "genie", "petitlyrics"}
+var lyricSourceNames = []string{"netease", "qq", "kugou", "lrclib", "amll", "lyricfind", "kuwo", "migu", "deezer", "applemusic", "soda", "vibe", "genie", "petitlyrics"}
 
 // lyricCandidateTieOrder:同分候选按这个源序决胜,就是 rankLyricSourceResults 构造候选的顺序(本机几家的歌词夹在
 // 汽水和 AMLL 之间)。合并几轮结果的 mergeLyricCandidateRounds 按它重建顺序,两边才是同一个口径:不然同一首歌走没走
-// 补查轮,同分时会在 musixmatch / lrclib、applemusic / amll 之间换源。rankLyricSourceResults 里加了源、挪了顺序,这里
+// 补查轮,同分时会在 lrclib / lyricfind、applemusic / amll 之间换源。rankLyricSourceResults 里加了源、挪了顺序,这里
 // 跟着改(lyrictieorder_test.go 用源码扫描钉着两边一致)。
 var lyricCandidateTieOrder = []string{
-	"netease", "qq", "kugou", "musixmatch", "lrclib", "lyricfind", "kuwo", "migu", "deezer", "applemusic", "soda", "vibe", "genie", "petitlyrics",
+	"netease", "qq", "kugou", "lrclib", "lyricfind", "kuwo", "migu", "deezer", "applemusic", "soda", "vibe", "genie", "petitlyrics",
 	kkboxLocalLyricsSource, amazonLocalLyricsSource, lxMusicLocalLyricsSource, localFileLyricsSource, importLyricsSource,
 	spotifyLocalLyricsSource,
 	"amll",
@@ -5368,19 +5348,15 @@ type lyricSourceResult struct {
 	// songwriters:词曲作者名单(applemusicResult.songwriters / deezerResult.songwriters)。applemusic 与 deezer 走这里,
 	// amll 的在 amll.songwriters。
 	songwriters []string
-	// performers:演唱者标注(musixmatchResult.performers),只有 musixmatch 走这里。
-	performers []musixmatchPerformerSpan
 	// trackFoundNoLyrics:"这个源的曲库里有这首歌,但平台上没有歌词文本"这个**明确结论**
 	//。目前 netease/qq 两路会给(经各自的 neteaseInfo.TrackFoundNoLyrics /
 	// qqLyricResult.trackFoundNoLyrics,判据和边界见那两处头注)。跟 instrumental 是并列
 	// 而非重叠的两个结论,互斥由各源自己的判据保证。
 	trackFoundNoLyrics bool
-	// instrumental:"这首歌是纯音乐"这个**明确结论**。四个源会给:lrclib 的结构化字段、
-	// 网易云的 pureMusic/占位正文、QQ 的占位正文(见 qqLyricResult)、musixmatch 每行都带的
-	// instrumental 字段(见 pickMusixmatchTrackRow 第三趟)。
+	// instrumental:"这首歌是纯音乐"这个**明确结论**。lrclib 的结构化字段、
+	// 网易云的 pureMusic/占位正文、QQ 的占位正文(见 qqLyricResult)会给。
 	instrumental bool
-	// plainOnly:lrclib / musixmatch / deezer / applemusic / migu / qq / lyricfind 会给(musixmatch 见
-	// resolveMusixmatchLyric 里的纯文本回退;网易云的纯文本在 ne.PlainLyrics)——语义见 lrclibResult.plainOnly 头注。
+	// plainOnly:lrclib / deezer / applemusic / migu / qq / lyricfind 会给(网易云的纯文本在 ne.PlainLyrics)——语义见 lrclibResult.plainOnly 头注。
 	plainOnly bool
 	// amll:amll-ttml-db 那一档的三件套(见 amllttml.go)。它跟别的源不同,一次就带回
 	// 整行+逐字+译文,所以单独放一个结构而不是复用上面的 lyr/yrc/tr。
@@ -5428,7 +5404,7 @@ func rankLyricSourceResults(artist, title, album string, durationSecs float64, r
 	raw = splitWordTimedSourceLyrics(raw)
 	raw = dropOtherVersionInstrumentalClaims(title, album, raw)
 	ne := raw["netease"].ne
-	qq, kugou, lrclib, mx, lf, kuwo := raw["qq"], raw["kugou"], raw["lrclib"], raw["musixmatch"], raw["lyricfind"], raw["kuwo"]
+	qq, kugou, lrclib, lf, kuwo := raw["qq"], raw["kugou"], raw["lrclib"], raw["lyricfind"], raw["kuwo"]
 	qqLyr, qqYRC, qqTr, qqRoma, qqTitle, qqArtist, qqAlbum, qqCover, qqDur, qqLang := qq.lyr, qq.yrc, qq.tr, qq.roma, qq.matchTitle, qq.matchArtist, qq.matchAlbum, qq.matchCover, qq.srcDur, qq.language
 	qqInstrumental := qq.instrumental
 	qqPlainOnly := qq.plainOnly
@@ -5437,9 +5413,6 @@ func rankLyricSourceResults(artist, title, album string, durationSecs float64, r
 	lrclibInstrumental := lrclib.instrumental
 	lrclibPlainOnly := lrclib.plainOnly
 	lrclibYRC, lrclibRoma := lrclib.yrc, lrclib.roma
-	mxLyr, mxYRC, mxTr, mxRoma, mxTitle, mxArtist, mxAlbum, mxCover, mxDur := mx.lyr, mx.yrc, mx.tr, mx.roma, mx.matchTitle, mx.matchArtist, mx.matchAlbum, mx.matchCover, mx.srcDur
-	mxPlainOnly := mx.plainOnly
-	mxInstrumental := mx.instrumental
 	lfLyr, lfTitle, lfArtist, lfAlbum, lfCover, lfDur, lfPlainOnly := lf.lyr, lf.matchTitle, lf.matchArtist, lf.matchAlbum, lf.matchCover, lf.srcDur, lf.plainOnly
 	kuwoLyr, kuwoYRC, kuwoTitle, kuwoArtist, kuwoAlbum, kuwoCover, kuwoDur := kuwo.lyr, kuwo.yrc, kuwo.matchTitle, kuwo.matchArtist, kuwo.matchAlbum, kuwo.matchCover, kuwo.srcDur
 	migu := raw["migu"]
@@ -5472,13 +5445,12 @@ func rankLyricSourceResults(artist, title, album string, durationSecs float64, r
 	// 分辨"这条是哪个版本"的,套上一张别人的图反而像是对上了;所有没带封面的候选还会套成同一张,毫无区分度。
 	// 烘进正文的逐行中文译文(bakedtranslation.go):候选装配**之前**摘出来——共识、行数、
 	// 逐字覆盖率全都读正文,晚了就都是按"一半是中文"的正文算的。译文轨本来就是中文语义的源
-	// (netease/qq/kugou)接上摘出来的译文;musixmatch/amll 的译文语言跟设置走,只摘不接。
+	// (netease/qq/kugou)接上摘出来的译文;lrclib/lyricfind/amll 只摘不接。
 	foreignSong := !containsHan(artist) && !containsHan(title)
 	bakedLines := map[string]int{}
 	ne.Lyrics, ne.Trans, ne.YRC, bakedLines["netease"] = adoptBakedTranslation(ne.Lyrics, ne.Trans, ne.YRC, foreignSong, true)
 	qqLyr, qqTr, qqYRC, bakedLines["qq"] = adoptBakedTranslation(qqLyr, qqTr, qqYRC, foreignSong, true)
 	kugouLyr, kugouTr, kugouYRC, bakedLines["kugou"] = adoptBakedTranslation(kugouLyr, kugouTr, kugouYRC, foreignSong, true)
-	mxLyr, _, mxYRC, bakedLines["musixmatch"] = adoptBakedTranslation(mxLyr, "", mxYRC, foreignSong, false)
 	lrclibLyr, _, lrclibYRC, bakedLines["lrclib"] = adoptBakedTranslation(lrclibLyr, "", lrclibYRC, foreignSong, false)
 	lfLyr, _, _, bakedLines["lyricfind"] = adoptBakedTranslation(lfLyr, "", "", foreignSong, false)
 	// 酷我对外文歌**系统性**地把中文译文烘在正文里(金标 ko-fallen-angel / latin-purple-rain 里的酷我候选
@@ -5516,10 +5488,6 @@ func rankLyricSourceResults(artist, title, album string, durationSecs float64, r
 		kugouUsableTr, kugouUsableRoma := usableValueAdd(kugouLyr, kugouTr, "zh", kugouRoma, features().LyricsTranslationLanguage)
 		candidates = append(candidates, lyricCandidate{source: "kugou", lyrics: kugouLyr, wordTimingYRC: usableYRC(kugouLyr, kugouYRC), hasWordTiming: usableWordTiming(kugouLyr, kugouYRC), hasUsableTranslation: kugouUsableTr, hasUsableRomanization: kugouUsableRoma, sourceReportedDurationSecs: kugouDur, title: kugouTitle, artist: kugouArtist, album: kugouAlbum, cover: kugouCover, language: kugouLang, identityFromLocalClient: kugou.identityFromLocalClient})
 	}
-	if mxLyr != "" {
-		mxUsableTr, mxUsableRoma := usableValueAdd(mxLyr, mxTr, features().LyricsTranslationLanguage, mxRoma, features().LyricsTranslationLanguage)
-		candidates = append(candidates, lyricCandidate{source: "musixmatch", lyrics: mxLyr, wordTimingYRC: usableYRC(mxLyr, mxYRC), hasWordTiming: usableWordTiming(mxLyr, mxYRC), hasUsableTranslation: mxUsableTr, hasUsableRomanization: mxUsableRoma, sourceReportedDurationSecs: mxDur, title: mxTitle, artist: mxArtist, album: mxAlbum, cover: mxCover, plainTextOnly: mxPlainOnly, identityFromLocalClient: mx.identityFromLocalClient})
-	}
 	if lrclibLyr != "" {
 		// 罗马音来自 lyricsfile 的音译(lyricsfile.go),可用性跟别的源同一道 usableValueAdd;没有译文。
 		_, lrclibUsableRoma := usableValueAdd(lrclibLyr, "", "", lrclibRoma, features().LyricsTranslationLanguage)
@@ -5549,7 +5517,7 @@ func rankLyricSourceResults(artist, title, album string, durationSecs float64, r
 		// 逐行正文 + 可选的逐字轨 + 可选的译文(语言跟译文语言设置走),没有罗马音;封面用搜索
 		// 结果自带的 album.cover_xl,时长用 Deezer 自报的 duration(见 deezer.go 头注)。逐字走
 		// usableYRC / usableWordTiming,译文走 usableValueAdd,口径同别的源。plainOnly 直通打分层
-		// 那道恒 -1 的闸(match.go 的 scoreRejectPlainTextOnly),口径与 lrclib/musixmatch 的纯文本回退一致。
+		// 那道恒 -1 的闸(match.go 的 scoreRejectPlainTextOnly),口径与 lrclib 的纯文本回退一致。
 		dzUsableTr, _ := usableValueAdd(dzLyr, dzTr, features().LyricsTranslationLanguage, "", features().LyricsTranslationLanguage)
 		candidates = append(candidates, lyricCandidate{source: "deezer", lyrics: dzLyr, wordTimingYRC: usableYRC(dzLyr, dzYRC), hasWordTiming: usableWordTiming(dzLyr, dzYRC), hasUsableTranslation: dzUsableTr, sourceReportedDurationSecs: dzDur, title: dzTitle, artist: dzArtist, album: dzAlbum, cover: dzCover, plainTextOnly: dzPlainOnly, isrc: dz.isrc})
 	}
@@ -5666,7 +5634,7 @@ func rankLyricSourceResults(artist, title, album string, durationSecs float64, r
 		})
 	}
 	if spl.lyr != "" {
-		// Spotify 本地歌词(Spotify 自己拉过的那份,逐行,多是 Musixmatch 供词,见 spotifylyrics.go)。Spotify 没有配同源
+		// Spotify 本地歌词(Spotify 自己拉过的那份,逐行,见 spotifylyrics.go)。Spotify 没有配同源
 		// 歌词,不置 identityFromLocalClient,跟各源公平打分。
 		candidates = append(candidates, lyricCandidate{
 			source: spotifyLocalLyricsSource, lyrics: spl.lyr,
@@ -5733,19 +5701,6 @@ func rankLyricSourceResults(artist, title, album string, durationSecs float64, r
 		// (封面/单曲链接都给了)、歌词接口也明确回了 pureMusic=true。lrclib 优先只是因为
 		// 它的标记是结构化字段、语义最干净。
 		instrumentalMarker = &scoredLyricCandidateResult{Source: "netease", Score: -1, Instrumental: true}
-	} else if mxLyr == "" && mxInstrumental {
-		// Musixmatch 那一路。它的 instrumental 也是结构化字段(track.search 每一行都带),
-		// 干净程度跟 lrclib 一档 —— 排在最后只是因为最新、样本最少,而排序只决定"界面上说是
-		// 谁判的",不影响结论本身。
-		//
-		// 覆盖面上它补的是**西方器乐**这一块:Explosions In The Sky《Your Hand In Mine》
-		// (post-rock 器乐)五行候选全是 instrumental=1,而这类曲目 lrclib 往往没收、网易云/QQ
-		// 也不一定匹配得上。Musixmatch 本来就是各源里西方曲库覆盖最好的那个(见 doh.go 头注)。
-		//
-		// 能走到这里有个前提:musixmatch.go 的 pickMusixmatchTrackRow 有第三趟。纯音乐行在
-		// Musixmatch 上是 has_subtitles=0 且 has_lyrics=0,前两趟的闸门按定义会把它们全筛掉 ——
-		// 没有第三趟,这个分支永远不会被触发。
-		instrumentalMarker = &scoredLyricCandidateResult{Source: "musixmatch", Score: -1, Instrumental: true}
 	} else if isInstrumentalPlaceholderLyric(miguLyr) {
 		// 咪咕对纯音乐回的歌词文件就是一句「此歌曲为纯音乐,请欣赏」,判定同 QQ 的占位。
 		instrumentalMarker = &scoredLyricCandidateResult{Source: "migu", Score: -1, Instrumental: true}
@@ -5778,7 +5733,7 @@ func rankLyricSourceResults(artist, title, album string, durationSecs float64, r
 			artist, title, album, durationSecs, c, corroborated[c.source], len(consensusPeers[c.source]))
 		r.ConsensusPeers = consensusPeers[c.source]
 		// 正文时间轴被重挂过的话,附属歌词也得搬 —— 它们的时间戳是照原文 LRC 抄的
-		// (translate.go 的 assembleTranslationLRC / musixmatch.go 的 buildTranslatedLRC)。
+		// (translate.go 的 assembleTranslationLRC)。
 		// 下面 switch 里各源赋完 r.LyricsTr/r.LyricsRoma 之后统一搬,见循环末尾。
 		switch c.source {
 		case "netease":
@@ -5802,23 +5757,6 @@ func rankLyricSourceResults(artist, title, album string, durationSecs float64, r
 			if usableRomaForResult(c.lyrics, lrclibRoma) {
 				r.LyricsRoma = lrclibRoma
 			}
-		case "musixmatch":
-			// Musixmatch 的译文语言是用户在"歌词"设置里配的
-			// LyricsTranslationLanguage(ISO 639-1 代码),不像网易云固定中文——
-			// 见 musixmatchTranslationLRC 注释。没配置/没查到社区翻译时 mxTr 是
-			// 空串,r.LyricsTr 保持空,不影响这条候选本身的原文歌词。
-			// 同上,c.hasUsableTranslation 是同一道闸——不可用(如目标语言跟原文
-			// 实际语言"同语言不同文字"这类假翻译)就不赋值。
-			if c.hasUsableTranslation {
-				r.LyricsTr = mxTr
-				// 抓取时用的就是当时设置里的语言。之后用户改了设置,这里记下的旧语言
-				// 就会跟新目标对不上 —— 那正是要的:对不上就重翻。
-				r.LyricsTrLang = features().LyricsTranslationLanguage
-			}
-			if usableRomaForResult(c.lyrics, mxRoma) {
-				r.LyricsRoma = mxRoma
-			}
-			r.Performers = mx.performers
 		case "amll":
 			// amll 这条 case 不能漏。amll.tr 早就在 candidates 构造那一步被读出来过(见上面
 			// usableValueAdd 调用,+50 分的打分信号靠它),但只要这个 switch 没有 amll 分支,分数
@@ -6267,23 +6205,6 @@ func fetchScoredLyricCandidatesStreaming(ctx context.Context, artist, title, alb
 		resultsCh <- lyricSourceResult{source: "lrclib", lyr: r.lyrics, yrc: r.yrc, roma: r.roma, matchTitle: r.title, matchArtist: r.artist, matchAlbum: r.album, srcDur: r.durationSecs, instrumental: r.instrumental, plainOnly: r.plainOnly}
 	}()
 	go func() {
-		if skipSource("musixmatch") {
-			resultsCh <- lyricSourceResult{source: "musixmatch"}
-			return
-		}
-		// isrc 同 deezer 那路:有值时走 track.get?track_isrc= 直取,绕开这个源最松的那套
-		// 名称搜索(见 musixmatch.go)。
-		// Apple / Spotify ID 让它按录音级身份一次取齐(musixmatchmacro.go):播放器这一拍给的优先,没有就取缓存里存的。
-		// 只在首轮取:补查轮换的是歌手别名,key 本来就对不上,按 ID 那一次首轮也已经试过。
-		mxCtx := ctx
-		if lyricQueryReasonFrom(ctx) == lyricQueryReasonPrimary {
-			appleID, spotifyID := musixmatchTrackIDsFor(ctx, idArtist, idTitle, idAlbum)
-			mxCtx = withMusixmatchPlaybackIDs(ctx, appleID, spotifyID)
-		}
-		r := musixmatchLyric(mxCtx, artist, srcTitle, durationSecs, features().LyricsTranslationLanguage, lyricSourceISRC(ctx, artist, title, album))
-		resultsCh <- lyricSourceResult{source: "musixmatch", lyr: r.lrc, yrc: r.yrc, tr: r.tr, roma: r.roma, matchTitle: r.title, matchArtist: r.artist, matchAlbum: r.album, matchCover: musixmatchResultCover(ctx, r), srcDur: r.durationSecs, plainOnly: r.plainOnly, instrumental: r.instrumental, performers: r.performers, identityFromLocalClient: r.bySpotifyID}
-	}()
-	go func() {
 		if skipSource("lyricfind") {
 			resultsCh <- lyricSourceResult{source: "lyricfind"}
 			return
@@ -6399,7 +6320,7 @@ func fetchScoredLyricCandidatesStreaming(ctx context.Context, artist, title, alb
 		if r, ok := kkboxLocalLyricsFor(idArtist, idTitle, durationSecs); ok {
 			raw[kkboxLocalLyricsSource] = r
 		}
-		// Spotify 本地歌词同理(Musixmatch 的备用管道,见 spotifylyrics.go),不看当前播放器:按曲目 ID 找得到就放。
+		// Spotify 本地歌词同理(见 spotifylyrics.go),不看当前播放器:按曲目 ID 找得到就放。
 		if r, ok := spotifyLocalLyricsFor(idArtist, idTitle, idAlbum); ok {
 			raw[spotifyLocalLyricsSource] = r
 		}

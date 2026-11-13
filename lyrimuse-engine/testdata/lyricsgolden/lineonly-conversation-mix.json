@@ -3,7 +3,7 @@
   "category": "line-only-winner",
   "note": "无逐字冠军:本地是 4:16 的 Conversation Mix,QQ/酷狗带逐字的候选都是原版(末句超曲长 -700),LRCLIB 无逐字但标题精确、时长吻合、有共识——逐字 +400 不该压过\"版本对不对\"",
   "label_evidence": {
-    "consensus_peers": 3,
+    "consensus_peers": 2,
     "title_accepted": true,
     "version_tags_ok": true,
     "source_duration_delta_pct": 0.47473051085768625,
@@ -35,7 +35,6 @@
       "kuwo": true,
       "lrclib": true,
       "lyricfind": true,
-      "musixmatch": true,
       "netease": true,
       "qq": true
     },
@@ -44,7 +43,6 @@
       "netease",
       "qq",
       "kugou",
-      "musixmatch",
       "lrclib",
       "amll",
       "lyricfind",
@@ -77,14 +75,6 @@
       "duration_secs": 254.8245
     },
     "lyricfind": {},
-    "musixmatch": {
-      "lyrics": "[00:09.66] K esw'p mwsl lzxp zj esja ps fxmj dsv ngd\n[00:14.07] Ovp K'yy oj pzjgj ps fxmj dsv afkyj\n[00:18.32] K esw'p zxrj x bxwnd nxg\n[00:23.10] Ps hjp ps dsv K'e lxym x pzsvaxwe fkyja\n[00:28.43] K esw'p nxgj kb zj ovda dsv wknj pzkwha\n[00:34.03] Esja zka hkbpa nsfj bgsf pzj zjxgp\n[00:38.58] K esw'p mwsl...\n[00:40.72] Ovp kb dsv ljgj fd hkgy...\n[00:43.14] K'e fxmj kp as lj'e wjrjg oj xuxgp\n[00:48.14] Ovp fd ysrj ka xyy K zxrj ps hkrj\n[00:53.03] Lkpzsvp dsv K esw'p pzkwm K nxw ykrj\n[00:58.20] K lkaz K nsvye hkrj pzj lsgye ps dsv... ovp\n[01:03.79] Ysrj ka xyy K zxrj ps hkrj\n[01:08.49] Lzjw dsv pxym\n[01:10.46] Esja kp ajjf ykmj zj'a wsp jrjw\n[01:14.46] Ykapjwkwh ps x lsge dsv axd\n[01:19.13] Pzxp'a sm oxoj, qvap pjyy fj dsvg ugsoyjfa\n[01:23.44] K'yy pgd fd ojap ps mkaa pzjf xyy xlxd...\n[01:28.44] Esja zj yjxrj lzjw dsv wjje zkf pzj fsap\n[01:34.12] Esja zka bgkjwea hjp xyy dsvg pkfj\n[01:38.17] Oxod uyjxaj, K'f sw fd mwjja\n[01:43.29] Ugxdkwh bsg pzj exd pzxp dsv'yy oj fkwj\n[01:48.21] Ovp fd ysrj ka xyy K zxrj ps hkrj\n[01:52.85] Lkpzsvp dsv K esw'p pzkwm K nxw ykrj\n[01:58.20] K lkaz K nsvye hkrj pzj lsgye ps dsv... ovp\n[02:03.57] Ysrj ka xyy K zxrj ps hkrj\n[02:08.97] Ps dsv... Zjd hkgy\n[02:12.27] K esw'p lxwp dsv ps ngd ws fsgj kwakej\n[02:18.57] Xyy pzj fswjd kw pzj lsgye\n[02:24.53] Nsvye wjrjg xee vu ps pzj ysrj\n[02:27.80] K zxrj kwakej...\n[02:31.63] K ysrj dsv\n[02:33.21] Xwe K lkyy hkrj kp ps dsv\n[02:40.93] Xyy K nxw hkrj, xyy K nxw hkrj\n[02:44.93] Jrjgdpzkwh K zxrj ka bsg dsv\n[02:47.24] Ovp ysrj ka xyy K zxrj ps hkrj\n[02:57.94] Ovp fd ysrj ka xyy K zxrj ps hkrj\n[03:06.01] Lkpzsvp dsv K esw'p pzkwm K nxw ykrj\n[03:10.66] K lkaz K nsvye hkrj pzj lsgye ps dsv... ovp\n[03:16.49] Ysrj ka xyy K zxrj ps hkrj Ovp fd ysrj ka xyy K zxrj ps hkrj\n[03:25.96] Lkpzsvp dsv K esw'p pzkwm K nxw ykrj\n[03:30.70] K lkaz K nsvye hkrj pzj lsgye ps dsv... ovp\n[03:36.48] Ysrj ka xyy K zxrj ps hkrj ps dsv\n[03:46.45] ",
-      "title": "All I Have to Give",
-      "artist": "Full Force \u0026 Backstreet Boys",
-      "album": "Still Standing",
-      "cover": "https://s.mxmcdn.net/images-storage/albums/5/1/1/7/7/5/26577115_500_500.jpg",
-      "duration_secs": 244
-    },
     "netease": {
       "netease": {
         "cover": "https://p1.music.126.net/XqwpdcWDLaVWpgjox5jy9g==/109951165991886879.jpg?param=800y800",
@@ -115,14 +105,13 @@
     "verdicts": {
       "kugou": "accepted",
       "lrclib": "accepted",
-      "musixmatch": "accepted",
       "netease": "accepted",
       "qq": "accepted"
     },
     "ranked": [
       {
         "source": "lrclib",
-        "score": 870,
+        "score": 869,
         "terms": [
           {
             "kind": "duration",
@@ -130,7 +119,7 @@
           },
           {
             "kind": "lines",
-            "points": 58
+            "points": 57
           },
           {
             "kind": "album",
@@ -148,7 +137,7 @@
       },
       {
         "source": "netease",
-        "score": 596,
+        "score": 595,
         "terms": [
           {
             "kind": "duration",
@@ -156,7 +145,7 @@
           },
           {
             "kind": "lines",
-            "points": 25
+            "points": 24
           },
           {
             "kind": "album",
@@ -169,30 +158,6 @@
           {
             "kind": "translation",
             "points": 50
-          }
-        ],
-        "has_translation": true,
-        "translation_lang": "zh"
-      },
-      {
-        "source": "musixmatch",
-        "score": 589,
-        "terms": [
-          {
-            "kind": "duration",
-            "points": 176
-          },
-          {
-            "kind": "lines",
-            "points": 43
-          },
-          {
-            "kind": "titleMatch",
-            "points": 120
-          },
-          {
-            "kind": "consensus",
-            "points": 250
           }
         ],
         "has_translation": true,
@@ -212,7 +177,7 @@
           },
           {
             "kind": "lines",
-            "points": 52
+            "points": 51
           },
           {
             "kind": "album",
@@ -249,7 +214,7 @@
           },
           {
             "kind": "lines",
-            "points": 53
+            "points": 52
           },
           {
             "kind": "titleMatch",

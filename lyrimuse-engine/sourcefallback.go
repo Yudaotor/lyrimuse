@@ -24,13 +24,10 @@ import (
 //   - Apple Music:搜索 amp-api → api.music.apple.com,取词 amp-api → amp-api-edge(api.music 搜得到同样的结果、
 //     取词回 400;amp-api-edge 取词逐字节相同、搜索回 200 却是空结果,所以两个端点各有各的备用)。只在传输失败 / 5xx
 //     时换:401 / 403 / 404 / 429 是答了,令牌、这首没词、限流都跟主机无关
-//   - Musixmatch:apic-appmobile → apic(同一个 app_id,token 互认,同一请求答的内容一致)。换不换、先问哪个
-//     见 musixmatchDo;答了 captcha 不换,token.get 的限流按 IP 算,两个主机共用
 //
 // 没有备用的:lrclib(只有 lrclib.net 一个公共实例)、Deezer(api / pipe / auth 各只有一个主机)。
-// Musixmatch 的 apic-desktop 不能当备用:换 token 只给全零的占位值,macro 答 200 却是诱饵数据。
 //
-// 主机都逐个实测过,实测记录见 docs/features/09 第 90 条;Musixmatch 的备用主机见第 135 条,Apple Music 的见第 142 条。
+// 主机都逐个实测过,实测记录见 docs/features/09 第 90 条;Apple Music 的见第 142 条。
 
 var (
 	kuwoSearchEndpoints = []string{
@@ -51,8 +48,6 @@ var (
 	// applemusicSearchBases / applemusicLyricsBases:主用在前,按请求带不带用户令牌选(applemusicAPIGet)。
 	applemusicSearchBases = []string{"https://amp-api.music.apple.com/v1/catalog/", "https://api.music.apple.com/v1/catalog/"}
 	applemusicLyricsBases = []string{"https://amp-api.music.apple.com/v1/catalog/", "https://amp-api-edge.music.apple.com/v1/catalog/"}
-	// musixmatchBases:主用在前。单测会把它整个换成本地假服务器。
-	musixmatchBases = []string{"https://apic-appmobile.musixmatch.com/ws/1.1/", "https://apic.musixmatch.com/ws/1.1/"}
 )
 
 // 备用主机平时只在没问成时才问。不急着上屏的几条路(手动搜索、重新自动匹配、升级重试、规则换版重选)
@@ -73,9 +68,8 @@ func lyricSearchAsksBackupHosts(ctx context.Context) bool {
 var errSourceNotReached = errors.New("source: not reached")
 
 // tryEach 按顺序对每个候选 i 调 try,第一个返回 nil 的就停;全部失败返回最后一个错误。ctx 已取消
-// 时不再试下一个。try 只在没问成时返回错误。各源换主机都走它,只有两家另写:网易云(neteaseFetchBody)几台主机共用一个
-// 按路径分的限速桶,桶在退避里就整条放弃、不换主机;Musixmatch(musixmatchDo)按主机最近的成败排先后,答了(含 404、
-// 验证码)就停、只在 musixmatchHostFailed 认定没问成时才换。
+// 时不再试下一个。try 只在没问成时返回错误。各源换主机都走它,只有网易云另写(neteaseFetchBody):几台主机共用一个
+// 按路径分的限速桶,桶在退避里就整条放弃、不换主机。
 func tryEach[T any](ctx context.Context, candidates []T, try func(c T) error) error {
 	lastErr := errSourceNotReached
 	for _, c := range candidates {

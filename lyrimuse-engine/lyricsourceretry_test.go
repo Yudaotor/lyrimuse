@@ -154,14 +154,14 @@ func TestLyricSourceRoundStatsSkips(t *testing.T) {
 func TestLyricSourceOutcomeUsesRoundSkips(t *testing.T) {
 	all := func(string) bool { return true }
 	breakerReason := func(string) string { return lyricSourceCooldownReasonServerError }
-	d := &lyricsDecision{SourcesSkipped: []string{"lrclib", "kuwo", "qq", "musixmatch"},
+	d := &lyricsDecision{SourcesSkipped: []string{"lrclib", "kuwo", "qq", "deezer"},
 		statsSkips: map[string]string{"lrclib": lyricSourceCooldownReasonBlocked, "kuwo": lyricSourceSkipReasonQueued,
-			"musixmatch": lyricSourceSkipReasonPaused}}
+			"deezer": lyricSourceSkipReasonPaused}}
 	o := lyricSourceOutcomeFromDecision(d, all, all, breakerReason)
 	if !o.skipped["lrclib"] || o.skipReason["lrclib"] != lyricSourceCooldownReasonBlocked {
 		t.Errorf("lrclib 应按记下的原因算跳过: %v %v", o.skipped, o.skipReason)
 	}
-	if o.skipped["musixmatch"] {
+	if o.skipped["deezer"] {
 		t.Error("后台暂停(前台照问)跳过的不算这个源的这一轮")
 	}
 	if o.skipped["qq"] {

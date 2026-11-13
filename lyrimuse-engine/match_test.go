@@ -754,7 +754,7 @@ func TestScoringAfter20260809Review(t *testing.T) {
 
 	t.Run("来源不再加分", func(t *testing.T) {
 		var scores []int
-		for _, src := range []string{"netease", "qq", "kugou", "musixmatch", "lrclib"} {
+		for _, src := range []string{"netease", "qq", "kugou", "vibe", "lrclib"} {
 			s, terms := scoreLyricCandidateDetailed(
 				"someone", "song", "", dur, lyricCandidate{source: src, lyrics: good}, false, 0)
 			scores = append(scores, s)
@@ -1129,7 +1129,7 @@ func TestLyricSourceConsensusFamily(t *testing.T) {
 		t.Error("deezer 与 lyricfind 必须归同一家 —— 两者的正文都由 LyricFind 供")
 	}
 	for _, s := range []string{lyricSourceNetease, lyricSourceQQ, lyricSourceKugou,
-		lyricSourceMusixmatch, lyricSourceLRCLIB, lyricSourceAMLL, lyricSourceKuwo, lyricSourceMigu} {
+		lyricSourceLRCLIB, lyricSourceAMLL, lyricSourceKuwo, lyricSourceMigu} {
 		if lyricSourceConsensusFamily(s) != s {
 			t.Errorf("%s 应当自成一家,实际归到 %q", s, lyricSourceConsensusFamily(s))
 		}
@@ -1379,7 +1379,7 @@ func TestApplyWordTimingTitleOverride_SecondRealWorldCase(t *testing.T) {
 			},
 		},
 		{
-			Source: "musixmatch", Score: 825,
+			Source: "vibe", Score: 825,
 			Title: "Shake Your Body (Down to the Ground) [Single Version]",
 			Album: "Michael Jackson's This Is It (The Music That Inspired the Movie)",
 			ScoreTerms: []scoreTerm{
@@ -1393,8 +1393,8 @@ func TestApplyWordTimingTitleOverride_SecondRealWorldCase(t *testing.T) {
 	}
 	applyWordTimingTitleOverride(results)
 	sort.SliceStable(results, func(i, j int) bool { return results[i].Score > results[j].Score })
-	if results[0].Source != "musixmatch" {
-		t.Errorf("修复后冠军应该是 musixmatch(标题/专辑都更吻合),实际是 %s", results[0].Source)
+	if results[0].Source != "vibe" {
+		t.Errorf("修复后冠军应该是 vibe(标题/专辑都更吻合),实际是 %s", results[0].Source)
 	}
 }
 
@@ -1477,7 +1477,7 @@ func TestApplyWordTimingTitleOverride_SkipsRejectedCandidates(t *testing.T) {
 				{Kind: scoreTermTitleMatch, Points: 30},
 			},
 		},
-		{Source: "musixmatch", Score: -1, ScoreTerms: []scoreTerm{{Kind: scoreRejectNotTimed}}},
+		{Source: "vibe", Score: -1, ScoreTerms: []scoreTerm{{Kind: scoreRejectNotTimed}}},
 	}
 	applyWordTimingTitleOverride(results)
 	if results[1].Score != 500 {

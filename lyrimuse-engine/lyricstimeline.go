@@ -10,30 +10,18 @@ import (
 
 // LRC与YRC 时间轴自洽修复。
 //
-// 起因(现象是《Rumour Has It》"明显进度对不上"):Musixmatch 在同一个
-// track_id 下挂着两份**不同年份做的、互不兼容**的资产 —— track.subtitle.get 那份
-// 行级 LRC(制,自报 215s)与 track.richsync.get 那份逐字(制,
-// 自报 232s),曲长实际 223.3s。实调把两边原始 body 拉回来比 sha256,证实都是上游原样
-// 落库、我们零清洗 —— 坏的是上游数据本身。
-//
-// 这份坏 LRC 单调递增、末句时间戳也正常(204.81s),坏只坏在**内部**:第 27→28 行凭空
-// 跳 48.6 秒,第 41~49 行 9 句完整长句挤在 6.86 秒里(同样这 9 句在 richsync 里跨 46 秒)。
+// 同一个候选可能带着两套互相矛盾的时间轴:行级 LRC 与逐字 YRC 逐行文本一一对应,LRC 单调递增、
+// 末句时间戳也正常,坏只坏在**内部**(某一行凭空跳几十秒,后面一串长句挤在几秒里)。
 // 而引擎里所有与时间有关的判据(durationFits/corroboratedEndings/sourceDurationOff)
-// **全都只看末句这一个标量**,25% 容差对这首歌意味着 167~228s 这个 61 秒宽的窗口全算
+// **全都只看末句这一个标量**,25% 容差对一首三分多钟的歌意味着一分钟宽的窗口全算
 // "吻合" —— 端点判据在原理上就看不见这种坏法。
 //
-// 为什么是"修数据"而不是"改打分":
-//
-//	实测本机 86 条 musixmatch 双轴条目,LRC 与 YRC **逐行文本 100% 相同、行数 100% 相同**
-//	—— subtitle.get 那一趟请求除了带回一份坏时间轴,没提供任何 richsync 没有的信息。
-//	既然文本一一对应,直接把行级时间戳换成逐字轴的行起点即可,不必换源、不必动打分,
-//	因此**不需要 bump lyricsScoringVersion**(全库不会被拖去重跑全源检索)。
-//	反事实消融(784 首/3063 候选)结果:冠军翻盘 2 首、回归 0 首。
+// 修数据而不是改打分:文本一一对应时,直接把行级时间戳换成逐字轴的行起点即可,不必换源、
+// 不必动打分,因此**不需要 bump lyricsScoringVersion**(全库不会被拖去重跑全源检索)。见 09 章决策 23。
 //
 // 适用范围由判据自己划出来,不按源写死白名单:
 //
-//	musixmatch 86/86 满足前提(它的病就是"同一批行、两套时间");
-//	kugou 710/714、qq 196/428 满足(它们本来就自洽,重挂是空操作);
+//	kugou 710/714、qq 196/428 满足前提(它们本来就自洽,重挂是空操作);
 //	netease 只有 24/568 满足 —— 它的两份是**根本不同的资产**(LRC 常带署名行、行数对不上),
 //	对它重挂会挂错,判据会自动放弃。
 //
@@ -134,8 +122,7 @@ func twoDigits(n int) string {
 // rehangLRCOnYRC 用逐字轴的行起点重挂行级 LRC 的时间戳。
 //
 // 返回(新 LRC, 旧毫秒→新毫秒映射, 是否真的改过)。映射给译文/罗马音复用 —— 它们的
-// 时间戳是照原文 LRC 抄的(translate.go 的 assembleTranslationLRC / musixmatch.go 的
-// buildTranslatedLRC),不跟着重挂就会相对正文错位。
+// 时间戳是照原文 LRC 抄的(translate.go 的 assembleTranslationLRC),不跟着重挂就会相对正文错位。
 //
 // 前提(任一不满足就原样返回,不改):
 //   - 两侧都解析得出 >=2 行;
@@ -259,7 +246,7 @@ func rehangLRCOnYRC(lrc, yrc string, durationSecs float64, guard bool) (string, 
 
 // ---- 逐字轴与行级轴自相矛盾时弃用逐字轴(陈奕迅《2001太空漫游 (Live)》案) ----
 //
-// rehangLRCOnYRC 只能修"两边逐行文本严格一一对应"的打架(musixmatch 的病正是那个形态)。
+// rehangLRCOnYRC 只能修"两边逐行文本严格一一对应"的打架。
 // netease 的两套轴是**两条独立产线**(行级 /api/song/lyric 老接口 vs 逐字 /api/song/lyric/v1
 // 新接口),同一首歌可能**断行方式都不一样**(LRC 拆两行的,YRC 合成一行)、还夹着对方没有的
 // 署名行/纯音乐占位行 —— 行结构对不上,重挂在前提检查那一步就放弃,打架原样留给播放。
@@ -447,11 +434,6 @@ func rehangStoredTimeline(e *enrichEntry, durationSecs float64) bool {
 	newLyrics, remap, ok := rehangLRCOnYRC(e.Lyrics.String(), e.LyricsYRC.String(), durationSecs, true)
 	if !ok {
 		return false
-	}
-	if sp := e.LyricsSpeakers; sp != nil && sp.For == lyricSpeakersFingerprint(e.Lyrics.String(), e.LyricsYRC.String()) {
-		moved := *sp
-		moved.For = lyricSpeakersFingerprint(newLyrics, e.LyricsYRC.String())
-		e.LyricsSpeakers = &moved
 	}
 	e.Lyrics = bt(newLyrics)
 	if tr, ok := remapLRCTimestamps(e.LyricsTr.String(), remap); ok {

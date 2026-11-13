@@ -66,7 +66,7 @@ public struct PlayerLyricsVersion: Decodable, Equatable, Sendable {
     public static func chosen(_ versions: [String: PlayerLyricsVersion], bundleID: String?, lyrics: String,
                               lyricsYRC: String) -> PlayerLyricsVersion? {
         guard let bundleID, let v = versions[bundleID], !v.lyrics.isEmpty,
-              v.mainFingerprint == LyricSpeakerTags.fingerprint(lyrics: lyrics, lyricsYRC: lyricsYRC) else { return nil }
+              v.mainFingerprint == LyricsBodyFingerprint.of(lyrics: lyrics, lyricsYRC: lyricsYRC) else { return nil }
         return v
     }
 }

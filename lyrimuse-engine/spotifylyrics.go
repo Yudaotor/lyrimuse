@@ -19,9 +19,8 @@ import (
 
 // Spotify 本地歌词:Spotify 桌面客户端自己拉过的歌词,读它内嵌浏览器的 HTTP 缓存,不联网、不要登录。
 //
-// 定位是 Musixmatch 的备用管道。Spotify 歌词接口 `spclient.wg.spotify.com/color-lyrics/v2/track/<id>` 的
-// 应答里 `provider` 多是 `MusixMatch`,数据跟 musixmatch.go 那一路同源;那一路只靠匿名 token,token 拿不到时这份
-// 还在。跟 KKBOX 本地歌词(kkboxlyrics.go)一样**不是歌词源**:不能按歌名去搜,只有 Spotify 自己显示过歌词的
+// 缓存的是 Spotify 歌词接口 `spclient.wg.spotify.com/color-lyrics/v2/track/<id>` 的应答。
+// 跟 KKBOX 本地歌词(kkboxlyrics.go)一样**不是歌词源**:不能按歌名去搜,只有 Spotify 自己显示过歌词的
 // 歌才有(打开歌词面板或「正在播放」视图时它才去拉),所以不进源清单、设置里没有开关。Spotify 没有配同源歌词,
 // 这份按普通候选跟各源公平打分,不加同源权重。
 //
@@ -451,16 +450,15 @@ func spotifyLyricsRecheckOnce(key string) bool {
 	return true
 }
 
-// spotifyLyricsWorthRecheck:正在用 Spotify 放的这首,Spotify 缓存里有它的逐行歌词,而当初解析时 Musixmatch 那一路
-// 没给出候选、也没见过这份 → 值得重来一次(retryLyricsUpgrade,分数严格更高才替换)。Spotify 开播时才拉当前这首的词,
-// 预解析过、或解析跟它赛跑的条目,不补这一次就进不了打分。Musixmatch 给出过候选时不补:两份同源,多一份不改结论。
+// spotifyLyricsWorthRecheck:正在用 Spotify 放的这首,Spotify 缓存里有它的逐行歌词,而当初解析时没见过这份 → 值得重来
+// 一次(retryLyricsUpgrade,分数严格更高才替换)。Spotify 开播时才拉当前这首的词,预解析过、或解析跟它赛跑的条目,
+// 不补这一次就进不了打分。
 // available 由调用方在锁外算好传进来。手改过、校准过、关了自动升级的都不动。
 func spotifyLyricsWorthRecheck(e enrichEntry, bundleID string, pinned, autoUpgrade, available bool) bool {
 	if bundleID != spotifyBundleID || !autoUpgrade || pinned || e.ManualLyrics || e.Instrumental || !available {
 		return false
 	}
-	if slices.Contains(e.LyricsSourcesSeen, "musixmatch") ||
-		slices.Contains(e.LyricsSourcesSeen, spotifyLocalLyricsSource) || slices.Contains(e.LyricsSourcesResponded, spotifyLocalLyricsSource) {
+	if slices.Contains(e.LyricsSourcesSeen, spotifyLocalLyricsSource) || slices.Contains(e.LyricsSourcesResponded, spotifyLocalLyricsSource) {
 		return false
 	}
 	if e.LyricsDecision != nil && slices.Contains(e.LyricsDecision.SourcesResponded, spotifyLocalLyricsSource) {

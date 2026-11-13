@@ -35,7 +35,6 @@
       "kuwo": true,
       "lrclib": true,
       "lyricfind": true,
-      "musixmatch": true,
       "netease": true,
       "qq": true
     },
@@ -44,7 +43,6 @@
       "netease",
       "qq",
       "kugou",
-      "musixmatch",
       "lrclib",
       "amll",
       "lyricfind",
@@ -64,7 +62,6 @@
       "instrumental": true
     },
     "lyricfind": {},
-    "musixmatch": {},
     "netease": {
       "netease": {
         "cover": "https://p1.music.126.net/IeRnZyxClyoTwqZ76Qcyhw==/109951166161936990.jpg?param=800y800",

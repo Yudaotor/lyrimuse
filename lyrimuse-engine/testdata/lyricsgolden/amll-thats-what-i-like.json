@@ -3,7 +3,7 @@
   "category": "amll-embedded-translation",
   "note": "amll 直取:按网易云/QQ 的音乐 ID 从 amll-ttml-db 取回逐字 + 内嵌中文译文,身份沿用本地标签;冠亚军分差只有个位数(amll 1342 vs kugou 1337),靠的是 lines 与 duration 的微小差异——译文 +50 两边都有",
   "label_evidence": {
-    "consensus_peers": 5,
+    "consensus_peers": 4,
     "title_accepted": true,
     "version_tags_ok": true,
     "source_duration_delta_pct": -1,
@@ -35,7 +35,6 @@
       "kuwo": true,
       "lrclib": true,
       "lyricfind": true,
-      "musixmatch": true,
       "netease": true,
       "qq": true
     },
@@ -44,7 +43,6 @@
       "netease",
       "qq",
       "kugou",
-      "musixmatch",
       "lrclib",
       "amll",
       "lyricfind",
@@ -82,15 +80,6 @@
       "duration_secs": 207
     },
     "lyricfind": {},
-    "musixmatch": {
-      "lyrics": "[00:01.54] Fjj, fjj, fjj\n[00:02.74] K pzm f dzucz ku Yfuvfmmfu\n[00:04.22] Ofoj pkxg, qvfm'i vfaahuku'? (Qvfm'i vfaahuku'?)\n[00:05.97] Jzt fuc jztx fii kuekmhc\n[00:08.19] Iz pz zu fuc phm mz dgfaaku' (dgfa)\n[00:09.67] Pz aza km bzx f agfjhx\n[00:11.40] Aza, aza km bzx yh\n[00:13.18] Mtxu fxztuc fuc cxza km bzx f agfjhx (cxza km)\n[00:14.85] Cxza, cxza km bzx yh (cxza km)\n[00:16.58] K'gg xhum f ohfdv vztih ku Ykfyk (-fyk)\n[00:18.65] Qfwh ta qkmv uz lfyykhi (uzah)\n[00:20.82] Gzoimhx mfkg bzx ckuuhx (jhfv)\n[00:22.73] Ltgkz, ihxeh mvfm idfyak (Ltgkz!)\n[00:24.48] Jzt pzm km kb jzt qfum km\n[00:25.88] Pzm, pzm km kb jzt qfum km\n[00:27.45] Ifkc, jzt pzm km kb jzt qfum km\n[00:29.47] Mfwh yj qfgghm kb jzt qfum km, uzq\n[00:31.36] Ltya ku mvh Dfckggfd\n[00:33.84] Pkxg, ghm'i atm izyh ykghi zu km\n[00:34.81] Fujmvkup jzt qfum\n[00:36.76] Ltim mz atm f iykgh zu km\n[00:38.72] Jzt chihxeh km, ofoj, jzt chihxeh km fgg\n[00:41.97] Fuc K'y pzuuf pkeh km mz jzt\n[00:44.43] Pzgc lhqhgxj ivkukup iz oxkpvm\n[00:47.79] Imxfqohxxj dvfyafpuh zu kdh\n[00:51.31] Gtdwj bzx jzt, mvfm'i qvfm K gkwh, mvfm'i qvfm K gkwh\n[00:54.94] Gtdwj bzx jzt, mvfm'i qvfm K gkwh, mvfm'i qvfm K gkwh\n[00:59.12] Ihr oj mvh bkxh fm ukpvm\n[01:02.21] Ikgw ivhhmi fuc ckfyzuci fgg qvkmh\n[01:05.67] Gtdwj bzx jzt, mvfm'i qvfm K gkwh, mvfm'i qvfm K gkwh\n[01:08.97] Gtdwj bzx jzt, mvfm'i qvfm K gkwh, mvfm'i qvfm K gkwh\n[01:14.05] K'y mfgwku' mxkai mz Athxmz Xkdz (okv)\n[01:16.21] Ifj mvh qzxc fuc qh pz (ifj km)\n[01:17.68] Jzt dfu oh yj bxhfwf (oxx)\n[01:19.53] Pkxg, K'gg oh jztx bghhwz\n[01:21.60] Yfyfdkmf, K qkgg uhehx yfwh f axzykih mvfm K dfu'm whha\n[01:25.53] K axzykih mvfm jztx iykgh fku'm pzu' uhehx ghfeh\n[01:29.23] Ivzaakup iaxhhi ku Afxki (zv)\n[01:30.17] Hehxjmvkup 24 wfxfmi (tv)\n[01:31.49] Mfwh f gzzw ku mvfm ykxxzx (mfwh f gzzw)\n[01:33.91] Uzq, mhgg yh qvz'i mvh bfkxhim?\n[01:35.61] Ki km jzt? (Ki km jzt?) Ki km yh? (Ki km yh?)\n[01:38.83] Ifj km'i ti (ifj km'i ti) fuc K'gg fpxhh, ofoj\n[01:42.42] Ltya ku mvh Dfckggfd\n[01:44.60] Pkxg, ghm'i atm izyh ykghi zu km\n[01:46.80] Fujmvkup jzt qfum\n[01:48.67] Ltim mz atm f iykgh zu km\n[01:50.46] Jzt chihxeh km ofoj, jzt chihxeh km fgg\n[01:53.84] Fuc K'y pzuuf pkeh km mz jzt\n[01:55.92] Pzgc lhqhgxj ivkukup iz oxkpvm\n[01:59.67] Imxfqohxxj dvfyafpuh zu kdh\n[02:02.81] Gtdwj bzx jzt, mvfm'i qvfm K gkwh, mvfm'i qvfm K gkwh\n[02:06.63] Gtdwj bzx jzt, mvfm'i qvfm K gkwh, mvfm'i qvfm K gkwh\n[02:10.44] Ihr oj mvh bkxh fm ukpvm\n[02:13.64] Ikgw ivhhmi fuc ckfyzuci fgg qvkmh\n[02:17.21] Gtdwj bzx jzt, mvfm'i qvfm K gkwh, mvfm'i qvfm K gkwh\n[02:20.75] Gtdwj bzx jzt, mvfm'i qvfm K gkwh, mvfm'i qvfm K gkwh\n[02:25.18] Jzt ifj jzt qfum f pzzc mkyh\n[02:29.64] Qhgg, vhxh K fy, ofoj, vhxh K fy, ofoj\n[02:33.87] Mfgw mz yh, mfgw mz yh, mfgw mz yh\n[02:36.86] Mfgw mz yh, mhgg yh, qvfm'i zu jztx ykuc? (Qvfm'i zu jztx ykuc?)\n[02:41.49] Kb jzt qfum km, pkxg, dzyh fuc phm km\n[02:44.22] Fgg mvki ki vhxh bzx jzt\n[02:48.26] Mhgg yh, ofoj, mhgg yh, mhgg yh, ofoj\n[02:52.07] Qvfm jzt mxjuf cz?\n[02:53.46] Pzgc lhqhgxj ivkukup iz oxkpvm\n[02:57.07] Imxfqohxxj dvfyafpuh zu kdh\n[03:00.40] Gtdwj bzx jzt, mvfm'i qvfm K gkwh, mvfm'i qvfm K gkwh (mvfm'i qvfm K gkwh, ofoj)\n[03:04.87] Gtdwj bzx jzt, mvfm'i qvfm K gkwh, mvfm'i qvfm K gkwh (zv, zv)\n[03:07.54] Ihr oj mvh bkxh fm ukpvm\n[03:10.91] Ikgw ivhhmi fuc ckfyzuci fgg qvkmh\n[03:14.38] Gtdwj bzx jzt, mvfm'i qvfm K gkwh, mvfm'i qvfm K gkwh (mvfm'i qvfm K gkwh, ofoj)\n[03:17.96] Gtdwj bzx jzt, mvfm'i qvfm K gkwh, mvfm'i qvfm K gkwh (zzv, zzv, zzv)\n[03:20.22] ",
-      "yrc": "[221,2792](221,1742,0)Fjj, (1963,791,0)fjj, (2754,259,0)fjj\n[8113,1613](8113,104,0)K (8217,200,0)pzm (8417,107,0)f (8524,298,0)dzucz (8822,159,0)ku (8981,745,0)Yfuvfmmfu\n[10465,1648](10465,90,0)Ofoj (10555,132,0)pkxg, (10687,294,0)qvfm'i (10981,662,0)vfaahuku'? (11643,201,0)(Qvfm'i (11844,269,0)vfaahuku'?)\n[12363,915](12363,110,0)Jzt (12473,156,0)fuc (12629,235,0)jztx (12864,138,0)fii (13002,276,0)kuekmhc\n[13756,1061](13756,86,0)Iz (13842,45,0)pz (13887,60,0)zu (13947,78,0)fuc (14025,145,0)phm (14170,158,0)mz (14328,357,0)dgfaaku' (14685,132,0)(dgfa)\n[15915,981](15915,129,0)Pz (16044,141,0)aza (16185,189,0)km (16374,142,0)bzx (16516,94,0)f (16610,286,0)agfjhx\n[17178,1066](17178,254,0)Aza, (17432,234,0)aza (17666,253,0)km (17919,235,0)bzx (18154,90,0)yh\n[18822,1446](18822,77,0)Mtxu (18899,106,0)fxztuc (19005,99,0)fuc (19104,161,0)cxza (19265,101,0)km (19366,185,0)bzx (19551,92,0)f (19643,392,0)agfjhx (20035,164,0)(cxza (20199,69,0)km)\n[20795,1066](20795,117,0)Cxza, (20912,112,0)cxza (21024,105,0)km (21129,165,0)bzx (21294,128,0)yh (21422,344,0)(cxza (21766,95,0)km)\n[22339,1441](22339,60,0)K'gg (22399,131,0)xhum (22530,51,0)f (22581,295,0)ohfdv (22876,394,0)vztih (23270,137,0)ku (23407,220,0)Ykfyk (23627,153,0)(-fyk)\n[24822,1078](24822,134,0)Qfwh (24956,52,0)ta (25008,195,0)qkmv (25203,159,0)uz (25362,398,0)lfyykhi (25760,140,0)(uzah)\n[26775,1118](26775,236,0)Gzoimhx (27011,194,0)mfkg (27205,134,0)bzx (27339,284,0)ckuuhx (27623,270,0)(jhfv)\n[27893,999](27893,146,0)Ltgkz, (28039,150,0)ihxeh (28189,217,0)mvfm (28406,267,0)idfyak (28673,219,0)(Ltgkz!)\n[29608,1151](29608,132,0)Jzt (29740,142,0)pzm (29882,185,0)km (30067,149,0)kb (30216,197,0)jzt (30413,287,0)qfum (30700,59,0)km\n[31411,1067](31411,127,0)Pzm, (31538,104,0)pzm (31642,94,0)km (31736,169,0)kb (31905,229,0)jzt (32134,291,0)qfum (32425,53,0)km\n[33327,1238](33327,128,0)Ifkc, (33455,80,0)jzt (33535,170,0)pzm (33705,153,0)km (33858,135,0)kb (33993,188,0)jzt (34181,289,0)qfum (34470,95,0)km\n[34825,1168](34825,117,0)Mfwh (34942,67,0)yj (35009,181,0)qfgghm (35190,111,0)kb (35301,152,0)jzt (35453,254,0)qfum (35707,183,0)km, (35890,103,0)uzq\n[36904,1107](36904,193,0)Ltya (37097,157,0)ku (37254,192,0)mvh (37446,565,0)Dfckggfd\n[39097,1137](39097,113,0)Pkxg, (39210,106,0)ghm'i (39316,134,0)atm (39450,261,0)izyh (39711,298,0)ykghi (40009,180,0)zu (40189,45,0)km\n[40965,1453](40965,729,0)Fujmvkup (41694,383,0)jzt (42077,341,0)qfum\n[42566,1210](42566,170,0)Ltim (42736,98,0)mz (42834,239,0)atm (43073,79,0)f (43152,442,0)iykgh (43594,120,0)zu (43714,62,0)km\n[44345,1474](44345,38,0)Jzt (44383,145,0)chihxeh (44528,72,0)km, (44600,245,0)ofoj, (44845,109,0)jzt (44954,395,0)chihxeh (45349,205,0)km (45554,265,0)fgg\n[45819,1867](45819,167,0)Fuc (45986,283,0)K'y (46269,422,0)pzuuf (46691,284,0)pkeh (46975,215,0)km (47190,294,0)mz (47484,202,0)jzt\n[50476,2252](50476,171,0)Pzgc (50647,517,0)lhqhgxj (51164,839,0)ivkukup (52003,340,0)iz (52343,385,0)oxkpvm\n[53812,2456](53812,718,0)Imxfqohxxj (54530,1150,0)dvfyafpuh (55680,389,0)zu (56069,199,0)kdh\n[56725,3110](56725,149,0)Gtdwj (56874,71,0)bzx (56945,381,0)jzt, (57326,489,0)mvfm'i (57815,461,0)qvfm (58276,74,0)K (58350,310,0)gkwh, (58660,642,0)mvfm'i (59302,232,0)qvfm (59534,119,0)K (59653,182,0)gkwh\n[60644,2653](60644,101,0)Gtdwj (60745,48,0)bzx (60793,133,0)jzt, (60926,375,0)mvfm'i (61301,351,0)qvfm (61652,53,0)K (61705,810,0)gkwh, (62515,275,0)mvfm'i (62790,213,0)qvfm (63003,82,0)K (63085,212,0)gkwh\n[63941,2265](63941,191,0)Ihr (64132,261,0)oj (64393,387,0)mvh (64780,447,0)bkxh (65227,467,0)fm (65694,512,0)ukpvm\n[67712,2369](67712,185,0)Ikgw (67897,511,0)ivhhmi (68408,270,0)fuc (68678,632,0)ckfyzuci (69310,450,0)fgg (69760,321,0)qvkmh\n[71156,2788](71156,114,0)Gtdwj (71270,149,0)bzx (71419,131,0)jzt, (71550,314,0)mvfm'i (71864,644,0)qvfm (72508,343,0)K (72851,321,0)gkwh, (73172,391,0)mvfm'i (73563,195,0)qvfm (73758,52,0)K (73810,134,0)gkwh\n[74882,2564](74882,90,0)Gtdwj (74972,127,0)bzx (75099,131,0)jzt, (75230,268,0)mvfm'i (75498,258,0)qvfm (75756,128,0)K (75884,287,0)gkwh, (76171,627,0)mvfm'i (76798,222,0)qvfm (77020,214,0)K (77234,212,0)gkwh\n[78639,1225](78639,144,0)K'y (78783,250,0)mfgwku' (79033,183,0)mxkai (79216,106,0)mz (79322,223,0)Athxmz (79545,180,0)Xkdz (79725,139,0)(okv)\n[82066,1146](82066,124,0)Ifj (82190,196,0)mvh (82386,231,0)qzxc (82617,140,0)fuc (82757,88,0)qh (82845,98,0)pz (82943,195,0)(ifj (83138,74,0)km)\n[83550,1155](83550,153,0)Jzt (83703,222,0)dfu (83925,142,0)oh (84067,147,0)yj (84214,348,0)bxhfwf (84562,143,0)(oxx)\n[85390,877](85390,225,0)Pkxg, (85615,158,0)K'gg (85773,81,0)oh (85854,170,0)jztx (86024,243,0)bghhwz\n[86828,2717](86828,154,0)Yfyfdkmf, (86982,19,0)K (87001,99,0)qkgg (87100,156,0)uhehx (87256,182,0)yfwh (87438,69,0)f (87507,583,0)axzykih (88090,272,0)mvfm (88362,211,0)K (88573,393,0)dfu'm (88966,579,0)whha\n[91261,2058](91261,38,0)K (91299,185,0)axzykih (91484,216,0)mvfm (91700,234,0)jztx (91934,314,0)iykgh (92248,388,0)fku'm (92636,239,0)pzu' (92875,194,0)uhehx (93069,250,0)ghfeh\n[94174,1017](94174,291,0)Ivzaakup (94465,299,0)iaxhhi (94764,94,0)ku (94858,230,0)Afxki (95088,103,0)(zv)\n[96151,915](96151,449,0)Hehxjmvkup (96600,89,0)24 (96689,202,0)wfxfmi (96891,175,0)(tv)\n[98269,1273](98269,122,0)Mfwh (98391,54,0)f (98445,119,0)gzzw (98564,91,0)ku (98655,255,0)mvfm (98910,223,0)ykxxzx (99133,248,0)(mfwh (99381,29,0)f (99410,132,0)gzzw)\n[99905,1110](99905,144,0)Uzq, (100049,105,0)mhgg (100154,95,0)yh (100249,281,0)qvz'i (100530,176,0)mvh (100706,309,0)bfkxhim?\n[101479,2189](101479,30,0)Ki (101509,59,0)km (101568,113,0)jzt? (101681,105,0)(Ki (101786,96,0)km (101882,346,0)jzt?) (102228,152,0)Ki (102380,182,0)km (102562,361,0)yh? (102923,107,0)(Ki (103030,131,0)km (103161,507,0)yh?)\n[104735,3150](104735,118,0)Ifj (104853,112,0)km'i (104965,278,0)ti (105243,336,0)(ifj (105579,230,0)km'i (105809,381,0)ti) (106190,334,0)fuc (106524,259,0)K'gg (106783,265,0)fpxhh, (107048,837,0)ofoj\n[108902,1294](108902,290,0)Ltya (109192,263,0)ku (109455,174,0)mvh (109629,567,0)Dfckggfd\n[110877,1305](110877,125,0)Pkxg, (111002,156,0)ghm'i (111158,144,0)atm (111302,240,0)izyh (111542,235,0)ykghi (111777,364,0)zu (112141,41,0)km\n[112350,1217](112350,660,0)Fujmvkup (113010,338,0)jzt (113348,219,0)qfum\n[114321,853](114321,86,0)Ltim (114407,52,0)mz (114459,198,0)atm (114657,105,0)f (114762,208,0)iykgh (114970,132,0)zu (115102,72,0)km\n[116002,1832](116002,36,0)Jzt (116038,129,0)chihxeh (116167,95,0)km (116262,289,0)ofoj, (116551,145,0)jzt (116696,625,0)chihxeh (117321,79,0)km (117400,434,0)fgg\n[119453,1798](119453,199,0)Fuc (119652,169,0)K'y (119821,269,0)pzuuf (120090,325,0)pkeh (120415,162,0)km (120577,273,0)mz (120850,401,0)jzt\n[121913,2044](121913,131,0)Pzgc (122044,697,0)lhqhgxj (122741,593,0)ivkukup (123334,254,0)iz (123588,369,0)oxkpvm\n[124978,2449](124978,685,0)Imxfqohxxj (125663,999,0)dvfyafpuh (126662,429,0)zu (127091,336,0)kdh\n[128614,2646](128614,59,0)Gtdwj (128673,29,0)bzx (128702,99,0)jzt, (128801,340,0)mvfm'i (129141,444,0)qvfm (129585,134,0)K (129719,638,0)gkwh, (130357,294,0)mvfm'i (130651,374,0)qvfm (131025,56,0)K (131081,179,0)gkwh\n[132162,2671](132162,135,0)Gtdwj (132297,129,0)bzx (132426,124,0)jzt, (132550,451,0)mvfm'i (133001,269,0)qvfm (133270,103,0)K (133373,681,0)gkwh, (134054,456,0)mvfm'i (134510,152,0)qvfm (134662,41,0)K (134703,130,0)gkwh\n[135988,2614](135988,182,0)Ihr (136170,232,0)oj (136402,439,0)mvh (136841,729,0)bkxh (137570,455,0)fm (138025,577,0)ukpvm\n[139298,1898](139298,66,0)Ikgw (139364,347,0)ivhhmi (139711,212,0)fuc (139923,581,0)ckfyzuci (140504,342,0)fgg (140846,350,0)qvkmh\n[143179,2880](143179,61,0)Gtdwj (143240,81,0)bzx (143321,128,0)jzt, (143449,310,0)mvfm'i (143759,467,0)qvfm (144226,195,0)K (144421,481,0)gkwh, (144902,771,0)mvfm'i (145673,193,0)qvfm (145866,80,0)K (145946,113,0)gkwh\n[146406,2436](146406,70,0)Gtdwj (146476,26,0)bzx (146502,117,0)jzt, (146619,227,0)mvfm'i (146846,301,0)qvfm (147147,80,0)K (147227,533,0)gkwh, (147760,626,0)mvfm'i (148386,202,0)qvfm (148588,47,0)K (148635,207,0)gkwh\n[151531,1838](151531,179,0)Jzt (151710,201,0)ifj (151911,231,0)jzt (152142,284,0)qfum (152426,180,0)f (152606,300,0)pzzc (152906,463,0)mkyh\n[154312,4047](154312,296,0)Qhgg, (154608,883,0)vhxh (155491,152,0)K (155643,490,0)fy, (156133,741,0)ofoj, (156874,435,0)vhxh (157309,165,0)K (157474,424,0)fy, (157898,461,0)ofoj\n[159116,2282](159116,108,0)Mfgw (159224,156,0)mz (159380,307,0)yh, (159687,357,0)mfgw (160044,241,0)mz (160285,349,0)yh, (160634,392,0)mfgw (161026,224,0)mz (161250,148,0)yh\n[162187,3783](162187,457,0)Mfgw (162644,592,0)mz (163236,596,0)yh, (163832,85,0)mhgg (163917,80,0)yh, (163997,152,0)qvfm'i (164149,132,0)zu (164281,189,0)jztx (164470,281,0)ykuc? (164751,461,0)(Qvfm'i (165212,103,0)zu (165315,120,0)jztx (165435,535,0)ykuc?)\n[166409,2300](166409,62,0)Kb (166471,140,0)jzt (166611,316,0)qfum (166927,279,0)km, (167206,495,0)pkxg, (167701,368,0)dzyh (168069,293,0)fuc (168362,256,0)phm (168618,91,0)km\n[169958,2217](169958,124,0)Fgg (170082,393,0)mvki (170475,187,0)ki (170662,348,0)vhxh (171010,602,0)bzx (171612,563,0)jzt\n[173256,2565](173256,209,0)Mhgg (173465,211,0)yh, (173676,421,0)ofoj, (174097,402,0)mhgg (174499,261,0)yh, (174760,465,0)mhgg (175225,396,0)yh, (175621,200,0)ofoj\n[176854,1395](176854,413,0)Qvfm (177267,324,0)jzt (177591,457,0)mxjuf (178048,201,0)cz?\n[179153,2239](179153,70,0)Pzgc (179223,508,0)lhqhgxj (179731,654,0)ivkukup (180385,350,0)iz (180735,657,0)oxkpvm\n[182486,1888](182486,664,0)Imxfqohxxj (183150,760,0)dvfyafpuh (183910,231,0)zu (184141,233,0)kdh\n[185824,4301](185824,19,0)Gtdwj (185843,38,0)bzx (185881,31,0)jzt, (185912,143,0)mvfm'i (186055,225,0)qvfm (186280,54,0)K (186334,786,0)gkwh, (187120,459,0)mvfm'i (187579,198,0)qvfm (187777,91,0)K (187868,395,0)gkwh (188263,473,0)(mvfm'i (188736,129,0)qvfm (188865,35,0)K (188900,208,0)gkwh, (189108,1017,0)ofoj)\n[190125,2891](190125,63,0)Gtdwj (190188,28,0)bzx (190216,123,0)jzt, (190339,342,0)mvfm'i (190681,317,0)qvfm (190998,52,0)K (191050,159,0)gkwh, (191209,463,0)mvfm'i (191672,413,0)qvfm (192085,113,0)K (192198,362,0)gkwh (192560,132,0)(zv, (192692,324,0)zv)\n[193135,1703](193135,262,0)Ihr (193397,150,0)oj (193547,256,0)mvh (193803,367,0)bkxh (194170,326,0)fm (194496,342,0)ukpvm\n[197083,2665](197083,86,0)Ikgw (197169,772,0)ivhhmi (197941,264,0)fuc (198205,648,0)ckfyzuci (198853,711,0)fgg (199564,184,0)qvkmh\n[200538,2410](200538,68,0)Gtdwj (200606,20,0)bzx (200626,51,0)jzt, (200677,46,0)mvfm'i (200723,124,0)qvfm (200847,73,0)K (200920,276,0)gkwh, (201196,335,0)mvfm'i (201531,95,0)qvfm (201626,307,0)K (201933,201,0)gkwh (202134,393,0)(mvfm'i (202527,182,0)qvfm (202709,53,0)K (202762,124,0)gkwh, (202886,62,0)ofoj)\n[204200,2166](204200,36,0)Gtdwj (204236,14,0)bzx (204250,70,0)jzt, (204320,162,0)mvfm'i (204482,189,0)qvfm (204671,63,0)K (204734,307,0)gkwh, (205041,389,0)mvfm'i (205430,111,0)qvfm (205541,89,0)K (205630,190,0)gkwh (205820,186,0)(zzv, (206006,144,0)zzv, (206150,216,0)zzv)\n",
-      "title": "That’s What I Like",
-      "artist": "Bruno Mars",
-      "album": "ยิมก็เข้า เหงาได้ไง",
-      "cover": "https://s.mxmcdn.net/images-storage/albums5/9/5/6/4/3/4/80434659_500_500.jpg",
-      "duration_secs": 205
-    },
     "netease": {
       "netease": {
         "cover": "https://p1.music.126.net/O0rmDv7U7uhLpyPs7YPp-w==/109951166232338422.jpg?param=800y800",
@@ -123,14 +112,13 @@
       "amll": "accepted",
       "kugou": "accepted",
       "lrclib": "accepted",
-      "musixmatch": "accepted",
       "netease": "accepted",
       "qq": "accepted"
     },
     "ranked": [
       {
         "source": "amll",
-        "score": 1320,
+        "score": 1325,
         "terms": [
           {
             "kind": "duration",
@@ -142,7 +130,7 @@
           },
           {
             "kind": "lines",
-            "points": 71
+            "points": 76
           },
           {
             "kind": "album",
@@ -167,7 +155,7 @@
       },
       {
         "source": "qq",
-        "score": 1319,
+        "score": 1324,
         "terms": [
           {
             "kind": "duration",
@@ -179,7 +167,7 @@
           },
           {
             "kind": "lines",
-            "points": 78
+            "points": 83
           },
           {
             "kind": "album",
@@ -204,11 +192,48 @@
       },
       {
         "source": "kugou",
-        "score": 1319,
+        "score": 1324,
         "terms": [
           {
             "kind": "duration",
             "points": 271
+          },
+          {
+            "kind": "wordTiming",
+            "points": 400
+          },
+          {
+            "kind": "lines",
+            "points": 83
+          },
+          {
+            "kind": "album",
+            "points": 150
+          },
+          {
+            "kind": "titleMatch",
+            "points": 120
+          },
+          {
+            "kind": "consensus",
+            "points": 250
+          },
+          {
+            "kind": "translation",
+            "points": 50
+          }
+        ],
+        "has_word_timing": true,
+        "has_translation": true,
+        "translation_lang": "zh"
+      },
+      {
+        "source": "netease",
+        "score": 1320,
+        "terms": [
+          {
+            "kind": "duration",
+            "points": 272
           },
           {
             "kind": "wordTiming",
@@ -240,45 +265,8 @@
         "translation_lang": "zh"
       },
       {
-        "source": "netease",
-        "score": 1314,
-        "terms": [
-          {
-            "kind": "duration",
-            "points": 272
-          },
-          {
-            "kind": "wordTiming",
-            "points": 400
-          },
-          {
-            "kind": "lines",
-            "points": 72
-          },
-          {
-            "kind": "album",
-            "points": 150
-          },
-          {
-            "kind": "titleMatch",
-            "points": 120
-          },
-          {
-            "kind": "consensus",
-            "points": 250
-          },
-          {
-            "kind": "translation",
-            "points": 50
-          }
-        ],
-        "has_word_timing": true,
-        "has_translation": true,
-        "translation_lang": "zh"
-      },
-      {
         "source": "lrclib",
-        "score": 871,
+        "score": 876,
         "terms": [
           {
             "kind": "duration",
@@ -286,7 +274,7 @@
           },
           {
             "kind": "lines",
-            "points": 81
+            "points": 86
           },
           {
             "kind": "album",
@@ -301,37 +289,6 @@
             "points": 250
           }
         ]
-      },
-      {
-        "source": "musixmatch",
-        "score": 541,
-        "terms": [
-          {
-            "kind": "duration",
-            "points": 290
-          },
-          {
-            "kind": "wordTiming",
-            "points": 400
-          },
-          {
-            "kind": "lines",
-            "points": 81
-          },
-          {
-            "kind": "titleMatch",
-            "points": 120
-          },
-          {
-            "kind": "consensus",
-            "points": 250
-          },
-          {
-            "kind": "timelineOffset",
-            "points": -600
-          }
-        ],
-        "has_word_timing": true
       }
     ],
     "winner_fingerprint": "81120f00461356da"

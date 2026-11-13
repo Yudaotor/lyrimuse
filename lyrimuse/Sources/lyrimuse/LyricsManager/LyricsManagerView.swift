@@ -268,7 +268,6 @@ func sourceColor(_ source: String) -> Color {
     case "netease": return .red
     case "qq": return .green
     case "kugou": return .cyan
-    case "musixmatch": return .indigo
     case "lrclib": return .purple
     case "amll": return .orange
     // LyricFind(加,检索走 YouTube Music 但只在数据真是 LyricFind 时才
@@ -278,13 +277,13 @@ func sourceColor(_ source: String) -> Color {
     // 酷我音乐(加,见 lyrimuse-engine/kuwo.go 头注)。红/绿/蓝/紫/橙/粉都被占了,
     // 选棕色作为下一个未占用色。
     case "kuwo": return .brown
-    // 咪咕音乐(加,见 lyrimuse-engine/migu.go 头注)。红/绿/青/靛/紫/橙/粉/棕都被占了,
+    // 咪咕音乐(加,见 lyrimuse-engine/migu.go 头注)。红/绿/青/紫/橙/粉/棕都被占了,
     // 选薄荷绿作为下一个未占用色。
     case "migu": return .mint
-    // Deezer(加,见 lyrimuse-engine/deezer.go 头注)。红/绿/青/靛/紫/橙/粉/棕/薄荷
+    // Deezer(加,见 lyrimuse-engine/deezer.go 头注)。红/绿/青/紫/橙/粉/棕/薄荷
     // 都被占了,选蓝绿(teal)作为下一个未占用色。
     case "deezer": return .teal
-    // Apple Music(加,见 lyrimuse-engine/applemusic.go 头注)。红/绿/青/靛/紫/橙/粉/
+    // Apple Music(加,见 lyrimuse-engine/applemusic.go 头注)。红/绿/青/紫/橙/粉/
     // 棕/薄荷/蓝绿都被占了,选蓝色作为下一个未占用色(品牌色那系的红/粉早被网易云和
     // LyricFind 占了,不硬凑)。
     case "applemusic": return .blue
@@ -300,7 +299,7 @@ func sourceColor(_ source: String) -> Color {
     // KKBOX 本地歌词(不是歌词源:用 KKBOX 放歌时读它自己缓存里的那份,见 lyrimuse-engine/kkboxlyrics.go 头注)。
     // 品牌色是青蓝一系,.cyan / .teal / .blue 都被占了,取最后一个未占用色 .yellow。
     case "kkbox": return .yellow
-    // Spotify 本地歌词(不是歌词源:Spotify 自己拉过的那份,多是 Musixmatch 供词,见 lyrimuse-engine/spotifylyrics.go)。
+    // Spotify 本地歌词(不是歌词源:Spotify 自己拉过的那份,见 lyrimuse-engine/spotifylyrics.go)。
     // 系统色都被占了,品牌绿跟 QQ 音乐的 .green 分不开,用 .gray。
     case "spotify": return .gray
     // Amazon Music 本地歌词(不是歌词源:用它放歌时读它自己缓存里的那份,见 lyrimuse-engine/amazonlibrary.go)。
@@ -318,9 +317,8 @@ func sourceColor(_ source: String) -> Color {
     }
 }
 
-// 歌词来源展示名——网易云音乐/QQ音乐/酷狗音乐是国内用户认得出的中文写法;Musixmatch/
-// LRCLIB 都是纯西方的歌词库(品牌),没有约定俗成的中文名,保留英文原名,不强行硬翻
-// 一个不存在的中文名。
+// 歌词来源展示名——网易云音乐/QQ音乐/酷狗音乐是国内用户认得出的中文写法;LRCLIB 这类
+// 西方的歌词库(品牌)没有约定俗成的中文名,保留英文原名,不强行硬翻一个不存在的中文名。
 /// 「在汽水音乐中播放时用汽水音乐的歌词（晚 2.3 秒）」:偏移是那份相对现在这份主歌词的。歌词管理详情页和搜索面板共用。
 func playerLyricsVersionText(bundleID: String, source: String, shiftMs: Int) -> String {
     let player = SongVersionsSheet.playerDisplayName(bundleID)
@@ -335,10 +333,9 @@ func sourceDisplayName(_ source: String) -> String {
     case "netease": return L10n.t("网易云音乐")
     case "qq": return L10n.t("QQ 音乐")
     case "kugou": return L10n.t("酷狗音乐")
-    case "musixmatch": return "Musixmatch"
     case "lrclib": return "LRCLIB"
     // amll-ttml-db 是社区维护的 TTML 歌词库(github.com/amll-dev/amll-ttml-db),
-    // 跟 Musixmatch/LRCLIB 一样是没有中文名的项目名,保留原名。
+    // 跟 LRCLIB 一样是没有中文名的项目名,保留原名。
     case "amll": return "AMLL"
     // LyricFind——国际品牌名,没有约定俗成的中文译名,同上保留原名。
     // 检索机制上走的是 YouTube Music,但候选过滤只留真正的 LyricFind 数据(见
@@ -348,7 +345,7 @@ func sourceDisplayName(_ source: String) -> String {
     case "kuwo": return L10n.t("酷我音乐")
     // 咪咕音乐——同酷我,用国内用户认得出的中文写法。
     case "migu": return L10n.t("咪咕音乐")
-    // Deezer——国际品牌名,没有约定俗成的中文译名,同 LyricFind/Musixmatch
+    // Deezer——国际品牌名,没有约定俗成的中文译名,同 LyricFind
     // 保留原名。它跟 lyricfind 数据同源(都是 LyricFind 供词),但**展示成两个源**是对的:
     // 用户看到的是"哪条管道给出了这份候选",两条管道的接口与可用性都不一样(实测这台机器上
     // lyricfind 整源不可用、deezer 正常出词),见 lyrimuse-engine/deezer.go。
@@ -393,7 +390,7 @@ func sourceDisplayName(_ source: String) -> String {
 // 在界面上无处可看。接完 Deezer(同样是 LyricFind 供词的另一条管道)之后用户
 // 直接问到"这里该写 LyricFind 还是 YouTube Music",说明这层关系确实需要在界面上讲一句,
 // 就借这个本来空着的槽位讲。展示名不动:改叫 YouTube Music 会 over-promise——实测 YTM
-// 命中的候选里 6/9 是 Musixmatch 转发、全部被闸门拒掉,不是"YouTube Music 有的都能拿到"。
+// 命中的候选里 6/9 是别家转发、全部被闸门拒掉,不是"YouTube Music 有的都能拿到"。
 func sourceHelpText(_ source: String) -> String {
     switch source {
     case "lyricfind": return L10n.t("LyricFind（经由 YouTube Music 检索）")

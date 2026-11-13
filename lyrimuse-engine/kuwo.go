@@ -34,7 +34,7 @@ import (
 //
 // 合规提醒:`search.kuwo.cn/r.s` 和 `kuwo.cn/openapi/...` 都是网页端
 // 接口、非公开 API 文档,这类接口"可能随时失效、
-// 要求验证码或发生变更"——跟 musixmatch.go/amllttml.go 是同一类风险,不是新引入
+// 要求验证码或发生变更"——跟 amllttml.go 是同一类风险,不是新引入
 // 一种风险类别。healthcheck 走的是 enabledLyricSourceNames()(见 enrich.go
 // lyricSourceNames),这个源接进去之后会被健康检查自动覆盖,不需要单独接线。
 type kuwoResult struct {

@@ -28,11 +28,11 @@ func tlOffYRC(startMs int) string {
 // 当前这份有逐字、整首晚 2.5 秒,冠军是对齐的那份、没有逐字:这一轮有一份跟当前这份同轴的候选扣了 timelineOffset,
 // 就不再为逐字留着当前这份;同轴的那份没被扣、被扣的是另一份轴、扣的是别的项,都照旧留着。
 func TestRescoreWouldLoseWordTimingOffTimeline(t *testing.T) {
-	cur := enrichEntry{Lyrics: bt(tlOffLRC(7500)), LyricsYRC: bt(tlOffYRC(7500)), LyricsSource: "musixmatch", LyricsScore: 1030,
+	cur := enrichEntry{Lyrics: bt(tlOffLRC(7500)), LyricsYRC: bt(tlOffYRC(7500)), LyricsSource: "deezer", LyricsScore: 1030,
 		LyricsScoringVersion: lyricsScoringVersion - 1}
 	winner := scoredLyricCandidateResult{Source: "applemusic", Lyrics: tlOffLRC(5000), Score: 694}
 	offset := []scoreTerm{{Kind: scoreTermTimelineOffset, Points: -600}}
-	sameAxis := scoredLyricCandidateResult{Source: "musixmatch", Lyrics: tlOffLRC(7500), LyricsYRC: tlOffYRC(7500), Score: 430,
+	sameAxis := scoredLyricCandidateResult{Source: "deezer", Lyrics: tlOffLRC(7500), LyricsYRC: tlOffYRC(7500), Score: 430,
 		ScoreTerms: offset}
 	cases := []struct {
 		name  string
@@ -40,9 +40,9 @@ func TestRescoreWouldLoseWordTimingOffTimeline(t *testing.T) {
 		want  bool
 	}{
 		{"同轴的那份被判整首错开", sameAxis, false},
-		{"同轴的那份没被扣分", scoredLyricCandidateResult{Source: "musixmatch", Lyrics: tlOffLRC(7500), LyricsYRC: tlOffYRC(7500), Score: 1030}, true},
+		{"同轴的那份没被扣分", scoredLyricCandidateResult{Source: "deezer", Lyrics: tlOffLRC(7500), LyricsYRC: tlOffYRC(7500), Score: 1030}, true},
 		{"被扣分的是另一份轴", scoredLyricCandidateResult{Source: "lrclib", Lyrics: tlOffLRC(11000), Score: 100, ScoreTerms: offset}, true},
-		{"扣的不是整首错开那一项", scoredLyricCandidateResult{Source: "musixmatch", Lyrics: tlOffLRC(7500), LyricsYRC: tlOffYRC(7500), Score: 430,
+		{"扣的不是整首错开那一项", scoredLyricCandidateResult{Source: "deezer", Lyrics: tlOffLRC(7500), LyricsYRC: tlOffYRC(7500), Score: 430,
 			ScoreTerms: []scoreTerm{{Kind: scoreTermTimelineIntrusion, Points: -600}}}, true},
 	}
 	for _, c := range cases {
@@ -65,7 +65,7 @@ func TestRescoreWouldLoseWordTimingOffTimeline(t *testing.T) {
 		want  bool
 	}{
 		{"这一版的旧分数、同轴的那份被判整首错开", sameAxis, false},
-		{"这一版的旧分数、同轴的那份没被扣分", scoredLyricCandidateResult{Source: "musixmatch", Lyrics: tlOffLRC(7500), LyricsYRC: tlOffYRC(7500), Score: 1030}, true},
+		{"这一版的旧分数、同轴的那份没被扣分", scoredLyricCandidateResult{Source: "deezer", Lyrics: tlOffLRC(7500), LyricsYRC: tlOffYRC(7500), Score: 1030}, true},
 	} {
 		scored := []scoredLyricCandidateResult{winner, c.other}
 		if got := rescoreKeepsCurrent(stamped, scored, &scored[0]); got != c.want {
@@ -76,7 +76,7 @@ func TestRescoreWouldLoseWordTimingOffTimeline(t *testing.T) {
 		}
 	}
 	// 比的是显示出来的那条轴:整行 LRC 不同、逐字轴是同一份,照样认得出。
-	wordsOnly := scoredLyricCandidateResult{Source: "musixmatch", Lyrics: tlOffLRC(9000), LyricsYRC: tlOffYRC(7500), Score: 430, ScoreTerms: offset}
+	wordsOnly := scoredLyricCandidateResult{Source: "deezer", Lyrics: tlOffLRC(9000), LyricsYRC: tlOffYRC(7500), Score: 430, ScoreTerms: offset}
 	if !rescoreCurrentTimelineOff(cur, []scoredLyricCandidateResult{winner, wordsOnly}) {
 		t.Error("整行 LRC 不同、逐字轴同一份的被判错开候选应当认得出")
 	}

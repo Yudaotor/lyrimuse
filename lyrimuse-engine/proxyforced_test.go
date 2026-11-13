@@ -12,7 +12,7 @@ import (
 // 强制走代理的主机:代理失败不退回直连、不清粘性,下一次照旧走代理;新起的 transport(别的进程)读磁盘提示照样认。
 func TestProxyFallbackForcedHostStaysOnProxy(t *testing.T) {
 	newFallbackTestEnv(t)
-	host := "apic-appmobile.musixmatch.com"
+	host := "lyrics.example.com"
 	direct := &stubRoundTripper{body: "direct"}
 	viaProxy := &stubRoundTripper{err: errors.New("EOF")}
 	tr := &proxyFallbackTransport{direct: direct, viaProxy: viaProxy}
@@ -35,7 +35,7 @@ func TestProxyFallbackForcedHostStaysOnProxy(t *testing.T) {
 // 强制期过了:代理失败照旧退回直连(普通的「代理自己坏了」)。
 func TestProxyFallbackExpiredForceFallsBackDirect(t *testing.T) {
 	newFallbackTestEnv(t)
-	host := "apic-appmobile.musixmatch.com"
+	host := "lyrics.example.com"
 	saveProxyFallbackHint(host, true)
 	f := readProxyFallbackHint()
 	f.Forced = map[string]int64{host: time.Now().Add(-time.Minute).Unix()}
@@ -56,7 +56,7 @@ func TestProxyFallbackExpiredForceFallsBackDirect(t *testing.T) {
 func TestProxyFallbackPreferProxyAll(t *testing.T) {
 	newFallbackTestEnv(t)
 	tr := &proxyFallbackTransport{direct: &stubRoundTripper{}, viaProxy: &stubRoundTripper{}}
-	hosts := []string{"apic-appmobile.musixmatch.com", "apic.musixmatch.com"}
+	hosts := []string{"lyrics.example.com", "lyrics-backup.example.com"}
 	saveProxyFallbackHint(hosts[1], true)
 	if tr.preferProxyAll(hosts) {
 		t.Fatal("只有一台走代理不算")

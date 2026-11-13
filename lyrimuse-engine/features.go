@@ -22,21 +22,18 @@ import (
 // Source 的取值、以及 desktop-lyrics「歌词管理」窗口 LyricsManagerView.swift 的
 // sourceDisplayName 逐字对应,这是整个项目里"歌词源"唯一的一套 id,不是这里新起的。
 const (
-	lyricSourceNetease    = "netease"
-	lyricSourceQQ         = "qq"
-	lyricSourceKugou      = "kugou"
-	lyricSourceMusixmatch = "musixmatch"
-	lyricSourceLRCLIB     = "lrclib"
+	lyricSourceNetease = "netease"
+	lyricSourceQQ      = "qq"
+	lyricSourceKugou   = "kugou"
+	lyricSourceLRCLIB  = "lrclib"
 	// amll-ttml-db 社区库(见 amllttml.go)。它跟其余源的区别是**格式本身**能携带
 	// 演唱者归属(TTML 的 ttm:agent),命中即拿到真·结构化对唱,不用靠行首前缀的启发式。
 	// 覆盖率有限(实测约 6%),所以是"锦上添花"的一档,不是主力源。
 	lyricSourceAMLL = "amll"
-	// LyricFind(检索机制见 ytmusic.go)。YouTube Music 的歌词后端同时
-	// 接了 Musixmatch 和 LyricFind 两家供应商,只有 LyricFind 是六源之外的真实增量
-	// 数据——ytmusic.go 按 timedLyricsData 的 sourceMessage 过滤,查到的是 Musixmatch
-	// 换个管道重发时一律当"没查到"处理,所以这个源名副其实:只要叫这个名字的候选,
-	// 就真的是 LyricFind 的数据(源名因此叫 "lyricfind" 不是 "ytmusic"——这是检索
-	// 机制,不是数据归属方,归属方才是这个项目给源命名的准则,见 musixmatch/lrclib)。
+	// LyricFind(检索机制见 ytmusic.go)。YouTube Music 的歌词后端接了好几家供应商,
+	// ytmusic.go 按 timedLyricsData 的 sourceMessage 过滤,只收标着 LyricFind 的那份,别家的一律当"没查到",
+	// 所以这个源名副其实:只要叫这个名字的候选,就真的是 LyricFind 的数据(源名因此叫 "lyricfind" 不是
+	// "ytmusic"——这是检索机制,不是数据归属方,归属方才是这个项目给源命名的准则)。
 	// 只有逐行,没有逐字。实测(用户曲库 9 首抽样,过滤前的原始命中)8/9 在 YTM 上有
 	// 歌词,但只有 2/9 是 LyricFind,覆盖率不算高,归在"锦上添花",不是主力源。
 	lyricSourceLyricFind = "lyricfind"
@@ -97,15 +94,15 @@ const (
 //
 // 排序依据(按实测采用率,此前是照抄 enrich.go candidates 的 append 顺序):
 // 用户本机 3744 条 enrich 缓存里最终被采用的歌词来自 酷狗 1506(40.2%)/ 网易云 1125(30.0%)/
-// QQ 732(19.6%)/ Musixmatch 176(4.7%)/ LRCLIB 74(2.0%) —— 酷狗是第一主力却长期排第三,
-// 这次提到首位,前五个自此按真实采用率排。
+// QQ 732(19.6%)/ LRCLIB 74(2.0%) —— 酷狗是第一主力却长期排第三,
+// 这次提到首位,前四个自此按真实采用率排。
 //
 // 后四个(amll/lyricfind/kuwo/migu)**刻意不按采用率排**,维持"锦上添花"档排在末尾:
 // 它们分别是 / 08-31 / 08-31 / 09-04 才接入的,上面那 3744 条缓存绝大多数早于
 // 它们存在,采用数 0~16 是样本偏差、不是覆盖率结论 —— 别拿"没赶上考试"当"考砸了"。等各自
 // 跑满一段时间再拿数据重排。想让它们优先,用户可以自己在设置里拖。
 var lyricsSourceDefaultOrder = []string{
-	lyricSourceKugou, lyricSourceNetease, lyricSourceQQ, lyricSourceMusixmatch, lyricSourceLRCLIB,
+	lyricSourceKugou, lyricSourceNetease, lyricSourceQQ, lyricSourceLRCLIB,
 	lyricSourceAMLL, lyricSourceLyricFind, lyricSourceKuwo, lyricSourceMigu, lyricSourceDeezer,
 	lyricSourceAppleMusic, lyricSourceSoda, lyricSourceVibe, lyricSourceGenie, lyricSourcePetitLyrics,
 }
@@ -205,8 +202,8 @@ type featureFlagsFile struct {
 	// 两处都找。见 resolveMotionCoverSources。
 	MotionCoverSources []string `json:"motion_cover_sources,omitempty"`
 	// LyricsTranslationLanguage："auto"(跟随系统语言,默认)或 ISO 639-1 两位小写代码
-	// (如"en"/"es"/"ja")——Musixmatch 译文(crowd.track.translations.get)的目标语言。
-	// 网易云/QQ 音乐的译文固定是中文,只有 Musixmatch 这个源支持指定任意语言。
+	// (如"en"/"es"/"ja")——机器翻译的目标语言,也用来判断歌词源自带的译文是不是用户要的语言。
+	// 网易云/QQ 音乐的译文固定是中文。
 	// resolveLyricsTranslationLanguage 负责把"auto"/空值解析成具体代码,见其注释。
 	LyricsTranslationLanguage string `json:"lyrics_translation_language,omitempty"`
 	// SystemLanguage:App 写进来的本机系统语言(AppleLocale 下划线前那段转小写,App 侧 SystemLanguage),
@@ -341,8 +338,7 @@ type featureFlags struct {
 	// 见 resolveMotionCoverSources。
 	MotionCoverSkipApple, MotionCoverSkipOther bool
 	// LyricsTranslationLanguage 是已经解析过的具体 ISO 639-1 代码(不会是"auto"或空值,
-	// 见 resolveLyricsTranslationLanguage)。三处读取,含义都是"译文要什么语言":
-	// musixmatchTranslationLRC(musixmatch.go)向 Musixmatch 索取该语言的社区译文;
+	// 见 resolveLyricsTranslationLanguage)。含义是"译文要什么语言":
 	// appleLangCode / myMemoryLangCode(translate.go)把它转成端上翻译和网络兜底
 	// 各自的语言代码。网易云/QQ 不在此列——它们自带的社区译文只有中文,给不了别的语言。
 	LyricsTranslationLanguage string
@@ -786,7 +782,7 @@ func systemLanguageCode() string {
 	return ""
 }
 
-// lyricsTranslationLanguageCodes:设置里可选的译文语言,跟 App 侧 MusixmatchTranslationLanguage 的
+// lyricsTranslationLanguageCodes:设置里可选的译文语言,跟 App 侧 LyricsTranslationLanguage 的
 // rawValue 逐项一致(auto 除外),TestLyricsTranslationLanguageCodesMatchSwift 对账。
 var lyricsTranslationLanguageCodes = []string{
 	"en", "zh", "ja", "ko", "es", "fr", "de", "pt", "it", "ru", "ar", "vi", "th", "id", "nl", "pl", "tr",

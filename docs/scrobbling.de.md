@@ -139,7 +139,7 @@ Innerhalb von Lyrimuse werden sie bei Wiedergabezahlen, Charts und „Wiedergabe
 ## 7. Häufige Fragen
 
 **Kann ich Lyrimuse ohne Scrobbeln nutzen?**
-Ja, das ist der Standard – es wird nichts gescrobbelt, bis du unter Einstellungen → Verknüpfte Dienste einen Last.fm-Account verbindest. Das Abrufen von Liedtexten und Covern ist davon getrennt: Es sendet Künstler- und Titelnamen an die öffentlichen Liedtextanbieter (Netease, QQ, Kugou, LRCLIB, Musixmatch, AMLL), unabhängig davon, ob ein Account verbunden ist. Diese Quellen kannst du in den Einstellungen einschränken oder deaktivieren.
+Ja, das ist der Standard – es wird nichts gescrobbelt, bis du unter Einstellungen → Verknüpfte Dienste einen Last.fm-Account verbindest. Das Abrufen von Liedtexten und Covern ist davon getrennt: Es sendet Künstler- und Titelnamen an die öffentlichen Liedtextanbieter (Netease, QQ, Kugou, LRCLIB, AMLL), unabhängig davon, ob ein Account verbunden ist. Diese Quellen kannst du in den Einstellungen einschränken oder deaktivieren.
 
 **Warum erscheint derselbe Künstler zweimal in meinem Last.fm-Profil?**
 Dein Player hat zwei verschiedene Namen gemeldet, und beide wurden wie gemeldet übermittelt. Lyrimuse führt sie in seiner eigenen Statistik zusammen; um sie auf Last.fm zusammenzuführen, musst du die Scrobbles dort bearbeiten.

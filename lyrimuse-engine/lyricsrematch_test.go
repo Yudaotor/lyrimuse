@@ -202,8 +202,8 @@ func TestLyricsRematchCancelAndSupersede(t *testing.T) {
 
 // 手动重评走真实的 rescoreLyricsWith:人工修正过、选定过源的条目照跑,换上冠军后两个标记清掉、决策记录标成手动。
 func TestManualRematchRescoresHandEditedEntry(t *testing.T) {
-	setupRescoreTest(t, []string{"musixmatch"}, func(ctx context.Context) {
-		lyricSourceRoundFrom(ctx).markReached("musixmatch")
+	setupRescoreTest(t, []string{"deezer"}, func(ctx context.Context) {
+		lyricSourceRoundFrom(ctx).markReached("deezer")
 	})
 	const artist, title, album = rescoreTestArtist, "Hand Edited", "Some Album"
 	key := enrichKey(artist, title, album)
@@ -231,7 +231,7 @@ func TestManualRematchRescoresHandEditedEntry(t *testing.T) {
 	e := enrichCache[key]
 	inflight := enrichInflight[key]
 	enrichMu.Unlock()
-	if !strings.HasPrefix(e.Lyrics.String(), "[00:05.00]Brand new first line") || e.LyricsSource != "musixmatch" {
+	if !strings.HasPrefix(e.Lyrics.String(), "[00:05.00]Brand new first line") || e.LyricsSource != "deezer" {
 		t.Fatalf("手动重评应换上冠军: source=%q lyrics=%q", e.LyricsSource, e.Lyrics)
 	}
 	if e.ManualLyrics || e.LyricsSourceChoice != "" {
@@ -240,7 +240,7 @@ func TestManualRematchRescoresHandEditedEntry(t *testing.T) {
 	if e.LyricsDecision == nil || e.LyricsDecision.Path != lyricsDecisionPathManualRematch || !e.LyricsDecision.Applied {
 		t.Errorf("决策记录应标成手动重新匹配、已采用: %+v", e.LyricsDecision)
 	}
-	if got.Outcome != lyricsRematchChanged || got.Winner != "musixmatch" || got.Previous != "" || !got.HadLyrics || !got.TextChanged {
+	if got.Outcome != lyricsRematchChanged || got.Winner != "deezer" || got.Previous != "" || !got.HadLyrics || !got.TextChanged {
 		t.Errorf("结论 %+v", got)
 	}
 	if progressCalls == 0 {
@@ -253,7 +253,7 @@ func TestManualRematchRescoresHandEditedEntry(t *testing.T) {
 
 // 没词的条目走补空那条路(retryLyricsUpgradeWith),决策记录同样标成手动。
 func TestManualRematchFillsEmptyEntry(t *testing.T) {
-	setupRescoreTest(t, []string{"musixmatch"}, nil)
+	setupRescoreTest(t, []string{"deezer"}, nil)
 	const artist, title, album = rescoreTestArtist, "Empty Song", "Some Album"
 	key := enrichKey(artist, title, album)
 	enrichMu.Lock()
@@ -265,21 +265,21 @@ func TestManualRematchFillsEmptyEntry(t *testing.T) {
 	enrichMu.Lock()
 	e := enrichCache[key]
 	enrichMu.Unlock()
-	if e.LyricsSource != "musixmatch" || e.Lyrics.IsZero() {
+	if e.LyricsSource != "deezer" || e.Lyrics.IsZero() {
 		t.Fatalf("没词的条目应补上冠军: %+v", e)
 	}
 	if e.LyricsDecision == nil || e.LyricsDecision.Path != lyricsDecisionPathManualRematch {
 		t.Errorf("决策记录应标成手动重新匹配: %+v", e.LyricsDecision)
 	}
-	if got.Outcome != lyricsRematchChanged || got.HadLyrics || got.Winner != "musixmatch" {
+	if got.Outcome != lyricsRematchChanged || got.HadLyrics || got.Winner != "deezer" {
 		t.Errorf("结论 %+v", got)
 	}
 }
 
 // 当前歌词的来源这一轮没应答:不动,结论 not_decidable 带上那个来源。lrclib 走测试里拨号即失败的传输,不会应答。
 func TestManualRematchNotDecidable(t *testing.T) {
-	setupRescoreTest(t, []string{"musixmatch", "lrclib"}, func(ctx context.Context) {
-		lyricSourceRoundFrom(ctx).markReached("musixmatch")
+	setupRescoreTest(t, []string{"deezer", "lrclib"}, func(ctx context.Context) {
+		lyricSourceRoundFrom(ctx).markReached("deezer")
 	})
 	const artist, title, album = rescoreTestArtist, "Lrclib Song", "Some Album"
 	key := enrichKey(artist, title, album)
@@ -307,13 +307,13 @@ func TestManualRematchEditedOrDeletedMidway(t *testing.T) {
 	key := enrichKey(artist, title, album)
 	const body = "[00:05.00]Old line one\n[00:15.00]Old line two"
 
-	setupRescoreTest(t, []string{"musixmatch"}, func(context.Context) {
+	setupRescoreTest(t, []string{"deezer"}, func(context.Context) {
 		enrichMu.Lock()
 		markEnrichEditedLocked(false, key)
 		enrichMu.Unlock()
 	})
 	enrichMu.Lock()
-	enrichCache = map[string]enrichEntry{key: {Lyrics: bt(body), LyricsSource: "musixmatch", LyricsScoringVersion: lyricsScoringVersion - 1}}
+	enrichCache = map[string]enrichEntry{key: {Lyrics: bt(body), LyricsSource: "deezer", LyricsScoringVersion: lyricsScoringVersion - 1}}
 	enrichMu.Unlock()
 	if got := runLyricsRematchOne(context.Background(), key, nil); got.Outcome != lyricsRematchEdited {
 		t.Errorf("期间被改过: %+v", got)
@@ -325,17 +325,17 @@ func TestManualRematchEditedOrDeletedMidway(t *testing.T) {
 		t.Errorf("期间被改过就不该写: %q", kept)
 	}
 
-	// 换一首:进程内的 musixmatch 缓存按歌名命中,同名会绕过下面这个假源。
+	// 换一首:进程内的 deezer 缓存按歌名命中,同名会绕过下面这个假源。
 	const deletedTitle = "Deleted Song"
 	deleted := enrichKey(artist, deletedTitle, album)
-	musixmatchResolve = func(ctx context.Context, artist, title string, durationSecs float64, trLang, isrc string) musixmatchResult {
+	deezerResolve = func(ctx context.Context, artist, title, album string, durationSecs float64, isrc string) deezerResult {
 		enrichMu.Lock()
 		delete(enrichCache, deleted)
 		enrichMu.Unlock()
-		return musixmatchResult{lrc: rescoreTestNewBody, title: title, artist: artist, durationSecs: 180}
+		return deezerResult{lyrics: rescoreTestNewBody, title: title, artist: artist, durationSecs: 180}
 	}
 	enrichMu.Lock()
-	enrichCache[deleted] = enrichEntry{Lyrics: bt(body), LyricsSource: "musixmatch", LyricsScoringVersion: lyricsScoringVersion - 1}
+	enrichCache[deleted] = enrichEntry{Lyrics: bt(body), LyricsSource: "deezer", LyricsScoringVersion: lyricsScoringVersion - 1}
 	enrichMu.Unlock()
 	if got := runLyricsRematchOne(context.Background(), deleted, nil); got.Outcome != lyricsRematchMissing {
 		t.Errorf("期间被删了: %+v", got)
@@ -350,7 +350,7 @@ func TestManualRematchEditedOrDeletedMidway(t *testing.T) {
 
 // 缓存里没有、这首正在别处搜索:不发请求,结论分别是 missing / busy。
 func TestManualRematchMissingOrBusy(t *testing.T) {
-	setupRescoreTest(t, []string{"musixmatch"}, func(context.Context) {
+	setupRescoreTest(t, []string{"deezer"}, func(context.Context) {
 		t.Error("不该发请求")
 	})
 	const key = "Someone|Busy|Album"
@@ -376,12 +376,12 @@ func TestManualRematchMissingOrBusy(t *testing.T) {
 
 // 报结论之前已经落盘:常驻进程里保存有节流,没换词的一轮只排一次记账补写(最多晚一分钟),App 拿到结论就重读。
 func TestManualRematchSavesBeforeReporting(t *testing.T) {
-	setupRescoreTest(t, []string{"musixmatch"}, nil)
+	setupRescoreTest(t, []string{"deezer"}, nil)
 	const artist, title, album = rescoreTestArtist, "Same Song", "Some Album"
 	key := enrichKey(artist, title, album)
 	enrichMu.Lock()
 	enrichCache = map[string]enrichEntry{key: {
-		Lyrics: bt(rescoreTestNewBody), LyricsSource: "musixmatch", LyricsScoringVersion: lyricsScoringVersion - 1,
+		Lyrics: bt(rescoreTestNewBody), LyricsSource: "deezer", LyricsScoringVersion: lyricsScoringVersion - 1,
 	}}
 	enrichMu.Unlock()
 	saves := 0

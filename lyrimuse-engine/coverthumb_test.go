@@ -13,7 +13,6 @@ func TestCoverThumbURL(t *testing.T) {
 		{"https://d.musicapp.migu.cn/a/b.webp", "https://d.musicapp.migu.cn/a/b.jpg"},
 		// 认不出尺寸段的 Apple 地址、别家的地址原样。
 		{"https://is1-ssl.mzstatic.com/image/thumb/x/source.png", "https://is1-ssl.mzstatic.com/image/thumb/x/source.png"},
-		{"https://s.mxmcdn.net/images-storage/albums2/1/41606678_500_500.jpg", "https://s.mxmcdn.net/images-storage/albums2/1/41606678_500_500.jpg"},
 	}
 	for _, c := range cases {
 		if got := coverThumbURL(c.in); got != c.want {

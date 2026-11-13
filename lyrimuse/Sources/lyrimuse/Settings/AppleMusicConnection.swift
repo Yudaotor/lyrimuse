@@ -266,7 +266,7 @@ final class AppleMusicLoginWindowController: NSWindowController, WKNavigationDel
     }
 
     /// 凭据文件从创建那一刻起就是 0o600(先建同目录临时文件再改名),不存在「先按默认权限写好、再 chmod」
-    /// 之间同机其它用户读得到的窗口。引擎侧写 musixmatch token 同一档权限。
+    /// 之间同机其它用户读得到的窗口。引擎侧写凭据文件同一档权限。
     static func writeCredentialFile(_ data: Data, to url: URL) throws {
         let dir = url.deletingLastPathComponent()
         try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)

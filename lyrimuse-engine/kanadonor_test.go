@@ -180,13 +180,13 @@ func TestLyricsKanaIsWired(t *testing.T) {
 		}
 		return string(b)
 	}
-	if n := strings.Count(read("enrich.go"), "\trefreshSpeakers(&e, scored)\n\trefreshKana(&e, scored)\n"); n != 2 {
+	if n := strings.Count(read("enrich.go"), "\trefreshKana(&e, scored)\n"); n != 2 {
 		t.Errorf("enrich.go 升级重试和重选两处该刷新,找到 %d 处", n)
 	}
 	for f, s := range map[string]string{
-		"provisionallyrics.go": "refreshSpeakers(&e, scored)\n\trefreshKana(&e, scored)\n",
-		"resynclyricscli.go":   "refreshSpeakers(&cur, scored)\n\t\trefreshKana(&cur, scored)\n",
-		"songentityshare.go":   "refreshSpeakers(e, r.Scored)\n\trefreshKana(e, r.Scored)\n",
+		"provisionallyrics.go": "refreshKana(&e, scored)\n",
+		"resynclyricscli.go":   "refreshKana(&cur, scored)\n",
+		"songentityshare.go":   "refreshKana(e, r.Scored)\n",
 		"backfilllyrics.go":    "e.LyricsKana, e.LyricsKanaChecked, e.LyricsKanaRomaFor = fresh.LyricsKana, fresh.LyricsKanaChecked, fresh.LyricsKanaRomaFor\n",
 		"crossalbum.go":        "e.LyricsKana, e.LyricsKanaChecked, e.LyricsKanaRomaFor = src.LyricsKana, src.LyricsKanaChecked, src.LyricsKanaRomaFor\n",
 		"crossalbumcli.go":     "dst.LyricsKana, dst.LyricsKanaChecked, dst.LyricsKanaRomaFor = src.LyricsKana, src.LyricsKanaChecked, src.LyricsKanaRomaFor\n",

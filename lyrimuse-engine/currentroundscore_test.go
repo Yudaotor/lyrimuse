@@ -87,8 +87,8 @@ func TestCurrentLyricsRoundScoreCreditsSourceTranslation(t *testing.T) {
 	t.Cleanup(func() { setFeatures(saved) })
 	setFeatures(featureFlags{LyricsTranslationLanguage: "zh"})
 	lyrics, _, tr := timedLyricsFixture(6)
-	cur := enrichEntry{Lyrics: bt(lyrics), LyricsSource: "musixmatch", LyricsTr: bt(tr), LyricsTrLang: "zh"}
-	scored := []scoredLyricCandidateResult{{Source: "musixmatch", Lyrics: lyrics, Score: 700}}
+	cur := enrichEntry{Lyrics: bt(lyrics), LyricsSource: "deezer", LyricsTr: bt(tr), LyricsTrLang: "zh"}
+	scored := []scoredLyricCandidateResult{{Source: "deezer", Lyrics: lyrics, Score: 700}}
 	if score, gained, _ := currentLyricsRoundScore(cur, scored, true); !gained || score != 700+translationPoints {
 		t.Fatalf("歌词源自带译文应补 %d 分,得到 %d", translationPoints, score)
 	}

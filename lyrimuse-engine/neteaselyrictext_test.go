@@ -6,7 +6,7 @@ import "testing"
 // Away》这两首网易云缓存的歌词里,英文撇号前带着字面反斜杠(`It\'s`、`Can\'t`)直接显示
 // 在悬浮歌词/歌词窗口里。核实过是网易云 lyric/tlyric/romalrc/yrc 接口自己数据库里的脏
 // 数据(json.Unmarshal 已经正常解码,不是我们转义链路的 bug——本地缓存全量按来源分组
-// 核实过,1669 条网易云缓存只有这 2 条命中,QQ/酷狗/musixmatch/lrclib/amll 零命中),
+// 核实过,1669 条网易云缓存只有这 2 条命中,QQ/酷狗/lrclib/amll 零命中),
 // 所以固定清一种组合(反斜杠+撇号)就够,见 stripNeteaseEscapedApostrophes 头注。
 func TestStripNeteaseEscapedApostrophes(t *testing.T) {
 	cases := []struct {

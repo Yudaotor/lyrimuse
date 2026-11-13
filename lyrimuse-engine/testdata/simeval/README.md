@@ -83,8 +83,6 @@ SIMEVAL_DATA=<目录> SIMEVAL_WRITE_GOLDEN=1 go test -run TestSimEval .
 - `lyrimuse-features.json` — **拷贝**。缺了不会全禁用(静默退默认值),但退的是默认集合、
   不是用户当前的「歌词来源」开关,源覆盖面会跟真实配置对不上。
 - 上面那五份 — **拷贝**(隔离的正题)。
-- `lyrimuse-musixmatch-token.json` — **拷贝**。不给的话每个一次性子进程各自 `token.get`,
-  一密集就 401,Musixmatch 在样本里基本等于整体失效,命中率系统性偏低。
 - `lyrimuse-enrich-cache.json` — **symlink 就行**(`loadEnrichCacheReadOnly` 刻意不设
   `enrichPath`)。别省掉:不给的话 `learnedSourceArtistAlias` 那一档恒空,打分会变。
 

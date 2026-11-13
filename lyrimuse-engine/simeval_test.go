@@ -561,8 +561,8 @@ func TestSimEval(t *testing.T) {
 	}
 	fingerprint := fmt.Sprintf("%d/%d/%x", len(tracks), nCands, h.Sum(nil)[:8])
 
-	// 各源候选数按样本实算,不写死。那轮把"无 musixmatch 候选"手写进
-	// Assumptions,之后样本重采带上了 musixmatch 也没人改这行字——直接后果是
+	// 各源候选数按样本实算,不写死。那轮把"无某源候选"手写进
+	// Assumptions,之后样本重采带上了那个源也没人改这行字——直接后果是
 	// wordTimingCoverage 那道自洽闸"从没在它要治的源上消融过"这件事一直没被发现
 	// (《Rumour Has It》案)。假设要么可执行,要么迟早撒谎。
 	srcCount := map[string]int{}

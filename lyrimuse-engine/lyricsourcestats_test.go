@@ -17,6 +17,14 @@ var lyricSourceStatsTestToday = time.Date(2026, 10, 2, 15, 0, 0, 0, time.Local)
 
 func allLyricSourcesOn(string) bool { return true }
 
+// withVibeInWesternPeers:几条判定要西文那一组凑够五家才测得出来,用例里把 vibe 临时并进那一组。
+func withVibeInWesternPeers(t *testing.T) {
+	t.Helper()
+	saved := lyricSourcePeerGroups
+	lyricSourcePeerGroups = [][]string{saved[0], append(slices.Clone(saved[1]), "vibe")}
+	t.Cleanup(func() { lyricSourcePeerGroups = saved })
+}
+
 // lyricSourceTestDays 按「往前第几天 → 源 → 计数」拼出 days。
 func lyricSourceTestDays(spec map[int]map[string]lyricSourceDayCounts) map[string]*lyricSourceStatsDay {
 	days := map[string]*lyricSourceStatsDay{}
@@ -109,9 +117,9 @@ func TestAddLyricSourceRoundCountsPeersInSameGroup(t *testing.T) {
 func TestAddLyricSourceRoundSplitsClassesAndBlockedSkips(t *testing.T) {
 	day := &lyricSourceStatsDay{}
 	round := lyricSourceRoundOutcome{
-		enabled:    []string{"lrclib", "musixmatch", "lyricfind", "deezer", "applemusic"},
-		skipped:    map[string]bool{"musixmatch": true, "applemusic": true},
-		skipReason: map[string]string{"musixmatch": lyricSourceCooldownReasonBlocked, "applemusic": lyricSourceCooldownReasonNetwork},
+		enabled:    []string{"lrclib", "vibe", "lyricfind", "deezer", "applemusic"},
+		skipped:    map[string]bool{"vibe": true, "applemusic": true},
+		skipReason: map[string]string{"vibe": lyricSourceCooldownReasonBlocked, "applemusic": lyricSourceCooldownReasonNetwork},
 		responded:  map[string]bool{"lrclib": true, "deezer": true, "lyricfind": true},
 		cjk:        true,
 	}
@@ -124,7 +132,7 @@ func TestAddLyricSourceRoundSplitsClassesAndBlockedSkips(t *testing.T) {
 		"deezer":    {Asked: 2, Responded: 2, PeerRounds: 1, PeerHits: 1, PeerRoundsCJK: 1, PeerHitsCJK: 1},
 		"lyricfind": {Asked: 2, Responded: 1, PeerRounds: 2, PeerHits: 1, PeerRoundsCJK: 1, PeerHitsCJK: 1},
 		// 被拦下跳过的另记一份;别的原因跳过的不记。
-		"musixmatch": {Skipped: 2, SkippedBlocked: 2},
+		"vibe":       {Skipped: 2, SkippedBlocked: 2},
 		"applemusic": {Skipped: 2},
 	}
 	for src, w := range want {
@@ -237,9 +245,9 @@ func TestSummarizeLyricSourceStatsBelowUsual(t *testing.T) {
 	// lrclib:西文歌真的少了(六成 → 两成);中文歌每天不到 20 轮、没有基线,只拿西文那一类比,照样报。
 	lyricSourceTestRange(spec, 3, 16, "lrclib", lyricSourceTestPeers(50, 30, 10, 9))
 	lyricSourceTestRange(spec, 0, 2, "lrclib", lyricSourceTestPeers(40, 8, 30, 0))
-	// musixmatch:够格的基线天只有 6 天,不到 7 天没有基线可比。
-	lyricSourceTestRange(spec, 3, 8, "musixmatch", lyricSourceTestPeers(40, 36, 0, 0))
-	lyricSourceTestRange(spec, 0, 2, "musixmatch", lyricSourceTestPeers(40, 5, 0, 0))
+	// vibe:够格的基线天只有 6 天,不到 7 天没有基线可比。
+	lyricSourceTestRange(spec, 3, 8, "vibe", lyricSourceTestPeers(40, 36, 0, 0))
+	lyricSourceTestRange(spec, 0, 2, "vibe", lyricSourceTestPeers(40, 5, 0, 0))
 	// applemusic:3 天只有 90 轮,不到「比平时少」要的 100 轮。
 	lyricSourceTestRange(spec, 3, 16, "applemusic", lyricSourceTestPeers(40, 36, 0, 0))
 	lyricSourceTestRange(spec, 0, 2, "applemusic", lyricSourceTestPeers(30, 6, 0, 0))
@@ -256,7 +264,7 @@ func TestSummarizeLyricSourceStatsBelowUsual(t *testing.T) {
 	if lrclib.Alert != lyricSourceAlertBelowUsual || lrclib.PeerRate != 0.2 || lrclib.UsualRate != 0.6 || lrclib.PeerRounds != 120 {
 		t.Errorf("lrclib = %+v, want below_usual 0.2 vs 0.6 / 120(没有基线的中文那类不算)", lrclib)
 	}
-	for _, src := range []string{"lyricfind", "musixmatch", "applemusic", "kuwo"} {
+	for _, src := range []string{"lyricfind", "vibe", "applemusic", "kuwo"} {
 		if a := lyricSourceSummaryOf(t, out, src).Alert; a != "" {
 			t.Errorf("%s alert = %q, want 无", src, a)
 		}
@@ -279,6 +287,7 @@ func TestSummarizeLyricSourceStatsBelowUsual(t *testing.T) {
 }
 
 func TestSummarizeLyricSourceStatsCooling(t *testing.T) {
+	withVibeInWesternPeers(t)
 	spec := map[int]map[string]lyricSourceDayCounts{}
 	// lyricfind:2 天里四分之三被跳过,跳闸原因是 5xx。命中率同时也够「几乎不给词」,冷却优先。
 	lyricSourceTestRange(spec, 0, 1, "lyricfind", lyricSourceDayCounts{Asked: 5, Skipped: 15, PeerRounds: 30})
@@ -288,16 +297,16 @@ func TestSummarizeLyricSourceStatsCooling(t *testing.T) {
 	lyricSourceTestRange(spec, 0, 1, "kugou", lyricSourceDayCounts{Asked: 30, Skipped: 10})
 	// deezer:2 天只有 12 轮,样本不够。
 	lyricSourceTestRange(spec, 0, 1, "deezer", lyricSourceDayCounts{Asked: 1, Skipped: 5})
-	// musixmatch:网络原因冷却,但只有它一个,仍然只说冷却。
-	lyricSourceTestRange(spec, 0, 1, "musixmatch", lyricSourceDayCounts{Asked: 5, Skipped: 15, Trips: map[string]int{lyricSourceCooldownReasonNetwork: 3}})
+	// vibe:网络原因冷却,但只有它一个,仍然只说冷却。
+	lyricSourceTestRange(spec, 0, 1, "vibe", lyricSourceDayCounts{Asked: 5, Skipped: 15, Trips: map[string]int{lyricSourceCooldownReasonNetwork: 3}})
 
 	out := summarizeLyricSourceStats(lyricSourceTestDays(spec), nil, lyricSourceStatsTestToday, allLyricSourcesOn)
 	lf := lyricSourceSummaryOf(t, out, "lyricfind")
 	if lf.Alert != lyricSourceAlertCooling || lf.SkipRate != 0.75 || lf.PeerRate != 0 {
 		t.Errorf("lyricfind = %+v, want cooling 0.75", lf)
 	}
-	if mx := lyricSourceSummaryOf(t, out, "musixmatch"); mx.Alert != lyricSourceAlertCooling || len(mx.NetworkPeers) != 0 {
-		t.Errorf("musixmatch = %+v, want 只有自己网络冷却时报 cooling", mx)
+	if mx := lyricSourceSummaryOf(t, out, "vibe"); mx.Alert != lyricSourceAlertCooling || len(mx.NetworkPeers) != 0 {
+		t.Errorf("vibe = %+v, want 只有自己网络冷却时报 cooling", mx)
 	}
 	for _, src := range []string{"kugou", "deezer"} {
 		if a := lyricSourceSummaryOf(t, out, src).Alert; a != "" {
@@ -307,9 +316,10 @@ func TestSummarizeLyricSourceStatsCooling(t *testing.T) {
 }
 
 func TestSummarizeLyricSourceStatsNetwork(t *testing.T) {
+	withVibeInWesternPeers(t)
 	spec := map[int]map[string]lyricSourceDayCounts{}
 	network := map[string]int{lyricSourceCooldownReasonNetwork: 2}
-	for _, src := range []string{"musixmatch", "lyricfind", "deezer"} {
+	for _, src := range []string{"vibe", "lyricfind", "deezer"} {
 		lyricSourceTestRange(spec, 0, 1, src, lyricSourceDayCounts{Asked: 2, Skipped: 20, Trips: network})
 	}
 	// 被限流冷却的照旧报 cooling,不并进网络那一组。
@@ -319,11 +329,11 @@ func TestSummarizeLyricSourceStatsNetwork(t *testing.T) {
 		Trips: map[string]int{lyricSourceCooldownReasonNetwork: 1, lyricSourceCooldownReasonServerError: 2}})
 
 	out := summarizeLyricSourceStats(lyricSourceTestDays(spec), nil, lyricSourceStatsTestToday, allLyricSourcesOn)
-	mx := lyricSourceSummaryOf(t, out, "musixmatch")
+	mx := lyricSourceSummaryOf(t, out, "vibe")
 	if mx.Alert != lyricSourceAlertNetwork || !reflect.DeepEqual(mx.NetworkPeers, []string{"lyricfind", "deezer"}) {
-		t.Errorf("musixmatch = %+v, want network 并列出 lyricfind/deezer", mx)
+		t.Errorf("vibe = %+v, want network 并列出 lyricfind/deezer", mx)
 	}
-	if dz := lyricSourceSummaryOf(t, out, "deezer"); dz.Alert != lyricSourceAlertNetwork || !reflect.DeepEqual(dz.NetworkPeers, []string{"musixmatch", "lyricfind"}) {
+	if dz := lyricSourceSummaryOf(t, out, "deezer"); dz.Alert != lyricSourceAlertNetwork || !reflect.DeepEqual(dz.NetworkPeers, []string{"lyricfind", "vibe"}) {
 		t.Errorf("deezer = %+v", dz)
 	}
 	for _, src := range []string{"kugou", "lrclib"} {
@@ -388,13 +398,14 @@ func TestLyricSourceClassBaselineMedian(t *testing.T) {
 
 // 逐轮记录:只记同类条件成立的轮和它给了的轮;被跳过的带上原因;每个源只留最近 lyricSourceRecentKeep 条。
 func TestAddLyricSourceRecent(t *testing.T) {
+	withVibeInWesternPeers(t)
 	recent := map[string][]lyricSourceRecentRound{}
 	at := lyricSourceStatsTestToday
 	addLyricSourceRecent(recent, lyricSourceRoundOutcome{
-		enabled:    []string{"netease", "qq", "kugou", "lrclib", "musixmatch", "lyricfind", "deezer", "amll"},
+		enabled:    []string{"netease", "qq", "kugou", "lrclib", "vibe", "lyricfind", "deezer", "amll"},
 		skipped:    map[string]bool{"lyricfind": true, "deezer": true},
 		skipReason: map[string]string{"lyricfind": lyricSourceCooldownReasonBlocked},
-		responded:  map[string]bool{"netease": true, "lrclib": true, "musixmatch": true, "amll": true},
+		responded:  map[string]bool{"netease": true, "lrclib": true, "vibe": true, "amll": true},
 		cjk:        true,
 		artist:     7,
 	}, at)
@@ -405,8 +416,8 @@ func TestAddLyricSourceRecent(t *testing.T) {
 		// 同类两家给了、它没给。
 		"lyricfind": {At: at.Unix(), Skip: lyricSourceCooldownReasonBlocked, CJK: true, Artist: 7},
 		// 被跳过却说不出原因(冷却刚好到期)。
-		"deezer":     {At: at.Unix(), Skip: lyricSourceSkipReasonUnknown, CJK: true, Artist: 7},
-		"musixmatch": {At: at.Unix(), Hit: true, CJK: true, Artist: 7},
+		"deezer": {At: at.Unix(), Skip: lyricSourceSkipReasonUnknown, CJK: true, Artist: 7},
+		"vibe":   {At: at.Unix(), Hit: true, CJK: true, Artist: 7},
 	}
 	if len(recent) != len(want) {
 		t.Fatalf("记了 %d 个源,want %d(qq、kugou 同类不到两家又没给,amll 不进组): %v", len(recent), len(want), recent)
@@ -465,8 +476,9 @@ func lyricSourceTestStreak(n int, cjk bool, firstArtist uint32, skip string) []l
 }
 
 func TestSummarizeLyricSourceStatsStopped(t *testing.T) {
+	withVibeInWesternPeers(t)
 	spec := map[int]map[string]lyricSourceDayCounts{}
-	for _, src := range []string{"musixmatch", "lyricfind", "deezer", "applemusic"} {
+	for _, src := range []string{"vibe", "lyricfind", "deezer", "applemusic"} {
 		// 西文歌平时九成(lyricfind 六成)、中文歌平时两成。
 		hits := 36
 		if src == "lyricfind" {
@@ -474,14 +486,14 @@ func TestSummarizeLyricSourceStatsStopped(t *testing.T) {
 		}
 		lyricSourceTestRange(spec, 3, 16, src, lyricSourceTestPeers(40, hits, 20, 4))
 	}
-	// musixmatch 这 3 天同时也够「几乎不给词」,「突然不给了」排在前面。
-	lyricSourceTestRange(spec, 0, 2, "musixmatch", lyricSourceTestPeers(20, 1, 0, 0))
+	// vibe 这 3 天同时也够「几乎不给词」,「突然不给了」排在前面。
+	lyricSourceTestRange(spec, 0, 2, "vibe", lyricSourceTestPeers(20, 1, 0, 0))
 	// qq:2 天里大半被熔断跳过(5xx),冷却排在「突然不给了」前面。
 	lyricSourceTestRange(spec, 0, 1, "qq", lyricSourceDayCounts{Asked: 5, Skipped: 15, Trips: map[string]int{lyricSourceCooldownReasonServerError: 2}})
 	days := lyricSourceTestClassDays(spec)
 	recent := map[string][]lyricSourceRecentRound{
 		// 20 位不同的歌手、平时九成:本该给 18 次,一次都没给。
-		"musixmatch": lyricSourceTestStreak(20, false, 100, ""),
+		"vibe": lyricSourceTestStreak(20, false, 100, ""),
 		// 中文歌 30 位、平时两成:本该给 6 次,不到 12 次,说明不了什么。
 		"lyricfind": lyricSourceTestStreak(30, true, 100, ""),
 		// 40 轮,但都是同 3 位歌手(整张专辑预取):本该给 2.7 次。
@@ -499,9 +511,9 @@ func TestSummarizeLyricSourceStatsStopped(t *testing.T) {
 		"qq":     lyricSourceTestStreak(40, true, 100, ""),
 	}
 	out := summarizeLyricSourceStats(days, recent, lyricSourceStatsTestToday, allLyricSourcesOn)
-	mx := lyricSourceSummaryOf(t, out, "musixmatch")
+	mx := lyricSourceSummaryOf(t, out, "vibe")
 	if mx.Alert != lyricSourceAlertStopped || mx.Streak != 20 || mx.ExpectedHits != 18 {
-		t.Errorf("musixmatch = %+v, want stopped 20 轮、本该 18 次", mx)
+		t.Errorf("vibe = %+v, want stopped 20 轮、本该 18 次", mx)
 	}
 	if qq := lyricSourceSummaryOf(t, out, "qq"); qq.Alert != lyricSourceAlertCooling {
 		t.Errorf("qq = %+v, want cooling 排在前面", qq)
@@ -514,6 +526,7 @@ func TestSummarizeLyricSourceStatsStopped(t *testing.T) {
 }
 
 func TestSummarizeLyricSourceStatsBlocked(t *testing.T) {
+	withVibeInWesternPeers(t)
 	spec := map[int]map[string]lyricSourceDayCounts{}
 	// lyricfind:2 天里大半被跳过,其中大半是被反爬拦下。
 	lyricSourceTestRange(spec, 0, 1, "lyricfind", lyricSourceDayCounts{Asked: 5, Skipped: 15, SkippedBlocked: 12, Trips: map[string]int{lyricSourceCooldownReasonBlocked: 1}})
@@ -524,13 +537,13 @@ func TestSummarizeLyricSourceStatsBlocked(t *testing.T) {
 	mixed = append(mixed, lyricSourceTestStreak(20, false, 200, lyricSourceCooldownReasonBlocked)[1:]...)
 	recent := map[string][]lyricSourceRecentRound{
 		// 按天还看不出来(今天才开始被拦),最近 25 轮里 20 轮是被拦下跳过的。
-		"musixmatch": mixed,
+		"vibe": mixed,
 		// 最近 25 轮里 20 轮因为连不上被跳过:不是被拦,也没有基线说它本该给多少,不报。
 		"deezer": append(lyricSourceTestStreak(5, false, 100, ""), lyricSourceTestStreak(20, false, 200, lyricSourceCooldownReasonNetwork)[1:]...),
 	}
 	out := summarizeLyricSourceStats(days, recent, lyricSourceStatsTestToday, allLyricSourcesOn)
-	if mx := lyricSourceSummaryOf(t, out, "musixmatch"); mx.Alert != lyricSourceAlertBlocked || mx.Streak != 25 || mx.BlockedRounds != 20 {
-		t.Errorf("musixmatch = %+v, want blocked 25 轮里 20 轮被拦", mx)
+	if mx := lyricSourceSummaryOf(t, out, "vibe"); mx.Alert != lyricSourceAlertBlocked || mx.Streak != 25 || mx.BlockedRounds != 20 {
+		t.Errorf("vibe = %+v, want blocked 25 轮里 20 轮被拦", mx)
 	}
 	if lf := lyricSourceSummaryOf(t, out, "lyricfind"); lf.Alert != lyricSourceAlertBlocked || lf.BlockedRounds != 24 || lf.SkipRate != 0.75 {
 		t.Errorf("lyricfind = %+v, want blocked(按 2 天)24 轮", lf)
@@ -761,7 +774,7 @@ func TestLyricSourceStatsHealthItems(t *testing.T) {
 		Summary: []lyricSourceStatsSummary{
 			{Source: "netease", Enabled: true, Rounds: 100, Responded: 80, Won: 50},
 			{Source: "kuwo", Enabled: true, Rounds: 90, Responded: 4, Alert: lyricSourceAlertBarely, PeerRate: 0.05, PeerRounds: 60},
-			{Source: "musixmatch", Enabled: true, Rounds: 40, Responded: 2, Alert: lyricSourceAlertNetwork, SkipRate: 0.9, NetworkPeers: []string{"lyricfind", "deezer"}},
+			{Source: "vibe", Enabled: true, Rounds: 40, Responded: 2, Alert: lyricSourceAlertNetwork, SkipRate: 0.9, NetworkPeers: []string{"lyricfind", "deezer"}},
 			// 关着的源、没问过的源都不列。
 			{Source: "migu", Enabled: false, Rounds: 30, Alert: lyricSourceAlertBarely},
 			{Source: "applemusic", Enabled: true},
@@ -769,7 +782,7 @@ func TestLyricSourceStatsHealthItems(t *testing.T) {
 	}
 	items := lyricSourceStatsHealthItems(f, now)
 	if len(items) != 3 {
-		t.Fatalf("items = %+v, want 一条总览 + kuwo、musixmatch 各一条", items)
+		t.Fatalf("items = %+v, want 一条总览 + kuwo、vibe 各一条", items)
 	}
 	head := items[0]
 	if head.Status != healthOK || !strings.Contains(head.Detail, "netease 80%/50%(100)") || strings.Contains(head.Detail, "migu") || strings.Contains(head.Detail, "applemusic") {
@@ -779,7 +792,7 @@ func TestLyricSourceStatsHealthItems(t *testing.T) {
 		t.Errorf("kuwo = %+v", items[1])
 	}
 	if !strings.Contains(items[2].Detail, "90%") || !strings.Contains(items[2].Detail, "lyricfind/deezer") {
-		t.Errorf("musixmatch = %+v", items[2])
+		t.Errorf("vibe = %+v", items[2])
 	}
 	details := map[string]lyricSourceStatsSummary{
 		"按这几天的语种构成平时约 49%": {Alert: lyricSourceAlertBelowUsual, PeerRounds: 446, PeerRate: 0.345, UsualRate: 0.49},

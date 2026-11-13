@@ -182,7 +182,7 @@ func TestRemapLRCTimestamps(t *testing.T) {
 
 func TestRehangCandidateTimelines(t *testing.T) {
 	cands := []lyricCandidate{
-		{source: "musixmatch", lyrics: rumourLRC, wordTimingYRC: rumourYRC},
+		{source: "deezer", lyrics: rumourLRC, wordTimingYRC: rumourYRC},
 		{source: "lrclib", lyrics: rumourLRC}, // 没有逐字轴,不该被碰
 	}
 	rehangCandidateTimelines(cands, 223.266)
@@ -262,7 +262,7 @@ func TestWordTimingContradictsLRC(t *testing.T) {
 func TestRehangCandidateTimelinesDropsContradictoryYRC(t *testing.T) {
 	cands := []lyricCandidate{
 		{source: "netease", lyrics: taikongLRC, wordTimingYRC: taikongYRC, hasWordTiming: true},
-		{source: "musixmatch", lyrics: rumourLRC, wordTimingYRC: rumourYRC, hasWordTiming: true},
+		{source: "deezer", lyrics: rumourLRC, wordTimingYRC: rumourYRC, hasWordTiming: true},
 	}
 	rehangCandidateTimelines(cands, 221.599)
 	if cands[0].wordTimingYRC != "" || cands[0].hasWordTiming {
@@ -329,7 +329,6 @@ func TestRehangOnReportedDurationLocked(t *testing.T) {
 	fresh := func() enrichEntry {
 		return enrichEntry{
 			Lyrics: bt(rumourLRC), LyricsYRC: bt(rumourYRC), LyricsTr: bt(rumourTr),
-			LyricsSpeakers: &lyricSpeakers{For: lyricSpeakersFingerprint(rumourLRC, rumourYRC), LRC: []string{"a", "b"}},
 		}
 	}
 	enrichMu.Lock()
@@ -347,9 +346,6 @@ func TestRehangOnReportedDurationLocked(t *testing.T) {
 	}
 	if !e.LyricsTr.EqualString("[00:18.31]她，她不是真的\n[00:21.18]她不可能像我一样爱你\n[00:59.72]有传言（谣言）") {
 		t.Errorf("译文要跟着搬: %q", e.LyricsTr)
-	}
-	if e.LyricsSpeakers == nil || e.LyricsSpeakers.For != lyricSpeakersFingerprint(e.Lyrics.String(), rumourYRC) {
-		t.Errorf("演唱者标注的指纹要换成新正文的: %+v", e.LyricsSpeakers)
 	}
 	if !enrichEditedSinceLocked(key, stamp) {
 		t.Error("要记一次改动,别让开跑在前的后台任务拿旧正文盖回去")

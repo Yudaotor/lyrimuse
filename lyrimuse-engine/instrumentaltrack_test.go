@@ -2,6 +2,8 @@ package main
 
 import (
 	"context"
+	"encoding/json"
+	"net/http"
 	"strings"
 	"testing"
 )
@@ -101,9 +103,9 @@ func rescoreInstrumentalEntry(t *testing.T, title string, e enrichEntry, manual 
 }
 
 func TestRescoreReplacesCreditOnlyLyricsDespiteWordTiming(t *testing.T) {
-	setupRescoreTest(t, []string{"musixmatch"}, nil)
+	setupRescoreTest(t, []string{"deezer"}, nil)
 	e, r := rescoreInstrumentalEntry(t, "Credit Song", enrichEntry{
-		Lyrics: bt(creditOnlyTestLyrics), LyricsYRC: bt("[0,500](0,500,0)作曲：甲"), LyricsSource: "musixmatch",
+		Lyrics: bt(creditOnlyTestLyrics), LyricsYRC: bt("[0,500](0,500,0)作曲：甲"), LyricsSource: "deezer",
 		LyricsScoringVersion: lyricsScoringVersion - 1,
 	}, false)
 	if !strings.HasPrefix(e.Lyrics.String(), "[00:05.00]Brand new first line") || r.Outcome != lyricsRematchChanged {
@@ -112,9 +114,9 @@ func TestRescoreReplacesCreditOnlyLyricsDespiteWordTiming(t *testing.T) {
 }
 
 func TestRescoreMarksInstrumentalVersion(t *testing.T) {
-	setupRescoreTest(t, []string{"musixmatch"}, nil)
+	setupRescoreTest(t, []string{"deezer"}, nil)
 	const old = "[00:05.00]Old line one\n[00:15.00]Old line two\n[00:25.00]Old line three\n[02:50.00]Old last line"
-	entry := enrichEntry{Lyrics: bt(old), LyricsSource: "musixmatch", LyricsScoringVersion: lyricsScoringVersion - 1}
+	entry := enrichEntry{Lyrics: bt(old), LyricsSource: "deezer", LyricsScoringVersion: lyricsScoringVersion - 1}
 
 	e, _ := rescoreInstrumentalEntry(t, "Inst Song (Instrumental)", entry, false)
 	if !e.Instrumental || !e.Lyrics.EqualString(old) {
@@ -132,12 +134,16 @@ func TestRescoreMarksInstrumentalVersion(t *testing.T) {
 }
 
 func TestRescoreMarksCreditOnlyLyricsInstrumental(t *testing.T) {
-	setupRescoreTest(t, []string{"musixmatch"}, nil)
-	musixmatchResolve = func(ctx context.Context, artist, title string, durationSecs float64, trLang, isrc string) musixmatchResult {
-		return musixmatchResult{instrumental: true, title: title, artist: artist}
-	}
+	setupRescoreTest(t, []string{"lrclib"}, nil)
+	withLRCLIBFake(t, func(r *http.Request) (int, http.Header, string) {
+		b, _ := json.Marshal(lrclibSearchItem{TrackName: "Credit Song", ArtistName: rescoreTestArtist, Duration: 180, Instrumental: true})
+		if r.URL.Path == "/api/search" {
+			return http.StatusOK, nil, "[" + string(b) + "]"
+		}
+		return http.StatusOK, nil, string(b)
+	})
 	e, _ := rescoreInstrumentalEntry(t, "Credit Song", enrichEntry{
-		Lyrics: bt(creditOnlyTestLyrics), LyricsSource: "musixmatch", LyricsScoringVersion: lyricsScoringVersion - 1,
+		Lyrics: bt(creditOnlyTestLyrics), LyricsSource: "lrclib", LyricsScoringVersion: lyricsScoringVersion - 1,
 	}, false)
 	if !e.Instrumental {
 		t.Error("当前这份只有署名、这一轮有源说是纯音乐:标纯音乐")

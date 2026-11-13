@@ -12,8 +12,8 @@ import (
 //
 // lyricsourcefailure.go 和 LyricSourceFailureReason.swift 的头注都在喊「两侧必须同步维护,
 // 漏了的后果是界面显示一串谁都看不懂的代码本身」—— 可这件事此前**一条自动检查都没有**,
-// 全靠改的人自己记得。加第四个代码(musixmatch_direct_blocked)时正好把这个洞补上:一边
-// 加了、另一边忘了,在这里当场红,而不是等用户在设置页看到 `musixmatch_direct_blocked`
+// 全靠改的人自己记得。这道守卫把这个洞补上:一边
+// 加了、另一边忘了,在这里当场红,而不是等用户在设置页看到一串代码本身
 // 这么一串东西才发现。
 //
 // 用源码扫描而不是"跨语言共享一份枚举":Swift 侧那个 switch 本来就是手写的翻译表,没有
@@ -53,29 +53,6 @@ func TestLyricSourceFailureCodesMatchSwiftSide(t *testing.T) {
 	}
 	if extra := diffCodes(swiftCodes, goCodes); len(extra) > 0 {
 		t.Errorf("Swift 侧有、引擎已经不再产出:%v\n要么是引擎那边删漏了,要么是死代码。", extra)
-	}
-}
-
-// 这次新加的那个必须在两边都在 —— 上面的集合比较对"两边一起漏了"是无感的。
-func TestMusixmatchDirectBlockedCodeIsWiredOnBothSides(t *testing.T) {
-	if lyricFailureReasonMusixmatchDirectBlocked != "musixmatch_direct_blocked" {
-		t.Fatalf("代码串变了:%q", lyricFailureReasonMusixmatchDirectBlocked)
-	}
-	swiftSrc, err := os.ReadFile(swiftFailureReasonPath)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !strings.Contains(string(swiftSrc), `case "musixmatch_direct_blocked":`) {
-		t.Error("Swift 侧没有 musixmatch_direct_blocked 的 case")
-	}
-	// 它必须真的接在 musixmatch 的 HTTP client 上,否则永远不会被设置 —— 光有常量和翻译
-	// 是"看起来做了"。
-	mm, err := os.ReadFile("musixmatch.go")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !strings.Contains(string(mm), "lyricFailureReasonMusixmatchDirectBlocked") {
-		t.Error("musixmatch.go 没有把这个代码接到 dohHTTPClient 的 onBlocked 上")
 	}
 }
 
@@ -133,19 +110,16 @@ func TestTransportFailureCodesAreWired(t *testing.T) {
 // 都带传输层代码"时派生 upstream_unreachable。lyricfind 的具体代码走进程级旁路
 // (ytmusicSetLastFailureReason),测试里设一次、结束时清掉。
 func TestLyricSourceFailureReasonsWith(t *testing.T) {
-	// 三个源特有旁路都是进程级变量,同一个测试二进制里别的测试可能已经设过(实测:全套跑时
-	// musixmatch 那份带着 musixmatch_direct_blocked 进来)。进来先存、清,出去还原。
-	savedYT, savedMM, savedNE := ytmusicLastFailureReasonNow(), musixmatchLastFailureReasonNow(), neteaseLastFailureReasonNow()
+	// 源特有旁路都是进程级变量,同一个测试二进制里别的测试可能已经设过。进来先存、清,出去还原。
+	savedYT, savedNE := ytmusicLastFailureReasonNow(), neteaseLastFailureReasonNow()
 	t.Cleanup(func() {
 		ytmusicSetLastFailureReason(savedYT)
-		musixmatchSetLastFailureReason(savedMM)
 		neteaseSetLastFailureReason(savedNE)
 	})
-	musixmatchSetLastFailureReason("")
 	neteaseSetLastFailureReason("")
 	ytmusicSetLastFailureReason(lyricFailureReasonLyricFindRegionRestricted)
 	results := []scoredLyricCandidateResult{
-		{Source: "musixmatch", Score: 300},
+		{Source: "genie", Score: 300},
 		{Source: "kuwo", Score: -1}, // 给过候选(哪怕被判废)就算应答
 	}
 	transport := map[string]string{

@@ -345,7 +345,7 @@ func searchAppleMusicMatch(ctx context.Context, artist, title, album string, dur
 }
 
 // pickAppleMusicMatch 是 searchAppleMusicMatch 的挑选逻辑,拆成纯函数好让上面那道身份闸
-// 能被回归测试锁住(同 pickAppleTitleSearchIdentities / pickMusixmatchTrackRow 的先例)。
+// 能被回归测试锁住(同 pickAppleTitleSearchIdentities 的先例)。
 // results 按商店查询顺序拼接,所以"第一条标题匹配"仍然是 CN 优先,跟拆分之前一致。
 //
 // 时长只排先后、不拦:专辑分一样的几条取时长近的(同一张专辑里的正曲和 Reprise、同一首的几个版本);没有专辑证据时

@@ -1,9 +1,9 @@
 {
   "id": "vertag-edit-diamonds-pearls",
   "category": "version-tag-edit",
-  "note": "「(Edit)」剪辑版(用户 2026-09-04 报\"这个歌匹配错了\"):酷狗《Diamonds And Pearls (Edit)》自报 260s 对本地 283s 只差 8%(够不到 sourceDurationOff 的 12%),末句时刻又落在容差里,带逐字 + 共识;v12 之前词表不认 \"edit\",它以 1122 压过 2023 Remaster 精确同名、专辑同名的 QQ 1079。v12 起吃 versionTags -600、标题降到 60 档,QQ 胜出。采集时缓存里生效的仍是那份 Edit(即被修的 bug),故用 CACHE_KNOWN_WRONG 采;QQ 这份正文里夹着逐行中文译文(上传者用 krc转qrc工具 烘进去的),所以跟 lrclib/musixmatch 的纯英文正文共识只有 0.41、拿不到共识分——正确性靠 2023 Remaster 精确同名 + 专辑同名 + 自报时长 0.36% + 覆盖 99% 站住",
+  "note": "「(Edit)」剪辑版(用户 2026-09-04 报\"这个歌匹配错了\"):酷狗《Diamonds And Pearls (Edit)》自报 260s 对本地 283s 只差 8%(够不到 sourceDurationOff 的 12%),末句时刻又落在容差里,带逐字 + 共识;v12 之前词表不认 \"edit\",它以 1122 压过 2023 Remaster 精确同名、专辑同名的 QQ 1079。v12 起吃 versionTags -600、标题降到 60 档,QQ 胜出。采集时缓存里生效的仍是那份 Edit(即被修的 bug),故用 CACHE_KNOWN_WRONG 采;QQ 这份正文里夹着逐行中文译文(上传者用 krc转qrc工具 烘进去的),所以跟 lrclib 的纯英文正文共识只有 0.41、拿不到共识分——正确性靠 2023 Remaster 精确同名 + 专辑同名 + 自报时长 0.36% + 覆盖 99% 站住",
   "label_evidence": {
-    "consensus_peers": 3,
+    "consensus_peers": 2,
     "title_accepted": true,
     "version_tags_ok": true,
     "source_duration_delta_pct": 0.3589872100832145,
@@ -36,7 +36,6 @@
       "lrclib": true,
       "lyricfind": true,
       "migu": true,
-      "musixmatch": true,
       "netease": true,
       "qq": true
     },
@@ -45,7 +44,6 @@
       "netease",
       "qq",
       "kugou",
-      "musixmatch",
       "lrclib",
       "amll",
       "lyricfind",
@@ -75,13 +73,6 @@
     },
     "lyricfind": {},
     "migu": {},
-    "musixmatch": {
-      "lyrics": "[00:36.42] Mqxr yxzz ul mql svi\n[00:39.32] Mqvm ihe yxzz qlvb cl rvi\n[00:42.17] Mqvm X yxzz jlklb bej vyvi\n[00:48.26] X vc qlbl phb ihe\n[00:51.24] Zhkl xr clvjm phb myh\n[00:54.06] Jhy mlzz cl yqvm ihe'bl ohjjv sh\n[00:59.11] Xp X ovkl ihe sxvchjsr vjs flvbzr\n[01:05.16] Yhezs ihe ul v qvffi uhi hb v oxbz?\n[01:10.88] Xp X whezs X yhezs oxkl ihe mql yhbzs\n[01:15.96] Uem vzz X wvj sh xr term hpplb ihe ci zhkl\n[01:21.78] \n[01:43.35] Yqxwq hjl hp er xr bxoqm\n[01:46.63] Xp yl vzyvir pxoqm?\n[01:49.24] Yqi wvj'm yl term zlm zhkl slwxsl?\n[01:52.80] (Zlm zhkl slwxsl)\n[01:55.28] Vc X mql ylvdlb cvj\n[01:58.24] Ulwverl X ejslbrmvjs\n[02:01.29] Mqvm zhkl cerm ul mql cvrmlb fzvj?\n[02:04.23] (Zhkl xr mql cvrmlb fzvj)\n[02:06.18] Xp X ovkl ihe sxvchjsr vjs flvbzr\n[02:12.01] Yhezs ihe ul v qvffi uhi hb v oxbz?\n[02:17.77] Xp X whezs X yhezs oxkl ihe mql yhbzs\n[02:22.85] Uem vzz X wvj sh xr term hpplb ihe ci zhkl\n[02:29.86] \n[02:47.46] S mh mql X mh mql V mh mql C\n[02:53.52] H mh mql J mh mql S mh mql flvbzr hp zhkl\n[02:59.35] S mh mql X mh mql V mh mql C (mh mql C)\n[03:05.24] H mh mql J mh mql S mh mql flvbzr hp zhkl\n[03:08.94] \n[03:20.72] Mqlbl yxzz whcl v mxcl (mqlbl yxzz whcl v mxcl)\n[03:23.54] Yqlj zhkl yxzz uzhy iheb cxjs (iheb cxjs)\n[03:26.40] Vjs lklbimqxjo ihe'zz zhhd phb ihe'zz pxjs (mvdl v zhhd xjrxsl, ilvq)\n[03:32.60] Mqvm yxzz ul mql mxcl (mqvm yxzz ul mql mxcl)\n[03:35.21] Mqvm lklbimqxjo yxzz rqxjl (phblklb)\n[03:38.22] Rh ubxoqm xm cvdlr ihe whzhbuzxjs (ihe yxzz ul whzhbuzxjs)\n[03:43.23] Xp X ovkl ihe sxvchjsr vjs flvbzr\n[03:48.99] Yhezs ihe ul v qvffi uhi hb v oxbz?\n[03:54.78] Xp X whezs X yhezs oxkl ihe mql yhbzs\n[03:59.77] Vzz X wvj sh xr term hpplb ihe ci zhkl\n[04:05.15] Xp X ovkl ihe sxvchjsr vjs flvbzr (flvbzr)\n[04:11.00] Yhezs ihe ul v qvffi uhi hb v oxbz? (Ilvq, ilvq)\n[04:17.13] Xp X whezs X yhezs oxkl ihe mql yhbzs (oxkl ihe mql yhbzs)\n[04:22.54] Vzz X wvj sh xr term hpplb ihe ci zhkl (vzz X wvj sh)\n[04:27.26] Xp X ovkl ihe sxvchjsr vjs flvbzr (sxvchjsr)\n[04:32.39] Yhezs ihe ul, yhezs ihe, yhezs ihe\n[04:34.68] Yhezs ihe, yhezs ihe\n[04:36.00] Yhezs ihe ul qvffi, zxmmzl uvui?\n[04:38.99] Xp X whezs X yhezs oxkl ihe mql yhbzs\n[04:42.66] ",
-      "title": "Diamonds and Pearls",
-      "artist": "Prince",
-      "album": "Diamonds and Pearls",
-      "cover": "https://s.mxmcdn.net/images-storage/albums4/1/7/1/8/1/2/37218171_500_500.jpg"
-    },
     "netease": {
       "netease": {
         "cover": "https://p1.music.126.net/85z9kbXjneY5vYsk2YuNiQ==/109951168246326480.jpg?param=800y800",
@@ -109,13 +100,12 @@
     "verdicts": {
       "kugou": "accepted",
       "lrclib": "accepted",
-      "musixmatch": "accepted",
       "qq": "accepted"
     },
     "ranked": [
       {
         "source": "qq",
-        "score": 1305,
+        "score": 1306,
         "terms": [
           {
             "kind": "duration",
@@ -127,7 +117,7 @@
           },
           {
             "kind": "lines",
-            "points": 49
+            "points": 50
           },
           {
             "kind": "album",
@@ -152,7 +142,7 @@
       },
       {
         "source": "lrclib",
-        "score": 855,
+        "score": 856,
         "terms": [
           {
             "kind": "duration",
@@ -160,7 +150,7 @@
           },
           {
             "kind": "lines",
-            "points": 49
+            "points": 50
           },
           {
             "kind": "album",
@@ -177,36 +167,8 @@
         ]
       },
       {
-        "source": "musixmatch",
-        "score": 780,
-        "terms": [
-          {
-            "kind": "duration",
-            "points": 288
-          },
-          {
-            "kind": "lines",
-            "points": 47
-          },
-          {
-            "kind": "album",
-            "points": 75
-          },
-          {
-            "kind": "titleMatch",
-            "points": 120
-          },
-          {
-            "kind": "consensus",
-            "points": 250
-          }
-        ],
-        "has_translation": true,
-        "translation_lang": "zh"
-      },
-      {
         "source": "kugou",
-        "score": 51,
+        "score": 52,
         "terms": [
           {
             "kind": "duration",
@@ -218,7 +180,7 @@
           },
           {
             "kind": "lines",
-            "points": 42
+            "points": 43
           },
           {
             "kind": "versionTags",

@@ -33,7 +33,7 @@ import (
 //	   「Rice Field / Jay Chou」),中文 / 日文歌几乎过不了名称闸(09 章决策 136 的实测)。
 //	② 取词也走 GraphQL,认证用 auth.deezer.com/login/anonymous 换来的**匿名 JWT**(不需要账号、不需要
 //	   ARL、不碰用户登录态)。JWT 自带 exp,实测 iat 到 exp 只有 6 分钟,过期后回 HTTP 200 +
-//	   JwtTokenExpiredError(不是 401);进程级缓存 + 单飞锁(同 musixmatch token)。
+//	   JwtTokenExpiredError(不是 401);进程级缓存 + 单飞锁。
 //	   响应 data.track.lyrics 里 synchronizedLines[] 是逐行(lrcTimestamp 形如
 //	   "[00:01.41]" + line,lineTranslated 是这一行的译文),synchronizedWordByWordLines[]
 //	   是逐字({start,end,words:[{start,end,word}]},毫秒),text 是整份纯文本。
@@ -70,7 +70,7 @@ import (
 // 比 migu 多一道时长闸和时长加分(口径与 kuwo 一致,容差 0.25)。
 //
 // 合规提醒:①搜索用的是 Deezer 公开 API;②auth/pipe 两个端点是网页客户端接口、非公开
-// 文档,跟 kuwo.go / migu.go / musixmatch.go 同一类风险(可能随时失效或要求验证码),
+// 文档,跟 kuwo.go / migu.go 同一类风险(可能随时失效或要求验证码),
 // 不是新引入一种风险类别。全程匿名,不碰用户账号、不需要登录。
 type deezerResult struct {
 	lyrics, title, artist, album string
@@ -157,7 +157,7 @@ var (
 	deezerCache = map[string]deezerResult{}
 
 	// deezerJWTMu 保护下面三个值本身;deezerJWTFetchMu 是单飞锁,同一时刻只允许一个
-	// goroutine 真的去换票。理由跟 musixmatch.go 的 musixmatchTokenFetchMu 一样:相册预取一次能触发
+	// goroutine 真的去换票:相册预取一次能触发
 	// 十几首歌并发解析,各自"没有就自己去拿一个"会同时打十几个请求。
 	deezerJWTMu      sync.Mutex
 	deezerJWT        string
@@ -185,6 +185,9 @@ func deezerLastFailureReasonNow() string {
 	return deezerLastFailure
 }
 
+// deezerResolve 可换,只为单测;生产路径永远是 resolveDeezerLyric。
+var deezerResolve = resolveDeezerLyric
+
 // isrc:这次播放的这条录音的 ISRC(spotifyisrc.go;只有 Spotify 原生客户端在播、且它的
 // 缓存里记了才有)。空串 = 照原样走名称搜索。
 func deezerLyric(ctx context.Context, artist, title, album string, durationSecs float64, isrc string) deezerResult {
@@ -203,7 +206,7 @@ func deezerLyric(ctx context.Context, artist, title, album string, durationSecs 
 	deezerMu.Unlock()
 
 	ctx, sub := withLyricSubFetch(ctx)
-	r := resolveDeezerLyric(ctx, artist, title, album, durationSecs, isrc)
+	r := deezerResolve(ctx, artist, title, album, durationSecs, isrc)
 	if !r.empty() && sub.complete(ctx) {
 		deezerMu.Lock()
 		deezerCache[key] = r
@@ -449,7 +452,7 @@ func deezerFetchJWT(ctx context.Context) string {
 	req.Header.Set("User-Agent", "Mozilla/5.0")
 	resp, err := doHTTPTracked(lyricHTTPClient(deezerHTTPTimeout), req)
 	if err != nil {
-		// 调用方自己取消 / 到期的不算「换不到票」:这个原因会让别名重查跳过这一路,见 musixmatch.go 同一处。
+		// 调用方自己取消 / 到期的不算「换不到票」:这个原因会让别名重查跳过这一路(lyricSourcesWorthRetry)。
 		if ctx.Err() == nil {
 			deezerSetLastFailureReason(lyricFailureReasonDeezerAuthFailed)
 		}
@@ -471,7 +474,7 @@ func deezerFetchJWT(ctx context.Context) string {
 		deezerSetLastFailureReason(lyricFailureReasonDeezerAuthFailed)
 		return ""
 	}
-	// 换到了就撤掉早先的失败原因,理由同 musixmatch.go 那处。
+	// 换到了就撤掉早先的失败原因:它是进程级的,不撤的话一次换票失败会让这一路一直不进别名重查。
 	deezerSetLastFailureReason("")
 	return strings.TrimSpace(out.JWT)
 }
@@ -905,7 +908,7 @@ func deezerFetchLyrics(ctx context.Context, trackID string) (deezerLyricsPayload
 // resolveDeezerLyric:①搜索(单次请求,10 条;GraphQL 没问成才退回公开 API);②身份闸 + 时长闸淘汰、
 // 按分数稳定排序;③取前几条**并发**取词 —— 搜索明确说没有同步歌词的不在其列;④按名次(不是"谁先拉完")
 // 挑第一份真同步的;⑤一份同步的都没有时,退而求其次挑第一份纯文本(plainOnly,分数恒 -1,只有用户手点才会
-// 采用)——理由同 lrclib/musixmatch 那两路的纯文本回退:有词可看胜过没有,但绝不让它自动顶掉别的源。
+// 采用)——理由同 lrclib 那一路的纯文本回退:有词可看胜过没有,但绝不让它自动顶掉别的源。
 // 候选里全是「没有同步歌词」的,只取分数最高那条、为的是它的纯文本。
 func resolveDeezerLyric(ctx context.Context, artist, title, album string, durationSecs float64, isrc string) deezerResult {
 	type scoredTrack struct {
@@ -925,7 +928,7 @@ func resolveDeezerLyric(ctx context.Context, artist, title, album string, durati
 	// 对照实测:同一首歌按名字搜,第一条是 251 秒的 Live 日文版;按 ISRC 直取是 180 秒的原版。
 	//
 	// 但**时长闸仍然要过**。ISRC 理论上是录音身份,现实里却存在垃圾值:实测
-	// "ZZZZZ9999999"(一眼占位符)在 Deezer 和 Musixmatch 上**都查得到歌**,各自是一首
+	// "ZZZZZ9999999"(一眼占位符)在 Deezer 上**查得到歌**,是一首
 	// 完全不相干的曲子。名称对不上可能只是本地化写法,时长差一大截就说明拿到的根本不是
 	// 这首 —— 这是唯一一道对"ISRC 本身是脏数据"还有效的防线。
 	if isrc != "" {

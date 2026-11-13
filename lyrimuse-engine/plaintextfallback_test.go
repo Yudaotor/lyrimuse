@@ -52,7 +52,7 @@ func TestPlainTextFallbackFromScored(t *testing.T) {
 				{Source: "netease", Score: -1, Lyrics: "作词 : 某某"},
 				{Source: "qq", Score: -1},
 				{Source: "lrclib", Score: -1, PlainTextOnly: true, Lyrics: "纯文本正文"},
-				{Source: "musixmatch", Score: -1},
+				{Source: "deezer", Score: -1},
 			},
 			wantLyrics: "纯文本正文", wantSource: "lrclib",
 		},

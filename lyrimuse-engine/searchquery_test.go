@@ -113,7 +113,6 @@ func TestLyricIdentityFieldsIsWired(t *testing.T) {
 		"enrich.go": {
 			"idArtist, idTitle, idAlbum := lyricIdentityFields(ctx, artist, title, album)",
 			"appleCatalogID, spotifyTrackID := playbackTrackIDsForRound(ctx, idArtist, idTitle, idAlbum)",
-			"appleID, spotifyID := musixmatchTrackIDsFor(ctx, idArtist, idTitle, idAlbum)",
 			"appleID, _ := playbackTrackIDsForRound(ctx, idArtist, idTitle, idAlbum)",
 			"kkboxLocalLyricsFor(idArtist, idTitle, durationSecs)",
 			"spotifyLocalLyricsFor(idArtist, idTitle, idAlbum)",
@@ -136,7 +135,7 @@ func TestLyricIdentityFieldsIsWired(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, old := range []string{"playbackTrackIDsFor(artist, title, album)", "musixmatchTrackIDsFor(artist, title, album)", "LocalLyricsFor(artist, title"} {
+	for _, old := range []string{"playbackTrackIDsFor(artist, title, album)", "LocalLyricsFor(artist, title"} {
 		if strings.Contains(string(b), old) {
 			t.Errorf("enrich.go 还在拿查询词 %q 查按原样标签记的东西", old)
 		}

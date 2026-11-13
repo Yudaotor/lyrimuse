@@ -81,15 +81,15 @@ func TestLyricsRecheckKeepsReasonsThatDidNotHoldYet(t *testing.T) {
 func TestLyricsRecheckDoesNotRepeatAnIdenticalRound(t *testing.T) {
 	withEmptyRecheckRecords(t)
 	var fetches int
-	setupRescoreTest(t, []string{"musixmatch"}, func(ctx context.Context) {
+	setupRescoreTest(t, []string{"deezer"}, func(ctx context.Context) {
 		fetches++
-		lyricSourceRoundFrom(ctx).markReached("musixmatch")
+		lyricSourceRoundFrom(ctx).markReached("deezer")
 	})
 	const artist, title = rescoreTestArtist, "Recheck Song"
 	key := enrichKey(artist, title, "")
 	enrichMu.Lock()
 	enrichCache = map[string]enrichEntry{key: {
-		Lyrics: bt(rescoreTestNewBody), LyricsSource: "musixmatch", LyricsScore: 5000, ResolvedDurationSecs: 180,
+		Lyrics: bt(rescoreTestNewBody), LyricsSource: "deezer", LyricsScore: 5000, ResolvedDurationSecs: 180,
 		LyricsScoringVersion: lyricsScoringVersion, LyricsScoringRevision: lyricsScoringRevision,
 	}}
 	enrichMu.Unlock()

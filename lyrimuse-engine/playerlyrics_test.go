@@ -120,7 +120,7 @@ func TestPlayerLyricsAltFrom(t *testing.T) {
 		return scoredLyricCandidateResult{Source: "soda", Lyrics: testPlayerLRC(shiftMs), LyricsTr: "[00:20.00]译文", LyricsTrLang: "zh",
 			Score: score, IdentityFromLocalClient: local}
 	}
-	fp := lyricSpeakersFingerprint(main, "")
+	fp := lyricsBodyFingerprint(main, "")
 
 	alt, ok := playerLyricsAltFrom(main, "", cand(2200, true, 1300), 42)
 	if !ok || alt.Lyrics == "" || alt.Source != "soda" || alt.ShiftMs != 2200 || alt.MainFP != fp || alt.Tr == "" || alt.TrLang != "zh" || alt.At != 42 {

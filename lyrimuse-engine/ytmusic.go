@@ -16,17 +16,16 @@ import (
 )
 
 // ytmusicLyric 是歌词第七个候选来源(加,当天追问后收窄成只认 LyricFind)。
-// YouTube Music 的歌词后端同时接了 Musixmatch 和 LyricFind 两家供应商——LyricFind 是
-// 独立于现有六源(含 Musixmatch 本身)的另一家歌词版权方,接这一路的价值就在于它,不是
+// YouTube Music 的歌词后端有好几家供应商,这一路只收标着 LyricFind 的那份——LyricFind 是
+// 独立于其余各源的一家歌词版权方,接这一路的价值就在于它,不是
 // "YouTube Music"这个平台本身。所以这份代码只在 timedLyricsData 的 sourceMessage 标注
 // LyricFind 时才接受候选(见 resolveYTMusicLyric 末尾的 ytmusicIsLyricFindSource 那道闸)、
 // 对外注册的**源名是 "lyricfind" 不是 "ytmusic"**(features.go 的 lyricSourceLyricFind)——
 // 这份文件之所以还叫 ytmusic.go,是因为它描述的是"怎么从 YouTube Music 拿数据"这个检索
 // 机制,跟 amllttml.go(文件按格式 TTML 命名、源叫 "amll")是同一种文件名≠源名的分工。
 //
-// 为什么要按 sourceMessage 过滤,不是"YouTube Music 查到什么就收什么":实测(见下面覆盖率
-// 数据)YTM 命中的候选里 6/9 其实是 Musixmatch 换个管道重发,现有 musixmatch 源已经在直接
-// 查它——① 打分层的"跨源正文共识"(contentConsensusPeers)按**来源数**算独立印证,这种
+// 为什么要按 sourceMessage 过滤,不是"YouTube Music 查到什么就收什么":别家供应商的那份
+// 常是别的源也查得到的同一份数据——① 打分层的"跨源正文共识"(contentConsensusPeers)按**来源数**算独立印证,这种
 // 情况下两条候选文本高度相似却不是两个独立信源,会把置信度算高、是虚假加分;② 这部分
 // 命中在 YouTube Music 这条链路(未公开协议、三跳请求、会过期的硬编码客户端版本号)上
 // 纯粹是多担风险、零信息增量。过滤之后这一源名副其实:凡是叫 "lyricfind" 的候选,查到的
@@ -38,13 +37,11 @@ import (
 // 是逐字段读它的源码 + 自己发裸 HTTP 请求实测核实过一遍才落的这份实现,
 // 下面每个端点/字段路径都是核实过的真实结构,不是照抄文档假设。
 //
-// 跟 amll-ttml-db/musixmatch 同一类风险:未公开协议,随时可能改结构或限流,没有 SLA。
-// 这个仓库已经接过两个这一类的源(见 musixmatch.go/amllttml.go 头注),不是新引入一种
-// 风险类别,是这类风险的第三个实例。
+// 跟 amll-ttml-db 同一类风险:未公开协议,随时可能改结构或限流,没有 SLA(见 amllttml.go 头注),
+// 不是新引入一种风险类别。
 //
-// 实测覆盖率(用户曲库 9 首中/日/英抽样,过滤生效**之前**测的原始命中):
-// 8/9 在 YTM 上有歌词,其中 2/9 是 LyricFind、6/9 是 Musixmatch(过滤生效后这 6/9 会
-// 变成"这一源没查到",不再产出候选)。另外拿现有六源全部落空的曲目里最像"真的有歌词
+// 实测覆盖率(用户曲库 9 首中/日/英抽样):8/9 在 YTM 上有歌词,其中标着 LyricFind 的是 2/9,
+// 其余的过滤后算"这一源没查到"、不产出候选。另外拿现有六源全部落空的曲目里最像"真的有歌词
 // 只是没搜到"的 3 首去测,YTM 一首都没能补上(1 首 YTM 上确实标注"歌词不可用",2 首
 // 因为曲名太泛被搜到完全不相关的曲目、连候选都没拿到)。也就是说这一路的边际价值
 // 就是那 2/9 的 LyricFind 命中,不要指望它填补现有六源找不到的空白——那部分命中率是 0。
@@ -68,7 +65,7 @@ type ytmusicResult struct {
 const (
 	ytmusicDomain      = "https://music.youtube.com"
 	ytmusicHTTPTimeout = 6 * time.Second
-	// 每个真实浏览器都会发的 UA——跟 musixmatch.go/amllttml.go 同一个理由:这是未公开的
+	// 每个真实浏览器都会发的 UA:这是未公开的
 	// 反爬接口,一个诚实的自定义 UA(比如 lrclib.go 那种"客户端名/版本号")在这类接口上
 	// 只会被更容易拦,不是更礼貌。字符串跟 sigma67/ytmusicapi 的默认值一致——那是这个
 	// 领域实测多年、被反复验证不会被拦的一个值,没有理由自己另编一个没验证过的。
@@ -110,8 +107,7 @@ var (
 	ytmusicRegionCheckedAt time.Time
 	ytmusicRegionBlocked   bool
 
-	// ytmusicRegionFetchMu 是查首页的单飞锁:批量解析(相册预取一次触发十几首歌并发)时同时搜不到的那几首只查一次,
-	// 跟 musixmatch.go 的 musixmatchTokenFetchMu 同一个模式。
+	// ytmusicRegionFetchMu 是查首页的单飞锁:批量解析(相册预取一次触发十几首歌并发)时同时搜不到的那几首只查一次。
 	ytmusicRegionFetchMu sync.Mutex
 
 	// ytmusicLastFailureMu/ytmusicLastFailureReason:诊断用的只读旁路
@@ -141,9 +137,8 @@ func ytmusicLastFailureReasonNow() string {
 
 // ytmusicDoFetchVisitorID 是"真的去查首页"这一步(返回首页里的 visitor id,顺带记下 / 撤掉地区限制这个失败原因),
 // ytmusicCheckRegion 在单飞锁里调它。nil(默认)= 用真正的实现 ytmusicFetchVisitorID。声明成变量是给测试
-// 留的缝,原因与用法跟 musixmatch.go 的 musixmatchDoFetchToken 一致(那边的头注解释了
-// 为什么不能写成 `= func() string { return ytmusicFetchVisitorID() }` 这种直接初始化
-// 的形式——会形成初始化环)。
+// 留的缝。别写成 `= func() string { return ytmusicFetchVisitorID() }` 这种直接初始化
+// 的形式——会形成初始化环。
 var ytmusicDoFetchVisitorID func(ctx context.Context) string
 
 // ytmusicRegionRecheck:查过首页之后多久内不再查。首页慢(0.8～8 秒)、常超时,查一次的结论
@@ -260,7 +255,7 @@ func ytmusicVisitorFromHome(html string) string {
 			ytmusicSetLastFailureReason(lyricFailureReasonLyricFindRegionRestricted)
 		}
 	} else {
-		// 拿到了就撤掉早先的地区限制结论(换了网络 / 节点),理由同 musixmatch.go 那处。
+		// 拿到了就撤掉早先的地区限制结论(换了网络 / 节点)。
 		ytmusicSetLastFailureReason("")
 	}
 	return v
@@ -596,8 +591,8 @@ func ytmusicSearchSongItems(ctx context.Context, artist, title, album string) ([
 
 // ytmusicExtractSearchItems 从整份 search 响应里摘出 musicResponsiveListItemRenderer
 // 数组。用通用递归查找而不是硬编码 tabs[0].tabRenderer.content... 这条深路径——
-// InnerTube 是没有文档的私有协议,这条路径实测是这个形状,但 amll/musixmatch
-// 的头注都记录过同类接口"结构说变就变"的先例(见 amllttml.go/musixmatch.go),按key名
+// InnerTube 是没有文档的私有协议,这条路径实测是这个形状,但 amll
+// 的头注记录过同类接口"结构说变就变"的先例(见 amllttml.go),按key名
 // 找比按精确路径导航更能扛住这类结构调整。
 func ytmusicExtractSearchItems(raw []byte) []ytmusicSearchItem {
 	var tree any
@@ -697,7 +692,7 @@ type ytmusicLyricLine struct {
 }
 
 // ytmusicParseTimedLyrics 从 "browse"(ANDROID_MUSIC 身份)响应里摘出逐行歌词 +
-// 来源标注(形如 "Source: LyricFind"/"Source: Musixmatch")。这首歌没有带时间戳的
+// 来源标注(形如 "Source: LyricFind")。这首歌没有带时间戳的
 // 歌词时返回空切片(纯文本那份见 ytmusicParsePlainLyrics)。纯函数,便于单测。
 func ytmusicParseTimedLyrics(raw []byte) ([]ytmusicLyricLine, string) {
 	var tree any
@@ -943,9 +938,8 @@ func ytmusicNoteSearchWorks() {
 }
 
 // ytmusicLyricsOf:browseId 那一页的歌词。先切到 Android 客户端身份取带时间戳的逐行歌词,没有时用 Web 身份再 browse 一次
-// 取纯文本(plainOnly)。两种都**只在来源标注 LyricFind 时才接受**(ytmusicIsLyricFindSource,理由见文件头注):是
-// Musixmatch 换个管道重发的,跟 musixmatch 源查到的是同一份数据,当成两个源会让跨源正文共识(contentConsensusPeers)
-// 虚高,当"这一源没查到"。收下逐行歌词时连同 browseId 记一笔(ytmusicRememberTranslatable),机翻链第 0 级凭它取译文。
+// 取纯文本(plainOnly)。两种都**只在来源标注 LyricFind 时才接受**(ytmusicIsLyricFindSource,理由见文件头注),标着别家供应商的
+// 当"这一源没查到"。收下逐行歌词时连同 browseId 记一笔(ytmusicRememberTranslatable),机翻链第 0 级凭它取译文。
 func ytmusicLyricsOf(ctx context.Context, browseID string) (lyrics string, plainOnly bool) {
 	lrc, source := ytmusicFetchTimedLyrics(ctx, browseID)
 	if isTimedLRC(lrc) {
@@ -966,8 +960,8 @@ func ytmusicLyricsOf(ctx context.Context, browseID string) (lyrics string, plain
 }
 
 // ytmusicIsLyricFindSource 判断 timedLyricsData 的 sourceMessage 是不是标注了
-// LyricFind(观察到的真实取值形如 "Source: LyricFind" / "Source: Musixmatch")。
-// 纯函数,便于单测;大小写不敏感只是防御性写法,实测两个取值大小写固定,没见过变体。
+// LyricFind(观察到的真实取值形如 "Source: LyricFind")。
+// 纯函数,便于单测;大小写不敏感只是防御性写法,实测取值大小写固定,没见过变体。
 func ytmusicIsLyricFindSource(source string) bool {
 	return strings.Contains(strings.ToLower(source), "lyricfind")
 }

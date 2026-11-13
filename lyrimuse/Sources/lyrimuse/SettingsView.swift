@@ -1979,7 +1979,7 @@ private struct LyricsSettingsTab: View {
                         get: { features.lyricsTranslationLanguage },
                         set: { features.lyricsTranslationLanguage = $0; Task { await features.save() } }
                     ),
-                    options: MusixmatchTranslationLanguage.allCases,
+                    options: LyricsTranslationLanguage.allCases,
                     label: \.displayName,
                     compact: true
                 )

@@ -6,8 +6,8 @@ import (
 	"testing"
 )
 
-// 实测形状:《Ocho Rios》(musixmatch richsync)的空白词条掏空了短词的读条时长。
-func TestYRCMergeWhitespaceTokensMusixmatchShape(t *testing.T) {
+// 实测形状:逐字轨里独立计时的空白词条掏空了短词的读条时长。
+func TestYRCMergeWhitespaceTokensSpaceEntryShape(t *testing.T) {
 	in := "[1980,4087](1980,23,0)In(2003,165,0) (2168,24,0)the(2192,96,0) (2288,40,0)nick\n"
 	want := "[1980,4087](1980,188,0)In (2168,120,0)the (2288,40,0)nick\n"
 	got, changed := yrcMergeWhitespaceTokens(in)
@@ -41,25 +41,6 @@ func TestYRCMergeWhitespaceTokensLeadingSpace(t *testing.T) {
 	got, changed := yrcMergeWhitespaceTokens(in)
 	if !changed || got != want {
 		t.Fatalf("行首空白应并给下一个词:\n got %q\nwant %q", got, want)
-	}
-}
-
-// 转换器源头归并:richsync 的空白条目不再产出独立词条,短词时长恢复到"下一个非空白词"。
-func TestRichsyncToYRCMergesWhitespaceEntries(t *testing.T) {
-	lines := []musixmatchRichsyncLine{{
-		Ts: 1.98, Te: 6.067,
-		L: []musixmatchRichsyncWord{
-			{C: "In", O: 0},
-			{C: " ", O: 0.023},
-			{C: "the", O: 0.188},
-			{C: " ", O: 0.212},
-			{C: "nick", O: 0.308},
-		},
-	}}
-	got := richsyncToYRC(lines)
-	want := "[1980,4087](1980,188,0)In (2168,120,0)the (2288,3779,0)nick\n"
-	if got != want {
-		t.Fatalf("richsyncToYRC 归并不对:\n got %q\nwant %q", got, want)
 	}
 }
 

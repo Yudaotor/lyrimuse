@@ -2148,8 +2148,6 @@ func runCoverArtTests() {
                     "https://img1.kuwo.cn/star/albumcover/300/s4s67/89/1.jpg", "缩略图下载: 酷我原图换 300")
         expectEqual(t("https://p3-luna.douyinpic.com/img/tos-cn/abc~tplv-b829550vbb-resize:0:0.jpg"),
                     "https://p3-luna.douyinpic.com/img/tos-cn/abc~tplv-b829550vbb-resize:300:300.jpg", "缩略图下载: 汽水原图换 300")
-        expectEqual(t("https://s.mxmcdn.net/images-storage/albums2/1/125051961_800_800.jpg"),
-                    "https://s.mxmcdn.net/images-storage/albums2/1/125051961_350_350.jpg", "缩略图下载: Musixmatch 取 350(100 是 403)")
         expectEqual(t("https://yt3.googleusercontent.com/KKEMiv9Iul-JvjB=s0"),
                     "https://yt3.googleusercontent.com/KKEMiv9Iul-JvjB=s256", "缩略图下载: Google 图床原图换 =s256")
         expectEqual(t("https://lh3.googleusercontent.com/abc_d=w544-h544-l90-rj"),

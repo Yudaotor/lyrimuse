@@ -12,7 +12,7 @@ import (
 func swimMVDecision() *lyricsDecision {
 	return &lyricsDecision{Winner: "kugou", Candidates: []lyricsDecisionCandidate{
 		{Source: "kugou", Artist: "BTS (防弹少年团)", SourceReportedDurationSecs: 159},
-		{Source: "musixmatch", Artist: "BTS", SourceReportedDurationSecs: 237},
+		{Source: "deezer", Artist: "BTS", SourceReportedDurationSecs: 237},
 		{Source: "lrclib", Artist: "BTS", SourceReportedDurationSecs: 159},
 	}}
 }
@@ -23,14 +23,14 @@ func TestDecisionSongDurationSecs(t *testing.T) {
 	}
 	// 显示的是哪份歌词就按哪份的曲长,哪怕它跟多数候选不一样。
 	minority := swimMVDecision()
-	minority.Winner = "musixmatch"
+	minority.Winner = "deezer"
 	if got := decisionSongDurationSecs(minority); got != 237 {
 		t.Fatalf("胜出候选优先于中位数,得到 %v", got)
 	}
 	// 胜出的那条没报曲长:退回全部候选的中位数。
 	noWinnerDuration := &lyricsDecision{Winner: "qq", Candidates: []lyricsDecisionCandidate{
 		{Source: "qq"}, {Source: "kugou", SourceReportedDurationSecs: 159},
-		{Source: "musixmatch", SourceReportedDurationSecs: 237}, {Source: "lrclib", SourceReportedDurationSecs: 159},
+		{Source: "deezer", SourceReportedDurationSecs: 237}, {Source: "lrclib", SourceReportedDurationSecs: 159},
 	}}
 	if got := decisionSongDurationSecs(noWinnerDuration); got != 159 {
 		t.Fatalf("中位数,得到 %v", got)

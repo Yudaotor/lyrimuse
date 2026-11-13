@@ -9,10 +9,9 @@ import (
 )
 
 // 纯空白的逐字词条不该独立存在(现象是"有些单词没有读条直接填满"):
-// Musixmatch richsync 把空格作为独立计时条目,空格占走了前一个词的绝大部分演唱时长
-// (实测《Ocho Rios》"In" 23ms + 空格 165ms),悬浮窗按 23ms 填完一个词,观感就是
-// "瞬间填满"。网易云原生逐字、QQ 的 QRC、酷狗的 KRC 同样会有(实测《SPECIALZ》网易云逐字里
-// "U" 60ms 后跟一个 3620ms 的空格)。richsyncToYRC(musixmatch.go)、qrcToYRC(qq.go)、krcToYRC(kugou.go)
+// 逐字数据把空格作为独立计时条目时,空格占走了前一个词的绝大部分演唱时长(例:"U" 60ms 后跟
+// 一个 3620ms 的空格),悬浮窗按 60ms 填完一个词,观感就是"瞬间填满"。网易云原生逐字、QQ 的 QRC、
+// 酷狗的 KRC 都会有。qrcToYRC(qq.go)、krcToYRC(kugou.go)
 // 和网易云取词(netease.go resolveNeteaseInfo)都在源头归并;这里是对**存量**缓存的
 // 一次性清洗 —— 空白词条自带的时间信息就在数据里,原地归并即可,不需要重新联网解析。
 //

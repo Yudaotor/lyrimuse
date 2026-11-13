@@ -208,14 +208,12 @@ func TestYtmusicLyricsBrowseID(t *testing.T) {
 	}
 }
 
-// 用户追问坐实:只在真是 LyricFind 时才接受候选,Musixmatch 换个管道重发的
-// 一律当"这一源没查到"——理由见 ytmusicLyric 文件头注(跨源共识会被虚假印证 + 6/9 的
-// 命中在已有 musixmatch 源上零增量)。这条钉住判定本身,真实的两种 sourceMessage 取值
-// 都覆盖到。
+// 只在真是 LyricFind 时才接受候选,别家供应商的一律当"这一源没查到"——理由见 ytmusicLyric 文件头注。
+// 这条钉住判定本身。
 func TestYtmusicIsLyricFindSource(t *testing.T) {
 	cases := map[string]bool{
 		"Source: LyricFind":   true,
-		"Source: Musixmatch":  false,
+		"Source: Other":       false,
 		"":                    false,
 		"source: lyricfind":   true, // 大小写不敏感只是防御性写法,见函数注释
 		"LyricFind":           true,
@@ -264,7 +262,7 @@ func TestYtmusicParseTimedLyrics(t *testing.T) {
 	dirty := `{"timedLyricsData": [
 		{"lyricLine": "bad", "cueRange": {"startTimeMilliseconds": "100", "endTimeMilliseconds": "50", "metadata": {"id": "0"}}},
 		{"lyricLine": "good", "cueRange": {"startTimeMilliseconds": "100", "endTimeMilliseconds": "200", "metadata": {"id": "1"}}}
-	], "sourceMessage": "Source: Musixmatch"}`
+	], "sourceMessage": "Source: Other"}`
 	lines, _ = ytmusicParseTimedLyrics([]byte(dirty))
 	if len(lines) != 1 || lines[0].text != "good" {
 		t.Errorf("时间戳倒退的行应该被跳过,实际 %+v", lines)

@@ -16,7 +16,7 @@ import (
 // -album ... -duration ...`: a one-shot, no-persistent-server way for desktop-lyrics
 // to let the user manually re-search lyric candidates for a specific song (its
 // "歌词管理" window's "联网搜索候选歌词" feature). It reuses scoredLyricCandidatesStreaming
-// (enrich.go) — the exact same NetEase/QQ/酷狗/Musixmatch/LRCLIB fetch-and-score logic the
+// (enrich.go) — the exact same NetEase/QQ/酷狗/LRCLIB fetch-and-score logic the
 // normal background auto-resolve path uses — so there is no second, drifting
 // implementation of "how do we rank lyric sources" living in Swift.
 //
@@ -125,7 +125,7 @@ func runSearchLyricsCLI(args []string) {
 		// 跟常驻引擎同一份对外限流窗口(iTunes / Last.fm / MusicBrainz 被 429 / 503 后的停手时刻,见 sharedcooldown.go):
 		// 不设的话这条子进程既看不到常驻那边刚记下的窗口、照打,自己撞上的也不留给别人。
 		setSharedCooldownPath(filepath.Join(filepath.Dir(cfgPath), clientName+"-outbound-cooldowns.json"))
-		// 常驻引擎存着的反爬暂停(Musixmatch 被拦后停 15 分钟～4 小时)只读读进来:暂停期里手动搜索照样不去碰它。
+		// 常驻引擎存着的反爬暂停(被拦后停 15 分钟～4 小时,见 sourcebreaker.go)只读读进来:暂停期里手动搜索照样不去碰它。
 		// 不写回 —— 存盘那份归常驻进程,两个进程各写各的会互相盖掉。
 		loadLyricSourceBlocksReadOnly(filepath.Join(filepath.Dir(cfgPath), lyricSourceBlocksFileName))
 		// AMLL 索引只读磁盘上那份,核对交给常驻引擎(见 amllIndexRefreshEnabled)。
@@ -370,8 +370,7 @@ type searchLyricsUpdate struct {
 	AppleTitle string `json:"appleTitle,omitempty"`
 	AppleAlbum string `json:"appleAlbum,omitempty"`
 	// SourceFailureReasonCodes:哪些没给出候选的源,查得到失败原因——两层:具体原因只覆盖
-	// neteaseLastFailureReasonNow/musixmatchLastFailureReasonNow/ytmusicLastFailureReasonNow
-	// 这三个已经接了诊断旁路的源(给 test-lyric-sources 用的同一套旁路,见
+	// 已经接了诊断旁路的那几个源(各自的 xxxLastFailureReasonNow,给 test-lyric-sources 用的同一套旁路,见
 	// testlyricsourcescli.go 的排查记录);传输层通用原因(dns_failed /
 	// connect_failed / server_error)对任何一个 HTTP 响应都没拿到的源都会报。两层都没命中的
 	// 源不在这个 map 里出现——Swift 侧对没出现的源如实显示"未给出候选"，不编一个没核实过的理由。
@@ -379,7 +378,7 @@ type searchLyricsUpdate struct {
 	// (从 SourceFailureReasons 改名——见 lyricsourcefailure.go 头注,人话交给
 	// Swift 侧的 LyricSourceFailureReason.text(forCode:) 按 App 界面语言翻译)。
 	SourceFailureReasonCodes map[string]string `json:"sourceFailureReasonCodes,omitempty"`
-	// Instrumental:有源明确断言"这首本来就没有词"(lrclib / 网易云 / QQ / Musixmatch 都可能给,
+	// Instrumental:有源明确断言"这首本来就没有词"(lrclib / 网易云 / QQ 都可能给,
 	// 见第 09 章「纯音乐标记的三个来源」)。
 	Instrumental bool `json:"instrumental,omitempty"`
 	// TracksFoundNoLyrics:这一轮里"曲库里有这首歌、但平台上没有歌词文本"的那几个源
@@ -467,7 +466,7 @@ func tracksFoundNoLyrics(results []scoredLyricCandidateResult) []trackFoundNoLyr
 // 查一下有没有已知的具体失败原因,查得到才放进返回的 map。返回值的 value 是**稳定
 // 代码**,不是文案,见 lyricsourcefailure.go 头注。
 //
-// 两层:① 具体失败原因,只覆盖三个已经接了诊断旁路的源:netease/musixmatch/lyricfind(见各自
+// 两层:① 具体失败原因,只覆盖已经接了诊断旁路的那几个源:netease/lyricfind/deezer/soda(见各自
 // xxxLastFailureReasonNow 的头注,给 test-lyric-sources 用的同一条只读旁路,这里
 // 复用,不重新发明);② 传输层通用原因,对任何源:这一轮一个 HTTP 响应都没拿到的,
 // 报 dns_failed / connect_failed / server_error(sourcebreaker.go 的 transportFailureCodes)。
@@ -477,7 +476,7 @@ func tracksFoundNoLyrics(results []scoredLyricCandidateResult) []trackFoundNoLyr
 // **原因 ≠ 没给出候选的原因**(补的一道判据):网易云那一条现在还要过
 // `neteaseSawSuccessNow()` —— 这一轮它只要成功答过一次,就不把限流报上去。实测对照见
 // netease.go 里那个函数的头注(同一分钟两次搜索:两次都吃了 405,其中一次照样给出 4 条
-// 候选)。musixmatch 同样有了「成功过」信号(musixmatchSawSuccessNow);lyricfind 暂时没有,维持原样。
+// 候选)。其余几个源没有这个信号。
 //
 // 这几个 xxxLastFailureReasonNow 读的是**进程级**"这次进程生命周期里最近一次识别出的
 // 失败原因",不是专门为"这一轮搜索"重新打点的——但 search-lyrics 本来就是一次性短命进程
@@ -490,7 +489,7 @@ func lyricSourceFailureReasons(results []scoredLyricCandidateResult) map[string]
 }
 
 // lyricSourceFailureReasonsWith 是上面那个的可测版本:传输层代码表、启用判定、amll 缺 ID 标记
-// 都从参数进,不碰包级状态(三个源特有的 xxxLastFailureReasonNow 仍读进程级旁路 —— 那几条
+// 都从参数进,不碰包级状态(各源特有的 xxxLastFailureReasonNow 仍读进程级旁路 —— 那几条
 // 各自有测试,这里只管合成规则)。
 func lyricSourceFailureReasonsWith(results []scoredLyricCandidateResult, transport map[string]string,
 	enabled func(string) bool, amllSkippedForMissingIDs bool) map[string]string {
@@ -510,10 +509,6 @@ func lyricSourceFailureReasonsWith(results []scoredLyricCandidateResult, transpo
 	// netease.go 里 `neteaseSawSuccessNow` 的头注。
 	if !neteaseSawSuccessNow() {
 		check("netease", neteaseLastFailureReasonNow)
-	}
-	// musixmatch 同理:这一轮数据接口答过 200,早先记下的失败原因就不是这次没给出候选的原因。
-	if !musixmatchSawSuccessNow() {
-		check("musixmatch", musixmatchLastFailureReasonNow)
 	}
 	check("lyricfind", ytmusicLastFailureReasonNow)
 	// deezer:目前只有"换不到匿名 JWT"这一种已实测的失败模式

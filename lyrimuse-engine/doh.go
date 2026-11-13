@@ -12,32 +12,8 @@ import (
 	"time"
 )
 
-// DoH(DNS over HTTPS)解析,只给那些**本地 DNS 会把它解析歪**的域名用。
-//
-// 这台机器上
-//
-//	apic-appmobile.musixmatch.com  系统 DNS → 31.13.91.6（Facebook 的地址段）
-//	                               DoH 查询 → 44.212.146.46 / 52.5.55.223（AWS）
-//	apic-desktop.musixmatch.com    系统 DNS → 98.159.108.57
-//	                               DoH 查询 → 18.154.206.x
-//
-// 连过去的结果是 TLS 握手直接失败(`SSL: no alternative certificate subject name
-// matches target host name`)—— 证书当然对不上,那台机器根本不是 Musixmatch。
-// 于是 token.get 一个字节都拿不到,整个 Musixmatch 源静默失效:各源里唯一覆盖
-// 欧美/日韩曲库的那个,英文歌就只剩 LRCLIB 一家。
-//
-// 这**不是**代码问题,也不是 musixmatch.go 注释里记的那种反爬拦截(那种会正经返回
-// 401 + hint=captcha 的 JSON)。用 --resolve 强制连真实 IP 立刻拿到 HTTP 200 和
-// 有效 token —— 服务器一直是好的,只是我们被送错了地方。
-//
-// 只对 musixmatch 生效:网易云/QQ/酷狗在这个网络环境下本来就正常,没有理由让它们
-// 多绕一层;LRCLIB 也一直通。任何一步失败都静默退回系统 DNS,退化成现在的行为,
-// 不会比不加更差。
-//
-// 补:其余八个歌词源后来也接上了 DoH,但顺序**反过来**(lyricsourcedial.go):系统
-// DNS 优先、它报错才问 DoH。两次的病不同 —— 这里是系统 DNS **答错**(先问它没意义),那次是
-// 公司 VPN 的 DNS **不答**(系统 DNS 正常时不该多打一次 1.1.1.1)。dohLookup / dohDialRaceWith
-// 两套共用,只是拨号器不同。
+// DoH(DNS over HTTPS)解析。歌词源的拨号器(lyricsourcedial.go)在系统 DNS 报错时用它:dohLookup 拿 IP,
+// dohDialRaceWith 并发拨号。
 const (
 	dohTimeout  = 4 * time.Second
 	dohCacheTTL = 30 * time.Minute
@@ -45,11 +21,9 @@ const (
 	// (lyricSourceSystemDNSFailTTL)同一个量级:现在八个歌词源都靠这里兜底,合盖唤醒、切网那几秒
 	// 恰好查失败的话,记 30 分钟就是网络恢复之后这半小时它们全报「DNS 失败」。
 	dohNegativeTTL = 60 * time.Second
-	// 单个地址的拨号上限。有了 dohDialRace 的并发拨号之后,这个值不再决定"整体等多久"
-	// (黑洞地址不会再挡住好地址),真正卡总时长的是调用方 ctx 上的 deadline
-	// —— dohHTTPClient 那条路上是 proxyFallbackTransport 的 3s 直连预算。
-	dohDialTimeout         = 8 * time.Second
-	dohTLSHandshakeTimeout = 8 * time.Second
+	// 单个地址的拨号上限。dohDialRaceWith 并发拨号,这个值不决定"整体等多久"
+	// (黑洞地址不会挡住好地址),真正卡总时长的是调用方 ctx 上的 deadline。
+	dohDialTimeout = 8 * time.Second
 )
 
 // 两个 DoH 端点都用 IP 直连(自己不需要再解析一次 DNS,否则就是鸡生蛋)。
@@ -57,12 +31,6 @@ const (
 var dohEndpoints = []string{
 	"https://1.1.1.1/dns-query",
 	"https://8.8.8.8/resolve",
-}
-
-// 需要绕过系统 DNS 的域名后缀。故意用一份显式清单而不是"全都走 DoH":
-// 把整个进程的解析行为改掉,影响面远超这个 bug 需要修的范围。
-var dohHostSuffixes = []string{
-	".musixmatch.com",
 }
 
 type dohEntry struct {
@@ -81,16 +49,6 @@ var (
 type dohFlight struct {
 	done chan struct{}
 	ips  []string
-}
-
-func dohShouldResolve(host string) bool {
-	h := strings.ToLower(strings.TrimSuffix(host, "."))
-	for _, suffix := range dohHostSuffixes {
-		if strings.HasSuffix(h, suffix) {
-			return true
-		}
-	}
-	return false
 }
 
 // dohLookup 返回这个域名的 A 记录。查不到/查询失败/调用方的 ctx 先结束了返回 nil,调用方据此退回系统解析。
@@ -192,56 +150,18 @@ func dohParseAnswer(body []byte) []string {
 	return ips
 }
 
-// dohDialContext 是给 http.Transport 用的拨号器:命中清单里的域名就连 DoH 解析出的
-// 地址,其余一律走系统解析。
-//
-// 只改拨号的目标地址,**不碰 TLS** —— crypto/tls 用的 ServerName 来自 URL 里的域名,
-// 不是这里的 IP,所以证书照常按域名严格校验(跟 curl --resolve 是同一个机制)。绝不能
-// 为了"连得上"去关 InsecureSkipVerify:那才是真的把连接置于风险之中。
-func dohDialContext(ctx context.Context, network, addr string) (net.Conn, error) {
-	host, port, err := net.SplitHostPort(addr)
-	if err != nil || !dohShouldResolve(host) {
-		return dohDialer().DialContext(ctx, network, addr)
-	}
-	conn, raceErr := dohDialRace(ctx, network, dohLookup(ctx, host), port)
-	if conn != nil {
-		return conn, nil
-	}
-	// DoH 没结果、或者拿到的地址都连不上:退回系统解析,行为跟没有这套东西时一致。
-	conn, err = dohDialer().DialContext(ctx, network, addr)
-	if err != nil && raceErr != nil {
-		return nil, fmt.Errorf("%w (DoH 地址也连不上: %v)", err, raceErr)
-	}
-	return conn, err
-}
-
 func dohDialer() *net.Dialer {
 	return &net.Dialer{Timeout: dohDialTimeout, KeepAlive: 30 * time.Second}
 }
 
-// dohDialRace 对 DoH 查到的每个地址**同时**发起拨号,第一个连上的胜出,慢一步也连上的
+// dohDialRaceWith 对 DoH 查到的每个地址**同时**发起拨号(dial 是拨号器),第一个连上的胜出,慢一步也连上的
 // 当场关掉。ips 为空时返回 (nil, nil),由调用方退回系统解析。
 //
-// 修的真 bug。原来这里是串行的:
+// 别改成串行逐个拨:每个 dialer.Timeout = 8s,第一个地址是黑洞(SYN 石沉大海、不是被拒)时预算全耗在它身上,
+// 永远轮不到第二个;而 DoH 返回的地址顺序是随机轮转的,dohCache 又一存 30 分钟。并发拨号让"有一个地址能连"
+// 直接等价于"连得上",跟顺序无关。标准库的 Happy Eyeballs 只在它自己解析出多个地址时生效,这里走不到。
 //
-//	for _, ip := range ips { conn, err := dialer.DialContext(ctx, ...); if err == nil { return } }
-//
-// 每个 dialer.Timeout = 8s,而外面 http.Client.Timeout 也是 8s —— 第一个地址是黑洞
-// (SYN 石沉大海、不是被拒)时,8 秒预算全耗在它身上,**永远轮不到第二个**。而 DoH 返回的
-// 地址顺序是随机轮转的(实测:1.1.1.1 对同一个域名连查三次给了两种顺序),
-// dohCache 又一存 30 分钟 —— 一次坏运气就是接下来半小时这个源全废,而另一个地址明明是
-// 好的。并发拨号让"有一个地址能连"直接等价于"连得上",跟顺序无关。
-//
-// 这跟 net.Dialer 自己对多地址做的 Happy Eyeballs 是同一个思路,但标准库那套只在**它自己**
-// 解析出多个地址时生效;我们是拿 DoH 的结果逐个拨,走不到那条路径。
-func dohDialRace(ctx context.Context, network string, ips []string, port string) (net.Conn, error) {
-	return dohDialRaceWith(ctx, dohDialer().DialContext, network, ips, port)
-}
-
-// dohDialRaceWith 是 dohDialRace 的可注入版本。拆出来只为单测:要证明"第一个地址是黑洞
-// 时不再挡住第二个",就得有一个**真的永远不返回**的拨号目标,而真实网络里没有可移植、
-// 可复现的黑洞地址(RFC 5737 那几段在不同网络下有时秒回 EHOSTUNREACH、有时超时)。
-// 生产路径只有 dohDialRace 一个调用方,传的永远是真拨号器。
+// dial 可注入只为单测:要证明"第一个地址是黑洞时不再挡住第二个",得有一个真的永远不返回的拨号目标。
 func dohDialRaceWith(ctx context.Context, dial func(context.Context, string, string) (net.Conn, error),
 	network string, ips []string, port string) (net.Conn, error) {
 	if len(ips) == 0 {
@@ -301,30 +221,4 @@ func dohDialRaceWith(ctx context.Context, dial func(context.Context, string, str
 	}
 	cancel()
 	return nil, firstErr
-}
-
-// dohHTTPClient 造一个走上面那套拨号逻辑的 client:直连优先(DoH 解析 + 并发拨号),直连
-// 被打掉时自动改走「代理」设置里的代理(proxyfallback.go / networkproxy.go —— "为什么
-// 不全局走代理"的实测依据记在 systemproxy.go 头注)。
-//
-// onBlocked 透传给 proxyFallbackTransport:直连不通、代理也救不回来时回调一次,让调用方
-// 记一个具体的失败原因。可以为 nil。
-//
-// **刻意不设 http.Client.Timeout。** 那是把直连和代理两次尝试算进同一个预算里,直连一
-// 超时就没钱给代理重试了,fallback 等于没加。预算落在 proxyFallbackTransport.attempt 的
-// 每次尝试上(3s 直连 / 10s 代理),调用方自己 ctx 上的 deadline 照常生效。
-func dohHTTPClient(onBlocked func()) *http.Client {
-	return &http.Client{
-		Transport: &proxyFallbackTransport{
-			direct: &http.Transport{
-				DialContext:         dohDialContext,
-				TLSHandshakeTimeout: dohTLSHandshakeTimeout,
-				ForceAttemptHTTP2:   true,
-			},
-			// 走代理时拨的是代理自己的地址(通常是 127.0.0.1),DoH 对它没有意义,用默认
-			// 拨号器即可;目标域名交给代理去解析。
-			viaProxy:  newFallbackProxyTransport(dohTLSHandshakeTimeout),
-			onBlocked: onBlocked,
-		},
-	}
 }

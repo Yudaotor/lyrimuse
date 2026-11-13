@@ -119,8 +119,8 @@ func TestScoreSourceDurationMismatch(t *testing.T) {
 }
 
 // TestMoscowClubMixOutranksStandardVersion 是这次误判的端到端回归:用真实数字重建两条
-// 候选,断言修复后**混音版胜出**。刻意把跨源共识给正常版那一边(现实里 qq/musixmatch/
-// lrclib 三家都是同一份正常版歌词、互相印证),混音版孤身一条、没有共识分 —— 这是更难的
+// 候选,断言修复后**混音版胜出**。刻意把跨源共识给正常版那一边(现实里 qq/
+// lrclib 等几家都是同一份正常版歌词、互相印证),混音版孤身一条、没有共识分 —— 这是更难的
 // 那一侧,过了才算数。
 func TestMoscowClubMixOutranksStandardVersion(t *testing.T) {
 	standard := lyricCandidate{

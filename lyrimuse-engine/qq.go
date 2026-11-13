@@ -2074,9 +2074,8 @@ func qrcToYRC(qrc string) string {
 	}
 	// 纯空白词条在**源头**就归并掉,别留给启动期那道迁移去擦。
 	// QRC 把空格作为独立计时条目,空格会占走前一个词的大部分演唱时长,悬浮窗于是"某个字
-	// 没有读条直接填满"(完整来龙去脉见 yrcwhitespace.go 头注)。musixmatch 的 richsyncToYRC
-	// 一直在源头做这件事,QQ / 酷狗这两条路却没有 —— 于是每解析一首新歌就又产生一批,靠
-	// migrateYRCWhitespaceTokens 在下次启动时擦,那道"迁移"因此跑了 39 次也收敛不了。
+	// 没有读条直接填满"(见 yrcwhitespace.go 头注)。源头不归并的话每解析一首新歌
+	// 就又产生一批,只能靠 migrateYRCWhitespaceTokens 在下次启动时擦,那道迁移永远收敛不了。
 	merged, _ := yrcMergeWhitespaceTokens(strings.Join(lines, "\n"))
 	return merged
 }

@@ -11,6 +11,7 @@ import (
 	neturl "net/url"
 	"os"
 	"reflect"
+	"regexp"
 	"slices"
 	"sort"
 	"strconv"
@@ -1427,4 +1428,15 @@ func dedupeArtistIdentities(groups ...[]artistIdentity) []artistIdentity {
 		}
 	}
 	return out
+}
+
+// appleTrackParamRe:Apple Music 单曲链接里的曲目参数(…/album/<名>/<专辑 id>?i=<曲目 id>)。
+var appleTrackParamRe = regexp.MustCompile(`[?&]i=(\d+)`)
+
+// appleCatalogIDFromURL 从 Apple Music 单曲链接里取曲目目录 ID,不是这个形状返回空串。纯函数,便于单测。
+func appleCatalogIDFromURL(u string) string {
+	if m := appleTrackParamRe.FindStringSubmatch(u); m != nil {
+		return m[1]
+	}
+	return ""
 }

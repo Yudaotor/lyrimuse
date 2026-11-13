@@ -218,7 +218,7 @@ wrong scrobble is a permanent edit to a public page.
 **Can I use Lyrimuse without scrobbling?**
 Yes, that's the default — nothing is scrobbled until you connect a Last.fm account in
 Settings → Linked Platforms. Resolving lyrics and artwork is separate: it sends the artist and track
-name to the public lyrics providers (Netease, QQ, Kugou, LRCLIB, Musixmatch, AMLL) regardless of
+name to the public lyrics providers (Netease, QQ, Kugou, LRCLIB, AMLL) regardless of
 whether an account is connected. Those sources can be narrowed or disabled in Settings.
 
 **Why does the same artist appear twice on my Last.fm profile?**

@@ -20,7 +20,7 @@ import (
 //   - manual:只用填的那一个,连不上就当没有。
 //   - off:不走代理。
 //
-// 只管直连失败之后:用它的是 proxyFallbackTransport(海外歌词源、Musixmatch、Telegram、状态中继、ListenBrainz),直连
+// 只管直连失败之后:用它的是 proxyFallbackTransport(海外歌词源、Telegram、状态中继、ListenBrainz),直连
 // 正常时一个包都不经过代理。国内歌词源不在里面(lyricSourceProxyFallbackSources)。见 09 章决策 321。
 const (
 	networkProxyAuto   = "auto"

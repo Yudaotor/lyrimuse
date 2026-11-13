@@ -34,12 +34,12 @@ var songEntityFieldClasses = map[string]songFieldClass{
 	"body_crc": songFieldLyricsChoice, "body_fields": songFieldLyricsChoice, "lyrics_source": songFieldLyricsChoice,
 	"lyrics_score": songFieldLyricsChoice, "lyrics_scoring_version": songFieldLyricsChoice,
 	"lyrics_scoring_revision": songFieldLyricsChoice,
-	"resolved_duration_secs":  songFieldLyricsChoice, "lyrics_speakers": songFieldLyricsChoice,
+	"resolved_duration_secs":  songFieldLyricsChoice,
 	// 按播放器的那份绑着这条写法自己的主歌词指纹,各条写法在播放器里放到时各自比,不跟着实体同步。
 	"player_lyrics": songFieldVariant,
 	// 导出读音按写法键算指纹、带的是同曲其它写法的抬头,各写法各算(exportroma.go)。
 	"lyrics_roma_export": songFieldVariant, "lyrics_roma_export_src": songFieldVariant, "lyrics_roma_export_rules": songFieldVariant,
-	"lyrics_speakers_checked": songFieldLyricsChoice, "plain_lyrics": songFieldLyricsChoice,
+	"plain_lyrics":        songFieldLyricsChoice,
 	"plain_lyrics_source": songFieldLyricsChoice, "lyrics_kana": songFieldLyricsChoice,
 	"lyrics_kana_checked": songFieldLyricsChoice, "lyrics_kana_roma_for": songFieldLyricsChoice,
 

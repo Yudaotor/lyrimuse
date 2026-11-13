@@ -55,7 +55,7 @@ const (
 	lyricQueryReasonTitleBilingual = "title-bilingual"
 	// 曲名变体:还缺着的源换一种曲名写法再问一次,见 titleVariantRound。
 	lyricQueryReasonTitleVariant = "title-variant"
-	// 按 ISRC 补取:还缺着的 deezer / musixmatch 拿 Apple Music 候选报的 ISRC 直取,见 isrcretry.go。
+	// 按 ISRC 补取:还缺着的、能按 ISRC 直取的源拿 Apple Music 候选报的 ISRC 直取,见 isrcretry.go。
 	lyricQueryReasonISRC = "isrc-from-applemusic"
 )
 

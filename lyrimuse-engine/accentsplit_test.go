@@ -263,7 +263,6 @@ func TestMigrateAccentSplits(t *testing.T) {
 	damaged := "[00:16.27]Aus der groß en traumfabrik"
 	damagedYRC := yrcLine(16270, "Aus der groß en traumfabrik")
 	healthy := "[00:01.00]Für dich\n" + damaged
-	duet := "[00:16.27]Aus der groß en traumfabrik\n[00:20.89]Seit die bilder laufen"
 	withAccentCacheWords(t)
 	withEnrichCache(t, map[string]enrichEntry{
 		"a|damaged|":  {Lyrics: bt(damaged), LyricsYRC: bt(damagedYRC)},
@@ -271,8 +270,6 @@ func TestMigrateAccentSplits(t *testing.T) {
 		"c|manual|":   {Lyrics: bt(damaged), LyricsYRC: bt(damagedYRC), ManualLyrics: true},
 		"d|healthy|":  {Lyrics: bt(healthy)},
 		"e|yrc-only|": {Lyrics: bt("[00:12.17]Was gibt's da zu grübeln"), LyricsYRC: bt(accentYRCOnly)},
-		"f|duet|":     {Lyrics: bt(duet), LyricsSpeakers: &lyricSpeakers{For: lyricSpeakersFingerprint(duet, ""), LRC: []string{"A", "B"}}},
-		"g|stale|":    {Lyrics: bt(duet), LyricsSpeakers: &lyricSpeakers{For: "stale", LRC: []string{"A", "B"}}},
 		"h|partial|":  {Lyrics: bt("[00:01.00]C'est la dernière danse\n[00:05.00]C'est la derni ère fois")},
 		"i|clean-yrc|": {Lyrics: bt("[00:07.26]Und ein mä rchen voll musik"),
 			LyricsYRC: bt("[7260,1200](7260,200,0)Und (7460,200,0)ein (7660,200,0)mä(7860,200,0)rchen (8060,200,0)voll (8260,200,0)musik")},
@@ -303,13 +300,6 @@ func TestMigrateAccentSplits(t *testing.T) {
 	}
 	if e := enrichCache["e|yrc-only|"]; !e.Lyrics.EqualString("[00:12.17]Was gibt's da zu grübeln") || !strings.Contains(e.LyricsYRC.String(), "ü(13382,135,0)beln") {
 		t.Errorf("只坏了逐字的,拿自己的整行当证据修: %+v", e)
-	}
-	if e := enrichCache["f|duet|"]; !strings.Contains(e.Lyrics.String(), "großen") || e.LyricsSpeakers.For != lyricSpeakersFingerprint(e.Lyrics.String(), e.LyricsYRC.String()) ||
-		strings.Join(e.LyricsSpeakers.LRC, ",") != "A,B" {
-		t.Errorf("对唱标注的指纹要跟着换成新正文的: %+v", e.LyricsSpeakers)
-	}
-	if e := enrichCache["g|stale|"]; !strings.Contains(e.Lyrics.String(), "großen") || e.LyricsSpeakers.For != "stale" {
-		t.Errorf("原本就对不上的标注不动: %+v", e.LyricsSpeakers)
 	}
 	if e := enrichCache["h|partial|"]; !e.Lyrics.EqualString("[00:01.00]C'est la dernière danse\n[00:05.00]C'est la dernière fois") {
 		t.Errorf("只坏了一部分的,拿自己别处的拼法修: %q", e.Lyrics)

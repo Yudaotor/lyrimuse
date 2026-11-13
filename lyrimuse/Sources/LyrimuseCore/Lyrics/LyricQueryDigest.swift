@@ -7,7 +7,7 @@ import Foundation
 /// [Instrumental]》)一轮问了 9 组词,逐条平铺出来是这样:
 ///
 ///     · Utada - Beautiful World (Da Capo Version) [Instrumental]（首轮）
-///     · Hikaru Utada - Beautiful World (Da Capo Version) [Instrumental]（别名轮：补查未应答的源 → 仅查询 网易云音乐、QQ音乐、LRCLIB、Musixmatch、AMLL、酷我音乐、咪咕音乐）
+///     · Hikaru Utada - Beautiful World (Da Capo Version) [Instrumental]（别名轮：补查未应答的源 → 仅查询 网易云音乐、QQ音乐、LRCLIB、AMLL、酷我音乐、咪咕音乐）
 ///     · 宇多田ヒカル - Beautiful World (Da Capo Version) [Instrumental]（别名轮：补查未应答的源 → 仅查询 网易云音乐、QQ音乐、LRCLIB、…）
 ///     …再来六行一模一样的后缀
 ///

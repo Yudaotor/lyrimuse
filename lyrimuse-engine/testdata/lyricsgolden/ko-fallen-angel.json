@@ -1,7 +1,7 @@
 {
   "id": "ko-fallen-angel",
   "category": "ko-hangul-lyrics",
-  "note": "韩文歌:标签是拉丁字母、正文是谚文(cjkRatio 只数汉字,语言闸不能因此误杀),酷狗/QQ 带中文译文(+50);酷狗那条韩文歌的\"罗马音\"轨是中文谐音,在 kugou.go 就按汉字占比挡掉了,所以这里任何候选都不该有罗马音;musixmatch 自报时长偏差 \u003e12% 吃 sourceDurationOff",
+  "note": "韩文歌:标签是拉丁字母、正文是谚文(cjkRatio 只数汉字,语言闸不能因此误杀),酷狗/QQ 带中文译文(+50);酷狗那条韩文歌的\"罗马音\"轨是中文谐音,在 kugou.go 就按汉字占比挡掉了,所以这里任何候选都不该有罗马音",
   "label_evidence": {
     "consensus_peers": 4,
     "title_accepted": true,
@@ -35,7 +35,6 @@
       "kuwo": true,
       "lrclib": true,
       "lyricfind": true,
-      "musixmatch": true,
       "netease": true,
       "qq": true
     },
@@ -44,7 +43,6 @@
       "netease",
       "qq",
       "kugou",
-      "musixmatch",
       "lrclib",
       "amll",
       "lyricfind",
@@ -84,7 +82,6 @@
       "duration_secs": 199
     },
     "lyricfind": {},
-    "musixmatch": {},
     "netease": {
       "netease": {
         "cover": "https://p1.music.126.net/d4k2_0W68j4QnT6CMObp2w==/109951173846753314.jpg?param=800y800",

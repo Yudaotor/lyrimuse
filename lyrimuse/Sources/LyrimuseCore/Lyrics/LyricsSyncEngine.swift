@@ -1576,7 +1576,7 @@ public final class LyricsSyncEngine {
         // 0 秒处只写歌名的第一行,见 looksLikeTitleOnlyHeaderLine。
         let titleOnlyHeader = startsMs?.first == 0
             && looksLikeTitleOnlyHeaderLine(texts, trackTitle: trackTitle, trackArtist: trackArtist, tags: tags)
-        // 认抬头之前先剥掉已认出的演唱者标签:演唱者标注(LyricSpeakerTags)也会落在抬头那一行上
+        // 认抬头之前先剥掉已认出的演唱者标签:演唱者标签也会落在抬头那一行上
         // (「v1：歌名 - 歌手」),带着标签认不出抬头。见 08 章决策 52。
         func headerProbe(_ text: String) -> String {
             guard let (label, rest, _) = LyricDuet.splitLabel(text), speakerExemptions.contains(label) else { return text }

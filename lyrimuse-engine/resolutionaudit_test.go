@@ -85,7 +85,7 @@ func TestWallTimerRestart(t *testing.T) {
 	}
 }
 
-// 源码契约:首次解析带上本轮跳过名单、取消的那一轮不进统计;导入一首不跟着进程退出取消;后台要不到 token 不让前台冷却;
+// 源码契约:首次解析带上本轮跳过名单、取消的那一轮不进统计;导入一首不跟着进程退出取消;
 // 补封面的重核走后台档;两处写回前核对校准;补空、补封面的定时器按墙钟;正在播的从时长变体挪回基条目。
 func TestResolutionAuditContracts(t *testing.T) {
 	read := func(name string) string {
@@ -100,7 +100,6 @@ func TestResolutionAuditContracts(t *testing.T) {
 		{enrich, "e.LyricsDecision.statsSkips = round.statsSkips()\n\t\te.LyricsDecision.skipStats = roundCtx.Err() != nil || lyricSourceStatsOff(roundCtx)", "首次解析带本轮跳过名单"},
 		{read("lyricsourcestats.go"), "if s == nil || d == nil || d.skipStats || !lyricSourceStatsCountsPath(d.Path) {", "取消的那一轮不进统计"},
 		{read("prefetchimport.go"), "roundCtx, round := withLyricSourceRound(withoutLyricSourceStats(context.WithoutCancel(ctx)))", "导入一首不跟着进程退出取消、不进各源近况统计"},
-		{read("musixmatch.go"), "} else if ctx.Err() == nil && !isBackgroundOutbound(ctx) {", "后台要不到 token 不让前台冷却"},
 		{read("coversweep.go"), "rctx, round := coverSweepNetworkRound(withBackgroundOutbound(ctx))", "补封面重核动态封面走后台档"},
 		{read("coversweep.go"), "timer := newWallTimer(coverSweepInitialDelay)", "补封面定时器按墙钟"},
 		{read("lyricsfillsweep.go"), "next := newWallTimer(lyricsFillSweepFirstDelay(lyricsFullScanActive()))", "补空定时器按墙钟"},

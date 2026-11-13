@@ -18,10 +18,8 @@ import (
 // 治的是系统 DNS 对歌词源域名不答、按 IP 直连却是通的这种网络(公司 VPN 下发的 DNS 就是这样),
 // 见 09 章「六个源死在 DNS 这一步」。
 //
-// 顺序:先正常走系统 DNS,它失败了才问 DoH。跟 musixmatch 那套(doh.go dohDialContext:DoH 优先、退回系统解析)
-// 相反,两边治的病不同:那边系统 DNS 会答错(把 musixmatch 解析到别家的地址段),先问它没有意义;这边是不答,
-// 系统 DNS 正常时就不该多打一次 1.1.1.1。所以:系统 DNS 正常 → 一个包都不多发;系统 DNS 报错(NXDOMAIN /
-// SERVFAIL / 超时)→ dohLookup 拿 IP → 并发拨号(dohDialRace);DoH 也没辄 → 把系统解析那条错误原样交回去,
+// 顺序:先正常走系统 DNS,它失败了才问 DoH,系统 DNS 正常时就不该多打一次 1.1.1.1。所以:系统 DNS 正常 → 一个包都不多发;系统 DNS 报错(NXDOMAIN /
+// SERVFAIL / 超时)→ dohLookup 拿 IP → 并发拨号(dohDialRaceWith);DoH 也没辄 → 把系统解析那条错误原样交回去,
 // 传输层分类照旧认成 dns_failed。
 //
 // 三个细节:
@@ -35,7 +33,7 @@ import (
 //     DNSStart 也补上。
 //
 // 只改拨号的目标地址,不碰 TLS:crypto/tls 的 ServerName 来自 URL 里的域名,证书照常按域名严格校验
-// (跟 dohDialContext 同一段话)。musixmatch 不走这里,它有自己的 DoH 优先 + 代理兜底那套(dohHTTPClient)。
+// (跟 curl --resolve 是同一个机制)。绝不能为了"连得上"去关 InsecureSkipVerify。
 
 const (
 	lyricSourceSystemDNSBudget  = 2 * time.Second
@@ -207,6 +205,6 @@ func lyricSourceDialContext(ctx context.Context, network, addr string) (net.Conn
 		raceErr = errors.New("no address dialed")
 	}
 	// 解析成功(靠 DoH)但地址连不上:这是连接层的失败,不再把系统解析那条错误包进来,
-	// 免得传输层分类顺着错误链又认成 dns_failed(评审提过 dohDialContext 那处的同型问题)。
+	// 免得传输层分类顺着错误链又认成 dns_failed。
 	return nil, fmt.Errorf("dial %s via DoH-resolved %v: %w", host, ips, raceErr)
 }

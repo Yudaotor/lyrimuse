@@ -290,13 +290,13 @@ func TestTrustedRecordingISRCFallsBackToCachedEntry(t *testing.T) {
 
 // 原产地曲名轮:缺着的源拿原产地曲名问一轮,补上的候选带改写记号;已经齐了、或者拿不到原产地曲名时一个请求都不发。
 func TestOriginTitleRound(t *testing.T) {
-	saved, savedResolve := features(), musixmatchResolve
-	t.Cleanup(func() { setFeatures(saved); musixmatchResolve = savedResolve })
-	featuresRef().LyricsSources = map[string]bool{"musixmatch": true, "lrclib": true}
-	var mxCalls int
-	musixmatchResolve = func(context.Context, string, string, float64, string, string) musixmatchResult {
-		mxCalls++
-		return musixmatchResult{}
+	saved, savedResolve := features(), deezerResolve
+	t.Cleanup(func() { setFeatures(saved); deezerResolve = savedResolve })
+	featuresRef().LyricsSources = map[string]bool{"deezer": true, "lrclib": true}
+	var dzCalls int
+	deezerResolve = func(context.Context, string, string, string, float64, string) deezerResult {
+		dzCalls++
+		return deezerResult{}
 	}
 	resetOriginTitleState(t)
 	lr := withLRCLIBFake(t, func(r *http.Request) (int, http.Header, string) {
@@ -309,7 +309,7 @@ func TestOriginTitleRound(t *testing.T) {
 		}
 		return http.StatusNotFound, nil, `{"code":404}`
 	})
-	base := []scoredLyricCandidateResult{{Source: "musixmatch", Score: 900, Lyrics: originJapaneseLRC, Title: "Tabiji", Artist: "Fujii Kaze", SourceReportedDurationSecs: 277}}
+	base := []scoredLyricCandidateResult{{Source: "deezer", Score: 900, Lyrics: originJapaneseLRC, Title: "Tabiji", Artist: "Fujii Kaze", SourceReportedDurationSecs: 277}}
 
 	if _, got := originTitleRound(qqRoundCtx(), "Fujii Kaze", "Tabiji", "LOVE ALL SERVE ALL", 277, neteaseInfo{}, base, nil); len(got) != 1 || len(lr.requests()) != 0 {
 		t.Fatalf("拿不到原产地曲名时原样返回、不发请求: %+v / %v", got, lr.requests())
@@ -341,8 +341,8 @@ func TestOriginTitleRound(t *testing.T) {
 	if _, again := originTitleRound(qqRoundCtx(), "Fujii Kaze", "Tabiji", "LOVE ALL SERVE ALL", 277, neteaseInfo{}, got, nil); len(again) != len(got) || len(lr.requests()) != n {
 		t.Errorf("没有缺着的源时不发请求: %d -> %d", n, len(lr.requests()))
 	}
-	if mxCalls != 0 {
-		t.Errorf("已经有可用候选的 musixmatch 不该再问,问了 %d 次", mxCalls)
+	if dzCalls != 0 {
+		t.Errorf("已经有可用候选的 deezer 不该再问,问了 %d 次", dzCalls)
 	}
 }
 
@@ -351,18 +351,18 @@ func TestOriginTitleRound(t *testing.T) {
 func TestOriginTitleRoundOriginArtist(t *testing.T) {
 	saved := features()
 	t.Cleanup(func() { setFeatures(saved) })
-	featuresRef().LyricsSources = map[string]bool{"musixmatch": true, "lrclib": true}
-	resetMusixmatchCacheForTest(t)
+	featuresRef().LyricsSources = map[string]bool{"deezer": true, "lrclib": true}
+	resetDeezerCacheForTest(t)
 	var mu sync.Mutex
-	var mxArtists []string
-	musixmatchResolve = func(_ context.Context, artist, title string, _ float64, _, _ string) musixmatchResult {
+	var dzArtists []string
+	deezerResolve = func(_ context.Context, artist, title, _ string, _ float64, _ string) deezerResult {
 		mu.Lock()
-		mxArtists = append(mxArtists, artist)
+		dzArtists = append(dzArtists, artist)
 		mu.Unlock()
 		if title != "旅路" {
-			return musixmatchResult{}
+			return deezerResult{}
 		}
-		return musixmatchResult{lrc: originJapaneseLRC, title: "旅路", artist: artist, durationSecs: 277}
+		return deezerResult{lyrics: originJapaneseLRC, title: "旅路", artist: artist, durationSecs: 277}
 	}
 	withTestDevToken(t)
 	resetOriginTitleState(t)
@@ -426,13 +426,13 @@ func TestOriginTitleRoundOriginArtist(t *testing.T) {
 	}
 
 	_, got := originTitleRound(qqRoundCtx(), "Fujii Kaze", "Tabiji", "LOVE ALL SERVE ALL", 277, neteaseInfo{}, base("JPPO02100112"), nil)
-	for _, s := range []string{"musixmatch", "lrclib"} {
+	for _, s := range []string{"deezer", "lrclib"} {
 		if c := bySource(got, s); c == nil || c.Score < 0 || c.RetryMethod != lyricQueryReasonTitleStorefront || c.RetriedTitle != "旅路" {
 			t.Fatalf("%s 该补上一条带改写记号、可用的候选: %+v", s, got)
 		}
 	}
-	if strings.Join(mxArtists, ",") != "Fujii Kaze" {
-		t.Errorf("musixmatch 用本地署名那一次就补上了,原产地署名那一次不该再问它: %q", mxArtists)
+	if strings.Join(dzArtists, ",") != "Fujii Kaze" {
+		t.Errorf("deezer 用本地署名那一次就补上了,原产地署名那一次不该再问它: %q", dzArtists)
 	}
 	var artists []string
 	for _, g := range gets() {
@@ -448,14 +448,14 @@ func TestOriginTitleRoundOriginArtist(t *testing.T) {
 		t.Errorf("lrclib 先用本地署名、再用原产地署名: %q", artists)
 	}
 
-	resetMusixmatchCacheForTest(t)
-	mxArtists = nil
+	resetDeezerCacheForTest(t)
+	dzArtists = nil
 	n := len(gets())
 	if _, again := originTitleRound(qqRoundCtx(), "Fujii Kaze", "Tabiji", "LOVE ALL SERVE ALL", 277, neteaseInfo{}, base("JPPO02100113"), nil); bySource(again, "lrclib") != nil {
 		t.Errorf("原产地署名跟本地归一相同时不再补: %+v", again)
 	}
-	if strings.Join(mxArtists, ",") != "Fujii Kaze" {
-		t.Errorf("两个署名归一相同时只用本地署名问: %q", mxArtists)
+	if strings.Join(dzArtists, ",") != "Fujii Kaze" {
+		t.Errorf("两个署名归一相同时只用本地署名问: %q", dzArtists)
 	}
 	for _, g := range gets()[n:] {
 		if a, _, _ := strings.Cut(g, "/"); a != "Fujii Kaze" {

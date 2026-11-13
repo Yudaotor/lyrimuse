@@ -1,9 +1,9 @@
 {
   "id": "timeline-intrusion-hello",
   "category": "timeline-intrusion",
-  "note": "Musixmatch 那份把副歌复制进了 2:32~2:51 的吉他间奏(另外几家时长对得上的在那段都空着),只比酷狗高 10 分;v24 扣 timelineIntrusion,冠军交给酷狗",
+  "note": "咪咕那份在别家时长对得上、都空着的间奏里多出一段歌词,v24 扣 timelineIntrusion(它整体平移,同时吃 timelineOffset)",
   "label_evidence": {
-    "consensus_peers": 7,
+    "consensus_peers": 6,
     "title_accepted": true,
     "version_tags_ok": true,
     "source_duration_delta_pct": 0,
@@ -38,7 +38,6 @@
       "lrclib": true,
       "lyricfind": true,
       "migu": true,
-      "musixmatch": true,
       "netease": true,
       "qq": true,
       "soda": true
@@ -48,7 +47,6 @@
       "kugou",
       "netease",
       "qq",
-      "musixmatch",
       "lrclib",
       "amll",
       "lyricfind",
@@ -107,15 +105,6 @@
       "album": "Symphonica In Rosso 2008",
       "cover": "https://d.musicapp.migu.cn/data/oss/resource/00/27/3n/9v"
     },
-    "musixmatch": {
-      "lyrics": "[00:15.42] U'gv pvvn xjrnv huak ori unludv so sund\n[00:23.52] Xnd un so dcvxsl U'gv wullvd oric juml x akrilxnd ausvl\n[00:29.47] U lrsvausvl lvv ori mxll rialudv so drrc\n[00:38.66] Kvjjr, ul ua sv ori'cv jrrwunf qrc?\n[00:46.24] U txn lvv ua un oric vovl, U txn lvv ua un oric lsujv\n[00:54.06] Ori'cv xjj U'gv vgvc hxnavd xnd so xcsl xcv rmvn hudv\n[01:01.71] 'Txilv ori wnrh eila hkxa ar lxo, xnd ori wnrh eila hkxa ar dr\n[01:09.56] Xnd U hxna ar avjj ori lr sitk, U jrgv ori\n[01:18.16] \n[01:28.98] U jrnf ar lvv akv linjufka un oric kxuc\n[01:38.66] Xnd avjj ori ausv xnd ausv xfxun krh sitk U txcv\n[01:45.75] Lrsvausvl U qvvj so kvxca hujj rgvcqjrh\n[01:53.63] Kvjjr, U'gv eila fra ar jva ori wnrh\n[02:01.74] 'Txilv U hrndvc hkvcv ori xcv xnd U hrndvc hkxa ori dr\n[02:09.50] Xcv ori lrsvhkvcv qvvjunf jrnvjo rc ul lrsvrnv jrgunf ori?\n[02:16.78] Avjj sv krh ar hun oric kvxca, qrc U kxgvn'a fra x tjiv\n[02:25.04] Pia jva sv laxca po lxounf, U jrgv ori\n[02:32.49] Kvjjr, ul ua sv ori'cv jrrwunf qrc?\n[02:38.03] 'Txilv U hrndvc hkvcv ori xcv xnd U hrndvc hkxa ori dr\n[02:41.58] Xcv ori lrsvhkvcv qvvjunf jrnvjo rc ul lrsvrnv jrgunf ori?\n[02:45.11] Avjj sv krh ar hun oric kvxca, qrc U kxgvn'a fra x tjiv\n[02:50.06] Pia jva sv laxca po lxounf, U jrgv ori\n[02:51.05] U jrgv ori\n[02:51.26] U jrgv ori\n[02:51.42] Ul ua sv ori'cv jrrwunf qrc?\n[02:53.55] Kvjjr, ul ua sv ori'cv jrrwunf qrc?\n[03:01.73] 'Txilv U hrndvc hkvcv ori xcv xnd U hrndvc hkxa ori dr\n[03:09.62] Xcv ori lrsvhkvcv qvvjunf jrnvjo rc ul lrsvrnv jrgunf ori?\n[03:16.24] Avjj sv krh ar hun oric kvxca, qrc U kxgvn'a fra x tjiv\n[03:25.00] Pia jva sv laxca po lxounf, U jrgv ori\n[03:34.70] U jrgv ori\n[03:36.11] U jrgv ori\n[03:41.77] \n[03:43.82] Kvjjr, ul ua sv ori'cv jrrwunf qrc?\n[03:56.03] Ul ua sv, ul ua sv, ul ua sv\n[04:01.39] Ul ua sv ori'cv jrrwunf qrc?\n[04:05.28] Ul ua sv, ul ua sv\n[04:08.57] ",
-      "yrc": "[15420,4830](15420,150,0)U'gv (15570,510,0)pvvn (16080,870,0)xjrnv (16950,240,0)huak (17190,600,0)ori (17790,1380,0)unludv (19170,360,0)so (19530,720,0)sund\n[23520,5820](23520,120,0)Xnd (23640,120,0)un (23760,300,0)so (24060,599,0)dcvxsl (24659,781,0)U'gv (25440,450,0)wullvd (25890,240,0)oric (26130,1290,0)juml (27420,90,0)x (27510,840,0)akrilxnd (28350,990,0)ausvl\n[29470,7230](29470,1560,0)U (31030,930,0)lrsvausvl (31960,390,0)lvv (32350,240,0)ori (32590,1170,0)mxll (33760,1530,0)rialudv (35290,390,0)so (35680,1020,0)drrc\n[38659,6091](38659,3390,0)Kvjjr, (42049,210,0)ul (42259,90,0)ua (42349,510,0)sv (42859,870,0)ori'cv (43729,420,0)jrrwunf (44149,601,0)qrc?\n[46240,6510](46240,90,0)U (46330,180,0)txn (46510,480,0)lvv (46990,90,0)ua (47080,120,0)un (47200,330,0)oric (47530,2610,0)vovl, (50140,30,0)U (50170,180,0)txn (50350,480,0)lvv (50830,90,0)ua (50920,150,0)un (51070,420,0)oric (51490,1260,0)lsujv\n[54060,6570](54060,300,0)Ori'cv (54360,420,0)xjj (54780,810,0)U'gv (55590,390,0)vgvc (55980,2040,0)hxnavd (58020,90,0)xnd (58110,210,0)so (58320,509,0)xcsl (58829,31,0)xcv (58860,480,0)rmvn (59340,1290,0)hudv\n[61710,5999](61710,270,0)'Txilv (61980,180,0)ori (62160,390,0)wnrh (62550,299,0)eila (62849,301,0)hkxa (63150,150,0)ar (63300,2310,0)lxo, (65610,180,0)xnd (65790,150,0)ori (65940,390,0)wnrh (66330,360,0)eila (66690,300,0)hkxa (66990,210,0)ar (67200,509,0)dr\n[69560,6600](69560,120,0)Xnd (69680,180,0)U (69860,480,0)hxna (70340,150,0)ar (70490,810,0)avjj (71300,150,0)ori (71450,540,0)lr (71990,3330,0)sitk, (75320,120,0)U (75440,330,0)jrgv (75770,390,0)ori\n[88980,7770](88980,2070,0)U (91050,510,0)jrnf (91560,150,0)ar (91710,810,0)lvv (92520,120,0)akv (92640,1649,0)linjufka (94289,301,0)un (94590,420,0)oric (95010,1740,0)kxuc\n[98660,5580](98660,180,0)Xnd (98840,570,0)avjj (99410,120,0)ori (99530,810,0)ausv (100340,180,0)xnd (100520,600,0)ausv (101120,1800,0)xfxun (102920,210,0)krh (103130,510,0)sitk (103640,240,0)U (103880,360,0)txcv\n[105750,6660](105750,1379,0)Lrsvausvl (107129,181,0)U (107310,690,0)qvvj (108000,300,0)so (108300,510,0)kvxca (108810,990,0)hujj (109800,2610,0)rgvcqjrh\n[113630,7950](113630,3870,0)Kvjjr, (117500,300,0)U'gv (117800,389,0)eila (118189,361,0)fra (118550,240,0)ar (118790,480,0)jva (119270,210,0)ori (119480,2100,0)wnrh\n[121740,6000](121740,210,0)'Txilv (121950,180,0)U (122130,600,0)hrndvc (122730,540,0)hkvcv (123270,330,0)ori (123600,2100,0)xcv (125700,150,0)xnd (125850,180,0)U (126030,660,0)hrndvc (126690,540,0)hkxa (127230,210,0)ori (127440,300,0)dr\n[129500,6840](129500,90,0)Xcv (129590,210,0)ori (129800,1140,0)lrsvhkvcv (130940,450,0)qvvjunf (131390,1800,0)jrnvjo (133190,240,0)rc (133430,120,0)ul (133550,750,0)lrsvrnv (134300,780,0)jrgunf (135080,1260,0)ori?\n[136780,7590](136780,330,0)Avjj (137110,420,0)sv (137530,540,0)krh (138070,210,0)ar (138280,420,0)hun (138700,540,0)oric (139240,1860,0)kvxca, (141100,300,0)qrc (141400,240,0)U (141640,720,0)kxgvn'a (142360,810,0)fra (143170,120,0)x (143290,1080,0)tjiv\n[145040,7410](145040,150,0)Pia (145190,539,0)jva (145729,151,0)sv (145880,780,0)laxca (146660,659,0)po (147319,3091,0)lxounf, (150410,180,0)U (150590,480,0)jrgv (151070,1380,0)ori\n[152490,5540](152490,119,0)Kvjjr, (152609,60,0)ul (152669,417,0)ua (153086,4110,0)sv (157196,417,0)ori'cv (157613,357,0)jrrwunf (157970,60,0)qrc?\n[158030,3540](158030,90,0)'Txilv (158120,30,0)U (158150,210,0)hrndvc (158360,180,0)hkvcv (158540,1320,0)ori (159860,30,0)xcv (159890,120,0)xnd (160010,29,0)U (160039,211,0)hrndvc (160250,1080,0)hkxa (161330,180,0)ori (161510,60,0)dr\n[161580,3530](161580,29,0)Xcv (161609,442,0)ori (162051,793,0)lrsvhkvcv (162844,177,0)qvvjunf (163021,206,0)jrnvjo (163227,30,0)rc (163257,59,0)ul (163316,206,0)lrsvrnv (163522,1529,0)jrgunf (165051,59,0)ori?\n[165110,4830](165110,240,0)Avjj (165350,180,0)sv (165530,60,0)krh (165590,2160,0)ar (167750,540,0)hun (168290,660,0)oric (168950,480,0)kvxca, (169430,90,0)qrc (169520,30,0)U (169550,180,0)kxgvn'a (169730,90,0)fra (169820,30,0)x (169850,90,0)tjiv\n[170060,990](170060,82,0)Pia (170142,303,0)jva (170445,55,0)sv (170500,220,0)laxca (170720,55,0)po (170775,110,0)lxounf, (170885,27,0)U (170912,83,0)jrgv (170995,55,0)ori\n[171050,180](171050,30,0)U (171080,90,0)jrgv (171170,60,0)ori\n[171260,159](171260,23,0)U (171283,91,0)jrgv (171374,45,0)ori\n[171419,691](171419,60,0)Ul (171479,60,0)ua (171539,60,0)sv (171599,90,0)ori'cv (171689,360,0)jrrwunf (172049,61,0)qrc?\n[173550,7860](173550,3930,0)Kvjjr, (177480,240,0)ul (177720,150,0)ua (177870,540,0)sv (178410,720,0)ori'cv (179130,450,0)jrrwunf (179580,1830,0)qrc?\n[181730,6630](181730,180,0)'Txilv (181910,180,0)U (182090,570,0)hrndvc (182660,540,0)hkvcv (183200,360,0)ori (183560,2070,0)xcv (185630,180,0)xnd (185810,180,0)U (185990,600,0)hrndvc (186590,750,0)hkxa (187340,180,0)ori (187520,840,0)dr\n[189620,6420](189620,180,0)Xcv (189800,270,0)ori (190070,900,0)lrsvhkvcv (190970,480,0)qvvjunf (191450,1500,0)jrnvjo (192950,240,0)rc (193190,300,0)ul (193490,840,0)lrsvrnv (194330,720,0)jrgunf (195050,990,0)ori?\n[196240,8520](196240,540,0)Avjj (196780,510,0)sv (197290,750,0)krh (198040,180,0)ar (198220,420,0)hun (198640,450,0)oric (199090,2010,0)kvxca, (201100,300,0)qrc (201400,240,0)U (201640,690,0)kxgvn'a (202330,1290,0)fra (203620,90,0)x (203710,1050,0)tjiv\n[205000,8040](205000,120,0)Pia (205120,569,0)jva (205689,151,0)sv (205840,840,0)laxca (206680,690,0)po (207370,3060,0)lxounf, (210430,300,0)U (210730,360,0)jrgv (211090,1950,0)ori\n[214700,1140](214700,180,0)U (214880,240,0)jrgv (215120,720,0)ori\n[216110,3660](216110,210,0)U (216320,300,0)jrgv (216620,3150,0)ori\n[223820,12150](223820,9720,0)Kvjjr, (233540,270,0)ul (233810,180,0)ua (233990,540,0)sv (234530,659,0)ori'cv (235189,451,0)jrrwunf (235640,330,0)qrc?\n[236030,4230](236030,2700,0)Ul (238730,150,0)ua (238880,360,0)sv, (239240,60,0)ul (239300,60,0)ua (239360,90,0)sv, (239450,210,0)ul (239660,120,0)ua (239780,480,0)sv\n[241390,3660](241390,270,0)Ul (241660,180,0)ua (241840,630,0)sv (242470,510,0)ori'cv (242980,150,0)jrrwunf (243130,1920,0)qrc?\n[245280,3290](245280,235,0)Ul (245515,206,0)ua (245721,1439,0)sv, (247160,235,0)ul (247395,206,0)ua (247601,969,0)sv\n",
-      "title": "Hello",
-      "artist": "Lionel Richie",
-      "album": "Can't Slow Down (Deluxe Edition)",
-      "cover": "https://s.mxmcdn.net/images-storage/albums2/2/9/4/4/9/2/32294492_500_500.jpg",
-      "duration_secs": 249
-    },
     "netease": {
       "netease": {
         "cover": "https://p1.music.126.net/qzB9AAW5p2cZi8a_WqidgQ==/109951169965483614.jpg?param=800y800",
@@ -151,7 +140,6 @@
       "kugou": "accepted",
       "lrclib": "accepted",
       "migu": "accepted",
-      "musixmatch": "accepted",
       "netease": "accepted",
       "qq": "accepted"
     },
@@ -232,7 +220,7 @@
       },
       {
         "source": "applemusic",
-        "score": 1178,
+        "score": 1179,
         "terms": [
           {
             "kind": "duration",
@@ -244,7 +232,7 @@
           },
           {
             "kind": "lines",
-            "points": 30
+            "points": 31
           },
           {
             "kind": "album",
@@ -264,8 +252,60 @@
         "translation_lang": "zh"
       },
       {
+        "source": "lrclib",
+        "score": 781,
+        "terms": [
+          {
+            "kind": "duration",
+            "points": 230
+          },
+          {
+            "kind": "lines",
+            "points": 31
+          },
+          {
+            "kind": "album",
+            "points": 150
+          },
+          {
+            "kind": "titleMatch",
+            "points": 120
+          },
+          {
+            "kind": "consensus",
+            "points": 250
+          }
+        ],
+        "has_translation": true,
+        "translation_lang": "zh"
+      },
+      {
+        "source": "deezer",
+        "score": 626,
+        "terms": [
+          {
+            "kind": "duration",
+            "points": 225
+          },
+          {
+            "kind": "lines",
+            "points": 31
+          },
+          {
+            "kind": "titleMatch",
+            "points": 120
+          },
+          {
+            "kind": "consensus",
+            "points": 250
+          }
+        ],
+        "has_translation": true,
+        "translation_lang": "zh"
+      },
+      {
         "source": "qq",
-        "score": 1145,
+        "score": 545,
         "terms": [
           {
             "kind": "duration",
@@ -294,6 +334,10 @@
           {
             "kind": "translation",
             "points": 50
+          },
+          {
+            "kind": "timelineOffset",
+            "points": -600
           }
         ],
         "has_word_timing": true,
@@ -301,36 +345,8 @@
         "translation_lang": "zh"
       },
       {
-        "source": "lrclib",
-        "score": 780,
-        "terms": [
-          {
-            "kind": "duration",
-            "points": 230
-          },
-          {
-            "kind": "lines",
-            "points": 30
-          },
-          {
-            "kind": "album",
-            "points": 150
-          },
-          {
-            "kind": "titleMatch",
-            "points": 120
-          },
-          {
-            "kind": "consensus",
-            "points": 250
-          }
-        ],
-        "has_translation": true,
-        "translation_lang": "zh"
-      },
-      {
         "source": "migu",
-        "score": 747,
+        "score": 1,
         "terms": [
           {
             "kind": "duration",
@@ -338,7 +354,7 @@
           },
           {
             "kind": "lines",
-            "points": 30
+            "points": 31
           },
           {
             "kind": "titleMatch",
@@ -351,67 +367,14 @@
           {
             "kind": "translation",
             "points": 50
-          }
-        ],
-        "has_translation": true,
-        "translation_lang": "zh"
-      },
-      {
-        "source": "musixmatch",
-        "score": 653,
-        "terms": [
-          {
-            "kind": "duration",
-            "points": 289
           },
           {
-            "kind": "wordTiming",
-            "points": 400
-          },
-          {
-            "kind": "lines",
-            "points": 44
-          },
-          {
-            "kind": "album",
-            "points": 150
-          },
-          {
-            "kind": "titleMatch",
-            "points": 120
-          },
-          {
-            "kind": "consensus",
-            "points": 250
+            "kind": "timelineOffset",
+            "points": -600
           },
           {
             "kind": "timelineIntrusion",
             "points": -600
-          }
-        ],
-        "has_word_timing": true,
-        "has_translation": true,
-        "translation_lang": "zh"
-      },
-      {
-        "source": "deezer",
-        "score": 625,
-        "terms": [
-          {
-            "kind": "duration",
-            "points": 225
-          },
-          {
-            "kind": "lines",
-            "points": 30
-          },
-          {
-            "kind": "titleMatch",
-            "points": 120
-          },
-          {
-            "kind": "consensus",
-            "points": 250
           }
         ],
         "has_translation": true,

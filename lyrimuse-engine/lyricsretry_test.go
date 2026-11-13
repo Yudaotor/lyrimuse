@@ -123,8 +123,8 @@ func TestLyricSourcesWithCandidates(t *testing.T) {
 	scored := []scoredLyricCandidateResult{
 		{Source: "lrclib", Score: 83},
 		{Source: "netease", Score: 525},
-		{Source: "lrclib", Score: 12},                         // 同一个源多条候选,只记一次
-		{Source: "musixmatch", Score: -1, Instrumental: true}, // 负分是"纯音乐"搭车标记,不算候选
+		{Source: "lrclib", Score: 12},                     // 同一个源多条候选,只记一次
+		{Source: "deezer", Score: -1, Instrumental: true}, // 负分是"纯音乐"搭车标记,不算候选
 	}
 	got := lyricSourcesWithCandidates(scored)
 	want := []string{"lrclib", "netease"}

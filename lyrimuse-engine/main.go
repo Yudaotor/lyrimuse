@@ -335,6 +335,9 @@ func main() {
 			recheckMigrationsFor(keys, fmt.Sprintf("%d entries rewritten by lyrics/ files", len(keys)))
 		}
 	})
+	// 下架歌词源留下的内容清掉、交给重新匹配(retiredsource.go)。紧跟 import:lyrics/ 里带着下架源头部的文件刚被导入,
+	// 这里连同文件一起清;排在 export 之前。
+	startupStep("purgeRetiredLyricSources", purgeRetiredLyricSources)
 	// 存量歌词正文里的 HTML / XML 字符实体(酷狗 `they&apos;re`,见 lyricentities.go)。
 	// 紧跟 import:lyrics/ 文件夹赢完之后改的才是权威内容;后面 export 把干净正文写回文件。
 	// 也要排在 migrateManualPickMarks 之前(那一步按最终正文算指纹)。
@@ -354,7 +357,7 @@ func main() {
 	// 夹在 import 和 export 之间:见 invalidateStaleTranslations 的注释——前者让
 	// lyrics/ 文件夹赢,后者负责把这里清空的译文同步成删掉对应的 .tr.lrc。
 	startupStep("invalidateStaleTranslations", func() { invalidateStaleTranslations() })
-	// 逐字歌词的空白词条清洗(Musixmatch richsync 存量,见 yrcwhitespace.go)。
+	// 逐字歌词的空白词条清洗(存量,见 yrcwhitespace.go)。
 	// 必须夹在 import(权威内容已从 lyrics/ 文件夹导回缓存)与 export(把修好的内容写回
 	// 导出文件)之间,顺序错了修的就是马上要被覆盖的那一份。
 	// 必须排在空白词条归并**之前**:残缺的两数字词条(qrcToYRC 旧实现漏转的)会把相邻的
@@ -517,8 +520,6 @@ func main() {
 	startAmazonBorrowedISRCCleanup(ctx)
 	// 存量里同名另一版那张专辑的 Amazon 播放器封面拿掉(amazonforeigncover.go),要读 Amazon 的本机目录缓存,同样放后台。
 	startAmazonForeignPlayerCoverCleanup(ctx)
-	// 存量里取不到的 Musixmatch 800 档封面换回 500 档(musixmatchcoverrepair.go),要联网,同样放后台。
-	startMusixmatchCoverRepair(ctx)
 	// 存量 Apple 链接换成已校验目录锚点的页面(applecataloglink.go),要联网,同样放后台。
 	startAppleCatalogLinkMigration(ctx)
 	startArtistAliasRecheck(ctx)

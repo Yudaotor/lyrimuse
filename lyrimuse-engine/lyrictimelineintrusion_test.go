@@ -62,13 +62,13 @@ const tiLocal = 130.0
 
 func TestTimelineIntrusionPenalizesCopiedBlockInBreak(t *testing.T) {
 	results := []scoredLyricCandidateResult{
-		tiResult(lyricSourceMusixmatch, 1247, 130.4, tiSong(tiCopiedChorus()...)),
+		tiResult(lyricSourceKuwo, 1247, 130.4, tiSong(tiCopiedChorus()...)),
 		tiResult(lyricSourceKugou, 1237, 130, tiSong()),
 		tiResult(lyricSourceNetease, 1211, 130.1, tiSong()),
 	}
 	applyTimelineIntrusionPenalty(results, tiLocal)
 	got := tiPenalized(results)
-	if !got[lyricSourceMusixmatch] || len(got) != 1 {
+	if !got[lyricSourceKuwo] || len(got) != 1 {
 		t.Fatalf("只扣间奏里多出一段的那份,得到 %v", got)
 	}
 	if results[0].Score != 1247-timelineIntrusionPenalty {
@@ -76,21 +76,21 @@ func TestTimelineIntrusionPenalizesCopiedBlockInBreak(t *testing.T) {
 	}
 }
 
-// 末句跟曲长对不上被扣过分的候选不进参照组:它镜像了同一份错轴,也不会替 Musixmatch 把共同空档填掉
-// (见 09 章决策 218)。轮到判它自己时 Musixmatch 在参照组里、同样填掉了空档,它不扣。
+// 末句跟曲长对不上被扣过分的候选不进参照组:它镜像了同一份错轴,也不会替 酷我 把共同空档填掉
+// (见 09 章决策 218)。轮到判它自己时 酷我 在参照组里、同样填掉了空档,它不扣。
 func TestTimelineIntrusionSkipsDurationOffReferences(t *testing.T) {
 	mirror := tiResult(lyricSourceLRCLIB, 900, 130, tiSong(tiCopiedChorus()...))
 	mirror.ScoreTerms = []scoreTerm{{Kind: scoreTermDurationOff, Points: -500}}
 	results := []scoredLyricCandidateResult{
-		tiResult(lyricSourceMusixmatch, 1247, 130.4, tiSong(tiCopiedChorus()...)),
+		tiResult(lyricSourceKuwo, 1247, 130.4, tiSong(tiCopiedChorus()...)),
 		tiResult(lyricSourceKugou, 1237, 130, tiSong()),
 		tiResult(lyricSourceNetease, 1211, 130.1, tiSong()),
 		mirror,
 	}
 	applyTimelineIntrusionPenalty(results, tiLocal)
 	got := tiPenalized(results)
-	if !got[lyricSourceMusixmatch] || len(got) != 1 {
-		t.Fatalf("只有 Musixmatch 该吃 timelineIntrusion,得到 %v", got)
+	if !got[lyricSourceKuwo] || len(got) != 1 {
+		t.Fatalf("只有 酷我 该吃 timelineIntrusion,得到 %v", got)
 	}
 }
 
@@ -110,7 +110,7 @@ func TestTimelineIntrusionLeavesUnrelatedLinesAlone(t *testing.T) {
 	}
 	for name, extra := range cases {
 		results := []scoredLyricCandidateResult{
-			tiResult(lyricSourceMusixmatch, 1247, 130.4, tiSong(extra...)),
+			tiResult(lyricSourceKuwo, 1247, 130.4, tiSong(extra...)),
 			tiResult(lyricSourceKugou, 1237, 130, tiSong()),
 			tiResult(lyricSourceNetease, 1211, 130.1, tiSong()),
 		}
@@ -124,7 +124,7 @@ func TestTimelineIntrusionLeavesUnrelatedLinesAlone(t *testing.T) {
 func TestTimelineIntrusionNeedsTwoFamiliesOfReferences(t *testing.T) {
 	// 参照只有一家时长对得上(QQ 自报曲长差太多,不算参照)。
 	results := []scoredLyricCandidateResult{
-		tiResult(lyricSourceMusixmatch, 1247, 130.4, tiSong(tiCopiedChorus()...)),
+		tiResult(lyricSourceKuwo, 1247, 130.4, tiSong(tiCopiedChorus()...)),
 		tiResult(lyricSourceKugou, 1237, 130, tiSong()),
 		tiResult(lyricSourceQQ, 1100, 150, tiSong()),
 	}
@@ -134,7 +134,7 @@ func TestTimelineIntrusionNeedsTwoFamiliesOfReferences(t *testing.T) {
 	}
 	// 两家参照是同一个信源家族(Deezer 与 LyricFind)。
 	results = []scoredLyricCandidateResult{
-		tiResult(lyricSourceMusixmatch, 1247, 130.4, tiSong(tiCopiedChorus()...)),
+		tiResult(lyricSourceKuwo, 1247, 130.4, tiSong(tiCopiedChorus()...)),
 		tiResult(lyricSourceDeezer, 1237, 130, tiSong()),
 		tiResult(lyricSourceLyricFind, 1211, 130.1, tiSong()),
 	}
@@ -147,7 +147,7 @@ func TestTimelineIntrusionNeedsTwoFamiliesOfReferences(t *testing.T) {
 func TestTimelineIntrusionNoCommonBreak(t *testing.T) {
 	// 有一家参照镜像了同一份错轴:间奏里不是人人都空,没有共同空档。
 	results := []scoredLyricCandidateResult{
-		tiResult(lyricSourceMusixmatch, 1247, 130.4, tiSong(tiCopiedChorus()...)),
+		tiResult(lyricSourceKuwo, 1247, 130.4, tiSong(tiCopiedChorus()...)),
 		tiResult(lyricSourceLRCLIB, 800, 130.4, tiSong(tiCopiedChorus()...)),
 		tiResult(lyricSourceKugou, 1237, 130, tiSong()),
 		tiResult(lyricSourceNetease, 1211, 130.1, tiSong()),
@@ -168,7 +168,7 @@ func TestTimelineIntrusionNoCommonBreak(t *testing.T) {
 		return out
 	}
 	results = []scoredLyricCandidateResult{
-		tiResult(lyricSourceMusixmatch, 1247, 130.4, short(tiLine{67.5, "hello is it me"}, tiLine{69.5, "i wonder where you are"}, tiLine{71.5, "are you somewhere feeling lonely"})),
+		tiResult(lyricSourceKuwo, 1247, 130.4, short(tiLine{67.5, "hello is it me"}, tiLine{69.5, "i wonder where you are"}, tiLine{71.5, "are you somewhere feeling lonely"})),
 		tiResult(lyricSourceKugou, 1237, 130, short()),
 		tiResult(lyricSourceNetease, 1211, 130.1, short()),
 	}
@@ -191,7 +191,7 @@ func TestTimelineIntrusionIgnoresIntro(t *testing.T) {
 	}
 	intro := []tiLine{{4, "hello is it me"}, {8, "i wonder where you are"}, {12, "are you somewhere feeling lonely"}}
 	results := []scoredLyricCandidateResult{
-		tiResult(lyricSourceMusixmatch, 1247, 130.4, late(intro...)),
+		tiResult(lyricSourceKuwo, 1247, 130.4, late(intro...)),
 		tiResult(lyricSourceKugou, 1237, 130, late()),
 		tiResult(lyricSourceNetease, 1211, 130.1, late()),
 	}
@@ -204,7 +204,7 @@ func TestTimelineIntrusionIgnoresIntro(t *testing.T) {
 func TestTimelineIntrusionRevertsWhenWinnerUnverified(t *testing.T) {
 	// 扣完之后第一名是一份时长对不上的(没核实过的轴):整批撤销。
 	results := []scoredLyricCandidateResult{
-		tiResult(lyricSourceMusixmatch, 1247, 130.4, tiSong(tiCopiedChorus()...)),
+		tiResult(lyricSourceKuwo, 1247, 130.4, tiSong(tiCopiedChorus()...)),
 		tiResult(lyricSourceQQ, 1000, 150, tiSong()),
 		tiResult(lyricSourceKugou, 700, 130, tiSong()),
 		tiResult(lyricSourceNetease, 650, 130.1, tiSong()),
@@ -220,7 +220,7 @@ func TestTimelineIntrusionRevertsWhenWinnerUnverified(t *testing.T) {
 
 func TestTimelineIntrusionUnknownDuration(t *testing.T) {
 	results := []scoredLyricCandidateResult{
-		tiResult(lyricSourceMusixmatch, 1247, 130.4, tiSong(tiCopiedChorus()...)),
+		tiResult(lyricSourceKuwo, 1247, 130.4, tiSong(tiCopiedChorus()...)),
 		tiResult(lyricSourceKugou, 1237, 130, tiSong()),
 		tiResult(lyricSourceNetease, 1211, 130.1, tiSong()),
 	}

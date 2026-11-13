@@ -17,9 +17,9 @@ func TestNeedsLyricsFirstFillAfterSourceEnabled(t *testing.T) {
 		t.Fatal("名单没变、刚搜过,该等退避")
 	}
 
-	rewrite(t, path, `{"lyrics_sources":["netease","qq","musixmatch"]}`)
+	rewrite(t, path, `{"lyrics_sources":["netease","qq","deezer"]}`)
 	if !needsLyricsFirstFill(empty) {
-		t.Error("新开了 musixmatch,该马上补搜")
+		t.Error("新开了 deezer,该马上补搜")
 	}
 	for name, e := range map[string]enrichEntry{
 		"老条目没记名单":  {TS: now},

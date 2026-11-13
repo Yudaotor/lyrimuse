@@ -71,9 +71,9 @@ Diese Funktionen bleiben nach der Installation aus. Schalte sie zuerst in den Ei
 
 <a id="feature-lyric-sources"></a>
 
-### 15 Liedtextquellen, automatisch durchsucht
+### 14 Liedtextquellen, automatisch durchsucht
 
-NetEase Cloud Music, QQ Music, Kugou, Kuwo, Migu, Musixmatch, LRCLIB, LyricFind, Deezer, AMLL, Soda Music, VIBE, Genie, PetitLyrics und Apple Music. Jede Quelle lässt sich ausschalten, umsortieren oder testen, um zu sehen, ob sie gerade erreichbar ist.
+NetEase Cloud Music, QQ Music, Kugou, Kuwo, Migu, LRCLIB, LyricFind, Deezer, AMLL, Soda Music, VIBE, Genie, PetitLyrics und Apple Music. Jede Quelle lässt sich ausschalten, umsortieren oder testen, um zu sehen, ob sie gerade erreichbar ist.
 
 - Standardmäßig ein
 - Einstellungen: Liedtext › Quelle › Liedtextquellen
@@ -216,7 +216,7 @@ Jeder gefundene Liedtext wird auf deinem Mac zwischengespeichert und erscheint a
 
 ### Übersetzungen
 
-Übersetzungen, die mit dem Liedtext kommen, erscheinen unter jeder Zeile. NetEase Cloud Music, QQ Music und Kugou übersetzen ins Chinesische; Musixmatch und die maschinelle Übersetzung folgen der Übersetzungssprache, die du aus 17 wählst. Schwebender Text, Liedtextfenster, Notch, Menüleiste und Touch Bar entscheiden jeweils selbst, ob sie sie zeigen. Standardmäßig eingeblendet, wenn die Sprachen deines Mac Chinesisch enthalten.
+Übersetzungen, die mit dem Liedtext kommen, erscheinen unter jeder Zeile. NetEase Cloud Music, QQ Music und Kugou übersetzen ins Chinesische; die maschinelle Übersetzung folgt der Übersetzungssprache, die du aus 17 wählst. Schwebender Text, Liedtextfenster, Notch, Menüleiste und Touch Bar entscheiden jeweils selbst, ob sie sie zeigen. Standardmäßig eingeblendet, wenn die Sprachen deines Mac Chinesisch enthalten.
 
 - Einstellungen: Liedtext › Sprache › Übersetzungssprache
 - Einstellungen: Liedtext-Anzeige › Schwebender Text › Inhalt › Übersetzung

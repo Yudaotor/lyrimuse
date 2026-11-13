@@ -109,7 +109,7 @@ const (
 // 播放器本地缓存那几路(isPlayerLocalLyricSource)不是歌词源,整个不统计。
 var lyricSourcePeerGroups = [][]string{
 	{"netease", "qq", "kugou", "kuwo", "migu", "soda"},
-	{"lrclib", "musixmatch", "lyricfind", "deezer", "applemusic"},
+	{"lrclib", "lyricfind", "deezer", "applemusic"},
 }
 
 func lyricSourcePeerGroup(source string) []string {
@@ -799,6 +799,7 @@ func loadLyricSourceStats(path string, now func() time.Time) *lyricSourceStats {
 	} else {
 		noteFileErr("read", path, err)
 	}
+	dropRetiredLyricSourceStats(&s.data)
 	if s.data.Days == nil {
 		s.data.Days = map[string]*lyricSourceStatsDay{}
 	}

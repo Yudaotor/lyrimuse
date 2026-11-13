@@ -153,7 +153,7 @@ func TestLearnedSourceArtistAliasSelfStillCountsForAmbiguity(t *testing.T) {
 func TestLyricsReSearchMarksLearnedAliasSelf(t *testing.T) {
 	var mu sync.Mutex
 	seen := map[string]bool{}
-	setupRescoreTest(t, []string{"musixmatch"}, func(ctx context.Context) {
+	setupRescoreTest(t, []string{"deezer"}, func(ctx context.Context) {
 		mu.Lock()
 		seen[learnedAliasSelfFrom(ctx)] = true
 		mu.Unlock()
@@ -162,7 +162,7 @@ func TestLyricsReSearchMarksLearnedAliasSelf(t *testing.T) {
 	emptyKey, lyricKey := enrichKey(artist, "Empty Song", ""), enrichKey(artist, "Rescored Song", "Some Album")
 	withEnrichCache(t, map[string]enrichEntry{
 		emptyKey: {},
-		lyricKey: {Lyrics: bt("[00:05.00]Old line one\n[00:15.00]Old line two"), LyricsSource: "musixmatch",
+		lyricKey: {Lyrics: bt("[00:05.00]Old line one\n[00:15.00]Old line two"), LyricsSource: "deezer",
 			LyricsScoringVersion: lyricsScoringVersion - 1},
 	})
 	retryLyricsUpgrade(context.Background(), emptyKey, artist, "Empty Song", "", 180, true)

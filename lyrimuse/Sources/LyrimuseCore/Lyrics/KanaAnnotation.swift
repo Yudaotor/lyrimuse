@@ -108,7 +108,7 @@ public struct KanaAnnotation {
 
         var lines = bodyLines(of: lrc)
         // 先做总数校验 —— 对不上就整份弃用,不冒着"从某一行开始全歪"的风险硬塞。
-        // 补进正文的演唱者标签(Musixmatch 的「合：」)不在条目里:总数对不上时剥掉行首标签再对一次,对上才用。
+        // 正文行首的演唱者标签(如「合：」)可能不在条目里:总数对不上时剥掉行首标签再对一次,对上才用。
         let total = entries.reduce(0, { $0 + $1.count })
         func need(_ lines: [String]) -> Int { lines.reduce(0) { $0 + annotationUnits(in: $1).count } }
         if need(lines) != total {

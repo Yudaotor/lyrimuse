@@ -26,11 +26,11 @@ func TestLyricsHandEdited(t *testing.T) {
 	}
 }
 
-// 采纳候选:背景人声与译文语言换成候选自己的,背景人声记成按当前解析器取过,演唱者标注清掉「补过」重新问。
+// 采纳候选:背景人声与译文语言换成候选自己的,背景人声记成按当前解析器取过。
 // 不是采纳候选的保存照旧:正文一换背景人声清掉,译文一换语言清掉。
 func TestApplySaveEditAdoptCarriesCandidateExtras(t *testing.T) {
 	bg, lang := "[1000,500](1000,500,0)ooh", "zh-Hant"
-	e := enrichEntry{Lyrics: bt("[00:01.00]旧"), LyricsTr: bt("[00:01.00]old"), LyricsTrLang: "en", LyricsBG: bt("old-bg"), LyricsSpeakersChecked: lyricsSpeakersVersion}
+	e := enrichEntry{Lyrics: bt("[00:01.00]旧"), LyricsTr: bt("[00:01.00]old"), LyricsTrLang: "en", LyricsBG: bt("old-bg")}
 	req := enrichEditRequest{Lyrics: "[00:01.00]新", Tr: "[00:01.00]新的譯文", Source: "amll", MarkManual: true, FromManualPick: true, BG: &bg, TrLang: &lang}
 	if err := applySaveEdit(&e, req); err != nil {
 		t.Fatal(err)
@@ -40,9 +40,6 @@ func TestApplySaveEditAdoptCarriesCandidateExtras(t *testing.T) {
 	}
 	if e.LyricsTrLang != lang {
 		t.Errorf("译文语言该换成候选的: %q", e.LyricsTrLang)
-	}
-	if e.LyricsSpeakersChecked != 0 {
-		t.Errorf("演唱者标注该重新问: checked=%d", e.LyricsSpeakersChecked)
 	}
 	if e.lyricsHandEdited() {
 		t.Error("原样采纳的候选不算手改")
@@ -86,7 +83,7 @@ func TestApplySaveEditAdoptRomaRules(t *testing.T) {
 	}
 }
 
-// 原样采纳的候选照常补背景人声与演唱者标注;手改过的不补。
+// 原样采纳的候选照常补背景人声;手改过的不补。
 func TestBackfillsCoverAdoptedCandidates(t *testing.T) {
 	adopted := func(e enrichEntry) enrichEntry {
 		e.ManualLyrics, e.ManualPickSHA = true, manualPickFingerprint(e.Lyrics.String())
@@ -102,13 +99,6 @@ func TestBackfillsCoverAdoptedCandidates(t *testing.T) {
 	}
 	if needsBackgroundVocalsBackfill(handEdited(bg)) {
 		t.Error("手改过的不补背景人声")
-	}
-	sp := spkBackfillEntry()
-	if !needsLyricSpeakersBackfill(adopted(sp), "A & B", "Song") {
-		t.Error("原样采纳的候选该补演唱者标注")
-	}
-	if needsLyricSpeakersBackfill(handEdited(sp), "A & B", "Song") {
-		t.Error("手改过的不补演唱者标注")
 	}
 }
 

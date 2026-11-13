@@ -13,7 +13,7 @@ import (
 // 这是歌词源自己数据库里的脏数据,不是我们转义链路的 bug(json 解码早就正常完成了)。全库
 // 核实(4145 条缓存,按 lyrics_source 分组数实体):酷狗 1695 条里 11 条命中——`&apos;` 382 处、
 // `&quot;` 6、`&amp;` 4,全是英文老歌 + 少数国语歌,整行歌词与逐字(KRC)两轨**同样**带着;网易云
-// 1203 条里 1 条 `&nbsp;`(Chaka Khan《Fool's Paradise》"Whoa&nbsp;?");QQ 842 / Musixmatch 190 /
+// 1203 条里 1 条 `&nbsp;`(Chaka Khan《Fool's Paradise》"Whoa&nbsp;?");QQ 842 /
 // LRCLIB 74 / AMLL 16 零命中。`&apos;` 连 HTML4 都不认(它是 XML 预定义实体),说明是上传端某个
 // XML 工具链把整份词转义了一遍就这么入库了。
 //

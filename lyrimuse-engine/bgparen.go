@@ -18,7 +18,7 @@ import (
 // parenBGSources:拆括号背景人声的源。amll / applemusic 自带结构化的背景人声,正文里剩下的括号是它们判成主唱的部分,
 // 而且存量回填(bgbackfill.go)会整份换掉它们的 lyrics_bg;本机文件、各客户端缓存里的用户歌词不动。
 var parenBGSources = map[string]bool{
-	"netease": true, "qq": true, "kugou": true, "lrclib": true, "musixmatch": true, "lyricfind": true, "kuwo": true,
+	"netease": true, "qq": true, "kugou": true, "lrclib": true, "lyricfind": true, "kuwo": true,
 	"migu": true, "deezer": true, "soda": true, "vibe": true, "genie": true, "petitlyrics": true,
 	lxMusicLocalLyricsSource: true,
 }
@@ -734,11 +734,6 @@ func migrateParenBackground() {
 		changed := false
 		stamps := map[int]bool{}
 		if sp, ok := splitParenBackground(lrc, yrc); ok {
-			if s := e.LyricsSpeakers; s != nil && s.For == lyricSpeakersFingerprint(lrc, yrc) {
-				moved := *s
-				moved.For = lyricSpeakersFingerprint(sp.lrc, sp.yrc)
-				e.LyricsSpeakers = &moved
-			}
 			if e.ManualPickSHA != "" && e.ManualPickSHA == manualPickFingerprint(lrc) {
 				e.ManualPickSHA = manualPickFingerprint(sp.lrc)
 			}

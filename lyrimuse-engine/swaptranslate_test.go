@@ -14,22 +14,22 @@ import (
 const swapNewBody = "[00:05.00]Brand new first line\n[00:15.00]Brand new second line\n[00:25.00]Brand new third line\n" +
 	"[00:35.00]Brand new fourth line\n[00:45.00]Brand new fifth line\n[02:50.00]Brand new last line"
 
-// setupSwapE2E:歌词源只开 musixmatch 且换成假的(回 swapNewBody、不带译文),翻译走假 Google,不连外网。
+// setupSwapE2E:歌词源只开 deezer 且换成假的(回 swapNewBody、不带译文),翻译走假 Google,不连外网。
 // 假 Google 每次晚 googleDelay 才回,让「先换正文、再等机翻」那段空档宽到观察得到。
 // 返回 Google 被调了几次的计数。条目由调用方写。
 func setupSwapE2E(t *testing.T, googleDelay time.Duration) *int32 {
 	t.Helper()
 	setupTranslateStart(t)
 	savedPlaying := enrichPlayingKey.Load()
-	savedResolve := musixmatchResolve
+	savedResolve := deezerResolve
 	savedOnDevice := onDeviceTranslator
 	t.Cleanup(func() {
 		enrichPlayingKey.Store(savedPlaying)
-		musixmatchResolve = savedResolve
+		deezerResolve = savedResolve
 		onDeviceTranslator = savedOnDevice
 	})
-	resetMusixmatchCacheForTest(t)
-	featuresRef().LyricsSources = map[string]bool{"musixmatch": true}
+	resetDeezerCacheForTest(t)
+	featuresRef().LyricsSources = map[string]bool{"deezer": true}
 	featuresRef().LyricsAutoUpgrade = true
 	onDeviceTranslator = func(context.Context, string, []string) ([]string, error) { return nil, errOnDeviceUnavailable }
 	googleCalls := new(int32)
@@ -43,8 +43,8 @@ func setupSwapE2E(t *testing.T, googleDelay time.Duration) *int32 {
 		}
 		fmt.Fprint(w, googleReply(t, out))
 	})
-	musixmatchResolve = func(ctx context.Context, artist, title string, durationSecs float64, trLang, isrc string) musixmatchResult {
-		return musixmatchResult{lrc: swapNewBody, title: title, artist: artist, durationSecs: 180}
+	deezerResolve = func(ctx context.Context, artist, title, album string, durationSecs float64, isrc string) deezerResult {
+		return deezerResult{lyrics: swapNewBody, title: title, artist: artist, durationSecs: 180}
 	}
 	return googleCalls
 }
@@ -92,7 +92,7 @@ func assertSwappedWithTranslation(t *testing.T, key string, gap bool, googleCall
 	enrichMu.Lock()
 	e := enrichCache[key]
 	enrichMu.Unlock()
-	if !e.Lyrics.EqualString(swapNewBody) || e.LyricsSource != "musixmatch" {
+	if !e.Lyrics.EqualString(swapNewBody) || e.LyricsSource != "deezer" {
 		t.Fatalf("没换上新正文: source=%q lyrics=%q", e.LyricsSource, e.Lyrics)
 	}
 	if e.LyricsTrSource != lyricsTrSourceMachine || !strings.Contains(e.LyricsTr.String(), fakeTranslated("谷:", "Brand new first line")) || strings.Contains(e.LyricsTr.String(), "旧") {

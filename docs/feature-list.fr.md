@@ -71,9 +71,9 @@ Ces fonctionnalités restent désactivées après l’installation. Activez-les 
 
 <a id="feature-lyric-sources"></a>
 
-### 15 sources de paroles, interrogées automatiquement
+### 14 sources de paroles, interrogées automatiquement
 
-NetEase Cloud Music, QQ Music, Kugou, Kuwo, Migu, Musixmatch, LRCLIB, LyricFind, Deezer, AMLL, Soda Music, VIBE, Genie, PetitLyrics et Apple Music. Chaque source peut être désactivée, déplacée dans l’ordre ou testée pour savoir si elle est joignable en ce moment.
+NetEase Cloud Music, QQ Music, Kugou, Kuwo, Migu, LRCLIB, LyricFind, Deezer, AMLL, Soda Music, VIBE, Genie, PetitLyrics et Apple Music. Chaque source peut être désactivée, déplacée dans l’ordre ou testée pour savoir si elle est joignable en ce moment.
 
 - Activée par défaut
 - Réglages : Paroles › Source › Sources de paroles
@@ -216,7 +216,7 @@ Toutes les paroles trouvées sont mises en cache sur votre Mac et s’affichent 
 
 ### Traduction
 
-Les traductions fournies avec les paroles apparaissent sous chaque ligne. NetEase Cloud Music, QQ Music et Kugou traduisent en chinois ; Musixmatch et la traduction automatique suivent la langue de traduction que vous choisissez parmi 17. Les paroles flottantes, la fenêtre des paroles, l’encoche, la barre des menus et la Touch Bar décident chacune de les afficher ou non. Affichées par défaut quand les langues de votre Mac incluent le chinois.
+Les traductions fournies avec les paroles apparaissent sous chaque ligne. NetEase Cloud Music, QQ Music et Kugou traduisent en chinois ; la traduction automatique suit la langue de traduction que vous choisissez parmi 17. Les paroles flottantes, la fenêtre des paroles, l’encoche, la barre des menus et la Touch Bar décident chacune de les afficher ou non. Affichées par défaut quand les langues de votre Mac incluent le chinois.
 
 - Réglages : Paroles › Langue › Langue de traduction
 - Réglages : Affichage des paroles › Paroles flottantes › Contenu › Traduction

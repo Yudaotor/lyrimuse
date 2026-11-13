@@ -2,10 +2,13 @@ package main
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"log"
 	"maps"
 	"math"
+	"strings"
 	"time"
 )
 
@@ -39,9 +42,16 @@ const playerLyricsCheckTimeout = 30 * time.Second
 // playerLyricsTried:这一进程里比过的「key + 播放器 + 主歌词指纹」。调用方持 enrichMu。
 var playerLyricsTried = map[string]bool{}
 
-// mainLyricsFingerprint:主歌词的指纹,算法同演唱者标注(lyricSpeakersFingerprint),App 侧 LyricSpeakerTags.fingerprint 对得上。
+// mainLyricsFingerprint:主歌词的指纹(lyricsBodyFingerprint)。
 func mainLyricsFingerprint(e enrichEntry) string {
-	return lyricSpeakersFingerprint(e.Lyrics.String(), e.LyricsYRC.String())
+	return lyricsBodyFingerprint(e.Lyrics.String(), e.LyricsYRC.String())
+}
+
+// lyricsBodyFingerprint:去掉开头 BOM 的 lyrics + "\x01" + 去掉开头 BOM 的 yrc 的 SHA256,取前 12 位十六进制。
+// App 侧 LyricsBodyFingerprint.of 必须是同一算法,两边各有一条同输入同输出的单测钉着。
+func lyricsBodyFingerprint(lyrics, yrc string) string {
+	sum := sha256.Sum256([]byte(strings.TrimLeft(lyrics, "\uFEFF") + "\x01" + strings.TrimLeft(yrc, "\uFEFF")))
+	return hex.EncodeToString(sum[:])[:12]
 }
 
 // needsPlayerLyricsCheck:在 bundleID 这个播放器里放这首(它报的曲长 durationSecs)时,要不要问一次它自家源。
@@ -102,7 +112,7 @@ func playerLyricsAltFrom(mainLRC, mainYRC string, c scoredLyricCandidateResult, 
 	if c.Score < 0 || !c.IdentityFromLocalClient || c.Lyrics == "" {
 		return playerLyricsAlt{}, false
 	}
-	alt := playerLyricsAlt{MainFP: lyricSpeakersFingerprint(mainLRC, mainYRC), At: now}
+	alt := playerLyricsAlt{MainFP: lyricsBodyFingerprint(mainLRC, mainYRC), At: now}
 	rel, shift := classifyTimelinesShift(displayedTimeline(c.Lyrics, c.LyricsYRC), displayedTimeline(mainLRC, mainYRC), timelineNearMs)
 	if rel != timelineShiftedLater && rel != timelineShiftedEarlier {
 		return alt, true

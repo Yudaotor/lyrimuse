@@ -71,9 +71,9 @@ Lyrimuse のすべての機能について、何ができるか、設定のど�
 
 <a id="feature-lyric-sources"></a>
 
-### 15の歌詞ソースを自動で検索
+### 14の歌詞ソースを自動で検索
 
-NetEase Cloud Music、QQ Music、Kugou、Kuwo、Migu、Musixmatch、LRCLIB、LyricFind、Deezer、AMLL、Soda Music、VIBE、Genie、PetitLyrics、Apple Music。歌詞ソースごとにオン/オフ、並べ替え、現在接続できるかのテストができます。
+NetEase Cloud Music、QQ Music、Kugou、Kuwo、Migu、LRCLIB、LyricFind、Deezer、AMLL、Soda Music、VIBE、Genie、PetitLyrics、Apple Music。歌詞ソースごとにオン/オフ、並べ替え、現在接続できるかのテストができます。
 
 - 初期設定でオン
 - 設定の場所：歌詞 › ソース › 歌詞ソース
@@ -216,7 +216,7 @@ Apple Music、Spotify、Kugou Music、KKBOX、Amazon Music、LX MusicがこのMa
 
 ### 翻訳
 
-歌詞ソースに付属する翻訳は原文の下に表示されます。NetEase Cloud Music、QQ Music、Kugouの翻訳は中国語です。Musixmatchと機械翻訳は、選択した翻訳の言語（17言語から選択可能）で提供されます。フローティング歌詞、歌詞ウインドウ、ノッチ、メニューバー、Touch Barで、それぞれ表示するかどうかを設定できます。システムの言語に中国語が含まれている場合はデフォルトで表示されます。
+歌詞ソースに付属する翻訳は原文の下に表示されます。NetEase Cloud Music、QQ Music、Kugouの翻訳は中国語です。機械翻訳は、選択した翻訳の言語（17言語から選択可能）で提供されます。フローティング歌詞、歌詞ウインドウ、ノッチ、メニューバー、Touch Barで、それぞれ表示するかどうかを設定できます。システムの言語に中国語が含まれている場合はデフォルトで表示されます。
 
 - 設定の場所：歌詞 › 言語 › 翻訳の言語
 - 設定の場所：歌詞の表示 › フローティング歌詞 › 内容 › 翻訳

@@ -21,16 +21,16 @@ func stubLyricSourceCooldownLeft(t *testing.T, left map[string]time.Duration) {
 
 func TestLyricSourcesSkippedForRetry(t *testing.T) {
 	stubLyricSourceCooldownLeft(t, map[string]time.Duration{
-		"musixmatch": time.Hour,
-		"qq":         15 * time.Second,
-		"kugou":      lyricsFillSkippedRetryInterval,
-		"lrclib":     lyricsFillSkippedRetryInterval + time.Second,
+		"deezer": time.Hour,
+		"qq":     15 * time.Second,
+		"kugou":  lyricsFillSkippedRetryInterval,
+		"lrclib": lyricsFillSkippedRetryInterval + time.Second,
 	})
-	got := lyricSourcesSkippedForRetry([]string{"kugou", "lrclib", "musixmatch", "netease", "qq"})
+	got := lyricSourcesSkippedForRetry([]string{"kugou", "lrclib", "deezer", "netease", "qq"})
 	if want := []string{"kugou", "netease", "qq"}; !slices.Equal(got, want) {
 		t.Errorf("剩余冷却超过补搜等待的不留,其余照留(含已经不冷却的):got %v want %v", got, want)
 	}
-	if got := lyricSourcesSkippedForRetry([]string{"musixmatch"}); got != nil {
+	if got := lyricSourcesSkippedForRetry([]string{"deezer"}); got != nil {
 		t.Errorf("只剩长冷却的源:名单为空(nil,落盘时省掉这个键),got %#v", got)
 	}
 	if got := lyricSourcesSkippedForRetry(nil); got != nil {
@@ -41,7 +41,7 @@ func TestLyricSourcesSkippedForRetry(t *testing.T) {
 // 补空、重新打分两处写入:条目只记很快会恢复的源,决策记录照记这一轮跳过的全部。首次解析那一处见
 // TestFirstResolveRecordsSkippedForRetry。
 func TestSkippedSourcesForRetryAtEveryWrite(t *testing.T) {
-	setupRescoreTest(t, []string{"musixmatch"}, func(ctx context.Context) {
+	setupRescoreTest(t, []string{"deezer"}, func(ctx context.Context) {
 		round := lyricSourceRoundFrom(ctx)
 		round.markSkipped("lrclib")
 		round.markSkipped("qq")
@@ -63,7 +63,7 @@ func TestSkippedSourcesForRetryAtEveryWrite(t *testing.T) {
 	enrichMu.Lock()
 	enrichCache = map[string]enrichEntry{
 		fillKey: {},
-		rescoreKey: {Lyrics: bt("[00:05.00]Old line one\n[00:15.00]Old line two"), LyricsSource: "musixmatch",
+		rescoreKey: {Lyrics: bt("[00:05.00]Old line one\n[00:15.00]Old line two"), LyricsSource: "deezer",
 			LyricsScoringVersion: lyricsScoringVersion - 1},
 	}
 	enrichMu.Unlock()

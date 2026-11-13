@@ -282,3 +282,19 @@ func TestNeteaseLookupCachesWhenEapiLyricAnswers(t *testing.T) {
 		t.Fatal("eapi 答了、结果完整,第二次该命中缓存")
 	}
 }
+
+// resetDeezerCacheForTest:清空 Deezer 的进程内缓存,用例结束时连同 deezerResolve 一起换回来。用例拿 deezerResolve 当假歌词源。
+func resetDeezerCacheForTest(t *testing.T) {
+	t.Helper()
+	savedResolve := deezerResolve
+	deezerMu.Lock()
+	savedCache := deezerCache
+	deezerCache = map[string]deezerResult{}
+	deezerMu.Unlock()
+	t.Cleanup(func() {
+		deezerResolve = savedResolve
+		deezerMu.Lock()
+		deezerCache = savedCache
+		deezerMu.Unlock()
+	})
+}

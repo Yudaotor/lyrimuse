@@ -15,7 +15,7 @@ import (
 	"time"
 )
 
-// ---- dohDialRace:并发拨号 ----
+// ---- dohDialRaceWith:并发拨号 ----
 
 // blackHoleDialer 造一份可控的拨号行为:blackHoles 里的地址永远不返回(直到 ctx 被取消,
 // 模拟 SYN 石沉大海),其余地址在 delay 之后返回一条可关闭的假连接。
@@ -193,7 +193,7 @@ func newFallbackTestEnv(t *testing.T) {
 
 func newTestRequest(t *testing.T) *http.Request {
 	t.Helper()
-	req, err := http.NewRequest(http.MethodGet, "https://apic-appmobile.musixmatch.com/ws/1.1/token.get", nil)
+	req, err := http.NewRequest(http.MethodGet, "https://lyrics.example.com/api/token", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -237,7 +237,7 @@ func TestProxyFallbackUsesProxyWhenDirectFails(t *testing.T) {
 	}
 
 	// 磁盘提示写下来了 —— 这是给一次性 CLI 子进程用的,它们内存粘性一律归零。
-	if !loadProxyFallbackHint("apic-appmobile.musixmatch.com") {
+	if !loadProxyFallbackHint("lyrics.example.com") {
 		t.Error("磁盘提示没写下来,新起的 CLI 进程还要再白等一遍直连")
 	}
 	if _, err := os.Stat(proxyFallbackHintPath()); err != nil {
@@ -265,7 +265,7 @@ func TestProxyFallbackDirectSuccessNeverTouchesProxy(t *testing.T) {
 	if viaProxy.calls != 0 {
 		t.Errorf("直连成功却动了代理 %d 次", viaProxy.calls)
 	}
-	if !loadProxyFallbackHint("apic-appmobile.musixmatch.com") == false {
+	if !loadProxyFallbackHint("lyrics.example.com") == false {
 		t.Error("直连成功不该写代理提示")
 	}
 }
@@ -323,7 +323,7 @@ func TestProxyFallbackReportsBlockedWhenNoProxyConfigured(t *testing.T) {
 // 否则会一直往一个死代理上撞,而直连说不定早就恢复了。
 func TestProxyFallbackFallsBackToDirectWhenStickyProxyDies(t *testing.T) {
 	newFallbackTestEnv(t)
-	host := "apic-appmobile.musixmatch.com"
+	host := "lyrics.example.com"
 	saveProxyFallbackHint(host, true)
 	if !loadProxyFallbackHint(host) {
 		t.Fatal("前置条件没建立:磁盘提示应该存在")
@@ -354,7 +354,7 @@ func TestProxyFallbackFallsBackToDirectWhenStickyProxyDies(t *testing.T) {
 // 直接走代理,不再白等一次直连探路。
 func TestProxyFallbackHintCrossesProcessBoundary(t *testing.T) {
 	newFallbackTestEnv(t)
-	saveProxyFallbackHint("apic-appmobile.musixmatch.com", true)
+	saveProxyFallbackHint("lyrics.example.com", true)
 
 	direct := &stubRoundTripper{err: errors.New("should not be tried")}
 	viaProxy := &stubRoundTripper{body: "via proxy"}
@@ -377,7 +377,7 @@ func TestProxyFallbackSkipsRetryForRequestsWithBody(t *testing.T) {
 	viaProxy := &stubRoundTripper{body: "should not be used"}
 	tr := &proxyFallbackTransport{direct: direct, viaProxy: viaProxy}
 
-	req, err := http.NewRequest(http.MethodPost, "https://apic-appmobile.musixmatch.com/x", io.MultiReader(strings.NewReader("payload")))
+	req, err := http.NewRequest(http.MethodPost, "https://lyrics.example.com/x", io.MultiReader(strings.NewReader("payload")))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -529,8 +529,8 @@ func TestProxyFallbackConnectBudgetStillFallsBack(t *testing.T) {
 	}
 }
 
-// 调用方没设时限(Musixmatch 的请求就是):直连预算同样只管建连,连上了服务器慢一点也等它回,不转代理、不钉粘性。
-// 原来整段请求按 3 秒掐,Musixmatch 慢一点的应答全被当成直连不通。见 09 章决策 42。
+// 调用方没设时限时:直连预算同样只管建连,连上了服务器慢一点也等它回,不转代理、不钉粘性。
+// 整段请求按 3 秒掐的话,慢一点的应答会全被当成直连不通。见 09 章决策 42。
 func TestProxyFallbackNoDeadlineSlowServerStaysDirect(t *testing.T) {
 	newFallbackTestEnv(t)
 	srv := delayedServer(t, 300*time.Millisecond, "slow")
@@ -618,7 +618,7 @@ func TestProxyFallbackCallerExpiryDuringProxyNotBlocked(t *testing.T) {
 		onBlocked: func() { blocked++ }}
 	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
 	defer cancel()
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, "https://apic-appmobile.musixmatch.com/ws/1.1/track.search", nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, "https://lyrics.example.com/api/search", nil)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -71,9 +71,9 @@ Queste funzioni restano disattivate dopo l’installazione. Attivale prima nelle
 
 <a id="feature-lyric-sources"></a>
 
-### 15 fonti dei testi, consultate automaticamente
+### 14 fonti dei testi, consultate automaticamente
 
-NetEase Cloud Music, QQ Music, Kugou, Kuwo, Migu, Musixmatch, LRCLIB, LyricFind, Deezer, AMLL, Soda Music, VIBE, Genie, PetitLyrics e Apple Music. Ogni fonte si può disattivare, spostare nell’ordine o testare per vedere se è raggiungibile in questo momento.
+NetEase Cloud Music, QQ Music, Kugou, Kuwo, Migu, LRCLIB, LyricFind, Deezer, AMLL, Soda Music, VIBE, Genie, PetitLyrics e Apple Music. Ogni fonte si può disattivare, spostare nell’ordine o testare per vedere se è raggiungibile in questo momento.
 
 - Attiva di default
 - Impostazioni: Testo › Fonte › Fonti dei testi
@@ -216,7 +216,7 @@ Ogni testo trovato viene salvato nella cache del Mac e si vede anche senza conne
 
 ### Traduzioni
 
-Le traduzioni che accompagnano il testo compaiono sotto ogni riga. NetEase Cloud Music, QQ Music e Kugou traducono in cinese; Musixmatch e la traduzione automatica seguono la lingua di traduzione che scegli, tra 17. Testo fluttuante, finestra testo, notch, barra dei menu e Touch Bar decidono ciascuno se mostrarle. Visibili per impostazione predefinita quando tra le lingue del Mac c’è il cinese.
+Le traduzioni che accompagnano il testo compaiono sotto ogni riga. NetEase Cloud Music, QQ Music e Kugou traducono in cinese; la traduzione automatica segue la lingua di traduzione che scegli, tra 17. Testo fluttuante, finestra testo, notch, barra dei menu e Touch Bar decidono ciascuno se mostrarle. Visibili per impostazione predefinita quando tra le lingue del Mac c’è il cinese.
 
 - Impostazioni: Testo › Lingua › Lingua di traduzione
 - Impostazioni: Visualizzazione testo › Testo fluttuante › Contenuto › Traduzione

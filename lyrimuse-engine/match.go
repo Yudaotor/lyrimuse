@@ -305,7 +305,7 @@ func lastLRCTimestampSecs(lrc string) (float64, bool) {
 
 // lyricCandidate 是某个歌词源解析出的一份候选结果,连同来源标记。
 type lyricCandidate struct {
-	source        string // "netease" | "qq" | "kugou" | "musixmatch" | "lrclib" | "amll" | "lyricfind" | "kuwo" | "migu"
+	source        string // "netease" | "qq" | "kugou" | "lrclib" | "amll" | "lyricfind" | "kuwo" | "migu"
 	lyrics        string
 	wordTimingYRC string // 该候选归一化成 YRCParser 语法后的逐字数据,没有则空串(netease/qq/kugou 都可能有,lrclib 恒无)
 	hasWordTiming bool   // = wordTimingYRC != "",构造候选时直接算好,见 enrich.go
@@ -349,7 +349,7 @@ type lyricCandidate struct {
 	// 无法识别的值一律留空。跟 sourceReportedDurationSecs 同一个模式:纯透传、由
 	// 各源的解析代码在构造候选时算好(QQ 用 fcg_play_single_song.fcg 的 language
 	// 数字字段,酷狗用 api/v3/search/song 的 trans_param.language 字符串字段),
-	// netease/musixmatch/lrclib/amll/lyricfind 都没有这个信号,恒为空。
+	// netease/lrclib/amll/lyricfind 都没有这个信号,恒为空。
 	// (v15)之前不参与打分、只作为 enrichEntry.SongLanguage 的来源给粤拼罗马音
 	// 生成用;v15 起经 applyLanguageVersionVerdicts 折算成下面两个批级判决参与打分。
 	language string
@@ -714,7 +714,7 @@ const durationMismatchPenalty = 500
 //
 // 唯一那处变化是同专辑的「Earth Song」(本地 475.55s 的 Hani's Club Experience 混音),
 // 老冠军是 405s 的正常版、新冠军是对版专辑那条 475s 的混音版 —— **改对了**,是同一个 bug
-// 的兄弟案例。加分档多出来的那处(Morphine)则是中性偏坏:musixmatch 那条专辑名逐字对上、
+// 的兄弟案例。加分档多出来的那处(Morphine)则是中性偏坏:专辑名逐字对上的那条候选
 // 只因为没自报时长就被有自报时长的 qq/kugou 挤掉,还可能连带丢掉译文。所以不加分。
 //
 // 阈值 12% 复用 enrich.go:wrongDuration 那条既有口径(「差超 12% 就当作给另一个版本选的」),
@@ -799,7 +799,7 @@ const (
 // 只是其中一个播放器,按定义只有那一个该给,其余不该给。
 // 后果有两层:①「解析决策」面板上「这个源就是你正在用的播放器」对三个源都是假话;
 // ② 这一项的**区分力被自己抵消**——三个中文源都 +250,它没法在三者之间区分,只剩
-// "系统性地把它们抬到 Musixmatch / LRCLIB 之上"这一个效果。
+// "系统性地把它们抬到 LRCLIB 这类海外源之上"这一个效果。
 //
 // 跟 features 同款的包级变量而不是打分函数的参数:打分函数已经有 7 个参数,再加一个
 // 会让每个调用点都得关心一件跟它无关的事。 但它现在是**运行期按曲目变的**(换播放器
@@ -820,15 +820,18 @@ func setNativeLyricSourcesForPlayer(bundleID string) {
 	nativeLyricSourcesMu.Lock()
 	defer nativeLyricSourcesMu.Unlock()
 	playingPlayerID = player
-	if src == "" {
-		nativeLyricSources = nil
-		return
+	want := map[string]bool{}
+	if src != "" {
+		want[src] = true
 	}
-	want := map[string]bool{src: true}
 	if playsLocalFilesBesidesStreaming(player) {
 		// 放本地文件时文件旁的 .lrc、文件标签里的歌词就是它自己的那份(localfilelyrics.go);放流媒体时没有这一份候选,
-		// 不影响别的源。
+		// 不影响别的源。没有自家歌词源的播放器(Spotify)同样算。
 		want[localFileLyricsSource] = true
+	}
+	if len(want) == 0 {
+		nativeLyricSources = nil
+		return
 	}
 	if maps.Equal(nativeLyricSources, want) {
 		return // 没变,不重建 map
@@ -877,8 +880,7 @@ func playerForBundleID(bundleID string) string {
 
 // playerNativeLyricSource 把播放器映射成它自家的歌词源。
 //
-// Spotify 对的是 musixmatch 源:它显示的歌词由 Musixmatch 提供,按 Spotify 曲目 ID 取到的那条才算同源
-// (musixmatchResult.bySpotifyID)。auto 不在此列:识别不出用户在用哪个播放器,就不该瞎猜。Apple Music 对的是 applemusic 源(Music.app 本地 TTML /
+// auto 不在此列:识别不出用户在用哪个播放器,就不该瞎猜。Apple Music 对的是 applemusic 源(Music.app 本地 TTML /
 // amp-api),汽水音乐对的是 soda 源(seo_track);后者尤其贴这条加权的立论 —— 它的曲目 id
 // 就取自汽水客户端正在播的那一条,时间轴天然对着用户耳朵里的那个母版。
 func playerNativeLyricSource(player string) string {
@@ -1650,8 +1652,8 @@ func artistMatches(a, b string) bool {
 // 根本不存在的"K"反而能过**。
 //
 // 实际后果:「联网搜索候选歌词」用播放器给的完整歌手串只搜到两条候选,手工截短成
-// "K/DA" 之后变成三条——Musixmatch 的采纳条件里有 artistMatches(它返回的 artist_name
-// 正是 "K/DA"),哪怕 API 把正确那条返回了也会被原地拒掉;而且 netease/lrclib 两条本来
+// "K/DA" 之后变成三条——采纳条件里有 artistMatches 的源,返回的 artist_name 正是
+// "K/DA" 时,哪怕 API 把正确那条返回了也会被原地拒掉;而且 netease/lrclib 两条本来
 // 就找得到的候选也因为歌手项没拿到分、各低了整 100 分,导致 app 退而用了没有逐字
 // 时间轴的那份。
 //
@@ -1728,7 +1730,7 @@ func lyricArtistWithoutThe(s string) string {
 // 段对整串也不等)。跨服务的合唱署名本来就会换分隔符、换合作者的语言写法(V 与 金泰亨),
 // 要求整串对上等于要求两边曲库用同一套署名习惯。
 //
-// 只用在歌词候选的采纳闸(kugou/qq strict 档/lrclib search/musixmatch),**不替换**
+// 只用在歌词候选的采纳闸(kugou/qq strict 档/lrclib search),**不替换**
 // artistMatches 本身——后者还服务于身份判定/防仿冒(nameOnlyMatch、canonical 统一
 // 拼写),那些场景放宽会扩大仿冒面。防仿冒守卫在这里同样保留:交集档要求**两侧都**
 // 真正切出 ≥2 段(artistCreditParts 的 len<2 约定),"周杰伦、"这种尾随分隔符的仿冒
@@ -2924,7 +2926,7 @@ func parentheticalSegments(s string) []string {
 // 是正式版(同理),都算不匹配。
 //
 // **歌名和专辑名一起看**,举例说明为什么非做不可:PRINCE 的 "1999"
-// (本地专辑 The Hits/The B-Sides)匹配到了 Musixmatch 的一条现场版,而那条候选的
+// (本地专辑 The Hits/The B-Sides)匹配到了某个源的一条现场版,而那条候选的
 // **歌名就是干净的 "1999"**,"Live" 藏在它的专辑名里
 // ("Nude Tour, 1990 (Remastered, Live On Broadcasting)")——只看歌名的话这道闸门
 // 一点反应都没有,那条现场版拿着 768 分(逐字 +400、时长 +283、行数 +85)稳居第一,
@@ -3614,7 +3616,7 @@ func liveAlbumIdentityConflict(localArtist, localTitle, localAlbum, candTitle, c
 //
 // 例外:两边带着同一类编号、值不同(「#6」对「#11」、「Part 1」对「Part 2」)时上面哪条都不认,见 titleIdentifiersConflict。
 //
-// **绝不认任意的双向子串包含**。那是之前 kugou/QQ/Musixmatch/netease 的
+// **绝不认任意的双向子串包含**。那是之前 kugou/QQ/netease 的
 // 做法,是个定时炸弹:"Real Love" 本来就是 "Real Love Baby" 的子串,查 "love" 能命中
 // 同歌手的 "Real Love",时长又常在容差内,于是把另一首歌的歌词当成这一首。lrclib 早就
 // 因为这个单独收紧过(见 lrclib.go 里那段注释),现在统一到这里。
@@ -3898,7 +3900,7 @@ const (
 // 目前只有一组例外:**deezer 与 lyricfind 同属 LyricFind**。两者的歌词正文都由 LyricFind
 // 供,只是管道不同(Deezer 的网页客户端 / YouTube Music),正文高度相似却不是两次独立印证。
 // 这条纪律 ytmusic.go 顶部早就写下了("按来源数算独立印证……是虚假加分"),当时靠的是
-// "只接受 sourceMessage 标 LyricFind 的候选"把 Musixmatch 挡在 lyricfind 之外;
+// "只接受 sourceMessage 标 LyricFind 的候选"把别家供应商的数据挡在 lyricfind 之外;
 // 接 deezer 时从**另一个方向**踩进同一个坑——不是"一个源里混进别家数据",而是"两个源来自
 // 同一家",而共识那段只比 source 字符串,拦不住。两处后果都要堵:① 它俩互相不算 peer;
 // ② 第三方(比如 lrclib)不能因为"deezer 和 lyricfind 都跟我一致"就拿到 2 家的 +250 ——

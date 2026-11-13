@@ -3,7 +3,7 @@ import Foundation
 /// 一份译文是**歌词源自带的社区翻译**还是 **引擎机翻补的**。
 ///
 /// 权威源是 enrich 缓存里的 `lyrics_tr_source` 字段(引擎侧 `enrichEntry.LyricsTrSource`):
-/// 空 = 社区翻译(网易云 / Musixmatch 随冠军候选一起带过来的),`"machine"` = 引擎的
+/// 空 = 社区翻译(网易云等歌词源随冠军候选一起带过来的),`"machine"` = 引擎的
 /// translate.go 补的(端上 Apple 翻译 helper,或网络兜底 Google / MyMemory)。老条目没有这个字段,读成空
 /// **正是事实** —— 机翻这条路是后加的,那之前所有译文都来自歌词源。
 public enum LyricsTranslationSource: String, CaseIterable, Sendable {

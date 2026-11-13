@@ -143,7 +143,7 @@ func TestPrefetchImportOneResolves(t *testing.T) {
 	it := prefetchImportItem{Artist: rescoreTestArtist, Title: "Import Song", Album: "Import Album", Duration: 180}
 	key := enrichKey(it.Artist, it.Title, it.Album)
 	claimed := false
-	setupRescoreTest(t, []string{"musixmatch"}, func(context.Context) {
+	setupRescoreTest(t, []string{"deezer"}, func(context.Context) {
 		enrichMu.Lock()
 		claimed = enrichInflight[key]
 		enrichMu.Unlock()

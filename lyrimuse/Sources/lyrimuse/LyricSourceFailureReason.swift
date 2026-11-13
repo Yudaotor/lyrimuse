@@ -16,8 +16,6 @@ enum LyricSourceFailureReason {
         switch code {
         case "lyricfind_region_restricted":
             return L10n.t("YouTube Music 在当前网络所在地区不可用（地区限制，并非网络故障）")
-        case "musixmatch_rate_limited":
-            return L10n.t("Musixmatch 拒绝了匿名令牌请求（反爬虫限流，hint=captcha），并非网络故障，通常稍后重试即可恢复")
         case "netease_rate_limited":
             return L10n.t("网易云音乐接口限流（短时间内请求过多，code 405），并非网络故障")
         case "deezer_auth_failed":
@@ -43,17 +41,10 @@ enum LyricSourceFailureReason {
             // 另外两种结局都不会走到这里:曲库里有这首歌但没给词(正常结果)、这首没用汽水
             // 放过所以取不到曲目 id(这一路的常态)。
             return L10n.t("汽水音乐的歌词接口返回了无法识别的内容（接口可能已变更），并非这首歌曲无歌词，通常将在后续版本中修复")
-        case "musixmatch_direct_blocked":
-            // 跟上面的 musixmatch_rate_limited 是完全不同的两回事,别混:那个是服务器
-            // **正经回了** 401 hint=captcha(反爬),这个是一个字节都没拿到。实测
-            // 这台机器直连 apic-appmobile.musixmatch.com 那两个 AWS 地址 100% ICMP 丢包、
-            // TLS 握手 16 次 0 次成功,而经本机代理立刻 200。用户该做的事也不同:那个是等,
-            // 这个是去开代理。
-            return L10n.t("当前网络无法直接连接 Musixmatch 的接口（TCP/TLS 均无响应），系统代理也不可用；开启代理后通常可恢复")
         // 下面四个是传输层通用代码(引擎侧 sourcebreaker.go 最后一节的
         // classifyLyricSourceTransportFailure + searchcli.go 派生的 upstream_unreachable),任何源都
         // 可能出现,含义是"这一轮该源一个 HTTP 响应都没拿到 / 根本没法查"——跟"曲库里确实
-        // 没有这首歌"是两回事,不能把"连不上"报成"没收录"。这四个只在具体代码(上面四个)都没命中时才会出现,
+        // 没有这首歌"是两回事,不能把"连不上"报成"没收录"。这四个只在具体代码(上面那些)都没命中时才会出现,
         // 见 searchcli.go 的 lyricSourceFailureReasons。
         case "dns_failed":
             return L10n.t("域名解析失败（DNS），请求未能发出。常见于 VPN 或公司网络接管 DNS 的情况；浏览器能打开网页并不代表此处可以连接")

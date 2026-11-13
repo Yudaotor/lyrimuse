@@ -7,7 +7,6 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
-	neturl "net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -59,7 +58,7 @@ func TestProxyFallbackStickyKeepsStickyOnCallerCancel(t *testing.T) {
 	if direct.calls != 1 || blocked != 0 {
 		t.Fatalf("不该拿死 ctx 再试直连 / 报 blocked: direct=%d blocked=%d", direct.calls, blocked)
 	}
-	if !loadProxyFallbackHint("apic-appmobile.musixmatch.com") {
+	if !loadProxyFallbackHint("lyrics.example.com") {
 		t.Fatal("调用方取消不该清掉磁盘提示")
 	}
 	tr.mu.Lock()
@@ -73,7 +72,7 @@ func TestProxyFallbackStickyKeepsStickyOnCallerCancel(t *testing.T) {
 // 粘性是上一个进程设的(只在磁盘提示里,已过期):这个进程直连成功时也要把留着的连续失败次数清掉。
 func TestProxyFallbackDirectSuccessClearsLeftoverStreak(t *testing.T) {
 	newFallbackTestEnv(t)
-	host := "apic-appmobile.musixmatch.com"
+	host := "lyrics.example.com"
 	saveProxyFallbackHint(host, true)
 	saveProxyFallbackHint(host, true)
 	f := readProxyFallbackHint()
@@ -93,34 +92,6 @@ func TestProxyFallbackDirectSuccessClearsLeftoverStreak(t *testing.T) {
 	resp.Body.Close()
 	if got := readProxyFallbackHint().Streak[host]; got != 0 {
 		t.Fatalf("直连成功应当清掉上一个进程留下的连续次数,还剩 %d", got)
-	}
-}
-
-// Musixmatch 答上来了就撤掉早先的失败原因:它在常驻进程里别无清除之处,留着会让别名重查一直跳过这个源。
-func TestMusixmatchSuccessClearsFailureReason(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Write([]byte(`{"message":{"header":{"status_code":200},"body":{}}}`))
-	}))
-	defer srv.Close()
-	savedBases := musixmatchBases
-	musixmatchBases = []string{srv.URL + "/"}
-	t.Cleanup(func() { musixmatchBases = savedBases })
-	musixmatchTokenMu.Lock()
-	savedTok, savedExp := musixmatchToken, musixmatchTokenExpiry
-	musixmatchToken, musixmatchTokenExpiry = "tok", time.Now().Add(time.Hour)
-	musixmatchTokenMu.Unlock()
-	t.Cleanup(func() {
-		musixmatchTokenMu.Lock()
-		musixmatchToken, musixmatchTokenExpiry = savedTok, savedExp
-		musixmatchTokenMu.Unlock()
-		musixmatchSetLastFailureReason("")
-	})
-	musixmatchSetLastFailureReason(lyricFailureReasonMusixmatchDirectBlocked)
-	if _, err := musixmatchDo(context.Background(), "track.search", neturl.Values{}); err != nil {
-		t.Fatal(err)
-	}
-	if got := musixmatchLastFailureReasonNow(); got != "" {
-		t.Fatalf("答上来之后应当撤掉失败原因,还剩 %q", got)
 	}
 }
 
@@ -608,9 +579,9 @@ func TestLyricsTranslationLanguageCodesMatchSwift(t *testing.T) {
 		t.Fatalf("读不到 App 侧的枚举(路径变了就跟着改,别把这个测试删掉): %v", err)
 	}
 	src := string(raw)
-	start := strings.Index(src, "enum MusixmatchTranslationLanguage")
+	start := strings.Index(src, "enum LyricsTranslationLanguage")
 	if start < 0 {
-		t.Fatal("App 侧找不到 MusixmatchTranslationLanguage")
+		t.Fatal("App 侧找不到 LyricsTranslationLanguage")
 	}
 	var swift []string
 	for _, line := range strings.Split(src[start:], "\n")[1:] {

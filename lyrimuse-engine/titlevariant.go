@@ -10,7 +10,7 @@ import (
 
 // titleVariantRound:前面几轮跑完还有源缺着时,曲名换一种写法(titleVariantFor)只问缺着的那几个源,合并后照旧按
 // 本地曲名重打分(mergeLyricCandidateRounds)。先用本地署名问,还缺着的再用它的第一个别名(retryArtistIdentitiesWithOrigin)
-// 问一次:国内几家多按原文署名登记(「キタニタツヤ」对「Tatsuya Kitani」)。首轮仍用整串:Apple Music、Musixmatch 这几家
+// 问一次:国内几家多按原文署名登记(「キタニタツヤ」对「Tatsuya Kitani」)。首轮仍用整串:Apple Music 等几家
 // 登记的就是整串,换成前一段反而搜不到。没有换写法的余地、或没有缺着的源时原样返回。见 09 章决策 191。
 func titleVariantRound(ctx context.Context, artist, title, album string, durationSecs float64, ne neteaseInfo,
 	results []scoredLyricCandidateResult, onUpdate lyricSearchUpdateFunc) (neteaseInfo, []scoredLyricCandidateResult) {

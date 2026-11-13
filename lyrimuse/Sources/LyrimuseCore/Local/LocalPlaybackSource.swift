@@ -5566,8 +5566,6 @@ public final class LocalPlaybackSource: ObservableObject {
         let plainLyrics: String
         // Apple 名单可能比正文晚到(存量条目播放时才补),只变它也得重算。
         let songwriters: [String]
-        // 演唱者标注也可能比正文晚到(正文没变、后来一轮 Musixmatch 才给出),同上。
-        let speakers: LyricSpeakerTags?
         // 借来的假名标注同理(存量条目播放时才补问)。
         let kanaDonor: String
         // 认歌词开头抬头用的同曲条目歌名、歌手:引擎在缓存落盘几秒后才给新写法记上实体,正文没变、这一份变了也得重载。
@@ -5585,7 +5583,7 @@ public final class LocalPlaybackSource: ObservableObject {
             album: snapshot.album ?? ""
         )
         // 这个播放器有它自家平台那份、而且是对着现在这份主歌词比出来的,就换用它(正文、译文、逐字、背景人声一起换;
-        // 罗马音和演唱者标注是对着主歌词那几行的,不带过去)。见 PlayerLyricsVersion。
+        // 罗马音是对着主歌词那几行的,不带过去)。见 PlayerLyricsVersion。
         let playerVersion = PlayerLyricsVersion.chosen(
             found?.playerVersions ?? [:], bundleID: snapshot.bundleIdentifier,
             lyrics: found?.lyrics ?? "", lyricsYRC: found?.lyricsYRC ?? "")
@@ -5598,7 +5596,6 @@ public final class LocalPlaybackSource: ObservableObject {
         let shownRoma = playerVersion == nil ? found?.lyricsRoma ?? "" : ""
         let shownYRC = playerVersion?.lyricsYRC ?? found?.lyricsYRC ?? ""
         let shownBG = playerVersion?.lyricsBG ?? found?.lyricsBG ?? ""
-        let shownSpeakers = playerVersion == nil ? found?.speakers : nil
         // 见过中文歌词就记一笔(粘性,只置不清)。判据用共享的 `ChineseVariant.affects`,跟转换本身是同一个函数,别在这里另抄一份。
         // 刻意放在下面的等值闸之前:闸命中早退时这两个标志也必须照常更新。
         let raw = playerVersion?.lyrics ?? found?.lyrics ?? ""
@@ -5634,7 +5631,6 @@ public final class LocalPlaybackSource: ObservableObject {
             isHokkien: found?.isHokkien ?? false,
             plainLyrics: found?.plainLyrics ?? "",
             songwriters: found?.songwriters ?? [],
-            speakers: shownSpeakers,
             kanaDonor: found?.kanaDonor ?? "",
             headerAliases: EnrichCacheReader.headerAliases(
                 artist: snapshot.artist ?? "", title: snapshot.title ?? "", album: snapshot.album ?? ""))
@@ -5661,10 +5657,8 @@ public final class LocalPlaybackSource: ObservableObject {
         // 译文是中文、罗马音是拉丁字母,都不进修回。
         // 同形异码字(康熙部首等)最先换回标准字,署名过滤、日文汉字修复、简繁转换、罗马音都按标准字认。
         // 只换送进引擎的文本;下面算校正值 key 的仍用缓存原文。
-        // Musixmatch 的演唱者标注(引擎 lyrics_speakers):指纹对得上才把 v1：/合： 补进正文,交给对唱分栏。
-        let tagged = shownSpeakers?.applied(lyrics: raw, lyricsYRC: shownYRC) ?? (lyrics: raw, lyricsYRC: shownYRC)
-        let text = HanCompatibility.normalized(tagged.lyrics)
-        let rawYRC = HanCompatibility.normalized(tagged.lyricsYRC)
+        let text = HanCompatibility.normalized(raw)
+        let rawYRC = HanCompatibility.normalized(shownYRC)
         let japaneseSong = Romanizer.looksJapaneseSong(text.isEmpty ? rawYRC : text)
         // 排字语言要在引擎加载之前设好:加载时就会按各面宽度断句、量宽度,量宽度要跟画字同一口径。
         LyricTypesetting.setJapaneseSong(japaneseSong)

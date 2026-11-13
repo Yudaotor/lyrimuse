@@ -99,7 +99,7 @@ func TestKasetNativeLyricsVideoID(t *testing.T) {
 	if got := kasetNativeLyricsVideoID(song, skipped, cached); got != "" {
 		t.Errorf("这一轮跳过了自家源: %q", got)
 	}
-	featuresRef().LyricsSources = map[string]bool{"musixmatch": true}
+	featuresRef().LyricsSources = map[string]bool{"deezer": true}
 	if got := kasetNativeLyricsVideoID(song, round, cached); got != "" {
 		t.Errorf("lyricfind 关着: %q", got)
 	}
@@ -108,9 +108,9 @@ func TestKasetNativeLyricsVideoID(t *testing.T) {
 // 升级重试 / 重打分按条目存的 YouTube Music 歌曲页问自家源,把按哪个 videoId 问的记下(MV 记配对的音轨版本);
 // 同一进程里再评估一次,那一版的词读缓存、不发请求,照样记着。
 func TestLyricsEvaluationRecordsNativeVideoID(t *testing.T) {
-	// 假 musixmatch 照真实应答那样记一笔连上了:不然只读缓存的那一轮一个源都没连上、整轮不记账,测不出标记被冲掉。
-	setupRescoreTest(t, []string{"musixmatch", "lyricfind"}, func(ctx context.Context) {
-		lyricSourceRoundFrom(ctx).markReached("musixmatch")
+	// 假 deezer 照真实应答那样记一笔连上了:不然只读缓存的那一轮一个源都没连上、整轮不记账,测不出标记被冲掉。
+	setupRescoreTest(t, []string{"deezer", "lyricfind"}, func(ctx context.Context) {
+		lyricSourceRoundFrom(ctx).markReached("deezer")
 	})
 	resetYtmusicRegionState(t)
 	withKasetAudioVideoIDs(t)
@@ -141,13 +141,13 @@ func TestLyricsEvaluationRecordsNativeVideoID(t *testing.T) {
 	enrichMu.Lock()
 	enrichCache = map[string]enrichEntry{
 		mvKey: {YouTubeMusicURL: "https://music.youtube.com/watch?v=Mv000000001", YouTubeMusicMV: true},
-		songKey: {Lyrics: bt("[00:05.00]Old line one\n[00:15.00]Old line two"), LyricsSource: "musixmatch",
+		songKey: {Lyrics: bt("[00:05.00]Old line one\n[00:15.00]Old line two"), LyricsSource: "deezer",
 			LyricsScoringVersion: lyricsScoringVersion - 1, YouTubeMusicURL: "https://music.youtube.com/watch?v=Song0000001"},
 	}
 	enrichMu.Unlock()
 	retryLyricsUpgrade(context.Background(), mvKey, artist, "Mv Song", "", 180, true)
-	// 第二轮别的源照常联网应答(清掉 musixmatch 的进程内缓存,假 musixmatch 再答一次),自家源那一版读缓存。
-	resetMusixmatchCacheForTest(t)
+	// 第二轮别的源照常联网应答(清掉 deezer 的进程内缓存,假 deezer 再答一次),自家源那一版读缓存。
+	resetDeezerCacheForTest(t)
 	retryLyricsUpgrade(context.Background(), mvKey, artist, "Mv Song", "", 180, false)
 	rescoreLyrics(context.Background(), songKey, artist, "Rescored Song", "", 180)
 

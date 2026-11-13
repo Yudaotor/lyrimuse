@@ -72,8 +72,6 @@ func TestInstrumentalStopsAutomaticLyricsWork(t *testing.T) {
 		{"机翻补译文", enrichEntry{Lyrics: bt("[00:01.00]hello world")},
 			func(e enrichEntry) bool { return needsTranslationBackfill(e, "") }},
 		{"补背景人声", enrichEntry{Lyrics: bt("[00:01.00]x"), LyricsSource: "amll"}, needsBackgroundVocalsBackfill},
-		{"补演唱者标注", spkBackfillEntry(),
-			func(e enrichEntry) bool { return needsLyricSpeakersBackfill(e, "A & B", "Song") }},
 		{"专辑登记重查", enrichEntry{Lyrics: bt("x"), YouTubeMusicAlbum: "Album"},
 			func(e enrichEntry) bool { return listedAlbumLyricsWorthRecheck(e, "", false, true) }},
 		{"KKBOX 本地歌词", enrichEntry{},

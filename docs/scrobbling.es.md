@@ -216,7 +216,7 @@ scrobble erróneo es una edición permanente de una página pública.
 **¿Puedo usar Lyrimuse sin hacer scrobble?**
 Sí, es lo predeterminado: no se hace scrobble de nada hasta que conectas una cuenta de Last.fm en
 Ajustes → Plataformas vinculadas. Obtener letras e ilustraciones es aparte: envía el artista y el nombre
-de la canción a los proveedores públicos de letras (Netease, QQ, Kugou, LRCLIB, Musixmatch, AMLL) tanto si hay
+de la canción a los proveedores públicos de letras (Netease, QQ, Kugou, LRCLIB, AMLL) tanto si hay
 una cuenta conectada como si no. Esas fuentes se pueden limitar o desactivar en Ajustes.
 
 **¿Por qué aparece el mismo artista dos veces en mi perfil de Last.fm?**

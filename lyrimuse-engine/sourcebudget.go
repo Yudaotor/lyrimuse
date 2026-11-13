@@ -8,8 +8,8 @@ import (
 )
 
 // 歌词源的小时额度:滚动一小时里给这个源发了多少个请求(前台后台一起算),到了额度后台请求就不发,前台照发。
-// 令牌桶(hostRateFor)只削尖峰,管不住几个小时的累计量;Musixmatch 的反爬按出口 IP 的累计请求量拦,每小时
-// 400 多次连着两三个小时就被拦,拦下之后正在播的歌也问不了它。见 09 章决策 327。
+// 令牌桶(hostRateFor)只削尖峰,管不住几个小时的累计量;有的源的反爬按出口 IP 的累计请求量拦,
+// 拦下之后正在播的歌也问不了它。见 09 章决策 327。
 //
 // 被额度拦下的后台请求记进这一轮的跳过名单(lyricSourceSkipReasonBudget),跟排不上队一样,以后自动补问;
 // 各源近况统计不算它这一轮。导入清单也不等额度:用完之后这一小时导入的歌不问这个源,播到时再补问。
@@ -22,9 +22,6 @@ const sourceBudgetWindow = time.Hour
 
 // newHostGuardSourceBudget:各歌词源一小时的请求额度,0 = 不限。单测总入口换成全部不限,专测额度的用例自己设。
 var newHostGuardSourceBudget = func(source string) int {
-	if source == "musixmatch" {
-		return 240
-	}
 	return 0
 }
 

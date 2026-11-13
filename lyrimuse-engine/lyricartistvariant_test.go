@@ -91,7 +91,7 @@ func TestLyricPrimaryQueryArtist(t *testing.T) {
 		{"K/DA", ""},
 		// 反过来,真的是合唱串时现在能产出正确的首歌手 —— 实测过:
 		// 用完整串只搜到两条候选,手工截短成 "K/DA" 才搜到三条(多一条带逐字轴、
-		// 分数最高的 Musixmatch)。那次只能手工截,现在这一步自己就给出 K/DA。
+		// 分数最高的候选)。那次只能手工截,现在这一步自己就给出 K/DA。
 		{"K/DA/Madison Beer/(G)I-DLE/Jaira Burns", "K/DA"},
 	}
 	for _, c := range cases {
@@ -217,7 +217,7 @@ func TestMergeLyricCandidateRoundsKeepsNativeIdentity(t *testing.T) {
 	}
 }
 
-// needsRomanizationRetry:见其头注的側田/Justin Lo《Erica》案例——musixmatch+lrclib
+// needsRomanizationRetry:见其头注的側田/Justin Lo《Erica》案例——lrclib
 // 已经凑够可用源数,但两者都不会给语种/罗马音信号,只有 QQ/酷狗(粤语)、网易云(日语罗马字)
 // 才给,而它们要靠换艺人名重搜才有机会被问到正确的名字。
 func TestNeedsRomanizationRetry(t *testing.T) {
@@ -230,7 +230,7 @@ func TestNeedsRomanizationRetry(t *testing.T) {
 		{
 			"纯英文歌_不需要",
 			[]scoredLyricCandidateResult{
-				{Source: "musixmatch", Lyrics: "Oh Erica, baby Erica"},
+				{Source: "kuwo", Lyrics: "Oh Erica, baby Erica"},
 				{Source: "lrclib", Lyrics: "Oh Erica, baby Erica"},
 			},
 			false,
@@ -239,7 +239,7 @@ func TestNeedsRomanizationRetry(t *testing.T) {
 			// 側田《Erica》:歌词主体是汉字,两个源都没给语种/罗马音信号。
 			"汉字歌词_没有语种信号_需要重试",
 			[]scoredLyricCandidateResult{
-				{Source: "musixmatch", Lyrics: "知你其實想找一個水泡救生嗎"},
+				{Source: "kuwo", Lyrics: "知你其實想找一個水泡救生嗎"},
 				{Source: "lrclib", Lyrics: "知你其實想找一個水泡救生嗎"},
 			},
 			true,
@@ -247,7 +247,7 @@ func TestNeedsRomanizationRetry(t *testing.T) {
 		{
 			"汉字歌词_但已有语种信号_不需要",
 			[]scoredLyricCandidateResult{
-				{Source: "musixmatch", Lyrics: "知你其實想找一個水泡救生嗎"},
+				{Source: "kuwo", Lyrics: "知你其實想找一個水泡救生嗎"},
 				{Source: "qq", Lyrics: "知你其實想找一個水泡救生嗎", Language: "yue"},
 			},
 			false,
@@ -262,14 +262,14 @@ func TestNeedsRomanizationRetry(t *testing.T) {
 		{
 			"日语假名为主_需要重试",
 			[]scoredLyricCandidateResult{
-				{Source: "musixmatch", Lyrics: "きっと忘れられない くらい素敵な日々を"},
+				{Source: "kuwo", Lyrics: "きっと忘れられない くらい素敵な日々を"},
 			},
 			true,
 		},
 		{
 			"韩语谚文_需要重试",
 			[]scoredLyricCandidateResult{
-				{Source: "musixmatch", Lyrics: "사랑해 진짜 진짜 많이 사랑해"},
+				{Source: "kuwo", Lyrics: "사랑해 진짜 진짜 많이 사랑해"},
 			},
 			true,
 		},
@@ -277,7 +277,7 @@ func TestNeedsRomanizationRetry(t *testing.T) {
 			"只有判废的汉字候选_不为它重查",
 			[]scoredLyricCandidateResult{
 				{Source: "qq", Lyrics: "知你其實想找一個水泡救生嗎", Score: -1},
-				{Source: "musixmatch", Lyrics: "Oh Erica, baby Erica"},
+				{Source: "kuwo", Lyrics: "Oh Erica, baby Erica"},
 			},
 			false,
 		},
@@ -285,7 +285,7 @@ func TestNeedsRomanizationRetry(t *testing.T) {
 			"判废候选带的语种信号不算",
 			[]scoredLyricCandidateResult{
 				{Source: "qq", Lyrics: "别的歌", Language: "yue", Score: -1},
-				{Source: "musixmatch", Lyrics: "知你其實想找一個水泡救生嗎"},
+				{Source: "kuwo", Lyrics: "知你其實想找一個水泡救生嗎"},
 			},
 			true,
 		},

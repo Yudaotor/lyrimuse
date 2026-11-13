@@ -147,7 +147,7 @@ Trong Lyrimuse, số lượt phát, bảng xếp hạng và số “Lượt phá
 ## 7. Câu hỏi thường gặp
 
 **Có dùng được Lyrimuse mà không scrobble không?**
-Có, đó là mặc định: không có gì được scrobble cho đến khi bạn kết nối tài khoản Last.fm trong Cài đặt → Dịch vụ liên kết. Việc tìm lời bài hát và ảnh bìa là chuyện riêng: việc này gửi tên nghệ sĩ và tên bài tới các nguồn lời bài hát công khai (Netease, QQ, Kugou, LRCLIB, Musixmatch, AMLL) dù có kết nối tài khoản hay không. Có thể thu hẹp hoặc tắt các nguồn này trong Cài đặt.
+Có, đó là mặc định: không có gì được scrobble cho đến khi bạn kết nối tài khoản Last.fm trong Cài đặt → Dịch vụ liên kết. Việc tìm lời bài hát và ảnh bìa là chuyện riêng: việc này gửi tên nghệ sĩ và tên bài tới các nguồn lời bài hát công khai (Netease, QQ, Kugou, LRCLIB, AMLL) dù có kết nối tài khoản hay không. Có thể thu hẹp hoặc tắt các nguồn này trong Cài đặt.
 
 **Vì sao cùng một nghệ sĩ xuất hiện hai lần trên hồ sơ Last.fm của tôi?**
 Trình phát của bạn báo hai tên khác nhau, và cả hai đều được gửi đúng như được báo. Lyrimuse gộp chúng trong thống kê của chính nó; muốn gộp trên Last.fm thì phải sửa các lượt scrobble ở đó.

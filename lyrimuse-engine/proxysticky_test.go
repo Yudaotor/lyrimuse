@@ -40,7 +40,7 @@ func proxyHintWindowLeft(host string) time.Duration {
 
 func TestProxyFallbackStickyWindowGrowsAndResets(t *testing.T) {
 	newFallbackTestEnv(t)
-	const host = "apic-appmobile.musixmatch.com"
+	const host = "lyrics.example.com"
 	direct := &stubRoundTripper{err: errors.New("i/o timeout")}
 	viaProxy := &stubRoundTripper{body: `{"ok":1}`}
 	tr := &proxyFallbackTransport{direct: direct, viaProxy: viaProxy}
@@ -84,7 +84,7 @@ func TestProxyFallbackStickyWindowGrowsAndResets(t *testing.T) {
 // 老版本写的提示文件只有 hosts(没有 until):照旧按 proxyFallbackSticky 算到期。
 func TestProxyFallbackHintLegacyFormat(t *testing.T) {
 	newFallbackTestEnv(t)
-	const host = "apic-appmobile.musixmatch.com"
+	const host = "lyrics.example.com"
 	write := func(at time.Time) {
 		t.Helper()
 		raw, _ := json.Marshal(map[string]any{"hosts": map[string]int64{host: at.Unix()}})

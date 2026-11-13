@@ -19,7 +19,7 @@ import (
 func allLyricSourceConstants() []string {
 	return []string{
 		lyricSourceNetease, lyricSourceQQ, lyricSourceKugou,
-		lyricSourceMusixmatch, lyricSourceLRCLIB, lyricSourceAMLL, lyricSourceLyricFind,
+		lyricSourceLRCLIB, lyricSourceAMLL, lyricSourceLyricFind,
 		lyricSourceKuwo, lyricSourceMigu, lyricSourceDeezer, lyricSourceAppleMusic,
 		lyricSourceSoda, lyricSourceVibe, lyricSourceGenie, lyricSourcePetitLyrics,
 	}
@@ -143,7 +143,7 @@ func TestLyricsMigrationFlagsCoverNewerSources(t *testing.T) {
 	}
 	swift := string(swiftRaw)
 	original := map[string]bool{lyricSourceNetease: true, lyricSourceQQ: true, lyricSourceKugou: true,
-		lyricSourceMusixmatch: true, lyricSourceLRCLIB: true}
+		lyricSourceLRCLIB: true}
 	for _, src := range lyricSourceNames {
 		if original[src] {
 			continue
@@ -177,7 +177,7 @@ func TestLyricsMigrationFlagsCoverNewerSources(t *testing.T) {
 func TestLyricSourceFailureReasonWiredInBothConsumers(t *testing.T) {
 	// 有专属失败原因的源 → 它在两处 switch/check 里的源名。没有专属原因的源不在此列
 	// (它们只走传输层通用代码),新接的源如果加了 xxxLastFailureReasonNow,这里也要补一行。
-	sources := []string{"netease", "musixmatch", "lyricfind", "deezer", "soda"}
+	sources := []string{"netease", "lyricfind", "deezer", "soda"}
 	files := map[string]string{
 		"searchcli.go":           `check("%s"`,
 		"testlyricsourcescli.go": `case "%s":`,

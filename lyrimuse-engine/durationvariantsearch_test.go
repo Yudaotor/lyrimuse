@@ -57,14 +57,14 @@ func TestSplitEnrichKeyFieldsWithPipesInFields(t *testing.T) {
 
 // 补空扫描、全量扫库、手动重新匹配按「~durN」变体 key 重搜:搜的歌名不带标记,写回的是变体那一条,基条目不凭空长出来。
 func TestBackgroundResearchSearchesVariantKeyWithoutMarker(t *testing.T) {
-	setupRescoreTest(t, []string{"musixmatch"}, nil)
+	setupRescoreTest(t, []string{"deezer"}, nil)
 	var mu sync.Mutex
 	var searched []string
-	musixmatchResolve = func(ctx context.Context, artist, title string, durationSecs float64, trLang, isrc string) musixmatchResult {
+	deezerResolve = func(ctx context.Context, artist, title, album string, durationSecs float64, isrc string) deezerResult {
 		mu.Lock()
 		searched = append(searched, title)
 		mu.Unlock()
-		return musixmatchResult{lrc: rescoreTestNewBody, title: title, artist: artist, durationSecs: 180}
+		return deezerResult{lyrics: rescoreTestNewBody, title: title, artist: artist, durationSecs: 180}
 	}
 	const old = "[00:05.00]Old line one\n[00:15.00]Old line two"
 	for _, c := range []struct {
@@ -73,9 +73,9 @@ func TestBackgroundResearchSearchesVariantKeyWithoutMarker(t *testing.T) {
 		run         func(key string)
 	}{
 		{"补空扫描", "Fill Song", enrichEntry{DurationSecs: 180}, func(key string) { lyricsFillSweepOne(context.Background(), key) }},
-		{"全量扫库", "Scan Song", enrichEntry{Lyrics: bt(old), LyricsSource: "musixmatch", LyricsScoringVersion: lyricsScoringVersion - 1, DurationSecs: 180},
+		{"全量扫库", "Scan Song", enrichEntry{Lyrics: bt(old), LyricsSource: "deezer", LyricsScoringVersion: lyricsScoringVersion - 1, DurationSecs: 180},
 			func(key string) { lyricsFullScanOne(context.Background(), key) }},
-		{"手动重新匹配", "Rematch Song", enrichEntry{Lyrics: bt(old), LyricsSource: "musixmatch", DurationSecs: 180},
+		{"手动重新匹配", "Rematch Song", enrichEntry{Lyrics: bt(old), LyricsSource: "deezer", DurationSecs: 180},
 			func(key string) { runLyricsRematchOne(context.Background(), key, nil) }},
 	} {
 		base := enrichKey(rescoreTestArtist, c.title, "Some Album")

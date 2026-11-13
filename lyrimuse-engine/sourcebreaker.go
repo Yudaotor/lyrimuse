@@ -20,7 +20,7 @@ import (
 //
 // 全部歌词源并发、20 秒总截止(lyricSearchDeadline)。某个源整个哑掉(DNS 污染、TLS 挂死、5xx)时,不熔断的话
 // 每首歌都要把它等到自己的超时。这里是「某个源连续失败就在接下来一段时间跳过它」的通用层;点状的退避另有
-// 网易云按端点分桶的拒绝退避(2 分钟起翻倍、封顶 15 分钟,netease.go)、lb.go 的 429 阶梯、Musixmatch 自己换 token。
+// 网易云按端点分桶的拒绝退避(2 分钟起翻倍、封顶 15 分钟,netease.go)、lb.go 的 429 阶梯。
 //
 // 挂在哪:各源函数把所有错误都吞成空结果、不区分"没查到"和"没查成",唯一集中的地方是 doHTTPTracked
 // (所有对外请求的统一出口),能拿到网络层错误与状态码,所以失败观察挂在那里,按请求主机归到源
@@ -29,7 +29,7 @@ import (
 // 只统计两类失败:http.Client.Do 本身返回错误(DNS/连接/TLS/超时)和 5xx;429 单独按 Retry-After 处理(没给时按连着被限流
 // 几次升档,见 observeWith 的 429 那一支)。后台请求的 429 不进这里,只由出站闸暂停后台(observeBackgroundRateLimited)。
 // 拿到响应且状态码 < 500 的请求都算一次成功,当场解除冷却(档位另算,见 lyricSourceBreakerSchedule)。
-// 4xx 一律不算:那是各源自己的业务判定(网易云 body 里的 405、Musixmatch 的 401 hint=captcha 各自处理,后者由它
+// 4xx 一律不算:那是各源自己的业务判定(网易云 body 里的 405 这类各自处理;被反爬拦下由源
 // 自己调 noteBlocked,见「反爬拦截」一节)。401/402/403 也不当长期粘性冷却的理由:对没有凭据的源,那样会让它
 // 永久缺席、界面还不提示。
 //
@@ -116,11 +116,11 @@ const (
 
 // ---- 反爬拦截:按源暂停,15 分钟起翻倍 ----
 //
-// Musixmatch 拦一个出口 IP 时,从这个出口来的每个数据请求都回 HTTP 200 + `status_code:401, hint:"captcha"`,两台主机
-// 都一样,刚换的 token 也照样被拒。换个出口(改走系统代理、切 Clash 节点)照常能用,所以 musixmatch.go 先换出口,
-// 换不了才走到这里的暂停(musixmatchreroute.go)。上面那套熔断看的是 HTTP 层,这种应答算成功、一档都不跳 ——
+// 有的源拦一个出口 IP 时,从这个出口来的每个数据请求都回 HTTP 200、应答体里才说被拦(要验证码)。换个出口
+// (改走系统代理、切 Clash 节点)常常照常能用,能换先换(forceProxyFor),换不了才走到这里的暂停。上面那套熔断
+// 看的是 HTTP 层,这种应答算成功、一档都不跳 ——
 // 不单独处理的话每一轮照发、每一轮被拒,整段时间一首词都给不出,还可能把封禁拖得更久。认得出这种应答的
-// 只有源自己(musixmatch.go 解应答头),由它调 noteBlocked。
+// 只有源自己,由它调 noteBlocked。
 //
 // 跟上面的冷却分开存,两条理由:① 拦截应答本身是 HTTP 200,observeWith 的 default 分支会把同一个源的冷却
 // 当场撤掉;② 上面的档位离上次跳闸 10 分钟就归零,而这里一档就 15 分钟,放在一起永远升不上去。
@@ -139,7 +139,7 @@ type lyricSourceBlockState struct {
 // 暂停状态存盘:常驻进程在 run() 开头调 enableLyricSourceBlockPersistence,读回上次存的、之后每次变化都写回。
 // 别只放内存:引擎一重启就从 15 分钟那档重来,装机频繁时每次启动后的第一个请求都去撞一下,一小时能撞六次,
 // 而对方的反爬看的正是请求频率。手动搜索的一次性子命令只读不写(loadLyricSourceBlocksReadOnly):暂停期里它也不去碰,
-// 存盘那份归常驻进程。单测都不开:单测进程要是读到本机真实的「被拦」记录,Musixmatch 的测试会在被拦的机器上莫名其妙地失败。
+// 存盘那份归常驻进程。单测都不开:单测进程要是读到本机真实的「被拦」记录,相关源的测试会在被拦的机器上莫名其妙地失败。
 const (
 	lyricSourceBlocksFileName = "lyrimuse-source-blocks.json"
 	// lyricSourceBlocksForgetAfter:暂停到期这么久还没再被拦(引擎一直没跑),读回时整条丢掉、档位从头算。
@@ -358,8 +358,6 @@ func lyricSourceForHost(host string) string {
 		return "kugou"
 	case h == "lrclib.net" || strings.HasSuffix(h, ".lrclib.net"):
 		return "lrclib"
-	case h == "musixmatch.com" || strings.HasSuffix(h, ".musixmatch.com"):
-		return "musixmatch"
 	case h == "raw.githubusercontent.com" || h == "cdn.jsdelivr.net" || h == "fastly.jsdelivr.net" || h == "api.amll.dev":
 		// jsDelivr 两个是 amll-ttml-db 的镜像(sourcefallback.go 的 amllBases),api.amll.dev 是 AMLL 官方接口(amllttml.go 的
 		// amllAPIBase),全仓只有 amll 在用。
@@ -808,8 +806,7 @@ func (r *lyricSourceRound) skippedSources() []string {
 // (net 包在系统解析器与纯 Go 解析器两条路上都会调这两个钩子,ctx 被取消时 DNSDone 也会带 err 调一次),分类时
 // 先看轨迹:DNS 阶段开始了却没结束、或结束时带错 → dns_failed;错误链里有 DNSError → dns_failed;其余才是
 // connect_failed。复用连接(没有 DNS 阶段)拿不到轨迹,退回错误链判定;歌词源走 DoH 时轨迹由 lyricsourcedial.go
-// 手动补。musixmatch 的 DoH 拨号(dohDialContext)没有 DNS 钩子,退回错误链判定:它用 %w 包住了系统解析的
-// NXDOMAIN,"DoH 解析成功但拨不通"会被归成 dns_failed,由 musixmatch_direct_blocked 这个具体代码盖住。
+// 手动补。
 //
 // 两处消费:一次性 CLI(searchcli.go 的 lyricSourceFailureReasons)报失败原因;常驻引擎的别名重查
 // (enrich.go lyricSourcesWorthRetry)剔掉连不上的源。常驻引擎里这份是进程生命周期累计的、不按轮清零,

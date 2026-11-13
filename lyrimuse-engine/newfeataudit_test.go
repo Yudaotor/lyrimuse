@@ -79,8 +79,4 @@ func TestNewFeatureAuditContracts(t *testing.T) {
 		!containsCode(pf, "sticky := time.Now().Round(0).Before(t.stickyUntil)") {
 		t.Error("走代理的粘性窗口按墙钟算")
 	}
-	mx := read("musixmatchreroute.go")
-	if !containsCode(mx, "viaClash = m != nil && c != nil && m.Host == c.Host") {
-		t.Error("手动档填的不是 Clash 时不切 Clash 节点")
-	}
 }

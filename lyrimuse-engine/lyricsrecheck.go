@@ -13,7 +13,7 @@ type lyricsRecheck struct {
 	kkbox bool
 	// amazon:这首当初不是用 Amazon Music 放着解析的,它本地现在有词(见 amazonLyricsWorthRecheck)。
 	amazon bool
-	// spotify:Musixmatch 当初没给出词,Spotify 缓存里现在有(见 spotifyLyricsWorthRecheck)。
+	// spotify:这首最近一轮没问过 Spotify 本地缓存,它现在有词(见 spotifyLyricsWorthRecheck)。
 	spotify bool
 	// kaset:这份词最近一轮没按这一版的 videoId 问过 Kaset 自家那个源(见 kasetLyricsWorthRecheck)。
 	kaset bool

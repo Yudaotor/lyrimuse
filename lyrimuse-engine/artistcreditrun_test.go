@@ -4,7 +4,7 @@ import "testing"
 
 // 现象是:「联网搜索候选歌词」用播放器给的完整歌手串
 // "K/DA/Madison Beer/(G)I-DLE/Jaira Burns" 只搜到两条候选,把歌手手工截短成 "K/DA"
-// 之后变三条(还多出一条带逐字时间轴、分数最高的 Musixmatch)。
+// 之后变三条(还多出一条带逐字时间轴、分数最高的候选)。
 //
 // 根因:`/` 既在 isArtistCreditSep 里、又是 K/DA 这个名字自身的一部分,于是
 // artistCreditParts 切出来的段里永远没有 "k/da",artistMatches 把真正的歌手判成不匹配。

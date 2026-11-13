@@ -687,7 +687,7 @@ struct PanelQuickSettings: View {
                         get: { features.lyricsTranslationLanguage },
                         set: { features.lyricsTranslationLanguage = $0; Task { await features.save() } }
                     ),
-                    options: MusixmatchTranslationLanguage.allCases,
+                    options: LyricsTranslationLanguage.allCases,
                     label: \.displayName)
             }
             // 同设置页那一行(引擎那份配置,改完存盘),排在译文语言下面同设置页。

@@ -70,8 +70,8 @@ func TestPlayerNativeLyricSource(t *testing.T) {
 		// 汽水音乐对的是 soda 源(见 lyrimuse-engine/soda.go)——它的曲目 id 直接取自汽水客户端
 		// 正在播的那一条,是这条加权里"时间轴对着同一份母版"最硬的一例。
 		playerSoda: "soda",
-		// Spotify 显示的歌词由 Musixmatch 提供;auto 识别不出播放器,不该瞎猜。
-		playerSpotify: "musixmatch", playerAuto: "", "": "",
+		// Spotify 没有自家歌词源;auto 识别不出播放器,不该瞎猜。
+		playerSpotify: "", playerAuto: "", "": "",
 	}
 	for player, want := range cases {
 		if got := playerNativeLyricSource(player); got != want {
@@ -142,10 +142,10 @@ func TestSetNativeLyricSourcesForPlayer(t *testing.T) {
 		t.Errorf("换到酷狗之后应当恰好只剩 kugou,got %v", nativeLyricSources)
 	}
 
-	// Spotify 对的是 musixmatch(只有按它的曲目 ID 认出的那条带本机身份,见 musixmatchResult.bySpotifyID)。
+	// Spotify 没有自家歌词源,只有放本机文件时那一份。
 	setNativeLyricSourcesForPlayer(spotifyBundleID)
-	if !isNativeLyricSource("musixmatch") || isNativeLyricSource("kugou") {
-		t.Errorf("放 Spotify 时恰好只有 musixmatch,got %v", nativeLyricSources)
+	if !isNativeLyricSource(localFileLyricsSource) || len(nativeLyricSources) != 1 {
+		t.Errorf("放 Spotify 时恰好只有本地文件,got %v", nativeLyricSources)
 	}
 
 	// 认不出的 bundle id(浏览器网页版等)同样是空集,不能兜底成某个源。
@@ -258,33 +258,21 @@ func TestNativeSourcesForAppleMusicIncludeLocalFile(t *testing.T) {
 	}
 }
 
-// QQ 音乐、网易云、酷狗用「打开文件」、Spotify 从「本地文件」列表放本机文件时,文件里的歌词跟它自家的源一样算同源。
+// QQ 音乐、网易云、酷狗用「打开文件」、Spotify 从「本地文件」列表放本机文件时,文件里的歌词跟它自家的源一样算同源;
+// Spotify 没有自家歌词源,本地文件那一份照样算。
 func TestNativeSourcesForStreamingClientsIncludeLocalFile(t *testing.T) {
 	t.Cleanup(func() { setNativeLyricSourcesForPlayer("") })
 	for _, c := range []struct{ bundleID, own string }{
 		{qqMusicBundleID, lyricSourceQQ}, {neteaseMusicBundleID, lyricSourceNetease}, {kugouMusicBundleID, lyricSourceKugou},
-		{spotifyBundleID, lyricSourceMusixmatch},
+		{spotifyBundleID, ""},
 	} {
 		setNativeLyricSourcesForPlayer(c.bundleID)
-		if !isNativeLyricSource(c.own) || !isNativeLyricSource(localFileLyricsSource) {
+		if (c.own != "" && !isNativeLyricSource(c.own)) || !isNativeLyricSource(localFileLyricsSource) {
 			t.Errorf("%s:自家源和本地文件都算同源", c.bundleID)
 		}
 	}
 	setNativeLyricSourcesForPlayer(kkboxBundleID)
 	if isNativeLyricSource(localFileLyricsSource) {
 		t.Error("KKBOX 不放本机文件,不带本地文件")
-	}
-}
-
-// 放 Spotify 时 musixmatch 落选不算「同源落选」:按歌名搜到的那条不带本机身份,重搜结论不变。
-func TestNeedsLyricsRetry_SpotifyMusixmatchNotMissedOut(t *testing.T) {
-	setNativeLyricSourcesForPlayer(spotifyBundleID)
-	t.Cleanup(func() { setNativeLyricSourcesForPlayer("") })
-	e := enrichEntry{
-		Lyrics: bt("[00:01.00]x"), LyricsYRC: bt("[1,2](1,1,0)x"),
-		LyricsSource: "netease", LyricsSourcesSeen: []string{"netease", "musixmatch", "lrclib"},
-	}
-	if needsLyricsRetry(e, false, false, true) {
-		t.Error("Spotify 下 musixmatch 落选不该触发重搜")
 	}
 }

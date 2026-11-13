@@ -112,7 +112,7 @@ func runResyncLyrics(keys []string, apply bool) int {
 		picked := pickLyricCandidatePreferring(scored, e.LyricsSourceChoice)
 		// 这条 CLI 手上就攥着 enrichCache 里的 e,按它有没有词传 —— 如果这里图省事硬编码 false,等于永远按"手上有一份好歌词"
 		// 那套更严格的闸走(rescoreDecidable 见其头注:要求全部启用的源都应答)。0 条候选、
-		// 慢源(Musixmatch/YTMusic 这类)没能在 20 秒内应答时 decidable 恒为 false,即便
+		// 慢源(YTMusic 这类)没能在 20 秒内应答时 decidable 恒为 false,即便
 		// 新一轮已经搜到可用源也会被当成"跳过"——保护的是一份根本不存在的"旧歌词"
 		// (如陶喆《Airport in 10:30》这类曾撞上这个坑的例子)。
 		decidable := rescoreDecidable(scored, e.LyricsSource, e.Lyrics.IsZero())
@@ -180,7 +180,6 @@ func runResyncLyrics(keys []string, apply bool) int {
 		traceLyricsDecision(key, cur.LyricsDecision)
 		cur.LyricsDecisionApplied = cur.LyricsDecision
 		cur = applyResync(cur, picked, plan, songLanguage, preparedRoma)
-		refreshSpeakers(&cur, scored)
 		refreshKana(&cur, scored)
 		cur.ResolvedDurationSecs = duration
 		enrichCache[key] = cur

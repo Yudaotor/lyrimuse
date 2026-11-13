@@ -82,7 +82,7 @@ func TestParenBGYRCLine(t *testing.T) {
 			"[78050,1960](78050,220,0)Ooh(78270,0,0), (78270,120,0)you're (78390,360,0)so (78750,480,0)sweet (79230,0,0)（(79230,330,0)So (79560,450,0)sweet(80010,0,0)）",
 			"[78050,1960](78050,220,0)Ooh(78270,0,0), (78270,120,0)you're (78390,360,0)so (78750,480,0)sweet",
 			"[78050,1960](79230,330,0)So (79560,450,0)sweet"},
-		{"Musixmatch:右括号后的标点并回主句、两段各去括号",
+		{"酷我:右括号后的标点并回主句、两段各去括号",
 			"[29180,4132](29180,42,0)I'm (29222,50,0)not (29272,260,0)breathing (29532,55,0)(I'm (29587,55,0)not (29642,996,0)breathing), (30638,786,0)slowly (31424,586,0)bleeding (32010,1302,0)(bleeding)",
 			"[29180,4132](29180,42,0)I'm (29222,50,0)not (29272,260,0)breathing, (30638,786,0)slowly (31424,586,0)bleeding",
 			"[29180,4132](29532,55,0)I'm (29587,55,0)not (29642,996,0)breathing (32010,1302,0)bleeding"},
@@ -262,15 +262,14 @@ func TestMigrateParenBackground(t *testing.T) {
 	yrc := yrcLine(1000, "Kills me slowly (slowly)") + "\n" + yrcLine(5000, "No parens here")
 	tr := "[00:01.00]慢慢杀死我（慢慢）\n[00:05.00]这里没有括号"
 	withEnrichCache(t, map[string]enrichEntry{
-		"a|split|":    {LyricsSource: "netease", Lyrics: bt(lrc), LyricsYRC: bt(yrc), LyricsTr: bt(tr)},
-		"b|manual|":   {LyricsSource: "netease", Lyrics: bt(lrc), LyricsYRC: bt(yrc), ManualLyrics: true},
-		"c|apple|":    {LyricsSource: "applemusic", Lyrics: bt(lrc), LyricsYRC: bt(yrc)},
-		"d|has-bg|":   {LyricsSource: "netease", Lyrics: bt(lrc), LyricsYRC: bt(yrc), LyricsBG: bt("[5000,600](5400,200,0)here\n")},
-		"e|no-yrc|":   {LyricsSource: "netease", Lyrics: bt(lrc)},
-		"f|speakers|": {LyricsSource: "musixmatch", Lyrics: bt(lrc), LyricsYRC: bt(yrc), LyricsSpeakers: &lyricSpeakers{For: lyricSpeakersFingerprint(lrc, yrc), LRC: []string{"v1", "v2"}}},
-		"g|picked|":   {LyricsSource: "qq", Lyrics: bt(lrc), LyricsYRC: bt(yrc), ManualPickSHA: manualPickFingerprint(lrc)},
-		"h|instr|":    {LyricsSource: "qq", Lyrics: bt(lrc), LyricsYRC: bt(yrc), Instrumental: true},
-		"i|local|":    {LyricsSource: localFileLyricsSource, Lyrics: bt(lrc), LyricsYRC: bt(yrc)},
+		"a|split|":  {LyricsSource: "netease", Lyrics: bt(lrc), LyricsYRC: bt(yrc), LyricsTr: bt(tr)},
+		"b|manual|": {LyricsSource: "netease", Lyrics: bt(lrc), LyricsYRC: bt(yrc), ManualLyrics: true},
+		"c|apple|":  {LyricsSource: "applemusic", Lyrics: bt(lrc), LyricsYRC: bt(yrc)},
+		"d|has-bg|": {LyricsSource: "netease", Lyrics: bt(lrc), LyricsYRC: bt(yrc), LyricsBG: bt("[5000,600](5400,200,0)here\n")},
+		"e|no-yrc|": {LyricsSource: "netease", Lyrics: bt(lrc)},
+		"g|picked|": {LyricsSource: "qq", Lyrics: bt(lrc), LyricsYRC: bt(yrc), ManualPickSHA: manualPickFingerprint(lrc)},
+		"h|instr|":  {LyricsSource: "qq", Lyrics: bt(lrc), LyricsYRC: bt(yrc), Instrumental: true},
+		"i|local|":  {LyricsSource: localFileLyricsSource, Lyrics: bt(lrc), LyricsYRC: bt(yrc)},
 		"j|old-split|": {LyricsSource: "deezer", Lyrics: bt("[00:01.00]Kills me slowly\n[00:05.00]No parens here"),
 			LyricsYRC: bt(yrcLine(1000, "Kills me slowly") + "\n" + yrcLine(5000, "No parens here")),
 			LyricsBG:  bt("[1000,600](1600,200,0)slowly\n"), LyricsTr: bt("[00:01.02]慢慢杀死我（慢慢）\n[00:05.00]这里（没有）")},
@@ -299,28 +298,11 @@ func TestMigrateParenBackground(t *testing.T) {
 		!e.LyricsBG.EqualString("[1000,800](1600,200,0)slowly\n[5000,600](5400,200,0)here\n") {
 		t.Errorf("已有背景人声的,剩下的括号行拆出来按行头并进去: %q / %q", e.Lyrics, e.LyricsBG)
 	}
-	if e := enrichCache["f|speakers|"]; e.LyricsSpeakers.For != lyricSpeakersFingerprint(e.Lyrics.String(), e.LyricsYRC.String()) ||
-		strings.Join(e.LyricsSpeakers.LRC, ",") != "v1,v2" {
-		t.Errorf("对唱标注的指纹要跟着换: %+v", e.LyricsSpeakers)
-	}
 	if e := enrichCache["j|old-split|"]; !e.LyricsTr.EqualString("[00:01.02]慢慢杀死我\n[00:05.00]这里（没有）") {
 		t.Errorf("以前拆过的条目:挂着背景人声的那行译文去掉括号段,别的行不动: %q", e.LyricsTr)
 	}
 	if e := enrichCache["g|picked|"]; e.ManualPickSHA != manualPickFingerprint(e.Lyrics.String()) || e.Lyrics.EqualString(lrc) {
 		t.Errorf("原样采纳的指纹要跟着换: %+v", e)
-	}
-}
-
-// 正文的括号背景人声拆走以后,Musixmatch 演唱者标注片段里还带着它,去掉括号里的字照样定位得上。
-func TestMusixmatchLineOwnersAfterParenSplit(t *testing.T) {
-	lines := []string{"It's whatever, it's whatever", "Next line"}
-	spans := []musixmatchPerformerSpan{
-		{text: "It's whatever (whatever), it's whatever", performers: []string{"mxm:artist:1"}},
-		{text: "(uh-huh)\nNext line", performers: []string{"mxm:artist:2"}},
-	}
-	owners := musixmatchLineOwners(lines, spans)
-	if speakerLineKey(owners[0]) != "mxm:artist:1" || speakerLineKey(owners[1]) != "mxm:artist:2" {
-		t.Errorf("owners = %v / %v", speakerLineKey(owners[0]), speakerLineKey(owners[1]))
 	}
 }
 

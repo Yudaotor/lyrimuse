@@ -35,7 +35,6 @@
       "kuwo": true,
       "lrclib": true,
       "lyricfind": true,
-      "musixmatch": true,
       "netease": true,
       "qq": true
     },
@@ -44,7 +43,6 @@
       "netease",
       "qq",
       "kugou",
-      "musixmatch",
       "lrclib",
       "amll",
       "lyricfind",
@@ -76,7 +74,6 @@
       "album": "七(国语新歌+精选)"
     },
     "lyricfind": {},
-    "musixmatch": {},
     "netease": {
       "netease": {
         "cover": "https://p2.music.126.net/m9cBIL-D3or61yMh9OPdqg==/82463372088816.jpg?param=800y800",

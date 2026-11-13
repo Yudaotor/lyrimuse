@@ -57,7 +57,7 @@ func TestMarkerLineDoesNotStripPeersOfCorroboration(t *testing.T) {
 	end := "[03:19.30]Yes sir\n"
 	batch := []lyricCandidate{
 		{source: "netease", lyrics: body(0) + end + "[03:52.70][Outro]\n", title: "Overtime"},
-		{source: "musixmatch", lyrics: body(250) + end, title: "Overtime", hasWordTiming: true},
+		{source: "deezer", lyrics: body(250) + end, title: "Overtime", hasWordTiming: true},
 		{source: "soda", lyrics: body(-300) + end, title: "Overtime"},
 	}
 	const dur = 273
@@ -74,7 +74,7 @@ func TestMarkerLineDoesNotStripPeersOfCorroboration(t *testing.T) {
 			best, bestScore = c.source, sc
 		}
 	}
-	if best != "musixmatch" {
-		t.Errorf("冠军 = %s,want 带逐字的 musixmatch", best)
+	if best != "deezer" {
+		t.Errorf("冠军 = %s,want 带逐字的 deezer", best)
 	}
 }

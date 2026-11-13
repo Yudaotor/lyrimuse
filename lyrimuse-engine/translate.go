@@ -26,7 +26,7 @@ import (
 
 // 机器翻译兜底:歌词源自带社区译文时一律用社区译文,没有才机翻补上。
 //
-// 为什么需要:lyrics_tr 目前只在网易云/Musixmatch 恰好带社区翻译时才有。实测本机缓存
+// 为什么需要:lyrics_tr 只在歌词源(网易云等)恰好带社区翻译时才有。实测本机缓存
 // 179 条有歌词的记录里带译文的 40 条(22%),而"歌词里没有中文"的外语歌 32 条里带译文的
 // 只有 1 条 —— 也就是听英文/日文歌时 97% 看不到翻译,恰恰是最需要翻译的场景。
 //
@@ -937,7 +937,7 @@ const (
 // features.json 由 maybeReloadFeatures 热重读,它发现语言变了就调 reapplyTranslationLanguage。
 // 只挂启动那一处的话,运行中改语言之后旧语言的机翻会一直留着(机翻开关关着时一直显示)。
 //
-// **只清 lyrics_tr_source == "machine" 的**。歌词源自带的社区译文(网易云/Musixmatch)
+// **只清 lyrics_tr_source == "machine" 的**。歌词源自带的社区译文(网易云等)
 // 质量高于机翻,而且清掉之后万一机翻失败(没网/超额),用户就一份译文都没有了;留着它
 // translationUsable 照样判它不可用、让机翻覆盖过去,那条路本来就通。
 //
@@ -1000,7 +1000,7 @@ func (e *enrichEntry) resetTranslationAttempts() {
 
 // needsTranslationBackfill 判断这条要不要机翻补一份译文。
 //
-// 已经有 lyrics_tr 就一律不动 —— 社区翻译(网易云/Musixmatch 的人工译文)质量高于机翻,
+// 已经有 lyrics_tr 就一律不动 —— 社区翻译(网易云等的人工译文)质量高于机翻,
 // 机翻只是"没有社区译文时总比没有强"的兜底,不是升级。
 func needsTranslationBackfill(e enrichEntry, key string) bool {
 	if !features().LyricsMachineTranslation {

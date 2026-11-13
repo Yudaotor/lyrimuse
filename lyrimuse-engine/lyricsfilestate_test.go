@@ -237,7 +237,7 @@ func TestMigrateStaleAppliedDecisions(t *testing.T) {
 	}
 	lrc := bt("[00:01.00]aaaa")
 	withEnrichCache(t, map[string]enrichEntry{
-		"stale":        {Lyrics: lrc, LyricsSource: "kugou", LyricsDecisionApplied: applied("musixmatch")},
+		"stale":        {Lyrics: lrc, LyricsSource: "kugou", LyricsDecisionApplied: applied("deezer")},
 		"consistent":   {Lyrics: lrc, LyricsSource: "kugou", LyricsDecisionApplied: applied("kugou")},
 		"manual":       {Lyrics: lrc, LyricsSource: "kugou", ManualLyrics: true, LyricsDecisionApplied: applied("qq")},
 		"choice":       {Lyrics: lrc, LyricsSource: "kugou", LyricsSourceChoice: "kugou", LyricsDecisionApplied: applied("qq")},

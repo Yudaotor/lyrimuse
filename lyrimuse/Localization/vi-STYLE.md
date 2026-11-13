@@ -38,7 +38,7 @@ Lyrimuse's UI strings live in `lyrimuse/Localization/Localizable.xcstrings`. The
 
 ## Names that stay as they are
 
-Lyrimuse, Last.fm, ListenBrainz, Discord, Telegram, Slack, Bark, ntfy, Server酱 (ServerChan), Apple Music, Spotify, YouTube Music, Musixmatch, Genius, Cloudflare, GitHub, Sparkle, Touch Bar, Dock, Finder, Scrobble, Safari, Chrome, Arc, Edge.
+Lyrimuse, Last.fm, ListenBrainz, Discord, Telegram, Slack, Bark, ntfy, Server酱 (ServerChan), Apple Music, Spotify, YouTube Music, Genius, Cloudflare, GitHub, Sparkle, Touch Bar, Dock, Finder, Scrobble, Safari, Chrome, Arc, Edge.
 Chinese music services use the names in the English string (NetEase Cloud Music, QQ Music, Kugou, Kuwo, Migu, Soda Music…).
 
 ## Glossary

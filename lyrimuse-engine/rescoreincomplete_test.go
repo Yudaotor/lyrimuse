@@ -16,7 +16,7 @@ const rescoreTestArtist = "Someone"
 const rescoreTestNewBody = "[00:05.00]Brand new first line\n[00:15.00]Brand new second line\n[00:25.00]Brand new third line\n" +
 	"[00:35.00]Brand new fourth line\n[00:45.00]Brand new fifth line\n[02:50.00]Brand new last line"
 
-// 走真实的 rescoreLyrics,歌词源只开 sources 里那几个,musixmatch 换成假的(返回 rescoreTestNewBody,并调一次 onFetch)。
+// 走真实的 rescoreLyrics,歌词源只开 sources 里那几个,deezer 换成假的(返回 rescoreTestNewBody,并调一次 onFetch)。
 // 可用源数够不上兜底轮门槛时会去解析歌手别名:MusicBrainz 那一路预先记成"查过、没有",走歌词源传输的请求拨号即失败,
 // iTunes 指到不监听的本机端口 —— 整轮不连外网。出站闸换一份令牌给足的:伴奏版标题会顺带跑标题反查,
 // 那几次搜索拨号即失败,但照样要等全局闸的限速令牌,一次重评能等两秒。
@@ -24,7 +24,7 @@ func setupRescoreTest(t *testing.T, sources []string, onFetch func(ctx context.C
 	t.Helper()
 	setupTranslateStart(t)
 	savedPlaying := enrichPlayingKey.Load()
-	savedResolve := musixmatchResolve
+	savedResolve := deezerResolve
 	savedGuard, savedBreaker, savedTransport := sharedHostGuard(), sharedLyricSourceBreaker(), sharedLyricSourceTransport()
 	savedLookup, savedSearch, savedCatalog := itunesLookupTracksURL, itunesSearchBaseURL, appleCatalogLookupURL
 	artistAliasMu.Lock()
@@ -34,7 +34,7 @@ func setupRescoreTest(t *testing.T, sources []string, onFetch func(ctx context.C
 	withCachedMBAliases(t, map[string][]string{rescoreTestArtist: nil})
 	t.Cleanup(func() {
 		enrichPlayingKey.Store(savedPlaying)
-		musixmatchResolve = savedResolve
+		deezerResolve = savedResolve
 		setSharedHostGuard(savedGuard)
 		setSharedLyricSourceBreaker(savedBreaker)
 		setSharedLyricSourceTransport(savedTransport)
@@ -55,32 +55,32 @@ func setupRescoreTest(t *testing.T, sources []string, onFetch func(ctx context.C
 	guard.rateFor = func(string) hostRate { return hostRate{perSec: 1000, burst: 1000} }
 	setSharedHostGuard(guard)
 	setSharedLyricSourceBreaker(newLyricSourceBreaker(time.Now))
-	resetMusixmatchCacheForTest(t)
+	resetDeezerCacheForTest(t)
 	enabled := map[string]bool{}
 	for _, s := range sources {
 		enabled[s] = true
 	}
 	featuresRef().LyricsSources = enabled
 	featuresRef().LyricsAutoUpgrade = true
-	musixmatchResolve = func(ctx context.Context, artist, title string, durationSecs float64, trLang, isrc string) musixmatchResult {
+	deezerResolve = func(ctx context.Context, artist, title, album string, durationSecs float64, isrc string) deezerResult {
 		if onFetch != nil {
 			onFetch(ctx)
 		}
-		return musixmatchResult{lrc: rescoreTestNewBody, title: title, artist: artist, durationSecs: 180}
+		return deezerResult{lyrics: rescoreTestNewBody, title: title, artist: artist, durationSecs: 180}
 	}
 }
 
 // 有源被跳过:照常换上新冠军,但打分版本不追平、返回 deferred(全量扫库据此收尾再试),跳过名单如实落下。
-// 被跳过的那一笔由假 musixmatch 记在这一轮的 round 上 —— 跟熔断冷却 / 后台暂停跳过时写的是同一个地方。
+// 被跳过的那一笔由假 deezer 记在这一轮的 round 上 —— 跟熔断冷却 / 后台暂停跳过时写的是同一个地方。
 func TestRescoreWithSkippedSourceDoesNotCatchUpVersion(t *testing.T) {
-	setupRescoreTest(t, []string{"musixmatch"}, func(ctx context.Context) {
+	setupRescoreTest(t, []string{"deezer"}, func(ctx context.Context) {
 		lyricSourceRoundFrom(ctx).markSkipped("lrclib")
 	})
 	const artist, title, album = rescoreTestArtist, "Skip Song", "Some Album"
 	key := enrichKey(artist, title, album)
 	enrichMu.Lock()
 	enrichCache = map[string]enrichEntry{key: {
-		Lyrics: bt("[00:05.00]Old line one\n[00:15.00]Old line two"), LyricsSource: "musixmatch", LyricsScore: 10,
+		Lyrics: bt("[00:05.00]Old line one\n[00:15.00]Old line two"), LyricsSource: "deezer", LyricsScore: 10,
 		LyricsScoringVersion: lyricsScoringVersion - 1,
 	}}
 	enrichMu.Unlock()
@@ -102,7 +102,7 @@ func TestRescoreWithSkippedSourceDoesNotCatchUpVersion(t *testing.T) {
 	if !slices.Equal(e.LyricsSourcesSkipped, []string{"lrclib"}) {
 		t.Errorf("跳过名单 %v,want [lrclib]", e.LyricsSourcesSkipped)
 	}
-	if e.LyricsDecision == nil || !slices.Contains(e.LyricsDecision.SourcesResponded, "musixmatch") {
+	if e.LyricsDecision == nil || !slices.Contains(e.LyricsDecision.SourcesResponded, "deezer") {
 		t.Errorf("可判的一轮照常写决策记录,got %+v", e.LyricsDecision)
 	}
 }
@@ -110,14 +110,14 @@ func TestRescoreWithSkippedSourceDoesNotCatchUpVersion(t *testing.T) {
 // 当前这份有逐字、打分版本落后(rescoreKeepsCurrent 管不着),这一轮冠军是另一份没有逐字的:留着当前这份,
 // 决策记录照写、标成没采用,这一轮完整就照常追平打分版本。
 func TestRescoreKeepsWordTimingOverAPlainWinner(t *testing.T) {
-	setupRescoreTest(t, []string{"musixmatch"}, nil)
+	setupRescoreTest(t, []string{"deezer"}, nil)
 	const artist, title, album = rescoreTestArtist, "Timed Song", "Some Album"
 	key := enrichKey(artist, title, album)
 	const oldBody = "[00:05.00]Old line one\n[00:15.00]Old line two"
 	const oldYRC = "[5000,1000](5000,500,0)Old(5500,500,0)line"
 	enrichMu.Lock()
 	enrichCache = map[string]enrichEntry{key: {
-		Lyrics: bt(oldBody), LyricsYRC: bt(oldYRC), LyricsSource: "musixmatch", LyricsScore: 900,
+		Lyrics: bt(oldBody), LyricsYRC: bt(oldYRC), LyricsSource: "deezer", LyricsScore: 900,
 		LyricsScoringVersion: lyricsScoringVersion - 1,
 	}}
 	enrichMu.Unlock()
@@ -127,7 +127,7 @@ func TestRescoreKeepsWordTimingOverAPlainWinner(t *testing.T) {
 	enrichMu.Lock()
 	e := enrichCache[key]
 	enrichMu.Unlock()
-	if !e.Lyrics.EqualString(oldBody) || !e.LyricsYRC.EqualString(oldYRC) || e.LyricsSource != "musixmatch" {
+	if !e.Lyrics.EqualString(oldBody) || !e.LyricsYRC.EqualString(oldYRC) || e.LyricsSource != "deezer" {
 		t.Fatalf("冠军没有逐字时不该换掉有逐字的这份: lyrics=%q yrc=%q", e.Lyrics, e.LyricsYRC)
 	}
 	if e.lyricsScoring() != currentLyricsScoring {
@@ -141,17 +141,17 @@ func TestRescoreKeepsWordTimingOverAPlainWinner(t *testing.T) {
 // 后台重评与补空发查询之前跟首次解析一样先繁转简(见 searchQueryFields):缓存 key 是原样标签,拿繁体去搜
 // 国内几家的简体索引整个查不到。
 func TestBackgroundRetriesSearchWithNormalizedQuery(t *testing.T) {
-	setupRescoreTest(t, []string{"musixmatch"}, nil)
+	setupRescoreTest(t, []string{"deezer"}, nil)
 	var asked []string
-	musixmatchResolve = func(ctx context.Context, artist, title string, durationSecs float64, trLang, isrc string) musixmatchResult {
+	deezerResolve = func(ctx context.Context, artist, title, album string, durationSecs float64, isrc string) deezerResult {
 		asked = append(asked, title)
-		return musixmatchResult{lrc: rescoreTestNewBody, title: title, artist: artist, durationSecs: 180}
+		return deezerResult{lyrics: rescoreTestNewBody, title: title, artist: artist, durationSecs: 180}
 	}
 	const artist, title, album = rescoreTestArtist, "愛情轉移", "認了吧"
 	key := enrichKey(artist, title, album)
 	enrichMu.Lock()
 	enrichCache = map[string]enrichEntry{key: {
-		Lyrics: bt("[00:05.00]Old line one\n[00:15.00]Old line two"), LyricsSource: "musixmatch",
+		Lyrics: bt("[00:05.00]Old line one\n[00:15.00]Old line two"), LyricsSource: "deezer",
 		LyricsScoringVersion: lyricsScoringVersion - 1,
 	}}
 	enrichMu.Unlock()
@@ -177,7 +177,7 @@ func TestBackgroundRetriesSearchWithNormalizedQuery(t *testing.T) {
 
 // 不可判(当前歌词的来源 lrclib 正在熔断冷却、这一轮没应答):不改歌词、不写决策记录,三份名单保留上一轮的。
 func TestRescoreUndecidableKeepsSourceLists(t *testing.T) {
-	setupRescoreTest(t, []string{"musixmatch", "lrclib"}, nil)
+	setupRescoreTest(t, []string{"deezer", "lrclib"}, nil)
 	b := sharedLyricSourceBreaker()
 	for range 2 {
 		b.observe("lrclib.net", errors.New("connection reset"), 0, "")
@@ -188,11 +188,11 @@ func TestRescoreUndecidableKeepsSourceLists(t *testing.T) {
 	const artist, title, album = rescoreTestArtist, "Keep Song", "Some Album"
 	key := enrichKey(artist, title, album)
 	oldBody := "[00:05.00]Old line one\n[00:15.00]Old line two"
-	prevDecision := &lyricsDecision{Path: lyricsDecisionPathRescore, Winner: "lrclib", SourcesResponded: []string{"lrclib", "musixmatch"}}
+	prevDecision := &lyricsDecision{Path: lyricsDecisionPathRescore, Winner: "lrclib", SourcesResponded: []string{"lrclib", "deezer"}}
 	enrichMu.Lock()
 	enrichCache = map[string]enrichEntry{key: {
 		Lyrics: bt(oldBody), LyricsSource: "lrclib", LyricsScore: 10, LyricsScoringVersion: lyricsScoringVersion - 1,
-		LyricsSourcesSeen: []string{"lrclib", "musixmatch"}, LyricsSourcesResponded: []string{"lrclib", "musixmatch"},
+		LyricsSourcesSeen: []string{"lrclib", "deezer"}, LyricsSourcesResponded: []string{"lrclib", "deezer"},
 		LyricsDecision: prevDecision,
 	}}
 	enrichMu.Unlock()
@@ -208,7 +208,7 @@ func TestRescoreUndecidableKeepsSourceLists(t *testing.T) {
 	if !e.Lyrics.EqualString(oldBody) || e.LyricsSource != "lrclib" {
 		t.Errorf("不可判时不该换词,got source=%q", e.LyricsSource)
 	}
-	if !slices.Equal(e.LyricsSourcesResponded, []string{"lrclib", "musixmatch"}) || !slices.Equal(e.LyricsSourcesSeen, []string{"lrclib", "musixmatch"}) {
+	if !slices.Equal(e.LyricsSourcesResponded, []string{"lrclib", "deezer"}) || !slices.Equal(e.LyricsSourcesSeen, []string{"lrclib", "deezer"}) {
 		t.Errorf("应答 / 出现过名单被残缺的一轮盖掉了: responded=%v seen=%v", e.LyricsSourcesResponded, e.LyricsSourcesSeen)
 	}
 	if len(e.LyricsSourcesSkipped) != 0 {
@@ -229,8 +229,8 @@ func TestLyricSourcesWorthAliasRetryDropsSkippedSources(t *testing.T) {
 		setSharedLyricSourceBreaker(savedBreaker)
 	})
 	setSharedLyricSourceBreaker(newLyricSourceBreaker(time.Now))
-	featuresRef().LyricsSources = map[string]bool{"qq": true, "lrclib": true, "musixmatch": true}
-	results := []scoredLyricCandidateResult{{Source: "musixmatch", Score: 500}}
+	featuresRef().LyricsSources = map[string]bool{"qq": true, "lrclib": true, "deezer": true}
+	results := []scoredLyricCandidateResult{{Source: "deezer", Score: 500}}
 	ctx, round := withLyricSourceRound(context.Background())
 	if got := lyricSourcesWorthAliasRetry(ctx, results); !slices.Equal(got, []string{"qq", "lrclib"}) {
 		t.Fatalf("没有跳过时缺席的两个源都该补查,got %v", got)

@@ -252,12 +252,12 @@ func runSettingsInteractionTests() {
     // 「歌词来源」卡的排列:中文用户中文源在前,其余国外源在前;组内顺序不变。
     do {
         typealias R = LyricsSourceRegion
-        let all = ["kugou", "netease", "qq", "musixmatch", "lrclib", "amll", "lyricfind", "kuwo", "migu", "deezer", "applemusic", "soda"]
+        let all = ["kugou", "netease", "qq", "lrclib", "amll", "lyricfind", "kuwo", "migu", "deezer", "applemusic", "soda"]
         expectEqual(R.displayOrder(all, chineseFirst: true),
-                    ["kugou", "netease", "qq", "kuwo", "migu", "soda", "musixmatch", "lrclib", "amll", "lyricfind", "deezer", "applemusic"],
+                    ["kugou", "netease", "qq", "kuwo", "migu", "soda", "lrclib", "amll", "lyricfind", "deezer", "applemusic"],
                     "来源排列: 中文用户中文源在前,两组内保持原顺序")
         expectEqual(R.displayOrder(all, chineseFirst: false),
-                    ["musixmatch", "lrclib", "amll", "lyricfind", "deezer", "applemusic", "kugou", "netease", "qq", "kuwo", "migu", "soda"],
+                    ["lrclib", "amll", "lyricfind", "deezer", "applemusic", "kugou", "netease", "qq", "kuwo", "migu", "soda"],
                     "来源排列: 其余用户国外源在前")
         expectEqual(R.prefersChineseSources(appLanguageOverride: "en", preferredLanguage: "zh-Hans-CN"), false,
                     "来源排列: 设置里明确选了英文界面,按非中文")
@@ -269,6 +269,37 @@ func runSettingsInteractionTests() {
                     "来源排列: 跟随系统时,日语系统算非中文(界面虽退回简体,更用得上国外源)")
         expectEqual(R.prefersChineseSources(appLanguageOverride: nil, preferredLanguage: nil), false,
                     "来源排列: 读不到系统语言时按非中文")
+    }
+
+    // 老设置文件里已下线的源名:读的时候剔掉,其余源名和顺序原样;写回不再带它,但更新的版本加的未知源名照旧保留。
+    do {
+        typealias Retired = RetiredLyricsSources
+        let retired = Retired.names.sorted()
+        expectEqual(retired.isEmpty, false, "下线源名: 名单不为空")
+        let legacy = #"{"lyrics_sources":["kugou","lrclib","\#(retired[0])","netease","futuresource"],"#
+            + #""lyrics_source_order":["qq","\#(retired[0])","kugou","player_local","futuresource"]}"#
+        let parsed = (try? JSONSerialization.jsonObject(with: Data(legacy.utf8))) as? [String: Any]
+        let sources = Retired.dropping(parsed?["lyrics_sources"] as? [String])
+        let order = Retired.dropping(parsed?["lyrics_source_order"] as? [String])
+        expectEqual(sources, ["kugou", "lrclib", "netease", "futuresource"], "下线源名: 启用列表剔掉它,其余原样(含未知的新源名)")
+        expectEqual(order, ["qq", "kugou", "player_local", "futuresource"], "下线源名: 顺序表剔掉它,其余顺序不变")
+        expectEqual(Retired.dropping(nil), nil, "下线源名: 文件里没写这个键时仍是 nil(按全部启用 / 默认顺序)")
+        expectEqual(Retired.dropping(retired), [], "下线源名: 只剩下线源时是空列表(读设置时按全部启用)")
+        let written = try? JSONSerialization.data(withJSONObject: ["lyrics_sources": sources ?? [], "lyrics_source_order": order ?? []],
+                                                  options: [.sortedKeys])
+        expectEqual(written.map { String(decoding: $0, as: UTF8.self).contains(retired[0]) }, false, "下线源名: 写回的内容里不再有它")
+
+        let settingsDir = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("lyrimuse/Settings")
+        let store = (try? String(contentsOf: settingsDir.appendingPathComponent("FeatureSettingsStore.swift"), encoding: .utf8)) ?? ""
+        expectEqual(sourceHas(store, "var lyricsSources: [String]?") && sourceHas(store, "var lyricsSourceOrder: [String]?"), true,
+                    "下线源名: 设置文件里的源名按字符串解码,认不得的名字不会让整份设置解码失败")
+        expectEqual(sourceHas(store, "let storedSources = RetiredLyricsSources.dropping(f.lyricsSources)")
+                    && sourceHas(store, "let storedOrder = RetiredLyricsSources.dropping(f.lyricsSourceOrder)")
+                    && sourceHas(store, "(storedOrder ?? []).compactMap(LyricsPriorityEntry.init(rawValue:)))")
+                    && !sourceHas(store, "(f.lyricsSources ?? []).compactMap(")
+                    && !sourceHas(store, "(f.lyricsSourceOrder ?? []).compactMap("), true,
+                    "下线源名: 读设置时启用列表、顺序表、未知名字都按剔过的那份算")
     }
 
     // 添加渠道时平台的排列:不分组,中文用户国内平台在前,其余用户国外平台在前;通用 Webhook 排最后。加上 generic 必须

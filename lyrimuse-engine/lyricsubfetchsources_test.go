@@ -5,10 +5,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"net/http/httptest"
 	"strings"
 	"testing"
-	"time"
 )
 
 // 各源「排在前面的没问成、退到后面的」时记一次没问成,这一份不进缓存;问全了照常算完整。见 lyricsubfetch.go。
@@ -177,49 +175,6 @@ func TestApplemusicPlainOnlyCachedOnlyWhenComplete(t *testing.T) {
 	applemusicMu.Unlock()
 	if n != 0 {
 		t.Fatal("搜索没问成时退下来的纯文本不该缓存")
-	}
-}
-
-// Musixmatch:说有字幕却没问成(拒绝码、连不上)记一次;404 是这首没有,不记。
-func TestMusixmatchSubtitleFailureIsIncomplete(t *testing.T) {
-	t.Cleanup(func() { musixmatchSetLastFailureReason("") })
-	var code string
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Write([]byte(`{"message":{"header":{"status_code":` + code + `},"body":{}}}`))
-	}))
-	defer srv.Close()
-	savedBases := musixmatchBases
-	musixmatchBases = []string{srv.URL + "/"}
-	t.Cleanup(func() { musixmatchBases = savedBases })
-	musixmatchTokenMu.Lock()
-	savedTok, savedExp := musixmatchToken, musixmatchTokenExpiry
-	musixmatchToken, musixmatchTokenExpiry = "tok", time.Now().Add(time.Hour)
-	musixmatchTokenMu.Unlock()
-	t.Cleanup(func() {
-		musixmatchTokenMu.Lock()
-		musixmatchToken, musixmatchTokenExpiry = savedTok, savedExp
-		musixmatchTokenMu.Unlock()
-	})
-	for _, c := range []struct {
-		code         string
-		wantComplete bool
-	}{
-		{"500", false}, {"404", true},
-	} {
-		code = c.code
-		ctx, sub := withLyricSubFetch(context.Background())
-		if lrc := musixmatchSubtitleLRC(ctx, 1); lrc != "" {
-			t.Fatalf("%s: 应为空: %q", c.code, lrc)
-		}
-		if got := sub.complete(ctx); got != c.wantComplete {
-			t.Errorf("status_code %s: complete = %v,期望 %v", c.code, got, c.wantComplete)
-		}
-	}
-	srv.Close()
-	ctx, sub := withLyricSubFetch(context.Background())
-	musixmatchSubtitleLRC(ctx, 1)
-	if sub.complete(ctx) {
-		t.Error("连不上也应记下")
 	}
 }
 

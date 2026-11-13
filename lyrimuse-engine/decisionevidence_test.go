@@ -76,7 +76,7 @@ func TestQueriesTriedReachDecisionJSON(t *testing.T) {
 	splitCtx := withLyricQueryReason(ctx, lyricQueryReasonTitleSplit)
 	log.record("Musiq Soulchild", "Buddy", lyricQueryReasonFrom(splitCtx), "", sortedLyricSourceOnly(splitCtx))
 	// ③ 别名轮 + 定向重查:源名单必须**按 lyricSourceNames 的规范顺序**落盘,不能是 map 随机序。
-	aliasCtx := withLyricQueryReason(withLyricSourceOnly(ctx, []string{"musixmatch", "qq", "kugou"}),
+	aliasCtx := withLyricQueryReason(withLyricSourceOnly(ctx, []string{"deezer", "qq", "kugou"}),
 		lyricQueryReasonAliasMissing)
 	log.record("JW", "NOT YOUR FAULT", lyricQueryReasonFrom(aliasCtx), "", sortedLyricSourceOnly(aliasCtx))
 
@@ -90,8 +90,8 @@ func TestQueriesTriedReachDecisionJSON(t *testing.T) {
 	if got[1].Reason != lyricQueryReasonTitleSplit || got[1].Artist != "Musiq Soulchild" {
 		t.Errorf("拆分那一组不对: %+v", got[1])
 	}
-	// 定序:qq → kugou → musixmatch(lyricSourceNames 的顺序),不是字典序、更不是 map 序。
-	if want := []string{"qq", "kugou", "musixmatch"}; strings.Join(got[2].Sources, ",") != strings.Join(want, ",") {
+	// 定序:qq → kugou → deezer(lyricSourceNames 的顺序),不是字典序、更不是 map 序。
+	if want := []string{"qq", "kugou", "deezer"}; strings.Join(got[2].Sources, ",") != strings.Join(want, ",") {
 		t.Errorf("别名轮的源名单 = %v, want %v —— 必须按 lyricSourceNames 定序,否则同一轮解析每次序列化出不同 JSON",
 			got[2].Sources, want)
 	}
@@ -107,7 +107,7 @@ func TestQueriesTriedReachDecisionJSON(t *testing.T) {
 		`"queries_tried":[`,
 		`{"artist":"音樂頑童","title":"Musiq Soulchild - Buddy"}`, // 首轮:reason/sources 都 omitempty
 		`"reason":"title-split"`,
-		`"reason":"alias-missing","sources":["qq","kugou","musixmatch"]`,
+		`"reason":"alias-missing","sources":["qq","kugou","deezer"]`,
 	} {
 		if !strings.Contains(s, needle) {
 			t.Errorf("序列化后的存档里找不到 %s:\n%s", needle, s)

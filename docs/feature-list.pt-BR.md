@@ -71,9 +71,9 @@ Estes recursos vêm desativados depois da instalação. Ative-os antes nos ajust
 
 <a id="feature-lyric-sources"></a>
 
-### 15 fontes de letras, consultadas automaticamente
+### 14 fontes de letras, consultadas automaticamente
 
-NetEase Cloud Music, QQ Music, Kugou, Kuwo, Migu, Musixmatch, LRCLIB, LyricFind, Deezer, AMLL, Soda Music, VIBE, Genie, PetitLyrics e Apple Music. Cada fonte pode ser desativada, reordenada ou testada para ver se está acessível agora.
+NetEase Cloud Music, QQ Music, Kugou, Kuwo, Migu, LRCLIB, LyricFind, Deezer, AMLL, Soda Music, VIBE, Genie, PetitLyrics e Apple Music. Cada fonte pode ser desativada, reordenada ou testada para ver se está acessível agora.
 
 - Ativado por padrão
 - Ajustes: Letra › Origem › Fontes de letras
@@ -216,7 +216,7 @@ Toda letra encontrada fica em cache no seu Mac e aparece sem conexão. Cada mús
 
 ### Tradução
 
-As traduções que vêm com a letra aparecem abaixo de cada linha. NetEase Cloud Music, QQ Music e Kugou traduzem para o chinês; o Musixmatch e a tradução automática seguem o idioma da tradução que você escolher, entre 17. A letra flutuante, a janela da letra, o notch, a barra de menus e a Touch Bar decidem cada um se mostram a tradução. Aparece por padrão quando os idiomas do seu Mac incluem o chinês.
+As traduções que vêm com a letra aparecem abaixo de cada linha. NetEase Cloud Music, QQ Music e Kugou traduzem para o chinês; a tradução automática segue o idioma da tradução que você escolher, entre 17. A letra flutuante, a janela da letra, o notch, a barra de menus e a Touch Bar decidem cada um se mostram a tradução. Aparece por padrão quando os idiomas do seu Mac incluem o chinês.
 
 - Ajustes: Letra › Idioma › Idioma da tradução
 - Ajustes: Exibição da letra › Letra flutuante › Conteúdo › Tradução

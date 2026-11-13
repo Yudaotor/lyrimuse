@@ -26,7 +26,6 @@ var upstreamIdentities = []upstreamIdentity{
 	{"QQ 音乐 lyric_download 版本号", "qqfallback.go qqLyricDownloadAt", "15/82", "2026-10-02", "备用链取不到 QRC,逐字退成逐行"},
 	{"QQ 音乐 smartbox cv", "qq.go qqSmartboxAt", "4747474", "2026-09-25", "联想搜索不给结果"},
 	{"YouTube Music 安卓客户端版本", "ytmusic.go ytmusicMobileClientVersion", "7.21.50", "2026-08-31", "lyricfind 带时间戳歌词 404,退成纯文本"},
-	{"Musixmatch app_id", "musixmatch.go musixmatchAppID", "mac-ios-v2.0", "2026-09-28", "拿不到 usertoken 或回 captcha,整源暂停"},
 	{"咪咕 jadeite 签名盐", "migu.go miguJadeiteSignSalt", "yyapp2d1", "2026-10-01", "备用搜索签名不过,回落主搜索"},
 	{"汽水音乐搜索 aid", "soda.go sodaSearchAID", "386088", "2026-09-21", "搜索回空,回落分享页"},
 	{"酷狗网页版搜索签名盐", "kugousongpage.go kugouSearchSignSalt", "NVPh5oo7", "2026-10-23", "签名搜索回 status 0,酷狗在放的歌没有网页歌曲页"},

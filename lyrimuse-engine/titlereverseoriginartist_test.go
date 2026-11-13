@@ -97,16 +97,8 @@ func TestTrustedRecordingISRCFallsBackToDeezer(t *testing.T) {
 func TestTitleReverseOriginArtistRound(t *testing.T) {
 	saved := features()
 	t.Cleanup(func() { setFeatures(saved) })
-	featuresRef().LyricsSources = map[string]bool{"musixmatch": true, "lrclib": true}
-	resetMusixmatchCacheForTest(t)
+	featuresRef().LyricsSources = map[string]bool{"lrclib": true}
 	var mu sync.Mutex
-	var mxArtists []string
-	musixmatchResolve = func(_ context.Context, artist, title string, _ float64, _, _ string) musixmatchResult {
-		mu.Lock()
-		mxArtists = append(mxArtists, artist+"/"+title)
-		mu.Unlock()
-		return musixmatchResult{}
-	}
 	withTestDevToken(t)
 	resetOriginTitleState(t)
 	resetSourceCachesForTest(t)
@@ -155,9 +147,9 @@ func TestTitleReverseOriginArtistRound(t *testing.T) {
 		t.Fatalf("lrclib 该拿原产地署名补上一条带改写记号的候选: %+v", got)
 	}
 	mu.Lock()
-	gets, mx := append([]string(nil), lrclibGets...), append([]string(nil), mxArtists...)
+	gets := append([]string(nil), lrclibGets...)
 	mu.Unlock()
-	for _, g := range append(gets, mx...) {
+	for _, g := range gets {
 		if g != "Official髭男dism/115万キロのフィルム" {
 			t.Errorf("这一轮只拿原产地署名 + 原产地曲名问(本地署名那一遍反查已经问过): %q", g)
 		}
@@ -180,7 +172,6 @@ func TestTitleReverseOriginArtistRound(t *testing.T) {
 	}
 
 	full := append(base("JPC841800603"),
-		scoredLyricCandidateResult{Source: "musixmatch", Score: 800, Lyrics: originJapaneseLRC},
 		scoredLyricCandidateResult{Source: "lrclib", Score: 800, Lyrics: originJapaneseLRC})
 	if _, kept := titleReverseOriginArtistRound(qqRoundCtx(), "Official胡子男dism", "115 Million Kilometer Film", "Escaparade", 324.7, samples,
 		"115万キロのフィルム", neteaseInfo{}, full, nil); len(kept) != len(full) {

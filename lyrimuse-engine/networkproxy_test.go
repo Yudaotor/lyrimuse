@@ -172,7 +172,7 @@ func TestFallbackClientsFollowProxySetting(t *testing.T) {
 	t.Cleanup(func() { fallbackProxyURL = saved })
 	req, _ := http.NewRequest(http.MethodGet, "https://example.com/", nil)
 	for name, c := range map[string]*http.Client{
-		"doh": dohHTTPClient(nil), "telegram": telegramHTTPClient, "relay": relayHTTPClient,
+		"telegram": telegramHTTPClient, "relay": relayHTTPClient,
 		"relaySeed": relaySeedClient, "lb": lbHTTPClient(),
 		"lyricSource": {Transport: lyricSourceFallbackFor("lrclib.net")},
 	} {
@@ -192,13 +192,6 @@ func TestFallbackClientsFollowProxySetting(t *testing.T) {
 		if got, _ := via.Proxy(req); got != want {
 			t.Errorf("%s: 走代理时拨的不是设置里的代理, 得到 %v", name, got)
 		}
-	}
-	if !musixmatchProxyAvailable() {
-		t.Error("Musixmatch 被拦时判断有没有代理也读设置")
-	}
-	fallbackProxyURL = func() *neturl.URL { return nil }
-	if musixmatchProxyAvailable() {
-		t.Error("设置给不出代理时 Musixmatch 不改走代理")
 	}
 }
 

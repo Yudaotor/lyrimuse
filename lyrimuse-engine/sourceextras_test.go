@@ -81,20 +81,6 @@ func TestApplemusicKeyedLRCDropsBackgroundVocals(t *testing.T) {
 	}
 }
 
-func TestMusixmatchRomaLanguage(t *testing.T) {
-	cases := map[string]string{
-		"[00:01.00]夢ならばどれほどよかったでしょう":  "rj",
-		"[00:01.00]아침은 너무 멀어":         "rk",
-		"[00:01.00]故事的小黄花":            "rz",
-		"[00:01.00]Look at the stars": "",
-	}
-	for lrc, want := range cases {
-		if got := musixmatchRomaLanguage(lrc); got != want {
-			t.Errorf("%s: got %q, want %q", lrc, got, want)
-		}
-	}
-}
-
 func TestUsableRomaForResult(t *testing.T) {
 	ko := "[00:01.00]아침은 너무 멀어\n[00:02.00]보고 싶어\n[00:03.00]오늘도"
 	koRoma := "[00:01.00]achimeun neomu meoreo\n[00:02.00]bogo sipeo\n[00:03.00]oneuldo"
@@ -155,8 +141,6 @@ func TestCandidateCoverOriginals(t *testing.T) {
 		{neteaseCoverUpgrade("https://p1.music.126.net/abc==/1099.jpg?param=800y800"), "https://p1.music.126.net/abc==/1099.jpg" + neteaseCoverQuery},
 		{neteaseCoverUpgrade("https://p1.music.126.net/abc==/1099.jpg" + neteaseCoverQuery), "https://p1.music.126.net/abc==/1099.jpg" + neteaseCoverQuery},
 		{neteaseCoverUpgrade("https://example.com/a.jpg?param=800y800"), "https://example.com/a.jpg?param=800y800"},
-		{musixmatchLargestCover(musixmatchTrackRow{AlbumCoverart500x500: "https://s.mxmcdn.net/images-storage/albums2/1/41606678_500_500.jpg"}), "https://s.mxmcdn.net/images-storage/albums2/1/41606678_800_800.jpg"},
-		{musixmatchLargestCover(musixmatchTrackRow{AlbumCoverart500x500: "https://s.mxmcdn.net/a_500_500.jpg", AlbumCoverart800x800: "https://s.mxmcdn.net/b_800_800.jpg"}), "https://s.mxmcdn.net/b_800_800.jpg"},
 		{ytmusicOriginalThumbnail("https://yt3.googleusercontent.com/C_Wsvrqk0E7n=w120-h120-l90-rj"), "https://yt3.googleusercontent.com/C_Wsvrqk0E7n=s0"},
 		{ytmusicOriginalThumbnail("https://i.ytimg.com/vi/x/hqdefault.jpg"), "https://i.ytimg.com/vi/x/hqdefault.jpg"},
 		{kkboxOriginalImage("https://i.kfs.io/album/global/276412593,0v1/fit/600x600.jpg"), "https://i.kfs.io/album/global/276412593,0v1/original.jpg"},
@@ -176,9 +160,6 @@ func TestRomaScriptOfMixedKpop(t *testing.T) {
 		"[00:17.00]Don't want no riddle\n[00:19.00]말해줘 say it back\n[00:21.00]Oh, say it ditto\n[00:23.00]아침은 너무 멀어"
 	if got := romaScriptOf(ditto); got != scriptHangul {
 		t.Fatalf("got %v, want hangul", got)
-	}
-	if got := musixmatchRomaLanguage(ditto); got != "rk" {
-		t.Fatalf("got %q, want rk", got)
 	}
 	if romaScriptOf("[00:01.00]Look at the stars\n[00:02.00]Look how they shine for you") != scriptNone {
 		t.Fatal("英文歌不需要罗马音")

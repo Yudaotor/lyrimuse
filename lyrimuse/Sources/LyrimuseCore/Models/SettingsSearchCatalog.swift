@@ -354,7 +354,7 @@ public enum SettingsSearchCatalog {
 
     public static let entries: [SettingsSearchEntry] = [
         // ---- 歌词 › 来源 ----
-        lyrics("fetch", "歌词来源", kw: ["歌词源", "网易云音乐", "QQ音乐", "酷狗音乐", "Musixmatch", "LRCLIB", "AMLL",
+        lyrics("fetch", "歌词来源", kw: ["歌词源", "网易云音乐", "QQ音乐", "酷狗音乐", "LRCLIB", "AMLL",
                                       "LyricFind", "酷我音乐", "咪咕音乐", "Deezer", "Apple Music", "汽水音乐",
                                       "测试", "顺序"]),
         lyrics("fetch", "匹配算法", kw: ["智能", "顺序优先", "打分"]),

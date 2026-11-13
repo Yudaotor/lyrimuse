@@ -21,7 +21,6 @@ func TestUpstreamIdentitiesMatchCode(t *testing.T) {
 		"qq.go qqCommBase":                      fmt.Sprint(qqCommBase["cv"]),
 		"qqfallback.go qqSearchComm":            fmt.Sprint(qqSearchComm["cv"]),
 		"ytmusic.go ytmusicMobileClientVersion": ytmusicMobileClientVersion,
-		"musixmatch.go musixmatchAppID":         musixmatchAppID,
 		"migu.go miguJadeiteSignSalt":           miguJadeiteSignSalt[:8],
 		"soda.go sodaSearchAID":                 sodaSearchAID,
 		"kugousongpage.go kugouSearchSignSalt":  kugouSearchSignSalt[:8],

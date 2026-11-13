@@ -1,9 +1,9 @@
 {
-  "id": "vertag-guitar-version",
-  "category": "version-tag-mismatch",
-  "note": "版本限定词:本地是 Guitar Version,musixmatch 那条是演唱会经典实录(限定词集合对不上,-600);QQ 那条是原版录音室(自报时长与末句都对不上,durationOff + sourceDurationOff)——正确答案是网易云的 (Guitar) 版",
+  "id": "timeline-offset-guitar-version",
+  "category": "timeline-offset",
+  "note": "本地是 Guitar Version:QQ 那条是原版录音室,自报时长与末句都对不上(durationOff + sourceDurationOff),时间轴还整体平移(timelineOffset);正确答案是网易云的 (Guitar) 版",
   "label_evidence": {
-    "consensus_peers": 4,
+    "consensus_peers": 3,
     "title_accepted": true,
     "version_tags_ok": true,
     "source_duration_delta_pct": 0.2773681189485736,
@@ -35,7 +35,6 @@
       "kuwo": true,
       "lrclib": true,
       "lyricfind": true,
-      "musixmatch": true,
       "netease": true,
       "qq": true
     },
@@ -44,7 +43,6 @@
       "netease",
       "qq",
       "kugou",
-      "musixmatch",
       "lrclib",
       "amll",
       "lyricfind",
@@ -77,13 +75,6 @@
       "duration_secs": 306.453333
     },
     "lyricfind": {},
-    "musixmatch": {
-      "lyrics": "[00:36.42] ：MG CG CG MG CG CG MG CG CG MG CG\n[00:58.48] 䎳䒅㴭䵃䠮䅄㔕㳪㕠㟌 㔕㠀㻦䅜䵪㔕䒅䄺㲻\n[01:08.88] 㻦䛈㩲㾶䎳䘄㼰䒑䒜㗂 㻦䛈㩲㾶䎳䪄㟌䂮䒑䱝 䜰䒅䨽㪶\n[01:26.46] 㾶䎳䶡䘄䳒䌩 㽋㒱䱥㜚 㼣䛈㩲㬘㬘䒅 䈖䵪䎳䒅䵃㗵\n[01:50.93] 䎳䒅㴭䵃䠮䅄㔕㳪㕠㟌 㔕㠀㻦䅜䵪㔕䒅䄺㲻\n[02:02.23] 㻦㘟䳄㐼㺭㟌㔕䒅䏹㶝 㻦㘟䳄㾳䳚㟌㔕䅙㙴䅷 䤴䒅䭋㝤\n[02:18.64] 㾶䎳䶡䘄䳒䌩 㽋㒱䱥㜚 㶝䍏㟌㬘㬘䒅 䈖䵪䎳䒅䵃㗵\n[03:00.87] 㔕䒅䏹㶝 㘟䳄㸃㟌\n[03:12.55] 㔕䒅䏹㶝 㘟䳄㸃㟌\n[03:24.29] 䎳䒅䙿㣔䠮䅄㔕㳪㕠㟌 㔕㠀㻦䅜䵪㔕䒅䳔䓗\n[03:35.68] 㻦䛈㩲䬗䎳䙝㻗㴿㜪㶍 㻦㕢䵪㬘㬘䒅 䈖䵪㔕䒅䵃㗵\n[03:53.43] 㶝䍏㟌㬘㬘䒅 䈖䵪㔕䒅䵃㗵\n[04:22.56] 㔕䒅䏹㶝 㘟䳄㸃㟌\n[04:34.60] 㔕䒅䏹㶝 㔕䒅䏹㶝\n[04:57.27] ",
-      "title": "躺在你的衣櫃",
-      "artist": "陳綺貞",
-      "album": "花的姿態演唱會經典實錄",
-      "cover": "https://s.mxmcdn.net/images-storage/albums/1/2/2/1/3/0/29031221_500_500.jpg"
-    },
     "netease": {
       "netease": {
         "cover": "https://p2.music.126.net/Mvv6oyi8XjVfAIk0Lg76aA==/109951165876268707.jpg?param=800y800",
@@ -114,7 +105,6 @@
     "verdicts": {
       "kugou": "accepted",
       "lrclib": "accepted",
-      "musixmatch": "accepted",
       "netease": "accepted",
       "qq": "accepted"
     },
@@ -208,32 +198,6 @@
         ]
       },
       {
-        "source": "musixmatch",
-        "score": 9,
-        "terms": [
-          {
-            "kind": "duration",
-            "points": 216
-          },
-          {
-            "kind": "lines",
-            "points": 23
-          },
-          {
-            "kind": "versionTags",
-            "points": -600
-          },
-          {
-            "kind": "titleMatch",
-            "points": 120
-          },
-          {
-            "kind": "consensus",
-            "points": 250
-          }
-        ]
-      },
-      {
         "source": "qq",
         "score": 1,
         "terms": [
@@ -251,7 +215,7 @@
           },
           {
             "kind": "lines",
-            "points": 21
+            "points": 22
           },
           {
             "kind": "album",

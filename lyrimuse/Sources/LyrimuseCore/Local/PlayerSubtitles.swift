@@ -85,7 +85,7 @@ public enum PlayerSubtitles {
         let lines = lines(forKey: trackKey(album: album, title: title))
         return EnrichCacheLyrics(
             lyrics: lrc(lines), lyricsTr: "", lyricsRoma: "", lyricsYRC: "", lyricsBG: "",
-            songwriters: [], speakers: nil, playerVersions: [:], kanaDonor: "",
+            songwriters: [], playerVersions: [:], kanaDonor: "",
             instrumental: false, resolved: !lines.isEmpty, isCantonese: false, isHokkien: false,
             plainLyrics: "", searchIncomplete: false, storedLyrics: "")
     }

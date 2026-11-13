@@ -71,9 +71,9 @@ These features stay off after you install. Turn them on in Settings first (some 
 
 <a id="feature-lyric-sources"></a>
 
-### Fifteen lyric sources, searched automatically
+### Fourteen lyric sources, searched automatically
 
-NetEase Cloud Music, QQ Music, Kugou, Kuwo, Migu, Musixmatch, LRCLIB, LyricFind, Deezer, AMLL, Soda Music, VIBE, Genie, PetitLyrics and Apple Music. Each source can be turned off, reordered, or tested to see whether it is reachable right now.
+NetEase Cloud Music, QQ Music, Kugou, Kuwo, Migu, LRCLIB, LyricFind, Deezer, AMLL, Soda Music, VIBE, Genie, PetitLyrics and Apple Music. Each source can be turned off, reordered, or tested to see whether it is reachable right now.
 
 - On by default
 - Settings: Lyrics › Source › Lyrics Sources
@@ -216,7 +216,7 @@ Every lyric found is cached on your Mac and shows without a connection. Each son
 
 ### Translations
 
-Translations that come with the lyrics appear under each line. NetEase Cloud Music, QQ Music and Kugou translate into Chinese; Musixmatch and machine translation follow the translation language you pick, from 17. Floating lyrics, the lyrics window, the notch, the menu bar and the Touch Bar each decide whether to show them. Shown by default when your Mac's languages include Chinese.
+Translations that come with the lyrics appear under each line. NetEase Cloud Music, QQ Music and Kugou translate into Chinese; machine translation follows the translation language you pick, from 17. Floating lyrics, the lyrics window, the notch, the menu bar and the Touch Bar each decide whether to show them. Shown by default when your Mac's languages include Chinese.
 
 - Settings: Lyrics › Language › Translation Language
 - Settings: Lyrics Display › Floating Lyrics › Content › Translation

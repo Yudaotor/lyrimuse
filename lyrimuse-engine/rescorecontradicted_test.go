@@ -50,7 +50,7 @@ func TestRescoreCurrentContradicted(t *testing.T) {
 	}
 }
 
-// 当前来源(网易云)这一轮没应答,当前这份是另一首歌的词(带逐字):Musixmatch 和 LRCLIB 两家给出同一份、歌名对得上的
+// 当前来源(网易云)这一轮没应答,当前这份是另一首歌的词(带逐字):Deezer 和 LRCLIB 两家给出同一份、歌名对得上的
 // 词,照样换,逐字不算留的理由;当前这份跟这一轮的词一样时照旧判不了、什么都不动。
 func TestRescoreReplacesAnotherSongWhenCurrentSourceSilent(t *testing.T) {
 	cases := []struct {
@@ -64,7 +64,7 @@ func TestRescoreReplacesAnotherSongWhenCurrentSourceSilent(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			setupRescoreTest(t, []string{"musixmatch", "lrclib", "netease"}, nil)
+			setupRescoreTest(t, []string{"deezer", "lrclib", "netease"}, nil)
 			const artist, title, album = rescoreTestArtist, "Silent Song", "Some Album"
 			hit, _ := json.Marshal(map[string]any{"trackName": title, "artistName": artist, "albumName": album, "duration": 180, "syncedLyrics": rescoreTestNewBody})
 			withKugouFake(t, func(target string) (int, string) {

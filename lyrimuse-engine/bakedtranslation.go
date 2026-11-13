@@ -20,7 +20,7 @@ import (
 //	[00:41.30]你会听见我郑重承诺
 //
 // 每句英文后面紧跟一行**独立时间戳**的中文译文,QRC 逐字轨里同样有这些行(每个汉字 66ms 的假计时)。
-// 后果有三层:①共识——正文里一半是中文,跟 lrclib/musixmatch 的纯英文正文 3-gram 相似度只有 0.41,
+// 后果有三层:①共识——正文里一半是中文,跟 lrclib 的纯英文正文 3-gram 相似度只有 0.41,
 // 拿不到 150~250 的共识分,而冠亚军分差中位只有 22 分;②行数——118 行里 59 行是译文,+1/行 的行数分
 // 虚高;③显示——App 把它当歌词逐行播,用户看到英中交替,悬浮窗逐字填色也会在中文行上跑一遍假计时。
 // 引擎明明有 lyrics_tr 这条专门放译文的轨,这份数据只是放错了地方。
@@ -302,7 +302,7 @@ func stripBakedYRCLines(yrc string, removedMs map[int]bool, removedText map[stri
 }
 
 // adoptBakedTranslation 是候选装配处的入口:命中就摘,译文轨为空时把摘出来的译文接上(语言固定中文,
-// 所以只给译文轨本来就是中文语义的源用——netease/qq/kugou;musixmatch/amll 的译文语言跟设置走,
+// 所以只给译文轨本来就是中文语义的源用——netease/qq/kugou;amll 的译文语言跟设置走,
 // 调用方传 acceptTr=false,只摘不接)。返回 (正文, 译文, 逐字轨, 摘掉的行数)。
 func adoptBakedTranslation(lyr, tr, yrc string, foreignSong, acceptTr bool) (string, string, string, int) {
 	clean, bakedTr, cleanYRC, n := splitBakedTranslation(lyr, yrc, foreignSong)

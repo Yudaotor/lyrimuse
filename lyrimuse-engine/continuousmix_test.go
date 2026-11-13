@@ -8,12 +8,12 @@ import (
 // 连续混音版(Apple Music「DJ Mix」专辑)的识别与拒绝。
 //
 // 举例:Fred again..《Winnie (end of me) [Mixed]》,专辑
-// 「Live from Mexico City, Mexico, Dec 12, 2025 (DJ Mix)」,本地 410s。四个源(qq/
-// musixmatch/lrclib/kugou)返回的全是录音室原版《Winnie (end of me)》的词——源自报
+// 「Live from Mexico City, Mexico, Dec 12, 2025 (DJ Mix)」,本地 410s。几个源(qq/
+// lrclib/kugou 等)返回的全是录音室原版《Winnie (end of me)》的词——源自报
 // 242s、末句停在 3:51,只铺满前 56%,时间轴整段错位。修复前 QQ 那条 566 分夺冠:
 // 版本限定词两边都是空集(词表认 "club mix"/"radio mix" 一类带前缀的写法,不认 Apple
 // 用的裸「[Mixed]」/「(DJ Mix)」),liveAlbumIdentityConflict 要求候选也是 live 版所以
-// 静默,durationOff 又被四源互相印证的 corroborated 豁免换成 +100,只剩
+// 静默,durationOff 又被几源互相印证的 corroborated 豁免换成 +100,只剩
 // sourceDurationOff -400 一项被 wordTiming +400 盖过。
 func continuousMixCase() (artist, title, album string) {
 	return "Fred again..",

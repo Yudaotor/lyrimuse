@@ -141,7 +141,6 @@ func lyricsEntryFromScored(decisionPath, artist, title, album string, durationSe
 	e.ResolvedDurationSecs = durationSecs
 	e.LyricsTr, e.LyricsRoma, e.LyricsYRC = bt(picked.LyricsTr), bt(picked.LyricsRoma), bt(picked.LyricsYRC)
 	e.LyricsBG, e.LyricsBGChecked = bt(picked.LyricsBG), lyricsBGParserVersion
-	refreshSpeakers(&e, scored)
 	refreshKana(&e, scored)
 	e.SongLanguage = entrySongLanguage(picked.Lyrics, picked.LyricsRoma, scored)
 	e.dropHokkienRoma()

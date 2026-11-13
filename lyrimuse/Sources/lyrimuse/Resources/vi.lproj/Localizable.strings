@@ -176,7 +176,6 @@
 "MusicBrainz 中文名" = "Tên tiếng Trung trên MusicBrainz";
 "MusicBrainz 别名" = "Tên khác trên MusicBrainz";
 "MusicBrainz 录音 ID 一致" = "Cùng ID bản thu MusicBrainz";
-"Musixmatch 拒绝了匿名令牌请求（反爬虫限流，hint=captcha），并非网络故障，通常稍后重试即可恢复" = "Musixmatch từ chối yêu cầu token ẩn danh (giới hạn chống bot, hint=captcha). Đây không phải lỗi mạng, thường thử lại sau một lúc là được";
 "OBS" = "OBS";
 "OBS 输出" = "Đầu ra OBS";
 "POST 到你填的地址" = "POST đến địa chỉ bạn đã nhập";
@@ -508,7 +507,6 @@
 "免费开放的社区歌词库" = "Kho lời cộng đồng, miễn phí và mở";
 "免费开源，感谢你的 ⭐ 支持" = "Miễn phí và mã nguồn mở, cảm ơn bạn đã ủng hộ ⭐";
 "全屏时隐藏" = "Ẩn khi toàn màn hình";
-"全球最大的歌词库，Spotify 的歌词也来自它" = "Kho lời lớn nhất thế giới, lời trên Spotify cũng lấy từ đây";
 "全球用户最多的流媒体音乐 App" = "Ứng dụng nghe nhạc trực tuyến có nhiều người dùng nhất thế giới";
 "全角/半角" = "Ký tự rộng/hẹp";
 "全选" = "Chọn tất cả";
@@ -1261,7 +1259,6 @@
 "当前演唱的歌词" = "Câu đang hát";
 "当前系统未提供触控栏接口" = "Hệ thống không cung cấp API Touch Bar";
 "当前系统未提供触控栏接口，开启后不生效" = "Phiên bản macOS này không cung cấp API Touch Bar mà Lyrimuse cần nên bật cũng không có tác dụng";
-"当前网络无法直接连接 Musixmatch 的接口（TCP/TLS 均无响应），系统代理也不可用；开启代理后通常可恢复" = "Mạng hiện tại không kết nối trực tiếp được tới API của Musixmatch (TCP/TLS đều không phản hồi) và không có proxy hệ thống khả dụng; bật proxy thường sẽ khắc phục được";
 "当前输出设备不支持调节音量" = "Thiết bị đầu ra hiện tại không hỗ trợ chỉnh âm lượng";
 "当前这句有歌词时才显示" = "Chỉ hiện khi dòng hiện tại có lời";
 "当前连续" = "Chuỗi hiện tại";

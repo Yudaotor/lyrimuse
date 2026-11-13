@@ -454,11 +454,6 @@ func migrateAccentSplits() {
 		if !lrcChanged && !yrcChanged {
 			continue
 		}
-		if sp := e.LyricsSpeakers; sp != nil && sp.For == lyricSpeakersFingerprint(e.Lyrics.String(), e.LyricsYRC.String()) {
-			moved := *sp
-			moved.For = lyricSpeakersFingerprint(lrc, yrc)
-			e.LyricsSpeakers = &moved
-		}
 		if e.ManualPickSHA != "" && e.ManualPickSHA == manualPickFingerprint(e.Lyrics.String()) {
 			e.ManualPickSHA = manualPickFingerprint(lrc)
 		}
@@ -474,4 +469,20 @@ func migrateAccentSplits() {
 		log.Printf("accent split repair: fixed %d entries", fixed)
 		saveEnrichCache()
 	}
+}
+
+// yrcPlainLines:YRC 每行去掉行头和词标记后的文字,一行一句。
+func yrcPlainLines(yrc string) string {
+	if yrc == "" {
+		return ""
+	}
+	var b strings.Builder
+	for _, ln := range splitLyricLines(yrc) {
+		if !yrcLineTimeRegex.MatchString(ln) {
+			continue
+		}
+		b.WriteString(strings.TrimSpace(yrcWordTokenRe.ReplaceAllString(yrcLineTimeRegex.ReplaceAllString(ln, ""), "")))
+		b.WriteByte('\n')
+	}
+	return b.String()
 }

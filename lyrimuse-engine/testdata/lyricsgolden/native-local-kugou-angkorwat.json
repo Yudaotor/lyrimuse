@@ -3,7 +3,7 @@
   "category": "native-player-source",
   "note": "同源加权 v21 的准入条件:采集时声明播放器是酷狗(com.kugou.mac.Music),而且这首歌在酷狗客户端本地缓存里有 KRC,身份由客户端给定(identity_from_local_client=true)——这才是 +250 的资格。库里另一条 native 样本 native-earth-song 是同源但身份来自搜索,一分不加;两条合起来钉住这次收窄的两侧。",
   "label_evidence": {
-    "consensus_peers": 8,
+    "consensus_peers": 7,
     "title_accepted": true,
     "version_tags_ok": true,
     "source_duration_delta_pct": -1,
@@ -38,7 +38,6 @@
       "lrclib": true,
       "lyricfind": true,
       "migu": true,
-      "musixmatch": true,
       "netease": true,
       "qq": true,
       "soda": true
@@ -48,7 +47,6 @@
       "kugou",
       "netease",
       "qq",
-      "musixmatch",
       "lrclib",
       "amll",
       "lyricfind",
@@ -112,14 +110,6 @@
       "album": "Best of Kary",
       "cover": "https://d.musicapp.migu.cn/data/oss/resource/00/46/0k/643d64b40d8e4766b14f51720f32786c.webp"
     },
-    "musixmatch": {
-      "lyrics": "[00:14.22] 䦫㚟㰄䔈䠻㱲䒣\n[00:19.18] 䲼㭦䀨䃥䕐䩐㨐㝲䋶\n[00:25.45] 䘐䟄㾃㭦㞢㗣 㫈䤘㚗㦯㭦䵚䶩\n[00:31.92] 䥅㹴㭦㪟䭣㭦䀗㼉䥫㐿䙸\n[00:40.21] 䚑䟉䩢㓷䎮㶹䍳\n[00:44.92] 㓾㓶㡧䬤䓧䃇䢫䋛䡒\n[00:51.49] 䌑㟃㹴㯙㼭㻱 䊐㿭䓢㭦㩏䉧㹬\n[00:58.17] 䊍㸙䖈㪒䊍㦯㭦䆒㤺㝖㼲\n[01:04.55] 䊐㾃䃥㨐㳯㣢㽜㭦䎮䇁䒳㮓䘗㗈䛯\n[01:11.14] 䊐㾃㭦㨐㳯㣢䈬㨤䓬䤘㭦㣍䇁\n[01:17.32] 㔎㮬䋁䊩㛱䒛 䊐㪜䃈䊩䇁䃇㲏㐐\n[01:23.85] 㶨䃫䙭䞢㟃㬀㖹㓔䍢\n[01:29.51] \n[02:07.80] 䃫䥐䨔㸠䋶㱝㿾\n[02:12.58] 䗮㭦䨊㴫䊩䇁㮬㱝㶙\n[02:18.96] 㒒䅎㩞 㹢䬡䔅 䢼㐅䳩㟣㰰㱆㤈\n[02:25.49] 䖛䵪䌤㒖㒾㨐㲓䆒㨃㝲䁃\n[02:32.24] 䊐㾃䃥㨐㳯㣢㽜㭦䎮䇁䒳㮓䘗㗈䛯\n[02:38.69] 䊐㾃㭦㨐㳯㣢䈬㨤䓬䤘㭦㣍䇁\n[02:45.12] 㔎㮬䋁䊩㛱䒛 䊐㪜䃈䊩䇁䃇㲏㐐\n[02:51.65] 㶨䃫䙭䞢㟃㬀㖹㓔䍢\n[02:58.16] 䪫䥰㭦㳱䇎㯲㽜䃥䎮䇁䒳㸙㶍㲏㐐\n[03:04.61] 䪫䥰䃥㳱䎂㯲䗇㝆䭌䆃㬀䔅䘽\n[03:10.85] 㔎㮬䋁䇁䥤㶑 䘣䤘䥫㟃䃫㰤䶉䭅\n[03:17.55] 䓻㟃䞷䍩㞢㫾䥮㹢㟃\n[03:23.03] ",
-      "title": "吳哥窟",
-      "artist": "吳雨霏",
-      "album": "我本人",
-      "cover": "https://s.mxmcdn.net/images-storage/albums/1/4/9/0/3/7/26730941_500_500.jpg",
-      "duration_secs": 223
-    },
     "netease": {
       "netease": {
         "cover": "https://p1.music.126.net/uKxj83SpUuBG4bv_TZx3dw==/109951172846651235.jpg?param=800y800",
@@ -164,7 +154,6 @@
       "kugou": "accepted",
       "lrclib": "accepted",
       "migu": "accepted",
-      "musixmatch": "accepted",
       "netease": "accepted",
       "qq": "accepted",
       "soda": "accepted"
@@ -172,7 +161,7 @@
     "ranked": [
       {
         "source": "kugou",
-        "score": 1405,
+        "score": 1408,
         "terms": [
           {
             "kind": "duration",
@@ -188,7 +177,7 @@
           },
           {
             "kind": "lines",
-            "points": 27
+            "points": 30
           },
           {
             "kind": "album",
@@ -208,7 +197,7 @@
       },
       {
         "source": "qq",
-        "score": 1155,
+        "score": 1158,
         "terms": [
           {
             "kind": "duration",
@@ -220,7 +209,7 @@
           },
           {
             "kind": "lines",
-            "points": 27
+            "points": 30
           },
           {
             "kind": "album",
@@ -240,7 +229,7 @@
       },
       {
         "source": "applemusic",
-        "score": 1155,
+        "score": 1158,
         "terms": [
           {
             "kind": "duration",
@@ -252,7 +241,7 @@
           },
           {
             "kind": "lines",
-            "points": 27
+            "points": 30
           },
           {
             "kind": "album",
@@ -271,7 +260,7 @@
       },
       {
         "source": "soda",
-        "score": 1155,
+        "score": 1158,
         "terms": [
           {
             "kind": "duration",
@@ -283,7 +272,7 @@
           },
           {
             "kind": "lines",
-            "points": 27
+            "points": 30
           },
           {
             "kind": "album",
@@ -302,7 +291,7 @@
       },
       {
         "source": "amll",
-        "score": 931,
+        "score": 936,
         "terms": [
           {
             "kind": "duration",
@@ -314,7 +303,7 @@
           },
           {
             "kind": "lines",
-            "points": 53
+            "points": 58
           },
           {
             "kind": "album",
@@ -329,15 +318,15 @@
       },
       {
         "source": "netease",
-        "score": 754,
+        "score": 756,
         "terms": [
           {
             "kind": "duration",
-            "points": 208
+            "points": 207
           },
           {
             "kind": "lines",
-            "points": 26
+            "points": 29
           },
           {
             "kind": "album",
@@ -355,34 +344,8 @@
         "has_romanization": true
       },
       {
-        "source": "musixmatch",
-        "score": 754,
-        "terms": [
-          {
-            "kind": "duration",
-            "points": 208
-          },
-          {
-            "kind": "lines",
-            "points": 26
-          },
-          {
-            "kind": "album",
-            "points": 150
-          },
-          {
-            "kind": "titleMatch",
-            "points": 120
-          },
-          {
-            "kind": "consensus",
-            "points": 250
-          }
-        ]
-      },
-      {
         "source": "lrclib",
-        "score": 751,
+        "score": 754,
         "terms": [
           {
             "kind": "duration",
@@ -390,7 +353,7 @@
           },
           {
             "kind": "lines",
-            "points": 26
+            "points": 29
           },
           {
             "kind": "album",
@@ -408,7 +371,7 @@
       },
       {
         "source": "deezer",
-        "score": 616,
+        "score": 619,
         "terms": [
           {
             "kind": "duration",
@@ -416,7 +379,7 @@
           },
           {
             "kind": "lines",
-            "points": 26
+            "points": 29
           },
           {
             "kind": "titleMatch",
@@ -430,7 +393,7 @@
       },
       {
         "source": "migu",
-        "score": 616,
+        "score": 619,
         "terms": [
           {
             "kind": "duration",
@@ -438,7 +401,7 @@
           },
           {
             "kind": "lines",
-            "points": 26
+            "points": 29
           },
           {
             "kind": "titleMatch",

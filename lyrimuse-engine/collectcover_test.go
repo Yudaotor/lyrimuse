@@ -78,13 +78,12 @@ func TestDropAMLLWithoutIDSource(t *testing.T) {
 func TestAliasRetryListDropsAMLLWhenIDSourcesAnswered(t *testing.T) {
 	savedFeatures := features()
 	savedBreaker := sharedLyricSourceBreaker()
-	savedYT, savedMM := ytmusicLastFailureReasonNow(), musixmatchLastFailureReasonNow()
+	savedYT := ytmusicLastFailureReasonNow()
 	savedDZ, savedAM := deezerLastFailureReasonNow(), applemusicLastFailureReasonNow()
 	t.Cleanup(func() {
 		setFeatures(savedFeatures)
 		setSharedLyricSourceBreaker(savedBreaker)
 		ytmusicSetLastFailureReason(savedYT)
-		musixmatchSetLastFailureReason(savedMM)
 		deezerSetLastFailureReason(savedDZ)
 		applemusicSetLastFailureReason(savedAM)
 	})
@@ -94,7 +93,6 @@ func TestAliasRetryListDropsAMLLWhenIDSourcesAnswered(t *testing.T) {
 	}
 	setSharedLyricSourceBreaker(newLyricSourceBreaker(time.Now))
 	ytmusicSetLastFailureReason("")
-	musixmatchSetLastFailureReason("")
 	deezerSetLastFailureReason("")
 	applemusicSetLastFailureReason("")
 

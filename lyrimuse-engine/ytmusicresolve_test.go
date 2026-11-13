@@ -128,8 +128,8 @@ func TestResolveYTMusicLyricTimedLyricFind(t *testing.T) {
 	}
 }
 
-// 带时间戳的是 Musixmatch 供的:不收,也不再问 Web 那一次(纯文本也是同一家)。
-func TestResolveYTMusicLyricRejectsMusixmatch(t *testing.T) {
+// 带时间戳的是别家供应商的:不收,也不再问 Web 那一次(纯文本也是同一家)。
+func TestResolveYTMusicLyricRejectsOtherProvider(t *testing.T) {
 	resetYtmusicRegionState(t)
 	reqs := withYtmusicFake(t, func(w http.ResponseWriter, req ytmusicFakeReq) {
 		switch {
@@ -138,13 +138,13 @@ func TestResolveYTMusicLyricRejectsMusixmatch(t *testing.T) {
 		case req.target == ytmNextURL:
 			_, _ = io.WriteString(w, ytmFakeNext)
 		case req.target == ytmBrowseURL && req.clientName == ytmusicMobileClientName:
-			_, _ = io.WriteString(w, ytmFakeTimed("Source: Musixmatch"))
+			_, _ = io.WriteString(w, ytmFakeTimed("Source: Other"))
 		default:
 			_, _ = io.WriteString(w, ytmFakePlain("Source: LyricFind"))
 		}
 	})
 	if r := resolveYTMusicLyric(qqRoundCtx(), "Adele", "Hello", "25", 295); r.lyrics != "" {
-		t.Fatalf("Musixmatch 供的不收: %+v", r)
+		t.Fatalf("别家供的不收: %+v", r)
 	}
 	if n := len(reqs()); n != 3 {
 		t.Errorf("不该再问 Web 那一次,实际 %d 个请求", n)
@@ -157,7 +157,7 @@ func TestResolveYTMusicLyricSparseOtherProviderSkipsPlain(t *testing.T) {
 	sparse := `{"contents":{"timedLyricsModel":{"lyricsData":{"timedLyricsData":[` +
 		`{"lyricLine":"Hello, it's me","cueRange":{"startTimeMilliseconds":"1000","endTimeMilliseconds":"4500"}},` +
 		`{"lyricLine":"I was wondering","cueRange":{"startTimeMilliseconds":"5000","endTimeMilliseconds":"8500"}}` +
-		`],"sourceMessage":"Source: Musixmatch"}}}}`
+		`],"sourceMessage":"Source: Other"}}}}`
 	reqs := withYtmusicFake(t, func(w http.ResponseWriter, req ytmusicFakeReq) {
 		switch {
 		case req.target == ytmSearchURL:
@@ -183,7 +183,7 @@ func TestResolveYTMusicLyricPlainFallback(t *testing.T) {
 	for _, c := range []struct {
 		source string
 		want   bool
-	}{{"Source: LyricFind", true}, {"Source: Musixmatch", false}} {
+	}{{"Source: LyricFind", true}, {"Source: Other", false}} {
 		resetYtmusicRegionState(t)
 		withYtmusicFake(t, func(w http.ResponseWriter, req ytmusicFakeReq) {
 			switch {
@@ -433,7 +433,7 @@ func TestYtmusicLyricFallsBackToSearch(t *testing.T) {
 		case req.target == ytmNextURL:
 			_, _ = io.WriteString(w, ytmFakeNext)
 		case req.target == ytmBrowseURL && req.body["browseId"] == "MPLYt_v1":
-			_, _ = io.WriteString(w, ytmFakeTimed("Source: Musixmatch"))
+			_, _ = io.WriteString(w, ytmFakeTimed("Source: Other"))
 		case req.target == ytmBrowseURL && req.clientName == ytmusicMobileClientName:
 			_, _ = io.WriteString(w, ytmFakeTimed("Source: LyricFind"))
 		default:

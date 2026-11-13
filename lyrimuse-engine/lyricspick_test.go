@@ -126,7 +126,7 @@ func TestPickLyricCandidatePreferring(t *testing.T) {
 	}
 
 	// 选定的源这一轮一条候选都没有 → 不换(nil),绝不退回全局最优。
-	if got := pickLyricCandidatePreferring(scored, "musixmatch"); got != nil {
+	if got := pickLyricCandidatePreferring(scored, "deezer"); got != nil {
 		t.Fatalf("选定的源没有候选时该返回 nil(不换),得到 %v", got)
 	}
 

@@ -402,8 +402,8 @@ struct LyricsSearchSheet: View {
 
     private func respondedSourceRow(_ source: String) -> some View {
         let responded = respondedSources.contains(source)
-        // 失败原因分两层(见 searchcli.go 的 lyricSourceFailureReasons 头注):三个源
-        // (netease/musixmatch/lyricfind)特有的具体原因(限流、token 失效这类),加上任何源
+        // 失败原因分两层(见 searchcli.go 的 lyricSourceFailureReasons 头注):几个源
+        // (netease/lyricfind 等)特有的具体原因(限流、token 失效这类),加上任何源
         // 都可能报的传输层通用原因(dns_failed / connect_failed / server_error,分类在
         // sourcebreaker.go 的传输层失败分类)。两层都没命中才是 nil,如实只显示
         // "未返回候选",不编一个没核实过的理由。sourceFailureReasonCodes 里存的是稳定代码,经
@@ -1324,7 +1324,7 @@ struct LyricsSearchSheet: View {
                 // 不同的 x。
                 //
                 // `fixedSize()`:侧栏里一行只有约 350pt 宽,不钉住的话 SwiftUI 会先压这个胶囊(「网易云
-                // 音乐」折成两行、「Musixmatch」被截成「Musixmat…」)。来源名截半个字等于没标,宁可让上面的
+                // 音乐」折成两行、「PetitLyrics」被截成「PetitLyr…」)。来源名截半个字等于没标,宁可让上面的
                 // 歌名先换行——它本来就允许两行 + 悬停看全文。
                 sourceBadge(c.source)
                     .fixedSize()

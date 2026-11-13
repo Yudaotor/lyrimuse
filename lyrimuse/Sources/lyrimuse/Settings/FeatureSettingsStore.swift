@@ -5,7 +5,7 @@ import SwiftUI
 
 private let logger = Logger(subsystem: "me.yudaotor.lyrimuse", category: "feature-settings")
 
-// 十五个歌词源——rawValue 必须跟 lyrimuse-engine/features.go 的 lyricSourceXxx 常量逐字对应,
+// 十四个歌词源——rawValue 必须跟 lyrimuse-engine/features.go 的 lyricSourceXxx 常量逐字对应,
 // 这是两侧通过共享 json 文件交换的字符串。displayName/color 直接委托给
 // LyricsManagerView.swift 已有的 sourceDisplayName/sourceColor(那两个函数也在给
 // "歌词管理"窗口的来源筛选/列表用),不重复维护第二份名字/颜色映射。
@@ -18,13 +18,13 @@ private let logger = Logger(subsystem: "me.yudaotor.lyrimuse", category: "featur
 // 所以它必须跟引擎 `features.go` 的 `lyricsSourceDefaultOrder` **逐字同序**,
 // 否则同一台机器在首次写盘前后表现不同(那边注释也钉着这条)。
 //
-// 排序依据:前五个(酷狗 / 网易云 / QQ / Musixmatch / LRCLIB)按实测的最终采用率排;后面几个
+// 排序依据:前四个(酷狗 / 网易云 / QQ / LRCLIB)按实测的最终采用率排;后面几个
 // **刻意不按采用率排**:它们接入得晚,统计时的缓存绝大多数早于它们存在,采用数低是样本偏差、
 // 不是覆盖率结论,等各自跑满一段时间再拿数据说话。
 // deezer 跟 lyricfind 数据同源(都是 LyricFind 供词),但两条管道各走各的接口:接它既是
 // 给那家版权方补条后路,也因为 Deezer 的法语曲库覆盖更好,见 lyrimuse-engine/deezer.go 头注。
 public enum LyricsSource: String, CaseIterable, Identifiable, Codable, Hashable {
-    case kugou, netease, qq, musixmatch, lrclib, amll, lyricfind, kuwo, migu, deezer, applemusic, soda, vibe, genie, petitlyrics
+    case kugou, netease, qq, lrclib, amll, lyricfind, kuwo, migu, deezer, applemusic, soda, vibe, genie, petitlyrics
     public var id: Self { self }
     public var displayName: String { sourceDisplayName(rawValue) }
     public var color: Color { sourceColor(rawValue) }
@@ -47,7 +47,6 @@ extension LyricsSource {
         case .kugou: return L10n.t("腾讯音乐旗下的音乐平台")
         case .netease: return L10n.t("网易旗下的音乐平台")
         case .qq: return L10n.t("腾讯旗下的音乐平台")
-        case .musixmatch: return L10n.t("全球最大的歌词库，Spotify 的歌词也来自它")
         case .lrclib: return L10n.t("免费开放的社区歌词库")
         case .amll: return L10n.t("社区人工校对的逐字歌词库")
         case .lyricfind: return L10n.t("加拿大的歌词版权公司，经由 YouTube Music 检索")
@@ -63,16 +62,14 @@ extension LyricsSource {
     }
 }
 
-// Musixmatch 译文(lyrimuse-engine/musixmatch.go 的 crowd.track.translations.get)目标语言——
-// 网易云/QQ 音乐的译文固定是中文,只有 Musixmatch 这个源能指定任意语言,rawValue 必须是
-// Musixmatch 认的 ISO 639-1 两位小写代码(已用真实接口核实过这个格式,见开发时的调研)。
+// 歌词译文的目标语言:机器翻译、以及能按语言给译文的歌词源(Apple Music、Deezer 等)都按它取。网易云 / QQ 音乐
+// 这类源的译文固定是中文,不受它影响。rawValue 是 ISO 639-1 两位小写代码,跟引擎 features.go 的
+// lyricsTranslationLanguageCodes 逐项一致(auto 除外)。
 // .auto 的字面值原样写进共享 json,由引擎侧 resolveLyricsTranslationLanguage
 // (features.go)按同一份文件里的 system_language 解析成具体代码;system_language 是这个 store
 // 加载时读本机写进去的(`SystemLanguage`,见 FeatureFlagsFile.systemLanguage)。
-// 跟随的是 macOS 系统语言而不是 App 界面语言:App 界面本身只做了中英两版翻译,母语是
-// 西语/日语等的用户即使 App 界面只能显示英文,系统语言仍然如实反映其母语,能让这个
-// 功能真正惠及"母语非中非英"的用户,而不是被 App 界面语言的两个选项卡住。
-public enum MusixmatchTranslationLanguage: String, CaseIterable, Identifiable, Codable {
+// 跟随的是 macOS 系统语言而不是 App 界面语言:界面语言没覆盖到的母语,系统语言仍然如实反映。
+public enum LyricsTranslationLanguage: String, CaseIterable, Identifiable, Codable {
     case auto
     case en, zh, ja, ko, es, fr, de, pt, it, ru, ar, vi, th, id, nl, pl, tr
 
@@ -355,7 +352,7 @@ struct FeatureFlagsFile: Codable, Equatable {
     // 动态封面从哪几处找(MotionCoverSource 的值)。nil = 两处都找。
     var motionCoverSources: [String]?
     // "auto"(跟随系统语言,默认)或具体 ISO 639-1 代码("en"/"zh"/"ja"...)——见
-    // MusixmatchTranslationLanguage 注释,引擎侧负责把 "auto" 解析成具体代码。
+    // LyricsTranslationLanguage 注释,引擎侧负责把 "auto" 解析成具体代码。
     var lyricsTranslationLanguage: String?
     /// 本机系统语言(`SystemLanguage.current()`),引擎解析上面的 "auto" 用。描述的是这台机器而不是偏好:
     /// 加载时跟本机对不上就单独改写这一个键(见 `writeSystemLanguage`),配置包导出时去掉、导入时换成本机的值。
@@ -653,8 +650,8 @@ public final class FeatureSettingsStore: ObservableObject {
     @Published public var lyricsWordFormats: [LyricsWordFormat] = [.yrc]
     /// 动态封面从哪几处找,至少一个(见 MotionCoverSource)。改了用 `toggleMotionCoverSource`。
     @Published public var motionCoverSources: Set<MotionCoverSource> = MotionCoverSource.all
-    // 只影响 Musixmatch 这个源的译文语言,详见 MusixmatchTranslationLanguage 注释。
-    @Published public var lyricsTranslationLanguage: MusixmatchTranslationLanguage = .auto
+    // 歌词译文的目标语言,详见 LyricsTranslationLanguage 注释。
+    @Published public var lyricsTranslationLanguage: LyricsTranslationLanguage = .auto
     /// 本机系统语言,每次 load() 读一遍(见 FeatureFlagsFile.systemLanguage)。「翻译语言包」那一行按它算
     /// 「跟随系统语言」的目标,跟引擎认的是同一个值。
     @Published public private(set) var systemLanguage = ""
@@ -1013,9 +1010,12 @@ public final class FeatureSettingsStore: ObservableObject {
         digestPushMinutes = DigestPushTime.resolved(f.digestPushTime)
         digestTemplate = DigestTemplate.resolved(title: f.digestTemplate?.title, body: f.digestTemplate?.body)
         // 缺失/空数组(旧配置文件没这个字段,或者曾经被清空过)都按"全部启用"处理。
-        let decodedSources = (f.lyricsSources ?? []).compactMap(LyricsSource.init(rawValue:))
-        unknownLyricsSources = Self.unknownNames(f.lyricsSources) { LyricsSource(rawValue: $0) != nil }
-        unknownLyricsOrder = Self.unknownNames(f.lyricsSourceOrder) { LyricsPriorityEntry(rawValue: $0) != nil }
+        // 已下线的源名先剔掉(RetiredLyricsSources):它们不是「更新的版本加的源」,不能当未知名字原样写回。
+        let storedSources = RetiredLyricsSources.dropping(f.lyricsSources)
+        let storedOrder = RetiredLyricsSources.dropping(f.lyricsSourceOrder)
+        let decodedSources = (storedSources ?? []).compactMap(LyricsSource.init(rawValue:))
+        unknownLyricsSources = Self.unknownNames(storedSources) { LyricsSource(rawValue: $0) != nil }
+        unknownLyricsOrder = Self.unknownNames(storedOrder) { LyricsPriorityEntry(rawValue: $0) != nil }
         var enabled = Set(decodedSources)
         if enabled.isEmpty {
             enabled = Set(LyricsSource.allCases)
@@ -1075,7 +1075,7 @@ public final class FeatureSettingsStore: ObservableObject {
         // 顺序表跟全部源对不上(刚加了新源、旧文件的顺序表还没有它;文件被手改过)时,用户排过的那几位原样保留,
         // 缺的按默认顺序补在末尾(见 completedLyricsPriorityOrder),补完随整份写回。
         lyricsPriorityOrder = Self.completedLyricsPriorityOrder(
-            (f.lyricsSourceOrder ?? []).compactMap(LyricsPriorityEntry.init(rawValue:)))
+            (storedOrder ?? []).compactMap(LyricsPriorityEntry.init(rawValue:)))
         // 信任列表里后来成了内置播放器的(KKBOX)挪进播放器选择,见 TrustedPlayers.promotingBuiltins。
         let promoted = TrustedPlayers.promotingBuiltins(trusted: f.trustedPlayers ?? [:], players: players)
         trustedPlayers = promoted.trusted
@@ -1094,7 +1094,7 @@ public final class FeatureSettingsStore: ObservableObject {
         lyricsDir = f.lyricsDir ?? ""
         lyricsWordFormats = LyricsWordFormat.resolve(f.lyricsWordFormats)
         motionCoverSources = MotionCoverSource.resolve(f.motionCoverSources)
-        lyricsTranslationLanguage = f.lyricsTranslationLanguage.flatMap(MusixmatchTranslationLanguage.init(rawValue:)) ?? .auto
+        lyricsTranslationLanguage = f.lyricsTranslationLanguage.flatMap(LyricsTranslationLanguage.init(rawValue:)) ?? .auto
         if let raw = f.launchLyrimuseOnPlayers {
             launchLyrimuseOnPlayers = Set(raw.compactMap(PlaybackPlayer.init(rawValue:)))
         } else {

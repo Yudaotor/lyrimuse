@@ -15,7 +15,7 @@ private let logger = Logger(subsystem: "me.yudaotor.lyrimuse", category: "lyrics
 private let searchLyricsHealthMarkers = ["rejected (code", "backing off", "cooling down"]
 
 // "联网搜索候选歌词"——形态是这类工具常见的双栏候选面板,但**不**在 Swift 这边
-// 重新实现网易云/QQ/酷狗/Musixmatch/LRCLIB 的检索逻辑(那会是第二份、迟早会跟 Go 引擎那份
+// 重新实现网易云/QQ/酷狗/LRCLIB 等各源的检索逻辑(那会是第二份、迟早会跟 Go 引擎那份
 // 走样的实现)。改用一次性子进程调用 `lyrimuse-engine search-lyrics`(lyrimuse-engine/searchcli.go),
 // 复用 scoredLyricCandidates(lyrimuse-engine/enrich.go)——跟自动解析路径完全同一份取分/排序
 // 代码,只是把"取最高分那个"换成"把全部候选连分数一起交给用户挑"。不新增常驻服务:
@@ -72,7 +72,7 @@ final class LyricsSearchService {
     private var lastLaunch: [Owner: Date] = [:]
 
     /// 同时最多几个 search-lyrics 子进程。每个子进程都把全部歌词源问一遍,按主机的限速只在它自己进程里算,
-    /// 几扇窗口同时搜等于对各源成倍地发请求(Musixmatch 遇到并发会弹验证码)。留两个:歌词窗口弹出的小窗不用等
+    /// 几扇窗口同时搜等于对各源成倍地发请求(有的源遇到并发会限流)。留两个:歌词窗口弹出的小窗不用等
     /// 歌词管理里正在跑的那一轮(一轮连兜底可能要一两分钟);再多的排队,先来先起。
     static let maxConcurrentProcesses = 2
     /// 同一个发起方两次起进程至少隔这么久:连点「重新搜索」时上一轮被杀,但它已经发出去的请求收不回来,
@@ -396,7 +396,7 @@ final class LyricsSearchService {
         let round: Int
         /// 这一轮里没给出候选的源,查得到原因的那几个——引擎侧
         /// lyricSourceFailureReasons(searchcli.go)算出来,分两层:源特有的具体原因只覆盖
-        /// netease/musixmatch/lyricfind 三个已经接了诊断旁路的源;传输层通用原因(
+        /// netease/lyricfind 等几个已经接了诊断旁路的源;传输层通用原因(
         /// dns_failed / connect_failed / server_error,以及 AMLL 的 upstream_unreachable)任何
         /// 启用的源都可能带。给"歌词源可用情况"明细面板和空状态的「没连上」分组用。key 是源名,
         /// value 是**稳定代码**,不是文案(从 sourceFailureReasons 改名——见

@@ -49,7 +49,7 @@ Lyrimuse's UI strings live in `lyrimuse/Localization/Localizable.xcstrings`. The
 
 ## Names that stay in Latin letters
 
-Lyrimuse, Last.fm, ListenBrainz, Discord, Telegram, Slack, Bark, ntfy, Server酱 (ServerChan), Apple Music, Spotify, YouTube Music, Musixmatch, Genius, Cloudflare, GitHub, Sparkle, Mac, macOS, iCloud, AirPlay, Siri, Touch Bar, Dock, Finder, Safari, Spotlight, Chrome, Arc, Edge, Wi‑Fi, URL, API, Webhook, Scrobble (“การ Scrobble”, “Scrobble ไปยัง Last.fm”), Replay, Dynamic Island (Apple's product name only; Lyrimuse's own notch feature is รอยบาก).
+Lyrimuse, Last.fm, ListenBrainz, Discord, Telegram, Slack, Bark, ntfy, Server酱 (ServerChan), Apple Music, Spotify, YouTube Music, Genius, Cloudflare, GitHub, Sparkle, Mac, macOS, iCloud, AirPlay, Siri, Touch Bar, Dock, Finder, Safari, Spotlight, Chrome, Arc, Edge, Wi‑Fi, URL, API, Webhook, Scrobble (“การ Scrobble”, “Scrobble ไปยัง Last.fm”), Replay, Dynamic Island (Apple's product name only; Lyrimuse's own notch feature is รอยบาก).
 Chinese music services use the names in the English string (NetEase Cloud Music, QQ Music, Kugou, Kuwo, Migu, Soda Music…).
 Common technical loanwords are written in Thai as Apple does: แอป, ดาวน์โหลด, อัปเดต, รีเซ็ต, แคช, เซิร์ฟเวอร์, โทเค็น, ปลั๊กอิน, วิดเจ็ต, บลูทูธ, เพลย์ลิสต์, อัลบั้ม, แทร็ก, คาราโอเกะ, เอฟเฟ็กต์. Sync is เชื่อมข้อมูล, never ซิงค์.
 

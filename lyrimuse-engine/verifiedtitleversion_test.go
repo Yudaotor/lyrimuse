@@ -10,7 +10,7 @@ func TestLiveAlbumConflictAcrossLanguages(t *testing.T) {
 	if !liveAlbumIdentityConflict(artist, title, album, same.title, same.album) || !sameLiveShowNamedInOtherLanguage(album, 213, same) {
 		t.Error("中英两种叫法、曲长一致:认作同一场")
 	}
-	// 反过来(本地中文、候选英文)同样认:「NOW YOU SEE ME (Live)」musixmatch 写的是英文专辑名。
+	// 反过来(本地中文、候选英文)同样认:「NOW YOU SEE ME (Live)」候选写的是英文专辑名。
 	if !sameLiveShowNamedInOtherLanguage("周杰伦地表最强世界巡回演唱会 (Live)", 168.066,
 		lyricCandidate{album: "Jay Chou The Invincible Concert Tour", sourceReportedDurationSecs: 168}) {
 		t.Error("本地中文、候选英文")

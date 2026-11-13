@@ -1,7 +1,7 @@
 package main
 
-// 三个歌词源(netease/musixmatch/lyricfind)已经接了具体失败原因诊断(
-// 分别见 ytmusic.go/musixmatch.go/netease.go 头注),
+// 几个歌词源(netease/lyricfind/deezer/soda)已经接了具体失败原因诊断(
+// 分别见各自源文件头注),
 // 两处消费:设置页"歌词来源"卡片的测试按钮(testlyricsourcescli.go)、"联网搜索候选歌词"
 // 弹窗的"歌词源可用情况"明细(searchcli.go 的 lyricSourceFailureReasons)。
 //
@@ -15,14 +15,7 @@ package main
 // "两侧必须同步"提醒。
 const (
 	lyricFailureReasonLyricFindRegionRestricted = "lyricfind_region_restricted"
-	lyricFailureReasonMusixmatchRateLimited     = "musixmatch_rate_limited"
 	lyricFailureReasonNeteaseRateLimited        = "netease_rate_limited"
-	// musixmatch_direct_blocked:apic-appmobile.musixmatch.com 那两个 AWS
-	// 地址在当前网络下直连不通(实测 100% ICMP 丢包、TCP 16 次只成功 3 次、TLS 16 次
-	// 0 次成功),而 proxyfallback.go 的系统代理兜底也没能救回来(没配代理,或者配了但
-	// 连不上)。跟 musixmatch_rate_limited 是完全不同的两回事:那个是服务器**正经回了**
-	// 401 hint=captcha,这个是一个字节都没拿到。
-	lyricFailureReasonMusixmatchDirectBlocked = "musixmatch_direct_blocked"
 	// deezer_auth_failed:取词要先从 auth.deezer.com 换一张**匿名 JWT**,
 	// 这一步没换到(端点不答、非 200、或响应里没有 jwt 字段)。这是这一路目前**唯一**
 	// 实测见过的失败模式 —— "这首歌没有歌词"(GraphQL 的 LyricsNotFoundError)是正常

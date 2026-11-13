@@ -51,7 +51,7 @@ func TestLyricsBaselineForUnknownDuration(t *testing.T) {
 	current := enrichEntry{Lyrics: bt("supernova"), LyricsSource: "qq", LyricsScore: 1011}
 	// 现存那份这一轮还在:按它这一轮的分比。
 	scored := []scoredLyricCandidateResult{
-		{Source: "musixmatch", Lyrics: "original", Score: 752},
+		{Source: "deezer", Lyrics: "original", Score: 752},
 		{Source: "qq", Lyrics: "supernova", Score: 600},
 	}
 	if b, ok := lyricsBaselineForUnknownDuration(current, scored); !ok || b != 600 {
@@ -59,14 +59,14 @@ func TestLyricsBaselineForUnknownDuration(t *testing.T) {
 	}
 	// 它的源应答了、但这一轮给的是另一份(按未知时长它不再是候选):基准 0。
 	scored = []scoredLyricCandidateResult{
-		{Source: "musixmatch", Lyrics: "original", Score: 752},
+		{Source: "deezer", Lyrics: "original", Score: 752},
 		{Source: "qq", Lyrics: "suga remix", Score: 475},
 	}
 	if b, ok := lyricsBaselineForUnknownDuration(current, scored); !ok || b != 0 {
 		t.Fatalf("源应答了却没再给这份,基准 0,得到 %d %v", b, ok)
 	}
 	// 它的源这一轮没应答:不下结论。
-	scored = []scoredLyricCandidateResult{{Source: "musixmatch", Lyrics: "original", Score: 752}}
+	scored = []scoredLyricCandidateResult{{Source: "deezer", Lyrics: "original", Score: 752}}
 	if _, ok := lyricsBaselineForUnknownDuration(current, scored); ok {
 		t.Fatal("现存那份的源这一轮没应答,不能拿 0 当基准把它换掉")
 	}

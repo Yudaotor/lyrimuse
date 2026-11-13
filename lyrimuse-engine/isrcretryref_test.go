@@ -23,7 +23,7 @@ func TestISRCRetryReferenceFilter(t *testing.T) {
 	}
 	ref := newISRCRetryReference(base)
 	extra := []scoredLyricCandidateResult{
-		{Source: "musixmatch", Score: 213, Title: "Morning Wind", Lyrics: isrcRefSongTrad},
+		{Source: "kuwo", Score: 213, Title: "Morning Wind", Lyrics: isrcRefSongTrad},
 		{Source: "deezer", Score: 300, Title: "另一首", Lyrics: isrcRefOther},
 		{Source: "amll", Score: 100, Lyrics: "[00:01.00]短句"},
 		{Source: "lrclib", Score: -1, Instrumental: true},
@@ -34,7 +34,7 @@ func TestISRCRetryReferenceFilter(t *testing.T) {
 	for _, r := range kept {
 		keptSrc = append(keptSrc, r.Source)
 	}
-	if strings.Join(keptSrc, ",") != "musixmatch,amll,lrclib,qq" {
+	if strings.Join(keptSrc, ",") != "kuwo,amll,lrclib,qq" {
 		t.Errorf("留下的该是正文对得上的、太短没法比的和两种标记,got %v", keptSrc)
 	}
 	if len(dropped) != 1 || dropped[0].Source != "deezer" {
@@ -51,7 +51,7 @@ func TestISRCRetryReferenceUsesConsensusThreshold(t *testing.T) {
 	ref := newISRCRetryReference([]scoredLyricCandidateResult{{Source: "applemusic", Score: 520, Lyrics: isrcRefSong}})
 	half := "[00:10.00]清晨的风吹过窗台 我在等一封信到来\n[00:20.00]街角的灯亮了又灭\n" +
 		"[00:30.00]谁也没有回头看一眼\n[00:40.00]明天的事明天再说\n"
-	r := scoredLyricCandidateResult{Source: "musixmatch", Score: 300, Lyrics: half}
+	r := scoredLyricCandidateResult{Source: "kuwo", Score: 300, Lyrics: half}
 	if s, ok := ref.similarity(r); !ok || s < 0.2 || s >= lyricConsensusSimThreshold {
 		t.Fatalf("这份正文该是一半对得上,got %.2f %v", s, ok)
 	}
@@ -82,7 +82,7 @@ func TestISRCRetryReferenceAnyAcceptedSourceCounts(t *testing.T) {
 		{Source: "netease", Score: 900, Lyrics: isrcRefSong},
 		{Source: "applemusic", Score: 520, Lyrics: isrcRefOther},
 	})
-	kept, dropped := ref.filter([]scoredLyricCandidateResult{{Source: "musixmatch", Score: 400, Lyrics: isrcRefSongTrad}})
+	kept, dropped := ref.filter([]scoredLyricCandidateResult{{Source: "kuwo", Score: 400, Lyrics: isrcRefSongTrad}})
 	if len(kept) != 1 || len(dropped) != 0 {
 		t.Errorf("跟网易云那条对得上就该留下,kept=%d dropped=%d", len(kept), len(dropped))
 	}

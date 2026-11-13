@@ -81,10 +81,10 @@ func TestListedAlbumLyricsRecheckOnce(t *testing.T) {
 
 // 升级重试 / 补空 / 重打分:播放器没报专辑时拿条目里的登记专辑去搜、去打分,决策记录和 LyricsListedAlbum 记下,缓存 key 不变。
 func TestLyricsRetriesSearchWithListedAlbum(t *testing.T) {
-	setupRescoreTest(t, []string{"musixmatch"}, nil)
-	musixmatchResolve = func(ctx context.Context, artist, title string, durationSecs float64, trLang, isrc string) musixmatchResult {
-		lyricSourceRoundFrom(ctx).markReached("musixmatch")
-		return musixmatchResult{lrc: rescoreTestNewBody, title: title, artist: artist, album: "Listed Album", durationSecs: 180}
+	setupRescoreTest(t, []string{"deezer"}, nil)
+	deezerResolve = func(ctx context.Context, artist, title, album string, durationSecs float64, isrc string) deezerResult {
+		lyricSourceRoundFrom(ctx).markReached("deezer")
+		return deezerResult{lyrics: rescoreTestNewBody, title: title, artist: artist, album: "Listed Album", durationSecs: 180}
 	}
 	const artist = rescoreTestArtist
 	listedKey, plainKey := enrichKey(artist, "Listed Song", ""), enrichKey(artist, "Plain Song", "")
@@ -93,7 +93,7 @@ func TestLyricsRetriesSearchWithListedAlbum(t *testing.T) {
 	enrichCache = map[string]enrichEntry{
 		listedKey: {YouTubeMusicAlbum: "Listed Album"},
 		plainKey:  {},
-		rescoreKey: {Lyrics: bt("[00:05.00]Old line one\n[00:15.00]Old line two"), LyricsSource: "musixmatch",
+		rescoreKey: {Lyrics: bt("[00:05.00]Old line one\n[00:15.00]Old line two"), LyricsSource: "deezer",
 			LyricsScoringVersion: lyricsScoringVersion - 1, YouTubeMusicAlbum: "Listed Album"},
 	}
 	enrichMu.Unlock()

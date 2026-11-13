@@ -58,8 +58,8 @@ func TestLyricCandidateTieOrderMatchesConstruction(t *testing.T) {
 func TestMergeLyricCandidateRoundsKeepsTieOrder(t *testing.T) {
 	lrc := "[00:01.00]第一句\n[00:05.00]第二句\n[00:09.00]第三句\n"
 	raw := map[string]lyricSourceResult{
-		"musixmatch": {source: "musixmatch", lyr: lrc, matchTitle: "测试", matchArtist: "歌手"},
-		"lrclib":     {source: "lrclib", lyr: lrc, matchTitle: "测试", matchArtist: "歌手"},
+		"deezer": {source: "deezer", lyr: lrc, matchTitle: "测试", matchArtist: "歌手"},
+		"lrclib": {source: "lrclib", lyr: lrc, matchTitle: "测试", matchArtist: "歌手"},
 	}
 	direct := rankLyricSourceResults("歌手", "测试", "", 0, raw)
 	if len(direct) < 2 || direct[0].Score != direct[1].Score {

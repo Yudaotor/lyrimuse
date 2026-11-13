@@ -576,7 +576,6 @@ func TestLyricSearchTitleIsWired(t *testing.T) {
 		"kugouLocalLyric(artist, srcTitle, album, durationSecs)",
 		"kugouLyric(ctx, artist, srcTitle, album, durationSecs)",
 		"lrclibLyric(ctx, artist, srcTitle, album, durationSecs)",
-		"musixmatchLyric(mxCtx, artist, srcTitle, durationSecs,",
 		"ytmusicLyric(ctx, artist, srcTitle, album, durationSecs)",
 		"kuwoLyric(ctx, artist, srcTitle, album, durationSecs)",
 		"miguLyric(ctx, artist, srcTitle, album, durationSecs)",

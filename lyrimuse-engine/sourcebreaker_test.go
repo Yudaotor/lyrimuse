@@ -29,25 +29,25 @@ var errProbeDial = &net.OpError{Op: "dial", Err: errors.New("no such host")}
 
 func TestLyricSourceForHost(t *testing.T) {
 	cases := map[string]string{
-		"music.163.com":                 "netease",
-		"c.y.qq.com":                    "qq",
-		"u.y.qq.com:443":                "qq",
-		"KRCS.KUGOU.COM":                "kugou",
-		"lyrics.kugou.com":              "kugou",
-		"lrclib.net":                    "lrclib",
-		"apic-appmobile.musixmatch.com": "musixmatch",
-		"raw.githubusercontent.com":     "amll",
-		"music.youtube.com":             "lyricfind",
-		"search.kuwo.cn":                "kuwo",
-		"pd.musicapp.migu.cn":           "migu",
-		"d.musicapp.migu.cn":            "migu",
-		"ws.audioscrobbler.com":         "",
-		"api.listenbrainz.org":          "",
-		"musicbrainz.org":               "",
-		"itunes.apple.com":              "",
-		"1.1.1.1":                       "",
-		"notqq.com":                     "",
-		"evil-163.com":                  "",
+		"music.163.com":             "netease",
+		"c.y.qq.com":                "qq",
+		"u.y.qq.com:443":            "qq",
+		"KRCS.KUGOU.COM":            "kugou",
+		"lyrics.kugou.com":          "kugou",
+		"lrclib.net":                "lrclib",
+		"apis.naver.com":            "vibe",
+		"raw.githubusercontent.com": "amll",
+		"music.youtube.com":         "lyricfind",
+		"search.kuwo.cn":            "kuwo",
+		"pd.musicapp.migu.cn":       "migu",
+		"d.musicapp.migu.cn":        "migu",
+		"ws.audioscrobbler.com":     "",
+		"api.listenbrainz.org":      "",
+		"musicbrainz.org":           "",
+		"itunes.apple.com":          "",
+		"1.1.1.1":                   "",
+		"notqq.com":                 "",
+		"evil-163.com":              "",
 	}
 	for host, want := range cases {
 		if got := lyricSourceForHost(host); got != want {
@@ -313,8 +313,8 @@ func TestLyricSourceTransportFailureCodes(t *testing.T) {
 	// 咪咕:先 503 后 200 —— 不报。
 	b.observe("pd.musicapp.migu.cn", nil, 503, "")
 	b.observe("pd.musicapp.migu.cn", nil, 200, "")
-	// Musixmatch:只有取消 —— 不算失败,不报。
-	b.observe("apic-appmobile.musixmatch.com", context.Canceled, 0, "")
+	// VIBE:只有取消 —— 不算失败,不报。
+	b.observe("apis.naver.com", context.Canceled, 0, "")
 	// Last.fm / iTunes 不是歌词源,再怎么失败都不出现。
 	b.observe("ws.audioscrobbler.com", dns, 0, "")
 	b.observe("itunes.apple.com", dns, 0, "")
@@ -579,49 +579,49 @@ func TestLyricSourceBreakerIgnoresSingleEndpoint5xxWhenSiblingHealthy(t *testing
 // HTTP 200)撤不掉它,只有数据接口正经答一次(clearBlocked)才撤、档位归零。
 func TestLyricSourceBreakerBlockedPausesAndBacksOff(t *testing.T) {
 	b, clk := newTestBreaker()
-	if !b.noteBlocked("musixmatch") {
+	if !b.noteBlocked("vibe") {
 		t.Fatal("第一次被拦应当暂停")
 	}
-	if d, ok := b.blockedFor("musixmatch"); !ok || d != 15*time.Minute {
+	if d, ok := b.blockedFor("vibe"); !ok || d != 15*time.Minute {
 		t.Fatalf("第一档应暂停 15 分钟,实际 %v %s", ok, d)
 	}
 	clk.advance(time.Minute)
-	if b.noteBlocked("musixmatch") {
+	if b.noteBlocked("vibe") {
 		t.Fatal("暂停期内又被拦(之前在飞的请求)不该再算一次")
 	}
-	b.observe("apic-appmobile.musixmatch.com", nil, 200, "")
-	if d, ok := b.blockedFor("musixmatch"); !ok || d != 14*time.Minute {
+	b.observe("apis.naver.com", nil, 200, "")
+	if d, ok := b.blockedFor("vibe"); !ok || d != 14*time.Minute {
 		t.Fatalf("不升档、不续期,HTTP 200 也撤不掉:实际 %v %s", ok, d)
 	}
-	if d, cooling := b.coolingDown("musixmatch"); !cooling || d != 14*time.Minute {
+	if d, cooling := b.coolingDown("vibe"); !cooling || d != 14*time.Minute {
 		t.Fatalf("coolingDown 应当算上暂停,实际 %v %s", cooling, d)
 	}
-	if r := b.cooldownReason("musixmatch"); r != lyricSourceCooldownReasonBlocked {
+	if r := b.cooldownReason("vibe"); r != lyricSourceCooldownReasonBlocked {
 		t.Fatalf("原因 = %q, want blocked", r)
 	}
-	if plan := b.planRound(lyricSourceNames); plan["musixmatch"] != 14*time.Minute || len(plan) != 1 {
-		t.Fatalf("这一轮应只跳过 musixmatch,实际 %v", plan)
+	if plan := b.planRound(lyricSourceNames); plan["vibe"] != 14*time.Minute || len(plan) != 1 {
+		t.Fatalf("这一轮应只跳过 vibe,实际 %v", plan)
 	}
 	for _, want := range []time.Duration{30 * time.Minute, time.Hour, 2 * time.Hour, 4 * time.Hour, 4 * time.Hour} {
-		d, _ := b.blockedFor("musixmatch")
+		d, _ := b.blockedFor("vibe")
 		clk.advance(d)
-		if _, ok := b.blockedFor("musixmatch"); ok {
+		if _, ok := b.blockedFor("vibe"); ok {
 			t.Fatal("到期后应当放一个请求出去试探")
 		}
-		b.noteBlocked("musixmatch")
-		if got, _ := b.blockedFor("musixmatch"); got != want {
+		b.noteBlocked("vibe")
+		if got, _ := b.blockedFor("vibe"); got != want {
 			t.Fatalf("试探还被拦应升到 %s,实际 %s", want, got)
 		}
 	}
-	b.clearBlocked("musixmatch")
-	if _, ok := b.blockedFor("musixmatch"); ok {
+	b.clearBlocked("vibe")
+	if _, ok := b.blockedFor("vibe"); ok {
 		t.Fatal("正经答一次之后应当撤掉暂停")
 	}
-	if r := b.cooldownReason("musixmatch"); r != "" {
+	if r := b.cooldownReason("vibe"); r != "" {
 		t.Fatalf("撤掉之后原因 = %q, want 空", r)
 	}
-	b.noteBlocked("musixmatch")
-	if d, _ := b.blockedFor("musixmatch"); d != 15*time.Minute {
+	b.noteBlocked("vibe")
+	if d, _ := b.blockedFor("vibe"); d != 15*time.Minute {
 		t.Fatalf("撤掉之后档位归零,再被拦从 15 分钟起,实际 %s", d)
 	}
 }
@@ -650,25 +650,25 @@ func TestLyricSourceBreakerBlocksPersistAcrossRestart(t *testing.T) {
 	path := filepath.Join(t.TempDir(), lyricSourceBlocksFileName)
 	b, clk := newTestBreaker()
 	b.loadBlocks(path)
-	b.noteBlocked("musixmatch")
+	b.noteBlocked("vibe")
 	clk.advance(15 * time.Minute)
-	b.noteBlocked("musixmatch") // 第二档 30 分钟
+	b.noteBlocked("vibe") // 第二档 30 分钟
 	clk.advance(10 * time.Minute)
 
 	restarted := newLyricSourceBreaker(clk.now)
 	restarted.loadBlocks(path)
-	if d, ok := restarted.blockedFor("musixmatch"); !ok || d != 20*time.Minute {
+	if d, ok := restarted.blockedFor("vibe"); !ok || d != 20*time.Minute {
 		t.Fatalf("重启后应接着暂停剩下的 20 分钟,实际 %v %s", ok, d)
 	}
 	clk.advance(20 * time.Minute)
-	restarted.noteBlocked("musixmatch")
-	if d, _ := restarted.blockedFor("musixmatch"); d != time.Hour {
+	restarted.noteBlocked("vibe")
+	if d, _ := restarted.blockedFor("vibe"); d != time.Hour {
 		t.Fatalf("重启后再被拦应接着升到第三档 1 小时,实际 %s", d)
 	}
-	restarted.clearBlocked("musixmatch")
+	restarted.clearBlocked("vibe")
 	again := newLyricSourceBreaker(clk.now)
 	again.loadBlocks(path)
-	if _, ok := again.blockedFor("musixmatch"); ok {
+	if _, ok := again.blockedFor("vibe"); ok {
 		t.Fatal("撤销之后文件里不该还有它")
 	}
 

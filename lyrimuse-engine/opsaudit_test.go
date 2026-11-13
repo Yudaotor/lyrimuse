@@ -28,7 +28,7 @@ func TestHostGuardClockIsWallClock(t *testing.T) {
 func TestSourceBudgetFileDropsFutureAndSorts(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "budget.json")
 	now := time.Unix(1_800_000_000, 0)
-	saved := map[string][]int64{"musixmatch": {
+	saved := map[string][]int64{"deezer": {
 		now.Add(-10 * time.Minute).UnixMilli(), now.Add(-50 * time.Minute).UnixMilli(), now.Add(time.Hour).UnixMilli(),
 	}}
 	data, _ := json.Marshal(saved)
@@ -37,7 +37,7 @@ func TestSourceBudgetFileDropsFutureAndSorts(t *testing.T) {
 	}
 	g := newHostGuard(func() time.Time { return now })
 	g.useSourceBudgetFile(path)
-	hits := g.sourceHits["musixmatch"]
+	hits := g.sourceHits["deezer"]
 	if len(hits) != 2 || !hits[0].Before(hits[1]) {
 		t.Fatalf("应丢掉将来的那条、按先后排: %v", hits)
 	}

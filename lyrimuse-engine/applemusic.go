@@ -31,11 +31,9 @@ import (
 // 却在其余各源之外**的信源 —— 其余源一个字都取不回来的歌里,有一部分在 Apple 侧
 // hasTimeSyncedLyrics=true(另有一部分只有纯文本;Apple 也没有的多是器乐/现场,本来就不该有词)。
 //
-// 为什么其余候选源一个都没接:逐个实测过。Musixmatch 对这类歌
-// has_subtitles=0(有词无时间轴),而 Spotify / Tidal / Amazon 的歌词后端都是 Musixmatch,
-// 一并出局;Yandex 在本地网络回 451(区域封锁);韩国 Bugs 零命中;人工 LRC 站
-// (Megalobiz / Lyricsify)对一个月内的小众新歌没有收录;Genius 只有纯文本,而纯文本
-// Musixmatch 已经给了,增量为零。
+// 为什么其余候选源一个都没接:逐个实测过。Spotify / Tidal / Amazon 的歌词后端对这类歌
+// 有词无时间轴;Yandex 在本地网络回 451(区域封锁);韩国 Bugs 零命中;人工 LRC 站
+// (Megalobiz / Lyricsify)对一个月内的小众新歌没有收录;Genius 只有纯文本。
 //
 // 两段式:
 //
@@ -43,8 +41,7 @@ import (
 //	   applemusicEnsureDeveloperToken:从 music.apple.com 的 JS bundle 里抓,不要钱、
 //	   不要账号)。返回的 song attributes 自带 hasLyrics / hasTimeSyncedLyrics /
 //	   durationInMillis / artwork —— 其中那两个布尔是**这一路独有的便宜信号**:没有
-//	   时间轴的歌可以在取词之前就判掉,不白跑一个往返(同 musixmatch.go 那道
-//	   has_subtitles 闸)。
+//	   时间轴的歌可以在取词之前就判掉,不白跑一个往返。
 //	② 取词走 /songs/{id}/syllable-lyrics(逐字)与 /songs/{id}/lyrics(逐行),**必须**
 //	   带 media-user-token —— 这是订阅用户的登录令牌,由 lyrimuse 设置里的"连接
 //	   Apple Music"窗口登录一次拿到(见 applemusicUserTokenPath)。没有它这两个端点
@@ -127,7 +124,7 @@ var (
 	applemusicMu    sync.Mutex
 	applemusicCache = map[string]applemusicResult{}
 
-	// 单飞锁,理由同 musixmatch/deezer:相册预取一次能触发十几首歌并发解析,各自去抓一次
+	// 单飞锁,理由同 deezer:相册预取一次能触发十几首歌并发解析,各自去抓一次
 	// JS bundle(3MB)是纯浪费。
 	applemusicDevTokenMu      sync.Mutex
 	applemusicDevToken        string
@@ -378,7 +375,7 @@ func applemusicMarkTokenRejected(userToken string) {
 
 // applemusicDevTokenPath:developer token 的磁盘缓存。它是**公开**的(从 Apple 自己的
 // 网页 JS 里抓的,每个访问 music.apple.com 的浏览器都拿得到),不是用户凭据,
-// 但仍然落盘缓存 —— 理由跟 musixmatchTokenPath 一模一样:一次性的 search-lyrics CLI
+// 但仍然落盘缓存:一次性的 search-lyrics CLI
 // 每次都是新进程,只靠内存缓存等于每次都要下一个 3MB 的 JS bundle。
 func applemusicDevTokenPath() string {
 	if cacheDir() == "" {
@@ -742,7 +739,7 @@ type applemusicSong struct {
 		ArtistName       string `json:"artistName"`
 		AlbumName        string `json:"albumName"`
 		DurationInMillis int    `json:"durationInMillis"`
-		// Isrc:这条录音的 ISRC。按 ISRC 补取未应答的 deezer / musixmatch 用,见 isrcretry.go。
+		// Isrc:这条录音的 ISRC。按 ISRC 补取未应答的 deezer 用,见 isrcretry.go。
 		Isrc string `json:"isrc"`
 		// AudioLocale:演唱语种,zxx 是没有人声。歌曲实体的名字补扫记下它(songentitynames.go)。
 		AudioLocale string `json:"audioLocale"`
@@ -961,8 +958,7 @@ func applemusicEnglishTagFrom(defaultTag string, supported []string) string {
 //
 // 比别的源多一道**便宜闸**:hasLyrics=false 的直接淘汰 —— Apple 在搜索结果里就告诉了
 // 我们有没有词,不必等到取词那一趟才发现是空的。注意**不**在这里要求 hasTimeSynced:
-// 只有纯文本的歌仍然值得取回来走 plainOnly 通道(跟 musixmatch 那道 has_subtitles 闸的
-// 取舍一致:别因为没时间轴就整首丢掉)。纯函数,便于单测。
+// 只有纯文本的歌仍然值得取回来走 plainOnly 通道:别因为没时间轴就整首丢掉。纯函数,便于单测。
 func applemusicCandidateScore(s applemusicSong, artist, title, album string, durationSecs float64) int {
 	if strings.TrimSpace(s.ID) == "" {
 		return -1
@@ -1575,7 +1571,7 @@ func applemusicResultFrom(s applemusicSong, p amllResult, plainOnly bool) applem
 	}
 }
 
-// applemusicLyric 是这一路的入口,带进程内缓存(同 deezer/musixmatch)。
+// applemusicLyric 是这一路的入口,带进程内缓存(同 deezer)。
 // catalogID:正在播的这首歌在 Apple 目录里的 id(platformtrackid.go 记的,已过
 // appleCatalogAnchor 校验)。非空时先问 Music.app 自己的缓存要官方歌词 —— 那份带
 // 词级时间轴和官方译文,是搜索那条拿不到的,见 applemusiclocal.go 头注。

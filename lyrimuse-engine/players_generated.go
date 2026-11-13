@@ -200,7 +200,6 @@ var playerNativeLyricSources = map[string]string{
 	playerKugou:       "kugou",
 	playerSoda:        "soda",
 	playerKKBOX:       "kkbox",
-	playerSpotify:     "musixmatch",
 	playerAmazonMusic: "amazon",
 	playerKaset:       "lyricfind",
 	playerPearDesktop: "lyricfind",

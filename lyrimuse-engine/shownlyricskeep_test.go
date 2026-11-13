@@ -47,13 +47,13 @@ func TestLyricsCandidateAddsNothingShown(t *testing.T) {
 // 重评(打分版本落后):冠军跟当前这份原文不同、上屏看不出差别时留着当前这份,打分版本照常追平、决策记录标成没采用;
 // 看得出差别的照换;手动重新匹配照换(用户要的就是这一轮的结论)。
 func TestRescoreKeepsSameShownLyrics(t *testing.T) {
-	setupRescoreTest(t, []string{"musixmatch"}, nil)
+	setupRescoreTest(t, []string{"deezer"}, nil)
 	const artist, album = rescoreTestArtist, "Some Album"
 	run := func(title, current string, manual bool) enrichEntry {
 		key := enrichKey(artist, title, album)
 		enrichMu.Lock()
 		enrichCache = map[string]enrichEntry{key: {
-			Lyrics: bt(current), LyricsSource: "musixmatch", LyricsScore: 900, LyricsScoringVersion: lyricsScoringVersion - 1,
+			Lyrics: bt(current), LyricsSource: "deezer", LyricsScore: 900, LyricsScoringVersion: lyricsScoringVersion - 1,
 		}}
 		enrichMu.Unlock()
 		if manual {
@@ -87,7 +87,7 @@ func TestRescoreKeepsSameShownLyrics(t *testing.T) {
 // 升级重试:冠军分数更高、换上去屏上却看不出差别时不换;现存这份也就是给这个时长选的,时长照记,免得「时长对不上」接着重来。
 // 看得出差别的照常升级。
 func TestUpgradeRetryKeepsSameShownLyrics(t *testing.T) {
-	setupRescoreTest(t, []string{"musixmatch"}, nil)
+	setupRescoreTest(t, []string{"deezer"}, nil)
 	const artist, album = rescoreTestArtist, "Some Album"
 	run := func(title, current string) enrichEntry {
 		key := enrichKey(artist, title, album)
@@ -111,7 +111,7 @@ func TestUpgradeRetryKeepsSameShownLyrics(t *testing.T) {
 		t.Errorf("时长照记成这一轮的: %v", e.ResolvedDurationSecs)
 	}
 	e = run("Upgrade Changed", strings.Replace(shownSameBody, "first line", "first lane", 1))
-	if !e.Lyrics.EqualString(rescoreTestNewBody) || e.LyricsSource != "musixmatch" {
+	if !e.Lyrics.EqualString(rescoreTestNewBody) || e.LyricsSource != "deezer" {
 		t.Errorf("看得出差别照常升级: source=%q lyrics=%q", e.LyricsSource, e.Lyrics)
 	}
 }

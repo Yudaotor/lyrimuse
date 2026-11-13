@@ -71,9 +71,9 @@ Các tính năng này tắt sau khi cài. Hãy bật chúng trong cài đặt tr
 
 <a id="feature-lyric-sources"></a>
 
-### 15 nguồn lời bài hát, tìm tự động
+### 14 nguồn lời bài hát, tìm tự động
 
-NetEase Cloud Music, QQ Music, Kugou, Kuwo, Migu, Musixmatch, LRCLIB, LyricFind, Deezer, AMLL, Soda Music, VIBE, Genie, PetitLyrics và Apple Music. Mỗi nguồn đều có thể tắt, sắp xếp lại hoặc kiểm tra xem hiện có kết nối được không.
+NetEase Cloud Music, QQ Music, Kugou, Kuwo, Migu, LRCLIB, LyricFind, Deezer, AMLL, Soda Music, VIBE, Genie, PetitLyrics và Apple Music. Mỗi nguồn đều có thể tắt, sắp xếp lại hoặc kiểm tra xem hiện có kết nối được không.
 
 - Bật theo mặc định
 - Cài đặt: Lời bài hát › Nguồn › Nguồn lời bài hát
@@ -216,7 +216,7 @@ Mọi lời tìm được đều được lưu đệm trên máy Mac của bạn
 
 ### Bản dịch
 
-Bản dịch đi kèm lời bài hát hiển thị dưới mỗi dòng. NetEase Cloud Music, QQ Music và Kugou dịch sang tiếng Trung; Musixmatch và bản dịch máy theo ngôn ngữ dịch bạn chọn, trong 17 ngôn ngữ. Lời nổi, cửa sổ lời, Notch, thanh menu và Touch Bar có thể bật hoặc tắt riêng. Mặc định hiển thị khi các ngôn ngữ trên máy Mac của bạn có tiếng Trung.
+Bản dịch đi kèm lời bài hát hiển thị dưới mỗi dòng. NetEase Cloud Music, QQ Music và Kugou dịch sang tiếng Trung; bản dịch máy theo ngôn ngữ dịch bạn chọn, trong 17 ngôn ngữ. Lời nổi, cửa sổ lời, Notch, thanh menu và Touch Bar có thể bật hoặc tắt riêng. Mặc định hiển thị khi các ngôn ngữ trên máy Mac của bạn có tiếng Trung.
 
 - Cài đặt: Lời bài hát › Ngôn ngữ › Ngôn ngữ dịch
 - Cài đặt: Hiển thị lời › Lời nổi › Nội dung › Bản dịch

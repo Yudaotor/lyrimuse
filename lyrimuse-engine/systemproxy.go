@@ -15,27 +15,15 @@ import (
 
 // ---- 读 macOS 系统代理设置 ----
 //
-// 起因:用户在设置页点 Musixmatch 那颗「测试」,报「两首探测曲都没有响应,
-// 这个源目前可能不可用」。逐层量下来根因既不在代码,也不在 Musixmatch:
-//
-//	ping 52.22.193.26 / 54.144.176.235(apic-appmobile 的两个 A 记录)  100% 丢包
-//	ping 18.154.206.74(apic-desktop)/ 1.1.1.1  对照组                 0% 丢包,~160ms
-//	TCP connect 16 次                                                 只成功 3 次(且都要等 SYN 重传)
-//	TLS 握手 16 次                                                     0 次成功
-//	经本机 Clash(127.0.0.1:7897)                                      HTTP 200,拿到真 token
-//
-// 也就是说这台机器**直连** Musixmatch 那两个 AWS us-east-1 地址是不通的,而用户开着代理、
-// macOS 系统代理开关也是开的(scutil --proxy 里 HTTPSEnable=1 HTTPSProxy=127.0.0.1:7897),
-// 引擎却全程直连。
-//
-// 为什么会这样:**Go 标准库不读 macOS 系统代理**。http.ProxyFromEnvironment 只认
+// **Go 标准库不读 macOS 系统代理**。http.ProxyFromEnvironment 只认
 // HTTP(S)_PROXY / ALL_PROXY 环境变量,而引擎是被 Lyrimuse.app(GUI)拉起来的,
 // GUI 进程不继承 shell 环境 —— 实测运行中的引擎进程环境里一个 proxy 变量都没有。
-// 三个形状完全一样、只差 Proxy 字段的 http.Client 打同一个 URL 的对照:
+// 直连不通、macOS 系统代理开着(scutil --proxy 里 HTTPSEnable=1)的机器上,三个形状完全一样、
+// 只差 Proxy 字段的 http.Client 打同一个 URL 的对照:
 //
 //	A 现状(Transport 没有 Proxy 字段)     FAILED after 8.001s: context deadline exceeded
 //	B 只加 Proxy 显式指向 Clash           HTTP 200 in 6.5s
-//	C Proxy: http.ProxyFromEnvironment    FAILED: dial tcp 54.144.176.235:443: i/o timeout
+//	C Proxy: http.ProxyFromEnvironment    FAILED: dial tcp <ip>:443: i/o timeout
 //
 // C 就是"指望标准库自己读系统代理"这条路走不通的直接证据。
 //
@@ -155,8 +143,8 @@ func envProxyURL() *neturl.URL {
 // PAC(ProxyAutoConfigEnable=1)刻意不支持:要跑一段 JS 才能算出该用哪个代理,Go 标准库同样
 // 不支持。命中时返回 nil、退回直连,行为跟没有这套东西时一致。
 //
-// ExceptionsList 也刻意不解析:这条兜底通路只在"直连已经失败"之后才启用,且只对 doh.go 那份
-// 域名清单生效(当前只有 .musixmatch.com,不可能出现在内网例外表里)。把 `*.local` / `<local>` /
+// ExceptionsList 也刻意不解析:这条兜底通路只在"直连已经失败"之后才启用,且只对 proxyfallback.go 头注那份
+// 客户端名单生效(都是公网主机,不会出现在内网例外表里)。把 `*.local` / `<local>` /
 // `10.0.0.0/8` 这套通配 + CIDR 语义完整实现一遍是一大坨代码,而它能改变的行为只有"某个已经
 // 连不上的域名要不要试一下代理"。
 func parseSCUtilProxy(out string) *neturl.URL {

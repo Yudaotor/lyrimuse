@@ -48,7 +48,7 @@ const spotifyLyricsTestJSON = `{"lyrics":{"syncType":"LINE_SYNCED","lines":[` +
 	`{"startTimeMs":"20500","words":"♪","syllables":[],"endTimeMs":"0"},` +
 	`{"startTimeMs":"61230","words":"Second line","syllables":[],"endTimeMs":"0"},` +
 	`{"startTimeMs":"125004","words":"Third line","syllables":[],"endTimeMs":"0"}],` +
-	`"provider":"MusixMatch","language":"en"},"colors":{"background":-1}}`
+	`"provider":"Deezer","language":"en"},"colors":{"background":-1}}`
 
 func useSpotifyLyricsCacheDir(t *testing.T, dir string) {
 	t.Helper()
@@ -95,7 +95,7 @@ func TestSpotifyLyricsBodyGzipAndPlain(t *testing.T) {
 		"plain": []byte(spotifyLyricsTestJSON),
 	} {
 		got, ok := spotifyLyricsBody(spotifySimpleCacheEntry(key, body))
-		if !ok || !strings.Contains(string(got), `"MusixMatch"`) {
+		if !ok || !strings.Contains(string(got), `"Deezer"`) {
 			t.Errorf("%s: ok=%v body=%.60q", name, ok, got)
 		}
 	}
@@ -156,12 +156,9 @@ func TestSpotifyLyricsCacheFormatChangeCountsAsDrift(t *testing.T) {
 func TestSpotifyLyricsWorthRecheck(t *testing.T) {
 	base := enrichEntry{LyricsSourcesSeen: []string{"netease", "lrclib"}}
 	if !spotifyLyricsWorthRecheck(base, spotifyBundleID, false, true, true) {
-		t.Fatal("Musixmatch 没给出、Spotify 缓存里有,应补一次")
+		t.Fatal("Deezer 没给出、Spotify 缓存里有,应补一次")
 	}
-	withMxm := base
-	withMxm.LyricsSourcesSeen = append([]string{"musixmatch"}, base.LyricsSourcesSeen...)
 	cases := map[string]bool{
-		"Musixmatch 给出过":    spotifyLyricsWorthRecheck(withMxm, spotifyBundleID, false, true, true),
 		"缓存里没有":             spotifyLyricsWorthRecheck(base, spotifyBundleID, false, true, false),
 		"不是在用 Spotify 放":    spotifyLyricsWorthRecheck(base, appleMusicBundleID, false, true, true),
 		"钉住了":               spotifyLyricsWorthRecheck(base, spotifyBundleID, true, true, true),

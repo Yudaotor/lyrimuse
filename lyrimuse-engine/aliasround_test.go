@@ -16,14 +16,13 @@ import (
 func TestLyricSourcesWorthAliasRetry(t *testing.T) {
 	savedFeatures := features()
 	savedBreaker := sharedLyricSourceBreaker()
-	savedYT, savedMM := ytmusicLastFailureReasonNow(), musixmatchLastFailureReasonNow()
+	savedYT := ytmusicLastFailureReasonNow()
 	savedDZ := deezerLastFailureReasonNow()
 	savedAM := applemusicLastFailureReasonNow()
 	t.Cleanup(func() {
 		setFeatures(savedFeatures)
 		setSharedLyricSourceBreaker(savedBreaker)
 		ytmusicSetLastFailureReason(savedYT)
-		musixmatchSetLastFailureReason(savedMM)
 		deezerSetLastFailureReason(savedDZ)
 		applemusicSetLastFailureReason(savedAM)
 	})
@@ -36,11 +35,10 @@ func TestLyricSourcesWorthAliasRetry(t *testing.T) {
 	// 酷我:传输层连不上 —— 换名字也没用
 	dns := &url.Error{Op: "Get", Err: &net.OpError{Op: "dial", Err: &net.DNSError{Err: "no such host", IsNotFound: true}}}
 	sharedLyricSourceBreaker().observe("search.kuwo.cn", dns, 0, "")
-	// lyricfind 地区限制、musixmatch 直连被堵、deezer 换不到匿名 JWT —— 同理
+	// lyricfind 地区限制、deezer 换不到匿名 JWT —— 同理
 	ytmusicSetLastFailureReason(lyricFailureReasonLyricFindRegionRestricted)
-	musixmatchSetLastFailureReason(lyricFailureReasonMusixmatchDirectBlocked)
 	deezerSetLastFailureReason(lyricFailureReasonDeezerAuthFailed)
-	// applemusic:用户没连过账号 —— 跟上面三个同理,换名字也变不出凭据来
+	// applemusic:用户没连过账号 —— 跟上面两个同理,换名字也变不出凭据来
 	applemusicSetLastFailureReason(lyricFailureReasonAppleMusicNotConnected)
 
 	results := []scoredLyricCandidateResult{
@@ -65,13 +63,12 @@ func TestLyricSourcesWorthAliasRetry(t *testing.T) {
 	if got := lyricSourcesWorthAliasRetry(context.Background(), full); len(got) != 0 {
 		t.Fatalf("全部可用时应为空,得到 %v", got)
 	}
-	// 具体原因清掉后 lyricfind / musixmatch / deezer 重新算缺
+	// 具体原因清掉后 lyricfind / deezer 重新算缺
 	ytmusicSetLastFailureReason("")
-	musixmatchSetLastFailureReason("")
 	deezerSetLastFailureReason("")
 	got = lyricSourcesWorthAliasRetry(context.Background(), results)
-	if !containsString(got, "lyricfind") || !containsString(got, "musixmatch") || !containsString(got, "deezer") {
-		t.Fatalf("没有具体失败原因时 lyricfind / musixmatch / deezer 应算缺,得到 %v", got)
+	if !containsString(got, "lyricfind") || !containsString(got, "deezer") {
+		t.Fatalf("没有具体失败原因时 lyricfind / deezer 应算缺,得到 %v", got)
 	}
 }
 
@@ -83,9 +80,9 @@ func TestWithLyricSourceOnly(t *testing.T) {
 	if withLyricSourceOnly(base, nil) != base || withLyricSourceOnly(base, []string{}) != base {
 		t.Fatal("空名单应原样返回 ctx(不限制)")
 	}
-	ctx := withLyricSourceOnly(base, []string{"qq", "musixmatch"})
+	ctx := withLyricSourceOnly(base, []string{"qq", "lrclib"})
 	set := lyricSourceOnlyFrom(ctx)
-	if !set["qq"] || !set["musixmatch"] || set["netease"] || len(set) != 2 {
+	if !set["qq"] || !set["lrclib"] || set["netease"] || len(set) != 2 {
 		t.Fatalf("名单不对:%v", set)
 	}
 	if lyricSourceOnlyFrom(nil) != nil {

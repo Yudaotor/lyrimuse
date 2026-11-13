@@ -266,7 +266,7 @@ func versionLabelParts(s string) (string, bool) {
 // versionLabelsConflict:两个歌名的括号里都有同一类文字写的版本标注,而且这些里没有哪一对说得上是同一版(「唯」对「律」、
 // 「japanese」对「english」)。一个包含另一个算同一版(「tv」对「tvsize」、「765pro」对「765proallstars」,写法详略不同)。
 // 一边只有拉丁字母、另一边有汉字假名的那一对不比(「Mari Ohara Solo Version」对「小原鞠莉 Solo Ver.」:Apple Music、
-// Musixmatch、Deezer 常按地区给罗马字的歌名,认不出是不是同一个人);同一个歌名常两种都带(「(優木せつ菜 Ver.) (Setsuna Yuki
+// Deezer 常按地区给罗马字的歌名,认不出是不是同一个人);同一个歌名常两种都带(「(優木せつ菜 Ver.) (Setsuna Yuki
 // Version)」),那就拿同类的那一对比。只有一边带标注、没有同一类文字的那一对,都不算:各家常把标注只写在专辑名里,或者只收了
 // 合唱版。纯函数。
 func versionLabelsConflict(a, b string) bool {

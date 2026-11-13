@@ -5,13 +5,12 @@ import (
 	"testing"
 )
 
-// 只改字的保存:背景人声的行头还挂得上就留着;正文、逐字逐行比行数和每行时间戳都没变,演唱者标注换成新正文的指纹接着用。
+// 只改字的保存:背景人声的行头还挂得上就留着。
 func TestSaveEditKeepsLineBoundExtrasWhenOnlyTextChanged(t *testing.T) {
 	yrc := "[1000,1000](1000,500,0)记(1500,500,0)得\n[3000,1000](3000,1000,0)第二句"
 	lrc := "[00:01.00]记得\n[00:03.00]第二句"
 	bg := "[1000,800](1200,600,0)(和声)"
-	base := enrichEntry{TS: 1, Lyrics: bt(lrc), LyricsYRC: bt(yrc), LyricsBG: bt(bg),
-		LyricsSpeakers: &lyricSpeakers{For: lyricSpeakersFingerprint(lrc, yrc), LRC: []string{"v1", "v2"}, YRC: []string{"v1", "v2"}}}
+	base := enrichEntry{TS: 1, Lyrics: bt(lrc), LyricsYRC: bt(yrc), LyricsBG: bt(bg)}
 
 	e := base
 	typoYRC := "[1000,1000](1000,500,0)忘(1500,500,0)得\n[3000,1000](3000,1000,0)第二句"
@@ -21,9 +20,6 @@ func TestSaveEditKeepsLineBoundExtrasWhenOnlyTextChanged(t *testing.T) {
 	if !e.LyricsBG.EqualString(bg) {
 		t.Errorf("只改字,背景人声该留着: %q", e.LyricsBG)
 	}
-	if e.LyricsSpeakers == nil || e.LyricsSpeakers.For != lyricSpeakersFingerprint(e.Lyrics.String(), e.LyricsYRC.String()) || len(e.LyricsSpeakers.LRC) != 2 {
-		t.Errorf("只改字,演唱者标注换成新正文的指纹接着用: %+v", e.LyricsSpeakers)
-	}
 
 	e = base
 	dropYRC := "[3000,1000](3000,1000,0)第二句"
@@ -32,18 +28,6 @@ func TestSaveEditKeepsLineBoundExtrasWhenOnlyTextChanged(t *testing.T) {
 	}
 	if !e.LyricsBG.IsZero() {
 		t.Errorf("删了背景人声挂的那一行,背景人声该清掉: %q", e.LyricsBG)
-	}
-	if e.LyricsSpeakers == nil || e.LyricsSpeakers.For != lyricSpeakersFingerprint(lrc, yrc) {
-		t.Errorf("行数变了,演唱者标注不换指纹: %+v", e.LyricsSpeakers)
-	}
-
-	e = base
-	movedYRC := "[1200,1000](1200,500,0)记(1700,500,0)得\n[3000,1000](3000,1000,0)第二句"
-	if err := applySaveEdit(&e, enrichEditRequest{Key: editKey, Lyrics: "[00:01.20]记得\n[00:03.00]第二句", YRC: &movedYRC, MarkManual: true}); err != nil {
-		t.Fatal(err)
-	}
-	if e.LyricsSpeakers.For != lyricSpeakersFingerprint(lrc, yrc) {
-		t.Errorf("改了时间戳不算只改字,演唱者标注不换指纹: %+v", e.LyricsSpeakers)
 	}
 }
 

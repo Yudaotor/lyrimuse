@@ -139,7 +139,7 @@ Dans Lyrimuse, le nombre d’écoutes, les classements et les numéros de « É
 ## 7. Questions fréquentes
 
 **Puis-je utiliser Lyrimuse sans scrobbler ?**
-Oui, c’est le comportement par défaut : rien n’est scrobblé tant que vous n’avez pas connecté de compte Last.fm dans Réglages → Plateformes liées. La recherche des paroles et des illustrations est indépendante : elle envoie le nom de l’artiste et du morceau aux sources de paroles publiques (Netease, QQ, Kugou, LRCLIB, Musixmatch, AMLL), qu’un compte soit connecté ou non. Ces sources peuvent être restreintes ou désactivées dans les Réglages.
+Oui, c’est le comportement par défaut : rien n’est scrobblé tant que vous n’avez pas connecté de compte Last.fm dans Réglages → Plateformes liées. La recherche des paroles et des illustrations est indépendante : elle envoie le nom de l’artiste et du morceau aux sources de paroles publiques (Netease, QQ, Kugou, LRCLIB, AMLL), qu’un compte soit connecté ou non. Ces sources peuvent être restreintes ou désactivées dans les Réglages.
 
 **Pourquoi le même artiste apparaît-il deux fois sur mon profil Last.fm ?**
 Votre lecteur a indiqué deux noms différents, et les deux ont été envoyés tels quels. Lyrimuse les fusionne dans ses propres statistiques ; pour les fusionner sur Last.fm, il faut y modifier les scrobbles.

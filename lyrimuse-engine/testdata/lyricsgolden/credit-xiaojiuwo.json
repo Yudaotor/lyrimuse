@@ -3,7 +3,7 @@
   "category": "multi-artist-credit",
   "note": "多歌手合 credit:本地署名「林俊杰 \u0026 蔡卓妍」,各源写法是「林俊杰、蔡卓妍」等,artistCreditParts 分段后交集判定;歌词是男女对唱,带「男：/女：」行内前缀,共识比对只剥前缀保留正文",
   "label_evidence": {
-    "consensus_peers": 4,
+    "consensus_peers": 3,
     "title_accepted": true,
     "version_tags_ok": true,
     "source_duration_delta_pct": 0.011925183235031812,
@@ -36,7 +36,6 @@
       "kuwo": true,
       "lrclib": true,
       "lyricfind": true,
-      "musixmatch": true,
       "netease": true,
       "qq": true
     },
@@ -45,7 +44,6 @@
       "netease",
       "qq",
       "kugou",
-      "musixmatch",
       "lrclib",
       "amll",
       "lyricfind",
@@ -78,14 +76,6 @@
       "instrumental": true
     },
     "lyricfind": {},
-    "musixmatch": {
-      "lyrics": "[00:09.97] 䲫䣮䰤䏐㑬 㚢㱆䶱㯰 䨵㚢㱆䪢㾼\n[00:20.41] 䥴㐺䲫㟅㬸 㐺䲫䇿㤨\n[00:26.49] 㦠䲫㨷㜭㦠䲫㠟\n[00:30.63] 䚚䙦䟓㢰㻁䖺㬛\n[00:34.92] 䃂䕙㗫䲫䁬䑑䑑㺃㯰\n[00:40.07] 㽕䁉㻛㿥䡻䖆㠋䧰\n[00:43.12] 㴨㥩㩯㯽㻁䆖㥩 㻁㩯䎍䧰\n[00:49.73] 㖦䬔㢋 䛿䝞䍯 㴥㐪䞽䠵䶍䉁䛻\n[00:54.74] 䲫㧵䖦䢝䆈㩞 䎡䵢㐪䶍䐝䖠\n[01:00.73] 㐪䆈䧭䖤 㐪㱫䲫䝴㼇㥲䪯\n[01:05.49] 㻁䧰㐪 㨷䂰㶦㡸䶍䊟㚥\n[01:09.90] 㖦䬔㢋 䛿䝞䍯 䩵㻣䶍㴨䙇䘌䂜\n[01:15.19] 䲫㮞䑑䧰䙖䐻 䮌䅸㑌㴥㡷䬟䧰\n[01:21.16] 䋯䞢㑬䀔 㩶㻁䰳䓤䶍䠵㚥\n[01:26.06] 㚢䔿㼻䇄䇄䶍㚥\n[01:31.13] 䲫䵫㹝㷤㐪䀔䂑\n[01:43.84] 䚚䙦䟓㢰㻁䖺㬛\n[01:48.24] 䃂䕙㗫䲫䁬䑑䑑㺃㯰\n[01:53.22] 㽕䁉㻛㿥䡻䖆㠋䧰\n[01:56.47] 㴨㥩㩯㯽㻁䆖㥩 㻁㩯䎍䧰\n[02:02.88] 㖦䬔㢋 䛿䝞䍯 㴥㐪䞽䠵䶍䉁䛻\n[02:08.10] 䲫㧵䖦䢝䆈㩞 䎡䵢㐪䶍䐝䖠\n[02:14.04] 㐪䆈䧭䖤 㐪㱫䲫䝴㼇㥲䪯\n[02:18.60] 㻁䧰㐪㨷䂰㶦㡸䶍䊟㚥\n[02:23.17] 㖦䬔㢋 䛿䝞䍯 䩵㻣䶍㴨䙇䘌䂜\n[02:28.26] 䲫㮞䑑䧰䙖䐻 䮌䅸㑌㴥㡷䬟䧰\n[02:34.27] 䋯䞢㑬䀔 㩶㻁䰳䓤䶍䠵㚥\n[02:39.37] 㚢䔿㼻䇄䇄䶍㚥\n[02:44.43] 䲫䵫㹝㷤㐪䀔䂑\n[02:56.30] 㖦䬔㢋 䛿䝞䍯 䩵㻣䶍㴨䙇䘌䂜\n[03:02.33] 䲫㮞䑑䧰䙖䐻 䮌䅸㑌㴥㡷䬟䧰\n[03:08.40] 䋯䞢㑬䀔 㩶㻁䰳䓤䶍䠵㚥\n[03:13.42] 㚢䔿㼻䇄䇄䶍㚥\n[03:18.53] 䲫䵫㹝㷤㐪䀔䂑\n[03:30.14] ",
-      "title": "小酒窝",
-      "artist": "林俊傑",
-      "album": "JJ林俊杰 I AM 世界巡回演唱会小巨蛋（终极典藏版）",
-      "cover": "https://s.mxmcdn.net/images-storage/albums/6/3/5/9/7/2/32279536_500_500.jpg",
-      "duration_secs": 300
-    },
     "netease": {
       "netease": {
         "cover": "https://p2.music.126.net/m1Jv3k4Yl4kpBv62NPjGHQ==/109951172814148796.jpg?param=800y800",
@@ -116,14 +106,13 @@
     "verdicts": {
       "amll": "accepted",
       "kugou": "accepted",
-      "musixmatch": "accepted",
       "netease": "accepted",
       "qq": "accepted"
     },
     "ranked": [
       {
         "source": "qq",
-        "score": 1192,
+        "score": 1196,
         "terms": [
           {
             "kind": "duration",
@@ -135,7 +124,7 @@
           },
           {
             "kind": "lines",
-            "points": 43
+            "points": 47
           },
           {
             "kind": "album",
@@ -154,7 +143,7 @@
       },
       {
         "source": "netease",
-        "score": 1192,
+        "score": 1196,
         "terms": [
           {
             "kind": "duration",
@@ -166,7 +155,7 @@
           },
           {
             "kind": "lines",
-            "points": 43
+            "points": 47
           },
           {
             "kind": "album",
@@ -185,7 +174,7 @@
       },
       {
         "source": "kugou",
-        "score": 1192,
+        "score": 1196,
         "terms": [
           {
             "kind": "duration",
@@ -197,7 +186,7 @@
           },
           {
             "kind": "lines",
-            "points": 43
+            "points": 47
           },
           {
             "kind": "album",
@@ -216,7 +205,7 @@
       },
       {
         "source": "amll",
-        "score": 1192,
+        "score": 1196,
         "terms": [
           {
             "kind": "duration",
@@ -228,7 +217,7 @@
           },
           {
             "kind": "lines",
-            "points": 43
+            "points": 47
           },
           {
             "kind": "album",
@@ -244,40 +233,6 @@
           }
         ],
         "has_word_timing": true
-      },
-      {
-        "source": "musixmatch",
-        "score": 1,
-        "terms": [
-          {
-            "kind": "duration",
-            "points": 228
-          },
-          {
-            "kind": "sourceDurationOff",
-            "points": -400
-          },
-          {
-            "kind": "lines",
-            "points": 42
-          },
-          {
-            "kind": "versionTags",
-            "points": -600
-          },
-          {
-            "kind": "album",
-            "points": 40
-          },
-          {
-            "kind": "titleMatch",
-            "points": 120
-          },
-          {
-            "kind": "consensus",
-            "points": 250
-          }
-        ]
       }
     ],
     "winner_fingerprint": "a116b72361c97bc0"

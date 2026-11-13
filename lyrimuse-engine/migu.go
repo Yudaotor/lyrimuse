@@ -44,7 +44,7 @@ import (
 // 搜索结果里的 `mrcurl`(加密的 MRC 文件),只给选中的那一条拉,解密与转换见 migumrc.go。
 //
 // 合规提醒:这是网页/客户端接口、非公开 API 文档,"可能随时失效、要求验证码或发生变更"
-// ——跟 kuwo.go / musixmatch.go 同一类风险,不是新引入一种风险类别。healthcheck 走
+// ——跟 kuwo.go 同一类风险,不是新引入一种风险类别。healthcheck 走
 // enabledLyricSourceNames()(见 enrich.go lyricSourceNames),接进去自动被覆盖。
 type miguResult struct {
 	lyrics, tr, title, artist, album string

@@ -22,7 +22,7 @@ import (
 // 用哪个代理看「代理」设置(networkproxy.go 的 fallbackProxyURL)。代理比直连慢、失败率也高得多(数据见 09 章
 // 决策 48),所以它只能是兜底:直连正常时一个包都不该经过它。
 //
-// 生效范围:doh.go 的 dohHTTPClient(dohHostSuffixes,当前只有 .musixmatch.com)、lyricsourcedial.go 的海外歌词源
+// 生效范围:lyricsourcedial.go 的海外歌词源
 // (lyricSourceProxyFallbackSources,每台主机一份)、alerter.go 的 telegramHTTPClient(推送到 api.telegram.org)、
 // relay.go 的 relayHTTPClient / relaySeedClient(状态中继的推送与封面托管、启动补「上次播放」那一次 ListenBrainz 查询),
 // 以及 lb.go 的 lbHTTPClient(ListenBrainz 提交)。国内歌词源只直连,Last.fm / iTunes 等仍是 http.DefaultTransport。
@@ -32,18 +32,15 @@ const (
 	// 3 秒足够分辨这两种,又不至于在慢网络上把"只是有点慢"误判成"被打掉了"。只算到拿到连接为止,服务器处理得慢
 	// 不算(见 attemptDirect)。
 	proxyFallbackDirectBudget = 3 * time.Second
-	// proxyFallbackDirectCap:调用方没设时限时,直连整段请求(含服务器处理、读响应体)的上限。Musixmatch 的请求不带时限
-	// (一轮 20 秒截止是 time.After,不挂在 ctx 上),它的翻译 / 字幕接口慢的时候要三秒多才回;按 3 秒整段掐表的话这些
-	// 慢应答全被当成直连不通:喂熔断、换主机、报 musixmatch_direct_blocked。见 09 章决策 42、301。
+	// proxyFallbackDirectCap:调用方没设时限时,直连整段请求(含服务器处理、读响应体)的上限。别按 proxyFallbackDirectBudget
+	// 整段掐表:服务器慢的时候要三秒多才回,这些慢应答会全被当成直连不通、喂熔断、换主机。见 09 章决策 42、301。
 	proxyFallbackDirectCap = 10 * time.Second
 	// proxyFallbackProxyBudget:走代理的预算。实测经本机 Clash 打 token.get 是 6.5s
 	// (代理要先把自己那条出境链路建起来),给 10s 留足余量。
 	proxyFallbackProxyBudget = 10 * time.Second
 	// proxyFallbackSticky:代理救回来之后,接下来多久直接走代理、不再重新探直连。
 	//
-	// 粘性不是优化,是必需项。AGENTS.md 里 Musixmatch DNS 事故的原话是
-	// 「每首歌都要把 DNS/TLS 超时白等一遍」,healthcheck 探两首歌从 7s 涨到 29s。没有粘性
-	// 的话这里会原样重演:每个请求先白等 3s 直连再走代理。10 分钟之后重新探一次直连,
+	// 粘性不是优化,是必需项:没有粘性的话每个请求都先白等 3s 直连再走代理。10 分钟之后重新探一次直连,
 	// 网络恢复了就自动回到直连,不需要重启。
 	//
 	// 这是第一次的窗口;到期重新探直连又失败,窗口翻倍(proxyStickyWindow)。
@@ -51,8 +48,8 @@ const (
 	// proxyFallbackStickySlowFirst:只是建连没在预算内完成(没被拒、没解析失败)时,第一次走代理的窗口。偶尔慢一下的
 	// 主机这样很快回到直连;真被打掉的,下一次探直连还是不通,窗口照常从 proxyStickyWindow(2) 翻倍。见 09 章决策 324。
 	proxyFallbackStickySlowFirst = 2 * time.Minute
-	// proxyFallbackStickyMax:窗口翻倍的上限。直连在这台机器上是长期被打掉的(Musixmatch 一周 86 次
-	// 「直连失败、代理救回」,每次都先白等 proxyFallbackDirectBudget),固定 10 分钟就是每隔一阵再白等一次;
+	// proxyFallbackStickyMax:窗口翻倍的上限。直连可能长期被打掉(每次都先白等
+	// proxyFallbackDirectBudget),固定 10 分钟就是每隔一阵再白等一次;
 	// 一直失败就越等越久,上限之后仍会定期探一次,直连恢复了照样回得来。
 	proxyFallbackStickyMax = 6 * time.Hour
 )
@@ -69,7 +66,7 @@ func proxyStickyWindow(streak int) time.Duration {
 
 // proxyFallbackTransport 把上面那条策略包成一个 http.RoundTripper。
 //
-// 为什么做在 RoundTripper 这一层而不是拨号层(dohDialContext):HTTP 代理是靠 CONNECT 建
+// 为什么做在 RoundTripper 这一层而不是拨号层:HTTP 代理是靠 CONNECT 建
 // 隧道的,在 net.Conn 那一层做等于手写一遍 CONNECT 握手;而 http.Transport 本来就实现了
 // 它,只要给它一个 Proxy 函数。两个 Transport 各自完整、互不干扰,选哪个是这一层的事。
 type proxyFallbackTransport struct {
@@ -146,7 +143,7 @@ func (t *proxyFallbackTransport) RoundTrip(req *http.Request) (*http.Response, e
 		return resp, nil
 	}
 	// 直连失败但失败的原因是调用方自己取消 / 到期、或者连上了只是没在上限内答完:不是「直连不通」,不试代理、也不报
-	// blocked(那个原因常驻进程里从不清除,一次就会让 Musixmatch 这一路一直不进别名重查)。
+	// blocked(那个原因常驻进程里从不清除,一次就会让这一路一直不进别名重查)。
 	if !directUnreachable(req, directErr) {
 		return nil, directErr
 	}
@@ -186,8 +183,7 @@ func (t *proxyFallbackTransport) RoundTrip(req *http.Request) (*http.Response, e
 // attempt 跑一次 RoundTrip,并给它单独一份预算(整段请求,含读响应体)。
 //
 // 预算必须落在**每次尝试**上,不能靠 http.Client.Timeout —— 那是把直连和代理两次尝试
-// 算进同一个预算里,直连一超时就没钱给代理重试了,fallback 等于没加。dohHTTPClient 因此
-// 刻意不设 Client.Timeout,头注里也写着别加回去。
+// 算进同一个预算里,直连一超时就没钱给代理重试了,fallback 等于没加。
 func (t *proxyFallbackTransport) attempt(rt http.RoundTripper, req *http.Request, budget time.Duration) (*http.Response, error) {
 	ctx, cancel := context.WithTimeout(req.Context(), budget)
 	return proxyFallbackSend(ctx, rt, req, cancel)
@@ -196,8 +192,8 @@ func (t *proxyFallbackTransport) attempt(rt http.RoundTripper, req *http.Request
 // attemptDirect 跑一次直连。fallback:直连不通时后面还有代理可退。
 //
 // 直连的预算只为判「直连通不通」,而不通的样子是连接建不起来(SYN 石沉大海、TLS 握手卡住):
-//   - 后面有代理可退:预算只管到拿到连接为止,拿到就停表。之后服务器自己处理得慢(ListenBrainz 慢的时候三五秒才回,
-//     Musixmatch 的翻译 / 字幕接口也常过 3 秒)交给调用方的时限 —— 那不是直连被打掉,按整段请求掐表的话会把同一个请求
+//   - 后面有代理可退:预算只管到拿到连接为止,拿到就停表。之后服务器自己处理得慢(ListenBrainz 慢的时候三五秒才回)
+//     交给调用方的时限 —— 那不是直连被打掉,按整段请求掐表的话会把同一个请求
 //     经代理再发一遍,还把这台主机钉到代理上(最长 6 小时)。
 //   - 没有代理可退(没有可用的系统代理、代理失败后回直连那一次、body 不能重放):不另设建连预算,早掐只会更差。
 //   - 调用方没设时限:另外给整段请求限 proxyFallbackDirectCap,不让连上了却一直不回话的服务器把调用方挂着。连上了、
@@ -358,7 +354,7 @@ func (t *proxyFallbackTransport) markSticky(host string, slowConnect bool) time.
 	return window
 }
 
-// forceProxyFor:不等直连失败,接下来 d 这么久 host 直接走代理(直连这个出口被对方反爬拦下时用,见 musixmatchreroute.go)。
+// forceProxyFor:不等直连失败,接下来 d 这么久 host 直接走代理(直连这个出口被对方反爬拦下时用)。
 // 连续失败次数不动,到期之后照常重新探一次直连。c 不是这一层的客户端时什么都不做。
 func forceProxyFor(c *http.Client, host string, d time.Duration) {
 	t, ok := c.Transport.(*proxyFallbackTransport)
@@ -532,7 +528,7 @@ func writeProxyFallbackHint(host string, useProxy, slowConnect bool) time.Durati
 	if os.MkdirAll(filepath.Dir(path), 0o700) != nil {
 		return window
 	}
-	// tmp + rename,临时文件名带进程号 —— 跟 musixmatchSaveTokenFile 同一个理由:并发的
+	// tmp + rename,临时文件名带进程号:并发的
 	// 两个写入方不能互相覆盖同一个 tmp,否则 rename 出去的可能是半份别人的内容。
 	_ = writeFileAtomic(path, raw)
 	return window

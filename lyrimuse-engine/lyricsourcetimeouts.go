@@ -3,7 +3,7 @@ package main
 import "time"
 
 // 各歌词源单个请求的整体超时(含读完响应体),交给 lyricHTTPClient。一轮搜索另有 20 秒总截止(lyricSearchDeadline)。
-// 自带超时常量的源不在这里:网易云的在各调用点按接口传(neteaseFetchBody 的 timeout 参数)、Musixmatch 用 musixmatchHTTPClient、
+// 自带超时常量的源不在这里:网易云的在各调用点按接口传(neteaseFetchBody 的 timeout 参数)、
 // 汽水用 sodaLyricTimeout、YouTube Music 的接口用 ytmusicHTTPTimeout。
 const (
 	// qqHTTPTimeout:QQ 网页接口(搜索、歌词、lyric_download)。

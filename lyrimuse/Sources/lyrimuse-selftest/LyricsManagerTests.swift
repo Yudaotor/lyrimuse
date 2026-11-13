@@ -292,7 +292,7 @@ func runLyricsManagerTests() {
             G.Traits(source: source, excluded: excluded, hasWordTiming: word, hasTranslation: tr, hasRomanization: roma)
         }
         let items = [t("qq", word: true, tr: true), t("lrclib"), t("netease", word: true), t("kugou", tr: true, roma: true),
-                     t("musixmatch", excluded: true), t("migu")]
+                     t("deezer", excluded: true), t("migu")]
         let dups: [String: M] = ["lrclib": M(anchor: "qq", sameTimeline: true), "netease": M(anchor: "qq", sameTimeline: true),
                                  "kugou": M(anchor: "qq", sameTimeline: true), "migu": M(anchor: "qq", sameTimeline: false)]
         let groups = G.groups(items, duplicates: dups)
@@ -300,7 +300,7 @@ func runLyricsManagerTests() {
         expectEqual(groups["lrclib"], .sameAsAnother, "候选分组: 内容相同、没多带东西的收进「内容相同」")
         expectEqual(groups["netease"], .sameAsAnother, "候选分组: 逐字轨锚也有,不算多带")
         expectEqual(groups["kugou"], .main, "候选分组: 多带读音的留在列表里")
-        expectEqual(groups["musixmatch"], .excluded, "候选分组: 评分时被排除的收进「不可用」")
+        expectEqual(groups["deezer"], .excluded, "候选分组: 评分时被排除的收进「不可用」")
         expectEqual(groups["migu"], .main, "候选分组: 只有文字相同、时间不同的留在列表里(比的就是时间轴)")
         let anchorExcluded = G.groups([t("a", excluded: true), t("b")], duplicates: ["b": M(anchor: "a", sameTimeline: true)])
         expectEqual(anchorExcluded["b"], .main, "候选分组: 锚被排除时不收,不然列表里看不到跟它一样的那条")
@@ -1091,9 +1091,9 @@ func runLyricsManagerTests() {
         expectEqual(D.firstMatches([("lrclib", "", t1), ("amll", "", t1)]).isEmpty, true, "同词标注: 空指纹互相不算相同")
         expectEqual(D.firstMatches([]).isEmpty, true, "同词标注: 空列表")
         // 词一样、每行时间不一样的只算文字相同;后面又有跟它时间也一样的,指向它而不是首条。
-        let mixed = D.firstMatches([("qq", "aaa", t1), ("lrclib", "aaa", t2), ("musixmatch", "aaa", t2)])
+        let mixed = D.firstMatches([("qq", "aaa", t1), ("lrclib", "aaa", t2), ("deezer", "aaa", t2)])
         expectEqual(mixed["lrclib"], D.Match(anchor: "qq", sameTimeline: false), "同词标注: 每行时间不一样只算文字相同")
-        expectEqual(mixed["musixmatch"], D.Match(anchor: "lrclib", sameTimeline: true), "同词标注: 优先指向词和时间都一样的那条")
+        expectEqual(mixed["deezer"], D.Match(anchor: "lrclib", sameTimeline: true), "同词标注: 优先指向词和时间都一样的那条")
         // 每行时间:取行规则跟只取词的指纹一样;行首认不出时间的标签不算,一行挂几个时间就记几个。
         let timed = "[ti:歌名]\n[00:11.13]第一句\n\n[00:12.00][01:05.5]副歌\n 没时间戳 \n[00:30.00]"
         expectEqual(D.lineTimestamps(timed), [[11130], [12000, 65500], []], "每行时间: 剥标签、空行不算、一行几个时间都记")
@@ -1164,7 +1164,7 @@ func runLyricsManagerTests() {
     // 逐条平铺查询词分组时,曲名/源名单会大量重复(如曲名重复 9 遍、同一串源名单重复 8 遍),
     // 20 多个视觉行里真正的信息可能只有"换了几个歌手名"。
     do {
-        let SRC = ["netease", "qq", "lrclib", "musixmatch", "amll", "kuwo", "migu"]
+        let SRC = ["netease", "qq", "lrclib", "amll", "kuwo", "migu"]
         let TITLE = "Beautiful World (Da Capo Version) [Instrumental]"
         // 对拍里那一轮的真实形状:首轮 1 组 + 别名轮 8 组,曲名与源名单全同。
         let rounds = [LyricQueryRound(artist: "Utada", title: TITLE, reason: "", sources: [])]
@@ -1285,7 +1285,7 @@ func runLyricsManagerTests() {
         }
 
         // ---- A:back number《Hanataba》(匹配到《水平線》)----
-        let peersA = ["netease", "qq", "kugou", "lrclib", "musixmatch"]
+        let peersA = ["netease", "qq", "kugou", "lrclib", "deezer"]
         let sampleA = [
             cand("qq", 945, [("duration", 164), ("wordTiming", 400), ("lines", 51),
                              ("consensus", 250), ("translation", 50), ("romanization", 30)],
@@ -1294,7 +1294,7 @@ func runLyricsManagerTests() {
                                 ("consensus", 250), ("translation", 50), ("romanization", 30)]),
             cand("netease", 942, [("duration", 163), ("wordTiming", 400), ("lines", 49),
                                   ("consensus", 250), ("translation", 50), ("romanization", 30)]),
-            cand("musixmatch", 892, [("duration", 164), ("wordTiming", 400), ("lines", 28),
+            cand("deezer", 892, [("duration", 164), ("wordTiming", 400), ("lines", 28),
                                      ("consensus", 250), ("translation", 50)]),
             cand("lrclib", 460, [("duration", 180), ("lines", 30), ("consensus", 250)]),
         ]
@@ -1331,7 +1331,7 @@ func runLyricsManagerTests() {
                                   ("consensus", 250), ("translation", 50)]),
             cand("qq", 429, [("duration", 275), ("wordTiming", 400), ("lines", 44),
                              ("versionTags", -600), ("titleMatch", 60), ("consensus", 250)]),
-            cand("musixmatch", 1, [("durationOvershoot", -700), ("lines", 77),
+            cand("deezer", 1, [("durationOvershoot", -700), ("lines", 77),
                                    ("album", 150), ("titleMatch", 120)]),
             cand("lrclib", -1, [("rejectPlainTextOnly", 0)]),
         ]
@@ -1340,7 +1340,7 @@ func runLyricsManagerTests() {
                     "判词C: 亚军吃了冠军没有的 −600,绝对值 ≥ 221 分的分差 → 这一项就是决定性差异")
         // 被拒的那条(rejectPlainTextOnly,存档里 score 恒为 -1)不参赛 —— 它进了候选表就会
         // 把 ranked/champion/共有项全带偏,而那个 -1 是内部手段不是评价。
-        expectEqual(V.ranked(sampleC).map(\.source), ["kugou", "netease", "qq", "musixmatch"],
+        expectEqual(V.ranked(sampleC).map(\.source), ["kugou", "netease", "qq", "deezer"],
                     "参赛: 被拒的候选不参与排名")
         expectEqual(sampleC[4].isRejected, true, "参赛: 首项 kind 以 reject 开头即被拒")
         expectEqual(V.sharedTerms(among: sampleC), [],

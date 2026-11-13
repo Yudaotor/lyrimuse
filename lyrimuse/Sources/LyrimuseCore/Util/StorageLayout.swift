@@ -112,9 +112,9 @@ public enum StorageLayout {
         "lyrimuse-apple-catalog-names.json", "lyrimuse-apple-storefront-artist-cache.json",
         "lyrimuse-apple-storefront-title-cache.json", "lyrimuse-applemusic-devtoken.json", "lyrimuse-artist-alias-cache.json",
         "lyrimuse-artist-avatar-cache.json", "lyrimuse-artist-identity-cache.json", "lyrimuse-artist-primary-cache.json",
-        "lyrimuse-artist-regions.json", "lyrimuse-artwork-confirmed.json", "lyrimuse-clash-node-blocks.json",
+        "lyrimuse-artist-regions.json", "lyrimuse-artwork-confirmed.json",
         "lyrimuse-digest-artist-totals.json", "lyrimuse-feature-flags-logged.json", "lyrimuse-mb-recordings.json",
-        "lyrimuse-motion-cover-cache.json", "lyrimuse-musixmatch-token.json", "lyrimuse-netease-names.json",
+        "lyrimuse-motion-cover-cache.json", "lyrimuse-netease-names.json",
         "lyrimuse-platform-pages-cache.json", "lyrimuse-proxy-hint.json", "lyrimuse-qq-artist-name-cache.json",
         "lyrimuse-soda-track-cache.json", "lyrimuse-spotify-lyrics-index.json", "lyrimuse-artist-avatar-cache.json.lock",
         // App 写

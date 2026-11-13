@@ -28,7 +28,7 @@
 //	4. **样本自洽**:写出的 JSON 读回来、按 TestLyricsGolden 同一条路跑一遍,diff 为零。
 //
 // 真实数据目录(goldenRealConfigDir)下的数据文件(enrich 缓存、正文小文件、歌手别名/主名/Apple 目录/QQ 歌手名缓存)只读——
-// 加载进内存后把回写路径清空。跟跑一次 search-lyrics 一样,Musixmatch 匿名 token 与代理提示这类
+// 加载进内存后把回写路径清空。跟跑一次 search-lyrics 一样,Deezer 匿名 token 与代理提示这类
 // 运行缓存可能被刷新,那不是用户数据。
 package main
 

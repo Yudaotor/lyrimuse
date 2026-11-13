@@ -3028,8 +3028,8 @@ func runSourceContractSurfaceTests() {
             expectEqual(sourceHas(store, "lyricsSources: (lyricsSources.map(\\.rawValue) + unknownLyricsSources).sorted(),")
                         && sourceHas(store, "lyricsSourceOrder: lyricsPriorityOrder.map(\\.rawValue) + unknownLyricsOrder,"), true,
                         "未知源名保留: 写回 lyrics_sources / lyrics_source_order 时没带上不认识的源名")
-            expectEqual(sourceHas(store, "unknownLyricsSources = Self.unknownNames(f.lyricsSources) { LyricsSource(rawValue: $0) != nil }")
-                        && sourceHas(store, "unknownLyricsOrder = Self.unknownNames(f.lyricsSourceOrder) { LyricsPriorityEntry(rawValue: $0) != nil }"), true,
+            expectEqual(sourceHas(store, "unknownLyricsSources = Self.unknownNames(storedSources) { LyricsSource(rawValue: $0) != nil }")
+                        && sourceHas(store, "unknownLyricsOrder = Self.unknownNames(storedOrder) { LyricsPriorityEntry(rawValue: $0) != nil }"), true,
                         "未知源名保留: 读设置时没记下不认识的源名")
         } else {
             expectEqual(true, false, "未知源名保留: 读不到 FeatureSettingsStore.swift(路径挪了?)")

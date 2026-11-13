@@ -302,7 +302,7 @@ func TestEarlyLyricsWatch(t *testing.T) {
 // (别的版本、别的录音、时长对不上)。例外只有时间轴整体平移、间奏插入两项:都要等时长对得上的那几家到齐才判得出来,
 // 首轮中途判不了(见 09 章决策 193)。例外必须真的出现,出现不了就该删掉。
 func TestEarlyLyricsGoldenNeverShowsAPenalizedCandidate(t *testing.T) {
-	arrival := []string{"netease", "kugou", "migu", "kuwo", "applemusic", "lrclib", "soda", "musixmatch", "lyricfind", "deezer", "qq", "amll"}
+	arrival := []string{"netease", "kugou", "migu", "kuwo", "applemusic", "lrclib", "soda", "vibe", "lyricfind", "deezer", "qq", "amll"}
 	batchOnly := map[string]bool{scoreTermTimelineOffset: true, scoreTermTimelineIntrusion: true}
 	seen := map[string]bool{}
 	for _, fx := range loadGoldenFixtures(t) {

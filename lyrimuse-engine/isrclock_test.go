@@ -7,10 +7,10 @@ import (
 )
 
 // 升级重试与重评不能持着 enrichMu 去取播放器给的 ISRC:取号要读别的 App 的本机缓存,Amazon 按歌手 + 歌名认曲目的那份
-// 索引(amazonCachedASIN)过期时重建还要拿同一把锁,取号的路一旦经过它,持锁调用就会锁死整个引擎。这里在假 musixmatch
+// 索引(amazonCachedASIN)过期时重建还要拿同一把锁,取号的路一旦经过它,持锁调用就会锁死整个引擎。这里在假 deezer
 // 应答时把那份索引置成过期,要求每一轮都很快跑完。
 func TestLyricsRoundsLookUpPlaybackISRCOutsideTheLock(t *testing.T) {
-	setupRescoreTest(t, []string{"musixmatch"}, func(context.Context) {
+	setupRescoreTest(t, []string{"deezer"}, func(context.Context) {
 		amazonCachedASINsMu.Lock()
 		amazonCachedASINs = nil
 		amazonCachedASINsMu.Unlock()
@@ -19,7 +19,7 @@ func TestLyricsRoundsLookUpPlaybackISRCOutsideTheLock(t *testing.T) {
 	emptyKey, lyricKey := enrichKey(artist, "Lock Empty Song", ""), enrichKey(artist, "Lock Rescored Song", "Some Album")
 	withEnrichCache(t, map[string]enrichEntry{
 		emptyKey: {},
-		lyricKey: {Lyrics: bt("[00:05.00]Old line one\n[00:15.00]Old line two"), LyricsSource: "musixmatch",
+		lyricKey: {Lyrics: bt("[00:05.00]Old line one\n[00:15.00]Old line two"), LyricsSource: "deezer",
 			LyricsScoringVersion: lyricsScoringVersion - 1},
 	})
 	run := func(name string, round func()) {

@@ -455,14 +455,6 @@ func applySaveEdit(e *enrichEntry, req enrichEditRequest) error {
 	if req.YRC != nil {
 		e.LyricsYRC = bt(*req.YRC)
 	}
-	// 只改了字(正文、逐字各自逐行比,行数一样、每行开头的时间戳一样):演唱者标注按行号挂在正文上,换成新正文的指纹
-	// 接着用。采纳候选另有一套(下面会重问)。
-	if !req.FromManualPick && e.LyricsSpeakers != nil && e.LyricsSpeakers.For == lyricSpeakersFingerprint(oldLyrics.String(), oldYRC.String()) &&
-		sameLineHeads(oldLyrics.String(), e.Lyrics.String()) && sameLineHeads(oldYRC.String(), e.LyricsYRC.String()) {
-		speakers := *e.LyricsSpeakers
-		speakers.For = lyricSpeakersFingerprint(e.Lyrics.String(), e.LyricsYRC.String())
-		e.LyricsSpeakers = &speakers
-	}
 	// 借来的假名标注对到新正文上,对不上的行去掉;采纳了别的候选就当没问过,播放到时再补问(kanabackfill.go)。
 	if !oldLyrics.Equal(e.Lyrics) || !oldYRC.Equal(e.LyricsYRC) {
 		e.LyricsKana = refitLyricsKana(e.LyricsKana, e.Lyrics.String(), e.LyricsYRC.String())
@@ -482,7 +474,6 @@ func applySaveEdit(e *enrichEntry, req enrichEditRequest) error {
 		e.dropHokkienRoma()
 		e.dropUnusableCantoneseRoma()
 		e.maybeGenerateJyutpingRoma()
-		e.LyricsSpeakersChecked = 0
 	}
 	return nil
 }

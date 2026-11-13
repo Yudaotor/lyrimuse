@@ -128,7 +128,7 @@ func runTestLyricSourcesCLI(args []string) {
 	}
 
 	// 两首探测曲,一首华语一首英文,取并集——理由见 healthcheckcli.go 顶部注释:
-	// NetEase/QQ/酷狗以中文库为主,LRCLIB/Musixmatch 以英文库为主,只用一首会把另一半源的
+	// NetEase/QQ/酷狗以中文库为主,LRCLIB 以英文库为主,只用一首会把另一半源的
 	// "库里确实没有这首"误判成"这个源坏了"。中文探测曲跟 healthcheckcli.go 保持同一首
 	// (从《晴天》换成《少年》,理由同样见 healthcheckcli.go 那边的注释——不重复)。
 	// Apple Music 没连过账号时**不进探测**,当场给结论:它的取词端点只认
@@ -165,15 +165,13 @@ func runTestLyricSourcesCLI(args []string) {
 		if down {
 			status, reasonCode = "fail", lyricTestReasonNetworkDown
 		} else {
-			// 目前接了具体失败原因诊断的源(分别见 ytmusic.go/musixmatch.go/
+			// 目前接了具体失败原因诊断的源(分别见 ytmusic.go/
 			// netease.go 头注)。QQ/酷狗/LRCLIB/AMLL 没有对应旁路,拿不到具体原因时
 			// 统一退回上面的通用代码,不编一个没核实过的理由。
 			var reason string
 			switch src {
 			case "lyricfind":
 				reason = ytmusicLastFailureReasonNow()
-			case "musixmatch":
-				reason = musixmatchLastFailureReasonNow()
 			case "soda":
 				// 跟 searchcli.go 的 lyricSourceFailureReasons 是**两处**,接源时两边都要补
 				// (deezer 那次就只补了一处,见下面那条注释)。这条由
