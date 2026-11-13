@@ -8629,21 +8629,16 @@ private struct AboutSettingsTab: View {
 }
 
 
-/// 设置窗口的 NSWindow 收尾配置:让它能被拖大、能最小化。
+/// 设置窗口的 NSWindow 收尾配置:让它能拖边框改大小、能最小化。
 ///
-/// SwiftUI 给 Settings scene 的 styleMask 里**没有** .resizable(32771 =
-/// titled | closable | fullSizeContentView),所以这个窗口原本一格也拉不动,SettingsView
-/// 上声明的 idealHeight 只决定它开出来多大。而「歌词显示」页顶上钉着 205pt 的固定头部,
-/// 窗口拉不高的话滚动区就一直很憋屈。
+/// SwiftUI 给 Settings scene 的 styleMask 是 32771(titled | closable | fullSizeContentView),
+/// 没有 .resizable 和 .miniaturizable,而且内容的最小 / 最大尺寸每变一次都会重写一遍、摘掉 .resizable,
+/// scene 修饰符 .windowResizability(...) 也改不动。所以两位交给 `WindowStyleMaskKeeper` 守着,被摘就补回
+/// (14 章决策 193)。缩放下限是 SwiftUI 按 SettingsView 上声明的 minWidth/minHeight 写进 contentMinSize 的,
+/// 这里不另设。
 ///
-/// 同一个 32771 里也没有 .miniaturizable —— 黄灯是灰的,点不动。那是苹果给 Settings scene
-/// 定的默认,系统「设置」自己也这样;但这一页很长、内容也不是"改完就关"的一次性面板
-/// (Last.fm 统计、歌词管理入口都在里面),留着能收起来更顺手,所以一并开了。收起来之后跟
-/// 普通窗口一样在 Dock 右侧那段可以点回来,不受这个 App 是否显示 Dock 图标影响。
-///
-/// scene 修饰符 .windowResizability(.contentMinSize) 对 Settings scene 无效(加上之后
-/// styleMask 纹丝不动),只能在 NSWindow 这一层开。缩放下限仍由 SettingsView 上声明的
-/// minWidth/minHeight 兜着。
+/// 开 .miniaturizable 是因为这扇窗内容多、不是改完就关的面板;收起来后在 Dock 右侧那段点回来,
+/// 不受这个 App 是否显示 Dock 图标影响。
 ///
 /// 这里**只**动 styleMask。别顺手改 collectionBehavior(.auxiliary / .fullScreenNone)
 /// 或开 isMovableByWindowBackground —— "设置窗口拖不到另一块屏"跟这个窗口无关(全屏 Space
@@ -8662,7 +8657,6 @@ struct SettingsWindowConfigurator: NSViewRepresentable {
         // runloop 取一次 view.window、拿不到就放弃 —— 那一拍还没挂上的话窗口拉不大、黄灯是灰的、预览停表也不接。
         view.onWindow = { window in
             surface.attach(window)
-            window.styleMask.insert([.resizable, .miniaturizable])
             // `Settings` 场景默认给窗口的是 `.preference` 样式 —— AppKit 对它的定义就是
             // 「标题独占一行、工具栏项整体居中」,于是详情列最左那对前进/后退键被顶到了
             // 正中(实测截图)。`.unified` 让标题回到侧栏右边、跟工具栏项同一行,
@@ -8703,6 +8697,8 @@ struct SettingsWindowConfigurator: NSViewRepresentable {
         private weak var configured: NSWindow?
         /// 侧栏收不起来(SettingsSidebarCollapseGuard)。跟着这个视图活,窗口关了一起没。
         private let sidebarGuard = SettingsSidebarCollapseGuard()
+        /// 能拖边框改大小、能最小化,被 SwiftUI 摘掉就补回。
+        private let styleKeeper = WindowStyleMaskKeeper(required: [.resizable, .miniaturizable])
 
         func setSidebarDefaultWidth(_ width: CGFloat) {
             sidebarGuard.setDefaultWidth(width)
@@ -8712,6 +8708,7 @@ struct SettingsWindowConfigurator: NSViewRepresentable {
             super.viewDidMoveToWindow()
             guard let window, window !== configured else { return }
             configured = window
+            styleKeeper.attach(to: window)
             onWindow?(window)
             sidebarGuard.attach(to: window)
         }

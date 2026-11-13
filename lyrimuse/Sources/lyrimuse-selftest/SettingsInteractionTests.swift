@@ -8,6 +8,7 @@ import Foundation
 @MainActor
 func runSettingsInteractionTests() {
     runPermissionGuideContracts()
+    runSettingsWindowResizeContracts()
     // ---- EditorToolbarWidths:编辑台工具栏一行按内容分宽(04 章决策 80) ----
     do {
         func fill(_ ideals: [CGFloat], _ floors: [CGFloat], _ room: CGFloat) -> [CGFloat] {
@@ -1277,6 +1278,63 @@ func runSettingsInteractionTests() {
                         && chrome.contains("split.setPosition(target, ofDividerAt: 0)"), true,
                     "设置侧栏(契约): 默认宽度变了就把侧栏放回新的默认宽度")
     }
+}
+
+/// 设置窗口能拖边框改大小(14 章决策 193):SwiftUI 每次更新内容尺寸上下限都摘掉 `.resizable`,
+/// `WindowStyleMaskKeeper` 在下一拍补回;窗口不上屏(`defer: true`),不碰窗口服务器。
+@MainActor
+private func runSettingsWindowResizeContracts() {
+    func makeWindow() -> NSWindow {
+        NSWindow(contentRect: NSRect(x: 0, y: 0, width: 200, height: 100), styleMask: [.titled, .closable],
+                 backing: .buffered, defer: true)
+    }
+    let required: NSWindow.StyleMask = [.resizable, .miniaturizable]
+    do {
+        var queued: [() -> Void] = []
+        let keeper = WindowStyleMaskKeeper(required: required, schedule: { queued.append($0) })
+        let window = makeWindow()
+        keeper.attach(to: window)
+        expectEqual(window.styleMask.isSuperset(of: required), true, "设置窗缩放: 挂上时插上 .resizable 和 .miniaturizable")
+        window.styleMask.remove(.resizable)
+        window.styleMask = [.titled, .closable, .fullSizeContentView]
+        expectEqual(window.styleMask.contains(.resizable), false, "设置窗缩放: 被摘掉时不当场补(摘位发生在约束更新中途)")
+        expectEqual(queued.count, 1, "设置窗缩放: 同一拍里被摘几次只排一次补回")
+        queued.forEach { $0() }
+        queued.removeAll()
+        expectEqual(window.styleMask.isSuperset(of: required) && window.styleMask.contains(.fullSizeContentView), true,
+                    "设置窗缩放: 下一拍补回缺的位,别的位照 SwiftUI 写的留着")
+        window.styleMask.insert(.utilityWindow)
+        expectEqual(queued.count, 0, "设置窗缩放: 两位都在时改别的位不排补回")
+        window.styleMask.remove(.miniaturizable)
+        queued.forEach { $0() }
+        expectEqual(window.styleMask.contains(.miniaturizable), true, "设置窗缩放: .miniaturizable 被摘同样补回")
+        let other = makeWindow()
+        keeper.attach(to: other)
+        queued.removeAll()
+        window.styleMask.remove(.resizable)
+        expectEqual(queued.count, 0, "设置窗缩放: 换了窗之后不再管旧窗")
+        other.styleMask.remove(.resizable)
+        queued.forEach { $0() }
+        expectEqual(other.styleMask.contains(.resizable), true, "设置窗缩放: 换了窗之后盯新的那扇")
+    }
+    do {
+        let keeper = WindowStyleMaskKeeper(required: required)
+        let window = makeWindow()
+        keeper.attach(to: window)
+        window.styleMask.remove(.resizable)
+        let deadline = Date().addingTimeInterval(0.2)
+        while !window.styleMask.contains(.resizable), Date() < deadline {
+            RunLoop.main.run(until: Date().addingTimeInterval(0.005))
+        }
+        expectEqual(window.styleMask.contains(.resizable), true, "设置窗缩放: 默认在主队列下一拍补回")
+    }
+    let appDir = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+        .appendingPathComponent("lyrimuse")
+    let settingsView = (try? String(contentsOf: appDir.appendingPathComponent("SettingsView.swift"), encoding: .utf8)) ?? ""
+    let hook = sourceBody("private final class WindowHookView", in: settingsView)
+    expectEqual(sourceHas(hook, "private let styleKeeper = WindowStyleMaskKeeper(required: [.resizable, .miniaturizable])")
+                    && sourceHas(hook, "configured = window\nstyleKeeper.attach(to: window)"), true,
+                "设置窗缩放(契约): 设置窗口挂上来时交给 WindowStyleMaskKeeper 守 .resizable / .miniaturizable")
 }
 
 /// 「完全磁盘访问」「辅助功能」没授权时的说明(14 章决策 67):授权过又失效时说「授权已失效」、讲删掉再加回来;
