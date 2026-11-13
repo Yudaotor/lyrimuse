@@ -207,13 +207,15 @@ func runVoxTests() {
                     && sourceHas(artwork, "PlayerArtistFix.correctedTrackKey(bundle: bundleID, artist: keyArtist, title: keyTitle)"),
                     true, "VOX 接线: 封面的曲目标识用拆好的歌手")
         expectEqual(sourceHas(artwork, "if channelFallback == .vox, let art = voxArtwork(tryingFolder: true) { return (art, nil) }")
-                    && sourceHas(artwork, "if target.bundleID == VoxPlayerInfo.bundleID, let art = voxArtwork(tryingFolder: true) { return (art, nil) }")
+                    && sourceCount(artwork, "if let art = focusTargetArtwork(target) { return (art, nil) }") == 2
+                    && sourceHas(sourceBody("private static func focusTargetArtwork(", in: client),
+                                 "if target.bundleID == VoxPlayerInfo.bundleID { return voxArtwork(tryingFolder: true) }")
                     && sourceHas(artwork, "if bundleID == VoxPlayerInfo.bundleID, let art = voxArtwork(tryingFolder: false) { return (art, nil) }"),
                     true, "VOX 接线: 通道坏了、焦点被占、系统那份没带图,封面都退到脚本那张和同目录的图")
         expectEqual(sourceHas(artwork, "guard !SourceKnockout.isOut(.systemArtwork), let imageData = artworkImageData(base64: raw.artworkData) else {"),
                     true, "VOX 接线: 拔腿开关能关掉系统那份封面")
         let probe = source("LyrimuseCore/Local/NowPlayingClientsProbe.swift")
-        expectEqual(sourceHas(sourceBody("public static func artwork(forBundleID bundleID: String)", in: probe),
+        expectEqual(sourceHas(sourceBody("public static func artworkReport(forBundleID bundleID: String)", in: probe),
                               "VoxPlayerInfo.artworkIdentity(title: title, artist: artist)"), true,
                     "VOX 接线: 按 bundle id 取封面那条也换身份")
         let playback = source("LyrimuseCore/Local/LocalPlaybackSource.swift")

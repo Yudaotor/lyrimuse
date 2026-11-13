@@ -4,7 +4,8 @@ import os
 /// QQ 音乐、网易云、酷狗用「打开文件」、Spotify 从它的「本地文件」列表放本机的音频文件时,以及 foobar2000、Swinsian(只放本机文件,
 /// 只开着正在放的那一个;它们自己报的标签已经齐全,这里主要为了拿到路径)、MyGo Music 放本机文件时,按快照里的进程号找到它开着的
 /// 那个文件(`ProcessOpenFiles`;快照没带进程号时按 bundle id 找主进程,Spotify 的快照来自脚本、不带):
-/// 路径写进播放状态(`local_file`,引擎读同名 .lrc 和文件里的歌词)、没报封面时用同目录的图;标签里有歌名时换成标签里的
+/// 路径写进播放状态(`local_file`,引擎读同名 .lrc 和文件里的歌词)、没报封面时用这个文件自带的封面(取之前核对它此刻还开着,
+/// `playingFilePath`);标签里有歌名时换成标签里的
 /// 歌手、歌名、专辑和精确时长(网易云把带扩展名的文件名报成歌名,酷狗不读标签、按文件名拆歌手歌名)。
 /// 在线播放时它们开着的是自己的缓存(网易云 `.uc!`、Spotify 没有扩展名的缓存文件),不在 `PlayerTitleSplit.audioExtensions`
 /// 里,不会认成本机文件;MyGo 插件音源的缓存是带完整标签的 .mp3,按目录排除(`isPlayerCache`)。见 02 章决策 188、196、206、241、248。
@@ -89,9 +90,12 @@ public enum PlayerOpenFile {
         var path: String?
         var checkedAt: Date
         var attempts: Int
+        /// 找的时候问的那个进程。
+        var pid: Int32
     }
 
-    /// 按播放器报的(歌手、歌名)记,同一首每拍不重复读盘;没找到的按 `PlayerTitleSplit.shouldLookUpFile` 的节奏再找。
+    /// 按播放器报的(歌手、歌名)记,同一首每拍不重复读盘;没找到的按 `PlayerTitleSplit.shouldLookUpFile` 的节奏再找,
+    /// 找到过的报的时长跟文件对不上时重找(`cachedFileMatches`)。
     private static let cache = OSAllocatedUnfairLock<[String: CacheEntry]>(initialState: [:])
 
     private static func cacheKey(artist: String?, title: String) -> String { (artist ?? "") + "\u{1F}" + title }
@@ -148,7 +152,8 @@ public enum PlayerOpenFile {
         }
         if !newTrack, let hit = cache.withLock({ $0[key] }),
            !PlayerTitleSplit.shouldLookUpFile(found: hit.path != nil, attempts: hit.attempts,
-                                              sinceChecked: now.timeIntervalSince(hit.checkedAt)) {
+                                              sinceChecked: now.timeIntervalSince(hit.checkedAt)),
+           hit.path == nil || cachedFileMatches(fileDuration: hit.identity?.duration, reportedDuration: duration) {
             return hit.identity
         }
         guard let pid = pid(), pid > 0 else { return nil }
@@ -158,13 +163,43 @@ public enum PlayerOpenFile {
             if entries.count > 64 { entries.removeAll() }
             let previous = entries[key]
             let attempts = (previous?.attempts ?? 0) >= PlayerTitleSplit.maxAttempts ? 1 : (previous?.attempts ?? 0) + 1
-            entries[key] = CacheEntry(identity: found?.identity, path: found?.path, checkedAt: now, attempts: attempts)
+            entries[key] = CacheEntry(identity: found?.identity, path: found?.path, checkedAt: now, attempts: attempts,
+                                      pid: Int32(pid))
             return previous.map { $0.path }
         }
         if mygo, sourceChanged(previous: previousPath, found: found?.path) {
             NotificationCenter.default.post(name: mygoSourceChangedNotification, object: nil)
         }
         return found?.identity
+    }
+
+    /// 按(歌手、歌名)记下的文件还是不是报的这一首:两边都有时长时差在 1.5 秒以内(同 `fileMatches`)。同名同歌手的单曲版和专辑版
+    /// 前后接着放时,记下的是前一个。纯函数,selftest 覆盖。
+    public static func cachedFileMatches(fileDuration: Double?, reportedDuration: Double?) -> Bool {
+        guard let fileDuration, let reportedDuration, fileDuration > 0, reportedDuration > 0 else { return true }
+        return abs(fileDuration - reportedDuration) <= 1.5
+    }
+
+    /// 取封面用的那个文件:按(歌手、歌名)记下的文件此刻还开着才算;记下的没开着、开着别的音频文件时当场重找一次(同名同歌手的
+    /// 另一个文件)。一个音频文件都没开着(在线播放同名的歌、已经停了)为 nil,不挂记下的那个文件的封面。会读盘,别在主线程调。
+    public static func playingFilePath(bundleID: String?, rawArtist: String?, rawTitle: String?) -> String? {
+        guard !SourceKnockout.isOut(.playerFile), let bundleID, bundleIDs.contains(bundleID), let rawTitle,
+              let entry = cache.withLock({ $0[cacheKey(artist: rawArtist, title: rawTitle)] }), let cached = entry.path
+        else { return nil }
+        let audio = ProcessOpenFiles.paths(pid: entry.pid)
+            .filter { PlayerTitleSplit.audioExtensions.contains(URL(fileURLWithPath: $0).pathExtension.lowercased()) }
+        return playingFile(cachedPath: cached, openAudioPaths: audio) {
+            lookUp(artist: rawArtist ?? "", title: rawTitle, duration: nil, pid: entry.pid,
+                   foobar: bundleID == PlaybackPlayer.foobar2000.bundleIdentifier,
+                   baseName: baseNameBundleIDs.contains(bundleID),
+                   skipsWhenCacheMatches: bundleID == PlaybackPlayer.mygoMusic.bundleIdentifier)?.path
+        }
+    }
+
+    /// 记下的文件还开着就用它;一个音频文件都没开着为 nil;开着别的就交给 `lookUp` 重找。纯函数,selftest 覆盖。
+    public static func playingFile(cachedPath: String, openAudioPaths: [String], lookUp: () -> String?) -> String? {
+        if openAudioPaths.contains(cachedPath) { return cachedPath }
+        return openAudioPaths.isEmpty ? nil : lookUp()
     }
 
     /// 播放器原样报的(歌手、歌名)换成的标签身份(`applied` 找到过才有,不读盘)。独立取回的封面载荷按它算曲目标识,
@@ -174,7 +209,7 @@ public enum PlayerOpenFile {
         return cache.withLock { $0[cacheKey(artist: rawArtist, title: rawTitle)]?.identity }
     }
 
-    /// 播放器原样报的(歌手、歌名)对上的那个文件(`applied` 找到过才有,不读盘)。封面取不到系统那份时按它找同目录的图。
+    /// 播放器原样报的(歌手、歌名)对上的那个文件(`applied` 找到过才有,不读盘)。取封面不用它,用 `playingFilePath`。
     public static func currentFilePath(bundleID: String?, rawArtist: String?, rawTitle: String?) -> String? {
         guard !SourceKnockout.isOut(.playerFile), let bundleID, bundleIDs.contains(bundleID), let rawTitle else { return nil }
         return cache.withLock { $0[cacheKey(artist: rawArtist, title: rawTitle)]?.path }

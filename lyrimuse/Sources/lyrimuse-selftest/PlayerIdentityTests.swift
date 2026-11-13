@@ -1079,8 +1079,8 @@ func runPlayerIdentityTests() {
                                     contain: "pid: snapshot.processIdentifier ?? PlayerProcess.pid(bundleID: bundleID)"),
                         true, "开着的文件 接线: 快照没带进程号(Spotify 走脚本)时按 bundle id 找主进程")
             expectEqual(sourceBytes(client, contain: "to: PlayerOpenFile.applied(to: PlayerTitleSplit.applied(to: PinePlayerInfo.adapted(PlayerSubtitles.adapted(raw)))), state: fixState))")
-                        && sourceBytes(client, contain: "?? PlayerOpenFile.currentFilePath(bundleID: bundleID, rawArtist: raw.artist, rawTitle: raw.title)"),
-                        true, "开着的文件 接线: 快照公开出口换身份、封面按它找同目录的图")
+                        && sourceBytes(client, contain: "?? PlayerOpenFile.playingFilePath(bundleID: bundleID, rawArtist: rawArtist, rawTitle: rawTitle)"),
+                        true, "开着的文件 接线: 快照公开出口换身份、封面按此刻开着的那个文件找")
             expectEqual(sourceBytes(text("LocalPlaybackSource.swift"),
                                     contain: "?? PlayerOpenFile.currentFilePath(bundleID: bundleID, artist: snapshot.artist ?? \"\","),
                         true, "开着的文件 接线: 路径写进播放状态(local_file)")

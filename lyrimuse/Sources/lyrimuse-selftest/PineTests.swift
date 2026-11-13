@@ -469,7 +469,8 @@ func runPineTests() {
                     "Pine 接线: 曲目在公开出口换,主路径、焦点回退、通道坏了三条路都过")
         expectEqual(sourceHas(client, "snapshot = pineProbedSnapshot(probed.snapshot, anchor: probed.anchor, now: now)"), true,
                     "Pine 接线: 焦点回退那份同样换")
-        expectEqual(sourceHas(client, "(keyTitle, keyArtist, filePath) = PinePlayerInfo.artworkIdentity(title: raw.title, artist: raw.artist)"),
+        expectEqual(sourceHas(client, "let identity = PinePlayerInfo.artworkIdentity(title: raw.title, artist: raw.artist)")
+                    && sourceHas(client, "(keyTitle, keyArtist, adapterPath) = (identity.title, identity.artist, .some(identity.path))"),
                     true, "Pine 接线: 封面的曲目标识跟快照对得上")
         expectEqual(sourceHas(client, "|| PinePlayerInfo.isNetworkRadio(snapshot)"), true, "Pine 接线: 网络电台当不是歌")
         expectEqual(sourceHas(client, "|| PinePlayerInfo.isVideo(snapshot)"), true, "Pine 接线: 视频当不是歌")

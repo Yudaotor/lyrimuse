@@ -357,7 +357,7 @@ public enum PlayerTitleSplit {
         return found?.identity
     }
 
-    /// 播放器报的这串标题对上的那个文件(`applied` 找到过才有,不读盘)。封面取不到系统那份时按它找同目录的图。
+    /// 播放器报的这串标题对上的那个文件(`applied` 找到过才有,不读盘)。封面取不到系统那份时用它自带的封面(`fileCover`)。
     public static func currentFilePath(bundleID: String?, title: String?) -> String? {
         guard let bundleID, bundleIDs.contains(bundleID), let title else { return nil }
         return cache.withLock { $0[title]?.path }

@@ -2715,15 +2715,11 @@ public enum MediaControlClient {
         if channelFallback == .vox, let art = voxArtwork(tryingFolder: true) { return (art, nil) }
         // 焦点那家暂停着、屏上是顶上来的那家:系统那份是焦点那家的图。
         if let target = pausedFocusSubstitute() {
-            if !SourceKnockout.isOut(.systemArtwork),
-               let art = NowPlayingClientsProbe.artwork(forBundleID: target.bundleID) { return (art, nil) }
-            if target.bundleID == VoxPlayerInfo.bundleID, let art = voxArtwork(tryingFolder: true) { return (art, nil) }
+            if let art = focusTargetArtwork(target) { return (art, nil) }
             return (nil, "the focused player is paused and \(target.bundleID) gave no artwork")
         }
         if let target = activeFocusFallbackTarget() {
-            if !SourceKnockout.isOut(.systemArtwork),
-               let art = NowPlayingClientsProbe.artwork(forBundleID: target.bundleID) { return (art, nil) }
-            if target.bundleID == VoxPlayerInfo.bundleID, let art = voxArtwork(tryingFolder: true) { return (art, nil) }
+            if let art = focusTargetArtwork(target) { return (art, nil) }
             prefix = "focus is held elsewhere and \(target.bundleID) gave no artwork; "
         }
         guard let binaryPath = binaryPath() else { return (nil, prefix + "media-control is not bundled") }
@@ -2743,18 +2739,21 @@ public enum MediaControlClient {
         // iPad 版网易云的歌名按记住的真名还原(见 NetEaseIPadNowPlaying),iPad 版 QQ 音乐的去掉改写的那一截(见 QQIPadNowPlaying)。
         var (keyTitle, keyArtist) = NetEaseIPadNowPlaying.names(title: raw.title, artist: raw.artist, bundleID: raw.bundleIdentifier)
         (keyTitle, keyArtist) = QQIPadNowPlaying.names(title: keyTitle, artist: keyArtist, bundleID: raw.bundleIdentifier)
-        var filePath = PlayerTitleSplit.currentFilePath(bundleID: bundleID, title: raw.title)
-            ?? PlayerOpenFile.currentFilePath(bundleID: bundleID, rawArtist: raw.artist, rawTitle: raw.title)
+        var adapterPath: String??
         if bundleID == VoxPlayerInfo.bundleID {
-            (keyTitle, keyArtist, filePath) = VoxPlayerInfo.artworkIdentity(title: raw.title, artist: raw.artist)
+            let identity = VoxPlayerInfo.artworkIdentity(title: raw.title, artist: raw.artist)
+            (keyTitle, keyArtist, adapterPath) = (identity.title, identity.artist, .some(identity.path))
         } else if bundleID == PinePlayerInfo.bundleID {
-            (keyTitle, keyArtist, filePath) = PinePlayerInfo.artworkIdentity(title: raw.title, artist: raw.artist)
+            let identity = PinePlayerInfo.artworkIdentity(title: raw.title, artist: raw.artist)
+            (keyTitle, keyArtist, adapterPath) = (identity.title, identity.artist, .some(identity.path))
+        }
+        // 只在要退回文件时才找(会问播放器开着哪些文件)。
+        func filePath() -> String? {
+            adapterPath ?? localFilePath(bundleID: bundleID, rawTitle: raw.title, rawArtist: raw.artist)
         }
         guard !SourceKnockout.isOut(.systemArtwork), let imageData = artworkImageData(base64: raw.artworkData) else {
-            // 放本地文件的播放器没报封面时用正在放的文件自带的那张:文件里嵌着的,再是同目录的图(`PlayerTitleSplit.fileCover`)。
-            if let path = filePath, let cover = PlayerTitleSplit.fileCover(forAudioFile: path) {
-                return ((cover.data, cover.mimeType,
-                         PlayerArtistFix.correctedTrackKey(bundle: bundleID, artist: keyArtist, title: keyTitle)), nil)
+            if let art = localFileArtwork(path: filePath(), bundleID: bundleID, keyArtist: keyArtist, keyTitle: keyTitle) {
+                return (art, nil)
             }
             if bundleID == VoxPlayerInfo.bundleID, let art = voxArtwork(tryingFolder: false) { return (art, nil) }
             let artwork = raw.artworkData.map { "with artwork that is not an image (\(Data(base64Encoded: $0)?.count ?? 0) bytes)" }
@@ -2764,12 +2763,36 @@ public enum MediaControlClient {
         // Pine Player 文件没有封面时推的是它自己的图标、foobar2000 推一张光盘(都登记在 KnownPlaceholderArtwork):先找正在放的文件自带的封面。
         if bundleID == PinePlayerInfo.bundleID || bundleID == PlaybackPlayer.foobar2000.bundleIdentifier,
            KnownPlaceholderArtwork.isPlaceholder(imageData),
-           let path = filePath, let cover = PlayerTitleSplit.fileCover(forAudioFile: path) {
-            return ((cover.data, cover.mimeType,
-                     PlayerArtistFix.correctedTrackKey(bundle: bundleID, artist: keyArtist, title: keyTitle)), nil)
+           let art = localFileArtwork(path: filePath(), bundleID: bundleID, keyArtist: keyArtist, keyTitle: keyTitle) {
+            return (art, nil)
         }
         return ((imageData, raw.artworkMimeType ?? "image/jpeg",
                  PlayerArtistFix.correctedTrackKey(bundle: bundleID, artist: keyArtist, title: keyTitle)), nil)
+    }
+
+    /// 播放器没报封面时退回的那个文件自带的封面(`PlayerTitleSplit.fileCover`:文件里嵌着的,再是同目录的图),曲目标识跟系统那份
+    /// 同样算。系统那份为空、报的是占位图、焦点被占时单问那一家也没给,都走这里。见 02 章决策 260。会读盘,别在主线程调。
+    public static func localFileArtwork(path: String?, bundleID: String, keyArtist: String?, keyTitle: String?)
+        -> (data: Data, mimeType: String, trackKey: String)? {
+        guard let path, let cover = PlayerTitleSplit.fileCover(forAudioFile: path) else { return nil }
+        return (cover.data, cover.mimeType, PlayerArtistFix.correctedTrackKey(bundle: bundleID, artist: keyArtist, title: keyTitle))
+    }
+
+    /// 按开着的文件认出路径的播放器(reAMP 按标题、QQ 音乐 / 网易云 / 酷狗 / Spotify 等按歌手歌名)此刻在放的那个文件。
+    private static func localFilePath(bundleID: String, rawTitle: String?, rawArtist: String?) -> String? {
+        PlayerTitleSplit.currentFilePath(bundleID: bundleID, title: rawTitle)
+            ?? PlayerOpenFile.playingFilePath(bundleID: bundleID, rawArtist: rawArtist, rawTitle: rawTitle)
+    }
+
+    /// 焦点被别的 App 占着时单问那一家要封面:它给的那张;没给时 VOX 走它自己的退路,按开着的文件认出路径的播放器用那个文件
+    /// 自带的封面(同主路径)。
+    private static func focusTargetArtwork(_ target: FocusFallbackTarget) -> (data: Data, mimeType: String, trackKey: String)? {
+        let report = SourceKnockout.isOut(.systemArtwork) ? nil : NowPlayingClientsProbe.artworkReport(forBundleID: target.bundleID)
+        if let art = report?.artwork { return art }
+        if target.bundleID == VoxPlayerInfo.bundleID { return voxArtwork(tryingFolder: true) }
+        guard let report, let title = report.rawTitle else { return nil }
+        return localFileArtwork(path: localFilePath(bundleID: target.bundleID, rawTitle: title, rawArtist: report.rawArtist),
+                                bundleID: target.bundleID, keyArtist: report.rawArtist, keyTitle: title)
     }
 
     /// Swinsian 这一拍的位置:系统那份锚点、它的通知、在放时问一次脚本的整秒,交给 `SwinsianPlayhead`。主路径与焦点回退都走这里。

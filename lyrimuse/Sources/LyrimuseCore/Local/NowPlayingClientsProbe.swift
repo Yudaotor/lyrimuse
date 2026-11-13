@@ -50,20 +50,29 @@ public enum NowPlayingClientsProbe {
     /// Apple Music 113KB),但 Spotify **放广告时不给**,浏览器里的视频也不给。拿不到就是拿不到,
     /// 调用方照旧退回既有来源(目录高清图等)。
     public static func artwork(forBundleID bundleID: String) -> (data: Data, mimeType: String, trackKey: String)? {
-        guard !bundleID.isEmpty, let paths = helperPaths() else { return nil }
+        artworkReport(forBundleID: bundleID).artwork
+    }
+
+    /// 同 `artwork`;没给封面时另外交回第一个有回音的版本原样报的歌名、歌手,调用方按它找正在放的文件
+    /// (`MediaControlClient.localFileArtwork`)。
+    public static func artworkReport(forBundleID bundleID: String)
+        -> (artwork: (data: Data, mimeType: String, trackKey: String)?, rawTitle: String?, rawArtist: String?) {
+        guard !bundleID.isEmpty, let paths = helperPaths() else { return (nil, nil, nil) }
         // 同一个播放器的别的版本(`PlayerBundleAliases`)逐个问,在跑的先问;曲目标识照本体的 bundle id 算。
         var found: (decoded: ArtworkPayload, data: Data, id: String)?
+        var reported: ArtworkPayload?
         for id in PlayerBundleAliases.inProbeOrder(for: bundleID) {
             guard let r = ProcessRunner.run(
                 "/usr/bin/perl", [paths.script, paths.library, id, "artwork"], timeout: artworkTimeout),
                 r.succeeded,
-                let decoded = try? JSONDecoder().decode(ArtworkPayload.self, from: r.stdout),
-                let data = MediaControlClient.artworkImageData(base64: decoded.artworkData)
+                let decoded = try? JSONDecoder().decode(ArtworkPayload.self, from: r.stdout)
             else { continue }
+            if reported == nil, decoded.title?.isEmpty == false { reported = decoded }
+            guard let data = MediaControlClient.artworkImageData(base64: decoded.artworkData) else { continue }
             found = (decoded, data, id)
             break
         }
-        guard let (decoded, data, foundID) = found else { return nil }
+        guard let (decoded, data, foundID) = found else { return (nil, reported?.title, reported?.artist) }
         // iPad 版网易云的歌名按记住的真名还原(见 NetEaseIPadNowPlaying),iPad 版 QQ 音乐的去掉改写的那一截(见 QQIPadNowPlaying)。
         var (title, artist) = NetEaseIPadNowPlaying.names(title: decoded.title, artist: decoded.artist, bundleID: foundID)
         (title, artist) = QQIPadNowPlaying.names(title: title, artist: artist, bundleID: foundID)
@@ -72,8 +81,8 @@ public enum NowPlayingClientsProbe {
         } else if bundleID == PinePlayerInfo.bundleID {
             (title, artist, _) = PinePlayerInfo.artworkIdentity(title: title, artist: artist)
         }
-        return (data, decoded.artworkMimeType ?? "image/jpeg",
-                PlayerArtistFix.correctedTrackKey(bundle: bundleID, artist: artist, title: title))
+        return ((data, decoded.artworkMimeType ?? "image/jpeg",
+                 PlayerArtistFix.correctedTrackKey(bundle: bundleID, artist: artist, title: title)), decoded.title, decoded.artist)
     }
 
     /// 带封面那一趟的超时:比状态查询宽,一张图要过 base64。
