@@ -301,8 +301,19 @@ func runCacheKeyTests() {
             expectEqual(CanonicalArtistBorrow.table(inputs), CanonicalArtistBorrow.table(rows, key: norm),
                         "补读: 预先算好输入的借名表跟原版一样")
         }
-        expectEqual(sourceBytes(storeSource, contain: "        if onlyIfChanged, !isReleased, let base = reloadBase,\n           await reloadIncrementally(base: base, start: reloadStart) {"),
-                    true, "补读(契约): 只有被动补读先试增量,显式刷新照旧整份读")
+        expectEqual(sourceBytes(storeSource, contain: "        if tryIncremental, !isReleased, let base = reloadBase,\n           await reloadIncrementally(base: base, start: reloadStart) {")
+                    && sourceBytes(storeSource, contain: "    public func reload(onlyIfChanged: Bool = false) async {\n        await reload(onlyIfChanged: onlyIfChanged, tryIncremental: onlyIfChanged)\n    }"),
+                    true, "补读(契约): 被动补读先试增量,显式 reload()(侧栏「刷新」)照旧整份读")
+        // 改动交给引擎之后的重读也先试增量(11 章决策 165)。
+        expectEqual(sourceBytes(storeSource, contain: "        await reload(onlyIfChanged: false, tryIncremental: true)\n        LyricsManagerBaseline.logAfterEditReload(since: start)")
+                    && storeSource.components(separatedBy: "if !isReleased { await reloadAfterEdit() }").count - 1 == 2
+                    && sourceBytes(storeSource, contain: "        guard stale else { return }\n        await reloadAfterEdit()")
+                    && !storeSource.contains("{ await reload() }"), true,
+                    "操作后重读(契约): 交给引擎之后、从快照恢复之后、保存前核对都先试增量,不再直接整份读")
+        let managerViewSource = (try? String(contentsOf: URL(fileURLWithPath: #filePath).deletingLastPathComponent()
+            .deletingLastPathComponent().appendingPathComponent("lyrimuse/LyricsManager/LyricsManagerView.swift"), encoding: .utf8)) ?? ""
+        expectEqual(sourceBytes(managerViewSource, contain: "    private func refreshWithFeedback() {\n        Task {\n            await store.reload()\n"), true,
+                    "操作后重读(契约): 侧栏「刷新」仍是整份读的兜底")
         expectEqual(sourceBytes(storeSource, contain: "EnrichIndexDiff.rawChanges(data, since: base.fingerprints, alsoExtract: unlaid)")
                     && sourceBytes(storeSource, contain: "            if touched[s.key] != nil || rebuildKeys.contains(s.key) {")
                     && sourceBytes(storeSource, contain: "            items.append(s)\n"), true,

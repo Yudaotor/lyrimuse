@@ -400,10 +400,10 @@ public final class EnrichCacheStore: ObservableObject {
         var size: Int64
     }
 
-    /// 被动补读(`reload(onlyIfChanged: true)`,轮询、窗口重新露出来)接着用的底子:列表这一版读的那份索引每条的校验值、
-    /// 上面叠了哪几条待落盘 / 正在播放的条目、借名那一份跨条目的状态。有它时只解码变了的那几条、只重建这几行,别的行
-    /// 原样留着(`reloadIncrementally`);没有(从没读过、读的是主缓存、快照放掉了、读盘失败)就整份读。显式刷新照旧整份读。
-    /// 见 11 章决策 164。
+    /// 被动补读(`reload(onlyIfChanged: true)`,轮询、窗口重新露出来)和改动之后的重读(`reloadAfterEdit`)接着用的底子:
+    /// 列表这一版读的那份索引每条的校验值、上面叠了哪几条待落盘 / 正在播放的条目、借名那一份跨条目的状态。有它时只解码
+    /// 变了的那几条、只重建这几行,别的行原样留着(`reloadIncrementally`);没有(从没读过、读的是主缓存、快照放掉了、
+    /// 读盘失败)就整份读。侧栏「刷新」照旧整份读。见 11 章决策 164、165。
     private struct ReloadBase: Sendable {
         var fingerprints: EnrichIndexDiff.Fingerprints
         var overlaidKeys: Set<String>
@@ -442,8 +442,20 @@ public final class EnrichCacheStore: ObservableObject {
     ///
     /// - Parameter onlyIfChanged: true = 缓存文件的 (mtime, size) 指纹没变就什么都不做(App 每次激活都触发
     ///   一次 reload,而绝大多数激活时文件根本没变,整份重读+解析+重建+summaries 重发布 → List 全量 diff 全是
-    ///   白跑;EnrichCacheReader 有同款 mtime 门控)。侧栏「刷新」、改动交给引擎之后保持默认 false(显式刷新语义)。
+    ///   白跑;EnrichCacheReader 有同款 mtime 门控)。侧栏「刷新」保持默认 false:整份读,是兜底。
     public func reload(onlyIfChanged: Bool = false) async {
+        await reload(onlyIfChanged: onlyIfChanged, tryIncremental: onlyIfChanged)
+    }
+
+    /// 改动交给引擎之后(保存、删除、采纳候选、从快照恢复,`reloadIfStale`):同显式刷新,等在飞的那次读完再自己读一遍,
+    /// 拿的是改完之后盘上的内容;但先试增量(只解码变了的那几条),做不了再整份读。见 11 章决策 165。
+    func reloadAfterEdit() async {
+        let start = CFAbsoluteTimeGetCurrent()
+        await reload(onlyIfChanged: false, tryIncremental: true)
+        LyricsManagerBaseline.logAfterEditReload(since: start)
+    }
+
+    private func reload(onlyIfChanged: Bool, tryIncremental: Bool) async {
         if onlyIfChanged, let inFlight = inFlightReload {
             await inFlight.value
             return
@@ -458,7 +470,7 @@ public final class EnrichCacheStore: ObservableObject {
             await inFlight.value
             if inFlightReload == inFlight { inFlightReload = nil }
         }
-        let task = Task { await self.performReload(onlyIfChanged: onlyIfChanged) }
+        let task = Task { await self.performReload(onlyIfChanged: onlyIfChanged, tryIncremental: tryIncremental) }
         inFlightReload = task
         await task.value
         // 必须**条件**置空。无条件 `inFlightReload = nil` 会抹掉别人在飞的 Task,
@@ -466,7 +478,7 @@ public final class EnrichCacheStore: ObservableObject {
         if inFlightReload == task { inFlightReload = nil }
     }
 
-    private func performReload(onlyIfChanged: Bool) async {
+    private func performReload(onlyIfChanged: Bool, tryIncremental: Bool) async {
         let cacheURL = Self.cacheURL
         if onlyIfChanged,
            let fp = Self.fileFingerprint(cacheURL),
@@ -479,7 +491,7 @@ public final class EnrichCacheStore: ObservableObject {
         // 用的同一条路径)独立算、独立更新。
         refreshSizeBytes()
         let reloadStart = CFAbsoluteTimeGetCurrent()
-        if onlyIfChanged, !isReleased, let base = reloadBase,
+        if tryIncremental, !isReleased, let base = reloadBase,
            await reloadIncrementally(base: base, start: reloadStart) {
             return
         }
@@ -760,7 +772,7 @@ public final class EnrichCacheStore: ObservableObject {
                       fingerprint: fingerprint)
     }
 
-    /// 「保存修改」核对之前调:整份缓存、待落盘条目、单条快照里有一份跟这份快照读进来时不一样就整份重读,拿盘上此刻的
+    /// 「保存修改」核对之前调:整份缓存、待落盘条目、单条快照里有一份跟这份快照读进来时不一样就重读(先试增量),拿盘上此刻的
     /// 内容去核对、去补没改的几格(LyricsEditConflict)。轮询那条 `reload(onlyIfChanged: true)` 不为单条快照里已在列表里的
     /// 那首整份重读,编辑的又常是正在放的这首,靠它会拿着旧快照去比。
     public func reloadIfStale() async {
@@ -769,7 +781,7 @@ public final class EnrichCacheStore: ObservableObject {
             || Self.fileFingerprint(EnrichPendingEntries.url) != loadedOverlayFingerprints.pending
             || Self.fileFingerprint(PlayingEntrySnapshot.url) != loadedOverlayFingerprints.playing
         guard stale else { return }
-        await reload()
+        await reloadAfterEdit()
     }
 
     /// 保存前发现这次修改不能存(改完没有歌词了、原来有时间轴改完一行时间戳都没有),没交给引擎:同一条红字,编辑缓冲原样留着。
@@ -1792,7 +1804,7 @@ public final class EnrichCacheStore: ObservableObject {
     /// 再由它交给引擎收进缓存(adopt_restore),最后刷新列表。返回给用户看的一句结果;nil = 读不出这份快照。
     func restoreFromAutoSnapshot(_ snapshot: LyricsBackupStore.Snapshot) async -> String? {
         guard let result = await LyricsBackupStore.restoreAutoSnapshot(snapshot) else { return nil }
-        if !isReleased { await reload() }
+        if !isReleased { await reloadAfterEdit() }
         refreshSizeBytes()
         var lines = [String(format: L10n.plural("已恢复 %d 个歌词文件（新增 %d、覆盖 %d）", count: result.total),
                             result.total, result.added, result.overwritten)]
@@ -1815,7 +1827,7 @@ public final class EnrichCacheStore: ObservableObject {
             scheduleReleaseIfUnheld()
         }
         let result = await EnrichEditChannel.send(op, fields)
-        if !isReleased { await reload() }
+        if !isReleased { await reloadAfterEdit() }
         if result.ok {
             if editError != nil { editError = nil }
         } else if let error = result.error, result.errorIsLocalized {

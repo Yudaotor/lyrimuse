@@ -67,6 +67,11 @@ enum LyricsManagerBaseline {
             """)
     }
 
+    /// 改动交给引擎之后那次重读(`EnrichCacheStore.reloadAfterEdit`)从开始到返回,含等在飞的那次。
+    static func logAfterEditReload(since start: CFAbsoluteTime) {
+        logger.notice("baseline: after-edit reload=\(ms(since: start), format: .fixed(precision: 1), privacy: .public)ms")
+    }
+
     /// 窗口重新露出来(轮询任务重启)到列表换成新的:`reload` 是补读那次 `reload(onlyIfChanged:)` 返回时,`settled` 是
     /// 那之后主线程两次让出都排到了的时刻,包含列表按新摘要比对行(SwiftUI 在主线程上做)。
     @MainActor

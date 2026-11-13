@@ -270,6 +270,11 @@ enum DebugDeepLinks {
         case let .touchBarTyping(override):
             TouchBarLyricsController.shared.setTypingOverride(override)
             logger.notice("debug touch bar typing override=\(override.map { String($0) } ?? "auto", privacy: .public)")
+        case let .managerInstrumental(key, on):
+            Task {
+                let ok = await EnrichCacheStore.shared.setInstrumental(key: key, on)
+                logger.notice("debug manager instrumental on=\(on, privacy: .public) ok=\(ok, privacy: .public)")
+            }
         case let .managerVisibility(override):
             NotificationCenter.default.post(name: managerVisibilityNotification, object: override.map { NSNumber(value: $0) })
             logger.notice("debug manager visibility override=\(override.map { String($0) } ?? "auto", privacy: .public)")

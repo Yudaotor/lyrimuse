@@ -342,6 +342,10 @@ func runDeepLinkTests() {
                      link("lyrimuse://debug/manager-visibility?state=auto")],
                     [.debug(.managerVisibility(override: false)), .debug(.managerVisibility(override: true)),
                      .debug(.managerVisibility(override: nil))], "debug: 歌词管理当作挡住 / 露出来 / 交还")
+        expectEqual(link("lyrimuse://debug/manager-instrumental?key=a%7Cb%7Cc&on=1"), .debug(.managerInstrumental(key: "a|b|c", on: true)),
+                    "debug: 歌词管理把一条标成纯音乐")
+        expectEqual(link("lyrimuse://debug/manager-instrumental?on=1") == nil && link("lyrimuse://debug/manager-instrumental?key=a%7Cb%7Cc") == nil,
+                    true, "debug: 歌词管理标纯音乐没带 key 或 on 不认")
         expectEqual(link("lyrimuse://debug/manager-visibility?state=on") == nil
                     && link("lyrimuse://debug/manager-visibility") == nil, true, "debug: 歌词管理可见性认不出的、没带都不认")
         expectEqual(link("lyrimuse://debug/touchbar-display?color=pink") == nil
@@ -561,6 +565,7 @@ func runDeepLinkTests() {
             .debug(.touchBarDisplay(color: .rainbow)), .debug(.touchBarDisplay(color: .cover)),
             .debug(.touchBarTyping(override: true)), .debug(.touchBarTyping(override: false)), .debug(.touchBarTyping(override: nil)),
             .debug(.managerVisibility(override: true)), .debug(.managerVisibility(override: false)), .debug(.managerVisibility(override: nil)),
+            .debug(.managerInstrumental(key: "歌手|歌 & 名|专辑", on: true)), .debug(.managerInstrumental(key: "a|b|", on: false)),
             .debug(.rainbow(overlay: true, notch: nil)), .debug(.rainbow(overlay: false, notch: true)),
             .debug(.rainbow(overlay: nil, notch: nil, menuBar: false)),
             .debug(.menuBarDisplay(artwork: true, content: nil)), .debug(.menuBarDisplay(artwork: nil, content: "title")),

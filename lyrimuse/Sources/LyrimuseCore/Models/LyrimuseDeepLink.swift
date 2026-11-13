@@ -145,6 +145,9 @@ public enum LyrimuseDeepLink: Equatable, Sendable {
         /// 歌词管理当作被挡住 / 露出来,不看遮挡状态和桌面空间(`debug/manager-visibility?state=hidden|visible|auto`,`auto` = 交还给它)。
         /// 不切桌面、不动别的窗口就能验「看不见时停轮询、重新露出来补读」。nil = auto。
         case managerVisibility(override: Bool?)
+        /// 歌词管理里把这一条标成 / 取消纯音乐,跟详情页那颗开关走同一条路(交给引擎、改完重读):
+        /// `debug/manager-instrumental?key=<写法键>&on=1|0`。验「改动之后的重读」用。
+        case managerInstrumental(key: String, on: Bool)
         /// 悬浮歌词、灵动岛、菜单栏的彩虹开关,跟设置页走同一个设置(`debug/rainbow?overlay=0|1&notch=0|1&menubar=0|1`,
         /// 至少带一个)。
         case rainbow(overlay: Bool?, notch: Bool?, menuBar: Bool? = nil)
@@ -509,6 +512,9 @@ public enum LyrimuseDeepLink: Equatable, Sendable {
             case "auto": self = .debug(.touchBarTyping(override: nil))
             default: return nil
             }
+        case ("debug", "/manager-instrumental"):
+            guard let key = value("key"), !key.isEmpty, let on = value("on").flatMap(Self.parseBool) else { return nil }
+            self = .debug(.managerInstrumental(key: key, on: on))
         case ("debug", "/manager-visibility"):
             switch value("state")?.lowercased() {
             case "visible": self = .debug(.managerVisibility(override: true))
@@ -790,6 +796,9 @@ public enum LyrimuseDeepLink: Equatable, Sendable {
             case let .touchBarTyping(override):
                 components.path = "/touchbar-typing"
                 components.queryItems = [URLQueryItem(name: "state", value: override.map { $0 ? "on" : "off" } ?? "auto")]
+            case let .managerInstrumental(key, on):
+                components.path = "/manager-instrumental"
+                components.queryItems = [URLQueryItem(name: "key", value: key), URLQueryItem(name: "on", value: on ? "1" : "0")]
             case let .managerVisibility(override):
                 components.path = "/manager-visibility"
                 components.queryItems = [URLQueryItem(name: "state", value: override.map { $0 ? "visible" : "hidden" } ?? "auto")]
