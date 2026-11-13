@@ -13,6 +13,8 @@ import (
 //   - 原有的歌词帧(USLT、SYLT、描述是歌词键的 TXXX)全部去掉,换成这一个;别的帧原样、按原顺序留着。语言沿用
 //     原来第一个 USLT 的,没有就写 eng。
 //   - 扩展头、标签尾不写回;v2.3 整个标签反同步过的,写回时不再反同步。
+//   - v2.4 的帧长照读法 id3v24FrameSize 认普通大端整数(iTunes 写法),写回一律写成同步安全整数,帧标志和正文原样;
+//     要换算帧长的帧带格式标志(数据长度指示、压缩、加密、反同步、分组)的不写,那几样的长度字段读法同样拿不准。
 //   - 新帧放得进原标签区就用掉 padding、标签区总长不变;放不下整个标签变长,新留 writebackPadding 那么多 padding。
 
 const id3WritebackDefaultLang = "eng"
@@ -55,9 +57,16 @@ func id3WritebackLayout(r io.ReadSeeker, fileSize int64) (lyricsTagLayout, error
 	if _, err := io.ReadFull(r, head[10:]); err != nil {
 		return lyricsTagLayout{}, wbErr(wbErrIO, err)
 	}
-	frames, err := id3Frames(version, flags, head[10:10+size])
+	frames, err := id3Frames(version, flags, head[10:10+size], false)
 	if err != nil {
 		return lyricsTagLayout{}, err
+	}
+	if version == 4 {
+		for _, f := range frames {
+			if !id3SizeIsSyncsafe(f) && f.raw[9] != 0 {
+				return lyricsTagLayout{}, wbErrf(wbErrUnsupportedTag, "frame %q: plain size with format flags %#x", f.id, f.raw[9])
+			}
+		}
 	}
 	lang := id3WritebackDefaultLang
 	for _, f := range frames {
@@ -95,7 +104,8 @@ func id3NewTagLayout(fileSize int64) lyricsTagLayout {
 }
 
 // id3Frames 拆标签区里的帧(不含 10 字节标签头),遇到 padding(0 字节)为止。帧长越界、padding 里有非 0 字节当损坏。
-func id3Frames(version, flags byte, tag []byte) ([]id3RawFrame, error) {
+// v2.4 的帧长:strictSyncsafe 为真只认同步安全整数(核对自己写出的标签),否则同读法 id3v24FrameSize。
+func id3Frames(version, flags byte, tag []byte, strictSyncsafe bool) ([]id3RawFrame, error) {
 	if flags&0x80 != 0 {
 		tag = bytes.ReplaceAll(tag, []byte{0xFF, 0x00}, []byte{0xFF})
 	}
@@ -119,9 +129,12 @@ func id3Frames(version, flags byte, tag []byte) ([]id3RawFrame, error) {
 			return nil, wbErrf(wbErrUnsupportedTag, "truncated frame header")
 		}
 		var size int
-		if version == 4 {
+		switch {
+		case version == 4 && strictSyncsafe:
 			size = syncsafeInt(tag[pos+4 : pos+8])
-		} else {
+		case version == 4:
+			size = id3v24FrameSize(tag, pos)
+		default:
 			size = int(binary.BigEndian.Uint32(tag[pos+4 : pos+8]))
 		}
 		if size < 0 || size > len(tag)-pos-10 {
@@ -136,6 +149,13 @@ func id3Frames(version, flags byte, tag []byte) ([]id3RawFrame, error) {
 		}
 	}
 	return frames, nil
+}
+
+// id3SizeIsSyncsafe:帧头里的帧长字节就是正文长度的同步安全写法。
+func id3SizeIsSyncsafe(f id3RawFrame) bool {
+	var want [4]byte
+	putSyncsafe(want[:], len(f.raw)-10)
+	return bytes.Equal(f.raw[4:8], want[:])
 }
 
 // id3KeptFrames:写回时原样留下的帧,即歌词帧以外的全部。
@@ -190,7 +210,11 @@ func id3USLTFrame(version byte, lang, text string) []byte {
 func id3BuildTag(version byte, kept []id3RawFrame, lyricsFrame []byte, oldLen int, audioBytes int64) ([]byte, error) {
 	var frames []byte
 	for _, f := range kept {
+		start := len(frames)
 		frames = append(frames, f.raw...)
+		if version == 4 {
+			putSyncsafe(frames[start+4:start+8], len(f.raw)-10)
+		}
 	}
 	frames = append(frames, lyricsFrame...)
 	total := oldLen
@@ -208,7 +232,8 @@ func id3BuildTag(version byte, kept []id3RawFrame, lyricsFrame []byte, oldLen in
 	return tag, nil
 }
 
-// id3PreservedErr:新标签里歌词以外的帧跟 kept 逐字节相同、顺序一致,而且恰好有一个歌词帧(USLT)。
+// id3PreservedErr:新标签里歌词以外的帧跟 kept 的帧名、帧标志、正文逐字节相同、顺序一致,而且恰好有一个歌词帧(USLT)。
+// v2.4 按同步安全整数拆帧,帧长写成别的样子拆不开或对不上。
 func id3PreservedErr(kept []id3RawFrame, newHead []byte) error {
 	if len(newHead) < 10 || !bytes.HasPrefix(newHead, []byte("ID3")) {
 		return wbErrf(wbErrTagsNotPreserved, "no ID3 header")
@@ -218,7 +243,7 @@ func id3PreservedErr(kept []id3RawFrame, newHead []byte) error {
 	if 10+size > len(newHead) {
 		return wbErrf(wbErrTagsNotPreserved, "bad tag size")
 	}
-	frames, err := id3Frames(version, flags, newHead[10:10+size])
+	frames, err := id3Frames(version, flags, newHead[10:10+size], true)
 	if err != nil {
 		return wbErr(wbErrTagsNotPreserved, err)
 	}
@@ -227,7 +252,8 @@ func id3PreservedErr(kept []id3RawFrame, newHead []byte) error {
 		return wbErrf(wbErrTagsNotPreserved, "%d frames kept, expected %d", len(got), len(kept))
 	}
 	for i := range got {
-		if !bytes.Equal(got[i].raw, kept[i].raw) {
+		g, k := got[i].raw, kept[i].raw
+		if got[i].id != kept[i].id || !bytes.Equal(g[8:], k[8:]) {
 			return wbErrf(wbErrTagsNotPreserved, "frame %d (%s) changed", i, kept[i].id)
 		}
 	}
