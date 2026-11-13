@@ -486,7 +486,21 @@ func runDeepLinkTests() {
                     "模拟播放: 刚结束换回真实曲目不算换歌")
         expectEqual(PlaybackSimulation.suppressesTrackChange(now: t0.addingTimeInterval(2 + PlaybackSimulation.endGrace + 1)), false,
                     "模拟播放: 过了收尾那一段照常")
+        expectEqual(PlaybackSimulation.isLeftover(shownBundleID: PlaybackSimulation.bundleIdentifier), true,
+                    "模拟播放: 收尾后屏上还是模拟那首,算留下的")
+        expectEqual(PlaybackSimulation.isLeftover(shownBundleID: PlaybackPlayer.appleMusic.bundleIdentifier)
+                        || PlaybackSimulation.isLeftover(shownBundleID: nil), false,
+                    "模拟播放: 屏上是真实播放器的歌或什么都没有,不算留下的")
+        PlaybackSimulation.begin(.nothingPlaying(anchoredAt: t0))
+        expectEqual(PlaybackSimulation.isLeftover(shownBundleID: PlaybackSimulation.bundleIdentifier), false,
+                    "模拟播放: idle=1 模拟中不算留下的(照播放器撤掉正在播放那一路的宽限清)")
+        PlaybackSimulation.end(now: t0.addingTimeInterval(2))
         let lps = source("LyrimuseCore/Local/LocalPlaybackSource.swift")
+        expectEqual(sourceHas(lps, """
+            if PlaybackSimulation.isLeftover(shownBundleID: self.lastSnapshot?.bundleIdentifier)
+                || MediaControlClient.nilSnapshotClearsState(
+            """), true,
+                    "模拟播放: off=1 后读回空快照,屏上模拟那首当拍清掉,不按焦点被占留 300 秒")
         let publish = lps.components(separatedBy: "private func publishPlaybackState(").dropFirst().first ?? ""
         expectEqual(publish.prefix(400).contains("guard !PlaybackSimulation.isActive else { return }"), true,
                     "模拟播放: 不写给引擎的播放状态(引擎据此打卡 Last.fm)")

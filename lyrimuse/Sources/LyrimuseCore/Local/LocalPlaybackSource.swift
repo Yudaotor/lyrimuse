@@ -4366,11 +4366,12 @@ public final class LocalPlaybackSource: ObservableObject {
                     logger.notice("snapshot failed: \(reason, privacy: .public)\(streakSuffix, privacy: .public)")
                 }
                 // 单拍 nil 不清状态:判据与代价见
-                // MediaControlClient.nilSnapshotClearsState。
+                // MediaControlClient.nilSnapshotClearsState。屏上是收掉的模拟留下的那首时不留(PlaybackSimulation.isLeftover)。
                 let failure = snapshotFailure
                 self.nilStreakIsLoading = failure == .targetLoading
                 let nilStreakSeconds = Date().timeIntervalSince(self.nilStreakStartedAt ?? Date())
-                if MediaControlClient.nilSnapshotClearsState(
+                if PlaybackSimulation.isLeftover(shownBundleID: self.lastSnapshot?.bundleIdentifier)
+                    || MediaControlClient.nilSnapshotClearsState(
                     consecutiveNilCount: self.consecutiveNilSnapshots,
                     failure: failure, nilStreakSeconds: nilStreakSeconds) {
                     clearIfWasPlaying()

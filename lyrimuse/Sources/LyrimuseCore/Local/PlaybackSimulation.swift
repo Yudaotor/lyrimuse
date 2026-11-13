@@ -106,6 +106,12 @@ public struct PlaybackSimulation: Equatable, Sendable {
         }
     }
 
+    /// 屏上这首是已经收掉的模拟留下的(`shownBundleID` 是模拟的 bundle id、模拟已不在)。读回真实播放器拿到空快照时,
+    /// 这种曲目不按真实播放器的宽限留着(焦点被占那一档要留 300 秒),当拍清掉。见 14 章决策 191。
+    public static func isLeftover(shownBundleID: String?) -> Bool {
+        shownBundleID == bundleIdentifier && !isActive
+    }
+
     /// 模拟期间的播放 / 暂停。没在模拟返回 false。
     @discardableResult
     public static func togglePlaying(now: Date = Date()) -> Bool {
