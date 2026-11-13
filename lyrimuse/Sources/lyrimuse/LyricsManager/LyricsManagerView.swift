@@ -2172,6 +2172,37 @@ struct LyricsManagerView: View {
         openSearchWindow(summary)
     }
 
+    /// 窗口关掉时放下挂在这扇窗上的面板、确认框和浮层。关窗只拆掉面板(sheet 照调 onDismiss),绑定的状态不会置回 false;
+    /// @State 跨关窗存活,下次开窗它们会自己再弹出来,决策面板那时内容已被 onDismiss 清空,只剩「无法读取」。
+    /// 新加挂在窗上的 .sheet / .confirmationDialog / .alert / .popover 要在这里放下(selftest lyrics-manager 组守着)。
+    /// 待删 / 待清理清单不清:确认框关闭动画里还在读。见 11 章决策 167
+    private func dismissWindowPresentations() {
+        showDecisionSheet = false
+        decisionSlots = nil
+        showSongVersions = false
+        songVersionsShowEvidence = false
+        songVersionsCompare = nil
+        batchImportRequest = nil
+        showImportLibrary = false
+        showClearAllConfirm = false
+        showCleanupConfirm = false
+        showBatchDeleteConfirm = false
+        showClearOffsetsConfirm = false
+        confirmFullScan = false
+        showClearRadioOffsetsConfirm = false
+        showRestoreSnapshotConfirm = false
+        restoreSnapshotResult = nil
+        showDiscardEditConfirm = false
+        showUnsavedEditAlert = false
+        confirmManualConflict = false
+        showFilterPopover = false
+        showSourcePicker = false
+        showArtistPicker = false
+        showAlbumPicker = false
+        writeback.cancel()
+        writeback.failure = nil
+    }
+
     private func openDecision(for key: String) {
         guard select(key) else { return }
         presentDecision(for: key)
@@ -2494,6 +2525,7 @@ struct LyricsManagerView: View {
             // 见 pendingAutoFocus 的注释:@State 会跨关窗存活,得自己把这个闸复位,
             // 下次开窗才会重新定位一次。
             pendingAutoFocus = true
+            dismissWindowPresentations()
         }
         .onChange(of: store.summariesGeneration) { _, _ in refreshNowPlayingKey() }
         .onChange(of: placeholderSummary?.key) { _, _ in refreshNowPlayingKey() }

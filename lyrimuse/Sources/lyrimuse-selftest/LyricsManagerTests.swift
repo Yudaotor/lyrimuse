@@ -8,6 +8,36 @@ import Foundation
 @MainActor
 func runLyricsManagerTests() {
     checkLyricsManagerAudit()
+    // ---- 窗口关掉时放下挂在窗上的面板 / 确认框 / 浮层(见 11 章决策 167) ----
+    do {
+        let file = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("lyrimuse/LyricsManager/LyricsManagerView.swift")
+        let text = (try? String(contentsOf: file, encoding: .utf8)) ?? ""
+        let view = sourceBody("struct LyricsManagerView: View {", in: text)
+        var names: [String] = []
+        for pattern in [#"isPresented: \$(\w+)"#, #"\.sheet\(item: \$(\w+)"#] {
+            guard let re = try? NSRegularExpression(pattern: pattern) else { continue }
+            for m in re.matches(in: view, range: NSRange(view.startIndex..., in: view)) {
+                if let r = Range(m.range(at: 1), in: view) { names.append(String(view[r])) }
+            }
+        }
+        let reset = sourceBody("private func dismissWindowPresentations()", in: view)
+        let missing = names.filter { !sourceHas(reset, "\($0) = false") && !sourceHas(reset, "\($0) = nil") }
+        expectEqual(names.count >= 15 && missing.isEmpty, true,
+                    "关窗复位: 每个挂在歌词管理上的弹出状态都在 dismissWindowPresentations 里放下(漏了 \(missing))")
+        expectEqual(sourceHas(reset, "decisionSlots = nil") && sourceHas(reset, "restoreSnapshotResult = nil")
+                    && sourceHas(reset, "writeback.cancel()") && sourceHas(reset, "writeback.failure = nil"), true,
+                    "关窗复位: 决策面板内容、恢复结果框、写入歌曲文件的确认 / 失败框一起放下")
+        var closeHooks = 0
+        var rest = view[...]
+        while let r = rest.range(of: ".onDisappear {") {
+            let body = sourceBody(".onDisappear {", in: rest[r.lowerBound...])
+            if sourceHas(body, #"AuxiliaryWindowActivation.windowDidDisappear("lyrics-manager")"#),
+               sourceHas(body, "dismissWindowPresentations()") { closeHooks += 1 }
+            rest = rest[r.upperBound...]
+        }
+        expectEqual(closeHooks, 1, "关窗复位: 窗口关掉那一处 onDisappear 调 dismissWindowPresentations")
+    }
     // ---- 搜索候选:按播放器的时长一个能用的都没有时,不看时长补搜到的那几条在弹窗里有说法 ----
     do {
         let repo = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
