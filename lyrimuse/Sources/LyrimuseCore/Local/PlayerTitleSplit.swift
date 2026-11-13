@@ -427,6 +427,11 @@ public enum PlayerTitleSplit {
         return (data, url.pathExtension.lowercased() == "png" ? "image/png" : "image/jpeg")
     }
 
+    /// 正在放的文件自带的封面:先读文件里嵌着的(`LocalAudioFileArtwork`),没有再找同目录的图(`folderCover`)。会读盘。
+    public static func fileCover(forAudioFile path: String) -> (data: Data, mimeType: String)? {
+        LocalAudioFileArtwork.read(path: path) ?? folderCover(forAudioFile: path)
+    }
+
     // MARK: 字符串
 
     /// 按 Latin-1 读出来的 GBK / Big5 字节还原成中文或日文。同一个文件的几个标签(歌手、歌名、专辑)一起判,传一组字段;

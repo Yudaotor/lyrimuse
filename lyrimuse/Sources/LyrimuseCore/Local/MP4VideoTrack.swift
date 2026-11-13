@@ -7,23 +7,28 @@ public enum MP4VideoTrack {
 
     /// 会读盘,别在主线程调。
     public static func present(path: String) -> Bool {
-        guard let handle = FileHandle(forReadingAtPath: path) else { return false }
+        moov(path: path, limit: moovLimit).map(moovHasVideo) ?? false
+    }
+
+    /// 顶层 `moov` 的内容(不含盒子头);没有、超过 `limit`、读不出为 nil。只读顶层盒子头,别的盒子跳过。会读盘。
+    static func moov(path: String, limit: UInt64) -> [UInt8]? {
+        guard let handle = FileHandle(forReadingAtPath: path) else { return nil }
         defer { try? handle.close() }
-        guard let size = try? handle.seekToEnd() else { return false }
+        guard let size = try? handle.seekToEnd() else { return nil }
         var offset: UInt64 = 0
         while offset + 8 <= size {
             guard (try? handle.seek(toOffset: offset)) != nil,
                   let head = try? handle.read(upToCount: 16),
-                  let box = header([UInt8](head), remaining: size - offset) else { return false }
+                  let box = header([UInt8](head), remaining: size - offset) else { return nil }
             if box.type == "moov" {
                 let length = box.size - box.headerSize
-                guard length <= moovLimit, (try? handle.seek(toOffset: offset + box.headerSize)) != nil,
-                      let payload = try? handle.read(upToCount: Int(length)), UInt64(payload.count) == length else { return false }
-                return moovHasVideo([UInt8](payload))
+                guard length <= limit, (try? handle.seek(toOffset: offset + box.headerSize)) != nil,
+                      let payload = try? handle.read(upToCount: Int(length)), UInt64(payload.count) == length else { return nil }
+                return [UInt8](payload)
             }
             offset += box.size
         }
-        return false
+        return nil
     }
 
     /// 盒子头:大小(含头;1 = 后面 8 字节是 64 位大小,0 = 到 `remaining` 为止)、类型、头长。比 8 字节短、大小比头还小或超出

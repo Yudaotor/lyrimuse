@@ -1026,7 +1026,7 @@ public enum MediaControlClient {
         return reading
     }
 
-    /// Audirvana 这首的封面(它显示的那张,没有就找当前文件同目录的图)。最近一次读到的不是这首(按快照的 `identityKey` 认)为 nil。
+    /// Audirvana 这首的封面(它显示的那张,没有就用当前文件自带的:嵌着的,再是同目录的图)。最近一次读到的不是这首(按快照的 `identityKey` 认)为 nil。
     /// 会阻塞,不要在主线程调用。
     public static func audirvanaArtwork(forTrackKey key: String) -> (data: Data, mimeType: String, trackKey: String)? {
         guard let entry = AudirvanaPlayerInfo.currentEntry(), !entry.title.isEmpty else { return nil }
@@ -1035,7 +1035,7 @@ public enum MediaControlClient {
             playing: nil, playbackRate: nil, isMusicApp: nil, bundleIdentifier: nil, anchorElapsedTime: nil, isRadio: nil).identityKey
         guard entryKey.compare(key, options: [.caseInsensitive]) == .orderedSame else { return nil }
         if let jpeg = AudirvanaPlayerInfo.scriptArtwork(for: (entry.title, entry.path)) { return (jpeg, "image/jpeg", key) }
-        if let path = entry.path, let cover = PlayerTitleSplit.folderCover(forAudioFile: path) {
+        if let path = entry.path, let cover = PlayerTitleSplit.fileCover(forAudioFile: path) {
             return (cover.data, cover.mimeType, key)
         }
         return nil
@@ -2751,9 +2751,8 @@ public enum MediaControlClient {
             (keyTitle, keyArtist, filePath) = PinePlayerInfo.artworkIdentity(title: raw.title, artist: raw.artist)
         }
         guard !SourceKnockout.isOut(.systemArtwork), let imageData = artworkImageData(base64: raw.artworkData) else {
-            // 放本地文件的播放器(reAMP、VOX,放本机文件的 QQ 音乐、网易云、酷狗、Spotify)只报文件里嵌着的封面:没嵌的改用正在放的文件
-            // 同目录里的那张(见 PlayerTitleSplit)。
-            if let path = filePath, let cover = PlayerTitleSplit.folderCover(forAudioFile: path) {
+            // 放本地文件的播放器没报封面时用正在放的文件自带的那张:文件里嵌着的,再是同目录的图(`PlayerTitleSplit.fileCover`)。
+            if let path = filePath, let cover = PlayerTitleSplit.fileCover(forAudioFile: path) {
                 return ((cover.data, cover.mimeType,
                          PlayerArtistFix.correctedTrackKey(bundle: bundleID, artist: keyArtist, title: keyTitle)), nil)
             }
@@ -2762,10 +2761,10 @@ public enum MediaControlClient {
                 ?? "without artwork"
             return (nil, prefix + "\(bundleID) reports \(raw.title ?? "") \(artwork)")
         }
-        // Pine Player 文件没有封面时推的是它自己的图标、foobar2000 推一张光盘(都登记在 KnownPlaceholderArtwork):先找正在放的文件同目录的图。
+        // Pine Player 文件没有封面时推的是它自己的图标、foobar2000 推一张光盘(都登记在 KnownPlaceholderArtwork):先找正在放的文件自带的封面。
         if bundleID == PinePlayerInfo.bundleID || bundleID == PlaybackPlayer.foobar2000.bundleIdentifier,
            KnownPlaceholderArtwork.isPlaceholder(imageData),
-           let path = filePath, let cover = PlayerTitleSplit.folderCover(forAudioFile: path) {
+           let path = filePath, let cover = PlayerTitleSplit.fileCover(forAudioFile: path) {
             return ((cover.data, cover.mimeType,
                      PlayerArtistFix.correctedTrackKey(bundle: bundleID, artist: keyArtist, title: keyTitle)), nil)
         }
@@ -2886,13 +2885,13 @@ public enum MediaControlClient {
         return snapshot
     }
 
-    /// VOX 这首的封面,系统那份给不了时:先问它的脚本要它显示的那张,再找正在放的文件同目录的图(`tryingFolder`)。
+    /// VOX 这首的封面,系统那份给不了时:先问它的脚本要它显示的那张,再用正在放的文件自带的封面(`tryingFolder`:嵌着的,再是同目录的图)。
     /// 曲目标识按记下的这首算,跟快照对得上。
     private static func voxArtwork(tryingFolder: Bool) -> (data: Data, mimeType: String, trackKey: String)? {
         guard let entry = VoxPlayerInfo.currentEntry(), !entry.title.isEmpty else { return nil }
         let key = PlayerArtistFix.correctedTrackKey(bundle: VoxPlayerInfo.bundleID, artist: entry.artist, title: entry.title)
         if let jpeg = VoxPlayerInfo.scriptArtwork(for: (entry.title, entry.path)) { return (jpeg, "image/jpeg", key) }
-        if tryingFolder, let path = entry.path, let cover = PlayerTitleSplit.folderCover(forAudioFile: path) {
+        if tryingFolder, let path = entry.path, let cover = PlayerTitleSplit.fileCover(forAudioFile: path) {
             return (cover.data, cover.mimeType, key)
         }
         return nil
