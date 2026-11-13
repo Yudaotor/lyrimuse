@@ -1093,6 +1093,53 @@ struct LyricsDecisionSheet: View {
         }
     }
 
+    /// 候选行折起时那一行:展开箭头、封面、来源、胜者、逐字、分数、差值、分数条。
+    private func candidateHeader(_ row: Row, delta: LyricsScoreDelta?, isOpen: Bool, isChampion: Bool,
+                                 topScore: Int, showsCover: Bool, crownOnly: Bool) -> some View {
+        let c = row.model
+        return HStack(spacing: 7) {
+            Image(systemName: isOpen ? "chevron.down" : "chevron.right")
+                .font(.caption2).foregroundStyle(.secondary)
+                .frame(width: 10)
+            if showsCover { candidateCover(c.coverUrl, size: 22) }
+            Text(sourceDisplayName(c.source))
+                .font(.callout.weight(isChampion ? .semibold : .regular))
+                .foregroundStyle(sourceColor(c.source))
+                .padding(.horizontal, 7).padding(.vertical, 2)
+                .background(sourceColor(c.source).opacity(0.12), in: Capsule())
+            // 两个小标签不折行:英文「Winner」「Word-by-Word」被拆成两行会断在词中间。
+            if isChampion {
+                Group {
+                    if crownOnly {
+                        Label(L10n.t("胜者"), systemImage: "crown.fill").labelStyle(.iconOnly)
+                    } else {
+                        Label(L10n.t("胜者"), systemImage: "crown.fill").labelStyle(.titleAndIcon)
+                    }
+                }
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.orange)
+                .fixedSize()
+            }
+            if c.hasWordTiming == true {
+                Text(L10n.t("逐字")).font(.caption2)
+                    .fixedSize()
+                    .padding(.horizontal, 5).padding(.vertical, 1)
+                    .background(Color.secondary.opacity(0.12), in: Capsule())
+            }
+            Spacer(minLength: 4)
+            Text("\(c.score)")
+                .font(.callout.weight(.semibold).monospacedDigit())
+                .foregroundStyle(.primary)
+                .fixedSize()
+            // 差值列固定宽度、冠军留空 —— 分数列才对得齐,一眼能比长短。
+            Text(delta.map { signedText($0.scoreGap) } ?? "")
+                .font(.caption.monospacedDigit())
+                .foregroundStyle(.secondary)
+                .frame(width: 44, alignment: .trailing)
+            scoreBar(score: c.score, top: topScore, tint: sourceColor(c.source))
+        }
+    }
+
     /// 一条参赛候选。
     ///
     /// **折叠态 = 差值,展开态 = 绝对明细带解释。** 这是整个重设计的落点:
@@ -1110,39 +1157,12 @@ struct LyricsDecisionSheet: View {
                     else { expanded.insert(row.core.source) }
                 }
             } label: {
-                HStack(spacing: 7) {
-                    Image(systemName: isOpen ? "chevron.down" : "chevron.right")
-                        .font(.caption2).foregroundStyle(.secondary)
-                        .frame(width: 10)
-                    if showsCover { candidateCover(c.coverUrl, size: 22) }
-                    Text(sourceDisplayName(c.source))
-                        .font(.callout.weight(isChampion ? .semibold : .regular))
-                        .foregroundStyle(sourceColor(c.source))
-                        .padding(.horizontal, 7).padding(.vertical, 2)
-                        .background(sourceColor(c.source).opacity(0.12), in: Capsule())
-                    // 两个小标签不折行,挤的时候让来源名折:英文「Winner」「Word-by-Word」被拆成两行会断在词中间。
-                    if isChampion {
-                        Label(L10n.t("胜者"), systemImage: "crown.fill")
-                            .font(.caption.weight(.semibold))
-                            .foregroundStyle(.orange)
-                            .fixedSize()
-                    }
-                    if c.hasWordTiming == true {
-                        Text(L10n.t("逐字")).font(.caption2)
-                            .fixedSize()
-                            .padding(.horizontal, 5).padding(.vertical, 1)
-                            .background(Color.secondary.opacity(0.12), in: Capsule())
-                    }
-                    Spacer(minLength: 4)
-                    Text("\(c.score)")
-                        .font(.callout.weight(.semibold).monospacedDigit())
-                        .foregroundStyle(.primary)
-                    // 差值列固定宽度、冠军留空 —— 分数列才对得齐,一眼能比长短。
-                    Text(delta.map { signedText($0.scoreGap) } ?? "")
-                        .font(.caption.monospacedDigit())
-                        .foregroundStyle(.secondary)
-                        .frame(width: 44, alignment: .trailing)
-                    scoreBar(score: c.score, top: topScore, tint: sourceColor(c.source))
+                // 英文下整行放不下(来源名、分数会被拆在词中间)时,「胜者」只留皇冠图标。
+                ViewThatFits(in: .horizontal) {
+                    candidateHeader(row, delta: delta, isOpen: isOpen, isChampion: isChampion,
+                                    topScore: topScore, showsCover: showsCover, crownOnly: false)
+                    candidateHeader(row, delta: delta, isOpen: isOpen, isChampion: isChampion,
+                                    topScore: topScore, showsCover: showsCover, crownOnly: true)
                 }
                 .contentShape(Rectangle())
             }
