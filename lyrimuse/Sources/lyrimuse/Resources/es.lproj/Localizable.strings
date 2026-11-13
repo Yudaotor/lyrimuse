@@ -1545,7 +1545,7 @@
 "播放控制" = "Controles";
 "播放控制位置" = "Posición de los controles";
 "播放时显示动画，暂停时静止" = "Se anima mientras suena la música y se detiene en pausa";
-"播放本地 MP3 或 FLAC 时，把确定的歌词写进文件，不覆盖其他软件写入的歌词" = "Al reproducir un MP3 o FLAC local, escribe la letra elegida en el archivo sin sobrescribir la que hayan escrito otras apps";
+"播放本地 MP3 或 FLAC 时，把确定的歌词写进文件" = "Al reproducir un MP3 o FLAC local, escribe la letra elegida en el archivo";
 "播放本机文件时，先用同名 .lrc 或文件里内嵌的歌词" = "Al reproducir un archivo local, usar primero su .lrc del mismo nombre o la letra incrustada";
 "播放来源" = "Reproducida en";
 "播放次数" = "Reproducciones";
@@ -1774,6 +1774,7 @@
 "更新设置" = "Ajustes de actualización";
 "更早的记录尚未加载，这些行暂不编号" = "Las reproducciones anteriores aún no se han cargado, así que esas filas no están numeradas";
 "替换" = "Reemplazar";
+"替换前先备份原有歌词" = "Antes de reemplazarla, se guarda una copia de la letra existente";
 "替换并锁定" = "Sustituir y bloquear";
 "替换现有歌词" = "Sustituir la letra actual";
 "最后一句晚于歌曲结束 5 秒以上，可能是完整版歌词对应了精简版曲目" = "La última línea cae más de 5 segundos después del final de la canción; probablemente es la letra completa de una versión editada";
@@ -2556,6 +2557,7 @@
 "要放弃对歌词的修改吗？" = "¿Descartar los cambios en esta letra?";
 "要清理缓存吗？" = "¿Limpiar la caché?";
 "要清除全部设置吗？" = "¿Borrar todos los ajustes?";
+"覆盖其他软件写入的歌词" = "Sobrescribir la letra escrita por otras apps";
 "规则" = "Reglas";
 "视频流" = "Flujo de vídeo";
 "解析 Last.fm 响应失败" = "No se pudo leer la respuesta de Last.fm";

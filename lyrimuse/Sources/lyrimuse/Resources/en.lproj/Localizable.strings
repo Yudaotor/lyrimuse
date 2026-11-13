@@ -1545,7 +1545,7 @@
 "播放控制" = "Controls";
 "播放控制位置" = "Controls Position";
 "播放时显示动画，暂停时静止" = "Animates while music plays and stays still when paused";
-"播放本地 MP3 或 FLAC 时，把确定的歌词写进文件，不覆盖其他软件写入的歌词" = "When a local MP3 or FLAC file plays, writes the settled lyrics into it without overwriting lyrics written by other apps";
+"播放本地 MP3 或 FLAC 时，把确定的歌词写进文件" = "When a local MP3 or FLAC file plays, writes the settled lyrics into it";
 "播放本机文件时，先用同名 .lrc 或文件里内嵌的歌词" = "When playing a local file, use its same-name .lrc or embedded lyrics first";
 "播放来源" = "Played In";
 "播放次数" = "Plays";
@@ -1774,6 +1774,7 @@
 "更新设置" = "Update Settings";
 "更早的记录尚未加载，这些行暂不编号" = "Older plays aren’t loaded yet, so those rows aren’t numbered";
 "替换" = "Replace";
+"替换前先备份原有歌词" = "The existing lyrics are backed up before being replaced";
 "替换并锁定" = "Replace and Lock";
 "替换现有歌词" = "Replace Current Lyrics";
 "最后一句晚于歌曲结束 5 秒以上，可能是完整版歌词对应了精简版曲目" = "The last line falls more than 5 seconds after the track ends; likely full-version lyrics for an edited track";
@@ -2556,6 +2557,7 @@
 "要放弃对歌词的修改吗？" = "Discard your changes to these lyrics?";
 "要清理缓存吗？" = "Clean up the cache?";
 "要清除全部设置吗？" = "Erase all settings?";
+"覆盖其他软件写入的歌词" = "Overwrite Lyrics Written by Other Apps";
 "规则" = "Rules";
 "视频流" = "Video stream";
 "解析 Last.fm 响应失败" = "Couldn’t read the response from Last.fm";

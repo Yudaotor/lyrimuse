@@ -267096,91 +267096,91 @@
         }
       }
     },
-    "播放本地 MP3 或 FLAC 时，把确定的歌词写进文件，不覆盖其他软件写入的歌词" : {
+    "播放本地 MP3 或 FLAC 时，把确定的歌词写进文件" : {
       "extractionState" : "manual",
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Schreibt beim Abspielen einer lokalen MP3- oder FLAC-Datei den festgelegten Liedtext hinein, ohne von anderen Apps geschriebene Liedtexte zu überschreiben"
+            "value" : "Schreibt beim Abspielen einer lokalen MP3- oder FLAC-Datei den festgelegten Liedtext hinein"
           }
         },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "When a local MP3 or FLAC file plays, writes the settled lyrics into it without overwriting lyrics written by other apps"
+            "value" : "When a local MP3 or FLAC file plays, writes the settled lyrics into it"
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Al reproducir un MP3 o FLAC local, escribe la letra elegida en el archivo sin sobrescribir la que hayan escrito otras apps"
+            "value" : "Al reproducir un MP3 o FLAC local, escribe la letra elegida en el archivo"
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Pendant la lecture d’un MP3 ou FLAC local, écrit les paroles retenues dans le fichier sans écraser celles écrites par d’autres apps"
+            "value" : "Pendant la lecture d’un MP3 ou FLAC local, écrit les paroles retenues dans le fichier"
           }
         },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Durante la riproduzione di un MP3 o FLAC locale, scrive nel file il testo scelto senza sovrascrivere quello scritto da altre app"
+            "value" : "Durante la riproduzione di un MP3 o FLAC locale, scrive nel file il testo scelto"
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "ローカルの MP3 や FLAC の再生中、確定した歌詞をファイルに書き込みます。他のアプリが書き込んだ歌詞は上書きしません"
+            "value" : "ローカルの MP3 や FLAC の再生中、確定した歌詞をファイルに書き込みます"
           }
         },
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "로컬 MP3나 FLAC를 재생할 때 확정된 가사를 파일에 쓰며, 다른 앱이 쓴 가사는 덮어쓰지 않습니다"
+            "value" : "로컬 MP3나 FLAC를 재생할 때 확정된 가사를 파일에 씁니다"
           }
         },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Ao tocar um MP3 ou FLAC local, grava a letra escolhida no arquivo sem sobrescrever a que outros apps gravaram"
+            "value" : "Ao tocar um MP3 ou FLAC local, grava a letra escolhida no arquivo"
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "При воспроизведении локальных MP3 или FLAC записывает выбранный текст в файл, не перезаписывая текст от других приложений"
+            "value" : "При воспроизведении локальных MP3 или FLAC записывает выбранный текст в файл"
           }
         },
         "th" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "ขณะเล่นไฟล์ MP3 หรือ FLAC ในเครื่อง จะเขียนเนื้อเพลงที่เลือกแล้วลงในไฟล์ โดยไม่เขียนทับเนื้อเพลงที่แอปอื่นเขียนไว้"
+            "value" : "ขณะเล่นไฟล์ MP3 หรือ FLAC ในเครื่อง จะเขียนเนื้อเพลงที่เลือกแล้วลงในไฟล์"
           }
         },
         "uk" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Під час відтворення локальних MP3 або FLAC записує вибраний текст у файл, не перезаписуючи текст від інших програм"
+            "value" : "Під час відтворення локальних MP3 або FLAC записує вибраний текст у файл"
           }
         },
         "vi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Khi phát tệp MP3 hoặc FLAC cục bộ, ghi lời đã chọn vào tệp, không ghi đè lời do ứng dụng khác ghi"
+            "value" : "Khi phát tệp MP3 hoặc FLAC cục bộ, ghi lời đã chọn vào tệp"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "播放本地 MP3 或 FLAC 时，把确定的歌词写进文件，不覆盖其他软件写入的歌词"
+            "value" : "播放本地 MP3 或 FLAC 时，把确定的歌词写进文件"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "播放本機 MP3 或 FLAC 時，把確定的歌詞寫進檔案，不覆寫其他軟體寫入的歌詞"
+            "value" : "播放本機 MP3 或 FLAC 時，把確定的歌詞寫進檔案"
           }
         }
       }
@@ -267626,6 +267626,184 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "可能是網易雲音樂 iPad 版設定裡開了「允许与其他应用同时播放」"
+          }
+        }
+      }
+    },
+    "覆盖其他软件写入的歌词" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Von anderen Apps geschriebene Liedtexte überschreiben"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Overwrite Lyrics Written by Other Apps"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sobrescribir la letra escrita por otras apps"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Écraser les paroles écrites par d’autres apps"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sovrascrivi il testo scritto da altre app"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "他のアプリが書き込んだ歌詞を上書き"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "다른 앱이 쓴 가사 덮어쓰기"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sobrescrever a letra gravada por outros apps"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Перезаписывать текст от других приложений"
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "เขียนทับเนื้อเพลงที่แอปอื่นเขียนไว้"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Перезаписувати текст від інших програм"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ghi đè lời do ứng dụng khác ghi"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "覆盖其他软件写入的歌词"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "覆寫其他軟體寫入的歌詞"
+          }
+        }
+      }
+    },
+    "替换前先备份原有歌词" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Der vorhandene Liedtext wird vor dem Ersetzen gesichert"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The existing lyrics are backed up before being replaced"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Antes de reemplazarla, se guarda una copia de la letra existente"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Les paroles existantes sont sauvegardées avant d’être remplacées"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Il testo esistente viene salvato prima di essere sostituito"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "置き換える前に元の歌詞をバックアップします"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "바꾸기 전에 기존 가사를 백업합니다"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "A letra existente é copiada antes de ser substituída"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Перед заменой прежний текст сохраняется в резервную копию"
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "สำรองเนื้อเพลงเดิมไว้ก่อนแทนที่"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Перед заміною наявний текст зберігається в резервну копію"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sao lưu lời hiện có trước khi thay"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "替换前先备份原有歌词"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "取代前先備份原有歌詞"
           }
         }
       }

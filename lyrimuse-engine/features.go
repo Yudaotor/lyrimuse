@@ -192,6 +192,8 @@ type featureFlagsFile struct {
 	PreferLocalFileLyrics *bool `json:"prefer_local_file_lyrics,omitempty"`
 	// LyricsAutoWriteback:实验室「自动写入歌曲文件」,正在放的本地文件的歌词定下来后写进文件(lyricsautowriteback.go)。缺失为关。
 	LyricsAutoWriteback bool `json:"lyrics_auto_writeback,omitempty"`
+	// LyricsAutoWritebackOverwrite:自动写入时覆盖别的软件写的歌词(先备份原歌词),只在 LyricsAutoWriteback 开着时起作用。缺失为关。
+	LyricsAutoWritebackOverwrite bool `json:"lyrics_auto_writeback_overwrite,omitempty"`
 	// LyricsDir：歌词文件夹("歌词文件夹作为权威源"读写的那个文件夹)的自定义位置。
 	// 留空则用默认位置(config.json 同目录下的 lyrics/,main.go 里兜底)。
 	LyricsDir string `json:"lyrics_dir,omitempty"`
@@ -329,6 +331,8 @@ type featureFlags struct {
 	LyricsSourceOrder     []string
 	// 见 featureFlagsFile.LyricsAutoWriteback。
 	LyricsAutoWriteback bool
+	// 见 featureFlagsFile.LyricsAutoWritebackOverwrite。
+	LyricsAutoWritebackOverwrite bool
 	// LyricsDir 空字符串表示"用默认位置",由 main.go 里设置包级变量 lyricsDir() 时兜底,
 	// 不在这里(loadFeatureFlags)展开成绝对路径——那时候 *cfgPath 还没解析完。
 	LyricsDir string
@@ -463,39 +467,40 @@ func buildFeatureFlags(f featureFlagsFile) featureFlags {
 		LastfmMatchFirstArtistOnly: match.FirstArtistOnly,
 		// 默认 false:照 Last.fm 官方规则,短于 30 秒不记。fail-closed 跟其余"改变上送内容"的
 		// 开关一致——字段缺失不能让老用户的历史突然多出一批短曲目。
-		ScrobbleShortTracks:       boolOr(f.ScrobbleShortTracks, false),
-		LastfmScrobblePoint:       resolveScrobblePoint(f.LastfmScrobblePoint),
-		WeeklyDigest:              boolOr(f.WeeklyDigest, false),
-		DailyDigest:               boolOr(f.DailyDigest, false),
-		WeeklyDigestSource:        f.WeeklyDigestSource,
-		DailyDigestSource:         f.DailyDigestSource,
-		MonthlyDigest:             boolOr(f.MonthlyDigest, false),
-		YearlyDigest:              boolOr(f.YearlyDigest, false),
-		MonthlyDigestSource:       f.MonthlyDigestSource,
-		YearlyDigestSource:        f.YearlyDigestSource,
-		DigestTopN:                resolveDigestTopN(f.DigestTopN),
-		DigestPushTime:            resolveDigestPushTime(f.DigestPushTime),
-		DigestTemplate:            resolveDigestTemplate(f.DigestTemplate),
-		LyricsSources:             resolveLyricsSources(f.LyricsSources),
-		LyricsSourceMode:          resolveLyricsSourceMode(f.LyricsSourceMode),
-		PreferLocalFileLyrics:     resolvePreferLocalFileLyrics(f.PreferLocalFileLyrics, f.LyricsSourceMode),
-		LyricsSourceOrder:         resolveLyricsSourceOrder(f.LyricsSourceOrder),
-		LyricsAutoWriteback:       f.LyricsAutoWriteback,
-		LyricsDir:                 f.LyricsDir,
-		LyricsWordFormats:         resolveLyricsWordFormats(f.LyricsWordFormats),
-		MotionCoverSkipApple:      !motionApple,
-		MotionCoverSkipOther:      !motionOther,
-		LyricsTranslationLanguage: resolveLyricsTranslationLanguage(f.LyricsTranslationLanguage, f.SystemLanguage),
-		SystemLanguage:            strings.ToLower(strings.TrimSpace(f.SystemLanguage)),
-		ReportLanguage:            parseDigestLang(f.ReportLanguage),
-		LyricsMachineTranslation:  boolOr(f.LyricsMachineTranslation, false),
-		LaunchLyrimuseOnPlayers:   resolveLaunchLyrimuseOnPlayers(f.LaunchLyrimuseOnPlayers),
-		LyricsDecisionTrace:       boolOr(f.LyricsDecisionTrace, false),
-		SongEntityShadow:          boolOr(f.SongEntityShadow, true),
-		SongEntityPhase2:          boolOr(f.SongEntityPhase2, true),
-		SongEntityShareLyrics:     boolOr(f.SongEntityShareLyrics, true),
-		NetworkProxy:              resolveNetworkProxy(f.NetworkProxy),
-		NetworkProxyServer:        strings.TrimSpace(f.NetworkProxyServer),
+		ScrobbleShortTracks:          boolOr(f.ScrobbleShortTracks, false),
+		LastfmScrobblePoint:          resolveScrobblePoint(f.LastfmScrobblePoint),
+		WeeklyDigest:                 boolOr(f.WeeklyDigest, false),
+		DailyDigest:                  boolOr(f.DailyDigest, false),
+		WeeklyDigestSource:           f.WeeklyDigestSource,
+		DailyDigestSource:            f.DailyDigestSource,
+		MonthlyDigest:                boolOr(f.MonthlyDigest, false),
+		YearlyDigest:                 boolOr(f.YearlyDigest, false),
+		MonthlyDigestSource:          f.MonthlyDigestSource,
+		YearlyDigestSource:           f.YearlyDigestSource,
+		DigestTopN:                   resolveDigestTopN(f.DigestTopN),
+		DigestPushTime:               resolveDigestPushTime(f.DigestPushTime),
+		DigestTemplate:               resolveDigestTemplate(f.DigestTemplate),
+		LyricsSources:                resolveLyricsSources(f.LyricsSources),
+		LyricsSourceMode:             resolveLyricsSourceMode(f.LyricsSourceMode),
+		PreferLocalFileLyrics:        resolvePreferLocalFileLyrics(f.PreferLocalFileLyrics, f.LyricsSourceMode),
+		LyricsSourceOrder:            resolveLyricsSourceOrder(f.LyricsSourceOrder),
+		LyricsAutoWriteback:          f.LyricsAutoWriteback,
+		LyricsAutoWritebackOverwrite: f.LyricsAutoWritebackOverwrite,
+		LyricsDir:                    f.LyricsDir,
+		LyricsWordFormats:            resolveLyricsWordFormats(f.LyricsWordFormats),
+		MotionCoverSkipApple:         !motionApple,
+		MotionCoverSkipOther:         !motionOther,
+		LyricsTranslationLanguage:    resolveLyricsTranslationLanguage(f.LyricsTranslationLanguage, f.SystemLanguage),
+		SystemLanguage:               strings.ToLower(strings.TrimSpace(f.SystemLanguage)),
+		ReportLanguage:               parseDigestLang(f.ReportLanguage),
+		LyricsMachineTranslation:     boolOr(f.LyricsMachineTranslation, false),
+		LaunchLyrimuseOnPlayers:      resolveLaunchLyrimuseOnPlayers(f.LaunchLyrimuseOnPlayers),
+		LyricsDecisionTrace:          boolOr(f.LyricsDecisionTrace, false),
+		SongEntityShadow:             boolOr(f.SongEntityShadow, true),
+		SongEntityPhase2:             boolOr(f.SongEntityPhase2, true),
+		SongEntityShareLyrics:        boolOr(f.SongEntityShareLyrics, true),
+		NetworkProxy:                 resolveNetworkProxy(f.NetworkProxy),
+		NetworkProxyServer:           strings.TrimSpace(f.NetworkProxyServer),
 	}
 }
 

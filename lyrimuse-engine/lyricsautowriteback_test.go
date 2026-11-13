@@ -15,12 +15,14 @@ func setUpAutoWriteback(t *testing.T, entries map[string]enrichEntry) {
 	setUpEnrichEditTest(t, entries)
 	setFeatures(featureFlags{LyricsAutoWriteback: true})
 	record := filepath.Join(t.TempDir(), "writeback.json")
-	savedPath, savedSync, savedPlaying := lyricsWritebackRecordPath, autoWritebackSync, enrichPlayingKey.Load()
+	backups := filepath.Join(t.TempDir(), "backups")
+	savedPath, savedSync, savedPlaying, savedBackup := lyricsWritebackRecordPath, autoWritebackSync, enrichPlayingKey.Load(), lyricsWritebackBackupDir
 	lyricsWritebackRecordPath = func() string { return record }
+	lyricsWritebackBackupDir = func() string { return backups }
 	autoWritebackSync = true
 	autoWritebackLastTry = ""
 	t.Cleanup(func() {
-		lyricsWritebackRecordPath, autoWritebackSync = savedPath, savedSync
+		lyricsWritebackRecordPath, autoWritebackSync, lyricsWritebackBackupDir = savedPath, savedSync, savedBackup
 		enrichPlayingKey.Store(savedPlaying)
 		autoWritebackLastTry = ""
 		noteLocalFileCurrentTrack("", "", "", "")
@@ -184,5 +186,168 @@ func TestAutoWritebackAppleMusicPlainAndRecordCap(t *testing.T) {
 	}
 	if lyricsWrittenBackSHA("/new") == "" || lyricsWrittenBackSHA("/x/0.mp3") != "" {
 		t.Errorf("新写的留着、丢的是最早的")
+	}
+}
+
+// readBackupIndex:测试用,读备份目录的索引。
+func readBackupIndex(t *testing.T) lyricsWritebackBackupIndex {
+	t.Helper()
+	var idx lyricsWritebackBackupIndex
+	data, err := os.ReadFile(filepath.Join(lyricsWritebackBackupDir(), lyricsWritebackBackupIndexName))
+	if err != nil {
+		return idx
+	}
+	if err := json.Unmarshal(data, &idx); err != nil {
+		t.Fatal(err)
+	}
+	return idx
+}
+
+func TestAutoWritebackForeignOverwriteSwitch(t *testing.T) {
+	const artist, title = "A", "foreign"
+	key := enrichKey(artist, title, "")
+	setUpAutoWriteback(t, map[string]enrichEntry{key: {Lyrics: bt(writebackLRC), TS: 1}})
+	const theirs = "[00:01.00]别人写的歌词\n[00:02.00]第二行"
+	foreign := append(id3TagPadded(4, 64, id3Frame(4, "USLT", usltBody(3, []byte(theirs)))), writebackAudio(3000)...)
+	path := writeTemp(t, "f.mp3", foreign)
+	real, _ := filepath.EvalSymlinks(path)
+	playLocalFile(reampBundleID, artist, title, "", path)
+
+	if got := autoWritebackLyricsOnce(); got != autoWBForeign {
+		t.Fatalf("开关关:别人写的不覆盖,得到 %s", got)
+	}
+	if out, _ := os.ReadFile(path); !bytes.Equal(out, foreign) {
+		t.Errorf("开关关:文件不动")
+	}
+	if n := len(readBackupIndex(t).Backups); n != 0 {
+		t.Errorf("开关关:不留备份,得到 %d 份", n)
+	}
+
+	setFeatures(featureFlags{LyricsAutoWriteback: true, LyricsAutoWritebackOverwrite: true})
+	if got := autoWritebackLyricsOnce(); got != autoWBOverwrote {
+		t.Fatalf("这首放着时打开覆盖:同一份正文再试一次并覆盖,得到 %s", got)
+	}
+	if got := readLocalFileTags(path).lyrics; got != writebackLRC {
+		t.Errorf("覆盖成这首的歌词:%q", got)
+	}
+	idx := readBackupIndex(t)
+	if len(idx.Backups) != 1 {
+		t.Fatalf("留一份备份,得到 %d 份", len(idx.Backups))
+	}
+	e := idx.Backups[0]
+	if e.Path != real || e.SHA != writebackTextSHA(theirs) || filepath.Ext(e.File) != ".lrc" {
+		t.Errorf("备份索引记下原文件、原歌词哈希,带时间标签存 .lrc:%+v", e)
+	}
+	if got, _ := os.ReadFile(filepath.Join(lyricsWritebackBackupDir(), e.File)); string(got) != theirs {
+		t.Errorf("备份是原歌词一字不改:%q", got)
+	}
+
+	autoWritebackLastTry = ""
+	if got := autoWritebackLyricsOnce(); got != autoWBUpToDate {
+		t.Errorf("覆盖之后文件里已是这份,不重写:%s", got)
+	}
+	enrichMu.Lock()
+	c := enrichCache[key]
+	c.Lyrics = bt("[00:01.00]改过的歌词")
+	enrichCache[key] = c
+	enrichMu.Unlock()
+	if got := autoWritebackLyricsOnce(); got != autoWBWritten {
+		t.Errorf("文件里是自己写的:照样更新、不算覆盖别人,得到 %s", got)
+	}
+	if n := len(readBackupIndex(t).Backups); n != 1 {
+		t.Errorf("更新自己写的不再备份,得到 %d 份", n)
+	}
+
+	if err := os.WriteFile(path, foreign, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	autoWritebackLastTry = ""
+	if got := autoWritebackLyricsOnce(); got != autoWBOverwrote {
+		t.Errorf("别的软件又写回同一份:再覆盖,得到 %s", got)
+	}
+	if n := len(readBackupIndex(t).Backups); n != 1 {
+		t.Errorf("同一个文件同一份原歌词只备份一次,得到 %d 份", n)
+	}
+}
+
+func TestAutoWritebackOverwriteNeedsBackup(t *testing.T) {
+	const artist, title = "A", "nobackup"
+	setUpAutoWriteback(t, map[string]enrichEntry{enrichKey(artist, title, ""): {Lyrics: bt(writebackLRC), TS: 1}})
+	setFeatures(featureFlags{LyricsAutoWriteback: true, LyricsAutoWritebackOverwrite: true})
+	foreign := append(id3TagPadded(4, 64, id3Frame(4, "USLT", usltBody(3, []byte("别人写的歌词")))), writebackAudio(2000)...)
+	path := writeTemp(t, "n.mp3", foreign)
+	playLocalFile(reampBundleID, artist, title, "", path)
+	lyricsWritebackBackupDir = func() string { return "" }
+	if got := autoWritebackLyricsOnce(); got != autoWBWriteFailed {
+		t.Errorf("备份不成不覆盖:%s", got)
+	}
+	if out, _ := os.ReadFile(path); !bytes.Equal(out, foreign) {
+		t.Errorf("备份不成:文件不动")
+	}
+}
+
+func TestLyricsWritebackBackupCap(t *testing.T) {
+	setUpAutoWriteback(t, nil)
+	dir := lyricsWritebackBackupDir()
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	var idx lyricsWritebackBackupIndex
+	for j := 0; j < lyricsWritebackBackupMax; j++ {
+		name := fmt.Sprintf("%d.txt", j)
+		if err := os.WriteFile(filepath.Join(dir, name), []byte("x"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		idx.Backups = append(idx.Backups, lyricsWritebackBackupEntry{File: name, Path: fmt.Sprintf("/x/%d.mp3", j), SHA: "s", At: int64(j + 1)})
+	}
+	idx.Backups = append(idx.Backups, lyricsWritebackBackupEntry{File: "../outside.txt", Path: "/evil.mp3", SHA: "s", At: 0})
+	outside := filepath.Join(filepath.Dir(dir), "outside.txt")
+	if err := os.WriteFile(outside, []byte("keep"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	data, _ := json.Marshal(idx)
+	if err := os.WriteFile(filepath.Join(dir, lyricsWritebackBackupIndexName), data, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := backupForeignLyrics("/new/song.mp3", "新的原歌词"); err != nil {
+		t.Fatal(err)
+	}
+	got := readBackupIndex(t)
+	if len(got.Backups) != lyricsWritebackBackupMax {
+		t.Errorf("备份封顶 %d 份,得到 %d", lyricsWritebackBackupMax, len(got.Backups))
+	}
+	if _, err := os.Stat(filepath.Join(dir, "0.txt")); !os.IsNotExist(err) {
+		t.Errorf("删掉最早的那份备份文件")
+	}
+	if _, err := os.Stat(filepath.Join(dir, "1.txt")); err != nil {
+		t.Errorf("第二早的留着")
+	}
+	if _, err := os.Stat(outside); err != nil {
+		t.Errorf("索引里指到目录外的文件名不删")
+	}
+	last := got.Backups[len(got.Backups)-1]
+	if last.Path != "/new/song.mp3" || filepath.Ext(last.File) != ".txt" {
+		t.Errorf("新备份在最后,纯文本存 .txt:%+v", last)
+	}
+}
+
+func TestFeaturesLyricsAutoWritebackOverwrite(t *testing.T) {
+	dir := t.TempDir()
+	for _, c := range []struct {
+		json            string
+		auto, overwrite bool
+	}{
+		{`{}`, false, false},
+		{`{"lyrics_auto_writeback":true}`, true, false},
+		{`{"lyrics_auto_writeback":true,"lyrics_auto_writeback_overwrite":true}`, true, true},
+	} {
+		path := filepath.Join(dir, "features.json")
+		if err := os.WriteFile(path, []byte(c.json), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		f := loadFeatureFlags(path)
+		if f.LyricsAutoWriteback != c.auto || f.LyricsAutoWritebackOverwrite != c.overwrite {
+			t.Errorf("%s:得到 auto=%v overwrite=%v", c.json, f.LyricsAutoWriteback, f.LyricsAutoWritebackOverwrite)
+		}
 	}
 }

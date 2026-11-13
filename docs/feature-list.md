@@ -145,10 +145,11 @@ When the song playing is a file on this Mac, its same-name .lrc or embedded lyri
 
 ### Write lyrics into song files
 
-While a local MP3 or FLAC file is playing, Lyrics Manager’s ⋯ menu can write the song's lyrics into the file, so other players can show them too. The file is replaced only after a copy has been written and checked, so a player reading it isn’t disturbed. Apple Music tracks get the lyric text without timestamps. With the Labs option on, the lyrics are written automatically once they’re settled, without overwriting lyrics written by other apps.
+While a local MP3 or FLAC file is playing, Lyrics Manager’s ⋯ menu can write the song's lyrics into the file, so other players can show them too. The file is replaced only after a copy has been written and checked, so a player reading it isn’t disturbed. Apple Music tracks get the lyric text without timestamps. With the Labs option on, the lyrics are written automatically once they’re settled. Lyrics written by other apps are left alone unless you also turn on overwriting, which backs them up first.
 
 - Off by default
 - Settings: Labs › Write to Song Files Automatically
+- Settings: Labs › Overwrite Lyrics Written by Other Apps
 
 <a id="feature-lock-hand-picked"></a>
 
@@ -931,7 +932,7 @@ At most once a day, sends the version, macOS, which features are on and crash su
 
 ## Every setting
 
-Every setting in the Settings window, by where it lives: 318 in all. Type a name into the search field at the top of the Settings sidebar to jump straight to it.
+Every setting in the Settings window, by where it lives: 319 in all. Type a name into the search field at the top of the Settings sidebar to jump straight to it.
 
 ### Lyrics › Source
 
@@ -1351,7 +1352,8 @@ Every setting in the Settings window, by where it lives: 318 in all. Type a name
 
 ### Labs
 
-- **Write to Song Files Automatically**: When a local MP3 or FLAC file plays, writes the settled lyrics into it without overwriting lyrics written by other apps
+- **Write to Song Files Automatically**: When a local MP3 or FLAC file plays, writes the settled lyrics into it
+- **Overwrite Lyrics Written by Other Apps**: The existing lyrics are backed up before being replaced
 
 ### Software Update
 

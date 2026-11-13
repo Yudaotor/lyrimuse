@@ -4,9 +4,11 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"log"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -18,7 +20,8 @@ import (
 // 里、同一时刻只跑一份。规则(见 11 章决策 163):
 //   - 只写 MP3 / FLAC,写法、自校验、拒写的位置同单首写入(writeLyricsToFile);
 //   - 标了纯音乐、没有歌词、首次解析还在跑的不写;Apple Music 的曲目只写歌词文字(writebackWantsPlainText);
-//   - 文件里原本有歌词、又不是 Lyrimuse 上次写进去的(写入记录里这个文件的正文哈希对不上),不覆盖;
+//   - 文件里原本有歌词、又不是 Lyrimuse 上次写进去的(写入记录里这个文件的正文哈希对不上):默认不覆盖;打开「覆盖其他软件
+//     写入的歌词」(features LyricsAutoWritebackOverwrite)时先把原歌词备份(backupForeignLyrics),备份成了才写,见 11 章决策 166;
 //   - 文件里的歌词已经跟要写的一样,不重写;
 //   - 同一个文件、同一份正文只试一次(不论成败),换了正文或换了歌再试;失败只记日志。
 
@@ -106,6 +109,100 @@ func lyricsWrittenBackSHA(path string) string {
 	return loadLyricsWritebackRecordLocked().Files[path].SHA
 }
 
+// lyricsWritebackBackupMax:覆盖前留下的原歌词备份最多这么多份,多了按备份时间删最早的。
+const lyricsWritebackBackupMax = 200
+
+// lyricsWritebackBackupIndexName:备份目录里的索引,记每份备份来自哪个歌曲文件。
+const lyricsWritebackBackupIndexName = "index.json"
+
+var (
+	lyricsWritebackBackupMu sync.Mutex
+	// lyricsWritebackBackupDir 原歌词备份的目录;测试换成临时目录。
+	lyricsWritebackBackupDir = func() string {
+		dir := configDir()
+		if dir == "" {
+			return ""
+		}
+		return filepath.Join(dir, clientName+"-lyrics-writeback-backups")
+	}
+)
+
+type lyricsWritebackBackupIndex struct {
+	Backups []lyricsWritebackBackupEntry `json:"backups"`
+}
+
+type lyricsWritebackBackupEntry struct {
+	File string `json:"file"`   // 备份目录里的文件名,内容是原歌词一字不改
+	Path string `json:"path"`   // 被覆盖的歌曲文件
+	SHA  string `json:"sha256"` // 原歌词的 sha256
+	At   int64  `json:"at"`
+}
+
+// backupForeignLyrics 把 path 里别的软件写的歌词原样存一份(有 LRC 时间标签存 .lrc,否则 .txt),同一个文件同一份歌词只存一次。
+// 返回错误时不能覆盖。
+func backupForeignLyrics(path, lyrics string) error {
+	dir := lyricsWritebackBackupDir()
+	if dir == "" {
+		return fmt.Errorf("no backup directory")
+	}
+	lyricsWritebackBackupMu.Lock()
+	defer lyricsWritebackBackupMu.Unlock()
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return err
+	}
+	indexPath := filepath.Join(dir, lyricsWritebackBackupIndexName)
+	var idx lyricsWritebackBackupIndex
+	if data, err := os.ReadFile(indexPath); err == nil {
+		if err := json.Unmarshal(data, &idx); err != nil {
+			noteFileErr("decode", indexPath, err)
+			idx = lyricsWritebackBackupIndex{}
+		}
+	} else if !os.IsNotExist(err) {
+		return err
+	}
+	sha := writebackTextSHA(lyrics)
+	for _, e := range idx.Backups {
+		if e.Path == path && e.SHA == sha {
+			if _, err := os.Stat(filepath.Join(dir, e.File)); err == nil {
+				return nil
+			}
+		}
+	}
+	now := time.Now()
+	base := []rune(strings.TrimSuffix(filepath.Base(path), filepath.Ext(path)))
+	if len(base) > 80 {
+		base = base[:80]
+	}
+	ext := ".txt"
+	if localFileLRCTimestamp.MatchString(lyrics) {
+		ext = ".lrc"
+	}
+	name := fmt.Sprintf("%s %s-%s%s", string(base), now.Format("20060102-150405"), sha[:8], ext)
+	if err := writeFileAtomic(filepath.Join(dir, name), []byte(lyrics)); err != nil {
+		return err
+	}
+	idx.Backups = append(idx.Backups, lyricsWritebackBackupEntry{File: name, Path: path, SHA: sha, At: now.Unix()})
+	if len(idx.Backups) > lyricsWritebackBackupMax {
+		sort.SliceStable(idx.Backups, func(i, j int) bool { return idx.Backups[i].At < idx.Backups[j].At })
+		drop := len(idx.Backups) - lyricsWritebackBackupMax
+		for _, e := range idx.Backups[:drop] {
+			if e.File != "" && e.File == filepath.Base(e.File) && e.File != lyricsWritebackBackupIndexName {
+				_ = os.Remove(filepath.Join(dir, e.File))
+			}
+		}
+		idx.Backups = append([]lyricsWritebackBackupEntry(nil), idx.Backups[drop:]...)
+	}
+	data, err := json.MarshalIndent(idx, "", "  ")
+	if err != nil {
+		return err
+	}
+	if err := writeFileAtomic(indexPath, data); err != nil {
+		_ = os.Remove(filepath.Join(dir, name))
+		return err
+	}
+	return nil
+}
+
 var (
 	autoWritebackRunning atomic.Bool
 	autoWritebackMu      sync.Mutex
@@ -144,8 +241,9 @@ const (
 	autoWBSkipped     autoWritebackOutcome = "skipped"      // 没有可写的(开关关、不是本地文件、没定下来、没歌词、不支持的格式)
 	autoWBSeen        autoWritebackOutcome = "seen"         // 这个文件这份正文已经试过
 	autoWBUpToDate    autoWritebackOutcome = "up_to_date"   // 文件里已经是这份
-	autoWBForeign     autoWritebackOutcome = "foreign"      // 文件里有别人写的歌词,不覆盖
+	autoWBForeign     autoWritebackOutcome = "foreign"      // 文件里有别人写的歌词,没开覆盖,不动
 	autoWBWritten     autoWritebackOutcome = "written"      // 写进去了
+	autoWBOverwrote   autoWritebackOutcome = "overwrote"    // 备份了别人写的歌词后覆盖
 	autoWBWriteFailed autoWritebackOutcome = "write_failed" // 写失败(已记日志)
 )
 
@@ -171,7 +269,12 @@ func autoWritebackLyricsOnce() autoWritebackOutcome {
 		return autoWBSkipped
 	}
 	sha := writebackTextSHA(text)
+	overwrite := features().LyricsAutoWritebackOverwrite
+	// 开关在这首放着时打开,同一份正文要能再试一次。
 	try := path + "\x00" + sha
+	if overwrite {
+		try += "\x00overwrite"
+	}
 	autoWritebackMu.Lock()
 	seen := autoWritebackLastTry == try
 	autoWritebackLastTry = try
@@ -184,15 +287,23 @@ func autoWritebackLyricsOnce() autoWritebackOutcome {
 		log.Printf("lyrics writeback: auto skipped path=%s: %v", tildeHome(path), err)
 		return autoWBSkipped
 	}
+	foreign := false
 	if probe.hasLyrics {
-		existing := normalizeWritebackLyrics(readLocalFileTags(probe.path).lyrics)
-		switch writebackTextSHA(existing) {
+		existing := readLocalFileTags(probe.path).lyrics
+		switch writebackTextSHA(normalizeWritebackLyrics(existing)) {
 		case sha:
 			return autoWBUpToDate
 		case lyricsWrittenBackSHA(probe.path):
 		default:
-			log.Printf("lyrics writeback: auto skipped path=%s: file already carries lyrics not written by lyrimuse", tildeHome(probe.path))
-			return autoWBForeign
+			if !overwrite {
+				log.Printf("lyrics writeback: auto skipped path=%s: file already carries lyrics not written by lyrimuse", tildeHome(probe.path))
+				return autoWBForeign
+			}
+			if err := backupForeignLyrics(probe.path, existing); err != nil {
+				warnf("lyrics writeback: auto skipped path=%s: backing up existing lyrics failed: %v", tildeHome(probe.path), err)
+				return autoWBWriteFailed
+			}
+			foreign = true
 		}
 	}
 	real, err := writeLyricsToFile(path, text, true)
@@ -201,6 +312,10 @@ func autoWritebackLyricsOnce() autoWritebackOutcome {
 		return autoWBWriteFailed
 	}
 	noteLyricsWrittenBack(real, text)
+	if foreign {
+		log.Printf("lyrics writeback: auto replaced lyrics written by another app path=%s (original backed up)", tildeHome(real))
+		return autoWBOverwrote
+	}
 	return autoWBWritten
 }
 

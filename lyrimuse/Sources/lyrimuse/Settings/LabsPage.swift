@@ -75,18 +75,32 @@ struct LabsPage: View {
     var body: some View {
         SettingsPage(title: L10n.t("实验室"), subtitle: L10n.t("尚在试验阶段的功能，后续可能调整、重构或移除")) {
             VStack(spacing: 14) {
-                // 「自动写入歌曲文件」:闸门在引擎 lyricsautowriteback.go(features LyricsAutoWriteback),规则见 11 章决策 163。
+                // 「自动写入歌曲文件」:闸门在引擎 lyricsautowriteback.go(features LyricsAutoWriteback),规则见 11 章决策 163;
+                // 子开关「覆盖其他软件写入的歌词」(LyricsAutoWritebackOverwrite)只在总开关开着时出现,见 11 章决策 166。
                 SettingsCard {
                     SettingsRow(
                         icon: "square.and.arrow.down.on.square",
                         title: L10n.t("自动写入歌曲文件"),
-                        subtitle: L10n.t("播放本地 MP3 或 FLAC 时，把确定的歌词写进文件，不覆盖其他软件写入的歌词")
+                        subtitle: L10n.t("播放本地 MP3 或 FLAC 时，把确定的歌词写进文件")
                     ) {
                         Toggle("", isOn: Binding(
                             get: { features.lyricsAutoWriteback },
-                            set: { features.lyricsAutoWriteback = $0; Task { await features.save() } }
+                            set: { newValue in
+                                withAnimation(.settingsCardReveal) { features.lyricsAutoWriteback = newValue }
+                                Task { await features.save() }
+                            }
                         ))
                         .labelsHidden()
+                    }
+                    if features.lyricsAutoWriteback {
+                        CardDivider()
+                        SettingsSubRow(title: L10n.t("覆盖其他软件写入的歌词"), subtitle: L10n.t("替换前先备份原有歌词")) {
+                            Toggle("", isOn: Binding(
+                                get: { features.lyricsAutoWritebackOverwrite },
+                                set: { features.lyricsAutoWritebackOverwrite = $0; Task { await features.save() } }
+                            ))
+                            .labelsHidden()
+                        }
                     }
                 }
                 SettingsCard {

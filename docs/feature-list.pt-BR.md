@@ -145,10 +145,11 @@ Quando a música que está tocando é um arquivo neste Mac, o .lrc com o mesmo n
 
 ### Gravar a letra nos arquivos das músicas
 
-Enquanto um MP3 ou FLAC local toca, o menu ⋯ do Gerenciador de letras pode gravar a letra da música no arquivo, para que outros players também a mostrem. O arquivo só é substituído depois que uma cópia é gravada e verificada, sem atrapalhar o player que o está lendo. Em faixas do Apple Music, só o texto é gravado, sem marcações de tempo. Com a opção do Laboratório ativada, a letra é gravada automaticamente assim que é definida, sem sobrescrever a que outros apps gravaram.
+Enquanto um MP3 ou FLAC local toca, o menu ⋯ do Gerenciador de letras pode gravar a letra da música no arquivo, para que outros players também a mostrem. O arquivo só é substituído depois que uma cópia é gravada e verificada, sem atrapalhar o player que o está lendo. Em faixas do Apple Music, só o texto é gravado, sem marcações de tempo. Com a opção do Laboratório ativada, a letra é gravada automaticamente assim que é definida. A que outros apps gravaram fica como está, a menos que você também ative a sobrescrita, que faz uma cópia antes.
 
 - Desativado por padrão
 - Ajustes: Labs › Gravar automaticamente nos arquivos das músicas
+- Ajustes: Labs › Sobrescrever a letra gravada por outros apps
 
 <a id="feature-lock-hand-picked"></a>
 
@@ -931,7 +932,7 @@ No máximo uma vez por dia, envia a versão, o macOS, quais recursos estão ativ
 
 ## Todos os ajustes
 
-Todos os ajustes da janela Ajustes, por local: 318 no total. Digite um nome no campo de busca no topo da barra lateral dos Ajustes para ir direto até ele.
+Todos os ajustes da janela Ajustes, por local: 319 no total. Digite um nome no campo de busca no topo da barra lateral dos Ajustes para ir direto até ele.
 
 ### Letra › Origem
 
@@ -1351,7 +1352,8 @@ Todos os ajustes da janela Ajustes, por local: 318 no total. Digite um nome no c
 
 ### Labs
 
-- **Gravar automaticamente nos arquivos das músicas**: Ao tocar um MP3 ou FLAC local, grava a letra escolhida no arquivo sem sobrescrever a que outros apps gravaram
+- **Gravar automaticamente nos arquivos das músicas**: Ao tocar um MP3 ou FLAC local, grava a letra escolhida no arquivo
+- **Sobrescrever a letra gravada por outros apps**: A letra existente é copiada antes de ser substituída
 
 ### Atualização de software
 

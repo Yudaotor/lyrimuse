@@ -145,10 +145,11 @@ Ist der laufende Titel eine Datei auf diesem Mac, wird zuerst ihre gleichnamige 
 
 ### Liedtexte in Songdateien schreiben
 
-Während eine lokale MP3- oder FLAC-Datei läuft, kann das ⋯-Menü der Liedtextverwaltung den Liedtext in die Datei schreiben, sodass auch andere Player ihn anzeigen. Die Datei wird erst ersetzt, nachdem eine Kopie geschrieben und geprüft wurde, ein Player, der sie gerade liest, wird also nicht gestört. Bei Apple Music-Titeln wird nur der Text ohne Zeitstempel geschrieben. Mit der Labor-Option wird der Liedtext automatisch geschrieben, sobald er feststeht, ohne von anderen Apps geschriebene Liedtexte zu überschreiben.
+Während eine lokale MP3- oder FLAC-Datei läuft, kann das ⋯-Menü der Liedtextverwaltung den Liedtext in die Datei schreiben, sodass auch andere Player ihn anzeigen. Die Datei wird erst ersetzt, nachdem eine Kopie geschrieben und geprüft wurde, ein Player, der sie gerade liest, wird also nicht gestört. Bei Apple Music-Titeln wird nur der Text ohne Zeitstempel geschrieben. Mit der Labor-Option wird der Liedtext automatisch geschrieben, sobald er feststeht. Von anderen Apps geschriebene Liedtexte bleiben unangetastet, es sei denn, Überschreiben ist ebenfalls aktiv – dann werden sie vorher gesichert.
 
 - Standardmäßig aus
 - Einstellungen: Labor › Automatisch in Songdateien schreiben
+- Einstellungen: Labor › Von anderen Apps geschriebene Liedtexte überschreiben
 
 <a id="feature-lock-hand-picked"></a>
 
@@ -931,7 +932,7 @@ Sendet höchstens einmal täglich Version, macOS, aktivierte Funktionen und Abst
 
 ## Alle Einstellungen
 
-Alle Einstellungen des Einstellungsfensters nach Ort: insgesamt 318. Gib einen Namen in das Suchfeld oben in der Seitenleiste der Einstellungen ein, um direkt dorthin zu springen.
+Alle Einstellungen des Einstellungsfensters nach Ort: insgesamt 319. Gib einen Namen in das Suchfeld oben in der Seitenleiste der Einstellungen ein, um direkt dorthin zu springen.
 
 ### Liedtext › Quelle
 
@@ -1351,7 +1352,8 @@ Alle Einstellungen des Einstellungsfensters nach Ort: insgesamt 318. Gib einen N
 
 ### Labor
 
-- **Automatisch in Songdateien schreiben**: Schreibt beim Abspielen einer lokalen MP3- oder FLAC-Datei den festgelegten Liedtext hinein, ohne von anderen Apps geschriebene Liedtexte zu überschreiben
+- **Automatisch in Songdateien schreiben**: Schreibt beim Abspielen einer lokalen MP3- oder FLAC-Datei den festgelegten Liedtext hinein
+- **Von anderen Apps geschriebene Liedtexte überschreiben**: Der vorhandene Liedtext wird vor dem Ersetzen gesichert
 
 ### Softwareupdate
 

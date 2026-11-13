@@ -1470,7 +1470,7 @@
 "播放控制" = "Điều khiển phát";
 "播放控制位置" = "Vị trí nút điều khiển";
 "播放时显示动画，暂停时静止" = "Chuyển động khi đang phát nhạc, đứng yên khi tạm dừng";
-"播放本地 MP3 或 FLAC 时，把确定的歌词写进文件，不覆盖其他软件写入的歌词" = "Khi phát tệp MP3 hoặc FLAC cục bộ, ghi lời đã chọn vào tệp, không ghi đè lời do ứng dụng khác ghi";
+"播放本地 MP3 或 FLAC 时，把确定的歌词写进文件" = "Khi phát tệp MP3 hoặc FLAC cục bộ, ghi lời đã chọn vào tệp";
 "播放本机文件时，先用同名 .lrc 或文件里内嵌的歌词" = "Khi phát tệp trên máy, dùng trước tệp .lrc cùng tên hoặc lời nhúng trong tệp";
 "播放来源" = "Phát trên";
 "播放次数" = "Lượt phát";
@@ -1697,6 +1697,7 @@
 "更新设置" = "Cài đặt cập nhật";
 "更早的记录尚未加载，这些行暂不编号" = "Lượt phát cũ hơn chưa được tải, nên tạm chưa đánh số các hàng này";
 "替换" = "Thay thế";
+"替换前先备份原有歌词" = "Sao lưu lời hiện có trước khi thay";
 "替换并锁定" = "Thay và khóa";
 "替换现有歌词" = "Thay lời hiện tại";
 "最后一句晚于歌曲结束 5 秒以上，可能是完整版歌词对应了精简版曲目" = "Câu cuối nằm sau điểm kết thúc bài hát hơn 5 giây, có thể là lời bản đầy đủ cho bài hát bản rút gọn";
@@ -2467,6 +2468,7 @@
 "要放弃对歌词的修改吗？" = "Hủy bỏ thay đổi đối với lời bài hát?";
 "要清理缓存吗？" = "Dọn dẹp bộ nhớ đệm?";
 "要清除全部设置吗？" = "Xóa tất cả cài đặt?";
+"覆盖其他软件写入的歌词" = "Ghi đè lời do ứng dụng khác ghi";
 "规则" = "Quy tắc";
 "视频流" = "Luồng video";
 "解析 Last.fm 响应失败" = "Không đọc được phản hồi từ Last.fm";

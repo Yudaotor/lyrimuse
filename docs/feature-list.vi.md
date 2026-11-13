@@ -145,10 +145,11 @@ Khi bài đang phát là một tệp trên máy Mac này, Lyrimuse dùng trướ
 
 ### Ghi lời vào tệp bài hát
 
-Khi đang phát tệp MP3 hoặc FLAC cục bộ, menu ⋯ của Quản lý lời có thể ghi lời bài hát vào tệp để trình phát khác cũng hiển thị được. Tệp chỉ được thay sau khi đã ghi và kiểm tra một bản sao, nên trình phát đang đọc tệp không bị ảnh hưởng. Với bài trong Apple Music, chỉ ghi phần chữ, không kèm mốc thời gian. Khi bật tùy chọn trong Phòng thí nghiệm, lời được tự động ghi khi đã chốt, không ghi đè lời do ứng dụng khác ghi.
+Khi đang phát tệp MP3 hoặc FLAC cục bộ, menu ⋯ của Quản lý lời có thể ghi lời bài hát vào tệp để trình phát khác cũng hiển thị được. Tệp chỉ được thay sau khi đã ghi và kiểm tra một bản sao, nên trình phát đang đọc tệp không bị ảnh hưởng. Với bài trong Apple Music, chỉ ghi phần chữ, không kèm mốc thời gian. Khi bật tùy chọn trong Phòng thí nghiệm, lời được tự động ghi khi đã chốt. Lời do ứng dụng khác ghi được giữ nguyên, trừ khi bật thêm ghi đè, khi đó lời cũ được sao lưu trước.
 
 - Tắt theo mặc định
 - Cài đặt: Thử nghiệm › Tự động ghi vào tệp bài hát
+- Cài đặt: Thử nghiệm › Ghi đè lời do ứng dụng khác ghi
 
 <a id="feature-lock-hand-picked"></a>
 
@@ -931,7 +932,7 @@ Tối đa một lần mỗi ngày, Lyrimuse gửi phiên bản, macOS, các tín
 
 ## Toàn bộ cài đặt
 
-Toàn bộ mục trong cửa sổ Cài đặt, theo vị trí: tổng cộng 318 mục. Gõ tên vào ô tìm kiếm ở đầu thanh bên của Cài đặt để đi thẳng tới mục đó.
+Toàn bộ mục trong cửa sổ Cài đặt, theo vị trí: tổng cộng 319 mục. Gõ tên vào ô tìm kiếm ở đầu thanh bên của Cài đặt để đi thẳng tới mục đó.
 
 ### Lời bài hát › Nguồn
 
@@ -1351,7 +1352,8 @@ Toàn bộ mục trong cửa sổ Cài đặt, theo vị trí: tổng cộng 318
 
 ### Thử nghiệm
 
-- **Tự động ghi vào tệp bài hát**: Khi phát tệp MP3 hoặc FLAC cục bộ, ghi lời đã chọn vào tệp, không ghi đè lời do ứng dụng khác ghi
+- **Tự động ghi vào tệp bài hát**: Khi phát tệp MP3 hoặc FLAC cục bộ, ghi lời đã chọn vào tệp
+- **Ghi đè lời do ứng dụng khác ghi**: Sao lưu lời hiện có trước khi thay
 
 ### Cập nhật phần mềm
 

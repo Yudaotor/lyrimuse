@@ -145,10 +145,11 @@ Al reproducir un archivo de música de este Mac, se usa primero su .lrc del mism
 
 ### Escribir la letra en los archivos de canciones
 
-Mientras suena un MP3 o FLAC local, el menú ⋯ del Gestor de letras puede escribir la letra de la canción en el archivo para que otros reproductores también la muestren. El archivo solo se reemplaza después de escribir y comprobar una copia, así que no molesta al reproductor que lo está leyendo. En las pistas de Apple Music se escribe solo el texto, sin marcas de tiempo. Con la opción de Laboratorio activada, la letra se escribe sola en cuanto queda fijada, sin sobrescribir la que hayan escrito otras apps.
+Mientras suena un MP3 o FLAC local, el menú ⋯ del Gestor de letras puede escribir la letra de la canción en el archivo para que otros reproductores también la muestren. El archivo solo se reemplaza después de escribir y comprobar una copia, así que no molesta al reproductor que lo está leyendo. En las pistas de Apple Music se escribe solo el texto, sin marcas de tiempo. Con la opción de Laboratorio activada, la letra se escribe sola en cuanto queda fijada. La que hayan escrito otras apps no se toca, salvo que actives también sobrescribirla, y entonces se guarda una copia antes.
 
 - Desactivada por omisión
 - Ajustes: Laboratorio › Escribir automáticamente en los archivos de canciones
+- Ajustes: Laboratorio › Sobrescribir la letra escrita por otras apps
 
 <a id="feature-lock-hand-picked"></a>
 
@@ -931,7 +932,7 @@ Como máximo una vez al día, envía al servidor del propio autor la versión, e
 
 ## Todos los ajustes
 
-Todos los ajustes de la ventana Ajustes, según dónde están: 318 en total. Escribe un nombre en el campo de búsqueda de la parte superior de la barra lateral de Ajustes para ir directamente a él.
+Todos los ajustes de la ventana Ajustes, según dónde están: 319 en total. Escribe un nombre en el campo de búsqueda de la parte superior de la barra lateral de Ajustes para ir directamente a él.
 
 ### Letra › Fuente
 
@@ -1351,7 +1352,8 @@ Todos los ajustes de la ventana Ajustes, según dónde están: 318 en total. Esc
 
 ### Laboratorio
 
-- **Escribir automáticamente en los archivos de canciones**: Al reproducir un MP3 o FLAC local, escribe la letra elegida en el archivo sin sobrescribir la que hayan escrito otras apps
+- **Escribir automáticamente en los archivos de canciones**: Al reproducir un MP3 o FLAC local, escribe la letra elegida en el archivo
+- **Sobrescribir la letra escrita por otras apps**: Antes de reemplazarla, se guarda una copia de la letra existente
 
 ### Actualización de software
 

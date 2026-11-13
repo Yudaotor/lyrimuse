@@ -145,10 +145,11 @@ Quand le morceau lu est un fichier sur ce Mac, son .lrc du même nom ou ses paro
 
 ### Écrire les paroles dans les fichiers des morceaux
 
-Pendant la lecture d’un MP3 ou FLAC local, le menu ⋯ du Gestionnaire de paroles peut écrire les paroles du morceau dans le fichier, pour que d’autres lecteurs les affichent aussi. Le fichier n’est remplacé qu’une fois une copie écrite et vérifiée, sans gêner le lecteur qui le lit. Pour les morceaux Apple Music, seul le texte est écrit, sans horodatage. Avec l’option du Labo activée, les paroles sont écrites automatiquement dès qu’elles sont fixées, sans écraser celles écrites par d’autres apps.
+Pendant la lecture d’un MP3 ou FLAC local, le menu ⋯ du Gestionnaire de paroles peut écrire les paroles du morceau dans le fichier, pour que d’autres lecteurs les affichent aussi. Le fichier n’est remplacé qu’une fois une copie écrite et vérifiée, sans gêner le lecteur qui le lit. Pour les morceaux Apple Music, seul le texte est écrit, sans horodatage. Avec l’option du Labo activée, les paroles sont écrites automatiquement dès qu’elles sont fixées. Celles écrites par d’autres apps ne sont pas touchées, sauf si vous activez aussi l’écrasement, qui les sauvegarde d’abord.
 
 - Désactivée par défaut
 - Réglages : Labo › Écrire automatiquement dans les fichiers des morceaux
+- Réglages : Labo › Écraser les paroles écrites par d’autres apps
 
 <a id="feature-lock-hand-picked"></a>
 
@@ -931,7 +932,7 @@ Au plus une fois par jour, envoie la version, macOS, les fonctions activées et 
 
 ## Tous les réglages
 
-Tous les réglages de la fenêtre Réglages, classés par emplacement : 318 au total. Tapez un nom dans le champ de recherche en haut de la barre latérale des Réglages pour y aller directement.
+Tous les réglages de la fenêtre Réglages, classés par emplacement : 319 au total. Tapez un nom dans le champ de recherche en haut de la barre latérale des Réglages pour y aller directement.
 
 ### Paroles › Source
 
@@ -1351,7 +1352,8 @@ Tous les réglages de la fenêtre Réglages, classés par emplacement : 318 au 
 
 ### Labo
 
-- **Écrire automatiquement dans les fichiers des morceaux** : Pendant la lecture d’un MP3 ou FLAC local, écrit les paroles retenues dans le fichier sans écraser celles écrites par d’autres apps
+- **Écrire automatiquement dans les fichiers des morceaux** : Pendant la lecture d’un MP3 ou FLAC local, écrit les paroles retenues dans le fichier
+- **Écraser les paroles écrites par d’autres apps** : Les paroles existantes sont sauvegardées avant d’être remplacées
 
 ### Mise à jour du logiciel
 

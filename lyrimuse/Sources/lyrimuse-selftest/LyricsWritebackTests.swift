@@ -44,4 +44,29 @@ func runLyricsWritebackTests() {
         missing.append(key)
     }
     expectEqual(missing, [], "写回: 每条原因文案都在 Localizable.xcstrings 里")
+
+    // 「覆盖其他软件写入的歌词」:App 写 features.json 的键、读回、引擎认同一个键并在自动写入里看它(11 章决策 166)。
+    let store = text("lyrimuse/Sources/lyrimuse/Settings/FeatureSettingsStore.swift")
+    let features = text("lyrimuse-engine/features.go")
+    let autoWB = text("lyrimuse-engine/lyricsautowriteback.go")
+    expectEqual(sourceHas(store, "case lyricsAutoWritebackOverwrite = \"lyrics_auto_writeback_overwrite\"")
+                && sourceHas(store, "lyricsAutoWritebackOverwrite: lyricsAutoWritebackOverwrite ? true : nil,")
+                && sourceHas(store, "lyricsAutoWritebackOverwrite = f.lyricsAutoWritebackOverwrite ?? false"), true,
+                "写回覆盖开关: App 按 lyrics_auto_writeback_overwrite 写出(关时不写)、读回(缺失为关)")
+    expectEqual(sourceHas(features, "LyricsAutoWritebackOverwrite bool `json:\"lyrics_auto_writeback_overwrite,omitempty\"`")
+                && sourceHas(features, "LyricsAutoWritebackOverwrite: f.LyricsAutoWritebackOverwrite,")
+                && sourceHas(autoWB, "overwrite := features().LyricsAutoWritebackOverwrite"), true,
+                "写回覆盖开关: 引擎认同一个键、带进 featureFlags、自动写入时看它")
+    let labs = text("lyrimuse/Sources/lyrimuse/Settings/LabsPage.swift")
+    expectEqual(sourceHas(labs, """
+        if features.lyricsAutoWriteback {
+            CardDivider()
+            SettingsSubRow(title: L10n.t("覆盖其他软件写入的歌词"), subtitle: L10n.t("替换前先备份原有歌词")) {
+                Toggle("", isOn: Binding(
+                    get: { features.lyricsAutoWritebackOverwrite },
+                    set: { features.lyricsAutoWritebackOverwrite = $0; Task { await features.save() } }
+                ))
+        """) && sourceHas(labs, "withAnimation(.settingsCardReveal) { features.lyricsAutoWriteback = newValue }")
+                && !labs.contains("不覆盖其他软件写入的歌词"), true,
+                "写回覆盖开关: 实验室里总开关开着才出现子开关、读写同一个字段并存盘;总开关说明不再写死「不覆盖」")
 }
