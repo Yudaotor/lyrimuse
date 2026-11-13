@@ -305,7 +305,26 @@ func runSettingsAuditContracts() {
                           "note: settings.webLyricsAllowLAN ? L10n.t(\"更改后需重新扫码连接\") : L10n.t(\"更改后需重新打开本机地址\"))"),
                 true, "网页歌词「端口」: 说明按局域网开没开写")
     let pageScroll = sourceBody("private struct FixedWidthScrollView<Content: View>: View {", in: app("Settings/SettingsDesignSystem.swift"))
-    expectEqual(sourceHas(pageScroll, ".containerRelativeFrame(.horizontal)\n.frame(minWidth: 0, maxWidth: .infinity, alignment: .leading)")
+    expectEqual(sourceHas(pageScroll, "SettingsPageColumnLayout {\nColor.clear\n.containerRelativeFrame(.horizontal)")
+                && !sourceHas(pageScroll, "content()\n.containerRelativeFrame")
                 && !pageScroll.contains("onGeometryChange") && !pageScroll.contains("GeometryReader"), true,
-                "设置页滚动: 内容按整宽排、靠左摆,常驻滚动条出现时卡片列不左移")
+                "设置页滚动: 容器宽只当探针量,内容宽交给 SettingsPageColumnLayout 定,不直接按容器宽排")
+    let columnLayout = sourceBody("private struct SettingsPageColumnLayout: Layout {", in: app("Settings/SettingsDesignSystem.swift"))
+    expectEqual(sourceHas(columnLayout, "SettingsPageContentWidth.resolve(")
+                && sourceHas(columnLayout, "return CGSize(width: proposal.width ?? width, height: height)")
+                && !columnLayout.contains("@State"), true,
+                "设置页滚动: 内容宽经 SettingsPageContentWidth 判定,报给 ScrollView 的仍是提议宽,不存状态")
+    // 常驻滚动条 17pt。提议宽 = ScrollView 给内容的宽,容器宽 = containerRelativeFrame 量到的宽。
+    let pageWidthCases: [(visible: CGFloat, container: CGFloat, want: CGFloat, label: String)] = [
+        (881, 898, 898, "常驻滚动条占了 17pt: 按容器宽排,卡片列不左移"),
+        (898, 898, 898, "没有滚动条: 两者相等"),
+        (693, 898, 693, "容器把 205pt 浮动侧栏也算进来: 只按可见区宽排,不往右溢出"),
+        (676, 898, 676, "浮动侧栏 + 常驻滚动条: 只按可见区宽排"),
+        (0, 898, 0, "最小尺寸查询(提议宽 0): 不拿容器宽撑开"),
+        (700, 690, 700, "容器比提议还窄: 按提议宽"),
+    ]
+    for c in pageWidthCases {
+        expectEqual(SettingsPageContentWidth.resolve(visible: c.visible, container: c.container, scrollerWidth: 17), c.want,
+                    "设置页内容宽: \(c.label)")
+    }
 }

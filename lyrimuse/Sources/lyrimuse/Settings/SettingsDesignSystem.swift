@@ -490,13 +490,7 @@ extension AnyTransition {
 // 卡片列宽度钉在 maxCardColumnWidth 并居中——窗口可以拖得很宽,但一行设置拉到 1000pt
 // 宽会让"标题在最左、控件在最右"两端相距太远,眼睛要来回扫。参考图里 Dropover 也是
 // 让卡片列保持一个固定的舒适宽度、两侧留白。
-// 内容按滚动视图的整宽排、靠左摆，滚动条出现与否都不改变卡片列的位置。
-//
-// 接鼠标时系统「显示滚动条：自动」走常驻滚动条，它占约 15pt 布局宽度，可见区跟着变窄。
-// 内容若按可见区排，居中点左移；若按整宽排却交给 ScrollView 摆，它会把比可见区宽的内容
-// 居中，照样左移半个滚动条。所以两步缺一不可：`containerRelativeFrame` 取整宽（含滚动条那一条），
-// 外面再包一层 `minWidth: 0` 的靠左框，报给 ScrollView 的宽度就是可见区宽度，内容从左缘铺开，
-// 右边那一条被滚动条盖住——卡片列两侧有 20pt 留白，盖不到内容。
+// 内容宽度由 `SettingsPageColumnLayout` 定：常驻滚动条出现与否都不改变卡片列的位置，也绝不比可见区宽。
 //
 // 别换回「量宽度存进 @State 再 `.frame(width:)`」：用 `onGeometryChange` 回写，内容宽于可见区时宽度来回
 // 振荡，设置窗口一打开就因 AppKit 布局循环崩溃（14 章决策 113）；用覆盖式 reduce 的偏好量，真实宽度被
@@ -507,10 +501,45 @@ private struct FixedWidthScrollView<Content: View>: View {
 
     var body: some View {
         ScrollView {
-            content()
-                .containerRelativeFrame(.horizontal)
-                .frame(minWidth: 0, maxWidth: .infinity, alignment: .leading)
+            SettingsPageColumnLayout {
+                Color.clear
+                    .containerRelativeFrame(.horizontal)
+                    .frame(height: 0)
+                    .accessibilityHidden(true)
+                content()
+            }
         }
+    }
+}
+
+// 两个子视图：第一个是只用来量宽的 `containerRelativeFrame` 探针，第二个是页面内容。
+//
+// 接鼠标时系统「显示滚动条：自动」走常驻滚动条，它占约 17pt 布局宽度，ScrollView 提议的宽跟着变窄，
+// 按提议宽排居中点会左移半个滚动条，所以容器宽只比提议宽多一条滚动条以内时按容器宽排、靠左摆，
+// 右边那一条被滚动条盖住的只是卡片列 20pt 留白（14 章决策 167）。容器宽比提议宽多出更多时（容器把浮动侧栏
+// 底下那块也算进来），只按提议宽排，不然整页右移、右侧被裁（`SettingsPageContentWidth`，14 章决策 192）。
+// 报给 ScrollView 的宽度始终是提议宽。宽度由这一轮的提议和探针直接算出，不存状态、不回写。
+private struct SettingsPageColumnLayout: Layout {
+    private func contentWidth(visible: CGFloat?, subviews: Subviews) -> CGFloat {
+        let container = subviews[0].sizeThatFits(.unspecified).width
+        guard let visible, visible.isFinite else { return container }
+        return SettingsPageContentWidth.resolve(
+            visible: visible,
+            container: container,
+            scrollerWidth: NSScroller.scrollerWidth(for: .regular, scrollerStyle: .legacy)
+        )
+    }
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        let width = contentWidth(visible: proposal.width, subviews: subviews)
+        let height = subviews[1].sizeThatFits(ProposedViewSize(width: width, height: proposal.height)).height
+        return CGSize(width: proposal.width ?? width, height: height)
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        let width = contentWidth(visible: bounds.width, subviews: subviews)
+        subviews[0].place(at: bounds.origin, proposal: .zero)
+        subviews[1].place(at: bounds.origin, proposal: ProposedViewSize(width: width, height: bounds.height))
     }
 }
 
