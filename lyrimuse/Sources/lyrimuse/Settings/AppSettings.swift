@@ -417,6 +417,8 @@ final class AppSettings: ObservableObject {
         // 毛玻璃「浓淡」档位。只在上面那颗开着时才生效,但键本身独立存——关着玻璃再打开,
         // 浓淡该停在用户上次选的档,不因为玻璃关过一次就丢。
         static let overlayGlassIntensity = "np:overlayGlassIntensity"
+        // 悬浮歌词文字的不透明度(0.2~1),见 `OverlayTextOpacity`。
+        static let overlayTextOpacity = "np:overlayTextOpacity"
         // "跟随封面"——桌面悬浮歌词的前景色改用当前曲目封面算出的动态高亮色,见
         // PlaybackCoordinator.displayForegroundColor。跟 foregroundColorHex 是独立的
         // 两个字段:开着这个模式时 foregroundColorHex 仍然保留、当"没有封面数据时的
@@ -2312,6 +2314,11 @@ final class AppSettings: ObservableObject {
     @Published var overlayGlassIntensity: OverlayGlassIntensity {
         didSet { defaults.set(overlayGlassIntensity.rawValue, forKey: Keys.overlayGlassIntensity) }
     }
+    /// 悬浮歌词文字整块的不透明度,跟文字颜色从哪来无关,跟自定义颜色自带的透明度相乘。读的时候已夹回范围,
+    /// 没存过是 1(`OverlayTextOpacity.defaultValue`)。见 04 章决策 99。
+    @Published var overlayTextOpacity: Double {
+        didSet { defaults.set(overlayTextOpacity, forKey: Keys.overlayTextOpacity) }
+    }
     /// 「自定义」档那颗调色盘没被改过时的起点。取白色 = 这扇窗一直以来的正文色,从它开始调
     /// 比从一个随机颜色开始更接近用户心里的"现在这样,我微调一下"。
     static let defaultLyricsWindowTextColorHex = "#FFFFFFFF"
@@ -2767,6 +2774,7 @@ final class AppSettings: ObservableObject {
         overlayRainbow = (defaults.object(forKey: Keys.overlayRainbow) as? Bool) ?? false
         overlayGlassIntensity = defaults.string(forKey: Keys.overlayGlassIntensity)
             .flatMap(OverlayGlassIntensity.init(rawValue:)) ?? .default
+        overlayTextOpacity = OverlayTextOpacity.clamped(defaults.object(forKey: Keys.overlayTextOpacity) as? Double)
         textStrokeColorHex = defaults.string(forKey: Keys.textStrokeColorHex) ?? ColorTheme.defaultTheme.textStrokeColorHex
         lockPosition = (defaults.object(forKey: Keys.lockPosition) as? Bool) ?? false
         overlayFadeOnHover = (defaults.object(forKey: Keys.overlayFadeOnHover) as? Bool) ?? false

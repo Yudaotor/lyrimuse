@@ -130,6 +130,14 @@ enum DebugDeepLinks {
             if let overflow { AppSettings.shared.overlayLineOverflow = overflow }
             if let arrangement { AppSettings.shared.overlayNextLineArrangement = arrangement }
             logger.notice("debug overlay layout width=\(width.map { String($0) } ?? "nil", privacy: .public) lineChange=\(String(describing: lineChange), privacy: .public) nextLine=\(nextLine.map { String($0) } ?? "nil", privacy: .public) overflow=\(overflow?.rawValue ?? "nil", privacy: .public) nextArrangement=\(arrangement?.rawValue ?? "nil", privacy: .public)")
+        case let .overlayText(opacity, color):
+            if let opacity { AppSettings.shared.overlayTextOpacity = OverlayTextOpacity.clamped(opacity) }
+            // 同设置页「文字颜色」那颗下拉(`OverlayColorSettingsRows.textColorSource`)。
+            if let color {
+                AppSettings.shared.overlayRainbow = color == "rainbow"
+                if color != "rainbow" { AppSettings.shared.followsCoverArt = color == "cover" }
+            }
+            logger.notice("debug overlay text opacity=\(opacity.map { String($0) } ?? "nil", privacy: .public) color=\(color ?? "nil", privacy: .public)")
         case let .notchStyle(style, expanded):
             if let style, let parsed = NotchCardStyle(rawValue: style) { AppSettings.shared.notchCardStyle = parsed }
             if let expanded {

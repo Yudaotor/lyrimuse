@@ -411,7 +411,7 @@ Khi không có gì đang phát, cửa sổ lời hiển thị bài cuối cùng 
 
 ### Giao diện
 
-Phông chữ (của hệ thống, hoặc tệp .ttf / .otf của bạn), cỡ chữ, độ đậm, màu chữ và màu nền, viền chữ và kính mờ. Lời nổi có sẵn các chủ đề màu và có thể lưu chủ đề của riêng bạn; màu chữ có thể theo ảnh bìa album, còn lời nổi, Notch, thanh menu và Touch Bar có thể chạy màu cầu vồng. Phím tắt, hoặc giữ ⌘ và cuộn trên lời (con lăn chuột hoặc vuốt hai ngón), cũng có thể phóng to hay thu nhỏ lời nổi ngay lập tức.
+Phông chữ (của hệ thống, hoặc tệp .ttf / .otf của bạn), cỡ chữ, độ đậm, màu chữ và màu nền, độ chắn sáng của chữ, viền chữ và kính mờ. Lời nổi có sẵn các chủ đề màu và có thể lưu chủ đề của riêng bạn; màu chữ có thể theo ảnh bìa album, còn lời nổi, Notch, thanh menu và Touch Bar có thể chạy màu cầu vồng. Phím tắt, hoặc giữ ⌘ và cuộn trên lời (con lăn chuột hoặc vuốt hai ngón), cũng có thể phóng to hay thu nhỏ lời nổi ngay lập tức.
 
 - Cài đặt: Hiển thị lời › Lời nổi › Chủ đề
 - Cài đặt: Hiển thị lời › Lời nổi › Chủ đề › Chủ đề của tôi
@@ -419,6 +419,7 @@ Phông chữ (của hệ thống, hoặc tệp .ttf / .otf của bạn), cỡ ch
 - Cài đặt: Hiển thị lời › Thanh menu › Màu › Cầu vồng
 - Cài đặt: Hiển thị lời › Lời nổi › Phông chữ › Phông chữ
 - Cài đặt: Hiển thị lời › Lời nổi › Màu › Nền kính mờ
+- Cài đặt: Hiển thị lời › Lời nổi › Màu › Độ chắn sáng của chữ
 - Cài đặt: Phím tắt › Tăng cỡ Lời nổi
 - Cài đặt: Phím tắt › Giảm cỡ Lời nổi
 
@@ -932,7 +933,7 @@ Tối đa một lần mỗi ngày, Lyrimuse gửi phiên bản, macOS, các tín
 
 ## Toàn bộ cài đặt
 
-Toàn bộ mục trong cửa sổ Cài đặt, theo vị trí: tổng cộng 319 mục. Gõ tên vào ô tìm kiếm ở đầu thanh bên của Cài đặt để đi thẳng tới mục đó.
+Toàn bộ mục trong cửa sổ Cài đặt, theo vị trí: tổng cộng 320 mục. Gõ tên vào ô tìm kiếm ở đầu thanh bên của Cài đặt để đi thẳng tới mục đó.
 
 ### Lời bài hát › Nguồn
 
@@ -1039,6 +1040,7 @@ Toàn bộ mục trong cửa sổ Cài đặt, theo vị trí: tổng cộng 319
 - **Màu chữ**
 - **Viền chữ**
 - **Màu viền**
+- **Độ chắn sáng của chữ**
 - **Màu chưa hát**
 - **Màu nền**
 - **Nền kính mờ**

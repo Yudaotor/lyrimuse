@@ -194,6 +194,9 @@ public enum LyrimuseDeepLink: Equatable, Sendable {
         /// 至少带一个。
         case overlayLayout(width: Double?, lineChange: Bool?, nextLine: Double? = nil, overflow: OverlayLineOverflow? = nil,
                            nextArrangement: OverlayNextLineArrangement? = nil)
+        /// 悬浮歌词「文字不透明度」(按设置的区间夹取)和「文字颜色」从哪来,跟设置页「颜色」走同几个设置:
+        /// `debug/overlay-text?opacity=0.4&color=cover|custom|rainbow`,至少带一个。
+        case overlayText(opacity: Double?, color: String?)
         /// 把标题为 `title` 的那扇 App 窗口挪到 (x, y):全局坐标、左上角原点(同 `check-windows.swift` 打印的),不改大小、
         /// 不激活。`debug/move-window?title=搜索歌词…&x=-200&y=-1200`:把预览会停表的窗口挪到没被盖住的屏上再录帧。
         case moveWindow(title: String, x: Double, y: Double)
@@ -466,6 +469,12 @@ public enum LyrimuseDeepLink: Equatable, Sendable {
             guard width != nil || lineChange != nil || nextLine != nil || overflow != nil || arrangement != nil else { return nil }
             self = .debug(.overlayLayout(width: width, lineChange: lineChange, nextLine: nextLine, overflow: overflow,
                                          nextArrangement: arrangement))
+        case ("debug", "/overlay-text"):
+            let opacity = value("opacity").flatMap(Double.init).flatMap { $0.isFinite && $0 > 0 ? $0 : nil }
+            let color = value("color")?.lowercased()
+            if let color, !["cover", "custom", "rainbow"].contains(color) { return nil }
+            guard opacity != nil || color != nil else { return nil }
+            self = .debug(.overlayText(opacity: opacity, color: color))
         case ("debug", "/notch-style"):
             let style = value("style").flatMap { $0.isEmpty ? nil : $0 }
             let expanded = value("expanded").flatMap { $0.isEmpty ? nil : $0 }
@@ -760,6 +769,12 @@ public enum LyrimuseDeepLink: Equatable, Sendable {
                 if let nextLine { items.append(URLQueryItem(name: "next-line", value: String(nextLine))) }
                 if let overflow { items.append(URLQueryItem(name: "overflow", value: overflow.rawValue)) }
                 if let arrangement { items.append(URLQueryItem(name: "next-arrangement", value: arrangement.rawValue)) }
+                components.queryItems = items
+            case let .overlayText(opacity, color):
+                components.path = "/overlay-text"
+                var items: [URLQueryItem] = []
+                if let opacity { items.append(URLQueryItem(name: "opacity", value: String(opacity))) }
+                if let color { items.append(URLQueryItem(name: "color", value: color)) }
                 components.queryItems = items
             case let .notchStyle(style, expanded):
                 components.path = "/notch-style"

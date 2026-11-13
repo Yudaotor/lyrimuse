@@ -335,6 +335,13 @@ func runDeepLinkTests() {
         expectEqual(link("lyrimuse://debug/rainbow?menubar=1"), .debug(.rainbow(overlay: nil, notch: nil, menuBar: true)),
                     "debug: 只开菜单栏彩虹")
         expectEqual(link("lyrimuse://debug/rainbow"), nil, "debug: 彩虹什么都没带不认")
+        expectEqual(link("lyrimuse://debug/overlay-text?opacity=0.4&color=Cover"),
+                    .debug(.overlayText(opacity: 0.4, color: "cover")), "debug: 悬浮歌词文字不透明度和颜色来源一起设")
+        expectEqual(link("lyrimuse://debug/overlay-text?color=custom"), .debug(.overlayText(opacity: nil, color: "custom")),
+                    "debug: 只设文字颜色来源")
+        expectEqual(link("lyrimuse://debug/overlay-text?color=accent"), nil, "debug: 文字颜色来源不认的值不认")
+        expectEqual(link("lyrimuse://debug/overlay-text?opacity=0"), nil, "debug: 不透明度不是正数不认")
+        expectEqual(link("lyrimuse://debug/overlay-text"), nil, "debug: 文字设置什么都没带不认")
         expectEqual(link("lyrimuse://debug/touchbar-display?color=Rainbow"), .debug(.touchBarDisplay(color: .rainbow)),
                     "debug: 触控栏歌词颜色切彩虹(大小写不敏感)")
         expectEqual([link("lyrimuse://debug/touchbar-typing?state=on"), link("lyrimuse://debug/touchbar-typing?state=OFF"),
@@ -597,6 +604,8 @@ func runDeepLinkTests() {
             .debug(.managerInstrumental(key: "歌手|歌 & 名|专辑", on: true)), .debug(.managerInstrumental(key: "a|b|", on: false)),
             .debug(.rainbow(overlay: true, notch: nil)), .debug(.rainbow(overlay: false, notch: true)),
             .debug(.rainbow(overlay: nil, notch: nil, menuBar: false)),
+            .debug(.overlayText(opacity: 0.4, color: "cover")), .debug(.overlayText(opacity: 1, color: nil)),
+            .debug(.overlayText(opacity: nil, color: "rainbow")),
             .debug(.menuBarDisplay(artwork: true, content: nil)), .debug(.menuBarDisplay(artwork: nil, content: "title")),
             .debug(.menuBarDisplay(artwork: false, content: "lyrics")),
             .debug(.menuBarDisplay(artwork: nil, content: nil, iconSize: "small")),

@@ -411,7 +411,7 @@ Quand rien n’est en lecture, la fenêtre des paroles affiche le dernier morcea
 
 ### Apparence
 
-Police (celle du système, ou votre propre .ttf / .otf), taille, graisse, couleurs du texte et du fond, contour et verre dépoli. Les paroles flottantes ont des thèmes de couleurs et peuvent enregistrer les vôtres ; la couleur du texte peut suivre l’illustration de l’album, et les paroles flottantes, l’encoche, la barre des menus et la Touch Bar peuvent aussi défiler en arc-en-ciel. Des raccourcis, ou le défilement sur les paroles en maintenant ⌘ (molette ou balayage à deux doigts), agrandissent ou réduisent aussi les paroles flottantes à la volée.
+Police (celle du système, ou votre propre .ttf / .otf), taille, graisse, couleurs du texte et du fond, opacité du texte, contour et verre dépoli. Les paroles flottantes ont des thèmes de couleurs et peuvent enregistrer les vôtres ; la couleur du texte peut suivre l’illustration de l’album, et les paroles flottantes, l’encoche, la barre des menus et la Touch Bar peuvent aussi défiler en arc-en-ciel. Des raccourcis, ou le défilement sur les paroles en maintenant ⌘ (molette ou balayage à deux doigts), agrandissent ou réduisent aussi les paroles flottantes à la volée.
 
 - Réglages : Affichage des paroles › Paroles flottantes › Thème
 - Réglages : Affichage des paroles › Paroles flottantes › Thème › Mes thèmes
@@ -419,6 +419,7 @@ Police (celle du système, ou votre propre .ttf / .otf), taille, graisse, couleu
 - Réglages : Affichage des paroles › Barre des menus › Couleur › Arc-en-ciel
 - Réglages : Affichage des paroles › Paroles flottantes › Police › Police
 - Réglages : Affichage des paroles › Paroles flottantes › Couleur › Fond dépoli
+- Réglages : Affichage des paroles › Paroles flottantes › Couleur › Opacité du texte
 - Réglages : Raccourcis clavier › Agrandir les paroles flottantes
 - Réglages : Raccourcis clavier › Réduire les paroles flottantes
 
@@ -932,7 +933,7 @@ Au plus une fois par jour, envoie la version, macOS, les fonctions activées et 
 
 ## Tous les réglages
 
-Tous les réglages de la fenêtre Réglages, classés par emplacement : 319 au total. Tapez un nom dans le champ de recherche en haut de la barre latérale des Réglages pour y aller directement.
+Tous les réglages de la fenêtre Réglages, classés par emplacement : 320 au total. Tapez un nom dans le champ de recherche en haut de la barre latérale des Réglages pour y aller directement.
 
 ### Paroles › Source
 
@@ -1039,6 +1040,7 @@ Tous les réglages de la fenêtre Réglages, classés par emplacement : 319 au 
 - **Couleur du texte**
 - **Contour du texte**
 - **Couleur du contour**
+- **Opacité du texte**
 - **Couleur non chantée**
 - **Couleur de fond**
 - **Fond dépoli**

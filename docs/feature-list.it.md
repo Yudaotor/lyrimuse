@@ -411,7 +411,7 @@ Quando non c’è niente in riproduzione, la finestra testo mostra l’ultimo br
 
 ### Aspetto
 
-Font (quello di sistema o un tuo .ttf / .otf), dimensione, spessore, colori del testo e dello sfondo, contorno ed effetto smerigliato. Il testo fluttuante ha dei temi di colore e può salvare i tuoi; il colore del testo può seguire l’illustrazione dell’album, e testo fluttuante, notch, barra dei menu e Touch Bar possono anche scorrere come un arcobaleno. Con le scorciatoie, o scorrendo sul testo tenendo premuto ⌘ (rotella del mouse o scorrimento con due dita), puoi anche ingrandire o rimpicciolire al volo il testo fluttuante.
+Font (quello di sistema o un tuo .ttf / .otf), dimensione, spessore, colori del testo e dello sfondo, opacità del testo, contorno ed effetto smerigliato. Il testo fluttuante ha dei temi di colore e può salvare i tuoi; il colore del testo può seguire l’illustrazione dell’album, e testo fluttuante, notch, barra dei menu e Touch Bar possono anche scorrere come un arcobaleno. Con le scorciatoie, o scorrendo sul testo tenendo premuto ⌘ (rotella del mouse o scorrimento con due dita), puoi anche ingrandire o rimpicciolire al volo il testo fluttuante.
 
 - Impostazioni: Visualizzazione testo › Testo fluttuante › Tema
 - Impostazioni: Visualizzazione testo › Testo fluttuante › Tema › I miei temi
@@ -419,6 +419,7 @@ Font (quello di sistema o un tuo .ttf / .otf), dimensione, spessore, colori del 
 - Impostazioni: Visualizzazione testo › Barra dei menu › Colore › Arcobaleno
 - Impostazioni: Visualizzazione testo › Testo fluttuante › Font › Font
 - Impostazioni: Visualizzazione testo › Testo fluttuante › Colore › Sfondo smerigliato
+- Impostazioni: Visualizzazione testo › Testo fluttuante › Colore › Opacità testo
 - Impostazioni: Scorciatoie da tastiera › Ingrandisci testo fluttuante
 - Impostazioni: Scorciatoie da tastiera › Rimpicciolisci testo fluttuante
 
@@ -932,7 +933,7 @@ Al massimo una volta al giorno invia versione, macOS, funzioni attive e riepilog
 
 ## Tutte le impostazioni
 
-Tutte le impostazioni della finestra Impostazioni, per posizione: 319 in tutto. Scrivi un nome nel campo di ricerca in cima alla barra laterale delle Impostazioni per andarci direttamente.
+Tutte le impostazioni della finestra Impostazioni, per posizione: 320 in tutto. Scrivi un nome nel campo di ricerca in cima alla barra laterale delle Impostazioni per andarci direttamente.
 
 ### Testo › Fonte
 
@@ -1039,6 +1040,7 @@ Tutte le impostazioni della finestra Impostazioni, per posizione: 319 in tutto. 
 - **Colore testo**
 - **Contorno testo**
 - **Colore contorno**
+- **Opacità testo**
 - **Colore non cantato**
 - **Colore di sfondo**
 - **Sfondo smerigliato**

@@ -1598,6 +1598,7 @@
 "文件过大，无法导入" = "The file is too large to import";
 "文字" = "Text";
 "文字一致" = "Same Wording";
+"文字不透明度" = "Text Opacity";
 "文字描边" = "Text Outline";
 "文字颜色" = "Text Color";
 "文本与行时间一致，仅逐字时间轴不同" = "Text and line timing match; only word timing differs";

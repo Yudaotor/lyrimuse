@@ -411,7 +411,7 @@ Läuft nichts, zeigt das Liedtextfenster den letzten Titel mit einer Zeile aus s
 
 ### Erscheinungsbild
 
-Schrift (die des Systems oder deine eigene .ttf / .otf), Größe, Stärke, Text- und Hintergrundfarbe, Kontur und Milchglas. Der schwebende Text bringt Farbdesigns mit und kann eigene sichern; die Textfarbe kann dem Albumcover folgen, und schwebender Text, Notch, Menüleiste und Touch Bar können auch als Regenbogen fließen. Tastaturkurzbefehle oder Scrollen über dem Liedtext bei gedrückter ⌘-Taste (Mausrad oder Streichen mit zwei Fingern) machen den schwebenden Text auch spontan größer oder kleiner.
+Schrift (die des Systems oder deine eigene .ttf / .otf), Größe, Stärke, Text- und Hintergrundfarbe, Textdeckkraft, Kontur und Milchglas. Der schwebende Text bringt Farbdesigns mit und kann eigene sichern; die Textfarbe kann dem Albumcover folgen, und schwebender Text, Notch, Menüleiste und Touch Bar können auch als Regenbogen fließen. Tastaturkurzbefehle oder Scrollen über dem Liedtext bei gedrückter ⌘-Taste (Mausrad oder Streichen mit zwei Fingern) machen den schwebenden Text auch spontan größer oder kleiner.
 
 - Einstellungen: Liedtext-Anzeige › Schwebender Text › Design
 - Einstellungen: Liedtext-Anzeige › Schwebender Text › Design › Meine Designs
@@ -419,6 +419,7 @@ Schrift (die des Systems oder deine eigene .ttf / .otf), Größe, Stärke, Text-
 - Einstellungen: Liedtext-Anzeige › Menüleiste › Farbe › Regenbogen
 - Einstellungen: Liedtext-Anzeige › Schwebender Text › Schrift › Schrift
 - Einstellungen: Liedtext-Anzeige › Schwebender Text › Farbe › Milchglas-Hintergrund
+- Einstellungen: Liedtext-Anzeige › Schwebender Text › Farbe › Textdeckkraft
 - Einstellungen: Tastaturkurzbefehle › Schwebenden Text vergrößern
 - Einstellungen: Tastaturkurzbefehle › Schwebenden Text verkleinern
 
@@ -932,7 +933,7 @@ Sendet höchstens einmal täglich Version, macOS, aktivierte Funktionen und Abst
 
 ## Alle Einstellungen
 
-Alle Einstellungen des Einstellungsfensters nach Ort: insgesamt 319. Gib einen Namen in das Suchfeld oben in der Seitenleiste der Einstellungen ein, um direkt dorthin zu springen.
+Alle Einstellungen des Einstellungsfensters nach Ort: insgesamt 320. Gib einen Namen in das Suchfeld oben in der Seitenleiste der Einstellungen ein, um direkt dorthin zu springen.
 
 ### Liedtext › Quelle
 
@@ -1039,6 +1040,7 @@ Alle Einstellungen des Einstellungsfensters nach Ort: insgesamt 319. Gib einen N
 - **Textfarbe**
 - **Textkontur**
 - **Konturfarbe**
+- **Textdeckkraft**
 - **Farbe ungesungen**
 - **Hintergrundfarbe**
 - **Milchglas-Hintergrund**

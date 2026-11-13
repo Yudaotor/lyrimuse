@@ -1523,6 +1523,7 @@
 "文件过大，无法导入" = "Tệp quá lớn, không thể nhập";
 "文字" = "Chữ";
 "文字一致" = "Cùng chữ";
+"文字不透明度" = "Độ chắn sáng của chữ";
 "文字描边" = "Viền chữ";
 "文字颜色" = "Màu chữ";
 "文本与行时间一致，仅逐字时间轴不同" = "Văn bản và thời gian dòng khớp, chỉ khác thời gian theo từng chữ";

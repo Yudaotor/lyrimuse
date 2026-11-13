@@ -411,7 +411,7 @@ Quando nada está tocando, a janela da letra mostra a última música com uma li
 
 ### Aparência
 
-Fonte (a do sistema ou uma sua em .ttf / .otf), tamanho, peso, cores do texto e do fundo, contorno e vidro fosco. A letra flutuante vem com temas de cores e pode salvar os seus; a cor do texto pode seguir a capa do álbum, e a letra flutuante, o notch, a barra de menus e a Touch Bar também podem fluir como um arco-íris. Atalhos, ou rolar sobre a letra com ⌘ pressionada (roda do mouse ou deslizar com dois dedos), também aumentam ou diminuem a letra flutuante na hora.
+Fonte (a do sistema ou uma sua em .ttf / .otf), tamanho, peso, cores do texto e do fundo, opacidade do texto, contorno e vidro fosco. A letra flutuante vem com temas de cores e pode salvar os seus; a cor do texto pode seguir a capa do álbum, e a letra flutuante, o notch, a barra de menus e a Touch Bar também podem fluir como um arco-íris. Atalhos, ou rolar sobre a letra com ⌘ pressionada (roda do mouse ou deslizar com dois dedos), também aumentam ou diminuem a letra flutuante na hora.
 
 - Ajustes: Exibição da letra › Letra flutuante › Tema
 - Ajustes: Exibição da letra › Letra flutuante › Tema › Meus temas
@@ -419,6 +419,7 @@ Fonte (a do sistema ou uma sua em .ttf / .otf), tamanho, peso, cores do texto e 
 - Ajustes: Exibição da letra › Barra de menus › Cor › Arco-íris
 - Ajustes: Exibição da letra › Letra flutuante › Fonte › Fonte
 - Ajustes: Exibição da letra › Letra flutuante › Cor › Fundo de vidro fosco
+- Ajustes: Exibição da letra › Letra flutuante › Cor › Opacidade do texto
 - Ajustes: Atalhos de teclado › Aumentar tamanho da letra flutuante
 - Ajustes: Atalhos de teclado › Diminuir tamanho da letra flutuante
 
@@ -932,7 +933,7 @@ No máximo uma vez por dia, envia a versão, o macOS, quais recursos estão ativ
 
 ## Todos os ajustes
 
-Todos os ajustes da janela Ajustes, por local: 319 no total. Digite um nome no campo de busca no topo da barra lateral dos Ajustes para ir direto até ele.
+Todos os ajustes da janela Ajustes, por local: 320 no total. Digite um nome no campo de busca no topo da barra lateral dos Ajustes para ir direto até ele.
 
 ### Letra › Origem
 
@@ -1039,6 +1040,7 @@ Todos os ajustes da janela Ajustes, por local: 319 no total. Digite um nome no c
 - **Cor do texto**
 - **Contorno do texto**
 - **Cor do contorno**
+- **Opacidade do texto**
 - **Cor não cantada**
 - **Cor de fundo**
 - **Fundo de vidro fosco**

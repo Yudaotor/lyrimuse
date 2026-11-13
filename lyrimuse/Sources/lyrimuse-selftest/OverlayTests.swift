@@ -1133,6 +1133,42 @@ func runOverlayTests() {
                     "行间距接线: 真窗口不接临时值,松手提交后才跟上")
     }
 
+    // ---- 文字不透明度:整块文字一起淡,默认 100% 不变,跟随封面时照样生效 ----
+    do {
+        typealias O = OverlayTextOpacity
+        expectEqual([O.defaultValue, O.clamped(nil)], [1, 1], "文字不透明度: 默认 / 没存过 = 100%,现有用户看到的不变")
+        expectEqual([O.clamped(.nan), O.clamped(.infinity), O.clamped(0), O.clamped(-1), O.clamped(3), O.clamped(0.4)],
+                    [1, 1, O.range.lowerBound, O.range.lowerBound, 1, 0.4], "文字不透明度: 夹回 20%~100%,不是有限数按默认")
+        expectEqual(O.range.lowerBound > 0 && O.range.upperBound == 1, true, "文字不透明度: 淡不到看不见,也不超过原样")
+        expectEqual([O.percentText(0.4), O.percentText(1), O.percentText(0.35)], ["40%", "100%", "35%"],
+                    "文字不透明度: 读数是百分比")
+
+        let sources = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+        func src(_ rel: String) -> String {
+            (try? String(contentsOf: sources.appendingPathComponent(rel), encoding: .utf8)) ?? ""
+        }
+        let settings = src("lyrimuse/Settings/AppSettings.swift")
+        expectEqual(sourceHas(settings, "overlayTextOpacity = OverlayTextOpacity.clamped(defaults.object(forKey: Keys.overlayTextOpacity) as? Double)"),
+                    true, "文字不透明度接线: 启动时没存过就是默认的 100%,不往配置里写")
+        let overlay = src("lyrimuse/UI/LyricsOverlayView.swift")
+        expectEqual(sourceHas(overlay, "s.$overlayTextOpacity.map { OverlayTextOpacity.clamped($0) }.removeDuplicates()\n .sink { [weak self] in self?.textOpacity = $0 },"),
+                    true, "文字不透明度接线: 悬浮窗只从这一项设置取,不看文字颜色从哪来")
+        let card = sourceBody("private var lyricsCard: some View", in: overlay)
+        expectEqual(sourceHas(card, "lyricsCardContent\n .compositingGroup()\n .opacity(playback.textOpacity)\n .padding(.leading,"),
+                    true, "文字不透明度接线: 先合成再淡,整块文字连描边一起,套在背景之前(跟随封面、自定义、彩虹都吃)")
+        expectEqual(sourceCount(overlay, "playback.textOpacity"), 1, "文字不透明度接线: 只在卡片内容那一处用,不按颜色来源分支")
+        expectEqual(sourceHas(sourceBody("private var overlayBackground", in: overlay), "textOpacity"), false,
+                    "文字不透明度接线: 背景不跟着淡")
+
+        let rows = src("lyrimuse/UI/OverlayStyleSettingsRows.swift")
+        let colorRows = sourceBody("struct OverlayColorSettingsRows: View", in: rows)
+        let customOnly = sourceBody("if textColorSource.wrappedValue == .custom", in: colorRows)
+        expectEqual([sourceHas(colorRows, "OverlayTextOpacityCell()"), customOnly.isEmpty, sourceHas(customOnly, "OverlayTextOpacityCell")],
+                    [true, false, false], "文字不透明度接线: 滑杆在「颜色」组里常驻,不只在「自定义」颜色下出现")
+        expectEqual(sourceHas(rows, "settings.overlayTextOpacity = OverlayTextOpacity.defaultValue"), true,
+                    "文字不透明度接线: 「恢复默认文字与配色」带上它")
+    }
+
     // ---- 副行字号比例:读音 / 译文 / 下一句各占主句多少 ----
     do {
         typealias S = OverlayRowFontScale

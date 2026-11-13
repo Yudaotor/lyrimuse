@@ -411,7 +411,7 @@ When nothing is playing, the lyrics window shows the last song with a line from 
 
 ### Appearance
 
-Font (the system's, or your own .ttf / .otf), size, weight, text and background colours, outline and frosted glass. Floating lyrics come with colour themes and can save your own; text colour can follow the album artwork, and floating lyrics, the notch, the menu bar and the Touch Bar can also flow as a rainbow. Shortcuts, or scrolling over the lyrics with ⌘ held (mouse wheel or two-finger swipe), can also make floating lyrics bigger or smaller on the fly.
+Font (the system's, or your own .ttf / .otf), size, weight, text and background colours, text opacity, outline and frosted glass. Floating lyrics come with colour themes and can save your own; text colour can follow the album artwork, and floating lyrics, the notch, the menu bar and the Touch Bar can also flow as a rainbow. Shortcuts, or scrolling over the lyrics with ⌘ held (mouse wheel or two-finger swipe), can also make floating lyrics bigger or smaller on the fly.
 
 - Settings: Lyrics Display › Floating Lyrics › Theme
 - Settings: Lyrics Display › Floating Lyrics › Theme › My Themes
@@ -419,6 +419,7 @@ Font (the system's, or your own .ttf / .otf), size, weight, text and background 
 - Settings: Lyrics Display › Menu Bar › Color › Rainbow
 - Settings: Lyrics Display › Floating Lyrics › Font › Font
 - Settings: Lyrics Display › Floating Lyrics › Color › Frosted Glass Background
+- Settings: Lyrics Display › Floating Lyrics › Color › Text Opacity
 - Settings: Keyboard Shortcuts › Increase Floating Lyrics Font Size
 - Settings: Keyboard Shortcuts › Decrease Floating Lyrics Font Size
 
@@ -932,7 +933,7 @@ At most once a day, sends the version, macOS, which features are on and crash su
 
 ## Every setting
 
-Every setting in the Settings window, by where it lives: 319 in all. Type a name into the search field at the top of the Settings sidebar to jump straight to it.
+Every setting in the Settings window, by where it lives: 320 in all. Type a name into the search field at the top of the Settings sidebar to jump straight to it.
 
 ### Lyrics › Source
 
@@ -1039,6 +1040,7 @@ Every setting in the Settings window, by where it lives: 319 in all. Type a name
 - **Text Color**
 - **Text Outline**
 - **Outline Color**
+- **Text Opacity**
 - **Unsung Color**
 - **Background Color**
 - **Frosted Glass Background**

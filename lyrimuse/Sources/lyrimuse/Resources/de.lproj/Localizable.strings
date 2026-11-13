@@ -1598,6 +1598,7 @@
 "文件过大，无法导入" = "Die Datei ist zu groß zum Importieren";
 "文字" = "Text";
 "文字一致" = "Gleicher Wortlaut";
+"文字不透明度" = "Textdeckkraft";
 "文字描边" = "Textkontur";
 "文字颜色" = "Textfarbe";
 "文本与行时间一致，仅逐字时间轴不同" = "Text und Zeilenzeiten stimmen überein; nur das Wort-Timing weicht ab";

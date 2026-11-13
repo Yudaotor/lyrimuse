@@ -232,6 +232,7 @@ extension AppSettings {
             ("overlayRainbow", overlayRainbow),
             ("overlayBackgroundGlass", overlayBackgroundGlass),
             ("overlayGlassIntensity", overlayGlassIntensity),
+            ("overlayTextOpacity", overlayTextOpacity),
             ("followsCoverArt", followsCoverArt),
             ("customColorThemes", customColorThemes),
         ]

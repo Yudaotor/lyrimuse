@@ -161,6 +161,8 @@ struct OverlayColorSettingsRows: View {
                         )
                     }
                 }
+                // 整块文字一起淡,跟上面颜色从哪来无关;排在颜色那一对后面,已唱 / 未唱仍并排。
+                OverlayTextOpacityCell()
                 if settings.textStrokeEnabled {
                     SettingsControlCell(icon: "pencil.tip", title: L10n.t("描边颜色")) {
                         AppColorPicker(selection: Binding(
@@ -514,6 +516,38 @@ struct OverlayRowFontScaleCell: View {
     }
 }
 
+/// 「颜色」里「文字不透明度」那一格。拖动中节流提交(`SliderCommitThrottle`),同「字号」那一行。
+@MainActor
+struct OverlayTextOpacityCell: View {
+    @ObservedObject private var settings = AppSettings.shared
+    @State private var throttle = SliderCommitThrottle()
+
+    private var value: Double { throttle.value(or: settings.overlayTextOpacity) }
+
+    /// 相等守卫:等值赋值照样广播、写盘。
+    private func commit(_ next: Double) {
+        let settings = AppSettings.shared
+        if settings.overlayTextOpacity != next { settings.overlayTextOpacity = next }
+    }
+
+    var body: some View {
+        SettingsControlCell(icon: "circle.dotted", title: L10n.t("文字不透明度")) {
+            HStack(spacing: 6) {
+                SteppedSlider(value: Binding(get: { value }, set: { throttle.update($0, commit: commit) }),
+                              in: OverlayTextOpacity.range, step: OverlayTextOpacity.step,
+                              onEditingChanged: { throttle.editingChanged($0, commit: commit) })
+                    .frame(width: 96)
+                Text(verbatim: OverlayTextOpacity.percentText(value))
+                    .foregroundStyle(.secondary)
+                    .monospacedDigit()
+                    .frame(width: 36, alignment: .trailing)
+            }
+        }
+        // 浮层在拖动中途被关掉时收不到松手那一下,把拖到的值提交掉。
+        .onDisappear { throttle.editingChanged(false, commit: commit) }
+    }
+}
+
 /// 「对齐方式」用的自定义分段控件(从 SettingsView 里那个
 /// `private struct` 提到这里 —— 卡片和浮层都要用,再是 private 就只有卡片够得着)。
 ///
@@ -830,6 +864,8 @@ enum OverlayStyleDefaults {
         // 毛玻璃虽然关了,浓淡却停在用户上次选的档,下次重新打开毛玻璃时又不是默认观感
         // (同上面那条注释警告的坑,新加字段不进这个函数就会被漏掉)。
         settings.overlayGlassIntensity = .default
+        // 文字不透明度同在「颜色」那一组;不进主题,只在这里回到默认。
+        settings.overlayTextOpacity = OverlayTextOpacity.defaultValue
         settings.overlayRainbow = ColorTheme.defaultTheme.rainbow
         settings.textStrokeEnabled = ColorTheme.defaultTheme.textStrokeEnabled
         settings.textStrokeColorHex = ColorTheme.defaultTheme.textStrokeColorHex

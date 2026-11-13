@@ -450,6 +450,7 @@ public enum SettingsSearchCatalog {
         surface(.overlay, "文字颜色", alt: ["已唱颜色"], kw: ["字色", "颜色", "跟随封面", "彩虹", "渐变"], group: "颜色"),
         surface(.overlay, "文字描边", kw: ["描边", "outline"], group: "颜色"),
         surface(.overlay, "描边颜色", kw: ["描边"], group: "颜色"),
+        surface(.overlay, "文字不透明度", kw: ["透明度", "透明", "不透明度", "淡", "遮挡", "opacity", "transparency"], group: "颜色"),
         surface(.overlay, "未唱颜色", kw: ["卡拉OK", "未唱", "未唱颜色", "逐字", "karaoke", "跟随封面"], group: "颜色"),
         surface(.overlay, "背景颜色", kw: ["背景", "透明"], group: "颜色"),
         surface(.overlay, "毛玻璃背景", kw: ["模糊", "玻璃", "blur"], group: "颜色"),

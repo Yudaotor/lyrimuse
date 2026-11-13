@@ -411,7 +411,7 @@ Cuando no suena nada, la ventana de letra muestra la última canción, una líne
 
 ### Aspecto personalizable
 
-Fuente (la del sistema, o una .ttf / .otf importada), tamaño, grosor, color del texto y del fondo, contorno y fondo esmerilado. La letra flotante incluye varios temas de color y puede guardar tus colores como tema; el color del texto puede seguir la ilustración del álbum, y la letra flotante, el notch, la barra de menús y la Touch Bar también pueden fluir como un arcoíris. El tamaño de la letra flotante también se cambia al momento con atajos, o manteniendo ⌘ y girando la rueda del ratón o deslizando dos dedos sobre la letra.
+Fuente (la del sistema, o una .ttf / .otf importada), tamaño, grosor, color del texto y del fondo, opacidad del texto, contorno y fondo esmerilado. La letra flotante incluye varios temas de color y puede guardar tus colores como tema; el color del texto puede seguir la ilustración del álbum, y la letra flotante, el notch, la barra de menús y la Touch Bar también pueden fluir como un arcoíris. El tamaño de la letra flotante también se cambia al momento con atajos, o manteniendo ⌘ y girando la rueda del ratón o deslizando dos dedos sobre la letra.
 
 - Ajustes: Mostrar letra › Letra flotante › Tema
 - Ajustes: Mostrar letra › Letra flotante › Tema › Mis temas
@@ -419,6 +419,7 @@ Fuente (la del sistema, o una .ttf / .otf importada), tamaño, grosor, color del
 - Ajustes: Mostrar letra › Barra de menús › Color › Arcoíris
 - Ajustes: Mostrar letra › Letra flotante › Fuente › Fuente
 - Ajustes: Mostrar letra › Letra flotante › Color › Fondo esmerilado
+- Ajustes: Mostrar letra › Letra flotante › Color › Opacidad del texto
 - Ajustes: Atajos de teclado › Aumentar tamaño de la letra flotante
 - Ajustes: Atajos de teclado › Reducir tamaño de la letra flotante
 
@@ -932,7 +933,7 @@ Como máximo una vez al día, envía al servidor del propio autor la versión, e
 
 ## Todos los ajustes
 
-Todos los ajustes de la ventana Ajustes, según dónde están: 319 en total. Escribe un nombre en el campo de búsqueda de la parte superior de la barra lateral de Ajustes para ir directamente a él.
+Todos los ajustes de la ventana Ajustes, según dónde están: 320 en total. Escribe un nombre en el campo de búsqueda de la parte superior de la barra lateral de Ajustes para ir directamente a él.
 
 ### Letra › Fuente
 
@@ -1039,6 +1040,7 @@ Todos los ajustes de la ventana Ajustes, según dónde están: 319 en total. Esc
 - **Color del texto**
 - **Contorno del texto**
 - **Color del contorno**
+- **Opacidad del texto**
 - **Color sin cantar**
 - **Color de fondo**
 - **Fondo esmerilado**

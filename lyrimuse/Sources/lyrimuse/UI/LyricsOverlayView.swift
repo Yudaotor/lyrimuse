@@ -86,6 +86,8 @@ private final class OverlayPlayback: ObservableObject {
     /// `karaokeUnsungInk` 画),SwiftUI 画歌词的地方套 `LyricStrokeRainbow`(只看透明度)。上下两个显示色不变,状态文案、提示、
     /// 间奏三点照旧用它们。
     @Published private(set) var rainbow = false
+    /// 卡片里整块文字的不透明度(`AppSettings.overlayTextOpacity`,已夹回范围)。不看文字颜色从哪来。
+    @Published private(set) var textOpacity = OverlayTextOpacity.defaultValue
     // ---- 来自 AppSettings(只挑悬浮窗读的这一小片) ----
     @Published private(set) var lockPosition = false
     /// 指针划过时让开(见 AppSettings.overlayFadeOnHover)。
@@ -235,6 +237,8 @@ private final class OverlayPlayback: ObservableObject {
                 .removeDuplicates()
                 .sink { [weak self] in self?.displayForegroundColor = $0 },
             s.$overlayRainbow.removeDuplicates().sink { [weak self] in self?.rainbow = $0 },
+            s.$overlayTextOpacity.map { OverlayTextOpacity.clamped($0) }.removeDuplicates()
+                .sink { [weak self] in self?.textOpacity = $0 },
             s.$lockPosition.removeDuplicates().sink { [weak self] in self?.lockPosition = $0 },
             s.$overlayFadeOnHover.removeDuplicates().sink { [weak self] in self?.fadeOnHover = $0 },
             s.$overlayPlacementMode.removeDuplicates().sink { [weak self] in self?.placementMode = $0 },
@@ -1278,7 +1282,10 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
         //
         // 换句动画开着时这份留白不加在卡片外面,由舞台每一格各自带上(`lineChangeRows`):加在外面的话换人唱时舞台跟着横移,
         // 正在淡出的旧句被带着横跳(见 04 章决策 59)。
+        // 文字不透明度整块套在内容上、背景之外:先合成一层再淡,描边剪影不从半透明的字底下透出来(04 章决策 99)。
         lyricsCardContent
+            .compositingGroup()
+            .opacity(playback.textOpacity)
             .padding(.leading, animatesLineChange ? 0 : duetPadding.leading)
             .padding(.trailing, animatesLineChange ? 0 : duetPadding.trailing)
             .padding(.horizontal, OverlayPlayback.cardHorizontalPadding)
