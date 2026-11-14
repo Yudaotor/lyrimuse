@@ -879,12 +879,24 @@ func runOpsDiagnosticsTests() {
             expectEqual(abort.totalExceptionFrames, 18, "崩溃报告: 异常调用栈总帧数不算公共入口")
             expectEqual(abort.exceptionFrames.count, CrashReportSummary.maxFrames, "崩溃报告: 异常调用栈只留前 15 帧")
             expectEqual(abort.frames.first?.symbol, "__pthread_kill", "崩溃报告: 故障线程照旧解")
+            expectEqual(abort.exceptionLaterOwnFrames, [], "崩溃报告: 后面没有本进程的帧时为空")
             let text = abort.renderLines().joined(separator: "\n")
             expectEqual(text.contains("last exception backtrace: showing 15 of 18 frames"), true, "崩溃报告: 渲染异常调用栈")
             expectEqual(text.contains("AppKit  thrown0 + 2002"), true, "崩溃报告: 异常调用栈帧行格式")
             let exceptionAt = text.range(of: "last exception backtrace")?.lowerBound, faultingAt = text.range(of: "faulting thread 0")?.lowerBound
             expectEqual(exceptionAt != nil && faultingAt != nil && exceptionAt! < faultingAt!, true, "崩溃报告: 异常调用栈排在故障线程前")
         }
+        // 第 15 帧之后才出现本进程的帧(布局回调里抛的异常就是这样):单独留最近的几个。
+        let laterJSON = (["__exceptionPreprocess", "objc_exception_throw"] + (0..<30).map { "deep\($0)" }).enumerated().map { i, symbol in
+            let own = [22, 25, 27, 29, 31].contains(i)
+            return "{\"imageIndex\":\(i < 2 ? 1 : (own ? 2 : 0)),\"imageOffset\":\(3000 + i)\(own ? "" : ",\"symbol\":\"\(symbol)\"")}"
+        }.joined(separator: ",")
+        let laterBody = """
+        {"procName":"lyrimuse","exception":{"type":"EXC_CRASH","signal":"SIGABRT"},"faultingThread":0,"threads":[{"frames":[]}],"lastExceptionBacktrace":[\(laterJSON)],"usedImages":[{"name":"AppKit"},{"name":"libobjc.A.dylib"},{"name":"lyrimuse"}]}
+        """
+        let later = CrashReportSummary.parse(fileName: "lyrimuse-2026-11-14-220000.ips", data: ips("{}", laterBody))
+        expectEqual(later?.exceptionLaterOwnFrames.map(\.imageOffset), [3022, 3025, 3027, 3029],
+                    "崩溃报告: 第 15 帧之后的本进程帧留最近的 4 个")
 
         // 装了异常预处理器(SwallowedExceptionGuard):__exceptionPreprocess 和 objc_exception_throw 之间夹着预处理器的帧。
         let guardedJSON = ["__exceptionPreprocess", "closure #1 in static SwallowedExceptionGuard.install()",
@@ -913,8 +925,13 @@ func runOpsDiagnosticsTests() {
             expectEqual(seen.left, false, "异常守卫: 正在跑的任务栈里有并发运行时的帧,不算残留")
             let sources = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
             let entry = (try? String(contentsOf: sources.appendingPathComponent("lyrimuse/StorageMigrationRunner.swift"), encoding: .utf8)) ?? ""
-            expectEqual(sourceHas(sourceBody("static func main()", in: entry), "SwallowedExceptionGuard.install() StorageMigrationRunner.runAtLaunch() LyrimuseApp.main()"), true,
-                        "异常守卫(契约): App 入口在一切别的代码之前装上")
+            expectEqual(sourceHas(sourceBody("static func main()", in: entry), "DisplayCycleLimit.registerNonAsserting() SwallowedExceptionGuard.install() StorageMigrationRunner.runAtLaunch() LyrimuseApp.main()"), true,
+                        "异常守卫(契约): App 入口先登记显示周期上限不崩,再在一切别的代码之前装上守卫")
+            let scratch = UserDefaults(suiteName: "me.yudaotor.lyrimuse.selftest-display-cycle-\(getpid())")!
+            expectEqual(scratch.object(forKey: DisplayCycleLimit.assertKey) == nil, true, "显示周期上限: 登记前没有这一项")
+            DisplayCycleLimit.registerNonAsserting(in: scratch)
+            expectEqual(scratch.object(forKey: DisplayCycleLimit.assertKey) as? Bool, false, "显示周期上限: 登记成不崩(AppKit 读的就是这个键)")
+            expectEqual(DisplayCycleLimit.assertKey, "NSWindowAssertWhenDisplayCycleLimitReached", "显示周期上限: 键名照 AppKit 原样")
         }
 
         let collectorHeader = """

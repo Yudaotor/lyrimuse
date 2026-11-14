@@ -9,6 +9,7 @@ import OSLog
 @main
 enum AppEntry {
     static func main() {
+        DisplayCycleLimit.registerNonAsserting()
         SwallowedExceptionGuard.install()
         StorageMigrationRunner.runAtLaunch()
         LyrimuseApp.main()

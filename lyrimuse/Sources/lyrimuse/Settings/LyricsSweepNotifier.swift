@@ -31,18 +31,35 @@ final class LyricsSweepNotifier {
     private var lastWasFullOffline = false
 
     private var timer: Timer?
+    /// 后台正在读状态文件;上一次还没读完(磁盘卡住)就不再派新的。
+    private var reading = false
 
-    /// 5 秒一拍:读的是按 mtime 缓存的状态文件,没变时就是一次 stat。
+    /// 5 秒一拍:读的是按 mtime 缓存的状态文件,没变时就是一次 stat。读文件放到后台:主线程上一次 stat 遇上磁盘卡住
+    /// 就是几秒的卡顿(14 章决策 194)。
     func start() {
         guard timer == nil else { return }
         timer = Timer.scheduledTimer(withTimeInterval: 5, repeats: true) { [weak self] _ in
-            Task { @MainActor in self?.tick() }
+            Task { @MainActor in self?.poll() }
         }
         timer?.tolerance = 1
     }
 
-    private func tick() {
-        guard let info = LyricsFillSweep.current else { return }
+    private func poll() {
+        guard !reading else { return }
+        reading = true
+        Task.detached(priority: .utility) { [weak self] in
+            let info = LyricsFillSweep.current
+            await self?.finishRead(info)
+        }
+    }
+
+    private func finishRead(_ info: LyricsFillSweep.Info?) {
+        reading = false
+        tick(info)
+    }
+
+    private func tick(_ info: LyricsFillSweep.Info?) {
+        guard let info else { return }
         if info.running {
             runningStartedAt = info.startedAt
             return

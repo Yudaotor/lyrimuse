@@ -58,6 +58,10 @@ public struct CrashReportSummary: Equatable {
     /// `objc_exception_throw`),最多 `maxFrames` 帧。没有异常的崩溃为空。
     public var exceptionFrames: [Frame] = []
     public var totalExceptionFrames = 0
+    /// 异常调用栈里排在 `maxFrames` 之后的本进程帧(镜像名等于进程名),从抛异常处往外数最近的 `maxLaterOwnFrames` 个。
+    /// 布局回调这类异常前面几十帧全是系统框架,自家帧都在这里;遥测拿它补进上报的那几帧(`TelemetryCrash`)。
+    public var exceptionLaterOwnFrames: [Frame] = []
+    public static let maxLaterOwnFrames = 4
     /// 哪一段没解出来("header unreadable" / "body unreadable"),写进报告让读的人知道信息不全。
     public var parseNotes: [String] = []
 
@@ -135,6 +139,10 @@ public struct CrashReportSummary: Equatable {
                 let thrown = exceptionThrowSite(rawFrames)
                 summary.totalExceptionFrames = thrown.count
                 summary.exceptionFrames = thrown.prefix(maxFrames).map { frame($0, images: images) }
+                if let process = summary.processName {
+                    summary.exceptionLaterOwnFrames = Array(thrown.dropFirst(maxFrames).lazy.map { frame($0, images: images) }
+                        .filter { $0.imageName == process }.prefix(maxLaterOwnFrames))
+                }
             }
         }
         return summary

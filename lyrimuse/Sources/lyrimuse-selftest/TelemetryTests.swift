@@ -105,6 +105,18 @@ func runTelemetryTests() {
         expectEqual(withException.exceptionFrames.count, Telemetry.maxCrashFrames, "异常调用栈: 截到上限")
         expectEqual(withException.exceptionFrames.first, TelemetryCrash.Frame(image: "<path>", symbol: "e0", offset: 0),
                     "异常调用栈: 镜像脱敏,不带源码文件")
+        var deep = thrown
+        deep.exceptionLaterOwnFrames = [CrashReportSummary.Frame(imageName: "lyrimuse", symbol: nil, imageOffset: 777),
+                                        CrashReportSummary.Frame(imageName: "lyrimuse", symbol: nil, imageOffset: 888)]
+        let deepCrash = TelemetryCrash(summary: deep, reportID: id, executableName: "lyrimuse", installID: "i", env: env)
+        expectEqual(deepCrash.exceptionFrames.map { $0.symbol ?? "lyrimuse+\($0.offset ?? -1)" },
+                    (0..<10).map { "e\($0)" } + ["lyrimuse+777", "lyrimuse+888"],
+                    "异常调用栈: 前面全是系统帧时,末尾换成后面最近的自家帧,总数不变")
+        var ownInHead = deep
+        ownInHead.exceptionFrames[3] = CrashReportSummary.Frame(imageName: "lyrimuse", symbol: nil, imageOffset: 5)
+        expectEqual(TelemetryCrash(summary: ownInHead, reportID: id, executableName: "lyrimuse", installID: "i", env: env).exceptionFrames
+                        .map(\.offset), Array(ownInHead.exceptionFrames.prefix(Telemetry.maxCrashFrames)).map(\.imageOffset),
+                    "异常调用栈: 前面已经有自家帧就照原样截")
         let exceptionJSON = (try? JSONEncoder().encode(withException)).flatMap { String(data: $0, encoding: .utf8) } ?? ""
         expectEqual(exceptionJSON.contains("\"exception_frames\""), true, "异常调用栈: 键名 exception_frames")
         expectEqual(exceptionJSON.contains("alice") || exceptionJSON.contains("Bar.swift"), false, "异常调用栈: 不带路径、源码文件")
@@ -252,6 +264,44 @@ func runTelemetryTests() {
         expectEqual(stack.map(\.image), ["libsystem_kernel.dylib", "libsystem_pthread.dylib", "lyrimuse", "lyrimuse", "lyrimuse", "lyrimuse"],
                     "采样: 镜像名")
         expectEqual(H.mainThreadStack(fromSample: "no call graph here", executable: "lyrimuse"), [], "采样: 认不出格式时返回空")
+        let nested = """
+        Call graph:
+            2000 Thread_1   DispatchQueue_1: com.apple.main-thread  (serial)
+            + 2000 start  (in dyld) + 6688  [0x18204be88]
+            +   2000 ???  (in lyrimuse)  load address 0x10022c000 + 0x8f9648  [0x100b25648]
+            +     2000 NSApplicationMain  (in AppKit) + 880  [0x186a5a000]
+            +       2000 -[NSApplication run]  (in AppKit) + 396  [0x186a8290c]
+            +         2000 -[NSApplication(NSEventRouting) nextEventMatchingMask:untilDate:inMode:dequeue:]  (in AppKit) + 292  [0x18730726c]
+            +           2000 _DPSNextEvent  (in AppKit) + 588  [0x187300000]
+            +             2000 __CFRunLoopRun  (in CoreFoundation) + 1820  [0x1824e0000]
+            +               2000 __CFRUNLOOP_IS_SERVICING_THE_MAIN_DISPATCH_QUEUE__  (in CoreFoundation) + 16  [0x1824e1000]
+            +                 2000 _dispatch_main_queue_callback_4CF  (in libdispatch.dylib) + 44  [0x1821e0000]
+            +                   2000 ???  (in SwiftUI)  load address 0x1c0000000 + 0x123456  [0x1c0123456]
+            +                     2000 -[NSMenu popUpMenuPositioningItem:atLocation:inView:appearance:]  (in AppKit) + 700  [0x186b00000]
+            +                       2000 _NSMenuTrackingLoop  (in AppKit) + 120  [0x186b10000]
+            +                         2000 _DPSNextEvent  (in AppKit) + 588  [0x187300000]
+            +                           2000 __CFRunLoopRun  (in CoreFoundation) + 1820  [0x1824e0000]
+            +                             2000 __CFRunLoopServiceMachPort  (in CoreFoundation) + 160  [0x1824e2000]
+            +                               2000 mach_msg  (in libsystem_kernel.dylib) + 24  [0x182366000]
+            +                                 2000 mach_msg_overwrite  (in libsystem_kernel.dylib) + 484  [0x182366100]
+            +                                   2000 mach_msg2_internal  (in libsystem_kernel.dylib) + 76  [0x182366200]
+            +                                     2000 mach_msg2_trap  (in libsystem_kernel.dylib) + 8  [0x182365c34]
+        """
+        expectEqual(H.mainThreadStack(fromSample: nested, executable: "lyrimuse").map { $0.symbol ?? "\($0.image ?? "")+\($0.offset ?? -1)" },
+                    ["mach_msg2_trap", "mach_msg2_internal", "mach_msg_overwrite",
+                     "_NSMenuTrackingLoop", "_dispatch_main_queue_callback_4CF", "lyrimuse+9410120"],
+                    "采样: 自家帧只剩入口时,空名额给嵌套循环的线索帧(每类最深一帧:弹菜单、在主队列回调里),run loop 等事件那几层不占名额")
+        let idle = nested.split(separator: "\n").filter { line in
+            !["SERVICING", "_dispatch_main", "SwiftUI", "NSMenu", "_NSMenuTracking"].contains { line.contains($0) }
+        }.joined(separator: "\n")
+        expectEqual(H.mainThreadStack(fromSample: idle, executable: "lyrimuse").map { $0.symbol ?? "\($0.image ?? "")+\($0.offset ?? -1)" },
+                    ["mach_msg2_trap", "mach_msg2_internal", "mach_msg_overwrite", "lyrimuse+9410120"],
+                    "采样: 主线程就是在等事件时只剩入口,不硬凑系统帧")
+        let viaQueue = nested.replacingOccurrences(of: "-[NSMenu popUpMenuPositioningItem:atLocation:inView:appearance:]", with: "-[NSAlert runModal]")
+            .replacingOccurrences(of: "_NSMenuTrackingLoop", with: "-[NSApplication _doModalLoop:peek:]")
+        expectEqual(H.mainThreadStack(fromSample: viaQueue, executable: "lyrimuse").dropFirst(3).compactMap(\.symbol),
+                    ["-[NSApplication _doModalLoop:peek:]", "_dispatch_main_queue_callback_4CF"],
+                    "采样: 弹窗的模态循环同样算线索帧,同一类只占一个名额")
         let noMain = sample.replacingOccurrences(of: "com.apple.main-thread", with: "x")
         expectEqual(H.mainThreadStack(fromSample: noMain, executable: "lyrimuse").first?.symbol, "__psynch_mutexwait",
                     "采样: 没标主线程时取第一个线程")
@@ -378,6 +428,52 @@ func runTelemetryTests() {
         }, true, "逐字歌词格式: 每种格式都发得出去")
         let formatsJSON = (try? JSONEncoder().encode(formats)).flatMap { String(data: $0, encoding: .utf8) } ?? ""
         expectEqual(formatsJSON.contains(#""lyrics_word_formats":["ttml","enhanced-lrc","yrc"]"#), true, "负载: 逐字歌词格式")
+    }
+
+    do {
+        print("\n== 遥测:全默认设置用的内存偏好 ==")
+        // 同一串读写分别对真的临时域和内存偏好做一遍,按类型取回来的值要一样。
+        let suite = "me.yudaotor.lyrimuse.selftest-in-memory-\(getpid())-\(UUID().uuidString)"
+        let real = UserDefaults(suiteName: suite)!
+        let prefsDir = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Library/Preferences")
+        defer {
+            // 清域只清内容、留下一个空 plist,同步之后连文件一起删。
+            real.removePersistentDomain(forName: suite)
+            CFPreferencesAppSynchronize(suite as CFString)
+            try? FileManager.default.removeItem(at: prefsDir.appendingPathComponent(suite + ".plist"))
+        }
+        let memory = InMemoryUserDefaults.make()!
+        for d in [real, memory] {
+            d.register(defaults: ["reg": 7, "over": "registered"])
+            d.set(true, forKey: "b"); d.set(5, forKey: "i"); d.set(2.5, forKey: "d")
+            d.set("hello", forKey: "s"); d.set("12", forKey: "numStr"); d.set(["x", "y"], forKey: "arr"); d.set(["x", 1] as [Any], forKey: "mixed")
+            d.set(Data([1, 2]), forKey: "data"); d.set(["k": "v"], forKey: "dict"); d.set("mine", forKey: "over")
+            d.set("gone", forKey: "rm"); d.removeObject(forKey: "rm"); d.set(nil, forKey: "nil")
+        }
+        for d in [real, memory] {
+            let tag = d === memory ? "内存" : "真域"
+            expectEqual(d.bool(forKey: "b"), true, "内存偏好(\(tag)): bool")
+            expectEqual(d.object(forKey: "i") as? Double, 5, "内存偏好(\(tag)): 存整数按 Double 取得到")
+            expectEqual(d.object(forKey: "b") as? Bool, true, "内存偏好(\(tag)): object as? Bool")
+            expectEqual(d.integer(forKey: "d"), 2, "内存偏好(\(tag)): integer 截断")
+            expectEqual(d.string(forKey: "s"), "hello", "内存偏好(\(tag)): string")
+            expectEqual(d.integer(forKey: "numStr"), 12, "内存偏好(\(tag)): 数字字符串按整数取")
+            expectEqual(d.string(forKey: "i"), "5", "内存偏好(\(tag)): 数按字符串取")
+            expectEqual(d.stringArray(forKey: "arr"), ["x", "y"], "内存偏好(\(tag)): stringArray")
+            expectEqual(d.stringArray(forKey: "mixed") == nil, true, "内存偏好(\(tag)): 混了别的类型的数组不算字符串数组")
+            expectEqual(d.array(forKey: "mixed")?.count, 2, "内存偏好(\(tag)): array")
+            expectEqual(d.data(forKey: "data"), Data([1, 2]), "内存偏好(\(tag)): data")
+            expectEqual(d.dictionary(forKey: "dict") as? [String: String], ["k": "v"], "内存偏好(\(tag)): dictionary")
+            expectEqual(d.integer(forKey: "reg"), 7, "内存偏好(\(tag)): 注册域的值")
+            expectEqual(d.string(forKey: "over"), "mine", "内存偏好(\(tag)): 写过的值压过注册域")
+            expectEqual(d.object(forKey: "rm") == nil && d.object(forKey: "nil") == nil, true, "内存偏好(\(tag)): 删掉 / 写 nil")
+            expectEqual(d.bool(forKey: "missing") || d.integer(forKey: "missing") != 0 || d.string(forKey: "missing") != nil, false,
+                        "内存偏好(\(tag)): 没有的键取默认零值")
+        }
+        let leaked = ((try? FileManager.default.contentsOfDirectory(atPath: prefsDir.path)) ?? [])
+            .filter { $0.hasPrefix(LyrimuseIdentity.bundleIdentifier + ".in-memory-") }
+        expectEqual(leaked, [], "内存偏好: 不建偏好文件")
+        expectEqual(UserDefaults.standard.object(forKey: "numStr") == nil, true, "内存偏好: 不碰标准域")
     }
 
     do {
@@ -561,6 +657,9 @@ func runTelemetryTests() {
                      "AppSettings.telemetryDefaultSettingValues()", "PlayerHealthMonitor.telemetryPermissionGaps()",
                      "LyricsWindowSession.shouldReopenAtLaunch, \"lyrics-window\""].filter { !sourceHas(features, $0) }, [],
                     "接线: 功能快照取安装渠道、改过的设置、缺的权限、歌词窗口开着没有")
+        let defaultsBody = sourceBody("static func telemetryDefaultSettingValues()", in: sourceText("lyrimuse/Settings/AppSettings+Telemetry.swift"))
+        expectEqual(sourceHas(defaultsBody, "InMemoryUserDefaults.make()") && !sourceHas(defaultsBody, "UserDefaults(suiteName:"), true,
+                    "接线: 全默认设置用内存偏好造,不在主线程上跟 cfprefsd 建域 / 清域")
         let offsets = sourceText("LyrimuseCore/Lyrics/LyricsOffsetStore.swift")
         expectEqual(["public func nudgeRadio(by", "public func nudge(by", "public func reset(forKey", "public func setOffset(_ ms"]
             .filter { !sourceHas(sourceBody($0, in: offsets), "TelemetryActivity.shared.noteAction(.offsetAdjusted)") }, [],

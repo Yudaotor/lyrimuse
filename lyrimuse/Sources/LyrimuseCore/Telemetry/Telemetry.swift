@@ -456,6 +456,8 @@ public struct TelemetryCrash: Codable, Equatable, Sendable {
     public var terminationReasons: [String]
     public var frames: [Frame]
     /// 抛出未捕获异常时的调用栈(`CrashReportSummary.exceptionFrames`),同样截到 `Telemetry.maxCrashFrames`;没有就是空。
+    /// 前 `maxCrashFrames` 帧里一个自家帧都没有、后面有时,末尾几帧换成后面最近的那几个自家帧(看得出是谁的代码引起的),
+    /// 接收端按自家帧归并。
     public var exceptionFrames: [Frame]
     public var env: TelemetryEnvironment
 
@@ -493,7 +495,13 @@ public struct TelemetryCrash: Codable, Equatable, Sendable {
             }
         }
         frames = payload(summary.frames)
-        exceptionFrames = payload(summary.exceptionFrames)
+        let isOwn = { (frame: CrashReportSummary.Frame) in frame.imageName == summary.processName }
+        let head = summary.exceptionFrames.prefix(Telemetry.maxCrashFrames)
+        let laterOwn = (summary.exceptionFrames.dropFirst(Telemetry.maxCrashFrames).filter(isOwn)
+            + summary.exceptionLaterOwnFrames).prefix(CrashReportSummary.maxLaterOwnFrames)
+        exceptionFrames = head.contains(where: isOwn) || laterOwn.isEmpty
+            ? payload(summary.exceptionFrames)
+            : payload(Array(head.prefix(Telemetry.maxCrashFrames - laterOwn.count)) + laterOwn)
         self.env = env
     }
 }

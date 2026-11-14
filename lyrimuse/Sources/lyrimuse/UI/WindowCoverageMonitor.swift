@@ -9,7 +9,8 @@ import LyrimuseCore
 ///
 /// 什么时候重算:窗口在屏上时每 2 秒一次(别的 App 挪窗口没有通知可听;收起后停表);另外切换前台 App、这扇窗获得 / 失去焦点、
 /// 移动 / 缩放时立刻重算 —— 最常见的「切回来看歌词」不用等那 2 秒。一次重算是一次
-/// `CGWindowListCopyWindowInfo(.optionOnScreenAboveWindow)` + 4pt 网格采样,毫秒级。
+/// `CGWindowListCopyWindowInfo(.optionOnScreenAboveWindow)` + 4pt 网格采样,平时毫秒级;这两次窗口清单是跟 WindowServer
+/// 的同步往返,放在后台队列上问,WindowServer 卡住时卡的是那条队列、不是主线程(14 章决策 194)。
 @MainActor
 final class WindowCoverageMonitor {
     private weak var window: NSWindow?
@@ -93,21 +94,60 @@ final class WindowCoverageMonitor {
         workspaceObserver = nil
     }
 
+    private static let windowServerQueue = DispatchQueue(label: "me.yudaotor.lyrimuse.window-coverage", qos: .utility)
+    /// 后台正在问 WindowServer;这期间又要重算的记一笔,问完再算一次(不堆积请求)。
+    private var asking = false
+    private var askAgain = false
+
     private func recompute() {
         guard let window else { return }
-        let covered = Self.computeCovered(window)
+        if let covered = Self.quickVerdict(window) {
+            apply(covered)
+            return
+        }
+        guard !asking else {
+            askAgain = true
+            return
+        }
+        asking = true
+        let id = CGWindowID(window.windowNumber)
+        Self.windowServerQueue.async { [weak self] in
+            let covered = Self.coveredByWindowsAbove(id)
+            DispatchQueue.main.async {
+                MainActor.assumeIsolated { self?.finishAsking(covered) }
+            }
+        }
+    }
+
+    private func finishAsking(_ covered: Bool) {
+        asking = false
+        guard !stopped else { return }
+        guard !askAgain else {
+            askAgain = false
+            recompute()
+            return
+        }
+        apply(covered)
+    }
+
+    private func apply(_ covered: Bool) {
         guard covered != isCovered else { return }
         isCovered = covered
         onChange(covered)
     }
 
-    private static func computeCovered(_ window: NSWindow) -> Bool {
+    /// 不用问 WindowServer 就定得了的情况;nil = 要看上面压着哪些窗口。
+    private static func quickVerdict(_ window: NSWindow) -> Bool? {
         // 没上屏 / 最小化 / 系统判为被遮住时直接算盖住:窗口一上屏就被整扇盖住时系统不发遮挡变化通知,
         // 宿主手里的遮挡初值会一直停在「可见」,靠这里每 2 秒的重算纠正(07 章决策 103)。
         guard window.isVisible, !window.isMiniaturized, window.occlusionState.contains(.visible) else { return true }
         // 前台正是它自己时上面没有别的窗口。
         guard !window.isKeyWindow else { return false }
-        let id = CGWindowID(window.windowNumber)
+        return nil
+    }
+
+    /// 在后台队列上调:窗口清单是跟 WindowServer 的同步往返。
+    private nonisolated static func coveredByWindowsAbove(_ id: CGWindowID) -> Bool {
         guard let selfInfo = (CGWindowListCopyWindowInfo([.optionIncludingWindow], id) as? [[String: Any]])?.first,
               let target = bounds(selfInfo),
               let above = CGWindowListCopyWindowInfo([.optionOnScreenAboveWindow], id) as? [[String: Any]]
@@ -121,7 +161,7 @@ final class WindowCoverageMonitor {
         return WindowCoverage.isEffectivelyHidden(target: target, covers: covers)
     }
 
-    private static func bounds(_ info: [String: Any]) -> CGRect? {
+    private nonisolated static func bounds(_ info: [String: Any]) -> CGRect? {
         guard let dict = info[kCGWindowBounds as String] as? NSDictionary,
               let r = CGRect(dictionaryRepresentation: dict) else { return nil }
         return r

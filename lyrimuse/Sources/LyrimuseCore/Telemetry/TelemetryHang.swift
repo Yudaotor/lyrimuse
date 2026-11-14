@@ -41,7 +41,7 @@ public struct TelemetryHang: Codable, Equatable, Sendable {
     /// 前面几个是 SwiftUI 场景 id(窗口标识里含它,设置窗口的标识里含 `Settings`);`menubar-panel` 是菜单栏面板。
     public static let windowTags = ["settings", "lyrics-manager", "lyrics-window", "lyrics-quick-search", "lyrics-share",
                                     "whats-new", "onboarding", "menubar-panel"]
-    /// 栈里最多几帧:最深的 `leafFrames` 帧 + 最深的 `ownFrames` 个自家帧。
+    /// 栈里最多几帧:最深的 `leafFrames` 帧 + `ownFrames` 个说明「谁在那儿等」的帧(自家帧优先,不够时补系统帧)。接收端最多收 6 帧。
     public static let leafFrames = 3, ownFrames = 3
     public static let symbolLimit = 200
 
@@ -80,8 +80,11 @@ public struct TelemetryHang: Codable, Equatable, Sendable {
     }
 
     /// 从 `/usr/bin/sample` 的输出里取主线程最重的那条调用路径:最深的 `leafFrames` 帧,再接路径上最深的 `ownFrames` 个
-    /// `executable` 自己的帧(前面已经取到的不重复),都按从深到浅排。发版包剥了符号,自家帧只有偏移(跟崩溃摘要的
-    /// `imageOffset` 同一口径,用发版符号包能还原);有符号的(本机构建)带符号。找不到主线程时返回空。
+    /// `executable` 自己的帧(前面已经取到的不重复),都按从深到浅排。自家帧不够 `ownFrames` 个时(常见的是只剩进程入口,
+    /// 主线程停在系统代码里的 `mach_msg`),空出来的名额给路径上的系统帧:先给 `nestingMarkers`(嵌套的事件循环、主队列回调、
+    /// 弹菜单这类,说明为什么主队列上的探测任务等不到),再给最深的、不属于 run loop 等事件那几层(`runLoopPlumbing`)的帧。
+    /// 发版包剥了符号,自家帧只有偏移(跟崩溃摘要的 `imageOffset` 同一口径,用发版符号包能还原);有符号的(本机构建)带符号。
+    /// 找不到主线程时返回空。见 14 章决策 194。
     public static func mainThreadStack(fromSample text: String, executable: String) -> [TelemetryCrash.Frame] {
         let lines = text.split(separator: "\n", omittingEmptySubsequences: false)
         guard let graph = lines.firstIndex(where: { $0.hasPrefix("Call graph:") }) else { return [] }
@@ -97,10 +100,46 @@ public struct TelemetryHang: Codable, Equatable, Sendable {
             i += 1
         }
         let deepestFirst = Array(path.reversed())
-        var picked = Array(deepestFirst.prefix(leafFrames))
-        let own = deepestFirst.dropFirst(leafFrames).filter { $0.image == executable }.prefix(ownFrames)
-        picked.append(contentsOf: own)
-        return picked
+        let rest = Array(deepestFirst.indices.dropFirst(leafFrames))
+        var chosen = Array(rest.filter { deepestFirst[$0].image == executable }.prefix(ownFrames))
+        let spare = ownFrames - chosen.count
+        if spare > 0 {
+            let system = rest.filter { deepestFirst[$0].image != executable && !isRunLoopPlumbing(deepestFirst[$0]) }
+            var seenKinds = Set<Int>()
+            let markers = system.filter { index in
+                guard let kind = nestingKind(deepestFirst[index]) else { return false }
+                return seenKinds.insert(kind).inserted
+            }
+            let others = system.filter { nestingKind(deepestFirst[$0]) == nil }
+            chosen.append(contentsOf: (markers + others).prefix(spare))
+        }
+        return Array(deepestFirst.prefix(leafFrames)) + chosen.sorted().map { deepestFirst[$0] }
+    }
+
+    /// 主线程在等事件时每次都有的那几层(加上进程入口):空名额不给它们。
+    static let runLoopPlumbing = ["mach_msg", "__CFRunLoop", "CFRunLoopRunSpecific", "_CFRunLoopRunSpecific", "RunCurrentEventLoopInMode",
+                                  "ReceiveNextEventCommon", "_BlockUntilNextEventMatchingListInMode",
+                                  "_DPSBlockUntilNextEventMatchingListInMode", "_DPSNextEvent",
+                                  "-[NSApplication(NSEventRouting) _nextEventMatchingEventMask:",
+                                  "-[NSApplication(NSEventRouting) nextEventMatchingMask:", "-[NSApplication run]",
+                                  "NSApplicationMain", "start"]
+    /// 说明主线程为什么停在一层嵌套里的帧,按类分组,每类只取最深的一帧:主队列回调里起的嵌套循环会把之后投到主队列的任务
+    /// (含看门狗的探测)全挡住,所以「在主队列回调里」单独一类。
+    static let nestingMarkers: [[String]] = [["_dispatch_main_queue", "SERVICING_THE_MAIN_DISPATCH_QUEUE"],
+                                             ["runModal", "ModalSession", "_doModalLoop"],
+                                             ["popUp", "Menu", "trackWithEvent"],
+                                             ["sendEvent:"], ["AESend"], ["TSM", "IMK"]]
+
+    static func isRunLoopPlumbing(_ frame: TelemetryCrash.Frame) -> Bool {
+        guard let symbol = frame.symbol else { return false }
+        return symbol == "start" || runLoopPlumbing.contains { $0 != "start" && symbol.hasPrefix($0) }
+    }
+
+    /// 属于 `nestingMarkers` 的第几类;Sparkle 的帧另算一类。
+    static func nestingKind(_ frame: TelemetryCrash.Frame) -> Int? {
+        if frame.image == "Sparkle" { return nestingMarkers.count }
+        guard let symbol = frame.symbol else { return nil }
+        return nestingMarkers.firstIndex { group in group.contains { symbol.contains($0) } }
     }
 
     /// 行里样本数开始的那一列(`+ ! : |` 和空格是缩进);不是调用图的行返回 nil。

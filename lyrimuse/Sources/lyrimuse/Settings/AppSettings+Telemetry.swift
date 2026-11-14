@@ -239,12 +239,10 @@ extension AppSettings {
         return Dictionary(values.map { ($0.0, Telemetry.settingFingerprint($0.1)) }, uniquingKeysWith: { a, _ in a })
     }
 
-    /// 全默认的那一份:用一个空的临时 UserDefaults 域造一份设置,读完把这个域清掉。构造时的迁移只写进这个临时域。
+    /// 全默认的那一份:拿一个只活在内存里的 `InMemoryUserDefaults` 造一份设置,构造时的迁移只写进它。别换回临时的
+    /// `UserDefaults(suiteName:)`:建域、读写、清域都要跟 cfprefsd 同步往返,cfprefsd 忙时主线程一卡几十秒(14 章决策 194)。
     @MainActor static func telemetryDefaultSettingValues() -> [String: String] {
-        let suite = LyrimuseIdentity.bundleIdentifier + ".telemetry-defaults"
-        guard let scratch = UserDefaults(suiteName: suite) else { return [:] }
-        scratch.removePersistentDomain(forName: suite)
-        defer { scratch.removePersistentDomain(forName: suite) }
+        guard let scratch = InMemoryUserDefaults.make() else { return [:] }
         return AppSettings(defaults: scratch).telemetrySettingValues()
     }
 }

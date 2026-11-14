@@ -1656,6 +1656,12 @@ func runLyricsManagerTests() {
                     "收尾通知: 还在跑不弹")
         expectEqual(S.finishNotice(finished(done: 0, filled: 0, skipped: nil), startedSince: 1_000, sawRunning: false),
                     .fillDone(done: 0, filled: 0, missed: 0, skipped: 0), "收尾通知: 一首候选都没有也弹(说没有需要补搜的)")
+        let notifier = (try? String(contentsOf: URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("lyrimuse/Settings/LyricsSweepNotifier.swift"), encoding: .utf8)) ?? ""
+        expectEqual(sourceHas(sourceBody("private func poll()", in: notifier), "Task.detached(priority: .utility)")
+                    && sourceHas(sourceBody("private func poll()", in: notifier), "LyricsFillSweep.current")
+                    && !sourceHas(sourceBody("private func tick(", in: notifier), "LyricsFillSweep.current"), true,
+                    "收尾通知(契约): 状态文件在后台读,主线程上不 stat")
     }
 
     // ---- 全量重新扫库(LyricsFullScan)的状态文件 ----

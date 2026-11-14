@@ -108,6 +108,11 @@ func runSettingsAuditContracts() {
     expectEqual(sourceHas(sourceBody("private func tick()", in: coverage), "guard let window, window.isVisible else {")
                 && sourceHas(coverage, "self?.resumeTimerIfNeeded()"), true,
                 "遮挡检测: 窗口收起就停 2 秒那个计时器,再露面接上")
+    let recomputeBody = sourceBody("private func recompute()", in: coverage)
+    expectEqual(sourceHas(recomputeBody, "Self.windowServerQueue.async") && !sourceHas(recomputeBody, "CGWindowListCopyWindowInfo")
+                && sourceHas(sourceBody("private nonisolated static func coveredByWindowsAbove(_ id: CGWindowID) -> Bool", in: coverage),
+                             "CGWindowListCopyWindowInfo([.optionOnScreenAboveWindow], id)"), true,
+                "遮挡检测: 窗口清单在后台队列上问 WindowServer,主线程不同步等")
 
     // ---- 全局件 ----
     let recorder = app("Settings/ShortcutRecorder.swift")
