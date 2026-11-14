@@ -1023,7 +1023,8 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
     var debugState: [String: Any] {
         ["passThrough": passThrough?.isActive ?? false, "ignoresMouseEvents": window?.ignoresMouseEvents ?? false,
          "managesHitTesting": passThrough?.managesHitTesting ?? false,
-         "expanded": isExpanded, "passThroughBandTop": passThroughBandTop.map { $0 as Any } ?? NSNull()]
+         "expanded": isExpanded, "passThroughBandTop": passThroughBandTop.map { $0 as Any } ?? NSNull(),
+         "cardHovered": cardHovered, "simulatedHover": simulatedHoverPointer != nil]
     }
 
     /// 指针在卡片或简介浮框上时光标钉成箭头。App 在后台,不开 `BackgroundCursor` 时 `NSCursor.set()` 不生效,
