@@ -10,6 +10,8 @@ public final class TelemetryActivity: @unchecked Sendable {
     public static let maxStoredDays = 3
     /// 每天最多记几次卡顿的概况(次数照记);心跳带最多 `maxStoredDays` 天,负载要在 Worker 的 MAX_BODY 以内。
     public static let maxHangDetailsPerDay = 3
+    /// 每天最多记几种窗口布局超限(按窗口 + 类名 + pass 分;同一种只加次数)。
+    public static let maxLayoutLimitsPerDay = 5
 
     private let defaults: UserDefaults
     private let key: String
@@ -96,18 +98,38 @@ public final class TelemetryActivity: @unchecked Sendable {
     }
 
     /// 主线程卡住一次。`detail` 给了且当天还没记满,记下概况(播放器填最近一次放歌的那个),之后的 `finishHang` /
-    /// `attachHangStack` 补到这一条。
-    public func noteHang(_ detail: TelemetryHang? = nil, now: Date = Date()) {
+    /// `attachHangStack` 补到这一条。返回这一次有没有占到当天的概况名额(占到了,看门狗就该采栈)。
+    @discardableResult
+    public func noteHang(_ detail: TelemetryHang? = nil, now: Date = Date()) -> Bool {
         let day = Telemetry.day(now)
-        lock.withLock {
-            guard recording else { return }
+        return lock.withLock {
+            guard recording else { return false }
             openHang = nil
+            var tookSlot = false
             update(day: day) { d in
                 d.hangs += 1
                 guard var detail, d.hangDetails.count < Self.maxHangDetailsPerDay else { return }
                 if detail.player == nil { detail.player = lastPlayer?.tag }
                 d.hangDetails.append(detail)
                 openHang = (day, d.hangDetails.count - 1)
+                tookSlot = true
+            }
+            return tookSlot
+        }
+    }
+
+    /// 窗口布局轮数超限被接住一次(`DisplayCycleLimit`)。同一种(窗口、类名、pass 都一样)只加次数,
+    /// 当天已经记满 `maxLayoutLimitsPerDay` 种时新的一种不记。
+    public func noteLayoutLimit(window: String?, windowClass: String, pass: String, now: Date = Date()) {
+        let day = Telemetry.day(now)
+        lock.withLock {
+            guard recording else { return }
+            update(day: day) { d in
+                if let i = d.layoutLimits.firstIndex(where: { $0.window == window && $0.windowClass == windowClass && $0.pass == pass }) {
+                    d.layoutLimits[i].count = min(d.layoutLimits[i].count + 1, 10_000)
+                } else if d.layoutLimits.count < Self.maxLayoutLimitsPerDay {
+                    d.layoutLimits.append(TelemetryLayoutLimit(window: window, windowClass: windowClass, pass: pass, count: 1))
+                }
             }
         }
     }

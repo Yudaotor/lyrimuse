@@ -29,6 +29,7 @@ public enum SwallowedExceptionGuard {
         previousPreprocessor = objc_setExceptionPreprocessor { thrown in
             if pthread_main_np() != 0, let exception = thrown as? NSException {
                 SwallowedExceptionGuard.lastMainThreadException = exception
+                DisplayCycleLimit.noteThrown(reason: exception.reason)
             }
             return SwallowedExceptionGuard.previousPreprocessor.map { $0(thrown) } ?? thrown
         }

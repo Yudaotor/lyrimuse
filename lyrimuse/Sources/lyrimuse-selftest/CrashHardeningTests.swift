@@ -115,4 +115,103 @@ func runCrashHardeningTests() {
                 "私有 CAFilter:先问认不认这个类方法")
     expectEqual(sourceHas(source("lyrimuse/MenuBar/MenuBarSceneActions.swift"), "host.sizingOptions = []"), true,
                 "隐藏锚点窗口:不按内容改尺寸")
+
+    print("\n== 从磁盘映像 / 临时位置运行:判定、脚本、搬运 ==")
+    do {
+        typealias L = AppLocation
+        expectEqual(L.classify(bundlePath: "/private/var/folders/x/T/AppTranslocation/ABC/d/Lyrimuse.app", volumeIsReadOnly: true,
+                               volumePath: "/", diskImageMountPoints: []), .translocated, "位置: App Translocation 路径")
+        expectEqual(L.classify(bundlePath: "/Volumes/Lyrimuse/Lyrimuse.app", volumeIsReadOnly: true, volumePath: "/Volumes/Lyrimuse/",
+                               diskImageMountPoints: ["/Volumes/Other", "/Volumes/Lyrimuse"]), .diskImage(mountPoint: "/Volumes/Lyrimuse"),
+                    "位置: 只读卷又是磁盘映像的挂载点(末尾斜杠不影响)")
+        expectEqual(L.classify(bundlePath: "/Volumes/Share/Lyrimuse.app", volumeIsReadOnly: true, volumePath: "/Volumes/Share",
+                               diskImageMountPoints: ["/Volumes/Lyrimuse"]), .normal, "位置: 只读但不是磁盘映像(网络卷)不算")
+        expectEqual(L.classify(bundlePath: "/Volumes/RW/Lyrimuse.app", volumeIsReadOnly: false, volumePath: "/Volumes/RW",
+                               diskImageMountPoints: ["/Volumes/RW"]), .normal, "位置: 可写的映像(自己挂的读写映像)不算")
+        expectEqual(L.classify(bundlePath: "/Applications/Lyrimuse.app", volumeIsReadOnly: false, volumePath: "/System/Volumes/Data",
+                               diskImageMountPoints: []), .normal, "位置: 应用程序文件夹")
+        expectEqual(L.shouldPrompt(.normal, declinedVersion: nil, currentVersion: "1.14.0"), false, "提示: 位置没问题不问")
+        expectEqual(L.shouldPrompt(.translocated, declinedVersion: nil, currentVersion: "1.14.0"), true, "提示: 没说过不了就问")
+        expectEqual(L.shouldPrompt(.diskImage(mountPoint: "/Volumes/L"), declinedVersion: "1.14.0", currentVersion: "1.14.0"), false,
+                    "提示: 这一版说过不了就不再问")
+        expectEqual(L.shouldPrompt(.diskImage(mountPoint: "/Volumes/L"), declinedVersion: "1.13.0", currentVersion: "1.14.0"), true,
+                    "提示: 换了新版本再问一次")
+        let info: [String: Any] = ["images": [
+            ["image-path": "/Users/u/Downloads/Lyrimuse.dmg", "system-entities": [["dev-entry": "/dev/disk9"],
+                                                                                 ["dev-entry": "/dev/disk9s1", "mount-point": "/Volumes/Lyrimuse"]]],
+            ["image-path": "/x.dmg", "system-entities": [["mount-point": "/Volumes/X Y"]]],
+        ]]
+        let plist = (try? PropertyListSerialization.data(fromPropertyList: info, format: .xml, options: 0)) ?? Data()
+        expectEqual(L.diskImageMountPoints(hdiutilInfoPlist: plist), ["/Volumes/Lyrimuse", "/Volumes/X Y"], "hdiutil info: 取各映像的挂载点")
+        expectEqual(L.diskImageMountPoints(hdiutilInfoPlist: Data("not a plist".utf8)), [], "hdiutil info: 读不懂就是空")
+        expectEqual(L.shellQuote("it's a b"), "'it'\\''s a b'", "shell 引号: 单引号拆开转义")
+        expectEqual(L.appleScriptLiteral("a\"b\\c"), "\"a\\\"b\\\\c\"", "AppleScript 字面量: 双引号、反斜杠转义")
+        let relaunch = L.relaunchScript(waitingFor: 42, detachMountPoint: "/Volumes/L y", launch: "/usr/bin/open '/Applications/Lyrimuse.app'")
+        expectEqual(relaunch.split(separator: "\n").map(String.init),
+                    ["while /bin/kill -0 42 >/dev/null 2>&1; do /bin/sleep 0.2; done",
+                     "/usr/bin/hdiutil detach '/Volumes/L y' -quiet >/dev/null 2>&1", "/usr/bin/open '/Applications/Lyrimuse.app'"],
+                    "重开: 等进程退出 → 推出映像 → 打开新位置")
+        expectEqual(L.relaunchScript(waitingFor: 1, detachMountPoint: nil, launch: "x").contains("hdiutil"), false, "重开: 不在映像里就不推")
+
+        // 授权那段脚本不用管理员权限也能在临时目录里真跑:换上新版、旧版进「废纸篓」、失败不留半截。
+        let scratch = fm.temporaryDirectory.appendingPathComponent("lyrimuse-app-move-\(getpid())-\(UUID().uuidString)")
+        defer { try? fm.removeItem(at: scratch) }
+        func makeApp(_ dir: URL, _ content: String) {
+            try? fm.createDirectory(at: dir.appendingPathComponent("Contents"), withIntermediateDirectories: true)
+            try? Data(content.utf8).write(to: dir.appendingPathComponent("Contents/marker"))
+        }
+        func marker(_ dir: URL) -> String? { (try? String(contentsOf: dir.appendingPathComponent("Contents/marker"), encoding: .utf8)) }
+        let appSource = scratch.appendingPathComponent("src it's/Lyrimuse.app"), apps = scratch.appendingPathComponent("Apps"),
+            trash = scratch.appendingPathComponent("Trash")
+        makeApp(appSource, "new")
+        makeApp(apps.appendingPathComponent("Lyrimuse.app"), "old")
+        try? fm.createDirectory(at: trash, withIntermediateDirectories: true)
+        func runScript(_ src: URL) -> Int32 {
+            ProcessRunner.run("/bin/sh", ["-c", L.privilegedMoveScript(
+                source: src.path, destination: apps.appendingPathComponent("Lyrimuse.app").path,
+                temporary: apps.appendingPathComponent(L.temporaryName(for: "Lyrimuse.app")).path,
+                trashTarget: trash.appendingPathComponent("Lyrimuse 1.app").path)], timeout: 10)?.status ?? -1
+        }
+        expectEqual(runScript(appSource), 0, "授权脚本: 成功退出")
+        expectEqual(marker(apps.appendingPathComponent("Lyrimuse.app")), "new", "授权脚本: 换上新版")
+        expectEqual(marker(trash.appendingPathComponent("Lyrimuse 1.app")), "old", "授权脚本: 旧版挪进废纸篓,不是覆盖")
+        try? fm.removeItem(at: trash.appendingPathComponent("Lyrimuse 1.app"))
+        expectEqual(runScript(scratch.appendingPathComponent("missing/Lyrimuse.app")) != 0, true, "授权脚本: 来源拷不了就失败退出")
+        expectEqual(marker(apps.appendingPathComponent("Lyrimuse.app")), "new", "授权脚本: 失败时目标原样不动")
+        expectEqual(((try? fm.contentsOfDirectory(atPath: apps.path)) ?? []).sorted(), ["Lyrimuse.app"], "授权脚本: 失败不留临时那份")
+
+        // 不要权限的那条:注入的废纸篓是临时目录。
+        let apps2 = scratch.appendingPathComponent("Apps2"), trash2 = scratch.appendingPathComponent("Trash2")
+        try? fm.createDirectory(at: apps2, withIntermediateDirectories: true)
+        try? fm.createDirectory(at: trash2, withIntermediateDirectories: true)
+        _ = appSource.appendingPathComponent("Contents/marker").path.withCString { setxattr($0, "com.apple.quarantine", "0081;0;x;", 9, 0, 0) }
+        let mover = AppBundleMover(trash: { url in
+            let target = trash2.appendingPathComponent(url.lastPathComponent)
+            try fm.moveItem(at: url, to: target)
+            return target
+        })
+        let fresh = try? mover.move(appSource, into: apps2)
+        expectEqual(fresh?.replaced == nil && marker(apps2.appendingPathComponent("Lyrimuse.app")) == "new", true, "搬运: 原来没有旧版")
+        let quarantined = apps2.appendingPathComponent("Lyrimuse.app/Contents/marker").path.withCString { getxattr($0, "com.apple.quarantine", nil, 0, 0, 0) }
+        expectEqual(quarantined < 0, true, "搬运: 换上之后去掉隔离标记")
+        makeApp(appSource, "newer")
+        let again = try? mover.move(appSource, into: apps2)
+        expectEqual(again?.replaced?.lastPathComponent, "Lyrimuse.app", "搬运: 旧版交给废纸篓")
+        expectEqual(marker(apps2.appendingPathComponent("Lyrimuse.app")) == "newer" && marker(trash2.appendingPathComponent("Lyrimuse.app")) == "new",
+                    true, "搬运: 新版换上、旧版在废纸篓里")
+        struct TrashFailed: Error {}
+        let stuck = AppBundleMover(trash: { _ in throw TrashFailed() })
+        makeApp(appSource, "newest")
+        expectEqual((try? stuck.move(appSource, into: apps2)) == nil, true, "搬运: 旧版挪不走就失败")
+        expectEqual(marker(apps2.appendingPathComponent("Lyrimuse.app")) == "newer"
+                    && ((try? fm.contentsOfDirectory(atPath: apps2.path)) ?? []).sorted() == ["Lyrimuse.app"], true,
+                    "搬运: 失败时旧版原样、不留临时那份")
+        let prompt = source("lyrimuse/Settings/AppLocationPrompt.swift")
+        expectEqual(sourceHas(sourceBody("@MainActor static func runAtLaunch()", in: prompt), "UserDefaults.standard.set(currentVersion, forKey: declinedVersionKey)")
+                    && sourceHas(prompt, "if activate { NSApplication.shared.activate(ignoringOtherApps: true) }"), true,
+                    "提示(契约): 选不了记下这一版")
+        expectEqual(sourceHas(sourceBody("func applicationWillFinishLaunching(_ notification: Notification)", in: source("lyrimuse/AppDelegate.swift")),
+                              "AppLocationPrompt.runAtLaunch() terminateOlderInstances()"), true,
+                    "提示(契约): 在请走旧实例之前问(移走要从新位置重开,别先关掉在跑的那份)")
+    }
 }

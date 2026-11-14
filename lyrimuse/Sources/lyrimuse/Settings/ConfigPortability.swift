@@ -77,6 +77,8 @@ enum ConfigPortability {
     ///   用户在新机器上自己开一次。
     private static let machineLocalDefaultsKeys: Set<String> = [
         "np:hasCompletedOnboarding",
+        // 对哪一版说过「不移到应用程序文件夹」:说的是这台机器上那一份放在哪。
+        AppLocationPrompt.declinedVersionKey,
         // 遥测的记账(机器专属,别放进下面的 obsoleteDefaultsKeys:那张表启动时就删):安装 ID 带去新机器会让两台机器算成一台;哪天发过心跳、发过哪些崩溃报告、记下的活动都是这台机器的。
         TelemetryService.Keys.installID,
         TelemetryService.Keys.lastHeartbeatDay,

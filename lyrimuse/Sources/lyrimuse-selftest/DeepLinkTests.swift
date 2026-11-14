@@ -172,6 +172,11 @@ func runDeepLinkTests() {
     do {
         expectEqual(link("lyrimuse://debug/state"), .debug(.state), "debug: 状态快照")
         expectEqual(link("lyrimuse://debug/telemetry-preview"), .debug(.telemetryPreview), "debug: 遥测心跳预览")
+        expectEqual(link("lyrimuse://debug/app-move"), .debug(.appMove(source: nil, destination: nil, answer: nil)), "debug: 移到应用程序文件夹那一问")
+        expectEqual(link("lyrimuse://debug/app-move?source=/Volumes/Lyrimuse/Lyrimuse.app&dest=/tmp/a%20b&answer=move"),
+                    .debug(.appMove(source: "/Volumes/Lyrimuse/Lyrimuse.app", destination: "/tmp/a b", answer: true)), "debug: app-move 带来源、目标、直接移动")
+        expectEqual(link("lyrimuse://debug/app-move?answer=decline"), .debug(.appMove(source: nil, destination: nil, answer: false)), "debug: app-move 直接选不了")
+        expectEqual(link("lyrimuse://debug/app-move?answer=maybe"), nil, "debug: app-move 认不出的 answer 整条不认")
         expectEqual(link("lyrimuse://debug/diagnostics"), .debug(.diagnostics), "debug: 不弹面板导出诊断包")
         expectEqual(link("lyrimuse://debug/drag-region?window=Lyrics-Window"), .debug(.dragRegion(window: "lyrics-window")),
                     "debug: 拖窗区")
@@ -547,7 +552,8 @@ func runDeepLinkTests() {
             .copyLyric(includeTranslation: true), .copyLyric(includeTranslation: false),
             .setSurfaces(overlay: true, notch: false, menuBar: nil), .setLyricsOffset(ms: -300),
             .nowPlayingCallback(success: URL(string: "shortcuts://x-callback-url/ic-success")),
-            .debug(.state), .debug(.telemetryPreview), .debug(.diagnostics), .debug(.checkpoint), .debug(.restore), .debug(.snapshot(window: "panel")),
+            .debug(.state), .debug(.telemetryPreview), .debug(.appMove(source: nil, destination: nil, answer: nil)),
+            .debug(.appMove(source: "/Volumes/X Y/Lyrimuse.app", destination: "/tmp/t", answer: false)), .debug(.diagnostics), .debug(.checkpoint), .debug(.restore), .debug(.snapshot(window: "panel")),
             .debug(.dragRegion(window: "lyrics-window")),
             .debug(.simulate(title: "Orange Moon", artist: "Khalil", album: "", duration: 280, position: 12.5, playing: false)),
             .debug(.simulate(title: "x", artist: "y", album: "z", duration: nil, position: 0, playing: true)), .debug(.simulateOff),

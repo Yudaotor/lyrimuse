@@ -32,6 +32,8 @@ CREATE TABLE IF NOT EXISTS activity (
   actions        TEXT,  -- {"lyrics_window": 2, …},见 index.js 的 ACTIONS
   lyrics         TEXT,  -- {"word": 12, "none": 1, …},见 index.js 的 LYRICS_RESULTS
   languages      TEXT,  -- {"zh": 8, "en": 3, …},见 index.js 的 SONG_LANGUAGES
+  layout_limits  TEXT,  -- [{"window": "onboarding", "class": "SwiftUI.AppKitWindow", "pass": "layout", "count": 3}],见 index.js 的 cleanLayoutLimits;
+                        -- 旧库:ALTER TABLE activity ADD COLUMN layout_limits TEXT
   PRIMARY KEY (day, install_id)
 );
 

@@ -3,7 +3,8 @@ import os
 
 /// App 主线程卡顿探针。后台队列每 `probeInterval` 秒往主线程投一个空任务:超过 `stallThreshold` 秒才被执行到,恢复时记一行卡了多久;
 /// 卡满 `sampleAfter` 秒还没被执行到,先记一行,再用 `/usr/bin/sample` 采一次调用栈写到 `LogFiles.mainThreadStall`
-/// (覆盖写,`sampleCooldown` 秒内最多采一次)。播放状态的保活挂在主线程上(PlaybackStatePublisher),
+/// (覆盖写)。占到当天遥测概况名额的那几次(每天前 `TelemetryActivity.maxHangDetailsPerDay` 次)每次都采,
+/// 别的按 `sampleCooldown` 秒内最多一次(`shouldSample`,14 章决策 195)。播放状态的保活挂在主线程上(PlaybackStatePublisher),
 /// 卡满 15 秒引擎就判 App 不可用、进待机。
 ///
 /// 卡满 `sampleAfter` 时给遥测记一条概况(`TelemetryHang`:启动 / 唤醒后多久、开着哪些窗口、温度状态),恢复时补上卡了多久,
@@ -159,14 +160,19 @@ public final class MainThreadWatchdog: @unchecked Sendable {
             // 报过 unresponsive 的那次才补时长;没卡满 sampleAfter 的不算一次卡顿。
             if tracker.reportedStill { TelemetryActivity.shared.finishHang(seconds: seconds) }
         case .stillStalled(let seconds):
-            TelemetryActivity.shared.noteHang(hangContext(at: now))
-            let sample = lastSampleAt.map { now - $0 >= Self.sampleCooldown } ?? true
+            let detailed = TelemetryActivity.shared.noteHang(hangContext(at: now))
+            let sample = Self.shouldSample(tookDetailSlot: detailed, lastSampleAt: lastSampleAt, now: now)
             logger.error("main thread: unresponsive for \(Int(seconds), privacy: .public)s\(sample ? ", sampling its stack" : "", privacy: .public)")
             if sample {
                 lastSampleAt = now
                 takeSample()
             }
         }
+    }
+
+    /// 要不要采这一次:占到了当天的遥测概况名额就采(不采那条概况就没有栈),否则离上次采样满 `sampleCooldown` 才采。
+    public static func shouldSample(tookDetailSlot: Bool, lastSampleAt: TimeInterval?, now: TimeInterval) -> Bool {
+        tookDetailSlot || lastSampleAt.map { now - $0 >= sampleCooldown } ?? true
     }
 
     /// 卡住这一刻的概况(时长先记成没恢复,恢复时再补)。

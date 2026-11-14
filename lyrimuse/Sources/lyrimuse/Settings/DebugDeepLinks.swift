@@ -41,6 +41,7 @@ enum DebugDeepLinks {
         case let .dragRegion(window): writeDragRegion(window)
         case .state: writeState()
         case .telemetryPreview: writeTelemetryPreview()
+        case let .appMove(source, destination, answer): appMove(source: source, destination: destination, answer: answer)
         case .diagnostics: writeDiagnostics()
         case .checkpoint: checkpoint()
         case .restore: restore()
@@ -395,6 +396,45 @@ enum DebugDeepLinks {
             await DiagnosticsExporter.export(to: url)
             let written = FileManager.default.fileExists(atPath: url.path)
             logger.notice("debug diagnostics \(written ? "written" : "failed", privacy: .public): \(url.path, privacy: .public)")
+        }
+    }
+
+    /// `debug/app-move`:同启动时那一问,只是不重开、不退出,目标默认不是「应用程序」文件夹。
+    private static func appMove(source: String?, destination: String?, answer: Bool?) {
+        let sourceURL = source.map { URL(fileURLWithPath: $0) } ?? Bundle.main.bundleURL
+        let directory = destination.map { URL(fileURLWithPath: $0, isDirectory: true) } ?? outputDir.appendingPathComponent("app-move-target")
+        guard directory.standardizedFileURL.path != AppLocationPrompt.applicationsDirectory.path else {
+            logger.error("debug app-move refused: the target must not be /Applications")
+            return
+        }
+        Task { @MainActor in
+            let location = AppLocationPrompt.kind(of: sourceURL)
+            let declined = UserDefaults.standard.string(forKey: AppLocationPrompt.declinedVersionKey)
+            let asks = AppLocation.shouldPrompt(location, declinedVersion: declined, currentVersion: AppLocationPrompt.currentVersion)
+            var outcome = AppLocationPrompt.Outcome.notNeeded
+            if asks {
+                FileIO.createDirectory(directory)
+                outcome = AppLocationPrompt.ask(location: location, source: sourceURL, into: directory,
+                                                activate: !WindowActivation.isBackground, answer: answer)
+                if outcome == .declined {
+                    UserDefaults.standard.set(AppLocationPrompt.currentVersion, forKey: AppLocationPrompt.declinedVersionKey)
+                }
+            }
+            var report: [String: Any] = ["source": sourceURL.path, "location": String(describing: location), "asks": asks,
+                                         "declinedVersionBefore": declined ?? NSNull(), "outcome": String(describing: outcome)]
+            if case let .moved(destination, replaced) = outcome {
+                report["destination"] = destination.path
+                report["replaced"] = replaced?.path ?? NSNull()
+            }
+            let url = outputDir.appendingPathComponent("app-move.json")
+            do {
+                try FileManager.default.createDirectory(at: outputDir, withIntermediateDirectories: true)
+                guard let data = SafeSerialization.jsonData(report, options: [.prettyPrinted, .sortedKeys]) else { return }
+                try data.write(to: url, options: .atomic)
+                logger.notice("debug app-move written: \(url.path, privacy: .public)")
+            } catch {
+                logger.error("debug app-move failed: \(error.localizedDescription, privacy: .public)")
+            }
         }
     }
 

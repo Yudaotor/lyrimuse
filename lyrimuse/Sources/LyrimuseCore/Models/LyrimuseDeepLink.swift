@@ -81,6 +81,11 @@ public enum LyrimuseDeepLink: Equatable, Sendable {
         case state
         /// 把此刻会发的那条遥测心跳写成 JSON(`telemetry-preview.json`),不发出去、不动记账。
         case telemetryPreview
+        /// 走一遍启动时「移到应用程序文件夹」那一问(`debug/app-move?source=<.app 路径>&dest=<目录>&answer=move|decline`):
+        /// 判 `source`(缺省是 App 自己)在不在磁盘映像 / 临时位置、这一版说没说过「不了」,该问就问(带 `answer` 不弹窗、
+        /// 直接按它走),移动搬进 `dest`(缺省是 debug 输出目录下的 `app-move-target`,不收 `/Applications`)。不重开、不退出,
+        /// 结果写进 `app-move.json`。
+        case appMove(source: String?, destination: String?, answer: Bool?)
         /// 不弹保存面板,把诊断包写进 debug 输出目录(`diagnostics-<时刻>.zip`),内容同「导出诊断信息」。
         case diagnostics
         /// 记下此刻的窗口与开关,`restore` 时按它恢复。
@@ -323,6 +328,16 @@ public enum LyrimuseDeepLink: Equatable, Sendable {
             self = .debug(.state)
         case ("debug", "/telemetry-preview"):
             self = .debug(.telemetryPreview)
+        case ("debug", "/app-move"):
+            let answer: Bool?
+            switch value("answer")?.lowercased() {
+            case nil: answer = nil
+            case "move": answer = true
+            case "decline": answer = false
+            default: return nil
+            }
+            self = .debug(.appMove(source: value("source").flatMap { $0.isEmpty ? nil : $0 },
+                                   destination: value("dest").flatMap { $0.isEmpty ? nil : $0 }, answer: answer))
         case ("debug", "/diagnostics"):
             self = .debug(.diagnostics)
         case ("debug", "/checkpoint"):
@@ -637,6 +652,13 @@ public enum LyrimuseDeepLink: Equatable, Sendable {
                 components.queryItems = [URLQueryItem(name: "window", value: window)]
             case .state: components.path = "/state"
             case .telemetryPreview: components.path = "/telemetry-preview"
+            case let .appMove(source, destination, answer):
+                components.path = "/app-move"
+                var items: [URLQueryItem] = []
+                if let source { items.append(URLQueryItem(name: "source", value: source)) }
+                if let destination { items.append(URLQueryItem(name: "dest", value: destination)) }
+                if let answer { items.append(URLQueryItem(name: "answer", value: answer ? "move" : "decline")) }
+                components.queryItems = items.isEmpty ? nil : items
             case .diagnostics: components.path = "/diagnostics"
             case .checkpoint: components.path = "/checkpoint"
             case .restore: components.path = "/restore"

@@ -193,6 +193,8 @@
 "Lyrimuse 将显示正在播放的 App 的歌词，之后可随时在设置中更改" = "Lyrimuse shows lyrics for whichever app is playing. You can change this in Settings any time";
 "Lyrimuse 无法写入以下位置，歌词引擎因此无法启动：" = "Lyrimuse can’t write to these locations, so the lyrics engine can’t start:";
 "Lyrimuse 标识" = "Lyrimuse Logo";
+"Lyrimuse 正在从临时位置运行" = "Lyrimuse is running from a temporary location";
+"Lyrimuse 正在从磁盘映像运行" = "Lyrimuse is running from a disk image";
 "Lyrimuse 现已支持简体中文" = "Lyrimuse is now available in English";
 "Lyrimuse 通过此接口读取 Pear Desktop 当前歌曲的 ID、类型和播放队列" = "Lyrimuse reads the current song’s ID and type and the play queue from Pear Desktop through this API";
 "Lyrimuse 通过此接口读取洛雪音乐的播放进度并调节其音量" = "Lyrimuse reads LX Music’s playback position and adjusts its volume through this API";
@@ -332,6 +334,7 @@
 "下载 Discord…" = "Download Discord…";
 "下载中…" = "Downloading…";
 "不 Scrobble 任何播放器" = "Nothing is scrobbled";
+"不了" = "Don’t Move";
 "不使用" = "Off";
 "不保存" = "Don’t Save";
 "不再悬停显示播放控制" = "Stop Showing Playback Controls on Hover";
@@ -2179,6 +2182,7 @@
 "没有封面时显示所选图标" = "Shows the chosen icon when there is no artwork";
 "没能写入歌曲文件" = "Couldn’t Write to the Song File";
 "没能取到真实数据（网络或后台服务未响应），先用测试数据示意" = "Couldn’t fetch real data (network or background service not responding), so sample data is shown";
+"没能移到「应用程序」文件夹" = "Couldn’t move Lyrimuse to Applications";
 "沿用同曲条目「%@」的时间轴校准，在此调整后将保存到当前条目" = "Uses the timing calibration from “%@”, another entry of this song. Adjusting it here saves it to this entry";
 "沿用同曲条目的人工修正" = "Uses the manual correction from another entry of this song";
 "沿用同曲条目的修正" = "From Another Entry";
@@ -2328,6 +2332,9 @@
 "示例" = "Example";
 "社区人工校对的逐字歌词库" = "Word-by-word lyrics checked by hand by its community";
 "秒" = "s";
+"移到「应用程序」文件夹后才能自动更新" = "Move it to Applications to get automatic updates";
+"移到「应用程序」文件夹后才能自动更新，推出磁盘映像时它也不会退出" = "Move it to Applications to get automatic updates and keep it running after you eject the disk image";
+"移到应用程序文件夹并重新打开" = "Move to Applications and Reopen";
 "移除" = "Remove";
 "移除导入的歌词" = "Remove Imported Lyrics";
 "移除配对" = "Unpair";

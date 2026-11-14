@@ -371,9 +371,12 @@ public struct TelemetryActivityDay: Codable, Equatable, Sendable {
     public var lyrics: [String: Int]
     /// 这一天放过的有歌词的歌各是什么语言(`TelemetrySongLanguage` 的 rawValue → 首数)。
     public var languages: [String: Int]
+    /// 窗口布局轮数超限被 AppKit 接住的次数,按窗口 + pass 分,最多 `TelemetryActivity.maxLayoutLimitsPerDay` 种。
+    public var layoutLimits: [TelemetryLayoutLimit]
 
     public init(day: String, playersPlayed: [String] = [], hangs: Int = 0, hangDetails: [TelemetryHang] = [],
-                actions: [String: Int] = [:], lyrics: [String: Int] = [:], languages: [String: Int] = [:]) {
+                actions: [String: Int] = [:], lyrics: [String: Int] = [:], languages: [String: Int] = [:],
+                layoutLimits: [TelemetryLayoutLimit] = []) {
         self.day = day
         self.playersPlayed = playersPlayed
         self.hangs = hangs
@@ -381,9 +384,10 @@ public struct TelemetryActivityDay: Codable, Equatable, Sendable {
         self.actions = actions
         self.lyrics = lyrics
         self.languages = languages
+        self.layoutLimits = layoutLimits
     }
 
-    /// 旧版本存下的活动没有 `actions`、`lyrics`、`languages`、`hang_details`。
+    /// 旧版本存下的活动没有 `actions`、`lyrics`、`languages`、`hang_details`、`layout_limits`。
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         day = try c.decode(String.self, forKey: .day)
@@ -393,10 +397,34 @@ public struct TelemetryActivityDay: Codable, Equatable, Sendable {
         actions = try c.decodeIfPresent([String: Int].self, forKey: .actions) ?? [:]
         lyrics = try c.decodeIfPresent([String: Int].self, forKey: .lyrics) ?? [:]
         languages = try c.decodeIfPresent([String: Int].self, forKey: .languages) ?? [:]
+        layoutLimits = try c.decodeIfPresent([TelemetryLayoutLimit].self, forKey: .layoutLimits) ?? []
     }
 
     enum CodingKeys: String, CodingKey {
         case day, playersPlayed = "players_played", hangs, hangDetails = "hang_details", actions, lyrics, languages
+        case layoutLimits = "layout_limits"
+    }
+}
+
+/// 一种窗口布局轮数超限(`DisplayCycleLimit`)在这一天被接住了几次。不带任何内容,只有窗口是哪一扇。
+public struct TelemetryLayoutLimit: Codable, Equatable, Sendable {
+    /// `TelemetryHang.windowTags` 里的一个(认得出的场景窗口 / 菜单栏面板);认不出为 nil。
+    public var window: String?
+    /// 窗口类名(`DisplayCycleLimit.Event.windowClass`)。
+    public var windowClass: String
+    /// `DisplayCycleLimit.passes` 里的一个。
+    public var pass: String
+    public var count: Int
+
+    public init(window: String?, windowClass: String, pass: String, count: Int) {
+        self.window = window
+        self.windowClass = windowClass
+        self.pass = pass
+        self.count = count
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case window, windowClass = "class", pass, count
     }
 }
 

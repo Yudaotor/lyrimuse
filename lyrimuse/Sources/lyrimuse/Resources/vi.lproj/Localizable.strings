@@ -168,6 +168,8 @@
 "Lyrimuse 将显示正在播放的 App 的歌词，之后可随时在设置中更改" = "Lyrimuse hiển thị lời bài hát cho ứng dụng đang phát. Bạn có thể thay đổi trong Cài đặt bất kỳ lúc nào";
 "Lyrimuse 无法写入以下位置，歌词引擎因此无法启动：" = "Lyrimuse không thể ghi vào các vị trí sau nên công cụ lời bài hát không khởi động được:";
 "Lyrimuse 标识" = "Logo Lyrimuse";
+"Lyrimuse 正在从临时位置运行" = "Lyrimuse đang chạy từ một vị trí tạm thời";
+"Lyrimuse 正在从磁盘映像运行" = "Lyrimuse đang chạy từ ảnh đĩa";
 "Lyrimuse 现已支持简体中文" = "Lyrimuse đã có giao diện tiếng Việt";
 "Lyrimuse 通过此接口读取 Pear Desktop 当前歌曲的 ID、类型和播放队列" = "Lyrimuse đọc ID, loại của bài đang phát và hàng chờ phát từ Pear Desktop qua API này";
 "Lyrimuse 通过此接口读取洛雪音乐的播放进度并调节其音量" = "Lyrimuse đọc vị trí phát của LX Music và chỉnh âm lượng qua API này";
@@ -306,6 +308,7 @@
 "下载 Discord…" = "Tải về Discord…";
 "下载中…" = "Đang tải về…";
 "不 Scrobble 任何播放器" = "Không Scrobble trình phát nào";
+"不了" = "Không di chuyển";
 "不使用" = "Tắt";
 "不保存" = "Không lưu";
 "不再悬停显示播放控制" = "Không hiện điều khiển phát khi di chuột";
@@ -2097,6 +2100,7 @@
 "没有封面时显示所选图标" = "Hiện biểu tượng đã chọn khi không có ảnh bìa";
 "没能写入歌曲文件" = "Không ghi được vào tệp bài hát";
 "没能取到真实数据（网络或后台服务未响应），先用测试数据示意" = "Không lấy được dữ liệu thật (mạng hoặc dịch vụ nền không phản hồi), tạm dùng dữ liệu mẫu";
+"没能移到「应用程序」文件夹" = "Không thể di chuyển Lyrimuse vào “Ứng dụng”";
 "沿用同曲条目「%@」的时间轴校准，在此调整后将保存到当前条目" = "Dùng hiệu chỉnh thời gian của “%@”, một mục khác của bài hát này. Điều chỉnh tại đây sẽ lưu vào mục hiện tại";
 "沿用同曲条目的人工修正" = "Dùng bản sửa thủ công của một mục khác cùng bài";
 "沿用同曲条目的修正" = "Theo mục cùng bài";
@@ -2243,6 +2247,9 @@
 "示例" = "Ví dụ";
 "社区人工校对的逐字歌词库" = "Kho lời theo từng chữ do cộng đồng kiểm tra thủ công";
 "秒" = "giây";
+"移到「应用程序」文件夹后才能自动更新" = "Di chuyển vào “Ứng dụng” để nhận cập nhật tự động";
+"移到「应用程序」文件夹后才能自动更新，推出磁盘映像时它也不会退出" = "Di chuyển vào “Ứng dụng” để nhận cập nhật tự động và không bị thoát khi tháo ảnh đĩa";
+"移到应用程序文件夹并重新打开" = "Di chuyển vào Ứng dụng và mở lại";
 "移除" = "Gỡ bỏ";
 "移除导入的歌词" = "Gỡ lời đã nhập";
 "移除配对" = "Hủy ghép đôi";

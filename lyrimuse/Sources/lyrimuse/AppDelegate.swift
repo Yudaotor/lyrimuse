@@ -29,11 +29,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // 退出原因日志(见 AppExit):SIGTERM 要在这里就接住,不然 launchctl kickstart -k
         // 这条最常见的退出路径连 applicationShouldTerminate 都到不了。
         AppExit.installSigtermHandler()
+        // 窗口布局轮数超限被 AppKit 接住时记进遥测(见 DisplayCycleLimit);要赶在任何窗口布局之前。
+        DisplayCycleLimit.onLimitReached = { event in
+            MainActor.assumeIsolated { AppDelegate.recordLayoutLimit(event) }
+        }
         if isUnregisterLoginItemRun {
             LoginItemManager.shared.unregisterForUninstall()
             AppExit.request(.unregisterLoginItemHelper)
             return
         }
+        // 从磁盘映像 / 临时位置启动时先问要不要移走;必须在请走旧实例之前:移走就从新位置重开,不该先把在跑的那份关掉。
+        AppLocationPrompt.runAtLaunch()
         terminateOlderInstances()
         // 接住"连接 Last.fm 账号"授权页跳回来的 lyrimuse:// 回调(见 build.sh 的 CFBundleURLTypes +
         // LastfmAuthFlow.authorizeURL 的 cb= 参数)以及各条深链。用 NSAppleEventManager 注册,不用 SwiftUI 的
@@ -111,6 +117,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         DeepLinkRouter.handle(url)
     }
 
+
+    /// 本进程里已经记过日志的超限(窗口类名 + pass):来回振荡时每一帧都会超一次,日志每种只记第一次。
+    private static var loggedLayoutLimits: Set<String> = []
+
+    /// 超限的那扇窗:认得出的场景窗口按场景 id 报,菜单栏面板按类名认,别的只报类名。
+    static func recordLayoutLimit(_ event: DisplayCycleLimit.Event) {
+        let window = event.windowNumber.flatMap { NSApp.window(withWindowNumber: $0) }
+        let tag = window?.identifier.flatMap { TelemetryHang.windowTag(identifier: $0.rawValue) }
+            ?? (event.windowClass.hasSuffix("MenuBarPanelWindow") ? "menubar-panel" : nil)
+        if loggedLayoutLimits.insert(event.windowClass + "|" + event.pass).inserted {
+            Logger(subsystem: "me.yudaotor.lyrimuse", category: "layout")
+                .error("window layout limit reached: \(event.pass, privacy: .public) in \(event.windowClass, privacy: .public) (\(tag ?? "-", privacy: .public))")
+        }
+        TelemetryActivity.shared.noteLayoutLimit(window: tag, windowClass: event.windowClass, pass: event.pass)
+    }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         // 卸载辅助模式:willFinishLaunching 里已经请求退出,这里什么都不建。

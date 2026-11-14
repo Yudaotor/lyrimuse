@@ -193,6 +193,8 @@
 "Lyrimuse 将显示正在播放的 App 的歌词，之后可随时在设置中更改" = "Lyrimuse zeigt den Liedtext der App, die gerade abspielt. Du kannst das jederzeit in den Einstellungen ändern";
 "Lyrimuse 无法写入以下位置，歌词引擎因此无法启动：" = "Lyrimuse kann an diese Orte nicht schreiben, daher startet die Liedtext-Engine nicht:";
 "Lyrimuse 标识" = "Lyrimuse-Logo";
+"Lyrimuse 正在从临时位置运行" = "Lyrimuse läuft von einem temporären Ort";
+"Lyrimuse 正在从磁盘映像运行" = "Lyrimuse läuft von einem Disk-Image";
 "Lyrimuse 现已支持简体中文" = "Lyrimuse gibt es jetzt auf Deutsch";
 "Lyrimuse 通过此接口读取 Pear Desktop 当前歌曲的 ID、类型和播放队列" = "Lyrimuse liest über diese API ID und Typ des aktuellen Titels sowie die Warteschlange aus Pear Desktop";
 "Lyrimuse 通过此接口读取洛雪音乐的播放进度并调节其音量" = "Lyrimuse liest über diese API die Wiedergabeposition von LX Music und regelt seine Lautstärke";
@@ -332,6 +334,7 @@
 "下载 Discord…" = "Discord laden …";
 "下载中…" = "Wird geladen …";
 "不 Scrobble 任何播放器" = "Es wird nichts gescrobbelt";
+"不了" = "Nicht bewegen";
 "不使用" = "Aus";
 "不保存" = "Nicht sichern";
 "不再悬停显示播放控制" = "Wiedergabesteuerung nicht mehr beim Überfahren zeigen";
@@ -2179,6 +2182,7 @@
 "没有封面时显示所选图标" = "Zeigt das gewählte Symbol, wenn kein Cover vorhanden ist";
 "没能写入歌曲文件" = "Schreiben in die Songdatei nicht möglich";
 "没能取到真实数据（网络或后台服务未响应），先用测试数据示意" = "Echte Daten nicht abrufbar (Netzwerk oder Hintergrunddienst antwortet nicht), daher Beispieldaten";
+"没能移到「应用程序」文件夹" = "Lyrimuse konnte nicht in „Programme“ bewegt werden";
 "沿用同曲条目「%@」的时间轴校准，在此调整后将保存到当前条目" = "Übernimmt die Timing-Kalibrierung von „%@“, einem anderen Eintrag dieses Titels. Anpassungen hier werden in diesem Eintrag gesichert";
 "沿用同曲条目的人工修正" = "Übernimmt die manuelle Korrektur eines anderen Eintrags dieses Titels";
 "沿用同曲条目的修正" = "Von anderem Eintrag";
@@ -2328,6 +2332,9 @@
 "示例" = "Beispiel";
 "社区人工校对的逐字歌词库" = "Von der Community von Hand geprüfte Wort-für-Wort-Liedtexte";
 "秒" = "s";
+"移到「应用程序」文件夹后才能自动更新" = "Bewege die App in den Ordner „Programme“, um automatische Updates zu erhalten";
+"移到「应用程序」文件夹后才能自动更新，推出磁盘映像时它也不会退出" = "Bewege die App in den Ordner „Programme“, um automatische Updates zu erhalten und sie nach dem Auswerfen des Disk-Images weiter zu nutzen";
+"移到应用程序文件夹并重新打开" = "In „Programme“ bewegen und neu öffnen";
 "移除" = "Entfernen";
 "移除导入的歌词" = "Importierten Liedtext entfernen";
 "移除配对" = "Entkoppeln";

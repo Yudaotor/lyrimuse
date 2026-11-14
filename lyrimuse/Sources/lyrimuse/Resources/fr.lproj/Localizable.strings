@@ -193,6 +193,8 @@
 "Lyrimuse 将显示正在播放的 App 的歌词，之后可随时在设置中更改" = "Lyrimuse affiche les paroles de l’app en cours de lecture. Vous pouvez changer cela à tout moment dans Réglages";
 "Lyrimuse 无法写入以下位置，歌词引擎因此无法启动：" = "Lyrimuse ne peut pas écrire dans ces emplacements, le moteur de paroles ne peut donc pas démarrer :";
 "Lyrimuse 标识" = "Logo Lyrimuse";
+"Lyrimuse 正在从临时位置运行" = "Lyrimuse s’exécute depuis un emplacement temporaire";
+"Lyrimuse 正在从磁盘映像运行" = "Lyrimuse s’exécute depuis une image disque";
 "Lyrimuse 现已支持简体中文" = "Lyrimuse est désormais disponible en français";
 "Lyrimuse 通过此接口读取 Pear Desktop 当前歌曲的 ID、类型和播放队列" = "Lyrimuse lit dans Pear Desktop l’identifiant et le type du morceau en cours et la file d’attente via cette API";
 "Lyrimuse 通过此接口读取洛雪音乐的播放进度并调节其音量" = "Lyrimuse lit la position de lecture de LX Music et règle son volume via cette API";
@@ -332,6 +334,7 @@
 "下载 Discord…" = "Télécharger Discord…";
 "下载中…" = "Téléchargement…";
 "不 Scrobble 任何播放器" = "Aucun scrobble";
+"不了" = "Ne pas déplacer";
 "不使用" = "Aucun";
 "不保存" = "Ne pas enregistrer";
 "不再悬停显示播放控制" = "Ne plus afficher les commandes au survol";
@@ -2179,6 +2182,7 @@
 "没有封面时显示所选图标" = "Affiche l’icône choisie en l’absence d’illustration";
 "没能写入歌曲文件" = "Impossible d’écrire dans le fichier du morceau";
 "没能取到真实数据（网络或后台服务未响应），先用测试数据示意" = "Impossible de récupérer les données réelles (réseau ou service d’arrière-plan sans réponse), données d’exemple affichées";
+"没能移到「应用程序」文件夹" = "Impossible de déplacer Lyrimuse dans Applications";
 "沿用同曲条目「%@」的时间轴校准，在此调整后将保存到当前条目" = "Utilise le calibrage du minutage de « %@ », une autre entrée de ce morceau. L’ajuster ici l’enregistre pour cette entrée";
 "沿用同曲条目的人工修正" = "Utilise la correction manuelle d’une autre entrée de ce morceau";
 "沿用同曲条目的修正" = "D’une autre entrée";
@@ -2328,6 +2332,9 @@
 "示例" = "Exemple";
 "社区人工校对的逐字歌词库" = "Paroles mot à mot vérifiées à la main par sa communauté";
 "秒" = "s";
+"移到「应用程序」文件夹后才能自动更新" = "Déplacez-la dans Applications pour recevoir les mises à jour automatiques";
+"移到「应用程序」文件夹后才能自动更新，推出磁盘映像时它也不会退出" = "Déplacez-la dans Applications pour recevoir les mises à jour automatiques et qu’elle reste ouverte après l’éjection de l’image disque";
+"移到应用程序文件夹并重新打开" = "Déplacer dans Applications et rouvrir";
 "移除" = "Retirer";
 "移除导入的歌词" = "Retirer les paroles importées";
 "移除配对" = "Dissocier";

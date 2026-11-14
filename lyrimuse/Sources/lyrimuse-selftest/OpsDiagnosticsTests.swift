@@ -1085,6 +1085,12 @@ func runOpsDiagnosticsTests() {
         expectEqual(tracker.shouldProbe(now: 120), true, "卡顿探针: 再下一轮")
         expectEqual(tracker.check(now: 126), .stillStalled(seconds: 6), "卡顿探针: 新的一次卡顿重新报")
 
+        typealias Dog = MainThreadWatchdog
+        expectEqual([Dog.shouldSample(tookDetailSlot: true, lastSampleAt: 100, now: 101),
+                     Dog.shouldSample(tookDetailSlot: false, lastSampleAt: 100, now: 101),
+                     Dog.shouldSample(tookDetailSlot: false, lastSampleAt: 100, now: 100 + Dog.sampleCooldown),
+                     Dog.shouldSample(tookDetailSlot: false, lastSampleAt: nil, now: 5)], [true, false, true, true],
+                    "卡顿采样: 占到当天概况名额就采(不管冷却),否则 30 分钟最多一次")
         // 接线:真的投探测、主线程执行到、报事件。间隔与阈值调短,事件交给回调(不记日志、不采样)。
         // 空闲那段要比卡顿阈值短一截:机器被别的编译占满时主线程晚几百毫秒才执行到探测是常事,
         // 空闲窗口长过阈值就会把这种调度延迟当成卡顿报出来。

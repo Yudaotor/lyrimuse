@@ -319,12 +319,12 @@ func runTelemetryTests() {
         let day1 = Date(timeIntervalSince1970: 1_793_300_000)
         let d2 = Telemetry.day(day1.addingTimeInterval(86_400))
         let base = H(sinceLaunch: "1-10m", sinceWake: nil, windows: ["settings"], thermal: "nominal")
-        activity.noteHang(base, now: day1)
+        expectEqual(activity.noteHang(base, now: day1), false, "记账: 关着时不占概况名额(看门狗按冷却决定采不采)")
         activity.finishHang(seconds: 12)
         expectEqual(activity.completedDays(before: d2), [], "记账: 关着时不记概况")
         activity.isRecording = true
         activity.notePlayer(bundleID: PlaybackPlayer.spotify.bundleIdentifier, now: day1)
-        activity.noteHang(base, now: day1)
+        expectEqual(activity.noteHang(base, now: day1), true, "记账: 当天第一次占到概况名额")
         var details = activity.completedDays(before: d2).first?.hangDetails ?? []
         expectEqual(details.map(\.duration), [H.unrecovered], "记账: 刚卡住记成没恢复")
         expectEqual(details.first?.player, PlaybackPlayer.spotify.rawValue, "记账: 播放器填最近放歌的那个")
@@ -334,14 +334,15 @@ func runTelemetryTests() {
         details = activity.completedDays(before: d2).first?.hangDetails ?? []
         expectEqual(details.first?.duration, "10-30s", "记账: 恢复后补上时长")
         expectEqual(details.first?.stack.map(\.offset), [42], "记账: 调用栈只补第一份")
-        for _ in 0..<5 { activity.noteHang(base, now: day1) }
+        expectEqual((0..<5).map { _ in activity.noteHang(base, now: day1) }, [true, true, false, false, false],
+                    "记账: 名额只有每天前 3 次,之后不占")
         let got = activity.completedDays(before: d2).first
         expectEqual(got?.hangs, 6, "记账: 次数照记")
         expectEqual(got?.hangDetails.count, TelemetryActivity.maxHangDetailsPerDay, "记账: 概况每天最多记几条")
         activity.finishHang(seconds: 40)
         expectEqual(activity.completedDays(before: d2).first?.hangDetails.last?.duration, H.unrecovered,
                     "记账: 超出名额的那次恢复了不改前一条")
-        activity.noteHang(nil, now: day1)
+        expectEqual(activity.noteHang(nil, now: day1), false, "记账: 不带概况的不占名额")
         activity.finishHang(seconds: 40)
         expectEqual(activity.completedDays(before: d2).first?.hangDetails.map(\.duration), ["10-30s", H.unrecovered, H.unrecovered],
                     "记账: 不带概况的那次之后不补到旧的一条")
@@ -428,6 +429,50 @@ func runTelemetryTests() {
         }, true, "逐字歌词格式: 每种格式都发得出去")
         let formatsJSON = (try? JSONEncoder().encode(formats)).flatMap { String(data: $0, encoding: .utf8) } ?? ""
         expectEqual(formatsJSON.contains(#""lyrics_word_formats":["ttml","enhanced-lrc","yrc"]"#), true, "负载: 逐字歌词格式")
+    }
+
+    do {
+        print("\n== 遥测:窗口布局轮数超限 ==")
+        typealias D = DisplayCycleLimit
+        // AppKit 原话(本机 macOS 27.0 复现里异常预处理器抓到的,窗口描述那行原样)。
+        let real = "The window has been marked as needing another Update Constraints in Window pass, but it has already had more Update Constraints in Window passes than there are views in the window. \n<NSWindow: 0x77cad54280> 0x28856 (165974) {{200, 200}, {200, 132}} en"
+        expectEqual(D.parse(reason: real), D.Event(pass: "update-constraints", windowClass: "NSWindow", windowNumber: 165974),
+                    "超限: 认出 pass、窗口类名、窗口编号")
+        let layout = "The window has been marked as needing another Layout pass, but it has already had 3 Layout passes. \n<SwiftUI.AppKitWindow: 0x1> 0x9 (9) {{0, 0}, {1, 1}} en"
+        expectEqual(D.parse(reason: layout), D.Event(pass: "layout", windowClass: "SwiftUI.AppKitWindow", windowNumber: 9), "超限: 固定轮数那种写法、布局 pass")
+        expectEqual(D.parse(reason: "The window has been marked as needing another Display pass, but … \n<lyri muse/../x\u{1F600}: 0x1>")?.windowClass,
+                    "lyrimuse..x", "超限: 类名只留字母数字和 _ . $")
+        expectEqual(D.parse(reason: "The window has been marked as needing another Foo pass, x")?.pass, "other", "超限: 认不出的 pass 归 other")
+        expectEqual(D.parse(reason: "The window has been marked as needing another Foo pass, x")?.windowClass, "unknown", "超限: 没有窗口描述时类名 unknown")
+        expectEqual(D.parse(reason: "*** -[__NSArrayM objectAtIndex:]: index 3 beyond bounds"), nil, "超限: 别的异常不认")
+        expectEqual(Set(D.passes), ["update-constraints", "layout", "display", "other"], "超限: pass 取值名单")
+
+        let key = "np:selftest.layout-limit.\(getpid())"
+        defer { UserDefaults.standard.removeObject(forKey: key) }
+        let activity = TelemetryActivity(defaults: .standard, key: key)
+        let day1 = Date(timeIntervalSince1970: 1_793_300_000)
+        let d2 = Telemetry.day(day1.addingTimeInterval(86_400))
+        activity.noteLayoutLimit(window: "onboarding", windowClass: "SwiftUI.AppKitWindow", pass: "layout", now: day1)
+        expectEqual(activity.completedDays(before: d2), [], "超限记账: 遥测关着不记")
+        activity.isRecording = true
+        for _ in 0..<3 { activity.noteLayoutLimit(window: "onboarding", windowClass: "SwiftUI.AppKitWindow", pass: "layout", now: day1) }
+        activity.noteLayoutLimit(window: nil, windowClass: "NSPanel", pass: "update-constraints", now: day1)
+        for i in 0..<10 { activity.noteLayoutLimit(window: nil, windowClass: "C\(i)", pass: "layout", now: day1) }
+        let limits = activity.completedDays(before: d2).first?.layoutLimits ?? []
+        expectEqual(limits.first, TelemetryLayoutLimit(window: "onboarding", windowClass: "SwiftUI.AppKitWindow", pass: "layout", count: 3),
+                    "超限记账: 同一种只加次数")
+        expectEqual(limits.count, TelemetryActivity.maxLayoutLimitsPerDay, "超限记账: 每天最多记几种")
+        let json = (try? JSONEncoder().encode(limits.first)).flatMap { String(data: $0, encoding: .utf8) } ?? ""
+        expectEqual(json.contains("\"class\":\"SwiftUI.AppKitWindow\"") && json.contains("\"window\":\"onboarding\""), true, "超限记账: 键名 class / window")
+        let old = #"{"day":"2026-11-01","players_played":[],"hangs":0}"#
+        expectEqual((try? JSONDecoder().decode(TelemetryActivityDay.self, from: Data(old.utf8)))?.layoutLimits, [],
+                    "超限记账: 旧版本存下的活动没有这一项也读得出")
+        let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+        func text(_ rel: String) -> String { (try? String(contentsOf: root.appendingPathComponent(rel), encoding: .utf8)) ?? "" }
+        expectEqual(sourceHas(sourceBody("public static func install()", in: text("LyrimuseCore/Diagnostics/SwallowedExceptionGuard.swift")),
+                              "DisplayCycleLimit.noteThrown(reason: exception.reason)"), true, "超限(契约): 异常预处理器把主线程异常交给它认")
+        expectEqual(sourceHas(sourceBody("func applicationWillFinishLaunching(_ notification: Notification)", in: text("lyrimuse/AppDelegate.swift")),
+                              "DisplayCycleLimit.onLimitReached = { event in"), true, "超限(契约): App 启动时接上记账")
     }
 
     do {
@@ -529,6 +574,9 @@ func runTelemetryTests() {
         expectEqual([workerList("HANG_DURATIONS"), workerList("HANG_ELAPSED"), workerList("HANG_THERMAL"), workerList("HANG_WINDOWS")],
                     [TelemetryHang.durationBuckets.sorted(), TelemetryHang.elapsedBuckets.sorted(), TelemetryHang.thermalStates.sorted(),
                      TelemetryHang.windowTags.sorted()], "Worker: 卡顿概况的取值名单跟 Core 一致")
+        expectEqual(workerList("LAYOUT_PASSES"), DisplayCycleLimit.passes.sorted(), "Worker: 布局超限的 pass 名单跟 Core 一致")
+        expectEqual(worker.contains("const MAX_LAYOUT_LIMITS_PER_DAY = \(TelemetryActivity.maxLayoutLimitsPerDay);"), true,
+                    "Worker: 布局超限每天的条数上限跟 Core 一致")
         expectEqual(workerList("LYRICS_WORD_FORMATS"), LyricsWordFormat.allCases.map(\.rawValue).sorted(),
                     "Worker: 逐字歌词格式的取值名单跟 Core LyricsWordFormat 一致")
         // 统计端按「改过默认值的设置项里有没有 appLanguage」分界面语言跟随系统还是手动选(14 章决策 177):

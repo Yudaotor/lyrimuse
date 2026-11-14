@@ -31,6 +31,11 @@ const HANG_ELAPSED = ["<1m", "1-10m", "10-60m", "1-6h", "6h+"];
 const HANG_THERMAL = ["nominal", "fair", "serious", "critical"];
 const HANG_WINDOWS = ["settings", "lyrics-manager", "lyrics-window", "lyrics-quick-search", "lyrics-share", "whats-new", "onboarding", "menubar-panel"];
 const MAX_HANG_DETAILS_PER_DAY = 3;
+// 窗口布局轮数超限被 AppKit 接住(Core DisplayCycleLimit / TelemetryLayoutLimit):pass 名单跟 Core 一致,selftest 核对;
+// 窗口只收 HANG_WINDOWS 里的场景名,类名只收字母数字和 _ . $。
+const LAYOUT_PASSES = ["update-constraints", "layout", "display", "other"];
+const LAYOUT_CLASS_RE = /^[A-Za-z0-9_.$]{1,80}$/;
+const MAX_LAYOUT_LIMITS_PER_DAY = 5;
 const MAX_HANG_FRAMES = 6;
 const MAX_CRASHES_PER_INSTALL_DAY = 20;
 const DAY_MS = 86_400_000;
@@ -203,13 +208,14 @@ async function heartbeat(request, env) {
     const back = dayDistance(day, a.day);
     if (back < 1 || back > 7) continue;
     statements.push(env.DB.prepare(
-      `INSERT INTO activity (day, install_id, players_played, hangs, actions, lyrics, languages) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
+      `INSERT INTO activity (day, install_id, players_played, hangs, actions, lyrics, languages, layout_limits)
+       VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)
        ON CONFLICT (day, install_id) DO UPDATE SET players_played = excluded.players_played, hangs = excluded.hangs,
                                                    actions = excluded.actions, lyrics = excluded.lyrics,
-                                                   languages = excluded.languages`
+                                                   languages = excluded.languages, layout_limits = excluded.layout_limits`
     ).bind(a.day, installID, JSON.stringify(ids(a.players_played)), int(a.hangs, 0, 10_000) ?? 0,
            JSON.stringify(counts(a.actions, ACTIONS)), JSON.stringify(counts(a.lyrics, LYRICS_RESULTS)),
-           JSON.stringify(counts(a.languages, SONG_LANGUAGES))));
+           JSON.stringify(counts(a.languages, SONG_LANGUAGES)), JSON.stringify(cleanLayoutLimits(a.layout_limits))));
     // 那一天的卡顿概况整批替换(同一天重发时以新的为准)。版本与系统取这条心跳的,活动是之前几天的,升级当天可能差一版。
     statements.push(env.DB.prepare(`DELETE FROM hang_events WHERE day = ?1 AND install_id = ?2`).bind(a.day, installID));
     const details = Array.isArray(a.hang_details) ? a.hang_details.slice(0, MAX_HANG_DETAILS_PER_DAY) : [];
@@ -222,6 +228,18 @@ async function heartbeat(request, env) {
   }
   await env.DB.batch(statements);
   return json({ ok: true });
+}
+
+// 旧版本 App 不发这一项,存成空数组。不合法的条目整条丢掉。
+function cleanLayoutLimits(v) {
+  if (!Array.isArray(v)) return [];
+  return v.slice(0, MAX_LAYOUT_LIMITS_PER_DAY).map((l) => {
+    if (!l || typeof l !== "object" || Array.isArray(l)) return null;
+    const cls = typeof l.class === "string" && LAYOUT_CLASS_RE.test(l.class) ? l.class : null;
+    const pass = oneOf(l.pass, LAYOUT_PASSES), count = int(l.count, 1, 10_000);
+    if (!cls || !pass || count == null) return null;
+    return { window: oneOf(l.window, HANG_WINDOWS), class: cls, pass, count };
+  }).filter(Boolean);
 }
 
 function oneOf(v, list) {
