@@ -34,7 +34,7 @@ final class SettingsWindowSurface: ObservableObject {
     private var observer: NSObjectProtocol?
     private var coverageMonitor: WindowCoverageMonitor?
     private weak var window: NSWindow?
-    /// `debug/manager-visibility` 设的:非 nil 时不看遮挡状态,按它算看不看得见。
+    /// `debug/manager-visibility` / `debug/settings-visibility` 设的:非 nil 时不看遮挡状态,按它算看不看得见。
     var debugOverride: Bool? {
         didSet { refresh() }
     }

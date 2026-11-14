@@ -809,10 +809,9 @@ private struct MenuBarPanelView: View {
                 for: .lastfm,
                 config: .shared,
                 lastfmConnect: .shared,
-                // 这里直接读那个带 mtime 缓存的静态量,不走 LastfmMirrorStatusWatcher:
-                // 那个观察器是给**常驻**视图用的(文件被引擎自愈删掉时要能推一次
-                // 更新);这张面板活不过一次开合,读一次当下的状态正好。
-                mirrorInfo: LastfmMirrorStatus.current)
+                // 取观察器此刻发布的值、不订阅:这张面板活不过一次开合,读一次当下的状态正好。不直接读
+                // LastfmMirrorStatus.current:主线程上不 stat 状态文件(14 章决策 194)。
+                mirrorInfo: LastfmMirrorStatusWatcher.shared.info)
             discordStatus = destinationStatus(for: .discord, config: .shared, lastfmConnect: .shared, mirrorInfo: nil)
         }
     }
@@ -1995,7 +1994,7 @@ private struct MenuBarPanelView: View {
         // Last.fm 那一项只在连着时能加,判据同底栏;这一份不走主面板的 onAppear,自己取一次。
         .onAppear {
             lastfmStatus = destinationStatus(for: .lastfm, config: .shared, lastfmConnect: .shared,
-                                             mirrorInfo: LastfmMirrorStatus.current)
+                                             mirrorInfo: LastfmMirrorStatusWatcher.shared.info)
             discordStatus = destinationStatus(for: .discord, config: .shared, lastfmConnect: .shared, mirrorInfo: nil)
         }
     }

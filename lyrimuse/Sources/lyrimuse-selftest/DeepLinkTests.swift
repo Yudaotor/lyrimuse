@@ -365,6 +365,12 @@ func runDeepLinkTests() {
                     true, "debug: 歌词管理标纯音乐没带 key 或 on 不认")
         expectEqual(link("lyrimuse://debug/manager-visibility?state=on") == nil
                     && link("lyrimuse://debug/manager-visibility") == nil, true, "debug: 歌词管理可见性认不出的、没带都不认")
+        expectEqual([link("lyrimuse://debug/settings-visibility?state=hidden"), link("lyrimuse://debug/settings-visibility?state=Visible"),
+                     link("lyrimuse://debug/settings-visibility?state=auto")],
+                    [.debug(.settingsVisibility(override: false)), .debug(.settingsVisibility(override: true)),
+                     .debug(.settingsVisibility(override: nil))], "debug: 设置窗口当作挡住 / 露出来 / 交还")
+        expectEqual(link("lyrimuse://debug/settings-visibility?state=on") == nil
+                    && link("lyrimuse://debug/settings-visibility") == nil, true, "debug: 设置窗口可见性认不出的、没带都不认")
         expectEqual([link("lyrimuse://debug/onboarding-step?step=done"), link("lyrimuse://debug/onboarding-step?step=Background"),
                      link("lyrimuse://debug/onboarding-step?step=players")],
                     [.debug(.onboardingStep(.done)), .debug(.onboardingStep(.background)), .debug(.onboardingStep(.playerChoice))],
@@ -613,6 +619,7 @@ func runDeepLinkTests() {
             .debug(.touchBarDisplay(color: .rainbow)), .debug(.touchBarDisplay(color: .cover)),
             .debug(.touchBarTyping(override: true)), .debug(.touchBarTyping(override: false)), .debug(.touchBarTyping(override: nil)),
             .debug(.managerVisibility(override: true)), .debug(.managerVisibility(override: false)), .debug(.managerVisibility(override: nil)),
+            .debug(.settingsVisibility(override: true)), .debug(.settingsVisibility(override: false)), .debug(.settingsVisibility(override: nil)),
             .debug(.onboardingStep(.welcome)), .debug(.onboardingStep(.playerChoice)), .debug(.onboardingStep(.browserPairing)),
             .debug(.onboardingStep(.background)), .debug(.onboardingStep(.displayMode)), .debug(.onboardingStep(.done)),
             .debug(.managerInstrumental(key: "歌手|歌 & 名|专辑", on: true)), .debug(.managerInstrumental(key: "a|b|", on: false)),

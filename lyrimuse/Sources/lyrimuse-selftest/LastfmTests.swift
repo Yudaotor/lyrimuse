@@ -9,6 +9,23 @@ import Foundation
 func runLastfmTests() {
     checkScrobbleAudit()
 
+    // ---- 镜像状态文件只在后台读(14 章决策 194)----
+    do {
+        let file = (try? String(contentsOf: URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("lyrimuse/Settings/LastfmMirrorStatus.swift"), encoding: .utf8)) ?? ""
+        let notifier = (try? String(contentsOf: URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("lyrimuse/Settings/LastfmMirrorNotifier.swift"), encoding: .utf8)) ?? ""
+        let refresh = sourceBody("func refresh()", in: file)
+        expectEqual(appCodeOccurrences(of: "LastfmMirrorStatus.current") == ["lyrimuse/Settings/LastfmMirrorStatus.swift"]
+                    && sourceHas(refresh, "Task.detached(priority: .utility)")
+                    && sourceHas(refresh, "LastfmMirrorStatus.current")
+                    && sourceHas(refresh, "guard !readInFlight else { return }")
+                    && !sourceHas(sourceBody("static func clear()", in: file), "cached"), true,
+                    "镜像状态(契约): 只在观察器的后台读里读文件,面板、设置页、clear 都不在主线程上碰它")
+        expectEqual(sourceHas(notifier, "watcher.$info.combineLatest(watcher.$loaded) .filter { $0.1 }"), true,
+                    "镜像状态(契约): 通知等第一次读落下再看,读到之前的 nil 不撤通知")
+    }
+
     // ---- 授权成功后桥接用户名(lastfm_user)跟不跟着换 ----
     do {
         let adopt = LastfmBridgeUser.shouldAdoptAuthorized

@@ -255,25 +255,29 @@ struct LyricsLibraryStatsPanel: View {
             guard windowVisible else { return }
             // 两份状态文件先读,再重读缓存:这一块每次进页面都是新建的,状态从 nil 起步,而 reload 要把整份
             // 缓存按指纹过一遍、下面的循环还要先睡一拍 —— 后读的话,扫库明明在跑,这两行头几秒显示的是「开始」。
-            fillSweepStatus = LyricsFillSweep.current
-            fullScanState = LyricsFullScan.current
+            // 状态文件一律在后台读(`readWithFullScan`),主线程上不 stat(14 章决策 194)。
+            let first = await LyricsFillSweep.readWithFullScan()
+            guard !Task.isCancelled else { return }
+            fillSweepStatus = first.fill
+            fullScanState = first.full
             await store.refreshLibraryDigest()
             while !Task.isCancelled {
                 let starting = fillSweepStarting || fullScanStarting
                 try? await Task.sleep(for: .seconds(starting ? 1 : (fillSweepStatus?.running == true ? 2 : 5)))
                 guard !Task.isCancelled else { break }
+                let files = await LyricsFillSweep.readWithFullScan()
+                guard !Task.isCancelled else { break }
                 let previous = fillSweepStatus
-                let sweep = LyricsFillSweep.current
+                let sweep = files.fill
                 if sweep != fillSweepStatus { fillSweepStatus = sweep }
                 // 引擎接手了(或者等超时了),清掉"正在启动"(loading 动画消失、切换到进度条)。
-                if starting && !LyricsFillSweep.isPending {
+                if starting && !LyricsFillSweep.isPending(status: sweep) {
                     fillSweepStarting = false
                     fullScanStarting = false
                 }
                 // 这份文件一轮里只在开头/结尾各写一次(外加引擎每次启动),按 mtime
                 // 读的开销就是一次 stat,跟着同一个节拍走即可。
-                let full = LyricsFullScan.current
-                if full != fullScanState { fullScanState = full }
+                if files.full != fullScanState { fullScanState = files.full }
                 if LyricsFillSweep.changesVisibleRows(previous: previous, current: sweep) {
                     await store.refreshLibraryDigest()
                 }

@@ -83,3 +83,24 @@ func sourceBody<S: StringProtocol>(_ signature: String, in text: S) -> String {
     }
     return ""
 }
+
+/// App 与 Core 两个目标(`Sources/lyrimuse`、`Sources/LyrimuseCore`)的代码里 `snippet` 出现在哪:一处一条「目录/相对路径」,
+/// 按路径排序。先剥掉 `//` 开头的注释行,比对口径同 sourceCount。钉「这个读取器只在后台那一处被读」用:
+/// 主线程上再冒出一处同步读,这份清单就多一条。
+func appCodeOccurrences(of snippet: String) -> [String] {
+    let sources = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+    var hits: [String] = []
+    for dir in ["lyrimuse", "LyrimuseCore"] {
+        let root = sources.appendingPathComponent(dir)
+        guard let walker = FileManager.default.enumerator(atPath: root.path) else { continue }
+        for case let rel as String in walker where rel.hasSuffix(".swift") {
+            guard let text = try? String(contentsOfFile: root.appendingPathComponent(rel).path, encoding: .utf8),
+                  sourceBytes(text, contain: snippet) else { continue }
+            let code = text.split(separator: "\n", omittingEmptySubsequences: false)
+                .filter { !$0.trimmingCharacters(in: .whitespaces).hasPrefix("//") }
+                .joined(separator: "\n")
+            hits += Array(repeating: "\(dir)/\(rel)", count: sourceCount(code, snippet))
+        }
+    }
+    return hits.sorted()
+}

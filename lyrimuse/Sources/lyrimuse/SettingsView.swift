@@ -659,6 +659,9 @@ struct SettingsView: View {
         // 播放器页那张引擎状态卡直接用它发布的状态,不再自己每 2 秒起一次 launchctl。
         .environmentObject(playerHealth)
         .background(SettingsWindowConfigurator(surface: windowSurface, sidebarDefaultWidth: sidebarWidth))
+        .onReceive(NotificationCenter.default.publisher(for: DebugDeepLinks.settingsVisibilityNotification)) {
+            windowSurface.debugOverride = ($0.object as? NSNumber)?.boolValue
+        }
         // 见 AppActions.pendingSettingsSelection 注释——Onboarding 的 Last.fm 步骤
         // 借这个信箱指定"这次打开设置窗口要直接停在哪个分类",这里读一次就清空,不影响
         // 之后用户正常打开设置窗口(默认回到上次停留的顶层分类,见 SettingsTab.restoredLastTab)。

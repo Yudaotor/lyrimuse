@@ -1662,6 +1662,31 @@ func runLyricsManagerTests() {
                     && sourceHas(sourceBody("private func poll()", in: notifier), "LyricsFillSweep.current")
                     && !sourceHas(sourceBody("private func tick(", in: notifier), "LyricsFillSweep.current"), true,
                     "收尾通知(契约): 状态文件在后台读,主线程上不 stat")
+        // 歌词管理、设置页歌词库的轮询:两份状态文件都经 readWithFullScan 在后台读,别处不同步读(14 章决策 194)。
+        let fillSweepSource = (try? String(contentsOf: URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("LyrimuseCore/Local/LyricsFillSweep.swift"), encoding: .utf8)) ?? ""
+        let pendingBody = sourceBody("public static func isPending(status: Info?) -> Bool", in: fillSweepSource)
+        expectEqual(sourceHas(sourceBody("public static func readWithFullScan()", in: fillSweepSource),
+                              "await Task.detached(priority: .utility) { (current, LyricsFullScan.current) }.value")
+                    && appCodeOccurrences(of: "LyricsFullScan.current") == ["LyrimuseCore/Local/LyricsFillSweep.swift"]
+                    && appCodeOccurrences(of: "LyricsFillSweep.current") == ["lyrimuse/Settings/LyricsSweepNotifier.swift"]
+                    && sourceHas(pendingBody, "requestLock.lock()") && !pendingBody.contains("current")
+                    && !pendingBody.contains(" lock.lock()"), true,
+                    "扫库状态(契约): 两份状态文件只在后台读;判 pending 用传进来的状态、不跟读文件抢同一把锁")
+        let managerSource = (try? String(contentsOf: URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("lyrimuse/LyricsManager/LyricsManagerView.swift"), encoding: .utf8)) ?? ""
+        let decisionSource = (try? String(contentsOf: URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("lyrimuse/LyricsManager/LyricsDecisionSheet.swift"), encoding: .utf8)) ?? ""
+        expectEqual(sourceCount(managerSource, "await LyricsFillSweep.readWithFullScan()") == 2
+                    && sourceHas(managerSource, "LyricsFillSweep.isPending(status: sweep)")
+                    && sourceHas(managerSource, "fullScan: fullScanState)")
+                    && sourceHas(decisionSource, "let current = fullScan, current.scoringVersion > 0"), true,
+                    "歌词管理(契约): 窗口可见时的轮询在后台读状态文件,决策面板用歌词管理读好的打分版本")
+        let statsSource = (try? String(contentsOf: URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("lyrimuse/Settings/LyricsLibraryStats.swift"), encoding: .utf8)) ?? ""
+        expectEqual(sourceCount(statsSource, "await LyricsFillSweep.readWithFullScan()") == 2
+                    && sourceHas(statsSource, "LyricsFillSweep.isPending(status: sweep)"), true,
+                    "设置页歌词库(契约): 页面可见时的轮询在后台读状态文件")
     }
 
     // ---- 全量重新扫库(LyricsFullScan)的状态文件 ----
@@ -1737,7 +1762,7 @@ func runLyricsManagerTests() {
         // 决策面板的「旧版评分规则」按引擎发布的打分版本号判,App 不写死一份;主版本号、开发修订号
         // 两段一起比(源码契约)。
         let decisionSheet = appSource("LyricsManager/LyricsDecisionSheet.swift")
-        expectEqual(decisionSheet.contains("let current = LyricsFullScan.current, current.scoringVersion > 0")
+        expectEqual(decisionSheet.contains("let current = fullScan, current.scoringVersion > 0")
                     && decisionSheet.contains("(version, decision.scoringRevision ?? 0) < (current.scoringVersion, current.scoringRevision)")
                     && !decisionSheet.contains("currentLyricsScoringVersion"), true,
                     "旧版评分规则: 按引擎发布的打分版本号与修订号判,不写死")

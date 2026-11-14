@@ -153,6 +153,9 @@ public enum LyrimuseDeepLink: Equatable, Sendable {
         /// 歌词管理当作被挡住 / 露出来,不看遮挡状态和桌面空间(`debug/manager-visibility?state=hidden|visible|auto`,`auto` = 交还给它)。
         /// 不切桌面、不动别的窗口就能验「看不见时停轮询、重新露出来补读」。nil = auto。
         case managerVisibility(override: Bool?)
+        /// 设置窗口当作被挡住 / 露出来,不看遮挡状态和桌面空间(`debug/settings-visibility?state=hidden|visible|auto`,
+        /// `auto` = 交还给它)。不提前台就能验设置页里看得见才跑的轮询(歌词库、账号页)。nil = auto。
+        case settingsVisibility(override: Bool?)
         /// 歌词管理里把这一条标成 / 取消纯音乐,跟详情页那颗开关走同一条路(交给引擎、改完重读):
         /// `debug/manager-instrumental?key=<写法键>&on=1|0`。验「改动之后的重读」用。
         case managerInstrumental(key: String, on: Bool)
@@ -571,6 +574,13 @@ public enum LyrimuseDeepLink: Equatable, Sendable {
             case "auto": self = .debug(.managerVisibility(override: nil))
             default: return nil
             }
+        case ("debug", "/settings-visibility"):
+            switch value("state")?.lowercased() {
+            case "visible": self = .debug(.settingsVisibility(override: true))
+            case "hidden": self = .debug(.settingsVisibility(override: false))
+            case "auto": self = .debug(.settingsVisibility(override: nil))
+            default: return nil
+            }
         case ("debug", "/touchbar-display"):
             guard let color = value("color").flatMap({ TouchBarLyricsColorMode(rawValue: $0.lowercased()) }) else { return nil }
             self = .debug(.touchBarDisplay(color: color))
@@ -873,6 +883,9 @@ public enum LyrimuseDeepLink: Equatable, Sendable {
                 components.queryItems = [URLQueryItem(name: "key", value: key), URLQueryItem(name: "on", value: on ? "1" : "0")]
             case let .managerVisibility(override):
                 components.path = "/manager-visibility"
+                components.queryItems = [URLQueryItem(name: "state", value: override.map { $0 ? "visible" : "hidden" } ?? "auto")]
+            case let .settingsVisibility(override):
+                components.path = "/settings-visibility"
                 components.queryItems = [URLQueryItem(name: "state", value: override.map { $0 ? "visible" : "hidden" } ?? "auto")]
             case let .onboardingStep(step):
                 components.path = "/onboarding-step"

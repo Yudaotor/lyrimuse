@@ -145,6 +145,8 @@ public final class LocalPlaybackSource: ObservableObject {
     /// "根本没查成"。没有它的话,断网时界面会一直停在"搜索歌词中…" —— 而那句话在
     /// 断网状态下永远不会有下文。
     @Published public private(set) var engineNetworkDown: Bool = false
+    /// `refreshEngineNetworkDown` 派出的那次后台读还没回来;没回来就不再派(磁盘卡住时不堆积)。
+    private var engineStatusReadInFlight = false
     // Spotify 广告插播——补上:media-control 自己的文档确认广告播放时 album
     // 字段恒为空字符串,靠"当前是 Spotify 在报告 + album 为空"这个信号判断(见
     // apply() 里的计算);跟 isCurrentTrackInstrumental 同一个优先级问题,必须排在
@@ -4427,6 +4429,23 @@ public final class LocalPlaybackSource: ObservableObject {
         }
     }
 
+    /// 在后台读 `EngineStatus`(按 mtime 缓存,常态是一次 stat),回到主线程才更新 `engineNetworkDown`。主线程上 stat
+    /// 碰上磁盘卡住就是几秒的卡顿(14 章决策 194)。只有这一处读它,一次只在飞一个,结果按派出顺序落下。
+    /// `engineNetworkDown` 只给界面说「网络不通」,位置、换歌判断都不读它,晚几毫秒落下不影响 apply 里的任何判断。
+    private func refreshEngineNetworkDown() {
+        guard !engineStatusReadInFlight else { return }
+        engineStatusReadInFlight = true
+        Task.detached(priority: .utility) { [weak self] in
+            let down = EngineStatus.networkLooksDown
+            await self?.finishEngineStatusRead(down)
+        }
+    }
+
+    private func finishEngineStatusRead(_ down: Bool) {
+        engineStatusReadInFlight = false
+        if down != engineNetworkDown { engineNetworkDown = down }
+    }
+
     private func apply(_ rawSnapshot: MediaControlSnapshot) {
         // 电台的分母:系统报的 `duration` 是**整档节目**的(实测 3390.122s = 56 分半),
         // 而位置已经在 MediaControlClient 里换成了单曲口径(见 RadioTrackClock)。分母不跟着换,
@@ -4697,9 +4716,8 @@ public final class LocalPlaybackSource: ObservableObject {
         // 代价是可控的:mtime 只是一次 stat,而重新解析只在文件真的被改写时发生 —— 那时候
         // 下一次 lookup() 本来也要重新解析(EnrichCacheReader 自己就是按 mtime 缓存的)。
         // 跟下面读 enrich cache 的 mtime 挂在同一个节拍上(每次快照,约 2s 一次)。
-        // 成本是一次 stat —— EngineStatus 自己按 mtime 缓存,文件没变就不会重新解码。
-        let networkDown = EngineStatus.networkLooksDown
-        if networkDown != engineNetworkDown { engineNetworkDown = networkDown }
+        // 「网络不通」状态文件同一节拍在后台读、读完再更新 engineNetworkDown(见 refreshEngineNetworkDown)。
+        refreshEngineNetworkDown()
 
         // 每拍先让 Reader 推进内容(mtime 变了在后台解码,见 refreshIfNeeded 注释),触发
         // 键用**已解码代**的版本而不是文件即时 mtime——stale 返回窗口里拿文件 mtime 触发

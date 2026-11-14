@@ -23,7 +23,11 @@ final class LastfmMirrorNotifier {
 
     func start() {
         guard cancellable == nil else { return }
-        cancellable = LastfmMirrorStatusWatcher.shared.$info
+        // 第一次后台读落下之前的 nil 不算「恢复了」,不撤通知中心里那条。
+        let watcher = LastfmMirrorStatusWatcher.shared
+        cancellable = watcher.$info.combineLatest(watcher.$loaded)
+            .filter { $0.1 }
+            .map { $0.0 }
             .removeDuplicates()
             .sink { [weak self] info in
                 Task { @MainActor in self?.handle(info) }

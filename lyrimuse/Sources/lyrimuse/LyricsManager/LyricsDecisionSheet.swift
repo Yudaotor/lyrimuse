@@ -11,11 +11,12 @@ import LyrimuseCore
 // 它拿的是新鲜正文;决策记录里根本没有正文(引擎侧三条铁律之一,见 decision.go),
 // 也就不存在"从存档采纳"这种操作。
 /// 这份存档是不是用旧版打分规则跑的。当前版本号读引擎发布在全量扫库状态文件里的那个
-/// (`LyricsFullScan.State.scoringVersion` / `scoringRevision`),读不到就不判:宁可不提示,也不拿一个猜来的版本号去比。
+/// (`LyricsFullScan.State.scoringVersion` / `scoringRevision`),由歌词管理在后台读好传进来(`fullScan`),
+/// 这里不读文件;读不到就不判:宁可不提示,也不拿一个猜来的版本号去比。
 /// 主版本号、开发修订号按两段整数比。版本号只用来比新旧,不展示给用户(裸编号没有对照、看不出新旧)。
-private func scoredWithOlderRules(_ decision: LyricsResolutionDecision) -> Bool {
+private func scoredWithOlderRules(_ decision: LyricsResolutionDecision, fullScan: LyricsFullScan.State?) -> Bool {
     guard let version = decision.scoringVersion,
-          let current = LyricsFullScan.current, current.scoringVersion > 0 else { return false }
+          let current = fullScan, current.scoringVersion > 0 else { return false }
     return (version, decision.scoringRevision ?? 0) < (current.scoringVersion, current.scoringRevision)
 }
 
@@ -26,6 +27,8 @@ struct LyricsDecisionSheet: View {
     /// 当前这份歌词不是这些存档里任何一轮自动决策选出来的(手动改过,或手动采纳了别的源的候选):
     /// 保存编辑 / 采纳候选不写新的决策存档,出处那一槽还停在之前那轮自动决策上。
     private let currentLyricsNotFromDecision: Bool
+    /// 引擎发布的全量扫库状态,只用它带的打分版本号(见 `scoredWithOlderRules`)。
+    private let fullScan: LyricsFullScan.State?
     @State private var selectedRecord = 0
     /// 哪几条候选是展开的(按源名)。**折叠态给差值、展开态给绝对明细带解释** ——
     /// 见 candidateRow 头注。默认全折:判词卡已经回答了"为什么是它",明细是第二层。
@@ -41,8 +44,10 @@ struct LyricsDecisionSheet: View {
     /// 两份是同一轮(decidedAt+path 一致)就只展示一份,免得多出一个内容相同的页签。
     init(summary: EnrichCacheStore.Summary,
          latest: LyricsResolutionDecision?,
-         applied: LyricsResolutionDecision?) {
+         applied: LyricsResolutionDecision?,
+         fullScan: LyricsFullScan.State?) {
         self.summary = summary
+        self.fullScan = fullScan
         let origin = applied ?? ((latest?.applied == true) ? latest : nil)
         // 手改过(人工修正),或者生效的源跟那轮的胜者对不上(手动采纳了另一个源的候选):那一轮只是之前的
         // 自动决策,不再是现在这份词的出处,页签别这么叫、判词上面说一句。
@@ -599,7 +604,7 @@ struct LyricsDecisionSheet: View {
         if let applied = decision.applied {
             head.append(applied ? L10n.t("已采用") : L10n.t("评估后未更换"))
         }
-        if scoredWithOlderRules(decision) {
+        if scoredWithOlderRules(decision, fullScan: fullScan) {
             head.append(L10n.t("旧版评分规则"))
         }
         if let ts = decision.decidedAt, ts > 0 {
@@ -761,7 +766,7 @@ struct LyricsDecisionSheet: View {
             }
             // 只在存档确实比当前算法旧时提示一句(见 scoredWithOlderRules),呼应面板副标题
             // "现在重新搜索结果可能不同"那句话,给出具体原因。
-            if scoredWithOlderRules(decision) {
+            if scoredWithOlderRules(decision, fullScan: fullScan) {
                 InfoChip(icon: "arrow.triangle.2.circlepath", text: L10n.t("旧版评分规则"), tint: .orange)
             }
             if let ts = decision.decidedAt, ts > 0 {

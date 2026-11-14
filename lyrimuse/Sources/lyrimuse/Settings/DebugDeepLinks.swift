@@ -24,6 +24,8 @@ enum DebugDeepLinks {
     static let editNotifyChannelNotification = Notification.Name("lyrimuse.debug.editNotifyChannel")
     /// `debug/manager-visibility`:object 是 NSNumber(true = 当作露出来,false = 当作挡住),nil = 交还给遮挡状态。
     static let managerVisibilityNotification = Notification.Name("lyrimuse.debug.managerVisibility")
+    /// `debug/settings-visibility`:同上,对设置窗口。
+    static let settingsVisibilityNotification = Notification.Name("lyrimuse.debug.settingsVisibility")
     /// `debug/onboarding-step`:object 是 `OnboardingStep`,引导窗口收到后翻到那一步。
     static let onboardingStepNotification = Notification.Name("lyrimuse.debug.onboardingStep")
 
@@ -302,6 +304,9 @@ enum DebugDeepLinks {
         case let .managerVisibility(override):
             NotificationCenter.default.post(name: managerVisibilityNotification, object: override.map { NSNumber(value: $0) })
             logger.notice("debug manager visibility override=\(override.map { String($0) } ?? "auto", privacy: .public)")
+        case let .settingsVisibility(override):
+            NotificationCenter.default.post(name: settingsVisibilityNotification, object: override.map { NSNumber(value: $0) })
+            logger.notice("debug settings visibility override=\(override.map { String($0) } ?? "auto", privacy: .public)")
         case let .onboardingStep(step):
             NotificationCenter.default.post(name: onboardingStepNotification, object: step)
             logger.notice("debug onboarding step=\(String(describing: step), privacy: .public)")
@@ -387,6 +392,13 @@ enum DebugDeepLinks {
                            "menuBarDark": MenuBarAppearanceStore.shared.isDark],
             "checkpoint": checkpointSaved != nil,
             "fullDiskAccess": FullDiskAccessPermission.shared.debugState,
+            // 后台读的状态文件此刻发布出来的结论:Last.fm 镜像(`loaded` 为 false = 第一次还没读完)、引擎报的网络不通。
+            "stateFiles": [
+                "lastfmMirror": ["loaded": LastfmMirrorStatusWatcher.shared.loaded,
+                                 "error": LastfmMirrorStatusWatcher.shared.info.map { $0.error as Any } ?? NSNull(),
+                                 "at": LastfmMirrorStatusWatcher.shared.info.map { $0.at as Any } ?? NSNull()],
+                "engineNetworkDown": LocalPlaybackSource.shared.engineNetworkDown,
+            ],
             "simulation": PlaybackSimulation.current.map { sim -> Any in
                 ["title": sim.title, "artist": sim.artist, "positionSecs": sim.elapsed(at: Date()),
                  "playing": sim.isPlaying(at: Date()), "ad": sim.ad, "idle": sim.idle]

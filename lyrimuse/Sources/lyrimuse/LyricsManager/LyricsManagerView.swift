@@ -2357,9 +2357,12 @@ struct LyricsManagerView: View {
                 .task(id: windowSurface.isVisible) {
                     guard windowSurface.isVisible else { return }
                     let revealStart = CFAbsoluteTimeGetCurrent()
-                    // 两份状态文件先读,再重读缓存:后读的话扫描明明在跑,进度卡头几秒是空着的。
-                    fillSweepStatus = LyricsFillSweep.current
-                    fullScanState = LyricsFullScan.current
+                    // 两份状态文件先读,再重读缓存:后读的话扫描明明在跑,进度卡头几秒是空着的。状态文件一律在后台读
+                    // (`readWithFullScan`),主线程上不 stat(14 章决策 194)。
+                    let first = await LyricsFillSweep.readWithFullScan()
+                    guard !Task.isCancelled else { return }
+                    fillSweepStatus = first.fill
+                    fullScanState = first.full
                     await store.reload(onlyIfChanged: true)
                     refreshPlaceholder()
                     await LyricsManagerBaseline.logReveal(since: revealStart)
@@ -2371,12 +2374,13 @@ struct LyricsManagerView: View {
                         guard !Task.isCancelled else { continue }
                         // 进度文件按 mtime 读(LyricsFillSweep.current 内部缓存),Equatable
                         // 没变就不赋值——不制造无意义的重渲染。
+                        let files = await LyricsFillSweep.readWithFullScan()
+                        guard !Task.isCancelled else { continue }
                         let previous = fillSweepStatus
-                        let sweep = LyricsFillSweep.current
+                        let sweep = files.fill
                         if sweep != fillSweepStatus { fillSweepStatus = sweep }
-                        let full = LyricsFullScan.current
-                        if full != fullScanState { fullScanState = full }
-                        if fillSweepPending && !LyricsFillSweep.isPending { fillSweepPending = false }
+                        if files.full != fullScanState { fullScanState = files.full }
+                        if fillSweepPending && !LyricsFillSweep.isPending(status: sweep) { fillSweepPending = false }
                         // 扫描期间缓存文件每搜完一首都会变,可列表上看得见的东西只在补出一首、一轮开始或结束
                         // 时才变(LyricsFillSweep.changesVisibleRows);每条都整份重读一次要一两秒 CPU。
                         let busy = placeholderSummary != nil
@@ -3419,7 +3423,8 @@ struct LyricsManagerView: View {
                 // 按钮只在 hasDecision 时出现,两槽在 presentDecision 里解好。都解不出来(存档坏了、格式对不上)时给一页
                 // 带「完成」的说明,别弹一张空白、关不掉的面板。
                 if let slots = decisionSlots, slots.key == key, slots.latest != nil || slots.applied != nil {
-                    LyricsDecisionSheet(summary: summary, latest: slots.latest, applied: slots.applied)
+                    LyricsDecisionSheet(summary: summary, latest: slots.latest, applied: slots.applied,
+                                        fullScan: fullScanState)
                 } else {
                     DecisionUnavailableSheet()
                 }

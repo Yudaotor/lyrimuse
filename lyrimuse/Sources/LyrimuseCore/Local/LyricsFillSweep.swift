@@ -176,6 +176,12 @@ public enum LyricsFillSweep {
         return cached
     }
 
+    /// 这份进度和 `LyricsFullScan` 的状态一起在后台读,读完回到调用方。主线程上定时刷新的界面用它,
+    /// 不在主线程上 stat:碰上磁盘卡住就是几秒的卡顿,见 14 章决策 194。
+    public static func readWithFullScan() async -> (fill: Info?, full: LyricsFullScan.State?) {
+        await Task.detached(priority: .utility) { (current, LyricsFullScan.current) }.value
+    }
+
     /// 请求文件的内容——纯函数,selftest 覆盖(引擎侧 parseLyricsFillRequest 是它的读方)。
     /// keys 为空 = 全部;非空 = 只这些。key 原样写,一行一个;含换行的 key 不存在
     /// (EnrichCacheKeys 由 media tag 拼成,tag 里不会有换行)。
@@ -206,9 +212,9 @@ public enum LyricsFillSweep {
 
     private static func write(_ body: String, startsRound: Bool) -> Bool {
         let ok = FileIO.write(body, to: requestURL)
-        lock.lock()
+        requestLock.lock()
         requestedAt = ok && startsRound ? Date() : nil
-        lock.unlock()
+        requestLock.unlock()
         return ok
     }
 
@@ -220,13 +226,16 @@ public enum LyricsFillSweep {
     public static let pendingTimeout: TimeInterval = 10
 
     nonisolated(unsafe) private static var requestedAt: Date?
+    /// 只护 `requestedAt`,跟读状态文件那把 `lock` 分开:后台那次 stat 卡住时握着 `lock`,主线程写请求、判 pending 不跟着等。
+    private static let requestLock = NSLock()
 
-    /// 此刻是不是「请求写下了、引擎还没接手」。两个入口(歌词管理侧栏「⋯」、设置页歌词库)共用。
-    public static var isPending: Bool {
-        lock.lock()
+    /// 按调用方读到的进度 `status` 判此刻是不是「请求写下了、引擎还没接手」。两个入口(歌词管理侧栏「⋯」、设置页歌词库)共用;
+    /// `status` 由 `readWithFullScan` 在后台读好传进来,这里不读文件。
+    public static func isPending(status: Info?) -> Bool {
+        requestLock.lock()
         let at = requestedAt
-        lock.unlock()
-        return isPending(requestedAt: at, status: current, now: Date())
+        requestLock.unlock()
+        return isPending(requestedAt: at, status: status, now: Date())
     }
 
     /// 判据本体,纯函数,selftest 覆盖。状态文件里出现了开工时刻不早于请求的一轮(含一条候选都没有、

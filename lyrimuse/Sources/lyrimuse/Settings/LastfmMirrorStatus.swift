@@ -18,12 +18,15 @@ enum LastfmMirrorStatus {
 
     private static let url = LyrimusePaths.configFile("lyrimuse-lastfm-status.json")
 
-    private static var cachedMTime: Date?
-    private static var cached: Info?
+    private static let lock = NSLock()
+    nonisolated(unsafe) private static var cachedMTime: Date?
+    nonisolated(unsafe) private static var cached: Info?
 
-    /// 当前的致命错误;文件不存在/解析失败都是 nil。按 mtime 缓存 —— 侧边栏徽标每次
-    /// 渲染都会读这里,不能每次都做完整的读盘+解码。
+    /// 当前的致命错误;文件不存在/解析失败都是 nil。按 mtime 缓存,文件没变时只是一次 stat。
+    /// 只由 `LastfmMirrorStatusWatcher` 在后台读;界面一律读观察器发布的 `info`,主线程上不碰这里。
     static var current: Info? {
+        lock.lock()
+        defer { lock.unlock() }
         let mtime = (try? FileManager.default.attributesOfItem(atPath: url.path))?[.modificationDate] as? Date
         guard let mtime else {
             cachedMTime = nil
@@ -38,13 +41,12 @@ enum LastfmMirrorStatus {
 
     /// 重新连接成功/主动断开时清掉 —— 旧错误描述的是上一把钥匙,留着会让新连接顶着
     /// 一个不属于它的红标(引擎侧也会在下次成功提交时删,这里是即时反馈)。
+    /// 不碰 mtime 缓存(那把锁可能正被后台那次读握着):文件没了,下一次读按 mtime 为空自己清掉。
+    @MainActor
     static func clear() {
         FileIO.remove(url)
-        cachedMTime = nil
-        cached = nil
-        // 红标即时消失,不等观察器的下一跳。两个调用方(重连成功/断开)都在主线程
-        // (LastfmConnectController 是 @MainActor,另一处是视图 action)。
-        LastfmMirrorStatusWatcher.shared.refresh()
+        // 红标即时消失,不等观察器的下一跳。
+        LastfmMirrorStatusWatcher.shared.noteCleared()
     }
 }
 
@@ -57,25 +59,59 @@ enum LastfmMirrorStatus {
 /// 每 5 秒重读一次(LastfmMirrorStatus.current 按 mtime 缓存,常态代价是一次 stat),
 /// 值真变了才发布 —— 订阅的视图只在红标该出现/消失的那一刻各重算一次,其余时间
 /// objectWillChange 完全安静。App 启动时由 `LastfmMirrorNotifier` 订阅,从那一刻起就在跳(熔断要弹系统通知)。
+///
+/// 读文件在后台,回到主线程才发布:主线程上 stat 碰上磁盘卡住就是几秒的卡顿(14 章决策 194)。第一次读完之前
+/// `info` 是 nil、`loaded` 是 false;要区分「没读到」和「读过、没有错误」的(系统通知)看 `loaded`。
+@MainActor
 final class LastfmMirrorStatusWatcher: ObservableObject {
     static let shared = LastfmMirrorStatusWatcher()
 
     @Published private(set) var info: LastfmMirrorStatus.Info?
+    /// 第一次后台读已经落下。
+    @Published private(set) var loaded = false
 
     private var timer: Timer?
+    /// 派出的那次后台读还没回来;没回来就不再派(磁盘卡住时不堆积)。
+    private var readInFlight = false
+    /// 每次后台读按派出顺序编号,只采用比已采用的更新的那次;`noteCleared` 把还在飞的那次作废。
+    private var readsIssued = 0
+    private var readsApplied = 0
 
     private init() {
-        info = LastfmMirrorStatus.current
-        let t = Timer(timeInterval: 5, repeats: true) { [weak self] _ in self?.refresh() }
+        let t = Timer(timeInterval: 5, repeats: true) { [weak self] _ in
+            Task { @MainActor in self?.refresh() }
+        }
         // 差几秒无所谓,让系统合并唤醒。
         t.tolerance = 2
         RunLoop.main.add(t, forMode: .common)
         timer = t
+        refresh()
     }
 
-    /// 立即重读一次。定时器之外,LastfmMirrorStatus.clear()(重连/断开)也调它。
+    /// 在后台重读一次,读完发布;上一次还没读完就什么都不做。
     func refresh() {
-        let now = LastfmMirrorStatus.current
-        if now != info { info = now }
+        guard !readInFlight else { return }
+        readInFlight = true
+        readsIssued += 1
+        let read = readsIssued
+        Task.detached(priority: .utility) { [weak self] in
+            let latest = LastfmMirrorStatus.current
+            await self?.finishRead(latest, read: read)
+        }
+    }
+
+    private func finishRead(_ latest: LastfmMirrorStatus.Info?, read: Int) {
+        readInFlight = false
+        guard read > readsApplied else { return }
+        readsApplied = read
+        if latest != info { info = latest }
+        if !loaded { loaded = true }
+    }
+
+    /// `LastfmMirrorStatus.clear()` 删掉状态文件之后:当场发布「没有错误」,还在飞的那次读(可能读到删之前的文件)作废。
+    func noteCleared() {
+        readsApplied = readsIssued
+        if info != nil { info = nil }
+        if !loaded { loaded = true }
     }
 }
