@@ -11,6 +11,12 @@
 #   ./build.sh --no-restart   只构建,不重启
 #   ./build.sh --dest <路径>  组装到指定路径而不是 /Applications(隐含 --no-restart),
 #                             供 package.sh 一次跑出两种架构的包
+#   ./build.sh --ci-sdk       按正式版的编法装机:release 配置,sdk 字段写成最新正式版里的值
+#                             (scripts/ci-sdk-version.sh 读),复现只在正式版出现的 linked-on-or-after 行为
+#   ./build.sh --ci-sdk=26.5  同上,sdk 版本直接给定
+#
+# --ci-sdk 装上的包会在输出和 .build/build.sh.last-install(kind=ci-sdk)里标明,排队中的普通装机不会合并到它上面;
+# 换回日常的包再跑一次不带参数的 ./build.sh。见 14 章决策 192「本机验发版行为」。
 #
 # 发布包分成两份(打包见 package.sh),两个方向都别退回去:
 #   - 只发 arm64:cask 只写 `depends_on macos: :sonoma`、appcast 只写 minimumSystemVersion,两个都不管架构,
@@ -72,6 +78,11 @@ coalesce_if_installed() {
   if [ "$PLAIN_INSTALL" != 1 ] || [ -n "${LYRIMUSE_BUILD_NO_COALESCE:-}" ] || [ ! -f "$LAST_INSTALL" ]; then
     return 0
   fi
+  # 记录里的 kind 缺省按普通装机算;--ci-sdk 装的包不能顶替普通装机。
+  case "$(sed -n 's/^kind=//p' "$LAST_INSTALL" 2>/dev/null || true)" in
+    ""|plain) ;;
+    *) return 0 ;;
+  esac
   local app="/Applications/${APP_NAME}.app" last_snapshot_at last_pid last_bundle_ino current_bundle_ino running_pid
   last_snapshot_at="$(sed -n 's/^snapshot_at=//p' "$LAST_INSTALL" 2>/dev/null || true)"
   last_pid="$(sed -n 's/^pid=//p' "$LAST_INSTALL" 2>/dev/null || true)"
@@ -148,19 +159,37 @@ trap 'cmux_build_done $?; release_build_lock' EXIT
 NO_RESTART=0
 UNIVERSAL=0
 DEST=""
+CI_SDK=0
+CI_SDK_ARG=""
 while [ "$#" -gt 0 ]; do
   case "$1" in
     --no-restart) NO_RESTART=1 ;;
     --universal) UNIVERSAL=1 ;;
+    --ci-sdk) CI_SDK=1 ;;
+    --ci-sdk=*)
+      CI_SDK=1
+      CI_SDK_ARG="${1#--ci-sdk=}"
+      ;;
     --dest)
       shift
       DEST="${1:-}"
       [ -n "$DEST" ] || { echo "!! --dest 需要一个路径" >&2; exit 2; }
       ;;
-    *) echo "!! 未知参数:$1(可用:--universal / --no-restart / --dest <路径>)" >&2; exit 2 ;;
+    *) echo "!! 未知参数:$1(可用:--universal / --no-restart / --dest <路径> / --ci-sdk[=<版本>])" >&2; exit 2 ;;
   esac
   shift
 done
+# 写进 Swift 二进制 sdk 字段的版本:默认本机 SDK;--ci-sdk 时取正式版的值。
+STAMP_SDK="$(xcrun --show-sdk-version)"
+CI_SDK_SOURCE=""
+if [ "$CI_SDK" = 1 ]; then
+  ci_sdk_line="$(./scripts/ci-sdk-version.sh ${CI_SDK_ARG:+"$CI_SDK_ARG"})" || {
+    echo "!! --ci-sdk:取不到正式版的 sdk 版本" >&2
+    exit 2
+  }
+  read -r STAMP_SDK CI_SDK_SOURCE <<< "$ci_sdk_line"
+  echo "==> --ci-sdk:Swift 二进制的 sdk 字段写成 $STAMP_SDK(来源 $CI_SDK_SOURCE,本机 SDK $(xcrun --show-sdk-version)),release 配置编"
+fi
 if [ "$UNIVERSAL" = 1 ]; then
   ARCHES="arm64 x86_64"
 else
@@ -217,7 +246,7 @@ fi
 # 排在 codesign 之前:改写 Mach-O 会让已有签名失效。
 stamp_sdk_version() {
   local sdkv minos tmp
-  sdkv="$(xcrun --show-sdk-version)"
+  sdkv="$STAMP_SDK"
   for bin in "$@"; do
     [ -f "$bin" ] || continue
     minos="$(vtool -show-build "$bin" | awk '/minos/{print $2; exit}')"
@@ -1036,6 +1065,13 @@ SWAP
   APP_DIR="$FINAL_APP_DIR"
   BIN="$APP_DIR/Contents/MacOS/lyrimuse"
   echo "==> installed → $FINAL_APP_DIR"
+  # 换包一完成就记:哪怕后面重启失败,/Applications 里的也已经是这个包,别的会话读记录要看得出来。
+  if [ "$CI_SDK" = 1 ]; then
+    printf 'kind=ci-sdk\nsdk=%s\nsdk_source=%s\nsnapshot_at=%s\npid=%s\nbundle_ino=%s\n' \
+      "$STAMP_SDK" "$CI_SDK_SOURCE" "$SNAPSHOT_AT" "$$" "$(stat -f %i "$FINAL_APP_DIR")" > "$LAST_INSTALL.$$"
+    mv "$LAST_INSTALL.$$" "$LAST_INSTALL"
+    echo "==> 装的是 --ci-sdk 包(sdk $STAMP_SDK,release 配置),不是普通 dev 包;换回跑一次不带参数的 ./build.sh"
+  fi
 fi
 
 if [ "$NO_RESTART" = 1 ]; then
@@ -1125,8 +1161,8 @@ if [ -n "$OLD_PIDS" ] && [ "$pid" = "$OLD_PIDS" ]; then
   restore_engine_job
   exit 1
 fi
-echo "==> $APP_NAME running, pid ${pid% }"
-CMUX_BUILD_RESULT="App pid ${pid% }"
+echo "==> $APP_NAME running, pid ${pid% }${CI_SDK_SOURCE:+(--ci-sdk 包,sdk $STAMP_SDK)}"
+CMUX_BUILD_RESULT="App pid ${pid% }${CI_SDK_SOURCE:+,--ci-sdk 包 sdk $STAMP_SDK}"
 cmux_stage 0.96 "等引擎起来"
 
 # 引擎是独立的一份 launchd job(com.lyrimuse.collector),上面那一整套 kickstart/
@@ -1192,6 +1228,7 @@ fi
 
 # 普通装机全部成功(App 起来了、要等的引擎也起来了)才记下来,给排队在后面的合并用,见 coalesce_if_installed。
 if [ "$PLAIN_INSTALL" = 1 ] && [ -n "$SNAPSHOT_AT" ] && { [ ! -f "$ENGINE_PLIST" ] || [ -n "${cpid:-}" ]; }; then
-  printf 'snapshot_at=%s\npid=%s\nbundle_ino=%s\n' "$SNAPSHOT_AT" "$$" "$(stat -f %i "$FINAL_APP_DIR")" > "$LAST_INSTALL.$$"
+  printf 'kind=plain\nsdk=%s\nsnapshot_at=%s\npid=%s\nbundle_ino=%s\n' \
+    "$STAMP_SDK" "$SNAPSHOT_AT" "$$" "$(stat -f %i "$FINAL_APP_DIR")" > "$LAST_INSTALL.$$"
   mv "$LAST_INSTALL.$$" "$LAST_INSTALL"
 fi

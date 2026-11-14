@@ -1509,7 +1509,7 @@ func runOpsDiagnosticsTests() {
                let queue = code.range(of: "while ! mkdir \"$BUILD_LOCK\" 2>/dev/null; do\ncoalesce_if_installed\n"),
                let snapshot = code.range(of: "SNAPSHOT_AT=\"$("),
                let engine = code.range(of: "ENGINE_PLIST="),
-               let record = code.range(of: "mv \"$LAST_INSTALL.$$\" \"$LAST_INSTALL\"") {
+               let record = code.range(of: "printf 'kind=plain\\n") {
                 expectEqual(requested.lowerBound < queue.lowerBound, true, "排队合并: 请求时刻要在排队之前记")
                 expectEqual(check.lowerBound < queue.lowerBound, true, "排队合并: 判定函数要在排队之前定义")
                 let afterLock = code[queue.upperBound..<snapshot.lowerBound]
@@ -1525,6 +1525,22 @@ func runOpsDiagnosticsTests() {
                         "排队合并: 记录要跟 /Applications 里那个包的 inode 对上才算数")
             expectEqual(code.contains("awk -v a=\"$last_snapshot_at\" -v b=\"$BUILD_REQUESTED_AT\""), true,
                         "排队合并: 比的是上一次的快照时刻(a)晚于这次的请求时刻(b)")
+            if let fn = code.range(of: "coalesce_if_installed() {"),
+               let kindGate = code.range(of: "\"\"|plain) ;;\n*) return 0 ;;", range: fn.upperBound..<code.endIndex),
+               let inoCheck = code.range(of: "[ \"$last_bundle_ino\" = \"$current_bundle_ino\" ]") {
+                expectEqual(kindGate.lowerBound < inoCheck.lowerBound, true,
+                            "排队合并: 记录的 kind 不是 plain(--ci-sdk 装的包)时不合并(14 章决策 192)")
+            } else {
+                expectEqual(true, false, "排队合并: 判定函数里找不到按 kind 拦 --ci-sdk 记录那段(改写法了?)")
+            }
+            if let installed = code.range(of: "echo \"==> installed → $FINAL_APP_DIR\""),
+               let ciRecord = code.range(of: "printf 'kind=ci-sdk\\n"),
+               let noRestart = code.range(of: "if [ \"$NO_RESTART\" = 1 ]; then\necho \"==> built (restart skipped)\"") {
+                expectEqual(installed.lowerBound < ciRecord.lowerBound && ciRecord.lowerBound < noRestart.lowerBound, true,
+                            "--ci-sdk: 换包一完成就写 kind=ci-sdk 记录,--no-restart 退出之前(14 章决策 192)")
+            } else {
+                expectEqual(true, false, "--ci-sdk: 找不到换包后写 kind=ci-sdk 记录那段(改写法了?)")
+            }
         } else {
             expectEqual(true, false, "构建产品: 读不到 build.sh(路径挪了?)")
         }
