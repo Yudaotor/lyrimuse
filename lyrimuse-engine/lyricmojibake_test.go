@@ -25,6 +25,20 @@ func TestRepairLyricMojibake(t *testing.T) {
 		{"é»…", "é»…"},
 		{"ß»", "ß»"},
 		{"FRANÇ»", "FRANÇ»"},
+		// 大写词尾的 Â/Ã/Ä/Å 后面跟省略号、引号、破折号、不换行空格,是正常北欧语 / 葡萄牙语
+		{"OCH SÅ…", "OCH SÅ…"},
+		{"TÄNK PÅ”", "TÄNK PÅ”"},
+		{"IRMÃ…", "IRMÃ…"},
+		{"MINÄ…", "MINÄ…"},
+		{"NÃ’", "NÃ’"},
+		{"PÅ\u00a0OSS", "PÅ\u00a0OSS"},
+		{"Å’", "Å’"},
+		{"SINÄ’", "SINÄ’"},
+		{"SÅ—", "SÅ—"},
+		{"«AMANHÃ»", "«AMANHÃ»"},
+		// 句首大写字母后面、拼出来的大写字母接着小写的,照样是乱码
+		{"TÃ£o longe", "Tão longe"},
+		{"Ã‰tÃ© indien", "Été indien"},
 		// 后续字节不够数的不动
 		{"â€", "â€"},
 		{"晴天", "晴天"},
@@ -45,6 +59,7 @@ func TestLyricTextGarbled(t *testing.T) {
 		"Ha, ha, ha Â¨C **",
 		"youâ€™re",
 		"manhÃ£",
+		"TÃ£o",
 	}
 	for _, s := range garbled {
 		if !lyricTextGarbled(s) {
@@ -53,7 +68,7 @@ func TestLyricTextGarbled(t *testing.T) {
 	}
 	clean := []string{
 		"SÃO PAULO", "Mötley Crüe", "naïve café", "Ça va", "Âme", "Hãy Trao Cho Anh", "tão", "晴天", "",
-		"âme sœur", "Ã",
+		"âme sœur", "Ã", "«AMANHÃ»", "MANHÃ\u00a0",
 	}
 	for _, s := range clean {
 		if lyricTextGarbled(s) {

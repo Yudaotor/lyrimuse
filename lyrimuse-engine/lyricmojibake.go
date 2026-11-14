@@ -72,7 +72,7 @@ func repairLyricMojibake(s string) string {
 				}
 				raw = append(raw, cb)
 			}
-			if len(raw) == need+1 {
+			if len(raw) == need+1 && !(need == 1 && mojibakeLooksLikeCapsText(rs, i, utf8Lead(raw))) {
 				if u, size := utf8.DecodeRune(raw); u != utf8.RuneError && size == len(raw) && mojibakeRepairable(u) {
 					b.WriteRune(u)
 					i += need
@@ -83,6 +83,23 @@ func repairLyricMojibake(s string) string {
 		b.WriteRune(r)
 	}
 	return b.String()
+}
+
+// utf8Lead:raw 按 UTF-8 解出的那个字符,解不出为 utf8.RuneError。
+func utf8Lead(raw []byte) rune {
+	u, _ := utf8.DecodeRune(raw)
+	return u
+}
+
+// mojibakeLooksLikeCapsText:rs[i] 起的两个字符(带重音的大写拉丁字母 + 一个 0x80–0xBF / cp1252 高位符号)更像正常西文:前一个字符是
+// 大写字母、或拼出来的 u 是大写字母,而且这两个字符后面不接小写字母(`IRMÃ…`、`OCH SÅ…`、`PÅ` + 不换行空格 + `OSS`、«AMANHÃ»)。
+// 真乱码的两个字符在单词里,后面接着小写字母或拼出来的是小写(`manhÃ£`、`TÃ£o`、`Ã‰tÃ©`)。见 09 章决策 371。
+func mojibakeLooksLikeCapsText(rs []rune, i int, u rune) bool {
+	if i+2 < len(rs) && unicode.IsLower(rs[i+2]) {
+		return false
+	}
+	prevUpper := i > 0 && unicode.IsUpper(rs[i-1])
+	return prevUpper || unicode.IsUpper(u)
 }
 
 // lyricTextGarbled:一段歌词文本里有没有还原不了的乱码。只认正常歌词里不会出现的写法:替换字符、`Ã` / `Â` 后面跟着
@@ -102,7 +119,7 @@ func lyricTextGarbled(s string) bool {
 		}
 		switch r {
 		case 'Ã', 'Â':
-			if next >= 0x80 && next <= 0xBF {
+			if next >= 0x80 && next <= 0xBF && !mojibakeLooksLikeCapsText(rs, i, utf8Lead([]byte{byte(r), byte(next)})) {
 				return true
 			}
 			if r == 'Ã' && i > 0 && unicode.IsLower(rs[i-1]) && unicode.IsLower(next) {

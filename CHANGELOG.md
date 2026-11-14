@@ -31,7 +31,7 @@ New / 新功能
   手动选过界面语言的，升级后有了自己系统语言的界面时会提示改用
 - Added Pear Desktop, Swinsian, Plexamp, MyGo Music and Audirvana Studio
   and Origin as built-in players
-  新增内置播放器 Pear Desktop、Swinsian、Plexamp、MyGo Music 与 Audirvana（Studio 与 Origin）
+  内置播放器新增五款：Pear Desktop、Swinsian、Plexamp、MyGo Music，以及 Audirvana（含 Studio 与 Origin 两个版本）
 - Added WeRead audiobooks, showing the passage being read as subtitles,
   bringing built-in players to twenty
   新增微信读书听书，正在朗读的段落作为字幕显示，内置播放器增至 20 款

@@ -33,6 +33,10 @@ func id3WritebackLayout(r io.ReadSeeker, fileSize int64) (lyricsTagLayout, error
 		return lyricsTagLayout{}, wbErr(wbErrIO, err)
 	}
 	if n < 10 || !bytes.HasPrefix(header, []byte("ID3")) {
+		// 没有标签时在文件最前面插一份:开头得是 MPEG 帧同步,改了扩展名的 MP4 / WAV / OGG 插进去文件头就不在原位了。
+		if n < 2 || !mpegFrameSync(header) {
+			return lyricsTagLayout{}, wbErrf(wbErrUnsupportedTag, "no ID3 tag and no MPEG frame at the start")
+		}
 		return id3NewTagLayout(fileSize), nil
 	}
 	version, flags := header[3], header[5]
@@ -66,6 +70,11 @@ func id3WritebackLayout(r io.ReadSeeker, fileSize int64) (lyricsTagLayout, error
 			if !id3SizeIsSyncsafe(f) && f.raw[9] != 0 {
 				return lyricsTagLayout{}, wbErrf(wbErrUnsupportedTag, "frame %q: plain size with format flags %#x", f.id, f.raw[9])
 			}
+		}
+	}
+	for _, f := range frames {
+		if id3LyricsFrameUnreadable(f) {
+			return lyricsTagLayout{}, wbErrf(wbErrUnsupportedTag, "lyrics frame %q the reader cannot decode", f.id)
 		}
 	}
 	lang := id3WritebackDefaultLang
@@ -167,6 +176,30 @@ func id3KeptFrames(frames []id3RawFrame) []id3RawFrame {
 		}
 	}
 	return kept
+}
+
+// mpegFrameSync:b 开头是 MPEG 音频帧同步(11 个 1)。
+func mpegFrameSync(b []byte) bool {
+	return len(b) >= 2 && b[0] == 0xFF && b[1]&0xE0 == 0xE0
+}
+
+// id3LyricsFrameUnreadable:读法(tagsFromID3)解不出、帧里又带着内容的 USLT / SYLT。写回会删掉全部歌词帧,这种帧确认框、
+// 覆盖前的备份都看不到,所以整个文件不写。见 11 章决策 169。
+func id3LyricsFrameUnreadable(f id3RawFrame) bool {
+	body := f.raw[10:]
+	// 带格式标志的(压缩、加密、分组、反同步、数据长度指示)读法要先拆一层,这里不重算,一律当读不准。
+	if (f.id == "USLT" || f.id == "SYLT") && f.raw[9] != 0 {
+		return len(bytes.Trim(body, "\x00")) > 0
+	}
+	switch f.id {
+	case "USLT":
+		_, ok := textFromUSLT(body)
+		return !ok && len(body) > 4 && len(bytes.Trim(body[4:], "\x00")) > 0
+	case "SYLT":
+		_, ok := lrcFromSYLT(body)
+		return !ok && len(body) > 6 && len(bytes.Trim(body[6:], "\x00")) > 0
+	}
+	return false
 }
 
 // id3IsLyricsFrame:USLT、SYLT,以及描述是歌词键(isLyricsTagKey)的 TXXX。

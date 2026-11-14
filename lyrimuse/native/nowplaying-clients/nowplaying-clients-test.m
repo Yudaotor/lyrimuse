@@ -71,6 +71,13 @@ static void normalizationTests(void) {
         }
     }
     CHECK(normalize(@{}, @"player", @YES, now) == nil);
+    // 会话条目标识原样交回,键名同 Swift 的 MediaControlSnapshot.nowPlayingItemID;没有、不是字符串的不带。
+    NSMutableDictionary *withItem = [raw mutableCopy];
+    withItem[K("ContentItemIdentifier")] = @"6B1DF3F6-ABE6-410A-9CBD-33D46EA01878";
+    CHECK([normalize(withItem, @"player", @YES, now)[@"nowPlayingItemID"] isEqual:@"6B1DF3F6-ABE6-410A-9CBD-33D46EA01878"]);
+    withItem[K("ContentItemIdentifier")] = @42;
+    CHECK(normalize(withItem, @"player", @YES, now)[@"nowPlayingItemID"] == nil);
+    CHECK(normalize(raw, @"player", @YES, now)[@"nowPlayingItemID"] == nil);
     NSString *json = [[NSString alloc] initWithData:[NSJSONSerialization dataWithJSONObject:
         normalize(raw, @"player", @NO, now) options:0 error:NULL] encoding:NSUTF8StringEncoding];
     CHECK([json containsString:@"\"playing\":false"]);

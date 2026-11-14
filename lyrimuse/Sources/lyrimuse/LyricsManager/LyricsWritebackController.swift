@@ -68,9 +68,10 @@ final class LyricsWritebackController: ObservableObject {
         plan = Plan(key: key, path: result.filePath ?? file.path, player: file.player, hasLyrics: result.fileHasLyrics)
     }
 
-    /// 确认框的「写入 / 替换」。
-    func confirm() async {
-        guard let plan, !busy else { return }
+    /// 确认框的「写入 / 替换」。按钮要把确认框交进来的那份传进来:关框时绑定的 setter 先调 `cancel()` 清掉 `plan`,
+    /// 按钮里排的 Task 跑起来时 `self.plan` 已是 nil。不传(调试深链)才读 `self.plan`。见 11 章决策 169。
+    func confirm(_ confirmed: Plan? = nil) async {
+        guard let plan = confirmed ?? plan, !busy else { return }
         self.plan = nil
         busy = true
         defer { busy = false }

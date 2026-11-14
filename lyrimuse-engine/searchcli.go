@@ -258,7 +258,7 @@ func runSearchLyricsCLI(args []string) {
 	// 能预览、能手动采用。播放器报的时长不准时,不然弹窗上一条都没有、看不出是时长挡掉的。换的时长取 Apple 目录里
 	// 这首的(跟这个差得多才用),查不到就不带时长:不带时长时标题反查和几家按时长挑结果的那几步都用不上,常常还是空。
 	// 见 11 章决策 159。
-	if effectiveDuration > 0 && !manualSearchFoundUsable(filterEnabledLyricSources(results)) {
+	if effectiveDuration > 0 && !manualSearchFoundUsable(results) {
 		retryDuration := 0.0
 		if m := appleMusicMatchCached(context.Background(), sArtist, sTitle, sAlbum, 0); durationOffRetryUsable(m.durationSecs, effectiveDuration) {
 			retryDuration = m.durationSecs
@@ -296,10 +296,13 @@ func runSearchLyricsCLI(args []string) {
 	emit(neteaseInfo{}, results, enabledLyricSourceCount(), enabledLyricSourceCount())
 }
 
-// manualSearchFoundUsable:手动搜索这一轮有没有一条能自动选用的候选(分数不是 -1、有歌词正文)。纯音乐标记算「有结论」,
-// 也当有:那时不该再换时长搜一轮。
+// manualSearchFoundUsable:手动搜索这一轮启用的源里有没有一条能自动选用的候选(分数不是 -1、有歌词正文)。纯音乐标记算「有结论」,
+// 也当有:那时不该再换时长搜一轮。要传没过滤的结果:filterEnabledLyricSources 先把纯音乐标记删了(11 章决策 169)。
 func manualSearchFoundUsable(results []scoredLyricCandidateResult) bool {
 	for _, r := range results {
+		if !lyricSourceEnabled(r.Source) {
+			continue
+		}
 		if r.Instrumental || (r.Score >= 0 && !r.TrackFoundNoLyrics && strings.TrimSpace(r.Lyrics) != "") {
 			return true
 		}

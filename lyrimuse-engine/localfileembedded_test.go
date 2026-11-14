@@ -530,3 +530,31 @@ func TestEmbeddedLyricsMalformedBlocksBounded(t *testing.T) {
 		}
 	}
 }
+
+// v2.4 的反同步按帧还原:帧长是反同步后的字节数,整段先还原再拆会错位。数据长度指示、分组标识跳过,压缩、加密的帧不读。
+func TestEmbeddedLyricsID3v24FrameFormatFlags(t *testing.T) {
+	lrc := "[00:01.00]稻香"
+	title := []byte{1, 0xFF, 0x00, 0xFE, 'x', 0}
+	tag := id3Tag(4, id3Frame(4, "TIT2", title), id3Frame(4, "USLT", usltBody(3, []byte(lrc))))
+	tag[5] = 0x80
+	if got, ok := embeddedLyricsFromID3(tag[:10], tag[10:]); !ok || got != lrc {
+		t.Errorf("整个标签标了反同步的 v2.4:得到 %q, ok=%v", got, ok)
+	}
+	withFlags := func(flags byte, body []byte) []byte {
+		f := id3Frame(4, "USLT", body)
+		f[9] = flags
+		return f
+	}
+	dli := append([]byte{0, 0, 0, 0x20}, usltBody(3, []byte(lrc))...)
+	group := append([]byte{7}, usltBody(3, []byte(lrc))...)
+	for name, frame := range map[string][]byte{"数据长度指示": withFlags(0x01, dli), "分组标识": withFlags(0x40, group)} {
+		tag := id3Tag(4, frame)
+		if got, ok := embeddedLyricsFromID3(tag[:10], tag[10:]); !ok || got != lrc {
+			t.Errorf("v2.4 帧带%s:得到 %q, ok=%v", name, got, ok)
+		}
+	}
+	compressed := id3Tag(4, withFlags(0x08|0x01, append([]byte{0, 0, 0, 0x20}, 0x78, 0x9C, 1, 2, 3)))
+	if got, ok := embeddedLyricsFromID3(compressed[:10], compressed[10:]); ok {
+		t.Errorf("压缩的帧不读:得到 %q", got)
+	}
+}

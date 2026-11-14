@@ -4847,7 +4847,7 @@ private struct LyricsWritebackHooks: ViewModifier {
             .alert(L10n.t("将歌词写入歌曲文件？"), isPresented: Binding(
                 get: { controller.plan != nil }, set: { if !$0 { controller.cancel() } }),
                    presenting: controller.plan) { plan in
-                Button(plan.hasLyrics ? L10n.t("替换") : L10n.t("写入")) { Task { await controller.confirm() } }
+                Button(plan.hasLyrics ? L10n.t("替换") : L10n.t("写入")) { Task { await controller.confirm(plan) } }
                 Button(L10n.t("取消"), role: .cancel) { controller.cancel() }
             } message: { plan in
                 Text(LyricsWritebackController.confirmMessage(plan))

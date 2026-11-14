@@ -481,7 +481,7 @@ private func wiringContracts() {
     let lxClient = code("LyrimuseCore/Local/MediaControlClient.swift")
     expectEqual(sourceHas(lxClient, "return heldAcrossPlayerGap(preferringLXMusicOpenAPI(\npreferringAudirvana(preferringPlayingKaset(withPlaying), wanted: true), wanted: true))")
                 && lxClient.contains("return heldAcrossPlayerGap(preferringLXMusicOpenAPI(withAudirvana, wanted: lxMusicWanted))")
-                && lxClient.contains("return kasetPreferred ? .kaset : lxMusicPreferred ? .lxMusic : audirvanaPreferred ? .audirvana : scriptTarget"),
+                && lxClient.contains("return lxMusicPreferred ? .lxMusic : audirvanaPreferred ? .audirvana : kasetPreferred ? .kaset : scriptTarget"),
                 true, "洛雪退路: 系统不报洛雪时用开放 API 顶上(自动识别、多选两条路),播放控制跟着发给它")
     expectEqual(lxClient.contains("if wanted, found?.bundleIdentifier != PlaybackPlayer.lxMusic.bundleIdentifier,")
                 && lxClient.contains("           kasetWins(over: found, kaset: synthesized, otherPlayerLoading: otherBetweenTracks, alreadyPreferred: alreadyPreferred) {"),
@@ -918,6 +918,12 @@ private func scriptServerTests() {
                     && sourceHas(runScript, "case .busy: result = nil")
                     && sourceHas(runScript, "if PlayerScriptStall.note(name, succeeded: result?.succeeded == true, elapsed: elapsed, timeout: timeout) {"),
                 true, "读数常驻(契约): 先看退避;问这一家自己的进程;被占着不另起 osascript;卡住记退避")
+    let rawSnapshotBody = sourceBody("private static func rawSnapshot(", in: (try? String(contentsOf: URL(fileURLWithPath: #filePath)
+        .deletingLastPathComponent().deletingLastPathComponent()
+        .appendingPathComponent("LyrimuseCore/Local/MediaControlClient.swift"), encoding: .utf8)) ?? "")
+    expectEqual(sourceHas(rawSnapshotBody, "stopIdleAppleScriptServers(now: Date(), using: nil)")
+                    && sourceHas(runScript, "appleScriptServerLastUse.withLock { $0[name] = started }\nlet result: ProcessRunner.Result?"),
+                true, "读数常驻(契约): 每拍查闲置,退出了的播放器那个进程也会关;开问前先记使用时刻,正在答的不被关")
     let swinsianSampling = sourceBody("private static func startSampling(", in: (try? String(contentsOf: URL(fileURLWithPath: #filePath)
         .deletingLastPathComponent().deletingLastPathComponent()
         .appendingPathComponent("LyrimuseCore/Local/SwinsianPlayhead.swift"), encoding: .utf8)) ?? "")

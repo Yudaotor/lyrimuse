@@ -532,7 +532,7 @@ func runWebLyricsTests() {
         expectEqual(sourceBytes(sizedScreen, contain: "controlScale: playback.fullControlScale))")
                         && sourceHas(sizedScreen, "let layout = WebLyricsControlsLayout(width: w, rowTop: rowTop, rowHeight: rowHeight, skipGlyphWidth: skipWidth,\n                                             factor: next.controlScale)"),
                     true, "网页歌词: 播放键按歌词窗口那一档「控件大小」排")
-        expectEqual(sourceHas(sizedScreen, "let d = 26 * next.controlScale")
+        expectEqual(sourceHas(sizedScreen, "requested: next.controlScale,") && sourceHas(sizedScreen, "let d = 26 * factor")
                         && sourceHas(sizedChrome, "let d = 36 * k")
                         && sourceHas(sizedChrome, "lyricsSlot.frame = capsule.insetBy(dx: 3 * k, dy: 3 * k)"), true,
                     "网页歌词: 标题旁圆钮、右下一排跟着放大")

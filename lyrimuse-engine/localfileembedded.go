@@ -420,8 +420,8 @@ func tagsFromID3(header, tag []byte) localFileTags {
 		// v2.2 的这一位是整个标签压缩过,标准没定压缩算法,读不了。
 		return out
 	}
-	if flags&0x80 != 0 {
-		// 整个标签做过反同步:0xFF 0x00 还原成 0xFF。
+	if version < 4 && flags&0x80 != 0 {
+		// v2.2 / v2.3 整个标签做过反同步:0xFF 0x00 还原成 0xFF。v2.4 的帧长按反同步后的字节算,只能逐帧还原(下面)。
 		tag = bytes.ReplaceAll(tag, []byte{0xFF, 0x00}, []byte{0xFF})
 	}
 	// 帧头:v2.2 是 3 字节帧名 + 3 字节大端长度,没有帧标志;v2.3 / v2.4 是 4 字节帧名 + 4 字节长度 + 2 字节标志。
@@ -472,6 +472,41 @@ func tagsFromID3(header, tag []byte) localFileTags {
 			break
 		}
 		body = body[:size]
+		var format byte
+		if version > 2 {
+			format = tag[pos+9]
+		}
+		pos += frameHead + size
+		// 帧格式标志(同 App 侧 LocalAudioFileArtwork.id3Frames):压缩、加密的不读;分组标识、v2.4 的数据长度指示跳过;
+		// v2.4 帧自己或整个标签标了反同步的逐帧还原。见 09 章决策 371。
+		if version > 2 {
+			if version == 3 {
+				if format&0xC0 != 0 {
+					continue
+				}
+				if format&0x20 != 0 && len(body) > 0 {
+					body = body[1:]
+				}
+			} else {
+				if format&0x0C != 0 {
+					continue
+				}
+				skip := 0
+				if format&0x40 != 0 {
+					skip++
+				}
+				if format&0x01 != 0 {
+					skip += 4
+				}
+				if skip > len(body) {
+					continue
+				}
+				body = body[skip:]
+				if format&0x02 != 0 || flags&0x80 != 0 {
+					body = bytes.ReplaceAll(body, []byte{0xFF, 0x00}, []byte{0xFF})
+				}
+			}
+		}
 		switch id {
 		case "SYLT":
 			// 第一份 SYLT 压过别的歌词帧,排在它前面的也一样。
@@ -498,7 +533,6 @@ func tagsFromID3(header, tag []byte) localFileTags {
 				out.comments = append(out.comments, text)
 			}
 		}
-		pos += frameHead + size
 	}
 	out.lyrics = timed
 	if out.lyrics == "" {

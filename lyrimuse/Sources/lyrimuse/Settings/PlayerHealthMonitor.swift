@@ -71,7 +71,8 @@ final class PlayerHealthMonitor: ObservableObject {
     static func automationMissing(_ targets: [PlaybackPlayer]) async -> Set<PlaybackPlayer> {
         var missing: Set<PlaybackPlayer> = []
         for player in targets {
-            let status = await MusicAutomationPermission.status(bundleID: player.bundleIdentifier, askIfNeeded: false)
+            let bundleID = PlayerBundleAliases.automationBundleID(for: player)
+            let status = await MusicAutomationPermission.status(bundleID: bundleID, askIfNeeded: false)
             let grant: AutomationAlert.Grant? = switch status {
             case .authorized: .authorized
             case .denied: .denied
@@ -79,7 +80,7 @@ final class PlayerHealthMonitor: ObservableObject {
             case nil: nil
             }
             if PlayerHealth.automationIsMissing(
-                grant, isRunning: MusicAutomationPermission.isRunning(bundleID: player.bundleIdentifier)) {
+                grant, isRunning: MusicAutomationPermission.isRunning(bundleID: bundleID)) {
                 missing.insert(player)
             }
         }

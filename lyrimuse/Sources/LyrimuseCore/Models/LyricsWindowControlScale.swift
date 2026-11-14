@@ -20,13 +20,18 @@ public enum LyricsWindowControlScale {
     /// 圆钮放大后歌名、「歌手 — 专辑」那两行至少还留这么宽。
     public static let titleMinTextWidth: CGFloat = 80
     /// 文字块跟圆钮之间:外层 HStack 的间距 12 + `Spacer(minLength: 8)`。
-    static let titleRowGaps: CGFloat = 12 + 8
+    public static let titleRowGaps: CGFloat = 12 + 8
+
+    /// 网页歌词标题行文字块跟圆钮之间留的宽(`WebLyricsPlayerPane.layoutTitleRow`:12 + 8 + 12)。
+    public static let webTitleRowGaps: CGFloat = 12 + 8 + 12
 
     /// 歌名旁 `buttons` 颗圆钮实际用的倍数:左栏(宽 `columnWidth`)放不下时收小,给文字留 `titleMinTextWidth`,最小收到 1。
+    /// `gaps` 是文字块跟圆钮之间的宽,歌词窗口用默认的 `titleRowGaps`,网页歌词用 `webTitleRowGaps`。
     /// 纯函数,selftest 覆盖。见 07 章决策 200。
-    public static func titleButtonsFactor(columnWidth: CGFloat, buttons: Int, requested: CGFloat) -> CGFloat {
+    public static func titleButtonsFactor(columnWidth: CGFloat, buttons: Int, requested: CGFloat,
+                                          gaps: CGFloat = titleRowGaps) -> CGFloat {
         guard buttons > 0, requested > 1 else { return max(1, requested) }
-        let fixed = titleMinTextWidth + titleRowGaps + CGFloat(buttons - 1) * titleButtonSpacing
+        let fixed = titleMinTextWidth + gaps + CGFloat(buttons - 1) * titleButtonSpacing
         let fit = (columnWidth - fixed) / (CGFloat(buttons) * titleButtonSide)
         return max(1, min(requested, fit))
     }

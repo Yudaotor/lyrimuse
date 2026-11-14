@@ -55,10 +55,19 @@ func runOverlayTests() {
                                  "alignment: nextLineDuetSide"), true,
                     "上下交替(契约): 滚动模式的下一句用开唱后同一种图层行、静止,开唱时不挪")
         expectEqual(sourceHas(sourceBody("@ViewBuilder private var alternateNextSlot: some View", in: view),
-                              "Color.clear.frame(height: alternateRowHeight)")
+                              "alternateRowPlaceholder(text: alternateMainRowIsText(words: line?.words))")
                     && sourceHas(sourceBody("private var alternateMainSlot: some View", in: view),
-                                 ".frame(minHeight: line == nil ? alternateRowHeight : nil)"), true,
+                                 "if line == nil { alternateRowPlaceholder(text: alternateMainRowIsText(words: playback.nextLineWords)) }"), true,
                     "上下交替(契约): 没有下一句时空一行、「•••」撑到一行歌词的高,另一行不挪")
+        // 换行模式下 SwiftUI 一行字比图层行的行高式子矮 2～3pt:画 SwiftUI 字的格子占位也用同字体的隐藏字。
+        let placeholder = sourceBody("@ViewBuilder private func alternatePlaceholder(font: Font, nsFont: NSFont, text: Bool) -> some View", in: view)
+        expectEqual(sourceHas(placeholder, "lyricStroke(Text(verbatim: \"X\").font(font)).hidden()")
+                    && sourceHas(placeholder, "Color.clear.frame(height: playback.scrollRowHeight(nsFont))")
+                    && sourceHas(sourceBody("private func alternateMainRowIsText(words: [SyncedLyricWord]?) -> Bool", in: view),
+                                 "playback.lineOverflow != .scroll && (words?.isEmpty ?? true)")
+                    && sourceHas(sourceBody("private func alternateSecondaryPlaceholder(translation: Bool) -> some View", in: view),
+                                 "text: playback.lineOverflow != .scroll)"), true,
+                    "上下交替(契约): 换行模式画 SwiftUI 字的格子用同字体隐藏字占位,图层行按行高式子")
         let rowsSrc = (try? String(contentsOf: src.appendingPathComponent("lyrimuse/UI/OverlayStyleSettingsRows.swift"), encoding: .utf8)) ?? ""
         expectEqual(sourceHas(rowsSrc, ".disabled(!settings.showNextLinePreview || settings.overlayNextLineArrangement == .alternate)"), true,
                     "上下交替(契约): 交错时「下一句大小」置灰")
@@ -91,9 +100,9 @@ func runOverlayTests() {
                     && sourceHas(sourceBody("private var alternateReservesRomanization: Bool", in: view),
                                  "alternatePlacement != nil && (romanizationRowText != nil || alternateNextRomanization != nil)")
                     && sourceBody("private var alternateMainSlot: some View", in: view)
-                        .components(separatedBy: "Color.clear.frame(height: alternateSecondaryRowHeight(").count == 3
+                        .components(separatedBy: "alternateSecondaryPlaceholder(translation: ").count == 3
                     && sourceBody("@ViewBuilder private var alternateNextSlot: some View", in: view)
-                        .components(separatedBy: "Color.clear.frame(height: alternateSecondaryRowHeight(").count == 3,
+                        .components(separatedBy: "alternateSecondaryPlaceholder(translation: ").count == 3,
                     true, "上下交替(契约): 两句里有一句带读音 / 译文,两格都留出那一行,唱着的那句不被挤动")
         expectEqual(sourceHas(sourceBody("@ViewBuilder private func alternateNextSecondaryRow(_ text: String, translation: Bool) -> some View", in: view),
                               "still: true")

@@ -69,4 +69,10 @@ func runLyricsWritebackTests() {
         """) && sourceHas(labs, "withAnimation(.settingsCardReveal) { features.lyricsAutoWriteback = newValue }")
                 && !labs.contains("不覆盖其他软件写入的歌词"), true,
                 "写回覆盖开关: 实验室里总开关开着才出现子开关、读写同一个字段并存盘;总开关说明不再写死「不覆盖」")
+    // 关确认框时绑定的 setter 先清掉 plan,按钮里排的 Task 再读 self.plan 已是 nil、什么都不写。
+    let manager = text("lyrimuse/Sources/lyrimuse/LyricsManager/LyricsManagerView.swift")
+    let writebackController = text("lyrimuse/Sources/lyrimuse/LyricsManager/LyricsWritebackController.swift")
+    expectEqual(sourceHas(manager, "Button(plan.hasLyrics ? L10n.t(\"替换\") : L10n.t(\"写入\")) { Task { await controller.confirm(plan) } }")
+                && sourceHas(writebackController, "guard let plan = confirmed ?? plan, !busy else { return }"), true,
+                "写回确认框: 按钮把确认框交进来的那份传给 confirm,不读关框时已清掉的 self.plan")
 }

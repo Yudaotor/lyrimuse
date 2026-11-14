@@ -397,6 +397,63 @@ func TestLyricsWritebackRefusals(t *testing.T) {
 	wantWritebackCode(t, err, wbErrUnsupportedTag)
 }
 
+// 开头没有 ID3 标签又不是 MPEG 帧的(改了扩展名的别的容器)不插标签:插在最前面,容器头就不在原位了。
+func TestLyricsWritebackMP3NeedsFrameSyncWithoutTag(t *testing.T) {
+	for name, head := range map[string][]byte{
+		"m4a":  []byte("\x00\x00\x00\x20ftypM4A \x00\x00\x00\x00"),
+		"wav":  []byte("RIFF\x24\x00\x00\x00WAVEfmt "),
+		"ogg":  []byte("OggS\x00\x02\x00\x00\x00\x00"),
+		"flac": []byte("fLaC\x00\x00\x00\x22"),
+	} {
+		data := append(append([]byte(nil), head...), bytes.Repeat([]byte{0x5A}, 4000)...)
+		path := writeTemp(t, name+".mp3", data)
+		_, err := writeLyricsToFile(path, writebackLRC, true)
+		wantWritebackCode(t, err, wbErrUnsupportedTag)
+		if out, _ := os.ReadFile(path); !bytes.Equal(out, data) {
+			t.Errorf("%s 改名成 .mp3:文件不该动", name)
+		}
+	}
+	if _, err := writeLyricsToFile(writeTemp(t, "bare.mp3", writebackAudio(4000)), writebackLRC, false); err != nil {
+		t.Errorf("没有标签、开头是 MPEG 帧的照常写:%v", err)
+	}
+}
+
+// 读法解不出、却带着内容的歌词帧 / 条目:写回会删掉它,确认框和覆盖前备份都看不到,整个文件不写。空的照常替换。
+func TestLyricsWritebackRefusesLyricsTheReaderCannotDecode(t *testing.T) {
+	audio := writebackAudio(4000)
+	sylt := append([]byte{3, 'e', 'n', 'g', 1, 1, 0}, append([]byte("第一行\x00"), 0, 0, 0, 10)...)
+	refused := map[string][]byte{
+		"SYLT 按帧计时":    id3TagPadded(3, 64, id3Frame(3, "SYLT", sylt)),
+		"USLT 编码字节不认识": id3TagPadded(3, 64, id3Frame(3, "USLT", append([]byte{4, 'e', 'n', 'g', 0}, "歌词"...))),
+	}
+	for name, tag := range refused {
+		data := append(append([]byte(nil), tag...), audio...)
+		path := writeTemp(t, "x.mp3", data)
+		if p, err := probeLyricsWriteback(path); err == nil {
+			t.Errorf("%s:探查应拒绝,得到 %+v", name, p)
+		}
+		_, err := writeLyricsToFile(path, writebackLRC, true)
+		wantWritebackCode(t, err, wbErrUnsupportedTag)
+		if out, _ := os.ReadFile(path); !bytes.Equal(out, data) {
+			t.Errorf("%s:文件不该动", name)
+		}
+	}
+	empty := append(id3TagPadded(3, 64, id3Frame(3, "USLT", []byte{4, 'e', 'n', 'g', 0})), audio...)
+	if _, err := writeLyricsToFile(writeTemp(t, "empty-uslt.mp3", empty), writebackLRC, false); err != nil {
+		t.Errorf("空的 USLT 不算歌词,照常写:%v", err)
+	}
+	streamInfo := bytes.Repeat([]byte{0x11}, 34)
+	flac := bytes.Join([][]byte{[]byte("fLaC"), flacBlockBytes(0, false, streamInfo),
+		flacBlockBytes(4, true, vorbisComment("TITLE=x", "LYRICS=\xff\xfe\x80\xff"))}, nil)
+	flac = append(flac, audio...)
+	path := writeTemp(t, "bad.flac", flac)
+	_, err := writeLyricsToFile(path, writebackLRC, true)
+	wantWritebackCode(t, err, wbErrUnsupportedTag)
+	if out, _ := os.ReadFile(path); !bytes.Equal(out, flac) {
+		t.Errorf("FLAC 歌词条目解不出:文件不该动")
+	}
+}
+
 func TestLyricsWritebackNotWritable(t *testing.T) {
 	if os.Geteuid() == 0 {
 		t.Skip("root 不受权限位限制")

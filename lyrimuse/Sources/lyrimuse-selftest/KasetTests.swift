@@ -565,6 +565,16 @@ func runKasetTests() {
         expectEqual(C.controlScriptTarget(kasetPreferred: false, lxMusicPreferred: false, holdingAcrossGap: false,
                                           scriptTarget: .appleMusic), .appleMusic,
                     "播放控制: 没在顶替时照回退目标发")
+        // 读数按 Kaset → Audirvana → 洛雪依次顶替,后顶上来的才是屏上那家。
+        expectEqual(C.controlScriptTarget(kasetPreferred: true, lxMusicPreferred: false, audirvanaPreferred: true,
+                                          holdingAcrossGap: false, scriptTarget: nil), .audirvana,
+                    "播放控制: Kaset 暂停着、Audirvana 顶上来时发给 Audirvana")
+        expectEqual(C.controlScriptTarget(kasetPreferred: true, lxMusicPreferred: true, holdingAcrossGap: false,
+                                          scriptTarget: nil), .lxMusic,
+                    "播放控制: Kaset 暂停着、洛雪顶上来时发给洛雪")
+        expectEqual(C.controlScriptTarget(kasetPreferred: true, lxMusicPreferred: true, audirvanaPreferred: true,
+                                          holdingAcrossGap: false, scriptTarget: nil), .lxMusic,
+                    "播放控制: 三家都记着顶替时发给最后顶上来的洛雪")
     }
 
     // ---- 封面:系统那份恒为空,用缓存里匹配到的 ----

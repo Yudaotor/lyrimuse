@@ -666,12 +666,22 @@ func (e *enrichEntry) recordMotionVerdict(master, preview string, identity bool)
 	e.MotionCoverSources = motionCoverSourcesKey(features())
 }
 
-// motionRecheckTried:这次启动里播到时已经重核过作废结论的条目(trackEnrichment 判),键是 motionRecheckKey。调用方持有 enrichMu。
+// motionRecheckTried:这次启动里、这一组来源下播到时已经重核过作废结论的条目(trackEnrichment 判),键是 motionRecheckKey。
+// 调用方持有 enrichMu。
 var motionRecheckTried = map[string]bool{}
 
-// motionRecheckKey:条目 key 加上现在这组动态封面来源,换一组来源就是新的一次。
+// motionRecheckSources:motionRecheckTried 是在哪一组来源下记的。只在 enrichMu 里读写。
+var motionRecheckSources string
+
+// motionRecheckKey:条目 key 加上现在这组动态封面来源。来源一换就把记录整个清掉:切回这次启动里用过的一组时,条目上的结论
+// 已是按中间那组核的,不清的话按旧记录跳过、到重启都不重核(03 章决策 72)。调用方持有 enrichMu。
 func motionRecheckKey(key string) string {
-	return key + "\x00" + motionCoverSourcesKey(features())
+	sources := motionCoverSourcesKey(features())
+	if sources != motionRecheckSources {
+		motionRecheckSources = sources
+		clear(motionRecheckTried)
+	}
+	return key + "\x00" + sources
 }
 
 // recheckPlayingMotionCover:播到这首时重核作废的动态封面结论,收工时放掉 enrichInflight。

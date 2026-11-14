@@ -73,7 +73,7 @@ final class PlayerAutomationPermissions: ObservableObject {
     /// `.notDetermined` 了就把转圈/超时提示一起清掉,不然文字变了、下面还卡着。
     func refresh(_ players: [PlaybackPlayer], clearRequestUI: Bool = false) {
         for player in players {
-            let bundleID = player.bundleIdentifier
+            let bundleID = PlayerBundleAliases.automationBundleID(for: player)
             guard !bundleID.isEmpty else { continue }
             let runningBefore = MusicAutomationPermission.isRunning(bundleID: bundleID)
             Task { [weak self] in
@@ -101,7 +101,7 @@ final class PlayerAutomationPermissions: ObservableObject {
     func requestOnSelect(justEnabled player: PlaybackPlayer) {
         let plan = AutomationRequestPlan.onSelect(
             player, isInstalled: isInstalled,
-            isRunning: { MusicAutomationPermission.isRunning(bundleID: $0.bundleIdentifier) })
+            isRunning: { MusicAutomationPermission.isRunning(bundleID: PlayerBundleAliases.automationBundleID(for: $0)) })
         for item in plan {
             request(item.player, launchIfNeeded: item.launchIfNeeded)
         }
@@ -116,7 +116,7 @@ final class PlayerAutomationPermissions: ObservableObject {
     /// 超时(返回 nil)时停掉转圈、按钮还给用户,同时留着超时提示(「打开系统设置」)。
     /// 那次系统调用可能还挂着;再点一次会合并到同一次调用上等结果,不会并发发起第二次。
     func request(_ player: PlaybackPlayer, launchIfNeeded: Bool = true) {
-        let bundleID = player.bundleIdentifier
+        let bundleID = PlayerBundleAliases.automationBundleID(for: player)
         guard !bundleID.isEmpty, !requesting.contains(player) else { return }
         // 显示的是记下的结论时照样问:它可能已经过时;真授权着的话系统不弹窗,直接返回结论。
         guard status(player) == .notDetermined || fromMemory.contains(player) else { return }

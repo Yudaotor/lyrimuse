@@ -115,11 +115,13 @@ func runWhatsNewTests() {
             let section = ReleaseNotes.section(version: version, in: text) ?? ""
             let en = ReleaseNotes.parse(section, chinese: false), zh = ReleaseNotes.parse(section, chinese: true)
             let zhItems = zh.flatMap(\.items)
-            if en.isEmpty || en.map(\.items.count) != zh.map(\.items.count) || zhItems.contains(where: { !hasCJK($0) }) {
+            // 拆不出中文行的条目整条退回英文(中文行一起混进去),两边一模一样;同 split_release_notes.py 的 one_sided_bullets。
+            let fellBack = zip(en.flatMap(\.items), zhItems).contains { $0 == $1 }
+            if en.isEmpty || en.map(\.items.count) != zh.map(\.items.count) || zhItems.contains(where: { !hasCJK($0) }) || fellBack {
                 broken.append(version)
             }
         }
-        expectEqual(broken, [], "CHANGELOG: 每一版两种语言条目一一对应、中文条目都是中文")
+        expectEqual(broken, [], "CHANGELOG: 每一版两种语言条目一一对应、中文条目都是中文、每条都拆得出中文行")
     }
 
     do {

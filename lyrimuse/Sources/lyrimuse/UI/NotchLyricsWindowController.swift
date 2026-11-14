@@ -1011,9 +1011,11 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
     private func feedSimulatedHover(_ offset: CGPoint) {
         guard let window, let frame = cardScreenFrame else { return }
         let local = CGPoint(x: frame.width / 2 + offset.x, y: offset.y)
-        simulatedHoverPointer = NSPoint(x: frame.midX + offset.x, y: frame.maxY - offset.y)
         // 卡片的命中区横向是卡片宽、纵向是整扇窗(见 NotchWindowRoot 的 contentShape),出了这块视图收到的就是离开。
         let inside = (0...frame.width).contains(local.x) && (0...window.frame.height).contains(local.y)
+        // 模拟点出了卡片就放掉,光标复查(`reassertCardCursor`)回到真指针:路径停在卡片外又没发 off=1 时,
+        // 留着它会让之后真指针的每次悬停 0.1 秒内就被判成离开(05 章决策 145)。
+        simulatedHoverPointer = inside ? NSPoint(x: frame.midX + offset.x, y: frame.maxY - offset.y) : nil
         NotchDebugHover.phases.send(inside ? .active(local) : .ended)
     }
 

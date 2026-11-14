@@ -118,6 +118,8 @@ public enum MediaControlClient {
     }
 
     private static func rawSnapshot(players: Set<PlaybackPlayer>) -> MediaControlSnapshot? {
+        // 每拍都查一次闲着的常驻 osascript:退出了的播放器不会再被问,只靠别家脚本请求时顺带关,没有别家走脚本时它一直留着。
+        stopIdleAppleScriptServers(now: Date(), using: nil)
         // 这份设置不认 Kaset(没开自动识别也没勾它)时,上一次顶替系统那边的记录作废,播放控制别再发给它。
         if !players.contains(.auto), !players.contains(.kaset) { forgetKasetPreference() }
         let lxMusicWanted = players.contains(.auto) || players.contains(.lxMusic)
@@ -1845,6 +1847,8 @@ public enum MediaControlClient {
         if PlayerScriptStall.backingOff(name) { return nil }
         let started = Date()
         stopIdleAppleScriptServers(now: started, using: name)
+        // 开问前先记一笔:别的线程这时做闲置检查,不会把正在答的这一家当成闲着关掉。
+        appleScriptServerLastUse.withLock { $0[name] = started }
         let result: ProcessRunner.Result?
         switch appleScriptServers[name]?.send(name, timeout: timeout) ?? .unavailable {
         case .answered(let answered): result = answered
@@ -1859,8 +1863,8 @@ public enum MediaControlClient {
         return result
     }
 
-    /// 关掉闲了 `appleScriptServerIdleStop` 的别家常驻 osascript。
-    private static func stopIdleAppleScriptServers(now: Date, using name: String) {
+    /// 关掉闲了 `appleScriptServerIdleStop` 的常驻 osascript(`name` 是这次要用的那家,不关)。
+    private static func stopIdleAppleScriptServers(now: Date, using name: String?) {
         let idle = appleScriptServerLastUse.withLock { uses -> [String] in
             let names = uses.filter { $0.key != name && now.timeIntervalSince($0.value) >= appleScriptServerIdleStop }.map(\.key)
             for idleName in names { uses[idleName] = nil }
@@ -2116,11 +2120,13 @@ public enum MediaControlClient {
 
     /// 播放控制按哪家的脚本发。Kaset / 洛雪 / Audirvana 顶替了系统那边的读数时发给它们;但切歌间隙保持(`heldAcrossPlayerGap`)把屏上
     /// 留在别的播放器时,顶替是这一拍按「系统什么都没报」判出来的,屏上并不是它们 —— 这时照回退目标发,不然按播放会把暂停着的
-    /// Kaset / 洛雪放起来,跟保持着的那家同时出声。见 02 章决策 149。纯函数,selftest 覆盖。
+    /// Kaset / 洛雪放起来,跟保持着的那家同时出声。见 02 章决策 149。
+    /// 几家同时记着顶替时,读数是按 Kaset → Audirvana → 洛雪依次叠的(`rawSnapshot`),屏上是最后顶上来的那家,优先级照这个倒序;
+    /// 两处次序必须同步改(02 章决策 261)。纯函数,selftest 覆盖。
     public static func controlScriptTarget(kasetPreferred: Bool, lxMusicPreferred: Bool, audirvanaPreferred: Bool = false,
                                            holdingAcrossGap: Bool, scriptTarget: PlaybackPlayer?) -> PlaybackPlayer? {
         guard !holdingAcrossGap else { return scriptTarget }
-        return kasetPreferred ? .kaset : lxMusicPreferred ? .lxMusic : audirvanaPreferred ? .audirvana : scriptTarget
+        return lxMusicPreferred ? .lxMusic : audirvanaPreferred ? .audirvana : kasetPreferred ? .kaset : scriptTarget
     }
 
     /// 回退查询失败只关闭读取开关,不证明焦点恢复。targetGone 由被接受的快照清零;
@@ -2880,8 +2886,11 @@ public enum MediaControlClient {
         let position = foobarLoopPosition(bundleID: probed.bundleIdentifier, playing: probed.playing, position: extrapolated,
                                           duration: probed.duration) ?? extrapolated
         let pid = snapshot.processIdentifier
+        let itemID = snapshot.nowPlayingItemID
         snapshot = snapshot.withPlayerClock(position, capturedAt: now)
         snapshot.processIdentifier = pid
+        // `withPlayerClock` 不带它;MyGo 按它分同名的本机文件和插件音源(02 章决策 252)。
+        snapshot.nowPlayingItemID = itemID
         snapshot.republishDueBy = foobarLoopCheckAt(bundleID: probed.bundleIdentifier, playing: probed.playing,
                                                     position: position, duration: probed.duration, now: now)
         return snapshot

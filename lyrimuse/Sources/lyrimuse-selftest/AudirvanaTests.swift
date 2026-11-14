@@ -154,6 +154,15 @@ func runAudirvanaTests() {
         expectEqual(sourceHas(client, "let withAudirvana = preferringAudirvana(withKaset, wanted: audirvanaWanted)")
                         && sourceHas(client, "if !audirvanaWanted { forgetAudirvanaPreference() }"),
                     true, "Audirvana 契约: 多选勾了它也问,设置不认它时清掉顶替记录")
+        // 自动化授权按 bundle id 记:只装了 Origin 时问 Studio 永远问不到结论,在跑 Origin 时查 Studio 的授权会误报失效。
+        let automationFiles = ["lyrimuse/Settings/PlayerAutomationPermissions.swift", "lyrimuse/Settings/AutomationAlertMonitor.swift",
+                               "lyrimuse/Settings/PlayerHealthMonitor.swift"].map(code)
+        expectEqual(automationFiles.allSatisfy { sourceHas($0, "PlayerBundleAliases.automationBundleID(for:") }
+                        && !automationFiles.contains { sourceHas($0, "MusicAutomationPermission.status(bundleID: player.bundleIdentifier")
+                            || sourceHas($0, "MusicAutomationPermission.status(\nbundleID: playing.bundleIdentifier") },
+                    true, "Audirvana 契约: 查、要「自动化」权限对准此刻在跑或装着的那个版本")
+        expectEqual(PlayerBundleAliases.automationBundleID(for: .appleMusic), PlaybackPlayer.appleMusic.bundleIdentifier,
+                    "自动化对象: 没有别的版本的播放器就是它自己")
         let read = sourceBody("private static func readAudirvanaSnapshot(", in: client)
         expectEqual(sourceHas(read, "guard !SourceKnockout.isOut(.audirvanaScript) else { return nil }")
                         && sourceHas(read, "let r = runPlayerScript(\"audirvana\", source: AudirvanaPlayerInfo.script)"),

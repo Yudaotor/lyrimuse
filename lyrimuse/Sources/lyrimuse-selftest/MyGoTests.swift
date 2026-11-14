@@ -244,6 +244,14 @@ func runMyGoTests() {
                         && sourceHas(coordinator, "if self.favoriteBlockedForTrack { self.favoriteUnavailableTrackKey = nil }\nself.refreshFavorited()")],
                     [true, true, true, true, true],
                     "MyGo 接线: 条目标识从解码带到找文件;按它判重找;对上的文件变了重读「喜欢」、放出藏起来的心")
+        // 焦点被别的 App 占着时走按 bundle id 单问那条:helper 交回条目标识,换时钟的副本不带它,要补回来。
+        let probedJSON = Data(#"{"bundleIdentifier":"dev.egoist.music","title":"米店","artist":"张玮玮","playing":true,"nowPlayingItemID":"A1"}"#.utf8)
+        expectEqual(NowPlayingClientsProbe.decodeSnapshot(probedJSON)?.snapshot.nowPlayingItemID, "A1",
+                    "MyGo 接线: 单问那份解得出条目标识")
+        expectEqual(sourceHas(sourceBody("private static func mygoProbedSnapshot(", in: client),
+                              "let itemID = snapshot.nowPlayingItemID\nsnapshot = snapshot.withPlayerClock(position, capturedAt: now)")
+                        && sourceHas(sourceBody("private static func mygoProbedSnapshot(", in: client), "snapshot.nowPlayingItemID = itemID"),
+                    true, "MyGo 接线: 单问那份换时钟后补回条目标识")
         expectEqual(sourceHas(favorite, "guard let id = currentLocalTrackID(confirm: true), let now = liked(id: id) else { return false }"),
                     true, "MyGo 接线: 按「喜欢」菜单之前按开着的文件当场再核一次放的是本机文件")
         expectEqual(sourceHas(client, "timestamp = mygo.timestamp"), true, "MyGo 接线: 下游拿到的是挪过的时刻")

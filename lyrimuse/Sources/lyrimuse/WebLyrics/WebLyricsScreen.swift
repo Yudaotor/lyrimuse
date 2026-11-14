@@ -2012,12 +2012,15 @@ final class WebLyricsPlayerPane: CALayer {
 
     /// 标题行(同 `trackInfoRow`):左边歌名、歌手两行跑马灯(各 22 高、叠 −3,左端渐隐 24、右端 32),右边 26 的圆钮
     /// 星、「…」间隔 8,跟两行字整体竖直居中;字和圆钮之间至少 12 + 8 + 12。圆底有封面背景时白 0.16、否则前景色 0.08,
-    /// 字形 14pt 半粗、前景色 0.9。圆钮和字形按「控件大小」放大。
+    /// 字形 14pt 半粗、前景色 0.9。圆钮和字形按「控件大小」放大,左栏放不下时收小、歌名至少留 80(同歌词窗口,07 章决策 200;19 章决策 48)。
     private func layoutTitleRow(_ next: Content, x: CGFloat, rowTop y: CGFloat, width w: CGFloat, scale: CGFloat) {
-        let d = 26 * next.controlScale
-        let glyphSize = 14 * next.controlScale
+        let factor = LyricsWindowControlScale.titleButtonsFactor(
+            columnWidth: w, buttons: next.favorited == nil ? 1 : 2, requested: next.controlScale,
+            gaps: LyricsWindowControlScale.webTitleRowGaps)
+        let d = 26 * factor
+        let glyphSize = 14 * factor
         let buttons: CGFloat = next.favorited == nil ? d : d + 8 + d
-        let textWidth = max(40, w - buttons - 32)
+        let textWidth = max(40, w - buttons - LyricsWindowControlScale.webTitleRowGaps)
         let animating = !next.controls.reduceMotion
         titleLayer.show(next.title, font: .systemFont(ofSize: 17, weight: .semibold), color: next.primary,
                         frame: CGRect(x: x, y: y, width: textWidth, height: 22), scale: scale,

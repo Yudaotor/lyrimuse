@@ -66,7 +66,7 @@ func TestSearchCLIRetriesAtAnotherDurationWhenNothingUsable(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, want := range []string{
-		"if effectiveDuration > 0 && !manualSearchFoundUsable(filterEnabledLyricSources(results)) {",
+		"if effectiveDuration > 0 && !manualSearchFoundUsable(results) {",
 		"durationOffRetryUsable(m.durationSecs, effectiveDuration) {",
 		"retryDuration = m.durationSecs",
 		"_, loose := scoredLyricCandidatesStreaming(searchCtx, sArtist, sTitle, sAlbum, retryDuration,",
@@ -76,6 +76,14 @@ func TestSearchCLIRetriesAtAnotherDurationWhenNothingUsable(t *testing.T) {
 		if !containsCode(string(src), want) {
 			t.Errorf("searchcli.go 里少了 %q", want)
 		}
+	}
+	// filterEnabledLyricSources 先删纯音乐标记,过滤后再判,「纯音乐算有结论」那一支永远走不到。
+	if containsCode(string(src), "manualSearchFoundUsable(filterEnabledLyricSources(") {
+		t.Errorf("补搜判据要收没过滤的结果")
+	}
+	raw := []scoredLyricCandidateResult{{Source: "lrclib", Instrumental: true}, {Source: "qq", Score: -1, Lyrics: "人声版"}}
+	if len(filterEnabledLyricSources(raw)) != 1 || !manualSearchFoundUsable(raw) {
+		t.Errorf("过滤会删掉纯音乐标记;没过滤的结果里有它就不补搜")
 	}
 }
 

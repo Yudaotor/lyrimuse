@@ -112,6 +112,12 @@ func TestMotionCoverSourcesChangeInvalidatesVerdict(t *testing.T) {
 	if motionRecheckKey("k") == both {
 		t.Error("换了来源,重核记录没分开")
 	}
+	// 来源切走再切回:条目上的结论已按中间那组核过,回到原来这组时要能再核一次。
+	motionRecheckTried[both] = true
+	withMotionSources(t, true, true)
+	if motionRecheckTried[motionRecheckKey("k")] {
+		t.Error("切回这次启动里用过的一组来源,按旧记录跳过了重核")
+	}
 	e.clearMotionVerdict()
 	if e.MotionCoverSources != "" || motionVerdictSourcesChanged(e) {
 		t.Errorf("清掉之后: %+v", e)

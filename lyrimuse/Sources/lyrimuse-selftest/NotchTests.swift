@@ -684,6 +684,9 @@ func runNotchTests() {
         let controller = read("NotchLyricsWindowController.swift")
         let view = notchCardSource(read)
         let stage = notchStageSource(read)
+        expectEqual(sourceHas(sourceBody("private func feedSimulatedHover(", in: controller),
+                              "simulatedHoverPointer = inside ? NSPoint(x: frame.midX + offset.x, y: frame.maxY - offset.y) : nil"),
+                    true, "模拟悬停(契约): 模拟点出了卡片就放掉,停在卡片外不发 off=1 时之后的真指针悬停照常")
         let scrubber = sourceBody("private func scrubberAndTimes(", in: view)
         let paint = sourceBody("Canvas { context, size in", in: scrubber)
         expectEqual(paint.contains("context.fill(track,")

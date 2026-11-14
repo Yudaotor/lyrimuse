@@ -75,6 +75,16 @@ func flacWritebackLayout(r io.ReadSeeker, fileSize int64) (lyricsTagLayout, erro
 			return lyricsTagLayout{}, wbErrf(wbErrUnsupportedTag, "malformed VORBIS_COMMENT block")
 		}
 		hasLyrics = tagsFromVorbisComment(blocks[comment].body).hasLyrics
+		// 读法解不出的歌词条目写回时会被删掉,确认框、覆盖前的备份都看不到它,整个文件不写(同 id3LyricsFrameUnreadable)。
+		for _, e := range entries {
+			key, value, _ := bytes.Cut(e, []byte("="))
+			if !isLyricsTagKey(string(key)) || len(bytes.TrimSpace(value)) == 0 {
+				continue
+			}
+			if _, ok := decodeLyricBytes(value); !ok {
+				return lyricsTagLayout{}, wbErrf(wbErrUnsupportedTag, "lyrics entry %q the reader cannot decode", key)
+			}
+		}
 	}
 	keptEntries := vorbisKeptEntries(entries)
 	headBytes := head.Bytes()

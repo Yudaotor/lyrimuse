@@ -56,6 +56,16 @@ public enum PlayerBundleAliases {
         return nil
     }
 
+    /// 向这个内置播放器查、要「自动化」权限时对准的 bundle id:在跑的那个版本,其次装着的(本体优先),都没装为本体。
+    /// 授权是按 bundle id 记的,只装了别的版本(Audirvana Origin)时问本体永远问不到结论。`otherClients` 不算。见 02 章决策 261。
+    public static func automationBundleID(for player: PlaybackPlayer) -> String {
+        guard !player.bundleIdentifier.isEmpty else { return player.bundleIdentifier }
+        let ids = all(for: player.bundleIdentifier, includingOtherClients: false)
+        return ids.first(where: isRunning)
+            ?? ids.first { NSWorkspace.shared.urlForApplication(withBundleIdentifier: $0) != nil }
+            ?? player.bundleIdentifier
+    }
+
     /// 这个内置播放器(本体或别的版本)装在这台 Mac 上没有。
     public static func isInstalled(_ player: PlaybackPlayer, includingOtherClients: Bool = true) -> Bool {
         !player.bundleIdentifier.isEmpty

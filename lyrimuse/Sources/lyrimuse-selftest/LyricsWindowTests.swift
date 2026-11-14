@@ -1258,6 +1258,18 @@ func runLyricsWindowTests() {
                     "歌名旁圆钮: 放得下照给;100% 不动;再窄也不小于 100%")
         expectEqual(CS.titleButtonsFactor(columnWidth: 250, buttons: 2, requested: 2) > titleNarrow, true,
                     "歌名旁圆钮: 没有星(两颗)时能放得更大")
+        // 网页歌词照歌词窗口画、圆钮也按「控件大小」放大:左栏窄时同样收小,文字和圆钮之间的空隙是 32。
+        let webNarrow = CS.titleButtonsFactor(columnWidth: 200, buttons: 2, requested: 2, gaps: CS.webTitleRowGaps)
+        expectEqual(webNarrow < 2 && abs(200 - (CS.titleMinTextWidth + 32 + 8 + 2 * 26 * webNarrow)) < 0.001, true,
+                    "网页歌词圆钮: 左栏 200、星和「…」两颗、200% 时收到歌名正好留 80")
+        expectEqual(CS.titleButtonsFactor(columnWidth: 150, buttons: 2, requested: 2, gaps: CS.webTitleRowGaps), 1,
+                    "网页歌词圆钮: 左栏 150 放不下放大的,按 100% 画")
+        let webScreen = (try? String(contentsOf: URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("lyrimuse/WebLyrics/WebLyricsScreen.swift"), encoding: .utf8)) ?? ""
+        expectEqual(sourceHas(sourceBody("private func layoutTitleRow(", in: webScreen),
+                              "columnWidth: w, buttons: next.favorited == nil ? 1 : 2, requested: next.controlScale,")
+                        && !sourceHas(sourceBody("private func layoutTitleRow(", in: webScreen), "let d = 26 * next.controlScale"),
+                    true, "网页歌词圆钮(契约): 按实际圆钮数和左栏宽收小,不直接乘「控件大小」")
         expectEqual(LyricsWindowControlScale.percentRange == 100...200 && LyricsWindowControlScale.percentStep == 5
                     && LyricsWindowControlScale.defaultPercent == 100, true, "控件大小: 滑杆 100%～200%、一格 5%、默认 100%")
         func legacy(_ w: CGFloat) -> [CGFloat] {

@@ -138,6 +138,9 @@ static NSDictionary *normalize(NSDictionary *raw, NSString *bundleID, NSNumber *
     if (raw[K("Artist")]) out[@"artist"] = raw[K("Artist")];
     if (raw[K("Album")]) out[@"album"] = raw[K("Album")];
     if (raw[K("Duration")]) out[@"duration"] = raw[K("Duration")];
+    // 会话这一条的标识,键名同 MediaControlSnapshot.nowPlayingItemID(MyGo 靠它分同名的本机文件和插件音源,02 章决策 252)。
+    NSString *item = raw[K("ContentItemIdentifier")];
+    if ([item isKindOfClass:NSString.class] && item.length > 0) out[@"nowPlayingItemID"] = item;
     if (rate) out[@"playbackRate"] = rate;
     // 必须是 JSON 布尔值,Swift 的 JSONDecoder 不把数字 1/0 当 Bool。
     if (playing) out[@"playing"] = playing.boolValue ? @YES : @NO;

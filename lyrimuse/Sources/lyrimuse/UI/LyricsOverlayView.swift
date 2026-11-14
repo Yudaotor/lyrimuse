@@ -1362,22 +1362,22 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
     /// 换成歌词时另一行不跟着上下挪。
     private var alternateMainSlot: some View {
         VStack(alignment: duetAlignment, spacing: 0) {
-            reportingMainLineRect(mainLine)
-                .frame(minHeight: line == nil ? alternateRowHeight : nil)
-                .reportsContentRow(.main, in: contentRowRectsSpace)
+            ZStack(alignment: Alignment(horizontal: duetAlignment, vertical: .center)) {
+                if line == nil { alternateRowPlaceholder(text: alternateMainRowIsText(words: playback.nextLineWords)) }
+                reportingMainLineRect(mainLine)
+            }
+            .reportsContentRow(.main, in: contentRowRectsSpace)
             if romanizationRowText != nil {
                 romanizationRow.reportsContentRow(.romanization, in: contentRowRectsSpace)
                     .padding(.top, CGFloat(rowSpacing.romanization))
             } else if alternateReservesRomanization {
-                Color.clear.frame(height: alternateSecondaryRowHeight(translation: false))
-                    .padding(.top, CGFloat(rowSpacing.romanization))
+                alternateSecondaryPlaceholder(translation: false).padding(.top, CGFloat(rowSpacing.romanization))
             }
             if translationRowText != nil {
                 translationRow.reportsContentRow(.translation, in: contentRowRectsSpace)
                     .padding(.top, CGFloat(rowSpacing.translation))
             } else if alternateReservesTranslation {
-                Color.clear.frame(height: alternateSecondaryRowHeight(translation: true))
-                    .padding(.top, CGFloat(rowSpacing.translation))
+                alternateSecondaryPlaceholder(translation: true).padding(.top, CGFloat(rowSpacing.translation))
             }
         }
     }
@@ -1388,19 +1388,17 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
             if nextLineText != nil {
                 nextLinePreviewRow.reportsContentRow(.nextLine, in: contentRowRectsSpace)
             } else {
-                Color.clear.frame(height: alternateRowHeight)
+                alternateRowPlaceholder(text: alternateMainRowIsText(words: line?.words))
             }
             if let roma = alternateNextRomanization {
                 alternateNextSecondaryRow(roma, translation: false).padding(.top, CGFloat(rowSpacing.romanization))
             } else if alternateReservesRomanization {
-                Color.clear.frame(height: alternateSecondaryRowHeight(translation: false))
-                    .padding(.top, CGFloat(rowSpacing.romanization))
+                alternateSecondaryPlaceholder(translation: false).padding(.top, CGFloat(rowSpacing.romanization))
             }
             if let tr = alternateNextTranslation {
                 alternateNextSecondaryRow(tr, translation: true).padding(.top, CGFloat(rowSpacing.translation))
             } else if alternateReservesTranslation {
-                Color.clear.frame(height: alternateSecondaryRowHeight(translation: true))
-                    .padding(.top, CGFloat(rowSpacing.translation))
+                alternateSecondaryPlaceholder(translation: true).padding(.top, CGFloat(rowSpacing.translation))
             }
         }
     }
@@ -1439,12 +1437,37 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
         }
     }
 
-    /// 上下交替时一行歌词(主字号、单行)的高,同图层行的行高式子。
-    private var alternateRowHeight: CGFloat { playback.scrollRowHeight(playback.overlayNSFonts.main) }
+    /// 上下交替时空着的格子占的高,跟那里平时画的东西一样高,换句时另一格不上下挪(04 章决策 100):画的是图层行的(滚动模式、
+    /// 带逐字的主行)按图层行的行高式子;换行模式下画 SwiftUI 的字的(读音 / 译文、没有逐字的主行)用同字体、同描边的隐藏字,
+    /// SwiftUI 一行字比图层行的式子矮 2～3pt。
+    @ViewBuilder private func alternatePlaceholder(font: Font, nsFont: NSFont, text: Bool) -> some View {
+        if text {
+            lyricStroke(Text(verbatim: "X").font(font)).hidden()
+        } else {
+            Color.clear.frame(height: playback.scrollRowHeight(nsFont))
+        }
+    }
 
-    /// 上下交替时一行整行读音 / 译文的高,同它们图层行的行高。
+    /// 上下交替时一行整行读音 / 译文图层行的高。
     private func alternateSecondaryRowHeight(translation: Bool) -> CGFloat {
         playback.scrollRowHeight(translation ? playback.overlayNSFonts.translation : playback.overlayNSFonts.romanization)
+    }
+
+    /// 主行 / 下一句那一格画成 SwiftUI 的字:换行模式、这一句没有逐字(带逐字的走图层行)。
+    private func alternateMainRowIsText(words: [SyncedLyricWord]?) -> Bool {
+        playback.lineOverflow != .scroll && (words?.isEmpty ?? true)
+    }
+
+    /// 上下交替时一行歌词(主字号、单行)空着时的占位。
+    private func alternateRowPlaceholder(text: Bool) -> some View {
+        alternatePlaceholder(font: playback.mainFont, nsFont: playback.overlayNSFonts.main, text: text)
+    }
+
+    /// 上下交替时一行整行读音 / 译文空着时的占位。
+    private func alternateSecondaryPlaceholder(translation: Bool) -> some View {
+        alternatePlaceholder(font: translation ? playback.translationFont : playback.romanizationFont,
+                             nsFont: translation ? playback.overlayNSFonts.translation : playback.overlayNSFonts.romanization,
+                             text: playback.lineOverflow != .scroll)
     }
 
     /// 卡片内容:歌词各行在上,操作回声 / 拖动提示在下。
