@@ -97,7 +97,7 @@ struct LocalCacheAccessHelp: View {
             try? await Task.sleep(for: .seconds(Self.pollInterval))
             // 只认这次重启之后发布的结论,而且要明确是「读得到」:新进程启动时先删掉状态文件再重写,
             // 那段空窗里「不是被拒」只是没有数据(判据同 FullDiskAccessPermission.restartEngine)。
-            guard let state = LocalCacheAccess.current, state.updatedAt >= startedAt else { continue }
+            guard let state = await fullDiskAccess.reload(), state.updatedAt >= startedAt else { continue }
             if LocalCacheAccess.grant(for: [source.rawValue], state: state) == .granted {
                 onResolved()
                 return

@@ -94,7 +94,7 @@ final class PlayerHealthMonitor: ObservableObject {
         let targets = PlayerHealth.automationMissingPlayers(
             selection: selection, isInstalled: permissions.isInstalled, isMissing: { _ in true })
         let fullDisk = FullDiskAccessPermission.shared
-        fullDisk.refresh()
+        await fullDisk.reload()
         let fullDiskVisible = fullDisk.visiblePlayers(for: selection)
         let fullDiskDenied = PlayerHealth.fullDiskAccessDeniedPlayers(visible: fullDiskVisible, grant: fullDisk.grant(fullDiskVisible))
         let accessibility = AccessibilityPermission.shared
@@ -118,16 +118,13 @@ final class PlayerHealthMonitor: ObservableObject {
             selection: selection, isInstalled: permissions.isInstalled, isMissing: { _ in true })
         let engineEnabled = AppSettings.shared.engineServiceEnabled
         let fullDisk = FullDiskAccessPermission.shared
-        fullDisk.refresh()
-        let fullDiskVisible = fullDisk.visiblePlayers(for: selection)
-        let fullDiskDenied = PlayerHealth.fullDiskAccessDeniedPlayers(visible: fullDiskVisible, grant: fullDisk.grant(fullDiskVisible))
         let accessibility = AccessibilityPermission.shared
         accessibility.refresh()
         let accessibilityMissing = PlayerHealth.accessibilityMissingPlayers(
             visible: accessibility.visiblePlayers(for: selection), trusted: accessibility.trusted)
-        // 两次跨进程的查询都下到后台:launchctl 在 Task.detached 里,AE 权限走
-        // `MusicAutomationPermission.status`(专用线程 + 超时,超时当"没被拒");结果回到主 actor
-        // 再碰 self。askIfNeeded 必须是 false——这里绝不能弹系统授权框。
+        // 跨进程的查询和读文件都下到后台:launchctl 在 Task.detached 里,AE 权限走
+        // `MusicAutomationPermission.status`(专用线程 + 超时,超时当"没被拒"),完全磁盘访问的状态文件走
+        // `FullDiskAccessPermission.reload`;结果回到主 actor 再碰 self。askIfNeeded 必须是 false——这里绝不能弹系统授权框。
         // Task { } 继承本类的 @MainActor 隔离,weak self 在这里解包不算"并发代码里引用捕获变量"
         // (原来整段包在 Task.detached 里、在 MainActor.run 闭包内解包,编译器会告警,Swift 6 是 error)。
         let lastState = engineState
@@ -144,6 +141,9 @@ final class PlayerHealthMonitor: ObservableObject {
                 return (EngineServiceManager.state, now)
             }.value
             let missing = await Self.automationMissing(targets)
+            await fullDisk.reload()
+            let fullDiskVisible = fullDisk.visiblePlayers(for: selection)
+            let fullDiskDenied = PlayerHealth.fullDiskAccessDeniedPlayers(visible: fullDiskVisible, grant: fullDisk.grant(fullDiskVisible))
             guard let self else { return }
             self.refreshInFlight = false
             if let queriedAt { self.lastLaunchdQueryAt = queriedAt }

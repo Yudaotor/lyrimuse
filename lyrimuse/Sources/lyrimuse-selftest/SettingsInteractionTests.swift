@@ -1383,6 +1383,16 @@ private func runPermissionGuideContracts() {
                 "权限说明(契约): 只在确实被拒时讲「更新后原有授权已失效」;引擎说不用授权的来源不列进那一行")
     expectEqual([ax, fda, onboarding, lockHelp, settings].contains { $0.contains("取消勾选后重新勾选") }, false,
                 "权限说明(契约): 失效的授权关了再开不管用,别再这么教")
+    let health = read("Settings/PlayerHealthMonitor.swift")
+    expectEqual(!health.isEmpty
+                && sourceCount(fda, "LocalCacheAccess.current") == 1
+                && sourceHas(sourceBody("private nonisolated static func readState()", in: fda),
+                             "Task.detached(priority: .utility) { LocalCacheAccess.current }")
+                && sourceHas(sourceBody("func refresh()", in: fda), "guard !refreshInFlight else { return }")
+                && !sourceHas(sourceBody("private init()", in: fda), "LocalCacheAccess.current")
+                && [settings, lockHelp, health].allSatisfy { !sourceHas($0, "LocalCacheAccess.current") }
+                && !sourceHas(health, "fullDisk.refresh()"), true,
+                "完全磁盘访问(契约): 状态文件只在后台读,refresh / 歌词页的锁 / 锁说明 / 权限体检都不在主线程上 stat(14 章决策 194)")
 
     // ---- 悬停弹说明的三处共用一份时序 ----
     do {

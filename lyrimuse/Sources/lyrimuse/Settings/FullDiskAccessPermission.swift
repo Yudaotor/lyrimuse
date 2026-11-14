@@ -11,6 +11,9 @@ import SwiftUI
 /// 哪几家要摆出来(`visiblePlayers`)、把这几家合成一个结论(`grant`)、「重启后台服务」之后
 /// 一直等到引擎发布了新结论才算完(`restartEngine`)。
 ///
+/// 状态文件一律在后台读(`refresh` / `reload`),主线程只拿结果:一次 stat 碰上磁盘卡住就是十几秒的卡顿(14 章决策 194)。
+/// 读到之前 `state` 保持上一次的结论,刚启动还没读到时是 nil(界面显示「尚未确认」)。
+///
 /// 授权是整个 App 一份,不是每个播放器一份 —— 所以两个界面都只摆**一行**,标题是这项权限本身,
 /// 替哪几家要只出现在「为什么要这项授权」那句里(`FullDiskAccessGuide.reason`)。
 @MainActor
@@ -31,6 +34,11 @@ final class FullDiskAccessPermission: ObservableObject {
     @Published private(set) var everGranted: Bool
     /// 上一次「重启后台服务」替哪几家等的结论 —— `.stillDenied` 要在它们不再被拒时自己撤掉。
     private var restartTargets: [PlaybackPlayer] = []
+    /// `refresh` 派出的那次后台读还没回来;没回来就不再派(磁盘卡住时不堆积)。
+    private var refreshInFlight = false
+    /// 每次后台读按派出顺序编号,只采用比已采用的更新的那次:先派的读得慢时不会盖掉后派的结果。
+    private var readsIssued = 0
+    private var readsApplied = 0
 
     /// 引擎启动时先探容器再跑耗时的启动迁移(localcacheprobe.go),新结论通常几秒内就到;
     /// 这个上限只兜引擎起不来的情况。
@@ -38,9 +46,8 @@ final class FullDiskAccessPermission: ObservableObject {
     private static let pollInterval: TimeInterval = 1
 
     private init() {
-        state = LocalCacheAccess.current
         everGranted = PermissionGrantMemory.everGranted(PermissionGrantMemory.fullDiskAccessKey)
-        noteGranted()
+        refresh()
     }
 
     /// 这套选择下要替哪几家说话:需要授权 ∩ 装了 ∩ 引擎没说它读的那一份不用授权。没装的播放器没有容器,
@@ -58,9 +65,33 @@ final class FullDiskAccessPermission: ObservableObject {
         LocalCacheAccess.grant(for: players.compactMap(\.localCacheSource), state: state)
     }
 
-    /// 重读引擎发布的状态(按 mtime 缓存,很便宜,可以定时调)。
+    /// 在后台重读引擎发布的状态,读完更新 `state`;上一次还没读完就什么都不做。可以定时调。
     func refresh() {
-        let latest = LocalCacheAccess.current
+        guard !refreshInFlight else { return }
+        refreshInFlight = true
+        Task {
+            await reload()
+            refreshInFlight = false
+        }
+    }
+
+    /// 在后台重读一次并等它读完,返回时 `state` 已是这次读到的结论。要拿最新结论接着判断的调用方用它。
+    @discardableResult
+    func reload() async -> LocalCacheAccess.State? {
+        readsIssued += 1
+        let read = readsIssued
+        let latest = await Self.readState()
+        apply(latest, read: read)
+        return state
+    }
+
+    private nonisolated static func readState() async -> LocalCacheAccess.State? {
+        await Task.detached(priority: .utility) { LocalCacheAccess.current }.value
+    }
+
+    private func apply(_ latest: LocalCacheAccess.State?, read: Int) {
+        guard read > readsApplied else { return }
+        readsApplied = read
         if latest != state { state = latest }
         noteGranted()
         if restartPhase == .stillDenied, grant(restartTargets) != .denied {
@@ -94,8 +125,7 @@ final class FullDiskAccessPermission: ObservableObject {
         let deadline = Date().addingTimeInterval(Self.settleTimeout)
         while Date() < deadline {
             try? await Task.sleep(for: .seconds(Self.pollInterval))
-            refresh()
-            guard let state, state.updatedAt >= startedAt else { continue }
+            guard let state = await reload(), state.updatedAt >= startedAt else { continue }
             switch grant(players) {
             case .granted:
                 restartPhase = .idle

@@ -953,9 +953,9 @@ private struct LyricsSettingsTab: View {
     /// 复选框+空白+测试图标整行,专门只用来决定"这一行的测试图标要不要露出来";复选框的
     /// 高底色/`.help` 提示仍由 hoveredSource 驱动,两者不合并。
     @State private var hoveredRow: LyricsSource?
-    // 引擎发布的「哪几家的客户端缓存被系统挡住了」。 只认它的结论,别在 App 里
+    // 引擎发布的「哪几家的客户端缓存被系统挡住了」(`fullDiskAccess.state`,后台读)。 只认它的结论,别在 App 里
     // 自己探一遍 —— 授权在每个进程里各自生效,理由见 LocalCacheAccess 头注。
-    @State private var localCacheAccess: LocalCacheAccess.State?
+    @ObservedObject private var fullDiskAccess = FullDiskAccessPermission.shared
     /// 哪一格的「客户端缓存读不到」说明正开着(`LocalCacheAccessHelp`)。同时最多一个。
     @State private var localCacheHelpSource: LyricsSource?
 
@@ -1181,11 +1181,10 @@ private struct LyricsSettingsTab: View {
         .onChange(of: orderedEnabledSources.count) { _, _ in sourceDrag = nil }
         .onChange(of: features.lyricsSourceMode) { _, _ in sourceDrag = nil }
         .onAppear { appleMusic.refresh() }
-        // 这个状态只在用户改授权时才变,5 秒一次绰绰有余;`LocalCacheAccess.current` 自己按
-        // mtime 缓存,没变过的一拍只花一次 stat。视图消失即取消,没有常驻计时器。
+        // 这个状态只在用户改授权时才变,5 秒一次绰绰有余;状态文件在后台读,读完 `fullDiskAccess.state` 才变。
+        // 视图消失即取消,没有常驻计时器。
         .settingsPolling(every: 5, runsOnAppear: true) {
-            let state = LocalCacheAccess.current
-            if state != localCacheAccess { localCacheAccess = state }
+            fullDiskAccess.refresh()
         }
     }
 
@@ -1254,7 +1253,7 @@ private struct LyricsSettingsTab: View {
     /// 在引擎侧,这里只负责显示它报上来的名单。
     @ViewBuilder
     private func localCacheAccessory(_ source: LyricsSource) -> some View {
-        if LocalCacheAccess.isDenied(source.rawValue, state: localCacheAccess) {
+        if LocalCacheAccess.isDenied(source.rawValue, state: fullDiskAccess.state) {
             Button {
                 localCacheHelpSource = source
             } label: {
@@ -1276,7 +1275,7 @@ private struct LyricsSettingsTab: View {
                 LocalCacheAccessHelp(source: source) {
                     // 只有引擎真的重新发布了状态(这个源不在名单里了)才会走到这里,
                     // 所以这一下关闭是"事情办成了",不是"指令发出去了"。界面不自己改
-                    // localCacheAccess —— 那等于替另一个进程宣布结果。
+                    // fullDiskAccess.state —— 那等于替另一个进程宣布结果。
                     localCacheHelpSource = nil
                 }
             }
