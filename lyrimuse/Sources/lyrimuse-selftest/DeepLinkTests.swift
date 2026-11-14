@@ -365,6 +365,12 @@ func runDeepLinkTests() {
                     true, "debug: 歌词管理标纯音乐没带 key 或 on 不认")
         expectEqual(link("lyrimuse://debug/manager-visibility?state=on") == nil
                     && link("lyrimuse://debug/manager-visibility") == nil, true, "debug: 歌词管理可见性认不出的、没带都不认")
+        expectEqual([link("lyrimuse://debug/onboarding-step?step=done"), link("lyrimuse://debug/onboarding-step?step=Background"),
+                     link("lyrimuse://debug/onboarding-step?step=players")],
+                    [.debug(.onboardingStep(.done)), .debug(.onboardingStep(.background)), .debug(.onboardingStep(.playerChoice))],
+                    "debug: 引导翻到某一步")
+        expectEqual(link("lyrimuse://debug/onboarding-step?step=finish") == nil
+                    && link("lyrimuse://debug/onboarding-step") == nil, true, "debug: 引导步骤认不出的、没带都不认")
         expectEqual(link("lyrimuse://debug/touchbar-display?color=pink") == nil
                     && link("lyrimuse://debug/touchbar-display") == nil, true, "debug: 触控栏颜色认不出的、没带都不认")
         expectEqual(LyrimuseDeepLink.wantsBackground(URL(string: "lyrimuse://lyrics-manager?background=1")!), true, "后台开窗: 带了")
@@ -607,6 +613,8 @@ func runDeepLinkTests() {
             .debug(.touchBarDisplay(color: .rainbow)), .debug(.touchBarDisplay(color: .cover)),
             .debug(.touchBarTyping(override: true)), .debug(.touchBarTyping(override: false)), .debug(.touchBarTyping(override: nil)),
             .debug(.managerVisibility(override: true)), .debug(.managerVisibility(override: false)), .debug(.managerVisibility(override: nil)),
+            .debug(.onboardingStep(.welcome)), .debug(.onboardingStep(.playerChoice)), .debug(.onboardingStep(.browserPairing)),
+            .debug(.onboardingStep(.background)), .debug(.onboardingStep(.displayMode)), .debug(.onboardingStep(.done)),
             .debug(.managerInstrumental(key: "歌手|歌 & 名|专辑", on: true)), .debug(.managerInstrumental(key: "a|b|", on: false)),
             .debug(.rainbow(overlay: true, notch: nil)), .debug(.rainbow(overlay: false, notch: true)),
             .debug(.rainbow(overlay: nil, notch: nil, menuBar: false)),

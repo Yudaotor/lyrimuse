@@ -24,6 +24,8 @@ enum DebugDeepLinks {
     static let editNotifyChannelNotification = Notification.Name("lyrimuse.debug.editNotifyChannel")
     /// `debug/manager-visibility`:object 是 NSNumber(true = 当作露出来,false = 当作挡住),nil = 交还给遮挡状态。
     static let managerVisibilityNotification = Notification.Name("lyrimuse.debug.managerVisibility")
+    /// `debug/onboarding-step`:object 是 `OnboardingStep`,引导窗口收到后翻到那一步。
+    static let onboardingStepNotification = Notification.Name("lyrimuse.debug.onboardingStep")
 
     static var outputDir: URL {
         let caches = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first
@@ -300,6 +302,9 @@ enum DebugDeepLinks {
         case let .managerVisibility(override):
             NotificationCenter.default.post(name: managerVisibilityNotification, object: override.map { NSNumber(value: $0) })
             logger.notice("debug manager visibility override=\(override.map { String($0) } ?? "auto", privacy: .public)")
+        case let .onboardingStep(step):
+            NotificationCenter.default.post(name: onboardingStepNotification, object: step)
+            logger.notice("debug onboarding step=\(String(describing: step), privacy: .public)")
         }
     }
 
@@ -381,6 +386,7 @@ enum DebugDeepLinks {
                            "systemDark": SystemAppearanceStore.shared.isDark,
                            "menuBarDark": MenuBarAppearanceStore.shared.isDark],
             "checkpoint": checkpointSaved != nil,
+            "fullDiskAccess": FullDiskAccessPermission.shared.debugState,
             "simulation": PlaybackSimulation.current.map { sim -> Any in
                 ["title": sim.title, "artist": sim.artist, "positionSecs": sim.elapsed(at: Date()),
                  "playing": sim.isPlaying(at: Date()), "ad": sim.ad, "idle": sim.idle]

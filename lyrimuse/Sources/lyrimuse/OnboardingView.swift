@@ -378,6 +378,11 @@ struct OnboardingView: View {
         }
         .onReceive(Self.liveInputs) { liveInput = $0 }
         .onReceive(AppActions.shared.onboardingRestartRequests) { restartFromBeginning() }
+        .onReceive(NotificationCenter.default.publisher(for: DebugDeepLinks.onboardingStepNotification)) { note in
+            guard let target = note.object as? Step, let index = steps.firstIndex(of: target) else { return }
+            if introStart != nil { skipIntro() }
+            goTo(index)
+        }
         .onAppear {
             startIntroIfNeeded()
             automation.refresh(automationTargets)

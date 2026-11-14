@@ -140,6 +140,20 @@ final class FullDiskAccessPermission: ObservableObject {
         restartPhase = grant(players) == .denied ? .stillDenied : .idle
     }
 
+    /// `debug/state` 的 `fullDiskAccess` 节:此刻发布的结论(`state` 为 null = 还没读到)、按当前选择那一行显示的字样、
+    /// 重启等待阶段、授权成功过没有。
+    var debugState: [String: Any] {
+        let players = visiblePlayers(for: FeatureSettingsStore.shared.players)
+        return [
+            "state": state.map { ["updatedAt": $0.updatedAt, "denied": $0.denied, "readable": $0.readable,
+                                  "unprotected": $0.unprotected] as Any } ?? NSNull(),
+            "players": players.map(\.rawValue),
+            "caption": players.isEmpty ? NSNull() : caption(players) as Any,
+            "restartPhase": String(describing: restartPhase),
+            "everGranted": everGranted,
+        ]
+    }
+
     // MARK: - 两个界面共用的措辞
 
     func caption(_ players: [PlaybackPlayer]) -> String {

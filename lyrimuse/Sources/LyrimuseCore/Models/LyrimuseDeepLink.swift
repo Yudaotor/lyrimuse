@@ -156,6 +156,9 @@ public enum LyrimuseDeepLink: Equatable, Sendable {
         /// 歌词管理里把这一条标成 / 取消纯音乐,跟详情页那颗开关走同一条路(交给引擎、改完重读):
         /// `debug/manager-instrumental?key=<写法键>&on=1|0`。验「改动之后的重读」用。
         case managerInstrumental(key: String, on: Bool)
+        /// 首启引导翻到这一步,跟翻页走同一条路(`debug/onboarding-step?step=welcome|players|browser|background|display|done`)。
+        /// 引导窗口要先开着(`onboarding?background=1`)。
+        case onboardingStep(OnboardingStep)
         /// 悬浮歌词、灵动岛、菜单栏的彩虹开关,跟设置页走同一个设置(`debug/rainbow?overlay=0|1&notch=0|1&menubar=0|1`,
         /// 至少带一个)。
         case rainbow(overlay: Bool?, notch: Bool?, menuBar: Bool? = nil)
@@ -558,6 +561,9 @@ public enum LyrimuseDeepLink: Equatable, Sendable {
         case ("debug", "/manager-instrumental"):
             guard let key = value("key"), !key.isEmpty, let on = value("on").flatMap(Self.parseBool) else { return nil }
             self = .debug(.managerInstrumental(key: key, on: on))
+        case ("debug", "/onboarding-step"):
+            guard let step = value("step").flatMap({ Self.onboardingStepNames[$0.lowercased()] }) else { return nil }
+            self = .debug(.onboardingStep(step))
         case ("debug", "/manager-visibility"):
             switch value("state")?.lowercased() {
             case "visible": self = .debug(.managerVisibility(override: true))
@@ -868,6 +874,9 @@ public enum LyrimuseDeepLink: Equatable, Sendable {
             case let .managerVisibility(override):
                 components.path = "/manager-visibility"
                 components.queryItems = [URLQueryItem(name: "state", value: override.map { $0 ? "visible" : "hidden" } ?? "auto")]
+            case let .onboardingStep(step):
+                components.path = "/onboarding-step"
+                components.queryItems = [URLQueryItem(name: "step", value: Self.onboardingStepNames.first { $0.value == step }?.key)]
             }
         case .lastfmAuthCallback:
             components.host = "lastfm-auth-callback"
@@ -933,6 +942,12 @@ public enum LyrimuseDeepLink: Equatable, Sendable {
     }
 
     /// `on=` 认 1 / 0、true / false、on / off(大小写不敏感),别的当没带。
+    /// `debug/onboarding-step` 的步骤名。
+    static let onboardingStepNames: [String: OnboardingStep] = [
+        "welcome": .welcome, "players": .playerChoice, "browser": .browserPairing,
+        "background": .background, "display": .displayMode, "done": .done,
+    ]
+
     static func parseBool(_ raw: String) -> Bool? {
         switch raw.lowercased() {
         case "1", "true", "on", "yes": return true
