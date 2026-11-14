@@ -68,6 +68,12 @@ func runOverlayTests() {
                     && sourceHas(sourceBody("private func alternateSecondaryPlaceholder(translation: Bool) -> some View", in: view),
                                  "text: playback.lineOverflow != .scroll)"), true,
                     "上下交替(契约): 换行模式画 SwiftUI 字的格子用同字体隐藏字占位,图层行按行高式子")
+        // 隐藏字只有一个字宽:下一格整行空着(最后一句)、读音 / 译文行空着时不横向撑满,两格的块宽缩回唱着那句的宽、被摆到正中。
+        expectEqual(sourceHas(sourceBody("@ViewBuilder private var alternateNextSlot: some View", in: view),
+                              "alternateRowPlaceholder(text: alternateMainRowIsText(words: line?.words)).frame(maxWidth: .infinity)")
+                    && sourceHas(sourceBody("private func alternateSecondaryPlaceholder(translation: Bool) -> some View", in: view),
+                                 ".frame(maxWidth: .infinity)"), true,
+                    "上下交替(契约): 下一格空着、读音 / 译文行空着时占位横向撑满,最后一句不横移到正中")
         let rowsSrc = (try? String(contentsOf: src.appendingPathComponent("lyrimuse/UI/OverlayStyleSettingsRows.swift"), encoding: .utf8)) ?? ""
         expectEqual(sourceHas(rowsSrc, ".disabled(!settings.showNextLinePreview || settings.overlayNextLineArrangement == .alternate)"), true,
                     "上下交替(契约): 交错时「下一句大小」置灰")

@@ -1388,7 +1388,7 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
             if nextLineText != nil {
                 nextLinePreviewRow.reportsContentRow(.nextLine, in: contentRowRectsSpace)
             } else {
-                alternateRowPlaceholder(text: alternateMainRowIsText(words: line?.words))
+                alternateRowPlaceholder(text: alternateMainRowIsText(words: line?.words)).frame(maxWidth: .infinity)
             }
             if let roma = alternateNextRomanization {
                 alternateNextSecondaryRow(roma, translation: false).padding(.top, CGFloat(rowSpacing.romanization))
@@ -1439,7 +1439,8 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
 
     /// 上下交替时空着的格子占的高,跟那里平时画的东西一样高,换句时另一格不上下挪(04 章决策 100):画的是图层行的(滚动模式、
     /// 带逐字的主行)按图层行的行高式子;换行模式下画 SwiftUI 的字的(读音 / 译文、没有逐字的主行)用同字体、同描边的隐藏字,
-    /// SwiftUI 一行字比图层行的式子矮 2～3pt。
+    /// SwiftUI 一行字比图层行的式子矮 2～3pt。隐藏字只有一个字宽:下一格整行空着、读音 / 译文行空着时,调用处要再横向撑满,
+    /// 不然两格的块宽缩回唱着那句自己的宽、被摆到正中(主格「•••」那一处不撑,它报的是主行的点按区域)。
     @ViewBuilder private func alternatePlaceholder(font: Font, nsFont: NSFont, text: Bool) -> some View {
         if text {
             lyricStroke(Text(verbatim: "X").font(font)).hidden()
@@ -1463,11 +1464,12 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
         alternatePlaceholder(font: playback.mainFont, nsFont: playback.overlayNSFonts.main, text: text)
     }
 
-    /// 上下交替时一行整行读音 / 译文空着时的占位。
+    /// 上下交替时一行整行读音 / 译文空着时的占位,横向撑满(见 `alternatePlaceholder`)。
     private func alternateSecondaryPlaceholder(translation: Bool) -> some View {
         alternatePlaceholder(font: translation ? playback.translationFont : playback.romanizationFont,
                              nsFont: translation ? playback.overlayNSFonts.translation : playback.overlayNSFonts.romanization,
                              text: playback.lineOverflow != .scroll)
+            .frame(maxWidth: .infinity)
     }
 
     /// 卡片内容:歌词各行在上,操作回声 / 拖动提示在下。
