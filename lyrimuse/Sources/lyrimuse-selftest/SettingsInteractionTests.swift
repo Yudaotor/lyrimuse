@@ -9,6 +9,7 @@ import Foundation
 func runSettingsInteractionTests() {
     runPermissionGuideContracts()
     runSettingsWindowResizeContracts()
+    runClosedWindowContentContracts()
     // ---- EditorToolbarWidths:编辑台工具栏一行按内容分宽(04 章决策 80) ----
     do {
         func fill(_ ideals: [CGFloat], _ floors: [CGFloat], _ room: CGFloat) -> [CGFloat] {

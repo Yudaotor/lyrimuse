@@ -57,6 +57,7 @@ enum MenuBarSceneActions {
     /// 打开设置窗口。见 mainMenuSettingsItem 上那段说明。
     static func presentSettings(fallback: () -> Void) {
         LaunchPhase.settingsRequested = true
+        ClosedWindowContent.finishPendingReshows()
         // 后台开窗时设置窗口已经开着就只摆到最前:菜单项那条路对它 makeKeyAndOrderFront,会把 App 切到前台。
         if WindowActivation.surfaceIfOnScreen("settings") { return }
         WindowActivation.activateApp()

@@ -264,6 +264,8 @@ struct SettingsView: View {
     /// 这扇窗口看不看得见。「歌词显示」页的几块预览靠它在被遮住 / 最小化时停表,
     /// 见 PreviewHostVisibility.swift。
     @StateObject private var windowSurface = SettingsWindowSurface()
+    /// 窗口关着时详情页换成占位,放下那一页的整棵视图树(见 ClosedWindowContent)。停在哪一页、前进后退记录在根视图上,留着。
+    @StateObject private var closedContent = ClosedWindowContent()
     /// 「有软件更新可用」那一行出不出现。只订阅这一位,不订阅整个 SparkleUpdaterManager(见 SoftwareUpdateBadge)。
     @ObservedObject private var updateBadge = SoftwareUpdateBadge.shared
     /// 「Last.fm 账号建议」那一行出不出现、计数几条。只订阅这一份列表(见 LastfmSuggestionsStore)。
@@ -603,6 +605,7 @@ struct SettingsView: View {
                 case nil: ContentUnavailableView(L10n.t("选择左侧的设置分类"), systemImage: "gearshape")
                 }
             }
+            .releasedWhenWindowClosed(closedContent)
             // 配置文件损坏告示:平时零高度;config.json / features.json 任一启动时
             // 判定为损坏就钉在 detail 列顶部,不挑分页 —— 那时所有保存都被拒,用户在哪一页拨开关都会撞上。
             .safeAreaInset(edge: .top, spacing: 0) { ConfigFileDamageBanner() }
@@ -707,6 +710,7 @@ struct SettingsView: View {
         // 点空白处让输入框失焦,见 EndEditingOnOutsideClick。
         .background(EndEditingOnOutsideClick())
         .onAppear {
+            guard closedContent.windowAppeared() else { return }
             AuxiliaryWindowActivation.windowDidAppear("settings")
             playerHealth.start()
             // 侧栏身份区的头像:行内 .task 在侧栏 List 的行上不触发,从这里拉一次,
@@ -719,10 +723,12 @@ struct SettingsView: View {
             if visible { playerHealth.start() } else { playerHealth.stop() }
         }
         .onDisappear {
+            guard closedContent.windowDisappeared() else { return }
             AuxiliaryWindowActivation.windowDidDisappear("settings")
             playerHealth.stop()
             // 「软件更新」页攥着的 Sparkle 回复(找到了 / 下完待装)随窗口一起放掉,见那边注释。
             SparkleUpdaterManager.shared.settingsWindowClosed()
+            closedContent.release(windowSurface.window)
         }
     }
 

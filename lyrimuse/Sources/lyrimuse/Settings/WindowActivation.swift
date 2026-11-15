@@ -31,6 +31,7 @@ enum WindowActivation {
     /// 后台开窗时那扇窗已经在屏上就只摆到最前、不调 `open`:`openWindow` 对开着的窗口 `makeKeyAndOrderFront`,
     /// 处理深链的那一拍里这一下会让窗口服务器把 App 切到前台,不经过 `NSApp.activate`(见 14 章决策 197)。
     static func openScene(_ identifier: String, open: () -> Void) {
+        ClosedWindowContent.finishPendingReshows()
         if surfaceIfOnScreen(identifier) { return }
         activateApp()
         open()
