@@ -1,4 +1,5 @@
 import AppKit
+import LyrimuseCore
 import SwiftUI
 
 /// 关掉的 SwiftUI 窗口(`Window` / `Settings` 场景)放下里面那块重的内容。
@@ -15,7 +16,11 @@ import SwiftUI
 ///
 /// 用 `releasedWhenWindowClosed` 包住的那块:它的视图值本身一直留在视图图里,值里别直接带大数组(包一层取数的闭包,
 /// 如 `ScrollViewReader { … }`);它在被拆掉之前还会再求值一次,读的缓存在 `released` 时要返回空,不然会把刚放掉的数据
-/// 重新算回来。被拆的那棵树很大时,拆本身在主线程上要花时间,先量过再接(15 章决策 112)。
+/// 重新算回来。
+///
+/// 被拆的那棵树很大时拆本身要占主线程好几秒(歌词管理三万行的列表 3～5 秒,SwiftUI 的 List 数据一变就整表更新,分批拆、
+/// 先清数据源都一样),这种窗口用 `releaseLater`:关窗时只登记,等屏幕锁定 / 显示器睡眠(`releaseDeferred`)再拆,
+/// 拆的那一段告诉卡顿探针是有意的(`MainThreadWatchdog.beginExpectedStall`),不当卡顿上报。见 15 章决策 112。
 @MainActor
 final class ClosedWindowContent: ObservableObject {
     /// 窗口关着,内容已换成(或正要换成)占位。
@@ -31,10 +36,42 @@ final class ClosedWindowContent: ObservableObject {
     /// 收尾那次 `close()` 引出的 onDisappear 还没到。下一次真开窗时清掉,防止它没来、吞掉之后真关窗那一笔。
     private var pendingSyntheticDisappear = false
     private var fallback: Task<Void, Never>?
+    /// `releaseLater` 登记、还没拆:拆之前要做的事(清掉根视图上攥着数据的缓存)和那扇窗。
+    private var deferredPrepare: (@MainActor () -> Void)?
+    private weak var deferredWindow: NSWindow?
+    /// 这一次摆回去是延后拆的(拆得慢,告诉卡顿探针);占位报到过没有。
+    private var reshowIsDeferred = false
+    private var deferredReason = ""
+    private var placeholderShown = false
     /// 占位一直没报到也要收尾的时限。
     static let reshowTimeout: Duration = .seconds(1)
     /// 正摆回去、还没收尾的那几个。
     private static var inReshow: [ObjectIdentifier: ClosedWindowContent] = [:]
+    /// 关着、等锁屏 / 睡眠再拆的那几个。
+    private static var waiting: [ObjectIdentifier: ClosedWindowContent] = [:]
+    private static var triggerObservers: [NSObjectProtocol] = []
+
+    /// App 启动时装一次:屏幕锁定、显示器睡眠时拆掉登记着的窗口(`releaseDeferred`)。
+    static func installDeferredReleaseTriggers() {
+        guard triggerObservers.isEmpty else { return }
+        let fire: @Sendable (Notification) -> Void = { note in
+            let reason = note.name == NSWorkspace.screensDidSleepNotification ? "displays asleep" : "screen locked"
+            MainActor.assumeIsolated { releaseDeferred(reason: reason) }
+        }
+        triggerObservers = [
+            DistributedNotificationCenter.default().addObserver(
+                forName: Notification.Name("com.apple.screenIsLocked"), object: nil, queue: .main, using: fire),
+            NSWorkspace.shared.notificationCenter.addObserver(
+                forName: NSWorkspace.screensDidSleepNotification, object: nil, queue: .main, using: fire),
+        ]
+    }
+
+    /// 拆掉登记着的窗口。那扇窗已经重新开着(或正在开)就不动它,等下次关窗重新登记。
+    static func releaseDeferred(reason: String) {
+        let pending = waiting.values
+        waiting.removeAll()
+        for content in pending { content.fireDeferred(reason: reason) }
+    }
 
     /// 开窗入口在开窗之前调:正摆回去的窗口当场收尾。不收的话,开窗那一下只把这扇透明窗摆到最前(它在屏上,
     /// `WindowActivation.surfaceIfOnScreen` / `openWindow` 都当它开着),随后收尾的 `close()` 又把它关掉,这次开窗就丢了。
@@ -45,6 +82,7 @@ final class ClosedWindowContent: ObservableObject {
     /// 根视图 onAppear 调。false = 这是关窗后摆回去的那一下,不是开窗。
     func windowAppeared() -> Bool {
         guard reshow == nil else { return false }
+        cancelDeferred()
         pendingSyntheticDisappear = false
         if released { released = false }
         return true
@@ -68,9 +106,42 @@ final class ClosedWindowContent: ObservableObject {
         DispatchQueue.main.async { [weak self] in self?.beginReshow(window) }
     }
 
+    /// 真关窗时调(拆起来慢的窗口):只登记,等 `releaseDeferred` 再先跑 `prepare`、再换占位。重开过就作废。
+    func releaseLater(_ window: NSWindow?, prepare: @escaping @MainActor () -> Void) {
+        guard !released, let window else { return }
+        deferredPrepare = prepare
+        deferredWindow = window
+        Self.waiting[ObjectIdentifier(self)] = self
+    }
+
+    private func cancelDeferred() {
+        deferredPrepare = nil
+        deferredWindow = nil
+        Self.waiting[ObjectIdentifier(self)] = nil
+    }
+
+    private func fireDeferred(reason: String) {
+        let prepare = deferredPrepare
+        deferredPrepare = nil
+        guard let window = deferredWindow, !window.isVisible else {
+            deferredWindow = nil
+            return
+        }
+        reshowIsDeferred = true
+        deferredReason = reason
+        if released {
+            // 上一回没换成(占位没报到就超时收尾了):内容已经是占位状态,再摆回去一次。
+            DispatchQueue.main.async { [weak self] in self?.beginReshow(window) }
+        } else {
+            prepare?()
+            release(window)
+        }
+    }
+
     /// 占位的 onAppear 调。推到下一拍再关:别在 SwiftUI 更新视图的当中关窗。
     func placeholderAppeared() {
         guard reshow != nil else { return }
+        placeholderShown = true
         DispatchQueue.main.async { [weak self] in self?.finishReshow() }
     }
 
@@ -82,6 +153,8 @@ final class ClosedWindowContent: ObservableObject {
         window.animationBehavior = .none
         window.alphaValue = 0
         window.ignoresMouseEvents = true
+        placeholderShown = false
+        if reshowIsDeferred { MainThreadWatchdog.shared.beginExpectedStall("release closed window: \(deferredReason)") }
         window.orderBack(nil)
         Self.inReshow[ObjectIdentifier(self)] = self
         fallback = Task { [weak self] in
@@ -102,6 +175,14 @@ final class ClosedWindowContent: ObservableObject {
         r.window.ignoresMouseEvents = r.ignoresMouse
         r.window.animationBehavior = r.animation
         reshow = nil
+        guard reshowIsDeferred else { return }
+        reshowIsDeferred = false
+        MainThreadWatchdog.shared.endExpectedStall()
+        // 占位没报到就超时收尾了(显示器睡着时可能不画):留到下一次锁屏 / 睡眠再摆一次。
+        if released, !placeholderShown {
+            deferredWindow = r.window
+            Self.waiting[ObjectIdentifier(self)] = self
+        }
     }
 }
 

@@ -14,7 +14,10 @@ import os
 /// 计时用不含睡眠的系统运行时长(`systemUptime`):睡前投出去的任务醒来才被执行到,不算卡顿。
 /// 只在以 Lyrimuse.app 身份运行时启动:selftest 与 `swift run` 起的进程不采样。
 ///
-/// 状态(定时器、Tracker、上次采样时刻)只在 `queue` 上读写。
+/// App 有意占住主线程的那一段(锁屏时拆掉关着的大窗口的视图树,`beginExpectedStall` / `endExpectedStall`):这段里投出的
+/// 探测任务卡多久都只记一行说明,不进遥测、不采样(`isExpected`)。
+///
+/// 状态(定时器、Tracker、上次采样时刻、预期停顿)只在 `queue` 上读写。
 public final class MainThreadWatchdog: @unchecked Sendable {
     public static let shared = MainThreadWatchdog()
 
@@ -72,6 +75,26 @@ public final class MainThreadWatchdog: @unchecked Sendable {
         }
     }
 
+    /// App 有意占住主线程的一段:`from` 起、到 `until`(还没结束是 nil)。时刻是 `systemUptime` 口径的秒数。
+    public struct ExpectedStall: Equatable, Sendable {
+        public var from: TimeInterval
+        public var until: TimeInterval?
+        public var reason: String
+
+        public init(from: TimeInterval, until: TimeInterval? = nil, reason: String) {
+            self.from = from
+            self.until = until
+            self.reason = reason
+        }
+    }
+
+    /// 在 `probeSentAt` 投出的探测任务是不是撞上了预期停顿:投出时刻落在这一段里(开始前一拍投出、开始后才被卡住的也算)。
+    public static func isExpected(probeSentAt: TimeInterval?, _ stall: ExpectedStall?,
+                                  probeInterval: TimeInterval = probeInterval) -> Bool {
+        guard let sent = probeSentAt, let stall else { return false }
+        return sent >= stall.from - probeInterval && stall.until.map { sent <= $0 } ?? true
+    }
+
     private let queue = DispatchQueue(label: "me.yudaotor.lyrimuse.main-thread-watchdog", qos: .utility)
     private let sampleQueue = DispatchQueue(label: "me.yudaotor.lyrimuse.main-thread-sample", qos: .utility)
     private let logger = Logger(subsystem: LyrimuseIdentity.logSubsystem, category: "main-thread")
@@ -86,6 +109,7 @@ public final class MainThreadWatchdog: @unchecked Sendable {
     private var wake = WakeDetector()
     /// 最近一次探测任务被执行到时开着的窗口(标识)。
     private var lastWindows: [String] = []
+    private var expected: ExpectedStall?
     private var windowProvider: (@MainActor @Sendable () -> [String])?
 
     private init() {
@@ -123,6 +147,18 @@ public final class MainThreadWatchdog: @unchecked Sendable {
         }
     }
 
+    /// 接下来主线程要有意占住一段(在主线程上、动手之前调)。跟 `endExpectedStall` 成对。
+    public func beginExpectedStall(_ reason: String) {
+        let now = ProcessInfo.processInfo.systemUptime
+        queue.async { [self] in expected = ExpectedStall(from: now, reason: reason) }
+    }
+
+    /// 那一段结束了(在主线程上调)。区间留着:卡住期间投出的那个探测任务这之后才被执行到,还要靠它认出来。
+    public func endExpectedStall() {
+        let now = ProcessInfo.processInfo.systemUptime
+        queue.async { [self] in expected?.until = now }
+    }
+
     /// 停掉探测(单测收尾用)。
     public func stop() {
         queue.sync {
@@ -134,7 +170,8 @@ public final class MainThreadWatchdog: @unchecked Sendable {
     private func tick() {
         let now = ProcessInfo.processInfo.systemUptime
         wake.observe(uptime: now, continuous: WakeDetector.continuousNow)
-        if let event = tracker.check(now: now) { handle(event, at: now) }
+        let sentAt = tracker.pendingSince
+        if let event = tracker.check(now: now) { handle(event, at: now, probeSentAt: sentAt) }
         guard tracker.shouldProbe(now: now) else { return }
         let provider = windowProvider
         DispatchQueue.main.async { [weak self] in
@@ -143,15 +180,23 @@ public final class MainThreadWatchdog: @unchecked Sendable {
             self?.queue.async {
                 guard let self else { return }
                 if let windows { self.lastWindows = windows }
+                let sentAt = self.tracker.pendingSince
                 guard let event = self.tracker.answered(now: answeredAt) else { return }
-                self.handle(event, at: answeredAt)
+                self.handle(event, at: answeredAt, probeSentAt: sentAt)
             }
         }
     }
 
-    private func handle(_ event: Tracker.Event, at now: TimeInterval) {
+    private func handle(_ event: Tracker.Event, at now: TimeInterval, probeSentAt: TimeInterval?) {
         if let onEvent {
             onEvent(event)
+            return
+        }
+        if Self.isExpected(probeSentAt: probeSentAt, expected, probeInterval: interval) {
+            if case .recovered(let seconds) = event {
+                let reason = expected?.reason ?? ""
+                logger.notice("main thread: busy for \(String(format: "%.1f", seconds), privacy: .public)s on purpose (\(reason, privacy: .public)), not reported")
+            }
             return
         }
         switch event {

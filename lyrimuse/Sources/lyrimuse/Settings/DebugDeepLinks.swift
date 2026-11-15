@@ -234,6 +234,9 @@ enum DebugDeepLinks {
         case .milestonePreview:
             ListenMilestoneCenter.shared.preview()
             logger.notice("debug milestone preview")
+        case .releaseClosedWindows:
+            ClosedWindowContent.releaseDeferred(reason: "debug")
+            logger.notice("debug release closed windows")
         case .saveConfig:
             Task { @MainActor in
                 let ok = await ConfigStore.shared.save()

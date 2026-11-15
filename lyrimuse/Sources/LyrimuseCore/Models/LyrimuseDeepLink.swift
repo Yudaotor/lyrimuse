@@ -120,6 +120,8 @@ public enum LyrimuseDeepLink: Equatable, Sendable {
         case editNotifyChannel(id: String?)
         /// 账号配置按内存里的样子原样保存一次,跟账号页自动保存走同一条 `ConfigStore.save()`(`debug/config-save`)。
         case saveConfig
+        /// 当作屏幕刚锁上:拆掉关着、等锁屏再拆的窗口内容(`debug/release-closed-windows`,同 `ClosedWindowContent.releaseDeferred`)。
+        case releaseClosedWindows
         /// 关掉 / 接回一条来源(`debug/knockout?leg=<名字>&on=0|1`,`on=0` 关掉):验证退路撑不撑得住,见 `SourceKnockout`。
         case knockout(leg: SourceKnockout.Leg, on: Bool)
         /// 当作这个播放器已经在出声却没报 Now Playing 满了提示的时长,发一次跟轮询同一条的提示信号
@@ -397,6 +399,8 @@ public enum LyrimuseDeepLink: Equatable, Sendable {
             }
         case ("debug", "/config-save"):
             self = .debug(.saveConfig)
+        case ("debug", "/release-closed-windows"):
+            self = .debug(.releaseClosedWindows)
         case ("debug", "/panel-layout"):
             self = .debug(.panelLayout(json: value("json").flatMap { $0.isEmpty ? nil : $0 }))
         case ("debug", "/panel-drag"):
@@ -744,6 +748,7 @@ public enum LyrimuseDeepLink: Equatable, Sendable {
                 components.path = "/notify-channel"
                 if let id { components.queryItems = [URLQueryItem(name: "id", value: id)] }
             case .saveConfig: components.path = "/config-save"
+            case .releaseClosedWindows: components.path = "/release-closed-windows"
             case let .panelLayout(json):
                 components.path = "/panel-layout"
                 if let json { components.queryItems = [URLQueryItem(name: "json", value: json)] }

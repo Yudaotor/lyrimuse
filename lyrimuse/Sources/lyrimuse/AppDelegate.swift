@@ -147,6 +147,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 + (MenuBarStatusItem.shared.isPanelOpen ? ["menubar-panel"] : [])
         }
         MainThreadWatchdog.shared.start()
+        ClosedWindowContent.installDeferredReleaseTriggers()
         // 必须是这个函数里第一个碰 AppSettings 的事之前:CustomFontStore.shared 的 init
         // 会把用户导入的字体注册进 Core Text(进程级,每次启动都要重新注册一遍)。下面一行
         // 就会第一次访问 AppSettings.shared,而它的 init() 末尾会用 fontFamilyName 算一遍

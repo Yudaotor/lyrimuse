@@ -607,6 +607,9 @@ struct LyricsManagerView: View {
     // 窗口看不看得见(遮挡 / 最小化 / 在别的桌面)。看不见时列表那个轮询整个停掉:自动匹配期间缓存文件
     // 每搜完一首就变,不停的话被挡住的窗口也会跟着反复解析整份缓存。
     @StateObject private var windowSurface = SettingsWindowSurface()
+    /// 关着的窗口里列表和详情那块攥着整份列表摘要;拆它要卡主线程几秒,等锁屏 / 显示器睡眠再拆(见 ClosedWindowContent)。
+    /// 根视图上的 `@State`(搜索、筛选、编辑缓冲)不在那块里,留到下次开窗。
+    @StateObject private var closedContent = ClosedWindowContent()
     // 只为了让这个独立窗口(跟 SettingsView 不在同一棵视图树里)在手动切换语言时
     // 重新渲染。经 AppLanguageObserver 窄代理(见文件顶部),不整对象订阅 AppSettings。
     @ObservedObject private var languageSettings = AppLanguageObserver.shared
@@ -934,10 +937,39 @@ struct LyricsManagerView: View {
         var pins: [String: Int]?
         var countsPins: [String: Int]?
         var cleanupPins: [String: Int]?
+
+        /// 拆关着的窗口之前调:清回初值、放掉攥着的整份摘要。原地清,别换成新实例:关着的窗口里键盘快捷键那些闭包抓着的视图值
+        /// 还指着这一个,换掉的话旧的连同整份摘要照样留着。新加字段要在这里一起清(selftest 对着字段清单查)。
+        func clear() {
+            token = "\u{0}"
+            generation = -1
+            result = []
+            sortedFor = nil
+            sorted = []
+            selectable = nil
+            selectedVisible = nil
+            retryableVisible = nil
+            groups = nil
+            albumEntries = nil
+            retryableAllGeneration = -1
+            retryableAll = []
+            noResponderGeneration = -1
+            noResponderRetryable = []
+            countsGeneration = -1
+            counts = [:]
+            cleanupGeneration = -1
+            cleanup = []
+            kindCounts = [:]
+            pins = nil
+            countsPins = nil
+            cleanupPins = nil
+        }
     }
     @State private var filteredCache = FilteredCache()
 
     private var filtered: [EnrichCacheStore.Summary] {
+        // 关着的窗口要拆了(内容已换成占位)时别再填缓存:被换掉的那块拆掉之前还会再求值一次,填进去的整份摘要就跟着留下。
+        if closedContent.released { return [] }
         // 缓存键 = 全部筛选状态(filterToken,本来就为 onChange 拼好了)+ summaries 代数 + 校准名单。
         let generation = store.summariesGeneration
         let token = filterToken
@@ -2394,6 +2426,7 @@ struct LyricsManagerView: View {
                     }
                 }
             }
+            .releasedWhenWindowClosed(closedContent)
         }
         // 标题栏透明、内容铺到顶(场景挂 .windowStyle(.hiddenTitleBar)),红绿灯落在侧栏左上角。
         .ignoresSafeArea()
@@ -2492,6 +2525,7 @@ struct LyricsManagerView: View {
         }
         // 见 AuxiliaryWindowActivation 注释——只记账,不碰 Dock 图标。
         .onAppear {
+            guard closedContent.windowAppeared() else { return }
             AuxiliaryWindowActivation.windowDidAppear("lyrics-manager")
             store.holdSnapshot("lyrics-manager")
         }
@@ -2523,6 +2557,7 @@ struct LyricsManagerView: View {
             if let b = albumFilter, !store.distinctAlbums.contains(b) { albumFilter = nil }
         }
         .onDisappear {
+            guard closedContent.windowDisappeared() else { return }
             AuxiliaryWindowActivation.windowDidDisappear("lyrics-manager")
             // 关窗后快照(连同列表约 300 MB)由 store 延时清掉,下次开窗重新读盘(约 0.7 秒)。
             store.releaseSnapshot("lyrics-manager")
@@ -2530,6 +2565,8 @@ struct LyricsManagerView: View {
             // 下次开窗才会重新定位一次。
             pendingAutoFocus = true
             dismissWindowPresentations()
+            let cache = filteredCache
+            closedContent.releaseLater(windowSurface.window) { cache.clear() }
         }
         .onChange(of: store.summariesGeneration) { _, _ in refreshNowPlayingKey() }
         .onChange(of: placeholderSummary?.key) { _, _ in refreshNowPlayingKey() }

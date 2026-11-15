@@ -1091,6 +1091,27 @@ func runOpsDiagnosticsTests() {
                      Dog.shouldSample(tookDetailSlot: false, lastSampleAt: 100, now: 100 + Dog.sampleCooldown),
                      Dog.shouldSample(tookDetailSlot: false, lastSampleAt: nil, now: 5)], [true, false, true, true],
                     "卡顿采样: 占到当天概况名额就采(不管冷却),否则 30 分钟最多一次")
+        // 有意占住主线程的那一段(拆关着的大窗口,15 章决策 112):这段里投出的探测任务不上报。
+        let openStall = Dog.ExpectedStall(from: 100, reason: "test")
+        let closedStall = Dog.ExpectedStall(from: 100, until: 104, reason: "test")
+        expectEqual([Dog.isExpected(probeSentAt: 101, openStall, probeInterval: 2),
+                     Dog.isExpected(probeSentAt: 98.5, openStall, probeInterval: 2),
+                     Dog.isExpected(probeSentAt: 97.9, openStall, probeInterval: 2),
+                     Dog.isExpected(probeSentAt: 103.9, closedStall, probeInterval: 2),
+                     Dog.isExpected(probeSentAt: 104.1, closedStall, probeInterval: 2),
+                     Dog.isExpected(probeSentAt: nil, openStall, probeInterval: 2),
+                     Dog.isExpected(probeSentAt: 101, nil, probeInterval: 2)],
+                    [true, true, false, true, false, false, false],
+                    "预期停顿: 段里投出的、开始前一拍内投出的算;段外的、没有在等的、没有预期的都不算")
+        let dogSource = (try? String(contentsOf: repoRoot.appendingPathComponent("Sources/LyrimuseCore/Diagnostics/MainThreadWatchdog.swift"),
+                                     encoding: .utf8)) ?? ""
+        let handleBody = sourceBody("private func handle(_ event: Tracker.Event", in: dogSource)
+        let expectedAt = handleBody.range(of: "if Self.isExpected(probeSentAt: probeSentAt, expected")
+        let telemetryAt = handleBody.range(of: "TelemetryActivity.shared")
+        expectEqual(expectedAt != nil && telemetryAt != nil && expectedAt!.lowerBound < telemetryAt!.lowerBound
+                    && sourceHas(dogSource, "let sentAt = self.tracker.pendingSince")
+                    && sourceHas(dogSource, "let sentAt = tracker.pendingSince"), true,
+                    "预期停顿: 记遥测、采样之前先看是不是预期内的,两处判卡顿都带上探测投出的时刻")
         // 接线:真的投探测、主线程执行到、报事件。间隔与阈值调短,事件交给回调(不记日志、不采样)。
         // 空闲那段要比卡顿阈值短一截:机器被别的编译占满时主线程晚几百毫秒才执行到探测是常事,
         // 空闲窗口长过阈值就会把这种调度延迟当成卡顿报出来。
