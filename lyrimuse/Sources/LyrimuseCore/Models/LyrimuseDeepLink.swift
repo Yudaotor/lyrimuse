@@ -145,6 +145,9 @@ public enum LyrimuseDeepLink: Equatable, Sendable {
         /// 歌词窗口完整尺寸的「控件大小」百分比,跟设置页走同一个设置(`debug/lyrics-window-controls?percent=130`,
         /// 100…200,`LyricsWindowControlScale.percentRange`)。带 `draft=1` 时跟拖滑杆途中一样,只给设置页预览、不写设置。
         case lyricsWindowControls(percent: Double, draft: Bool = false)
+        /// 当作指针进 / 出歌词窗口(`debug/lyrics-window-pointer?inside=1|0`):完整尺寸走「闲置隐藏」的进出,迷你走面板的悬停进出,
+        /// 跟真指针进出走同一处,不挪鼠标就能验按钮组和红绿灯的显隐。
+        case lyricsWindowPointer(inside: Bool)
         /// 触控栏「歌词颜色」那一档,跟设置页走同一个设置(`debug/touchbar-display?color=white|cover|custom|rainbow`)。
         case touchBarDisplay(color: TouchBarLyricsColorMode)
         /// 当作键盘焦点在 / 不在输入框里,不看辅助功能读到的(`debug/touchbar-typing?state=on|off|auto`,`auto` = 交还给它)。
@@ -549,6 +552,9 @@ public enum LyrimuseDeepLink: Equatable, Sendable {
             guard let percent = value("percent").flatMap(Double.init),
                   LyricsWindowControlScale.percentRange.contains(percent) else { return nil }
             self = .debug(.lyricsWindowControls(percent: percent, draft: value("draft").flatMap(Self.parseBool) ?? false))
+        case ("debug", "/lyrics-window-pointer"):
+            guard let inside = value("inside").flatMap(Self.parseBool) else { return nil }
+            self = .debug(.lyricsWindowPointer(inside: inside))
         case ("debug", "/rainbow"):
             let overlay = value("overlay").flatMap(Self.parseBool)
             let notch = value("notch").flatMap(Self.parseBool)
@@ -866,6 +872,9 @@ public enum LyrimuseDeepLink: Equatable, Sendable {
                 let text = percent == percent.rounded() ? String(Int(percent)) : String(percent)
                 components.queryItems = [URLQueryItem(name: "percent", value: text)]
                 if draft { components.queryItems?.append(URLQueryItem(name: "draft", value: "1")) }
+            case let .lyricsWindowPointer(inside):
+                components.path = "/lyrics-window-pointer"
+                components.queryItems = [URLQueryItem(name: "inside", value: inside ? "1" : "0")]
             case let .rainbow(overlay, notch, menuBar):
                 components.path = "/rainbow"
                 var items: [URLQueryItem] = []

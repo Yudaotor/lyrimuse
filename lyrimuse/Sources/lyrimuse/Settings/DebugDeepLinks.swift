@@ -287,6 +287,9 @@ enum DebugDeepLinks {
                 AppSettings.shared.lyricsWindowControlScalePercent = percent
             }
             logger.notice("debug lyrics window controls \(percent, privacy: .public)% draft=\(draft, privacy: .public)")
+        case let .lyricsWindowPointer(inside):
+            LyricsWindowRemote.shared.simulatePointer(inside: inside)
+            logger.notice("debug lyrics window pointer inside=\(inside, privacy: .public)")
         case let .rainbow(overlay, notch, menuBar):
             if let overlay { AppSettings.shared.overlayRainbow = overlay }
             if let notch { AppSettings.shared.notchLyricsColor = notch ? .rainbow : .accent }

@@ -180,7 +180,7 @@ func checkLyricsWindowChromeIdle() {
                 "闲置隐藏: 跟踪区报指针移动、带 .activeAlways(窗口常放在副屏、焦点在别的 App)")
     expectEqual(sourceBytes(fade, contain: "guard let frameView = window.contentView?.superview ?? window.contentView else { return }"), true,
                 "闲置隐藏: 跟踪区挂在整扇窗最外层的框架上,标题栏那一条(左上那组按钮所在)也算在窗里")
-    expectEqual(sourceBytes(fade, contain: "if !inside, let window, window.isVisible, window.frame.contains(NSEvent.mouseLocation) { return }"), true,
+    expectEqual(sourceBytes(fade, contain: "if !inside, checkingLocation, let window, window.isVisible, window.frame.contains(NSEvent.mouseLocation) { return }"), true,
                 "闲置隐藏: 报离开时按真实指针位置再核一次")
     for group in ["volume", "window", "lyrics", "scroll"] {
         expectEqual(window.components(separatedBy: ".lyricsWindowChromeFade(windowController.chromeFade, group: \"\(group)\")").count - 1, 1,

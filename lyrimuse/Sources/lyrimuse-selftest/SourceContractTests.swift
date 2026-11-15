@@ -2258,7 +2258,7 @@ func runSourceContractSurfaceTests() {
             expectEqual(sourceHas(lwv, "paused: !playback.isPlayingNow || !windowController.isSurfaceVisible || !miniProgressBarShown) { now in"), true,
                         "迷你进度条: 暂停 / 不可见 / 条子没显示时停表")
             // 迷你窗:红绿灯只留关闭和最小化;进迷你默认置顶,退出时置顶状态原样还回去。
-            expectEqual(lwv.contains("let hide = hidden || (type == .zoomButton && isMini)"), true,
+            expectEqual(lwv.contains("hidden || (type == .zoomButton && isMini)"), true,
                         "迷你窗: 绿键单独藏起来,只留关闭和最小化")
             expectEqual(sourceHas(lwv, "if isMiniPanel {\n            isMini = true\n            setAlwaysOnTop(true)\n        }"), true,
                         "迷你窗: 迷你面板挂上来就是迷你、默认置顶(07 章决策 133)")

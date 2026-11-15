@@ -508,6 +508,15 @@ private final class LyricsWindowController: ObservableObject {
         if isSurfaceVisible != visible { isSurfaceVisible = visible }
     }
 
+    /// `debug/lyrics-window-pointer`:迷你走面板的悬停进出,完整尺寸走「闲置隐藏」的进出(不核真实指针位置)。
+    func simulatePointer(inside: Bool) {
+        if window is LyricsMiniPanel {
+            setMiniHovered(inside)
+        } else {
+            MainActor.assumeIsolated { chromeFade.pointer(inside: inside, checkingLocation: false) }
+        }
+    }
+
     /// 迷你窗的悬停进出(`MiniWindowHoverTracker` 报上来),交给「悬浮淡化」。
     func setMiniHovered(_ hovered: Bool) {
         MainActor.assumeIsolated { hoverFade.setHovered(hovered) }
@@ -941,27 +950,10 @@ private final class LyricsWindowController: ObservableObject {
         window.collectionBehavior = behavior
     }
 
-    /// 红绿灯默认位置(AppKit 坐标,标题栏容器内),首次 attach 时记录。
-    /// 红绿灯离父视图顶边的目标距离。
-    ///
-    /// 这是个**常量**,不是"首次量到的默认值"。两版错法都踩过:
-    ///   1. 记首次那个绝对 `origin.y` —— AppKit y 向上、相对父视图左下角算,窗口一改高度这个值
-    ///      就该跟着变,用旧值摆回去,按钮相对窗口顶边整体漂。
-    ///   2. 记首次的"离顶边距离"再按 `superview.bounds.height` 反推 —— 看着自适应了,但**父视图
-    ///      本身会换**:有时是窗口 themeFrame(高 = 窗口高),有时是标题栏容器(高固定)。两者不是
-    ///      同一个参照,记录时是 A、使用时是 B,算出来的位置跟窗口尺寸完全对不上 —— 实测拖宽到
-    ///      477 时三颗按钮被摆到距顶 8pt(正确是 18),就是这么来的。
-    /// 直接钉一个常量,无论父视图是谁、多高,按钮永远贴着它的顶边这么远。
-    private var trafficLightDefaultXs: [NSWindow.ButtonType.RawValue: CGFloat] = [:]
-    /// 红绿灯离标题栏顶的距离:按钮中心(无障碍读数)落在窗内 26pt,跟 Apple Music 同一处,也跟左上、
-    /// 右上两颗胶囊(顶 8pt、高 36pt)同一行(07 章决策 92)。
-    private static let trafficLightTopMargin: CGFloat = 19
-    /// 红点(close)目标中心 x(按 Apple Music 整窗截图量出:红点中心 x=25.8pt);
-    /// 整组随 close 平移,保留系统自己的按钮间距。
-    private static let trafficLightCloseCenterX: CGFloat = 26
-    /// 系统每次标题栏布局都会把按钮拉回默认位,跟 collectionBehavior 一样要持续钉——
-    /// 搭同一个 didUpdate 观察者的车,不等才写不自激。原生全屏中标题栏由系统全权
-    /// 接管(自动隐藏/悬停浮出),不掺和。
+    /// 红绿灯的位置与显隐:关闭键中心落在窗内 x 26pt(按 Apple Music 整窗截图量出),按钮离标题栏顶 19pt,
+    /// 中心(无障碍读数)落在窗内 y 26pt,跟左上、右上两颗胶囊(顶 8pt、高 36pt)同一行(07 章决策 92)。
+    /// 系统每次重排标题栏都把按钮拉回默认位,切显隐就是一次重排,所以显隐也交给它(见 07 章决策 203)。
+    private let trafficLights = TitlebarButtonPlacement(closeCenterX: 26, topMargin: 19)
     /// 红绿灯此刻该不该藏起来。
     ///
     /// 两个来源合成一处,不让任何一方直接写 `isHidden` —— 各写各的必然打架:伪全屏里藏了、
@@ -977,41 +969,18 @@ private final class LyricsWindowController: ObservableObject {
         // 迷你面板不当 key,红绿灯跟着指针在不在窗上走,否则一直藏着、关不掉(07 章决策 133)。
         let inactive = window is LyricsMiniPanel ? !miniPointerInside : !window.isKeyWindow
         let hidden = isActive || inactive || (chromeHidden && !isMini)
-        for type in [NSWindow.ButtonType.closeButton, .miniaturizeButton, .zoomButton] {
-            let hide = hidden || (type == .zoomButton && isMini)
-            if let button = window.standardWindowButton(type), button.isHidden != hide {
-                button.isHidden = hide
-            }
+        // 原生全屏里标题栏归系统管,只设显隐、不摆。
+        trafficLights.setHidden(in: window, reposition: !isNativeFullScreen) { type in
+            hidden || (type == .zoomButton && isMini)
         }
     }
 
+    /// 系统每次标题栏布局都会把按钮拉回默认位,跟 collectionBehavior 一样要持续钉 ——
+    /// 搭同一个 didUpdate 观察者的车,不等才写不自激。原生全屏中标题栏由系统全权
+    /// 接管(自动隐藏 / 悬停浮出),不掺和。
     private func enforceTrafficLightPosition(_ window: NSWindow) {
         guard !isNativeFullScreen else { return }
-        let types: [NSWindow.ButtonType] = [.closeButton, .miniaturizeButton, .zoomButton]
-        // 只记 x 的默认位(必须在动它们之前一次记齐)。横向不随窗口尺寸变,三颗按钮的相对间距
-        // 也只有从系统默认位才量得准 —— 纵向不记,见 trafficLightTopMargin。
-        if trafficLightDefaultXs.isEmpty {
-            for type in types {
-                guard let button = window.standardWindowButton(type) else { continue }
-                trafficLightDefaultXs[type.rawValue] = button.frame.origin.x
-            }
-        }
-        guard let closeButton = window.standardWindowButton(.closeButton),
-              let superview = closeButton.superview,
-              let closeDefaultX = trafficLightDefaultXs[NSWindow.ButtonType.closeButton.rawValue]
-        else { return }
-        // 整组横向平移量:让 close 的中心落到目标 x(默认位已对时 dx≈0,写入是 no-op)。
-        let dx = (Self.trafficLightCloseCenterX - closeButton.frame.width / 2) - closeDefaultX
-        // 贴父视图顶边固定距离。AppKit y 向上,所以从父视图高度往下减。
-        let targetY = superview.bounds.height - Self.trafficLightTopMargin - closeButton.frame.height
-        for type in types {
-            guard let button = window.standardWindowButton(type),
-                  let defaultX = trafficLightDefaultXs[type.rawValue] else { continue }
-            let targetX = defaultX + dx
-            if abs(button.frame.origin.y - targetY) > 0.5 || abs(button.frame.origin.x - targetX) > 0.5 {
-                button.setFrameOrigin(NSPoint(x: targetX, y: targetY))
-            }
-        }
+        trafficLights.place(in: window)
     }
 
     /// 标题栏那一行里 SwiftUI 画的控件此刻的矩形(SwiftUI 全局坐标,左上原点),双击落在这些上面不算标题栏空白。
@@ -1166,6 +1135,11 @@ private final class LyricsWindowController: ObservableObject {
         // 才写,写入本身也满足守卫条件,不会自激。
         Self.enforceSpaceBehavior(window, mini: isMini, floating: isAlwaysOnTop)
         enforceTrafficLightPosition(window)
+        // 改标题、开始 / 停止被录制这类别处触发的标题栏重排,按钮被挪走就在这一轮画面提交前摆回去。
+        trafficLights.track(window) { [weak self] in
+            guard let self else { return false }
+            return !self.isNativeFullScreen && !self.isNativeFullScreenTransition
+        }
         updateTrafficLightVisibility()
         if !isMiniPanel { addToWindowsMenu(window) }
         // 窗口本体的不透明度。attach 之前视图就可能已经算出了意图,这里补上。
@@ -1396,7 +1370,11 @@ private final class LyricsWindowController: ObservableObject {
         exitFullScreenObserver = NotificationCenter.default.addObserver(
             forName: NSWindow.didExitFullScreenNotification, object: window, queue: .main
         ) { [weak self] _ in
-            MainActor.assumeIsolated { self?.clearNativeFullScreen() }
+            MainActor.assumeIsolated {
+                self?.clearNativeFullScreen()
+                // 出全屏时系统重排标题栏、把按钮拉回默认位,当场摆回去,不等下一次 didUpdate。
+                if let win = self?.window { self?.enforceTrafficLightPosition(win) }
+            }
         }
     }
 
@@ -8135,6 +8113,14 @@ final class LyricsWindowRemote: ObservableObject {
 
     /// `debug/state` 的 `lyricsWindowChrome` 一项:最近 attach 的那份控制器的按钮组露 / 收(关着也报)。
     var chromeDebugState: Any { controller?.chromeFade.debugState ?? NSNull() }
+
+    /// `debug/lyrics-window-pointer`:当作指针进 / 出最近 attach 的那扇窗。挪到下一拍再报:深链在 Apple 事件里处理,
+    /// 处理完系统会补发一次 `didUpdate`,把只靠它兜底的毛病盖住;跟踪区报的进出之后不一定有这一下。
+    func simulatePointer(inside: Bool) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { [weak self] in
+            MainActor.assumeIsolated { self?.controller?.simulatePointer(inside: inside) }
+        }
+    }
 
     private var live: LyricsWindowController? {
         guard let controller, controller.isOnScreen else { return nil }

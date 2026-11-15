@@ -80,9 +80,10 @@ final class LyricsWindowChromeFade: ObservableObject {
         evaluate()
     }
 
-    func pointer(inside: Bool) {
+    /// `checkingLocation` 只给 `debug/lyrics-window-pointer` 关:模拟进出时真指针在哪不算数。
+    func pointer(inside: Bool, checkingLocation: Bool = true) {
         // 报「离开」时指针其实还在这扇窗的范围里(跟踪区所在的视图被换掉、窗口边缘的阴影区),不算离开。
-        if !inside, let window, window.isVisible, window.frame.contains(NSEvent.mouseLocation) { return }
+        if !inside, checkingLocation, let window, window.isVisible, window.frame.contains(NSEvent.mouseLocation) { return }
         state.pointerInside = inside
         if inside { state.lastActivity = Date() }
         if !inside { hoveredGroups.removeAll() }

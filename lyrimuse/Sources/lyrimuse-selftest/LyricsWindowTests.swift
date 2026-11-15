@@ -69,6 +69,7 @@ func runLyricsWindowTests() {
     checkLyricsWindowHoverFade()
     checkLyricsWindowMiniAutoHide()
     checkLyricsWindowChromeIdle()
+    checkLyricsWindowTrafficLights()
     checkLyricsWindowLaunchRestore()
     // ---- 歌词窗口的空格 / ← / → ----
     do {
