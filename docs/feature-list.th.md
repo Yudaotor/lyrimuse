@@ -2,9 +2,9 @@
 
 # ความสามารถของ Lyrimuse
 
-[English](feature-list.md) · [简体中文](feature-list.zh-CN.md) · [繁體中文](feature-list.zh-Hant.md) · [日本語](feature-list.ja.md) · [한국어](feature-list.ko.md) · [Español](feature-list.es.md) · [Français](feature-list.fr.md) · [Deutsch](feature-list.de.md) · [Italiano](feature-list.it.md) · [Português (Brasil)](feature-list.pt-BR.md) · [Tiếng Việt](feature-list.vi.md) · [Русский](feature-list.ru.md) · [Українська](feature-list.uk.md) · ไทย
+[English](feature-list.md) · [简体中文](feature-list.zh-CN.md) · [繁體中文](feature-list.zh-Hant.md) · [日本語](feature-list.ja.md) · [한국어](feature-list.ko.md) · [Español](feature-list.es.md) · [Français](feature-list.fr.md) · [Deutsch](feature-list.de.md) · [Italiano](feature-list.it.md) · [Português (Brasil)](feature-list.pt-BR.md) · [Tiếng Việt](feature-list.vi.md) · [Русский](feature-list.ru.md) · [Українська](feature-list.uk.md) · ไทย · [Türkçe](feature-list.tr.md)
 
-Lyrimuse เป็นแอปโอเพนซอร์ส (GPL-3.0) สำหรับ Mac ที่แสดงเนื้อเพลงแบบคำต่อคำตรงตามจังหวะ ใช้ได้กับ macOS 14 ขึ้นไปบน Apple Silicon และ Intel แสดงเนื้อเพลงให้ Apple Music, Spotify, QQ Music, NetEase Cloud Music, Kugou, Soda Music, KKBOX, Amazon Music, LX Music, Kaset, Pear Desktop, reAMP, VOX, Pine Player, foobar2000, Swinsian, Plexamp, MyGo Music, Audirvana รวมถึง YouTube Music หรือ Spotify Web ที่เล่นในเบราว์เซอร์ ได้ทั้งแบบลอยบนเดสก์ท็อป ข้างรอยบาก ในแถบเมนู บน Touch Bar หรือในหน้าต่างเนื้อเพลงแบบเต็มหน้า พร้อมคำแปลและการออกเสียง (พินอิน Jyutping ภาษากวางตุ้ง โรมะจิภาษาญี่ปุ่น และอักษรโรมันภาษาเกาหลี) Lyrimuse Scrobble ไปยัง Last.fm และ ListenBrainz และแสดงเพลงที่คุณกำลังฟังบน Discord ได้ แอปมีให้เลือกเป็นภาษาอังกฤษ จีนตัวย่อ จีนตัวเต็ม ญี่ปุ่น เกาหลี สเปน ฝรั่งเศส เยอรมัน อิตาลี โปรตุเกส (บราซิล) เวียดนาม รัสเซีย ยูเครน และไทย
+Lyrimuse เป็นแอปโอเพนซอร์ส (GPL-3.0) สำหรับ Mac ที่แสดงเนื้อเพลงแบบคำต่อคำตรงตามจังหวะ ใช้ได้กับ macOS 14 ขึ้นไปบน Apple Silicon และ Intel แสดงเนื้อเพลงให้ Apple Music, Spotify, QQ Music, NetEase Cloud Music, Kugou, Soda Music, KKBOX, Amazon Music, LX Music, Kaset, Pear Desktop, reAMP, VOX, Pine Player, foobar2000, Swinsian, Plexamp, MyGo Music, Audirvana รวมถึง YouTube Music หรือ Spotify Web ที่เล่นในเบราว์เซอร์ ได้ทั้งแบบลอยบนเดสก์ท็อป ข้างรอยบาก ในแถบเมนู บน Touch Bar หรือในหน้าต่างเนื้อเพลงแบบเต็มหน้า พร้อมคำแปลและการออกเสียง (พินอิน Jyutping ภาษากวางตุ้ง โรมะจิภาษาญี่ปุ่น และอักษรโรมันภาษาเกาหลี) Lyrimuse Scrobble ไปยัง Last.fm และ ListenBrainz และแสดงเพลงที่คุณกำลังฟังบน Discord ได้ แอปมีให้เลือกเป็นภาษาอังกฤษ จีนตัวย่อ จีนตัวเต็ม ญี่ปุ่น เกาหลี สเปน ฝรั่งเศส เยอรมัน อิตาลี โปรตุเกส (บราซิล) เวียดนาม รัสเซีย ยูเครน ไทย และตุรกี
 
 รวมความสามารถทั้งหมดของ Lyrimuse ไว้ที่นี่ ทั้งสิ่งที่แต่ละอย่างทำ อยู่ตรงไหนในการตั้งค่า และเปิดอยู่ตั้งแต่ติดตั้งหรือไม่ ท้ายหน้ามีรายการการตั้งค่าทั้งหมดในหน้าต่างการตั้งค่า รายการนี้ดูแลไปพร้อมกับซอร์สโค้ดและอัปเดตทุกครั้งที่มีการเปลี่ยนแปลง
 
@@ -806,7 +806,7 @@ Apple Music, Spotify, Kaset, VOX, Swinsian และ Audirvana ต้องใ�
 
 <a id="feature-language"></a>
 
-### ภาษาอังกฤษ จีนตัวย่อและตัวเต็ม ญี่ปุ่น เกาหลี สเปน ฝรั่งเศส เยอรมัน อิตาลี โปรตุเกส (บราซิล) เวียดนาม รัสเซีย ยูเครน และไทย
+### ภาษาอังกฤษ จีนตัวย่อและตัวเต็ม ญี่ปุ่น เกาหลี สเปน ฝรั่งเศส เยอรมัน อิตาลี โปรตุเกส (บราซิล) เวียดนาม รัสเซีย ยูเครน ไทย และตุรกี
 
 ตามภาษาของระบบโดยค่าเริ่มต้น และใช้ภาษาอังกฤษเมื่อภาษาของระบบไม่อยู่ในรายการนี้ เปลี่ยนแล้วมีผลทันทีโดยไม่ต้องเปิดแอปใหม่
 

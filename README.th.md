@@ -6,7 +6,7 @@
 
 **เนื้อเพลงบนเดสก์ท็อป ออกแบบใหม่เพื่อ Mac**
 
-**Language / 语言 / 語言 / 言語 / 언어 / Idioma / Langue / Sprache / Lingua / Язык / Мова / ภาษา:** [English](README.md) | [简体中文](README.zh-CN.md) | [繁體中文](README.zh-Hant.md) | [日本語](README.ja.md) | [한국어](README.ko.md) | [Español](README.es.md) | [Français](README.fr.md) | [Deutsch](README.de.md) | [Italiano](README.it.md) | [Português (Brasil)](README.pt-BR.md) | [Tiếng Việt](README.vi.md) | [Русский](README.ru.md) | [Українська](README.uk.md) | **ไทย**
+**Language / 语言 / 語言 / 言語 / 언어 / Idioma / Langue / Sprache / Lingua / Язык / Мова / ภาษา / Dil:** [English](README.md) | [简体中文](README.zh-CN.md) | [繁體中文](README.zh-Hant.md) | [日本語](README.ja.md) | [한국어](README.ko.md) | [Español](README.es.md) | [Français](README.fr.md) | [Deutsch](README.de.md) | [Italiano](README.it.md) | [Português (Brasil)](README.pt-BR.md) | [Tiếng Việt](README.vi.md) | [Русский](README.ru.md) | [Українська](README.uk.md) | **ไทย** | [Türkçe](README.tr.md)
 
 ![Platform](https://img.shields.io/badge/platform-macOS%2014%2B-blue)
 ![Architecture](https://img.shields.io/badge/arch-Apple%20Silicon%20%2B%20Intel-blue)
@@ -93,7 +93,7 @@ brew install --cask lyrimuse
 - **ซ่อนตัวเองเมื่อหยุดเล่นชั่วคราว** จึงไม่ค้างอยู่บนเดสก์ท็อปโดยไม่มีประโยชน์ และยังหลบให้ช่วงดนตรีบรรเลง เพลงที่ไม่มีเนื้อเพลง และแอปแบบเต็มหน้าจอได้ ส่วนเนื้อเพลงแบบลอยตามคุณไปยังหน้าจอของหน้าต่างที่กำลังใช้อยู่ได้
 
 ### รายละเอียดในการใช้งานประจำวัน
-- **อังกฤษ จีนตัวย่อ จีนตัวเต็ม ญี่ปุ่น เกาหลี สเปน ฝรั่งเศส เยอรมัน อิตาลี โปรตุเกส (บราซิล) เวียดนาม รัสเซีย ยูเครน และไทย** สลับภาษาแล้วมีผลทันทีโดยไม่ต้องเริ่มแอปใหม่ หากพบคำแปลที่ไม่เป็นธรรมชาติ ยินดีรับ Pull Request ทุกภาษามีคู่มือสไตล์การแปลอยู่ใน `lyrimuse/Localization/`
+- **อังกฤษ จีนตัวย่อ จีนตัวเต็ม ญี่ปุ่น เกาหลี สเปน ฝรั่งเศส เยอรมัน อิตาลี โปรตุเกส (บราซิล) เวียดนาม รัสเซีย ยูเครน ไทย และตุรกี** สลับภาษาแล้วมีผลทันทีโดยไม่ต้องเริ่มแอปใหม่ หากพบคำแปลที่ไม่เป็นธรรมชาติ ยินดีรับ Pull Request ทุกภาษามีคู่มือสไตล์การแปลอยู่ใน `lyrimuse/Localization/`
 - **Liquid Glass บน macOS 26** การตั้งค่า แผงแถบเมนู หน้าต่างเนื้อเพลง ตัวจัดการเนื้อเพลง และตัวช่วยตั้งค่าสร้างด้วย Liquid Glass และส่วนใหญ่ตั้งให้เป็นแบบสว่างหรือมืดตลอดแทนการตามระบบได้
 - **ปุ่มลัด** สำหรับทุกการทำงาน ตั้งแต่ซ่อนเนื้อเพลงทั้งหมดไปจนถึงกดถูกใจเพลง ไม่มีปุ่มลัดตั้งไว้ล่วงหน้า คุณเลือกปุ่มเอง ทุกการทำงานยังมีลิงก์ `lyrimuse://` ที่เรียกใช้จากคำสั่งลัด Raycast หรือ Alfred ได้ และเมื่อเรียกจากคำสั่งลัด ลิงก์ส่งเพลงที่กำลังเล่นกลับมาได้ ([URL Scheme](docs/url-scheme.th.md))
 - **ค้นหาในการตั้งค่า** พิมพ์ในแถบด้านข้างแล้วจะเลื่อนไปยังแถวที่ตรงกันและไฮไลท์ไว้ พร้อมเปิดกลุ่มที่ยุบอยู่หากจำเป็น

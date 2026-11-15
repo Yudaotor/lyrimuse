@@ -1,0 +1,4 @@
+/* 由 Localization/Localizable.xcstrings 生成(键表见 generate-strings.py 的 INFO_PLIST_KEYS)—— 不要手改这个文件。 */
+
+"NSAppleEventsUsageDescription" = "Lyrimuse’un eşzamanlı şarkı sözlerini gösterebilmesi için çalarlarda ve tarayıcılarda çalan parçayı okuması gerekir";
+"NSAudioCaptureUsageDescription" = "Lyrimuse, çentikteki ses dalgasının müzikle hareket etmesi için yalnızca çaların ses düzeyini okur. Ses kaydedilmez";

@@ -29,12 +29,12 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-LANGS = ("en", "zh-Hans", "zh-Hant", "ja", "ko", "es", "fr", "de", "it", "pt-BR", "vi", "ru", "uk", "th")
-LANG_LABELS = {"en": "English", "zh-Hans": "简体中文", "zh-Hant": "繁體中文", "ja": "日本語", "ko": "한국어", "es": "Español", "fr": "Français", "de": "Deutsch", "it": "Italiano", "pt-BR": "Português (Brasil)", "vi": "Tiếng Việt", "ru": "Русский", "uk": "Українська", "th": "ไทย"}
+LANGS = ("en", "zh-Hans", "zh-Hant", "ja", "ko", "es", "fr", "de", "it", "pt-BR", "vi", "ru", "uk", "th", "tr")
+LANG_LABELS = {"en": "English", "zh-Hans": "简体中文", "zh-Hant": "繁體中文", "ja": "日本語", "ko": "한국어", "es": "Español", "fr": "Français", "de": "Deutsch", "it": "Italiano", "pt-BR": "Português (Brasil)", "vi": "Tiếng Việt", "ru": "Русский", "uk": "Українська", "th": "ไทย", "tr": "Türkçe"}
 DOC_FILES = {"en": "feature-list.md", "zh-Hans": "feature-list.zh-CN.md", "zh-Hant": "feature-list.zh-Hant.md",
              "ja": "feature-list.ja.md", "ko": "feature-list.ko.md", "es": "feature-list.es.md",
              "fr": "feature-list.fr.md", "de": "feature-list.de.md", "it": "feature-list.it.md",
-             "pt-BR": "feature-list.pt-BR.md", "vi": "feature-list.vi.md", "ru": "feature-list.ru.md", "uk": "feature-list.uk.md", "th": "feature-list.th.md"}
+             "pt-BR": "feature-list.pt-BR.md", "vi": "feature-list.vi.md", "ru": "feature-list.ru.md", "uk": "feature-list.uk.md", "th": "feature-list.th.md", "tr": "feature-list.tr.md"}
 BRANDS = {"ListenBrainz", "Last.fm", "Discord"}
 
 CHROME = {
@@ -318,6 +318,26 @@ CHROME = {
         "sep": ": ",
         "generated": "สร้างโดย scripts/gen-feature-list.py จาก shared/feature-list.json และ shared/settings-catalog.json หากต้องการแก้รายการ ให้แก้ไฟล์เหล่านั้น",
     },
+    "tr": {
+        "title": "Lyrimuse Özellikleri",
+        "intro": "Lyrimuse’un tüm özellikleri burada: her birinin ne yaptığı, ayarlarda nerede olduğu ve yüklendikten sonra açık olup olmadığı; sonda Ayarlar penceresindeki tüm ayarlar listelenir. Liste kaynak kodla birlikte tutulur ve her değişiklikte güncellenir.",
+        "toc": "İçindekiler",
+        "off_title": "Siz açana kadar kapalı",
+        "off_intro": "Bu özellikler yüklendikten sonra kapalıdır. Önce ayarlardan açın (bazıları için ayrıca bir hesap veya izin gerekir):",
+        "col_feature": "Özellik",
+        "col_where": "Nereden açılır",
+        "default_on": "Saptanmış olarak açık",
+        "default_off": "Saptanmış olarak kapalı",
+        "where": "Ayarlar",
+        "index_title": "Tüm Ayarlar",
+        "index_intro": "Ayarlar penceresindeki tüm ayarlar, konumlarına göre; toplam: {n}. Bir ayara hemen gitmek için adını kenar çubuğunun üstündeki arama alanına yazın.",
+        "settings": "Ayarlar",
+        "labs": "Deneysel",
+        "mini_only": " (yalnızca Mini)",
+        "full_only": " (yalnızca Tam Boyut)",
+        "sep": ": ",
+        "generated": "scripts/gen-feature-list.py tarafından shared/feature-list.json ve shared/settings-catalog.json dosyalarından oluşturuldu; listeyi değiştirmek için bu dosyaları düzenleyin.",
+    },
 }
 
 CALL_RE = re.compile(r"\b(SettingsRow|SettingsSubRow|SettingsCardHeader|SettingsChipToggle|SettingsToggleTile|SettingsControlCell)\(")
@@ -447,7 +467,7 @@ def load_model(root: Path = ROOT) -> dict:
             joined = ""
             for line in lines:
                 if joined:
-                    if lang in ("en", "ko", "es", "fr", "de", "it", "pt-BR", "vi", "ru", "uk", "th"):
+                    if lang in ("en", "ko", "es", "fr", "de", "it", "pt-BR", "vi", "ru", "uk", "th", "tr"):
                         joined += " "
                     elif lang == "ja":
                         joined += "" if joined[-1] in "。：！？" else "。"

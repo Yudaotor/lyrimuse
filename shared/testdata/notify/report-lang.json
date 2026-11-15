@@ -1987,6 +1987,148 @@
       "body": "เล่น 286 ครั้ง (สัปดาห์ก่อนหน้า: 241, ↑19%) · ประมาณ 17 ชั่วโมง 52 นาที\nศิลปินใหม่: 5",
       "sections": null,
       "new_line": "ศิลปินใหม่ 5 ราย"
+    },
+    {
+      "lang": "tr",
+      "kind": "daily",
+      "style": "full",
+      "top_n": 3,
+      "title": "🎧 Bugünün Dinleme Raporu (20.10)",
+      "summary": "42 dinleme · yaklaşık 2 sa 46 dk",
+      "body": "42 dinleme · yaklaşık 2 sa 46 dk\n\nEn çok dinlenen sanatçılar:\n1. 周杰伦 (12)\n2. 方大同 (8)\n3. 陈绮贞 (5)\n\nEn çok dinlenen albümler:\n1. 周杰伦 - 叶惠美 (6)\n2. 方大同 - 15 (5)\n3. 陈绮贞 - 还是会寂寞 (4)\n\nEn çok dinlenen parçalar:\n1. 周杰伦 - 晴天 (4)\n2. 方大同 - 春风吹 (3)\n3. 陈绮贞 - 越洋电话 (3)\n\n2 yeni sanatçı: Prince, D'Angelo",
+      "sections": [
+        {
+          "heading": "Sanatçılar",
+          "title": "En çok dinlenen sanatçılar",
+          "lines": [
+            "1. 周杰伦 · 12",
+            "2. 方大同 · 8",
+            "3. 陈绮贞 · 5"
+          ]
+        },
+        {
+          "heading": "Albümler",
+          "title": "En çok dinlenen albümler",
+          "lines": [
+            "1. 叶惠美 — 周杰伦 · 6",
+            "2. 15 — 方大同 · 5",
+            "3. 还是会寂寞 — 陈绮贞 · 4"
+          ]
+        },
+        {
+          "heading": "Parçalar",
+          "title": "En çok dinlenen parçalar",
+          "lines": [
+            "1. 晴天 — 周杰伦 · 4",
+            "2. 春风吹 — 方大同 · 3",
+            "3. 越洋电话 — 陈绮贞 · 3"
+          ]
+        }
+      ],
+      "new_line": "2 yeni sanatçı: Prince, D'Angelo"
+    },
+    {
+      "lang": "tr",
+      "kind": "daily",
+      "style": "brief",
+      "top_n": 3,
+      "title": "🎧 Bugünün Dinleme Raporu (20.10)",
+      "summary": "42 dinleme · yaklaşık 2 sa 46 dk",
+      "body": "42 dinleme · yaklaşık 2 sa 46 dk\nEn çok dinlenen sanatçı: 周杰伦\nEn çok dinlenen albüm: 周杰伦 - 叶惠美\nEn çok dinlenen parça: 周杰伦 - 晴天\nYeni sanatçılar (2): Prince, D'Angelo",
+      "sections": [
+        {
+          "heading": "En çok dinlenenler",
+          "title": "En çok dinlenenler",
+          "lines": [
+            "Sanatçı: 周杰伦 · 12",
+            "Albüm: 叶惠美 — 周杰伦 · 6",
+            "Parça: 晴天 — 周杰伦 · 4"
+          ]
+        }
+      ],
+      "new_line": "2 yeni sanatçı: Prince, D'Angelo"
+    },
+    {
+      "lang": "tr",
+      "kind": "daily",
+      "style": "overview",
+      "top_n": 3,
+      "title": "🎧 Bugünün Dinleme Raporu (20.10)",
+      "summary": "42 dinleme · yaklaşık 2 sa 46 dk",
+      "body": "42 dinleme · yaklaşık 2 sa 46 dk\nYeni sanatçılar: 2",
+      "sections": null,
+      "new_line": "2 yeni sanatçı"
+    },
+    {
+      "lang": "tr",
+      "kind": "weekly",
+      "style": "full",
+      "top_n": 3,
+      "title": "🎵 Geçen Haftanın Dinleme Raporu (12.10 – 18.10)",
+      "summary": "286 dinleme (önceki hafta: 241, ↑19%) · yaklaşık 17 sa 52 dk",
+      "body": "286 dinleme (önceki hafta: 241, ↑19%) · yaklaşık 17 sa 52 dk\n\nEn çok dinlenen sanatçılar:\n1. 方大同 (61)\n2. 周杰伦 (48)\n3. Prince (33)\n\nEn çok dinlenen albümler:\n1. 方大同 - JTW 西游记 (29)\n2. 周杰伦 - 叶惠美 (21)\n3. Prince - For You (17)\n\nEn çok dinlenen parçalar:\n1. 方大同 - NMW (11)\n2. 周杰伦 - 晴天 (9)\n3. Prince - For You (8)\n\n5 yeni sanatçı: D'Angelo, 林忆莲, 卢广仲 ve diğerleri",
+      "sections": [
+        {
+          "heading": "Sanatçılar",
+          "title": "En çok dinlenen sanatçılar",
+          "lines": [
+            "1. 方大同 · 61",
+            "2. 周杰伦 · 48",
+            "3. Prince · 33"
+          ]
+        },
+        {
+          "heading": "Albümler",
+          "title": "En çok dinlenen albümler",
+          "lines": [
+            "1. JTW 西游记 — 方大同 · 29",
+            "2. 叶惠美 — 周杰伦 · 21",
+            "3. For You — Prince · 17"
+          ]
+        },
+        {
+          "heading": "Parçalar",
+          "title": "En çok dinlenen parçalar",
+          "lines": [
+            "1. NMW — 方大同 · 11",
+            "2. 晴天 — 周杰伦 · 9",
+            "3. For You — Prince · 8"
+          ]
+        }
+      ],
+      "new_line": "5 yeni sanatçı: D'Angelo, 林忆莲, 卢广仲 ve diğerleri"
+    },
+    {
+      "lang": "tr",
+      "kind": "weekly",
+      "style": "brief",
+      "top_n": 3,
+      "title": "🎵 Geçen Haftanın Dinleme Raporu (12.10 – 18.10)",
+      "summary": "286 dinleme (önceki hafta: 241, ↑19%) · yaklaşık 17 sa 52 dk",
+      "body": "286 dinleme (önceki hafta: 241, ↑19%) · yaklaşık 17 sa 52 dk\nEn çok dinlenen sanatçı: 方大同\nEn çok dinlenen albüm: 方大同 - JTW 西游记\nEn çok dinlenen parça: 方大同 - NMW\nYeni sanatçılar (5): D'Angelo, 林忆莲, 卢广仲",
+      "sections": [
+        {
+          "heading": "En çok dinlenenler",
+          "title": "En çok dinlenenler",
+          "lines": [
+            "Sanatçı: 方大同 · 61",
+            "Albüm: JTW 西游记 — 方大同 · 29",
+            "Parça: NMW — 方大同 · 11"
+          ]
+        }
+      ],
+      "new_line": "5 yeni sanatçı: D'Angelo, 林忆莲, 卢广仲 ve diğerleri"
+    },
+    {
+      "lang": "tr",
+      "kind": "weekly",
+      "style": "overview",
+      "top_n": 3,
+      "title": "🎵 Geçen Haftanın Dinleme Raporu (12.10 – 18.10)",
+      "summary": "286 dinleme (önceki hafta: 241, ↑19%) · yaklaşık 17 sa 52 dk",
+      "body": "286 dinleme (önceki hafta: 241, ↑19%) · yaklaşık 17 sa 52 dk\nYeni sanatçılar: 5",
+      "sections": null,
+      "new_line": "5 yeni sanatçı"
     }
   ]
 }

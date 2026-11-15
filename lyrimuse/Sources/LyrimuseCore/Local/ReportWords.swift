@@ -3,7 +3,7 @@ import Foundation
 /// 听歌报告用哪种语言写:App 的界面语言(`L10n.current`:zh-hans / zh-hant / en),写进 features.json 的
 /// `report_language` 给引擎(digestlang.go)。认不得的按简体。
 public enum ReportLanguage: String, CaseIterable, Sendable {
-    case zhHans = "zh-hans", zhHant = "zh-hant", en, ja, ko, es, fr, de, it, ptBR = "pt-br", vi, ru, uk, th
+    case zhHans = "zh-hans", zhHant = "zh-hant", en, ja, ko, es, fr, de, it, ptBR = "pt-br", vi, ru, uk, th, tr
 
     /// features.json 里的键名,同引擎 featureFlagsFile.ReportLanguage 的 json 标签。
     public static let featuresKey = "report_language"
@@ -782,6 +782,54 @@ public struct ReportWords: Sendable {
             "title_yesterday": "🎧 รายงานการฟังเมื่อวาน ({date})",
             "value_hm": "{h} ชั่วโมง {m} นาที",
             "value_m": "{m} นาที",
+        ],
+        .tr: [
+            "brief_line": "{label}: {name} · {n}",
+            "col_albums": "Albümler",
+            "col_artists": "Sanatçılar",
+            "col_tracks": "Parçalar",
+            "colon": ":",
+            "compare": " ({label}: {prev}, {change})",
+            "cover": "Kapak",
+            "date": "{dd}.{mm}",
+            "duration_hm": " · yaklaşık {h} sa {m} dk",
+            "duration_m": " · yaklaşık {m} dk",
+            "flat": "değişmedi",
+            "footer": "Lyrimuse · Veriler: {source}",
+            "head_albums": "En çok dinlenen albümler",
+            "head_artists": "En çok dinlenen sanatçılar",
+            "head_tracks": "En çok dinlenen parçalar",
+            "item": "{i}. {name} ({n})",
+            "keyword": "Dinleme Raporu",
+            "label_album": "Albüm",
+            "label_artist": "Sanatçı",
+            "label_track": "Parça",
+            "link": "Sıralamanın tamamı: {source}",
+            "month_names": "Ocak,Şubat,Mart,Nisan,Mayıs,Haziran,Temmuz,Ağustos,Eylül,Ekim,Kasım,Aralık",
+            "more": " ve diğerleri",
+            "most_played": "En çok dinlenenler",
+            "name_sep": ", ",
+            "names_lead": ": ",
+            "new_artists": "{n} yeni sanatçı",
+            "pair": "{artist} - {name}",
+            "plays": "{n} dinleme",
+            "plays_truncated": "{n}+ dinleme (çok fazla olduğundan yalnızca son dinlemeler sayıldı)",
+            "preset_brief": "{summary}\nEn çok dinlenen sanatçı: {top_artist}\nEn çok dinlenen albüm: {top_album}\nEn çok dinlenen parça: {top_track}\nYeni sanatçılar ({new_artists}): {new_artist_names}",
+            "preset_full": "{summary}\n\nEn çok dinlenen sanatçılar:\n{top_artists}\n\nEn çok dinlenen albümler:\n{top_albums}\n\nEn çok dinlenen parçalar:\n{top_tracks}\n\nYeni sanatçılar ({new_artists}): {new_artist_names}",
+            "preset_overview": "{summary}\nYeni sanatçılar: {new_artists}",
+            "prev_month": "{month_name}",
+            "prev_month_year": "{month_name} {year}",
+            "prev_week": "önceki hafta",
+            "prev_year": "{year}",
+            "title_day": "🎧 Günlük Dinleme Raporu ({date})",
+            "title_month": "📅 {month_name} {year} Dinleme Raporu",
+            "title_sample": "🎧 Örnek Dinleme Raporu",
+            "title_today": "🎧 Bugünün Dinleme Raporu ({date})",
+            "title_week": "🎵 Geçen Haftanın Dinleme Raporu ({from} – {to})",
+            "title_year": "🏆 {year} Dinleme Raporu",
+            "title_yesterday": "🎧 Dünün Dinleme Raporu ({date})",
+            "value_hm": "{h} sa {m} dk",
+            "value_m": "{m} dk",
         ],
     ]
 }
