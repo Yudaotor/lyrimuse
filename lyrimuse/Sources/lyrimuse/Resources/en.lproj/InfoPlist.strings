@@ -1,3 +1,4 @@
 /* 由 Localization/Localizable.xcstrings 生成(键表见 generate-strings.py 的 INFO_PLIST_KEYS)—— 不要手改这个文件。 */
 
 "NSAppleEventsUsageDescription" = "Lyrimuse needs to send Apple Events to media players and browsers to read the currently playing track and show synced lyrics.";
+"NSAudioCaptureUsageDescription" = "Lyrimuse reads only the player’s volume so the notch audio wave moves with the music. No audio is saved";

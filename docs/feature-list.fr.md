@@ -52,6 +52,7 @@ Ces fonctionnalités restent désactivées après l’installation. Activez-les 
 | [Encoche sur l’écran verrouillé](#feature-notch-show-on-lock-screen) | Réglages › Affichage des paroles › Encoche › Comportement › Afficher sur l’écran verrouillé |
 | [Paroles flottantes masquées en plein écran](#feature-overlay-hide-in-full-screen) | Réglages › Affichage des paroles › Paroles flottantes › Comportement › Masquer en plein écran |
 | [Estomper la ligne de paroles de l’encoche au survol](#feature-notch-lyric-row-fade) | Réglages › Affichage des paroles › Encoche › Ligne de paroles › Estomper au survol |
+| [Onde audio qui suit la musique](#feature-notch-wave-follows-music) | Réglages › Affichage des paroles › Encoche › Gauche › Suivre la musique |
 | [Paroles web : un téléphone ou une tablette en second écran, ou une source navigateur OBS](#feature-web-lyrics) | Réglages › Affichage des paroles › Fenêtre des paroles › Paroles web |
 | [YouTube Music et Spotify Web dans votre navigateur](#feature-web-players) | Réglages › Lecteur › Web |
 | [Passer les pubs YouTube Music automatiquement](#feature-skip-youtube-ads) | Réglages › Lecteur › Web › Passer les pubs |
@@ -603,6 +604,15 @@ Quand l’encoche se développe sous le pointeur, la zone des paroles devient un
 - Réglages : Affichage des paroles › Encoche › Développé › Paroles multilignes
 - Réglages : Affichage des paroles › Encoche › Développé › Lignes
 
+<a id="feature-notch-wave-follows-music"></a>
+
+### Onde audio qui suit la musique
+
+L’onde audio de l’encoche suit le son réellement joué par le lecteur, répartie en cinq bandes des graves aux aigus (macOS 14.2 ou ultérieur). Lyrimuse lit uniquement le volume et n’enregistre aucun son ; macOS demande une fois l’autorisation d’enregistrer l’audio du système. Ce qui ne joue pas sur ce Mac, comme la lecture sur un iPhone, garde une onde calée sur les paroles.
+
+- Désactivée par défaut
+- Réglages : Affichage des paroles › Encoche › Gauche › Suivre la musique
+
 <a id="feature-web-lyrics"></a>
 
 ### Paroles web : un téléphone ou une tablette en second écran, ou une source navigateur OBS
@@ -933,7 +943,7 @@ Au plus une fois par jour, envoie la version, macOS, les fonctions activées et 
 
 ## Tous les réglages
 
-Tous les réglages de la fenêtre Réglages, classés par emplacement : 320 au total. Tapez un nom dans le champ de recherche en haut de la barre latérale des Réglages pour y aller directement.
+Tous les réglages de la fenêtre Réglages, classés par emplacement : 321 au total. Tapez un nom dans le champ de recherche en haut de la barre latérale des Réglages pour y aller directement.
 
 ### Paroles › Source
 
@@ -1099,6 +1109,7 @@ Tous les réglages de la fenêtre Réglages, classés par emplacement : 320 au 
 ### Affichage des paroles › Encoche › Gauche
 
 - **Onde audio** : Un seul côté à la fois
+- **Suivre la musique** : Suit le son du lecteur et nécessite l’autorisation d’enregistrer l’audio du système ; seul le volume est lu, aucun son n’est enregistré
 
 ### Affichage des paroles › Encoche › Ligne de paroles
 

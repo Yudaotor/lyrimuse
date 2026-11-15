@@ -52,6 +52,7 @@ Queste funzioni restano disattivate dopo l’installazione. Attivale prima nelle
 | [Notch sulla schermata di blocco](#feature-notch-show-on-lock-screen) | Impostazioni › Visualizzazione testo › Notch › Comportamento › Mostra in schermata di blocco |
 | [Il testo fluttuante si fa da parte a tutto schermo](#feature-overlay-hide-in-full-screen) | Impostazioni › Visualizzazione testo › Testo fluttuante › Comportamento › Nascondi a tutto schermo |
 | [Sfuma la riga del testo del notch al passaggio del mouse](#feature-notch-lyric-row-fade) | Impostazioni › Visualizzazione testo › Notch › Riga del testo › Sfuma al passaggio del mouse |
+| [Onda audio che segue la musica](#feature-notch-wave-follows-music) | Impostazioni › Visualizzazione testo › Notch › Sinistra › Segui la musica |
 | [Testo web: un telefono o un tablet come secondo schermo, o una sorgente browser di OBS](#feature-web-lyrics) | Impostazioni › Visualizzazione testo › Finestra testo › Testo web |
 | [YouTube Music e Spotify Web nel browser](#feature-web-players) | Impostazioni › Player › Web |
 | [Salta automaticamente la pubblicità di YouTube Music](#feature-skip-youtube-ads) | Impostazioni › Player › Web › Salta pubblicità |
@@ -603,6 +604,15 @@ Quando il notch si espande sotto il puntatore, l’area del testo diventa un ele
 - Impostazioni: Visualizzazione testo › Notch › Espanso › Testo su più righe
 - Impostazioni: Visualizzazione testo › Notch › Espanso › Righe
 
+<a id="feature-notch-wave-follows-music"></a>
+
+### Onda audio che segue la musica
+
+L’onda audio del notch segue il suono effettivamente riprodotto dal player, divisa in cinque bande dai bassi agli acuti (macOS 14.2 o successivo). Lyrimuse legge solo il volume e non salva audio; macOS chiede una volta il permesso di registrare l’audio di sistema. Ciò che non suona su questo Mac, come la riproduzione su un iPhone, mantiene l’onda a tempo con il testo.
+
+- Disattivata di default
+- Impostazioni: Visualizzazione testo › Notch › Sinistra › Segui la musica
+
 <a id="feature-web-lyrics"></a>
 
 ### Testo web: un telefono o un tablet come secondo schermo, o una sorgente browser di OBS
@@ -933,7 +943,7 @@ Al massimo una volta al giorno invia versione, macOS, funzioni attive e riepilog
 
 ## Tutte le impostazioni
 
-Tutte le impostazioni della finestra Impostazioni, per posizione: 320 in tutto. Scrivi un nome nel campo di ricerca in cima alla barra laterale delle Impostazioni per andarci direttamente.
+Tutte le impostazioni della finestra Impostazioni, per posizione: 321 in tutto. Scrivi un nome nel campo di ricerca in cima alla barra laterale delle Impostazioni per andarci direttamente.
 
 ### Testo › Fonte
 
@@ -1099,6 +1109,7 @@ Tutte le impostazioni della finestra Impostazioni, per posizione: 320 in tutto. 
 ### Visualizzazione testo › Notch › Sinistra
 
 - **Onda audio**: Appare su un lato alla volta
+- **Segui la musica**: Segue il suono del player e richiede il permesso di registrare l’audio di sistema; legge solo il volume e non salva alcun audio
 
 ### Visualizzazione testo › Notch › Riga del testo
 

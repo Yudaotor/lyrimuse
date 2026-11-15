@@ -52,6 +52,7 @@ Estas funciones siguen desactivadas después de instalar. Actívalas primero en 
 | [Notch en la pantalla bloqueada](#feature-notch-show-on-lock-screen) | Ajustes › Mostrar letra › Notch › Comportamiento › Mostrar en pantalla bloqueada |
 | [Ocultar la letra flotante en pantalla completa](#feature-overlay-hide-in-full-screen) | Ajustes › Mostrar letra › Letra flotante › Comportamiento › Ocultar en pantalla completa |
 | [Atenuar la fila de letra del notch al pasar el puntero](#feature-notch-lyric-row-fade) | Ajustes › Mostrar letra › Notch › Fila de letra › Atenuar al pasar el puntero |
+| [Onda de audio que sigue la música](#feature-notch-wave-follows-music) | Ajustes › Mostrar letra › Notch › Izquierda › Seguir la música |
 | [Letra web: teléfono o tableta como segunda pantalla, o fuente de navegador de OBS](#feature-web-lyrics) | Ajustes › Mostrar letra › Ventana de letra › Letra web |
 | [YouTube Music y Spotify Web en el navegador](#feature-web-players) | Ajustes › Reproductor › Web |
 | [Omitir anuncios de YouTube Music automáticamente](#feature-skip-youtube-ads) | Ajustes › Reproductor › Web › Omitir anuncios de YouTube Music |
@@ -603,6 +604,15 @@ Al expandirse el notch bajo el puntero, la zona de la letra pasa a ser una lista
 - Ajustes: Mostrar letra › Notch › Expandido › Letra en varias líneas
 - Ajustes: Mostrar letra › Notch › Expandido › Líneas
 
+<a id="feature-notch-wave-follows-music"></a>
+
+### Onda de audio que sigue la música
+
+La onda de audio del notch se mueve con el sonido que está reproduciendo el reproductor, dividido en cinco bandas de graves a agudos (macOS 14.2 o posterior). Lyrimuse solo lee el volumen y no guarda audio; macOS pide una vez permiso para grabar el audio del sistema. Lo que no suena en este Mac, como la reproducción en un iPhone, mantiene la onda al ritmo de la letra.
+
+- Desactivada por omisión
+- Ajustes: Mostrar letra › Notch › Izquierda › Seguir la música
+
 <a id="feature-web-lyrics"></a>
 
 ### Letra web: teléfono o tableta como segunda pantalla, o fuente de navegador de OBS
@@ -933,7 +943,7 @@ Como máximo una vez al día, envía al servidor del propio autor la versión, e
 
 ## Todos los ajustes
 
-Todos los ajustes de la ventana Ajustes, según dónde están: 320 en total. Escribe un nombre en el campo de búsqueda de la parte superior de la barra lateral de Ajustes para ir directamente a él.
+Todos los ajustes de la ventana Ajustes, según dónde están: 321 en total. Escribe un nombre en el campo de búsqueda de la parte superior de la barra lateral de Ajustes para ir directamente a él.
 
 ### Letra › Fuente
 
@@ -1099,6 +1109,7 @@ Todos los ajustes de la ventana Ajustes, según dónde están: 320 en total. Esc
 ### Mostrar letra › Notch › Izquierda
 
 - **Onda de audio**: Se muestra en un solo lado a la vez
+- **Seguir la música**: Sigue el sonido del reproductor y requiere permiso para grabar el audio del sistema; solo se lee el volumen y no se guarda ningún audio
 
 ### Mostrar letra › Notch › Fila de letra
 

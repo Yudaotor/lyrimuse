@@ -870,6 +870,10 @@ cat > "$APP_DIR/Contents/Info.plist" <<PLIST
          改这句要连 catalog 里那一条的英文一起改,selftest 本地化守卫对着查。 -->
     <key>NSAppleEventsUsageDescription</key>
     <string>Lyrimuse needs to send Apple Events to media players and browsers to read the currently playing track and show synced lyrics.</string>
+    <!-- 灵动岛音浪「跟随音乐跳动」读播放器声音(进程级 tap)时系统弹「仅系统录音」授权框的用途说明;缺了这个 key
+         系统不弹框、tap 只读到静音。英文原文,译文同上一条走 InfoPlist.strings。 -->
+    <key>NSAudioCaptureUsageDescription</key>
+    <string>Lyrimuse reads only the player’s volume so the notch audio wave moves with the music. No audio is saved</string>
     <!-- 给"连接 Last.fm 账号"这一步的浏览器授权做自动回跳用
          (见 LastfmAuthFlow.authorizeURL 的 cb= 参数 + AppDelegate 的 GetURL 事件
          处理)——注册这个 scheme 之后,授权页跳转到 lyrimuse://lastfm-auth-callback

@@ -188,6 +188,7 @@
 "LyricFind（经由 YouTube Music 检索）" = "LyricFind (searched via YouTube Music)";
 "Lyrimuse" = "Lyrimuse";
 "Lyrimuse 反馈" = "Lyrimuse Feedback";
+"Lyrimuse 只读取播放器的音量，让灵动岛音浪跟随音乐跳动，不保存声音" = "Lyrimuse reads only the player’s volume so the notch audio wave moves with the music. No audio is saved";
 "Lyrimuse 启动时同时打开勾选的播放器，已在运行的播放器不受影响，也不会抢占焦点" = "When Lyrimuse starts, open the checked players too. Ones already running are left alone, and nothing steals focus";
 "Lyrimuse 将向此地址 POST 一段 JSON，包含 app、event（如 weekly_digest）、title、body、sent_at，适用于对接 Home Assistant、n8n 或自建服务" = "Lyrimuse POSTs JSON to this URL with app, event (such as weekly_digest), title, body and sent_at. Suitable for Home Assistant, n8n or your own service";
 "Lyrimuse 将显示正在播放的 App 的歌词，之后可随时在设置中更改" = "Lyrimuse shows lyrics for whichever app is playing. You can change this in Settings any time";
@@ -1464,6 +1465,7 @@
 "按住歌词即可拖动位置" = "Hold the lyrics to reposition";
 "按你写的模板，以纯文本推送" = "Uses your template, sent as plain text";
 "按播放器报的时长没有可用候选，这一份是不看时长搜到的：可能是其他版本，也可能是播放器报的时长有误" = "No usable result matched the length the player reports, so this one was found without it: it may be another version, or the player’s length may be wrong";
+"按播放器正在播放的声音跳动，需允许 Lyrimuse 录制系统音频；只读取音量，不保存声音" = "Follows the sound from the player and needs permission to record system audio; only the volume is read, no audio is saved";
 "按收听最多的前 %1$@ 位歌手统计，占此期间收听量的 %2$@" = "Based on your top %1$@ artists, %2$@ of your plays in this period";
 "按收听最多的前 %1$@ 位歌手统计，占此期间收听量的 %2$@#one" = "Based on your top %1$@ artist, %2$@ of your plays in this period";
 "按收听最多的前 %@ 位歌手统计" = "Based on your top %@ artists";
@@ -1864,6 +1866,7 @@
 "未获授权" = "Not granted";
 "未记录" = "Not recorded";
 "未设置" = "Not Set";
+"未读到声音，请在系统设置中允许 Lyrimuse 录制系统音频" = "No sound detected. Allow Lyrimuse to record system audio in System Settings";
 "未运行" = "Not running";
 "未返回候选" = "No candidate returned";
 "未连接" = "Not connected";
@@ -2707,6 +2710,7 @@
 "跟随窗口" = "Follow Window";
 "跟随系统" = "Follow System";
 "跟随系统语言" = "Follow System Language";
+"跟随音乐跳动" = "Move with the Music";
 "跳转到列表中正在播放的歌曲；若被搜索或筛选隐藏，会先清除" = "Jump to the playing song in the list, clearing the search or filters if they hide it";
 "跳过" = "Skip";
 "跳过广告" = "Skip Ad";

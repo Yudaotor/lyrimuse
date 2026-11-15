@@ -135,6 +135,8 @@ final class NotchPlayback: ObservableObject {
         AppSettings.defaultNotchLyricsAlignment
     /// 歌词行的颜色:强调色或流动彩虹(`AppSettings.notchLyricsColor`),同上走这里现读。
     @Published private(set) var lyricsColor: NotchLyricsColor = AppSettings.defaultNotchLyricsColor
+    /// 音浪「跟随音乐跳动」(`AppSettings.notchEqualizerFollowsAudio`),同上走这里现读。
+    @Published private(set) var equalizerFollowsAudio: Bool = AppSettings.defaultNotchEqualizerFollowsAudio
     /// 灵动岛歌词的字体(设置页「字体」组):主行 / 主行同字号细一档(广告态倒计时)/ 副行与展开区
     /// 「下一句」预览。同上走这里现读:只改字形,不改卡片任何一个尺寸(字号上限由 Core 倒推、保证两行仍塞进 44,
     /// 见 `NotchLyricRowMetrics`)。初值直接读 `AppSettings.shared` 已算好的派生值,不另抄一份字面量。
@@ -386,6 +388,7 @@ final class NotchPlayback: ObservableObject {
             s.$notchLyricRowArtworkPosition.removeDuplicates().sink { [weak self] in self?.lyricRowArtworkPosition = $0 },
             s.$notchLyricsAlignment.removeDuplicates().sink { [weak self] in self?.lyricsAlignment = $0 },
             s.$notchLyricsColor.removeDuplicates().sink { [weak self] in self?.lyricsColor = $0 },
+            s.$notchEqualizerFollowsAudio.removeDuplicates().sink { [weak self] in self?.equalizerFollowsAudio = $0 },
             // 字体三件:派生 Font 不是 Equatable,不去重 —— 上游只在三个输入之一真变时才重算,本来就低频。
             s.$notchMainFont.sink { [weak self] in self?.mainFont = $0 },
             s.$notchMainDetailFont.sink { [weak self] in self?.mainDetailFont = $0 },

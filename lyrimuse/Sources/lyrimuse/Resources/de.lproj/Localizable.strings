@@ -188,6 +188,7 @@
 "LyricFind（经由 YouTube Music 检索）" = "LyricFind (gesucht über YouTube Music)";
 "Lyrimuse" = "Lyrimuse";
 "Lyrimuse 反馈" = "Lyrimuse-Feedback";
+"Lyrimuse 只读取播放器的音量，让灵动岛音浪跟随音乐跳动，不保存声音" = "Lyrimuse liest nur die Lautstärke des Players, damit die Audiowelle in der Notch der Musik folgt. Es wird kein Ton gespeichert";
 "Lyrimuse 启动时同时打开勾选的播放器，已在运行的播放器不受影响，也不会抢占焦点" = "Öffnet beim Start von Lyrimuse auch die ausgewählten Player. Bereits laufende bleiben unberührt, und nichts drängt sich in den Vordergrund";
 "Lyrimuse 将向此地址 POST 一段 JSON，包含 app、event（如 weekly_digest）、title、body、sent_at，适用于对接 Home Assistant、n8n 或自建服务" = "Lyrimuse sendet per POST JSON an diese URL mit app, event (etwa weekly_digest), title, body und sent_at. Geeignet für Home Assistant, n8n oder deinen eigenen Dienst";
 "Lyrimuse 将显示正在播放的 App 的歌词，之后可随时在设置中更改" = "Lyrimuse zeigt den Liedtext der App, die gerade abspielt. Du kannst das jederzeit in den Einstellungen ändern";
@@ -1464,6 +1465,7 @@
 "按住歌词即可拖动位置" = "Text gedrückt halten, um ihn zu verschieben";
 "按你写的模板，以纯文本推送" = "Nutzt deine Vorlage, als reiner Text gesendet";
 "按播放器报的时长没有可用候选，这一份是不看时长搜到的：可能是其他版本，也可能是播放器报的时长有误" = "Zur vom Player gemeldeten Länge gab es keinen brauchbaren Treffer, dieser wurde ohne Länge gefunden: vielleicht eine andere Version, oder die Länge des Players stimmt nicht";
+"按播放器正在播放的声音跳动，需允许 Lyrimuse 录制系统音频；只读取音量，不保存声音" = "Folgt dem Ton des Players und braucht die Erlaubnis, Systemaudio aufzunehmen; gelesen wird nur die Lautstärke, kein Ton wird gespeichert";
 "按收听最多的前 %1$@ 位歌手统计，占此期间收听量的 %2$@" = "Basierend auf deinen Top-%1$@-Künstlern, %2$@ deiner Wiedergaben in diesem Zeitraum";
 "按收听最多的前 %1$@ 位歌手统计，占此期间收听量的 %2$@#one" = "Basierend auf deinem Top-%1$@-Künstler, %2$@ deiner Wiedergaben in diesem Zeitraum";
 "按收听最多的前 %@ 位歌手统计" = "Basierend auf deinen Top-%@-Künstlern";
@@ -1864,6 +1866,7 @@
 "未获授权" = "Nicht erteilt";
 "未记录" = "Nicht erfasst";
 "未设置" = "Nicht festgelegt";
+"未读到声音，请在系统设置中允许 Lyrimuse 录制系统音频" = "Kein Ton erkannt. Erlaube Lyrimuse in den Systemeinstellungen, Systemaudio aufzunehmen";
 "未运行" = "Läuft nicht";
 "未返回候选" = "Kein Treffer geliefert";
 "未连接" = "Nicht verbunden";
@@ -2707,6 +2710,7 @@
 "跟随窗口" = "Fenster folgen";
 "跟随系统" = "System";
 "跟随系统语言" = "Systemsprache";
+"跟随音乐跳动" = "Im Takt der Musik";
 "跳转到列表中正在播放的歌曲；若被搜索或筛选隐藏，会先清除" = "Zum laufenden Titel in der Liste springen und Suche oder Filter aufheben, falls sie ihn ausblenden";
 "跳过" = "Überspringen";
 "跳过广告" = "Werbung überspringen";

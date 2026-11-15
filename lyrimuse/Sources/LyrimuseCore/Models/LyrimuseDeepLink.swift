@@ -189,12 +189,13 @@ public enum LyrimuseDeepLink: Equatable, Sendable {
         case stall(ms: Int)
         /// 灵动岛摆一次报喜,跟设置页「收听里程碑」旁那颗「试用」走同一条路(`debug/milestone-preview`)。
         case milestonePreview
-        /// 灵动岛「暂停时收起」「暂停时隐藏」「进度线」「所有屏幕」「显示歌词」「悬浮淡化」「按音量键时提示」,跟设置页那几项走同一个设置:
-        /// `debug/notch-behavior?collapse-when-paused=1&hide-when-not-playing=0&progress-line=off|bottom|ears&all-screens=1&show-lyrics=1&lyric-row-fade=1&volume-key-banner=0`,
-        /// 至少带一个。
+        /// 灵动岛「暂停时收起」「暂停时隐藏」「进度线」「所有屏幕」「显示歌词」「悬浮淡化」「按音量键时提示」「音浪跟随音乐跳动」,
+        /// 跟设置页那几项走同一个设置:
+        /// `debug/notch-behavior?collapse-when-paused=1&hide-when-not-playing=0&progress-line=off|bottom|ears&all-screens=1&show-lyrics=1&lyric-row-fade=1&volume-key-banner=0&real-audio=1`,
+        /// 至少带一个。`real-audio=1` 跟设置页打开开关一样会去要「仅系统录音」授权。
         case notchBehavior(collapseWhenPaused: Bool?, hideWhenNotPlaying: Bool?, progressLine: NotchProgressLineChoice? = nil,
                            allScreens: Bool? = nil, showLyrics: Bool? = nil, lyricRowFade: Bool? = nil,
-                           volumeKeyBanner: Bool? = nil)
+                           volumeKeyBanner: Bool? = nil, equalizerFollowsAudio: Bool? = nil)
         /// 灵动岛「风格」里的「背景」「展开背景」,跟设置页走同两个设置:`debug/notch-style?style=coverArt&expanded=solidBlack|same`
         /// (值是 `NotchCardStyle` 的 rawValue,`same` = 展开背景「同上」),至少带一个。认不认得这个值由 App 判。
         case notchStyle(style: String?, expanded: String?)
@@ -478,11 +479,12 @@ public enum LyrimuseDeepLink: Equatable, Sendable {
             let showLyrics = value("show-lyrics").flatMap(Self.parseBool)
             let lyricRowFade = value("lyric-row-fade").flatMap(Self.parseBool)
             let volumeKeyBanner = value("volume-key-banner").flatMap(Self.parseBool)
+            let realAudio = value("real-audio").flatMap(Self.parseBool)
             guard collapse != nil || hide != nil || progressLine != nil || allScreens != nil || showLyrics != nil
-                    || lyricRowFade != nil || volumeKeyBanner != nil else { return nil }
+                    || lyricRowFade != nil || volumeKeyBanner != nil || realAudio != nil else { return nil }
             self = .debug(.notchBehavior(collapseWhenPaused: collapse, hideWhenNotPlaying: hide, progressLine: progressLine,
                                          allScreens: allScreens, showLyrics: showLyrics, lyricRowFade: lyricRowFade,
-                                         volumeKeyBanner: volumeKeyBanner))
+                                         volumeKeyBanner: volumeKeyBanner, equalizerFollowsAudio: realAudio))
         case ("debug", "/move-window"):
             guard let title = value("title"), !title.isEmpty,
                   let x = value("x").flatMap(Double.init), let y = value("y").flatMap(Double.init),
@@ -799,7 +801,7 @@ public enum LyrimuseDeepLink: Equatable, Sendable {
                 if let secondary { items.append(URLQueryItem(name: "secondary", value: secondary)) }
                 if let alignment { items.append(URLQueryItem(name: "alignment", value: alignment)) }
                 components.queryItems = items
-            case let .notchBehavior(collapse, hide, progressLine, allScreens, showLyrics, lyricRowFade, volumeKeyBanner):
+            case let .notchBehavior(collapse, hide, progressLine, allScreens, showLyrics, lyricRowFade, volumeKeyBanner, realAudio):
                 components.path = "/notch-behavior"
                 var items: [URLQueryItem] = []
                 if let collapse { items.append(URLQueryItem(name: "collapse-when-paused", value: collapse ? "1" : "0")) }
@@ -811,6 +813,7 @@ public enum LyrimuseDeepLink: Equatable, Sendable {
                 if let volumeKeyBanner {
                     items.append(URLQueryItem(name: "volume-key-banner", value: volumeKeyBanner ? "1" : "0"))
                 }
+                if let realAudio { items.append(URLQueryItem(name: "real-audio", value: realAudio ? "1" : "0")) }
                 components.queryItems = items
             case let .moveWindow(title, x, y):
                 components.path = "/move-window"

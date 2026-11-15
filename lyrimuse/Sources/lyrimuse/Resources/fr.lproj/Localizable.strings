@@ -188,6 +188,7 @@
 "LyricFind（经由 YouTube Music 检索）" = "LyricFind (recherché via YouTube Music)";
 "Lyrimuse" = "Lyrimuse";
 "Lyrimuse 反馈" = "Commentaires sur Lyrimuse";
+"Lyrimuse 只读取播放器的音量，让灵动岛音浪跟随音乐跳动，不保存声音" = "Lyrimuse lit uniquement le volume du lecteur pour que l’onde audio de l’encoche suive la musique. Aucun son n’est enregistré";
 "Lyrimuse 启动时同时打开勾选的播放器，已在运行的播放器不受影响，也不会抢占焦点" = "Au lancement de Lyrimuse, ouvre aussi les lecteurs cochés. Ceux déjà ouverts ne sont pas touchés, et rien ne passe au premier plan";
 "Lyrimuse 将向此地址 POST 一段 JSON，包含 app、event（如 weekly_digest）、title、body、sent_at，适用于对接 Home Assistant、n8n 或自建服务" = "Lyrimuse envoie en POST un JSON à cette URL avec app, event (par ex. weekly_digest), title, body et sent_at. Idéal pour Home Assistant, n8n ou votre propre service";
 "Lyrimuse 将显示正在播放的 App 的歌词，之后可随时在设置中更改" = "Lyrimuse affiche les paroles de l’app en cours de lecture. Vous pouvez changer cela à tout moment dans Réglages";
@@ -1464,6 +1465,7 @@
 "按住歌词即可拖动位置" = "Maintenez le clic sur les paroles pour les déplacer";
 "按你写的模板，以纯文本推送" = "Utilise votre modèle, envoyé en texte brut";
 "按播放器报的时长没有可用候选，这一份是不看时长搜到的：可能是其他版本，也可能是播放器报的时长有误" = "Aucun résultat utilisable ne correspondait à la durée indiquée par le lecteur, celui-ci a donc été trouvé sans en tenir compte : autre version possible, ou durée du lecteur erronée";
+"按播放器正在播放的声音跳动，需允许 Lyrimuse 录制系统音频；只读取音量，不保存声音" = "Suit le son du lecteur et nécessite l’autorisation d’enregistrer l’audio du système ; seul le volume est lu, aucun son n’est enregistré";
 "按收听最多的前 %1$@ 位歌手统计，占此期间收听量的 %2$@" = "Selon vos %1$@ artistes les plus écoutés, %2$@ de vos écoutes sur la période";
 "按收听最多的前 %1$@ 位歌手统计，占此期间收听量的 %2$@#one" = "Selon votre top %1$@ des artistes, %2$@ de vos écoutes sur la période";
 "按收听最多的前 %@ 位歌手统计" = "Selon vos %@ artistes les plus écoutés";
@@ -1864,6 +1866,7 @@
 "未获授权" = "Non accordé";
 "未记录" = "Non enregistré";
 "未设置" = "Non défini";
+"未读到声音，请在系统设置中允许 Lyrimuse 录制系统音频" = "Aucun son détecté. Autorisez Lyrimuse à enregistrer l’audio du système dans Réglages Système";
 "未运行" = "Fermé";
 "未返回候选" = "Aucun résultat renvoyé";
 "未连接" = "Non connecté";
@@ -2707,6 +2710,7 @@
 "跟随窗口" = "Suivre la fenêtre";
 "跟随系统" = "Système";
 "跟随系统语言" = "Langue du système";
+"跟随音乐跳动" = "Suivre la musique";
 "跳转到列表中正在播放的歌曲；若被搜索或筛选隐藏，会先清除" = "Atteindre le morceau en cours dans la liste, en effaçant la recherche ou les filtres qui le masquent";
 "跳过" = "Ignorer";
 "跳过广告" = "Passer la pub";

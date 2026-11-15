@@ -196,6 +196,7 @@ extension AppSettings {
             ("lyricsWindowGradientDirection", lyricsWindowGradientDirection),
             ("notchCollapsesWhenPaused", notchCollapsesWhenPaused),
             ("notchShowsEqualizer", notchShowsEqualizer),
+            ("notchEqualizerFollowsAudio", notchEqualizerFollowsAudio),
             ("notchEqualizerEar", notchEqualizerEar),
             ("notchExpandedShowsNextLine", notchExpandedShowsNextLine),
             ("notchExpandedShowsControls", notchExpandedShowsControls),

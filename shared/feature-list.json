@@ -2800,6 +2800,53 @@
           ]
         },
         {
+          "id": "notch-wave-follows-music",
+          "title": {
+            "en": "Audio wave that follows the music",
+            "zh-Hans": "音浪跟随音乐跳动",
+            "zh-Hant": "音浪跟隨音樂跳動",
+            "ja": "音楽に合わせて動くオーディオ波形",
+            "ko": "음악에 맞춰 움직이는 음파",
+            "es": "Onda de audio que sigue la música",
+            "fr": "Onde audio qui suit la musique",
+            "de": "Audiowelle im Takt der Musik",
+            "it": "Onda audio che segue la musica",
+            "pt-BR": "Onda sonora que acompanha a música",
+            "vi": "Sóng âm nhảy theo nhạc",
+            "ru": "Звуковая волна в такт музыке",
+            "uk": "Звукова хвиля в такт музиці",
+            "th": "คลื่นเสียงที่ขยับตามเพลง"
+          },
+          "desc": {
+            "en": "The notch audio wave moves with the sound the player is actually playing, split into five bands from bass to treble (macOS 14.2 or later). Lyrimuse only reads the volume and saves no audio; macOS asks once for permission to record system audio. Music that is not playing on this Mac, such as playback on an iPhone, keeps the wave timed to the lyrics.",
+            "zh-Hans": "灵动岛音浪按播放器实际放出的声音跳动，从低音到高音分成五段（需要 macOS 14.2 或更高版本）。Lyrimuse 只读取音量、不保存声音，系统会请求一次录制系统音频的权限。不在这台 Mac 上出声的播放（如 iPhone 上的播放）仍按歌词节奏跳动。",
+            "zh-Hant": "動態島音浪依播放器實際播出的聲音跳動，從低音到高音分成五段（需要 macOS 14.2 或以上版本）。Lyrimuse 只讀取音量、不儲存聲音，系統會要求一次錄製系統音訊的權限。不在這台 Mac 上發聲的播放（如 iPhone 上的播放）仍依歌詞節奏跳動。",
+            "ja": "ノッチのオーディオ波形が、プレーヤーで実際に再生されている音に合わせて低音から高音までの5帯域で動きます（macOS 14.2 以降）。Lyrimuse は音量だけを読み取り、音声は保存しません。システムオーディオの録音の許可を一度求められます。この Mac で鳴っていない再生（iPhone での再生など）では、これまでどおり歌詞のタイミングで動きます。",
+            "ko": "노치의 음파가 플레이어에서 실제로 나오는 소리에 맞춰 저음부터 고음까지 다섯 대역으로 움직입니다(macOS 14.2 이상). Lyrimuse는 음량만 읽고 소리는 저장하지 않으며, 시스템 오디오 녹음 권한을 한 번 요청합니다. 이 Mac에서 소리가 나지 않는 재생(iPhone 재생 등)은 계속 가사 타이밍에 맞춰 움직입니다.",
+            "es": "La onda de audio del notch se mueve con el sonido que está reproduciendo el reproductor, dividido en cinco bandas de graves a agudos (macOS 14.2 o posterior). Lyrimuse solo lee el volumen y no guarda audio; macOS pide una vez permiso para grabar el audio del sistema. Lo que no suena en este Mac, como la reproducción en un iPhone, mantiene la onda al ritmo de la letra.",
+            "fr": "L’onde audio de l’encoche suit le son réellement joué par le lecteur, répartie en cinq bandes des graves aux aigus (macOS 14.2 ou ultérieur). Lyrimuse lit uniquement le volume et n’enregistre aucun son ; macOS demande une fois l’autorisation d’enregistrer l’audio du système. Ce qui ne joue pas sur ce Mac, comme la lecture sur un iPhone, garde une onde calée sur les paroles.",
+            "de": "Die Audiowelle in der Notch folgt dem Ton, den der Player tatsächlich abspielt, aufgeteilt in fünf Bänder von Bass bis Höhen (macOS 14.2 oder neuer). Lyrimuse liest nur die Lautstärke und speichert keinen Ton; macOS fragt einmal nach der Erlaubnis, Systemaudio aufzunehmen. Wiedergabe, die nicht auf diesem Mac zu hören ist, etwa auf einem iPhone, behält die am Liedtext getaktete Welle.",
+            "it": "L’onda audio del notch segue il suono effettivamente riprodotto dal player, divisa in cinque bande dai bassi agli acuti (macOS 14.2 o successivo). Lyrimuse legge solo il volume e non salva audio; macOS chiede una volta il permesso di registrare l’audio di sistema. Ciò che non suona su questo Mac, come la riproduzione su un iPhone, mantiene l’onda a tempo con il testo.",
+            "pt-BR": "A onda sonora do notch acompanha o som que o player está tocando de fato, dividida em cinco faixas dos graves aos agudos (macOS 14.2 ou posterior). O Lyrimuse só lê o volume e não salva áudio; o macOS pede uma vez permissão para gravar o áudio do sistema. O que não toca neste Mac, como a reprodução em um iPhone, mantém a onda no ritmo da letra.",
+            "vi": "Sóng âm ở notch nhảy theo âm thanh trình phát đang thực sự phát, chia thành năm dải từ trầm đến cao (macOS 14.2 trở lên). Lyrimuse chỉ đọc âm lượng và không lưu âm thanh; macOS sẽ hỏi quyền ghi âm thanh hệ thống một lần. Phần không phát ra trên máy Mac này, như phát trên iPhone, vẫn nhảy theo nhịp lời bài hát.",
+            "ru": "Звуковая волна в вырезе следует за звуком, который реально играет плеер, — пять полос от низких до высоких частот (macOS 14.2 или новее). Lyrimuse считывает только громкость и не сохраняет звук; macOS один раз запросит разрешение на запись системного звука. Для того, что не звучит на этом Mac, например воспроизведения на iPhone, волна по-прежнему идёт в такт тексту.",
+            "uk": "Звукова хвиля у вирізі стежить за звуком, який справді грає плеєр, — п’ять смуг від низьких до високих частот (macOS 14.2 або новіша). Lyrimuse зчитує лише гучність і не зберігає звук; macOS один раз попросить дозвіл на запис системного звуку. Для того, що не звучить на цьому Mac, наприклад відтворення на iPhone, хвиля й далі йде в такт тексту.",
+            "th": "คลื่นเสียงที่รอยบากจะขยับตามเสียงที่เครื่องเล่นกำลังเล่นจริง แบ่งเป็นห้าช่วงตั้งแต่เสียงทุ้มถึงเสียงแหลม (macOS 14.2 ขึ้นไป) Lyrimuse อ่านเฉพาะระดับเสียงและไม่บันทึกเสียงไว้ โดย macOS จะขออนุญาตบันทึกเสียงระบบหนึ่งครั้ง ส่วนที่ไม่ได้เล่นออกเสียงบน Mac เครื่องนี้ เช่นการเล่นบน iPhone จะยังขยับตามจังหวะเนื้อเพลงเหมือนเดิม"
+          },
+          "default": "off",
+          "check": {
+            "appSetting": "notchEqualizerFollowsAudio"
+          },
+          "settings": [
+            [
+              "歌词显示",
+              "灵动岛",
+              "左耳",
+              "跟随音乐跳动"
+            ]
+          ]
+        },
+        {
           "id": "web-lyrics",
           "title": {
             "en": "Web lyrics: a phone or tablet as a second screen, or an OBS browser source",

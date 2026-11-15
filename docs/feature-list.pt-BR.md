@@ -52,6 +52,7 @@ Estes recursos vêm desativados depois da instalação. Ative-os antes nos ajust
 | [Notch na Tela Bloqueada](#feature-notch-show-on-lock-screen) | Ajustes › Exibição da letra › Notch › Comportamento › Mostrar na Tela Bloqueada |
 | [Letra flutuante sai de cena em tela cheia](#feature-overlay-hide-in-full-screen) | Ajustes › Exibição da letra › Letra flutuante › Comportamento › Ocultar em tela cheia |
 | [Esmaecer a linha da letra do notch ao passar o ponteiro](#feature-notch-lyric-row-fade) | Ajustes › Exibição da letra › Notch › Linha da letra › Esmaecer ao passar o ponteiro |
+| [Onda sonora que acompanha a música](#feature-notch-wave-follows-music) | Ajustes › Exibição da letra › Notch › Ouvido esquerdo › Acompanhar a música |
 | [Letra na web: um celular ou tablet como segunda tela, ou uma fonte de navegador no OBS](#feature-web-lyrics) | Ajustes › Exibição da letra › Janela da letra › Letra na web |
 | [YouTube Music e Spotify Web no navegador](#feature-web-players) | Ajustes › Player › Web |
 | [Pular anúncios do YouTube Music automaticamente](#feature-skip-youtube-ads) | Ajustes › Player › Web › Pular anúncios do YouTube Music |
@@ -603,6 +604,15 @@ Quando o notch se expande sob o ponteiro, a área da letra vira uma lista de 3, 
 - Ajustes: Exibição da letra › Notch › Expandido › Letra em várias linhas
 - Ajustes: Exibição da letra › Notch › Expandido › Linhas
 
+<a id="feature-notch-wave-follows-music"></a>
+
+### Onda sonora que acompanha a música
+
+A onda sonora do notch acompanha o som que o player está tocando de fato, dividida em cinco faixas dos graves aos agudos (macOS 14.2 ou posterior). O Lyrimuse só lê o volume e não salva áudio; o macOS pede uma vez permissão para gravar o áudio do sistema. O que não toca neste Mac, como a reprodução em um iPhone, mantém a onda no ritmo da letra.
+
+- Desativado por padrão
+- Ajustes: Exibição da letra › Notch › Ouvido esquerdo › Acompanhar a música
+
 <a id="feature-web-lyrics"></a>
 
 ### Letra na web: um celular ou tablet como segunda tela, ou uma fonte de navegador no OBS
@@ -933,7 +943,7 @@ No máximo uma vez por dia, envia a versão, o macOS, quais recursos estão ativ
 
 ## Todos os ajustes
 
-Todos os ajustes da janela Ajustes, por local: 320 no total. Digite um nome no campo de busca no topo da barra lateral dos Ajustes para ir direto até ele.
+Todos os ajustes da janela Ajustes, por local: 321 no total. Digite um nome no campo de busca no topo da barra lateral dos Ajustes para ir direto até ele.
 
 ### Letra › Origem
 
@@ -1099,6 +1109,7 @@ Todos os ajustes da janela Ajustes, por local: 320 no total. Digite um nome no c
 ### Exibição da letra › Notch › Ouvido esquerdo
 
 - **Onda sonora**: Aparece em um lado por vez
+- **Acompanhar a música**: Acompanha o som do player e precisa de permissão para gravar o áudio do sistema; só o volume é lido e nenhum áudio é salvo
 
 ### Exibição da letra › Notch › Linha da letra
 

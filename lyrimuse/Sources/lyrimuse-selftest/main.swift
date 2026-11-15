@@ -80,6 +80,7 @@ let groups: [TestGroup] = [
     TestGroup(name: "overlay", summary: "桌面悬浮歌词 / 歌词窗口的几何与命中测试", run: runOverlayTests),
     TestGroup(name: "lyrics-window", summary: "歌词窗口:空状态优先级 / 字号 / 景深 / 迷你两行 / 窗口位置 / 文字色调 / vibrancy / Last.fm 喜欢 / 进度外推", run: runLyricsWindowTests),
     TestGroup(name: "notch", summary: "灵动岛:展开区 / 音浪包络", run: runNotchTests),
+    TestGroup(name: "real-audio", summary: "灵动岛音浪跟随音乐:频段 / 自适应归一化与快升慢落 / 输出延迟 / 退回判定 / 跟哪些进程 / 默认关与接线", run: runRealAudioTests),
     TestGroup(name: "idle-page", summary: "停播页:第 N 次听换算 / 收听总览 / 选句 / 平台链接", run: runIdlePageTests),
     TestGroup(name: "identity", summary: "变体身份与落盘路径:正式 / Dev 两套名字、配置目录、日志、传给引擎的环境变量", run: runIdentityTests),
     TestGroup(name: "whats-new", summary: "更新后的新功能提示:基准版本 / 挂哪些点 / 面板横条 / 名单在设置目录里 / 接线", run: runWhatsNewTests),

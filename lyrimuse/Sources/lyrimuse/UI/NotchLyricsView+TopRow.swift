@@ -71,7 +71,8 @@ extension NotchLyricsView {
         // 「减弱动态效果」开着也按暂停画:音浪是纯装饰的动画,别的会动的部分(弹簧、出场撑开)都已经为它停了。
         EqualizerBars(color: accentOrWhite, isPlaying: playback.isPlayingNow && surfaceVisible && !reduceMotion,
                       resyncKey: equalizerResyncKey,
-                      amplitude: Self.vocalAmplitude(at:))
+                      amplitude: Self.vocalAmplitude(at:),
+                      followsAudio: playback.equalizerFollowsAudio)
     }
 
     /// 音浪的关键帧是按「当前行的逐字 + 锚点外推」预先排好一段的(见 EqualizerBars 头注),这几样

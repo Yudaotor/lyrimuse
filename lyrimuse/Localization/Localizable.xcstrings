@@ -268519,6 +268519,362 @@
           }
         }
       }
+    },
+    "跟随音乐跳动" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Im Takt der Musik"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Move with the Music"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Seguir la música"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Suivre la musique"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Segui la musica"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "音楽に合わせて動く"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "음악에 맞춰 움직이기"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Acompanhar a música"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Двигаться в такт музыке"
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "เต้นตามเพลง"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Рухатися в такт музиці"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nhảy theo nhạc"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "跟随音乐跳动"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "跟隨音樂跳動"
+          }
+        }
+      }
+    },
+    "按播放器正在播放的声音跳动，需允许 Lyrimuse 录制系统音频；只读取音量，不保存声音" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Folgt dem Ton des Players und braucht die Erlaubnis, Systemaudio aufzunehmen; gelesen wird nur die Lautstärke, kein Ton wird gespeichert"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Follows the sound from the player and needs permission to record system audio; only the volume is read, no audio is saved"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sigue el sonido del reproductor y requiere permiso para grabar el audio del sistema; solo se lee el volumen y no se guarda ningún audio"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Suit le son du lecteur et nécessite l’autorisation d’enregistrer l’audio du système ; seul le volume est lu, aucun son n’est enregistré"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Segue il suono del player e richiede il permesso di registrare l’audio di sistema; legge solo il volume e non salva alcun audio"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "プレーヤーの再生音に合わせて動きます。システムオーディオの録音の許可が必要で、読み取るのは音量のみ、音声は保存しません"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "플레이어에서 재생 중인 소리에 맞춰 움직이며 시스템 오디오 녹음 권한이 필요합니다. 음량만 읽고 소리는 저장하지 않습니다"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Acompanha o som do player e precisa de permissão para gravar o áudio do sistema; só o volume é lido e nenhum áudio é salvo"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Следует за звуком плеера, нужно разрешение на запись системного звука; считывается только громкость, звук не сохраняется"
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ขยับตามเสียงที่เครื่องเล่นกำลังเล่น ต้องอนุญาตให้บันทึกเสียงระบบ อ่านเฉพาะระดับเสียงและไม่บันทึกเสียงไว้"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Стежить за звуком плеєра, потрібен дозвіл на запис системного звуку; зчитується лише гучність, звук не зберігається"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nhảy theo âm thanh đang phát từ trình phát, cần cho phép ghi âm thanh hệ thống; chỉ đọc âm lượng, không lưu âm thanh"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "按播放器正在播放的声音跳动，需允许 Lyrimuse 录制系统音频；只读取音量，不保存声音"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "依播放器正在播放的聲音跳動，需允許 Lyrimuse 錄製系統音訊；只讀取音量，不儲存聲音"
+          }
+        }
+      }
+    },
+    "未读到声音，请在系统设置中允许 Lyrimuse 录制系统音频" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kein Ton erkannt. Erlaube Lyrimuse in den Systemeinstellungen, Systemaudio aufzunehmen"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No sound detected. Allow Lyrimuse to record system audio in System Settings"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No se detecta sonido. Permite que Lyrimuse grabe el audio del sistema en Ajustes del Sistema"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aucun son détecté. Autorisez Lyrimuse à enregistrer l’audio du système dans Réglages Système"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nessun suono rilevato. Consenti a Lyrimuse di registrare l’audio di sistema in Impostazioni di Sistema"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "音を読み取れません。システム設定で Lyrimuse にシステムオーディオの録音を許可してください"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "소리를 읽지 못했습니다. 시스템 설정에서 Lyrimuse의 시스템 오디오 녹음을 허용하세요"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nenhum som detectado. Permita que o Lyrimuse grave o áudio do sistema em Ajustes do Sistema"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Звук не обнаружен. Разрешите Lyrimuse запись системного звука в Системных настройках"
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ไม่พบเสียง โปรดอนุญาตให้ Lyrimuse บันทึกเสียงระบบในการตั้งค่าระบบ"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Звук не виявлено. Дозвольте Lyrimuse запис системного звуку в Системних параметрах"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Không đọc được âm thanh. Hãy cho phép Lyrimuse ghi âm thanh hệ thống trong Cài đặt hệ thống"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "未读到声音，请在系统设置中允许 Lyrimuse 录制系统音频"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "未讀取到聲音，請在系統設定中允許 Lyrimuse 錄製系統音訊"
+          }
+        }
+      }
+    },
+    "Lyrimuse 只读取播放器的音量，让灵动岛音浪跟随音乐跳动，不保存声音" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lyrimuse liest nur die Lautstärke des Players, damit die Audiowelle in der Notch der Musik folgt. Es wird kein Ton gespeichert"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lyrimuse reads only the player’s volume so the notch audio wave moves with the music. No audio is saved"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lyrimuse solo lee el volumen del reproductor para que la onda de audio del notch siga la música. No se guarda ningún audio"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lyrimuse lit uniquement le volume du lecteur pour que l’onde audio de l’encoche suive la musique. Aucun son n’est enregistré"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lyrimuse legge solo il volume del player perché l’onda audio del notch segua la musica. Nessun audio viene salvato"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lyrimuse はプレーヤーの音量のみを読み取り、ノッチのオーディオ波形を音楽に合わせて動かします。音声は保存しません"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lyrimuse는 플레이어의 음량만 읽어 노치의 음파가 음악에 맞춰 움직이게 합니다. 소리는 저장하지 않습니다"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "O Lyrimuse lê apenas o volume do player para que a onda sonora do notch acompanhe a música. Nenhum áudio é salvo"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lyrimuse считывает только громкость плеера, чтобы звуковая волна в вырезе двигалась в такт музыке. Звук не сохраняется"
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lyrimuse อ่านเฉพาะระดับเสียงของเครื่องเล่น เพื่อให้คลื่นเสียงที่รอยบากขยับตามเพลง โดยไม่บันทึกเสียงไว้"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lyrimuse зчитує лише гучність плеєра, щоб звукова хвиля у вирізі рухалася в такт музиці. Звук не зберігається"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lyrimuse chỉ đọc âm lượng của trình phát để sóng âm ở notch nhảy theo nhạc. Không lưu âm thanh"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lyrimuse 只读取播放器的音量，让灵动岛音浪跟随音乐跳动，不保存声音"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lyrimuse 只讀取播放器的音量，讓動態島音浪跟隨音樂跳動，不儲存聲音"
+          }
+        }
+      }
     }
   },
   "version" : "1.0"

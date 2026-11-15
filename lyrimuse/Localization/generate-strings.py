@@ -67,6 +67,7 @@ OUT_DIR = os.path.join(ROOT, "..", "Sources", "lyrimuse", "Resources")
 # 两处必须一致,selftest 本地化守卫对着查。
 INFO_PLIST_KEYS = {
     "NSAppleEventsUsageDescription": "Lyrimuse 需要读取播放器和浏览器中正在播放的歌曲，才能显示同步歌词。",
+    "NSAudioCaptureUsageDescription": "Lyrimuse 只读取播放器的音量，让灵动岛音浪跟随音乐跳动，不保存声音",
 }
 # 按数量分单复数:某语言写成 Xcode 的 plural 变体(variations.plural)时,other 写进这个键,其余各类写进
 # 「键 + PLURAL_SUFFIX + 类别」(键#one、键#few、键#many)。L10n.plural(_:count:) 按 UILanguage.pluralCategory

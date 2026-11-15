@@ -52,6 +52,7 @@ Các tính năng này tắt sau khi cài. Hãy bật chúng trong cài đặt tr
 | [Notch trên Màn hình khóa](#feature-notch-show-on-lock-screen) | Cài đặt › Hiển thị lời › Notch › Hành vi › Hiện trên màn hình khóa |
 | [Lời nổi tự ẩn khi toàn màn hình](#feature-overlay-hide-in-full-screen) | Cài đặt › Hiển thị lời › Lời nổi › Hành vi › Ẩn khi toàn màn hình |
 | [Làm mờ dòng lời trên Notch khi di chuột](#feature-notch-lyric-row-fade) | Cài đặt › Hiển thị lời › Notch › Dòng lời › Làm mờ khi di chuột qua |
+| [Sóng âm nhảy theo nhạc](#feature-notch-wave-follows-music) | Cài đặt › Hiển thị lời › Notch › Tai trái › Nhảy theo nhạc |
 | [Lời trên web: điện thoại hoặc máy tính bảng làm màn hình phụ, hoặc nguồn trình duyệt OBS](#feature-web-lyrics) | Cài đặt › Hiển thị lời › Cửa sổ lời › Lời trên web |
 | [YouTube Music và Spotify Web trong trình duyệt](#feature-web-players) | Cài đặt › Trình phát › Web |
 | [Tự động bỏ qua quảng cáo YouTube Music](#feature-skip-youtube-ads) | Cài đặt › Trình phát › Web › Tự bỏ qua quảng cáo |
@@ -603,6 +604,15 @@ Khi Notch mở rộng dưới con trỏ, vùng lời trở thành danh sách 3, 
 - Cài đặt: Hiển thị lời › Notch › Khi mở rộng › Lời nhiều dòng
 - Cài đặt: Hiển thị lời › Notch › Khi mở rộng › Số dòng
 
+<a id="feature-notch-wave-follows-music"></a>
+
+### Sóng âm nhảy theo nhạc
+
+Sóng âm ở notch nhảy theo âm thanh trình phát đang thực sự phát, chia thành năm dải từ trầm đến cao (macOS 14.2 trở lên). Lyrimuse chỉ đọc âm lượng và không lưu âm thanh; macOS sẽ hỏi quyền ghi âm thanh hệ thống một lần. Phần không phát ra trên máy Mac này, như phát trên iPhone, vẫn nhảy theo nhịp lời bài hát.
+
+- Tắt theo mặc định
+- Cài đặt: Hiển thị lời › Notch › Tai trái › Nhảy theo nhạc
+
 <a id="feature-web-lyrics"></a>
 
 ### Lời trên web: điện thoại hoặc máy tính bảng làm màn hình phụ, hoặc nguồn trình duyệt OBS
@@ -933,7 +943,7 @@ Tối đa một lần mỗi ngày, Lyrimuse gửi phiên bản, macOS, các tín
 
 ## Toàn bộ cài đặt
 
-Toàn bộ mục trong cửa sổ Cài đặt, theo vị trí: tổng cộng 320 mục. Gõ tên vào ô tìm kiếm ở đầu thanh bên của Cài đặt để đi thẳng tới mục đó.
+Toàn bộ mục trong cửa sổ Cài đặt, theo vị trí: tổng cộng 321 mục. Gõ tên vào ô tìm kiếm ở đầu thanh bên của Cài đặt để đi thẳng tới mục đó.
 
 ### Lời bài hát › Nguồn
 
@@ -1099,6 +1109,7 @@ Toàn bộ mục trong cửa sổ Cài đặt, theo vị trí: tổng cộng 320
 ### Hiển thị lời › Notch › Tai trái
 
 - **Sóng âm**: Mỗi lúc chỉ hiện ở một bên
+- **Nhảy theo nhạc**: Nhảy theo âm thanh đang phát từ trình phát, cần cho phép ghi âm thanh hệ thống; chỉ đọc âm lượng, không lưu âm thanh
 
 ### Hiển thị lời › Notch › Dòng lời
 

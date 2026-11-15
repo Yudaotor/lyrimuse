@@ -526,6 +526,8 @@ final class AppSettings: ObservableObject {
         static let lyricsWindowMiniHeaderHeightPercent = "np:lyricsWindowMiniHeaderHeightPercent"
         static let notchCollapsesWhenPaused = "np:notchCollapsesWhenPaused"
         static let notchShowsEqualizer = "np:notchShowsEqualizer"
+        /// 音浪「跟随音乐跳动」。这台机器的偏好、不随配置搬家(授权是每台机器各自的,见 ConfigPortability.machineLocalDefaultsKeys)。
+        static let notchEqualizerFollowsAudio = "np:notchEqualizerFollowsAudio"
         static let notchEqualizerEar = "np:notchEqualizerEar"
         static let notchExpandedShowsNextLine = "np:notchExpandedShowsNextLine"
         static let notchExpandedShowsControls = "np:notchExpandedShowsControls"
@@ -681,6 +683,8 @@ final class AppSettings: ObservableObject {
     /// 暂停时是否收起成一条:默认不收,暂停时卡片留在原地比缩回去更容易接着看。
     static let defaultNotchCollapsesWhenPaused = false
     static let defaultNotchShowsEqualizer = true
+    /// 音浪跟随真实音频:默认关,打开时才要「仅系统录音」授权。
+    static let defaultNotchEqualizerFollowsAudio = false
     static let defaultNotchEqualizerEar = NotchEqualizerEar.right
     static let defaultNotchExpandedShowsNextLine = true
     static let defaultNotchExpandedShowsControls = true
@@ -2027,6 +2031,10 @@ final class AppSettings: ObservableObject {
     @Published var notchShowsEqualizer: Bool {
         didSet { defaults.set(notchShowsEqualizer, forKey: Keys.notchShowsEqualizer) }
     }
+    /// 音浪按播放器此刻的声音跳(`RealAudioMeter`),读不到时照旧按歌词时间轴。默认 `false`。
+    @Published var notchEqualizerFollowsAudio: Bool {
+        didSet { defaults.set(notchEqualizerFollowsAudio, forKey: Keys.notchEqualizerFollowsAudio) }
+    }
     /// 音浪贴哪只耳朵的外缘。默认 `.right`。
     @Published var notchEqualizerEar: NotchEqualizerEar {
         didSet { defaults.set(notchEqualizerEar.rawValue, forKey: Keys.notchEqualizerEar) }
@@ -2994,6 +3002,8 @@ final class AppSettings: ObservableObject {
             defaults.set(collapsesWhenPaused, forKey: Keys.notchCollapsesDuringAds)
         }
         notchShowsEqualizer = (defaults.object(forKey: Keys.notchShowsEqualizer) as? Bool) ?? Self.defaultNotchShowsEqualizer
+        notchEqualizerFollowsAudio = (defaults.object(forKey: Keys.notchEqualizerFollowsAudio) as? Bool)
+            ?? Self.defaultNotchEqualizerFollowsAudio
         notchEqualizerEar = defaults.string(forKey: Keys.notchEqualizerEar)
             .flatMap(NotchEqualizerEar.init(rawValue:)) ?? Self.defaultNotchEqualizerEar
         notchExpandedShowsNextLine = (defaults.object(forKey: Keys.notchExpandedShowsNextLine) as? Bool)

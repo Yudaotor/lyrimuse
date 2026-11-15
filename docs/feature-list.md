@@ -52,6 +52,7 @@ These features stay off after you install. Turn them on in Settings first (some 
 | [Notch on the Lock Screen](#feature-notch-show-on-lock-screen) | Settings › Lyrics Display › Notch › Behavior › Show on Lock Screen |
 | [Floating lyrics step aside in full screen](#feature-overlay-hide-in-full-screen) | Settings › Lyrics Display › Floating Lyrics › Behavior › Hide in Full Screen |
 | [Fade the notch lyric row on hover](#feature-notch-lyric-row-fade) | Settings › Lyrics Display › Notch › Lyric Row › Fade on Hover |
+| [Audio wave that follows the music](#feature-notch-wave-follows-music) | Settings › Lyrics Display › Notch › Left Ear › Move with the Music |
 | [Web lyrics: a phone or tablet as a second screen, or an OBS browser source](#feature-web-lyrics) | Settings › Lyrics Display › Lyrics Window › Web Lyrics |
 | [YouTube Music and Spotify Web in your browser](#feature-web-players) | Settings › Player › Web |
 | [Skip YouTube Music ads automatically](#feature-skip-youtube-ads) | Settings › Player › Web › Skip YouTube Music Ads Automatically |
@@ -603,6 +604,15 @@ When the notch expands under the pointer, the lyric area becomes a list of 3, 5 
 - Settings: Lyrics Display › Notch › Expanded › Multi-Line Lyrics
 - Settings: Lyrics Display › Notch › Expanded › Lines
 
+<a id="feature-notch-wave-follows-music"></a>
+
+### Audio wave that follows the music
+
+The notch audio wave moves with the sound the player is actually playing, split into five bands from bass to treble (macOS 14.2 or later). Lyrimuse only reads the volume and saves no audio; macOS asks once for permission to record system audio. Music that is not playing on this Mac, such as playback on an iPhone, keeps the wave timed to the lyrics.
+
+- Off by default
+- Settings: Lyrics Display › Notch › Left Ear › Move with the Music
+
 <a id="feature-web-lyrics"></a>
 
 ### Web lyrics: a phone or tablet as a second screen, or an OBS browser source
@@ -933,7 +943,7 @@ At most once a day, sends the version, macOS, which features are on and crash su
 
 ## Every setting
 
-Every setting in the Settings window, by where it lives: 320 in all. Type a name into the search field at the top of the Settings sidebar to jump straight to it.
+Every setting in the Settings window, by where it lives: 321 in all. Type a name into the search field at the top of the Settings sidebar to jump straight to it.
 
 ### Lyrics › Source
 
@@ -1099,6 +1109,7 @@ Every setting in the Settings window, by where it lives: 320 in all. Type a name
 ### Lyrics Display › Notch › Left Ear
 
 - **Audio Wave**: Shows on one side at a time
+- **Move with the Music**: Follows the sound from the player and needs permission to record system audio; only the volume is read, no audio is saved
 
 ### Lyrics Display › Notch › Lyric Row
 

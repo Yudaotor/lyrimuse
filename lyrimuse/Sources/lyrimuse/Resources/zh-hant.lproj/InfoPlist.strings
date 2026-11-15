@@ -1,3 +1,4 @@
 /* 由 Localization/Localizable.xcstrings 生成(键表见 generate-strings.py 的 INFO_PLIST_KEYS)—— 不要手改这个文件。 */
 
 "NSAppleEventsUsageDescription" = "Lyrimuse 需要讀取播放器和瀏覽器中正在播放的歌曲，才能顯示同步歌詞。";
+"NSAudioCaptureUsageDescription" = "Lyrimuse 只讀取播放器的音量，讓動態島音浪跟隨音樂跳動，不儲存聲音";

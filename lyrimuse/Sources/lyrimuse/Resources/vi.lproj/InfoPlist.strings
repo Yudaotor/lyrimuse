@@ -1,3 +1,4 @@
 /* 由 Localization/Localizable.xcstrings 生成(键表见 generate-strings.py 的 INFO_PLIST_KEYS)—— 不要手改这个文件。 */
 
 "NSAppleEventsUsageDescription" = "Lyrimuse cần đọc bài hát đang phát trong trình phát và trình duyệt để hiển thị lời đồng bộ.";
+"NSAudioCaptureUsageDescription" = "Lyrimuse chỉ đọc âm lượng của trình phát để sóng âm ở notch nhảy theo nhạc. Không lưu âm thanh";

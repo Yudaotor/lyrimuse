@@ -52,6 +52,7 @@ Diese Funktionen bleiben nach der Installation aus. Schalte sie zuerst in den Ei
 | [Notch auf dem Sperrbildschirm](#feature-notch-show-on-lock-screen) | Einstellungen › Liedtext-Anzeige › Notch › Verhalten › Auf Sperrbildschirm zeigen |
 | [Schwebender Text weicht im Vollbild aus](#feature-overlay-hide-in-full-screen) | Einstellungen › Liedtext-Anzeige › Schwebender Text › Verhalten › Im Vollbild ausblenden |
 | [Textzeile der Notch beim Daraufzeigen abblenden](#feature-notch-lyric-row-fade) | Einstellungen › Liedtext-Anzeige › Notch › Textzeile › Beim Überfahren abblenden |
+| [Audiowelle im Takt der Musik](#feature-notch-wave-follows-music) | Einstellungen › Liedtext-Anzeige › Notch › Linkes Ohr › Im Takt der Musik |
 | [Web-Liedtext: Smartphone oder Tablet als zweiter Bildschirm oder OBS-Browserquelle](#feature-web-lyrics) | Einstellungen › Liedtext-Anzeige › Liedtextfenster › Web-Liedtext |
 | [YouTube Music und Spotify Web im Browser](#feature-web-players) | Einstellungen › Player › Web |
 | [YouTube Music-Werbung automatisch überspringen](#feature-skip-youtube-ads) | Einstellungen › Player › Web › Werbung in YouTube Music überspringen |
@@ -603,6 +604,15 @@ Klappt die Notch unter dem Zeiger aus, wird der Textbereich zu einer Liste mit 3
 - Einstellungen: Liedtext-Anzeige › Notch › Ausgeklappt › Mehrzeiliger Liedtext
 - Einstellungen: Liedtext-Anzeige › Notch › Ausgeklappt › Zeilen
 
+<a id="feature-notch-wave-follows-music"></a>
+
+### Audiowelle im Takt der Musik
+
+Die Audiowelle in der Notch folgt dem Ton, den der Player tatsächlich abspielt, aufgeteilt in fünf Bänder von Bass bis Höhen (macOS 14.2 oder neuer). Lyrimuse liest nur die Lautstärke und speichert keinen Ton; macOS fragt einmal nach der Erlaubnis, Systemaudio aufzunehmen. Wiedergabe, die nicht auf diesem Mac zu hören ist, etwa auf einem iPhone, behält die am Liedtext getaktete Welle.
+
+- Standardmäßig aus
+- Einstellungen: Liedtext-Anzeige › Notch › Linkes Ohr › Im Takt der Musik
+
 <a id="feature-web-lyrics"></a>
 
 ### Web-Liedtext: Smartphone oder Tablet als zweiter Bildschirm oder OBS-Browserquelle
@@ -933,7 +943,7 @@ Sendet höchstens einmal täglich Version, macOS, aktivierte Funktionen und Abst
 
 ## Alle Einstellungen
 
-Alle Einstellungen des Einstellungsfensters nach Ort: insgesamt 320. Gib einen Namen in das Suchfeld oben in der Seitenleiste der Einstellungen ein, um direkt dorthin zu springen.
+Alle Einstellungen des Einstellungsfensters nach Ort: insgesamt 321. Gib einen Namen in das Suchfeld oben in der Seitenleiste der Einstellungen ein, um direkt dorthin zu springen.
 
 ### Liedtext › Quelle
 
@@ -1099,6 +1109,7 @@ Alle Einstellungen des Einstellungsfensters nach Ort: insgesamt 320. Gib einen N
 ### Liedtext-Anzeige › Notch › Linkes Ohr
 
 - **Audiowelle**: Nur auf einer Seite gleichzeitig
+- **Im Takt der Musik**: Folgt dem Ton des Players und braucht die Erlaubnis, Systemaudio aufzunehmen; gelesen wird nur die Lautstärke, kein Ton wird gespeichert
 
 ### Liedtext-Anzeige › Notch › Textzeile
 

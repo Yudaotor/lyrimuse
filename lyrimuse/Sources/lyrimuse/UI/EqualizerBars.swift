@@ -4,13 +4,12 @@ import QuartzCore
 import SwiftUI
 import LyrimuseCore
 
-// 灵动岛左耳歌名前面那几根"跳动的均衡条"——纯装饰性的播放指示器,不是真的频谱。
+// 灵动岛耳朵里那几根"跳动的均衡条"(播放指示)。两种驱动:
 //
-// 名字叫均衡条,但它跟音频数据没有任何关系,也不该有:拿到真实频谱需要 CoreAudio 抓
-// 系统输出(要么装虚拟声卡,要么申请录屏/录音权限),对一个"显示歌词"的 App 来说代价完全
-// 不成比例。被参考的那个 fork 的 README 宣称有频谱,读代码发现它的 visualizer.metal 根本
-// 没进编译清单,实际画的也是随机动画 —— 这里不重复那种宣称,注释和 UI 文案都只说"播放
-// 指示",不说"频谱"。
+// - **默认:按歌词时间轴跳**,跟音频数据无关、不要任何权限。下面几节讲的都是这一种。
+// - **「跟随音乐跳动」开着**(`followsAudio`,macOS 14.2+):`RealAudioMeter` 读播放器此刻送出的声音,
+//   5 个频段的电平直接驱动五根条子(`applyRealLevels`)。读不到(没授权、播放器不在本机出声)时
+//   `RealAudioMeter` 报不在跟随,这里照旧走时间轴那套。见 05 章决策 146。
 //
 // 条高的**振幅**由逐字歌词时间轴调制(`amplitude` 闭包),所以它确实跟着歌在动 —— 但
 // 驱动它的是"这一刻有没有字正在唱",不是音频。这是 lyrimuse 相对那类抓音频的实现的
@@ -56,6 +55,8 @@ struct EqualizerBars: View {
     ///
     /// 默认 `{ _ in 1 }` = 满幅,等价于加这个参数之前的行为。
     var amplitude: (Date) -> Double = { _ in 1 }
+    /// 「跟随音乐跳动」开着(`AppSettings.notchEqualizerFollowsAudio`)。开着也只在真读到声音时才按真实电平跳。
+    var followsAudio: Bool = false
 
     /// 改成 iPhone 那种"上下对称、从中线生长"的声浪。
     ///
@@ -101,7 +102,7 @@ struct EqualizerBars: View {
 
     var body: some View {
         EqualizerBarsLayer(color: NSColor(color), isPlaying: isPlaying,
-                           resyncKey: resyncKey, amplitude: amplitude)
+                           resyncKey: resyncKey, amplitude: amplitude, followsAudio: followsAudio)
             .frame(width: Self.width, height: Self.maxHeight)
             // 装饰元素,读屏软件念"2.5、7、4、9"没有任何意义。
             .accessibilityHidden(true)
@@ -113,12 +114,13 @@ private struct EqualizerBarsLayer: NSViewRepresentable {
     let isPlaying: Bool
     let resyncKey: Int
     let amplitude: (Date) -> Double
+    let followsAudio: Bool
 
     func makeNSView(context: Context) -> EqualizerBarsNSView { EqualizerBarsNSView() }
 
     func updateNSView(_ view: EqualizerBarsNSView, context: Context) {
         view.amplitude = amplitude
-        view.update(color: color, isPlaying: isPlaying, resyncKey: resyncKey)
+        view.update(color: color, isPlaying: isPlaying, resyncKey: resyncKey, followsAudio: followsAudio)
     }
 
     func sizeThatFits(_ proposal: ProposedViewSize, nsView: EqualizerBarsNSView, context: Context) -> CGSize? {
@@ -131,6 +133,8 @@ private struct EqualizerBarsLayer: NSViewRepresentable {
 @MainActor
 final class EqualizerBarsNSView: NSView {
     private static let animationKey = "lyrimuse.equalizer-bars"
+    /// 跟随真实音频时每一帧之间的补间(一帧 1/30 秒)。
+    private static let liveAnimationKey = "lyrimuse.equalizer-bars.live"
 
     var amplitude: (Date) -> Double = { _ in 1 }
 
@@ -138,6 +142,9 @@ final class EqualizerBarsNSView: NSView {
     private var color: NSColor?
     private var isPlaying = false
     private var resyncKey: Int?
+    private var followsAudio = false
+    /// `RealAudioMeter` 此刻在给真实电平:关键帧那套停掉,高度由 `applyRealLevels` 逐帧给。
+    private var liveAudio = false
     /// 这一段快播完时续排下一段。只在"在播且在窗口里"时存在。
     private var renewTimer: Timer?
 
@@ -162,21 +169,63 @@ final class EqualizerBarsNSView: NSView {
     @available(*, unavailable)
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
 
-    func update(color: NSColor, isPlaying: Bool, resyncKey: Int) {
+    func update(color: NSColor, isPlaying: Bool, resyncKey: Int, followsAudio: Bool) {
         if self.color != color {
             self.color = color
             let cg = color.cgColor
             for bar in bars { bar.backgroundColor = cg }
         }
-        guard self.isPlaying != isPlaying || self.resyncKey != resyncKey else { return }
+        guard self.isPlaying != isPlaying || self.resyncKey != resyncKey || self.followsAudio != followsAudio else { return }
+        let listeningChanged = self.isPlaying != isPlaying || self.followsAudio != followsAudio
         self.isPlaying = isPlaying
         self.resyncKey = resyncKey
+        self.followsAudio = followsAudio
+        if listeningChanged { syncListening() }
+        // 跟随真实音频时关键帧那套不在用,换行 / 锚点变了不用重排。
+        if liveAudio && !listeningChanged { return }
         reinstall()
     }
 
     override func viewDidMoveToWindow() {
         super.viewDidMoveToWindow()
+        syncListening()
         reinstall()
+    }
+
+    /// 向 `RealAudioMeter` 登记 / 撤销:只有在播、在窗口里、开关开着才要真实电平。
+    private func syncListening() {
+        let listening = followsAudio && isPlaying && window != nil
+        RealAudioMeter.shared.setListening(self, listening)
+        if !listening { liveAudio = false }
+    }
+
+    /// `RealAudioMeter` 开始 / 停止给真实电平。
+    func realAudioModeChanged(live: Bool) {
+        let effective = live && followsAudio && isPlaying && window != nil
+        guard effective != liveAudio else { return }
+        liveAudio = effective
+        reinstall()
+    }
+
+    /// 一帧真实电平(已按条子顺序排好的高度比例 0…1)。上一帧到这一帧用 1/30 秒线性补间,
+    /// 只动五个图层,不经 SwiftUI。
+    func applyRealLevels(_ levels: [Double]) {
+        guard liveAudio, levels.count >= bars.count else { return }
+        let range = EqualizerBars.maxHeight - EqualizerBars.minHeight
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        for (i, bar) in bars.enumerated() {
+            let target = EqualizerBars.minHeight + range * CGFloat(min(1, max(0, levels[i])))
+            let from = bar.presentation()?.bounds.size.height ?? bar.bounds.size.height
+            bar.bounds.size.height = target
+            let anim = CABasicAnimation(keyPath: "bounds.size.height")
+            anim.fromValue = from
+            anim.toValue = target
+            anim.duration = 1.0 / EqualizerBars.keyframeRate
+            anim.preferredFrameRateRange = CAFrameRateRange(minimum: 15, maximum: 60, preferred: 60)
+            bar.add(anim, forKey: Self.liveAnimationKey)
+        }
+        CATransaction.commit()
     }
 
     override func viewDidChangeBackingProperties() {
@@ -193,11 +242,16 @@ final class EqualizerBarsNSView: NSView {
         CATransaction.begin()
         CATransaction.setDisableActions(true)
         defer { CATransaction.commit() }
-        for bar in bars { bar.removeAnimation(forKey: Self.animationKey) }
+        for bar in bars {
+            bar.removeAnimation(forKey: Self.animationKey)
+            bar.removeAnimation(forKey: Self.liveAnimationKey)
+        }
         guard isPlaying, window != nil else {
             for bar in bars { bar.bounds.size.height = EqualizerBars.minHeight }
             return
         }
+        // 真实电平接管:高度停在当前值,等下一帧 `applyRealLevels`。
+        if liveAudio { return }
 
         let span = EqualizerBars.resyncSpan
         let rate = EqualizerBars.keyframeRate

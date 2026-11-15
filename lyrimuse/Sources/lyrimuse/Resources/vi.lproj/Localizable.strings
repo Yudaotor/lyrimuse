@@ -163,6 +163,7 @@
 "LyricFind（经由 YouTube Music 检索）" = "LyricFind (tìm qua YouTube Music)";
 "Lyrimuse" = "Lyrimuse";
 "Lyrimuse 反馈" = "Phản hồi Lyrimuse";
+"Lyrimuse 只读取播放器的音量，让灵动岛音浪跟随音乐跳动，不保存声音" = "Lyrimuse chỉ đọc âm lượng của trình phát để sóng âm ở notch nhảy theo nhạc. Không lưu âm thanh";
 "Lyrimuse 启动时同时打开勾选的播放器，已在运行的播放器不受影响，也不会抢占焦点" = "Khi Lyrimuse khởi động, mở cùng các trình phát đã chọn; trình phát đang chạy không bị ảnh hưởng, trình phát được mở cũng không chiếm tiêu điểm";
 "Lyrimuse 将向此地址 POST 一段 JSON，包含 app、event（如 weekly_digest）、title、body、sent_at，适用于对接 Home Assistant、n8n 或自建服务" = "Lyrimuse sẽ POST JSON tới địa chỉ này, gồm app, event (ví dụ weekly_digest), title, body, sent_at; phù hợp để kết nối Home Assistant, n8n hoặc dịch vụ tự dựng";
 "Lyrimuse 将显示正在播放的 App 的歌词，之后可随时在设置中更改" = "Lyrimuse hiển thị lời bài hát cho ứng dụng đang phát. Bạn có thể thay đổi trong Cài đặt bất kỳ lúc nào";
@@ -1391,6 +1392,7 @@
 "按住歌词即可拖动位置" = "Nhấn giữ lời để kéo đến vị trí khác";
 "按你写的模板，以纯文本推送" = "Theo mẫu của bạn, gửi dạng văn bản thuần túy";
 "按播放器报的时长没有可用候选，这一份是不看时长搜到的：可能是其他版本，也可能是播放器报的时长有误" = "Không có kết quả dùng được khớp với thời lượng trình phát báo, nên bản này được tìm mà không xét thời lượng: có thể là phiên bản khác, hoặc thời lượng trình phát báo bị sai";
+"按播放器正在播放的声音跳动，需允许 Lyrimuse 录制系统音频；只读取音量，不保存声音" = "Nhảy theo âm thanh đang phát từ trình phát, cần cho phép ghi âm thanh hệ thống; chỉ đọc âm lượng, không lưu âm thanh";
 "按收听最多的前 %1$@ 位歌手统计，占此期间收听量的 %2$@" = "Dựa trên %1$@ nghệ sĩ được nghe nhiều nhất, chiếm %2$@ lượt phát trong giai đoạn này";
 "按收听最多的前 %@ 位歌手统计" = "Dựa trên %@ nghệ sĩ được nghe nhiều nhất";
 "按歌名和歌手识别" = "Nhận diện theo tên bài và nghệ sĩ";
@@ -1785,6 +1787,7 @@
 "未获授权" = "Chưa được cấp quyền";
 "未记录" = "Chưa ghi";
 "未设置" = "Chưa đặt";
+"未读到声音，请在系统设置中允许 Lyrimuse 录制系统音频" = "Không đọc được âm thanh. Hãy cho phép Lyrimuse ghi âm thanh hệ thống trong Cài đặt hệ thống";
 "未运行" = "Không chạy";
 "未返回候选" = "Không trả về kết quả";
 "未连接" = "Chưa kết nối";
@@ -2617,6 +2620,7 @@
 "跟随窗口" = "Theo cửa sổ";
 "跟随系统" = "Hệ thống";
 "跟随系统语言" = "Theo ngôn ngữ hệ thống";
+"跟随音乐跳动" = "Nhảy theo nhạc";
 "跳转到列表中正在播放的歌曲；若被搜索或筛选隐藏，会先清除" = "Chuyển đến bài đang phát trong danh sách; nếu bài bị tìm kiếm hoặc bộ lọc ẩn đi, sẽ xóa chúng trước";
 "跳过" = "Bỏ qua";
 "跳过广告" = "Bỏ qua quảng cáo";

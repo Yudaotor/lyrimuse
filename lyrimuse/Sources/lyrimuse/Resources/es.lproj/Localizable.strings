@@ -188,6 +188,7 @@
 "LyricFind（经由 YouTube Music 检索）" = "LyricFind (buscado a través de YouTube Music)";
 "Lyrimuse" = "Lyrimuse";
 "Lyrimuse 反馈" = "Comentarios sobre Lyrimuse";
+"Lyrimuse 只读取播放器的音量，让灵动岛音浪跟随音乐跳动，不保存声音" = "Lyrimuse solo lee el volumen del reproductor para que la onda de audio del notch siga la música. No se guarda ningún audio";
 "Lyrimuse 启动时同时打开勾选的播放器，已在运行的播放器不受影响，也不会抢占焦点" = "Al iniciar Lyrimuse, abre también los reproductores marcados. Los que ya están abiertos no se tocan y nada te quita el foco";
 "Lyrimuse 将向此地址 POST 一段 JSON，包含 app、event（如 weekly_digest）、title、body、sent_at，适用于对接 Home Assistant、n8n 或自建服务" = "Lyrimuse envía por POST un JSON a esta URL con app, event (como weekly_digest), title, body y sent_at. Útil para Home Assistant, n8n o tu propio servicio";
 "Lyrimuse 将显示正在播放的 App 的歌词，之后可随时在设置中更改" = "Lyrimuse muestra la letra de la app que esté reproduciendo. Puedes cambiarlo en Ajustes cuando quieras";
@@ -1464,6 +1465,7 @@
 "按住歌词即可拖动位置" = "Mantén pulsada la letra para moverla";
 "按你写的模板，以纯文本推送" = "Usa tu plantilla y se envía como texto sin formato";
 "按播放器报的时长没有可用候选，这一份是不看时长搜到的：可能是其他版本，也可能是播放器报的时长有误" = "Ningún resultado útil coincidía con la duración que indica el reproductor, así que este se encontró sin ella: puede ser otra versión o la duración del reproductor puede estar mal";
+"按播放器正在播放的声音跳动，需允许 Lyrimuse 录制系统音频；只读取音量，不保存声音" = "Sigue el sonido del reproductor y requiere permiso para grabar el audio del sistema; solo se lee el volumen y no se guarda ningún audio";
 "按收听最多的前 %1$@ 位歌手统计，占此期间收听量的 %2$@" = "Según tus %1$@ artistas más escuchados, %2$@ de tus reproducciones en este periodo";
 "按收听最多的前 %1$@ 位歌手统计，占此期间收听量的 %2$@#one" = "Según tu top %1$@ de artistas, %2$@ de tus reproducciones en este periodo";
 "按收听最多的前 %@ 位歌手统计" = "Según tus %@ artistas más escuchados";
@@ -1864,6 +1866,7 @@
 "未获授权" = "No concedido";
 "未记录" = "Sin registrar";
 "未设置" = "Sin definir";
+"未读到声音，请在系统设置中允许 Lyrimuse 录制系统音频" = "No se detecta sonido. Permite que Lyrimuse grabe el audio del sistema en Ajustes del Sistema";
 "未运行" = "No se está ejecutando";
 "未返回候选" = "No devolvió candidatas";
 "未连接" = "No conectado";
@@ -2707,6 +2710,7 @@
 "跟随窗口" = "Seguir ventana";
 "跟随系统" = "Según el sistema";
 "跟随系统语言" = "Según el idioma del sistema";
+"跟随音乐跳动" = "Seguir la música";
 "跳转到列表中正在播放的歌曲；若被搜索或筛选隐藏，会先清除" = "Saltar a la canción en reproducción en la lista; borra la búsqueda o los filtros si la ocultan";
 "跳过" = "Omitir";
 "跳过广告" = "Omitir anuncio";

@@ -112,6 +112,8 @@ enum ConfigPortability {
         "np:pauseJumpHistory",
         // 各播放器上次运行时查到的自动化授权结论(AutomationLastStatusMemory),同上一条。
         "np:automationLastStatus",
+        // 音浪「跟随音乐跳动」:开着就要这台机器给过「仅系统录音」授权,带去新机器会在第一次播放时突然弹框。
+        "np:notchEqualizerFollowsAudio",
         // 「完全磁盘访问」「辅助功能」在这台机器上授权成功过没有(PermissionGrantMemory),同上一条。
         "np:fullDiskAccessEverGranted",
         "np:accessibilityEverGranted",

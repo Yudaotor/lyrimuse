@@ -491,6 +491,7 @@ public enum SettingsSearchCatalog {
         surface(.notch, "左耳", kw: ["模块", "歌名", "歌手", "专辑", "封面", "播放控制", "已播时长", "剩余时长", "收听次数", "播放器"]),
         surface(.notch, "右耳", kw: ["模块", "歌名", "歌手", "专辑", "封面", "播放控制", "已播时长", "剩余时长", "收听次数", "播放器"]),
         surface(.notch, "音浪", kw: ["频谱", "音条", "律动"], group: "左耳"),
+        surface(.notch, "跟随音乐跳动", kw: ["音浪", "频谱", "真实音频", "节奏", "鼓点", "系统录音"], group: "左耳"),
         surface(.notch, "宽度", kw: ["稳态宽", "pt"]),
         surface(.notch, "展开宽度", kw: ["展开态", "pt"]),
         surface(.notch, "收起时显示歌词", kw: ["显示歌词", "歌词行", "状态条"], group: "歌词行"),
