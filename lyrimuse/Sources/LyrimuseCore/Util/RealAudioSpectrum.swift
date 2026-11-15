@@ -110,8 +110,9 @@ public enum RealAudioSpectrum {
 /// 上限各段各管各的:低频的绝对能量比高频大几十分贝,共用一个上限的话高频那几根永远贴底。
 /// tap 的单声道 mixdown 峰值会超过 1(左右声道相加),所以不能按满刻度 0 dBFS 归一。
 public struct RealAudioBandFollower: Equatable, Sendable {
-    /// 上限往下数多少分贝算 0。
-    public static let dynamicRangeDB: Double = 30
+    /// 上限往下数多少分贝算 0:离上限 6dB 是半高。别放宽:压得很响的流行 / 电子歌各段一直贴着上限几分贝以内,
+    /// 范围一宽五根条子就一直顶在上半截、看不出跟着拍子起落。取值和真机回放判据见 05 章决策 146。
+    public static let dynamicRangeDB: Double = 12
     /// 上限每秒往下放多少分贝:一段响的过去之后,安静段大约十秒内重新跳得起来。
     public static let ceilingDecayDBPerSecond: Double = 3
     /// 上限最低放到这里,不再往下追:不然只剩底噪时底噪也会被放大成满格。
@@ -139,17 +140,18 @@ public struct RealAudioBandFollower: Equatable, Sendable {
             let db = p > 0 ? 10 * log10(p) : -.infinity
             let decayed = ceilingsDB[b] - Self.ceilingDecayDBPerSecond * step
             ceilingsDB[b] = max(Self.minimumCeilingDB, decayed, db.isFinite ? db : -.infinity)
-            let target: Double
-            if db < Self.silenceDB {
-                target = 0
-            } else {
-                target = min(1, max(0, (db - (ceilingsDB[b] - Self.dynamicRangeDB)) / Self.dynamicRangeDB))
-            }
+            let target = Self.level(db: db, ceilingDB: ceilingsDB[b])
             let tau = target > levels[b] ? Self.attackSeconds : Self.releaseSeconds
             let k = step > 0 ? 1 - exp(-step / tau) : 0
             levels[b] += (target - levels[b]) * k
         }
         return levels
+    }
+
+    /// 一个频段此刻的能量(dB)在上限下面的位置 → 0…1,不含平滑。
+    public static func level(db: Double, ceilingDB: Double) -> Double {
+        guard db.isFinite, ceilingDB.isFinite, db >= silenceDB else { return 0 }
+        return min(1, max(0, (db - (ceilingDB - dynamicRangeDB)) / dynamicRangeDB))
     }
 
     /// 换播放器、重建 tap 时从头来:上限按新声源重新学。

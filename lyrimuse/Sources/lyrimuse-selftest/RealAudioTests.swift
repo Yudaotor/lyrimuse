@@ -58,6 +58,20 @@ func runRealAudioTests() {
     run(&g, Array(repeating: db(-30), count: 5), seconds: 12)
     expectEqual(g.levels.allSatisfy { $0 > 0.9 }, true, "真实音浪: 上限慢慢放下来,十几秒后安静段重新跳得起来")
 
+    expectEqual([0, -3, -6, -12, -20].map { RealAudioBandFollower.level(db: -10 + $0, ceilingDB: -10) }, [1, 0.75, 0.5, 0, 0],
+                "真实音浪: 贴着上限满格、低 6dB 半高、低 12dB 贴底")
+    expectEqual([RealAudioBandFollower.level(db: -95, ceilingDB: -45), RealAudioBandFollower.level(db: .nan, ceilingDB: 0),
+                 RealAudioBandFollower.level(db: 3, ceilingDB: 0)], [0, 0, 1], "真实音浪: 静音 / 坏值是 0,超过上限夹在 1")
+    // 压得很响的歌:拍子上 -10dB、拍子间 -20dB,每拍 0.5 秒。条子在一拍里要有一半以上的起落;动态范围放宽到 15dB 就不到一半。
+    var beat = RealAudioBandFollower()
+    var beatLevels: [Double] = []
+    for i in 0..<Int((4 / step).rounded()) {
+        let on = (Double(i) * step).truncatingRemainder(dividingBy: 0.5) < 0.25
+        beat.update(powers: Array(repeating: db(on ? -10 : -20), count: 5), dt: step)
+        if Double(i) * step >= 3 { beatLevels.append(beat.levels[0]) }
+    }
+    expectEqual(beatLevels.max()! - beatLevels.min()! > 0.5, true, "真实音浪: 响的歌每拍 10dB 的起落在条子上看得出来(一半以上)")
+
     var noise = RealAudioBandFollower()
     run(&noise, Array(repeating: db(-80), count: 5), seconds: 30)
     expectEqual(noise.levels.allSatisfy { $0 < 0.05 }, true, "真实音浪: 只剩底噪时上限停在下限、底噪不被放大")
