@@ -292,6 +292,9 @@ func runSettingsInteractionTests() {
                     "来源排列: 跟随系统时,繁体中文系统算中文")
         expectEqual(R.prefersChineseSources(appLanguageOverride: nil, preferredLanguage: "ja-JP"), false,
                     "来源排列: 跟随系统时,日语系统算非中文(界面虽退回简体,更用得上国外源)")
+        expectEqual([R.prefersChineseSources(appLanguageOverride: nil, preferredLanguage: "yue-Hant-HK"),
+                     R.prefersChineseSources(appLanguageOverride: "system", preferredLanguage: "yue-Hans-CN")], [true, true],
+                    "歌词来源排列: 系统首选是粤语算中文用户")
         expectEqual(R.prefersChineseSources(appLanguageOverride: nil, preferredLanguage: nil), false,
                     "来源排列: 读不到系统语言时按非中文")
     }
@@ -1110,6 +1113,9 @@ func runSettingsInteractionTests() {
         expectEqual(L.code(appleLocale: nil, preferredLanguages: ["ja-JP", "en"]), "ja", "系统语言: 没有 AppleLocale 退回首选语言第一项")
         expectEqual(L.code(appleLocale: " ", preferredLanguages: ["zh-Hans-CN"]), "zh", "系统语言: AppleLocale 是空白同样退回首选语言")
         expectEqual(L.code(appleLocale: nil, preferredLanguages: []), "en", "系统语言: 都没有兜底 en")
+        expectEqual([L.code(appleLocale: nil, preferredLanguages: ["yue-Hant-HK"]), L.code(appleLocale: nil, preferredLanguages: ["yue-Hans-CN"]),
+                     L.code(appleLocale: "yue-Hant_HK", preferredLanguages: ["en"])], ["zh-hant", "zh-hans", "zh-hant"],
+                    "系统语言: 粤语按写的汉字归中文(首选语言退路与 AppleLocale 同一套)")
         expectEqual(L.current().isEmpty, false, "系统语言: 本机读得出一个值")
         let features: [String: Any] = ["lyrics_translation_language": "auto", L.featuresKey: "ja", "players": ["auto"]]
         let exported = L.strippingForExport(features) as? [String: Any]

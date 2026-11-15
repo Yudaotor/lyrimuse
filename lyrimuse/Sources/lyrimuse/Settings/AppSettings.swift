@@ -852,9 +852,7 @@ final class AppSettings: ObservableObject {
     /// 这台机器的用户读不读中文 —— 用系统的**首选语言列表**判,不是只看 App 界面语言:
     /// 一个把系统语言设成英文、但语言列表里加了中文的用户,照样在听中文歌。
     /// 只在启动时算一次就够了(系统语言不会在 App 运行期间变)。
-    static let userReadsChinese: Bool = Locale.preferredLanguages.contains {
-        $0.lowercased().hasPrefix("zh")
-    }
+    static let userReadsChinese: Bool = Locale.preferredLanguages.contains(where: UILanguage.isChineseFamilyTag)
 
     /// 首选语言的**第一项**具体是不是简体中文(引导页"选择播放器"排序用,见
     /// `PlaybackPlayer.onboardingDisplayOrder`)——跟上面 `userReadsChinese` 不是同一件事:
@@ -863,10 +861,10 @@ final class AppSettings: ObservableObject {
     /// 地区用户在国内三家播放器上的使用率跟英文用户更接近,不该被并进简体那一档。
     /// 判据是字符串前缀/子串匹配(跟 L10n.current 同一套朴素写法,不依赖
     /// Locale.Language.script 这类新引入 API 在不同系统版本上的推断是否可靠):
-    /// 含 "hant"/"-tw"/"-hk"/"-mo" 里任意一个 → 认成繁体;剩下以 "zh" 开头的(裸 "zh"、
-    /// "zh-cn"、"zh-hans"、"zh-sg" 等)→ 简体。
+    /// 含 "hant"/"-tw"/"-hk"/"-mo" 里任意一个、或没写 Hans 的粤语 → 认成繁体;剩下的中文标签(裸 "zh"、
+    /// "zh-cn"、"zh-hans"、"zh-sg"、"yue-hans" 等)→ 简体。
     static let userReadsSimplifiedChinese: Bool = {
-        guard let first = Locale.preferredLanguages.first?.lowercased(), first.hasPrefix("zh") else { return false }
+        guard let first = Locale.preferredLanguages.first, UILanguage.isChineseFamilyTag(first) else { return false }
         // 判据本体在 LyrimuseCore 的 UILanguage(跟 L10n 的语言协商同一份):含 hans 一定简体、
         // 含 hant 一定繁体,都没写才看 -TW / -HK / -MO 地区码。
         return !UILanguage.isTraditionalChineseTag(first)

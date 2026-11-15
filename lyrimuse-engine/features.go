@@ -812,14 +812,23 @@ func querySystemLanguageCode() string {
 }
 
 // appleLocaleLanguage:AppleLocale("zh_CN" / "en_US" / "zh-Hans_CN")下划线前那段转小写,文字子标签原样留着;
+// 粤语按写的汉字归中文:整串带 Hans 得 "zh-hans",其余("yue-Hant_HK"、"yue_HK")得 "zh-hant"。
 // 取不到是空串。必须跟 App 的 SystemLanguage.appleLocaleLanguage 逐字一致(两侧共用样例
 // shared/testdata/system-language.json):两边对同一台机器得出不同语言,会被当成译文语言换了、整库机翻清一遍。
 func appleLocaleLanguage(s string) string {
 	s = strings.TrimSpace(s)
+	full := strings.ToLower(s)
 	if i := strings.IndexByte(s, '_'); i > 0 {
 		s = s[:i]
 	}
-	return strings.ToLower(s)
+	s = strings.ToLower(s)
+	if s == "yue" || strings.HasPrefix(s, "yue-") {
+		if strings.Contains(full, "hans") {
+			return "zh-hans"
+		}
+		return "zh-hant"
+	}
+	return s
 }
 
 // ---- 启动时的开关快照 ----

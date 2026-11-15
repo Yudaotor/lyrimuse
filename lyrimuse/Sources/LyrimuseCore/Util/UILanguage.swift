@@ -6,8 +6,9 @@ import Foundation
 /// `AppSettings.userReadsSimplifiedChinese`(引导页播放器排序用)也用这里的简繁判据,别各写一份。
 ///
 /// 规则:按系统首选语言列表的顺序,取第一个有语言包的;一个都没有用英文。一个标签归哪个包:
-///   - 中文:显式 script 子标签优先 —— 含 "hans" 一定是简体(zh-Hans-HK 是「香港的简体用户」,不能被地区码拉去繁体),
-///     含 "hant" 一定是繁体;两者都没写才看地区码,-TW / -HK / -MO 按繁体,其余(裸 zh、zh-CN、zh-SG …)按简体。
+///   - 中文(`isChineseFamilyTag`:zh 和粤语 yue):显式 script 子标签优先 —— 含 "hans" 一定是简体(zh-Hans-HK 是「香港的简体用户」,
+///     不能被地区码拉去繁体),含 "hant" 一定是繁体;两者都没写时粤语按繁体,zh 看地区码,-TW / -HK / -MO 按繁体,
+///     其余(裸 zh、zh-CN、zh-SG …)按简体。
 ///   - 葡萄牙语(pt、pt-BR、pt-PT、pt-AO …)都归巴西葡语包 pt-br。
 ///   - 其余语言按主语言码(en-GB → en),没有这个语言包的跳过、看列表里的下一项。
 public enum UILanguage {
@@ -27,7 +28,7 @@ public enum UILanguage {
     /// 一个语言标签归哪个语言包;界面没有这种语言时为 nil。
     public static func pack(forTag tag: String) -> String? {
         let t = tag.lowercased().replacingOccurrences(of: "_", with: "-")
-        if t == "zh" || t.hasPrefix("zh-") {
+        if isChineseFamilyTag(t) {
             return isTraditionalChineseTag(t) ? "zh-hant" : "zh-hans"
         }
         let language = t.split(separator: "-").first.map(String.init) ?? t
@@ -35,12 +36,20 @@ public enum UILanguage {
         return packs.contains(language) ? language : nil
     }
 
-    /// 一个 zh 标签该不该按繁体处理。只管 zh 家族;传进别的语言标签一律 false。
+    /// 写汉字的中文标签:zh、zh-*,以及粤语 yue、yue-*(粤语书面用汉字,系统首选是粤语的人读中文界面)。
+    /// 「读不读中文」「界面归哪个中文包」都按它判,别各自写 `hasPrefix("zh")`。
+    public static func isChineseFamilyTag(_ tag: String) -> Bool {
+        let t = tag.lowercased().replacingOccurrences(of: "_", with: "-")
+        return t == "zh" || t.hasPrefix("zh-") || t == "yue" || t.hasPrefix("yue-")
+    }
+
+    /// 一个中文标签该不该按繁体处理。只管 `isChineseFamilyTag` 认的标签;传进别的语言标签一律 false。
+    /// 粤语没写文字子标签(yue、yue-HK)按繁体:Apple 的粤语默认是 yue-Hant。
     public static func isTraditionalChineseTag(_ tag: String) -> Bool {
-        let t = tag.lowercased()
-        guard t.hasPrefix("zh") else { return false }
+        let t = tag.lowercased().replacingOccurrences(of: "_", with: "-")
+        guard isChineseFamilyTag(t) else { return false }
         if t.contains("hans") { return false }
-        if t.contains("hant") { return true }
+        if t.contains("hant") || t == "yue" || t.hasPrefix("yue-") { return true }
         return traditionalRegions.contains { t.contains($0) }
     }
 

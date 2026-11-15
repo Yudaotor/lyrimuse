@@ -18,7 +18,7 @@ public enum LyricsSourceRegion {
         switch appLanguageOverride {
         case "en": return false
         case "zh-hans", "zh-hant": return true
-        default: return (preferredLanguage ?? "").lowercased().hasPrefix("zh")
+        default: return UILanguage.isChineseFamilyTag(preferredLanguage ?? "")
         }
     }
 

@@ -515,6 +515,15 @@ func runSourceContractTests() {
             expectEqual(UILanguage.packs.allSatisfy { resolve($0) == $0 && UILanguage.nativeName(of: $0) != $0 }, true,
                         "本地化: 每个语言包认得自己的标签、有自己写法的语言名")
             expectEqual(UILanguage.isTraditionalChineseTag("ja-JP"), false, "本地化: isTraditionalChineseTag 只管 zh 家族")
+            expectEqual([resolve("yue-Hant-HK"), resolve("yue"), resolve("yue-HK"), resolve("YUE_hant"), resolve("yue-Hans-CN"), resolve("yue_Hans"),
+                         resolve("pl-PL", "yue-Hant-HK", "en"), resolve("en", "yue-Hant-HK")],
+                        ["zh-hant", "zh-hant", "zh-hant", "zh-hant", "zh-hans", "zh-hans", "zh-hant", "en"],
+                        "本地化: 粤语归中文包 —— 没写文字或写 Hant 归繁体,写 Hans 归简体;按首选顺序取第一个有包的")
+            expectEqual(["zh", "zh-Hant-TW", "yue", "yue-Hant-HK", "YUE_hans", "zhx-Latn", "yuex", "ja-JP", ""].map(UILanguage.isChineseFamilyTag),
+                        [true, true, true, true, true, false, false, false, false],
+                        "本地化: isChineseFamilyTag 认 zh、zh-*、yue、yue-*,不认只是同前缀的别的语言")
+            expectEqual(["yue-Hans-CN", "yue-HK", "zh_TW", "zh-Hans-HK"].map(UILanguage.isTraditionalChineseTag), [false, true, true, false],
+                        "本地化: isTraditionalChineseTag 认粤语、认下划线写法")
             do {
                 let year = { (id: String) -> String in
                     let f = DateFormatter()

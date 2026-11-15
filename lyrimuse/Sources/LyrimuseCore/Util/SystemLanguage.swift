@@ -4,7 +4,8 @@ import Foundation
 /// 引擎解析 auto 时用它(features.go `resolveLyricsTranslationLanguage`);「翻译语言包」那一行按同一个值算目标。
 ///
 /// 取法:全局偏好 AppleLocale(`zh_CN` / `en_US` / `ja_JP`)下划线前那段转小写,跟 `defaults read -g AppleLocale`
-/// 是同一个值,文字子标签原样留着(`zh-Hans_CN` 得 `zh-hans`)。必须跟引擎的 `appleLocaleLanguage` 逐字一致
+/// 是同一个值,文字子标签原样留着(`zh-Hans_CN` 得 `zh-hans`)。粤语按它写的汉字归中文:带 Hans 的得 `zh-hans`,
+/// 其余(`yue-Hant_HK`、`yue_HK`)得 `zh-hant`,译文目标和「翻译语言包」都认这两个值。必须跟引擎的 `appleLocaleLanguage` 逐字一致
 /// (两侧共用样例 `shared/testdata/system-language.json`):文件里还没有这个键时引擎自己查一次,两边对同一台
 /// 机器得出不同语言,会被当成译文语言换了、整库机翻清一遍。
 ///
@@ -22,17 +23,24 @@ public enum SystemLanguage {
     public static func code(appleLocale: String?, preferredLanguages: [String]) -> String {
         let fromLocale = appleLocaleLanguage(appleLocale ?? "")
         if !fromLocale.isEmpty { return fromLocale }
-        if let first = preferredLanguages.first?.split(separator: "-").first, !first.isEmpty {
-            return first.lowercased()
+        if let tag = preferredLanguages.first, let first = tag.split(separator: "-").first, !first.isEmpty {
+            return cantoneseAsChinese(primary: first.lowercased(), tag: tag) ?? first.lowercased()
         }
         return "en"
     }
 
     /// AppleLocale → 语言代码;取不到是空串。
     public static func appleLocaleLanguage(_ raw: String) -> String {
-        var s = Substring(raw.trimmingCharacters(in: .whitespacesAndNewlines))
+        let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        var s = Substring(trimmed)
         if let i = s.firstIndex(of: "_"), i > s.startIndex { s = s[..<i] }
-        return s.lowercased()
+        return cantoneseAsChinese(primary: s.lowercased(), tag: trimmed) ?? s.lowercased()
+    }
+
+    /// 粤语(yue、yue-*)→ 写的那种中文:整个标签带 Hans 是 `zh-hans`,其余 `zh-hant`;不是粤语为 nil。
+    private static func cantoneseAsChinese(primary: String, tag: String) -> String? {
+        guard primary == "yue" || primary.hasPrefix("yue-") else { return nil }
+        return tag.lowercased().contains("hans") ? "zh-hans" : "zh-hant"
     }
 
     /// 配置包 `features` 段导出前去掉;不是对象原样返回。
