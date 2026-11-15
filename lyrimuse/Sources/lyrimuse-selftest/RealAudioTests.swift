@@ -137,15 +137,52 @@ func runRealAudioTests() {
                 "真实音浪: 采样环只留最近的、按时间排、多声道取第一个,记回调数和有声的回调数")
 
     // MARK: 跟哪些进程
-    let table = ["com.apple.Music", "com.apple.WebKit.GPU", "com.apple.Safari", "com.spotify.client",
-                 "com.spotify.client.helper", "com.spotify.clientx", "com.apple.WebKit.GPU"]
-    expectEqual(ProcessAudioOutput.tapTargetIndices(bundleID: "com.apple.Music", table: table), [0], "真实音浪: 本地播放器读它自己")
-    expectEqual(ProcessAudioOutput.tapTargetIndices(bundleID: "com.apple.Safari", table: table), [1, 2, 6],
-                "真实音浪: Safari 连它的 WebKit 媒体进程一起读")
-    expectEqual(ProcessAudioOutput.tapTargetIndices(bundleID: "com.spotify.client", table: table), [3, 4],
+    let gpu = "com.apple.WebKit.GPU"
+    let table: [TapProcess] = [
+        TapProcess(bundleID: "com.apple.Music", pid: 100),
+        TapProcess(bundleID: gpu, pid: 201, responsiblePID: 200),
+        TapProcess(bundleID: "com.apple.Safari", pid: 200),
+        TapProcess(bundleID: "com.spotify.client", pid: 300),
+        TapProcess(bundleID: "com.spotify.client.helper", pid: 301),
+        TapProcess(bundleID: "com.spotify.clientx", pid: 310),
+        TapProcess(bundleID: gpu, pid: 401, responsiblePID: 400),
+        TapProcess(bundleID: gpu, pid: 501, responsiblePID: 500),
+        TapProcess(bundleID: "com.apple.mail", pid: 400),
+        TapProcess(bundleID: "com.netease.163music", pid: 600),
+        TapProcess(bundleID: NetEaseIPadNowPlaying.bundleID, pid: 610),
+        TapProcess(bundleID: "com.audirvana.Audirvana-Origin", pid: 700),
+        TapProcess(bundleID: "com.amazon.music", pid: 800, responsiblePID: 800),
+        TapProcess(bundleID: "com.amazon.music-renderer", pid: 801, responsiblePID: 800),
+        TapProcess(bundleID: "com.google.Chrome.helper", pid: 901, responsiblePID: 990),
+    ]
+    func targets(_ bundleID: String, reporting: String? = nil, hostPIDs: Set<pid_t> = []) -> [Int] {
+        ProcessAudioOutput.tapTargetIndices(hosts: ProcessAudioOutput.tapHosts(bundleID: bundleID, reportingClient: reporting),
+                                            table: table, hostPIDs: hostPIDs)
+    }
+    expectEqual(targets("com.apple.Music"), [0], "真实音浪: 本地播放器读它自己")
+    expectEqual([targets(gpu), targets("com.apple.Safari")], [[1, 2], [1, 2]],
+                "真实音浪: Safari 网页在放(系统报的是 WebKit 媒体进程)只读 Safari 和负责进程是它的那个媒体进程,别的 App 的媒体进程不读")
+    var safariHidden = table
+    safariHidden.remove(at: 2)
+    expectEqual(ProcessAudioOutput.tapTargetIndices(hosts: ["com.apple.Safari"], table: safariHidden, hostPIDs: [200]), [1],
+                "真实音浪: 宿主自己没有进程对象时按它在跑的进程号认媒体进程")
+    expectEqual(targets("com.sertacozercan.Kaset", hostPIDs: [500]), [7],
+                "真实音浪: 内嵌网页的 App(Kaset)读负责进程是它的那个媒体进程")
+    var unknownOwner = table
+    unknownOwner[6].responsiblePID = nil
+    unknownOwner[6].pid = 0
+    expectEqual([ProcessAudioOutput.tapTargetIndices(hosts: ["com.apple.Safari"], table: unknownOwner, hostPIDs: []),
+                 ProcessAudioOutput.tapTargetIndices(hosts: ["com.apple.Safari"], table: unknownOwner, hostPIDs: [], ownerLookup: false)],
+                [[1, 2], [1, 2, 6]],
+                "真实音浪: 查不到负责进程(进程对象报 pid 0)的媒体进程不读;整个查询用不了时才按表把媒体进程都算给 Safari")
+    expectEqual(targets("com.spotify.client"), [3, 4],
                 "真实音浪: 连辅助进程一起读,名字只是前缀相同的别的 App 不算")
-    expectEqual([ProcessAudioOutput.tapTargetIndices(bundleID: "", table: table),
-                 ProcessAudioOutput.tapTargetIndices(bundleID: "com.example.bridge", table: table)], [[], []],
+    expectEqual([targets("com.netease.163music"), targets("com.netease.163music", reporting: NetEaseIPadNowPlaying.bundleID)],
+                [[9], [10]], "真实音浪: 另一个程序的版本(iPad 版网易云)只在会话是它报的时候读它,本体就不读")
+    expectEqual(targets("com.audirvana.Audirvana-Studio"), [11], "真实音浪: 同一个播放器的别的版本(Audirvana Origin)也读")
+    expectEqual(targets("com.amazon.music"), [12, 13], "真实音浪: bundle id 跟本体不沾边、负责进程是它的子进程也读(Amazon Music 的渲染进程)")
+    expectEqual(targets("com.google.Chrome"), [14], "真实音浪: 负责进程是别的 App(从终端拉起的浏览器)的辅助进程照 bundle id 前缀读")
+    expectEqual([targets(""), targets("com.example.bridge")], [[], []],
                 "真实音浪: 没识别出播放器、本机没有它的进程(iPhone 桥接)时不建 tap")
 
     // MARK: 默认关、接线、不落盘

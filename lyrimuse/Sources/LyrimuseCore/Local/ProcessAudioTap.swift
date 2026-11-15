@@ -192,26 +192,79 @@ public final class SampleRing: @unchecked Sendable {
     }
 }
 
+/// 进程对象表里的一行,给 tap 挑目标用。
+public struct TapProcess: Equatable, Sendable {
+    public var object: AudioObjectID
+    public var bundleID: String
+    public var pid: pid_t
+    public var outputting: Bool
+    /// 负责进程号(`PlayerProcess.responsiblePID(of:)`,系统把这个进程算在哪个 App 头上);查不到为 nil(进程对象报的 pid 可能是 0)。
+    public var responsiblePID: pid_t?
+
+    public init(object: AudioObjectID = 0, bundleID: String, pid: pid_t, outputting: Bool = false, responsiblePID: pid_t? = nil) {
+        self.object = object
+        self.bundleID = bundleID
+        self.pid = pid
+        self.outputting = outputting
+        self.responsiblePID = responsiblePID
+    }
+}
+
 extension ProcessAudioOutput {
-    /// 播放器 `bundleID` 的声音从哪几个进程对象出来(`table` 是进程对象表的 bundle id 列,下标对应进程对象):
-    /// 本体、它的辅助进程(bundle id 以「本体.」开头,如 `com.spotify.client.helper`),以及把声音放在
-    /// 媒体代理进程里的(Safari → `com.apple.WebKit.GPU`,表见 `TrustedPlayers.mediaProxyOwners`)。
-    /// 本机没有这个播放器的进程对象(iPhone 桥接、模拟播放)返回空。纯函数,selftest 覆盖。
-    public static func tapTargetIndices(bundleID: String, table: [String]) -> [Int] {
+    /// 播放器 `bundleID` 算哪几个 App:系统报的是媒体代理进程(Safari 网页在放时报 `com.apple.WebKit.GPU`)就换成宿主;
+    /// 本体和它的别的版本(`PlayerBundleAliases`),会话是另一个程序报的(`reportingClient` 是 iPad 版网易云 / QQ音乐)就只认那一个。
+    /// 纯函数,selftest 覆盖。
+    public static func tapHosts(bundleID: String, reportingClient: String?) -> [String] {
         guard !bundleID.isEmpty else { return [] }
-        let proxies = TrustedPlayers.mediaProxyOwners.filter { $0.value == bundleID }.map(\.key)
-        let helperPrefix = bundleID + "."
+        let host = TrustedPlayers.mediaProxyOwner(of: bundleID) ?? bundleID
+        if let other = PlayerProcess.otherClient(reporting: reportingClient),
+           PlayerBundleAliases.canonical(other) == PlayerBundleAliases.canonical(host) {
+            return [other]
+        }
+        return PlayerBundleAliases.all(for: host, includingOtherClients: false)
+    }
+
+    /// 播放器自己的声音从表里哪几行出来:`hosts`(`tapHosts`)的进程和 bundle id 以「本体.」开头的辅助进程
+    /// (`com.spotify.client.helper`),以及负责进程是它的进程:负责进程号在 `hostPIDs`(宿主在跑的进程号)里、或是前面认下的
+    /// 某一行的进程号。后一条认的是 bundle id 跟宿主不沾边的那些:WebKit 的媒体进程(`com.apple.WebKit.GPU`)每个用到网页的
+    /// App(Safari、Mail、内嵌网页的 Kaset……)各有一个、bundle id 全一样,只能按负责进程分;Amazon Music 的渲染进程叫
+    /// `com.amazon.music-renderer`。某一行查不到负责进程就不读它(说不清是谁的,读进来可能混进别的 App 的声音);只有整个查询
+    /// 用不了(`ownerLookup` 为 false,系统里取不到那个函数)时,媒体代理进程(`TrustedPlayers.mediaProxyOwners` 的键)按那张表
+    /// 认宿主,别的 App 的那份会一起读进来。本机没有这个播放器的进程对象(iPhone 桥接、模拟播放)返回空。纯函数,selftest 覆盖。
+    /// 见 05 章决策 146。
+    public static func tapTargetIndices(hosts: [String], table: [TapProcess], hostPIDs: Set<pid_t>,
+                                        ownerLookup: Bool = true) -> [Int] {
+        guard !hosts.isEmpty else { return [] }
+        let prefixes = hosts.map { $0 + "." }
+        let own = Set(table.indices.filter { i in
+            let id = table[i].bundleID
+            return hosts.contains(id) || prefixes.contains { id.hasPrefix($0) }
+        })
+        let owners = hostPIDs.union(own.map { table[$0].pid })
         return table.indices.filter { i in
-            let id = table[i]
-            return id == bundleID || id.hasPrefix(helperPrefix) || proxies.contains(id)
+            if own.contains(i) { return true }
+            let row = table[i]
+            if let responsible = row.responsiblePID { return owners.contains(responsible) }
+            guard !ownerLookup else { return false }
+            return TrustedPlayers.mediaProxyOwners[row.bundleID].map(hosts.contains) ?? false
         }
     }
 
-    /// 同上,直接查此刻的进程对象表,返回进程对象号。
-    public static func tapTargets(bundleID: String) -> [AudioObjectID] {
-        guard let objects = processObjectListForTap() else { return [] }
-        let ids = objects.map { tapStringProperty($0, kAudioProcessPropertyBundleID) ?? "" }
-        return tapTargetIndices(bundleID: bundleID, table: ids).map { objects[$0] }
+    /// 此刻读播放器 `bundleID` 要 tap 的那几行(查进程对象表、代理进程的负责进程、宿主的进程号)。
+    public static func tapTargets(bundleID: String) -> [TapProcess] {
+        let hosts = tapHosts(bundleID: bundleID,
+                             reportingClient: MediaControlClient.reportingClient(forBundleID: PlayerBundleAliases.canonical(bundleID)))
+        guard !hosts.isEmpty, let objects = processObjectListForTap() else { return [] }
+        let table = objects.map { object -> TapProcess in
+            let id = tapStringProperty(object, kAudioProcessPropertyBundleID) ?? ""
+            let pid = pid_t(bitPattern: tapUInt32Property(object, kAudioProcessPropertyPID) ?? 0)
+            return TapProcess(object: object, bundleID: id, pid: pid,
+                              outputting: (tapUInt32Property(object, kAudioProcessPropertyIsRunningOutput) ?? 0) != 0,
+                              responsiblePID: PlayerProcess.responsiblePID(of: pid))
+        }
+        let hostPIDs = Set(hosts.compactMap { PlayerProcess.pid(exactBundleID: $0) })
+        return tapTargetIndices(hosts: hosts, table: table, hostPIDs: hostPIDs,
+                                ownerLookup: PlayerProcess.canResolveResponsiblePID).map { table[$0] }
     }
 
     /// 默认输出设备从收到声音到出声大约晚多少秒(设备延迟 + 安全偏移 + 缓冲,按设备采样率折算)。读不到时 0。
@@ -256,6 +309,14 @@ extension ProcessAudioOutput {
         var ids = [AudioObjectID](repeating: 0, count: Int(size) / MemoryLayout<AudioObjectID>.size)
         guard AudioObjectGetPropertyData(system, &addr, 0, nil, &size, &ids) == noErr else { return nil }
         return Array(ids.prefix(Int(size) / MemoryLayout<AudioObjectID>.size))
+    }
+
+    private static func tapUInt32Property(_ object: AudioObjectID, _ selector: AudioObjectPropertySelector) -> UInt32? {
+        var addr = AudioObjectPropertyAddress(mSelector: selector, mScope: kAudioObjectPropertyScopeGlobal,
+                                              mElement: kAudioObjectPropertyElementMain)
+        var value: UInt32 = 0
+        var size = UInt32(MemoryLayout<UInt32>.size)
+        return AudioObjectGetPropertyData(object, &addr, 0, nil, &size, &value) == noErr ? value : nil
     }
 
     /// 这个属性交回的 CFString 归调用方释放。

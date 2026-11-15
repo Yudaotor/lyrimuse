@@ -156,6 +156,8 @@ private final class RealAudioEngine: @unchecked Sendable {
     private var lastSent: (live: Bool, denied: Bool)?
     private var primeTap: AnyObject?
     private var tapTargets: [AudioObjectID] = []
+    /// tap 着的进程,`debug/state` 用:「bundle id pid」。
+    private var tapProcesses: [String] = []
 
     func want(bundleID: String?) {
         queue.async { self.apply(bundleID: bundleID) }
@@ -171,7 +173,7 @@ private final class RealAudioEngine: @unchecked Sendable {
 
     func debugState() -> [String: Any] {
         queue.sync {
-            ["tap": tap != nil, "targets": tapTargets.count, "latencyMs": Int((latency * 1000).rounded()),
+            ["tap": tap != nil, "targets": tapTargets.count, "processes": tapProcesses, "latencyMs": Int((latency * 1000).rounded()),
              "everHeard": gate.everHeard, "playerOutputting": playerOutputting, "callbacks": lastCallbacks]
         }
     }
@@ -219,6 +221,7 @@ private final class RealAudioEngine: @unchecked Sendable {
         if #available(macOS 14.2, *) { (tap as? ProcessAudioTap)?.stop() }
         tap = nil
         tapTargets = []
+        tapProcesses = []
         analyzer = nil
         gate.tapStopped()
         follower.reset()
@@ -257,13 +260,9 @@ private final class RealAudioEngine: @unchecked Sendable {
 
     @available(macOS 14.2, *)
     private func retarget(bundleID: String, now: Double) {
-        let targets = ProcessAudioOutput.tapTargets(bundleID: bundleID)
-        if let table = ProcessAudioOutput.processOutputTable() {
-            let idx = ProcessAudioOutput.tapTargetIndices(bundleID: bundleID, table: table.map(\.bundleID))
-            playerOutputting = idx.contains { table[$0].outputting }
-        } else {
-            playerOutputting = false
-        }
+        let rows = ProcessAudioOutput.tapTargets(bundleID: bundleID)
+        let targets = rows.map(\.object)
+        playerOutputting = rows.contains(where: \.outputting)
         latency = ProcessAudioOutput.defaultOutputLatencySeconds()
         guard Set(targets) != Set(tapTargets) else { return }
         teardownTap()
@@ -279,6 +278,7 @@ private final class RealAudioEngine: @unchecked Sendable {
         }
         tap = created
         tapTargets = targets
+        tapProcesses = rows.map { "\($0.bundleID) \($0.pid)" }
         self.analyzer = analyzer
         gate.tapStarted(at: now)
         Self.logger.info("real-audio: tap bundle=\(bundleID, privacy: .public) processes=\(targets.count, privacy: .public) latencyMs=\(Int(self.latency * 1000), privacy: .public)")

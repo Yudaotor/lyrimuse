@@ -4203,21 +4203,9 @@ public enum MediaControlClient {
         return reportingClients[bundleID]
     }
 
-    private typealias ResponsiblePIDFunction = @convention(c) (pid_t) -> pid_t
-    /// 系统把子进程算到哪个 App 头上用的函数(活动监视器把 WebKit 的媒体进程算到宿主头上用的也是它)。私有符号,按名字取
-    /// (`bitPattern: -2` 即 `RTLD_DEFAULT`);取不到为 nil。
-    private static let responsiblePIDFunction: ResponsiblePIDFunction? = {
-        guard let symbol = dlsym(UnsafeMutableRawPointer(bitPattern: -2), "responsibility_get_pid_responsible_for_pid") else {
-            return nil
-        }
-        return unsafeBitCast(symbol, to: ResponsiblePIDFunction.self)
-    }()
-
-    /// 这个进程的负责 App 的 bundle id;查不到为 nil。在轮询线程上调。
+    /// 这个进程的负责 App(`PlayerProcess.responsiblePID(of:)`)的 bundle id;查不到为 nil。在轮询线程上调。
     private static func responsibleBundleID(ofPID pid: Int) -> String? {
-        guard pid > 0, let responsible = responsiblePIDFunction else { return nil }
-        let owner = responsible(pid_t(pid))
-        guard owner > 0 else { return nil }
+        guard pid > 0, pid <= Int(Int32.max), let owner = PlayerProcess.responsiblePID(of: pid_t(pid)) else { return nil }
         return NSRunningApplication(processIdentifier: owner)?.bundleIdentifier
     }
 

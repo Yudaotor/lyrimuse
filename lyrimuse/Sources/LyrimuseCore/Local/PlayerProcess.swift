@@ -103,6 +103,26 @@ public enum PlayerProcess {
         knownLock.unlock()
     }
 
+    private typealias ResponsiblePIDFunction = @convention(c) (pid_t) -> pid_t
+    /// 系统把子进程算到哪个 App 头上用的函数(活动监视器把 WebKit 的媒体进程算到宿主头上用的也是它)。私有符号,按名字取
+    /// (`bitPattern: -2` 即 `RTLD_DEFAULT`);取不到为 nil。
+    private static let responsiblePIDFunction: ResponsiblePIDFunction? = {
+        guard let symbol = dlsym(UnsafeMutableRawPointer(bitPattern: -2), "responsibility_get_pid_responsible_for_pid") else {
+            return nil
+        }
+        return unsafeBitCast(symbol, to: ResponsiblePIDFunction.self)
+    }()
+
+    /// 系统里取得到查负责进程的那个函数。
+    public static var canResolveResponsiblePID: Bool { responsiblePIDFunction != nil }
+
+    /// 系统把这个进程算在哪个进程头上(负责进程,没有宿主的就是它自己);查不到为 nil。一次系统调用,不问 LaunchServices。
+    public static func responsiblePID(of pid: pid_t) -> pid_t? {
+        guard pid > 0, let responsible = responsiblePIDFunction else { return nil }
+        let owner = responsible(pid)
+        return owner > 0 ? owner : nil
+    }
+
     /// 可执行文件路径以 `prefix` 开头的进程。
     public static func pids(executableUnder prefix: String) -> [pid_t] {
         let count = proc_listallpids(nil, 0)
