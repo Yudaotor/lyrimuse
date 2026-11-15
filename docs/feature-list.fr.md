@@ -980,7 +980,7 @@ Tous les réglages de la fenêtre Réglages, classés par emplacement : 321 au 
 - **Format des paroles mot à mot**
 - **Importer un dossier de paroles** : Associe les fichiers de paroles d’un dossier aux morceaux de votre bibliothèque, avec un aperçu avant l’importation
 - **Importation de dossiers**
-- **Dossier surveillé** : Les fichiers de paroles ajoutés ou modifiés dans le dossier sont importés automatiquement : les morceaux sans paroles les reçoivent aussitôt, les autres restent inchangés
+- **Dossier surveillé** : Les fichiers de paroles ajoutés ou modifiés dans le dossier sont importés automatiquement : les morceaux sans paroles les reçoivent aussitôt, les autres restent inchangés
 - **Bibliothèque d’importation** : Afficher et supprimer les paroles importées
 
 ### Lecteur
@@ -1061,7 +1061,7 @@ Tous les réglages de la fenêtre Réglages, classés par emplacement : 321 au 
 - **Romanisation**
 - **Traduction**
 - **Ligne suivante**
-- **Disposition de la ligne suivante** : Décalé : deux lignes de même taille, l’une à gauche, l’autre à droite ; la ligne chantée laisse place à celle d’après
+- **Disposition de la ligne suivante** : Décalé : deux lignes de même taille, l’une à gauche, l’autre à droite ; la ligne chantée laisse place à celle d’après
 
 ### Affichage des paroles › Paroles flottantes › Disposition
 
@@ -1109,7 +1109,7 @@ Tous les réglages de la fenêtre Réglages, classés par emplacement : 321 au 
 ### Affichage des paroles › Encoche › Gauche
 
 - **Onde audio** : Un seul côté à la fois
-- **Suivre la musique** : Suit le son du lecteur et nécessite l’autorisation d’enregistrer l’audio du système ; seul le volume est lu, aucun son n’est enregistré
+- **Suivre la musique** : Suit le son du lecteur et nécessite l’autorisation d’enregistrer l’audio du système ; seul le volume est lu, aucun son n’est enregistré
 
 ### Affichage des paroles › Encoche › Ligne de paroles
 

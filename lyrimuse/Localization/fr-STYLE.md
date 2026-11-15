@@ -95,6 +95,9 @@ Chinese music services use the names in the English string (NetEase Cloud Music,
 | 候选 | Candidates | Résultats |
 | 搜索 | Search | Rechercher |
 | 重新匹配 | Rematch | Réassocier |
+| 副行 | Second Line | Seconde ligne |
+| 正在采用… | Applying… | Application… |
+| 在 Last.fm 上喜欢 / 已在 Last.fm 上喜欢 | Love / Loved on Last.fm | Coup de cœur sur Last.fm / Coup de cœur ajouté sur Last.fm (Last.fm’s own French wording) |
 | 取消 / 完成 / 好 | Cancel / Done / OK | Annuler / Terminé / OK |
 | 保存 / 删除 / 重置 / 恢复默认 | Save / Delete / Reset / Restore Defaults | Enregistrer / Supprimer / Réinitialiser / Par défaut |
 | 关闭 | Close | Fermer |

@@ -6,7 +6,9 @@ Lyrimuse's UI strings live in `lyrimuse/Localization/Localizable.xcstrings`. The
 
 - Follow the wording Apple uses in Korean macOS (시스템 설정, 음악, Finder). When Apple has a term, use it.
 - Labels, buttons, menu items, section titles: short noun phrases or the plain verb form Apple uses on buttons (「저장」「취소」「가사 검색」).
-- Descriptions, help text, status and error messages: 합니다체 (「가사를 찾을 수 없습니다」「~을(를) 표시합니다」).
+- Descriptions, help text, status and error messages: 합니다체 (「가사를 찾을 수 없습니다」「~을(를) 표시합니다」). Requests end in -십시오, questions in -겠습니까? / -십니까?; never -세요, -나요?, -까요?.
+- A setting quoted in a sentence (‘ ’) must match its label exactly, including the particle that follows it.
+- 匹配 as an action (match, re-match, matched) is 매칭 (다시 매칭, 매칭됨); 일치 only means "the same / agrees" (제목 일치, 길이 일치, 완전히 일치).
 - No trailing period at the end of any string, even long ones. A period between two sentences is fine.
 - Keep it as short as the English. Many strings sit in narrow rows, segmented controls and the menu bar.
 - Pick the right particle after placeholders when you can; when the word is unknown, use the combined form 을(를), 이(가), 은(는), (으)로.
@@ -56,6 +58,24 @@ Chinese music services use the names in the English string (NetEase Cloud Music,
 | 逐字歌词 | Word-by-word lyrics | 단어별 가사 |
 | 打卡 / scrobble | Scrobble | 스크로블 |
 | 收听记录 | Listening history | 재생 기록 |
+| 收听（上次收听、收听时段、收听热力图…） | Listened / Listening … | 재생 (마지막 재생, 재생 시간대, 재생 히트맵) |
+| 今日收听 | Today | 오늘 재생 |
+| 那年今日 | On This Day | 오늘의 추억 |
+| 每日 / 每周 / 每月 / 年度 | Daily / Weekly / Monthly / Yearly | 일간 / 주간 / 월간 / 연간 |
+| 匹配 / 重新匹配 / 匹配算法 | Match / Re-match / Matching Algorithm | 매칭 / 다시 매칭 / 매칭 알고리즘 |
+| 一致 / 吻合 | Matches (agrees) | 일치 |
+| 胜者 | Winner | 승자 |
+| 字号 | Font Size | 글자 크기 |
+| 渐变 | Gradient | 그라데이션 |
+| 描边 | Outline | 윤곽선 |
+| 隐藏 | Hide | 가리기 (가립니다) |
+| 停止 | Stop | 중단 |
+| 暂停 | Pause | 일시 정지 |
+| 重启 | Restart | 재시작 |
+| 迷你窗口 | Mini Window | 미니 윈도우 |
+| 输入时收起 | Collapse While Typing | 입력 중 접기 |
+| 灵动岛宽度 / 灵动岛展开宽度 | Notch Card Width / Expanded Width | 노치 카드 너비 / 노치 카드 펼친 너비 |
+| 访问令牌 | Access Token | 액세스 토큰 |
 | 听歌报告 / 听歌小结 | Listening Report / Digest | 청취 리포트 / 청취 요약 |
 | 推送渠道 | Push Channels | 알림 채널 |
 | 偏移 | Offset | 오프셋 |

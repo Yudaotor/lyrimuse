@@ -416,7 +416,7 @@
 "五" = "V";
 "亚马逊的流媒体音乐 App" = "L’app de streaming musical d’Amazon";
 "交错" = "Décalé";
-"交错：两句一样大，一左一右轮流唱，唱完的那句换成再下一句" = "Décalé : deux lignes de même taille, l’une à gauche, l’autre à droite ; la ligne chantée laisse place à celle d’après";
+"交错：两句一样大，一左一右轮流唱，唱完的那句换成再下一句" = "Décalé : deux lignes de même taille, l’une à gauche, l’autre à droite ; la ligne chantée laisse place à celle d’après";
 "人工修正" = "Modifiés manuellement";
 "人工修正 %@ 首" = "%@ modifiés manuellement";
 "人工修正过的歌词删除后无法恢复" = "Les paroles modifiées manuellement sont irrécupérables une fois supprimées";
@@ -481,7 +481,7 @@
 "从文件导入…" = "Importer depuis un fichier…";
 "从暂停恢复播放时展开歌词；播放中切歌不展开，手动收起后保持收起" = "Affiche les paroles à la reprise après une pause. Changer de morceau pendant la lecture ne les développe pas, et les paroles réduites manuellement le restent";
 "从本机文件导入，未参与评分；采用后不会被自动匹配替换" = "Importées d’un fichier de ce Mac, sans score. Une fois adoptées, l’association automatique ne les remplacera pas";
-"从歌词文件夹导入的歌词优先使用（+300），其他来源提供带逐字时间轴等明显更好的版本时仍可胜出" = "Les paroles importées d’un dossier sont privilégiées (+300) ; une autre source peut l’emporter avec une version nettement meilleure, par exemple synchronisée mot à mot";
+"从歌词文件夹导入的歌词优先使用（+300），其他来源提供带逐字时间轴等明显更好的版本时仍可胜出" = "Les paroles importées d’un dossier sont privilégiées (+300) ; une autre source peut l’emporter avec une version nettement meilleure, par exemple synchronisée mot à mot";
 "从此句开始播放" = "Lire à partir de cette ligne";
 "从自动备份恢复" = "Restaurer depuis la sauvegarde auto";
 "从资料库删除" = "Supprimer de la bibliothèque";
@@ -588,7 +588,7 @@
 "关闭全部" = "Tout désactiver";
 "关闭后不显示进度条，Discord 将改为显示已播放时长，该计时无法关闭" = "Désactivé, pas de barre de progression ; Discord affiche alors le temps écoulé, qui ne peut pas être désactivé";
 "关闭后仅保留菜单栏图标" = "Si désactivé, seule l’icône de la barre des menus reste";
-"关闭后只在灵动岛上滑动调节音量时显示音量提示，键盘音量键等只显示系统自带的提示" = "Désactivé, l’indicateur de volume n’apparaît que lorsque vous balayez l’encoche pour régler le volume ; les touches de volume et les autres changements n’affichent que celui du système";
+"关闭后只在灵动岛上滑动调节音量时显示音量提示，键盘音量键等只显示系统自带的提示" = "Désactivé, l’indicateur de volume n’apparaît que lorsque vous balayez l’encoche pour régler le volume ; les touches de volume et les autres changements n’affichent que celui du système";
 "关闭后平时只保留刘海高度，悬停展开时照常显示" = "Si désactivé, seule une bande à la hauteur de l’encoche reste visible jusqu’au survol";
 "关闭后暂停推送到这个渠道，填写的内容会保留" = "Désactivez pour suspendre les envois vers ce canal ; vos saisies sont conservées";
 "关闭后，仅在悬停显示播放控制时出现" = "Si désactivée, n’apparaît qu’avec les commandes de lecture au survol";
@@ -612,7 +612,7 @@
 "其他 App 正占用播放焦点，暂时无法控制「%@」" = "Impossible de contrôler « %@ » tant qu’une autre app a le focus de lecture";
 "其他 App 正占用播放焦点，暂时无法控制播放" = "Impossible de contrôler la lecture tant qu’une autre app a le focus de lecture";
 "其他平台" = "Autres plateformes";
-"其他平台包括 %@" = "Autres plateformes : %@";
+"其他平台包括 %@" = "Autres plateformes : %@";
 "其他折叠规则" = "Autre règle de regroupement";
 "其他文字" = "Autres écritures";
 "其他歌词源仍在搜索中…" = "Recherche en cours dans d’autres sources…";
@@ -639,7 +639,7 @@
 "决定性差异：「%@」" = "Écart décisif : « %@ »";
 "准备密钥" = "Obtenir vos clés API";
 "减少推荐" = "Suggérer moins souvent";
-"出现「跳过」按钮时自动点按，无法跳过的广告照常播放。适用于网页版和 Pear Desktop，需要「辅助功能」权限。网页版位于后台标签页时将短暂切换至该标签页再切回，当前使用的浏览器窗口不受影响。Pear Desktop 的窗口需露在屏幕上，最小化或被其他窗口完全挡住时无法跳过" = "Clique sur « Ignorer » dès qu’il apparaît ; les pubs non ignorables sont lues normalement. Fonctionne avec la version web et Pear Desktop, et nécessite l’autorisation Accessibilité. Si la version web est dans un onglet en arrière-plan, Lyrimuse y bascule brièvement puis revient, sans toucher à la fenêtre de navigateur que vous utilisez. La fenêtre de Pear Desktop doit être visible à l’écran ; si elle est réduite ou entièrement masquée, rien n’est ignoré";
+"出现「跳过」按钮时自动点按，无法跳过的广告照常播放。适用于网页版和 Pear Desktop，需要「辅助功能」权限。网页版位于后台标签页时将短暂切换至该标签页再切回，当前使用的浏览器窗口不受影响。Pear Desktop 的窗口需露在屏幕上，最小化或被其他窗口完全挡住时无法跳过" = "Clique sur « Ignorer » dès qu’il apparaît ; les pubs non ignorables sont lues normalement. Fonctionne avec la version web et Pear Desktop, et nécessite l’autorisation Accessibilité. Si la version web est dans un onglet en arrière-plan, Lyrimuse y bascule brièvement puis revient, sans toucher à la fenêtre de navigateur que vous utilisez. La fenêtre de Pear Desktop doit être visible à l’écran ; si elle est réduite ou entièrement masquée, rien n’est ignoré";
 "出生日期" = "Naissance";
 "分享…" = "Partager…";
 "分享歌词" = "Partager les paroles";
@@ -709,7 +709,7 @@
 "前进" = "Suivant";
 "剩余时长" = "Restant";
 "副行" = "Seconde ligne";
-"副行：%@" = "Deuxième ligne : %@";
+"副行：%@" = "Seconde ligne : %@";
 "功能清单" = "Liste des fonctionnalités";
 "加入信任列表" = "Faire confiance à cette app";
 "加宽" = "Large";
@@ -804,9 +804,9 @@
 "可在快捷指令、Raycast、Alfred 等工具中打开；将指针悬停在上方的快捷键上，可拷贝对应操作的链接" = "Ouvrez-les depuis Raccourcis, Raycast, Alfred et d’autres outils similaires. Survolez un raccourci ci-dessus pour copier le lien de cette action";
 "可拖到任意位置" = "Déplaçable partout";
 "可添加" = "Disponibles";
-"可能是 QQ 音乐 iPad 版设置里开了「允许多应用同时播放」" = "L’option « 允许多应用同时播放 » (lecture simultanée avec d’autres apps) est peut-être activée dans les réglages de QQ Music pour iPad";
-"可能是 QQ 音乐设置里没勾选「启用媒体键/远程控制事件」" = "L’option « 启用媒体键/远程控制事件 » (touches multimédias et télécommande) est peut-être désactivée dans les réglages de QQ Music";
-"可能是网易云音乐 iPad 版设置里开了「允许与其他应用同时播放」" = "L’option « 允许与其他应用同时播放 » (lecture simultanée avec d’autres apps) est peut-être activée dans les réglages de NetEase Cloud Music pour iPad";
+"可能是 QQ 音乐 iPad 版设置里开了「允许多应用同时播放」" = "L’option « 允许多应用同时播放 » (lecture simultanée avec d’autres apps) est peut-être activée dans les réglages de QQ Music pour iPad";
+"可能是 QQ 音乐设置里没勾选「启用媒体键/远程控制事件」" = "L’option « 启用媒体键/远程控制事件 » (touches multimédias et télécommande) est peut-être désactivée dans les réglages de QQ Music";
+"可能是网易云音乐 iPad 版设置里开了「允许与其他应用同时播放」" = "L’option « 允许与其他应用同时播放 » (lecture simultanée avec d’autres apps) est peut-être activée dans les réglages de NetEase Cloud Music pour iPad";
 "可跳过的广告出现时自动跳过" = "Les pubs pouvant être passées le sont dès leur apparition";
 "可重新获取的封面与查询结果" = "Illustrations et recherches récupérables à nouveau";
 "台湾、香港常用的流媒体音乐 App" = "Une app de streaming musical populaire à Taïwan et Hong Kong";
@@ -896,7 +896,7 @@
 "在 GitHub 讨论区的问答分类中提问" = "Posez votre question dans la catégorie Q&A de GitHub Discussions";
 "在 KKBOX 中显示专辑" = "Afficher l’album dans KKBOX";
 "在 KKBOX 中显示歌手" = "Afficher l’artiste dans KKBOX";
-"在 Last.fm 上喜欢" = "Adorer sur Last.fm";
+"在 Last.fm 上喜欢" = "Coup de cœur sur Last.fm";
 "在 Last.fm 上打开" = "Ouvrir sur Last.fm";
 "在 Last.fm 或 ListenBrainz 上看完整榜单的地址" = "Lien vers le classement complet sur Last.fm ou ListenBrainz";
 "在 Last.fm 网站查看主页" = "Voir mon profil sur Last.fm";
@@ -1053,7 +1053,7 @@
 "将播放记录同步到 Last.fm" = "Synchronise vos écoutes avec Last.fm";
 "将播放记录同步到 ListenBrainz" = "Synchronise vos écoutes avec ListenBrainz";
 "将文件夹中的歌词文件对应到歌词库中的歌曲，导入前可预览" = "Associe les fichiers de paroles d’un dossier aux morceaux de votre bibliothèque, avec un aperçu avant l’importation";
-"将歌词写入歌曲文件？" = "Écrire les paroles dans le fichier du morceau ?";
+"将歌词写入歌曲文件？" = "Écrire les paroles dans le fichier du morceau ?";
 "将此句恢复为编辑前的内容" = "Rétablir cette ligne telle qu’elle était avant la modification";
 "将消息转发到微信的服务：使用微信扫码登录获取 SendKey，报告将显示在微信「方糖」服务号中" = "Service qui transfère les messages vers WeChat. Scannez le code QR avec WeChat pour obtenir une SendKey ; les bilans arrivent dans le compte officiel Fangtang";
 "将清除 %d 首歌曲的手动时间轴校准，此操作无法撤销。歌词内容和设置中的「时间轴偏移」不受影响。清除后，这些歌曲将恢复自动更新歌词源" = "Efface le calibrage manuel du minutage de %d morceaux. Action irréversible. Les paroles et le réglage « Décalage du minutage » ne changent pas. Ces morceaux reprendront ensuite la mise à jour auto de leur source de paroles";
@@ -1138,7 +1138,7 @@
 "已启用的歌词源均未找到可用的候选" = "Aucune source n’a de paroles";
 "已唱颜色" = "Couleur chantée";
 "已喜欢" = "Ajouté aux favoris";
-"已在 Last.fm 上喜欢" = "Adoré sur Last.fm";
+"已在 Last.fm 上喜欢" = "Coup de cœur ajouté sur Last.fm";
 "已在「%@」中打开。保存后自动应用：带时间戳的内容存为同步歌词，不带时间戳的存为纯文本" = "Ouvert dans %@. Enregistrez quand vous avez fini : les lignes horodatées deviennent des paroles synchronisées, le reste est enregistré en texte brut";
 "已在「%@」中打开。逐字歌词仅修改文字，请勿改动每行开头的时间，保存后自动应用" = "Ouvert dans %@. Pour les paroles mot à mot, modifiez seulement les mots et gardez l’horodatage en début de ligne ; l’enregistrement applique les modifications";
 "已在「%@」中打开，保存后自动应用" = "Ouvert dans %@ ; l’enregistrement applique les modifications";
@@ -1428,7 +1428,7 @@
 "找到 %1$@ · 未找到 %2$@ · 跳过 %3$@" = "Trouvés %1$@ · Introuvables %2$@ · Ignorés %3$@";
 "找到 %@ 首" = "Trouvés : %@";
 "把「默认正文」换成概况、三份榜单、新歌手几段，可以逐段删改、调整顺序" = "Remplace le corps par défaut par ses parties (résumé, les trois classements, nouveaux artistes) pour modifier, supprimer ou réordonner chacune";
-"把下面的按钮拖进格子，格子可以留空" = "Faites glisser les boutons ci-dessous dans les cases ; des cases peuvent rester vides";
+"把下面的按钮拖进格子，格子可以留空" = "Faites glisser les boutons ci-dessous dans les cases ; des cases peuvent rester vides";
 "把这首歌词写进正在播放的歌曲文件" = "Écrit ces paroles dans le fichier du morceau en cours de lecture";
 "报告内容" = "Contenu du bilan";
 "拆分" = "Séparer";
@@ -1465,13 +1465,13 @@
 "按住歌词即可拖动位置" = "Maintenez le clic sur les paroles pour les déplacer";
 "按你写的模板，以纯文本推送" = "Utilise votre modèle, envoyé en texte brut";
 "按播放器报的时长没有可用候选，这一份是不看时长搜到的：可能是其他版本，也可能是播放器报的时长有误" = "Aucun résultat utilisable ne correspondait à la durée indiquée par le lecteur, celui-ci a donc été trouvé sans en tenir compte : autre version possible, ou durée du lecteur erronée";
-"按播放器正在播放的声音跳动，需允许 Lyrimuse 录制系统音频；只读取音量，不保存声音" = "Suit le son du lecteur et nécessite l’autorisation d’enregistrer l’audio du système ; seul le volume est lu, aucun son n’est enregistré";
+"按播放器正在播放的声音跳动，需允许 Lyrimuse 录制系统音频；只读取音量，不保存声音" = "Suit le son du lecteur et nécessite l’autorisation d’enregistrer l’audio du système ; seul le volume est lu, aucun son n’est enregistré";
 "按收听最多的前 %1$@ 位歌手统计，占此期间收听量的 %2$@" = "Selon vos %1$@ artistes les plus écoutés, %2$@ de vos écoutes sur la période";
 "按收听最多的前 %1$@ 位歌手统计，占此期间收听量的 %2$@#one" = "Selon votre top %1$@ des artistes, %2$@ de vos écoutes sur la période";
 "按收听最多的前 %@ 位歌手统计" = "Selon vos %@ artistes les plus écoutés";
 "按收听最多的前 %@ 位歌手统计#one" = "Selon votre top %@ des artistes";
 "按歌名和歌手识别" = "Identifiées par titre et artiste";
-"按现在的展开宽度，每行 %d 格" = "Avec la largeur déployée actuelle : %d cases par ligne";
+"按现在的展开宽度，每行 %d 格" = "Avec la largeur déployée actuelle : %d cases par ligne";
 "按相关度" = "Par pertinence";
 "按纯音乐处理：不显示歌词，也不自动搜索；原有歌词将保留，取消标记即可恢复" = "Traiter comme instrumental : les paroles sont masquées et ne sont pas recherchées automatiquement. Les paroles existantes sont conservées et reviennent si vous retirez la marque";
 "按翻唱者署名" = "Artiste de la reprise d’après le titre";
@@ -1594,7 +1594,7 @@
 "文件中包含账号凭证与密钥的明文，请妥善保管，请勿分享。歌词库将另存为同名的第二个文件，迁移时请一并拷贝" = "Le fichier contient les identifiants et clés de vos comptes en clair. Conservez-le en lieu sûr et ne le partagez pas. La bibliothèque de paroles est enregistrée dans un second fichier au nom correspondant ; copiez les deux pour passer à un nouveau Mac";
 "文件中尚无歌词，未保存" = "Le fichier ne contient pas encore de paroles ; non enregistré";
 "文件中已有的歌词将被替换" = "Les paroles déjà présentes dans le fichier seront remplacées";
-"文件夹中新增或修改的歌词文件会自动导入：对应的歌曲没有歌词时直接补上，已有歌词的不变" = "Les fichiers de paroles ajoutés ou modifiés dans le dossier sont importés automatiquement : les morceaux sans paroles les reçoivent aussitôt, les autres restent inchangés";
+"文件夹中新增或修改的歌词文件会自动导入：对应的歌曲没有歌词时直接补上，已有歌词的不变" = "Les fichiers de paroles ajoutés ou modifiés dans le dossier sont importés automatiquement : les morceaux sans paroles les reçoivent aussitôt, les autres restent inchangés";
 "文件夹中没有可识别的歌词文件" = "Aucun fichier de paroles reconnaissable dans ce dossier";
 "文件夹导入方式" = "Importation de dossiers";
 "文件所在的磁盘是只读的" = "Le disque contenant le fichier est en lecture seule";
@@ -1858,9 +1858,9 @@
 "未获得完全磁盘访问权限，无法读取 %@ 的本机歌词" = "Pas d’accès complet au disque ; impossible de lire les paroles locales de %@";
 "未获得辅助功能权限，%@ 不显示喜欢按钮，失去系统媒体焦点时也无法控制暂停、恢复和切换上一首或下一首" = "Autorisation Accessibilité manquante : %@ n’a pas de bouton Favori et ne peut pas mettre en pause, reprendre ni changer de morceau sans le focus multimédia du système";
 "未获得辅助功能权限，%@ 不显示随机、循环与喜欢按钮，失去焦点时也无法控制播放" = "Pas d’autorisation Accessibilité ; les boutons Aléatoire, Répéter et Favori de %@ sont masqués et la lecture ne peut pas être contrôlée sans le focus";
-"未获得辅助功能权限，%@ 不显示随机、循环按钮和音量调节" = "Autorisation Accessibilité manquante : les commandes Aléatoire, Répéter et Volume de %@ sont masquées";
+"未获得辅助功能权限，%@ 不显示随机、循环按钮和音量调节" = "Autorisation Accessibilité manquante : les commandes Aléatoire, Répéter et Volume de %@ sont masquées";
 "未获得辅助功能权限，%@ 不显示随机、循环按钮和音量调节，失去系统媒体焦点时也无法控制暂停、恢复和切换上一首或下一首" = "Autorisation Accessibilité manquante : les commandes Aléatoire, Répéter et Volume de %@ sont masquées, et Lyrimuse ne peut pas mettre en pause, reprendre ou changer de morceau sans le focus multimédia du système";
-"未获得辅助功能权限，%@ 失去系统媒体焦点时无法控制暂停、恢复和切换上一首或下一首" = "Autorisation Accessibilité manquante : %@ ne peut pas mettre en pause, reprendre ni changer de morceau sans le focus multimédia du système";
+"未获得辅助功能权限，%@ 失去系统媒体焦点时无法控制暂停、恢复和切换上一首或下一首" = "Autorisation Accessibilité manquante : %@ ne peut pas mettre en pause, reprendre ni changer de morceau sans le focus multimédia du système";
 "未获得辅助功能权限，%@ 拖动进度后歌词可能差半秒左右，不显示循环按钮和音量调节，失去焦点时也无法控制播放" = "Pas d’autorisation Accessibilité ; les paroles de %@ peuvent être décalées d’environ une demi-seconde après un déplacement, les boutons de répétition et de volume sont masqués, et la lecture ne peut pas être contrôlée quand le focus est ailleurs";
 "未获得辅助功能权限，无法校准 %@ 的播放进度" = "Pas d’autorisation Accessibilité ; impossible de calibrer la progression de %@";
 "未获授权" = "Non accordé";
@@ -2124,7 +2124,7 @@
 "正在读取并匹配歌词文件…" = "Lecture et association des fichiers de paroles…";
 "正在连接 Discord…" = "Connexion à Discord…";
 "正在连接 Lyrimuse…" = "Connexion à Lyrimuse…";
-"正在采用…" = "Adoption…";
+"正在采用…" = "Application…";
 "正在重启歌词引擎并重新检查授权…" = "Redémarrage du moteur de paroles et nouvelle vérification des accès…";
 "正在重启歌词引擎，需要重新读取歌词缓存，通常需要一到两分钟…" = "Redémarrage du moteur de paroles. Il doit relire tout le cache de paroles, ce qui prend en général une à deux minutes…";
 "正在重新匹配…" = "Réassociation…";
@@ -2133,7 +2133,7 @@
 "正在验证…" = "Vérification…";
 "正文" = "Corps";
 "正文有乱码" = "Caractères corrompus dans les paroles";
-"正文里有乱码（问号框或错乱的字母），是歌词源存的数据坏了；有其他正常的候选时排在它们后面" = "Les paroles contiennent des caractères corrompus (carrés avec point d’interrogation ou lettres altérées), car les données de la source sont endommagées ; classées après tout candidat intact";
+"正文里有乱码（问号框或错乱的字母），是歌词源存的数据坏了；有其他正常的候选时排在它们后面" = "Les paroles contiennent des caractères corrompus (carrés avec point d’interrogation ou lettres altérées), car les données de la source sont endommagées ; classées après tout candidat intact";
 "此 Mac 未安装 Discord" = "Discord n’est pas installé sur ce Mac";
 "此 Mac 未配备触控栏" = "Ce Mac n’a pas de Touch Bar";
 "此为上限：窗口足够大时使用此字号，窗口缩小时文字随之缩小，以免超出窗口" = "C’est un plafond : le texte prend cette taille si la fenêtre est assez grande, et rétrécit avec elle pour ne jamais déborder";
@@ -2235,7 +2235,7 @@
 "清空全部时间轴校准" = "Effacer tous les calibrages du minutage";
 "清空全部电台校准" = "Effacer tous les calibrages radio";
 "清空全部缓存" = "Vider tout le cache";
-"清空导入库？" = "Vider la bibliothèque d’importation ?";
+"清空导入库？" = "Vider la bibliothèque d’importation ?";
 "清空搜索" = "Effacer la recherche";
 "清除" = "Effacer";
 "清除…" = "Effacer…";
@@ -2251,7 +2251,7 @@
 "源自报曲长偏离吻合版本" = "Durée de la source éloignée de la version concordante";
 "滚动" = "Défiler";
 "演唱：%@" = "par %@";
-"灰色的格子放不下，加宽展开卡片才会显示" = "Les cases grises ne tiennent pas ; elles apparaissent si la carte déployée est plus large";
+"灰色的格子放不下，加宽展开卡片才会显示" = "Les cases grises ne tiennent pas ; elles apparaissent si la carte déployée est plus large";
 "灵动岛" = "Encoche";
 "灵动岛、菜单栏和触控栏歌词在播放时显示" = "Les paroles de l’encoche, de la barre des menus et de la Touch Bar s’affichent pendant la lecture";
 "灵动岛副行" = "Seconde ligne de l’encoche";
@@ -2290,7 +2290,7 @@
 "现在" = "maintenant";
 "现场版场次不符" = "Enregistrement live d’un autre concert";
 "玻璃浓淡" = "Densité du verre";
-"用「导入歌词文件夹…」导入，或在下方设置监视文件夹" = "Utilisez « Importer un dossier de paroles… » ou définissez un dossier surveillé ci-dessous";
+"用「导入歌词文件夹…」导入，或在下方设置监视文件夹" = "Utilisez « Importer un dossier de paroles… » ou définissez un dossier surveillé ci-dessous";
 "用于改进 Lyrimuse：版本、系统、用了哪些功能和崩溃报告，不含歌名和账号" = "Aide à améliorer Lyrimuse : version, système, fonctions utilisées et rapports de plantage. Jamais de titres ni de comptes";
 "用当前配色覆盖" = "Remplacer par les couleurs actuelles";
 "用户名下方显示" = "Sous votre nom";
@@ -2482,7 +2482,7 @@
 "背景" = "Fond";
 "背景颜色" = "Couleur de fond";
 "胜者" = "Gagnant";
-"腾讯旗下的读书 App，听书时把正在念的原文当字幕显示" = "L’app de lecture de Tencent ; à l’écoute, le texte lu s’affiche en sous-titres";
+"腾讯旗下的读书 App，听书时把正在念的原文当字幕显示" = "L’app de lecture de Tencent ; à l’écoute, le texte lu s’affiche en sous-titres";
 "腾讯旗下的音乐 App" = "L’app de musique de Tencent";
 "腾讯旗下的音乐平台" = "Service musical de Tencent";
 "腾讯音乐旗下的音乐 App" = "Une app de musique de Tencent Music";
@@ -2506,7 +2506,7 @@
 "自动匹配的歌词与当前条目同步：更换歌词时一并更新，手动修改也会同步" = "Les paroles associées automatiquement restent synchronisées avec l’entrée actuelle : remplacements et modifications manuelles s’appliquent aux deux";
 "自动匹配缺失歌词" = "Associer les paroles manquantes";
 "自动备份失败，为避免数据无法恢复，本次未执行删除。请检查磁盘空间和配置文件夹的写入权限后重试" = "La sauvegarde automatique a échoué : rien n’a été supprimé, pour que tout reste récupérable. Vérifiez l’espace disque et l’accès en écriture au dossier de configuration, puis réessayez";
-"自动备份失败，为避免数据无法恢复，本次未执行导入。请检查磁盘空间和配置文件夹的写入权限后重试" = "La sauvegarde automatique a échoué ; rien n’a été importé pour que vos données restent récupérables. Vérifiez l’espace disque et l’accès en écriture au dossier de configuration, puis réessayez";
+"自动备份失败，为避免数据无法恢复，本次未执行导入。请检查磁盘空间和配置文件夹的写入权限后重试" = "La sauvegarde automatique a échoué ; rien n’a été importé pour que vos données restent récupérables. Vérifiez l’espace disque et l’accès en écriture au dossier de configuration, puis réessayez";
 "自动对齐" = "Alignement auto";
 "自动导入失败，文件夹有变动时会重试" = "L’importation automatique a échoué ; nouvel essai dès que le dossier change";
 "自动展开" = "Développement auto";
@@ -2824,7 +2824,7 @@
 "连续混音版，与原版编排不同" = "Mix continu, arrangé différemment de l’original";
 "迷你尺寸" = "Mini";
 "迷你尺寸下，所在屏幕有 App 全屏时隐藏" = "En taille Mini, masqué quand une app est en plein écran sur son écran";
-"迷你尺寸下，搜索确认无歌词后才隐藏，搜索期间照常显示" = "En taille Mini, se masque seulement quand la recherche confirme l’absence de paroles ; reste visible pendant la recherche";
+"迷你尺寸下，搜索确认无歌词后才隐藏，搜索期间照常显示" = "En taille Mini, se masque seulement quand la recherche confirme l’absence de paroles ; reste visible pendant la recherche";
 "迷你尺寸下，暂停或未播放时隐藏，开始播放后重新显示" = "En taille Mini, masqué en pause ou à l’arrêt, réapparaît au début de la lecture";
 "迷你尺寸中一行显示不下时换行或滚动" = "Retour à la ligne ou défilement des lignes longues en taille Mini";
 "迷你尺寸仅显示当前句、显示当前句与下一句，或与完整尺寸相同整页滚动" = "En taille Mini, affiche seulement la ligne actuelle, la ligne actuelle et la suivante, ou une page défilante comme en taille complète";

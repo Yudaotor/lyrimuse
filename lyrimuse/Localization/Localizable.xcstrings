@@ -2235,7 +2235,7 @@
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "청취 시간대"
+            "value" : "재생 시간대"
           }
         },
         "pt-BR" : {
@@ -2324,7 +2324,7 @@
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "첫 번째 기록 동기화가 끝나면 여기에 청취 시간대가 표시됩니다"
+            "value" : "첫 번째 기록 동기화가 끝나면 여기에 재생 시간대가 표시됩니다"
           }
         },
         "pt-BR" : {
@@ -2502,7 +2502,7 @@
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "청취 피크 %@"
+            "value" : "재생 피크 %@"
           }
         },
         "pt-BR" : {
@@ -6911,7 +6911,7 @@
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "수동으로 중지됨"
+            "value" : "수동으로 중단됨"
           }
         },
         "pt-BR" : {
@@ -9643,7 +9643,7 @@
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "YouTube Music을 어떤 브라우저에서 사용합니까?"
+            "value" : "YouTube Music은 어떤 브라우저에서 사용하십니까?"
           }
         },
         "pt-BR" : {
@@ -14974,7 +14974,7 @@
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Deezer에서 익명 접근 토큰을 가져올 수 없습니다(노래에 가사가 있는지와는 무관하며 보통 잠시 후 다시 시도하면 복구됩니다)"
+            "value" : "Deezer에서 익명 액세스 토큰을 가져올 수 없습니다(노래에 가사가 있는지와는 무관하며 보통 잠시 후 다시 시도하면 복구됩니다)"
           }
         },
         "pt-BR" : {
@@ -16830,7 +16830,7 @@
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "마지막 청취"
+            "value" : "마지막 재생"
           }
         },
         "pt-BR" : {
@@ -21537,7 +21537,7 @@
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "검색 중지"
+            "value" : "검색 중단"
           }
         },
         "pt-BR" : {
@@ -30737,7 +30737,7 @@
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "일치 항목"
+            "value" : "매칭 항목"
           }
         },
         "pt-BR" : {
@@ -30826,7 +30826,7 @@
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "일치 항목: Last.fm에 등록된 표기를 사용합니다(예: ‘那个女孩’ → ‘那個女孩’). 등록되지 않은 경우 그대로 전송합니다. 앨범 이름에서는 ‘ - Single’, ‘ - EP’도 제거합니다\n원본: 플레이어가 보고한 내용을 그대로 전송합니다"
+            "value" : "매칭 항목: Last.fm에 등록된 표기를 사용합니다(예: ‘那个女孩’ → ‘那個女孩’). 등록되지 않은 경우 그대로 전송합니다. 앨범 이름에서는 ‘ - Single’, ‘ - EP’도 제거합니다\n원본: 플레이어가 보고한 내용을 그대로 전송합니다"
           }
         },
         "pt-BR" : {
@@ -30915,7 +30915,7 @@
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "일치 항목: Last.fm에 등록된 표기를 사용합니다(예: ‘Wang Leehom’ → ‘王力宏’). 등록되지 않은 경우 그대로 전송합니다\n첫 번째 아티스트만: 여러 아티스트가 부른 노래는 첫 번째 아티스트만 전송합니다(예: ‘陶喆, 卢广仲’ → ‘陶喆’). 제목이 ‘일치 항목’으로 설정되어 있고 Last.fm에 해당 노래가 등록되어 있으면 잘라내지 않습니다\n원본: 플레이어가 보고한 내용을 그대로 전송합니다"
+            "value" : "매칭 항목: Last.fm에 등록된 표기를 사용합니다(예: ‘Wang Leehom’ → ‘王力宏’). 등록되지 않은 경우 그대로 전송합니다\n첫 번째 아티스트만: 여러 아티스트가 부른 노래는 첫 번째 아티스트만 전송합니다(예: ‘陶喆, 卢广仲’ → ‘陶喆’). 제목이 ‘매칭 항목’으로 설정되어 있고 Last.fm에 해당 노래가 등록되어 있으면 잘라내지 않습니다\n원본: 플레이어가 보고한 내용을 그대로 전송합니다"
           }
         },
         "pt-BR" : {
@@ -32567,7 +32567,7 @@
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Adorer sur Last.fm"
+            "value" : "Coup de cœur sur Last.fm"
           }
         },
         "it" : {
@@ -33558,7 +33558,7 @@
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Feishu 그룹에서: 설정 → 그룹 봇 → 봇 추가 → 사용자 지정 봇을 선택하고, 생성 후 Webhook URL을 복사하십시오. 추가 검증이 필요하면 ‘서명 검증’을 켜고 시크릿을 아래의 ‘서명 키’에 입력하십시오"
+            "value" : "Feishu 그룹에서: 설정 → 그룹 봇 → 봇 추가 → 사용자 지정 봇을 선택하고, 생성 후 Webhook URL을 복사하십시오. 추가 검증이 필요하면 ‘서명 확인’을 켜고 시크릿을 아래의 ‘서명 키’에 입력하십시오"
           }
         },
         "pt-BR" : {
@@ -34448,7 +34448,7 @@
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "서체 크기"
+            "value" : "글자 크기"
           }
         },
         "pt-BR" : {
@@ -38239,7 +38239,7 @@
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Adoré sur Last.fm"
+            "value" : "Coup de cœur ajouté sur Last.fm"
           }
         },
         "it" : {
@@ -50450,7 +50450,7 @@
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "청취 히트맵"
+            "value" : "재생 히트맵"
           }
         },
         "pt-BR" : {
@@ -63478,7 +63478,7 @@
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "지난 해 오늘 조회 중…"
+            "value" : "오늘의 추억 조회 중…"
           }
         },
         "pt-BR" : {
@@ -65169,7 +65169,7 @@
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "‘지난 해 오늘’을 불러올 수 없습니다. Last.fm이 응답하지 않습니다"
+            "value" : "‘오늘의 추억’을 불러올 수 없습니다. Last.fm이 응답하지 않습니다"
           }
         },
         "pt-BR" : {
@@ -66854,7 +66854,7 @@
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "지우고 다시 시작"
+            "value" : "지우고 재시작"
           }
         },
         "pt-BR" : {
@@ -75286,7 +75286,7 @@
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "선택된 후보"
+            "value" : "승자"
           }
         },
         "pt-BR" : {
@@ -77410,7 +77410,7 @@
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "먼저 웹 앱을 배포하고 접근 토큰을 받으십시오. 배포 방법은 프로젝트 README의 ‘웹’ 섹션을 참고하십시오: https://github.com/Yudaotor/lyrimuse#网页端"
+            "value" : "먼저 웹 앱을 배포하고 액세스 토큰을 받으십시오. 배포 방법은 프로젝트 README의 ‘웹’ 섹션을 참고하십시오: https://github.com/Yudaotor/lyrimuse#网页端"
           }
         },
         "pt-BR" : {
@@ -77944,7 +77944,7 @@
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "잠금 해제 시 클릭이 데스크탑으로 전달됩니다. 드래그 방식은 설정의 ‘길게 눌러 드래그’를 참고하십시오"
+            "value" : "잠금 해제 시 클릭이 데스크탑으로 전달됩니다. 드래그 방식은 설정의 ‘길게 클릭하여 드래그’를 참고하십시오"
           }
         },
         "pt-BR" : {
@@ -78822,7 +78822,7 @@
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "접근 토큰"
+            "value" : "액세스 토큰"
           }
         },
         "pt-BR" : {
@@ -82629,7 +82629,7 @@
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "최근 12주 청취 히트맵(1년 전체는 설정의 통계 페이지에서 볼 수 있음)"
+            "value" : "최근 12주 재생 히트맵(1년 전체는 설정의 통계 페이지에서 볼 수 있음)"
           }
         },
         "pt-BR" : {
@@ -84120,7 +84120,7 @@
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "이 옵션은 꺼져 있습니다. 브라우저가 아직 재시동되지 않아 현재는 작동하지만, 재시동하면 작동하지 않습니다"
+            "value" : "이 옵션은 꺼져 있습니다. 브라우저가 아직 재시작되지 않아 현재는 작동하지만, 재시작하면 작동하지 않습니다"
           }
         },
         "pt-BR" : {
@@ -85435,7 +85435,7 @@
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "이 소스에서 일치한 앨범이 로컬 앨범과 같아 버전이 맞을 가능성이 높습니다(최대 150)"
+            "value" : "이 소스에서 매칭한 앨범이 로컬 앨범과 같아 버전이 맞을 가능성이 높습니다(최대 150)"
           }
         },
         "pt-BR" : {
@@ -86474,7 +86474,7 @@
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "로컬 기록 %d개를 모두 삭제합니다. 직접 편집한 가사와 후보에서 적용한 가사가 포함되며, 내보낸 가사 파일도 함께 삭제됩니다. 지우기 전에 자동으로 백업되며 이 메뉴의 ‘자동 백업에서 복원’으로 되찾을 수 있습니다. 이후 재생하는 노래는 가사를 다시 일치시킵니다"
+            "value" : "로컬 기록 %d개를 모두 삭제합니다. 직접 편집한 가사와 후보에서 적용한 가사가 포함되며, 내보낸 가사 파일도 함께 삭제됩니다. 지우기 전에 자동으로 백업되며 이 메뉴의 ‘자동 백업에서 복원’으로 되찾을 수 있습니다. 이후 재생하는 노래는 가사를 다시 매칭합니다"
           }
         },
         "pt-BR" : {
@@ -86921,7 +86921,7 @@
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "연결된 계정과 재생 기록 전송 주소를 포함한 현재 설정을 모두 덮어씁니다. 완료 후 Lyrimuse가 바로 재시동됩니다"
+            "value" : "연결된 계정과 재생 기록 전송 주소를 포함한 현재 설정을 모두 덮어씁니다. 완료 후 Lyrimuse가 바로 재시작됩니다"
           }
         },
         "pt-BR" : {
@@ -87070,7 +87070,7 @@
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "연결된 계정과 재생 기록 전송 주소를 포함한 현재 설정을 모두 덮어쓰고, 백업에 있는 가사 파일 %@개를 복원합니다(이름이 같은 파일은 덮어씀). 완료 후 Lyrimuse가 바로 재시동됩니다"
+            "value" : "연결된 계정과 재생 기록 전송 주소를 포함한 현재 설정을 모두 덮어쓰고, 백업에 있는 가사 파일 %@개를 복원합니다(이름이 같은 파일은 덮어씀). 완료 후 Lyrimuse가 바로 재시작됩니다"
           }
         },
         "pt-BR" : {
@@ -91439,7 +91439,7 @@
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "온라인에서 다시 일치시키고, 설정의 ‘일치 알고리즘’에 따라 알고리즘이 고른 결과를 바로 사용합니다"
+            "value" : "온라인에서 다시 매칭하고, 설정의 ‘매칭 알고리즘’에 따라 알고리즘이 고른 결과를 바로 사용합니다"
           }
         },
         "pt-BR" : {
@@ -91528,7 +91528,7 @@
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "자동으로 다시 일치"
+            "value" : "자동으로 다시 매칭"
           }
         },
         "pt-BR" : {
@@ -94999,7 +94999,7 @@
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "검은색 텍스트 및 외곽선"
+            "value" : "검은 글자 윤곽선"
           }
         },
         "pt-BR" : {
@@ -96504,7 +96504,7 @@
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "✓ 지금은 작동하지만 브라우저를 재시동하기 전까지만 유효합니다. 위 옵션이 꺼져 있어 재시동 후에는 작동하지 않습니다"
+            "value" : "✓ 지금은 작동하지만 브라우저를 재시작하기 전까지만 유효합니다. 위 옵션이 꺼져 있어 재시작 후에는 작동하지 않습니다"
           }
         },
         "pt-BR" : {
@@ -98593,7 +98593,7 @@
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "청취 발자취"
+            "value" : "재생 발자취"
           }
         },
         "pt-BR" : {
@@ -98682,7 +98682,7 @@
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "처음으로 기록을 동기화하면 여기에 청취 발자취가 표시됩니다"
+            "value" : "처음으로 기록을 동기화하면 여기에 재생 발자취가 표시됩니다"
           }
         },
         "pt-BR" : {
@@ -102724,7 +102724,7 @@
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Adoption…"
+            "value" : "Application…"
           }
         },
         "it" : {
@@ -105590,7 +105590,7 @@
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "중지"
+            "value" : "중단"
           }
         },
         "pt-BR" : {
@@ -106214,7 +106214,7 @@
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "노치 펼친 너비"
+            "value" : "노치 카드 펼친 너비"
           }
         },
         "pt-BR" : {
@@ -108493,7 +108493,7 @@
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "켬(기본값): 같은 노래가 다른 플레이어나 다른 앨범 버전에 있고 같은 녹음으로 확인되면 같은 가사를 사용하며, 수동 수정도 함께 동기화됩니다\n끔: 각 항목의 가사를 따로 일치시키며, 동기화되었던 항목은 원래 가사로 돌아갑니다"
+            "value" : "켬(기본값): 같은 노래가 다른 플레이어나 다른 앨범 버전에 있고 같은 녹음으로 확인되면 같은 가사를 사용하며, 수동 수정도 함께 동기화됩니다\n끔: 각 항목의 가사를 따로 매칭하며, 동기화되었던 항목은 원래 가사로 돌아갑니다"
           }
         },
         "pt-BR" : {
@@ -117424,7 +117424,7 @@
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "제목 불일치: 로컬 제목은 ‘%1$@’, 일치한 제목은 ‘%2$@’"
+            "value" : "제목 불일치: 로컬 제목은 ‘%1$@’, 매칭된 제목은 ‘%2$@’"
           }
         },
         "pt-BR" : {
@@ -119112,7 +119112,7 @@
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "지금 재시동"
+            "value" : "지금 재시작"
           }
         },
         "pt-BR" : {
@@ -121871,7 +121871,7 @@
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "트랙 일치함 · 가사 텍스트 없음"
+            "value" : "트랙 매칭됨 · 가사 텍스트 없음"
           }
         },
         "pt-BR" : {
@@ -121960,7 +121960,7 @@
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "일치함, 가사 없음"
+            "value" : "매칭됨, 가사 없음"
           }
         },
         "pt-BR" : {
@@ -122645,7 +122645,7 @@
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "일치함: %@"
+            "value" : "매칭됨: %@"
           }
         },
         "pt-BR" : {
@@ -122734,7 +122734,7 @@
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "%@에서 이 트랙과 일치했지만 가사 텍스트가 없음"
+            "value" : "%@에서 이 트랙을 매칭했지만 가사 텍스트가 없음"
           }
         },
         "pt-BR" : {
@@ -122912,7 +122912,7 @@
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "전체 가사 보관함 다시 일치"
+            "value" : "전체 가사 보관함 다시 매칭"
           }
         },
         "pt-BR" : {
@@ -122995,7 +122995,7 @@
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "전체 가사 보관함을 다시 일치시키겠습니까?"
+            "value" : "전체 가사 보관함을 다시 매칭하겠습니까?"
           }
         },
         "pt-BR" : {
@@ -123078,7 +123078,7 @@
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "이미 가사가 있는 노래도 다시 일치시킵니다. 직접 수정한 노래, 타이밍을 보정한 노래와 연주곡은 제외됩니다"
+            "value" : "이미 가사가 있는 노래도 다시 매칭합니다. 직접 수정한 노래, 타이밍을 보정한 노래와 연주곡은 제외됩니다"
           }
         },
         "pt-BR" : {
@@ -123221,7 +123221,7 @@
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "총 %1$@곡이며 %2$@ 걸립니다. 이미 가사가 있는 노래도 다시 일치시킵니다. 직접 수정한 노래, 타이밍을 보정한 노래와 연주곡은 제외됩니다. 언제든지 중지할 수 있으며 닫아도 진행 상황은 유지됩니다"
+            "value" : "총 %1$@곡이며 %2$@ 걸립니다. 이미 가사가 있는 노래도 다시 매칭합니다. 직접 수정한 노래, 타이밍을 보정한 노래와 연주곡은 제외됩니다. 언제든지 중단할 수 있으며 닫아도 진행 상황은 유지됩니다"
           }
         },
         "pt-BR" : {
@@ -123530,7 +123530,7 @@
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "다시 일치시킬 노래 없음"
+            "value" : "다시 매칭할 노래 없음"
           }
         },
         "pt-BR" : {
@@ -123613,7 +123613,7 @@
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "%@ 걸리며 언제든지 중지할 수 있습니다"
+            "value" : "%@ 걸리며 언제든지 중단할 수 있습니다"
           }
         },
         "pt-BR" : {
@@ -123951,7 +123951,7 @@
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "네트워크에 연결할 수 없어 중지됨"
+            "value" : "네트워크에 연결할 수 없어 중단됨"
           }
         },
         "pt-BR" : {
@@ -124212,7 +124212,7 @@
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "지난번: %1$@곡 확인 후 중지, %2$@곡 업데이트"
+            "value" : "지난번: %1$@곡 확인 후 중단, %2$@곡 업데이트"
           }
         },
         "pt-BR" : {
@@ -125668,7 +125668,7 @@
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Apple Music API의 공개 접근 토큰을 가져올 수 없습니다(music.apple.com에 연결할 수 없음). 네트워크 문제일 수 있으며 잠시 후 다시 시도하면 대개 해결됩니다"
+            "value" : "Apple Music API의 공개 액세스 토큰을 가져올 수 없습니다(music.apple.com에 연결할 수 없음). 네트워크 문제일 수 있으며 잠시 후 다시 시도하면 대개 해결됩니다"
           }
         },
         "pt-BR" : {
@@ -127825,7 +127825,7 @@
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "그라디언트"
+            "value" : "그라데이션"
           }
         },
         "pt-BR" : {
@@ -129900,7 +129900,7 @@
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "미니 크기의 가사 서체 크기 최대값"
+            "value" : "미니 크기의 가사 글자 크기 최대값"
           }
         },
         "pt-BR" : {
@@ -134734,7 +134734,7 @@
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "재생 중인데 가사가 표시되지 않나요? 선택한 플레이어를 확인하십시오"
+            "value" : "재생 중인데 가사가 표시되지 않습니까? 선택한 플레이어를 확인하십시오"
           }
         },
         "pt-BR" : {
@@ -135980,7 +135980,7 @@
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "시작하지 못했습니다(%@). 우선 ‘일단 건너뛰기’를 선택하고 나중에 ‘설정 › 플레이어 › 권한 및 서비스’에서 다시 시도할 수 있으며, 해당 페이지에 더 자세한 상태가 표시됩니다"
+            "value" : "시작하지 못했습니다(%@). 우선 ‘지금은 건너뛰기’를 선택하고 나중에 ‘설정 › 플레이어 › 권한 및 서비스’에서 다시 시도할 수 있으며, 해당 페이지에 더 자세한 상태가 표시됩니다"
           }
         },
         "pt-BR" : {
@@ -139065,7 +139065,7 @@
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Clique sur « Ignorer » dès qu’il apparaît ; les pubs non ignorables sont lues normalement. Fonctionne avec la version web et Pear Desktop, et nécessite l’autorisation Accessibilité. Si la version web est dans un onglet en arrière-plan, Lyrimuse y bascule brièvement puis revient, sans toucher à la fenêtre de navigateur que vous utilisez. La fenêtre de Pear Desktop doit être visible à l’écran ; si elle est réduite ou entièrement masquée, rien n’est ignoré"
+            "value" : "Clique sur « Ignorer » dès qu’il apparaît ; les pubs non ignorables sont lues normalement. Fonctionne avec la version web et Pear Desktop, et nécessite l’autorisation Accessibilité. Si la version web est dans un onglet en arrière-plan, Lyrimuse y bascule brièvement puis revient, sans toucher à la fenêtre de navigateur que vous utilisez. La fenêtre de Pear Desktop doit être visible à l’écran ; si elle est réduite ou entièrement masquée, rien n’est ignoré"
           }
         },
         "it" : {
@@ -143111,7 +143111,7 @@
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "사용하는 플레이어가 없나요?"
+            "value" : "사용하는 플레이어가 없습니까?"
           }
         },
         "pt-BR" : {
@@ -143455,7 +143455,7 @@
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "이 노래의 가사를 읽을 수 없습니다(가사 파일이 없거나 손상됨). 디스크의 내용을 덮어쓰지 않도록 지금은 변경 사항을 저장할 수 없습니다. ‘후보 가사 검색’으로 다시 적용할 수 있습니다"
+            "value" : "이 노래의 가사를 읽을 수 없습니다(가사 파일이 없거나 손상됨). 디스크의 내용을 덮어쓰지 않도록 지금은 변경 사항을 저장할 수 없습니다. ‘가사 후보 검색’으로 다시 적용할 수 있습니다"
           }
         },
         "pt-BR" : {
@@ -147429,7 +147429,7 @@
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "청취 마일스톤"
+            "value" : "재생 마일스톤"
           }
         },
         "pt-BR" : {
@@ -170513,7 +170513,7 @@
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "실행 시 윈도우를 열지 않고 메뉴 막대 아이콘과 가사 표시만 유지합니다. 켜면 Dock 아이콘도 숨깁니다"
+            "value" : "실행 시 윈도우를 열지 않고 메뉴 막대 아이콘과 가사 표시만 유지합니다. 켜면 Dock 아이콘도 가립니다"
           }
         },
         "pt-BR" : {
@@ -171492,7 +171492,7 @@
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "‘수정 명령 복사’를 클릭하고 ‘터미널’을 열어 붙여넣은 다음 Return 키를 누르십시오. 안내에 따라 로그인 암호를 입력한 후(입력 시 문자가 표시되지 않음) ‘활성화’를 클릭하십시오"
+            "value" : "‘수정 명령 복사’를 클릭하고 ‘터미널’을 열어 붙여넣은 다음 Return 키를 누르십시오. 안내에 따라 로그인 암호를 입력한 후(입력 시 문자가 표시되지 않음) ‘사용’을 클릭하십시오"
           }
         },
         "pt-BR" : {
@@ -171670,7 +171670,7 @@
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "미니 크기에서는 일시 정지 중이거나 재생하지 않을 때 숨기고, 재생을 시작하면 다시 표시합니다"
+            "value" : "미니 크기에서는 일시 정지 중이거나 재생하지 않을 때 가리고, 재생을 시작하면 다시 표시합니다"
           }
         },
         "pt-BR" : {
@@ -171753,7 +171753,7 @@
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "미니 크기에서는 해당 디스플레이에 전체 화면 앱이 있을 때 숨깁니다"
+            "value" : "미니 크기에서는 해당 디스플레이에 전체 화면 앱이 있을 때 가립니다"
           }
         },
         "pt-BR" : {
@@ -175267,7 +175267,7 @@
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "청취 시간대 및 아티스트"
+            "value" : "재생 시간대 및 아티스트"
           }
         },
         "pt-BR" : {
@@ -176606,7 +176606,7 @@
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "청취 피크 시간"
+            "value" : "재생 피크 시간"
           }
         },
         "pt-BR" : {
@@ -176777,7 +176777,7 @@
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "광고 중 숨기기"
+            "value" : "광고 중 가리기"
           }
         },
         "pt-BR" : {
@@ -178977,7 +178977,7 @@
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "히트맵, 청취 시간대, 그해 오늘"
+            "value" : "히트맵, 재생 시간대, 오늘의 추억"
           }
         },
         "pt-BR" : {
@@ -180579,7 +180579,7 @@
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "온라인에서 한 곡씩 검색하며 언제든지 중지할 수 있습니다"
+            "value" : "온라인에서 한 곡씩 검색하며 언제든지 중단할 수 있습니다"
           }
         },
         "pt-BR" : {
@@ -183540,7 +183540,7 @@
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "노래 정보 숨기기"
+            "value" : "노래 정보 가리기"
           }
         },
         "pt-BR" : {
@@ -183955,7 +183955,7 @@
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "‘노래 정보 숨기기’가 켜져 있음"
+            "value" : "‘노래 정보 가리기’가 켜져 있음"
           }
         },
         "pt-BR" : {
@@ -184038,7 +184038,7 @@
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "‘노래 정보 숨기기’가 켜져 있어 노래 관련 옵션이 현재 적용되지 않습니다"
+            "value" : "‘노래 정보 가리기’가 켜져 있어 노래 관련 옵션이 현재 적용되지 않습니다"
           }
         },
         "pt-BR" : {
@@ -197824,7 +197824,7 @@
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "overlay, notch, menubar를 1로 설정하면 표시, 0이면 숨김입니다. 변경할 매개변수만 포함하면 됩니다"
+            "value" : "overlay, notch, menubar를 1로 설정하면 표시, 0이면 가립니다. 변경할 매개변수만 포함하면 됩니다"
           }
         },
         "pt-BR" : {
@@ -198358,7 +198358,7 @@
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "모든 가사 숨기기/복원"
+            "value" : "모든 가사 가리기/복원"
           }
         },
         "pt-BR" : {
@@ -198892,7 +198892,7 @@
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "모든 가사를 숨겼습니다"
+            "value" : "모든 가사를 가렸습니다"
           }
         },
         "pt-BR" : {
@@ -204874,7 +204874,7 @@
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "해당 디스플레이에 전체 화면 앱이 있을 때 숨깁니다"
+            "value" : "해당 디스플레이에 전체 화면 앱이 있을 때 가립니다"
           }
         },
         "pt-BR" : {
@@ -205491,7 +205491,7 @@
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "매칭 알고리즘이 ‘우선순위 순’으로 설정되어 있거나, 점수가 더 높은 후보의 버전 또는 길이가 이 노래와 맞지 않습니다"
+            "value" : "매칭 알고리즘이 ‘우선순위 순서’로 설정되어 있거나, 점수가 더 높은 후보의 버전 또는 길이가 이 노래와 맞지 않습니다"
           }
         },
         "pt-BR" : {
@@ -210839,7 +210839,7 @@
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "‘서명 시크릿’이 봇 설정과 일치하는지 확인하십시오. 서명 확인을 사용하지 않는 경우 이 필드를 비우십시오"
+            "value" : "‘서명 키’가 봇 설정과 일치하는지 확인하십시오. 서명 확인을 사용하지 않는 경우 이 필드를 비우십시오"
           }
         },
         "pt-BR" : {
@@ -216827,7 +216827,7 @@
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "일일 리포트"
+            "value" : "일간 리포트"
           }
         },
         "pt-BR" : {
@@ -226631,7 +226631,7 @@
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "정리 후 재시동"
+            "value" : "정리 후 재시작"
           }
         },
         "pt-BR" : {
@@ -226720,7 +226720,7 @@
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "움직이는 아트워크와 온라인 조회 캐시를 삭제하고 바로 재시동하며, 필요할 때 다시 가져옵니다. 설정, 가사, 재생 기록은 유지됩니다"
+            "value" : "움직이는 아트워크와 온라인 조회 캐시를 삭제하고 바로 재시작하며, 필요할 때 다시 가져옵니다. 설정, 가사, 재생 기록은 유지됩니다"
           }
         },
         "pt-BR" : {
@@ -239536,7 +239536,7 @@
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "이전 기간의 재생 횟수로, 일일 리포트에는 없습니다"
+            "value" : "이전 기간의 재생 횟수로, 일간 리포트에는 없습니다"
           }
         },
         "pt-BR" : {
@@ -241138,7 +241138,7 @@
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "번역이 원문 뒤에 한 줄로 이어지며, ‘서체 크기’는 그대로 적용됩니다"
+            "value" : "번역이 원문 뒤에 한 줄로 이어지며, ‘글자 크기’는 그대로 적용됩니다"
           }
         },
         "pt-BR" : {
@@ -251154,7 +251154,7 @@
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "La sauvegarde automatique a échoué ; rien n’a été importé pour que vos données restent récupérables. Vérifiez l’espace disque et l’accès en écriture au dossier de configuration, puis réessayez"
+            "value" : "La sauvegarde automatique a échoué ; rien n’a été importé pour que vos données restent récupérables. Vérifiez l’espace disque et l’accès en écriture au dossier de configuration, puis réessayez"
           }
         },
         "it" : {
@@ -251510,7 +251510,7 @@
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Les paroles importées d’un dossier sont privilégiées (+300) ; une autre source peut l’emporter avec une version nettement meilleure, par exemple synchronisée mot à mot"
+            "value" : "Les paroles importées d’un dossier sont privilégiées (+300) ; une autre source peut l’emporter avec une version nettement meilleure, par exemple synchronisée mot à mot"
           }
         },
         "it" : {
@@ -252284,7 +252284,7 @@
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Vider la bibliothèque d’importation ?"
+            "value" : "Vider la bibliothèque d’importation ?"
           }
         },
         "it" : {
@@ -252302,7 +252302,7 @@
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "가져오기 보관함을 비울까요?"
+            "value" : "가져오기 보관함을 비우겠습니까?"
           }
         },
         "pt-BR" : {
@@ -253027,7 +253027,7 @@
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Utilisez « Importer un dossier de paroles… » ou définissez un dossier surveillé ci-dessous"
+            "value" : "Utilisez « Importer un dossier de paroles… » ou définissez un dossier surveillé ci-dessous"
           }
         },
         "it" : {
@@ -253579,7 +253579,7 @@
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "감시 중지"
+            "value" : "감시 중단"
           }
         },
         "pt-BR" : {
@@ -253917,7 +253917,7 @@
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Les fichiers de paroles ajoutés ou modifiés dans le dossier sont importés automatiquement : les morceaux sans paroles les reçoivent aussitôt, les autres restent inchangés"
+            "value" : "Les fichiers de paroles ajoutés ou modifiés dans le dossier sont importés automatiquement : les morceaux sans paroles les reçoivent aussitôt, les autres restent inchangés"
           }
         },
         "it" : {
@@ -255341,7 +255341,7 @@
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "En taille Mini, se masque seulement quand la recherche confirme l’absence de paroles ; reste visible pendant la recherche"
+            "value" : "En taille Mini, se masque seulement quand la recherche confirme l’absence de paroles ; reste visible pendant la recherche"
           }
         },
         "it" : {
@@ -256351,7 +256351,7 @@
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Désactivé, l’indicateur de volume n’apparaît que lorsque vous balayez l’encoche pour régler le volume ; les touches de volume et les autres changements n’affichent que celui du système"
+            "value" : "Désactivé, l’indicateur de volume n’apparaît que lorsque vous balayez l’encoche pour régler le volume ; les touches de volume et les autres changements n’affichent que celui du système"
           }
         },
         "it" : {
@@ -257330,7 +257330,7 @@
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Faites glisser les boutons ci-dessous dans les cases ; des cases peuvent rester vides"
+            "value" : "Faites glisser les boutons ci-dessous dans les cases ; des cases peuvent rester vides"
           }
         },
         "it" : {
@@ -257348,7 +257348,7 @@
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "아래 버튼을 칸으로 끌어 놓으세요. 칸은 비워 둘 수 있습니다"
+            "value" : "아래 버튼을 칸으로 끌어 놓으십시오. 칸은 비워 둘 수 있습니다"
           }
         },
         "pt-BR" : {
@@ -257508,7 +257508,7 @@
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Avec la largeur déployée actuelle : %d cases par ligne"
+            "value" : "Avec la largeur déployée actuelle : %d cases par ligne"
           }
         },
         "it" : {
@@ -257686,7 +257686,7 @@
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Les cases grises ne tiennent pas ; elles apparaissent si la carte déployée est plus large"
+            "value" : "Les cases grises ne tiennent pas ; elles apparaissent si la carte déployée est plus large"
           }
         },
         "it" : {
@@ -258576,7 +258576,7 @@
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Deuxième ligne : %@"
+            "value" : "Seconde ligne : %@"
           }
         },
         "it" : {
@@ -259128,7 +259128,7 @@
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "모든 가사 숨기기"
+            "value" : "모든 가사 가리기"
           }
         },
         "pt-BR" : {
@@ -259217,7 +259217,7 @@
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "미니 창"
+            "value" : "미니 윈도우"
           }
         },
         "pt-BR" : {
@@ -259840,7 +259840,7 @@
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Pear Desktop에서 ‘허용’을 클릭하세요"
+            "value" : "Pear Desktop에서 ‘허용’을 클릭하십시오"
           }
         },
         "pt-BR" : {
@@ -259929,7 +259929,7 @@
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "켜짐 · 지금은 연결할 수 없습니다. Pear Desktop이 실행 중인지 확인하세요"
+            "value" : "켜짐 · 지금은 연결할 수 없습니다. Pear Desktop이 실행 중인지 확인하십시오"
           }
         },
         "pt-BR" : {
@@ -260908,7 +260908,7 @@
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "오늘 감상"
+            "value" : "오늘 재생"
           }
         },
         "pt-BR" : {
@@ -261531,7 +261531,7 @@
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "먼저 노치 가사를 켜세요"
+            "value" : "먼저 노치 가사를 켜십시오"
           }
         },
         "pt-BR" : {
@@ -261869,7 +261869,7 @@
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "L’app de lecture de Tencent ; à l’écoute, le texte lu s’affiche en sous-titres"
+            "value" : "L’app de lecture de Tencent ; à l’écoute, le texte lu s’affiche en sous-titres"
           }
         },
         "it" : {
@@ -262314,7 +262314,7 @@
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Décalé : deux lignes de même taille, l’une à gauche, l’autre à droite ; la ligne chantée laisse place à celle d’après"
+            "value" : "Décalé : deux lignes de même taille, l’une à gauche, l’autre à droite ; la ligne chantée laisse place à celle d’après"
           }
         },
         "it" : {
@@ -262510,7 +262510,7 @@
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "입력 시 접기"
+            "value" : "입력 중 접기"
           }
         },
         "pt-BR" : {
@@ -263115,7 +263115,7 @@
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Autorisation Accessibilité manquante : %@ ne peut pas mettre en pause, reprendre ni changer de morceau sans le focus multimédia du système"
+            "value" : "Autorisation Accessibilité manquante : %@ ne peut pas mettre en pause, reprendre ni changer de morceau sans le focus multimédia du système"
           }
         },
         "it" : {
@@ -263827,7 +263827,7 @@
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Autorisation Accessibilité manquante : les commandes Aléatoire, Répéter et Volume de %@ sont masquées"
+            "value" : "Autorisation Accessibilité manquante : les commandes Aléatoire, Répéter et Volume de %@ sont masquées"
           }
         },
         "it" : {
@@ -264272,7 +264272,7 @@
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Autres plateformes : %@"
+            "value" : "Autres plateformes : %@"
           }
         },
         "it" : {
@@ -264450,7 +264450,7 @@
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Les paroles contiennent des caractères corrompus (carrés avec point d’interrogation ou lettres altérées), car les données de la source sont endommagées ; classées après tout candidat intact"
+            "value" : "Les paroles contiennent des caractères corrompus (carrés avec point d’interrogation ou lettres altérées), car les données de la source sont endommagées ; classées après tout candidat intact"
           }
         },
         "it" : {
@@ -266319,7 +266319,7 @@
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Écrire les paroles dans le fichier du morceau ?"
+            "value" : "Écrire les paroles dans le fichier du morceau ?"
           }
         },
         "it" : {
@@ -266337,7 +266337,7 @@
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "가사를 노래 파일에 쓸까요?"
+            "value" : "가사를 노래 파일에 쓰겠습니까?"
           }
         },
         "pt-BR" : {
@@ -267387,7 +267387,7 @@
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "L’option « 启用媒体键/远程控制事件 » (touches multimédias et télécommande) est peut-être désactivée dans les réglages de QQ Music"
+            "value" : "L’option « 启用媒体键/远程控制事件 » (touches multimédias et télécommande) est peut-être désactivée dans les réglages de QQ Music"
           }
         },
         "it" : {
@@ -267476,7 +267476,7 @@
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "L’option « 允许多应用同时播放 » (lecture simultanée avec d’autres apps) est peut-être activée dans les réglages de QQ Music pour iPad"
+            "value" : "L’option « 允许多应用同时播放 » (lecture simultanée avec d’autres apps) est peut-être activée dans les réglages de QQ Music pour iPad"
           }
         },
         "it" : {
@@ -267565,7 +267565,7 @@
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "L’option « 允许与其他应用同时播放 » (lecture simultanée avec d’autres apps) est peut-être activée dans les réglages de NetEase Cloud Music pour iPad"
+            "value" : "L’option « 允许与其他应用同时播放 » (lecture simultanée avec d’autres apps) est peut-être activée dans les réglages de NetEase Cloud Music pour iPad"
           }
         },
         "it" : {
@@ -268633,7 +268633,7 @@
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Suit le son du lecteur et nécessite l’autorisation d’enregistrer l’audio du système ; seul le volume est lu, aucun son n’est enregistré"
+            "value" : "Suit le son du lecteur et nécessite l’autorisation d’enregistrer l’audio du système ; seul le volume est lu, aucun son n’est enregistré"
           }
         },
         "it" : {
@@ -268740,7 +268740,7 @@
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "소리를 읽지 못했습니다. 시스템 설정에서 Lyrimuse의 시스템 오디오 녹음을 허용하세요"
+            "value" : "소리를 읽지 못했습니다. 시스템 설정에서 Lyrimuse의 시스템 오디오 녹음을 허용하십시오"
           }
         },
         "pt-BR" : {
