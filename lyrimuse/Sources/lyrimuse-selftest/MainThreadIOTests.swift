@@ -251,12 +251,18 @@ func runMainThreadIOTests() {
         let build = repoText("lyrimuse/build.sh")
         expectEqual(sourceHas(build, "clang -dynamiclib -fobjc-arc -O2 -arch \"$arch\" -mmacosx-version-min=14.0"), true,
                     "最低系统版本(契约): nowplaying-clients 的 dylib 按 14.0 编")
-        expectEqual(sourceHas(repoText("lyrimuse/package.sh"), "../scripts/check-release-binaries.sh \"$app\""), true,
+        let package = repoText("lyrimuse/package.sh")
+        expectEqual(sourceHas(package, "../scripts/check-release-binaries.sh ${gate_flags[@]+\"${gate_flags[@]}\"} \"$app\""), true,
                     "发版闸门(契约): 打包前查弱导入与 minos")
+        expectEqual(sourceHas(package, "if [ -z \"${LYRIMUSE_MEDIA_CONTROL_PREFIX:-}\" ] && [ \"${LYRIMUSE_REQUIRE_STABLE_SIGNATURE:-}\" != 1 ]; then"), true,
+                    "发版闸门(契约): media-control 的 minos 只在本机 brew 打包、不打 tag 时降为警告")
         let gate = repoText("scripts/check-release-binaries.sh")
         expectEqual(["\"QuartzCore/_CADynamicRangeHigh\"", "\"AppKit/_OBJC_CLASS_\\$_NSGlassEffectView\"",
                      "\"AppKit/_OBJC_METACLASS_\\$_NSGlassEffectView\"", "Contents/Resources/nowplaying-clients/libnowplaying-clients.dylib"]
                         .allSatisfy { gate.contains($0) }, true,
                     "发版闸门(契约): 弱导入白名单只有这三个、minos 查到 dylib")
+        expectEqual(["MediaRemoteAdapter.framework/Versions/A/MediaRemoteAdapter\"", "lib/media-control/MediaRemoteAdapterTestClient\"",
+                     "check_minos \"$rel\" \"$bundled_warn_only\""].allSatisfy { gate.contains($0) }, true,
+                    "发版闸门(契约): minos 查到 media-control 的两个 Mach-O")
     }
 }

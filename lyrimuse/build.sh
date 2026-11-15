@@ -577,7 +577,7 @@ rm -rf "$NPC_DST"
 mkdir -p "$NPC_DST"
 NPC_SLICES=()
 # 最低系统版本跟 App 一样写 14.0(Package.swift 的 .macOS(.v14)、Info.plist 的 LSMinimumSystemVersion):不写时 clang
-# 按编译机的系统版本写 minos,发版包里就是 26.0 / 27.0,macOS 14 / 15 上 perl 加载它会被 dyld 拒掉。
+# 按编译机的系统版本写 minos(发版包里就是 26.0 / 27.0),新系统才有的符号随之写成强引用,旧系统上 perl 加载时找不到就失败。
 for arch in $ARCHES; do
   npc_out="$FAT_DIR/libnowplaying-clients-$arch.dylib"
   clang -dynamiclib -fobjc-arc -O2 -arch "$arch" -mmacosx-version-min=14.0 -framework Foundation \
@@ -606,6 +606,8 @@ codesign --force --sign "$SIGN_ID" "$NPC_DST/libnowplaying-clients.dylib"
 # 安装对 CI 是无操作的冗余检查,不影响什么)。`brew install` 失败(网络问题/没装 Homebrew
 # 本身等)不阻断本地构建,跳过这一步、打个警告:这样出来的包只剩 Apple Music 和 Spotify 读得到(走
 # AppleScript),其余播放器都靠 media-control。发布构建缺了它,package.sh 的必备组件闸拒绝打包。
+# 本机 brew 装的 bottle 按本机系统挑(macOS 26 起是 arm64_tahoe,两个 Mach-O 的 minos 26.0,其中 TestClient 强引用
+# macOS 15 才有的符号),只能给本机和新系统用;发版用 CI 钉的 arm64_sonoma(minos 14.0),scripts/check-release-binaries.sh 查。
 # LYRIMUSE_MEDIA_CONTROL_PREFIX(CI 直取 ghcr bottle 时用):从指定前缀取 media-control、
 # 并且**不再**尝试 brew 自动安装。设了但路径下没有可执行文件时,按下面既有的"没装"警告路径走,
 # 不回落到 brew。

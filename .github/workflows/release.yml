@@ -94,7 +94,9 @@ jobs:
       # x86_64 half only exists for 0.7.6 (later bottles are arm64-only), and build.sh refuses to
       # lipo mismatched halves. Fetched from ghcr by content hash, not via brew, so the runner's
       # brew index moving on never changes what ships. Bump MC_ARM_SHA here together with
-      # build.sh's MC_PIN_VER / MC_SHA.
+      # build.sh's MC_PIN_VER / MC_SHA. MC_ARM_SHA is the arm64_sonoma bottle: its Mach-Os say
+      # minos 14.0 (= LSMinimumSystemVersion); arm64_sequoia / arm64_tahoe say 15.0 / 26.0 and
+      # scripts/check-release-binaries.sh refuses them.
       - name: Install media-control (QQ 音乐支持)
         run: |
           MC_PIN_VER=0.7.6

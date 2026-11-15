@@ -163,8 +163,13 @@ for v in "${VARIANTS[@]}"; do
     exit 1
   fi
   # 发布闸门:主程序弱导入的系统符号只许白名单里那几个,自己编的 Mach-O 的 minos 不高于 LSMinimumSystemVersion
-  # (脚本头注写了为什么)。
-  ../scripts/check-release-binaries.sh "$app"
+  # (脚本头注写了为什么)。media-control 取自本机 brew(没设 LYRIMUSE_MEDIA_CONTROL_PREFIX)且不是打 tag 时,它那两个
+  # Mach-O 的 minos 只警告:本机 bottle 按本机系统挑,改不了;CI 用钉住的 arm64_sonoma / sonoma bottle,超了照样拒绝打包。
+  gate_flags=()
+  if [ -z "${LYRIMUSE_MEDIA_CONTROL_PREFIX:-}" ] && [ "${LYRIMUSE_REQUIRE_STABLE_SIGNATURE:-}" != 1 ]; then
+    gate_flags+=(--bundled-minos-warn-only)
+  fi
+  ../scripts/check-release-binaries.sh ${gate_flags[@]+"${gate_flags[@]}"} "$app"
   # 签名也验一遍 —— 签名一坏,用户那边表现成"打开就闪退",发出去才发现代价太大。
   codesign -v --deep --strict "$app"
   # 发布闸门:签名要求必须是「identifier + 证书根」,不能是 cdhash。ad-hoc 签名的要求是一条 cdhash,
