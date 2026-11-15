@@ -2360,6 +2360,20 @@ func runMenuBarTests() {
                     "面板编辑: 编辑页底栏画出存下的每一项,用不了的调淡,满不满按存下的项数")
         expectEqual(sourceHas(source("lyrimuse/MenuBar/MenuBarPanelVolume.swift"), ".accessibilityAdjustableAction { direction in"), true,
                     "面板音量: 只在按着时写音量,辅助功能的增减单独接")
+        let volumeTile = source("lyrimuse/MenuBar/MenuBarPanelVolume.swift")
+        expectEqual(sourceHas(panel, "if event.type == .scrollWheel, PanelVolumeScrollAnchor.route(event, in: self) { return }\nsuper.sendEvent(event)")
+                    && sourceHas(panel, ".background(PanelVolumeScrollAnchor(enabled: !editing && volume.volume != nil))"), true,
+                    "面板音量滚动: 面板窗口先把滚动交给声音格,四档都垫锚;编辑时、设备调不了音量时不接")
+        let handle = sourceBody("fileprivate func handle(_ event: NSEvent, at screenPoint: CGPoint) -> Bool {", in: volumeTile)
+        expectEqual(sourceHas(handle, "guard bounds.contains(local) else { return false }\nguard enabled else {\nscroll.invalidate()\nreturn false\n}")
+                    && sourceHas(handle, "VolumeMonitor.adjustSystemVolume(by: delta)")
+                    && !handle.contains("setSystemVolume") && !handle.contains("model."), true,
+                    "面板音量滚动: 只在落在格子上、接滚动时按增量写(经 adjustSystemVolume,记「自己调的」),不经滑杆的绑定")
+        expectEqual(sourceHas(volumeTile, "if event.phase.isEmpty { return NotchScrollGesture.Phase.none }")
+                    && !sourceHas(volumeTile, "if event.phase.isEmpty { return .none }"), true,
+                    "面板音量滚动: 拆阶段返回可选型,没有阶段那一档写全类型名(裸 .none 是 nil,鼠标滚轮整个不认)")
+        expectEqual(sourceHas(volumeTile, "override func hitTest(_ point: NSPoint) -> NSView? { nil }"), true,
+                    "面板音量滚动: 锚视图不接点击,小号点按 / 长按、滑杆照常")
         let idleCard = source("lyrimuse/MenuBar/MenuBarPanelIdleCard.swift")
         expectEqual(sourceHas(panel, "if isIdleNoTrack {\nPanelIdleNowPlaying(wide: true, coverSide: Self.coverSide, openLyricsWindow: openLyricsWindowFromCard,\nopenPlayer: openIdlePlayer, transport: { transportRow }) {\nidleActionButton(prominent: true)")
                     && sourceHas(panel, "if isIdleNoTrack {\nPanelIdleNowPlaying(wide: false, coverSide: 48, openLyricsWindow: openLyricsWindowFromCard,\nopenPlayer: openIdlePlayer, transport: { compactTransportRow }) {\nidleActionButton()")
@@ -2392,5 +2406,60 @@ func runMenuBarTests() {
                     "面板走带: 左随机、右循环,两侧定宽,键藏起来时三个主键照样居中")
         expectEqual(sourceHas(panel, "Spacer(minLength: 0)\nfavoriteControl\n}\n.frame(height: Self.coverSide)"), true,
                     "面板走带: 喜欢在卡片右上角标下面,跟封面底边对齐")
+    }
+
+    // ---- 面板「声音」格滚动调音量(PanelVolumeScroll)、调一步之后的音量(SystemVolumeStep) ----
+    do {
+        typealias S = PanelVolumeScroll
+        let wheel = NotchScrollGesture.wheelStep, perPoint = NotchScrollGesture.volumePerPoint
+        var s = S()
+        expectEqual(s.feed(dx: 0, dy: 1, phase: .none, invertedFromDevice: false, preciseDeltas: false, pointerMoved: true), wheel,
+                    "面板滚动: 鼠标滚轮往上一格调大 1/16")
+        expectEqual(s.feed(dx: 0, dy: -3, phase: .none, invertedFromDevice: false, preciseDeltas: false, pointerMoved: true), -wheel,
+                    "面板滚动: 滚轮一格就是一档,不按行数放大")
+        expectEqual(s.feed(dx: 0, dy: -1, phase: .none, invertedFromDevice: true, preciseDeltas: false, pointerMoved: true), wheel,
+                    "面板滚动: 开着自然滚动时按手指方向,往上仍是调大")
+        expectEqual(s.feed(dx: 0, dy: 1, phase: .none, invertedFromDevice: false, preciseDeltas: false, pointerMoved: false), nil,
+                    "面板滚动: 格子出现后指针没动过,滚轮不认")
+        expectEqual(s.feed(dx: 0, dy: 2, phase: .none, invertedFromDevice: false, preciseDeltas: true, pointerMoved: true), 2 * perPoint,
+                    "面板滚动: 平滑滚动的鼠标按位移调")
+        expectEqual(s.feed(dx: 5, dy: 0, phase: .none, invertedFromDevice: false, preciseDeltas: false, pointerMoved: true), nil,
+                    "面板滚动: 横着滚不调")
+        // 触控板:从 began 起按位移连续调,小位移不攒阈值;指针没动过也认(手指放上去才开始)。
+        var t = S()
+        expectEqual(t.feed(dx: 0, dy: 0, phase: .began, invertedFromDevice: true, preciseDeltas: true, pointerMoved: false), nil,
+                    "面板滚动: 手指刚放上去不调")
+        expectEqual(t.feed(dx: 0, dy: -2, phase: .changed, invertedFromDevice: true, preciseDeltas: true, pointerMoved: false), nil,
+                    "面板滚动: 没过认方向的距离先不调")
+        expectEqual(t.feed(dx: 0, dy: -5, phase: .changed, invertedFromDevice: true, preciseDeltas: true, pointerMoved: false), 5 * perPoint,
+                    "面板滚动: 认成上下滑后按这一下的位移调")
+        expectEqual(t.feed(dx: 0, dy: 1.5, phase: .changed, invertedFromDevice: true, preciseDeltas: true, pointerMoved: false), -1.5 * perPoint,
+                    "面板滚动: 往回滑一点点就调小一点点")
+        expectEqual(t.feed(dx: 0, dy: -50, phase: .momentum, invertedFromDevice: true, preciseDeltas: true, pointerMoved: false), nil,
+                    "面板滚动: 惯性余势不调")
+        var h = S()
+        _ = h.feed(dx: 0, dy: 0, phase: .began, invertedFromDevice: true, preciseDeltas: true, pointerMoved: true)
+        let sideways = [h.feed(dx: -10, dy: 0, phase: .changed, invertedFromDevice: true, preciseDeltas: true, pointerMoved: true),
+                        h.feed(dx: -60, dy: 0, phase: .changed, invertedFromDevice: true, preciseDeltas: true, pointerMoved: true),
+                        h.feed(dx: 0, dy: -30, phase: .changed, invertedFromDevice: true, preciseDeltas: true, pointerMoved: true)]
+        expectEqual(sideways, [nil, nil, nil], "面板滚动: 认成左右滑的那一次整段不调、也不切歌")
+        var inv = S()
+        _ = inv.feed(dx: 0, dy: 0, phase: .began, invertedFromDevice: true, preciseDeltas: true, pointerMoved: true)
+        inv.invalidate()
+        expectEqual(inv.feed(dx: 0, dy: -30, phase: .changed, invertedFromDevice: true, preciseDeltas: true, pointerMoved: true), nil,
+                    "面板滚动: 中途作废(进了编辑)之后剩下的位移不调")
+        expectEqual([S.pointerMoved(from: nil, to: CGPoint(x: 5, y: 5)),
+                     S.pointerMoved(from: CGPoint(x: 5, y: 5), to: CGPoint(x: 5.3, y: 5.2)),
+                     S.pointerMoved(from: CGPoint(x: 5, y: 5), to: CGPoint(x: 6, y: 5))], [true, false, true],
+                    "面板滚动: 指针挪开半个点以上才算动过,没记下出现位置按动过算")
+        typealias V = SystemVolumeStep
+        expectEqual([V.apply(current: 0.31, muted: false, delta: wheel).volume == 0.31 + wheel,
+                     V.apply(current: 0.98, muted: false, delta: wheel).volume == 1,
+                     V.apply(current: 0.02, muted: false, delta: -wheel).volume == 0,
+                     V.apply(current: 0.5, muted: true, delta: wheel).unmute,
+                     !V.apply(current: 0.5, muted: true, delta: -wheel).unmute,
+                     V.apply(current: 0.5, muted: true, delta: -wheel).volume == 0.5 - wheel,
+                     !V.apply(current: 0.5, muted: false, delta: wheel).unmute], [true, true, true, true, true, true, true],
+                    "调一步音量: 落在 0...1 里;静音时调大顺手取消静音、按静音前的音量加,调小不碰静音")
     }
 }

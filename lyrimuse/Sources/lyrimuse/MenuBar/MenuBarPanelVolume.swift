@@ -80,6 +80,98 @@ struct PanelVolumeReader<Content: View>: View {
     }
 }
 
+/// 「声音」格上的滚动调音量:格子底下垫一层不接点击的 NSView 当位置锚,面板窗口收到滚动事件先交给 `route`
+/// (`MenuBarPanelWindow.sendEvent`),落在此刻接滚动的声音格上就按 `PanelVolumeScroll` 调系统音量、事件不再往下发。
+/// 小号、中号、大号、长条都垫;编辑布局、当前设备调不了音量时不接,事件照常往下发。见 06 章决策 103。
+struct PanelVolumeScrollAnchor: NSViewRepresentable {
+    let enabled: Bool
+
+    func makeNSView(context: Context) -> AnchorView {
+        let view = AnchorView()
+        view.enabled = enabled
+        return view
+    }
+
+    func updateNSView(_ view: AnchorView, context: Context) { view.enabled = enabled }
+
+    /// 返回 true = 这一下落在某个声音格上、已经接下。事件自带窗口时按窗口坐标换成屏幕坐标,不带窗口的(调试深链造的)
+    /// `locationInWindow` 本身就是屏幕坐标。
+    @MainActor
+    static func route(_ event: NSEvent, in window: NSWindow) -> Bool {
+        let screenPoint = event.window.map { $0.convertPoint(toScreen: event.locationInWindow) } ?? event.locationInWindow
+        return AnchorView.live.allObjects.contains { $0.window === window && $0.handle(event, at: screenPoint) }
+    }
+
+    /// `debug/panel-scroll` 的日志用:这扇窗里登记着的声音格,各自的屏幕位置、接不接、指针动没动过。
+    @MainActor
+    static func debugSummary(in window: NSWindow) -> String {
+        let anchors = AnchorView.live.allObjects.filter { $0.window === window }
+        return "anchors=\(anchors.count) " + anchors.map(\.debugSummary).joined(separator: "; ")
+    }
+
+    final class AnchorView: NSView {
+        static let live = NSHashTable<AnchorView>.weakObjects()
+
+        var enabled = false {
+            didSet { if !enabled { scroll.invalidate() } }
+        }
+        private var scroll = PanelVolumeScroll()
+        /// 格子进窗口那一刻指针在哪,和指针后来动没动过(`PanelVolumeScroll.pointerMoved`)。
+        private var appearedAt: CGPoint?
+        private var pointerMoved = false
+
+        /// 只当位置锚,点击、悬停照常落在格子上。
+        override func hitTest(_ point: NSPoint) -> NSView? { nil }
+
+        override func viewDidMoveToWindow() {
+            super.viewDidMoveToWindow()
+            scroll = PanelVolumeScroll()
+            pointerMoved = false
+            if window != nil {
+                appearedAt = NSEvent.mouseLocation
+                Self.live.add(self)
+            } else {
+                appearedAt = nil
+                Self.live.remove(self)
+            }
+        }
+
+        fileprivate var debugSummary: String {
+            let frame = window.map { $0.convertToScreen(convert(bounds, to: nil)) } ?? .zero
+            return "frame=\(frame) enabled=\(enabled) pointerMoved=\(pointerMoved) appearedAt=\(appearedAt.map { "\($0)" } ?? "nil")"
+        }
+
+        fileprivate func handle(_ event: NSEvent, at screenPoint: CGPoint) -> Bool {
+            guard let window else { return false }
+            let local = convert(window.convertPoint(fromScreen: screenPoint), from: nil)
+            guard bounds.contains(local) else { return false }
+            guard enabled else {
+                scroll.invalidate()
+                return false
+            }
+            if !pointerMoved { pointerMoved = PanelVolumeScroll.pointerMoved(from: appearedAt, to: screenPoint) }
+            guard let phase = Self.phase(of: event),
+                  let delta = scroll.feed(dx: Double(event.scrollingDeltaX), dy: Double(event.scrollingDeltaY), phase: phase,
+                                          invertedFromDevice: event.isDirectionInvertedFromDevice,
+                                          preciseDeltas: event.hasPreciseScrollingDeltas, pointerMoved: pointerMoved)
+            else { return true }
+            VolumeMonitor.adjustSystemVolume(by: delta)
+            return true
+        }
+
+        /// 同灵动岛卡片(`NotchLyricsWindowController.handleScrollWheel`)的拆法;nil = 手指刚碰板(`mayBegin`)这类不认的阶段。
+        /// 返回值是可选型,没有阶段那一档必须写全 `NotchScrollGesture.Phase.none`:裸写 `.none` 是 nil,鼠标滚轮整个不认。
+        private static func phase(of event: NSEvent) -> NotchScrollGesture.Phase? {
+            if !event.momentumPhase.isEmpty { return .momentum }
+            if event.phase.contains(.began) { return .began }
+            if event.phase.contains(.changed) { return .changed }
+            if event.phase.contains(.ended) || event.phase.contains(.cancelled) { return .ended }
+            if event.phase.isEmpty { return NotchScrollGesture.Phase.none }
+            return nil
+        }
+    }
+}
+
 /// 中号、大号、长条的「声音」:标题、右上角一颗翻到输出设备的键,一条滑杆(左边喇叭点一下静音);大号底下、长条标题右边
 /// 再写当前输出设备。小号用面板的圆钮块(`knobTile`),不在这里。
 struct PanelVolumeSlider: View {

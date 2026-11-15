@@ -436,9 +436,10 @@ private final class MenuBarPanelWindow: NSPanel {
         onCancel?()
     }
 
-    /// 在分发前截:不截的话空格会先落到有焦点的按钮上。
+    /// 在分发前截:不截的话空格会先落到有焦点的按钮上。落在「声音」格上的滚动由它调音量(`PanelVolumeScrollAnchor.route`)。
     override func sendEvent(_ event: NSEvent) {
         if event.type == .keyDown, onKeyDown?(event) == true { return }
+        if event.type == .scrollWheel, PanelVolumeScrollAnchor.route(event, in: self) { return }
         super.sendEvent(event)
     }
 
@@ -1088,18 +1089,21 @@ private struct MenuBarPanelView: View {
             }
         case .volume:
             // 系统输出音量,同控制中心的「声音」:对哪个播放器都管用,不用权限。小号点一下静音、长按翻到输出设备;中号、大号是
-            // 一条滑杆。编辑时不接点击。
+            // 一条滑杆。各档指针停在上面滚动都调音量(`PanelVolumeScrollAnchor`)。编辑时不接点击、不接滚动。
             PanelTileSizeReader { size, editing in
                 PanelVolumeReader { volume in
-                    if size == .small {
-                        knobTile(symbol: volume.symbolName, title: volume.label, on: false, enabled: volume.volume != nil,
-                                 help: volume.volume == nil ? L10n.t("当前输出设备不支持调节音量") : nil, quick: .volume) {
-                            volume.toggleMute()
+                    Group {
+                        if size == .small {
+                            knobTile(symbol: volume.symbolName, title: volume.label, on: false, enabled: volume.volume != nil,
+                                     help: volume.volume == nil ? L10n.t("当前输出设备不支持调节音量") : nil, quick: .volume) {
+                                volume.toggleMute()
+                            }
+                        } else {
+                            PanelVolumeSlider(model: volume, size: size, openDevices: { setQuickTarget(.volume) })
+                                .allowsHitTesting(!editing)
                         }
-                    } else {
-                        PanelVolumeSlider(model: volume, size: size, openDevices: { setQuickTarget(.volume) })
-                            .allowsHitTesting(!editing)
                     }
+                    .background(PanelVolumeScrollAnchor(enabled: !editing && volume.volume != nil))
                 }
             }
         case .todayListening:

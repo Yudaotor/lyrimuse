@@ -197,7 +197,8 @@ final class VolumeMonitor {
 
     // MARK: - 调音量
 
-    /// 把系统输出音量加减 `delta`(0...1 的量纲),灵动岛手势用;调大时顺手解除静音。音量横幅由上面那条监听照常弹,
+    /// 把系统输出音量加减 `delta`(0...1 的量纲),灵动岛手势、菜单栏面板声音格的滚动用;调大时顺手解除静音
+    /// (`SystemVolumeStep`)。音量横幅由上面那条监听照常弹,
     /// 写之前记下 `lastOwnAdjustAt`,「按音量键时提示」关着时靠它认出是自己调的(`NotchVolumeBannerPolicy`)。
     /// 默认输出设备的音量归下游硬件管(没有可写的音量属性,HDMI、部分 USB DAC)时什么都不做。
     static func adjustSystemVolume(by delta: Float) {
@@ -219,16 +220,19 @@ final class VolumeMonitor {
             size = UInt32(MemoryLayout<Float32>.size)
             guard AudioObjectGetPropertyData(device, &addr, 0, nil, &size, &value) == noErr else { return }
         }
-        if delta > 0, var mute = muteAddress(for: device) {
-            var muted = UInt32(0)
-            var muteSize = UInt32(MemoryLayout<UInt32>.size)
-            if AudioObjectGetPropertyData(device, &mute, 0, nil, &muteSize, &muted) == noErr, muted != 0 {
-                var off = UInt32(0)
-                lastOwnAdjustAt = Date()
-                AudioObjectSetPropertyData(device, &mute, 0, nil, muteSize, &off)
-            }
+        var muted = UInt32(0)
+        var muteSize = UInt32(MemoryLayout<UInt32>.size)
+        if delta > 0, var mute = muteAddress(for: device),
+           AudioObjectGetPropertyData(device, &mute, 0, nil, &muteSize, &muted) != noErr {
+            muted = 0
         }
-        var next = min(1, max(0, value + delta))
+        let step = SystemVolumeStep.apply(current: value, muted: muted != 0, delta: delta)
+        if step.unmute, var mute = muteAddress(for: device) {
+            var off = UInt32(0)
+            lastOwnAdjustAt = Date()
+            AudioObjectSetPropertyData(device, &mute, 0, nil, muteSize, &off)
+        }
+        var next = step.volume
         adjustBurst = (device, next, now)
         guard next != value else { return }
         lastOwnAdjustAt = Date()
@@ -291,7 +295,7 @@ final class VolumeMonitor {
     }
 
     private static var adjustBurst: (device: AudioObjectID, target: Float32, at: Date)?
-    /// 灵动岛上一次写系统音量或解除静音的时刻。
+    /// 本 App 上一次写系统音量或静音的时刻(灵动岛手势、面板声音格)。
     private static var lastOwnAdjustAt: Date?
 
     // MARK: - 属性地址

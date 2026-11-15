@@ -190,6 +190,10 @@ public enum LyrimuseDeepLink: Equatable, Sendable {
         /// 在菜单栏面板里 (x, y) 处点一下(按下、30 毫秒后松开,坐标同 `panelDrag`):`debug/panel-click?at=60,208`。
         /// 格子的点按 / 长按按按住多久分,`panelDrag` 按住约 0.4 秒,会被认成长按。`in=gallery` 同 `panelDrag`。
         case panelClick(at: CGPoint, inGallery: Bool = false)
+        /// 在菜单栏面板 (x, y) 处滚动(坐标同 `panelDrag`),事件送进面板窗口、跟真实滚动同一条路:`debug/panel-scroll?at=60,208&dy=1`
+        /// 是鼠标滚轮往上一格;`steps=N` 连滚 N 格;`kind=trackpad` 换成触控板两指滑(began、N 次各 `dy` pt、ended)。
+        /// `dy` 为正 = 手指往上(调大)。
+        case panelScroll(at: CGPoint, dy: Double, trackpad: Bool = false, steps: Int = 1)
         /// 主线程原地睡这么多毫秒(`debug/stall?ms=`,1…`maxStallMs`):造出「别的窗口把主线程占住」那一下,验动画扛不扛得住。
         case stall(ms: Int)
         /// 灵动岛摆一次报喜,跟设置页「收听里程碑」旁那颗「试用」走同一条路(`debug/milestone-preview`)。
@@ -413,6 +417,15 @@ public enum LyrimuseDeepLink: Equatable, Sendable {
         case ("debug", "/panel-click"):
             guard let at = Self.panelPoint(Substring(value("at") ?? "")) else { return nil }
             self = .debug(.panelClick(at: at, inGallery: value("in") == "gallery"))
+        case ("debug", "/panel-scroll"):
+            guard let at = Self.panelPoint(Substring(value("at") ?? "")),
+                  let dy = value("dy").flatMap(Double.init), dy.isFinite, dy != 0, abs(dy) <= Self.maxPanelScrollDelta
+            else { return nil }
+            let kind = value("kind")
+            guard kind == nil || kind == "wheel" || kind == "trackpad" else { return nil }
+            let steps = value("steps").map { Int($0) ?? 0 } ?? 1
+            guard (1...Self.maxPanelScrollSteps).contains(steps) else { return nil }
+            self = .debug(.panelScroll(at: at, dy: dy, trackpad: kind == "trackpad", steps: steps))
         case ("debug", "/panel-pin"):
             guard let on = value("on").flatMap(Self.parseBool) else { return nil }
             self = .debug(.panelPin(on: on))
@@ -762,6 +775,11 @@ public enum LyrimuseDeepLink: Equatable, Sendable {
                 components.path = "/panel-click"
                 components.queryItems = [URLQueryItem(name: "at", value: "\(at.x),\(at.y)")]
                 if inGallery { components.queryItems?.append(URLQueryItem(name: "in", value: "gallery")) }
+            case let .panelScroll(at, dy, trackpad, steps):
+                components.path = "/panel-scroll"
+                components.queryItems = [URLQueryItem(name: "at", value: "\(at.x),\(at.y)"), URLQueryItem(name: "dy", value: "\(dy)")]
+                if trackpad { components.queryItems?.append(URLQueryItem(name: "kind", value: "trackpad")) }
+                if steps != 1 { components.queryItems?.append(URLQueryItem(name: "steps", value: String(steps))) }
             case let .panelPin(on):
                 components.path = "/panel-pin"
                 components.queryItems = [URLQueryItem(name: "on", value: on ? "1" : "0")]
@@ -1065,6 +1083,10 @@ extension SettingsDeepLink {
 
 extension LyrimuseDeepLink {
     /// 面板调试深链里的一个点:`x,y`(面板窗口内的点坐标)。
+    /// `debug/panel-scroll` 一步的位移上限(行或 pt)和连滚的步数上限。
+    static let maxPanelScrollDelta: Double = 200
+    static let maxPanelScrollSteps = 60
+
     static func panelPoint(_ text: Substring) -> CGPoint? {
         let parts = text.split(separator: ",").compactMap { Double($0) }
         return parts.count == 2 ? CGPoint(x: parts[0], y: parts[1]) : nil

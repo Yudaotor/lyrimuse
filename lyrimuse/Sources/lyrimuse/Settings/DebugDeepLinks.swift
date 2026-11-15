@@ -246,6 +246,8 @@ enum DebugDeepLinks {
             panelDrag(from: from, to: to, via: via, inGallery: inGallery)
         case let .panelClick(at, inGallery):
             panelClick(at: at, inGallery: inGallery)
+        case let .panelScroll(at, dy, trackpad, steps):
+            panelScroll(at: at, dy: dy, trackpad: trackpad, steps: steps)
         case let .panelPin(on):
             MenuBarPanelDebugState.pinned = on
             logger.notice("debug panel pin \(on, privacy: .public)")
@@ -689,6 +691,47 @@ extension DebugDeepLinks {
             try? await Task.sleep(nanoseconds: 30_000_000)
             if let e = event(.leftMouseUp) { window.sendEvent(e) }
             logger.notice("debug panel click done")
+        }
+    }
+}
+
+extension DebugDeepLinks {
+    /// `debug/panel-scroll`:往面板窗口 (x, y) 处送滚动事件(坐标同 `panelDrag`),经 `MenuBarPanelWindow.sendEvent`,跟真实滚动
+    /// 同一条路。滚轮:`steps` 格、每格 `dy` 行,没有阶段;触控板:began → `steps` 次 changed(每次 `dy` pt,带精确位移)→ ended。
+    /// 造出来的事件不带「自然滚动」标记,`dy` 为正就是手指往上、调大。每步之间隔 16 毫秒。
+    static func panelScroll(at point: CGPoint, dy: Double, trackpad: Bool, steps: Int) {
+        guard let window = PanelEditBridge.shared.mainWindow, window.isVisible else {
+            logger.notice("debug panel scroll: panel is not open")
+            return
+        }
+        func event(phase: Int64, delta: Double) -> NSEvent? {
+            let cocoa = window.convertPoint(toScreen: NSPoint(x: point.x, y: window.frame.height - point.y))
+            let primaryHeight = NSScreen.screens.first?.frame.height ?? 0
+            guard let cg = CGEvent(scrollWheelEvent2Source: nil, units: trackpad ? .pixel : .line, wheelCount: 1,
+                                   wheel1: Int32(delta.rounded()), wheel2: 0, wheel3: 0) else { return nil }
+            cg.location = CGPoint(x: cocoa.x, y: primaryHeight - cocoa.y)
+            if trackpad {
+                cg.setIntegerValueField(.scrollWheelEventIsContinuous, value: 1)
+                cg.setDoubleValueField(.scrollWheelEventFixedPtDeltaAxis1, value: delta)
+                cg.setDoubleValueField(.scrollWheelEventPointDeltaAxis1, value: delta)
+                cg.setIntegerValueField(.scrollWheelEventScrollPhase, value: phase)
+            }
+            return NSEvent(cgEvent: cg)
+        }
+        // CGScrollPhase:1 began、2 changed、4 ended。
+        let sequence: [(Int64, Double)] = trackpad
+            ? [(1, 0)] + Array(repeating: (2, dy), count: steps) + [(4, 0)]
+            : Array(repeating: (0, dy), count: steps)
+        Task { @MainActor in
+            for (phase, delta) in sequence {
+                guard let e = event(phase: phase, delta: delta) else { continue }
+                logger.notice("debug panel scroll event phase=\(e.phase.rawValue, privacy: .public) dy=\(e.scrollingDeltaY, privacy: .public) precise=\(e.hasPreciseScrollingDeltas, privacy: .public) inverted=\(e.isDirectionInvertedFromDevice, privacy: .public) at=\(e.locationInWindow.x, privacy: .public),\(e.locationInWindow.y, privacy: .public)")
+                window.sendEvent(e)
+                try? await Task.sleep(nanoseconds: 16_000_000)
+            }
+            let state = VolumeMonitor.readSystemVolume()
+            let anchors = PanelVolumeScrollAnchor.debugSummary(in: window)
+            logger.notice("debug panel scroll done volume=\(state.volume ?? -1, privacy: .public) muted=\(state.muted, privacy: .public) \(anchors, privacy: .public)")
         }
     }
 }
