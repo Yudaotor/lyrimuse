@@ -517,6 +517,14 @@ private final class LyricsWindowController: ObservableObject {
         }
     }
 
+    /// `debug/lyrics-window-key`:完整尺寸的红绿灯当作窗口是 / 不是 key,nil = 看真的 key 状态。只给验证用。
+    private(set) var debugKeyOverride: Bool?
+
+    func setDebugKeyOverride(_ override: Bool?) {
+        debugKeyOverride = override
+        updateTrafficLightVisibility()
+    }
+
     /// 迷你窗的悬停进出(`MiniWindowHoverTracker` 报上来),交给「悬浮淡化」。
     func setMiniHovered(_ hovered: Bool) {
         MainActor.assumeIsolated { hoverFade.setHovered(hovered) }
@@ -967,7 +975,7 @@ private final class LyricsWindowController: ObservableObject {
     private func updateTrafficLightVisibility() {
         guard let window else { return }
         // 迷你面板不当 key,红绿灯跟着指针在不在窗上走,否则一直藏着、关不掉(07 章决策 133)。
-        let inactive = window is LyricsMiniPanel ? !miniPointerInside : !window.isKeyWindow
+        let inactive = window is LyricsMiniPanel ? !miniPointerInside : !(debugKeyOverride ?? window.isKeyWindow)
         let hidden = isActive || inactive || (chromeHidden && !isMini)
         // 原生全屏里标题栏归系统管,只设显隐、不摆。
         trafficLights.setHidden(in: window, reposition: !isNativeFullScreen) { type in
@@ -8112,7 +8120,19 @@ final class LyricsWindowRemote: ObservableObject {
     var isOpen: Bool { live != nil }
 
     /// `debug/state` 的 `lyricsWindowChrome` 一项:最近 attach 的那份控制器的按钮组露 / 收(关着也报)。
-    var chromeDebugState: Any { controller?.chromeFade.debugState ?? NSNull() }
+    var chromeDebugState: Any {
+        guard let controller else { return NSNull() }
+        var state = controller.chromeFade.debugState
+        state["keyOverride"] = controller.debugKeyOverride.map { $0 ? "on" : "off" } ?? "auto"
+        return state
+    }
+
+    /// `debug/lyrics-window-key`:最近 attach 的那扇窗的红绿灯当作是 / 不是 key。跟 `simulatePointer` 一样挪到下一拍。
+    func setKeyOverride(_ override: Bool?) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { [weak self] in
+            MainActor.assumeIsolated { self?.controller?.setDebugKeyOverride(override) }
+        }
+    }
 
     /// `debug/lyrics-window-pointer`:当作指针进 / 出最近 attach 的那扇窗。挪到下一拍再报:深链在 Apple 事件里处理,
     /// 处理完系统会补发一次 `didUpdate`,把只靠它兜底的毛病盖住;跟踪区报的进出之后不一定有这一下。

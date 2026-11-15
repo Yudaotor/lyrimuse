@@ -340,6 +340,12 @@ func runDeepLinkTests() {
                     "debug: 当作指针出了歌词窗口")
         expectEqual(link("lyrimuse://debug/lyrics-window-pointer?inside=maybe") == nil
                     && link("lyrimuse://debug/lyrics-window-pointer") == nil, true, "debug: 指针进出认不出、没带都不认")
+        expectEqual([link("lyrimuse://debug/lyrics-window-key?state=on"), link("lyrimuse://debug/lyrics-window-key?state=OFF"),
+                     link("lyrimuse://debug/lyrics-window-key?state=auto")],
+                    [.debug(.lyricsWindowKey(override: true)), .debug(.lyricsWindowKey(override: false)),
+                     .debug(.lyricsWindowKey(override: nil))], "debug: 歌词窗口红绿灯当作是 / 不是 key、交还")
+        expectEqual(link("lyrimuse://debug/lyrics-window-key?state=maybe") == nil
+                    && link("lyrimuse://debug/lyrics-window-key") == nil, true, "debug: 歌词窗口 key 覆盖认不出的、没带都不认")
         expectEqual(link("lyrimuse://debug/rainbow?overlay=1"), .debug(.rainbow(overlay: true, notch: nil)), "debug: 只开悬浮歌词彩虹")
         expectEqual(link("lyrimuse://debug/rainbow?overlay=0&notch=1"), .debug(.rainbow(overlay: false, notch: true)),
                     "debug: 悬浮歌词、灵动岛彩虹一起设")
@@ -636,6 +642,7 @@ func runDeepLinkTests() {
             .debug(.lyricsWindowControls(percent: 100)), .debug(.lyricsWindowControls(percent: 162.5)),
             .debug(.lyricsWindowControls(percent: 140, draft: true)),
             .debug(.lyricsWindowPointer(inside: true)), .debug(.lyricsWindowPointer(inside: false)),
+            .debug(.lyricsWindowKey(override: true)), .debug(.lyricsWindowKey(override: false)), .debug(.lyricsWindowKey(override: nil)),
             .debug(.touchBarDisplay(color: .rainbow)), .debug(.touchBarDisplay(color: .cover)),
             .debug(.touchBarTyping(override: true)), .debug(.touchBarTyping(override: false)), .debug(.touchBarTyping(override: nil)),
             .debug(.managerVisibility(override: true)), .debug(.managerVisibility(override: false)), .debug(.managerVisibility(override: nil)),

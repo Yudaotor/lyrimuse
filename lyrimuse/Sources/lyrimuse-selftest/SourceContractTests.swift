@@ -2308,7 +2308,7 @@ func runSourceContractSurfaceTests() {
             expectEqual(sourceHas(lwv, "if mini {\n            LyricsMiniPanelHost.show()\n        } else {\n            LyricsMiniPanelHost.closeHeldPanel()\n            openScene()\n        }")
                         && lwv.contains("if formRequest.map({ !$0.mini && $0.isFresh(now: Date()) }) == true { return }"), true,
                         "迷你面板: 打开入口按形态分流,面板开着、要完整尺寸时交给面板自己切")
-            expectEqual(lwv.contains("let inactive = window is LyricsMiniPanel ? !miniPointerInside : !window.isKeyWindow")
+            expectEqual(lwv.contains("let inactive = window is LyricsMiniPanel ? !miniPointerInside : !(debugKeyOverride ?? window.isKeyWindow)")
                         && lwv.contains("if !previewMode, !hostsMiniPanel { AuxiliaryWindowActivation.windowDidAppear(\"lyrics-window\") }")
                         && lwv.contains("if !isMiniPanel { addToWindowsMenu(window) }"), true,
                         "迷你面板: 红绿灯跟着指针显隐,不参与 Dock 图标记账、不进窗口菜单")

@@ -290,6 +290,9 @@ enum DebugDeepLinks {
         case let .lyricsWindowPointer(inside):
             LyricsWindowRemote.shared.simulatePointer(inside: inside)
             logger.notice("debug lyrics window pointer inside=\(inside, privacy: .public)")
+        case let .lyricsWindowKey(override):
+            LyricsWindowRemote.shared.setKeyOverride(override)
+            logger.notice("debug lyrics window key override=\(override.map { String($0) } ?? "auto", privacy: .public)")
         case let .rainbow(overlay, notch, menuBar):
             if let overlay { AppSettings.shared.overlayRainbow = overlay }
             if let notch { AppSettings.shared.notchLyricsColor = notch ? .rainbow : .accent }
