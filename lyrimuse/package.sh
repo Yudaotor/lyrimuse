@@ -95,6 +95,14 @@ missing_contents() {
   done
 }
 
+# media-control 照 CI 取钉住的 arm64_sonoma bottle(minos 14.0),不用本机 brew 那份:brew 按本机系统挑 bottle,macOS 26 起是
+# arm64_tahoe(minos 26.0),旧系统上 QQ 音乐那一路起不来。-intel 变体的 x86_64 半边由 build.sh 用同一个脚本取 sonoma。
+# 外面已经设了 LYRIMUSE_MEDIA_CONTROL_PREFIX(release.yml)就用它,下面的发版闸照样查 minos。见 15 章决策 111。
+if [ -z "${LYRIMUSE_MEDIA_CONTROL_PREFIX:-}" ]; then
+  LYRIMUSE_MEDIA_CONTROL_PREFIX="$(./scripts/fetch-media-control.sh arm64_sonoma "$STAGE/media-control")"
+  export LYRIMUSE_MEDIA_CONTROL_PREFIX
+fi
+
 echo "==> building variants"
 VERSION=""
 for v in "${VARIANTS[@]}"; do
@@ -162,14 +170,9 @@ for v in "${VARIANTS[@]}"; do
     echo "!! $label 的 sdk 字段是 $sdk_field(<26)——这样发出去在 macOS 26+ 上没有液态玻璃,拒绝打包" >&2
     exit 1
   fi
-  # 发布闸门:主程序弱导入的系统符号只许白名单里那几个,自己编的 Mach-O 的 minos 不高于 LSMinimumSystemVersion
-  # (脚本头注写了为什么)。media-control 取自本机 brew(没设 LYRIMUSE_MEDIA_CONTROL_PREFIX)且不是打 tag 时,它那两个
-  # Mach-O 的 minos 只警告:本机 bottle 按本机系统挑,改不了;CI 用钉住的 arm64_sonoma / sonoma bottle,超了照样拒绝打包。
-  gate_flags=()
-  if [ -z "${LYRIMUSE_MEDIA_CONTROL_PREFIX:-}" ] && [ "${LYRIMUSE_REQUIRE_STABLE_SIGNATURE:-}" != 1 ]; then
-    gate_flags+=(--bundled-minos-warn-only)
-  fi
-  ../scripts/check-release-binaries.sh ${gate_flags[@]+"${gate_flags[@]}"} "$app"
+  # 发布闸门:主程序弱导入的系统符号只许白名单里那几个,自己编的 Mach-O 和随包 media-control 的 minos 不高于
+  # LSMinimumSystemVersion(脚本头注写了为什么)。
+  ../scripts/check-release-binaries.sh "$app"
   # 签名也验一遍 —— 签名一坏,用户那边表现成"打开就闪退",发出去才发现代价太大。
   codesign -v --deep --strict "$app"
   # 发布闸门:签名要求必须是「identifier + 证书根」,不能是 cdhash。ad-hoc 签名的要求是一条 cdhash,

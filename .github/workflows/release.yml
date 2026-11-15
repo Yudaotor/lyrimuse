@@ -90,35 +90,20 @@ jobs:
           go version
 
       # media-control (BSD-3-Clause) is copied into the .app by build.sh; without it the release
-      # loses QQ Music support. The version must equal build.sh's MC_PIN_VER: the -intel variant's
-      # x86_64 half only exists for 0.7.6 (later bottles are arm64-only), and build.sh refuses to
-      # lipo mismatched halves. Fetched from ghcr by content hash, not via brew, so the runner's
-      # brew index moving on never changes what ships. Bump MC_ARM_SHA here together with
-      # build.sh's MC_PIN_VER / MC_SHA. MC_ARM_SHA is the arm64_sonoma bottle: its Mach-Os say
-      # minos 14.0 (= LSMinimumSystemVersion); arm64_sequoia / arm64_tahoe say 15.0 / 26.0 and
+      # loses QQ Music support. lyrimuse/scripts/fetch-media-control.sh is the single pin (version and
+      # sha256 of the arm64_sonoma bottle here, the sonoma bottle for the -intel variant's x86_64 half
+      # in build.sh, and package.sh's local runs): fetched from ghcr by content hash, not via brew, so
+      # the runner's brew index moving on never changes what ships. arm64_sonoma / sonoma say minos
+      # 14.0 (= LSMinimumSystemVersion); arm64_sequoia / arm64_tahoe say 15.0 / 26.0 and
       # scripts/check-release-binaries.sh refuses them.
       - name: Install media-control (QQ 音乐支持)
         run: |
-          MC_PIN_VER=0.7.6
-          MC_ARM_SHA=179a21d0233706e75adcb70048386b3e471ad364e192e8ba0da80121a09d4ce4
-          dst="$RUNNER_TEMP/media-control"
-          mkdir -p "$dst"
-          curl -fsSL -H "Authorization: Bearer QQ==" \
-            "https://ghcr.io/v2/homebrew/core/media-control/blobs/sha256:$MC_ARM_SHA" \
-            -o "$dst/bottle.tar.gz"
-          got="$(shasum -a 256 "$dst/bottle.tar.gz" | awk '{print $1}')"
-          if [ "$got" != "$MC_ARM_SHA" ]; then
-            echo "::error::media-control arm64 bottle 校验不过:拿到 $got,期望 $MC_ARM_SHA" >&2
-            exit 1
-          fi
-          tar -xzf "$dst/bottle.tar.gz" -C "$dst"
-          prefix="$dst/media-control/$MC_PIN_VER"
-          if [ ! -x "$prefix/bin/media-control" ]; then
-            echo "::error::解出来的 bottle 里没有 $prefix/bin/media-control(bottle 结构变了?)" >&2
+          if ! prefix="$(bash lyrimuse/scripts/fetch-media-control.sh arm64_sonoma "$RUNNER_TEMP/media-control")"; then
+            echo "::error::取 media-control arm64_sonoma bottle 失败(原因见上一行输出)" >&2
             exit 1
           fi
           echo "LYRIMUSE_MEDIA_CONTROL_PREFIX=$prefix" >> "$GITHUB_ENV"
-          echo "==> media-control $MC_PIN_VER (arm64, ghcr blob) -> $prefix"
+          echo "==> media-control (arm64_sonoma, ghcr blob) -> $prefix"
 
       - name: Determine version string
         id: version

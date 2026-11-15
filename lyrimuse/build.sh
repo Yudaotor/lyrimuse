@@ -607,8 +607,9 @@ codesign --force --sign "$SIGN_ID" "$NPC_DST/libnowplaying-clients.dylib"
 # 本身等)不阻断本地构建,跳过这一步、打个警告:这样出来的包只剩 Apple Music 和 Spotify 读得到(走
 # AppleScript),其余播放器都靠 media-control。发布构建缺了它,package.sh 的必备组件闸拒绝打包。
 # 本机 brew 装的 bottle 按本机系统挑(macOS 26 起是 arm64_tahoe,两个 Mach-O 的 minos 26.0,其中 TestClient 强引用
-# macOS 15 才有的符号),只能给本机和新系统用;发版用 CI 钉的 arm64_sonoma(minos 14.0),scripts/check-release-binaries.sh 查。
-# LYRIMUSE_MEDIA_CONTROL_PREFIX(CI 直取 ghcr bottle 时用):从指定前缀取 media-control、
+# macOS 15 才有的符号),只能给本机装机用;package.sh 和 CI 用 scripts/fetch-media-control.sh 钉的 arm64_sonoma(minos 14.0),
+# scripts/check-release-binaries.sh 查。
+# LYRIMUSE_MEDIA_CONTROL_PREFIX(package.sh / CI 取钉住的 bottle 后传进来):从指定前缀取 media-control、
 # 并且**不再**尝试 brew 自动安装。设了但路径下没有可执行文件时,按下面既有的"没装"警告路径走,
 # 不回落到 brew。
 if [ -n "${LYRIMUSE_MEDIA_CONTROL_PREFIX:-}" ]; then
@@ -649,11 +650,8 @@ if [ -x "$MEDIA_CONTROL_PREFIX/bin/media-control" ]; then
   #
   # Homebrew 在 Apple Silicon 上只会装 arm64 那份,而且不让你拉异架构 bottle
   # (`brew fetch --bottle-tag=sonoma media-control` 直接回 "Bottle for tag :sonoma is
-  # unavailable",实测)。所以 Intel 那半得自己取:media-control 在官方 homebrew-core 里,
-  # bottle 放在 ghcr.io,可以拿 formula JSON 里记录的 sha256 直接下对应 blob(匿名 token
-  # 就是字面量 "QQ==" —— Homebrew 自己访问 ghcr 用的也是这个),下完**先校验 sha256 再
-  # 解包**,不无条件信任下载内容。Intel 的 bottle tag 就是不带 arm64_ 前缀的那个 macOS
-  # 代号(现在是 sonoma),所以这里按"排除 arm64_* 和 *_linux"动态挑,而不是写死 sonoma。
+  # unavailable",实测)。所以 Intel 那半由 scripts/fetch-media-control.sh 取:按 homebrew-core
+  # formula 里的 sha256 从 ghcr 直取 sonoma bottle,先校验 sha256 再解包。
   #
   # 只有两个 Mach-O 需要合并(逐文件核实过):框架里的 MediaRemoteAdapter 和 lib/ 下的
   # MediaRemoteAdapterTestClient。bin/media-control 本身是 Perl 脚本(`file` 报
@@ -671,7 +669,7 @@ if [ -x "$MEDIA_CONTROL_PREFIX/bin/media-control" ]; then
   # QQ 音乐支持,所以下面的架构自检会把还是单架构的文件列出来。
   if [ "$UNIVERSAL" = 1 ]; then
     MC_FW="$APP_DIR/Contents/Resources/media-control/Frameworks/MediaRemoteAdapter.framework"
-    # 前缀由 LYRIMUSE_MEDIA_CONTROL_PREFIX 指定时(CI 直取 ghcr bottle),
+    # 前缀由 LYRIMUSE_MEDIA_CONTROL_PREFIX 指定时(package.sh / CI 取钉住的 bottle),
     # 机器上可能压根没有 brew、或者 brew 里装着另一个版本,版本号只能从前缀自己读——
     # bottle 解出来就是 media-control/<版本>/ 这层结构,末段即版本号。
     if [ -n "${LYRIMUSE_MEDIA_CONTROL_PREFIX:-}" ]; then
@@ -679,30 +677,18 @@ if [ -x "$MEDIA_CONTROL_PREFIX/bin/media-control" ]; then
     else
       MC_VER="$(brew list --versions media-control | awk '{print $2}')"
     fi
-    # Intel 切片钉死在 0.7.6:media-control 0.7.7(恰在 v1.5.0 发完三小时后)起
-    # homebrew-core 不再产任何 Intel bottle(Homebrew 弃养 x86_64 macOS),原来这里查
-    # formulae.brew.sh 实时 JSON 挑 Intel tag 的路子从此永远落空——v1.6.0 第一次打 tag 就是
-    # 这样被打包闸拒掉的。0.7.6 的 sonoma bottle blob 在 ghcr 按内容寻址、老版本长期可取,
-    # sha256 抄自 homebrew-core 4d7e1515ad 的 formula。要升级钉版:先确认新版有没有恢复
-    # Intel bottle;没有的话要么继续用 0.7.6 的 x86 半边(版本不一致,下面的守卫会拒绝合并),
-    # 要么在仓里 vendor 一对 universal 二进制。release.yml 的安装步钉着 arm 半边的同一个
-    # 版本号,两处要一起改。
-    MC_PIN_VER="0.7.6"
+    # Intel 切片钉死在 0.7.6:media-control 0.7.7 起 homebrew-core 不再产任何 Intel bottle
+    # (Homebrew 弃养 x86_64 macOS)。0.7.6 的 sonoma bottle blob 在 ghcr 按内容寻址、老版本长期可取。
+    # 版本和 arm / Intel 两个 bottle 的 sha256 只钉在 scripts/fetch-media-control.sh(release.yml、
+    # package.sh 取 arm 半边也走它)。要升级钉版:先确认新版有没有恢复 Intel bottle;没有的话要么
+    # 继续用 0.7.6 的 x86 半边(版本不一致,下面的守卫会拒绝合并),要么在仓里 vendor 一对
+    # universal 二进制。
+    MC_PIN_VER="$(./scripts/fetch-media-control.sh --version)"
     MC_TAG="sonoma"
-    MC_SHA="52a07ebec136e88574c620dfaa6cf2121d37aade09967bf4d6bab0d316ee6aac"
     if [ "$MC_VER" != "$MC_PIN_VER" ]; then
       echo "!! media-control 本机版本 $MC_VER 与钉住的 $MC_PIN_VER 不一致,跳过 lipo——x86_64 上 QQ 音乐支持不可用(重新钉版见本段注释)" >&2
     else
-      MC_TGZ="$FAT_DIR/media-control-x86_64-$MC_PIN_VER.tar.gz"
-      if curl -fsSL -H "Authorization: Bearer QQ==" \
-           "https://ghcr.io/v2/homebrew/core/media-control/blobs/sha256:$MC_SHA" -o "$MC_TGZ" \
-         && [ "$(shasum -a 256 "$MC_TGZ" | awk '{print $1}')" = "$MC_SHA" ]; then
-        MC_X86="$FAT_DIR/media-control-x86_64"
-        rm -rf "$MC_X86"; mkdir -p "$MC_X86"
-        tar -xzf "$MC_TGZ" -C "$MC_X86"
-        # bottle 解出来是 media-control/<版本>/... 这层结构,用 find 定位而不是拼路径。
-        MC_X86_ROOT="$(find "$MC_X86" -type d -name "Frameworks" -maxdepth 3 | head -1)"
-        MC_X86_ROOT="$(dirname "${MC_X86_ROOT:-$MC_X86}")"
+      if MC_X86_ROOT="$(./scripts/fetch-media-control.sh "$MC_TAG" "$FAT_DIR/media-control-x86_64")"; then
         merged=0
         for rel in "Frameworks/MediaRemoteAdapter.framework/Versions/A/MediaRemoteAdapter" \
                    "lib/media-control/MediaRemoteAdapterTestClient"; do
