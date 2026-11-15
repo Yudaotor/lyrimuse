@@ -46,8 +46,8 @@ func runClosedWindowContentContracts() {
     }
     // 拆得慢的窗口等锁屏 / 显示器睡眠再拆:启动时装好触发,拆的那一段告诉卡顿探针,收尾时结束;重开过就作废。
     let triggers = sourceBody("static func installDeferredReleaseTriggers()", in: helper)
-    expectEqual(sourceHas(triggers, #"Notification.Name("com.apple.screenIsLocked")"#)
-                && sourceHas(triggers, "NSWorkspace.screensDidSleepNotification")
+    expectEqual(sourceHas(triggers, #"forName: Notification.Name("com.apple.screenIsLocked")"#)
+                && sourceHas(triggers, "forName: NSWorkspace.screensDidSleepNotification")
                 && sourceHas(read("AppDelegate.swift"), "ClosedWindowContent.installDeferredReleaseTriggers()"), true,
                 "关窗放内容: 启动时装好锁屏、显示器睡眠两个触发")
     expectEqual(sourceHas(begin, "if reshowIsDeferred { MainThreadWatchdog.shared.beginExpectedStall(")
