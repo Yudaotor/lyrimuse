@@ -57,6 +57,8 @@ enum MenuBarSceneActions {
     /// 打开设置窗口。见 mainMenuSettingsItem 上那段说明。
     static func presentSettings(fallback: () -> Void) {
         LaunchPhase.settingsRequested = true
+        // 后台开窗时设置窗口已经开着就只摆到最前:菜单项那条路对它 makeKeyAndOrderFront,会把 App 切到前台。
+        if WindowActivation.surfaceIfOnScreen("settings") { return }
         WindowActivation.activateApp()
         if let item = mainMenuSettingsItem(), let action = item.action,
            NSApp.sendAction(action, to: item.target, from: item) {
@@ -108,25 +110,22 @@ private struct SceneActionRegistrar: View {
                 AppActions.shared.openSettings = {
                     MenuBarSceneActions.presentSettings { openSettingsAction() }
                 }
-                // 激活一律走 WindowActivation:深链带 background=1 时这一拍不激活、窗口建好后摆到最前不当 key。
+                // 开场景窗一律走 WindowActivation.openScene:深链带 background=1 时不激活 App,窗口已开着就不再 openWindow,
+                // 窗口建好后摆到最前不当 key。
                 AppActions.shared.openLyricsManager = {
-                    WindowActivation.activateApp()
-                    openWindowAction(id: "lyrics-manager")
+                    WindowActivation.openScene("lyrics-manager") { openWindowAction(id: "lyrics-manager") }
                 }
                 // 迷你是面板、完整是场景,按要的形态开(07 章决策 133);面板不激活 App。
                 AppActions.shared.openLyricsWindow = {
                     LyricsWindowSession.open {
-                        WindowActivation.activateApp()
-                        openWindowAction(id: "lyrics-window")
+                        WindowActivation.openScene("lyrics-window") { openWindowAction(id: "lyrics-window") }
                     }
                 }
                 AppActions.shared.openLyricsWindowScene = {
-                    WindowActivation.activateApp()
-                    openWindowAction(id: "lyrics-window")
+                    WindowActivation.openScene("lyrics-window") { openWindowAction(id: "lyrics-window") }
                 }
                 AppActions.shared.presentLyricsSearchWindow = {
-                    WindowActivation.activateApp()
-                    openWindowAction(id: "lyrics-quick-search")
+                    WindowActivation.openScene("lyrics-quick-search") { openWindowAction(id: "lyrics-quick-search") }
                     // 窗口已经开着(没被真关掉)时,上面这行只是把它带到前台,不会让
                     // LyricsQuickSearchWindow 的 .task 重跑——靠这一下 send 补上"点一次
                     // 就该看到当前这首歌"这个诉求,见 AppActions.quickSearchRefreshRequests
@@ -134,17 +133,14 @@ private struct SceneActionRegistrar: View {
                     AppActions.shared.quickSearchRefreshRequests.send()
                 }
                 AppActions.shared.presentLyricShareWindow = {
-                    WindowActivation.activateApp()
-                    openWindowAction(id: "lyrics-share")
+                    WindowActivation.openScene("lyrics-share") { openWindowAction(id: "lyrics-share") }
                     AppActions.shared.lyricShareRefreshRequests.send()
                 }
                 AppActions.shared.openWhatsNew = {
-                    WindowActivation.activateApp()
-                    openWindowAction(id: WhatsNewWindow.sceneID)
+                    WindowActivation.openScene(WhatsNewWindow.sceneID) { openWindowAction(id: WhatsNewWindow.sceneID) }
                 }
                 AppActions.shared.openOnboarding = {
-                    WindowActivation.activateApp()
-                    openWindowAction(id: "onboarding")
+                    WindowActivation.openScene("onboarding") { openWindowAction(id: "onboarding") }
                 }
                 // 首次启动的完整引导向导——放在这里而不是 AppDelegate.
                 // applicationDidFinishLaunching 里直接调用,是因为 openWindow(id:) 这个

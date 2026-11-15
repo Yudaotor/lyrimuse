@@ -483,8 +483,21 @@ func runDeepLinkTests() {
         let scene = source("lyrimuse/MenuBar/MenuBarSceneActions.swift")
         expectEqual(scene.contains("NSApp.activate(ignoringOtherApps: true)"), false,
                     "后台开窗: 开窗入口不直接激活 App,走 WindowActivation.activateApp()")
-        expectEqual(scene.components(separatedBy: "WindowActivation.activateApp()").count - 1 >= 6, true,
-                    "后台开窗: 设置 / 歌词管理 / 歌词窗口两处 / 搜索小窗 / 引导六处入口")
+        // 已开着的场景窗再 openWindow 会 makeKeyAndOrderFront,处理深链时窗口服务器借这一下把 App 切到前台(14 章决策 197)。
+        let sceneOpens = scene.components(separatedBy: "openWindowAction(id:").count - 1
+        let viaOpenScene = scene.components(separatedBy: "WindowActivation.openScene(").count - 1
+        expectEqual(viaOpenScene >= 7 && sceneOpens - viaOpenScene == 1, true,
+                    "后台开窗: 歌词管理 / 歌词窗口两处 / 搜索小窗 / 分享 / 本次更新 / 引导都走 openScene,只有启动重开直接 openWindow")
+        expectEqual(sourceHas(sourceBody("static func presentSettings(", in: scene),
+                              #"if WindowActivation.surfaceIfOnScreen("settings") { return } WindowActivation.activateApp()"#),
+                    true, "后台开窗: 设置窗口开着时只摆到最前,不再走菜单项(那条路 makeKeyAndOrderFront)")
+        let activation = source("lyrimuse/Settings/WindowActivation.swift")
+        expectEqual(sourceHas(sourceBody("static func openScene(", in: activation),
+                              "if surfaceIfOnScreen(identifier) { return } activateApp() open()"),
+                    true, "后台开窗: openScene 先看窗口在不在屏上,在就不再 open;不带 background 时照旧激活再开")
+        expectEqual(sourceHas(sourceBody("static func surfaceIfOnScreen(", in: activation),
+                              "guard isBackground, let window = window(matching: identifier, visibleOnly: true) else { return false } window.orderFrontRegardless()"),
+                    true, "后台开窗: 只在 background=1 那一段、窗口可见时跳过 openWindow,摆到最前不当 key")
 
         // 模拟播放:位置怎么走,以及对外的出口都挡住(引擎读播放状态打卡 Last.fm,控制会发给真实播放器)。
         let t0 = Date(timeIntervalSince1970: 1_000)

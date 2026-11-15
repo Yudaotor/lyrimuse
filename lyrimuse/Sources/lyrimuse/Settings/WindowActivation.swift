@@ -27,12 +27,33 @@ enum WindowActivation {
         NSApp.activate(ignoringOtherApps: true)
     }
 
-    /// 后台开窗之后把那扇窗摆到最前(不当 key)。窗口是 SwiftUI 场景现建的,要等一拍,隔 0.25 秒找一次、最多两秒。
+    /// 开一扇 SwiftUI 场景窗(歌词管理、歌词窗口、搜索歌词小窗、分享、本次更新、引导;设置走 `presentSettings`)。
+    /// 后台开窗时那扇窗已经在屏上就只摆到最前、不调 `open`:`openWindow` 对开着的窗口 `makeKeyAndOrderFront`,
+    /// 处理深链的那一拍里这一下会让窗口服务器把 App 切到前台,不经过 `NSApp.activate`(见 14 章决策 197)。
+    static func openScene(_ identifier: String, open: () -> Void) {
+        if surfaceIfOnScreen(identifier) { return }
+        activateApp()
+        open()
+    }
+
+    /// 后台开窗、且 `identifier` 那扇窗已经在屏上:`orderFrontRegardless()` 摆到最前(不当 key),返回 true。
+    /// 别的情况什么都不做、返回 false,由调用方照常开窗。
+    static func surfaceIfOnScreen(_ identifier: String) -> Bool {
+        guard isBackground, let window = window(matching: identifier, visibleOnly: true) else { return false }
+        window.orderFrontRegardless()
+        return true
+    }
+
     /// `identifier` 认 SwiftUI `Window(id:)` 的场景 id(窗口标识里含它)和设置窗口。
+    private static func window(matching identifier: String, visibleOnly: Bool) -> NSWindow? {
+        NSApp.windows.first {
+            $0.identifier?.rawValue.localizedCaseInsensitiveContains(identifier) == true && (!visibleOnly || $0.isVisible)
+        }
+    }
+
+    /// 后台开窗之后把那扇窗摆到最前(不当 key)。窗口是 SwiftUI 场景现建的,要等一拍,隔 0.25 秒找一次、最多两秒。
     static func surface(identifier: String, attempt: Int = 0) {
-        if let match = NSApp.windows.first(where: {
-            $0.identifier?.rawValue.localizedCaseInsensitiveContains(identifier) == true
-        }) {
+        if let match = window(matching: identifier, visibleOnly: false) {
             match.orderFrontRegardless()
             if match.isVisible { return }
         }

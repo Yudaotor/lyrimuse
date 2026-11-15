@@ -2911,7 +2911,7 @@ func runSourceContractSurfaceTests() {
                                 "歌词窗口重开: 启动时先置标记、再直接开窗")
                     expectEqual(sourceHas(actions, "LyricsWindowSession.shouldReopenAtLaunch {\n                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {\n                        AppActions.shared.openLyricsWindow?()"), false,
                                 "歌词窗口重开: 启动时不走先激活 App 的 openLyricsWindow")
-                    expectEqual(sourceHas(actions, "AppActions.shared.openLyricsWindow = {\n                    LyricsWindowSession.open {\n                        WindowActivation.activateApp()\n                        openWindowAction(id: \"lyrics-window\")"), true,
+                    expectEqual(sourceHas(actions, "AppActions.shared.openLyricsWindow = {\n                    LyricsWindowSession.open {\n                        WindowActivation.openScene(\"lyrics-window\") { openWindowAction(id: \"lyrics-window\") }"), true,
                                 "歌词窗口: 菜单、快捷键这些手动打开的入口照旧先激活 App")
                 }
                 expectEqual(view.contains("if LyricsWindowSession.takeRestoringAtLaunch() { window.orderFrontRegardless() }"), true,
