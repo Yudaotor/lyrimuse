@@ -36,19 +36,19 @@ final class PlayerQuitWatcher {
     func start() {
         guard observers.isEmpty else { return }
         let center = NSWorkspace.shared.notificationCenter
+        // 起停通知里的 bundle id、进程号从通知自带的字段读(`WorkspaceAppNote`),不读 `NSRunningApplication` 的属性。
         observers.append(center.addObserver(forName: NSWorkspace.didTerminateApplicationNotification,
                                             object: nil, queue: .main) { [weak self] note in
-            guard let app = note.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication,
-                  let bundleID = app.bundleIdentifier.map(PlayerBundleAliases.canonical) else { return }
-            let pid = app.processIdentifier
+            guard let bundleID = WorkspaceAppNote.bundleID(note).map(PlayerBundleAliases.canonical),
+                  let pid = WorkspaceAppNote.pid(note) else { return }
             MainActor.assumeIsolated { self?.exited(bundleID, pid: pid) }
         })
         observers.append(center.addObserver(forName: NSWorkspace.didLaunchApplicationNotification,
                                             object: nil, queue: .main) { [weak self] note in
-            guard let app = note.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication,
-                  let bundleID = app.bundleIdentifier.map(PlayerBundleAliases.canonical) else { return }
+            guard let bundleID = WorkspaceAppNote.bundleID(note).map(PlayerBundleAliases.canonical) else { return }
+            let pid = WorkspaceAppNote.pid(note)
             MainActor.assumeIsolated {
-                self?.watchExit(of: app)
+                if let pid { self?.watchExit(pid: pid, bundleID: bundleID) }
                 self?.playerLaunched(bundleID)
             }
         })
@@ -64,10 +64,13 @@ final class PlayerQuitWatcher {
 
     /// 内置播放器的进程按进程号盯退出;别的 App 不盯。
     private func watchExit(of app: NSRunningApplication) {
-        let pid = app.processIdentifier
-        guard pid > 0, exitSources[pid] == nil, !app.isTerminated,
-              let bundleID = app.bundleIdentifier.map(PlayerBundleAliases.canonical),
-              PlaybackPlayer.builtin(forBundleID: bundleID) != nil else { return }
+        guard !app.isTerminated, let bundleID = app.bundleIdentifier.map(PlayerBundleAliases.canonical) else { return }
+        watchExit(pid: app.processIdentifier, bundleID: bundleID)
+    }
+
+    /// `bundleID` 已经换成本体的(`PlayerBundleAliases.canonical`)。
+    private func watchExit(pid: pid_t, bundleID: String) {
+        guard pid > 0, exitSources[pid] == nil, PlaybackPlayer.builtin(forBundleID: bundleID) != nil else { return }
         let source = DispatchSource.makeProcessSource(identifier: pid, eventMask: .exit, queue: .main)
         source.setEventHandler { [weak self] in
             MainActor.assumeIsolated { self?.exited(bundleID, pid: pid) }

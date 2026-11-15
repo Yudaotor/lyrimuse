@@ -64,9 +64,9 @@ final class MenuBarOccupancy {
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { self?.readFrontMenus() }
                 }
             },
+            // 进程号从通知自带的字段读(`WorkspaceAppNote`),不读 `NSRunningApplication` 的属性。
             nc.addObserver(forName: NSWorkspace.didLaunchApplicationNotification, object: nil, queue: .main) { [weak self] note in
-                guard let app = note.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication else { return }
-                let pid = app.processIdentifier
+                guard let pid = WorkspaceAppNote.pid(note) else { return }
                 // 状态栏图标在 App 起来之后才建,隔两拍各问一次。
                 MainActor.assumeIsolated {
                     for delay in [2.0, 6.0] {
@@ -75,8 +75,7 @@ final class MenuBarOccupancy {
                 }
             },
             nc.addObserver(forName: NSWorkspace.didTerminateApplicationNotification, object: nil, queue: .main) { [weak self] note in
-                guard let app = note.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication else { return }
-                let pid = app.processIdentifier
+                guard let pid = WorkspaceAppNote.pid(note) else { return }
                 MainActor.assumeIsolated {
                     guard let self, self.statusItemFrames.removeValue(forKey: pid) != nil else { return }
                     self.onChange?()

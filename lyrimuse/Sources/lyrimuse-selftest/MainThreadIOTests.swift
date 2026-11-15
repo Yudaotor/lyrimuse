@@ -1,3 +1,4 @@
+import AppKit
 import Foundation
 import LyrimuseCore
 
@@ -316,5 +317,71 @@ func runMainThreadIOTests() {
                     "触控栏判定(契约): 内核进程表在后台查、一次一个,派不出去的那次等回来再补查")
         expectEqual(sourceHas(sourceBody("private func controlStripProbed(", in: availability), "case .unknown:\nreturn"), true,
                     "触控栏判定(契约): 进程表读不出来时沿用上一次的结论")
+    }
+
+    do {
+        print("\n== 主线程 I/O:按 bundle id 找进程先用记下的进程号,装没装只问登记位置 ==")
+        let me = getpid()
+        let fake = "me.yudaotor.selftest.process-cache.\(me)"
+        expectEqual(PlayerProcess.pid(exactBundleID: fake), nil, "进程缓存: 没记过、LaunchServices 也不认的 bundle id 找不到")
+        PlayerProcess.remember(me, bundleID: fake)
+        expectEqual(PlayerProcess.pid(exactBundleID: fake), me, "进程缓存: 记下的进程还活着、路径没变就直接用,不问 LaunchServices")
+        expectEqual(PlayerProcess.isRunning(bundleID: fake, includingAliases: false, excludingPID: me), false,
+                    "进程缓存: 要剔掉的正是记下的那个就不算")
+        expectEqual(PlayerProcess.pid(exactBundleID: fake), nil, "进程缓存: 剔掉过的记录随之忘掉")
+        let myPath = ControlStripProcess.executablePath(of: me) ?? ""
+        let entry = (pid: me, path: myPath)
+        expectEqual([PlayerProcess.verifiedPID(entry, excludingPID: nil, executablePath: { _ in myPath }),
+                     PlayerProcess.verifiedPID(entry, excludingPID: nil, executablePath: { _ in "/elsewhere/other" }),
+                     PlayerProcess.verifiedPID(entry, excludingPID: nil, executablePath: { _ in nil }),
+                     PlayerProcess.verifiedPID(entry, excludingPID: me, executablePath: { _ in myPath })],
+                    [me, nil, nil, nil], "进程缓存: 路径对得上才用;进程号换了程序、进程不在、要剔掉的都不用")
+        let process = core("Local/PlayerProcess.swift")
+        expectEqual(sourceHas(sourceBody("private static func firstPID(", in: process),
+                              "for id in ids {\nif let pid = knownPID(bundleID: id, excludingPID: gone) { return pid }\nlet apps = NSRunningApplication.runningApplications(withBundleIdentifier: id)"),
+                    true, "进程缓存(契约): 先核记下的进程号,对不上才问 LaunchServices,本体优先的次序不变")
+
+        let note = Notification(name: NSWorkspace.didLaunchApplicationNotification, object: nil,
+                                userInfo: ["NSApplicationBundleIdentifier": "com.example.player", "NSApplicationProcessIdentifier": NSNumber(value: 4321)])
+        expectEqual([WorkspaceAppNote.bundleID(note), WorkspaceAppNote.pid(note).map(String.init)], ["com.example.player", "4321"],
+                    "起停通知: bundle id、进程号读通知自带的字段")
+        if let dock = NSRunningApplication.runningApplications(withBundleIdentifier: "com.apple.dock").first {
+            let bare = Notification(name: NSWorkspace.didLaunchApplicationNotification, object: nil,
+                                    userInfo: [NSWorkspace.applicationUserInfoKey: dock])
+            expectEqual([WorkspaceAppNote.bundleID(bare), WorkspaceAppNote.pid(bare).map(String.init)],
+                        ["com.apple.dock", String(dock.processIdentifier)], "起停通知: 没带字段时退回 NSRunningApplication")
+        }
+        let quitWatcher = sourceBody("func start()", in: app("Settings/PlayerQuitWatcher.swift"))
+        let centerLyrics = sourceBody("private func start()", in: app("MenuBar/MenuBarCenterLyrics.swift"))
+        let discord = sourceBody("nonisolated private static func isDiscordDesktop(", in: app("Settings/DiscordPresenceController.swift"))
+        expectEqual([quitWatcher, centerLyrics, discord].map { sourceHas($0, "as? NSRunningApplication") },
+                    [false, false, false], "起停通知(契约): 跟随退出、菜单栏居中歌词、Discord 不读通知里 NSRunningApplication 的属性")
+        expectEqual(sourceHas(quitWatcher, "WorkspaceAppNote.bundleID(note)") && sourceHas(centerLyrics, "WorkspaceAppNote.pid(note)")
+                        && sourceHas(discord, "WorkspaceAppNote.bundleID(notification)"), true, "起停通知(契约): 三处都走 WorkspaceAppNote")
+
+        let aliases = core("Local/PlayerBundleAliases.swift")
+        let installed = sourceBody("public static func isInstalled(", in: aliases)
+        expectEqual(sourceHas(installed, "urlForApplication(withBundleIdentifier:") && !sourceHas(installed, "applicationURL(")
+                        && !sourceHas(installed, "runningApplications"), true,
+                    "装没装(契约): 只问登记位置,不先翻在跑的那份")
+        expectEqual(sourceHas(sourceBody("public static func installedPlayers()", in: core("Local/PlayerPickerLayout.swift")),
+                              "PlayerBundleAliases.isInstalled(player)"), true, "装没装(契约): 选播放器网格走同一个判断")
+        expectEqual(PlayerBundleAliases.isInstalled(.appleMusic), true, "装没装: 系统自带的 Apple Music 算装了")
+        expectEqual(sourceHas(sourceBody("public static func automationBundleID(", in: aliases),
+                              "guard ids.count > 1 else { return player.bundleIdentifier }"), true,
+                    "自动化对象(契约): 没有别的版本时不问在不在跑、装没装")
+        expectEqual(PlayerBundleAliases.automationBundleID(for: .spotify), PlaybackPlayer.spotify.bundleIdentifier,
+                    "自动化对象: 只有本体的就是本体")
+
+        expectEqual(sourceHas(app("Settings/PlayerHealthMonitor.swift"), "nonisolated static func automationMissing("), true,
+                    "设置侧栏健康(契约): 每拍的自动化查询(挑版本、判在跑)不在主线程上跑")
+        let browser = sourceBody("private func refreshBrowserLiveStatus()", in: app("SettingsView.swift"))
+        expectEqual(sourceHas(browser, "Task.detached(priority: .utility)") && sourceHas(browser, "running: MusicAutomationPermission.isRunning(bundleID: id),")
+                        && !sourceHas(browser, "let running = Dictionary("), true,
+                    "浏览器实时状态(契约): 判在不在跑挪进后台那一段")
+        let pear = sourceBody("public func canControl()", in: core("Local/PearDesktopAPI.swift"))
+        expectEqual(sourceHas(pear, "PlayerProcess.pid(exactBundleID: PlaybackPlayer.pearDesktop.bundleIdentifier)")
+                        && sourceHas(pear, "now - last.at < Self.runningCheckTTL") && !sourceHas(pear, "runningApplications"), true,
+                    "Pear 能不能控制(契约): 判开着走进程缓存、结论记一会儿,榜单每行重画不再问 LaunchServices")
     }
 }

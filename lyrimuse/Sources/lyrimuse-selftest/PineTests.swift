@@ -478,8 +478,9 @@ func runPineTests() {
                               "rows.map { track($0, video: isVideo($0, directory: directory)) }"), true, "Pine 接线: 列表里的视频行不预取")
         expectEqual([sourceHas(sourceText("LyrimuseCore/Local/PlayerProcess.swift"), "let ids = PlayerBundleAliases.all(for: bundleID, includingOtherClients: false)"),
                      sourceHas(sourceText("LyrimuseCore/Local/NowPlayingClientsProbe.swift"), "for id in PlayerBundleAliases.inProbeOrder(for: bundleID) {"),
-                     sourceHas(sourceText("LyrimuseCore/Local/PlayerPickerLayout.swift"),
-                               "PlayerBundleAliases.applicationURL(forBundleID: player.bundleIdentifier) != nil")],
+                     sourceHas(sourceText("LyrimuseCore/Local/PlayerPickerLayout.swift"), "player != .auto && PlayerBundleAliases.isInstalled(player)")
+                        && sourceHas(sourceBody("public static func isInstalled(", in: sourceText("LyrimuseCore/Local/PlayerBundleAliases.swift")),
+                                     "&& all(for: player.bundleIdentifier, includingOtherClients: includingOtherClients)")],
                     [true, true, true], "Pine 别名: 找进程、单问会话、判装没装都把别名试一遍")
         expectEqual([sourceHas(client, "guard let bundleID = raw.bundleIdentifier.map(PlayerBundleAliases.canonical), artworkBundleIDMatches(bundleID, players: players) else {"),
                      sourceHas(sourceText("LyrimuseCore/Local/NowPlayingClientsProbe.swift"), "\"/usr/bin/perl\", [paths.script, paths.library, id, \"artwork\"]"),

@@ -321,6 +321,8 @@ public final class PearDesktopAPI: @unchecked Sendable {
     private let logger = Logger(subsystem: LyrimuseIdentity.logSubsystem, category: "pear-api")
     private let lock = NSLock()
     private var cachedConfig: (modified: Date, config: Config?)?
+    /// `canControl` 上次判开没开着的时刻(`systemUptime`)和结论。
+    private var runningCheck: (at: TimeInterval, running: Bool)?
     private var token: String?
     private var authorizing = false
     private var lastAuthorizationFailure: Date?
@@ -599,10 +601,23 @@ public final class PearDesktopAPI: @unchecked Sendable {
 
     /// 能不能直接经接口让它干活:它开着、接口开着、该有的令牌有了。不发请求,主线程上也能调。停播页据此给不给「继续播放」:
     /// 它冷启动时自己跳到前台(同 reAMP、VOX),没开着时只给「打开」。
+    /// 开没开着记 `runningCheckTTL` 秒:Last.fm 榜单每一行重画都问。在跑的进程由 `PlayerProcess` 记着、只问内核;没在跑时
+    /// 那一遍内核进程表约 1 毫秒。见 02 章决策 262。
     public func canControl() -> Bool {
         guard usableConfig() != nil else { return false }
-        return !NSRunningApplication.runningApplications(withBundleIdentifier: PlaybackPlayer.pearDesktop.bundleIdentifier).isEmpty
+        let now = ProcessInfo.processInfo.systemUptime
+        lock.lock()
+        let last = runningCheck
+        lock.unlock()
+        if let last, now - last.at < Self.runningCheckTTL { return last.running }
+        let running = PlayerProcess.pid(exactBundleID: PlaybackPlayer.pearDesktop.bundleIdentifier) != nil
+        lock.lock()
+        runningCheck = (now, running)
+        lock.unlock()
+        return running
     }
+
+    static let runningCheckTTL: TimeInterval = 1
 
     /// 搜索结果(`POST /api/v1/search` 回的 YouTube Music 搜索应答)里歌名对得上的那首歌的 videoId:只认标成「歌曲」的音轨版
     /// (`MUSIC_VIDEO_TYPE_ATV`),排第一的热门结果常是 MV,不拿。歌名先找去掉空白和大小写后完全一样的,没有再找以它开头的

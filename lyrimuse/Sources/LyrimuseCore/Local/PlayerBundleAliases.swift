@@ -61,14 +61,19 @@ public enum PlayerBundleAliases {
     public static func automationBundleID(for player: PlaybackPlayer) -> String {
         guard !player.bundleIdentifier.isEmpty else { return player.bundleIdentifier }
         let ids = all(for: player.bundleIdentifier, includingOtherClients: false)
+        // 只有本体时三条路都落到它,不用问在不在跑、装没装:设置页每拍都调,问一次在跑的就同步等 launchservicesd 一次。
+        guard ids.count > 1 else { return player.bundleIdentifier }
         return ids.first(where: isRunning)
             ?? ids.first { NSWorkspace.shared.urlForApplication(withBundleIdentifier: $0) != nil }
             ?? player.bundleIdentifier
     }
 
-    /// 这个内置播放器(本体或别的版本)装在这台 Mac 上没有。
+    /// 这个内置播放器(本体或别的版本)装在这台 Mac 上没有。只问 LaunchServices 登记的 App 位置(本进程里有缓存),不经
+    /// `applicationURL` 先翻在跑的那份:那一步对在跑的 App 要同步等 launchservicesd 三次,设置页、引导页每次重画、每拍都调。
+    /// 在跑的 App 都登记过,结论一样。见 02 章决策 262。
     public static func isInstalled(_ player: PlaybackPlayer, includingOtherClients: Bool = true) -> Bool {
         !player.bundleIdentifier.isEmpty
-            && applicationURL(forBundleID: player.bundleIdentifier, includingOtherClients: includingOtherClients) != nil
+            && all(for: player.bundleIdentifier, includingOtherClients: includingOtherClients)
+                .contains { NSWorkspace.shared.urlForApplication(withBundleIdentifier: $0) != nil }
     }
 }

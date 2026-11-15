@@ -67,8 +67,9 @@ final class PlayerHealthMonitor: ObservableObject {
 
     /// 立刻查一次(页面刚出现时调)。在飞时不重复起。引擎状态照样按 `EngineDaemonProbe` 的规则决定沿用还是再问 launchd;
     /// 要权威结论的(启停服务的按钮)自己等 `EngineServiceManager.waitForPendingOperations()`。
-    /// 这几家里自动化权限缺着的(查询不弹窗,超时当没被拒)。
-    static func automationMissing(_ targets: [PlaybackPlayer]) async -> Set<PlaybackPlayer> {
+    /// 这几家里自动化权限缺着的(查询不弹窗,超时当没被拒)。不在主线程上跑:挑查哪个版本、判在不在跑都可能要问
+    /// launchservicesd,`refresh` 每 2 秒一拍。见 02 章决策 262。
+    nonisolated static func automationMissing(_ targets: [PlaybackPlayer]) async -> Set<PlaybackPlayer> {
         var missing: Set<PlaybackPlayer> = []
         for player in targets {
             let bundleID = PlayerBundleAliases.automationBundleID(for: player)

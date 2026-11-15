@@ -480,9 +480,9 @@ final class DiscordPresenceController: ObservableObject {
         return DiscordPresence.waiting(installed: desktopAppURL() != nil, running: running)
     }
 
+    /// 每个 App 起停都过一遍:bundle id 从通知自带的字段读(`WorkspaceAppNote`),不读 `NSRunningApplication` 的属性。
     nonisolated private static func isDiscordDesktop(_ notification: Notification) -> Bool {
-        let app = notification.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication
-        return app?.bundleIdentifier.map(DiscordPresence.desktopBundleIDs.contains) ?? false
+        WorkspaceAppNote.bundleID(notification).map(DiscordPresence.desktopBundleIDs.contains) ?? false
     }
 
     // MARK: - 此刻的曲目

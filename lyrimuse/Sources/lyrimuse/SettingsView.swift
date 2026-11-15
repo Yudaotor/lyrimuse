@@ -5929,8 +5929,8 @@ private struct PlayerSettingsTab: View {
     /// 的心跳同频,在后台跑,4 个浏览器 ×4ms 无感)、切回 App、请求过授权之后
     /// (`automationRefreshTick`)、配对表变了。同一时刻最多一次在飞。
     ///
-    /// `isRunning` 读 `NSWorkspace.runningApplications`,在主线程读完再带进后台 —— 它便宜,
-    /// 而且 NSWorkspace 那套属性按文档就该在主线程碰。
+    /// 在不在跑也在后台判:浏览器开着时 `PlayerProcess` 头一回要同步问 launchservicesd,没开着时翻一遍内核进程表。
+    /// 见 02 章决策 262。
     private func refreshBrowserLiveStatus() {
         guard !browserLiveStatusInFlight else {
             browserLiveStatusRerun = true
@@ -5941,9 +5941,6 @@ private struct PlayerSettingsTab: View {
             if !browserLiveStatus.isEmpty { browserLiveStatus = [:] }
             return
         }
-        let running = Dictionary(uniqueKeysWithValues: ids.map {
-            ($0, MusicAutomationPermission.isRunning(bundleID: $0))
-        })
         browserLiveStatusInFlight = true
         Task {
             var fresh = await Task.detached(priority: .utility) { () -> [String: BrowserLiveStatus] in
@@ -5951,14 +5948,14 @@ private struct PlayerSettingsTab: View {
                 for id in ids {
                     out[id] = BrowserLiveStatus(
                         jsSwitch: BrowserAutomationPermission.status(forBundleID: id),
-                        running: running[id] ?? false,
+                        running: MusicAutomationPermission.isRunning(bundleID: id),
                         automation: nil)
                 }
                 return out
             }.value
             // 目标没在跑时 check 查不出真实状态(会落进 procNotFound 被当成"还没问过"),
             // 干脆不问,留 nil 表示"查不到"。
-            for id in ids where running[id] ?? false {
+            for id in ids where fresh[id]?.running == true {
                 fresh[id]?.automation = await MusicAutomationPermission.status(bundleID: id, askIfNeeded: false)
             }
             browserLiveStatusInFlight = false
