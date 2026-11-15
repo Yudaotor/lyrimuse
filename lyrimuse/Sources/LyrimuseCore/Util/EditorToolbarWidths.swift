@@ -83,3 +83,21 @@ public enum EditorToolbarSummary {
         return [summary] + (1..<parts.count).reversed().map { parts[0..<$0].joined(separator: separator) + "…" }
     }
 }
+
+/// 编辑台工具栏按钮上的摘要:浮层开着时停在打开那一刻的那一句,关掉再换成现值。按内容分宽的那一行按摘要量宽,
+/// 浮层又挂在按钮上,摘要跟着浮层里改的设置变,整行就重新分宽、浮层跟着挪。见 04 章决策 101。
+public struct EditorToolbarSummaryHold: Equatable {
+    public private(set) var held: String?
+
+    public init() {}
+
+    /// 浮层开关一变就调:开着记下此刻的摘要,关了放掉。
+    public mutating func update(holding: Bool, live: String) {
+        held = holding ? live : nil
+    }
+
+    /// 按钮上画的那一句。
+    public func shown(live: String) -> String {
+        held ?? live
+    }
+}

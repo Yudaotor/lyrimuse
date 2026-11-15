@@ -14,7 +14,7 @@ import SwiftUI
 struct EditorToolbarButtonLabel: View {
     let icon: String
     let title: String
-    let summary: String
+    var summary: String
     /// 悬停说明里代替 `summary` 的整句(开关类摘要只报数量,这里列出开着的是哪几项)。不给就用 `summary`。
     var detail: String?
     /// 标题后面标「Beta」(`SettingsBetaBadge`);占的宽度从摘要那一截让出来。
@@ -92,6 +92,13 @@ struct EditorToolbarButtonLabel: View {
 }
 
 extension EditorToolbarButtonLabel {
+    /// 同一颗按钮换一句摘要(`EditorToolbarHeldSummary` 停住的那句)。
+    func withSummary(_ summary: String) -> Self {
+        var label = self
+        label.summary = summary
+        return label
+    }
+
     /// 第一个值连同间隔点比摘要上限还宽:任何宽度下都放不全,只能截。
     static func allowsTailTruncation(_ summary: String) -> Bool {
         textWidth("· " + EditorToolbarSummary.parts(summary)[0]) > summaryWidth
@@ -207,10 +214,40 @@ extension EditorToolbarButtonLabel {
     }
 }
 
-extension View {
-    /// 挂在 `EditorToolbarContentWidthRow` 里每颗按钮的最外层:告诉那一行这颗的摘要能让多少宽。
+private extension View {
+    /// 告诉 `EditorToolbarContentWidthRow` 这颗的摘要能让多少宽。只给 `EditorToolbarHeldSummary` 用:分宽量的必须是画出来的那一句。
     func editorToolbarSummarySlack(_ summary: String) -> some View {
         layoutValue(key: EditorToolbarSummarySlack.self, value: EditorToolbarButtonLabel.summarySlack(summary))
             .layoutValue(key: EditorToolbarSummarySteps.self, value: EditorToolbarButtonLabel.summarySteps(summary))
+    }
+}
+
+/// `EditorToolbarContentWidthRow` 里的一颗按钮:`content` 拿到的摘要在浮层开着(`editorToolbarHoldsSummaries`)时停在打开那一刻,
+/// 关掉再换成现值,这一行的分宽和挂在按钮上的浮层就不随浮层里改的设置挪位。分宽要读的布局值也挂在这一层,跟画出来的是同一句。
+/// 这一行的按钮都要包在这里,宿主在工具栏外面按「有没有浮层开着」设 `editorToolbarHoldsSummaries`。见 04 章决策 101。
+struct EditorToolbarHeldSummary<Content: View>: View {
+    let summary: String
+    @ViewBuilder let content: (String) -> Content
+
+    @Environment(\.editorToolbarHoldsSummaries) private var holding
+    @State private var hold = EditorToolbarSummaryHold()
+
+    var body: some View {
+        let shown = hold.shown(live: summary)
+        content(shown)
+            .onChange(of: holding, initial: true) { _, now in hold.update(holding: now, live: summary) }
+            .editorToolbarSummarySlack(shown)
+    }
+}
+
+private struct EditorToolbarHoldsSummariesKey: EnvironmentKey {
+    static let defaultValue = false
+}
+
+extension EnvironmentValues {
+    /// 编辑台有浮层开着:工具栏按钮的摘要先不跟着设置变(`EditorToolbarHeldSummary`)。
+    var editorToolbarHoldsSummaries: Bool {
+        get { self[EditorToolbarHoldsSummariesKey.self] }
+        set { self[EditorToolbarHoldsSummariesKey.self] = newValue }
     }
 }

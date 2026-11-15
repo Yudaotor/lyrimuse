@@ -308,6 +308,27 @@ func runSettingsAuditContracts() {
                 && sourceHas(toolbarLabel, "hideBelow: Self.allowsTailTruncation(summary) ? EditorToolbarSummarySlot.hideBelow : .infinity"), true,
                 "编辑台工具栏摘要: 整句、少掉末尾的值几档逐个试,都放不下就整截藏掉,只有放不全的长名字才截断(04 章决策 87)")
     let toolbarLabelFile = app("UI/EditorToolbarButtonLabel.swift")
+    let heldSummary = sourceBody("struct EditorToolbarHeldSummary<Content: View>: View {", in: toolbarLabelFile)
+    expectEqual(sourceHas(heldSummary, "let shown = hold.shown(live: summary)\ncontent(shown)")
+                && sourceHas(heldSummary, ".onChange(of: holding, initial: true) { _, now in hold.update(holding: now, live: summary) }")
+                && sourceHas(heldSummary, ".editorToolbarSummarySlack(shown)")
+                && sourceHas(toolbarLabelFile, "private extension View {\n/// 告诉 `EditorToolbarContentWidthRow`"), true,
+                "编辑台工具栏摘要停住: 包装层画的、分宽量的都是停住的那一句,量宽的布局值只能经它挂(04 章决策 101)")
+    let heldHosts: [(name: String, source: String, holding: String, rows: Int)] = [
+        ("悬浮歌词", app("UI/OverlayEditorStage.swift"), "popover != nil", 2),
+        ("灵动岛", app("UI/NotchEditorStage.swift"), "popover != nil", 2),
+        ("歌词窗口", app("SettingsView.swift"), "lyricsWindowPopover != nil", 1),
+    ]
+    let contentWidthHosts = (FileManager.default.enumerator(atPath: appDir.path)?.allObjects as? [String] ?? [])
+        .filter { $0.hasSuffix(".swift") && $0 != "UI/EditorToolbarButtonLabel.swift" && app($0).contains("EditorToolbarContentWidthRow(") }
+        .sorted()
+    expectEqual(contentWidthHosts, ["SettingsView.swift", "UI/NotchEditorStage.swift", "UI/OverlayEditorStage.swift"],
+                "编辑台工具栏摘要停住: 按内容分宽的工具栏都要接上 EditorToolbarHeldSummary,新加一段就补进下面的名单(04 章决策 101)")
+    for host in heldHosts {
+        expectEqual(sourceHas(host.source, "EditorToolbarHeldSummary(summary:")
+                    && host.source.components(separatedBy: ".environment(\\.editorToolbarHoldsSummaries, \(host.holding))").count - 1 == host.rows,
+                    true, "编辑台工具栏摘要停住: \(host.name)工具栏按钮包在 EditorToolbarHeldSummary 里,每行按有没有浮层开着设停住(04 章决策 101)")
+    }
     expectEqual(sourceHas(toolbarLabelFile, "min(textWidth(text) - summaryFloor, summaryWidth)")
                 && sourceHas(toolbarLabelFile, "let full = summaryLineWidth(summary)")
                 && sourceHas(toolbarLabelFile, ".map { max(full - summaryLineWidth($0) - 1, 0) }"), true,

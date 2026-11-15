@@ -1644,7 +1644,7 @@ func runNotchTests() {
             expectEqual(stageSrc.contains("if gone, case .hotspot = popoverAnchor, popover != nil { popover = nil }")
                         && stageSrc.contains("return (spot, min(index, spot.rects.count - 1))"), true,
                         "编辑台浮层契约: 点开它的区域没了就收掉浮层,矩形少了挂到最后一个,不留空壳")
-            expectEqual(stageSrc.contains("if case .hotspot = popoverAnchor, popover != nil, adjustingThumb == nil {\n                chrome.setExpandedFromPreview(false)"), true,
+            expectEqual(sourceHas(stageSrc, "if case .hotspot = popoverAnchor, popover != nil, adjustingThumb == nil {\nchrome.setExpandedFromPreview(false)"), true,
                         "编辑台浮层契约: 从卡片浮层直接点工具栏,先放掉卡片浮层钉住的展开")
             expectEqual(src("NotchEditorialPanel.swift").contains("AppSettings.shared.$notchHideDuringScreenCapture"), true,
                         "浮框契约: 浮框开着时改「截屏时隐藏」当场生效")

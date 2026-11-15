@@ -4015,9 +4015,9 @@ func runSourceContractSettingsTests() {
             expectEqual(file.map { sourceHas($0, "private var toolbar: some View {\nHStack(spacing: 8) {\nEditorToolbarContentWidthRow(spacing: 8) {")
                                     && sourceHas($0, "private var toolbarRow2: some View {\nEditorToolbarContentWidthRow(spacing: 8) {")
                                     && sourceHas($0, "fitsContent: true)")
-                                    && sourceHas($0, ".editorToolbarSummarySlack(summary)")
+                                    && sourceHas($0, "EditorToolbarHeldSummary(summary: summary) { summary in")
                                     && !$0.contains("EditorToolbarResetReserve()") }, true,
-                        "工具栏分宽: \(name)两行按内容分宽,标签报文字本身的宽,按钮挂摘要可让宽度,不放「重置 ▾」占位")
+                        "工具栏分宽: \(name)两行按内容分宽,标签报文字本身的宽,按钮经 EditorToolbarHeldSummary 挂摘要可让宽度,不放「重置 ▾」占位")
         }
         expectEqual(menuBar.map { $0.contains("EditorToolbarResetReserve()") && $0.contains("toolbarGhostButton(icon:") }, true,
                     "工具栏对齐闸: 菜单栏工具栏第二行末尾要有第一行第三颗的隐藏副本和 EditorToolbarResetReserve(),否则两颗比上面宽一截")

@@ -388,9 +388,11 @@ struct OverlayEditorStage: View {
                 toolbar
                     .frame(height: Self.toolbarHeight)
                     .editorToolbarGlassGroup()
+                    .environment(\.editorToolbarHoldsSummaries, popover != nil)
                 toolbarRow2
                     .frame(height: Self.toolbarHeight)
                     .editorToolbarGlassGroup()
+                    .environment(\.editorToolbarHoldsSummaries, popover != nil)
                 // 舞台底下没有 caption 那一行了(21pt,理由见 totalHeight),
                 // 这里直接就是舞台本身。
                 stage(stageWidth: stageWidth)
@@ -563,21 +565,23 @@ struct OverlayEditorStage: View {
     private func toolbarButton(
         icon: String, title: String, summary: String, detail: String? = nil, target: StagePopover
     ) -> some View {
-        Button {
-            popoverMaxHeight = stageTopProbe.popoverHeightLimit(rowOffset: Self.rowOffsetAboveStage(target))
-            popoverAnchor = .toolbar
-            popover = target
-        } label: {
-            // 两行都按内容分宽,标签报文字本身的宽(`EditorToolbarContentWidthRow`)。
-            EditorToolbarButtonLabel(icon: icon, title: title, summary: summary, detail: detail, fitsContent: true)
-        }
-        .editorToolbarButtonStyle()
-        .popover(isPresented: popoverBinding(target), arrowEdge: .top) {
-            SettingsPopoverShell(title: target.title, width: target.width, maxHeight: popoverMaxHeight) {
-                popoverRows(for: target)
+        // 浮层开着时摘要停住(`EditorToolbarHeldSummary`),拖「文字不透明度」这类改摘要的控件时这一行不重排、浮层不挪。
+        EditorToolbarHeldSummary(summary: summary) { summary in
+            Button {
+                popoverMaxHeight = stageTopProbe.popoverHeightLimit(rowOffset: Self.rowOffsetAboveStage(target))
+                popoverAnchor = .toolbar
+                popover = target
+            } label: {
+                // 两行都按内容分宽,标签报文字本身的宽(`EditorToolbarContentWidthRow`)。
+                EditorToolbarButtonLabel(icon: icon, title: title, summary: summary, detail: detail, fitsContent: true)
+            }
+            .editorToolbarButtonStyle()
+            .popover(isPresented: popoverBinding(target), arrowEdge: .top) {
+                SettingsPopoverShell(title: target.title, width: target.width, maxHeight: popoverMaxHeight) {
+                    popoverRows(for: target)
+                }
             }
         }
-        .editorToolbarSummarySlack(summary)
     }
 
     /// 按钮所在那一行的上沿比舞台上沿高多少:第一行(主题 / 字形 / 颜色)隔着两行,其余在第二行。

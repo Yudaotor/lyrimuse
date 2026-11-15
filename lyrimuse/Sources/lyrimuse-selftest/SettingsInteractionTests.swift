@@ -31,6 +31,29 @@ func runSettingsInteractionTests() {
         expectEqual(EditorToolbarSummary.candidates(""), [""], "工具栏摘要: 空串照原样")
         expectEqual(EditorToolbarSummary.parts("PingFang SC 较粗 31pt"), ["PingFang SC 较粗 31pt"], "工具栏摘要: 空格不算分段")
     }
+    // ---- EditorToolbarSummaryHold:浮层开着时工具栏摘要停住,这一行不重排、浮层不挪(04 章决策 101) ----
+    do {
+        let before = ["默认", "较粗 30pt", "跟随封面 · 透明"]
+        let dragged = ["默认", "较粗 30pt", "跟随封面 · 透明 · 95%"]
+        func xs(_ summaries: [String]) -> [CGFloat] {
+            let font = NSFont.systemFont(ofSize: 12)
+            let ideals = summaries.map { 60 + ($0 as NSString).size(withAttributes: [.font: font]).width.rounded(.up) }
+            let widths = EditorToolbarWidths.fill(ideals: ideals, floors: ideals, room: 480)
+            return widths.indices.map { i in widths[..<i].reduce(0, +) + CGFloat(i) * 8 }
+        }
+        expectEqual(xs(before) == xs(dragged), false, "工具栏摘要停住: 前提——摘要多出一截时整行重新分宽,按钮挪位")
+        var holds = before.map { _ in EditorToolbarSummaryHold() }
+        for i in holds.indices { holds[i].update(holding: false, live: before[i]) }
+        expectEqual(holds.indices.map { holds[$0].shown(live: before[$0]) }, before, "工具栏摘要停住: 浮层关着时报现值")
+        for i in holds.indices { holds[i].update(holding: true, live: before[i]) }
+        let shownWhileOpen = holds.indices.map { holds[$0].shown(live: dragged[$0]) }
+        expectEqual(shownWhileOpen, before, "工具栏摘要停住: 浮层开着时设置变了,按钮上仍是打开那一刻的摘要")
+        expectEqual(xs(shownWhileOpen), xs(before), "工具栏摘要停住: 浮层开着时各按钮的 x 不变")
+        for i in holds.indices { holds[i].update(holding: false, live: dragged[i]) }
+        expectEqual(holds.indices.map { holds[$0].shown(live: dragged[$0]) }, dragged, "工具栏摘要停住: 浮层关掉后换成现值")
+        holds[2].update(holding: true, live: dragged[2])
+        expectEqual(holds[2].shown(live: "跟随封面 · 透明 · 20%"), dragged[2], "工具栏摘要停住: 再打开时停在新的那一句")
+    }
     do {
         func snap(_ widths: [CGFloat], _ steps: [[CGFloat]]) -> [CGFloat] {
             EditorToolbarWidths.snap(widths, steps: steps).map { ($0 * 100).rounded() / 100 }

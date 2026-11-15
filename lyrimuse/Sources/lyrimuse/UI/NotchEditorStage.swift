@@ -232,9 +232,11 @@ struct NotchEditorStage: View {
                 toolbar
                     .frame(height: Self.toolbarHeight)
                     .editorToolbarGlassGroup()
+                    .environment(\.editorToolbarHoldsSummaries, popover != nil)
                 toolbarRow2
                     .frame(height: Self.toolbarHeight)
                     .editorToolbarGlassGroup()
+                    .environment(\.editorToolbarHoldsSummaries, popover != nil)
                 stage(stageWidth: stageWidth)
             }
             .frame(maxWidth: .infinity)
@@ -465,25 +467,27 @@ struct NotchEditorStage: View {
     private func toolbarButton(
         icon: String, title: String, summary: String, detail: String? = nil, target: StagePopover
     ) -> some View {
-        Button {
-            popoverMaxHeight = stageTopProbe.popoverHeightLimit(rowOffset: Self.rowOffsetAboveStage(target))
-            // 从卡片上点开的浮层还开着、直接点了工具栏:先放掉它钉住的展开。下面 onChange(of: popover) 只认卡片锚点,
-            // 锚点这一下已经换成工具栏;目标浮层相同时 popover 值都不变、根本不触发,预览会一直停在展开态。
-            if case .hotspot = popoverAnchor, popover != nil, adjustingThumb == nil {
-                chrome.setExpandedFromPreview(false)
+        // 浮层开着时摘要停住(`EditorToolbarHeldSummary`),浮层里改字号、开关时这一行不重排、浮层不挪。
+        EditorToolbarHeldSummary(summary: summary) { summary in
+            Button {
+                popoverMaxHeight = stageTopProbe.popoverHeightLimit(rowOffset: Self.rowOffsetAboveStage(target))
+                // 从卡片上点开的浮层还开着、直接点了工具栏:先放掉它钉住的展开。下面 onChange(of: popover) 只认卡片锚点,
+                // 锚点这一下已经换成工具栏;目标浮层相同时 popover 值都不变、根本不触发,预览会一直停在展开态。
+                if case .hotspot = popoverAnchor, popover != nil, adjustingThumb == nil {
+                    chrome.setExpandedFromPreview(false)
+                }
+                popoverAnchor = .toolbar
+                popover = target
+            } label: {
+                // 两行都按内容分宽,标签报文字本身的宽(`EditorToolbarContentWidthRow`)。
+                EditorToolbarButtonLabel(icon: icon, title: title, summary: summary, detail: detail, fitsContent: true)
             }
-            popoverAnchor = .toolbar
-            popover = target
-        } label: {
-            // 两行都按内容分宽,标签报文字本身的宽(`EditorToolbarContentWidthRow`)。
-            EditorToolbarButtonLabel(icon: icon, title: title, summary: summary, detail: detail, fitsContent: true)
+            .editorToolbarButtonStyle()
+            .popover(isPresented: popoverBinding(target), arrowEdge: .top) {
+                popoverContent(for: target)
+                    .environment(\.settingsPopoverMaxHeight, popoverMaxHeight)
+            }
         }
-        .editorToolbarButtonStyle()
-        .popover(isPresented: popoverBinding(target), arrowEdge: .top) {
-            popoverContent(for: target)
-                .environment(\.settingsPopoverMaxHeight, popoverMaxHeight)
-        }
-        .editorToolbarSummarySlack(summary)
     }
 
     /// 按钮所在那一行的上沿比舞台上沿高多少:第一行(风格 / 屏幕 / 左耳 / 右耳)隔着两行,其余在第二行。

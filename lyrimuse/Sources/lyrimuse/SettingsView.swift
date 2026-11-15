@@ -3217,6 +3217,7 @@ private struct AppearanceSettingsTab: View {
         .font(.system(size: 12))
         .padding(.horizontal, 2)
         .editorToolbarGlassGroup()
+        .environment(\.editorToolbarHoldsSummaries, lyricsWindowPopover != nil)
     }
 
     /// 按钮那一行上沿的测量点(同另外几段编辑台的 `StageTopProbe`)。
@@ -3355,23 +3356,25 @@ private struct AppearanceSettingsTab: View {
     /// 不让系统翻下来(同另外几段编辑台,04 章决策 34、61)。
     private func lyricsWindowToolbarButton(_ item: LyricsWindowToolbarItem) -> some View {
         let label = lyricsWindowToolbarLabel(item)
-        return Button {
-            let probe = Self.lyricsWindowToolbarFirstRow.contains(item) ? lyricsWindowRow1Probe : lyricsWindowRow2Probe
-            lyricsWindowPopoverMaxHeight = probe.popoverHeightLimit()
-            lyricsWindowPopover = item
-        } label: {
-            label
+        // 浮层开着时摘要停住(`EditorToolbarHeldSummary`),同悬浮歌词、灵动岛编辑台。
+        return EditorToolbarHeldSummary(summary: label.summary) { summary in
+            Button {
+                let probe = Self.lyricsWindowToolbarFirstRow.contains(item) ? lyricsWindowRow1Probe : lyricsWindowRow2Probe
+                lyricsWindowPopoverMaxHeight = probe.popoverHeightLimit()
+                lyricsWindowPopover = item
+            } label: {
+                label.withSummary(summary)
+            }
+            .editorToolbarButtonStyle()
+            .popover(isPresented: Binding(
+                get: { lyricsWindowPopover == item },
+                set: { shown in
+                    if shown { lyricsWindowPopover = item } else if lyricsWindowPopover == item { lyricsWindowPopover = nil }
+                }), arrowEdge: .top) {
+                lyricsWindowPopoverContent(item)
+                    .environment(\.settingsPopoverMaxHeight, lyricsWindowPopoverMaxHeight)
+            }
         }
-        .editorToolbarButtonStyle()
-        .popover(isPresented: Binding(
-            get: { lyricsWindowPopover == item },
-            set: { shown in
-                if shown { lyricsWindowPopover = item } else if lyricsWindowPopover == item { lyricsWindowPopover = nil }
-            }), arrowEdge: .top) {
-            lyricsWindowPopoverContent(item)
-                .environment(\.settingsPopoverMaxHeight, lyricsWindowPopoverMaxHeight)
-        }
-        .editorToolbarSummarySlack(label.summary)
     }
 
     /// 浮层宽度按内容估、宁宽勿窄(`SettingsPopoverShell.width` 那条:窄了尾部控件 fixedSize
