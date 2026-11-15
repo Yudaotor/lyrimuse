@@ -4872,6 +4872,16 @@ func runSourceContractSettingsTests() {
                     && previewScroll.contains("host.safeAreaRegions = []")
                     && previewScroll.contains("if event.momentumPhase.isEmpty, event.phase.isEmpty || event.phase.contains(.began) || event.phase.contains(.changed) {\n            onUserScroll?()"),
                     true, "歌词管理: 预览滚动用 NSScrollView、AppKit 动画滚到当前句,手动滚动暂停跟随(惯性阶段不算)")
+        // 滚动容器每轮布局都调 relayout:宽度和内容都没变就不量内层宿主,守卫在 sizeThatFits 之前;换内容时 updateNSView 记一笔(15 章决策 109)。
+        let previewRelayout = sourceBody("func relayout(force: Bool = false)", in: previewScroll)
+        if let guardAt = previewRelayout.range(of: "guard force || contentChanged || width != laidOutWidth else { return }"),
+           let measureAt = previewRelayout.range(of: "host.sizeThatFits(") {
+            expectEqual(guardAt.upperBound <= measureAt.lowerBound
+                        && sourceHas(previewScroll, "coordinator?.rowFramesChanged(frames)\n})\ncoordinator.contentChanged = true\ncoordinator.relayout()"),
+                        true, "歌词管理: 预览宽度和内容都没变就不在布局里量内层宿主")
+        } else {
+            expectEqual(false, true, "歌词管理: 预览 relayout 先判宽度 / 内容变没变,再量内层宿主")
+        }
         expectEqual([previewScroll.contains("coordinator.settle = request.animated ? nil : request"),
                      previewScroll.contains("if pending == nil, let settle { pending = settle }"),
                      previewScroll.contains("coordinator?.settle = nil")], [true, true, true],

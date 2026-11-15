@@ -121,6 +121,16 @@ func runSettingsAuditContracts() {
     expectEqual(sourceHas(sourceBody("private func startRecording()", in: recorder), "clickMonitor = NSEvent.addLocalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown])")
                 && sourceHas(sourceBody("private func stopRecording()", in: recorder), "NSEvent.removeMonitor(clickMonitor)"), true,
                 "快捷键录制: 点在别处就收尾")
+    // updateNSView 每次刷新都调 refreshTitle:标题没变不重设、不作废固有尺寸,不然每次刷新外层都再排一遍布局(15 章决策 109)。
+    let refresh = sourceBody("func refreshTitle()", in: recorder)
+    if let guardAt = refresh.range(of: "guard title != next else { return }"), let invalidateAt = refresh.range(of: "invalidateIntrinsicContentSize()") {
+        expectEqual(guardAt.upperBound <= invalidateAt.lowerBound
+                    && refresh.components(separatedBy: "invalidateIntrinsicContentSize()").count == 2
+                    && sourceHas(refresh, "if let clearButton, clearButton.isHidden != hidesClear { clearButton.isHidden = hidesClear }"), true,
+                    "快捷键录制: 标题真变了才重设、作废固有尺寸,「×」显隐真变了才改")
+    } else {
+        expectEqual(false, true, "快捷键录制: refreshTitle 里先比标题、再作废固有尺寸")
+    }
     let unknown = app("Settings/UnknownPlayerNotifier.swift")
     let trust = sourceBody("static func trust(_ bundleID: String) async", in: unknown)
     expectEqual(!trust.isEmpty

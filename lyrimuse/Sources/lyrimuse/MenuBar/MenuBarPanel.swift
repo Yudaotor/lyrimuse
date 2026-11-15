@@ -226,7 +226,7 @@ final class MenuBarPanelController {
         // 先登记再装内容:内容第一次布局就会报尺寸(onFittingSizeChange),那时 panel 还是 nil 的话这次摆位会被跳过。
         panel = window
         window.setContent(host)
-        place(size: LayoutHysteresis.ceilToPixels(host.fittingSize, scale: window.backingScaleFactor))
+        place(size: host.fittingSize)
         installDismissWatchers(for: window)
         // 面板开着时预取简介:歌名、歌手名、专辑名只在有简介时可点,得提前知道。与 close 里的 release 成对。
         EditorialNotesStore.shared.retain()
@@ -254,26 +254,32 @@ final class MenuBarPanelController {
         onVisibilityChange?(false)
     }
 
-    /// 顶边贴着锚点下沿(留 4pt)、水平居中在锚点下面,再钳进屏幕可用区。内容变高时只往下长。
+    /// 顶边贴着锚点下沿、水平居中在锚点下面,钳进锚点所在屏的可用区,比可用区高时截短(`MenuBarPanelPlacement`)。
+    /// 内容变高时只往下长。
     private func place(size: CGSize) {
         guard let window = panel, size.width > 0, size.height > 0 else { return }
         guard let anchor = anchorView, let anchorWindow = anchor.window else { return }
         let buttonRect = anchorWindow.convertToScreen(anchor.convert(anchor.bounds, to: nil))
         let visible = (anchorWindow.screen ?? NSScreen.main)?.visibleFrame ?? buttonRect
-        let margin: CGFloat = 8
-        let x = min(max(buttonRect.midX - size.width / 2, visible.minX + margin), visible.maxX - size.width - margin)
-        let top = min(buttonRect.minY - 4, visible.maxY)
-        let frame = NSRect(x: x.rounded(), y: (top - size.height).rounded(), width: size.width, height: size.height)
+        let frame = MenuBarPanelPlacement.frame(fitting: size, anchor: buttonRect, visible: visible)
         if window.frame != frame {
             panelLogger.debug("panel placed: \(Int(frame.width), privacy: .public)x\(Int(frame.height), privacy: .public)")
-            window.setFrame(frame, display: true)
         }
-        // 玻璃底(`NSGlassEffectView`)按内容的固有尺寸自己先长 / 缩一次,窗口改尺寸时又按自动缩放再改一次,高度差算了两遍:
-        // 内容视图比窗口高(内容往上顶出去)或矮(内容沉到底)。每次摆完都把它对齐到窗口。见 06 章决策 52。
+        Self.apply(frame, to: window)
+        placeGallery()
+    }
+
+    /// 改面板窗口的 frame,窗口尺寸只由这里定。内容视图(玻璃底)在 `setFrame` 之前先设成新尺寸、之后再对齐一次,两处都别删:
+    /// 不先设,`setFrame` 里同步走的那次布局会由约束按玻璃底的旧尺寸再改一次窗口,往上推出可用区;不后对齐,高度差算两遍
+    ///(06 章决策 52)。见 06 章决策 102。
+    private static func apply(_ frame: NSRect, to window: NSWindow) {
         if let content = window.contentView, content.frame.size != frame.size {
             content.frame = NSRect(origin: .zero, size: frame.size)
         }
-        placeGallery()
+        if window.frame != frame { window.setFrame(frame, display: true) }
+        if let content = window.contentView, content.frame.size != frame.size {
+            content.frame = NSRect(origin: .zero, size: frame.size)
+        }
     }
 
     /// 进编辑时在主面板左边开一块「可添加」面板(同款玻璃窗,不当 key,键盘仍归主面板),出编辑、收面板时收掉。
@@ -307,15 +313,13 @@ final class MenuBarPanelController {
         guard size.width > 0, size.height > 0 else { return }
         let visible = (main.screen ?? NSScreen.main)?.visibleFrame ?? main.frame
         let gap: CGFloat = 8
-        var x = main.frame.minX - gap - size.width
+        let width = size.width.rounded(.up)
+        var x = main.frame.minX - gap - width
         if x < visible.minX + gap { x = main.frame.maxX + gap }
-        let height = min(size.height, visible.height - gap * 2)
+        let height = min(size.height.rounded(.up), visible.height - gap * 2)
         let y = max(main.frame.maxY - height, visible.minY + gap)
-        let frame = NSRect(x: x.rounded(), y: y.rounded(), width: size.width, height: height)
-        if window.frame != frame { window.setFrame(frame, display: true) }
-        if let content = window.contentView, content.frame.size != frame.size {
-            content.frame = NSRect(origin: .zero, size: frame.size)
-        }
+        let frame = NSRect(x: x.rounded(), y: y.rounded(), width: width, height: height)
+        Self.apply(frame, to: window)
     }
 
     /// 锚点在屏幕上的矩形。
@@ -517,10 +521,10 @@ private final class FirstMouseHostingView<Content: View>: NSHostingView<Content>
     override func layout() {
         super.layout()
         guard !reportingFittingSize else { return }
-        // 按设备像素取整再比:窗口尺寸落在像素上,差不到一个像素也报的话,每轮布局都会再摆一次窗口。
-        let scale = window?.backingScaleFactor ?? 2
-        let fitting = LayoutHysteresis.ceilToPixels(fittingSize, scale: scale)
-        guard LayoutHysteresis.differsByPixel(fitting, bounds.size, scale: scale) else { return }
+        // 跟摆位同一个整点取整口径再比,不看窗口此刻在哪块屏:按窗口的缩放比取整的话,窗口换到缩放比不同的屏上,
+        // 同一份内容算出来的尺寸就变了、又要摆一次。
+        let fitting = fittingSize
+        guard MenuBarPanelPlacement.needsReport(fitting: fitting, current: bounds.size) else { return }
         reportingFittingSize = true
         onFittingSizeChange?(fitting)
         reportingFittingSize = false

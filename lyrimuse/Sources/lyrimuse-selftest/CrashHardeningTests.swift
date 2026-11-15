@@ -99,8 +99,8 @@ func runCrashHardeningTests() {
                 "配置导入跳过非属性列表值、导出跳过非 JSON 值")
     let panel = source("lyrimuse/MenuBar/MenuBarPanel.swift")
     expectEqual(sourceHas(panel, "guard !reportingFittingSize else { return }")
-                && sourceHas(panel, "guard LayoutHysteresis.differsByPixel(fitting, bounds.size, scale: scale) else { return }"), true,
-                "菜单栏面板:按像素比尺寸、摆窗口时不重入")
+                && sourceHas(panel, "guard MenuBarPanelPlacement.needsReport(fitting: fitting, current: bounds.size) else { return }"), true,
+                "菜单栏面板:按跟摆位同一个整点口径比尺寸、摆窗口时不重入")
     expectEqual(sourceHas(source("lyrimuse/SettingsView.swift"), "minHeight: SettingsWindowHeight.minimum(visibleHeight: NSScreen.main?.visibleFrame.height)"),
                 true, "设置窗口:最小高度按屏幕可用高度封顶")
     let mini = source("lyrimuse/UI/LyricsMiniPanel.swift")

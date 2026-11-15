@@ -310,17 +310,24 @@ final class ShortcutRecorderButton: NSButton {
         refreshTitle()
     }
 
+    /// 标题和「×」显隐真变了才动:SwiftUI 每次刷新都会调到这里(`updateNSView`),无条件重设标题、作废固有尺寸的话,
+    /// 每次刷新都让外面那层再排一遍布局。
     func refreshTitle() {
+        let next: String
+        let hidesClear: Bool
         if isRecording {
-            title = L10n.t("请按下快捷键…")
-            clearButton?.isHidden = true
+            next = L10n.t("请按下快捷键…")
+            hidesClear = true
         } else if let shortcut = KeyboardShortcuts.getShortcut(for: shortcutName) {
-            title = "\(shortcut)"
-            clearButton?.isHidden = false
+            next = "\(shortcut)"
+            hidesClear = false
         } else {
-            title = L10n.t("点按录制")
-            clearButton?.isHidden = true
+            next = L10n.t("点按录制")
+            hidesClear = true
         }
+        if let clearButton, clearButton.isHidden != hidesClear { clearButton.isHidden = hidesClear }
+        guard title != next else { return }
+        title = next
         invalidateIntrinsicContentSize()
         needsDisplay = true
     }

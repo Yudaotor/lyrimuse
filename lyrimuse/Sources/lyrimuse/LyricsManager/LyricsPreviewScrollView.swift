@@ -76,6 +76,7 @@ struct LyricsPreviewScrollView<Content: View>: NSViewRepresentable {
                 .onPreferenceChange(LyricsPreviewRowFrameKey.self) { [weak coordinator] frames in
                     coordinator?.rowFramesChanged(frames)
                 })
+        coordinator.contentChanged = true
         coordinator.relayout()
         if let request = scrollRequest, request.serial != coordinator.handledSerial {
             coordinator.handledSerial = request.serial
@@ -104,6 +105,8 @@ struct LyricsPreviewScrollView<Content: View>: NSViewRepresentable {
         private var rowFrames: [Int: CGRect] = [:]
         private var laidOutWidth: CGFloat = -1
         private var laidOutHeight: CGFloat = -1
+        /// 换过内容、还没按新内容量过高度。
+        var contentChanged = true
 
         func rowFramesChanged(_ frames: [Int: CGRect]) {
             rowFrames = frames
@@ -114,10 +117,14 @@ struct LyricsPreviewScrollView<Content: View>: NSViewRepresentable {
         }
 
         /// 文档视图跟可视区一样宽,高度按内容在这个宽度下排出来的高度。
+        /// 宽度和内容都没变就不量:滚动容器每轮布局都来调一次,在布局里量内层宿主会让它再排一遍。行高自己变了走
+        /// `rowFramesChanged`(force)。
         func relayout(force: Bool = false) {
             guard let scrollView, let document, let host else { return }
             let width = Self.documentWidth(scrollView)
             guard width > 0 else { return }
+            guard force || contentChanged || width != laidOutWidth else { return }
+            contentChanged = false
             let height = ceil(host.sizeThatFits(in: CGSize(width: width, height: .greatestFiniteMagnitude)).height)
             guard force || width != laidOutWidth || height != laidOutHeight else { return }
             laidOutWidth = width

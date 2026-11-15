@@ -1802,14 +1802,46 @@ func runMenuBarTests() {
                     "歌词管理背面: 不收歌词库那一组,也不收外部编辑器")
         // 窗口跟着内容长高:尺寸由宿主视图在 layout() 里报。GeometryReader + PreferenceKey 那条在内容比窗口高时不来(06 章决策 44)。
         expectEqual(panel.contains("host.onFittingSizeChange = { [weak self] size in self?.place(size: size) }")
-                    && sourceHas(panel, "guard LayoutHysteresis.differsByPixel(fitting, bounds.size, scale: scale) else { return }\nreportingFittingSize = true\nonFittingSizeChange?(fitting)")
+                    && sourceHas(panel, "guard MenuBarPanelPlacement.needsReport(fitting: fitting, current: bounds.size) else { return }\nreportingFittingSize = true\nonFittingSizeChange?(fitting)")
                     // 编辑布局时收集各格位置(拖动判定用)那一处不管尺寸,放行;别的 onPreferenceChange 一律不许。
                     && panel.components(separatedBy: "onPreferenceChange(").count
                         == panel.components(separatedBy: "onPreferenceChange(PanelTileFramesKey.self)").count, true,
                     "面板尺寸: 宿主视图 layout() 里当场报 fittingSize,不用 PreferenceKey、不推到下一拍")
+        // 窗口尺寸只有摆位一个改动方:改 frame 前先把内容视图(玻璃底)设成新尺寸,不然 setFrame 里那次布局由约束按玻璃底
+        // 旧尺寸再改一次窗口、往上推出可用区;改完再对齐一次(06 章决策 52)。主面板和「可添加」都走这一处(06 章决策 102)。
+        let applyBody = sourceBody("private static func apply(_ frame: NSRect, to window: NSWindow)", in: panel)
+        let alignContent = "if let content = window.contentView, content.frame.size != frame.size {\ncontent.frame = NSRect(origin: .zero, size: frame.size)\n}"
+        expectEqual(sourceHas(applyBody, alignContent + "\nif window.frame != frame { window.setFrame(frame, display: true) }\n" + alignContent)
+                    && panel.components(separatedBy: "setFrame(").count == 2
+                    && sourceHas(sourceBody("private func place(size: CGSize)", in: panel),
+                                 "let frame = MenuBarPanelPlacement.frame(fitting: size, anchor: buttonRect, visible: visible)")
+                    && sourceHas(sourceBody("private func place(size: CGSize)", in: panel), "Self.apply(frame, to: window)")
+                    && sourceHas(sourceBody("private func placeGallery()", in: panel), "Self.apply(frame, to: window)"), true,
+                    "面板尺寸: 先把内容视图设成新尺寸再改窗口、改完再对齐,主面板和「可添加」都只经这一处改 frame")
         // 内容贴顶:对不上高度的那一帧不许上下居中(翻面时整个面板抖一下),minHeight: 0 不能省(06 章决策 45)。
         expectEqual(panel.contains(".frame(minWidth: 0, maxWidth: .infinity, minHeight: 0, maxHeight: .infinity, alignment: .top)"), true,
                     "面板尺寸: 内容贴着窗口顶边摆")
+    }
+
+    // ---- 菜单栏左键面板摆在哪(06 章决策 102) ----
+    do {
+        typealias P = MenuBarPanelPlacement
+        // 内建屏 1470×956、可用区 y 64…923,菜单栏图标在顶上;外接屏在它正上方。
+        let visible = CGRect(x: 0, y: 64, width: 1470, height: 859)
+        let anchor = CGRect(x: 1000, y: 923, width: 30, height: 33)
+        let normal = P.frame(fitting: CGSize(width: 336, height: 384), anchor: anchor, visible: visible)
+        expectEqual(normal, CGRect(x: 847, y: 535, width: 336, height: 384), "面板摆位: 顶边贴锚点下沿留 4、水平居中在锚点下面")
+        let tall = P.frame(fitting: CGSize(width: 336, height: 1500), anchor: anchor, visible: visible)
+        expectEqual(tall.maxY <= visible.maxY && tall.maxY == 919 && tall.minY == visible.minY + P.margin, true,
+                    "面板摆位: 比可用区高时截短到可用区里,顶边不往上推到上面那块屏")
+        let half = P.frame(fitting: CGSize(width: 336.5, height: 383.5), anchor: anchor, visible: visible)
+        expectEqual(half.size, CGSize(width: 337, height: 384), "面板摆位: 宽高按整点向上取整(窗口尺寸落在整点上)")
+        let edge = P.frame(fitting: CGSize(width: 336, height: 200), anchor: CGRect(x: 1450, y: 923, width: 20, height: 33), visible: visible)
+        expectEqual(edge.maxX, visible.maxX - P.margin, "面板摆位: 锚点贴屏幕右边时左挪到可用区里")
+        expectEqual(P.needsReport(fitting: CGSize(width: 336.5, height: 383.5), current: CGSize(width: 337, height: 384)), false,
+                    "面板报尺寸: 跟摆位同一个整点口径,摆好之后不再觉得差半点")
+        expectEqual(P.needsReport(fitting: CGSize(width: 336, height: 385), current: CGSize(width: 336, height: 384)), true,
+                    "面板报尺寸: 差到一点就报")
     }
 
     // ---- 菜单栏正中:落在哪块屏、哪一段(06 章「菜单栏正中」) ----

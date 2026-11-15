@@ -799,8 +799,12 @@ func runLyricsWindowTests() {
         expectEqual(sourceHas(marquee, "if abs(bounds.width - laidOutWidth) > 0.5 {\n refit()")
                     && sourceHas(marquee, "install(next, from: old.carry(phase, to: next))"), true,
                     "图层跑马灯(契约): 宽度变了从此刻的位置换到新周期接着播,不从头来(05 章决策 99)")
-        expectEqual(sourceHas(marquee, "let measured = hosting.fittingSize"), true,
+        expectEqual(sourceHas(marquee, "let measured = measuredContentSize"), true,
                     "图层跑马灯(契约): 每次更新都量内容尺寸,同一个 id 下内容变宽变窄也跟上")
+        // 量内容读宿主的固有尺寸:fittingSize 每读一次都让宿主跑一遍更新约束,update 又在外层 SwiftUI 更新的半路上(15 章决策 109)。
+        expectEqual(sourceHas(sourceBody("private var measuredContentSize: CGSize", in: marquee), "let size = hosting.intrinsicContentSize")
+                    && !marquee.contains("hosting.fittingSize"), true,
+                    "图层跑马灯(契约): 量内容尺寸读 intrinsicContentSize,不读 fittingSize")
         expectEqual(sourceHas(marquee, "move.beginTime = (scroller.layer?.convertTime(now, from: nil) ?? now) - played")
                     && sourceHas(marquee, "animation.isRemovedOnCompletion = false"), true,
                     "图层跑马灯(契约): 只滚一遍时往前拨 beginTime、停在末帧,不用 timeOffset(会从头补上跳过的那段)")

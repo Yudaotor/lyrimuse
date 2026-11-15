@@ -124,7 +124,7 @@ final class LayerMarqueeNSView: NSView {
             updateTrackingAreas()
         }
         // 每次都量:同一个 `id` 下内容也会变宽变窄(字号改了、状态文字换了),宿主视图不会为此通知。
-        let measured = hosting.fittingSize
+        let measured = measuredContentSize
         let resized = abs(measured.width - contentSize.width) > 0.5 || abs(measured.height - contentSize.height) > 0.5
         contentSize = measured
         if changed {
@@ -152,8 +152,16 @@ final class LayerMarqueeNSView: NSView {
 
     override func viewDidMoveToWindow() {
         super.viewDidMoveToWindow()
-        contentSize = hosting.fittingSize
+        contentSize = measuredContentSize
         restart()
+    }
+
+    /// 内容的理想尺寸,读宿主的固有尺寸(`sizingOptions` 带 `.intrinsicContentSize`,换了 `rootView` 当场就是新值)。
+    /// 别换成 `fittingSize`:它每读一次都让宿主跑一遍更新约束,而 `update` 是在外层 SwiftUI 更新的半路上调的。
+    /// 见 15 章决策 109。
+    private var measuredContentSize: CGSize {
+        let size = hosting.intrinsicContentSize
+        return CGSize(width: max(size.width, 0), height: max(size.height, 0))
     }
 
     override func updateTrackingAreas() {
