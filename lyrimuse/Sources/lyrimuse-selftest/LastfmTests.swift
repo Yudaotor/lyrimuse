@@ -2705,6 +2705,15 @@ func runLastfmTests() {
                     true, "右键链接: 设置窗口看不看得见报给服务")
         expectEqual(section.contains(".onDisappear { stats.setChartAppLinksOnScreen(false) }"), true,
                     "右键链接: 统计区卸载时报不在屏上")
+        // 链接索引三万条约 20 MB,只有统计区用;不在屏上时放掉,内存紧张让出缓存时一起清(15 章决策 112)。
+        let onScreen = sourceBody("func setChartAppLinksOnScreen(", in: service)
+        let reader = (try? String(contentsOf: base.appendingPathComponent("LyrimuseCore/Local/EnrichCacheReader.swift"),
+                                  encoding: .utf8)) ?? ""
+        let pressure = sourceBody("public static func installMemoryPressureRelief()", in: reader)
+        expectEqual(sourceHas(onScreen, "} else {") && sourceHas(onScreen, "EnrichCacheReader.releaseChartLinkIndex()")
+                    && sourceHas(sourceBody("public static func releaseChartLinkIndex()", in: reader), "cachedChartLinkIndex = nil"),
+                    true, "右键链接: 统计区不在屏上时放掉链接索引")
+        expectEqual(sourceHas(pressure, "cachedChartLinkIndex = nil"), true, "右键链接: 内存紧张让出缓存时链接索引一起清")
         expectEqual(section.contains("if let mid = links?.qqSongMID, Self.isInstalled(.qqMusic) {")
                         && section.contains("|| (links.qqSongMID != nil && Self.isInstalled(.qqMusic))"), true,
                     "右键链接: QQ 音乐那项只在装了 QQ 音乐时出,有它的行才挂菜单")

@@ -1726,6 +1726,11 @@ public enum EnrichCacheReader {
 
     private static var cachedChartLinkIndex: (mtime: Date?, fromIndex: Bool, index: ChartLinkIndex)?
 
+    /// 放掉榜单链接索引(三万条缓存约 20 MB)。只有 Last.fm 统计区用它,统计区不在屏上时调;下次要查时按当时的缓存版本重建。
+    public static func releaseChartLinkIndex() {
+        cachedChartLinkIndex = nil
+    }
+
     public nonisolated static func albumCoverKey(artist: String, album: String) -> String {
         EnrichCacheKeys.looseKey(artist) + "|" + EnrichCacheKeys.looseKey(album)
     }
@@ -2301,6 +2306,7 @@ public enum EnrichCacheReader {
                 cachedEntries = nil
                 cachedCoverIndex = nil
                 cachedAlbumCoverIndex = nil
+                cachedChartLinkIndex = nil
                 cachedLooseIndex = nil
                 cachedLegacyLooseIndex = nil
                 cachedSongIndex = nil

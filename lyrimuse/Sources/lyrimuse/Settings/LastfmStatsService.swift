@@ -873,6 +873,9 @@ final class LastfmStatsService: ObservableObject {
             refreshChartAppLinks()
             refreshLocalCovers()
             refreshChartLocalCovers()
+        } else {
+            // 算好的 chartAppLinks 留着:行和缓存版本都没变时 refreshChartAppLinks 直接返回、用不到索引,变了本来就要按新版本重建。
+            EnrichCacheReader.releaseChartLinkIndex()
         }
     }
 
