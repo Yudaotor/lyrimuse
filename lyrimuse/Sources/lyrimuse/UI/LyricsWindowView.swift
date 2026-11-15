@@ -8124,6 +8124,7 @@ final class LyricsWindowRemote: ObservableObject {
         guard let controller else { return NSNull() }
         var state = controller.chromeFade.debugState
         state["keyOverride"] = controller.debugKeyOverride.map { $0 ? "on" : "off" } ?? "auto"
+        state["nativeFullScreen"] = controller.isNativeFullScreen
         return state
     }
 
@@ -8187,6 +8188,13 @@ final class LyricsWindowRemote: ObservableObject {
         }
         if !LyricsWindowSession.requestForm(mini: false) { AppActions.shared.openLyricsWindow?() }
         whenReady({ !$0.isMini }) { if !$0.isFullScreenActive { $0.toggleFullScreenFromOutside() } }
+    }
+
+    /// `debug/lyrics-window-fullscreen`:进 / 出全屏,已经在要的状态就不动。
+    func setFullScreen(_ on: Bool) {
+        if let live, !live.isMini, live.isFullScreenActive == on { return }
+        if !on && live == nil { return }
+        toggleFullScreen()
     }
 
     /// 窗口上屏、不在切形态、`ready` 连着两次成立时做 `action`(刚上屏那一拍变形动画可能还没收尾)。

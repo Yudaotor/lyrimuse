@@ -151,6 +151,9 @@ public enum LyrimuseDeepLink: Equatable, Sendable {
         /// 完整尺寸歌词窗口的红绿灯当作窗口是 / 不是 key 来显隐,不看真的 key 状态(`debug/lyrics-window-key?state=on|off|auto`,
         /// `auto` = 交还给它)。不提前台就能验完整尺寸红绿灯的显隐与摆位;只管红绿灯,别的按 key 走的照旧。nil = auto。
         case lyricsWindowKey(override: Bool?)
+        /// 完整尺寸歌词窗口进 / 出原生全屏(`debug/lyrics-window-fullscreen?state=on|off`),跟菜单栏面板的全屏键走同一处;
+        /// 已经在要的状态就不动。进全屏要先激活 App(全屏作用在 key 窗口上)。
+        case lyricsWindowFullScreen(on: Bool)
         /// 触控栏「歌词颜色」那一档,跟设置页走同一个设置(`debug/touchbar-display?color=white|cover|custom|rainbow`)。
         case touchBarDisplay(color: TouchBarLyricsColorMode)
         /// 当作键盘焦点在 / 不在输入框里,不看辅助功能读到的(`debug/touchbar-typing?state=on|off|auto`,`auto` = 交还给它)。
@@ -567,6 +570,12 @@ public enum LyrimuseDeepLink: Equatable, Sendable {
             case "auto": self = .debug(.lyricsWindowKey(override: nil))
             default: return nil
             }
+        case ("debug", "/lyrics-window-fullscreen"):
+            switch value("state")?.lowercased() {
+            case "on": self = .debug(.lyricsWindowFullScreen(on: true))
+            case "off": self = .debug(.lyricsWindowFullScreen(on: false))
+            default: return nil
+            }
         case ("debug", "/rainbow"):
             let overlay = value("overlay").flatMap(Self.parseBool)
             let notch = value("notch").flatMap(Self.parseBool)
@@ -891,6 +900,9 @@ public enum LyrimuseDeepLink: Equatable, Sendable {
             case let .lyricsWindowKey(override):
                 components.path = "/lyrics-window-key"
                 components.queryItems = [URLQueryItem(name: "state", value: override.map { $0 ? "on" : "off" } ?? "auto")]
+            case let .lyricsWindowFullScreen(on):
+                components.path = "/lyrics-window-fullscreen"
+                components.queryItems = [URLQueryItem(name: "state", value: on ? "on" : "off")]
             case let .rainbow(overlay, notch, menuBar):
                 components.path = "/rainbow"
                 var items: [URLQueryItem] = []
