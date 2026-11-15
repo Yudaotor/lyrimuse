@@ -36,64 +36,101 @@ final class LoginItemManager {
 
     private init() {}
 
-    /// 登录项此刻的真实状态(设置页 / 菜单读 AppSettings 的开关,这里是系统那一侧的真值)。
-    var status: SMAppService.Status { SMAppService.mainApp.status }
+    /// 问状态、注册、注销都排在这条串行队列上:每一下都是跟系统登录项服务的同步往返,慢的时候几秒,别占主线程;
+    /// 排在同一条队列上,用户拨开关和启动时那次补注册不会颠倒先后。
+    private nonisolated static let queue = DispatchQueue(label: "me.yudaotor.lyrimuse.login-item", qos: .utility)
 
-    /// 系统「登录项」里此刻是不是开着。`.notFound`(App 不在可注册的位置,比如 `swift run` 直跑)答 nil:
-    /// 那时系统给不出结论,不能拿它去改开关。
-    var systemSaysEnabled: Bool? {
+    /// 系统那一侧最近一次问到的状态(设置页 / 菜单读 AppSettings 的开关,这里是系统的真值);还没问到是 nil。
+    private(set) var lastStatus: SMAppService.Status?
+
+    /// 系统「登录项」里此刻是不是开着。`.notFound`(App 不在可注册的位置,比如 `swift run` 直跑)和还没问到都答 nil:
+    /// 那时给不出结论,不能拿它去改开关。
+    var systemSaysEnabled: Bool? { Self.systemSaysEnabled(lastStatus) }
+
+    nonisolated static func systemSaysEnabled(_ status: SMAppService.Status?) -> Bool? {
         switch status {
         case .enabled: return true
         case .requiresApproval, .notRegistered: return false
-        case .notFound: return nil
+        case .notFound, nil: return nil
         @unknown default: return nil
         }
     }
 
     /// 用户在「系统设置 › 通用 › 登录项」里关掉过它:再注册也只会停在这里,得用户自己去那里打开。
-    var needsApproval: Bool { status == .requiresApproval }
+    var needsApproval: Bool { lastStatus == .requiresApproval }
 
     func openSystemSettings() {
         SMAppService.openSystemSettingsLoginItems()
     }
 
-    /// 用户拨开关(设置页 / 菜单栏 / 引导页三处都经 AppSettings.launchAtLoginEnabled 的 didSet 到这里)。
-    func setEnabled(_ enabled: Bool) {
-        removeLegacyLaunchAgentPlist()
-        if enabled {
-            register()
-            // 用户在 System Settings 里把这个登录项关过之后,再 register 会停在 requiresApproval ——
-            // 开关看着开了、登录时却不起。这是**用户主动**拨的开关,把系统设置的登录项面板打开让他
-            // 点一下是 Apple 自己样例里的做法;启动时那条自动同步(syncAtLaunch)不做这一步,
-            // 不能每次开机弹一个系统设置页出来。
-            if status == .requiresApproval {
-                logger.notice("login item requires approval in System Settings; opening the pane")
-                SMAppService.openSystemSettingsLoginItems()
+    /// 在后台问一次系统,回主线程记进 `lastStatus` 再调 `then`。菜单、设置页先用上一次的结论,这里对完账再校正。
+    func refreshStatus(then: @escaping @MainActor () -> Void) {
+        Self.queue.async {
+            let status = SMAppService.mainApp.status
+            Task { @MainActor in
+                LoginItemManager.shared.lastStatus = status
+                then()
             }
-        } else {
-            unregister()
         }
     }
 
-    /// App 启动时调一次:清掉旧方案的 plist;开关开着就幂等地补一次注册(默认值那次赋值不触发
-    /// didSet,不补的话"默认开"只停在偏好里)。用户手动关掉之后这里读到 false,不会偷偷再打开。
-    func syncAtLaunch(enabled: Bool) {
-        removeLegacyLaunchAgentPlist()
-        guard enabled else { return }
-        register()
+    /// 用户拨开关(设置页 / 菜单栏 / 引导页三处都经 AppSettings.launchAtLoginEnabled 的 didSet 到这里)。
+    func setEnabled(_ enabled: Bool) {
+        let legacy = legacyPlistURL
+        Self.queue.async {
+            Self.removeLegacyLaunchAgentPlist(legacy)
+            if enabled {
+                Self.register()
+            } else {
+                Self.unregister()
+            }
+            let status = SMAppService.mainApp.status
+            Task { @MainActor in
+                LoginItemManager.shared.lastStatus = status
+                // 用户在 System Settings 里把这个登录项关过之后,再 register 会停在 requiresApproval ——
+                // 开关看着开了、登录时却不起。这是**用户主动**拨的开关,把系统设置的登录项面板打开让他
+                // 点一下是 Apple 自己样例里的做法;启动时那条自动同步(syncAtLaunch)不做这一步,
+                // 不能每次开机弹一个系统设置页出来。
+                if enabled, status == .requiresApproval {
+                    logger.notice("login item requires approval in System Settings; opening the pane")
+                    SMAppService.openSystemSettingsLoginItems()
+                }
+            }
+        }
+    }
+
+    /// App 启动时调一次:后台清掉旧方案的 plist、问一次系统状态,回主线程交给 `decide`(按系统状态校正开关,返回开关
+    /// 此刻开没开);开着就再到后台幂等地补一次注册(默认值那次赋值不触发 didSet,不补的话"默认开"只停在偏好里)。
+    /// 用户手动关掉之后 `decide` 返回 false,不会偷偷再打开。
+    func syncAtLaunch(decide: @escaping @MainActor () -> Bool) {
+        let legacy = legacyPlistURL
+        Self.queue.async {
+            Self.removeLegacyLaunchAgentPlist(legacy)
+            let status = SMAppService.mainApp.status
+            Task { @MainActor in
+                LoginItemManager.shared.lastStatus = status
+                guard decide() else { return }
+                Self.queue.async {
+                    Self.register()
+                    let registered = SMAppService.mainApp.status
+                    Task { @MainActor in LoginItemManager.shared.lastStatus = registered }
+                }
+            }
+        }
     }
 
     /// 卸载脚本(scripts/uninstall.sh)用:`lyrimuse --unregister-login-item`。App 包一删,登录项会
     /// 在 System Settings 里留一条指向不存在路径的死项;Apple 的口径是删 App 之前先 unregister。
+    /// 这条路紧接着就退出、不建界面,同步做完。
     func unregisterForUninstall() {
-        removeLegacyLaunchAgentPlist()
-        unregister()
+        Self.removeLegacyLaunchAgentPlist(legacyPlistURL)
+        Self.unregister()
     }
 
-    private func register() {
+    private nonisolated static func register() {
         do {
             try SMAppService.mainApp.register()
-            logger.notice("login item registered status=\(String(describing: self.status), privacy: .public)")
+            logger.notice("login item registered status=\(String(describing: SMAppService.mainApp.status), privacy: .public)")
         } catch {
             // 常见原因:App 不在 LaunchServices 认的位置(开发时直接跑 .build/ 里的二进制),
             // 或被 MDM 策略禁止。个人小工具,静默失败可接受;状态在日志里,诊断导出带得上。
@@ -101,7 +138,7 @@ final class LoginItemManager {
         }
     }
 
-    private func unregister() {
+    private nonisolated static func unregister() {
         do {
             try SMAppService.mainApp.unregister()
             logger.notice("login item unregistered")
@@ -114,8 +151,7 @@ final class LoginItemManager {
     /// 只删文件、不碰 launchd:本次会话里那个 job 若还挂着(开机自启走的就是它),bootout 等于
     /// 杀自己;它没有 KeepAlive、退出后不复活,留到登出自然消失。plist 一删,下次登录 launchd 就
     /// 读不到它了 —— 这正是当年"一个偏好开关不该启动或杀死任何进程"那条纪律的全部机制。
-    private func removeLegacyLaunchAgentPlist() {
-        let url = legacyPlistURL
+    private nonisolated static func removeLegacyLaunchAgentPlist(_ url: URL) {
         guard FileManager.default.fileExists(atPath: url.path) else { return }
         do {
             try FileManager.default.removeItem(at: url)

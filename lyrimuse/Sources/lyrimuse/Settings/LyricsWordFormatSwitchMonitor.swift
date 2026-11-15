@@ -5,6 +5,7 @@ import LyrimuseCore
 /// (`LyricsWordFormatSwitch` 的状态文件),做完显示「已改存」几秒再回到格式说明。
 ///
 /// 单例:离开设置页再回来,正在进行的那一趟照样接着显示。只在等结论时每 0.25 秒读一次状态文件,平时不读。
+/// 读和解在后台,上一次没读完不再派,回到主线程才判阶段(14 章决策 194)。
 @MainActor
 final class LyricsWordFormatSwitchMonitor: ObservableObject {
     static let shared = LyricsWordFormatSwitchMonitor()
@@ -30,6 +31,7 @@ final class LyricsWordFormatSwitchMonitor: ObservableObject {
     private var requestedAt = Date()
     private var timer: Timer?
     private var generation = 0
+    private let reads = SingleFlightBackgroundRead<LyricsWordFormatSwitch.Status?>()
 
     /// 正在备份或改存:下拉框锁住、旁边转圈。
     var isBusy: Bool {
@@ -75,7 +77,15 @@ final class LyricsWordFormatSwitchMonitor: ObservableObject {
     }
 
     private func poll() {
-        let phase = LyricsWordFormatSwitch.phase(formats: formats.map(\.rawValue), status: LyricsWordFormatSwitch.current,
+        let current = generation
+        reads.start(read: { LyricsWordFormatSwitch.current }) { [weak self] status in
+            guard let self, self.generation == current else { return }
+            self.apply(status)
+        }
+    }
+
+    private func apply(_ status: LyricsWordFormatSwitch.Status?) {
+        let phase = LyricsWordFormatSwitch.phase(formats: formats.map(\.rawValue), status: status,
                                                  requestedAt: requestedAt, now: Date())
         if display != .phase(phase) { display = .phase(phase) }
         switch phase {
@@ -98,5 +108,6 @@ final class LyricsWordFormatSwitchMonitor: ObservableObject {
         timer?.invalidate()
         timer = nil
         generation += 1
+        reads.invalidate()
     }
 }

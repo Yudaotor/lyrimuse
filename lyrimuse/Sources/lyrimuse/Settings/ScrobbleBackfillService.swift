@@ -111,8 +111,7 @@ final class ScrobbleBackfillService: ObservableObject {
     /// 一首那一刻才重跑 dry-run。路径跟引擎那边 initListenLog 传进去的一致
     /// (main.go:178,配置目录 + clientName + "-listens.jsonl")。
     static func listenLogModifiedAt() -> Date? {
-        let url = LyrimusePaths.configFile("lyrimuse-listens.jsonl")
-        return (try? FileManager.default.attributesOfItem(atPath: url.path))?[.modificationDate] as? Date
+        FileIO.modificationDate(LyrimusePaths.configFile("lyrimuse-listens.jsonl"))
     }
 
     /// 刷新"有多少条可补"。空跑,不发任何网络请求,可以随便调。
@@ -135,9 +134,12 @@ final class ScrobbleBackfillService: ObservableObject {
         lastRunFailed = false
         // 上一趟被杀掉时留下的进度文件不能当成这一趟的。
         _ = FileIO.remove(Self.progressURL)
+        // 进度文件在后台读解(14 章决策 194);一拍等一拍,同一时刻只有一次在读。
+        let progressURL = Self.progressURL
         let poll = Task { @MainActor [weak self] in
             while !Task.isCancelled {
-                if let p = FileIO.decodeJSON(Progress.self, from: Self.progressURL), p.total > 0 {
+                let p = await Task.detached(priority: .utility) { FileIO.decodeJSON(Progress.self, from: progressURL) }.value
+                if let p, p.total > 0, !Task.isCancelled {
                     self?.progress = p
                 }
                 try? await Task.sleep(nanoseconds: 500_000_000)

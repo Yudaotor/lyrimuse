@@ -18,6 +18,12 @@ public enum FileIO {
 
     // MARK: 读
 
+    /// 文件的内容修改时间;不存在或读不到是 nil。按 mtime 判「状态文件变了没有」用,比 `attributesOfItem` 便宜。
+    /// 每次按路径新建 URL:同一个 URL 对象会缓存取过的资源值,拿常驻的那个去问,文件改了也读回旧值。
+    public static func modificationDate(_ url: URL) -> Date? {
+        (try? URL(fileURLWithPath: url.path).resourceValues(forKeys: [.contentModificationDateKey]))?.contentModificationDate
+    }
+
     /// 读整个文件。不存在返回 nil、不记;别的错误记一次后返回 nil。
     public static func read(_ url: URL, options: Data.ReadingOptions = []) -> Data? {
         do {

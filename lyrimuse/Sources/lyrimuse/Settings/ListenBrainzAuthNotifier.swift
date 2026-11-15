@@ -22,7 +22,11 @@ final class ListenBrainzAuthNotifier {
 
     func start() {
         guard cancellable == nil else { return }
-        cancellable = ListenBrainzSubmitStatusWatcher.shared.$info
+        // 等第一次后台读落下再看:读到之前的 nil 不是「恢复了」,当真会撤掉通知中心里那条。
+        let watcher = ListenBrainzSubmitStatusWatcher.shared
+        cancellable = watcher.$info.combineLatest(watcher.$loaded)
+            .filter { $0.1 }
+            .map(\.0)
             .removeDuplicates()
             .sink { [weak self] info in
                 Task { @MainActor in self?.handle(info) }

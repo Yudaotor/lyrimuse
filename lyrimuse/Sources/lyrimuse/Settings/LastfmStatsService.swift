@@ -24,14 +24,38 @@ final class LastfmStatsService: ObservableObject {
     static let shared = LastfmStatsService()
 
     private init() {
-        loadSnapshot()
-        // 前几页最近记录的翻页缓存也在启动时**主动**加载(不像 titleForms/dailySnapshot
-        // 那样惰性、等第一次用到才读)——这份缓存存在的意义就是"翻页那一刻立刻有内容",
-        // 等到 goToPage 被调用才去读盘,首次翻页依然会有一次同步 IO 的空档,不如跟
-        // loadSnapshot 一样在启动时就做掉。
-        loadRecentPageCache()
-        // 引擎落盘的最近记录 feed:启动先读一次(通常比快照新),之后按 mtime 盯着。
+        // 快照和前几页最近记录的翻页缓存都在启动时**主动**加载(不像 titleForms/dailySnapshot
+        // 那样惰性、等第一次用到才读)——翻页缓存存在的意义就是"翻页那一刻立刻有内容"。
+        // 读和解在后台,并进来之后再读第一份 feed(通常比快照新,要盖在快照上面)。
+        loadPersistedState()
         startFeedWatcher()
+    }
+
+    /// 启动时读过的快照和翻页缓存已经并进来(或者文件不在、读不出)。这之前不读 feed:feed 先到、快照后到,
+    /// 快照里更旧的最近记录会把它盖掉。
+    private var persistedStateLoaded = false
+
+    /// 启动时的快照和翻页缓存:读和解在后台(14 章决策 194),回主线程按原来的顺序并进来(先快照、再翻页缓存),
+    /// 再读第一份 feed。期间换了账号(`resetAll`)就整份丢掉,翻页缓存等用到时按新账号再读。
+    private func loadPersistedState() {
+        recentPageCacheLoaded = true
+        let epoch = accountEpoch
+        let snapshotURL = Self.snapshotURL
+        let pagesURL = Self.recentPageCacheURL
+        Task.detached(priority: .utility) { [weak self] in
+            let snapshot = Self.readSnapshot(snapshotURL)
+            let pages = Self.readRecentPageCache(pagesURL)
+            await self?.finishPersistedLoad(snapshot: snapshot, pages: pages, epoch: epoch)
+        }
+    }
+
+    private func finishPersistedLoad(snapshot: StatsSnapshot?, pages: RecentPageCacheSnapshot?, epoch: Int) {
+        persistedStateLoaded = true
+        if epoch == accountEpoch {
+            if let snapshot { applySnapshot(snapshot) }
+            if let pages { applyRecentPageCache(pages) }
+        }
+        pollFeedFile()
     }
 
     // MARK: - engine feed
@@ -51,6 +75,7 @@ final class LastfmStatsService: ObservableObject {
     private static let feedURL = LyrimusePaths.configFile("lyrimuse-lastfm-recent-feed.json")
     private var feedTimer: Timer?
     private var feedMTime: Date?
+    private let feedReads = SingleFlightBackgroundRead<(mtime: Date, feed: LastfmRecentFeed?)?>()
     private var lastFeed: LastfmRecentFeed?
     /// feed 里已完成的 50 行(RecentTrack 形态,新→旧),composeExactPage 的位置 0 起那份来源。
     private var feedCompletedRows: [RecentTrack] = []
@@ -60,7 +85,6 @@ final class LastfmStatsService: ObservableObject {
     var feedIsFresh: Bool { lastFeed?.isFresh() ?? false }
 
     private func startFeedWatcher() {
-        pollFeedFile()
         let t = Timer(timeInterval: 5, repeats: true) { [weak self] _ in
             Task { @MainActor in
                 self?.pollFeedFile()
@@ -72,15 +96,31 @@ final class LastfmStatsService: ObservableObject {
         feedTimer = t
     }
 
-    /// 常态代价是一次 stat;mtime 没变直接返回。文件 ≤30 KB,解码放主线程就够(跟快照同量级)。
+    /// 常态代价是一次 stat;mtime 没变什么都不做。stat、读、解都在后台,上一次没回来不再派,回主线程只 ingest(14 章决策 194)。
     private func pollFeedFile() {
-        guard credentials != nil else { return }
-        let mtime = (try? FileManager.default.attributesOfItem(atPath: Self.feedURL.path))?[.modificationDate] as? Date
-        guard let mtime, mtime != feedMTime else { return }
-        feedMTime = mtime
-        guard let data = FileIO.read(Self.feedURL),
-              let feed = LastfmRecentFeed.decode(data) else { return }
-        ingestFeed(feed)
+        guard persistedStateLoaded, credentials != nil else { return }
+        let url = Self.feedURL
+        let known = feedMTime
+        feedReads.start(read: { Self.readFeed(url, ifChangedFrom: known) }) { [weak self] result in
+            guard let self, let result, result.mtime != self.feedMTime else { return }
+            self.feedMTime = result.mtime
+            if let feed = result.feed { self.ingestFeed(feed) }
+        }
+    }
+
+    /// `debug/state` 用:启动时的快照并进来没有、读到的 feed 的 mtime(秒)和头部、最近记录第一页几行。
+    var debugState: [String: Any] {
+        ["persistedStateLoaded": persistedStateLoaded,
+         "feedMTime": feedMTime.map { $0.timeIntervalSince1970 as Any } ?? NSNull(),
+         "feedTotal": lastFeed.map { $0.total as Any } ?? NSNull(),
+         "feedNowPlaying": lastFeed?.nowPlaying.map { $0.title as Any } ?? NSNull(),
+         "recentRows": recent.count]
+    }
+
+    /// feed 的 mtime 跟 `known` 不同才读解;没变或文件不在是 nil。
+    private nonisolated static func readFeed(_ url: URL, ifChangedFrom known: Date?) -> (mtime: Date, feed: LastfmRecentFeed?)? {
+        guard let mtime = FileIO.modificationDate(url), mtime != known else { return nil }
+        return (mtime, FileIO.read(url).flatMap(LastfmRecentFeed.decode))
     }
 
     /// Last.fm 给的图 URL → 过滤掉"万能占位星"后的 URL(规则在 LyrimuseCore.LastfmImage)。
@@ -458,17 +498,24 @@ final class LastfmStatsService: ObservableObject {
     /// stale-while-revalidate——缓存内容立刻可用(不转圈),该不该在背后悄悄重取交给新鲜度判断。
     private func loadRecentPageCache() {
         recentPageCacheLoaded = true
-        guard let cred = credentials,
-              let data = FileIO.read(Self.recentPageCacheURL),
-              let snap = FileIO.decodeJSON(RecentPageCacheSnapshot.self, from: data, source: Self.recentPageCacheURL),
-              snap.username == cred.user
-        else { return }
+        guard credentials != nil, let snap = Self.readRecentPageCache(Self.recentPageCacheURL) else { return }
+        applyRecentPageCache(snap)
+    }
+
+    private nonisolated static func readRecentPageCache(_ url: URL) -> RecentPageCacheSnapshot? {
+        guard let data = FileIO.read(url) else { return nil }
+        return FileIO.decodeJSON(RecentPageCacheSnapshot.self, from: data, source: url)
+    }
+
+    /// 读好的翻页缓存并进内存。只补内存里还没有的页:启动时后台读回来之前,已经从网络或 feed 拿到的页更新。
+    private func applyRecentPageCache(_ snap: RecentPageCacheSnapshot) {
+        guard let cred = credentials, snap.username == cred.user else { return }
         for (k, v) in snap.pages {
-            guard let page = Int(k) else { continue }
+            guard let page = Int(k), recentPageCache[page] == nil else { continue }
             recentPageCache[page] = v
             if let t = snap.totals?[k] { recentPageCacheTotal[page] = t }
         }
-        // 用 merge/formUnion 而不是直接赋值:主快照(loadSnapshot,只覆盖第一页)已经
+        // 用 merge/formUnion 而不是直接赋值:主快照(applySnapshot,只覆盖第一页)已经
         // 先加载过,这里只补它没有的键,不拿这份(可能更旧一点的)数据倒退已经更新的值——
         // 两者理论上不会真的冲突,但这个方向的合并成本为零,不需要争论"会不会撞上"。
         if snap.mergedCountsVersion == Self.mergedCountsVersion, let counts = snap.playCounts, !counts.isEmpty {
@@ -1200,6 +1247,7 @@ final class LastfmStatsService: ObservableObject {
         // 清掉,新账号的第一份 feed 到了要能立刻吃进去(username 校验在 ingestFeed)。
         lastFeed = nil
         feedMTime = nil
+        feedReads.invalidate()
     }
 
     /// 「第 N 次听」:换歌那一刻取一次。key 守卫保证晚到的响应不会写到下一首歌头上,
@@ -2522,7 +2570,7 @@ final class LastfmStatsService: ObservableObject {
         var mergedCountsVersion: Int?
         /// 第一页的总页数。启动时默认值是 1,不存的话冷启动那一屏曲目已经端上桌,翻页控件那道
         /// `if stats.recentTotalPages > 1` 门槛却要等联网刷新回来才过,这段空窗里翻到列表最底下
-        /// 看不到页码。老快照没有这个字段,解码时是 nil,`loadSnapshot` 退回默认值 1。
+        /// 看不到页码。老快照没有这个字段,解码时是 nil,`applySnapshot` 退回默认值 1。
         var recentTotalPages: Int?
         /// 「那年今日」那张卡:不进快照的话每次启动都要重新"正在查"(本机链路 1–9 秒、16% 概率
         /// 直接变成"没能取到")。内容按日历天定义,`onThisDayDay` 一起存——`DailyRefreshGate` 靠它
@@ -2568,11 +2616,20 @@ final class LastfmStatsService: ObservableObject {
     private static let snapshotURL = LyrimusePaths.cacheFile("lyrimuse-lastfm-stats-cache.json")
     private var snapshotSaveTask: Task<Void, Never>?
 
-    private func loadSnapshot() {
-        guard let data = FileIO.read(Self.snapshotURL),
-              let snap = FileIO.decodeJSON(StatsSnapshot.self, from: data, source: Self.snapshotURL) else { return }
+    private nonisolated static func readSnapshot(_ url: URL) -> StatsSnapshot? {
+        guard let data = FileIO.read(url) else { return nil }
+        return FileIO.decodeJSON(StatsSnapshot.self, from: data, source: url)
+    }
+
+    /// 读好的快照端上桌。
+    private func applySnapshot(_ snap: StatsSnapshot) {
         // 换过账号就不吃旧快照 —— 那是前任的数据
         guard let cred = credentials, cred.user == snap.username else { return }
+        // 后台读回来之前已经有请求发出去(打开了统计页)或内容到了:快照只是首屏的底,不拿更旧的去盖。
+        guard fetchedAt.isEmpty, overview == nil, recent.isEmpty else {
+            logger.notice("stats snapshot arrived after live data, skipped")
+            return
+        }
         overview = snap.overview
         recent = snap.recent
         // 快照里存的永远是第一页(见 scheduleSnapshotSave),重开也从第一页看起
@@ -3033,7 +3090,7 @@ final class LastfmStatsService: ObservableObject {
     /// 按文件修改时间判断,没变不读。卡片出现时读一次,之后跟着统计页每 2 分钟那一拍(refreshLocalCoversIfCacheChanged)。
     func refreshArtistRegionsIfChanged() {
         let url = LyrimusePaths.cacheFile(ArtistRegions.fileName)
-        let version = (try? FileManager.default.attributesOfItem(atPath: url.path))?[.modificationDate] as? Date
+        let version = FileIO.modificationDate(url)
         // 跟引擎用同一个账号名比(它按 lastfm_user 取榜单),不是 credentials 优先取的打卡账号。
         let user = ConfigStore.shared.lastfmUser
         guard version != artistRegionsVersion, !user.isEmpty else { return }
@@ -3141,7 +3198,7 @@ final class LastfmStatsService: ObservableObject {
         }
         let cacheVersion = EnrichCacheReader.decodedContentVersion
         let pagesURL = LyrimusePaths.cacheFile(PlatformPagesCache.fileName)
-        let pagesVersion = (try? FileManager.default.attributesOfItem(atPath: pagesURL.path))?[.modificationDate] as? Date
+        let pagesVersion = FileIO.modificationDate(pagesURL)
         if let last = chartAppLinksInputs, last.keys == keys, last.cacheVersion == cacheVersion,
            last.pagesVersion == pagesVersion, last.artistAliases == localAliasTables.artists { return }
         chartAppLinksInputs = (keys, cacheVersion, pagesVersion, localAliasTables.artists)

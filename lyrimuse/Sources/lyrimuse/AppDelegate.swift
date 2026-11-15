@@ -41,6 +41,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // 从磁盘映像 / 临时位置启动时先问要不要移走;必须在请走旧实例之前:移走就从新位置重开,不该先把在跑的那份关掉。
         AppLocationPrompt.runAtLaunch()
         terminateOlderInstances()
+        // 钥匙串保险箱在后台先读一次(起 `security` 子进程,一次几十毫秒,钥匙串忙时更久):读到就进缓存,
+        // ConfigStore / AppleMusicConnection 第一次加载时在主线程上只读缓存。读不出(锁着)不进缓存,照旧由它们自己再读。
+        // 保存凭据仍在主线程上同步写(`ConfigStore.persistFile` 要当场知道写没写成),见 14 章决策 194。
+        Task.detached(priority: .userInitiated) { _ = CredentialVaultStore.shared.load() }
         // 接住"连接 Last.fm 账号"授权页跳回来的 lyrimuse:// 回调(见 build.sh 的 CFBundleURLTypes +
         // LastfmAuthFlow.authorizeURL 的 cb= 参数)以及各条深链。用 NSAppleEventManager 注册,不用 SwiftUI 的
         // .onOpenURL:这个 App 没有 WindowGroup 这个最典型的挂载点(MenuBarExtra/Settings 这类 Scene 上是否稳定
@@ -136,6 +140,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         // 卸载辅助模式:willFinishLaunching 里已经请求退出,这里什么都不建。
         if isUnregisterLoginItemRun { return }
+        // 主线程卡住几秒就记一行、卡久了采一次调用栈(见 MainThreadWatchdog)。窗口提供者给遥测的卡顿概况报开着哪些窗口。
+        // 排在启动的头一件:下面的启动步骤卡住也要报得上来。
+        MainThreadWatchdog.shared.setWindowProvider {
+            NSApp.windows.filter(\.isVisible).compactMap { $0.identifier?.rawValue }
+                + (MenuBarStatusItem.shared.isPanelOpen ? ["menubar-panel"] : [])
+        }
+        MainThreadWatchdog.shared.start()
         // 必须是这个函数里第一个碰 AppSettings 的事之前:CustomFontStore.shared 的 init
         // 会把用户导入的字体注册进 Core Text(进程级,每次启动都要重新注册一遍)。下面一行
         // 就会第一次访问 AppSettings.shared,而它的 init() 末尾会用 fontFamilyName 算一遍
@@ -149,9 +160,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         //
         // 存过这个键时先按系统的实际状态对账,再注册:用户在「系统设置 › 登录项」里移除了它,对账把开关校正成关,
         // 不会又被注册回去。没存过(默认值)时注册之后把默认值落盘,下次启动同样走先对账那条。
+        // 问系统状态和注册都跟登录项服务同步往返,在 LoginItemManager 的后台队列上做,回主线程才对账。
         let launchAtLoginStored = UserDefaults.standard.object(forKey: "np:launchAtLoginEnabled") != nil
-        if launchAtLoginStored { AppSettings.shared.syncLaunchAtLoginFromSystem() }
-        LoginItemManager.shared.syncAtLaunch(enabled: AppSettings.shared.launchAtLoginEnabled)
+        LoginItemManager.shared.syncAtLaunch {
+            if launchAtLoginStored { AppSettings.shared.syncLaunchAtLoginFromSystem() }
+            return AppSettings.shared.launchAtLoginEnabled
+        }
         if !launchAtLoginStored {
             UserDefaults.standard.set(AppSettings.shared.launchAtLoginEnabled, forKey: "np:launchAtLoginEnabled")
         }
@@ -166,8 +180,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // 配置文件夹里压根不会有这个文件 —— 而"拷整个文件夹换机器"恰恰是这类用户最可能
         // 走的路。幂等,内容没变时也就是重写一遍同样的字节。
         AppSettingsMirror.write()
-        // 备份文件夹贴上 App 图标(仅在它已经存在时),让它在 Finder 里认得出来。
-        ICloudConfigStore.ensureFolderIconIfPresent()
+        // 备份文件夹贴上 App 图标(仅在它已经存在时),让它在 Finder 里认得出来。查目录、写图标都碰磁盘(iCloud 目录可能很慢),放后台。
+        Task.detached(priority: .utility) { ICloudConfigStore.ensureFolderIconIfPresent() }
         // 封面/头像全走 AsyncImage(内部用 URLSession.shared),它吃的是 URLCache.shared,
         // 默认容量小得可怜 —— 最近记录展开到 100 行再切个 tab 回来,九十多张封面全部
         // 重新下载。给共享缓存一个像样的容量,磁盘部分跨启动依然有效。
@@ -189,8 +203,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         KeychainUnlockWatcher.start()
         // 启动后把 Last.fm 信息页那批小图(头像/封面)提前解码进内存:那一页是用户点进
         // 设置才打开的,启动到点进去之间有充足的空窗,预热完再打开就不会闪占位符了
-        // (触发点是 LastfmStatsService 首次实例化 → loadSnapshot → prewarm)。
-        // 延后 3 秒,不跟启动本身抢资源;没连 Last.fm 的话 loadSnapshot 直接返回,零成本。
+        // (触发点是 LastfmStatsService 首次实例化 → 后台读快照 → applySnapshot → prewarm)。
+        // 延后 3 秒,不跟启动本身抢资源;没连 Last.fm 的话快照读回来直接丢掉。
         DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
             _ = LastfmStatsService.shared
         }
@@ -220,12 +234,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // 引擎预解析要问播放器的那几样(Music 的队列与专辑曲目、Spotify 随机、网页版队列)由 App 代跑,
         // 引擎自己不发 AppleEvent(见 PlayerQueryServer)。
         PlayerQueryServer.shared.start()
-        // 主线程卡住几秒就记一行、卡久了采一次调用栈(见 MainThreadWatchdog)。窗口提供者给遥测的卡顿概况报开着哪些窗口。
-        MainThreadWatchdog.shared.setWindowProvider {
-            NSApp.windows.filter(\.isVisible).compactMap { $0.identifier?.rawValue }
-                + (MenuBarStatusItem.shared.isPanelOpen ? ["menubar-panel"] : [])
-        }
-        MainThreadWatchdog.shared.start()
         // 匿名遥测:开着时每天一条心跳、有新的崩溃报告各发一条(见 TelemetryService)。
         TelemetryService.shared.start()
         // 这次启动的基准版本、面板顶部要不要出「已更新」(见 WhatsNewCenter)。

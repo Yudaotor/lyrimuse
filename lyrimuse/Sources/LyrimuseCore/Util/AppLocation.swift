@@ -13,6 +13,17 @@ public enum AppLocation {
         case translocated
     }
 
+    /// App 所在卷要不要盯着卸载(`AppVolumeUnmountWatcher`):根卷不会被卸载,不盯。
+    public static func watchesVolume(at path: String) -> Bool {
+        URL(fileURLWithPath: path).standardizedFileURL.path != "/"
+    }
+
+    /// 卸载通知里的卷是不是 App 所在的那个卷(按挂载点路径比,末尾斜杠、`.` 不算差别)。
+    public static func isSameVolume(_ unmounting: URL?, _ volume: URL) -> Bool {
+        guard let unmounting else { return false }
+        return unmounting.standardizedFileURL.path == volume.standardizedFileURL.path
+    }
+
     /// `volumePath`:App 所在卷的挂载点;`diskImageMountPoints`:`hdiutil info -plist` 列出的磁盘映像挂载点。
     /// 只读卷不一定是磁盘映像(只读的网络卷、恢复盘),两样都对上才算。
     public static func classify(bundlePath: String, volumeIsReadOnly: Bool, volumePath: String?,

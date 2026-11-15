@@ -392,12 +392,19 @@ enum DebugDeepLinks {
                            "menuBarDark": MenuBarAppearanceStore.shared.isDark],
             "checkpoint": checkpointSaved != nil,
             "fullDiskAccess": FullDiskAccessPermission.shared.debugState,
-            // 后台读的状态文件此刻发布出来的结论:Last.fm 镜像(`loaded` 为 false = 第一次还没读完)、引擎报的网络不通。
+            // 后台读的状态文件此刻发布出来的结论:Last.fm 镜像(`loaded` 为 false = 第一次还没读完)、引擎报的网络不通、
+            // ListenBrainz 令牌被拒、网页推送判定、Last.fm 统计读到的 feed、逐字格式切换那一行、登录项上次问到的系统状态。
             "stateFiles": [
                 "lastfmMirror": ["loaded": LastfmMirrorStatusWatcher.shared.loaded,
                                  "error": LastfmMirrorStatusWatcher.shared.info.map { $0.error as Any } ?? NSNull(),
                                  "at": LastfmMirrorStatusWatcher.shared.info.map { $0.at as Any } ?? NSNull()],
                 "engineNetworkDown": LocalPlaybackSource.shared.engineNetworkDown,
+                "listenBrainz": ["loaded": ListenBrainzSubmitStatusWatcher.shared.loaded,
+                                 "since": ListenBrainzSubmitStatusWatcher.shared.info.map { $0.since as Any } ?? NSNull()],
+                "relayPush": String(describing: RelayPushStatusWatcher.shared.verdict),
+                "lastfmStats": LastfmStatsService.shared.debugState,
+                "wordFormatSwitch": String(describing: LyricsWordFormatSwitchMonitor.shared.display),
+                "loginItem": LoginItemManager.shared.lastStatus.map { String(describing: $0) as Any } ?? NSNull(),
             ],
             "simulation": PlaybackSimulation.current.map { sim -> Any in
                 ["title": sim.title, "artist": sim.artist, "positionSecs": sim.elapsed(at: Date()),

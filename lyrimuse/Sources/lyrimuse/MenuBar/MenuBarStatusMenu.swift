@@ -148,7 +148,9 @@ final class MenuBarStatusMenu: NSObject, NSMenuDelegate {
                              on: settings.overlayShowRomanization || settings.showRomanization,
                              action: #selector(toggleRomanization), shortcut: .toggleRomanizationHotkey))
         quick.addItem(.separator())
+        // 先按上一次问到的系统状态对账,再在后台问一次:开菜单不等登录项服务,这次对出来的差别下次开菜单时体现。
         settings.syncLaunchAtLoginFromSystem()
+        LoginItemManager.shared.refreshStatus { settings.syncLaunchAtLoginFromSystem() }
         quick.addItem(toggle(L10n.t("开机启动"), symbol: "power",
                              on: settings.launchAtLoginEnabled,
                              action: #selector(toggleLaunchAtLogin)))

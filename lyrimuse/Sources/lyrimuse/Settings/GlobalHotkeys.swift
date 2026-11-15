@@ -53,17 +53,29 @@ enum GlobalHotkeys {
     /// 两边收同一对通知,谁先谁后最终状态都一样。代价是菜单开着时全局快捷键不响应,跟系统原生
     /// 菜单的行为一致;这些快捷键里没有要在菜单打开时触发的(没有「开关菜单」这一类)。
     /// 升级到带上游修复的版本需要 swift-tools 6.2,且 2.x 用了本机编不过的宏,见 Package.swift。
+    ///
+    /// 观察者用 `queue: nil`,在发通知的线程上同步回调:菜单开始跟踪的那一下就得关掉,排到主队列上要等跟踪循环让出。
+    /// 本进程里任何 NSMenu 都会发这对通知,发的线程不归这里管,所以先判线程,不在主线程就派回去,别直接 assumeIsolated。
     private static func pauseWhileMenuTracking() {
         guard menuTrackingObservers.isEmpty else { return }
         let center = NotificationCenter.default
         menuTrackingObservers = [
             center.addObserver(forName: NSMenu.didBeginTrackingNotification, object: nil, queue: nil) { _ in
-                MainActor.assumeIsolated { setPaused(true, for: .menuTracking) }
+                onMainThread { setPaused(true, for: .menuTracking) }
             },
             center.addObserver(forName: NSMenu.didEndTrackingNotification, object: nil, queue: nil) { _ in
-                MainActor.assumeIsolated { setPaused(false, for: .menuTracking) }
+                onMainThread { setPaused(false, for: .menuTracking) }
             },
         ]
+    }
+
+    /// 已在主线程就当场跑,不在就派到主队列上。
+    nonisolated static func onMainThread(_ body: @escaping @MainActor () -> Void) {
+        if Thread.isMainThread {
+            MainActor.assumeIsolated { body() }
+        } else {
+            DispatchQueue.main.async { MainActor.assumeIsolated { body() } }
+        }
     }
 
     /// 把一条操作回声送到**用户实际开着的那个展示形态**上。

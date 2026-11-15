@@ -33,6 +33,8 @@ enum AppExit {
         case externalRequest = "external_request"
         /// `lyrimuse --unregister-login-item`(卸载脚本调的辅助模式)注销完登录项就退出。
         case unregisterLoginItemHelper = "unregister_login_item_helper"
+        /// App 所在的卷(磁盘映像、外置盘、网络卷)要被卸载(AppVolumeUnmountWatcher)。
+        case appVolumeUnmounting = "app_volume_unmounting"
     }
 
     /// 生命周期日志分类。走 Logger 不走 NSLog:DiagnosticsExporter.recentAppLogLines() 按 subsystem 查,

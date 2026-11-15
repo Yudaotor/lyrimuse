@@ -97,6 +97,7 @@ let groups: [TestGroup] = [
     TestGroup(name: "docs-local", summary: "只留本地的文档对得上:署名轮次计数 / 项目级 skill / releasing.md、AGENTS.md(CI 与提交校验里没有这些文件,整组跳过)", run: runLocalDocsTests),
     TestGroup(name: "ops-diagnostics", summary: "诊断脱敏 / 备份发现 / 导入策略 / 安全写文件 / launchd / 进程", run: runOpsDiagnosticsTests),
     TestGroup(name: "crash-hardening", summary: "崩溃防护:读管道 / 序列化 / 取子串不抛 Objective-C 异常,布局回调改尺寸加像素容差、回差、封顶", run: runCrashHardeningTests),
+    TestGroup(name: "main-thread-io", summary: "主线程不碰磁盘:按 mtime 缓存的状态文件 / 单飞的后台读 / 播放状态写盘队列 / 各观察器与启动步骤只在后台读,异常守卫,App 所在卷卸载,发版闸门", run: runMainThreadIOTests),
 ]
 
 // ---- 参数 ----

@@ -5302,6 +5302,7 @@ private struct PlayerSettingsTab: View {
     // 引擎没在跑时,它要写的位置里不归当前用户或写不进的那几处(HomeFolderAccess)。非空就换成具体原因和修复命令,
     // 不再只说「可能是权限或系统限制」。
     @State private var engineFolderFindings: [HomeFolderAccess.Finding] = []
+    @State private var engineFolderCheckInFlight = false
     // App 本体版本 vs 打包进这份 App 的引擎版本是否一致(见
     // EngineServiceManager.bundledEngineVersion 头注)。nil = 一致或没法判断(两种
     // 都不该报警,见 refreshEngineVersionCheck);非 nil 才代表真的查到了不一致,存的是
@@ -6995,10 +6996,20 @@ private struct PlayerSettingsTab: View {
         playerHealth.refresh()
     }
 
-    /// 引擎没在跑时重查一遍 `HomeFolderAccess`,在跑就清空。只是几次 stat,跟着状态心跳查。
+    /// 引擎没在跑时重查一遍 `HomeFolderAccess`,在跑就清空。跟着状态心跳查;几次 stat 放在后台,上一次没回来不再派(14 章决策 194)。
     private func refreshEngineFolderFindings() {
-        let findings = engineState.isRunning ? [] : HomeFolderAccess.check()
-        if findings != engineFolderFindings { engineFolderFindings = findings }
+        guard !engineState.isRunning else {
+            if !engineFolderFindings.isEmpty { engineFolderFindings = [] }
+            return
+        }
+        guard !engineFolderCheckInFlight else { return }
+        engineFolderCheckInFlight = true
+        Task {
+            let findings = await Task.detached(priority: .utility) { HomeFolderAccess.check() }.value
+            engineFolderCheckInFlight = false
+            guard !engineState.isRunning, findings != engineFolderFindings else { return }
+            engineFolderFindings = findings
+        }
     }
     /// 查一次"App 本体版本"跟"打包进这份 App 的引擎版本"是否一致(见
     /// EngineServiceManager.bundledEngineVersion 头注)。只在 .onAppear 调一次
@@ -7051,6 +7062,8 @@ private struct GeneralSettingsTab: View {
     // iCloud 文件夹里最新的那份配置(没有就是 nil)。只在 .onAppear 查一次 —— 这是文件
     // 系统状态,App 不会主动收到"iCloud 里多了个文件"的通知。
     @State private var iCloudSnapshot: ICloudConfigStore.Snapshot?
+    /// `ICloudConfigStore.isAvailable` 的结论:几次 stat 在后台查,出现时、换备份文件夹后各查一次,body 里只读这一位。
+    @State private var iCloudAvailable = true
     /// 系统「登录项」里被用户关掉了(见 `LoginItemManager.needsApproval`)。
     @State private var loginItemNeedsApproval = false
     /// 系统通知授权被拒(「换歌时显示通知」开着时在那一行下面说去哪打开)。
@@ -7308,6 +7321,7 @@ private struct GeneralSettingsTab: View {
             entries.append(.action(L10n.t("切换回 iCloud")) {
                 ICloudConfigStore.setCustomFolder(nil)
                 iCloudSnapshot = ICloudConfigStore.latestSnapshot()
+                refreshICloudAvailability()
             })
         }
         entries.append(.divider)
@@ -7377,13 +7391,13 @@ private struct GeneralSettingsTab: View {
                     // (保存到 iCloud / 保存备份 / 更新备份 / 已保存),每变一次整行跳一下 ——
                     // 跟 ShortcutRecorder 用 max(width,150) 解决的是同一个问题。
                     .frame(minWidth: 88)
-                    .disabled(!ICloudConfigStore.isAvailable || iCloudBusy)
+                    .disabled(!iCloudAvailable || iCloudBusy)
                     if iCloudSnapshot != nil {
                         // 这颗叫「恢复这份」不叫「导入…」:它直接恢复**副标题里说的那一份**
                         // (不开面板),而下面「设置文件」那行的「导入…」是开文件选择器;两条路的
                         // 文件面板默认目录还是同一个 iCloud 文件夹,同名会更难分辨。
                         Button(L10n.t("恢复此备份")) { importFromICloud() }
-                            .disabled(!ICloudConfigStore.isAvailable || iCloudBusy)
+                            .disabled(!iCloudAvailable || iCloudBusy)
                     }
                 }
                 .buttonBorderShape(.capsule)
@@ -7433,6 +7447,7 @@ private struct GeneralSettingsTab: View {
         }
         .onAppear {
             iCloudSnapshot = ICloudConfigStore.latestSnapshot()
+            refreshICloudAvailability()
         }
         // 这个 alert 必须带 message 说清风险:存到 iCloud 才是把明文 token 推上 Apple
         // 服务器和你所有设备的那一步(write 设的 0600 权限过了同步就不作数),风险比本地
@@ -7722,12 +7737,22 @@ private struct GeneralSettingsTab: View {
         // 换了目录,原来那份快照的信息就不成立了,立刻按新目录重新探测一次。
         iCloudSnapshot = ICloudConfigStore.latestSnapshot()
         iCloudMessage = nil
+        refreshICloudAvailability()
     }
 
-    /// 开机启动开关与系统「登录项」对账,并决定要不要摆「去系统设置里打开」那句提示。
+    private func refreshICloudAvailability() {
+        Task {
+            let available = await Task.detached(priority: .utility) { ICloudConfigStore.isAvailable }.value
+            if available != iCloudAvailable { iCloudAvailable = available }
+        }
+    }
+
+    /// 开机启动开关与系统「登录项」对账,并决定要不要摆「去系统设置里打开」那句提示。系统状态在后台问一次,两件事用同一份结论。
     private func refreshLoginItemState() {
-        settings.syncLaunchAtLoginFromSystem()
-        loginItemNeedsApproval = LoginItemManager.shared.needsApproval
+        LoginItemManager.shared.refreshStatus {
+            settings.syncLaunchAtLoginFromSystem()
+            loginItemNeedsApproval = LoginItemManager.shared.needsApproval
+        }
     }
 
     /// 通知授权被拒了没有。系统不推这个变化,所以出现时、切回 App 时、打开开关之后各查一次。

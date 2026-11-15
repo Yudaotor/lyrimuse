@@ -1,5 +1,6 @@
 import AppKit
 import ImageIO
+import LyrimuseCore
 
 /// 当前桌面壁纸的平均相对亮度。
 ///
@@ -8,8 +9,8 @@ import ImageIO
 /// 读的是壁纸文件本身(`NSWorkspace.desktopImageURL`),不截屏、不需要屏幕录制权限;代价是盖在壁纸上的
 /// 别的窗口算不进来。
 ///
-/// 这个值在歌词窗口的 body 里每次重算都会被问好几遍:按壁纸地址缓存,每个地址最多 5 秒回盘上核对一次
-/// 有没有换壁纸,其余时候只是一次字典查找。解码用 ImageIO 的缩略图,不整张解开几千像素的原图。
+/// 这个值在歌词窗口的 body 里每次重算都会被问好几遍:每块屏幕的壁纸地址(问一次要跨进程)和每个地址的亮度
+/// 都缓存,最多 5 秒回去核对一次有没有换壁纸,其余时候只是两次字典查找。解码用 ImageIO 的缩略图,不整张解开几千像素的原图。
 @MainActor
 enum DesktopWallpaperLuma {
     private struct Entry {
@@ -19,17 +20,18 @@ enum DesktopWallpaperLuma {
     }
 
     private static var cache: [URL: Entry] = [:]
+    private static var wallpaperURLs: [CGDirectDisplayID: (url: URL?, checkedAt: Date)] = [:]
     private static let recheckInterval: TimeInterval = 5
 
     /// nil = 读不到(拿不到屏幕、壁纸地址,或者文件解不开),调用方按系统外观估计。
     static func luma(for screen: NSScreen?) -> Double? {
-        guard let screen = screen ?? NSScreen.main,
-              let url = NSWorkspace.shared.desktopImageURL(for: screen) else { return nil }
+        guard let screen = screen ?? NSScreen.main else { return nil }
         let now = Date()
+        guard let url = wallpaperURL(for: screen, now: now) else { return nil }
         if let entry = cache[url], now.timeIntervalSince(entry.checkedAt) < recheckInterval {
             return entry.luma
         }
-        let modified = (try? url.resourceValues(forKeys: [.contentModificationDateKey]))?.contentModificationDate
+        let modified = FileIO.modificationDate(url)
         if var entry = cache[url], entry.modified == modified {
             entry.checkedAt = now
             cache[url] = entry
@@ -38,6 +40,16 @@ enum DesktopWallpaperLuma {
         let luma = averageLuma(of: url)
         cache[url] = Entry(modified: modified, luma: luma, checkedAt: now)
         return luma
+    }
+
+    private static func wallpaperURL(for screen: NSScreen, now: Date) -> URL? {
+        guard let display = screen.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? CGDirectDisplayID else {
+            return NSWorkspace.shared.desktopImageURL(for: screen)
+        }
+        if let known = wallpaperURLs[display], now.timeIntervalSince(known.checkedAt) < recheckInterval { return known.url }
+        let url = NSWorkspace.shared.desktopImageURL(for: screen)
+        wallpaperURLs[display] = (url, now)
+        return url
     }
 
     /// 缩到 16×16 以内再按 sRGB 线性化后的相对亮度取平均。

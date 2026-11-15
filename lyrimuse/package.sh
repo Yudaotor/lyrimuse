@@ -162,6 +162,9 @@ for v in "${VARIANTS[@]}"; do
     echo "!! $label 的 sdk 字段是 $sdk_field(<26)——这样发出去在 macOS 26+ 上没有液态玻璃,拒绝打包" >&2
     exit 1
   fi
+  # 发布闸门:主程序弱导入的系统符号只许白名单里那几个,自己编的 Mach-O 的 minos 不高于 LSMinimumSystemVersion
+  # (脚本头注写了为什么)。
+  ../scripts/check-release-binaries.sh "$app"
   # 签名也验一遍 —— 签名一坏,用户那边表现成"打开就闪退",发出去才发现代价太大。
   codesign -v --deep --strict "$app"
   # 发布闸门:签名要求必须是「identifier + 证书根」,不能是 cdhash。ad-hoc 签名的要求是一条 cdhash,

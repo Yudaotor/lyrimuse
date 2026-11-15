@@ -381,6 +381,9 @@ public enum PlaybackStateFile {
 ///
 /// 放歌时向系统持有一个活动(`holdsActivity(for:)`):没有可见窗口时 App Nap 会推迟计时器,保活一旦晚过引擎的
 /// 15 秒就被当成不可用。见 02 章决策 89。
+///
+/// 序号和内容在主线程上定,写盘交给 `PlaybackStateFileWriter` 的串行队列(按交来的顺序写),主线程不等磁盘;
+/// 退出时(`markExiting`)等这份写完再走(14 章决策 194)。
 @MainActor
 public final class PlaybackStatePublisher {
     public static let shared = PlaybackStatePublisher()
@@ -394,9 +397,8 @@ public final class PlaybackStatePublisher {
     private let sink: ((Data) -> Void)?
     private let logger = Logger(subsystem: LyrimuseIdentity.logSubsystem, category: "playback-state")
     private var lastWriteUptime: TimeInterval?
-    /// 上一次记「状态文件写失败」的时刻(系统运行时长)。磁盘写满、目录没权限时每拍都失败,隔这么久才再记一行。
-    private var lastWriteFailureLogUptime: TimeInterval?
-    private static let writeFailureLogInterval: TimeInterval = 60
+    /// 正式实例的写盘队列;测试实例(`init(sink:)`)为 nil。
+    private let fileWriter: PlaybackStateFileWriter?
 
     private let appPID = getpid()
     private let appStartedAtMs = PlaybackStateFile.millis(Date())
@@ -416,12 +418,14 @@ public final class PlaybackStatePublisher {
     private init() {
         writesEnabled = Bundle.main.bundleIdentifier == LyrimuseIdentity.bundleIdentifier
         sink = nil
+        fileWriter = PlaybackStateFileWriter(url: PlaybackStateFile.url)
     }
 
     /// 测试用:每写出一份记录就交给 `sink`。不碰文件(状态文件、封面文件),不起保活计时器,不持有系统活动。
     public init(sink: @escaping (Data) -> Void) {
         writesEnabled = true
         self.sink = sink
+        fileWriter = nil
     }
 
     public func publish(_ input: PlaybackStateFile.Input, now: Date = Date()) {
@@ -501,6 +505,7 @@ public final class PlaybackStatePublisher {
         heartbeat = nil
         updateActivity(for: .exiting)
         write(.exiting, now: Date())
+        fileWriter?.flush()
     }
 
     /// 这个状态下要不要持有活动:只在放歌时。暂停、停播照常让系统节能。纯函数,selftest 覆盖。
@@ -567,14 +572,45 @@ public final class PlaybackStatePublisher {
             sink(data)
             return
         }
-        do {
-            try data.write(to: PlaybackStateFile.url, options: .atomic)
-        } catch {
-            // 写不出去的话引擎 15 秒后判 App 不可用,不记这一行就看不出为什么。
-            let uptime = ProcessInfo.processInfo.systemUptime
-            guard lastWriteFailureLogUptime.map({ uptime - $0 >= Self.writeFailureLogInterval }) ?? true else { return }
-            lastWriteFailureLogUptime = uptime
-            logger.error("playback state: write failed: \(error.localizedDescription, privacy: .public)")
+        fileWriter?.write(data)
+    }
+}
+
+/// 播放状态文件的写盘:按交来的顺序在一条串行队列上原子写,调用方不等磁盘。只在这条队列上碰 `lastFailureLogUptime`。
+public final class PlaybackStateFileWriter: @unchecked Sendable {
+    /// 磁盘写满、目录没权限时每拍都失败,隔这么久才再记一行。
+    static let failureLogInterval: TimeInterval = 60
+
+    private let url: URL
+    private let queue = DispatchQueue(label: "me.yudaotor.lyrimuse.playback-state-write", qos: .userInitiated)
+    private let logger = Logger(subsystem: LyrimuseIdentity.logSubsystem, category: "playback-state")
+    private let didWrite: (@Sendable (_ onMainThread: Bool) -> Void)?
+    private var lastFailureLogUptime: TimeInterval?
+
+    /// `didWrite` 给测试用:每写完一份调一次,带着这次写是不是在主线程上。
+    public init(url: URL, didWrite: (@Sendable (_ onMainThread: Bool) -> Void)? = nil) {
+        self.url = url
+        self.didWrite = didWrite
+    }
+
+    public func write(_ data: Data) {
+        queue.async { [self] in
+            do {
+                try data.write(to: url, options: .atomic)
+            } catch {
+                // 写不出去的话引擎 15 秒后判 App 不可用,不记这一行就看不出为什么。
+                let uptime = ProcessInfo.processInfo.systemUptime
+                if lastFailureLogUptime.map({ uptime - $0 >= Self.failureLogInterval }) ?? true {
+                    lastFailureLogUptime = uptime
+                    logger.error("playback state: write failed: \(error.localizedDescription, privacy: .public)")
+                }
+            }
+            didWrite?(Thread.isMainThread)
         }
+    }
+
+    /// 等已经交来的都写完再返回。
+    public func flush() {
+        queue.sync {}
     }
 }

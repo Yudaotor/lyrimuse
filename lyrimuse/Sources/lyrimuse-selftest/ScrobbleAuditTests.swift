@@ -96,7 +96,7 @@ func checkScrobbleAudit() {
         let onThisDay = sourceBody("func refreshOnThisDay(force: Bool = false)", in: stats)
         expectEqual(onThisDay.components(separatedBy: "generation == onThisDayGeneration").count - 1, 3,
                     "那年今日: 只认最后起飞的那一轮")
-        expectEqual(sourceHas(sourceBody("private func loadRecentPageCache()", in: stats),
+        expectEqual(sourceHas(sourceBody("private func applyRecentPageCache(_ snap: RecentPageCacheSnapshot)", in: stats),
                               "if snap.mergedCountsVersion == Self.mergedCountsVersion, let counts = snap.playCounts"), true,
                     "翻页缓存: 口径版本对不上不还原次数")
         let reset = sourceBody("func resetAll()", in: stats)

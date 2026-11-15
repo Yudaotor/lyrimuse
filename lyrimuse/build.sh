@@ -576,9 +576,11 @@ NPC_DST="$APP_DIR/Contents/Resources/nowplaying-clients"
 rm -rf "$NPC_DST"
 mkdir -p "$NPC_DST"
 NPC_SLICES=()
+# 最低系统版本跟 App 一样写 14.0(Package.swift 的 .macOS(.v14)、Info.plist 的 LSMinimumSystemVersion):不写时 clang
+# 按编译机的系统版本写 minos,发版包里就是 26.0 / 27.0,macOS 14 / 15 上 perl 加载它会被 dyld 拒掉。
 for arch in $ARCHES; do
   npc_out="$FAT_DIR/libnowplaying-clients-$arch.dylib"
-  clang -dynamiclib -fobjc-arc -O2 -arch "$arch" -framework Foundation \
+  clang -dynamiclib -fobjc-arc -O2 -arch "$arch" -mmacosx-version-min=14.0 -framework Foundation \
     -o "$npc_out" "$NPC_SRC/nowplaying-clients.m"
   NPC_SLICES+=("$npc_out")
 done

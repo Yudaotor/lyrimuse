@@ -48,7 +48,7 @@ func runSettingsAuditContracts() {
     expectEqual(sourceHas(settings, ".flatMap { $0 == \"system\" || UILanguage.packs.contains($0) ? $0 : nil } ?? \"system\""), true,
                 "界面语言: 读盘只认「跟随系统」和有语言包的几种")
     let delegate = app("AppDelegate.swift")
-    expectEqual(sourceHas(delegate, "if launchAtLoginStored { AppSettings.shared.syncLaunchAtLoginFromSystem() }\nLoginItemManager.shared.syncAtLaunch(enabled: AppSettings.shared.launchAtLoginEnabled)"), true,
+    expectEqual(sourceHas(delegate, "LoginItemManager.shared.syncAtLaunch {\nif launchAtLoginStored { AppSettings.shared.syncLaunchAtLoginFromSystem() }\nreturn AppSettings.shared.launchAtLoginEnabled"), true,
                 "开机启动: 存过时先按系统实际状态对账,再注册(系统设置里移除了不会被注册回去)")
     expectEqual(sourceHas(delegate, "cached.target == nil || cached.target?.window === win {"), true,
                 "滚轮兜底转发: 复用缓存前核对目标还在这扇窗里")
