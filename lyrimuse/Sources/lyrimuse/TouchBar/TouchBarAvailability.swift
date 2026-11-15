@@ -10,14 +10,12 @@ private let logger = Logger(subsystem: "me.yudaotor.lyrimuse", category: "touchb
 /// Mac 上照常生效)。
 ///
 /// 判据在 Core `TouchBarPresence`,这里取输入、跟着变:
-/// - 运行中 App 列表(KVO)里系统的 ControlStrip 起停;
+/// - 运行中 App 列表(KVO)一变就在后台查一次 ControlStrip 在不在跑(`ControlStripProcess`,只问内核进程表);
 /// - ControlStrip 在跑之后注册的 DFRFoundation 状态回调(模拟器开 / 关、触控栏出现 / 消失,实测一两秒内就到);
 /// - 设置页「歌词显示」每次出现时补判一次,兜住漏掉的通知。
 @MainActor
 final class TouchBarAvailability: ObservableObject {
     static let shared = TouchBarAvailability()
-    /// 系统的 ControlStrip(功能栏那一条就是它画的)。launchd 只在系统匹配到触控栏时拉起它。
-    static let controlStripBundleID = "com.apple.controlstrip"
 
     @Published private(set) var isPresent = false
 
@@ -34,8 +32,12 @@ final class TouchBarAvailability: ObservableObject {
     @Published private(set) var hasEscapeKey = false
     private var started = false
     private var controlStripRunning = false
+    private var controlStripPID: pid_t?
     private var statusCallbackRegistered = false
     private var runningAppsObservation: NSKeyValueObservation?
+    /// 查 ControlStrip 一次只派一个;派不出去时记下,这一次回来后再查一遍。
+    private let probes = SingleFlightBackgroundRead<ControlStripProcess.Probe>()
+    private var probeAgain = false
 
     private init() {}
 
@@ -43,18 +45,54 @@ final class TouchBarAvailability: ObservableObject {
     func start() {
         guard !started else { return }
         started = true
+        // 回调里不读那张表、也不读里面 App 的属性:读一次就是同步问 launchservicesd(17 章决策 60)。
         runningAppsObservation = NSWorkspace.shared.observe(\.runningApplications) { _, _ in
-            DispatchQueue.main.async { TouchBarAvailability.shared.runningAppsChanged() }
+            DispatchQueue.main.async { TouchBarAvailability.shared.probeControlStrip() }
         }
-        reevaluate()
+        probeControlStrip()
     }
 
-    /// 重判一次。不在 ControlStrip 在跑的时候,一个私有接口都不碰(见 `TouchBarPresence`)。
+    /// 补判一次(设置页出现时):按上次查到的 ControlStrip 立刻重判,另在后台再查一次它,变了再重判。
     func reevaluate() {
-        controlStripRunning = Self.isControlStripRunning()
+        probeControlStrip()
+        apply()
+    }
+
+    /// 在后台查 ControlStrip,回主线程只拿结论。
+    private func probeControlStrip() {
+        let known = controlStripPID
+        let issued = probes.start(read: { ControlStripProcess.probe(known: known) }, apply: { probe in
+            TouchBarAvailability.shared.controlStripProbed(probe)
+        })
+        if !issued { probeAgain = true }
+    }
+
+    private func controlStripProbed(_ probe: ControlStripProcess.Probe) {
+        if probeAgain {
+            probeAgain = false
+            probeControlStrip()
+        }
+        let running: Bool
+        switch probe {
+        case let .running(pid):
+            controlStripPID = pid
+            running = true
+        case .notRunning:
+            controlStripPID = nil
+            running = false
+        case .unknown:
+            return
+        }
+        guard running != controlStripRunning else { return }
+        controlStripRunning = running
+        apply()
+    }
+
+    /// 按此刻知道的 ControlStrip 在不在跑重判。不在跑的时候,一个私有接口都不碰(见 `TouchBarPresence`)。
+    private func apply() {
         if controlStripRunning, !statusCallbackRegistered {
             statusCallbackRegistered = TouchBarPrivateAPI.registerStatusChange {
-                DispatchQueue.main.async { TouchBarAvailability.shared.reevaluate() }
+                DispatchQueue.main.async { TouchBarAvailability.shared.apply() }
             }
         }
         let present = TouchBarPresence.isPresent(
@@ -70,13 +108,9 @@ final class TouchBarAvailability: ObservableObject {
         logger.notice("[TouchBarAvailability.reevaluate] present=\(present) controlStrip=\(self.controlStripRunning)")
     }
 
-    /// 任何 App 起停都会来一次;只在 ControlStrip 那一位变了时重判。
-    private func runningAppsChanged() {
-        guard Self.isControlStripRunning() != controlStripRunning else { return }
-        reevaluate()
-    }
-
-    private static func isControlStripRunning() -> Bool {
-        NSWorkspace.shared.runningApplications.contains { $0.bundleIdentifier == controlStripBundleID }
+    /// `debug/state` 里的一段:此刻的结论和用来判的 ControlStrip 进程。
+    var debugState: [String: Any] {
+        ["present": isPresent, "hasEscapeKey": hasEscapeKey, "controlStripRunning": controlStripRunning,
+         "controlStripPID": controlStripPID.map { Int($0) as Any } ?? NSNull()]
     }
 }

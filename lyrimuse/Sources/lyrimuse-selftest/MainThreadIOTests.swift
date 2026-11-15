@@ -274,4 +274,47 @@ func runMainThreadIOTests() {
                         && !gate.contains("warn-only") && !package.contains("warn-only"), true,
                     "发版闸门(契约): minos 查到 media-control 的两个 Mach-O,超了一律拒绝")
     }
+
+    do {
+        print("\n== 主线程 I/O:触控栏判 ControlStrip 只问内核进程表 ==")
+        let me = getpid()
+        let myPath = ControlStripProcess.executablePath(of: me) ?? ""
+        expectEqual(myPath.isEmpty, false, "ControlStrip 进程: 读得到自己的可执行文件路径")
+        expectEqual(ControlStripProcess.executablePath(of: -1), nil, "ControlStrip 进程: 不合法的进程号读不到路径")
+        // selftest 的可执行文件名比内核留的进程名长:按路径最后一段截到 16 字节才挑得出候选。
+        let comm = String(decoding: (myPath as NSString).lastPathComponent.utf8.prefix(16), as: UTF8.self)
+        expectEqual(ControlStripProcess.pids(command: comm)?.contains(me), true, "ControlStrip 进程: 按进程名在内核表里找到自己")
+        expectEqual(ControlStripProcess.probe(executablePath: myPath, known: me), .running(me), "ControlStrip 进程: 认得上次的进程号")
+        let viaScan = ControlStripProcess.probe(executablePath: myPath, known: nil)
+        if case let .running(pid) = viaScan {
+            expectEqual(ControlStripProcess.executablePath(of: pid), myPath, "ControlStrip 进程: 没有上次的进程号时翻表找到同一个可执行文件")
+        } else {
+            expectEqual(String(describing: viaScan), "running", "ControlStrip 进程: 没有上次的进程号时翻表找到")
+        }
+        if case let .running(pid) = ControlStripProcess.probe(executablePath: myPath, known: 1) {
+            expectEqual(ControlStripProcess.executablePath(of: pid), myPath, "ControlStrip 进程: 上次的进程号换了人就翻表")
+        } else {
+            expectEqual(false, true, "ControlStrip 进程: 上次的进程号换了人就翻表")
+        }
+        expectEqual(ControlStripProcess.probe(executablePath: "/nonexistent/\(UUID().uuidString)/ControlStrip", known: me), .notRunning,
+                    "ControlStrip 进程: 没有这个可执行文件的进程就是没在跑")
+        expectEqual(ControlStripProcess.executablePath, "/System/Library/CoreServices/ControlStrip.app/Contents/MacOS/ControlStrip",
+                    "ControlStrip 进程: 认的是系统那一份")
+
+        let availability = app("TouchBar/TouchBarAvailability.swift")
+        expectEqual(sourceHas(availability, "runningApplications.contains") || sourceHas(availability, ".bundleIdentifier")
+                        || sourceHas(availability, "NSRunningApplication"), false,
+                    "触控栏判定(契约): 不读运行中 App 表里的属性(每读一次同步问 launchservicesd)")
+        expectEqual(sourceHas(sourceBody("func start()", in: availability),
+                              "NSWorkspace.shared.observe(\\.runningApplications) { _, _ in\nDispatchQueue.main.async { TouchBarAvailability.shared.probeControlStrip() }"),
+                    true, "触控栏判定(契约): 运行中 App 表一变只派一次后台查")
+        let probe = sourceBody("private func probeControlStrip()", in: availability)
+        expectEqual(sourceHas(probe, "probes.start(read: { ControlStripProcess.probe(known: known) }")
+                        && sourceHas(probe, "if !issued { probeAgain = true }")
+                        && sourceHas(sourceBody("private func controlStripProbed(", in: availability),
+                                     "if probeAgain {\nprobeAgain = false\nprobeControlStrip()"), true,
+                    "触控栏判定(契约): 内核进程表在后台查、一次一个,派不出去的那次等回来再补查")
+        expectEqual(sourceHas(sourceBody("private func controlStripProbed(", in: availability), "case .unknown:\nreturn"), true,
+                    "触控栏判定(契约): 进程表读不出来时沿用上一次的结论")
+    }
 }

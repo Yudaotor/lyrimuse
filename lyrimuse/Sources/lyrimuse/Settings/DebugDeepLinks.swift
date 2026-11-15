@@ -405,6 +405,7 @@ enum DebugDeepLinks {
                            "menuBarDark": MenuBarAppearanceStore.shared.isDark],
             "checkpoint": checkpointSaved != nil,
             "fullDiskAccess": FullDiskAccessPermission.shared.debugState,
+            "touchBarAvailability": TouchBarAvailability.shared.debugState,
             // 后台读的状态文件此刻发布出来的结论:Last.fm 镜像(`loaded` 为 false = 第一次还没读完)、引擎报的网络不通、
             // ListenBrainz 令牌被拒、网页推送判定、Last.fm 统计读到的 feed、逐字格式切换那一行、登录项上次问到的系统状态。
             "stateFiles": [
