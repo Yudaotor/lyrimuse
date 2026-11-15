@@ -180,7 +180,9 @@ enum DebugDeepLinks {
             case "queued": .phase(.queued)
             default: nil
             }
-            if let display {
+            if state == "poll" {
+                LyricsWordFormatSwitchMonitor.shared.requested(formats, removing: removing.compactMap(LyricsWordFormat.init(rawValue:)))
+            } else if let display {
                 LyricsWordFormatSwitchMonitor.shared.simulate(display, formats: formats,
                                                               removing: removing.compactMap(LyricsWordFormat.init(rawValue:)))
             }

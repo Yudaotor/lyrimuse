@@ -231,7 +231,8 @@ public enum LyrimuseDeepLink: Equatable, Sendable {
         /// 把设置页「逐字歌词格式」那一行摆到换格式的某一步,不真换、不碰歌词文件:
         /// `debug/word-format-switch?state=backup|waiting|converting|finished|queued|idle&format=qrc&done=3214&total=17564`
         /// (`format` 是 `LyricsWordFormat` 的 rawValue,缺省 = 当前主格式;`done` / `total` 只在 converting / finished 时用;
-        /// `remove=yrc,qrc` 摆成「删除副本…」那一趟,文案说删除哪几种)。
+        /// `remove=yrc,qrc` 摆成「删除副本…」那一趟,文案说删除哪几种)。`state=poll` 不摆,当作刚请求了换成 `format`、
+        /// 照常开始读引擎的状态文件(不写 features.json,引擎不会真换),验监视器轮询用。
         case wordFormatSwitch(state: String, format: String?, done: Int?, total: Int?, removing: [String] = [])
         /// 把这几个文件交给「搜索歌词…」窗口导入,跟点「导入文件…」选完文件走同一条路(`debug/import-lyrics?path=<绝对路径>&path=…`)。
         /// 不开窗:窗口没开着时请求留 60 秒,开窗时取走(先 `lyrics-search?background=1`)。

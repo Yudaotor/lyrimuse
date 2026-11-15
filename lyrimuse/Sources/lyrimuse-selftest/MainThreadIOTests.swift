@@ -126,6 +126,9 @@ func runMainThreadIOTests() {
                     && sourceHas(sourceBody("private func poll()", in: monitor), "reads.start(read: { LyricsWordFormatSwitch.current })")
                     && sourceHas(sourceBody("private func stop()", in: monitor), "reads.invalidate()"), true,
                     "逐字格式切换(契约): 状态文件在后台读,停下时作废还在飞的那次")
+        expectEqual(sourceHas(app("Settings/DebugDeepLinks.swift"),
+                              "if state == \"poll\" {\nLyricsWordFormatSwitchMonitor.shared.requested("), true,
+                    "逐字格式切换(契约): debug/word-format-switch?state=poll 走真实轮询")
         let backfill = app("Settings/ScrobbleBackfillService.swift")
         expectEqual(sourceHas(sourceBody("func runBackfill()", in: backfill),
                               "await Task.detached(priority: .utility) { FileIO.decodeJSON(Progress.self, from: progressURL) }.value"), true,
