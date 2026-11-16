@@ -1767,9 +1767,9 @@ func runLyricsWindowTests() {
         expectEqual(sourceBytes(list, contain: "CATransaction.setCompletionBlock { [weak layer] in")
                     && sourceBytes(list, contain: "layer.animation(forKey: Self.depthAnimationKey + \"filters.blur.inputRadius\") == nil"),
                     true, "景深: 模糊对焦到 0 收尾后摘掉滤镜,不再每帧走离屏")
-        expectEqual(sourceHas(morph, "if let level = self?.levelAfterMorph { destination.level = level }\n                self?.levelAfterMorph = nil\n                destination.orderFrontRegardless()"),
+        expectEqual(sourceHas(morph, "destination.level = levelAfterMorph ?? wanted ?? level\n            levelAfterMorph = nil\n            destination.orderFrontRegardless()"),
                     true, "形态切换: 首张截图没截到、放弃动画时也把压到桌面以下的那扇还回层级")
-        expectEqual(sourceBytes(morph, contain: "        destination.level = levelAfterMorph ?? destinationLevel\n        // 迷你面板不当 main")
+        expectEqual(sourceBytes(morph, contain: "        destination.level = levelAfterMorph ?? wanted ?? destinationLevel\n        // 迷你面板不当 main")
                     && !sourceBytes(morph, contain: "if destination.isVisible {\n            destination.level"),
                     true, "形态切换: 落地时目标窗口被规则藏起也还层级,下次摆出来不在桌面以下")
         expectEqual(sourceBytes(window, contain: "p.$currentLyricsOffsetMs.removeDuplicates().sink { [weak self] in self?.lyricsOffsetMs = $0 }")

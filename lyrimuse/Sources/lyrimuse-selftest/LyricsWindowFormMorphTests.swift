@@ -29,6 +29,8 @@ func checkLyricsWindowFormMorph() {
     expectEqual(abs(Plan.crossfadeDuration(elapsed: 0.1) - 0.26) < 1e-9, true, "变形动画淡入: 剩多少走多少")
     expectEqual(Plan.crossfadeDuration(elapsed: 0.3), 0.12, "变形动画淡入: 快走完时至少 0.12")
     expectEqual(Plan.crossfadeDuration(elapsed: 0.9), 0.12, "变形动画淡入: 卡片已落地也留 0.12")
+    // 起步前等新图:按下到卡片起步再多等不过 0.2 秒,不然按下去像没反应。
+    expectEqual(Plan.newImageWait > 0 && Plan.newImageWait <= 0.2, true, "变形动画: 起步前等新图最多 0.2 秒")
 
     // 同一块屏才做动画。
     let screens = [CGRect(x: 0, y: 0, width: 1470, height: 956), CGRect(x: 1470, y: 0, width: 1920, height: 1080)]

@@ -7,9 +7,13 @@ public enum LyricsWindowFormMorphPlan {
     public static let curve: (Float, Float, Float, Float) = (0.3, 0.8, 0.25, 1)
     /// 截切换前那一张最多等多久。超时就不做动画、直接切(截图服务冷启动时第一张要 300 多毫秒)。
     public static let firstCaptureTimeout: Double = 0.25
-    /// 截切换后那一张最多等多久(从真窗口换完布局算起)。超时就不交叉淡化,卡片落地后直接淡出。
+    /// 截切换后那一张最多等多久(从目标窗口换完布局算起)。超时就不交叉淡化,卡片落地后直接淡出。
     public static let secondCaptureTimeout: Double = 0.6
-    /// 新图到手时动画已经快走完,交叉淡化至少留这么长,不让它一闪而过。
+    /// 卡片摆上之后最多停在原处等新图多久(几何动画按这么久的推迟交给渲染进程,主线程被占住也按时起步)。
+    /// 新图在这之前到了就跟卡片从那一刻一起起步,同一条曲线、同一时长淡入;没到就按时起步,新图到了按
+    /// `crossfadeDuration` 补淡入。
+    public static let newImageWait: Double = 0.15
+    /// 新图起步之后才到、动画已经快走完时,交叉淡化至少留这么长,不让它一闪而过。
     public static let minimumCrossfade: Double = 0.12
     /// 收尾时临时窗淡出:有新图时两张几乎一样,快一点;没截到新图时是旧图换成真窗口,慢一点。
     public static let fadeOutMatched: Double = 0.1

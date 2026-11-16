@@ -2320,6 +2320,19 @@ func runSourceContractSurfaceTests() {
                 expectEqual(morph.contains("CGWindowLevelForKey(.desktopWindow)) - 1"), true,
                             "变形动画: 真窗口藏在桌面层级以下(透明度为 0 截出来全透明)")
                 expectEqual(morph.contains("accessibilityDisplayShouldReduceMotion"), true, "变形动画: 减弱动态效果时不做")
+                // 新图要在卡片起步时就在手里,跟几何同一条曲线淡入;卡片起步后才去截,尺寸走完才换内容(07 章决策 205)。
+                expectEqual(sourceHas(morph, "let staged = Task { @MainActor () -> (window: NSWindow, level: NSWindow.Level)? in")
+                                && (morph.range(of: "let staged = Task {")?.lowerBound ?? morph.endIndex)
+                                    < (morph.range(of: "guard let old = await capture(source,")?.lowerBound ?? morph.startIndex)
+                                && sourceHas(morph, "overlay.animate(from: start, to: target, duration: Plan.duration, timing: timing, delay: Plan.newImageWait)\n        CATransaction.flush()")
+                                && sourceHas(morph, "let early = await Self.value(of: newImage, within: Plan.newImageWait)")
+                                && sourceHas(morph, "overlay.animate(from: start, to: target, duration: Plan.duration, timing: timing, delay: 0)\n            overlay.fadeIn(new, duration: Plan.duration, timing: timing, delay: 0)")
+                                && sourceHas(morph, "animation.beginTime = beginTime\n            animation.fillMode = .backwards"),
+                            true, "变形动画: 目标窗口跟第一张截图同时备,新图跟卡片几何同一时长、同一曲线淡入;卡片推迟起步交给渲染进程,主线程被占住也按时动")
+                // 目标窗口藏着期间它自己的控制器挂上来会直接改层级(迷你面板默认置顶),顶到卡片上面:看守着压回去,收尾按它要的还。
+                expectEqual(sourceHas(morph, "window.level = Self.hiddenLevel\n            self.holdHidden(window)")
+                                && sourceHas(morph, "let wanted = releaseHold()\n        destination.level = levelAfterMorph ?? wanted ?? destinationLevel"),
+                            true, "变形动画: 目标窗口藏着期间被改层级会压回桌面以下,收尾按改成的层级还")
                 // 07 章决策 128:上沿伸进菜单栏的普通窗口上屏时会被往下推,卡片跟着下移。
                 expectEqual(morph.contains("override func constrainFrameRect(_ frameRect: NSRect, to screen: NSScreen?) -> NSRect { frameRect }")
                                 && morph.contains("let window = MorphWindow(contentRect: frame, styleMask: [.borderless]"), true,
@@ -2435,7 +2448,7 @@ func runSourceContractSurfaceTests() {
             expectEqual(sourceHas(lwv, "if window is LyricsMiniPanel {\n            switchToFullWindow(from: window, animated: animated)")
                         && lwv.contains("prepare: { done in done(LyricsMiniPanelHost.make(frame: target)) },")
                         && lwv.contains("AppActions.shared.openLyricsWindowScene?()")
-                        && morph.contains("destination.level = Self.hiddenLevel")
+                        && morph.contains("window.level = Self.hiddenLevel")
                         && morph.contains("finish(destination)")
                         && !morph.contains("func run(window:"), true,
                         "迷你面板: 进出迷你是两扇窗交接,变形动画截源窗口和目标窗口")

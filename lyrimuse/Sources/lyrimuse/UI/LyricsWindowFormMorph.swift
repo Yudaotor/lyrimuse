@@ -1,13 +1,19 @@
 import AppKit
 import LyrimuseCore
+import os
 import ScreenCaptureKit
 
 /// 进 / 出迷你的变形动画(07 章决策 125):完整尺寸那扇窗和迷你面板之间交接(决策 133)。
 ///
 /// 真窗口自己不做尺寸动画:它的内容区就是 SwiftUI 的宿主视图,尺寸每变一帧整窗重排一遍,AppKit 的窗口尺寸
 /// 动画本身也是主线程逐帧推,主线程一忙就掉帧。这里另起一扇透明、不接鼠标的临时窗,上面一张卡片:先摆切换前
-/// 那张窗口截图,从旧 frame 走到新 frame;真窗口换好新布局后截第二张,叠在旧图上淡入。卡片的几何和淡入都是
+/// 那张窗口截图,从旧 frame 走到新 frame;目标窗口换好新布局后截第二张,叠在旧图上淡入。卡片的几何和淡入都是
 /// 显式的 Core Animation 动画,提交后由渲染进程逐帧合成,主线程这时在重排新布局也不影响。
+///
+/// 目标窗口跟第一张截图同时备好、截第二张,卡片起步时两张图都在手里,新图跟卡片几何同一条曲线、同一时长淡入:
+/// 内容换成新布局的进度跟尺寸走到哪一步一致。别写成卡片起步之后才开目标窗口、截第二张:曲线起步快,
+/// 新图晚到时尺寸已经走完,看着是先变大、后换内容(07 章决策 205)。卡片几何一开始就交给渲染进程、推迟 `newImageWait` 起步,新图在那之前到了就一起提前起步,
+/// 没到就按时起步、到了再补淡入:目标窗口排版占住主线程时,卡片停在原处的时间也不超过 `newImageWait`。
 ///
 /// 动画期间真窗口降到桌面层级以下:用户看不见,截图照样截得到最新内容。别改成调透明度或挪到屏幕外 ——
 /// 透明度为 0 的窗口截出来全透明,带标题栏的窗口挪出屏幕会被系统拉回屏内。
@@ -18,6 +24,7 @@ import ScreenCaptureKit
 @MainActor
 final class LyricsWindowFormMorph {
     private typealias Plan = LyricsWindowFormMorphPlan
+    private static let log = Logger(subsystem: "me.yudaotor.lyrimuse", category: "lyrics-window-morph")
 
     /// 从截第一张到临时窗撤掉这一整段。期间真窗口的层级归这里管。
     private(set) var isRunning = false
@@ -26,6 +33,9 @@ final class LyricsWindowFormMorph {
     var levelAfterMorph: NSWindow.Level?
 
     private var warmFilter: (id: CGWindowID, filter: SCContentFilter, at: CFTimeInterval)?
+    /// 目标窗口藏在桌面以下的这段里,它自己的控制器挂上来时会直接改层级(迷你面板默认置顶),把它顶到卡片上面。
+    /// 这里每拍看一眼,被改了就记下要的层级、压回桌面以下,收尾时按记下的还。
+    private var hold: (window: NSWindow, wanted: NSWindow.Level?, timer: Timer)?
     private var isWarming = false
 
     /// 藏真窗口用的层级:桌面图片那一层之下。
@@ -81,21 +91,50 @@ final class LyricsWindowFormMorph {
                          _ failed: @escaping @MainActor () -> Void) async {
         let start = source.frame
         let scale = source.backingScaleFactor
-        guard let old = await capture(source, allowWarm: true, timeout: Plan.firstCaptureTimeout),
-              source.isVisible, source.frame == start else {
-            isRunning = false
-            prepare { [weak self] destination in
-                guard let destination else { return failed() }
-                // 调用方在 prepare 里可能把复用的那扇压到了桌面以下、等收尾还(levelAfterMorph):不做动画也得还。
-                if let level = self?.levelAfterMorph { destination.level = level }
-                self?.levelAfterMorph = nil
-                destination.orderFrontRegardless()
-                finish(destination)
-            }
-            return
-        }
         let sourceLevel = source.level
         let wasKey = source.isKeyWindow
+        let t0 = CACurrentMediaTime()
+        // 目标窗口跟第一张截图同时备:摆好、在桌面以下上屏(用户看不见,截得到它的新内容)、截第二张。
+        let staged = Task { @MainActor () -> (window: NSWindow, level: NSWindow.Level)? in
+            let window: NSWindow? = await withCheckedContinuation { (done: CheckedContinuation<NSWindow?, Never>) in
+                Task { @MainActor in prepare { done.resume(returning: $0) } }
+            }
+            guard let window else { return nil }
+            let level = window.level
+            window.level = Self.hiddenLevel
+            self.holdHidden(window)
+            if !window.isVisible { window.orderFrontRegardless() }
+            return (window, level)
+        }
+        let newImage = Task { @MainActor () -> CGImage? in
+            guard let window = await staged.value?.window else { return nil }
+            let stagedAt = CACurrentMediaTime()
+            await Self.pause(1.0 / 60)
+            guard !Task.isCancelled else { return nil }
+            window.contentView?.layoutSubtreeIfNeeded()
+            window.displayIfNeeded()
+            CATransaction.flush()
+            let image = await self.capture(window, allowWarm: false, timeout: Plan.secondCaptureTimeout)
+            Self.log.info("form morph: destination \(Self.ms(stagedAt - t0), privacy: .public) ms, new image \(image == nil ? "none" : "\(Self.ms(CACurrentMediaTime() - t0)) ms", privacy: .public)")
+            return image
+        }
+        guard let old = await capture(source, allowWarm: true, timeout: Plan.firstCaptureTimeout),
+              source.isVisible, source.frame == start else {
+            newImage.cancel()
+            guard let (destination, level) = await staged.value else {
+                isRunning = false
+                return failed()
+            }
+            // 不做动画:目标窗口从桌面以下直接回到它的层级(动画期间别处要改的那份优先)。
+            let wanted = releaseHold()
+            destination.level = levelAfterMorph ?? wanted ?? level
+            levelAfterMorph = nil
+            destination.orderFrontRegardless()
+            isRunning = false
+            finish(destination)
+            return
+        }
+        let oldAt = CACurrentMediaTime()
         let overlay = MorphOverlay(frame: Plan.overlayFrame(from: start, to: target), level: sourceLevel, scale: scale,
                                    keyShadow: wasKey)
         overlay.show(old, at: start, cornerRadius: Self.cornerRadius(of: old, scale: scale))
@@ -103,15 +142,25 @@ final class LyricsWindowFormMorph {
         await Self.pause(Self.settleFrames)
 
         source.level = Self.hiddenLevel
-        let begin = CACurrentMediaTime()
-        overlay.animate(to: target, duration: Plan.duration,
-                        timing: CAMediaTimingFunction(controlPoints: Plan.curve.0, Plan.curve.1, Plan.curve.2, Plan.curve.3))
+        // 卡片几何先交给渲染进程、推迟 `newImageWait` 起步:目标窗口排版把主线程占住时,卡片照样按时动。
+        // 新图赶在起步前到了就让卡片和新图从这一刻一起起步。
+        let timing = CAMediaTimingFunction(controlPoints: Plan.curve.0, Plan.curve.1, Plan.curve.2, Plan.curve.3)
+        var begin = CACurrentMediaTime() + Plan.newImageWait
+        overlay.animate(from: start, to: target, duration: Plan.duration, timing: timing, delay: Plan.newImageWait)
         CATransaction.flush()
-
-        let destination: NSWindow? = await withCheckedContinuation { (done: CheckedContinuation<NSWindow?, Never>) in
-            Task { @MainActor in prepare { done.resume(returning: $0) } }
+        // `.some(nil)` = 没开出来或没截到,nil = 等超时。
+        let early = await Self.value(of: newImage, within: Plan.newImageWait)
+        var withMotion = false
+        if let new = early ?? nil, CACurrentMediaTime() < begin {
+            begin = CACurrentMediaTime()
+            overlay.animate(from: start, to: target, duration: Plan.duration, timing: timing, delay: 0)
+            overlay.fadeIn(new, duration: Plan.duration, timing: timing, delay: 0)
+            CATransaction.flush()
+            withMotion = true
         }
-        guard let destination else {
+
+        guard let (destination, destinationLevel) = await staged.value else {
+            _ = releaseHold()
             source.level = sourceLevel
             overlay.fadeOut(duration: Plan.fadeOutUnmatched) { [weak self] in
                 MainActor.assumeIsolated {
@@ -122,29 +171,31 @@ final class LyricsWindowFormMorph {
             failed()
             return
         }
-        // 目标窗口在桌面以下上屏:用户看不见,截得到它的新内容。
-        let destinationLevel = destination.level
-        destination.level = Self.hiddenLevel
-        if !destination.isVisible { destination.orderFrontRegardless() }
-        await Self.pause(1.0 / 60)
-        destination.contentView?.layoutSubtreeIfNeeded()
-        destination.displayIfNeeded()
-        CATransaction.flush()
-        let new = await capture(destination, allowWarm: false, timeout: Plan.secondCaptureTimeout)
+        var new = early ?? nil
+        if early == nil { new = await newImage.value }
         var landing = begin + Plan.duration
-        if let new {
+        var crossfade = withMotion ? "with motion" : "none"
+        if !withMotion, let late = new {
             let now = CACurrentMediaTime()
-            let fade = Plan.crossfadeDuration(elapsed: now - begin)
-            overlay.fadeIn(new, duration: fade)
+            if now < begin {
+                overlay.fadeIn(late, duration: Plan.duration, timing: timing, delay: begin - now)
+                crossfade = "with motion"
+            } else {
+                let fade = Plan.crossfadeDuration(elapsed: now - begin)
+                overlay.fadeIn(late, duration: fade, timing: CAMediaTimingFunction(name: .easeInEaseOut), delay: 0)
+                landing = max(landing, now + fade)
+                crossfade = "late +\(Self.ms(now - begin)) ms"
+            }
             CATransaction.flush()
-            landing = max(landing, now + fade)
         }
+        Self.log.info("form morph: old image \(Self.ms(oldAt - t0), privacy: .public) ms, motion start \(Self.ms(begin - t0), privacy: .public) ms, crossfade \(crossfade, privacy: .public)")
         let wait = landing - CACurrentMediaTime()
         if wait > 0 { await Self.pause(wait) }
 
         // 目标窗口回到它的层级(动画期间别处要改的那份优先),此刻它正好在卡片底下、跟新图对齐;源窗口交给调用方关掉。
         // 层级不看在不在屏:落地前被「暂停时隐藏」这类规则藏起的,下次摆出来不能还在桌面以下。
-        destination.level = levelAfterMorph ?? destinationLevel
+        let wanted = releaseHold()
+        destination.level = levelAfterMorph ?? wanted ?? destinationLevel
         // 迷你面板不当 main,也不抢 key。
         if destination.isVisible, wasKey, destination.canBecomeMain { destination.makeKey() }
         levelAfterMorph = nil
@@ -159,6 +210,31 @@ final class LyricsWindowFormMorph {
                 self?.isRunning = false
             }
         }
+    }
+
+    private func holdHidden(_ window: NSWindow) {
+        hold?.timer.invalidate()
+        let timer = Timer(timeInterval: 1.0 / 120, repeats: true) { [weak self] _ in
+            MainActor.assumeIsolated { self?.reassertHidden() }
+        }
+        RunLoop.main.add(timer, forMode: .common)
+        hold = (window, nil, timer)
+    }
+
+    private func reassertHidden() {
+        guard let held = hold, held.window.level != Self.hiddenLevel else { return }
+        hold?.wanted = held.window.level
+        held.window.level = Self.hiddenLevel
+    }
+
+    /// 停掉看守,交回藏着期间被改成的层级(没人改过是 nil)。
+    private func releaseHold() -> NSWindow.Level? {
+        reassertHidden()
+        let wanted = hold?.wanted
+        hold?.timer.invalidate()
+        hold = nil
+        if let wanted { Self.log.info("form morph: destination asked for level \(wanted.rawValue, privacy: .public) while hidden") }
+        return wanted
     }
 
     /// 截这扇窗此刻的样子(不带阴影,按屏幕倍率出像素)。`timeout` 秒内没回来当没截到。
@@ -191,6 +267,22 @@ final class LyricsWindowFormMorph {
               let window = content.windows.first(where: { $0.windowID == id }) else { return nil }
         return SCContentFilter(desktopIndependentWindow: window)
     }
+
+    /// `task` 在 `seconds` 秒内交出结果就返回它,否则返回 nil;任务照跑,之后还能再取。
+    private static func value<T: Sendable>(of task: Task<T, Never>, within seconds: Double) async -> T? {
+        await withCheckedContinuation { (result: CheckedContinuation<T?, Never>) in
+            let once = ResumeOnce()
+            Task { @MainActor in
+                let value = await task.value
+                if once.claim() { result.resume(returning: value) }
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + seconds) {
+                if once.claim() { result.resume(returning: nil) }
+            }
+        }
+    }
+
+    private static func ms(_ seconds: CFTimeInterval) -> Int { Int((seconds * 1000).rounded()) }
 
     private static func withTimeout(_ seconds: Double,
                                     _ work: @escaping @MainActor () async -> CGImage?) async -> CGImage? {
@@ -299,24 +391,28 @@ private final class MorphOverlay {
         window.orderFrontRegardless()
     }
 
-    /// 卡片走到 `rect`:位置、尺寸、阴影路径三样同一条曲线。
-    func animate(to rect: NSRect, duration: Double, timing: CAMediaTimingFunction) {
-        let fromPosition = card.position
-        let fromBounds = card.bounds
-        let fromPath = card.shadowPath
+    /// 卡片从 `start` 走到 `rect`:位置、尺寸、阴影路径三样同一条曲线,`delay` 秒后起步(起步前停在 `start`)。
+    /// 再调一次换掉上一次的那组动画。
+    func animate(from start: NSRect, to rect: NSRect, duration: Double, timing: CAMediaTimingFunction, delay: Double) {
+        let from = local(start)
+        let fromBounds = CGRect(origin: .zero, size: from.size)
+        let fromPath = CGPath(roundedRect: fromBounds, cornerWidth: radius, cornerHeight: radius, transform: nil)
         CATransaction.begin()
         CATransaction.setDisableActions(true)
         place(local(rect))
         CATransaction.commit()
+        let beginTime = card.convertTime(CACurrentMediaTime(), from: nil) + delay
         func animate(_ layer: CALayer, _ keyPath: String, from: Any?, to: Any?) {
             let animation = CABasicAnimation(keyPath: keyPath)
             animation.fromValue = from
             animation.toValue = to
             animation.duration = duration
             animation.timingFunction = timing
+            animation.beginTime = beginTime
+            animation.fillMode = .backwards
             layer.add(animation, forKey: "morph." + keyPath)
         }
-        animate(card, "position", from: NSValue(point: fromPosition), to: NSValue(point: card.position))
+        animate(card, "position", from: NSValue(point: from.origin), to: NSValue(point: card.position))
         for layer in [card, clip, oldImage, newImage] {
             animate(layer, "bounds", from: NSValue(rect: fromBounds), to: NSValue(rect: card.bounds))
         }
@@ -324,7 +420,7 @@ private final class MorphOverlay {
     }
 
     /// 新图叠在旧图上淡入。旧图垫在底下不动,省得两张一起半透明时透出背后的桌面。
-    func fadeIn(_ image: CGImage, duration: Double) {
+    func fadeIn(_ image: CGImage, duration: Double, timing: CAMediaTimingFunction, delay: Double) {
         CATransaction.begin()
         CATransaction.setDisableActions(true)
         newImage.contents = image
@@ -334,7 +430,9 @@ private final class MorphOverlay {
         animation.fromValue = 0
         animation.toValue = 1
         animation.duration = duration
-        animation.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+        animation.timingFunction = timing
+        animation.beginTime = newImage.convertTime(CACurrentMediaTime(), from: nil) + delay
+        animation.fillMode = .backwards
         newImage.add(animation, forKey: "morph.fade")
     }
 
