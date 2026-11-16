@@ -1537,6 +1537,7 @@
 "搜索确认无歌词后才收起，仅保留顶部窄条，悬停时仍可展开；搜索期间照常显示歌词行" = "Se réduit seulement quand la recherche confirme l’absence de paroles, en ne laissant que la bande du haut ; le survol la développe toujours. La ligne de paroles reste visible pendant la recherche";
 "搜索确认无歌词后才隐藏，搜索期间照常显示" = "Se masque seulement quand la recherche confirme l’absence de paroles ; reste visible pendant la recherche";
 "搜索结果仅有当前使用的歌词" = "La recherche n’a trouvé que les paroles déjà utilisées";
+"搜这首" = "Rechercher ce morceau";
 "播放/暂停" = "Lecture/Pause";
 "播放到何处时记录一次 Scrobble\n50%：播放一半或 4 分钟，以先到者为准（Last.fm 官方规则）\n75% / 90%：播放达到对应比例\n曲终：完整播放后才记录，中途切歌不记录" = "Quelle part d’un morceau doit être lue pour le scrobbler\n50 % : la moitié ou 4 minutes, selon le premier seuil atteint (règle de Last.fm)\n75 % / 90 % : cette part du morceau\nFin du morceau : seulement s’il est lu jusqu’au bout ; les morceaux passés ne comptent pas";
 "播放器" = "Lecteur";

@@ -4774,7 +4774,7 @@ func runSourceContractSettingsTests() {
         expectEqual(sourceHas(sheet, "autoMatchButton(iconOnly: iconOnly)\n            instrumentalButton(iconOnly: iconOnly)\n")
                     && sourceHas(sheet, "toolbarRow(showsTitle: true, iconOnly: false)\n                toolbarRow(showsTitle: false, iconOnly: false)\n                toolbarRow(showsTitle: false, iconOnly: true)")
                     && sheet.contains("toolbarLabel(markedInstrumental ? L10n.t(\"取消纯音乐标记\") : L10n.t(\"标为纯音乐\"),")
-                    && sourceHas(sheet, "detailToolbar\n            instrumentalBanner\n")
+                    && sourceHas(sheet, "detailToolbar\n            nowPlayingBanner\n            instrumentalBanner\n")
                     && sheet.contains("instrumentalOverride = false"), true,
                     "采纳候选入口: 搜索面板右侧标题行常驻带文字的标 / 撤纯音乐按钮,标上时说明条挂在那一行下面,采纳成功后跟着撤")
         // 「重新自动匹配」:面板和歌词管理详情页走同一个 runner、同一套结论说法(管理页不留自己那份 rematchText),

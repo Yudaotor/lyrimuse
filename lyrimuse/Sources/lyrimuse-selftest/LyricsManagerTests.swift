@@ -1233,11 +1233,28 @@ func runLyricsManagerTests() {
                         "当前使用契约: 宿主给的来源变了,面板记的采纳结果让位")
             expectEqual(sourceHas(sheet, ".onChange(of: currentFingerprint) { _, value in\n            host.fingerprint = value\n            appliedSource = nil"), true,
                         "当前使用契约: 宿主给的指纹变了,面板记的采纳结果让位")
-            // 选中的就是在用的那一份时,采用按钮只说明状态、点不了(11 章决策 55)。
-            expectEqual(sheet.contains("if isCurrentCandidate(c) { return L10n.t(\"当前使用\") }"), true,
-                        "当前使用契约: 选中在用的那份时,采用按钮写「当前使用」")
-            expectEqual(sheet.contains(".disabled(isCurrentCandidate(c))"), true,
-                        "当前使用契约: 选中在用的那份时,采用按钮点不了")
+            // 选中的就是在用的那一份时不画采用按钮,「当前使用」只由徽标说一次;正在采用的那条照画(11 章决策 174)。
+            let applyTitle = sourceBody("private func applyButtonTitle(for c: LyricsSearchService.Candidate) -> String", in: sheet)
+            expectEqual([!applyTitle.isEmpty && !applyTitle.contains("当前使用"),
+                          sourceHas(sheet, "if !isCurrentCandidate(c) || applyingSource == c.source {\n// 纯文本那条写")
+                              && sheet.contains("Button(applyButtonTitle(for: c)) {"),
+                          !sheet.contains(".disabled(isCurrentCandidate(c))")], [true, true, true],
+                        "当前使用契约: 选中在用的那份时不画采用按钮(按钮不再写「当前使用」、不再挂置灰),正在采用的那条照画")
+            // 窗口不跟着换歌,但放过这首之后换了歌,预览顶上说现在放的是哪首、「搜这首」改搜它(11 章决策 174)。
+            let actions = (try? String(contentsOf: URL(fileURLWithPath: #filePath).deletingLastPathComponent()
+                .deletingLastPathComponent().appendingPathComponent("lyrimuse/Settings/AppActions.swift"), encoding: .utf8)) ?? ""
+            let banner = sourceBody("private var nowPlayingBanner: some View", in: sheet)
+            expectEqual([sourceHas(sheet, ".onChange(of: isSongPlaying, initial: true) { _, playing in\nif playing { playedWhileOpen = true }"),
+                         sourceHas(sheet, "subjectGeneration += 1\nplayedWhileOpen = isSongPlaying"),
+                         banner.contains("if playedWhileOpen, !isSongPlaying, let playing = nowPlaying.displayText {"),
+                         banner.contains("L10n.t(\"正在播放：%@\")") && banner.contains("Button(L10n.t(\"搜这首\"))")
+                             && banner.contains(".settingsGlassButtons()"),
+                         banner.contains("AppActions.shared.retargetLyricsSearchToNowPlaying()"),
+                         sourceHas(sourceBody("func retargetLyricsSearchToNowPlaying()", in: actions),
+                                   "lyricsSearchTarget = nil\nquickSearchRefreshRequests.send()"),
+                         sourceHas(sheet, "detailToolbar\nnowPlayingBanner\ninstrumentalBanner")],
+                        [true, true, true, true, true, true, true],
+                        "换歌提示: 放过这首、换了歌才出「正在播放」那一行,换查询对象时按此刻在不在放重置;「搜这首」清掉指定目标、让窗口改搜正在放的")
             // 面板按 defaultSize 打开,标题行的按钮放得下(11 章决策 56)。
             expectEqual(sheet.contains("idealWidth: Self.defaultSize.width") && sheet.contains("idealHeight: Self.defaultSize.height"),
                         true, "面板尺寸: 打开时按 defaultSize,不是挤在最小尺寸里")
@@ -2185,6 +2202,21 @@ func runLyricsManagerTests() {
         expectEqual(sheet.contains("metaLine(c, font: .caption2)") && sheet.contains("metaLine(c, font: .caption)")
                     && sheet.contains("LyricsCandidateDuration.isOff(candidate: c.sourceDurationSecs, song: durationSecs)"), true,
                     "搜索候选歌词: 列表和预览都写源自报曲长、跟这首比")
+        // 候选行不截歌名 / 歌手 / 专辑,标签只画图标、悬停看名字,跟预览那排是同一组(11 章决策 174)。
+        let candidateRowBody = sourceBody("private func candidateRow(_ c: LyricsSearchService.Candidate) -> some View", in: sheet)
+        let rowIcons = sourceBody("private func characteristicIcons(", in: sheet)
+        let previewBadges = sourceBody("private func characteristicBadges(", in: sheet)
+        let badgeNames = ["无时间戳", "逐字时间轴", "译文", "自带读音", "歌词内容与 %@ 相同", "歌词文字与 %@ 相同", "当前使用"]
+        expectEqual([!candidateRowBody.isEmpty && !candidateRowBody.contains(".lineLimit(")
+                         && !candidateRowBody.contains("truncationMode"),
+                     candidateRowBody.contains("Text(c.title)") && candidateRowBody.contains("[c.artist, c.album]"),
+                     candidateRowBody.contains("characteristicIcons(c, isCurrent: isCurrentCandidate(c),")
+                         && !candidateRowBody.contains("characteristicBadges("),
+                     badgeNames.allSatisfy { rowIcons.contains("L10n.t(\"\($0)\")") && previewBadges.contains("L10n.t(\"\($0)\")") },
+                     rowIcons.contains("effectiveCurrentPick.badgeText") && previewBadges.contains("effectiveCurrentPick.badgeText"),
+                     sourceBody("private func characteristicIcon(", in: sheet).contains(".hoverNote(")],
+                    [true, true, true, true, true, true],
+                    "搜索候选歌词: 候选行歌名 / 歌手 / 专辑不截断,标签只画图标、悬停看名字,跟预览那排同一组")
         expectEqual(sheet.contains(".keyboardShortcut(.return, modifiers: .command)"), true, "搜索候选歌词: ⌘↩ 采用选中的候选")
         let service = (try? String(contentsOf: URL(fileURLWithPath: #filePath).deletingLastPathComponent()
             .deletingLastPathComponent().appendingPathComponent("lyrimuse/LyricsManager/LyricsSearchService.swift"),

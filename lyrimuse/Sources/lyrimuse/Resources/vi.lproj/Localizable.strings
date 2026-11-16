@@ -1462,6 +1462,7 @@
 "搜索确认无歌词后才收起，仅保留顶部窄条，悬停时仍可展开；搜索期间照常显示歌词行" = "Chỉ thu gọn khi tìm kiếm xác nhận không có lời, chỉ giữ dải hẹp ở trên cùng; di chuột vào vẫn mở rộng được. Dòng lời vẫn hiện trong lúc tìm";
 "搜索确认无歌词后才隐藏，搜索期间照常显示" = "Chỉ ẩn khi tìm kiếm xác nhận không có lời, vẫn hiện trong lúc tìm";
 "搜索结果仅有当前使用的歌词" = "Kết quả tìm kiếm chỉ có lời đang dùng";
+"搜这首" = "Tìm bài hát này";
 "播放/暂停" = "Phát/Tạm dừng";
 "播放到何处时记录一次 Scrobble\n50%：播放一半或 4 分钟，以先到者为准（Last.fm 官方规则）\n75% / 90%：播放达到对应比例\n曲终：完整播放后才记录，中途切歌不记录" = "Phát đến đâu thì ghi một lần Scrobble\n50%: phát một nửa hoặc 4 phút, tùy điều kiện nào đến trước (quy tắc chính thức của Last.fm)\n75% / 90%: phát đến tỷ lệ tương ứng\nHết bài: chỉ ghi khi phát hết bài, chuyển bài giữa chừng thì không ghi";
 "播放器" = "Trình phát";

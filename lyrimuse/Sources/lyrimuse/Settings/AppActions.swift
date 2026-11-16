@@ -54,6 +54,12 @@ final class AppActions {
     /// 读一次就清的话后一次读到 nil,又换回正在放的那首。
     private(set) var lyricsSearchTarget: LyricsSearchTarget?
 
+    /// 「搜索歌词…」窗口里的「搜这首」:开着的窗口改搜正在放的那首,不重开窗口、不提前台。
+    func retargetLyricsSearchToNowPlaying() {
+        lyricsSearchTarget = nil
+        quickSearchRefreshRequests.send()
+    }
+
     func openLyricsSearch(for target: LyricsSearchTarget) {
         guard let present = presentLyricsSearchWindow else { return }
         lyricsSearchTarget = target

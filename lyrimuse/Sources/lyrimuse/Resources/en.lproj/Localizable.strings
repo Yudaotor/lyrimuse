@@ -1537,6 +1537,7 @@
 "搜索确认无歌词后才收起，仅保留顶部窄条，悬停时仍可展开；搜索期间照常显示歌词行" = "Collapses only after the search confirms there are no lyrics, leaving just the top strip; hovering still expands it. The lyric row stays visible while searching";
 "搜索确认无歌词后才隐藏，搜索期间照常显示" = "Hides only once the search confirms there are no lyrics; stays visible while searching";
 "搜索结果仅有当前使用的歌词" = "The search found only the lyrics already in use";
+"搜这首" = "Search This Track";
 "播放/暂停" = "Play/Pause";
 "播放到何处时记录一次 Scrobble\n50%：播放一半或 4 分钟，以先到者为准（Last.fm 官方规则）\n75% / 90%：播放达到对应比例\n曲终：完整播放后才记录，中途切歌不记录" = "How much of a track must play before it’s scrobbled\n50%: half the track or 4 minutes, whichever comes first (Last.fm’s rule)\n75% / 90%: that share of the track\nTrack End: only when played to the end; skipped tracks aren’t scrobbled";
 "播放器" = "Player";

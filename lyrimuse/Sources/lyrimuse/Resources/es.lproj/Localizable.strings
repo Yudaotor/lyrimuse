@@ -1537,6 +1537,7 @@
 "搜索确认无歌词后才收起，仅保留顶部窄条，悬停时仍可展开；搜索期间照常显示歌词行" = "Solo se contrae cuando la búsqueda confirma que no hay letra, y deja solo la franja superior; al pasar el puntero se sigue expandiendo. La fila de letra se sigue mostrando durante la búsqueda";
 "搜索确认无歌词后才隐藏，搜索期间照常显示" = "Solo se oculta cuando la búsqueda confirma que no hay letra; sigue visible mientras busca";
 "搜索结果仅有当前使用的歌词" = "La búsqueda solo encontró la letra en uso";
+"搜这首" = "Buscar esta canción";
 "播放/暂停" = "Reproducir/Pausa";
 "播放到何处时记录一次 Scrobble\n50%：播放一半或 4 分钟，以先到者为准（Last.fm 官方规则）\n75% / 90%：播放达到对应比例\n曲终：完整播放后才记录，中途切歌不记录" = "Cuánto debe reproducirse una canción para hacer scrobble\n50%: la mitad o 4 minutos, lo que llegue antes (regla de Last.fm)\n75% / 90%: esa parte de la canción\nAl final: solo si se reproduce hasta el final; las canciones saltadas no cuentan";
 "播放器" = "Reproductor";

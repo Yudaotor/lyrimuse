@@ -129,6 +129,8 @@ struct LyricsSearchSheet: View {
     /// 对照结果按两边内容缓存(`comparison`)。
     @State private var comparisonMemo = ComparisonMemo()
     @StateObject private var nowPlaying = LyricsSearchNowPlaying()
+    /// 这首在窗口开着期间放过(打开时正在放也算)。换歌后的「正在播放」那一行只在它为 true 时出。
+    @State private var playedWhileOpen = false
     /// 查询对象(换歌)换了几次,见 apply 里那道守卫。
     @State private var subjectGeneration = 0
     /// 候选列表有没有焦点:点一行时交给它,方向键才换得了行(onMoveCommand)。
@@ -577,8 +579,12 @@ struct LyricsSearchSheet: View {
         // 别改成让宿主 `.id(context.key)` 整棵重建:重建时新面板的 .task 先起、旧面板的任务取消与 onDisappear 后到,
         // 两边的收尾交错。`.task(id:)` 先取消旧任务再起新任务;`.onChange` 在更新阶段同步触发,load() 起跑时查询词
         // 已经是新曲目的。
+        .onChange(of: isSongPlaying, initial: true) { _, playing in
+            if playing { playedWhileOpen = true }
+        }
         .onChange(of: searchSubject) { _, _ in
             subjectGeneration += 1
+            playedWhileOpen = isSongPlaying
             artist = originalArtist
             title = originalTitle
             album = originalAlbum
@@ -1135,6 +1141,7 @@ struct LyricsSearchSheet: View {
     private var detail: some View {
         VStack(alignment: .leading, spacing: 0) {
             detailToolbar
+            nowPlayingBanner
             instrumentalBanner
             autoMatchStatus
             detailContent
@@ -1301,46 +1308,107 @@ struct LyricsSearchSheet: View {
         }
     }
 
+    // 歌名、歌手、专辑一个字都不截、不封顶行数:同名候选之间往往只有尾巴上的版本信息(「(Remaster)」「feat. …」)分得出来。
+    // 行高从别处省:封面 32pt,歌手和专辑并成一段接着排,标签只画图标(`characteristicIcons`)、跟分数排同一行。见 11 章决策 174。
     private func candidateRow(_ c: LyricsSearchService.Candidate) -> some View {
         let isSelected = c.id == previewedCandidate?.id
         let shape = RoundedRectangle(cornerRadius: 13, style: .continuous)
-        // 标签排放在"封面+文字"这一整条 HStack **下面**、贴着整行的左缘(也就是封面的左缘,不是文字的
-        // 左缘)——不管这一行标题/歌手·专辑多长、封面下面空多少,标签排永远钉在同一个 x、同一个
-        // "这一行内容结束后"的 y,一列看下来是一条直线。
-        return VStack(alignment: .leading, spacing: 5) {
-            HStack(alignment: .top, spacing: 10) {
-                coverThumbnail(c.coverURL, size: 42, cornerRadius: 8)
-                VStack(alignment: .leading, spacing: 2) {
-                    // 第一行放这个候选**实际匹配到的歌名**,不放来源名 —— 挑候选时最要紧的
-                    // 判断是"这条到底对上了哪首歌/哪个版本",来源只是附带信息。
-                    candidateMatchInfo(c, titleFont: .body.weight(.medium))
-                    metaLine(c, font: .caption2)
-                        .padding(.top, 1)
+        // 不换行空格:折行时「·」跟着歌手留在上一行,不落到下一行行首。
+        let byline = [c.artist, c.album].filter { !$0.isEmpty }.joined(separator: "\u{00A0}· ")
+        return HStack(alignment: .top, spacing: 8) {
+            coverThumbnail(c.coverURL, size: 32, cornerRadius: 7)
+            VStack(alignment: .leading, spacing: 2) {
+                HStack(alignment: .firstTextBaseline, spacing: 6) {
+                    if !c.title.isEmpty {
+                        Text(c.title)
+                            .font(.body.weight(.medium))
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    Spacer(minLength: 0)
+                    // 来源标钉在歌名那一行的右端,各行右缘对齐。`fixedSize()`:不钉住 SwiftUI 会先压它(「网易云音乐」折两行、
+                    // 长的英文来源名截出省略号),宁可让歌名换行。
+                    sourceBadge(c.source)
+                        .font(.caption2)
+                        .fixedSize()
                 }
-                Spacer(minLength: 0)
-                // 来源标钉在每行**右上角**,不混在下面那排标签里:那几个标签说的是"这条候选有什么"
-                // (越多越好的加分项),来源说的是"这条是谁给的"(身份),身份钉在行的右上角、各行右缘
-                // 对齐,扫起来最省事;混在标签排里的话,它前面站着几个标签全看这条候选的成色,每行落在
-                // 不同的 x。
-                //
-                // `fixedSize()`:侧栏里一行只有约 350pt 宽,不钉住的话 SwiftUI 会先压这个胶囊(「网易云
-                // 音乐」折成两行、「PetitLyrics」被截成「PetitLyr…」)。来源名截半个字等于没标,宁可让上面的
-                // 歌名先换行——它本来就允许两行 + 悬停看全文。
-                sourceBadge(c.source)
-                    .fixedSize()
+                if !byline.isEmpty {
+                    Text(byline)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                WrapLayout(horizontalSpacing: 6, verticalSpacing: 2, rowAlignment: .leading) {
+                    metaLine(c, font: .caption2)
+                    characteristicIcons(c, isCurrent: isCurrentCandidate(c),
+                                        duplicate: c.isStored || c.isImported ? nil : duplicates[c.source])
+                }
+                .padding(.top, 1)
             }
-            // showsSource: false —— 这一处的来源标已经在上面的右上角了,别在标签排里再来一遍。
-            characteristicBadges(c, source: c.source, showsSource: false, isCurrent: isCurrentCandidate(c),
-                                 duplicate: c.isStored || c.isImported ? nil : duplicates[c.source])
         }
         .padding(.horizontal, 9)
-        .padding(.vertical, 10)
+        .padding(.vertical, 7)
         .settingsHoverRow(cornerRadius: 13, inset: 0)
         .background(shape.fill(isSelected ? Color.accentColor.opacity(0.15) : Color.clear))
         .contentShape(shape)
         // 整行可点;分数旁的问号自己接点击(QuickHelpLabel),子视图的手势先于这里。
         .onTapGesture { select(c.id) }
         .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : .isButton)
+    }
+
+    /// 候选行的标签:只画图标,名字(和预览那排标签的悬停说明)放在悬停气泡和无障碍标签里。哪几个、什么顺序、什么颜色
+    /// 跟预览里那排 `characteristicBadges` 一一对应,改一边记得改另一边。
+    private func characteristicIcons(_ c: LyricsSearchService.Candidate, isCurrent: Bool,
+                                     duplicate: LyricsCandidateDuplicates.Match?) -> some View {
+        HStack(spacing: 5) {
+            if c.isPlainTextOnly {
+                characteristicIcon(L10n.t("无时间戳"), "exclamationmark.triangle.fill", .orange)
+            }
+            if c.hasWordTiming {
+                characteristicIcon(L10n.t("逐字时间轴"), "text.word.spacing", LyricsFeatureTint.wordTiming)
+            }
+            if c.hasTranslation {
+                characteristicIcon(L10n.t("译文"), "character.book.closed", LyricsFeatureTint.translation)
+            }
+            if c.hasRomanization {
+                characteristicIcon(L10n.t("自带读音"), "textformat.abc", LyricsFeatureTint.romanization,
+                                   note: L10n.t("歌词源自带的读音。无此标记的歌词也将按设置中的「标注读音的语言」自动标注"),
+                                   latinIcon: true)
+            }
+            if let duplicate {
+                characteristicIcon(
+                    String(format: duplicate.sameTimeline ? L10n.t("歌词内容与 %@ 相同") : L10n.t("歌词文字与 %@ 相同"),
+                           sourceDisplayName(duplicate.anchor)),
+                    "equal.circle", .secondary,
+                    note: duplicate.sameTimeline
+                        ? L10n.t("歌词文字和每行时间均相同（未比较逐字时间和译文）；该候选仍可能包含其他来源没有的逐字时间轴或译文")
+                        : L10n.t("歌词文字相同，每行时间不同；该候选仍可能包含其他来源没有的逐字时间轴或译文"))
+            }
+            if isCurrent, let text = effectiveCurrentPick.badgeText {
+                characteristicIcon(text, effectiveCurrentPick.badgeIcon, LyricsFeatureTint.manualPick,
+                                   note: effectiveCurrentPick.badgeHelp)
+            }
+            if isCurrent {
+                characteristicIcon(L10n.t("当前使用"), "checkmark.seal.fill", .accentColor)
+            }
+        }
+        .font(.caption)
+        .fixedSize()
+    }
+
+    /// latinIcon:图标必须画成拉丁字母才说得通(「读音」),理由见 LatinIconLabel。
+    private func characteristicIcon(
+        _ name: String, _ icon: String, _ tint: Color, note: String? = nil, latinIcon: Bool = false
+    ) -> some View {
+        Group {
+            if latinIcon {
+                Image(systemName: icon).environment(\.locale, Locale(identifier: "en"))
+            } else {
+                Image(systemName: icon)
+            }
+        }
+        .foregroundStyle(tint)
+        .hoverNote(note.map { name + "\n" + $0 } ?? name)
+        .accessibilityLabel(name)
     }
 
     /// 这首歌眼下实际生效的来源:本次面板里采纳过就是刚采纳的那条,否则是打开时的快照。
@@ -1406,8 +1474,6 @@ struct LyricsSearchSheet: View {
 
     private func applyButtonTitle(for c: LyricsSearchService.Candidate) -> String {
         if applyingSource == c.source { return L10n.t("正在采用…") }
-        // 选中的就是这首现在在用的那一份:按钮只说明状态,另挂 .disabled(isCurrentCandidate(c)) 点不了(11 章决策 55)。
-        if isCurrentCandidate(c) { return L10n.t("当前使用") }
         // 纯文本那条采纳后不会跟播放逐字 / 逐行同步,按钮文案说清楚。
         return c.isPlainTextOnly ? L10n.t("采纳为静态文本") : L10n.t("采用此候选")
     }
@@ -1642,6 +1708,37 @@ struct LyricsSearchSheet: View {
         autoMatchLine = line
     }
 
+    /// 打开时正在放的就是这首、之后换了歌:标题行下面一行说现在放的是哪首,「搜这首」改搜它。窗口本身不跟着换歌
+    /// (11 章决策 86、90)。从歌词管理按另一首开的、一直没放过这首的,不出这一行。见 11 章决策 174。
+    @ViewBuilder
+    private var nowPlayingBanner: some View {
+        if playedWhileOpen, !isSongPlaying, let playing = nowPlaying.displayText {
+            HStack(spacing: 8) {
+                Image(systemName: "music.note")
+                    .foregroundStyle(.secondary)
+                Text(String(format: L10n.t("正在播放：%@"), playing))
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+                    .help(playing)
+                Spacer(minLength: 8)
+                Button(L10n.t("搜这首")) {
+                    AppActions.shared.retargetLyricsSearchToNowPlaying()
+                }
+                .controlSize(.small)
+                .settingsGlassButtons()
+                .fixedSize()
+            }
+            .font(.callout)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 6)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(Color.secondary.opacity(0.08), in: RoundedRectangle(cornerRadius: 8))
+            .padding(.horizontal, 24)
+            .padding(.bottom, 10)
+            .transition(.opacity)
+        }
+    }
+
     /// 标成纯音乐时挂在右侧标题行下面的说明条:标没标上一眼看得出,也说清这时采用候选会怎样。卡片样式同歌词管理的
     /// `wordTimingHint`。
     @ViewBuilder
@@ -1732,23 +1829,24 @@ struct LyricsSearchSheet: View {
                         .padding(.top, 2)
                 }
                 Spacer(minLength: 12)
-                // 纯文本那条写「采纳为静态文本」(applyButtonTitle):点下去之前按钮本身就说清楚,不只靠警示标签。
-                Button(applyButtonTitle(for: c)) {
-                    Task { await apply(c) }
+                // 选中的就是在用的那份时不画按钮:「当前使用」徽标已经说了(见 11 章决策 174)。正在采用的那条照画,「正在采用…」要看得见。
+                if !isCurrentCandidate(c) || applyingSource == c.source {
+                    // 纯文本那条写「采纳为静态文本」(applyButtonTitle):点下去之前按钮本身就说清楚,不只靠警示标签。
+                    Button(applyButtonTitle(for: c)) {
+                        Task { await apply(c) }
+                    }
+                    .controlSize(.large)
+                    .settingsProminentGlassButton(tint: .accentColor)
+                    .keyboardShortcut(.return, modifiers: .command)
+                    .help(L10n.t("快捷键：⌘↩"))
+                    .disabled(applyingSource != nil || settingInstrumental || autoMatching)
                 }
-                .controlSize(.large)
-                .settingsProminentGlassButton(tint: isCurrentCandidate(c) ? Color.secondary : .accentColor)
-                .keyboardShortcut(.return, modifiers: .command)
-                .help(isCurrentCandidate(c) ? "" : L10n.t("快捷键：⌘↩"))
-                .disabled(applyingSource != nil || settingInstrumental || autoMatching)
-                .disabled(isCurrentCandidate(c))
             }
             .padding(.horizontal, 24)
             .padding(.top, 4)
-            // showsSource: true —— 右侧详情**不跟着**把来源挪去右上角:挪的收益是"多行之间对齐、好扫",
-            // 而这里永远只有一条候选,没有可对齐的对象;这一行的右上角又被「采用此候选」这颗主按钮占着,
-            // 塞个胶囊进去只会跟它抢视线。
-            characteristicBadges(c, source: c.source, showsSource: true, isCurrent: isCurrentCandidate(c),
+            // 来源标在这一排里,不像列表那样钉在右上角:这里永远只有一条候选,没有要对齐的对象;这一行的右上角又被
+            // 「采用此候选」这颗主按钮占着,塞个胶囊进去只会跟它抢视线。
+            characteristicBadges(c, source: c.source, isCurrent: isCurrentCandidate(c),
                                  duplicate: c.isStored || c.isImported ? nil : duplicates[c.source])
                 .padding(.horizontal, 24)
                 .padding(.top, 12)
@@ -1955,8 +2053,7 @@ struct LyricsSearchSheet: View {
         mode == .romanization && rows.romanized.count == rows.plain.count ? rows.romanized : rows.plain
     }
 
-    // 这个候选实际匹配到的歌名 / 歌手 / 专辑,各占一行;哪一项是空的就不显示那一行,不留空白占位。歌手和专辑别合并成
-    // 一行:侧栏窄,合并后专辑名几乎必被截断,而同名候选之间往往只有专辑名分得出版本。
+    // 预览头部:这个候选实际匹配到的歌名 / 歌手 / 专辑,各占一行;哪一项是空的就不显示那一行,不留空白占位。
     // 每项最多两行、挂 `help` 看全文:截掉的总是尾巴,尾巴恰恰是版本信息(「(2023 Remaster)」「feat. …」),所以宁可
     // 换行;不用居中省略(一行中间挖个洞读着费劲);封顶两行,不然一条候选能撑出五六行。
     @ViewBuilder
@@ -2004,84 +2101,61 @@ struct LyricsSearchSheet: View {
 
     // 逐字/译文/罗马音——分别对应"是否有逐字时间戳""是否带翻译""是否带罗马音标注",
     // 跟 LyricsManagerView 详情页三个编辑区(歌词/译文/罗马音)用同一组图标,方便用户
-    // 把候选列表里的图标和保存后详情页里的字段对上号。
-    ///
-    /// `showsSource`:来源标算不算这一排里的一员。左侧列表传 false —— 那边
-    /// 把来源单独钉在行的右上角(理由见 `candidateRow`);右侧详情仍是 true。
-    @ViewBuilder
+    // 把候选列表里的图标和保存后详情页里的字段对上号。预览头部那一排;列表行用只画图标的 `characteristicIcons`。
     private func characteristicBadges(
-        _ c: LyricsSearchService.Candidate, source: String, showsSource: Bool,
+        _ c: LyricsSearchService.Candidate, source: String,
         isCurrent: Bool, duplicate: LyricsCandidateDuplicates.Match?
     ) -> some View {
-        // 一个标签都没有时整排不渲染(而不是渲染一个空的 WrapLayout):空 Layout 高度是 0
-        // 但外层 VStack 照样给它算 4pt 间距,那一行看起来就比别的行多垫了一截。来源标可以
-        // 不在这排(showsSource 为 false),所以"全空"是真会发生的——一条有逐行时间戳、没译文没罗马音、既不
-        // 重复也不是当前使用的普通候选,剩下的就是空。
-        if hasAnyCharacteristicBadge(c, showsSource: showsSource, isCurrent: isCurrent, duplicate: duplicate) {
-            // WrapLayout 而不是 HStack:最多可能同时有六个标签(逐字/译文/罗马音/来源/内容或文字相同/当前使用),
-            // 侧栏里一行只有 ~350pt 宽,挤不下时该折行,不该被裁掉。
-            WrapLayout(horizontalSpacing: 5, verticalSpacing: 4, rowAlignment: .leading) {
-                // 橙色、放在最前:后面几个说这条候选有什么,这一个是用之前必须知道的限制。
-                if c.isPlainTextOnly {
-                    characteristicBadge(L10n.t("无时间戳"), "exclamationmark.triangle.fill", .orange)
-                }
-                if c.hasWordTiming {
-                    characteristicBadge(L10n.t("逐字时间轴"), "text.word.spacing", LyricsFeatureTint.wordTiming)
-                }
-                if c.hasTranslation {
-                    characteristicBadge(L10n.t("译文"), "character.book.closed", LyricsFeatureTint.translation)
-                }
-                // 「自带」:标的是歌词源给了读音。预览和歌词窗口里的读音还包括按设置现算的,没这个标记的也可能有读音,
-                // 悬停说清楚,不然看着像标记和预览对不上。
-                if c.hasRomanization {
-                    characteristicBadge(L10n.t("自带读音"), "textformat.abc", LyricsFeatureTint.romanization, latinIcon: true)
-                        .help(L10n.t("歌词源自带的读音。无此标记的歌词也将按设置中的「标注读音的语言」自动标注"))
-                }
-                // 来源:用它在别处(歌词管理列表、设置里的来源勾选)一贯的身份色,一眼能对上号。
-                if showsSource {
-                    sourceBadge(source)
-                }
-                if let duplicate {
-                    // 跟排在前面的某个源一样(见 LyricsCandidateDuplicates):词和每行时间都一样写「内容相同」,只有词一样
-                    // 写「文字相同」;逐字时间与译文不比,所以不写「完全相同」,悬停说明把口径讲清。**只标注不隐藏**——
-                    // 用户可能就是要这个源的译文/逐字轨,参考做法整条丢弃的路子不学。灰色:它是"这条跟别人重复"的
-                    // 提示,不是加分项。
-                    let anchor = sourceDisplayName(duplicate.anchor)
-                    characteristicBadge(
-                        String(format: duplicate.sameTimeline ? L10n.t("歌词内容与 %@ 相同") : L10n.t("歌词文字与 %@ 相同"),
-                               anchor),
-                        "equal.circle", .secondary)
-                        .help(duplicate.sameTimeline
-                              ? L10n.t("歌词文字和每行时间均相同（未比较逐字时间和译文）；该候选仍可能包含其他来源没有的逐字时间轴或译文")
-                              : L10n.t("歌词文字相同，每行时间不同；该候选仍可能包含其他来源没有的逐字时间轴或译文"))
-                }
-                if isCurrent, let text = effectiveCurrentPick.badgeText {
-                    characteristicBadge(text, effectiveCurrentPick.badgeIcon, LyricsFeatureTint.manualPick)
-                        .help(effectiveCurrentPick.badgeHelp)
-                }
-                if isCurrent {
-                    // 这首歌眼下真正在用的就是这一条。实心填充,跟上面几个描述性标签区分开 ——
-                    // 那几个说的是"这条候选有什么",这一个说的是"你现在用的是它"。
-                    Label(L10n.t("当前使用"), systemImage: "checkmark.seal.fill")
-                        .foregroundStyle(.white)
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 2)
-                        .background(Color.accentColor, in: Capsule())
-                }
+        // WrapLayout 而不是 HStack:最多可能同时有六个标签(逐字/译文/罗马音/来源/内容或文字相同/当前使用),
+        // 挤不下时该折行,不该被裁掉。
+        WrapLayout(horizontalSpacing: 5, verticalSpacing: 4, rowAlignment: .leading) {
+            // 橙色、放在最前:后面几个说这条候选有什么,这一个是用之前必须知道的限制。
+            if c.isPlainTextOnly {
+                characteristicBadge(L10n.t("无时间戳"), "exclamationmark.triangle.fill", .orange)
             }
-            .font(.caption2)
+            if c.hasWordTiming {
+                characteristicBadge(L10n.t("逐字时间轴"), "text.word.spacing", LyricsFeatureTint.wordTiming)
+            }
+            if c.hasTranslation {
+                characteristicBadge(L10n.t("译文"), "character.book.closed", LyricsFeatureTint.translation)
+            }
+            // 「自带」:标的是歌词源给了读音。预览和歌词窗口里的读音还包括按设置现算的,没这个标记的也可能有读音,
+            // 悬停说清楚,不然看着像标记和预览对不上。
+            if c.hasRomanization {
+                characteristicBadge(L10n.t("自带读音"), "textformat.abc", LyricsFeatureTint.romanization, latinIcon: true)
+                    .help(L10n.t("歌词源自带的读音。无此标记的歌词也将按设置中的「标注读音的语言」自动标注"))
+            }
+            // 来源:用它在别处(歌词管理列表、设置里的来源勾选)一贯的身份色,一眼能对上号。
+            sourceBadge(source)
+            if let duplicate {
+                // 跟排在前面的某个源一样(见 LyricsCandidateDuplicates):词和每行时间都一样写「内容相同」,只有词一样
+                // 写「文字相同」;逐字时间与译文不比,所以不写「完全相同」,悬停说明把口径讲清。**只标注不隐藏**——
+                // 用户可能就是要这个源的译文/逐字轨,参考做法整条丢弃的路子不学。灰色:它是"这条跟别人重复"的
+                // 提示,不是加分项。
+                let anchor = sourceDisplayName(duplicate.anchor)
+                characteristicBadge(
+                    String(format: duplicate.sameTimeline ? L10n.t("歌词内容与 %@ 相同") : L10n.t("歌词文字与 %@ 相同"),
+                           anchor),
+                    "equal.circle", .secondary)
+                    .help(duplicate.sameTimeline
+                          ? L10n.t("歌词文字和每行时间均相同（未比较逐字时间和译文）；该候选仍可能包含其他来源没有的逐字时间轴或译文")
+                          : L10n.t("歌词文字相同，每行时间不同；该候选仍可能包含其他来源没有的逐字时间轴或译文"))
+            }
+            if isCurrent, let text = effectiveCurrentPick.badgeText {
+                characteristicBadge(text, effectiveCurrentPick.badgeIcon, LyricsFeatureTint.manualPick)
+                    .help(effectiveCurrentPick.badgeHelp)
+            }
+            if isCurrent {
+                // 这首歌眼下真正在用的就是这一条。实心填充,跟上面几个描述性标签区分开 ——
+                // 那几个说的是"这条候选有什么",这一个说的是"你现在用的是它"。
+                Label(L10n.t("当前使用"), systemImage: "checkmark.seal.fill")
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 2)
+                    .background(Color.accentColor, in: Capsule())
+            }
         }
-    }
-
-    /// 上面那排里这条候选到底会不会长出至少一个标签 —— 判断顺序、判断条件跟
-    /// `characteristicBadges` 的渲染体一一对应,改那边记得改这里(漏一项 = 那一排明明
-    /// 有内容却被整个跳过)。
-    private func hasAnyCharacteristicBadge(
-        _ c: LyricsSearchService.Candidate, showsSource: Bool, isCurrent: Bool,
-        duplicate: LyricsCandidateDuplicates.Match?
-    ) -> Bool {
-        c.isPlainTextOnly || c.hasWordTiming || c.hasTranslation || c.hasRomanization
-            || showsSource || duplicate != nil || isCurrent
+        .font(.caption2)
     }
 
     /// 名字和颜色走全局那一份:Spotify、Amazon Music、KKBOX 的本地歌词不在 `LyricsSource` 里,别改成按枚举取名
@@ -2290,10 +2364,13 @@ struct LyricsSearchSheet: View {
 @MainActor
 private final class LyricsSearchNowPlaying: ObservableObject {
     @Published private(set) var key: String?
+    /// 「歌名 · 歌手」,没在放时 nil。
+    @Published private(set) var displayText: String?
     /// 屏上换成了播放器自家那份时是哪份,显示主歌词时 nil。
     @Published private(set) var playerLyrics: PlayerLyricsShown?
     private var sub: AnyCancellable?
     private var playerLyricsSub: AnyCancellable?
+    private var displaySub: AnyCancellable?
 
     init() {
         let p = PlaybackCoordinator.shared
@@ -2305,6 +2382,13 @@ private final class LyricsSearchNowPlaying: ObservableObject {
             }
             .removeDuplicates()
             .sink { [weak self] in self?.key = $0 }
+        displaySub = Publishers.CombineLatest(p.$title, p.$displayArtist)
+            .map { title, artist -> String? in
+                guard !title.isEmpty else { return nil }
+                return artist.isEmpty ? title : "\(title) · \(artist)"
+            }
+            .removeDuplicates()
+            .sink { [weak self] in self?.displayText = $0 }
         playerLyricsSub = LocalPlaybackSource.shared.$currentPlayerLyricsShown
             .removeDuplicates()
             .sink { [weak self] in self?.playerLyrics = $0 }

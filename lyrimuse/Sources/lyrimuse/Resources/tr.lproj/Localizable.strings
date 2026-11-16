@@ -1462,6 +1462,7 @@
 "搜索确认无歌词后才收起，仅保留顶部窄条，悬停时仍可展开；搜索期间照常显示歌词行" = "Yalnızca arama şarkı sözü olmadığını doğruladıktan sonra daralır ve yalnızca üstteki ince şerit kalır; üzerine gelince yine genişler. Arama sırasında söz satırı görünür kalır";
 "搜索确认无歌词后才隐藏，搜索期间照常显示" = "Yalnızca arama şarkı sözü olmadığını doğruladığında gizlenir; arama sırasında görünür kalır";
 "搜索结果仅有当前使用的歌词" = "Arama yalnızca kullanılmakta olan şarkı sözlerini buldu";
+"搜这首" = "Bu Parçayı Ara";
 "播放/暂停" = "Çal/Duraklat";
 "播放到何处时记录一次 Scrobble\n50%：播放一半或 4 分钟，以先到者为准（Last.fm 官方规则）\n75% / 90%：播放达到对应比例\n曲终：完整播放后才记录，中途切歌不记录" = "Bir parçanın ne kadarı çalınınca skroplanacağı\n%50: parçanın yarısı veya 4 dakika, hangisi önce gelirse (Last.fm kuralı)\n%75 / %90: parçanın o kadarı\nParça Sonu: yalnızca sonuna kadar çalınınca; atlanan parçalar skroplanmaz";
 "播放器" = "Çalar";
