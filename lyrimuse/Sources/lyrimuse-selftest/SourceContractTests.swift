@@ -4811,6 +4811,7 @@ func runSourceContractSettingsTests() {
                     && manager.contains("statusFilter.matches(statusFacts(s, kind: kind))"), true,
                     "歌词管理: 歌词类型和状态胶囊跟设置页统计同一个阶梯(LyricsKind.classify)")
         let managerParts = read("LyricsManager/LyricsManagerParts.swift") ?? ""
+        let songTable = read("LyricsManager/LyricsManagerSongTable.swift") ?? ""
         expectEqual(managerParts.contains(".onChange(of: stampDraft) { _, draft in")
                     && managerParts.contains("shiftIndices(afterRemoving: removed)")
                     && managerParts.contains("main.lines[index].timesMs.map")
@@ -4848,11 +4849,13 @@ func runSourceContractSettingsTests() {
                     && manager.contains("shown: effectiveDisplayMode(summary),"), true,
                     "歌词管理: 模式切换高亮这首实际显示的那一档")
         // 开窗、换歌只选中不滚动,只有「定位」滚动(11 章决策 64)。
-        expectEqual(manager.components(separatedBy: "focusCurrentlyPlaying(scrollProxy: scrollProxy, scroll: false)").count - 1, 2,
+        expectEqual(manager.components(separatedBy: "focusCurrentlyPlaying(scroll: false)").count - 1, 2,
                     "歌词管理: 开窗和换歌只选中正在播放的那首,列表不滚动")
-        // 按专辑分组时组头和歌排在同一层 ForEach 里,不在 Section 里套 ForEach:后者每次比对都从第一组数起,上万首时一次几秒(11 章决策 70)。
-        expectEqual(manager.contains("ForEach(albumEntries) { entry in") && !manager.contains("ForEach(group.items)"), true,
-                    "歌词管理: 按专辑分组摊平成一层 ForEach,组头是不能选中的一行")
+        // 按专辑分组时组头和歌摊平成一层交给表格,组头是选不中的一行(11 章决策 70)。
+        expectEqual(manager.contains("entries: groupByAlbum ? .grouped(albumEntries) : .flat(sortedFiltered),")
+                    && !manager.contains("ForEach(group.items)")
+                    && sourceHas(songTable, "func tableView(_ tableView: NSTableView, shouldSelectRow row: Int) -> Bool {\n parent.entries.key(at: row) != nil"), true,
+                    "歌词管理: 按专辑分组摊平成一层,组头是不能选中的一行")
         // 播放器没报歌手(网易云云盘里没匹配到曲库的歌)时,列表和详情显示引擎认出来的歌手;查缓存、写回仍用键里的(03 章决策 32)。
         let storeSource = read("LyricsManager/EnrichCacheStore.swift") ?? ""
         expectEqual(storeSource.contains("let inferredArtist = parts.artist.isEmpty")
@@ -4923,11 +4926,11 @@ func runSourceContractSettingsTests() {
                     && sourceHas(manager, "focus: $focusedLine,\n                isNowPlaying: summary.key == nowPlayingKey)"), true,
                     "歌词管理: 逐句编辑标出正在唱的那一句")
         // 换分组、换排序之后滚回选中的那一首(11 章决策 75)。
-        expectEqual(manager.contains(".onChange(of: groupByAlbum) { _, _ in revealSelection(scrollProxy: scrollProxy) }")
-                    && manager.contains(".onChange(of: sortOption) { _, _ in revealSelection(scrollProxy: scrollProxy) }"), true,
+        expectEqual(manager.contains(".onChange(of: groupByAlbum) { _, _ in revealSelection() }")
+                    && manager.contains(".onChange(of: sortOption) { _, _ in revealSelection() }"), true,
                     "歌词管理: 换分组、换排序之后滚回选中的那一首")
         // 正在放的那首在列表行、多选清单里跟详情页头部一样用播放器给的封面(11 章决策 78)。
-        expectEqual(manager.contains("artwork: isNowPlaying ? nowPlaying.artwork : nil)")
+        expectEqual(songTable.contains("artwork: isNowPlaying ? nowPlaying.artwork : nil)")
                     && manager.contains("listNowPlaying.update(key: nowPlayingKey, artwork: nowPlaying.artwork)")
                     && sourceHas(manager, "LyricsManagerCover(url: summary.coverURL, image: summary.key == nowPlayingKey ? nowPlaying.artwork : nil,\n                               size: 32, radius: 6)")
                     && managerParts.contains("LyricsManagerCover(url: summary.coverURL, image: artwork, size: 40, radius: 7)"), true,
@@ -4959,42 +4962,55 @@ func runSourceContractSettingsTests() {
                     && lineEditorSource.contains(".onAppear(perform: activateInitialLine)")
                     && lineEditorSource.contains(".accessibilityAction {"), true,
                     "歌词管理: 审查之后的修法(搜索面板快照、批量标纯音乐、编辑中的行留在列表、偏移输入、逐句编辑的焦点)")
-        // 列表的估算行高等于实际行高,scrollTo 才落得准(11 章决策 62)。
-        expectEqual(manager.contains(".environment(\\.defaultMinListRowHeight, LyricsManagerView.listRowHeight)")
-                    && manager.contains("private static let listRowHeight: CGFloat = 56"), true,
-                    "歌词管理: 列表的估算行高设成实际行高")
-        // 列表是按 == 比对的子视图,行自己读强调色;列表那份选中放在外层不订阅的对象里、外层 onReceive 它:闭包绑定下代码里改的
-        // 选中到不了表格,外层 onChange(of:) 一份 @State 则每换一次选中 body 多算一遍。按 key 找条目走索引(11 章决策 89)。
-        let songListSource = (manager.components(separatedBy: "private struct SongList<Menu: View>: View, Equatable {").dropFirst().first ?? "")
-            .components(separatedBy: "/// 列表的一行。").first ?? ""
-        expectEqual(!songListSource.isEmpty
-                    && sourceHas(manager, "menu: { keys in listMenu(keys) })\n        .equatable()")
-                    && manager.contains("selection: listSelection,")
+        // 列表是自己管数据源的表格,行高固定 56、不量自动行高:滚到某一行一次就落准,AppKit 不估算行高(11 章决策 170,原来的估算行高见决策 62)。
+        expectEqual(songTable.contains("static let rowHeight: CGFloat = 56")
+                    && songTable.contains("table.rowHeight = Self.rowHeight")
+                    && songTable.contains("table.usesAutomaticRowHeights = false")
+                    && songTable.contains("table.intercellSpacing = .zero")
+                    && songTable.contains("let origin = clip.constrainBoundsRect(proposed).origin")
+                    && sourceHas(manager, "private func centerListRow(_ key: String) {\n DispatchQueue.main.async { songTable.center(key) }"), true,
+                    "歌词管理: 列表行高固定 56,滚到一行按行号算、一次落准")
+        // 换数据才整表重载,只是行上的字变了就只重画屏上的行;不再挂 SwiftUI List(三万行时数据一变就整表比对一秒多,11 章决策 170)。
+        let tableUpdate = sourceBody("func updateNSView(_ scroll: NSScrollView, context: Context)", in: songTable)
+        expectEqual(!manager.contains("List(selection:") && !manager.contains("ScrollViewReader")
+                    && tableUpdate.contains("sameData: entries.isSameArray(as: old.entries),")
+                    && tableUpdate.contains("rowInputsChanged: query != old.query || pins != old.pins || language != old.language)")
+                    && tableUpdate.contains("case .reload: coordinator.reload()")
+                    && tableUpdate.contains("case .visibleRows: coordinator.refreshVisibleRows()")
+                    && sourceHas(songTable, "a.count == b.count && a.withUnsafeBufferPointer { pa in b.withUnsafeBufferPointer { pa.baseAddress == $0.baseAddress } }"), true,
+                    "歌词管理: 列表换了一份数据才整表重载,同一份数组只重画屏上的行")
+        // 选中双向同步:用户点的经 tableViewSelectionDidChange 报上来,代码改的选中按 key 换算成行号写回表格(屏幕外的行当场对上,
+        // 11 章决策 91);代码在改表格期间表格报上来的不算。换了数据之后按 key 把选中对回去。外层 onReceive 列表那份选中
+        // (11 章决策 89)。
+        let tableReload = sourceBody("func reload()", in: songTable)
+        expectEqual(manager.contains("selection: listSelection,")
                     && manager.contains(".onReceive(listSelection.$keys) { keys in listSelectionChanged(keys) }")
-                    && sourceHas(songListSource, "List(selection: $selection.keys) {\n                rows\n            }")
-                    && songListSource.contains("private struct SongRows: View, Equatable {")
-                    && !songListSource.contains("selectedKeys")
-                    && manager.contains("isEmphasized: emphasis.keys.contains(summary.key),")
-                    && !manager.contains("List(selection: Binding(")
+                    && manager.contains("if listSelection.keys != keys { listSelection.keys = keys }")
+                    && songTable.contains("selectionSink = selection.$keys.sink { [weak self] keys in")
+                    && songTable.contains("let rows = LyricsManagerListTable.rows(of: keys, count: entries.count, key: entries.key(at:))")
+                    && songTable.contains("table.selectRowIndexes(rows, byExtendingSelection: false)")
+                    && sourceHas(songTable, "guard !applyingSelection, let table else { return }\n let keys = LyricsManagerListTable.keys(atRows: table.selectedRowIndexes, key: parent.entries.key(at:))")
+                    && sourceHas(tableReload, "applyingSelection = true\n table.reloadData()\n applyingSelection = false\n applySelection(parent.selection.keys)")
                     && !manager.contains("store.summaries.first(where:"), true,
-                    "歌词管理: 列表是按 == 比对的子视图,行自己读强调色,选中放在外层不订阅的对象里")
-        // 正在放的那首和它的封面各行自己读,SongRows 的 == 只比是不是同一个对象:换歌、封面晚到时列表不整表重比。条目的 key
-        // 在 buildSummaries 里转成原生字符串,列表 id、选中集合、各个索引整批是原生的(11 章决策 94)。
-        expectEqual(!songListSource.isEmpty
-                    && !songListSource.contains("nowPlayingKey") && !songListSource.contains("nowPlayingArtwork")
-                    && songListSource.contains("a.nowPlaying === b.nowPlaying")
-                    && manager.contains("@ObservedObject var nowPlaying: SongListNowPlaying")
+                    "歌词管理: 列表选中双向同步,代码改的选中按 key 写回表格,换数据后对回去")
+        // 右键菜单按点在哪一行现建:点在选中区里是整个选区,点在没选中的行上是那一行,空白处和组头是空集(只给「全选」)。
+        expectEqual(songTable.contains("for item in parent.menu(menuKeys(clickedRow: table.clickedRow)) { menu.addItem(item.menuItem()) }")
+                    && songTable.contains("return LyricsManagerListTable.menuKeys(clickedRow: clickedRow, selectedRows: table.selectedRowIndexes,")
+                    && manager.contains("menu: { keys in listMenu(keys) })")
+                    && !sourceBody("private func listMenu(_ keys: Set<String>) -> [LyricsManagerListMenuItem]", in: manager).contains("selectedKeys"), true,
+                    "歌词管理: 右键菜单按点在哪一行定作用于哪几首,不读 selectedKeys")
+        // 行自己读强调色、正在放的那首和它的封面;选中且有焦点的行换白字那一套。表格那一层不碰 nowPlayingKey(11 章决策 67、89、94)。
+        let listRow = sourceBody("struct LyricsManagerSongListRow: View", in: songTable)
+        expectEqual(listRow.contains("let isEmphasized = emphasis.keys.contains(summary.key)")
+                    && listRow.contains("@ObservedObject var nowPlaying: LyricsManagerListNowPlaying")
+                    && listRow.contains(".environment(\\.colorScheme, isEmphasized ? .dark : colorScheme)")
+                    && !songTable.contains("nowPlayingKey") && !songTable.contains("nowPlayingArtwork")
                     && manager.contains(".onChange(of: nowPlayingKey, initial: true) { _, _ in syncListNowPlaying() }")
                     && manager.contains(".onChange(of: nowPlaying.artwork) { _, _ in syncListNowPlaying() }"), true,
-                    "歌词管理: 正在放的那首和封面各行自己读,换歌、封面到达时列表不整表重比")
+                    "歌词管理: 行自己读强调色和正在播放,选中有焦点时换白字")
         expectEqual(sourceHas(storeSource, "            return Summary(\n                key: Self.nativeKey(key),\n")
                     && storeSource.contains("native.makeContiguousUTF8()"), true,
                     "歌词管理: 条目的 key 转成原生字符串再存")
-        // 代码里改了选中,下一拍按数据把表格的选中整份对一遍:SwiftUI 取消不掉屏幕外那行旧选中(11 章决策 91)。
-        expectEqual(sourceHas(manager, "listSelection.keys = keys\n                // 代码里改的选中:等列表这一拍按它同步完,再把表格对一遍。\n                DispatchQueue.main.async { alignTableSelection() }")
-                    && manager.contains("guard table.numberOfRows == keys.count else { return }")
-                    && manager.contains("selectedKeys.contains(keys[$0]) }), byExtendingSelection: false)"), true,
-                    "歌词管理: 代码里改了选中,表格上留着的旧选中按数据清掉")
         // 缓存里已经有正在放的那首时占位行不并进列表:同一个键两行,表格的选中会多出一行、落到下一组的组头上(11 章决策 118)。
         expectEqual(sourceHas(manager, "let placeholder = placeholderSummary.flatMap { store.hasEntry(forKey: $0.key) ? nil : $0 }\n        let base = placeholder.map { store.summaries + [$0] } ?? store.summaries"), true,
                     "歌词管理: 真条目到了之后占位行不再并进列表")

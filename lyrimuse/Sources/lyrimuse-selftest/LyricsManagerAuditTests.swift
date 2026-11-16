@@ -59,18 +59,18 @@ func checkLyricsManagerAudit() {
 
     // 列表
     do {
-        let single = sourceBody("private func singleItemMenu(_ summary: EnrichCacheStore.Summary) -> some View", in: manager)
-        expectEqual(single.components(separatedBy: ".disabled(editingThis)").count - 1, 2, "歌词管理: 正在编辑的那首右键菜单里标不了纯音乐")
+        let single = sourceBody("private func singleItemMenu(_ summary: EnrichCacheStore.Summary) -> [LyricsManagerListMenuItem]", in: manager)
+        expectEqual(single.components(separatedBy: "enabled: !editingThis)").count - 1, 2, "歌词管理: 正在编辑的那首右键菜单里标不了纯音乐")
         let more = sourceBody("private func detailMoreMenu(_ summary: EnrichCacheStore.Summary) -> some View", in: manager)
         expectEqual(more.components(separatedBy: ".disabled(editMode != .preview)").count - 1, 2, "歌词管理: 编辑中「⋯」里标不了纯音乐")
         expectEqual(manager.components(separatedBy: "markingInstrumental || editingAny(").count - 1, 2,
                     "歌词管理: 批量标纯音乐避开正在编辑的那首")
-        expectEqual(manager.contains("if !isEditorDirty { focusCurrentlyPlaying(scrollProxy: scrollProxy, scroll: false) }"), true,
+        expectEqual(manager.contains("if !isEditorDirty { focusCurrentlyPlaying(scroll: false) }"), true,
                     "歌词管理: 带着未保存修改关窗再开,不自动换歌")
         let reveal = sourceBody("private func revealInList(_ key: String)", in: manager)
         expectEqual(reveal.contains("guard select(key) else { return }") && reveal.contains("resetFilters()")
                     && reveal.contains("clearSearch()") && reveal.contains("pendingListReveal = key")
-                    && sourceHas(manager, ".onChange(of: pendingListReveal) { _, key in\n guard let key else { return }\n pendingListReveal = nil\n centerListRow(key, scrollProxy: scrollProxy)"), true,
+                    && sourceHas(manager, ".onChange(of: pendingListReveal) { _, key in\n guard let key else { return }\n pendingListReveal = nil\n centerListRow(key)"), true,
                     "歌词管理: 同曲条目「在列表中显示」被筛选挡住时先清掉,再滚到那一行")
         expectEqual(sourceHas(manager, ".onChange(of: store.summariesGeneration) { _, _ in\n guard !store.summaries.isEmpty else { return }\n if let a = artistFilter,"), true,
                     "歌词管理: 关窗清快照不重置歌手 / 专辑筛选")

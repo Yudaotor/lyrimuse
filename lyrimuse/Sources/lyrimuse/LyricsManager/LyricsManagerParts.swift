@@ -443,7 +443,7 @@ struct LyricsManagerSongRow: View {
             Spacer(minLength: 8)
             trailing
         }
-        // 行高(封面 40 + 上下各 4)改了要连 LyricsManagerView.listRowHeight 一起改。
+        // 行高(封面 40 + 上下各 4)改了要连 LyricsManagerSongTable.rowHeight 一起改。
         .padding(.vertical, 4)
         .contentShape(Rectangle())
     }

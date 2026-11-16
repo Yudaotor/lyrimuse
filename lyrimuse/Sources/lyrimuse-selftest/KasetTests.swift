@@ -783,7 +783,8 @@ func runKasetTests() {
                         && store.contains("albumMap[s.normAlbum] = s.displayAlbum"), true,
                     "Kaset 契约: 歌词管理的列表、筛选、排序、搜索按给人看的专辑")
         let manager = src("lyrimuse/LyricsManager/LyricsManagerView.swift")
-        expectEqual(manager.contains(": albumDisplay(summary.displayAlbum),")
+        let songTable = src("lyrimuse/LyricsManager/LyricsManagerSongTable.swift")
+        expectEqual(songTable.contains(": LyricsManagerView.albumDisplay(summary.displayAlbum, in: parent.albumDisplayMap),")
                         && src("lyrimuse/LyricsManager/LyricsQuickSearchWindow.swift").contains("album: summary.displayAlbum,")
                         && manager.contains(": albumDisplay(summary.displayAlbum))")
                         && manager.contains("displayAlbum: displayAlbum,"), true,
@@ -801,7 +802,7 @@ func runKasetTests() {
         expectEqual(src("lyrimuse/PlaybackCoordinator.swift").contains("isMusicVideo: isMusicVideo || listedMV,"), true,
                     "Kaset 契约: 判成 MV 版本的专辑位写「MV」")
         expectEqual(store.contains(#"isListedMV: displayAlbum.isEmpty && (entry["youtube_music_mv"] as? Bool ?? false),"#)
-                        && manager.contains(#"albumDisplayName: summary.isListedMV ? L10n.t("MV") : albumDisplay(summary.displayAlbum),"#)
+                        && sourceHas(songTable, #"albumDisplayName: summary.isListedMV ? L10n.t("MV") : LyricsManagerView.albumDisplay(summary.displayAlbum, in: parent.albumDisplayMap),"#)
                         && manager.contains(#"Text(summary.isListedMV ? L10n.t("MV") : albumDisplay(summary.displayAlbum))"#), true,
                     "Kaset 契约: 歌词管理的列表和详情给 MV 版本写「MV」")
         let playback = src("LyrimuseCore/Local/LocalPlaybackSource.swift")

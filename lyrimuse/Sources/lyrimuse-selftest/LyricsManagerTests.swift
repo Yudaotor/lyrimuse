@@ -867,6 +867,34 @@ func runLyricsManagerTests() {
                     "手动选定标记: 手改正文锁的(没有指纹)不标手动选定")
     }
 
+    // ---- 列表那张表格:选中、右键菜单按行号和 key 互换(LyricsManagerListTable,见 11 章决策 170) ----
+    do {
+        // 分组时的一张表:0 组头、1 a、2 b、3 组头、4 c。
+        let table: [String?] = [nil, "a", "b", nil, "c"]
+        let key: (Int) -> String? = { table.indices.contains($0) ? table[$0] : nil }
+        expectEqual(LyricsManagerListTable.rows(of: ["c", "a"], count: table.count, key: key), IndexSet([1, 4]),
+                    "列表表格: 选中按 key 换算成行号,屏幕外的行也对得上")
+        expectEqual(LyricsManagerListTable.rows(of: ["gone"], count: table.count, key: key), IndexSet(),
+                    "列表表格: 不在列表里的 key 没有行(筛掉的选中不画)")
+        expectEqual(LyricsManagerListTable.rows(of: [], count: table.count, key: key), IndexSet(), "列表表格: 没选中就没有行")
+        expectEqual(LyricsManagerListTable.keys(atRows: IndexSet([0, 1, 3, 4, 9]), key: key), ["a", "c"],
+                    "列表表格: 表格报上来的行换回 key,组头和越界的行不算")
+        expectEqual(LyricsManagerListTable.menuKeys(clickedRow: 2, selectedRows: IndexSet([1, 2, 4]), key: key), ["a", "b", "c"],
+                    "列表表格: 右键点在选中区里,菜单作用于整个选区")
+        expectEqual(LyricsManagerListTable.menuKeys(clickedRow: 4, selectedRows: IndexSet([1, 2]), key: key), ["c"],
+                    "列表表格: 右键点在没选中的歌上,菜单只作用于那一首")
+        expectEqual(LyricsManagerListTable.menuKeys(clickedRow: -1, selectedRows: IndexSet([1, 2]), key: key), [],
+                    "列表表格: 右键点在空白处,菜单作用于空集(只给「全选」)")
+        expectEqual(LyricsManagerListTable.menuKeys(clickedRow: 3, selectedRows: IndexSet([1, 2]), key: key), [],
+                    "列表表格: 右键点在组头上,菜单作用于空集")
+        expectEqual([LyricsManagerListTable.refresh(sameData: false, rowInputsChanged: false),
+                     LyricsManagerListTable.refresh(sameData: false, rowInputsChanged: true),
+                     LyricsManagerListTable.refresh(sameData: true, rowInputsChanged: true),
+                     LyricsManagerListTable.refresh(sameData: true, rowInputsChanged: false)],
+                    [.reload, .reload, .visibleRows, .none],
+                    "列表表格: 换了一份数据整表重载,只是行上的字变了重画屏上的行,都没变不动")
+    }
+
     // ---- LyricsSortOrder(「歌词管理」列表排序) ----
     // 「仅无歌词」筛选 + 「更新时间新到旧」排序时,列表可能看着纹丝不动、还是默认的
     // 歌手字母序。根因不是比较器写错,是**这批数据让排序无从下手**——没歌词的条目按定义
