@@ -267,6 +267,27 @@ func runLyricsManagerTests() {
         expectEqual(script[0].candidateMarks, [], "对照: 繁简写法不同不标字")
         expectEqual(C.summary(script), C.Summary(scriptVariants: 1), "对照: 繁简写法不同在小结里单独记")
 
+        // 异体字(ICU 不转的妳/牠/祂,对照专用的祢)跟繁简一样归一;ICU 已转的裡/裏/著照旧。
+        for (variant, standard) in [("妳", "你"), ("牠", "它"), ("祂", "他"), ("祢", "你"), ("裡", "里"), ("裏", "里"), ("著", "着")] {
+            expectEqual(C.folded(variant), standard, "对照: \(variant) 归到 \(standard)")
+        }
+        expectEqual(C.folded("她他它你"), "她他它你", "对照: 规范字原样")
+        // 《晴天》PetitLyrics 对 QQ 音乐的真实几句:只差繁简和「妳」,算繁简写法不同、不算改字。
+        let qingtian = C.align(
+            candidate: [l(56680, "為妳翹課的那一天 花落的那一天"), l(84810, "颳風這天 我試過握著妳手"),
+                        l(133370, "但故事的最後妳好像還是說了拜拜")],
+            current: [l(56720, "为你翘课的那一天"), l(58830, "花落的那一天"), l(84910, "刮风这天我试过握着你手"),
+                      l(133500, "但故事的最后你好像还是说了拜拜")])
+        expectEqual(qingtian.allSatisfy { $0.candidateMarks.isEmpty && $0.kind != .changed }, true,
+                    "对照:《晴天》妳/你 不标字、不算改字")
+        expectEqual(C.summary(qingtian), C.Summary(resegmented: 1, scriptVariants: 3),
+                    "对照:《晴天》只剩分行和繁简写法不同")
+        // 真换了人称不合并:妳/她、祢/他 照样标出那个字。
+        let pronoun = C.align(candidate: [l(1000, "妳說這一句很有夏天的感覺"), l(5000, "祢的愛")],
+                              current: [l(1000, "她说这一句很有夏天的感觉"), l(5000, "他的爱")])
+        expectEqual(kinds(pronoun), [.changed, .changed], "对照: 妳/她、祢/他 是改了字")
+        expectEqual(pronoun[0].candidateMarks, [0], "对照: 只标换了的那个人称")
+
         let rows = [LyricsPreviewRow(timeMs: 2000, text: "x", translation: nil)]
         expectEqual(C.lines(rows, embeddedOffsetMs: 500), [l(1500, "x")], "对照: 时间减去歌词自带的 [offset:]")
 

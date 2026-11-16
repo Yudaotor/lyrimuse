@@ -38,7 +38,7 @@ public enum LyricsCandidateComparison {
         public let candidateMarks: Set<Int>
         /// 跟 `current` 一一对应,当前使用那几句里对不上的字。
         public let currentMarks: [Set<Int>]
-        /// 这一块里有字只是繁简写法不同(按简体比对得上、原字不一样),只挂在块的第一行。
+        /// 这一块里有字只是繁简或异体写法不同(按 `folded` 比对得上、原字不一样),只挂在块的第一行。
         public let scriptVariant: Bool
 
         public init(candidate: Int?, current: [Int], kind: Kind, continuation: Bool = false, deltaMs: Int? = nil,
@@ -115,8 +115,21 @@ public enum LyricsCandidateComparison {
         text.filter { $0.isLetter || $0.isNumber }.map { $0.lowercased() }.joined()
     }
 
-    /// 参与比对的一个字:只取字母和数字,转小写、汉字转简体(繁简写法不同不算改了字),记着原字、在第几句、
-    /// 是那一句的第几个字符。
+    /// 汉字比对时的写法:整句转简体(ICU `Hant-Hans`),再按异体字表归到大陆规范字(`HanVariants`,妳→你、牠→它、
+    /// 祂→他),最后过对照专用的 `comparisonOnlyVariants`。每一步都是一个字换一个字,字数不变。只拿来比对,不当显示写法。
+    /// 见 11 章决策 176。
+    public static func folded(_ text: String) -> String {
+        let normalized = HanVariants.normalizeToSimplified(HanScript.simplified(text))
+        guard normalized.contains(where: { comparisonOnlyVariants[$0] != nil }) else { return normalized }
+        return String(normalized.map { comparisonOnlyVariants[$0] ?? $0 })
+    }
+
+    /// 异体字表因为本身也是通用字而不收、但在歌词里只当另一个字的写法用的字。只用在对照,不进显示的繁简转换:
+    /// 两边同一位置一个写它、一个写规范字时才起作用,收字以这种情况不会是真改了词为准。
+    static let comparisonOnlyVariants: [Character: Character] = ["祢": "你"]
+
+    /// 参与比对的一个字:只取字母和数字,转小写、汉字按 `folded` 归一(繁简、异体写法不同不算改了字),记着原字、
+    /// 在第几句、是那一句的第几个字符。
     private struct Token {
         let key: String
         let raw: String
@@ -129,7 +142,7 @@ public enum LyricsCandidateComparison {
         for (lineIndex, line) in lines.enumerated() {
             let original = Array(line.text)
             // 整句一起转(字形转换吃上下文),字数变了就不转这一句。
-            let folded = Array(HanScript.simplified(line.text))
+            let folded = Array(Self.folded(line.text))
             let canFold = folded.count == original.count
             for (offset, character) in original.enumerated() where character.isLetter || character.isNumber {
                 let raw = character.lowercased()
