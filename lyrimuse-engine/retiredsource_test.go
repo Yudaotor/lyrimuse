@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -306,5 +307,68 @@ func TestRetiredLyricSourcesMatchSwift(t *testing.T) {
 	slices.Sort(engine)
 	if !slices.Equal(swift, engine) {
 		t.Fatalf("两份下架源名单不一致:\n  App:  %v\n  引擎: %v", swift, engine)
+	}
+}
+
+// 随下架源整列删掉的字段(retiredEnrichKeys):主缓存和同步留底里都清掉,别的不认识的键照旧原样留着;没有这些键的条目
+// 不算改动。
+func TestPurgeRetiredEnrichKeys(t *testing.T) {
+	withTempMigrationState(t)
+	dir := withTempDecisionCache(t)
+	t.Setenv("LYRIMUSE_CONFIG_DIR", dir)
+	t.Setenv("LYRIMUSE_CACHE_DIR", t.TempDir())
+
+	decode := func(raw string) enrichEntry {
+		var e enrichEntry
+		if err := json.Unmarshal([]byte(raw), &e); err != nil {
+			t.Fatal(err)
+		}
+		return e
+	}
+	const both, only, clean = "A|Duet|Album", "B|Solo|Album", "C|Plain|Album"
+	withBoth := decode(`{"lyrics_source":"qq","lyrics_speakers":{"for":"a9","lrc":["v1"]},"lyrics_speakers_checked":1,"future_field":7}`)
+	withOnly := decode(`{"lyrics_source":"kugou","lyrics_speakers_checked":1}`)
+	if len(withBoth.Unknown) != 3 || len(withOnly.Unknown) != 1 {
+		t.Fatalf("用例前提:这些键这个构建不认识: %v %v", withBoth.Unknown, withOnly.Unknown)
+	}
+	plain := decode(`{"lyrics_source":"qq","future_field":7}`)
+	if changed, _ := scrubRetiredLyricSources(&plain); changed || len(plain.Unknown) != 1 {
+		t.Fatalf("没有这些键的条目不算改动、别的未知键不动: changed=%v %v", changed, plain.Unknown)
+	}
+	original := withBoth.Unknown
+	enrichMu.Lock()
+	enrichCache = map[string]enrichEntry{both: withBoth, only: withOnly, clean: decode(`{"lyrics_source":"qq"}`)}
+	enrichDirty = true
+	enrichMu.Unlock()
+	saveEnrichCache()
+
+	pre := songSharePreDir()
+	if err := os.MkdirAll(pre, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	preRec, _ := json.Marshal(songSharePre{Key: both, SavedAt: 1, Entry: json.RawMessage(`{"lyrics_source":"qq","lyrics_speakers_checked":1}`)})
+	if err := os.WriteFile(songSharePrePath(both), preRec, 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	purgeRetiredLyricSources()
+
+	enrichMu.Lock()
+	gotBoth, gotOnly := enrichCache[both], enrichCache[only]
+	enrichMu.Unlock()
+	if _, ok := gotBoth.Unknown["future_field"]; !ok || len(gotBoth.Unknown) != 1 || gotBoth.LyricsSource != "qq" {
+		t.Errorf("只去掉随它删掉的键,别的未知键留着: %v", gotBoth.Unknown)
+	}
+	if gotOnly.Unknown != nil {
+		t.Errorf("清空了就不留空表: %v", gotOnly.Unknown)
+	}
+	if len(original) != 3 {
+		t.Errorf("改的是拷贝,原来那份未知键表不动: %v", original)
+	}
+	if b, _ := os.ReadFile(enrichPath); bytes.Contains(b, []byte("lyrics_speakers")) || !bytes.Contains(b, []byte("future_field")) {
+		t.Errorf("落盘的主缓存里不再有这些键: %s", b)
+	}
+	if b, _ := os.ReadFile(songSharePrePath(both)); bytes.Contains(b, []byte("lyrics_speakers")) || !bytes.Contains(b, []byte(`"qq"`)) {
+		t.Errorf("同步留底里那份条目也清掉: %s", b)
 	}
 }

@@ -20,6 +20,8 @@ import (
 //     那一槽、判决明细里它的候选和只问它的查询。
 //   - 同步留底里的那份条目照同样的规则清(恢复时不能把它带回来)。
 //   - 它自己的缓存文件(retiredLyricSourceFiles)和小时额度里它那一份;各源近况统计在读进来时剔掉(dropRetiredLyricSourceStats)。
+//   - 只有它供数据、随它整列删掉的条目字段(retiredEnrichKeys):这个构建不认识它们,解码时进 enrichEntry.Unknown 原样保留,
+//     不清就永远留在缓存里。
 //
 // 带水位(migrationRetiredLyricSources):lyrics/ 导入进来的那几条下次启动补扫,配置搬家带进来的整库重扫。只动本机数据,不联网。
 
@@ -29,13 +31,17 @@ var retiredLyricSources = []string{"musixmatch"}
 // retiredLyricSourceCoverHosts:下架源的封面图床,封面在这些主机(含子域)上的清掉,交给补封面重新取。
 var retiredLyricSourceCoverHosts = []string{"mxmcdn.net"}
 
+// retiredEnrichKeys:随下架源整列删掉的条目字段的 JSON 键。删掉 enrichEntry 的字段时,键加进这里、水位加一
+// (enrichjson.go 头注,09 章决策 372)。
+var retiredEnrichKeys = []string{"lyrics_speakers", "lyrics_speakers_checked"}
+
 // retiredLyricSourceFiles:下架源自己的缓存文件,去掉 clientName 前缀之后的名字。新旧两个目录(cacheFilePath /
 // configFilePath)都删。
 var retiredLyricSourceFiles = []string{"-musixmatch-token.json", "-clash-node-blocks.json"}
 
 const (
 	migrationRetiredLyricSources        = "retired_lyric_sources"
-	migrationRetiredLyricSourcesVersion = 1
+	migrationRetiredLyricSourcesVersion = 2
 )
 
 func isRetiredLyricSource(s string) bool { return slices.Contains(retiredLyricSources, s) }
@@ -204,6 +210,16 @@ func scrubRetiredLyricSources(e *enrichEntry) (changed, reset bool) {
 		if n := withoutRetiredSources(*l); !slices.Equal(n, *l) {
 			*l, changed = n, true
 		}
+	}
+	if slices.ContainsFunc(retiredEnrichKeys, func(k string) bool { _, ok := e.Unknown[k]; return ok }) {
+		e.Unknown = maps.Clone(e.Unknown)
+		for _, k := range retiredEnrichKeys {
+			delete(e.Unknown, k)
+		}
+		if len(e.Unknown) == 0 {
+			e.Unknown = nil
+		}
+		changed = true
 	}
 	latest, applied := e.LyricsDecision, e.LyricsDecisionApplied
 	if d, ok := scrubRetiredDecision(latest); ok {
@@ -461,7 +477,7 @@ func dropRetiredLyricSourceStats(f *lyricSourceStatsFile) {
 	}
 }
 
-// retiredSourceMentioned:文件内容里出现了下架源的名字或它的图床,值得解出来看。
+// retiredSourceMentioned:文件内容里出现了下架源的名字、它的图床或随它删掉的字段,值得解出来看。
 func retiredSourceMentioned(raw []byte) bool {
 	lower := bytes.ToLower(raw)
 	for _, s := range retiredLyricSources {
@@ -471,6 +487,11 @@ func retiredSourceMentioned(raw []byte) bool {
 	}
 	for _, h := range retiredLyricSourceCoverHosts {
 		if bytes.Contains(lower, []byte(h)) {
+			return true
+		}
+	}
+	for _, k := range retiredEnrichKeys {
+		if bytes.Contains(raw, []byte(`"`+k+`"`)) {
 			return true
 		}
 	}
