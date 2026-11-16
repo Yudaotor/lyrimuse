@@ -233,7 +233,8 @@ func primaryArtist(_ full: String) -> String {
 // 没有引入 gocc 那类第三方库,直接用 Foundation/ICU 内置的 "Traditional-Simplified"
 // transform 就能做,不需要额外依赖(例如:"100種生活"/"100种生活" 这类
 // 繁简差一个字的专辑名,之前的归并键只转小写、不管繁简,被当成两张不同专辑,在筛选下拉
-// 里重复出现)。
+// 里重复出现)。ICU 不管异体字(「張震嶽」只转成「张震嶽」,「妳」原样留着),转完再过 `HanVariants` 异体字表,
+// 见 08 章决策 68。
 //
 // 按原串 memoize:CFStringTransform 是 ICU 调用、单次微秒级,而
 // 排序/筛选/归并把它放进了 O(N)~O(N·logN) 路径;歌手/专辑名的重复率极高(几百条数据
@@ -251,7 +252,7 @@ func toSimplified(_ s: String) -> String {
     if let hit { return hit }
     let mutable = NSMutableString(string: s) as CFMutableString
     CFStringTransform(mutable, nil, "Traditional-Simplified" as CFString, false)
-    let result = mutable as String
+    let result = HanVariants.normalizeToSimplified(mutable as String)
     toSimplifiedCacheLock.lock()
     toSimplifiedCache[s] = result
     toSimplifiedCacheLock.unlock()

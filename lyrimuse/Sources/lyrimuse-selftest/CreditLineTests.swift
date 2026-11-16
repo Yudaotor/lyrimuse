@@ -331,6 +331,43 @@ func runCreditLineTests() {
     }
 
     do {
+        // 异体字:ICU 繁转简不动「妳」「牠」「祂」,抬头和歌名两边都转简体并归一异体字再比。见 08 章决策 68。
+        expectEqual(LyricsSyncEngine.looksLikeHeaderLine("為妳寫的歌 - 方大同",
+                    trackTitle: "为你写的歌", trackArtist: "方大同"), true, "抬头异体字: 妳")
+        expectEqual(LyricsSyncEngine.looksLikeHeaderLine("蘇打綠 - 小狗與牠的主人",
+                    trackTitle: "小狗与它的主人", trackArtist: "苏打绿"), true, "抬头异体字: 牠,歌手在前")
+        expectEqual(LyricsSyncEngine.looksLikeHeaderLine("祂說 - 張震嶽",
+                    trackTitle: "他说", trackArtist: "张震岳"), true, "抬头异体字: 祂,歌手名 ICU 不转的「嶽」")
+        // 繁简混写的抬头(歌名繁体、歌手简体)也认。
+        expectEqual(LyricsSyncEngine.looksLikeHeaderLine("為妳寫的歌 - 方大同",
+                    trackTitle: "為你寫的歌", trackArtist: "方大同"), true, "抬头异体字: 歌名是繁体「你」")
+        let body = ["為妳寫的歌 - 方大同", "妳說過的話", "我都記得"]
+        expectEqual(LyricsSyncEngine.creditLineDropDecisions(body, trackTitle: "为你写的歌", trackArtist: "方大同"),
+                    [true, false, false], "抬头异体字: 整份里只删抬头")
+        // 带标签的抬头、0 秒处只写歌名的抬头同一套归一。
+        expectEqual(LyricsSyncEngine.creditLineDropDecisions(["Title: 為妳寫的歌", "妳說過的話", "我都記得"],
+                    trackTitle: "为你写的歌", trackArtist: "方大同"), [true, false, false], "抬头异体字: 带标签")
+        expectEqual(LyricsSyncEngine.creditLineDropDecisions(["為妳寫的歌", "妳說過的話", "我都記得"],
+                    trackTitle: "为你写的歌", trackArtist: "方大同", startsMs: [0, 1000, 2000]),
+                    [true, false, false], "抬头异体字: 0 秒处只写歌名")
+    }
+
+    do {
+        // 反向:含「妳」的真歌词不当抬头删。
+        expectEqual(LyricsSyncEngine.looksLikeHeaderLine("為妳寫的歌 妳聽見了嗎",
+                    trackTitle: "为你写的歌", trackArtist: "方大同"), false, "抬头异体字(反向): 没有分隔、没有歌手")
+        expectEqual(LyricsSyncEngine.looksLikeHeaderLine("我為妳寫的歌 - 是不是太遲",
+                    trackTitle: "为你写的歌", trackArtist: "方大同"), false, "抬头异体字(反向): 另一段不含歌手")
+        expectEqual(LyricsSyncEngine.creditLineDropDecisions(["妳說過的話 - 方大同", "我都記得", "為妳寫的歌"],
+                    trackTitle: "为你写的歌", trackArtist: "方大同"), [false, false, false],
+                    "抬头异体字(反向): 一段含歌手、另一段不等于歌名")
+        // 0 秒处那句等于歌名,但后面又唱了一次(写法是「你」):是真歌词。
+        expectEqual(LyricsSyncEngine.creditLineDropDecisions(["為妳寫的歌", "妳說過的話", "為你寫的歌"],
+                    trackTitle: "为你写的歌", trackArtist: "方大同", startsMs: [0, 1000, 2000]),
+                    [false, false, false], "抬头异体字(反向): 0 秒唱歌名、后面再唱一次")
+    }
+
+    do {
         // 反向用例:这些**不能**被当成抬头删掉。
         // 真歌词里念自己名字(蛋堡《经典!》的实际歌词,库里存在)。
         expectEqual(LyricsSyncEngine.looksLikeHeaderLine("新的经典 蛋堡 x Jabberloop",

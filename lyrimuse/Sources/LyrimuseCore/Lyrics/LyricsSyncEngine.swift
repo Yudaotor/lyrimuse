@@ -510,11 +510,11 @@ public final class LyricsSyncEngine {
         guard !rest.isEmpty, (1...10).contains(core.count), !core.isEmpty,
               core.unicodeScalars.allSatisfy({ $0.properties.isIdeographic })
         else { return false }
-        // 繁体标签(「作詞」「編曲」「主題歌」)不用在表里双写一份,转成孪生写法再比一次就行:把繁简两种写法
+        // 繁体标签(「作詞」「編曲」「主題歌」)不用在表里双写一份,转成孪生写法和归一写法再比一次就行(roleWordForms):把繁简两种写法
         // 都手工列进表,表长一倍还容易漏(有「作詞」也有「作词」,但「録音」就只有「录音」)。
         // 分隔符里有「和 / 与 / 及」,切完「和音」只剩「音」:不切的原标签也比一次。
         let unsplit = String(hanLabel.unicodeScalars.filter { $0.properties.isIdeographic }.map(Character.init))
-        let forms = [core, HanScript.sibling(core), unsplit, HanScript.sibling(unsplit)].compactMap { $0 }
+        let forms = roleWordForms(core) + roleWordForms(unsplit)
         if creditRoleWords.contains(where: { word in forms.contains { $0.contains(word) } }) {
             return true
         }
@@ -535,7 +535,7 @@ public final class LyricsSyncEngine {
               parts.allSatisfy({ (1...6).contains($0.count) && $0.unicodeScalars.allSatisfy { $0.properties.isIdeographic } })
         else { return false }
         let roleParts = parts.filter { part in
-            let forms = [part, HanScript.sibling(part)].compactMap { $0 }
+            let forms = roleWordForms(part)
             return creditRoleWords.contains { word in forms.contains { $0.contains(word) } }
         }
         return roleParts.count >= 2
@@ -772,9 +772,7 @@ public final class LyricsSyncEngine {
     /// 记的是日文名)时宁可不删。
     public static func looksLikeHeaderLine(_ text: String, trackTitle: String, trackArtist: String) -> Bool {
         guard !trackTitle.isEmpty, !trackArtist.isEmpty else { return false }
-        func norm(_ s: String) -> String {
-            s.lowercased().filter { $0.isLetter || $0.isNumber }
-        }
+        func norm(_ s: String) -> String { headerKey(s) }
         // 抬头写的常是**裸曲名**,而本地标签带着 "(Remastered 2014)" 这类后缀 —— 两边直接
         // 比会对不上(就栽在这儿,抬头一行没删掉)。去掉括号段再比一次。
         func stripBrackets(_ s: String) -> String {
@@ -840,7 +838,7 @@ public final class LyricsSyncEngine {
     /// 所以按歌名 / 歌手等值来认;只在开头那段署名里用(见 strippingCreditLines)。
     static func looksLikeLabeledHeaderLine(_ text: String, trackTitle: String, trackArtist: String) -> Bool {
         guard !trackTitle.isEmpty, !trackArtist.isEmpty else { return false }
-        func norm(_ s: String) -> String { s.lowercased().filter { $0.isLetter || $0.isNumber } }
+        func norm(_ s: String) -> String { headerKey(s) }
         // 歌名、歌手两个标签写在同一行、标签后面可以没有冒号(「歌曲名 X 歌手名 Y」):歌名等值或歌手对得上一个就算。
         // 见 08 章决策 55。
         let r = NSRange(text.startIndex..., in: text)
@@ -961,6 +959,23 @@ public final class LyricsSyncEngine {
               let idx = text.firstIndex(where: { dashes.contains($0) })
         else { return [] }
         return [(String(text[text.startIndex..<idx]), String(text[text.index(after: idx)...]))]
+    }
+
+    /// 抬头、演唱者名比对用的归一:转简体并归一异体字(`HanScript.foldedSimplified`)、只留字母数字、转小写。
+    /// 行这一侧和歌名 / 歌手那一侧都过这一步再比,「為妳寫的歌」才对得上「为你写的歌」:只给歌名、歌手加 ICU 孪生写法的话,
+    /// ICU 不转的异体字(妳 / 牠 / 祂)两边永远对不上。Go 侧 lyricheader.go 的 headerKey 同一个做法。见 08 章决策 68。
+    static func headerKey<S: StringProtocol>(_ s: S) -> String {
+        HanScript.foldedSimplified(String(s)).lowercased().filter { $0.isLetter || $0.isNumber }
+    }
+
+    /// 拿去跟角色词表(只写简体)比的几种写法:原样、简繁孪生(`HanScript.sibling`)、转简体并归一异体字
+    /// (`HanScript.foldedSimplified`)。见 08 章决策 68。
+    private static func roleWordForms(_ s: String) -> [String] {
+        var out = [s]
+        for form in [HanScript.sibling(s), HanScript.foldedSimplified(s)] {
+            if let form, !out.contains(form) { out.append(form) }
+        }
+        return out
     }
 
     /// 歌名可以长成的样子:原样、去括号、去掉「 - 版本」尾巴(Apple Music 的
@@ -1169,10 +1184,8 @@ public final class LyricsSyncEngine {
         return t[r] == "歌曲名" ? "song" : "artist"
     }
 
-    /// 比演唱者名用的归一形式:只留字母数字、转小写(空格、点号、大小写写法不同的同一个名字比得上)。
-    private static func performerKey<S: StringProtocol>(_ s: S) -> String {
-        s.lowercased().filter { $0.isLetter || $0.isNumber }
-    }
+    /// 比演唱者名用的归一形式,同 `headerKey`(空格、点号、大小写、繁简和异体字写法不同的同一个名字比得上)。
+    private static func performerKey<S: StringProtocol>(_ s: S) -> String { headerKey(s) }
 
     /// 这首歌的演唱者:播放器报的、歌词 [ar:] 标签里的、同曲别的写法里的歌手,按「& / 、 , ; | feat.」拆成单人,
     /// 各取原样、去括号和简繁孪生的归一形式。
@@ -1199,7 +1212,7 @@ public final class LyricsSyncEngine {
     static func looksLikeTitleOnlyHeaderLine(_ texts: [String], trackTitle: String, trackArtist: String,
                                              tags: LRCParser.HeaderTags) -> Bool {
         guard let first = texts.first, texts.count > 1 else { return false }
-        func norm(_ s: String) -> String { s.lowercased().filter { $0.isLetter || $0.isNumber } }
+        func norm(_ s: String) -> String { headerKey(s) }
         let titles = Set(headerIdentities(trackTitle: trackTitle, trackArtist: trackArtist, tags: tags)
             .flatMap { headerTitleForms($0.title) }.map(norm)).subtracting([""])
         let pairs: [Character: Character] = ["《": "》", "(": ")", "（": "）", "[": "]", "【": "】"]
@@ -1366,12 +1379,14 @@ public final class LyricsSyncEngine {
     /// 复用同一张词表,免得两边各维护一份还对不齐。
     ///
     /// 表里只写简体。繁体 / 日文字形(「詞：」「編：」;日文歌词里的简体「词」会先被 `JapaneseKanjiRepair`
-    /// 修成「詞」)按 `HanScript.sibling` 转成简体再比一次,跟 `matchesRoleWordCredit` 同一种简繁互认。
+    /// 修成「詞」)按 `roleWordForms` 的孪生写法和归一写法再比一次,跟 `matchesRoleWordCredit` 同一种简繁互认。
     /// 正则要求冒号,没冒号的行不转。引擎 lyricspeaker.go 的说话人否决同样转简体再比,两边一起改。见 08 章决策 37。
     static func matchesKeywordCreditPattern(_ text: String) -> Bool {
         if creditLinePattern.firstMatch(in: text, range: NSRange(text.startIndex..., in: text)) != nil { return true }
-        guard text.contains(where: { $0 == ":" || $0 == "：" }), let sibling = HanScript.sibling(text) else { return false }
-        return creditLinePattern.firstMatch(in: sibling, range: NSRange(sibling.startIndex..., in: sibling)) != nil
+        guard text.contains(where: { $0 == ":" || $0 == "：" }) else { return false }
+        return roleWordForms(text).dropFirst().contains { form in
+            creditLinePattern.firstMatch(in: form, range: NSRange(form.startIndex..., in: form)) != nil
+        }
     }
 
     /// 文字里有没有英文的署名角色名(`englishRoleNounPattern`)。LyricDuet 判单独一行的名字标签时用。
@@ -1405,7 +1420,7 @@ public final class LyricsSyncEngine {
         guard (1...16).contains(core),
               let last = label.components(separatedBy: separators).last(where: { !$0.isEmpty })
         else { return false }
-        let forms = [last, HanScript.sibling(last)].compactMap { $0 }
+        let forms = roleWordForms(last)
         return creditRoleWords.contains { word in forms.contains { $0.contains(word) } }
     }
 

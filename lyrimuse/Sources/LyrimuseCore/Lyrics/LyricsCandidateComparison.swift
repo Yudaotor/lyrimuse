@@ -119,7 +119,7 @@ public enum LyricsCandidateComparison {
     /// 祂→他),最后过对照专用的 `comparisonOnlyVariants`。每一步都是一个字换一个字,字数不变。只拿来比对,不当显示写法。
     /// 见 11 章决策 176。
     public static func folded(_ text: String) -> String {
-        let normalized = HanVariants.normalizeToSimplified(HanScript.simplified(text))
+        let normalized = HanScript.foldedSimplified(text)
         guard normalized.contains(where: { comparisonOnlyVariants[$0] != nil }) else { return normalized }
         return String(normalized.map { comparisonOnlyVariants[$0] ?? $0 })
     }

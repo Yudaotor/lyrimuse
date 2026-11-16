@@ -34,6 +34,13 @@ public enum HanScript {
     /// 转成简体写法(ICU `Hant-Hans`)。只拿来比对,不当显示或 key 的权威写法。
     public static func simplified(_ s: String) -> String { transform(s, "Hant-Hans") }
 
+    /// 转成简体(ICU `Hant-Hans`)再按异体字表归到大陆规范字(`HanVariants`,妳→你、牠→它、祂→他)。ICU 不管异体字,
+    /// 只转简体的话「為妳寫的歌」和「为你写的歌」对不上。只拿来比对,不当显示或 key 的权威写法。全是 ASCII 时原样返回。
+    public static func foldedSimplified(_ s: String) -> String {
+        guard s.unicodeScalars.contains(where: { !$0.isASCII }) else { return s }
+        return HanVariants.normalizeToSimplified(simplified(s))
+    }
+
     private static func transform(_ s: String, _ id: String) -> String {
         let m = NSMutableString(string: s) as CFMutableString
         CFStringTransform(m, nil, id as CFString, false)
