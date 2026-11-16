@@ -286,6 +286,11 @@ func saveImportedLyrics(recs ...importedLyricsRecord) error {
 
 // dropImportedLyrics 作废这几首的导入歌词;没有的不管。
 func dropImportedLyrics(keys ...string) {
+	dropImportedLyricsCapturing(nil, keys...)
+}
+
+// dropImportedLyricsCapturing 同 dropImportedLyrics;undo 非 nil 时把删掉的记录文件原文和摘掉的索引项记进去。
+func dropImportedLyricsCapturing(undo *importedLyricsUndo, keys ...string) {
 	dir := importedLyricsDir()
 	if dir == "" || len(keys) == 0 {
 		return
@@ -300,6 +305,8 @@ func dropImportedLyrics(keys ...string) {
 		if !ok {
 			continue
 		}
+		undo.noteFile(dir, name)
+		undo.noteKey(stored, name)
 		if err := os.Remove(filepath.Join(dir, name)); err != nil && !errors.Is(err, fs.ErrNotExist) {
 			noteFileErr("remove", filepath.Join(dir, name), err)
 		}
@@ -514,7 +521,12 @@ func importedLyricsRecordBySong(artist, title string, durationSecs float64) (imp
 
 // dropImportedLyricsForSong:用户在这首上采用了别的歌词:按 key 存的、按身份对得上的一起作废。
 func dropImportedLyricsForSong(key string) {
-	dropImportedLyrics(key)
+	dropImportedLyricsForSongCapturing(key, nil)
+}
+
+// dropImportedLyricsForSongCapturing 同 dropImportedLyricsForSong;undo 非 nil 时记下删掉的东西,restoreImportedLyrics 能原样放回。
+func dropImportedLyricsForSongCapturing(key string, undo *importedLyricsUndo) {
+	dropImportedLyricsCapturing(undo, key)
 	if strings.Count(key, "|") < 2 {
 		return
 	}
@@ -538,6 +550,7 @@ func dropImportedLyricsForSong(key string) {
 				kept = append(kept, name)
 				continue
 			}
+			undo.noteFile(dir, name)
 			if err := os.Remove(filepath.Join(dir, name)); err != nil && !errors.Is(err, fs.ErrNotExist) {
 				noteFileErr("remove", filepath.Join(dir, name), err)
 			}
@@ -547,6 +560,7 @@ func dropImportedLyricsForSong(key string) {
 			continue
 		}
 		changed = true
+		undo.noteTitles(t, importedLyricsIndex.titles[t])
 		if len(kept) == 0 {
 			delete(importedLyricsIndex.titles, t)
 		} else {

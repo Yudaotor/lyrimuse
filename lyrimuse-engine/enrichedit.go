@@ -123,6 +123,9 @@ type enrichEditRequest struct {
 	// 已有的歌词。Player 是正在放这个文件的播放器(bundle id),Apple Music 的曲目只写歌词文字(writebackWantsPlainText)。
 	FilePath string `json:"file_path,omitempty"`
 	Player   string `json:"player,omitempty"`
+	// Undoable:save_edit / save_plain_text 留一份撤销记录,结果里回 undo_id;UndoID:undo_edit 撤哪一笔(enrichundo.go)。
+	Undoable bool   `json:"undoable,omitempty"`
+	UndoID   string `json:"undo_id,omitempty"`
 	// importPrepared:import_lyrics_batch 在拿锁之前读好、解析好的暂存(prepareImportBatch),不从请求文件里来。
 	importPrepared *importBatchPrepared
 }
@@ -137,6 +140,8 @@ type enrichEditResult struct {
 	ErrorCode     string `json:"error_code,omitempty"`
 	FilePath      string `json:"file_path,omitempty"`
 	FileHasLyrics bool   `json:"file_has_lyrics,omitempty"`
+	// UndoID:带 undoable 的改动成功后,undo_edit 撤这一笔用的 id(enrichundo.go);撤销失败时 ErrorCode 是 undo_expired / undo_changed。
+	UndoID string `json:"undo_id,omitempty"`
 }
 
 // enrichEditOutcome 是一次改动之后要在锁外做的事。
@@ -154,6 +159,11 @@ type enrichEditOutcome struct {
 	// emptied:exports 里改完正文是空的 key。导出只写有正文的条目,它们导出过的歌词文件要挪进废纸篓,不然下次
 	// 启动导入按文件头把正文导回来(「清空 → 恢复」那条路)。见 11 章决策 158。
 	emptied []string
+	// undo:这一笔的撤销记录(请求带 undoable 时),记下改动序号之后收进 enrichUndos,id 回给 App。
+	undo   *enrichUndoRecord
+	undoID string
+	// errCode:失败时回给 App 的错误码(enrichEditResult.ErrorCode)。
+	errCode string
 	err     error
 }
 
@@ -214,6 +224,9 @@ func applyEnrichEdit(req enrichEditRequest) enrichEditResult {
 				touched = append(touched, req.Key)
 			}
 			markEnrichEditedLocked(req.Op == "clear_all", touched...)
+			if out.undo != nil {
+				out.undoID = storeEnrichUndoLocked(out.undo, enrichEditSeq)
+			}
 			for _, k := range out.exports {
 				if e, ok := enrichCache[k]; ok && e.Lyrics.IsZero() {
 					out.emptied = append(out.emptied, k)
@@ -223,7 +236,7 @@ func applyEnrichEdit(req enrichEditRequest) enrichEditResult {
 		enrichMu.Unlock()
 	}
 	if out.err != nil {
-		res.Error = out.err.Error()
+		res.Error, res.ErrorCode = out.err.Error(), out.errCode
 		warnf("enrich edit: op=%s failed: %v", req.Op, out.err)
 		return res
 	}
@@ -266,6 +279,7 @@ func applyEnrichEdit(req enrichEditRequest) enrichEditResult {
 	}
 	res.OK = true
 	res.Changed = out.changed - out.followers
+	res.UndoID = out.undoID
 	log.Printf("enrich edit: op=%s changed=%d", req.Op, out.changed)
 	return res
 }
@@ -276,6 +290,11 @@ func applyEnrichEditLocked(req enrichEditRequest) enrichEditOutcome {
 	case "save_edit":
 		if req.Key == "" {
 			return enrichEditOutcome{err: fmt.Errorf("save_edit: empty key")}
+		}
+		sharing := songEntitySharing()
+		var undo *enrichUndoRecord
+		if req.Undoable {
+			undo = beginEnrichUndoLocked(req.Key, sharing)
 		}
 		e, existed := enrichCache[req.Key]
 		if err := applySaveEdit(&e, req); err != nil {
@@ -290,13 +309,14 @@ func applyEnrichEditLocked(req enrichEditRequest) enrichEditOutcome {
 		cancelInFlightEnrichLocked(req.Key)
 		// 用户在这首上采用了别的歌词:导入库里那份作废,不然下一轮选词又把它挑回来(importstore.go)。
 		if req.Source != importLyricsSource {
-			dropImportedLyricsForSong(req.Key)
+			dropImportedLyricsForSongCapturing(req.Key, undo.importedCapture())
 		}
 		exports := []string{req.Key}
-		if songEntitySharing() {
+		if sharing {
 			exports = append(exports, shareManualEditLocked(req.Key, time.Now())...)
 		}
-		return enrichEditOutcome{changed: len(exports), exports: exports}
+		undo.finishLocked(exports)
+		return enrichEditOutcome{changed: len(exports), exports: exports, undo: undo}
 	case "import_lyrics_batch":
 		return applyImportBatchLocked(req)
 	case "drop_imported_lyrics":
@@ -307,6 +327,10 @@ func applyEnrichEditLocked(req enrichEditRequest) enrichEditOutcome {
 	case "save_plain_text":
 		if req.Key == "" {
 			return enrichEditOutcome{err: fmt.Errorf("save_plain_text: empty key")}
+		}
+		var undo *enrichUndoRecord
+		if req.Undoable {
+			undo = beginEnrichUndoLocked(req.Key, false)
 		}
 		e, existed := enrichCache[req.Key]
 		e.PlainLyrics = bt(req.PlainLyrics)
@@ -323,9 +347,12 @@ func applyEnrichEditLocked(req enrichEditRequest) enrichEditOutcome {
 		enrichCache[req.Key] = e
 		cancelInFlightEnrichLocked(req.Key)
 		if req.PlainLyricsSource != importLyricsSource {
-			dropImportedLyricsForSong(req.Key)
+			dropImportedLyricsForSongCapturing(req.Key, undo.importedCapture())
 		}
-		return enrichEditOutcome{changed: 1}
+		undo.finishLocked(nil)
+		return enrichEditOutcome{changed: 1, undo: undo}
+	case "undo_edit":
+		return undoEnrichEditLocked(req.UndoID)
 	case "set_instrumental":
 		// 单个 key(详情页、搜索面板)或一串 keys(歌词管理多选「全部标为纯音乐」:一次请求改完,App 只重读一遍缓存)。
 		keys := req.Keys
@@ -744,6 +771,8 @@ func runApplyEnrichEditCLI(args []string) {
 		emit(enrichEditResult{Error: "unreadable request: " + err.Error()})
 		os.Exit(1)
 	}
+	// 撤销记录只在常驻进程内存里,这个进程一退就没了:不发 undo_id。
+	req.Undoable = false
 	cfgDir := configDir()
 	if cfgDir == "" {
 		emit(enrichEditResult{ID: req.ID, Error: "cannot resolve the config directory"})
