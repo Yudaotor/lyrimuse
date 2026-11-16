@@ -2316,6 +2316,32 @@ struct SettingsGlassActionMenu: View {
     }
 }
 
+/// 设置行尾的玻璃小圆钮(尺寸、三态同 `GlassInfoButton`),点开一个浮层放这一行的从属设置,摆在这一行的开关左边。
+/// `tint` 报浮层里那项此刻的状态(开着用强调色、出了问题用橙色),nil 是次要灰:不点开也看得出里面开没开。
+/// `label` 同时是悬停提示和旁白,写浮层里那项设置的名字。见 05 章决策 147。
+struct SettingsGlassPopoverButton<Content: View>: View {
+    var systemImage = "ellipsis"
+    let label: String
+    var tint: Color?
+    @ViewBuilder let content: () -> Content
+    @State private var shown = false
+
+    var body: some View {
+        Button { shown.toggle() } label: {
+            Image(systemName: systemImage)
+                .font(.system(size: 10, weight: .bold))
+                .foregroundStyle(tint.map(AnyShapeStyle.init) ?? AnyShapeStyle(.secondary))
+                .frame(width: 22, height: 22)
+                .contentShape(Circle())
+        }
+        .buttonStyle(SettingsGlassHoverButtonStyle(isOpen: shown, pressScale: 0.9))
+        .settingsCardBackground(cornerRadius: 11)
+        .help(label)
+        .accessibilityLabel(label)
+        .popover(isPresented: $shown, arrowEdge: .bottom) { content() }
+    }
+}
+
 /// 玻璃件里自己画的按钮(玻璃下拉 / 动作菜单 / 字体选择的胶囊、胶囊分段里没选中的档、胶囊里的 − / + 和 ⓘ 小圆钮)的
 /// 悬停 / 按下 / 弹层开着三态:在玻璃上面垫一层淡底,悬停淡、弹层开着实一点、按下最实,形状同按钮的 `contentShape`
 /// 那颗胶囊(方形标签就是圆)。别改成给玻璃加 `.interactive()`:胶囊里有好几颗按钮时整块一起亮,分不出是哪颗,

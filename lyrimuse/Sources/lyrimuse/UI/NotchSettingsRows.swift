@@ -345,7 +345,7 @@ extension NotchProgressLineChoice {
 /// 勾列 20 + 间距 12 + 右内边距 14)。**抬到 240 的是顶上那一行「音浪」开关**(`SettingsRow` +
 /// `Toggle`):`SettingsRow` 固定开销 150pt(2×14 内边距 + 20 图标列 + 3×12
 /// 间距 + 12 Spacer + 54 开关)+ 标题 13pt 系统字「音浪」25.8 / "Audio Wave" 70.9 = 中文 176 /
-/// **英文 221**,240 给英文留 19pt。**别顺手拉回 380 去跟别的浮层"对齐"** —— 那不是对齐,是空转。
+/// **英文 221**,240 给英文留 19pt。音浪开着的那一侧,开关左边还有「跟随音乐跳动」按钮(22 + 间距 8,05 章决策 147),320 放得下。**别顺手拉回 380 去跟别的浮层"对齐"** —— 那不是对齐,是空转。
 @MainActor
 struct NotchEarPopover: View {
     enum Side { case left, right }
@@ -389,59 +389,49 @@ struct NotchEarSettingsRows: View {
     }
 
     /// ⓘ 交代两侧是同一个开关:左右两张卡上下排着,不说的话会以为两边能同时开。
+    /// 开关左边那颗小圆钮点开「跟随音乐跳动」浮层(`followsAudioButton`);搜「跟随音乐跳动」时点亮的是这一行。
     private var equalizerRow: some View {
         SettingsRow(icon: "waveform", title: L10n.t("音浪"), help: L10n.t("同一时间只能显示在一侧")) {
-            Toggle("", isOn: Binding(
-                get: { showsEqualizerHere },
-                set: { on in
-                    if on {
-                        settings.notchEqualizerEar = equalizerEarValue
-                        settings.notchShowsEqualizer = true
-                    } else {
-                        settings.notchShowsEqualizer = false
-                    }
-                }))
-        }
-    }
-
-    /// 「跟随音乐跳动」:从属于音浪,只在音浪贴这一侧、系统支持进程级 tap(macOS 14.2+)时出现。
-    /// 打开的那一下系统弹「仅系统录音」授权框(`RealAudioMeter` 订阅这个开关去要)。
-    @ViewBuilder
-    private var followsAudioRows: some View {
-        if showsEqualizerHere && RealAudioMeter.isSupported {
-            CardDivider()
-            SettingsSubRow(title: L10n.t("跟随音乐跳动"),
-                           help: L10n.t("按播放器正在播放的声音跳动，需允许 Lyrimuse 录制系统音频；只读取音量，不保存声音")) {
-                Toggle("", isOn: $settings.notchEqualizerFollowsAudio)
-            }
-            if settings.notchEqualizerFollowsAudio && realAudio.likelyDenied {
-                SettingsRawRow(insetToText: true) {
-                    HStack(spacing: 8) {
-                        Text(L10n.t("未读到声音，请在系统设置中允许 Lyrimuse 录制系统音频"))
-                            .font(.system(size: 11))
-                            .foregroundStyle(.orange)
-                            .fixedSize(horizontal: false, vertical: true)
-                        Spacer(minLength: 4)
-                        Button(L10n.t("打开系统设置")) {
-                            if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture") {
-                                NSWorkspace.shared.open(url)
-                            }
+            HStack(spacing: 8) {
+                followsAudioButton
+                Toggle("", isOn: Binding(
+                    get: { showsEqualizerHere },
+                    set: { on in
+                        if on {
+                            settings.notchEqualizerEar = equalizerEarValue
+                            settings.notchShowsEqualizer = true
+                        } else {
+                            settings.notchShowsEqualizer = false
                         }
-                        .controlSize(.small)
-                        .settingsGlassButtons()
-                        .buttonBorderShape(.capsule)
-                    }
-                }
+                    }))
+            }
+        }
+        .settingsSearchHighlight(title: showsFollowsAudioButton ? L10n.t("跟随音乐跳动") : nil)
+    }
+
+    /// 「跟随音乐跳动」从属于音浪:只在音浪贴这一侧、系统支持进程级 tap(macOS 14.2+)时有入口,音浪关着时按钮不出现。
+    private var showsFollowsAudioButton: Bool { showsEqualizerHere && RealAudioMeter.isSupported }
+
+    /// 音浪那一行开关左边的小圆钮,点开 `NotchFollowsAudioPopover`。见 05 章决策 147。
+    @ViewBuilder
+    private var followsAudioButton: some View {
+        if showsFollowsAudioButton {
+            SettingsGlassPopoverButton(label: L10n.t("跟随音乐跳动"), tint: followsAudioTint) {
+                NotchFollowsAudioPopover()
             }
         }
     }
 
-    // 一框:音浪一行开关(开着时下面一行「跟随音乐跳动」),这一侧显示什么一行下拉(选其一;选「不显示」就空着)。
+    private var followsAudioTint: Color? {
+        guard settings.notchEqualizerFollowsAudio else { return nil }
+        return realAudio.likelyDenied ? .orange : .accentColor
+    }
+
+    // 一框:音浪一行开关(「跟随音乐跳动」在开关左边那颗按钮的浮层里),这一侧显示什么一行下拉(选其一;选「不显示」就空着)。
     var body: some View {
         SettingsRowGroup {
             VStack(spacing: 0) {
                 equalizerRow
-                followsAudioRows
                 CardDivider()
                 SettingsRow(icon: "rectangle.lefthalf.inset.filled", title: L10n.t("显示内容")) {
                     // 顺序直接用 allCases(声明序),不另抄一份数组 —— 抄一份的话以后往枚举里加一个
@@ -467,6 +457,50 @@ struct NotchEarSettingsRows: View {
         } else {
             guard settings.notchRightEar != module else { return }
             settings.notchRightEar = module
+        }
+    }
+}
+
+/// 灵动岛音浪那一行按钮点开的浮层:「跟随音乐跳动」开关和说明,疑似没授权时下面一行橙字提示 +「打开系统设置」。
+/// 打开开关的那一下系统弹「仅系统录音」授权框(`RealAudioMeter` 订阅这个开关去要)。宽度同左右耳浮层。
+@MainActor
+struct NotchFollowsAudioPopover: View {
+    @ObservedObject private var settings = AppSettings.shared
+    @ObservedObject private var realAudio = RealAudioMeter.shared
+
+    var body: some View {
+        SettingsPopoverShell(title: L10n.t("音浪"), width: 320) {
+            SettingsRowGroup {
+                VStack(spacing: 0) { rows }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var rows: some View {
+        SettingsRow(icon: "speaker.wave.2", title: L10n.t("跟随音乐跳动"),
+                    subtitle: L10n.t("按播放器正在播放的声音跳动，需允许 Lyrimuse 录制系统音频；只读取音量，不保存声音")) {
+            Toggle("", isOn: $settings.notchEqualizerFollowsAudio)
+        }
+        if settings.notchEqualizerFollowsAudio && realAudio.likelyDenied {
+            CardDivider()
+            // 提示和按钮上下排:浮层只有 320 宽,并排时英文按钮会截尾、提示折成五行。图标要给:不给时图标列不占位,提示会顶到行首。
+            SettingsRawRow(insetToText: true, icon: "exclamationmark.triangle") {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text(L10n.t("未读到声音，请在系统设置中允许 Lyrimuse 录制系统音频"))
+                        .font(.system(size: 11))
+                        .foregroundStyle(.orange)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Button(L10n.t("打开系统设置")) {
+                        if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture") {
+                            NSWorkspace.shared.open(url)
+                        }
+                    }
+                    .controlSize(.small)
+                    .settingsGlassButtons()
+                    .buttonBorderShape(.capsule)
+                }
+            }
         }
     }
 }

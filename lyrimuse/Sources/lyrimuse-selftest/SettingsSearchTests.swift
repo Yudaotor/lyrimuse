@@ -432,6 +432,9 @@ func runSettingsSearchTests() {
         expectEqual(gate(notch, "展开时预览下一句", false: ["notch.expandedNextLine", "notch.showLyrics"]), "收起时显示歌词",
                     "搜索门: 落点自己也藏着时接着往上找")
         expectEqual(gate(notch, "展开时预览下一句", false: ["notch.expandedNextLine"]), "副行", "搜索门: 只隔一层时停在「副行」")
+        let notchEar = ["歌词显示", "灵动岛", "左耳"]
+        expectEqual([gate(notchEar, "跟随音乐跳动", false: ["notch.equalizer"]), gate(notchEar, "跟随音乐跳动", false: [])],
+                    ["音浪", nil], "搜索门: 音浪关着时「跟随音乐跳动」落到「音浪」(开着时由那一行自己点亮)")
         expectEqual(gate(lastfm, "歌名", false: ["lastfm.matchCustom"]), "匹配模式", "搜索门: Last.fm 歌名落到「匹配模式」")
         expectEqual(gate(lastfm, "歌名", false: ["lastfm.mirror", "lastfm.matchCustom"]), "Scrobble 规则",
                     "搜索门: Scrobble 关着时落到「Scrobble 规则」")

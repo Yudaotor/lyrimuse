@@ -176,7 +176,7 @@ final class SettingsSearchRouter: ObservableObject {
     }
 
     /// `rowGates` 里各条件此刻的真假(假 = 那一行不在页面上)。每一条的写法跟那一行自己的显隐同步:菜单栏
-    /// `MenuBarLayoutRows` / `MenuBarWidthModeRow` / `MenuBarColorRows`,灵动岛 `NotchLyricRowSettingsRows`,悬浮歌词
+    /// `MenuBarLayoutRows` / `MenuBarWidthModeRow` / `MenuBarColorRows`,灵动岛 `NotchLyricRowSettingsRows` / `NotchEarSettingsRows`,悬浮歌词
     /// `OverlayStyleSettingsRows`,触控栏 `TouchBarSettingsRows`,歌词窗口 `lyricsWindowRows` / `WebLyricsSettingsCard`,
     /// Last.fm「Scrobble 规则」。歌词窗口两种尺寸各存一份:按跳过去之后预览显示的那一种算。认不出的名字当真(不加门)。
     static func rowCondition(_ name: String, entry: SettingsSearchEntry) -> Bool {
@@ -195,6 +195,7 @@ final class SettingsSearchRouter: ObservableObject {
         case "notch.expandedNextLine": return !s.notchSecondaryLine.hidesExpandedNextLinePreview
         case "notch.lyricList": return s.notchExpandedLyricList
         case "notch.lyricListOff": return !s.notchExpandedLyricList
+        case "notch.equalizer": return s.notchShowsEqualizer
         case "overlay.karaoke": return s.overlayLyricsKaraoke
         case "overlay.notRainbow": return !s.overlayRainbow
         case "overlay.stroke": return s.textStrokeEnabled

@@ -210,8 +210,18 @@ func runRealAudioTests() {
                  sourceHas(sourceBody("private func reinstall()", in: bars), "if liveAudio { return }"),
                  sourceHas(app("UI/NotchLyricsView+TopRow.swift"), "followsAudio: playback.equalizerFollowsAudio")],
                 [true, true, true], "真实音浪: 只在开关开、在播、在窗口里时登记;跟随时停掉关键帧;灵动岛音浪接上开关")
-    expectEqual(sourceHas(app("UI/NotchSettingsRows.swift"), "if showsEqualizerHere && RealAudioMeter.isSupported {"), true,
-                "真实音浪: 设置行只在音浪贴这一侧、系统支持时出现")
+    let rows = app("UI/NotchSettingsRows.swift")
+    let equalizerRow = sourceBody("private var equalizerRow: some View", in: rows)
+    expectEqual([sourceHas(rows, "private var showsFollowsAudioButton: Bool { showsEqualizerHere && RealAudioMeter.isSupported }"),
+                 sourceHas(equalizerRow, "HStack(spacing: 8) {\nfollowsAudioButton\nToggle(\"\", isOn: Binding("),
+                 sourceHas(sourceBody("private var followsAudioButton: some View", in: rows),
+                           "if showsFollowsAudioButton {\nSettingsGlassPopoverButton(label: L10n.t(\"跟随音乐跳动\")"),
+                 sourceHas(sourceBody("var body: some View", in: sourceBody("struct NotchEarSettingsRows: View", in: rows)),
+                           "equalizerRow\nCardDivider()\nSettingsRow(icon: \"rectangle.lefthalf.inset.filled\""),
+                 sourceHas(sourceBody("struct NotchFollowsAudioPopover: View", in: rows),
+                           "Toggle(\"\", isOn: $settings.notchEqualizerFollowsAudio)")],
+                [true, true, true, true, true],
+                "真实音浪: 开关在音浪那一行开关左边的按钮浮层里,不单独占一行;按钮只在音浪贴这一侧、系统支持时出现")
     let tap = core("Local/ProcessAudioTap.swift")
     let leaks = ["write(to:", "FileManager", "AVAudioFile", "ExtAudioFile", "AudioFileCreate", "FileHandle", "FileIO."]
     expectEqual(leaks.filter { tap.contains($0) || meter.contains($0) }, [], "真实音浪: 读到的采样不写盘")
