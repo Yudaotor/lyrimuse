@@ -188,6 +188,29 @@ func runSpotifyNativeTests() {
                     "能切哪几档: Apple Music / Kaset 四档都能切")
         expectEqual(O([]).allows(.list), true, "能切哪几档: 列表一直能切")
     }
+
+    // ---- 设模式时上次没读到模式(锁屏、窗口关着):当场重读再判,不按空集合降成列表 ----
+    do {
+        typealias M = MusicPlaybackController
+        var rereads = 0
+        func write(_ target: M.MusicPlaybackMode, known: M.PlaybackModeOptions?,
+                   reread: M.PlaybackModeState?) -> M.PlaybackModeState? {
+            M.playbackModeWrite(target, known: known, reread: { rereads += 1; return reread })
+        }
+        let kuwo = M.PlaybackModeState(mode: .list, options: .all)
+        expectEqual(write(.shuffle, known: nil, reread: kuwo), M.PlaybackModeState(mode: .shuffle, options: .all),
+                    "设模式(上次没读到): 重读到四档都能切 → 写随机,不降成列表")
+        expectEqual(write(.repeatOne, known: nil, reread: kuwo)?.mode, .repeatOne, "设模式(上次没读到): 单曲循环照样写")
+        expectEqual(rereads, 2, "设模式(上次没读到): 每次都当场重读")
+        expectEqual(write(.shuffle, known: nil, reread: nil) == nil, true, "设模式(重读也没读到): 这次不写")
+        rereads = 0
+        expectEqual(write(.shuffle, known: .all, reread: nil)?.mode, .shuffle, "设模式(读到过): 按上次的能切哪几档")
+        expectEqual(write(.repeatAll, known: [.shuffle, .repeatOne], reread: kuwo)?.mode, .list,
+                    "设模式(读到过): 够不到的档照旧落到列表")
+        expectEqual(rereads, 0, "设模式(读到过): 不重读")
+        expectEqual(write(.repeatAll, known: nil, reread: M.PlaybackModeState(mode: .list, options: [.shuffle, .repeatOne]))?.mode,
+                    .list, "设模式(上次没读到): 重读到的档里没有也落到列表")
+    }
 }
 
 // ---- 网页版 Spotify:浏览器位置探针输出的第三段是封面地址----

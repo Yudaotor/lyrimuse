@@ -374,6 +374,11 @@ public enum MusicPlaybackController {
             case .repeatOne: return contains(.repeatOne)
             }
         }
+
+        /// 要切到 `target` 时实际写的那一档:够不到的档落到列表。
+        public func resolving(_ target: MusicPlaybackMode) -> MusicPlaybackMode {
+            allows(target) ? target : .list
+        }
     }
 
     /// 读回来的播放模式,连同这个播放器此刻能切哪几档。
@@ -385,6 +390,15 @@ public enum MusicPlaybackController {
             self.mode = mode
             self.options = options
         }
+    }
+
+    /// 设模式时要写的那一档,连同这个播放器能切哪几档。`known` 是上次读到的能切哪几档,nil 表示上次没读到
+    /// (锁屏、播放器窗口关着):这时当场 `reread` 一次再按它判,别把要的档按空集合降成列表;重读也没读到回 nil,这次不写。
+    /// `known` 不为 nil 时不调 `reread`。见 02 章决策 265。
+    public static func playbackModeWrite(_ target: MusicPlaybackMode, known: PlaybackModeOptions?,
+                                         reread: () -> PlaybackModeState?) -> PlaybackModeState? {
+        guard let options = known ?? reread()?.options else { return nil }
+        return PlaybackModeState(mode: options.resolving(target), options: options)
     }
 
     /// 这个播放器支不支持「播放模式 / 音量」这两组扩展控制。

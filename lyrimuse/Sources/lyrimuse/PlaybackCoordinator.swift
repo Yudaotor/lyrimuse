@@ -896,17 +896,23 @@ final class PlaybackCoordinator: ObservableObject {
         }
         guard let player = extendedControlPlayer else { return }
         // 播放器此刻够不到的档位静默降为列表,别让乐观更新画出一个永远写不进去的图标。
-        let options = playbackModeOptions
-        let resolved: MusicPlaybackController.MusicPlaybackMode = options.allows(target) ? target : .list
-        applyPlaybackMode(MusicPlaybackController.PlaybackModeState(mode: resolved, options: options))
+        // 上次没读到模式时没有乐观更新,写之前当场重读(`playbackModeWrite`)。
+        let known = knownPlaybackModeOptions
+        if let known {
+            applyPlaybackMode(MusicPlaybackController.PlaybackModeState(mode: known.resolving(target), options: known))
+        }
         playbackModeActionSeq &+= 1
+        let seq = playbackModeActionSeq
         Task.detached(priority: .userInitiated) {
             if player == .appleMusic,
                await !MusicAutomationPermission.checkAppleMusicSafely(askIfNeeded: true) {
                 await MainActor.run { [weak self] in self?.refreshPlaybackMode() }
                 return
             }
-            let wrote = MusicPlaybackController.setPlaybackMode(resolved, for: player)
+            guard let write = MusicPlaybackController.playbackModeWrite(
+                target, known: known, reread: { MusicPlaybackController.playbackMode(for: player) }) else { return }
+            if known == nil { await MainActor.run { [weak self] in self?.applyRereadPlaybackMode(write, seq: seq) } }
+            let wrote = MusicPlaybackController.setPlaybackMode(write.mode, for: player)
             // 写成功就**不回读**:Music.app 的 getter 滞后于 setter(见 setPlaybackMode
             // 的注释),这时候读回来的是旧值,只会把刚画对的图标又抹掉。只有写没被接受时
             // 才需要问一遍真实状态,好把乐观更新纠回去。
@@ -918,14 +924,33 @@ final class PlaybackCoordinator: ObservableObject {
     /// 网页版的循环键,取舍同 `setPlaybackMode`:乐观更新、写成了不回读、没写成回读纠正。
     private func setYouTubeMusicWebMode(_ target: MusicPlaybackController.MusicPlaybackMode,
                                         web: YouTubeMusicWebControls.Target) {
-        let options = playbackModeOptions
-        let resolved: MusicPlaybackController.MusicPlaybackMode = options.allows(target) ? target : .list
-        applyPlaybackMode(MusicPlaybackController.PlaybackModeState(mode: resolved, options: options))
+        let known = knownPlaybackModeOptions
+        if let known {
+            applyPlaybackMode(MusicPlaybackController.PlaybackModeState(mode: known.resolving(target), options: known))
+        }
         playbackModeActionSeq &+= 1
+        let seq = playbackModeActionSeq
         Task.detached(priority: .userInitiated) {
-            guard !YouTubeMusicWebControls.setMode(resolved, web) else { return }
+            guard let write = MusicPlaybackController.playbackModeWrite(target, known: known, reread: {
+                YouTubeMusicWebControls.readState(web)?.mode.map {
+                    MusicPlaybackController.PlaybackModeState(mode: $0, options: YouTubeMusicWebControls.modeOptions)
+                }
+            }) else { return }
+            if known == nil { await MainActor.run { [weak self] in self?.applyRereadPlaybackMode(write, seq: seq) } }
+            guard !YouTubeMusicWebControls.setMode(write.mode, web) else { return }
             await MainActor.run { [weak self] in self?.refreshPlaybackMode() }
         }
+    }
+
+    /// 上次读到的能切哪几档;没读到模式时为 nil(此刻的 `playbackModeOptions` 是空集合,不能拿来判档)。
+    private var knownPlaybackModeOptions: MusicPlaybackController.PlaybackModeOptions? {
+        playbackMode == nil ? nil : playbackModeOptions
+    }
+
+    /// 设模式前当场重读到的结果先画上(期间又有别的模式动作就不画),跟乐观更新同一个口径。
+    private func applyRereadPlaybackMode(_ state: MusicPlaybackController.PlaybackModeState, seq: Int) {
+        guard playbackModeActionSeq == seq else { return }
+        applyPlaybackMode(state)
     }
 
     /// 点心:翻转当前曲目的"喜欢"状态。先乐观更新本地状态好让按钮立刻有反馈;写被接受了就不回读

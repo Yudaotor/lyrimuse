@@ -2701,6 +2701,16 @@ func runSourceContractSurfaceTests() {
                         "灵动岛模式键: playbackMode 只在 applyPlaybackMode 里赋值(跟 playbackModeOptions 一起)")
             expectEqual(coordinator.components(separatedBy: "playbackModeOptions = ").count - 1, 1,
                         "灵动岛模式键: playbackModeOptions 只在 applyPlaybackMode 里赋值")
+            // 上次没读到模式时 playbackModeOptions 是空集合,设模式不能拿它判档(会把要的档全降成列表)。
+            expectEqual(sourceHas(coordinator, "playbackMode == nil ? nil : playbackModeOptions"), true,
+                        "设模式: 没读到模式时已知的能切哪几档是 nil,不是空集合")
+            for signature in ["func setPlaybackMode(_ target:", "private func setYouTubeMusicWebMode("] {
+                let body = sourceBody(signature, in: coordinator)
+                expectEqual(sourceHas(body, "let known = knownPlaybackModeOptions")
+                                && sourceHas(body, "playbackModeWrite(")
+                                && !body.contains("allows(target)"), true,
+                            "设模式: \(signature) 经 playbackModeWrite 判档,上次没读到时当场重读")
+            }
         } else {
             expectEqual(true, false, "灵动岛模式键: 读不到 NotchLyricsView.swift / PlaybackCoordinator.swift")
         }
