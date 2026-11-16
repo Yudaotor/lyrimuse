@@ -114,7 +114,19 @@ final class LastfmStatsService: ObservableObject {
          "feedMTime": feedMTime.map { $0.timeIntervalSince1970 as Any } ?? NSNull(),
          "feedTotal": lastFeed.map { $0.total as Any } ?? NSNull(),
          "feedNowPlaying": lastFeed?.nowPlaying.map { $0.title as Any } ?? NSNull(),
-         "recentRows": recent.count]
+         "recentRows": recent.count,
+         "familyIndex": familyIndexDebugState]
+    }
+
+    /// 写法族索引有几族、几条写法、一份跟族内顺序无关的摘要(FNV-1a,按「族键 + 族内各写法的次数键」排序后算),后台是否正在建。
+    private var familyIndexDebugState: [String: Any] {
+        let lines = primaryCreditFamilies.map { key, family in
+            ([key] + family.map { Self.playCountKey(artist: $0.artist, title: $0.title) }.sorted()).joined(separator: "\t")
+        }.sorted()
+        var hash: UInt64 = 0xcbf2_9ce4_8422_2325
+        for byte in lines.joined(separator: "\n").utf8 { hash = (hash ^ UInt64(byte)) &* 0x0000_0100_0000_01b3 }
+        return ["families": primaryCreditFamilies.count, "forms": primaryCreditFamilies.values.reduce(0) { $0 + $1.count },
+                "digest": String(hash, radix: 16), "building": familyIndexBuild != nil]
     }
 
     /// feed 的 mtime 跟 `known` 不同才读解;没变或文件不在是 nil。
@@ -1159,6 +1171,7 @@ final class LastfmStatsService: ObservableObject {
         snapshotSaveTask?.cancel()
         FileIO.remove(Self.snapshotURL)
         titleForms = [:]
+        titleFormsGeneration += 1
         titleFormsSyncedThrough = 0
         titleFormsLoaded = false
         titleFormsLastTopUp = nil
@@ -2210,13 +2223,54 @@ final class LastfmStatsService: ObservableObject {
 
     /// 往派生索引里塞一条写法(按 歌手|歌名 小写键去重),加载与增量收割共用。
     private static func insertForm(_ form: TitleForm, into index: inout [String: [TitleForm]]) {
-        let key = PlayCountFold.familyKey(artist: form.artist, title: form.title)
+        insertForm(form, familyKey: PlayCountFold.familyKey(artist: form.artist, title: form.title), into: &index)
+    }
+
+    /// 同上,族键由调用方算好(后台按一份别名表建索引时用,见 buildFamilyIndex)。去重挡掉了返回 false。
+    @discardableResult
+    private nonisolated static func insertForm(_ form: TitleForm, familyKey key: String,
+                                               into index: inout [String: [TitleForm]]) -> Bool {
         let raw = playCountKey(artist: form.artist, title: form.title)
         var fam = index[key] ?? []
         guard !fam.contains(where: { playCountKey(artist: $0.artist, title: $0.title) == raw })
-        else { return }
+        else { return false }
         fam.append(form)
         index[key] = fam
+        return true
+    }
+
+    /// 按一份别名表建好的 primaryCreditFamilies,连同每条写法标过期要比的几种键(flushLocalAliasStaleMarks 用)。
+    private struct FamilyIndex {
+        var families: [String: [TitleForm]] = [:]
+        var marks: [FormMarkKeys] = []
+    }
+
+    private struct FormMarkKeys {
+        var playCountKey: String
+        var canonicalArtistKey: String
+        var artistKey: String
+        var foldedTitle: String
+        var baseFamilyKey: String
+    }
+
+    /// 按 `keys` 那份别名表建族索引,顺带算好每条写法标过期要比的键。只查 `keys`、不读 PlayCountFold 全局的别名表,
+    /// 所以能在后台跑、跟主线程上还在用的旧表互不影响。跟 rebuildPrimaryCreditFamilies 同一个插入顺序和去重。
+    private nonisolated static func buildFamilyIndex(_ forms: [String: [TitleForm]],
+                                                     keys: EnrichCacheReader.AliasFamilyKeys) -> FamilyIndex {
+        var index = FamilyIndex()
+        for family in forms.values {
+            for form in family {
+                let base = keys.baseFamilyKey(artist: form.artist, title: form.title)
+                guard insertForm(form, familyKey: keys.familyKey(base: base), into: &index.families) else { continue }
+                index.marks.append(FormMarkKeys(
+                    playCountKey: playCountKey(artist: form.artist, title: form.title),
+                    canonicalArtistKey: keys.canonicalArtistKey(form.artist),
+                    artistKey: LocalArtistAliases.artistKey(form.artist),
+                    foldedTitle: PlayCountFold.foldTitle(form.title),
+                    baseFamilyKey: base))
+            }
+        }
+        return index
     }
 
     /// 把实时行刚取到的**新鲜合并总数**写进历史行用的 trackPlayCounts。
@@ -2280,6 +2334,8 @@ final class LastfmStatsService: ObservableObject {
         // 派生索引跟着增量更新 —— 少了这一步,App 运行期间新收割到的写法要等下次启动
         // 重新加载才能参与合并。
         Self.insertForm(form, into: &primaryCreditFamilies)
+        // 后台正按开工时那份 titleForms 建新族索引:这条换上之后再补进去(见 applyLocalAliases)。
+        if familyIndexBuild != nil { formsHarvestedDuringBuild.append(form) }
         scheduleTitleFormsSave()
     }
 
@@ -2301,6 +2357,7 @@ final class LastfmStatsService: ObservableObject {
             // 直接采用、不重折:全部写法重折一遍(几千条 × 每条数次 ICU 繁简 transform,约百毫秒)
             // 会全压在主线程的首次触碰上。
             titleForms = snap.forms
+            titleFormsGeneration += 1
             rebuildPrimaryCreditFamilies()
             flushLocalAliasStaleMarks()
         } else {
@@ -2320,6 +2377,7 @@ final class LastfmStatsService: ObservableObject {
                 }
             }
             titleForms = refolded
+            titleFormsGeneration += 1
             rebuildPrimaryCreditFamilies()
             flushLocalAliasStaleMarks()
             scheduleTitleFormsSave()
@@ -2403,7 +2461,8 @@ final class LastfmStatsService: ObservableObject {
         }
     }
 
-    /// 重算两张表并套用(变了才动)。已算好的直接同步套用;没算好的起后台任务,算完回主线程套用。
+    /// 重算两张表并套用(变了才动)。已算好的直接套用;没算好的起后台任务,算完回主线程套用。要重建族时族索引另在后台建,
+    /// 建好才一起换上(见 applyLocalAliases)。
     /// 两个调用点:loadTitleForms(首次建族之前,`rebuildFamilies: false` —— 族马上会被那边建出来;
     /// 若那时表还没算好,后台算完会自己带 rebuild 回来)、refreshLocalCoversIfCacheChanged(enrich 缓存
     /// 变了,`true`:重建族并把受影响写法的次数标过期 —— 族的成员变了,合并总数必然变,旧值照显、
@@ -2423,12 +2482,51 @@ final class LastfmStatsService: ObservableObject {
         }
     }
 
+    /// 别名表换代、要重建族时,新族索引在后台建(几千条写法 × 每条数次 ICU 繁简变换,主线程上要半秒);建好之前别名表、族索引
+    /// 都还是旧的,回主线程一次换上(12 章决策 94)。同一时刻最多一份在建。
+    private var familyIndexBuild: (id: Int, tables: EnrichCacheReader.LocalAliasTables)?
+    private var familyIndexBuildCount = 0
+    /// 后台建族索引期间收割到的写法:索引按开工时那份 titleForms 建,换上之后补进去。
+    private var formsHarvestedDuringBuild: [TitleForm] = []
+    /// titleForms 整份换过(加载、迁移、换账号)就 +1。后台建的族索引换上前对不上就不用,按现在的 titleForms 当场重建。
+    private var titleFormsGeneration = 0
+
     private func applyLocalAliases(_ derived: EnrichCacheReader.LocalAliasTables, rebuildFamilies: Bool) {
         var tables = derived
         // 实体那一层和撤出表有开关(features.json 的 song_entity_phase1),关着时当空表,族退回原来的写法族(18 章决策 9、19);
         // 上送写法那一层建在实体那一层上,跟它一起关(12 章决策 73)。
         if !FeatureSettingsStore.shared.songEntityPhase1Enabled { tables.entities = [:]; tables.withdrawals = [:]; tables.rewrites = [:] }
+        // 后台正为别的一份表建族索引:同一份就等它;不同就作废那份,这一份照常跟已经套用的那份比。
+        if let building = familyIndexBuild {
+            if rebuildFamilies && building.tables == tables { return }
+            familyIndexBuild = nil
+            formsHarvestedDuringBuild = []
+        }
         guard !localAliasesApplied || tables != localAliasTables else { return }
+        guard rebuildFamilies, !titleForms.isEmpty else {
+            commitLocalAliases(tables, rebuildFamilies: rebuildFamilies, index: nil)
+            return
+        }
+        familyIndexBuildCount += 1
+        let id = familyIndexBuildCount, forms = titleForms, generation = titleFormsGeneration
+        let keys = EnrichCacheReader.AliasFamilyKeys(tables)
+        familyIndexBuild = (id, tables)
+        formsHarvestedDuringBuild = []
+        Task { @MainActor [weak self] in
+            let index = await Task.detached(priority: .utility) { Self.buildFamilyIndex(forms, keys: keys) }.value
+            guard let self, self.familyIndexBuild?.id == id else { return }
+            let harvested = self.formsHarvestedDuringBuild
+            self.familyIndexBuild = nil
+            self.formsHarvestedDuringBuild = []
+            self.commitLocalAliases(tables, rebuildFamilies: true,
+                                    index: generation == self.titleFormsGeneration ? index : nil, harvested: harvested)
+        }
+    }
+
+    /// 套用一份别名表:灌进 PlayCountFold、跟旧表比出受影响的写法、重排榜单,要重建族时换上族索引并标过期。`index` 是后台按这份表
+    /// 建好的族索引,nil 时当场重建;`harvested` 是建索引期间收割到的写法,换上之后补进去。
+    private func commitLocalAliases(_ tables: EnrichCacheReader.LocalAliasTables, rebuildFamilies: Bool,
+                                    index: FamilyIndex?, harvested: [TitleForm] = []) {
         // 启动后第一次套用:跟盘上记的那份比(见 AliasBaseline),没有记录就跟空表比。
         let old: EnrichCacheReader.LocalAliasTables
         if localAliasesApplied {
@@ -2495,8 +2593,14 @@ final class LastfmStatsService: ObservableObject {
             saveAliasBaselineIfSettled()
             return
         }
-        rebuildPrimaryCreditFamilies()
-        flushLocalAliasStaleMarks()
+        guard let index else {
+            rebuildPrimaryCreditFamilies()
+            flushLocalAliasStaleMarks()
+            return
+        }
+        primaryCreditFamilies = index.families
+        flushLocalAliasStaleMarks(precomputed: index.marks)
+        for form in harvested { Self.insertForm(form, into: &primaryCreditFamilies) }
     }
 
     /// 别名变了但族索引还没建好时先记在这里(首次加载:loadTitleForms 先灌别名再建族)。
@@ -2507,7 +2611,9 @@ final class LastfmStatsService: ObservableObject {
     /// 把攒下的受影响写法的次数标过期。族索引刚建好/重建好之后调;旧值照显、后台重取
     /// (stalePlayCountKeys 的语义)。首次装机后的第一次启动也走这里:缓存里存的是各写法自己的次数,
     /// 不标过期的话要等判据④的 24 小时窗口才会换成合并后的数。
-    private func flushLocalAliasStaleMarks() {
+    ///
+    /// `precomputed` 是后台建族索引时按新表算好的每条写法的键(跟刚换上的 primaryCreditFamilies 一一对应),给了就只做集合查找。
+    private func flushLocalAliasStaleMarks(precomputed: [FormMarkKeys]? = nil) {
         defer { saveAliasBaselineIfSettled() }
         guard !primaryCreditFamilies.isEmpty,
               !(pendingLocalAliasTouched.isEmpty && pendingLocalArtistTouched.isEmpty && pendingEntityTouched.isEmpty)
@@ -2518,21 +2624,37 @@ final class LastfmStatsService: ObservableObject {
         pendingLocalArtistTouched = []
         pendingEntityTouched = []
         var marked = 0
-        for family in primaryCreditFamilies.values {
-            for form in family {
-                let canonKey = PlayCountFold.canonicalArtistKey(form.artist)
-                var hit = touchedArtists.contains(canonKey) || touchedArtists.contains(LocalArtistAliases.artistKey(form.artist))
-                if !hit, let folded = touchedTitles[canonKey], folded.contains(PlayCountFold.foldTitle(form.title)) { hit = true }
-                if !hit, !touchedFamilies.isEmpty,
-                   touchedFamilies.contains(PlayCountFold.baseFamilyKey(artist: form.artist, title: form.title)) { hit = true }
-                guard hit else { continue }
-                stalePlayCountKeys.insert(Self.playCountKey(artist: form.artist, title: form.title))
+        if let precomputed {
+            for k in precomputed where Self.touchesChangedAlias(
+                canonKey: k.canonicalArtistKey, artistKey: k.artistKey, foldedTitle: k.foldedTitle, baseFamilyKey: k.baseFamilyKey,
+                titles: touchedTitles, artists: touchedArtists, families: touchedFamilies) {
+                stalePlayCountKeys.insert(k.playCountKey)
                 marked += 1
+            }
+        } else {
+            for family in primaryCreditFamilies.values {
+                for form in family where Self.touchesChangedAlias(
+                    canonKey: PlayCountFold.canonicalArtistKey(form.artist), artistKey: LocalArtistAliases.artistKey(form.artist),
+                    foldedTitle: PlayCountFold.foldTitle(form.title),
+                    baseFamilyKey: PlayCountFold.baseFamilyKey(artist: form.artist, title: form.title),
+                    titles: touchedTitles, artists: touchedArtists, families: touchedFamilies) {
+                    stalePlayCountKeys.insert(Self.playCountKey(artist: form.artist, title: form.title))
+                    marked += 1
+                }
             }
         }
         if marked > 0 {
             logger.notice("local aliases: \(marked, privacy: .public) play-count key(s) marked stale")
         }
+    }
+
+    /// 一条写法沾没沾到这次变了的别名:歌手键、歌名折叠键、族键任一命中。后三个键用到才算(当场算时它们是 ICU 变换)。
+    private static func touchesChangedAlias(canonKey: String, artistKey: @autoclosure () -> String,
+                                            foldedTitle: @autoclosure () -> String, baseFamilyKey: @autoclosure () -> String,
+                                            titles: [String: Set<String>], artists: Set<String>, families: Set<String>) -> Bool {
+        if artists.contains(canonKey) || artists.contains(artistKey()) { return true }
+        if let folded = titles[canonKey], folded.contains(foldedTitle()) { return true }
+        return !families.isEmpty && families.contains(baseFamilyKey())
     }
 
     // MARK: - 快照(stale-while-revalidate)

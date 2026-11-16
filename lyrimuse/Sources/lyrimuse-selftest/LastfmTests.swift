@@ -772,7 +772,8 @@ func runLastfmTests() {
         expectEqual(stats.contains("if !FeatureSettingsStore.shared.songEntityPhase1Enabled { tables.entities = [:]; tables.withdrawals = [:]; tables.rewrites = [:] }")
                     && stats.contains("PlayCountFold.setEntityFamilyAliases(tables.entities)")
                     && stats.contains("ListenMilestoneCenter.carryOverFamilies(from: oldFamilies, to: newFamilies)")
-                    && stats.contains("touchedFamilies.contains(PlayCountFold.baseFamilyKey(artist: form.artist, title: form.title))"),
+                    && sourceHas(stats, "baseFamilyKey: PlayCountFold.baseFamilyKey(artist: form.artist, title: form.title),")
+                    && stats.contains("return !families.isEmpty && families.contains(baseFamilyKey())"),
                     true, "实体族(契约): 开关、灌表、抄里程碑、标过期四处都接上了")
         let diff = (try? String(contentsOf: root.appendingPathComponent("LyrimuseCore/Local/EnrichIndexDiff.swift"), encoding: .utf8)) ?? ""
         expectEqual(diff.contains("a.song == b.song"), true, "实体族(契约): 条目的 song 变了别名表要重算")
@@ -2997,9 +2998,10 @@ func runLastfmTests() {
             .deletingLastPathComponent().appendingPathComponent("lyrimuse/Settings/LastfmStatsService.swift"),
             encoding: .utf8)) ?? ""
         let apply = sourceBody("private func applyLocalAliases(", in: stats)
+        let commit = sourceBody("private func commitLocalAliases(", in: stats)
         expectEqual(apply.contains("guard !localAliasesApplied || tables != localAliasTables else { return }")
-                    && apply.contains("aliasBaselineSaved = Self.loadAliasBaseline()")
-                    && apply.contains("old = aliasBaselineSaved ?? .empty"), true,
+                    && commit.contains("aliasBaselineSaved = Self.loadAliasBaseline()")
+                    && commit.contains("old = aliasBaselineSaved ?? .empty"), true,
                     "别名表记录(契约): 启动后第一次套用跟盘上记的那份比,不跟空表比")
         expectEqual(sourceBody("private static func loadAliasBaseline(", in: stats)
                         .contains("baseline.mergedCountsVersion == mergedCountsVersion, baseline.foldVersion == PlayCountFold.foldVersion"),
@@ -3010,6 +3012,75 @@ func runLastfmTests() {
         expectEqual(sourceBody("private func flushLocalAliasStaleMarks(", in: stats)
                         .contains("defer { saveAliasBaselineIfSettled() }"), true,
                     "别名表记录(契约): 标完过期就记下这份表")
+    }
+
+    // ---- 别名表换代时族索引按新表在后台建,建好一次换上(EnrichCacheReader.AliasFamilyKeys,12 章决策 94) ----
+    do {
+        var tables = EnrichCacheReader.LocalAliasTables.empty
+        tables.artists = [LocalArtistAliases.artistKey("Khalil Fong"): "方大同", LocalArtistAliases.artistKey("KF"): "方大同"]
+        tables.titles = [LocalArtistAliases.canonicalArtistKey("方大同", table: tables.artists):
+                            [PlayCountFold.foldTitle("Love Love Love"): "爱爱爱"]]
+        let withdrawn = PlayCountFold.plainFamilyKey(artist: "KF", title: "魔术先生")
+        tables.withdrawals = [withdrawn: .init(family: "方大同|魔术先生", key: withdrawn)]
+        let jay = PlayCountFold.baseFamilyKey(artist: "周杰倫", title: "晴天", artists: tables.artists, titles: tables.titles)
+        tables.entities = [jay: "rep|晴天"]
+        tables.rewrites = ["rep|晴天": "final|晴天"]
+        let keys = EnrichCacheReader.AliasFamilyKeys(tables)
+        expectEqual(keys.familyKey(artist: "周杰倫", title: "晴天"), "final|晴天", "后台建族: 全局还是空表时照样按这份表算(实体、上送写法两层)")
+        expectEqual(keys.baseFamilyKey(artist: "KF", title: "魔术先生"), withdrawn, "后台建族: 按这份撤出表撤出")
+        expectEqual(keys.familyKey(artist: "Khalil Fong", title: "Love Love Love"), keys.familyKey(artist: "方大同", title: "爱爱爱"),
+                    "后台建族: 按这份歌手、歌名表并族")
+        expectEqual(keys.canonicalArtistKey("Khalil Fong"), LocalArtistAliases.canonicalArtistKey("方大同", table: [:]),
+                    "后台建族: 歌手键按这份歌手表归并")
+        expectEqual(keys.familyKey(artist: "Khalil Fong", title: "Love Love Love") != PlayCountFold.familyKey(artist: "Khalil Fong", title: "Love Love Love"),
+                    true, "后台建族: 不读全局的别名表")
+        PlayCountFold.setLocalArtistAliases(tables.artists)
+        PlayCountFold.setLocalTitleAliases(tables.titles)
+        PlayCountFold.setEntityFamilyAliases(tables.entities)
+        PlayCountFold.setAliasWithdrawals(tables.withdrawals.mapValues(\.key))
+        PlayCountFold.setScrobbleRewriteAliases(tables.rewrites)
+        for (artist, title) in [("Khalil Fong", "Love Love Love"), ("KF", "Love Love Love"), ("方大同 & 薛凯琪", "四人游"),
+                                ("KF", "魔术先生"), ("Khalil Fong", "魔术先生"), ("周杰倫", "晴天"), ("周杰伦", "晴天"),
+                                ("Khalil Fong feat. X", "Flow (feat. X)"), ("Unknown", "Song")] {
+            expectEqual(keys.familyKey(artist: artist, title: title), PlayCountFold.familyKey(artist: artist, title: title),
+                        "后台建族: familyKey 跟灌进全局之后同一把尺子(\(artist) / \(title))")
+            expectEqual(keys.baseFamilyKey(artist: artist, title: title), PlayCountFold.baseFamilyKey(artist: artist, title: title),
+                        "后台建族: baseFamilyKey 跟灌进全局之后同一把尺子(\(artist) / \(title))")
+            expectEqual(keys.canonicalArtistKey(artist), PlayCountFold.canonicalArtistKey(artist),
+                        "后台建族: canonicalArtistKey 跟灌进全局之后同一把尺子(\(artist))")
+        }
+        PlayCountFold.setLocalArtistAliases([:])
+        PlayCountFold.setLocalTitleAliases([:])
+        PlayCountFold.setEntityFamilyAliases([:])
+        PlayCountFold.setAliasWithdrawals([:])
+        PlayCountFold.setScrobbleRewriteAliases([:])
+
+        let stats = (try? String(contentsOf: URL(fileURLWithPath: #filePath).deletingLastPathComponent()
+            .deletingLastPathComponent().appendingPathComponent("lyrimuse/Settings/LastfmStatsService.swift"),
+            encoding: .utf8)) ?? ""
+        let build = sourceBody("private nonisolated static func buildFamilyIndex(", in: stats)
+        expectEqual(!build.isEmpty && !build.contains("PlayCountFold.familyKey(") && !build.contains("PlayCountFold.baseFamilyKey(")
+                    && !build.contains("PlayCountFold.canonicalArtistKey(")
+                    && sourceHas(build, "insertForm(form, familyKey: keys.familyKey(base: base), into: &index.families)")
+                    && sourceHas(build, "canonicalArtistKey: keys.canonicalArtistKey(form.artist),"), true,
+                    "后台建族(契约): 族键、标过期用的键只查这份表,不读全局")
+        let apply = sourceBody("private func applyLocalAliases(", in: stats)
+        expectEqual(sourceHas(apply, "await Task.detached(priority: .utility) { Self.buildFamilyIndex(forms, keys: keys) }.value")
+                    && sourceHas(apply, "guard let self, self.familyIndexBuild?.id == id else { return }")
+                    && sourceHas(apply, "index: generation == self.titleFormsGeneration ? index : nil, harvested: harvested)")
+                    && sourceHas(apply, "if rebuildFamilies && building.tables == tables { return }")
+                    && !apply.contains("PlayCountFold.set") && !apply.contains("remergeCharts()"), true,
+                    "后台建族(契约): 建好之前什么都不换;后来的表作废在建的那份;titleForms 整份换过就当场重建")
+        expectEqual(sourceHas(sourceBody("private func flushLocalAliasStaleMarks(", in: stats),
+                              "canonKey: k.canonicalArtistKey, artistKey: k.artistKey, foldedTitle: k.foldedTitle, baseFamilyKey: k.baseFamilyKey,"),
+                    true, "后台建族(契约): 标过期按算好的键比,每个键对上同名参数")
+        let commit = sourceBody("private func commitLocalAliases(", in: stats)
+        expectEqual(sourceHas(commit, "primaryCreditFamilies = index.families flushLocalAliasStaleMarks(precomputed: index.marks) for form in harvested { Self.insertForm(form, into: &primaryCreditFamilies) }")
+                    && sourceHas(commit, "guard let index else { rebuildPrimaryCreditFamilies() flushLocalAliasStaleMarks() return }"), true,
+                    "后台建族(契约): 换上族索引、按算好的键标过期,建索引期间收割的写法补进去")
+        expectEqual(sourceHas(stats, "if familyIndexBuild != nil { formsHarvestedDuringBuild.append(form) }")
+                    && sourceCount(stats, "titleFormsGeneration += 1") == 3, true,
+                    "后台建族(契约): 建索引期间收割的写法记下;titleForms 整份换(加载、迁移、换账号)都记代际")
     }
 
     // ---- 别名表日志不带歌名歌手(契约) ----

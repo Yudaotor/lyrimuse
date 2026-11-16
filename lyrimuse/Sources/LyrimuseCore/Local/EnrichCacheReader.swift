@@ -1870,6 +1870,42 @@ public enum EnrichCacheReader {
         }
     }
 
+    /// 按一份别名表算族键:跟这份表灌进 PlayCountFold 全局之后的 `familyKey` / `baseFamilyKey` / `canonicalArtistKey` 同一把尺子,
+    /// 只是表由这里给,不读也不改全局。别名表换代时在后台按新表把写法索引的族键全部重算一遍用(12 章决策 94);selftest 拿同一份表核对两边。
+    public struct AliasFamilyKeys: Sendable {
+        private let artists: [String: String]
+        private let titles: [String: [String: String]]
+        private let withdrawals: [String: String]
+        private let entities: [String: String]
+        private let rewrites: [String: String]
+
+        public init(_ tables: LocalAliasTables) {
+            artists = tables.artists
+            titles = tables.titles
+            withdrawals = tables.withdrawals.mapValues(\.key)
+            entities = tables.entities
+            rewrites = tables.rewrites
+        }
+
+        public func baseFamilyKey(artist: String, title: String) -> String {
+            PlayCountFold.baseFamilyKey(artist: artist, title: title, artists: artists, titles: titles, withdrawals: withdrawals)
+        }
+
+        public func familyKey(artist: String, title: String) -> String {
+            familyKey(base: baseFamilyKey(artist: artist, title: title))
+        }
+
+        /// 已经有 `baseFamilyKey` 时接着查实体那一层和上送写法那一层,省得再折一遍。
+        public func familyKey(base: String) -> String {
+            let entity = entities[base] ?? base
+            return rewrites[entity] ?? entity
+        }
+
+        public func canonicalArtistKey(_ artist: String) -> String {
+            LocalArtistAliases.canonicalArtistKey(artist, table: artists)
+        }
+    }
+
     /// 已算好的那份(没算过给 nil)。主线程同步读,不触发计算 —— 计算走 `computeLocalAliasTables`。
     public static var localAliasTablesIfComputed: LocalAliasTables? { cachedAliasTables }
 

@@ -6164,11 +6164,11 @@ func runSourceContractIdentityTests() {
         expectEqual(stats.contains("let key: ChartMerge.KeyMemo = pool.kind == .albums ? .albums() : .songs()"), true,
                     "Last.fm 榜单: 专辑榜按同一张专辑、歌曲榜按同一首歌合并")
         // 歌曲榜跟「第 N 次听」用同一套别名表合并:本机别名表一变就按原始行重新合并。
-        if case let fnBody = sourceBody("private func applyLocalAliases(", in: stats), !fnBody.isEmpty {
+        if case let fnBody = sourceBody("private func commitLocalAliases(", in: stats), !fnBody.isEmpty {
             expectEqual(fnBody.contains("remergeCharts()"), true,
                         "Last.fm 榜单: 本机别名表变了重新合并歌曲榜、专辑榜")
         } else {
-            expectEqual(false, true, "Last.fm 榜单: 找不到 applyLocalAliases")
+            expectEqual(false, true, "Last.fm 榜单: 找不到 commitLocalAliases")
         }
         expectEqual(stats.contains("let merged = batch.mergingSameSong()"), true, "Last.fm 榜单: 歌手展开行按同一首歌合并")
         expectEqual(code("LastfmStatsSection.swift").contains("L10n.t(\"%@ 首歌\")")
