@@ -1665,6 +1665,8 @@
 "暂停 10 秒后收起为功能栏图标，恢复播放时自动展开" = "Thu gọn thành nút trên Control Strip sau 10 giây tạm dừng, tự mở rộng lại khi tiếp tục phát";
 "暂停后" = "Khi tạm dừng";
 "暂停收起" = "Thu gọn khi dừng";
+"暂停时保留歌词" = "Giữ lời khi tạm dừng";
+"暂停时停在当前这一句，不收起为图标" = "Khi tạm dừng, giữ nguyên câu hiện tại thay vì thu gọn thành biểu tượng";
 "暂停时收起" = "Thu gọn khi tạm dừng";
 "暂停时自动收起" = "Tự thu gọn khi tạm dừng";
 "暂停时隐藏" = "Ẩn khi tạm dừng";

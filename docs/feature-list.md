@@ -943,7 +943,7 @@ At most once a day, sends the version, macOS, which features are on and crash su
 
 ## Every setting
 
-Every setting in the Settings window, by where it lives: 325 in all. Type a name into the search field at the top of the Settings sidebar to jump straight to it.
+Every setting in the Settings window, by where it lives: 326 in all. Type a name into the search field at the top of the Settings sidebar to jump straight to it.
 
 ### Lyrics › Source
 
@@ -1196,6 +1196,7 @@ Every setting in the Settings window, by where it lives: 325 in all. Type a name
 
 - **Show Controls on Hover**
 - **Show Title When No Lyrics**: Shows the song title in place of lyrics while there are none or they’re still being found
+- **Keep Lyrics When Paused**: Stays on the current line while paused instead of collapsing to the icon
 
 ### Lyrics Display › Touch Bar
 

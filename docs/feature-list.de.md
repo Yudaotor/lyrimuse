@@ -943,7 +943,7 @@ Sendet höchstens einmal täglich Version, macOS, aktivierte Funktionen und Abst
 
 ## Alle Einstellungen
 
-Alle Einstellungen des Einstellungsfensters nach Ort: insgesamt 325. Gib einen Namen in das Suchfeld oben in der Seitenleiste der Einstellungen ein, um direkt dorthin zu springen.
+Alle Einstellungen des Einstellungsfensters nach Ort: insgesamt 326. Gib einen Namen in das Suchfeld oben in der Seitenleiste der Einstellungen ein, um direkt dorthin zu springen.
 
 ### Liedtext › Quelle
 
@@ -1196,6 +1196,7 @@ Alle Einstellungen des Einstellungsfensters nach Ort: insgesamt 325. Gib einen N
 
 - **Steuerung beim Überfahren zeigen**
 - **Titel zeigen, wenn kein Text**: Zeigt den Titelnamen anstelle des Liedtexts, solange keiner da ist oder noch gesucht wird
+- **Text bei Pause behalten**: Bleibt bei Pause auf der aktuellen Zeile, statt zum Symbol einzuklappen
 
 ### Liedtext-Anzeige › Touch Bar
 

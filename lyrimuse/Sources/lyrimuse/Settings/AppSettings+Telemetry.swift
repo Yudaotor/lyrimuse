@@ -107,6 +107,7 @@ extension AppSettings {
             ("menuBarHoverShowsControls", menuBarHoverShowsControls),
             ("menuBarPanelLayout", menuBarPanelLayout),
             ("menuBarShowsTitleWhenNoLyrics", menuBarShowsTitleWhenNoLyrics),
+            ("menuBarKeepsLyricsWhenPaused", menuBarKeepsLyricsWhenPaused),
             ("menuBarIconStyle", menuBarIconStyle),
             ("menuBarIconAnimates", menuBarIconAnimates),
             ("menuBarIconShowsArtwork", menuBarIconShowsArtwork),

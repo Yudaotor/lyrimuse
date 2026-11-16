@@ -1665,6 +1665,8 @@
 "暂停 10 秒后收起为功能栏图标，恢复播放时自动展开" = "10 saniye duraklatıldıktan sonra Control Strip düğmesine daralır, çalma sürdürülünce yeniden genişler";
 "暂停后" = "Duraklatınca";
 "暂停收起" = "Duraklamada Daralt";
+"暂停时保留歌词" = "Duraklatınca Sözleri Koru";
+"暂停时停在当前这一句，不收起为图标" = "Duraklatıldığında simgeye daralmak yerine geçerli satırda kalır";
 "暂停时收起" = "Duraklatınca Daralt";
 "暂停时自动收起" = "Duraklatınca Daralt";
 "暂停时隐藏" = "Duraklatınca Gizle";

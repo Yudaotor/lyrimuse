@@ -173,8 +173,12 @@ public enum MenuBarSlotPolicy {
     /// `MenuBarStatusItem.present` 头注的铁律),没歌词的歌整首只剩图标。灵动岛 / 悬浮歌词都有占位
     /// 文案,菜单栏是唯一直接塌回图标的展示面。固定宽度模式下有词没词几何完全不变。
     ///
-    /// 三条刻意保留的边界:① `isPlaying` 为 false 一律 nil —— 口径是「暂停不占宽」,
-    /// 参考做法"暂停仍显示当前句"不学;② 广告态不显示广告标题;③ 没歌名就还是图标,不做品牌兜底。
+    /// 三条刻意保留的边界:① `isPlaying` 为 false 一律 nil —— 口径是「暂停不占宽」;② 广告态不显示广告标题;
+    /// ③ 没歌名就还是图标,不做品牌兜底。
+    ///
+    /// `keepsLyricsWhenPaused`(「暂停时保留歌词」,默认关)开着时第 ① 条只放过**歌词句**:暂停时这一格停在当前这一句
+    /// (含间奏三点),「♪ 歌名」兜底和「显示内容」选歌名时照旧收回。停播、播放器退出时曲目和歌词行一起清空,
+    /// 这里拿到的是空串,照旧收回。见 06 章决策 106。
     /// 返回 nil = 照旧收回图标;`isFallback` 告诉调用方这不是歌词句(配速不按歌词时长算)。
     ///
     /// `iconBesideLyrics`(歌词旁那枚进度图标开着)为真时**不加 ♪ 前缀**:那个前缀是为了
@@ -192,9 +196,12 @@ public enum MenuBarSlotPolicy {
     public static func displayText(
         lyricText: String, title: String, isPlaying: Bool, isAdBreak: Bool,
         showsTitleWhenNoLyrics: Bool, placeholderGlyph: String, iconBesideLyrics: Bool,
-        songTitleOnly: Bool = false, artist: String = ""
+        songTitleOnly: Bool = false, artist: String = "", keepsLyricsWhenPaused: Bool = false
     ) -> (text: String, isFallback: Bool)? {
-        guard isPlaying else { return nil }
+        guard isPlaying else {
+            guard keepsLyricsWhenPaused, !songTitleOnly, !lyricText.isEmpty else { return nil }
+            return (lyricText, false)
+        }
         if songTitleOnly {
             guard !isAdBreak, let text = songTitleText(title: title, artist: artist) else { return nil }
             return (text, true)

@@ -272,6 +272,9 @@ func runDeepLinkTests() {
                     .debug(.menuBarDisplay(artwork: nil, content: nil, alignment: "trailing")), "debug: 只改菜单栏对齐方式")
         expectEqual(link("lyrimuse://debug/menubar-display?icon-animates=0"),
                     .debug(.menuBarDisplay(artwork: nil, content: nil, iconAnimates: false)), "debug: 只关图标动画")
+        expectEqual(link("lyrimuse://debug/menubar-display?keep-paused=1"),
+                    .debug(.menuBarDisplay(artwork: nil, content: nil, keepsLyricsWhenPaused: true)),
+                    "debug: 只开暂停时保留歌词")
         expectEqual(link("lyrimuse://debug/menubar-display"), nil, "debug: 菜单栏显示什么都没带不认")
         expectEqual(link("lyrimuse://debug/notch-behavior?hide-when-not-playing=1"),
                     .debug(.notchBehavior(collapseWhenPaused: nil, hideWhenNotPlaying: true)), "debug: 只开灵动岛暂停时隐藏")
@@ -758,6 +761,7 @@ func runDeepLinkTests() {
             .debug(.menuBarDisplay(artwork: nil, content: "translation", secondary: "off")),
             .debug(.menuBarDisplay(artwork: nil, content: nil, alignment: "center")),
             .debug(.menuBarDisplay(artwork: nil, content: nil, iconAnimates: true)),
+            .debug(.menuBarDisplay(artwork: nil, content: nil, keepsLyricsWhenPaused: false)),
             .debug(.settingsSearch(query: "OBS 输出")),
             .debug(.hoverNote(query: "越南 VNG")), .debug(.hoverNote(query: nil)),
             .debug(.importLyrics(paths: ["/tmp/歌 词.lrc", "/tmp/歌 词.tr.lrc"])),

@@ -388,6 +388,7 @@ final class AppSettings: ObservableObject {
         static let menuBarHoverShowsControls = "np:menuBarHoverShowsControls"
         static let menuBarPanelLayout = "np:menuBarPanelLayout"
         static let menuBarShowsTitleWhenNoLyrics = "np:menuBarShowsTitleWhenNoLyrics"
+        static let menuBarKeepsLyricsWhenPaused = "np:menuBarKeepsLyricsWhenPaused"
         static let menuBarIconStyle = "np:menuBarIconStyle"
         static let menuBarIconAnimates = "np:menuBarIconAnimates"
         static let menuBarIconShowsArtwork = "np:menuBarIconShowsArtwork"
@@ -746,6 +747,8 @@ final class AppSettings: ObservableObject {
     static let defaultMenuBarHoverShowsControls = false
     /// 见 `menuBarShowsTitleWhenNoLyrics`。默认开:固定宽度模式下有词没词几何完全不变,这是主要收益。
     static let defaultMenuBarShowsTitleWhenNoLyrics = true
+    /// 见 `menuBarKeepsLyricsWhenPaused`。默认关:暂停收回图标是既有行为。在「重置」范围内。
+    static let defaultMenuBarKeepsLyricsWhenPaused = false
     /// 菜单栏那一格显示歌词还是歌名。在「重置」范围内(`MenuBarStyleDefaults.restoreDefaults()`)。
     static let defaultMenuBarLyricsContent = MenuBarLyricsContent.lyrics
     /// 见 `menuBarTranslationInline`。在「重置」范围内。
@@ -1388,6 +1391,11 @@ final class AppSettings: ObservableObject {
     // 不想外露歌名"留出口 —— 菜单栏没有截屏隐藏选项。
     @Published var menuBarShowsTitleWhenNoLyrics: Bool {
         didSet { defaults.set(menuBarShowsTitleWhenNoLyrics, forKey: Keys.menuBarShowsTitleWhenNoLyrics) }
+    }
+    /// 菜单栏歌词:暂停时这一格停在当前这一句,不收回图标,旁边的状态栏图标不跟着挪。判据在 Core 的
+    /// `MenuBarSlotPolicy.displayText`;状态栏那一格和「菜单栏正中」都读它,别的展示面不读。
+    @Published var menuBarKeepsLyricsWhenPaused: Bool {
+        didSet { defaults.set(menuBarKeepsLyricsWhenPaused, forKey: Keys.menuBarKeepsLyricsWhenPaused) }
     }
     // 菜单栏那个图标长什么样。它只在**没在显示歌词**时出现(没在放歌、还没解析出这一句、
     // 或者菜单栏歌词整个关掉),所以它跟上面那些宽度设置是两回事,不受它们影响。
@@ -2789,6 +2797,8 @@ final class AppSettings: ObservableObject {
         menuBarPanelLayout = MenuBarPanelLayout.decode(defaults.string(forKey: Keys.menuBarPanelLayout))
         menuBarShowsTitleWhenNoLyrics = (defaults.object(forKey: Keys.menuBarShowsTitleWhenNoLyrics) as? Bool)
             ?? Self.defaultMenuBarShowsTitleWhenNoLyrics
+        menuBarKeepsLyricsWhenPaused = (defaults.object(forKey: Keys.menuBarKeepsLyricsWhenPaused) as? Bool)
+            ?? Self.defaultMenuBarKeepsLyricsWhenPaused
         menuBarIconStyle = defaults.string(forKey: Keys.menuBarIconStyle)
             .flatMap(MenuBarIconStyle.init(rawValue:)) ?? .default
         menuBarIconAnimates = (defaults.object(forKey: Keys.menuBarIconAnimates) as? Bool) ?? true

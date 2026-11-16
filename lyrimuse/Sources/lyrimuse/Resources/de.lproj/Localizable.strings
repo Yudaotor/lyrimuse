@@ -1741,6 +1741,8 @@
 "暂停 10 秒后收起为功能栏图标，恢复播放时自动展开" = "Klappt nach 10 Sekunden Pause zur Control Strip-Taste ein und bei Wiedergabe wieder aus";
 "暂停后" = "Bei Pause";
 "暂停收起" = "Bei Pause einklappen";
+"暂停时保留歌词" = "Text bei Pause behalten";
+"暂停时停在当前这一句，不收起为图标" = "Bleibt bei Pause auf der aktuellen Zeile, statt zum Symbol einzuklappen";
 "暂停时收起" = "Bei Pause einklappen";
 "暂停时自动收起" = "Bei Pause einklappen";
 "暂停时隐藏" = "Bei Pause ausblenden";

@@ -218,6 +218,8 @@ final class MenuBarStatusItem: NSObject {
             .sink { [weak self] _ in self?.scheduleRefresh() }.store(in: &cancellables)
         settings.$menuBarShowsTitleWhenNoLyrics.dropFirst().receive(on: DispatchQueue.main)
             .sink { [weak self] _ in self?.scheduleRefresh() }.store(in: &cancellables)
+        settings.$menuBarKeepsLyricsWhenPaused.dropFirst().receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in self?.scheduleRefresh() }.store(in: &cancellables)
         // 悬停三键。两条订阅:
         //
         // ① 开关本身 —— 拨掉的时候如果正接管着,要立刻把歌词放回来(用户就是盯着菜单栏拨的)。
@@ -1091,7 +1093,7 @@ final class MenuBarStatusItem: NSObject {
     ///     (图标宽 + 5pt 间距),门槛按窄的那个算。
     ///
     /// 第 4、5 条合起来还有一个副作用:**暂停之后歌词槽会收成图标槽**(refresh() 里那道
-    /// lyricsActive guard,等收缩观察窗走完才缩),所以"暂停 → 想再点播放"这条路只在指针
+    /// lyricsActive guard,等收缩观察窗走完才缩;开着「暂停时保留歌词」时不收),所以"暂停 → 想再点播放"这条路只在指针
     /// 一直停在这一项上时才走得通 —— 接管期间 refresh() 早退,那次收缩根本不会发生,三个
     /// 键就停在原地等着。指针一离开,收缩才照旧进行。
     private func evaluateHoverEngagement() {
@@ -1330,6 +1332,7 @@ final class MenuBarStatusItem: NSObject {
         // 压根没有可显示的行(整首没歌词 / 还在搜)时按开关用歌名占槽,不塌回图标 ——
         // 判据与三条边界(暂停不占宽 / 广告不显示 / 没歌名不兜底)都在 Core 的 MenuBarSlotPolicy.displayText,
         // 这里只消费。nil = 照旧收回图标。歌词旁那枚图标开着时兜底文字不带 ♪ 前缀(理由见那个函数)。
+        // 「暂停时保留歌词」开着时暂停照样返回这一句,下面状态栏那一格和正中那几扇都按在显示歌词走,槽宽不变。
         let display = MenuBarSlotPolicy.displayText(
             lyricText: lyricText, title: coordinator.displayTitle,
             isPlaying: coordinator.isPlayingNow, isAdBreak: coordinator.isCurrentTrackAdBreak,
@@ -1337,7 +1340,8 @@ final class MenuBarStatusItem: NSObject {
             placeholderGlyph: MenuBarMarqueeRenderer.placeholderGlyph,
             iconBesideLyrics: settings.menuBarLyricsIconPosition != .off,
             songTitleOnly: songTitleOnly,
-            artist: settings.menuBarLyricsContent == .titleArtist ? coordinator.displayArtist : "")
+            artist: settings.menuBarLyricsContent == .titleArtist ? coordinator.displayArtist : "",
+            keepsLyricsWhenPaused: settings.menuBarKeepsLyricsWhenPaused)
         let text = display?.text ?? ""
         titleFallbackActive = display?.isFallback ?? false
         // 「♪ 歌名」兜底不是歌词句,没有副行可言,照旧按单行(13pt)画。

@@ -1741,6 +1741,8 @@
 "暂停 10 秒后收起为功能栏图标，恢复播放时自动展开" = "Recolhe-se no botão da Control Strip após 10 segundos em pausa e expande de novo quando a reprodução é retomada";
 "暂停后" = "Ao pausar";
 "暂停收起" = "Recolher na pausa";
+"暂停时保留歌词" = "Manter letra na pausa";
+"暂停时停在当前这一句，不收起为图标" = "Na pausa, fica na linha atual em vez de recolher para o ícone";
 "暂停时收起" = "Recolher na pausa";
 "暂停时自动收起" = "Recolher na pausa";
 "暂停时隐藏" = "Ocultar na pausa";

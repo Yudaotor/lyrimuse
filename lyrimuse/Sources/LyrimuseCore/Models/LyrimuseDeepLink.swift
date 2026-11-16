@@ -152,12 +152,12 @@ public enum LyrimuseDeepLink: Equatable, Sendable {
         /// 「显示内容」四档)、图标大小(`icon-size`:small / standard / large)、图标款式(`icon-style`:
         /// `MenuBarIconStyle` 的 rawValue)、悬停显示播放控制(`hover-controls`)、副行(`secondary`:off / nextLine /
         /// translation / translationInline / romanization,同设置页「副行」五档)、对齐方式(`alignment`:leading / center /
-        /// trailing)、图标动画(`icon-animates`),跟设置页走同一个设置:
-        /// `debug/menubar-display?artwork=1&content=title&icon-size=large&icon-style=vinyl&hover-controls=1&secondary=off&alignment=trailing&icon-animates=0`,
+        /// trailing)、图标动画(`icon-animates`)、暂停时保留歌词(`keep-paused`),跟设置页走同一个设置:
+        /// `debug/menubar-display?artwork=1&content=title&icon-size=large&icon-style=vinyl&hover-controls=1&secondary=off&alignment=trailing&icon-animates=0&keep-paused=1`,
         /// 至少带一个。
         case menuBarDisplay(artwork: Bool?, content: String?, iconSize: String? = nil, iconStyle: String? = nil,
                             hoverControls: Bool? = nil, secondary: String? = nil, alignment: String? = nil,
-                            iconAnimates: Bool? = nil)
+                            iconAnimates: Bool? = nil, keepsLyricsWhenPaused: Bool? = nil)
         /// 日语读音标罗马字还是假名,跟设置页「日语读音」走同一条路(`debug/japanese-reading?style=romaji|kana`)。
         case japaneseReading(JapaneseReadingStyle)
         /// 歌词窗口完整尺寸的「控件大小」百分比,跟设置页走同一个设置(`debug/lyrics-window-controls?percent=130`,
@@ -554,11 +554,12 @@ public enum LyrimuseDeepLink: Equatable, Sendable {
             let secondary = value("secondary").flatMap { $0.isEmpty ? nil : $0 }
             let alignment = value("alignment").flatMap { $0.isEmpty ? nil : $0 }
             let iconAnimates = value("icon-animates").flatMap(Self.parseBool)
+            let keepPaused = value("keep-paused").flatMap(Self.parseBool)
             guard artwork != nil || content != nil || iconSize != nil || iconStyle != nil || hoverControls != nil
-                    || secondary != nil || alignment != nil || iconAnimates != nil else { return nil }
+                    || secondary != nil || alignment != nil || iconAnimates != nil || keepPaused != nil else { return nil }
             self = .debug(.menuBarDisplay(artwork: artwork, content: content, iconSize: iconSize, iconStyle: iconStyle,
                                           hoverControls: hoverControls, secondary: secondary, alignment: alignment,
-                                          iconAnimates: iconAnimates))
+                                          iconAnimates: iconAnimates, keepsLyricsWhenPaused: keepPaused))
         case ("debug", "/notch-behavior"):
             let collapse = value("collapse-when-paused").flatMap(Self.parseBool)
             let hide = value("hide-when-not-playing").flatMap(Self.parseBool)
@@ -926,7 +927,8 @@ public enum LyrimuseDeepLink: Equatable, Sendable {
                 if let hover { items.append(URLQueryItem(name: "hover", value: hover ? "1" : "0")) }
                 if let click { items.append(URLQueryItem(name: "click", value: click)) }
                 components.queryItems = items
-            case let .menuBarDisplay(artwork, content, iconSize, iconStyle, hoverControls, secondary, alignment, iconAnimates):
+            case let .menuBarDisplay(artwork, content, iconSize, iconStyle, hoverControls, secondary, alignment, iconAnimates,
+                                     keepPaused):
                 components.path = "/menubar-display"
                 var items: [URLQueryItem] = []
                 if let artwork { items.append(URLQueryItem(name: "artwork", value: artwork ? "1" : "0")) }
@@ -937,6 +939,7 @@ public enum LyrimuseDeepLink: Equatable, Sendable {
                 if let secondary { items.append(URLQueryItem(name: "secondary", value: secondary)) }
                 if let alignment { items.append(URLQueryItem(name: "alignment", value: alignment)) }
                 if let iconAnimates { items.append(URLQueryItem(name: "icon-animates", value: iconAnimates ? "1" : "0")) }
+                if let keepPaused { items.append(URLQueryItem(name: "keep-paused", value: keepPaused ? "1" : "0")) }
                 components.queryItems = items
             case let .notchBehavior(collapse, hide, progressLine, allScreens, showLyrics, lyricRowFade, volumeKeyBanner, realAudio):
                 components.path = "/notch-behavior"

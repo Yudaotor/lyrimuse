@@ -559,6 +559,7 @@ public enum SettingsSearchCatalog {
         surface(.menuBar, "最大宽度", alt: ["宽度"], kw: ["宽度", "pt"], group: "宽度"),
         surface(.menuBar, "悬停时显示播放控制", kw: ["悬停", "播放控制", "鼠标"], group: "行为"),
         surface(.menuBar, "无歌词时显示歌名", kw: ["歌名", "兜底", "没有歌词"], group: "行为"),
+        surface(.menuBar, "暂停时保留歌词", kw: ["暂停", "保留", "收起", "图标"], group: "行为"),
         surface(.menuBar, "恢复默认", sub: "不含宽度和「菜单栏歌词」开关", kw: ["重置"]),
 
 

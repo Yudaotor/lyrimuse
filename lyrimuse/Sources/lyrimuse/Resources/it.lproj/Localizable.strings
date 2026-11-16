@@ -1741,6 +1741,8 @@
 "暂停 10 秒后收起为功能栏图标，恢复播放时自动展开" = "Si comprime nel pulsante della Control Strip dopo 10 secondi di pausa e si espande di nuovo alla ripresa";
 "暂停后" = "Alla pausa";
 "暂停收起" = "Comprimi in pausa";
+"暂停时保留歌词" = "Mantieni testo in pausa";
+"暂停时停在当前这一句，不收起为图标" = "In pausa resta sulla riga corrente invece di ridursi all’icona";
 "暂停时收起" = "Comprimi in pausa";
 "暂停时自动收起" = "Comprimi in pausa";
 "暂停时隐藏" = "Nascondi in pausa";

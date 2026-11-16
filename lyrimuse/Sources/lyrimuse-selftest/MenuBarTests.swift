@@ -1339,6 +1339,27 @@ func runMenuBarTests() {
         expectEqual(song("有词", "", "周杰伦") == nil, true, "只显示歌名: 没歌名收回图标,不退回歌词")
         expectEqual(P.songTitleText(title: "稻香", artist: "周杰伦"), "稻香 — 周杰伦", "只显示歌名: 歌名在前、歌手在后")
 
+        // 「暂停时保留歌词」(06 章决策 106):暂停时只留歌词句,别的边界不变。
+        func paused(_ lyric: String, _ title: String = "稻香", keep: Bool = true, ad: Bool = false, on: Bool = true,
+                    songOnly: Bool = false) -> (text: String, isFallback: Bool)? {
+            P.displayText(lyricText: lyric, title: title, isPlaying: false, isAdBreak: ad,
+                          showsTitleWhenNoLyrics: on, placeholderGlyph: "♪", iconBesideLyrics: false,
+                          songTitleOnly: songOnly, artist: "周杰伦", keepsLyricsWhenPaused: keep)
+        }
+        expectEqual(paused("对这个世界如果你有太多的抱怨")?.text, "对这个世界如果你有太多的抱怨", "暂停保留: 开着时停在这一句")
+        expectEqual(paused("对这个世界如果你有太多的抱怨")?.isFallback, false, "暂停保留: 留下的是歌词句,不算兜底")
+        expectEqual(paused(dots)?.text, dots, "暂停保留: 停在间奏时三点照旧占住槽位")
+        expectEqual(paused("有词", keep: false) == nil, true, "暂停保留: 关着时暂停照旧收回图标")
+        expectEqual(paused("") == nil, true, "暂停保留: 没有歌词句(还在搜 / 没词)时不拿「♪ 歌名」占槽,照旧收回")
+        expectEqual(paused("", "") == nil, true, "暂停保留: 停播清空了曲目和歌词行,照旧收回")
+        expectEqual(paused("有词", songOnly: true) == nil, true, "暂停保留: 「显示内容」选歌名时照旧收回")
+        expectEqual(P.displayText(lyricText: "有词", title: "稻香", isPlaying: true, isAdBreak: false,
+                                  showsTitleWhenNoLyrics: true, placeholderGlyph: "♪", iconBesideLyrics: false,
+                                  keepsLyricsWhenPaused: true)?.text, "有词", "暂停保留: 播放中不受影响")
+        expectEqual(P.displayText(lyricText: "", title: "稻香", isPlaying: true, isAdBreak: false,
+                                  showsTitleWhenNoLyrics: true, placeholderGlyph: "♪", iconBesideLyrics: false,
+                                  keepsLyricsWhenPaused: true)?.text, "♪ 稻香", "暂停保留: 播放中「♪ 歌名」兜底照旧")
+
         // 源码契约:上面抄的那个记号串,以及「♪ 歌名」兜底与间奏三点是**两条**互不相干的路。
         let menuBar = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent().deletingLastPathComponent()
@@ -1349,6 +1370,16 @@ func runMenuBarTests() {
                                      encoding: .utf8)) ?? ""
         expectEqual(rendererSrc.isEmpty, false, "菜单栏三点(契约): 读到 MenuBarMarqueeRenderer.swift")
         expectEqual(statusSrc.isEmpty, false, "菜单栏三点(契约): 读到 MenuBarStatusItem.swift")
+        expectEqual(statusSrc.contains("keepsLyricsWhenPaused: settings.menuBarKeepsLyricsWhenPaused)"), true,
+                    "暂停保留(契约): 状态栏那一格把「暂停时保留歌词」喂给 displayText")
+        expectEqual(statusSrc.contains("settings.$menuBarKeepsLyricsWhenPaused.dropFirst()"), true,
+                    "暂停保留(契约): 开关一拨就重算,暂停中打开当场停回歌词、关掉当场收回")
+        let stageSrc = (try? String(contentsOf: menuBar.deletingLastPathComponent()
+            .appendingPathComponent("UI/MenuBarEditorStage.swift"), encoding: .utf8)) ?? ""
+        let behaviorRows = sourceBody("struct MenuBarBehaviorRows", in: stageSrc)
+        expectEqual(["MenuBarHoverControlsTile()", "MenuBarTitleFallbackTile()", "MenuBarKeepLyricsWhenPausedTile()"]
+                        .filter { !sourceHas(behaviorRows, $0) }, [],
+                    "暂停保留(契约): 「行为」浮层与抽屉共用的那一组里摆着三块开关")
         expectEqual(rendererSrc.contains("static let gapDotsToken = \"\\u{2022}\\u{2022}\\u{2022}\""), true,
                     "菜单栏三点(契约): 记号串仍是三个 U+2022(上面抄的那份还成立)")
         expectEqual(rendererSrc.contains("static let placeholderGlyph = \"♪\""), true,

@@ -145,12 +145,13 @@ struct MenuBarEditorStage: View {
         return parts.joined(separator: " ")
     }
 
-    /// 「行为」按钮摘要:两个开关里开着的那几个,全开 / 全关给一句概括(`SettingsToggleSummary`,跟另外
+    /// 「行为」按钮摘要:几个开关里开着的那几个,全开 / 全关给一句概括(`SettingsToggleSummary`,跟另外
     /// 两段编辑台的「行为」按钮同一份归约)。
     private var behaviorSummary: String {
         SettingsToggleSummary.text([
             (title: L10n.t("悬停时显示播放控制"), isOn: settings.menuBarHoverShowsControls),
             (title: L10n.t("无歌词时显示歌名"), isOn: settings.menuBarShowsTitleWhenNoLyrics),
+            (title: L10n.t("暂停时保留歌词"), isOn: settings.menuBarKeepsLyricsWhenPaused),
         ])
     }
 
@@ -411,6 +412,21 @@ struct MenuBarTitleFallbackTile: View {
     }
 }
 
+/// 「暂停时保留歌词」小块,同住「行为」浮层与抽屉「行为」组。暂停时这一格停在当前这一句、不收回图标;
+/// 「♪ 歌名」兜底和「显示内容」选歌名时照旧收回。判据在 Core 的 `MenuBarSlotPolicy.displayText`,边界写在 06 章。
+/// 进「重置 ▾」。
+struct MenuBarKeepLyricsWhenPausedTile: View {
+    @ObservedObject private var settings = AppSettings.shared
+
+    var body: some View {
+        SettingsToggleTile(
+            icon: "pause.circle",
+            title: L10n.t("暂停时保留歌词"),
+            help: L10n.t("暂停时停在当前这一句，不收起为图标"),
+            isOn: $settings.menuBarKeepsLyricsWhenPaused)
+    }
+}
+
 // MARK: - 恢复默认
 
 /// 「重置」按钮的动作本体——把工具栏五个浮层(布局 / 内容 / 颜色 / 字体 / 行为)里的**每一项**恢复默认。
@@ -454,6 +470,7 @@ enum MenuBarStyleDefaults {
         // 「行为」浮层(从「布局」拆出来)
         settings.menuBarHoverShowsControls = AppSettings.defaultMenuBarHoverShowsControls
         settings.menuBarShowsTitleWhenNoLyrics = AppSettings.defaultMenuBarShowsTitleWhenNoLyrics
+        settings.menuBarKeepsLyricsWhenPaused = AppSettings.defaultMenuBarKeepsLyricsWhenPaused
     }
 }
 
@@ -566,13 +583,14 @@ struct MenuBarBehaviorRows: View {
         SettingsTileGrid(columns: 2) {
             MenuBarHoverControlsTile()
             MenuBarTitleFallbackTile()
+            MenuBarKeepLyricsWhenPausedTile()
         }
     }
 }
 
 /// 工具栏「行为」浮层。
 ///
-/// 两颗开关并排两列小块。宽 500:一格约 237pt,中文标题(8 字 + ⓘ + 开关)一行放得下;420 时一格 197pt,中文也折成两行。
+/// 三颗开关按两列小块排。宽 500:一格约 237pt,中文标题(8 字 + ⓘ + 开关)一行放得下;420 时一格 197pt,中文也折成两行。
 struct MenuBarBehaviorPopover: View {
     var body: some View {
         SettingsPopoverShell(title: L10n.t("行为"), width: 500) {

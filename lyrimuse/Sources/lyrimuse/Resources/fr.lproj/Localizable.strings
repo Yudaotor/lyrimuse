@@ -1741,6 +1741,8 @@
 "暂停 10 秒后收起为功能栏图标，恢复播放时自动展开" = "Se réduit au bouton de la Control Strip après 10 secondes de pause, et se développe à la reprise";
 "暂停后" = "À la pause";
 "暂停收起" = "Réduire en pause";
+"暂停时保留歌词" = "Garder les paroles en pause";
+"暂停时停在当前这一句，不收起为图标" = "En pause, reste sur la ligne en cours au lieu de se réduire en icône";
 "暂停时收起" = "Réduire en pause";
 "暂停时自动收起" = "Réduire en pause";
 "暂停时隐藏" = "Masquer en pause";

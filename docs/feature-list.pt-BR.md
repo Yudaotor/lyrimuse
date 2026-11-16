@@ -943,7 +943,7 @@ No máximo uma vez por dia, envia a versão, o macOS, quais recursos estão ativ
 
 ## Todos os ajustes
 
-Todos os ajustes da janela Ajustes, por local: 325 no total. Digite um nome no campo de busca no topo da barra lateral dos Ajustes para ir direto até ele.
+Todos os ajustes da janela Ajustes, por local: 326 no total. Digite um nome no campo de busca no topo da barra lateral dos Ajustes para ir direto até ele.
 
 ### Letra › Origem
 
@@ -1196,6 +1196,7 @@ Todos os ajustes da janela Ajustes, por local: 325 no total. Digite um nome no c
 
 - **Mostrar controles ao passar o ponteiro**
 - **Mostrar título se não houver letra**: Mostra o título da música no lugar da letra quando não há letra ou ela ainda está sendo buscada
+- **Manter letra na pausa**: Na pausa, fica na linha atual em vez de recolher para o ícone
 
 ### Exibição da letra › Touch Bar
 

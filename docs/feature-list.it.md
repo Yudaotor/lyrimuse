@@ -943,7 +943,7 @@ Al massimo una volta al giorno invia versione, macOS, funzioni attive e riepilog
 
 ## Tutte le impostazioni
 
-Tutte le impostazioni della finestra Impostazioni, per posizione: 325 in tutto. Scrivi un nome nel campo di ricerca in cima alla barra laterale delle Impostazioni per andarci direttamente.
+Tutte le impostazioni della finestra Impostazioni, per posizione: 326 in tutto. Scrivi un nome nel campo di ricerca in cima alla barra laterale delle Impostazioni per andarci direttamente.
 
 ### Testo › Fonte
 
@@ -1196,6 +1196,7 @@ Tutte le impostazioni della finestra Impostazioni, per posizione: 325 in tutto. 
 
 - **Mostra controlli al passaggio**
 - **Mostra titolo senza testo**: Mostra il titolo del brano al posto del testo quando non c’è o è ancora in ricerca
+- **Mantieni testo in pausa**: In pausa resta sulla riga corrente invece di ridursi all’icona
 
 ### Visualizzazione testo › Touch Bar
 

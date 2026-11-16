@@ -1741,6 +1741,8 @@
 "暂停 10 秒后收起为功能栏图标，恢复播放时自动展开" = "Collapses to the Control Strip button after 10 seconds paused, and expands again when playback resumes";
 "暂停后" = "When Paused";
 "暂停收起" = "Collapse on Pause";
+"暂停时保留歌词" = "Keep Lyrics When Paused";
+"暂停时停在当前这一句，不收起为图标" = "Stays on the current line while paused instead of collapsing to the icon";
 "暂停时收起" = "Collapse When Paused";
 "暂停时自动收起" = "Collapse When Paused";
 "暂停时隐藏" = "Hide When Paused";

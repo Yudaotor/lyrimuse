@@ -943,7 +943,7 @@ Neyin önce düzeltileceğine karar vermek için günde en fazla bir kez sürüm
 
 ## Tüm Ayarlar
 
-Ayarlar penceresindeki tüm ayarlar, konumlarına göre; toplam: 325. Bir ayara hemen gitmek için adını kenar çubuğunun üstündeki arama alanına yazın.
+Ayarlar penceresindeki tüm ayarlar, konumlarına göre; toplam: 326. Bir ayara hemen gitmek için adını kenar çubuğunun üstündeki arama alanına yazın.
 
 ### Şarkı Sözleri › Kaynak
 
@@ -1196,6 +1196,7 @@ Ayarlar penceresindeki tüm ayarlar, konumlarına göre; toplam: 325. Bir ayara 
 
 - **Üzerine Gelince Denetimleri Göster**
 - **Şarkı Sözü Yoksa Parça Adını Göster**: Parçanın şarkı sözü yokken veya sözler hâlâ aranırken şarkı sözlerinin yerinde parça adını gösterir
+- **Duraklatınca Sözleri Koru**: Duraklatıldığında simgeye daralmak yerine geçerli satırda kalır
 
 ### Şarkı Sözü Görünümü › Touch Bar
 

@@ -943,7 +943,7 @@ Como máximo una vez al día, envía al servidor del propio autor la versión, e
 
 ## Todos los ajustes
 
-Todos los ajustes de la ventana Ajustes, según dónde están: 325 en total. Escribe un nombre en el campo de búsqueda de la parte superior de la barra lateral de Ajustes para ir directamente a él.
+Todos los ajustes de la ventana Ajustes, según dónde están: 326 en total. Escribe un nombre en el campo de búsqueda de la parte superior de la barra lateral de Ajustes para ir directamente a él.
 
 ### Letra › Fuente
 
@@ -1196,6 +1196,7 @@ Todos los ajustes de la ventana Ajustes, según dónde están: 325 en total. Esc
 
 - **Mostrar controles al pasar el puntero**
 - **Mostrar título si no hay letra**: Muestra el título de la canción en lugar de la letra si no hay o aún se está buscando
+- **Mantener letra en pausa**: En pausa se queda en la línea actual en lugar de contraerse al icono
 
 ### Mostrar letra › Touch Bar
 
