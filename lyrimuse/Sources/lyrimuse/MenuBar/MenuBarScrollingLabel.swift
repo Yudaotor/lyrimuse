@@ -91,8 +91,8 @@ final class MenuBarScrollingLabel: NSView {
     private let iconBaseLayer = MenuBarDrawnLayer()
     private let iconFillClipLayer = CALayer()
     private let iconFillLayer = MenuBarDrawnLayer()
-    /// 律动那一态(`IconBadge.animates`)的两份活体图标:未唱色那份压淡到 `MenuBarIconArtwork.unplayedOpacity`、
-    /// 已唱色那份不压。两份必须同一轮搭台、同一轮退场,动画起点才相同,拼缝处的字形对得上。
+    /// 律动那一态(`IconBadge.animates`)的两份活体图标:未唱色、已唱色各一份,都不压淡(同静态那两张位图)。
+    /// 两份必须同一轮搭台、同一轮退场,动画起点才相同,拼缝处的字形对得上。
     private let liveIconBase = MenuBarLiveIconView()
     private let liveIconFill = MenuBarLiveIconView()
     private let liveIconBaseMask = CALayer()
@@ -1598,13 +1598,11 @@ final class MenuBarScrollingLabel: NSView {
             }
         }
         // 所有"不染"路径的必经出口:填色层隐掉、baseClip 复位成整枚 —— 基础图**永远**经由
-        // baseClip 显示,漏了这一步就是"关掉进度之后图标只剩上半截"。律动那份同理:已唱色那份蒙版收成 0 高,
-        // 未唱色那份不压淡(没有进度可比时,整枚就是基础色)。
+        // baseClip 显示,漏了这一步就是"关掉进度之后图标只剩上半截"。律动那份同理:已唱色那份蒙版收成 0 高。
         guard !highlighted, let clock = progressClock, clock.durationMs > 0 else {
             CATransaction.begin()
             CATransaction.setDisableActions(true)
             iconFillClipLayer.isHidden = true
-            liveIconBase.alphaValue = 1
             setBoundary(0)
             CATransaction.commit()
             return
@@ -1613,7 +1611,6 @@ final class MenuBarScrollingLabel: NSView {
         CATransaction.begin()
         CATransaction.setDisableActions(true)
         iconFillClipLayer.isHidden = false
-        liveIconBase.alphaValue = MenuBarIconArtwork.unplayedOpacity
         if let ramp = MenuBarMarquee.progressFillRamp(
             positionMs: nowMs, durationMs: clock.durationMs,
             rate: clock.playing ? clock.rate : 0, fullLength: h) {

@@ -1690,9 +1690,9 @@ func runMenuBarTests() {
         expectEqual(sourceHas(progress, "removeLiveIconMaskAnimations()")
                     && sourceHas(progress, "(fill: liveIconFillMask, base: liveIconBaseMask)]")
                     && sourceHas(progress, "for pair in pairs {\n// 每对的三条动画显式共享同一个 beginTime")
-                    && sourceHas(progress, "liveIconBase.alphaValue = MenuBarIconArtwork.unplayedOpacity")
-                    && sourceHas(progress, "iconFillClipLayer.isHidden = true\nliveIconBase.alphaValue = 1\nsetBoundary(0)"), true,
-                    "歌词旁律动: 两份活体图标的蒙版跟静态裁剪层同一套进度几何与动画,未唱那份压淡,没进度可比时不压")
+                    && sourceHas(progress, "iconFillClipLayer.isHidden = true\nsetBoundary(0)")
+                    && !sourceHas(label, "liveIconBase.alphaValue") && !sourceHas(label, "liveIconFill.alphaValue"), true,
+                    "歌词旁律动: 两份活体图标的蒙版跟静态裁剪层同一套进度几何与动画,未唱那份全亮、不压淡(同静态进度填充)")
         let live = sourceBody("private func setLiveIcon(", in: label)
         expectEqual(sourceHas(live, "liveIconBase.tintOverride = base\nliveIconFill.tintOverride = fill\nliveIconBase.present(style: icon.style, size: icon.size)\nliveIconFill.present(style: icon.style, size: icon.size)")
                     && sourceHas(live, "liveIconBase.clear()\nliveIconFill.clear()"), true,
@@ -1716,6 +1716,10 @@ func runMenuBarTests() {
                                  "animation.beginTime = movingPart.convertTime(Self.waveformEpoch, from: nil)")
                     && sourceHas(liveView, "if currentStyle == .waveform, !waveformInLayer { addWaveformEffect() }"), true,
                     "歌词旁律动: 声波款不用符号动效(不吃蒙版),改图层逐帧,相位钉在共用起点")
+        expectEqual(sourceHas(liveView, "static let waveformUnlitAlpha: CGFloat = 0.55")
+                    && sourceHas(sourceBody("static func waveformFrames()", in: liveView),
+                                 "for c in 0 ..< 4 { out[i + c] = UInt8(min(255, (CGFloat(dim[i + c]) * unlitGain).rounded())) }"), true,
+                    "歌词旁律动: 声波款没亮的条抬到 waveformUnlitAlpha,两色分界在暗条上也看得出")
     }
 
     // ---- 主行显示译文 / 原文接着译文(06 章决策 70) ----

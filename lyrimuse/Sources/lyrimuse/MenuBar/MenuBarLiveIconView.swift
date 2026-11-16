@@ -341,7 +341,10 @@ final class MenuBarLiveIconView: NSView {
 
     private static var cachedWaveformFrames: [NSImage]?
 
-    /// 声波每一帧的模板图:第 k 帧只有第 k 根声条是实的,其余是符号自己压暗的那一档。
+    /// 没亮的声条抬到的不透明度。符号自己压暗的那一档太暗,歌词旁那枚按进度染成两色时暗条上看不出分界(06 章决策 104)。
+    static let waveformUnlitAlpha: CGFloat = 0.55
+
+    /// 声波每一帧的模板图:第 k 帧只有第 k 根声条是实的,其余是全暗那档、抬到 `waveformUnlitAlpha`。
     /// 用 variableValue 出累积点亮的几档,相邻两档的 alpha 差就是第 k 根;跟全暗那档拼起来。
     /// 按 4 倍像素出图,染色时再按实际比例缩,不糊。
     static func waveformFrames() -> [NSImage] {
@@ -372,6 +375,14 @@ final class MenuBarLiveIconView: NSView {
         }
         guard steps.count >= 2, let dim = steps.first?.bitmapData else { return [] }
         let byteCount = steps[0].bytesPerRow * steps[0].pixelsHigh
+        var dimPeak: UInt8 = 0
+        var j = 3
+        while j < byteCount {
+            dimPeak = max(dimPeak, dim[j])
+            j += 4
+        }
+        // 全暗那档按同一倍数整体放大(预乘 RGBA 四个分量一起乘),最实的像素落在 waveformUnlitAlpha。
+        let unlitGain = dimPeak > 0 ? max(1, waveformUnlitAlpha * 255 / CGFloat(dimPeak)) : 1
         var frames: [NSImage] = []
         for k in 1 ..< steps.count {
             guard let lit = steps[k].bitmapData, let below = steps[k - 1].bitmapData,
@@ -381,12 +392,14 @@ final class MenuBarLiveIconView: NSView {
                                              bytesPerRow: steps[0].bytesPerRow, bitsPerPixel: 32),
                   let out = rep.bitmapData else { continue }
             rep.size = steps[0].size
-            // 逐像素:这一档比上一档亮出来的(第 k 根)取这一档,其余取全暗那档。RGBA 四字节一组,比 alpha。
+            // 逐像素:这一档比上一档亮出来的(第 k 根)取这一档,其余取放大过的全暗那档。RGBA 四字节一组,比 alpha。
             var i = 0
             while i < byteCount {
-                let fromLit = Int(lit[i + 3]) > Int(below[i + 3]) + 8
-                let src = fromLit ? lit : dim
-                out[i] = src[i]; out[i + 1] = src[i + 1]; out[i + 2] = src[i + 2]; out[i + 3] = src[i + 3]
+                if Int(lit[i + 3]) > Int(below[i + 3]) + 8 {
+                    out[i] = lit[i]; out[i + 1] = lit[i + 1]; out[i + 2] = lit[i + 2]; out[i + 3] = lit[i + 3]
+                } else {
+                    for c in 0 ..< 4 { out[i + c] = UInt8(min(255, (CGFloat(dim[i + c]) * unlitGain).rounded())) }
+                }
                 i += 4
             }
             let image = NSImage(size: rep.size)
