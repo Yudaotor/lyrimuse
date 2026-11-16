@@ -1551,8 +1551,42 @@ func runNotchTests() {
             expectEqual(reveal.contains("notchHeight: outline.notchHeight, corner: outline.corner(live))"), true,
                         "外轮廓契约: 出场裁剪的圆角也从 NotchCornerLive 取")
             expectEqual(rootSrc.contains(".modifier(NotchRevealClip(widthFraction: state.widthFraction,")
-                        && rootSrc.contains("outline: controller.cardOutline))"), true,
+                        && sourceHas(rootSrc, "outline: controller.cardOutline,\n expanded: controller.isExpanded))"), true,
                         "外轮廓契约: 出场裁剪传的是同一个刘海高度和圆角")
+            // 展开态的发丝描边和浅投影(05 章决策 150)。
+            let ctrlSrc = src("NotchLyricsWindowController.swift")
+            expectEqual(sourceHas(reveal, "NotchCardEdgeShadow(shape: shape, lowRes: lowRes)\n .animation(fade) { $0.opacity(expanded ? 1 : 0) }")
+                        && sourceHas(reveal, "NotchCardKeyline(shape: shape)\n .animation(fade) { $0.opacity(expanded ? 1 : 0) }")
+                        && sourceHas(reveal, "shape.stroke(Color.white.opacity(NotchCardEdge.keylineOpacity), lineWidth: 1)\n .clipShape(shape)")
+                        && sourceHas(reveal, "shape.stroke(Color.black.opacity(lowRes ? NotchCardEdge.lowResOutlineOpacity : NotchCardEdge.outlineOpacity),")
+                        && sourceHas(reveal, "shape.fill(Color.black.opacity(layer.opacity))\n .blur(radius: layer.radius)\n .offset(y: layer.y)")
+                        && sourceHas(reveal, ".mask(NotchOutsideShape(inner: shape, outset: NotchCardEdge.windowMargin * 2).fill(style: FillStyle(eoFill: true)))"),
+                        true, "展开边缘: 展开时才显出内侧白描边、外侧黑描边和两层投影,投影与外描边挖掉卡片本身,跟裁剪是同一个形状")
+            expectEqual(sourceHas(ctrlSrc, "let margin = NotchCardEdge.windowMargin\n let size = NSSize(\n width: expandedCardWidth + 2 * margin,")
+                        && sourceHas(ctrlSrc, "geo.notchHeight + NotchExpandedMetrics.idlePanelMaxHeight) + margin)")
+                        && sourceHas(ctrlSrc, "x: (geo.centerX - size.width / 2).rounded(.down),\n y: (screen.frame.maxY - size.height).rounded(.down),")
+                        && sourceHas(ctrlSrc, "return NSRect(x: window.frame.midX - cardWidth / 2, y: window.frame.maxY - cardHeight,")
+                        && reveal.components(separatedBy: ".allowsHitTesting(false)").count == 4
+                        && !rootSrc.contains(".background(Color") && !rootSrc.contains(".contentShape(Rectangle().inset"), true,
+                        "展开边缘: 窗口左右下方留投影余量、左右对称不改卡片在屏幕上的位置;余量里没有命中形状,描边投影不吃点击")
+            // 余量装得下投影:最远一层按 3 倍模糊半径加下移量算,超出去会被窗口硬裁成直角残影。
+            func number(_ pattern: String) -> [Double] {
+                guard let re = try? NSRegularExpression(pattern: pattern) else { return [] }
+                return re.matches(in: reveal, range: NSRange(reveal.startIndex..., in: reveal)).flatMap { m in
+                    (1..<m.numberOfRanges).compactMap { Range(m.range(at: $0), in: reveal).flatMap { Double(reveal[$0]) } }
+                }
+            }
+            let margin = number(#"static let windowMargin: CGFloat = ([0-9.]+)"#).first ?? 0
+            let shadowTuples = number(#"\(([0-9.]+), [0-9.]+, ([0-9.]+)\)"#)
+            let reach = stride(from: 0, to: shadowTuples.count - 1, by: 2).map { 3 * shadowTuples[$0] + shadowTuples[$0 + 1] }.max() ?? .infinity
+            expectEqual(shadowTuples.count >= 4 && margin >= reach, true, "展开边缘: 窗口余量 \(margin) 装得下投影的外沿 \(reach)")
+            expectEqual(sourceHas(reveal, "static let strokeFade: ClosedRange<CGFloat> = 3...28")
+                        && sourceHas(reveal, "static let shadowFade: ClosedRange<CGFloat> = 14...42")
+                        && reveal.components(separatedBy: ".mask(alignment: .top) { NotchTopFadeMask(fade: NotchCardEdge.strokeFade,").count == 3
+                        && reveal.components(separatedBy: ".mask(alignment: .top) { NotchTopFadeMask(fade: NotchCardEdge.shadowFade,").count == 2
+                        && sourceHas(reveal, "Color.clear.frame(height: fade.lowerBound)\n LinearGradient(colors: [.clear, .black], startPoint: .top, endPoint: .bottom)")
+                        && sourceHas(reveal, ".frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)\n .padding(.horizontal, -outset)"), true,
+                        "展开边缘: 描边和投影在卡片顶部渐隐,不沿屏幕上沿、刘海和菜单栏走(纯黑风格不露出刘海轮廓)")
             expectEqual(sourceHas(stageSrc, "NotchCardOutlineReader(outline: chrome.cardOutline) {\n            $0.stroke("), true,
                         "外轮廓契约: 编辑台拖宽度那圈虚线跟卡片同形")
             // 圆角按这一帧的高度算,不靠动画插值:两道形状都不该再声明 animatableData(插值的起点会把没展开那张卡片拉成直角再长回来)。
@@ -1593,7 +1627,6 @@ func runNotchTests() {
             let observesLive = "@ObservedObject private var live = NotchCornerLive.shared"
             expectEqual(liveSrc.contains(observesLive) && v.contains(observesLive) && reveal.contains(observesLive), true,
                         "圆角契约: 纯色底 / 虚线框、卡片自裁、出场裁剪三处各自观察 NotchCornerLive")
-            let ctrlSrc = src("NotchLyricsWindowController.swift")
             expectEqual(ctrlSrc.contains("CornerRadius"), false, "圆角契约: 真窗口控制器不镜像圆角(镜像的话每一格都重算整张卡片)")
             // 调「展开圆角」时(按着滑杆,或指针停在那一行上)预览摆成展开态,移开交还给指针 / 浮层。
             expectEqual(stageSrc.contains("var isExpanded: Bool { cornerFocus.map { $0 == .expanded } ?? pointerExpanded }")
@@ -3117,7 +3150,8 @@ func runNotchTests() {
                     && sourceHas(src("NotchCardModifiers.swift"), "let n = ArcFlattening.segments(radius: radius, sweep: CGFloat(a1 - a0))")
                     && sourceHas(progressLine, ".mask(LinearGradient(colors: [.white.opacity(0.85), .white], startPoint: .top, endPoint: .bottom))\n // 光晕和遮罩先合成一张再交给卡片外形裁剪,同卡片背景(05 章决策 114)。\n .compositingGroup()")
                     && sourceHas(v, "NotchCrossfadeBackdrop(image: image, size: size, overlayOpacity: playback.backdropOverlayOpacity)\n }\n // 先把这几层合成一张再交给卡片外形裁剪")
-                    && sourceHas(src("NotchRevealShape.swift"), "content.clipShape(shape)\n .background {\n if displayScale < 1.5 {\n NotchLowResEdgeShadow(shape: shape)")
+                    && sourceHas(src("NotchRevealShape.swift"), "let lowRes = displayScale < 1.5")
+                    && sourceHas(src("NotchRevealShape.swift"), "content.clipShape(shape)\n .background {\n if lowRes {\n NotchLowResEdgeShadow(shape: shape)")
                     && sourceHas(src("NotchRevealShape.swift"), ".mask(NotchOutsideShape(inner: shape).fill(style: FillStyle(eoFill: true)))")
                     && sourceHas(progressLine, ".stroke(tint, style: StrokeStyle(lineWidth: Self.strokeWidth, lineCap: .round))")
                     && progressLine.components(separatedBy: "value: tint)").count == 3, true,

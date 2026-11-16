@@ -220,9 +220,8 @@ struct NotchLyricsView<Chrome: NotchChromeSource>: View {
         .onDisappear { playback.syncAdSkipGate(adBreak: false) }
         // 这里不挂 .onHover:它覆盖的范围比卡片大一圈,窗口常驻最大尺寸时鼠标划过卡片下方的透明区也会展开。命中判定和触觉反馈
         // 在 NotchWindowRoot,那里拿精确坐标跟卡片矩形直接比;预览那边走自己的 onContinuousHover。
-        // 展开态也不加投影:灵动岛的设计语言是从刘海长出来,不是一张悬空的卡片,投影会把这件事拆穿,观感是整个卡片外侧糊着一层灰。
-        // 要加投影的话,窗口必须按投影半径留出四周余量(见 NotchLyricsWindowController.recomputeGeometry),否则阴影会被窗口的
-        // 矩形边界硬裁,在底部两个圆角外侧留下两块直角的深色残影。
+        // 展开态的描边和投影不在这里画,挂在真窗口那道外形裁剪上(`NotchRevealClip`、`NotchCardEdge`),窗口为投影留的余量见
+        // NotchLyricsWindowController.recomputeGeometry。
     }
 
     // 「跟随封面」背景:跟"歌词窗口"的 artworkBackground(LyricsWindowView.swift)同一套效果(封面整图放大、高斯模糊、压一层

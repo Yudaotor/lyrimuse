@@ -1809,20 +1809,21 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
         //
         // 多出来的那片区域必须保持纯透明、不能有任何命中形状 —— 它压在系统菜单栏上,
         // 详见 NotchWindowRoot 顶部那段(带实测结论)。
-        // 窗口尺寸 = 展开态卡片本身,不留额外余量。宽度是**展开宽**而不是稳态宽
+        // 窗口尺寸 = 展开态卡片,左右和下方各加 `NotchCardEdge.windowMargin`。宽度是**展开宽**而不是稳态宽
         // (两者可以不同):窗口比稳态卡片宽出来的那两截跟下方多出来的高度一样是纯透明区,
         // 点击穿透到底下的菜单栏,见上面那条提醒。
         //
-        // 窗口跟卡片严丝合缝,所以卡片不带投影:阴影会被窗口的矩形边界硬裁,在底部两个圆角外侧留下
-        // 直角残影。**要加投影就得同时给窗口加一圈余量**,两件事绑在一起,别只做一半。
+        // 余量是给展开态投影(`NotchCardEdge`)留的:没有余量,投影被窗口的矩形边界硬裁,在底部两个圆角外侧留下
+        // 直角残影。改投影的范围要连着改余量。左右对称加、顶边不加,卡片在屏幕上的位置(`cardScreenFrame`)不变。
         // 收听里程碑的报喜卡片(顶行 + milestonePanelHeight)加上它下沿落出去的碎屑(`milestoneConfettiReach`)在展开区很矮的配置下
         // 可能比展开态还高,取两者大的;多出来的是透明区,点击穿透。
+        let margin = NotchCardEdge.windowMargin
         let size = NSSize(
-            width: expandedCardWidth,
+            width: expandedCardWidth + 2 * margin,
             // 歌词那一格按两种排法里高的那种留:这首有歌词、开着多行歌词时是列表,别的歌照旧是一行歌词。
             height: max(geo.notchHeight + max(lyricRowHeight, expandedLyricListHeight) + expandedExtraHeightMax,
                         geo.notchHeight + NotchMetrics.milestonePanelHeight + NotchMetrics.milestoneConfettiReach,
-                        geo.notchHeight + NotchExpandedMetrics.idlePanelMaxHeight))
+                        geo.notchHeight + NotchExpandedMetrics.idlePanelMaxHeight) + margin)
         // 必须先取成整点,规则跟 AppKit 自己对窗口 frame 做的一致(实测:原点向下取整、宽高
         // 向上取整)。刘海高度 `safeAreaInsets.top` 在部分机型 / 缩放档下带小数(如 33.5),
         // 不取整的话:① 下面的判等永远不等(window.frame 已被取整),每次调用都白做一次同步

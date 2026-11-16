@@ -41,28 +41,123 @@ struct NotchRevealShape: Shape {
 ///
 /// 1x 屏上卡片外面再垫一圈柔边(`NotchLowResEdgeShadow`):一个点只有一个像素,圆角的抗锯齿过渡带只有一像素宽,深色卡片压在
 /// 浅色菜单栏上看得出台阶。2x 屏上不画。见 05 章决策 114。
+///
+/// 展开态再加发丝描边和浅投影(`NotchCardEdge`),只在 `expanded` 时显出来,收起态、稳态不画。描边和投影跟裁剪是同一个形状值,
+/// 出场、展开收回、退场缩放都一起走。投影落在卡片外,窗口四周要留出 `NotchCardEdge.windowMargin`(控制器 `recomputeGeometry`)。
 struct NotchRevealClip: ViewModifier {
     var widthFraction: CGFloat
     var heightFraction: CGFloat
     var outline: NotchCardOutline
+    var expanded: Bool
     @ObservedObject private var live = NotchCornerLive.shared
     @Environment(\.displayScale) private var displayScale
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-    init(widthFraction: CGFloat, heightFraction: CGFloat, outline: NotchCardOutline) {
+    init(widthFraction: CGFloat, heightFraction: CGFloat, outline: NotchCardOutline, expanded: Bool) {
         self.widthFraction = widthFraction
         self.heightFraction = heightFraction
         self.outline = outline
+        self.expanded = expanded
     }
 
     func body(content: Content) -> some View {
         let shape = NotchRevealShape(widthFraction: widthFraction, heightFraction: heightFraction,
                                      notchHeight: outline.notchHeight, corner: outline.corner(live))
+        let lowRes = displayScale < 1.5
+        let fade = NotchCardEdge.fade(showing: expanded, reduceMotion: reduceMotion)
         content.clipShape(shape)
             .background {
-                if displayScale < 1.5 {
+                if lowRes {
                     NotchLowResEdgeShadow(shape: shape)
                 }
+                // 曲线只套在透明度上,形状照跟卡片那条尺寸弹簧。
+                NotchCardEdgeShadow(shape: shape, lowRes: lowRes)
+                    .animation(fade) { $0.opacity(expanded ? 1 : 0) }
             }
+            .overlay {
+                NotchCardKeyline(shape: shape)
+                    .animation(fade) { $0.opacity(expanded ? 1 : 0) }
+            }
+    }
+}
+
+/// 展开态卡片边缘的参数。见 05 章决策 150。
+enum NotchCardEdge {
+    /// 窗口在卡片左右、下方多留的透明余量,装得下投影的外沿;贴屏幕顶的那一边不留。
+    static let windowMargin: CGFloat = 24
+    /// 内侧发丝高光(白)与外侧勾边(黑)的透明度,各占卡片外沿内外 0.5pt。
+    static let keylineOpacity: Double = 0.16
+    static let outlineOpacity: Double = 0.35
+    /// 1x 屏上外侧勾边要叠在 `NotchLowResEdgeShadow` 上,降到这么多,两层合起来不成一道硬黑边。
+    static let lowResOutlineOpacity: Double = 0.12
+    /// 两层投影:贴边一层 + 环境一层,略向下。
+    static let shadows: [(radius: CGFloat, opacity: Double, y: CGFloat)] = [(1, 0.25, 1), (7, 0.28, 3)]
+    /// 从卡片顶边(屏幕上沿)往下量:描边在 `strokeFade` 内、投影在 `shadowFade` 内从无渐到全显,不沿屏幕上沿、刘海和菜单栏走。
+    static let strokeFade: ClosedRange<CGFloat> = 3...28
+    static let shadowFade: ClosedRange<CGFloat> = 14...42
+
+    /// 淡入跟展开同长,淡出短一些:收回时卡片先缩,投影不该拖在后面。
+    static func fade(showing: Bool, reduceMotion: Bool) -> Animation? {
+        if reduceMotion { return nil }
+        return showing ? .easeOut(duration: 0.2) : .easeIn(duration: 0.12)
+    }
+}
+
+/// 卡片外面那一层:两层投影加外侧勾边,把卡片本身那块挖掉,只留外面 —— 磨砂玻璃是半透明的,垫在底下会把卡片里面压暗。
+struct NotchCardEdgeShadow: View {
+    let shape: NotchRevealShape
+    let lowRes: Bool
+
+    var body: some View {
+        ZStack {
+            ZStack {
+                ForEach(NotchCardEdge.shadows.indices, id: \.self) { i in
+                    let layer = NotchCardEdge.shadows[i]
+                    shape.fill(Color.black.opacity(layer.opacity))
+                        .blur(radius: layer.radius)
+                        .offset(y: layer.y)
+                }
+            }
+            .mask(alignment: .top) { NotchTopFadeMask(fade: NotchCardEdge.shadowFade, outset: NotchCardEdge.windowMargin) }
+            shape.stroke(Color.black.opacity(lowRes ? NotchCardEdge.lowResOutlineOpacity : NotchCardEdge.outlineOpacity),
+                         lineWidth: 1)
+                .mask(alignment: .top) { NotchTopFadeMask(fade: NotchCardEdge.strokeFade, outset: NotchCardEdge.windowMargin) }
+        }
+        .mask(NotchOutsideShape(inner: shape, outset: NotchCardEdge.windowMargin * 2).fill(style: FillStyle(eoFill: true)))
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
+    }
+}
+
+/// 卡片里面贴着外沿的那圈发丝高光:1pt 描边裁到卡片里,剩里侧 0.5pt。
+struct NotchCardKeyline: View {
+    let shape: NotchRevealShape
+
+    var body: some View {
+        shape.stroke(Color.white.opacity(NotchCardEdge.keylineOpacity), lineWidth: 1)
+            .clipShape(shape)
+            .mask(alignment: .top) { NotchTopFadeMask(fade: NotchCardEdge.strokeFade, outset: 0) }
+            .allowsHitTesting(false)
+            .accessibilityHidden(true)
+    }
+}
+
+/// 从顶边往下按点数量的渐显遮罩:`fade` 下界以上全透明、上界以下全显,中间线性过渡;左右和下方多铺 `outset`,盖住画到卡片外的部分。
+/// 卡片比渐变段还矮时(收起态)贴顶排、多出来的往下溢,别改成居中。
+struct NotchTopFadeMask: View {
+    let fade: ClosedRange<CGFloat>
+    let outset: CGFloat
+
+    var body: some View {
+        VStack(spacing: 0) {
+            Color.clear.frame(height: fade.lowerBound)
+            LinearGradient(colors: [.clear, .black], startPoint: .top, endPoint: .bottom)
+                .frame(height: fade.upperBound - fade.lowerBound)
+            Color.black
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        .padding(.horizontal, -outset)
+        .padding(.bottom, -outset)
     }
 }
 
@@ -82,12 +177,13 @@ struct NotchLowResEdgeShadow: View {
     }
 }
 
-/// `inner` 外面的那一圈(外扩一段的矩形减去 `inner`,奇偶填充)。
+/// `inner` 外面的那一圈(外扩 `outset` 的矩形减去 `inner`,奇偶填充)。`outset` 要盖得住被遮的那层画到卡片外的范围。
 struct NotchOutsideShape: Shape {
     let inner: NotchRevealShape
+    var outset: CGFloat = 8
 
     func path(in rect: CGRect) -> Path {
-        var path = Path(rect.insetBy(dx: -8, dy: -8))
+        var path = Path(rect.insetBy(dx: -outset, dy: -outset))
         path.addPath(inner.path(in: rect))
         return path
     }
