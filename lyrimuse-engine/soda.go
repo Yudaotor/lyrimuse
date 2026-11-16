@@ -114,6 +114,11 @@ type sodaSeoTrackResponse struct {
 			FirstVocal *struct {
 				Start int64 `json:"start"`
 			} `json:"first_vocal"`
+			// Preview:非会员试听段(毫秒),联想那条腿拼搜索候选用(sodaSearchItemFromSeo)。
+			Preview struct {
+				Start    int64 `json:"start"`
+				Duration int64 `json:"duration"`
+			} `json:"preview"`
 			Artists []struct {
 				Name string `json:"name"`
 			} `json:"artists"`
@@ -237,13 +242,21 @@ func sodaLyricFromHosts(ctx context.Context, hosts []string, artist, title, albu
 	if !ok || now.Sub(cached.at) >= ttl {
 		var err error
 		items, host, err = sodaSearchVia(ctx, hosts, artist, title)
-		if err != nil {
-			infoFailf("soda: search for %q - %q failed: %v", artist, title, err)
+		switch {
+		case err != nil && len(items) == 0:
+			// 本地熔断拦下的不逐条记:hostguard 跳闸时已经记过一条。
+			if !errors.Is(err, errHostGuarded) {
+				infoFailf("soda: search for %q - %q failed: %v", artist, title, err)
+			}
 			return sodaResult{}, false, ""
+		case err != nil:
+			// 联想那条腿有候选没问成:手上这几条照用,结果不完整,不缓存。
+			noteLyricSubFetchFailure(ctx)
+		default:
+			sodaSearchMu.Lock()
+			sodaSearchCache[key] = sodaSearchCacheEntry{items: items, at: now.Round(0), host: host}
+			sodaSearchMu.Unlock()
 		}
-		sodaSearchMu.Lock()
-		sodaSearchCache[key] = sodaSearchCacheEntry{items: items, at: now.Round(0), host: host}
-		sodaSearchMu.Unlock()
 	}
 	ids := sodaRankCandidates(items, artist, title, album, durationSecs)
 	// 一条都没通过身份闸 = 汽水没有这首歌(或只有对不上的版本),是正常结果,不报故障。
@@ -566,6 +579,10 @@ func sodaCoverNeedsTransform(u string) bool {
 // 本地队列缓存只有"用汽水放过的歌"(见文件头注),而 `seo_track` 只认 track id、不吃歌名。
 // 所以用别的播放器听歌时,这一路要先把歌名搜成 id。
 //
+// 整页搜索不给曲目时(网关对不带签名的请求整体回 200 + 空应答体、被本地熔断拦下、没问成或真的没有),改问搜索联想
+// (sodasuggest.go)。整页搜索回来认不出的应答按接口被拒记进 hostguard 的接口熔断,连着被拒就停一阵、到期放一次试探,
+// 恢复了自动用回来;同时记进解析漂移,健康检查的「汽水搜索」一行据此报出来。见 09 章决策 375。
+//
 // 搜索**不需要伪装成客户端**:实测 `q` / `cursor` / `count` / `aid` 四个参数就够,
 // 普通桌面 UA、甚至完全不带 UA 都照样 200。music-lib 那份实现里带着几十个 Android 设备
 // 参数(含固定的 device_id / iid / cdid),那是别人某台真机的标识 —— 照抄只会平添被识别
@@ -587,6 +604,8 @@ const (
 	sodaSearchCount = 20
 	// sodaSearchDurationTolerance:时长偏差超过这个比例直接淘汰,口径同酷我。
 	sodaSearchDurationTolerance = 0.25
+	// sodaSearchParserName:parserdrift.go 里整页搜索这条路径的名字;sodaSearchHealthItem 也读它。
+	sodaSearchParserName = "soda-search"
 	// sodaSearchMaxTries:通过身份闸后最多按名次试几条。取词那一步响应不小(实测 ~250KB),
 	// 不像酷我那样并发拉 5 条;绝大多数情况第一条就有词,试到第三条还没有就认了。
 	sodaSearchMaxTries = 3
@@ -695,13 +714,15 @@ func sodaCandidateScore(item sodaSearchItem, artist, title, album string, durati
 	return score
 }
 
-// sodaSearch 按 sodaSearchHosts 逐个主机发一次搜索请求;只有没问成才换下一个。
+// sodaSearch 按 sodaSearchHosts 逐个主机发一次搜索请求;只有没问成才换下一个。err 非空时 items 可能还带着部分结果,
+// 见 sodaSearchVia。
 func sodaSearch(ctx context.Context, artist, title string) ([]sodaSearchItem, error) {
 	items, _, err := sodaSearchVia(ctx, sodaSearchHosts, artist, title)
 	return items, err
 }
 
-// sodaSearchVia 同 sodaSearch,主机按 hosts 的顺序试;另外交出答了话的那个主机。
+// sodaSearchVia 同 sodaSearch,主机按 hosts 的顺序试;另外交出答了话的那个主机。整页搜索没给出曲目时改问联想
+// (sodaSearchBySuggest):err 非空、items 不空是联想那条腿的部分结果,能用、别缓存。
 func sodaSearchVia(ctx context.Context, hosts []string, artist, title string) ([]sodaSearchItem, string, error) {
 	// 搜索词里歌名带编号时去掉带编号的那几层,见 lyricQueryTitle。
 	q := strings.TrimSpace(strings.TrimSpace(artist) + " " + strings.TrimSpace(lyricQueryTitle(title)))
@@ -717,7 +738,18 @@ func sodaSearchVia(ctx context.Context, hosts []string, artist, title string) ([
 		}
 		return err
 	})
-	return items, answered, err
+	if len(items) > 0 || ctx.Err() != nil {
+		return items, answered, err
+	}
+	sugItems, sugHost, sugErr := sodaSearchBySuggest(ctx, hosts, artist, title)
+	if sugErr == nil || len(sugItems) > 0 {
+		return sugItems, sugHost, sugErr
+	}
+	if err == nil {
+		// 整页搜索答了没有、联想没问成:按整页搜索的「没有」算。
+		return nil, answered, nil
+	}
+	return nil, "", sugErr
 }
 
 // sodaSearchAt 打一个主机上的搜索;两个主机同一个路径、同一个响应结构(实测)。
@@ -741,11 +773,35 @@ func sodaSearchAt(ctx context.Context, host, q string) ([]sodaSearchItem, error)
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("status %d", resp.StatusCode)
 	}
-	var body sodaSearchResponse
-	if err := json.NewDecoder(io.LimitReader(resp.Body, lyricSourceResponseMaxBytes)).Decode(&body); err != nil {
+	raw, err := io.ReadAll(io.LimitReader(resp.Body, lyricSourceResponseMaxBytes))
+	if err != nil {
 		return nil, err
 	}
+	body, ok := sodaDecodeSearch(raw)
+	if !ok {
+		reportEndpointRejected(req.URL)
+		noteParserUnrecognized(sodaSearchParserName, sodaRefusalDetail(raw, "result_groups"))
+		return nil, errSodaSearchRefused
+	}
+	reportEndpointAccepted(req.URL)
+	noteParserRecognized(sodaSearchParserName)
 	return sodaParseSearch(body), nil
+}
+
+// sodaDecodeSearch 解整页搜索的应答;ok=false 是认不出的形状:空应答体、不是 JSON、没有 result_groups 字段
+// (result_groups 为空数组是「没搜到」)。纯函数。
+func sodaDecodeSearch(raw []byte) (sodaSearchResponse, bool) {
+	var probe struct {
+		ResultGroups json.RawMessage `json:"result_groups"`
+	}
+	if json.Unmarshal(raw, &probe) != nil || len(probe.ResultGroups) == 0 || string(probe.ResultGroups) == "null" {
+		return sodaSearchResponse{}, false
+	}
+	var body sodaSearchResponse
+	if json.Unmarshal(raw, &body) != nil {
+		return sodaSearchResponse{}, false
+	}
+	return body, true
 }
 
 // sodaRankCandidates 过身份闸并按分数排序,返回可以依次尝试的曲目 id。纯函数,便于单测。

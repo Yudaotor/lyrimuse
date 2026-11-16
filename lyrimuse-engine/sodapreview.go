@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"log/slog"
 	"math"
 	"strings"
@@ -252,8 +253,10 @@ func sodaPreviewSearchKey(artist, title, album string) string {
 // sodaSearchFullLengths。
 func sodaSearchPreview(ctx context.Context, artist, title, album string, mrDuration float64) (sodaPreview, bool) {
 	items, err := sodaSearch(ctx, artist, title)
-	if err != nil {
-		slog.Info("soda preview: search failed", "artist", artist, "title", title, "err", err)
+	if err != nil && len(items) == 0 {
+		if !errors.Is(err, errHostGuarded) {
+			slog.Info("soda preview: search failed", "artist", artist, "title", title, "err", err)
+		}
 		return sodaPreview{}, false
 	}
 	noteSodaSearchFullLengths(items, artist, title, album)

@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -132,7 +133,11 @@ func runHealthcheckCLI(args []string) {
 
 	// 靠解析网页 / 客户端本地文件取数的路径:常驻实例把连续认不出的记在这份文件里(parserdrift.go)。
 	// 这些路径坏了会安静地退回备用,只有这里看得出上游改了版。
-	if drift := loadParserDriftFile(filepath.Join(configDir, clientName+"-parser-drift.json")); len(drift) == 0 {
+	drift := loadParserDriftFile(filepath.Join(configDir, clientName+"-parser-drift.json"))
+	if it, ok := sodaSearchHealthItem(drift, slices.Contains(enabled, lyricSourceSoda)); ok {
+		report.Items = append(report.Items, it)
+	}
+	if len(drift) == 0 {
 		add("网页与本地文件解析", healthOK, "没有连续认不出的路径")
 	} else {
 		names := make([]string, 0, len(drift))
