@@ -72,9 +72,9 @@ Lyrimuse のすべての機能について、何ができるか、設定のど�
 
 <a id="feature-lyric-sources"></a>
 
-### 14の歌詞ソースを自動で検索
+### 15の歌詞ソースを自動で検索
 
-NetEase Cloud Music、QQ Music、Kugou、Kuwo、Migu、LRCLIB、LyricFind、Deezer、AMLL、Soda Music、VIBE、Genie、PetitLyrics、Apple Music。歌詞ソースごとにオン/オフ、並べ替え、現在接続できるかのテストができます。
+NetEase Cloud Music、QQ Music、Kugou、Kuwo、Migu、LRCLIB、LyricFind、Deezer、AMLL、Soda Music、VIBE、Genie、PetitLyrics、Zing MP3、Apple Music。歌詞ソースごとにオン/オフ、並べ替え、現在接続できるかのテストができます。
 
 - 初期設定でオン
 - 設定の場所：歌詞 › ソース › 歌詞ソース

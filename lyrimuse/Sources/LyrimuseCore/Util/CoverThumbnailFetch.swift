@@ -15,7 +15,9 @@ public enum CoverThumbnailFetch {
     /// - 酷我 `/albumcover/N/`:120 / 300 / 500(0 = 原图);
     /// - 汽水(douyinpic)`~tplv-…-resize:W:H`:300 / 600(0:0 = 原图);
     /// - Google 图床(googleusercontent,YouTube Music 借来的封面)末尾 `=s0` / `=wN-hN-…`:换成 `=sN`,任意边长;
-    /// - Deezer `/images/cover/<id>/NxN-…`:任意边长。
+    /// - Deezer `/images/cover/<id>/NxN-…`:任意边长;
+    /// - Zing MP3 原图 `photo-zmp3.zmdcdn.me/cover(s)/…` 换到 `photo-resize-zmp3.zmdcdn.me/wN_r1x1_jpeg/cover(s)/…`:
+    ///   94 / 128 / 168 / 240 / 256 / 320 / 480 / 600(要别的边长时向下取到这几档)。
     /// 咪咕的地址里没有尺寸,原样。缓存仍按原地址记,这里只换"去哪下"。
     /// 只管缩略档(maxPixel ≤ 512);原图档的地址由调用方自己挑(见 EnrichCacheReader.nativeSizedCoverURL)。
     public static func url(for url: URL, maxPixel: Int) -> URL {
@@ -61,6 +63,12 @@ public enum CoverThumbnailFetch {
             // VIBE 的专辑图:不带参数是原图,`type=r<边长>Fll` 只认这几档(r150 / r600 是 404)。
             let edge = snap(maxPixel, to: [240, 300, 480, 720])
             comps.percentEncodedQuery = "type=r\(edge)Fll"
+            return comps.url ?? url
+        }
+        if host == "photo-zmp3.zmdcdn.me", path.hasPrefix("/cover/") || path.hasPrefix("/covers/") {
+            let edge = snap(maxPixel, to: [94, 128, 168, 240, 256, 320, 480, 600])
+            comps.host = "photo-resize-zmp3.zmdcdn.me"
+            comps.percentEncodedPath = "/w\(edge)_r1x1_jpeg" + path
             return comps.url ?? url
         }
         if isHost(host, "dzcdn.net") {

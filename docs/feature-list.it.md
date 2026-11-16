@@ -72,9 +72,9 @@ Queste funzioni restano disattivate dopo l’installazione. Attivale prima nelle
 
 <a id="feature-lyric-sources"></a>
 
-### 14 fonti dei testi, consultate automaticamente
+### 15 fonti dei testi, consultate automaticamente
 
-NetEase Cloud Music, QQ Music, Kugou, Kuwo, Migu, LRCLIB, LyricFind, Deezer, AMLL, Soda Music, VIBE, Genie, PetitLyrics e Apple Music. Ogni fonte si può disattivare, spostare nell’ordine o testare per vedere se è raggiungibile in questo momento.
+NetEase Cloud Music, QQ Music, Kugou, Kuwo, Migu, LRCLIB, LyricFind, Deezer, AMLL, Soda Music, VIBE, Genie, PetitLyrics, Zing MP3 e Apple Music. Ogni fonte si può disattivare, spostare nell’ordine o testare per vedere se è raggiungibile in questo momento.
 
 - Attiva di default
 - Impostazioni: Testo › Fonte › Fonti dei testi

@@ -227,6 +227,7 @@
 "YouTube Music 的浏览器" = "YouTube Music 的瀏覽器";
 "YouTube Music 的第三方 Mac 客户端" = "YouTube Music 的第三方 Mac 用戶端";
 "YouTube Music 视频 ID 一致" = "YouTube Music 影片 ID 一致";
+"Zing MP3 拒绝了内置的接口签名（网页版可能已升级），并非这首歌曲无歌词，通常将在后续版本中修复" = "Zing MP3 拒絕了內建的介面簽名（網頁版可能已升級），並非這首歌曲無歌詞，通常將在後續版本中修復";
 "https://api.day.app/你的Key" = "https://api.day.app/你的Key";
 "https://ntfy.sh/你的主题" = "https://ntfy.sh/你的主題";
 "https://sctapi.ftqq.com/你的SendKey.send" = "https://sctapi.ftqq.com/你的SendKey.send";
@@ -2605,6 +2606,7 @@
 "账号信息" = "帳號資訊";
 "资料卡「正在收听 ××」中的 ××。iOS 版和网页版 Discord 不支持此项，仍显示播放器名\n选择歌名或歌手时，用户名下方无法再选择「播放器」" = "資料卡「正在聆聽 ××」中的 ××。iOS 版和網頁版 Discord 不支援此項，仍顯示播放器名\n選擇歌名或歌手時，使用者名稱下方無法再選擇「播放器」";
 "超薄" = "超薄";
+"越南 VNG 旗下的音乐平台" = "越南 VNG 旗下的音樂平台";
 "足迹" = "足跡";
 "跟上一期比的涨跌，如「↑12%」" = "與上一期比較的漲跌，例如「↑12%」";
 "跟随" = "跟隨";

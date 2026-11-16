@@ -227,6 +227,7 @@
 "YouTube Music 的浏览器" = "Trình duyệt cho YouTube Music";
 "YouTube Music 的第三方 Mac 客户端" = "Ứng dụng Mac bên thứ ba cho YouTube Music";
 "YouTube Music 视频 ID 一致" = "Cùng ID video YouTube Music";
+"Zing MP3 拒绝了内置的接口签名（网页版可能已升级），并非这首歌曲无歌词，通常将在后续版本中修复" = "Zing MP3 từ chối chữ ký API tích hợp (bản web có thể đã cập nhật), không phải bài hát này không có lời; thường sẽ được sửa ở phiên bản sau";
 "https://api.day.app/你的Key" = "https://api.day.app/KeyCủaBạn";
 "https://ntfy.sh/你的主题" = "https://ntfy.sh/chu-de-cua-ban";
 "https://sctapi.ftqq.com/你的SendKey.send" = "https://sctapi.ftqq.com/SendKeyCủaBạn.send";
@@ -2605,6 +2606,7 @@
 "账号信息" = "Thông tin tài khoản";
 "资料卡「正在收听 ××」中的 ××。iOS 版和网页版 Discord 不支持此项，仍显示播放器名\n选择歌名或歌手时，用户名下方无法再选择「播放器」" = "Phần ×× trong “Đang nghe ××” trên hồ sơ. Discord trên iOS và web không hỗ trợ mục này, vẫn hiện tên trình phát\nKhi chọn tên bài hát hoặc nghệ sĩ ở đây, “Hiện dưới tên của bạn” không thể chọn “Trình phát” nữa";
 "超薄" = "Siêu mỏng";
+"越南 VNG 旗下的音乐平台" = "Nền tảng nhạc của VNG (Việt Nam)";
 "足迹" = "Dấu chân";
 "跟上一期比的涨跌，如「↑12%」" = "Tăng giảm so với kỳ trước, như “↑12%”";
 "跟随" = "Bên dưới";

@@ -72,9 +72,9 @@ Lyrimuse — приложение для Mac с открытым исходны�
 
 <a id="feature-lyric-sources"></a>
 
-### 14 источников текстов с автоматическим поиском
+### 15 источников текстов с автоматическим поиском
 
-NetEase Cloud Music, QQ Music, Kugou, Kuwo, Migu, LRCLIB, LyricFind, Deezer, AMLL, Soda Music, VIBE, Genie, PetitLyrics и Apple Music. Каждый источник можно выключить, переместить в списке или проверить, доступен ли он прямо сейчас.
+NetEase Cloud Music, QQ Music, Kugou, Kuwo, Migu, LRCLIB, LyricFind, Deezer, AMLL, Soda Music, VIBE, Genie, PetitLyrics, Zing MP3 и Apple Music. Каждый источник можно выключить, переместить в списке или проверить, доступен ли он прямо сейчас.
 
 - Включено по умолчанию
 - Настройки: Текст › Источник › Источники текстов

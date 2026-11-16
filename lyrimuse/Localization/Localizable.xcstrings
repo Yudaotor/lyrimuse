@@ -286724,6 +286724,196 @@
           }
         }
       }
+    },
+    "越南 VNG 旗下的音乐平台" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Musikdienst von VNG aus Vietnam"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "VNG’s music service from Vietnam"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Servicio de música vietnamita de VNG"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Service musical vietnamien de VNG"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Servizio musicale vietnamita di VNG"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ベトナムVNGの音楽サービス"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "베트남 VNG의 음악 서비스"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Serviço de música vietnamita da VNG"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Музыкальный сервис VNG из Вьетнама"
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "บริการเพลงของ VNG จากเวียดนาม"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Vietnamlı VNG şirketine ait müzik hizmeti"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "В’єтнамський музичний сервіс VNG"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nền tảng nhạc của VNG (Việt Nam)"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "越南 VNG 旗下的音乐平台"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "越南 VNG 旗下的音樂平台"
+          }
+        }
+      }
+    },
+    "Zing MP3 拒绝了内置的接口签名（网页版可能已升级），并非这首歌曲无歌词，通常将在后续版本中修复" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Zing MP3 hat die integrierte API-Signatur abgelehnt (der Web-Player wurde vielleicht aktualisiert). Das heißt nicht, dass der Titel keinen Text hat; ein späteres Update behebt das meist"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Zing MP3 rejected the built-in API signature (its web player may have been updated). This doesn’t mean the song has no lyrics; a later update usually fixes it"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Zing MP3 rechazó la firma de API integrada (puede que su web se haya actualizado). No significa que la canción no tenga letra; suele corregirse en una actualización posterior"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Zing MP3 a refusé la signature d’API intégrée (son lecteur web a peut-être été mis à jour). Le morceau a sans doute des paroles ; une mise à jour corrige généralement le problème"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Zing MP3 ha rifiutato la firma API integrata (il player web potrebbe essere stato aggiornato). Non significa che il brano sia senza testo; di solito un aggiornamento successivo risolve"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Zing MP3が組み込みのAPI署名を拒否しました（Web版が更新された可能性があります）。この曲に歌詞がないわけではありません。通常は今後のアップデートで修正されます"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Zing MP3가 내장된 API 서명을 거부했습니다(웹 버전이 업데이트되었을 수 있음). 이 노래에 가사가 없다는 뜻은 아니며 대개 이후 업데이트에서 수정됩니다"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "O Zing MP3 recusou a assinatura de API integrada (o player web pode ter sido atualizado). Isso não significa que a música não tenha letra; uma atualização futura costuma corrigir"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Zing MP3 отклонил встроенную подпись API (возможно, веб-версия обновилась). Это не значит, что у песни нет текста; обычно это исправляется в следующей версии"
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Zing MP3 ปฏิเสธลายเซ็น API ที่ฝังมาในแอป (เวอร์ชั่นเว็บอาจอัปเดตแล้ว) ไม่ได้หมายความว่าเพลงนี้ไม่มีเนื้อเพลง มักจะแก้ไขได้ในเวอร์ชั่นถัดไป"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Zing MP3 yerleşik API imzasını reddetti (web oynatıcısı güncellenmiş olabilir). Bu, parçanın şarkı sözü olmadığı anlamına gelmez; genellikle sonraki bir güncellemede düzeltilir"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Zing MP3 відхилив вбудований підпис API (можливо, вебверсію оновлено). Це не означає, що пісня не має тексту; зазвичай це виправляється в наступній версії"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Zing MP3 từ chối chữ ký API tích hợp (bản web có thể đã cập nhật), không phải bài hát này không có lời; thường sẽ được sửa ở phiên bản sau"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Zing MP3 拒绝了内置的接口签名（网页版可能已升级），并非这首歌曲无歌词，通常将在后续版本中修复"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Zing MP3 拒絕了內建的介面簽名（網頁版可能已升級），並非這首歌曲無歌詞，通常將在後續版本中修復"
+          }
+        }
+      }
     }
   },
   "version" : "1.0"

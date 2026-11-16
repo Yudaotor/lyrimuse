@@ -72,9 +72,9 @@ Lyrimuse เป็นแอปโอเพนซอร์ส (GPL-3.0) สำห
 
 <a id="feature-lyric-sources"></a>
 
-### แหล่งเนื้อเพลง 14 แหล่ง ค้นหาให้อัตโนมัติ
+### แหล่งเนื้อเพลง 15 แหล่ง ค้นหาให้อัตโนมัติ
 
-NetEase Cloud Music, QQ Music, Kugou, Kuwo, Migu, LRCLIB, LyricFind, Deezer, AMLL, Soda Music, VIBE, Genie, PetitLyrics และ Apple Music แหล่งเนื้อเพลงแต่ละแหล่งปิดได้ จัดลำดับใหม่ได้ หรือทดสอบได้ว่าตอนนี้เชื่อมต่อได้หรือไม่
+NetEase Cloud Music, QQ Music, Kugou, Kuwo, Migu, LRCLIB, LyricFind, Deezer, AMLL, Soda Music, VIBE, Genie, PetitLyrics, Zing MP3 และ Apple Music แหล่งเนื้อเพลงแต่ละแหล่งปิดได้ จัดลำดับใหม่ได้ หรือทดสอบได้ว่าตอนนี้เชื่อมต่อได้หรือไม่
 
 - เปิดอยู่ตามค่าเริ่มต้น
 - การตั้งค่า: เนื้อเพลง › แหล่งที่มา › แหล่งเนื้อเพลง

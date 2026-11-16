@@ -120,7 +120,7 @@ const (
 // (改走系统代理、切 Clash 节点)常常照常能用,能换先换(forceProxyFor),换不了才走到这里的暂停。上面那套熔断
 // 看的是 HTTP 层,这种应答算成功、一档都不跳 ——
 // 不单独处理的话每一轮照发、每一轮被拒,整段时间一首词都给不出,还可能把封禁拖得更久。认得出这种应答的
-// 只有源自己,由它调 noteBlocked。
+// 只有源自己,由它调 noteBlocked。签名密钥全被拒的源(zing.go)也走这里:换出口没用,每轮照发只会每轮被拒。
 //
 // 跟上面的冷却分开存,两条理由:① 拦截应答本身是 HTTP 200,observeWith 的 default 分支会把同一个源的冷却
 // 当场撤掉;② 上面的档位离上次跳闸 10 分钟就归零,而这里一档就 15 分钟,放在一起永远升不上去。
@@ -278,7 +278,7 @@ func (b *lyricSourceBreaker) noteBlocked(source string) bool {
 	idx := min(bs.tier, len(lyricSourceBlockSchedule)-1)
 	bs.tier++
 	bs.until = now.Add(lyricSourceBlockSchedule[idx])
-	log.Printf("lyrics: source %s blocked by its anti-bot check, pausing it for %s (reason=%s trip=%d)",
+	log.Printf("lyrics: source %s refused our requests (anti-bot check or rejected credentials), pausing it for %s (reason=%s trip=%d)",
 		source, lyricSourceBlockSchedule[idx], lyricSourceCooldownReasonBlocked, bs.tier)
 	b.saveBlocksLocked()
 	noteLyricSourceTrip(source, lyricSourceCooldownReasonBlocked)
@@ -402,6 +402,10 @@ func lyricSourceForHost(host string) string {
 	case h == "p1.petitlyrics.com" || h == "p0.petitlyrics.com" || h == "on.petitlyrics.com":
 		// PetitLyrics 轮换着用的三个主机(petitlyrics.go 的 petitClients),全仓只有这一源请求它们。
 		return "petitlyrics"
+	case h == "zingmp3.vn" || h == "static-zmp3.zmdcdn.me":
+		// Zing MP3 的接口在 zingmp3.vn、LRC 文件在 static-zmp3.zmdcdn.me(zing.go),全仓只有这一源请求它们;封面图在
+		// photo-zmp3.zmdcdn.me / photo-resize-zmp3.zmdcdn.me,跟歌词无关,不进来。
+		return "zing"
 	}
 	return ""
 }

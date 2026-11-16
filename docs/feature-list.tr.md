@@ -72,9 +72,9 @@ Bu özellikler yüklendikten sonra kapalıdır. Önce ayarlardan açın (bazıla
 
 <a id="feature-lyric-sources"></a>
 
-### 14 şarkı sözü kaynağı, otomatik arama
+### 15 şarkı sözü kaynağı, otomatik arama
 
-NetEase Cloud Music, QQ Music, Kugou, Kuwo, Migu, LRCLIB, LyricFind, Deezer, AMLL, Soda Music, VIBE, Genie, PetitLyrics ve Apple Music. Her kaynak kapatılabilir, yeniden sıralanabilir veya şu an erişilebilir olup olmadığı test edilebilir.
+NetEase Cloud Music, QQ Music, Kugou, Kuwo, Migu, LRCLIB, LyricFind, Deezer, AMLL, Soda Music, VIBE, Genie, PetitLyrics, Zing MP3 ve Apple Music. Her kaynak kapatılabilir, yeniden sıralanabilir veya şu an erişilebilir olup olmadığı test edilebilir.
 
 - Saptanmış olarak açık
 - Ayarlar: Şarkı Sözleri › Kaynak › Şarkı Sözü Kaynakları

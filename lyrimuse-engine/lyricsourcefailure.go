@@ -45,6 +45,9 @@ const (
 	// 跟另外两种结局分清楚,两者都**不**往这里记:曲库里有这首歌但没词(正常结果,走
 	// trackFoundNoLyrics)、这首没用汽水放过所以拿不到曲目 id(这一路的常态,见 soda.go 头注)。
 	lyricFailureReasonSodaEndpointChanged = "soda_endpoint_changed"
+	// zing_signature_rejected:Zing MP3 把轮换的几组签名密钥全拒了(err -104 / -116),多半是网页升级换了密钥,
+	// 要跟着改 zing.go 的 zingKeys。没词的曲目回 err 0,不往这里记。
+	lyricFailureReasonZingSignatureRejected = "zing_signature_rejected"
 )
 
 // 传输层通用代码。由 sourcebreaker.go

@@ -184,6 +184,8 @@ func runTestLyricSourcesCLI(args []string) {
 				// 「测试」按钮于是只会说「这个源没反应」,把"换票这一步失败"说成了"没反应"。
 				// 再接新源时记得这里和 searchcli.go 是**两处**,守卫没钉住它。
 				reason = deezerLastFailureReasonNow()
+			case "zing":
+				reason = zingLastFailureReasonNow()
 			case "netease":
 				// 同 lyricSourceFailureReasons:这一轮网易云只要成功答过
 				// 一次,就不把限流当成"这个源没给出候选"的原因 —— 吃过一次 405 跟"这个源

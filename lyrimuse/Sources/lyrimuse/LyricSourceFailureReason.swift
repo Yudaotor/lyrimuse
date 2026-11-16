@@ -41,6 +41,9 @@ enum LyricSourceFailureReason {
             // 另外两种结局都不会走到这里:曲库里有这首歌但没给词(正常结果)、这首没用汽水
             // 放过所以取不到曲目 id(这一路的常态)。
             return L10n.t("汽水音乐的歌词接口返回了无法识别的内容（接口可能已变更），并非这首歌曲无歌词，通常将在后续版本中修复")
+        case "zing_signature_rejected":
+            // Zing MP3 把内置的几组接口签名密钥全拒了,多半是网页版升级换了密钥,要跟着改引擎 zing.go 的 zingKeys。
+            return L10n.t("Zing MP3 拒绝了内置的接口签名（网页版可能已升级），并非这首歌曲无歌词，通常将在后续版本中修复")
         // 下面四个是传输层通用代码(引擎侧 sourcebreaker.go 最后一节的
         // classifyLyricSourceTransportFailure + searchcli.go 派生的 upstream_unreachable),任何源都
         // 可能出现,含义是"这一轮该源一个 HTTP 响应都没拿到 / 根本没法查"——跟"曲库里确实

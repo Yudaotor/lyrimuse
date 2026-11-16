@@ -252,6 +252,7 @@
 "YouTube Music 的浏览器" = "Navegador do YouTube Music";
 "YouTube Music 的第三方 Mac 客户端" = "Cliente de Mac de terceiros para o YouTube Music";
 "YouTube Music 视频 ID 一致" = "Mesmo ID de vídeo do YouTube Music";
+"Zing MP3 拒绝了内置的接口签名（网页版可能已升级），并非这首歌曲无歌词，通常将在后续版本中修复" = "O Zing MP3 recusou a assinatura de API integrada (o player web pode ter sido atualizado). Isso não significa que a música não tenha letra; uma atualização futura costuma corrigir";
 "https://api.day.app/你的Key" = "https://api.day.app/SuaChave";
 "https://ntfy.sh/你的主题" = "https://ntfy.sh/seu-topico";
 "https://sctapi.ftqq.com/你的SendKey.send" = "https://sctapi.ftqq.com/SuaSendKey.send";
@@ -2695,6 +2696,7 @@
 "账号信息" = "Dados da conta";
 "资料卡「正在收听 ××」中的 ××。iOS 版和网页版 Discord 不支持此项，仍显示播放器名\n选择歌名或歌手时，用户名下方无法再选择「播放器」" = "O “××” de “Ouvindo ××” no seu perfil. O Discord no iOS e na web ignora isso e continua mostrando o player\nCom “Título” ou “Artista” aqui, “Abaixo do seu nome” não pode mostrar o player";
 "超薄" = "Ultrafino";
+"越南 VNG 旗下的音乐平台" = "Serviço de música vietnamita da VNG";
 "足迹" = "Pegada";
 "跟上一期比的涨跌，如「↑12%」" = "Variação em relação ao período anterior, como “↑12%”";
 "跟随" = "Abaixo";

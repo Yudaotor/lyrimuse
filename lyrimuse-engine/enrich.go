@@ -5013,6 +5013,11 @@ func lyricSourcesWorthRetry(ctx context.Context, scored []scoredLyricCandidateRe
 			if applemusicLastFailureReasonNow() != "" {
 				continue
 			}
+		case "zing":
+			// 密钥全被拒(zing_signature_rejected)时换个别名照样被拒。
+			if zingLastFailureReasonNow() != "" {
+				continue
+			}
 		}
 		out = append(out, s)
 	}
@@ -5298,14 +5303,14 @@ func keepShownRoundUpdate(onUpdate lyricSearchUpdateFunc, base []scoredLyricCand
 
 // lyricSourceNames 是全部歌词源的名字,每个源一个并发 goroutine。顺序只决定「有歌没词」标记、日志和设置项里的源序;
 // 同分候选谁赢看 lyricCandidateTieOrder,不看这里。
-var lyricSourceNames = []string{"netease", "qq", "kugou", "lrclib", "amll", "lyricfind", "kuwo", "migu", "deezer", "applemusic", "soda", "vibe", "genie", "petitlyrics"}
+var lyricSourceNames = []string{"netease", "qq", "kugou", "lrclib", "amll", "lyricfind", "kuwo", "migu", "deezer", "applemusic", "soda", "vibe", "genie", "petitlyrics", "zing"}
 
 // lyricCandidateTieOrder:同分候选按这个源序决胜,就是 rankLyricSourceResults 构造候选的顺序(本机几家的歌词夹在
 // 汽水和 AMLL 之间)。合并几轮结果的 mergeLyricCandidateRounds 按它重建顺序,两边才是同一个口径:不然同一首歌走没走
 // 补查轮,同分时会在 lrclib / lyricfind、applemusic / amll 之间换源。rankLyricSourceResults 里加了源、挪了顺序,这里
 // 跟着改(lyrictieorder_test.go 用源码扫描钉着两边一致)。
 var lyricCandidateTieOrder = []string{
-	"netease", "qq", "kugou", "lrclib", "lyricfind", "kuwo", "migu", "deezer", "applemusic", "soda", "vibe", "genie", "petitlyrics",
+	"netease", "qq", "kugou", "lrclib", "lyricfind", "kuwo", "migu", "deezer", "applemusic", "soda", "vibe", "genie", "petitlyrics", "zing",
 	kkboxLocalLyricsSource, amazonLocalLyricsSource, lxMusicLocalLyricsSource, localFileLyricsSource, importLyricsSource,
 	spotifyLocalLyricsSource,
 	"amll",
@@ -5431,6 +5436,7 @@ func rankLyricSourceResults(artist, title, album string, durationSecs float64, r
 	vibe := raw["vibe"]
 	genie := raw["genie"]
 	petit := raw["petitlyrics"]
+	zing := raw["zing"]
 	kk := raw[kkboxLocalLyricsSource]
 	spl := raw[spotifyLocalLyricsSource]
 	amz := raw[amazonLocalLyricsSource]
@@ -5576,6 +5582,13 @@ func rankLyricSourceResults(artist, title, album string, durationSecs float64, r
 			wordTimingYRC: usableYRC(petit.lyr, petit.yrc), hasWordTiming: usableWordTiming(petit.lyr, petit.yrc),
 			sourceReportedDurationSecs: petit.srcDur, title: petit.matchTitle, artist: petit.matchArtist, album: petit.matchAlbum,
 			cover: petit.matchCover, plainTextOnly: petit.plainOnly, isrc: petit.isrc})
+	}
+	if zing.lyr != "" {
+		// 逐行,逐字跟逐行对得上才带;没有译文、罗马音、纯文本;封面、时长是搜索结果自带的(见 zing.go 头注)。
+		candidates = append(candidates, lyricCandidate{source: "zing", lyrics: zing.lyr,
+			wordTimingYRC: usableYRC(zing.lyr, zing.yrc), hasWordTiming: usableWordTiming(zing.lyr, zing.yrc),
+			sourceReportedDurationSecs: zing.srcDur, title: zing.matchTitle, artist: zing.matchArtist, album: zing.matchAlbum,
+			cover: zing.matchCover})
 	}
 	if kk.lyr != "" {
 		// KKBOX 本地歌词(用 KKBOX 放歌时读它自己缓存里的那份,逐行,见 kkboxlyrics.go)。只精确到整秒的那类不置
@@ -6306,6 +6319,15 @@ func fetchScoredLyricCandidatesStreaming(ctx context.Context, artist, title, alb
 		// 独立检索,同 vibe。只有纯文本时 plainOnly=true。
 		r := petitLyric(ctx, artist, srcTitle, album, durationSecs)
 		resultsCh <- lyricSourceResult{source: "petitlyrics", lyr: r.lyrics, yrc: r.yrc, matchTitle: r.title, matchArtist: r.artist, matchAlbum: r.album, matchCover: r.cover, srcDur: r.durationSecs, isrc: r.isrc, plainOnly: r.plainOnly}
+	}()
+	go func() {
+		if skipSource("zing") {
+			resultsCh <- lyricSourceResult{source: "zing"}
+			return
+		}
+		// 独立检索,同 vibe。
+		r := zingLyric(ctx, artist, srcTitle, album, durationSecs)
+		resultsCh <- lyricSourceResult{source: "zing", lyr: r.lyrics, yrc: r.yrc, matchTitle: r.title, matchArtist: r.artist, matchAlbum: r.album, matchCover: r.cover, srcDur: r.durationSecs}
 	}()
 
 	// raw:目前为止到手的各源原始应答,按源名存。打分/排序全部下放给

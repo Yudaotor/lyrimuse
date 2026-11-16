@@ -2159,6 +2159,12 @@ func runCoverArtTests() {
         expectEqual(t("https://musicmeta-phinf.pstatic.net/album/002/923/2923941.jpg"),
                     "https://musicmeta-phinf.pstatic.net/album/002/923/2923941.jpg?type=r300Fll",
                     "缩略图下载: VIBE 原图换 r300Fll(只有 240 / 300 / 480 / 720 几档)")
+        expectEqual(t("https://photo-zmp3.zmdcdn.me/cover/e/e/2/3/ee2340d69ab29f4da3c2bdab9b33112d.jpg"),
+                    "https://photo-resize-zmp3.zmdcdn.me/w256_r1x1_jpeg/cover/e/e/2/3/ee2340d69ab29f4da3c2bdab9b33112d.jpg",
+                    "缩略图下载: Zing MP3 原图换到缩略图床的 w256")
+        expectEqual(t("https://photo-zmp3.zmdcdn.me/covers/b/1/b1c839bd85e6081614cf770278b8f782_1387164001.jpg"),
+                    "https://photo-resize-zmp3.zmdcdn.me/w256_r1x1_jpeg/covers/b/1/b1c839bd85e6081614cf770278b8f782_1387164001.jpg",
+                    "缩略图下载: Zing MP3 covers/ 下的原图同样换 w256")
         // 形状对不上一个字都不改:改错是 404、整张封面消失
         for s in ["https://d.musicapp.migu.cn/data/oss/resource/00/60/ig/9cf9564aff9544f4983d16b25e85d250.webp",
                   "https://evilmusic.126.net/a.jpg?x=1",
@@ -2167,7 +2173,8 @@ func runCoverArtTests() {
                   "https://y.qq.com/music/photo_new/T003R800x800M000003zeVgY4BE7Sk.jpg",
                   "https://i.scdn.co/image/ab67616d0000b273abc",
                   "https://yt3.googleusercontent.com/KKEMiv9IulJvjB",
-                  "https://cdn-images.dzcdn.net/images/artist/42b95263fc55a7b8/1000x1000-000000-80-0-0.jpg"] {
+                  "https://cdn-images.dzcdn.net/images/artist/42b95263fc55a7b8/1000x1000-000000-80-0-0.jpg",
+                  "https://photo-zmp3.zmdcdn.me/avatars/e/e/a.jpg"] {
             expectEqual(t(s), s, "缩略图下载: 没实测过的形状原样 —— \(s)")
         }
         expectEqual(F.url(for: URL(string: "https://p1.music.126.net/abc==/1099.jpg?param=600y600")!, maxPixel: 2048).absoluteString,

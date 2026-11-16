@@ -5,7 +5,7 @@ import SwiftUI
 
 private let logger = Logger(subsystem: "me.yudaotor.lyrimuse", category: "feature-settings")
 
-// 十四个歌词源——rawValue 必须跟 lyrimuse-engine/features.go 的 lyricSourceXxx 常量逐字对应,
+// 十五个歌词源——rawValue 必须跟 lyrimuse-engine/features.go 的 lyricSourceXxx 常量逐字对应,
 // 这是两侧通过共享 json 文件交换的字符串。displayName/color 直接委托给
 // LyricsManagerView.swift 已有的 sourceDisplayName/sourceColor(那两个函数也在给
 // "歌词管理"窗口的来源筛选/列表用),不重复维护第二份名字/颜色映射。
@@ -24,7 +24,7 @@ private let logger = Logger(subsystem: "me.yudaotor.lyrimuse", category: "featur
 // deezer 跟 lyricfind 数据同源(都是 LyricFind 供词),但两条管道各走各的接口:接它既是
 // 给那家版权方补条后路,也因为 Deezer 的法语曲库覆盖更好,见 lyrimuse-engine/deezer.go 头注。
 public enum LyricsSource: String, CaseIterable, Identifiable, Codable, Hashable {
-    case kugou, netease, qq, lrclib, amll, lyricfind, kuwo, migu, deezer, applemusic, soda, vibe, genie, petitlyrics
+    case kugou, netease, qq, lrclib, amll, lyricfind, kuwo, migu, deezer, applemusic, soda, vibe, genie, petitlyrics, zing
     public var id: Self { self }
     public var displayName: String { sourceDisplayName(rawValue) }
     public var color: Color { sourceColor(rawValue) }
@@ -58,6 +58,7 @@ extension LyricsSource {
         case .vibe: return L10n.t("韩国 Naver 旗下的音乐平台")
         case .genie: return L10n.t("韩国 KT 旗下的音乐平台")
         case .petitlyrics: return L10n.t("日本 SyncPower 运营的同步歌词服务")
+        case .zing: return L10n.t("越南 VNG 旗下的音乐平台")
         }
     }
 }
@@ -340,6 +341,7 @@ struct FeatureFlagsFile: Codable, Equatable {
     var vibeLyrics: Bool?
     var genieLyrics: Bool?
     var petitLyrics: Bool?
+    var zingLyrics: Bool?
     var lyricsSourceMode: String?
     var lyricsSourceOrder: [String]?
     // 放本机文件时先用文件自带的歌词。nil = 没写过,按匹配算法取缺省(见 effectivePreferLocalFileLyrics)。
@@ -432,6 +434,7 @@ struct FeatureFlagsFile: Codable, Equatable {
         case vibeLyrics = "vibe_lyrics"
         case genieLyrics = "genie_lyrics"
         case petitLyrics = "petitlyrics_lyrics"
+        case zingLyrics = "zing_lyrics"
         case lyricsSourceMode = "lyrics_source_mode"
         case lyricsSourceOrder = "lyrics_source_order"
         case preferLocalFileLyrics = "prefer_local_file_lyrics"
@@ -785,6 +788,8 @@ public final class FeatureSettingsStore: ObservableObject {
             genieLyrics: lyricsSources.contains(.genie),
             // 同上,petitlyrics 的迁移标记独立生效一次。
             petitLyrics: lyricsSources.contains(.petitlyrics),
+            // 同上,zing 的迁移标记独立生效一次。
+            zingLyrics: lyricsSources.contains(.zing),
             lyricsSourceMode: lyricsSourceMode.rawValue,
             lyricsSourceOrder: lyricsPriorityOrder.map(\.rawValue) + unknownLyricsOrder,
             preferLocalFileLyrics: preferLocalFileLyrics,
@@ -1072,6 +1077,10 @@ public final class FeatureSettingsStore: ObservableObject {
             if f.petitLyrics == nil {
                 // 同上,见 FeatureFlagsFile.petitLyrics。
                 enabled.insert(.petitlyrics)
+            }
+            if f.zingLyrics == nil {
+                // 同上,见 FeatureFlagsFile.zingLyrics。
+                enabled.insert(.zing)
             }
         }
         lyricsSources = enabled
