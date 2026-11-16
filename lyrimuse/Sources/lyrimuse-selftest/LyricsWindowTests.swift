@@ -113,8 +113,8 @@ func runLyricsWindowTests() {
     do {
         typealias E = LyricsWindowEmptyState
         let everything = E.Inputs(hasTitle: true, isAdBreak: true, isRadioTalkBreak: true,
-                                  isInstrumental: true, hasNoLyrics: true, engineNetworkDown: true,
-                                  hasLyricsContent: false, isPlaying: true)
+                                  isInstrumental: true, hasNoLyrics: true, engineNotRunning: true,
+                                  engineNetworkDown: true, hasLyricsContent: false, isPlaying: true)
         expectEqual(E.resolve(E.Inputs(hasTitle: false, isAdBreak: true, isPlaying: true)), .notPlaying,
                     "空状态: 曲名为空时一律「没有在播放」,哪怕别的标志还挂着")
         expectEqual(E.resolve(everything), .adBreak, "空状态: 广告排在口白 / 纯音乐 / 搜索之前")
@@ -124,8 +124,13 @@ func runLyricsWindowTests() {
         i.isRadioTalkBreak = false
         expectEqual(E.resolve(i), .instrumental, "空状态: 纯音乐排在暂无歌词之前")
         i.isInstrumental = false
-        expectEqual(E.resolve(i), .noLyrics, "空状态: 暂无歌词(明确结论)排在网络失败之前")
+        expectEqual(E.resolve(i), .noLyrics, "空状态: 暂无歌词(明确结论)排在引擎未运行之前")
         i.hasNoLyrics = false
+        expectEqual(E.resolve(i), .engineNotRunning, "空状态: 引擎未运行排在网络失败、搜索中之前")
+        i.isPlaying = false
+        expectEqual(E.resolve(i), .networkDown, "空状态: 没在放时不报引擎未运行(只替换「搜索中」那一档)")
+        i.isPlaying = true
+        i.engineNotRunning = false
         expectEqual(E.resolve(i), .networkDown, "空状态: 断网且没有歌词内容 → 网络连接失败,不是一直「搜索中」")
         i.engineNetworkDown = false
         expectEqual(E.resolve(i), .searching, "空状态: 在放、没有内容、没有定论 → 搜索中")
@@ -134,9 +139,15 @@ func runLyricsWindowTests() {
         expectEqual(E.resolve(E.Inputs(hasTitle: true, engineNetworkDown: true, hasLyricsContent: true,
                                        isPlaying: true)), .none,
                     "空状态: 有歌词内容时断网不算失败(内容已经在手里)")
-        expectEqual([E.notPlaying, .adBreak, .radioTalk, .instrumental, .noLyrics, .networkDown, .searching, .none]
-                        .filter(\.offersSearch), [.noLyrics, .networkDown],
+        expectEqual(E.resolve(E.Inputs(hasTitle: true, engineNotRunning: true, hasLyricsContent: true,
+                                       isPlaying: true)), .none,
+                    "空状态: 有歌词内容时引擎不在不算(内容已经在手里)")
+        let allStates: [E] = [.notPlaying, .adBreak, .radioTalk, .instrumental, .noLyrics, .engineNotRunning, .networkDown,
+                              .searching, .none]
+        expectEqual(allStates.filter(\.offersSearch), [.noLyrics, .networkDown],
                     "空状态: 只有「暂无歌词」「网络连接失败」给搜索入口")
+        expectEqual(allStates.filter(\.offersEngineSettings), [.engineNotRunning],
+                    "空状态: 只有「歌词引擎未运行」给「打开设置」")
         expectEqual(E.radioTalk.icon, "dot.radiowaves.left.and.right", "空状态: 口白图标")
     }
 

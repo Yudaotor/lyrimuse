@@ -1954,6 +1954,7 @@
 "歌词引擎无响应" = "Şarkı sözü motoru yanıt vermedi";
 "歌词引擎未响应，未重发" = "Şarkı sözü motoru yanıt vermedi, hiçbir şey yeniden gönderilmedi";
 "歌词引擎未响应，测试消息未发送。请确认歌词引擎正在运行后重试" = "Şarkı sözü motoru yanıt vermedi, test iletisi gönderilmedi. Motorun çalıştığından emin olup yeniden deneyin";
+"歌词引擎未运行" = "Şarkı sözü motoru çalışmıyor";
 "歌词引擎未运行，歌词不会更新" = "Şarkı sözü motoru çalışmıyor; şarkı sözleri güncellenmez";
 "歌词引擎本次未能将它们收入缓存，列表中暂时不可见；文件已在歌词文件夹中，歌词引擎下次启动时将自动导入" = "Şarkı sözü motoru bu kez bunları önbelleğe ekleyemedi, bu nedenle henüz listede görünmüyorlar. Dosyalar şarkı sözü klasöründe; şarkı sözü motoru bir sonraki başlatılışında otomatik olarak içe aktarılır";
 "歌词引擎的原始日志，供自行排查" = "Şarkı sözü motorunun ham günlüğü, kendi sorun gidermeniz için";

@@ -64,6 +64,7 @@ final class NotchPlayback: ObservableObject {
     /// 这首只有纯文本歌词(没有时间戳):「暂无歌词」那一格改说「仅有纯文本，无时间戳」,同悬浮歌词。
     @Published private(set) var hasPlainLyrics = false
     @Published private(set) var engineNetworkDown = false
+    @Published private(set) var engineNotRunning = false
     @Published private(set) var isCurrentTrackAdBreak = false
     /// 电台口白:这一刻在放的不是歌,台里在说话。语义与 `isCurrentTrackAdBreak` 平行。
     @Published private(set) var isRadioTalkBreak = false
@@ -345,6 +346,7 @@ final class NotchPlayback: ObservableObject {
             p.$currentTrackPlainLyrics.map { !$0.isEmpty }.removeDuplicates()
                 .sink { [weak self] in self?.hasPlainLyrics = $0 },
             p.$engineNetworkDown.removeDuplicates().sink { [weak self] in self?.engineNetworkDown = $0 },
+            p.$engineNotRunning.removeDuplicates().sink { [weak self] in self?.engineNotRunning = $0 },
             p.$isCurrentTrackAdBreak.removeDuplicates().sink { [weak self] in self?.isCurrentTrackAdBreak = $0 },
             YouTubeMusicAdSkipCenter.shared.$adSkipAvailable.removeDuplicates().sink { [weak self] in self?.adSkipAvailable = $0 },
             YouTubeMusicAdSkipCenter.shared.$skipInFlight.removeDuplicates().sink { [weak self] in self?.skipAdInFlight = $0 },

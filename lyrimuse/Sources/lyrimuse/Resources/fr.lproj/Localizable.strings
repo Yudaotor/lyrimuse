@@ -2036,6 +2036,7 @@
 "歌词引擎无响应" = "Le moteur de paroles ne répond pas";
 "歌词引擎未响应，未重发" = "Le moteur de paroles n’a pas répondu. Rien n’a été renvoyé";
 "歌词引擎未响应，测试消息未发送。请确认歌词引擎正在运行后重试" = "Le moteur de paroles n’a pas répondu, le test n’a pas été envoyé. Vérifiez qu’il est lancé et réessayez";
+"歌词引擎未运行" = "Le moteur de paroles ne tourne pas";
 "歌词引擎未运行，歌词不会更新" = "Le moteur de paroles ne tourne pas ; les paroles ne seront pas mises à jour";
 "歌词引擎本次未能将它们收入缓存，列表中暂时不可见；文件已在歌词文件夹中，歌词引擎下次启动时将自动导入" = "Le moteur de paroles n’a pas pu les ajouter au cache cette fois : ils n’apparaissent pas encore dans la liste. Les fichiers sont déjà dans le dossier des paroles et seront importés au prochain démarrage du moteur";
 "歌词引擎的原始日志，供自行排查" = "Le journal brut du moteur de paroles, pour vos propres diagnostics";

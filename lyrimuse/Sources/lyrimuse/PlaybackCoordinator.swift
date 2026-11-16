@@ -111,6 +111,8 @@ final class PlaybackCoordinator: ObservableObject {
     @Published private(set) var currentTrackSongwriters: [String] = []
     /// 引擎报"网络不通,这一轮查不了"(见 EngineStatus)。
     @Published private(set) var engineNetworkDown: Bool = false
+    /// 歌词引擎的常驻进程一直不在,见 LocalPlaybackSource 同名属性的注释。
+    @Published private(set) var engineNotRunning: Bool = false
     // Spotify 广告插播,见 LocalPlaybackSource 同名属性的注释。
     @Published private(set) var isCurrentTrackAdBreak: Bool = false
     /// 电台口白:当前这首歌已经放完、台里在说话。语义与 `isCurrentTrackAdBreak`
@@ -1178,6 +1180,7 @@ final class PlaybackCoordinator: ObservableObject {
             s.$currentTrackPlainLyrics.assign(to: \.currentTrackPlainLyrics, on: self),
             s.$currentTrackSongwriters.assign(to: \.currentTrackSongwriters, on: self),
             s.$engineNetworkDown.assign(to: \.engineNetworkDown, on: self),
+            s.$engineNotRunning.assign(to: \.engineNotRunning, on: self),
             s.$isCurrentTrackAdBreak.assign(to: \.isCurrentTrackAdBreak, on: self),
             s.$isRadioTalkBreak.assign(to: \.isRadioTalkBreak, on: self),
             s.$radioStationName.assign(to: \.radioStationName, on: self),

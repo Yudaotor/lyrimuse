@@ -183,6 +183,9 @@ public enum LyrimuseDeepLink: Equatable, Sendable {
         /// 设置窗口当作被挡住 / 露出来,不看遮挡状态和桌面空间(`debug/settings-visibility?state=hidden|visible|auto`,
         /// `auto` = 交还给它)。不提前台就能验设置页里看得见才跑的轮询(歌词库、账号页)。nil = auto。
         case settingsVisibility(override: Bool?)
+        /// 歌词引擎常驻进程当作在 / 不在,不看真的进程(`debug/engine-alive?state=present|absent|auto`,`auto` = 交还给它)。
+        /// 宽限照算,不停用户的引擎就能验展示面的「歌词引擎未运行」。nil = auto。
+        case engineAlive(override: Bool?)
         /// 歌词管理里把这一条标成 / 取消纯音乐,跟详情页那颗开关走同一条路(交给引擎、改完重读):
         /// `debug/manager-instrumental?key=<写法键>&on=1|0`。验「改动之后的重读」用。
         case managerInstrumental(key: String, on: Bool)
@@ -692,6 +695,13 @@ public enum LyrimuseDeepLink: Equatable, Sendable {
             case "auto": self = .debug(.managerVisibility(override: nil))
             default: return nil
             }
+        case ("debug", "/engine-alive"):
+            switch value("state")?.lowercased() {
+            case "present": self = .debug(.engineAlive(override: true))
+            case "absent": self = .debug(.engineAlive(override: false))
+            case "auto": self = .debug(.engineAlive(override: nil))
+            default: return nil
+            }
         case ("debug", "/settings-visibility"):
             switch value("state")?.lowercased() {
             case "visible": self = .debug(.settingsVisibility(override: true))
@@ -1050,6 +1060,9 @@ public enum LyrimuseDeepLink: Equatable, Sendable {
             case let .settingsVisibility(override):
                 components.path = "/settings-visibility"
                 components.queryItems = [URLQueryItem(name: "state", value: override.map { $0 ? "visible" : "hidden" } ?? "auto")]
+            case let .engineAlive(override):
+                components.path = "/engine-alive"
+                components.queryItems = [URLQueryItem(name: "state", value: override.map { $0 ? "present" : "absent" } ?? "auto")]
             case let .onboardingStep(step):
                 components.path = "/onboarding-step"
                 components.queryItems = [URLQueryItem(name: "step", value: Self.onboardingStepNames.first { $0.value == step }?.key)]

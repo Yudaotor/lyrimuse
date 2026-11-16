@@ -41,6 +41,7 @@ private final class PanelPlayback: ObservableObject {
     @Published private(set) var isCurrentTrackInstrumental = false
     @Published private(set) var currentTrackHasNoLyrics = false
     @Published private(set) var engineNetworkDown = false
+    @Published private(set) var engineNotRunning = false
     @Published private(set) var isCurrentTrackAdBreak = false
     /// 电台口白 / 台卡:这一刻在放的不是歌。语义与 isCurrentTrackAdBreak 平行。
     @Published private(set) var isRadioTalkBreak = false
@@ -129,6 +130,7 @@ private final class PanelPlayback: ObservableObject {
             p.$isCurrentTrackInstrumental.removeDuplicates().sink { [weak self] in self?.isCurrentTrackInstrumental = $0 },
             p.$currentTrackHasNoLyrics.removeDuplicates().sink { [weak self] in self?.currentTrackHasNoLyrics = $0 },
             p.$engineNetworkDown.removeDuplicates().sink { [weak self] in self?.engineNetworkDown = $0 },
+            p.$engineNotRunning.removeDuplicates().sink { [weak self] in self?.engineNotRunning = $0 },
             p.$isCurrentTrackAdBreak.removeDuplicates().sink { [weak self] in self?.isCurrentTrackAdBreak = $0 },
             p.$isRadioTalkBreak.removeDuplicates().sink { [weak self] in self?.isRadioTalkBreak = $0 },
             p.$radioStationName.removeDuplicates().sink { [weak self] in self?.radioStationName = $0 },
@@ -1575,6 +1577,7 @@ private struct MenuBarPanelView: View {
             isRadioTalk: playback.isRadioTalkBreak,
             isInstrumental: playback.isCurrentTrackInstrumental,
             hasNoLyrics: playback.currentTrackHasNoLyrics,
+            engineNotRunning: playback.engineNotRunning,
             networkDown: playback.engineNetworkDown,
             hasLyricsContent: playback.hasLyricsContent,
             isPlaying: playback.isPlayingNow
@@ -1596,6 +1599,16 @@ private struct MenuBarPanelView: View {
             statusText(L10n.t("纯音乐"))
         case .noLyrics:
             statusText(L10n.t("暂无歌词"))
+        case .engineNotRunning:
+            // 点一下收面板、翻到设置的播放器页(歌词引擎那一行有「启用」),同歌词窗口空状态那颗「打开设置」。
+            Button {
+                close()
+                AppActions.shared.requestSettings(.tab(.player))
+                AppActions.shared.openSettings?()
+            } label: {
+                statusText(L10n.t("歌词引擎未运行"))
+            }
+            .buttonStyle(.plain)
         case .networkDown:
             statusText(L10n.t("网络连接失败"))
         case .searching:

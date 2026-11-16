@@ -283,18 +283,19 @@ private func wiringContracts() {
         return text.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
             .filter { !$0.trimmingCharacters(in: .whitespaces).hasPrefix("//") }.joined(separator: "\n")
     }
-    // 「网络不通」状态文件(EngineStatus)在后台读,apply 本身不 stat(14 章决策 194)。
+    // 「网络不通」状态文件(EngineStatus)和引擎常驻进程在后台看,apply 本身不 stat、不列进程(14 章决策 194)。
     do {
         let source = code("LyrimuseCore/Local/LocalPlaybackSource.swift")
-        let refresh = sourceBody("private func refreshEngineNetworkDown()", in: source)
+        let refresh = sourceBody("private func refreshEngineHealth()", in: source)
         let apply = sourceBody("private func apply(_ rawSnapshot: MediaControlSnapshot)", in: source)
         expectEqual((appCodeOccurrences(of: "EngineStatus.networkLooksDown") + appCodeOccurrences(of: "EngineStatus.current"))
                         == ["LyrimuseCore/Local/LocalPlaybackSource.swift"]
                     && sourceHas(refresh, "guard !engineStatusReadInFlight else { return }")
                     && sourceHas(refresh, "Task.detached(priority: .utility) { [weak self] in let down = EngineStatus.networkLooksDown")
-                    && sourceHas(apply, "refreshEngineNetworkDown()")
-                    && !apply.contains("EngineStatus."), true,
-                    "播放源(契约): 网络不通状态只在后台读,apply 里不在主线程上读它")
+                    && sourceHas(refresh, "let present = EngineDaemonProbe.daemonPID() != nil")
+                    && sourceHas(apply, "refreshEngineHealth()")
+                    && !apply.contains("EngineStatus.") && !apply.contains("EngineDaemonProbe."), true,
+                    "播放源(契约): 网络不通状态和引擎常驻进程只在后台看,apply 里不在主线程上读它们")
     }
     /// `signature` 起到与它第一个 `{` 配对的 `}` 为止;找不到返回空串(断言随之失败)。
     /// `a` 在 `text` 里出现、且第一次出现在 `b` 第一次出现之前。

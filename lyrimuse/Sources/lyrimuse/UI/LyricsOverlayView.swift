@@ -64,6 +64,7 @@ private final class OverlayPlayback: ObservableObject {
     @Published private(set) var isCurrentTrackInstrumental = false
     @Published private(set) var currentTrackHasNoLyrics = false
     @Published private(set) var engineNetworkDown = false
+    @Published private(set) var engineNotRunning = false
     @Published private(set) var isCurrentTrackAdBreak = false
     /// 电台口白:这一刻在放的不是歌,台里在说话。语义与 `isCurrentTrackAdBreak` 平行。
     @Published private(set) var isRadioTalkBreak = false
@@ -224,6 +225,7 @@ private final class OverlayPlayback: ObservableObject {
             p.$isCurrentTrackInstrumental.removeDuplicates().sink { [weak self] in self?.isCurrentTrackInstrumental = $0 },
             p.$currentTrackHasNoLyrics.removeDuplicates().sink { [weak self] in self?.currentTrackHasNoLyrics = $0 },
             p.$engineNetworkDown.removeDuplicates().sink { [weak self] in self?.engineNetworkDown = $0 },
+            p.$engineNotRunning.removeDuplicates().sink { [weak self] in self?.engineNotRunning = $0 },
             p.$isCurrentTrackAdBreak.removeDuplicates().sink { [weak self] in self?.isCurrentTrackAdBreak = $0 },
             p.$isRadioTalkBreak.removeDuplicates().sink { [weak self] in self?.isRadioTalkBreak = $0 },
             p.$currentLineFillSettled.removeDuplicates().sink { [weak self] in self?.currentLineFillSettled = $0 },
@@ -2292,6 +2294,13 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
             // 搜完了、确实一句都没有。必须排在下面那个"搜索歌词中…"分支前面,否则这首歌
             // 只要还在播,那句"搜索中"就会一直挂着(见 PlaybackCoordinator.currentTrackHasNoLyrics)。
             Text(playback.hasPlainLyrics ? L10n.t("仅有纯文本，无时间戳") : L10n.t("暂无歌词"))
+                .font(playback.mainFont)
+                .foregroundStyle(playback.displayForegroundColor.opacity(0.5))
+                .lyricsTextStroke(playback.textStrokeEnabled, color: playback.textStrokeColor)
+        } else if playback.engineNotRunning && playback.isPlayingNow && !playback.hasLyricsContent {
+            // 引擎常驻进程一直不在,没人去搜。顺序与判据同 LyricsLineDisplay:排在「暂无歌词」后、「网络连接失败」和
+            // 「搜索歌词中…」前(见 15 章决策 115)。
+            Text(L10n.t("歌词引擎未运行"))
                 .font(playback.mainFont)
                 .foregroundStyle(playback.displayForegroundColor.opacity(0.5))
                 .lyricsTextStroke(playback.textStrokeEnabled, color: playback.textStrokeColor)

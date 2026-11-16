@@ -2036,6 +2036,7 @@
 "歌词引擎无响应" = "The lyrics engine didn’t respond";
 "歌词引擎未响应，未重发" = "The lyrics engine didn’t respond. Nothing was resent";
 "歌词引擎未响应，测试消息未发送。请确认歌词引擎正在运行后重试" = "The lyrics engine didn’t respond, so the test wasn’t sent. Make sure it is running and try again";
+"歌词引擎未运行" = "Lyrics engine not running";
 "歌词引擎未运行，歌词不会更新" = "The lyrics engine isn’t running; lyrics won’t update";
 "歌词引擎本次未能将它们收入缓存，列表中暂时不可见；文件已在歌词文件夹中，歌词引擎下次启动时将自动导入" = "The lyrics engine couldn’t add them to the cache this time, so they won’t appear in the list yet. The files are already in the lyrics folder and will be imported the next time the lyrics engine starts";
 "歌词引擎的原始日志，供自行排查" = "The lyrics engine’s raw log, for your own troubleshooting";

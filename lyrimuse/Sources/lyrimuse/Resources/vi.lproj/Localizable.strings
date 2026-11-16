@@ -1954,6 +1954,7 @@
 "歌词引擎无响应" = "Công cụ lời bài hát không phản hồi";
 "歌词引擎未响应，未重发" = "Công cụ lời bài hát không phản hồi, chưa gửi lại";
 "歌词引擎未响应，测试消息未发送。请确认歌词引擎正在运行后重试" = "Công cụ lời bài hát không phản hồi, chưa gửi tin nhắn thử. Hãy kiểm tra công cụ lời bài hát đang chạy rồi thử lại";
+"歌词引擎未运行" = "Công cụ lời bài hát không chạy";
 "歌词引擎未运行，歌词不会更新" = "Công cụ lời bài hát không chạy, lời bài hát sẽ không cập nhật";
 "歌词引擎本次未能将它们收入缓存，列表中暂时不可见；文件已在歌词文件夹中，歌词引擎下次启动时将自动导入" = "Lần này công cụ lời bài hát chưa đưa được chúng vào bộ nhớ đệm nên tạm thời chưa thấy trong danh sách. Các tệp đã có trong thư mục lời bài hát và sẽ được tự động nhập khi công cụ lời bài hát khởi động lần sau";
 "歌词引擎的原始日志，供自行排查" = "Nhật ký gốc của công cụ lời bài hát, để bạn tự kiểm tra lỗi";

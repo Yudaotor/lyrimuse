@@ -8,7 +8,9 @@ import Foundation
 ///     落到"搜索中"就会一直转圈;
 ///   * 「暂无歌词」要排在「网络连接失败」和「搜索歌词中…」**前面** —— 搜完了确实没有,
 ///     不是网断了、也不是还没搜到;
-///   * 「网络连接失败」要排在「搜索歌词中…」**前面** —— 搜不动是因为网断了。
+///   * 「网络连接失败」要排在「搜索歌词中…」**前面** —— 搜不动是因为网断了;
+///   * 「歌词引擎未运行」要排在「网络连接失败」和「搜索歌词中…」**前面**、「暂无歌词」**后面** —— 引擎不在就没人去搜,
+///     断网标记是引擎写的、它不在时可能是陈旧的;缓存里已有的结论照旧作数。只在在放、没有歌词内容时报(见 15 章决策 115)。
 ///
 /// 顺序错了不编译报错、不崩、不报警,只会长期显示一句**似是而非**的状态(比如一首纯音乐
 /// 永远停在"搜索歌词中…")。所以它值得被 selftest 钉住,而不是靠每个 View 各自誊一遍。
@@ -25,6 +27,7 @@ public enum LyricsLineDisplay: Equatable, Sendable {
     case radioTalk
     case instrumental
     case noLyrics
+    case engineNotRunning
     case networkDown
     case searching
     /// 没在放 / 这一刻确实没什么可显示的(间奏、还没开始)。
@@ -38,6 +41,7 @@ public enum LyricsLineDisplay: Equatable, Sendable {
         isRadioTalk: Bool,
         isInstrumental: Bool,
         hasNoLyrics: Bool,
+        engineNotRunning: Bool,
         networkDown: Bool,
         hasLyricsContent: Bool,
         isPlaying: Bool
@@ -51,6 +55,7 @@ public enum LyricsLineDisplay: Equatable, Sendable {
         if isRadioTalk { return .radioTalk }
         if isInstrumental { return .instrumental }
         if hasNoLyrics { return .noLyrics }
+        if engineNotRunning, isPlaying, !hasLyricsContent { return .engineNotRunning }
         if networkDown, !hasLyricsContent { return .networkDown }
         if isPlaying, !hasLyricsContent { return .searching }
         return hasCurrentLine ? .plain : .idle

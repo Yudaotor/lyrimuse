@@ -352,6 +352,8 @@ enum DebugDeepLinks {
         case let .settingsVisibility(override):
             NotificationCenter.default.post(name: settingsVisibilityNotification, object: override.map { NSNumber(value: $0) })
             logger.notice("debug settings visibility override=\(override.map { String($0) } ?? "auto", privacy: .public)")
+        case let .engineAlive(override):
+            LocalPlaybackSource.shared.setEngineDaemonPresenceOverride(override)
         case let .onboardingStep(step):
             NotificationCenter.default.post(name: onboardingStepNotification, object: step)
             logger.notice("debug onboarding step=\(String(describing: step), privacy: .public)")
@@ -446,6 +448,7 @@ enum DebugDeepLinks {
                                  "error": LastfmMirrorStatusWatcher.shared.info.map { $0.error as Any } ?? NSNull(),
                                  "at": LastfmMirrorStatusWatcher.shared.info.map { $0.at as Any } ?? NSNull()],
                 "engineNetworkDown": LocalPlaybackSource.shared.engineNetworkDown,
+                "engineNotRunning": LocalPlaybackSource.shared.engineNotRunning,
                 "listenBrainz": ["loaded": ListenBrainzSubmitStatusWatcher.shared.loaded,
                                  "since": ListenBrainzSubmitStatusWatcher.shared.info.map { $0.since as Any } ?? NSNull()],
                 "relayPush": String(describing: RelayPushStatusWatcher.shared.verdict),

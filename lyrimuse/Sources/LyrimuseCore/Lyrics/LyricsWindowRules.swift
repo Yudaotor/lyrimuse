@@ -14,12 +14,15 @@ import Foundation
 /// - 「暂无歌词」排在「网络连接失败」前面:前者是搜完的明确结论,比"此刻没网"更有信息量。断网
 ///   那一档必须有:引擎什么都查不到、全空又不写缓存,hasLyricsContent 永远是 false,不插
 ///   这一档就会一直停在「搜索歌词中…」。
+/// - 「歌词引擎未运行」排在「网络连接失败」和「搜索中」前面、「暂无歌词」后面,只在在放、没有歌词内容时报,
+///   理由同 `LyricsLineDisplay`(见 15 章决策 115)。
 public enum LyricsWindowEmptyState: Equatable, Sendable {
     case notPlaying
     case adBreak
     case radioTalk
     case instrumental
     case noLyrics
+    case engineNotRunning
     case networkDown
     case searching
     case none
@@ -30,19 +33,21 @@ public enum LyricsWindowEmptyState: Equatable, Sendable {
         public var isRadioTalkBreak: Bool
         public var isInstrumental: Bool
         public var hasNoLyrics: Bool
+        public var engineNotRunning: Bool
         public var engineNetworkDown: Bool
         public var hasLyricsContent: Bool
         public var isPlaying: Bool
 
         public init(hasTitle: Bool, isAdBreak: Bool = false, isRadioTalkBreak: Bool = false,
                     isInstrumental: Bool = false, hasNoLyrics: Bool = false,
-                    engineNetworkDown: Bool = false, hasLyricsContent: Bool = false,
+                    engineNotRunning: Bool = false, engineNetworkDown: Bool = false, hasLyricsContent: Bool = false,
                     isPlaying: Bool = false) {
             self.hasTitle = hasTitle
             self.isAdBreak = isAdBreak
             self.isRadioTalkBreak = isRadioTalkBreak
             self.isInstrumental = isInstrumental
             self.hasNoLyrics = hasNoLyrics
+            self.engineNotRunning = engineNotRunning
             self.engineNetworkDown = engineNetworkDown
             self.hasLyricsContent = hasLyricsContent
             self.isPlaying = isPlaying
@@ -55,6 +60,7 @@ public enum LyricsWindowEmptyState: Equatable, Sendable {
         if i.isRadioTalkBreak { return .radioTalk }
         if i.isInstrumental { return .instrumental }
         if i.hasNoLyrics { return .noLyrics }
+        if i.engineNotRunning && i.isPlaying && !i.hasLyricsContent { return .engineNotRunning }
         if i.engineNetworkDown && !i.hasLyricsContent { return .networkDown }
         if i.isPlaying && !i.hasLyricsContent { return .searching }
         return .none
@@ -68,6 +74,7 @@ public enum LyricsWindowEmptyState: Equatable, Sendable {
         case .radioTalk: return "dot.radiowaves.left.and.right"
         case .instrumental: return "waveform"
         case .noLyrics: return "text.badge.xmark"
+        case .engineNotRunning: return "exclamationmark.triangle"
         case .networkDown: return "wifi.slash"
         case .searching: return "magnifyingglass"
         case .none: return "text.quote"
@@ -82,6 +89,9 @@ public enum LyricsWindowEmptyState: Equatable, Sendable {
         default: return false
         }
     }
+
+    /// 这一档要不要给「打开设置」入口:引擎没在跑时翻到设置的播放器页,歌词引擎那一行有「启用」。
+    public var offersEngineSettings: Bool { self == .engineNotRunning }
 }
 
 /// 歌词字号。

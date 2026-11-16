@@ -61,3 +61,33 @@ public enum EngineDaemonProbe {
         }
     }
 }
+
+/// 展示面判「歌词引擎没在跑」:每拍喂一次 `EngineDaemonProbe.daemonPID()` 有没有,连续看不到满 `graceSeconds`、
+/// 而且连着至少 `minAbsentProbes` 拍都看不到才算没在跑;看到一次就清。宽限盖住 App 刚启动时的对账重装、
+/// 改配置后的重启和 launchd 崩溃重拉的间隔,拍数盖住睡眠前后两拍隔得很远的情形。见 15 章决策 115。
+public struct EngineLivenessTracker: Equatable, Sendable {
+    public static let graceSeconds: TimeInterval = 20
+    public static let minAbsentProbes = 3
+
+    public private(set) var notRunning = false
+    private var absentSince: TimeInterval?
+    private var absentProbes = 0
+
+    public init() {}
+
+    /// `now` 用单调时钟(`ProcessInfo.systemUptime`)。返回观察之后的 `notRunning`。
+    @discardableResult
+    public mutating func observe(daemonPresent: Bool, now: TimeInterval) -> Bool {
+        guard !daemonPresent else {
+            absentSince = nil
+            absentProbes = 0
+            notRunning = false
+            return false
+        }
+        let since = absentSince ?? now
+        absentSince = since
+        absentProbes += 1
+        notRunning = absentProbes >= Self.minAbsentProbes && now - since >= Self.graceSeconds
+        return notRunning
+    }
+}

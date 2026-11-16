@@ -581,6 +581,37 @@ func runOpsDiagnosticsTests() {
         expectEqual(P.isDaemon(ppid: 1, name: "lyrimuse", names: engineNames), false, "引擎探针: 名字不对不算")
     }
 
+    // ---- EngineLivenessTracker(展示面「歌词引擎未运行」的宽限) ----
+    do {
+        print("\n== 引擎存活宽限 ==")
+        typealias L = EngineLivenessTracker
+        func run(_ probes: [(present: Bool, at: TimeInterval)]) -> [Bool] {
+            var tracker = L()
+            return probes.map { tracker.observe(daemonPresent: $0.present, now: $0.at) }
+        }
+        let grace = L.graceSeconds
+        expectEqual(L().notRunning, false, "引擎存活: 还没探过不报")
+        // App 刚启动、对账重装那几秒:每 2 秒一拍都看不到,宽限内一拍都不报,进程起来就清。
+        let launch = run(stride(from: 0.0, to: 16, by: 2).map { (false, $0) } + [(true, 16)])
+        expectEqual(launch.contains(true), false, "引擎存活: 宽限内看不到进程不报(启动、重启那几秒)")
+        let down = run(stride(from: 0.0, through: grace, by: 2).map { (false, $0) })
+        expectEqual(down.last, true, "引擎存活: 连续看不到满宽限就报")
+        expectEqual(down.dropLast().contains(true), false, "引擎存活: 不满宽限一拍都不报")
+        expectEqual(run([(false, 0), (false, grace - 0.5), (false, grace - 0.1)]).last, false,
+                    "引擎存活: 拍数够了时间不够不报")
+        expectEqual(run([(false, 0), (false, grace + 80)]).last, false,
+                    "引擎存活: 时间够了只有两拍不报(睡眠前后各一拍)")
+        expectEqual(run([(false, 0), (false, grace + 80), (false, grace + 82)]).last, true,
+                    "引擎存活: 满宽限且满 \(L.minAbsentProbes) 拍才报")
+        var tracker = L()
+        for t in stride(from: 0.0, through: grace, by: 2) { tracker.observe(daemonPresent: false, now: t) }
+        expectEqual(tracker.observe(daemonPresent: true, now: grace + 2), false, "引擎存活: 进程回来一拍就清")
+        expectEqual(tracker.observe(daemonPresent: false, now: grace + 4), false,
+                    "引擎存活: 清掉之后再不见,宽限重新算、不接着上一次")
+        expectEqual(run([(false, 0), (false, 8), (true, 10), (false, 12), (false, 18), (false, 26)]).last, false,
+                    "引擎存活: 中间看到过一次进程,不在的起点从那之后算")
+    }
+
     // ---- ProcessRunner ----
     //
     // 跑真实子进程（/bin/echo、/bin/sleep、/usr/bin/yes），不是合成数据 —— 这里要验证的

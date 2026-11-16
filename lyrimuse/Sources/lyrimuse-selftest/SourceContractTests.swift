@@ -1310,6 +1310,55 @@ func runSourceContractTests() {
             } else {
                 expectEqual(true, false, "电台: 读不到 lyrimuse-engine/enrich.go(路径挪了?)")
             }
+            // 「歌词引擎未运行」:灵动岛、悬浮歌词各有一份内联的判定链(菜单栏面板、歌词窗口、网页歌词走 Core 的两条,行为测试钉着)。
+            // 排错了不报错,只会在引擎不在时照旧一直「搜索歌词中…」,或者把缓存里已有的「暂无歌词」压掉。见 15 章决策 115。
+            do {
+                func ordered(_ src: String, _ snippets: [String]) -> Bool {
+                    let collapsed = src.split(whereSeparator: \.isWhitespace).joined(separator: " ")
+                    let spots = snippets.map { collapsed.range(of: $0.split(whereSeparator: \.isWhitespace).joined(separator: " "))?.lowerBound }
+                    guard spots.allSatisfy({ $0 != nil }) else { return false }
+                    let found = spots.compactMap { $0 }
+                    return zip(found, found.dropFirst()).allSatisfy { $0 < $1 }
+                }
+                let chain = ["} else if playback.currentTrackHasNoLyrics {",
+                             "} else if playback.engineNotRunning && playback.isPlayingNow && !playback.hasLyricsContent {",
+                             "L10n.t(\"歌词引擎未运行\")",
+                             "} else if playback.engineNetworkDown && !playback.hasLyricsContent {",
+                             "} else if playback.isPlayingNow && !playback.hasLyricsContent {"]
+                if let overlay = text("lyrimuse/Sources/lyrimuse/UI/LyricsOverlayView.swift") {
+                    expectEqual(ordered(overlay, chain), true,
+                                "引擎未运行: 悬浮歌词那一档排在「暂无歌词」后、「网络连接失败」和「搜索歌词中…」前")
+                } else {
+                    expectEqual(true, false, "引擎未运行: 读不到 LyricsOverlayView.swift(路径挪了?)")
+                }
+                if let notch = notchCardSourceIfReadable({ text("lyrimuse/Sources/lyrimuse/UI/" + $0) }) {
+                    expectEqual(ordered(notch, chain), true,
+                                "引擎未运行: 灵动岛那一档排在「暂无歌词」后、「网络连接失败」和「搜索歌词中…」前")
+                } else {
+                    expectEqual(true, false, "引擎未运行: 读不到灵动岛卡片源码(路径挪了?)")
+                }
+                for (rel, face) in [("lyrimuse/Sources/lyrimuse/MenuBar/MenuBarPanel.swift", "菜单栏面板"),
+                                    ("lyrimuse/Sources/lyrimuse/UI/LyricsWindowView.swift", "歌词窗口"),
+                                    ("lyrimuse/Sources/lyrimuse/WebLyrics/WebLyricsScreen.swift", "网页歌词")] {
+                    if let src = text(rel) {
+                        expectEqual(sourceHas(src, "engineNotRunning: playback.engineNotRunning"), true,
+                                    "引擎未运行: \(face)要把引擎状态喂进共用判定链")
+                    } else {
+                        expectEqual(true, false, "引擎未运行: 读不到 \(rel)(路径挪了?)")
+                    }
+                }
+                if let lps = text("lyrimuse/Sources/LyrimuseCore/Local/LocalPlaybackSource.swift") {
+                    expectEqual(sourceBody("private func apply(_ rawSnapshot: MediaControlSnapshot)", in: lps)
+                                    .contains("refreshEngineHealth()")
+                                && sourceHas(sourceBody("private func refreshEngineHealth()", in: lps),
+                                             "let present = EngineDaemonProbe.daemonPID() != nil")
+                                && sourceHas(sourceBody("private func finishEngineStatusRead(", in: lps),
+                                             "engineLiveness.observe(daemonPresent: present, now: ProcessInfo.processInfo.systemUptime)"),
+                                true, "引擎未运行: 每拍在后台看一眼常驻进程,经宽限判定器再发布")
+                } else {
+                    expectEqual(true, false, "引擎未运行: 读不到 LocalPlaybackSource.swift(路径挪了?)")
+                }
+            }
             // 分母:位置换成单曲口径之后,时长也得换,否则显示成「2:29 / 56:30」。真曲长由引擎
             // 从 Apple 目录查到写进歌词缓存,App 在 apply 里读出来替换 —— 读不到时**保留**快照那份,
             // 绝不置 0(进度锚点按 durationMs 夹位置,0 会把位置钉死在开头、整档没歌词)。

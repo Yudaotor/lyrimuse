@@ -92,6 +92,7 @@ final class WindowPlayback: ObservableObject {
     // 列表末尾「创作者：…」的名单,见 LocalPlaybackSource.currentTrackSongwriters。
     @Published private(set) var songwriters: [String] = []
     @Published private(set) var engineNetworkDown = false
+    @Published private(set) var engineNotRunning = false
     @Published private(set) var isCurrentTrackAdBreak = false
     // ---- 来自 AppSettings(只挑本窗口实读的几项) ----
     @Published private(set) var showRomanization = true
@@ -220,6 +221,7 @@ final class WindowPlayback: ObservableObject {
             p.$currentTrackPlainLyrics.removeDuplicates().sink { [weak self] in self?.currentTrackPlainLyrics = $0 },
             p.$currentTrackSongwriters.removeDuplicates().sink { [weak self] in self?.songwriters = $0 },
             p.$engineNetworkDown.removeDuplicates().sink { [weak self] in self?.engineNetworkDown = $0 },
+            p.$engineNotRunning.removeDuplicates().sink { [weak self] in self?.engineNotRunning = $0 },
             p.$isCurrentTrackAdBreak.removeDuplicates().sink { [weak self] in self?.isCurrentTrackAdBreak = $0 },
             s.$showRomanization.removeDuplicates().sink { [weak self] in self?.showRomanization = $0 },
             s.$showTranslation.removeDuplicates().sink { [weak self] in self?.showTranslation = $0 },
@@ -5047,7 +5049,8 @@ struct LyricsWindowView: View {
     /// 只有「暂无歌词」「网络连接失败」为 true —— 前者是自动解析的明确结论,用户不服就手动搜;
     /// 后者是此刻查不了,网好了想立刻再查也在这里。**「纯音乐」刻意不给**;「没有在播放」
     /// 「广告中」没有可搜的对象,「搜索歌词中…」正在搜,兜底那档理论上到不了。
-    private var emptyStateSpec: (icon: String, text: String, offersSearch: Bool) {
+    /// 第四个字段 `offersEngineSettings`:「歌词引擎未运行」给一颗「打开设置」,翻到播放器页(歌词引擎那一行有「启用」)。
+    private var emptyStateSpec: (icon: String, text: String, offersSearch: Bool, offersEngineSettings: Bool) {
         // 判定与优先级在 Core(`LyricsWindowEmptyState.resolve`,各档为什么排在那里见那边的注释,
         // selftest 钉着顺序),这里只配文案。
         let state = LyricsWindowEmptyState.resolve(.init(
@@ -5056,6 +5059,7 @@ struct LyricsWindowView: View {
             isRadioTalkBreak: playback.isRadioTalkBreak,
             isInstrumental: playback.isCurrentTrackInstrumental,
             hasNoLyrics: playback.currentTrackHasNoLyrics,
+            engineNotRunning: playback.engineNotRunning,
             engineNetworkDown: playback.engineNetworkDown,
             hasLyricsContent: playback.hasLyricsContent,
             isPlaying: playback.isPlayingNow))
@@ -5066,11 +5070,12 @@ struct LyricsWindowView: View {
         case .radioTalk: text = L10n.t("口白")
         case .instrumental: text = L10n.t("纯音乐")
         case .noLyrics: text = L10n.t("暂无歌词")
+        case .engineNotRunning: text = L10n.t("歌词引擎未运行")
         case .networkDown: text = L10n.t("网络连接失败")
         case .searching: text = L10n.t("搜索歌词中…")
         case .none: text = L10n.t("无歌词")
         }
-        return (state.icon, text, state.offersSearch)
+        return (state.icon, text, state.offersSearch, state.offersEngineSettings)
     }
 
     /// 纯文本歌词兜底的静态展示(见 currentTrackPlainLyrics 声明处注释)。不用 rightPane
@@ -5135,6 +5140,21 @@ struct LyricsWindowView: View {
                     .clearGlassCapsule(rim: Color.white.opacity(0.28))
                     .padding(.top, 6)
                 }
+                if spec.offersEngineSettings {
+                    Button {
+                        openEngineSettings()
+                    } label: {
+                        Label(L10n.t("打开设置"), systemImage: "gearshape")
+                            .font(.system(size: 13, weight: .medium))
+                            .foregroundStyle(.white.opacity(0.92))
+                            .padding(.horizontal, 14)
+                            .padding(.vertical, 8)
+                    }
+                    .buttonStyle(SettingsGlassHoverButtonStyle())
+                    .environment(\.colorScheme, .dark)
+                    .clearGlassCapsule(rim: Color.white.opacity(0.28))
+                    .padding(.top, 6)
+                }
             }
             .foregroundStyle(.white.opacity(0.75))
             .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -5148,8 +5168,17 @@ struct LyricsWindowView: View {
                 if spec.offersSearch {
                     Button(L10n.t("搜索歌词…")) { openLyricsSearch() }
                 }
+                if spec.offersEngineSettings {
+                    Button(L10n.t("打开设置")) { openEngineSettings() }
+                }
             }
         }
+    }
+
+    /// 「歌词引擎未运行」那颗「打开设置」:翻到播放器页,歌词引擎那一行有「启用」。
+    private func openEngineSettings() {
+        AppActions.shared.requestSettings(.tab(.player))
+        AppActions.shared.openSettings?()
     }
 
     /// 这一行是不是把读音逐词标进正文了(标了就别再单独渲染一整行罗马音)。

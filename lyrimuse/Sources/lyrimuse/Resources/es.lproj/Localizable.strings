@@ -2036,6 +2036,7 @@
 "歌词引擎无响应" = "El motor de letras no respondió";
 "歌词引擎未响应，未重发" = "El motor de letras no respondió. No se reenvió nada";
 "歌词引擎未响应，测试消息未发送。请确认歌词引擎正在运行后重试" = "El motor de letras no respondió y no se envió la prueba. Comprueba que esté en ejecución y vuelve a intentarlo";
+"歌词引擎未运行" = "El motor de letras no se está ejecutando";
 "歌词引擎未运行，歌词不会更新" = "El motor de letras no está en ejecución; la letra no se actualizará";
 "歌词引擎本次未能将它们收入缓存，列表中暂时不可见；文件已在歌词文件夹中，歌词引擎下次启动时将自动导入" = "El motor de letras no pudo añadirlos a la caché esta vez, así que aún no aparecerán en la lista. Los archivos ya están en la carpeta de letras y se importarán la próxima vez que se inicie el motor de letras";
 "歌词引擎的原始日志，供自行排查" = "El registro sin procesar del motor de letras, para resolver problemas por tu cuenta";

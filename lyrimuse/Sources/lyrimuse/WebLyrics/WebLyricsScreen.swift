@@ -971,7 +971,7 @@ final class WebLyricsScreenRenderer {
         let state = LyricsWindowEmptyState.resolve(.init(
             hasTitle: !isIdle, isAdBreak: playback.isCurrentTrackAdBreak, isRadioTalkBreak: playback.isRadioTalkBreak,
             isInstrumental: playback.isCurrentTrackInstrumental, hasNoLyrics: playback.currentTrackHasNoLyrics,
-            engineNetworkDown: playback.engineNetworkDown, hasLyricsContent: playback.hasLyricsContent,
+            engineNotRunning: playback.engineNotRunning, engineNetworkDown: playback.engineNetworkDown, hasLyricsContent: playback.hasLyricsContent,
             isPlaying: playback.isPlayingNow))
         let showsList = !isIdle && !lyricsOnHold && !playback.allLines.isEmpty
         list.isHidden = !showsList
@@ -1347,6 +1347,7 @@ final class WebLyricsScreenRenderer {
         case .radioTalk: return L10n.t("口白")
         case .instrumental: return L10n.t("纯音乐")
         case .noLyrics: return L10n.t("暂无歌词")
+        case .engineNotRunning: return L10n.t("歌词引擎未运行")
         case .networkDown: return L10n.t("网络连接失败")
         case .searching: return L10n.t("搜索歌词中…")
         case .none: return L10n.t("无歌词")

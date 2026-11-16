@@ -461,6 +461,11 @@ extension NotchLyricsView {
                 Text(playback.hasPlainLyrics ? L10n.t("仅有纯文本，无时间戳") : L10n.t("暂无歌词"))
                     .foregroundStyle(accentOrWhite.opacity(0.7))
                     .notchTextShadow()
+            } else if playback.engineNotRunning && playback.isPlayingNow && !playback.hasLyricsContent {
+                // 引擎常驻进程一直不在,顺序与判据同 LyricsLineDisplay(见 15 章决策 115)。
+                Text(L10n.t("歌词引擎未运行"))
+                    .foregroundStyle(accentOrWhite.opacity(0.7))
+                    .notchTextShadow()
             } else if playback.engineNetworkDown && !playback.hasLyricsContent {
                 // 顺序理由同 LyricsOverlayView.mainLine 里那段:必须排在"搜索歌词中…"
                 // 之前、"暂无歌词"之后。

@@ -1482,11 +1482,11 @@ func runSyncEngineTests() {
 
     do {
         func d(words: Bool = false, line: Bool = false, ad: Bool = false, talk: Bool = false,
-               inst: Bool = false, noLyrics: Bool = false, netDown: Bool = false, content: Bool = false,
-               playing: Bool = true) -> LyricsLineDisplay {
+               inst: Bool = false, noLyrics: Bool = false, engineDown: Bool = false, netDown: Bool = false,
+               content: Bool = false, playing: Bool = true) -> LyricsLineDisplay {
             LyricsLineDisplay.resolve(
                 hasWordTiming: words, hasCurrentLine: line, isAdBreak: ad, isRadioTalk: talk,
-                isInstrumental: inst, hasNoLyrics: noLyrics, networkDown: netDown,
+                isInstrumental: inst, hasNoLyrics: noLyrics, engineNotRunning: engineDown, networkDown: netDown,
                 hasLyricsContent: content, isPlaying: playing)
         }
 
@@ -1510,6 +1510,13 @@ func runSyncEngineTests() {
         expectEqual(d(noLyrics: true, netDown: true), .noLyrics,
                     "歌词行: 「暂无歌词」排在「网络失败」前(搜完了确实没有)")
         expectEqual(d(netDown: true), .networkDown, "歌词行: 「网络失败」排在「搜索中」前")
+        expectEqual(d(engineDown: true), .engineNotRunning, "歌词行: 「歌词引擎未运行」排在「搜索中」前(没人去搜)")
+        expectEqual(d(engineDown: true, netDown: true), .engineNotRunning,
+                    "歌词行: 「歌词引擎未运行」排在「网络失败」前(断网标记是引擎写的,它不在时可能是陈旧的)")
+        expectEqual(d(noLyrics: true, engineDown: true), .noLyrics, "歌词行: 缓存里已有的「暂无歌词」照旧作数")
+        expectEqual(d(inst: true, engineDown: true), .instrumental, "歌词行: 纯音乐排在「歌词引擎未运行」前")
+        expectEqual(d(line: true, engineDown: true, content: true), .plain, "歌词行: 歌词已在手时引擎不在不影响显示")
+        expectEqual(d(engineDown: true, playing: false), .idle, "歌词行: 没在放时不报引擎未运行(只替换「搜索中」那一档)")
 
         // 有词优先于一切状态 —— 跟另外三处展示面保持同一口径
         expectEqual(d(words: true, line: true, ad: true, inst: true, noLyrics: true), .words,

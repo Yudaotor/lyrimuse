@@ -145,7 +145,13 @@ public final class LocalPlaybackSource: ObservableObject {
     /// "根本没查成"。没有它的话,断网时界面会一直停在"搜索歌词中…" —— 而那句话在
     /// 断网状态下永远不会有下文。
     @Published public private(set) var engineNetworkDown: Bool = false
-    /// `refreshEngineNetworkDown` 派出的那次后台读还没回来;没回来就不再派(磁盘卡住时不堆积)。
+    /// 歌词引擎的常驻进程一直不在(`EngineLivenessTracker`,有宽限)。展示面拿它把「搜索歌词中…」换成「歌词引擎未运行」:
+    /// 引擎不在就没人去搜,那句话不会有下文。见 15 章决策 115。
+    @Published public private(set) var engineNotRunning: Bool = false
+    private var engineLiveness = EngineLivenessTracker()
+    /// 本机验证用(`debug/engine-alive`):nil = 照实探测;true / false = 把每拍的探测结果当成在 / 不在,宽限照算。
+    private var engineDaemonPresenceOverride: Bool?
+    /// `refreshEngineHealth` 派出的那次后台读还没回来;没回来就不再派(磁盘卡住时不堆积)。
     private var engineStatusReadInFlight = false
     // Spotify 广告插播——补上:media-control 自己的文档确认广告播放时 album
     // 字段恒为空字符串,靠"当前是 Spotify 在报告 + album 为空"这个信号判断(见
@@ -4429,21 +4435,35 @@ public final class LocalPlaybackSource: ObservableObject {
         }
     }
 
-    /// 在后台读 `EngineStatus`(按 mtime 缓存,常态是一次 stat),回到主线程才更新 `engineNetworkDown`。主线程上 stat
-    /// 碰上磁盘卡住就是几秒的卡顿(14 章决策 194)。只有这一处读它,一次只在飞一个,结果按派出顺序落下。
-    /// `engineNetworkDown` 只给界面说「网络不通」,位置、换歌判断都不读它,晚几毫秒落下不影响 apply 里的任何判断。
-    private func refreshEngineNetworkDown() {
+    /// 在后台读 `EngineStatus`(按 mtime 缓存,常态是一次 stat)、看一眼引擎常驻进程在不在(`EngineDaemonProbe`,不起子进程),
+    /// 回到主线程才更新 `engineNetworkDown` / `engineNotRunning`。主线程上 stat 碰上磁盘卡住就是几秒的卡顿(14 章决策 194)。
+    /// 只有这一处读它们,一次只在飞一个,结果按派出顺序落下。这两项只给界面说状态,位置、换歌判断都不读它们。
+    private func refreshEngineHealth() {
         guard !engineStatusReadInFlight else { return }
         engineStatusReadInFlight = true
         Task.detached(priority: .utility) { [weak self] in
             let down = EngineStatus.networkLooksDown
-            await self?.finishEngineStatusRead(down)
+            let present = EngineDaemonProbe.daemonPID() != nil
+            await self?.finishEngineStatusRead(down, daemonPresent: present)
         }
     }
 
-    private func finishEngineStatusRead(_ down: Bool) {
+    private func finishEngineStatusRead(_ down: Bool, daemonPresent: Bool) {
         engineStatusReadInFlight = false
         if down != engineNetworkDown { engineNetworkDown = down }
+        let present = engineDaemonPresenceOverride ?? daemonPresent
+        let notRunning = engineLiveness.observe(daemonPresent: present, now: ProcessInfo.processInfo.systemUptime)
+        if notRunning != engineNotRunning {
+            engineNotRunning = notRunning
+            logger.notice("engine liveness: \(notRunning ? "daemon absent past the grace period, showing not running" : "daemon back", privacy: .public)")
+        }
+    }
+
+    /// 本机验证用(`debug/engine-alive`):把常驻进程的探测结果当成在(true)/ 不在(false),nil 交还给真实探测。
+    /// 宽限和拍数照常算,验得到「刚不在时不报、满宽限才报、回来立刻清」。
+    public func setEngineDaemonPresenceOverride(_ present: Bool?) {
+        engineDaemonPresenceOverride = present
+        logger.notice("engine liveness: presence override \(present.map { $0 ? "present" : "absent" } ?? "auto", privacy: .public)")
     }
 
     private func apply(_ rawSnapshot: MediaControlSnapshot) {
@@ -4716,8 +4736,8 @@ public final class LocalPlaybackSource: ObservableObject {
         // 代价是可控的:mtime 只是一次 stat,而重新解析只在文件真的被改写时发生 —— 那时候
         // 下一次 lookup() 本来也要重新解析(EnrichCacheReader 自己就是按 mtime 缓存的)。
         // 跟下面读 enrich cache 的 mtime 挂在同一个节拍上(每次快照,约 2s 一次)。
-        // 「网络不通」状态文件同一节拍在后台读、读完再更新 engineNetworkDown(见 refreshEngineNetworkDown)。
-        refreshEngineNetworkDown()
+        // 「网络不通」状态文件和引擎常驻进程同一节拍在后台看、看完再更新 engineNetworkDown / engineNotRunning(见 refreshEngineHealth)。
+        refreshEngineHealth()
 
         // 每拍先让 Reader 推进内容(mtime 变了在后台解码,见 refreshIfNeeded 注释),触发
         // 键用**已解码代**的版本而不是文件即时 mtime——stale 返回窗口里拿文件 mtime 触发
