@@ -1166,7 +1166,7 @@ private struct LyricsSettingsTab: View {
                 let disabled = LyricsSource.settingsDisplayOrder.filter { !features.lyricsSources.contains($0) }
                 if !disabled.isEmpty {
                     CardDivider()
-                    SettingsRawRow(insetToText: true) {
+                    SettingsRawRow {
                         VStack(alignment: .leading, spacing: 6) {
                             Text(L10n.t("未启用的来源"))
                                 .font(.system(size: 11))
@@ -1177,7 +1177,7 @@ private struct LyricsSettingsTab: View {
                     }
                 }
             } else {
-                SettingsRawRow(insetToText: true) {
+                SettingsRawRow {
                     sourceGrid(LyricsSource.settingsDisplayOrder)
                         .padding(.bottom, 4)
                 }
@@ -2060,7 +2060,7 @@ private struct LyricsSettingsTab: View {
     private var readingCard: some View {
         SettingsCard(cornerRadius: 18) {
             SettingsCardHeader(title: L10n.t("读音"))
-            SettingsRawRow(insetToText: true) {
+            SettingsRawRow {
                 LyricsTextSample(
                     scripts: settings.romanizationScripts,
                     japaneseReading: settings.japaneseReadingStyle,
@@ -2080,7 +2080,7 @@ private struct LyricsSettingsTab: View {
                     .monospacedDigit()
                     .foregroundStyle(.secondary)
             }
-            SettingsRawRow(insetToText: true) {
+            SettingsRawRow {
                 SettingsEqualColumns(columns: 2, spacing: 6) {
                     ForEach(Self.commonReadings) { romanizationTile($0) }
                 }
@@ -2241,7 +2241,7 @@ private struct LyricsSettingsTab: View {
 
     private func readingGroupBlock(_ group: ReadingGroup) -> some View {
         let allOn = group.languages.allSatisfy { settings.romanizationScripts.contains($0.option) }
-        return SettingsRawRow(insetToText: true) {
+        return SettingsRawRow {
             VStack(alignment: .leading, spacing: 6) {
                 HStack(spacing: 6) {
                     Text(group.title)
@@ -2695,7 +2695,8 @@ private struct LyricsSettingsTab: View {
             if isDragged { return drag.translation }
             return ReorderDrag.displacement(row: index, source: drag.source, target: drag.target, rowMidYs: drag.rowMidYs)
         }()
-        return SettingsRawRow(insetToText: true) {
+        // 把手落在图标列、序号落在标题那一列,跟上面「匹配算法」那一行的图标和标题对齐,所以不带 insetToText。
+        return SettingsRawRow {
             HStack(spacing: 8) {
                 Image(systemName: "line.3.horizontal")
                     .font(.system(size: 11, weight: .semibold))

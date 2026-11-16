@@ -1550,33 +1550,34 @@ struct SettingsSubRow<Trailing: View>: View {
 // 需要整行自己排版(一排按钮、来源排序列表、权限状态块这类)的场合,用它拿到跟
 // SettingsRow 一致的内边距,不必每处重复写 padding 数值。
 struct SettingsRawRow<Content: View>: View {
+    /// 内容左沿落在 `textLeadingInset`,跟上下行的标题对齐;不给图标也一样。说明文字、输入框、单颗按钮带它;
+    /// 格子、示例面板这类自带底色、按整张卡宽排的内容不带,左沿跟卡片标题对齐(长语言里格子才不被挤得截尾)。
     var insetToText = false
-    // insetToText 的行会空出一整条图标列(那是它跟其它行文字对齐的代价)。给了图标就把那块
-    // 填上,不给就还是空着 —— 空着本身不是 bug,但一张卡里别的行都有图标、唯独这一行留个
-    // 空洞,看起来就像漏画了(用户指的就是「账户 Token」那一行)。
+    /// 只在 `insetToText` 时画,放在图标列里。一张卡里别的行都有图标时给上,免得这一行像漏画了图标。
     var icon: String?
     @ViewBuilder let content: () -> Content
 
+    /// 有图标时图标列 + 间距补足 `textLeadingInset`;没有图标时由内边距直接补足。别靠一个包着条件视图的
+    /// Group 加 `.frame(width:)` 占图标列:没有图标时 Group 里没有子视图,frame 落不到任何东西上,图标列不占位,
+    /// 内容会顶到行首。见 14 章决策 203。
+    static func leadingPadding(insetToText: Bool, hasIcon: Bool) -> CGFloat {
+        insetToText && !hasIcon ? SettingsRowMetrics.textLeadingInset : SettingsRowMetrics.horizontalPadding
+    }
+
     var body: some View {
         HStack(alignment: .top, spacing: SettingsRowMetrics.iconTextSpacing) {
-            if insetToText {
-                Group {
-                    if let icon {
-                        SymbolImage(name: icon, size: 13)
-                            .foregroundStyle(.secondary)
-                            // 锁拉丁语区,理由同 SettingsRow 里那处注释(SF Symbols 的部分
-                            // 符号有 CJK 变体,中文界面下会被渲染成汉字)。
-                            .environment(\.locale, Locale(identifier: "en"))
-                    }
-                }
-                .frame(width: SettingsRowMetrics.iconWidth, alignment: .center)
-                .padding(.top, 1)
+            if insetToText, let icon {
+                SymbolImage(name: icon, size: 13)
+                    .foregroundStyle(.secondary)
+                    // 锁拉丁语区,理由同 SettingsRow 里那处注释(SF Symbols 的部分
+                    // 符号有 CJK 变体,中文界面下会被渲染成汉字)。
+                    .environment(\.locale, Locale(identifier: "en"))
+                    .frame(width: SettingsRowMetrics.iconWidth, alignment: .center)
+                    .padding(.top, 1)
             }
             content()
         }
-        // 图标列自己占了宽度,所以这里一律用卡片内边距 —— 加起来仍然是
-        // horizontalPadding + iconWidth + spacing = textLeadingInset,跟原来的对齐一致。
-        .padding(.leading, SettingsRowMetrics.horizontalPadding)
+        .padding(.leading, Self.leadingPadding(insetToText: insetToText, hasIcon: icon != nil))
         .padding(.trailing, SettingsRowMetrics.horizontalPadding)
         .modifier(SettingsRowVerticalPadding())
         .frame(maxWidth: .infinity, alignment: .leading)

@@ -222,7 +222,7 @@ struct LanguagePackSection: View {
                 SettingsNote {
                     Text(L10n.t("仅列出可翻译为当前译文语言的语言，因此可能少于「系统设置」中的数量。点按未下载的语言即可下载"))
                 }
-                SettingsRawRow(insetToText: true) { packGrid }
+                SettingsRawRow { packGrid }
                 SettingsNote {
                     Text(L10n.t("删除语言包：系统设置 › 通用 › 语言与地区 › 翻译语言"))
                     Button(L10n.t("打开系统设置")) {

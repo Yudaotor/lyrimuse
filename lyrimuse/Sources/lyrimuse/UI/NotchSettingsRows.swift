@@ -484,7 +484,7 @@ struct NotchFollowsAudioPopover: View {
         }
         if settings.notchEqualizerFollowsAudio && realAudio.likelyDenied {
             CardDivider()
-            // 提示和按钮上下排:浮层只有 320 宽,并排时英文按钮会截尾、提示折成五行。图标要给:不给时图标列不占位,提示会顶到行首。
+            // 提示和按钮上下排:浮层只有 320 宽,并排时英文按钮会截尾、提示折成五行。图标列放警告图标,跟触控栏「输入时收起」没授权那一行同一种写法。
             SettingsRawRow(insetToText: true, icon: "exclamationmark.triangle") {
                 VStack(alignment: .leading, spacing: 8) {
                     Text(L10n.t("未读到声音，请在系统设置中允许 Lyrimuse 录制系统音频"))

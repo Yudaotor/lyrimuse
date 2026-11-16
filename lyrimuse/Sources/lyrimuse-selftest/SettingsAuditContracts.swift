@@ -182,6 +182,28 @@ func runSettingsAuditContracts() {
                 && sourceHas(channels, "L10n.formatNames(L10n.t(\"已识别为%@，平台已自动切换\"), detected.displayName)"), true,
                 "中英文间距: 推送渠道里贴着汉字的平台名走 formatNames")
 
+    // ---- 卡片里的整行自定义内容:SettingsRawRow(insetToText:) 跟上下行标题对齐 ----
+    let designSource = app("Settings/SettingsDesignSystem.swift")
+    let rawRow = sourceBody("struct SettingsRawRow<Content: View>: View {", in: designSource)
+    expectEqual(sourceHas(designSource, "static var textLeadingInset: CGFloat { horizontalPadding + iconWidth + iconTextSpacing }")
+                && sourceHas(rawRow, "insetToText && !hasIcon ? SettingsRowMetrics.textLeadingInset : SettingsRowMetrics.horizontalPadding")
+                && sourceHas(rawRow, ".padding(.leading, Self.leadingPadding(insetToText: insetToText, hasIcon: icon != nil))"), true,
+                "SettingsRawRow: insetToText 不给图标时内边距直接补到 textLeadingInset,给图标时图标列 + 间距补足(14 章决策 203)")
+    expectEqual(sourceHas(rawRow, "if insetToText, let icon {\nSymbolImage(name: icon, size: 13)")
+                && sourceHas(rawRow, ".frame(width: SettingsRowMetrics.iconWidth, alignment: .center)")
+                && !rawRow.contains("Group {"), true,
+                "SettingsRawRow: 图标列只在有图标时画、自带定宽,不写成没有子视图就塌掉的 Group(14 章决策 203)")
+    let settingsPage = app("SettingsView.swift")
+    expectEqual(sourceHas(settingsPage, "SettingsRawRow {\nsourceGrid(LyricsSource.settingsDisplayOrder)")
+                && sourceHas(settingsPage, "SettingsRawRow {\nVStack(alignment: .leading, spacing: 6) {\nText(L10n.t(\"未启用的来源\"))")
+                && sourceHas(settingsPage, "SettingsRawRow {\nLyricsTextSample(")
+                && sourceHas(settingsPage, "SettingsRawRow {\nSettingsEqualColumns(columns: 2, spacing: 6) {")
+                && sourceHas(sourceBody("private func readingGroupBlock(_ group: ReadingGroup) -> some View {", in: settingsPage), "return SettingsRawRow {")
+                && sourceHas(sourceBody("private func priorityRow(index: Int, source: LyricsPriorityEntry, visible: [LyricsPriorityEntry]) -> some View {", in: settingsPage),
+                             "return SettingsRawRow {")
+                && sourceHas(app("Settings/LanguagePackRow.swift"), "SettingsRawRow { packGrid }"), true,
+                "SettingsRawRow: 来源格子、读音示例与格子、语言包格子、顺序列表按整张卡宽排,不带 insetToText(14 章决策 203)")
+
     // ---- 编辑台工具栏胶囊:摘要读得完(悬浮歌词 / 灵动岛) ----
     let designSystem = app("Settings/SettingsDesignSystem.swift")
     let toggleText = sourceBody("static func text(_ entries: [(title: String, isOn: Bool)]) -> String", in: designSystem)
