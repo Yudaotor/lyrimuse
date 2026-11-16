@@ -1505,7 +1505,7 @@ func runRomanizationTests() {
             if k == v { selfMapped += 1 }
             if HanVariants.toSimplified[v] != nil { chained += 1 }
         }
-        // 表是**生成**的(681 条,见 HanVariants 头注),所以这两条从"逐条
+        // 表是**生成**的(条目数见 HanVariants.txt 统计行),所以这两条从"逐条
         // 断言"改成"计数断言" —— 逐条会往输出里灌一千多行 ok,而要守的东西一个数字就够:
         // 映射到自己 = 无意义条目;成链 = 逐字替换只跑一遍、结果取决于遍历顺序。
         expectEqual(selfMapped, 0, "异体字表: 没有映射到自己的条目")
@@ -1515,6 +1515,11 @@ func runRomanizationTests() {
         // 覆盖表纠正的两条(scripts/han-variant-overrides.txt):上游推导得出的「洿」「掉」意思都不对。
         expectEqual(HanVariants.toSimplified["汚"], "污", "异体字表: 汚 → 污(不是积水的「洿」)")
         expectEqual(HanVariants.toSimplified["櫂"], "棹", "异体字表: 櫂 → 棹(船桨,不是「掉」)")
+        // 否决表剔掉的条目(08 章决策 69):上游关系只在古义、生僻读音上成立,目标字的现代字义是另一个字,不折。
+        expectEqual(HanVariants.toSimplified["螆"], nil, "异体字表: 螆 不折成 蚝(蚝 是 蠔 的简体,牡蛎)")
+        expectEqual(V.simplified.converted("如蚊螆"), "如蚊螆", "简体显示: 粤语 蚊螆 不变成 蚊蚝")
+        expectEqual(V.simplified.converted("张栢芝"), "张栢芝", "简体显示: 栢 不变成 彗星的 孛")
+        expectEqual(V.simplified.converted("亂噏"), "乱噏", "简体显示: 粤语 噏 不变成 吸")
 
         // ⑨ 逐字替换的前提:ICU 对**它确实不转的那批 key**,整条链路的产物必须等于表里的
         //    规范字。只对这一批断言,不是对全表 —— 其余条目 ICU 自己就转掉了(它们留在表里

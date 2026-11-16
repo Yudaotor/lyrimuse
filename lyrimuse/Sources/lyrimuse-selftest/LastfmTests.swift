@@ -1323,6 +1323,7 @@ func runLastfmTests() {
         expectNotEqual(F.foldTitle("他的歌"), F.foldTitle("她的歌"), "折叠键: 他 / 她 不互折")
         expectNotEqual(F.foldTitle("感谢祢"), F.foldTitle("感谢你"), "折叠键: 祢 不折成 你(只在搜索对照里算)")
         expectNotEqual(F.foldTitle("奶茶"), F.foldTitle("你茶"), "折叠键: 不相干的字不并")
+        expectNotEqual(F.foldTitle("蚊螆"), F.foldTitle("蚊蚝"), "折叠键: 螆 不折成 蚝(08 章决策 69)")
         // 段落交错的双语名不收敛(宁可漏合不错合)
         expectNotEqual(F.foldTitle("月食 The 月食 Woman"), F.foldTitle("月食"),
                        "折叠键: CJK/拉丁交错不折")
