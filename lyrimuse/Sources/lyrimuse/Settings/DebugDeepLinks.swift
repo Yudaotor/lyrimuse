@@ -243,9 +243,9 @@ enum DebugDeepLinks {
             MainThreadGapProbe.label = op
             logger.notice("debug manager list op=\(op, privacy: .public)")
             NotificationCenter.default.post(name: managerListNotification, object: op)
-        case let .mainThreadGaps(on):
-            MainThreadGapProbe.setRunning(on)
-            logger.notice("debug main thread gaps on=\(on, privacy: .public)")
+        case let .mainThreadGaps(on, minMs):
+            MainThreadGapProbe.setRunning(on, minMs: minMs ?? 100)
+            logger.notice("debug main thread gaps on=\(on, privacy: .public) min=\(minMs ?? 100, privacy: .public)")
         case .saveConfig:
             Task { @MainActor in
                 let ok = await ConfigStore.shared.save()
@@ -785,7 +785,8 @@ enum MenuBarPanelDebugState {
     static var pinned = false
 }
 
-/// `debug/main-thread-gaps` 的主线程心跳:每 10 毫秒一拍,两拍隔了 100 毫秒以上记一行,带上最近一次 `debug/manager-list` 动作。
+/// `debug/main-thread-gaps` 的主线程心跳:每 10 毫秒一拍,两拍隔了门槛(默认 100 毫秒)以上记一行,带上最近一次 `debug/manager-list` 动作
+/// 和这段时间里主线程自己用掉的 CPU 时间(`cpu`):墙钟停得比 CPU 久,多出来的是等页面换入、排不上核这类机器上的等待。
 /// 挂在 `.common` 模式上,菜单、拖动期间照样打拍。只给本机量停顿用,默认不开。
 @MainActor
 enum MainThreadGapProbe {
@@ -793,11 +794,15 @@ enum MainThreadGapProbe {
     private static let logger = Logger(subsystem: LyrimuseIdentity.logSubsystem, category: "main-thread-gaps")
     private static var timer: Timer?
     private static var last = CFAbsoluteTimeGetCurrent()
+    private static var threshold = 0.1
+    private static var lastCPU: UInt64 = 0
 
-    static func setRunning(_ on: Bool) {
+    static func setRunning(_ on: Bool, minMs: Int = 100) {
         timer?.invalidate()
         timer = nil
         guard on else { return }
+        threshold = Double(minMs) / 1000
+        lastCPU = clock_gettime_nsec_np(CLOCK_THREAD_CPUTIME_ID)
         last = CFAbsoluteTimeGetCurrent()
         let t = Timer(timeInterval: 0.01, repeats: true) { _ in
             MainActor.assumeIsolated { tick() }
@@ -810,7 +815,10 @@ enum MainThreadGapProbe {
         let now = CFAbsoluteTimeGetCurrent()
         let gap = now - last
         last = now
-        guard gap > 0.1 else { return }
-        logger.notice("gap \(Int(gap * 1000), privacy: .public) ms after [\(label, privacy: .public)]")
+        let cpu = clock_gettime_nsec_np(CLOCK_THREAD_CPUTIME_ID)
+        let cpuMs = Int((cpu &- lastCPU) / 1_000_000)
+        lastCPU = cpu
+        guard gap > threshold else { return }
+        logger.notice("gap \(Int(gap * 1000), privacy: .public) ms after [\(label, privacy: .public)] cpu \(cpuMs, privacy: .public) ms")
     }
 }

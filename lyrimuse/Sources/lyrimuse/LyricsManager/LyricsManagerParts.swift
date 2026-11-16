@@ -1012,6 +1012,8 @@ struct LyricsManagerPreviewList: View {
     var compareTimes: [Int?] = []
     /// 对照栏那份自带的 `[offset:]`。
     var compareEmbeddedOffsetMs = 0
+    /// 预览的是哪一首:变了就当新开一份,回到开头(在跟随就落到当前句),这一下不带换句的过渡。nil = 调用方换内容时自己用 `.id` 重建。
+    var resetKey: String? = nil
     @StateObject private var playback = LyricsManagerPlaybackLine()
     @StateObject private var position = LyricsPreviewPositionLine()
     /// 对照栏的当前句。它就是在用的那份,偏移按在用的算(`isCurrent: true`)。
@@ -1055,12 +1057,22 @@ struct LyricsManagerPreviewList: View {
                 .padding(.bottom, 60)
                 // 滚动容器里是另一个托管视图,不继承外面的环境:逐字染色那一层的时钟在这里挂进去。
                 .environment(\.frameClock, frameClock)
+                .transaction(value: resetKey) { $0.disablesAnimations = true }
             }
             .background(FrameClockHost(clock: frameClock, pausesWhenOccluded: true).frame(width: 0, height: 0))
             .onChange(of: current) { _, _ in scrollToCurrent(animated: true) }
             .onChange(of: follow) { _, _ in scrollToCurrent(animated: true) }
             // 行换了也重新对一次位:换歌时新歌的行在预览出现之后才算好,切原文 / 译文 / 读音也换行;当前句的值可能没变,
             // 上面那条不会触发,列表就停在按旧行滚到的地方。
+            .onChange(of: resetKey) { _, _ in
+                updatePosition()
+                if follow, isNowPlaying, !rows.isEmpty {
+                    scrollToCurrent(animated: false)
+                } else {
+                    scrollRequest = LyricsPreviewScrollRequest(row: 0, anchor: .top, animated: false,
+                                                               serial: (scrollRequest?.serial ?? 0) + 1)
+                }
+            }
             .onChange(of: rows) { _, _ in
                 updatePosition()
                 scrollToCurrent(animated: false)
@@ -1156,8 +1168,11 @@ enum LyricsCompareLayout {
 
     /// 把对不上的那几个字(按 `Character` 下标)染成 `markColor`,其余用调用方的颜色。
     static func marked(_ text: String, marks: Set<Int>) -> AttributedString {
+        let shown = text.isEmpty ? " " : text
+        // 没有要标的字(歌词管理的预览、当前句)整段一次建好,不逐字拼。
+        guard !marks.isEmpty else { return AttributedString(shown) }
         var out = AttributedString()
-        for (offset, character) in (text.isEmpty ? " " : text).enumerated() {
+        for (offset, character) in shown.enumerated() {
             var piece = AttributedString(String(character))
             if marks.contains(offset) { piece.foregroundColor = markColor }
             out += piece

@@ -70,8 +70,10 @@ struct LyricsPreviewScrollView<Content: View>: NSViewRepresentable {
         let coordinator = context.coordinator
         coordinator.onUserScroll = onUserScroll
         scrollView.topFadeHeight = topFadeHeight
+        // 纵向按理想高度排:量文档高度给的是极大的建议高度,不固定的话 VStack 每一行都要按弹性试排(见 11 章决策 172)。
         coordinator.host?.rootView = AnyView(
             content()
+                .fixedSize(horizontal: false, vertical: true)
                 .coordinateSpace(name: LyricsPreviewRowFrameKey.space)
                 .onPreferenceChange(LyricsPreviewRowFrameKey.self) { [weak coordinator] frames in
                     coordinator?.rowFramesChanged(frames)

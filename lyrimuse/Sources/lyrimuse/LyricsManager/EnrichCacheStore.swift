@@ -1585,7 +1585,7 @@ public final class EnrichCacheStore: ObservableObject {
     /// 成员取播放那一侧的读取、再用这份快照校正;正文按需从小文件补(只补这首歌的几条),补不回来的那条不算。
     func manualConflict(forKey key: String) -> [String] {
         guard EnrichCacheReader.sharesEntityLyrics, let own = songMembership(forKey: key) else { return [] }
-        var keys = Set(EnrichCacheReader.songMemberships().filter { $0.value == own }.map(\.key))
+        var keys = Set(EnrichCacheReader.songShareMembers(of: own))
         keys.insert(key)
         var members: [SongVersions.ManualCandidate] = []
         // 手改只在同一个共享组里同步(18 章决策 58),两份手改也只在组里算冲突。

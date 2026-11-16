@@ -5009,6 +5009,41 @@ func runSourceContractSettingsTests() {
                     && !rightClicked.contains("applyingSelection")
                     && manager.contains("rightClickMovesSelection: { !isEditorDirty })"), true,
                     "歌词管理: 右键点没选中的歌先把选中收到那一行,有没保存的修改时不跟")
+        // 换一首歌只让主线程停一下(11 章决策 172):详情跟选中同一拍载好,详情页 onChange(key) 见到载好了不重载;同组写法走
+        // 同曲索引,不整表建 songMemberships();预览按理想高度排;标题和 ⌘⌫ 只数选中里看得见几首;表格写回选中先比选中行。
+        let preload = sourceBody("private func preloadDetail(for keys: Set<String>)", in: manager)
+        let loadDetailBody = sourceBody("private func loadDetail(key: String)", in: manager)
+        let preview = read("LyricsManager/LyricsPreviewScrollView.swift") ?? ""
+        let store = read("LyricsManager/EnrichCacheStore.swift") ?? ""
+        expectEqual(sourceHas(manager, "preloadDetail(for: keys)\n selectedKeys = keys\n }")
+                    && sourceHas(manager, "preloadDetail(for: [key])\n selectedKeys = [key]\n return true")
+                    && sourceHas(preload, "guard keys.count == 1, let key = keys.first, key != singleSelectedKey, store.summary(forKey: key) != nil else { return }")
+                    && preload.contains("loadDetail(key: key)")
+                    && sourceHas(manager, "endEditing()\n // 经 preloadDetail 换过来的已经载好了。\n if editingKey != newKey { loadDetail(key: newKey) }")
+                    && sourceHas(loadDetailBody, "EnrichCacheReader.songShareMembers(of: own).contains { $0 != key }")
+                    && !loadDetailBody.contains("songMemberships()")
+                    && store.contains("var keys = Set(EnrichCacheReader.songShareMembers(of: own))")
+                    && sourceHas(preview, "content()\n .fixedSize(horizontal: false, vertical: true)\n .coordinateSpace(name: LyricsPreviewRowFrameKey.space)")
+                    && manager.contains(".disabled(selectedVisibleCount == 0)")
+                    && sourceHas(manager, "let picked = selectedVisibleCount\n if picked > 1 {")
+                    && !sourceBody("private var shortcutButtons: some View", in: manager).contains("selectedVisibleKeys")
+                    && sourceHas(sourceBody("private var selectedVisibleCount: Int", in: manager),
+                                 "visible = Set(filtered.lazy.filter { !$0.isSearching }.map(\\.key))")
+                    && sourceHas(sourceBody("private var selectedVisibleCount: Int", in: manager),
+                                 "return selectedKeys.reduce(0) { $0 + (visible.contains($1) ? 1 : 0) }")
+                    && sourceHas(manager, "filteredCache.selectable = nil\n filteredCache.visibleKeys = nil")
+                    && sourceHas(sourceBody("func applySelection(_ keys: Set<String>)", in: songTable),
+                                 "if LyricsManagerListTable.selectionMatches(keys, selectedRows: table.selectedRowIndexes, key: entries.key(at:)) { return }\n let rows = LyricsManagerListTable.rows(of: keys"), true,
+                    "歌词管理: 换一首歌时详情同一拍载好、同组写法走索引、预览按理想高度排、选中计数不整表排")
+        // 预览换歌原地换内容,不按 key 重建整个滚动容器:回到开头(在跟随就落到当前句),这一下不带换句过渡。
+        let previewList = sourceBody("struct LyricsManagerPreviewList: View", in: managerParts)
+        expectEqual(manager.contains("resetKey: summary.key)")
+                    && !sourceBody("private func lyricsArea(_ summary: EnrichCacheStore.Summary) -> some View", in: manager).contains(".id(")
+                    && previewList.contains(".transaction(value: resetKey) { $0.disablesAnimations = true }")
+                    && sourceHas(sourceBody("static func marked(_ text: String, marks: Set<Int>) -> AttributedString", in: managerParts),
+                                 "guard !marks.isEmpty else { return AttributedString(shown) }\n var out = AttributedString()\n for (offset, character) in shown.enumerated() {")
+                    && sourceHas(previewList, ".onChange(of: resetKey) { _, _ in\n updatePosition()\n if follow, isNowPlaying, !rows.isEmpty {\n scrollToCurrent(animated: false)\n } else {\n scrollRequest = LyricsPreviewScrollRequest(row: 0, anchor: .top, animated: false,"), true,
+                    "歌词管理: 预览换歌原地换内容、回到开头、不带过渡")
         // 行自己读强调色、正在放的那首和它的封面;选中且有焦点的行换白字那一套。表格那一层不碰 nowPlayingKey(11 章决策 67、89、94)。
         let listRow = sourceBody("struct LyricsManagerSongListRow: View", in: songTable)
         expectEqual(listRow.contains("let isEmphasized = emphasis.keys.contains(summary.key)")

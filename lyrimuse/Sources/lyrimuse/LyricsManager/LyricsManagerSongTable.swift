@@ -186,10 +186,12 @@ struct LyricsManagerSongTable: NSViewRepresentable {
             }
         }
 
-        /// 选中按 key 换算成行号写回表格;跟表格上的一样就不动。
+        /// 选中按 key 换算成行号写回表格;跟表格上的一样就不动。用户在表格上点的报上来再经这里回来时,表格上的选中已经是这几首,
+        /// 先比选中的那几行,不整表换算。
         func applySelection(_ keys: Set<String>) {
             guard let table else { return }
             let entries = parent.entries
+            if LyricsManagerListTable.selectionMatches(keys, selectedRows: table.selectedRowIndexes, key: entries.key(at:)) { return }
             let rows = LyricsManagerListTable.rows(of: keys, count: entries.count, key: entries.key(at:))
             guard rows != table.selectedRowIndexes else { return }
             applyingSelection = true

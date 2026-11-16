@@ -402,8 +402,10 @@ func runDeepLinkTests() {
         expectEqual(link("lyrimuse://debug/manager-instrumental?on=1") == nil && link("lyrimuse://debug/manager-instrumental?key=a%7Cb%7Cc") == nil,
                     true, "debug: 歌词管理标纯音乐没带 key 或 on 不认")
         expectEqual([link("lyrimuse://debug/manager-list?op=search%3Ajay"), link("lyrimuse://debug/main-thread-gaps?on=1"),
-                     link("lyrimuse://debug/main-thread-gaps?on=0")],
-                    [.debug(.managerList(op: "search:jay")), .debug(.mainThreadGaps(on: true)), .debug(.mainThreadGaps(on: false))],
+                     link("lyrimuse://debug/main-thread-gaps?on=0"), link("lyrimuse://debug/main-thread-gaps?on=1&min=30"),
+                     link("lyrimuse://debug/main-thread-gaps?on=1&min=0")],
+                    [.debug(.managerList(op: "search:jay")), .debug(.mainThreadGaps(on: true)), .debug(.mainThreadGaps(on: false)),
+                     .debug(.mainThreadGaps(on: true, minMs: 30)), .debug(.mainThreadGaps(on: true))],
                     "debug: 歌词管理列表动作、主线程心跳")
         expectEqual(link("lyrimuse://debug/manager-list") == nil && link("lyrimuse://debug/manager-list?op=") == nil
                     && link("lyrimuse://debug/main-thread-gaps") == nil, true, "debug: 列表动作没带 op、心跳没带 on 不认")
@@ -687,7 +689,7 @@ func runDeepLinkTests() {
             .debug(.managerInstrumental(key: "歌手|歌 & 名|专辑", on: true)), .debug(.managerInstrumental(key: "a|b|", on: false)),
             .debug(.managerList(op: "search:歌 & 名")), .debug(.managerList(op: "key:down")),
             .debug(.managerList(op: "rightclick:3")),
-            .debug(.mainThreadGaps(on: true)), .debug(.mainThreadGaps(on: false)),
+            .debug(.mainThreadGaps(on: true)), .debug(.mainThreadGaps(on: false)), .debug(.mainThreadGaps(on: true, minMs: 20)),
             .debug(.rainbow(overlay: true, notch: nil)), .debug(.rainbow(overlay: false, notch: true)),
             .debug(.rainbow(overlay: nil, notch: nil, menuBar: false)),
             .debug(.overlayText(opacity: 0.4, color: "cover")), .debug(.overlayText(opacity: 1, color: nil)),

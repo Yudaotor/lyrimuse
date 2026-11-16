@@ -552,6 +552,25 @@ func runLyricsOffsetTests() {
         expectEqual(EnrichCacheReader.offsetSiblings(ownKey: "d|other|z", entry: entry("{}"), in: all), LyricsOffsetSiblings.none,
                     "读穿顺序: 没有实体 id 不读穿")
         expectEqual(LyricsOffsetSiblings.name(ofWritingKey: "歌手|歌名~dur3|专辑"), "歌手|歌名", "读穿: 写法键 → 偏移键前两段")
+
+        // 歌词管理按实体 id + 共享组取同组写法:走按实体 id 分好的索引,跟整表 songMemberships() 筛 == 出来的是同一批。
+        var shared = all
+        shared["e|song|x"] = entry(#"{"song":"s_1","song_share":2}"#)
+        shared["f|song|x"] = entry(#"{"song":"s_1","song_share":2}"#)
+        shared["g|none|x"] = entry("{}")
+        let index = EnrichCacheReader.buildSongIndex(shared)
+        expectEqual(index["s_1"], ["a|song|x", "a|song|y", "b|track|w", "b|track|y", "c|song~dur2|z", "e|song|x", "f|song|x"],
+                    "同曲索引: 按实体 id 分组、组内按键排")
+        expectEqual([index["s_2"], index[""]], [["d|other|z"], nil], "同曲索引: 没有实体 id 的写法不进索引")
+        expectEqual(EnrichCacheReader.shareMembers(of: SongVersions.Membership(song: "s_1", share: 0), in: shared, index: index),
+                    ["a|song|x", "a|song|y", "b|track|w", "b|track|y", "c|song~dur2|z"], "同组写法: 没写共享组的算 0 组")
+        expectEqual(EnrichCacheReader.shareMembers(of: SongVersions.Membership(song: "s_1", share: 2), in: shared, index: index),
+                    ["e|song|x", "f|song|x"], "同组写法: 同一个实体里只取同一个共享组")
+        expectEqual(EnrichCacheReader.shareMembers(of: SongVersions.Membership(song: "s_9", share: 0), in: shared, index: index), [],
+                    "同组写法: 索引里没有这个实体就是空的")
+        expectEqual(EnrichCacheReader.offsetSiblings(ownKey: "a|song|x", entry: own, sortedSongKeys: index["s_1"] ?? []),
+                    EnrichCacheReader.offsetSiblings(ownKey: "a|song|x", entry: own, in: shared),
+                    "读穿顺序: 按同曲索引取的那一组跟整表筛出来的一样")
     }
 
     // ---- 读穿的接线(源码契约):播放时生效、加减、重置都带上这首的其它写法;歌词管理同样;启动时补记校准对着的歌词 ----

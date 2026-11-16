@@ -550,13 +550,18 @@ public enum EnrichCacheReader {
 
     private static func songIndex(in all: [String: EnrichCacheEntry]) -> [String: [String]] {
         if let cachedSongIndex, cachedSongIndex.generation == contentGeneration { return cachedSongIndex.index }
+        let index = buildSongIndex(all)
+        cachedSongIndex = (contentGeneration, index)
+        return index
+    }
+
+    public nonisolated static func buildSongIndex(_ all: [String: EnrichCacheEntry]) -> [String: [String]] {
         var index: [String: [String]] = [:]
         for (k, e) in all {
             guard let song = e.song, !song.isEmpty else { continue }
             index[song, default: []].append(k)
         }
         for song in index.keys { index[song]?.sort() }
-        cachedSongIndex = (contentGeneration, index)
         return index
     }
 
@@ -590,7 +595,7 @@ public enum EnrichCacheReader {
     public static func offsetSiblings(artist: String, title: String, album: String) -> LyricsOffsetSiblings {
         let key = EnrichCacheKeys.normalizedKey(artist: artist, title: title, album: album)
         guard inheritsEntityOffsets, let entry = currentEntry(key), let all = loadEntries() else { return .none }
-        return offsetSiblings(ownKey: key, entry: entry, in: all)
+        return offsetSiblings(ownKey: key, entry: entry, sortedSongKeys: entry.song.flatMap { songIndex(in: all)[$0] } ?? [])
     }
 
     /// 歌词同步开没开(features.json 的 song_entity_share_lyrics,缺失 = 开;App 启动读到后设)。两份手改的提示只在开着时有意义
@@ -610,10 +615,23 @@ public enum EnrichCacheReader {
         return out
     }
 
+    /// 跟这一组(实体 id + 共享组)一样的写法,按键排序;跟 `songMemberships()` 里筛出 `== membership` 的那几条是同一批。
+    /// 走按实体 id 记住的索引(`songIndex`),不整表建一遍:歌词管理每换一首歌都要问。缓存没加载好时是空的。
+    public static func songShareMembers(of membership: SongVersions.Membership) -> [String] {
+        guard let all = loadEntries() else { return [] }
+        return shareMembers(of: membership, in: all, index: songIndex(in: all))
+    }
+
+    /// `index` 是按实体 id 分好的写法(`buildSongIndex`)。
+    public nonisolated static func shareMembers(of membership: SongVersions.Membership, in all: [String: EnrichCacheEntry],
+                                         index: [String: [String]]) -> [String] {
+        (index[membership.song] ?? []).filter { (all[$0]?.songShare ?? 0) == membership.share }
+    }
+
     /// 同上,按缓存里的 key 原样取(歌词管理、外部编辑)。
     public static func offsetSiblings(forKey key: String) -> LyricsOffsetSiblings {
         guard inheritsEntityOffsets, let all = loadEntries(), let entry = all[key] else { return .none }
-        return offsetSiblings(ownKey: key, entry: entry, in: all)
+        return offsetSiblings(ownKey: key, entry: entry, sortedSongKeys: entry.song.flatMap { songIndex(in: all)[$0] } ?? [])
     }
 
     /// 跟 entry 同一个实体(`song` 相同)的写法:entry 的歌词是手改副本时原件排最前,其余按写法键排;按单曲偏移键的前两段
@@ -621,7 +639,13 @@ public enum EnrichCacheReader {
     public nonisolated static func offsetSiblings(ownKey: String, entry: EnrichCacheEntry,
                                                  in all: [String: EnrichCacheEntry]) -> LyricsOffsetSiblings {
         guard let song = entry.song, !song.isEmpty else { return .none }
-        var keys = all.compactMap { $0.value.song == song ? $0.key : nil }.sorted()
+        return offsetSiblings(ownKey: ownKey, entry: entry, sortedSongKeys: all.compactMap { $0.value.song == song ? $0.key : nil }.sorted())
+    }
+
+    /// 同上,`sortedSongKeys` 是跟 entry 同一个实体的全部写法、按键排好(`songIndex` 里取的那一组)。
+    public nonisolated static func offsetSiblings(ownKey: String, entry: EnrichCacheEntry, sortedSongKeys: [String]) -> LyricsOffsetSiblings {
+        guard let song = entry.song, !song.isEmpty else { return .none }
+        var keys = sortedSongKeys
         if let origin = entry.lyricsEntityOrigin, let i = keys.firstIndex(of: origin) {
             keys.remove(at: i)
             keys.insert(origin, at: 0)

@@ -905,6 +905,15 @@ func runLyricsManagerTests() {
                                                                 key: key)],
                     [nil, nil, nil, nil, nil],
                     "列表表格: 右键点在选中区里、空白处、组头、越界,或有没保存的修改时,选中不动")
+        expectEqual([LyricsManagerListTable.selectionMatches(["a", "c"], selectedRows: IndexSet([1, 4]), key: key),
+                     LyricsManagerListTable.selectionMatches([], selectedRows: IndexSet(), key: key)],
+                    [true, true], "列表表格: 表格上选中的恰好就是这几首,写回选中不用整表换算")
+        expectEqual([LyricsManagerListTable.selectionMatches(["a"], selectedRows: IndexSet([1, 4]), key: key),
+                     LyricsManagerListTable.selectionMatches(["a", "c"], selectedRows: IndexSet([1]), key: key),
+                     LyricsManagerListTable.selectionMatches(["a", "b"], selectedRows: IndexSet([1, 4]), key: key),
+                     LyricsManagerListTable.selectionMatches(["a"], selectedRows: IndexSet([0, 1]), key: key)],
+                    [false, false, false, false],
+                    "列表表格: 多一行、少一首、换了一首、多选中了组头,都要整表换算")
         // 选中跟过去之后菜单按新的选中建:作用于那一首。
         let moved = LyricsManagerListTable.rightClickSelection(clickedRow: 4, selectedRows: IndexSet([1, 2]), mayMoveSelection: true,
                                                                key: key) ?? IndexSet([1, 2])

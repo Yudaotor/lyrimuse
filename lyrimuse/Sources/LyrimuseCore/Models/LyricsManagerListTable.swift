@@ -13,6 +13,11 @@ public enum LyricsManagerListTable {
         return result
     }
 
+    /// 表格上选中的这几行恰好就是这几首(一行一首、不多不少):代码写回选中时不用整表换算行号。
+    public static func selectionMatches(_ keys: Set<String>, selectedRows: IndexSet, key: (Int) -> String?) -> Bool {
+        selectedRows.count == keys.count && self.keys(atRows: selectedRows, key: key) == keys
+    }
+
     /// 这几行是哪几首;组头和越界的行不算。
     public static func keys(atRows rows: IndexSet, key: (Int) -> String?) -> Set<String> {
         var result = Set<String>()

@@ -915,6 +915,8 @@ struct LyricsManagerView: View {
         // result 重算时清 selectable,sorted 重排时清后三份;retryableAll 和胶囊计数只跟 summaries 代数走。
         var selectable: [EnrichCacheStore.Summary]?
         var selectedVisible: (keys: Set<String>, result: [String])?
+        /// 筛选结果里能操作的那些 key(占位行除外),result 重算时清。
+        var visibleKeys: Set<String>?
         var retryableVisible: [String]?
         var groups: [AlbumGroup]?
         var albumEntries: [AlbumListEntry]?
@@ -943,6 +945,7 @@ struct LyricsManagerView: View {
             sorted = []
             selectable = nil
             selectedVisible = nil
+            visibleKeys = nil
             retryableVisible = nil
             groups = nil
             albumEntries = nil
@@ -1016,6 +1019,7 @@ struct LyricsManagerView: View {
         filteredCache.result = result
         filteredCache.sortedFor = nil
         filteredCache.selectable = nil
+        filteredCache.visibleKeys = nil
         LyricsManagerBaseline.logFilter(
             inCount: base.count, outCount: result.count,
             elapsedMS: LyricsManagerBaseline.ms(since: recomputeStart))
@@ -1222,6 +1226,18 @@ struct LyricsManagerView: View {
         // 意义(EnrichCacheStore.delete 本身会安全地把不存在的 key 过滤掉,这里提前排除
         // 是为了让"删除 N 条"这个数字如实反映真的会被删掉几条,不是靠下游兜底凑数)。
         sortedFiltered.compactMap { !$0.isSearching && keys.contains($0.key) ? $0.key : nil }
+    }
+
+    /// 选中里有几首在当前筛选结果中看得见,跟 `selectedVisibleKeys.count` 同一个数;只数不排,不按列表顺序整表过一遍。
+    private var selectedVisibleCount: Int {
+        let visible: Set<String>
+        if let cached = filteredCache.visibleKeys {
+            visible = cached
+        } else {
+            visible = Set(filtered.lazy.filter { !$0.isSearching }.map(\.key))
+            filteredCache.visibleKeys = visible
+        }
+        return selectedKeys.reduce(0) { $0 + (visible.contains($1) ? 1 : 0) }
     }
 
     private var selectedVisibleKeys: [String] {
@@ -1710,8 +1726,9 @@ struct LyricsManagerView: View {
                     .monospacedDigit()
                     .foregroundStyle(.secondary)
             }
-            if selectedVisibleKeys.count > 1 {
-                Text(String(format: L10n.t("已选 %@ 首"), selectedVisibleKeys.count.formatted()))
+            let picked = selectedVisibleCount
+            if picked > 1 {
+                Text(String(format: L10n.t("已选 %@ 首"), picked.formatted()))
                     .font(.system(size: 12.5, weight: .medium))
                     .foregroundStyle(Color.accentColor)
                     .lineLimit(1)
@@ -1781,7 +1798,17 @@ struct LyricsManagerView: View {
             }
             return
         }
+        preloadDetail(for: keys)
         selectedKeys = keys
+    }
+
+    /// 选中要换成另一首单独的歌时,在改 `selectedKeys` 之前先把它的详情载好,两样同一拍交给 SwiftUI,详情页按新歌只画一轮;
+    /// 详情页 `onChange(of: key)` 见到 `editingKey` 已经是它就不再重载。必须在有没保存修改的拦截之后调(见 11 章决策 172)。
+    private func preloadDetail(for keys: Set<String>) {
+        guard keys.count == 1, let key = keys.first, key != singleSelectedKey, store.summary(forKey: key) != nil else { return }
+        store.dismissEditError()
+        endEditing()
+        loadDetail(key: key)
     }
 
     /// 强调色跟着选中和键盘焦点走:列表没焦点时选中行是灰底,照常彩色。
@@ -1801,6 +1828,7 @@ struct LyricsManagerView: View {
             showUnsavedEditAlert = true
             return false
         }
+        preloadDetail(for: [key])
         selectedKeys = [key]
         return true
     }
@@ -2420,7 +2448,7 @@ struct LyricsManagerView: View {
             // 歌词编辑格子的退格键全抢掉。空选时禁用,按了毫无反应。
             Button("") { deleteSelectionShortcut() }
                 .keyboardShortcut(.delete, modifiers: .command)
-                .disabled(selectedVisibleKeys.isEmpty)
+                .disabled(selectedVisibleCount == 0)
             Button("") { beginLineEditing() }
                 .keyboardShortcut("e", modifiers: .command)
                 .disabled(!canEditLyrics)
@@ -3265,7 +3293,8 @@ struct LyricsManagerView: View {
             .onChange(of: key) { _, newKey in
                 store.dismissEditError()
                 endEditing()
-                loadDetail(key: newKey)
+                // 经 preloadDetail 换过来的已经载好了。
+                if editingKey != newKey { loadDetail(key: newKey) }
                 // 换歌就把上一首的进行中/结果状态收掉,并叫引擎停掉那一轮(它的结果已经没人要了)。
                 // rematchGeneration 换代顺带让在飞的那一轮的轮询和收尾全部失效。
                 if rematchRunningKey != nil {
@@ -3901,8 +3930,8 @@ struct LyricsManagerView: View {
                 isNowPlaying: nowPlayingThis,
                 follow: $followPlayback,
                 canSeek: nowPlayingThis && PlaybackCoordinator.shared.acceptsSeek,
-                onSeek: { seek(toLyricsMs: $0) })
-            .id(summary.key)
+                onSeek: { seek(toLyricsMs: $0) },
+                resetKey: summary.key)
         case .lines:
             lineEditor(summary)
         case .text:
@@ -3933,8 +3962,8 @@ struct LyricsManagerView: View {
         isDisplayModeAvailable(displayMode, summary) ? displayMode : .original
     }
 
-    /// 还没为这首算好行时给空:换歌那一刻页面先按新歌画一轮、loadDetail 才跑,这时手里的还是上一首的行,
-    /// 预览列表又按 key 重建,拿旧行去建就是整张白建一遍(见 11 章决策 96)。
+    /// 还没为这首算好行时给空:没经 preloadDetail 换过来的(onAppear、别处改选中),页面先按新歌画一轮、loadDetail 才跑,
+    /// 这时手里的还是上一首的行,别把上一首的歌词显示成这一首(见 11 章决策 96)。
     private func shownRows(_ summary: EnrichCacheStore.Summary) -> [LyricsPreviewRow] {
         guard previewInputs.first == summary.key else { return [] }
         return effectiveDisplayMode(summary) == .romanization ? romanizedRows : previewRows
@@ -4609,7 +4638,7 @@ struct LyricsManagerView: View {
         }
         manualConflictKeys = store.manualConflict(forKey: key)
         instrumentalFollowsGroup = EnrichCacheReader.sharesEntityLyrics && store.songMembership(forKey: key).map { own in
-            EnrichCacheReader.songMemberships().contains { $0.key != key && $0.value == own }
+            EnrichCacheReader.songShareMembers(of: own).contains { $0 != key }
         } == true
         if manualConflictKeys.count < 2 {
             confirmManualConflict = false
