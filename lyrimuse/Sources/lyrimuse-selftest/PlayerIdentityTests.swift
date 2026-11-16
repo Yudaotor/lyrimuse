@@ -312,6 +312,33 @@ func runPlayerIdentityTests() {
                 expectEqual(client.components(separatedBy: "snapshot = kuwoProbedSnapshot(probed.snapshot, anchor: probed.anchor, now: now)").count - 1,
                             2, "酷我锚点接线: 两条单问路径都扣")
             }
+            do {
+                typealias X = KuwoModeControl
+                expectEqual(["顺序播放", "列表循环", "单曲循环", "随机播放", "播放/暂停", ""].map(X.mode(help:)),
+                            [.list, .repeatAll, .repeatOne, .shuffle, nil, nil], "酷我模式: 模式键的 AXHelp 就是档名")
+                expectEqual([X.presses(from: .repeatAll, to: .shuffle), X.presses(from: .shuffle, to: .list),
+                             X.presses(from: .list, to: .repeatOne), X.presses(from: .repeatOne, to: .repeatAll),
+                             X.presses(from: .repeatAll, to: .repeatOne), X.presses(from: .list, to: .list)],
+                            [1, 1, 1, 1, 3, 0], "酷我模式: 列表循环 → 随机 → 顺序 → 单曲循环 → 列表循环,一下一档")
+                expectEqual(X.maxPresses > X.cycle.count - 1, true, "酷我模式: 绕一圈之外留重按(快速连按会丢一下)")
+                typealias C = MusicPlaybackController
+                expectEqual(C.supportsExtendedControls(.kuwo) && C.supportsRepeatOne(.kuwo) && !C.supportsFavorite(.kuwo), true,
+                            "酷我能力: 四档模式,没有喜欢")
+                let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+                let controller = (try? String(contentsOfFile: root.appendingPathComponent("LyrimuseCore/Local/MusicPlaybackController.swift").path,
+                                              encoding: .utf8)) ?? ""
+                expectEqual(sourceHas(sourceBody("public static func setPlaybackMode(", in: controller), "case .kuwo:\nreturn KuwoModeControl.setMode(mode)")
+                                && sourceHas(sourceBody("public static func playbackMode(", in: controller),
+                                             "case .kuwo:\nreturn KuwoModeControl.readMode().map { PlaybackModeState(mode: $0, options: KuwoModeControl.options) }")
+                                && sourceHas(sourceBody("public static func extendedControlsState(", in: controller),
+                                             "mode: KuwoModeControl.readMode().map { PlaybackModeState(mode: $0, options: KuwoModeControl.options) },\nvolume: nil)"),
+                            true, "酷我契约: 模式读写都走 KuwoModeControl,音量不接")
+                let control = (try? String(contentsOfFile: root.appendingPathComponent("LyrimuseCore/Local/KuwoModeControl.swift").path,
+                                           encoding: .utf8)) ?? ""
+                expectEqual(sourceHas(sourceBody("public static func setMode(", in: control),
+                                      "} while current == before && Date() < deadline\n}\nreturn current == target"),
+                            true, "酷我契约: 按一下等档名变了再按下一下,读回到目标档才算成")
+            }
             for command in [Command.playPause, .nextTrack, .previousTrack] {
                 expectEqual(MusicPlaybackController.controlRoute(exclusivelyAppleMusic: false, focusFallback: nil,
                     focusHeldElsewhere: true, directQueryFallback: .kugou, mediaControlCommand: command.rawValue),
@@ -1279,7 +1306,7 @@ func runPlayerIdentityTests() {
             .qqMusic: (.qqMusic, [.extendedControls, .repeatOne, .favorite, .resume, .learnsAnchorLag, .catalogMenuRows]),
             .netease: (.netease, [.favorite, .resume, .learnsAnchorLag, .pausedAnchorStartsOnPlay, .catalogMenuRows]),
             .kugou: (nil, [.favorite, .resume, .lateAnchorProbe, .resetAnchorCorrection, .stampsCaptureTime, .catalogMenuRows]),
-            .kuwo: (.kuwo, [.resume, .gaplessLead, .lateAnchorProbe, .learnsAnchorLag, .followsRepublishedAnchors,
+            .kuwo: (.kuwo, [.extendedControls, .repeatOne, .resume, .gaplessLead, .lateAnchorProbe, .learnsAnchorLag, .followsRepublishedAnchors,
                             .snapsToReportedPosition, .stampsCaptureTime, .systemNeverHasArtwork, .catalogMenuRows]),
             .soda: (.soda, [.favorite, .gaplessLead, .lateAnchorProbe, .learnsAnchorLag, .catalogMenuRows]),
             .kkbox: (.kkbox, [.gaplessLead, .lateAnchorProbe, .learnsAnchorLag, .followsRepublishedAnchors,
@@ -1561,7 +1588,7 @@ func runPlayerIdentityTests() {
                     [.qqMusic, .netease, .kugou, .kuwo, .soda, .amazonMusic, .reamp, .pinePlayer, .foobar2000, .mygoMusic, .audirvana],
                     "辅助功能判据: 读界面的 Amazon Music / Pine Player、按菜单控制的 QQ 音乐/网易云/酷狗/酷我/reAMP、按播放条控制的汽水和 Audirvana(改 shared/players.json 的 needsAccessibilityPermission)")
         expectEqual(PlaybackPlayer.allCases.compactMap(\.accessibilityUse),
-                    [.switchesPlayMode, .controlsPlayback, .controlsPlayback, .controlsTransport, .controlsPlayback, .calibratesProgress, .pressesPlayMode,
+                    [.switchesPlayMode, .controlsPlayback, .controlsPlayback, .switchesModeAndTransport, .controlsPlayback, .calibratesProgress, .pressesPlayMode,
                      .refinesProgress, .pressesPlayMode, .controlsTransport, .adjustsModeAndVolume],
                     "辅助功能判据: QQ 音乐是切模式、网易云/酷狗/汽水是喜欢加失焦播放、Amazon Music 是读进度加随机循环、reAMP 只有随机循环、Pine Player 是读进度条补位置加失焦播放,授权说明和体检提示按这个分开写")
         expectEqual(PlaybackPlayer.allCases.compactMap(\.automationUse),
@@ -1574,7 +1601,7 @@ func runPlayerIdentityTests() {
         expectEqual(PlaybackPlayer.netease.accessibilityUse, .controlsPlayback, "网易云授权用途不承诺模式或进度")
         expectEqual(P([.mygoMusic]).playersNeedingAccessibility, [.mygoMusic], "MyGo: 单选显示 AX 授权入口")
         expectEqual(PlaybackPlayer.mygoMusic.accessibilityUse, .controlsTransport, "MyGo: 权限用途只承诺失焦三项控制")
-        expectEqual(PlaybackPlayer.kuwo.accessibilityUse, .controlsTransport, "酷我: 权限用途只承诺失焦三项控制(没有喜欢、模式菜单可读)")
+        expectEqual(PlaybackPlayer.kuwo.accessibilityUse, .switchesModeAndTransport, "酷我: 权限用途是窗口上的模式键加失焦三项控制(没有喜欢、音量)")
         expectEqual(PlaybackPlayer.soda.accessibilityUse, .controlsPlayback, "汽水授权用途: 喜欢加失焦时按播放条控制播放")
         expectEqual(P([.amazonMusic, .spotify]).playersNeedingAccessibility, [.amazonMusic],
                     "辅助功能判据: 多选里只挑出要授权的那一家")

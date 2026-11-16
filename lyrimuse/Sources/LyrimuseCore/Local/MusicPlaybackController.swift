@@ -395,20 +395,21 @@ public enum MusicPlaybackController {
     /// 按它菜单栏「重复模式」子菜单(`PineMenuControl`);foobar2000 有随机和两种循环,按它菜单栏「Order」子菜单(`FoobarMenuControl`),
     /// 音量读写它窗口里的滑块(`FoobarVolume`);Pear Desktop 开着本机接口时有随机、循环和音量(`PearDesktopAPI`);Swinsian 的随机、
     /// 两种循环和音量都是可写的脚本属性;Plexamp 的两种循环和音量走它的本机播放器接口(`PlexampPlayerAPI`,随机写不进);Audirvana 的
-    /// 随机、两种循环和音量读写它主窗口播放条上的控件(`AudirvanaControls`)。网易云、酷狗等没有
+    /// 随机、两种循环和音量读写它主窗口播放条上的控件(`AudirvanaControls`);酷我只有模式,按它窗口播放条上那颗四档轮转的模式键
+    /// (`KuwoModeControl`),音量读不出来、不接。网易云、酷狗等没有
     /// .sdef(不可脚本化),而
     /// media-control 走的系统级 MediaRemote 只有播放控制 —— 对它们只能不显示这些控件(各家实测见 07 章决策 130)。
     public static func supportsExtendedControls(_ player: PlaybackPlayer) -> Bool {
         player == .appleMusic || player == .spotify || player == .kaset || player == .qqMusic || player == .amazonMusic
             || player == .reamp || player == .lxMusic || player == .vox || player == .pinePlayer || player == .foobar2000
-            || player == .pearDesktop || player == .swinsian || player == .plexamp || player == .audirvana
+            || player == .pearDesktop || player == .swinsian || player == .plexamp || player == .audirvana || player == .kuwo
     }
 
     /// 这个播放器的循环档位里有没有「单曲循环」。见 MusicPlaybackMode.nextRepeat。
     public static func supportsRepeatOne(_ player: PlaybackPlayer) -> Bool {
         player == .appleMusic || player == .kaset || player == .qqMusic || player == .amazonMusic || player == .vox
             || player == .pinePlayer || player == .foobar2000 || player == .pearDesktop || player == .swinsian || player == .plexamp
-            || player == .audirvana
+            || player == .audirvana || player == .kuwo
     }
 
     /// 这个播放器有没有「喜欢」:Apple Music(收藏)、Kaset(YouTube Music 的赞)、QQ 音乐、网易云音乐和酷狗音乐(菜单栏「喜欢歌曲」)、
@@ -841,6 +842,10 @@ public enum MusicPlaybackController {
                                          mode: AudirvanaControls.readMode()
                                              .map { PlaybackModeState(mode: $0, options: AudirvanaControls.options) },
                                          volume: AudirvanaControls.readVolume())
+        case .kuwo:
+            return ExtendedControlsState(favorited: nil,
+                                         mode: KuwoModeControl.readMode().map { PlaybackModeState(mode: $0, options: KuwoModeControl.options) },
+                                         volume: nil)
         case .vox:
             guard let c = voxControls() else { return .empty }
             return ExtendedControlsState(favorited: nil,
@@ -980,6 +985,8 @@ public enum MusicPlaybackController {
             return FoobarMenuControl.readMode().map { PlaybackModeState(mode: $0, options: FoobarMenuControl.options) }
         case .audirvana:
             return AudirvanaControls.readMode().map { PlaybackModeState(mode: $0, options: AudirvanaControls.options) }
+        case .kuwo:
+            return KuwoModeControl.readMode().map { PlaybackModeState(mode: $0, options: KuwoModeControl.options) }
         case .vox:
             return voxControls().flatMap { voxPlaybackMode(repeatState: $0.repeatState) }
                 .map { PlaybackModeState(mode: $0, options: voxModeOptions) }
@@ -1074,6 +1081,8 @@ public enum MusicPlaybackController {
             return FoobarMenuControl.setMode(mode)
         case .audirvana:
             return AudirvanaControls.setMode(mode)
+        case .kuwo:
+            return KuwoModeControl.setMode(mode)
         case .vox:
             guard let state = voxRepeatState(for: mode) else { return false }
             return runAppleScriptCapturing(voxRunningGuard + #"tell application "VOX" to set repeat state to "# + String(state)) != nil
@@ -1112,6 +1121,8 @@ public enum MusicPlaybackController {
             // QQ 菜单栏只有一档一档的「音量加 / 音量减」,当前值要另读它的偏好,不接:那颗胶囊对 QQ 不出现。
             return nil
         case .amazonMusic: // 只接了随机 / 循环,音量不接。
+            return nil
+        case .kuwo: // 音量浮层是自绘的、辅助功能树里读不出值,偏好运行中不更新;只接模式。见 02 章决策 264。
             return nil
         case .reamp:
             return ReampVolume.read()
@@ -1152,7 +1163,7 @@ public enum MusicPlaybackController {
                 spotifyRunningGuard + #"tell application "Spotify" to set sound volume to \#(v)"#) != nil
         case .kaset:
             return runKasetJXACapturing("        K.setVolume(\(v));\n        return \"ok\";") == "ok"
-        case .qqMusic, .amazonMusic: // 同 soundVolume(for:):这几家不接音量。
+        case .qqMusic, .amazonMusic, .kuwo: // 同 soundVolume(for:):这几家不接音量。
             return false
         case .reamp:
             return ReampVolume.set(v)

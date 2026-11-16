@@ -2230,6 +2230,11 @@ func runCoverArtTests() {
         expectEqual(S.artworkLateRetryDelay(afterWaiting: 31), 15, "封面晚到: 5 分钟内 15 秒取一次")
         expectEqual(S.artworkLateRetryDelay(afterWaiting: 299), 15, "封面晚到: 5 分钟内 15 秒取一次(边界)")
         expectEqual(S.artworkLateRetryDelay(afterWaiting: 300), 60, "封面晚到: 之后 60 秒一次")
+        typealias Gate = CoverArtReplacementGate
+        expectEqual([PlaybackPlayer.kuwo, .kaset, .appleMusic, .kkbox].map { Gate.waitsForLateSystemArtwork(bundleID: $0.bundleIdentifier) },
+                    [false, true, true, true],
+                    "封面晚到: 从不报封面的酷我不接着取;Kaset 的图走它自己的接口、可能真晚到,照取")
+        expectEqual(Gate.waitsForLateSystemArtwork(bundleID: nil), true, "封面晚到: 认不出是谁时照取")
         let png = Data([0x89, 0x50, 0x4E, 0x47])
         expectEqual(S.artworkMissDescription(data: nil, payloadKey: nil, miss: "the system reports nothing", expectedKey: "a|b"),
                     "the system reports nothing", "取图失败说明: 取图那边给的原因原样带上")
@@ -2279,7 +2284,8 @@ func runCoverArtTests() {
                         && sourceHas(lps, "guard stillWaiting() else { return }\n                // 暂停着不取,恢复播放后接着取。\n                guard self.isPlayingNow else { continue }\n                let late = await attempt()")
                         && lps.contains("generation == self.artworkFetchGeneration && expectedKey == self.lastKey && self.artworkData == nil")
                         && sourceHas(lps, "artworkFetchGeneration += 1\n        let generation = artworkFetchGeneration")
-                        && lps.contains("last attempt: \\(lastMiss ?? \"-\", privacy: .public)"), true,
+                        && lps.contains("last attempt: \\(lastMiss ?? \"-\", privacy: .public)")
+                        && sourceHas(lps, "guard stillWaiting(),\n                  CoverArtReplacementGate.waitsForLateSystemArtwork(bundleID: self.lastResolvedBundleID) else { return }\n            logger.notice(\"artwork: still no matching system cover"), true,
                     "封面晚到(契约): 二次确认跑完还没封面就接着取,同一首另起一轮就让给它;那条日志带上最后一次为什么没取到")
         expectEqual(lps.contains("if KnownPlaceholderArtwork.isPlaceholder(data) { return \"the player's built-in placeholder\" }"), true,
                     "封面晚到(契约): 登记在案的占位图不算取到(网易云云盘歌那张不会晚到时被挂上)")

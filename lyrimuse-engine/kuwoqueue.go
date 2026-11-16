@@ -21,8 +21,9 @@ import (
 // 没有当前位置(LastIndex 表常是空的),靠歌名、歌手在列表里认出在放的这首;电台里的歌不进这份列表,认不出就退回
 // 同专辑预取。
 //
-// 偏好里有个 keyPlayMode,各值对应哪种模式没有核实过,不读;顺序 / 随机看换歌行为(queueorder.go),
-// 小列表整份预取,同酷狗(kugouPickUpcoming)。见 09 章决策 377。
+// 播放模式先请 App 读它窗口上那颗模式键(playerPlaybackMode,App 侧 KuwoModeControl;偏好里的 keyPlayMode 运行中不更新,
+// 不读):单曲循环不预取,随机按读到的档,列表循环在列表末尾接回开头。读不到(没授权、窗口关着)才看换歌行为
+// (queueorder.go),小列表整份预取,同酷狗(kugouPickUpcoming)。见 09 章决策 377、02 章决策 264。
 
 // kuwoUpcomingOverride 让单测把库指到临时路径。空 = 用真实路径。
 var kuwoUpcomingOverride string
@@ -145,19 +146,33 @@ func kuwoPickUpcoming(rows []kuwoQueueRow, artist, title string, n int) ([]upcom
 		return nil, false
 	}
 
+	mode, modeOK := playerPlaybackMode(kuwoMusicBundleID)
+	if modeOK && mode == playerModeRepeatOne {
+		return nil, true
+	}
 	kuwoPlayOrderMu.Lock()
 	prevPos := kuwoPlayOrderLast.pos
 	shuffled, flipped := kuwoPlayOrderLast.observeWrapping(kuwoQueueID(rows), pos, len(tracks))
 	kuwoPlayOrderMu.Unlock()
-	if flipped {
+	if modeOK {
+		shuffled = mode == playerModeShuffle
+	} else if flipped {
 		log.Printf("kuwo upcoming: moved from position %d to %d in the play list, treating playback as shuffled", prevPos, pos)
 	}
 
-	if shuffled || len(tracks) <= queueShuffleWholeListMax {
+	if shuffled || (!modeOK && len(tracks) <= queueShuffleWholeListMax) {
 		return shuffleCandidates(len(tracks), pos, at), true
 	}
+	wraps := modeOK && mode == playerModeRepeatAll
 	res := make([]upcomingTrack, 0, n)
-	for i := pos + 1; i < len(tracks) && len(res) < n; i++ {
+	for k := 1; k < len(tracks) && len(res) < n; k++ {
+		i := pos + k
+		if i >= len(tracks) {
+			if !wraps {
+				break
+			}
+			i -= len(tracks)
+		}
 		if t, ok := at(i); ok {
 			res = append(res, t)
 		}

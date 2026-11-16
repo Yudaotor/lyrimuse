@@ -976,6 +976,11 @@ struct OnboardingView: View {
             lines.append(L10n.formatNames(L10n.t("辅助功能权限可显示%@的随机、循环按钮和音量调节"),
                                 accessibility.playerNames(windowControlTargets)))
         }
+        let modeKeyTargets = pendingAccessibility.filter { $0.accessibilityUse == .switchesModeAndTransport }
+        if !modeKeyTargets.isEmpty {
+            lines.append(L10n.formatNames(L10n.t("辅助功能权限可显示%@的随机、循环按钮，也可在系统媒体焦点被其他 App 占用时控制暂停、恢复和切换上一首或下一首"),
+                                accessibility.playerNames(modeKeyTargets)))
+        }
         return lines.isEmpty ? nil : lines.joined(separator: "\n")
     }
 
@@ -1646,6 +1651,7 @@ struct OnboardingView: View {
             let modeOnly = targets.filter { $0.accessibilityUse == .pressesPlayMode }
             let refines = targets.filter { $0.accessibilityUse == .refinesProgress }
             let windowControls = targets.filter { $0.accessibilityUse == .adjustsModeAndVolume }
+            let modeKey = targets.filter { $0.accessibilityUse == .switchesModeAndTransport }
             var lines: [String] = []
             if !progress.isEmpty && !playMode.isEmpty {
                 lines.append(L10n.formatNames(L10n.t("请开启此权限，以提高%@自动连播时播放进度的准确性，并显示%@的随机、循环与喜欢按钮及失去焦点时的播放控制"),
@@ -1676,6 +1682,10 @@ struct OnboardingView: View {
             if !windowControls.isEmpty {
                 lines.append(L10n.formatNames(L10n.t("请开启此权限，以显示%@的随机、循环按钮和音量调节"),
                                     accessibility.playerNames(windowControls)))
+            }
+            if !modeKey.isEmpty {
+                lines.append(L10n.formatNames(L10n.t("请开启此权限，以显示%@的随机、循环按钮，并在失去系统媒体焦点时控制暂停、恢复和切换上一首或下一首"),
+                                    accessibility.playerNames(modeKey)))
             }
             return lines.joined(separator: "\n")
         case .automation(let player) where player.automationUse == .readsTrack:

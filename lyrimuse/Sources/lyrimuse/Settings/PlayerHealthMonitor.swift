@@ -209,6 +209,10 @@ final class PlayerHealthMonitor: ObservableObject {
             if !windowControls.isEmpty {
                 parts.append(String(format: L10n.t("未获得辅助功能权限，%@ 不显示随机、循环按钮和音量调节"), names(windowControls)))
             }
+            let modeKey = accessibilityMissingPlayers.filter { $0.accessibilityUse == .switchesModeAndTransport }
+            if !modeKey.isEmpty {
+                parts.append(String(format: L10n.t("未获得辅助功能权限，%@ 不显示随机、循环按钮，失去系统媒体焦点时也无法控制暂停、恢复和切换上一首或下一首"), names(modeKey)))
+            }
             return parts.joined(separator: L10n.t("；"))
         }
     }

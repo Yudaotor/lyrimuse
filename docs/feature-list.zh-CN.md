@@ -671,7 +671,7 @@ Apple Music、Spotify、QQ 音乐、网易云音乐、酷狗音乐、酷我音�
 
 ### 按需申请权限
 
-Apple Music、Spotify、Kaset、VOX、Swinsian 和 Audirvana 需要「自动化」权限才能读取播放状态；QQ 音乐、酷我音乐、网易云音乐、酷狗音乐需要「完全磁盘访问权限」才能使用本机歌词和播放队列，汽水音乐和 VOX 需要该权限读取播放队列；Amazon Music 和 Pine Player 的进度校准，Pine Player 的播放列表，QQ 音乐、网易云音乐、酷狗音乐、汽水音乐、Amazon Music、reAMP、Pine Player 和 foobar2000 的随机、循环、喜欢按钮，foobar2000 的音量，以及其他 App 占用「正在播放」时 QQ 音乐、酷我音乐、网易云音乐、汽水音乐、Pine Player、foobar2000 和 MyGo Music 的播放按钮，需要「辅助功能」权限；浏览器中的网页播放器需要为浏览器开启「自动化」权限，并在浏览器中开启「允许 Apple 事件中的 JavaScript」。其他播放器无需权限。设置中会标明每项的当前授权状态。
+Apple Music、Spotify、Kaset、VOX、Swinsian 和 Audirvana 需要「自动化」权限才能读取播放状态；QQ 音乐、酷我音乐、网易云音乐、酷狗音乐需要「完全磁盘访问权限」才能使用本机歌词和播放队列，汽水音乐和 VOX 需要该权限读取播放队列；Amazon Music 和 Pine Player 的进度校准，Pine Player 的播放列表，QQ 音乐、酷我音乐、网易云音乐、酷狗音乐、汽水音乐、Amazon Music、reAMP、Pine Player 和 foobar2000 的随机、循环、喜欢按钮，foobar2000 的音量，以及其他 App 占用「正在播放」时 QQ 音乐、酷我音乐、网易云音乐、汽水音乐、Pine Player、foobar2000 和 MyGo Music 的播放按钮，需要「辅助功能」权限；浏览器中的网页播放器需要为浏览器开启「自动化」权限，并在浏览器中开启「允许 Apple 事件中的 JavaScript」。其他播放器无需权限。设置中会标明每项的当前授权状态。
 
 - 设置位置：播放器 › 权限与服务 › 自动化权限
 - 设置位置：播放器 › 权限与服务 › 完全磁盘访问权限
@@ -681,7 +681,7 @@ Apple Music、Spotify、Kaset、VOX、Swinsian 和 Audirvana 需要「自动化�
 
 ### 播放控制与进度跳转
 
-在歌词窗口和展开的灵动岛上播放、暂停、切歌，拖动进度条跳转。随机、循环、喜欢和音量取决于播放器的支持情况：Apple Music、Spotify、Kaset、QQ 音乐、Amazon Music、reAMP、VOX、Pine Player、foobar2000、Swinsian、Plexamp、Pear Desktop 和浏览器中的 YouTube Music 支持其中部分或全部功能，网易云音乐、酷狗音乐、汽水音乐、洛雪音乐和 MyGo Music 支持喜欢，洛雪音乐在其设置中开启开放 API 后还可调节音量。播放、暂停、切歌和喜欢也可绑定全局快捷键。浏览器视频等 App 占用系统「正在播放」时，QQ 音乐、酷我音乐、网易云音乐、汽水音乐、Pine Player、foobar2000 和 MyGo Music 的播放、暂停和切歌改为通过其自身的菜单或播放条操作，此时无法拖动进度跳转。
+在歌词窗口和展开的灵动岛上播放、暂停、切歌，拖动进度条跳转。随机、循环、喜欢和音量取决于播放器的支持情况：Apple Music、Spotify、Kaset、QQ 音乐、酷我音乐、Amazon Music、reAMP、VOX、Pine Player、foobar2000、Swinsian、Plexamp、Pear Desktop 和浏览器中的 YouTube Music 支持其中部分或全部功能，网易云音乐、酷狗音乐、汽水音乐、洛雪音乐和 MyGo Music 支持喜欢，洛雪音乐在其设置中开启开放 API 后还可调节音量。播放、暂停、切歌和喜欢也可绑定全局快捷键。浏览器视频等 App 占用系统「正在播放」时，QQ 音乐、酷我音乐、网易云音乐、汽水音乐、Pine Player、foobar2000 和 MyGo Music 的播放、暂停和切歌改为通过其自身的菜单或播放条操作，此时无法拖动进度跳转。
 
 - 设置位置：歌词显示 › 灵动岛 › 展开时 › 显示播放控制
 - 设置位置：快捷键 › 播放/暂停

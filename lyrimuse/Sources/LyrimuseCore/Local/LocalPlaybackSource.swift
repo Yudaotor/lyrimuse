@@ -6139,7 +6139,8 @@ public final class LocalPlaybackSource: ObservableObject {
             @MainActor func stillWaiting() -> Bool {
                 generation == self.artworkFetchGeneration && expectedKey == self.lastKey && self.artworkData == nil
             }
-            guard stillWaiting() else { return }
+            guard stillWaiting(),
+                  CoverArtReplacementGate.waitsForLateSystemArtwork(bundleID: self.lastResolvedBundleID) else { return }
             logger.notice("artwork: still no matching system cover \(waited, privacy: .public)s after the track change for \(expectedKey, privacy: .public); last attempt: \(lastMiss ?? "-", privacy: .public)")
             while true {
                 let delay = Self.artworkLateRetryDelay(afterWaiting: waited)

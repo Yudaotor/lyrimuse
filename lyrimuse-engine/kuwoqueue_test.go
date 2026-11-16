@@ -33,6 +33,7 @@ func writeTestKuwoDB(t *testing.T, songs []kuwoTestSong) string {
 
 func useKuwoQueue(t *testing.T, path string) {
 	t.Helper()
+	withPlayerMode(t, "", false)
 	old := kuwoUpcomingOverride
 	kuwoUpcomingOverride = path
 	kuwoPlayOrderMu.Lock()
@@ -94,6 +95,50 @@ func TestKuwoPickUpcomingLargeListOrderedThenShuffled(t *testing.T) {
 	got, ok = kuwoPickUpcoming(rows, "某人", "歌20", 2)
 	if !ok || len(got) != queueShuffleBatch || got[0].title != "歌21" {
 		t.Fatalf("跳着放该按随机交一批: %+v", got)
+	}
+}
+
+// 读得到酷我的播放模式时按它来:单曲循环不预取;随机第一首就交一批;顺序播放到末尾就停,列表循环接回开头;
+// 按着上一首从第一首退到最后一首也不当随机。
+func TestKuwoPickUpcomingFollowsPlaybackMode(t *testing.T) {
+	rows := make([]kuwoQueueRow, queueShuffleWholeListMax+10)
+	for i := range rows {
+		rows[i] = kuwoQueueRow{ID: int64(i + 1), PersistentID: float64(5000 + i), Title: fmt.Sprintf("歌%02d", i), Artist: "某人", Duration: float64(180)}
+	}
+	last := fmt.Sprintf("歌%02d", len(rows)-1)
+	useKuwoQueue(t, "")
+	withPlayerMode(t, playerModeRepeatOne, true)
+	if got, ok := kuwoPickUpcoming(rows, "某人", "歌03", 5); !ok || len(got) != 0 {
+		t.Errorf("单曲循环:不预取、也不退回同专辑: ok=%v %+v", ok, got)
+	}
+	withPlayerMode(t, playerModeShuffle, true)
+	if got, ok := kuwoPickUpcoming(rows, "某人", "歌03", 5); !ok || len(got) != queueShuffleBatch {
+		t.Errorf("读到随机:开播第一首就交一批: ok=%v %d 首", ok, len(got))
+	}
+	useKuwoQueue(t, "")
+	withPlayerMode(t, playerModeList, true)
+	kuwoPickUpcoming(rows, "某人", "歌03", 2)
+	if got, ok := kuwoPickUpcoming(rows, "某人", "歌20", 2); !ok || len(got) != 2 || got[0].title != "歌21" {
+		t.Errorf("读到顺序:跳着点也照列表往后取: ok=%v %+v", ok, got)
+	}
+	if got, ok := kuwoPickUpcoming(rows, "某人", last, 2); ok || len(got) != 0 {
+		t.Errorf("顺序播放到末尾就停,不接回开头: ok=%v %+v", ok, got)
+	}
+	withPlayerMode(t, playerModeRepeatAll, true)
+	if got, ok := kuwoPickUpcoming(rows, "某人", last, 2); !ok || len(got) != 2 || got[0].title != "歌00" || got[1].title != "歌01" {
+		t.Errorf("列表循环:末尾接回开头: ok=%v %+v", ok, got)
+	}
+	useKuwoQueue(t, "")
+	withPlayerMode(t, playerModeRepeatAll, true)
+	kuwoPickUpcoming(rows, "某人", "歌00", 2)
+	if got, ok := kuwoPickUpcoming(rows, "某人", last, 2); !ok || len(got) != 2 || got[0].title != "歌00" {
+		t.Errorf("从第一首按上一首退到最后一首不当随机: ok=%v %+v", ok, got)
+	}
+	small := rows[:4]
+	useKuwoQueue(t, "")
+	withPlayerMode(t, playerModeList, true)
+	if got, ok := kuwoPickUpcoming(small, "某人", "歌01", 5); !ok || len(got) != 2 || got[0].title != "歌02" {
+		t.Errorf("读到顺序时小列表也只往后取: ok=%v %+v", ok, got)
 	}
 }
 

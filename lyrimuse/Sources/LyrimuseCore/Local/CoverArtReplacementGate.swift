@@ -31,6 +31,12 @@ public enum CoverArtReplacementGate {
         bundleID == PlaybackPlayer.kaset.bundleIdentifier || bundleID == PlaybackPlayer.kuwo.bundleIdentifier
     }
 
+    /// 换歌后系统那份还没有封面时,要不要接着隔一阵再取(`LocalPlaybackSource.fetchArtworkForCurrentTrack` 末尾那段重试)。
+    /// 从不报封面的播放器等不到,不取;Kaset 除外,它的封面走 `kasetArtwork`、可能真的晚到。纯函数,selftest 覆盖。
+    public static func waitsForLateSystemArtwork(bundleID: String?) -> Bool {
+        !systemNeverHasArtwork(bundleID: bundleID) || bundleID == PlaybackPlayer.kaset.bundleIdentifier
+    }
+
     /// 系统会话里这一首没有封面时,改用引擎按歌手 + 歌名匹配到的那张(`reason` 的 `systemNeverHasArtwork` 传它)。
     /// 除了从不报封面的播放器,还有放本地文件的 reAMP、VOX、Pine Player、foobar2000、Swinsian、Audirvana:文件里没嵌、同目录也没有封面就没有,匹配到的可能是同一首别的
     /// 专辑版本,仍比整首占位音符强。见 02 章决策 126。洛雪:有的源给不出封面,系统会话里留着的又是上一首的、到期被清空
