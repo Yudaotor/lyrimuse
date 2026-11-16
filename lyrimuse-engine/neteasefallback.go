@@ -32,7 +32,7 @@ import (
 //     歌词 /api/song/lyric/v1(整行 / 译文 / 罗马音 / 逐字一次取齐,署名行见 neteaseV1LyricLines)→ /eapi/song/lyric/v1
 //       → /api/song/lyric(没有逐字)
 //     专辑曲目 /api/album/{id} → /api/v1/album/{id} → /eapi/album/{id}
-//     专辑搜索(type=10)与按歌手泛搜 /api/search/get → /api/search/get/web → /eapi/search/get
+//     专辑搜索(type=10)、按歌手泛搜、按歌词搜:同样这四条(neteaseSearchPaths;曲目字段名在 neteaseSongSearchVerdict 归一)
 //   - /eapi/ 开头的是网易云客户端用的加密写法:跟去掉 e 的 /api/ 是同一个接口、同一份返回,只是请求改成 POST、
 //     查询参数加密进表单(neteaseNewRequest)。每条链各补一条,明文路径整条被拒或被封时还有它。
 //
@@ -152,118 +152,166 @@ func neteaseEapiParams(apiPath string, data map[string]string) (string, error) {
 	return strings.ToUpper(hex.EncodeToString(msg)), nil
 }
 
-// neteaseCloudSearchEndpoint 是搜歌的第四条路径。结果里的字段名跟 search/get 不同
-// (ar / al / dt 对 artists / album / duration),neteaseSearchSongs 负责归一。
+// neteaseCloudSearchEndpoint 是搜索的第四条路径。搜歌(type=1、1006)结果里的字段名跟 search/get 不同
+// (ar / al / dt / alia / tns 对 artists / album / duration / alias / transNames),专辑搜索(type=10)同名。
 const neteaseCloudSearchEndpoint = "https://music.163.com/api/cloudsearch/pc"
 
-// neteaseSearchSongs 按 search/get → search/get/web → eapi 的 search/get → cloudsearch/pc 的顺序搜歌,每条路径
-// 内部由 get(resolveNeteaseInfo 里那个)按主机退。
+// neteaseSearchAnswer:一条搜索路径答回来、判过能不能用的结果。n 是结果条数;why 非空是不能用(写进日志)。
+// 不能用但 n > 0 的(有结果、一条都不沾边)留着,给各条都不能用时兜底。
+type neteaseSearchAnswer[T any] struct {
+	val T
+	n   int
+	why string
+}
+
+// neteaseSearchPaths 按 search/get → search/get/web → eapi 的 search/get → cloudsearch/pc 的顺序问同一个查询串 query
+// (? 开头),ask 问一条并判能不能用(没问成交 error;cloud 表示问的是 cloudsearch)。q 是查询词,只用来写日志。
 //
-// 一条路径答了、但答的不能用(neteaseSearchVerdict:result 不是对象、songs 解不开,或者有歌却没有一首跟查询词沾边),
-// 照没问成处理、接着问下一条。各条都不能用时交回第一份解得开的结果(跟只问第一条时一样);一份解得开的都没有才返回错误,
+// 一条路径答了、但答的不能用(result 不是对象、列表解不开,或者有结果却没有一条跟查询词沾边),照没问成处理、接着问下一条。
+// 前三条答的「确实没有」(没有 result / null / 空列表)算能用;cloudsearch 答空不算,也不算它答垃圾。
+// 各条都不能用时交回第一份解得开的结果(跟只问第一条时一样);一份解得开的都没有才返回错误,
 // 优先交 search/get 几条的错误,它们都没报错(被跳过或答的解不开)时交 cloudsearch 的。
 // 前面几条答的不能用、后面一条答的能用,算前面几条在这台机器上答垃圾的一次实证,连着几次就先跳过(neteaseSearchJunkSkipped)。
-// cloudsearch 是最后一条,从不跳过。见 09 章决策 378。
-func neteaseSearchSongs(get func(string, any) error, q string) ([]neSearchSong, error) {
-	escaped := neturl.QueryEscape(q)
-	const query = "?type=1&limit=30&s="
+// cloudsearch 是最后一条,从不跳过。见 09 章决策 378、380。
+func neteaseSearchPaths[T any](q, query string, ask func(u string, cloud bool) (neteaseSearchAnswer[T], error)) (T, error) {
+	var zero T
 	var err error
 	var junk []string
-	var firstSongs []neSearchSong
+	var first *neteaseSearchAnswer[T]
 	for _, endpoint := range []string{neteaseSearchEndpointPrimary, neteaseSearchEndpointFallback, neteaseSearchEndpointEapi} {
 		if neteaseSearchJunkSkipped(endpoint) {
 			continue
 		}
-		var r struct {
-			Result json.RawMessage `json:"result"`
-		}
-		if gerr := get(endpoint+query+escaped, &r); gerr != nil {
-			err = gerr
+		a, aerr := ask(endpoint+query, false)
+		if aerr != nil {
+			err = aerr
 			continue
 		}
-		songs, why := neteaseSearchVerdict(r.Result, q)
-		if why == "" {
+		if a.why == "" {
 			neteaseSearchJunkSettle(endpoint, junk)
-			return songs, nil
+			return a.val, nil
 		}
-		log.Printf("netease: %s answered an unusable search for %q (%s), trying the next path", neteaseEndpointBucket(endpoint), q, why)
+		log.Printf("netease: %s answered an unusable search for %q (%s), trying the next path", neteaseEndpointBucket(endpoint), q, a.why)
 		junk = append(junk, endpoint)
-		if firstSongs == nil {
-			firstSongs = songs
+		if first == nil && a.n > 0 {
+			first = &a
 		}
 	}
-	var c struct {
-		Result struct {
-			Songs []struct {
-				ID   int64    `json:"id"`
-				Name string   `json:"name"`
-				Alia []string `json:"alia"`
-				Tns  []string `json:"tns"`
-				Dt   float64  `json:"dt"`
-				Ar   []struct {
-					Name string `json:"name"`
-				} `json:"ar"`
-				Al struct {
-					ID     int64  `json:"id"`
-					Name   string `json:"name"`
-					PicURL string `json:"picUrl"`
-				} `json:"al"`
-			} `json:"songs"`
-		} `json:"result"`
+	a, cerr := ask(neteaseCloudSearchEndpoint+query, true)
+	if cerr == nil && a.why != "" && a.n == 0 {
+		cerr = fmt.Errorf("netease: cloudsearch answered an unusable search (%s)", a.why)
 	}
-	if cerr := get(neteaseCloudSearchEndpoint+query+escaped, &c); cerr != nil {
-		if firstSongs != nil {
-			return firstSongs, nil
+	if cerr != nil {
+		if first != nil {
+			return first.val, nil
 		}
 		if err != nil {
-			return nil, err
+			return zero, err
 		}
-		return nil, cerr
+		return zero, cerr
 	}
-	songs := make([]neSearchSong, 0, len(c.Result.Songs))
-	texts := make([][]string, 0, len(c.Result.Songs))
-	for _, s := range c.Result.Songs {
-		var song neSearchSong
-		song.ID, song.Name, song.Duration = s.ID, s.Name, s.Dt
-		song.Album.ID, song.Album.Name, song.Album.PicURL = s.Al.ID, s.Al.Name, s.Al.PicURL
-		fields := append([]string{s.Name, s.Al.Name}, s.Alia...)
-		fields = append(fields, s.Tns...)
-		for _, a := range s.Ar {
-			song.Artists = append(song.Artists, struct {
-				Name string `json:"name"`
-			}{Name: a.Name})
-			fields = append(fields, a.Name)
-		}
-		songs = append(songs, song)
-		texts = append(texts, fields)
-	}
-	if len(songs) > 0 && neteaseSearchOverlaps(q, texts) {
+	if a.why == "" && a.n > 0 {
 		neteaseSearchJunkSettle("", junk)
-		return songs, nil
+		return a.val, nil
 	}
-	if firstSongs != nil {
-		return firstSongs, nil
+	if first != nil {
+		return first.val, nil
 	}
-	return songs, nil
+	return a.val, nil
 }
 
-// neteaseSearchVerdict 判 search/get 一类路径答回来的 result 能不能用,能用时 why 为空。
-// 没有 result、result 是 null 或者 songs 是空的,算「确实没有」,能用。result 不是对象(有的地区出口回加密的十六进制串)、
-// songs 解不开,或者有歌却没有一首跟查询词沾边(neteaseSearchOverlaps;有的地区出口不管搜什么都回同一批无关的歌),不能用。
-// 后一种 songs 照样交回,给各条都不能用时兜底。
-func neteaseSearchVerdict(raw json.RawMessage, q string) (songs []neSearchSong, why string) {
+// neteaseSearchSongs 搜歌(type=1),四条路径和判定见 neteaseSearchPaths;每条路径内部由 get(resolveNeteaseInfo 里那个)按主机退。
+// cloudsearch 的字段名在这里归一回 neSearchSong。
+func neteaseSearchSongs(get func(string, any) error, q string) ([]neSearchSong, error) {
+	return neteaseSearchPaths(q, "?type=1&limit=30&s="+neturl.QueryEscape(q), func(u string, cloud bool) (neteaseSearchAnswer[[]neSearchSong], error) {
+		if !cloud {
+			var r struct {
+				Result json.RawMessage `json:"result"`
+			}
+			if err := get(u, &r); err != nil {
+				return neteaseSearchAnswer[[]neSearchSong]{}, err
+			}
+			songs, why := neteaseSearchVerdict(r.Result, q)
+			return neteaseSearchAnswer[[]neSearchSong]{val: songs, n: len(songs), why: why}, nil
+		}
+		var c struct {
+			Result struct {
+				Songs []struct {
+					ID   int64    `json:"id"`
+					Name string   `json:"name"`
+					Alia []string `json:"alia"`
+					Tns  []string `json:"tns"`
+					Dt   float64  `json:"dt"`
+					Ar   []struct {
+						Name string `json:"name"`
+					} `json:"ar"`
+					Al struct {
+						ID     int64  `json:"id"`
+						Name   string `json:"name"`
+						PicURL string `json:"picUrl"`
+					} `json:"al"`
+				} `json:"songs"`
+			} `json:"result"`
+		}
+		if err := get(u, &c); err != nil {
+			return neteaseSearchAnswer[[]neSearchSong]{}, err
+		}
+		songs := make([]neSearchSong, 0, len(c.Result.Songs))
+		texts := make([][]string, 0, len(c.Result.Songs))
+		for _, s := range c.Result.Songs {
+			var song neSearchSong
+			song.ID, song.Name, song.Duration = s.ID, s.Name, s.Dt
+			song.Album.ID, song.Album.Name, song.Album.PicURL = s.Al.ID, s.Al.Name, s.Al.PicURL
+			fields := append([]string{s.Name, s.Al.Name}, s.Alia...)
+			fields = append(fields, s.Tns...)
+			for _, a := range s.Ar {
+				song.Artists = append(song.Artists, struct {
+					Name string `json:"name"`
+				}{Name: a.Name})
+				fields = append(fields, a.Name)
+			}
+			songs = append(songs, song)
+			texts = append(texts, fields)
+		}
+		return neteaseSearchJudged(songs, texts, q, normLoose), nil
+	})
+}
+
+// neteaseSearchJudged:list 有结果却没有一条跟查询词沾边(neteaseSearchOverlaps,texts 是每条的字段)时判不能用。
+func neteaseSearchJudged[T any](list []T, texts [][]string, q string, norm func(string) string) neteaseSearchAnswer[[]T] {
+	a := neteaseSearchAnswer[[]T]{val: list, n: len(list)}
+	if len(list) > 0 && !neteaseSearchOverlaps(norm, q, texts) {
+		a.why = "no result shares a word with the query"
+	}
+	return a
+}
+
+// neteaseSearchDecode 把 search/get 一类路径答回来的 result 解进 v。没有 result、result 是 null 时 v 不动(确实没有);
+// result 不是对象(有的地区出口回加密的十六进制串)或解不开时交回原因。
+func neteaseSearchDecode(raw json.RawMessage, v any) string {
 	trimmed := bytes.TrimSpace(raw)
 	if len(trimmed) == 0 || bytes.Equal(trimmed, []byte("null")) {
-		return nil, ""
+		return ""
 	}
 	if trimmed[0] != '{' {
-		return nil, "result is not an object"
+		return "result is not an object"
 	}
+	if json.Unmarshal(trimmed, v) != nil {
+		return "result undecodable"
+	}
+	return ""
+}
+
+// neteaseSearchVerdict 判 search/get 一类路径搜歌(type=1)答回来的 result 能不能用,能用时 why 为空。
+// 没有 result、result 是 null 或者 songs 是空的,算「确实没有」,能用。result 不是对象、songs 解不开,
+// 或者有歌却没有一首跟查询词沾边(neteaseSearchOverlaps;有的地区出口不管搜什么都回同一批无关的歌),不能用。
+// 后一种 songs 照样交回,给各条都不能用时兜底。
+func neteaseSearchVerdict(raw json.RawMessage, q string) (songs []neSearchSong, why string) {
 	var r struct {
 		Songs []neSearchSong `json:"songs"`
 	}
-	if json.Unmarshal(trimmed, &r) != nil {
-		return nil, "songs undecodable"
+	if why := neteaseSearchDecode(raw, &r); why != "" {
+		return nil, why
 	}
 	if len(r.Songs) == 0 {
 		return r.Songs, ""
@@ -281,8 +329,8 @@ func neteaseSearchVerdict(raw json.RawMessage, q string) (songs []neSearchSong, 
 			} `json:"album"`
 		} `json:"songs"`
 	}
-	if json.Unmarshal(trimmed, &t) != nil {
-		return nil, "songs undecodable"
+	if json.Unmarshal(bytes.TrimSpace(raw), &t) != nil {
+		return nil, "result undecodable"
 	}
 	texts := make([][]string, 0, len(t.Songs))
 	for _, s := range t.Songs {
@@ -293,20 +341,128 @@ func neteaseSearchVerdict(raw json.RawMessage, q string) (songs []neSearchSong, 
 		}
 		texts = append(texts, fields)
 	}
-	if !neteaseSearchOverlaps(q, texts) {
-		return r.Songs, "no result shares a word with the query"
-	}
-	return r.Songs, ""
+	a := neteaseSearchJudged(r.Songs, texts, q, normLoose)
+	return a.val, a.why
 }
 
-// neteaseSearchOverlaps:texts 里有没有一首(一组字段:歌名、专辑、别名、歌手)跟查询词沾边。查询词按 albumTokens 切词
-// (繁简、大小写、变音折叠,数字 / 拉丁 / CJK 交界处断开,单字和虚词不算),每个词再过 normLoose(全角字母数字折半角);
-// 某个词出现在某个字段里(字段也过 normLoose),或者某个字段里两字以上的一段 CJK 出现在某个查询词里(查询词里中日文常连写),
-// 就算沾边。查询词切不出词时判不了,按沾边算。
-func neteaseSearchOverlaps(q string, texts [][]string) bool {
+// neteaseSearchAlbum:专辑搜索(type=10)结果里的一张。search/get 一类和 cloudsearch 字段同名。
+type neteaseSearchAlbum struct {
+	ID     int64  `json:"id"`
+	Name   string `json:"name"`
+	Artist struct {
+		Name string `json:"name"`
+	} `json:"artist"`
+	Artists []struct {
+		Name string `json:"name"`
+	} `json:"artists"`
+	Alias      []string `json:"alias"`
+	TransNames []string `json:"transNames"`
+}
+
+// neteaseAlbumSearchVerdict 判专辑搜索答回来的 result,口径同 neteaseSearchVerdict(沾边看专辑名、别名、歌手)。
+// search/get 一类还带 hlWords(服务端认出的查询词):正常出口原样回查询词,答垃圾的出口回一个跟查询词无关的数字(「-53」「84」),
+// 它也算一个字段:结果跟查询词毫不相干、但服务端认的是这个查询词时,是网易云真没有,能用,不多打请求。
+func neteaseAlbumSearchVerdict(raw json.RawMessage, q string) neteaseSearchAnswer[[]neteaseSearchAlbum] {
+	var r struct {
+		HlWords []string             `json:"hlWords"`
+		Albums  []neteaseSearchAlbum `json:"albums"`
+	}
+	if why := neteaseSearchDecode(raw, &r); why != "" {
+		return neteaseSearchAnswer[[]neteaseSearchAlbum]{why: why}
+	}
+	texts := make([][]string, 0, len(r.Albums)+1)
+	texts = append(texts, r.HlWords)
+	for _, a := range r.Albums {
+		fields := append([]string{a.Name, a.Artist.Name}, a.Alias...)
+		fields = append(fields, a.TransNames...)
+		for _, ar := range a.Artists {
+			fields = append(fields, ar.Name)
+		}
+		texts = append(texts, fields)
+	}
+	return neteaseSearchJudged(r.Albums, texts, q, normLoose)
+}
+
+// neteaseSearchHit:neteaseSongSearch 结果里的一首,search/get 一类(artists / album / duration / alias / transNames)和
+// cloudsearch(ar / al / dt / alia / tns)两种字段名都收。lyrics 是按歌词搜时带回的那段歌词:search/get 一类是 {"txt": …},
+// cloudsearch 是一组字符串。
+type neteaseSearchHit struct {
+	Name     string  `json:"name"`
+	Duration float64 `json:"duration"`
+	Dt       float64 `json:"dt"`
+	Artists  []struct {
+		Name string `json:"name"`
+	} `json:"artists"`
+	Ar []struct {
+		Name string `json:"name"`
+	} `json:"ar"`
+	Album struct {
+		Name string `json:"name"`
+	} `json:"album"`
+	Al struct {
+		Name string `json:"name"`
+	} `json:"al"`
+	Alias      []string        `json:"alias"`
+	Alia       []string        `json:"alia"`
+	TransNames []string        `json:"transNames"`
+	Tns        []string        `json:"tns"`
+	Lyrics     json.RawMessage `json:"lyrics"`
+}
+
+// neteaseSearchHitLyrics 取 lyrics 里的歌词文字;认不出的写法交空。
+func neteaseSearchHitLyrics(raw json.RawMessage) []string {
+	var lines []string
+	if json.Unmarshal(raw, &lines) == nil {
+		return lines
+	}
+	var o struct {
+		Txt string `json:"txt"`
+	}
+	if json.Unmarshal(raw, &o) == nil && o.Txt != "" {
+		return []string{o.Txt}
+	}
+	return nil
+}
+
+// neteaseSongSearchVerdict 判 neteaseSongSearch 答回来的 result,口径同 neteaseSearchVerdict,沾边还看带回的歌词
+// (按歌词搜时查询词是一句歌词)。norm 是给字段和查询词折写法的:歌词又长又几乎不重复,得用 normLooseUncached,
+// 别灌进 normLoose 的备忘表。
+func neteaseSongSearchVerdict(raw json.RawMessage, q string, norm func(string) string) neteaseSearchAnswer[[]neteaseSearchSong] {
+	var r struct {
+		Songs []neteaseSearchHit `json:"songs"`
+	}
+	if why := neteaseSearchDecode(raw, &r); why != "" {
+		return neteaseSearchAnswer[[]neteaseSearchSong]{why: why}
+	}
+	songs := make([]neteaseSearchSong, 0, len(r.Songs))
+	texts := make([][]string, 0, len(r.Songs))
+	for _, h := range r.Songs {
+		s := neteaseSearchSong{Name: h.Name, Duration: h.Duration}
+		if s.Duration == 0 {
+			s.Duration = h.Dt
+		}
+		fields := []string{h.Name, h.Album.Name, h.Al.Name}
+		for _, list := range [][]string{h.Alias, h.Alia, h.TransNames, h.Tns, neteaseSearchHitLyrics(h.Lyrics)} {
+			fields = append(fields, list...)
+		}
+		for _, a := range append(h.Artists, h.Ar...) {
+			s.Artists = append(s.Artists, a)
+			fields = append(fields, a.Name)
+		}
+		songs = append(songs, s)
+		texts = append(texts, fields)
+	}
+	return neteaseSearchJudged(songs, texts, q, norm)
+}
+
+// neteaseSearchOverlaps:texts 里有没有一条(一组字段:歌名、专辑、别名、歌手)跟查询词沾边。查询词按 albumTokens 切词
+// (繁简、大小写、变音折叠,数字 / 拉丁 / CJK 交界处断开,单字和虚词不算),每个词再过 norm(normLoose 或 normLooseUncached,
+// 全角字母数字折半角);某个词出现在某个字段里(字段也过 norm),或者某个字段里两字以上的一段 CJK 出现在某个查询词里
+// (查询词里中日文常连写),就算沾边。查询词切不出词时判不了,按沾边算。
+func neteaseSearchOverlaps(norm func(string) string, q string, texts [][]string) bool {
 	var tokens []string
 	for t := range albumTokens(q) {
-		if n := normLoose(t); utf8.RuneCountInString(n) >= 2 {
+		if n := norm(t); utf8.RuneCountInString(n) >= 2 {
 			tokens = append(tokens, n)
 		}
 	}
@@ -315,7 +471,7 @@ func neteaseSearchOverlaps(q string, texts [][]string) bool {
 	}
 	for _, fields := range texts {
 		for _, f := range fields {
-			nf := normLoose(f)
+			nf := norm(f)
 			if nf == "" {
 				continue
 			}
@@ -325,7 +481,7 @@ func neteaseSearchOverlaps(q string, texts [][]string) bool {
 				}
 			}
 			for ft := range albumTokens(f) {
-				ft = normLoose(ft)
+				ft = norm(ft)
 				r, _ := utf8.DecodeRuneInString(ft)
 				if utf8.RuneCountInString(ft) < 2 || !isCJKRune(r) {
 					continue

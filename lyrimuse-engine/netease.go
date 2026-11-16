@@ -1216,81 +1216,74 @@ func neteaseAlbumTracks(ctx context.Context, albumID int64) ([]albumTrack, bool)
 // 在平台间是意译、文字层面完全无法互认"这种场景,这一步不能像 resolveNeteaseInfo 那样
 // 靠曲目搜索间接带出专辑,必须直接搜专辑本身。
 //
-// 跟 resolveNeteaseInfo 的 get 闭包同一个理由,同一个修法:网易云限流照样回 HTTP 200,
-// 拒绝写在 body 的 code 字段里,只看 HTTP 状态码会把"这次被限流了"解成"这张专辑网易云
-// 真的没有",而且是**按端点分桶**限流,同一时刻换 /api/search/get 往往还通——按端点
-// 分桶重试一次,body code 非 200/0 一律当失败,不当"零张专辑"。
+// 四条路径和判定见 neteaseSearchPaths,body 里的拒绝码(限流照样回 HTTP 200)见 neteaseSearchResult:
+// 拒绝当没问成、换下一条,不当"零张专辑"。
 func neteaseAlbumIDByName(ctx context.Context, artist, album string) (int64, bool) {
 	// 本地艺人标签有时自带括号里的罗马化别名(YouTube Music 给的「溫嵐 (Landy Wen)」),整串拼进搜索词会把网易云的模糊搜索
 	// 带偏、专辑一条都搜不到,所以 artist 也去括号(跟 retryTitleFromArtistSearch 对标题的 stripParens 同理)。后面 neteaseArtistMatches
 	// 那道身份核验闸不受影响:底下的 artistMatches 有 stripParens 的兜底分支,核验用的仍然是完整的原始 artist。
 	q := stripParens(artist) + " " + album
-	get := func(u string) (int64, bool, bool) { // (albumID, found, requestSucceeded)
-		body, err := neteaseFetchBody(ctx, u, "", 4*time.Second)
+	albums, err := neteaseSearchPaths(q, "?type=10&limit=5&s="+neturl.QueryEscape(q), func(u string, _ bool) (neteaseSearchAnswer[[]neteaseSearchAlbum], error) {
+		raw, err := neteaseSearchResult(ctx, u)
 		if err != nil {
-			return 0, false, false
+			return neteaseSearchAnswer[[]neteaseSearchAlbum]{}, err
 		}
-		var probe struct {
-			Code int `json:"code"`
-		}
-		if json.Unmarshal(body, &probe) != nil {
-			return 0, false, false
-		}
-		if probe.Code != 0 && probe.Code != 200 {
-			// 限流/拒绝,不是"零张专辑"。跟 resolveNeteaseInfo 的 get 同一份处理:
-			// 记日志 + 指数退避这个端点桶,405 时额外记具体原因(见那边注释)。
-			cooldown, streak := neteaseReportRejected(u)
-			log.Printf("netease: %s rejected (code %d), backing off %s (bucket rejected %d times in a row)",
-				neteaseEndpointBucket(u), probe.Code, cooldown, streak)
-			if probe.Code == 405 {
-				neteaseSetLastFailureReason(lyricFailureReasonNeteaseRateLimited)
-			}
-			return 0, false, false
-		}
-		neteaseReportSuccess(u) // 见 resolveNeteaseInfo 的 get 里同一句的注释
-		var out struct {
-			Result struct {
-				Albums []struct {
-					ID     int64  `json:"id"`
-					Name   string `json:"name"`
-					Artist struct {
-						Name string `json:"name"`
-					} `json:"artist"`
-				} `json:"albums"`
-			} `json:"result"`
-		}
-		if err := json.Unmarshal(body, &out); err != nil {
-			return 0, false, false
-		}
-		// 扫完这一页全部结果、取 albumScore **最高**的那个,而不是"扫到第一条满足门槛
-		// (>=100)的专辑就收工"——网易云的搜索排名不保证精确同名的排在前面:名字里带着专辑名的演唱会
-		// 专辑可能排在正好同名的录音室专辑前面,两者的 albumScore 都够门槛(前者是"字符串包含"档 100,
-		// 后者是"完全同名"档 200,但"第一条满足门槛就收工"从不比较、只看谁先出现),浏览曲目时就进了
-		// 演唱会专辑,配出来的是 Live 版而不是录音室版。同分才按到达顺序决胜——跟 bestAlbumTrackByDuration
-		// "不是谁先到就信谁,而是比谁更贴切"是同一个原则。
-		bestID := int64(0)
-		bestScore := -1
-		for _, a := range out.Result.Albums {
-			if !neteaseArtistMatches(a.Artist.Name, artist) {
-				continue
-			}
-			s := albumScore(a.Name, album)
-			if s >= 100 && s > bestScore {
-				bestID, bestScore = a.ID, s
-			}
-		}
-		if bestID != 0 {
-			return bestID, true, true
-		}
-		return 0, false, true // 请求成功、确实没有匹配的专辑
+		return neteaseAlbumSearchVerdict(raw, q), nil
+	})
+	if err != nil {
+		return 0, false
 	}
-	const query = "?type=10&limit=5&s="
-	for _, endpoint := range []string{neteaseSearchEndpointPrimary, neteaseSearchEndpointFallback, neteaseSearchEndpointEapi} {
-		if id, ok, succeeded := get(endpoint + query + neturl.QueryEscape(q)); succeeded {
-			return id, ok
+	// 扫完这一页全部结果、取 albumScore **最高**的那个,而不是"扫到第一条满足门槛
+	// (>=100)的专辑就收工"——网易云的搜索排名不保证精确同名的排在前面:名字里带着专辑名的演唱会
+	// 专辑可能排在正好同名的录音室专辑前面,两者的 albumScore 都够门槛(前者是"字符串包含"档 100,
+	// 后者是"完全同名"档 200,但"第一条满足门槛就收工"从不比较、只看谁先出现),浏览曲目时就进了
+	// 演唱会专辑,配出来的是 Live 版而不是录音室版。同分才按到达顺序决胜——跟 bestAlbumTrackByDuration
+	// "不是谁先到就信谁,而是比谁更贴切"是同一个原则。
+	bestID := int64(0)
+	bestScore := -1
+	for _, a := range albums {
+		if !neteaseArtistMatches(a.Artist.Name, artist) {
+			continue
+		}
+		s := albumScore(a.Name, album)
+		if s >= 100 && s > bestScore {
+			bestID, bestScore = a.ID, s
 		}
 	}
-	return 0, false
+	return bestID, bestID != 0
+}
+
+// neteaseSearchResult 问一条搜索地址,交回响应里的 result 原样(判能不能用交给各自的 verdict)。
+// 网易云限流照样回 HTTP 200,拒绝写在 body 的 code 字段里,不能当成"零条结果":body code 非 200/0 记日志、
+// 指数退避这个端点桶、405 时额外记具体原因(见 resolveNeteaseInfo 的 get 那段注释),交 error。
+func neteaseSearchResult(ctx context.Context, u string) (json.RawMessage, error) {
+	body, err := neteaseFetchBody(ctx, u, "", 4*time.Second)
+	if err != nil {
+		return nil, err
+	}
+	var probe struct {
+		Code int `json:"code"`
+	}
+	if err := json.Unmarshal(body, &probe); err != nil {
+		return nil, err
+	}
+	if probe.Code != 0 && probe.Code != 200 {
+		cooldown, streak := neteaseReportRejected(u)
+		log.Printf("netease: %s rejected (code %d), backing off %s (bucket rejected %d times in a row)",
+			neteaseEndpointBucket(u), probe.Code, cooldown, streak)
+		if probe.Code == 405 {
+			neteaseSetLastFailureReason(lyricFailureReasonNeteaseRateLimited)
+		}
+		return nil, fmt.Errorf("netease: %s rejected (code %d)", neteaseEndpointBucket(u), probe.Code)
+	}
+	neteaseReportSuccess(u) // 见 resolveNeteaseInfo 的 get 里同一句的注释
+	var out struct {
+		Result json.RawMessage `json:"result"`
+	}
+	if err := json.Unmarshal(body, &out); err != nil {
+		return nil, err
+	}
+	return out.Result, nil
 }
 
 // retryTitleFromAlbumMaxDurationDiffSecs 故意卡得很紧:这是**唯一**一处纯粹依赖时长做
@@ -1496,48 +1489,21 @@ const (
 	neteaseSearchTypeLyric = 1006
 )
 
-// neteaseSongSearch:网易云曲目搜索,三个端点依次试,第一个问成的为准;reqOK=false 是都没问成。
-// 限流照样回 HTTP 200,拒绝写在 body 的 code 里,不能当成"零条搜索结果":记日志 + 退避这个端点桶,
-// 405 时额外记具体原因(见 resolveNeteaseInfo 的 get 那段注释)。
+// neteaseSongSearch:网易云曲目搜索,四条路径和判定见 neteaseSearchPaths;reqOK=false 是都没问成。
 func neteaseSongSearch(ctx context.Context, searchType, limit int, q string) (songs []neteaseSearchSong, reqOK bool) {
-	get := func(u string) ([]neteaseSearchSong, bool) {
-		body, err := neteaseFetchBody(ctx, u, "", 4*time.Second)
-		if err != nil {
-			return nil, false
-		}
-		var probe struct {
-			Code int `json:"code"`
-		}
-		if json.Unmarshal(body, &probe) != nil {
-			return nil, false
-		}
-		if probe.Code != 0 && probe.Code != 200 {
-			cooldown, streak := neteaseReportRejected(u)
-			log.Printf("netease: %s rejected (code %d), backing off %s (bucket rejected %d times in a row)",
-				neteaseEndpointBucket(u), probe.Code, cooldown, streak)
-			if probe.Code == 405 {
-				neteaseSetLastFailureReason(lyricFailureReasonNeteaseRateLimited)
-			}
-			return nil, false
-		}
-		neteaseReportSuccess(u) // 见 resolveNeteaseInfo 的 get 里同一句的注释
-		var out struct {
-			Result struct {
-				Songs []neteaseSearchSong `json:"songs"`
-			} `json:"result"`
-		}
-		if err := json.Unmarshal(body, &out); err != nil {
-			return nil, false
-		}
-		return out.Result.Songs, true
+	norm := normLoose
+	if searchType == neteaseSearchTypeLyric {
+		norm = normLooseUncached
 	}
 	query := fmt.Sprintf("?type=%d&limit=%d&s=%s", searchType, limit, neturl.QueryEscape(q))
-	for _, endpoint := range []string{neteaseSearchEndpointPrimary, neteaseSearchEndpointFallback, neteaseSearchEndpointEapi} {
-		if songs, reqOK = get(endpoint + query); reqOK {
-			return songs, true
+	songs, err := neteaseSearchPaths(q, query, func(u string, _ bool) (neteaseSearchAnswer[[]neteaseSearchSong], error) {
+		raw, err := neteaseSearchResult(ctx, u)
+		if err != nil {
+			return neteaseSearchAnswer[[]neteaseSearchSong]{}, err
 		}
-	}
-	return nil, false
+		return neteaseSongSearchVerdict(raw, q, norm), nil
+	})
+	return songs, err == nil
 }
 
 // neteaseSongsByArtist:搜索结果里歌手对得上 artists 其中一个的那些,保持搜索结果的排名顺序;albumTrack.artist 记对上的那个。
