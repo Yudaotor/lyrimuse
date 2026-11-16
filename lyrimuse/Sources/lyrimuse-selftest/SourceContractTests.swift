@@ -4996,9 +4996,19 @@ func runSourceContractSettingsTests() {
         // 右键菜单按点在哪一行现建:点在选中区里是整个选区,点在没选中的行上是那一行,空白处和组头是空集(只给「全选」)。
         expectEqual(songTable.contains("for item in parent.menu(menuKeys(clickedRow: table.clickedRow)) { menu.addItem(item.menuItem()) }")
                     && songTable.contains("return LyricsManagerListTable.menuKeys(clickedRow: clickedRow, selectedRows: table.selectedRowIndexes,")
-                    && manager.contains("menu: { keys in listMenu(keys) })")
+                    && manager.contains("menu: { keys in listMenu(keys) },")
                     && !sourceBody("private func listMenu(_ keys: Set<String>) -> [LyricsManagerListMenuItem]", in: manager).contains("selectedKeys"), true,
                     "歌词管理: 右键菜单按点在哪一行定作用于哪几首,不读 selectedKeys")
+        // 右键点没选中的歌:表格在 menu(for:) 里先把选中收到那一行(照用户点选往上报,经 listSelectionChanged),再交给 AppKit
+        // 建菜单;有没保存的修改时不跟。
+        let rightClick = sourceBody("final class LyricsManagerSongTableView: NSTableView", in: songTable)
+        let rightClicked = sourceBody("func rightClicked(row: Int)", in: songTable)
+        expectEqual(songTable.contains("let table = LyricsManagerSongTableView()")
+                    && sourceHas(rightClick, "let row = row(at: convert(event.locationInWindow, from: nil))\n (delegate as? LyricsManagerSongTable.Coordinator)?.rightClicked(row: row)\n return super.menu(for: event)")
+                    && sourceHas(rightClicked, "guard let table, let rows = LyricsManagerListTable.rightClickSelection(\n clickedRow: row, selectedRows: table.selectedRowIndexes,\n mayMoveSelection: parent.rightClickMovesSelection(), key: parent.entries.key(at:)) else { return }\n table.selectRowIndexes(rows, byExtendingSelection: false)")
+                    && !rightClicked.contains("applyingSelection")
+                    && manager.contains("rightClickMovesSelection: { !isEditorDirty })"), true,
+                    "歌词管理: 右键点没选中的歌先把选中收到那一行,有没保存的修改时不跟")
         // 行自己读强调色、正在放的那首和它的封面;选中且有焦点的行换白字那一套。表格那一层不碰 nowPlayingKey(11 章决策 67、89、94)。
         let listRow = sourceBody("struct LyricsManagerSongListRow: View", in: songTable)
         expectEqual(listRow.contains("let isEmphasized = emphasis.keys.contains(summary.key)")

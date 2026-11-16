@@ -22,7 +22,15 @@ public enum LyricsManagerListTable {
         return result
     }
 
-    /// 右键菜单作用于哪几首:点在选中区里是整个选区,点在没选中的歌上是那一首(选中不动),点在空白处(-1)或组头上是空集。
+    /// 右键点下去时选中换成哪几行:点在没选中的歌上、此刻允许换选中时收成那一行;点在选中区里、空白处(-1)、组头上,
+    /// 或者不允许换(编辑里有没保存的修改)时不动,给 nil。
+    public static func rightClickSelection(clickedRow: Int, selectedRows: IndexSet, mayMoveSelection: Bool,
+                                           key: (Int) -> String?) -> IndexSet? {
+        guard mayMoveSelection, key(clickedRow) != nil, !selectedRows.contains(clickedRow) else { return nil }
+        return IndexSet(integer: clickedRow)
+    }
+
+    /// 右键菜单作用于哪几首:点在选中区里是整个选区,点在没选中的歌上是那一首(选中没跟过去时),点在空白处(-1)或组头上是空集。
     public static func menuKeys(clickedRow: Int, selectedRows: IndexSet, key: (Int) -> String?) -> Set<String> {
         guard let clicked = key(clickedRow) else { return [] }
         return selectedRows.contains(clickedRow) ? keys(atRows: selectedRows, key: key) : [clicked]

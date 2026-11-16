@@ -1819,8 +1819,10 @@ struct LyricsManagerView: View {
             scrollerTopInset: groupByAlbum ? Self.groupedListTopTrim : 0,
             // 菜单只用参数 keys,一个字都不能读 selectedKeys:右键点空白处时 keys 是空集(即使当前有选中项),读
             // selectedKeys 就会变成"右键点空白 → 菜单显示『删除 8 条』 → 删掉 8 条根本不在右键位置的条目"。空白处只给「全选」。
-            // 右键点没选中的行 keys 是那一行(选中不动),点在选中区内任一行 keys 是整个选区。
-            menu: { keys in listMenu(keys) })
+            // 右键点没选中的行时选中先跟过去、keys 是那一行(有没保存的修改时选中不动、keys 仍是那一行),点在选中区内任一行
+            // keys 是整个选区。
+            menu: { keys in listMenu(keys) },
+            rightClickMovesSelection: { !isEditorDirty })
         // 分组时第一行是组头,行里上方那一截是组跟组之间的间隔,排在最前面时用不上:列表往上伸进标题行底下,把它藏起来,
         // 伸出去的这一条不画,往下滚时行照旧在原来的上沿切掉。滚动条从缩回后的上沿开始(scrollerTopInset,见 11 章决策 113、132)。
         .padding(.top, groupByAlbum ? -Self.groupedListTopTrim : 0)
@@ -3029,7 +3031,8 @@ struct LyricsManagerView: View {
     /// `debug/manager-list` 的动作(`LyrimuseDeepLink.DebugCommand.managerList`):跟用户在界面上做的同一条路,做完下一拍把列表此刻的
     /// 样子记一行日志。`search:<词>` 改搜索框(照常防抖)、`sort:<排序>`、`group:on|off|toggle`、`status:<胶囊>`、
     /// `key:down|up`(往表格发一次方向键)、`select:<行>`、`locate`(同「正在播放」那一行的「定位」)、`reload`(同「刷新」)、
-    /// `menu:<行>`(右键点这一行时菜单里有哪几项,只记日志不弹出)、`emphasize:on|off`(当作列表有键盘焦点,选中行按有焦点的样子画,
+    /// `menu:<行>`(这一行此刻的菜单里有哪几项,不改选中、只记日志不弹出)、`rightclick:<行>`(往这一行造一次右键按下,
+    /// 选中照真右键跟过去,记下菜单里有哪几项,不弹出)、`emphasize:on|off`(当作列表有键盘焦点,选中行按有焦点的样子画,
     /// 不用把窗口提到前台就能截图看配色)、`state`。
     private func runDebugListOp(_ op: String) {
         let parts = op.split(separator: ":", maxSplits: 1, omittingEmptySubsequences: false).map(String.init)
@@ -3057,6 +3060,11 @@ struct LyricsManagerView: View {
             if let row = Int(arg) {
                 let titles = songTable.menuTitles(forRow: row).joined(separator: " | ")
                 editLog.notice("debug list menu row=\(row, privacy: .public) items=\(titles, privacy: .public)")
+            }
+        case "rightclick":
+            if let row = Int(arg) {
+                let titles = songTable.rightClickTitles(row: row).joined(separator: " | ")
+                editLog.notice("debug list rightclick row=\(row, privacy: .public) items=\(titles, privacy: .public)")
             }
         case "emphasize":
             let on = arg != "off"

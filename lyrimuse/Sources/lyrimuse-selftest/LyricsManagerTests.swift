@@ -887,6 +887,29 @@ func runLyricsManagerTests() {
                     "列表表格: 右键点在空白处,菜单作用于空集(只给「全选」)")
         expectEqual(LyricsManagerListTable.menuKeys(clickedRow: 3, selectedRows: IndexSet([1, 2]), key: key), [],
                     "列表表格: 右键点在组头上,菜单作用于空集")
+        expectEqual(LyricsManagerListTable.rightClickSelection(clickedRow: 4, selectedRows: IndexSet([1, 2]), mayMoveSelection: true,
+                                                               key: key), IndexSet([4]),
+                    "列表表格: 右键点在没选中的歌上,选中先收到那一行")
+        expectEqual(LyricsManagerListTable.rightClickSelection(clickedRow: 4, selectedRows: IndexSet(), mayMoveSelection: true,
+                                                               key: key), IndexSet([4]),
+                    "列表表格: 什么都没选时右键点一首,选中那一首")
+        expectEqual([LyricsManagerListTable.rightClickSelection(clickedRow: 2, selectedRows: IndexSet([1, 2]), mayMoveSelection: true,
+                                                                key: key),
+                     LyricsManagerListTable.rightClickSelection(clickedRow: -1, selectedRows: IndexSet([1]), mayMoveSelection: true,
+                                                                key: key),
+                     LyricsManagerListTable.rightClickSelection(clickedRow: 3, selectedRows: IndexSet([1]), mayMoveSelection: true,
+                                                                key: key),
+                     LyricsManagerListTable.rightClickSelection(clickedRow: 9, selectedRows: IndexSet([1]), mayMoveSelection: true,
+                                                                key: key),
+                     LyricsManagerListTable.rightClickSelection(clickedRow: 4, selectedRows: IndexSet([1]), mayMoveSelection: false,
+                                                                key: key)],
+                    [nil, nil, nil, nil, nil],
+                    "列表表格: 右键点在选中区里、空白处、组头、越界,或有没保存的修改时,选中不动")
+        // 选中跟过去之后菜单按新的选中建:作用于那一首。
+        let moved = LyricsManagerListTable.rightClickSelection(clickedRow: 4, selectedRows: IndexSet([1, 2]), mayMoveSelection: true,
+                                                               key: key) ?? IndexSet([1, 2])
+        expectEqual(LyricsManagerListTable.menuKeys(clickedRow: 4, selectedRows: moved, key: key), ["c"],
+                    "列表表格: 选中跟到右键那一行后,菜单作用于那一首")
         expectEqual([LyricsManagerListTable.refresh(sameData: false, rowInputsChanged: false),
                      LyricsManagerListTable.refresh(sameData: false, rowInputsChanged: true),
                      LyricsManagerListTable.refresh(sameData: true, rowInputsChanged: true),

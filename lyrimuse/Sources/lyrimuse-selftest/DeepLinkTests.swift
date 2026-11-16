@@ -678,6 +678,7 @@ func runDeepLinkTests() {
             .debug(.onboardingStep(.background)), .debug(.onboardingStep(.displayMode)), .debug(.onboardingStep(.done)),
             .debug(.managerInstrumental(key: "歌手|歌 & 名|专辑", on: true)), .debug(.managerInstrumental(key: "a|b|", on: false)),
             .debug(.managerList(op: "search:歌 & 名")), .debug(.managerList(op: "key:down")),
+            .debug(.managerList(op: "rightclick:3")),
             .debug(.mainThreadGaps(on: true)), .debug(.mainThreadGaps(on: false)),
             .debug(.rainbow(overlay: true, notch: nil)), .debug(.rainbow(overlay: false, notch: true)),
             .debug(.rainbow(overlay: nil, notch: nil, menuBar: false)),

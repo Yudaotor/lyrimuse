@@ -8,7 +8,8 @@ import SwiftUI
 /// 界面语言变了就只重画屏上的行。别换回 SwiftUI `List`:三万行时数据有一点变化它就要整表比对一秒以上(见 11 章决策 170)。
 ///
 /// 选中经 `LyricsManagerListSelection` 双向同步:用户在表格上点选报上去,代码里改的选中按 key 换算成行号写回表格,屏幕外的
-/// 行也当场对上。组头是一行选不中的条目(`shouldSelectRow`),方向键、Shift 连选、全选都跳过它。
+/// 行也当场对上。组头是一行选不中的条目(`shouldSelectRow`),方向键、Shift 连选、全选都跳过它。右键点一首没选中的歌,
+/// 先把选中收到那一行再弹菜单(`LyricsManagerSongTableView.menu(for:)`)。
 struct LyricsManagerSongTable: NSViewRepresentable {
     /// 列表的数据:不分组是一首一行,分组是组头和歌摊平成一层(见 11 章决策 70)。
     enum Entries {
@@ -70,13 +71,15 @@ struct LyricsManagerSongTable: NSViewRepresentable {
     let scrollerTopInset: CGFloat
     /// 右键菜单。参数是这一下作用于哪几首:点在选中区里是整个选区,点在没选中的行上是那一行,点在空白处或组头上是空集。
     let menu: (Set<String>) -> [LyricsManagerListMenuItem]
+    /// 右键点没选中的歌时选中能不能跟过去:编辑里有没保存的修改时不跟,菜单照旧只作用于那一首,里面的动作换歌前先问。
+    let rightClickMovesSelection: () -> Bool
 
     static let rowHeight: CGFloat = 56
 
     func makeCoordinator() -> Coordinator { Coordinator(self) }
 
     func makeNSView(context: Context) -> NSScrollView {
-        let table = NSTableView()
+        let table = LyricsManagerSongTableView()
         let column = NSTableColumn(identifier: Coordinator.columnID)
         column.resizingMask = .autoresizingMask
         table.addTableColumn(column)
@@ -194,6 +197,14 @@ struct LyricsManagerSongTable: NSViewRepresentable {
             applyingSelection = false
         }
 
+        /// 右键点下去、菜单建出来之前:点在没选中的歌上就把选中收到那一行,照用户点选一样往上报(不设 applyingSelection)。
+        func rightClicked(row: Int) {
+            guard let table, let rows = LyricsManagerListTable.rightClickSelection(
+                clickedRow: row, selectedRows: table.selectedRowIndexes,
+                mayMoveSelection: parent.rightClickMovesSelection(), key: parent.entries.key(at:)) else { return }
+            table.selectRowIndexes(rows, byExtendingSelection: false)
+        }
+
         /// 右键点在第几行时菜单作用于哪几首(-1 是空白处)。
         func menuKeys(clickedRow: Int) -> Set<String> {
             guard let table else { return [] }
@@ -276,7 +287,7 @@ struct LyricsManagerSongTable: NSViewRepresentable {
 
         // MARK: NSMenuDelegate
 
-        /// 右键菜单每次弹出前按点在哪一行现建。只看 clickedRow 和表格的选中,不改选中。
+        /// 右键菜单每次弹出前按点在哪一行现建。只看 clickedRow 和表格的选中;选中已在 `rightClicked(row:)` 里跟过去。
         func menuNeedsUpdate(_ menu: NSMenu) {
             menu.removeAllItems()
             guard let table else { return }
@@ -300,10 +311,34 @@ final class LyricsManagerSongTableController {
         coordinator?.center(key, animated: animated)
     }
 
-    /// 这一行右键菜单此刻的各项(调试深链核对菜单用),不弹出来。
+    /// 这一行右键菜单此刻的各项(调试深链核对菜单用),不弹出来、不改选中。
     func menuTitles(forRow row: Int) -> [String] {
         guard let coordinator else { return [] }
         return coordinator.parent.menu(coordinator.menuKeys(clickedRow: row)).map(\.debugTitle)
+    }
+
+    /// 往这一行中点造一次右键按下,走 AppKit 弹菜单前的同一条路(`menu(for:)` 定点在哪一行、跟选中、菜单按它现建),
+    /// 返回菜单里的各项,不弹出来(调试深链用)。
+    func rightClickTitles(row: Int) -> [String] {
+        guard let table, let menu = table.menu, (0..<table.numberOfRows).contains(row) else { return [] }
+        let rect = table.rect(ofRow: row)
+        let point = table.convert(NSPoint(x: rect.midX, y: rect.midY), to: nil)
+        guard let event = NSEvent.mouseEvent(with: .rightMouseDown, location: point, modifierFlags: [],
+                                             timestamp: ProcessInfo.processInfo.systemUptime,
+                                             windowNumber: table.window?.windowNumber ?? 0, context: nil,
+                                             eventNumber: 0, clickCount: 1, pressure: 1),
+              table.menu(for: event) === menu else { return [] }
+        menu.delegate?.menuNeedsUpdate?(menu)
+        return menu.items.map { $0.isSeparatorItem ? "-" : $0.isEnabled ? $0.title : "(\($0.title))" }
+    }
+}
+
+/// 歌词管理列表的表格:右键按下、菜单建出来之前先让选中跟到点的那一行(见 `Coordinator.rightClicked(row:)`)。
+final class LyricsManagerSongTableView: NSTableView {
+    override func menu(for event: NSEvent) -> NSMenu? {
+        let row = row(at: convert(event.locationInWindow, from: nil))
+        (delegate as? LyricsManagerSongTable.Coordinator)?.rightClicked(row: row)
+        return super.menu(for: event)
     }
 }
 
