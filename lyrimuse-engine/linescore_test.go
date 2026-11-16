@@ -133,8 +133,8 @@ func TestLineScoreReferenceWiredInBothBatchPaths(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, want := range []string{
-		"inheritIdentityTerms(title, album, cands, consensusPeers)\n\tapplyLineScoreReference(cands)",
-		"inheritIdentityTerms(title, album, candidates, consensusPeers)\n\tapplyLineScoreReference(candidates)",
+		"inheritIdentityTerms(title, album, cands, familyPeers)\n\tapplyLineScoreReference(cands)",
+		"inheritIdentityTerms(title, album, candidates, familyPeers)\n\tapplyLineScoreReference(candidates)",
 	} {
 		if !containsCode(string(src), want) {
 			t.Errorf("enrich.go 缺少 %q", want)

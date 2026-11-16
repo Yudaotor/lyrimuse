@@ -566,7 +566,7 @@ const lyricOvershootToleranceSecs = 5.0
 // (按版本号可查,如决策 31/33/36/43/44/49/50/58/64/69/82)——这里不重复。
 const lyricsScoringVersion = 32
 
-const lyricsScoringRevision = 3
+const lyricsScoringRevision = 4
 
 // lyricsScoringStamp 是一条歌词按哪一版打分规则选出来的:主版本号 + 开发修订号。存成两个整数、按这两段比大小,
 // 不存小数:小数比大小时 29.10 会排在 29.9 前面。
@@ -3896,6 +3896,9 @@ const (
 //
 // 参与比对的候选先过与打分同款的基本校验(时间戳密度/语言/纯署名),正文归一后不足
 // lyricConsensusMinBodyRunes 字符的不参与(既不领分也不为别人作证)。
+//
+// 第二个返回值 familyPeers 是给 inheritIdentityTerms 的名单:每个源的互证伙伴所在家族里、跟它正文一致的全部成员
+// (不按家族去重,不含它自己那一家),跟 peers 过同一道时长闸。
 // lyricSourceConsensusFamily 回答"这两条候选算不算**两个独立信源**"——跨源共识
 // (contentConsensusPeers)按它归组,而不是按源名。默认每个源自成一家。
 //
@@ -3947,7 +3950,7 @@ func identityTermPoints(localTitle, localAlbum string, c lyricCandidate) (album,
 }
 
 // inheritIdentityTerms 给每条候选填上 inheritedAlbumPoints / inheritedTitlePoints,取自它的正文互证伙伴
-// (contentConsensusPeers 的名单,已过时长闸)里这一项最高的那一档。只在这条候选**歌名一个字都对不上**时补:
+// 里这一项最高的那一档。只在这条候选**歌名一个字都对不上**时补:
 // 歌名 0 分就补歌名;歌名 0 分、专辑也报了却 0 分,专辑一起补。
 //
 // 正文互证、时长吻合,歌名却完全对不上,是平台把整首歌的元数据换成了另一种语言(中文平台的中文歌名、专辑名
@@ -3958,6 +3961,9 @@ func identityTermPoints(localTitle, localAlbum string, c lyricCandidate) (album,
 //   - 歌名对得上、只有专辑对不上,多半就是另一张专辑(精选集、演唱会实录),不是另一种写法;
 //   - 源没报专辑名是没有说法,补了等于在整组候选里抹掉专辑这一项。
 //
+// 伙伴按 contentConsensusPeers 第二个返回值给的名单算(已过时长闸):互证伙伴所在家族里跟它正文一致的每一员,
+// 不是去重后的家族代表。同一家族的几员歌名写法可以不一样(LyricFind 那份按原名补搜回来、Deezer 那份是播放器报的
+// 译名),只看代表会在代表恰好 0 分时整家都继承不到;取全家最高那档,继承的结果才不随源顺序变。见 09 章决策 379。
 // 继承只看伙伴**自己**那一档,不传递。各条取舍的金标依据见 09 章决策。
 // 两个调用点(rankLyricSourceResults / mergeLyricCandidateRounds)必须在 contentConsensusPeers 之后、
 // 打分之前调它。
@@ -3986,9 +3992,9 @@ func inheritIdentityTerms(localTitle, localAlbum string, candidates []lyricCandi
 	}
 }
 
-func contentConsensusPeers(localArtist, localTitle string, candidates []lyricCandidate, durationSecs float64) map[string][]string {
+func contentConsensusPeers(localArtist, localTitle string, candidates []lyricCandidate, durationSecs float64) (peers, familyPeers map[string][]string) {
 	if len(candidates) < 2 {
-		return map[string][]string{} // 一条候选无从互证,省掉整批 3-gram 构建
+		return map[string][]string{}, map[string][]string{} // 一条候选无从互证,省掉整批 3-gram 构建
 	}
 	type member struct {
 		source   string
@@ -4057,24 +4063,29 @@ func contentConsensusPeers(localArtist, localTitle string, candidates []lyricCan
 			}
 		}
 	}
-	peers := map[string][]string{}
+	peers, familyPeers = map[string][]string{}, map[string][]string{}
 	for i := range members {
 		if members[i].grams == nil {
 			continue
 		}
-		var agree []string
+		var agree, agreeAll []string
 		// 按**信源家族**去重,不是按源名 —— 见 lyricSourceConsensusFamily 的头注;时间轴是同一份副本的几条也算一家。
 		seenFamily := map[int]bool{root(i): true}
 		for j := range members {
 			if i == j || !agrees[i][j] {
 				continue
 			}
-			if fam := root(j); !seenFamily[fam] {
+			fam := root(j)
+			if fam != root(i) {
+				agreeAll = append(agreeAll, members[j].source)
+			}
+			if !seenFamily[fam] {
 				agree = append(agree, members[j].source)
 				seenFamily[fam] = true
 			}
 		}
 		peers[members[i].source] = agree
+		familyPeers[members[i].source] = agreeAll
 	}
 	if durationSecs > 0 {
 		for i := range members {
@@ -4089,10 +4100,11 @@ func contentConsensusPeers(localArtist, localTitle string, candidates []lyricCan
 			//    没人 fits、①闸不触发的局面——正是印证机制该收手的地方(审阅)。
 			if (anyFits && !fits) || members[i].last > durationSecs+lyricOvershootToleranceSecs {
 				peers[members[i].source] = nil
+				familyPeers[members[i].source] = nil
 			}
 		}
 	}
-	return peers
+	return peers, familyPeers
 }
 
 // titleMatchTierPoints 把标题吻合从布尔门升级成梯度分:精确同名 +120 > 仅括号差异 +60

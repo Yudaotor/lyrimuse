@@ -139,7 +139,7 @@ func deltaRichsyncLRCAt(guarded bool) func(tr *evalTrack, i int) int {
 		}
 		batch[i].lyrics = newLyrics
 		corro := corroboratedEndings(batch, tr.dur)
-		peers := contentConsensusPeers(tr.la, tr.lt, batch, tr.dur)
+		peers, _ := contentConsensusPeers(tr.la, tr.lt, batch, tr.dur)
 		_, terms := scoreLyricCandidateDetailed(tr.la, tr.lt, tr.lal, tr.dur, batch[i], corro[batch[i].source], len(peers[batch[i].source]))
 		newRaw := 0
 		for _, t := range terms {
