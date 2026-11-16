@@ -1312,6 +1312,17 @@ func runLastfmTests() {
                     "折叠键: 歌手键同样不看格式字符")
         expectEqual(F.key(artist: "陳奕迅", title: "富士山下"),
                     F.key(artist: "陈奕迅", title: "富士山下"), "折叠键: 歌手名繁简")
+        // 异体字:ICU 繁简不转「妳」「嶽」,折叠键另过一遍异体字表(12 章决策 95)
+        expectEqual(F.key(artist: "方大同", title: "為妳寫的歌"), F.key(artist: "方大同", title: "为你写的歌"),
+                    "折叠键: 异体字 妳 == 你")
+        expectEqual(F.foldTitle("五嶽"), F.foldTitle("五岳"), "折叠键: 异体字 嶽 == 岳")
+        expectEqual(F.key(artist: "劉嶽", title: "X"), F.key(artist: "刘岳", title: "X"), "折叠键: 歌手名的异体字也折")
+        expectEqual(F.familyKey(artist: "方大同", title: "為妳寫的歌"), F.familyKey(artist: "方大同", title: "为你写的歌"),
+                    "折叠键: 写法族同样折异体字")
+        expectNotEqual(F.foldTitle("為妳寫的歌"), F.foldTitle("为她写的歌"), "折叠键: 妳 不折成 她")
+        expectNotEqual(F.foldTitle("他的歌"), F.foldTitle("她的歌"), "折叠键: 他 / 她 不互折")
+        expectNotEqual(F.foldTitle("感谢祢"), F.foldTitle("感谢你"), "折叠键: 祢 不折成 你(只在搜索对照里算)")
+        expectNotEqual(F.foldTitle("奶茶"), F.foldTitle("你茶"), "折叠键: 不相干的字不并")
         // 段落交错的双语名不收敛(宁可漏合不错合)
         expectNotEqual(F.foldTitle("月食 The 月食 Woman"), F.foldTitle("月食"),
                        "折叠键: CJK/拉丁交错不折")
@@ -1404,6 +1415,16 @@ func runLastfmTests() {
         let bonusSibs = PlayCountVariants.siblings(artist: "周杰倫", title: "一路向北 (bonus track)")
         expectEqual(bonusSibs.contains { $0.title == "一路向北" }, true,
                     "写法族: (bonus track) 给出去副题候选")
+        // 猜枚举兜底:异体字归一的写法多查一次;跟繁简孪生或本尊一样就不重复生成
+        let variantSibs = PlayCountVariants.siblings(artist: "方大同", title: "為妳寫的歌")
+        expectEqual(variantSibs.map { "\($0.artist)|\($0.title)" }, ["方大同|爲妳寫的歌", "方大同|为妳写的歌", "方大同|为你写的歌"],
+                    "写法族: 繁简孪生之后补异体字归一的写法")
+        expectEqual(PlayCountVariants.siblings(artist: "劉嶽", title: "X").map { "\($0.artist)|\($0.title)" },
+                    ["刘嶽|X", "刘岳|X"], "写法族: 歌手名的异体字归一同样补一条")
+        expectEqual(PlayCountVariants.siblings(artist: "方大同", title: "我不是農人").map(\.title), ["我不是农人"],
+                    "写法族: 异体字归一跟繁简孪生相同时不重复")
+        expectEqual(PlayCountVariants.siblings(artist: "方大同", title: "为你写的歌").map(\.title), ["為你寫的歌"],
+                    "写法族: 本来就是规范字时不多生成")
 
         // 剥掉目录学噪音之后不能让 R1 再把版本标记当译名吃掉(补 bonus track
         // 那一族时用真索引实测出来的**回归**:方大同《悟空 2003 demo (bonus track)》
@@ -2079,6 +2100,8 @@ func runLastfmTests() {
                     "合并原因: 全角括号 → 全角/半角(丁世光《一口》实测)")
         expectEqual(r(("盧廣仲", "我不是农人"), ("盧廣仲", "我不是農人")), [.hanScript],
                     "合并原因: 繁简 → 繁简(《我不是农人》11/3 实测)")
+        expectEqual(r(("方大同", "为你写的歌"), ("方大同", "為妳寫的歌")), [.hanScript],
+                    "合并原因: 繁简加异体字 → 繁简")
         expectEqual(r(("宇多田ヒカル", "Automatic"), ("宇多田ヒカル", "Automatic (Remastered 2014)")), [.catalogNoise],
                     "合并原因: Remaster 副题 → 目录学噪音")
         expectEqual(r(("王力宏", "蓋世英雄"), ("王力宏", "盖世英雄 (feat. 欧阳靖 & 李岩)")), [.catalogNoise],
@@ -2405,14 +2428,20 @@ func runLastfmTests() {
         expectEqual(A.derive([e("方大同", "Black Hole", dur: 213.586, lyrics: lrcHans),
                               e("方大同", "黑洞里", dur: 213.9, lyrics: lrcHant)]), [:],
                     "E2: 两侧都是毫秒级、差 0.3 s → 不采纳(同一份录音差不到 0.01 s)")
-        // 同脚本只连"等长且恰好一个字不同":你/妳 这种字形差异成一类,英文名 + 两个中文写法三种写法并到一起;
+        // 同脚本只连"等长且恰好一个字不同":你/祢 这种折叠键折不掉的字形差异成一类,英文名 + 两个中文写法三种写法并到一起;
         // 代表 = 含汉字 → 本机条目多 → 字典序
         expectEqual(A.derive([e("方大同", "Write A Song For You", dur: 197.273696, lyrics: lrcHans),
                               e("方大同", "为你写的歌", dur: 197.273, lyrics: lrcHant),
-                              e("方大同", "为妳写的歌", dur: 197.274002, lyrics: lrcHant),
+                              e("方大同", "为祢写的歌", dur: 197.274002, lyrics: lrcHant),
+                              e("方大同", "为祢写的歌", dur: 197.274002, lyrics: lrcHant)]),
+                    ["方大同": ["writeasongforyou": "为祢写的歌", "为你写的歌": "为祢写的歌"]],
+                    "E2: 英文名 + 你/祢 两种中文写法成一类,代表取条目最多的中文写法")
+        // 你/妳 折叠键已经折成一个,不用再连,英文名直接指向这一个
+        expectEqual(A.derive([e("方大同", "Write A Song For You", dur: 197.273696, lyrics: lrcHans),
+                              e("方大同", "为你写的歌", dur: 197.273, lyrics: lrcHant),
                               e("方大同", "为妳写的歌", dur: 197.274002, lyrics: lrcHant)]),
-                    ["方大同": ["writeasongforyou": "为妳写的歌", "为你写的歌": "为妳写的歌"]],
-                    "E2: 英文名 + 你/妳 两种中文写法成一类,代表取条目最多的中文写法")
+                    ["方大同": ["writeasongforyou": "为你写的歌"]],
+                    "E2: 你/妳 是同一个折叠键,只留英文名那一条")
         expectEqual(A.derive([e("方大同", "阿拉斯加海湾", dur: 200.5, lyrics: lrcHans),
                               e("方大同", "阿拉斯加海湾伴奏", dur: 200.5, lyrics: lrcHans)]), [:],
                     "E2: 同脚本、不是单字差异(多出「伴奏」)→ 不连,哪怕时长歌词全一样")

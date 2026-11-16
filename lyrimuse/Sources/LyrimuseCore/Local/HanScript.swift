@@ -41,6 +41,13 @@ public enum HanScript {
         return HanVariants.normalizeToSimplified(simplified(s))
     }
 
+    /// (歌手, 歌名) 都过 `foldedSimplified` 的写法;两个字段都没变时返回 nil。给「第 N 次听」多查一种写法:siblingPair 走 ICU,
+    /// 转出来的简体里还留着「妳」「嶽」这类异体字(12 章决策 95)。跟 siblingPair 一样只拿来发起查询。
+    public static func foldedSimplifiedPair(artist: String, title: String) -> (artist: String, title: String)? {
+        let fa = foldedSimplified(artist), ft = foldedSimplified(title)
+        return fa != artist || ft != title ? (fa, ft) : nil
+    }
+
     private static func transform(_ s: String, _ id: String) -> String {
         let m = NSMutableString(string: s) as CFMutableString
         CFStringTransform(m, nil, id as CFString, false)
@@ -66,8 +73,8 @@ public enum PlayCountVariants {
     }
 
     /// 返回不含本尊、已按 歌手|歌名 小写键去重的候选列表(封顶 6,每个候选是一次 getinfo,结果随总数一起缓存)。
-    /// 顺序即优先级(按实测的账量):半角无空格(本字形→变体字形)> 全角(同序)> 半角带空格 > 纯名 > 繁简孪生,
-    /// 封顶挤掉的永远是低优先级候选。
+    /// 顺序即优先级(按实测的账量):半角无空格(本字形→变体字形)> 全角(同序)> 半角带空格 > 纯名 > 繁简孪生 >
+    /// 异体字归一(跟前面哪个候选或本尊折成同一个小写键就不再生成),封顶挤掉的永远是低优先级候选。
     public static func siblings(artist: String, title: String) -> [(artist: String, title: String)] {
         var out: [(artist: String, title: String)] = []
         var seen: Set<String> = [fold(artist, title)]
@@ -93,6 +100,9 @@ public enum PlayCountVariants {
         }
         if let sib = HanScript.siblingPair(artist: artist, title: title) {
             add(sib.artist, sib.title)
+        }
+        if let folded = HanScript.foldedSimplifiedPair(artist: artist, title: title) {
+            add(folded.artist, folded.title)
         }
         return out
     }
@@ -267,7 +277,7 @@ public enum PlayCountVariants {
 /// 「第 N 次听」写法索引的折叠键。跟 PlayCountVariants(猜枚举)相反的思路:不猜写法,把用户自己历史上真实出现过的写法按
 /// 这个键归到同一族,查次数时按族查。这个键要折掉见过的全部分裂维度:
 ///  - 全角/半角括号与全角空格(NFKC);
-///  - 繁简 + 同折简体的字形变体(ICU Hant-Hans:麼/麽都折到么);
+///  - 繁简 + 同折简体的字形变体(ICU Hant-Hans:麼/麽都折到么)+ 异体字(HanVariants:妳→你、嶽→岳,12 章决策 95);
 ///  - 空格有无(全部剥除)、大小写;
 ///  - 「CJK 段 + 空格 + 拉丁段」的双语拼接名(`月食 The Weeping Woman` 与 `月食`):恰好两段时取 CJK 段,对应导出脚本的 R1 规则。
 /// 不折一般括号副题:`一口(The Day You Left Me)` 与 `一口` 不同键,括号常携带版本信息((Live)/(Remix)),折掉会把不同录音
@@ -282,7 +292,7 @@ public enum PlayCountFold {
     /// `familyKey`/`canonicalArtist`/歌名别名表的改动不算在内,不用 +1:这个版本号只管 `key()`/`foldTitle()` 落进
     /// `titleForms` 索引的键要不要重折;`familyKey` 是派生索引 `primaryCreditFamilies` 的键,`loadTitleForms` 两条分支
     /// (版本相等/不等)都无条件调用 `rebuildPrimaryCreditFamilies`,每次启动都用当前 `familyKey` 重新分组。
-    public static let foldVersion = 8
+    public static let foldVersion = 9
 
     /// key 的 memo:单次 key 要走 2 次 NFKC + 2 次 ICU 繁简
     /// transform(各自新建 CFMutableString),几十 µs 量级;而每次刷新最近记录都对同一批
@@ -575,14 +585,12 @@ public enum PlayCountFold {
         return t
     }
 
-    /// 去掉看不见的格式字符(stripInvisible) → NFKC(全角→半角) → 繁简(ICU) → 小写。
+    /// 去掉看不见的格式字符(stripInvisible) → NFKC(全角→半角) → 繁简(ICU)并归一异体字(HanScript.foldedSimplified) → 小写。
     /// 模块内可见:PlayCountFoldExplainer 要沿这条流水线逐级比对给出「为什么并进来」,
     /// 必须用同一个函数而不是再写一遍归一。
     static func normalized(_ s: String) -> String {
         let nfkc = stripInvisible(s).precomposedStringWithCompatibilityMapping
-        let m = NSMutableString(string: nfkc) as CFMutableString
-        CFStringTransform(m, nil, "Hant-Hans" as CFString, false)
-        return (m as String).lowercased()
+        return HanScript.foldedSimplified(nfkc).lowercased()
     }
 
     /// R1:恰好「CJK 段 + 拉丁段」(顺序不限、以空格分界、不含括号)的双语拼接名

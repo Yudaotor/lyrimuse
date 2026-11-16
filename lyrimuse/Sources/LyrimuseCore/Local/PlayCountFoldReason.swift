@@ -15,7 +15,7 @@ public enum PlayCountFoldReason: String, CaseIterable, Hashable, Codable {
     case caseOrSpacing
     /// 全角与半角(NFKC 兼容分解:全角括号、全角空格、全角字母数字)
     case fullwidth
-    /// 繁简(含同折简体的字形变体:麼/麽)
+    /// 繁简(含同折简体的字形变体:麼/麽,以及异体字:妳/你)
     case hanScript
     /// Remaster / feat. / with / Bonus Track / Explicit 这类目录学噪音副题
     case catalogNoise

@@ -2724,9 +2724,9 @@ final class LastfmStatsService: ObservableObject {
 
     /// 歌曲榜、专辑榜的合并口径版本:改 ChartMerge 的分组规则、两种榜的折叠键或取数深度时 +1
     /// (见 StatsSnapshot.mergedChartVersion)。
-    private static let mergedChartVersion = 7
+    private static let mergedChartVersion = 8
     /// 次数表的口径版本,读写快照两处都用它,见 StatsSnapshot.mergedCountsVersion。
-    private static let mergedCountsVersion = 23
+    private static let mergedCountsVersion = 24
 
     /// 快照里允许持久化的 `fetchedAt` 键。榜单键是 `"\(kind)|\(period)"`,跟 `refreshChart`
     /// 拼法一致。
