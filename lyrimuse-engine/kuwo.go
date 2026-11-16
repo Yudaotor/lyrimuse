@@ -2,9 +2,7 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
-	"io"
 	"math"
 	"net/http"
 	neturl "net/url"
@@ -140,7 +138,7 @@ func kuwoSearchAt(ctx context.Context, endpoint, q string) ([]kuwoSearchItem, er
 	var out struct {
 		Abslist []kuwoSearchItem `json:"abslist"`
 	}
-	if err := json.NewDecoder(io.LimitReader(resp.Body, lyricSourceResponseMaxBytes)).Decode(&out); err != nil {
+	if err := decodeLyricSourceJSON(req, resp, lyricSourceResponseMaxBytes, &out); err != nil {
 		return nil, err
 	}
 	return out.Abslist, nil
@@ -259,7 +257,7 @@ func kuwoFetchLyricAt(ctx context.Context, base, musicID string) ([]kuwoLyricLin
 			LrcList []kuwoLyricLine `json:"lrclist"`
 		} `json:"data"`
 	}
-	if err := json.NewDecoder(io.LimitReader(resp.Body, lyricSourceResponseMaxBytes)).Decode(&out); err != nil {
+	if err := decodeJudgedLyricSourceJSON(req, resp, lyricSourceResponseMaxBytes, &out); err != nil {
 		return nil, err
 	}
 	if out.Code != 200 {

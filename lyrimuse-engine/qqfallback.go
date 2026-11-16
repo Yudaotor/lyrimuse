@@ -183,7 +183,7 @@ func qqAlbumSongsWebAt(ctx context.Context, host, albumMid string) ([]qqAlbumSon
 			} `json:"list"`
 		} `json:"data"`
 	}
-	if err := json.NewDecoder(io.LimitReader(resp.Body, qqResponseMaxBytes)).Decode(&out); err != nil {
+	if err := decodeLyricSourceJSON(req, resp, qqResponseMaxBytes, &out); err != nil {
 		return nil, err
 	}
 	if out.Code == qqAlbumNotFoundCode {
@@ -268,7 +268,7 @@ func qqAlbumNameWebAt(ctx context.Context, host, albumMid string) (string, error
 			Name string `json:"name"`
 		} `json:"data"`
 	}
-	if err := json.NewDecoder(io.LimitReader(resp.Body, qqResponseMaxBytes)).Decode(&out); err != nil {
+	if err := decodeLyricSourceJSON(req, resp, qqResponseMaxBytes, &out); err != nil {
 		return "", err
 	}
 	if out.Code != 0 {
@@ -394,7 +394,7 @@ func qqSongDetailWebAt(ctx context.Context, host, mid string) (qqSongDetailRow, 
 	var out struct {
 		Data []qqSongDetailRow `json:"data"`
 	}
-	if err := json.NewDecoder(io.LimitReader(resp.Body, qqResponseMaxBytes)).Decode(&out); err != nil {
+	if err := decodeLyricSourceJSON(req, resp, qqResponseMaxBytes, &out); err != nil {
 		return qqSongDetailRow{}, false, err
 	}
 	if len(out.Data) == 0 {

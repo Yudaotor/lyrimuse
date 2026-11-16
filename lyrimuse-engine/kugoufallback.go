@@ -2,10 +2,8 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"net/http"
 	neturl "net/url"
 	"strconv"
@@ -56,32 +54,54 @@ func kugouURLAlternates(raw string) []string {
 }
 
 // kugouGet 发一个酷狗 GET 并把响应解进 v,按 kugouURLAlternates 的顺序试,第一个 200 且解得开的
-// 就停(tryEach)。
+// 就停(tryEach)。解得动就记 reportEndpointAccepted。
 func kugouGet(ctx context.Context, u string, v any) error {
-	return tryEach(ctx, kugouURLAlternates(u), func(alt string) error { return kugouGetAt(ctx, alt, v) })
+	_, err := kugouGetVia(ctx, u, v, false)
+	return err
+}
+
+// kugouGetJudged 同 kugouGet,但不记 Accepted:调用方还要从应答体里认拒绝码,认完对交回的那条地址(答了话的主机)
+// 自己记 reportEndpointAccepted / reportEndpointRejected。
+func kugouGetJudged(ctx context.Context, u string, v any) (*neturl.URL, error) {
+	return kugouGetVia(ctx, u, v, true)
+}
+
+func kugouGetVia(ctx context.Context, u string, v any, judged bool) (*neturl.URL, error) {
+	var answered *neturl.URL
+	err := tryEach(ctx, kugouURLAlternates(u), func(alt string) error {
+		au, err := kugouGetAt(ctx, alt, v, judged)
+		if err == nil {
+			answered = au
+		}
+		return err
+	})
+	return answered, err
 }
 
 // errKugouNotFound:接口答了 404(没有这一条)。是「问成了、没有」,调用方别把它记成没问成。
 var errKugouNotFound = errors.New("kugou: not found")
 
-func kugouGetAt(ctx context.Context, u string, v any) error {
+func kugouGetAt(ctx context.Context, u string, v any, judged bool) (*neturl.URL, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	req.Header.Set("User-Agent", "Mozilla/5.0")
 	resp, err := doHTTPTracked(lyricHTTPClient(kugouHTTPTimeout), req)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode == http.StatusNotFound {
-		return fmt.Errorf("status %d: %w", resp.StatusCode, errKugouNotFound)
+		return nil, fmt.Errorf("status %d: %w", resp.StatusCode, errKugouNotFound)
 	}
 	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("status %d", resp.StatusCode)
+		return nil, fmt.Errorf("status %d", resp.StatusCode)
 	}
-	return json.NewDecoder(io.LimitReader(resp.Body, lyricSourceResponseMaxBytes)).Decode(v)
+	if judged {
+		return req.URL, decodeJudgedLyricSourceJSON(req, resp, lyricSourceResponseMaxBytes, v)
+	}
+	return req.URL, decodeLyricSourceJSON(req, resp, lyricSourceResponseMaxBytes, v)
 }
 
 // kugouSearchSongs 搜一次歌:/api/v3/search/song(几个主机)→ songsearch。ok=false 是两套都没问成。
@@ -95,8 +115,7 @@ func kugouSearchSongs(ctx context.Context, keyword string) ([]kugouSong, bool) {
 		} `json:"data"`
 	}
 	searchURL := "http://mobilecdn.kugou.com/api/v3/search/song?format=json&keyword=" + kugouEscape(keyword) + "&page=1&pagesize=" + strconv.Itoa(kugouSearchPageSize) + "&showtype=1"
-	if err := kugouGet(ctx, searchURL, &sr); err == nil {
-		u, _ := neturl.Parse(searchURL)
+	if u, err := kugouGetJudged(ctx, searchURL, &sr); err == nil {
 		if !kugouSearchRejected(sr.Status, sr.Errcode) {
 			reportEndpointAccepted(u)
 			return sr.Data.Info, true
@@ -153,10 +172,10 @@ func kugouSongSearch(ctx context.Context, keyword string) ([]kugouSong, error) {
 		} `json:"data"`
 	}
 	u := kugouSongSearchEndpoint + "?keyword=" + kugouEscape(keyword) + "&page=1&pagesize=" + strconv.Itoa(kugouSearchPageSize) + "&platform=WebFilter"
-	if err := kugouGet(ctx, u, &out); err != nil {
+	pu, err := kugouGetJudged(ctx, u, &out)
+	if err != nil {
 		return nil, err
 	}
-	pu, _ := neturl.Parse(u)
 	if kugouSearchRejected(out.Status, out.ErrorCode) {
 		reportEndpointRejected(pu)
 		return nil, errors.New("kugou songsearch rejected")

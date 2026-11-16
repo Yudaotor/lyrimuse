@@ -292,6 +292,11 @@ var lyricSourceOwnProbes = map[string]func(ctx context.Context) bool{
 	lyricSourceZing: func(ctx context.Context) bool {
 		return zingLyric(ctx, "Sơn Tùng M-TP", "Lạc Trôi", "", 0).lyrics != ""
 	},
+	// 汽水:《少年》只有翻唱、《Yesterday》不在曲库;走搜索那条路(不看本地队列缓存),问的是联想 + seo_track(09 章决策 376)。
+	lyricSourceSoda: func(ctx context.Context) bool {
+		r, _ := sodaLyricBySearch(ctx, "陈奕迅", "十年", "", 0)
+		return !r.empty()
+	},
 }
 
 // startOwnLyricSourceProbes 在后台对启用的、配了专用探测曲的源各问一次,跟共用探测曲同时起跑、同一个时限

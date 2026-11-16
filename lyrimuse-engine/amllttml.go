@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"encoding/xml"
 	"fmt"
 	"io"
@@ -1132,7 +1131,7 @@ func amllFetchAPI(ctx context.Context, platformDir, musicID string) (string, boo
 			Lyrics string `json:"lyrics"`
 		} `json:"data"`
 	}
-	if err := json.NewDecoder(io.LimitReader(resp.Body, 8<<20)).Decode(&out); err != nil {
+	if err := decodeLyricSourceJSON(req, resp, 8<<20, &out); err != nil {
 		return "", false, err
 	}
 	if strings.TrimSpace(out.Data.Lyrics) == "" {

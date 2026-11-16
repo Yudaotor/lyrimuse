@@ -267,7 +267,7 @@ func deezerSearch(ctx context.Context, artist, title string) ([]deezerTrack, err
 		Data  []deezerTrack   `json:"data"`
 		Error json.RawMessage `json:"error"`
 	}
-	if err := json.NewDecoder(io.LimitReader(resp.Body, 2<<20)).Decode(&out); err != nil {
+	if err := decodeLyricSourceJSON(req, resp, 2<<20, &out); err != nil {
 		return nil, err
 	}
 	// 配额/参数错误时 Deezer 回 200 + {"error":{...}},不是 4xx —— 不把它当成"没这首歌"。
@@ -321,7 +321,7 @@ func deezerTrackByISRC(ctx context.Context, isrc string) (deezerTrack, bool) {
 		deezerTrack
 		Error json.RawMessage `json:"error"`
 	}
-	if err := json.NewDecoder(io.LimitReader(resp.Body, 1<<20)).Decode(&out); err != nil {
+	if err := decodeLyricSourceJSON(req, resp, 1<<20, &out); err != nil {
 		return deezerTrack{}, false
 	}
 	if deezerHasError(out.Error) || out.ID == 0 {
@@ -466,7 +466,7 @@ func deezerFetchJWT(ctx context.Context) string {
 	var out struct {
 		JWT string `json:"jwt"`
 	}
-	if err := json.NewDecoder(io.LimitReader(resp.Body, 1<<20)).Decode(&out); err != nil {
+	if err := decodeLyricSourceJSON(req, resp, 1<<20, &out); err != nil {
 		deezerSetLastFailureReason(lyricFailureReasonDeezerAuthFailed)
 		return ""
 	}
@@ -523,6 +523,9 @@ func deezerPipeQuery(ctx context.Context, operation, query string, variables map
 		if readErr != nil {
 			return nil, nil, readErr
 		}
+		if err := rejectEmptyLyricSourceBody(req, raw); err != nil {
+			return nil, nil, err
+		}
 		var out struct {
 			Errors json.RawMessage `json:"errors"`
 			Data   json.RawMessage `json:"data"`
@@ -530,6 +533,7 @@ func deezerPipeQuery(ctx context.Context, operation, query string, variables map
 		if err := json.Unmarshal(raw, &out); err != nil {
 			return nil, nil, err
 		}
+		reportEndpointAccepted(req.URL)
 		if deezerHasError(out.Errors) && deezerJWTRejected(string(out.Errors)) && attempt == 0 {
 			deezerClearJWT()
 			continue

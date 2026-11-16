@@ -2,10 +2,8 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"math"
 	"net/http"
 	neturl "net/url"
@@ -197,7 +195,7 @@ func vibeGetJSON(ctx context.Context, u string, out any) error {
 	if resp.StatusCode != http.StatusOK {
 		return vibeStatusError(resp.StatusCode)
 	}
-	return json.NewDecoder(io.LimitReader(resp.Body, lyricSourceResponseMaxBytes)).Decode(out)
+	return decodeLyricSourceJSON(req, resp, lyricSourceResponseMaxBytes, out)
 }
 
 // vibeBuildLRC 把 startTimeIndex 和同序号的一份 contents 拼成 LRC。空句写成只有时间戳的行(那是一句唱完、

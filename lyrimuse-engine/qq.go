@@ -237,7 +237,7 @@ func qqClientSearchAt(ctx context.Context, base, query string) ([]qqSearchItem, 
 		return nil, fmt.Errorf("client_search_cp status %d", resp.StatusCode)
 	}
 	var out qqClientSearchResp
-	if err := json.NewDecoder(io.LimitReader(resp.Body, qqResponseMaxBytes)).Decode(&out); err != nil {
+	if err := decodeJudgedLyricSourceJSON(req, resp, qqResponseMaxBytes, &out); err != nil {
 		return nil, err
 	}
 	// 查无结果时 code 仍是 0(实测),非 0 是服务端拒绝。
@@ -308,7 +308,7 @@ func qqSmartboxAt(ctx context.Context, host, query string) (qqSmartboxData, erro
 		Code int            `json:"code"`
 		Data qqSmartboxData `json:"data"`
 	}
-	if err := json.NewDecoder(io.LimitReader(resp.Body, qqResponseMaxBytes)).Decode(&out); err != nil {
+	if err := decodeJudgedLyricSourceJSON(req, resp, qqResponseMaxBytes, &out); err != nil {
 		return qqSmartboxData{}, err
 	}
 	// 查无结果时 code 仍是 0(实测),非 0 是服务端拒绝。
@@ -492,7 +492,7 @@ func qqSingerSuggestionsAt(ctx context.Context, host, name string) ([]qqSingerSu
 			} `json:"singer"`
 		} `json:"data"`
 	}
-	if err := json.NewDecoder(io.LimitReader(resp.Body, qqResponseMaxBytes)).Decode(&out); err != nil {
+	if err := decodeJudgedLyricSourceJSON(req, resp, qqResponseMaxBytes, &out); err != nil {
 		return nil, false
 	}
 	if out.Code != 0 {
@@ -1687,7 +1687,7 @@ func resolveQQLyricAt(ctx context.Context, host, mid string) (qqLyricResult, err
 	if resp.StatusCode != http.StatusOK {
 		return qqLyricResult{}, errQQNotReached
 	}
-	raw, err := io.ReadAll(io.LimitReader(resp.Body, 64*1024))
+	raw, err := readLyricSourceBody(req, resp, 64*1024)
 	if err != nil {
 		return qqLyricResult{}, errQQNotReached
 	}
@@ -1712,6 +1712,7 @@ func resolveQQLyricAt(ctx context.Context, host, mid string) (qqLyricResult, err
 		reportEndpointRejected(req.URL)
 		return qqLyricResult{}, errQQNotReached
 	}
+	reportEndpointAccepted(req.URL)
 	// 顺序要紧:占位判定必须在 isTimedLRC **之前**。QQ 的纯音乐占位只有一行带戳,
 	// 过不了"≥3 行且过半"那道门槛,先过 isTimedLRC 的话这个明确结论就被当成"没歌词"扔掉了。
 	if isInstrumentalPlaceholderLyric(out.Lyric) {
@@ -1832,7 +1833,7 @@ func qqMusicuPostAt(ctx context.Context, host string, raw []byte) (data json.Raw
 			Data json.RawMessage `json:"data"`
 		} `json:"request"`
 	}
-	if err := json.NewDecoder(io.LimitReader(resp.Body, qqResponseMaxBytes)).Decode(&out); err != nil {
+	if err := decodeLyricSourceJSON(req, resp, qqResponseMaxBytes, &out); err != nil {
 		return nil, false, err
 	}
 	if out.Code != 0 || out.Request.Code != 0 {

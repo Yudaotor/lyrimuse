@@ -929,7 +929,7 @@ func applemusicStorefrontEnglishTag(ctx context.Context, storefront, devToken st
 			} `json:"attributes"`
 		} `json:"data"`
 	}
-	if json.NewDecoder(io.LimitReader(resp.Body, 1<<20)).Decode(&out) != nil || len(out.Data) == 0 {
+	if decodeLyricSourceJSON(req, resp, 1<<20, &out) != nil || len(out.Data) == 0 {
 		return ""
 	}
 	tag = applemusicEnglishTagFrom(out.Data[0].Attributes.DefaultLanguageTag, out.Data[0].Attributes.SupportedLanguageTags)

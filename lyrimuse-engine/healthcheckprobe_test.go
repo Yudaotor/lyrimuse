@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"net/http"
 	"slices"
 	"strings"
 	"testing"
@@ -210,5 +211,20 @@ func TestLyricSourceOwnProbesAreRegisteredSources(t *testing.T) {
 		if !slices.Contains(allLyricSourceConstants(), src) {
 			t.Errorf("%s 不是登记过的源", src)
 		}
+	}
+}
+
+// 汽水的专用探测曲走搜索那条路:整页搜索被拒时从联想问到《十年》、取得到词就算答了;联想里没有就不算。
+func TestSodaOwnProbeUsesSearchPath(t *testing.T) {
+	sug := `{"status_info":{},"sugs":[{"suggestion":"十年 陈奕迅","content_type":"track","entity":{"track":{"id":"91"}}}]}`
+	sodaSuggestFake(t, http.StatusOK, "", sug, map[string]sodaSeoTrackResponse{
+		"91": sodaTestSeoFor("91", "十年", "陈奕迅", 205000, sodaTestLyricContent),
+	})
+	if !lyricSourceOwnProbes[lyricSourceSoda](qqRoundCtx()) {
+		t.Error("联想问到《十年》并取到词,该算答了")
+	}
+	sodaSuggestFake(t, http.StatusOK, "", `{"status_info":{}}`, nil)
+	if lyricSourceOwnProbes[lyricSourceSoda](qqRoundCtx()) {
+		t.Error("联想里没有,不该算答了")
 	}
 }

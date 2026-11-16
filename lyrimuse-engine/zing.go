@@ -275,7 +275,7 @@ func zingCallWith(ctx context.Context, k zingKey, path string, params map[string
 		Err  *int            `json:"err"`
 		Data json.RawMessage `json:"data"`
 	}
-	if err := json.NewDecoder(io.LimitReader(resp.Body, lyricSourceResponseMaxBytes)).Decode(&out); err != nil {
+	if err := decodeLyricSourceJSON(req, resp, lyricSourceResponseMaxBytes, &out); err != nil {
 		return 0, nil, sentCookie, err
 	}
 	if out.Err == nil {

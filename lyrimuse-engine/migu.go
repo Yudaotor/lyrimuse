@@ -268,7 +268,7 @@ func miguSearchAt(ctx context.Context, host, q string) ([]miguSearchItem, error)
 			Result []miguSearchItem `json:"result"`
 		} `json:"songResultData"`
 	}
-	if err := json.NewDecoder(io.LimitReader(resp.Body, 2<<20)).Decode(&out); err != nil {
+	if err := decodeJudgedLyricSourceJSON(req, resp, 2<<20, &out); err != nil {
 		return nil, err
 	}
 	if out.Code != "" && out.Code != "000000" {
@@ -594,7 +594,7 @@ func miguJadeiteSearch(ctx context.Context, q string) ([]miguSearchItem, error) 
 			ResultList [][]miguJadeiteItem `json:"resultList"`
 		} `json:"songResultData"`
 	}
-	if err := json.NewDecoder(io.LimitReader(resp.Body, 4<<20)).Decode(&out); err != nil {
+	if err := decodeJudgedLyricSourceJSON(req, resp, 4<<20, &out); err != nil {
 		return nil, err
 	}
 	if out.Code != "000000" {

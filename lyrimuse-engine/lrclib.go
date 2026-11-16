@@ -2,10 +2,8 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	_ "image/jpeg" // 注册 JPEG 解码器
 	_ "image/png"  // 网易云取色缩略图有时是 PNG(content-type 却谎报 jpg)
-	"io"
 	"math"
 	"net/http"
 	neturl "net/url"
@@ -199,7 +197,7 @@ func lrclibRequest(ctx context.Context, url string, timeout time.Duration, out a
 			return false
 		}
 		if resp.StatusCode == http.StatusOK {
-			ok := json.NewDecoder(io.LimitReader(resp.Body, lyricSourceResponseMaxBytes)).Decode(out) == nil
+			ok := decodeLyricSourceJSON(req, resp, lyricSourceResponseMaxBytes, out) == nil
 			resp.Body.Close()
 			if !ok {
 				noteLyricSubFetchFailure(ctx)
