@@ -166,6 +166,15 @@ final class MenuBarLiveIconView: NSView {
         isHidden = true
     }
 
+    /// 指定颜色,不跟 labelColor / 菜单反白走(歌词旁那枚叠进度的图标用:未唱色、已唱色各一份,
+    /// 反白由 `MenuBarScrollingLabel` 换色时一并给)。nil = 默认配色。换色不碰动画。
+    var tintOverride: NSColor? {
+        didSet {
+            guard tintOverride != oldValue else { return }
+            applyColor()
+        }
+    }
+
     /// 菜单开合换色,不碰动画。
     func setHighlighted(_ on: Bool) {
         guard on != highlighted else { return }
@@ -191,7 +200,7 @@ final class MenuBarLiveIconView: NSView {
     private func setTinted(_ target: CALayer, key: String, _ artwork: () -> NSImage) {
         let base = menuBarBitmapScale
         let scale = base * iconScale
-        let cacheKey = "\(key)|\(scale)|\(effectiveAppearance.name.rawValue)|\(highlighted)"
+        let cacheKey = "\(key)|\(scale)|\(effectiveAppearance.name.rawValue)|\(highlighted)|\(tintOverride?.description ?? "-")"
         let image: CGImage?
         if let hit = tintCache[cacheKey] {
             image = hit
@@ -511,7 +520,7 @@ final class MenuBarLiveIconView: NSView {
     }
 
     private var tintColor: NSColor {
-        highlighted ? .selectedMenuItemTextColor : .labelColor
+        tintOverride ?? (highlighted ? .selectedMenuItemTextColor : .labelColor)
     }
 
     private func applyColor() {

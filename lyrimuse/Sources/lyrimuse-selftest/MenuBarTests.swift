@@ -1667,6 +1667,51 @@ func runMenuBarTests() {
                     true, "画法: 彩虹走图层(button.title 叠不上流动渐变,06 章决策 76)")
     }
 
+    // ---- 歌词旁的图标律动叠进度(06 章决策 104) ----
+    do {
+        func animates(_ on: Bool, _ playing: Bool, _ artwork: Bool) -> Bool {
+            MenuBarSlotPolicy.lyricsIconAnimates(iconAnimates: on, playing: playing, drawsArtwork: artwork)
+        }
+        expectEqual(animates(true, true, false), true, "歌词旁律动: 动画开着、在放、画款式图标时律动")
+        expectEqual(animates(false, true, false), false, "歌词旁律动: 「图标动画」关着是原来的静止进度填充")
+        expectEqual(animates(true, false, false), false, "歌词旁律动: 暂停静止")
+        expectEqual(animates(true, true, true), false, "歌词旁律动: 画封面时不动(同只剩图标那一态)")
+
+        let menuBar = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("lyrimuse/MenuBar")
+        func src(_ name: String) -> String {
+            (try? String(contentsOfFile: menuBar.appendingPathComponent(name).path, encoding: .utf8)) ?? ""
+        }
+        let label = src("MenuBarScrollingLabel.swift")
+        expectEqual(sourceHas(label, "animates: MenuBarSlotPolicy.lyricsIconAnimates(\niconAnimates: settings.menuBarIconAnimates,\nplaying: PlaybackCoordinator.shared.isPlayingNow,\ndrawsArtwork: artwork != nil))")
+                    && sourceHas(label, "&& a.size == b.size && a.animates == b.animates"), true,
+                    "歌词旁律动: 本体、正中、预览共用 IconBadge.current 的判据,律动与否进判等(换态要重画)")
+        let progress = sourceBody("private func applyProgressFill()", in: label)
+        expectEqual(sourceHas(progress, "removeLiveIconMaskAnimations()")
+                    && sourceHas(progress, "(fill: liveIconFillMask, base: liveIconBaseMask)]")
+                    && sourceHas(progress, "for pair in pairs {\n// 每对的三条动画显式共享同一个 beginTime")
+                    && sourceHas(progress, "liveIconBase.alphaValue = MenuBarIconArtwork.unplayedOpacity")
+                    && sourceHas(progress, "iconFillClipLayer.isHidden = true\nliveIconBase.alphaValue = 1\nsetBoundary(0)"), true,
+                    "歌词旁律动: 两份活体图标的蒙版跟静态裁剪层同一套进度几何与动画,未唱那份压淡,没进度可比时不压")
+        let live = sourceBody("private func setLiveIcon(", in: label)
+        expectEqual(sourceHas(live, "liveIconBase.tintOverride = base\nliveIconFill.tintOverride = fill\nliveIconBase.present(style: icon.style, size: icon.size)\nliveIconFill.present(style: icon.style, size: icon.size)")
+                    && sourceHas(live, "liveIconBase.clear()\nliveIconFill.clear()"), true,
+                    "歌词旁律动: 两份同一轮搭台、同一轮退场(相位对齐),颜色是未唱色 / 已唱色")
+        expectEqual(sourceHas(sourceBody("func clear()", in: label), "removeLiveIconMaskAnimations()\nsetLiveIcon(nil)")
+                    && !sourceHas(sourceBody("func clearLyricsKeepingIcon()", in: label), "setLiveIcon(nil)")
+                    && sourceHas(label, "iconHostLayer.isHidden = plan.icon?.animates == true"), true,
+                    "歌词旁律动: 收起时摘干净,悬停三键接管时图标留着;律动时静态那两张藏着")
+        let item = src("MenuBarStatusItem.swift")
+        expectEqual(sourceHas(item, "liveIconView.setAnimationsPaused(paused || reduceMotion)\nscrollingLabel.setIconAnimationsPaused(paused || reduceMotion)")
+                    && sourceHas(src("MenuBarCenterLyrics.swift"), "slot.label.setIconAnimationsPaused(paused || reduceMotion)\nguard paused != slot.animationsPaused else { continue }")
+                    && sourceHas(label, "view.setIconAnimationsPaused(NSWorkspace.shared.accessibilityDisplayShouldReduceMotion)"), true,
+                    "歌词旁律动: 看不见、「减弱动态效果」时冻住(本体、正中、设置页预览三处)")
+        let liveView = src("MenuBarLiveIconView.swift")
+        expectEqual(sourceHas(liveView, "tintOverride ?? (highlighted ? .selectedMenuItemTextColor : .labelColor)")
+                    && sourceHas(liveView, "|\\(tintOverride?.description ?? \"-\")\""), true,
+                    "歌词旁律动: 活体图标可指定颜色,位图缓存键带上它(两份颜色不串)")
+    }
+
     // ---- 主行显示译文 / 原文接着译文(06 章决策 70) ----
     do {
         typealias T = MenuBarLyricText

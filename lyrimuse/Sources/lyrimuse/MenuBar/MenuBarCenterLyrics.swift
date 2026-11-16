@@ -453,10 +453,11 @@ final class MenuBarCenterLyrics {
     }
 
     /// 按每一扇此刻看不看得见冻住 / 恢复它的动画。返回 true = 有一扇刚恢复,调用方该强制对一次表。
-    func applyAnimationPause(screensHidden: Bool) -> Bool {
+    func applyAnimationPause(screensHidden: Bool, reduceMotion: Bool) -> Bool {
         var resumed = false
         for slot in slots.values {
             let paused = screensHidden || !slot.panel.occlusionState.contains(.visible)
+            slot.label.setIconAnimationsPaused(paused || reduceMotion)
             guard paused != slot.animationsPaused else { continue }
             slot.animationsPaused = paused
             slot.label.setAnimationsPaused(paused)

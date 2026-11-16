@@ -118,6 +118,12 @@ public enum MenuBarSlotPolicy {
         return max(naturalWidth, min(maxWidth, songRowWidth))
     }
 
+    /// 歌词旁那枚进度图标此刻律动不律动:「图标动画」开着、正在播放、画的是款式图标(封面不动,同只剩图标那一态)。
+    /// 律动时进度照样叠在上面;不律动就是静止的进度填充。菜单栏本体、正中那几扇和设置页预览共用这一份(见 06 章决策 104)。
+    public static func lyricsIconAnimates(iconAnimates: Bool, playing: Bool, drawsArtwork: Bool) -> Bool {
+        iconAnimates && playing && !drawsArtwork
+    }
+
     /// 自适应模式下装得下的这一句交给谁画:true = 图层(`MenuBarScrollingLabel`),false = 按钮自己画 title。
     ///
     /// 逐字染色、进度图标、双排、同一行接着译文(那段画淡,`MenuBarLyricText`)、彩虹都画不进 button.title;**歌词格比文字宽**(起步宽度、占位兜底撑出来的空)时也走图层:

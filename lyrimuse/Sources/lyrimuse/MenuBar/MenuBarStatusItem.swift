@@ -357,9 +357,11 @@ final class MenuBarStatusItem: NSObject {
     private func applyAnimationPause() {
         let windowVisible = statusItem?.button?.window?.occlusionState.contains(.visible) ?? true
         let paused = screensHidden || !windowVisible
-        liveIconView.setAnimationsPaused(paused || NSWorkspace.shared.accessibilityDisplayShouldReduceMotion)
+        let reduceMotion = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
+        liveIconView.setAnimationsPaused(paused || reduceMotion)
+        scrollingLabel.setIconAnimationsPaused(paused || reduceMotion)
         // 正中那几扇窗口各看各的(各在各的屏上),有一扇恢复时同样强制对一次表。
-        if centerLyrics.applyAnimationPause(screensHidden: screensHidden) {
+        if centerLyrics.applyAnimationPause(screensHidden: screensHidden, reduceMotion: reduceMotion) {
             syncKaraokeClock(force: true)
             syncProgressClock(force: true)
         }

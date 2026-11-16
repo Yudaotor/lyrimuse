@@ -33,6 +33,8 @@ import SwiftUI
 //          │    └ iconBaseLayer (图标模板图,基础色)
 //          └ iconFillClipLayer (masksToBounds,只露出**已经放过**的那截 [底, 边界])
 //               └ iconFillLayer (同一枚图标的强调色版)
+//     liveIconBase / liveIconFill (子视图,`MenuBarLiveIconView`;律动那一态才出场,这时 iconHostLayer 藏着)
+//          各戴一张蒙版(liveIconBaseMask / liveIconFillMask),几何和进度动画跟上面那对裁剪层同一套
 //     └ secondaryClipLayer (masksToBounds,副行那一格,双排;单行时 isHidden;装不下时 mask 尾部渐隐)
 //          └ secondaryTextLayer (副行,**不滚**;opacity 按档位压淡)
 //
@@ -89,6 +91,13 @@ final class MenuBarScrollingLabel: NSView {
     private let iconBaseLayer = MenuBarDrawnLayer()
     private let iconFillClipLayer = CALayer()
     private let iconFillLayer = MenuBarDrawnLayer()
+    /// 律动那一态(`IconBadge.animates`)的两份活体图标:未唱色那份压淡到 `MenuBarIconArtwork.unplayedOpacity`、
+    /// 已唱色那份不压。两份必须同一轮搭台、同一轮退场,动画起点才相同,拼缝处的字形对得上。
+    private let liveIconBase = MenuBarLiveIconView()
+    private let liveIconFill = MenuBarLiveIconView()
+    private let liveIconBaseMask = CALayer()
+    private let liveIconFillMask = CALayer()
+    private var liveIconActive = false
     private let secondaryClipLayer = CALayer()
     private let secondaryTextLayer = MenuBarDrawnLayer()
     /// 彩虹:三个宿主(蒙版 = 对应那层字)各挂一条渐变,见头注。
@@ -124,19 +133,26 @@ final class MenuBarScrollingLabel: NSView {
         var artwork: NSImage?
         /// 「图标大小」。
         var size: MenuBarIconSize = .standard
+        /// 律动(`MenuBarSlotPolicy.lyricsIconAnimates`):两份 `MenuBarLiveIconView` 叠着演,进度照样裁在上面。
+        var animates = false
 
         static func == (a: IconBadge, b: IconBadge) -> Bool {
             a.style == b.style && a.position == b.position && a.showsArtwork == b.showsArtwork
-                && a.artwork === b.artwork && a.size == b.size
+                && a.artwork === b.artwork && a.size == b.size && a.animates == b.animates
         }
 
         /// 按此刻的设置和封面拼一枚;`position == .off` 时 nil。菜单栏本体和设置页预览都调这一份。
         @MainActor static func current(position: MenuBarLyricsIconPosition) -> IconBadge? {
             guard position != .off else { return nil }
             let settings = AppSettings.shared
+            let artwork = MenuBarIconArtwork.currentSource()
             return IconBadge(style: settings.menuBarIconStyle, position: position,
                              showsArtwork: settings.menuBarIconShowsArtwork,
-                             artwork: MenuBarIconArtwork.currentSource(), size: settings.menuBarIconSize)
+                             artwork: artwork, size: settings.menuBarIconSize,
+                             animates: MenuBarSlotPolicy.lyricsIconAnimates(
+                                 iconAnimates: settings.menuBarIconAnimates,
+                                 playing: PlaybackCoordinator.shared.isPlayingNow,
+                                 drawsArtwork: artwork != nil))
         }
     }
 
@@ -300,6 +316,12 @@ final class MenuBarScrollingLabel: NSView {
         iconFillClipLayer.addSublayer(iconFillLayer)
         iconHostLayer.addSublayer(iconFillClipLayer)
         layer?.addSublayer(iconHostLayer)
+        for (view, mask) in [(liveIconBase, liveIconBaseMask), (liveIconFill, liveIconFillMask)] {
+            mask.anchorPoint = .zero
+            mask.backgroundColor = NSColor.black.cgColor
+            view.layer?.mask = mask
+            addSubview(view)
+        }
         // 副行那一支(双排)。跟主行的 clipLayer 是上下叠的两格,**不进 contentLayer**:
         // 主行滚、副行不滚,挂进去就跟着一起平移了。默认隐藏,双排时 layout() 露出来。
         for l in [secondaryClipLayer, secondaryTextLayer, secondaryFadeMask] { l.anchorPoint = .zero }
@@ -520,6 +542,13 @@ final class MenuBarScrollingLabel: NSView {
         if paused { layer?.pauseMenuBarAnimations() } else { layer?.resumeMenuBarAnimations() }
     }
 
+    /// 律动图标单独冻 / 放:看不见时跟着整层冻,系统开了「减弱动态效果」时也冻(纯装饰,同只剩图标那一态);
+    /// 声波款是符号动效,冻图层时间停不住,`MenuBarLiveIconView.setAnimationsPaused` 自己摘、自己加。
+    func setIconAnimationsPaused(_ paused: Bool) {
+        liveIconBase.setAnimationsPaused(paused)
+        liveIconFill.setAnimationsPaused(paused)
+    }
+
     /// 退出滚动模式(这一句装得下、菜单栏歌词关掉、或者没在播放)。
     /// 必须真的把动画摘掉:留一条 repeatCount = .infinity 的动画在隐藏图层上,
     /// 渲染层会一直为它做无用功。
@@ -537,6 +566,8 @@ final class MenuBarScrollingLabel: NSView {
         iconFillClipLayer.removeAnimation(forKey: Self.iconFillAnimationKey)
         iconBaseClipLayer.removeAnimation(forKey: Self.iconBasePositionAnimationKey)
         iconBaseClipLayer.removeAnimation(forKey: Self.iconBaseBoundsAnimationKey)
+        removeLiveIconMaskAnimations()
+        setLiveIcon(nil)
         removeGapDotsAnimations()
         removeRainbowAnimations()
         preparedIcon = nil
@@ -764,7 +795,11 @@ final class MenuBarScrollingLabel: NSView {
         } else {
             secondaryClipLayer.isHidden = true
         }
-        if let icon = geometry.icon { iconHostLayer.frame = icon }
+        if let icon = geometry.icon {
+            iconHostLayer.frame = icon
+            liveIconBase.frame = icon
+            liveIconFill.frame = icon
+        }
         CATransaction.commit()
     }
 
@@ -1050,7 +1085,7 @@ final class MenuBarScrollingLabel: NSView {
             iconFillLayer.bounds = CGRect(origin: .zero, size: iconFill.size)
             // 只动宽,不碰高 —— 高是进度动画的领地(见 applyProgressFill)。
             iconFillClipLayer.bounds.size.width = iconFill.size.width
-            iconHostLayer.isHidden = false
+            iconHostLayer.isHidden = plan.icon?.animates == true
         } else {
             preparedIcon = nil
             iconBaseLayer.painter = nil
@@ -1059,6 +1094,9 @@ final class MenuBarScrollingLabel: NSView {
         }
         mountRainbow(rainbow)
         CATransaction.commit()
+        // 两张静态位图照排:进度几何(宽、高)取自它们,动画关掉、换回静止时也直接用。
+        setLiveIcon(preparedIcon != nil && plan.icon?.animates == true ? plan.icon : nil,
+                    base: color, fill: karaokeFillColor)
         applyRainbow()
         needsLayout = true
     }
@@ -1194,6 +1232,8 @@ final class MenuBarScrollingLabel: NSView {
                          followPath: followPath, icon: icon,
                          secondaryText: secondaryText, secondaryKind: secondaryKind,
                          inlineTranslationStart: inlineTranslationStart)
+            // 律动图标:预览不在 MenuBarStatusItem 的冻结覆盖范围内,「减弱动态效果」在这里自己看。
+            view.setIconAnimationsPaused(NSWorkspace.shared.accessibilityDisplayShouldReduceMotion)
             // 预览实例不在 MenuBarStatusItem 的颜色订阅覆盖范围内,靠宿主 body 重算带一次
             // 重排 —— 用户在旁边拖「文字颜色」色轮时预览才跟手(重排一句位图 sub-ms 级)。
             view.refreshColors()
@@ -1538,23 +1578,31 @@ final class MenuBarScrollingLabel: NSView {
         iconFillClipLayer.removeAnimation(forKey: Self.iconFillAnimationKey)
         iconBaseClipLayer.removeAnimation(forKey: Self.iconBasePositionAnimationKey)
         iconBaseClipLayer.removeAnimation(forKey: Self.iconBaseBoundsAnimationKey)
+        removeLiveIconMaskAnimations()
         guard let icon = preparedIcon else { return }
         let w = icon.base.size.width
         let h = icon.base.size.height
+        // 两对互补的裁剪:静态那对裁剪层,和律动那两份活体图标的蒙版。几何关系、动画逐条相同。
+        let pairs = [(fill: iconFillClipLayer, base: iconBaseClipLayer),
+                     (fill: liveIconFillMask, base: liveIconBaseMask)]
         func baseRect(_ boundary: CGFloat) -> CGRect {
             CGRect(x: 0, y: min(boundary, h), width: w, height: max(0, h - boundary))
         }
         func setBoundary(_ boundary: CGFloat) {
-            iconFillClipLayer.bounds = CGRect(x: 0, y: 0, width: w, height: max(0, boundary))
-            iconBaseClipLayer.position = CGPoint(x: 0, y: min(boundary, h))
-            iconBaseClipLayer.bounds = baseRect(boundary)
+            for pair in pairs {
+                pair.fill.bounds = CGRect(x: 0, y: 0, width: w, height: max(0, boundary))
+                pair.base.position = CGPoint(x: 0, y: min(boundary, h))
+                pair.base.bounds = baseRect(boundary)
+            }
         }
         // 所有"不染"路径的必经出口:填色层隐掉、baseClip 复位成整枚 —— 基础图**永远**经由
-        // baseClip 显示,漏了这一步就是"关掉进度之后图标只剩上半截"。
+        // baseClip 显示,漏了这一步就是"关掉进度之后图标只剩上半截"。律动那份同理:已唱色那份蒙版收成 0 高,
+        // 未唱色那份不压淡(没有进度可比时,整枚就是基础色)。
         guard !highlighted, let clock = progressClock, clock.durationMs > 0 else {
             CATransaction.begin()
             CATransaction.setDisableActions(true)
             iconFillClipLayer.isHidden = true
+            liveIconBase.alphaValue = 1
             setBoundary(0)
             CATransaction.commit()
             return
@@ -1563,16 +1611,14 @@ final class MenuBarScrollingLabel: NSView {
         CATransaction.begin()
         CATransaction.setDisableActions(true)
         iconFillClipLayer.isHidden = false
+        liveIconBase.alphaValue = MenuBarIconArtwork.unplayedOpacity
         if let ramp = MenuBarMarquee.progressFillRamp(
             positionMs: nowMs, durationMs: clock.durationMs,
             rate: clock.playing ? clock.rate : 0, fullLength: h) {
             // 模型值直接放终态(动画 fillMode=forwards 盖着;动画一旦被摘,这首歌也已经
             // 放完了,终态正确)。
             setBoundary(ramp.to)
-            // 三条动画显式共享同一个 beginTime:互补裁剪的两边差半帧,边界处就会闪出一条
-            // 双色缝或空缝(同逐字染色那三条)。
-            let start = iconFillClipLayer.convertTime(CACurrentMediaTime(), from: nil)
-            func install(_ keyPath: String, from: Any, to: Any, on layer: CALayer, key: String) {
+            func install(_ keyPath: String, from: Any, to: Any, on layer: CALayer, key: String, start: CFTimeInterval) {
                 let animation = CABasicAnimation(keyPath: keyPath)
                 animation.fromValue = from
                 animation.toValue = to
@@ -1588,23 +1634,51 @@ final class MenuBarScrollingLabel: NSView {
                 MenuBarAnimation.capped(animation, fps: MenuBarAnimation.progressFPS)
                 layer.add(animation, forKey: key)
             }
-            install("bounds.size.height",
-                    from: NSNumber(value: Double(ramp.from)),
-                    to: NSNumber(value: Double(ramp.to)),
-                    on: iconFillClipLayer, key: Self.iconFillAnimationKey)
-            install("position.y",
-                    from: NSNumber(value: Double(min(ramp.from, h))),
-                    to: NSNumber(value: Double(min(ramp.to, h))),
-                    on: iconBaseClipLayer, key: Self.iconBasePositionAnimationKey)
-            install("bounds",
-                    from: NSValue(rect: baseRect(ramp.from)),
-                    to: NSValue(rect: baseRect(ramp.to)),
-                    on: iconBaseClipLayer, key: Self.iconBaseBoundsAnimationKey)
+            for pair in pairs {
+                // 每对的三条动画显式共享同一个 beginTime:互补裁剪的两边差半帧,边界处就会闪出一条
+                // 双色缝或空缝(同逐字染色那三条)。蒙版挂在活体图标自己的图层上,时间按那一层换算。
+                let start = pair.fill.convertTime(CACurrentMediaTime(), from: nil)
+                install("bounds.size.height",
+                        from: NSNumber(value: Double(ramp.from)),
+                        to: NSNumber(value: Double(ramp.to)),
+                        on: pair.fill, key: Self.iconFillAnimationKey, start: start)
+                install("position.y",
+                        from: NSNumber(value: Double(min(ramp.from, h))),
+                        to: NSNumber(value: Double(min(ramp.to, h))),
+                        on: pair.base, key: Self.iconBasePositionAnimationKey, start: start)
+                install("bounds",
+                        from: NSValue(rect: baseRect(ramp.from)),
+                        to: NSValue(rect: baseRect(ramp.to)),
+                        on: pair.base, key: Self.iconBaseBoundsAnimationKey, start: start)
+            }
         } else {
             // 暂停 / 已放完:静止停在此刻该有的边界。
             setBoundary(MenuBarMarquee.progressFillLength(
                 positionMs: nowMs, durationMs: clock.durationMs, fullLength: h))
         }
         CATransaction.commit()
+    }
+
+    private func removeLiveIconMaskAnimations() {
+        liveIconFillMask.removeAnimation(forKey: Self.iconFillAnimationKey)
+        liveIconBaseMask.removeAnimation(forKey: Self.iconBasePositionAnimationKey)
+        liveIconBaseMask.removeAnimation(forKey: Self.iconBaseBoundsAnimationKey)
+    }
+
+    /// 律动那一态上场 / 退场(nil = 退场)。两份同一轮搭台,动画在这一轮的事务里一起提交、起点相同;
+    /// 同款同大小再调是空操作,不打回相位起点。颜色跟静态那两张位图同两个(未唱色 / 已唱色),反白时 base 已是选中色。
+    private func setLiveIcon(_ icon: IconBadge?, base: NSColor = .labelColor, fill: NSColor = .labelColor) {
+        guard let icon else {
+            guard liveIconActive else { return }
+            liveIconActive = false
+            liveIconBase.clear()
+            liveIconFill.clear()
+            return
+        }
+        liveIconActive = true
+        liveIconBase.tintOverride = base
+        liveIconFill.tintOverride = fill
+        liveIconBase.present(style: icon.style, size: icon.size)
+        liveIconFill.present(style: icon.style, size: icon.size)
     }
 }
