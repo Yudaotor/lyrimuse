@@ -286636,7 +286636,7 @@
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Wird nicht abgespielt, solange „Bewegung reduzieren“ aktiv ist"
+            "value" : "Pausiert durch „Bewegung reduzieren“"
           }
         },
         "en" : {
@@ -286648,43 +286648,43 @@
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "No se reproduce con «Reducir movimiento» activado"
+            "value" : "En pausa por «Reducir movimiento»"
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Sans effet tant que « Réduire les animations » est activé"
+            "value" : "En pause : « Réduire les animations »"
           }
         },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Non viene riprodotta con “Riduci movimento” attivo"
+            "value" : "In pausa: “Riduci movimento” attivo"
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "「視差効果を減らす」がオンのため、再生されません"
+            "value" : "「視差効果を減らす」により停止中"
           }
         },
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "시스템에서 ‘동작 줄이기’가 켜져 있어 재생되지 않습니다"
+            "value" : "‘동작 줄이기’로 일시 정지됨"
           }
         },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Não é reproduzida com “Reduzir movimento” ativado"
+            "value" : "Pausada: “Reduzir movimento” ativado"
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "В системе включено «Уменьшение движения», поэтому анимация не воспроизводится"
+            "value" : "Пауза: «Уменьшение движения» вкл."
           }
         },
         "th" : {
@@ -286696,19 +286696,19 @@
         "tr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Sistemde “Hareketi Azalt” açık; geçiş oynatılmaz"
+            "value" : "“Hareketi Azalt” açık, duraklatıldı"
           }
         },
         "uk" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "У системі ввімкнено «Зменшення руху», тому анімація не відтворюється"
+            "value" : "Пауза: увімкнено «Зменшення руху»"
           }
         },
         "vi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Hệ thống đang bật “Giảm chuyển động”, hiệu ứng sẽ không phát"
+            "value" : "Tạm dừng do bật “Giảm chuyển động”"
           }
         },
         "zh-Hans" : {

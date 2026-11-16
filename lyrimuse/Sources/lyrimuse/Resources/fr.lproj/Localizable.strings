@@ -2385,7 +2385,7 @@
 "系统媒体信息通道不可用" = "Canal multimédia du système indisponible";
 "系统媒体信息通道在本机不可用：%@ 将改为直接读取播放状态（进度可能略有偏差），其他播放器暂时无法读取" = "Le canal multimédia du système est indisponible sur ce Mac : %@ sera lu directement (la progression peut être légèrement décalée) ; les autres lecteurs ne peuvent pas être lus pour l’instant";
 "系统字体" = "Police système";
-"系统已开启「减弱动态效果」，不会播放" = "Sans effet tant que « Réduire les animations » est activé";
+"系统已开启「减弱动态效果」，不会播放" = "En pause : « Réduire les animations »";
 "系统已开启「减弱动态效果」，触控栏歌词不滚动、不逐字高亮" = "« Réduire les animations » est activé : les paroles de la Touch Bar ne défilent pas et ne s’allument pas mot à mot";
 "系统自动化授权：上次检测时已授权" = "Accès d’automatisation du système : accordé lors de la dernière vérification";
 "系统自动化授权：尚未授权" = "Accès d’automatisation du système : pas encore accordé";
