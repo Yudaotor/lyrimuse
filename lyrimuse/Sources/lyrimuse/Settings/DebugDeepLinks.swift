@@ -24,6 +24,8 @@ enum DebugDeepLinks {
     static let editNotifyChannelNotification = Notification.Name("lyrimuse.debug.editNotifyChannel")
     /// `debug/manager-visibility`:object 是 NSNumber(true = 当作露出来,false = 当作挡住),nil = 交还给遮挡状态。
     static let managerVisibilityNotification = Notification.Name("lyrimuse.debug.managerVisibility")
+    /// `debug/manager-list`:object 是动作原文(String),歌词管理收(`LyricsManagerDebugOp`)。
+    static let managerListNotification = Notification.Name("lyrimuse.debug.managerList")
     /// `debug/settings-visibility`:同上,对设置窗口。
     static let settingsVisibilityNotification = Notification.Name("lyrimuse.debug.settingsVisibility")
     /// `debug/onboarding-step`:object 是 `OnboardingStep`,引导窗口收到后翻到那一步。
@@ -237,6 +239,13 @@ enum DebugDeepLinks {
         case .releaseClosedWindows:
             ClosedWindowContent.releaseDeferred(reason: "debug")
             logger.notice("debug release closed windows")
+        case let .managerList(op):
+            MainThreadGapProbe.label = op
+            logger.notice("debug manager list op=\(op, privacy: .public)")
+            NotificationCenter.default.post(name: managerListNotification, object: op)
+        case let .mainThreadGaps(on):
+            MainThreadGapProbe.setRunning(on)
+            logger.notice("debug main thread gaps on=\(on, privacy: .public)")
         case .saveConfig:
             Task { @MainActor in
                 let ok = await ConfigStore.shared.save()
@@ -744,4 +753,34 @@ enum MenuBarPanelDebugState {
     static var editing = false
     /// `debug/panel-pin`:开着时点到外面、切 App、切桌面空间都不收面板(不落盘)。
     static var pinned = false
+}
+
+/// `debug/main-thread-gaps` 的主线程心跳:每 10 毫秒一拍,两拍隔了 100 毫秒以上记一行,带上最近一次 `debug/manager-list` 动作。
+/// 挂在 `.common` 模式上,菜单、拖动期间照样打拍。只给本机量停顿用,默认不开。
+@MainActor
+enum MainThreadGapProbe {
+    static var label = "idle"
+    private static let logger = Logger(subsystem: LyrimuseIdentity.logSubsystem, category: "main-thread-gaps")
+    private static var timer: Timer?
+    private static var last = CFAbsoluteTimeGetCurrent()
+
+    static func setRunning(_ on: Bool) {
+        timer?.invalidate()
+        timer = nil
+        guard on else { return }
+        last = CFAbsoluteTimeGetCurrent()
+        let t = Timer(timeInterval: 0.01, repeats: true) { _ in
+            MainActor.assumeIsolated { tick() }
+        }
+        RunLoop.main.add(t, forMode: .common)
+        timer = t
+    }
+
+    private static func tick() {
+        let now = CFAbsoluteTimeGetCurrent()
+        let gap = now - last
+        last = now
+        guard gap > 0.1 else { return }
+        logger.notice("gap \(Int(gap * 1000), privacy: .public) ms after [\(label, privacy: .public)]")
+    }
 }

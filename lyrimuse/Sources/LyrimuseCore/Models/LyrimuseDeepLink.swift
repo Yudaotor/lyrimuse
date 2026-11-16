@@ -122,6 +122,12 @@ public enum LyrimuseDeepLink: Equatable, Sendable {
         case saveConfig
         /// 当作屏幕刚锁上:拆掉关着、等锁屏再拆的窗口内容(`debug/release-closed-windows`,同 `ClosedWindowContent.releaseDeferred`)。
         case releaseClosedWindows
+        /// 歌词管理的列表做一个动作,做完把列表此刻的样子记进日志(`debug/manager-list?op=<动作>`),验列表、量主线程停顿用;
+        /// 动作原样交给 App(`LyricsManagerDebugOp`)。歌词管理要开着。
+        case managerList(op: String)
+        /// 主线程心跳(`debug/main-thread-gaps?on=1|0`):每 10 毫秒一拍,两拍隔了 100 毫秒以上记一行
+        /// `gap <毫秒> ms after [<最近一次 manager-list 动作>]`,量一个动作让主线程停了多久。
+        case mainThreadGaps(on: Bool)
         /// 关掉 / 接回一条来源(`debug/knockout?leg=<名字>&on=0|1`,`on=0` 关掉):验证退路撑不撑得住,见 `SourceKnockout`。
         case knockout(leg: SourceKnockout.Leg, on: Bool)
         /// 当作这个播放器已经在出声却没报 Now Playing 满了提示的时长,发一次跟轮询同一条的提示信号
@@ -405,6 +411,12 @@ public enum LyrimuseDeepLink: Equatable, Sendable {
             self = .debug(.saveConfig)
         case ("debug", "/release-closed-windows"):
             self = .debug(.releaseClosedWindows)
+        case ("debug", "/manager-list"):
+            guard let op = value("op"), !op.isEmpty else { return nil }
+            self = .debug(.managerList(op: op))
+        case ("debug", "/main-thread-gaps"):
+            guard let on = value("on").flatMap(Self.parseBool) else { return nil }
+            self = .debug(.mainThreadGaps(on: on))
         case ("debug", "/panel-layout"):
             self = .debug(.panelLayout(json: value("json").flatMap { $0.isEmpty ? nil : $0 }))
         case ("debug", "/panel-drag"):
@@ -762,6 +774,12 @@ public enum LyrimuseDeepLink: Equatable, Sendable {
                 if let id { components.queryItems = [URLQueryItem(name: "id", value: id)] }
             case .saveConfig: components.path = "/config-save"
             case .releaseClosedWindows: components.path = "/release-closed-windows"
+            case let .managerList(op):
+                components.path = "/manager-list"
+                components.queryItems = [URLQueryItem(name: "op", value: op)]
+            case let .mainThreadGaps(on):
+                components.path = "/main-thread-gaps"
+                components.queryItems = [URLQueryItem(name: "on", value: on ? "1" : "0")]
             case let .panelLayout(json):
                 components.path = "/panel-layout"
                 if let json { components.queryItems = [URLQueryItem(name: "json", value: json)] }

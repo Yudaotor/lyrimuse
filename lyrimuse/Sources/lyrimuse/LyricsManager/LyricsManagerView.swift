@@ -1877,6 +1877,9 @@ struct LyricsManagerView: View {
             centerListRow(key, scrollProxy: scrollProxy)
         }
         .onChange(of: sortOption) { _, _ in revealSelection(scrollProxy: scrollProxy) }
+        .onReceive(NotificationCenter.default.publisher(for: DebugDeepLinks.managerListNotification)) { note in
+            runDebugListOp(note.object as? String ?? "", scrollProxy: scrollProxy)
+        }
         .onReceive(listSelection.$keys) { keys in listSelectionChanged(keys) }
         // lyrimuse://lyrics-manager/song-versions:窗口已经开着时收 subject;开窗那一轮(pendingAutoFocus 还没放下)缓存可能还是空的,
         // 留给下面 onAppear 读完缓存、自动定位之后取信箱。
@@ -3212,6 +3215,54 @@ struct LyricsManagerView: View {
                 }
             }
         }
+    }
+
+    /// `debug/manager-list` 的动作(`LyrimuseDeepLink.DebugCommand.managerList`):跟用户在界面上做的同一条路,做完下一拍把列表此刻的
+    /// 样子记一行日志。`search:<词>` 改搜索框(照常防抖)、`sort:<排序>`、`group:on|off|toggle`、`status:<胶囊>`、
+    /// `key:down|up`(往表格发一次方向键)、`select:<行>`、`locate`(同「正在播放」那一行的「定位」)、`reload`(同「刷新」)、`state`。
+    private func runDebugListOp(_ op: String, scrollProxy: ScrollViewProxy) {
+        let parts = op.split(separator: ":", maxSplits: 1, omittingEmptySubsequences: false).map(String.init)
+        let arg = parts.count > 1 ? parts[1] : ""
+        switch parts[0] {
+        case "search": searchText = arg
+        case "sort": if let option = LyricsSortOption(rawValue: arg) { sortOption = option }
+        case "group": groupByAlbum = arg == "toggle" ? !groupByAlbum : arg == "on"
+        case "status": if let status = LyricsManagerStatus(rawValue: arg) { statusFilter = status }
+        case "key":
+            guard let table = windowFrame.listTable else { break }
+            let down = arg != "up"
+            let scalar = UnicodeScalar(down ? NSDownArrowFunctionKey : NSUpArrowFunctionKey).map { String(Character($0)) } ?? ""
+            if let event = NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: [.numericPad, .function],
+                                            timestamp: ProcessInfo.processInfo.systemUptime,
+                                            windowNumber: table.window?.windowNumber ?? 0, context: nil, characters: scalar,
+                                            charactersIgnoringModifiers: scalar, isARepeat: false, keyCode: down ? 125 : 126) {
+                table.keyDown(with: event)
+            }
+        case "select":
+            let keys = groupByAlbum ? albumEntries.map(\.id) : sortedFiltered.map(\.key)
+            if let row = Int(arg), keys.indices.contains(row) { _ = select(keys[row]) }
+        case "locate": focusCurrentlyPlaying(scrollProxy: scrollProxy)
+        case "reload": refreshWithFeedback()
+        default: break
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { logDebugListState(op) }
+    }
+
+    private func logDebugListState(_ op: String) {
+        let keys = groupByAlbum ? albumEntries.map(\.id) : sortedFiltered.map(\.key)
+        let table = windowFrame.listTable
+        let visible = table.map { $0.rows(in: $0.visibleRect) } ?? NSRange(location: 0, length: 0)
+        let tableSelected = table.map { Array($0.selectedRowIndexes.prefix(6)) } ?? []
+        let firstSelected = keys.firstIndex { selectedKeys.contains($0) }
+        let title = firstSelected.flatMap { store.summary(forKey: keys[$0])?.shownTitle } ?? ""
+        let playingRow = nowPlayingKey.flatMap { key in keys.firstIndex(of: key) }
+        editLog.notice("""
+            debug list op=\(op, privacy: .public) rows=\(table?.numberOfRows ?? -1, privacy: .public) data=\(keys.count, privacy: .public) \
+            selectedKeys=\(selectedKeys.count, privacy: .public) firstSelectedRow=\(firstSelected ?? -1, privacy: .public) \
+            title=\(title, privacy: .public) tableSelected=\(String(describing: tableSelected), privacy: .public) \
+            visible=\(visible.location, privacy: .public)+\(visible.length, privacy: .public) \
+            nowPlayingRow=\(playingRow ?? -1, privacy: .public) focused=\(windowFrame.listHasKeyFocus, privacy: .public)
+            """)
     }
 
     // 「正在搜索」占位行的详情——只读,不带任何编辑/删除/重新自动匹配按钮:这些操作全部
