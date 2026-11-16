@@ -1299,6 +1299,32 @@ func runLyricsWindowTests() {
         expectEqual(LyricsTransportMetrics(width: 120, requested: 1.6).factor, 1,
                     "控件大小: 连 100% 都挤的窄窗口不往小缩,保持原样")
         expectEqual(LyricsTransportMetrics(width: 410, requested: 0.5).factor, 1, "控件大小: 倍数不低于 1")
+        // 主三键命中区(07 章决策 204):各种左栏宽 × 控件大小下,相邻主键命中区不重叠、上 / 下一首不伸进随机 / 循环格,
+        // 高至少 44;往上扩出这一排的量(按一排高 ≈ 播放字号算)小于播放控制跟上方时间行之间的 17。
+        let hitCases = [120, 178, 200, 300, 410, 460].flatMap { w in [1, 1.3, 1.6, 2].map { LyricsTransportMetrics(width: CGFloat(w), requested: $0) } }
+        expectEqual(hitCases.allSatisfy { m in
+            m.playHitReach + m.skipHitReach <= m.spacing + 0.001 && m.skipHitReach >= 0 && m.playHitReach > 0
+                && m.skipHitReach <= LyricsTransportMetrics.hitReach && m.playHitReach <= LyricsTransportMetrics.hitReach
+        }, true, "播放控制命中区: 相邻主键各扩不超过一半间距,每边最多 22")
+        expectEqual(zip([120, 178, 200, 300, 410, 460].flatMap { w in [CGFloat](repeating: CGFloat(w), count: 4) }, hitCases).allSatisfy { w, m in
+            let group = 2 * 1.54 * m.skipFontSize + m.playCellWidth + 2 * m.spacing
+            return m.skipHitReach <= max(0, (w - 2 * m.modeCellWidth - group) / 2) / 2 + 0.001
+        }, true, "播放控制命中区: 上 / 下一首往外扩不超过跟随机 / 循环格之间那段空的一半")
+        expectEqual(hitCases.allSatisfy { m in m.hitHeight >= 44 && m.hitHeight >= m.playFontSize && (m.hitHeight - m.playFontSize) / 2 < 17 },
+                    true, "播放控制命中区: 至少 44 高、不比播放键矮,往上扩不到进度条时间行")
+        let wideHit = LyricsTransportMetrics(width: 410)
+        expectEqual([wideHit.skipHitReach, wideHit.playHitReach, wideHit.hitHeight], [22, 22, 44],
+                    "播放控制命中区: 封面 410 标准档时上 / 下一首、播放键横向各扩 22,高 44")
+        let transportBody = sourceBody("private func transportKey<", in: window)
+        expectEqual(sourceHas(transportBody, "return shape.hidden().overlay {\n Button(action: action) {\n shape.padding(.horizontal, reach)\n .frame(height: transportMetrics.hitHeight)\n .contentShape(Rectangle())\n }\n .fixedSize()")
+                    && sourceCount(sourceBody("private var playbackControls:", in: window), "transportKey(reach: metrics.") == 3
+                    && sourceHas(sourceBody("private var playbackControls:", in: window), "transportKey(reach: metrics.skipHitReach, label: L10n.t(\"上一首\"))")
+                    && sourceHas(sourceBody("private var playbackControls:", in: window), "transportKey(reach: metrics.playHitReach, label: L10n.t(\"播放/暂停\"))")
+                    && sourceHas(sourceBody("private var playbackControls:", in: window), "transportKey(reach: metrics.skipHitReach, label: L10n.t(\"下一首\"))"),
+                    true, "播放控制命中区(契约): 主三键是浮在隐藏字形上的放大按钮,命中区是矩形、不跟字形镂空")
+        expectEqual(WebLyricsControlsLayout.minimumHitSize == LyricsTransportMetrics.minimumHitSize
+                    && WebLyricsControlsLayout.hitReach == LyricsTransportMetrics.hitReach, true,
+                    "播放控制命中区: 网页歌词跟歌词窗口用同一组命中区常数")
         expectEqual(sourceHas(window, "s.$lyricsWindowControlScalePercent.map(LyricsWindowControlScale.factor(percent:)).removeDuplicates()\n                .sink { [weak self] in self?.fullControlScale = $0 }")
                     && sourceBytes(window, contain: "LyricsTransportMetrics(width: controlScale, requested: controlFactor)")
                     && !sourceBytes(window, contain: "ctrl(0.")

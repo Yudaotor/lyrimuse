@@ -255,6 +255,8 @@ enum DebugDeepLinks {
             panelDrag(from: from, to: to, via: via, inGallery: inGallery)
         case let .panelClick(at, inGallery):
             panelClick(at: at, inGallery: inGallery)
+        case let .windowClick(window, at):
+            windowClick(named: window, at: at)
         case let .panelScroll(at, dy, trackpad, steps):
             panelScroll(at: at, dy: dy, trackpad: trackpad, steps: steps)
         case let .panelPin(on):
@@ -702,6 +704,30 @@ extension DebugDeepLinks {
             try? await Task.sleep(nanoseconds: 30_000_000)
             if let e = event(.leftMouseUp) { window.sendEvent(e) }
             logger.notice("debug panel click done")
+        }
+    }
+
+    /// `debug/window-click`:往窗口里 (x, y) 处送一次按下 → 30 毫秒后松开,经 `NSWindow.sendEvent`,跟真实点按同一条路
+    /// (SwiftUI 按钮只认这条路送来的事件,直接调视图的 `mouseDown` 不响应)。按下前 `preventWindowOrdering`:窗口不被提到前面,
+    /// App 不激活。日志记下点按前后窗口是不是 key、App 在不在前台。
+    static func windowClick(named name: String, at point: CGPoint) {
+        guard let window = window(named: name) else {
+            logger.notice("debug window click: no visible window named \(name, privacy: .public)")
+            return
+        }
+        let location = NSPoint(x: point.x, y: window.frame.height - point.y)
+        func event(_ type: NSEvent.EventType) -> NSEvent? {
+            NSEvent.mouseEvent(with: type, location: location, modifierFlags: [],
+                               timestamp: ProcessInfo.processInfo.systemUptime, windowNumber: window.windowNumber,
+                               context: nil, eventNumber: 0, clickCount: 1, pressure: type == .leftMouseUp ? 0 : 1)
+        }
+        let keyBefore = window.isKeyWindow
+        Task { @MainActor in
+            NSApp.preventWindowOrdering()
+            if let e = event(.leftMouseDown) { window.sendEvent(e) }
+            try? await Task.sleep(nanoseconds: 30_000_000)
+            if let e = event(.leftMouseUp) { window.sendEvent(e) }
+            logger.notice("debug window click done window=\(name, privacy: .public) at=\(point.x, privacy: .public),\(point.y, privacy: .public) keyBefore=\(keyBefore, privacy: .public) keyAfter=\(window.isKeyWindow, privacy: .public) appActive=\(NSApp.isActive, privacy: .public)")
         }
     }
 }

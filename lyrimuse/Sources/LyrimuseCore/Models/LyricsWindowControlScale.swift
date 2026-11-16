@@ -54,6 +54,18 @@ public struct LyricsTransportMetrics: Equatable, Sendable {
     /// 随机 / 循环那一格的定宽(字号 + 8,字形在格里居中)。
     public var modeCellWidth: CGFloat { modeFontSize + 8 }
 
+    /// 主三键命中区至少这么高(点)。网页歌词 `WebLyricsControlsLayout` 用同一个数。
+    public static let minimumHitSize: CGFloat = 44
+    /// 主三键命中区横向每边最多比键宽出去这么多。
+    public static let hitReach: CGFloat = 22
+    /// 主三键命中区的高:三颗等高、跟这一排同一条中线,至少 `minimumHitSize`,播放字号大时比它高 8。
+    public var hitHeight: CGFloat { max(Self.minimumHitSize, playFontSize + 8) }
+    /// 播放键命中区横向每边扩出去多少:一半间距,跟两侧键的命中区正好接上、不重叠。
+    public var playHitReach: CGFloat { min(Self.hitReach, spacing / 2) }
+    /// 上 / 下一首命中区横向每边扩出去多少(两边一样,按下缩小时字形不偏):不超过 `playHitReach`,
+    /// 也不超过主三键跟随机 / 循环格之间那段空的一半(字形宽按 `skipGlyphRatio` 往大估,只会估短)。
+    public let skipHitReach: CGFloat
+
     /// 上 / 下一首字形宽与字号之比(`backward.fill` 实排 1.48~1.54,取大的那头)。只用来估一排放不放得下。
     static let skipGlyphRatio: CGFloat = 1.54
     /// 随机 / 循环跟主三键之间至少留的空(同歌词窗口两个 `Spacer(minLength: 12)`)。
@@ -78,5 +90,8 @@ public struct LyricsTransportMetrics: Equatable, Sendable {
         playFontSize = play * f
         playCellWidth = cell * f
         spacing = gap * (1 + (f - 1) / 2)
+        let group = 2 * Self.skipGlyphRatio * skip * f + cell * f + 2 * spacing
+        let sideSpace = (w - 2 * (mode * f + 8) - group) / 2
+        skipHitReach = min(Self.hitReach, spacing / 2, max(0, sideSpace / 2))
     }
 }

@@ -42,7 +42,11 @@ public enum MusicPlaybackController {
 
     @MainActor
     public static func nextTrack(completion: Completion? = nil) {
-        guard !PlaybackSimulation.isActive else { completion?(nil); return }
+        guard !PlaybackSimulation.isActive else {
+            logger.notice("simulation: next-track not sent to the player")
+            completion?(nil)
+            return
+        }
         dispatch(appleScript: #"tell application "Music" to next track"#,
                  spotifyScript: #"tell application "Spotify" to next track"#,
                  kasetScript: #"tell application "Kaset" to next track"#,
@@ -52,7 +56,11 @@ public enum MusicPlaybackController {
 
     @MainActor
     public static func previousTrack(completion: Completion? = nil) {
-        guard !PlaybackSimulation.isActive else { completion?(nil); return }
+        guard !PlaybackSimulation.isActive else {
+            logger.notice("simulation: previous-track not sent to the player")
+            completion?(nil)
+            return
+        }
         dispatch(appleScript: #"tell application "Music" to previous track"#,
                  spotifyScript: #"tell application "Spotify" to previous track"#,
                  kasetScript: #"tell application "Kaset" to previous track"#,

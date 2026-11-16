@@ -218,6 +218,12 @@ func runDeepLinkTests() {
                     "debug: 面板滚动缺位置或位移、位移为 0 或超上限、kind 不认得、步数越界都不认")
         expectEqual(link("lyrimuse://debug/panel-click") == nil && link("lyrimuse://debug/panel-click?at=1") == nil, true,
                     "debug: 点的位置缺了或写错不认")
+        expectEqual(link("lyrimuse://debug/window-click?window=lyrics-window&at=210,640.5"),
+                    .debug(.windowClick(window: "lyrics-window", at: CGPoint(x: 210, y: 640.5))), "debug: 在某扇窗里点一下")
+        expectEqual(["lyrimuse://debug/window-click?at=1,2", "lyrimuse://debug/window-click?window=&at=1,2",
+                     "lyrimuse://debug/window-click?window=lyrics-window", "lyrimuse://debug/window-click?window=lyrics-window&at=1"]
+                        .allSatisfy { link($0) == nil }, true,
+                    "debug: 窗口点按缺窗口名、缺位置或位置写错不认")
         expectEqual(link("lyrimuse://debug/panel-drag?from=1,2") == nil && link("lyrimuse://debug/panel-drag?from=1&to=3,4") == nil, true,
                     "debug: 面板拖动缺终点或坐标不全不认")
         expectEqual(link("lyrimuse://debug/panel-layout?json=%7B%22tiles%22%3A%5B%5D%7D"), .debug(.panelLayout(json: "{\"tiles\":[]}")),
@@ -629,7 +635,7 @@ func runDeepLinkTests() {
             .debug(.simulateIdle),
             .debug(.toggleFavorite), .debug(.idleResume), .debug(.seek(seconds: 99.7)), .debug(.seek(seconds: 0)),
             .debug(.knockout(leg: .appleMusicScript, on: false)), .debug(.knockout(leg: .spotifyScript, on: true)),
-            .debug(.knockout(leg: .kasetScript, on: false)), .debug(.saveConfig), .debug(.releaseClosedWindows), .debug(.panelLayout(json: nil)), .debug(.panelPin(on: true)), .debug(.panelPin(on: false)), .debug(.panelDrag(from: CGPoint(x: 1.5, y: 2), to: CGPoint(x: 300, y: 400))), .debug(.panelDrag(from: CGPoint(x: 1, y: 2), to: CGPoint(x: 3, y: 4), via: [CGPoint(x: 5, y: 6)])), .debug(.panelDrag(from: CGPoint(x: 1, y: 2), to: CGPoint(x: 3, y: 4), inGallery: true)), .debug(.panelClick(at: CGPoint(x: 1, y: 2))), .debug(.panelClick(at: CGPoint(x: 1, y: 2), inGallery: true)), .debug(.panelScroll(at: CGPoint(x: 1.5, y: 2), dy: 1)), .debug(.panelScroll(at: CGPoint(x: 1, y: 2), dy: -2.5, trackpad: true, steps: 20)),
+            .debug(.knockout(leg: .kasetScript, on: false)), .debug(.saveConfig), .debug(.releaseClosedWindows), .debug(.panelLayout(json: nil)), .debug(.panelPin(on: true)), .debug(.panelPin(on: false)), .debug(.panelDrag(from: CGPoint(x: 1.5, y: 2), to: CGPoint(x: 300, y: 400))), .debug(.panelDrag(from: CGPoint(x: 1, y: 2), to: CGPoint(x: 3, y: 4), via: [CGPoint(x: 5, y: 6)])), .debug(.panelDrag(from: CGPoint(x: 1, y: 2), to: CGPoint(x: 3, y: 4), inGallery: true)), .debug(.panelClick(at: CGPoint(x: 1, y: 2))), .debug(.panelClick(at: CGPoint(x: 1, y: 2), inGallery: true)), .debug(.windowClick(window: "lyrics-window", at: CGPoint(x: 1.5, y: 2))), .debug(.panelScroll(at: CGPoint(x: 1.5, y: 2), dy: 1)), .debug(.panelScroll(at: CGPoint(x: 1, y: 2), dy: -2.5, trackpad: true, steps: 20)),
             .debug(.panelLayout(json: MenuBarPanelLayout(placements: [.init(tile: .translation, size: .large, column: 0, row: 0)], footer: [.version]).encoded())), .debug(.volume(percent: 0)), .debug(.volume(percent: 100)),
             .debug(.stall(ms: 1)), .debug(.stall(ms: 2000)), .debug(.milestonePreview),
             .debug(.notchBehavior(collapseWhenPaused: true, hideWhenNotPlaying: nil)),

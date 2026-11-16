@@ -4493,19 +4493,17 @@ struct LyricsWindowView: View {
             shuffleButton
             Spacer(minLength: 12)
             HStack(spacing: metrics.spacing) {
-            Button {
+            transportKey(reach: metrics.skipHitReach, label: L10n.t("上一首")) {
                 MusicPlaybackController.previousTrack()
-            } label: {
+            } glyph: {
                 Image(systemName: "backward.fill").font(.system(size: metrics.skipFontSize))
                     .opacity(Self.skipButtonOpacity)
             }
-            .help(playback.controlsWithheldReason ?? L10n.t("上一首"))
-            .accessibilityLabel(L10n.t("上一首"))
-            Button {
+            transportKey(reach: metrics.playHitReach, label: L10n.t("播放/暂停")) {
                 // 走 coordinator 的乐观回声版,不直接发命令:封面缩放/图标点击即动,
                 // 不等 0.5~1s 的轮询回读(见 userTogglePlayPause 注释)。
                 PlaybackCoordinator.shared.userTogglePlayPause()
-            } label: {
+            } glyph: {
                 // 图标跟观感层 isPlayingSmoothed 走(不是 isPlayingNow 真值):点击瞬间
                 // 翻转,还顺带吸掉切歌间隙真值抖 false 时图标闪一下的毛病。
                 Image(systemName: playback.isPlayingSmoothed ? "pause.fill" : "play.fill")
@@ -4514,16 +4512,12 @@ struct LyricsWindowView: View {
                     .frame(width: metrics.playCellWidth)
                     .opacity(Self.playButtonOpacity)
             }
-            .help(playback.controlsWithheldReason ?? L10n.t("播放/暂停"))
-            .accessibilityLabel(L10n.t("播放/暂停"))
-            Button {
+            transportKey(reach: metrics.skipHitReach, label: L10n.t("下一首")) {
                 MusicPlaybackController.nextTrack()
-            } label: {
+            } glyph: {
                 Image(systemName: "forward.fill").font(.system(size: metrics.skipFontSize))
                     .opacity(Self.skipButtonOpacity)
             }
-            .help(playback.controlsWithheldReason ?? L10n.t("下一首"))
-            .accessibilityLabel(L10n.t("下一首"))
             }
             .opacity(playback.controlsWithheldReason == nil ? 1 : PlaybackCoordinator.withheldControlOpacity)
             Spacer(minLength: 12)
@@ -4533,6 +4527,24 @@ struct LyricsWindowView: View {
         .buttonStyle(TransportButtonStyle(reduceMotion: reduceMotion))
         .foregroundStyle(primaryTextColor)
         .frame(maxWidth: .infinity)
+    }
+
+    /// 主三键之一。隐藏的同一份字形撑出原来那一格布局,按钮整个浮在上面:命中区是以字形为中心、横向每边扩 `reach`、
+    /// 高 `LyricsTransportMetrics.hitHeight` 的矩形,不随字形轮廓镂空。SwiftUI 按钮的命中区出不了按钮自己的布局框,
+    /// 别改成在按钮里用负 padding / 背景往外扩(见 07 章决策 204)。
+    private func transportKey<Glyph: View>(reach: CGFloat, label: String, action: @escaping () -> Void,
+                                           @ViewBuilder glyph: () -> Glyph) -> some View {
+        let shape = glyph()
+        return shape.hidden().overlay {
+            Button(action: action) {
+                shape.padding(.horizontal, reach)
+                    .frame(height: transportMetrics.hitHeight)
+                    .contentShape(Rectangle())
+            }
+            .fixedSize()
+            .help(playback.controlsWithheldReason ?? label)
+            .accessibilityLabel(label)
+        }
     }
 
     /// 置顶 / 全屏 / 回到当前播放。

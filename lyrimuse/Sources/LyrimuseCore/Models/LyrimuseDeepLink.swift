@@ -196,6 +196,10 @@ public enum LyrimuseDeepLink: Equatable, Sendable {
         /// 在菜单栏面板里 (x, y) 处点一下(按下、30 毫秒后松开,坐标同 `panelDrag`):`debug/panel-click?at=60,208`。
         /// 格子的点按 / 长按按按住多久分,`panelDrag` 按住约 0.4 秒,会被认成长按。`in=gallery` 同 `panelDrag`。
         case panelClick(at: CGPoint, inGallery: Bool = false)
+        /// 在名为 `window` 的窗口里 (x, y) 处点一下(窗口内的点坐标,左上角为原点;窗口名同 `snapshot`):
+        /// `debug/window-click?window=lyrics-window&at=210,640`。按下、30 毫秒后松开,经窗口的事件分发(跟真实点按同一条路),
+        /// 不把窗口提到前面、不激活 App。
+        case windowClick(window: String, at: CGPoint)
         /// 在菜单栏面板 (x, y) 处滚动(坐标同 `panelDrag`),事件送进面板窗口、跟真实滚动同一条路:`debug/panel-scroll?at=60,208&dy=1`
         /// 是鼠标滚轮往上一格;`steps=N` 连滚 N 格;`kind=trackpad` 换成触控板两指滑(began、N 次各 `dy` pt、ended)。
         /// `dy` 为正 = 手指往上(调大)。
@@ -430,6 +434,10 @@ public enum LyrimuseDeepLink: Equatable, Sendable {
         case ("debug", "/panel-click"):
             guard let at = Self.panelPoint(Substring(value("at") ?? "")) else { return nil }
             self = .debug(.panelClick(at: at, inGallery: value("in") == "gallery"))
+        case ("debug", "/window-click"):
+            guard let window = value("window"), !window.isEmpty,
+                  let at = Self.panelPoint(Substring(value("at") ?? "")) else { return nil }
+            self = .debug(.windowClick(window: window, at: at))
         case ("debug", "/panel-scroll"):
             guard let at = Self.panelPoint(Substring(value("at") ?? "")),
                   let dy = value("dy").flatMap(Double.init), dy.isFinite, dy != 0, abs(dy) <= Self.maxPanelScrollDelta
@@ -795,6 +803,9 @@ public enum LyrimuseDeepLink: Equatable, Sendable {
                 components.path = "/panel-click"
                 components.queryItems = [URLQueryItem(name: "at", value: "\(at.x),\(at.y)")]
                 if inGallery { components.queryItems?.append(URLQueryItem(name: "in", value: "gallery")) }
+            case let .windowClick(window, at):
+                components.path = "/window-click"
+                components.queryItems = [URLQueryItem(name: "window", value: window), URLQueryItem(name: "at", value: "\(at.x),\(at.y)")]
             case let .panelScroll(at, dy, trackpad, steps):
                 components.path = "/panel-scroll"
                 components.queryItems = [URLQueryItem(name: "at", value: "\(at.x),\(at.y)"), URLQueryItem(name: "dy", value: "\(dy)")]

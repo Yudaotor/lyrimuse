@@ -73,9 +73,9 @@ public struct WebLyricsControlsLayout: Equatable, Sendable {
     public enum Button: CaseIterable, Sendable { case shuffle, previous, playPause, next, repeatMode }
 
     /// 手指点得中的最小高度(点)。
-    public static let minimumHitSize: CGFloat = 44
+    public static let minimumHitSize: CGFloat = LyricsTransportMetrics.minimumHitSize
     /// 命中区横向最多比格子宽出去这么多(每边)。
-    public static let hitReach: CGFloat = 22
+    public static let hitReach: CGFloat = LyricsTransportMetrics.hitReach
 
     public let modeFontSize: CGFloat
     public let skipFontSize: CGFloat
