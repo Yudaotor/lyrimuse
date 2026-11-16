@@ -792,11 +792,12 @@
 "另有 %@ 首歌曲无源应答 · 全部自动匹配" = "%@ more songs had no source response · Auto-Match All";
 "另有 %@ 首歌曲无源应答 · 全部自动匹配#one" = "%@ more song had no source response · Auto-Match All";
 "另有 %d 个文件未能写入歌词文件夹，请检查写入权限和磁盘空间" = "%d more couldn’t be written to the lyrics folder. Check write access and disk space";
+"只支持 MP3、M4A、FLAC、OGG、Opus、WAV 和 AIFF 文件" = "Only MP3, M4A, FLAC, OGG, Opus, WAV and AIFF files are supported";
 "只显示歌词" = "Lyrics only";
 "只显示歌词源自带的读音" = "Shows only romanization supplied by the lyrics source";
 "只有播放次数、时长和新听了几位歌手" = "Just plays, listening time and how many new artists";
 "只给汉字标注平假名" = "Hiragana for kanji only";
-"只能写入正在播放的本地 MP3 或 FLAC 文件" = "Only a local MP3 or FLAC file that’s playing can be written to";
+"只能写入正在播放的本地文件" = "Only a local file that’s playing can be written to";
 "只补没有歌词的歌曲" = "Only Songs Without Lyrics";
 "可以直接粘贴完整地址，会自动识别是哪个平台" = "Paste the full URL and the platform is recognized automatically";
 "可同时开启多项" = "You can turn on more than one";
@@ -1551,7 +1552,7 @@
 "播放控制" = "Controls";
 "播放控制位置" = "Controls Position";
 "播放时显示动画，暂停时静止" = "Animates while music plays and stays still when paused";
-"播放本地 MP3 或 FLAC 时，把确定的歌词写进文件" = "When a local MP3 or FLAC file plays, writes the settled lyrics into it";
+"播放本地歌曲时，把确定的歌词写进文件" = "When a local song plays, writes the settled lyrics into its file";
 "播放本机文件时，先用同名 .lrc 或文件里内嵌的歌词" = "When playing a local file, use its same-name .lrc or embedded lyrics first";
 "播放来源" = "Played In";
 "播放次数" = "Plays";
@@ -2315,7 +2316,6 @@
 "监视文件夹不能是歌词文件夹，也不能包含它或在它里面" = "The watched folder can’t be the lyrics folder, contain it, or be inside it";
 "监视文件夹与歌词文件夹重叠，已暂停自动导入" = "The watched folder overlaps the lyrics folder, so automatic import is paused";
 "监视的文件夹已不存在" = "The watched folder no longer exists";
-"目前只支持 MP3 和 FLAC 文件" = "Only MP3 and FLAC files are supported for now";
 "直连失败时，经下方代理服务器重试" = "If a direct connection fails, retry through the proxy server below";
 "直连失败时，经系统代理或本机检测到的代理重试" = "If a direct connection fails, retry through the system proxy or a proxy detected on this Mac";
 "相邻短句可容纳于一行时合并显示" = "Adjacent short lines are merged when they fit on one line";

@@ -146,7 +146,7 @@ Apple Music, Spotify, Kugou, KKBOX, Amazon Music ve LX Music’in bu Mac’e zat
 
 ### Şarkı sözlerini parça dosyalarına yazma
 
-Yerel bir MP3 veya FLAC dosyası çalarken Şarkı Sözü Yöneticisi’nin ⋯ menüsü parçanın şarkı sözlerini dosyaya yazabilir; böylece diğer çalarlar da bunları gösterebilir. Dosya ancak bir kopyası yazılıp denetlendikten sonra değiştirilir, bu yüzden dosyayı okuyan bir çalar etkilenmez. Apple Music parçalarına şarkı sözleri zaman damgası olmadan yazılır. Deneysel bölümündeki seçenek açıkken şarkı sözleri kesinleşince otomatik olarak yazılır. Diğer uygulamaların yazdığı şarkı sözlerine, üzerine yazmayı da açmadığınız sürece dokunulmaz; bu seçenek önce onları yedekler.
+Yerel bir MP3, M4A, FLAC, OGG, Opus, WAV veya AIFF dosyası çalarken Şarkı Sözü Yöneticisi’nin ⋯ menüsü parçanın şarkı sözlerini dosyaya yazabilir; böylece diğer çalarlar da bunları gösterebilir. Dosya ancak bir kopyası yazılıp denetlendikten sonra değiştirilir, bu yüzden dosyayı okuyan bir çalar etkilenmez. Apple Music parçalarına şarkı sözleri zaman damgası olmadan yazılır. Deneysel bölümündeki seçenek açıkken şarkı sözleri kesinleşince otomatik olarak yazılır. Diğer uygulamaların yazdığı şarkı sözlerine, üzerine yazmayı da açmadığınız sürece dokunulmaz; bu seçenek önce onları yedekler.
 
 - Saptanmış olarak kapalı
 - Ayarlar: Deneysel › Parça Dosyalarına Otomatik Yaz
@@ -1369,7 +1369,7 @@ Ayarlar penceresindeki tüm ayarlar, konumlarına göre; toplam: 325. Bir ayara 
 
 ### Deneysel
 
-- **Parça Dosyalarına Otomatik Yaz**: Yerel bir MP3 veya FLAC dosyası çalınırken kesinleşen şarkı sözlerini dosyaya yazar
+- **Parça Dosyalarına Otomatik Yaz**: Yerel bir şarkı çalınırken kesinleşen şarkı sözlerini dosyaya yazar
 - **Diğer Uygulamaların Yazdığı Sözlerin Üzerine Yaz**: Mevcut şarkı sözleri değiştirilmeden önce yedeklenir
 
 ### Yazılım Güncelleme

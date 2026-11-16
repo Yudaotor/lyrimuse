@@ -1,10 +1,12 @@
 import Foundation
 
 /// 歌词写回(把一首歌的歌词写进它的本地音频文件)在 App 一侧的判据:能不能写、Apple Music 的曲目写什么、引擎的错误码
-/// 对应哪句文案。写入本身在引擎(lyricswriteback.go),见 11 章决策 162、163。
+/// 对应哪句文案。写入本身在引擎(lyricswriteback.go),见 11 章决策 162、163、173。
 public enum LyricsWriteback {
     /// 写回支持的扩展名,跟引擎 lyricsWritebackFormats 一致。
-    public static let supportedExtensions: Set<String> = ["mp3", "flac"]
+    public static let supportedExtensions: Set<String> = [
+        "mp3", "flac", "m4a", "ogg", "oga", "opus", "wav", "wave", "aif", "aiff", "aifc",
+    ]
 
     public static func supports(path: String) -> Bool {
         supportedExtensions.contains((path as NSString).pathExtension.lowercased())
@@ -20,13 +22,13 @@ public enum LyricsWriteback {
     public enum Unavailable: Equatable, Sendable {
         /// 这一首不是正在放的、或者没在放本地文件
         case notPlayingLocalFile
-        /// 不是 MP3 / FLAC
+        /// 不是写回支持的格式(supportedExtensions)
         case unsupportedFormat
         /// 引擎查文件(probe_file_lyrics)报的错误码
         case engine(String)
     }
 
-    /// 歌词管理里这一首的「写入歌曲文件…」能不能点:要是正在放的那首、放的是本地 MP3 / FLAC,引擎查过没报错
+    /// 歌词管理里这一首的「写入歌曲文件…」能不能点:要是正在放的那首、放的是写回支持格式的本地文件,引擎查过没报错
     /// (`probeError` 为 nil = 没查过或查过没问题)。
     public static func unavailable(isNowPlaying: Bool, file: NowPlayingLocalFile?, probeError: String?) -> Unavailable? {
         guard isNowPlaying, let file else { return .notPlayingLocalFile }
@@ -38,8 +40,8 @@ public enum LyricsWriteback {
     /// 灰掉时悬停说明的 L10n 键。
     public static func reasonKey(_ reason: Unavailable) -> String {
         switch reason {
-        case .notPlayingLocalFile: return "只能写入正在播放的本地 MP3 或 FLAC 文件"
-        case .unsupportedFormat: return "目前只支持 MP3 和 FLAC 文件"
+        case .notPlayingLocalFile: return "只能写入正在播放的本地文件"
+        case .unsupportedFormat: return "只支持 MP3、M4A、FLAC、OGG、Opus、WAV 和 AIFF 文件"
         case let .engine(code): return errorKey(code: code)
         }
     }
@@ -47,7 +49,7 @@ public enum LyricsWriteback {
     /// 引擎错误码(lyricswriteback.go 的 wbErr…)→ 文案的 L10n 键;认不出的码交通用的一句。
     public static func errorKey(code: String) -> String {
         switch code {
-        case "unsupported_format": return "目前只支持 MP3 和 FLAC 文件"
+        case "unsupported_format": return "只支持 MP3、M4A、FLAC、OGG、Opus、WAV 和 AIFF 文件"
         case "unsupported_tag": return "这个文件的标签格式暂不支持写入"
         case "not_found": return "找不到这个文件"
         case "not_regular": return "这不是普通的音频文件"

@@ -18,7 +18,7 @@ import (
 // 实验室「自动写入歌曲文件」(features LyricsAutoWriteback,默认关):正在放的本地文件,这首的歌词定下来后(首次解析落定、
 // 采纳候选、手改保存)写进文件。每一拍 poller 记下当前文件之后调 maybeAutoWritebackLyrics,真正读写文件在后台 goroutine
 // 里、同一时刻只跑一份。规则(见 11 章决策 163):
-//   - 只写 MP3 / FLAC,写法、自校验、拒写的位置同单首写入(writeLyricsToFile);
+//   - 格式范围、写法、自校验、拒写的位置同单首写入(lyricsWritebackFormats、writeLyricsToFile);
 //   - 标了纯音乐、没有歌词、首次解析还在跑的不写;Apple Music 的曲目只写歌词文字(writebackWantsPlainText);
 //   - 文件里原本有歌词、又不是 Lyrimuse 上次写进去的(fileLyricsAgainst 判成 fileLyricsForeign):默认不覆盖;打开「覆盖其他软件
 //     写入的歌词」(features LyricsAutoWritebackOverwrite)时先把原歌词备份(backupForeignLyrics),备份成了才写,见 11 章决策 166;

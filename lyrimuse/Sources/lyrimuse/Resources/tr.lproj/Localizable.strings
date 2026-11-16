@@ -739,11 +739,12 @@
 "另有 %@ 条记录过旧，Last.fm 不再接受" = "Ayrıca %@ skroplama, Last.fm’in kabul edemeyeceği kadar eski";
 "另有 %@ 首歌曲无源应答 · 全部自动匹配" = "%@ parça daha kaynaklardan yanıt alamadı · Tümünü Otomatik Eşleştir";
 "另有 %d 个文件未能写入歌词文件夹，请检查写入权限和磁盘空间" = "%d dosya daha şarkı sözü klasörüne yazılamadı. Yazma iznini ve disk alanını denetleyin";
+"只支持 MP3、M4A、FLAC、OGG、Opus、WAV 和 AIFF 文件" = "Yalnızca MP3, M4A, FLAC, OGG, Opus, WAV ve AIFF dosyaları destekleniyor";
 "只显示歌词" = "Yalnızca sözler";
 "只显示歌词源自带的读音" = "Yalnızca şarkı sözü kaynağının sağladığı telaffuzu gösterir";
 "只有播放次数、时长和新听了几位歌手" = "Yalnızca dinleme sayısı, dinleme süresi ve yeni sanatçı sayısı";
 "只给汉字标注平假名" = "Yalnızca kanjiler için hiragana";
-"只能写入正在播放的本地 MP3 或 FLAC 文件" = "Yalnızca çalınan yerel bir MP3 veya FLAC dosyasına yazılabilir";
+"只能写入正在播放的本地文件" = "Yalnızca çalınan yerel bir dosyaya yazılabilir";
 "只补没有歌词的歌曲" = "Yalnızca Sözü Olmayan Parçalar";
 "可以直接粘贴完整地址，会自动识别是哪个平台" = "Tam URL’yi yapıştırabilirsiniz; platform otomatik olarak tanınır";
 "可同时开启多项" = "Birden fazlasını açabilirsiniz";
@@ -1476,7 +1477,7 @@
 "播放控制" = "Denetimler";
 "播放控制位置" = "Denetimlerin Konumu";
 "播放时显示动画，暂停时静止" = "Müzik çalarken hareket eder, duraklatıldığında durağan kalır";
-"播放本地 MP3 或 FLAC 时，把确定的歌词写进文件" = "Yerel bir MP3 veya FLAC dosyası çalınırken kesinleşen şarkı sözlerini dosyaya yazar";
+"播放本地歌曲时，把确定的歌词写进文件" = "Yerel bir şarkı çalınırken kesinleşen şarkı sözlerini dosyaya yazar";
 "播放本机文件时，先用同名 .lrc 或文件里内嵌的歌词" = "Yerel bir dosya çalınırken önce aynı adlı .lrc dosyası veya dosyaya gömülü şarkı sözleri kullanılır";
 "播放来源" = "Çalındığı Yer";
 "播放次数" = "Dinleme sayısı";
@@ -2232,7 +2233,6 @@
 "监视文件夹不能是歌词文件夹，也不能包含它或在它里面" = "İzlenen klasör, şarkı sözü klasörünün kendisi olamaz, onu içeremez veya onun içinde olamaz";
 "监视文件夹与歌词文件夹重叠，已暂停自动导入" = "İzlenen klasör şarkı sözü klasörüyle çakışıyor, otomatik içe aktarma duraklatıldı";
 "监视的文件夹已不存在" = "İzlenen klasör artık yok";
-"目前只支持 MP3 和 FLAC 文件" = "Şimdilik yalnızca MP3 ve FLAC dosyaları destekleniyor";
 "直连失败时，经下方代理服务器重试" = "Doğrudan bağlantı başarısız olursa aşağıdaki vekil sunucu üzerinden yeniden dener";
 "直连失败时，经系统代理或本机检测到的代理重试" = "Doğrudan bağlantı başarısız olursa sistem vekil sunucusu veya bu Mac’te algılanan bir vekil sunucu üzerinden yeniden dener";
 "相邻短句可容纳于一行时合并显示" = "Bitişik kısa satırlar tek satıra sığıyorsa birleştirilir";

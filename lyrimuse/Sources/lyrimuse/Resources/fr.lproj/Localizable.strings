@@ -792,11 +792,12 @@
 "另有 %@ 首歌曲无源应答 · 全部自动匹配" = "%@ autres morceaux sans réponse des sources · Tout associer";
 "另有 %@ 首歌曲无源应答 · 全部自动匹配#one" = "%@ autre morceau sans réponse des sources · Tout associer";
 "另有 %d 个文件未能写入歌词文件夹，请检查写入权限和磁盘空间" = "Autres fichiers non écrits dans le dossier des paroles : %d. Vérifiez l’accès en écriture et l’espace disque";
+"只支持 MP3、M4A、FLAC、OGG、Opus、WAV 和 AIFF 文件" = "Seuls les fichiers MP3, M4A, FLAC, OGG, Opus, WAV et AIFF sont pris en charge";
 "只显示歌词" = "Paroles seules";
 "只显示歌词源自带的读音" = "N’affiche que la romanisation fournie par la source de paroles";
 "只有播放次数、时长和新听了几位歌手" = "Seulement les écoutes, le temps d’écoute et le nombre de nouveaux artistes";
 "只给汉字标注平假名" = "Hiragana sur les kanji seulement";
-"只能写入正在播放的本地 MP3 或 FLAC 文件" = "Seul un fichier MP3 ou FLAC local en cours de lecture peut être modifié";
+"只能写入正在播放的本地文件" = "Seul un fichier local en cours de lecture peut être modifié";
 "只补没有歌词的歌曲" = "Seulement les morceaux sans paroles";
 "可以直接粘贴完整地址，会自动识别是哪个平台" = "Collez l’URL complète, la plateforme est reconnue automatiquement";
 "可同时开启多项" = "Vous pouvez en activer plusieurs";
@@ -1551,7 +1552,7 @@
 "播放控制" = "Commandes";
 "播放控制位置" = "Position des commandes";
 "播放时显示动画，暂停时静止" = "S’anime pendant la lecture et reste immobile en pause";
-"播放本地 MP3 或 FLAC 时，把确定的歌词写进文件" = "Pendant la lecture d’un MP3 ou FLAC local, écrit les paroles retenues dans le fichier";
+"播放本地歌曲时，把确定的歌词写进文件" = "Pendant la lecture d’un morceau local, écrit les paroles retenues dans le fichier";
 "播放本机文件时，先用同名 .lrc 或文件里内嵌的歌词" = "Pour un fichier local, utiliser d’abord le .lrc du même nom ou les paroles intégrées";
 "播放来源" = "Lu dans";
 "播放次数" = "Écoutes";
@@ -2315,7 +2316,6 @@
 "监视文件夹不能是歌词文件夹，也不能包含它或在它里面" = "Le dossier surveillé ne peut pas être le dossier des paroles, le contenir ni s’y trouver";
 "监视文件夹与歌词文件夹重叠，已暂停自动导入" = "Le dossier surveillé chevauche le dossier des paroles : l’importation automatique est en pause";
 "监视的文件夹已不存在" = "Le dossier surveillé n’existe plus";
-"目前只支持 MP3 和 FLAC 文件" = "Seuls les fichiers MP3 et FLAC sont pris en charge pour l’instant";
 "直连失败时，经下方代理服务器重试" = "Si la connexion directe échoue, réessayer via le serveur proxy ci-dessous";
 "直连失败时，经系统代理或本机检测到的代理重试" = "Si la connexion directe échoue, réessayer via le proxy du système ou un proxy détecté sur ce Mac";
 "相邻短句可容纳于一行时合并显示" = "Les lignes courtes voisines sont fusionnées si elles tiennent sur une ligne";

@@ -81,7 +81,7 @@ struct LabsPage: View {
                     SettingsRow(
                         icon: "square.and.arrow.down.on.square",
                         title: L10n.t("自动写入歌曲文件"),
-                        subtitle: L10n.t("播放本地 MP3 或 FLAC 时，把确定的歌词写进文件")
+                        subtitle: L10n.t("播放本地歌曲时，把确定的歌词写进文件")
                     ) {
                         Toggle("", isOn: Binding(
                             get: { features.lyricsAutoWriteback },

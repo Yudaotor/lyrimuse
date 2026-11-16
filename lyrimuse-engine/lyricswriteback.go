@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"crypto/rand"
+	"encoding/binary"
 	"encoding/hex"
 	"errors"
 	"fmt"
@@ -17,12 +18,14 @@ import (
 	"syscall"
 )
 
-// 歌词写回:把歌词管理里一首歌的歌词写进它的本地音频文件(MP3 的 ID3v2 USLT、FLAC 的 VORBIS_COMMENT LYRICS)。
-// 只在用户点按钮时由编辑通道(write_file_lyrics)触发,引擎是唯一写音频文件的一方。见 11 章决策 162。
+// 歌词写回:把歌词管理里一首歌的歌词写进它的本地音频文件(MP3 / WAV / AIFF 的 ID3v2 USLT、FLAC / OGG / Opus 的 Vorbis
+// 注释 LYRICS、M4A 的 ©lyr)。单首写入由编辑通道(write_file_lyrics)触发,自动写回见 lyricsautowriteback.go。
+// 见 11 章决策 162、173。
 //
 // 写法一律是「同目录克隆 → 改克隆 → 自校验 → rename 换掉原文件」,不就地写:正在放这个文件的播放器手上是旧 inode,
 // 不受影响;中途失败只删克隆,原文件一个字节不动。自校验三项,任一不过就放弃替换:
-//   - 克隆里标签区之后的字节(音频帧、文件尾的 ID3v1 / APE 等)跟原文件逐字节相同;
+//   - 克隆里标签区以外的字节(音频帧、文件尾的 ID3v1 / APE 等)跟原文件逐字节相同;标签区前面的容器长度字段
+//     (RIFF / FORM)恰好差标签区变长的那么多;OGG 页数变了时后面每页只有页序号和校验和不同(各格式的 tailCheck);
 //   - 用引擎自己的读法(readLocalFileTags)回读克隆,歌词跟要写的一字不差;
 //   - 克隆的标签区里歌词以外的帧 / 元数据块跟原文件逐字节相同、顺序不变。
 
@@ -43,8 +46,8 @@ func (e *lyricsWritebackErr) Unwrap() error { return e.err }
 
 // 错误码。App 侧按这些字面量分文案,改名要两边同步。
 const (
-	wbErrUnsupportedFormat = "unsupported_format" // 不是 MP3 / FLAC
-	wbErrUnsupportedTag    = "unsupported_tag"    // 标签版本或布局不在写入范围(ID3v2.2、v2.4 整体反同步、帧表损坏、FLAC 前面套 ID3)
+	wbErrUnsupportedFormat = "unsupported_format" // 扩展名不在 lyricsWritebackFormats 里
+	wbErrUnsupportedTag    = "unsupported_tag"    // 标签版本或布局不在写入范围(v2.4 整体反同步、帧表损坏、FLAC 前面套 ID3、分片 MP4…)
 	wbErrNotFound          = "not_found"          // 文件不存在
 	wbErrNotRegular        = "not_regular"        // 不是普通文件
 	wbErrHardLinked        = "hard_linked"        // 有多个硬链接:换文件会把它们拆开
@@ -78,21 +81,60 @@ func lyricsWritebackCode(err error) string {
 	return wbErrIO
 }
 
-// lyricsTagLayout:一个文件开头的标签区(MP3 的 ID3v2、FLAC 的 fLaC + 元数据块)和它后面的音频区。
+// lyricsTagLayout:文件里要整段换掉的标签区 [regionStart, audioStart)(MP3 开头的 ID3v2、FLAC 的 fLaC + 元数据块、
+// OGG 的头几页、M4A 的 moov、WAV / AIFF 的 ID3 块)。标签区以外的字节原样,除了 sizeField 和 tailCheck 说的那两种。
 type lyricsTagLayout struct {
-	head       []byte // 原文件 [0, audioStart)
-	audioStart int64
-	hasLyrics  bool
-	// build 拼出写进 text 之后的新标签区。原标签区放得下时长度跟 head 相同(用掉 / 让出 padding),音频区不挪。
+	head        []byte // 原文件 [regionStart, audioStart)
+	regionStart int64
+	audioStart  int64
+	hasLyrics   bool
+	// build 拼出写进 text 之后的新标签区。原标签区放得下时长度跟 head 相同(用掉 / 让出 padding),后面的字节不挪。
 	build func(text string) ([]byte, error)
 	// preserved 核对新标签区里歌词以外的部分跟原来逐字节相同。
 	preserved func(newHead []byte) error
+	// sizeField:标签区前面随标签区变长的容器长度字段(WAV 的 RIFF、AIFF 的 FORM),nil 为没有。
+	sizeField *lyricsSizeField
+	// copyTail 把原文件标签区之后的字节接进克隆;nil 为原样复制。OGG 头几页的页数变了时要重编后面各页的页序号。
+	copyTail func(dst io.Writer, src io.Reader, newHead []byte) (int64, error)
+	// tailCheck 是替换前对标签区之后那段的核对;nil 为逐字节相同(sameAudioRegion)。
+	tailCheck func(orig, clone string, origStart, cloneStart int64, newHead []byte) error
 }
 
-// lyricsWritebackFormats:写回支持的扩展名(小写,不带点) → 读标签区的函数。
+// lyricsSizeField:文件里一个 32 位长度字段,标签区变长多少它就跟着变多少。
+type lyricsSizeField struct {
+	offset    int64
+	bigEndian bool
+	value     uint32
+}
+
+// encode 交回标签区从 oldLen 变成 newLen 之后这个字段的 4 个字节;超出 32 位为 false。
+func (f *lyricsSizeField) encode(oldLen, newLen int) ([]byte, bool) {
+	v := int64(f.value) + int64(newLen) - int64(oldLen)
+	if v < 0 || v > 0xFFFFFFFF {
+		return nil, false
+	}
+	b := make([]byte, 4)
+	if f.bigEndian {
+		binary.BigEndian.PutUint32(b, uint32(v))
+	} else {
+		binary.LittleEndian.PutUint32(b, uint32(v))
+	}
+	return b, true
+}
+
+// lyricsWritebackFormats:写回支持的扩展名(小写,不带点) → 读标签区的函数。App 侧 LyricsWriteback.supportedExtensions 跟它对拍。
 var lyricsWritebackFormats = map[string]func(io.ReadSeeker, int64) (lyricsTagLayout, error){
 	"mp3":  id3WritebackLayout,
 	"flac": flacWritebackLayout,
+	"m4a":  mp4WritebackLayout,
+	"ogg":  oggWritebackLayout,
+	"oga":  oggWritebackLayout,
+	"opus": oggWritebackLayout,
+	"wav":  wavWritebackLayout,
+	"wave": wavWritebackLayout,
+	"aif":  aiffWritebackLayout,
+	"aiff": aiffWritebackLayout,
+	"aifc": aiffWritebackLayout,
 }
 
 func lyricsWritebackExt(path string) string {
@@ -159,6 +201,11 @@ func writeLyricsToFile(path, text string, overwrite bool) (string, error) {
 	}
 	if err := layout.preserved(newHead); err != nil {
 		return "", err
+	}
+	if layout.sizeField != nil {
+		if _, ok := layout.sizeField.encode(len(layout.head), len(newHead)); !ok {
+			return "", wbErrf(wbErrUnsupportedTag, "container size would overflow")
+		}
 	}
 	clone, err := cloneForWriteback(real)
 	if err != nil {
@@ -337,18 +384,27 @@ func cloneForWriteback(real string) (string, error) {
 	return clone, nil
 }
 
-// writeWritebackClone 把新标签区写进克隆:长度不变时只覆盖开头那一段;变了就从原文件把音频区接在后面、截掉多余的尾巴。
-// 最后 fsync。
+// writeWritebackClone 把新标签区写进克隆:长度不变时只覆盖那一段;变了(或 copyTail 要改写后面的字节)就从原文件把
+// 标签区之后的部分接在后面、截掉多余的尾巴。容器长度字段跟着改。最后 fsync。
 func writeWritebackClone(clone, real string, newHead []byte, layout lyricsTagLayout) error {
 	f, err := os.OpenFile(clone, os.O_WRONLY, 0)
 	if err != nil {
 		return wbErr(wbErrIO, err)
 	}
 	defer f.Close()
-	if _, err := f.WriteAt(newHead, 0); err != nil {
+	if _, err := f.WriteAt(newHead, layout.regionStart); err != nil {
 		return wbErr(wbErrIO, err)
 	}
-	if len(newHead) != len(layout.head) {
+	if layout.sizeField != nil {
+		b, ok := layout.sizeField.encode(len(layout.head), len(newHead))
+		if !ok {
+			return wbErrf(wbErrUnsupportedTag, "container size would overflow")
+		}
+		if _, err := f.WriteAt(b, layout.sizeField.offset); err != nil {
+			return wbErr(wbErrIO, err)
+		}
+	}
+	if len(newHead) != len(layout.head) || layout.copyTail != nil {
 		src, err := os.Open(real)
 		if err != nil {
 			return wbErr(wbErrIO, err)
@@ -357,14 +413,23 @@ func writeWritebackClone(clone, real string, newHead []byte, layout lyricsTagLay
 		if _, err := src.Seek(layout.audioStart, io.SeekStart); err != nil {
 			return wbErr(wbErrIO, err)
 		}
-		if _, err := f.Seek(int64(len(newHead)), io.SeekStart); err != nil {
+		tailStart := layout.regionStart + int64(len(newHead))
+		if _, err := f.Seek(tailStart, io.SeekStart); err != nil {
 			return wbErr(wbErrIO, err)
 		}
-		n, err := io.Copy(f, src)
+		var n int64
+		if layout.copyTail != nil {
+			n, err = layout.copyTail(f, src, newHead)
+		} else {
+			n, err = io.Copy(f, src)
+		}
 		if err != nil {
+			if _, ok := err.(*lyricsWritebackErr); ok {
+				return err
+			}
 			return wbErr(wbErrIO, err)
 		}
-		if err := f.Truncate(int64(len(newHead)) + n); err != nil {
+		if err := f.Truncate(tailStart + n); err != nil {
 			return wbErr(wbErrIO, err)
 		}
 	}
@@ -380,15 +445,74 @@ func verifyWritebackClone(clone, real, text string, orig lyricsTagLayout) error 
 	if err != nil {
 		return wbErr(wbErrReadbackMismatch, err)
 	}
+	if got.regionStart != orig.regionStart {
+		return wbErrf(wbErrTagsNotPreserved, "tag region moved from %d to %d", orig.regionStart, got.regionStart)
+	}
 	if err := orig.preserved(got.head); err != nil {
 		return err
 	}
-	if err := sameAudioRegion(real, orig.audioStart, clone, got.audioStart); err != nil {
+	if err := samePrefix(real, clone, orig, len(got.head)); err != nil {
+		return err
+	}
+	if orig.tailCheck != nil {
+		err = orig.tailCheck(real, clone, orig.audioStart, got.audioStart, got.head)
+	} else {
+		err = sameAudioRegion(real, orig.audioStart, clone, got.audioStart)
+	}
+	if err != nil {
 		return err
 	}
 	tags := readLocalFileTags(clone)
 	if !tags.hasLyrics || tags.lyrics != text {
 		return wbErrf(wbErrReadbackMismatch, "read back %d bytes, wrote %d", len(tags.lyrics), len(text))
+	}
+	return nil
+}
+
+// samePrefix:克隆标签区前面的字节跟原文件相同;容器长度字段那 4 个字节恰好是标签区变成 newLen 之后该有的值。
+func samePrefix(real, clone string, orig lyricsTagLayout, newLen int) error {
+	if orig.regionStart == 0 {
+		return nil
+	}
+	fa, err := os.Open(real)
+	if err != nil {
+		return wbErr(wbErrIO, err)
+	}
+	defer fa.Close()
+	fb, err := os.Open(clone)
+	if err != nil {
+		return wbErr(wbErrIO, err)
+	}
+	defer fb.Close()
+	skip := int64(-1)
+	var want []byte
+	if orig.sizeField != nil {
+		var ok bool
+		if want, ok = orig.sizeField.encode(len(orig.head), newLen); !ok {
+			return wbErrf(wbErrTagsNotPreserved, "container size overflow")
+		}
+		skip = orig.sizeField.offset
+		got := make([]byte, 4)
+		if _, err := fb.ReadAt(got, skip); err != nil || !bytes.Equal(got, want) {
+			return wbErrf(wbErrTagsNotPreserved, "container size field is %x, want %x", got, want)
+		}
+	}
+	bufA, bufB := make([]byte, 1<<20), make([]byte, 1<<20)
+	for off := int64(0); off < orig.regionStart; {
+		n := min(int64(len(bufA)), orig.regionStart-off)
+		if _, err := fa.ReadAt(bufA[:n], off); err != nil {
+			return wbErr(wbErrIO, err)
+		}
+		if _, err := fb.ReadAt(bufB[:n], off); err != nil {
+			return wbErr(wbErrAudioMismatch, err)
+		}
+		if skip >= off && skip+4 <= off+n {
+			copy(bufB[skip-off:skip-off+4], bufA[skip-off:skip-off+4])
+		}
+		if !bytes.Equal(bufA[:n], bufB[:n]) {
+			return wbErrf(wbErrAudioMismatch, "bytes before the tag region changed")
+		}
+		off += n
 	}
 	return nil
 }

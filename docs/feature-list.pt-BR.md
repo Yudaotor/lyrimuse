@@ -146,7 +146,7 @@ Quando a música que está tocando é um arquivo neste Mac, o .lrc com o mesmo n
 
 ### Gravar a letra nos arquivos das músicas
 
-Enquanto um MP3 ou FLAC local toca, o menu ⋯ do Gerenciador de letras pode gravar a letra da música no arquivo, para que outros players também a mostrem. O arquivo só é substituído depois que uma cópia é gravada e verificada, sem atrapalhar o player que o está lendo. Em faixas do Apple Music, só o texto é gravado, sem marcações de tempo. Com a opção do Laboratório ativada, a letra é gravada automaticamente assim que é definida. A que outros apps gravaram fica como está, a menos que você também ative a sobrescrita, que faz uma cópia antes.
+Enquanto um arquivo local MP3, M4A, FLAC, OGG, Opus, WAV ou AIFF toca, o menu ⋯ do Gerenciador de letras pode gravar a letra da música no arquivo, para que outros players também a mostrem. O arquivo só é substituído depois que uma cópia é gravada e verificada, sem atrapalhar o player que o está lendo. Em faixas do Apple Music, só o texto é gravado, sem marcações de tempo. Com a opção do Laboratório ativada, a letra é gravada automaticamente assim que é definida. A que outros apps gravaram fica como está, a menos que você também ative a sobrescrita, que faz uma cópia antes.
 
 - Desativado por padrão
 - Ajustes: Labs › Gravar automaticamente nos arquivos das músicas
@@ -1369,7 +1369,7 @@ Todos os ajustes da janela Ajustes, por local: 325 no total. Digite um nome no c
 
 ### Labs
 
-- **Gravar automaticamente nos arquivos das músicas**: Ao tocar um MP3 ou FLAC local, grava a letra escolhida no arquivo
+- **Gravar automaticamente nos arquivos das músicas**: Ao tocar uma música local, grava a letra escolhida no arquivo
 - **Sobrescrever a letra gravada por outros apps**: A letra existente é copiada antes de ser substituída
 
 ### Atualização de software

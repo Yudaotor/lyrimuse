@@ -146,7 +146,7 @@ When the song playing is a file on this Mac, its same-name .lrc or embedded lyri
 
 ### Write lyrics into song files
 
-While a local MP3 or FLAC file is playing, Lyrics Manager’s ⋯ menu can write the song's lyrics into the file, so other players can show them too. The file is replaced only after a copy has been written and checked, so a player reading it isn’t disturbed. Apple Music tracks get the lyric text without timestamps. With the Labs option on, the lyrics are written automatically once they’re settled. Lyrics written by other apps are left alone unless you also turn on overwriting, which backs them up first.
+While a local MP3, M4A, FLAC, OGG, Opus, WAV or AIFF file is playing, Lyrics Manager’s ⋯ menu can write the song's lyrics into the file, so other players can show them too. The file is replaced only after a copy has been written and checked, so a player reading it isn’t disturbed. Apple Music tracks get the lyric text without timestamps. With the Labs option on, the lyrics are written automatically once they’re settled. Lyrics written by other apps are left alone unless you also turn on overwriting, which backs them up first.
 
 - Off by default
 - Settings: Labs › Write to Song Files Automatically
@@ -1369,7 +1369,7 @@ Every setting in the Settings window, by where it lives: 325 in all. Type a name
 
 ### Labs
 
-- **Write to Song Files Automatically**: When a local MP3 or FLAC file plays, writes the settled lyrics into it
+- **Write to Song Files Automatically**: When a local song plays, writes the settled lyrics into its file
 - **Overwrite Lyrics Written by Other Apps**: The existing lyrics are backed up before being replaced
 
 ### Software Update

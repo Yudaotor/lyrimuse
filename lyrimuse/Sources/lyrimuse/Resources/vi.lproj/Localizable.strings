@@ -739,11 +739,12 @@
 "另有 %@ 条记录过旧，Last.fm 不再接受" = "Còn %@ mục khác quá cũ, Last.fm không nhận nữa";
 "另有 %@ 首歌曲无源应答 · 全部自动匹配" = "%@ bài khác không có nguồn phản hồi · Tự động tìm tất cả";
 "另有 %d 个文件未能写入歌词文件夹，请检查写入权限和磁盘空间" = "Còn %d tệp không ghi được vào thư mục lời bài hát. Hãy kiểm tra quyền ghi và dung lượng ổ đĩa";
+"只支持 MP3、M4A、FLAC、OGG、Opus、WAV 和 AIFF 文件" = "Chỉ hỗ trợ tệp MP3, M4A, FLAC, OGG, Opus, WAV và AIFF";
 "只显示歌词" = "Chỉ lời";
 "只显示歌词源自带的读音" = "Chỉ hiện phát âm do nguồn lời cung cấp";
 "只有播放次数、时长和新听了几位歌手" = "Chỉ lượt phát, thời lượng nghe và số nghệ sĩ mới";
 "只给汉字标注平假名" = "Chỉ thêm hiragana cho chữ Hán";
-"只能写入正在播放的本地 MP3 或 FLAC 文件" = "Chỉ ghi được vào tệp MP3 hoặc FLAC cục bộ đang phát";
+"只能写入正在播放的本地文件" = "Chỉ ghi được vào tệp cục bộ đang phát";
 "只补没有歌词的歌曲" = "Chỉ bài chưa có lời";
 "可以直接粘贴完整地址，会自动识别是哪个平台" = "Có thể dán nguyên địa chỉ, nền tảng sẽ được tự động nhận diện";
 "可同时开启多项" = "Có thể bật nhiều mục cùng lúc";
@@ -1476,7 +1477,7 @@
 "播放控制" = "Điều khiển phát";
 "播放控制位置" = "Vị trí nút điều khiển";
 "播放时显示动画，暂停时静止" = "Chuyển động khi đang phát nhạc, đứng yên khi tạm dừng";
-"播放本地 MP3 或 FLAC 时，把确定的歌词写进文件" = "Khi phát tệp MP3 hoặc FLAC cục bộ, ghi lời đã chọn vào tệp";
+"播放本地歌曲时，把确定的歌词写进文件" = "Khi phát bài hát cục bộ, ghi lời đã chọn vào tệp";
 "播放本机文件时，先用同名 .lrc 或文件里内嵌的歌词" = "Khi phát tệp trên máy, dùng trước tệp .lrc cùng tên hoặc lời nhúng trong tệp";
 "播放来源" = "Phát trên";
 "播放次数" = "Lượt phát";
@@ -2232,7 +2233,6 @@
 "监视文件夹不能是歌词文件夹，也不能包含它或在它里面" = "Thư mục theo dõi không được là thư mục lời, chứa nó hoặc nằm trong nó";
 "监视文件夹与歌词文件夹重叠，已暂停自动导入" = "Thư mục theo dõi trùng với thư mục lời, đã tạm dừng tự động nhập";
 "监视的文件夹已不存在" = "Thư mục theo dõi không còn tồn tại";
-"目前只支持 MP3 和 FLAC 文件" = "Hiện chỉ hỗ trợ tệp MP3 và FLAC";
 "直连失败时，经下方代理服务器重试" = "Khi kết nối trực tiếp thất bại, thử lại qua máy chủ proxy bên dưới";
 "直连失败时，经系统代理或本机检测到的代理重试" = "Khi kết nối trực tiếp thất bại, thử lại qua proxy hệ thống hoặc proxy phát hiện trên máy Mac này";
 "相邻短句可容纳于一行时合并显示" = "Gộp các dòng ngắn liền kề khi vừa một dòng";

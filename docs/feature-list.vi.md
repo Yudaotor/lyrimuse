@@ -146,7 +146,7 @@ Khi bài đang phát là một tệp trên máy Mac này, Lyrimuse dùng trướ
 
 ### Ghi lời vào tệp bài hát
 
-Khi đang phát tệp MP3 hoặc FLAC cục bộ, menu ⋯ của Quản lý lời có thể ghi lời bài hát vào tệp để trình phát khác cũng hiển thị được. Tệp chỉ được thay sau khi đã ghi và kiểm tra một bản sao, nên trình phát đang đọc tệp không bị ảnh hưởng. Với bài trong Apple Music, chỉ ghi phần chữ, không kèm mốc thời gian. Khi bật tùy chọn trong Phòng thí nghiệm, lời được tự động ghi khi đã chốt. Lời do ứng dụng khác ghi được giữ nguyên, trừ khi bật thêm ghi đè, khi đó lời cũ được sao lưu trước.
+Khi đang phát tệp MP3, M4A, FLAC, OGG, Opus, WAV hoặc AIFF cục bộ, menu ⋯ của Quản lý lời có thể ghi lời bài hát vào tệp để trình phát khác cũng hiển thị được. Tệp chỉ được thay sau khi đã ghi và kiểm tra một bản sao, nên trình phát đang đọc tệp không bị ảnh hưởng. Với bài trong Apple Music, chỉ ghi phần chữ, không kèm mốc thời gian. Khi bật tùy chọn trong Phòng thí nghiệm, lời được tự động ghi khi đã chốt. Lời do ứng dụng khác ghi được giữ nguyên, trừ khi bật thêm ghi đè, khi đó lời cũ được sao lưu trước.
 
 - Tắt theo mặc định
 - Cài đặt: Thử nghiệm › Tự động ghi vào tệp bài hát
@@ -1369,7 +1369,7 @@ Toàn bộ mục trong cửa sổ Cài đặt, theo vị trí: tổng cộng 325
 
 ### Thử nghiệm
 
-- **Tự động ghi vào tệp bài hát**: Khi phát tệp MP3 hoặc FLAC cục bộ, ghi lời đã chọn vào tệp
+- **Tự động ghi vào tệp bài hát**: Khi phát bài hát cục bộ, ghi lời đã chọn vào tệp
 - **Ghi đè lời do ứng dụng khác ghi**: Sao lưu lời hiện có trước khi thay
 
 ### Cập nhật phần mềm

@@ -146,7 +146,7 @@ Quando il brano in riproduzione è un file su questo Mac, il suo .lrc con lo ste
 
 ### Scrivere il testo nei file dei brani
 
-Durante la riproduzione di un MP3 o FLAC locale, il menu ⋯ della Gestione testi può scrivere il testo del brano nel file, così anche altri player lo mostrano. Il file viene sostituito solo dopo aver scritto e verificato una copia, senza disturbare il player che lo sta leggendo. Per i brani di Apple Music viene scritto solo il testo, senza tempi. Con l’opzione del Laboratorio attiva, il testo viene scritto automaticamente appena è definito. Quello scritto da altre app resta com’è, a meno che non attivi anche la sovrascrittura, che prima ne salva una copia.
+Durante la riproduzione di un file locale MP3, M4A, FLAC, OGG, Opus, WAV o AIFF, il menu ⋯ della Gestione testi può scrivere il testo del brano nel file, così anche altri player lo mostrano. Il file viene sostituito solo dopo aver scritto e verificato una copia, senza disturbare il player che lo sta leggendo. Per i brani di Apple Music viene scritto solo il testo, senza tempi. Con l’opzione del Laboratorio attiva, il testo viene scritto automaticamente appena è definito. Quello scritto da altre app resta com’è, a meno che non attivi anche la sovrascrittura, che prima ne salva una copia.
 
 - Disattivata di default
 - Impostazioni: Lab › Scrivi automaticamente nei file dei brani
@@ -1369,7 +1369,7 @@ Tutte le impostazioni della finestra Impostazioni, per posizione: 325 in tutto. 
 
 ### Lab
 
-- **Scrivi automaticamente nei file dei brani**: Durante la riproduzione di un MP3 o FLAC locale, scrive nel file il testo scelto
+- **Scrivi automaticamente nei file dei brani**: Durante la riproduzione di un brano locale, scrive nel file il testo scelto
 - **Sovrascrivi il testo scritto da altre app**: Il testo esistente viene salvato prima di essere sostituito
 
 ### Aggiornamento software

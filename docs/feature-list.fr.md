@@ -146,7 +146,7 @@ Quand le morceau lu est un fichier sur ce Mac, son .lrc du même nom ou ses paro
 
 ### Écrire les paroles dans les fichiers des morceaux
 
-Pendant la lecture d’un MP3 ou FLAC local, le menu ⋯ du Gestionnaire de paroles peut écrire les paroles du morceau dans le fichier, pour que d’autres lecteurs les affichent aussi. Le fichier n’est remplacé qu’une fois une copie écrite et vérifiée, sans gêner le lecteur qui le lit. Pour les morceaux Apple Music, seul le texte est écrit, sans horodatage. Avec l’option du Labo activée, les paroles sont écrites automatiquement dès qu’elles sont fixées. Celles écrites par d’autres apps ne sont pas touchées, sauf si vous activez aussi l’écrasement, qui les sauvegarde d’abord.
+Pendant la lecture d’un fichier local MP3, M4A, FLAC, OGG, Opus, WAV ou AIFF, le menu ⋯ du Gestionnaire de paroles peut écrire les paroles du morceau dans le fichier, pour que d’autres lecteurs les affichent aussi. Le fichier n’est remplacé qu’une fois une copie écrite et vérifiée, sans gêner le lecteur qui le lit. Pour les morceaux Apple Music, seul le texte est écrit, sans horodatage. Avec l’option du Labo activée, les paroles sont écrites automatiquement dès qu’elles sont fixées. Celles écrites par d’autres apps ne sont pas touchées, sauf si vous activez aussi l’écrasement, qui les sauvegarde d’abord.
 
 - Désactivée par défaut
 - Réglages : Labo › Écrire automatiquement dans les fichiers des morceaux
@@ -1369,7 +1369,7 @@ Tous les réglages de la fenêtre Réglages, classés par emplacement : 325 au 
 
 ### Labo
 
-- **Écrire automatiquement dans les fichiers des morceaux** : Pendant la lecture d’un MP3 ou FLAC local, écrit les paroles retenues dans le fichier
+- **Écrire automatiquement dans les fichiers des morceaux** : Pendant la lecture d’un morceau local, écrit les paroles retenues dans le fichier
 - **Écraser les paroles écrites par d’autres apps** : Les paroles existantes sont sauvegardées avant d’être remplacées
 
 ### Mise à jour du logiciel

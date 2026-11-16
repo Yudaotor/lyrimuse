@@ -3599,7 +3599,7 @@ struct LyricsManagerView: View {
                 LyricsExternalEditor.shared.open(artist: summary.artist, title: summary.shownTitle, album: summary.album, key: summary.key)
             }
             Button(L10n.t("在访达中显示歌词文件")) { revealLyricsFile(summary.key) }
-            // 只有正在放的本地 MP3 / FLAC 能写,别的灰掉、悬停说原因(LyricsWriteback.unavailable)。
+            // 只有正在放的、写回支持格式的本地文件能写,别的灰掉、悬停说原因(LyricsWriteback.unavailable)。
             let writebackReason = writeback.unavailable(isNowPlaying: summary.key == nowPlayingKey, file: nowPlayingLocalFile.current)
             Button(L10n.t("写入歌曲文件…")) { beginWriteback(summary) }
                 .disabled(writebackReason != nil || writeback.busy || editMode != .preview)

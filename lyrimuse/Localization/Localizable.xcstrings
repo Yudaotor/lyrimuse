@@ -282545,192 +282545,192 @@
         }
       }
     },
-    "只能写入正在播放的本地 MP3 或 FLAC 文件" : {
+    "只能写入正在播放的本地文件" : {
       "extractionState" : "manual",
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Nur in eine gerade wiedergegebene lokale MP3- oder FLAC-Datei kann geschrieben werden"
+            "value" : "Nur in eine gerade wiedergegebene lokale Datei kann geschrieben werden"
           }
         },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Only a local MP3 or FLAC file that’s playing can be written to"
+            "value" : "Only a local file that’s playing can be written to"
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Solo se puede escribir en un archivo MP3 o FLAC local que se esté reproduciendo"
+            "value" : "Solo se puede escribir en un archivo local que se esté reproduciendo"
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Seul un fichier MP3 ou FLAC local en cours de lecture peut être modifié"
+            "value" : "Seul un fichier local en cours de lecture peut être modifié"
           }
         },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Si può scrivere solo in un file MP3 o FLAC locale in riproduzione"
+            "value" : "Si può scrivere solo in un file locale in riproduzione"
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "書き込めるのは再生中のローカル MP3 または FLAC ファイルのみです"
+            "value" : "書き込めるのは再生中のローカルファイルのみです"
           }
         },
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "재생 중인 로컬 MP3 또는 FLAC 파일에만 쓸 수 있습니다"
+            "value" : "재생 중인 로컬 파일에만 쓸 수 있습니다"
           }
         },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Só é possível gravar em um arquivo MP3 ou FLAC local que esteja tocando"
+            "value" : "Só é possível gravar em um arquivo local que esteja tocando"
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Записать можно только в воспроизводимый локальный файл MP3 или FLAC"
+            "value" : "Записать можно только в воспроизводимый локальный файл"
           }
         },
         "th" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "เขียนได้เฉพาะไฟล์ MP3 หรือ FLAC ในเครื่องที่กำลังเล่นอยู่"
+            "value" : "เขียนได้เฉพาะไฟล์ในเครื่องที่กำลังเล่นอยู่"
           }
         },
         "tr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Yalnızca çalınan yerel bir MP3 veya FLAC dosyasına yazılabilir"
+            "value" : "Yalnızca çalınan yerel bir dosyaya yazılabilir"
           }
         },
         "uk" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Записати можна лише у локальний файл MP3 або FLAC, що відтворюється"
+            "value" : "Записати можна лише у локальний файл, що відтворюється"
           }
         },
         "vi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Chỉ ghi được vào tệp MP3 hoặc FLAC cục bộ đang phát"
+            "value" : "Chỉ ghi được vào tệp cục bộ đang phát"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "只能写入正在播放的本地 MP3 或 FLAC 文件"
+            "value" : "只能写入正在播放的本地文件"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "只能寫入正在播放的本機 MP3 或 FLAC 檔案"
+            "value" : "只能寫入正在播放的本機檔案"
           }
         }
       }
     },
-    "目前只支持 MP3 和 FLAC 文件" : {
+    "只支持 MP3、M4A、FLAC、OGG、Opus、WAV 和 AIFF 文件" : {
       "extractionState" : "manual",
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Derzeit werden nur MP3- und FLAC-Dateien unterstützt"
+            "value" : "Nur MP3-, M4A-, FLAC-, OGG-, Opus-, WAV- und AIFF-Dateien werden unterstützt"
           }
         },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Only MP3 and FLAC files are supported for now"
+            "value" : "Only MP3, M4A, FLAC, OGG, Opus, WAV and AIFF files are supported"
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Por ahora solo se admiten archivos MP3 y FLAC"
+            "value" : "Solo se admiten archivos MP3, M4A, FLAC, OGG, Opus, WAV y AIFF"
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Seuls les fichiers MP3 et FLAC sont pris en charge pour l’instant"
+            "value" : "Seuls les fichiers MP3, M4A, FLAC, OGG, Opus, WAV et AIFF sont pris en charge"
           }
         },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Per ora sono supportati solo i file MP3 e FLAC"
+            "value" : "Sono supportati solo i file MP3, M4A, FLAC, OGG, Opus, WAV e AIFF"
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "現在対応しているのは MP3 と FLAC ファイルのみです"
+            "value" : "対応しているのは MP3、M4A、FLAC、OGG、Opus、WAV、AIFF ファイルのみです"
           }
         },
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "현재는 MP3와 FLAC 파일만 지원합니다"
+            "value" : "MP3, M4A, FLAC, OGG, Opus, WAV, AIFF 파일만 지원합니다"
           }
         },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Por enquanto só há suporte a arquivos MP3 e FLAC"
+            "value" : "Só há suporte a arquivos MP3, M4A, FLAC, OGG, Opus, WAV e AIFF"
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Пока поддерживаются только файлы MP3 и FLAC"
+            "value" : "Поддерживаются только файлы MP3, M4A, FLAC, OGG, Opus, WAV и AIFF"
           }
         },
         "th" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "ขณะนี้รองรับเฉพาะไฟล์ MP3 และ FLAC"
+            "value" : "รองรับเฉพาะไฟล์ MP3, M4A, FLAC, OGG, Opus, WAV และ AIFF"
           }
         },
         "tr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Şimdilik yalnızca MP3 ve FLAC dosyaları destekleniyor"
+            "value" : "Yalnızca MP3, M4A, FLAC, OGG, Opus, WAV ve AIFF dosyaları destekleniyor"
           }
         },
         "uk" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Поки що підтримуються лише файли MP3 і FLAC"
+            "value" : "Підтримуються лише файли MP3, M4A, FLAC, OGG, Opus, WAV і AIFF"
           }
         },
         "vi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Hiện chỉ hỗ trợ tệp MP3 và FLAC"
+            "value" : "Chỉ hỗ trợ tệp MP3, M4A, FLAC, OGG, Opus, WAV và AIFF"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "目前只支持 MP3 和 FLAC 文件"
+            "value" : "只支持 MP3、M4A、FLAC、OGG、Opus、WAV 和 AIFF 文件"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "目前只支援 MP3 和 FLAC 檔案"
+            "value" : "只支援 MP3、M4A、FLAC、OGG、Opus、WAV 和 AIFF 檔案"
           }
         }
       }
@@ -284730,97 +284730,97 @@
         }
       }
     },
-    "播放本地 MP3 或 FLAC 时，把确定的歌词写进文件" : {
+    "播放本地歌曲时，把确定的歌词写进文件" : {
       "extractionState" : "manual",
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Schreibt beim Abspielen einer lokalen MP3- oder FLAC-Datei den festgelegten Liedtext hinein"
+            "value" : "Schreibt beim Abspielen eines lokalen Titels den festgelegten Liedtext in die Datei"
           }
         },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "When a local MP3 or FLAC file plays, writes the settled lyrics into it"
+            "value" : "When a local song plays, writes the settled lyrics into its file"
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Al reproducir un MP3 o FLAC local, escribe la letra elegida en el archivo"
+            "value" : "Al reproducir una canción local, escribe la letra elegida en el archivo"
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Pendant la lecture d’un MP3 ou FLAC local, écrit les paroles retenues dans le fichier"
+            "value" : "Pendant la lecture d’un morceau local, écrit les paroles retenues dans le fichier"
           }
         },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Durante la riproduzione di un MP3 o FLAC locale, scrive nel file il testo scelto"
+            "value" : "Durante la riproduzione di un brano locale, scrive nel file il testo scelto"
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "ローカルの MP3 や FLAC の再生中、確定した歌詞をファイルに書き込みます"
+            "value" : "ローカルの曲の再生中、確定した歌詞をファイルに書き込みます"
           }
         },
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "로컬 MP3나 FLAC를 재생할 때 확정된 가사를 파일에 씁니다"
+            "value" : "로컬 곡을 재생할 때 확정된 가사를 파일에 씁니다"
           }
         },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Ao tocar um MP3 ou FLAC local, grava a letra escolhida no arquivo"
+            "value" : "Ao tocar uma música local, grava a letra escolhida no arquivo"
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "При воспроизведении локальных MP3 или FLAC записывает выбранный текст в файл"
+            "value" : "При воспроизведении локальных треков записывает выбранный текст в файл"
           }
         },
         "th" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "ขณะเล่นไฟล์ MP3 หรือ FLAC ในเครื่อง จะเขียนเนื้อเพลงที่เลือกแล้วลงในไฟล์"
+            "value" : "ขณะเล่นเพลงในเครื่อง จะเขียนเนื้อเพลงที่เลือกแล้วลงในไฟล์"
           }
         },
         "tr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Yerel bir MP3 veya FLAC dosyası çalınırken kesinleşen şarkı sözlerini dosyaya yazar"
+            "value" : "Yerel bir şarkı çalınırken kesinleşen şarkı sözlerini dosyaya yazar"
           }
         },
         "uk" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Під час відтворення локальних MP3 або FLAC записує вибраний текст у файл"
+            "value" : "Під час відтворення локальних треків записує вибраний текст у файл"
           }
         },
         "vi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Khi phát tệp MP3 hoặc FLAC cục bộ, ghi lời đã chọn vào tệp"
+            "value" : "Khi phát bài hát cục bộ, ghi lời đã chọn vào tệp"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "播放本地 MP3 或 FLAC 时，把确定的歌词写进文件"
+            "value" : "播放本地歌曲时，把确定的歌词写进文件"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "播放本機 MP3 或 FLAC 時，把確定的歌詞寫進檔案"
+            "value" : "播放本機歌曲時，把確定的歌詞寫進檔案"
           }
         }
       }

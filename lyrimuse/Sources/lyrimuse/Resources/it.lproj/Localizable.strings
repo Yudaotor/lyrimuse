@@ -792,11 +792,12 @@
 "另有 %@ 首歌曲无源应答 · 全部自动匹配" = "Altri %@ brani senza risposta dalle fonti · Associa tutti";
 "另有 %@ 首歌曲无源应答 · 全部自动匹配#one" = "Altro %@ brano senza risposta dalle fonti · Associa tutti";
 "另有 %d 个文件未能写入歌词文件夹，请检查写入权限和磁盘空间" = "Altri file non scritti nella cartella dei testi: %d. Controlla l’accesso in scrittura e lo spazio su disco";
+"只支持 MP3、M4A、FLAC、OGG、Opus、WAV 和 AIFF 文件" = "Sono supportati solo i file MP3, M4A, FLAC, OGG, Opus, WAV e AIFF";
 "只显示歌词" = "Solo testo";
 "只显示歌词源自带的读音" = "Mostra solo la pronuncia fornita dalla fonte del testo";
 "只有播放次数、时长和新听了几位歌手" = "Solo ascolti, tempo di ascolto e quanti nuovi artisti";
 "只给汉字标注平假名" = "Hiragana solo per i kanji";
-"只能写入正在播放的本地 MP3 或 FLAC 文件" = "Si può scrivere solo in un file MP3 o FLAC locale in riproduzione";
+"只能写入正在播放的本地文件" = "Si può scrivere solo in un file locale in riproduzione";
 "只补没有歌词的歌曲" = "Solo brani senza testo";
 "可以直接粘贴完整地址，会自动识别是哪个平台" = "Incolla l’URL completo e la piattaforma viene riconosciuta automaticamente";
 "可同时开启多项" = "Puoi attivare più opzioni";
@@ -1551,7 +1552,7 @@
 "播放控制" = "Controlli";
 "播放控制位置" = "Posizione controlli";
 "播放时显示动画，暂停时静止" = "Si anima durante la riproduzione e resta fermo in pausa";
-"播放本地 MP3 或 FLAC 时，把确定的歌词写进文件" = "Durante la riproduzione di un MP3 o FLAC locale, scrive nel file il testo scelto";
+"播放本地歌曲时，把确定的歌词写进文件" = "Durante la riproduzione di un brano locale, scrive nel file il testo scelto";
 "播放本机文件时，先用同名 .lrc 或文件里内嵌的歌词" = "Riproducendo un file locale, usa prima il .lrc con lo stesso nome o il testo incorporato";
 "播放来源" = "Riprodotto in";
 "播放次数" = "Ascolti";
@@ -2315,7 +2316,6 @@
 "监视文件夹不能是歌词文件夹，也不能包含它或在它里面" = "La cartella monitorata non può essere la cartella dei testi, contenerla o trovarsi al suo interno";
 "监视文件夹与歌词文件夹重叠，已暂停自动导入" = "La cartella monitorata si sovrappone alla cartella dei testi, quindi l’importazione automatica è in pausa";
 "监视的文件夹已不存在" = "La cartella monitorata non esiste più";
-"目前只支持 MP3 和 FLAC 文件" = "Per ora sono supportati solo i file MP3 e FLAC";
 "直连失败时，经下方代理服务器重试" = "Se la connessione diretta non riesce, riprova tramite il server proxy qui sotto";
 "直连失败时，经系统代理或本机检测到的代理重试" = "Se la connessione diretta non riesce, riprova tramite il proxy di sistema o uno rilevato su questo Mac";
 "相邻短句可容纳于一行时合并显示" = "Le righe brevi vicine vengono unite se stanno su una riga";

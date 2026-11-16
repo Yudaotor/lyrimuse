@@ -375,11 +375,11 @@ func TestLyricsWritebackRefusals(t *testing.T) {
 		t.Errorf("没允许覆盖时文件不动")
 	}
 
-	v22 := append([]byte{'I', 'D', '3', 2, 0, 0, 0, 0, 0, 10}, make([]byte, 10)...)
-	_, err = writeLyricsToFile(writeTemp(t, "v22.mp3", append(v22, writebackAudio(100)...)), writebackLRC, true)
+	v21 := append([]byte{'I', 'D', '3', 1, 0, 0, 0, 0, 0, 10}, make([]byte, 10)...)
+	_, err = writeLyricsToFile(writeTemp(t, "v21.mp3", append(v21, writebackAudio(100)...)), writebackLRC, true)
 	wantWritebackCode(t, err, wbErrUnsupportedTag)
 
-	_, err = writeLyricsToFile(writeTemp(t, "a.m4a", []byte("....ftyp")), writebackLRC, true)
+	_, err = writeLyricsToFile(writeTemp(t, "a.wma", []byte("....ftyp")), writebackLRC, true)
 	wantWritebackCode(t, err, wbErrUnsupportedFormat)
 
 	_, err = writeLyricsToFile(filepath.Join(t.TempDir(), "missing.mp3"), writebackLRC, true)
@@ -620,7 +620,7 @@ func TestLyricsWritebackEditChannel(t *testing.T) {
 	if res.OK || res.ErrorCode != wbErrNoLyrics {
 		t.Errorf("没有歌词的条目:%+v", res)
 	}
-	res = applyEnrichEdit(enrichEditRequest{Op: "write_file_lyrics", Key: key, FilePath: path + ".m4a"})
+	res = applyEnrichEdit(enrichEditRequest{Op: "write_file_lyrics", Key: key, FilePath: path + ".wma"})
 	if res.OK || res.ErrorCode != wbErrUnsupportedFormat {
 		t.Errorf("不支持的格式:%+v", res)
 	}

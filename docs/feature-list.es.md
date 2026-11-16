@@ -146,7 +146,7 @@ Al reproducir un archivo de música de este Mac, se usa primero su .lrc del mism
 
 ### Escribir la letra en los archivos de canciones
 
-Mientras suena un MP3 o FLAC local, el menú ⋯ del Gestor de letras puede escribir la letra de la canción en el archivo para que otros reproductores también la muestren. El archivo solo se reemplaza después de escribir y comprobar una copia, así que no molesta al reproductor que lo está leyendo. En las pistas de Apple Music se escribe solo el texto, sin marcas de tiempo. Con la opción de Laboratorio activada, la letra se escribe sola en cuanto queda fijada. La que hayan escrito otras apps no se toca, salvo que actives también sobrescribirla, y entonces se guarda una copia antes.
+Mientras suena un archivo local MP3, M4A, FLAC, OGG, Opus, WAV o AIFF, el menú ⋯ del Gestor de letras puede escribir la letra de la canción en el archivo para que otros reproductores también la muestren. El archivo solo se reemplaza después de escribir y comprobar una copia, así que no molesta al reproductor que lo está leyendo. En las pistas de Apple Music se escribe solo el texto, sin marcas de tiempo. Con la opción de Laboratorio activada, la letra se escribe sola en cuanto queda fijada. La que hayan escrito otras apps no se toca, salvo que actives también sobrescribirla, y entonces se guarda una copia antes.
 
 - Desactivada por omisión
 - Ajustes: Laboratorio › Escribir automáticamente en los archivos de canciones
@@ -1369,7 +1369,7 @@ Todos los ajustes de la ventana Ajustes, según dónde están: 325 en total. Esc
 
 ### Laboratorio
 
-- **Escribir automáticamente en los archivos de canciones**: Al reproducir un MP3 o FLAC local, escribe la letra elegida en el archivo
+- **Escribir automáticamente en los archivos de canciones**: Al reproducir una canción local, escribe la letra elegida en el archivo
 - **Sobrescribir la letra escrita por otras apps**: Antes de reemplazarla, se guarda una copia de la letra existente
 
 ### Actualización de software

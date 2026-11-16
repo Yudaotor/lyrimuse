@@ -146,7 +146,7 @@ Ist der laufende Titel eine Datei auf diesem Mac, wird zuerst ihre gleichnamige 
 
 ### Liedtexte in Songdateien schreiben
 
-Während eine lokale MP3- oder FLAC-Datei läuft, kann das ⋯-Menü der Liedtextverwaltung den Liedtext in die Datei schreiben, sodass auch andere Player ihn anzeigen. Die Datei wird erst ersetzt, nachdem eine Kopie geschrieben und geprüft wurde, ein Player, der sie gerade liest, wird also nicht gestört. Bei Apple Music-Titeln wird nur der Text ohne Zeitstempel geschrieben. Mit der Labor-Option wird der Liedtext automatisch geschrieben, sobald er feststeht. Von anderen Apps geschriebene Liedtexte bleiben unangetastet, es sei denn, Überschreiben ist ebenfalls aktiv – dann werden sie vorher gesichert.
+Während eine lokale MP3-, M4A-, FLAC-, OGG-, Opus-, WAV- oder AIFF-Datei läuft, kann das ⋯-Menü der Liedtextverwaltung den Liedtext in die Datei schreiben, sodass auch andere Player ihn anzeigen. Die Datei wird erst ersetzt, nachdem eine Kopie geschrieben und geprüft wurde, ein Player, der sie gerade liest, wird also nicht gestört. Bei Apple Music-Titeln wird nur der Text ohne Zeitstempel geschrieben. Mit der Labor-Option wird der Liedtext automatisch geschrieben, sobald er feststeht. Von anderen Apps geschriebene Liedtexte bleiben unangetastet, es sei denn, Überschreiben ist ebenfalls aktiv – dann werden sie vorher gesichert.
 
 - Standardmäßig aus
 - Einstellungen: Labor › Automatisch in Songdateien schreiben
@@ -1369,7 +1369,7 @@ Alle Einstellungen des Einstellungsfensters nach Ort: insgesamt 325. Gib einen N
 
 ### Labor
 
-- **Automatisch in Songdateien schreiben**: Schreibt beim Abspielen einer lokalen MP3- oder FLAC-Datei den festgelegten Liedtext hinein
+- **Automatisch in Songdateien schreiben**: Schreibt beim Abspielen eines lokalen Titels den festgelegten Liedtext in die Datei
 - **Von anderen Apps geschriebene Liedtexte überschreiben**: Der vorhandene Liedtext wird vor dem Ersetzen gesichert
 
 ### Softwareupdate

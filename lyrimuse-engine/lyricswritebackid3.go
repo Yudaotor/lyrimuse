@@ -8,8 +8,11 @@ import (
 )
 
 // MP3 的歌词写回:文件开头的 ID3v2 标签里写一个 USLT 帧(描述留空),纯文本和 LRC 都写进它;不另写 SYLT。
+// WAV / AIFF 的 ID3 块(lyricswritebackchunk.go)用同一套(id3EditTag)。
 //   - 原来是 v2.4 的保持 v2.4,正文 UTF-8;原来是 v2.3 的保持 v2.3,正文用带 BOM 的 UTF-16(v2.3 没有 UTF-8 这一档)。
-//     原来没有标签的新建 v2.4。v2.2、v2.4 整个标签做过反同步的不写(wbErrUnsupportedTag)。
+//     原来没有标签的新建 v2.4。v2.4 整个标签做过反同步的不写(wbErrUnsupportedTag)。
+//   - v2.2 升成 v2.4(id3UpgradeV22):三字母帧名按 id3v22To24 换成四字母、PIC 换成 APIC,别的帧正文原样;
+//     v2.4 里没有对应帧的(TDA、TIM、RVA、CRM…)和压缩过的 v2.2 不写。见 11 章决策 173。
 //   - 原有的歌词帧(USLT、SYLT、描述是歌词键的 TXXX)全部去掉,换成这一个;别的帧原样、按原顺序留着。语言沿用
 //     原来第一个 USLT 的,没有就写 eng。
 //   - 扩展头、标签尾不写回;v2.3 整个标签反同步过的,写回时不再反同步。
@@ -37,44 +40,104 @@ func id3WritebackLayout(r io.ReadSeeker, fileSize int64) (lyricsTagLayout, error
 		if n < 2 || !mpegFrameSync(header) {
 			return lyricsTagLayout{}, wbErrf(wbErrUnsupportedTag, "no ID3 tag and no MPEG frame at the start")
 		}
-		return id3NewTagLayout(fileSize), nil
+		edit, _ := id3EditTag(nil, fileSize)
+		return lyricsTagLayout{build: edit.build, preserved: edit.preserved}, nil
 	}
-	version, flags := header[3], header[5]
-	switch {
-	case version == 2:
-		return lyricsTagLayout{}, wbErrf(wbErrUnsupportedTag, "ID3v2.2")
-	case version != 3 && version != 4:
-		return lyricsTagLayout{}, wbErrf(wbErrUnsupportedTag, "ID3v2.%d", version)
-	case version == 4 && flags&0x80 != 0:
-		return lyricsTagLayout{}, wbErrf(wbErrUnsupportedTag, "ID3v2.4 whole-tag unsynchronisation")
+	headLen, err := id3TagLen(header)
+	if err != nil {
+		return lyricsTagLayout{}, err
 	}
-	size := syncsafeInt(header[6:10])
-	headLen := 10 + int64(size)
-	if version == 4 && flags&0x10 != 0 {
-		headLen += 10
-	}
-	if size > localFileEmbeddedMaxTagBytes || headLen > fileSize {
-		return lyricsTagLayout{}, wbErrf(wbErrUnsupportedTag, "ID3 tag size %d", size)
+	if int64(headLen) > fileSize {
+		return lyricsTagLayout{}, wbErrf(wbErrUnsupportedTag, "ID3 tag size %d", headLen)
 	}
 	head := make([]byte, headLen)
 	copy(head, header)
 	if _, err := io.ReadFull(r, head[10:]); err != nil {
 		return lyricsTagLayout{}, wbErr(wbErrIO, err)
 	}
-	frames, err := id3Frames(version, flags, head[10:10+size], false)
+	edit, err := id3EditTag(head, fileSize-int64(headLen))
 	if err != nil {
 		return lyricsTagLayout{}, err
 	}
-	if version == 4 {
-		for _, f := range frames {
-			if !id3SizeIsSyncsafe(f) && f.raw[9] != 0 {
-				return lyricsTagLayout{}, wbErrf(wbErrUnsupportedTag, "frame %q: plain size with format flags %#x", f.id, f.raw[9])
+	return lyricsTagLayout{
+		head:       head,
+		audioStart: int64(headLen),
+		hasLyrics:  edit.hasLyrics,
+		build:      edit.build,
+		preserved:  edit.preserved,
+	}, nil
+}
+
+// id3TagLen 看 10 字节标签头:写回认不认这个版本,整个标签(标签头 + 标签区 + v2.4 标签尾)多长。
+func id3TagLen(header []byte) (int, error) {
+	version, flags := header[3], header[5]
+	switch {
+	case version != 2 && version != 3 && version != 4:
+		return 0, wbErrf(wbErrUnsupportedTag, "ID3v2.%d", version)
+	case version == 4 && flags&0x80 != 0:
+		return 0, wbErrf(wbErrUnsupportedTag, "ID3v2.4 whole-tag unsynchronisation")
+	case version == 2 && flags&0x40 != 0:
+		return 0, wbErrf(wbErrUnsupportedTag, "ID3v2.2 compression")
+	}
+	size := syncsafeInt(header[6:10])
+	if size > localFileEmbeddedMaxTagBytes {
+		return 0, wbErrf(wbErrUnsupportedTag, "ID3 tag size %d", size)
+	}
+	n := 10 + size
+	if version == 4 && flags&0x10 != 0 {
+		n += 10
+	}
+	return n, nil
+}
+
+// id3TagEdit:一份 ID3v2 标签写进歌词要用的东西。build 交回整份新标签,preserved 核对它。
+type id3TagEdit struct {
+	hasLyrics bool
+	build     func(text string) ([]byte, error)
+	preserved func(newTag []byte) error
+}
+
+// id3EditTag 拆 tag(从 "ID3" 起、长度恰好是 id3TagLen);tag 为 nil 时新建一份 v2.4。audioBytes 只用来定 padding。
+func id3EditTag(tag []byte, audioBytes int64) (id3TagEdit, error) {
+	if tag == nil {
+		return id3TagEdit{
+			build: func(text string) ([]byte, error) {
+				return id3BuildTag(4, nil, id3USLTFrame(4, id3WritebackDefaultLang, text), 0, audioBytes)
+			},
+			preserved: func(newTag []byte) error {
+				return id3PreservedErr(4, nil, newTag)
+			},
+		}, nil
+	}
+	version, flags := tag[3], tag[5]
+	size := syncsafeInt(tag[6:10])
+	body := tag[10 : 10+size]
+	outVersion := version
+	var frames, from22 []id3RawFrame
+	var err error
+	if version == 2 {
+		if from22, err = id3v22Frames(flags, body); err != nil {
+			return id3TagEdit{}, err
+		}
+		if frames, err = id3UpgradeV22(from22); err != nil {
+			return id3TagEdit{}, err
+		}
+		outVersion = 4
+	} else {
+		if frames, err = id3Frames(version, flags, body, false); err != nil {
+			return id3TagEdit{}, err
+		}
+		if version == 4 {
+			for _, f := range frames {
+				if !id3SizeIsSyncsafe(f) && f.raw[9] != 0 {
+					return id3TagEdit{}, wbErrf(wbErrUnsupportedTag, "frame %q: plain size with format flags %#x", f.id, f.raw[9])
+				}
 			}
 		}
 	}
 	for _, f := range frames {
 		if id3LyricsFrameUnreadable(f) {
-			return lyricsTagLayout{}, wbErrf(wbErrUnsupportedTag, "lyrics frame %q the reader cannot decode", f.id)
+			return id3TagEdit{}, wbErrf(wbErrUnsupportedTag, "lyrics frame %q the reader cannot decode", f.id)
 		}
 	}
 	lang := id3WritebackDefaultLang
@@ -85,31 +148,27 @@ func id3WritebackLayout(r io.ReadSeeker, fileSize int64) (lyricsTagLayout, error
 		}
 	}
 	kept := id3KeptFrames(frames)
-	audio := fileSize - headLen
-	return lyricsTagLayout{
-		head:       head,
-		audioStart: headLen,
-		hasLyrics:  tagsFromID3(header, head[10:10+size]).hasLyrics,
+	var kept22 []id3RawFrame
+	for i, f := range frames {
+		if version == 2 && !id3IsLyricsFrame(f) {
+			kept22 = append(kept22, from22[i])
+		}
+	}
+	return id3TagEdit{
+		hasLyrics: tagsFromID3(tag[:10], body).hasLyrics,
 		build: func(text string) ([]byte, error) {
-			return id3BuildTag(version, kept, id3USLTFrame(version, lang, text), len(head), audio)
+			return id3BuildTag(outVersion, kept, id3USLTFrame(outVersion, lang, text), len(tag), audioBytes)
 		},
-		preserved: func(newHead []byte) error {
-			return id3PreservedErr(kept, newHead)
+		preserved: func(newTag []byte) error {
+			if err := id3PreservedErr(outVersion, kept, newTag); err != nil {
+				return err
+			}
+			if version == 2 {
+				return id3UpgradePreservedErr(kept22, newTag)
+			}
+			return nil
 		},
 	}, nil
-}
-
-// id3NewTagLayout:文件开头没有 ID3v2 标签,写回时新建一份 v2.4。
-func id3NewTagLayout(fileSize int64) lyricsTagLayout {
-	return lyricsTagLayout{
-		audioStart: 0,
-		build: func(text string) ([]byte, error) {
-			return id3BuildTag(4, nil, id3USLTFrame(4, id3WritebackDefaultLang, text), 0, fileSize)
-		},
-		preserved: func(newHead []byte) error {
-			return id3PreservedErr(nil, newHead)
-		},
-	}
 }
 
 // id3Frames 拆标签区里的帧(不含 10 字节标签头),遇到 padding(0 字节)为止。帧长越界、padding 里有非 0 字节当损坏。
@@ -265,13 +324,16 @@ func id3BuildTag(version byte, kept []id3RawFrame, lyricsFrame []byte, oldLen in
 	return tag, nil
 }
 
-// id3PreservedErr:新标签里歌词以外的帧跟 kept 的帧名、帧标志、正文逐字节相同、顺序一致,而且恰好有一个歌词帧(USLT)。
-// v2.4 按同步安全整数拆帧,帧长写成别的样子拆不开或对不上。
-func id3PreservedErr(kept []id3RawFrame, newHead []byte) error {
+// id3PreservedErr:新标签是 version 版,歌词以外的帧跟 kept 的帧名、帧标志、正文逐字节相同、顺序一致,而且恰好有一个
+// 歌词帧(USLT)。v2.4 按同步安全整数拆帧,帧长写成别的样子拆不开或对不上。
+func id3PreservedErr(version byte, kept []id3RawFrame, newHead []byte) error {
 	if len(newHead) < 10 || !bytes.HasPrefix(newHead, []byte("ID3")) {
 		return wbErrf(wbErrTagsNotPreserved, "no ID3 header")
 	}
-	version, flags := newHead[3], newHead[5]
+	if newHead[3] != version {
+		return wbErrf(wbErrTagsNotPreserved, "ID3v2.%d written, want ID3v2.%d", newHead[3], version)
+	}
+	flags := newHead[5]
 	size := syncsafeInt(newHead[6:10])
 	if 10+size > len(newHead) {
 		return wbErrf(wbErrTagsNotPreserved, "bad tag size")
