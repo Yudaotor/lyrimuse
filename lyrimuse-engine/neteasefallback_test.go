@@ -51,7 +51,14 @@ func withNeteaseFake(t *testing.T, handle func(target string) (int, string)) *ne
 	neteaseCooldownUntil = map[string]time.Time{}
 	neteaseBlockStreak = map[string]int{}
 	neteaseRateMu.Unlock()
+	neteaseSearchJunkMu.Lock()
+	savedJunk, savedJunkNow := neteaseSearchJunk, neteaseSearchJunkNow
+	neteaseSearchJunk, neteaseSearchJunkNow = map[string]neteaseSearchJunkState{}, time.Now
+	neteaseSearchJunkMu.Unlock()
 	t.Cleanup(func() {
+		neteaseSearchJunkMu.Lock()
+		neteaseSearchJunk, neteaseSearchJunkNow = savedJunk, savedJunkNow
+		neteaseSearchJunkMu.Unlock()
 		setSharedHostGuard(savedGuard)
 		setSharedLyricSourceBreaker(savedBreaker)
 		setSharedLyricSourceTransport(savedTransport)
