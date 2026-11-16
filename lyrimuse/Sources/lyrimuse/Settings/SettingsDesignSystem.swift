@@ -1465,6 +1465,9 @@ struct SettingsNote<Content: View>: View {
             }
             .font(.system(size: 11))
             .foregroundStyle(.secondary)
+            // 按自己的理想高度排、不让外层压:设置页摆内容时给的是有限高度(`SettingsPageColumnLayout`),
+            // 外层 VStack 会压可伸缩的子视图,文字 + 按钮这种两段以上的说明里文字被压成一行截尾。见 14 章决策 204
+            .fixedSize(horizontal: false, vertical: true)
         }
     }
 }

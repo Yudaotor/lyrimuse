@@ -203,6 +203,9 @@ func runSettingsAuditContracts() {
                              "return SettingsRawRow {")
                 && sourceHas(app("Settings/LanguagePackRow.swift"), "SettingsRawRow { packGrid }"), true,
                 "SettingsRawRow: 来源格子、读音示例与格子、语言包格子、顺序列表按整张卡宽排,不带 insetToText(14 章决策 203)")
+    expectEqual(sourceHas(sourceBody("struct SettingsNote<Content: View>: View {", in: designSource),
+                          ".fixedSize(horizontal: false, vertical: true)"), true,
+                "SettingsNote: 整块按理想高度排,文字 + 按钮的说明里文字不被外层压成一行截尾(14 章决策 204)")
 
     // ---- 编辑台工具栏胶囊:摘要读得完(悬浮歌词 / 灵动岛) ----
     let designSystem = app("Settings/SettingsDesignSystem.swift")
