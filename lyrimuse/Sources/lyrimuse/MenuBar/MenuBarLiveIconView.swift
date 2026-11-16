@@ -166,6 +166,10 @@ final class MenuBarLiveIconView: NSView {
         isHidden = true
     }
 
+    /// 声波款改用图层逐帧换图(`waveformFrames`),不用系统符号动效:符号动效不吃上层图层的蒙版,歌词旁那枚
+    /// 要按进度裁成两半(`MenuBarScrollingLabel` 的两份活体图标)。只剩图标那一态不裁,照旧用符号动效。搭台前设好。
+    var waveformInLayer = false
+
     /// 指定颜色,不跟 labelColor / 菜单反白走(歌词旁那枚叠进度的图标用:未唱色、已唱色各一份,
     /// 反白由 `MenuBarScrollingLabel` 换色时一并给)。nil = 默认配色。换色不碰动画。
     var tintOverride: NSColor? {
@@ -198,6 +202,14 @@ final class MenuBarLiveIconView: NSView {
     /// contents 与 contentsScale 必须是同一个比例,所以永远一起设(见 NSView.menuBarBitmapScale)。
     /// 挂在 `stage` 下的图层被整体放大 `iconScale` 倍,位图按放大后的像素灌。
     private func setTinted(_ target: CALayer, key: String, _ artwork: () -> NSImage) {
+        let image = tintedImage(key: key, artwork)
+        target.contentsScale = menuBarBitmapScale * iconScale
+        // 同一张就不换:换 contents 会让状态项副本再重绘一轮,又把外观回调叫回来。
+        if (target.contents as CFTypeRef?) !== image { target.contents = image }
+    }
+
+    /// 按当前颜色染好的一张(带缓存,键同 `setTinted`)。
+    private func tintedImage(key: String, _ artwork: () -> NSImage) -> CGImage? {
         let base = menuBarBitmapScale
         let scale = base * iconScale
         let cacheKey = "\(key)|\(scale)|\(effectiveAppearance.name.rawValue)|\(highlighted)|\(tintOverride?.description ?? "-")"
@@ -209,10 +221,8 @@ final class MenuBarLiveIconView: NSView {
             if tintCache.count > 32 { tintCache.removeAll() }
             tintCache[cacheKey] = image
         }
-        target.contentsScale = scale
-        // 同一张就不换:换 contents 会让状态项副本再重绘一轮,又把外观回调叫回来。
-        if (target.contents as CFTypeRef?) !== image { target.contents = image }
         lastBitmapScale = base
+        return image
     }
 
     // 状态项在不同 DPI 的显示器之间迁移 / 首次挂进窗口:比例变了就把当前款的位图按新比例重灌。
@@ -268,6 +278,12 @@ final class MenuBarLiveIconView: NSView {
     }
 
     private func buildWaveform() {
+        if waveformInLayer {
+            movingPart.isHidden = false
+            movingPart.bounds = CGRect(origin: .zero, size: MenuBarIconStyle.cachedImage(for: .waveform).size)
+            applyColor()
+            return
+        }
         imageView.isHidden = false
         imageView.image = MenuBarIconStyle.cachedImage(for: .waveform, size: currentSize)
         applyColor()
@@ -293,11 +309,93 @@ final class MenuBarLiveIconView: NSView {
         animationsPaused = paused
         if paused {
             layer?.pauseMenuBarAnimations()
-            if currentStyle == .waveform { imageView.removeAllSymbolEffects() }
+            if currentStyle == .waveform, !waveformInLayer { imageView.removeAllSymbolEffects() }
         } else {
             layer?.resumeMenuBarAnimations()
-            if currentStyle == .waveform { addWaveformEffect() }
+            if currentStyle == .waveform, !waveformInLayer { addWaveformEffect() }
         }
+    }
+
+    /// 图层版声波的一轮:各声条依次点亮、其余压暗,同系统 `.variableColor.iterative`。每帧停多久。
+    private static let waveformFrameSeconds: CFTimeInterval = 0.15
+    /// 所有图层版声波共用的相位起点:换色重装时不打回起点,两份活体图标(未唱 / 已唱)也对得上。
+    private static let waveformEpoch = CACurrentMediaTime()
+
+    /// 按当前颜色染好每一帧,装成一条离散的 contents 动画。起点钉在 `waveformEpoch`,什么时候装都在同一相位。
+    private func installWaveformFrames() {
+        let frames = Self.waveformFrames().enumerated().compactMap { i, image in
+            tintedImage(key: "waveform-frame-\(i)") { image }
+        }
+        guard let first = frames.first else { return }
+        movingPart.contentsScale = menuBarBitmapScale * iconScale
+        movingPart.contents = first
+        let animation = CAKeyframeAnimation(keyPath: "contents")
+        animation.values = frames
+        animation.calculationMode = .discrete
+        animation.duration = Self.waveformFrameSeconds * Double(frames.count)
+        animation.repeatCount = .infinity
+        animation.isRemovedOnCompletion = false
+        animation.beginTime = movingPart.convertTime(Self.waveformEpoch, from: nil)
+        movingPart.add(MenuBarAnimation.capped(animation, fps: MenuBarAnimation.decorativeFPS), forKey: Self.animationKey)
+    }
+
+    private static var cachedWaveformFrames: [NSImage]?
+
+    /// 声波每一帧的模板图:第 k 帧只有第 k 根声条是实的,其余是符号自己压暗的那一档。
+    /// 用 variableValue 出累积点亮的几档,相邻两档的 alpha 差就是第 k 根;跟全暗那档拼起来。
+    /// 按 4 倍像素出图,染色时再按实际比例缩,不糊。
+    static func waveformFrames() -> [NSImage] {
+        if let cachedWaveformFrames { return cachedWaveformFrames }
+        let config = NSImage.SymbolConfiguration(pointSize: 15, weight: .regular)
+        func render(_ value: Double) -> NSBitmapImageRep? {
+            guard let image = NSImage(systemSymbolName: "waveform", variableValue: value, accessibilityDescription: nil)?
+                .withSymbolConfiguration(config) else { return nil }
+            let w = Int(image.size.width * 4), h = Int(image.size.height * 4)
+            guard let rep = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: w, pixelsHigh: h,
+                                             bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true, isPlanar: false,
+                                             colorSpaceName: .deviceRGB, bytesPerRow: w * 4, bitsPerPixel: 32)
+            else { return nil }
+            rep.size = image.size
+            NSGraphicsContext.saveGraphicsState()
+            NSGraphicsContext.current = NSGraphicsContext(bitmapImageRep: rep)
+            image.draw(in: NSRect(origin: .zero, size: image.size))
+            NSGraphicsContext.restoreGraphicsState()
+            return rep
+        }
+        // 0 是全暗;往上逐档多点亮一根。档位取 1/20 一格扫出来、去掉跟上一档一样的。
+        var steps: [NSBitmapImageRep] = []
+        var lastData: Data?
+        for i in 0 ... 20 {
+            guard let rep = render(Double(i) / 20), let data = rep.tiffRepresentation else { continue }
+            if data != lastData { steps.append(rep) }
+            lastData = data
+        }
+        guard steps.count >= 2, let dim = steps.first?.bitmapData else { return [] }
+        let byteCount = steps[0].bytesPerRow * steps[0].pixelsHigh
+        var frames: [NSImage] = []
+        for k in 1 ..< steps.count {
+            guard let lit = steps[k].bitmapData, let below = steps[k - 1].bitmapData,
+                  let rep = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: steps[0].pixelsWide,
+                                             pixelsHigh: steps[0].pixelsHigh, bitsPerSample: 8, samplesPerPixel: 4,
+                                             hasAlpha: true, isPlanar: false, colorSpaceName: .deviceRGB,
+                                             bytesPerRow: steps[0].bytesPerRow, bitsPerPixel: 32),
+                  let out = rep.bitmapData else { continue }
+            rep.size = steps[0].size
+            // 逐像素:这一档比上一档亮出来的(第 k 根)取这一档,其余取全暗那档。RGBA 四字节一组,比 alpha。
+            var i = 0
+            while i < byteCount {
+                let fromLit = Int(lit[i + 3]) > Int(below[i + 3]) + 8
+                let src = fromLit ? lit : dim
+                out[i] = src[i]; out[i + 1] = src[i + 1]; out[i + 2] = src[i + 2]; out[i + 3] = src[i + 3]
+                i += 4
+            }
+            let image = NSImage(size: rep.size)
+            image.addRepresentation(rep)
+            image.isTemplate = true
+            frames.append(image)
+        }
+        cachedWaveformFrames = frames
+        return frames
     }
 
     /// 摇摆的几款:音符、歌词列表、三连音符、麦克风(`present` 里落到 default 的那几款)。
@@ -503,6 +601,11 @@ final class MenuBarLiveIconView: NSView {
             let center = CGPoint(x: o.x + canvas.width / 2, y: o.y + canvas.height / 2)
             staticPart.position = center
             classicLinesHost.position = center
+        case .waveform where waveformInLayer:
+            // 图层版声波同摇摆那几款:anchor 在中心,position 就是图标中心。
+            let size = movingPart.bounds.size
+            let o = centeredOrigin(size)
+            movingPart.position = CGPoint(x: o.x + size.width / 2, y: o.y + size.height / 2)
         case let style? where Self.swings(style):
             // anchor 在中心,position 就是图标中心。
             let size = movingPart.bounds.size
@@ -551,6 +654,8 @@ final class MenuBarLiveIconView: NSView {
             classicLineBars.forEach { $0.backgroundColor = solid }
         case let style? where Self.swings(style):
             setTinted(movingPart, key: "sway-\(style.rawValue)") { MenuBarIconStyle.cachedImage(for: style) }
+        case .waveform where waveformInLayer:
+            installWaveformFrames()
         default:
             break
         }

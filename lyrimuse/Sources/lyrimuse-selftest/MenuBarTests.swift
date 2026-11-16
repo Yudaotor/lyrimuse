@@ -1710,6 +1710,12 @@ func runMenuBarTests() {
         expectEqual(sourceHas(liveView, "tintOverride ?? (highlighted ? .selectedMenuItemTextColor : .labelColor)")
                     && sourceHas(liveView, "|\\(tintOverride?.description ?? \"-\")\""), true,
                     "歌词旁律动: 活体图标可指定颜色,位图缓存键带上它(两份颜色不串)")
+        expectEqual(sourceHas(label, "view.waveformInLayer = true")
+                    && sourceHas(sourceBody("private func buildWaveform()", in: liveView), "if waveformInLayer {\nmovingPart.isHidden = false")
+                    && sourceHas(sourceBody("private func installWaveformFrames()", in: liveView),
+                                 "animation.beginTime = movingPart.convertTime(Self.waveformEpoch, from: nil)")
+                    && sourceHas(liveView, "if currentStyle == .waveform, !waveformInLayer { addWaveformEffect() }"), true,
+                    "歌词旁律动: 声波款不用符号动效(不吃蒙版),改图层逐帧,相位钉在共用起点")
     }
 
     // ---- 主行显示译文 / 原文接着译文(06 章决策 70) ----

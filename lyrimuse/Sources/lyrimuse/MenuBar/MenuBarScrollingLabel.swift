@@ -317,6 +317,8 @@ final class MenuBarScrollingLabel: NSView {
         iconHostLayer.addSublayer(iconFillClipLayer)
         layer?.addSublayer(iconHostLayer)
         for (view, mask) in [(liveIconBase, liveIconBaseMask), (liveIconFill, liveIconFillMask)] {
+            // 声波款的系统符号动效不吃这张蒙版,改走图层逐帧(见 `MenuBarLiveIconView.waveformInLayer`)。
+            view.waveformInLayer = true
             mask.anchorPoint = .zero
             mask.backgroundColor = NSColor.black.cgColor
             view.layer?.mask = mask
