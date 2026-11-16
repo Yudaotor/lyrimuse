@@ -483,6 +483,13 @@ func runDeepLinkTests() {
                      link("lyrimuse://debug/notify-channel?id=Legacy")],
                     [.debug(.editNotifyChannel(id: nil)), .debug(.editNotifyChannel(id: nil)), .debug(.editNotifyChannel(id: "Legacy"))],
                     "debug: 打开渠道编辑弹窗,没带 id 或空的是第一个,id 原样")
+        expectEqual([link("lyrimuse://debug/hover-note?q=%E8%B6%8A%E5%8D%97"), link("lyrimuse://debug/hover-note?q=Zing%20"),
+                     link("lyrimuse://debug/hover-note"), link("lyrimuse://debug/hover-note?q="),
+                     link("lyrimuse://debug/hover-note?off=1"), link("lyrimuse://debug/hover-note?q=abc&off=1")],
+                    [.debug(.hoverNote(query: "越南")), .debug(.hoverNote(query: "Zing")),
+                     .debug(.hoverNote(query: nil)), .debug(.hoverNote(query: nil)),
+                     .debug(.hoverNote(query: nil)), .debug(.hoverNote(query: nil))],
+                    "debug: 悬停气泡,匹配文字去首尾空白、原样不转小写;没带、空、off=1 都是收回")
         expectEqual(link("lyrimuse://debug/settings-search?q=%E7%BD%91%E9%A1%B5%E6%AD%8C%E8%AF%8D"),
                     .debug(.settingsSearch(query: "网页歌词")), "debug: 设置搜索,搜索词原样(不转小写)")
         expectEqual(link("lyrimuse://debug/settings-search") == nil && link("lyrimuse://debug/settings-search?q=%20") == nil, true,
@@ -711,6 +718,7 @@ func runDeepLinkTests() {
             .debug(.menuBarDisplay(artwork: nil, content: nil, alignment: "center")),
             .debug(.menuBarDisplay(artwork: nil, content: nil, iconAnimates: true)),
             .debug(.settingsSearch(query: "OBS 输出")),
+            .debug(.hoverNote(query: "越南 VNG")), .debug(.hoverNote(query: nil)),
             .debug(.importLyrics(paths: ["/tmp/歌 词.lrc", "/tmp/歌 词.tr.lrc"])),
             .debug(.importLyrics(paths: [])),
             .debug(.importLyricsFolder(path: "/tmp/歌 词")),

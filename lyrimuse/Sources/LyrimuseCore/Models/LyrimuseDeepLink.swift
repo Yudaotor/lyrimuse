@@ -115,6 +115,9 @@ public enum LyrimuseDeepLink: Equatable, Sendable {
         /// 设置窗口里搜这个词、打开第一条结果:翻页、切分段、展开抽屉,把那一行高亮并滚进可见区
         /// (`debug/settings-search?q=`)。设置窗口要先开着。
         case settingsSearch(query: String)
+        /// 让说明文案里含这段文字的悬停气泡当作被悬停、直接弹出,不看真实指针(`debug/hover-note?q=`);
+        /// `off=1` 或没带 q 就全部收回,nil 即收回。设置窗口要先开着、翻到那一页。见 14 章决策 205。
+        case hoverNote(query: String?)
         /// 打开推送提醒页「推送渠道」里这个渠道的编辑弹窗,跟点那一行走同一条路(`debug/notify-channel?id=`,没带 id 是第一个)。
         /// 设置窗口要先翻到推送提醒页(`settings/account/bark`)。
         case editNotifyChannel(id: String?)
@@ -496,6 +499,10 @@ public enum LyrimuseDeepLink: Equatable, Sendable {
         case ("debug", "/settings-search"):
             guard let query = value("q")?.trimmingCharacters(in: .whitespaces), !query.isEmpty else { return nil }
             self = .debug(.settingsSearch(query: query))
+        case ("debug", "/hover-note"):
+            let text = value("q")?.trimmingCharacters(in: .whitespaces) ?? ""
+            let off = value("off").flatMap(Self.parseBool) ?? false
+            self = .debug(.hoverNote(query: off || text.isEmpty ? nil : text))
         case ("debug", "/notify-channel"):
             self = .debug(.editNotifyChannel(id: value("id").flatMap { $0.isEmpty ? nil : $0 }))
         case ("debug", "/reporting-switch-hint"):
@@ -794,6 +801,9 @@ public enum LyrimuseDeepLink: Equatable, Sendable {
             case let .settingsSearch(query):
                 components.path = "/settings-search"
                 components.queryItems = [URLQueryItem(name: "q", value: query)]
+            case let .hoverNote(query):
+                components.path = "/hover-note"
+                components.queryItems = [query.map { URLQueryItem(name: "q", value: $0) } ?? URLQueryItem(name: "off", value: "1")]
             case let .editNotifyChannel(id):
                 components.path = "/notify-channel"
                 if let id { components.queryItems = [URLQueryItem(name: "id", value: id)] }

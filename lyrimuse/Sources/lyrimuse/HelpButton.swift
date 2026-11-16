@@ -193,10 +193,20 @@ private struct HoverNote: ViewModifier {
     @State private var hovering = false
     @State private var hoverTask: Task<Void, Never>?
     @State private var anchor = HoverAnchor()
+    /// `debug/hover-note` 点到了这条说明:不看指针,气泡一直挂着。
+    @State private var debugForced = false
+
+    private func matchesDebugQuery(_ query: String) -> Bool {
+        !query.isEmpty && (text?.contains(query) ?? false)
+    }
 
     func body(content: Content) -> some View {
         content
             .background(HoverAnchorView(anchor: anchor))
+            .onAppear { debugForced = matchesDebugQuery(DebugDeepLinks.hoverNoteQuery) }
+            .onReceive(NotificationCenter.default.publisher(for: DebugDeepLinks.hoverNoteNotification)) { note in
+                debugForced = matchesDebugQuery(note.object as? String ?? "")
+            }
             .onHover { inside in
                 hoverTask?.cancel()
                 hoverTask = Task {
@@ -214,7 +224,8 @@ private struct HoverNote: ViewModifier {
                     }
                 }
             }
-            .popover(isPresented: Binding(get: { hovering && text != nil }, set: { if !$0 { hovering = false } }),
+            .popover(isPresented: Binding(get: { (hovering || debugForced) && text != nil },
+                                          set: { if !$0 { hovering = false; debugForced = false } }),
                      arrowEdge: .bottom) {
                 Text(text ?? "")
                     .font(.callout)

@@ -20,6 +20,10 @@ enum DebugDeepLinks {
     static let settingsSearchNotification = Notification.Name("lyrimuse.debug.settingsSearch")
     /// `debug/lyrics-writeback` 的步骤(open / confirm / cancel),歌词管理收到后对正显示的那首照做。
     static let lyricsWritebackNotification = Notification.Name("lyrimuse.debug.lyricsWriteback")
+    /// `debug/hover-note` 的匹配文字(空串 = 收回),悬停气泡收到后按自己的说明文案比对。
+    static let hoverNoteNotification = Notification.Name("lyrimuse.debug.hoverNote")
+    /// 最近一次 `debug/hover-note` 的匹配文字,晚于它出现的气泡锚点挂载时也按它比对。
+    static var hoverNoteQuery = ""
     /// `debug/notify-channel` 的渠道 id(空串 = 第一个),推送渠道卡收到后打开那个渠道的编辑弹窗。
     static let editNotifyChannelNotification = Notification.Name("lyrimuse.debug.editNotifyChannel")
     /// `debug/manager-visibility`:object 是 NSNumber(true = 当作露出来,false = 当作挡住),nil = 交还给遮挡状态。
@@ -96,6 +100,10 @@ enum DebugDeepLinks {
         case let .settingsSearch(query):
             NotificationCenter.default.post(name: settingsSearchNotification, object: query)
             logger.notice("debug settings search \(query, privacy: .public)")
+        case let .hoverNote(query):
+            hoverNoteQuery = query ?? ""
+            NotificationCenter.default.post(name: hoverNoteNotification, object: hoverNoteQuery)
+            logger.notice("debug hover note \(query ?? "off", privacy: .public)")
         case let .editNotifyChannel(id):
             NotificationCenter.default.post(name: editNotifyChannelNotification, object: id ?? "")
             logger.notice("debug edit notify channel")
