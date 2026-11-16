@@ -2383,6 +2383,7 @@
 "系统媒体信息通道不可用" = "Canale multimediale di sistema non disponibile";
 "系统媒体信息通道在本机不可用：%@ 将改为直接读取播放状态（进度可能略有偏差），其他播放器暂时无法读取" = "Il canale multimediale di sistema non è disponibile su questo Mac: %@ verrà letto direttamente (l’avanzamento potrebbe essere leggermente impreciso); per ora gli altri player non possono essere letti";
 "系统字体" = "Font di sistema";
+"系统已开启「减弱动态效果」，不会播放" = "Non viene riprodotta con “Riduci movimento” attivo";
 "系统已开启「减弱动态效果」，触控栏歌词不滚动、不逐字高亮" = "“Riduci movimento” è attivo, quindi il testo nella Touch Bar non scorre e non si illumina parola per parola";
 "系统自动化授权：上次检测时已授权" = "Accesso automazione di sistema: concesso all’ultima verifica";
 "系统自动化授权：尚未授权" = "Accesso automazione di sistema: non ancora concesso";

@@ -296,6 +296,8 @@ struct OverlayRowFontScaleCells: View {
 @MainActor
 struct OverlayLayoutSettingsRows: View {
     @ObservedObject private var settings = AppSettings.shared
+    /// 系统「减弱动态效果」:开着时悬浮窗不播换句动画(`LyricsOverlayView.animatesLineChange`),那一格多一行小字说明。
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     // 浮层里:对齐方式一行(四档分段太宽,单占一行);长句处理、换句动画并排两格;三格间距一组。
     // 一行一个控件时这个浮层放不下(往上弹,按钮上方只有约 236pt)。
@@ -321,6 +323,8 @@ struct OverlayLayoutSettingsRows: View {
                     icon: "arrow.up.to.line",
                     title: L10n.t("换句动画"),
                     help: L10n.t("换句时，下一句从原来的位置移到当前行；关闭时直接切换"),
+                    // 开关照常能拨,只说明这时为什么看不到动画。见 04 章决策 102。
+                    detail: reduceMotion ? L10n.t("系统已开启「减弱动态效果」，不会播放") : nil,
                     isOn: $settings.overlayLineChangeAnimation
                 )
                 // 上下交替时下一句不往上挪,这一项不起作用(见 OverlayNextLineArrangement)。

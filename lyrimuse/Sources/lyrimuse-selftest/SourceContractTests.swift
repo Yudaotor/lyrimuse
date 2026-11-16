@@ -2436,6 +2436,16 @@ func runSourceContractSurfaceTests() {
                         && !view.contains("matchedGeometryEffect")
                         && !view.contains(".animation(Self.animation, value: key)"), true,
                         "悬浮换句动画: 只在开着时用舞台;卡片上不挂 SwiftUI 的配对 / 过渡动画(每一帧都要整张卡片过一遍更新)")
+            // 设置里「换句动画」那一格:系统开着「减弱动态效果」时多一行小字说明不会播放,开关照常能拨(04 章决策 102)。
+            // 说明跟上面那道判断读同一个环境值;判断不再看它、或说明换了条件,都只表现成「说了不播却在播」或者反过来。
+            let layoutRows = sourceBody("struct OverlayLayoutSettingsRows: View", in: read("UI/OverlayStyleSettingsRows.swift") ?? "")
+            expectEqual(sourceHas(layoutRows, "@Environment(\\.accessibilityReduceMotion) private var reduceMotion")
+                        && sourceHas(layoutRows, "title: L10n.t(\"换句动画\")")
+                        && sourceHas(layoutRows, "detail: reduceMotion ? L10n.t(\"系统已开启「减弱动态效果」，不会播放\") : nil,\n                    isOn: $settings.overlayLineChangeAnimation")
+                        && !layoutRows.contains("disabled(reduceMotion")
+                        && sourceHas(sourceBody("private var animatesLineChange: Bool", in: view), "&& !reduceMotion")
+                        && sourceHas(view, "@Environment(\\.accessibilityReduceMotion) private var reduceMotion"), true,
+                        "悬浮换句动画: 减弱动态效果开着时设置那一格说明不会播放,开关不置灰,跟视图的判断读同一个环境值")
             if let stage = read("UI/OverlayLineChangeStage.swift") {
                 // 新主句跟上一拍下一句同号才从它那一格、按它的字号起步,否则原地淡入。
                 expectEqual(stage.contains("if lastNextRow.id == m.id, let oldNext = next, oldNext.id == m.id {")

@@ -286629,6 +286629,101 @@
           }
         }
       }
+    },
+    "系统已开启「减弱动态效果」，不会播放" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wird nicht abgespielt, solange „Bewegung reduzieren“ aktiv ist"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Won’t play while Reduce Motion is on"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No se reproduce con «Reducir movimiento» activado"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sans effet tant que « Réduire les animations » est activé"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Non viene riprodotta con “Riduci movimento” attivo"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "「視差効果を減らす」がオンのため、再生されません"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "시스템에서 ‘동작 줄이기’가 켜져 있어 재생되지 않습니다"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Não é reproduzida com “Reduzir movimento” ativado"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "В системе включено «Уменьшение движения», поэтому анимация не воспроизводится"
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "“ลดการเคลื่อนไหว” เปิดอยู่ จึงไม่เล่นภาพเคลื่อนไหว"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sistemde “Hareketi Azalt” açık; geçiş oynatılmaz"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "У системі ввімкнено «Зменшення руху», тому анімація не відтворюється"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hệ thống đang bật “Giảm chuyển động”, hiệu ứng sẽ không phát"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "系统已开启「减弱动态效果」，不会播放"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "系統已開啟「減少動態效果」，不會播放"
+          }
+        }
+      }
     }
   },
   "version" : "1.0"

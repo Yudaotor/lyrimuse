@@ -2298,6 +2298,7 @@
 "系统媒体信息通道不可用" = "Sistem medya kanalı kullanılamıyor";
 "系统媒体信息通道在本机不可用：%@ 将改为直接读取播放状态（进度可能略有偏差），其他播放器暂时无法读取" = "Sistem medya kanalı bu Mac’te kullanılamıyor: %@ çalarının durumu bunun yerine doğrudan okunacak (ilerleme biraz sapabilir); diğer çalarlar şimdilik okunamıyor";
 "系统字体" = "Sistem Fontu";
+"系统已开启「减弱动态效果」，不会播放" = "Sistemde “Hareketi Azalt” açık; geçiş oynatılmaz";
 "系统已开启「减弱动态效果」，触控栏歌词不滚动、不逐字高亮" = "Sistemde “Hareketi Azalt” açık; Touch Bar sözleri kaymaz ve kelime kelime vurgulanmaz";
 "系统自动化授权：上次检测时已授权" = "Sistem otomasyon izni: son denetimde verilmişti";
 "系统自动化授权：尚未授权" = "Sistem otomasyon izni: henüz verilmedi";
