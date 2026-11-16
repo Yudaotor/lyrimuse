@@ -1479,8 +1479,8 @@ struct LyricsSearchSheet: View {
         guard pending.key == nil || pending.key == songKey else { return }
         AppActions.shared.pendingLyricsImport = nil
         if pending.urls.isEmpty {
-            // 不在视图更新的当口弹模态框。
-            DispatchQueue.main.async { chooseImportFiles() }
+            // 不在视图更新的当口弹模态框;下一拍别走主队列块,面板开着期间主队列会停摆。
+            NestedLoopLaunch.nextTurn { chooseImportFiles() }
         } else {
             Task { await importFiles(pending.urls) }
         }

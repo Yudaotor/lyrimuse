@@ -77,14 +77,15 @@ enum ICloudConfigImportPrompt {
             // 窗口底下 —— 用户只会觉得"装完什么都没发生"。
             NSApp.activate(ignoringOtherApps: true)
 
-            guard alert.runModal() == .alertFirstButtonReturn else {
+            // 这段在主 actor 的 Task 里:模态框交给 NestedLoopLaunch 起,不然开着期间主队列停摆。
+            guard await NestedLoopLaunch.run({ alert.runModal() }) == .alertFirstButtonReturn else {
                 continuation()
                 return
             }
             // 认不出、解不开:什么都没写,说一声、不重启,照常往下走引导(同设置页导入)。歌词和备份目录也不动,
             // 配置都没写进去,单独铺歌词 / 改备份目录只会留下半吊子状态。
             guard await ConfigPortability.importData(data) else {
-                showNotice(L10n.t("导入失败：该文件不是 Lyrimuse 的设置备份，或已损坏。当前设置未更改"))
+                await showNotice(L10n.t("导入失败：该文件不是 Lyrimuse 的设置备份，或已损坏。当前设置未更改"))
                 continuation()
                 return
             }
@@ -99,7 +100,7 @@ enum ICloudConfigImportPrompt {
             // 有一份没写成(盘满、没有写权限):先说清是哪部分再重启,写成的那几份要重启才生效。
             let failed = ConfigPortability.lastImportFailures
             if !failed.isEmpty {
-                showNotice(String(format: L10n.t("部分设置未能写入（%@），其余已导入。可再次导入，或检查配置文件夹的写入权限"),
+                await showNotice(String(format: L10n.t("部分设置未能写入（%@），其余已导入。可再次导入，或检查配置文件夹的写入权限"),
                                   failed.joined(separator: ", ")))
             }
             ConfigPortability.restartApp()
@@ -107,11 +108,11 @@ enum ICloudConfigImportPrompt {
     }
 
     @MainActor
-    private static func showNotice(_ text: String) {
+    private static func showNotice(_ text: String) async {
         let alert = NSAlert()
         alert.messageText = text
         alert.addButton(withTitle: L10n.t("好"))
         NSApp.activate(ignoringOtherApps: true)
-        alert.runModal()
+        _ = await NestedLoopLaunch.run { alert.runModal() }
     }
 }

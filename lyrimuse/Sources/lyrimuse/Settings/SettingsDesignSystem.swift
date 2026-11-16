@@ -2243,7 +2243,8 @@ enum SettingsGlassMenuEntry {
 }
 
 /// 玻璃浮层菜单的内容,`SettingsGlassActionMenu` 和编辑台工具栏的「重置」共用。动作在浮层收起之后的下一拍才执行:
-/// 有的动作会弹系统的选文件面板,跟浮层的收起动画撞在同一拍会被一起带走。
+/// 有的动作会弹系统的选文件面板,跟浮层的收起动画撞在同一拍会被一起带走。下一拍走 `NestedLoopLaunch.nextTurn`,
+/// 别换成 `DispatchQueue.main.async`:面板的模态循环会整段嵌在那个主队列块里,开着期间主队列停摆。
 struct SettingsGlassMenuEntries: View {
     let entries: [SettingsGlassMenuEntry]
     let dismiss: () -> Void
@@ -2255,7 +2256,7 @@ struct SettingsGlassMenuEntries: View {
                 case let .action(title, action):
                     GlassPopoverMenuRow(title: title, checked: false, showsCheck: false) {
                         dismiss()
-                        DispatchQueue.main.async(execute: action)
+                        NestedLoopLaunch.nextTurn(action)
                     }
                 case .divider:
                     Divider().padding(.vertical, 4)

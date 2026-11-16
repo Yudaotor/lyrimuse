@@ -1,4 +1,5 @@
 import AppKit
+import LyrimuseCore
 import Carbon.HIToolbox
 import KeyboardShortcuts
 
@@ -141,11 +142,12 @@ enum ShortcutConflict {
     ///
     /// 必须异步弹:调用点在 `NSEvent.addLocalMonitorForEvents` 的回调里,在事件监听
     /// 闭包内部起模态会话是重入,轻则弹窗吃不到键盘、重则卡住。先让这一轮事件处理结束
-    /// (调用方已经 stopRecording、把监听摘掉了),下一个 runloop 回合再弹。
+    /// (调用方已经 stopRecording、把监听摘掉了),下一个 runloop 回合再弹。下一拍走 `NestedLoopLaunch`,
+    /// 别换成 `DispatchQueue.main.async`:没有窗口时的 `runModal` 会整段嵌在主队列块里,开着期间主队列停摆。
     @MainActor
     static func present(_ kind: Kind, over window: NSWindow?) {
         NSSound.beep()
-        DispatchQueue.main.async {
+        NestedLoopLaunch.nextTurn {
             let alert = NSAlert()
             alert.alertStyle = .warning
             alert.messageText = kind.message

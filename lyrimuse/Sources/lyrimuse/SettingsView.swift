@@ -2646,7 +2646,7 @@ private struct LyricsSettingsTab: View {
                     let alert = NSAlert()
                     alert.alertStyle = .warning
                     alert.messageText = L10n.t("自动备份失败，为避免数据无法恢复，本次未执行删除。请检查磁盘空间和配置文件夹的写入权限后重试")
-                    alert.runModal()
+                    _ = await NestedLoopLaunch.run { alert.runModal() }
                     return
                 }
             }

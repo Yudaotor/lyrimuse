@@ -467,8 +467,10 @@ enum DebugDeepLinks {
             var outcome = AppLocationPrompt.Outcome.notNeeded
             if asks {
                 FileIO.createDirectory(directory)
-                outcome = AppLocationPrompt.ask(location: location, source: sourceURL, into: directory,
-                                                activate: !WindowActivation.isBackground, answer: answer)
+                outcome = await NestedLoopLaunch.run {
+                    AppLocationPrompt.ask(location: location, source: sourceURL, into: directory,
+                                          activate: !WindowActivation.isBackground, answer: answer)
+                }
                 if outcome == .declined {
                     UserDefaults.standard.set(AppLocationPrompt.currentVersion, forKey: AppLocationPrompt.declinedVersionKey)
                 }

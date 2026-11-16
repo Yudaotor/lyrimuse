@@ -257,6 +257,7 @@ public enum LyrimuseDeepLink: Equatable, Sendable {
         /// 照常开始读引擎的状态文件(不写 features.json,引擎不会真换),验监视器轮询用。
         case wordFormatSwitch(state: String, format: String?, done: Int?, total: Int?, removing: [String] = [])
         /// 把这几个文件交给「搜索歌词…」窗口导入,跟点「导入文件…」选完文件走同一条路(`debug/import-lyrics?path=<绝对路径>&path=…`)。
+        /// 不带 `path` 时列表为空,窗口弹选文件框,同歌词管理「⋯」里的「导入歌词文件…」。
         /// 不开窗:窗口没开着时请求留 60 秒,开窗时取走(先 `lyrics-search?background=1`)。
         case importLyrics(paths: [String])
         /// 歌词管理弹「导入歌词文件夹」预览面板,读这个文件夹(`debug/import-lyrics-folder?path=<绝对路径>`)。歌词管理窗口要开着
@@ -467,8 +468,9 @@ public enum LyrimuseDeepLink: Equatable, Sendable {
             guard let path = value("path"), path.hasPrefix("/") else { return nil }
             self = .debug(.importLyricsFolder(path: path))
         case ("debug", "/import-lyrics"):
-            let paths = query.filter { $0.name.lowercased() == "path" }.compactMap(\.value).filter { $0.hasPrefix("/") }
-            guard !paths.isEmpty else { return nil }
+            let given = query.filter { $0.name.lowercased() == "path" }
+            let paths = given.compactMap(\.value).filter { $0.hasPrefix("/") }
+            guard !paths.isEmpty || given.isEmpty else { return nil }
             self = .debug(.importLyrics(paths: paths))
         case ("debug", "/settings-search"):
             guard let query = value("q")?.trimmingCharacters(in: .whitespaces), !query.isEmpty else { return nil }
@@ -807,7 +809,7 @@ public enum LyrimuseDeepLink: Equatable, Sendable {
             case .milestonePreview: components.path = "/milestone-preview"
             case let .importLyrics(paths):
                 components.path = "/import-lyrics"
-                components.queryItems = paths.map { URLQueryItem(name: "path", value: $0) }
+                components.queryItems = paths.isEmpty ? nil : paths.map { URLQueryItem(name: "path", value: $0) }
             case let .importLyricsFolder(path):
                 components.path = "/import-lyrics-folder"
                 components.queryItems = [URLQueryItem(name: "path", value: path)]

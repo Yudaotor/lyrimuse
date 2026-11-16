@@ -384,4 +384,103 @@ func runMainThreadIOTests() {
                         && sourceHas(pear, "now - last.at < Self.runningCheckTTL") && !sourceHas(pear, "runningApplications"), true,
                     "Pear 能不能控制(契约): 判开着走进程缓存、结论记一会儿,榜单每行重画不再问 LaunchServices")
     }
+
+    do {
+        print("\n== 嵌套事件循环:模态框不起在主队列块和主 actor 的 Task 里 ==")
+        /// 就地转一段嵌套 run loop(同 `runModal` 的模态循环),返回这期间主队列上另投的块有没有跑到。
+        func nestedLoopDrainsMainQueue() -> Bool {
+            var ran = false
+            DispatchQueue.main.async { ran = true }
+            let end = Date().addingTimeInterval(0.1)
+            while !ran, Date() < end { _ = RunLoop.main.run(mode: .default, before: end) }
+            return ran
+        }
+        final class Box: @unchecked Sendable { var direct: Bool?; var viaNextTurn: Bool?; var viaRun: Bool?; var result: Int? }
+        let box = Box()
+        DispatchQueue.main.async {
+            box.direct = nestedLoopDrainsMainQueue()
+            NestedLoopLaunch.nextTurn { box.viaNextTurn = nestedLoopDrainsMainQueue() }
+        }
+        spin(until: { box.viaNextTurn != nil })
+        expectEqual(box.direct, false, "嵌套循环(对照): 直接起在主队列块里,开着期间主队列停摆")
+        expectEqual(box.viaNextTurn, true, "嵌套循环: 主队列块里交给 NestedLoopLaunch.nextTurn,起的时候主队列照常执行")
+        Task { @MainActor in
+            box.result = await NestedLoopLaunch.run { () -> Int in
+                box.viaRun = nestedLoopDrainsMainQueue()
+                return 7
+            }
+        }
+        spin(until: { box.result != nil })
+        expectEqual(box.viaRun, true, "嵌套循环: 主 actor 的 Task 里 await NestedLoopLaunch.run,起的时候主队列照常执行")
+        expectEqual(box.result, 7, "嵌套循环: NestedLoopLaunch.run 交回 body 的返回值")
+
+        let glassMenu = sourceBody("struct SettingsGlassMenuEntries: View", in: app("Settings/SettingsDesignSystem.swift"))
+        expectEqual(sourceHas(glassMenu, "dismiss() NestedLoopLaunch.nextTurn(action)") && !sourceHas(glassMenu, "DispatchQueue.main"), true,
+                    "玻璃浮层菜单(契约): 动作的下一拍走 NestedLoopLaunch,不走主队列块(「从应用程序中选择…」「更换备份文件夹…」都从这里弹面板)")
+        let pendingImport = sourceBody("private func takePendingImport()", in: app("LyricsManager/LyricsSearchSheet.swift"))
+        expectEqual(sourceHas(pendingImport, "NestedLoopLaunch.nextTurn { chooseImportFiles() }") && !sourceHas(pendingImport, "DispatchQueue.main"), true,
+                    "搜索歌词取走导入请求(契约): 选文件面板的下一拍走 NestedLoopLaunch")
+        let conflict = sourceBody("static func present(_ kind: Kind, over window: NSWindow?)", in: app("Settings/ShortcutConflict.swift"))
+        expectEqual(sourceHas(conflict, "NestedLoopLaunch.nextTurn {") && !sourceHas(conflict, "DispatchQueue.main"), true,
+                    "快捷键冲突提示(契约): 没有窗口时的 runModal 不起在主队列块里")
+        expectEqual(sourceHas(app("Settings/ICloudConfigImportPrompt.swift"), "private static func showNotice(_ text: String) async {"), true,
+                    "iCloud 导入提示(契约): 导入后的说明框在 Task 里 await 着弹")
+
+        // 全仓扫:主队列块、主 actor 的 Task 里不许直接 runModal(交给 NestedLoopLaunch 的那一段不算)。只认直接写在块里的,
+        // 块里调的函数再 runModal 的(玻璃菜单、取走导入请求)由上面几条钉住。
+        /// 从 `index` 起、同一行上第一个 `{` 到配对的 `}`;那一行上没有 `{`(`async(execute: work)` 这种)返回 nil。
+        func closureBody(after index: String.Index, in text: String) -> Range<String.Index>? {
+            guard let open = text[index...].firstIndex(where: { $0 == "{" || $0 == "\n" }), text[open] == "{" else { return nil }
+            var depth = 0
+            var i = open
+            while i < text.endIndex {
+                if text[i] == "{" { depth += 1 } else if text[i] == "}" {
+                    depth -= 1
+                    if depth == 0 { return open..<text.index(after: i) }
+                }
+                i = text.index(after: i)
+            }
+            return nil
+        }
+        func blankingLaunchedBlocks(_ body: String) -> String {
+            var text = body
+            var from = text.startIndex
+            while let hit = text.range(of: "NestedLoopLaunch.", range: from..<text.endIndex) {
+                guard let block = closureBody(after: hit.upperBound, in: text) else {
+                    from = hit.upperBound
+                    continue
+                }
+                let offset = text.distance(from: text.startIndex, to: hit.upperBound)
+                text.replaceSubrange(block, with: "{}")
+                from = text.index(text.startIndex, offsetBy: offset)
+            }
+            return text
+        }
+        let openers = ["DispatchQueue.main.async", "OperationQueue.main.addOperation", "Task {", "Task(priority:"]
+        var modalInQueueBlock: [String] = []
+        var scannedRunModal = 0
+        let appRoot = sources.appendingPathComponent("lyrimuse")
+        for case let rel as String in FileManager.default.enumerator(atPath: appRoot.path) ?? FileManager.DirectoryEnumerator()
+        where rel.hasSuffix(".swift") {
+            guard let raw = try? String(contentsOfFile: appRoot.appendingPathComponent(rel).path, encoding: .utf8),
+                  sourceBytes(raw, contain: ".runModal()") else { continue }
+            let code = raw.split(separator: "\n", omittingEmptySubsequences: false)
+                .map { $0.trimmingCharacters(in: .whitespaces).hasPrefix("//") ? "" : String($0) }
+                .joined(separator: "\n")
+            scannedRunModal += code.components(separatedBy: ".runModal()").count - 1
+            for opener in openers {
+                var from = code.startIndex
+                while let hit = code.range(of: opener, range: from..<code.endIndex) {
+                    from = hit.upperBound
+                    guard let block = closureBody(after: hit.lowerBound, in: code) else { continue }
+                    if blankingLaunchedBlocks(String(code[block])).contains(".runModal()") {
+                        let line = code[..<hit.lowerBound].filter { $0 == "\n" }.count + 1
+                        modalInQueueBlock.append("\(rel):\(line) \(opener)")
+                    }
+                }
+            }
+        }
+        expectEqual(scannedRunModal >= 20, true, "嵌套循环(契约): 扫到了 App 里的 runModal(\(scannedRunModal) 处)")
+        expectEqual(modalInQueueBlock, [], "嵌套循环(契约): 主队列块 / Task 里没有直接起的 runModal")
+    }
 }
