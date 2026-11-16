@@ -7,6 +7,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"sync"
 )
 
 // runTestLyricSourcesCLI implements `lyrimuse-engine test-lyric-sources [-source <name>]`:
@@ -69,7 +70,11 @@ func runTestLyricSourcesCLI(args []string) {
 	// 任何输出——取消掉让 runProbe 立刻收工,理由见函数头注。
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
+	// 专用探测曲在别的 goroutine 里报结论,reported 的读写都要过 mu。
+	var mu sync.Mutex
 	allReported := func() bool {
+		mu.Lock()
+		defer mu.Unlock()
 		for _, t := range targets {
 			if !reported[t] {
 				return false
@@ -80,6 +85,8 @@ func runTestLyricSourcesCLI(args []string) {
 
 	enc := json.NewEncoder(os.Stdout)
 	emitResult := func(source, status, reasonCode string) {
+		mu.Lock()
+		defer mu.Unlock()
 		if reported[source] {
 			return
 		}
@@ -103,7 +110,7 @@ func runTestLyricSourcesCLI(args []string) {
 	// 本身是活的。
 	scanForPositives := func(results []scoredLyricCandidateResult) {
 		for _, src := range lyricSourcesResponded(results) {
-			if wanted[src] && !reported[src] {
+			if wanted[src] {
 				// ok 状态的 reasonCode 从来不会显示给用户(Swift 侧只在 warn/fail 时才读
 				// 这个字段,见 SettingsView.sourceAccessoryTooltip),留空即可。
 				emitResult(src, "ok", "")
@@ -142,6 +149,26 @@ func runTestLyricSourcesCLI(args []string) {
 		emitResult(lyricSourceAppleMusic, "warn", lyricFailureReasonAppleMusicNotConnected)
 	}
 
+	// 配了专用探测曲的源(lyricSourceOwnProbes)另外单独问一次,跟下面两首并行:共用的两首不在它的曲库里,
+	// 只靠那两首必然误报。没问出来的照样看下面两首的结果。
+	var ownProbes sync.WaitGroup
+	for _, src := range targets {
+		probe, ok := lyricSourceOwnProbes[src]
+		if !ok {
+			continue
+		}
+		ownProbes.Add(1)
+		go func(src string) {
+			defer ownProbes.Done()
+			if probe(ctx) {
+				emitResult(src, "ok", "")
+				if allReported() {
+					cancel()
+				}
+			}
+		}(src)
+	}
+
 	// 上面那一步可能已经把唯一的目标源结论掉了(单测 Apple Music 且没连账号),这时一首
 	// 探测曲都不必跑。
 	if !allReported() {
@@ -152,6 +179,7 @@ func runTestLyricSourcesCLI(args []string) {
 	if !allReported() {
 		runProbe("The Beatles", "Yesterday", "Help!")
 	}
+	ownProbes.Wait()
 
 	down := networkLooksDown()
 	for _, src := range targets {

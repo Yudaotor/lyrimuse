@@ -214,7 +214,9 @@ func runHealthcheckCLI(args []string) {
 			{"梦然", "少年", ""},                      // 中文库
 			{"The Beatles", "Yesterday", "Help!"}, // 英文库
 		}
+		own := startOwnLyricSourceProbes(enabled, *probeTimeout)
 		outcome := probeLyricSourcesWithin(probes, *probeTimeout, healthProbeGrace)
+		outcome.ownAnswered = own(healthProbeGrace)
 		report.NetworkLooksDown = networkLooksDown()
 		report.Items = append(report.Items,
 			healthProbeItems(enabled, len(probes), outcome, *probeTimeout, report.NetworkLooksDown)...)
@@ -272,9 +274,57 @@ var healthProbeSearch = func(ctx context.Context, p healthProbeTrack) []scoredLy
 }
 
 type healthProbeOutcome struct {
-	answered  map[string]int // 源 → 给出过候选的探测曲数,不看分数(跟 test-lyric-sources 同一口径)
-	elapsed   time.Duration
-	truncated bool // 时限到了还没跑完
+	answered    map[string]int  // 源 → 给出过候选的探测曲数,不看分数(跟 test-lyric-sources 同一口径)
+	ownAnswered map[string]bool // 源 → 专用探测曲(lyricSourceOwnProbes)问出了歌词
+	elapsed     time.Duration
+	truncated   bool // 时限到了还没跑完
+}
+
+// lyricSourceOwnProbes:曲库覆盖不到两首共用探测曲的源,各配一首它曲库里稳有的歌,直接调这个源自己的取词去问,
+// 不经整轮搜索、不打扰别的源。test-lyric-sources 和 healthcheck 共用;单测可换。
+var lyricSourceOwnProbes = map[string]func(ctx context.Context) bool{
+	// Zing MP3 只有越南曲库,《少年》搜不到,《Yesterday》只有不带歌词的条目(09 章决策 373)。
+	lyricSourceZing: func(ctx context.Context) bool {
+		return zingLyric(ctx, "Sơn Tùng M-TP", "Lạc Trôi", "", 0).lyrics != ""
+	},
+}
+
+// startOwnLyricSourceProbes 在后台对启用的、配了专用探测曲的源各问一次,跟共用探测曲同时起跑、同一个时限
+// (到点 cancel,理由同 probeLyricSourcesWithin)。返回的函数最多再等 grace 收结果,没回来的算没答。
+func startOwnLyricSourceProbes(enabled []string, budget time.Duration) func(grace time.Duration) map[string]bool {
+	ctx, cancel := context.WithCancel(context.Background())
+	stop := time.AfterFunc(budget, cancel)
+	type answer struct {
+		src string
+		ok  bool
+	}
+	answers := make(chan answer, len(enabled))
+	n := 0
+	for _, src := range enabled {
+		probe, ok := lyricSourceOwnProbes[src]
+		if !ok {
+			continue
+		}
+		n++
+		go func(src string) { answers <- answer{src, probe(ctx)} }(src)
+	}
+	return func(grace time.Duration) map[string]bool {
+		defer cancel()
+		defer stop.Stop()
+		out := map[string]bool{}
+		giveUp := time.After(grace)
+		for ; n > 0; n-- {
+			select {
+			case a := <-answers:
+				if a.ok {
+					out[a.src] = true
+				}
+			case <-giveUp:
+				return out
+			}
+		}
+		return out
+	}
 }
 
 // probeLyricSourcesWithin 让几首探测曲并发跑、共用一个时限。到点用 cancel 收工,别换成 context.WithTimeout:
@@ -334,6 +384,8 @@ func healthProbeItems(enabled []string, probes int, o healthProbeOutcome, budget
 	for _, src := range enabled {
 		n := o.answered[src]
 		switch {
+		case o.ownAnswered[src] && n < probes:
+			add("源 "+src, healthOK, "专用探测曲给出了歌词(共用探测曲不在它的曲库里属正常)")
 		case n == probes:
 			add("源 "+src, healthOK, "%d/%d 首探测曲给出了候选", n, probes)
 		case n > 0 && o.truncated:
