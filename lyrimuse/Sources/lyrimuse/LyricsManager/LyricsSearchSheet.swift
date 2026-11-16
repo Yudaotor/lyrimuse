@@ -133,8 +133,12 @@ struct LyricsSearchSheet: View {
     @State private var playedWhileOpen = false
     /// 查询对象(换歌)换了几次,见 apply 里那道守卫。
     @State private var subjectGeneration = 0
-    /// 候选列表有没有焦点:点一行时交给它,方向键才换得了行(onMoveCommand)。
+    /// 候选列表有没有焦点:点一行时交给它,方向键才换得了行(onMoveCommand)。每轮搜索列表出来时也交给它(`takeListFocus`)。
     @FocusState private var candidateListFocused: Bool
+    /// 这一轮搜索还没把焦点交给候选列表。
+    @State private var listFocusPending = false
+    /// 这一轮搜索发出时的查询词(歌名、歌手、专辑);之后改过就是用户在输入,不抢输入框的焦点。
+    @State private var searchedQuery: [String] = []
     /// 「内容与其他候选相同」「不可用」两个折叠组展开了没有(LyricsCandidateGroups)。选中的那条落在收起的组里时自动展开。
     @State private var showsSameGroup = false
     @State private var showsExcludedGroup = false
@@ -748,6 +752,8 @@ struct LyricsSearchSheet: View {
             }
             .controlSize(.large)
             .settingsGlassButtons()
+            .keyboardShortcut("r", modifiers: .command)
+            .help(L10n.t("快捷键：⌘R"))
             .disabled(title.trimmingCharacters(in: .whitespaces).isEmpty)
             if isDirty {
                 Button(L10n.t("恢复原信息")) {
@@ -869,7 +875,47 @@ struct LyricsSearchSheet: View {
             searchConclusion
             Spacer(minLength: 0)
         } else {
+            excludedConclusion
             candidateList
+        }
+    }
+
+    /// 搜完、列表里只剩「不可用」那一组时,列表上面一张小卡:搜到的都用不了,别的源为什么没给。行文同 `searchConclusion`。
+    /// 见 11 章决策 175。
+    @ViewBuilder
+    private var excludedConclusion: some View {
+        let layout = sidebarLayout
+        if !isSearching, loadError == nil, layout.onlyExcluded {
+            let groups = unreachableSourcesByCode
+            let unreachableCount = groups.reduce(0) { $0 + $1.sources.count }
+            let answered = Self.allLyricSourceNames.filter(respondedSources.contains).count
+            let silentCount = max(0, sourcesTotal - answered - unreachableCount - tracksFoundNoLyrics.count)
+            VStack(alignment: .leading, spacing: 4) {
+                // 除了不可用的没有别的可选(没有当前使用、也没导入)时,说的就是「都没找到可用的」。
+                conclusionTitle(layout.excludedForced ? L10n.t("已启用的歌词源均未找到可用的候选") : L10n.t("其他候选均不可用"),
+                                systemImage: "exclamationmark.triangle")
+                Group {
+                    ForEach(groups, id: \.code) { group in
+                        Self.transportFailureLine(group.code, sources: group.sources)
+                    }
+                    if instrumental {
+                        Text(L10n.t("有歌词源将这首歌曲标记为纯音乐，无可用的候选歌词"))
+                    }
+                    if !tracksFoundNoLyrics.isEmpty {
+                        Text(String(format: L10n.t("%@ 已匹配到该曲目，无歌词文本"),
+                                    tracksFoundNoLyrics.map { sourceDisplayName($0.source) }.joined(separator: "、")))
+                    }
+                    if silentCount > 0 {
+                        Text(String(format: L10n.plural("其余 %@ 个源未返回候选", count: silentCount), "\(silentCount)"))
+                    }
+                }
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+            }
+            .padding(10)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .settingsCardBackground(cornerRadius: 10, inSheet: true)
         }
     }
 
@@ -958,13 +1004,27 @@ struct LyricsSearchSheet: View {
                 .focused($candidateListFocused)
                 .focusEffectDisabled()
                 .onMoveCommand { direction in moveSelection(direction, proxy: proxy) }
+                .onAppear { takeListFocus() }
             }
         }
     }
 
+    /// 开窗、每轮搜索之后,候选列表一出来就把焦点交给它:↑ / ↓ 直接换候选,不用先点一下列表。查询词在这一轮发出之后
+    /// 又改过(正在输入)时不抢。见 11 章决策 175。
+    private func takeListFocus() {
+        guard listFocusPending, !searchResults.isEmpty, [title, artist, album] == searchedQuery else { return }
+        listFocusPending = false
+        // 列表这一拍才挂上,下一拍再给焦点。
+        Task { @MainActor in candidateListFocused = true }
+    }
+
     /// 「当前使用」那一块摆的:搜索结果里有同一份(来源和正文都一样)就是搜到的那条(带分数),否则是缓存里存着的那一版。
+    /// 搜到的那条没有封面(LRCLIB 这类源不给)时用这首自己的封面,是这首的、不是借别的候选的(见 11 章决策 175)。
     private var currentShown: LyricsSearchService.Candidate? {
-        if let hit = candidates.first(where: isCurrentCandidate) { return hit }
+        if var hit = candidates.first(where: isCurrentCandidate) {
+            if hit.coverURL == nil { hit.coverURL = storedCandidate?.coverURL }
+            return hit
+        }
         guard let stored = storedCandidate, isCurrentCandidate(stored) else { return nil }
         return stored
     }
@@ -986,6 +1046,9 @@ struct LyricsSearchSheet: View {
         var excludedExpanded = false
         /// 除了「不可用」那一组没有别的可看:那一组一直展开,组头不给收起。
         var excludedForced = false
+
+        /// 搜索结果里只剩「不可用」那一组(「当前使用」、导入的那条不算)。
+        var onlyExcluded: Bool { main.isEmpty && same.isEmpty && !excluded.isEmpty }
 
         /// 屏上看得见的,按屏上顺序。
         var visible: [LyricsSearchService.Candidate] {
@@ -2297,6 +2360,8 @@ struct LyricsSearchSheet: View {
         }
         candidates = []
         candidatesRevision &+= 1
+        listFocusPending = true
+        searchedQuery = [title, artist, album]
         coverPrewarm?.cancel()
         coverPrewarm = nil
         storedCandidate = makeStoredCandidate()
@@ -2356,6 +2421,9 @@ struct LyricsSearchSheet: View {
         }
         guard generation == searchGeneration else { return } // 别让旧一轮的收尾把新一轮的"正在搜索"关掉
         isSearching = false
+        // 搜完只剩「不可用」那一组时展开它,每一行写着不可用的原因;组头照样能收起。
+        if sidebarLayout.onlyExcluded { showsExcludedGroup = true }
+        takeListFocus()
     }
 }
 

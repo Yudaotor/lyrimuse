@@ -210,6 +210,10 @@ public enum LyrimuseDeepLink: Equatable, Sendable {
         /// `debug/window-click?window=lyrics-window&at=210,640`。按下、30 毫秒后松开,经窗口的事件分发(跟真实点按同一条路),
         /// 不把窗口提到前面、不激活 App。
         case windowClick(window: String, at: CGPoint)
+        /// 往名为 `window` 的窗口送一次按键(窗口名同 `snapshot`):`debug/window-key?window=lyrics-search&key=down`,
+        /// `cmd=1` 按住 ⌘(`key=r&cmd=1` 是 ⌘R)。`key` 认 `windowKeyNames` 和单个小写字母 a–z。按下、30 毫秒后松开,
+        /// 经窗口的事件分发(跟真实按键同一条路),不把窗口提到前面、不激活 App。
+        case windowKey(window: String, key: String, command: Bool)
         /// 在菜单栏面板 (x, y) 处滚动(坐标同 `panelDrag`),事件送进面板窗口、跟真实滚动同一条路:`debug/panel-scroll?at=60,208&dy=1`
         /// 是鼠标滚轮往上一格;`steps=N` 连滚 N 格;`kind=trackpad` 换成触控板两指滑(began、N 次各 `dy` pt、ended)。
         /// `dy` 为正 = 手指往上(调大)。
@@ -286,14 +290,24 @@ public enum LyrimuseDeepLink: Equatable, Sendable {
         /// 歌词管理弹「解析决策」面板,跟详情页「解析决策」那颗键同一条路(`debug/manager-decision[?key=<写法键>]`,没带 key 是
         /// 详情页正显示的那一条)。歌词管理要开着(先 `lyrics-manager?background=1`)。
         case managerDecision(key: String?)
-        /// 按这条写法键开「搜索歌词…」窗口,跟歌词管理「搜索候选歌词」同一条路(`debug/lyrics-search?key=<写法键>`)。
-        /// 歌名、时长取歌词管理的列表,歌词管理要开着(先 `lyrics-manager?background=1`)。
+        /// 按这条写法键开「搜索歌词…」窗口,跟歌词管理「搜索候选歌词」同一条路(`debug/lyrics-search?key=<写法键>`,可带
+        /// `background=1`)。歌名、时长取歌词管理的列表,歌词管理要开着(先 `lyrics-manager?background=1`);列表还没读完时等它读完再开。
         case lyricsSearch(key: String)
         /// 歌词管理详情页的「写入歌曲文件」(`debug/lyrics-writeback?step=open|confirm|cancel`):`open` 同点「⋯ → 写入歌曲文件…」
         /// (查文件、弹确认框),`confirm` / `cancel` 同点确认框的写入 / 取消。歌词管理要开着、正显示正在放的那首。
         case lyricsWriteback(step: String)
         /// 设监视文件夹(`debug/import-watch?path=<绝对路径>`),`debug/import-watch?off=1` 停止监视。
         case importWatch(path: String?)
+    }
+
+    /// `debug/window-key` 除单个小写字母外认的键名。
+    public static let windowKeyNames = ["up", "down", "left", "right", "return", "escape", "tab", "space"]
+
+    /// `debug/window-key` 的 `key` 认不认:`windowKeyNames` 里的,或者单个 a–z。
+    public static func isWindowKey(_ key: String) -> Bool {
+        if windowKeyNames.contains(key) { return true }
+        guard key.count == 1, let c = key.unicodeScalars.first else { return false }
+        return ("a"..."z").contains(c)
     }
 
     /// `debug/stall` 的上限(毫秒)。再长就是把 App 卡死了。
@@ -454,6 +468,9 @@ public enum LyrimuseDeepLink: Equatable, Sendable {
         case ("debug", "/panel-click"):
             guard let at = Self.panelPoint(Substring(value("at") ?? "")) else { return nil }
             self = .debug(.panelClick(at: at, inGallery: value("in") == "gallery"))
+        case ("debug", "/window-key"):
+            guard let window = value("window"), !window.isEmpty, let key = value("key"), Self.isWindowKey(key) else { return nil }
+            self = .debug(.windowKey(window: window, key: key, command: value("cmd").flatMap(Self.parseBool) ?? false))
         case ("debug", "/window-click"):
             guard let window = value("window"), !window.isEmpty,
                   let at = Self.panelPoint(Substring(value("at") ?? "")) else { return nil }
@@ -848,6 +865,10 @@ public enum LyrimuseDeepLink: Equatable, Sendable {
             case let .windowClick(window, at):
                 components.path = "/window-click"
                 components.queryItems = [URLQueryItem(name: "window", value: window), URLQueryItem(name: "at", value: "\(at.x),\(at.y)")]
+            case let .windowKey(window, key, command):
+                components.path = "/window-key"
+                components.queryItems = [URLQueryItem(name: "window", value: window), URLQueryItem(name: "key", value: key)]
+                if command { components.queryItems?.append(URLQueryItem(name: "cmd", value: "1")) }
             case let .panelScroll(at, dy, trackpad, steps):
                 components.path = "/panel-scroll"
                 components.queryItems = [URLQueryItem(name: "at", value: "\(at.x),\(at.y)"), URLQueryItem(name: "dy", value: "\(dy)")]

@@ -339,7 +339,8 @@ final class LyricsSearchService {
         let title: String
         let artist: String
         let album: String
-        let coverURL: URL?
+        /// 搜索窗口摆「当前使用」时,这条没有封面会补上这首自己的(`LyricsSearchSheet.currentShown`)。
+        var coverURL: URL?
         // true 时 lyrics 装的是没有时间戳的纯文本(见引擎
         // scoredLyricCandidateResult.PlainTextOnly 头注)。跟别的候选不同,这条**不能**
         // 用来做逐字/逐行同步展示,只能当静态文字读——「搜索候选歌词」弹窗要用它决定

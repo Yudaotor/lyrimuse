@@ -569,6 +569,7 @@
 "其他 App" = "Diğer Uygulamalar";
 "其他 App 正占用播放焦点，暂时无法控制「%@」" = "Başka bir uygulama çalma odağını tuttuğu için “%@” şu an denetlenemiyor";
 "其他 App 正占用播放焦点，暂时无法控制播放" = "Başka bir uygulama çalma odağını tuttuğu için çalma şu an denetlenemiyor";
+"其他候选均不可用" = "Diğer adayların hiçbiri uygun değil";
 "其他平台" = "Diğer platformlar";
 "其他平台包括 %@" = "Diğer platformlar: %@";
 "其他折叠规则" = "Diğer birleştirme kuralı";
@@ -1280,6 +1281,7 @@
 "快捷操作" = "Hızlı Eylemler";
 "快捷操作按钮" = "Hızlı İşlem Düğmeleri";
 "快捷键" = "Klavye Kestirmeleri";
+"快捷键：⌘R" = "Kestirme: ⌘R";
 "快捷键：⌘↩" = "Kestirme: ⌘↩";
 "快进 10 秒" = "10 Saniye İleri";
 "快退 10 秒" = "10 Saniye Geri";

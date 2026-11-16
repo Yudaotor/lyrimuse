@@ -2118,7 +2118,7 @@ func runLyricsManagerTests() {
         expectEqual(sourceHas(sheet, "storedCandidate = makeStoredCandidate()\n        loadError = nil\n")
                     && sheet.contains("selectedSource = shownCandidates.first?.id")
                     && sheet.contains("EnrichCacheReader.storedEntry(forKey: songKey)")
-                    && sheet.contains("if let hit = candidates.first(where: isCurrentCandidate) { return hit }")
+                    && sheet.contains("if var hit = candidates.first(where: isCurrentCandidate) {")
                     && sheet.contains("return candidates.filter { $0.id != current.id }")
                     && sheet.contains("ForEach(layout.main) { c in"),
                     true, "搜索候选歌词: 打开就先摆出缓存里在用的那一版并选中,搜到同一份时换成搜到的那条")
@@ -2199,6 +2199,28 @@ func runLyricsManagerTests() {
         expectEqual(sourceHas(sheet, "            searchConclusion\n            Spacer(minLength: 0)")
                     && sheet.contains("if !isSearching, loadError == nil, searchResults.isEmpty, currentShown != nil {"), true,
                     "搜索候选歌词: 搜完只剩「当前使用」那条时,结论挂在侧栏")
+        // 搜到的在用那条没封面时补这首自己的;只剩「不可用」时挂结论、展开那一组;⌘R 重新搜索,列表出来就拿焦点。
+        let shownCurrent = sourceBody("private var currentShown: LyricsSearchService.Candidate?", in: sheet)
+        let excludedCard = sourceBody("private var excludedConclusion: some View", in: sheet)
+        let listFocus = sourceBody("private func takeListFocus()", in: sheet)
+        let loadBody = sourceBody("private func load() async", in: sheet)
+        expectEqual([sourceHas(shownCurrent, "if hit.coverURL == nil { hit.coverURL = storedCandidate?.coverURL } return hit"),
+                     sourceHas(sheet, "var onlyExcluded: Bool { main.isEmpty && same.isEmpty && !excluded.isEmpty }"),
+                     sourceHas(sheet, "} else { excludedConclusion candidateList }")
+                         && sourceHas(excludedCard, "if !isSearching, loadError == nil, layout.onlyExcluded {")
+                         && excludedCard.contains("L10n.t(\"其他候选均不可用\")")
+                         && excludedCard.contains("L10n.plural(\"其余 %@ 个源未返回候选\", count: silentCount)"),
+                     sourceHas(loadBody, "if sidebarLayout.onlyExcluded { showsExcludedGroup = true } takeListFocus() }")
+                         && loadBody.range(of: "isSearching = false").map { flag in
+                             loadBody.range(of: "if sidebarLayout.onlyExcluded").map { flag.upperBound < $0.lowerBound } ?? false
+                         } ?? false,
+                     sourceHas(sheet, ".settingsGlassButtons() .keyboardShortcut(\"r\", modifiers: .command) .help(L10n.t(\"快捷键：⌘R\"))"),
+                     sourceHas(loadBody, "listFocusPending = true searchedQuery = [title, artist, album]")
+                         && sourceHas(sheet, ".onMoveCommand { direction in moveSelection(direction, proxy: proxy) } .onAppear { takeListFocus() }")
+                         && sourceHas(listFocus, "guard listFocusPending, !searchResults.isEmpty, [title, artist, album] == searchedQuery else { return }")
+                         && listFocus.contains("candidateListFocused = true")],
+                    [true, true, true, true, true, true],
+                    "搜索候选歌词: 当前使用补封面、只剩不可用时挂结论并展开、⌘R 重新搜索、列表出来就拿焦点(没在改查询词时)")
         expectEqual(sheet.contains("metaLine(c, font: .caption2)") && sheet.contains("metaLine(c, font: .caption)")
                     && sheet.contains("LyricsCandidateDuration.isOff(candidate: c.sourceDurationSecs, song: durationSecs)"), true,
                     "搜索候选歌词: 列表和预览都写源自报曲长、跟这首比")

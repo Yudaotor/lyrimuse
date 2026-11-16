@@ -612,6 +612,7 @@
 "其他 App" = "Otras apps";
 "其他 App 正占用播放焦点，暂时无法控制「%@」" = "No se puede controlar «%@» mientras otra app tiene el foco de reproducción";
 "其他 App 正占用播放焦点，暂时无法控制播放" = "No se puede controlar la reproducción mientras otra app tiene el foco de reproducción";
+"其他候选均不可用" = "Las demás candidatas no son utilizables";
 "其他平台" = "Otras plataformas";
 "其他平台包括 %@" = "Otras plataformas: %@";
 "其他折叠规则" = "Otra regla de agrupación";
@@ -1353,6 +1354,7 @@
 "快捷操作" = "Acciones rápidas";
 "快捷操作按钮" = "Botones de acciones rápidas";
 "快捷键" = "Atajos de teclado";
+"快捷键：⌘R" = "Atajo: ⌘R";
 "快捷键：⌘↩" = "Atajo: ⌘↩";
 "快进 10 秒" = "Avanzar 10 segundos";
 "快退 10 秒" = "Retroceder 10 segundos";

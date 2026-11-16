@@ -612,6 +612,7 @@
 "其他 App" = "Other Apps";
 "其他 App 正占用播放焦点，暂时无法控制「%@」" = "Can’t control “%@” while another app holds the playback focus";
 "其他 App 正占用播放焦点，暂时无法控制播放" = "Can’t control playback while another app holds the playback focus";
+"其他候选均不可用" = "All other candidates are unusable";
 "其他平台" = "Other platforms";
 "其他平台包括 %@" = "Other platforms: %@";
 "其他折叠规则" = "Other fold rule";
@@ -1353,6 +1354,7 @@
 "快捷操作" = "Quick Actions";
 "快捷操作按钮" = "Quick Action Buttons";
 "快捷键" = "Keyboard Shortcuts";
+"快捷键：⌘R" = "Shortcut: ⌘R";
 "快捷键：⌘↩" = "Shortcut: ⌘↩";
 "快进 10 秒" = "Forward 10 Seconds";
 "快退 10 秒" = "Back 10 Seconds";

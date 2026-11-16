@@ -569,6 +569,7 @@
 "其他 App" = "Ứng dụng khác";
 "其他 App 正占用播放焦点，暂时无法控制「%@」" = "Ứng dụng khác đang giữ quyền điều khiển phát, tạm thời không thể điều khiển “%@”";
 "其他 App 正占用播放焦点，暂时无法控制播放" = "Ứng dụng khác đang giữ quyền điều khiển phát, tạm thời không thể điều khiển việc phát";
+"其他候选均不可用" = "Các kết quả khác đều không dùng được";
 "其他平台" = "Nền tảng khác";
 "其他平台包括 %@" = "Nền tảng khác: %@";
 "其他折叠规则" = "Quy tắc gộp khác";
@@ -1280,6 +1281,7 @@
 "快捷操作" = "Tác vụ nhanh";
 "快捷操作按钮" = "Nút tác vụ nhanh";
 "快捷键" = "Phím tắt";
+"快捷键：⌘R" = "Phím tắt: ⌘R";
 "快捷键：⌘↩" = "Phím tắt: ⌘↩";
 "快进 10 秒" = "Tiến 10 giây";
 "快退 10 秒" = "Lùi 10 giây";

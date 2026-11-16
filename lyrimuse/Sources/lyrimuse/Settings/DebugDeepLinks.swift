@@ -229,12 +229,7 @@ enum DebugDeepLinks {
             AppActions.shared.requestLyricsManagerSheet(.decision(key: key), open: false)
             logger.notice("debug manager decision key=\(key == nil ? "selected" : "given", privacy: .public)")
         case let .lyricsSearch(key):
-            guard let summary = EnrichCacheStore.shared.summary(forKey: key) else {
-                logger.notice("debug lyrics search: key not in lyrics manager list")
-                return
-            }
-            AppActions.shared.openLyricsSearch(for: LyricsSearchTarget(summary: summary))
-            logger.notice("debug lyrics search")
+            openLyricsSearch(key: key, background: WindowActivation.isBackground, attempt: 0)
         case let .lyricsWriteback(step):
             NotificationCenter.default.post(name: lyricsWritebackNotification, object: step)
             logger.notice("debug lyrics writeback step=\(step, privacy: .public)")
@@ -276,6 +271,8 @@ enum DebugDeepLinks {
             panelClick(at: at, inGallery: inGallery)
         case let .windowClick(window, at):
             windowClick(named: window, at: at)
+        case let .windowKey(window, key, command):
+            windowKey(named: window, key: key, command: command)
         case let .panelScroll(at, dy, trackpad, steps):
             panelScroll(at: at, dy: dy, trackpad: trackpad, steps: steps)
         case let .panelPin(on):
@@ -724,6 +721,79 @@ extension DebugDeepLinks {
             try? await Task.sleep(nanoseconds: 30_000_000)
             if let e = event(.leftMouseUp) { window.sendEvent(e) }
             logger.notice("debug panel click done")
+        }
+    }
+
+    /// `debug/lyrics-search`:按写法键开「搜索歌词…」窗口。歌词管理的列表还没读完时每 0.5 秒再找一次、最多 6 秒;
+    /// 链接带了 `background=1` 的,晚开的那一次同样不激活 App(深链那一段后台时限已经过了)。
+    private static func openLyricsSearch(key: String, background: Bool, attempt: Int) {
+        let store = EnrichCacheStore.shared
+        guard let summary = store.summary(forKey: key) else {
+            let listReady = !store.isLoading && !store.summaries.isEmpty
+            if !listReady, attempt < 12 {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                    openLyricsSearch(key: key, background: background, attempt: attempt + 1)
+                }
+                return
+            }
+            logger.notice("debug lyrics search: \(listReady ? "key not in lyrics manager list" : "lyrics manager list not loaded, open lyrics-manager first", privacy: .public)")
+            return
+        }
+        let late = attempt > 0 && background
+        if late { WindowActivation.beginBackground() }
+        AppActions.shared.openLyricsSearch(for: LyricsSearchTarget(summary: summary))
+        if late { WindowActivation.surface(identifier: "lyrics-quick-search") }
+        logger.notice("debug lyrics search attempt=\(attempt, privacy: .public) background=\(background, privacy: .public)")
+    }
+
+    /// `debug/window-key`:往窗口里送一次按键(按下 → 30 毫秒后松开),经 `NSWindow.sendEvent`,跟真实按键同一条路;带 ⌘ 的先走
+    /// `performKeyEquivalent`(SwiftUI 的 `.keyboardShortcut` 在那条路上),没人接再照普通按键送。不把窗口提到前面、不激活 App。
+    /// 日志记下有没有被当快捷键接走、窗口是不是 key、App 在不在前台。
+    static func windowKey(named name: String, key: String, command: Bool) {
+        guard let window = window(named: name) else {
+            logger.notice("debug window key: no visible window named \(name, privacy: .public)")
+            return
+        }
+        guard let stroke = keyStroke(key) else { return }
+        var flags: NSEvent.ModifierFlags = stroke.function ? [.function, .numericPad] : []
+        if command { flags.insert(.command) }
+        func event(_ type: NSEvent.EventType) -> NSEvent? {
+            NSEvent.keyEvent(with: type, location: .zero, modifierFlags: flags,
+                             timestamp: ProcessInfo.processInfo.systemUptime, windowNumber: window.windowNumber, context: nil,
+                             characters: stroke.characters, charactersIgnoringModifiers: stroke.characters,
+                             isARepeat: false, keyCode: stroke.keyCode)
+        }
+        Task { @MainActor in
+            var equivalent = false
+            if let down = event(.keyDown) {
+                equivalent = command && window.performKeyEquivalent(with: down)
+                if !equivalent { window.sendEvent(down) }
+            }
+            try? await Task.sleep(nanoseconds: 30_000_000)
+            if !equivalent, let up = event(.keyUp) { window.sendEvent(up) }
+            logger.notice("debug window key done window=\(name, privacy: .public) key=\(key, privacy: .public) cmd=\(command, privacy: .public) equivalent=\(equivalent, privacy: .public) key window=\(window.isKeyWindow, privacy: .public) appActive=\(NSApp.isActive, privacy: .public)")
+        }
+    }
+
+    /// `debug/window-key` 的键:字符、键码(ANSI 键盘)、是不是功能键(方向键要带 `.function` / `.numericPad`,不然认不成移动)。
+    private static func keyStroke(_ key: String) -> (characters: String, keyCode: UInt16, function: Bool)? {
+        func function(_ scalar: Int) -> String { String(Character(UnicodeScalar(UInt16(scalar))!)) }
+        switch key {
+        case "up": return (function(NSUpArrowFunctionKey), 126, true)
+        case "down": return (function(NSDownArrowFunctionKey), 125, true)
+        case "left": return (function(NSLeftArrowFunctionKey), 123, true)
+        case "right": return (function(NSRightArrowFunctionKey), 124, true)
+        case "return": return ("\r", 36, false)
+        case "escape": return ("\u{1B}", 53, false)
+        case "tab": return ("\t", 48, false)
+        case "space": return (" ", 49, false)
+        default:
+            let codes: [Character: UInt16] = [
+                "a": 0, "s": 1, "d": 2, "f": 3, "h": 4, "g": 5, "z": 6, "x": 7, "c": 8, "v": 9, "b": 11, "q": 12, "w": 13,
+                "e": 14, "r": 15, "y": 16, "t": 17, "o": 31, "u": 32, "i": 34, "p": 35, "l": 37, "j": 38, "k": 40, "n": 45, "m": 46,
+            ]
+            guard let c = key.first, key.count == 1, let code = codes[c] else { return nil }
+            return (key, code, false)
         }
     }
 

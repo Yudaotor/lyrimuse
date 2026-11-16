@@ -224,6 +224,15 @@ func runDeepLinkTests() {
                      "lyrimuse://debug/window-click?window=lyrics-window", "lyrimuse://debug/window-click?window=lyrics-window&at=1"]
                         .allSatisfy { link($0) == nil }, true,
                     "debug: 窗口点按缺窗口名、缺位置或位置写错不认")
+        expectEqual([link("lyrimuse://debug/window-key?window=lyrics-search&key=down"),
+                     link("lyrimuse://debug/window-key?window=lyrics-search&key=r&cmd=1")],
+                    [.debug(.windowKey(window: "lyrics-search", key: "down", command: false)),
+                     .debug(.windowKey(window: "lyrics-search", key: "r", command: true))], "debug: 往某扇窗送一次按键,cmd=1 按住 ⌘")
+        expectEqual(["lyrimuse://debug/window-key?key=down", "lyrimuse://debug/window-key?window=&key=down",
+                     "lyrimuse://debug/window-key?window=lyrics-search", "lyrimuse://debug/window-key?window=lyrics-search&key=R",
+                     "lyrimuse://debug/window-key?window=lyrics-search&key=pageup", "lyrimuse://debug/window-key?window=lyrics-search&key=ab"]
+                        .allSatisfy { link($0) == nil }, true,
+                    "debug: 窗口按键缺窗口名、缺键、键不认得(大写、没有的键名、两个字母)不认")
         expectEqual(link("lyrimuse://debug/panel-drag?from=1,2") == nil && link("lyrimuse://debug/panel-drag?from=1&to=3,4") == nil, true,
                     "debug: 面板拖动缺终点或坐标不全不认")
         expectEqual(link("lyrimuse://debug/panel-layout?json=%7B%22tiles%22%3A%5B%5D%7D"), .debug(.panelLayout(json: "{\"tiles\":[]}")),
@@ -520,6 +529,10 @@ func runDeepLinkTests() {
                     "debug: 歌词管理解析决策面板,没带 key / 空 key 是详情页那条,键原样")
         expectEqual(link("lyrimuse://debug/lyrics-search?key=A%7CB%7CC"), .debug(.lyricsSearch(key: "A|B|C")),
                     "debug: 按写法键开搜索歌词窗口,键原样")
+        let searchInBackground = URL(string: "lyrimuse://debug/lyrics-search?key=A%7CB%7CC&background=1")!
+        expectEqual(link(searchInBackground.absoluteString) == .debug(.lyricsSearch(key: "A|B|C"))
+                    && LyrimuseDeepLink.wantsBackground(searchInBackground), true,
+                    "debug: 按写法键开搜索歌词窗口可带 background=1,不影响认哪条链接")
         expectEqual([link("lyrimuse://debug/lyrics-writeback?step=open"), link("lyrimuse://debug/lyrics-writeback?step=confirm"),
                      link("lyrimuse://debug/lyrics-writeback?step=cancel")],
                     [.debug(.lyricsWriteback(step: "open")), .debug(.lyricsWriteback(step: "confirm")),
@@ -566,6 +579,19 @@ func runDeepLinkTests() {
         expectEqual(sourceHas(sourceBody("static func surfaceIfOnScreen(", in: activation),
                               "guard isBackground, let window = window(matching: identifier, visibleOnly: true) else { return false } window.orderFrontRegardless()"),
                     true, "后台开窗: 只在 background=1 那一段、窗口可见时跳过 openWindow,摆到最前不当 key")
+        // debug/lyrics-search 开的也是搜索小窗:background=1 时由路由摆到最前;列表没读完、晚开的那一次自己补上后台那一段。
+        let router = source("lyrimuse/Settings/DeepLinkRouter.swift")
+        let lateSearch = sourceBody("private static func openLyricsSearch(", in: debug)
+        expectEqual([sourceHas(router, ".debug(.lyricsSearch): return \"lyrics-quick-search\""),
+                     sourceHas(debug, "openLyricsSearch(key: key, background: WindowActivation.isBackground, attempt: 0)"),
+                     sourceHas(lateSearch, "if late { WindowActivation.beginBackground() } AppActions.shared.openLyricsSearch(for:")
+                         && sourceHas(lateSearch, "if late { WindowActivation.surface(identifier: \"lyrics-quick-search\") }")],
+                    [true, true, true],
+                    "后台开窗: debug/lyrics-search 认 background=1,歌词管理列表晚读完时补开的那一次也不激活 App")
+        let windowKey = sourceBody("static func windowKey(", in: debug)
+        expectEqual(sourceHas(windowKey, "equivalent = command && window.performKeyEquivalent(with: down) if !equivalent { window.sendEvent(down) }")
+                    && !windowKey.contains("NSApp.activate") && !windowKey.contains("makeKey"), true,
+                    "debug: 窗口按键带 ⌘ 先走快捷键那条路,其余经 sendEvent 送进窗口,不激活 App、不抢 key")
 
         // 模拟播放:位置怎么走,以及对外的出口都挡住(引擎读播放状态打卡 Last.fm,控制会发给真实播放器)。
         let t0 = Date(timeIntervalSince1970: 1_000)
@@ -659,7 +685,7 @@ func runDeepLinkTests() {
             .debug(.simulateIdle),
             .debug(.toggleFavorite), .debug(.idleResume), .debug(.seek(seconds: 99.7)), .debug(.seek(seconds: 0)),
             .debug(.knockout(leg: .appleMusicScript, on: false)), .debug(.knockout(leg: .spotifyScript, on: true)),
-            .debug(.knockout(leg: .kasetScript, on: false)), .debug(.saveConfig), .debug(.releaseClosedWindows), .debug(.panelLayout(json: nil)), .debug(.panelPin(on: true)), .debug(.panelPin(on: false)), .debug(.panelDrag(from: CGPoint(x: 1.5, y: 2), to: CGPoint(x: 300, y: 400))), .debug(.panelDrag(from: CGPoint(x: 1, y: 2), to: CGPoint(x: 3, y: 4), via: [CGPoint(x: 5, y: 6)])), .debug(.panelDrag(from: CGPoint(x: 1, y: 2), to: CGPoint(x: 3, y: 4), inGallery: true)), .debug(.panelClick(at: CGPoint(x: 1, y: 2))), .debug(.panelClick(at: CGPoint(x: 1, y: 2), inGallery: true)), .debug(.windowClick(window: "lyrics-window", at: CGPoint(x: 1.5, y: 2))), .debug(.panelScroll(at: CGPoint(x: 1.5, y: 2), dy: 1)), .debug(.panelScroll(at: CGPoint(x: 1, y: 2), dy: -2.5, trackpad: true, steps: 20)),
+            .debug(.knockout(leg: .kasetScript, on: false)), .debug(.saveConfig), .debug(.releaseClosedWindows), .debug(.panelLayout(json: nil)), .debug(.panelPin(on: true)), .debug(.panelPin(on: false)), .debug(.panelDrag(from: CGPoint(x: 1.5, y: 2), to: CGPoint(x: 300, y: 400))), .debug(.panelDrag(from: CGPoint(x: 1, y: 2), to: CGPoint(x: 3, y: 4), via: [CGPoint(x: 5, y: 6)])), .debug(.panelDrag(from: CGPoint(x: 1, y: 2), to: CGPoint(x: 3, y: 4), inGallery: true)), .debug(.panelClick(at: CGPoint(x: 1, y: 2))), .debug(.panelClick(at: CGPoint(x: 1, y: 2), inGallery: true)), .debug(.windowClick(window: "lyrics-window", at: CGPoint(x: 1.5, y: 2))), .debug(.windowKey(window: "lyrics-search", key: "down", command: false)), .debug(.windowKey(window: "lyrics-search", key: "r", command: true)), .debug(.panelScroll(at: CGPoint(x: 1.5, y: 2), dy: 1)), .debug(.panelScroll(at: CGPoint(x: 1, y: 2), dy: -2.5, trackpad: true, steps: 20)),
             .debug(.panelLayout(json: MenuBarPanelLayout(placements: [.init(tile: .translation, size: .large, column: 0, row: 0)], footer: [.version]).encoded())), .debug(.volume(percent: 0)), .debug(.volume(percent: 100)),
             .debug(.stall(ms: 1)), .debug(.stall(ms: 2000)), .debug(.milestonePreview),
             .debug(.notchBehavior(collapseWhenPaused: true, hideWhenNotPlaying: nil)),
