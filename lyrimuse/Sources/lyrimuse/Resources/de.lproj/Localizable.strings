@@ -1803,6 +1803,7 @@
 "有 %@ 首歌曲因此开关而锁定。解锁后将恢复自动搜索和评分更新；手动编辑过歌词的歌曲不受影响，将保持锁定" = "%@ Titel sind wegen dieses Schalters gesperrt. Nach dem Entsperren können automatische Neusuche und verbesserte Bewertung sie wieder anpassen; Titel, deren Liedtext du von Hand bearbeitet hast, sind nicht betroffen und bleiben gesperrt";
 "有 %@ 首歌曲因此开关而锁定。解锁后将恢复自动搜索和评分更新；手动编辑过歌词的歌曲不受影响，将保持锁定#one" = "%@ Titel ist wegen dieses Schalters gesperrt. Nach dem Entsperren können automatische Neusuche und verbesserte Bewertung ihn wieder anpassen; Titel, deren Liedtext du von Hand bearbeitet hast, sind nicht betroffen und bleiben gesperrt";
 "有一种写法只在其中一边被合并时会这样" = "Passiert, wenn eine Schreibweise nur auf einer Seite zusammengeführt wurde";
+"有对齐的逐字版，撤销同源加分" = "Eine passende Version mit Wort-Timing existiert, daher entfällt der Plattform-Bonus";
 "有新版本 %@" = "Update verfügbar: %@";
 "有歌词源将这首歌曲标记为纯音乐，无可用的候选歌词" = "Eine Liedtextquelle markiert diesen Titel als instrumental; kein brauchbarer Treffer";
 "有软件更新可用" = "Softwareupdate verfügbar";
@@ -2772,6 +2773,7 @@
 "这也是你最长的连续记录" = "Deine bisher längste Serie";
 "这些歌词源连续失败，本轮暂未查询" = "Diese Quellen schlugen wiederholt fehl und wurden in dieser Runde nicht abgefragt";
 "这些记录无歌词，且无歌手或时长超过 20 分钟，通常为广告、播客或有声书。人工修正、标为纯音乐、已校准时间轴的记录和正在播放的歌曲不包含在内；再次播放时将重新匹配" = "Diese Einträge haben keinen Liedtext und entweder keinen Künstler oder eine Dauer über 20 Minuten – meist Werbung, Podcasts oder Hörbücher. Manuell bearbeitete, instrumentale und kalibrierte Einträge sowie der laufende Titel sind ausgenommen. Bei erneuter Wiedergabe werden sie neu zugeordnet";
+"这份只有逐行时间轴，另一份逐字歌词与它整首对齐、结尾完整，改用逐字版" = "Diese hat nur Zeilen-Timing; eine Version mit Wort-Timing passt durchgehend dazu und enthält das ganze Ende, daher wird sie verwendet";
 "这份报告推到哪些渠道" = "Kanäle für diesen Bericht";
 "这份报告的数据来源" = "Datenquelle für diesen Bericht";
 "这份歌词无时间戳，采纳后仅在「歌词窗口」中作为静态文字显示，不会随播放逐字 / 逐行高亮" = "Dieser Liedtext hat kein Timing. Übernommen erscheint er nur als statischer Text im Liedtextfenster und wird bei der Wiedergabe nicht Wort für Wort oder Zeile für Zeile hervorgehoben";

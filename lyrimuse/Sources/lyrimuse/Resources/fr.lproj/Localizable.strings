@@ -1803,6 +1803,7 @@
 "有 %@ 首歌曲因此开关而锁定。解锁后将恢复自动搜索和评分更新；手动编辑过歌词的歌曲不受影响，将保持锁定" = "%@ morceaux sont verrouillés par cette option. Les déverrouiller permet à la recherche automatique et aux améliorations du score de les ajuster à nouveau ; les morceaux dont vous avez modifié les paroles restent verrouillés";
 "有 %@ 首歌曲因此开关而锁定。解锁后将恢复自动搜索和评分更新；手动编辑过歌词的歌曲不受影响，将保持锁定#one" = "%@ morceau est verrouillé par cette option. Le déverrouiller permet à la recherche automatique et aux améliorations du score de l’ajuster à nouveau ; les morceaux dont vous avez modifié les paroles restent verrouillés";
 "有一种写法只在其中一边被合并时会这样" = "Cela arrive quand une graphie n’est fusionnée que d’un côté";
+"有对齐的逐字版，撤销同源加分" = "Une version mot à mot alignée existe : le bonus de même plateforme est retiré";
 "有新版本 %@" = "Mise à jour disponible : %@";
 "有歌词源将这首歌曲标记为纯音乐，无可用的候选歌词" = "Une source de paroles indique que ce morceau est instrumental ; aucun résultat utilisable";
 "有软件更新可用" = "Mise à jour disponible";
@@ -2772,6 +2773,7 @@
 "这也是你最长的连续记录" = "Votre plus longue série à ce jour";
 "这些歌词源连续失败，本轮暂未查询" = "Ces sources ont échoué à plusieurs reprises et n’ont pas été interrogées cette fois";
 "这些记录无歌词，且无歌手或时长超过 20 分钟，通常为广告、播客或有声书。人工修正、标为纯音乐、已校准时间轴的记录和正在播放的歌曲不包含在内；再次播放时将重新匹配" = "Ces entrées n’ont pas de paroles et soit pas d’artiste, soit une durée de plus de 20 minutes : souvent des pubs, podcasts ou livres audio. Les entrées modifiées manuellement, instrumentales ou calibrées et le morceau en cours ne sont pas concernés. Elles seront réassociées à leur prochaine lecture";
+"这份只有逐行时间轴，另一份逐字歌词与它整首对齐、结尾完整，改用逐字版" = "Celle-ci n’a qu’un minutage par ligne ; une version mot à mot s’aligne sur elle tout du long et contient la fin, elle est donc utilisée";
 "这份报告推到哪些渠道" = "Canaux de ce bilan";
 "这份报告的数据来源" = "Source des données de ce bilan";
 "这份歌词无时间戳，采纳后仅在「歌词窗口」中作为静态文字显示，不会随播放逐字 / 逐行高亮" = "Ces paroles n’ont pas de minutage. Une fois adoptées, elles s’affichent seulement en texte statique dans la « Fenêtre des paroles », sans surlignage mot à mot ni ligne par ligne";

@@ -36,6 +36,7 @@ var earlyLyricsPenaltyTerms = map[string]bool{
 	scoreTermTimelineIntrusion:      true,
 	scoreTermSourceDurationNearMiss: true,
 	scoreTermGarbledText:            true,
+	scoreTermNativeSourceYield:      true,
 }
 
 // titleMatchFullPoints:titleMatch 满档(精确同名,或括号里只有不算版本的噪音)的分值,跟着 titleMatchTierPoints 走。

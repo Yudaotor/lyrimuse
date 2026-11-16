@@ -1172,6 +1172,7 @@ var goldenUncoverableKinds = map[string]string{
 	scoreTermWordTimingOverride: "库里 20 条真实触发全是同一次录音的括号写法差异(见 goldenRequiredCategories 上方注释),有争议不采;match_test.go 的 TestApplyWordTimingTitleOverride_* 钉住",
 	scoreRejectNotTimed:         "2026-08-30 起 lrclib/deezer 的纯文本走 plainOnly → rejectPlainTextOnly,库里历史上的 rejectNotTimed 全是 lrclib 纯文本,如今再也触发不到;两首候选曲(罗伯·强生《Sweet Home Chicago》、米津玄师《Shitodo Seiten Daimeiwaku》)都要靠别名/变体重试轮才有候选,单轮不可回放",
 	scoreRejectNoLastTimestamp:  "过了 isTimedLRC 却提不出末句时间戳,理论上不会发生(scoreLyricCandidateDetailed 里的注释),库里零例",
+	scoreTermNativeSourceYield:  "要同源那份带本机身份(网易云 / QQ / 汽水的客户端曲库或播放队列),金标采集按真实客户端数据采,换一台机器就采不到同一首;lyricnativewordyield_test.go 钉住",
 	scoreTermImported:           "只给用户导入的歌词(importstore.go),金标样本回放的是各源的应答,没有导入库;importbatch_test.go 的 TestImportedLyricsCandidateInRanking 钉住",
 }
 

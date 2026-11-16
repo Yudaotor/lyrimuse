@@ -241,11 +241,11 @@ func TestTimelineIntrusionWiredIntoBothPipelines(t *testing.T) {
 		t.Fatalf("enrich.go 里要有两处调用(rankLyricSourceResults 与 mergeLyricCandidateRounds),得到 %d", n)
 	}
 	for _, pair := range []string{
-		"applyTimelineOffsetPenalty(out, durationSecs)\n\tapplyTimelineIntrusionPenalty(out, durationSecs)\n\tapplyGarbledTextPenalty(out)\n\tapplyDurationNearTie(out, durationSecs)\n\tapplyWordTimingTitleOverride(out)",
-		"applyTimelineOffsetPenalty(results, durationSecs)\n\tapplyTimelineIntrusionPenalty(results, durationSecs)\n\tapplyGarbledTextPenalty(results)\n\tapplyDurationNearTie(results, durationSecs)\n\tapplyWordTimingTitleOverride(results)",
+		"applyTimelineOffsetPenalty(out, durationSecs)\n\tapplyTimelineIntrusionPenalty(out, durationSecs)\n\tapplyGarbledTextPenalty(out)\n\tapplyDurationNearTie(out, durationSecs)\n\tapplyNativeSourceWordYield(out)\n\tapplyWordTimingTitleOverride(out)",
+		"applyTimelineOffsetPenalty(results, durationSecs)\n\tapplyTimelineIntrusionPenalty(results, durationSecs)\n\tapplyGarbledTextPenalty(results)\n\tapplyDurationNearTie(results, durationSecs)\n\tapplyNativeSourceWordYield(results)\n\tapplyWordTimingTitleOverride(results)",
 	} {
 		if !containsCode(src, pair) {
-			t.Errorf("调用位置要紧跟在时间轴平移扣分之后、乱码扣分与末句亚秒打平、逐字加分撤销之前:%q", pair)
+			t.Errorf("调用位置要紧跟在时间轴平移扣分之后、乱码扣分、末句亚秒打平与同源加分撤销、逐字加分撤销之前:%q", pair)
 		}
 	}
 }

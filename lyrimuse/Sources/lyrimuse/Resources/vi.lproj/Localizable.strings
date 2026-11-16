@@ -1724,6 +1724,7 @@
 "最长 %@ 天" = "Dài nhất: %@ ngày";
 "有 %@ 首歌曲因此开关而锁定。解锁后将恢复自动搜索和评分更新；手动编辑过歌词的歌曲不受影响，将保持锁定" = "%@ bài hát đang được khóa do tùy chọn này. Sau khi mở khóa, tìm kiếm tự động và cập nhật chấm điểm sẽ áp dụng lại; bài hát bạn đã sửa lời thủ công không bị ảnh hưởng và vẫn được khóa";
 "有一种写法只在其中一边被合并时会这样" = "Xảy ra khi một cách viết chỉ được gộp ở một bên";
+"有对齐的逐字版，撤销同源加分" = "Có bản theo từng chữ khớp thời gian, nên rút lại điểm cộng cùng nền tảng";
 "有新版本 %@" = "Có phiên bản mới: %@";
 "有歌词源将这首歌曲标记为纯音乐，无可用的候选歌词" = "Một nguồn lời đánh dấu bài hát này là nhạc không lời, không có kết quả nào dùng được";
 "有软件更新可用" = "Có bản cập nhật phần mềm";
@@ -2682,6 +2683,7 @@
 "这也是你最长的连续记录" = "Đây cũng là chuỗi dài nhất của bạn";
 "这些歌词源连续失败，本轮暂未查询" = "Các nguồn lời này lỗi liên tiếp nên lượt này chưa được tra";
 "这些记录无歌词，且无歌手或时长超过 20 分钟，通常为广告、播客或有声书。人工修正、标为纯音乐、已校准时间轴的记录和正在播放的歌曲不包含在内；再次播放时将重新匹配" = "Các mục này không có lời và không có nghệ sĩ hoặc dài hơn 20 phút, thường là quảng cáo, podcast hoặc sách nói. Không bao gồm mục đã chỉnh thủ công, đã đánh dấu nhạc không lời, đã hiệu chỉnh thời gian và bài đang phát; khi phát lại sẽ được tìm lại";
+"这份只有逐行时间轴，另一份逐字歌词与它整首对齐、结尾完整，改用逐字版" = "Bản này chỉ có thời gian theo dòng; một bản theo từng chữ khác khớp thời gian suốt bài và đủ phần kết, nên dùng bản đó";
 "这份报告推到哪些渠道" = "Báo cáo này gửi đến kênh nào";
 "这份报告的数据来源" = "Nguồn dữ liệu của báo cáo này";
 "这份歌词无时间戳，采纳后仅在「歌词窗口」中作为静态文字显示，不会随播放逐字 / 逐行高亮" = "Lời bài hát này không có dấu thời gian. Sau khi dùng, lời chỉ hiển thị dạng văn bản tĩnh trong “Cửa sổ lời”, không tô sáng theo từng chữ hay từng dòng khi phát";

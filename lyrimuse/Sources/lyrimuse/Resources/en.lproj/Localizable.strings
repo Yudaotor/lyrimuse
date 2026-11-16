@@ -1803,6 +1803,7 @@
 "有 %@ 首歌曲因此开关而锁定。解锁后将恢复自动搜索和评分更新；手动编辑过歌词的歌曲不受影响，将保持锁定" = "%@ songs are locked because of this switch. Unlocking lets automatic re-search and scoring improvements adjust them again; songs whose lyrics you edited by hand are unaffected and stay locked";
 "有 %@ 首歌曲因此开关而锁定。解锁后将恢复自动搜索和评分更新；手动编辑过歌词的歌曲不受影响，将保持锁定#one" = "%@ song is locked because of this switch. Unlocking lets automatic re-search and scoring improvements adjust it again; songs whose lyrics you edited by hand are unaffected and stay locked";
 "有一种写法只在其中一边被合并时会这样" = "This happens when a spelling is merged on only one side";
+"有对齐的逐字版，撤销同源加分" = "An aligned word-timed version exists, so the platform-match bonus is withdrawn";
 "有新版本 %@" = "Update available: %@";
 "有歌词源将这首歌曲标记为纯音乐，无可用的候选歌词" = "A lyrics source marks this song as instrumental; no usable lyrics candidate";
 "有软件更新可用" = "Software Update Available";
@@ -2772,6 +2773,7 @@
 "这也是你最长的连续记录" = "Your longest streak yet";
 "这些歌词源连续失败，本轮暂未查询" = "These sources failed repeatedly and were not queried this round";
 "这些记录无歌词，且无歌手或时长超过 20 分钟，通常为广告、播客或有声书。人工修正、标为纯音乐、已校准时间轴的记录和正在播放的歌曲不包含在内；再次播放时将重新匹配" = "These entries have no lyrics and either no artist or a duration over 20 minutes — usually ads, podcasts, or audiobooks. Manually edited, instrumental, and calibrated entries and the song now playing aren’t included. They’ll be matched again if played";
+"这份只有逐行时间轴，另一份逐字歌词与它整首对齐、结尾完整，改用逐字版" = "This one only has line timing; a word-timed version lines up with it throughout and has the full ending, so that one is used instead";
 "这份报告推到哪些渠道" = "Channels this report goes to";
 "这份报告的数据来源" = "Data Source for This Report";
 "这份歌词无时间戳，采纳后仅在「歌词窗口」中作为静态文字显示，不会随播放逐字 / 逐行高亮" = "These lyrics have no timing. Once adopted, they appear only as static text in the Lyrics Window and don’t highlight word by word or line by line during playback";

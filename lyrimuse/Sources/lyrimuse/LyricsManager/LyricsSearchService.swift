@@ -205,6 +205,8 @@ final class LyricsSearchService {
             case "sourceDurationNearMiss": return L10n.t("源自报曲长偏离吻合版本")
             // v32.1:见引擎侧 lyricmojibake.go。
             case "garbledText": return L10n.t("正文有乱码")
+            // 见引擎侧 lyricnativewordyield.go。
+            case "nativeSourceYield": return L10n.t("有对齐的逐字版，撤销同源加分")
             // 见引擎侧 importstore.go。
             case "imported": return L10n.t("导入的歌词")
             // 与引擎 match.go 的 scoreTerm kind 一一对应。引擎不再给来源先验分,没有 "source" 这一项。
@@ -266,6 +268,8 @@ final class LyricsSearchService {
                 return L10n.t("其他歌词源标注的曲目时长与本地一致，该源标注的时长却相差 5% 以上，可能是现场版、混音版等其他录音")
             case "garbledText":
                 return L10n.t("正文里有乱码（问号框或错乱的字母），是歌词源存的数据坏了；有其他正常的候选时排在它们后面")
+            case "nativeSourceYield":
+                return L10n.t("这份只有逐行时间轴，另一份逐字歌词与它整首对齐、结尾完整，改用逐字版")
             case "imported":
                 return L10n.t("从歌词文件夹导入的歌词优先使用（+300），其他来源提供带逐字时间轴等明显更好的版本时仍可胜出")
             case "durationOff":

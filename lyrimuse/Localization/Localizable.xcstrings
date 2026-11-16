@@ -286914,6 +286914,196 @@
           }
         }
       }
+    },
+    "有对齐的逐字版，撤销同源加分" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Eine passende Version mit Wort-Timing existiert, daher entfällt der Plattform-Bonus"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "An aligned word-timed version exists, so the platform-match bonus is withdrawn"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hay una versión palabra por palabra sincronizada, así que se retira la bonificación de misma plataforma"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Une version mot à mot alignée existe : le bonus de même plateforme est retiré"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Esiste una versione parola per parola allineata: il bonus stessa piattaforma viene ritirato"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "タイミングが一致する単語ごとの歌詞があるため、同じサービスの加点を取り消します"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "타이밍이 맞는 단어별 가사가 있어 같은 출처 가산점을 취소합니다"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Há uma versão palavra por palavra alinhada, então o bônus de mesma plataforma é retirado"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Есть совпадающая по времени версия с таймингом по словам, поэтому бонус платформы плеера отменен"
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "มีเวอร์ชันแบบคำต่อคำที่เวลาตรงกัน จึงยกเลิกคะแนนพิเศษจากแพลตฟอร์มเดียวกัน"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Zamanlaması uyan kelime zamanlamalı bir sürüm var, aynı platform bonusu geri alındı"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Є узгоджена в часі версія з пословним таймінгом, тож бонус за збіг платформи скасовано"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Có bản theo từng chữ khớp thời gian, nên rút lại điểm cộng cùng nền tảng"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "有对齐的逐字版，撤销同源加分"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "有對齊的逐字版，撤銷同平台加分"
+          }
+        }
+      }
+    },
+    "这份只有逐行时间轴，另一份逐字歌词与它整首对齐、结尾完整，改用逐字版" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Diese hat nur Zeilen-Timing; eine Version mit Wort-Timing passt durchgehend dazu und enthält das ganze Ende, daher wird sie verwendet"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This one only has line timing; a word-timed version lines up with it throughout and has the full ending, so that one is used instead"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Esta solo tiene tiempos por línea; otra versión palabra por palabra coincide con ella en toda la canción y tiene el final completo, así que se usa esa"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Celle-ci n’a qu’un minutage par ligne ; une version mot à mot s’aligne sur elle tout du long et contient la fin, elle est donc utilisée"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Questa ha solo il timing per riga; un’altra versione parola per parola è allineata per tutto il brano e include il finale, quindi si usa quella"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "この歌詞は行ごとのタイミングのみで、別の単語ごとの歌詞が曲全体でタイミングが一致し最後まで揃っているため、そちらを使用します"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "이 가사는 줄 단위 타이밍만 있고, 다른 단어별 가사가 곡 전체에서 타이밍이 맞고 끝부분까지 있어 그쪽을 사용합니다"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Esta só tem tempos por linha; outra versão palavra por palavra coincide com ela na música toda e tem o final completo, então ela é usada"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Здесь только тайминг по строкам; другая версия с таймингом по словам совпадает с ней по всей песне и содержит концовку, поэтому используется она"
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "เนื้อเพลงนี้มีเวลาแค่ทีละบรรทัด อีกเวอร์ชันแบบคำต่อคำมีเวลาตรงกันตลอดเพลงและมีท่อนจบครบ จึงใช้เวอร์ชันนั้นแทน"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bunda yalnızca satır zamanlaması var; kelime zamanlamalı başka bir sürüm şarkı boyunca onunla örtüşüyor ve sonu eksiksiz, bu yüzden o kullanılıyor"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Тут лише построковий таймінг; інша версія з пословним таймінгом збігається з нею по всій пісні й має кінцівку, тож використовується вона"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bản này chỉ có thời gian theo dòng; một bản theo từng chữ khác khớp thời gian suốt bài và đủ phần kết, nên dùng bản đó"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "这份只有逐行时间轴，另一份逐字歌词与它整首对齐、结尾完整，改用逐字版"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "這份只有逐行時間軸，另一份逐字歌詞與它整首對齊、結尾完整，改用逐字版"
+          }
+        }
+      }
     }
   },
   "version" : "1.0"

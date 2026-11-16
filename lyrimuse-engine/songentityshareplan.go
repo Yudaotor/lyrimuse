@@ -63,7 +63,7 @@ func songPlanLyricsFor(key, lyrics, yrc, source string, manual, pinned bool, app
 	if det := resolveSlot(d, pool); det != nil {
 		for _, c := range det.Candidates {
 			if c.Source == d.Winner {
-				nb := scoreTermPoints(c.ScoreTerms, scoreTermNativeSource)
+				nb := scoreTermPoints(c.ScoreTerms, scoreTermNativeSource) + scoreTermPoints(c.ScoreTerms, scoreTermNativeSourceYield)
 				l.score, l.native = c.Score-nb, nb > 0
 				break
 			}

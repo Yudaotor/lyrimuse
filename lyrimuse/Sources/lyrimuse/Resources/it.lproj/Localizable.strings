@@ -1803,6 +1803,7 @@
 "有 %@ 首歌曲因此开关而锁定。解锁后将恢复自动搜索和评分更新；手动编辑过歌词的歌曲不受影响，将保持锁定" = "%@ brani sono bloccati da questa opzione. Sbloccandoli, la ricerca automatica e i miglioramenti del punteggio potranno modificarli di nuovo; i brani di cui hai modificato il testo a mano non sono interessati e restano bloccati";
 "有 %@ 首歌曲因此开关而锁定。解锁后将恢复自动搜索和评分更新；手动编辑过歌词的歌曲不受影响，将保持锁定#one" = "%@ brano è bloccato da questa opzione. Sbloccandolo, la ricerca automatica e i miglioramenti del punteggio potranno modificarlo di nuovo; i brani di cui hai modificato il testo a mano non sono interessati e restano bloccati";
 "有一种写法只在其中一边被合并时会这样" = "Succede quando una grafia viene unita solo da un lato";
+"有对齐的逐字版，撤销同源加分" = "Esiste una versione parola per parola allineata: il bonus stessa piattaforma viene ritirato";
 "有新版本 %@" = "Aggiornamento disponibile: %@";
 "有歌词源将这首歌曲标记为纯音乐，无可用的候选歌词" = "Una fonte indica questo brano come strumentale; nessun risultato utilizzabile";
 "有软件更新可用" = "Aggiornamento disponibile";
@@ -2772,6 +2773,7 @@
 "这也是你最长的连续记录" = "La tua serie più lunga finora";
 "这些歌词源连续失败，本轮暂未查询" = "Queste fonti hanno avuto errori ripetuti e non sono state interrogate in questo giro";
 "这些记录无歌词，且无歌手或时长超过 20 分钟，通常为广告、播客或有声书。人工修正、标为纯音乐、已校准时间轴的记录和正在播放的歌曲不包含在内；再次播放时将重新匹配" = "Queste voci non hanno testo e non hanno artista o durano più di 20 minuti: di solito pubblicità, podcast o audiolibri. Le voci modificate a mano, strumentali o con timing calibrato e il brano in riproduzione sono esclusi. Verranno riassociate se riprodotte";
+"这份只有逐行时间轴，另一份逐字歌词与它整首对齐、结尾完整，改用逐字版" = "Questa ha solo il timing per riga; un’altra versione parola per parola è allineata per tutto il brano e include il finale, quindi si usa quella";
 "这份报告推到哪些渠道" = "Canali a cui va questo report";
 "这份报告的数据来源" = "Fonte dati di questo report";
 "这份歌词无时间戳，采纳后仅在「歌词窗口」中作为静态文字显示，不会随播放逐字 / 逐行高亮" = "Questo testo non ha timing. Una volta adottato, appare solo come testo statico nella “Finestra testo” e non si evidenzia parola per parola o riga per riga durante la riproduzione";

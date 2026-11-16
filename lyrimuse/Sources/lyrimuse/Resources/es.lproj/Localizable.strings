@@ -1803,6 +1803,7 @@
 "有 %@ 首歌曲因此开关而锁定。解锁后将恢复自动搜索和评分更新；手动编辑过歌词的歌曲不受影响，将保持锁定" = "%@ canciones están bloqueadas por este ajuste. Al desbloquearlas, la búsqueda automática y las mejoras de puntuación podrán ajustarlas de nuevo; las canciones cuya letra editaste a mano no se ven afectadas y siguen bloqueadas";
 "有 %@ 首歌曲因此开关而锁定。解锁后将恢复自动搜索和评分更新；手动编辑过歌词的歌曲不受影响，将保持锁定#one" = "%@ canción está bloqueada por este ajuste. Al desbloquearla, la búsqueda automática y las mejoras de puntuación podrán ajustarla de nuevo; las canciones cuya letra editaste a mano no se ven afectadas y siguen bloqueadas";
 "有一种写法只在其中一边被合并时会这样" = "Ocurre cuando una grafía se fusiona solo en un lado";
+"有对齐的逐字版，撤销同源加分" = "Hay una versión palabra por palabra sincronizada, así que se retira la bonificación de misma plataforma";
 "有新版本 %@" = "Actualización disponible: %@";
 "有歌词源将这首歌曲标记为纯音乐，无可用的候选歌词" = "Una fuente de letras marca esta canción como instrumental; no hay candidatas utilizables";
 "有软件更新可用" = "Actualización de software disponible";
@@ -2772,6 +2773,7 @@
 "这也是你最长的连续记录" = "Tu racha más larga hasta ahora";
 "这些歌词源连续失败，本轮暂未查询" = "Estas fuentes fallaron repetidamente y no se consultaron en esta ronda";
 "这些记录无歌词，且无歌手或时长超过 20 分钟，通常为广告、播客或有声书。人工修正、标为纯音乐、已校准时间轴的记录和正在播放的歌曲不包含在内；再次播放时将重新匹配" = "Estas entradas no tienen letra y no tienen artista o duran más de 20 minutos: suelen ser anuncios, pódcasts o audiolibros. No se incluyen las entradas editadas manualmente, instrumentales o calibradas ni la canción en reproducción. Se volverá a buscar su letra si se reproducen";
+"这份只有逐行时间轴，另一份逐字歌词与它整首对齐、结尾完整，改用逐字版" = "Esta solo tiene tiempos por línea; otra versión palabra por palabra coincide con ella en toda la canción y tiene el final completo, así que se usa esa";
 "这份报告推到哪些渠道" = "Canales a los que va este informe";
 "这份报告的数据来源" = "Origen de datos de este informe";
 "这份歌词无时间戳，采纳后仅在「歌词窗口」中作为静态文字显示，不会随播放逐字 / 逐行高亮" = "Esta letra no tiene tiempos. Si la usas, solo aparece como texto estático en la «Ventana de letra» y no se resalta palabra por palabra ni línea por línea al reproducir";

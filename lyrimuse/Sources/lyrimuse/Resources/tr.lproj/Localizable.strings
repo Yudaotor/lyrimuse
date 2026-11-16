@@ -1724,6 +1724,7 @@
 "最长 %@ 天" = "En uzun: %@ gün";
 "有 %@ 首歌曲因此开关而锁定。解锁后将恢复自动搜索和评分更新；手动编辑过歌词的歌曲不受影响，将保持锁定" = "Bu ayar nedeniyle %@ parça kilitli. Kilidi açarsanız otomatik yeniden arama ve puanlama iyileştirmeleri bu parçaları yeniden ayarlayabilir; şarkı sözlerini elle düzenlediğiniz parçalar etkilenmez ve kilitli kalır";
 "有一种写法只在其中一边被合并时会这样" = "Bir yazım yalnızca bir tarafta birleştirildiğinde bu olur";
+"有对齐的逐字版，撤销同源加分" = "Zamanlaması uyan kelime zamanlamalı bir sürüm var, aynı platform bonusu geri alındı";
 "有新版本 %@" = "Yeni sürüm var: %@";
 "有歌词源将这首歌曲标记为纯音乐，无可用的候选歌词" = "Bir şarkı sözü kaynağı bu parçayı enstrümantal olarak işaretliyor; kullanılabilir aday yok";
 "有软件更新可用" = "Yazılım Güncellemesi Var";
@@ -2682,6 +2683,7 @@
 "这也是你最长的连续记录" = "Bu aynı zamanda en uzun seriniz";
 "这些歌词源连续失败，本轮暂未查询" = "Bu şarkı sözü kaynakları art arda başarısız olduğundan bu turda sorgulanmadı";
 "这些记录无歌词，且无歌手或时长超过 20 分钟，通常为广告、播客或有声书。人工修正、标为纯音乐、已校准时间轴的记录和正在播放的歌曲不包含在内；再次播放时将重新匹配" = "Bu kayıtların şarkı sözü yok ve ya sanatçısı yok ya da süresi 20 dakikayı aşıyor; bunlar genellikle reklam, podcast veya sesli kitaptır. Elle düzenlenmiş, enstrümantal olarak işaretlenmiş ve zamanlaması kalibre edilmiş kayıtlar ile şu an çalan parça dahil değildir. Yeniden çalınırlarsa tekrar eşleştirilirler";
+"这份只有逐行时间轴，另一份逐字歌词与它整首对齐、结尾完整，改用逐字版" = "Bunda yalnızca satır zamanlaması var; kelime zamanlamalı başka bir sürüm şarkı boyunca onunla örtüşüyor ve sonu eksiksiz, bu yüzden o kullanılıyor";
 "这份报告推到哪些渠道" = "Bu raporun gönderileceği kanallar";
 "这份报告的数据来源" = "Bu Raporun Veri Kaynağı";
 "这份歌词无时间戳，采纳后仅在「歌词窗口」中作为静态文字显示，不会随播放逐字 / 逐行高亮" = "Bu şarkı sözlerinde zamanlama yok. Kullanılırsa yalnızca “Şarkı Sözü Penceresi” içinde durağan metin olarak görünür; çalma sırasında kelime kelime / satır satır vurgulanmaz";
