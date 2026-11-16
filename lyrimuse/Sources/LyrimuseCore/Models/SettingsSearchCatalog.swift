@@ -163,12 +163,14 @@ public enum SettingsSearchCatalog {
             RowGate(menuBar, "宽度模式", "menuBar.centerIdle", "歌词位置"),
             RowGate(menuBar, "对齐方式", "menuBar.centerIdle", "歌词位置"),
             RowGate(menuBar, "副行", "menuBar.showsLyrics", "显示内容"),
+            RowGate(menuBar, "无译文时", "menuBar.secondaryTranslation", "副行"),
+            RowGate(menuBar, "无读音时", "menuBar.secondaryRomanization", "副行"),
             RowGate(menuBar, "已唱颜色", "menuBar.fillColorShown", "卡拉OK效果"),
             RowGate(menuBar, "文字颜色", "menuBar.colorRowsShown", "彩虹"),
             RowGate(menuBar, "已唱颜色", "menuBar.colorRowsShown", "彩虹"),
         ]
         // 灵动岛「歌词行」组:收起时不显示歌词时整组藏起(`NotchLyricRowSettingsRows`)。
-        for title in ["对齐方式", "歌词颜色", "副行", "高度", "卡拉OK效果", "显示封面", "封面位置", "悬停时淡化"] {
+        for title in ["对齐方式", "歌词颜色", "副行", "无译文时", "无读音时", "高度", "卡拉OK效果", "显示封面", "封面位置", "悬停时淡化"] {
             gates.append(RowGate(notch, title, "notch.showLyrics", "收起时显示歌词"))
         }
         // Last.fm「Scrobble 规则」:上面的「Scrobble 到 Last.fm」关着时整组换成一句提示,落到组标题上。
@@ -179,6 +181,8 @@ public enum SettingsSearchCatalog {
             RowGate(notch, "封面位置", "notch.lyricRowArtwork", "显示封面"),
             RowGate(notch, "展开时预览下一句", "notch.lyricListOff", "多行歌词"),
             RowGate(notch, "展开时预览下一句", "notch.expandedNextLine", "副行"),
+            RowGate(notch, "无译文时", "notch.secondaryTranslation", "副行"),
+            RowGate(notch, "无读音时", "notch.secondaryRomanization", "副行"),
             RowGate(notch, "行数", "notch.lyricList", "多行歌词"),
             // 「跟随音乐跳动」的入口是音浪那一行开关左边的按钮,音浪关着时按钮不在(05 章决策 147)。
             RowGate(notch, "跟随音乐跳动", "notch.equalizer", "音浪"),
@@ -502,6 +506,8 @@ public enum SettingsSearchCatalog {
         surface(.notch, "对齐方式", kw: ["居中", "左对齐", "右对齐"], group: "歌词行"),
         surface(.notch, "歌词颜色", kw: ["颜色", "彩虹", "渐变", "强调色"], group: "歌词行"),
         surface(.notch, "副行", kw: ["下一句", "译文", "读音", "罗马音", "两行"], group: "歌词行"),
+        surface(.notch, "无译文时", kw: ["没有译文", "没有翻译", "副行", "下一句", "只显示歌词", "单行", "一行"], group: "歌词行"),
+        surface(.notch, "无读音时", kw: ["没有读音", "罗马音", "副行", "下一句", "只显示歌词", "单行", "一行"], group: "歌词行"),
         surface(.notch, "展开时预览下一句", kw: ["下一句", "预览"], group: "歌词行"),
         surface(.notch, "高度", kw: ["行高", "歌词行高度", "调高", "调矮", "遮挡", "pt"], group: "歌词行"),
         surface(.notch, "卡拉OK效果", kw: ["逐字", "染色", "karaoke"], group: "歌词行"),
@@ -539,6 +545,8 @@ public enum SettingsSearchCatalog {
         surface(.menuBar, "宽度模式", kw: ["固定", "自适应", "宽度"], group: "布局"),
         surface(.menuBar, "对齐方式", kw: ["居中", "左对齐", "右对齐"], group: "布局"),
         surface(.menuBar, "副行", kw: ["下一句", "译文", "读音", "罗马音", "双排", "两行"], group: "内容"),
+        surface(.menuBar, "无译文时", kw: ["没有译文", "没有翻译", "副行", "下一句", "只显示歌词", "单行", "一行"], group: "内容"),
+        surface(.menuBar, "无读音时", kw: ["没有读音", "罗马音", "副行", "下一句", "只显示歌词", "单行", "一行"], group: "内容"),
         surface(.menuBar, "歌词旁的图标", kw: ["进度图标", "图标"], group: "内容"),
         surface(.menuBar, "卡拉OK效果", kw: ["逐字", "染色", "karaoke"], group: "颜色"),
         surface(.menuBar, "彩虹", kw: ["彩虹", "渐变", "流动", "颜色", "rainbow"], group: "颜色"),

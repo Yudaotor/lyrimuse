@@ -943,7 +943,7 @@ Como máximo una vez al día, envía al servidor del propio autor la versión, e
 
 ## Todos los ajustes
 
-Todos los ajustes de la ventana Ajustes, según dónde están: 321 en total. Escribe un nombre en el campo de búsqueda de la parte superior de la barra lateral de Ajustes para ir directamente a él.
+Todos los ajustes de la ventana Ajustes, según dónde están: 325 en total. Escribe un nombre en el campo de búsqueda de la parte superior de la barra lateral de Ajustes para ir directamente a él.
 
 ### Letra › Fuente
 
@@ -1117,6 +1117,8 @@ Todos los ajustes de la ventana Ajustes, según dónde están: 321 en total. Esc
 - **Alineación**
 - **Color de la letra**
 - **Segunda línea**
+- **Sin traducción**
+- **Sin romanización**
 - **Ver línea siguiente al expandir**
 - **Altura**
 - **Efecto karaoke**
@@ -1162,6 +1164,8 @@ Todos los ajustes de la ventana Ajustes, según dónde están: 321 en total. Esc
 
 - **Qué se muestra**
 - **Segunda línea**
+- **Sin traducción**
+- **Sin romanización**
 - **Icono junto a la letra**: El icono se llena de abajo arriba para mostrar el progreso de reproducción, con los colores de «Color»
 
 ### Mostrar letra › Barra de menús › Diseño

@@ -188,11 +188,15 @@ final class SettingsSearchRouter: ObservableObject {
         case "menuBar.centerSelected": return s.menuBarLyricsPlacement == .screenCenter
         case "menuBar.centerIdle": return !MenuBarPlacementRow.centerInUse(s)
         case "menuBar.showsLyrics": return s.menuBarLyricsContent == .lyrics
+        case "menuBar.secondaryTranslation": return s.menuBarSecondaryChoice == .translation
+        case "menuBar.secondaryRomanization": return s.menuBarSecondaryChoice == .romanization
         case "menuBar.fillColorShown": return s.menuBarLyricsKaraoke || s.menuBarLyricsIconPosition != .off
         case "menuBar.colorRowsShown": return !s.menuBarLyricsRainbow || s.menuBarLyricsIconPosition != .off
         case "notch.showLyrics": return s.notchShowLyrics
         case "notch.lyricRowArtwork": return s.notchLyricRowShowsArtwork
         case "notch.expandedNextLine": return !s.notchSecondaryLine.hidesExpandedNextLinePreview
+        case "notch.secondaryTranslation": return s.notchSecondaryLine == .translation
+        case "notch.secondaryRomanization": return s.notchSecondaryLine == .romanization
         case "notch.lyricList": return s.notchExpandedLyricList
         case "notch.lyricListOff": return !s.notchExpandedLyricList
         case "notch.equalizer": return s.notchShowsEqualizer

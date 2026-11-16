@@ -258,9 +258,11 @@ extension NotchLyricsView {
     /// 编辑台舞台常量、出场动画这片高度体系(05 章决策 22)。
     /// 主行那一格的高度随「字号」走(`playback.mainLineHeight`,11…17pt → 13…19pt),两行最多 35pt,
     /// 仍在 44 里、上下各余 ≥ 4pt —— 字号范围就是按这条倒推的,Core 有 selftest 钉着。
+    /// 排一行还是两行看这首实际用的那一档(`shownSecondaryLine`):整首没有译文 / 读音、选了只显示歌词时只排主行,
+    /// 行高仍按设置,主行在里面竖直居中。
     @ViewBuilder
     private var lyricTextColumn: some View {
-        if playback.secondaryLine.showsSecondaryRow {
+        if playback.shownSecondaryLine.showsSecondaryRow {
             VStack(alignment: .leading, spacing: NotchLyricRowMetrics.lineSpacing) {
                 mainLyricLine
                     .frame(height: playback.mainLineHeight)
@@ -366,7 +368,7 @@ extension NotchLyricsView {
         Text(playback.secondaryText ?? "")
             // 固定 11pt、比主行细一档,只跟主行的字体族与粗细(理由见 NotchLyricRowMetrics.secondaryFontSize)。
             .font(playback.secondaryFont)
-            .lyricTypesetting(playback.secondaryText, translation: playback.secondaryLine == .translation)
+            .lyricTypesetting(playback.secondaryText, translation: playback.shownSecondaryLine == .translation)
             .foregroundStyle(lyricInk.opacity(secondaryLineOpacity))
             .notchLyricPaint(rainbow: lyricsRainbow, flowing: lyricsRainbowFlowing)
             .lineLimit(1)
@@ -375,7 +377,7 @@ extension NotchLyricsView {
     }
 
     private var secondaryLineOpacity: Double {
-        switch playback.secondaryLine {
+        switch playback.shownSecondaryLine {
         case .off, .nextLine: return 0.45
         case .translation: return 0.75
         case .romanization: return 0.6
@@ -484,7 +486,7 @@ extension NotchLyricsView {
                         .lyricTypesetting(plainText)
                         .notchLyricPaint(rainbow: lyricsRainbow, flowing: lyricsRainbowFlowing)
                 } else if !isIdleNoTrack, let raw = playback.rawGapWindow {
-                    let window = playback.secondaryLine.gapDotsWindow(raw, compactPlaceholder: playback.compactShowsPlaceholder)
+                    let window = playback.shownSecondaryLine.gapDotsWindow(raw, compactPlaceholder: playback.compactShowsPlaceholder)
                     // 尺寸按字号等比,别写死:歌词窗口字号至少 22(见 lyricFontSize),它那边 8pt 只相当于 0.36 倍字号;灵动岛主行只有
                     // 13pt(范围 11…17),同样画 8pt 就是 0.62 倍,呼吸到最大(×1.28)时逼近 10pt、在 15pt 的行高里比歌词本身还抢眼。
                     //

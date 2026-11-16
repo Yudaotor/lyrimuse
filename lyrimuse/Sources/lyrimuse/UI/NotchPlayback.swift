@@ -52,9 +52,12 @@ final class NotchPlayback: ObservableObject {
     /// 罗马音走 `SyncedLyricLine.romanization`,跟悬浮歌词同一来源(服务端 lyrics_roma 优先、
     /// 客户端 Romanizer 兜底、`romanizationScripts` 语言门控都在引擎侧做完了),这里不再判一遍。
     @Published private(set) var secondaryText: String?
-    /// 副行选项本身,视图据此决定歌词行走单行排法还是双行排法。 初值必须是
+    /// 设置里选的副行(快捷操作「切换副行」报它)。 初值必须是
     /// `AppSettings.defaultNotchSecondaryLine`,理由同下面 `lyricsAlignment` 那条。
     @Published private(set) var secondaryLine: LyricSecondaryLine = AppSettings.defaultNotchSecondaryLine
+    /// 副行这一首实际用哪一档(`PlaybackCoordinator.shownSecondaryLine`):整首没有译文 / 读音时按「无译文时 / 无读音时」
+    /// 换成下一句或不显示。视图据此决定歌词行走单行排法还是双行排法、副行的透明度和排字;行高仍按设置(见 05 章决策 148)。
+    @Published private(set) var shownSecondaryLine: LyricSecondaryLine = AppSettings.defaultNotchSecondaryLine
     @Published private(set) var hasLyricsContent = false
     @Published private(set) var isCurrentTrackInstrumental = false
     @Published private(set) var currentTrackHasNoLyrics = false
@@ -172,7 +175,7 @@ final class NotchPlayback: ObservableObject {
         lyricsAlignment.resolved(duetSide: nextLineSide).swiftUIAlignment
     }
     var secondaryLyricAlignment: Alignment {
-        secondaryLine == .nextLine ? nextLineAlignment : mainLyricAlignment
+        shownSecondaryLine == .nextLine ? nextLineAlignment : mainLyricAlignment
     }
 
     /// 「跳过广告」有没有对象:广告中,**且**这条广告是 YT Music 网页广告(探针强信号判定,
@@ -278,6 +281,8 @@ final class NotchPlayback: ObservableObject {
             .combineLatest(p.$rawGapWindow.combineLatest(p.$lyricsGapMarkers)
                 .map { raw, markers in raw?.isMarked(in: markers) ?? false })
             .map { LyricSecondaryLine.currentLine($0, inMarkedInterlude: $1) }
+        // 副行这首实际用的那一档:主行取句、副行文字、展开区「下一句」都认它。
+        let shown = p.shownSecondaryLinePublisher(setting: s.$notchSecondaryLine, fallback: s.$notchSecondaryFallback)
         subs = [
             p.$title.removeDuplicates().sink { [weak self] in self?.title = $0 },
             p.$displayTitle.removeDuplicates().sink { [weak self] in self?.displayTitle = $0 },
@@ -298,7 +303,7 @@ final class NotchPlayback: ObservableObject {
             // 均衡器条子当"此刻在唱哪个字"的节拍,那是跟着人声动的律动、不是染色,关掉卡拉OK填色不该
             // 让条子一起哑掉。
             Publishers.CombineLatest4(p.$notchLyrics.map(\.compactLine), shownCurrentLine,
-                                      s.$notchLyricsKaraoke, s.$notchSecondaryLine)
+                                      s.$notchLyricsKaraoke, shown)
                 .map { compact, current, karaoke, secondary -> SyncedLyricLine? in
                     // 挑哪一句在 Core(`LyricSecondaryLine.displayedLine`),菜单栏读的是同一份。
                     let line = secondary.displayedLine(compactLine: compact, currentLine: current)
@@ -307,7 +312,7 @@ final class NotchPlayback: ObservableObject {
                 .removeDuplicates()
                 .sink { [weak self] in self?.displayLine = $0 },
             // 副行文本:按四选一取下一句 / 当前句译文 / 当前句罗马音,空白算没有。
-            Publishers.CombineLatest3(shownCurrentLine, p.$notchLyrics.map(\.nextText), s.$notchSecondaryLine)
+            Publishers.CombineLatest3(shownCurrentLine, p.$notchLyrics.map(\.nextText), shown)
                 .map { current, next, secondary -> String? in
                     // 取值规则在 Core(`LyricSecondaryLine.secondaryText`),菜单栏副行读的是同一份。
                     secondary.secondaryText(currentLine: current, nextLineText: next)
@@ -315,12 +320,13 @@ final class NotchPlayback: ObservableObject {
                 .removeDuplicates()
                 .sink { [weak self] in self?.secondaryText = $0 },
             s.$notchSecondaryLine.removeDuplicates().sink { [weak self] in self?.secondaryLine = $0 },
-            // 展开区「下一句」预览:接主行显示的那一句往后数(`LyricSecondaryLine.expandedNextLine`)。
-            Publishers.CombineLatest(p.$notchLyrics, s.$notchSecondaryLine)
-                .map { lyrics, secondary in secondary.expandedNextLine(next: lyrics.nextText, afterCompact: lyrics.compactNextText) }
+            shown.sink { [weak self] in self?.shownSecondaryLine = $0 },
+            // 展开区「下一句」预览:接主行显示的那一句往后数;副行这首显示的就是下一句时留空(`expandedPreviewText`)。
+            Publishers.CombineLatest(p.$notchLyrics, shown)
+                .map { lyrics, secondary in secondary.expandedPreviewText(next: lyrics.nextText, afterCompact: lyrics.compactNextText) }
                 .removeDuplicates()
                 .sink { [weak self] in self?.nextLineText = $0 },
-            Publishers.CombineLatest(p.$notchLyrics, s.$notchSecondaryLine)
+            Publishers.CombineLatest(p.$notchLyrics, shown)
                 .map { lyrics, secondary in secondary.expandedNextLine(next: lyrics.nextSide, afterCompact: lyrics.compactNextSide) }
                 .removeDuplicates()
                 .sink { [weak self] in self?.nextLineSide = $0 },

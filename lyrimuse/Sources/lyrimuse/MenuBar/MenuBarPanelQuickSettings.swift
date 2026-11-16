@@ -551,6 +551,10 @@ struct PanelQuickSettings: View {
                 // 顺序跟设置页「歌词行」组一致(显示歌词 → 对齐方式 → 副行),字号来自「字体」组、
                 // 排在这一段最后 —— 上面的风格/宽度说的是整张卡,这四行是"歌词行自己的事"。
                 secondaryLineRow(selection: $settings.notchSecondaryLine)
+                // 同设置页:选了译文 / 读音才有「无译文时 / 无读音时」(05 章决策 148)。
+                if settings.notchSecondaryLine.isPerLineText {
+                    secondaryFallbackRow(secondary: settings.notchSecondaryLine, selection: $settings.notchSecondaryFallback)
+                }
                 // 灵动岛的字号跟「副行」**互不影响**,不要照搬菜单栏那边的「由副行决定」:
                 // 副行与展开预览固定 11pt、不随主行字号变,这正是 Core `NotchLyricRowMetrics`
                 // 刻意的取舍(那边注释:"不跟着放大是为了让主行的字号范围不依赖副行开没开")。
@@ -622,6 +626,10 @@ struct PanelQuickSettings: View {
                                          options: MenuBarSecondaryChoice.allCases, label: { $0.displayName })
                 }
             }
+            // 同设置页:两行的译文 / 读音才有「无译文时 / 无读音时」(06 章决策 105)。
+            if settings.menuBarShowsSecondaryFallback {
+                secondaryFallbackRow(secondary: settings.menuBarSecondaryLine, selection: $settings.menuBarSecondaryFallback)
+            }
             menuBarFontSizeRow
         case .touchBar:
             // 跟设置页「布局」卡同序(显示封面 → 显示播放控制 → 对齐方式 → 副行),「字号」在「外观」卡、排在最后,
@@ -634,10 +642,7 @@ struct PanelQuickSettings: View {
             secondaryLineRow(selection: $settings.touchBarSecondaryLine)
             // 同设置页:选了译文 / 读音才有「无译文时 / 无读音时」(17 章决策 58)。
             if settings.touchBarSecondaryLine.isPerLineText {
-                row(LyricSecondaryFallback.rowTitle(for: settings.touchBarSecondaryLine)) {
-                    PanelGlassMenuPicker(selection: $settings.touchBarSecondaryFallback,
-                                         options: LyricSecondaryFallback.allCases, label: { $0.displayName })
-                }
+                secondaryFallbackRow(secondary: settings.touchBarSecondaryLine, selection: $settings.touchBarSecondaryFallback)
             }
             touchBarFontSizeRow
         case .lyricsWindow:
@@ -994,6 +999,15 @@ struct PanelQuickSettings: View {
         }
     }
 
+    /// 「无译文时 / 无读音时」:灵动岛、菜单栏、触控栏三格各绑各的设置,标题跟着副行那一档走。
+    private func secondaryFallbackRow(secondary: LyricSecondaryLine,
+                                      selection: Binding<LyricSecondaryFallback>) -> some View {
+        row(LyricSecondaryFallback.rowTitle(for: secondary)) {
+            PanelGlassMenuPicker(selection: selection, options: LyricSecondaryFallback.allCases,
+                                 label: { $0.displayName })
+        }
+    }
+
     /// 拖回系统字号那一格存 0;相等守卫,同一个值不再广播。拖动中由 `menuBarFontSizeThrottle` 节流调用。
     private func commitMenuBarFontSize(_ newValue: Double) {
         let range = MenuBarMarqueeRenderer.fontSizeRange
@@ -1016,7 +1030,7 @@ struct PanelQuickSettings: View {
     /// 符合这块面板"停用/隐藏一个旋钮的前提是把为什么摆在它上面"那条(见菜单栏「对齐方式」处)。
     @ViewBuilder private var menuBarFontSizeRow: some View {
         row(L10n.t("字号")) {
-            if settings.menuBarUsesTwoRows {
+            if !settings.menuBarFontSizeApplies {
                 Text(L10n.t("由副行决定"))
                     .font(.system(size: 10))
                     .foregroundStyle(.tertiary)

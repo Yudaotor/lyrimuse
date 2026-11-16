@@ -7,6 +7,14 @@ import Foundation
 
 @MainActor
 func runMenuBarTests() {
+    // ---- 副行「无译文时 / 无读音时」:哪些档位下会有歌只排主行(「字号」据此显示滑杆还是「由副行决定」)----
+    do {
+        expectEqual(LyricSecondaryLine.allCases.map { $0.mayShowMainOnly(fallback: .nextLine) }, [true, false, false, false],
+                    "副行回退: 换成下一句时只有副行关着才排一行")
+        expectEqual(LyricSecondaryLine.allCases.map { $0.mayShowMainOnly(fallback: .mainOnly) }, [true, false, true, true],
+                    "副行回退: 只显示歌词时译文 / 读音两档也会排一行")
+    }
+
     // ---- 面板格子标题：没有空格的中日文只放一行，带空格 / 连字符的按词折行 ----
     do {
         for t in ["フローティング歌詞", "メニューバーの歌詞", "悬浮歌词", "選單列歌詞"] {
@@ -1349,8 +1357,8 @@ func runMenuBarTests() {
                     "菜单栏三点(契约): 前奏/间奏占位喂的是三点记号串,不是音符")
         expectEqual(statusSrc.contains("let raw = coordinator.rawGapWindow"), true,
                     "菜单栏三点(契约): 点亮进度走**不设门槛**的 rawGapWindow —— 门槛版会让短前奏/短间奏拿不到窗口")
-        expectEqual(sourceHas(statusSrc, "AppSettings.shared.menuBarLayoutSecondaryLine.gapDotsWindow(\nraw, compactPlaceholder: coordinator.menuBarLyrics.compactPlaceholder)"), true,
-                    "菜单栏三点(契约): 单行时下一句提前亮出来,点在那一刻走完(同灵动岛 gapDotsWindow;按实际排法,两种译文排法算单行)")
+        expectEqual(sourceHas(statusSrc, "shownSecondaryLine.gapDotsWindow(\nraw, compactPlaceholder: coordinator.menuBarLyrics.compactPlaceholder)"), true,
+                    "菜单栏三点(契约): 单行时下一句提前亮出来,点在那一刻走完(同灵动岛 gapDotsWindow;按这首实际的排法,两种译文排法、整首没译文只显示歌词都算单行)")
     }
 
     // ---- 间隙里不许闪图标(否则表现为「菜单栏歌词有时消失、过一会儿又回来」)----

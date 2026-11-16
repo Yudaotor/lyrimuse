@@ -54,7 +54,7 @@ public enum LyricSecondaryLine: String, CaseIterable, Sendable {
 
     /// 这首歌副行实际用哪一档:选了译文 / 读音、这首有词却一句都没有(按 `secondaryText` 的口径)时按 `fallback` 换成
     /// 「下一句」或「不显示」,不然整首副行都空着;别的情况原样。没有词(还在找、没找到、没曲目)时原样,那时哪档都没字。
-    /// 触控栏用,见 17 章决策 58。
+    /// 触控栏、灵动岛、菜单栏都用(各存各的 `fallback`),App 侧经 `PlaybackCoordinator.shownSecondaryLine` 取,见 17 章决策 58。
     public func resolved<Lines: Sequence>(in lines: Lines, fallback: LyricSecondaryFallback) -> LyricSecondaryLine
     where Lines.Element == SyncedLyricLine {
         guard isPerLineText else { return self }
@@ -68,6 +68,12 @@ public enum LyricSecondaryLine: String, CaseIterable, Sendable {
         case .nextLine: return .nextLine
         case .mainOnly: return .off
         }
+    }
+
+    /// 这一档下会不会有歌只排主行一行:副行关着时每首都是;选了译文 / 读音、「无译文时 / 无读音时」选了只显示歌词时,
+    /// 整首没有那一档的歌也是。触控栏、菜单栏的「字号」只管单行,据此决定显示滑杆还是「由副行决定」。
+    public func mayShowMainOnly(fallback: LyricSecondaryFallback) -> Bool {
+        !showsSecondaryRow || (isPerLineText && fallback == .mainOnly)
     }
 
     /// 副行要显示的文字:下一句 / 当前句译文 / 当前句罗马音,首尾空白剔掉、空的算没有(nil)。
@@ -100,6 +106,13 @@ public enum LyricSecondaryLine: String, CaseIterable, Sendable {
     /// 两行是同一句。文字和对唱声部都走这里。见 05 章决策 77。
     public func expandedNextLine<Value>(next: Value, afterCompact: Value) -> Value {
         showsSecondaryRow ? next : afterCompact
+    }
+
+    /// 灵动岛展开区「下一句」预览画什么字(在这首实际用的那一档上调):副行这首显示的就是下一句时给 nil,不重复画同一句;
+    /// 那一行占不占位置仍按设置定(`expandedNextLinePreviewVisible`),卡片不随歌变高变矮。别的情况同 `expandedNextLine`。
+    /// 见 05 章决策 148。
+    public func expandedPreviewText(next: String?, afterCompact: String?) -> String? {
+        hidesExpandedNextLinePreview ? nil : expandedNextLine(next: next, afterCompact: afterCompact)
     }
 
     /// 灵动岛喂给 `displayedLine` / `secondaryText` 的当前句:在够格的间奏里(`LyricsGapWindow.isMarked`)

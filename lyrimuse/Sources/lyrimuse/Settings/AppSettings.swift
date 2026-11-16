@@ -384,6 +384,7 @@ final class AppSettings: ObservableObject {
         static let menuBarLyricsFontSize = "np:menuBarLyricsFontSize"
         static let menuBarSecondaryLine = "np:menuBarSecondaryLine"
         static let menuBarTranslationInline = "np:menuBarTranslationInline"
+        static let menuBarSecondaryFallback = "np:menuBarSecondaryFallback"
         static let menuBarHoverShowsControls = "np:menuBarHoverShowsControls"
         static let menuBarPanelLayout = "np:menuBarPanelLayout"
         static let menuBarShowsTitleWhenNoLyrics = "np:menuBarShowsTitleWhenNoLyrics"
@@ -547,6 +548,7 @@ final class AppSettings: ObservableObject {
         static let notchLyricsAlignment = "np:notchLyricsAlignment"
         static let notchLyricsColor = "np:notchLyricsColor"
         static let notchSecondaryLine = "np:notchSecondaryLine"
+        static let notchSecondaryFallback = "np:notchSecondaryFallback"
         static let notchFontFamilyName = "np:notchFontFamilyName"
         static let notchFontWeight = "np:notchFontWeight"
         static let notchFontSize = "np:notchFontSize"
@@ -709,6 +711,7 @@ final class AppSettings: ObservableObject {
     static let defaultNotchLyricsColor = NotchLyricsColor.accent
     /// 灵动岛歌词行「副行」默认「下一句」:这项的主要目的是让它可以提前看到下一行歌词,默认就该是那个。
     static let defaultNotchSecondaryLine = LyricSecondaryLine.nextLine
+    static let defaultNotchSecondaryFallback = LyricSecondaryFallback.nextLine
     /// 灵动岛歌词的字体三件,默认系统字体 / semibold / 13pt。字号的默认值与合法区间真源在 Core
     /// `NotchLyricRowMetrics`(行高不变量在那边有 selftest 钉着),这里只转发。
     static let defaultNotchFontFamilyName = ""
@@ -768,6 +771,7 @@ final class AppSettings: ObservableObject {
     /// "提前看到下一句"在两个面上是同一个诉求。代价:开副行要把主行从 13pt 压到 10pt(项高不变,
     /// 仍是 22pt)、「字号」滑杆随之让位,见 `LyricSecondaryLine` 与 06 章「副行:双排歌词」。
     static let defaultMenuBarSecondaryLine = LyricSecondaryLine.nextLine
+    static let defaultMenuBarSecondaryFallback = LyricSecondaryFallback.nextLine
 
     // 「歌词显示 › 触控栏」那一段十项的默认值:`init()` 的 fallback 和 `TouchBarStyleDefaults.restoreDefaults()` 读同一组。
     // 字号的默认值在 Core(`TouchBarLyricsStyle.defaultFontSize`)。取值见 17 章决策 31、33。
@@ -1325,6 +1329,11 @@ final class AppSettings: ObservableObject {
     @Published var menuBarSecondaryLine: LyricSecondaryLine {
         didSet { defaults.set(menuBarSecondaryLine.rawValue, forKey: Keys.menuBarSecondaryLine) }
     }
+    /// 副行选了译文 / 读音(两行那种)、这首却一句都没有时:改显示下一句(默认)或只显示歌词(按单行排,
+    /// `menuBarLyricsFontSize` 生效)。按整首判,见 `PlaybackCoordinator.shownSecondaryLine`。
+    @Published var menuBarSecondaryFallback: LyricSecondaryFallback {
+        didSet { defaults.set(menuBarSecondaryFallback.rawValue, forKey: Keys.menuBarSecondaryFallback) }
+    }
     /// 副行选译文时,译文接在原文后面排成一行(「副行」下拉里的「译文(同一行)」,`MenuBarSecondaryChoice`)。
     /// 副行不是译文时不起作用。
     @Published var menuBarTranslationInline: Bool {
@@ -1347,9 +1356,18 @@ final class AppSettings: ObservableObject {
     var menuBarLayoutSecondaryLine: LyricSecondaryLine {
         MenuBarLyricText.layoutSecondary(mode: menuBarLyricTextMode, secondary: menuBarSecondaryLine)
     }
-    /// 菜单栏此刻排两行(显示歌词、副行开着、不是同一行译文)。「字号」让位成「由副行决定」按它判。
+    /// 菜单栏此刻排两行(显示歌词、副行开着、不是同一行译文)。
     var menuBarUsesTwoRows: Bool {
         menuBarLyricsContent == .lyrics && menuBarLayoutSecondaryLine.showsSecondaryRow
+    }
+    /// 「无译文时 / 无读音时」那一行在不在:显示歌词、副行是两行的译文 / 读音时在。
+    var menuBarShowsSecondaryFallback: Bool {
+        menuBarLyricsContent == .lyrics && menuBarLayoutSecondaryLine.isPerLineText
+    }
+    /// 「字号」用不用得上:排单行时用;两行的译文 / 读音选了只显示歌词时,整首没有那一档的歌按单行排,也用。
+    /// 不用时设置页和面板快捷设置都让位成「由副行决定」。
+    var menuBarFontSizeApplies: Bool {
+        !menuBarUsesTwoRows || menuBarLayoutSecondaryLine.mayShowMainOnly(fallback: menuBarSecondaryFallback)
     }
     /// 鼠标停在菜单栏歌词上时,歌词收掉、换成「上一曲 / 播放暂停 / 下一曲」三个键。默认**关**:
     /// 它改的是既有手势的语义(悬停时歌词看不见了、左键那一下可能落到某个键上而不是弹面板),
@@ -2142,6 +2160,11 @@ final class AppSettings: ObservableObject {
     @Published var notchSecondaryLine: LyricSecondaryLine {
         didSet { defaults.set(notchSecondaryLine.rawValue, forKey: Keys.notchSecondaryLine) }
     }
+    /// 副行选了译文 / 读音、这首却一句都没有时:改显示下一句(默认)或只显示歌词。按整首判
+    /// (`PlaybackCoordinator.shownSecondaryLine`);歌词行高度、展开区留不留「下一句」那一行仍按 `notchSecondaryLine` 定。
+    @Published var notchSecondaryFallback: LyricSecondaryFallback {
+        didSet { defaults.set(notchSecondaryFallback.rawValue, forKey: Keys.notchSecondaryFallback) }
+    }
     /// 灵动岛歌词的字体族 / 粗细 / 字号(设置页灵动岛工具栏第二行「字体」浮层与抽屉「字体」组)。
     /// 文字本身走 `NotchPlayback` 现读,跟 `notchLyricsAlignment` 一样;字号上限由 `NotchLyricRowMetrics.mainFontSizeRange`
     /// 倒推、保证副行开着时两行塞得进行高上限。字号另外决定歌词行高度的下限(`notchEffectiveLyricRowHeight`),
@@ -2758,6 +2781,8 @@ final class AppSettings: ObservableObject {
             .flatMap(LyricSecondaryLine.init(rawValue:)) ?? Self.defaultMenuBarSecondaryLine
         menuBarTranslationInline = (defaults.object(forKey: Keys.menuBarTranslationInline) as? Bool)
             ?? Self.defaultMenuBarTranslationInline
+        menuBarSecondaryFallback = defaults.string(forKey: Keys.menuBarSecondaryFallback)
+            .flatMap(LyricSecondaryFallback.init(rawValue:)) ?? Self.defaultMenuBarSecondaryFallback
         // 默认关,理由见属性上那段注释(改的是既有手势的语义)。
         menuBarHoverShowsControls = (defaults.object(forKey: Keys.menuBarHoverShowsControls) as? Bool)
             ?? Self.defaultMenuBarHoverShowsControls
@@ -3036,6 +3061,8 @@ final class AppSettings: ObservableObject {
                                                      fallback: Self.defaultNotchLyricsColor)
         notchSecondaryLine = defaults.string(forKey: Keys.notchSecondaryLine)
             .flatMap(LyricSecondaryLine.init(rawValue:)) ?? Self.defaultNotchSecondaryLine
+        notchSecondaryFallback = defaults.string(forKey: Keys.notchSecondaryFallback)
+            .flatMap(LyricSecondaryFallback.init(rawValue:)) ?? Self.defaultNotchSecondaryFallback
         // 字体三件:没存过一律落到默认常量;粗细的 rawValue 被手改坏时同样走兜底,不让一个坏字符串
         // 把灵动岛歌词变成随机档(同 overlayFontWeight 那条)。
         notchFontFamilyName = defaults.string(forKey: Keys.notchFontFamilyName) ?? Self.defaultNotchFontFamilyName

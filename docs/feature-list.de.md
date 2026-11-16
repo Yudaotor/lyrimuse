@@ -943,7 +943,7 @@ Sendet höchstens einmal täglich Version, macOS, aktivierte Funktionen und Abst
 
 ## Alle Einstellungen
 
-Alle Einstellungen des Einstellungsfensters nach Ort: insgesamt 321. Gib einen Namen in das Suchfeld oben in der Seitenleiste der Einstellungen ein, um direkt dorthin zu springen.
+Alle Einstellungen des Einstellungsfensters nach Ort: insgesamt 325. Gib einen Namen in das Suchfeld oben in der Seitenleiste der Einstellungen ein, um direkt dorthin zu springen.
 
 ### Liedtext › Quelle
 
@@ -1117,6 +1117,8 @@ Alle Einstellungen des Einstellungsfensters nach Ort: insgesamt 321. Gib einen N
 - **Ausrichtung**
 - **Liedtextfarbe**
 - **Zweitzeile**
+- **Ohne Übersetzung**
+- **Ohne Umschrift**
 - **Ausgeklappt nächste Zeile zeigen**
 - **Höhe**
 - **Karaoke-Effekt**
@@ -1162,6 +1164,8 @@ Alle Einstellungen des Einstellungsfensters nach Ort: insgesamt 321. Gib einen N
 
 - **Was angezeigt wird**
 - **Zweitzeile**
+- **Ohne Übersetzung**
+- **Ohne Umschrift**
 - **Symbol neben Liedtext**: Das Symbol füllt sich von unten, um den Fortschritt zu zeigen, in den Farben unter „Farbe“
 
 ### Liedtext-Anzeige › Menüleiste › Layout

@@ -943,7 +943,7 @@ No máximo uma vez por dia, envia a versão, o macOS, quais recursos estão ativ
 
 ## Todos os ajustes
 
-Todos os ajustes da janela Ajustes, por local: 321 no total. Digite um nome no campo de busca no topo da barra lateral dos Ajustes para ir direto até ele.
+Todos os ajustes da janela Ajustes, por local: 325 no total. Digite um nome no campo de busca no topo da barra lateral dos Ajustes para ir direto até ele.
 
 ### Letra › Origem
 
@@ -1117,6 +1117,8 @@ Todos os ajustes da janela Ajustes, por local: 321 no total. Digite um nome no c
 - **Alinhamento**
 - **Cor da letra**
 - **Segunda linha**
+- **Sem tradução**
+- **Sem pronúncia**
 - **Prévia da próxima linha ao expandir**
 - **Altura**
 - **Efeito karaokê**
@@ -1162,6 +1164,8 @@ Todos os ajustes da janela Ajustes, por local: 321 no total. Digite um nome no c
 
 - **O que é mostrado**
 - **Segunda linha**
+- **Sem tradução**
+- **Sem pronúncia**
 - **Ícone ao lado da letra**: O ícone se preenche de baixo para cima para mostrar o progresso, com as cores definidas em “Cor”
 
 ### Exibição da letra › Barra de menus › Layout

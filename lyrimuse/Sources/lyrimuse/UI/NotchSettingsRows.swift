@@ -294,6 +294,7 @@ enum NotchStyleDefaults {
         settings.notchLyricsAlignment = AppSettings.defaultNotchLyricsAlignment
         settings.notchLyricsColor = AppSettings.defaultNotchLyricsColor
         settings.notchSecondaryLine = AppSettings.defaultNotchSecondaryLine
+        settings.notchSecondaryFallback = AppSettings.defaultNotchSecondaryFallback
         // 「卡拉OK效果」在「歌词行」浮层里,同属内容开关。
         settings.notchLyricsKaraoke = AppSettings.defaultNotchLyricsKaraoke
         // 「字体」组三项。它们是字形、不是宽度那类结构性尺寸,按钮自报的排除范围「不含宽度和「灵动岛歌词」开关」

@@ -943,7 +943,7 @@ Tối đa một lần mỗi ngày, Lyrimuse gửi phiên bản, macOS, các tín
 
 ## Toàn bộ cài đặt
 
-Toàn bộ mục trong cửa sổ Cài đặt, theo vị trí: tổng cộng 321 mục. Gõ tên vào ô tìm kiếm ở đầu thanh bên của Cài đặt để đi thẳng tới mục đó.
+Toàn bộ mục trong cửa sổ Cài đặt, theo vị trí: tổng cộng 325 mục. Gõ tên vào ô tìm kiếm ở đầu thanh bên của Cài đặt để đi thẳng tới mục đó.
 
 ### Lời bài hát › Nguồn
 
@@ -1117,6 +1117,8 @@ Toàn bộ mục trong cửa sổ Cài đặt, theo vị trí: tổng cộng 321
 - **Căn chỉnh**
 - **Màu lời**
 - **Dòng phụ**
+- **Khi không có bản dịch**
+- **Khi không có phát âm**
 - **Xem trước dòng tiếp theo khi mở rộng**
 - **Chiều cao**
 - **Hiệu ứng karaoke**
@@ -1162,6 +1164,8 @@ Toàn bộ mục trong cửa sổ Cài đặt, theo vị trí: tổng cộng 321
 
 - **Nội dung**
 - **Dòng phụ**
+- **Khi không có bản dịch**
+- **Khi không có phát âm**
 - **Biểu tượng cạnh lời**: Biểu tượng được tô đầy từ dưới lên để thể hiện tiến độ phát, màu lấy từ nhóm “Màu”
 
 ### Hiển thị lời › Thanh menu › Bố cục

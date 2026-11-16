@@ -25,7 +25,22 @@ final class LineLayoutBudgets {
     func start() {
         guard subs.isEmpty else { return }
         let s = AppSettings.shared
+        let p = PlaybackCoordinator.shared
         // 闭包里只用参数,别回头读 AppSettings:@Published 在 willSet 时发布,那一刻存储属性还是旧值。
+        // 菜单栏、灵动岛、触控栏的副行都按这首实际用的那一档报(`PlaybackCoordinator.shownSecondaryLine`,各面本体同一条规则):
+        // 整首没有译文 / 读音时换成下一句或只排主行,断句宽度跟画出来的字号、行数对得上。
+        // 两种译文排法(只显示译文 / 同一行)都按单行字号断句,同 `AppSettings.menuBarLayoutSecondaryLine`。
+        let menuBarLayout: AnyPublisher<LyricSecondaryLine, Never> =
+            Publishers.CombineLatest3(s.$menuBarSecondaryLine, s.$menuBarLyricsContent, s.$menuBarTranslationInline)
+                .map { secondary, content, inline in
+                    let mode = MenuBarLyricText.mode(translationOnly: content == .translation,
+                                                     secondary: secondary, inline: inline)
+                    return MenuBarLyricText.layoutSecondary(mode: mode, secondary: secondary)
+                }
+                .eraseToAnyPublisher()
+        let menuBarKind = p.shownSecondaryLinePublisher(setting: menuBarLayout, fallback: s.$menuBarSecondaryFallback)
+        let notchKind = p.shownSecondaryLinePublisher(setting: s.$notchSecondaryLine, fallback: s.$notchSecondaryFallback)
+        let touchBarKind = p.shownSecondaryLinePublisher(setting: s.$touchBarSecondaryLine, fallback: s.$touchBarSecondaryFallback)
         subs = [
             Publishers.CombineLatest3(s.$overlayWidth, s.$overlayNSFonts, s.$textStrokeEnabled)
                 .combineLatest(Publishers.CombineLatest3(s.$overlayShowTranslation, s.$overlayShowRomanization,
@@ -38,30 +53,17 @@ final class LineLayoutBudgets {
                 },
             Publishers.CombineLatest4(s.$menuBarLyricsWidth, s.$menuBarLyricsFontFamily,
                                       s.$menuBarLyricsFontWeight, s.$menuBarLyricsFontSize)
-                .combineLatest(Publishers.CombineLatest3(s.$menuBarSecondaryLine, s.$menuBarLyricsContent,
-                                                         s.$menuBarTranslationInline))
-                .sink { values, layout in
+                .combineLatest(menuBarKind)
+                .sink { values, kind in
                     let (width, family, weight, size) = values
-                    let (secondary, content, inline) = layout
-                    // 两种译文排法(只显示译文 / 同一行)都按单行字号断句,同 `AppSettings.menuBarLayoutSecondaryLine`。
-                    let mode = MenuBarLyricText.mode(translationOnly: content == .translation,
-                                                     secondary: secondary, inline: inline)
-                    Self.reportMenuBar(width: width, family: family, weight: weight, size: size,
-                                       secondary: MenuBarLyricText.layoutSecondary(mode: mode, secondary: secondary))
+                    Self.reportMenuBar(width: width, family: family, weight: weight, size: size, secondary: kind)
                 },
-            Publishers.CombineLatest4(notchWidth.removeDuplicates(), s.$notchMainNSFont,
-                                      s.$notchSecondaryNSFont, s.$notchSecondaryLine)
+            Publishers.CombineLatest4(notchWidth.removeDuplicates(), s.$notchMainNSFont, s.$notchSecondaryNSFont, notchKind)
                 .sink { width, main, secondary, kind in
                     Self.reportNotch(width: width, main: main, secondary: secondary, kind: kind)
                 },
-            // 副行按这首实际用的那一档(`TouchBarLyricsCell.secondary` 同一条规则):整首没有译文 / 读音、选了「只显示歌词」时
-            // 主行按单行的字号断句。
-            Publishers.CombineLatest4(touchBarWidth.removeDuplicates(), s.$touchBarLyricsFontSize,
-                                      Publishers.CombineLatest(s.$touchBarSecondaryLine, s.$touchBarSecondaryFallback),
-                                      PlaybackCoordinator.shared.$allLines)
-                .map { width, size, choice, lines in
-                    (width, size, choice.0.resolved(in: lines.lazy.map(\.line), fallback: choice.1))
-                }
+            // 整首没有译文 / 读音、选了「只显示歌词」时主行按单行的字号断句。
+            Publishers.CombineLatest3(touchBarWidth.removeDuplicates(), s.$touchBarLyricsFontSize, touchBarKind)
                 .removeDuplicates { $0 == $1 }
                 .sink { width, size, kind in
                     Self.reportTouchBar(width: width, fontSize: size, kind: kind)

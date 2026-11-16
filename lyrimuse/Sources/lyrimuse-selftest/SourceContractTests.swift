@@ -1805,8 +1805,8 @@ func runSourceContractSurfaceTests() {
                         true, "菜单栏双排: 「重置」要覆盖副行和「同一行」、且读默认值常量")
             // 「字号」那一行常显、副行开着时尾部换成「由副行决定」(滑杆让位),浮层与抽屉调同一份
             // MenuBarFontRows —— 判据只在 MenuBarFontSizeRow 里出现一次。「显示内容」选了歌名时没有副行,滑杆照常。
-            expectEqual(stage.components(separatedBy: "if settings.menuBarUsesTwoRows {").count - 1, 1,
-                        "菜单栏双排: 「字号」滑杆在排两行时让位(判据只在 MenuBarFontSizeRow 一处;同一行接着译文时照常)")
+            expectEqual(stage.components(separatedBy: "if !settings.menuBarFontSizeApplies {").count - 1, 1,
+                        "菜单栏双排: 「字号」滑杆在用不上时让位(判据只在 MenuBarFontSizeRow 一处;同一行接着译文、只显示歌词时照常)")
             expectEqual(stage.components(separatedBy: "MenuBarFontRows()").count - 1, 2,
                         "菜单栏双排: 「字体」浮层与抽屉「字体」组调同一份 MenuBarFontRows(两处装配)")
         }
@@ -1814,6 +1814,86 @@ func runSourceContractSurfaceTests() {
             expectEqual(notch.contains("secondary.secondaryText(currentLine: current, nextLineText: next)"), true,
                         "菜单栏双排: 灵动岛副行取值走 Core 共享规则,不再自己 switch")
         }
+    }
+
+    // ---- 副行整首没有译文 / 读音时的回退(灵动岛、菜单栏,同触控栏 17 章决策 58)----
+    //
+    // 判据在 Core(`LyricSecondaryLine.resolved`),各面经 `PlaybackCoordinator.shownSecondaryLine` 取。漏接一处不报错,只表现成
+    // 副行照旧整首空着、或主行取句 / 断句 / 字号跟画出来的行数对不上。灵动岛的歌词行高度、展开区留不留「下一句」那一行仍按设置,
+    // 卡片不随歌变高变矮。
+    do {
+        let appSources = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("lyrimuse")
+        func read(_ rel: String) -> String { (try? String(contentsOfFile: appSources.appendingPathComponent(rel).path, encoding: .utf8)) ?? "" }
+        let notchPlayback = read("UI/NotchPlayback.swift")
+        expectEqual(sourceHas(notchPlayback,
+                              "let shown = p.shownSecondaryLinePublisher(setting: s.$notchSecondaryLine, fallback: s.$notchSecondaryFallback)")
+                        && sourceHas(notchPlayback, "s.$notchLyricsKaraoke, shown)")
+                        && sourceHas(notchPlayback, "Publishers.CombineLatest3(shownCurrentLine, p.$notchLyrics.map(\\.nextText), shown)")
+                        && sourceHas(notchPlayback, "secondary.expandedPreviewText(next: lyrics.nextText, afterCompact: lyrics.compactNextText)")
+                        && sourceHas(notchPlayback, "Publishers.CombineLatest(p.$notchLyrics, shown)")
+                        && notchPlayback.components(separatedBy: "s.$notchSecondaryLine").count - 1 == 2, true,
+                    "副行回退: 灵动岛主行取句、副行文字、展开区预览都认这首实际用的那一档(设置本身只喂 shown 和快捷操作)")
+        let notchCard = notchCardSourceIfReadable({ rel in Optional(read("UI/" + rel)) }) ?? ""
+        expectEqual(notchCard.contains("if playback.shownSecondaryLine.showsSecondaryRow {")
+                        && notchCard.contains("playback.shownSecondaryLine.gapDotsWindow(")
+                        && notchCard.contains("translation: playback.shownSecondaryLine == .translation")
+                        && notchCard.contains("switch playback.shownSecondaryLine {")
+                        && !notchCard.contains("playback.secondaryLine.showsSecondaryRow"), true,
+                    "副行回退: 灵动岛排一行还是两行、副行透明度和排字、三点窗口按这首实际用的那一档")
+        expectEqual(read("UI/NotchLyricsWindowController.swift").contains("$notchSecondaryFallback"), false,
+                    "副行回退: 灵动岛歌词行高度和展开区高度只按设置,卡片不随歌变")
+        let budgets = read("UI/LineLayoutBudgets.swift")
+        expectEqual(sourceHas(budgets, "let notchKind = p.shownSecondaryLinePublisher(setting: s.$notchSecondaryLine, fallback: s.$notchSecondaryFallback)")
+                        && sourceHas(budgets, "s.$notchSecondaryNSFont, notchKind)")
+                        && sourceHas(budgets, "let menuBarKind = p.shownSecondaryLinePublisher(setting: menuBarLayout, fallback: s.$menuBarSecondaryFallback)")
+                        && sourceHas(budgets, ".combineLatest(menuBarKind)"), true,
+                    "副行回退: 灵动岛、菜单栏断句预算按这首实际用的那一档报")
+        let item = read("MenuBar/MenuBarStatusItem.swift")
+        expectEqual(sourceHas(sourceBody("private var shownSecondaryLine: LyricSecondaryLine", in: item),
+                              "PlaybackCoordinator.shared.shownSecondaryLine(settings.menuBarLayoutSecondaryLine,\nfallback: settings.menuBarSecondaryFallback)")
+                        && item.contains("let secondaryKind = shownSecondaryLine")
+                        && item.components(separatedBy: "menuBarLayoutSecondaryLine").count - 1 == 1
+                        && sourceHas(item, "coordinator.shownSecondaryLinePublisher(setting: settings.$menuBarSecondaryLine, fallback: settings.$menuBarSecondaryFallback)"),
+                    true, "副行回退: 菜单栏(状态栏那一格与正中那扇)取句、排几行、填色、三点都认这首实际用的那一档,整首歌词一变就重排")
+        expectEqual(sourceHas(read("UI/SectionPreviewBars.swift"),
+                              "PlaybackCoordinator.shared.shownSecondaryLine(settings.menuBarLayoutSecondaryLine,\nfallback: settings.menuBarSecondaryFallback)"),
+                    true, "副行回退: 菜单栏预览跟本体同一份档位")
+        let settingsSource = read("Settings/AppSettings.swift")
+        expectEqual(sourceHas(sourceBody("var menuBarShowsSecondaryFallback: Bool", in: settingsSource),
+                              "menuBarLyricsContent == .lyrics && menuBarLayoutSecondaryLine.isPerLineText")
+                        && sourceHas(sourceBody("var menuBarFontSizeApplies: Bool", in: settingsSource),
+                                     "!menuBarUsesTwoRows || menuBarLayoutSecondaryLine.mayShowMainOnly(fallback: menuBarSecondaryFallback)"),
+                    true, "副行回退: 菜单栏那一行只在两行的译文 / 读音时出现(同一行译文没有这一行),「字号」按会不会排一行判")
+        // 设置页:那一行紧跟「副行」、只在译文 / 读音时出现;重置管到;面板快捷设置各一行;「字号」摘要也按能不能用判。
+        let notchRows = sourceBody("struct NotchLyricRowSettingsRows: View", in: read("SettingsView.swift"))
+        let secondaryAt = notchRows.range(of: "LyricSecondaryLineRow()")?.lowerBound
+        let fallbackAt = notchRows.range(of: "LyricSecondaryFallbackRow(secondary: settings.notchSecondaryLine,")?.lowerBound
+        let heightAt = notchRows.range(of: "NotchLyricRowHeightRow()")?.lowerBound
+        expectEqual(notchRows.contains("if settings.notchSecondaryLine.isPerLineText {") && secondaryAt != nil && fallbackAt != nil
+                        && heightAt != nil && secondaryAt! < fallbackAt! && fallbackAt! < heightAt!, true,
+                    "副行回退: 灵动岛「无译文时 / 无读音时」只在译文 / 读音时出现,排在副行和高度之间")
+        let menuBarStage = read("UI/MenuBarEditorStage.swift")
+        let contentRows = sourceBody("struct MenuBarContentRows: View", in: menuBarStage)
+        let mbSecondaryAt = contentRows.range(of: "MenuBarSecondaryLineRow()")?.lowerBound
+        let mbFallbackAt = contentRows.range(of: "LyricSecondaryFallbackRow(secondary: settings.menuBarSecondaryLine,")?.lowerBound
+        expectEqual(contentRows.contains("if settings.menuBarShowsSecondaryFallback {") && mbSecondaryAt != nil && mbFallbackAt != nil
+                        && mbSecondaryAt! < mbFallbackAt!, true,
+                    "副行回退: 菜单栏「无译文时 / 无读音时」排在副行下面,按 menuBarShowsSecondaryFallback 显隐")
+        expectEqual(menuBarStage.contains("settings.menuBarSecondaryFallback = AppSettings.defaultMenuBarSecondaryFallback")
+                        && read("UI/NotchSettingsRows.swift").contains("settings.notchSecondaryFallback = AppSettings.defaultNotchSecondaryFallback"),
+                    true, "副行回退: 菜单栏、灵动岛的「恢复默认」管到这一项")
+        expectEqual(menuBarStage.contains("if settings.menuBarFontSizeApplies, settings.menuBarLyricsFontSize > 0 {"), true,
+                    "副行回退: 菜单栏「字体」摘要报字号的条件同「字号」那一行")
+        let quick = read("MenuBar/MenuBarPanelQuickSettings.swift")
+        expectEqual(quick.contains("secondaryFallbackRow(secondary: settings.notchSecondaryLine, selection: $settings.notchSecondaryFallback)")
+                        && quick.contains("if settings.notchSecondaryLine.isPerLineText {")
+                        && quick.contains("if settings.menuBarShowsSecondaryFallback {")
+                        && quick.contains("secondaryFallbackRow(secondary: settings.menuBarSecondaryLine, selection: $settings.menuBarSecondaryFallback)")
+                        && quick.contains("if !settings.menuBarFontSizeApplies {")
+                        && !quick.contains("settings.menuBarUsesTwoRows"), true,
+                    "副行回退: 面板快捷设置灵动岛、菜单栏两格各有这一行,菜单栏「字号」同设置页的判据")
     }
 
     // ---- 菜单栏面板「快捷设置」的旋钮清单----
@@ -1883,8 +1963,8 @@ func runSourceContractSurfaceTests() {
                         "面板旋钮: 菜单栏字号区间读 renderer 真源(10…16 由状态栏项 22pt 高推出)")
             // ④ 菜单栏字号在副行开着时让位成一句灰字,跟设置页 MenuBarFontSizeRow 同进同出 ——
             //    两行字号由行高推出,滑杆翻了没效果;整行隐藏会变成"字号去哪了",所以是让位不是隐藏。
-            expectEqual(panel.contains("if settings.menuBarUsesTwoRows {"), true,
-                        "面板旋钮: 菜单栏「字号」要跟设置页一样在排两行时让位(显示歌名、译文、同一行时不让位)")
+            expectEqual(panel.contains("if !settings.menuBarFontSizeApplies {"), true,
+                        "面板旋钮: 菜单栏「字号」要跟设置页一样在用不上时让位(显示歌名、译文、同一行、只显示歌词时不让位)")
             expectEqual(panel.contains("selection: $settings.menuBarLyricsContent"), true,
                         "面板旋钮: 菜单栏那格要有「显示内容」(藏副行的原因得在面板里看得见)")
             expectEqual(panel.contains("由副行决定"), true,

@@ -121,3 +121,37 @@ extension NotchCardStyle {
         }
     }
 }
+
+extension LyricSecondaryFallback {
+    /// 「无译文时 / 无读音时」那一行的两个选项。
+    var displayName: String {
+        switch self {
+        case .nextLine: return L10n.t("下一句")
+        case .mainOnly: return L10n.t("只显示歌词")
+        }
+    }
+
+    /// 那一行的标题跟着副行选的那一档走;设置搜索里两个标题各登记一条(`SettingsSearchCatalog`)。
+    static func rowTitle(for secondary: LyricSecondaryLine) -> String {
+        secondary == .romanization ? L10n.t("无读音时") : L10n.t("无译文时")
+    }
+}
+
+/// 「无译文时 / 无读音时」设置行:副行选了译文 / 读音才出现、排在「副行」下面。灵动岛、菜单栏、触控栏三处各绑各的设置
+/// (17 章决策 58、05 章决策 148、06 章决策 105)。
+struct LyricSecondaryFallbackRow: View {
+    let secondary: LyricSecondaryLine
+    @Binding var selection: LyricSecondaryFallback
+
+    var body: some View {
+        SettingsRow(icon: "text.badge.xmark", title: LyricSecondaryFallback.rowTitle(for: secondary)) {
+            SettingsGlassMenuPicker(
+                selection: $selection,
+                options: LyricSecondaryFallback.allCases,
+                label: \.displayName,
+                compact: true
+            )
+            .fixedSize()
+        }
+    }
+}

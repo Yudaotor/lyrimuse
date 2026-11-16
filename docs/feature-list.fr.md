@@ -943,7 +943,7 @@ Au plus une fois par jour, envoie la version, macOS, les fonctions activées et 
 
 ## Tous les réglages
 
-Tous les réglages de la fenêtre Réglages, classés par emplacement : 321 au total. Tapez un nom dans le champ de recherche en haut de la barre latérale des Réglages pour y aller directement.
+Tous les réglages de la fenêtre Réglages, classés par emplacement : 325 au total. Tapez un nom dans le champ de recherche en haut de la barre latérale des Réglages pour y aller directement.
 
 ### Paroles › Source
 
@@ -1117,6 +1117,8 @@ Tous les réglages de la fenêtre Réglages, classés par emplacement : 321 au 
 - **Alignement**
 - **Couleur des paroles**
 - **Seconde ligne**
+- **Sans traduction**
+- **Sans romanisation**
 - **Aperçu de la ligne suivante (développé)**
 - **Hauteur**
 - **Effet karaoké**
@@ -1162,6 +1164,8 @@ Tous les réglages de la fenêtre Réglages, classés par emplacement : 321 au 
 
 - **Contenu affiché**
 - **Seconde ligne**
+- **Sans traduction**
+- **Sans romanisation**
 - **Icône à côté des paroles** : L’icône se remplit de bas en haut pour indiquer la progression, avec les couleurs du groupe « Couleur »
 
 ### Affichage des paroles › Barre des menus › Disposition

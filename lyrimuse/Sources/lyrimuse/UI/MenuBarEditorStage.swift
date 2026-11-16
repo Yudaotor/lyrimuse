@@ -139,7 +139,7 @@ struct MenuBarEditorStage: View {
             parts.append(FontFamilyPicker.displayName(for: settings.menuBarLyricsFontFamily))
         }
         parts.append(settings.menuBarLyricsFontWeight.displayName)
-        if !settings.menuBarUsesTwoRows, settings.menuBarLyricsFontSize > 0 {
+        if settings.menuBarFontSizeApplies, settings.menuBarLyricsFontSize > 0 {
             parts.append(String(format: L10n.t("%@pt"), "\(Int(MenuBarMarqueeRenderer.font.pointSize))"))
         }
         return parts.joined(separator: " ")
@@ -440,6 +440,7 @@ enum MenuBarStyleDefaults {
         settings.menuBarLyricsContent = AppSettings.defaultMenuBarLyricsContent
         settings.menuBarSecondaryLine = AppSettings.defaultMenuBarSecondaryLine
         settings.menuBarTranslationInline = AppSettings.defaultMenuBarTranslationInline
+        settings.menuBarSecondaryFallback = AppSettings.defaultMenuBarSecondaryFallback
         settings.menuBarLyricsIconPosition = AppSettings.defaultMenuBarLyricsIconPosition
         // 「颜色」浮层
         settings.menuBarLyricsKaraoke = AppSettings.defaultMenuBarLyricsKaraoke
@@ -495,6 +496,12 @@ struct MenuBarContentRows: View {
                 // 显示歌名时没有歌词句,副行无从谈起。
                 if settings.menuBarLyricsContent == .lyrics {
                     MenuBarSecondaryLineRow()
+                    CardDivider()
+                }
+                // 两行的译文 / 读音才会整首没有;同一行译文没有译文时本来就只显示原文(06 章决策 105)。
+                if settings.menuBarShowsSecondaryFallback {
+                    LyricSecondaryFallbackRow(secondary: settings.menuBarSecondaryLine,
+                                              selection: $settings.menuBarSecondaryFallback)
                     CardDivider()
                 }
                 MenuBarLyricsIconRow()
@@ -861,7 +868,7 @@ struct MenuBarFontSizeRow: View {
             // 之间这一行是整行隐藏的;「副行」搬去「布局」浮层之后,这里再藏整行就成了"字号去哪了",
             // 改成行留着、尾部换一句灰字「由副行决定」指向原因(跟悬浮歌词「文字颜色」在跟随封面时的做法
             // 同款)。这是**值**的位置,不是可点的控件。
-            if settings.menuBarUsesTwoRows {
+            if !settings.menuBarFontSizeApplies {
                 Text(L10n.t("由副行决定"))
                     .font(.system(size: 13))
                     .foregroundStyle(.secondary)

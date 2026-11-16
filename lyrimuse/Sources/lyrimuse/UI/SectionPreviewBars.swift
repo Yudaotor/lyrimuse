@@ -158,8 +158,12 @@ struct MenuBarPreviewBar<Lane: View>: View {
         return MenuBarLyricText.text(plainText: sample, translation: mode == .original ? nil : L10n.t("译文"), mode: mode)
     }
 
-    /// 副行档位(双排),跟本体 `MenuBarStatusItem.refresh` 同一份设置:两种译文排法都按单行。
-    private var secondaryKind: LyricSecondaryLine { settings.menuBarLayoutSecondaryLine }
+    /// 副行档位(双排),跟本体 `MenuBarStatusItem.refresh` 同一份:两种译文排法都按单行,正在放的歌整首没有译文 / 读音时
+    /// 按「无译文时 / 无读音时」换档(`PlaybackCoordinator.shownSecondaryLine`;没在放歌时没有词,原样演示例)。
+    private var secondaryKind: LyricSecondaryLine {
+        PlaybackCoordinator.shared.shownSecondaryLine(settings.menuBarLayoutSecondaryLine,
+                                                      fallback: settings.menuBarSecondaryFallback)
+    }
     private var twoRows: Bool { secondaryKind.showsSecondaryRow && !songTitleOnly }
     /// 主行字体:双排 10pt / 单行跟设置 —— 跟本体同一个入口(`mainFont(for:twoRows:)`),测宽、排版、
     /// 逐字边界三处都用它。

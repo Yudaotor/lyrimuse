@@ -1019,12 +1019,18 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
         NotchDebugHover.phases.send(inside ? .active(local) : .ended)
     }
 
-    /// `debug/state` 里灵动岛那一节。
+    /// `debug/state` 里灵动岛那一节。`secondaryLine` 是设置里选的副行,`shownSecondaryLine` 是这首实际用的那一档
+    /// (同 `NotchPlayback.shownSecondaryLine`)。
     var debugState: [String: Any] {
-        ["passThrough": passThrough?.isActive ?? false, "ignoresMouseEvents": window?.ignoresMouseEvents ?? false,
-         "managesHitTesting": passThrough?.managesHitTesting ?? false,
-         "expanded": isExpanded, "passThroughBandTop": passThroughBandTop.map { $0 as Any } ?? NSNull(),
-         "cardHovered": cardHovered, "simulatedHover": simulatedHoverPointer != nil]
+        let settings = AppSettings.shared
+        return ["passThrough": passThrough?.isActive ?? false, "ignoresMouseEvents": window?.ignoresMouseEvents ?? false,
+                "managesHitTesting": passThrough?.managesHitTesting ?? false,
+                "expanded": isExpanded, "passThroughBandTop": passThroughBandTop.map { $0 as Any } ?? NSNull(),
+                "cardHovered": cardHovered, "simulatedHover": simulatedHoverPointer != nil,
+                "secondaryLine": settings.notchSecondaryLine.rawValue,
+                "shownSecondaryLine": PlaybackCoordinator.shared.shownSecondaryLine(
+                    settings.notchSecondaryLine, fallback: settings.notchSecondaryFallback).rawValue,
+                "lyricRowHeight": lyricRowHeight]
     }
 
     /// 指针在卡片或简介浮框上时光标钉成箭头。App 在后台,不开 `BackgroundCursor` 时 `NSCursor.set()` 不生效,

@@ -281,6 +281,26 @@ final class PlaybackCoordinator: ObservableObject {
     /// 同 `currentLineDwellMs`,单位秒。
     var currentLineDwellSeconds: Double? { currentLineDwellMs.map { Double($0) / 1000 } }
 
+    /// 副行这一首实际用哪一档:设置里选的,这首有词却一句译文 / 读音都没有时按「无译文时 / 无读音时」换成下一句或不显示
+    /// (Core `LyricSecondaryLine.resolved(in:fallback:)`,看整首 `allLines`)。触控栏、灵动岛、菜单栏各传各的设置。
+    func shownSecondaryLine(_ setting: LyricSecondaryLine, fallback: LyricSecondaryFallback) -> LyricSecondaryLine {
+        Self.shownSecondaryLine(setting, fallback: fallback, in: allLines)
+    }
+
+    nonisolated static func shownSecondaryLine(_ setting: LyricSecondaryLine, fallback: LyricSecondaryFallback,
+                                               in lines: [LyricsWindowLine]) -> LyricSecondaryLine {
+        setting.resolved(in: lines.lazy.map(\.line), fallback: fallback)
+    }
+
+    /// 同上的订阅版:整首歌词(译文后到也算)或两项设置一变就重算,去重。闭包只用参数,@Published 在 willSet 时发布。
+    func shownSecondaryLinePublisher<S: Publisher, F: Publisher>(setting: S, fallback: F) -> AnyPublisher<LyricSecondaryLine, Never>
+    where S.Output == LyricSecondaryLine, S.Failure == Never, F.Output == LyricSecondaryFallback, F.Failure == Never {
+        Publishers.CombineLatest3($allLines, setting, fallback)
+            .map { lines, setting, fallback in Self.shownSecondaryLine(setting, fallback: fallback, in: lines) }
+            .removeDuplicates()
+            .eraseToAnyPublisher()
+    }
+
     /// 歌词时钟在不在走:在播,而且锚点没被暂停通知冻住(冻住时 isPlayingNow 要等下一次轮询才翻,按墙钟自己跑的
     /// 逐字 / 滚动动画这段时间会先冲再跳回)。同悬浮歌词、灵动岛、歌词窗口各自那份(04 章决策 71、07 章决策 167)。
     var lyricsClockRunning: Bool { isPlayingNow && !(anchor?.isFrozen ?? false) }

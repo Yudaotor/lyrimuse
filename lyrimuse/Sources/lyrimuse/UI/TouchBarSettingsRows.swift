@@ -77,16 +77,8 @@ struct TouchBarContentRows: View {
                 // 只有译文 / 读音会整首没有;这首一句都没有时换成下一句,或收成一行(17 章决策 58)。
                 if settings.touchBarSecondaryLine.isPerLineText {
                     CardDivider()
-                    SettingsRow(icon: "text.badge.xmark",
-                                title: LyricSecondaryFallback.rowTitle(for: settings.touchBarSecondaryLine)) {
-                        SettingsGlassMenuPicker(
-                            selection: $settings.touchBarSecondaryFallback,
-                            options: LyricSecondaryFallback.allCases,
-                            label: \.displayName,
-                            compact: true
-                        )
-                        .fixedSize()
-                    }
+                    LyricSecondaryFallbackRow(secondary: settings.touchBarSecondaryLine,
+                                              selection: $settings.touchBarSecondaryFallback)
                 }
                 CardDivider()
                 SettingsRow(icon: "textformat.size", title: L10n.t("字号")) {
@@ -539,20 +531,5 @@ struct TouchBarAllSettingsDrawer: View {
         .accessibilityLabel(L10n.t("全部设置"))
         .accessibilityAddTraits(isExpanded ? .isSelected : [])
         .accessibilityValue(isExpanded ? L10n.t("已展开") : L10n.t("已折叠"))
-    }
-}
-
-extension LyricSecondaryFallback {
-    /// 「无译文时 / 无读音时」那一行的两个选项。
-    var displayName: String {
-        switch self {
-        case .nextLine: return L10n.t("下一句")
-        case .mainOnly: return L10n.t("只显示歌词")
-        }
-    }
-
-    /// 那一行的标题跟着副行选的那一档走;设置搜索里两个标题各登记一条(`SettingsSearchCatalog`)。
-    static func rowTitle(for secondary: LyricSecondaryLine) -> String {
-        secondary == .romanization ? L10n.t("无读音时") : L10n.t("无译文时")
     }
 }

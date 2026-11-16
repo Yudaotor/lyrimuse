@@ -33,7 +33,7 @@ public enum TouchBarLyricsStyle {
     /// 「字号」这一项会不会用上(设置页和面板快捷设置据此显示滑杆,还是一句「由副行决定」):副行关着时用;选了译文 / 读音、
     /// 「无译文时 / 无读音时」选了只显示歌词时,没有那一档的歌收成一行,也用。
     public static func fontSizeApplies(secondary: LyricSecondaryLine, fallback: LyricSecondaryFallback) -> Bool {
-        !secondary.showsSecondaryRow || (secondary.isPerLineText && fallback == .mainOnly)
+        secondary.mayShowMainOnly(fallback: fallback)
     }
 
     // MARK: - 副行开着时的两行(实测)

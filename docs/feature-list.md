@@ -943,7 +943,7 @@ At most once a day, sends the version, macOS, which features are on and crash su
 
 ## Every setting
 
-Every setting in the Settings window, by where it lives: 321 in all. Type a name into the search field at the top of the Settings sidebar to jump straight to it.
+Every setting in the Settings window, by where it lives: 325 in all. Type a name into the search field at the top of the Settings sidebar to jump straight to it.
 
 ### Lyrics › Source
 
@@ -1117,6 +1117,8 @@ Every setting in the Settings window, by where it lives: 321 in all. Type a name
 - **Alignment**
 - **Lyrics Color**
 - **Second Line**
+- **Without Translation**
+- **Without Romanization**
 - **Preview Next Line When Expanded**
 - **Height**
 - **Karaoke Effect**
@@ -1162,6 +1164,8 @@ Every setting in the Settings window, by where it lives: 321 in all. Type a name
 
 - **What’s Shown**
 - **Second Line**
+- **Without Translation**
+- **Without Romanization**
 - **Icon Beside Lyrics**: The icon fills from the bottom up to show playback progress, using the colors set under Color
 
 ### Lyrics Display › Menu Bar › Layout

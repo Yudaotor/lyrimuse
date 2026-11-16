@@ -266,6 +266,10 @@ final class MenuBarStatusItem: NSObject {
             .sink { [weak self] _ in self?.scheduleRefresh() }.store(in: &cancellables)
         settings.$menuBarTranslationInline.dropFirst().receive(on: DispatchQueue.main)
             .sink { [weak self] _ in self?.scheduleRefresh() }.store(in: &cancellables)
+        // 「无译文时 / 无读音时」和整首歌词(译文后到也算)决定这首实际排几行(`shownSecondaryLine`),同副行档位走 refresh()。
+        coordinator.shownSecondaryLinePublisher(setting: settings.$menuBarSecondaryLine, fallback: settings.$menuBarSecondaryFallback)
+            .dropFirst().receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in self?.scheduleRefresh() }.store(in: &cancellables)
         coordinator.$menuBarLyrics.map(\.nextText).dropFirst().removeDuplicates().receive(on: DispatchQueue.main)
             .sink { [weak self] _ in self?.scheduleRefresh() }.store(in: &cancellables)
         coordinator.$menuBarSongRowWidth.dropFirst().removeDuplicates().receive(on: DispatchQueue.main)
@@ -426,11 +430,20 @@ final class MenuBarStatusItem: NSObject {
         MenuBarScrollingLabel.IconBadge.current(position: AppSettings.shared.menuBarLyricsIconPosition)
     }
 
+    /// 副行这一首实际按哪一档排(`PlaybackCoordinator.shownSecondaryLine`):两行的译文 / 读音整首都没有时按
+    /// 「无译文时 / 无读音时」换成下一句,或只排主行(主行改取提前亮出的那一句、字号照「字号」)。显示哪一句、几行、
+    /// 字体、配速、三点窗口都认它。
+    private var shownSecondaryLine: LyricSecondaryLine {
+        let settings = AppSettings.shared
+        return PlaybackCoordinator.shared.shownSecondaryLine(settings.menuBarLayoutSecondaryLine,
+                                                            fallback: settings.menuBarSecondaryFallback)
+    }
+
     /// 跟唱滚动只接当前演唱句。相邻两行同词不同时,提前显示下一句也不能沿用上句的路径,
     /// 所以按首词时间戳认是不是同一行。
     private func displayedLineIsCurrent(_ current: SyncedLyricLine) -> Bool {
         let coordinator = PlaybackCoordinator.shared
-        let displayed = AppSettings.shared.menuBarLayoutSecondaryLine.displayedLine(
+        let displayed = shownSecondaryLine.displayedLine(
             compactLine: coordinator.menuBarLyrics.compactLine, currentLine: coordinator.menuBarLyrics.line)
         return displayed?.words?.first?.startMs == current.words?.first?.startMs
     }
@@ -444,7 +457,7 @@ final class MenuBarStatusItem: NSObject {
     private func karaokeFillPath(for text: String) -> [MenuBarMarquee.KaraokeFillPoint]? {
         guard AppSettings.shared.menuBarLyricsKaraoke else { return nil }
         let coordinator = PlaybackCoordinator.shared
-        guard let line = AppSettings.shared.menuBarLayoutSecondaryLine.displayedLine(
+        guard let line = shownSecondaryLine.displayedLine(
                   compactLine: coordinator.menuBarLyrics.compactLine, currentLine: coordinator.menuBarLyrics.line),
               let words = line.words, !words.isEmpty, let plain = line.plainText,
               rowState.inlineTranslationStart == nil
@@ -1301,7 +1314,7 @@ final class MenuBarStatusItem: NSObject {
         //
         // 「显示内容」选译文、副行选「译文(同一行)」时主行换成译文 / 原文接着译文,都按单行排(`MenuBarLyricText`)。
         let textMode = settings.menuBarLyricTextMode
-        let secondaryKind = settings.menuBarLayoutSecondaryLine
+        let secondaryKind = shownSecondaryLine
         // 「显示内容」选了歌名(带不带歌手):这一格只显示歌名,不按下一句歌词定宽、不用整首的起步宽度。
         let songTitleOnly = settings.menuBarLyricsContent.showsSongTitle
         let line = secondaryKind.displayedLine(compactLine: coordinator.menuBarLyrics.compactLine, currentLine: coordinator.menuBarLyrics.line)
@@ -1557,6 +1570,10 @@ final class MenuBarStatusItem: NSObject {
             "showing": centerLyrics.isShowing,
             "ignoresNotch": MenuBarCenterLyrics.ignoresNotchForDebug,
             "statusItemClass": displayClass,
+            // 这一格此刻按哪一档副行排(`.off` = 单行)、副行的字、主行字号。
+            "rowKind": rowState.kind.rawValue,
+            "rowSecondaryText": rowState.secondaryText.map { $0 as Any } ?? NSNull(),
+            "rowMainFontSize": rowState.mainFont.pointSize,
         ]
         out["screenSetting"] = AppSettings.shared.menuBarCenterScreen
         out["targetScreens"] = MenuBarCenterLyrics.targetScreens().map { ScreenIdentity.id(of: $0) ?? "" }
@@ -1809,7 +1826,7 @@ final class MenuBarStatusItem: NSObject {
     private func gapWindow(for text: String) -> MenuBarScrollingLabel.GapWindow? {
         let coordinator = PlaybackCoordinator.shared
         guard text == MenuBarMarqueeRenderer.gapDotsToken, let raw = coordinator.rawGapWindow else { return nil }
-        let window = AppSettings.shared.menuBarLayoutSecondaryLine.gapDotsWindow(
+        let window = shownSecondaryLine.gapDotsWindow(
             raw, compactPlaceholder: coordinator.menuBarLyrics.compactPlaceholder)
         return MenuBarScrollingLabel.GapWindow(startMs: window.startMs, endMs: window.endMs)
     }

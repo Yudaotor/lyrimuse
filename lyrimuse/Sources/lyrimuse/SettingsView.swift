@@ -4457,6 +4457,12 @@ struct NotchLyricRowSettingsRows: View {
                         NotchLyricsColorRow()
                         CardDivider()
                         LyricSecondaryLineRow()
+                        // 只有译文 / 读音会整首没有(05 章决策 148)。
+                        if settings.notchSecondaryLine.isPerLineText {
+                            CardDivider()
+                            LyricSecondaryFallbackRow(secondary: settings.notchSecondaryLine,
+                                                      selection: $settings.notchSecondaryFallback)
+                        }
                         CardDivider()
                         NotchLyricRowHeightRow()
                         if settings.notchLyricRowShowsArtwork {

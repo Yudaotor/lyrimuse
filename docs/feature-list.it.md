@@ -943,7 +943,7 @@ Al massimo una volta al giorno invia versione, macOS, funzioni attive e riepilog
 
 ## Tutte le impostazioni
 
-Tutte le impostazioni della finestra Impostazioni, per posizione: 321 in tutto. Scrivi un nome nel campo di ricerca in cima alla barra laterale delle Impostazioni per andarci direttamente.
+Tutte le impostazioni della finestra Impostazioni, per posizione: 325 in tutto. Scrivi un nome nel campo di ricerca in cima alla barra laterale delle Impostazioni per andarci direttamente.
 
 ### Testo › Fonte
 
@@ -1117,6 +1117,8 @@ Tutte le impostazioni della finestra Impostazioni, per posizione: 321 in tutto. 
 - **Allineamento**
 - **Colore testo**
 - **Seconda riga**
+- **Senza traduzione**
+- **Senza pronuncia**
 - **Anteprima riga successiva da espanso**
 - **Altezza**
 - **Effetto karaoke**
@@ -1162,6 +1164,8 @@ Tutte le impostazioni della finestra Impostazioni, per posizione: 321 in tutto. 
 
 - **Contenuto mostrato**
 - **Seconda riga**
+- **Senza traduzione**
+- **Senza pronuncia**
 - **Icona accanto al testo**: L’icona si riempie dal basso verso l’alto per mostrare l’avanzamento, con i colori impostati in “Colore”
 
 ### Visualizzazione testo › Barra dei menu › Layout

@@ -606,6 +606,29 @@ func runNotchTests() {
                         secondary != .nextLine,
                         "副行: 用户开着展开区预览,只有「下一句」把它顶掉(\(secondary.rawValue))")
         }
+        // 整首没有译文 / 读音时(「无译文时 / 无读音时」):换成下一句时展开区那行「下一句」留空不重复,只显示歌词时
+        // 主行回到提前亮出的那一句、副行没字;有一句带译文就照旧。
+        func row(_ text: String, translation: String? = nil) -> SyncedLyricLine {
+            SyncedLyricLine(romanization: nil, translation: translation, mainText: text, words: nil, wordGroups: nil, side: nil)
+        }
+        let plain = [row("故事的小黄花"), row("从出生那年就飘着")]
+        let viaNext = LyricSecondaryLine.translation.resolved(in: plain, fallback: .nextLine)
+        let viaMain = LyricSecondaryLine.translation.resolved(in: plain, fallback: .mainOnly)
+        expectEqual([viaNext.expandedPreviewText(next: "B", afterCompact: "C"),
+                     viaMain.expandedPreviewText(next: "B", afterCompact: "C")], [nil, "C"],
+                    "副行回退: 换成下一句时展开区预览留空,只显示歌词时接提前亮出的那一句往后数")
+        expectEqual([viaNext.secondaryText(currentLine: plain[0], nextLineText: "从出生那年就飘着"),
+                     viaMain.secondaryText(currentLine: plain[0], nextLineText: "从出生那年就飘着")],
+                    ["从出生那年就飘着", nil], "副行回退: 副行换成下一句,或没有字")
+        expectEqual([viaNext.displayedLine(compactLine: plain[1], currentLine: plain[0])?.plainText,
+                     viaMain.displayedLine(compactLine: plain[1], currentLine: plain[0])?.plainText],
+                    ["故事的小黄花", "从出生那年就飘着"], "副行回退: 只显示歌词时主行按单行取句(提前亮出下一句)")
+        let withTranslation = LyricSecondaryLine.translation.resolved(in: plain + [row("晴天", translation: "Sunny")], fallback: .mainOnly)
+        expectEqual([withTranslation.expandedPreviewText(next: "B", afterCompact: "C"),
+                     withTranslation.secondaryText(currentLine: plain[0], nextLineText: "B")], ["B", nil],
+                    "副行回退: 有一句带译文就照旧(没译文的句子副行空着、展开区照常预览下一句)")
+        expectEqual(LyricSecondaryLine.allCases.map { $0.expandedPreviewText(next: "B", afterCompact: "C") }, ["C", nil, "B", "B"],
+                    "副行回退: 展开区预览只在副行就是下一句时留空")
         typealias R = NotchLyricRowMetrics
         expectEqual(R.rowHeight, 44, "副行: 歌词行高度的上限仍是 44(加「高度」这项之前的固定高度)")
         expectEqual(R.twoLineStackHeight, 31, "副行: 15 + 3 + 13 = 31")
@@ -2244,9 +2267,9 @@ func runNotchTests() {
                 (try? String(contentsOf: URL(fileURLWithPath: #filePath).deletingLastPathComponent()
                     .deletingLastPathComponent().appendingPathComponent("lyrimuse/UI/" + $0), encoding: .utf8)) ?? ""
             }
-            expectEqual(view.contains("secondary.expandedNextLine(next: lyrics.nextText, afterCompact: lyrics.compactNextText)")
+            expectEqual(view.contains("secondary.expandedPreviewText(next: lyrics.nextText, afterCompact: lyrics.compactNextText)")
                         && view.contains("secondary.expandedNextLine(next: lyrics.nextSide, afterCompact: lyrics.compactNextSide)"), true,
-                        "下一句预览接线: 文字和声部都按主行显示的那句取")
+                        "下一句预览接线: 文字和声部都按主行显示的那句取(文字在副行这首就是下一句时留空)")
         }
 
         // 够格的间奏里当前句当作没有:副行开着时主行画「•••」,副行的下一句照旧,译文跟着没有。
@@ -2633,7 +2656,7 @@ func runNotchTests() {
                     "间奏三点契约: 副行文本吃同一份当前句")
         expectEqual(view.contains("raw?.isMarked(in: markers) ?? false"), true,
                     "间奏三点契约: 只有够格的间奏才换成「•••」")
-        expectEqual(view.contains("playback.secondaryLine.gapDotsWindow(raw, compactPlaceholder: playback.compactShowsPlaceholder)"), true,
+        expectEqual(view.contains("playback.shownSecondaryLine.gapDotsWindow(raw, compactPlaceholder: playback.compactShowsPlaceholder)"), true,
                     "间奏三点契约: 三点窗口走 Core 的 gapDotsWindow")
         expectEqual(view.contains("NotchClockPhase.tick(for: anchor, epoch: clockEpoch, countdownFromMs: countdownFromMs)")
                     && view.contains("for: anchor, countdownFromMs: module == .remaining ? playback.currentDurationMs : nil)")

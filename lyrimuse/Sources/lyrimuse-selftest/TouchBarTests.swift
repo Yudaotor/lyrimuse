@@ -1137,7 +1137,7 @@ func runTouchBarTests() {
         expectEqual(sourceHas(contentRows, "if !TouchBarLyricsStyle.fontSizeApplies(secondary: settings.touchBarSecondaryLine,\nfallback: settings.touchBarSecondaryFallback) {")
                         && contentRows.contains("L10n.t(\"由副行决定\")"), true,
                     "触控栏: 两行时「字号」那一行显示「由副行决定」(判据 TouchBarLyricsStyle.fontSizeApplies)")
-        let fallbackAt = contentRows.range(of: "title: LyricSecondaryFallback.rowTitle(for: settings.touchBarSecondaryLine)")?.lowerBound
+        let fallbackAt = contentRows.range(of: "LyricSecondaryFallbackRow(secondary: settings.touchBarSecondaryLine,")?.lowerBound
         expectEqual(contentRows.contains("if settings.touchBarSecondaryLine.isPerLineText {") && fallbackAt != nil
                         && contentRows.range(of: "title: L10n.t(\"副行\")").map { $0.lowerBound < fallbackAt! } == true
                         && contentRows.range(of: "title: L10n.t(\"字号\")").map { fallbackAt! < $0.lowerBound } == true, true,
@@ -1251,17 +1251,20 @@ func runTouchBarTests() {
         expectEqual(cell.contains("static let adBreakArtwork = symbolTile(\"megaphone.fill\")")
                         && cell.contains("if content == .adBreak { return adBreakArtwork }"), true,
                     "触控栏广告态: 封面那一格在广告期间换成同一枚喇叭")
-        // 副行换档看整首歌词:判据读 allLines,译文后到时重画也靠订着它。
+        // 副行换档看整首歌词:判据读 allLines(三个面共用 `PlaybackCoordinator.shownSecondaryLine`),译文后到时重画也靠订着它。
         expectEqual(sourceHas(sourceBody("static func secondary(_ p: PlaybackCoordinator, setting: LyricSecondaryLine,", in: cell),
-                              "setting.resolved(in: p.allLines.lazy.map(\\.line), fallback: fallback)")
+                              "p.shownSecondaryLine(setting, fallback: fallback)")
+                        && sourceHas(sourceBody("nonisolated static func shownSecondaryLine(", in: coordinatorSource),
+                                     "setting.resolved(in: lines.lazy.map(\\.line), fallback: fallback)")
+                        && sourceHas(sourceBody("func shownSecondaryLinePublisher<", in: coordinatorSource), "$allLines")
                         && sourceHas(sourceBody("static func playbackChanges(_ p: PlaybackCoordinator)", in: cell), "signal(p.$allLines)"),
                     true, "触控栏副行: 整首没有译文 / 读音的判据读 allLines,而且订着它")
         // 断句预算按这首实际用的那一档:只显示歌词时主行按单行字号断句,不然断句宽度跟画出来的字号对不上。
         let fallbackBudgets = code(appDir.appendingPathComponent("UI/LineLayoutBudgets.swift")) ?? ""
-        expectEqual(sourceHas(fallbackBudgets, "choice.0.resolved(in: lines.lazy.map(\\.line), fallback: choice.1)")
-                        && fallbackBudgets.contains("PlaybackCoordinator.shared.$allLines")
-                        && fallbackBudgets.contains("s.$touchBarSecondaryFallback"), true,
-                    "触控栏断句: 预算按这首实际用的副行档位算")
+        expectEqual(sourceHas(fallbackBudgets,
+                              "let touchBarKind = p.shownSecondaryLinePublisher(setting: s.$touchBarSecondaryLine, fallback: s.$touchBarSecondaryFallback)")
+                        && sourceHas(fallbackBudgets, "Publishers.CombineLatest3(touchBarWidth.removeDuplicates(), s.$touchBarLyricsFontSize, touchBarKind)"),
+                    true, "触控栏断句: 预算按这首实际用的副行档位算")
         for (name, text) in [("预览", preview), ("控制器", controller)] {
             expectEqual(text.contains("TouchBarLyricsCell.artworkTile(p, content: content)"), true,
                         "触控栏广告态: \(name)封面那一格走 TouchBarLyricsCell.artworkTile")
@@ -1360,7 +1363,7 @@ func runTouchBarTests() {
                        "secondaryLineRow(selection: $settings.touchBarSecondaryLine)",
                        "range: TouchBarLyricsStyle.fontSizeRange",
                        "if settings.touchBarSecondaryLine.isPerLineText {",
-                       "PanelGlassMenuPicker(selection: $settings.touchBarSecondaryFallback,",
+                       "secondaryFallbackRow(secondary: settings.touchBarSecondaryLine, selection: $settings.touchBarSecondaryFallback)",
                        "if !TouchBarLyricsStyle.fontSizeApplies(secondary: settings.touchBarSecondaryLine,"] {
             expectEqual(quick.contains(needle), true, "触控栏面板: 快捷设置里有 \(needle)")
         }

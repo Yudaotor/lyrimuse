@@ -956,6 +956,24 @@
         "灵动岛",
         "歌词行"
       ],
+      "title" : "无译文时"
+    },
+    {
+      "dest" : "tab:appearance",
+      "path" : [
+        "歌词显示",
+        "灵动岛",
+        "歌词行"
+      ],
+      "title" : "无读音时"
+    },
+    {
+      "dest" : "tab:appearance",
+      "path" : [
+        "歌词显示",
+        "灵动岛",
+        "歌词行"
+      ],
       "title" : "展开时预览下一句"
     },
     {
@@ -1253,6 +1271,24 @@
         "内容"
       ],
       "title" : "副行"
+    },
+    {
+      "dest" : "tab:appearance",
+      "path" : [
+        "歌词显示",
+        "菜单栏",
+        "内容"
+      ],
+      "title" : "无译文时"
+    },
+    {
+      "dest" : "tab:appearance",
+      "path" : [
+        "歌词显示",
+        "菜单栏",
+        "内容"
+      ],
+      "title" : "无读音时"
     },
     {
       "dest" : "tab:appearance",
