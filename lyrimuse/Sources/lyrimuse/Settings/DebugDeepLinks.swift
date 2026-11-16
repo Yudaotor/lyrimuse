@@ -740,9 +740,10 @@ extension DebugDeepLinks {
                 window.sendEvent(e)
                 try? await Task.sleep(nanoseconds: 16_000_000)
             }
-            let state = VolumeMonitor.readSystemVolume()
             let anchors = PanelVolumeScrollAnchor.debugSummary(in: window)
-            logger.notice("debug panel scroll done volume=\(state.volume ?? -1, privacy: .public) muted=\(state.muted, privacy: .public) \(anchors, privacy: .public)")
+            VolumeMonitor.readSystemVolume { state in
+                logger.notice("debug panel scroll done volume=\(state.volume ?? -1, privacy: .public) muted=\(state.muted, privacy: .public) \(anchors, privacy: .public)")
+            }
         }
     }
 }

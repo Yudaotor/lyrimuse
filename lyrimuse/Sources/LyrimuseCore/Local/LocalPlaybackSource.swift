@@ -1977,9 +1977,8 @@ public final class LocalPlaybackSource: ObservableObject {
     }
 
     /// 默认输出设备换了:换用那台设备的领先量;正在放 Spotify 且偏置是探针量的,再问一次探针让位置按新
-    /// 领先量重折(否则要等用户下一次暂停)。
-    private func outputRouteChanged() {
-        let route = env.outputRoute()
+    /// 领先量重折(否则要等用户下一次暂停)。`route` 是 `AudioOutputRoute.startObserving` 在后台读好的。
+    private func outputRouteChanged(to route: AudioOutputRoute.Current?) {
         guard route != currentOutputRoute else { return }
         let before = probeLeadSecs
         currentOutputRoute = route
@@ -3380,8 +3379,8 @@ public final class LocalPlaybackSource: ObservableObject {
             Task { @MainActor [weak self] in self?.poll() }
         }
         // 默认输出设备一换,探针领先量跟着换(见 probeLeadByDevice 一带注释)。
-        AudioOutputRoute.startObserving { [weak self] in
-            Task { @MainActor [weak self] in self?.outputRouteChanged() }
+        AudioOutputRoute.startObserving { [weak self] route in
+            DispatchQueue.main.async { MainActor.assumeIsolated { self?.outputRouteChanged(to: route) } }
         }
         guard playerInfoObserver == nil else { return }
         let center = DistributedNotificationCenter.default()

@@ -2913,10 +2913,10 @@ func runNotchTests() {
             (try? String(contentsOf: appDir.appendingPathComponent(n), encoding: .utf8)) ?? ""
         }
         let volume = app("Settings/VolumeMonitor.swift")
-        let adjust = sourceBody("static func adjustSystemVolume(by delta: Float)", in: volume)
-        expectEqual([sourceHas(adjust, "var off = UInt32(0)\nlastOwnAdjustAt = Date()\nAudioObjectSetPropertyData(device, &mute"),
-                     sourceHas(adjust, "guard next != value else { return }\nlastOwnAdjustAt = Date()\nlet status = AudioObjectSetPropertyData("),
-                     sourceHas(volume, "shared.start { volume, muted in\n// 回调时现读设置(不是 Combine sink,读到的就是当前值)。\nguard NotchVolumeBannerPolicy.shows(\nforVolumeKeys: AppSettings.shared.notchVolumeBannerForVolumeKeys,\nsinceOwnAdjust: lastOwnAdjustAt.map { Date().timeIntervalSince($0) }) else { return }")],
+        let adjust = sourceBody("static func adjust(by delta: Float, at now: Date)", in: volume)
+        expectEqual([sourceHas(adjust, "var off = UInt32(0)\nnoteOwnAdjust()\nAudioObjectSetPropertyData(device, &mute"),
+                     sourceHas(adjust, "guard next != value else { return }\nnoteOwnAdjust()\nlet status = AudioObjectSetPropertyData("),
+                     sourceHas(volume, "shared.start { volume, muted in\n// 回调时现读设置(不是 Combine sink,读到的就是当前值)。\nguard NotchVolumeBannerPolicy.shows(\nforVolumeKeys: AppSettings.shared.notchVolumeBannerForVolumeKeys,\nsinceOwnAdjust: SystemVolumeIO.lastOwnAdjustAt.map { Date().timeIntervalSince($0) }) else { return }")],
                     [true, true, true],
                     "音量键提示: 写音量和解除静音之前都记下时刻,横幅弹之前按设置和这个时刻判")
         let rows = app("UI/NotchSettingsRows.swift")

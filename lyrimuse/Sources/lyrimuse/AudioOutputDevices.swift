@@ -131,46 +131,79 @@ enum AudioOutputDeviceManager {
 /// 输出设备列表与当前默认输出的实时状态,歌词窗口的输出键(染红)与输出面板只读这里。挂 CoreAudio 的属性
 /// 监听(默认输出换了 / 设备增减),系统一变就推过来,不轮询 —— 控制中心切换、AirPods 自动接管输出这类
 /// App 自己看不见的切换全靠它跟上。监听随单例常驻,没有事件时零开销。
+/// 挂监听、枚举设备、切默认输出都在 `queue` 上做,主线程只发布读回来的结果(15 章决策 113)。
 @MainActor
 final class AudioOutputMonitor: ObservableObject {
     static let shared = AudioOutputMonitor()
-    private static let logger = Logger(subsystem: "me.yudaotor.lyrimuse", category: "audio-output")
+    nonisolated private static let logger = Logger(subsystem: "me.yudaotor.lyrimuse", category: "audio-output")
 
     @Published private(set) var devices: [AudioOutputDeviceManager.Device] = []
     @Published private(set) var defaultID: AudioDeviceID?
     /// 默认输出是非内建设备。
     @Published private(set) var isExternal = false
+    /// 第一次读完之前为 false:那之前 `devices` 为空、`defaultID` 为 nil。第一次发布时还是 false。
+    private(set) var loaded = false
+
+    /// 这个监控的全部 CoreAudio 调用和监听回调都在这条串行队列上。
+    nonisolated private static let queue = DispatchQueue(label: "me.yudaotor.lyrimuse.audio-output", qos: .userInitiated)
+    /// 已经排了一次读、还没开始读。只在 `queue` 上读写。
+    nonisolated(unsafe) private static var readQueued = false
 
     private init() {
-        refresh()
-        let listener: AudioObjectPropertyListenerBlock = { [weak self] _, _ in
-            MainActor.assumeIsolated { self?.refresh() }
+        Self.queue.async { [weak self] in
+            let listener: AudioObjectPropertyListenerBlock = { [weak self] _, _ in self?.scheduleRead() }
+            for selector in [kAudioHardwarePropertyDefaultOutputDevice, kAudioHardwarePropertyDevices] {
+                var addr = AudioOutputDeviceManager.address(selector)
+                let status = AudioObjectAddPropertyListenerBlock(
+                    AudioObjectID(kAudioObjectSystemObject), &addr, Self.queue, listener)
+                if status != noErr {
+                    Self.logger.error("listener for \(selector, privacy: .public) failed: \(status, privacy: .public)")
+                }
+            }
+            self?.readAndPublish()
         }
-        for selector in [kAudioHardwarePropertyDefaultOutputDevice, kAudioHardwarePropertyDevices] {
-            var addr = AudioOutputDeviceManager.address(selector)
-            let status = AudioObjectAddPropertyListenerBlock(AudioObjectID(kAudioObjectSystemObject), &addr, .main, listener)
-            if status != noErr {
-                Self.logger.error("listener for \(selector, privacy: .public) failed: \(status, privacy: .public)")
+    }
+
+    /// 监听回调里调(在 `queue` 上):一串连着的变化只读一次。
+    nonisolated private func scheduleRead() {
+        dispatchPrecondition(condition: .onQueue(Self.queue))
+        guard !Self.readQueued else { return }
+        Self.readQueued = true
+        Self.queue.async { [weak self] in
+            Self.readQueued = false
+            self?.readAndPublish()
+        }
+    }
+
+    /// 在 `queue` 上读设备列表和默认输出,回主线程发布。
+    nonisolated private func readAndPublish(then completion: (@MainActor () -> Void)? = nil) {
+        dispatchPrecondition(condition: .onQueue(Self.queue))
+        let list = AudioOutputDeviceManager.outputDevices()
+        let current = AudioOutputDeviceManager.defaultOutputDeviceID()
+        let external = current.map(AudioOutputDeviceManager.isExternal) ?? false
+        DispatchQueue.main.async { [weak self] in
+            MainActor.assumeIsolated {
+                self?.publish(list, current, external)
+                completion?()
             }
         }
     }
 
-    func refresh() {
-        let list = AudioOutputDeviceManager.outputDevices()
-        let current = AudioOutputDeviceManager.defaultOutputDeviceID()
+    private func publish(_ list: [AudioOutputDeviceManager.Device], _ current: AudioDeviceID?, _ external: Bool) {
         if list != devices { devices = list }
         if current != defaultID { defaultID = current }
-        let external = current.map(AudioOutputDeviceManager.isExternal) ?? false
         if external != isExternal { isExternal = external }
+        loaded = true
     }
 
-    /// 把系统默认输出切到这台。失败返回 false(面板据此不关,勾留在原来那台),并记一行日志。
-    @discardableResult
-    func select(_ id: AudioDeviceID) -> Bool {
-        let ok = AudioOutputDeviceManager.setDefaultOutput(id)
-        if !ok { Self.logger.error("set default output \(id, privacy: .public) failed") }
-        refresh()
-        return ok
+    /// 把系统默认输出切到这台,切完、重读发布之后回主线程交结论。失败交 false(面板据此不关,勾留在原来那台),并记一行日志。
+    func select(_ id: AudioDeviceID, completion: @escaping @MainActor (Bool) -> Void = { _ in }) {
+        Self.queue.async { [weak self] in
+            let ok = AudioOutputDeviceManager.setDefaultOutput(id)
+            if !ok { Self.logger.error("set default output \(id, privacy: .public) failed") }
+            guard let self else { return }
+            self.readAndPublish { completion(ok) }
+        }
     }
 }
 
@@ -209,8 +242,9 @@ enum OutputDeviceAnnouncer {
         guard subscription == nil else { return }
         let monitor = AudioOutputMonitor.shared
         // `refresh` 先写 devices 再写 defaultID,这里收到新 id 时列表已经是新的。
+        // 监控第一次读完的那次发布(`loaded` 还是 false)不报:那是开始监听时的那一台。
         subscription = monitor.$defaultID.removeDuplicates().dropFirst().sink { id in
-            guard let id, let device = monitor.devices.first(where: { $0.id == id }) else { return }
+            guard monitor.loaded, let id, let device = monitor.devices.first(where: { $0.id == id }) else { return }
             NotchTransientCenter.shared.show(.init(icon: device.symbolName, text: device.name, progress: nil),
                                              for: duration)
         }

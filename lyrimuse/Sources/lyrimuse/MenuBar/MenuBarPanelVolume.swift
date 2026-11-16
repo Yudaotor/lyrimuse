@@ -13,6 +13,8 @@ final class PanelSystemVolume: ObservableObject {
     @Published private(set) var muted = false
     @Published private(set) var deviceName: String?
     private var deviceSubscription: AnyCancellable?
+    /// 每次发起读音量、或自己写了音量 / 静音时加一。读回来时已经不是最新一次的结果丢掉,不盖掉刚写下的值。
+    private var readGeneration = 0
 
     func start() {
         refresh()
@@ -28,22 +30,29 @@ final class PanelSystemVolume: ObservableObject {
         deviceSubscription = nil
     }
 
+    /// 音量、静音在 `VolumeMonitor` 的队列上读,读回来才更新;设备名读 `AudioOutputMonitor` 已发布的值。
     func refresh() {
-        let state = VolumeMonitor.readSystemVolume()
-        if state.volume != volume { volume = state.volume }
-        if state.muted != muted { muted = state.muted }
+        readGeneration += 1
+        let generation = readGeneration
+        VolumeMonitor.readSystemVolume { [weak self] state in
+            guard let self, generation == self.readGeneration else { return }
+            if state.volume != self.volume { self.volume = state.volume }
+            if state.muted != self.muted { self.muted = state.muted }
+        }
         let monitor = AudioOutputMonitor.shared
         let name = monitor.devices.first { $0.id == monitor.defaultID }?.name
         if name != deviceName { deviceName = name }
     }
 
     func set(_ value: Float) {
+        readGeneration += 1
         VolumeMonitor.setSystemVolume(value)
         volume = value
         if value > 0 { muted = false }
     }
 
     func toggleMute() {
+        readGeneration += 1
         VolumeMonitor.setSystemMuted(!muted)
         muted.toggle()
     }

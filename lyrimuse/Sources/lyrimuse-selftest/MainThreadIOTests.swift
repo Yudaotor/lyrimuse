@@ -483,4 +483,102 @@ func runMainThreadIOTests() {
         expectEqual(scannedRunModal >= 20, true, "嵌套循环(契约): 扫到了 App 里的 runModal(\(scannedRunModal) 处)")
         expectEqual(modalInQueueBlock, [], "嵌套循环(契约): 主队列块 / Task 里没有直接起的 runModal")
     }
+
+    do {
+        print("\n== 主线程 I/O:CoreAudio 不在主线程上调(15 章决策 113) ==")
+        let calls = ["AudioObjectGetPropertyData(", "AudioObjectSetPropertyData(", "AudioObjectHasProperty(",
+                     "AudioObjectIsPropertySettable(", "AudioObjectAddPropertyListenerBlock(", "AudioObjectRemovePropertyListenerBlock("]
+        func callCount(_ text: String) -> Int { calls.reduce(0) { $0 + sourceCount(text, $1) } }
+        let onQueue = "dispatchPrecondition(condition: .onQueue(queue))"
+
+        let volume = app("Settings/VolumeMonitor.swift")
+        expectEqual(callCount(sourceBody("final class VolumeMonitor {", in: volume)), 0,
+                    "系统音量(契约): 主线程那一侧(VolumeMonitor)不直接调 CoreAudio")
+        let ioFuncs = ["static func adjust(by delta: Float, at now: Date) {", "static func read() -> State {",
+                       "static func set(volume value: Float) {", "static func set(muted: Bool) {",
+                       "private static func setMuted(_ muted: Bool, on device: AudioObjectID) {",
+                       "static func defaultOutputDevice() -> AudioObjectID? {",
+                       "static func volumeAddress(for device: AudioObjectID) -> AudioObjectPropertyAddress? {",
+                       "static func muteAddress(for device: AudioObjectID) -> AudioObjectPropertyAddress? {",
+                       "private func startOnQueue(onChange: @escaping (Float, Bool) -> Void) {", "private func stopOnQueue() {",
+                       "private func rebindToDefaultDevice() {", "private func detachVolumeListener() {",
+                       "private func handleVolumeChanged() {", "private func readVolume() -> Float? {", "private func readMuted() -> Bool? {"]
+        let ioBodies = ioFuncs.map { sourceBody($0, in: volume) }
+        expectEqual(ioFuncs.filter { !sourceHas(sourceBody($0, in: volume), onQueue) }, [],
+                    "系统音量(契约): 碰 CoreAudio 的函数开头都断言在音量队列上")
+        expectEqual(ioBodies.reduce(0) { $0 + callCount($1) }, callCount(volume),
+                    "系统音量(契约): 文件里每一处 CoreAudio 调用都落在这些带队列断言的函数里")
+        expectEqual([sourceHas(sourceBody("static func adjustSystemVolume(by delta: Float) {", in: volume),
+                               "let at = Date()\nSystemVolumeIO.queue.async { SystemVolumeIO.adjust(by: delta, at: at) }"),
+                     sourceHas(sourceBody("static func readSystemVolume(", in: volume),
+                               "SystemVolumeIO.queue.async {\nlet state = SystemVolumeIO.read()\nDispatchQueue.main.async { MainActor.assumeIsolated { completion(state) } }"),
+                     sourceHas(sourceBody("static func setSystemVolume(_ value: Float) {", in: volume),
+                               "SystemVolumeIO.queue.async { SystemVolumeIO.set(volume: value) }"),
+                     sourceHas(sourceBody("static func setSystemMuted(_ muted: Bool) {", in: volume),
+                               "SystemVolumeIO.queue.async { SystemVolumeIO.set(muted: muted) }")],
+                    [true, true, true, true],
+                    "系统音量(契约): 调、读、设、静音都排到同一条串行队列上,调用时刻在主线程上取(一次滑动的累加按它判)")
+        expectEqual(sourceHas(sourceBody("private func startListening() {", in: volume),
+                              "DispatchQueue.main.async {\nMainActor.assumeIsolated { self?.deliver(volume: volume, muted: muted) }"), true,
+                    "系统音量(契约): 监听读到变化后只带结果回主线程")
+        let panel = app("MenuBar/MenuBarPanelVolume.swift")
+        expectEqual([sourceHas(sourceBody("func refresh() {", in: panel),
+                               "VolumeMonitor.readSystemVolume { [weak self] state in\nguard let self, generation == self.readGeneration else { return }"),
+                     sourceHas(sourceBody("func set(_ value: Float) {", in: panel), "readGeneration += 1\nVolumeMonitor.setSystemVolume(value)"),
+                     sourceHas(sourceBody("func toggleMute() {", in: panel), "readGeneration += 1\nVolumeMonitor.setSystemMuted(!muted)")],
+                    [true, true, true], "面板音量格(契约): 读回来才更新;自己写了之后,写之前派出的那次读不盖掉刚写的值")
+        expectEqual(appCodeOccurrences(of: "SystemVolumeIO.read()"), ["lyrimuse/Settings/VolumeMonitor.swift"],
+                    "系统音量(契约): 只有排在队列上的那一处读")
+
+        let audio = app("AudioOutputDevices.swift")
+        let outputInit = sourceBody("private init() {", in: audio)
+        expectEqual(sourceHas(outputInit, "Self.queue.async { [weak self] in") && sourceHas(outputInit, "&addr, Self.queue, listener)")
+                        && sourceHas(outputInit, "self?.readAndPublish()"), true,
+                    "输出设备(契约): 挂监听、第一次读都在输出设备队列上,监听回调也派到那条队列")
+        expectEqual(sourceHas(sourceBody("nonisolated private func readAndPublish(", in: audio),
+                              "dispatchPrecondition(condition: .onQueue(Self.queue))\nlet list = AudioOutputDeviceManager.outputDevices()"), true,
+                    "输出设备(契约): 枚举设备只在队列上")
+        expectEqual(sourceHas(audio, "func select(_ id: AudioDeviceID, completion: @escaping @MainActor (Bool) -> Void = { _ in }) {\n"
+                                  + "Self.queue.async { [weak self] in\nlet ok = AudioOutputDeviceManager.setDefaultOutput(id)"), true,
+                    "输出设备(契约): 切默认输出在队列上,结论回主线程交")
+        expectEqual(["AudioOutputDeviceManager.outputDevices()", "AudioOutputDeviceManager.defaultOutputDeviceID()",
+                     "AudioOutputDeviceManager.setDefaultOutput("].map(appCodeOccurrences(of:)),
+                    Array(repeating: ["lyrimuse/AudioOutputDevices.swift"], count: 3),
+                    "输出设备(契约): 枚举、读默认输出、切默认输出各只有队列上那一处")
+        expectEqual(sourceHas(sourceBody("private func publish(", in: audio),
+                              "if current != defaultID { defaultID = current }\nif external != isExternal { isExternal = external }\nloaded = true")
+                        && sourceHas(audio, "guard monitor.loaded, let id, let device = monitor.devices.first(where: { $0.id == id }) else { return }"),
+                    true, "输出设备横幅(契约): 第一次读完的那次发布还没 loaded,不当成换了设备")
+
+        let route = core("Local/AudioOutputRoute.swift")
+        let observe = sourceBody("public static func startObserving(", in: route)
+        expectEqual(sourceHas(observe, "observeQueue.async {") && sourceHas(observe, "&addr, observeQueue) { _, _ in\nonChange(current())")
+                        && !sourceHas(observe, "DispatchQueue.main"), true,
+                    "输出链路(契约): 挂监听、变化后读新设备都在后台队列上,读好的设备交给回调")
+        let playback = core("Local/LocalPlaybackSource.swift")
+        expectEqual(sourceHas(playback, "AudioOutputRoute.startObserving { [weak self] route in\nDispatchQueue.main.async { MainActor.assumeIsolated { self?.outputRouteChanged(to: route) } }")
+                        && !sourceHas(sourceBody("private func outputRouteChanged(to route: AudioOutputRoute.Current?) {", in: playback), "outputRoute()"),
+                    true, "输出链路(契约): 换了设备时主线程只拿读好的设备,不自己再问 CoreAudio")
+
+        // 全仓的 CoreAudio 属性监听都不派到主队列上。
+        var registrations: [String] = []
+        for dir in ["lyrimuse", "LyrimuseCore"] {
+            let base = sources.appendingPathComponent(dir)
+            for case let rel as String in FileManager.default.enumerator(atPath: base.path) ?? FileManager.DirectoryEnumerator()
+            where rel.hasSuffix(".swift") {
+                guard let text = try? String(contentsOf: base.appendingPathComponent(rel), encoding: .utf8),
+                      sourceBytes(text, contain: "AudioObjectAddPropertyListenerBlock(") else { continue }
+                var rest = Substring(text)
+                while let hit = rest.range(of: "AudioObjectAddPropertyListenerBlock(") {
+                    let tail = rest[hit.upperBound...]
+                    let end = [tail.range(of: ")\n")?.lowerBound, tail.range(of: ") {")?.lowerBound].compactMap { $0 }.min() ?? tail.endIndex
+                    registrations.append("\(dir)/\(rel): \(tail[..<end])")
+                    rest = tail
+                }
+            }
+        }
+        expectEqual(registrations.count >= 4, true, "CoreAudio 监听(契约): 扫到了全仓的监听注册")
+        expectEqual(registrations.filter { $0.contains(".main") }, [],
+                    "CoreAudio 监听(契约): 没有派到主队列上的属性监听(回调里同步读 CoreAudio 会卡住主线程)")
+    }
 }

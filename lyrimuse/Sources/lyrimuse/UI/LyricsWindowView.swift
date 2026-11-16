@@ -7234,7 +7234,7 @@ private struct OutputDeviceList: View {
                     symbol: LyricsWindowView.deviceSymbol(device),
                     isCurrent: device.id == output.defaultID
                 ) {
-                    if output.select(device.id) { close() }
+                    output.select(device.id) { ok in if ok { close() } }
                 }
             }
         }

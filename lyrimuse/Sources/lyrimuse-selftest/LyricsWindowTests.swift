@@ -1595,7 +1595,7 @@ func runLyricsWindowTests() {
                     "输出设备(契约): 歌词窗口不在渲染时现枚举设备,只读 AudioOutputMonitor")
         expectEqual(sourceHas(view, "output.isExternal\n                                    ? AnyShapeStyle(Color.red)"), true,
                     "输出设备(契约): 输出键染红读监听结果")
-        expectEqual(view.contains("if output.select(device.id) { close() }"), true,
+        expectEqual(view.contains("output.select(device.id) { ok in if ok { close() } }"), true,
                     "输出设备(契约): 切换失败不关面板")
     }
 
