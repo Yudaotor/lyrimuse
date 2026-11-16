@@ -2901,6 +2901,7 @@
 "配置文件夹" = "Konfigurationsordner";
 "配置文件无法解析，为避免覆盖已取消保存" = "Die Konfigurationsdatei kann nicht verarbeitet werden; Sichern wurde übersprungen, damit sie nicht überschrieben wird";
 "酷我音乐" = "Kuwo Music";
+"酷我音乐歌曲页" = "Songseite in Kuwo Music";
 "酷狗音乐" = "Kugou Music";
 "酷狗音乐专辑页" = "Albumseite bei Kugou Music";
 "酷狗音乐播放的歌曲 ID 一致" = "Gleiche Kugou Music-Song-ID aus der Wiedergabe";

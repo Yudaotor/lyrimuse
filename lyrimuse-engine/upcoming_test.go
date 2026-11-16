@@ -204,12 +204,12 @@ func TestUpcomingFromQueueCoversEveryPlayerWithAQueue(t *testing.T) {
 	// 并且在读不到时老实返回 false"。
 	missing := filepath.Join(t.TempDir(), "nope")
 	for _, p := range []*string{&sodaLocalQueueOverride, &qqUpcomingOverride, &kugouUpcomingOverride,
-		&kugouQueuePlistOverride, &kugouConfigPlistOverride, &kugouLibraryDBOverride, &neteaseUpcomingOverride} {
+		&kugouQueuePlistOverride, &kugouConfigPlistOverride, &kugouLibraryDBOverride, &neteaseUpcomingOverride, &kuwoUpcomingOverride} {
 		old := *p
 		*p = missing
 		defer func(dst *string, v string) { *dst = v }(p, old)
 	}
-	for _, bundle := range []string{sodaMusicBundleID, qqMusicBundleID, kugouMusicBundleID, neteaseMusicBundleID} {
+	for _, bundle := range []string{sodaMusicBundleID, qqMusicBundleID, kugouMusicBundleID, neteaseMusicBundleID, kuwoMusicBundleID} {
 		if _, ok := upcomingFromQueue("甲", "乙", "丙", bundle, 0, 5); ok {
 			t.Errorf("%s: 队列文件不存在时该返回 false", bundle)
 		}

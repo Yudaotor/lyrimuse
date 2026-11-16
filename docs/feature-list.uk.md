@@ -4,7 +4,7 @@
 
 [English](feature-list.md) · [简体中文](feature-list.zh-CN.md) · [繁體中文](feature-list.zh-Hant.md) · [日本語](feature-list.ja.md) · [한국어](feature-list.ko.md) · [Español](feature-list.es.md) · [Français](feature-list.fr.md) · [Deutsch](feature-list.de.md) · [Italiano](feature-list.it.md) · [Português (Brasil)](feature-list.pt-BR.md) · [Tiếng Việt](feature-list.vi.md) · [Русский](feature-list.ru.md) · Українська · [ไทย](feature-list.th.md) · [Türkçe](feature-list.tr.md)
 
-Lyrimuse — програма з відкритим кодом (GPL-3.0) для Mac, що показує пословно синхронізований текст пісень; для macOS 14 або новішої на Apple Silicon та Intel. Вона показує текст для Apple Music, Spotify, QQ Music, NetEase Cloud Music, Kugou, Soda Music, KKBOX, Amazon Music, LX Music, Kaset, Pear Desktop, reAMP, VOX, Pine Player, foobar2000, Swinsian, Plexamp, MyGo Music, Audirvana, а також для YouTube Music чи Spotify Web у браузері: над робочим столом, біля вирізу, на смузі меню, на Touch Bar або в окремому вікні тексту, з перекладом і вимовою (піньїнь, кантонський Jyutping, японська ромадзі, корейська латинізація). Lyrimuse скроблить у Last.fm і ListenBrainz та може показувати в Discord, що ви слухаєте. Інтерфейс доступний англійською, спрощеною й традиційною китайською, японською, корейською, іспанською, французькою, німецькою, італійською, бразильською португальською, вʼєтнамською, російською, українською, тайською та турецькою.
+Lyrimuse — програма з відкритим кодом (GPL-3.0) для Mac, що показує пословно синхронізований текст пісень; для macOS 14 або новішої на Apple Silicon та Intel. Вона показує текст для Apple Music, Spotify, QQ Music, NetEase Cloud Music, Kugou, Kuwo, Soda Music, KKBOX, Amazon Music, LX Music, Kaset, Pear Desktop, reAMP, VOX, Pine Player, foobar2000, Swinsian, Plexamp, MyGo Music, Audirvana, а також для YouTube Music чи Spotify Web у браузері: над робочим столом, біля вирізу, на смузі меню, на Touch Bar або в окремому вікні тексту, з перекладом і вимовою (піньїнь, кантонський Jyutping, японська ромадзі, корейська латинізація). Lyrimuse скроблить у Last.fm і ListenBrainz та може показувати в Discord, що ви слухаєте. Інтерфейс доступний англійською, спрощеною й традиційною китайською, японською, корейською, іспанською, французькою, німецькою, італійською, бразильською португальською, вʼєтнамською, російською, українською, тайською та турецькою.
 
 Тут зібрано всі можливості Lyrimuse: що робить кожна, де вона в параметрах і чи ввімкнена одразу після встановлення; наприкінці — усі параметри вікна «Параметри». Список ведеться разом із вихідним кодом і оновлюється з кожною зміною.
 
@@ -118,7 +118,7 @@ NetEase Cloud Music, QQ Music, Kugou, Kuwo, Migu, LRCLIB, LyricFind, Deezer, AML
 
 ### Текст готовий ще до наступної пісні
 
-Lyrimuse читає чергу вашого програвача й заздалегідь знаходить тексти для кількох наступних пісень; якщо черги немає, переходить до решти альбому. Для цього QQ Music, NetEase Cloud Music, Kugou, Soda Music і VOX потребують повного доступу до диска.
+Lyrimuse читає чергу вашого програвача й заздалегідь знаходить тексти для кількох наступних пісень; якщо черги немає, переходить до решти альбому. Для цього QQ Music, NetEase Cloud Music, Kugou, Kuwo, Soda Music і VOX потребують повного доступу до диска.
 
 - Типово ввімкнено
 - Параметри: Текст › Джерело › Готувати текст наступних треків
@@ -128,7 +128,7 @@ Lyrimuse читає чергу вашого програвача й заздал
 
 ### Тексти, які вже зберіг ваш програвач
 
-Тексти, які Apple Music, Spotify, Kugou, KKBOX, Amazon Music і LX Music уже зберегли на цьому Mac, можна використовувати напряму: це та сама версія, що й у програвачі, і так швидше (для Apple Music і Spotify — лише пісні, текст яких програвач уже показував). Для QQ Music і NetEase Cloud Music пісня впізнається за локальною бібліотекою програвача, тож саме ця версія завантажується без пошуку. Для reAMP, VOX, Pine Player, foobar2000, Swinsian, MyGo Music і Audirvana, а також для Apple Music чи LX Music, коли вони відтворюють локальний файл із вашої бібліотеки чи локального списку, використовується текст, вбудований у файл, або файл .lrc із тією самою назвою. Для QQ Music, NetEase Cloud Music і Kugou надайте Lyrimuse повний доступ до диска в Системних параметрах; без нього тексти однаково шукаються в інтернеті.
+Тексти, які Apple Music, Spotify, Kugou, Kuwo, KKBOX, Amazon Music і LX Music уже зберегли на цьому Mac, можна використовувати напряму: це та сама версія, що й у програвачі, і так швидше (для Apple Music і Spotify — лише пісні, текст яких програвач уже показував). Для QQ Music і NetEase Cloud Music пісня впізнається за локальною бібліотекою програвача, тож саме ця версія завантажується без пошуку. Для reAMP, VOX, Pine Player, foobar2000, Swinsian, MyGo Music і Audirvana, а також для Apple Music чи LX Music, коли вони відтворюють локальний файл із вашої бібліотеки чи локального списку, використовується текст, вбудований у файл, або файл .lrc із тією самою назвою. Для QQ Music, Kuwo, NetEase Cloud Music і Kugou надайте Lyrimuse повний доступ до диска в Системних параметрах; без нього тексти однаково шукаються в інтернеті.
 
 - Типово вимкнено
 - Параметри: Програвач › Дозволи й служби › Повний доступ до диска
@@ -632,9 +632,9 @@ Lyrimuse читає чергу вашого програвача й заздал
 
 <a id="feature-players"></a>
 
-### 20 програвачів: кілька на вибір або автовизначення
+### 21 програвач: кілька на вибір або автовизначення
 
-Apple Music, Spotify, QQ Music, NetEase Cloud Music, Kugou, Soda Music, LX Music, KKBOX, Amazon Music, reAMP у стилі Winamp, програвач VOX для локальних файлів без втрат і високої роздільності, безкоштовний локальний програвач Pine Player, що відтворює майже всі формати, класичний локальний програвач foobar2000, перенесений із Windows, локальний програвач Swinsian для великих медіатек, музичний програвач Plexamp від Plex для власного сервера, програвач MyGo Music з відкритим кодом, що відтворює локальні файли й додає інші джерела через плагіни, hi-res програвач Audirvana для аудіофілів, програма Kaset для YouTube Music, Pear Desktop — настільна програма YouTube Music з відкритим кодом, і WeRead для аудіокниг. Виберіть кілька одночасно або залиште автоматичний режим, щоб стежити за тим, що macOS показує в «Зараз грає». Працює й радіо Apple Music: поки говорить ведучий, показуються назва й логотип станції.
+Apple Music, Spotify, QQ Music, NetEase Cloud Music, Kugou, Kuwo, Soda Music, LX Music, KKBOX, Amazon Music, reAMP у стилі Winamp, програвач VOX для локальних файлів без втрат і високої роздільності, безкоштовний локальний програвач Pine Player, що відтворює майже всі формати, класичний локальний програвач foobar2000, перенесений із Windows, локальний програвач Swinsian для великих медіатек, музичний програвач Plexamp від Plex для власного сервера, програвач MyGo Music з відкритим кодом, що відтворює локальні файли й додає інші джерела через плагіни, hi-res програвач Audirvana для аудіофілів, програма Kaset для YouTube Music, Pear Desktop — настільна програма YouTube Music з відкритим кодом, і WeRead для аудіокниг. Виберіть кілька одночасно або залиште автоматичний режим, щоб стежити за тим, що macOS показує в «Зараз грає». Працює й радіо Apple Music: поки говорить ведучий, показуються назва й логотип станції.
 
 - Параметри: Програвач › Музичні програми
 
@@ -671,7 +671,7 @@ Apple Music, Spotify, QQ Music, NetEase Cloud Music, Kugou, Soda Music, LX Music
 
 ### Дозволи — лише там, де потрібно
 
-Apple Music, Spotify, Kaset, VOX, Swinsian і Audirvana потребують дозволу «Автоматизація», щоб читати, що грає. QQ Music, NetEase Cloud Music і Kugou потребують повного доступу до диска для збережених текстів і черг, а Soda Music і VOX — для черг. Дозвіл «Доступність» потрібен для калібрування прогресу в Amazon Music і Pine Player, списку відтворення Pine Player, кнопок тасування, повтору й уподобання в QQ Music, NetEase Cloud Music, Kugou Music, Soda Music, Amazon Music, reAMP, Pine Player і foobar2000, гучності foobar2000, а також кнопок відтворення QQ Music, NetEase Cloud Music, Soda Music, Pine Player, foobar2000 і MyGo Music, коли «Зараз грає» займає інша програма. Вебпрогравачам потрібен дозвіл «Автоматизація» для браузера та його параметр «Дозволити JavaScript від подій Apple». Іншим програвачам нічого не потрібно. Поточний стан кожного дозволу видно в Параметрах.
+Apple Music, Spotify, Kaset, VOX, Swinsian і Audirvana потребують дозволу «Автоматизація», щоб читати, що грає. QQ Music, Kuwo, NetEase Cloud Music і Kugou потребують повного доступу до диска для збережених текстів і черг, а Soda Music і VOX — для черг. Дозвіл «Доступність» потрібен для калібрування прогресу в Amazon Music і Pine Player, списку відтворення Pine Player, кнопок тасування, повтору й уподобання в QQ Music, NetEase Cloud Music, Kugou Music, Soda Music, Amazon Music, reAMP, Pine Player і foobar2000, гучності foobar2000, а також кнопок відтворення QQ Music, Kuwo Music, NetEase Cloud Music, Soda Music, Pine Player, foobar2000 і MyGo Music, коли «Зараз грає» займає інша програма. Вебпрогравачам потрібен дозвіл «Автоматизація» для браузера та його параметр «Дозволити JavaScript від подій Apple». Іншим програвачам нічого не потрібно. Поточний стан кожного дозволу видно в Параметрах.
 
 - Параметри: Програвач › Дозволи й служби › Дозвіл на автоматизацію
 - Параметри: Програвач › Дозволи й служби › Повний доступ до диска
@@ -681,7 +681,7 @@ Apple Music, Spotify, Kaset, VOX, Swinsian і Audirvana потребують д�
 
 ### Керування відтворенням і перемотування
 
-Відтворюйте, призупиняйте, перемикайте треки й перетягуйте смугу прогресу у вікні тексту або в розгорнутому вирізі. Тасування, повтор, уподобання й гучність залежать від програвача: Apple Music, Spotify, Kaset, QQ Music, Amazon Music, reAMP, VOX, Pine Player, foobar2000, Swinsian, Plexamp, Pear Desktop і YouTube Music у браузері підтримують деякі або всі з них, а NetEase Cloud Music, Kugou Music, Soda Music, LX Music і MyGo Music мають уподобання, причому LX Music — ще й гучність, якщо в параметрах LX Music увімкнено Open API. Відтворенню, паузі, перемиканню треків і вподобанню можна призначити глобальні клавіатурні скорочення. Поки «Зараз грає» зайняте чимось іншим, наприклад відео в браузері, відтворення, пауза й перемикання треків для QQ Music, NetEase Cloud Music, Soda Music, Pine Player, foobar2000 і MyGo Music працюють через їхні власні меню чи панель відтворення, а перемотування недоступне.
+Відтворюйте, призупиняйте, перемикайте треки й перетягуйте смугу прогресу у вікні тексту або в розгорнутому вирізі. Тасування, повтор, уподобання й гучність залежать від програвача: Apple Music, Spotify, Kaset, QQ Music, Amazon Music, reAMP, VOX, Pine Player, foobar2000, Swinsian, Plexamp, Pear Desktop і YouTube Music у браузері підтримують деякі або всі з них, а NetEase Cloud Music, Kugou Music, Soda Music, LX Music і MyGo Music мають уподобання, причому LX Music — ще й гучність, якщо в параметрах LX Music увімкнено Open API. Відтворенню, паузі, перемиканню треків і вподобанню можна призначити глобальні клавіатурні скорочення. Поки «Зараз грає» зайняте чимось іншим, наприклад відео в браузері, відтворення, пауза й перемикання треків для QQ Music, Kuwo Music, NetEase Cloud Music, Soda Music, Pine Player, foobar2000 і MyGo Music працюють через їхні власні меню чи панель відтворення, а перемотування недоступне.
 
 - Параметри: Показ тексту › Виріз › Розгорнутий вигляд › Керування
 - Параметри: Клавіатурні скорочення › Відтворення/пауза
@@ -694,7 +694,7 @@ Apple Music, Spotify, Kaset, VOX, Swinsian і Audirvana потребують д�
 
 ### Сторінка пісні одним клацанням
 
-Одне клацання в меню ⋯ відкриває пісню, її альбом або виконавця на платформі, з якої ви слухаєте. Apple Music і KKBOX відкриваються у своїх програмах, а Spotify переходить до пісні у своїй програмі; решта відкривається у вебі: альбоми й виконавці Spotify, QQ Music, Soda Music, Amazon Music і YouTube Music. Для NetEase Cloud Music і Kugou є лише сторінка пісні.
+Одне клацання в меню ⋯ відкриває пісню, її альбом або виконавця на платформі, з якої ви слухаєте. Apple Music і KKBOX відкриваються у своїх програмах, а Spotify переходить до пісні у своїй програмі; решта відкривається у вебі: альбоми й виконавці Spotify, QQ Music, Soda Music, Amazon Music і YouTube Music. Для Kuwo, NetEase Cloud Music і Kugou є лише сторінка пісні.
 
 <a id="feature-about-panels"></a>
 

@@ -78,6 +78,7 @@ struct PlayerChoiceCard: View {
         case .qqMusic: return L10n.t("腾讯旗下的音乐 App")
         case .netease: return L10n.t("网易旗下的音乐 App")
         case .kugou: return L10n.t("腾讯音乐旗下的音乐 App")
+        case .kuwo: return L10n.t("腾讯音乐旗下的音乐 App")
         case .soda: return L10n.t("字节跳动旗下的音乐 App")
         case .kkbox: return L10n.t("台湾、香港常用的流媒体音乐 App")
         case .spotify: return L10n.t("全球用户最多的流媒体音乐 App")

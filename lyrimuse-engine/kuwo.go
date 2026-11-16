@@ -46,6 +46,10 @@ type kuwoResult struct {
 	// 一次请求——见 kuwoCoverURL。拿不到就留空,交给 enrich.go 的 coverOrFallback
 	// 退到 Apple 封面。
 	cover string
+	// rid:酷我自己的曲目 id(纯数字),只有本地命中时才填(kuwolocal.go)。
+	rid string
+	// fromLocalClient:这份来自客户端为在放的这一版落盘的歌词、文件名精确命中,身份可信,见 lyricSourceResult.identityFromLocalClient。
+	fromLocalClient bool
 }
 
 var (
@@ -59,14 +63,24 @@ func kuwoLyric(ctx context.Context, artist, title, album string, durationSecs fl
 	}
 	key := artist + "|" + title + "|" + album
 	kuwoMu.Lock()
-	if v, ok := kuwoCache[key]; ok {
-		kuwoMu.Unlock()
-		return v
-	}
+	cachedResult, cached := kuwoCache[key]
 	kuwoMu.Unlock()
+	// 缓存那份是搜来的、这一轮是在放的这首时先问本地,见 playingRoundWantsLocalIdentity。
+	if cached && (cachedResult.fromLocalClient || !playingRoundWantsLocalIdentity(ctx)) {
+		return cachedResult
+	}
 
+	// 先问酷我客户端自己落盘的歌词(kuwolocal.go):命中就省掉搜索和取词,拿到的是它为在放的这一版写的那一份;
+	// 本地文件不带封面,只为封面再搜一次(kuwoLocalCoverURL)。没命中照常走网络。
 	ctx, sub := withLyricSubFetch(ctx)
-	r := resolveKuwoLyric(ctx, artist, title, album, durationSecs)
+	r, ok := kuwoLocalLyric(artist, title, durationSecs)
+	if ok {
+		r.cover = kuwoLocalCoverURL(ctx, artist, title, r.rid)
+	} else if cached {
+		return cachedResult
+	} else {
+		r = resolveKuwoLyric(ctx, artist, title, album, durationSecs)
+	}
 	// 逐字那一趟没问成的不缓存,见 lyricsubfetch.go。
 	if r.lyrics != "" && sub.complete(ctx) {
 		kuwoMu.Lock()

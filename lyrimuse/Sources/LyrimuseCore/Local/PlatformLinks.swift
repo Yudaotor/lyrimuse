@@ -76,7 +76,8 @@ public struct PlatformLinks: Sendable, Equatable {
     public let kkboxArtistWeb: URL?
     /// 洛雪里这一首来自哪个平台(QQ、网易云、酷我,见 `lxMusicPlatform(songID:)`):用洛雪放时简介面板给那家的歌曲页。
     public let lxMusicPlatform: Platform?
-    /// 酷我歌曲页(洛雪里来自酷我的歌,按它本地库的曲目 id 拼,见 `kuwoSongURL(lxSongID:)`)。
+    /// 酷我歌曲页:酷我在放时按它记下的曲目 id 拼(`kuwoSongURL(kuwoSongID:)`),洛雪里来自酷我的歌按它本地库的曲目 id 拼
+    /// (`kuwoSongURL(lxSongID:)`)。
     public let kuwoSong: URL?
     /// 酷狗网页歌曲页 `https://www.kugou.com/mixsong/<EMixSongID>.html`(浏览器)。引擎用酷狗放这首时按它报的 mixId 找的,
     /// 形状闸见 `kugouSongURL`。
@@ -167,6 +168,7 @@ public struct PlatformLinks: Sendable, Equatable {
             return youtubeMusicSong.map { (.youtubeMusic, $0) }
         case PlaybackPlayer.soda.bundleIdentifier: return sodaSong.map { (.soda, $0) }
         case PlaybackPlayer.kugou.bundleIdentifier: return kugouSong.map { (.kugou, $0) }
+        case PlaybackPlayer.kuwo.bundleIdentifier: return kuwoSong.map { (.kuwo, $0) }
         case PlaybackPlayer.lxMusic.bundleIdentifier:
             switch lxMusicPlatform {
             case .qqMusic?: return qqSong.map { (.qqMusic, $0) }
@@ -192,8 +194,12 @@ public struct PlatformLinks: Sendable, Equatable {
     /// 别的形状 nil。纯函数,selftest 覆盖。
     public static func kuwoSongURL(lxSongID: String?) -> URL? {
         guard let lxSongID, lxSongID.hasPrefix("kw_") else { return nil }
-        let id = lxSongID.dropFirst(3)
-        guard !id.isEmpty, id.count <= 20, id.allSatisfy({ $0.isASCII && $0.isNumber }) else { return nil }
+        return kuwoSongURL(kuwoSongID: String(lxSongID.dropFirst(3)))
+    }
+
+    /// 酷我客户端记下的曲目 id(引擎 `player_song_ids` 里酷我那一项,1～20 位数字)→ 酷我网页版歌曲页;别的形状 nil。纯函数,selftest 覆盖。
+    public static func kuwoSongURL(kuwoSongID id: String?) -> URL? {
+        guard let id, !id.isEmpty, id.count <= 20, id.allSatisfy({ $0.isASCII && $0.isNumber }) else { return nil }
         return URL(string: "https://www.kuwo.cn/play_detail/" + id)
     }
 

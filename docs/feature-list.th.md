@@ -4,7 +4,7 @@
 
 [English](feature-list.md) · [简体中文](feature-list.zh-CN.md) · [繁體中文](feature-list.zh-Hant.md) · [日本語](feature-list.ja.md) · [한국어](feature-list.ko.md) · [Español](feature-list.es.md) · [Français](feature-list.fr.md) · [Deutsch](feature-list.de.md) · [Italiano](feature-list.it.md) · [Português (Brasil)](feature-list.pt-BR.md) · [Tiếng Việt](feature-list.vi.md) · [Русский](feature-list.ru.md) · [Українська](feature-list.uk.md) · ไทย · [Türkçe](feature-list.tr.md)
 
-Lyrimuse เป็นแอปโอเพนซอร์ส (GPL-3.0) สำหรับ Mac ที่แสดงเนื้อเพลงแบบคำต่อคำตรงตามจังหวะ ใช้ได้กับ macOS 14 ขึ้นไปบน Apple Silicon และ Intel แสดงเนื้อเพลงให้ Apple Music, Spotify, QQ Music, NetEase Cloud Music, Kugou, Soda Music, KKBOX, Amazon Music, LX Music, Kaset, Pear Desktop, reAMP, VOX, Pine Player, foobar2000, Swinsian, Plexamp, MyGo Music, Audirvana รวมถึง YouTube Music หรือ Spotify Web ที่เล่นในเบราว์เซอร์ ได้ทั้งแบบลอยบนเดสก์ท็อป ข้างรอยบาก ในแถบเมนู บน Touch Bar หรือในหน้าต่างเนื้อเพลงแบบเต็มหน้า พร้อมคำแปลและการออกเสียง (พินอิน Jyutping ภาษากวางตุ้ง โรมะจิภาษาญี่ปุ่น และอักษรโรมันภาษาเกาหลี) Lyrimuse Scrobble ไปยัง Last.fm และ ListenBrainz และแสดงเพลงที่คุณกำลังฟังบน Discord ได้ แอปมีให้เลือกเป็นภาษาอังกฤษ จีนตัวย่อ จีนตัวเต็ม ญี่ปุ่น เกาหลี สเปน ฝรั่งเศส เยอรมัน อิตาลี โปรตุเกส (บราซิล) เวียดนาม รัสเซีย ยูเครน ไทย และตุรกี
+Lyrimuse เป็นแอปโอเพนซอร์ส (GPL-3.0) สำหรับ Mac ที่แสดงเนื้อเพลงแบบคำต่อคำตรงตามจังหวะ ใช้ได้กับ macOS 14 ขึ้นไปบน Apple Silicon และ Intel แสดงเนื้อเพลงให้ Apple Music, Spotify, QQ Music, NetEase Cloud Music, Kugou, Kuwo, Soda Music, KKBOX, Amazon Music, LX Music, Kaset, Pear Desktop, reAMP, VOX, Pine Player, foobar2000, Swinsian, Plexamp, MyGo Music, Audirvana รวมถึง YouTube Music หรือ Spotify Web ที่เล่นในเบราว์เซอร์ ได้ทั้งแบบลอยบนเดสก์ท็อป ข้างรอยบาก ในแถบเมนู บน Touch Bar หรือในหน้าต่างเนื้อเพลงแบบเต็มหน้า พร้อมคำแปลและการออกเสียง (พินอิน Jyutping ภาษากวางตุ้ง โรมะจิภาษาญี่ปุ่น และอักษรโรมันภาษาเกาหลี) Lyrimuse Scrobble ไปยัง Last.fm และ ListenBrainz และแสดงเพลงที่คุณกำลังฟังบน Discord ได้ แอปมีให้เลือกเป็นภาษาอังกฤษ จีนตัวย่อ จีนตัวเต็ม ญี่ปุ่น เกาหลี สเปน ฝรั่งเศส เยอรมัน อิตาลี โปรตุเกส (บราซิล) เวียดนาม รัสเซีย ยูเครน ไทย และตุรกี
 
 รวมความสามารถทั้งหมดของ Lyrimuse ไว้ที่นี่ ทั้งสิ่งที่แต่ละอย่างทำ อยู่ตรงไหนในการตั้งค่า และเปิดอยู่ตั้งแต่ติดตั้งหรือไม่ ท้ายหน้ามีรายการการตั้งค่าทั้งหมดในหน้าต่างการตั้งค่า รายการนี้ดูแลไปพร้อมกับซอร์สโค้ดและอัปเดตทุกครั้งที่มีการเปลี่ยนแปลง
 
@@ -118,7 +118,7 @@ NetEase Cloud Music, QQ Music, Kugou, Kuwo, Migu, LRCLIB, LyricFind, Deezer, AML
 
 ### เนื้อเพลงพร้อมก่อนถึงเพลงถัดไป
 
-อ่านคิวของเครื่องเล่นแล้วหาเนื้อเพลงของเพลงถัดๆ ไปไว้ล่วงหน้า ถ้าไม่มีคิวให้อ่าน จะหาเนื้อเพลงให้เพลงที่เหลือในอัลบั้มแทน QQ Music, NetEase Cloud Music, Kugou, Soda Music และ VOX ต้องได้รับสิทธิ์ “การเข้าถึงดิสก์ทั้งหมด” จึงจะทำแบบนี้ได้
+อ่านคิวของเครื่องเล่นแล้วหาเนื้อเพลงของเพลงถัดๆ ไปไว้ล่วงหน้า ถ้าไม่มีคิวให้อ่าน จะหาเนื้อเพลงให้เพลงที่เหลือในอัลบั้มแทน QQ Music, NetEase Cloud Music, Kugou, Kuwo, Soda Music และ VOX ต้องได้รับสิทธิ์ “การเข้าถึงดิสก์ทั้งหมด” จึงจะทำแบบนี้ได้
 
 - เปิดอยู่ตามค่าเริ่มต้น
 - การตั้งค่า: เนื้อเพลง › แหล่งที่มา › เตรียมเนื้อเพลงของเพลงถัดไปล่วงหน้า
@@ -128,7 +128,7 @@ NetEase Cloud Music, QQ Music, Kugou, Kuwo, Migu, LRCLIB, LyricFind, Deezer, AML
 
 ### ใช้เนื้อเพลงที่เครื่องเล่นบันทึกไว้แล้ว
 
-เนื้อเพลงที่ Apple Music, Spotify, Kugou, KKBOX, Amazon Music และ LX Music บันทึกไว้ใน Mac เครื่องนี้แล้วนำมาใช้ได้ทันที เป็นเวอร์ชั่นเดียวกับที่เครื่องเล่นแสดงและเร็วกว่า (สำหรับ Apple Music และ Spotify เฉพาะเพลงที่เครื่องเล่นเคยแสดงเนื้อเพลงแล้ว) สำหรับ QQ Music และ NetEase Cloud Music จะระบุเพลงจากคลังในเครื่องของเครื่องเล่น จึงดึงเวอร์ชั่นนั้นมาได้ตรงตัวโดยไม่ต้องค้นหา สำหรับ reAMP, VOX, Pine Player, foobar2000, Swinsian, MyGo Music และ Audirvana รวมถึง Apple Music หรือ LX Music เมื่อเล่นไฟล์ในเครื่องจากคลังหรือรายการเพลงในเครื่อง จะใช้เนื้อเพลงที่ฝังในไฟล์ที่กำลังเล่นหรือไฟล์ .lrc ที่ชื่อเดียวกัน QQ Music, NetEase Cloud Music และ Kugou ต้องให้สิทธิ์ “การเข้าถึงดิสก์ทั้งหมด” แก่ Lyrimuse ใน “การตั้งค่าระบบ” หากไม่ให้ก็ยังหาเนื้อเพลงทางออนไลน์ได้ตามปกติ
+เนื้อเพลงที่ Apple Music, Spotify, Kugou, Kuwo, KKBOX, Amazon Music และ LX Music บันทึกไว้ใน Mac เครื่องนี้แล้วนำมาใช้ได้ทันที เป็นเวอร์ชั่นเดียวกับที่เครื่องเล่นแสดงและเร็วกว่า (สำหรับ Apple Music และ Spotify เฉพาะเพลงที่เครื่องเล่นเคยแสดงเนื้อเพลงแล้ว) สำหรับ QQ Music และ NetEase Cloud Music จะระบุเพลงจากคลังในเครื่องของเครื่องเล่น จึงดึงเวอร์ชั่นนั้นมาได้ตรงตัวโดยไม่ต้องค้นหา สำหรับ reAMP, VOX, Pine Player, foobar2000, Swinsian, MyGo Music และ Audirvana รวมถึง Apple Music หรือ LX Music เมื่อเล่นไฟล์ในเครื่องจากคลังหรือรายการเพลงในเครื่อง จะใช้เนื้อเพลงที่ฝังในไฟล์ที่กำลังเล่นหรือไฟล์ .lrc ที่ชื่อเดียวกัน QQ Music, Kuwo, NetEase Cloud Music และ Kugou ต้องให้สิทธิ์ “การเข้าถึงดิสก์ทั้งหมด” แก่ Lyrimuse ใน “การตั้งค่าระบบ” หากไม่ให้ก็ยังหาเนื้อเพลงทางออนไลน์ได้ตามปกติ
 
 - ปิดอยู่ตามค่าเริ่มต้น
 - การตั้งค่า: เครื่องเล่น › สิทธิ์และบริการ › การเข้าถึงดิสก์ทั้งหมด
@@ -632,9 +632,9 @@ NetEase Cloud Music, QQ Music, Kugou, Kuwo, Migu, LRCLIB, LyricFind, Deezer, AML
 
 <a id="feature-players"></a>
 
-### เครื่องเล่น 20 ตัว เลือกหลายตัวหรือตรวจหาอัตโนมัติ
+### เครื่องเล่น 21 ตัว เลือกหลายตัวหรือตรวจหาอัตโนมัติ
 
-Apple Music, Spotify, QQ Music, NetEase Cloud Music, Kugou, Soda Music, LX Music, KKBOX, Amazon Music, reAMP เครื่องเล่นสไตล์ Winamp, VOX เครื่องเล่นไฟล์ในเครื่องแบบ Lossless และ Hi-Res, Pine Player เครื่องเล่นไฟล์ในเครื่องฟรีที่เล่นได้แทบทุกรูปแบบ, foobar2000 เครื่องเล่นไฟล์ในเครื่องรุ่นคลาสสิกที่พอร์ตมาจาก Windows, Swinsian เครื่องเล่นไฟล์ในเครื่องสำหรับคลังเพลงขนาดใหญ่, Plexamp เครื่องเล่นเพลงของ Plex สำหรับเซิร์ฟเวอร์ของตัวเอง, MyGo Music เครื่องเล่นโอเพนซอร์สที่เล่นไฟล์ในเครื่องและเพิ่มแหล่งเพลงอื่นผ่านปลั๊กอิน, Audirvana เครื่องเล่นเสียงความละเอียดสูงสำหรับนักฟังเครื่องเสียง, Kaset แอป YouTube Music, Pear Desktop แอป YouTube Music บนเดสก์ท็อปแบบโอเพนซอร์ส และ WeRead สำหรับฟังหนังสือเสียง เลือกหลายตัวพร้อมกันได้ หรือปล่อยเป็นอัตโนมัติเพื่อตามสิ่งที่ macOS แสดงใน “กำลังเล่นอยู่” วิทยุของ Apple Music ก็ใช้ได้ โดยแสดงชื่อสถานีและโลโก้ระหว่างที่ผู้ดำเนินรายการพูด
+Apple Music, Spotify, QQ Music, NetEase Cloud Music, Kugou, Kuwo, Soda Music, LX Music, KKBOX, Amazon Music, reAMP เครื่องเล่นสไตล์ Winamp, VOX เครื่องเล่นไฟล์ในเครื่องแบบ Lossless และ Hi-Res, Pine Player เครื่องเล่นไฟล์ในเครื่องฟรีที่เล่นได้แทบทุกรูปแบบ, foobar2000 เครื่องเล่นไฟล์ในเครื่องรุ่นคลาสสิกที่พอร์ตมาจาก Windows, Swinsian เครื่องเล่นไฟล์ในเครื่องสำหรับคลังเพลงขนาดใหญ่, Plexamp เครื่องเล่นเพลงของ Plex สำหรับเซิร์ฟเวอร์ของตัวเอง, MyGo Music เครื่องเล่นโอเพนซอร์สที่เล่นไฟล์ในเครื่องและเพิ่มแหล่งเพลงอื่นผ่านปลั๊กอิน, Audirvana เครื่องเล่นเสียงความละเอียดสูงสำหรับนักฟังเครื่องเสียง, Kaset แอป YouTube Music, Pear Desktop แอป YouTube Music บนเดสก์ท็อปแบบโอเพนซอร์ส และ WeRead สำหรับฟังหนังสือเสียง เลือกหลายตัวพร้อมกันได้ หรือปล่อยเป็นอัตโนมัติเพื่อตามสิ่งที่ macOS แสดงใน “กำลังเล่นอยู่” วิทยุของ Apple Music ก็ใช้ได้ โดยแสดงชื่อสถานีและโลโก้ระหว่างที่ผู้ดำเนินรายการพูด
 
 - การตั้งค่า: เครื่องเล่น › แอปเพลง
 
@@ -671,7 +671,7 @@ YouTube Music ในเบราว์เซอร์หรือ Pear Desktop �
 
 ### ขอสิทธิ์เฉพาะที่จำเป็น
 
-Apple Music, Spotify, Kaset, VOX, Swinsian และ Audirvana ต้องใช้สิทธิ์ “การทำงานอัตโนมัติ” เพื่ออ่านเพลงที่กำลังเล่น QQ Music, NetEase Cloud Music และ Kugou ต้องใช้ “การเข้าถึงดิสก์ทั้งหมด” เพื่ออ่านเนื้อเพลงที่บันทึกไว้และคิว ส่วน Soda Music และ VOX ใช้เพื่ออ่านคิว สิ่งต่อไปนี้ต้องใช้ “การช่วยการเข้าถึง”: การปรับเทียบความคืบหน้าของ Amazon Music และ Pine Player, เพลย์ลิสต์ของ Pine Player, ปุ่มสุ่ม เล่นซ้ำ และรายการโปรดของ QQ Music, NetEase Cloud Music, Kugou Music, Soda Music, Amazon Music, reAMP, Pine Player และ foobar2000, ระดับเสียงของ foobar2000 และปุ่มควบคุมการเล่นของ QQ Music, NetEase Cloud Music, Soda Music, Pine Player, foobar2000 และ MyGo Music ขณะที่แอปอื่นครอง “กำลังเล่นอยู่” เครื่องเล่นบนเว็บต้องใช้สิทธิ์ “การทำงานอัตโนมัติ” สำหรับเบราว์เซอร์และตัวเลือก “อนุญาต JavaScript จากเหตุการณ์ Apple” ของเบราว์เซอร์นั้น เครื่องเล่นอื่นๆ ไม่ต้องใช้สิทธิ์ใดๆ การตั้งค่าจะแสดงสถานะปัจจุบันของแต่ละรายการ
+Apple Music, Spotify, Kaset, VOX, Swinsian และ Audirvana ต้องใช้สิทธิ์ “การทำงานอัตโนมัติ” เพื่ออ่านเพลงที่กำลังเล่น QQ Music, Kuwo, NetEase Cloud Music และ Kugou ต้องใช้ “การเข้าถึงดิสก์ทั้งหมด” เพื่ออ่านเนื้อเพลงที่บันทึกไว้และคิว ส่วน Soda Music และ VOX ใช้เพื่ออ่านคิว สิ่งต่อไปนี้ต้องใช้ “การช่วยการเข้าถึง”: การปรับเทียบความคืบหน้าของ Amazon Music และ Pine Player, เพลย์ลิสต์ของ Pine Player, ปุ่มสุ่ม เล่นซ้ำ และรายการโปรดของ QQ Music, NetEase Cloud Music, Kugou Music, Soda Music, Amazon Music, reAMP, Pine Player และ foobar2000, ระดับเสียงของ foobar2000 และปุ่มควบคุมการเล่นของ QQ Music, Kuwo Music, NetEase Cloud Music, Soda Music, Pine Player, foobar2000 และ MyGo Music ขณะที่แอปอื่นครอง “กำลังเล่นอยู่” เครื่องเล่นบนเว็บต้องใช้สิทธิ์ “การทำงานอัตโนมัติ” สำหรับเบราว์เซอร์และตัวเลือก “อนุญาต JavaScript จากเหตุการณ์ Apple” ของเบราว์เซอร์นั้น เครื่องเล่นอื่นๆ ไม่ต้องใช้สิทธิ์ใดๆ การตั้งค่าจะแสดงสถานะปัจจุบันของแต่ละรายการ
 
 - การตั้งค่า: เครื่องเล่น › สิทธิ์และบริการ › สิทธิ์การทำงานอัตโนมัติ
 - การตั้งค่า: เครื่องเล่น › สิทธิ์และบริการ › การเข้าถึงดิสก์ทั้งหมด
@@ -681,7 +681,7 @@ Apple Music, Spotify, Kaset, VOX, Swinsian และ Audirvana ต้องใ�
 
 ### ควบคุมการเล่นและเลื่อนตำแหน่ง
 
-เล่น หยุดพัก ข้ามเพลง และลากแถบความคืบหน้าได้จากหน้าต่างเนื้อเพลงหรือรอยบากที่ขยาย สุ่ม เล่นซ้ำ รายการโปรด และระดับเสียงขึ้นอยู่กับเครื่องเล่น: Apple Music, Spotify, Kaset, QQ Music, Amazon Music, reAMP, VOX, Pine Player, foobar2000, Swinsian, Plexamp, Pear Desktop และ YouTube Music ในเบราว์เซอร์รองรับบางส่วนหรือทั้งหมด ส่วน NetEase Cloud Music, Kugou Music, Soda Music, LX Music และ MyGo Music มีรายการโปรด และ LX Music ปรับระดับเสียงได้ด้วยเมื่อเปิด Open API ในการตั้งค่าของแอป ตั้งปุ่มลัดทั่วทั้งระบบให้เล่น หยุดพัก ข้ามเพลง และเพิ่มไปยังรายการโปรดได้ ขณะที่สิ่งอื่น เช่น วิดีโอในเบราว์เซอร์ ครอง “กำลังเล่นอยู่” การเล่น หยุดพัก และข้ามเพลงของ QQ Music, NetEase Cloud Music, Soda Music, Pine Player, foobar2000 และ MyGo Music จะทำผ่านเมนูหรือแถบเล่นของแอปนั้นเอง และเลื่อนตำแหน่งไม่ได้
+เล่น หยุดพัก ข้ามเพลง และลากแถบความคืบหน้าได้จากหน้าต่างเนื้อเพลงหรือรอยบากที่ขยาย สุ่ม เล่นซ้ำ รายการโปรด และระดับเสียงขึ้นอยู่กับเครื่องเล่น: Apple Music, Spotify, Kaset, QQ Music, Amazon Music, reAMP, VOX, Pine Player, foobar2000, Swinsian, Plexamp, Pear Desktop และ YouTube Music ในเบราว์เซอร์รองรับบางส่วนหรือทั้งหมด ส่วน NetEase Cloud Music, Kugou Music, Soda Music, LX Music และ MyGo Music มีรายการโปรด และ LX Music ปรับระดับเสียงได้ด้วยเมื่อเปิด Open API ในการตั้งค่าของแอป ตั้งปุ่มลัดทั่วทั้งระบบให้เล่น หยุดพัก ข้ามเพลง และเพิ่มไปยังรายการโปรดได้ ขณะที่สิ่งอื่น เช่น วิดีโอในเบราว์เซอร์ ครอง “กำลังเล่นอยู่” การเล่น หยุดพัก และข้ามเพลงของ QQ Music, Kuwo Music, NetEase Cloud Music, Soda Music, Pine Player, foobar2000 และ MyGo Music จะทำผ่านเมนูหรือแถบเล่นของแอปนั้นเอง และเลื่อนตำแหน่งไม่ได้
 
 - การตั้งค่า: การแสดงเนื้อเพลง › รอยบาก › เมื่อขยาย › แสดงตัวควบคุม
 - การตั้งค่า: ปุ่มลัดแป้นพิมพ์ › เล่น/หยุดพัก
@@ -694,7 +694,7 @@ Apple Music, Spotify, Kaset, VOX, Swinsian และ Audirvana ต้องใ�
 
 ### เปิดหน้าเพลงได้ในคลิกเดียว
 
-คลิกเดียวในเมนู “⋯” จะเปิดเพลง อัลบั้ม หรือศิลปินบนแพลตฟอร์มที่คุณกำลังเล่นอยู่ Apple Music และ KKBOX เปิดในแอปของตัวเอง Spotify ข้ามไปยังเพลงในแอป ส่วนที่เหลือเปิดบนเว็บ ได้แก่ อัลบั้มและศิลปินของ Spotify, QQ Music, Soda Music, Amazon Music และ YouTube Music ส่วน NetEase Cloud Music และ Kugou มีเฉพาะหน้าเพลง
+คลิกเดียวในเมนู “⋯” จะเปิดเพลง อัลบั้ม หรือศิลปินบนแพลตฟอร์มที่คุณกำลังเล่นอยู่ Apple Music และ KKBOX เปิดในแอปของตัวเอง Spotify ข้ามไปยังเพลงในแอป ส่วนที่เหลือเปิดบนเว็บ ได้แก่ อัลบั้มและศิลปินของ Spotify, QQ Music, Soda Music, Amazon Music และ YouTube Music ส่วน Kuwo, NetEase Cloud Music และ Kugou มีเฉพาะหน้าเพลง
 
 <a id="feature-about-panels"></a>
 

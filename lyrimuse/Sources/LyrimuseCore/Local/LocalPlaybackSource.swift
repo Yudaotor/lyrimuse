@@ -1856,22 +1856,23 @@ public final class LocalPlaybackSource: ObservableObject {
     }
 
     /// 这个播放器播放中会持续重发准的锚点,外推只是两次重发之间的补间:KKBOX 约每 1.06s 一次、逐次一致,
-    /// 开播第一个却晚约 0.18s。按 cleanExtrapolated 那档 0.4s 的伺服门槛,这 0.18s 整首纠不回来,所以这类播放器
+    /// 开播第一个却晚约 0.18s;酷我约每 0.5~0.6s 一次,开播第一个反而早 0.28~0.5s(见 02 章决策 263)。
+    /// 按 cleanExtrapolated 那档 0.4s 的伺服门槛,这一截整首纠不回来,所以这类播放器
     /// 偏差过了 `republishedAnchorSnapSecs` 就对齐读数(读数盖了读到的时刻,见 `MediaControlClient.stampsCaptureTime`);
     /// 暂停那一拍的快照还带着播放时最后那个锚点、真正的暂停锚点晚约 0.2s 才到,见 `pauseAnchorIsStale`。
     /// 见 02 章决策 61。纯函数,selftest 直接覆盖。
     public nonisolated static func followsRepublishedAnchors(bundleID: String?) -> Bool {
-        bundleID == PlaybackPlayer.kkbox.bundleIdentifier
+        bundleID == PlaybackPlayer.kkbox.bundleIdentifier || bundleID == PlaybackPlayer.kuwo.bundleIdentifier
     }
 
-    /// 稳定播放时偏差过了 `republishedAnchorSnapSecs` 就直接对齐读数、不走 EMA 慢慢收的播放器:跟随重发锚点的(KKBOX),
+    /// 稳定播放时偏差过了 `republishedAnchorSnapSecs` 就直接对齐读数、不走 EMA 慢慢收的播放器:跟随重发锚点的(KKBOX、酷我),
     /// 加上位置是按它自己的日志算出来的 Amazon Music(读数就是干净的时钟,界面校准改提前量时一步到位,别被 EMA 拆成
     /// 每拍半秒的几次小跳),和位置是 `PinePlayhead` 那块表的 Pine Player(进度条校准改的零点几秒要当拍到屏上),
     /// Swinsian 同理(`SwinsianPlayhead` 按整秒跳变对时改的那一截)。
     /// iPad 版网易云(`client`:这份会话实际是谁报的)也是:「锁屏歌词」开着时它每换一句都带着准的进度重报一次,开播那个锚点却
     /// 早晚不定(实测早 0.1~0.3 秒或晚 0.45 秒),按网易云 Mac 版那档(只往前纠)早了的整首纠不回来。见 02 章决策 198。
     /// iPad 版 QQ 音乐也是:开播那一帧有时比紧跟的改写帧早 0.58 秒,改写帧和之后的重报才准。见 02 章决策 204。
-    /// 只管伺服这一处;暂停锚点判旧等 KKBOX 专属的规则仍只看 `followsRepublishedAnchors`。纯函数,selftest 直接覆盖。
+    /// 只管伺服这一处;暂停锚点判旧等跟随重发锚点专属的规则仍只看 `followsRepublishedAnchors`。纯函数,selftest 直接覆盖。
     public nonisolated static func snapsToReportedPosition(bundleID: String?, client: String? = nil) -> Bool {
         followsRepublishedAnchors(bundleID: bundleID) || bundleID == PlaybackPlayer.amazonMusic.bundleIdentifier
             || bundleID == PlaybackPlayer.pinePlayer.bundleIdentifier || bundleID == PlaybackPlayer.swinsian.bundleIdentifier
@@ -3653,10 +3654,10 @@ public final class LocalPlaybackSource: ObservableObject {
     /// 暂停时也按播放档轮询的那一段有多长。
     public nonisolated static let fastPausedPollWindow: TimeInterval = 600
 
-    /// 恢复播放只有 media-control 事件流一条即时信号的播放器:VOX 的通知只在换歌时发,reAMP、Pine、汽水、KKBOX、foobar2000 不发
+    /// 恢复播放只有 media-control 事件流一条即时信号的播放器:VOX 的通知只在换歌时发,reAMP、Pine、汽水、KKBOX、foobar2000、酷我不发
     /// 分布式通知(16 章第 21 节各自的 A4)。见 02 章决策 179。
     nonisolated static let singleResumeSignalBundleIDs: Set<String> = [
-        PlaybackPlayer.vox, .reamp, .pinePlayer, .soda, .kkbox, .foobar2000,
+        PlaybackPlayer.vox, .reamp, .pinePlayer, .soda, .kkbox, .foobar2000, .kuwo,
     ].reduce(into: []) { $0.insert($1.bundleIdentifier) }
 
     /// 刚暂停的这一段要不要按播放档(2 秒)轮询:只对 `singleResumeSignalBundleIDs`,事件流漏了也在 2 秒内认出恢复,

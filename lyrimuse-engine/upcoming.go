@@ -121,6 +121,9 @@ func upcomingFromQueue(artist, title, album, bundleID string, durationSecs float
 		return pearUpcoming(artist, title, n)
 	case lxMusicBundleID:
 		return lxMusicUpcoming(artist, title, n)
+	case kuwoMusicBundleID:
+		// 「播放列表」面板那一份在它容器的库里(kuwoqueue.go);电台的歌不在里面,认不出就退回同专辑预取。
+		return kuwoUpcoming(artist, title, n)
 	case myGoMusicBundleID:
 		// 没有对外队列接口,读它的会话快照(mygoqueue.go;最多晚 30 秒,当前这首对不上就退回)。
 		return myGoUpcoming(artist, title, n)

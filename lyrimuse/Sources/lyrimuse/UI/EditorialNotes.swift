@@ -508,7 +508,7 @@ final class EditorialNotesStore: ObservableObject {
 
     // MARK: - 酷我
 
-    /// 酷我的专辑、歌手介绍:按这首的酷我歌曲页(洛雪里来自酷我的歌才有,`PlatformLinks.kuwoSong`)换专辑 / 歌手 id 再取
+    /// 酷我的专辑、歌手介绍:按这首的酷我歌曲页(酷我在放的歌、洛雪里来自酷我的歌才有,`PlatformLinks.kuwoSong`)换专辑 / 歌手 id 再取
     /// (`KuwoEditorialInfo`),不按名字搜。id 按曲目记,介绍按专辑 / 歌手 id 记,"" = 酷我没有。见 05 章决策 92。
     private let kuwoIDs = EditorialMemo<String, KuwoEditorialInfo.IDs>("kuwo-ids")
     private let kuwoInfos = EditorialMemo<String, String>("kuwo", missing: { $0.isEmpty })

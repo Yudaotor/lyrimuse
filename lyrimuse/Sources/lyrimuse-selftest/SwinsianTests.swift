@@ -305,7 +305,7 @@ func runSwinsianTests() {
                     && sourceHas(info, "[\"-readonly\", database, podcastTableQuery(path: path)]"),
                     true, "Swinsian 接线: 脚本说不清时只读查它的播客表")
         let idle = src("lyrimuse/UI/IdlePlaybackActions.swift")
-        expectEqual(sourceHas(idle, "case .swinsian: PlayerProcess.pid(bundleID: player.bundleIdentifier) != nil")
+        expectEqual(sourceHas(idle, "case .swinsian, .kuwo: PlayerProcess.pid(bundleID: player.bundleIdentifier) != nil")
                     && sourceHas(idle, "ok = MusicPlaybackController.resumeSwinsianPlayback()"),
                     true, "Swinsian 接线: 停播页开着它时给「继续播放」,发它的脚本")
         let head = src("LyrimuseCore/Local/SwinsianPlayhead.swift")

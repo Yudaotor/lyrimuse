@@ -715,7 +715,8 @@ public enum EnrichCacheReader {
                 ? nil : kk.kkboxURL.flatMap { URL(string: $0) },
             kkboxArtistWeb: PlatformLinks.kkboxArtistWebURL(songPage: kk.kkboxURL ?? "", artistID: own(entry.kkboxArtistID, kk.kkboxArtistID)),
             lxMusicPlatform: PlatformLinks.lxMusicPlatform(songID: entry.playerSongIDs?[PlaybackPlayer.lxMusic.bundleIdentifier]),
-            kuwoSong: PlatformLinks.kuwoSongURL(lxSongID: entry.playerSongIDs?[PlaybackPlayer.lxMusic.bundleIdentifier]),
+            kuwoSong: PlatformLinks.kuwoSongURL(kuwoSongID: entry.playerSongIDs?[PlaybackPlayer.kuwo.bundleIdentifier])
+                ?? PlatformLinks.kuwoSongURL(lxSongID: entry.playerSongIDs?[PlaybackPlayer.lxMusic.bundleIdentifier]),
             kugouSong: PlatformLinks.kugouSongURL(kg.kugouURL ?? ""),
             kugouAlbum: PlatformLinks.kugouAlbumURL(id: entry.playerAlbumIDs?[PlaybackPlayer.kugou.bundleIdentifier]))
         return links.isEmpty ? nil : links

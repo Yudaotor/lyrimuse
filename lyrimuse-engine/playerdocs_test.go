@@ -3,6 +3,7 @@ package main
 import (
 	"os"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 	"testing"
@@ -62,16 +63,30 @@ func TestDocsListEveryPlayer(t *testing.T) {
 		t.Fatal("shared/players.json 里一个播放器都没读出来")
 	}
 	enWords := []string{"zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten",
-		"eleven", "twelve", "thirteen", "fourteen", "fifteen", "sixteen", "seventeen", "eighteen", "nineteen", "twenty"}
+		"eleven", "twelve", "thirteen", "fourteen", "fifteen", "sixteen", "seventeen", "eighteen", "nineteen", "twenty",
+		"twenty-one", "twenty-two", "twenty-three", "twenty-four", "twenty-five", "twenty-six", "twenty-seven", "twenty-eight",
+		"twenty-nine", "thirty"}
 	zhDigits := []string{"零", "一", "二", "三", "四", "五", "六", "七", "八", "九", "十",
-		"十一", "十二", "十三", "十四", "十五", "十六", "十七", "十八", "十九", "二十"}
-	if n >= len(enWords) {
+		"十一", "十二", "十三", "十四", "十五", "十六", "十七", "十八", "十九", "二十",
+		"二十一", "二十二", "二十三", "二十四", "二十五", "二十六", "二十七", "二十八", "二十九", "三十"}
+	if n >= len(enWords) || n >= len(zhDigits) {
 		t.Fatalf("播放器数量是 %d,没有对应的中英数字——请在两张表里补上再跑这个测试", n)
 	}
 	esWords := []string{"cero", "uno", "dos", "tres", "cuatro", "cinco", "seis", "siete", "ocho", "nueve", "diez",
-		"once", "doce", "trece", "catorce", "quince", "dieciséis", "diecisiete", "dieciocho", "diecinueve", "veinte"}
-	esNum := `(dos|tres|cuatro|cinco|seis|siete|ocho|nueve|diez|once|doce|trece|catorce|quince|dieciséis|diecisiete|dieciocho|diecinueve|veinte|\d+)`
-	enNum := `(one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty|\d+)`
+		"once", "doce", "trece", "catorce", "quince", "dieciséis", "diecisiete", "dieciocho", "diecinueve", "veinte",
+		"veintiuno", "veintidós", "veintitrés", "veinticuatro", "veinticinco", "veintiséis", "veintisiete", "veintiocho",
+		"veintinueve", "treinta"}
+	if n >= len(esWords) {
+		t.Fatalf("播放器数量是 %d,西语数字表不够——请补上再跑这个测试", n)
+	}
+	// 写法长的排前面:alternation 取最左那个能配上的,「twenty」排在「twenty-one」前面会只吃掉前半截。
+	wordsNum := func(words []string) string {
+		alts := append([]string(nil), words...)
+		sort.SliceStable(alts, func(i, j int) bool { return len(alts[i]) > len(alts[j]) })
+		return "(" + strings.Join(alts, "|") + `|\d+)`
+	}
+	esNum := wordsNum(esWords[2:])
+	enNum := wordsNum(enWords[1:])
 	zhNum := `([一二三四五六七八九十]+|\d+)`
 
 	readmes := []struct {
@@ -132,7 +147,7 @@ func TestDocsListEveryPlayer(t *testing.T) {
 	}
 
 	// 日文、韩文、西语、法语、德语、意大利语、巴西葡语、越南语、俄语、乌克兰语、泰语、土耳其语 README 只核两个数量(播放器总数、不用「自动化」权限的个数);向导那一句的名单以英文、中文 README 为准。
-	// 日文的「残りの10のプレーヤー」是后一个数,总数的正则不收前面紧挨「の」的数字;越南语「10 trình phát còn lại」同理,总数的正则不收后面跟着 còn 的。Go 正则的 \b 只认 ASCII,西里尔字母后面不写 \b。
+	// 日文的「残りの10のプレーヤー」是后一个数,总数的正则不收前面紧挨「の」的数字;越南语「10 trình phát còn lại」同理,总数的正则不收后面跟着 còn 的。Go 正则的 \b 只认 ASCII,西里尔字母后面不写 \b;俄语、乌克兰语只认词干,21、31 这类数后面跟单数(「21 плеер」)。
 	for _, r := range []struct {
 		path          string
 		count, others *regexp.Regexp
@@ -145,8 +160,8 @@ func TestDocsListEveryPlayer(t *testing.T) {
 		{"../README.it.md", regexp.MustCompile(`\b(\d+) player\b`), regexp.MustCompile(`(?i)\bgli altri (\d+)\b`)},
 		{"../README.pt-BR.md", regexp.MustCompile(`\b(\d+) players\b`), regexp.MustCompile(`(?i)\bos outros (\d+)\b`)},
 		{"../README.vi.md", regexp.MustCompile(`\b(\d+) trình phát(?:$|[^ ]| [^c]| c[^ò])`), regexp.MustCompile(`\b(\d+) trình phát còn lại`)},
-		{"../README.ru.md", regexp.MustCompile(`\b(\d+) плееров`), regexp.MustCompile(`(?i)остальные (\d+)\b`)},
-		{"../README.uk.md", regexp.MustCompile(`\b(\d+) програвачів`), regexp.MustCompile(`(?i)інші (\d+)\b`)},
+		{"../README.ru.md", regexp.MustCompile(`\b(\d+) плеер`), regexp.MustCompile(`(?i)остальные (\d+)\b`)},
+		{"../README.uk.md", regexp.MustCompile(`\b(\d+) програвач`), regexp.MustCompile(`(?i)інші (\d+)\b`)},
 		{"../README.th.md", regexp.MustCompile(`เครื่องเล่น (\d+) ตัว`), regexp.MustCompile(`เครื่องเล่นอีก (\d+) ตัว`)},
 		{"../README.tr.md", regexp.MustCompile(`(?i)\btoplam (\d+) çalar`), regexp.MustCompile(`(?i)\bkalan (\d+) çalar`)},
 	} {

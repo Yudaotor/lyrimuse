@@ -69,6 +69,7 @@ func otherAppContainer(path string) string {
 // (只看容器目录在不在,不进 Data)。跟 localCacheClientPaths 对得上,TestLocalCacheContainerBundlesMatchClientPaths 守着。
 var localCacheContainerBundles = map[string][]string{
 	"kugou":   {"com.kugou.mac.Music"},
+	"kuwo":    {"com.wenyu.kwplayermac"},
 	"qq":      {"com.tencent.QQMusicMac"},
 	"netease": {"com.netease.163music"},
 	"soda":    {"com.soda.music"},

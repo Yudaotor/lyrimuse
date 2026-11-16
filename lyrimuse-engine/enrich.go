@@ -5509,7 +5509,7 @@ func rankLyricSourceResults(artist, title, album string, durationSecs float64, r
 		// 逐行正文 + 可选的逐字轨(kuwolrcx.go),译文只有从正文摘出来的烘入译文,没有罗马音
 		// (见 kuwo.go 头注)。逐字的可用性判定同网易云/QQ/酷狗(usableYRC / usableWordTiming)。
 		kuwoUsableTr, _ := usableValueAdd(kuwoLyr, kuwoTr, "zh", "", features().LyricsTranslationLanguage)
-		candidates = append(candidates, lyricCandidate{source: "kuwo", lyrics: kuwoLyr, wordTimingYRC: usableYRC(kuwoLyr, kuwoYRC), hasWordTiming: usableWordTiming(kuwoLyr, kuwoYRC), hasUsableTranslation: kuwoUsableTr, sourceReportedDurationSecs: kuwoDur, title: kuwoTitle, artist: kuwoArtist, album: kuwoAlbum, cover: kuwoCover})
+		candidates = append(candidates, lyricCandidate{source: "kuwo", lyrics: kuwoLyr, wordTimingYRC: usableYRC(kuwoLyr, kuwoYRC), hasWordTiming: usableWordTiming(kuwoLyr, kuwoYRC), hasUsableTranslation: kuwoUsableTr, sourceReportedDurationSecs: kuwoDur, title: kuwoTitle, artist: kuwoArtist, album: kuwoAlbum, cover: kuwoCover, identityFromLocalClient: kuwo.identityFromLocalClient})
 	}
 	if miguLyr != "" {
 		// 逐行 LRC + 可选的逐字轨(MRC,migumrc.go)+ 可选的中文译文(trcUrl,外语歌才有),没有罗马音;
@@ -5996,6 +5996,15 @@ func kugouSourceResult(r kugouResult) lyricSourceResult {
 	}
 }
 
+// kuwoSourceResult 把 kuwoLyric / kuwoLocalLyric 的产物摊成这一路的结果(两个产出点同 kugouSourceResult)。
+func kuwoSourceResult(r kuwoResult) lyricSourceResult {
+	return lyricSourceResult{
+		source: "kuwo", lyr: r.lyrics, yrc: r.yrc,
+		matchTitle: r.title, matchArtist: r.artist, matchAlbum: r.album, matchCover: r.cover,
+		srcDur: r.durationSecs, identityFromLocalClient: r.fromLocalClient,
+	}
+}
+
 // lyricSourceSkipFor 决定一个源这一轮发不发请求(纯函数,给 fetchScoredLyricCandidatesStreaming 的 skipSource 用,
 // 单测钉住"关掉的源不发请求、也不算冷却跳过")。关掉优先于冷却:一个既关掉又在冷却的源按"关掉"处理,不该因为它在
 // 冷却就被记进 lyrics_sources_skipped 招来重搜。
@@ -6230,12 +6239,26 @@ func fetchScoredLyricCandidatesStreaming(ctx context.Context, artist, title, alb
 		resultsCh <- lyricSourceResult{source: "lyricfind", lyr: r.lyrics, matchTitle: r.title, matchArtist: r.artist, matchAlbum: r.album, matchCover: r.cover, srcDur: r.durationSecs, plainOnly: r.plainOnly, identityFromLocalClient: r.fromLocalClient}
 	}()
 	go func() {
-		if skipSource("kuwo") {
+		// 三档同酷狗那路:关掉的源本地那份也不要;熔断冷却时只放弃网络那一半,本地命中照常交、不记跳过。
+		if only != nil && !only["kuwo"] {
 			resultsCh <- lyricSourceResult{source: "kuwo"}
 			return
 		}
-		r := kuwoLyric(ctx, artist, srcTitle, album, durationSecs)
-		resultsCh <- lyricSourceResult{source: "kuwo", lyr: r.lyrics, yrc: r.yrc, matchTitle: r.title, matchArtist: r.artist, matchAlbum: r.album, matchCover: r.cover, srcDur: r.durationSecs}
+		switch lyricSourceSkipFor("kuwo", lyricSourceEnabled, breakerPlan) {
+		case lyricSourceSkipDisabled:
+			resultsCh <- lyricSourceResult{source: "kuwo"}
+			return
+		case lyricSourceSkipCooling:
+			if r, ok := kuwoLocalLyric(artist, srcTitle, durationSecs); ok {
+				resultsCh <- kuwoSourceResult(r)
+				return
+			}
+			round.markSkippedBecause("kuwo", sharedLyricSourceBreaker().cooldownReason("kuwo"))
+			log.Printf("lyrics: source kuwo skipped this round, cooling down for another %s", breakerPlan["kuwo"].Round(time.Second))
+			resultsCh <- lyricSourceResult{source: "kuwo"}
+			return
+		}
+		resultsCh <- kuwoSourceResult(kuwoLyric(ctx, artist, srcTitle, album, durationSecs))
 	}()
 	go func() {
 		if skipSource("migu") {

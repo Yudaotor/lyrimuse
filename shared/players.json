@@ -126,6 +126,34 @@
       "note": "Mac Catalyst 应用,靠 MPNowPlayingInfoCenter 发布进 MediaRemote。processName 是 UTF-8 12 字节,内核 p_comm 上限 16 字节——再长两个汉字 pgrep -x 就会失效。「喜欢」按它菜单栏的「喜欢歌曲」、读播放条那颗心(KugouMenuControl),所以要辅助功能权限。"
     },
     {
+      "id": "kuwo_music",
+      "swiftCase": "kuwo",
+      "goConst": "playerKuwo",
+      "bundleID": "com.wenyu.kwplayermac",
+      "goBundleConst": "kuwoMusicBundleID",
+      "processName": "KuwoMusic",
+      "displayName": {"l10n": "酷我音乐"},
+      "scrobbleLabel": "Kuwo Music (macOS)",
+      "nativeLyricSource": "kuwo",
+      "positionTier": "cleanExtrapolated",
+      "republishesZeroAnchor": false,
+      "playingFromRate": false,
+      "artistArrivesLate": false,
+      "artistlessNotMusic": false,
+      "subtitlesInArtist": false,
+      "dropsSessionBetweenTracks": false,
+      "dropsSessionWhilePlaying": false,
+      "ignoresSeekCommand": false,
+      "durationFromProgressBar": false,
+      "needsAutomationPermission": false,
+      "needsFullDiskAccess": true,
+      "needsAccessibilityPermission": true,
+      "tint": {"source": "kuwo"},
+      "fallbackSymbol": "music.note",
+      "bundledIcon": "KuwoIcon",
+      "note": "原生 AppKit 的 App Store 版(带沙盒),没有 AppleScript 字典、没有 URL scheme,走 media-control。系统会话报歌名、歌手、专辑、时长和毫秒级位置,不带封面;播放中每 0.5~0.6 秒重发一次锚点,形态同 KKBOX(followsRepublishedAnchors)。暂停时 playbackRate 仍是 1,按 playing 判状态。失焦时三项播放控制走它自己的「播放控制」菜单(PlaybackMenuControl,「播放」「暂停」标题随状态变),要辅助功能权限。nativeLyricSource 填 kuwo:引擎先读它容器里当场落盘的 DocumentData/Lyric/「歌手 - 歌名 - rid.lrcx」,要完全磁盘访问。"
+    },
+    {
       "id": "soda_music",
       "swiftCase": "soda",
       "goConst": "playerSoda",
@@ -617,8 +645,8 @@
   ],
   "displayOrder": {
     "$comment": "图标网格(引导页 + 设置页)的摆放顺序。Apple Music 恒第一、auto 恒垫底;中间按语境排。",
-    "simplifiedChinese": ["apple_music", "qq_music", "netease_music", "kugou_music", "soda_music", "lx_music", "kkbox", "spotify", "amazon_music", "kaset", "pear_desktop", "reamp", "vox", "pine_player", "foobar2000", "swinsian", "plexamp", "mygo_music", "audirvana", "weread", "auto"],
-    "default": ["apple_music", "spotify", "amazon_music", "kaset", "pear_desktop", "kkbox", "qq_music", "netease_music", "kugou_music", "soda_music", "lx_music", "reamp", "vox", "pine_player", "foobar2000", "swinsian", "plexamp", "mygo_music", "audirvana", "weread", "auto"]
+    "simplifiedChinese": ["apple_music", "qq_music", "netease_music", "kugou_music", "kuwo_music", "soda_music", "lx_music", "kkbox", "spotify", "amazon_music", "kaset", "pear_desktop", "reamp", "vox", "pine_player", "foobar2000", "swinsian", "plexamp", "mygo_music", "audirvana", "weread", "auto"],
+    "default": ["apple_music", "spotify", "amazon_music", "kaset", "pear_desktop", "kkbox", "qq_music", "netease_music", "kugou_music", "kuwo_music", "soda_music", "lx_music", "reamp", "vox", "pine_player", "foobar2000", "swinsian", "plexamp", "mygo_music", "audirvana", "weread", "auto"]
   },
   "mediaProxyOwners": {
     "$comment": "媒体进程 bundle id → 宿主 App bundle id。MediaRemote 报「现在谁在放」时,Safari 报的是替它解码播放的 WebKit GPU 进程,信任列表、Last.fm 排除名单、网页播放器配对里存的却是宿主,查这些表之前先按这张表换回宿主。Chromium 系(Arc/Chrome/Edge)报浏览器自己的 bundle id,不用登记。只登记实测见过的;为什么用别名而不是把媒体进程写进信任列表,见 LyrimuseCore/Local/TrustedPlayers.swift。",

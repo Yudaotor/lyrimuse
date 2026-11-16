@@ -2901,6 +2901,7 @@
 "配置文件夹" = "Cartella configurazione";
 "配置文件无法解析，为避免覆盖已取消保存" = "Il file di configurazione non è leggibile; salvataggio annullato per non sovrascriverlo";
 "酷我音乐" = "Kuwo Music";
+"酷我音乐歌曲页" = "Pagina del brano su Kuwo Music";
 "酷狗音乐" = "Kugou Music";
 "酷狗音乐专辑页" = "Pagina dell’album su Kugou Music";
 "酷狗音乐播放的歌曲 ID 一致" = "Stesso ID brano Kugou Music in riproduzione";

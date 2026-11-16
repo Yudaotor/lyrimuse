@@ -35,6 +35,7 @@ func localCacheClientPaths() map[string][]string {
 		"amazon":     {amazonMusicLogPath(), amazonLocalStorageDir(), amazonHammerCacheDir()},
 		"lxmusic":    {lxMusicStatePath(), lxMusicDBPath(), lxMusicConfigPath()},
 		"vox":        {voxUpcomingPath()},
+		"kuwo":       {kuwoLocalLyricDir(), kuwoUpcomingPath()},
 	}
 }
 

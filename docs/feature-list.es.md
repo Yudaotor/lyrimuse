@@ -4,7 +4,7 @@
 
 [English](feature-list.md) · [简体中文](feature-list.zh-CN.md) · [繁體中文](feature-list.zh-Hant.md) · [日本語](feature-list.ja.md) · [한국어](feature-list.ko.md) · Español · [Français](feature-list.fr.md) · [Deutsch](feature-list.de.md) · [Italiano](feature-list.it.md) · [Português (Brasil)](feature-list.pt-BR.md) · [Tiếng Việt](feature-list.vi.md) · [Русский](feature-list.ru.md) · [Українська](feature-list.uk.md) · [ไทย](feature-list.th.md) · [Türkçe](feature-list.tr.md)
 
-Lyrimuse es una app de código abierto (GPL-3.0) para Mac con letra sincronizada palabra por palabra, para macOS 14 o posterior en Apple Silicon e Intel. Muestra la letra de Apple Music, Spotify, QQ Music, NetEase Cloud Music, Kugou, Soda Music, KKBOX, Amazon Music, LX Music, Kaset, Pear Desktop, reAMP, VOX, Pine Player, foobar2000, Swinsian, Plexamp, MyGo Music, Audirvana, y de YouTube Music o Spotify Web en el navegador: como letra flotante en el escritorio, en el notch, en la barra de menús, en la Touch Bar o en la ventana de letra, con traducción y romanización (pinyin, jyutping cantonés, romaji japonés, romanización coreana). Hace scrobble en Last.fm y ListenBrainz, y puede mostrar en Discord lo que escuchas. La interfaz está en chino simplificado, chino tradicional, inglés, japonés, coreano, español, francés, alemán, italiano, portugués de Brasil, vietnamita, ruso, ucraniano, tailandés y turco.
+Lyrimuse es una app de código abierto (GPL-3.0) para Mac con letra sincronizada palabra por palabra, para macOS 14 o posterior en Apple Silicon e Intel. Muestra la letra de Apple Music, Spotify, QQ Music, NetEase Cloud Music, Kugou, Kuwo, Soda Music, KKBOX, Amazon Music, LX Music, Kaset, Pear Desktop, reAMP, VOX, Pine Player, foobar2000, Swinsian, Plexamp, MyGo Music, Audirvana, y de YouTube Music o Spotify Web en el navegador: como letra flotante en el escritorio, en el notch, en la barra de menús, en la Touch Bar o en la ventana de letra, con traducción y romanización (pinyin, jyutping cantonés, romaji japonés, romanización coreana). Hace scrobble en Last.fm y ListenBrainz, y puede mostrar en Discord lo que escuchas. La interfaz está en chino simplificado, chino tradicional, inglés, japonés, coreano, español, francés, alemán, italiano, portugués de Brasil, vietnamita, ruso, ucraniano, tailandés y turco.
 
 Esta lista recoge cada función de Lyrimuse: qué hace, dónde está en Ajustes y si viene activada o desactivada al instalarla; al final aparecen todos los ajustes de la ventana Ajustes. Se mantiene junto con el código y se actualiza cada vez que cambian las funciones.
 
@@ -118,7 +118,7 @@ Cuando una nueva versión mejora el algoritmo de coincidencia o las reglas de pu
 
 ### Letra de las siguientes canciones por adelantado
 
-Lee la cola de reproducción del reproductor y obtiene por adelantado la letra de las próximas canciones; si no puede leer la cola, prioriza el resto del álbum. QQ Music, NetEase Cloud Music, Kugou, Soda Music y VOX necesitan «Acceso total al disco» para leer la cola.
+Lee la cola de reproducción del reproductor y obtiene por adelantado la letra de las próximas canciones; si no puede leer la cola, prioriza el resto del álbum. QQ Music, NetEase Cloud Music, Kugou, Kuwo, Soda Music y VOX necesitan «Acceso total al disco» para leer la cola.
 
 - Activada por omisión
 - Ajustes: Letra › Fuente › Preparar próximas canciones
@@ -128,7 +128,7 @@ Lee la cola de reproducción del reproductor y obtiene por adelantado la letra d
 
 ### Usar la letra que tu reproductor ya guardó
 
-La letra que Apple Music, Spotify, Kugou, KKBOX, Amazon Music y LX Music ya guardaron en este Mac se usa directamente: es la misma versión que muestra el reproductor, y llega antes (en Apple Music y Spotify, solo en canciones cuya letra ya mostró el reproductor). En QQ Music y NetEase Cloud Music, la canción se reconoce por la biblioteca local del reproductor, así que se toma esa misma versión sin buscar. Con reAMP, VOX, Pine Player, foobar2000, Swinsian, MyGo Music y Audirvana, y cuando Apple Music reproduce un archivo local de su biblioteca o LX Music una canción de su lista local, se usa la letra incrustada en el archivo o un .lrc del mismo nombre. QQ Music, NetEase Cloud Music y Kugou necesitan que actives «Acceso total al disco» para Lyrimuse en Ajustes del Sistema; sin él, la letra se sigue buscando en internet.
+La letra que Apple Music, Spotify, Kugou, Kuwo, KKBOX, Amazon Music y LX Music ya guardaron en este Mac se usa directamente: es la misma versión que muestra el reproductor, y llega antes (en Apple Music y Spotify, solo en canciones cuya letra ya mostró el reproductor). En QQ Music y NetEase Cloud Music, la canción se reconoce por la biblioteca local del reproductor, así que se toma esa misma versión sin buscar. Con reAMP, VOX, Pine Player, foobar2000, Swinsian, MyGo Music y Audirvana, y cuando Apple Music reproduce un archivo local de su biblioteca o LX Music una canción de su lista local, se usa la letra incrustada en el archivo o un .lrc del mismo nombre. QQ Music, Kuwo, NetEase Cloud Music y Kugou necesitan que actives «Acceso total al disco» para Lyrimuse en Ajustes del Sistema; sin él, la letra se sigue buscando en internet.
 
 - Desactivada por omisión
 - Ajustes: Reproductor › Permisos y servicios › Acceso total al disco
@@ -632,9 +632,9 @@ Muestra la letra en un navegador. «Letra web» muestra lo mismo que la ventana 
 
 <a id="feature-players"></a>
 
-### Veinte reproductores, varios a la vez o detección automática
+### Veintiún reproductores, varios a la vez o detección automática
 
-Apple Music, Spotify, QQ Music, NetEase Cloud Music, Kugou, Soda Music, LX Music, KKBOX, Amazon Music, reAMP (al estilo de Winamp), VOX (reproductor local centrado en audio sin pérdida y de alta resolución), Pine Player (reproductor local gratuito compatible con casi cualquier formato), foobar2000 (veterano reproductor local llegado de Windows), Swinsian (reproductor local pensado para bibliotecas grandes), Plexamp (el reproductor de música de Plex para tu propio servidor), MyGo Music (reproductor de código abierto para archivos locales que añade otras fuentes mediante plugins), Audirvana (reproductor de alta resolución para audiófilos), Kaset, una app de YouTube Music, Pear Desktop, una app de escritorio de código abierto para YouTube Music, y WeRead para audiolibros. Puedes elegir varios a la vez o dejar la detección automática, que sigue al reproductor que aparece en «Reproduciendo» de macOS. Admite la radio de Apple Music: cuando habla el locutor, muestra el nombre y el logotipo de la emisora.
+Apple Music, Spotify, QQ Music, NetEase Cloud Music, Kugou, Kuwo, Soda Music, LX Music, KKBOX, Amazon Music, reAMP (al estilo de Winamp), VOX (reproductor local centrado en audio sin pérdida y de alta resolución), Pine Player (reproductor local gratuito compatible con casi cualquier formato), foobar2000 (veterano reproductor local llegado de Windows), Swinsian (reproductor local pensado para bibliotecas grandes), Plexamp (el reproductor de música de Plex para tu propio servidor), MyGo Music (reproductor de código abierto para archivos locales que añade otras fuentes mediante plugins), Audirvana (reproductor de alta resolución para audiófilos), Kaset, una app de YouTube Music, Pear Desktop, una app de escritorio de código abierto para YouTube Music, y WeRead para audiolibros. Puedes elegir varios a la vez o dejar la detección automática, que sigue al reproductor que aparece en «Reproduciendo» de macOS. Admite la radio de Apple Music: cuando habla el locutor, muestra el nombre y el logotipo de la emisora.
 
 - Ajustes: Reproductor › Apps de música
 
@@ -671,7 +671,7 @@ Los reproductores que no están en la lista se pueden elegir en «Aplicaciones»
 
 ### Permisos solo cuando hacen falta
 
-Apple Music, Spotify, Kaset, VOX, Swinsian y Audirvana necesitan el permiso de «Automatización» para leer el estado de reproducción; QQ Music, NetEase Cloud Music y Kugou necesitan «Acceso total al disco» para usar su letra local y su cola, y Soda Music y VOX lo necesitan para leer su cola. La calibración del progreso de Amazon Music y Pine Player, la lista de Pine Player, los botones de aleatorio, repetición y favorito de QQ Music, NetEase Cloud Music, Kugou Music, Soda Music, Amazon Music, reAMP, Pine Player y foobar2000, el volumen de foobar2000 y, cuando otra app ocupa «Reproduciendo», los botones de reproducción de QQ Music, NetEase Cloud Music, Soda Music, Pine Player, foobar2000 y MyGo Music requieren el permiso de «Accesibilidad». Los reproductores web necesitan el permiso de «Automatización» para el navegador y activar en él «Permitir JavaScript de Apple Events». Los demás reproductores no necesitan permisos. Ajustes indica el estado actual de cada uno.
+Apple Music, Spotify, Kaset, VOX, Swinsian y Audirvana necesitan el permiso de «Automatización» para leer el estado de reproducción; QQ Music, Kuwo, NetEase Cloud Music y Kugou necesitan «Acceso total al disco» para usar su letra local y su cola, y Soda Music y VOX lo necesitan para leer su cola. La calibración del progreso de Amazon Music y Pine Player, la lista de Pine Player, los botones de aleatorio, repetición y favorito de QQ Music, NetEase Cloud Music, Kugou Music, Soda Music, Amazon Music, reAMP, Pine Player y foobar2000, el volumen de foobar2000 y, cuando otra app ocupa «Reproduciendo», los botones de reproducción de QQ Music, Kuwo Music, NetEase Cloud Music, Soda Music, Pine Player, foobar2000 y MyGo Music requieren el permiso de «Accesibilidad». Los reproductores web necesitan el permiso de «Automatización» para el navegador y activar en él «Permitir JavaScript de Apple Events». Los demás reproductores no necesitan permisos. Ajustes indica el estado actual de cada uno.
 
 - Ajustes: Reproductor › Permisos y servicios › Permiso de automatización
 - Ajustes: Reproductor › Permisos y servicios › Acceso total al disco
@@ -681,7 +681,7 @@ Apple Music, Spotify, Kaset, VOX, Swinsian y Audirvana necesitan el permiso de �
 
 ### Controles de reproducción y saltar a otro punto
 
-Reproduce, pausa, cambia de canción y arrastra la barra de progreso desde la ventana de letra o el notch expandido. Aleatorio, repetición, favorito y volumen dependen del reproductor: Apple Music, Spotify, Kaset, QQ Music, Amazon Music, reAMP, VOX, Pine Player, foobar2000, Swinsian, Plexamp, Pear Desktop y YouTube Music en el navegador admiten algunos o todos; NetEase Cloud Music, Kugou Music, Soda Music, LX Music y MyGo Music admiten favorito, y LX Music también el volumen si activas Open API en sus ajustes. Reproducir, pausar, cambiar de canción y favorito también admiten atajos globales. Cuando otra app, como un vídeo del navegador, ocupa «Reproduciendo» en el sistema, reproducir, pausar y cambiar de canción en QQ Music, NetEase Cloud Music, Soda Music, Pine Player, foobar2000 y MyGo Music pasan por sus propios menús o barra de reproducción, y no se puede saltar a otro punto arrastrando el progreso.
+Reproduce, pausa, cambia de canción y arrastra la barra de progreso desde la ventana de letra o el notch expandido. Aleatorio, repetición, favorito y volumen dependen del reproductor: Apple Music, Spotify, Kaset, QQ Music, Amazon Music, reAMP, VOX, Pine Player, foobar2000, Swinsian, Plexamp, Pear Desktop y YouTube Music en el navegador admiten algunos o todos; NetEase Cloud Music, Kugou Music, Soda Music, LX Music y MyGo Music admiten favorito, y LX Music también el volumen si activas Open API en sus ajustes. Reproducir, pausar, cambiar de canción y favorito también admiten atajos globales. Cuando otra app, como un vídeo del navegador, ocupa «Reproduciendo» en el sistema, reproducir, pausar y cambiar de canción en QQ Music, Kuwo Music, NetEase Cloud Music, Soda Music, Pine Player, foobar2000 y MyGo Music pasan por sus propios menús o barra de reproducción, y no se puede saltar a otro punto arrastrando el progreso.
 
 - Ajustes: Mostrar letra › Notch › Expandido › Mostrar controles de reproducción
 - Ajustes: Atajos de teclado › Reproducir/Pausa
@@ -694,7 +694,7 @@ Reproduce, pausa, cambia de canción y arrastra la barra de progreso desde la ve
 
 ### Abrir la página de la canción con un clic
 
-Haz clic en el menú «⋯» para abrir la página de la canción, su álbum o su artista en esa plataforma. Apple Music y KKBOX se abren en sus apps, y las canciones de Spotify en su app; el resto se abre en la web: álbumes y artistas de Spotify, QQ Music, Soda Music, Amazon Music y YouTube Music. NetEase Cloud Music y Kugou solo ofrecen la página de la canción.
+Haz clic en el menú «⋯» para abrir la página de la canción, su álbum o su artista en esa plataforma. Apple Music y KKBOX se abren en sus apps, y las canciones de Spotify en su app; el resto se abre en la web: álbumes y artistas de Spotify, QQ Music, Soda Music, Amazon Music y YouTube Music. Kuwo, NetEase Cloud Music y Kugou solo ofrecen la página de la canción.
 
 <a id="feature-about-panels"></a>
 

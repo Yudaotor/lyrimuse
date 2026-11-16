@@ -2,11 +2,11 @@ import AppKit
 import ApplicationServices
 import Foundation
 
-/// QQ / 网易云 / 酷狗 / Pine Player / reAMP / foobar2000 / MyGo Music 失去系统媒体焦点时,只按目标进程菜单栏里的播放 / 暂停、上一首、下一首;汽水的菜单栏里没有这几项,
+/// QQ / 网易云 / 酷狗 / 酷我 / Pine Player / reAMP / foobar2000 / MyGo Music 失去系统媒体焦点时,只按目标进程菜单栏里的播放 / 暂停、上一首、下一首;汽水的菜单栏里没有这几项,
 /// 按它底部播放条上的键(`SodaMusicControl.press`)。不激活 App、不模拟按键,不回落到全局媒体控制,没有跳转。
 public enum PlaybackMenuControl {
     /// 失焦时能这样控制的播放器。路由(`MusicPlaybackController.controlRoute`)和 `press` 都按它,selftest 覆盖。
-    public static let players: Set<PlaybackPlayer> = [.qqMusic, .netease, .kugou, .soda, .pinePlayer, .reamp, .foobar2000, .mygoMusic]
+    public static let players: Set<PlaybackPlayer> = [.qqMusic, .netease, .kugou, .kuwo, .soda, .pinePlayer, .reamp, .foobar2000, .mygoMusic]
 
     public enum Command: String, Equatable, Sendable {
         case playPause = "toggle-play-pause"
@@ -24,7 +24,8 @@ public enum PlaybackMenuControl {
     }
 
     /// 菜单项标题 → 哪个控制。播放 / 暂停是同一项,标题随状态变,按下去都是切换。QQ 只有中文界面(简繁两套),
-    /// 网易云只有简体和英文两套,标题取自它自己的语言包;酷狗只有简体,「播放/暂停」标题不随状态变。reAMP(英文、俄文两套)
+    /// 网易云只有简体和英文两套,标题取自它自己的语言包;酷狗只有简体,「播放/暂停」标题不随状态变;酷我只有简体,
+    /// 在放时是「暂停」、停着时是「播放」。reAMP(英文、俄文两套)
     /// 的播放和暂停是两项:「暂停」在放着和暂停着时按下去都是切换,播放 / 暂停只按它,不认「播放」;foobar2000(只有英文)同样只按
     /// Pause。纯函数,selftest 覆盖。
     public static func command(forMenuTitle title: String, player: PlaybackPlayer) -> Command? {
@@ -49,6 +50,13 @@ public enum PlaybackMenuControl {
             case "播放/暂停": return .playPause
             case "下一曲": return .nextTrack
             case "上一曲": return .previousTrack
+            default: return nil
+            }
+        case .kuwo:
+            switch title {
+            case "播放", "暂停", "播放/暂停": return .playPause
+            case "下一首": return .nextTrack
+            case "上一首": return .previousTrack
             default: return nil
             }
         case .mygoMusic:
@@ -77,7 +85,7 @@ public enum PlaybackMenuControl {
         }
     }
 
-    /// 播放 / 暂停那一项的标题说明它在不在放:QQ、网易云在放时是「暂停」、停着时是「播放」;标题不随状态变(酷狗、网易云的
+    /// 播放 / 暂停那一项的标题说明它在不在放:QQ、网易云、酷我在放时是「暂停」、停着时是「播放」;标题不随状态变(酷狗、网易云的
     /// 「播放/暂停」、Pine)或认不出为 nil。纯函数,selftest 覆盖。
     public static func showsPlaying(menuTitle title: String, player: PlaybackPlayer) -> Bool? {
         guard titleShowsState(player) else { return nil }
@@ -89,7 +97,7 @@ public enum PlaybackMenuControl {
     }
 
     /// 播放 / 暂停那一项的标题随在不在放而变(`showsPlaying` 认得出)的播放器。
-    public static func titleShowsState(_ player: PlaybackPlayer) -> Bool { player == .qqMusic || player == .netease }
+    public static func titleShowsState(_ player: PlaybackPlayer) -> Bool { player == .qqMusic || player == .netease || player == .kuwo }
 
     /// 菜单项的快捷键 → 哪个控制。Pine 有十种界面语言、菜单标题不在它的语言包里,按快捷键认:空格是播放 / 暂停,左、右方向键是
     /// 上一首、下一首,都不带 ⌘(修饰键 `noCommandModifier`)。纯函数,selftest 覆盖。

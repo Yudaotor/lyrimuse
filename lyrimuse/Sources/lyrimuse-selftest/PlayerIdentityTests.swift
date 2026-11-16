@@ -273,8 +273,45 @@ func runPlayerIdentityTests() {
             expectEqual(shown(menuRoute, true, false, false), false, "播放键反馈: 菜单连按第二下按显示的翻回去")
             expectEqual(shown(menuRoute, true, false, true), true, "播放键反馈: 菜单回报前回读已到 → 跟真值,不再翻")
             expectEqual(shown(menuRoute, false, true, false), false, "播放键反馈: 回读先到的是暂停 → 跟真值")
-            expectEqual(PlaybackMenuControl.players, [.qqMusic, .netease, .kugou, .soda, .pinePlayer, .reamp, .foobar2000, .mygoMusic],
-                        "失焦按界面控制: QQ 音乐、网易云、酷狗、Pine Player、reAMP 按菜单,汽水按播放条")
+            expectEqual(PlaybackMenuControl.players, [.qqMusic, .netease, .kugou, .kuwo, .soda, .pinePlayer, .reamp, .foobar2000, .mygoMusic],
+                        "失焦按界面控制: QQ 音乐、网易云、酷狗、酷我、Pine Player、reAMP 按菜单,汽水按播放条")
+            for (t, command) in [("播放", Command.playPause), ("暂停", .playPause), ("播放/暂停", .playPause),
+                                 ("下一首", .nextTrack), ("上一首", .previousTrack)] {
+                expectEqual(PlaybackMenuControl.command(forMenuTitle: t, player: .kuwo), command, "酷我菜单: \(t)")
+            }
+            for t in ["下一曲", "静音", "增加音量", "收藏/取消收藏"] {
+                expectEqual(PlaybackMenuControl.command(forMenuTitle: t, player: .kuwo), nil, "酷我菜单: \(t) 不认")
+            }
+            do {
+                typealias K = KuwoSessionAnchor
+                let kuwo = PlaybackPlayer.kuwo.bundleIdentifier
+                let base = 1_794_838_168.448_114
+                let raw = MediaControlMicros.timestampString(base * 1_000_000)
+                func secs(_ s: String?) -> Double { s.flatMap { MediaControlMicros.date(fromTimestampString: $0)?.timeIntervalSince1970 } ?? -1 }
+                expectEqual(K.lead(bundleID: kuwo, playing: true), K.leadSecs, "酷我锚点: 在放的往后挪")
+                expectEqual(K.lead(bundleID: kuwo, playing: false), 0, "酷我锚点: 暂停帧报的是停声位置,不挪(暂停时速率仍是 1,只认 playing)")
+                expectEqual(K.lead(bundleID: kuwo, playing: nil), 0, "酷我锚点: 不知道在不在放不挪")
+                expectEqual(K.lead(bundleID: PlaybackPlayer.kkbox.bundleIdentifier, playing: true), 0, "酷我锚点: 只对酷我")
+                expectEqual(abs(secs(K.shifted(raw, by: K.leadSecs)) - (base + K.leadSecs)) < 0.000_01, true, "酷我锚点: 时刻往后挪")
+                expectEqual(K.shifted(raw, by: 0), raw, "酷我锚点: 不挪原样交回")
+                expectEqual(K.shifted("not a time", by: K.leadSecs), "not a time", "酷我锚点: 时刻读不出原样交回")
+                let now = Date(timeIntervalSince1970: base + 2)
+                let probed = K.probedPosition(bundleID: kuwo, playing: true, elapsed: 30, anchorAt: base, rate: 1, duration: 120, now: now)
+                expectEqual(abs((probed ?? -1) - (32 - K.leadSecs)) < 0.000_01, true, "酷我单问: 同主路扣掉这一截")
+                expectEqual(K.probedPosition(bundleID: kuwo, playing: true, elapsed: 119.95, anchorAt: base, rate: 1, duration: 120, now: now),
+                            120, "酷我单问: 不越过曲长")
+                expectEqual(K.probedPosition(bundleID: kuwo, playing: false, elapsed: 30, anchorAt: base, rate: 1, duration: 120, now: now),
+                            nil, "酷我单问: 暂停的原样交回")
+                let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+                let client = (try? String(contentsOfFile: root.appendingPathComponent("LyrimuseCore/Local/MediaControlClient.swift").path,
+                                          encoding: .utf8)) ?? ""
+                expectEqual(sourceHas(client, "timestamp = KuwoSessionAnchor.shifted(mygo.timestamp, by: kuwoLead)"), true,
+                            "酷我锚点接线: 解码系统会话时挪时刻")
+                expectEqual(sourceHas(client, "times.elapsedTimeNow.map { $0 + lead - kuwoLead * (plexamp.rate ?? 1) }"), true,
+                            "酷我锚点接线: 外推值同扣")
+                expectEqual(client.components(separatedBy: "snapshot = kuwoProbedSnapshot(probed.snapshot, anchor: probed.anchor, now: now)").count - 1,
+                            2, "酷我锚点接线: 两条单问路径都扣")
+            }
             for command in [Command.playPause, .nextTrack, .previousTrack] {
                 expectEqual(MusicPlaybackController.controlRoute(exclusivelyAppleMusic: false, focusFallback: nil,
                     focusHeldElsewhere: true, directQueryFallback: .kugou, mediaControlCommand: command.rawValue),
@@ -293,12 +330,13 @@ func runPlayerIdentityTests() {
             for (player, t, playing) in [(PlaybackPlayer.qqMusic, "暂停", true as Bool?), (.qqMusic, "暫停", true), (.qqMusic, "播放", false),
                                          (.netease, "暂停", true), (.netease, "Pause", true), (.netease, "播放", false),
                                          (.netease, "Play", false), (.netease, "播放/暂停", nil), (.qqMusic, "播放模式", nil),
-                                         (.kugou, "播放/暂停", nil), (.kugou, "暂停", nil), (.pinePlayer, "播放", nil)] {
+                                         (.kugou, "播放/暂停", nil), (.kugou, "暂停", nil), (.pinePlayer, "播放", nil),
+                                         (.kuwo, "暂停", true), (.kuwo, "播放", false), (.kuwo, "播放/暂停", nil)] {
                 expectEqual(PlaybackMenuControl.showsPlaying(menuTitle: t, player: player), playing,
                             "菜单标题看在不在放: \(player) 「\(t)」")
             }
-            expectEqual(PlaybackPlayer.allCases.filter(PlaybackMenuControl.titleShowsState), [.qqMusic, .netease],
-                        "菜单标题看在不在放: 只有 QQ、网易云的标题随状态变")
+            expectEqual(PlaybackPlayer.allCases.filter(PlaybackMenuControl.titleShowsState), [.qqMusic, .netease, .kuwo],
+                        "菜单标题看在不在放: 只有 QQ、网易云、酷我的标题随状态变")
             for command in [Command.playPause, .nextTrack, .previousTrack] {
                 expectEqual(MusicPlaybackController.controlRoute(exclusivelyAppleMusic: false, focusFallback: nil,
                     focusHeldElsewhere: true, directQueryFallback: .reamp, mediaControlCommand: command.rawValue),
@@ -564,6 +602,7 @@ func runPlayerIdentityTests() {
             .qqMusic: ("qq_music", "com.tencent.QQMusicMac"),
             .netease: ("netease_music", "com.netease.163music"),
             .kugou: ("kugou_music", "com.kugou.mac.Music"),
+            .kuwo: ("kuwo_music", "com.wenyu.kwplayermac"),
             .soda: ("soda_music", "com.soda.music"),
             .kkbox: ("kkbox", "com.kkbox.electron-app"),
             .spotify: ("spotify", "com.spotify.client"),
@@ -1240,6 +1279,8 @@ func runPlayerIdentityTests() {
             .qqMusic: (.qqMusic, [.extendedControls, .repeatOne, .favorite, .resume, .learnsAnchorLag, .catalogMenuRows]),
             .netease: (.netease, [.favorite, .resume, .learnsAnchorLag, .pausedAnchorStartsOnPlay, .catalogMenuRows]),
             .kugou: (nil, [.favorite, .resume, .lateAnchorProbe, .resetAnchorCorrection, .stampsCaptureTime, .catalogMenuRows]),
+            .kuwo: (.kuwo, [.resume, .gaplessLead, .lateAnchorProbe, .learnsAnchorLag, .followsRepublishedAnchors,
+                            .snapsToReportedPosition, .stampsCaptureTime, .systemNeverHasArtwork, .catalogMenuRows]),
             .soda: (.soda, [.favorite, .gaplessLead, .lateAnchorProbe, .learnsAnchorLag, .catalogMenuRows]),
             .kkbox: (.kkbox, [.gaplessLead, .lateAnchorProbe, .learnsAnchorLag, .followsRepublishedAnchors,
                               .snapsToReportedPosition, .stampsCaptureTime, .catalogMenuRows]),
@@ -1277,7 +1318,7 @@ func runPlayerIdentityTests() {
         let anyURL = URL(string: "https://example.com/song")!
         let allLinks = PlatformLinks(appleMusic: anyURL, qqSong: anyURL, qqAlbum: anyURL, qqArtist: anyURL,
                                      neteaseSong: anyURL, spotifySong: anyURL, kkboxSong: anyURL, amazonSong: anyURL,
-                                     youtubeMusicSong: anyURL, sodaSong: anyURL)
+                                     youtubeMusicSong: anyURL, sodaSong: anyURL, kuwoSong: anyURL)
         let spatialCue = LRCParser.SpatialAudioCue(lyricOffsetMs: 1672, stereoDurationMs: 196373)
         for (player, row) in table.sorted(by: { $0.key.rawValue < $1.key.rawValue }) {
             let b = player.bundleIdentifier
@@ -1496,19 +1537,19 @@ func runPlayerIdentityTests() {
     // TestPlayersNeedFullDiskAccessMatchesClientPaths 按真实路径对账),含 auto 时按超集算。
     do {
         typealias P = Set<PlaybackPlayer>
-        expectEqual(PlaybackPlayer.allCases.filter(\.needsFullDiskAccess), [.qqMusic, .netease, .kugou, .soda, .vox],
-                    "完全磁盘访问判据: 客户端文件在私有容器里的就这五家(汽水是沙盒版,VOX 是播放列表库)")
-        expectEqual(P([.auto]).playersNeedingFullDiskAccess, [.qqMusic, .netease, .kugou, .soda, .vox],
+        expectEqual(PlaybackPlayer.allCases.filter(\.needsFullDiskAccess), [.qqMusic, .netease, .kugou, .kuwo, .soda, .vox],
+                    "完全磁盘访问判据: 客户端文件在私有容器里的就这六家(汽水、酷我是沙盒版,VOX 是播放列表库)")
+        expectEqual(P([.auto]).playersNeedingFullDiskAccess, [.qqMusic, .netease, .kugou, .kuwo, .soda, .vox],
                     "完全磁盘访问判据: 纯 auto 按超集算")
-        expectEqual(PlaybackPlayer.allCases.compactMap(\.fullDiskAccessUse), [.readsLyricsAndQueue, .readsLyricsAndQueue, .readsLyricsAndQueue, .readsQueue, .readsQueue],
-                    "完全磁盘访问判据: QQ / 网易云 / 酷狗读歌词缓存和队列,汽水、VOX 只读队列,授权说明和体检提示按这个分开写")
+        expectEqual(PlaybackPlayer.allCases.compactMap(\.fullDiskAccessUse), [.readsLyricsAndQueue, .readsLyricsAndQueue, .readsLyricsAndQueue, .readsLyricsAndQueue, .readsQueue, .readsQueue],
+                    "完全磁盘访问判据: QQ / 网易云 / 酷狗 / 酷我读歌词缓存和队列,汽水、VOX 只读队列,授权说明和体检提示按这个分开写")
         expectEqual(P([.kugou, .spotify]).playersNeedingFullDiskAccess, [.kugou],
                     "完全磁盘访问判据: 多选里只挑出要授权的那几家")
         expectEqual(P([.spotify, .soda, .appleMusic]).playersNeedingFullDiskAccess, [.soda],
                     "完全磁盘访问判据: Spotify / Apple Music 的文件不在私有容器里,不出现;汽水在")
         // 状态文件里的来源名(localCacheSource)要跟引擎 localCacheClientPaths 的键一致 —— 对不上的话结论永远是「还没确认」。
         expectEqual(PlaybackPlayer.allCases.filter(\.needsFullDiskAccess).map(\.localCacheSource),
-                    ["qq", "netease", "kugou", "soda", "vox"],
+                    ["qq", "netease", "kugou", "kuwo", "soda", "vox"],
                     "完全磁盘访问判据: 要授权的每家都有引擎状态文件里的来源名(有自家歌词源的就是它,VOX 是 vox)")
     }
 
@@ -1517,22 +1558,23 @@ func runPlayerIdentityTests() {
     do {
         typealias P = Set<PlaybackPlayer>
         expectEqual(PlaybackPlayer.allCases.filter(\.needsAccessibilityPermission),
-                    [.qqMusic, .netease, .kugou, .soda, .amazonMusic, .reamp, .pinePlayer, .foobar2000, .mygoMusic, .audirvana],
-                    "辅助功能判据: 读界面的 Amazon Music / Pine Player、按菜单控制的 QQ 音乐/网易云/酷狗/reAMP、按播放条控制的汽水和 Audirvana(改 shared/players.json 的 needsAccessibilityPermission)")
+                    [.qqMusic, .netease, .kugou, .kuwo, .soda, .amazonMusic, .reamp, .pinePlayer, .foobar2000, .mygoMusic, .audirvana],
+                    "辅助功能判据: 读界面的 Amazon Music / Pine Player、按菜单控制的 QQ 音乐/网易云/酷狗/酷我/reAMP、按播放条控制的汽水和 Audirvana(改 shared/players.json 的 needsAccessibilityPermission)")
         expectEqual(PlaybackPlayer.allCases.compactMap(\.accessibilityUse),
-                    [.switchesPlayMode, .controlsPlayback, .controlsPlayback, .controlsPlayback, .calibratesProgress, .pressesPlayMode,
+                    [.switchesPlayMode, .controlsPlayback, .controlsPlayback, .controlsTransport, .controlsPlayback, .calibratesProgress, .pressesPlayMode,
                      .refinesProgress, .pressesPlayMode, .controlsTransport, .adjustsModeAndVolume],
                     "辅助功能判据: QQ 音乐是切模式、网易云/酷狗/汽水是喜欢加失焦播放、Amazon Music 是读进度加随机循环、reAMP 只有随机循环、Pine Player 是读进度条补位置加失焦播放,授权说明和体检提示按这个分开写")
         expectEqual(PlaybackPlayer.allCases.compactMap(\.automationUse),
                     [.refinesProgress, .refinesProgress, .readsTrack, .readsTrack, .refinesProgress, .readsTrack],
                     "自动化判据: Apple Music、Spotify、Swinsian 只让进度更准,Kaset、VOX、Audirvana 的曲目整份靠它,引导页和设置页的说明按这个分开写")
-        expectEqual(P([.auto]).playersNeedingAccessibility, [.qqMusic, .netease, .kugou, .soda, .amazonMusic, .reamp, .pinePlayer, .foobar2000, .mygoMusic, .audirvana],
+        expectEqual(P([.auto]).playersNeedingAccessibility, [.qqMusic, .netease, .kugou, .kuwo, .soda, .amazonMusic, .reamp, .pinePlayer, .foobar2000, .mygoMusic, .audirvana],
                     "辅助功能判据: 纯 auto 按超集算")
         expectEqual(P([.kugou]).playersNeedingAccessibility, [.kugou], "酷狗单选也显示 AX 授权入口(喜欢键、失焦播放控制要它)")
         expectEqual(P([.netease]).playersNeedingAccessibility, [.netease], "网易云单选也显示 AX 授权入口")
         expectEqual(PlaybackPlayer.netease.accessibilityUse, .controlsPlayback, "网易云授权用途不承诺模式或进度")
         expectEqual(P([.mygoMusic]).playersNeedingAccessibility, [.mygoMusic], "MyGo: 单选显示 AX 授权入口")
         expectEqual(PlaybackPlayer.mygoMusic.accessibilityUse, .controlsTransport, "MyGo: 权限用途只承诺失焦三项控制")
+        expectEqual(PlaybackPlayer.kuwo.accessibilityUse, .controlsTransport, "酷我: 权限用途只承诺失焦三项控制(没有喜欢、模式菜单可读)")
         expectEqual(PlaybackPlayer.soda.accessibilityUse, .controlsPlayback, "汽水授权用途: 喜欢加失焦时按播放条控制播放")
         expectEqual(P([.amazonMusic, .spotify]).playersNeedingAccessibility, [.amazonMusic],
                     "辅助功能判据: 多选里只挑出要授权的那一家")
@@ -3332,6 +3374,14 @@ private func amazonFavoriteChecks() {
     expectEqual(kwLinks.songLink(forPlayerBundleID: lxBundle)?.url, kwPage, "洛雪歌曲页: 来自酷我给酷我那页")
     expectEqual(kwLinks.songWebLink(forPlayerBundleID: lxBundle), kwPage, "洛雪歌曲页: 给 App 外面(Discord)的也是酷我那页")
     expectEqual(kwLinks.songLink(forPlayerBundleID: PlaybackPlayer.qqMusic.bundleIdentifier)?.url, qqPage, "酷我那页只给洛雪,别的播放器照旧")
+    let kwBundle = PlaybackPlayer.kuwo.bundleIdentifier
+    expectEqual(PlatformLinks.kuwoSongURL(kuwoSongID: "6680"), URL(string: "https://www.kuwo.cn/play_detail/6680"), "酷我歌曲页: 曲目 id 拼进 play_detail")
+    expectEqual(["", "12a", "MUSIC_6680", String(repeating: "9", count: 21)].map { PlatformLinks.kuwoSongURL(kuwoSongID: $0) } + [PlatformLinks.kuwoSongURL(kuwoSongID: nil)],
+                [nil, nil, nil, nil, nil], "酷我歌曲页: 空的、带字母的、带前缀的、过长的不拼")
+    expectEqual(kwLinks.songLink(forPlayerBundleID: kwBundle)?.platform, .kuwo, "酷我在放给酷我那页")
+    expectEqual(kwLinks.songWebLink(forPlayerBundleID: kwBundle), kwPage, "酷我歌曲页: 给 App 外面(Discord)的也是它")
+    expectEqual(PlatformLinks(appleMusic: nil, qqSong: qqPage, qqAlbum: nil, qqArtist: nil, neteaseSong: nePage)
+                    .songLink(forPlayerBundleID: kwBundle) == nil, true, "酷我没找到歌曲页不拿 QQ / 网易云顶上")
 
     let kgRaw = "https://www.kugou.com/mixsong/j2sek95.html"
     expectEqual(PlatformLinks.kugouSongURL(kgRaw), URL(string: kgRaw), "酷狗歌曲页: 引擎存的网页歌曲页原样给出")

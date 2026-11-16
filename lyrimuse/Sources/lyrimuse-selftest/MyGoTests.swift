@@ -254,7 +254,7 @@ func runMyGoTests() {
                     true, "MyGo 接线: 单问那份换时钟后补回条目标识")
         expectEqual(sourceHas(favorite, "guard let id = currentLocalTrackID(confirm: true), let now = liked(id: id) else { return false }"),
                     true, "MyGo 接线: 按「喜欢」菜单之前按开着的文件当场再核一次放的是本机文件")
-        expectEqual(sourceHas(client, "timestamp = mygo.timestamp"), true, "MyGo 接线: 下游拿到的是挪过的时刻")
+        expectEqual(sourceHas(client, "timestamp = KuwoSessionAnchor.shifted(mygo.timestamp, by: kuwoLead)"), true, "MyGo 接线: 下游拿到的是挪过的时刻")
         expectEqual(sourceHas(client, "snapshot.republishDueBy = foobarLoopCheckAt(bundleID: probed.bundleIdentifier"), true,
                     "MyGo 接线: 焦点被占时单问那份同样取余、排补查")
         expectEqual(PlaybackPlayer.mygoMusic.durationFromProgressBar, true, "MyGo 接线: 插件流不报时长时按界面进度条补")

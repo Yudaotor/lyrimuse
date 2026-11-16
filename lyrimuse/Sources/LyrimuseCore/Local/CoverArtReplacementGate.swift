@@ -25,9 +25,10 @@ public enum CoverArtReplacementGate {
     }
 
     /// 这个播放器的系统会话里从来没有封面。Kaset:播放中把会话交给 WebKit,那份不带图;它自己发的只有歌名歌手。
+    /// 酷我:只报歌名、歌手、专辑、时长和位置(见 02 章决策 263)。
     /// 对它们「没有图就显示占位音符」那条不成立 —— 等不到系统的图,整首都会是占位音符。
     public static func systemNeverHasArtwork(bundleID: String?) -> Bool {
-        bundleID == PlaybackPlayer.kaset.bundleIdentifier
+        bundleID == PlaybackPlayer.kaset.bundleIdentifier || bundleID == PlaybackPlayer.kuwo.bundleIdentifier
     }
 
     /// 系统会话里这一首没有封面时,改用引擎按歌手 + 歌名匹配到的那张(`reason` 的 `systemNeverHasArtwork` 传它)。

@@ -27,13 +27,14 @@ enum IdlePlaybackActions {
     /// 最近那份会话是 iPad 版报的(`PlayerProcess.sessionIsOtherClient`)也不给:它没有本体那份菜单,按了会把本体放起来。
     /// Pear Desktop 开着、本机接口能用时给,直接经接口开播;它冷启动时自己跳到前台,没开着时只给「打开」(02 章决策 228)。
     /// Swinsian 同理:开着时发它的脚本 `play`,冷启动会自己跳到前台,没开着只给「打开」(02 章决策 241)。
+    /// 酷我同理:开着时按它菜单里的播放(`resumeViaMenu`),隐藏不激活启动它照样跳到前台,没开着只给「打开」(02 章决策 263)。
     /// Plexamp 不给:停播页只在它整个列表放完、撤掉会话时出现,这时它已清掉播放队列,接口发 play 也放不起来(02 章决策 242)。
     static func canResume(_ player: PlaybackPlayer) -> Bool {
         guard !PlayerProcess.sessionIsOtherClient(bundleID: player.bundleIdentifier) else { return false }
         return switch player {
         case .appleMusic, .spotify, .kugou, .qqMusic, .netease, .pinePlayer, .foobar2000, .lxMusic: true
         case .pearDesktop: PearDesktopAPI.shared.canControl()
-        case .swinsian: PlayerProcess.pid(bundleID: player.bundleIdentifier) != nil
+        case .swinsian, .kuwo: PlayerProcess.pid(bundleID: player.bundleIdentifier) != nil
         default: false
         }
     }
@@ -59,7 +60,7 @@ enum IdlePlaybackActions {
                 }
             case .spotify:
                 ok = MusicPlaybackController.resumeSpotifyPlayback()
-            case .kugou, .qqMusic, .netease, .pinePlayer, .foobar2000:
+            case .kugou, .qqMusic, .netease, .pinePlayer, .foobar2000, .kuwo:
                 ok = await resumeViaMenu(player)
             case .lxMusic:
                 ok = LXMusicOpenAPI.shared.sendDirect("play", arguments: [])
@@ -78,7 +79,7 @@ enum IdlePlaybackActions {
     }
 
     /// 没开着就后台启动(不激活、隐藏窗口),等菜单出现再按播放 / 暂停。冷启动到菜单出现:Pine 约 2 秒、QQ 约 4 秒、酷狗约
-    /// 6 秒、网易云约 12 秒,最多等 25 秒。停播页说明它这时没在放,按一下就是开播。标题随状态变的(QQ、网易云)按完读回标题确认
+    /// 6 秒、网易云约 12 秒,最多等 25 秒。停播页说明它这时没在放,按一下就是开播。标题随状态变的(QQ、网易云、酷我)按完读回标题确认
     /// 放起来了:网易云菜单刚出现时按了常不接,隔 2 秒还没放就再按,最多按 4 次。
     nonisolated static func resumeViaMenu(_ player: PlaybackPlayer) async -> Bool {
         guard await launchHiddenIfNeeded(player) else { return false }

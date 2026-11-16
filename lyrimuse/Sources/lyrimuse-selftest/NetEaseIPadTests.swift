@@ -479,7 +479,7 @@ func runNetEaseIPadTests() {
         expectEqual([sourceHas(client, "elapsed: times.elapsedTime, timestamp: times.timestamp),"),
                      sourceHas(client, "playing: playing, elapsed: names.elapsed, timestamp: times.timestamp, rate: rate)"),
                      sourceHas(client, "elapsedNow: plexamp.elapsed == names.elapsed && mygo.timestamp == plexamp.timestamp")
-                        && sourceHas(client, "? times.elapsedTimeNow.map { $0 + lead } : nil,"),
+                        && sourceHas(client, "? times.elapsedTimeNow.map { $0 + lead - kuwoLead * (plexamp.rate ?? 1) } : nil,"),
                      sourceHas(watcher, "NetEaseIPadNowPlaying.noteBareStart(timestamp: timestamp, full: payload[\"elapsedTime\"] != nil)"),
                      sourceHas(watcher, "let elapsed = (identity[\"elapsedTime\"] as? NSNumber)?.doubleValue")],
                     [true, true, true, true, true], "iPad 网易云 接线: 开播提前量轮询、事件流两路都用整理过的进度")

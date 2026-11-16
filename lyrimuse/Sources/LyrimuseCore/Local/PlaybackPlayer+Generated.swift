@@ -16,6 +16,8 @@ public enum PlaybackPlayer: String, CaseIterable, Identifiable, Codable, Hashabl
     case netease = "netease_music"
     /// Mac Catalyst 应用,靠 MPNowPlayingInfoCenter 发布进 MediaRemote。processName 是 UTF-8 12 字节,内核 p_comm 上限 16 字节——再长两个汉字 pgrep -x 就会失效。「喜欢」按它菜单栏的「喜欢歌曲」、读播放条那颗心(KugouMenuControl),所以要辅助功能权限。
     case kugou = "kugou_music"
+    /// 原生 AppKit 的 App Store 版(带沙盒),没有 AppleScript 字典、没有 URL scheme,走 media-control。系统会话报歌名、歌手、专辑、时长和毫秒级位置,不带封面;播放中每 0.5~0.6 秒重发一次锚点,形态同 KKBOX(followsRepublishedAnchors)。暂停时 playbackRate 仍是 1,按 playing 判状态。失焦时三项播放控制走它自己的「播放控制」菜单(PlaybackMenuControl,「播放」「暂停」标题随状态变),要辅助功能权限。nativeLyricSource 填 kuwo:引擎先读它容器里当场落盘的 DocumentData/Lyric/「歌手 - 歌名 - rid.lrcx」,要完全磁盘访问。
+    case kuwo = "kuwo_music"
     /// Electron 应用,走 media-control。只在开播发一个 elapsed=0 锚点、播放中不再重发(实测 42 秒里 elapsedTime 恒 0、timestamp 冻在开播那一刻),位置全靠墙钟外推,所以归 cleanExtrapolated —— 这也正是它此前作为信任播放器走的那一档,内置化不改变位置行为。那个 0 锚点有概率被原样重发一次,由 zeroAnchorRepublishWindowSecs 的时间窗兜住。processName 是 UTF-8 12 字节,与酷狗同长,在内核 p_comm 16 字节上限内。「喜欢」读、按底部播放条那颗心,失焦时三项播放控制也按这条播放条上的键(SodaMusicControl),所以要辅助功能权限。
     case soda = "soda_music"
     /// Electron 应用,走 media-control,没有 AppleScript 字典、没有沙盒。播放中约每 1.06 秒重发一次锚点,位置精确到微秒、跟墙钟一致(实测 92 秒累计偏差 0.8 毫秒),归 cleanExtrapolated —— 跟它此前作为信任播放器走的是同一档,内置化不改变位置行为。开播先发一帧只有歌名的(歌手空、时长 0、rate 0),约半秒后才补齐,所以 artistArrivesLate;开播那个 0 锚点没见过原样重发。切歌时会先撤掉 Now Playing(多数 4~5 秒,刚开播一张专辑后的第一次切歌实测有过 19 秒),暂停着点开新列表加载时也撤,所以 dropsSessionBetweenTracks。歌手名取每首歌自己的 artist_roles,同一个歌手也时有时无括号里的译名(`Taylor Swift` / `Taylor Swift (泰勒絲)`、`周杰倫` / `周杰倫 (Jay Chou)`)。nativeLyricSource 填 kkbox:不是歌词源(接入走不通,见 kkboxlyrics.go 头注),是用它放歌时读它自己缓存里的那份歌词,享受同源加权。processName 5 字节。
@@ -61,6 +63,7 @@ public enum PlaybackPlayer: String, CaseIterable, Identifiable, Codable, Hashabl
         case .qqMusic: return "com.tencent.QQMusicMac"
         case .netease: return "com.netease.163music"
         case .kugou: return "com.kugou.mac.Music"
+        case .kuwo: return "com.wenyu.kwplayermac"
         case .soda: return "com.soda.music"
         case .kkbox: return "com.kkbox.electron-app"
         case .spotify: return "com.spotify.client"
@@ -88,6 +91,7 @@ public enum PlaybackPlayer: String, CaseIterable, Identifiable, Codable, Hashabl
         case .qqMusic: return "qq"
         case .netease: return "netease"
         case .kugou: return "kugou"
+        case .kuwo: return "kuwo"
         case .soda: return "soda"
         case .kkbox: return "kkbox"
         case .amazonMusic: return "amazon"
@@ -114,6 +118,7 @@ public enum PlaybackPlayer: String, CaseIterable, Identifiable, Codable, Hashabl
         case .qqMusic: return "noisyFloored"
         case .netease: return "noisyFloored"
         case .kugou: return "cleanExtrapolated"
+        case .kuwo: return "cleanExtrapolated"
         case .soda: return "cleanExtrapolated"
         case .kkbox: return "cleanExtrapolated"
         case .spotify: return "precise"
@@ -158,6 +163,7 @@ public enum PlaybackPlayer: String, CaseIterable, Identifiable, Codable, Hashabl
         case .qqMusic: return true
         case .netease: return true
         case .kugou: return true
+        case .kuwo: return true
         case .soda: return true
         case .vox: return true
         default: return false
@@ -171,6 +177,7 @@ public enum PlaybackPlayer: String, CaseIterable, Identifiable, Codable, Hashabl
         case .qqMusic: return true
         case .netease: return true
         case .kugou: return true
+        case .kuwo: return true
         case .soda: return true
         case .amazonMusic: return true
         case .reamp: return true

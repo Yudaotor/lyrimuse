@@ -4,7 +4,7 @@
 
 [English](feature-list.md) · [简体中文](feature-list.zh-CN.md) · [繁體中文](feature-list.zh-Hant.md) · [日本語](feature-list.ja.md) · [한국어](feature-list.ko.md) · [Español](feature-list.es.md) · [Français](feature-list.fr.md) · [Deutsch](feature-list.de.md) · [Italiano](feature-list.it.md) · [Português (Brasil)](feature-list.pt-BR.md) · [Tiếng Việt](feature-list.vi.md) · [Русский](feature-list.ru.md) · [Українська](feature-list.uk.md) · [ไทย](feature-list.th.md) · Türkçe
 
-Lyrimuse, kelime kelime eşzamanlı şarkı sözleri için açık kaynaklı (GPL-3.0) bir Mac uygulamasıdır; Apple Silicon ve Intel işlemcili Mac’lerde macOS 14 veya sonraki sürümlerde çalışır. Apple Music, Spotify, QQ Music, NetEase Cloud Music, Kugou, Soda Music, KKBOX, Amazon Music, LX Music, Kaset, Pear Desktop, reAMP, VOX, Pine Player, foobar2000, Swinsian, Plexamp, MyGo Music, Audirvana ile tarayıcıda çalan YouTube Music veya Spotify Web için şarkı sözlerini gösterir: masaüstünde yüzen, çentiğin yanında, menü çubuğunda, Touch Bar’da veya tam sayfa bir şarkı sözü penceresinde; çeviri ve telaffuzla birlikte (pinyin, Kantonca Jyutping, Japonca romaji, Korece Latin harfleriyle yazım). Last.fm ve ListenBrainz’e skroplar, çaldığınız parçayı Discord’da gösterebilir. Arayüz dilleri: İngilizce, Basitleştirilmiş Çince, Geleneksel Çince, Japonca, Korece, İspanyolca, Fransızca, Almanca, İtalyanca, Brezilya Portekizcesi, Vietnamca, Rusça, Ukraynaca, Tayca ve Türkçe.
+Lyrimuse, kelime kelime eşzamanlı şarkı sözleri için açık kaynaklı (GPL-3.0) bir Mac uygulamasıdır; Apple Silicon ve Intel işlemcili Mac’lerde macOS 14 veya sonraki sürümlerde çalışır. Apple Music, Spotify, QQ Music, NetEase Cloud Music, Kugou, Kuwo, Soda Music, KKBOX, Amazon Music, LX Music, Kaset, Pear Desktop, reAMP, VOX, Pine Player, foobar2000, Swinsian, Plexamp, MyGo Music, Audirvana ile tarayıcıda çalan YouTube Music veya Spotify Web için şarkı sözlerini gösterir: masaüstünde yüzen, çentiğin yanında, menü çubuğunda, Touch Bar’da veya tam sayfa bir şarkı sözü penceresinde; çeviri ve telaffuzla birlikte (pinyin, Kantonca Jyutping, Japonca romaji, Korece Latin harfleriyle yazım). Last.fm ve ListenBrainz’e skroplar, çaldığınız parçayı Discord’da gösterebilir. Arayüz dilleri: İngilizce, Basitleştirilmiş Çince, Geleneksel Çince, Japonca, Korece, İspanyolca, Fransızca, Almanca, İtalyanca, Brezilya Portekizcesi, Vietnamca, Rusça, Ukraynaca, Tayca ve Türkçe.
 
 Lyrimuse’un tüm özellikleri burada: her birinin ne yaptığı, ayarlarda nerede olduğu ve yüklendikten sonra açık olup olmadığı; sonda Ayarlar penceresindeki tüm ayarlar listelenir. Liste kaynak kodla birlikte tutulur ve her değişiklikte güncellenir.
 
@@ -118,7 +118,7 @@ Yeni bir sürüm eşleştirmeyi veya puanlamayı iyileştirdiğinde, mevcut şar
 
 ### Sonraki parçanın sözleri önceden hazır
 
-Çalarınızın çalma sırasını okur ve sıradaki birkaç parçanın şarkı sözlerini önceden bulur; okunacak bir sıra yoksa albümün geri kalanını sırayla işler. QQ Music, NetEase Cloud Music, Kugou, Soda Music ve VOX’ta bu özellik Tam Disk Erişimi gerektirir.
+Çalarınızın çalma sırasını okur ve sıradaki birkaç parçanın şarkı sözlerini önceden bulur; okunacak bir sıra yoksa albümün geri kalanını sırayla işler. QQ Music, NetEase Cloud Music, Kugou, Kuwo, Soda Music ve VOX’ta bu özellik Tam Disk Erişimi gerektirir.
 
 - Saptanmış olarak açık
 - Ayarlar: Şarkı Sözleri › Kaynak › Sıradaki Parçaları Önceden Çözümle
@@ -128,7 +128,7 @@ Yeni bir sürüm eşleştirmeyi veya puanlamayı iyileştirdiğinde, mevcut şar
 
 ### Çalarınızın kaydettiği şarkı sözlerini kullanma
 
-Apple Music, Spotify, Kugou, KKBOX, Amazon Music ve LX Music’in bu Mac’e zaten kaydettiği şarkı sözleri doğrudan kullanılabilir: çaların gösterdiği sürümün aynısı, üstelik daha hızlı (Apple Music ve Spotify’da yalnızca çaların sözlerini gösterdiği parçalar için). QQ Music ve NetEase Cloud Music’te parça, çaların yerel arşivinden tanınır; böylece tam o sürüm arama yapılmadan alınır. reAMP, VOX, Pine Player, foobar2000, Swinsian, MyGo Music ve Audirvana’da, ayrıca Apple Music veya LX Music arşivinizden ya da yerel listenizden yerel bir dosya çaldığında, çalan dosyanın içindeki şarkı sözleri veya aynı adlı .lrc dosyası kullanılır. QQ Music, NetEase Cloud Music ve Kugou için Sistem Ayarları’nda Lyrimuse’a Tam Disk Erişimi verilmesi gerekir; verilmezse şarkı sözleri yine çevrimiçi bulunur.
+Apple Music, Spotify, Kugou, Kuwo, KKBOX, Amazon Music ve LX Music’in bu Mac’e zaten kaydettiği şarkı sözleri doğrudan kullanılabilir: çaların gösterdiği sürümün aynısı, üstelik daha hızlı (Apple Music ve Spotify’da yalnızca çaların sözlerini gösterdiği parçalar için). QQ Music ve NetEase Cloud Music’te parça, çaların yerel arşivinden tanınır; böylece tam o sürüm arama yapılmadan alınır. reAMP, VOX, Pine Player, foobar2000, Swinsian, MyGo Music ve Audirvana’da, ayrıca Apple Music veya LX Music arşivinizden ya da yerel listenizden yerel bir dosya çaldığında, çalan dosyanın içindeki şarkı sözleri veya aynı adlı .lrc dosyası kullanılır. QQ Music, Kuwo, NetEase Cloud Music ve Kugou için Sistem Ayarları’nda Lyrimuse’a Tam Disk Erişimi verilmesi gerekir; verilmezse şarkı sözleri yine çevrimiçi bulunur.
 
 - Saptanmış olarak kapalı
 - Ayarlar: Çalar › İzinler ve Hizmetler › Tam Disk Erişimi
@@ -632,9 +632,9 @@ Web tarayıcısında şarkı sözleri. “Tarayıcıda Şarkı Sözleri” şark
 
 <a id="feature-players"></a>
 
-### 20 çalar; birkaçını seçin veya otomatik algılayın
+### 21 çalar; birkaçını seçin veya otomatik algılayın
 
-Apple Music, Spotify, QQ Music, NetEase Cloud Music, Kugou, Soda Music, LX Music, KKBOX, Amazon Music, Winamp tarzı reAMP, kayıpsız ve yüksek çözünürlüklü yerel çalar VOX, neredeyse her biçimi çalan ücretsiz yerel çalar Pine Player, Windows’tan taşınan klasik yerel çalar foobar2000, büyük arşivler için yapılmış yerel çalar Swinsian, Plex’in kendi sunucunuz için müzik çaları Plexamp, yerel dosyaları çalan ve eklentilerle başka kaynaklar ekleyen açık kaynaklı MyGo Music, odyofillere yönelik yüksek çözünürlüklü çalar Audirvana, YouTube Music uygulaması Kaset, açık kaynaklı YouTube Music masaüstü uygulaması Pear Desktop ve sesli kitaplar için WeRead. Aynı anda birkaçını seçin ya da macOS’in Şu An Çalınan olarak gösterdiğini izlemesi için otomatikte bırakın. Apple Music radyosu da çalışır; program sunucusu konuşurken istasyon adını ve logosunu gösterir.
+Apple Music, Spotify, QQ Music, NetEase Cloud Music, Kugou, Kuwo, Soda Music, LX Music, KKBOX, Amazon Music, Winamp tarzı reAMP, kayıpsız ve yüksek çözünürlüklü yerel çalar VOX, neredeyse her biçimi çalan ücretsiz yerel çalar Pine Player, Windows’tan taşınan klasik yerel çalar foobar2000, büyük arşivler için yapılmış yerel çalar Swinsian, Plex’in kendi sunucunuz için müzik çaları Plexamp, yerel dosyaları çalan ve eklentilerle başka kaynaklar ekleyen açık kaynaklı MyGo Music, odyofillere yönelik yüksek çözünürlüklü çalar Audirvana, YouTube Music uygulaması Kaset, açık kaynaklı YouTube Music masaüstü uygulaması Pear Desktop ve sesli kitaplar için WeRead. Aynı anda birkaçını seçin ya da macOS’in Şu An Çalınan olarak gösterdiğini izlemesi için otomatikte bırakın. Apple Music radyosu da çalışır; program sunucusu konuşurken istasyon adını ve logosunu gösterir.
 
 - Ayarlar: Çalar › Müzik Uygulamaları
 
@@ -671,7 +671,7 @@ Listede olmayan çalarlar Uygulamalar klasöründen güvenilen çalarlarınıza 
 
 ### İzinler, yalnızca gerektiği yerde
 
-Apple Music, Spotify, Kaset, VOX, Swinsian ve Audirvana’da çalanı okumak için Otomasyon izni gerekir. QQ Music, NetEase Cloud Music ve Kugou’da kaydedilmiş şarkı sözleri ve çalma sıraları için, Soda Music ve VOX’ta ise çalma sıraları için Tam Disk Erişimi gerekir. Amazon Music ve Pine Player’da ilerleme kalibrasyonu, Pine Player’ın çalma listesi; QQ Music, NetEase Cloud Music, Kugou Music, Soda Music, Amazon Music, reAMP, Pine Player ve foobar2000’de karıştırma, yineleme ve beğenme düğmeleri; foobar2000’de ses yüksekliği ve başka bir uygulama Şu An Çalınan’ı tutarken QQ Music, NetEase Cloud Music, Soda Music, Pine Player, foobar2000 ve MyGo Music’te çalma düğmeleri için Erişilebilirlik gerekir. Web çalarlar için tarayıcıda Otomasyon izni ve tarayıcının “Apple Olayları’ndan JavaScript’e izin ver” seçeneği gerekir. Diğer çalarlar hiçbir şey gerektirmez. Ayarlar her birinin güncel durumunu gösterir.
+Apple Music, Spotify, Kaset, VOX, Swinsian ve Audirvana’da çalanı okumak için Otomasyon izni gerekir. QQ Music, Kuwo, NetEase Cloud Music ve Kugou’da kaydedilmiş şarkı sözleri ve çalma sıraları için, Soda Music ve VOX’ta ise çalma sıraları için Tam Disk Erişimi gerekir. Amazon Music ve Pine Player’da ilerleme kalibrasyonu, Pine Player’ın çalma listesi; QQ Music, NetEase Cloud Music, Kugou Music, Soda Music, Amazon Music, reAMP, Pine Player ve foobar2000’de karıştırma, yineleme ve beğenme düğmeleri; foobar2000’de ses yüksekliği ve başka bir uygulama Şu An Çalınan’ı tutarken QQ Music, Kuwo Music, NetEase Cloud Music, Soda Music, Pine Player, foobar2000 ve MyGo Music’te çalma düğmeleri için Erişilebilirlik gerekir. Web çalarlar için tarayıcıda Otomasyon izni ve tarayıcının “Apple Olayları’ndan JavaScript’e izin ver” seçeneği gerekir. Diğer çalarlar hiçbir şey gerektirmez. Ayarlar her birinin güncel durumunu gösterir.
 
 - Ayarlar: Çalar › İzinler ve Hizmetler › Otomasyon İzni
 - Ayarlar: Çalar › İzinler ve Hizmetler › Tam Disk Erişimi
@@ -681,7 +681,7 @@ Apple Music, Spotify, Kaset, VOX, Swinsian ve Audirvana’da çalanı okumak iç
 
 ### Oynatma denetimleri ve sarma
 
-Şarkı sözü penceresinden veya genişletilmiş çentikten çalın, duraklatın, parça atlayın ve ilerleme çubuğunu sürükleyin. Karıştırma, yineleme, beğenme ve ses yüksekliği çalara bağlıdır: Apple Music, Spotify, Kaset, QQ Music, Amazon Music, reAMP, VOX, Pine Player, foobar2000, Swinsian, Plexamp, Pear Desktop ve tarayıcıdaki YouTube Music bunların bir kısmını ya da tümünü destekler; NetEase Cloud Music, Kugou Music, Soda Music, LX Music ve MyGo Music’te beğenme vardır, LX Music’te ayrıca kendi ayarlarında Open API açılınca ses yüksekliği de vardır. Çalma, duraklatma, parça atlama ve beğenmeye sistem genelinde klavye kestirmeleri atanabilir. Tarayıcıdaki bir video gibi başka bir şey Şu An Çalınan’ı tutarken QQ Music, NetEase Cloud Music, Soda Music, Pine Player, foobar2000 ve MyGo Music’te çalma, duraklatma ve parça atlama bu çalarların kendi menüleri veya çalma çubuğu üzerinden yapılır ve sarma kullanılamaz.
+Şarkı sözü penceresinden veya genişletilmiş çentikten çalın, duraklatın, parça atlayın ve ilerleme çubuğunu sürükleyin. Karıştırma, yineleme, beğenme ve ses yüksekliği çalara bağlıdır: Apple Music, Spotify, Kaset, QQ Music, Amazon Music, reAMP, VOX, Pine Player, foobar2000, Swinsian, Plexamp, Pear Desktop ve tarayıcıdaki YouTube Music bunların bir kısmını ya da tümünü destekler; NetEase Cloud Music, Kugou Music, Soda Music, LX Music ve MyGo Music’te beğenme vardır, LX Music’te ayrıca kendi ayarlarında Open API açılınca ses yüksekliği de vardır. Çalma, duraklatma, parça atlama ve beğenmeye sistem genelinde klavye kestirmeleri atanabilir. Tarayıcıdaki bir video gibi başka bir şey Şu An Çalınan’ı tutarken QQ Music, Kuwo Music, NetEase Cloud Music, Soda Music, Pine Player, foobar2000 ve MyGo Music’te çalma, duraklatma ve parça atlama bu çalarların kendi menüleri veya çalma çubuğu üzerinden yapılır ve sarma kullanılamaz.
 
 - Ayarlar: Şarkı Sözü Görünümü › Çentik › Genişletildiğinde › Denetimleri Göster
 - Ayarlar: Klavye Kestirmeleri › Çal/Duraklat
@@ -694,7 +694,7 @@ Apple Music, Spotify, Kaset, VOX, Swinsian ve Audirvana’da çalanı okumak iç
 
 ### Parçanın sayfasını tek tıkla açma
 
-⋯ menüsünde tek tıklama, parçayı, albümünü veya sanatçısını çaldığınız platformda açar. Apple Music ve KKBOX kendi uygulamalarında açılır, Spotify da uygulamasında parçaya atlar; diğerleri web’de açılır: Spotify albüm ve sanatçıları, QQ Music, Soda Music, Amazon Music ve YouTube Music. NetEase Cloud Music ve Kugou’da yalnızca parça sayfası vardır.
+⋯ menüsünde tek tıklama, parçayı, albümünü veya sanatçısını çaldığınız platformda açar. Apple Music ve KKBOX kendi uygulamalarında açılır, Spotify da uygulamasında parçaya atlar; diğerleri web’de açılır: Spotify albüm ve sanatçıları, QQ Music, Soda Music, Amazon Music ve YouTube Music. Kuwo, NetEase Cloud Music ve Kugou’da yalnızca parça sayfası vardır.
 
 <a id="feature-about-panels"></a>
 

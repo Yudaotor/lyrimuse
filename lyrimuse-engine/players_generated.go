@@ -12,6 +12,7 @@ const (
 	playerQQMusic     = "qq_music"
 	playerNetease     = "netease_music"
 	playerKugou       = "kugou_music"
+	playerKuwo        = "kuwo_music"
 	playerSoda        = "soda_music"
 	playerKKBOX       = "kkbox"
 	playerSpotify     = "spotify"
@@ -37,6 +38,7 @@ const (
 	qqMusicBundleID      = "com.tencent.QQMusicMac"
 	neteaseMusicBundleID = "com.netease.163music"
 	kugouMusicBundleID   = "com.kugou.mac.Music"
+	kuwoMusicBundleID    = "com.wenyu.kwplayermac"
 	sodaMusicBundleID    = "com.soda.music"
 	kkboxBundleID        = "com.kkbox.electron-app"
 	spotifyBundleID      = "com.spotify.client"
@@ -61,6 +63,7 @@ var allPlayerIDs = []string{
 	playerQQMusic,
 	playerNetease,
 	playerKugou,
+	playerKuwo,
 	playerSoda,
 	playerKKBOX,
 	playerSpotify,
@@ -87,6 +90,7 @@ var playerBundleIDs = map[string]string{
 	playerQQMusic:     qqMusicBundleID,
 	playerNetease:     neteaseMusicBundleID,
 	playerKugou:       kugouMusicBundleID,
+	playerKuwo:        kuwoMusicBundleID,
 	playerSoda:        sodaMusicBundleID,
 	playerKKBOX:       kkboxBundleID,
 	playerSpotify:     spotifyBundleID,
@@ -112,6 +116,7 @@ var builtinPlayerBundleIDs = map[string]bool{
 	qqMusicBundleID:      true,
 	neteaseMusicBundleID: true,
 	kugouMusicBundleID:   true,
+	kuwoMusicBundleID:    true,
 	sodaMusicBundleID:    true,
 	kkboxBundleID:        true,
 	spotifyBundleID:      true,
@@ -137,6 +142,7 @@ var playerProcessNames = map[string]string{
 	playerQQMusic:     "QQMusic",
 	playerNetease:     "NeteaseMusic",
 	playerKugou:       "酷狗音乐",
+	playerKuwo:        "KuwoMusic",
 	playerSoda:        "汽水音乐",
 	playerKKBOX:       "KKBOX",
 	playerSpotify:     "Spotify",
@@ -162,7 +168,7 @@ var playerOtherProcessNames = map[string][]string{
 }
 
 // knownPlayerProcessNames 是上面两张表的全部取值 —— 选了「自动识别」时盯全部。
-var knownPlayerProcessNames = []string{"Music", "QQMusic", "NeteaseMusic", "neteasemusic", "酷狗音乐", "汽水音乐", "KKBOX", "Spotify", "Amazon Music", "Kaset", "YouTube Music", "Reamp", "lx-music-desktop", "VOX", "Pine Player", "foobar2000", "Swinsian", "Plexamp", "MyGo Music", "Audirvana Studio", "Audirvana Origin", "WeRead"}
+var knownPlayerProcessNames = []string{"Music", "QQMusic", "NeteaseMusic", "neteasemusic", "酷狗音乐", "KuwoMusic", "汽水音乐", "KKBOX", "Spotify", "Amazon Music", "Kaset", "YouTube Music", "Reamp", "lx-music-desktop", "VOX", "Pine Player", "foobar2000", "Swinsian", "Plexamp", "MyGo Music", "Audirvana Studio", "Audirvana Origin", "WeRead"}
 
 // playerScrobbleLabels 是「bundle id → ListenBrainz 的 media_player 标签」。
 var playerScrobbleLabels = map[string]string{
@@ -170,6 +176,7 @@ var playerScrobbleLabels = map[string]string{
 	qqMusicBundleID:      "QQ Music (macOS)",
 	neteaseMusicBundleID: "NetEase Cloud Music (macOS)",
 	kugouMusicBundleID:   "Kugou Music (macOS)",
+	kuwoMusicBundleID:    "Kuwo Music (macOS)",
 	sodaMusicBundleID:    "Soda Music (macOS)",
 	kkboxBundleID:        "KKBOX (macOS)",
 	spotifyBundleID:      "Spotify (macOS)",
@@ -198,6 +205,7 @@ var playerNativeLyricSources = map[string]string{
 	playerQQMusic:     "qq",
 	playerNetease:     "netease",
 	playerKugou:       "kugou",
+	playerKuwo:        "kuwo",
 	playerSoda:        "soda",
 	playerKKBOX:       "kkbox",
 	playerAmazonMusic: "amazon",
@@ -220,6 +228,7 @@ var playerNeedsFullDiskAccess = map[string]bool{
 	playerQQMusic: true,
 	playerNetease: true,
 	playerKugou:   true,
+	playerKuwo:    true,
 	playerSoda:    true,
 	playerVox:     true,
 }

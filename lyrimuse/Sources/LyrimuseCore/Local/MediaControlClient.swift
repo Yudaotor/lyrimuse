@@ -1219,6 +1219,9 @@ public enum MediaControlClient {
             if target.bundleID == PlaybackPlayer.mygoMusic.bundleIdentifier {
                 snapshot = mygoProbedSnapshot(probed.snapshot, anchor: probed.anchor, now: now)
             }
+            if target.bundleID == PlaybackPlayer.kuwo.bundleIdentifier {
+                snapshot = kuwoProbedSnapshot(probed.snapshot, anchor: probed.anchor, now: now)
+            }
             if let reading = amazonMusicReading(
                 bundleID: target.bundleID, trackKey: probed.snapshot.trackKey, title: probed.snapshot.title,
                 metadataTimestamp: probed.anchor.timestamp.map { Date(timeIntervalSince1970: $0) },
@@ -1675,12 +1678,14 @@ public enum MediaControlClient {
             let mygo = MyGoSessionAnchor.filled(
                 bundleID: bundleIdentifier, identity: [title ?? "", artist ?? "", album ?? ""].joined(separator: "|"),
                 playing: playing, elapsed: plexamp.elapsed, timestamp: plexamp.timestamp, rate: plexamp.rate)
-            timestamp = mygo.timestamp
+            // 酷我在放时报的进度比出声早一截,时刻往后挪,外推值同扣(见 KuwoSessionAnchor)。
+            let kuwoLead = KuwoSessionAnchor.lead(bundleID: bundleIdentifier, playing: playing)
+            timestamp = KuwoSessionAnchor.shifted(mygo.timestamp, by: kuwoLead)
             // VOX 那份播放中缺位置、恢复后速率报 0,补成能外推的锚点(见 VoxPlayerInfo.systemAnchor)。
             let anchor = VoxPlayerInfo.systemAnchor(
                 bundleID: bundleIdentifier, playing: playing, elapsed: mygo.elapsed,
                 elapsedNow: plexamp.elapsed == names.elapsed && mygo.timestamp == plexamp.timestamp
-                    ? times.elapsedTimeNow.map { $0 + lead } : nil,
+                    ? times.elapsedTimeNow.map { $0 + lead - kuwoLead * (plexamp.rate ?? 1) } : nil,
                 rate: plexamp.rate, hasTimestamp: plexamp.timestamp != nil)
             elapsedTime = anchor.elapsed
             elapsedTimeNow = anchor.elapsedNow
@@ -2283,6 +2288,9 @@ public enum MediaControlClient {
             }
             if target.bundleID == PlaybackPlayer.mygoMusic.bundleIdentifier {
                 snapshot = mygoProbedSnapshot(probed.snapshot, anchor: probed.anchor, now: now)
+            }
+            if target.bundleID == PlaybackPlayer.kuwo.bundleIdentifier {
+                snapshot = kuwoProbedSnapshot(probed.snapshot, anchor: probed.anchor, now: now)
             }
             if let reading = amazonMusicReading(
                 bundleID: target.bundleID, trackKey: probed.snapshot.trackKey, title: probed.snapshot.title,
@@ -2893,6 +2901,20 @@ public enum MediaControlClient {
         snapshot.nowPlayingItemID = itemID
         snapshot.republishDueBy = foobarLoopCheckAt(bundleID: probed.bundleIdentifier, playing: probed.playing,
                                                     position: position, duration: probed.duration, now: now)
+        return snapshot
+    }
+
+    /// 按 bundle id 单问到的酷我那份(焦点被别的 App 占着时):位置同主路扣掉在放锚点比出声早的那一截
+    /// (`KuwoSessionAnchor.probedPosition`);没在放、缺锚点的原样交回。
+    private static func kuwoProbedSnapshot(_ probed: MediaControlSnapshot, anchor: NowPlayingClientsProbe.SessionAnchor,
+                                           now: Date) -> MediaControlSnapshot {
+        guard let position = KuwoSessionAnchor.probedPosition(
+            bundleID: probed.bundleIdentifier, playing: probed.playing, elapsed: probed.anchorElapsedTime,
+            anchorAt: anchor.timestamp, rate: probed.playbackRate, duration: probed.duration, now: now)
+        else { return probed }
+        var snapshot = probed.withPlayerClock(position, capturedAt: now)
+        snapshot.processIdentifier = probed.processIdentifier ?? anchor.processIdentifier.map { Int($0) }
+        snapshot.nowPlayingItemID = probed.nowPlayingItemID
         return snapshot
     }
 
@@ -3512,7 +3534,7 @@ public enum MediaControlClient {
 
     // ---- 跟随重发锚点的播放器:重发断档 = 卡在加载 ----
     //
-    // KKBOX 在放的时候约每 1.06 秒重发一次锚点;卡在加载(网络慢、缓冲)时照旧报在放、速率 1,只是不再重发。上一份锚点
+    // KKBOX 在放的时候约每 1.06 秒、酷我约每 0.5 秒重发一次锚点;卡在加载(网络慢、缓冲)时照旧报在放、速率 1,只是不再重发。上一份锚点
     // 过了 `republishOverdueSecs` 还没有下一份,这一拍就当作在加载:位置停在「上一份锚点 + 这段时长」,快照报没在走、
     // 标 `isWaitingToPlay`,下一份锚点一到就接着走。下一份锚点说明声音其实一直在走的(误报),这首余下部分不再停。
     // 见 02 章决策 107。
@@ -4169,7 +4191,7 @@ public enum MediaControlClient {
 
     /// 哪些播放器的 media-control 读数带上读到的时刻(见上面那句)。酷狗;Safari 的媒体进程
     /// (它的外推与页面 `currentTime` 逐拍差 0.001s,读数本身就是真值,晚处理多少就差多少);
-    /// 跟随重发锚点的播放器(KKBOX,见 `LocalPlaybackSource.followsRepublishedAnchors`:位置要对齐这份读数,读数得准)。
+    /// 跟随重发锚点的播放器(KKBOX、酷我,见 `LocalPlaybackSource.followsRepublishedAnchors`:位置要对齐这份读数,读数得准)。
     public static func stampsCaptureTime(bundleID: String?) -> Bool {
         correctsFromResetAnchor(bundleID: bundleID) || bundleID == safariMediaProcessBundleID
             || LocalPlaybackSource.followsRepublishedAnchors(bundleID: bundleID)
