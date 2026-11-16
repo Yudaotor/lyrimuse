@@ -87,7 +87,8 @@ public enum PlayerSubtitles {
             lyrics: lrc(lines), lyricsTr: "", lyricsRoma: "", lyricsYRC: "", lyricsBG: "",
             songwriters: [], playerVersions: [:], kanaDonor: "",
             instrumental: false, resolved: !lines.isEmpty, isCantonese: false, isHokkien: false,
-            plainLyrics: "", searchIncomplete: false, storedLyrics: "")
+            plainLyrics: "", searchIncomplete: false, storedLyrics: "", lyricsSource: TelemetryLyricSource.subtitles,
+            plainLyricsSource: "")
     }
 
     /// 把一句并进已有的字幕(纯函数,selftest 覆盖):空的不记;跟那一刻正在显示的那句一样(暂停、恢复时原样重发)不记;

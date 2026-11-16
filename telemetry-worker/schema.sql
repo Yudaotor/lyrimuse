@@ -36,6 +36,8 @@ CREATE TABLE IF NOT EXISTS activity (
                         -- 旧库:ALTER TABLE activity ADD COLUMN layout_limits TEXT
   throttled_hangs INTEGER,  -- hangs 里停顿期间主线程被系统压着(锁屏、App Nap)的次数,旧版 App 不报为空;
                             -- 旧库:ALTER TABLE activity ADD COLUMN throttled_hangs INTEGER
+  lyric_sources  TEXT,  -- {"netease:line": 47, "qq:word": 12, …},逐字 / 逐行 / 纯文本的歌显示的那份各来自哪个源,见 index.js 的 lyricSourceCounts;
+                        -- 旧版 App 不报为空。旧库:ALTER TABLE activity ADD COLUMN lyric_sources TEXT
   PRIMARY KEY (day, install_id)
 );
 

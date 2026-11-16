@@ -142,6 +142,8 @@ public final class EnrichCacheEntry: Decodable, Sendable {
     // 不是一回事:这个没有时间戳,只给"歌词窗口"当静态兜底用。引擎侧
     // enrichEntry.PlainLyrics 头注解释了为什么必须分开存。
     let plainLyrics: String?
+    /// `plainLyrics` 来自哪个源(引擎 enrichEntry.PlainLyricsSource),不在正文小文件里。
+    let plainLyricsSource: String?
     // 播放器报的时长(秒,lyrimuse-engine/enrich.go 的 DurationSecs)。电台条目由引擎换成 Apple 目录查到的真实曲长
     // (radioduration.go,电台进度条的分母读它,见 trackDurationSecs)。也给「英文歌名 → 中文歌名」的本机别名推断当
     // 第二道闸(见 EnrichTitleAliases)。
@@ -225,6 +227,7 @@ public final class EnrichCacheEntry: Decodable, Sendable {
         case inferredArtist = "inferred_artist"
         case inferredAlbum = "inferred_album"
         case plainLyrics = "plain_lyrics"
+        case plainLyricsSource = "plain_lyrics_source"
         case durationSecs = "duration_secs"
         case resolvedDurationSecs = "resolved_duration_secs"
         case lyricsDecision = "lyrics_decision"
@@ -311,6 +314,7 @@ public final class EnrichCacheEntry: Decodable, Sendable {
         inferredArtist = try c.decodeIfPresent(String.self, forKey: .inferredArtist)
         inferredAlbum = try c.decodeIfPresent(String.self, forKey: .inferredAlbum)
         plainLyrics = try c.decodeIfPresent(String.self, forKey: .plainLyrics)
+        plainLyricsSource = try c.decodeIfPresent(String.self, forKey: .plainLyricsSource)
         durationSecs = try c.decodeIfPresent(Double.self, forKey: .durationSecs)
         resolvedDurationSecs = try c.decodeIfPresent(Double.self, forKey: .resolvedDurationSecs)
         decisionSongDurationSecs = (try? c.decodeIfPresent(EnrichDecisionDuration.self, forKey: .lyricsDecision))?.songDurationSecs
@@ -415,6 +419,10 @@ public struct EnrichCacheLyrics {
     /// 条目里存着的主歌词正文,标了纯音乐也照给(那时 `lyrics` 是空的)。只给搜索候选歌词面板「当前使用」的
     /// 正文判据用,显示一律读 `lyrics`。
     public let storedLyrics: String
+    /// 主歌词来自哪个源(条目的 `lyrics_source`;听书字幕为 `TelemetryLyricSource.subtitles`),没记为空串。
+    public let lyricsSource: String
+    /// 纯文本兜底来自哪个源(条目的 `plain_lyrics_source`),没有为空串。
+    public let plainLyricsSource: String
 }
 
 @MainActor
@@ -930,7 +938,9 @@ public enum EnrichCacheReader {
                 lyrics: lyrics,
                 sourcesSkipped: entry.lyricsSourcesSkipped ?? [],
                 fillCount: entry.lyricsFillCount ?? 0),
-            storedLyrics: lyrics
+            storedLyrics: lyrics,
+            lyricsSource: entry.lyricsSource ?? "",
+            plainLyricsSource: entry.plainLyricsSource ?? ""
         )
     }
 

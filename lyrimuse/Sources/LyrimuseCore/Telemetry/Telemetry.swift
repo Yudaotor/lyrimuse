@@ -151,6 +151,31 @@ public enum TelemetryLyricsResult: String, CaseIterable, Codable, Sendable {
     }
 }
 
+/// 一首歌显示的那份歌词来自哪里(活动里 `lyric_sources` 键的前半段)。只在逐字 / 逐行 / 纯文本三档记。见 14 章决策 208。
+public enum TelemetryLyricSource {
+    /// 记得下的来源:引擎的十五个歌词源(`lyricSourceNames`)、播放器自带 / 本机的几种(引擎各 `…LyricsSource` 常量)、
+    /// 听书播放器推来的字幕 `subtitles`,条目没记来源的(手改过、老条目)`unknown`,其余一律 `other`。
+    /// Worker 的 `LYRIC_SOURCES` 跟它逐字一致,selftest telemetry 组核对。
+    public static let tags = [
+        "netease", "qq", "kugou", "lrclib", "amll", "lyricfind", "kuwo", "migu", "deezer", "applemusic", "soda", "vibe", "genie",
+        "petitlyrics", "zing", "kkbox", "spotify", "amazon", "localfile", "lxmusic", "import", "subtitles", "unknown", "other",
+    ]
+    public static let subtitles = "subtitles"
+    /// 计得到来源的几档,`lyric_sources` 键的后半段。
+    public static let results: [TelemetryLyricsResult] = [.word, .line, .plain]
+
+    /// 条目里的来源字段 → 上报的标识。
+    public static func tag(_ source: String?) -> String {
+        guard let source, !source.isEmpty else { return "unknown" }
+        return tags.contains(source) ? source : "other"
+    }
+
+    /// `lyric_sources` 里的键,如 `netease:line`;纯音乐、没找到不记来源,为 nil。
+    public static func key(source: String?, result: TelemetryLyricsResult) -> String? {
+        results.contains(result) ? "\(tag(source)):\(result.rawValue)" : nil
+    }
+}
+
 /// 一首歌的语言(活动里的 `languages`,ISO 639-1 代码)。按歌词正文判,没有歌词的歌不记。见 14 章决策 171。
 public enum TelemetrySongLanguage: String, CaseIterable, Codable, Sendable {
     case zh, yue, ja, ko
@@ -374,12 +399,15 @@ public struct TelemetryActivityDay: Codable, Equatable, Sendable {
     public var lyrics: [String: Int]
     /// 这一天放过的有歌词的歌各是什么语言(`TelemetrySongLanguage` 的 rawValue → 首数)。
     public var languages: [String: Int]
+    /// 这一天逐字 / 逐行 / 纯文本的歌,显示的那份各来自哪个源(`TelemetryLyricSource.key`,如 `netease:line` → 首数),
+    /// 各键之和等于 `lyrics` 里这三档之和。
+    public var lyricSources: [String: Int]
     /// 窗口布局轮数超限被 AppKit 接住的次数,按窗口 + pass 分,最多 `TelemetryActivity.maxLayoutLimitsPerDay` 种。
     public var layoutLimits: [TelemetryLayoutLimit]
 
     public init(day: String, playersPlayed: [String] = [], hangs: Int = 0, throttledHangs: Int = 0, hangDetails: [TelemetryHang] = [],
                 actions: [String: Int] = [:], lyrics: [String: Int] = [:], languages: [String: Int] = [:],
-                layoutLimits: [TelemetryLayoutLimit] = []) {
+                lyricSources: [String: Int] = [:], layoutLimits: [TelemetryLayoutLimit] = []) {
         self.day = day
         self.playersPlayed = playersPlayed
         self.hangs = hangs
@@ -388,10 +416,11 @@ public struct TelemetryActivityDay: Codable, Equatable, Sendable {
         self.actions = actions
         self.lyrics = lyrics
         self.languages = languages
+        self.lyricSources = lyricSources
         self.layoutLimits = layoutLimits
     }
 
-    /// 旧版本存下的活动没有 `actions`、`lyrics`、`languages`、`hang_details`、`layout_limits`、`throttled_hangs`。
+    /// 旧版本存下的活动没有 `actions`、`lyrics`、`languages`、`lyric_sources`、`hang_details`、`layout_limits`、`throttled_hangs`。
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         day = try c.decode(String.self, forKey: .day)
@@ -402,12 +431,13 @@ public struct TelemetryActivityDay: Codable, Equatable, Sendable {
         actions = try c.decodeIfPresent([String: Int].self, forKey: .actions) ?? [:]
         lyrics = try c.decodeIfPresent([String: Int].self, forKey: .lyrics) ?? [:]
         languages = try c.decodeIfPresent([String: Int].self, forKey: .languages) ?? [:]
+        lyricSources = try c.decodeIfPresent([String: Int].self, forKey: .lyricSources) ?? [:]
         layoutLimits = try c.decodeIfPresent([TelemetryLayoutLimit].self, forKey: .layoutLimits) ?? []
     }
 
     enum CodingKeys: String, CodingKey {
         case day, playersPlayed = "players_played", hangs, throttledHangs = "throttled_hangs", hangDetails = "hang_details", actions, lyrics, languages
-        case layoutLimits = "layout_limits"
+        case lyricSources = "lyric_sources", layoutLimits = "layout_limits"
     }
 }
 

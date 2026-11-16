@@ -185,27 +185,53 @@ func runTelemetryTests() {
                     "动作: 旧版本存下的活动(没有 actions)照样读得出")
 
         activity.isRecording = false
-        activity.noteLyricsResult(track: "a", result: .word, language: .zh, now: day1)
+        activity.noteLyricsResult(track: "a", result: .word, source: "qq", language: .zh, now: day1)
         expectEqual(activity.completedDays(before: "9999-12-31"), [], "歌词结果: 关着时不记")
         activity.isRecording = true
-        activity.noteLyricsResult(track: "a", result: .line, language: .zh, now: day1)
-        activity.noteLyricsResult(track: "a", result: .line, language: .zh, now: day1)
-        activity.noteLyricsResult(track: "b", result: .none, language: nil, now: day1)
-        activity.noteLyricsResult(track: "c", result: .word, language: .en, now: day1)
+        activity.noteLyricsResult(track: "a", result: .line, source: "netease", language: .zh, now: day1)
+        activity.noteLyricsResult(track: "a", result: .line, source: "netease", language: .zh, now: day1)
+        activity.noteLyricsResult(track: "b", result: .none, source: "kugou", language: nil, now: day1)
+        activity.noteLyricsResult(track: "c", result: .word, source: "qq", language: .en, now: day1)
         var got = activity.completedDays(before: d2).first
         expectEqual(got?.lyrics, ["line": 1, "none": 1, "word": 1], "歌词结果: 同一首一天只算一次")
         expectEqual(got?.languages, ["zh": 1, "en": 1], "歌词结果: 没歌词的歌不记语言")
-        activity.noteLyricsResult(track: "a", result: .word, language: .yue, now: day1)
-        activity.noteLyricsResult(track: "b", result: .line, language: .ja, now: day1)
+        expectEqual(got?.lyricSources, ["netease:line": 1, "qq:word": 1], "歌词来源: 按源和档计首数,没找到的不记源")
+        activity.noteLyricsResult(track: "a", result: .word, source: "netease", language: .yue, now: day1)
+        activity.noteLyricsResult(track: "b", result: .line, source: "kugou", language: .ja, now: day1)
         got = activity.completedDays(before: d2).first
         expectEqual(got?.lyrics, ["word": 2, "line": 1], "歌词结果: 结果变了挪到新的一档,不多算一首")
         expectEqual(got?.languages, ["yue": 1, "en": 1, "ja": 1], "歌词结果: 语言跟着挪")
-        activity.noteLyricsResult(track: "a", result: .word, language: .yue, now: day2)
+        expectEqual(got?.lyricSources, ["netease:word": 1, "qq:word": 1, "kugou:line": 1], "歌词来源: 档变了跟着挪")
+        activity.noteLyricsResult(track: "a", result: .word, source: "applemusic", language: .yue, now: day1)
+        got = activity.completedDays(before: d2).first
+        expectEqual(got?.lyrics, ["word": 2, "line": 1], "歌词来源: 只换了一份来源,档的首数不变")
+        expectEqual(got?.lyricSources, ["applemusic:word": 1, "qq:word": 1, "kugou:line": 1], "歌词来源: 换了来源挪到新的源")
+        activity.noteLyricsResult(track: "c", result: .instrumental, source: "qq", language: nil, now: day1)
+        activity.noteLyricsResult(track: "d", result: .plain, source: "lrclib", language: .en, now: day1)
+        activity.noteLyricsResult(track: "e", result: .line, source: "", language: .zh, now: day1)
+        activity.noteLyricsResult(track: "f", result: .line, source: "musixmatch", language: .en, now: day1)
+        activity.noteLyricsResult(track: "g", result: .line, source: TelemetryLyricSource.subtitles, language: .zh, now: day1)
+        got = activity.completedDays(before: d2).first
+        expectEqual(got?.lyricSources, ["applemusic:word": 1, "kugou:line": 1, "lrclib:plain": 1, "unknown:line": 1, "other:line": 1,
+                                        "subtitles:line": 1],
+                    "歌词来源: 纯音乐不记源、纯文本记一档、没记来源的记 unknown、认不出的记 other")
+        expectEqual(got.map { $0.lyricSources.values.reduce(0, +) },
+                    got.map { day in ["word", "line", "plain"].compactMap { day.lyrics[$0] }.reduce(0, +) },
+                    "歌词来源: 各键之和等于逐字、逐行、纯文本三档之和")
+        activity.noteLyricsResult(track: "a", result: .word, source: "netease", language: .yue, now: day2)
         expectEqual(activity.completedDays(before: "9999-12-31").last?.lyrics, ["word": 1], "歌词结果: 换天重新算")
+        expectEqual(activity.completedDays(before: "9999-12-31").last?.lyricSources, ["netease:word": 1], "歌词来源: 换天重新算")
         activity.clear()
-        activity.noteLyricsResult(track: "a", result: .word, language: .yue, now: day2)
+        activity.noteLyricsResult(track: "a", result: .word, source: "netease", language: .yue, now: day2)
         expectEqual(activity.completedDays(before: "9999-12-31").first?.lyrics, ["word": 1], "歌词结果: 清空后重新记")
         activity.clear()
+        expectEqual([TelemetryLyricSource.tag(nil), TelemetryLyricSource.tag(""), TelemetryLyricSource.tag("qq"),
+                     TelemetryLyricSource.tag("QQ")], ["unknown", "unknown", "qq", "other"], "歌词来源: 来源归一")
+        expectEqual(TelemetryLyricsResult.allCases.map { TelemetryLyricSource.key(source: "qq", result: $0) },
+                    ["qq:word", "qq:line", "qq:plain", nil, nil], "歌词来源: 纯音乐、没找到不出键")
+        let oldDay = #"[{"day":"2026-11-15","lyrics":{"word":1},"languages":{"zh":1}}]"#
+        expectEqual((try? JSONDecoder().decode([TelemetryActivityDay].self, from: Data(oldDay.utf8)))?.first?.lyricSources, [:],
+                    "歌词来源: 旧版本存下的活动(没有 lyric_sources)照样读得出")
         expectEqual(LyricsKind.allCases.map { TelemetryLyricsResult($0).rawValue },
                     ["word", "line", "plain", "instrumental", "none"], "歌词结果: 跟 LyricsKind 一一对应")
 
@@ -670,6 +696,35 @@ func runTelemetryTests() {
         expectEqual(TelemetryAction.allCases.filter { !worker.contains("\"\($0.rawValue)\"") }, [], "Worker: ACTIONS 列着 App 的每个动作")
         expectEqual(sourceHas(worker, "const LYRICS_RESULTS = [" + TelemetryLyricsResult.allCases.map { "\"\($0.rawValue)\"" }.joined(separator: ", ") + "];"),
                     true, "Worker: LYRICS_RESULTS 跟 App 的歌词结果一致")
+        expectEqual(sourceHas(worker, "const LYRIC_SOURCES = [" + TelemetryLyricSource.tags.map { "\"\($0)\"" }.joined(separator: ", ") + "];"),
+                    true, "Worker: LYRIC_SOURCES 跟 Core TelemetryLyricSource.tags 逐字一致")
+        expectEqual(sourceHas(worker, "const LYRIC_SOURCE_RESULTS = [" + TelemetryLyricSource.results.map { "\"\($0.rawValue)\"" }.joined(separator: ", ") + "];"),
+                    true, "Worker: LYRIC_SOURCE_RESULTS 跟 Core 计得到来源的几档一致")
+        expectEqual(Set(TelemetryLyricSource.tags).count == TelemetryLyricSource.tags.count
+                        && ["unknown", "other", TelemetryLyricSource.subtitles].allSatisfy(TelemetryLyricSource.tags.contains), true,
+                    "歌词来源: 名单不重复,带 unknown / other / subtitles")
+        // 引擎会写进条目 lyrics_source 的值:十五个歌词源(lyricSourceNames)和各本机来源常量(`const …LyricsSource = "…"`)。
+        // 漏了的会在遥测里全记成 other。
+        let engineDir = root.appendingPathComponent("../../lyrimuse-engine")
+        let enrichGo = (try? String(contentsOf: engineDir.appendingPathComponent("enrich.go"), encoding: .utf8)) ?? ""
+        var engineSources: [String] = []
+        if let start = enrichGo.range(of: "var lyricSourceNames = []string{"), let end = enrichGo[start.upperBound...].range(of: "}") {
+            engineSources = enrichGo[start.upperBound..<end.lowerBound].split(separator: ",").map {
+                $0.trimmingCharacters(in: .whitespaces).trimmingCharacters(in: CharacterSet(charactersIn: "\""))
+            }
+        }
+        let localConstRE = try? NSRegularExpression(pattern: #"^const \w*LyricsSource = "([a-z0-9]+)"$"#, options: .anchorsMatchLines)
+        let goFiles = ((try? FileManager.default.contentsOfDirectory(atPath: engineDir.path)) ?? [])
+            .filter { $0.hasSuffix(".go") && !$0.hasSuffix("_test.go") }
+        for name in goFiles {
+            let text = (try? String(contentsOf: engineDir.appendingPathComponent(name), encoding: .utf8)) ?? ""
+            guard text.contains("LyricsSource = \"") else { continue }
+            engineSources += (localConstRE?.matches(in: text, range: NSRange(text.startIndex..., in: text)) ?? [])
+                .compactMap { Range($0.range(at: 1), in: text).map { String(text[$0]) } }
+        }
+        expectEqual(engineSources.count >= 21, true, "歌词来源: 读到了引擎的源名单和本机来源常量(守卫自身没跑空)")
+        expectEqual(engineSources.filter { !TelemetryLyricSource.tags.contains($0) }, [],
+                    "歌词来源: 引擎会写的每个来源都在 TelemetryLyricSource.tags 里")
         expectEqual(sourceHas(worker, "const SONG_LANGUAGES = [" + TelemetrySongLanguage.allCases.map { "\"\($0.rawValue)\"" }.joined(separator: ", ") + "];"),
                     true, "Worker: SONG_LANGUAGES 跟 App 的语言一致")
         expectEqual(sourceHas(worker, #"const origin = body.origin === "new" || body.origin === "existing" ? body.origin : null;"#), true,
@@ -791,6 +846,10 @@ func runTelemetryTests() {
                     && sourceHas(sourceBody("private func noteLyricsTelemetry(", in: source), "!isCurrentTrackAdBreak")
                     && sourceHas(sourceBody("private func noteLyricsTelemetry(", in: source), "hasContent || instrumental || noLyrics"),
                     true, "接线: 歌词落定时记歌词结果,广告和还在搜的不记")
+        expectEqual(sourceHas(sourceBody("private func reloadCurrentLyrics()", in: source),
+                              "source: playerVersion?.source ?? found?.lyricsSource, plainSource: found?.plainLyricsSource")
+                    && sourceHas(sourceBody("private func noteLyricsTelemetry(", in: source), "source: result == .plain ? plainSource : source"),
+                    true, "接线: 来源取显示的那份(播放器自家那份优先),纯文本档取纯文本的来源")
         let window = sourceText("lyrimuse/UI/LyricsWindowView.swift")
         expectEqual(sourceHas(sourceBody("static func markOpen()", in: window), "guard !UserDefaults.standard.bool(forKey: openKey) else { return }")
                     && sourceHas(sourceBody("static func markOpen()", in: window), "TelemetryActivity.shared.noteAction(.lyricsWindow)"),

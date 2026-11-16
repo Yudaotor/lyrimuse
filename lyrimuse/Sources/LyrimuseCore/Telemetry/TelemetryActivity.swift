@@ -1,6 +1,6 @@
 import Foundation
 
-/// 心跳里「之前几天的活动」的记账:放过哪些播放器、主线程卡住几次(前几次带概况)、几个动作各做了几次、放过的歌各拿到哪档歌词和是什么语言,按本地自然日一天一格,存在 UserDefaults。
+/// 心跳里「之前几天的活动」的记账:放过哪些播放器、主线程卡住几次(前几次带概况)、几个动作各做了几次、放过的歌各拿到哪档歌词、显示的那份来自哪个源、是什么语言,按本地自然日一天一格,存在 UserDefaults。
 /// 播放源换播放器、看门狗报卡住时各记一笔;`isRecording` 为假(遥测关着)时一律不记。心跳发出去之后
 /// `remove(days:)` 删掉发过的那几天。最多留 `maxStoredDays` 天,多了丢最早的。
 public final class TelemetryActivity: @unchecked Sendable {
@@ -36,6 +36,8 @@ public final class TelemetryActivity: @unchecked Sendable {
     private struct LyricsNote: Equatable {
         var result: TelemetryLyricsResult
         var language: TelemetrySongLanguage?
+        /// `lyric_sources` 里记到的键;纯音乐、没找到为 nil。
+        var sourceKey: String?
     }
 
     public init(defaults: UserDefaults, key: String = TelemetryActivity.storageKey) {
@@ -72,12 +74,14 @@ public final class TelemetryActivity: @unchecked Sendable {
         }
     }
 
-    /// 一首歌的歌词落定了。同一首一天只算一次;结果变了(补出了逐字、手动换了一份)就把这首那一笔挪到新的那一档。
+    /// 一首歌的歌词落定了。`source` 是显示的那份的来源(条目的 `lyrics_source` 这类原值,`TelemetryLyricSource.tag` 归一)。
+    /// 同一首一天只算一次;结果或来源变了(补出了逐字、手动换了一份)就把这首那一笔挪到新的那一档。
     /// App 重启后内存里的记录没了,同一天再放到会再算一次。
-    public func noteLyricsResult(track: String, result: TelemetryLyricsResult, language: TelemetrySongLanguage?,
+    public func noteLyricsResult(track: String, result: TelemetryLyricsResult, source: String?, language: TelemetrySongLanguage?,
                                  now: Date = Date()) {
         let day = Telemetry.day(now)
-        let note = LyricsNote(result: result, language: language)
+        let note = LyricsNote(result: result, language: language,
+                              sourceKey: TelemetryLyricSource.key(source: source, result: result))
         lock.withLock {
             guard recording else { return }
             if lyricsNoted.day != day { lyricsNoted = (day, [:]) }
@@ -88,9 +92,11 @@ public final class TelemetryActivity: @unchecked Sendable {
                 if let previous {
                     Self.decrement(&d.lyrics, previous.result.rawValue)
                     if let old = previous.language { Self.decrement(&d.languages, old.rawValue) }
+                    if let old = previous.sourceKey { Self.decrement(&d.lyricSources, old) }
                 }
                 d.lyrics[result.rawValue, default: 0] += 1
                 if let language { d.languages[language.rawValue, default: 0] += 1 }
+                if let key = note.sourceKey { d.lyricSources[key, default: 0] += 1 }
             }
         }
     }

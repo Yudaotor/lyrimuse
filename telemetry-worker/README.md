@@ -4,7 +4,7 @@ Receives Lyrimuse's anonymous usage data ("Share Anonymous Usage Data" in Settin
 
 | Endpoint | What |
 |---|---|
-| `POST /v1/heartbeat` | At most one per machine per day: random install ID, app and macOS version, chip, languages, which features are on, which built-in players played music and how many hangs on previous days |
+| `POST /v1/heartbeat` | At most one per machine per day: random install ID, app and macOS version, chip, languages, which features are on, which built-in players played music and how many hangs on previous days, how many songs got each lyrics tier and which lyric source each word-synced, line-synced or plain-text one came from |
 | `POST /v1/crash` | One summary per crash report: exception, termination reason, top frames of the crashed thread and, for an uncaught exception, of the backtrace where it was thrown (paths already removed by the app) |
 | `GET /v1/stats` | Aggregates; needs `Authorization: Bearer <ADMIN_TOKEN>`. `days=1..180`; `include_excluded=1` also counts the installs in `excluded_installs` (our own machines) |
 | `GET /v1/stats/bundle` | Same aggregates for several windows in one request (`days=7,30,90,180`), as `{windows, windows_all}` (without / with `excluded_installs`); each table is read once. D1 free tier bills rows read, so the SecondBrain panel's hourly pull uses this |
@@ -53,6 +53,12 @@ Hangs during which the main thread was held back by the system (screen locked, o
 ```sh
 npx wrangler d1 execute lyrimuse-telemetry --remote --command "ALTER TABLE activity ADD COLUMN throttled_hangs INTEGER"
 npx wrangler d1 execute lyrimuse-telemetry --remote --command "ALTER TABLE hang_events ADD COLUMN throttled TEXT"
+```
+
+`activity.lyric_sources` counts, per day, which lyric source the shown lyrics came from for each word-synced, line-synced or plain-text song (keys like `netease:line`, sources and tiers from a fixed list). `/v1/stats` returns it as `lyric_sources`. Added once before deploying:
+
+```sh
+npx wrangler d1 execute lyrimuse-telemetry --remote --command "ALTER TABLE activity ADD COLUMN lyric_sources TEXT"
 ```
 
 ---

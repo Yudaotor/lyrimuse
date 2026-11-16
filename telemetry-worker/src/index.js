@@ -24,6 +24,12 @@ const ACTIONS = ["lyrics_window", "lyrics_picked", "offset_adjusted", "share_car
 const LYRICS_RESULTS = ["word", "line", "plain", "instrumental", "none"];
 // 歌词文件夹里逐字歌词存成的格式,跟 Core LyricsWordFormat 的 rawValue 一致;心跳里第一个是主格式。
 const LYRICS_WORD_FORMATS = ["yrc", "ttml", "qrc", "krc", "enhanced-lrc"];
+// 每日活动里逐字 / 逐行 / 纯文本的歌显示的那份各来自哪个源,键是「源:档」(如 netease:line)。源名单跟 Core TelemetryLyricSource.tags
+// 逐字一致(引擎的歌词源、本机来源、字幕,加 unknown / other),档跟 TelemetryLyricSource.results 一致,selftest telemetry 组核对。
+// 见 14 章决策 208。
+const LYRIC_SOURCES = ["netease", "qq", "kugou", "lrclib", "amll", "lyricfind", "kuwo", "migu", "deezer", "applemusic", "soda", "vibe", "genie", "petitlyrics", "zing", "kkbox", "spotify", "amazon", "localfile", "lxmusic", "import", "subtitles", "unknown", "other"];
+const LYRIC_SOURCE_RESULTS = ["word", "line", "plain"];
+const MAX_LYRIC_SOURCE_KEYS = 40;
 const SONG_LANGUAGES = ["zh", "yue", "ja", "ko", "ru", "uk", "bg", "be", "sr", "mk", "kk", "el", "th", "ar", "hi", "bn", "pa", "gu", "ta", "te", "kn", "ml", "si", "en", "es", "pt", "fr", "de", "it", "nl", "sv", "pl", "tr", "vi", "he", "other"];
 // 卡顿概况(Core TelemetryHang)的取值,跟 Core 那几份名单一致,selftest telemetry 组核对。
 const HANG_DURATIONS = ["5-10s", "10-30s", "30s+", "unrecovered"];
@@ -123,6 +129,21 @@ function counts(v, keys) {
   return out;
 }
 
+// lyric_sources:只收「名单里的源:名单里的档」,首数 1～10000,最多 MAX_LYRIC_SOURCE_KEYS 个键(按名单顺序取),别的键丢掉。
+function lyricSourceCounts(v) {
+  const out = {};
+  if (!v || typeof v !== "object" || Array.isArray(v)) return out;
+  for (const source of LYRIC_SOURCES) {
+    for (const result of LYRIC_SOURCE_RESULTS) {
+      if (Object.keys(out).length >= MAX_LYRIC_SOURCE_KEYS) return out;
+      const k = source + ":" + result;
+      const n = Object.hasOwn(v, k) ? int(v[k], 1, 10_000) : null;
+      if (n != null) out[k] = n;
+    }
+  }
+  return out;
+}
+
 function int(v, min, max) {
   return Number.isInteger(v) && v >= min && v <= max ? v : null;
 }
@@ -216,16 +237,19 @@ async function heartbeat(request, env) {
     // 其中停顿期间主线程被系统压着的次数;旧版 App 不发,存空。
     const throttledHangs = int(a.throttled_hangs, 0, 10_000);
     statements.push(env.DB.prepare(
-      `INSERT INTO activity (day, install_id, players_played, hangs, actions, lyrics, languages, layout_limits, throttled_hangs)
-       VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)
+      `INSERT INTO activity (day, install_id, players_played, hangs, actions, lyrics, languages, layout_limits, throttled_hangs,
+                             lyric_sources)
+       VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)
        ON CONFLICT (day, install_id) DO UPDATE SET players_played = excluded.players_played, hangs = excluded.hangs,
                                                    actions = excluded.actions, lyrics = excluded.lyrics,
                                                    languages = excluded.languages, layout_limits = excluded.layout_limits,
-                                                   throttled_hangs = excluded.throttled_hangs`
+                                                   throttled_hangs = excluded.throttled_hangs, lyric_sources = excluded.lyric_sources`
     ).bind(a.day, installID, JSON.stringify(ids(a.players_played)), hangs,
            JSON.stringify(counts(a.actions, ACTIONS)), JSON.stringify(counts(a.lyrics, LYRICS_RESULTS)),
            JSON.stringify(counts(a.languages, SONG_LANGUAGES)), JSON.stringify(cleanLayoutLimits(a.layout_limits)),
-           throttledHangs == null ? null : Math.min(throttledHangs, hangs)));
+           throttledHangs == null ? null : Math.min(throttledHangs, hangs),
+           // 旧版 App 不发 lyric_sources,存空,统计里跟「报了但一首都没有」分得开。
+           a.lyric_sources === undefined ? null : JSON.stringify(lyricSourceCounts(a.lyric_sources))));
     // 那一天的卡顿概况整批替换(同一天重发时以新的为准)。版本与系统取这条心跳的,活动是之前几天的,升级当天可能差一版。
     statements.push(env.DB.prepare(`DELETE FROM hang_events WHERE day = ?1 AND install_id = ?2`).bind(a.day, installID));
     const details = Array.isArray(a.hang_details)
@@ -402,7 +426,8 @@ async function loadStatsRows(db, since) {
   const [heartbeats, installs, activity, crashes, hangEvents, excluded] = await Promise.all([
     db.prepare(`SELECT * FROM heartbeats WHERE day >= ?1`).bind(since).all(),
     db.prepare(`SELECT install_id, first_day, origin FROM installs`).all(),
-    db.prepare(`SELECT day, install_id, players_played, hangs, throttled_hangs, actions, lyrics, languages FROM activity WHERE day >= ?1`)
+    db.prepare(`SELECT day, install_id, players_played, hangs, throttled_hangs, actions, lyrics, languages, lyric_sources
+                FROM activity WHERE day >= ?1`)
       .bind(since).all(),
     db.prepare(`SELECT day, install_id, received_at, signature, process, exception_type, termination_indicator, app_version, frames,
                        termination_reasons, exception_frames FROM crashes WHERE day >= ?1`).bind(since).all(),
@@ -437,6 +462,7 @@ async function loadStatsRows(db, since) {
     ix: a.ix, own: a.own, day: a.day, install_id: a.install_id, hangs: a.hangs || 0,
     throttled_hangs: Math.min(a.throttled_hangs || 0, a.hangs || 0), players_played: safeJSON(a.players_played, []),
     actions: safeJSON(a.actions, {}), lyrics: safeJSON(a.lyrics, {}), languages: safeJSON(a.languages, {}),
+    lyric_sources: a.lyric_sources == null ? null : safeJSON(a.lyric_sources, {}),
   }));
   const parsedHangs = hangEvents.results.map(mark).map((h) => ({ ...h, windows: safeJSON(h.windows, []), stack: safeJSON(h.stack, []),
                                                                     throttled: safeJSON(h.throttled, []) }));
@@ -512,6 +538,8 @@ function computeStats(raw, { days, now, includeExcluded }) {
   const installsWithHangs = new Set(), installsWithAnyHangs = new Set();
   const actionTotals = {}, actionInstalls = {};
   const lyricsTotals = {}, languageTotals = {}, lyricsByDay = {};
+  const lyricSourceTotals = {}, lyricSourceInstalls = {};
+  let lyricSourceReports = 0;
   for (const a of activity.results) {
     const lyrics = a.lyrics;
     if (Object.keys(lyrics).length > 0) {
@@ -523,6 +551,15 @@ function computeStats(raw, { days, now, includeExcluded }) {
       }
     }
     for (const [k, n] of Object.entries(a.languages)) languageTotals[k] = (languageTotals[k] || 0) + n;
+    if (a.lyric_sources) {
+      lyricSourceReports += 1;
+      for (const [k, n] of Object.entries(a.lyric_sources)) {
+        const [source, result] = k.split(":");
+        const t = (lyricSourceTotals[source] ||= Object.fromEntries(LYRIC_SOURCE_RESULTS.map((r) => [r, 0])));
+        if (result in t) t[result] += n;
+        (lyricSourceInstalls[source] ||= new Set()).add(a.ix);
+      }
+    }
     for (const p of a.players_played) (playedByInstall[p] ||= new Set()).add(a.ix);
     hangs += a.hangs - a.throttled_hangs;
     throttledHangs += a.throttled_hangs;
@@ -588,6 +625,15 @@ function computeStats(raw, { days, now, includeExcluded }) {
     lyrics: LYRICS_RESULTS.map((k) => ({ result: k, songs: lyricsTotals[k] || 0 })),
     languages: SONG_LANGUAGES.map((k) => ({ language: k, songs: languageTotals[k] || 0 })),
     lyrics_daily: Object.values(lyricsByDay).sort((a, b) => (a.day < b.day ? -1 : 1)),
+    // 逐字 / 逐行 / 纯文本的歌显示的那份各来自哪个源(窗口内首数之和,同一首一台机器一天只算一次),songs 是三档之和,
+    // installs 是记到过这个源的机器数,按 songs 从多到少;reports 是报了这一项的机器日数(旧版 App 不报,不算进来)。
+    lyric_sources: {
+      reports: lyricSourceReports,
+      sources: Object.entries(lyricSourceTotals)
+        .map(([source, t]) => ({ source, ...t, songs: LYRIC_SOURCE_RESULTS.reduce((n, r) => n + t[r], 0),
+                                 installs: lyricSourceInstalls[source].size }))
+        .sort((a, b) => b.songs - a.songs || byText(a.source, b.source)),
+    },
     machines: rows.length,
     crashes: crashes.results.map(({ versions, ...c }) => {
       const sorted = (versions || "").split(",").filter(Boolean).sort(compareVersions);
@@ -745,7 +791,10 @@ function render(s) {
     '<div class="card"><h2>歌词结果(首)</h2>' + table((s.lyrics || []).map((r) => [LYRICS_LABELS[r.result] || r.result, r.songs]),
       (s.lyrics || []).reduce((n, r) => n + r.songs, 0)) + "</div>" +
     '<div class="card"><h2>歌曲语言(首)</h2>' + table((s.languages || []).filter((r) => r.songs > 0).map((r) => [LANGUAGE_LABELS[r.language] || r.language, r.songs]),
-      (s.languages || []).reduce((n, r) => n + r.songs, 0)) + "</div></div>";
+      (s.languages || []).reduce((n, r) => n + r.songs, 0)) + "</div>" +
+    '<div class="card"><h2>歌词来源(首,逐字 / 逐行 / 纯文本)</h2>' + table(((s.lyric_sources || {}).sources || []).map((r) =>
+      [r.source + "(" + r.word + " / " + r.line + " / " + r.plain + ")", r.songs]),
+      ((s.lyric_sources || {}).sources || []).reduce((n, r) => n + r.songs, 0)) + "</div></div>";
   const hg = s.hangs || {};
   if (hg.detailed) {
     const ctx = hg.context || {};
