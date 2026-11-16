@@ -1187,6 +1187,7 @@
 "已拷贝版本信息" = "Versionsinfo kopiert";
 "已授权" = "Autorisiert";
 "已搜索的歌词源均未提供这首歌曲的歌词。可搜索候选歌词手动选择；若为纯音乐，可标为纯音乐" = "Keine der durchsuchten Liedtextquellen hat einen Text für diesen Titel. Suche, um manuell einen auszuwählen, oder markiere ihn als instrumental, wenn er keinen Gesang hat";
+"已撤销" = "Widerrufen";
 "已播时长" = "Verstrichen";
 "已收录、无歌词" = "Erfasst, kein Liedtext";
 "已收录、无歌词 %@ 首" = "%@ erfasst, kein Liedtext";
@@ -1355,6 +1356,7 @@
 "快捷操作按钮" = "Schnellaktions-Tasten";
 "快捷键" = "Tastaturkurzbefehle";
 "快捷键：⌘R" = "Kurzbefehl: ⌘R";
+"快捷键：⌘Z" = "Kurzbefehl: ⌘Z";
 "快捷键：⌘↩" = "Kurzbefehl: ⌘↩";
 "快进 10 秒" = "10 Sekunden vor";
 "快退 10 秒" = "10 Sekunden zurück";
@@ -1541,6 +1543,7 @@
 "搜索确认无歌词后才隐藏，搜索期间照常显示" = "Blendet erst aus, wenn die Suche keinen Liedtext bestätigt; während der Suche sichtbar";
 "搜索结果仅有当前使用的歌词" = "Die Suche fand nur den bereits verwendeten Liedtext";
 "搜这首" = "Diesen Titel suchen";
+"撤销" = "Widerrufen";
 "播放/暂停" = "Wiedergabe/Pause";
 "播放到何处时记录一次 Scrobble\n50%：播放一半或 4 分钟，以先到者为准（Last.fm 官方规则）\n75% / 90%：播放达到对应比例\n曲终：完整播放后才记录，中途切歌不记录" = "Wie viel eines Titels laufen muss, bevor er gescrobbelt wird\n50 %: die Hälfte des Titels oder 4 Minuten, was zuerst eintritt (Last.fm-Regel)\n75 % / 90 %: dieser Anteil des Titels\nTitelende: nur bei Wiedergabe bis zum Ende; übersprungene Titel werden nicht gescrobbelt";
 "播放器" = "Player";
@@ -1646,6 +1649,10 @@
 "无法写入歌词文件：%@" = "Liedtextdatei konnte nicht geschrieben werden: %@";
 "无法打开「%1$@」：%2$@" = "„%1$@“ kann nicht geöffnet werden: %2$@";
 "无法打开此文件夹：%@" = "Ordner kann nicht geöffnet werden: %@";
+"无法撤销，请重试" = "Widerrufen fehlgeschlagen. Versuch es erneut";
+"无法撤销：%@" = "Widerrufen nicht möglich: %@";
+"无法撤销：已超过撤销时限" = "Widerrufen nicht möglich: Die Frist zum Widerrufen ist abgelaufen";
+"无法撤销：这首歌曲的歌词已有其他改动" = "Widerrufen nicht möglich: Der Liedtext dieses Titels wurde inzwischen geändert";
 "无法添加" = "Hinzufügen nicht möglich";
 "无法确定歌手，不存入" = "Künstler unbekannt, nicht gespeichert";
 "无法确认状态（无法读取该浏览器的配置文件）" = "Status unbekannt (Einstellungsdatei des Browsers nicht lesbar)";

@@ -1121,6 +1121,7 @@
 "已拷贝版本信息" = "Sürüm bilgisi kopyalandı";
 "已授权" = "İzin verildi";
 "已搜索的歌词源均未提供这首歌曲的歌词。可搜索候选歌词手动选择；若为纯音乐，可标为纯音乐" = "Aranan şarkı sözü kaynaklarının hiçbirinde bu parçanın sözleri yok. Elle seçmek için aday sözleri arayın; parça sözsüzse enstrümantal olarak işaretleyin";
+"已撤销" = "Geri alındı";
 "已播时长" = "Geçen Süre";
 "已收录、无歌词" = "Kayıtlı, Şarkı Sözü Yok";
 "已收录、无歌词 %@ 首" = "%@ parça kayıtlı, şarkı sözü yok";
@@ -1282,6 +1283,7 @@
 "快捷操作按钮" = "Hızlı İşlem Düğmeleri";
 "快捷键" = "Klavye Kestirmeleri";
 "快捷键：⌘R" = "Kestirme: ⌘R";
+"快捷键：⌘Z" = "Kestirme: ⌘Z";
 "快捷键：⌘↩" = "Kestirme: ⌘↩";
 "快进 10 秒" = "10 Saniye İleri";
 "快退 10 秒" = "10 Saniye Geri";
@@ -1466,6 +1468,7 @@
 "搜索确认无歌词后才隐藏，搜索期间照常显示" = "Yalnızca arama şarkı sözü olmadığını doğruladığında gizlenir; arama sırasında görünür kalır";
 "搜索结果仅有当前使用的歌词" = "Arama yalnızca kullanılmakta olan şarkı sözlerini buldu";
 "搜这首" = "Bu Parçayı Ara";
+"撤销" = "Geri Al";
 "播放/暂停" = "Çal/Duraklat";
 "播放到何处时记录一次 Scrobble\n50%：播放一半或 4 分钟，以先到者为准（Last.fm 官方规则）\n75% / 90%：播放达到对应比例\n曲终：完整播放后才记录，中途切歌不记录" = "Bir parçanın ne kadarı çalınınca skroplanacağı\n%50: parçanın yarısı veya 4 dakika, hangisi önce gelirse (Last.fm kuralı)\n%75 / %90: parçanın o kadarı\nParça Sonu: yalnızca sonuna kadar çalınınca; atlanan parçalar skroplanmaz";
 "播放器" = "Çalar";
@@ -1571,6 +1574,10 @@
 "无法写入歌词文件：%@" = "Şarkı sözü dosyası yazılamadı: %@";
 "无法打开「%1$@」：%2$@" = "“%1$@” açılamadı: %2$@";
 "无法打开此文件夹：%@" = "Bu klasör açılamadı: %@";
+"无法撤销，请重试" = "Geri alınamadı. Yeniden deneyin";
+"无法撤销：%@" = "Geri alınamadı: %@";
+"无法撤销：已超过撤销时限" = "Geri alınamadı: geri alma süresi doldu";
+"无法撤销：这首歌曲的歌词已有其他改动" = "Geri alınamadı: bu şarkının sözleri o zamandan beri değişti";
 "无法添加" = "Eklenemedi";
 "无法确定歌手，不存入" = "Sanatçı belirlenemedi, kaydedilmez";
 "无法确认状态（无法读取该浏览器的配置文件）" = "Durum bilinmiyor (bu tarayıcının tercihler dosyası okunamıyor)";

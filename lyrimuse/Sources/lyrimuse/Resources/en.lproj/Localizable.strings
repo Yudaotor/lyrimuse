@@ -1187,6 +1187,7 @@
 "已拷贝版本信息" = "Version info copied";
 "已授权" = "Authorized";
 "已搜索的歌词源均未提供这首歌曲的歌词。可搜索候选歌词手动选择；若为纯音乐，可标为纯音乐" = "None of the lyrics sources searched has lyrics for this song. Search for lyrics to choose one manually, or mark it as instrumental if it has no vocals";
+"已撤销" = "Undone";
 "已播时长" = "Elapsed";
 "已收录、无歌词" = "Indexed, No Lyrics";
 "已收录、无歌词 %@ 首" = "%@ indexed, no lyrics";
@@ -1355,6 +1356,7 @@
 "快捷操作按钮" = "Quick Action Buttons";
 "快捷键" = "Keyboard Shortcuts";
 "快捷键：⌘R" = "Shortcut: ⌘R";
+"快捷键：⌘Z" = "Shortcut: ⌘Z";
 "快捷键：⌘↩" = "Shortcut: ⌘↩";
 "快进 10 秒" = "Forward 10 Seconds";
 "快退 10 秒" = "Back 10 Seconds";
@@ -1541,6 +1543,7 @@
 "搜索确认无歌词后才隐藏，搜索期间照常显示" = "Hides only once the search confirms there are no lyrics; stays visible while searching";
 "搜索结果仅有当前使用的歌词" = "The search found only the lyrics already in use";
 "搜这首" = "Search This Track";
+"撤销" = "Undo";
 "播放/暂停" = "Play/Pause";
 "播放到何处时记录一次 Scrobble\n50%：播放一半或 4 分钟，以先到者为准（Last.fm 官方规则）\n75% / 90%：播放达到对应比例\n曲终：完整播放后才记录，中途切歌不记录" = "How much of a track must play before it’s scrobbled\n50%: half the track or 4 minutes, whichever comes first (Last.fm’s rule)\n75% / 90%: that share of the track\nTrack End: only when played to the end; skipped tracks aren’t scrobbled";
 "播放器" = "Player";
@@ -1646,6 +1649,10 @@
 "无法写入歌词文件：%@" = "Couldn’t write the lyrics file: %@";
 "无法打开「%1$@」：%2$@" = "Couldn’t open %1$@: %2$@";
 "无法打开此文件夹：%@" = "Couldn’t open this folder: %@";
+"无法撤销，请重试" = "Couldn’t undo. Try again";
+"无法撤销：%@" = "Couldn’t undo: %@";
+"无法撤销：已超过撤销时限" = "Couldn’t undo: the time to undo has passed";
+"无法撤销：这首歌曲的歌词已有其他改动" = "Couldn’t undo: this song’s lyrics were changed by another action";
 "无法添加" = "Couldn’t Add It";
 "无法确定歌手，不存入" = "Artist unknown, not saved";
 "无法确认状态（无法读取该浏览器的配置文件）" = "Status unknown (can’t read this browser’s preferences file)";

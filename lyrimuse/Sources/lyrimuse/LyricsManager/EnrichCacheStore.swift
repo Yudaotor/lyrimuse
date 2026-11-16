@@ -1475,6 +1475,18 @@ public final class EnrichCacheStore: ObservableObject {
                          source: String? = nil, markManual: Bool = true,
                          sourceChoice: String? = nil, fromManualPick: Bool = false,
                          bg: String? = nil, trLang: String? = nil, trFrom: String = "") async -> Bool {
+        await saveEdit(key: key, lyrics: lyrics, tr: tr, roma: roma, yrc: yrc, source: source, markManual: markManual,
+                       sourceChoice: sourceChoice, fromManualPick: fromManualPick, bg: bg, trLang: trLang, trFrom: trFrom,
+                       undoable: false).ok
+    }
+
+    /// 同上,交回引擎的整份结果。`undoable` 为真时引擎留下这首改之前的完整状态,成功时 `undoID` 是撤这一笔用的 id
+    /// (`undoEdit`;后台服务没在跑、走一次性子命令时没有)。
+    func saveEdit(key: String, lyrics: String, tr: String, roma: String, yrc: String? = nil,
+                  source: String? = nil, markManual: Bool = true,
+                  sourceChoice: String? = nil, fromManualPick: Bool = false,
+                  bg: String? = nil, trLang: String? = nil, trFrom: String = "",
+                  undoable: Bool) async -> EnrichEditChannel.Result {
         // 字段规则(译文换了清译文记录、罗马音描述旧正文就清掉、采纳留内容指纹……)都在引擎的
         // applySaveEdit,这里只把参数原样交过去。nil 的参数不传 = 引擎那边不动这个字段。
         var fields: [String: Any] = [
@@ -1487,7 +1499,14 @@ public final class EnrichCacheStore: ObservableObject {
         if let bg { fields["bg"] = bg }
         if let trLang { fields["tr_lang"] = trLang }
         if !trFrom.isEmpty { fields["tr_from"] = trFrom }
-        return await commit("save_edit", fields).ok
+        if undoable { fields["undoable"] = true }
+        return await commit("save_edit", fields)
+    }
+
+    /// 撤销 `saveEdit` / `savePlainTextEdit` 带 undoable 的那一笔:引擎核对这首之后没被动过,把条目、同组写法、导入库记录原样放回、
+    /// 重新导出歌词文件(enrichundo.go)。失败时 `errorCode` 说原因(`LyricsEditUndo.reasonKey`)。
+    func undoEdit(undoID: String) async -> EnrichEditChannel.Result {
+        await commit("undo_edit", ["undo_id": undoID])
     }
 
     /// 开关翻面前后要告诉用户的那几个数。
@@ -1559,7 +1578,14 @@ public final class EnrichCacheStore: ObservableObject {
     /// - Returns: 有没有真的落盘,同 `saveEdit`。
     @discardableResult
     public func savePlainTextEdit(key: String, plainLyrics: String, source: String) async -> Bool {
-        await commit("save_plain_text", ["key": key, "plain_lyrics": plainLyrics, "plain_lyrics_source": source]).ok
+        await savePlainTextEdit(key: key, plainLyrics: plainLyrics, source: source, undoable: false).ok
+    }
+
+    /// 同上,交回引擎的整份结果;`undoable` 同 `saveEdit`。
+    func savePlainTextEdit(key: String, plainLyrics: String, source: String, undoable: Bool) async -> EnrichEditChannel.Result {
+        var fields: [String: Any] = ["key": key, "plain_lyrics": plainLyrics, "plain_lyrics_source": source]
+        if undoable { fields["undoable"] = true }
+        return await commit("save_plain_text", fields)
     }
 
     /// 这条写法现在在哪个实体、哪个共享组,取自刚重读的快照(拆开之后比播放那一侧的读取早一拍);没有实体 id 时是 nil。

@@ -1187,6 +1187,7 @@
 "已拷贝版本信息" = "Información de versión copiada";
 "已授权" = "Autorizado";
 "已搜索的歌词源均未提供这首歌曲的歌词。可搜索候选歌词手动选择；若为纯音乐，可标为纯音乐" = "Ninguna de las fuentes de letras consultadas tiene la letra de esta canción. Busca letras para elegir una manualmente o márcala como instrumental si no tiene voz";
+"已撤销" = "Deshecho";
 "已播时长" = "Transcurrido";
 "已收录、无歌词" = "Indexadas, sin letra";
 "已收录、无歌词 %@ 首" = "%@ indexadas, sin letra";
@@ -1355,6 +1356,7 @@
 "快捷操作按钮" = "Botones de acciones rápidas";
 "快捷键" = "Atajos de teclado";
 "快捷键：⌘R" = "Atajo: ⌘R";
+"快捷键：⌘Z" = "Atajo: ⌘Z";
 "快捷键：⌘↩" = "Atajo: ⌘↩";
 "快进 10 秒" = "Avanzar 10 segundos";
 "快退 10 秒" = "Retroceder 10 segundos";
@@ -1541,6 +1543,7 @@
 "搜索确认无歌词后才隐藏，搜索期间照常显示" = "Solo se oculta cuando la búsqueda confirma que no hay letra; sigue visible mientras busca";
 "搜索结果仅有当前使用的歌词" = "La búsqueda solo encontró la letra en uso";
 "搜这首" = "Buscar esta canción";
+"撤销" = "Deshacer";
 "播放/暂停" = "Reproducir/Pausa";
 "播放到何处时记录一次 Scrobble\n50%：播放一半或 4 分钟，以先到者为准（Last.fm 官方规则）\n75% / 90%：播放达到对应比例\n曲终：完整播放后才记录，中途切歌不记录" = "Cuánto debe reproducirse una canción para hacer scrobble\n50%: la mitad o 4 minutos, lo que llegue antes (regla de Last.fm)\n75% / 90%: esa parte de la canción\nAl final: solo si se reproduce hasta el final; las canciones saltadas no cuentan";
 "播放器" = "Reproductor";
@@ -1646,6 +1649,10 @@
 "无法写入歌词文件：%@" = "No se pudo escribir el archivo de letra: %@";
 "无法打开「%1$@」：%2$@" = "No se pudo abrir «%1$@»: %2$@";
 "无法打开此文件夹：%@" = "No se pudo abrir esta carpeta: %@";
+"无法撤销，请重试" = "No se pudo deshacer. Inténtalo de nuevo";
+"无法撤销：%@" = "No se pudo deshacer: %@";
+"无法撤销：已超过撤销时限" = "No se pudo deshacer: ya pasó el tiempo para deshacer";
+"无法撤销：这首歌曲的歌词已有其他改动" = "No se pudo deshacer: la letra de esta canción ha cambiado desde entonces";
 "无法添加" = "No se pudo añadir";
 "无法确定歌手，不存入" = "Artista desconocido, no se guarda";
 "无法确认状态（无法读取该浏览器的配置文件）" = "Estado desconocido (no se puede leer el archivo de preferencias de este navegador)";

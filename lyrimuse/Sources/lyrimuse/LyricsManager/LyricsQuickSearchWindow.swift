@@ -25,6 +25,8 @@ struct LyricsQuickSearchWindow: View {
     @State private var context: Context?
     /// 上一次重算「当前使用」时缓存文件的修改时间,见下面那条定时器。
     @State private var markedCacheMTime: Date?
+    /// 那一次重算时读到的缓存是不是已经解码到盘上那一版(`EnrichCacheReader.isCurrent`)。
+    @State private var markedCacheCurrent = true
     // 切换界面语言时重算 body,窗口标题(.navigationTitle)跟着换。经 AppLanguageObserver 窄代理,不整对象订阅 AppSettings。
     @ObservedObject private var languageSettings = AppLanguageObserver.shared
     @StateObject private var windowSurface = SettingsWindowSurface()
@@ -76,31 +78,40 @@ struct LyricsQuickSearchWindow: View {
                     // 保存前不用先把整份缓存读进 store:写入由引擎执行(EnrichEditChannel),不经 store 的内存副本;
                     // 歌词管理没开着时先读一遍就是白解析一整份缓存,commit 收尾还会再读一遍。
                     // 不再自己套 Task:面板要等这里回报"落盘成败"再决定挪徽标/回声。
-                    let saved: Bool
+                    // undoable:引擎留下这首改之前的完整状态,回声上的「撤销」按 undo_id 放回(见 11 章决策 177)。
+                    let result: EnrichEditChannel.Result
                     if candidate.isPlainTextOnly {
                         // 仅纯文本的候选必须走 savePlainTextEdit:喂没有时间戳的纯文本直接当 LRC 进 saveEdit,
                         // 后果正是 savePlainTextEdit 头注写的,这首歌在别的展示面上从"至少有静态文字"退化成
                         // "看起来完全没有歌词"。selftest contracts 组的「采纳候选入口」守卫钉着这条分流。
-                        saved = await EnrichCacheStore.shared.savePlainTextEdit(
-                            key: context.key, plainLyrics: candidate.lyrics, source: candidate.source)
+                        result = await EnrichCacheStore.shared.savePlainTextEdit(
+                            key: context.key, plainLyrics: candidate.lyrics, source: candidate.source, undoable: true)
                     } else {
                         // 必须显式传 markManual / sourceChoice:saveEdit 的默认值是 markManual: true,不传等于每次采纳
                         // 都悄悄永久冻结这首歌。采纳要不要顺带冻结由 `manualPickLocksLyrics` 决定:关 = 之后的自动更新照常
                         // 调整这首歌、不限制源,开 = 定在这份歌词上不动。两种状态都不写 lyrics_source_choice(空串 = 显式
                         // 清掉),别加"记下选了哪个源、自愈只在该源内挑"的中间档:那是一条看不见的约束。直接编辑正文
                         // (歌词管理的「保存修改」)永远置 manual_lyrics,不受这个开关影响;导入的文件同理,自动匹配搜不回它。
-                        saved = await EnrichCacheStore.shared.saveEdit(
+                        result = await EnrichCacheStore.shared.saveEdit(
                             key: context.key,
                             lyrics: candidate.lyrics, tr: candidate.lyricsTr,
                             roma: candidate.lyricsRoma, yrc: candidate.lyricsYRC,
                             source: candidate.source,
                             markManual: candidate.isImported || AppSettings.shared.manualPickLocksLyrics,
                             sourceChoice: "", fromManualPick: true, bg: candidate.lyricsBG, trLang: candidate.lyricsTrLang,
-                            trFrom: candidate.lyricsTrFrom)
+                            trFrom: candidate.lyricsTrFrom, undoable: true)
                     }
                     // 正在放的那首重读歌词由 EnrichCacheStore.commit 收尾时做,这里不再调一次。
-                    if saved { AppActions.shared.lyricsSearchApplied.send(context.key) }
-                    return saved
+                    if result.ok { AppActions.shared.lyricsSearchApplied.send(context.key) }
+                    return LyricsSearchSheet.ApplyOutcome(saved: result.ok, undoID: result.undoID)
+                } onUndo: { undoID in
+                    // 撤销同样经引擎;放回去之后歌词管理详情页重读、「当前使用」按缓存现状重算。
+                    let result = await EnrichCacheStore.shared.undoEdit(undoID: undoID)
+                    if result.ok {
+                        AppActions.shared.lyricsSearchApplied.send(context.key)
+                        refreshCurrentMarker()
+                    }
+                    return result
                 }
             } else {
                 // 极短暂的占位——曲目快照是纯内存读取(PlaybackCoordinator 当前值 + 一次
@@ -135,10 +146,14 @@ struct LyricsQuickSearchWindow: View {
         .navigationTitle(L10n.t("搜索歌词…"))
     }
 
+    /// 文件一变就重算;那一刻新的一版还在后台解码(读到的是旧条目配新正文)时,解完再重算一次,不然要等下一次文件变化
+    /// (采纳后马上撤销就停在采纳那份上,见 11 章决策 177)。
     private func checkCacheFileChanged() {
         let mtime = EnrichCacheReader.fileModificationDate
-        guard mtime != markedCacheMTime else { return }
+        let current = EnrichCacheReader.isCurrent
+        guard mtime != markedCacheMTime || (current && !markedCacheCurrent) else { return }
         markedCacheMTime = mtime
+        markedCacheCurrent = current
         refreshCurrentMarker()
     }
 

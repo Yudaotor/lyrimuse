@@ -1121,6 +1121,7 @@
 "已拷贝版本信息" = "Đã sao chép thông tin phiên bản";
 "已授权" = "Đã cấp quyền";
 "已搜索的歌词源均未提供这首歌曲的歌词。可搜索候选歌词手动选择；若为纯音乐，可标为纯音乐" = "Các nguồn lời đã tìm đều không có lời cho bài hát này. Có thể tìm lời bài hát để chọn thủ công; nếu là nhạc không lời, hãy đánh dấu là nhạc không lời";
+"已撤销" = "Đã hoàn tác";
 "已播时长" = "Đã phát";
 "已收录、无歌词" = "Đã ghi nhận, không có lời";
 "已收录、无歌词 %@ 首" = "%@ bài đã ghi nhận, không có lời";
@@ -1282,6 +1283,7 @@
 "快捷操作按钮" = "Nút tác vụ nhanh";
 "快捷键" = "Phím tắt";
 "快捷键：⌘R" = "Phím tắt: ⌘R";
+"快捷键：⌘Z" = "Phím tắt: ⌘Z";
 "快捷键：⌘↩" = "Phím tắt: ⌘↩";
 "快进 10 秒" = "Tiến 10 giây";
 "快退 10 秒" = "Lùi 10 giây";
@@ -1466,6 +1468,7 @@
 "搜索确认无歌词后才隐藏，搜索期间照常显示" = "Chỉ ẩn khi tìm kiếm xác nhận không có lời, vẫn hiện trong lúc tìm";
 "搜索结果仅有当前使用的歌词" = "Kết quả tìm kiếm chỉ có lời đang dùng";
 "搜这首" = "Tìm bài hát này";
+"撤销" = "Hoàn tác";
 "播放/暂停" = "Phát/Tạm dừng";
 "播放到何处时记录一次 Scrobble\n50%：播放一半或 4 分钟，以先到者为准（Last.fm 官方规则）\n75% / 90%：播放达到对应比例\n曲终：完整播放后才记录，中途切歌不记录" = "Phát đến đâu thì ghi một lần Scrobble\n50%: phát một nửa hoặc 4 phút, tùy điều kiện nào đến trước (quy tắc chính thức của Last.fm)\n75% / 90%: phát đến tỷ lệ tương ứng\nHết bài: chỉ ghi khi phát hết bài, chuyển bài giữa chừng thì không ghi";
 "播放器" = "Trình phát";
@@ -1571,6 +1574,10 @@
 "无法写入歌词文件：%@" = "Không thể ghi tệp lời: %@";
 "无法打开「%1$@」：%2$@" = "Không thể mở “%1$@”: %2$@";
 "无法打开此文件夹：%@" = "Không thể mở thư mục này: %@";
+"无法撤销，请重试" = "Không hoàn tác được, hãy thử lại";
+"无法撤销：%@" = "Không hoàn tác được: %@";
+"无法撤销：已超过撤销时限" = "Không hoàn tác được: đã quá thời hạn hoàn tác";
+"无法撤销：这首歌曲的歌词已有其他改动" = "Không hoàn tác được: lời của bài hát này đã có thay đổi khác";
 "无法添加" = "Không thể thêm";
 "无法确定歌手，不存入" = "Không rõ nghệ sĩ, không lưu";
 "无法确认状态（无法读取该浏览器的配置文件）" = "Không rõ trạng thái (không đọc được tệp tùy chọn của trình duyệt này)";

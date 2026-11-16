@@ -4907,10 +4907,10 @@ func runSourceContractSettingsTests() {
                     "采纳候选入口: 「当前使用」的正文指纹取 storedLyrics")
         let manager = read("LyricsManager/LyricsManagerView.swift") ?? ""
         // 歌词管理指定的那一首按 key 原样取:lookup 会按正在播放的快照、时长变体去认,同名的另一份录音在放时取错。
-        // 歌词管理把选中那首交给窗口,窗口采纳 / 自动匹配之后告诉它,它重载编辑框、挂结论。
+        // 歌词管理把选中那首交给窗口,窗口采纳 / 撤销采纳 / 自动匹配之后告诉它,它重载编辑框、挂结论。
         expectEqual(quick.contains("let stored = EnrichCacheReader.storedEntry(forKey: key)")
                     && manager.contains("AppActions.shared.openLyricsSearch(for: LyricsSearchTarget(")
-                    && quick.contains("if saved { AppActions.shared.lyricsSearchApplied.send(context.key) }")
+                    && quick.contains("if result.ok { AppActions.shared.lyricsSearchApplied.send(context.key) }")
                     && quick.contains("AppActions.shared.lyricsSearchRematched.send(")
                     && manager.contains(".onReceive(AppActions.shared.lyricsSearchApplied) { key in")
                     && manager.contains(".onReceive(AppActions.shared.lyricsSearchRematched) { result in"), true,

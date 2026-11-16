@@ -1187,6 +1187,7 @@
 "已拷贝版本信息" = "Infos de version copiées";
 "已授权" = "Autorisé";
 "已搜索的歌词源均未提供这首歌曲的歌词。可搜索候选歌词手动选择；若为纯音乐，可标为纯音乐" = "Aucune des sources de paroles consultées n’a les paroles de ce morceau. Recherchez des paroles pour en choisir manuellement, ou marquez-le comme instrumental s’il n’a pas de voix";
+"已撤销" = "Annulé";
 "已播时长" = "Écoulé";
 "已收录、无歌词" = "Indexés, sans paroles";
 "已收录、无歌词 %@ 首" = "%@ indexés, sans paroles";
@@ -1355,6 +1356,7 @@
 "快捷操作按钮" = "Boutons d’actions rapides";
 "快捷键" = "Raccourcis clavier";
 "快捷键：⌘R" = "Raccourci : ⌘R";
+"快捷键：⌘Z" = "Raccourci : ⌘Z";
 "快捷键：⌘↩" = "Raccourci : ⌘↩";
 "快进 10 秒" = "Avancer de 10 secondes";
 "快退 10 秒" = "Reculer de 10 secondes";
@@ -1541,6 +1543,7 @@
 "搜索确认无歌词后才隐藏，搜索期间照常显示" = "Se masque seulement quand la recherche confirme l’absence de paroles ; reste visible pendant la recherche";
 "搜索结果仅有当前使用的歌词" = "La recherche n’a trouvé que les paroles déjà utilisées";
 "搜这首" = "Rechercher ce morceau";
+"撤销" = "Annuler";
 "播放/暂停" = "Lecture/Pause";
 "播放到何处时记录一次 Scrobble\n50%：播放一半或 4 分钟，以先到者为准（Last.fm 官方规则）\n75% / 90%：播放达到对应比例\n曲终：完整播放后才记录，中途切歌不记录" = "Quelle part d’un morceau doit être lue pour le scrobbler\n50 % : la moitié ou 4 minutes, selon le premier seuil atteint (règle de Last.fm)\n75 % / 90 % : cette part du morceau\nFin du morceau : seulement s’il est lu jusqu’au bout ; les morceaux passés ne comptent pas";
 "播放器" = "Lecteur";
@@ -1646,6 +1649,10 @@
 "无法写入歌词文件：%@" = "Impossible d’écrire le fichier de paroles : %@";
 "无法打开「%1$@」：%2$@" = "Impossible d’ouvrir « %1$@ » : %2$@";
 "无法打开此文件夹：%@" = "Impossible d’ouvrir ce dossier : %@";
+"无法撤销，请重试" = "Annulation impossible. Réessayez";
+"无法撤销：%@" = "Annulation impossible : %@";
+"无法撤销：已超过撤销时限" = "Annulation impossible : le délai d’annulation est dépassé";
+"无法撤销：这首歌曲的歌词已有其他改动" = "Annulation impossible : les paroles de ce morceau ont été modifiées depuis";
 "无法添加" = "Ajout impossible";
 "无法确定歌手，不存入" = "Artiste inconnu, non enregistré";
 "无法确认状态（无法读取该浏览器的配置文件）" = "État inconnu (impossible de lire le fichier de préférences de ce navigateur)";

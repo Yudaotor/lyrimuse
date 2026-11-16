@@ -24,6 +24,8 @@ enum EnrichEditChannel {
         var errorCode: String?
         var filePath: String?
         var fileHasLyrics = false
+        /// 带 undoable 的改动成功后引擎给的 undo_id(`undo_edit` 撤这一笔用);撤销失败时 errorCode 是 undo_expired / undo_changed。
+        var undoID: String?
     }
 
     /// 跟引擎 main.go 里 setEnrichEditDir 的目录名逐字节一致。
@@ -164,6 +166,7 @@ enum EnrichEditChannel {
                       error: obj["error"] as? String,
                       errorCode: obj["error_code"] as? String,
                       filePath: obj["file_path"] as? String,
-                      fileHasLyrics: obj["file_has_lyrics"] as? Bool ?? false)
+                      fileHasLyrics: obj["file_has_lyrics"] as? Bool ?? false,
+                      undoID: (obj["undo_id"] as? String).flatMap { $0.isEmpty ? nil : $0 })
     }
 }
