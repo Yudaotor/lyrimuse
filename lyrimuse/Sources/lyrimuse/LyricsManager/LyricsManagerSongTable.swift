@@ -419,7 +419,8 @@ struct LyricsManagerSongListRow: View {
             isNowPlaying: isNowPlaying,
             isPinned: isPinned,
             isEmphasized: isEmphasized,
-            artwork: isNowPlaying ? nowPlaying.artwork : nil)
+            artwork: isNowPlaying ? nowPlaying.artwork : nil,
+            engineNotRunning: nowPlaying.engineNotRunning)
         // 行底铺了实心强调色:主色、次要色换成白字那一套,同系统列表的选中行(见 11 章决策 67)。
         .environment(\.colorScheme, isEmphasized ? .dark : colorScheme)
     }
@@ -441,16 +442,18 @@ final class LyricsManagerListEmphasis: ObservableObject {
     }
 }
 
-/// 正在放的那首在列表里是哪一行、播放器给的封面。各行自己读:换歌、封面晚一拍到的时候只有屏上那几行重算(见 11 章决策 94)。
-/// 值真的变了才发布。
+/// 正在放的那首在列表里是哪一行、播放器给的封面、歌词引擎在不在(占位行的状态文案)。各行自己读:换歌、封面晚一拍到的时候
+/// 只有屏上那几行重算(见 11 章决策 94)。值真的变了才发布。
 @MainActor
 final class LyricsManagerListNowPlaying: ObservableObject {
     @Published private(set) var key: String?
     @Published private(set) var artwork: NSImage?
+    @Published private(set) var engineNotRunning = false
 
-    func update(key: String?, artwork: NSImage?) {
+    func update(key: String?, artwork: NSImage?, engineNotRunning: Bool) {
         if key != self.key { self.key = key }
         if artwork !== self.artwork { self.artwork = artwork }
+        if engineNotRunning != self.engineNotRunning { self.engineNotRunning = engineNotRunning }
     }
 }
 

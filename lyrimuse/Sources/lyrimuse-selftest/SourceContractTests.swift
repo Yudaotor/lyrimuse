@@ -5069,8 +5069,8 @@ func runSourceContractSettingsTests() {
                     && manager.contains(".onChange(of: sortOption) { _, _ in revealSelection() }"), true,
                     "歌词管理: 换分组、换排序之后滚回选中的那一首")
         // 正在放的那首在列表行、多选清单里跟详情页头部一样用播放器给的封面(11 章决策 78)。
-        expectEqual(songTable.contains("artwork: isNowPlaying ? nowPlaying.artwork : nil)")
-                    && manager.contains("listNowPlaying.update(key: nowPlayingKey, artwork: nowPlaying.artwork)")
+        expectEqual(songTable.contains("artwork: isNowPlaying ? nowPlaying.artwork : nil")
+                    && manager.contains("listNowPlaying.update(key: nowPlayingKey, artwork: nowPlaying.artwork,")
                     && sourceHas(manager, "LyricsManagerCover(url: summary.coverURL, image: summary.key == nowPlayingKey ? nowPlaying.artwork : nil,\n                               size: 32, radius: 6)")
                     && managerParts.contains("LyricsManagerCover(url: summary.coverURL, image: artwork, size: 40, radius: 7)"), true,
                     "歌词管理: 正在放的那首在列表里用播放器给的封面")

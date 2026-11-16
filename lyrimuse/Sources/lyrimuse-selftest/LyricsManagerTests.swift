@@ -38,6 +38,42 @@ func runLyricsManagerTests() {
         }
         expectEqual(closeHooks, 1, "关窗复位: 窗口关掉那一处 onDisappear 调 dismissWindowPresentations")
     }
+    // ---- 「正在搜索」占位行:引擎常驻进程不在时说「歌词引擎未运行」(见 15 章决策 115) ----
+    // 引擎不在就没人去搜,占位行那句「搜索歌词中…」不会有下文。漏接哪一环都不报错,只会照旧一直挂着「搜索中」。
+    do {
+        let dir = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("lyrimuse/LyricsManager")
+        func read(_ name: String) -> String {
+            (try? String(contentsOf: dir.appendingPathComponent(name), encoding: .utf8)) ?? ""
+        }
+        let view = read("LyricsManagerView.swift")
+        let table = read("LyricsManagerSongTable.swift")
+        let parts = read("LyricsManagerParts.swift")
+        let observer = sourceBody("final class LyricsManagerNowPlayingObserver", in: view)
+        expectEqual(sourceHas(observer, "p.$engineNotRunning .removeDuplicates() .sink { [weak self] in self?.engineNotRunning = $0 }"),
+                    true, "引擎未运行占位行: 窄代理转发 PlaybackCoordinator.engineNotRunning")
+        expectEqual(sourceHas(sourceBody("private func syncListNowPlaying()", in: view),
+                              "engineNotRunning: nowPlaying.engineNotRunning")
+                    && sourceHas(view, ".onChange(of: nowPlaying.engineNotRunning) { _, _ in syncListNowPlaying() }"),
+                    true, "引擎未运行占位行: 引擎状态变了同步给列表各行")
+        let detail = sourceBody("private func placeholderDetailView(", in: view)
+        let downBranch = sourceBody("if nowPlaying.engineNotRunning {", in: detail)
+        expectEqual(sourceHas(downBranch, #"Label(L10n.t("歌词引擎未运行"), systemImage: "exclamationmark.triangle")"#)
+                    && sourceHas(downBranch, "AppActions.shared.requestSettings(.tab(.player))")
+                    && !sourceHas(downBranch, "cancelPlaceholderSearch()")
+                    && !sourceHas(downBranch, #"L10n.t("正在搜索歌词…")"#),
+                    true, "引擎未运行占位行: 详情页说「歌词引擎未运行」、给「打开设置」、不给「停止搜索」")
+        expectEqual(sourceHas(detail, #"} else { ContentUnavailableView { Label(L10n.t("正在搜索歌词…"), systemImage: "magnifyingglass")"#),
+                    true, "引擎未运行占位行: 引擎在时详情页照旧「正在搜索歌词…」")
+        expectEqual(sourceHas(sourceBody("struct LyricsManagerSongListRow: View", in: table),
+                              "engineNotRunning: nowPlaying.engineNotRunning)")
+                    && sourceHas(sourceBody("func update(key: String?, artwork: NSImage?, engineNotRunning: Bool)", in: table),
+                                 "if engineNotRunning != self.engineNotRunning { self.engineNotRunning = engineNotRunning }"),
+                    true, "引擎未运行占位行: 列表各行从 LyricsManagerListNowPlaying 读引擎状态")
+        expectEqual(sourceHas(sourceBody("private var status: some View", in: parts),
+                              #"if summary.isSearching { Text(engineNotRunning ? L10n.t("歌词引擎未运行") : L10n.t("搜索歌词中…"))"#),
+                    true, "引擎未运行占位行: 列表行右边说「歌词引擎未运行」,引擎在时照旧「搜索歌词中…」")
+    }
     // ---- 搜索候选:按播放器的时长一个能用的都没有时,不看时长补搜到的那几条在弹窗里有说法 ----
     do {
         let repo = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()

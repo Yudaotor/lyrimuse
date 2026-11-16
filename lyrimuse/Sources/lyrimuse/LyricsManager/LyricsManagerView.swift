@@ -35,9 +35,12 @@ final class LyricsManagerNowPlayingObserver: ObservableObject {
     @Published private(set) var trackSignature = ""
     @Published private(set) var artwork: NSImage?
     @Published private(set) var displayArtist = ""
+    /// 歌词引擎常驻进程一直不在:占位行不再说「搜索歌词中…」,改说「歌词引擎未运行」(15 章决策 115)。
+    @Published private(set) var engineNotRunning = false
     private var sub: AnyCancellable?
     private var artworkSub: AnyCancellable?
     private var displayArtistSub: AnyCancellable?
+    private var engineSub: AnyCancellable?
     init() {
         let p = PlaybackCoordinator.shared
         sub = Publishers.CombineLatest3(p.$artist, p.$title, p.$album)
@@ -51,6 +54,9 @@ final class LyricsManagerNowPlayingObserver: ObservableObject {
         artworkSub = p.$artworkImage
             .removeDuplicates { $0 === $1 }
             .sink { [weak self] in self?.artwork = $0 }
+        engineSub = p.$engineNotRunning
+            .removeDuplicates()
+            .sink { [weak self] in self?.engineNotRunning = $0 }
     }
 }
 
@@ -1823,7 +1829,7 @@ struct LyricsManagerView: View {
 
     /// 列表各行读的那份正在播放(见 SongListNowPlaying),跟 nowPlayingKey 和播放器给的封面对齐。
     private func syncListNowPlaying() {
-        listNowPlaying.update(key: nowPlayingKey, artwork: nowPlaying.artwork)
+        listNowPlaying.update(key: nowPlayingKey, artwork: nowPlaying.artwork, engineNotRunning: nowPlaying.engineNotRunning)
     }
 
     /// 选中这一首;编辑里有没保存的改动、要换到别的歌时先问一句,问的时候返回 false(这一下的动作不做)。
@@ -1905,6 +1911,7 @@ struct LyricsManagerView: View {
         .onChange(of: offsets.revision) { _, _ in refreshShownOffset() }
         .onChange(of: nowPlayingKey, initial: true) { _, _ in syncListNowPlaying() }
         .onChange(of: nowPlaying.artwork) { _, _ in syncListNowPlaying() }
+        .onChange(of: nowPlaying.engineNotRunning) { _, _ in syncListNowPlaying() }
         // 删除确认弹窗挂在 List 上——不能挂在 detailView 里(多选时右侧渲染的是批量
         // 面板、detailView 根本不在视图树里,置 isPresented 会静默无效),也故意不跟
         // 「清空全部缓存」那个弹窗挂在同一条修饰符链上:SwiftUI 对同一条链上叠加
@@ -3152,15 +3159,30 @@ struct LyricsManagerView: View {
                         .lineLimit(1)
                 }
             }
-            ContentUnavailableView {
-                Label(L10n.t("正在搜索歌词…"), systemImage: "magnifyingglass")
-            } description: {
-                Text(L10n.t("首次播放，正在联网搜索歌词，完成后将自动显示"))
-            } actions: {
-                Button(L10n.t("停止搜索")) { cancelPlaceholderSearch() }
+            if nowPlaying.engineNotRunning {
+                // 引擎不在就没人在搜,也没人读「停止搜索」的取消信号:只说状态,给一颗翻到播放器页的「打开设置」
+                // (歌词引擎那一行有「启用」),同歌词窗口空状态。见 15 章决策 115。
+                ContentUnavailableView {
+                    Label(L10n.t("歌词引擎未运行"), systemImage: "exclamationmark.triangle")
+                } actions: {
+                    Button(L10n.t("打开设置")) {
+                        AppActions.shared.requestSettings(.tab(.player))
+                        AppActions.shared.openSettings?()
+                    }
                     .settingsGlassButtons()
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else {
+                ContentUnavailableView {
+                    Label(L10n.t("正在搜索歌词…"), systemImage: "magnifyingglass")
+                } description: {
+                    Text(L10n.t("首次播放，正在联网搜索歌词，完成后将自动显示"))
+                } actions: {
+                    Button(L10n.t("停止搜索")) { cancelPlaceholderSearch() }
+                        .settingsGlassButtons()
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
         .padding(.leading, 30)
         .padding(.trailing, 22)

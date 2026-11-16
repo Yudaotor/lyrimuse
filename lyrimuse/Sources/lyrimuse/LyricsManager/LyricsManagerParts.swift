@@ -406,6 +406,8 @@ struct LyricsManagerSongRow: View {
     let isEmphasized: Bool
     /// 正在放的那首传播放器给的封面,有就直接画,不等缓存里的封面地址(见 11 章决策 78)。
     var artwork: NSImage? = nil
+    /// 歌词引擎常驻进程一直不在:占位行说「歌词引擎未运行」,不说「搜索歌词中…」(15 章决策 115)。
+    var engineNotRunning = false
 
     private var emphasized: Bool { isEmphasized }
 
@@ -467,7 +469,7 @@ struct LyricsManagerSongRow: View {
     @ViewBuilder
     private var status: some View {
         if summary.isSearching {
-            Text(L10n.t("搜索歌词中…")).foregroundStyle(.secondary)
+            Text(engineNotRunning ? L10n.t("歌词引擎未运行") : L10n.t("搜索歌词中…")).foregroundStyle(.secondary)
         } else if !summary.hasLyrics || summary.isInstrumental {
             if summary.isInstrumental {
                 Text(L10n.t("纯音乐")).foregroundStyle(.secondary)
