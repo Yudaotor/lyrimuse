@@ -96,6 +96,9 @@ func saveArtistAliasCache() {
 // 不够间隔就 sleep 补足即可。单测用假应答时置 0(withoutMBThrottle)。
 var musicbrainzMinIntervalBetweenCalls = 1100 * time.Millisecond
 
+// musicbrainzHost:MusicBrainz 接口的主机。
+const musicbrainzHost = "musicbrainz.org"
+
 // musicbrainzSharedMaxWait:跨进程窗口还要等超过这么久,就说明是被 503 停手了,这次不发。
 const musicbrainzSharedMaxWait = 3 * time.Second
 

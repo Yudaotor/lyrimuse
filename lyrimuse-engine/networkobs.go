@@ -162,12 +162,10 @@ func doHTTPTrackedOnce(cli *http.Client, req *http.Request) (*http.Response, err
 	// 只影响日志与汇总口径:熔断器那边 404 走哪条分支由它自己判(上面 observeTraced 已经
 	// 把原始状态码给它了),不受这里影响。
 	notFound := resp.StatusCode == http.StatusNotFound
-	failed := resp.StatusCode >= 400 && !notFound
-	// 歌词源回 503 / 429 是对方在限流(lrclib 忙时回 503 + Retry-After: 1),由出站闸那条「lyric source rate-limited」
-	// 记一次、带暂停多久(hostguard.go noteLyricSourceThrottled);这里逐次只到 Debug,汇总照样计 failed。
-	throttled := (resp.StatusCode == http.StatusServiceUnavailable || resp.StatusCode == http.StatusTooManyRequests) &&
-		lyricSourceForHost(guardHost(req.URL)) != "" && guardApplies(req)
-	if failed && !throttled {
+	// 限速应答由收到它的一方停手(rateLimitAnswerPaused):逐次只到 Debug,汇总单列 throttled、不进 failed。
+	throttled := rateLimitAnswerPaused(req, resp.StatusCode)
+	failed := resp.StatusCode >= 400 && !notFound && !throttled
+	if failed {
 		slog.Warn("api call: "+target, "status", resp.StatusCode, "elapsed_ms", elapsed.Milliseconds())
 	} else {
 		// 成功(以及 404)的逐次记录在 Debug(默认不落盘,log_level=debug 时可见);落盘的是
@@ -175,8 +173,26 @@ func doHTTPTrackedOnce(cli *http.Client, req *http.Request) (*http.Response, err
 		// 一行一次(Last.fm 每 5 秒一次轮询,两天日志里这一项就 4219 行)。
 		slog.Debug("api call: "+target, "status", resp.StatusCode, "elapsed_ms", elapsed.Milliseconds())
 	}
-	recordAPICall(summaryKey, elapsed, failed, notFound, time.Now())
+	if throttled {
+		recordThrottledAPICall(summaryKey, elapsed, time.Now())
+	} else {
+		recordAPICall(summaryKey, elapsed, failed, notFound, time.Now())
+	}
 	return resp, err
+}
+
+// rateLimitAnswerPaused:这次应答是对方在限速(503 / 429),而且收到它的一方会自己停手、照它停是设计内的常态:
+//   - 过出站闸的歌词源:出站闸暂停它的后台请求,记一条带暂停多久的「lyric source rate-limited」(hostguard.go
+//     noteLyricSourceThrottled);lrclib 忙时回 503 + Retry-After: 1。
+//   - MusicBrainz:按 IP 限速,mbGetBody 把停手窗口写进共享文件,ISRC 补扫和歌手查询都退避。
+//
+// 记成 Warn 会把真故障淹掉,见 15 章决策 54、114。新加别的主机前先确认它的调用方真的会停手。
+func rateLimitAnswerPaused(req *http.Request, status int) bool {
+	if status != http.StatusServiceUnavailable && status != http.StatusTooManyRequests {
+		return false
+	}
+	host := guardHost(req.URL)
+	return host == musicbrainzHost || lyricSourceForHost(host) != "" && guardApplies(req)
 }
 
 // loggedTransportError:上面已经按「api call … FAILED」记过一条 WARN 的传输层错误。调用方再用 warnf / infoFailf
@@ -194,7 +210,8 @@ func (e loggedTransportError) Unwrap() error { return e.err }
 //
 // 窗口从这个 target 第一次被记开始算,满一分钟后由维护循环(logsink.go,每 30 秒)或退出前
 // (flushLogSink)结算。failed 同时计传输失败和 HTTP 4xx/5xx —— 这两种在逐条 Warn 里都能
-// 看到细节,汇总只回答"这一分钟里失败了几次"。
+// 看到细节,汇总只回答"这一分钟里失败了几次"。404(notfound)、主动取消(canceled)、限速应答(throttled)
+// 各自单列,不进 failed。
 //
 // 逐 target 那一行只在窗口里有失败、或最慢一次不短于 apiCallSlowMax 时落 Info,其余落 Debug
 // (log_level=debug 时可见,按接口量速率用这一档)。每次结算另写一行 Info 总计(api call rollup),
@@ -300,7 +317,9 @@ type apiCallWindow struct {
 	// notfound:窗口里应答 404 的次数。跟 failed 分开记,理由见 doHTTPTracked。
 	notfound int
 	// canceled:调用方主动取消的次数,不进 failed、不进耗时分位(没等到应答)。
-	canceled  int
+	canceled int
+	// throttled:限速应答(rateLimitAnswerPaused)的次数,不进 failed;只有它的窗口逐 target 那一行落 Debug。
+	throttled int
 	durations []time.Duration
 }
 
@@ -330,6 +349,16 @@ func recordCanceledAPICall(target string, elapsed time.Duration, now time.Time) 
 	w := apiCallWindowLocked(target, now)
 	w.count++
 	w.canceled++
+}
+
+// recordThrottledAPICall:限速应答的一次,计 throttled 和耗时,不计 failed。
+func recordThrottledAPICall(target string, elapsed time.Duration, now time.Time) {
+	apiCallAgg.mu.Lock()
+	defer apiCallAgg.mu.Unlock()
+	w := apiCallWindowLocked(target, now)
+	w.count++
+	w.throttled++
+	w.durations = append(w.durations, elapsed)
 }
 
 func apiCallWindowLocked(target string, now time.Time) *apiCallWindow {
@@ -363,15 +392,16 @@ func flushAPICallSummaries(now time.Time, force bool) {
 		return
 	}
 	sort.Slice(ready, func(i, j int) bool { return ready[i].target < ready[j].target })
-	var calls, failed, notfound, canceled int
+	var calls, failed, notfound, canceled, throttled int
 	bySource := map[string]int{}
 	for _, d := range ready {
 		calls += d.w.count
 		failed += d.w.failed
 		notfound += d.w.notfound
 		canceled += d.w.canceled
+		throttled += d.w.throttled
 		bySource[apiCallRollupGroup(d.target)] += d.w.count
-		// notfound / canceled 只在非零时出现 —— 绝大多数目标一个都没有,给每行都挂一个恒为 0 的字段
+		// notfound / canceled / throttled 只在非零时出现 —— 绝大多数目标一个都没有,给每行都挂一个恒为 0 的字段
 		// 是纯粹的体积浪费。
 		attrs := []any{"target", d.target, "count", d.w.count, "failed", d.w.failed}
 		if d.w.notfound > 0 {
@@ -379,6 +409,9 @@ func flushAPICallSummaries(now time.Time, force bool) {
 		}
 		if d.w.canceled > 0 {
 			attrs = append(attrs, "canceled", d.w.canceled)
+		}
+		if d.w.throttled > 0 {
+			attrs = append(attrs, "throttled", d.w.throttled)
 		}
 		var max time.Duration
 		if n := len(d.w.durations); n > 0 {
@@ -413,6 +446,9 @@ func flushAPICallSummaries(now time.Time, force bool) {
 	}
 	if canceled > 0 {
 		attrs = append(attrs, "canceled", canceled)
+	}
+	if throttled > 0 {
+		attrs = append(attrs, "throttled", throttled)
 	}
 	slog.Info("api call rollup", append(attrs, "by_source", strings.Join(parts, " "))...)
 }

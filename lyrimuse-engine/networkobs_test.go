@@ -575,3 +575,67 @@ func TestDoHTTPTrackedLogsEachFailureOnce(t *testing.T) {
 		t.Errorf("已记过 FAILED 的传输层错误不再记 Warn,别的失败照旧,got: %q", buf.String())
 	}
 }
+
+// 限速应答(rateLimitAnswerPaused):MusicBrainz、过闸的歌词源回 503 / 429 不逐条记 Warn,汇总单列 throttled、不进 failed,
+// 只有限速的那一分钟逐 target 那一行落 Debug;别的主机回 503、MusicBrainz 回别的 5xx 照旧 Warn、计 failed。
+func TestRateLimitAnswersCountAsThrottled(t *testing.T) {
+	savedGuard, savedBreaker := sharedHostGuard(), sharedLyricSourceBreaker()
+	setSharedHostGuard(newHostGuard(time.Now))
+	setSharedLyricSourceBreaker(newLyricSourceBreaker(time.Now))
+	t.Cleanup(func() {
+		setSharedHostGuard(savedGuard)
+		setSharedLyricSourceBreaker(savedBreaker)
+	})
+	apiCallAgg.mu.Lock()
+	apiCallAgg.windows = map[string]*apiCallWindow{}
+	apiCallAgg.mu.Unlock()
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Query().Get("query") == "broken" {
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+		w.WriteHeader(http.StatusServiceUnavailable)
+	}))
+	t.Cleanup(srv.Close)
+	toServer := &http.Client{Timeout: 2 * time.Second, Transport: &http.Transport{
+		DialContext: func(ctx context.Context, network, _ string) (net.Conn, error) {
+			return (&net.Dialer{}).DialContext(ctx, network, srv.Listener.Addr().String())
+		},
+	}}
+
+	var buf bytes.Buffer
+	prev := slog.Default()
+	slog.SetDefault(slog.New(slog.NewTextHandler(&buf, &slog.HandlerOptions{Level: slog.LevelInfo})))
+	defer slog.SetDefault(prev)
+
+	for _, u := range []string{"http://musicbrainz.org/ws/2/isrc/USUM71814888?fmt=json", "http://musicbrainz.org/ws/2/isrc/GBAYE0000351?fmt=json",
+		"http://musicbrainz.org/ws/2/artist/?query=a&fmt=json", "http://musicbrainz.org/ws/2/artist/?query=broken&fmt=json", srv.URL + "/other"} {
+		req, err := http.NewRequest(http.MethodGet, u, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		resp, err := doHTTPTracked(toServer, req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		resp.Body.Close()
+	}
+	if out := buf.String(); strings.Contains(out, "/isrc/") || !strings.Contains(out, "musicbrainz.org/ws/2/artist/\" status=500") || strings.Count(out, "level=WARN") != 2 || !strings.Contains(out, "/other\" status=503") {
+		t.Fatalf("MusicBrainz 限速不逐条记,它别的 5xx、别的主机 503 照旧 Warn,got: %q", out)
+	}
+	buf.Reset()
+	flushAPICallSummaries(time.Now(), true)
+	out := buf.String()
+	if strings.Contains(out, `target="GET musicbrainz.org/ws/2/isrc/`) {
+		t.Errorf("只有限速应答的窗口,逐 target 那一行不该落 Info,got: %q", out)
+	}
+	if !strings.Contains(out, `target="GET 127.0.0.1`) || !strings.Contains(out, "failed=1") {
+		t.Errorf("别的主机的 503 照旧计 failed、汇总落 Info,got: %q", out)
+	}
+	if !strings.Contains(out, `target="GET musicbrainz.org/ws/2/artist/" count=2 failed=1 throttled=1`) {
+		t.Errorf("同一分钟里有真失败,逐 target 那一行落 Info、限速单列,got: %q", out)
+	}
+	if !strings.Contains(out, "calls=5 failed=2 throttled=3") {
+		t.Errorf("总计里限速单列 throttled、不进 failed,got: %q", out)
+	}
+}
