@@ -351,9 +351,60 @@ func runTelemetryTests() {
         let encoded = try? JSONEncoder().encode(TelemetryActivityDay(day: "2026-11-09", hangs: 1, hangDetails: [base]))
         expectEqual(encoded.flatMap { try? JSONDecoder().decode(TelemetryActivityDay.self, from: $0) }?.hangDetails, [base],
                     "记账: 概况能存能读")
+        let stored = TelemetryActivityDay(day: "2026-11-09", hangs: 3, throttledHangs: 2,
+                                          hangDetails: [H(sinceLaunch: "1-6h", sinceWake: nil, windows: [], thermal: "nominal", throttled: [MainThreadThrottle.locked])])
+        expectEqual((try? JSONEncoder().encode(stored)).flatMap { try? JSONDecoder().decode(TelemetryActivityDay.self, from: $0) }, stored,
+                    "记账: 被压着的次数和标记能存能读")
         let old = #"{"day":"2026-10-30","players_played":[],"hangs":2}"#
-        expectEqual((try? JSONDecoder().decode(TelemetryActivityDay.self, from: Data(old.utf8)))?.hangDetails, [],
-                    "记账: 旧版本存下的活动没有概况")
+        let oldDay = try? JSONDecoder().decode(TelemetryActivityDay.self, from: Data(old.utf8))
+        expectEqual([oldDay?.hangDetails.count, oldDay?.throttledHangs], [0, 0], "记账: 旧版本存下的活动没有概况、没有被压着的次数")
+        let oldHang = #"{"duration":"5-10s","since_launch":"<1m","windows":[],"thermal":"nominal","stack":[]}"#
+        expectEqual((try? JSONDecoder().decode(H.self, from: Data(oldHang.utf8))).map { $0.throttled == nil }, true,
+                    "记账: 旧版本存下的概况没有节流标记")
+
+        // 被系统压着的卡顿(14 章决策 202):次数照记、另记一份;概况另占名额,不挤掉没被压着的。
+        let throttleKey = "selftest.telemetryHangThrottle.\(getpid())"
+        defer { UserDefaults.standard.removeObject(forKey: throttleKey) }
+        let throttling = TelemetryActivity(defaults: .standard, key: throttleKey)
+        throttling.isRecording = true
+        let lockedHang = H(sinceLaunch: "1-6h", sinceWake: nil, windows: [], thermal: "nominal", throttled: [MainThreadThrottle.locked])
+        expectEqual([throttling.noteHang(lockedHang, now: day1), throttling.noteHang(lockedHang, now: day1)], [true, false],
+                    "节流记账: 被压着的每天另有名额")
+        expectEqual((0..<4).map { _ in throttling.noteHang(base, now: day1) }, [true, true, true, false],
+                    "节流记账: 被压着的不占没被压着的名额")
+        var throttledDay = throttling.completedDays(before: d2).first
+        expectEqual([throttledDay?.hangs, throttledDay?.throttledHangs], [6, 2], "节流记账: 次数照记,被压着的另记")
+        expectEqual(throttledDay?.hangDetails.map { $0.throttled != nil }, [true, false, false, false], "节流记账: 概况各占各的名额")
+        throttling.markHangThrottled([MainThreadThrottle.locked])
+        throttledDay = throttling.completedDays(before: d2).first
+        expectEqual([throttledDay?.throttledHangs, throttledDay?.hangDetails.filter { $0.throttled != nil }.count], [3, 1],
+                    "节流记账: 没占到名额的那次后来被压着,只补次数")
+        throttling.clear()
+        throttling.noteHang(nil, now: day1)
+        throttling.noteHang(base, now: day1)
+        throttling.markHangThrottled([MainThreadThrottle.locked])
+        throttling.markHangThrottled([MainThreadThrottle.locked, MainThreadThrottle.lowPriority])
+        throttling.finishHang(seconds: 20)
+        throttledDay = throttling.completedDays(before: d2).first
+        expectEqual(throttledDay?.throttledHangs, 1, "节流记账: 卡住之后才被压着,补进次数只补一次")
+        expectEqual(throttledDay?.hangDetails.first?.throttled, [MainThreadThrottle.locked, MainThreadThrottle.lowPriority],
+                    "节流记账: 概况补上标记(并起来的全部)")
+        expectEqual(throttledDay?.hangDetails.first?.duration, "10-30s", "节流记账: 补过标记之后恢复照样补时长")
+        throttling.noteHang(nil, now: day1)
+        throttling.markHangThrottled([MainThreadThrottle.locked])
+        expectEqual(throttling.completedDays(before: d2).first?.throttledHangs, 2, "节流记账: 不带概况的那次后补次数,不碰旧的一条")
+        throttling.clear()
+        throttling.markHangThrottled([MainThreadThrottle.locked])
+        expectEqual(throttling.completedDays(before: d2), [], "节流记账: 清空之后不凭空补出一天")
+        _ = throttling.noteHang(lockedHang, now: day1)
+        _ = throttling.noteHang(base, now: day1)
+        throttling.markHangThrottled([MainThreadThrottle.locked])
+        expectEqual((0..<3).map { _ in throttling.noteHang(base, now: day1) }, [true, true, false],
+                    "节流记账: 后补成被压着的那条仍占着名额,两类合计不超过上限之和")
+        expectEqual(throttling.completedDays(before: d2).first?.hangDetails.count,
+                    TelemetryActivity.maxHangDetailsPerDay + TelemetryActivity.maxThrottledHangDetailsPerDay, "节流记账: 概况每天最多 3 + 1 条")
+        throttling.clear()
+        throttling.waitForPendingWrites()
     }
 
     do {
@@ -556,7 +607,11 @@ func runTelemetryTests() {
                                   encoding: .utf8)) ?? ""
         let hang = TelemetryHang(sinceLaunch: "<1m", sinceWake: "<1m", player: "spotify", windows: [], thermal: "fair")
         expectEqual(keys(hang), ["duration", "player", "since_launch", "since_wake", "stack", "thermal", "windows"], "卡顿概况: 键名")
-        let fields = keys(regional) + keys(features) + keys(TelemetryActivityDay(day: "2026-10-30")) + keys(hang)
+        var throttledHang = hang
+        throttledHang.throttled = [MainThreadThrottle.locked]
+        expectEqual(keys(throttledHang).contains("throttled") && keys(TelemetryActivityDay(day: "2026-10-30")).contains("throttled_hangs"),
+                    true, "卡顿概况: 被压着的带 throttled,每天的活动带 throttled_hangs")
+        let fields = keys(regional) + keys(features) + keys(TelemetryActivityDay(day: "2026-10-30")) + keys(throttledHang)
             + ["install_id", "origin", "report_id", "exception_type", "termination_indicator", "frames", "exception_frames"]
             + TelemetryAction.allCases.map(\.rawValue)
         expectEqual(["install_method", "settings_changed", "permissions_missing", "lyrics_word_formats"].allSatisfy(keys(features).contains),
@@ -574,6 +629,10 @@ func runTelemetryTests() {
         expectEqual([workerList("HANG_DURATIONS"), workerList("HANG_ELAPSED"), workerList("HANG_THERMAL"), workerList("HANG_WINDOWS")],
                     [TelemetryHang.durationBuckets.sorted(), TelemetryHang.elapsedBuckets.sorted(), TelemetryHang.thermalStates.sorted(),
                      TelemetryHang.windowTags.sorted()], "Worker: 卡顿概况的取值名单跟 Core 一致")
+        expectEqual(workerList("HANG_THROTTLE"), MainThreadThrottle.reasons.sorted(), "Worker: 节流标记的取值名单跟 Core 一致")
+        expectEqual(worker.contains("const MAX_HANG_DETAILS_PER_DAY = \(TelemetryActivity.maxHangDetailsPerDay);")
+                        && worker.contains("const MAX_THROTTLED_HANG_DETAILS_PER_DAY = \(TelemetryActivity.maxThrottledHangDetailsPerDay);"),
+                    true, "Worker: 卡顿概况每天的条数上限(两类)跟 Core 一致")
         expectEqual(workerList("LAYOUT_PASSES"), DisplayCycleLimit.passes.sorted(), "Worker: 布局超限的 pass 名单跟 Core 一致")
         expectEqual(worker.contains("const MAX_LAYOUT_LIMITS_PER_DAY = \(TelemetryActivity.maxLayoutLimitsPerDay);"), true,
                     "Worker: 布局超限每天的条数上限跟 Core 一致")
@@ -645,9 +704,18 @@ func runTelemetryTests() {
                     true, "接线: 换歌、换播放器都记一笔(连着几天用同一个播放器也每天记到)")
         let watchdog = sourceText("LyrimuseCore/Diagnostics/MainThreadWatchdog.swift")
         let handleBody = sourceBody("private func handle(", in: watchdog)
-        expectEqual(sourceHas(handleBody, "TelemetryActivity.shared.noteHang(hangContext(at: now))")
-                        && sourceHas(handleBody, "if tracker.reportedStill { TelemetryActivity.shared.finishHang(seconds: seconds) }"),
-                    true, "接线: 主线程卡住记一笔概况,恢复时补时长(没卡满的不补)")
+        expectEqual(sourceHas(handleBody, "TelemetryActivity.shared.noteHang(hangContext(at: now, throttle: throttle))")
+                        && sourceHas(handleBody, "if tracker.reportedStill { TelemetryActivity.shared.finishHang(seconds: seconds) }")
+                        && sourceHas(handleBody, "TelemetryActivity.shared.markHangThrottled(throttle.sorted())"),
+                    true, "接线: 主线程卡住记一笔概况(带节流标记),恢复时补时长(没卡满的不补),卡住之后才被压着的补标记")
+        let tickBody = sourceBody("private func tick()", in: watchdog)
+        let throttleAt = tickBody.range(of: "if sentAt != nil { observeThrottle(at: now, probeSentAt: sentAt) }")
+        let checkAt = tickBody.range(of: "tracker.check(now: now)")
+        expectEqual(throttleAt != nil && checkAt != nil && throttleAt!.lowerBound < checkAt!.lowerBound
+                        && sourceHas(tickBody, "if let sentAt, answeredAt - sentAt >= self.tracker.stallThreshold { self.observeThrottle(at: answeredAt, probeSentAt: sentAt) }"),
+                    true, "接线: 探测过了一拍还没被执行到时先读节流状态再判卡顿,卡过阈值后被执行到时再读一次")
+        expectEqual(sourceHas(sourceBody("private func hangContext(", in: watchdog), "throttled: throttle.isEmpty ? nil : throttle.sorted()"),
+                    true, "接线: 卡顿概况带上停顿期间看到的节流标记")
         expectEqual(sourceHas(sourceBody("private func takeSample()", in: watchdog),
                               "TelemetryActivity.shared.attachHangStack(TelemetryHang.mainThreadStack(fromSample: text, executable: executable))")
                         && sourceHas(sourceBody("private func tick()", in: watchdog), "wake.observe(uptime: now, continuous: WakeDetector.continuousNow)")

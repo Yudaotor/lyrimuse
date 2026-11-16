@@ -34,6 +34,8 @@ CREATE TABLE IF NOT EXISTS activity (
   languages      TEXT,  -- {"zh": 8, "en": 3, …},见 index.js 的 SONG_LANGUAGES
   layout_limits  TEXT,  -- [{"window": "onboarding", "class": "SwiftUI.AppKitWindow", "pass": "layout", "count": 3}],见 index.js 的 cleanLayoutLimits;
                         -- 旧库:ALTER TABLE activity ADD COLUMN layout_limits TEXT
+  throttled_hangs INTEGER,  -- hangs 里停顿期间主线程被系统压着(锁屏、App Nap)的次数,旧版 App 不报为空;
+                            -- 旧库:ALTER TABLE activity ADD COLUMN throttled_hangs INTEGER
   PRIMARY KEY (day, install_id)
 );
 
@@ -59,7 +61,7 @@ CREATE TABLE IF NOT EXISTS crashes (
 );
 CREATE INDEX IF NOT EXISTS crashes_day ON crashes(day);
 
--- 主线程卡顿的概况(心跳活动里的 hang_details,每台每天最多 3 条);取值见 index.js 的 HANG_* 名单。
+-- 主线程卡顿的概况(心跳活动里的 hang_details,每台每天最多 3 + 1 条);取值见 index.js 的 HANG_* 名单。
 -- app_version / os_version / arch 取带它来的那条心跳的。
 CREATE TABLE IF NOT EXISTS hang_events (
   day          TEXT NOT NULL,
@@ -77,6 +79,8 @@ CREATE TABLE IF NOT EXISTS hang_events (
   thermal      TEXT,
   stack        TEXT,
   signature    TEXT,
+  throttled    TEXT,  -- ["locked", "low_priority"] 的子集(JSON),停顿期间主线程被系统压着;没被压着、旧版 App 为空。
+                      -- 旧库:ALTER TABLE hang_events ADD COLUMN throttled TEXT
   PRIMARY KEY (day, install_id, seq)
 );
 CREATE INDEX IF NOT EXISTS hang_events_day ON hang_events(day);

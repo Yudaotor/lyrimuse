@@ -17,9 +17,11 @@ public struct TelemetryHang: Codable, Equatable, Sendable {
     public var thermal: String
     /// 采样到的主线程调用栈:最深的几帧,再接最深的几个 Lyrimuse 自己的帧,都按从深到浅排;没采样时为空。
     public var stack: [TelemetryCrash.Frame]
+    /// 停顿期间主线程被系统压着(`MainThreadThrottle.reasons` 里的取值,排好序);没看到为 nil,编码时不带这个键。
+    public var throttled: [String]?
 
     public init(duration: String = TelemetryHang.unrecovered, sinceLaunch: String, sinceWake: String?, player: String? = nil,
-                windows: [String], thermal: String, stack: [TelemetryCrash.Frame] = []) {
+                windows: [String], thermal: String, stack: [TelemetryCrash.Frame] = [], throttled: [String]? = nil) {
         self.duration = duration
         self.sinceLaunch = sinceLaunch
         self.sinceWake = sinceWake
@@ -27,10 +29,11 @@ public struct TelemetryHang: Codable, Equatable, Sendable {
         self.windows = windows
         self.thermal = thermal
         self.stack = stack
+        self.throttled = throttled
     }
 
     enum CodingKeys: String, CodingKey {
-        case duration, sinceLaunch = "since_launch", sinceWake = "since_wake", player, windows, thermal, stack
+        case duration, sinceLaunch = "since_launch", sinceWake = "since_wake", player, windows, thermal, stack, throttled
     }
 
     public static let unrecovered = "unrecovered"

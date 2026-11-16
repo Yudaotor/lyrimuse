@@ -9,7 +9,9 @@ public final class TelemetryActivity: @unchecked Sendable {
     public static let storageKey = "np:telemetryActivity"
     public static let maxStoredDays = 3
     /// 每天最多记几次卡顿的概况(次数照记);心跳带最多 `maxStoredDays` 天,负载要在 Worker 的 MAX_BODY 以内。
+    /// 停顿期间主线程被系统压着的(`TelemetryHang.throttled`)另算名额,不挤掉没被压着的。Worker 的两个同名常量一起改。
     public static let maxHangDetailsPerDay = 3
+    public static let maxThrottledHangDetailsPerDay = 1
     /// 每天最多记几种窗口布局超限(按窗口 + 类名 + pass 分;同一种只加次数)。
     public static let maxLayoutLimitsPerDay = 5
 
@@ -25,8 +27,9 @@ public final class TelemetryActivity: @unchecked Sendable {
     private var trusted: Set<String> = []
     /// 上一次记下的播放器,同一个播放器连着报不重复写盘。
     private var lastPlayer: (day: String, tag: String)?
-    /// 最近记下的那条卡顿概况在哪一天的第几条:恢复时补时长、采样完补调用栈都补到它。只在内存里。
-    private var openHang: (day: String, index: Int)?
+    /// 最近那次卡顿记在哪一天、概况是第几条(没占到名额为 nil)、算没算进被压着的次数:恢复时补时长、采样完补调用栈、
+    /// 后来才看到被压着时补标记,都补到它。只在内存里。
+    private var openHang: (day: String, index: Int?, throttled: Bool)?
     /// 今天记过歌词结果的歌(曲目键 → 记下的那一笔)。只在内存里,不写盘、不上报;换天清空。
     private var lyricsNoted: (day: String, songs: [String: LyricsNote]) = ("", [:])
 
@@ -97,24 +100,49 @@ public final class TelemetryActivity: @unchecked Sendable {
         counts[key] = left > 0 ? left : nil
     }
 
-    /// 主线程卡住一次。`detail` 给了且当天还没记满,记下概况(播放器填最近一次放歌的那个),之后的 `finishHang` /
-    /// `attachHangStack` 补到这一条。返回这一次有没有占到当天的概况名额(占到了,看门狗就该采栈)。
+    /// 主线程卡住一次。`detail` 带了 `throttled` 的同时记进被压着的次数。`detail` 给了且当天同一类(被压着 / 没被压着)
+    /// 还有名额,记下概况(播放器填最近一次放歌的那个),之后的 `finishHang` / `attachHangStack` / `markHangThrottled`
+    /// 补到这一条。返回这一次有没有占到当天的概况名额(占到了,看门狗就该采栈)。
     @discardableResult
     public func noteHang(_ detail: TelemetryHang? = nil, now: Date = Date()) -> Bool {
         let day = Telemetry.day(now)
         return lock.withLock {
             guard recording else { return false }
-            openHang = nil
-            var tookSlot = false
+            let throttled = detail?.throttled != nil
+            var index: Int?
             update(day: day) { d in
                 d.hangs += 1
-                guard var detail, d.hangDetails.count < Self.maxHangDetailsPerDay else { return }
+                if throttled { d.throttledHangs += 1 }
+                guard var detail, Self.hasDetailSlot(d.hangDetails, throttled: throttled) else { return }
                 if detail.player == nil { detail.player = lastPlayer?.tag }
                 d.hangDetails.append(detail)
-                openHang = (day, d.hangDetails.count - 1)
-                tookSlot = true
+                index = d.hangDetails.count - 1
             }
-            return tookSlot
+            openHang = (day, index, throttled)
+            return index != nil
+        }
+    }
+
+    /// 当天的概况里,同一类(被压着 / 没被压着)还有没有名额;两类合起来也不超过两个上限之和。
+    static func hasDetailSlot(_ details: [TelemetryHang], throttled: Bool) -> Bool {
+        let sameKind = details.filter { ($0.throttled != nil) == throttled }.count
+        return sameKind < (throttled ? maxThrottledHangDetailsPerDay : maxHangDetailsPerDay)
+            && details.count < maxHangDetailsPerDay + maxThrottledHangDetailsPerDay
+    }
+
+    /// 最近那次卡顿记下之后才看到主线程被系统压着(`reasons` 是并起来的全部):这一次补进被压着的次数(只补一次),
+    /// 概况补上标记。那一天已经随心跳发出、删掉了的不补。
+    public func markHangThrottled(_ reasons: [String]) {
+        guard !reasons.isEmpty else { return }
+        lock.withLock {
+            guard recording, let open = openHang else { return }
+            var days = load()
+            guard let i = days.firstIndex(where: { $0.day == open.day }) else { return }
+            let before = days[i]
+            if !open.throttled { days[i].throttledHangs = min(days[i].throttledHangs + 1, days[i].hangs) }
+            if let index = open.index, index < days[i].hangDetails.count { days[i].hangDetails[index].throttled = reasons }
+            openHang = (open.day, open.index, true)
+            if days[i] != before { store(days) }
         }
     }
 
@@ -147,12 +175,12 @@ public final class TelemetryActivity: @unchecked Sendable {
 
     private func changeOpenHang(_ change: (inout TelemetryHang) -> Void) {
         lock.withLock {
-            guard recording, let open = openHang else { return }
+            guard recording, let open = openHang, let index = open.index else { return }
             var days = load()
-            guard let i = days.firstIndex(where: { $0.day == open.day }), open.index < days[i].hangDetails.count else { return }
-            let before = days[i].hangDetails[open.index]
-            change(&days[i].hangDetails[open.index])
-            if days[i].hangDetails[open.index] != before { store(days) }
+            guard let i = days.firstIndex(where: { $0.day == open.day }), index < days[i].hangDetails.count else { return }
+            let before = days[i].hangDetails[index]
+            change(&days[i].hangDetails[index])
+            if days[i].hangDetails[index] != before { store(days) }
         }
     }
 

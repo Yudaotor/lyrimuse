@@ -246,6 +246,11 @@ enum DebugDeepLinks {
         case let .mainThreadGaps(on, minMs):
             MainThreadGapProbe.setRunning(on, minMs: minMs ?? 100)
             logger.notice("debug main thread gaps on=\(on, privacy: .public) min=\(minMs ?? 100, privacy: .public)")
+        case let .mainThreadStall(seconds, throttle):
+            logger.notice("debug main thread stall seconds=\(seconds, privacy: .public) throttle=\(throttle ?? "-", privacy: .public)")
+            MainThreadWatchdog.shared.simulateThrottle(throttle.flatMap(MainThreadThrottle.Reading.init(simulating:)))
+            Thread.sleep(forTimeInterval: seconds)
+            MainThreadWatchdog.shared.simulateThrottle(nil)
         case .saveConfig:
             Task { @MainActor in
                 let ok = await ConfigStore.shared.save()
@@ -819,6 +824,8 @@ enum MainThreadGapProbe {
         let cpuMs = Int((cpu &- lastCPU) / 1_000_000)
         lastCPU = cpu
         guard gap > threshold else { return }
-        logger.notice("gap \(Int(gap * 1000), privacy: .public) ms after [\(label, privacy: .public)] cpu \(cpuMs, privacy: .public) ms")
+        let reading = MainThreadThrottle.readOnCurrentThread()
+        let note = MainThreadThrottle.logNote(reading.reasons, priority: reading.priority)
+        logger.notice("gap \(Int(gap * 1000), privacy: .public) ms after [\(label, privacy: .public)] cpu \(cpuMs, privacy: .public) ms\(note, privacy: .public)")
     }
 }

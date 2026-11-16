@@ -30,7 +30,12 @@ const HANG_DURATIONS = ["5-10s", "10-30s", "30s+", "unrecovered"];
 const HANG_ELAPSED = ["<1m", "1-10m", "10-60m", "1-6h", "6h+"];
 const HANG_THERMAL = ["nominal", "fair", "serious", "critical"];
 const HANG_WINDOWS = ["settings", "lyrics-manager", "lyrics-window", "lyrics-quick-search", "lyrics-share", "whats-new", "onboarding", "menubar-panel"];
+// 停顿期间主线程被系统压着(锁屏、App Nap 把优先级压到后台档)的标记,跟 Core MainThreadThrottle.reasons 一致。
+// 这类卡顿照收,统计默认不算(hangs),hangs_all 连它们一起算(14 章决策 202)。
+const HANG_THROTTLE = ["locked", "low_priority"];
+// 每台每天的卡顿概况条数:没被压着的、被压着的各有名额(Core TelemetryActivity 的两个同名常量)。
 const MAX_HANG_DETAILS_PER_DAY = 3;
+const MAX_THROTTLED_HANG_DETAILS_PER_DAY = 1;
 // 窗口布局轮数超限被 AppKit 接住(Core DisplayCycleLimit / TelemetryLayoutLimit):pass 名单跟 Core 一致,selftest 核对;
 // 窗口只收 HANG_WINDOWS 里的场景名,类名只收字母数字和 _ . $。
 const LAYOUT_PASSES = ["update-constraints", "layout", "display", "other"];
@@ -207,24 +212,31 @@ async function heartbeat(request, env) {
     if (!a || typeof a.day !== "string" || !DAY_RE.test(a.day)) continue;
     const back = dayDistance(day, a.day);
     if (back < 1 || back > 7) continue;
+    const hangs = int(a.hangs, 0, 10_000) ?? 0;
+    // 其中停顿期间主线程被系统压着的次数;旧版 App 不发,存空。
+    const throttledHangs = int(a.throttled_hangs, 0, 10_000);
     statements.push(env.DB.prepare(
-      `INSERT INTO activity (day, install_id, players_played, hangs, actions, lyrics, languages, layout_limits)
-       VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)
+      `INSERT INTO activity (day, install_id, players_played, hangs, actions, lyrics, languages, layout_limits, throttled_hangs)
+       VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)
        ON CONFLICT (day, install_id) DO UPDATE SET players_played = excluded.players_played, hangs = excluded.hangs,
                                                    actions = excluded.actions, lyrics = excluded.lyrics,
-                                                   languages = excluded.languages, layout_limits = excluded.layout_limits`
-    ).bind(a.day, installID, JSON.stringify(ids(a.players_played)), int(a.hangs, 0, 10_000) ?? 0,
+                                                   languages = excluded.languages, layout_limits = excluded.layout_limits,
+                                                   throttled_hangs = excluded.throttled_hangs`
+    ).bind(a.day, installID, JSON.stringify(ids(a.players_played)), hangs,
            JSON.stringify(counts(a.actions, ACTIONS)), JSON.stringify(counts(a.lyrics, LYRICS_RESULTS)),
-           JSON.stringify(counts(a.languages, SONG_LANGUAGES)), JSON.stringify(cleanLayoutLimits(a.layout_limits))));
+           JSON.stringify(counts(a.languages, SONG_LANGUAGES)), JSON.stringify(cleanLayoutLimits(a.layout_limits)),
+           throttledHangs == null ? null : Math.min(throttledHangs, hangs)));
     // 那一天的卡顿概况整批替换(同一天重发时以新的为准)。版本与系统取这条心跳的,活动是之前几天的,升级当天可能差一版。
     statements.push(env.DB.prepare(`DELETE FROM hang_events WHERE day = ?1 AND install_id = ?2`).bind(a.day, installID));
-    const details = Array.isArray(a.hang_details) ? a.hang_details.slice(0, MAX_HANG_DETAILS_PER_DAY) : [];
+    const details = Array.isArray(a.hang_details)
+      ? a.hang_details.slice(0, MAX_HANG_DETAILS_PER_DAY + MAX_THROTTLED_HANG_DETAILS_PER_DAY) : [];
     details.map(cleanHang).filter(Boolean).forEach((h, seq) => statements.push(env.DB.prepare(
       `INSERT INTO hang_events (day, install_id, seq, received_at, app_version, os_version, arch, duration, since_launch,
-                                since_wake, player, windows, thermal, stack, signature)
-       VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15)`
+                                since_wake, player, windows, thermal, stack, signature, throttled)
+       VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16)`
     ).bind(a.day, installID, seq, now, e.app_version, e.os_version, e.arch, h.duration, h.since_launch, h.since_wake,
-           h.player, JSON.stringify(h.windows), h.thermal, JSON.stringify(h.stack), hangSignature(h.stack))));
+           h.player, JSON.stringify(h.windows), h.thermal, JSON.stringify(h.stack), hangSignature(h.stack),
+           h.throttled.length ? JSON.stringify(h.throttled) : null)));
   }
   await env.DB.batch(statements);
   return json({ ok: true });
@@ -256,6 +268,8 @@ function cleanHang(h) {
     windows: Array.isArray(h.windows) ? [...new Set(h.windows.filter((w) => HANG_WINDOWS.includes(w)))].sort() : [],
     thermal: oneOf(h.thermal, HANG_THERMAL),
     stack: cleanFrames(h.stack).slice(0, MAX_HANG_FRAMES),
+    // 旧版 App 不发,记成空(没被压着)。
+    throttled: Array.isArray(h.throttled) ? [...new Set(h.throttled.filter((r) => HANG_THROTTLE.includes(r)))].sort() : [],
   };
 }
 
@@ -388,10 +402,12 @@ async function loadStatsRows(db, since) {
   const [heartbeats, installs, activity, crashes, hangEvents, excluded] = await Promise.all([
     db.prepare(`SELECT * FROM heartbeats WHERE day >= ?1`).bind(since).all(),
     db.prepare(`SELECT install_id, first_day, origin FROM installs`).all(),
-    db.prepare(`SELECT day, install_id, players_played, hangs, actions, lyrics, languages FROM activity WHERE day >= ?1`).bind(since).all(),
+    db.prepare(`SELECT day, install_id, players_played, hangs, throttled_hangs, actions, lyrics, languages FROM activity WHERE day >= ?1`)
+      .bind(since).all(),
     db.prepare(`SELECT day, install_id, received_at, signature, process, exception_type, termination_indicator, app_version, frames,
                        termination_reasons, exception_frames FROM crashes WHERE day >= ?1`).bind(since).all(),
-    db.prepare(`SELECT day, install_id, app_version, duration, since_launch, since_wake, player, windows, thermal, stack, signature, received_at
+    db.prepare(`SELECT day, install_id, app_version, duration, since_launch, since_wake, player, windows, thermal, stack, signature, received_at,
+                       throttled
                 FROM hang_events WHERE day >= ?1`).bind(since).all(),
     db.prepare(`SELECT install_id FROM excluded_installs`).all(),
   ]);
@@ -418,10 +434,12 @@ async function loadStatsRows(db, since) {
   const latest = [...latestByInstall.values()].map((r) => ({ ...r, features: safeJSON(r.features, {}) }));
   // JSON 列在这里解析一次,一次请求要算好几份统计,别在每份里再解析。
   const parsedActivity = activity.results.map(mark).map((a) => ({
-    ix: a.ix, own: a.own, day: a.day, install_id: a.install_id, hangs: a.hangs, players_played: safeJSON(a.players_played, []),
+    ix: a.ix, own: a.own, day: a.day, install_id: a.install_id, hangs: a.hangs || 0,
+    throttled_hangs: Math.min(a.throttled_hangs || 0, a.hangs || 0), players_played: safeJSON(a.players_played, []),
     actions: safeJSON(a.actions, {}), lyrics: safeJSON(a.lyrics, {}), languages: safeJSON(a.languages, {}),
   }));
-  const parsedHangs = hangEvents.results.map(mark).map((h) => ({ ...h, windows: safeJSON(h.windows, []), stack: safeJSON(h.stack, []) }));
+  const parsedHangs = hangEvents.results.map(mark).map((h) => ({ ...h, windows: safeJSON(h.windows, []), stack: safeJSON(h.stack, []),
+                                                                    throttled: safeJSON(h.throttled, []) }));
   return { heartbeats: heartbeats.results, latest, installs: installs.results, activity: parsedActivity,
            crashes: crashes.results, hangEvents: parsedHangs, excluded: excludedIDs, installCount: index.size, originByIx };
 }
@@ -490,8 +508,8 @@ function computeStats(raw, { days, now, includeExcluded }) {
   const rows = latest.results;
   const featureFlags = ["translation", "romanization", "machine_translation", "show_in_dock", "launch_at_login", "beta_updates"];
   const playedByInstall = {};
-  let hangs = 0;
-  const installsWithHangs = new Set();
+  let hangs = 0, throttledHangs = 0;
+  const installsWithHangs = new Set(), installsWithAnyHangs = new Set();
   const actionTotals = {}, actionInstalls = {};
   const lyricsTotals = {}, languageTotals = {}, lyricsByDay = {};
   for (const a of activity.results) {
@@ -506,8 +524,10 @@ function computeStats(raw, { days, now, includeExcluded }) {
     }
     for (const [k, n] of Object.entries(a.languages)) languageTotals[k] = (languageTotals[k] || 0) + n;
     for (const p of a.players_played) (playedByInstall[p] ||= new Set()).add(a.ix);
-    hangs += a.hangs || 0;
-    if (a.hangs > 0) installsWithHangs.add(a.ix);
+    hangs += a.hangs - a.throttled_hangs;
+    throttledHangs += a.throttled_hangs;
+    if (a.hangs > a.throttled_hangs) installsWithHangs.add(a.ix);
+    if (a.hangs > 0) installsWithAnyHangs.add(a.ix);
     for (const [k, n] of Object.entries(a.actions)) {
       actionTotals[k] = (actionTotals[k] || 0) + n;
       (actionInstalls[k] ||= new Set()).add(a.ix);
@@ -555,8 +575,13 @@ function computeStats(raw, { days, now, includeExcluded }) {
       flags: featureFlags.map((k) => [k, rows.filter((r) => r.features[k] === true).length]),
     },
     players_played: Object.entries(playedByInstall).map(([k, v]) => [k, v.size]).sort((a, b) => b[1] - a[1]),
-    // detailed:带了概况的那几次(新版本才有,每台每天最多 3 次);context 是这几次的情况分布,hotspots 按卡住的位置归并。
-    hangs: { total: hangs, installs: installsWithHangs.size, ...hangSummary(hangEvents.results) },
+    // detailed:带了概况的那几次(新版本才有,每台每天最多 3 + 1 次);context 是这几次的情况分布,hotspots 按卡住的位置归并。
+    // hangs 不算停顿期间主线程被系统压着(锁屏、App Nap)的那些,hangs_all 连它们一起算;throttled 是窗口内被压着的次数
+    // (两份一样)。旧版 App 不报这一项,它们的卡顿全算没被压着。
+    hangs: { total: hangs, installs: installsWithHangs.size, throttled: throttledHangs,
+             ...hangSummary(hangEvents.results.filter((h) => !h.throttled.length)) },
+    hangs_all: { total: hangs + throttledHangs, installs: installsWithAnyHangs.size, throttled: throttledHangs,
+                 ...hangSummary(hangEvents.results) },
     // 每个动作:窗口内一共几次、几台机器做过。
     actions: ACTIONS.map((k) => ({ action: k, total: actionTotals[k] || 0, installs: actionInstalls[k] ? actionInstalls[k].size : 0 })),
     // 放过的歌各拿到哪档歌词、各是什么语言(窗口内首数之和;同一首一台机器一天只算一次)。lyrics_daily 每天一行,installs 是报了的机器数。
@@ -581,6 +606,7 @@ function hangSummary(parsed) {
     player: countBy(parsed, (h) => h.player),
     windows: countBy(parsed, (h) => (h.windows.length ? h.windows : ["(none)"])),
     thermal: countBy(parsed, (h) => h.thermal),
+    throttled: countBy(parsed, (h) => (h.throttled.length ? h.throttled : ["(none)"])),
   };
   const groups = {};
   for (const h of parsed) (groups[h.signature] ||= []).push(h);
@@ -592,6 +618,7 @@ function hangSummary(parsed) {
       min_version: sorted[0] || null, max_version: sorted[sorted.length - 1] || null, last_at: latest.received_at,
       stack: latest.stack, duration: countBy(list, (h) => h.duration), since_wake: countBy(list, (h) => h.since_wake || "(no sleep)"),
       player: countBy(list, (h) => h.player), windows: countBy(list, (h) => (h.windows.length ? h.windows : ["(none)"])),
+      throttled: list.filter((h) => h.throttled.length).length,
     };
   }).sort((a, b) => b.n - a.n).slice(0, 50);
   return { detailed: parsed.length, context, hotspots };
@@ -706,7 +733,8 @@ function render(s) {
   const t = s.totals;
   let html = '<div class="card kpis">' +
     [["总安装", t.installs], ["近 7 天活跃", t.active_7d], ["近 " + s.window_days + " 天活跃", t.active_window],
-     ["卡顿次数", s.hangs.total + '<span> · ' + s.hangs.installs + " 台</span>"]]
+     ["卡顿次数", s.hangs.total + '<span> · ' + s.hangs.installs + " 台" +
+       (s.hangs.throttled ? " · 另有 " + s.hangs.throttled + " 次在锁屏 / 被节流期间" : "") + "</span>"]]
       .map(([k, v]) => '<div class="kpi"><span>' + k + "</span><b>" + v + "</b></div>").join("") + "</div>";
   html += bars(s.daily_active, "每日活跃") + bars(s.new_installs, "每日新安装");
   html += '<div class="grid">' + Object.entries(s.breakdown).map(([k, rows]) =>

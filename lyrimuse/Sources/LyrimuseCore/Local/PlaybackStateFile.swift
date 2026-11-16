@@ -549,7 +549,9 @@ public final class PlaybackStatePublisher {
                 if let last = self.lastWriteUptime {
                     let gap = ProcessInfo.processInfo.systemUptime - last
                     if gap >= Self.lateHeartbeatSeconds(for: content.state) {
-                        self.logger.notice("playback state: heartbeat \(String(format: "%.1f", gap), privacy: .public)s after the last write")
+                        let reading = MainThreadThrottle.readOnCurrentThread()
+                        let note = MainThreadThrottle.logNote(reading.reasons, priority: reading.priority)
+                        self.logger.notice("playback state: heartbeat \(String(format: "%.1f", gap), privacy: .public)s after the last write\(note, privacy: .public)")
                     }
                 }
                 self.write(content, now: Date())

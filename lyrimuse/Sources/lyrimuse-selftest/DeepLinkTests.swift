@@ -409,6 +409,13 @@ func runDeepLinkTests() {
                     "debug: 歌词管理列表动作、主线程心跳")
         expectEqual(link("lyrimuse://debug/manager-list") == nil && link("lyrimuse://debug/manager-list?op=") == nil
                     && link("lyrimuse://debug/main-thread-gaps") == nil, true, "debug: 列表动作没带 op、心跳没带 on 不认")
+        expectEqual([link("lyrimuse://debug/main-thread-stall?seconds=7"), link("lyrimuse://debug/main-thread-stall?seconds=6.5&throttle=locked"),
+                     link("lyrimuse://debug/main-thread-stall?seconds=12&throttle=low_priority")],
+                    [.debug(.mainThreadStall(seconds: 7, throttle: nil)), .debug(.mainThreadStall(seconds: 6.5, throttle: "locked")),
+                     .debug(.mainThreadStall(seconds: 12, throttle: "low_priority"))], "debug: 让主线程停几秒,可带节流读数")
+        expectEqual([link("lyrimuse://debug/main-thread-stall"), link("lyrimuse://debug/main-thread-stall?seconds=0"),
+                     link("lyrimuse://debug/main-thread-stall?seconds=13"), link("lyrimuse://debug/main-thread-stall?seconds=5&throttle=asleep")],
+                    [nil, nil, nil, nil], "debug: 主线程停顿没带秒数、超过上限、节流读数认不出都不认")
         expectEqual(link("lyrimuse://debug/manager-visibility?state=on") == nil
                     && link("lyrimuse://debug/manager-visibility") == nil, true, "debug: 歌词管理可见性认不出的、没带都不认")
         expectEqual([link("lyrimuse://debug/settings-visibility?state=hidden"), link("lyrimuse://debug/settings-visibility?state=Visible"),
@@ -690,6 +697,7 @@ func runDeepLinkTests() {
             .debug(.managerList(op: "search:歌 & 名")), .debug(.managerList(op: "key:down")),
             .debug(.managerList(op: "rightclick:3")),
             .debug(.mainThreadGaps(on: true)), .debug(.mainThreadGaps(on: false)), .debug(.mainThreadGaps(on: true, minMs: 20)),
+            .debug(.mainThreadStall(seconds: 7, throttle: nil)), .debug(.mainThreadStall(seconds: 6.5, throttle: "low_priority")),
             .debug(.rainbow(overlay: true, notch: nil)), .debug(.rainbow(overlay: false, notch: true)),
             .debug(.rainbow(overlay: nil, notch: nil, menuBar: false)),
             .debug(.overlayText(opacity: 0.4, color: "cover")), .debug(.overlayText(opacity: 1, color: nil)),

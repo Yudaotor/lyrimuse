@@ -1085,6 +1085,48 @@ func runOpsDiagnosticsTests() {
         expectEqual(tracker.shouldProbe(now: 120), true, "卡顿探针: 再下一轮")
         expectEqual(tracker.check(now: 126), .stillStalled(seconds: 6), "卡顿探针: 新的一次卡顿重新报")
 
+        // 节流标记(14 章决策 202):停顿期间任何一次看到主线程被系统压着就算,报过卡顿之后才看到的另报一次。
+        typealias T = MainThreadThrottle
+        var throttled = W.Tracker()
+        _ = throttled.shouldProbe(now: 200)
+        expectEqual(throttled.observe(throttle: []), nil, "节流标记: 没看到不报")
+        expectEqual(throttled.observe(throttle: [T.locked]), nil, "节流标记: 还没报卡顿时只记下")
+        expectEqual(throttled.check(now: 205), .stillStalled(seconds: 5, throttle: [T.locked]), "节流标记: 报卡顿时带上")
+        expectEqual(throttled.observe(throttle: [T.locked]), nil, "节流标记: 没多出新原因不再报")
+        expectEqual(throttled.observe(throttle: [T.lowPriority]), .throttled([T.locked, T.lowPriority]),
+                    "节流标记: 报过之后多出新原因,带上并起来的全部再报")
+        expectEqual(throttled.answered(now: 210), .recovered(seconds: 10, throttle: [T.locked, T.lowPriority]), "节流标记: 恢复时带上")
+        expectEqual(throttled.observe(throttle: [T.locked]), nil, "节流标记: 没有在等的探测不记")
+        _ = throttled.shouldProbe(now: 220)
+        expectEqual(throttled.check(now: 225), .stillStalled(seconds: 5), "节流标记: 新的一次从头算")
+        expectEqual(throttled.observe(throttle: [T.locked]), .throttled([T.locked]), "节流标记: 卡住之后才锁屏也算")
+        expectEqual([T.Reading(screenLocked: false, priority: 46).reasons, T.Reading(screenLocked: false, priority: 5).reasons,
+                     T.Reading(screenLocked: false, priority: 4).reasons, T.Reading(screenLocked: true, priority: 31).reasons,
+                     T.Reading(screenLocked: true, priority: 0).reasons, T.Reading(screenLocked: false, priority: nil).reasons],
+                    [[], [], [T.lowPriority], [T.locked], [T.locked, T.lowPriority], []],
+                    "节流判据: 锁屏,或主线程优先级落到后台档(4 及以下);读不到优先级不算")
+        expectEqual([T.Reading(simulating: T.locked)?.reasons, T.Reading(simulating: T.lowPriority)?.reasons],
+                    [[T.locked], [T.lowPriority]], "节流判据: 调试深链造的读数各对上一种")
+        expectEqual(T.Reading(simulating: "asleep") == nil && T.logNote([], priority: 4) == "", true, "节流判据: 认不出的不造;没看到节流时日志不加说明")
+        expectEqual(T.logNote([T.lowPriority, T.locked], priority: 4), " (throttled: locked,low_priority; main thread priority 4)",
+                    "节流判据: 日志说明")
+        // 真读数:在别的线程上读一条被压到后台档的线程(看门狗就是这样读主线程的)。
+        var bgPort: mach_port_t = 0
+        let bgReady = DispatchSemaphore(value: 0), bgDone = DispatchSemaphore(value: 0)
+        let bgThread = Thread {
+            setpriority(PRIO_DARWIN_THREAD, 0, PRIO_DARWIN_BG)
+            bgPort = pthread_mach_thread_np(pthread_self())
+            bgReady.signal()
+            bgDone.wait()
+        }
+        bgThread.start()
+        bgReady.wait()
+        let bgReading = T.read(thread: bgPort)
+        bgDone.signal()
+        let ownPriority = T.readOnCurrentThread().priority
+        expectEqual([bgReading.priority.map { $0 <= T.lowPriorityCeiling }, ownPriority.map { $0 > T.lowPriorityCeiling }], [true, true],
+                    "节流读数: 跨线程读得到优先级,后台档的线程读到 4 及以下,平常的线程在它之上")
+
         typealias Dog = MainThreadWatchdog
         expectEqual([Dog.shouldSample(tookDetailSlot: true, lastSampleAt: 100, now: 101),
                      Dog.shouldSample(tookDetailSlot: false, lastSampleAt: 100, now: 101),
@@ -1122,7 +1164,9 @@ func runOpsDiagnosticsTests() {
             var events: [MainThreadWatchdog.Tracker.Event] { lock.lock(); defer { lock.unlock() }; return items }
         }
         let box = EventBox()
-        let probe = W(probeInterval: 0.05, stallThreshold: 0.5, sampleAfter: 0.8) { box.append($0) }
+        // 节流读数一直报锁屏:空闲时不该因此报任何事件,卡住时报的那次带上标记。
+        let probe = W(probeInterval: 0.05, stallThreshold: 0.5, sampleAfter: 0.8,
+                      throttle: { MainThreadThrottle.Reading(screenLocked: true, priority: nil) }) { box.append($0) }
         probe.start()
         RunLoop.main.run(until: Date().addingTimeInterval(0.2))
         expectEqual(box.events.isEmpty, true, "卡顿探针(接线): 主线程空闲时不报")
@@ -1130,9 +1174,9 @@ func runOpsDiagnosticsTests() {
         RunLoop.main.run(until: Date().addingTimeInterval(0.3))
         probe.stop()
         let got = box.events
-        expectEqual(got.contains { if case .stillStalled = $0 { return true } else { return false } }, true,
-                    "卡顿探针(接线): 主线程堵着的时候报一次还没恢复")
-        expectEqual(got.contains { if case .recovered(let seconds) = $0 { return seconds >= 1.0 } else { return false } }, true,
+        expectEqual(got.contains { if case .stillStalled(_, let throttle) = $0 { return throttle == [MainThreadThrottle.locked] } else { return false } },
+                    true, "卡顿探针(接线): 主线程堵着的时候报一次还没恢复,带上停顿期间读到的节流标记")
+        expectEqual(got.contains { if case .recovered(let seconds, _) = $0 { return seconds >= 1.0 } else { return false } }, true,
                     "卡顿探针(接线): 恢复时报一共卡了多久")
     }
 

@@ -363,7 +363,10 @@ public struct TelemetryActivityDay: Codable, Equatable, Sendable {
     public var playersPlayed: [String]
     /// 主线程卡住到报「unresponsive」的次数(`MainThreadWatchdog`)。
     public var hangs: Int
-    /// 其中前 `TelemetryActivity.maxHangDetailsPerDay` 次的概况。
+    /// `hangs` 里停顿期间主线程被系统压着(锁屏、优先级落到后台档)的次数。
+    public var throttledHangs: Int
+    /// 其中几次的概况:没被压着的前 `TelemetryActivity.maxHangDetailsPerDay` 次,加被压着的前
+    /// `TelemetryActivity.maxThrottledHangDetailsPerDay` 次。
     public var hangDetails: [TelemetryHang]
     /// 几个动作各做了几次(`TelemetryAction` 的 rawValue → 次数),没做过的不写。
     public var actions: [String: Int]
@@ -374,12 +377,13 @@ public struct TelemetryActivityDay: Codable, Equatable, Sendable {
     /// 窗口布局轮数超限被 AppKit 接住的次数,按窗口 + pass 分,最多 `TelemetryActivity.maxLayoutLimitsPerDay` 种。
     public var layoutLimits: [TelemetryLayoutLimit]
 
-    public init(day: String, playersPlayed: [String] = [], hangs: Int = 0, hangDetails: [TelemetryHang] = [],
+    public init(day: String, playersPlayed: [String] = [], hangs: Int = 0, throttledHangs: Int = 0, hangDetails: [TelemetryHang] = [],
                 actions: [String: Int] = [:], lyrics: [String: Int] = [:], languages: [String: Int] = [:],
                 layoutLimits: [TelemetryLayoutLimit] = []) {
         self.day = day
         self.playersPlayed = playersPlayed
         self.hangs = hangs
+        self.throttledHangs = throttledHangs
         self.hangDetails = hangDetails
         self.actions = actions
         self.lyrics = lyrics
@@ -387,12 +391,13 @@ public struct TelemetryActivityDay: Codable, Equatable, Sendable {
         self.layoutLimits = layoutLimits
     }
 
-    /// 旧版本存下的活动没有 `actions`、`lyrics`、`languages`、`hang_details`、`layout_limits`。
+    /// 旧版本存下的活动没有 `actions`、`lyrics`、`languages`、`hang_details`、`layout_limits`、`throttled_hangs`。
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         day = try c.decode(String.self, forKey: .day)
         playersPlayed = try c.decodeIfPresent([String].self, forKey: .playersPlayed) ?? []
         hangs = try c.decodeIfPresent(Int.self, forKey: .hangs) ?? 0
+        throttledHangs = try c.decodeIfPresent(Int.self, forKey: .throttledHangs) ?? 0
         hangDetails = try c.decodeIfPresent([TelemetryHang].self, forKey: .hangDetails) ?? []
         actions = try c.decodeIfPresent([String: Int].self, forKey: .actions) ?? [:]
         lyrics = try c.decodeIfPresent([String: Int].self, forKey: .lyrics) ?? [:]
@@ -401,7 +406,7 @@ public struct TelemetryActivityDay: Codable, Equatable, Sendable {
     }
 
     enum CodingKeys: String, CodingKey {
-        case day, playersPlayed = "players_played", hangs, hangDetails = "hang_details", actions, lyrics, languages
+        case day, playersPlayed = "players_played", hangs, throttledHangs = "throttled_hangs", hangDetails = "hang_details", actions, lyrics, languages
         case layoutLimits = "layout_limits"
     }
 }
