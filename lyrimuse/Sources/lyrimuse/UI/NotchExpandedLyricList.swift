@@ -68,10 +68,14 @@ struct NotchExpandedLyricList: View {
 
     /// 当前句上面正好放下整数行、渐隐只淡行距那道缝(`NotchExpandedMetrics.lyricListPlacement`)。行距按这首歌实际排出来的算:
     /// 格高按设置里的副行定,这首一句译文 / 读音都没有时每句只有一行,别按带小字的行距摆,不然边上露出半截行。
+    /// 间奏「•••」那一排占一整行、开场时第一句也停在当前句那一格(有没有前奏点都一样),不用歌词窗口的半个字号和 52%,
+    /// 同样是为了不露半截行。
     private func placement(height: CGFloat) -> LyricsLayerListPlacement {
         let p = NotchExpandedMetrics.lyricListPlacement(height: height, secondaryRow: feed.showsSecondaryRow)
         return LyricsLayerListPlacement(activeAnchor: p.activeAnchor, topClear: p.topClear, topOpaque: p.topOpaque,
-                                        bottomOpaque: p.bottomOpaque, bottomClear: p.bottomClear)
+                                        bottomOpaque: p.bottomOpaque, bottomClear: p.bottomClear,
+                                        introAnchor: p.activeAnchor, anchorsIntroWithoutMarker: true,
+                                        gapRowHeight: p.gapRowHeight)
     }
 
     private func spec(width: CGFloat) -> LyricsLayerList.Spec {

@@ -71,7 +71,7 @@ struct LyricsLayerList: NSViewRepresentable {
     }
 }
 
-/// 图层列表的版式:当前句锚在视口哪个比例处,上下边渐隐的范围。
+/// 图层列表的版式:当前句锚在视口哪个比例处,上下边渐隐的范围,开场时第一句锚在哪,间奏「•••」那一排多高。
 struct LyricsLayerListPlacement: Equatable {
     /// 当前行滚到视口从上往下这个比例处(行内同一比例的点对过去)。
     var activeAnchor: CGFloat
@@ -81,6 +81,15 @@ struct LyricsLayerListPlacement: Equatable {
     var topOpaque: CGFloat
     var bottomOpaque: CGFloat
     var bottomClear: CGFloat
+    /// 开场(还没有当前行、有前奏点)第一句滚到视口的这个比例处。
+    var introAnchor: CGFloat = 0.52
+    /// 没有前奏点的歌开场时也把第一句滚到 `introAnchor`;关着时不滚,停在原来的滚动位置。
+    var anchorsIntroWithoutMarker = false
+    /// 间奏「•••」那一排占的高度(点在里面竖直居中);nil = 半个字号。
+    var gapRowHeight: CGFloat? = nil
+
+    /// 间奏「•••」那一排此刻占多高。
+    func gapHeight(fontSize: CGFloat) -> CGFloat { gapRowHeight ?? fontSize * 0.5 }
 
     /// 歌词窗口:锚 37%(同 SwiftUI 版 `activeLineAnchor`,07 章决策 87);顶部一直全透明到胶囊下沿之后才显现、
     /// 底边被窗口直切处淡掉(同 SwiftUI 版那条 mask)。
@@ -179,8 +188,6 @@ final class LyricsLayerListView: NSView {
     }
     /// 重装填色动画的漂移门:动画此刻推到的位置跟播放时钟差过它才重装(同悬浮歌词 `resyncToleranceMs`)。
     private static let resyncToleranceMs = 250
-    /// 开场(还没有当前行、有前奏点)滚第一句、锚 0.52。当前行的锚位在 `placement`。
-    private static let introAnchor: CGFloat = 0.52
     private static let staggerKey = "lyrimuse.layer-list.shift"
     /// 整张重建一次各花了多久(debug 级,`log stream --level debug` 才看得到)。
     private static let log = Logger(subsystem: "me.yudaotor.lyrimuse", category: "lyrics-layer-list")
@@ -465,7 +472,7 @@ final class LyricsLayerListView: NSView {
             y += h
             return top
         }
-        let gapHeight = fontSize * 0.5
+        let gapHeight = placement.gapHeight(fontSize: fontSize)
         let activeGap = gapView?.index
         if activeGap == -1 { gapY = next(gapHeight) }
         rowY = rows.indices.map { i in
@@ -542,17 +549,21 @@ final class LyricsLayerListView: NSView {
         landedScroll = newScroll
     }
 
-    /// 当前行(滚动锚)对到视口的锚位,对不上内容范围时钳住。没有滚动锚、有前奏点时滚第一句、锚 0.52(开场版式)。
+    /// 当前行(滚动锚)对到视口的锚位,对不上内容范围时钳住。没有滚动锚、有前奏点时滚第一句到 `placement.introAnchor`(开场版式)。
     private func targetScroll(_ s: LyricsLayerList.Spec, viewport: CGFloat) -> CGFloat? {
         let maxScroll = max(0, contentHeight - viewport)
         func aligned(_ top: CGFloat, _ height: CGFloat, _ anchor: CGFloat) -> CGFloat {
             min(maxScroll, max(0, top + anchor * height - anchor * viewport))
         }
-        if let g = gapView?.index, g >= 0 { return aligned(gapY, s.style.fontSize * 0.5, placement.activeAnchor) }
+        if let g = gapView?.index, g >= 0 {
+            return aligned(gapY, placement.gapHeight(fontSize: s.style.fontSize), placement.activeAnchor)
+        }
         if let i = s.scrollLineIndex ?? s.currentLineIndex, rowY.indices.contains(i) {
             return aligned(rowY[i], rows[i].size.height, placement.activeAnchor)
         }
-        if !rowY.isEmpty, s.gapMarkers[-1] != nil { return aligned(rowY[0], rows[0].size.height, Self.introAnchor) }
+        if !rowY.isEmpty, s.gapMarkers[-1] != nil || placement.anchorsIntroWithoutMarker {
+            return aligned(rowY[0], rows[0].size.height, placement.introAnchor)
+        }
         return nil
     }
 
@@ -582,7 +593,7 @@ final class LyricsLayerListView: NSView {
         case .center: x = s.leading + (column - w) / 2
         case .trailing: x = s.leading + column - w
         }
-        return CGRect(x: x, y: gapY + (s.style.fontSize * 0.5 - dot) / 2, width: w, height: dot)
+        return CGRect(x: x, y: gapY + (placement.gapHeight(fontSize: s.style.fontSize) - dot) / 2, width: w, height: dot)
     }
 
     /// 间奏开始时在原位展开一排点(只淡入,Apple 出现时没有放大那一下),结束时缩小淡出(同 SwiftUI 版 gapDotsRow 的过渡)。

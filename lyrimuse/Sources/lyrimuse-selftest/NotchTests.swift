@@ -3210,6 +3210,46 @@ func runNotchTests() {
                     "多行歌词: 3 行带小字的格高(132)里排 5 行不带小字的,多出的 17pt 上下各 8.5,当前句在中间那行")
         expectEqual(M.lyricListPlacement(height: 0, secondaryRow: false).activeAnchor, 0, "多行歌词: 还没量到高度时不算锚位")
 
+        // 间奏「•••」停在当前句那一格、开场时第一句停在当前句那一格:按图层列表的排法(上下逐项隔一个行距、锚位对齐
+        // `top + a × 高 = a × 视口`)摆出来,露在全透明区外面的每一项(歌词行、「•••」那一排)都必须是整项。
+        func cutItems(height h: CGFloat, songSecondary: Bool, placement p: M.LyricListPlacement, gapHeight: CGFloat,
+                      intro: Bool) -> [CGFloat] {
+            let pitch = M.lyricListPitch(secondaryRow: songSecondary), spacing = M.lyricListLineSpacing
+            let rowHeight = pitch - spacing
+            var items: [(top: CGFloat, height: CGFloat)] = []
+            if intro {
+                let first = p.activeAnchor * (h - rowHeight)
+                items.append((first - spacing - gapHeight, gapHeight))
+                items += (0...20).map { (first + CGFloat($0) * pitch, rowHeight) }
+            } else {
+                let gapTop = p.activeAnchor * (h - gapHeight)
+                items.append((gapTop, gapHeight))
+                items += (1...20).map { (gapTop - CGFloat($0) * pitch, rowHeight) }
+                items += (0...20).map { (gapTop + gapHeight + spacing + CGFloat($0) * pitch, rowHeight) }
+            }
+            return items.compactMap { item in
+                let shownTop = max(item.top, p.topClear * h), shownBottom = min(item.top + item.height, p.bottomClear * h)
+                guard shownBottom > shownTop + 1e-6 else { return nil }
+                return shownBottom - shownTop < item.height - 1e-6 ? item.top : nil
+            }
+        }
+        for lines in M.lyricListLineCounts {
+            for (cellSecondary, songSecondary) in [(false, false), (true, true), (true, false)] {
+                let h = M.lyricListHeight(lineCount: lines, secondaryRow: cellSecondary)
+                let p = M.lyricListPlacement(height: h, secondaryRow: songSecondary)
+                let label = "\(lines) 行\(cellSecondary ? "带小字的格高" : "")\(songSecondary ? "、这首带小字" : cellSecondary ? "、这首没有小字" : "")"
+                expectEqual(p.gapRowHeight, M.lyricListPitch(secondaryRow: songSecondary) - M.lyricListLineSpacing,
+                            "多行歌词: \(label)时「•••」那一排跟一句一样高")
+                expectEqual(cutItems(height: h, songSecondary: songSecondary, placement: p, gapHeight: p.gapRowHeight, intro: false),
+                            [], "多行歌词: \(label)、间奏里边上不露半截行")
+                expectEqual(cutItems(height: h, songSecondary: songSecondary, placement: p, gapHeight: p.gapRowHeight, intro: true),
+                            [], "多行歌词: \(label)、开场时边上不露半截行")
+            }
+        }
+        let p3 = M.lyricListPlacement(height: 69, secondaryRow: false)
+        expectEqual(cutItems(height: 69, songSecondary: false, placement: p3, gapHeight: 13 * 0.5, intro: false).isEmpty, false,
+                    "多行歌词: 「•••」那一排只有半个字号高时,3 行的底边露出下一句的上半截")
+
         // 这首有没有小字按真有的算:选译文时至少一句带译文,选读音时至少一句带读音或逐词标注。
         func row(roma: String? = nil, translation: String? = nil, groups: Bool = false) -> SyncedLyricLine {
             let words = [SyncedLyricWord(text: "故事", startMs: 0, durationMs: 400)]
@@ -3259,6 +3299,17 @@ func runNotchTests() {
         expectEqual(sourceHas(list, "interactive: false,\n minimumEdgePadding: 0,\n placement: placement(height: proxy.size.height),\n handle: listHandle)")
                     && sourceHas(src("LyricsLayerList.swift"), "var y = max(minimumEdgePadding, viewport * 0.395)"), true,
                     "多行歌词: 列表留白不套歌词窗口那条 88pt 下限,没有当前句时第一句不掉到视口下沿")
+        let layerList = src("LyricsLayerList.swift")
+        expectEqual(sourceHas(list, "introAnchor: p.activeAnchor, anchorsIntroWithoutMarker: true,\n gapRowHeight: p.gapRowHeight)")
+                    && sourceHas(layerList, "let gapHeight = placement.gapHeight(fontSize: fontSize)")
+                    && sourceHas(layerList, "return aligned(gapY, placement.gapHeight(fontSize: s.style.fontSize), placement.activeAnchor)")
+                    && sourceHas(layerList, "y: gapY + (placement.gapHeight(fontSize: s.style.fontSize) - dot) / 2")
+                    && sourceHas(layerList, "if !rowY.isEmpty, s.gapMarkers[-1] != nil || placement.anchorsIntroWithoutMarker {\n return aligned(rowY[0], rows[0].size.height, placement.introAnchor)"),
+                    true, "多行歌词: 「•••」那一排的高度、开场锚位由灵动岛的摆法给,排版、滚动、点的位置读同一份")
+        expectEqual(sourceHas(layerList, "static let window = LyricsLayerListPlacement(activeAnchor: 0.37, topClear: 0.075, topOpaque: 0.2,\n bottomOpaque: 0.9, bottomClear: 1)")
+                    && sourceHas(layerList, "var introAnchor: CGFloat = 0.52")
+                    && sourceHas(layerList, "func gapHeight(fontSize: CGFloat) -> CGFloat { gapRowHeight ?? fontSize * 0.5 }"), true,
+                    "多行歌词: 歌词窗口的「•••」仍是半个字号、开场仍锚 52%")
         expectEqual(sourceHas(list, "NotchExpandedMetrics.lyricListPlacement(height: height, secondaryRow: feed.showsSecondaryRow)")
                     && sourceHas(list, "secondary.showsLyricListSecondary(in: MiniLyricsSelection.lines(all, karaoke: karaoke).lazy.map(\\.line))")
                     && !list.contains("feed.secondaryLine.showsLyricListSecondary"), true,

@@ -179,6 +179,12 @@ enum DebugDeepLinks {
         case let .notchPreview(state):
             NotchCornerLive.shared.pinPreview(state == "expanded" ? .expanded : state == "collapsed" ? .collapsed : nil)
             logger.notice("debug notch preview state=\(state, privacy: .public)")
+        case let .notchLyricList(on, lines, secondary):
+            let s = AppSettings.shared
+            if let on { s.notchExpandedLyricList = on }
+            if let lines { s.notchExpandedLyricListLines = NotchExpandedMetrics.clampedLyricListLineCount(lines) }
+            if let secondary { s.notchSecondaryLine = secondary }
+            logger.notice("debug notch lyric list on=\(s.notchExpandedLyricList, privacy: .public) lines=\(s.notchExpandedLyricListLines, privacy: .public) secondary=\(s.notchSecondaryLine.rawValue, privacy: .public)")
         case let .wordFormatSwitch(state, format, done, total, removing):
             let formats = format.flatMap(LyricsWordFormat.init(rawValue:)).map { [$0] }
                 ?? Array(FeatureSettingsStore.shared.lyricsWordFormats.prefix(1))

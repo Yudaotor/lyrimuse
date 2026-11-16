@@ -233,6 +233,10 @@ public enum LyrimuseDeepLink: Equatable, Sendable {
         case notchQuickActions(layout: String)
         /// 设置页灵动岛预览摆成哪一态,不用指针悬停:`debug/notch-preview?state=expanded|collapsed|auto`(`auto` = 交还给指针)。
         case notchPreview(state: String)
+        /// 灵动岛「多行歌词」开关、行数和「副行」,跟设置页走同三个设置:
+        /// `debug/notch-lyric-list?on=1&lines=3|5|7&secondary=off|nextLine|translation|romanization`,至少带一个。
+        /// 行数按设置的几档夹取;副行值是 `LyricSecondaryLine` 的 rawValue,认不出的不认。
+        case notchLyricList(on: Bool?, lines: Int?, secondary: LyricSecondaryLine?)
         /// 实验室「自动写入歌曲文件」和它的子开关「覆盖其他软件写入的歌词」,跟实验室页走同两个设置:
         /// `debug/labs-writeback?auto=0|1&overwrite=0|1`,至少带一个。
         case labsWriteback(auto: Bool?, overwrite: Bool?)
@@ -585,6 +589,14 @@ public enum LyrimuseDeepLink: Equatable, Sendable {
         case ("debug", "/notch-preview"):
             guard let state = value("state"), ["expanded", "collapsed", "auto"].contains(state) else { return nil }
             self = .debug(.notchPreview(state: state))
+        case ("debug", "/notch-lyric-list"):
+            let on = value("on").flatMap(Self.parseBool)
+            let lines = value("lines").flatMap(Int.init)
+            let rawSecondary = value("secondary")
+            let secondary = rawSecondary.flatMap(LyricSecondaryLine.init(rawValue:))
+            if rawSecondary != nil, secondary == nil { return nil }
+            guard on != nil || lines != nil || secondary != nil else { return nil }
+            self = .debug(.notchLyricList(on: on, lines: lines, secondary: secondary))
         case ("debug", "/word-format-switch"):
             guard let state = value("state"), !state.isEmpty else { return nil }
             let nonNegative = { (s: String?) in s.flatMap(Int.init).flatMap { $0 >= 0 ? $0 : nil } }
@@ -942,6 +954,13 @@ public enum LyrimuseDeepLink: Equatable, Sendable {
             case let .notchPreview(state):
                 components.path = "/notch-preview"
                 components.queryItems = [URLQueryItem(name: "state", value: state)]
+            case let .notchLyricList(on, lines, secondary):
+                components.path = "/notch-lyric-list"
+                var items: [URLQueryItem] = []
+                if let on { items.append(URLQueryItem(name: "on", value: on ? "1" : "0")) }
+                if let lines { items.append(URLQueryItem(name: "lines", value: String(lines))) }
+                if let secondary { items.append(URLQueryItem(name: "secondary", value: secondary.rawValue)) }
+                components.queryItems = items
             case let .notchPassThrough(x, y):
                 components.path = "/notch-pass-through"
                 components.queryItems = [URLQueryItem(name: "x", value: String(x)), URLQueryItem(name: "y", value: String(y))]

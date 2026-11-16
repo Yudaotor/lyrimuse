@@ -155,23 +155,27 @@ public enum NotchExpandedMetrics {
     /// 列表上下边渐隐的宽度:行距的一半,只淡掉行与行之间那道缝,不吃进整行的字。
     public static let lyricListEdgeFade: CGFloat = lyricListLineSpacing / 2
 
-    /// 多行歌词在这一格里的摆法(比例都按视口高度):当前句锚位,上下边渐隐的四个停靠点。
+    /// 多行歌词在这一格里的摆法(比例都按视口高度):当前句锚位,上下边渐隐的四个停靠点,间奏「•••」那一排占多高。
     public struct LyricListPlacement: Equatable, Sendable {
         public let activeAnchor: CGFloat
         public let topClear: CGFloat
         public let topOpaque: CGFloat
         public let bottomOpaque: CGFloat
         public let bottomClear: CGFloat
+        /// 间奏「•••」那一排占的高度:跟一句歌词一样高(点在里面竖直居中),间奏时停在当前句那一格,上下仍是整行。
+        /// 比一句矮时列表底边会露出下一句的上半截(05 章决策 149)。
+        public let gapRowHeight: CGFloat
     }
 
     /// 这一格放得下几整行就排几行,当前句上面放 (行数 − 1) / 2 整行,渐隐只淡行距那道缝(`lyricListActiveAnchor` /
-    /// `lyricListEdgeFade`)。格高按「带小字」定、这首歌却一句小字都没有时行距变小、放不满整数行:多出来的那截平分到上下、
+    /// `lyricListEdgeFade`)。间奏「•••」和前奏里的第一句都停在当前句那一格,所以「•••」那一排按一整行的高度排。格高按「带小字」定、这首歌却一句小字都没有时行距变小、放不满整数行:多出来的那截平分到上下、
     /// 整段透明,边上不露半截行。格高正好是整数行时跟 `lyricListActiveAnchor` 一致。
     public static func lyricListPlacement(height: CGFloat, secondaryRow: Bool) -> LyricListPlacement {
         let pitch = lyricListPitch(secondaryRow: secondaryRow)
         let rowHeight = pitch - lyricListLineSpacing
         guard height >= pitch else {
-            return LyricListPlacement(activeAnchor: 0, topClear: 0, topOpaque: 0, bottomOpaque: 1, bottomClear: 1)
+            return LyricListPlacement(activeAnchor: 0, topClear: 0, topOpaque: 0, bottomOpaque: 1, bottomClear: 1,
+                                      gapRowHeight: rowHeight)
         }
         let count = Int(height / pitch + 1e-6)
         let margin = max(0, (height - CGFloat(count) * pitch) / 2)
@@ -179,7 +183,8 @@ public enum NotchExpandedMetrics {
         let opaque = min(0.5, (margin + lyricListEdgeFade) / height)
         return LyricListPlacement(activeAnchor: currentTop / (height - rowHeight),
                                   topClear: margin / height, topOpaque: opaque,
-                                  bottomOpaque: 1 - opaque, bottomClear: 1 - margin / height)
+                                  bottomOpaque: 1 - opaque, bottomClear: 1 - margin / height,
+                                  gapRowHeight: rowHeight)
     }
 
     // MARK: - 没有曲目时的空闲面板
