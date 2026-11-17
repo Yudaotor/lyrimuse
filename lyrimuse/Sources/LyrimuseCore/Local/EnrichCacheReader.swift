@@ -127,7 +127,7 @@ public final class EnrichCacheEntry: Decodable, Sendable {
     let youtubeMusicAlbum: String?
     // 用 Kaset 放的这一版是 MV 版本(引擎的 enrichEntry.YouTubeMusicMV),界面专辑位写「MV」。
     let youtubeMusicMV: Bool?
-    // 播放器本机数据把这一首记成有声内容(引擎的 enrichEntry.PlayerSpoken,酷狗听书)。只喂 kugouSpokenVerdict。
+    // 播放器把这一首记成有声内容(引擎的 enrichEntry.PlayerSpoken,酷狗听书、酷我的说话类内容)。只喂 kugouSpokenVerdict、kuwoSpokenVerdict。
     let playerSpoken: Bool?
     // 这首歌的语种真值(lyrimuse-engine/enrich.go 的 enrichEntry.SongLanguage,取值
     // "yue"=粤语/"cmn"=普通话/空=没判出来),给粤拼罗马音开关用——光看歌词文字认不出
@@ -752,6 +752,16 @@ public enum EnrichCacheReader {
         guard let entry = currentEntry(key) else { return nil }
         return spokenVerdict(playerSpoken: entry.playerSpoken,
                              playerSongID: entry.playerSongIDs?[PlaybackPlayer.kugou.bundleIdentifier])
+    }
+
+    /// 用酷我放的这一首是不是说话类内容(故事、有声书这类)。会话报了专辑的引擎不问,直接是 false;没报专辑的看引擎记在条目里的
+    /// 有声标记(lyrimuse-engine/kuwospoken.go 的 kuwoSpokenVerdict),没记、但条目里有酷我歌曲 id 是 false,都没有为 nil。零网络。
+    public static func kuwoSpokenVerdict(artist: String, title: String, album: String) -> Bool? {
+        if !album.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { return false }
+        let key = EnrichCacheKeys.normalizedKey(artist: artist, title: title, album: album)
+        guard let entry = currentEntry(key) else { return nil }
+        return spokenVerdict(playerSpoken: entry.playerSpoken,
+                             playerSongID: entry.playerSongIDs?[PlaybackPlayer.kuwo.bundleIdentifier])
     }
 
     /// 条目里的有声标记 → 结论:记了有声是 true;没记、但引擎已经按这家播放器的本机数据记下了歌曲 id(同一次读出来的)是 false;

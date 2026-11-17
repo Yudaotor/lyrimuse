@@ -219,6 +219,17 @@ func runPlayerIdentityTests() {
                         && sourceHas(source, "guard let verdict = EnrichCacheReader.kugouSpokenVerdict(artist: artist, title: title, album: album) else { return }\n"
                                      + "applySpokenAudio(verdict, mid: \"kugou\")\nif verdict { publishPlaybackState() }"), true,
                         "酷狗有声: 结论进 Discord 那份判定、写回播放状态")
+            // 酷我的说话类内容:引擎按酷我登记的专辑判、记进条目的 player_spoken;会话报了专辑的引擎不问,App 直接当歌(02 章决策 268)。
+            expectEqual(sourceHas(reader, "if !album.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { return false }\n"
+                                  + "let key = EnrichCacheKeys.normalizedKey(artist: artist, title: title, album: album)\n"
+                                  + "guard let entry = currentEntry(key) else { return nil }\n"
+                                  + "return spokenVerdict(playerSpoken: entry.playerSpoken,\n"
+                                  + "playerSongID: entry.playerSongIDs?[PlaybackPlayer.kuwo.bundleIdentifier])"), true,
+                        "酷我有声: 报了专辑是歌,没报的读引擎的 player_spoken 和酷我那一项歌曲 id")
+            expectEqual(source.contains("PlaybackPlayer.kuwo.bundleIdentifier, PlaybackPlayer.weread.bundleIdentifier]")
+                        && sourceHas(source, "guard let verdict = EnrichCacheReader.kuwoSpokenVerdict(artist: artist, title: title, album: album) else { return }\n"
+                                     + "applySpokenAudio(verdict, mid: \"kuwo\")\nif verdict { publishPlaybackState() }"), true,
+                        "酷我有声: 结论进 Discord 那份判定、写回播放状态")
         }
         do {
             typealias Command = PlaybackMenuControl.Command

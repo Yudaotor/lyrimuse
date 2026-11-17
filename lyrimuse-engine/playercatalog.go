@@ -43,11 +43,12 @@ const (
 
 // playerCatalogIDs:song 是歌曲页(只有汽水走这里),album / artist 是那家自己的 id,songID 是播放器报的这一首的歌曲 id、
 // songAlbum 是它所在的专辑 id(QQ 音乐、网易云走这里,成对记进 PlayerSongIDs / PlayerAlbumIDs)。qqSong / neteaseSong 是
-// 洛雪给的这一首在 QQ / 网易云的歌曲页。spoken:播放器本机数据把这一首记成有声内容(只有酷狗,见 kugouPlayingSongInfo)。
-// albumPending:songAlbum 还在后台问(只有酷狗,见 kugouPlayingAlbumID)。
+// 洛雪给的这一首在 QQ / 网易云的歌曲页。spoken:播放器把这一首记成有声内容(酷狗按本机队列,见 kugouPlayingSongInfo;酷我按
+// 酷我登记的专辑,见 kuwoSpokenVerdict)。albumPending:songAlbum 还在后台问(只有酷狗,见 kugouPlayingAlbumID)。
+// spokenPending:spoken 还在后台问(只有酷我)。
 type playerCatalogIDs struct {
 	song, album, artist, songID, songAlbum, qqSong, neteaseSong string
-	spoken, albumPending                                        bool
+	spoken, albumPending, spokenPending                         bool
 }
 
 var (
@@ -61,18 +62,18 @@ type playerCatalogAt struct {
 }
 
 func (m playerCatalogAt) ttl() time.Duration {
-	if m.ids == (playerCatalogIDs{}) || m.ids.albumPending {
+	if m.ids == (playerCatalogIDs{}) || m.ids.albumPending || m.ids.spokenPending {
 		return playerCatalogMissTTL
 	}
 	return playerCatalogHitTTL
 }
 
-// forgetPendingPlayerCatalogIDs 丢掉还在等专辑 id 的记忆,下一拍重读。
+// forgetPendingPlayerCatalogIDs 丢掉还在等专辑 id、等有声结论的记忆,下一拍重读。
 func forgetPendingPlayerCatalogIDs() {
 	playerCatalogMu.Lock()
 	defer playerCatalogMu.Unlock()
 	for k, m := range playerCatalogMemo {
-		if m.ids.albumPending {
+		if m.ids.albumPending || m.ids.spokenPending {
 			delete(playerCatalogMemo, k)
 		}
 	}
@@ -116,6 +117,7 @@ func playerCatalogIDsFor(bundleID, artist, title, album string, durationSecs flo
 		ids = lxMusicPlayingCatalogIDs(artist, title, durationSecs)
 	case kuwoMusicBundleID:
 		ids.songID, ids.songAlbum = kuwoPlayingSongIDs(artist, title)
+		ids.spoken, ids.spokenPending = kuwoSpokenVerdict(artist, title, album, durationSecs)
 	}
 	if !playerSongIDOK(bundleID, ids.songID) {
 		ids.songID = ""

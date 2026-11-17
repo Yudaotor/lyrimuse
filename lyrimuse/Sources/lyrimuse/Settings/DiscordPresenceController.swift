@@ -500,7 +500,7 @@ final class DiscordPresenceController: ObservableObject {
 
     private func makeTrack(now: Date, lookingUp: Bool) -> DiscordPresence.Track? {
         let playback = PlaybackCoordinator.shared
-        // QQ 音乐、酷狗的有声节目不显示成在听歌(见 LocalPlaybackSource.isCurrentTrackSpokenAudio)。
+        // QQ 音乐、酷狗、酷我的有声节目不显示成在听歌(见 LocalPlaybackSource.isCurrentTrackSpokenAudio)。
         guard !playback.title.isEmpty, !playback.isCurrentTrackAdBreak, !playback.isRadioTalkBreak,
               !LocalPlaybackSource.shared.isCurrentTrackSpokenAudio else { return nil }
         let reported = LocalPlaybackSource.shared.lastResolvedBundleID

@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"math"
 	"net/http"
@@ -97,6 +98,8 @@ type kuwoSearchItem struct {
 	Artist   string `json:"ARTIST"`
 	Album    string `json:"ALBUM"`    // 经常为空串
 	Duration string `json:"DURATION"` // 字符串秒数,偶尔是 "m:ss"(见 kuwoDurationSecs)
+	// AlbumID:酷我的专辑 id,一般是字符串;按原样留着,用时过 rawDigitsID(kuwospoken.go)。
+	AlbumID json.RawMessage `json:"ALBUMID"`
 	// WebAlbumPicShort:封面字段,形如 "120/38/70/3416909732.jpg"——
 	// 首段是尺寸,见 kuwoCoverURL。
 	WebAlbumPicShort string `json:"web_albumpic_short"`

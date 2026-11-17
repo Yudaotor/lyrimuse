@@ -160,12 +160,12 @@ public final class LocalPlaybackSource: ObservableObject {
     // (广告的标题/歌手压根不会被写进歌词缓存,见 lyrimuse-engine/enrich.go trackEnrichment
     // 的对应守卫,hasLyricsContent 永远拿不到内容)。
     @Published public private(set) var isCurrentTrackAdBreak: Bool = false
-    /// QQ 音乐、酷狗这一首判成了有声书 / 有声节目(QQ 见 QQSpokenAudio,酷狗见 EnrichCacheReader.kugouSpokenVerdict):
-    /// 字幕照常显示,Discord 不显示,引擎不当歌。
+    /// QQ 音乐、酷狗、酷我这一首判成了有声书 / 有声节目(QQ 见 QQSpokenAudio,酷狗、酷我见 EnrichCacheReader.kugouSpokenVerdict、
+    /// kuwoSpokenVerdict):字幕照常显示,Discord 不显示,引擎不当歌。
     @Published public private(set) var isCurrentTrackSpokenAudio: Bool = false
     /// 会判有声内容的播放器。歌手栏装字幕的听书播放器(`PlayerSubtitles`)放的都是有声内容,不用等结论。
     static let spokenAudioPlayers: Set<String> = [PlaybackPlayer.qqMusic.bundleIdentifier, PlaybackPlayer.kugou.bundleIdentifier,
-                                                  PlaybackPlayer.weread.bundleIdentifier]
+                                                  PlaybackPlayer.kuwo.bundleIdentifier, PlaybackPlayer.weread.bundleIdentifier]
     /// 这一首(身份)的结论;nil = 还没判出来。不是上面那几家时 key 为 nil。
     private var spokenAudioKey: String?
     private var spokenAudioVerdict: Bool?
@@ -4235,6 +4235,13 @@ public final class LocalPlaybackSource: ObservableObject {
             // 酷狗:引擎开播时读它的队列判,结论跟着这一首的缓存条目过来(见 EnrichCacheReader.kugouSpokenVerdict)。
             guard let verdict = EnrichCacheReader.kugouSpokenVerdict(artist: artist, title: title, album: album) else { return }
             applySpokenAudio(verdict, mid: "kugou")
+            if verdict { publishPlaybackState() }
+            return
+        }
+        if snapshot.bundleIdentifier == PlaybackPlayer.kuwo.bundleIdentifier {
+            // 酷我:会话没报专辑的,引擎问酷我它所在的专辑判,结论跟着这一首的缓存条目过来(见 EnrichCacheReader.kuwoSpokenVerdict)。
+            guard let verdict = EnrichCacheReader.kuwoSpokenVerdict(artist: artist, title: title, album: album) else { return }
+            applySpokenAudio(verdict, mid: "kuwo")
             if verdict { publishPlaybackState() }
             return
         }

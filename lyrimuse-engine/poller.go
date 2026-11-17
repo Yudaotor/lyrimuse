@@ -56,13 +56,14 @@ type playSession struct {
 	// 动机:广告字段会**闪变**(开播 album 空、几拍后补齐),announce 的门若按"当下字段"逐拍重判,
 	// 任何一拍看走眼就漏成 Last.fm nowplaying。
 	isAd bool
-	// 会话级「有声节目」标记:App 认出这一条是 QQ 音乐的有声书 / 有声节目(snapshot.Spoken)就往 true 棘轮。字幕照常解析
+	// 会话级「有声节目」标记:App 认出这一条是有声书 / 有声节目(snapshot.Spoken)、或者播放器把它记成有声内容(playerMarksSpoken)
+	// 就往 true 棘轮。字幕照常解析
 	// 显示;正在播放、收听提交、待播预取、网页中继都挡掉,挡的位置同广告。见 02 章决策 118。
 	isSpoken bool
 	// sodaPreviewPending:汽水试听段到这一拍还没有结论(snapshot.SodaPreviewPending,每拍跟着更新)。没结论时会话时长是
 	// 试听段长度,不提交收听;查到之后会话时长补成整首(sodaPreviewSessionBackfill),照常按整首算。见 09 章决策 240。
 	sodaPreviewPending bool
-	// prefetchDeferred:开播那一拍 App 对 QQ 这一条的结论还没到(awaitsSpokenVerdict),待播预取挪到结论到了再做。
+	// prefetchDeferred:开播那一拍 QQ、酷我这一条是不是有声节目的结论还没到(awaitsSpokenVerdict),待播预取挪到结论到了再做。
 	prefetchDeferred bool
 	// 会话级「不 scrobble 到 Last.fm」标记:开播时按 features().LastfmExcludedBundles
 	// 算一次(lastfmExcluded,见 lastfmexclude.go 头注)。**只管 Last.fm**:recordLastfmListen 不挂起也不镜像、
@@ -651,7 +652,7 @@ func (p *poller) pushRelayState(now time.Time, reanchored bool) {
 	if p.cfg.StateRelayURL == "" {
 		return
 	}
-	// QQ 这一条是不是有声节目还没判出来:先不推,网页留着上一份(见 awaitsSpokenVerdict)。
+	// QQ、酷我这一条是不是有声节目还没判出来:先不推,网页留着上一份(见 awaitsSpokenVerdict)。
 	if p.sess != nil && p.sess.key == p.cur.key() && awaitsSpokenVerdict(p.cur, p.sess.startedAt, now) {
 		return
 	}
@@ -668,8 +669,10 @@ func (p *poller) pushRelayState(now time.Time, reanchored bool) {
 	//
 	// 判成 false 之后会顺着下面的 switch 落到 iPhone 正在放 / 上次播放,也就是广告这几十秒
 	// 网页停在上一首,跟"没在放"时的表现一致 —— 不会出现一张假的当前曲目卡。判据见 isAdBreak。
+	// 酷我的结论在后台问,到了之后要等下一次 handle 才置上 isSpoken;这期间别的结果(桥接、收听提交)触发的推送照样要挡。
 	macHasTrack := p.isTracked() && !isAdBreak(p.cur.Bundle, p.cur.Artist, p.cur.Title, p.cur.Album) &&
-		!(p.sess != nil && p.sess.isAd) && !p.cur.Spoken && !(p.sess != nil && p.sess.isSpoken)
+		!(p.sess != nil && p.sess.isAd) && !p.cur.Spoken && !(p.sess != nil && p.sess.isSpoken) &&
+		!(p.cur.Bundle == kuwoMusicBundleID && playerMarksSpoken(p.cur))
 	iphonePlaying := !p.remoteAt.IsZero() && now.Sub(p.remoteAt) < 90*time.Second
 	switch {
 	case macHasTrack && p.cur.Playing: // Mac 正在放 → 最高优先(带进度条)
@@ -1347,7 +1350,7 @@ func (p *poller) handle(now time.Time, reanchored, loopRestart bool) {
 			p.sess.isSpoken = true
 			log.Printf("spoken audio: %q - %q marked by the player, showing subtitles without now playing, listens or prefetch", p.cur.Artist, p.cur.Title)
 		}
-		// QQ 这一条是不是有声节目还没判出来:正在播放和待播预取先等,见 awaitsSpokenVerdict。
+		// QQ、酷我这一条是不是有声节目还没判出来:正在播放和待播预取先等,见 awaitsSpokenVerdict。
 		waiting := awaitsSpokenVerdict(p.cur, p.sess.startedAt, now)
 		if waiting {
 			p.sess.prefetchDeferred = true
@@ -1415,7 +1418,12 @@ func (p *poller) handle(now time.Time, reanchored, loopRestart bool) {
 		p.sess.isSpoken = true
 		log.Printf("spoken audio: %q - %q, showing subtitles without now playing, listens or prefetch", p.cur.Artist, p.cur.Title)
 	}
-	// 开播时在等 QQ 的结论而挪后的待播预取:结论到了(或等到了上限)再做,是有声节目就不做。
+	// 酷我的结论在后台问,开播那一拍多半还没到:到了再置上。
+	if !p.sess.isSpoken && p.cur.Bundle == kuwoMusicBundleID && playerMarksSpoken(p.cur) {
+		p.sess.isSpoken = true
+		log.Printf("spoken audio: %q - %q marked by the player, showing subtitles without now playing, listens or prefetch", p.cur.Artist, p.cur.Title)
+	}
+	// 开播时在等 QQ、酷我的结论而挪后的待播预取:结论到了(或等到了上限)再做,是有声节目就不做。
 	if p.sess.prefetchDeferred && !awaitsSpokenVerdict(p.cur, p.sess.startedAt, now) {
 		p.sess.prefetchDeferred = false
 		if features().AlbumPrefetch && !p.sess.isAd && !p.sess.isSpoken &&

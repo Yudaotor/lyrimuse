@@ -554,7 +554,7 @@ type enrichEntry struct {
 	// PlayerAlbumIDs:PlayerSongIDs 里那一首所在的专辑 id,键同样是 bundle id,跟歌曲 id 成对记(notePlayerSongLocked;QQ 是
 	// albumMid,网易云是专辑 id)。歌曲实体拿它认「同一张专辑里的另一首」(18 章决策 67)。检索配的专辑(QQAlbumMid)别往这里写。
 	PlayerAlbumIDs map[string]string `json:"player_album_ids,omitempty"`
-	// PlayerSpoken:播放器本机数据把这一首记成有声内容(酷狗听书,applyPlayerCatalogIDsLocked 记,只置不清)。App 读它不让
+	// PlayerSpoken:播放器把这一首记成有声内容(酷狗听书、酷我按专辑认出的说话类内容,applyPlayerCatalogIDsLocked 记,只置不清)。App 读它不让
 	// Discord 显示、把播放状态的 spoken 写成 true(02 章决策 195)。
 	PlayerSpoken bool `json:"player_spoken,omitempty"`
 
