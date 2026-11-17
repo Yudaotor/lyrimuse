@@ -633,6 +633,8 @@ func runMainThreadIOTests() {
                         && sourceHas(stage, "guard !flushScheduled else { return }")
                         && sourceHas(stage, "DispatchQueue.main.asyncAfter(deadline: .now() + Self.publishDelay)"), true,
                     "App 图标(契约): 陆续读好的攒一会儿合成一次发布(每发布一次观察它的大页整页重算)")
+        expectEqual(sourceHas(stage, "let alreadyMissing = missingSince[bundleID] != nil\nmissingSince[bundleID] = Date()\nif alreadyMissing { return }"), true,
+                    "App 图标(契约): 没装的重查还是没装只更新时间、不发布(只有占位图变成没装那一次才发布)")
         let publish = sourceBody("private func publishStaged() {", in: cache)
         expectEqual(sourceHas(publish, "guard !stagedIcons.isEmpty else {\nobjectWillChange.send()\nreturn\n}")
                         && sourceHas(publish, "icons.merge(stagedIcons) { _, staged in staged }"), true,

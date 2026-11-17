@@ -505,7 +505,7 @@ public enum SettingsSearchCatalog {
         surface(.notch, "展开宽度", kw: ["展开态", "pt"]),
         surface(.notch, "收起时显示歌词", kw: ["显示歌词", "歌词行", "状态条"], group: "歌词行"),
         surface(.notch, "对齐方式", kw: ["居中", "左对齐", "右对齐"], group: "歌词行"),
-        surface(.notch, "歌词颜色", kw: ["颜色", "彩虹", "渐变", "强调色"], group: "歌词行"),
+        surface(.notch, "歌词颜色", kw: ["颜色", "彩虹", "渐变", "强调色", "自定义", "自定义颜色", "取色"], group: "歌词行"),
         surface(.notch, "副行", kw: ["下一句", "译文", "读音", "罗马音", "两行"], group: "歌词行"),
         surface(.notch, "无译文时", kw: ["没有译文", "没有翻译", "副行", "下一句", "只显示歌词", "单行", "一行"], group: "歌词行"),
         surface(.notch, "无读音时", kw: ["没有读音", "罗马音", "副行", "下一句", "只显示歌词", "单行", "一行"], group: "歌词行"),

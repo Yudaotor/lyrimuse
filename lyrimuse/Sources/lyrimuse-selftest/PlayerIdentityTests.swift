@@ -2984,16 +2984,48 @@ func runPlayerIdentityTests() {
         expectEqual([lf(returns: LF.maxReturns - 1), lf(returns: LF.maxReturns)], [.returnFocus, .stop],
                     "还前台: 一次拉起最多还 maxReturns 次,不跟反复抢前台的 App 拉锯")
         expectEqual(lf(alive: false), .stop, "还前台: 拉起之前那个 App 退了或被隐藏 → 不还")
+        expectEqual(LF.verdict(activatedIsLaunched: false, activatedIsPrevious: false, activatedIsSelf: true, sinceLaunch: 3,
+                               sinceClick: 0.2, sinceKey: 0.1, returnsSoFar: 0, previousAlive: true), .keepWatching,
+                    "还前台: Lyrimuse 自己成了前台(启动时设置窗口开了又关、用户点开它的窗口)→ 不算切走,接着盯")
+        // 同一批拉起的几个播放器共用一个守卫(LaunchFocusBatch):先跳的还回去之后,后跳的照样要还。
+        do {
+            let kuwo = PlaybackPlayer.kuwo.bundleIdentifier, swinsian = "com.swinsian.Swinsian"
+            var batch = LaunchFocusBatch(players: [[kuwo], [swinsian, "com.swinsian.SwinsianBeta"]])
+            func step(_ bundleID: String?, previous: Bool = false, isSelf: Bool = false, at: TimeInterval = 5) -> LF.Verdict {
+                batch.verdict(activatedBundleID: bundleID, activatedIsPrevious: previous, activatedIsSelf: isSelf,
+                              sinceLaunch: at, sinceClick: 30, sinceKey: 30, previousAlive: true)
+            }
+            expectEqual([step(kuwo), step("com.cmuxterm.app", previous: true), step("com.swinsian.SwinsianBeta", at: 8)],
+                        [.returnFocus, .keepWatching, .returnFocus],
+                        "还前台(同批): 酷我先跳 → 还;回到原来那个 → 接着盯;Swinsian(别的版本)再跳 → 照样还")
+            expectEqual(batch.returns, [1, 1], "还前台(同批): 次数按播放器各记各的")
+            for _ in 0..<(LF.maxReturns - 1) { _ = step(kuwo) }
+            expectEqual(step(kuwo), .stop, "还前台(同批): 某个播放器还满 maxReturns 次还在抢 → 不再管(守卫就此结束)")
+            var solo = LaunchFocusBatch(players: [[swinsian]])
+            expectEqual(solo.verdict(activatedBundleID: kuwo, activatedIsPrevious: false, activatedIsSelf: false, sinceLaunch: 5,
+                                     sinceClick: 30, sinceKey: 30, previousAlive: true), .stop,
+                        "还前台: 不是这一批拉起的 App 成了前台 → 当用户切走,不再管")
+            var home = LaunchFocusBatch(players: [[kuwo]])
+            _ = home.verdict(activatedBundleID: LyrimuseIdentity.current.bundleIdentifier, activatedIsPrevious: false, activatedIsSelf: true,
+                             sinceLaunch: 2, sinceClick: 0.3, sinceKey: 30, previousAlive: true)
+            let selfHome = home.lastHomeIsSelf
+            _ = home.verdict(activatedBundleID: "com.cmuxterm.app", activatedIsPrevious: true, activatedIsSelf: false,
+                             sinceLaunch: 4, sinceClick: 30, sinceKey: 30, previousAlive: true)
+            expectEqual([selfHome, home.lastHomeIsSelf], [true, false],
+                        "还前台: 最近回到的是 Lyrimuse 自己时记下来(有主窗口就还给它),回到原来那个之后改回还给原来那个")
+            expectEqual(LaunchFocusBatch(players: [[kuwo], [swinsian]]).allBundleIDs, [kuwo, swinsian], "还前台(同批): 合起来的 bundle id")
+        }
         do {
             let sourcesRoot = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
             func src(_ path: String) -> String {
                 (try? String(contentsOf: sourcesRoot.appendingPathComponent(path), encoding: .utf8)) ?? ""
             }
-            expectEqual(sourceHas(src("lyrimuse/AppDelegate.swift"),
-                                  "PlayerLaunchFocusGuard.begin(launching: ids) NSWorkspace.shared.openApplication(at: playerURL, configuration: config)"),
-                        true, "还前台接线: 打开 Lyrimuse 时启动播放器,拉起前先记前台")
+            let delegate = src("lyrimuse/AppDelegate.swift")
+            expectEqual(sourceHas(delegate, "if !launches.isEmpty { PlayerLaunchFocusGuard.begin(launching: launches.map(\\.ids)) } for launch in launches {")
+                        && sourceCount(delegate, "PlayerLaunchFocusGuard.begin(") == 1, true,
+                        "还前台接线: 打开 Lyrimuse 时启动播放器,整批拉起之前只调一次、共用一个守卫")
             expectEqual(sourceHas(sourceBody("static func ensureAppRunning(bundleID: String) async", in: src("lyrimuse/Settings/MusicAutomationPermission.swift")),
-                                  "await PlayerLaunchFocusGuard.begin(launching: PlayerBundleAliases.all(for: bundleID), keepSelf: true) do {"),
+                                  "await PlayerLaunchFocusGuard.begin(launching: [PlayerBundleAliases.all(for: bundleID)], keepSelf: true) do {"),
                         true, "还前台接线: 请求自动化权限前后台拉起目标 App,拉起前先记前台")
             let guardSource = src("LyrimuseCore/Local/PlayerLaunchFocusGuard.swift")
             expectEqual(sourceHas(guardSource, "target.activate(options: [])")

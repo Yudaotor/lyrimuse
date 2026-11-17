@@ -356,6 +356,11 @@ func runSettingsSearchTests() {
     let progressEntry = entries.first { $0.titleKey == "进度条" && $0.sectionValue == SettingsSearchCatalog.lyricsWindowSectionValue }
     expectEqual(progressEntry != nil && SettingsSearchCatalog.lyricsWindowMiniOnlyTitles.contains("进度条"), true,
                 "目录: 迷你「进度条」登记在歌词窗口那一段,命中时预览切到迷你")
+    for query in ["自定义", "自定义颜色", "取色"] {
+        let hits = SettingsSearchMatcher.ranked(entries, query: query, title: { $0.titleKey }, secondary: { $0.keywords + $0.pathKeys })
+        expectEqual(hits.contains { $0.sectionValue == "notch" && $0.titleKey == "歌词颜色" }, true,
+                    "目录: 搜「\(query)」能落到灵动岛的歌词颜色(有自定义档和取色器)")
+    }
     // 用户嫌歌词不准时多半照抱怨的原话搜,不会搜「时间轴偏移」。
     for query in ["歌词太快", "太慢", "不同步", "out of sync"] {
         let hits = SettingsSearchMatcher.ranked(entries, query: query, title: { $0.titleKey }, secondary: { $0.keywords + $0.pathKeys })

@@ -278,13 +278,16 @@ final class AppIconCache: ObservableObject {
         }
     }
 
-    /// 记下读的结果,攒一会儿再发布。没装也要发布:那一格正画着占位图,得重画一次才落到调用方的兜底图。
+    /// 记下读的结果,攒一会儿再发布。头一次读到没装也要发布:那一格正画着占位图,得重画一次才落到调用方的兜底图;
+    /// 本来就记着没装、重查还是没装的只更新时间,不发布(那一格已经是兜底图,发布只会让观察者整页白算一遍)。
     private func stage(_ bundleID: String, _ image: NSImage?) {
         if let image {
             missingSince[bundleID] = nil
             stagedIcons[bundleID] = image
         } else {
+            let alreadyMissing = missingSince[bundleID] != nil
             missingSince[bundleID] = Date()
+            if alreadyMissing { return }
         }
         guard !flushScheduled else { return }
         flushScheduled = true

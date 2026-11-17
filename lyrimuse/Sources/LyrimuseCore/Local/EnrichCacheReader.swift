@@ -728,9 +728,11 @@ public enum EnrichCacheReader {
                 ? nil : kk.kkboxURL.flatMap { URL(string: $0) },
             kkboxArtistWeb: PlatformLinks.kkboxArtistWebURL(songPage: kk.kkboxURL ?? "", artistID: own(entry.kkboxArtistID, kk.kkboxArtistID)),
             lxMusicPlatform: PlatformLinks.lxMusicPlatform(songID: entry.playerSongIDs?[PlaybackPlayer.lxMusic.bundleIdentifier]),
-            kuwoSong: PlatformLinks.kuwoSongURL(kw.kuwoURL ?? "")
+            // 本条自己的(引擎存的、酷我记下的曲目 id、洛雪 kw_ id)都没有,才借同一首别的写法存的。
+            kuwoSong: PlatformLinks.kuwoSongURL(entry.kuwoURL ?? "")
                 ?? PlatformLinks.kuwoSongURL(kuwoSongID: entry.playerSongIDs?[PlaybackPlayer.kuwo.bundleIdentifier])
-                ?? PlatformLinks.kuwoSongURL(lxSongID: entry.playerSongIDs?[PlaybackPlayer.lxMusic.bundleIdentifier]),
+                ?? PlatformLinks.kuwoSongURL(lxSongID: entry.playerSongIDs?[PlaybackPlayer.lxMusic.bundleIdentifier])
+                ?? PlatformLinks.kuwoSongURL(kw.kuwoURL ?? ""),
             kugouSong: PlatformLinks.kugouSongURL(kg.kugouURL ?? ""),
             kugouAlbum: PlatformLinks.kugouAlbumURL(id: entry.playerAlbumIDs?[PlaybackPlayer.kugou.bundleIdentifier]))
         return links.isEmpty ? nil : links

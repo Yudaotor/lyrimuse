@@ -26,6 +26,8 @@ public final class TelemetryActivity: @unchecked Sendable {
     /// 有一次延后的写盘排着(`store(_:deferred:)`)。
     private var deferredWritePending = false
     private var queuedWriteCount = 0
+    /// 写盘队列已经写完的次数;跟 `queuedWriteCount` 不等就还有排着没写完的。
+    private var finishedWriteCount = 0
     /// 延后写盘等多久:布局超限振荡时每帧都来一次,同一种只加次数的那些攒到这么久写一次。
     static let deferredWriteDelay: TimeInterval = 5
     private var recording = false
@@ -223,10 +225,26 @@ public final class TelemetryActivity: @unchecked Sendable {
         }
     }
 
-    /// 等排着的写盘都落地(测试读磁盘前用);排着的延后写当场写。
+    /// 等排着的写盘都落地(测试读磁盘前用);排着的延后写当场写。主线程上别调:写 UserDefaults 要等主线程上的观察者,
+    /// 主线程在这里同步等写盘队列会互相等死(14 章决策 175),退出时用 `flushPendingWrites(timeout:notifying:_:)`。
     public func waitForPendingWrites() {
         lock.withLock { if deferredWritePending { store(load()) } }
         writeQueue.sync {}
+    }
+
+    /// 还有没落盘的记账:排着的延后写,或排进写盘队列还没写完的。
+    public var hasPendingWrites: Bool {
+        lock.withLock { deferredWritePending || finishedWriteCount < queuedWriteCount }
+    }
+
+    /// 退出前调:排着的延后写当场排进写盘队列,队列把这之前的写都写完、或过了 `timeout` 秒(先到的那个)时在 `queue` 上调一次
+    /// `done`。调用线程不等,主线程上调也不会跟写盘互相等死。见 14 章决策 214。
+    public func flushPendingWrites(timeout: TimeInterval, notifying queue: DispatchQueue = .main,
+                                   _ done: @escaping @Sendable () -> Void) {
+        lock.withLock { if deferredWritePending { store(load()) } }
+        let once = FlushOnce()
+        writeQueue.async { if once.claim() { queue.async(execute: done) } }
+        queue.asyncAfter(deadline: .now() + timeout) { if once.claim() { done() } }
     }
 
     // 以下都在锁里调。
@@ -269,12 +287,26 @@ public final class TelemetryActivity: @unchecked Sendable {
         queuedWriteCount += 1
         let data = kept.isEmpty ? nil : try? JSONEncoder().encode(kept)
         let defaults = self.defaults, key = self.key
-        writeQueue.async {
+        writeQueue.async { [weak self] in
             if let data {
                 defaults.set(data, forKey: key)
             } else {
                 defaults.removeObject(forKey: key)
             }
+            if let self { self.lock.withLock { self.finishedWriteCount += 1 } }
+        }
+    }
+}
+
+/// `flushPendingWrites` 的写完与超时两条路只有先到的那条调 `done`。
+private final class FlushOnce: @unchecked Sendable {
+    private let lock = NSLock()
+    private var claimed = false
+    func claim() -> Bool {
+        lock.withLock {
+            if claimed { return false }
+            claimed = true
+            return true
         }
     }
 }

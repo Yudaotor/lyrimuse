@@ -638,6 +638,10 @@ func runDeepLinkTests() {
                     && debug.contains("guard isEnabled else {"), true,
                     "debug: 只在本机偏好 debug:deepLinks 打开时执行(网页改不了本机偏好)")
         expectEqual(debug.contains("enabledKey = \"np:"), false, "debug: 开关键不带 np: 前缀,导出配置不带走")
+        let lyricsWindowLookup = sourceBody("private static var visibleLyricsWindow: NSWindow? {", in: debug)
+        expectEqual(sourceHas(lyricsWindowLookup, "$0.identifier?.rawValue.hasPrefix(\"lyrics-window\") == true")
+                    && !lyricsWindowLookup.contains("== \"lyrics-window\""), true,
+                    "debug: 兜底找完整歌词窗口按场景 id 前缀认(标识可能是 lyrics-window-AppWindow-N)")
         // 开窗入口一律走 WindowActivation,background=1 时才能不抢焦点;漏一处那一处就照样抢。
         let scene = source("lyrimuse/MenuBar/MenuBarSceneActions.swift")
         expectEqual(scene.contains("NSApp.activate(ignoringOtherApps: true)"), false,

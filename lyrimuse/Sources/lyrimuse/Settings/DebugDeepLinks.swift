@@ -36,10 +36,13 @@ enum DebugDeepLinks {
     static let onboardingStepNotification = Notification.Name("lyrimuse.debug.onboardingStep")
 
     /// 屏上露着的那扇歌词窗口(迷你面板或完整窗口)。`LyricsWindowSession.window` 是最近 attach 的那扇、弱引用,
-    /// 启动时直接开成迷你那次读到的是空,它不在屏上时按窗口类型找。
+    /// 启动时直接开成迷你那次读到的是空,它不在屏上时按窗口类型找。完整窗口按场景 id 前缀认:有的系统上标识是
+    /// `lyrics-window-AppWindow-N`。
     private static var visibleLyricsWindow: NSWindow? {
         if let window = LyricsWindowSession.window, window.isVisible { return window }
-        return NSApp.windows.first { $0.isVisible && ($0 is LyricsMiniPanel || $0.identifier?.rawValue == "lyrics-window") }
+        return NSApp.windows.first {
+            $0.isVisible && ($0 is LyricsMiniPanel || $0.identifier?.rawValue.hasPrefix("lyrics-window") == true)
+        }
     }
 
     /// `debug/lyrics-window-traffic-hover`:当作指针停在歌词窗口红绿灯附近 `point`(窗口坐标,左上原点;nil = 离开)。

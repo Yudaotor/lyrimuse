@@ -570,6 +570,16 @@ func runTelemetryTests() {
         activity.waitForPendingWrites()
         let stored = UserDefaults.standard.data(forKey: key).flatMap { try? JSONDecoder().decode([TelemetryActivityDay].self, from: $0) }
         expectEqual(stored?.first?.layoutLimits.first?.count, 503, "超限记账: 延后的那次写盘带上攒下的次数")
+        for _ in 0..<7 { activity.noteLayoutLimit(window: "onboarding", windowClass: "SwiftUI.AppKitWindow", pass: "layout", now: day1) }
+        let pendingBeforeFlush = activity.hasPendingWrites
+        let flushed = DispatchSemaphore(value: 0)
+        let flushQueue = DispatchQueue(label: "selftest.telemetry-flush")
+        activity.flushPendingWrites(timeout: 2, notifying: flushQueue) { flushed.signal() }
+        let flushedInTime = flushed.wait(timeout: .now() + 2) == .success
+        let afterFlush = UserDefaults.standard.data(forKey: key).flatMap { try? JSONDecoder().decode([TelemetryActivityDay].self, from: $0) }
+        expectEqual([pendingBeforeFlush, flushedInTime, activity.hasPendingWrites], [true, true, false],
+                    "超限记账: 退出用的 flushPendingWrites 把攒着的延后写当场写掉,写完回调、不留没落盘的")
+        expectEqual(afterFlush?.first?.layoutLimits.first?.count, 510, "超限记账: 退出前写掉的那次带上攒下的次数")
         let json = (try? JSONEncoder().encode(limits.first)).flatMap { String(data: $0, encoding: .utf8) } ?? ""
         expectEqual(json.contains("\"class\":\"SwiftUI.AppKitWindow\"") && json.contains("\"window\":\"onboarding\""), true, "超限记账: 键名 class / window")
         let old = #"{"day":"2026-11-01","players_played":[],"hangs":0}"#
@@ -581,6 +591,12 @@ func runTelemetryTests() {
                               "DisplayCycleLimit.noteThrown(reason: exception.reason)"), true, "超限(契约): 异常预处理器把主线程异常交给它认")
         expectEqual(sourceHas(sourceBody("func applicationWillFinishLaunching(_ notification: Notification)", in: text("lyrimuse/AppDelegate.swift")),
                               "DisplayCycleLimit.onLimitReached = { event in"), true, "超限(契约): App 启动时接上记账")
+        let terminate = sourceBody("func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {",
+                                   in: text("lyrimuse/AppDelegate.swift"))
+        expectEqual(sourceHas(terminate, "guard saveConfig || TelemetryActivity.shared.hasPendingWrites else { return .terminateNow }")
+                    && sourceHas(terminate, "TelemetryActivity.shared.flushPendingWrites(timeout: 1) {")
+                    && !terminate.contains("waitForPendingWrites"), true,
+                    "超限(契约): 退出前把遥测攒着的写盘写掉,主线程只异步等、最多 1 秒(同步等会跟写盘互相等死)")
     }
 
     do {

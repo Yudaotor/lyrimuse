@@ -1020,6 +1020,16 @@ func runLastfmTests() {
                     "https://www.kugou.com/mixsong/j2sek95.html", "实体链接: 酷狗网页歌曲页解码出来,缺的时候向同一首借")
         let kugouBad = entry(#"{"song":"s_1","kugou_url":"https://www.kugou.com/song/x.html"}"#)
         expectEqual(EnrichCacheReader.platformLinks(for: kugouBad, siblings: [kugouBad])?.kugouSong == nil, true, "实体链接: 酷狗形状不对不认")
+        let kuwoID = PlaybackPlayer.kuwo.bundleIdentifier, lxID = PlaybackPlayer.lxMusic.bundleIdentifier
+        let kuwoLender = entry(#"{"song":"s_1","kuwo_url":"https://www.kuwo.cn/play_detail/111"}"#)
+        let kuwoOwnID = entry(#"{"song":"s_1","player_song_ids":{"\#(kuwoID)":"222"}}"#)
+        let kuwoOwnLX = entry(#"{"song":"s_1","player_song_ids":{"\#(lxID)":"kw_333"}}"#)
+        let kuwoOwnURL = entry(#"{"song":"s_1","kuwo_url":"https://www.kuwo.cn/play_detail/444","player_song_ids":{"\#(kuwoID)":"222"}}"#)
+        expectEqual([kuwoOwnURL, kuwoOwnID, kuwoOwnLX, apple].map {
+                        EnrichCacheReader.platformLinks(for: $0, siblings: [kuwoLender, $0])?.kuwoSong?.absoluteString },
+                    ["https://www.kuwo.cn/play_detail/444", "https://www.kuwo.cn/play_detail/222",
+                     "https://www.kuwo.cn/play_detail/333", "https://www.kuwo.cn/play_detail/111"],
+                    "实体链接: 酷我歌曲页先用本条的 kuwo_url、酷我曲目 id、洛雪 kw_ id,都没有才借别的写法的")
         let mvOwn = EnrichCacheReader.platformLinks(for: amazonMV, siblings: [youtube])
         expectEqual(mvOwn?.youtubeMusicSong?.absoluteString.contains("mvmvmvmvmv1"), true, "实体链接: 自己那条是 MV 的照旧用自己的")
         let reader = (try? String(contentsOf: URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()

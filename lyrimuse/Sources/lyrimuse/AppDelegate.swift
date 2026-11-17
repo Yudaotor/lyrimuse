@@ -400,18 +400,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         // 打开 Lyrimuse 时顺带启动用户勾选的播放器(逐播放器勾选,见 LyrimuseCore.PlayerLinkage 头注;勾选 ∩
         // 当前候选才算)。只启动还没运行的 —— 已经在跑就什么都不做,不做多余的"带到前台"动作;activates=false
-        // 避免用户正在用别的 App 时被抢焦点。冷启动自己跳到前台的(酷我、Swinsian)由 PlayerLaunchFocusGuard 把前台还回去。
+        // 避免用户正在用别的 App 时被抢焦点。冷启动自己跳到前台的(酷我、Swinsian)由 PlayerLaunchFocusGuard 把前台还回去:
+        // 这一批拉起的播放器共用一个守卫,拉起之前调一次(02 章决策 274)。
         let playersToLaunch = PlayerLinkage.effective(settings.launchPlayersOnLyrimuseOpen,
                                                       selectedPlayers: FeatureSettingsStore.shared.players)
-        for player in playersToLaunch where !player.bundleIdentifier.isEmpty {
+        let launches: [(ids: [String], url: URL)] = playersToLaunch.compactMap { player in
+            guard !player.bundleIdentifier.isEmpty else { return nil }
             let ids = PlayerBundleAliases.all(for: player.bundleIdentifier)
-            if !NSWorkspace.shared.runningApplications.contains(where: { $0.bundleIdentifier.map(ids.contains) ?? false }),
-               let playerURL = PlayerBundleAliases.applicationURL(forBundleID: player.bundleIdentifier) {
-                let config = NSWorkspace.OpenConfiguration()
-                config.activates = false
-                PlayerLaunchFocusGuard.begin(launching: ids)
-                NSWorkspace.shared.openApplication(at: playerURL, configuration: config)
-            }
+            guard !NSWorkspace.shared.runningApplications.contains(where: { $0.bundleIdentifier.map(ids.contains) ?? false }),
+                  let playerURL = PlayerBundleAliases.applicationURL(forBundleID: player.bundleIdentifier) else { return nil }
+            return (ids, playerURL)
+        }
+        if !launches.isEmpty { PlayerLaunchFocusGuard.begin(launching: launches.map(\.ids)) }
+        for launch in launches {
+            let config = NSWorkspace.OpenConfiguration()
+            config.activates = false
+            NSWorkspace.shared.openApplication(at: launch.url, configuration: config)
         }
         // 「跟随播放器退出」的监听,开关空集时它只是订阅着不做事。
         PlayerQuitWatcher.shared.start()
@@ -565,9 +569,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     // Cmd+Q / 菜单"退出 Lyrimuse"的正常退出路径。账号设置里的文本字段(Token/API Key 等)是防抖自动保存的,
     // 用户刚打完字就立刻 Cmd+Q 的话,防抖计时器根本没机会触发,那次编辑会随着进程退出彻底丢失;SwiftUI 的
     // .onDisappear 也不保证在进程被终止时对每个视图都执行一遍。所以真正退出前先同步检查 ConfigStore 是否还有
-    // 没保存的改动(isDirty):没有就直接放行,不拖慢正常退出;有就用 .terminateLater 暂缓退出,异步存盘
-    // 完成后再 reply(toApplicationShouldTerminate:) 放行——不管存盘成功与否都放行,避免磁盘
-    // 写入异常时把 Cmd+Q 卡死。
+    // 没保存的改动(isDirty)、遥测记账有没有没落盘的(攒着延后写的布局上限次数,14 章决策 209):都没有就直接放行,
+    // 不拖慢正常退出;有就用 .terminateLater 暂缓退出,遥测写盘(最多等 1 秒)、异步存盘完成后再
+    // reply(toApplicationShouldTerminate:) 放行——不管存盘成功与否都放行,避免磁盘写入异常时把 Cmd+Q 卡死。
+    // 遥测写盘只能异步等:它在后台队列写 UserDefaults,要等主线程上的观察者(14 章决策 214)。
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
         // 退出原因日志:所有退出路径的汇合点,在这里打、只打一次。原因由 AppExit.request
         // 登记,没登记的按信号推断(Sparkle 正在装更新 → sparkle_install,否则 external_request)。
@@ -577,10 +582,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // 镜像写盘有 2 秒防抖,退出前这 2 秒里改的设置还没进镜像;引导没走完的机器每次启动都会从镜像恢复
         // (restoreIfPristine),不补这一次就会把那几项改动回滚成旧值。
         AppSettingsMirror.write()
-        guard ConfigStore.shared.isDirty else { return .terminateNow }
-        Task {
-            _ = await ConfigStore.shared.save()
-            NSApp.reply(toApplicationShouldTerminate: true)
+        let saveConfig = ConfigStore.shared.isDirty
+        guard saveConfig || TelemetryActivity.shared.hasPendingWrites else { return .terminateNow }
+        TelemetryActivity.shared.flushPendingWrites(timeout: 1) {
+            Task { @MainActor in
+                if saveConfig { _ = await ConfigStore.shared.save() }
+                NSApp.reply(toApplicationShouldTerminate: true)
+            }
         }
         return .terminateLater
     }
