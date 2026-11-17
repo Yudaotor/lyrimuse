@@ -21,7 +21,7 @@ enum DeepLinkRouter {
         let background = LyrimuseDeepLink.wantsBackground(url)
         if background { WindowActivation.beginBackground() }
         defer {
-            if background, let scene = sceneID(for: link) { WindowActivation.surface(identifier: scene) }
+            if background, let scene = sceneToSurface(for: link) { WindowActivation.surface(identifier: scene) }
         }
         switch link {
         case let .settings(path, checkForUpdates):
@@ -71,6 +71,14 @@ enum DeepLinkRouter {
         case .lastfmAuthCallback:
             LastfmConnectController.shared.handleAuthCallback()
         }
+    }
+
+    /// `background=1` 时开完要摆到最前的那扇场景窗。歌词窗口这一下之后是迷你(切过去、开成迷你)就不摆:迷你是面板,
+    /// 开 / 切时自己上屏;按场景 id 找到的是交接时关掉、SwiftUI 留着的完整那扇,摆上来就是两扇同在(07 章决策 213)。
+    private static func sceneToSurface(for link: LyrimuseDeepLink) -> String? {
+        guard let scene = sceneID(for: link) else { return nil }
+        if scene == "lyrics-window", UserDefaults.standard.bool(forKey: LyricsWindowSession.miniModeKey) { return nil }
+        return scene
     }
 
     /// 开窗类链接开的是哪一扇 SwiftUI 场景窗(`background=1` 时开完摆到最前用);不开窗的是 nil。

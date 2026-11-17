@@ -654,6 +654,15 @@ func runDeepLinkTests() {
         expectEqual(sourceHas(sourceBody("static func presentSettings(", in: scene),
                               #"if WindowActivation.surfaceIfOnScreen("settings") { return } WindowActivation.activateApp()"#),
                     true, "后台开窗: 设置窗口开着时只摆到最前,不再走菜单项(那条路 makeKeyAndOrderFront)")
+        // 迷你是面板、没有场景 id:按 "lyrics-window" 找到的是交接时关掉、SwiftUI 留着的完整那扇,摆上来就是两扇同在。
+        let surfaceRouter = source("lyrimuse/Settings/DeepLinkRouter.swift")
+        let surfaced = sourceBody("private static func sceneToSurface(", in: surfaceRouter)
+        expectEqual(sourceHas(sourceBody("static func handle(", in: surfaceRouter),
+                              "if background, let scene = sceneToSurface(for: link) { WindowActivation.surface(identifier: scene) }")
+                    && sourceHas(surfaced, "guard let scene = sceneID(for: link) else { return nil }")
+                    && sourceHas(surfaced, "if scene == \"lyrics-window\", UserDefaults.standard.bool(forKey: LyricsWindowSession.miniModeKey) { return nil }")
+                    && !sourceHas(surfaceRouter, "if background, let scene = sceneID(for: link)"), true,
+                    "后台开窗: 歌词窗口这一下之后是迷你就不摆完整那扇(切回迷你、开成迷你时不会冒出两扇)")
         let activation = source("lyrimuse/Settings/WindowActivation.swift")
         expectEqual(sourceHas(sourceBody("static func openScene(", in: activation),
                               "if surfaceIfOnScreen(identifier) { return } activateApp() open()"),
