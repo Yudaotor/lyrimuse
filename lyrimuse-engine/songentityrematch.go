@@ -13,6 +13,11 @@ import (
 // 记这一条。组里有手改原件时不跟:那时这一组按手改同步。关着「算法更新后重新选择」时已经有词的不换,只补没词的。
 // 返回跟着换了的写法。
 func shareFollowWriting(key string, now time.Time) []string {
+	return shareFollowWritingCapturing(key, now, nil)
+}
+
+// shareFollowWritingCapturing 同 shareFollowWriting;undo 非 nil(手动重新匹配)时把跟着换了的写法改之前的条目、留底、判决旁路记进去。
+func shareFollowWritingCapturing(key string, now time.Time, undo *enrichUndoRecord) []string {
 	if !songEntitySharing() {
 		return nil
 	}
@@ -82,8 +87,10 @@ func shareFollowWriting(key string, now time.Time) []string {
 		if !songShareAutoWriteAllowedLocked(k, now) {
 			continue
 		}
+		undo.captureFollowerLocked(k)
 		if _, err := writeSongSharePre(k, e, to.fp, now); err != nil {
 			slog.Error("song entities: back up before following a rematch", "key", k, "err", err)
+			undo.dropLocked(k)
 			continue
 		}
 		songShareCopyPinned(&e, live, key, now)
@@ -94,6 +101,7 @@ func shareFollowWriting(key string, now time.Time) []string {
 	if len(changed) > 0 {
 		markEnrichEditedLocked(false, changed...)
 		enrichDirty = true
+		undo.followedLocked(changed)
 	}
 	slog.Info("song entities: share group followed a version", "from", key, "changed", len(changed), "kept", kept)
 	return changed

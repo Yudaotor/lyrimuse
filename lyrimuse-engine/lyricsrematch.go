@@ -54,6 +54,8 @@ type lyricsRematchResult struct {
 	TimingChanged bool `json:"timingChanged,omitempty"`
 	// Followers:歌词同步开着时,同一共享组跟着这一条换了词的写法数(shareFollowWriting)。
 	Followers int `json:"followers,omitempty"`
+	// UndoID:这一轮改了歌词选择(这一首或跟着换的同组写法)时,undo_edit 撤这一轮用的 id(enrichundo.go,11 章决策 178)。
+	UndoID string `json:"undoID,omitempty"`
 }
 
 // lyricsRematchStatus 是写给 App 看的状态。Done / Total:几个歌词源回了话 / 一共几个,追加轮(别名轮等)从 0 重数。
@@ -86,6 +88,26 @@ type lyricsRescoreOpts struct {
 	result   *lyricsRematchResult
 	// reasons:播放时起的这一轮升级重搜为的是哪几个理由(lyricsRecheck.String),记进决策日志那一行。
 	reasons string
+	// undo:非 nil 时写回那一刻留一份撤销记录放进去(只有手动重新匹配给)。
+	undo **enrichUndoRecord
+}
+
+// beginUndoLocked:写回 key 之前调。调用方持 enrichMu。
+func (o lyricsRescoreOpts) beginUndoLocked(key string) *enrichUndoRecord {
+	if o.undo == nil {
+		return nil
+	}
+	return beginRematchUndoLocked(key)
+}
+
+// finishUndoLocked:写回之后调,记下改完的样子和此刻的改动序号(这一笔不记序号,之后谁记了都算动过)。调用方持 enrichMu。
+func (o lyricsRescoreOpts) finishUndoLocked(rec *enrichUndoRecord) {
+	if rec == nil {
+		return
+	}
+	rec.finishLocked(nil)
+	rec.seq = enrichEditSeq
+	*o.undo = rec
 }
 
 // logAttrs:追加进这一轮决策日志那一行的字段。
@@ -347,7 +369,8 @@ func runLyricsRematchOne(ctx context.Context, key string, progress func(done, to
 		duration = e.DurationSecs
 	}
 	var result lyricsRematchResult
-	opts := lyricsRescoreOpts{manual: true, progress: progress, result: &result}
+	var undo *enrichUndoRecord
+	opts := lyricsRescoreOpts{manual: true, progress: progress, result: &result, undo: &undo}
 	// 两个函数自己负责清 enrichInflight、落盘、导出、通知重推。不是正在放的那首时不给自家源加分(withOtherTrackRound)。
 	rctx := withOtherTrackRoundUnlessPlaying(withManualLyricSearch(ctx), key)
 	if e.Lyrics.IsZero() {
@@ -358,7 +381,7 @@ func runLyricsRematchOne(ctx context.Context, key string, progress func(done, to
 	// 换了或者算下来还是这一份:共享组的其余写法跟着用这一份(歌词同步开着时,见 shareFollowWriting)。
 	switch result.Outcome {
 	case lyricsRematchChanged, lyricsRematchUnchanged, lyricsRematchKeptWordTiming:
-		if followers := shareFollowWriting(key, time.Now()); len(followers) > 0 {
+		if followers := shareFollowWritingCapturing(key, time.Now(), undo); len(followers) > 0 {
 			result.Followers = len(followers)
 			exportLyricsFilesFor(followers...)
 			nudgeEnrichPush()
@@ -370,7 +393,21 @@ func runLyricsRematchOne(ctx context.Context, key string, progress func(done, to
 	if result.Outcome == "" {
 		result.Outcome = lyricsRematchCancelled
 	}
+	result.UndoID = keepRematchUndo(undo)
 	return result
+}
+
+// keepRematchUndo:这一轮改了歌词选择、写回之后没被别的改动动过,就收下撤销记录、返回 undo_id;否则空串。
+func keepRematchUndo(rec *enrichUndoRecord) string {
+	if rec == nil {
+		return ""
+	}
+	enrichMu.Lock()
+	defer enrichMu.Unlock()
+	if !rec.changesChoice() || rec.changedSinceLocked() != "" {
+		return ""
+	}
+	return storeEnrichUndoLocked(rec, rec.seq)
 }
 
 func writeLyricsRematchStatus(s lyricsRematchStatus) {

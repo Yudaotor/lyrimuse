@@ -13,16 +13,18 @@ import (
 	"time"
 )
 
-// 单首歌词改动的撤销(见 11 章决策 177)。save_edit / save_plain_text 带 undoable 时,在 enrichMu 里把这一笔会动到的东西
-// 改之前的样子整份留下(enrichUndoRecord),结果里回一个 undo_id;undo_edit 带着它把这首原样放回去:
-//   - 这首和开着歌曲实体同步时同一个共享组里跟着改了的写法,整条条目(没有这条就删掉);
+// 歌词改动的撤销(见 11 章决策 177、178)。save_edit / save_plain_text / set_instrumental 带 undoable 时、「重新自动匹配」写回时,
+// 在 enrichMu 里把这一笔会动到的东西改之前的样子整份留下(enrichUndoRecord),结果里回一个 undo_id;undo_edit 带着它原样放回去:
+//   - 这首和开着歌曲实体同步时同一个共享组里跟着改了的写法,整条条目(没有这条就删掉);标纯音乐一次几首时每首一份;
 //   - 那几条写法的同步留底文件(lyrimuse-song-entity-pre/,同步时新建或改了 synced);
+//   - 重新匹配写了新判决记录的那几条写法的判决旁路文件(lyrimuse-decisions/);
 //   - 导入库里这首被作废的记录文件原文和索引项(dropImportedLyricsForSongCapturing)。
 // 歌词文件、正文小文件按放回去的条目重新导出、重新落盘,不另存。
 // 放回之前核对:这几条在那一笔之后没被改动序号记过(enrichEditedSinceLocked),歌词选择(enrichUndoSameChoice)也还是那一笔
 // 写下的;导入库里那几份没有又存进来。对不上、过期、找不到一律拒绝,不做部分恢复。
 // 记录只在常驻进程内存里:一次性的 apply-enrich-edit 子命令不发 undo_id。
 // 别的入口要接撤销:请求带 undoable、op 在 applyEnrichEditLocked 里照 save_edit 那样 begin / finish 一份记录即可。
+// 一笔里只要有一条写法对不上就整笔拒绝,标纯音乐一次几首时也一样。
 
 const (
 	// enrichUndoTTL:undo_id 多久之后不再认。App 那边的「撤销」按钮比它早消失。
@@ -48,6 +50,8 @@ type enrichUndoSlot struct {
 	existed bool
 	before  enrichEntry
 	after   enrichEntry
+	// seq:非 0 时核对这条用它、不用记录的 seq(重新匹配之后同组跟着换的写法,按它们那一笔记下的序号算)。
+	seq uint64
 }
 
 // enrichUndoFile:一个文件改之前的原文;known 为假时没读成(不是不存在),撤销时不碰它。
@@ -61,9 +65,11 @@ type enrichUndoRecord struct {
 	key string
 	at  time.Time
 	// seq:那一笔记下改动序号之后的序号,核对「之后有没有被改过」用。
-	seq      uint64
-	slots    map[string]*enrichUndoSlot
-	pre      map[string]enrichUndoFile
+	seq   uint64
+	slots map[string]*enrichUndoSlot
+	pre   map[string]enrichUndoFile
+	// side:判决旁路文件(decisionSidecarPath)改之前的原文,只有重新匹配记。
+	side     map[string]enrichUndoFile
 	imported importedLyricsUndo
 }
 
@@ -92,9 +98,45 @@ func (f enrichUndoFile) restore(path string) {
 	noteFileErr("write", path, writeFileAtomic(path, f.data))
 }
 
+func newEnrichUndoRecord(key string) *enrichUndoRecord {
+	return &enrichUndoRecord{key: key, at: enrichUndoNow(), slots: map[string]*enrichUndoSlot{},
+		pre: map[string]enrichUndoFile{}, side: map[string]enrichUndoFile{}}
+}
+
+// decisionSidecarPath:key 的判决旁路文件;没有落盘路径时为空串。
+func decisionSidecarPath(key string) string {
+	dir := decisionSidecarDir()
+	if dir == "" {
+		return ""
+	}
+	return filepath.Join(dir, decisionSidecarName(key))
+}
+
+// captureLocked 记下 k 现在的条目;pre / side 为真时连同步留底、判决旁路文件的原文一起记。调用方持 enrichMu,在改 k 之前调。
+func (rec *enrichUndoRecord) captureLocked(k string, pre, side bool) {
+	e, ok := enrichCache[k]
+	rec.slots[k] = &enrichUndoSlot{existed: ok, before: e}
+	if pre {
+		rec.pre[k] = readEnrichUndoFile(songSharePrePath(k))
+	}
+	if path := decisionSidecarPath(k); side && path != "" {
+		rec.side[k] = readEnrichUndoFile(path)
+	}
+}
+
+// dropLocked:记过、最后没改 k(留底没写成)时调。
+func (rec *enrichUndoRecord) dropLocked(k string) {
+	if rec == nil {
+		return
+	}
+	delete(rec.slots, k)
+	delete(rec.pre, k)
+	delete(rec.side, k)
+}
+
 // beginEnrichUndoLocked:改 key 之前调,留下 key(sharing 时连同共享组里的全部写法)现在的条目和同步留底。调用方持 enrichMu。
 func beginEnrichUndoLocked(key string, sharing bool) *enrichUndoRecord {
-	rec := &enrichUndoRecord{key: key, at: enrichUndoNow(), slots: map[string]*enrichUndoSlot{}, pre: map[string]enrichUndoFile{}}
+	rec := newEnrichUndoRecord(key)
 	keys := []string{key}
 	if e, ok := enrichCache[key]; ok && sharing && e.Song != "" {
 		for k, x := range enrichCache {
@@ -104,13 +146,46 @@ func beginEnrichUndoLocked(key string, sharing bool) *enrichUndoRecord {
 		}
 	}
 	for _, k := range keys {
-		e, ok := enrichCache[k]
-		rec.slots[k] = &enrichUndoSlot{existed: ok, before: e}
-		if sharing {
-			rec.pre[k] = readEnrichUndoFile(songSharePrePath(k))
-		}
+		rec.captureLocked(k, sharing, false)
 	}
 	return rec
+}
+
+// beginEnrichUndoKeysLocked:一次改好几首(标 / 撤纯音乐)之前调,每首一份,不展开共享组(调用方给的 keys 已经展开过)。
+// 这一笔没有主那一首:finishLocked 只留真改了的。调用方持 enrichMu。
+func beginEnrichUndoKeysLocked(keys []string) *enrichUndoRecord {
+	rec := newEnrichUndoRecord("")
+	for _, k := range keys {
+		rec.captureLocked(k, false, false)
+	}
+	return rec
+}
+
+// beginRematchUndoLocked:「重新自动匹配」写回 key 之前调,连它的判决旁路一起记(这一轮写了新的判决记录)。调用方持 enrichMu。
+func beginRematchUndoLocked(key string) *enrichUndoRecord {
+	rec := newEnrichUndoRecord(key)
+	rec.captureLocked(key, false, true)
+	return rec
+}
+
+// captureFollowerLocked:重新匹配之后共享组跟着换 k(写留底)之前调。rec 为 nil 时什么都不做。调用方持 enrichMu。
+func (rec *enrichUndoRecord) captureFollowerLocked(k string) {
+	if rec == nil {
+		return
+	}
+	rec.captureLocked(k, true, true)
+}
+
+// followedLocked:共享组跟着换完、记下改动序号之后调,记下跟着换了的那几条改完的样子和这一笔的序号。调用方持 enrichMu。
+func (rec *enrichUndoRecord) followedLocked(changed []string) {
+	if rec == nil {
+		return
+	}
+	for _, k := range changed {
+		if s, ok := rec.slots[k]; ok {
+			s.after, s.seq = enrichCache[k], enrichEditSeq
+		}
+	}
 }
 
 // importedCapture:导入库那一份的去处;rec 为 nil(这一笔不撤销)时返回 nil。
@@ -132,12 +207,21 @@ func (rec *enrichUndoRecord) finishLocked(changed []string) {
 	}
 	for k, s := range rec.slots {
 		if !keep[k] {
-			delete(rec.slots, k)
-			delete(rec.pre, k)
+			rec.dropLocked(k)
 			continue
 		}
 		s.after = enrichCache[k]
 	}
+}
+
+// changesChoice:这一笔改了至少一条写法的歌词选择(或新建了条目)。
+func (rec *enrichUndoRecord) changesChoice() bool {
+	for _, s := range rec.slots {
+		if !s.existed || !enrichUndoSameChoice(s.before, s.after) {
+			return true
+		}
+	}
+	return false
 }
 
 // enrichUndoSameChoice:两条的歌词选择一样(正文、逐字、纯文本、来源、手改与采纳标记、纯音乐、同步原件)。译文、罗马音不比:
@@ -151,8 +235,10 @@ func enrichUndoSameChoice(a, b enrichEntry) bool {
 // changedSinceLocked:那一笔之后被别的改动动过的第一条写法(按键排序),没有为空串。调用方持 enrichMu。
 func (rec *enrichUndoRecord) changedSinceLocked() string {
 	for _, k := range rec.sortedKeys() {
+		s := rec.slots[k]
+		seq := max(rec.seq, s.seq)
 		cur, ok := enrichCache[k]
-		if !ok || enrichEditedSinceLocked(k, rec.seq) || !enrichUndoSameChoice(cur, rec.slots[k].after) {
+		if !ok || enrichEditedSinceLocked(k, seq) || !enrichUndoSameChoice(cur, s.after) {
 			return k
 		}
 	}
@@ -226,6 +312,11 @@ func undoEnrichEditLocked(id string) enrichEditOutcome {
 	}
 	for k, f := range rec.pre {
 		f.restore(songSharePrePath(k))
+	}
+	for k, f := range rec.side {
+		if path := decisionSidecarPath(k); path != "" {
+			f.restore(path)
+		}
 	}
 	if err := restoreImportedLyrics(rec.imported); err != nil {
 		warnf("enrich edit: undo could not put back imported lyrics key=%s: %v", rec.key, err)

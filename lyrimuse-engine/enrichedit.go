@@ -123,7 +123,7 @@ type enrichEditRequest struct {
 	// 已有的歌词。Player 是正在放这个文件的播放器(bundle id),Apple Music 的曲目只写歌词文字(writebackWantsPlainText)。
 	FilePath string `json:"file_path,omitempty"`
 	Player   string `json:"player,omitempty"`
-	// Undoable:save_edit / save_plain_text 留一份撤销记录,结果里回 undo_id;UndoID:undo_edit 撤哪一笔(enrichundo.go)。
+	// Undoable:save_edit / save_plain_text / set_instrumental 留一份撤销记录,结果里回 undo_id;UndoID:undo_edit 撤哪一笔(enrichundo.go)。
 	Undoable bool   `json:"undoable,omitempty"`
 	UndoID   string `json:"undo_id,omitempty"`
 	// importPrepared:import_lyrics_batch 在拿锁之前读好、解析好的暂存(prepareImportBatch),不从请求文件里来。
@@ -365,6 +365,11 @@ func applyEnrichEditLocked(req enrichEditRequest) enrichEditOutcome {
 		if songEntitySharing() {
 			keys = withShareGroupMatesLocked(keys)
 		}
+		// 一次几首也只留一份记录、每首一条;撤销时有一首对不上就整笔拒绝(见 11 章决策 178)。
+		var undo *enrichUndoRecord
+		if req.Undoable {
+			undo = beginEnrichUndoKeysLocked(keys)
+		}
 		changed := 0
 		missing := ""
 		var edited []string
@@ -394,7 +399,8 @@ func applyEnrichEditLocked(req enrichEditRequest) enrichEditOutcome {
 		if changed == 0 && missing != "" {
 			return enrichEditOutcome{err: fmt.Errorf("set_instrumental: %q is not in the cache yet", missing)}
 		}
-		return enrichEditOutcome{changed: changed, edited: edited}
+		undo.finishLocked(edited)
+		return enrichEditOutcome{changed: changed, edited: edited, undo: undo}
 	case "set_manual_lock":
 		flipped := manualLockFlipsLocked(req.Value)
 		for _, k := range flipped {

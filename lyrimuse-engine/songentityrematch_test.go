@@ -83,7 +83,7 @@ func TestRematchFollowsShareGroupWired(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, want := range []string{
-		"\tcase lyricsRematchChanged, lyricsRematchUnchanged, lyricsRematchKeptWordTiming:\n\t\tif followers := shareFollowWriting(key, time.Now()); len(followers) > 0 {\n\t\t\tresult.Followers = len(followers)\n",
+		"\tcase lyricsRematchChanged, lyricsRematchUnchanged, lyricsRematchKeptWordTiming:\n\t\tif followers := shareFollowWritingCapturing(key, time.Now(), undo); len(followers) > 0 {\n\t\t\tresult.Followers = len(followers)\n",
 	} {
 		if !containsCode(string(src), want) {
 			t.Errorf("runLyricsRematchOne 里找不到: %q", want)

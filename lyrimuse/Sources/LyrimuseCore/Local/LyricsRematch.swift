@@ -50,9 +50,12 @@ public enum LyricsRematch {
         public let timingChanged: Bool?
         /// 歌词同步开着时,同一共享组跟着这一首换了词的写法数(引擎 shareFollowRematch);没有时不出现。
         public let followers: Int?
+        /// 这一轮改了歌词选择时,撤这一轮用的 undo_id(引擎 lyricsRematchResult.UndoID,`undo_edit`);没有时不出现。
+        public let undoID: String?
 
         public init(outcome: String, winner: String? = nil, winnerScore: Int? = nil, previous: String? = nil,
-                    hadLyrics: Bool? = nil, textChanged: Bool? = nil, timingChanged: Bool? = nil, followers: Int? = nil) {
+                    hadLyrics: Bool? = nil, textChanged: Bool? = nil, timingChanged: Bool? = nil, followers: Int? = nil,
+                    undoID: String? = nil) {
             self.outcome = outcome
             self.winner = winner
             self.winnerScore = winnerScore
@@ -61,6 +64,7 @@ public enum LyricsRematch {
             self.textChanged = textChanged
             self.timingChanged = timingChanged
             self.followers = followers
+            self.undoID = undoID
         }
     }
 
@@ -186,6 +190,12 @@ public enum LyricsRematch {
     public static func followers(of status: Status?, key: String) -> Int {
         guard let status, status.key == key, !status.running else { return 0 }
         return max(status.result?.followers ?? 0, 0)
+    }
+
+    /// 请求 id 那一轮跑完了、引擎给了 undo_id 时是它;别的一轮、还在跑、没给都是 nil。
+    public static func undoID(of status: Status?, id: String) -> String? {
+        guard let status, status.id == id, !status.running, let undo = status.result?.undoID, !undo.isEmpty else { return nil }
+        return undo
     }
 
     public static var current: Status? {

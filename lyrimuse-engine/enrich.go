@@ -2428,8 +2428,10 @@ func retryLyricsUpgradeWith(ctx context.Context, key, artist, title, album strin
 		e.Instrumental = false
 	}
 	opts.finish(lyricsRematchFacts{before: before, after: e, picked: picked, reached: reached, decidable: true})
+	undo := opts.beginUndoLocked(key)
 	enrichCache[key] = e
 	enrichDirty = true
+	opts.finishUndoLocked(undo)
 }
 
 // plainTextFallbackFromScored 从打分结果里挑一条可以自动兜底采纳的纯文本(无时间戳)
@@ -2906,8 +2908,10 @@ func rescoreLyricsWith(ctx context.Context, key, artist, title, album string, du
 	}
 	opts.finish(lyricsRematchFacts{before: before, after: e, picked: picked, reached: reached, decidable: decidable,
 		keptWordTiming: keep && rescoreWouldLoseWordTiming(before, scored, picked)})
+	undo := opts.beginUndoLocked(key)
 	enrichCache[key] = e
 	enrichDirty = true
+	opts.finishUndoLocked(undo)
 	return deferred
 }
 
