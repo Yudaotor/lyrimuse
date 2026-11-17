@@ -1776,6 +1776,8 @@ struct LyricsWindowView: View {
         .background {
             if previewMode, wantsTransparentWindow { OverlayDesktopSurface() }
         }
+        // 预览报窗口内容有多不透明,舞台照它调淡模拟的系统窗口投影和边线(真窗口透明时没有这两样)。
+        .preference(key: LyricsWindowPreviewOpacityKey.self, value: previewMode ? windowContentOpacity : 1)
         // 预览模式下**不能**挂:它会把宿主(设置)窗口当成歌词窗口接管,见 previewMode 的注释。
         .background {
             if !previewMode {
@@ -4843,6 +4845,20 @@ struct LyricsWindowView: View {
     /// 背景半透明时颜色后面透出来的那一层(桌面壁纸)的亮度;不透明、或者读不到壁纸时 nil(按系统外观估计)。
     private var transparentBackdropLuma: Double? {
         wantsTransparentWindow ? DesktopWallpaperLuma.luma(for: windowController.screen) : nil
+    }
+
+    /// 窗口内容有多不透明:系统的窗口投影和边线按窗口内容的 alpha 算。渐变取两端平均;封面和毛玻璃按不透明算
+    /// (毛玻璃的材质铺满整扇窗)。跟 `wantsTransparentWindow` 读同一组形态入口。
+    private var windowContentOpacity: Double {
+        func alpha(_ hex: String) -> Double { LyricsWindowBackgroundLuma.parse(hex: hex)?.a ?? 1 }
+        switch activeBackgroundMode {
+        case .artwork, .glass:
+            return 1
+        case .solid:
+            return alpha(activeBackgroundColorHex)
+        case .gradient:
+            return (alpha(activeBackgroundColorHex) + alpha(activeBackgroundColorEndHex)) / 2
+        }
     }
 
     private var wantsTransparentWindow: Bool {

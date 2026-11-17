@@ -35,6 +35,8 @@ struct LyricsWindowPreviewStage: View {
     /// 不用每次重选。纯 UI 偏好,不进 AppSettings(引擎不需要知道)。
     @AppStorage(showsMiniStorageKey) private var showsMini = false
     @ObservedObject private var controlScaleDraft = LyricsWindowControlScaleDraft.shared
+    /// 窗口内容有多不透明,`LyricsWindowView` 在预览里报上来(`LyricsWindowPreviewOpacityKey`)。
+    @State private var windowOpacity: Double = 1
 
     /// 画完整尺寸还是迷你尺寸(由上面那个偏好驱动,留参数是为了将来能从别处指定)。
     private var mini: Bool { showsMini }
@@ -81,9 +83,12 @@ struct LyricsWindowPreviewStage: View {
     /// 桌面上那扇真窗大一截,预览就不是"它真打开的样子"了。完整尺寸的缩放比由 `fullStage` 按实际列宽算。
     private static let miniScale: CGFloat = 1
 
-    /// 圆角跟设置卡片同一档(`settingsCardBackground` 用的也是 continuous),让它在这一页里
-    /// 读起来是"一块内容",而不是一张贴上去的截图。
-    private static let cornerRadius: CGFloat = 12
+    /// 舞台底下给真窗口的系统投影留的地方。按 1:1 的迷你窗算(完整尺寸缩小画,投影更短),深浅两种外观取长的:
+    /// 两档、两种外观下都是同一个数,切档时底下的切换不挪位置(07 章决策 206)。
+    private static var shadowRoom: CGFloat {
+        let below = [false, true].map { SystemWindowChrome.of(.titled, dark: $0).shadowExtentBelow(scale: miniScale) }
+        return max(0, (below.max() ?? 0) - SectionPreviewMetrics.captionSpacing)
+    }
 
     var body: some View {
         // 底下那一行原本是句「预览」的灰字,现在换成形态切换 —— 它同时兼了那句话的职责:
@@ -119,6 +124,8 @@ struct LyricsWindowPreviewStage: View {
                 fullStage
             }
         }
+        // 真窗口的系统投影伸到窗口下沿以下,底下那行「完整 / 迷你」离得太近会压在投影里。
+        .padding(.bottom, Self.shadowRoom)
         .onChange(of: mini) { _, isMini in
             if !isMini { headerPopoverShown = false }
         }
@@ -142,7 +149,7 @@ struct LyricsWindowPreviewStage: View {
     }
 
     private func preview(scale: CGFloat) -> some View {
-        let shape = RoundedRectangle(cornerRadius: Self.cornerRadius, style: .continuous)
+        let shape = RoundedRectangle(cornerRadius: SystemWindowChrome.titledCornerRadius * scale, style: .continuous)
         return LyricsWindowView(previewMode: true, previewMini: mini)
             // 玻璃里的内容不吃下面的 scaleEffect 和裁切,会按原尺寸画到预览框外面;预览里一律不用玻璃(07 章决策 156)。
             .environment(\.settingsGlassDisabled, true)
@@ -158,14 +165,16 @@ struct LyricsWindowPreviewStage: View {
                         .onChange(of: rect) { _, new in headerRect = new }
                 }
             }
+            .onPreferenceChange(LyricsWindowPreviewOpacityKey.self) { windowOpacity = $0 }
             .scaleEffect(scale, anchor: .topLeading)
             // scaleEffect 是渲染期变换、**不改变布局尺寸**,所以要再套一层缩小后的 frame 把
             // 版面占位收回来,否则这一块会按原尺寸占位、把下面的卡片全顶到屏幕外。
             .frame(width: contentSize.width * scale, height: contentSize.height * scale, alignment: .topLeading)
             .clipShape(shape)
-            // 一条发丝描边,理由同 settingsCardBackground:窗口自己的背景是模糊封面,亮暗随歌
-            // 变化,没有描边时边界时有时无。
-            .overlay(shape.strokeBorder(Color.primary.opacity(0.12), lineWidth: 0.5))
+            // 外形照真窗口:系统窗口的圆角、投影和内外两道边线(`SystemWindowChrome`,深浅跟设置窗口走,
+            // 真窗口也跟 App 的外观走),整扇窗缩小画时圆角和投影一起缩。窗口透明时真窗口没有投影和边线,
+            // 按窗口内容的不透明度调淡。见 07 章决策 207。
+            .systemWindowChrome(.titled, shape: shape, scale: scale, opacity: windowOpacity)
             .allowsHitTesting(false)
             // 预览是给眼睛看的,不该出现在辅助技术的浏览顺序里 —— 里面那一堆按钮既点不动、
             // 也不是真窗口的那几个。
@@ -210,6 +219,14 @@ struct LyricsWindowPreviewStage: View {
             .accessibilityAction { headerPopoverShown = true }
             .padding(.leading, max(0, rect.minX))
             .padding(.top, max(0, rect.minY))
+    }
+}
+
+/// 歌词窗口内容有多不透明(0…1),只在预览里报(见 `LyricsWindowView.windowContentOpacity`)。几处报的取最透的。
+struct LyricsWindowPreviewOpacityKey: PreferenceKey {
+    static var defaultValue: Double { 1 }
+    static func reduce(value: inout Double, nextValue: () -> Double) {
+        value = min(value, nextValue())
     }
 }
 

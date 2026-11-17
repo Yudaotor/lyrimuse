@@ -1371,6 +1371,50 @@ func runLyricsWindowTests() {
                     true, "控件大小: 设置搜索搜得到,命中时预览切到完整尺寸")
     }
 
+    // MARK: - 设置页预览照真窗口的外形:系统窗口的圆角、投影和边线(07 章决策 207)
+    do {
+        let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+        func source(_ path: String) -> String {
+            (try? String(contentsOf: root.appendingPathComponent(path), encoding: .utf8)) ?? ""
+        }
+        let chrome = source("lyrimuse/UI/SystemWindowChrome.swift")
+        let stage = source("lyrimuse/UI/LyricsWindowPreviewStage.swift")
+        let window = source("lyrimuse/UI/LyricsWindowView.swift")
+        let overlayStage = source("lyrimuse/UI/OverlayEditorStage.swift")
+        // 投影只画在窗口外面(挖掉窗口那块,半透明窗口里面不被压暗),随缩放比缩;边线一像素、按窗口内容的不透明度调淡。
+        expectEqual(sourceHas(chrome, "shape.fill(Color.black)\n.shadow(color: .black.opacity(chrome.shadowOpacity * opacity),\nradius: chrome.shadowRadius * scale, y: chrome.shadowY * scale)\n.mask(SystemWindowOutsideShape(inner: shape, outset: outset).fill(style: FillStyle(eoFill: true)))")
+                    && sourceHas(chrome, "shape.inset(by: -pixel)\n.strokeBorder(Color.black.opacity(chrome.outerEdgeOpacity * opacity), lineWidth: pixel)")
+                    && sourceHas(chrome, "let chrome = SystemWindowChrome.of(kind, dark: colorScheme == .dark)"),
+                    true, "预览窗口外形: 投影只在窗外、按缩放比缩,外沿暗线一像素,深浅按所在那层的外观取")
+        // 歌词窗口预览:圆角是系统窗口的(随缩放比缩),外形挂 SystemWindowChrome,不再自己描一圈灰边;舞台底下按 1:1 的投影留地方。
+        let preview = sourceBody("private func preview(scale: CGFloat) -> some View {", in: stage)
+        expectEqual(sourceHas(preview, "let shape = RoundedRectangle(cornerRadius: SystemWindowChrome.titledCornerRadius * scale, style: .continuous)")
+                    && sourceHas(preview, ".clipShape(shape)")
+                    && sourceHas(preview, ".systemWindowChrome(.titled, shape: shape, scale: scale, opacity: windowOpacity)\n.allowsHitTesting(false)")
+                    && !preview.contains("strokeBorder("),
+                    true, "歌词窗口预览: 系统窗口的圆角、投影和边线,圆角和投影随缩放比缩")
+        expectEqual(sourceHas(sourceBody("private var stage: some View {", in: stage), ".padding(.bottom, Self.shadowRoom)")
+                    && sourceHas(sourceBody("private static var shadowRoom: CGFloat {", in: stage),
+                                 "SystemWindowChrome.of(.titled, dark: $0).shadowExtentBelow(scale: miniScale)"),
+                    true, "歌词窗口预览: 舞台底下给投影留地方,两档、两种外观同一个数(切档不挪位置)")
+        // 窗口透明时真窗口没有投影和边线:预览报窗口内容的不透明度,舞台照它调淡。
+        expectEqual(sourceHas(window, ".preference(key: LyricsWindowPreviewOpacityKey.self, value: previewMode ? windowContentOpacity : 1)")
+                    && sourceHas(sourceBody("private var windowContentOpacity: Double {", in: window), "case .solid:\nreturn alpha(activeBackgroundColorHex)")
+                    && sourceHas(stage, ".onPreferenceChange(LyricsWindowPreviewOpacityKey.self) { windowOpacity = $0 }"),
+                    true, "歌词窗口预览: 投影和边线按窗口内容的不透明度调淡")
+        // 悬浮歌词编辑台:背景开着时挂无边框面板那一套,外形是背景那块圆角;深浅跟真窗口一样按系统走(挂在 followsSystemAppearance 里面)。
+        let canvas = sourceBody("private func canvas(visibleWidth: CGFloat) -> some View {", in: overlayStage)
+        let clipped = canvas.range(of: ".clipped()")
+        let chromed = canvas.range(of: ".systemWindowChrome(.borderless,")
+        let follows = canvas.range(of: ".followsSystemAppearance()")
+        expectEqual(clipped != nil && chromed != nil && follows != nil
+                    && clipped!.lowerBound < chromed!.lowerBound && chromed!.lowerBound < follows!.lowerBound
+                    && sourceHas(canvas, "shape: RoundedRectangle(cornerRadius: Self.windowCornerRadius, style: .continuous),\nopacity: windowChromeOpacity)")
+                    && sourceHas(sourceBody("private var windowChromeOpacity: Double {", in: overlayStage),
+                                 "guard settings.backgroundIsVisible else { return 0 }\nif settings.overlayBackgroundGlass { return 1 }"),
+                    true, "悬浮歌词编辑台: 背景开着时画系统窗口投影和边线(跟着系统深浅,背景关着时没有)")
+    }
+
     // MARK: - 记的那块屏不在时借屏、回来时送回去
     do {
         let both: Set<String> = ["内建", "外接"], builtin: Set<String> = ["内建"]

@@ -824,8 +824,6 @@ struct OverlayEditorStage: View {
             contentRowRectsSpace: Self.canvasSpace,
             onContentRowRectsChange: { contentRowRects = $0 },
             previewLine: Self.previewLine)
-            // 真窗口按系统深浅画(LyricsOverlayWindowController 的 appearanceObserver),预览跟它一致。
-            .followsSystemAppearance()
             .frame(width: cardWidth, height: cardHeight, alignment: .top)
             .coordinateSpace(name: Self.canvasSpace)
             // 裁到窗口自己的边界上。常态下这一层什么也不做(卡高就是量出来的内容高度),它兜的
@@ -834,6 +832,13 @@ struct OverlayEditorStage: View {
             // 窗下那条调整条。真窗口也是裁在窗口边界上的(NSHostingView 铺满 contentView),
             // 所以这更贴近真实,不是权宜。
             .clipped()
+            // 背景开着时真窗口有系统窗口投影和边线(`hasShadow` 跟着背景走,见 LyricsOverlayWindowController),预览照
+            // `SystemWindowChrome` 模拟,外形是背景那块圆角。见 04 章决策 103。
+            .systemWindowChrome(.borderless,
+                                shape: RoundedRectangle(cornerRadius: Self.windowCornerRadius, style: .continuous),
+                                opacity: windowChromeOpacity)
+            // 真窗口按系统深浅画(LyricsOverlayWindowController 的 appearanceObserver),预览连同上面那层投影跟它一致。
+            .followsSystemAppearance()
             // 预览上的可点区域(主行 → 「文字」,读音 / 译文 / 下一句 → 「内容」),见 cardHotspots。
             .overlay(alignment: .topLeading) { hotspotLayer(visibleWidth: visibleWidth) }
             // 「锁定位置」在编辑台上**唯一**能被看见的产物,所以贴在卡片上、跟着卡片一起
@@ -1063,8 +1068,7 @@ struct OverlayEditorStage: View {
     /// 握柄删掉之后,这圈轮廓是那句话**唯一**的视觉锚点(以前还有贴在窗口边上的两根杆子)。
     /// 别把它当可有可无的装饰顺手删掉。
     ///
-    /// 圆角 16 是悬浮窗的圆角(LyricsOverlayView.overlayBackgroundCornerRadius,那是个
-    /// private 常量,取不到,只能同步一份;改那边记得改这里)。
+    /// 圆角是 `windowCornerRadius`。
     ///
     /// 宽度按**卡片真实宽度**画,不是 visibleWidth:窗口超宽时左右两条边本来就在舞台外面,
     /// 让它们被舞台的 clipShape 裁掉、只剩上下两条横线,说的正好是"窗口有这么高、两端还没完",
@@ -1072,7 +1076,7 @@ struct OverlayEditorStage: View {
     /// **闭合**的框,那是在撒谎——它会被读成"这扇窗就这么宽"。
     private func windowEdgeOutline(cardWidth: CGFloat) -> some View {
         let strong = adjustingWidth
-        return RoundedRectangle(cornerRadius: 16, style: .continuous)
+        return RoundedRectangle(cornerRadius: Self.windowCornerRadius, style: .continuous)
             .strokeBorder(
                 Color.white.opacity(strong ? 0.95 : 0.5),
                 style: StrokeStyle(lineWidth: 1, dash: [4, 3]))
@@ -1085,6 +1089,18 @@ struct OverlayEditorStage: View {
             .animation(.easeOut(duration: 0.15), value: settings.backgroundIsVisible)
             .allowsHitTesting(false)
             .accessibilityHidden(true)
+    }
+
+    /// 悬浮窗背景那块的圆角(LyricsOverlayView.overlayBackgroundCornerRadius,那是个 private 常量,取不到,
+    /// 只能同步一份;改那边记得改这里)。
+    private static let windowCornerRadius: CGFloat = 16
+
+    /// 系统按窗口内容的 alpha 算投影和边线:背景关着时真窗口干脆关掉投影;半透明的背景色按它的不透明度调淡,
+    /// 毛玻璃的材质按不透明算。
+    private var windowChromeOpacity: Double {
+        guard settings.backgroundIsVisible else { return 0 }
+        if settings.overlayBackgroundGlass { return 1 }
+        return Double(NSColor(hexStringWithAlpha: settings.backgroundColorHex)?.alphaComponent ?? 0)
     }
 
     // MARK: - 宽度调整条
