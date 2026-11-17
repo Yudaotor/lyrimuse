@@ -1211,6 +1211,7 @@ func runPlayerIdentityTests() {
             expectEqual(open("Tag Artist", "Tag Title", 90, tagged, file: "LyrimuseC4Test.mp3"), true,
                         "开着的文件: Spotify 报标签里的歌手歌名,文件名跟歌名无关")
             expectEqual(O.bundleIDs.contains(PlaybackPlayer.spotify.bundleIdentifier), true, "开着的文件: Spotify 放本地文件也找")
+            expectEqual(O.bundleIDs.contains(PlaybackPlayer.kuwo.bundleIdentifier), true, "开着的文件: 酷我放下载的音乐也找")
             expectEqual(open("别人", "Tag Title", 90, tagged), false, "开着的文件: 歌名一样、歌手不同不是这首")
             expectEqual(open("Tag Artist", file, 90.25, tagged), true, "开着的文件: 网易云把带扩展名的文件名报成歌名")
             expectEqual(open("Name Artist", "Name Song", 90, tagged), true, "开着的文件: 酷狗按文件名拆歌手歌名")

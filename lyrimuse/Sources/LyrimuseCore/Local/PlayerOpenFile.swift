@@ -1,20 +1,20 @@
 import Foundation
 import os
 
-/// QQ 音乐、网易云、酷狗用「打开文件」、Spotify 从它的「本地文件」列表放本机的音频文件时,以及 foobar2000、Swinsian(只放本机文件,
+/// QQ 音乐、网易云、酷狗用「打开文件」、酷我从「下载的音乐」、Spotify 从它的「本地文件」列表放本机的音频文件时,以及 foobar2000、Swinsian(只放本机文件,
 /// 只开着正在放的那一个;它们自己报的标签已经齐全,这里主要为了拿到路径)、MyGo Music 放本机文件时,按快照里的进程号找到它开着的
 /// 那个文件(`ProcessOpenFiles`;快照没带进程号时按 bundle id 找主进程,Spotify 的快照来自脚本、不带):
 /// 路径写进播放状态(`local_file`,引擎读同名 .lrc 和文件里的歌词)、没报封面时用这个文件自带的封面(取之前核对它此刻还开着,
 /// `playingFilePath`);标签里有歌名时换成标签里的
 /// 歌手、歌名、专辑和精确时长(网易云把带扩展名的文件名报成歌名,酷狗不读标签、按文件名拆歌手歌名)。
-/// 在线播放时它们开着的是自己的缓存(网易云 `.uc!`、Spotify 没有扩展名的缓存文件),不在 `PlayerTitleSplit.audioExtensions`
+/// 在线播放时它们开着的是自己的缓存(网易云 `.uc!`、Spotify 没有扩展名的缓存文件,酷我不开文件),不在 `PlayerTitleSplit.audioExtensions`
 /// 里,不会认成本机文件;MyGo 插件音源的缓存是带完整标签的 .mp3,按目录排除(`isPlayerCache`)。见 02 章决策 188、196、206、241、248。
 public enum PlayerOpenFile {
     public static let bundleIDs: Set<String> = [
         PlaybackPlayer.qqMusic.bundleIdentifier, PlaybackPlayer.netease.bundleIdentifier,
         PlaybackPlayer.kugou.bundleIdentifier, PlaybackPlayer.spotify.bundleIdentifier,
         PlaybackPlayer.foobar2000.bundleIdentifier, PlaybackPlayer.swinsian.bundleIdentifier,
-        PlaybackPlayer.mygoMusic.bundleIdentifier,
+        PlaybackPlayer.mygoMusic.bundleIdentifier, PlaybackPlayer.kuwo.bundleIdentifier,
     ]
 
     /// 没写歌名的文件报成不带扩展名的文件名的播放器(`fileNameIdentity` 的 `acceptsBaseName`)。
