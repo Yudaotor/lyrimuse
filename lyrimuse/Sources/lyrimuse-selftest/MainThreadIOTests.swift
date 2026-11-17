@@ -691,4 +691,47 @@ func runMainThreadIOTests() {
         expectEqual(callers.subtracting(readerFiles).sorted(), ["lyrimuse/PlaybackCoordinator.swift"],
                     "App 图标(契约): 取播放器图标的视图都在上面的观察名单里")
     }
+
+    do {
+        print("\n== 主线程 I/O:字体选单的系统字体列表在后台读(04 章决策 105) ==")
+        // 行为:Core Text 在后台读的那份跟 NSFontManager 的逐项一致(族名、顺序、本地化名)。
+        final class Box: @unchecked Sendable { var snapshot: SystemFontFamilies.Snapshot?; var onMain: Bool? }
+        let box = Box()
+        let done = DispatchSemaphore(value: 0)
+        DispatchQueue.global(qos: .userInitiated).async {
+            box.onMain = Thread.isMainThread
+            box.snapshot = SystemFontFamilies.read()
+            done.signal()
+        }
+        done.wait()
+        let manager = NSFontManager.shared
+        let families = manager.availableFontFamilies.filter { !$0.hasPrefix(".") }
+            .sorted { $0.localizedCaseInsensitiveCompare($1) == .orderedAscending }
+        var localized: [String: String] = [:]
+        for family in families {
+            let name = manager.localizedName(forFamily: family, face: nil)
+            if name != family { localized[family] = name }
+        }
+        expectEqual(box.onMain, false, "字体选单: 列表在后台线程上读")
+        expectEqual(box.snapshot?.families.contains("Helvetica"), true, "字体选单: 读到系统字体")
+        expectEqual(box.snapshot?.families, families, "字体选单: 族名和顺序跟 NSFontManager.availableFontFamilies 一致")
+        expectEqual(box.snapshot?.localizedNames, localized, "字体选单: 本地化名跟 NSFontManager.localizedName(forFamily:) 一致")
+
+        // 契约:App 代码里不在主线程上列字体族、取本地化名。
+        expectEqual(appCodeOccurrences(of: "availableFontFamilies") + appCodeOccurrences(of: "localizedName(forFamily:")
+                        + appCodeOccurrences(of: "CTFontDescriptorCopyLocalizedAttribute("), ["LyrimuseCore/Local/SystemFontFamilies.swift"],
+                    "字体选单(契约): 列字体族、取本地化名只在 SystemFontFamilies 里")
+        expectEqual(appCodeOccurrences(of: "SystemFontFamilies.read()"), ["lyrimuse/UI/FontFamilyPicker.swift"],
+                    "字体选单(契约): 只有字体选单读系统字体列表")
+        let pickerFile = app("UI/FontFamilyPicker.swift")
+        let load = sourceBody("func load() {", in: sourceBody("final class FontFamilyCatalog: ObservableObject {", in: pickerFile))
+        expectEqual(sourceHas(load, "guard snapshot == nil, !loading else { return }\nloading = true")
+                        && sourceHas(load, "DispatchQueue.global(qos: .userInitiated).async {\nlet snapshot = SystemFontFamilies.read()\nDispatchQueue.main.async {")
+                        && sourceHas(load, "catalog.snapshot = snapshot") && sourceCount(load, "catalog.snapshot =") == 1, true,
+                    "字体选单(契约): 在后台读一次,读好回主线程整份发布")
+        expectEqual(sourceHas(sourceBody("struct FontFamilyPicker: View {", in: pickerFile), ".onAppear { catalog.load() }"), true,
+                    "字体选单(契约): 按钮出现就开始读")
+        expectEqual(sourceHas(pickerFile, "private var systemFamilies: [String] { catalog.snapshot?.families ?? [selection] }"), true,
+                    "字体选单(契约): 没读好时系统字体区只列选中的那款")
+    }
 }

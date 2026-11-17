@@ -10,8 +10,8 @@ import UniformTypeIdentifiers
 // 常规做法是列全 + 搜索 + 每一行用它自己的字体渲染族名 —— 挑字体时最需要的信息就是
 // 它长什么样,光看名字选不出来。
 //
-// 列表本身缓存成 static:availableFontFamilies 这一趟要问系统要几百个族名,不该每次
-// 重绘都跑一遍。新装的系统字体要等下次启动才出现在列表里,对一个字体选择器来说可以接受。
+// 系统字体列表由 `FontFamilyCatalog` 在后台读一次、整个进程共用:这一趟要等 fontd,
+// 不在主线程上做。新装的系统字体要等下次启动才出现在列表里,对一个字体选择器来说可以接受。
 //
 // 加「导入字体」:系统字体列表再全,也只能覆盖"已经装在
 // 这台 Mac 上"的字体——用户想用一款只有文件、没装进系统的字体,原来完全没有出路。落地和
@@ -26,38 +26,27 @@ struct FontFamilyPicker: View {
     /// 同一个选择器里——对选字体这件事来说,一款字体是系统自带的还是自己导入的不该是
     /// 两套不同的操作路径。
     @ObservedObject private var customFonts = CustomFontStore.shared
+    @ObservedObject private var catalog = FontFamilyCatalog.shared
 
     @State private var showingList = false
     @State private var query = ""
     @State private var importError: String?
 
-    /// 第一次打开时的系统字体族快照。导入字体启动时就注册了,也在这份快照里,而且删掉之后快照不会变 ——
-    /// 所以列出来之前再按 `CustomFontStore` 过一遍(见 `filtered`)。
-    private static let families: [String] = NSFontManager.shared.availableFontFamilies
-        // 点号开头的是系统内部字体(.AppleSystemUIFont 这类),不该出现在给人看的选单里。
-        .filter { !$0.hasPrefix(".") }
-        .sorted { $0.localizedCaseInsensitiveCompare($1) == .orderedAscending }
+    /// 系统字体族快照还没读好时,系统字体区只列选中的那一款,下面跟一个转圈。导入字体启动时就注册了,也在快照里,
+    /// 而且删掉之后快照不会变 —— 所以列出来之前再按 `CustomFontStore` 过一遍(见 `filtered`)。
+    private var systemFamilies: [String] { catalog.snapshot?.families ?? [selection] }
 
     /// 中文字体的族名是英文的("PingFang SC"),但用户多半想按中文名找。两个都拿来匹配。
-    private static let localizedNames: [String: String] = {
-        var map: [String: String] = [:]
-        for family in families {
-            // localizedName(forFamily:face:) 返回的是非可选 String,拿不到本地化名时
-            // 直接回族名本身,所以判据是"跟族名不同"而不是"有没有值"。
-            let localized = NSFontManager.shared.localizedName(forFamily: family, face: nil)
-            if localized != family { map[family] = localized }
-        }
-        return map
-    }()
+    private func localizedName(of family: String) -> String? { catalog.snapshot?.localizedNames[family] }
 
     /// 系统字体区:排除导入字体(它们在上面的「已导入」区,带删除键)和已经不存在的族(本次运行里删掉的导入字体)。
     private var filtered: [String] {
         let keyword = query.trimmingCharacters(in: .whitespaces)
-        let system = Self.families.filter { !customFonts.isImported($0) && customFonts.availableFamilies.contains($0) }
+        let system = systemFamilies.filter { !customFonts.isImported($0) && customFonts.availableFamilies.contains($0) }
         guard !keyword.isEmpty else { return system }
         return system.filter { family in
             family.localizedCaseInsensitiveContains(keyword)
-                || (Self.localizedNames[family]?.localizedCaseInsensitiveContains(keyword) ?? false)
+                || (localizedName(of: family)?.localizedCaseInsensitiveContains(keyword) ?? false)
         }
     }
 
@@ -110,6 +99,8 @@ struct FontFamilyPicker: View {
         .settingsCardBackground(cornerRadius: 14)
         .fixedSize()
         .popover(isPresented: $showingList, arrowEdge: .bottom) { picker }
+        // 按钮一出现就开始在后台读,点开时多半已经读好。
+        .onAppear { catalog.load() }
     }
 
     private var picker: some View {
@@ -150,7 +141,12 @@ struct FontFamilyPicker: View {
                     ForEach(filtered, id: \.self) { family in
                         row(family: family, label: family)
                     }
-                    if filtered.isEmpty && filteredCustomFonts.isEmpty {
+                    if catalog.snapshot == nil {
+                        ProgressView()
+                            .controlSize(.small)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 18)
+                    } else if filtered.isEmpty && filteredCustomFonts.isEmpty {
                         Text(L10n.t("无匹配的字体"))
                             .font(.callout)
                             .foregroundStyle(.secondary)
@@ -244,7 +240,7 @@ struct FontFamilyPicker: View {
                     Text(label)
                         .font(family.isEmpty ? .system(size: 13) : .custom(family, size: 13))
                         .lineLimit(1)
-                    if let localized = Self.localizedNames[family] {
+                    if let localized = localizedName(of: family) {
                         Text(localized)
                             .font(.system(size: 10))
                             .foregroundStyle(.secondary)
@@ -258,6 +254,33 @@ struct FontFamilyPicker: View {
             .padding(.vertical, 5)
         }
         .buttonStyle(.glassListRow)
+    }
+}
+
+/// 系统字体族列表:第一次要时在后台读(`SystemFontFamilies.read`),读好回主线程发布一次,整个进程共用。
+/// 族名和本地化名一起发布,选单只整体换一次。见 04 章决策 105。
+@MainActor
+final class FontFamilyCatalog: ObservableObject {
+    static let shared = FontFamilyCatalog()
+
+    @Published private(set) var snapshot: SystemFontFamilies.Snapshot?
+    private var loading = false
+
+    private init() {}
+
+    func load() {
+        guard snapshot == nil, !loading else { return }
+        loading = true
+        DispatchQueue.global(qos: .userInitiated).async {
+            let snapshot = SystemFontFamilies.read()
+            DispatchQueue.main.async {
+                MainActor.assumeIsolated {
+                    let catalog = FontFamilyCatalog.shared
+                    catalog.snapshot = snapshot
+                    catalog.loading = false
+                }
+            }
+        }
     }
 }
 
