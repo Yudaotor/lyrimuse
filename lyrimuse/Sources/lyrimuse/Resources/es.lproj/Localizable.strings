@@ -2433,7 +2433,7 @@
 "纯音乐" = "Instrumental";
 "纯音乐/无歌词时收起" = "Contraer en instrumentales y sin letra";
 "纯音乐/无歌词时收起歌词行" = "Contraer fila de letra en instrumentales y sin letra";
-"纯音乐/无歌词时隐藏" = "Ocultar en instrumentales y sin letra";
+"纯音乐/无歌词时隐藏" = "Ocultar si no hay letra";
 "纯黑" = "Negro sólido";
 "纸白卡片" = "Tarjeta de papel";
 "细" = "Ligera";

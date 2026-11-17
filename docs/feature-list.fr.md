@@ -47,7 +47,7 @@ Ces fonctionnalités restent désactivées après l’installation. Activez-les 
 | [Verrouiller la position, maintenir pour déplacer](#feature-lock-position) | Réglages › Affichage des paroles › Paroles flottantes › Comportement › Verrouiller la position |
 | [Masquées dans les captures et le partage d’écran](#feature-hide-in-screenshots) | Réglages › Affichage des paroles › Paroles flottantes › Comportement › Masquer dans les captures |
 | [Masquer ou réduire en pause](#feature-hide-when-paused) | Réglages › Affichage des paroles › Paroles flottantes › Comportement › Masquer en pause |
-| [Masquer si instrumental ou sans paroles](#feature-hide-when-no-lyrics) | Réglages › Affichage des paroles › Paroles flottantes › Comportement › Masquer si instrumental ou sans paroles |
+| [Masquer si instrumental ou sans paroles](#feature-hide-when-no-lyrics) | Réglages › Affichage des paroles › Paroles flottantes › Comportement › Masquer sans paroles |
 | [S’effacer pendant les pubs](#feature-hide-during-ads) | Réglages › Affichage des paroles › Paroles flottantes › Comportement › Masquer pendant les pubs |
 | [Encoche sur l’écran verrouillé](#feature-notch-show-on-lock-screen) | Réglages › Affichage des paroles › Encoche › Comportement › Afficher sur l’écran verrouillé |
 | [Paroles flottantes masquées en plein écran](#feature-overlay-hide-in-full-screen) | Réglages › Affichage des paroles › Paroles flottantes › Comportement › Masquer en plein écran |
@@ -516,8 +516,8 @@ Les paroles flottantes et l’encoche disparaissent en pause ou à l’arrêt ;
 Quand un morceau est instrumental, ou que la recherche est terminée sans trouver de paroles, les paroles flottantes et la fenêtre des paroles mini peuvent se masquer, et l’encoche et la Touch Bar peuvent replier leur ligne de paroles. Rien ne se masque tant que la recherche est en cours. Chacune a sa propre option.
 
 - Désactivée par défaut
-- Réglages : Affichage des paroles › Paroles flottantes › Comportement › Masquer si instrumental ou sans paroles
-- Réglages : Affichage des paroles › Fenêtre des paroles › Comportement › Masquer si instrumental ou sans paroles
+- Réglages : Affichage des paroles › Paroles flottantes › Comportement › Masquer sans paroles
+- Réglages : Affichage des paroles › Fenêtre des paroles › Comportement › Masquer sans paroles
 - Réglages : Affichage des paroles › Encoche › Comportement › Réduire si instrumental ou sans paroles
 - Réglages : Affichage des paroles › Touch Bar › Comportement › Réduire si instrumental ou sans paroles
 
@@ -1092,7 +1092,7 @@ Tous les réglages de la fenêtre Réglages, classés par emplacement : 329 au 
 - **Commandes au survol**
 - **Masquer dans les captures**
 - **Masquer en pause**
-- **Masquer si instrumental ou sans paroles**
+- **Masquer sans paroles**
 - **Masquer pendant les pubs**
 - **Masquer en plein écran**
 - **Afficher le titre sans paroles**
@@ -1290,7 +1290,7 @@ Tous les réglages de la fenêtre Réglages, classés par emplacement : 329 au 
 - **Clics traversants si estompé** (taille mini uniquement) : Une fois estompé, les clics passent à la fenêtre du dessous. Maintenez ⌥ pour le rendre opaque et interagir
 - **Masquer dans les captures** (taille mini uniquement)
 - **Masquer en pause** (taille mini uniquement)
-- **Masquer si instrumental ou sans paroles** (taille mini uniquement)
+- **Masquer sans paroles** (taille mini uniquement)
 - **Masquer pendant les pubs** (taille mini uniquement)
 - **Masquer en plein écran** (taille mini uniquement)
 

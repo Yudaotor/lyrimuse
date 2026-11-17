@@ -47,7 +47,7 @@ Estas funciones siguen desactivadas después de instalar. Actívalas primero en 
 | [Bloquear posición, mantener pulsado para arrastrar](#feature-lock-position) | Ajustes › Mostrar letra › Letra flotante › Comportamiento › Bloquear posición |
 | [Ocultar en capturas, grabaciones y pantalla compartida](#feature-hide-in-screenshots) | Ajustes › Mostrar letra › Letra flotante › Comportamiento › Ocultar en capturas |
 | [Ocultar o contraer en pausa](#feature-hide-when-paused) | Ajustes › Mostrar letra › Letra flotante › Comportamiento › Ocultar en pausa |
-| [Ocultar o contraer en instrumentales y sin letra](#feature-hide-when-no-lyrics) | Ajustes › Mostrar letra › Letra flotante › Comportamiento › Ocultar en instrumentales y sin letra |
+| [Ocultar o contraer en instrumentales y sin letra](#feature-hide-when-no-lyrics) | Ajustes › Mostrar letra › Letra flotante › Comportamiento › Ocultar si no hay letra |
 | [Ocultar o contraer durante anuncios](#feature-hide-during-ads) | Ajustes › Mostrar letra › Letra flotante › Comportamiento › Ocultar durante anuncios |
 | [Notch en la pantalla bloqueada](#feature-notch-show-on-lock-screen) | Ajustes › Mostrar letra › Notch › Comportamiento › Mostrar en pantalla bloqueada |
 | [Ocultar la letra flotante en pantalla completa](#feature-overlay-hide-in-full-screen) | Ajustes › Mostrar letra › Letra flotante › Comportamiento › Ocultar en pantalla completa |
@@ -516,8 +516,8 @@ En pausa o sin reproducción, la letra flotante y el notch se ocultan; el notch 
 Si la canción es instrumental, o la búsqueda confirma que no hay letra, la letra flotante y la ventana de letra mini pueden ocultarse y el notch y la Touch Bar pueden contraer su fila de letra; mientras se busca, se muestra como siempre. Cada uno tiene su propio interruptor.
 
 - Desactivada por omisión
-- Ajustes: Mostrar letra › Letra flotante › Comportamiento › Ocultar en instrumentales y sin letra
-- Ajustes: Mostrar letra › Ventana de letra › Comportamiento › Ocultar en instrumentales y sin letra
+- Ajustes: Mostrar letra › Letra flotante › Comportamiento › Ocultar si no hay letra
+- Ajustes: Mostrar letra › Ventana de letra › Comportamiento › Ocultar si no hay letra
 - Ajustes: Mostrar letra › Notch › Comportamiento › Contraer fila de letra en instrumentales y sin letra
 - Ajustes: Mostrar letra › Touch Bar › Comportamiento › Contraer en instrumentales y sin letra
 
@@ -1092,7 +1092,7 @@ Todos los ajustes de la ventana Ajustes, según dónde están: 329 en total. Esc
 - **Mostrar controles al pasar el puntero**
 - **Ocultar en capturas**
 - **Ocultar en pausa**
-- **Ocultar en instrumentales y sin letra**
+- **Ocultar si no hay letra**
 - **Ocultar durante anuncios**
 - **Ocultar en pantalla completa**
 - **Mostrar título si no hay letra**
@@ -1290,7 +1290,7 @@ Todos los ajustes de la ventana Ajustes, según dónde están: 329 en total. Esc
 - **Dejar pasar clics al atenuarse** (solo tamaño mini): Al atenuarse, los clics pasan a la ventana de abajo. Mantén pulsada ⌥ para volverla opaca e interactuar
 - **Ocultar en capturas** (solo tamaño mini)
 - **Ocultar en pausa** (solo tamaño mini)
-- **Ocultar en instrumentales y sin letra** (solo tamaño mini)
+- **Ocultar si no hay letra** (solo tamaño mini)
 - **Ocultar durante anuncios** (solo tamaño mini)
 - **Ocultar en pantalla completa** (solo tamaño mini)
 

@@ -47,7 +47,7 @@ Diese Funktionen bleiben nach der Installation aus. Schalte sie zuerst in den Ei
 | [Position sperren, zum Ziehen lange drücken](#feature-lock-position) | Einstellungen › Liedtext-Anzeige › Schwebender Text › Verhalten › Position sperren |
 | [Unsichtbar in Bildschirmfotos und bei Bildschirmfreigabe](#feature-hide-in-screenshots) | Einstellungen › Liedtext-Anzeige › Schwebender Text › Verhalten › In Bildschirmfotos ausblenden |
 | [Bei Pause ausblenden oder verkleinern](#feature-hide-when-paused) | Einstellungen › Liedtext-Anzeige › Schwebender Text › Verhalten › Bei Pause ausblenden |
-| [Bei Instrumentals und Titeln ohne Liedtext ausblenden](#feature-hide-when-no-lyrics) | Einstellungen › Liedtext-Anzeige › Schwebender Text › Verhalten › Bei Instrumental & ohne Text ausblenden |
+| [Bei Instrumentals und Titeln ohne Liedtext ausblenden](#feature-hide-when-no-lyrics) | Einstellungen › Liedtext-Anzeige › Schwebender Text › Verhalten › Ohne Liedtext ausblenden |
 | [Bei Werbung ausweichen](#feature-hide-during-ads) | Einstellungen › Liedtext-Anzeige › Schwebender Text › Verhalten › Bei Werbung ausblenden |
 | [Notch auf dem Sperrbildschirm](#feature-notch-show-on-lock-screen) | Einstellungen › Liedtext-Anzeige › Notch › Verhalten › Auf Sperrbildschirm zeigen |
 | [Schwebender Text weicht im Vollbild aus](#feature-overlay-hide-in-full-screen) | Einstellungen › Liedtext-Anzeige › Schwebender Text › Verhalten › Im Vollbild ausblenden |
@@ -516,8 +516,8 @@ Schwebender Text und Notch verschwinden bei Pause oder Leerlauf; die Notch kann 
 Ist ein Titel instrumental oder hat die Suche keinen Liedtext gefunden, können sich der schwebende Text und das Mini-Liedtextfenster ausblenden, und Notch und Touch Bar können ihre Textzeile einklappen. Solange die Suche läuft, wird nichts ausgeblendet. Jede Anzeige hat einen eigenen Schalter.
 
 - Standardmäßig aus
-- Einstellungen: Liedtext-Anzeige › Schwebender Text › Verhalten › Bei Instrumental & ohne Text ausblenden
-- Einstellungen: Liedtext-Anzeige › Liedtextfenster › Verhalten › Bei Instrumental & ohne Text ausblenden
+- Einstellungen: Liedtext-Anzeige › Schwebender Text › Verhalten › Ohne Liedtext ausblenden
+- Einstellungen: Liedtext-Anzeige › Liedtextfenster › Verhalten › Ohne Liedtext ausblenden
 - Einstellungen: Liedtext-Anzeige › Notch › Verhalten › Bei Instrumental & ohne Text einklappen
 - Einstellungen: Liedtext-Anzeige › Touch Bar › Verhalten › Bei Instrumental & ohne Text einklappen
 
@@ -1092,7 +1092,7 @@ Alle Einstellungen des Einstellungsfensters nach Ort: insgesamt 329. Gib einen N
 - **Steuerung beim Überfahren zeigen**
 - **In Bildschirmfotos ausblenden**
 - **Bei Pause ausblenden**
-- **Bei Instrumental & ohne Text ausblenden**
+- **Ohne Liedtext ausblenden**
 - **Bei Werbung ausblenden**
 - **Im Vollbild ausblenden**
 - **Titel zeigen, wenn kein Text**
@@ -1290,7 +1290,7 @@ Alle Einstellungen des Einstellungsfensters nach Ort: insgesamt 329. Gib einen N
 - **Verblasst durchklickbar** (nur Mini): Im verblassten Zustand gehen Klicks an das Fenster darunter. Halte ⌥ gedrückt, um es deckend zu machen und zu bedienen
 - **In Bildschirmfotos ausblenden** (nur Mini)
 - **Bei Pause ausblenden** (nur Mini)
-- **Bei Instrumental & ohne Text ausblenden** (nur Mini)
+- **Ohne Liedtext ausblenden** (nur Mini)
 - **Bei Werbung ausblenden** (nur Mini)
 - **Im Vollbild ausblenden** (nur Mini)
 

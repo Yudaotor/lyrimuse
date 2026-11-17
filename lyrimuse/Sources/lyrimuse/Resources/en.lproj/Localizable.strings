@@ -2433,7 +2433,7 @@
 "纯音乐" = "Instrumental";
 "纯音乐/无歌词时收起" = "Collapse for Instrumentals & No Lyrics";
 "纯音乐/无歌词时收起歌词行" = "Collapse Lyric Row for Instrumentals & No Lyrics";
-"纯音乐/无歌词时隐藏" = "Hide for Instrumentals & No Lyrics";
+"纯音乐/无歌词时隐藏" = "Hide When No Lyrics";
 "纯黑" = "Solid Black";
 "纸白卡片" = "Paper Card";
 "细" = "Light";

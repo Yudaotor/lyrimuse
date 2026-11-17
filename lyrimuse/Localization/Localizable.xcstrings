@@ -76436,25 +76436,25 @@
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Bei Instrumental & ohne Text ausblenden"
+            "value" : "Ohne Liedtext ausblenden"
           }
         },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Hide for Instrumentals & No Lyrics"
+            "value" : "Hide When No Lyrics"
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Ocultar en instrumentales y sin letra"
+            "value" : "Ocultar si no hay letra"
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Masquer si instrumental ou sans paroles"
+            "value" : "Masquer sans paroles"
           }
         },
         "it" : {
@@ -76466,7 +76466,7 @@
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "インストゥルメンタル/歌詞なしのときは非表示"
+            "value" : "歌詞なしのときは非表示"
           }
         },
         "ko" : {

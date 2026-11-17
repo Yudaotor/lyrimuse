@@ -47,7 +47,7 @@ These features stay off after you install. Turn them on in Settings first (some 
 | [Lock position, long-press to drag](#feature-lock-position) | Settings › Lyrics Display › Floating Lyrics › Behavior › Lock Position |
 | [Hidden from screenshots and screen sharing](#feature-hide-in-screenshots) | Settings › Lyrics Display › Floating Lyrics › Behavior › Hide in Screenshots |
 | [Hide or shrink when paused](#feature-hide-when-paused) | Settings › Lyrics Display › Floating Lyrics › Behavior › Hide When Paused |
-| [Hide for instrumentals and songs without lyrics](#feature-hide-when-no-lyrics) | Settings › Lyrics Display › Floating Lyrics › Behavior › Hide for Instrumentals & No Lyrics |
+| [Hide for instrumentals and songs without lyrics](#feature-hide-when-no-lyrics) | Settings › Lyrics Display › Floating Lyrics › Behavior › Hide When No Lyrics |
 | [Step aside during ads](#feature-hide-during-ads) | Settings › Lyrics Display › Floating Lyrics › Behavior › Hide During Ads |
 | [Notch on the Lock Screen](#feature-notch-show-on-lock-screen) | Settings › Lyrics Display › Notch › Behavior › Show on Lock Screen |
 | [Floating lyrics step aside in full screen](#feature-overlay-hide-in-full-screen) | Settings › Lyrics Display › Floating Lyrics › Behavior › Hide in Full Screen |
@@ -516,8 +516,8 @@ Floating lyrics and the notch disappear while paused or idle; the notch can inst
 When a song is instrumental, or the search is done and found no lyrics, floating lyrics and the mini lyrics window can hide, and the notch and the Touch Bar can fold their lyric row away. Nothing hides while the search is still running. Each has its own switch.
 
 - Off by default
-- Settings: Lyrics Display › Floating Lyrics › Behavior › Hide for Instrumentals & No Lyrics
-- Settings: Lyrics Display › Lyrics Window › Behavior › Hide for Instrumentals & No Lyrics
+- Settings: Lyrics Display › Floating Lyrics › Behavior › Hide When No Lyrics
+- Settings: Lyrics Display › Lyrics Window › Behavior › Hide When No Lyrics
 - Settings: Lyrics Display › Notch › Behavior › Collapse Lyric Row for Instrumentals & No Lyrics
 - Settings: Lyrics Display › Touch Bar › Behavior › Collapse for Instrumentals & No Lyrics
 
@@ -1092,7 +1092,7 @@ Every setting in the Settings window, by where it lives: 329 in all. Type a name
 - **Show Controls on Hover**
 - **Hide in Screenshots**
 - **Hide When Paused**
-- **Hide for Instrumentals & No Lyrics**
+- **Hide When No Lyrics**
 - **Hide During Ads**
 - **Hide in Full Screen**
 - **Show Title When No Lyrics**
@@ -1290,7 +1290,7 @@ Every setting in the Settings window, by where it lives: 329 in all. Type a name
 - **Click Through While Faded** (mini size only): While faded, clicks pass through to the window below. Hold ⌥ to make it opaque and interact with it
 - **Hide in Screenshots** (mini size only)
 - **Hide When Paused** (mini size only)
-- **Hide for Instrumentals & No Lyrics** (mini size only)
+- **Hide When No Lyrics** (mini size only)
 - **Hide During Ads** (mini size only)
 - **Hide in Full Screen** (mini size only)
 
