@@ -172,6 +172,9 @@ public enum LyrimuseDeepLink: Equatable, Sendable {
         /// 完整尺寸歌词窗口进 / 出原生全屏(`debug/lyrics-window-fullscreen?state=on|off`),跟菜单栏面板的全屏键走同一处;
         /// 已经在要的状态就不动。进全屏要先激活 App(全屏作用在 key 窗口上)。
         case lyricsWindowFullScreen(on: Bool)
+        /// 设置页「歌词窗口」那一段的预览切到完整 / 迷你尺寸(`debug/lyrics-window-preview?size=full|mini`),跟点预览下面那个
+        /// 切换写同一个偏好;下面的配置卡跟着换成那一套。
+        case lyricsWindowPreview(mini: Bool)
         /// 触控栏「歌词颜色」那一档,跟设置页走同一个设置(`debug/touchbar-display?color=white|cover|custom|rainbow`)。
         case touchBarDisplay(color: TouchBarLyricsColorMode)
         /// 当作键盘焦点在 / 不在输入框里,不看辅助功能读到的(`debug/touchbar-typing?state=on|off|auto`,`auto` = 交还给它)。
@@ -670,6 +673,12 @@ public enum LyrimuseDeepLink: Equatable, Sendable {
             case "off": self = .debug(.lyricsWindowFullScreen(on: false))
             default: return nil
             }
+        case ("debug", "/lyrics-window-preview"):
+            switch value("size")?.lowercased() {
+            case "full": self = .debug(.lyricsWindowPreview(mini: false))
+            case "mini": self = .debug(.lyricsWindowPreview(mini: true))
+            default: return nil
+            }
         case ("debug", "/rainbow"):
             let overlay = value("overlay").flatMap(Self.parseBool)
             let notch = value("notch").flatMap(Self.parseBool)
@@ -1041,6 +1050,9 @@ public enum LyrimuseDeepLink: Equatable, Sendable {
             case let .lyricsWindowFullScreen(on):
                 components.path = "/lyrics-window-fullscreen"
                 components.queryItems = [URLQueryItem(name: "state", value: on ? "on" : "off")]
+            case let .lyricsWindowPreview(mini):
+                components.path = "/lyrics-window-preview"
+                components.queryItems = [URLQueryItem(name: "size", value: mini ? "mini" : "full")]
             case let .rainbow(overlay, notch, menuBar):
                 components.path = "/rainbow"
                 var items: [URLQueryItem] = []

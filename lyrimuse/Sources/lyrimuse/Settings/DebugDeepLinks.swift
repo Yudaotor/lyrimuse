@@ -332,6 +332,9 @@ enum DebugDeepLinks {
         case let .lyricsWindowFullScreen(on):
             LyricsWindowRemote.shared.setFullScreen(on)
             logger.notice("debug lyrics window fullscreen on=\(on, privacy: .public)")
+        case let .lyricsWindowPreview(mini):
+            UserDefaults.standard.set(mini, forKey: LyricsWindowPreviewStage.showsMiniStorageKey)
+            logger.notice("debug lyrics window preview mini=\(mini, privacy: .public)")
         case let .rainbow(overlay, notch, menuBar):
             if let overlay { AppSettings.shared.overlayRainbow = overlay }
             if let notch { AppSettings.shared.notchLyricsColor = notch ? .rainbow : .accent }

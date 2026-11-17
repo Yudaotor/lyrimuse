@@ -2473,6 +2473,7 @@ struct SettingsPillSegmentedControl<T: Hashable>: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
+        let fade: Animation? = reduceMotion ? nil : .easeOut(duration: 0.15)
         HStack(spacing: 2) {
             ForEach(options, id: \.self) { option in
                 let isSelected = selection == option
@@ -2489,14 +2490,20 @@ struct SettingsPillSegmentedControl<T: Hashable>: View {
                         .contentShape(Capsule())
                 }
                 .buttonStyle(SettingsGlassHoverButtonStyle(showsFill: !isSelected))
-                .foregroundStyle(isSelected ? AnyShapeStyle(Color.white) : disabled ? AnyShapeStyle(.tertiary) : AnyShapeStyle(.primary))
-                .background(Capsule().fill(isSelected ? Color.accentColor : Color.clear))
+                // 换档的淡入淡出只套在字色和选中底的透明度上(`.animation(_:body:)`),别改回整排挂 `.animation(_:value:)`:
+                // 同一次换档里控件被挤到新位置时(上面的预览变高变矮),那几颗按钮会带着动画滑过去,底下的灰轨道却当场
+                // 就位(07 章决策 206)。
+                .animation(fade) {
+                    $0.foregroundStyle(isSelected ? AnyShapeStyle(Color.white) : disabled ? AnyShapeStyle(.tertiary) : AnyShapeStyle(.primary))
+                }
+                .background {
+                    Capsule().fill(Color.accentColor)
+                        .animation(fade) { $0.opacity(isSelected ? 1 : 0) }
+                }
                 .disabled(disabled)
                 .accessibilityAddTraits(isSelected ? .isSelected : [])
             }
         }
-        // 选中底换档时淡入淡出。只挂在这一排里面,理由同 `SettingsGlassTabPicker` 的动画那条。
-        .animation(reduceMotion ? nil : .easeOut(duration: 0.15), value: selection)
         .padding(2)
         .background(Capsule().fill(Color.primary.opacity(0.06)))
         .fixedSize(horizontal: !fillsWidth, vertical: true)

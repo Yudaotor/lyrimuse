@@ -390,6 +390,11 @@ func runDeepLinkTests() {
                     "debug: 歌词窗口进 / 出全屏")
         expectEqual(link("lyrimuse://debug/lyrics-window-fullscreen?state=auto") == nil
                     && link("lyrimuse://debug/lyrics-window-fullscreen") == nil, true, "debug: 歌词窗口全屏认不出的、没带都不认")
+        expectEqual([link("lyrimuse://debug/lyrics-window-preview?size=mini"), link("lyrimuse://debug/lyrics-window-preview?size=FULL")],
+                    [.debug(.lyricsWindowPreview(mini: true)), .debug(.lyricsWindowPreview(mini: false))],
+                    "debug: 设置页歌词窗口预览切迷你 / 完整尺寸")
+        expectEqual(link("lyrimuse://debug/lyrics-window-preview?size=small") == nil
+                    && link("lyrimuse://debug/lyrics-window-preview") == nil, true, "debug: 歌词窗口预览尺寸认不出的、没带都不认")
         expectEqual(link("lyrimuse://debug/rainbow?overlay=1"), .debug(.rainbow(overlay: true, notch: nil)), "debug: 只开悬浮歌词彩虹")
         expectEqual(link("lyrimuse://debug/rainbow?overlay=0&notch=1"), .debug(.rainbow(overlay: false, notch: true)),
                     "debug: 悬浮歌词、灵动岛彩虹一起设")
@@ -737,6 +742,7 @@ func runDeepLinkTests() {
             .debug(.lyricsWindowPointer(inside: true)), .debug(.lyricsWindowPointer(inside: false)),
             .debug(.lyricsWindowKey(override: true)), .debug(.lyricsWindowKey(override: false)), .debug(.lyricsWindowKey(override: nil)),
             .debug(.lyricsWindowFullScreen(on: true)), .debug(.lyricsWindowFullScreen(on: false)),
+            .debug(.lyricsWindowPreview(mini: true)), .debug(.lyricsWindowPreview(mini: false)),
             .debug(.touchBarDisplay(color: .rainbow)), .debug(.touchBarDisplay(color: .cover)),
             .debug(.touchBarTyping(override: true)), .debug(.touchBarTyping(override: false)), .debug(.touchBarTyping(override: nil)),
             .debug(.managerVisibility(override: true)), .debug(.managerVisibility(override: false)), .debug(.managerVisibility(override: nil)),

@@ -101,8 +101,12 @@ struct LyricsWindowPreviewStage: View {
         .frame(maxWidth: .infinity)
     }
 
+    /// 两档共用同一块舞台:高取完整尺寸那张缩到列宽后的高、至少放得下迷你窗,迷你那张贴底居中。舞台高度不跟着
+    /// 档位变,下面的「完整 / 迷你」切换和整页卡片切档时都不挪位置(07 章决策 206)。
     private var stage: some View {
-        Group {
+        ZStack(alignment: .bottom) {
+            fullSizer
+            Color.clear.frame(width: 0, height: LyricsWindowMiniMetrics.size.height)
             if mini {
                 ZStack(alignment: .topLeading) {
                     preview(scale: Self.miniScale)
@@ -122,10 +126,14 @@ struct LyricsWindowPreviewStage: View {
 
     /// 完整尺寸缩到内容列那么宽,最宽 `previewWidth`。宽度只取上层给的列宽、不能写成固定 frame:
     /// 内容列比它窄时(侧边栏宽的语言、窗口拖窄)固定宽度会把整个分栏撑出窗口,侧边栏被挤到左边外面。
-    private var fullStage: some View {
+    private var fullSizer: some View {
         Color.clear
             .aspectRatio(Self.contentSize, contentMode: .fit)
             .frame(maxWidth: Self.previewWidth)
+    }
+
+    private var fullStage: some View {
+        fullSizer
             .overlay(alignment: .topLeading) {
                 GeometryReader { geo in
                     preview(scale: geo.size.width / Self.contentSize.width)

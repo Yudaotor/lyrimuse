@@ -3014,9 +3014,22 @@ func runSourceContractSurfaceTests() {
                             "歌词窗口预览: 点顶部信息弹出浮层")
                 expectEqual(sourceHas(stage, "preview(scale: Self.miniScale)\n                    if let headerRect {"), true,
                             "歌词窗口预览: 可点区域叠在预览外面(预览本体仍整块 allowsHitTesting(false))")
-                expectEqual(sourceHas(sourceBody("private var fullStage: some View {", in: stage),
-                                      ".aspectRatio(Self.contentSize, contentMode: .fit)\n            .frame(maxWidth: Self.previewWidth)"), true,
+                expectEqual(sourceHas(sourceBody("private var fullSizer: some View {", in: stage),
+                                      ".aspectRatio(Self.contentSize, contentMode: .fit)\n            .frame(maxWidth: Self.previewWidth)")
+                                && sourceHas(sourceBody("private var fullStage: some View {", in: stage), "fullSizer\n.overlay("), true,
                             "歌词窗口预览: 完整尺寸跟着列宽缩放、不钉死宽度(07 章决策 189)")
+                // 两档共用一块舞台,高度不跟档位变:切档时下面的切换控件和卡片不挪(07 章决策 206)。
+                expectEqual(sourceHas(sourceBody("private var stage: some View {", in: stage),
+                                      "ZStack(alignment: .bottom) {\nfullSizer\nColor.clear.frame(width: 0, height: LyricsWindowMiniMetrics.size.height)\nif mini {"), true,
+                            "歌词窗口预览: 舞台两档同高(完整那张的高、至少迷你窗的高),迷你贴底")
+                if let design = read("Settings/SettingsDesignSystem.swift") {
+                    let pill = sourceBody("struct SettingsPillSegmentedControl<T: Hashable>: View {", in: design)
+                    expectEqual(!pill.isEmpty && !pill.contains("value: selection)")
+                                    && sourceHas(pill, "Capsule().fill(Color.accentColor)\n.animation(fade) { $0.opacity(isSelected ? 1 : 0) }"), true,
+                                "胶囊分段: 换档动画只套在选中底透明度和字色上,不整排挂 .animation(value:)(07 章决策 206)")
+                } else {
+                    expectEqual(true, false, "胶囊分段: 读不到 Settings/SettingsDesignSystem.swift(路径挪了?)")
+                }
                 expectEqual(sourceHas(sourceBody("private var sectionPicker: some View {", in: settings), "SettingsPageTabPicker("), true,
                             "设置页头 tab: 放不下时换紧凑档 / 下拉,不把分栏撑出窗口(07 章决策 189)")
                 // 设置页里自己定宽的几块在内容列窄于它时会把整个分栏撑出窗口(14 章决策 154)。
