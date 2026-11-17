@@ -323,10 +323,10 @@ extension NotchLyricsView {
 
     /// 没有曲目时左耳里的 App 图标。
     ///
-    /// 图标取 `NSApplication.shared.applicationIconImage`(bundle 里的 AppIcon.icns),但**不**直接
+    /// 图标是 bundle 里的 AppIcon.icns(`NotchOwnAppIcon` 在后台读,读好之前这一格空着),但**不**直接
     /// `Image(nsImage:).resizable()` 缩 —— 那样 1024px 那档位图会被
     /// SwiftUI 一步线性采样到 ~52px,圆角和音符边缘全是台阶("很有锯齿感")。现在按「pt 边长 × 显示倍率」预先光栅化
-    /// 一次(`NotchIdleAppIcon.bitmap`,高质量重采样、按像素边长缓存),`Image(decorative:scale:)` 逐像素
+    /// 一次(`NotchIdleAppIcon.rasterize`,高质量重采样、按像素边长缓存),`Image(decorative:scale:)` 逐像素
     /// 贴上去,运行期零缩放。不裁圆角、不描边、不投影 —— 它自己就是一枚带圆角方块的 macOS 图标,再套
     /// 一层 `artworkThumbnail` 那圈处理会把它的形状裁掉一截。
     ///
@@ -337,20 +337,10 @@ extension NotchLyricsView {
     func idleAppIcon(alignment: Alignment) -> some View {
         let side = NotchMetrics.earAppIconSide(contentTopInset: controller.contentTopInset)
         let scale = max(1, displayScale)
-        Group {
-            if let bitmap = NotchIdleAppIcon.bitmap(pixelSide: Int((side * scale).rounded())) {
-                Image(decorative: bitmap, scale: scale)
-            } else {
-                // 理论上到不了:CGContext 建不出来才会 nil。退回原图,至少有东西。
-                Image(nsImage: NSApplication.shared.applicationIconImage)
-                    .resizable()
-                    .interpolation(.high)
-                    .scaledToFit()
-            }
-        }
-        .frame(width: side, height: side)
-        .frame(maxWidth: .infinity, alignment: alignment)
-        .accessibilityHidden(true)
+        NotchOwnAppIconImage(pixelSide: Int((side * scale).rounded()), scale: scale)
+            .frame(width: side, height: side)
+            .frame(maxWidth: .infinity, alignment: alignment)
+            .accessibilityHidden(true)
     }
 
     /// 耳朵里那一排播放控制键。

@@ -589,4 +589,25 @@ func runMainThreadIOTests() {
         expectEqual(registrations.filter { $0.contains(".main") }, [],
                     "CoreAudio 监听(契约): 没有派到主队列上的属性监听(回调里同步读 CoreAudio 会卡住主线程)")
     }
+
+    do {
+        print("\n== 主线程 I/O:灵动岛自家图标在后台读(05 章决策 154) ==")
+        let icon = app("UI/NotchIdleAppIcon.swift")
+        let own = sourceBody("final class NotchOwnAppIcon: ObservableObject {", in: icon)
+        expectEqual(sourceHas(own, "read.start(priority: .userInitiated, read: {\nSelf.bundledIcon().flatMap { NotchIdleAppIcon.rasterize($0, pixelSide: pixelSide) }")
+                        && sourceHas(own, "if let image { self?.bitmaps[pixelSide] = image }"), true,
+                    "灵动岛自家图标(契约): 包里的图标在后台读、光栅化,回主线程才放进缓存")
+        expectEqual(sourceHas(sourceBody("func bitmap(pixelSide: Int) -> CGImage? {", in: own),
+                              "if let hit = bitmaps[pixelSide] { return hit }\nguard pixelSide > 0, reads[pixelSide] == nil else { return nil }"), true,
+                    "灵动岛自家图标(契约): 每个像素边长只派一次后台读,读不出来不反复派")
+        expectEqual(sourceHas(sourceBody("nonisolated static func bundledIcon() -> NSImage? {", in: icon),
+                              "Bundle.main.url(forResource: \"AppIcon\", withExtension: \"icns\")")
+                        && sourceHas(repoText("lyrimuse/build.sh"), "cp AppIcon.icns \"$APP_DIR/Contents/Resources/AppIcon.icns\""), true,
+                    "灵动岛自家图标(契约): 读的是 build.sh 拷进包里的那份 AppIcon.icns")
+        expectEqual(sourceHas(sourceBody("func idleAppIcon(alignment: Alignment) -> some View {", in: app("UI/NotchLyricsView+TopRow.swift")),
+                              "NotchOwnAppIconImage(pixelSide: Int((side * scale).rounded()), scale: scale)"), true,
+                    "灵动岛自家图标(契约): 没有曲目时左耳那枚走后台读的图标")
+        expectEqual(appCodeOccurrences(of: "applicationIconImage").filter { $0.contains("/UI/Notch") }, [],
+                    "灵动岛自家图标(契约): 灵动岛不在主线程上读 applicationIconImage(第一次读要同步等 iconservicesagent)")
+    }
 }
