@@ -1733,6 +1733,45 @@ func runOpsDiagnosticsTests() {
         }
     }
 
+    // ---- 全机重活闸回收陈旧令牌走接管闸 ----
+    //
+    // 几个排队者同时判定同一个令牌陈旧时,判定和删除之间没有互斥,后一个会把前一个刚重建的令牌删掉,
+    // 同时跑的编译就多出一份(15 章决策 120)。
+    do {
+        let gateScript = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()   // lyrimuse-selftest
+            .deletingLastPathComponent()   // Sources
+            .deletingLastPathComponent()   // lyrimuse
+            .deletingLastPathComponent()   // 仓库根
+            .appendingPathComponent("scripts/heavy-gate.sh")
+        if let text = try? String(contentsOfFile: gateScript.path, encoding: .utf8) {
+            let codeLines = text.split(separator: "\n", omittingEmptySubsequences: false)
+                .map { String($0).trimmingCharacters(in: .whitespaces) }
+                .filter { !$0.hasPrefix("#") }
+            let code = codeLines.joined(separator: "\n")
+            expectEqual(codeLines.filter { $0.contains("rm -rf \"$tok\"") }.count, 1,
+                        "重活闸: 删令牌只有一处(接管闸里确认过的陈旧令牌),多出来的就是不进闸的删法")
+            if let fn = code.range(of: "heavy_gate_take_over_stale() {"),
+               let gate = code.range(of: "if ! mkdir \"$gate\" 2>/dev/null; then", range: fn.upperBound..<code.endIndex),
+               let recheck = code.range(of: "if [ \"$now\" = \"$holder\" ]", range: fn.upperBound..<code.endIndex),
+               let remove = code.range(of: "rm -rf \"$tok\"", range: fn.upperBound..<code.endIndex),
+               let acquire = code.range(of: "heavy_gate_acquire() {"),
+               let acquireEnd = code.range(of: "\nheavy_gate_release() {", range: acquire.upperBound..<code.endIndex) {
+                expectEqual(gate.lowerBound < recheck.lowerBound && recheck.lowerBound < remove.lowerBound, true,
+                            "重活闸: 陈旧令牌先进接管闸、闸里重读确认还是同一个,再删")
+                let body = code[acquire.upperBound..<acquireEnd.lowerBound]
+                expectEqual(body.contains("heavy_gate_take_over_stale \"$tok\" \"$pid\"") && !body.contains("rm -rf"), true,
+                            "重活闸: 排队循环里不直接删令牌,陈旧令牌一律交给接管函数")
+            } else {
+                expectEqual(true, false, "重活闸: 找不到接管函数、闸、重读、删令牌或排队循环(改写法了?)")
+            }
+            expectEqual(code.contains("[ \"$(heavy_gate_owner_pid \"$HEAVY_GATE_HELD\")\" = \"$$\" ]"), true,
+                        "重活闸: 释放时只删记着自己 pid 的令牌")
+        } else {
+            expectEqual(true, false, "重活闸: 读不到 scripts/heavy-gate.sh(路径挪了?)")
+        }
+    }
+
     // ---- 提交信息不许引用 issue ----
     //
     // 「以后提交都不允许引用任何 issue」。为什么是 git hook 而不是写进文档:这个仓的

@@ -29,6 +29,23 @@ heavy_gate_stale() {
   fi
 }
 
+# heavy_gate_take_over_stale <令牌目录> <判陈旧时读到的 pid>:删陈旧令牌。先进接管闸($HEAVY_GATE_DIR/takeover,mkdir 原子),
+# 闸里再读一遍 owner,还是判定时那一个才删(没写 pid 的,目录仍是一分钟前建的);别的排队者刚回收重建过的令牌 pid 变了
+# 或还没写上,不删。闸被占着时返回 1。同 build.sh 的接管闸,见 15 章决策 120。
+heavy_gate_take_over_stale() {
+  local tok="$1" holder="$2" gate="$HEAVY_GATE_DIR/takeover" now
+  if ! mkdir "$gate" 2>/dev/null; then
+    # 闸只拿几毫秒,一分钟前建的是拿着它的进程被 SIGKILL 留下的。
+    if [ -n "$(find "$gate" -maxdepth 0 -mmin +1 2>/dev/null)" ]; then rmdir "$gate" 2>/dev/null || true; fi
+    return 1
+  fi
+  now="$(heavy_gate_owner_pid "$tok")"
+  if [ "$now" = "$holder" ] && heavy_gate_stale "$tok" "$now"; then
+    rm -rf "$tok"
+  fi
+  rmdir "$gate" 2>/dev/null || true
+}
+
 # heavy_gate_install_waiting:有还活着的装机在排队(顺手清掉进程已经不在的登记)。
 heavy_gate_install_waiting() {
   local f pid found=1
@@ -74,11 +91,10 @@ heavy_gate_acquire() {
           fi
           return 0
         fi
-        # 回收前再读一次 pid,跟判陈旧时读到的一样才删:别的排队者可能刚回收、重建了令牌(还没写 owner 时读到空串,
-        # 写上了是它自己的 pid),那就不是陈旧令牌了。同 build.sh 的锁。
+        # 陈旧令牌交给接管函数删,这里不直接删:几个排队者同时判定同一个令牌陈旧时,不加闸会后一个把前一个刚重建的令牌删掉。
         pid="$(heavy_gate_owner_pid "$tok")"
-        if heavy_gate_stale "$tok" "$pid" && [ "$(heavy_gate_owner_pid "$tok")" = "$pid" ]; then
-          rm -rf "$tok"
+        if heavy_gate_stale "$tok" "$pid"; then
+          heavy_gate_take_over_stale "$tok" "$pid" || sleep 0.2
           continue
         fi
         i=$((i + 1))
