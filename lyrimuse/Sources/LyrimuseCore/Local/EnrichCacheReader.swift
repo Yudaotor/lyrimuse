@@ -2314,6 +2314,131 @@ public enum EnrichCacheReader {
         }
     }
 
+    // ---- 本机封面查询的后台预备(12 章决策 97) ----
+
+    /// 已经解码过一版(内存压力让出之后、冷启动还没解时为 false)。
+    public static var hasDecodedEntries: Bool { cachedEntries != nil }
+
+    /// 本机封面查询(`coverURL` / `albumVerifiedCoverURL` / `albumCoverURL`)要用的条目和三份派生索引都在手上。
+    /// 冷启动同步解出来的那一版不带索引(见 `decodeSynchronously`),第一次查询在主线程上整份建。
+    public static var coverLookupsReady: Bool {
+        cachedEntries != nil && cachedLooseIndex != nil && cachedCoverIndex != nil && cachedAlbumCoverIndex != nil
+    }
+
+    /// 在飞的那次预备完成时要叫的回调;nil 表示没有在飞的。
+    private static var coverLookupWaiters: [@MainActor () -> Void]?
+
+    /// 后台备好的一份:条目(只在冷启动从盘上解的那次带)、三份派生索引、旧规则宽松索引,连同各自的记忆表。
+    private struct PreparedCoverLookups: Sendable {
+        let entries: [String: EnrichCacheEntry]?
+        let fingerprints: EnrichIndexDiff.Fingerprints?
+        let derived: DerivedIndexes
+        let legacy: LegacyLooseIndex
+    }
+
+    /// 把本机封面查询要用的东西在后台备好、回主线程一次换上,不在主线程同步整份解码再逐份建索引:还没解过(冷启动)
+    /// 就在后台从盘上解一份,解过但索引没建就只建索引。完成时(换上了,或者期间内容换过代、这份作废)在主线程调 `done`。
+    /// 已经备好、压力让出后正在重建、文件不在、这一版上次就解不开时不起,返回 false,调用方照旧当场查。
+    /// 期间别的调用方要条目照旧走同步解(`loadEntries`),歌词不等它;那样的话只在同一版文件上补上索引,条目不换。
+    public static func prepareCoverLookupsInBackground(_ done: @escaping @MainActor () -> Void) -> Bool {
+        if coverLookupWaiters != nil {
+            coverLookupWaiters?.append(done)
+            return true
+        }
+        guard !coverLookupsReady, !isRebuilding else { return false }
+        let entries = cachedEntries
+        let source = currentSource()
+        if entries == nil {
+            guard source.mtime != nil, !decodeAlreadyFailed(mtime: source.mtime, failedMTime: failedDecodeMTime) else { return false }
+            lastDecodeKick = ProcessInfo.processInfo.systemUptime
+        }
+        coverLookupWaiters = [done]
+        let gen = contentGeneration
+        let url = source.url, mtime = source.mtime, fromIndex = source.isIndex
+        let memos = (loose: looseKeyMemo, title: titleCoverKeyMemo, album: albumCoverKeyMemo, name: nameLooseKeyMemo,
+                     legacy: legacyLooseKeyMemo)
+        Task.detached(priority: .userInitiated) {
+            var decoded: (entries: [String: EnrichCacheEntry], fingerprints: EnrichIndexDiff.Fingerprints?)?
+            if entries == nil, let data = FileIO.read(url, options: .mappedIfSafe),
+               let all = FileIO.decodeJSON([String: EnrichCacheEntry].self, from: data, source: url) {
+                decoded = (all, EnrichIndexDiff.fingerprints(of: data))
+            }
+            let prepared = (entries ?? decoded?.entries).map { all -> PreparedCoverLookups in
+                let derived = buildDerivedIndexes(all, looseKeyMemo: memos.loose, titleCoverKeyMemo: memos.title,
+                                                  albumCoverKeyMemo: memos.album, nameLooseKeyMemo: memos.name)
+                return PreparedCoverLookups(entries: decoded?.entries, fingerprints: decoded?.fingerprints, derived: derived,
+                                            legacy: buildLegacyLooseIndex(all, looseKeyMemo: derived.looseKeyMemo,
+                                                                          legacyLooseKeyMemo: memos.legacy))
+            }
+            await MainActor.run {
+                finishCoverLookups(prepared, generation: gen, decodedFrom: entries == nil ? (mtime, fromIndex) : nil)
+            }
+        }
+        return true
+    }
+
+    /// `decodedFrom`:这次是从盘上解的(冷启动),那一版的 mtime 和是不是索引;只建索引时为 nil。
+    private static func finishCoverLookups(_ prepared: PreparedCoverLookups?, generation gen: Int,
+                                           decodedFrom: (mtime: Date?, fromIndex: Bool)?) {
+        let waiters = coverLookupWaiters ?? []
+        coverLookupWaiters = nil
+        if let prepared {
+            if let entries = prepared.entries, let decodedFrom, cachedEntries == nil, contentGeneration == gen {
+                adopt(entries: entries, mtime: decodedFrom.mtime, fromIndex: decodedFrom.fromIndex,
+                      derived: .replace(prepared.derived), fingerprints: prepared.fingerprints)
+                installLegacyLooseIndex(prepared.legacy)
+            } else if cachedEntries != nil,
+                      decodedFrom.map({ cachedMTime == $0.mtime && cachedFromIndex == $0.fromIndex }) ?? (contentGeneration == gen) {
+                // 期间有人同步解了同一版,或者只建索引而内容没换过代:条目不动,还空着的索引补上
+                let old = (cachedLooseIndex, cachedCoverIndex, cachedAlbumCoverIndex,
+                           looseKeyMemo, titleCoverKeyMemo, albumCoverKeyMemo, nameLooseKeyMemo)
+                if cachedLooseIndex == nil { cachedLooseIndex = prepared.derived.loose }
+                if cachedCoverIndex == nil { cachedCoverIndex = prepared.derived.covers }
+                if cachedAlbumCoverIndex == nil { cachedAlbumCoverIndex = prepared.derived.albumCovers }
+                looseKeyMemo = prepared.derived.looseKeyMemo
+                titleCoverKeyMemo = prepared.derived.titleCoverKeyMemo
+                albumCoverKeyMemo = prepared.derived.albumCoverKeyMemo
+                nameLooseKeyMemo = prepared.derived.nameLooseKeyMemo
+                if cachedLegacyLooseIndex == nil { installLegacyLooseIndex(prepared.legacy) }
+                DispatchQueue.global(qos: .utility).async { withExtendedLifetime(old) {} }
+            }
+        } else if let decodedFrom, cachedEntries == nil, contentGeneration == gen {
+            // 解不开:记下这一版,文件变了才再试;是索引就作废这一版索引,下一次改读主缓存(同 kickBackgroundDecode)
+            failedDecodeMTime = decodedFrom.mtime
+            if decodedFrom.fromIndex, let mtime = decodedFrom.mtime { indexRejectedAt = mtime; failedDecodeMTime = nil }
+        }
+        for done in waiters { done() }
+    }
+
+    private static func installLegacyLooseIndex(_ legacy: LegacyLooseIndex) {
+        let old = (cachedLegacyLooseIndex, legacyLooseKeyMemo)
+        cachedLegacyLooseIndex = legacy.index
+        legacyLooseKeyMemo = legacy.legacyLooseKeyMemo
+        DispatchQueue.global(qos: .utility).async { withExtendedLifetime(old) {} }
+    }
+
+    /// 旧规则形态的宽松索引,连同建的时候用到的记忆表(每条 key 的 looseKey(legacyKey(ofKey:)))。
+    public struct LegacyLooseIndex: Sendable {
+        public let index: [String: String]
+        public let legacyLooseKeyMemo: [String: String]
+    }
+
+    /// 结果跟主线程按需建的那份(`legacyLooseIndex`)逐条相同。纯函数,在后台跑;记忆表带进带出、修剪口径同那条路。
+    /// `looseKeyMemo` 只读,拿来省掉已经算过的 looseKey。
+    public nonisolated static func buildLegacyLooseIndex(_ all: [String: EnrichCacheEntry], looseKeyMemo: [String: String] = [:],
+                                                         legacyLooseKeyMemo: [String: String] = [:]) -> LegacyLooseIndex {
+        var memo = legacyLooseKeyMemo
+        let index = groupIndex(all) { key in
+            if let v = memo[key] { return v }
+            let legacy = EnrichCacheKeys.legacyKey(ofKey: key)
+            let v = looseKeyMemo[legacy] ?? EnrichCacheKeys.looseKey(legacy)
+            memo[key] = v
+            return v
+        }
+        if memo.count > all.count * 2 + 64 { memo = memo.filter { all[$0.key] != nil } }
+        return LegacyLooseIndex(index: index, legacyLooseKeyMemo: memo)
+    }
+
     /// 上一次清空是不是内存压力让出的。
     ///
     /// 冷启动那次必须同步解(没有缓存就什么都查不到,而那一刻屏幕上还没有东西在动);

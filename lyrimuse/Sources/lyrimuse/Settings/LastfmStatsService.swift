@@ -1228,6 +1228,7 @@ final class LastfmStatsService: ObservableObject {
         // 判重记录跟着清 —— 不清的话下一次 refreshLocalCovers 会认为"输入没变"、直接返回,
         // 把刚清空的 localCovers 留在空状态。
         localCoversInputs = nil
+        playCountsAwaitingCoverLookups = []
         playCountUnavailable = []
         playCountUnavailableAt = [:]
         playCountUnavailableStrikes = [:]
@@ -3235,6 +3236,8 @@ final class LastfmStatsService: ObservableObject {
     /// 的落盘在统计页就永远看不到了。先 refreshIfNeeded() 让 Reader 自己推进(空闲态这里
     /// 就是唯一的推进者),再按已解码版本判变化。
     func refreshLocalCoversIfCacheChanged() {
+        // 本机缓存还没解过(冷启动)时 refreshIfNeeded 会在主线程同步整份解码:交给后台,解好再来(见 awaitCoverLookups)
+        if !EnrichCacheReader.hasDecodedEntries, awaitCoverLookups(.cacheAdvance) { return }
         EnrichCacheReader.refreshIfNeeded()
         refreshArtistRegionsIfChanged()
         // 右键链接另外还跟着引擎的平台主页缓存走,放在下面那道判断前面(它自己按输入早退)
@@ -3306,11 +3309,46 @@ final class LastfmStatsService: ObservableObject {
     /// 共用这条主线程,一停就是四个面一起停。
     private var localCoversInputs: (keys: [String], cacheVersion: EnrichCacheReader.ContentVersion)?
 
+    /// 本机缓存的条目或封面索引还没备好时等着补算的几处(12 章决策 97)。
+    private enum CoverLookupWaiter { case recent, charts, appLinks, cacheAdvance }
+    private var coverLookupWaiters = Set<CoverLookupWaiter>()
+    /// 等着的期间要补次数 / 封面的那几批行,备好时按原样重发。
+    private var playCountsAwaitingCoverLookups: [(rows: [RecentTrack], priority: LastfmRateLimiter.Priority)] = []
+
+    /// 本机缓存还没备好(冷启动还没解码,或者同步解完还没建索引):交给后台备(`EnrichCacheReader.prepareCoverLookupsInBackground`),
+    /// 这一次先不查,备好时回来补算,返回 true。不能在这里当场查:第一次查询会在主线程上整份解码、逐份建索引,一停就是好几秒。
+    /// 备不了(文件不在、这一版解不开、压力让出后正在重建)返回 false,照旧当场查。
+    private func awaitCoverLookups(_ waiter: CoverLookupWaiter) -> Bool {
+        if coverLookupWaiters.isEmpty {
+            guard EnrichCacheReader.prepareCoverLookupsInBackground({ [weak self] in self?.coverLookupsPrepared() }) else {
+                return false
+            }
+        }
+        coverLookupWaiters.insert(waiter)
+        return true
+    }
+
+    /// 备好了(或者期间内容换过代、那份作废):等着的几处各补算一次,还没备好的会再交一次。
+    private func coverLookupsPrepared() {
+        let waiters = coverLookupWaiters
+        let counts = playCountsAwaitingCoverLookups
+        coverLookupWaiters = []
+        playCountsAwaitingCoverLookups = []
+        if waiters.contains(.cacheAdvance) { refreshLocalCoversIfCacheChanged() }
+        if waiters.contains(.appLinks) { refreshChartAppLinks() }
+        if waiters.contains(.charts) { refreshChartLocalCovers() }
+        if waiters.contains(.recent) { refreshLocalCovers() }
+        for batch in counts { resolvePlayCounts(for: batch.rows, priority: batch.priority) }
+    }
+
     /// 重算本机封面兜底。覆盖**列表上所有会显示封面的行**:最近记录那一页 +「那年今日」那三首
     /// (只算前者的话,那三首在 coverURL(for:) 里只有第一级可用,碰上占位星就是灰块)。
     ///
     /// 整体替换而不是往里 merge:这张表要跟着"当前屏幕上有哪些行"走,merge 会让它随翻页无界增长。
-    private func refreshLocalCovers() {
+    ///
+    /// 返回 false:本机缓存还没备好、这一次没算(冷启动),备好时自己补算(见 awaitCoverLookups)。
+    @discardableResult
+    private func refreshLocalCovers() -> Bool {
         let rows = recent + (onThisDay?.top.map(\.track) ?? [])
         // 行和缓存都没动 → 算出来跟上次逐字节相同,直接留着(理由见 localCoversInputs)。
         let keys = rows.map {
@@ -3318,8 +3356,10 @@ final class LastfmStatsService: ObservableObject {
         }
         let cacheVersion = EnrichCacheReader.decodedContentVersion
         if let last = localCoversInputs, last.keys == keys, last.cacheVersion == cacheVersion {
-            return
+            return true
         }
+        // 已经显示的封面留着不清,备好时整表换上
+        if !rows.isEmpty, awaitCoverLookups(.recent) { return false }
         localCoversInputs = (keys, cacheVersion)
         var out: [String: URL] = [:]
         var verified: [String: URL] = [:]
@@ -3339,6 +3379,7 @@ final class LastfmStatsService: ObservableObject {
         }
         localCovers = out
         localAlbumVerifiedCovers = verified
+        return true
     }
 
     /// 重算榜单的本机封面兜底。Last.fm 对中文曲库缺图很常见(歌曲没挂专辑、专辑页一张图都没有),而榜单上的歌
@@ -3360,6 +3401,7 @@ final class LastfmStatsService: ObservableObject {
         let keys = wanted.map { w in w.key + w.spellings.dropFirst().map { "\u{1}" + $0.artist + "\u{2}" + $0.name }.joined() }
         let cacheVersion = EnrichCacheReader.decodedContentVersion
         if let last = chartLocalCoversInputs, last.keys == keys, last.cacheVersion == cacheVersion { return }
+        if !wanted.isEmpty, awaitCoverLookups(.charts) { return }
         chartLocalCoversInputs = (keys, cacheVersion)
         var out: [String: URL] = [:]
         for w in wanted {
@@ -3400,6 +3442,8 @@ final class LastfmStatsService: ObservableObject {
         let pagesVersion = FileIO.modificationDate(pagesURL)
         if let last = chartAppLinksInputs, last.keys == keys, last.cacheVersion == cacheVersion,
            last.pagesVersion == pagesVersion, last.artistAliases == localAliasTables.artists { return }
+        // 本机缓存还没解过(冷启动)时第一次查询在主线程同步整份解码:交给后台,解好再来
+        if !EnrichCacheReader.hasDecodedEntries, awaitCoverLookups(.appLinks) { return }
         chartAppLinksInputs = (keys, cacheVersion, pagesVersion, localAliasTables.artists)
         let mbids = ArtistPlatformPages.loadMBIDs()
         let pages = PlatformPagesCache.load()
@@ -3840,8 +3884,12 @@ final class LastfmStatsService: ObservableObject {
     private func resolvePlayCounts(for rows: [RecentTrack], priority: LastfmRateLimiter.Priority = .interactive) {
         guard let cred = credentials else { return }
         // 下面判「封面还缺」要看本机封面兜底:面板都不在屏上时它没跟着缓存重算(见 refreshLocalCoversIfCacheChanged),
-        // 先补齐,免得本机给得出封面的行也去发 getinfo。行和缓存都没变时只是一次比较。
-        refreshLocalCovers()
+        // 先补齐,免得本机给得出封面的行也去发 getinfo。行和缓存都没变时只是一次比较。本机缓存还没备好(冷启动)就等
+        // 备好再判,备好时按原样重发。
+        guard refreshLocalCovers() else {
+            playCountsAwaitingCoverLookups.append((rows, priority))
+            return
+        }
         var seen = Set<String>()
         let now = Date()
         let missing = rows.compactMap { r -> (key: String, artist: String, title: String,

@@ -2879,6 +2879,69 @@ func runLastfmTests() {
                     true, "派生索引(契约): 换上的就是后台建的那三份,不在主线程作废重建")
     }
 
+    // ---- 冷启动补本机封面不在主线程整份解码、建索引(12 章决策 97) ----
+    do {
+        typealias R = EnrichCacheReader
+        func entry(_ json: String) -> EnrichCacheEntry {
+            try! JSONDecoder().decode(EnrichCacheEntry.self, from: Data(json.utf8))
+        }
+        let all: [String: EnrichCacheEntry] = [
+            "陈奕迅|孤独探戈 (Live)|Get A Life": entry("{\"lyrics\":\"x\",\"lyrics_score\":80}"),
+            "陈奕迅|孤独探戈|The Easy Ride": entry("{\"lyrics\":\"x\",\"lyrics_score\":90}"),
+            "陳奕迅|孤獨探戈|The Easy Ride": entry("{\"lyrics\":\"x\",\"lyrics_score\":95}"),
+            "K/DA|POP/STARS|POP/STARS": entry("{\"lyrics\":\"x\"}"),
+        ]
+        let expected = R.groupIndex(all) { EnrichCacheKeys.looseKey(EnrichCacheKeys.legacyKey(ofKey: $0)) }
+        let built = R.buildLegacyLooseIndex(all)
+        expectEqual(built.index, expected, "旧规则宽松索引: 后台建的跟主线程按需建的逐条相同")
+        expectEqual(built.legacyLooseKeyMemo.count, all.count, "旧规则宽松索引: 每条 key 的旧规则宽松 key 都记下")
+        let again = R.buildLegacyLooseIndex(all, looseKeyMemo: R.buildDerivedIndexes(all).looseKeyMemo,
+                                            legacyLooseKeyMemo: built.legacyLooseKeyMemo)
+        expectEqual(again.index, expected, "旧规则宽松索引: 带着记忆表再建,结果一样")
+    }
+    do {
+        let base = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+        let service = (try? String(contentsOf: base.appendingPathComponent("lyrimuse/Settings/LastfmStatsService.swift"),
+                                   encoding: .utf8)) ?? ""
+        let reader = (try? String(contentsOf: base.appendingPathComponent("LyrimuseCore/Local/EnrichCacheReader.swift"),
+                                  encoding: .utf8)) ?? ""
+        expectEqual(service.isEmpty || reader.isEmpty, false, "冷启动补封面(契约): 读到源码")
+        let local = sourceBody("private func refreshLocalCovers() -> Bool", in: service)
+        let wait = local.range(of: "if !rows.isEmpty, awaitCoverLookups(.recent) { return false }")
+        let lookup = local.range(of: "EnrichCacheReader.coverURL(")
+        expectEqual(wait != nil && lookup != nil && wait!.lowerBound < lookup!.lowerBound, true,
+                    "冷启动补封面(契约): 读回快照后补封面先看本机缓存备好没有,没备好交给后台、不当场逐行查")
+        let charts = sourceBody("private func refreshChartLocalCovers()", in: service)
+        let chartWait = charts.range(of: "if !wanted.isEmpty, awaitCoverLookups(.charts) { return }")
+        let chartLookup = charts.range(of: "EnrichCacheReader.coverURL(")
+        expectEqual(chartWait != nil && chartLookup != nil && chartWait!.lowerBound < chartLookup!.lowerBound, true,
+                    "冷启动补封面(契约): 榜单本机封面同样等备好")
+        expectEqual(sourceHas(service, "if !EnrichCacheReader.hasDecodedEntries, awaitCoverLookups(.cacheAdvance) { return }\n        EnrichCacheReader.refreshIfNeeded()"),
+                    true, "冷启动补封面(契约): 5 秒那一拍不在冷启动时让 refreshIfNeeded 在主线程同步解码")
+        expectEqual(sourceHas(service, "if !EnrichCacheReader.hasDecodedEntries, awaitCoverLookups(.appLinks) { return }\n        chartAppLinksInputs ="),
+                    true, "冷启动补封面(契约): 右键链接同样等解好")
+        expectEqual(sourceHas(sourceBody("private func awaitCoverLookups(_ waiter: CoverLookupWaiter) -> Bool", in: service),
+                              "guard EnrichCacheReader.prepareCoverLookupsInBackground({ [weak self] in self?.coverLookupsPrepared() }) else {"),
+                    true, "冷启动补封面(契约): 交给读取器在后台备")
+        let prepared = sourceBody("private func coverLookupsPrepared()", in: service)
+        expectEqual(["refreshLocalCoversIfCacheChanged()", "refreshChartAppLinks()", "refreshChartLocalCovers()", "refreshLocalCovers()",
+                     "resolvePlayCounts(for: batch.rows, priority: batch.priority)"].allSatisfy { prepared.contains($0) }, true,
+                    "冷启动补封面(契约): 备好时等着的几处都补算,等着的补次数原样重发")
+        let prepare = sourceBody("public static func prepareCoverLookupsInBackground(", in: reader)
+        let detached = prepare.range(of: "Task.detached(priority: .userInitiated) {")
+        let decode = prepare.range(of: "FileIO.decodeJSON([String: EnrichCacheEntry].self, from: data, source: url)")
+        let indexes = prepare.range(of: "buildLegacyLooseIndex(all,")
+        expectEqual(detached != nil && decode != nil && indexes != nil && detached!.lowerBound < decode!.lowerBound
+                        && decode!.lowerBound < indexes!.lowerBound, true,
+                    "冷启动补封面(契约): 整份解码和建索引都在后台那一段里")
+        expectEqual(prepare.contains("decodeSynchronously()") || prepare.contains("loadEntries()") || prepare.contains("looseIndex(in:")
+                        || prepare.contains("coverByArtistTitle()"), false,
+                    "冷启动补封面(契约): 预备不在主线程解码、不走按需建索引那几条")
+        let finish = sourceBody("private static func finishCoverLookups(", in: reader)
+        expectEqual(sourceHas(finish, "if let entries = prepared.entries, let decodedFrom, cachedEntries == nil, contentGeneration == gen {\n                adopt(entries: entries, mtime: decodedFrom.mtime, fromIndex: decodedFrom.fromIndex,\n                      derived: .replace(prepared.derived), fingerprints: prepared.fingerprints)\n                installLegacyLooseIndex(prepared.legacy)"),
+                    true, "冷启动补封面(契约): 还是冷的才采纳,连同后台建好的索引一起换上")
+    }
+
     // ---- 本机封面兜底只在有面板在屏上时跟着缓存重算(契约) ----
     // 每行一次缓存查询,缓存一推进还要重建索引,一轮几十毫秒主线程;5 秒的定时器一看到缓存推进就跑一轮,跟歌词滚动抢。
     do {
@@ -2894,7 +2957,7 @@ func runLastfmTests() {
                     true, "本机封面: 最近听过面板露出来那一刻补算")
         expectEqual(sourceHas(service, "refreshChartAppLinks()\n            refreshLocalCovers()\n            refreshChartLocalCovers()"),
                     true, "本机封面: 统计区露出来那一刻两份都补算")
-        expectEqual(sourceHas(service, "先补齐,免得本机给得出封面的行也去发 getinfo。行和缓存都没变时只是一次比较。\n        refreshLocalCovers()"),
+        expectEqual(sourceHas(service, "备好再判,备好时按原样重发。\n        guard refreshLocalCovers() else {\n            playCountsAwaitingCoverLookups.append((rows, priority))\n            return\n        }"),
                     true, "本机封面: 判「封面还缺」之前先补齐 —— 不然本机给得出封面的行也去发 getinfo,白烧限速额度")
         expectEqual(recent.contains(".onAppear { stats.setLocalCoversConsumer(coverConsumerID, onScreen: true) }"), true,
                     "本机封面: 最近听过面板挂上时报给服务")
