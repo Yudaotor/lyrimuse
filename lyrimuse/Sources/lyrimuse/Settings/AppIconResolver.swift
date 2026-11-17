@@ -180,6 +180,9 @@ enum AppIconResolver {
 /// 别在主线程上取 App 图标:`NSWorkspace.icon(forFile:)`、`NSApplication.applicationIconImage` 进程里第一次取,
 /// 以及按一个没画过的尺寸第一次画系统给的图标,都要同步等 iconservicesagent,刚登录、系统还忙时能卡住好几秒
 /// (14 章决策 211)。
+///
+/// 读在自己的 `loadQueue` 上(最多 2 个并发),别改成 `Task.detached`:那几次同步等 iconservicesagent 会占住 Swift 并发的
+/// 协作线程(总数等于核数),勾了很多播放器时启动预热能把它们全占满,别处的后台读跟着排队。
 @MainActor
 final class AppIconCache: ObservableObject {
     static let shared = AppIconCache()
@@ -207,18 +210,27 @@ final class AppIconCache: ObservableObject {
     @Published private(set) var icons: [String: NSImage] = [:]
     @Published private(set) var own: NSImage?
     private var missingSince: [String: Date] = [:]
-    private var reads: [String: SingleFlightBackgroundRead<NSImage?>] = [:]
-    private let ownRead = SingleFlightBackgroundRead<NSImage?>()
+    /// 排着或正在读的那一次,按 bundle id;自家图标的 key 是 `ownKey`。
+    private var inFlight: [String: Operation] = [:]
     private var ownRequested = false
+    private static let ownKey = "lyrimuse.own-icon"
+
+    private static let loadQueue: OperationQueue = {
+        let queue = OperationQueue()
+        queue.name = "lyrimuse.app-icons"
+        queue.maxConcurrentOperationCount = 2
+        queue.qualityOfService = .utility
+        return queue
+    }()
 
     func lookup(bundleID: String) -> Lookup {
         guard !bundleID.isEmpty else { return .missing }
         if let hit = icons[bundleID] { return .ready(hit) }
         if let since = missingSince[bundleID] {
-            if Date().timeIntervalSince(since) > Self.missingRecheckInterval { load(bundleID, priority: .utility) }
+            if Date().timeIntervalSince(since) > Self.missingRecheckInterval { load(bundleID, priority: .low) }
             return .missing
         }
-        load(bundleID, priority: .userInitiated)
+        load(bundleID, priority: .veryHigh)
         return .pending
     }
 
@@ -234,15 +246,15 @@ final class AppIconCache: ObservableObject {
     /// Lyrimuse 自己的图标;还在读(或包里没有图标)时给占位。
     var ownIcon: NSImage {
         if let own { return own }
-        loadOwnIcon(priority: .userInitiated)
+        loadOwnIcon(priority: .veryHigh)
         return Self.pendingPlaceholder
     }
 
-    /// 启动后预热:Lyrimuse 自己的图标、`bundleIDs` 里的播放器。已经有了或正在读的不重派。
+    /// 启动后预热:Lyrimuse 自己的图标、`bundleIDs` 里的播放器。已经有了或正在读的不重派;排在视图当场要的后面。
     func prefetch(bundleIDs: [String]) {
-        loadOwnIcon(priority: .utility)
+        loadOwnIcon(priority: .normal)
         for bundleID in bundleIDs where !bundleID.isEmpty && icons[bundleID] == nil && missingSince[bundleID] == nil {
-            load(bundleID, priority: .utility)
+            load(bundleID, priority: .low)
         }
     }
 
@@ -254,29 +266,56 @@ final class AppIconCache: ObservableObject {
         return ids.isEmpty ? [PlaybackPlayer.appleMusic.bundleIdentifier] : ids
     }
 
-    private func load(_ bundleID: String, priority: TaskPriority) {
-        let read = reads[bundleID] ?? SingleFlightBackgroundRead<NSImage?>()
-        reads[bundleID] = read
-        read.start(priority: priority, read: { AppIconResolver.loadInstalledIcon(bundleID: bundleID) }) { [weak self] image in
-            guard let self else { return }
+    private func load(_ bundleID: String, priority: Operation.QueuePriority) {
+        enqueue(key: bundleID, priority: priority, read: { AppIconResolver.loadInstalledIcon(bundleID: bundleID) }) { cache, image in
             if let image {
-                self.missingSince[bundleID] = nil
-                self.icons[bundleID] = image
+                cache.missingSince[bundleID] = nil
+                cache.icons[bundleID] = image
             } else {
-                self.missingSince[bundleID] = Date()
+                cache.missingSince[bundleID] = Date()
             }
         }
     }
 
-    private func loadOwnIcon(priority: TaskPriority) {
-        guard !ownRequested else { return }
+    private func loadOwnIcon(priority: Operation.QueuePriority) {
+        if ownRequested {
+            if let queued = inFlight[Self.ownKey], queued.queuePriority.rawValue < priority.rawValue { queued.queuePriority = priority }
+            return
+        }
         ownRequested = true
-        ownRead.start(priority: priority, read: {
+        enqueue(key: Self.ownKey, priority: priority, read: {
             AppIconResolver.bundledOwnIcon().map { AppIconResolver.rasterizedRepresentations(of: $0, maxPixels: 512) }
-        }) { [weak self] image in
-            if let image { self?.own = image }
+        }) { cache, image in
+            if let image { cache.own = image }
         }
     }
+
+    /// 在 `loadQueue` 上跑 `read`,回主线程交给 `apply`。同一个 key 已经排着就不重派,只把优先级提上去(视图当场要的插到预热前面)。
+    private func enqueue(key: String, priority: Operation.QueuePriority, read: @escaping @Sendable () -> NSImage?,
+                         apply: @escaping @MainActor (AppIconCache, NSImage?) -> Void) {
+        if let queued = inFlight[key] {
+            if queued.queuePriority.rawValue < priority.rawValue { queued.queuePriority = priority }
+            return
+        }
+        let operation = BlockOperation {
+            let image = LoadedIcon(image: read())
+            DispatchQueue.main.async {
+                MainActor.assumeIsolated {
+                    let cache = AppIconCache.shared
+                    cache.inFlight[key] = nil
+                    apply(cache, image.image)
+                }
+            }
+        }
+        operation.queuePriority = priority
+        inFlight[key] = operation
+        Self.loadQueue.addOperation(operation)
+    }
+}
+
+/// 后台读好的图标交回主线程:只在读的那条线程和主线程上各碰一次,不并发访问。
+private struct LoadedIcon: @unchecked Sendable {
+    let image: NSImage?
 }
 
 /// Lyrimuse 自己的图标,已经 `.resizable()`,外面照旧加 frame。读好之前那一格空着。

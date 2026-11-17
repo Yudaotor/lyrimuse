@@ -625,14 +625,20 @@ func runMainThreadIOTests() {
                               "AppIconCache.shared.icon(forBundleID: bundleID)")
                         && !sourceHas(sourceBody("static func icon(forBundleID bundleID: String) -> NSImage? {", in: resolverFile), "NSWorkspace"), true,
                     "App 图标(契约): AppIconResolver.icon(forBundleID:) 只读缓存")
-        expectEqual(sourceHas(sourceBody("private func load(_ bundleID: String, priority: TaskPriority) {", in: cache),
-                              "read.start(priority: priority, read: { AppIconResolver.loadInstalledIcon(bundleID: bundleID) }) { [weak self] image in"), true,
+        expectEqual(sourceHas(sourceBody("private func load(_ bundleID: String, priority: Operation.QueuePriority) {", in: cache),
+                              "enqueue(key: bundleID, priority: priority, read: { AppIconResolver.loadInstalledIcon(bundleID: bundleID) }) { cache, image in"), true,
                     "App 图标(契约): 播放器图标在后台读,回主线程才放进缓存")
-        expectEqual(sourceHas(sourceBody("private func loadOwnIcon(priority: TaskPriority) {", in: cache),
-                              "ownRead.start(priority: priority, read: {\nAppIconResolver.bundledOwnIcon().map { AppIconResolver.rasterizedRepresentations(of: $0, maxPixels: 512) }"), true,
+        expectEqual(sourceHas(sourceBody("private func loadOwnIcon(priority: Operation.QueuePriority) {", in: cache),
+                              "enqueue(key: Self.ownKey, priority: priority, read: {\nAppIconResolver.bundledOwnIcon().map { AppIconResolver.rasterizedRepresentations(of: $0, maxPixels: 512) }"), true,
                     "App 图标(契约): Lyrimuse 自己的图标从包里的 icns 在后台读")
+        let enqueue = sourceBody("private func enqueue(key: String, priority: Operation.QueuePriority,", in: cache)
+        expectEqual(sourceHas(enqueue, "let operation = BlockOperation {\nlet image = LoadedIcon(image: read())\nDispatchQueue.main.async {")
+                        && sourceHas(enqueue, "Self.loadQueue.addOperation(operation)")
+                        && sourceHas(cache, "queue.maxConcurrentOperationCount = 2")
+                        && !sourceHas(cache, "Task.detached") && !sourceHas(cache, "SingleFlightBackgroundRead"), true,
+                    "App 图标(契约): 在自己最多 2 个并发的队列上读,不占 Swift 并发的协作线程(同步等 iconservicesagent 会把它们占满)")
         let ownGetter = sourceBody("var ownIcon: NSImage {", in: cache)
-        expectEqual(sourceHas(ownGetter, "if let own { return own }\nloadOwnIcon(priority: .userInitiated)\nreturn Self.pendingPlaceholder"), true,
+        expectEqual(sourceHas(ownGetter, "if let own { return own }\nloadOwnIcon(priority: .veryHigh)\nreturn Self.pendingPlaceholder"), true,
                     "App 图标(契约): 自家图标还没读好时给占位,不在主线程上现读")
         expectEqual(sourceHas(sourceBody("struct LyrimuseAppIconImage: View {", in: resolverFile),
                               "@ObservedObject private var cache = AppIconCache.shared"), true,
