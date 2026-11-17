@@ -46,8 +46,7 @@ struct SoftwareUpdatePage: View {
     private var statusCard: some View {
         SettingsCard(cornerRadius: 18) {
             HStack(alignment: .center, spacing: 14) {
-                Image(nsImage: NSApplication.shared.applicationIconImage)
-                    .resizable()
+                LyrimuseAppIconImage()
                     .frame(width: 52, height: 52)
                 VStack(alignment: .leading, spacing: 4) {
                     Text(headline)

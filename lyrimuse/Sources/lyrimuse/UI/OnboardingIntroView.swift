@@ -267,8 +267,7 @@ private struct OnboardingIntroFrame: View {
             OnboardingIslandGlass(shape: shape, size: size, coverWidth: layout.islandTextWidth + 56)
             VStack(spacing: 0) {
                 HStack(spacing: 0) {
-                    Image(nsImage: NSApp.applicationIconImage)
-                        .resizable()
+                    LyrimuseAppIconImage()
                         .frame(width: 17, height: 17)
                         .clipShape(RoundedRectangle(cornerRadius: 4, style: .continuous))
                     Spacer(minLength: 0)
@@ -318,8 +317,7 @@ private struct OnboardingIntroFrame: View {
         return ZStack {
             // 图标自带透明边,落地时把底下的光球底色一起褪掉,只留图标本身。
             shape.fill(OnboardingIntroPalette.orbFill).opacity(1 - state.icon)
-            Image(nsImage: NSApp.applicationIconImage)
-                .resizable()
+            LyrimuseAppIconImage()
                 .opacity(state.icon)
         }
         .frame(width: state.diameter, height: state.diameter)
@@ -537,8 +535,7 @@ private struct OnboardingIslandGlass: View {
     let coverWidth: CGFloat
 
     var body: some View {
-        Image(nsImage: NSApp.applicationIconImage)
-            .resizable()
+        LyrimuseAppIconImage()
             .scaledToFill()
             .frame(width: coverWidth * 1.3, height: coverWidth * 0.5)
             .blur(radius: 16)

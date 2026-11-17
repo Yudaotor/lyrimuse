@@ -59,6 +59,8 @@ struct NotchEarPlayerIcon: View {
     let alignment: Alignment
     let trackKey: String
     var sourceKey: String? = NotchEarPlayerIcon.cacheKey
+    /// 图标在后台读好时跟着重画(`AppIconCache`)。
+    @ObservedObject private var appIcons = AppIconCache.shared
 
     var body: some View {
         let coordinator = PlaybackCoordinator.shared

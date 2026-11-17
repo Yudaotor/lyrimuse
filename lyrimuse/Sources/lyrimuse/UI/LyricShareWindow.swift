@@ -19,6 +19,8 @@ struct LyricShareWindow: View {
     @State private var rendered: (key: RenderKey, image: NSImage?)?
     @State private var snapshotGeneration = 0
     @ObservedObject private var languageSettings = AppLanguageObserver.shared
+    /// 署名里的 Lyrimuse 图标在后台读,读好之前出的图那一格是空的;读好时 `RenderKey` 变了,重画一张。
+    @ObservedObject private var appIcons = AppIconCache.shared
 
     private struct RenderKey: Equatable {
         let generation: Int
@@ -26,11 +28,13 @@ struct LyricShareWindow: View {
         let showsTranslation: Bool
         let showsRomanization: Bool
         let showsBrand: Bool
+        let brandIconLoaded: Bool
     }
 
     private var renderKey: RenderKey {
         RenderKey(generation: snapshotGeneration, selection: selection, showsTranslation: showsTranslation,
-                  showsRomanization: showsRomanization, showsBrand: showsBrand)
+                  showsRomanization: showsRomanization, showsBrand: showsBrand,
+                  brandIconLoaded: showsBrand && appIcons.own != nil)
     }
 
     struct Snapshot {
@@ -353,8 +357,7 @@ struct LyricShareCardView: View {
         HStack(spacing: 6) {
             Spacer()
             if card.showsBrand {
-                Image(nsImage: NSApp.applicationIconImage)
-                    .resizable()
+                LyrimuseAppIconImage()
                     .frame(width: 22, height: 22)
                     .opacity(0.85)
                 Text("Lyrimuse")

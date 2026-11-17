@@ -473,6 +473,8 @@ struct NotchTransientHost<Fallback: View>: View {
 /// 跟图标的浅色边角分开(卡片底本来就是纯黑,黑边等于一圈留白)。
 struct NotchIdleEarIconHost<Fallback: View>: View {
     @ObservedObject private var prompt: NotchUnknownPlayerPrompt
+    /// 图标在后台读好时跟着重画(`AppIconCache`)。
+    @ObservedObject private var appIcons = AppIconCache.shared
     let side: CGFloat
     let scale: CGFloat
     let alignment: Alignment

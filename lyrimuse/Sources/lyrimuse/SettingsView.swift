@@ -902,6 +902,8 @@ private struct LyricsWordFormatRow: View {
 
 private struct LyricsSettingsTab: View {
     @ObservedObject private var settings = AppSettings.shared
+    /// 图标在后台读好时跟着重画(`AppIconCache`)。
+    @ObservedObject private var appIcons = AppIconCache.shared
     // local 在这个页面里只当"写目标"用(切换开关时顺手同步给它),这个 View 的 body
     // 从来不读它的 @Published 数据渲染任何东西——声明成 @ObservedObject 会让这个页面
     // 在本地播放每次轮询(~2秒一次)更新歌曲信息时跟着白白重渲染一次。用普通引用
@@ -5308,6 +5310,8 @@ private struct YouTubeMusicAutoSkipRow: View {
 
 private struct PlayerSettingsTab: View {
     @StateObject private var stores = PlayerTabStores()
+    /// 图标在后台读好时跟着重画(`AppIconCache`)。
+    @ObservedObject private var appIcons = AppIconCache.shared
     /// SettingsView 根上注入的那一份,引擎服务状态从它这里拿(见引擎卡片的 onReceive)。
     @EnvironmentObject private var playerHealth: PlayerHealthMonitor
     // 「自动化」权限的状态/请求全在这个共享模型里,引导页那一步用的是同一个实例 ——
@@ -8357,9 +8361,6 @@ private struct AboutSettingsTab: View {
     /// 上面那个反馈态的失效令牌(同 iCloudJustSavedToken):1.6 秒内连点两下时,第一次的计时到点不把第二次的提前收掉。
     @State private var versionCopiedToken = 0
 
-    // CFBundleIconFile 指向 AppIcon.icns(build.sh 生成的 .app 包本身自带),直接读系统认的这份
-    // "当前 App 图标",不用再手动拼一遍 Bundle 里的文件路径。
-    private var appIcon: NSImage { NSApplication.shared.applicationIconImage }
     private var versionString: String { SparkleUpdaterManager.appVersionString }
 
     var body: some View {
@@ -8393,8 +8394,7 @@ private struct AboutSettingsTab: View {
 
     private var hero: some View {
         VStack(spacing: 8) {
-            Image(nsImage: appIcon)
-                .resizable()
+            LyrimuseAppIconImage()
                 .frame(width: 96, height: 96)
                 // 图标本身带圆角和描边,这里只给一层软阴影让它从底色上"抬起来";不加发光 / 渐变底 ——
                 // 图标的粉色已经够跳,再铺一层就腻了。

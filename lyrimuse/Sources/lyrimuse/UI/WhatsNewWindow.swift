@@ -33,8 +33,7 @@ struct WhatsNewWindow: View {
 
     private var header: some View {
         HStack(spacing: 14) {
-            Image(nsImage: NSApp.applicationIconImage)
-                .resizable()
+            LyrimuseAppIconImage()
                 .frame(width: 48, height: 48)
                 .accessibilityHidden(true)
             Text(String(format: L10n.t("%@ 更新内容"), version))

@@ -7,6 +7,8 @@ import SwiftUI
 /// 的标红),歌词不是完全一致时多一块逐行对比,认成同一首的依据,拆开 / 恢复合并;选中当前这条时是这首歌的概况(18 章决策 43、61)。拆开、恢复合并都交给引擎(EnrichCacheStore.splitSong /
 /// unsplitSong),列表数据见 SongVersions。
 struct SongVersionsSheet: View {
+    /// 图标在后台读好时跟着重画(`AppIconCache`)。
+    @ObservedObject private var appIcons = AppIconCache.shared
     let summary: EnrichCacheStore.Summary
     /// 关掉弹窗、在列表里选中这一条。
     let onOpen: (String) -> Void

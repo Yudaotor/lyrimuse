@@ -183,6 +183,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         AppSettingsMirror.write()
         // 备份文件夹贴上 App 图标(仅在它已经存在时),让它在 Finder 里认得出来。查目录、写图标都碰磁盘(iCloud 目录可能很慢),放后台。
         Task.detached(priority: .utility) { ICloudConfigStore.ensureFolderIconIfPresent() }
+        // App 图标在后台预热(主线程上第一次取要等 iconservicesagent,见 AppIconCache)。
+        Task.detached(priority: .utility) {
+            let bundleIDs = AppIconCache.prefetchBundleIDs()
+            await AppIconCache.shared.prefetch(bundleIDs: bundleIDs)
+        }
         // 封面/头像全走 AsyncImage(内部用 URLSession.shared),它吃的是 URLCache.shared,
         // 默认容量小得可怜 —— 最近记录展开到 100 行再切个 tab 回来,九十多张封面全部
         // 重新下载。给共享缓存一个像样的容量,磁盘部分跨启动依然有效。

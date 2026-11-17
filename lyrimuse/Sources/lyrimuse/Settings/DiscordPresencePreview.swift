@@ -13,6 +13,8 @@ struct DiscordPresencePreview: View {
     @ObservedObject private var discord = DiscordPresenceController.shared
     @ObservedObject private var avatars = DiscordAvatarStore.shared
     @ObservedObject private var settings = AppSettings.shared
+    /// 图标在后台读好时跟着重画(`AppIconCache`)。
+    @ObservedObject private var appIcons = AppIconCache.shared
     @Environment(\.previewHostVisible) private var previewHostVisible
 
     private enum Palette {
@@ -474,8 +476,7 @@ struct DiscordPresencePreview: View {
                 .scaledToFill()
                 .scaleEffect(1.22)
         } else {
-            Image(nsImage: NSApp.applicationIconImage)
-                .resizable()
+            LyrimuseAppIconImage()
                 .scaledToFill()
                 .scaleEffect(1.22)
         }
@@ -586,7 +587,7 @@ private struct PreviewLink<Label: View>: View {
 func discordApplicationIcon(_ application: DiscordPresence.Application) -> NSImage? {
     let player: PlaybackPlayer
     switch application {
-    case .lyrimuse: return NSApp.applicationIconImage
+    case .lyrimuse: return AppIconCache.shared.ownIcon
     case .youtubeMusic: return WebPlatformIcon.image("youtubeMusic")
     case .appleMusic: player = .appleMusic
     case .spotify: player = .spotify

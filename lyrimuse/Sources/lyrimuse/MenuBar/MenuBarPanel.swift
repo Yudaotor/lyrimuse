@@ -681,6 +681,8 @@ private struct MenuBarPanelView: View {
     // 悬浮窗凭空建出来)。动作闭包里可以碰 —— 那是用户主动要求。
     // 不整对象订阅 PlaybackCoordinator/AppSettings —— 见 PanelPlayback 的注释。
     @StateObject private var playback = PanelPlayback()
+    /// 图标在后台读好时跟着重画(`AppIconCache`)。
+    @ObservedObject private var appIcons = AppIconCache.shared
     let close: () -> Void
     // 长按 / 右键某个能翻面的格子之后,面板下半部分换成它自己的快捷设置;
     // nil = 正常的钮块网格。见 MenuBarPanelQuickSettings.swift。
@@ -732,7 +734,6 @@ private struct MenuBarPanelView: View {
         MenuBarPanelDebugState.editing = editing
     }
     /// 停播卡「打开」键上那枚播放器图标(见 idleActionButton)。按播放器取一次,不在 body 里现查。
-    @State private var idlePlayerIcon: NSImage?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     /// 封面小图按像素预先重采样要知道显示倍率(见 coverView)。
     @Environment(\.displayScale) private var displayScale
@@ -1515,7 +1516,7 @@ private struct MenuBarPanelView: View {
                     if canResume {
                         Image(systemName: "play.fill")
                             .font(.system(size: 10.5, weight: .semibold))
-                    } else if let idlePlayerIcon {
+                    } else if let idlePlayerIcon = AppIconResolver.icon(forBundleID: player.bundleIdentifier) {
                         Image(nsImage: idlePlayerIcon)
                             .resizable()
                             .frame(width: prominent ? 15 : 14, height: prominent ? 15 : 14)
@@ -1534,9 +1535,6 @@ private struct MenuBarPanelView: View {
             .fixedSize()
             .help(canResume ? L10n.t("继续播放") : String(format: L10n.t("打开 %@"), name))
             .accessibilityLabel(canResume ? L10n.t("继续播放") : String(format: L10n.t("打开 %@"), name))
-        }
-        .task(id: player) {
-            idlePlayerIcon = AppIconResolver.icon(forBundleID: player.bundleIdentifier)
         }
     }
 

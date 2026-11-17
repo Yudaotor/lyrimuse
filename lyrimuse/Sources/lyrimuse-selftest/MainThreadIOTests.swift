@@ -594,20 +594,83 @@ func runMainThreadIOTests() {
         print("\n== 主线程 I/O:灵动岛自家图标在后台读(05 章决策 154) ==")
         let icon = app("UI/NotchIdleAppIcon.swift")
         let own = sourceBody("final class NotchOwnAppIcon: ObservableObject {", in: icon)
-        expectEqual(sourceHas(own, "read.start(priority: .userInitiated, read: {\nSelf.bundledIcon().flatMap { NotchIdleAppIcon.rasterize($0, pixelSide: pixelSide) }")
+        expectEqual(sourceHas(own, "read.start(priority: .userInitiated, read: {\nAppIconResolver.bundledOwnIcon().flatMap { NotchIdleAppIcon.rasterize($0, pixelSide: pixelSide) }")
                         && sourceHas(own, "if let image { self?.bitmaps[pixelSide] = image }"), true,
                     "灵动岛自家图标(契约): 包里的图标在后台读、光栅化,回主线程才放进缓存")
         expectEqual(sourceHas(sourceBody("func bitmap(pixelSide: Int) -> CGImage? {", in: own),
                               "if let hit = bitmaps[pixelSide] { return hit }\nguard pixelSide > 0, reads[pixelSide] == nil else { return nil }"), true,
                     "灵动岛自家图标(契约): 每个像素边长只派一次后台读,读不出来不反复派")
-        expectEqual(sourceHas(sourceBody("nonisolated static func bundledIcon() -> NSImage? {", in: icon),
+        expectEqual(sourceHas(sourceBody("nonisolated static func bundledOwnIcon() -> NSImage? {", in: app("Settings/AppIconResolver.swift")),
                               "Bundle.main.url(forResource: \"AppIcon\", withExtension: \"icns\")")
                         && sourceHas(repoText("lyrimuse/build.sh"), "cp AppIcon.icns \"$APP_DIR/Contents/Resources/AppIcon.icns\""), true,
                     "灵动岛自家图标(契约): 读的是 build.sh 拷进包里的那份 AppIcon.icns")
         expectEqual(sourceHas(sourceBody("func idleAppIcon(alignment: Alignment) -> some View {", in: app("UI/NotchLyricsView+TopRow.swift")),
                               "NotchOwnAppIconImage(pixelSide: Int((side * scale).rounded()), scale: scale)"), true,
                     "灵动岛自家图标(契约): 没有曲目时左耳那枚走后台读的图标")
-        expectEqual(appCodeOccurrences(of: "applicationIconImage").filter { $0.contains("/UI/Notch") }, [],
-                    "灵动岛自家图标(契约): 灵动岛不在主线程上读 applicationIconImage(第一次读要同步等 iconservicesagent)")
+    }
+
+    do {
+        print("\n== 主线程 I/O:App 图标全走后台读的缓存(14 章决策 211) ==")
+        let resolverFile = app("Settings/AppIconResolver.swift")
+        let cache = sourceBody("final class AppIconCache: ObservableObject {", in: resolverFile)
+        // 取图标的两个系统接口:进程里第一次取、按没画过的尺寸第一次画,都要同步等 iconservicesagent。
+        expectEqual(appCodeOccurrences(of: "applicationIconImage") + appCodeOccurrences(of: "applicationIconName"), [],
+                    "App 图标(契约): App 代码里不再读 NSApplication.applicationIconImage / NSImage.applicationIconName")
+        expectEqual(appCodeOccurrences(of: "icon(forFile:"), ["lyrimuse/Settings/AppIconResolver.swift"],
+                    "App 图标(契约): NSWorkspace.icon(forFile:) 只在 AppIconResolver 里取")
+        let installed = sourceBody("nonisolated static func loadInstalledIcon(bundleID: String) -> NSImage? {", in: resolverFile)
+        expectEqual(sourceHas(installed, "rasterizedRepresentations(of: NSWorkspace.shared.icon(forFile: url.path), maxPixels: 256)"), true,
+                    "App 图标(契约): 系统给的图标在读它的那条后台线程上逐张画成位图,主线程画它不再找 iconservicesagent")
+        expectEqual(sourceHas(sourceBody("static func icon(forBundleID bundleID: String) -> NSImage? {", in: resolverFile),
+                              "AppIconCache.shared.icon(forBundleID: bundleID)")
+                        && !sourceHas(sourceBody("static func icon(forBundleID bundleID: String) -> NSImage? {", in: resolverFile), "NSWorkspace"), true,
+                    "App 图标(契约): AppIconResolver.icon(forBundleID:) 只读缓存")
+        expectEqual(sourceHas(sourceBody("private func load(_ bundleID: String, priority: TaskPriority) {", in: cache),
+                              "read.start(priority: priority, read: { AppIconResolver.loadInstalledIcon(bundleID: bundleID) }) { [weak self] image in"), true,
+                    "App 图标(契约): 播放器图标在后台读,回主线程才放进缓存")
+        expectEqual(sourceHas(sourceBody("private func loadOwnIcon(priority: TaskPriority) {", in: cache),
+                              "ownRead.start(priority: priority, read: {\nAppIconResolver.bundledOwnIcon().map { AppIconResolver.rasterizedRepresentations(of: $0, maxPixels: 512) }"), true,
+                    "App 图标(契约): Lyrimuse 自己的图标从包里的 icns 在后台读")
+        let ownGetter = sourceBody("var ownIcon: NSImage {", in: cache)
+        expectEqual(sourceHas(ownGetter, "if let own { return own }\nloadOwnIcon(priority: .userInitiated)\nreturn Self.pendingPlaceholder"), true,
+                    "App 图标(契约): 自家图标还没读好时给占位,不在主线程上现读")
+        expectEqual(sourceHas(sourceBody("struct LyrimuseAppIconImage: View {", in: resolverFile),
+                              "@ObservedObject private var cache = AppIconCache.shared"), true,
+                    "App 图标(契约): 画自家图标的视图观察缓存,读好时重画")
+        expectEqual(appCodeOccurrences(of: "LyrimuseAppIconImage()").count, 11,
+                    "App 图标(契约): 引导、设置、新功能介绍、分享图、Discord 与通知预览那 11 处自家图标走缓存")
+        expectEqual(sourceHas(sourceBody("static func bitmap(of source: NSImage, cacheKey: String, pixelSide: Int) -> CGImage? {",
+                                         in: app("UI/NotchIdleAppIcon.swift")),
+                              "guard pixelSide > 0, source !== AppIconCache.pendingPlaceholder else { return nil }"), true,
+                    "App 图标(契约): 灵动岛的位图缓存不收占位图(收了读好之后也一直是空的)")
+        expectEqual(sourceHas(app("AppDelegate.swift"),
+                              "let bundleIDs = AppIconCache.prefetchBundleIDs()\nawait AppIconCache.shared.prefetch(bundleIDs: bundleIDs)"), true,
+                    "App 图标(契约): 启动后在后台预热")
+        // 读图标的视图都要观察缓存:后台读好时不重画,那一格会一直空着。
+        let observe = "@ObservedObject private var appIcons = AppIconCache.shared"
+        let readers: [(file: String, type: String)] = [
+            ("OnboardingView.swift", "struct OnboardingView: View {"),
+            ("SettingsView.swift", "private struct LyricsSettingsTab: View {"),
+            ("SettingsView.swift", "private struct PlayerSettingsTab: View {"),
+            ("LyricsManager/SongVersionsSheet.swift", "struct SongVersionsSheet: View {"),
+            ("Settings/PlayerLinkageRow.swift", "private struct TrustedPlayerIconView: View {"),
+            ("Settings/PlayerChoiceCard.swift", "struct PlayerIconView: View {"),
+            ("Settings/DiscordPresencePreview.swift", "struct DiscordPresencePreview: View {"),
+            ("MenuBar/MenuBarPanel.swift", "private struct MenuBarPanelView: View {"),
+            ("MenuBar/MenuBarPanelIdleCard.swift", "struct PanelIdleNowPlaying<Transport: View, Action: View>: View {"),
+            ("UI/MiniIdleStandby.swift", "struct MiniIdleStandby: View {"),
+            ("UI/NotchEarExtras.swift", "struct NotchEarPlayerIcon: View {"),
+            ("UI/NotchLyricsView.swift", "struct NotchIdleEarIconHost<Fallback: View>: View {"),
+            ("UI/LyricShareWindow.swift", "struct LyricShareWindow: View {"),
+        ]
+        for reader in readers {
+            expectEqual(sourceHas(sourceBody(reader.type, in: app(reader.file)), observe), true,
+                        "App 图标(契约): \(reader.type) 观察 AppIconCache")
+        }
+        let readerFiles = Set(readers.map { "lyrimuse/" + $0.file })
+        let callers = Set(appCodeOccurrences(of: "AppIconResolver.icon(forBundleID:") + appCodeOccurrences(of: ".resolvedPlayerIcon")
+                          + appCodeOccurrences(of: "discordApplicationIcon(model"))
+        expectEqual(callers.subtracting(readerFiles).sorted(), ["lyrimuse/PlaybackCoordinator.swift"],
+                    "App 图标(契约): 取播放器图标的视图都在上面的观察名单里")
     }
 }

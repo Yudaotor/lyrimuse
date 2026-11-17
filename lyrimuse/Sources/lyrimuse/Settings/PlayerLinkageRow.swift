@@ -167,11 +167,12 @@ private struct PlayerBundleChips: View {
 private struct TrustedPlayerIconView: View {
     let bundleID: String
     var size: CGFloat
-    @State private var resolved: NSImage?
+    /// 图标在后台读好时跟着重画(`AppIconCache`)。
+    @ObservedObject private var appIcons = AppIconCache.shared
 
     var body: some View {
         Group {
-            if let resolved {
+            if let resolved = AppIconResolver.icon(forBundleID: bundleID) {
                 Image(nsImage: resolved).resizable().frame(width: size, height: size)
             } else {
                 Image(systemName: "checkmark.seal")
@@ -182,7 +183,6 @@ private struct TrustedPlayerIconView: View {
                                 in: RoundedRectangle(cornerRadius: size * 0.23, style: .continuous))
             }
         }
-        .onAppear { if resolved == nil { resolved = AppIconResolver.icon(forBundleID: bundleID) } }
     }
 }
 

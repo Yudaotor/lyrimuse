@@ -16,6 +16,8 @@ import SwiftUI
 // 也都能在设置里单独找到。
 struct OnboardingView: View {
     @ObservedObject private var settings = AppSettings.shared
+    /// 图标在后台读好时跟着重画(`AppIconCache`)。
+    @ObservedObject private var appIcons = AppIconCache.shared
     @ObservedObject private var features = FeatureSettingsStore.shared
     @Environment(\.dismissWindow) private var dismissWindow
     @Environment(\.openSettings) private var openSettings
@@ -486,8 +488,7 @@ struct OnboardingView: View {
         VStack(spacing: 0) {
             Spacer(minLength: 16)
                 .frame(maxHeight: 56)
-            Image(nsImage: NSApp.applicationIconImage)
-                .resizable()
+            LyrimuseAppIconImage()
                 .frame(width: 84, height: 84)
                 // 月桂冠比图标大一圈,挂在 overlay 上不占布局;叶子离图标的间距由 core 的几何保证(selftest 钉着)。
                 .overlay {
@@ -1372,8 +1373,7 @@ struct OnboardingView: View {
 
     private func doneHeader(allOK: Bool) -> some View {
         VStack(spacing: 6) {
-            Image(nsImage: NSApp.applicationIconImage)
-                .resizable()
+            LyrimuseAppIconImage()
                 .frame(width: 56, height: 56)
                 .overlay(alignment: .bottomTrailing) {
                     ZStack {

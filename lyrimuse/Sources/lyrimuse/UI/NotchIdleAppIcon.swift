@@ -22,7 +22,8 @@ enum NotchIdleAppIcon {
     /// 任意一张 App 图标按目标像素边长预先光栅化一次。`cacheKey` 区分源图(App 图标在进程生命周期内不变,
     /// 按 bundle id 分开缓存即可),像素边长再叠进 key:2x / 3x 屏各自一份。
     static func bitmap(of source: NSImage, cacheKey: String, pixelSide: Int) -> CGImage? {
-        guard pixelSide > 0 else { return nil }
+        // 占位图不进缓存:按 bundle id 缓存下来,读好之后也一直是空的。
+        guard pixelSide > 0, source !== AppIconCache.pendingPlaceholder else { return nil }
         let key = "\(cacheKey)@\(pixelSide)"
         if let hit = cache[key] { return hit }
         guard let image = rasterize(source, pixelSide: pixelSide) else { return nil }
@@ -70,16 +71,11 @@ final class NotchOwnAppIcon: ObservableObject {
         let read = SingleFlightBackgroundRead<CGImage?>()
         reads[pixelSide] = read
         read.start(priority: .userInitiated, read: {
-            Self.bundledIcon().flatMap { NotchIdleAppIcon.rasterize($0, pixelSide: pixelSide) }
+            AppIconResolver.bundledOwnIcon().flatMap { NotchIdleAppIcon.rasterize($0, pixelSide: pixelSide) }
         }) { [weak self] image in
             if let image { self?.bitmaps[pixelSide] = image }
         }
         return nil
-    }
-
-    /// build.sh 拷进 `Contents/Resources/` 的 `AppIcon.icns`(Info.plist 的 `CFBundleIconFile`)。
-    nonisolated static func bundledIcon() -> NSImage? {
-        Bundle.main.url(forResource: "AppIcon", withExtension: "icns").flatMap(NSImage.init(contentsOf:))
     }
 }
 

@@ -180,15 +180,16 @@ enum ICloudConfigStore {
     /// 它不会被备份探测误认:`ConfigSnapshotName` 只认 `Lyrimuse-Config-<时间>.json`
     /// (selftest 里有针对这个文件名的断言)。
     ///
-    /// 图标取 `NSImage.applicationIconName` 而不是去 /Applications 里按路径读 —— 那是本
-    /// 进程自己的图标,带全部分辨率,也不依赖 App 装在哪。
+    /// 图标取包里的 `AppIcon.icns`(`AppIconResolver.bundledOwnIcon`),不去 /Applications 里按路径读 —— 那是本
+    /// 进程自己的图标,带全部分辨率,也不依赖 App 装在哪。不用 `NSImage.applicationIconName`:进程里第一次取要同步等
+    /// iconservicesagent。
     static func ensureFolderIcon(at folder: URL) {
         // 已经有了就不再写。setIcon 会重写资源文件并触碰目录,而 preparedFolderURL 在每次
         // 导出/打开菜单时都会被调 —— 每次都写一遍等于每次都让同步服务认为这个文件夹变了。
         let marker = folder.appendingPathComponent("Icon\r")
         guard !FileManager.default.fileExists(atPath: marker.path) else { return }
         guard FileManager.default.fileExists(atPath: folder.path) else { return }
-        guard let icon = NSImage(named: NSImage.applicationIconName) else { return }
+        guard let icon = AppIconResolver.bundledOwnIcon() else { return }
         let ok = NSWorkspace.shared.setIcon(icon, forFile: folder.path, options: [])
         logger.notice("folder icon applied to \(folder.lastPathComponent, privacy: .public): \(ok, privacy: .public)")
     }

@@ -67,9 +67,11 @@ struct MiniIdleStandby: View {
 
     @State private var cover: URL?
     @State private var quote: [String]?
-    @State private var playerIcon: NSImage?
+    /// 图标在后台读好时跟着重画(`AppIconCache`)。
+    @ObservedObject private var appIcons = AppIconCache.shared
 
     private var canResume: Bool { IdlePlaybackActions.canResume(player) }
+    private var playerIcon: NSImage? { AppIconResolver.icon(forBundleID: player.bundleIdentifier) }
 
     var body: some View {
         let track = IdleLastTrack.current
@@ -145,9 +147,6 @@ struct MiniIdleStandby: View {
         // 缓存换了内容就再补一次封面。只补封面,不重选句子。
         .onReceive(LocalPlaybackSource.shared.$enrichContentVersion.removeDuplicates()) { _ in
             if cover == nil, !track.title.isEmpty { cover = track.coverURL() }
-        }
-        .task(id: player) {
-            playerIcon = AppIconResolver.icon(forBundleID: player.bundleIdentifier)
         }
     }
 

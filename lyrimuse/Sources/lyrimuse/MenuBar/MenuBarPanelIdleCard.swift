@@ -18,9 +18,11 @@ struct PanelIdleNowPlaying<Transport: View, Action: View>: View {
     /// 从没放过歌时那颗键(`MenuBarPanelView.idleActionButton`)。
     @ViewBuilder let fallbackAction: () -> Action
 
-    @State private var playerIcon: NSImage?
+    /// 图标在后台读好时跟着重画(`AppIconCache`)。
+    @ObservedObject private var appIcons = AppIconCache.shared
 
     private var player: PlaybackPlayer { IdlePlaybackActions.player }
+    private var playerIcon: NSImage? { AppIconResolver.icon(forBundleID: player.bundleIdentifier) }
 
     var body: some View {
         Group {
@@ -34,9 +36,6 @@ struct PanelIdleNowPlaying<Transport: View, Action: View>: View {
         }
         // 每次打开面板换一句(同灵动岛悬停展开)。
         .onAppear { model.rerollQuote() }
-        .task(id: player) {
-            playerIcon = AppIconResolver.icon(forBundleID: player.bundleIdentifier)
-        }
     }
 
     // MARK: 有上次那首

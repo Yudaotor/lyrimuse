@@ -175,7 +175,7 @@ struct NotificationPreviewCard: View {
             VStack(alignment: .leading, spacing: 3) {
                 HStack(spacing: 6) {
                     if appIcon {
-                        Image(nsImage: NSApp.applicationIconImage).resizable().frame(width: 18, height: 18)
+                        LyrimuseAppIconImage().frame(width: 18, height: 18)
                     } else {
                         NotificationPlatformBadge(platform: platform, size: 18)
                     }

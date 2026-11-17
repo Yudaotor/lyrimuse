@@ -121,7 +121,8 @@ struct PlayerChoiceCard: View {
 struct PlayerIconView: View {
     let player: PlaybackPlayer
     var size: CGFloat = 26
-    @State private var resolvedIcon: NSImage?
+    /// 图标在后台读好时跟着重画(`AppIconCache`)。
+    @ObservedObject private var appIcons = AppIconCache.shared
 
     var body: some View {
         Group {
@@ -139,17 +140,14 @@ struct PlayerIconView: View {
                                 in: RoundedRectangle(cornerRadius: size * 0.23, style: .continuous))
             }
         }
-        .onAppear(perform: loadRealIconIfAvailable)
     }
 
-    // .auto 没有对应的 App,两级都不用查,直接落到纯色占位。
-    private func loadRealIconIfAvailable() {
-        guard player != .auto else { return }
-        if let installed = AppIconResolver.icon(forBundleID: player.bundleIdentifier) {
-            resolvedIcon = installed
-        } else if let name = player.bundledIconResourceName {
-            resolvedIcon = AppIconResolver.icon(bundledResourceName: name)
-        }
+    /// .auto 没有对应的 App,两级都不用查,直接落到纯色占位。装没装还在后台查时是占位图(那一格先空着),
+    /// 不先画随包的图。
+    private var resolvedIcon: NSImage? {
+        guard player != .auto else { return nil }
+        return AppIconResolver.icon(forBundleID: player.bundleIdentifier)
+            ?? player.bundledIconResourceName.flatMap { AppIconResolver.icon(bundledResourceName: $0) }
     }
 }
 
