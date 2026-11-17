@@ -3337,6 +3337,12 @@ struct LyricsManagerView: View {
             .onChange(of: store.summariesGeneration) { _, _ in
                 if editingKey == key, !isEditorDirty, !detailIncomplete { loadDetail(key: key) }
             }
+            // 同组写法、偏移兄弟取自读取器(EnrichCacheReader),它比歌词管理自己的快照晚一拍:跟着快照重载的那一刻可能还是旧的一版,
+            // 解到新的一版再取一次(见 08 章决策 71)。
+            .onReceive(LocalPlaybackSource.shared.$enrichContentVersion.removeDuplicates().dropFirst()) { _ in
+                guard editingKey == key else { return }
+                refreshReaderDerivedDetail(key: key)
+            }
             // 设置里开关读音的文字种类:预览按盘上内容重算带读音那份。$romanizationScripts 在赋值前推送,新值要传进去。
             .onReceive(LocalPlaybackSource.shared.$romanizationScripts.removeDuplicates().dropFirst()) { scripts in
                 guard editingKey == key else { return }
@@ -4805,9 +4811,7 @@ struct LyricsManagerView: View {
             plainLyricsText = !summary.hasLyrics && summary.hasPlainTextFallback ? store.plainLyrics(for: key) : ""
         }
         manualConflictKeys = store.manualConflict(forKey: key)
-        instrumentalFollowsGroup = EnrichCacheReader.sharesEntityLyrics && store.songMembership(forKey: key).map { own in
-            EnrichCacheReader.songShareMembers(of: own).contains { $0 != key }
-        } == true
+        instrumentalFollowsGroup = followsGroupInReader(key: key)
         if manualConflictKeys.count < 2 {
             confirmManualConflict = false
         }
@@ -4841,6 +4845,23 @@ struct LyricsManagerView: View {
         let ms = LyricsOffsetStore.shared.offset(forKey: offsetKey, siblings: offsetSiblings)
         guard ms != shownStoredOffsetMs else { return }
         showStoredOffset(ms)
+    }
+
+    /// 同步开着、读取器里同一个共享组还有别的写法:标纯音乐会跟着同组一起标。
+    private func followsGroupInReader(key: String) -> Bool {
+        EnrichCacheReader.sharesEntityLyrics && store.songMembership(forKey: key).map { own in
+            EnrichCacheReader.songShareMembers(of: own).contains { $0 != key }
+        } == true
+    }
+
+    /// `loadDetail` 里取自读取器的那几样重取一次,变了才动;偏移输入框只在存储里的值变了时回填(同 `refreshShownOffset`)。
+    private func refreshReaderDerivedDetail(key: String) {
+        let follows = followsGroupInReader(key: key)
+        if follows != instrumentalFollowsGroup { instrumentalFollowsGroup = follows }
+        let siblings = EnrichCacheReader.offsetSiblings(forKey: key)
+        guard siblings != offsetSiblings else { return }
+        offsetSiblings = siblings
+        refreshShownOffset()
     }
 
     /// 输入框回填成存储里的值,并记下来(`refreshShownOffset` 据它判断这一条有没有变)。

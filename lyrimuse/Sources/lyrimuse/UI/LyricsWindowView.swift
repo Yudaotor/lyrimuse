@@ -3057,6 +3057,10 @@ struct LyricsWindowView: View {
                                 .fixedSize()
                                 // 开着面板换了歌:不重取的话来源和链接还是上一首的。
                                 .onChange(of: moreMenuTrackIdentity) { _ in loadInfoPanelDetails() }
+                                // 换歌后引擎要几秒才把来源、链接写进缓存,打开那一刻也可能还没解码上来:内容版本变了再取一次。
+                                .onReceive(LocalPlaybackSource.shared.$enrichContentVersion.removeDuplicates().dropFirst()) { _ in
+                                    loadInfoPanelDetails()
+                                }
                                 .padding(.leading, moreAnchorRect.maxX)
                                 .padding(.bottom, max(8, geo.size.height - moreAnchorRect.minY + 8))
                                 .transition(.opacity.combined(with: .scale(scale: 0.96, anchor: .bottomLeading)))

@@ -626,7 +626,7 @@ final class DiscordPresenceController: ObservableObject {
                 .flatMap { LXMusicOpenAPI.describes($0, title: source.title, artist: source.artist) ? LXMusicOpenAPI.ownCoverURL($0) : nil }
             : nil
         let key = [reportedBundleID ?? "", webPlatform ?? "", source.artist, source.title, source.album,
-                   source.enrichContentVersion.map { String($0.timeIntervalSince1970) } ?? "",
+                   source.enrichContentVersion?.description ?? "",
                    source.spotifyArtworkURL?.absoluteString ?? "", kasetCover?.absoluteString ?? "", kasetVideo ?? "",
                    source.webPageArtworkURL?.absoluteString ?? "", videoFrame?.absoluteString ?? "",
                    appleTrackID.map { String($0) } ?? "", relayBase, lxCover?.absoluteString ?? ""]

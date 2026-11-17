@@ -246,6 +246,20 @@ private func libraryAndCacheTests() {
     expectEqual(EnrichCacheReader.decodeAlreadyFailed(mtime: t.addingTimeInterval(1), failedMTime: t), false, "后台解码: 文件变了再试")
     expectEqual(EnrichCacheReader.decodeAlreadyFailed(mtime: nil, failedMTime: t), false, "后台解码: 取不到 mtime 不挡")
 
+    // 内容版本:单条快照比整份新时,后台解完的那一版比快照旧也得推进版本,不然按版本重算的地方停在解码之前那一刻
+    let snap = t.addingTimeInterval(30)
+    expectEqual(EnrichCacheReader.contentVersion(decodedMTime: t, freshPlayingMTime: snap)
+                    != EnrichCacheReader.contentVersion(decodedMTime: t.addingTimeInterval(10), freshPlayingMTime: snap), true,
+                "内容版本: 快照还新时解完一版(比快照旧)也推进")
+    expectEqual(EnrichCacheReader.contentVersion(decodedMTime: t, freshPlayingMTime: nil)
+                    != EnrichCacheReader.contentVersion(decodedMTime: t, freshPlayingMTime: snap), true,
+                "内容版本: 单条快照一落盘就推进")
+    expectEqual(EnrichCacheReader.contentVersion(decodedMTime: t, freshPlayingMTime: snap)
+                    != EnrichCacheReader.contentVersion(decodedMTime: snap.addingTimeInterval(5), freshPlayingMTime: nil), true,
+                "内容版本: 整份追上快照也推进")
+    expectEqual(EnrichCacheReader.contentVersion(decodedMTime: t, freshPlayingMTime: snap),
+                EnrichCacheReader.contentVersion(decodedMTime: t, freshPlayingMTime: snap), "内容版本: 什么都没变不推进")
+
     let now = Date(timeIntervalSince1970: 1_790_700_000)
     expectEqual(ITunesSearchBackoff.until(status: 0, retryAfter: nil, now: now, current: nil),
                 now.addingTimeInterval(ITunesSearchBackoff.forbiddenCooldown), "iTunes 退避: 网络层失败(0)按 30 秒,同引擎")

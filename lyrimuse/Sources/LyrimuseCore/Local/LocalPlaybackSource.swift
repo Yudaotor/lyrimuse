@@ -5575,9 +5575,9 @@ public final class LocalPlaybackSource: ObservableObject {
         return LyricsOffsetStore.radioKey(stationHash: hash, trackKey: currentOffsetKey)
     }
 
-    /// 上一次读缓存时那个文件的 mtime。变了就说明引擎又写过,当前这首歌的内容可能
-    /// 已经不是手上这一份了(见 apply() 里那段注释)。
-    private var lastEnrichMTime: Date?
+    /// 上一次重灌时缓存内容的版本(`EnrichCacheReader.decodedContentVersion`)。变了就说明引擎又写过、已经解码上来,
+    /// 当前这首歌的内容可能已经不是手上这一份了(见 apply() 里那段注释)。
+    private var lastEnrichMTime: EnrichCacheReader.ContentVersion?
 
     /// enrich 缓存**已解码那一代**的版本(= `EnrichCacheReader.decodedContentVersion`)。
     ///
@@ -5587,7 +5587,7 @@ public final class LocalPlaybackSource: ObservableObject {
     /// 版本号,不会出现"歌词换上了、封面没跟上"的偏差。
     ///
     /// 只在**变化**时赋值:@Published 是 willSet 语义,同值重复赋会白广播一轮下游订阅。
-    @Published public private(set) var enrichContentVersion: Date?
+    @Published public private(set) var enrichContentVersion: EnrichCacheReader.ContentVersion?
 
     /// reloadCurrentLyrics 的**全部**会影响引擎装载/派生状态的输入快照。相等 到 整段重算
     /// (简繁转换×3 + 引擎 load + allLines/gapMarkers 重建)可以跳过。

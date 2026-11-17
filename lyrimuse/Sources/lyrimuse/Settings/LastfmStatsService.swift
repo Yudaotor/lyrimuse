@@ -865,12 +865,12 @@ final class LastfmStatsService: ObservableObject {
     /// 歌曲榜 / 专辑榜的本机封面兜底,见 refreshChartLocalCovers。发布出去:缓存变了单独重算时没有别的字段一起变。
     @Published private(set) var chartLocalCovers: [String: URL] = [:]
     /// 上一次算 chartLocalCovers 用的输入(要查的行 + 本机缓存版本),没变就不重算。
-    private var chartLocalCoversInputs: (keys: [String], cacheVersion: Date?)?
+    private var chartLocalCoversInputs: (keys: [String], cacheVersion: EnrichCacheReader.ContentVersion)?
     /// 榜单每一行、最近记录每一行能直接进 App 打开的目标(右键菜单用),键同 chartLocalCovers(最近记录按歌曲榜的键)。
     /// 从本机歌词缓存现算,不进快照,见 refreshChartAppLinks。
     @Published private(set) var chartAppLinks: [String: ChartAppLinks] = [:]
     /// `artistAliases`:查不到时按歌手别名再查(见 EnrichCacheReader.chartAppLinks),别名表后台算完才灌进来,换了要重算。
-    private var chartAppLinksInputs: (keys: [String], cacheVersion: Date?, pagesVersion: Date?,
+    private var chartAppLinksInputs: (keys: [String], cacheVersion: EnrichCacheReader.ContentVersion, pagesVersion: Date?,
                                       artistAliases: [String: String])?
     /// 统计区此刻在不在屏上(挂着、且设置窗口看得见),由 LastfmStatsSection 报上来。右键菜单只在那里出现,
     /// 不在屏上时 refreshChartAppLinks 不算:整份建链接索引要几百毫秒主线程,而本机缓存播放中几秒就变一次,
@@ -3212,7 +3212,7 @@ final class LastfmStatsService: ObservableObject {
     private(set) var localAlbumVerifiedCovers: [String: URL] = [:]
 
     /// 上次算 localCovers 时本机缓存的已解码版本(decodedContentVersion)。
-    private var localCoversStamp: Date?
+    private var localCoversStamp: EnrichCacheReader.ContentVersion?
 
     /// 本机缓存的已解码版本推进了(App 刚启动那一轮解码完、引擎补上了封面)就重算本机封面兜底。挂在 5 秒的
     /// feed 定时器上:设置页统计卡那一拍是 2 分钟一次,歌词窗口的停播页、榜单单独开着、又停着播时 feed 不再变化,
@@ -3304,7 +3304,7 @@ final class LastfmStatsService: ObservableObject {
     /// 绝大多数时候都没动。不判重就是每 15 秒把 recent 加"那年今日"的**每一行**重做两次
     /// 模糊匹配查封面 —— 全在主线程上,实测一轮约 200ms;悬浮歌词/灵动岛/菜单栏/歌词窗口
     /// 共用这条主线程,一停就是四个面一起停。
-    private var localCoversInputs: (keys: [String], cacheVersion: Date?)?
+    private var localCoversInputs: (keys: [String], cacheVersion: EnrichCacheReader.ContentVersion)?
 
     /// 重算本机封面兜底。覆盖**列表上所有会显示封面的行**:最近记录那一页 +「那年今日」那三首
     /// (只算前者的话,那三首在 coverURL(for:) 里只有第一级可用,碰上占位星就是灰块)。

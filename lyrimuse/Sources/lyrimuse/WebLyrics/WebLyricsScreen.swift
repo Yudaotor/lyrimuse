@@ -297,8 +297,8 @@ final class WebLyricsScreenRenderer {
     private var chartPeriod: LastfmStatsService.Period = .week
     /// 简介正文滚到哪了。
     private var panelScroll: CGFloat = 0
-    /// 「显示简介」打开时读的歌词来源与平台链接(同歌词窗口 `loadInfoPanelDetails`),换歌时重读。
-    private var infoDetails: (track: String, source: String?, links: PlatformLinks?)?
+    /// 「显示简介」打开时读的歌词来源与平台链接(同歌词窗口 `loadInfoPanelDetails`),换歌、缓存内容版本变了时重读。
+    private var infoDetails: (track: String, version: EnrichCacheReader.ContentVersion?, source: String?, links: PlatformLinks?)?
     private var chromeIdle = LyricsWindowChromeIdle.State()
     private var chromeShown = true
     /// 左栏此刻摆在哪(左缘 x);nil = 还没摆过,第一次不做动画。
@@ -1157,12 +1157,15 @@ final class WebLyricsScreenRenderer {
     /// 连着 Last.fm 时再加累计次数与首次 / 上次收听。
     private func infoRows() -> [WebLyricsInfoRow] {
         let track = "\(playback.title)|\(playback.artist)|\(playback.album)"
-        if infoDetails?.track != track {
-            infoDetails = (track,
+        // 来源和链接是引擎换歌后几秒才写进缓存的,解码上来之前读到的是空的:内容版本变了也重读,计数只在换歌时刷新。
+        let version = LocalPlaybackSource.shared.enrichContentVersion
+        if infoDetails?.track != track || infoDetails?.version != version {
+            let trackChanged = infoDetails?.track != track
+            infoDetails = (track, version,
                            EnrichCacheReader.sourceInfo(artist: playback.artist, title: playback.title, album: playback.album)?
                                .lyricsSource,
                            EnrichCacheReader.platformLinks(artist: playback.artist, title: playback.title, album: playback.album))
-            if !playback.title.isEmpty, LastfmStatsService.shared.isConnected {
+            if trackChanged, !playback.title.isEmpty, LastfmStatsService.shared.isConnected {
                 LastfmStatsService.shared.refreshNowPlayingCount(title: playback.title, artist: playback.artist)
                 LastfmStatsService.shared.refreshNowPlayingSpan(title: playback.title, artist: playback.artist)
             }

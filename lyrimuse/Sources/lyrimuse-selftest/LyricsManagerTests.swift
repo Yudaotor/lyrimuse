@@ -1280,7 +1280,7 @@ func runLyricsManagerTests() {
                         "当前使用契约: 只在还是面板里那首时重算,换了歌不动")
             // 后台换了来源、正文一字不差时歌词行不变,上面那条不触发:缓存文件一变也重算一次。
             expectEqual(quick.contains("let mtime = EnrichCacheReader.fileModificationDate")
-                            && quick.contains("guard mtime != markedCacheMTime || (current && !markedCacheCurrent) else { return }"), true,
+                            && quick.contains("guard mtime != markedCacheMTime || version != markedContentVersion || (current && !markedCacheCurrent) else { return }"), true,
                         "当前使用契约: 快速搜索小窗在缓存文件变了时也重算(换了来源、正文相同),新的一版解码完再重算一次")
             let service = (try? String(contentsOf: managerDir.appendingPathComponent("LyricsSearchService.swift"),
                                        encoding: .utf8)) ?? ""

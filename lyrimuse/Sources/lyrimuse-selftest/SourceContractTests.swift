@@ -216,6 +216,28 @@ func runSourceContractTests() {
         let idle = code("lyrimuse/UI/IdleStandbyView.swift")
         expectEqual(idle.contains("$enrichContentVersion") && idle.contains("reloadCoverIfMissing()"), true,
                     "待机封面(契约): 「刚才在听」要在缓存换了内容时补封面")
+
+        // 读缓存派生出来的东西,在新的一版还在后台解码时算了一次之后,解完要再算一次(见 08 章决策 71)。
+        expectEqual(sourceHas(reader, "contentVersion(decodedMTime: cachedMTime, freshPlayingMTime: freshPlayingEntry()?.mtime)")
+                    && sourceHas(sourceBody("public nonisolated static func contentVersion(", in: reader),
+                                 "ContentVersion(decoded: decodedMTime, playing: freshPlayingMTime)"), true,
+                    "解码完再算(契约): 内容版本带上已解码那一代,快照比它新时解完也推进")
+        let quick = code("lyrimuse/LyricsManager/LyricsQuickSearchWindow.swift")
+        expectEqual(sourceHas(sourceBody("private func checkCacheFileChanged(", in: quick),
+                              "let version = EnrichCacheReader.decodedContentVersion")
+                    && sourceHas(quick, "|| version != markedContentVersion"), true,
+                    "解码完再算(契约): 搜索窗口「当前使用」也跟内容版本走(只写了单条快照、整份还攒着时文件时间不变)")
+        let manager = code("lyrimuse/LyricsManager/LyricsManagerView.swift")
+        expectEqual(sourceHas(manager, ".onReceive(LocalPlaybackSource.shared.$enrichContentVersion.removeDuplicates().dropFirst())")
+                    && sourceHas(manager, "refreshReaderDerivedDetail(key: key)"), true,
+                    "解码完再算(契约): 歌词管理详情页从读取器取的同组写法、偏移兄弟跟着内容版本重算")
+        let window = code("lyrimuse/UI/LyricsWindowView.swift")
+        expectEqual(sourceHas(window, ".onReceive(LocalPlaybackSource.shared.$enrichContentVersion.removeDuplicates().dropFirst())")
+                    && sourceHas(window, "loadInfoPanelDetails()"), true,
+                    "解码完再算(契约): 歌词窗口「显示简介」开着时跟着内容版本重取来源和链接")
+        let web = code("lyrimuse/WebLyrics/WebLyricsScreen.swift")
+        expectEqual(sourceHas(sourceBody("private func infoRows(", in: web), "LocalPlaybackSource.shared.enrichContentVersion"), true,
+                    "解码完再算(契约): 网页歌词「显示简介」的来源和链接按曲目加内容版本记")
     }
 
     // ---- 「歌词显示」页分段的跨文件契约 ----
@@ -5195,7 +5217,10 @@ func runSourceContractSettingsTests() {
                     && sourceHas(preload, "guard keys.count == 1, let key = keys.first, key != singleSelectedKey, store.summary(forKey: key) != nil else { return }")
                     && preload.contains("loadDetail(key: key)")
                     && sourceHas(manager, "endEditing()\n // 经 preloadDetail 换过来的已经载好了。\n if editingKey != newKey { loadDetail(key: newKey) }")
-                    && sourceHas(loadDetailBody, "EnrichCacheReader.songShareMembers(of: own).contains { $0 != key }")
+                    && sourceHas(loadDetailBody, "instrumentalFollowsGroup = followsGroupInReader(key: key)")
+                    && sourceHas(sourceBody("private func followsGroupInReader(key: String)", in: manager),
+                                 "EnrichCacheReader.songShareMembers(of: own).contains { $0 != key }")
+                    && !sourceBody("private func followsGroupInReader(key: String)", in: manager).contains("songMemberships()")
                     && !loadDetailBody.contains("songMemberships()")
                     && store.contains("var keys = Set(EnrichCacheReader.songShareMembers(of: own))")
                     && sourceHas(preview, "content()\n .fixedSize(horizontal: false, vertical: true)\n .coordinateSpace(name: LyricsPreviewRowFrameKey.space)")

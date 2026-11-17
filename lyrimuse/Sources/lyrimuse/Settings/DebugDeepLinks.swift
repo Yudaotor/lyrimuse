@@ -414,6 +414,9 @@ enum DebugDeepLinks {
                              "editing": MenuBarPanelDebugState.editing,
                              "layout": AppSettings.shared.menuBarPanelLayout.encoded()],
             "knockedOut": SourceKnockout.knockedOut,
+            // 读取器此刻解到哪一版;`published` 是按版本重算的各处订阅的那个信号(`enrichContentVersion`)。
+            "enrichCache": EnrichCacheReader.debugState.merging(
+                ["published": LocalPlaybackSource.shared.enrichContentVersion?.description ?? NSNull()]) { a, _ in a },
             // 设置页「网页版」卡每个平台配了哪些浏览器、「+」菜单列哪些(跟菜单同一个函数)、
             // 引导页「配对浏览器」那一步铺哪些(含已配对),都按界面上的顺序。
             "webPlayers": Dictionary(uniqueKeysWithValues: BrowserPositionProbe.supportedPlatforms.map { platform in

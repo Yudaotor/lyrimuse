@@ -27,6 +27,8 @@ struct LyricsQuickSearchWindow: View {
     @State private var markedCacheMTime: Date?
     /// 那一次重算时读到的缓存是不是已经解码到盘上那一版(`EnrichCacheReader.isCurrent`)。
     @State private var markedCacheCurrent = true
+    /// 那一次重算时缓存内容的版本(`EnrichCacheReader.decodedContentVersion`)。
+    @State private var markedContentVersion: EnrichCacheReader.ContentVersion?
     // 切换界面语言时重算 body,窗口标题(.navigationTitle)跟着换。经 AppLanguageObserver 窄代理,不整对象订阅 AppSettings。
     @ObservedObject private var languageSettings = AppLanguageObserver.shared
     @StateObject private var windowSurface = SettingsWindowSurface()
@@ -149,13 +151,16 @@ struct LyricsQuickSearchWindow: View {
     }
 
     /// 文件一变就重算;那一刻新的一版还在后台解码(读到的是旧条目配新正文)时,解完再重算一次,不然要等下一次文件变化
-    /// (采纳后马上撤销就停在采纳那份上,见 11 章决策 177)。
+    /// (采纳后马上撤销就停在采纳那份上,见 11 章决策 177)。内容版本变了也重算:引擎改正在播的那首时只写单条快照、
+    /// 整份攒着,文件时间不变(见 08 章决策 71)。
     private func checkCacheFileChanged() {
         let mtime = EnrichCacheReader.fileModificationDate
         let current = EnrichCacheReader.isCurrent
-        guard mtime != markedCacheMTime || (current && !markedCacheCurrent) else { return }
+        let version = EnrichCacheReader.decodedContentVersion
+        guard mtime != markedCacheMTime || version != markedContentVersion || (current && !markedCacheCurrent) else { return }
         markedCacheMTime = mtime
         markedCacheCurrent = current
+        markedContentVersion = version
         refreshCurrentMarker()
     }
 

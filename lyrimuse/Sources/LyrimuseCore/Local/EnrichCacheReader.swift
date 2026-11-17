@@ -2078,9 +2078,37 @@ public enum EnrichCacheReader {
     // 后台那一步手上有已解码那一版的校验值表时只解码变了的那几条(EnrichIndexDiff),派生索引和别名表只在各自的输入变了时
     // 重建,见 15 章决策 25。
 
-    /// 「当前已解码内容」对应的文件 mtime。给 apply() 当重灌触发键(见上面那段注释)。
-    /// 单条快照比它新时取快照的 mtime:快照一落盘就触发重灌,不等整份写完。
-    public static var decodedContentVersion: Date? { freshPlayingEntry()?.mtime ?? cachedMTime }
+    /// 「当前已解码内容」的版本。给 apply() 当重灌触发键(见上面那段注释),也是各处「缓存换了内容就重算」的触发键
+    /// (`LocalPlaybackSource.enrichContentVersion`)。只拿来判相等。
+    public struct ContentVersion: Equatable, Sendable, CustomStringConvertible {
+        /// 整份缓存已解码那一代的 mtime。
+        public let decoded: Date?
+        /// 比已解码内容新的单条快照的 mtime;没有为 nil。
+        public let playing: Date?
+
+        public var description: String {
+            "\(decoded.map { String($0.timeIntervalSince1970) } ?? "-")/\(playing.map { String($0.timeIntervalSince1970) } ?? "-")"
+        }
+    }
+
+    /// 两样一起进版本:单条快照一落盘就推进(不等整份写完);快照比整份新时后台解码采纳了新的一版也推进。
+    /// 解完的那一版常常比快照旧(整份写盘期间正在播的那首又改过,引擎写完补写一次快照),这时只看快照的 mtime,版本不动,
+    /// 按版本重算的消费方停在解码之前读到的旧内容上(见 08 章决策 71)。纯函数,selftest 覆盖。
+    public nonisolated static func contentVersion(decodedMTime: Date?, freshPlayingMTime: Date?) -> ContentVersion {
+        ContentVersion(decoded: decodedMTime, playing: freshPlayingMTime)
+    }
+
+    public static var decodedContentVersion: ContentVersion {
+        contentVersion(decodedMTime: cachedMTime, freshPlayingMTime: freshPlayingEntry()?.mtime)
+    }
+
+    /// `lyrimuse://debug/state` 的 `enrichCache`:已解码那一代、盘上那一版的 mtime,解没解到盘上那一版,内容版本。
+    public static var debugState: [String: Any] {
+        ["decodedMTime": cachedMTime.map { $0.timeIntervalSince1970 as Any } ?? NSNull(),
+         "fileMTime": fileModificationDate.map { $0.timeIntervalSince1970 as Any } ?? NSNull(),
+         "isCurrent": isCurrent,
+         "contentVersion": decodedContentVersion.description]
+    }
 
     /// 已解码的就是盘上此刻那一版(引擎刚写过、还没解完,或者内存压力让出之后还没重建时是 false)。读原样内容去改、
     /// 再交回去之前等它为真,别拿旧的一版去比对、去补没改的几块。

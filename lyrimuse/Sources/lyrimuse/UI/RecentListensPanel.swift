@@ -366,7 +366,7 @@ struct PendingListensPanel: View {
     @ObservedObject private var backfill = ScrobbleBackfillService.shared
     @State private var hoveredID: String?
     /// 行里的封面在 body 里现查本机缓存(见 row):缓存换了内容要重绘一次,不然启动那一刻没解码完查空的行一直是占位。
-    @State private var enrichVersion: Date?
+    @State private var enrichVersion: EnrichCacheReader.ContentVersion?
 
     private enum Item: Identifiable {
         case header(String)
