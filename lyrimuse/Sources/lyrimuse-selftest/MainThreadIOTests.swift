@@ -626,8 +626,20 @@ func runMainThreadIOTests() {
                         && !sourceHas(sourceBody("static func icon(forBundleID bundleID: String) -> NSImage? {", in: resolverFile), "NSWorkspace"), true,
                     "App 图标(契约): AppIconResolver.icon(forBundleID:) 只读缓存")
         expectEqual(sourceHas(sourceBody("private func load(_ bundleID: String, priority: Operation.QueuePriority) {", in: cache),
-                              "enqueue(key: bundleID, priority: priority, read: { AppIconResolver.loadInstalledIcon(bundleID: bundleID) }) { cache, image in"), true,
+                              "enqueue(key: bundleID, priority: priority, read: { AppIconResolver.loadInstalledIcon(bundleID: bundleID) }) { cache, image in\ncache.stage(bundleID, image)"), true,
                     "App 图标(契约): 播放器图标在后台读,回主线程才放进缓存")
+        let stage = sourceBody("private func stage(_ bundleID: String, _ image: NSImage?) {", in: cache)
+        expectEqual(sourceHas(stage, "stagedIcons[bundleID] = image") && !sourceHas(stage, "icons[bundleID] = image")
+                        && sourceHas(stage, "guard !flushScheduled else { return }")
+                        && sourceHas(stage, "DispatchQueue.main.asyncAfter(deadline: .now() + Self.publishDelay)"), true,
+                    "App 图标(契约): 陆续读好的攒一会儿合成一次发布(每发布一次观察它的大页整页重算)")
+        let publish = sourceBody("private func publishStaged() {", in: cache)
+        expectEqual(sourceHas(publish, "guard !stagedIcons.isEmpty else {\nobjectWillChange.send()\nreturn\n}")
+                        && sourceHas(publish, "icons.merge(stagedIcons) { _, staged in staged }"), true,
+                    "App 图标(契约): 只判出没装的那一批也发布一次(不然那一格一直画着占位图)")
+        expectEqual(sourceHas(sourceBody("func lookup(bundleID: String) -> Lookup {", in: cache),
+                              "if let hit = icons[bundleID] ?? stagedIcons[bundleID] { return .ready(hit) }"), true,
+                    "App 图标(契约): 攒着还没发布的也算读好了,不重派")
         expectEqual(sourceHas(sourceBody("private func loadOwnIcon(priority: Operation.QueuePriority) {", in: cache),
                               "enqueue(key: Self.ownKey, priority: priority, read: {\nAppIconResolver.bundledOwnIcon().map { AppIconResolver.rasterizedRepresentations(of: $0, maxPixels: 512) }"), true,
                     "App 图标(契约): Lyrimuse 自己的图标从包里的 icns 在后台读")

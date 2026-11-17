@@ -214,6 +214,11 @@ final class AppIconCache: ObservableObject {
     private var inFlight: [String: Operation] = [:]
     private var ownRequested = false
     private static let ownKey = "lyrimuse.own-icon"
+    /// 读好、还没发布的结果。一阵子里陆续回来的攒成一次发布:每发布一次,观察缓存的大页(设置页「播放器」、面板)
+    /// 都整页重算,勾了很多播放器时启动预热会一个接一个地回来。
+    private var stagedIcons: [String: NSImage] = [:]
+    private var flushScheduled = false
+    private static let publishDelay: TimeInterval = 0.3
 
     private static let loadQueue: OperationQueue = {
         let queue = OperationQueue()
@@ -225,7 +230,7 @@ final class AppIconCache: ObservableObject {
 
     func lookup(bundleID: String) -> Lookup {
         guard !bundleID.isEmpty else { return .missing }
-        if let hit = icons[bundleID] { return .ready(hit) }
+        if let hit = icons[bundleID] ?? stagedIcons[bundleID] { return .ready(hit) }
         if let since = missingSince[bundleID] {
             if Date().timeIntervalSince(since) > Self.missingRecheckInterval { load(bundleID, priority: .low) }
             return .missing
@@ -253,7 +258,8 @@ final class AppIconCache: ObservableObject {
     /// 启动后预热:Lyrimuse 自己的图标、`bundleIDs` 里的播放器。已经有了或正在读的不重派;排在视图当场要的后面。
     func prefetch(bundleIDs: [String]) {
         loadOwnIcon(priority: .normal)
-        for bundleID in bundleIDs where !bundleID.isEmpty && icons[bundleID] == nil && missingSince[bundleID] == nil {
+        for bundleID in bundleIDs where !bundleID.isEmpty && icons[bundleID] == nil && stagedIcons[bundleID] == nil
+            && missingSince[bundleID] == nil {
             load(bundleID, priority: .low)
         }
     }
@@ -268,13 +274,33 @@ final class AppIconCache: ObservableObject {
 
     private func load(_ bundleID: String, priority: Operation.QueuePriority) {
         enqueue(key: bundleID, priority: priority, read: { AppIconResolver.loadInstalledIcon(bundleID: bundleID) }) { cache, image in
-            if let image {
-                cache.missingSince[bundleID] = nil
-                cache.icons[bundleID] = image
-            } else {
-                cache.missingSince[bundleID] = Date()
-            }
+            cache.stage(bundleID, image)
         }
+    }
+
+    /// 记下读的结果,攒一会儿再发布。没装也要发布:那一格正画着占位图,得重画一次才落到调用方的兜底图。
+    private func stage(_ bundleID: String, _ image: NSImage?) {
+        if let image {
+            missingSince[bundleID] = nil
+            stagedIcons[bundleID] = image
+        } else {
+            missingSince[bundleID] = Date()
+        }
+        guard !flushScheduled else { return }
+        flushScheduled = true
+        DispatchQueue.main.asyncAfter(deadline: .now() + Self.publishDelay) {
+            MainActor.assumeIsolated { AppIconCache.shared.publishStaged() }
+        }
+    }
+
+    private func publishStaged() {
+        flushScheduled = false
+        guard !stagedIcons.isEmpty else {
+            objectWillChange.send()
+            return
+        }
+        icons.merge(stagedIcons) { _, staged in staged }
+        stagedIcons = [:]
     }
 
     private func loadOwnIcon(priority: Operation.QueuePriority) {
