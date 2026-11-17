@@ -833,10 +833,19 @@ struct OverlayEditorStage: View {
             // 所以这更贴近真实,不是权宜。
             .clipped()
             // 背景开着时真窗口有系统窗口投影和边线(`hasShadow` 跟着背景走,见 LyricsOverlayWindowController),预览照
-            // `SystemWindowChrome` 模拟,外形是背景那块圆角。见 04 章决策 103。
-            .systemWindowChrome(.borderless,
-                                shape: RoundedRectangle(cornerRadius: Self.windowCornerRadius, style: .continuous),
-                                opacity: windowChromeOpacity)
+            // `SystemWindowChrome` 模拟。系统按窗口内容的 alpha 画,所以外形是背景那块圆角卡片(真视图报的 `.card`),
+            // 不是整个窗口:按钮槽位那一截透明,没有投影。见 04 章决策 103。
+            .overlay(alignment: .topLeading) {
+                if let card = contentRowRects[.card] {
+                    Color.clear
+                        .frame(width: card.width, height: card.height)
+                        .systemWindowChrome(.borderless,
+                                            shape: RoundedRectangle(cornerRadius: Self.windowCornerRadius, style: .continuous),
+                                            opacity: windowChromeOpacity)
+                        .offset(x: card.minX, y: card.minY)
+                        .allowsHitTesting(false)
+                }
+            }
             // 真窗口按系统深浅画(LyricsOverlayWindowController 的 appearanceObserver),预览连同上面那层投影跟它一致。
             .followsSystemAppearance()
             // 预览上的可点区域(主行 → 「文字」,读音 / 译文 / 下一句 → 「内容」),见 cardHotspots。

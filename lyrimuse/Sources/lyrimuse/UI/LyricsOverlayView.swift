@@ -1292,6 +1292,15 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
             .padding(.bottom, cardBottomPadding)
             .frame(maxWidth: .infinity, alignment: duetFrameAlignment)
             .background(overlayBackground)
+            // 整张卡片的范围,同 `reportsContentRow`;写在这里不经那个泛型扩展(套在 body 这条链上会让不透明返回类型自指)。
+            .background {
+                if let space = contentRowRectsSpace {
+                    GeometryReader { proxy in
+                        Color.clear.preference(key: ContentRowRectsPreferenceKey.self,
+                                               value: [.card: proxy.frame(in: .named(space))])
+                    }
+                }
+            }
             // 长按拖动"武装"后的视觉提示——一圈跟前景色同色的高亮描边,松手/取消立刻淡出。
             .overlay(
                 RoundedRectangle(cornerRadius: overlayBackgroundCornerRadius, style: .continuous)
@@ -2634,8 +2643,9 @@ private struct LyricsTextRectPreferenceKey: PreferenceKey {
 }
 
 /// 悬浮歌词卡片里的几行。设置页编辑台按它划可点区域(`OverlayEditorStage.cardHotspots`)。
+/// `card` 是整张歌词卡片(背景那块圆角),编辑台照它画系统窗口投影和边线。
 enum OverlayContentRow: Hashable {
-    case main, romanization, translation, nextLine
+    case main, romanization, translation, nextLine, card
 }
 
 // MARK: - 换句动画的几个件

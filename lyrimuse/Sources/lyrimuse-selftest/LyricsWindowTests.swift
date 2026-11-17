@@ -1402,14 +1402,16 @@ func runLyricsWindowTests() {
                     && sourceHas(sourceBody("private var windowContentOpacity: Double {", in: window), "case .solid:\nreturn alpha(activeBackgroundColorHex)")
                     && sourceHas(stage, ".onPreferenceChange(LyricsWindowPreviewOpacityKey.self) { windowOpacity = $0 }"),
                     true, "歌词窗口预览: 投影和边线按窗口内容的不透明度调淡")
-        // 悬浮歌词编辑台:背景开着时挂无边框面板那一套,外形是背景那块圆角;深浅跟真窗口一样按系统走(挂在 followsSystemAppearance 里面)。
+        // 悬浮歌词编辑台:背景开着时挂无边框面板那一套,外形是背景那块圆角卡片(真视图报的 .card,不含透明的按钮槽位);
+        // 深浅跟真窗口一样按系统走(挂在 followsSystemAppearance 里面)。
         let canvas = sourceBody("private func canvas(visibleWidth: CGFloat) -> some View {", in: overlayStage)
         let clipped = canvas.range(of: ".clipped()")
         let chromed = canvas.range(of: ".systemWindowChrome(.borderless,")
         let follows = canvas.range(of: ".followsSystemAppearance()")
         expectEqual(clipped != nil && chromed != nil && follows != nil
                     && clipped!.lowerBound < chromed!.lowerBound && chromed!.lowerBound < follows!.lowerBound
-                    && sourceHas(canvas, "shape: RoundedRectangle(cornerRadius: Self.windowCornerRadius, style: .continuous),\nopacity: windowChromeOpacity)")
+                    && sourceHas(canvas, "if let card = contentRowRects[.card] {\nColor.clear\n.frame(width: card.width, height: card.height)\n.systemWindowChrome(.borderless,\nshape: RoundedRectangle(cornerRadius: Self.windowCornerRadius, style: .continuous),\nopacity: windowChromeOpacity)\n.offset(x: card.minX, y: card.minY)")
+                    && sourceHas(source("lyrimuse/UI/LyricsOverlayView.swift"), "Color.clear.preference(key: ContentRowRectsPreferenceKey.self,\nvalue: [.card: proxy.frame(in: .named(space))])")
                     && sourceHas(sourceBody("private var windowChromeOpacity: Double {", in: overlayStage),
                                  "guard settings.backgroundIsVisible else { return 0 }\nif settings.overlayBackgroundGlass { return 1 }"),
                     true, "悬浮歌词编辑台: 背景开着时画系统窗口投影和边线(跟着系统深浅,背景关着时没有)")
