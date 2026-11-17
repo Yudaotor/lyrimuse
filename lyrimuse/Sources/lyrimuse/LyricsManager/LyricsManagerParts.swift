@@ -875,9 +875,19 @@ private struct UnavailableModeNote: ViewModifier {
     @State private var isPresented = false
     @State private var pinnedByClick = false
     @State private var hoverTask: Task<Void, Never>?
+    /// `debug/hover-note` 点到了这条说明:不看指针,气泡一直挂着。
+    @State private var debugForced = false
+
+    private func matchesDebugQuery(_ query: String) -> Bool {
+        !query.isEmpty && (text?.contains(query) ?? false)
+    }
 
     func body(content: Content) -> some View {
         content
+            .onAppear { debugForced = matchesDebugQuery(DebugDeepLinks.hoverNoteQuery) }
+            .onReceive(NotificationCenter.default.publisher(for: DebugDeepLinks.hoverNoteNotification)) { note in
+                debugForced = matchesDebugQuery(note.object as? String ?? "")
+            }
             .onHover { inside in
                 guard text != nil else { return }
                 hoverTask?.cancel()
@@ -897,10 +907,13 @@ private struct UnavailableModeNote: ViewModifier {
                 pinnedByClick = true
                 isPresented = true
             })
-            .popover(isPresented: Binding(get: { isPresented && text != nil }, set: { isPresented = $0 }),
+            .popover(isPresented: Binding(get: { (isPresented || debugForced) && text != nil },
+                                          set: { isPresented = $0; if !$0 { debugForced = false } }),
                      arrowEdge: .bottom) {
+                // 弹层继承挂它的那排三选一的 lineLimit(1),不放开就只剩一行加省略号(11 章决策 183)。
                 Text(text ?? "")
                     .font(.callout)
+                    .lineLimit(nil)
                     .fixedSize(horizontal: false, vertical: true)
                     .frame(width: Self.bubbleWidth(text ?? ""), alignment: .leading)
                     .padding(10)

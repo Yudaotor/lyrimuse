@@ -488,6 +488,7 @@ struct NotificationRoutePicker: View {
             Text(L10n.t("新添加的渠道会自动勾上"))
                 .font(.system(size: 11))
                 .foregroundStyle(.secondary)
+                .lineLimit(nil)
                 .fixedSize(horizontal: false, vertical: true)
         }
         .font(.system(size: 12.5))

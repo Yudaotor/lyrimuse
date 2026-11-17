@@ -1346,6 +1346,7 @@ private struct LyricsSettingsTab: View {
             Text(appleMusicConnectionSubtitle)
                 .font(.system(size: 11))
                 .foregroundStyle(appleMusic.isConnected && appleMusic.needsRenewal ? Color.orange : Color.secondary)
+                .lineLimit(nil)
                 .multilineTextAlignment(.leading)
                 .frame(width: 240, alignment: .leading)
                 .fixedSize(horizontal: false, vertical: true)
@@ -1849,6 +1850,7 @@ private struct LyricsSettingsTab: View {
                 // (横向不再收缩、纵向随内容长高)才会真的按这个宽度换行。
                 Text(tooltip)
                     .font(.system(size: 11))
+                    .lineLimit(nil)
                     .multilineTextAlignment(.leading)
                     .frame(width: 220, alignment: .leading)
                     .fixedSize(horizontal: false, vertical: true)

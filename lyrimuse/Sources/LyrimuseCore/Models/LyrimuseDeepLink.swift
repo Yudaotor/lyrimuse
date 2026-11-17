@@ -122,7 +122,8 @@ public enum LyrimuseDeepLink: Equatable, Sendable {
         /// (`debug/settings-search?q=`)。设置窗口要先开着。
         case settingsSearch(query: String)
         /// 让说明文案里含这段文字的悬停气泡当作被悬停、直接弹出,不看真实指针(`debug/hover-note?q=`);
-        /// `off=1` 或没带 q 就全部收回,nil 即收回。设置窗口要先开着、翻到那一页。见 14 章决策 205。
+        /// `off=1` 或没带 q 就全部收回,nil 即收回。设置窗口要先开着、翻到那一页。歌词管理和「搜索歌词…」里点不了的显示档
+        /// 那句说明(`UnavailableModeNote`)也认,那扇窗要先开着、选中那首。见 14 章决策 205。
         case hoverNote(query: String?)
         /// 打开推送提醒页「推送渠道」里这个渠道的编辑弹窗,跟点那一行走同一条路(`debug/notify-channel?id=`,没带 id 是第一个)。
         /// 设置窗口要先翻到推送提醒页(`settings/account/bark`)。

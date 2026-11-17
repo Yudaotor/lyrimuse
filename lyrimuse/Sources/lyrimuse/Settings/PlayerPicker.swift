@@ -122,6 +122,7 @@ struct PlayerPicker<Trailing: View>: View {
             Text(L10n.t("以下播放器尚未安装，可提前选择，安装后自动生效"))
                 .font(.callout)
                 .foregroundStyle(.secondary)
+                .lineLimit(nil)
                 .fixedSize(horizontal: false, vertical: true)
             LazyVGrid(columns: Array(repeating: GridItem(.fixed(96), spacing: 10), count: min(3, max(more.count, 1))),
                       spacing: 10) {
@@ -139,6 +140,7 @@ struct PlayerPicker<Trailing: View>: View {
                 Link(L10n.t("在 GitHub 提交请求"), destination: FeedbackLinks.playerRequestURL(appVersion: FeedbackReporter.appVersion()))
             }
             .font(.callout)
+            .lineLimit(nil)
             .fixedSize(horizontal: false, vertical: true)
         }
         .padding(14)

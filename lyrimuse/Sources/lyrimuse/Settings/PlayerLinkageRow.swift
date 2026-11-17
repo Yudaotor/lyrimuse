@@ -113,6 +113,7 @@ struct PlayerBundleChipsRow: View {
                                 Text(note)
                                     .font(.system(size: 11))
                                     .foregroundStyle(.secondary)
+                                    .lineLimit(nil)
                                     .fixedSize(horizontal: false, vertical: true)
                                 PlayerBundleChips(choices: choices, excluded: excluded, onToggle: onToggle)
                             }

@@ -1441,6 +1441,73 @@ private func runPermissionGuideContracts() {
                     "悬停说明(契约): 四处弹层的说明都放开行数,不被挂它那一行的 lineLimit(1) 截成一行")
     }
 
+    // ---- 全 App 的弹层:按竖向理想高度换行的说明都放开行数 ----
+    do {
+        let scan = popoverWrapScan()
+        expectEqual(scan.offenders, [],
+                    "弹层说明(契约): 弹层里写了 .fixedSize(horizontal: false, vertical: true) 的说明也写 .lineLimit(nil),"
+                    + "不被挂它那一排的 lineLimit(1) 截成一行(11 章决策 183)")
+        expectEqual(["LyricsManager/LyricsManagerParts.swift", "Settings/PlayerPicker.swift"].allSatisfy(scan.checked.contains), true,
+                    "弹层说明(契约): 扫描认得出内联的弹层内容和只写一个名字、定义在同一文件里的弹层内容")
+    }
+
     runSettingsAuditContracts()
     runSettingsWritePressureContracts()
+}
+
+/// `Sources/lyrimuse` 里每个 `.popover(…) { … }` 的内容:尾随闭包本身;闭包里只有一个名字(`foo` / `foo()`)时换成同一文件里
+/// `var foo: some View` / `func foo(` 的定义体。去掉整行注释后,内容里有几处竖向 fixedSize 就至少要有几处 `.lineLimit(nil)`,
+/// 不够的记「相对路径:行号」。checked 是含竖向 fixedSize 的弹层所在文件。
+private func popoverWrapScan() -> (offenders: [String], checked: Set<String>) {
+    let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+        .appendingPathComponent("lyrimuse")
+    guard let walker = FileManager.default.enumerator(atPath: root.path) else { return (["读不到 Sources/lyrimuse"], []) }
+    let marker = Array(".popover(".utf8)
+    let fixedV = ".fixedSize(horizontal: false, vertical: true)"
+    func closing(_ b: [UInt8], _ open: Int, _ o: UInt8, _ c: UInt8) -> Int? {
+        var depth = 0
+        for i in open..<b.count {
+            if b[i] == o { depth += 1 } else if b[i] == c {
+                depth -= 1
+                if depth == 0 { return i }
+            }
+        }
+        return nil
+    }
+    func code(_ s: String) -> String {
+        s.split(separator: "\n", omittingEmptySubsequences: false)
+            .filter { !$0.trimmingCharacters(in: .whitespaces).hasPrefix("//") }
+            .joined(separator: "\n")
+    }
+    var offenders: [String] = []
+    var checked: Set<String> = []
+    for case let rel as String in walker where rel.hasSuffix(".swift") {
+        guard let text = try? String(contentsOfFile: root.appendingPathComponent(rel).path, encoding: .utf8),
+              sourceBytes(text, contain: ".popover(") else { continue }
+        let b = Array(text.utf8)
+        var i = 0
+        while i + marker.count <= b.count {
+            guard b[i] == marker[0], Array(b[i..<(i + marker.count)]) == marker else { i += 1; continue }
+            defer { i += marker.count }
+            guard let paren = closing(b, i + marker.count - 1, UInt8(ascii: "("), UInt8(ascii: ")")) else { continue }
+            var j = paren + 1
+            while j < b.count, [UInt8(ascii: " "), UInt8(ascii: "\n")].contains(b[j]) { j += 1 }
+            guard j < b.count, b[j] == UInt8(ascii: "{"),
+                  let brace = closing(b, j, UInt8(ascii: "{"), UInt8(ascii: "}")) else { continue }
+            var content = code(String(decoding: b[(j + 1)..<brace], as: UTF8.self))
+            let name = content.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !name.isEmpty, name.allSatisfy({ $0.isLetter || $0.isNumber || $0 == "_" || $0 == "(" || $0 == ")" }) {
+                let bare = name.hasSuffix("()") ? String(name.dropLast(2)) : name
+                let definition = sourceBody("var \(bare): some View", in: text)
+                content = code(definition.isEmpty ? sourceBody("func \(bare)(", in: text) : definition)
+            }
+            let wraps = sourceCount(content, fixedV)
+            guard wraps > 0 else { continue }
+            checked.insert(rel)
+            if sourceCount(content, ".lineLimit(nil)") < wraps {
+                offenders.append("\(rel):\(b[0..<i].filter { $0 == UInt8(ascii: "\n") }.count + 1)")
+            }
+        }
+    }
+    return (offenders.sorted(), checked)
 }
