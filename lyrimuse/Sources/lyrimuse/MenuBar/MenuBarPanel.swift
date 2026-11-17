@@ -190,6 +190,12 @@ final class MenuBarPanelController {
     private var galleryHost: NSView?
     /// 面板挂在谁下面:状态栏按钮,或「菜单栏正中」那一扇的内容视图。内容变高时按它重新定位(顶边不动、往下长)。
     private weak var anchorView: NSView?
+    /// 主面板的宿主视图:锚点窗口挪到位时按它的理想尺寸重摆。
+    private weak var panelHost: NSView?
+    /// 这次打开时摆过一回锚点还没上屏的位置(`MenuBarPanelPlacement.anchorIsPlaced`):收起之前锚点窗口每挪一下都重摆。
+    /// 系统摆新状态栏项是先放到左端再挪过去,只认第一次到位会停在半路。
+    private var followsAnchorWindow = false
+    private var anchorMoveObservers: [NSObjectProtocol] = []
     /// 「点到别的 App 上」的收起路径:全局监视器只收得到**别的 App** 的事件。
     private var outsideClickMonitor: Any?
     /// 「点到本 App 别的窗口上」的收起路径(相当于 NSPopover .transient 管的那一半)。
@@ -227,6 +233,8 @@ final class MenuBarPanelController {
         host.onFittingSizeChange = { [weak self] size in self?.place(size: size) }
         // 先登记再装内容:内容第一次布局就会报尺寸(onFittingSizeChange),那时 panel 还是 nil 的话这次摆位会被跳过。
         panel = window
+        panelHost = host
+        observeAnchorWindow(anchor.window)
         window.setContent(host)
         place(size: host.fittingSize)
         installDismissWatchers(for: window)
@@ -248,6 +256,7 @@ final class MenuBarPanelController {
         MenuBarPanelDebugState.quickTarget = nil
         MenuBarPanelDebugState.editing = false
         teardownDismissWatchers()
+        observeAnchorWindow(nil)
         setGalleryVisible(false)
         EditorialNotesStore.shared.release()
         // 收起即整树释放:下次 toggle 本来就是全新建(onAppear 快照语义还依赖这一点)。
@@ -257,12 +266,18 @@ final class MenuBarPanelController {
     }
 
     /// 顶边贴着锚点下沿、水平居中在锚点下面,钳进锚点所在屏的可用区,比可用区高时截短(`MenuBarPanelPlacement`)。
-    /// 内容变高时只往下长。
+    /// 内容变高时只往下长。锚点还没摆上屏时先摆在主屏菜单栏下沿正中,锚点窗口挪到位再重摆(06 章决策 109)。
     private func place(size: CGSize) {
         guard let window = panel, size.width > 0, size.height > 0 else { return }
         guard let anchor = anchorView, let anchorWindow = anchor.window else { return }
-        let buttonRect = anchorWindow.convertToScreen(anchor.convert(anchor.bounds, to: nil))
-        let visible = (anchorWindow.screen ?? NSScreen.main)?.visibleFrame ?? buttonRect
+        var buttonRect = anchorWindow.convertToScreen(anchor.convert(anchor.bounds, to: nil))
+        var visible = (anchorWindow.screen ?? NSScreen.main)?.visibleFrame ?? buttonRect
+        if !MenuBarPanelPlacement.anchorIsPlaced(anchorWindow.frame, screens: NSScreen.screens.map(\.frame)),
+           let screen = NSScreen.main ?? NSScreen.screens.first {
+            followsAnchorWindow = true
+            visible = screen.visibleFrame
+            buttonRect = MenuBarPanelPlacement.fallbackAnchor(screen: screen.frame, visible: visible)
+        }
         let frame = MenuBarPanelPlacement.frame(fitting: size, anchor: buttonRect, visible: visible)
         if window.frame != frame {
             panelLogger.debug("panel placed: \(Int(frame.width), privacy: .public)x\(Int(frame.height), privacy: .public)")
@@ -281,6 +296,23 @@ final class MenuBarPanelController {
         if window.frame != frame { window.setFrame(frame, display: true) }
         if let content = window.contentView, content.frame.size != frame.size {
             content.frame = NSRect(origin: .zero, size: frame.size)
+        }
+    }
+
+    /// 换一扇要盯的锚点窗口(nil = 不盯)。只在 `followsAnchorWindow` 时重摆:锚点一开始就在屏上时面板照旧不跟着图标挪。
+    private func observeAnchorWindow(_ anchorWindow: NSWindow?) {
+        anchorMoveObservers.forEach(NotificationCenter.default.removeObserver)
+        anchorMoveObservers = []
+        followsAnchorWindow = false
+        guard let anchorWindow else { return }
+        let names = [NSWindow.didMoveNotification, NSWindow.didResizeNotification, NSWindow.didChangeScreenNotification]
+        anchorMoveObservers = names.map { name in
+            NotificationCenter.default.addObserver(forName: name, object: anchorWindow, queue: .main) { [weak self] _ in
+                MainActor.assumeIsolated {
+                    guard let self, self.followsAnchorWindow, let host = self.panelHost else { return }
+                    self.place(size: host.fittingSize)
+                }
+            }
         }
     }
 

@@ -1912,6 +1912,17 @@ func runMenuBarTests() {
                     && sourceHas(sourceBody("private func place(size: CGSize)", in: panel), "Self.apply(frame, to: window)")
                     && sourceHas(sourceBody("private func placeGallery()", in: panel), "Self.apply(frame, to: window)"), true,
                     "面板尺寸: 先把内容视图设成新尺寸再改窗口、改完再对齐,主面板和「可添加」都只经这一处改 frame")
+        // 锚点窗口还没摆上屏(冷启动后系统还没排好新状态栏项)时按它摆,面板 1 点高、在屏外,宿主每轮布局都报尺寸,主线程一直在
+        // 摆窗口(06 章决策 109)。摆位先判锚点在不在屏上,不在就借菜单栏下沿正中,锚点窗口挪到位再重摆;收起时不再盯。
+        let placeBody = sourceBody("private func place(size: CGSize)", in: panel)
+        let observeBody = sourceBody("private func observeAnchorWindow(_ anchorWindow: NSWindow?)", in: panel)
+        expectEqual(sourceHas(placeBody, "if !MenuBarPanelPlacement.anchorIsPlaced(anchorWindow.frame, screens: NSScreen.screens.map(\\.frame)),")
+                    && sourceHas(placeBody, "followsAnchorWindow = true\nvisible = screen.visibleFrame\nbuttonRect = MenuBarPanelPlacement.fallbackAnchor(screen: screen.frame, visible: visible)\n}\nlet frame = MenuBarPanelPlacement.frame(")
+                    && sourceHas(sourceBody("func toggle(relativeTo anchor: NSView", in: panel), "observeAnchorWindow(anchor.window)\nwindow.setContent(host)")
+                    && sourceHas(sourceBody("func close()", in: panel), "observeAnchorWindow(nil)")
+                    && sourceHas(observeBody, "followsAnchorWindow = false\nguard let anchorWindow else { return }")
+                    && sourceHas(observeBody, "guard let self, self.followsAnchorWindow, let host = self.panelHost else { return }\nself.place(size: host.fittingSize)"), true,
+                    "面板摆位: 锚点还没上屏时借菜单栏下沿正中、锚点窗口挪动时重摆,收起时拆掉")
         // 内容贴顶:对不上高度的那一帧不许上下居中(翻面时整个面板抖一下),minHeight: 0 不能省(06 章决策 45)。
         expectEqual(panel.contains(".frame(minWidth: 0, maxWidth: .infinity, minHeight: 0, maxHeight: .infinity, alignment: .top)"), true,
                     "面板尺寸: 内容贴着窗口顶边摆")
@@ -1932,6 +1943,17 @@ func runMenuBarTests() {
         expectEqual(half.size, CGSize(width: 337, height: 384), "面板摆位: 宽高按整点向上取整(窗口尺寸落在整点上)")
         let edge = P.frame(fitting: CGSize(width: 336, height: 200), anchor: CGRect(x: 1450, y: 923, width: 20, height: 33), visible: visible)
         expectEqual(edge.maxX, visible.maxX - P.margin, "面板摆位: 锚点贴屏幕右边时左挪到可用区里")
+        // 冷启动后状态栏项窗口先在 (0, 0) 高 0,再挪到屏幕下沿外面,最后才到菜单栏上(06 章决策 109)。
+        let screens = [CGRect(x: 0, y: 0, width: 1470, height: 956)]
+        expectEqual(P.anchorIsPlaced(CGRect(x: 1155, y: 923, width: 38, height: 33), screens: screens), true, "面板锚点: 菜单栏上的图标窗口算摆好了")
+        expectEqual(P.anchorIsPlaced(CGRect(x: 0, y: 0, width: 38, height: 0), screens: screens)
+                    || P.anchorIsPlaced(CGRect(x: 0, y: -33, width: 54, height: 33), screens: screens), false,
+                    "面板锚点: 窗口高 0、在屏幕下沿外面的都不算摆好")
+        expectEqual(P.frame(fitting: CGSize(width: 336, height: 384), anchor: CGRect(x: 0, y: 0, width: 38, height: 0), visible: visible).height, 1,
+                    "面板锚点: 按没摆好的锚点摆,面板只剩 1 点高(所以要先判)")
+        let fallback = P.frame(fitting: CGSize(width: 336, height: 384),
+                               anchor: P.fallbackAnchor(screen: screens[0], visible: visible), visible: visible)
+        expectEqual(fallback, CGRect(x: 567, y: 535, width: 336, height: 384), "面板锚点: 没摆好时摆在菜单栏下沿正中,高度照内容")
         expectEqual(P.needsReport(fitting: CGSize(width: 336.5, height: 383.5), current: CGSize(width: 337, height: 384)), false,
                     "面板报尺寸: 跟摆位同一个整点口径,摆好之后不再觉得差半点")
         expectEqual(P.needsReport(fitting: CGSize(width: 336, height: 385), current: CGSize(width: 336, height: 384)), true,
