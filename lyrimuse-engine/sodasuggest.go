@@ -25,7 +25,8 @@ import (
 //     问到歌名、歌手、版本都对得上的就停(sodaSuggestQueries / sodaSuggestFound);
 //   - 提示里含着去括号歌名的曲目才去问 `seo_track`,一次最多 sodaSuggestMaxLookups 条,并发问;`seo_track` 给的歌名、
 //     歌手、专辑、时长、试听段拼成跟整页搜索同一个形状的 sodaSearchItem,之后的身份闸、排序、试听段挑选都不分来路;
-//   - 问到的歌词顺手放进 sodaCache(按曲目 id),取词那一步不再问一遍。见 09 章决策 375。
+//   - 问到的歌词先放进有上限的 sodaSuggestLyrics(按曲目 id,上限 sodaSuggestLyricsMax),选中那首取词时由 sodaLyricByID
+//     挪进 sodaCache,不再问一遍。见 09 章决策 375、381。
 
 const (
 	// sodaSuggestPath:搜索联想。主机同整页搜索(sodaSearchHosts)。
