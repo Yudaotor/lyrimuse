@@ -30,6 +30,13 @@ struct LyrimuseApp: App {
         Settings {
             SettingsView()
         }
+        // 设置窗口默认是「按内容定尺寸」的:SwiftUI 会把窗口的 contentMinSize 和 contentMaxSize
+        // 钉成同一个值(探针里实测是 600×432 那档),于是 SettingsWindowConfigurator 往 styleMask
+        // 里补出来的 .resizable 形同虚设 —— 四边拖不动,设置页在 13 英寸这类小屏上左右/上下都看不全。
+        // `.contentMinSize` 把上限重新打开:窗口最小尺寸仍由 SettingsView 的 .frame(minWidth:minHeight:)
+        // 兜着,最大可以拖到屏幕边缘。这个修饰符**不会**给 styleMask 加 .resizable(实测仍是 32771),
+        // 所以 SettingsWindowConfigurator 里那次插入仍要保留,两者缺一不可。
+        .windowResizability(.contentMinSize)
         // 主菜单的「关于」「检查更新…」「帮助」跟状态栏菜单对齐,见 AppMainMenuCommands。
         .commands { AppMainMenuCommands() }
         // 工具栏样式**不在这里改**:`Settings` 场景把 NSWindow 的 toolbarStyle 钉成了

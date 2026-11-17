@@ -103,6 +103,17 @@ func runCrashHardeningTests() {
                 "菜单栏面板:按像素比尺寸、摆窗口时不重入")
     expectEqual(sourceHas(source("lyrimuse/SettingsView.swift"), "minHeight: SettingsWindowHeight.minimum(visibleHeight: NSScreen.main?.visibleFrame.height)"),
                 true, "设置窗口:最小高度按屏幕可用高度封顶")
+    let appScene = source("lyrimuse/App.swift")
+    expectEqual(sourceHas(appScene, "Settings {\n            SettingsView()\n        }")
+                    && sourceHas(appScene, ".windowResizability(.contentMinSize)"),
+                true, "设置窗口: Settings 场景放开尺寸上限(SwiftUI 默认把 contentMinSize/contentMaxSize 钉成同一个值,窗口四边拖不动)")
+    expectEqual(sourceHas(source("lyrimuse/SettingsView.swift"), "window.styleMask.insert([.resizable, .miniaturizable])"),
+                true, "设置窗口: styleMask 里补 .resizable(.windowResizability 只放开上限,不会加这一位)")
+    expectEqual(sourceHas(source("lyrimuse/SettingsView.swift"), "WindowFrameFit.clamp(window.frame, into: screen.visibleFrame)"),
+                true, "设置窗口: 存档 frame 夹回屏幕可见区(以前拖不宽时用户会把窗口拖到屏幕外)")
+    expectEqual(sourceHas(source("lyrimuse/SettingsView.swift"), "NSWindow.didBecomeKeyNotification")
+                    && sourceHas(source("lyrimuse/SettingsView.swift"), "Self.ensureResizable(window)"),
+                true, "设置窗口: 每次变成 key / 更新时再补 .resizable(SwiftUI 会在窗口配置阶段把它盖掉)")
     let mini = source("lyrimuse/UI/LyricsMiniPanel.swift")
     expectEqual(sourceHas(mini, "host.sizingOptions = []\npanel.contentMinSize = LyricsMiniPanel.minimumContentSize"), true,
                 "迷你面板:最小尺寸自己设,不让 SwiftUI 在布局回调里改面板")

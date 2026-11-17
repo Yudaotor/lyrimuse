@@ -8601,19 +8601,34 @@ private struct AboutSettingsTab: View {
 /// 上声明的 idealHeight 只决定它开出来多大。而「歌词显示」页顶上钉着 205pt 的固定头部,
 /// 窗口拉不高的话滚动区就一直很憋屈。
 ///
+/// **只插 styleMask 还不够。** Settings scene 默认是「按内容定尺寸」:SwiftUI 会把窗口的
+/// `contentMinSize` 和 `contentMaxSize` 钉成同一个值(按内容适配尺寸),这时窗口依旧四边
+/// 拖不动 —— 13 英寸这类小屏上设置页右边和底下都会看不全。真正的开关是 App.swift 里给
+/// `Settings` 场景声明的 `.windowResizability(.contentMinSize)`:它把尺寸上限重新打开,
+/// 最小尺寸仍由 SettingsView 的 .frame(minWidth:minHeight:) 兜着。那个修饰符只放开上限,
+/// **不会**往 styleMask 里加 `.resizable`(实测修饰符加上之后 styleMask 仍是 32771)。
+///
+/// 而且补位不能只做一次:SwiftUI 在窗口配置阶段会把 `.resizable` 再盖掉一次(启动时按默认
+/// 创建、随后又被关掉的那扇窗尤其如此)。WindowHookView 在挂上、下一拍以及之后每次窗口
+/// 变成 key / 更新时都再检查一遍,缺了就补。
+///
 /// 同一个 32771 里也没有 .miniaturizable —— 黄灯是灰的,点不动。那是苹果给 Settings scene
 /// 定的默认,系统「设置」自己也这样;但这一页很长、内容也不是"改完就关"的一次性面板
 /// (Last.fm 统计、歌词管理入口都在里面),留着能收起来更顺手,所以一并开了。收起来之后跟
 /// 普通窗口一样在 Dock 右侧那段可以点回来,不受这个 App 是否显示 Dock 图标影响。
 ///
-/// scene 修饰符 .windowResizability(.contentMinSize) 对 Settings scene 无效(加上之后
-/// styleMask 纹丝不动),只能在 NSWindow 这一层开。缩放下限仍由 SettingsView 上声明的
-/// minWidth/minHeight 兜着。
+/// scene 修饰符 .windowResizability 对 Settings scene 的 styleMask 无效(它不会加 .resizable),
+/// 只能在 NSWindow 这一层补。缩放下限仍由 SettingsView 上声明的 minWidth/minHeight 兜着。
 ///
-/// 这里**只**动 styleMask。别顺手改 collectionBehavior(.auxiliary / .fullScreenNone)
-/// 或开 isMovableByWindowBackground —— "设置窗口拖不到另一块屏"跟这个窗口无关(全屏 Space
-/// 本来就不接受任何窗口拖入,换别的 App 一样进不去),那些改动解决不了任何问题,留着只会
-/// 给后来的人埋假线索。
+/// 还有一处:窗口 frame 是系统按上次的存档恢复的。设置窗口以前拖不大,用户常常把整扇窗口往
+/// 左拖去看右边的内容,存下来的原点就挂在屏幕外(本机存档是 x = -370)。打开时用
+/// `WindowFrameFit.clamp` 夹回当前屏幕,否则能拖了也还是缺一截。先同步夹一次,下一拍再补一次
+/// —— AppKit 可能在这之后才把存档 frame 应用上去。
+///
+/// 除了 styleMask / toolbarStyle 和这一次夹 frame,别顺手改 collectionBehavior(.auxiliary /
+/// .fullScreenNone)或开 isMovableByWindowBackground —— "设置窗口拖不到另一块屏"跟这个窗口无关
+/// (全屏 Space 本来就不接受任何窗口拖入,换别的 App 一样进不去),那些改动解决不了任何问题,
+/// 留着只会给后来的人埋假线索。
 struct SettingsWindowConfigurator: NSViewRepresentable {
     /// 顺带把窗口交给它盯可见性(预览停表用)。跟 styleMask 无关,只是这里是唯一拿得到 NSWindow 的地方。
     let surface: SettingsWindowSurface
@@ -8627,7 +8642,6 @@ struct SettingsWindowConfigurator: NSViewRepresentable {
         // runloop 取一次 view.window、拿不到就放弃 —— 那一拍还没挂上的话窗口拉不大、黄灯是灰的、预览停表也不接。
         view.onWindow = { window in
             surface.attach(window)
-            window.styleMask.insert([.resizable, .miniaturizable])
             // `Settings` 场景默认给窗口的是 `.preference` 样式 —— AppKit 对它的定义就是
             // 「标题独占一行、工具栏项整体居中」,于是详情列最左那对前进/后退键被顶到了
             // 正中(实测截图)。`.unified` 让标题回到侧栏右边、跟工具栏项同一行,
@@ -8639,6 +8653,9 @@ struct SettingsWindowConfigurator: NSViewRepresentable {
             // `.navigation`,放进 `WindowGroup`(默认样式与 `.expanded` 都试过)本来就落在最左;
             // 离线探针窗口把五种 placement 并排摆过一遍,`.navigation` 确实是最左那一档。
             window.toolbarStyle = .unified
+            // `.resizable` / 存档 frame 都交给 WindowHookView 在挂上、下一拍和每次变成
+            // key / 更新时补:SwiftUI 会在窗口配置阶段把 styleMask 盖回去,只在这一处补一次
+            // 会被它盖掉(启动时创建、随后又被关掉的那扇窗尤其如此)。
             // 启动流程里 SwiftUI 按默认开出来的这扇当场关掉。先透明、下一拍再关,不闪一下;
             // 关完把透明度还原,Settings 场景下次可能还用这扇窗(14 章决策 62)。
             // 关窗期间不许有窗口动画:开 / 关动画结束时会把透明度还原成动画开始时的 0,盖掉这里设回的 1,
@@ -8668,9 +8685,17 @@ struct SettingsWindowConfigurator: NSViewRepresentable {
         private weak var configured: NSWindow?
         /// 侧栏收不起来(SettingsSidebarCollapseGuard)。跟着这个视图活,窗口关了一起没。
         private let sidebarGuard = SettingsSidebarCollapseGuard()
+        /// 窗口 chrome 的补位观察者(styleMask / 存档 frame),见 `attachChrome`。
+        private var chromeObservers: [NSObjectProtocol] = []
+        /// 关过之后再打开时要重新把 frame 夹回屏幕。用户在窗口开着时自己拖到边上不算。
+        private var needsClampOnShow = true
 
         func setSidebarDefaultWidth(_ width: CGFloat) {
             sidebarGuard.setDefaultWidth(width)
+        }
+
+        deinit {
+            chromeObservers.forEach(NotificationCenter.default.removeObserver)
         }
 
         override func viewDidMoveToWindow() {
@@ -8679,6 +8704,60 @@ struct SettingsWindowConfigurator: NSViewRepresentable {
             configured = window
             onWindow?(window)
             sidebarGuard.attach(to: window)
+            attachChrome(to: window)
+        }
+
+        /// SwiftUI 会在窗口配置阶段把 styleMask 盖回自己的那一套(去掉 .resizable),之后
+        /// 开着设置页时也可能在更新里再盖一次。所以在挂上时补、下一拍再补,并盯着
+        /// didBecomeKey / didUpdate 一直补;只查标志位,没缺就立刻返回。
+        private func attachChrome(to window: NSWindow) {
+            chromeObservers.forEach(NotificationCenter.default.removeObserver)
+            chromeObservers.removeAll()
+
+            Self.ensureResizable(window)
+            Self.clampToScreen(window)
+            DispatchQueue.main.async { [weak self, weak window] in
+                guard let self, let window else { return }
+                Self.ensureResizable(window)
+                if self.needsClampOnShow {
+                    self.needsClampOnShow = false
+                    Self.clampToScreen(window)
+                }
+            }
+
+            let center = NotificationCenter.default
+            for name in [NSWindow.didBecomeKeyNotification, NSWindow.didBecomeMainNotification,
+                         NSWindow.didUpdateNotification, NSWindow.didExposeNotification] {
+                chromeObservers.append(center.addObserver(forName: name, object: window, queue: .main) { [weak self, weak window] note in
+                    guard let self, let window else { return }
+                    Self.ensureResizable(window)
+                    if note.name == NSWindow.didBecomeKeyNotification, self.needsClampOnShow {
+                        self.needsClampOnShow = false
+                        Self.clampToScreen(window)
+                    }
+                })
+            }
+            chromeObservers.append(center.addObserver(forName: NSWindow.willCloseNotification, object: window, queue: .main) { [weak self] _ in
+                self?.needsClampOnShow = true
+            })
+        }
+
+        private static func ensureResizable(_ window: NSWindow) {
+            guard !window.styleMask.contains(.resizable) || !window.styleMask.contains(.miniaturizable) else { return }
+            window.styleMask.insert([.resizable, .miniaturizable])
+        }
+
+        /// 把存下来的窗口 frame 夹回它所在那块屏的可见区。`window.screen` 在刚挂上、还没上屏时
+        /// 可能是 nil,这时按"存档 frame 跟哪块屏相交"选,别直接退回 `NSScreen.main` —— 那样会把
+        /// 停在外接屏上的窗口硬拽回内置屏。一块屏都不相交才用主屏。
+        private static func clampToScreen(_ window: NSWindow) {
+            let screen = window.screen
+                ?? NSScreen.screens.first { $0.visibleFrame.intersects(window.frame) }
+                ?? NSScreen.main
+            guard let screen else { return }
+            let target = WindowFrameFit.clamp(window.frame, into: screen.visibleFrame)
+            guard target != window.frame else { return }
+            window.setFrame(target, display: false)
         }
     }
 }
