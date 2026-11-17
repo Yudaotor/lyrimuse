@@ -634,14 +634,15 @@ enum DebugDeepLinks {
 
     // MARK: 窗口快照
 
-    /// 名字认这几个:settings / lyrics-manager / lyrics-window / lyrics-search / onboarding(SwiftUI 场景 id)、
-    /// panel(菜单栏面板)、overlay(悬浮歌词)、notch(灵动岛);都不是时按窗口标识、标题、类名里含这个名字找。
+    /// 名字认这几个:settings / lyrics-manager / lyrics-search / onboarding(SwiftUI 场景 id)、lyrics-window(屏上那扇歌词窗口,
+    /// 迷你面板或完整窗口)、panel(菜单栏面板)、overlay(悬浮歌词)、notch(灵动岛);都不是时按窗口标识、标题、类名里含这个名字找。
     /// 只找看得见的窗口,不为了拍照把窗口建出来。
     static func window(named name: String) -> NSWindow? {
         let visible = NSApp.windows.filter(\.isVisible)
         let key: String
         switch name {
         case "lyrics-search": key = "lyrics-quick-search"
+        case "lyrics-window": return visibleLyricsWindow
         case "panel": return PanelEditBridge.shared.mainWindow.flatMap { $0.isVisible ? $0 : nil }
         case "panel-gallery": return PanelEditBridge.shared.galleryWindow.flatMap { $0.isVisible ? $0 : nil }
         default: key = name
@@ -689,13 +690,15 @@ enum DebugDeepLinks {
         let overlayRomanization: Bool
         let windowRomanization: Bool
         let japaneseReading: JapaneseReadingStyle
+        let lyricsWindow: DebugLyricsWindowForm?
+        let lyricsWindowMini: Bool
     }
 
     private static var checkpointSaved: Checkpoint?
 
     /// 验证时会开、会关的那几种窗口(SwiftUI 场景)。悬浮歌词、灵动岛、菜单栏这些常驻窗口不在这里:恢复时不碰它们的窗口,
-    /// 只按开关设回去。
-    private static let sceneIDs = ["settings", "lyrics-manager", "lyrics-window", "lyrics-quick-search", "lyrics-share", "whats-new", "onboarding"]
+    /// 只按开关设回去。歌词窗口也不在这里:它有迷你、完整两种形态,按形态记、按形态恢复(`restoreLyricsWindow`)。
+    private static let sceneIDs = ["settings", "lyrics-manager", "lyrics-quick-search", "lyrics-share", "whats-new", "onboarding"]
 
     private static func openSceneWindows() -> [String: NSWindow] {
         var found: [String: NSWindow] = [:]
@@ -714,11 +717,44 @@ enum DebugDeepLinks {
             lockPosition: s.lockPosition,
             overlayTranslation: s.overlayShowTranslation, windowTranslation: s.showTranslation,
             overlayRomanization: s.overlayShowRomanization, windowRomanization: s.showRomanization,
-            japaneseReading: s.japaneseReadingStyle)
+            japaneseReading: s.japaneseReadingStyle,
+            lyricsWindow: lyricsWindowForm(),
+            lyricsWindowMini: UserDefaults.standard.bool(forKey: LyricsWindowSession.miniModeKey))
         logger.notice("debug checkpoint saved")
     }
 
-    /// 关掉记下之后才开出来的场景窗口、收起记下时没开的面板;开关只设有变化的那几个(走同一套开关动作,不一下闪一串回声)。
+    /// 此刻歌词窗口的形态:迷你面板在就是迷你(被「暂停时隐藏」这类规则藏着、最小化着也算,面板关掉后才放掉),
+    /// 否则看完整那扇在不在屏上。
+    private static func lyricsWindowForm() -> DebugLyricsWindowForm? {
+        if LyricsMiniPanelHost.panel != nil { return .mini }
+        return fullLyricsWindow() != nil ? .full : nil
+    }
+
+    /// 屏上的完整歌词窗口。按场景 id 前缀认,同 `visibleLyricsWindow`。
+    private static func fullLyricsWindow() -> NSWindow? {
+        NSApp.windows.first {
+            $0.isVisible && !($0 is LyricsMiniPanel) && $0.identifier?.rawValue.hasPrefix("lyrics-window") == true
+        }
+    }
+
+    /// 歌词窗口回到记下时的形态。切回 / 开回走「切换迷你」那条动作:开着就两扇交接,「开着」(`np:lyricsWindowOpen`)照旧记着;
+    /// 别写成关窗再开。回到完整那扇时不激活 App,开好摆到最前不当 key;迷你面板自己上屏,不摆(07 章决策 213)。
+    private static func restoreLyricsWindow(_ saved: Checkpoint) {
+        let now = lyricsWindowForm()
+        switch DebugLyricsWindowRestore.plan(saved: saved.lyricsWindow, now: now) {
+        case .keep:
+            break
+        case .close:
+            (now == .mini ? LyricsMiniPanelHost.panel : fullLyricsWindow())?.close()
+            UserDefaults.standard.set(saved.lyricsWindowMini, forKey: LyricsWindowSession.miniModeKey)
+        case let .show(mini):
+            WindowActivation.beginBackground()
+            LyrimuseActionRunner.perform(.toggleLyricsWindowMiniHotkey, on: mini)
+            if !mini { WindowActivation.surface(identifier: "lyrics-window") }
+        }
+        logger.notice("debug restore lyrics window saved=\(String(describing: saved.lyricsWindow), privacy: .public) now=\(String(describing: now), privacy: .public)")
+    }
+
     private static func endSimulation() {
         guard PlaybackSimulation.isActive else { return }
         PlaybackSimulation.end()
@@ -727,7 +763,8 @@ enum DebugDeepLinks {
         logger.notice("debug simulate off")
     }
 
-    /// 模拟播放不管记下时开没开,一律收掉。
+    /// 关掉记下之后才开出来的场景窗口、歌词窗口回到记下时的形态、收起记下时没开的面板;开关只设有变化的那几个
+    /// (走同一套开关动作,不一下闪一串回声)。模拟播放不管记下时开没开,一律收掉。
     private static func restore() {
         endSimulation()
         guard let saved = checkpointSaved else {
@@ -737,6 +774,7 @@ enum DebugDeepLinks {
         for (id, window) in openSceneWindows() where !saved.sceneWindows.contains(id) {
             window.close()
         }
+        restoreLyricsWindow(saved)
         if MenuBarStatusItem.shared.isPanelOpen && !saved.panelOpen {
             MenuBarStatusItem.shared.togglePanelFromDeepLink()
         }

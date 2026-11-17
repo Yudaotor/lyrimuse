@@ -663,6 +663,27 @@ func runDeepLinkTests() {
                     && sourceHas(surfaced, "if scene == \"lyrics-window\", UserDefaults.standard.bool(forKey: LyricsWindowSession.miniModeKey) { return nil }")
                     && !sourceHas(surfaceRouter, "if background, let scene = sceneID(for: link)"), true,
                     "后台开窗: 歌词窗口这一下之后是迷你就不摆完整那扇(切回迷你、开成迷你时不会冒出两扇)")
+        // debug/restore 对歌词窗口:按记下时的形态回去,迷你面板也算开着;切回、开回都不关窗(关窗把「开着」记成没开)。
+        let plan = DebugLyricsWindowRestore.plan
+        expectEqual([plan(.mini, .full), plan(.full, .mini), plan(.mini, nil), plan(.full, nil)],
+                    [.show(mini: true), .show(mini: false), .show(mini: true), .show(mini: false)],
+                    "debug/restore: 记下时开着,形态变了或被关了就按记下的形态切回 / 开回")
+        expectEqual([plan(nil, .mini), plan(nil, .full), plan(nil, nil), plan(.mini, .mini), plan(.full, .full)],
+                    [.close, .close, .keep, .keep, .keep],
+                    "debug/restore: 记下时没开就关掉此刻那扇(迷你面板也关),形态没变不动")
+        let restoreWindows = sourceBody("private static func restoreLyricsWindow(", in: debug)
+        expectEqual([sourceHas(sourceBody("private static func lyricsWindowForm(", in: debug),
+                               "if LyricsMiniPanelHost.panel != nil { return .mini }"),
+                     sourceHas(debug, "lyricsWindow: lyricsWindowForm(),"),
+                     sourceHas(sourceBody("private static func restore()", in: debug), "restoreLyricsWindow(saved)"),
+                     !debug.contains("\"lyrics-manager\", \"lyrics-window\""),
+                     sourceHas(restoreWindows, "switch DebugLyricsWindowRestore.plan(saved: saved.lyricsWindow, now: now) {"),
+                     sourceHas(restoreWindows, "WindowActivation.beginBackground() LyrimuseActionRunner.perform(.toggleLyricsWindowMiniHotkey, on: mini)")],
+                    [true, true, true, true, true, true],
+                    "debug/restore: 记下迷你面板,歌词窗口不按场景 id 关,按形态走切换动作、不激活 App")
+        expectEqual(sourceHas(sourceBody("static func window(named name: String) -> NSWindow? {", in: debug),
+                              "case \"lyrics-window\": return visibleLyricsWindow"), true,
+                    "debug: snapshot / window-click / window-key / drag-region 的 lyrics-window 也认迷你面板")
         let activation = source("lyrimuse/Settings/WindowActivation.swift")
         expectEqual(sourceHas(sourceBody("static func openScene(", in: activation),
                               "if surfaceIfOnScreen(identifier) { return } activateApp() open()"),
