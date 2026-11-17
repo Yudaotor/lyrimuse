@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"slices"
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -118,12 +119,13 @@ func TestSodaSearchItemFromSeo(t *testing.T) {
 // sodaSuggestFake:整页搜索按 searchBody 答,联想按 sugBody 答,seo_track 按 id 给 seoByID 里的应答。
 func sodaSuggestFake(t *testing.T, searchStatus int, searchBody, sugBody string, seoByID map[string]sodaSeoTrackResponse) *kgFake {
 	t.Helper()
-	savedSearch, savedLyrics, savedMeta := sodaSearchCache, sodaCache, sodaSuggestMeta
+	savedSearch, savedLyrics, savedMeta, savedSugLyrics := sodaSearchCache, sodaCache, sodaSuggestMeta, sodaSuggestLyrics
 	sodaSearchCache, sodaCache, sodaSuggestMeta = map[string]sodaSearchCacheEntry{}, map[string]sodaResult{}, map[string]sodaSearchItem{}
+	sodaSuggestLyrics = map[string]sodaResult{}
 	savedDrift := parserDrift
 	parserDrift = map[string]*parserDriftEntry{}
 	t.Cleanup(func() {
-		sodaSearchCache, sodaCache, sodaSuggestMeta = savedSearch, savedLyrics, savedMeta
+		sodaSearchCache, sodaCache, sodaSuggestMeta, sodaSuggestLyrics = savedSearch, savedLyrics, savedMeta, savedSugLyrics
 		parserDrift = savedDrift
 	})
 	return withKugouFakeReq(t, func(r *http.Request, target string) (int, string) {
@@ -184,6 +186,34 @@ func TestSodaSearchFallsBackToSuggestWhenSearchRefused(t *testing.T) {
 	sodaSearchMu.Unlock()
 	if cached != 1 {
 		t.Errorf("完整的联想结果照常缓存, 缓存了 %d 条", cached)
+	}
+	sodaMu.Lock()
+	_, pickedCached := sodaCache["82"]
+	_, otherCached := sodaCache["81"]
+	sodaMu.Unlock()
+	if !pickedCached || otherCached {
+		t.Errorf("选中的那首进 sodaCache、没选中的候选不进: 82=%v 81=%v", pickedCached, otherCached)
+	}
+}
+
+// 问联想时顺带拿到的词放在有上限的暂存表里,满了整张清掉。
+func TestSodaSuggestLyricsBounded(t *testing.T) {
+	seo := map[string]sodaSeoTrackResponse{}
+	for i := range sodaSuggestLyricsMax + 1 {
+		id := strconv.Itoa(900 + i)
+		seo[id] = sodaTestSeoFor(id, "Sorry", "方大同", 222653, sodaTestLyricContent)
+	}
+	sodaSuggestFake(t, http.StatusOK, "", sodaTestSugSorry, seo)
+	for i := range sodaSuggestLyricsMax + 1 {
+		if _, ok, err := sodaSuggestedItem(qqRoundCtx(), strconv.Itoa(900+i)); !ok || err != nil {
+			t.Fatalf("第 %d 条该认得出, ok=%v err=%v", i, ok, err)
+		}
+	}
+	sodaMu.Lock()
+	n, inCache := len(sodaSuggestLyrics), len(sodaCache)
+	sodaMu.Unlock()
+	if n != 1 || inCache != 0 {
+		t.Errorf("满了整张清掉、只问联想不进 sodaCache: 暂存 %d 条, sodaCache %d 条", n, inCache)
 	}
 }
 

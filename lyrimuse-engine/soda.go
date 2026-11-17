@@ -282,6 +282,12 @@ func sodaLyricByID(ctx context.Context, trackID, artist, title string) (sodaResu
 		sodaMu.Unlock()
 		return v, false
 	}
+	if v, ok := sodaSuggestLyrics[trackID]; ok {
+		delete(sodaSuggestLyrics, trackID)
+		sodaCache[trackID] = v
+		sodaMu.Unlock()
+		return v, false
+	}
 	sodaMu.Unlock()
 
 	ctx, sub := withLyricSubFetch(ctx)

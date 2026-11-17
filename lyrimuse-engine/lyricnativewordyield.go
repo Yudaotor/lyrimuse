@@ -1,5 +1,7 @@
 package main
 
+import "slices"
+
 // 同源加分让给对得上的逐字版(scoreTermNativeSourceYield)。判据与全库依据见 09 章决策 374。
 //
 // 智能算法下,当前第一名是跟正在放的播放器同源、只有逐行的那份,而别家有一份逐字候选同时满足:
@@ -7,7 +9,7 @@ package main
 //   - 显示轴跟同源那份对齐(classifyTimelines 判 timelineAligned);
 //   - 结尾没缺:同源那份最后一句正文在它的显示轴里配得上,或它最后一句不比同源那份早 timelineNearMs 以上。
 //
-// 就撤销同源那份的同源加分。撤销后的第一名必须是这样一份逐字候选,否则整批不动。播放器本地歌词
+// 就撤销同源那份的同源加分。撤销后的第一名必须是这样一份逐字候选、且接着的标题否决不会撤掉它的逐字加分,否则整批不动。播放器本地歌词
 // (isPlayerLocalLyricSource)不撤;「顺序优先」不比分,这一步不跑。
 
 // applyNativeSourceWordYield 两条流水线(rankLyricSourceResults、mergeLyricCandidateRounds)都要调,排在
@@ -37,11 +39,24 @@ func applyNativeSourceWordYield(results []scoredLyricCandidateResult) {
 	}
 	scores[n] = max(native.Score-bonus, 1) // 跟 scoreLyricCandidateDetailed 末尾同一条夹底纪律
 	top := topScoredIndex(results, scores)
-	if top == n || !nativeYieldTarget(results[top], nativeLines) {
+	if top == n || !nativeYieldTarget(results[top], nativeLines) || yieldLosesToTitleOverride(results, n, top, scores[n]) {
 		return
 	}
 	results[n].Score = scores[n]
 	results[n].ScoreTerms = append(results[n].ScoreTerms, scoreTerm{Kind: scoreTermNativeSourceYield, Points: -bonus})
+}
+
+// yieldLosesToTitleOverride 预演紧跟着的 applyWordTimingTitleOverride:让位之后接班的 top 会被撤掉逐字加分,
+// 就别让——不然冠军落到让位前排不上的第三家,或同源那份带着白扣的分照样赢(见 09 章决策 382)。
+func yieldLosesToTitleOverride(results []scoredLyricCandidateResult, native, top, nativeScore int) bool {
+	trial := make([]scoredLyricCandidateResult, len(results))
+	copy(trial, results)
+	for i := range trial {
+		trial[i].ScoreTerms = slices.Clip(trial[i].ScoreTerms)
+	}
+	trial[native].Score = nativeScore
+	applyWordTimingTitleOverride(trial)
+	return scoreTermPoints(trial[top].ScoreTerms, scoreTermWordTimingOverride) < 0
 }
 
 // nativeYieldTarget:c 是不是同源加分可以让出去的那种逐字候选(条件见文件头注)。

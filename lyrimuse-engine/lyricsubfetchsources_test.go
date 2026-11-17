@@ -90,12 +90,12 @@ func TestSodaSharePageResultNotCached(t *testing.T) {
 		return http.StatusNotFound, ""
 	})
 	sodaMu.Lock()
-	saved := sodaCache
-	sodaCache = map[string]sodaResult{}
+	saved, savedSug := sodaCache, sodaSuggestLyrics
+	sodaCache, sodaSuggestLyrics = map[string]sodaResult{}, map[string]sodaResult{}
 	sodaMu.Unlock()
 	t.Cleanup(func() {
 		sodaMu.Lock()
-		sodaCache = saved
+		sodaCache, sodaSuggestLyrics = saved, savedSug
 		sodaMu.Unlock()
 	})
 	r, _ := sodaLyricByID(qqRoundCtx(), "6705555863068739585", "a", "b")

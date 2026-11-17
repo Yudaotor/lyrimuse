@@ -8,6 +8,7 @@ import (
 	"net/url"
 	"os"
 	"os/exec"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -202,23 +203,20 @@ func kuwoCurrentUID(users []kuwoFavoriteUser) string {
 	return uid
 }
 
-// kuwoFavoriteRID 这首的 rid:播放列表里对上的优先(重复行算一个),没有再用歌词文件名;对上不止一个 ok=false。
+// kuwoFavoriteRID 这首的 rid:播放列表里按歌名歌手对上的和歌词文件名里的合起来(重复的算一个),恰好一个才算数。
+// 列表里对上的跟歌词文件给的不是同一个时 ok=false:正在放的可能是电台、推荐里同名的另一个版本,点喜欢会收藏错那首(见 02 章决策 270)。
 func kuwoFavoriteRID(queue, lyric []int64) (int64, bool) {
-	pick := func(ids []int64) (int64, bool, bool) {
-		set := map[int64]bool{}
-		for _, id := range ids {
-			set[id] = true
-		}
-		for id := range set {
-			return id, len(set) == 1, true
-		}
-		return 0, false, false
+	set := map[int64]bool{}
+	for _, id := range slices.Concat(queue, lyric) {
+		set[id] = true
 	}
-	if id, single, found := pick(queue); found {
-		return id, single
+	if len(set) != 1 {
+		return 0, false
 	}
-	id, single, _ := pick(lyric)
-	return id, single
+	for id := range set {
+		return id, true
+	}
+	return 0, false
 }
 
 // kuwoFavoritedIn 当前账号恰好一个「我喜欢听」、认得出这首的 rid 时,看它在不在里面;别的情况 ok=false。

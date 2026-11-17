@@ -38,6 +38,9 @@ const (
 	sodaSuggestParserName = "soda-search-suggest"
 	// sodaSuggestMetaMax:按 id 记住问到的曲目信息,满了整张清掉。别名轮、备用主机那一轮会拿同一批 id 再问。
 	sodaSuggestMetaMax = 512
+	// sodaSuggestLyricsMax:问联想时顺带拿到的词先放这张表(受 sodaMu 保护),满了整张清掉;选中那首取词时才挪进 sodaCache,
+	// 没选中的候选不在常驻进程里一直留着(见 09 章决策 381)。
+	sodaSuggestLyricsMax = 32
 )
 
 // errSodaSearchRefused:整页搜索或联想回了 200,应答体却不是认得的形状(空的、不是 JSON、缺结果字段)。
@@ -46,6 +49,7 @@ var errSodaSearchRefused = errors.New("answered 200 without a search result")
 var (
 	sodaSuggestMetaMu sync.Mutex
 	sodaSuggestMeta   = map[string]sodaSearchItem{}
+	sodaSuggestLyrics = map[string]sodaResult{}
 )
 
 type sodaSuggestion struct {
@@ -265,7 +269,7 @@ func sodaLookupSuggested(ctx context.Context, ids []string) ([]sodaSearchItem, e
 }
 
 // sodaSuggestedItem 问一条曲目的 seo_track。ok=false、err=nil:应答认不出这个 id(下架、端点换了形状),跳过。
-// 有词的那份放进 sodaCache:直取 seo_track,跟 sodaLyricByID 取到的是同一份、带译文。
+// 有词的那份先放进 sodaSuggestLyrics(跟 sodaLyricByID 取到的是同一份、带译文),选中时由 sodaLyricByID 挪进 sodaCache。
 func sodaSuggestedItem(ctx context.Context, id string) (sodaSearchItem, bool, error) {
 	sodaSuggestMetaMu.Lock()
 	it, ok := sodaSuggestMeta[id]
@@ -292,7 +296,10 @@ func sodaSuggestedItem(ctx context.Context, id string) (sodaSearchItem, bool, er
 	}
 	if r, _, broken := sodaParseSeoTrack(body); !broken && !r.empty() {
 		sodaMu.Lock()
-		sodaCache[id] = r
+		if len(sodaSuggestLyrics) >= sodaSuggestLyricsMax {
+			sodaSuggestLyrics = map[string]sodaResult{}
+		}
+		sodaSuggestLyrics[id] = r
 		sodaMu.Unlock()
 	}
 	sodaSuggestMetaMu.Lock()

@@ -214,3 +214,39 @@ func TestSongPlanLyricsNetsOutYieldedNativeBonus(t *testing.T) {
 		t.Fatalf("撤销过同源加分的那份该按 900 分、不算自家源加分,得到 %+v", l)
 	}
 }
+
+// 让位后接班的逐字版标题对不上、会被标题否决撤掉逐字加分:不让,冠军留在同源那份,也不留白扣的让位分。
+func TestNativeSourceWordYieldSkipsWhenTitleOverrideWouldStripHeir(t *testing.T) {
+	isolateNativeYieldFeatures(t, lyricsModeSmart)
+	for _, tc := range []struct {
+		name  string
+		third int
+	}{
+		{"第三家分数够得着同源让位后的分", 900},
+		{"第三家分数够不着", 700},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			heir := yieldResult("qq", yieldLRC(0, yieldLines), yieldYRC(0, yieldLines), yieldTerms(scoreTermDuration, 279,
+				scoreTermWordTiming, 400, scoreTermLines, 40, scoreTermAlbum, 120, scoreTermConsensus, 250))
+			third := yieldResult("kugou", yieldLRC(0, yieldLines), "", yieldTerms(scoreTermDuration, 280, scoreTermLines, 40,
+				scoreTermTitleMatch, 120, scoreTermConsensus, tc.third-440))
+			results := []scoredLyricCandidateResult{yieldNative(), heir, third}
+			applyNativeSourceWordYield(results)
+			applyWordTimingTitleOverride(results)
+			if top := topScoredIndex(results, scoresOf(results)); results[top].Source != "netease" {
+				t.Fatalf("冠军该留在同源那份, got %s %+v", results[top].Source, results)
+			}
+			if p := scoreTermPoints(results[0].ScoreTerms, scoreTermNativeSourceYield); p != 0 {
+				t.Errorf("没让成就不该留让位扣分, got %d", p)
+			}
+		})
+	}
+}
+
+func scoresOf(results []scoredLyricCandidateResult) []int {
+	s := make([]int, len(results))
+	for i, r := range results {
+		s[i] = r.Score
+	}
+	return s
+}

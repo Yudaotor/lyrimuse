@@ -20,9 +20,9 @@ func TestSodaSearchAsksBackupHostWhenPrimaryHasNoMatch(t *testing.T) {
 		backup  = "https://beta-luna.douyin.com/luna/search/track"
 	)
 	fresh := func(t *testing.T, primaryStatus int) *kgFake {
-		savedSearch, savedLyrics := sodaSearchCache, sodaCache
-		sodaSearchCache, sodaCache = map[string]sodaSearchCacheEntry{}, map[string]sodaResult{}
-		t.Cleanup(func() { sodaSearchCache, sodaCache = savedSearch, savedLyrics })
+		savedSearch, savedLyrics, savedSug := sodaSearchCache, sodaCache, sodaSuggestLyrics
+		sodaSearchCache, sodaCache, sodaSuggestLyrics = map[string]sodaSearchCacheEntry{}, map[string]sodaResult{}, map[string]sodaResult{}
+		t.Cleanup(func() { sodaSearchCache, sodaCache, sodaSuggestLyrics = savedSearch, savedLyrics, savedSug })
 		return withKugouFake(t, func(target string) (int, string) {
 			switch target {
 			case primary:

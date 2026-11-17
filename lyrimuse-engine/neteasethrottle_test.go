@@ -23,21 +23,25 @@ func TestNeteaseThrottle(t *testing.T) {
 		neteaseMinIntervalBetweenCalls = savedInterval
 	})
 	resetCooldowns := func() { neteaseCooldownUntil = map[string]time.Time{} }
+	// 判「不该等」的几条把最小间隔调到 5 秒、判据放 1 秒:误等一次至少 5 秒,机器忙时的调度抖动远小于 1 秒。
+	const longInterval, noWaitBound = 5 * time.Second, time.Second
 
 	t.Run("很久没调用过时不等待", func(t *testing.T) {
 		resetCooldowns()
+		neteaseMinIntervalBetweenCalls = longInterval
 		neteaseLastCall = time.Now().Add(-time.Hour)
 		start := time.Now()
 		if err := neteaseThrottle(context.Background(), "https://music.163.com/api/search/get/web"); err != nil {
 			t.Fatalf("neteaseThrottle() = %v, want nil", err)
 		}
-		if elapsed := time.Since(start); elapsed > 50*time.Millisecond {
+		if elapsed := time.Since(start); elapsed > noWaitBound {
 			t.Errorf("不该等待,实际等了 %v", elapsed)
 		}
 	})
 
 	t.Run("紧接着再调用一次要等满最小间隔", func(t *testing.T) {
 		resetCooldowns()
+		neteaseMinIntervalBetweenCalls = 60 * time.Millisecond
 		neteaseLastCall = time.Now()
 		start := time.Now()
 		if err := neteaseThrottle(context.Background(), "https://music.163.com/api/search/get/web"); err != nil {
@@ -51,6 +55,7 @@ func TestNeteaseThrottle(t *testing.T) {
 
 	t.Run("等待中途取消:提前返回错误,不占用这次调用名额", func(t *testing.T) {
 		resetCooldowns()
+		neteaseMinIntervalBetweenCalls = longInterval
 		neteaseLastCall = time.Now()
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
 		defer cancel()
@@ -60,7 +65,7 @@ func TestNeteaseThrottle(t *testing.T) {
 		if err == nil {
 			t.Fatal("ctx 超时应该返回错误,got nil")
 		}
-		if elapsed := time.Since(start); elapsed > neteaseMinIntervalBetweenCalls {
+		if elapsed := time.Since(start); elapsed > noWaitBound {
 			t.Errorf("应该在 ctx 超时(10ms)时就提前返回,实际等了 %v", elapsed)
 		}
 		if neteaseLastCall != beforeCall {
@@ -85,6 +90,7 @@ func TestNeteaseThrottle(t *testing.T) {
 		resetCooldowns()
 		neteaseLastCall = time.Now().Add(-time.Hour) // 最小间隔那层不参与,只看退避
 		const blocked = "https://music.163.com/api/search/get/web?type=1&s=a"
+		neteaseMinIntervalBetweenCalls = longInterval
 		neteaseReportBlocked(blocked, time.Second)
 
 		start := time.Now()
@@ -92,7 +98,7 @@ func TestNeteaseThrottle(t *testing.T) {
 		if !errors.Is(err, errNeteaseBucketCooling) {
 			t.Fatalf("neteaseThrottle() = %v, want errNeteaseBucketCooling", err)
 		}
-		if elapsed := time.Since(start); elapsed > 50*time.Millisecond {
+		if elapsed := time.Since(start); elapsed > noWaitBound {
 			t.Errorf("退避期内应当立刻返回,实际等了 %v", elapsed)
 		}
 	})
@@ -114,13 +120,14 @@ func TestNeteaseThrottle(t *testing.T) {
 		neteaseLastCall = time.Now().Add(-time.Hour)
 		const primary = "https://music.163.com/api/search/get/web?type=1&s=a"
 		const fallback = "https://music.163.com/api/search/get?type=1&s=a" // 不同路径,独立分桶
+		neteaseMinIntervalBetweenCalls = longInterval
 		neteaseReportBlocked(primary, time.Second)
 
 		start := time.Now()
 		if err := neteaseThrottle(context.Background(), fallback); err != nil {
 			t.Fatalf("neteaseThrottle() = %v, want nil", err)
 		}
-		if elapsed := time.Since(start); elapsed > 50*time.Millisecond {
+		if elapsed := time.Since(start); elapsed > noWaitBound {
 			t.Errorf("备用端点不该被主端点的退避连带卡住,实际等了 %v", elapsed)
 		}
 	})
