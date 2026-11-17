@@ -3030,13 +3030,8 @@ struct LyricsWindowView: View {
                         // 面板"贴按钮右缘、向右长出"而不是向左:按钮本来就在左栏靠右的位置,向左长出会
                         // 盖住左栏封面/曲目信息,向右正好落进歌词栏那片更空的区域。
                         ZStack(alignment: .bottomLeading) {
-                            // 全窗点击捕手(透明但可命中),点哪都只是关菜单。
-                            Color.black.opacity(0.001)
-                                .contentShape(Rectangle())
-                                .onTapGesture {
-                                    withAnimation(.easeOut(duration: 0.12)) { showsMoreMenu = false }
-                                }
-                                .transition(.opacity)
+                            // 全窗点击捕手,点哪都只是关菜单;App 不在前台时的第一下也算(见 FloatingPanelDismissCatcher)。
+                            FloatingPanelDismissCatcher { showsMoreMenu = false }
                             // 窗口窄时右侧放不下,FloatingPanelLayout 往左推回窗内(同输出面板)。
                             FloatingPanelLayout(x: moreAnchorRect.maxX, y: moreAnchorRect.minY - 8, grows: .top,
                                                 topInset: geo.safeAreaInsets.top) {
@@ -3055,12 +3050,7 @@ struct LyricsWindowView: View {
                         // 就是从「⋯」菜单里的「显示简介」点出来的,方向必须跟菜单一致,
                         // 不然会出现"菜单在右边、点进去的子面板跳回左边"的错位。
                         ZStack(alignment: .bottomLeading) {
-                            Color.black.opacity(0.001)
-                                .contentShape(Rectangle())
-                                .onTapGesture {
-                                    withAnimation(.easeOut(duration: 0.12)) { showsInfoPanel = false }
-                                }
-                                .transition(.opacity)
+                            FloatingPanelDismissCatcher { showsInfoPanel = false }
                             FloatingPanelLayout(x: moreAnchorRect.maxX, y: moreAnchorRect.minY - 8, grows: .top,
                                                 topInset: geo.safeAreaInsets.top) {
                                 trackInfoPanel
@@ -3079,12 +3069,7 @@ struct LyricsWindowView: View {
                 .overlay {
                     if let kind = editorialPanel, moreAnchorRect != .zero, let card = editorial.card(kind) {
                         ZStack(alignment: .bottomLeading) {
-                            Color.black.opacity(0.001)
-                                .contentShape(Rectangle())
-                                .onTapGesture {
-                                    withAnimation(.easeOut(duration: 0.12)) { editorialPanel = nil }
-                                }
-                                .transition(.opacity)
+                            FloatingPanelDismissCatcher { editorialPanel = nil }
                             FloatingPanelLayout(x: moreAnchorRect.maxX, y: moreAnchorRect.minY - 8, grows: .top,
                                                 topInset: geo.safeAreaInsets.top) {
                                 editorialPanelView(card)
@@ -3099,12 +3084,7 @@ struct LyricsWindowView: View {
                     if showsChartsPanel, moreAnchorRect != .zero {
                         // 同上,跟「⋯」菜单本体一起翻到按钮右边。
                         ZStack(alignment: .bottomLeading) {
-                            Color.black.opacity(0.001)
-                                .contentShape(Rectangle())
-                                .onTapGesture {
-                                    withAnimation(.easeOut(duration: 0.12)) { showsChartsPanel = false }
-                                }
-                                .transition(.opacity)
+                            FloatingPanelDismissCatcher { showsChartsPanel = false }
                             FloatingPanelLayout(x: moreAnchorRect.maxX, y: moreAnchorRect.minY - 8, grows: .top,
                                                 topInset: geo.safeAreaInsets.top) {
                                 ChartsPanelView()
@@ -3166,12 +3146,7 @@ struct LyricsWindowView: View {
                     if showsTranslationMenu, let anchor {
                         let r = geo[anchor]
                         ZStack(alignment: .bottomTrailing) {
-                            Color.black.opacity(0.001)
-                                .contentShape(Rectangle())
-                                .onTapGesture {
-                                    withAnimation(.easeOut(duration: 0.12)) { showsTranslationMenu = false }
-                                }
-                                .transition(.opacity)
+                            FloatingPanelDismissCatcher { showsTranslationMenu = false }
                             translationMenuPanel
                                 .fixedSize()
                                 .padding(.trailing, max(8, geo.size.width - r.maxX))
@@ -3194,12 +3169,7 @@ struct LyricsWindowView: View {
                         let r = geo[anchor]
                         let buttonBottom = r.maxY + 6
                         ZStack(alignment: .topLeading) {
-                            Color.black.opacity(0.001)
-                                .contentShape(Rectangle())
-                                .onTapGesture {
-                                    withAnimation(.easeOut(duration: 0.12)) { showsOutputMenu = false }
-                                }
-                                .transition(.opacity)
+                            FloatingPanelDismissCatcher { showsOutputMenu = false }
                             FloatingPanelLayout(x: r.minX - 16, y: buttonBottom + 8, grows: .bottom) {
                                 outputDevicePanel
                                     .transition(.opacity.combined(with: .scale(scale: 0.96, anchor: .top)))
@@ -7289,6 +7259,36 @@ private struct ListenHistoryPane: View {
         .padding(.bottom, 52)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .environment(\.colorScheme, onArtwork ? .dark : colorScheme)
+    }
+}
+
+/// 窗级自绘浮层下面那层全窗捕手:透明、铺满,点下去就关浮层(左、右、其他键都算,同系统 popover 按下就关)。
+/// 用 AppKit 视图、`acceptsFirstMouse` 为真:窗口不是 key(App 不在前台)时,SwiftUI 的 `onTapGesture` 收不到激活窗口的
+/// 那一下,浮层要再点一次才关。别换回 `Color` + `onTapGesture`(见 07 章决策 212)。
+private struct FloatingPanelDismissCatcher: NSViewRepresentable {
+    let dismiss: () -> Void
+
+    init(_ dismiss: @escaping () -> Void) { self.dismiss = dismiss }
+
+    func makeNSView(context: Context) -> CatcherView {
+        let view = CatcherView()
+        view.onPress = dismiss
+        return view
+    }
+
+    func updateNSView(_ view: CatcherView, context: Context) { view.onPress = dismiss }
+
+    final class CatcherView: NSView {
+        var onPress: (() -> Void)?
+        override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
+        override var mouseDownCanMoveWindow: Bool { false }
+        override func mouseDown(with event: NSEvent) { press() }
+        override func rightMouseDown(with event: NSEvent) { press() }
+        override func otherMouseDown(with event: NSEvent) { press() }
+
+        private func press() {
+            withAnimation(.easeOut(duration: 0.12)) { onPress?() }
+        }
     }
 }
 

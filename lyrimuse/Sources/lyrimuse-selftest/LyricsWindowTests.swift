@@ -1723,6 +1723,18 @@ func runLyricsWindowTests() {
                     "浮层落点(契约): FloatingPanelLayout 收宽、夹位置都走 FloatingPanelPlacement")
         expectEqual(view.components(separatedBy: "topInset: geo.safeAreaInsets.top) {").count - 1, 4,
                     "浮层落点(契约): 向上长的四块把顶部 safe area 算进窗口,不被压到「⋯」按钮上")
+        // 点外面关:六块浮层都垫同一层捕手,它认激活窗口的那一下(App 不在前台时第一下点外面就关)。
+        for state in ["showsMoreMenu = false", "showsInfoPanel = false", "editorialPanel = nil", "showsChartsPanel = false",
+                      "showsTranslationMenu = false", "showsOutputMenu = false"] {
+            expectEqual(view.contains("FloatingPanelDismissCatcher { \(state) }"), true,
+                        "浮层点外面关(契约): \(state) 那块垫 FloatingPanelDismissCatcher")
+        }
+        expectEqual(view.contains("Color.black.opacity(0.001)"), false,
+                    "浮层点外面关(契约): 不再用 Color + onTapGesture 当捕手(收不到激活窗口的那一下)")
+        let catcherBody = sourceBody("private struct FloatingPanelDismissCatcher: NSViewRepresentable", in: view)
+        expectEqual(sourceHas(catcherBody, "override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }")
+                    && sourceHas(catcherBody, "override func mouseDown(with event: NSEvent) { press() }"), true,
+                    "浮层点外面关(契约): 捕手认第一下点击、按下就关")
     }
 
     // ---- 窗口控制器的收尾与窗口不可见时停表(源码契约) ----
