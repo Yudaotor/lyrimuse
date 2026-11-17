@@ -288881,7 +288881,7 @@
         "tr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Arka planda çalışma Sistem Ayarları › Genel › Oturum Açma Öğeleri ve Uzantılar bölümünde kapatıldı, bu yüzden şarkı sözü motoru başlatılamıyor"
+            "value" : "Arka planda çalışma Sistem Ayarları › Genel › Oturum Açma Öğeleri ve Genişletmeler bölümünde kapatıldı, bu yüzden şarkı sözü motoru başlatılamıyor"
           }
         },
         "uk" : {
@@ -288893,7 +288893,7 @@
         "vi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Chạy nền đã bị tắt trong Cài đặt hệ thống › Cài đặt chung › Mục đăng nhập & tiện ích mở rộng nên công cụ lời bài hát không thể khởi động"
+            "value" : "Chạy nền đã bị tắt trong Cài đặt hệ thống › Cài đặt chung › Mục đăng nhập & Phần mở rộng nên công cụ lời bài hát không thể khởi động"
           }
         },
         "zh-Hans" : {

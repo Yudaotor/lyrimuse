@@ -1084,7 +1084,7 @@
 "已在「%@」中打开。逐字歌词仅修改文字，请勿改动每行开头的时间，保存后自动应用" = "Đã mở trong “%@”. Với lời theo từng chữ, chỉ sửa chữ, đừng đổi thời gian ở đầu mỗi dòng; thay đổi sẽ tự động áp dụng khi lưu";
 "已在「%@」中打开，保存后自动应用" = "Đã mở trong “%@”, thay đổi sẽ tự động áp dụng khi lưu";
 "已在「系统设置 › 通用 › 登录项」中关闭，开机启动不会生效" = "Đã tắt trong Cài đặt hệ thống › Cài đặt chung › Mục đăng nhập nên Lyrimuse sẽ không mở khi đăng nhập";
-"已在「系统设置 › 通用 › 登录项与扩展」中关闭后台运行，歌词引擎无法启动" = "Chạy nền đã bị tắt trong Cài đặt hệ thống › Cài đặt chung › Mục đăng nhập & tiện ích mở rộng nên công cụ lời bài hát không thể khởi động";
+"已在「系统设置 › 通用 › 登录项与扩展」中关闭后台运行，歌词引擎无法启动" = "Chạy nền đã bị tắt trong Cài đặt hệ thống › Cài đặt chung › Mục đăng nhập & Phần mở rộng nên công cụ lời bài hát không thể khởi động";
 "已在「设置 → 歌词 → 歌词来源」中关闭，本轮未查询" = "Đã tắt trong “Cài đặt → Lời bài hát → Nguồn lời bài hát”, vòng này không truy vấn";
 "已在播放但未显示歌词？请检查所选的播放器" = "Đang phát nhưng không thấy lời? Hãy kiểm tra trình phát đã chọn";
 "已在浏览器中打开 Last.fm 授权页面。请点按「Yes, allow access」完成授权，完成后将自动返回 Lyrimuse；如浏览器未自动跳转，也可返回此处点按下方按钮" = "Đã mở trang cấp quyền Last.fm trong trình duyệt. Bấm vào “Yes, allow access” để hoàn tất, sau đó sẽ tự động quay lại Lyrimuse; nếu trình duyệt không tự chuyển, có thể quay lại đây và bấm nút bên dưới";

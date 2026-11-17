@@ -1084,7 +1084,7 @@
 "已在「%@」中打开。逐字歌词仅修改文字，请勿改动每行开头的时间，保存后自动应用" = "%@ uygulamasında açıldı. Kelime kelime şarkı sözlerinde yalnızca kelimeleri değiştirin, her satırın başındaki zamana dokunmayın; kaydedince değişiklikler uygulanır";
 "已在「%@」中打开，保存后自动应用" = "%@ uygulamasında açıldı; kaydedince değişiklikler uygulanır";
 "已在「系统设置 › 通用 › 登录项」中关闭，开机启动不会生效" = "Sistem Ayarları › Genel › Oturum Açma Öğeleri bölümünde kapatıldı, bu yüzden Lyrimuse oturum açıldığında açılmaz";
-"已在「系统设置 › 通用 › 登录项与扩展」中关闭后台运行，歌词引擎无法启动" = "Arka planda çalışma Sistem Ayarları › Genel › Oturum Açma Öğeleri ve Uzantılar bölümünde kapatıldı, bu yüzden şarkı sözü motoru başlatılamıyor";
+"已在「系统设置 › 通用 › 登录项与扩展」中关闭后台运行，歌词引擎无法启动" = "Arka planda çalışma Sistem Ayarları › Genel › Oturum Açma Öğeleri ve Genişletmeler bölümünde kapatıldı, bu yüzden şarkı sözü motoru başlatılamıyor";
 "已在「设置 → 歌词 → 歌词来源」中关闭，本轮未查询" = "“Ayarlar → Şarkı Sözleri → Şarkı Sözü Kaynakları” bölümünde kapatıldı; bu aramada sorgulanmadı";
 "已在播放但未显示歌词？请检查所选的播放器" = "Çalıyor ama şarkı sözü görünmüyor mu? Seçili çaları denetleyin";
 "已在浏览器中打开 Last.fm 授权页面。请点按「Yes, allow access」完成授权，完成后将自动返回 Lyrimuse；如浏览器未自动跳转，也可返回此处点按下方按钮" = "Last.fm yetkilendirme sayfası tarayıcınızda açıldı. Bitirmek için orada “Yes, allow access” düğmesini tıklayın; ardından otomatik olarak Lyrimuse’a dönersiniz. Tarayıcı otomatik olarak yönlendirmezse aşağıdaki düğmeyi kullanın";
