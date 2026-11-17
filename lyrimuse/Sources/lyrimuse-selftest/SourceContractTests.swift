@@ -5151,7 +5151,7 @@ func runSourceContractSettingsTests() {
         // 解析(nan / inf / 1e20 直接转 Int 会崩);调偏移不再整库重建;逐句编辑一进来就有焦点,静态格子读屏能按(11 章决策 92)。
         expectEqual(manager.contains("AppActions.shared.openLyricsSearch(for: LyricsSearchTarget(")
                     && !manager.contains("$showSearchSheet")
-                    && manager.contains("await store.setInstrumental(keys: keys, true)")
+                    && manager.contains("await store.setInstrumental(keys: keys, true, undoable: true)")
                     && manager.contains("if s.key == kept { return true }")
                     && manager.contains("guard let ms = LyricsOffsetInput.milliseconds(from: editedOffsetSeconds) else {")
                     && !manager.contains("Int((seconds * 1000).rounded())")

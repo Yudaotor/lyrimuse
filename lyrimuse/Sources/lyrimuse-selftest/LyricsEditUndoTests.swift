@@ -2,7 +2,7 @@ import Foundation
 import LyrimuseCore
 
 /// 歌词改动之后的撤销:「搜索歌词…」采纳(11 章决策 177),歌词管理「保存修改」、外部编辑器存回、「重新自动匹配」、
-/// 标 / 撤纯音乐(11 章决策 178)。lyrics-manager 组开头调。
+/// 标 / 撤纯音乐(11 章决策 178),多选「全部标为纯音乐」(11 章决策 179)。lyrics-manager 组开头调。
 @MainActor
 func checkLyricsEditUndo() {
     let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
@@ -44,7 +44,7 @@ func checkLyricsEditUndo() {
     let catalog = (try? Data(contentsOf: root.deletingLastPathComponent().appendingPathComponent("Localization/Localizable.xcstrings"))) ?? Data()
     let keys = LyricsEditUndo.engineErrorCodes.compactMap { LyricsEditUndo.reasonKey(code: $0) }
         + [LyricsEditUndo.fallbackKey, LyricsEditUndo.reasonFormatKey, "撤销", "已撤销", "快捷键：⌘Z",
-           "已保存", "已标为纯音乐", "已取消纯音乐标记"]
+           "已保存", "已标为纯音乐", "已取消纯音乐标记", "已标为纯音乐 %@ 首", LyricsEditUndo.batchChangedKey]
     let missing = keys.filter { catalog.range(of: Data("\"\($0)\" : {".utf8)) == nil }
     expectEqual(missing, [], "采纳撤销: 文案都在 Localizable.xcstrings 里")
 
@@ -56,24 +56,59 @@ func checkLyricsEditUndo() {
                 && sourceHas(quick, "let result = await EnrichCacheStore.shared.undoEdit(undoID: undoID)"), true,
                 "采纳撤销: 宿主把 undo_id 交给面板,撤销经 EnrichCacheStore.undoEdit")
     let appDir = root.appendingPathComponent("lyrimuse")
-    var undoableCallers: [String] = []
+    // 每个文件带 undoable 的调用处数目:歌词管理是保存修改、单首标 / 撤纯音乐、多选「全部标为纯音乐」三处。
+    var undoableCallers: [String: Int] = [:]
     if let walker = FileManager.default.enumerator(atPath: appDir.path) {
         for case let rel as String in walker where rel.hasSuffix(".swift") && rel != "LyricsManager/EnrichCacheStore.swift" {
             let text = (try? String(contentsOf: appDir.appendingPathComponent(rel), encoding: .utf8)) ?? ""
-            if sourceBytes(text, contain: "undoable: true") { undoableCallers.append(rel) }
+            if sourceBytes(text, contain: "undoable: true") { undoableCallers[rel] = text.components(separatedBy: "undoable: true").count - 1 }
         }
     }
-    expectEqual(undoableCallers.sorted(), ["LyricsManager/LyricsExternalEditor.swift", "LyricsManager/LyricsManagerView.swift",
-                                           "LyricsManager/LyricsQuickSearchWindow.swift"],
+    expectEqual(undoableCallers, ["LyricsManager/LyricsExternalEditor.swift": 3, "LyricsManager/LyricsManagerView.swift": 3,
+                                  "LyricsManager/LyricsQuickSearchWindow.swift": 2],
                 "采纳撤销: 接了撤销的入口就这几处(再接别的入口,先在 11 章那几条决策里登记)")
-    expectEqual(external.components(separatedBy: "undoable: true").count - 1, 3,
-                "外部编辑器撤销: 逐字、逐行、纯文本三条存回路都带 undoable")
     expectEqual(sourceHas(manager, "store.saveEdit(key: key, lyrics: lyrics, tr: tr, roma: roma, yrc: yrc, undoable: true)")
                 && sourceHas(manager, "store.setInstrumental(key: key, value, undoable: true)")
                 && !manager.contains("store.setInstrumental(key: summary.key")
                 && sourceHas(store, "func setInstrumental(key: String, _ value: Bool, undoable: Bool) async -> EnrichEditChannel.Result")
                 && sourceHas(store, "if undoable { fields[\"undoable\"] = true }\n return await commit(\"set_instrumental\", fields)"), true,
                 "详情页撤销: 保存修改、标 / 撤纯音乐(按钮、「⋯」、右键)都经带 undoable 的那条路")
+
+    // 多选「全部标为纯音乐」:一次请求带 undoable,一笔一个 undo_id;回声在面板按钮行下面,只认标的那一批选中。
+    let mark = sourceBody("private func markInstrumental(_ keys: [String]) {", in: manager)
+    expectEqual(sourceHas(mark, "let result = await store.setInstrumental(keys: keys, true, undoable: true)")
+                && sourceHas(mark, "guard result.ok, let id = result.undoID, selectedKeys == selection else { return }")
+                && sourceHas(mark, "text: String(format: L10n.plural(\"已标为纯音乐 %@ 首\", count: keys.count), keys.count.formatted()),\n undoID: id)")
+                && sourceHas(store, "func setInstrumental(keys: [String], _ value: Bool, undoable: Bool) async -> EnrichEditChannel.Result")
+                && sourceHas(store, "if undoable { fields[\"undoable\"] = true }\n return await commit(\"set_instrumental\", fields)\n }\n\n /// 一条记录"),
+                true, "多选撤销: 「全部标为纯音乐」(面板按钮、列表右键)带 undoable 一次写回,回声写首数")
+    let panel = sourceBody("private var batchSelectionPanel: some View {", in: manager)
+    expectEqual(sourceHas(panel, ".controlSize(.large)\n .padding(.top, 22)\n batchEchoRow\n Divider().padding(.top, 22)")
+                && sourceHas(sourceBody("private var batchEchoRow: some View {", in: manager),
+                             "if let echo = batchEcho, echo.selection == selectedKeys {")
+                && sourceHas(sourceBody("private var batchEchoRow: some View {", in: manager),
+                             "if batchUndoID != nil {\n LyricsEditUndoButton(disabled: batchUndoing || markingInstrumental) {"),
+                true, "多选撤销: 回声挂在面板按钮行下面,选中还是标的那一批时才显示,「撤销」用共用那颗")
+    let batchUndo = sourceBody("private func undoBatchInstrumental() async {", in: manager)
+    expectEqual(sourceHas(batchUndo, "let result = await store.undoEdit(undoID: id)")
+                && sourceHas(batchUndo, "guard batchUndoID == id else { return }")
+                && sourceHas(batchUndo, "showBatchEcho(selection: selection, text: LyricsEditUndo.failureText(result, batch: true), ok: false)")
+                && sourceHas(batchUndo, "showBatchEcho(selection: selection, text: L10n.t(\"已撤销\"))"),
+                true, "多选撤销: 成功说「已撤销」,整笔被拒说其中有歌曲改过(不说「这首」)")
+    let batchShow = sourceBody("private func showBatchEcho(", in: manager)
+    expectEqual(sourceHas(batchShow, "try? await Task.sleep(for: .seconds(undoID != nil ? LyricsEditUndo.offerSeconds : 2.5))")
+                && sourceHas(batchShow, "guard generation == batchEchoGeneration, !batchUndoing else { return }")
+                && sourceHas(sourceBody(".onChange(of: selectedKeys) { _, keys in", in: manager),
+                             "if let echo = batchEcho, echo.selection != keys { dropBatchEcho() }")
+                && sourceHas(manager, "// 关窗之后不能再撤。\n dropDetailEcho()\n dropBatchEcho()"),
+                true, "多选撤销: 「撤销」停 offerSeconds,选中变了、关窗作废")
+    expectEqual(LyricsEditUndo.failure(code: "undo_changed", localizedReason: nil, batch: true), .key(LyricsEditUndo.batchChangedKey),
+                "多选撤销: 整笔被拒时说其中有歌曲改过")
+    expectEqual(LyricsEditUndo.failure(code: "undo_expired", localizedReason: nil, batch: true), .key("无法撤销：已超过撤销时限"),
+                "多选撤销: 过期那句跟单首一样")
+    expectEqual(sourceHas(button, "static func failureText(_ result: EnrichEditChannel.Result, batch: Bool = false) -> String {")
+                && sourceHas(button, "failure(code: result.errorCode, localizedReason: result.errorIsLocalized ? result.error : nil, batch: batch)"),
+                true, "多选撤销: 失败那句按是不是多选那一笔取")
 
     // 「撤销」按钮:玻璃小按钮、⌘Z(只在它出着时占),各处共用这一颗。
     expectEqual(sourceHas(button, "Button(L10n.t(\"撤销\"), action: action)")
@@ -120,7 +155,7 @@ func checkLyricsEditUndo() {
                 "采纳撤销: 引擎没响应时带上通道的原因")
     expectEqual(LyricsEditUndo.failure(code: nil, localizedReason: nil), .key("无法撤销，请重试"),
                 "采纳撤销: 引擎的英文内部错误不原样给人看")
-    expectEqual(sourceHas(button, "failure(code: result.errorCode, localizedReason: result.errorIsLocalized ? result.error : nil)"),
+    expectEqual(sourceHas(button, "failure(code: result.errorCode, localizedReason: result.errorIsLocalized ? result.error : nil, batch: batch)"),
                 true, "采纳撤销: 按引擎错误码、通道的本地化原因取那一句")
 
     // 重新自动匹配:引擎结论里的 undoID 跟 App 的键对得上,按请求 id 取。

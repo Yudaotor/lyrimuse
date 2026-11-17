@@ -1145,6 +1145,7 @@
 "已有歌词的歌曲保持不变" = "Bài đã có lời giữ nguyên";
 "已有歌词，将跳过 %@" = "Đã có lời, sẽ bỏ qua %@";
 "已标为纯音乐" = "Đã đánh dấu là nhạc không lời";
+"已标为纯音乐 %@ 首" = "Đã đánh dấu %@ bài là nhạc không lời";
 "已标为纯音乐：不显示歌词，也不自动搜索。采用任一候选将取消标记" = "Đã đánh dấu là nhạc không lời: không hiện lời và không tự động tìm lời. Dùng bất kỳ kết quả nào sẽ bỏ đánh dấu";
 "已校准" = "Đã hiệu chỉnh";
 "已校准 %d 首歌在电台上的时间轴" = "Đã hiệu chỉnh thời gian radio cho %d bài hát";
@@ -1579,6 +1580,7 @@
 "无法撤销：%@" = "Không hoàn tác được: %@";
 "无法撤销：已超过撤销时限" = "Không hoàn tác được: đã quá thời hạn hoàn tác";
 "无法撤销：这首歌曲的歌词已有其他改动" = "Không hoàn tác được: lời của bài hát này đã có thay đổi khác";
+"无法撤销：部分歌曲已有其他改动" = "Không hoàn tác được: một số bài hát này đã có thay đổi khác";
 "无法添加" = "Không thể thêm";
 "无法确定歌手，不存入" = "Không rõ nghệ sĩ, không lưu";
 "无法确认状态（无法读取该浏览器的配置文件）" = "Không rõ trạng thái (không đọc được tệp tùy chọn của trình duyệt này)";

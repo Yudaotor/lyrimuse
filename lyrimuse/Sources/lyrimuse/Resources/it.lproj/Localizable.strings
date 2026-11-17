@@ -1211,6 +1211,8 @@
 "已有歌词的歌曲保持不变" = "I brani che hanno già un testo restano invariati";
 "已有歌词，将跳过 %@" = "Hanno già un testo, verranno saltati %@";
 "已标为纯音乐" = "Segnato come strumentale";
+"已标为纯音乐 %@ 首" = "%@ brani segnati come strumentali";
+"已标为纯音乐 %@ 首#one" = "%@ brano segnato come strumentale";
 "已标为纯音乐：不显示歌词，也不自动搜索。采用任一候选将取消标记" = "Segnato come strumentale: il testo viene nascosto e non viene cercato automaticamente. Usare un risultato rimuove il contrassegno";
 "已校准" = "Calibrato";
 "已校准 %d 首歌在电台上的时间轴" = "%d brani con timing radio calibrato";
@@ -1654,6 +1656,7 @@
 "无法撤销：%@" = "Impossibile annullare: %@";
 "无法撤销：已超过撤销时限" = "Impossibile annullare: il tempo per annullare è scaduto";
 "无法撤销：这首歌曲的歌词已有其他改动" = "Impossibile annullare: il testo di questo brano è stato modificato nel frattempo";
+"无法撤销：部分歌曲已有其他改动" = "Impossibile annullare: alcuni di questi brani sono stati modificati nel frattempo";
 "无法添加" = "Impossibile aggiungerla";
 "无法确定歌手，不存入" = "Artista sconosciuto, non salvato";
 "无法确认状态（无法读取该浏览器的配置文件）" = "Stato sconosciuto (impossibile leggere il file delle preferenze di questo browser)";

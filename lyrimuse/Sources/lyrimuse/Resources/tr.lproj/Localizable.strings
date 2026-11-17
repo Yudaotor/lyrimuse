@@ -1145,6 +1145,7 @@
 "已有歌词的歌曲保持不变" = "Şarkı sözü olan parçalar değişmez";
 "已有歌词，将跳过 %@" = "Sözleri var, atlanacak %@";
 "已标为纯音乐" = "Enstrümantal Olarak İşaretli";
+"已标为纯音乐 %@ 首" = "%@ Parça Enstrümantal Olarak İşaretli";
 "已标为纯音乐：不显示歌词，也不自动搜索。采用任一候选将取消标记" = "Enstrümantal olarak işaretlendi: şarkı sözleri gösterilmez ve otomatik olarak aranmaz. Bir aday kullanılırsa işaret kaldırılır";
 "已校准" = "Kalibre edildi";
 "已校准 %d 首歌在电台上的时间轴" = "Radyo zamanlaması kalibre edilmiş %d parça";
@@ -1579,6 +1580,7 @@
 "无法撤销：%@" = "Geri alınamadı: %@";
 "无法撤销：已超过撤销时限" = "Geri alınamadı: geri alma süresi doldu";
 "无法撤销：这首歌曲的歌词已有其他改动" = "Geri alınamadı: bu şarkının sözleri o zamandan beri değişti";
+"无法撤销：部分歌曲已有其他改动" = "Geri alınamadı: bu şarkılardan bazıları o zamandan beri değişti";
 "无法添加" = "Eklenemedi";
 "无法确定歌手，不存入" = "Sanatçı belirlenemedi, kaydedilmez";
 "无法确认状态（无法读取该浏览器的配置文件）" = "Durum bilinmiyor (bu tarayıcının tercihler dosyası okunamıyor)";

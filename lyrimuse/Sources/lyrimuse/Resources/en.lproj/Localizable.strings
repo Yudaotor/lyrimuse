@@ -1211,6 +1211,8 @@
 "已有歌词的歌曲保持不变" = "Songs that already have lyrics stay unchanged";
 "已有歌词，将跳过 %@" = "Already have lyrics, will skip %@";
 "已标为纯音乐" = "Marked as Instrumental";
+"已标为纯音乐 %@ 首" = "Marked %@ Songs as Instrumental";
+"已标为纯音乐 %@ 首#one" = "Marked %@ Song as Instrumental";
 "已标为纯音乐：不显示歌词，也不自动搜索。采用任一候选将取消标记" = "Marked as instrumental: lyrics are hidden and aren’t searched for automatically. Using a candidate removes the mark";
 "已校准" = "Calibrated";
 "已校准 %d 首歌在电台上的时间轴" = "%d songs with calibrated radio timing";
@@ -1654,6 +1656,7 @@
 "无法撤销：%@" = "Couldn’t undo: %@";
 "无法撤销：已超过撤销时限" = "Couldn’t undo: the time to undo has passed";
 "无法撤销：这首歌曲的歌词已有其他改动" = "Couldn’t undo: this song’s lyrics were changed by another action";
+"无法撤销：部分歌曲已有其他改动" = "Couldn’t undo: some of these songs were changed by another action";
 "无法添加" = "Couldn’t Add It";
 "无法确定歌手，不存入" = "Artist unknown, not saved";
 "无法确认状态（无法读取该浏览器的配置文件）" = "Status unknown (can’t read this browser’s preferences file)";

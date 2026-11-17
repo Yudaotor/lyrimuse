@@ -775,6 +775,7 @@ func runDeepLinkTests() {
             .debug(.externalEdit(key: "歌手|歌 & 名|专辑")),
             .debug(.managerList(op: "search:歌 & 名")), .debug(.managerList(op: "key:down")),
             .debug(.managerList(op: "rightclick:3")), .debug(.managerList(op: "instrumental:on")),
+            .debug(.managerList(op: "selectrows:0,1,2")), .debug(.managerList(op: "batch:instrumental")),
             .debug(.managerList(op: "text:[00:01.00]一 & 二\n[00:02.00]三")),
             .debug(.mainThreadGaps(on: true)), .debug(.mainThreadGaps(on: false)), .debug(.mainThreadGaps(on: true, minMs: 20)),
             .debug(.mainThreadStall(seconds: 7, throttle: nil)), .debug(.mainThreadStall(seconds: 6.5, throttle: "low_priority")),

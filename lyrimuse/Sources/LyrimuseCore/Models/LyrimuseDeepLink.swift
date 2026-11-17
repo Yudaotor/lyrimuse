@@ -130,7 +130,8 @@ public enum LyrimuseDeepLink: Equatable, Sendable {
         /// 当作屏幕刚锁上:拆掉关着、等锁屏再拆的窗口内容(`debug/release-closed-windows`,同 `ClosedWindowContent.releaseDeferred`)。
         case releaseClosedWindows
         /// 歌词管理的列表做一个动作,做完把列表此刻的样子记进日志(`debug/manager-list?op=<动作>`),验列表、量主线程停顿用;
-        /// 动作原样交给 App(`LyricsManagerDebugOp`)。歌词管理要开着。
+        /// 动作原样交给 App(`LyricsManagerDebugOp`)。歌词管理要开着。`selectrows:0,1,2` 按不分组的列表行号多选,
+        /// `batch:instrumental` 同多选面板「全部标为纯音乐」。
         case managerList(op: String)
         /// 主线程心跳(`debug/main-thread-gaps?on=1|0[&min=<毫秒>]`):每 10 毫秒一拍,两拍隔了 `min`(默认 100)毫秒以上记一行
         /// `gap <毫秒> ms after [<最近一次 manager-list 动作>]`,量一个动作让主线程停了多久。

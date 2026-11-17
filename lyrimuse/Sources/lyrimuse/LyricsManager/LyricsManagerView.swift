@@ -777,6 +777,23 @@ struct LyricsManagerView: View {
         /// 保存修改时这首的单曲偏移从旧正文的指纹搬到了新正文下(两个偏移键);撤销成功后搬回去。没搬时 nil。
         let carried: (from: String, to: String)?
     }
+
+    // MARK: - 多选面板按钮行下面的回声与「撤销」
+    //
+    // 「全部标为纯音乐」之后说「已标为纯音乐 N 首」,引擎给了 undo_id 就带一颗「撤销」,停 `LyricsEditUndo.offerSeconds`;
+    // 这几首一笔撤,有一首之后被动过就整笔拒绝。选中变了、关窗都作废。见 11 章决策 179。
+    @State private var batchEcho: BatchEcho?
+    @State private var batchUndoID: String?
+    @State private var batchUndoing = false
+    /// 单调换代,同 detailEchoGeneration。
+    @State private var batchEchoGeneration = 0
+
+    private struct BatchEcho {
+        /// 标的那一刻的选中;选中变了这一行就收掉。
+        let selection: Set<String>
+        let text: String
+        let ok: Bool
+    }
     @State private var showDecisionSheet = false
     /// 「解析决策」弹窗的两槽,打开那一刻解一次(读旁路文件 + 解码),弹窗开着期间父视图重算不再重读。
     @State private var decisionSlots: DecisionSlots?
@@ -1927,6 +1944,7 @@ struct LyricsManagerView: View {
         .onChange(of: selectedKeys) { _, keys in
             // 代码里改的选中写给表格,表格按 key 换算成行号当场对上(屏幕外的行也是)。
             if listSelection.keys != keys { listSelection.keys = keys }
+            if let echo = batchEcho, echo.selection != keys { dropBatchEcho() }
             refreshListEmphasis()
         }
         .onChange(of: windowFrame.listHasKeyFocus) { _, _ in refreshListEmphasis() }
@@ -2163,11 +2181,70 @@ struct LyricsManagerView: View {
         return keys.contains(editingKey)
     }
 
+    /// 多选「全部标为纯音乐」(面板按钮、列表右键):带 undoable 一次写回,引擎给了 undo_id 就在面板按钮行下面说一句、带「撤销」。
+    /// 等待期间选中变了就不说。
     private func markInstrumental(_ keys: [String]) {
         markingInstrumental = true
+        let selection = selectedKeys
         Task {
-            await store.setInstrumental(keys: keys, true)
+            let result = await store.setInstrumental(keys: keys, true, undoable: true)
             markingInstrumental = false
+            guard result.ok, let id = result.undoID, selectedKeys == selection else { return }
+            showBatchEcho(selection: selection,
+                          text: String(format: L10n.plural("已标为纯音乐 %@ 首", count: keys.count), keys.count.formatted()),
+                          undoID: id)
+        }
+    }
+
+    /// 多选面板按钮行下面说一句;给了 `undoID` 就带「撤销」、停 offerSeconds,不带的停 2.5 秒。上一条和它的「撤销」收掉。
+    private func showBatchEcho(selection: Set<String>, text: String, ok: Bool = true, undoID: String? = nil) {
+        batchEchoGeneration += 1
+        let generation = batchEchoGeneration
+        batchUndoID = undoID
+        withAnimation { batchEcho = BatchEcho(selection: selection, text: text, ok: ok) }
+        Task {
+            try? await Task.sleep(for: .seconds(undoID != nil ? LyricsEditUndo.offerSeconds : 2.5))
+            guard generation == batchEchoGeneration, !batchUndoing else { return }
+            batchUndoID = nil
+            withAnimation { batchEcho = nil }
+        }
+    }
+
+    private func dropBatchEcho() {
+        batchEchoGeneration += 1
+        batchUndoID = nil
+        batchEcho = nil
+    }
+
+    /// 多选那一笔的「撤销」:几首一起放回;有一首在那之后被动过,引擎整笔拒绝、一首不改(11 章决策 178)。成功说「已撤销」,失败说原因。
+    private func undoBatchInstrumental() async {
+        guard let id = batchUndoID, let selection = batchEcho?.selection, !batchUndoing else { return }
+        batchUndoing = true
+        let result = await store.undoEdit(undoID: id)
+        batchUndoing = false
+        guard batchUndoID == id else { return }
+        guard result.ok else {
+            showBatchEcho(selection: selection, text: LyricsEditUndo.failureText(result, batch: true), ok: false)
+            return
+        }
+        showBatchEcho(selection: selection, text: L10n.t("已撤销"))
+    }
+
+    /// 多选面板按钮行下面那一行:选中还是标的那一批时才显示。
+    @ViewBuilder
+    private var batchEchoRow: some View {
+        if let echo = batchEcho, echo.selection == selectedKeys {
+            HStack(spacing: 8) {
+                Label(echo.text, systemImage: echo.ok ? "checkmark.circle.fill" : "exclamationmark.triangle.fill")
+                    .font(.caption)
+                    .foregroundStyle(echo.ok ? Color.secondary : Color.orange)
+                if batchUndoID != nil {
+                    LyricsEditUndoButton(disabled: batchUndoing || markingInstrumental) {
+                        Task { await undoBatchInstrumental() }
+                    }
+                }
+            }
+            .padding(.top, 12)
         }
     }
 
@@ -2452,6 +2529,7 @@ struct LyricsManagerView: View {
             pendingAutoFocus = true
             // 关窗之后不能再撤。
             dropDetailEcho()
+            dropBatchEcho()
             dismissWindowPresentations()
             let cache = filteredCache
             closedContent.releaseLater(windowSurface.window) { cache.clear() }
@@ -2667,6 +2745,7 @@ struct LyricsManagerView: View {
             }
             .controlSize(.large)
             .padding(.top, 22)
+            batchEchoRow
             Divider().padding(.top, 22)
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 2) {
@@ -3124,6 +3203,12 @@ struct LyricsManagerView: View {
         case "locate": focusCurrentlyPlaying()
         case "instrumental":
             if let key = editingKey { Task { await setInstrumental(key, arg != "off") } }
+        case "selectrows":
+            let keys = sortedFiltered.map(\.key)
+            let rows = arg.split(separator: ",").compactMap { Int($0) }.filter { keys.indices.contains($0) }
+            listSelectionChanged(Set(rows.map { keys[$0] }))
+        case "batch":
+            if arg == "instrumental", selectedKeys.count > 1 { markInstrumental(selectedVisibleKeys) }
         case "text":
             beginTextEditing()
             if editMode == .text { editedLyricsBody = arg }

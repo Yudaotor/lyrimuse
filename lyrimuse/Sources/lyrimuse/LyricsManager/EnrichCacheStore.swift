@@ -1694,10 +1694,12 @@ public final class EnrichCacheStore: ObservableObject {
 
     /// 多选「全部标为纯音乐」:一次请求带上全部 key,引擎一次改完,App 也只重读一遍缓存。别逐首调上面那个:每首都要整份
     /// 重读一次缓存,选几百首要等好几分钟,列表跟着反复重建(见 11 章决策 92)。
-    @discardableResult
-    public func setInstrumental(keys: [String], _ value: Bool) async -> Bool {
-        guard !keys.isEmpty else { return true }
-        return await commit("set_instrumental", ["keys": keys, "value": value]).ok
+    /// `undoable` 为真时这几首(连同跟着改的同组写法)只留一份记录、一个 `undoID`,撤销时有一首对不上就整笔拒绝(11 章决策 178)。
+    func setInstrumental(keys: [String], _ value: Bool, undoable: Bool) async -> EnrichEditChannel.Result {
+        guard !keys.isEmpty else { return EnrichEditChannel.Result(ok: true, changed: 0) }
+        var fields: [String: Any] = ["keys": keys, "value": value]
+        if undoable { fields["undoable"] = true }
+        return await commit("set_instrumental", fields)
     }
 
     /// 一条记录会不会被引擎的补空扫描真的拿去搜:没词、没确证纯音乐、没人工
