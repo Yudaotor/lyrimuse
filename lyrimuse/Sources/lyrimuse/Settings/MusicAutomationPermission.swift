@@ -226,6 +226,7 @@ enum MusicAutomationPermission {
         logger.notice("target app not running, launching in background before requesting automation permission")
         let config = NSWorkspace.OpenConfiguration()
         config.activates = false
+        await PlayerLaunchFocusGuard.begin(launching: PlayerBundleAliases.all(for: bundleID), keepSelf: true)
         do {
             _ = try await NSWorkspace.shared.openApplication(at: url, configuration: config)
         } catch {

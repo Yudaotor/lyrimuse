@@ -400,7 +400,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         // 打开 Lyrimuse 时顺带启动用户勾选的播放器(逐播放器勾选,见 LyrimuseCore.PlayerLinkage 头注;勾选 ∩
         // 当前候选才算)。只启动还没运行的 —— 已经在跑就什么都不做,不做多余的"带到前台"动作;activates=false
-        // 避免用户正在用别的 App 时被抢焦点。
+        // 避免用户正在用别的 App 时被抢焦点。冷启动自己跳到前台的(酷我、Swinsian)由 PlayerLaunchFocusGuard 把前台还回去。
         let playersToLaunch = PlayerLinkage.effective(settings.launchPlayersOnLyrimuseOpen,
                                                       selectedPlayers: FeatureSettingsStore.shared.players)
         for player in playersToLaunch where !player.bundleIdentifier.isEmpty {
@@ -409,6 +409,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                let playerURL = PlayerBundleAliases.applicationURL(forBundleID: player.bundleIdentifier) {
                 let config = NSWorkspace.OpenConfiguration()
                 config.activates = false
+                PlayerLaunchFocusGuard.begin(launching: ids)
                 NSWorkspace.shared.openApplication(at: playerURL, configuration: config)
             }
         }

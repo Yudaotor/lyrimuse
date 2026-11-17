@@ -2962,6 +2962,48 @@ func runPlayerIdentityTests() {
         expectEqual(PL.migratedLaunchSet(legacyEnabled: false, selectedPlayers: [.auto], requiresSole: false), [],
                     "联动迁移: 布尔 false → 空")
 
+        // 后台拉起的播放器冷启动自己跳到前台,把前台还给拉起之前那个 App(LaunchFocusReturn)。
+        typealias LF = LaunchFocusReturn
+        func lf(launched: Bool = true, previous: Bool = false, at: TimeInterval = 10, click: TimeInterval = 30,
+                key: TimeInterval = 30, returns: Int = 0, alive: Bool = true) -> LF.Verdict {
+            LF.verdict(activatedIsLaunched: launched, activatedIsPrevious: previous, sinceLaunch: at,
+                       sinceClick: click, sinceKey: key, returnsSoFar: returns, previousAlive: alive)
+        }
+        expectEqual(lf(), .returnFocus, "还前台: 拉起 10 秒后它自己成了前台、期间没点没按 → 还回去")
+        expectEqual(lf(click: 0.3), .stop, "还前台: 成前台前 0.3 秒点过鼠标或按过修饰键(点程序坞、点它的窗口、⌘Tab)→ 用户自己切的,不动、不再管")
+        expectEqual([lf(click: LF.clickSeconds - 0.01), lf(click: LF.clickSeconds)], [.stop, .returnFocus],
+                    "还前台: 点按的界线是 clickSeconds")
+        expectEqual([lf(key: 0.2), lf(key: LF.keySeconds)], [.stop, .returnFocus],
+                    "还前台: 刚按过键(启动器里回车打开)→ 用户自己切的;打字间隙里被抢 → 照样还回去")
+        expectEqual(LF.keySeconds < LF.clickSeconds, true, "还前台: 按键的界线比点按短,用户正打字时被抢也要还")
+        expectEqual(lf(launched: false), .stop, "还前台: 用户先切到了别的 App → 不再管(拉起之前那个已不是要回去的地方)")
+        expectEqual(lf(launched: false, previous: true), .keepWatching, "还前台: 回到拉起之前那个(含还回去的那一下)→ 接着盯")
+        expectEqual([lf(at: LF.windowSeconds), lf(at: LF.windowSeconds + 0.01)], [.returnFocus, .stop],
+                    "还前台: 只管拉起后 windowSeconds 秒之内")
+        expectEqual(LF.windowSeconds >= 20, true, "还前台: 窗口盖得住酷我约 10 秒后才跳、机器忙时更晚")
+        expectEqual([lf(returns: LF.maxReturns - 1), lf(returns: LF.maxReturns)], [.returnFocus, .stop],
+                    "还前台: 一次拉起最多还 maxReturns 次,不跟反复抢前台的 App 拉锯")
+        expectEqual(lf(alive: false), .stop, "还前台: 拉起之前那个 App 退了或被隐藏 → 不还")
+        do {
+            let sourcesRoot = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+            func src(_ path: String) -> String {
+                (try? String(contentsOf: sourcesRoot.appendingPathComponent(path), encoding: .utf8)) ?? ""
+            }
+            expectEqual(sourceHas(src("lyrimuse/AppDelegate.swift"),
+                                  "PlayerLaunchFocusGuard.begin(launching: ids) NSWorkspace.shared.openApplication(at: playerURL, configuration: config)"),
+                        true, "还前台接线: 打开 Lyrimuse 时启动播放器,拉起前先记前台")
+            expectEqual(sourceHas(sourceBody("static func ensureAppRunning(bundleID: String) async", in: src("lyrimuse/Settings/MusicAutomationPermission.swift")),
+                                  "await PlayerLaunchFocusGuard.begin(launching: PlayerBundleAliases.all(for: bundleID), keepSelf: true) do {"),
+                        true, "还前台接线: 请求自动化权限前后台拉起目标 App,拉起前先记前台")
+            let guardSource = src("LyrimuseCore/Local/PlayerLaunchFocusGuard.swift")
+            expectEqual(sourceHas(guardSource, "target.activate(options: [])")
+                        && !guardSource.contains("NSAppleScript") && !guardSource.contains("CGEvent("), true,
+                        "还前台: 只用 NSRunningApplication.activate,不发按键、不用 AppleScript")
+            expectEqual(sourceHas(guardSource, "if !ok, #available(macOS 14.0, *) {")
+                        && sourceHas(guardSource, "ok = target.activate(from: app, options: [])"), true,
+                        "还前台: 直接激活被拒时以眼下在前台的播放器为发起方再激活一次(Lyrimuse 直接激活真机回 false)")
+        }
+
         // 「添加播放器…」——用户自己从「应用程序」里挑一个加进信任列表。每一种结果都必须
         // 能说出话来:`FeatureSettingsStore.trust` 对"已在列表"和"是内置播放器"都是静默
         // return,主动挑选时静默 = 一个点了没反应的按钮。
