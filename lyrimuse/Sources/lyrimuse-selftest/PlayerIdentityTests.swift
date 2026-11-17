@@ -322,8 +322,8 @@ func runPlayerIdentityTests() {
                             [1, 1, 1, 1, 3, 0], "酷我模式: 列表循环 → 随机 → 顺序 → 单曲循环 → 列表循环,一下一档")
                 expectEqual(X.maxPresses > X.cycle.count - 1, true, "酷我模式: 绕一圈之外留重按(快速连按会丢一下)")
                 typealias C = MusicPlaybackController
-                expectEqual(C.supportsExtendedControls(.kuwo) && C.supportsRepeatOne(.kuwo) && !C.supportsFavorite(.kuwo), true,
-                            "酷我能力: 四档模式,没有喜欢")
+                expectEqual(C.supportsExtendedControls(.kuwo) && C.supportsRepeatOne(.kuwo) && C.supportsFavorite(.kuwo), true,
+                            "酷我能力: 四档模式,有喜欢")
                 let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
                 let controller = (try? String(contentsOfFile: root.appendingPathComponent("LyrimuseCore/Local/MusicPlaybackController.swift").path,
                                               encoding: .utf8)) ?? ""
@@ -338,6 +338,44 @@ func runPlayerIdentityTests() {
                 expectEqual(sourceHas(sourceBody("public static func setMode(", in: control),
                                       "} while current == before && Date() < deadline\n}\nreturn current == target"),
                             true, "酷我契约: 按一下等档名变了再按下一下,读回到目标档才算成")
+            }
+            do {
+                typealias F = KuwoFavoriteControl
+                // 状态怎么从 cloud.db 读出来由引擎 kuwofavorite_test.go 钉着;这里钉 App 这一侧怎么问、怎么认回答。
+                expectEqual([F.favorited(fromEngineOutput: Data(#"{"favorited":true}"#.utf8)),
+                             F.favorited(fromEngineOutput: Data(#"{"favorited":false}"#.utf8)),
+                             F.favorited(fromEngineOutput: Data("{}\n".utf8)),
+                             F.favorited(fromEngineOutput: Data(#"{"favorited":1}"#.utf8)),
+                             F.favorited(fromEngineOutput: Data("not json".utf8))],
+                            [true, false, nil, nil, nil], "酷我喜欢: 引擎回 true / false 才认,读不到({})和认不出的为 nil")
+                expectEqual(F.engineArguments(title: "至少还有你", artist: "姚贝娜"),
+                            ["kuwo-favorite", "-title", "至少还有你", "-artist", "姚贝娜"], "酷我喜欢: 按系统报的歌名、歌手问引擎")
+                expectEqual([F.favorite.commandKey, F.menuTitle], ["L", "收藏/取消收藏"], "酷我喜欢: 按「编辑」菜单的收藏/取消收藏,连同 ⌘L 一起认")
+                let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+                let controller = (try? String(contentsOfFile: root.appendingPathComponent("LyrimuseCore/Local/MusicPlaybackController.swift").path,
+                                              encoding: .utf8)) ?? ""
+                let control = (try? String(contentsOfFile: root.appendingPathComponent("LyrimuseCore/Local/KuwoFavoriteControl.swift").path,
+                                           encoding: .utf8)) ?? ""
+                expectEqual([sourceHas(controller, "case .kuwo: return KuwoFavoriteControl.readFavorited()"),
+                             sourceHas(controller, "case .kuwo:\nreturn KuwoFavoriteControl.setFavorited(value)"),
+                             sourceHas(sourceBody("static func readState() -> Bool? {", in: control),
+                                       "guard AXIsProcessTrusted(), let now = MediaControlClient.currentNowPlayingIdentifiers(), now.bundleID == bundleID"),
+                             sourceHas(sourceBody("static func readState() -> Bool? {", in: control),
+                                       "ProcessRunner.run(LyrimusePaths.bundledEnginePath,\nengineArguments(title: now.title, artist: now.artist)"),
+                             sourceHas(sourceBody("public static func extendedControlsState(", in: controller),
+                                       "case .kuwo:\nreturn ExtendedControlsState(favorited: includeFavorited ? KuwoFavoriteControl.readFavorited() : nil,")],
+                            [true, true, true, true, true], "酷我喜欢接线: 读写进分发、整组刷新也读喜欢;没授权辅助功能写不了就也不读;库交给引擎读")
+                // 有扩展控件的播放器喜欢走整组刷新(PlaybackCoordinator.refreshExtendedControls),那一支漏读喜欢,心就被刷成 nil。
+                let ext = sourceBody("public static func extendedControlsState(", in: controller)
+                let dropsFavorite = PlaybackPlayer.allCases.filter {
+                    MusicPlaybackController.supportsFavorite($0) && MusicPlaybackController.supportsExtendedControls($0) && $0 != .appleMusic
+                }.filter { player in
+                    guard let start = ext.range(of: "case .\(player):") else { return true }
+                    let rest = ext[start.upperBound...]
+                    let end = [rest.range(of: "\n        case ."), rest.range(of: "\n        default:")].compactMap { $0?.lowerBound }.min()
+                    return !rest[..<(end ?? rest.endIndex)].contains("favorited: includeFavorited ?")
+                }
+                expectEqual(dropsFavorite, [], "喜欢接线: 既有喜欢又有扩展控件的播放器,extendedControlsState 那一支都读喜欢(Apple Music 走脚本另算)")
             }
             for command in [Command.playPause, .nextTrack, .previousTrack] {
                 expectEqual(MusicPlaybackController.controlRoute(exclusivelyAppleMusic: false, focusFallback: nil,
@@ -1306,7 +1344,7 @@ func runPlayerIdentityTests() {
             .qqMusic: (.qqMusic, [.extendedControls, .repeatOne, .favorite, .resume, .learnsAnchorLag, .catalogMenuRows]),
             .netease: (.netease, [.favorite, .resume, .learnsAnchorLag, .pausedAnchorStartsOnPlay, .catalogMenuRows]),
             .kugou: (nil, [.favorite, .resume, .lateAnchorProbe, .resetAnchorCorrection, .stampsCaptureTime, .catalogMenuRows]),
-            .kuwo: (.kuwo, [.extendedControls, .repeatOne, .resume, .gaplessLead, .lateAnchorProbe, .learnsAnchorLag, .followsRepublishedAnchors,
+            .kuwo: (.kuwo, [.extendedControls, .repeatOne, .favorite, .resume, .gaplessLead, .lateAnchorProbe, .learnsAnchorLag, .followsRepublishedAnchors,
                             .snapsToReportedPosition, .stampsCaptureTime, .systemNeverHasArtwork, .catalogMenuRows]),
             .soda: (.soda, [.favorite, .gaplessLead, .lateAnchorProbe, .learnsAnchorLag, .catalogMenuRows]),
             .kkbox: (.kkbox, [.gaplessLead, .lateAnchorProbe, .learnsAnchorLag, .followsRepublishedAnchors,
@@ -1601,7 +1639,7 @@ func runPlayerIdentityTests() {
         expectEqual(PlaybackPlayer.netease.accessibilityUse, .controlsPlayback, "网易云授权用途不承诺模式或进度")
         expectEqual(P([.mygoMusic]).playersNeedingAccessibility, [.mygoMusic], "MyGo: 单选显示 AX 授权入口")
         expectEqual(PlaybackPlayer.mygoMusic.accessibilityUse, .controlsTransport, "MyGo: 权限用途只承诺失焦三项控制")
-        expectEqual(PlaybackPlayer.kuwo.accessibilityUse, .switchesModeAndTransport, "酷我: 权限用途是窗口上的模式键加失焦三项控制(没有喜欢、音量)")
+        expectEqual(PlaybackPlayer.kuwo.accessibilityUse, .switchesModeAndTransport, "酷我: 权限用途是窗口上的模式键、收藏菜单加失焦三项控制(没有音量)")
         expectEqual(PlaybackPlayer.soda.accessibilityUse, .controlsPlayback, "汽水授权用途: 喜欢加失焦时按播放条控制播放")
         expectEqual(P([.amazonMusic, .spotify]).playersNeedingAccessibility, [.amazonMusic],
                     "辅助功能判据: 多选里只挑出要授权的那一家")
@@ -1664,10 +1702,10 @@ func runPlayerIdentityTests() {
         // 换歌后菜单标题要过一会儿才换成新那首(网易云实测 0.16~0.27 秒):靠菜单标题的播放器写「喜欢」往后推(07 章决策 147)。
         typealias C = MusicPlaybackController
         expectEqual(PlaybackPlayer.allCases.filter(C.favoriteSettlesAfterTrackChange),
-                    [.qqMusic, .netease, .kugou, .soda, .amazonMusic, .mygoMusic].filter { PlaybackPlayer.allCases.contains($0) },
-                    "读别处状态的喜欢: QQ 音乐、网易云、酷狗、汽水、Amazon 和 MyGo(本地库)")
+                    [.qqMusic, .netease, .kugou, .kuwo, .soda, .amazonMusic, .mygoMusic].filter { PlaybackPlayer.allCases.contains($0) },
+                    "读别处状态的喜欢: QQ 音乐、网易云、酷狗、酷我(cloud.db)、汽水、Amazon 和 MyGo(本地库)")
         expectEqual(PlaybackPlayer.allCases.filter(C.hidesFavoriteWhenWriteIgnored),
-                    [.qqMusic, .netease, .kugou, .soda, .amazonMusic, .pearDesktop, .mygoMusic].filter { PlaybackPlayer.allCases.contains($0) },
+                    [.qqMusic, .netease, .kugou, .kuwo, .soda, .amazonMusic, .pearDesktop, .mygoMusic].filter { PlaybackPlayer.allCases.contains($0) },
                     "喜欢按了没生效藏心: 读别处状态的那几家加 Pear Desktop(登出后接口照报没赞、赞不理)")
         expectEqual(PlaybackPlayer.allCases.filter(C.shortcutAwaitsFavoriteWrite), [.pearDesktop],
                     "快捷键喜欢等写入结果再提示: 只有本机接口几毫秒就有结果的 Pear Desktop")

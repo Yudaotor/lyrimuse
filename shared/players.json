@@ -151,7 +151,7 @@
       "tint": {"source": "kuwo"},
       "fallbackSymbol": "music.note",
       "bundledIcon": "KuwoIcon",
-      "note": "原生 AppKit 的 App Store 版(带沙盒),没有 AppleScript 字典、没有 URL scheme,走 media-control。系统会话报歌名、歌手、专辑、时长和毫秒级位置,不带封面;播放中每 0.5~0.6 秒重发一次锚点,形态同 KKBOX(followsRepublishedAnchors)。暂停时 playbackRate 仍是 1,按 playing 判状态。失焦时三项播放控制走它自己的「播放控制」菜单(PlaybackMenuControl,「播放」「暂停」标题随状态变),要辅助功能权限。nativeLyricSource 填 kuwo:引擎先读它容器里当场落盘的 DocumentData/Lyric/「歌手 - 歌名 - rid.lrcx」,要完全磁盘访问。"
+      "note": "原生 AppKit 的 App Store 版(带沙盒),没有 AppleScript 字典、没有 URL scheme,走 media-control。系统会话报歌名、歌手、专辑、时长和毫秒级位置,不带封面;播放中每 0.5~0.6 秒重发一次锚点,形态同 KKBOX(followsRepublishedAnchors)。暂停时 playbackRate 仍是 1,按 playing 判状态。失焦时三项播放控制走它自己的「播放控制」菜单(PlaybackMenuControl,「播放」「暂停」标题随状态变),要辅助功能权限。喜欢读它容器 cloud.db 里当前账号的「我喜欢听」,写按「编辑」菜单的收藏/取消收藏(KuwoFavoriteControl),没登录不显示。nativeLyricSource 填 kuwo:引擎先读它容器里当场落盘的 DocumentData/Lyric/「歌手 - 歌名 - rid.lrcx」,要完全磁盘访问。"
     },
     {
       "id": "soda_music",

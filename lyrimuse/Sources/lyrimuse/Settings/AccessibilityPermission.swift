@@ -148,7 +148,7 @@ struct AccessibilityPermissionGuide: View {
         }
         let modeKey = players.filter { $0.accessibilityUse == .switchesModeAndTransport }
         if !modeKey.isEmpty {
-            lines.append(String(format: L10n.t("授权后，Lyrimuse 将读取%@窗口上的播放模式，并在你点按随机或循环按钮时代为按下其模式按钮；系统媒体焦点被其他 App 占用时，也可暂停、恢复和切换上一首或下一首。未授权时仍可显示歌词，但不提供随机、循环按钮，失去焦点时也无法控制播放"),
+            lines.append(String(format: L10n.t("授权后，Lyrimuse 将读取%@窗口上的播放模式，并在你点按随机或循环按钮时代为按下其模式按钮，点按喜欢时代为操作其收藏菜单；系统媒体焦点被其他 App 占用时，也可暂停、恢复和切换上一首或下一首。未授权时仍可显示歌词，但不提供随机、循环与喜欢按钮，失去焦点时也无法控制播放"),
                                 model.playerNames(modeKey)))
         }
         return lines.joined(separator: "\n")

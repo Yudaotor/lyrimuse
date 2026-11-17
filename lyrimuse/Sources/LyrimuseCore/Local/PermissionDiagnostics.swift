@@ -247,8 +247,8 @@ public enum PermissionDiagnostics {
             return ("reads and presses shuffle / repeat on its window; reads and sets its volume slider",
                     "no shuffle / repeat buttons or volume (lyrics and playback controls still work)")
         case .switchesModeAndTransport:
-            return ("reads and presses the play-mode button on its window; presses its playback menu while another app holds Now Playing focus",
-                    "no shuffle / repeat buttons; playback controls do nothing while it lacks Now Playing focus")
+            return ("reads and presses the play-mode button on its window; presses its favorite menu item; presses its playback menu while another app holds Now Playing focus",
+                    "no shuffle / repeat / favorite buttons; playback controls do nothing while it lacks Now Playing focus")
         }
     }
 

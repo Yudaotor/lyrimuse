@@ -163,6 +163,12 @@ func main() {
 		runApplyEnrichEditCLI(os.Args[2:])
 		return
 	}
+	// `lyrimuse-engine kuwo-favorite -title <歌名> -artist <歌手>`:酷我当前这首在不在「我喜欢听」,App 的喜欢键读它
+	// (见 kuwofavorite.go)。
+	if len(os.Args) > 1 && os.Args[1] == "kuwo-favorite" {
+		runKuwoFavoriteCLI(os.Args[2:])
+		return
+	}
 	// 开发者手动跑的存量修数据子命令只在带 devtools 构建标签时才有(见 devtools.go)。
 	if len(os.Args) > 1 {
 		if run, ok := devSubcommands[os.Args[1]]; ok {

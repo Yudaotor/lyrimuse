@@ -978,7 +978,7 @@ struct OnboardingView: View {
         }
         let modeKeyTargets = pendingAccessibility.filter { $0.accessibilityUse == .switchesModeAndTransport }
         if !modeKeyTargets.isEmpty {
-            lines.append(L10n.formatNames(L10n.t("辅助功能权限可显示%@的随机、循环按钮，也可在系统媒体焦点被其他 App 占用时控制暂停、恢复和切换上一首或下一首"),
+            lines.append(L10n.formatNames(L10n.t("辅助功能权限可显示%@的随机、循环与喜欢按钮，也可在系统媒体焦点被其他 App 占用时控制暂停、恢复和切换上一首或下一首"),
                                 accessibility.playerNames(modeKeyTargets)))
         }
         return lines.isEmpty ? nil : lines.joined(separator: "\n")
@@ -1684,7 +1684,7 @@ struct OnboardingView: View {
                                     accessibility.playerNames(windowControls)))
             }
             if !modeKey.isEmpty {
-                lines.append(L10n.formatNames(L10n.t("请开启此权限，以显示%@的随机、循环按钮，并在失去系统媒体焦点时控制暂停、恢复和切换上一首或下一首"),
+                lines.append(L10n.formatNames(L10n.t("请开启此权限，以显示%@的随机、循环与喜欢按钮，并在失去系统媒体焦点时控制暂停、恢复和切换上一首或下一首"),
                                     accessibility.playerNames(modeKey)))
             }
             return lines.joined(separator: "\n")

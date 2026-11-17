@@ -243,8 +243,8 @@ extension PlaybackPlayer {
         case refinesProgress
         /// 读、按主窗口播放条上的随机 / 循环键,读写音量滑块(Audirvana `AudirvanaControls`);播放控制走它的脚本,不要这项权限。
         case adjustsModeAndVolume
-        /// 读、按窗口播放条上那颗模式键(酷我 `KuwoModeControl`),失焦时按「播放控制」菜单里的播放 / 暂停、上一首、下一首
-        /// (`PlaybackMenuControl`)。没有喜欢和音量。
+        /// 读、按窗口播放条上那颗模式键(酷我 `KuwoModeControl`),按「编辑」菜单里的收藏 / 取消收藏(`KuwoFavoriteControl`),
+        /// 失焦时按「播放控制」菜单里的播放 / 暂停、上一首、下一首(`PlaybackMenuControl`)。没有音量。
         case switchesModeAndTransport
     }
 
