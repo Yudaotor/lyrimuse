@@ -180,3 +180,14 @@ func TestKuwoFavoriteIsWired(t *testing.T) {
 		t.Error("main.go 没接 kuwo-favorite(App 的酷我喜欢键靠它读状态)")
 	}
 }
+
+// 回滚日志模式下只读查也不建文件,上面那条造库测试分不出有没有 mode=ro,所以按源码守。
+func TestKuwoFavoriteOpensCloudDBReadOnly(t *testing.T) {
+	b, err := os.ReadFile("kuwofavorite.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !containsCode(string(b), `uri := (&url.URL{Scheme: "file", Path: cloud, RawQuery: "mode=ro"}).String()`) {
+		t.Error("cloud.db 要只读打开(mode=ro),别跟酷我抢写锁")
+	}
+}
