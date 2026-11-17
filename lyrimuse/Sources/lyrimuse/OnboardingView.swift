@@ -57,6 +57,9 @@ struct OnboardingView: View {
     @State private var furthestStep = 0
     /// 常驻服务点了「启用」却没起来时,给用户的一句交代。nil = 没有待报告的失败。
     @State private var engineFailure: String?
+    /// 没起来的原因是「登录项与扩展 › 允许在后台」里关掉了它(`EngineServiceManager.isBlockedByBackgroundItemSetting`),
+    /// 为真时换成这个原因和打开系统设置的按钮。
+    @State private var engineBlockedByBackgroundItem = false
     /// 「从应用程序中选择…」挑到一个驱不动的 App 时的错误文案(本体在
     /// `BrowserPairing.chooseFromApplications`,那边只返回文案、不碰视图状态)。
     @State private var browserPickerError: String?
@@ -768,7 +771,18 @@ struct OnboardingView: View {
                     engineTrailing
                 }
                 // 自动启用没起来时的交代:原因 + 出路(按钮已经变成「重试」)。
-                if let engineFailure {
+                if engineBlockedByBackgroundItem {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(L10n.t("已在「系统设置 › 通用 › 登录项与扩展」中关闭后台运行，歌词引擎无法启动"))
+                            .foregroundStyle(Color.orange)
+                        Button(L10n.t("打开系统设置")) { EngineServiceManager.openLoginItemsSettings() }
+                            .buttonStyle(.link)
+                    }
+                    .font(.caption)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.leading, Self.setupRowIndent)
+                    .padding(.bottom, 8)
+                } else if let engineFailure {
                     rowNote(engineFailure, tint: .orange)
                 }
                 ForEach(automationTargets, id: \.self) { player in
@@ -1720,7 +1734,11 @@ struct OnboardingView: View {
             // 先写开关(didSet 派发那唯一一次 install),再等它跑完拿状态,见 EngineServiceManager.operationQueue。
             settings.engineServiceEnabled = true
             let state = await EngineServiceManager.waitForPendingOperations()
-            engineRunning = state.isRunning
+            let running = state.isRunning
+            engineBlockedByBackgroundItem = await Task.detached(priority: .userInitiated) {
+                EngineServiceManager.isBlockedByBackgroundItemSetting(engineRunning: running)
+            }.value
+            engineRunning = running
             isTogglingEngineService = false
             // 起不来时给一句交代 + 一条出路。`LaunchdJobState.description`
             // 是固定英文的诊断串(见那边头注:它本来就是拿来贴给别人看的),所以只放进括号里

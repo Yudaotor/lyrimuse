@@ -1146,6 +1146,7 @@
 "已在「%@」中打开。逐字歌词仅修改文字，请勿改动每行开头的时间，保存后自动应用" = "Ouvert dans %@. Pour les paroles mot à mot, modifiez seulement les mots et gardez l’horodatage en début de ligne ; l’enregistrement applique les modifications";
 "已在「%@」中打开，保存后自动应用" = "Ouvert dans %@ ; l’enregistrement applique les modifications";
 "已在「系统设置 › 通用 › 登录项」中关闭，开机启动不会生效" = "Désactivé dans Réglages Système › Général › Éléments de connexion : Lyrimuse ne s’ouvrira pas à la connexion";
+"已在「系统设置 › 通用 › 登录项与扩展」中关闭后台运行，歌词引擎无法启动" = "L’exécution en arrière-plan est désactivée dans Réglages Système › Général › Ouverture et extensions : le moteur de paroles ne peut pas démarrer";
 "已在「设置 → 歌词 → 歌词来源」中关闭，本轮未查询" = "Désactivée dans Réglages → Paroles → Sources de paroles ; non interrogée lors de cette recherche";
 "已在播放但未显示歌词？请检查所选的播放器" = "Lecture en cours mais pas de paroles ? Vérifiez le lecteur sélectionné";
 "已在浏览器中打开 Last.fm 授权页面。请点按「Yes, allow access」完成授权，完成后将自动返回 Lyrimuse；如浏览器未自动跳转，也可返回此处点按下方按钮" = "La page d’autorisation de Last.fm est ouverte dans votre navigateur. Cliquez sur « Yes, allow access » pour terminer : vous reviendrez automatiquement dans Lyrimuse. Si le navigateur ne revient pas seul, utilisez le bouton ci-dessous";

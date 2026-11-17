@@ -359,6 +359,8 @@ enum DebugDeepLinks {
             logger.notice("debug settings visibility override=\(override.map { String($0) } ?? "auto", privacy: .public)")
         case let .engineAlive(override):
             LocalPlaybackSource.shared.setEngineDaemonPresenceOverride(override)
+        case let .engineBackgroundItem(disabled):
+            EngineServiceManager.setBackgroundItemDisabledOverride(disabled)
         case let .onboardingStep(step):
             NotificationCenter.default.post(name: onboardingStepNotification, object: step)
             logger.notice("debug onboarding step=\(String(describing: step), privacy: .public)")

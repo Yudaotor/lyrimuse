@@ -1146,6 +1146,7 @@
 "已在「%@」中打开。逐字歌词仅修改文字，请勿改动每行开头的时间，保存后自动应用" = "Opened in %@. For word-timed lyrics, change only the words and keep the time at the start of each line; saving applies the changes";
 "已在「%@」中打开，保存后自动应用" = "Opened in %@; saving applies the changes";
 "已在「系统设置 › 通用 › 登录项」中关闭，开机启动不会生效" = "Turned off in System Settings › General › Login Items, so Lyrimuse won’t open at login";
+"已在「系统设置 › 通用 › 登录项与扩展」中关闭后台运行，歌词引擎无法启动" = "Background activity is turned off in System Settings › General › Login Items & Extensions, so the lyrics engine can’t start";
 "已在「设置 → 歌词 → 歌词来源」中关闭，本轮未查询" = "Turned off under Settings → Lyrics → Lyrics Sources; this search did not query it";
 "已在播放但未显示歌词？请检查所选的播放器" = "Playing but no lyrics shown? Check the selected player";
 "已在浏览器中打开 Last.fm 授权页面。请点按「Yes, allow access」完成授权，完成后将自动返回 Lyrimuse；如浏览器未自动跳转，也可返回此处点按下方按钮" = "Last.fm’s authorization page is open in your browser. Click “Yes, allow access” there to finish, and you’ll be sent back to Lyrimuse automatically. If your browser doesn’t come back on its own, use the button below";

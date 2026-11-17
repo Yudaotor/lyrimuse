@@ -288814,6 +288814,101 @@
           }
         }
       }
+    },
+    "已在「系统设置 › 通用 › 登录项与扩展」中关闭后台运行，歌词引擎无法启动" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Die Hintergrundausführung ist in „Systemeinstellungen › Allgemein › Anmeldeobjekte & Erweiterungen“ ausgeschaltet, daher kann die Liedtext-Engine nicht starten"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Background activity is turned off in System Settings › General › Login Items & Extensions, so the lyrics engine can’t start"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "La ejecución en segundo plano está desactivada en Ajustes del Sistema › General › Ítems de inicio y extensiones, así que el motor de letras no puede iniciarse"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "L’exécution en arrière-plan est désactivée dans Réglages Système › Général › Ouverture et extensions : le moteur de paroles ne peut pas démarrer"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "L’esecuzione in background è disattivata in Impostazioni di Sistema › Generali › Elementi login ed estensioni: il motore dei testi non può avviarsi"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "「システム設定 › 一般 › ログイン項目と機能拡張」でバックグラウンド実行がオフになっているため、歌詞エンジンを起動できません"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "‘시스템 설정 › 일반 › 로그인 항목 및 확장 프로그램’에서 백그라운드 실행이 꺼져 있어 가사 엔진을 시작할 수 없습니다"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "A execução em segundo plano está desativada em Ajustes do Sistema › Geral › Itens de Início de Sessão e Extensões, então o motor de letras não pode iniciar"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Работа в фоне выключена в разделе «Системные настройки › Основные › Объекты входа и расширения», поэтому движок текстов не может запуститься"
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "การทำงานเบื้องหลังถูกปิดอยู่ใน “การตั้งค่าระบบ › ทั่วไป › รายการเข้าสู่ระบบและส่วนขยาย” บริการเนื้อเพลงจึงเริ่มทำงานไม่ได้"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Arka planda çalışma Sistem Ayarları › Genel › Oturum Açma Öğeleri ve Uzantılar bölümünde kapatıldı, bu yüzden şarkı sözü motoru başlatılamıyor"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Роботу у фоні вимкнено: Системні параметри › Загальні › Автозапуск і розширення. Рушій текстів не може запуститися"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Chạy nền đã bị tắt trong Cài đặt hệ thống › Cài đặt chung › Mục đăng nhập & tiện ích mở rộng nên công cụ lời bài hát không thể khởi động"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已在「系统设置 › 通用 › 登录项与扩展」中关闭后台运行，歌词引擎无法启动"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已在「系統設定 › 一般 › 登入項目與延伸功能」中關閉背景執行，歌詞引擎無法啟動"
+          }
+        }
+      }
     }
   },
   "version" : "1.0"

@@ -1,6 +1,7 @@
 import Foundation
 import LyrimuseCore
 import OSLog
+import ServiceManagement
 
 // 装/卸/查询引擎这个后台常驻服务的 LaunchAgent。跟 LoginItemManager 管这个 App
 // 自己的 LaunchAgent是同一种模式，但目标不同：LoginItemManager 装的是"这个 App 要不要
@@ -134,6 +135,35 @@ public enum EngineServiceManager {
 
     public static var isRunning: Bool { state.isRunning }
 
+    /// 这份 LaunchAgent 在「登录项与扩展 › 允许在后台」里的登记状态(`EngineBackgroundItem`)。一次 XPC 问答,不起子进程。
+    static var backgroundItemStatus: SMAppService.Status {
+        SMAppService.statusForLegacyPlist(at: plistURL)
+    }
+
+    /// 诊断导出用的一行。
+    static var backgroundItemStatusDescription: String {
+        EngineBackgroundItem.describe(backgroundItemStatus)
+    }
+
+    /// `debug/engine-background-item` 注入的结论,nil = 照实问系统。
+    private static let backgroundItemOverride = OSAllocatedUnfairLock<Bool?>(initialState: nil)
+
+    public static func setBackgroundItemDisabledOverride(_ value: Bool?) {
+        backgroundItemOverride.withLock { $0 = value }
+        logger.notice("debug engine background item override=\(value.map { String($0) } ?? "auto", privacy: .public)")
+    }
+
+    /// 引擎起不来是因为「允许在后台」里关掉了它,判据见 `EngineBackgroundItem.blocksEngine`。
+    public static func isBlockedByBackgroundItemSetting(engineRunning: Bool) -> Bool {
+        EngineBackgroundItem.blocksEngine(
+            engineRunning: engineRunning, override: backgroundItemOverride.withLock { $0 }, status: { backgroundItemStatus })
+    }
+
+    /// 打开「登录项与扩展」,让用户打开「允许在后台」里的 Lyrimuse。
+    public static func openLoginItemsSettings() {
+        SMAppService.openSystemSettingsLoginItems()
+    }
+
     /// 打包进这份 App 里的引擎二进制,自己报出来的版本号(`lyrimuse-engine version`,
     /// 对应 Go 侧 main.go 的 clientVersion)——加,给设置页"歌词引擎"卡片
     /// 检测"App 本体版本"跟"这份 App 实际打包的引擎版本"是否一致用。
@@ -221,7 +251,8 @@ public enum EngineServiceManager {
             recordInstalledFingerprint()
             let finalState = state
             if !finalState.isRunning {
-                logger.error("install: engine still not running after install, state=\(finalState.description, privacy: .public)")
+                logger.error(
+                    "install: engine still not running after install, state=\(finalState.description, privacy: .public) backgroundItem=\(backgroundItemStatusDescription, privacy: .public)")
                 logFolderAccessProblems(context: "install")
             }
         }

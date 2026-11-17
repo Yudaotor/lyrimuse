@@ -243,6 +243,8 @@ enum DiagnosticsExporter {
         // 报完整三态而不是 true/false —— "注册了但起不来"正是最需要出现在诊断报告里的那
         // 一档(带上次退出码),以前它跟"在跑"一样报 true,报告等于把最关键的线索抹掉了。
         lines.append("Engine service state: \(engineState)")
+        // 「登录项与扩展 › 允许在后台」里关掉了引擎时这里是 requiresApproval,launchctl 的报错认不出这个原因(15 章决策 116)。
+        lines.append("Engine background item: \(EngineServiceManager.backgroundItemStatusDescription)")
         // 引擎要写的几处主目录位置归不归当前用户、写不写得进。不对时引擎装不上或起不来,而 launchctl 只给笼统的报错。
         lines.append(contentsOf: HomeFolderAccess.diagnosticLines(
             for: HomeFolderAccess.check(), checkedCount: HomeFolderAccess.targets.count))

@@ -1,5 +1,6 @@
 import Foundation
 import LyrimuseCore
+import ServiceManagement
 
 /// 引擎要写的几处主目录位置(`HomeFolderAccess`,15 章决策 31)。在 `runOpsDiagnosticsTests` 里调用。
 func homeFolderAccessChecks() {
@@ -108,4 +109,60 @@ func homeFolderAccessChecks() {
                 "文件夹权限: 引擎 plist 原子写、显式 644")
     expectEqual(sourceBytes(manager, contain: "launchctl bootstrap exited with status"), true,
                 "文件夹权限: bootstrap 失败把退出码和原话记进日志")
+}
+
+/// 引擎被「登录项与扩展 › 允许在后台」关掉时说清原因(`EngineBackgroundItem`,15 章决策 116)。在 `runOpsDiagnosticsTests` 里调用。
+func engineBackgroundItemChecks() {
+    typealias B = EngineBackgroundItem
+    var asked = 0
+    func blocks(running: Bool, override: Bool? = nil, _ status: SMAppService.Status) -> Bool {
+        B.blocksEngine(engineRunning: running, override: override, status: { asked += 1; return status })
+    }
+    expectEqual(blocks(running: false, .requiresApproval), true, "后台项目: 没在跑、系统答 requiresApproval 才算被关")
+    expectEqual([blocks(running: false, .enabled), blocks(running: false, .notRegistered), blocks(running: false, .notFound)],
+                [false, false, false], "后台项目: enabled / notRegistered / notFound 都不算被关,照旧用原来的说法")
+    asked = 0
+    expectEqual(blocks(running: true, .requiresApproval), false, "后台项目: 引擎在跑就答否")
+    expectEqual(asked, 0, "后台项目: 引擎在跑不问系统")
+    expectEqual([blocks(running: true, override: true, .enabled), blocks(running: false, override: false, .requiresApproval)],
+                [true, false], "后台项目: 调试注入有值时以它为准")
+    expectEqual(B.describe(.requiresApproval).hasPrefix("requiresApproval"), true, "后台项目: 诊断导出写出 requiresApproval")
+
+    let appDir = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+        .appendingPathComponent("lyrimuse")
+    func app(_ name: String) -> String {
+        (try? String(contentsOf: appDir.appendingPathComponent(name), encoding: .utf8)) ?? ""
+    }
+    let manager = app("Settings/EngineServiceManager.swift")
+    expectEqual(sourceHas(manager, "SMAppService.statusForLegacyPlist(at: plistURL)"), true,
+                "后台项目: 问的是引擎自己那份 plist 的登记状态")
+    expectEqual(sourceHas(sourceBody("private static func install()", in: manager),
+                          "backgroundItem=\\(backgroundItemStatusDescription, privacy: .public)"), true,
+                "后台项目: 装完仍没跑起来时日志带上登记状态")
+    expectEqual(sourceHas(app("Settings/DiagnosticsExporter.swift"),
+                          "lines.append(\"Engine background item: \\(EngineServiceManager.backgroundItemStatusDescription)\")"), true,
+                "后台项目: 诊断导出有这一行")
+
+    let settings = app("SettingsView.swift")
+    let note = "L10n.t(\"已在「系统设置 › 通用 › 登录项与扩展」中关闭后台运行，歌词引擎无法启动\")"
+    expectEqual(sourceHas(sourceBody("private var engineRows: some View", in: settings),
+                          "if engineBlockedByBackgroundItem { SystemSettingsNote(text: \(note)) { EngineServiceManager.openLoginItemsSettings() } } else if !shownEngineState.isRunning, !engineFolderFindings.isEmpty {"),
+                true, "后台项目: 设置播放器页先说这个原因、给打开系统设置的按钮,盖过文件夹和笼统的失败说明")
+    expectEqual(sourceHas(settings, ".onReceive(playerHealth.$engineState.compactMap { $0 }) { latest in if latest != engineState { engineState = latest } refreshEngineFolderFindings() refreshEngineBackgroundItem() }"),
+                true, "后台项目: 设置页跟着引擎状态心跳重查")
+    expectEqual(sourceHas(settings, "if showsPearAPI { refreshPearAPI() } // 用户在系统设置里打开「允许在后台」时引擎状态不变、下面那条 onReceive 不触发,只能跟着这一拍重查。 refreshEngineBackgroundItem() }"),
+                true, "后台项目: 设置页每拍重查(打开「允许在后台」时引擎状态不变,只靠状态变化重查会一直挂着)")
+    let refresh = sourceBody("private func refreshEngineBackgroundItem()", in: settings)
+    expectEqual(sourceHas(refresh, "EngineServiceManager.isBlockedByBackgroundItemSetting(engineRunning: running)")
+                && sourceHas(refresh, "let reopened = engineBlockedByBackgroundItem engineBlockedByBackgroundItem = blocked if reopened, !engineState.isRunning, !isTogglingEngineService, AppSettings.shared.engineServiceEnabled { enableEngineService() }"),
+                true, "后台项目: 用户在系统设置里打开后,引擎该跑没跑就再装一次")
+    expectEqual(sourceHas(sourceBody("private func enableEngineService()", in: settings), "refreshEngineBackgroundItem()"), true,
+                "后台项目: 设置页点「启用」之后重查")
+
+    let onboarding = app("OnboardingView.swift")
+    expectEqual(sourceHas(sourceBody("private func enableEngineService()", in: onboarding),
+                          "EngineServiceManager.isBlockedByBackgroundItemSetting(engineRunning: running)")
+                && sourceHas(onboarding, "if engineBlockedByBackgroundItem { VStack(alignment: .leading, spacing: 4) { Text(\(note))")
+                && sourceHas(onboarding, "Button(L10n.t(\"打开系统设置\")) { EngineServiceManager.openLoginItemsSettings() }"), true,
+                "后台项目: 首启引导启用失败时同样说这个原因、给按钮")
 }

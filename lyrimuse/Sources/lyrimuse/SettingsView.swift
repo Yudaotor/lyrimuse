@@ -5319,6 +5319,10 @@ private struct PlayerSettingsTab: View {
     // 不再只说「可能是权限或系统限制」。
     @State private var engineFolderFindings: [HomeFolderAccess.Finding] = []
     @State private var engineFolderCheckInFlight = false
+    /// 引擎被「登录项与扩展 › 允许在后台」关掉了(`EngineServiceManager.isBlockedByBackgroundItemSetting`)。为真时卡片下面
+    /// 说这个原因、给打开系统设置的按钮,盖过文件夹和笼统的启用失败说明。
+    @State private var engineBlockedByBackgroundItem = false
+    @State private var engineBackgroundItemCheckInFlight = false
     // App 本体版本 vs 打包进这份 App 的引擎版本是否一致(见
     // EngineServiceManager.bundledEngineVersion 头注)。nil = 一致或没法判断(两种
     // 都不该报警,见 refreshEngineVersionCheck);非 nil 才代表真的查到了不一致,存的是
@@ -6644,6 +6648,7 @@ private struct PlayerSettingsTab: View {
             refreshEngineState()
             refreshEngineVersionCheck()
             refreshEngineFolderFindings()
+            refreshEngineBackgroundItem()
         }
         // 用户可能切去系统设置手动处理自动化授权,切回来要重读一次,并在已经不是 notDetermined 时
         // 清掉"正在等待"那套 UI,不然状态文字变了,下面却还卡在转圈/超时提示。
@@ -6660,6 +6665,8 @@ private struct PlayerSettingsTab: View {
                 if config != lxOpenAPIConfig { lxOpenAPIConfig = config }
             }
             if showsPearAPI { refreshPearAPI() }
+            // 用户在系统设置里打开「允许在后台」时引擎状态不变、下面那条 onReceive 不触发,只能跟着这一拍重查。
+            refreshEngineBackgroundItem()
         }
         // 引擎状态不能只在 onAppear 读一次。
         //
@@ -6670,6 +6677,7 @@ private struct PlayerSettingsTab: View {
         .onReceive(playerHealth.$engineState.compactMap { $0 }) { latest in
             if latest != engineState { engineState = latest }
             refreshEngineFolderFindings()
+            refreshEngineBackgroundItem()
         }
     }
 
@@ -6854,6 +6862,11 @@ private struct PlayerSettingsTab: View {
 
     // 引擎(读播放状态、抓歌词/封面写本地缓存的后台服务)用"状态图标 + 状态文字 +
     // 动作按钮"而不是简单 Toggle——需要展示"装了但没跑起来"这种中间态,纯 Toggle 表达不了。
+    /// 卡片按它画。调试注入「被关」时引擎可能其实在跑,这时按没跑画,跟真被关时一样。
+    private var shownEngineState: LaunchdJobState {
+        engineBlockedByBackgroundItem && engineState.isRunning ? .notRegistered : engineState
+    }
+
     @ViewBuilder
     private var engineRows: some View {
         SettingsRow(
@@ -6869,13 +6882,17 @@ private struct PlayerSettingsTab: View {
             // 自己在设置里点过的一个按钮联系起来。它没有"用户可能想关掉它"的正当场景。
             if isTogglingEngineService {
                 ProgressView().controlSize(.small)
-            } else if !engineState.isRunning {
+            } else if !shownEngineState.isRunning {
                 Button(L10n.t("启用")) { enableEngineService() }
             }
         }
         // 启用失败时给具体指引,不是只把红叉留在原地——这里能提供的具体行动是导出
         // 诊断信息(汇总 App/采集器日志),不是空泛地说"启用失败"。
-        if !engineState.isRunning, !engineFolderFindings.isEmpty {
+        if engineBlockedByBackgroundItem {
+            SystemSettingsNote(text: L10n.t("已在「系统设置 › 通用 › 登录项与扩展」中关闭后台运行，歌词引擎无法启动")) {
+                EngineServiceManager.openLoginItemsSettings()
+            }
+        } else if !shownEngineState.isRunning, !engineFolderFindings.isEmpty {
             CardDivider()
             SettingsNote {
                 EngineFolderAccessNote(findings: engineFolderFindings)
@@ -6966,7 +6983,7 @@ private struct PlayerSettingsTab: View {
     }
 
     private var engineStatusCaption: String {
-        switch engineState {
+        switch shownEngineState {
         case .running:
             return L10n.t("运行中")
         case .registeredNotRunning(let code):
@@ -6984,7 +7001,7 @@ private struct PlayerSettingsTab: View {
     }
 
     private var engineStatusIconName: String {
-        switch engineState {
+        switch shownEngineState {
         case .running: return "checkmark.circle.fill"
         case .registeredNotRunning, .unknown: return "exclamationmark.triangle.fill"
         case .notRegistered: return "xmark.circle.fill"
@@ -6992,7 +7009,7 @@ private struct PlayerSettingsTab: View {
     }
 
     private var engineStatusIconColor: Color {
-        switch engineState {
+        switch shownEngineState {
         case .running: return .green
         case .registeredNotRunning, .unknown: return .orange
         case .notRegistered: return .red
@@ -7024,6 +7041,26 @@ private struct PlayerSettingsTab: View {
             engineFolderFindings = findings
         }
     }
+    /// 跟着状态心跳问一次引擎是不是被「允许在后台」关掉了,上一次没回来不再派。从被关变成没关、引擎又该跑却没跑
+    /// (用户刚在系统设置里打开),替他再装一次。
+    private func refreshEngineBackgroundItem() {
+        guard !engineBackgroundItemCheckInFlight else { return }
+        engineBackgroundItemCheckInFlight = true
+        let running = engineState.isRunning
+        Task {
+            let blocked = await Task.detached(priority: .utility) {
+                EngineServiceManager.isBlockedByBackgroundItemSetting(engineRunning: running)
+            }.value
+            engineBackgroundItemCheckInFlight = false
+            guard blocked != engineBlockedByBackgroundItem else { return }
+            let reopened = engineBlockedByBackgroundItem
+            engineBlockedByBackgroundItem = blocked
+            if reopened, !engineState.isRunning, !isTogglingEngineService, AppSettings.shared.engineServiceEnabled {
+                enableEngineService()
+            }
+        }
+    }
+
     /// 查一次"App 本体版本"跟"打包进这份 App 的引擎版本"是否一致(见
     /// EngineServiceManager.bundledEngineVersion 头注)。只在 .onAppear 调一次
     /// (不放进每 2 秒那条心跳),而且真的 spawn 一次子进程,丢到后台线程跑,不阻塞
@@ -7054,6 +7091,7 @@ private struct PlayerSettingsTab: View {
             let state = await EngineServiceManager.waitForPendingOperations()
             engineState = state
             refreshEngineFolderFindings()
+            refreshEngineBackgroundItem()
             isTogglingEngineService = false
             // 只有这一个方向了(见上面按钮处的注释),没跑起来就是失败,直接标红给指引。
             engineEnableFailed = !state.isRunning
@@ -7180,19 +7218,7 @@ private struct GeneralSettingsTab: View {
 
     /// 系统设置里关掉了某项时挂在那一行下面的提示:橙字说状态,右侧一颗「打开系统设置」。
     private func systemSettingsNote(_ text: String, open: @escaping () -> Void) -> some View {
-        SettingsRawRow(insetToText: true) {
-            HStack(spacing: 8) {
-                Text(text)
-                    .font(.system(size: 11))
-                    .foregroundStyle(.orange)
-                    .fixedSize(horizontal: false, vertical: true)
-                Spacer(minLength: 4)
-                Button(L10n.t("打开系统设置"), action: open)
-                    .controlSize(.small)
-                    .settingsGlassButtons()
-                    .buttonBorderShape(.capsule)
-            }
-        }
+        SystemSettingsNote(text: text, open: open)
     }
 
     /// 「外观与语言」:外观、语言。
@@ -8780,5 +8806,27 @@ private enum SettingsDateText {
     static func relative(_ date: Date) -> String {
         relativeFormatter.locale = L10n.locale
         return relativeFormatter.localizedString(for: date, relativeTo: Date())
+    }
+}
+
+/// 卡片里一行橙色说明 + 行尾「打开系统设置」:系统那边关掉了什么、这边就不生效时用。
+private struct SystemSettingsNote: View {
+    let text: String
+    let open: () -> Void
+
+    var body: some View {
+        SettingsRawRow(insetToText: true) {
+            HStack(spacing: 8) {
+                Text(text)
+                    .font(.system(size: 11))
+                    .foregroundStyle(.orange)
+                    .fixedSize(horizontal: false, vertical: true)
+                Spacer(minLength: 4)
+                Button(L10n.t("打开系统设置"), action: open)
+                    .controlSize(.small)
+                    .settingsGlassButtons()
+                    .buttonBorderShape(.capsule)
+            }
+        }
     }
 }

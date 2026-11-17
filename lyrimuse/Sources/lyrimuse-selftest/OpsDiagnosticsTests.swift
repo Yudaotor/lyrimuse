@@ -465,6 +465,7 @@ func runOpsDiagnosticsTests() {
     }
 
     homeFolderAccessChecks()
+    engineBackgroundItemChecks()
     fileIOChecks()
 
     // ---- LaunchdPrintParser ----

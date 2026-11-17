@@ -451,6 +451,13 @@ func runDeepLinkTests() {
                      .debug(.engineAlive(override: nil))], "debug: 歌词引擎常驻进程当作不在 / 在 / 交还")
         expectEqual(link("lyrimuse://debug/engine-alive?state=down") == nil
                     && link("lyrimuse://debug/engine-alive") == nil, true, "debug: 引擎在不在认不出的、没带都不认")
+        expectEqual([link("lyrimuse://debug/engine-background-item?state=disabled"),
+                     link("lyrimuse://debug/engine-background-item?state=Enabled"),
+                     link("lyrimuse://debug/engine-background-item?state=auto")],
+                    [.debug(.engineBackgroundItem(disabled: true)), .debug(.engineBackgroundItem(disabled: false)),
+                     .debug(.engineBackgroundItem(disabled: nil))], "debug: 引擎后台项目当作被关 / 没关 / 交还")
+        expectEqual(link("lyrimuse://debug/engine-background-item?state=off") == nil
+                    && link("lyrimuse://debug/engine-background-item") == nil, true, "debug: 引擎后台项目认不出的、没带都不认")
         expectEqual(link("lyrimuse://debug/settings-visibility?state=on") == nil
                     && link("lyrimuse://debug/settings-visibility") == nil, true, "debug: 设置窗口可见性认不出的、没带都不认")
         expectEqual([link("lyrimuse://debug/onboarding-step?step=done"), link("lyrimuse://debug/onboarding-step?step=Background"),
@@ -748,6 +755,8 @@ func runDeepLinkTests() {
             .debug(.managerVisibility(override: true)), .debug(.managerVisibility(override: false)), .debug(.managerVisibility(override: nil)),
             .debug(.settingsVisibility(override: true)), .debug(.settingsVisibility(override: false)), .debug(.settingsVisibility(override: nil)),
             .debug(.engineAlive(override: true)), .debug(.engineAlive(override: false)), .debug(.engineAlive(override: nil)),
+            .debug(.engineBackgroundItem(disabled: true)), .debug(.engineBackgroundItem(disabled: false)),
+            .debug(.engineBackgroundItem(disabled: nil)),
             .debug(.onboardingStep(.welcome)), .debug(.onboardingStep(.playerChoice)), .debug(.onboardingStep(.browserPairing)),
             .debug(.onboardingStep(.background)), .debug(.onboardingStep(.displayMode)), .debug(.onboardingStep(.done)),
             .debug(.managerInstrumental(key: "歌手|歌 & 名|专辑", on: true)), .debug(.managerInstrumental(key: "a|b|", on: false)),
