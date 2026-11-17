@@ -354,6 +354,10 @@ func runDeepLinkTests() {
                     .debug(.moveWindow(title: "搜索", x: -200, y: -1200.5)), "debug: 按标题挪窗口")
         expectEqual(link("lyrimuse://debug/move-window?title=a&x=1") == nil
                     && link("lyrimuse://debug/move-window?x=1&y=2") == nil, true, "debug: 挪窗口缺标题或坐标不认")
+        expectEqual(link("lyrimuse://debug/move-window?title=a&x=1&y=2&w=520&h=600.5"),
+                    .debug(.moveWindow(title: "a", x: 1, y: 2, width: 520, height: 600.5)), "debug: 挪窗口连大小一起改")
+        expectEqual(link("lyrimuse://debug/move-window?title=a&x=1&y=2&w=0&h=nan"),
+                    .debug(.moveWindow(title: "a", x: 1, y: 2)), "debug: 挪窗口的宽高不是正数当没带")
         expectEqual(link("lyrimuse://debug/overlay-layout?width=1270&line-change=0"),
                     .debug(.overlayLayout(width: 1270, lineChange: false)), "debug: 悬浮歌词宽度、换句动画一起设")
         expectEqual(link("lyrimuse://debug/overlay-layout?next-line=0.7"),
@@ -528,6 +532,12 @@ func runDeepLinkTests() {
         expectEqual(link("lyrimuse://action/play-mode?mode=loop") == nil && link("lyrimuse://action/play-mode") == nil, true,
                     "播放模式: 认不出的取值、没带取值都认不出")
         expectEqual(link("lyrimuse://debug/simulate?artist=x"), nil, "模拟播放: 没给歌名认不出")
+        expectEqual(link("lyrimuse://debug/simulate?title=x&volume=40"),
+                    .debug(.simulate(title: "x", artist: "", album: "", duration: nil, position: 0, playing: true, volume: 40)),
+                    "模拟播放: 带音量当成能调音量的播放器")
+        expectEqual(link("lyrimuse://debug/simulate?title=x&volume=101"),
+                    .debug(.simulate(title: "x", artist: "", album: "", duration: nil, position: 0, playing: true)),
+                    "模拟播放: 音量出了 0…100 当没带")
         expectEqual(link("lyrimuse://debug/favorite"), .debug(.toggleFavorite), "debug: 翻转喜欢")
         expectEqual(link("lyrimuse://debug/idle-resume"), .debug(.idleResume), "debug: 停播页继续播放")
         expectEqual(link("lyrimuse://debug/seek?seconds=99.7"), .debug(.seek(seconds: 99.7)), "debug: 跳转")
@@ -766,6 +776,9 @@ func runDeepLinkTests() {
             .debug(.wordFormatSwitch(state: "queued", format: nil, done: nil, total: nil)),
             .debug(.overlayLayout(width: 640, lineChange: true)),
             .debug(.moveWindow(title: "搜索歌词…", x: 7, y: 33)),
+            .debug(.moveWindow(title: "歌词窗口", x: 7, y: 33, width: 520, height: 480)),
+            .debug(.moveWindow(title: "歌词窗口", x: 7, y: 33, height: 480)),
+            .debug(.simulate(title: "x", artist: "", album: "", duration: nil, position: 0, playing: true, volume: 0)),
             .debug(.overlayLayout(width: nil, lineChange: false)),
             .debug(.overlayLayout(width: nil, lineChange: nil, nextLine: 0.75)),
             .debug(.overlayLayout(width: nil, lineChange: nil, overflow: .wrap)),

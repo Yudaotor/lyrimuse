@@ -56,7 +56,7 @@ enum DebugDeepLinks {
         case .diagnostics: writeDiagnostics()
         case .checkpoint: checkpoint()
         case .restore: restore()
-        case let .simulate(title, artist, album, duration, position, playing, ad, artworkPath, localFile, localFilePlayer):
+        case let .simulate(title, artist, album, duration, position, playing, ad, artworkPath, localFile, localFilePlayer, volume):
             // 封面只读本机文件,限 20MB;读不到就当没有封面。
             let artwork = artworkPath.flatMap { path -> Data? in
                 let url = URL(fileURLWithPath: path)
@@ -65,11 +65,12 @@ enum DebugDeepLinks {
             }
             PlaybackSimulation.begin(PlaybackSimulation(
                 title: title, artist: artist, album: album, duration: duration, position: position, playing: playing, ad: ad,
-                artwork: artwork))
+                artwork: artwork, volume: volume))
             NowPlayingLocalFileModel.shared.update(localFile.map {
                 NowPlayingLocalFile(player: localFilePlayer ?? PlaybackSimulation.bundleIdentifier, path: $0)
             })
             LocalPlaybackSource.shared.simulationChanged()
+            PlaybackCoordinator.shared.refreshVolume()
             logger.notice("debug simulate on ad=\(ad, privacy: .public)")
         case .simulateIdle:
             PlaybackSimulation.begin(.nothingPlaying())
@@ -124,15 +125,17 @@ enum DebugDeepLinks {
                 AppSettings.shared.notchShowsProgressLine = progressLine.shows
             }
             logger.notice("debug notch behavior collapse=\(String(describing: collapse), privacy: .public) hide=\(String(describing: hide), privacy: .public) progressLine=\(progressLine?.rawValue ?? "nil", privacy: .public) allScreens=\(String(describing: allScreens), privacy: .public) showLyrics=\(String(describing: showLyrics), privacy: .public) lyricRowFade=\(String(describing: lyricRowFade), privacy: .public) volumeKeyBanner=\(String(describing: volumeKeyBanner), privacy: .public) realAudio=\(String(describing: realAudio), privacy: .public)")
-        case let .moveWindow(title, x, y):
+        case let .moveWindow(title, x, y, width, height):
             // 全局坐标的原点是主屏左上角;NSWindow 的原点在左下角、y 朝上。
             guard let window = NSApp.windows.first(where: { $0.title == title && $0.isVisible }),
                   let mainHeight = NSScreen.screens.first?.frame.height else {
                 logger.notice("debug move window: no visible window titled \(title, privacy: .public)")
                 return
             }
-            window.setFrameOrigin(NSPoint(x: x, y: mainHeight - y - window.frame.height))
-            logger.notice("debug move window \(title, privacy: .public) to \(x, privacy: .public),\(y, privacy: .public)")
+            let size = NSSize(width: max(width ?? window.frame.width, window.minSize.width),
+                              height: max(height ?? window.frame.height, window.minSize.height))
+            window.setFrame(NSRect(x: x, y: mainHeight - y - size.height, width: size.width, height: size.height), display: true)
+            logger.notice("debug move window \(title, privacy: .public) to \(x, privacy: .public),\(y, privacy: .public) size=\(size.width, privacy: .public)x\(size.height, privacy: .public)")
         case let .overlayLayout(width, lineChange, nextLine, overflow, arrangement):
             if let width {
                 let snapped = OverlayEditorStage.snappedWidth(width)

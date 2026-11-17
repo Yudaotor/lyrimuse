@@ -1682,6 +1682,49 @@ func runLyricsWindowTests() {
                     "输出设备(契约): 切换失败不关面板")
     }
 
+    // ---- 窗内自绘浮层落在窗口里(输出面板、「⋯」菜单那一族) ----
+    do {
+        typealias P = FloatingPanelPlacement
+        // 输出键离窗口右缘约 210pt,面板首选从键左边 16pt 起、宽 240:原样摆右缘伸出窗口 4pt。
+        for width in [520.0, 1020.0] {
+            let frame = P.frame(preferred: CGPoint(x: width - 226, y: 58), size: CGSize(width: 240, height: 76),
+                                bounds: CGRect(x: 0, y: 0, width: width, height: 480))
+            expectEqual(frame.maxX, width - P.margin, "浮层落点: 宽 \(Int(width)) 的窗里输出面板右缘推回窗内、离边 8")
+            expectEqual(frame.minY, 58, "浮层落点: 宽 \(Int(width)) 的窗里输出面板纵向不动")
+        }
+        expectEqual(P.frame(preferred: CGPoint(x: 120, y: 58), size: CGSize(width: 240, height: 76),
+                            bounds: CGRect(x: 0, y: 0, width: 1020, height: 660)).origin, CGPoint(x: 120, y: 58),
+                    "浮层落点: 放得下就照首选位置")
+        // 设备名很长:宽度先收到 窗宽 − 16,再贴左边距。
+        let long = P.maxLength(container: 520)
+        expectEqual(long, 504, "浮层落点: 最大宽度 = 窗宽减两侧边距")
+        expectEqual(P.frame(preferred: CGPoint(x: 294, y: 58), size: CGSize(width: long, height: 76),
+                            bounds: CGRect(x: 0, y: 0, width: 520, height: 480)).minX, 8, "浮层落点: 收满宽的面板贴左边距")
+        // 向上长的面板(「⋯」那一族):可以伸进内容区上面那截标题栏(顶部 safe area 32),再往上才往下推。
+        let titled = CGRect(x: 0, y: -32, width: 640, height: 512)
+        expectEqual(P.frame(preferred: CGPoint(x: 216, y: -24), size: CGSize(width: 200, height: 316),
+                            bounds: titled).minY, -24, "浮层落点: 伸进标题栏那一截照首选")
+        expectEqual(P.frame(preferred: CGPoint(x: 216, y: -100), size: CGSize(width: 200, height: 400),
+                            bounds: titled).minY, -24, "浮层落点: 上缘不出窗口(离窗口上缘 8)")
+        expectEqual(P.maxLength(container: 10), 0, "浮层落点: 容器比两侧边距还窄时最大宽度是 0")
+
+        let sourcesRoot = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+        let view = (try? String(contentsOf: sourcesRoot.appendingPathComponent("lyrimuse/UI/LyricsWindowView.swift"),
+                                encoding: .utf8)) ?? ""
+        expectEqual(view.isEmpty, false, "浮层落点(契约): 读到源码")
+        expectEqual(sourceHas(view, "FloatingPanelLayout(x: r.minX - 16, y: buttonBottom + 8, grows: .bottom) { outputDevicePanel"), true,
+                    "浮层落点(契约): 输出面板经 FloatingPanelLayout 摆,出了窗口往回推")
+        expectEqual(view.components(separatedBy: "FloatingPanelLayout(x: moreAnchorRect.maxX, y: moreAnchorRect.minY - 8, grows: .top,").count - 1, 4,
+                    "浮层落点(契约): 「⋯」菜单、简介、专辑简介、你的常听四块都经 FloatingPanelLayout 摆")
+        expectEqual(view.contains(".padding(.leading, moreAnchorRect.maxX)") || view.contains(".padding(.leading, max(8, r.minX - 16))"), false,
+                    "浮层落点(契约): 这几块面板不再按锚点直接 padding(那样不夹进窗口)")
+        let layoutBody = sourceBody("private struct FloatingPanelLayout: Layout", in: view)
+        expectEqual(layoutBody.contains("FloatingPanelPlacement.frame(") && layoutBody.contains("FloatingPanelPlacement.maxLength("), true,
+                    "浮层落点(契约): FloatingPanelLayout 收宽、夹位置都走 FloatingPanelPlacement")
+        expectEqual(view.components(separatedBy: "topInset: geo.safeAreaInsets.top) {").count - 1, 4,
+                    "浮层落点(契约): 向上长的四块把顶部 safe area 算进窗口,不被压到「⋯」按钮上")
+    }
+
     // ---- 窗口控制器的收尾与窗口不可见时停表(源码契约) ----
     do {
         let sourcesRoot = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()

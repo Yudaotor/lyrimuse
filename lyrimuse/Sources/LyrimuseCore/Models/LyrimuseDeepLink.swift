@@ -99,9 +99,11 @@ public enum LyrimuseDeepLink: Equatable, Sendable {
         /// 模拟播放(`PlaybackSimulation`):不读播放器,按这首驱动界面。时长、位置以秒计,`playing=0` 停在 `position`,
         /// `ad=1` 这一首按广告报;`artwork=<本机图片的绝对路径>` 给这一首一张封面(验跟随封面的背景、配色);
         /// `file=<本机音频文件的绝对路径>` 当成这一首正在放的本地文件(歌词管理「写入歌曲文件」认它,`NowPlayingLocalFile`),
-        /// `file_player=<bundle id>` 是放它的播放器,缺省是模拟播放器自己。都不写给引擎。
+        /// `file_player=<bundle id>` 是放它的播放器,缺省是模拟播放器自己;`volume=<0…100>` 当成能调音量的播放器,
+        /// 歌词窗口的音量胶囊和输出键跟着出现。都不写给引擎。
         case simulate(title: String, artist: String, album: String, duration: Double?, position: Double, playing: Bool,
-                      ad: Bool = false, artworkPath: String? = nil, localFile: String? = nil, localFilePlayer: String? = nil)
+                      ad: Bool = false, artworkPath: String? = nil, localFile: String? = nil, localFilePlayer: String? = nil,
+                      volume: Int? = nil)
         /// 模拟什么都没在放(停播页,`debug/simulate?idle=1`)。
         case simulateIdle
         /// 结束模拟,交还真实播放器(`debug/simulate?off=1`)。
@@ -284,9 +286,10 @@ public enum LyrimuseDeepLink: Equatable, Sendable {
         /// 悬浮歌词「文字不透明度」(按设置的区间夹取)和「文字颜色」从哪来,跟设置页「颜色」走同几个设置:
         /// `debug/overlay-text?opacity=0.4&color=cover|custom|rainbow`,至少带一个。
         case overlayText(opacity: Double?, color: String?)
-        /// 把标题为 `title` 的那扇 App 窗口挪到 (x, y):全局坐标、左上角原点(同 `check-windows.swift` 打印的),不改大小、
-        /// 不激活。`debug/move-window?title=搜索歌词…&x=-200&y=-1200`:把预览会停表的窗口挪到没被盖住的屏上再录帧。
-        case moveWindow(title: String, x: Double, y: Double)
+        /// 把标题为 `title` 的那扇 App 窗口挪到 (x, y):全局坐标、左上角原点(同 `check-windows.swift` 打印的),不激活。
+        /// `debug/move-window?title=搜索歌词…&x=-200&y=-1200`:把预览会停表的窗口挪到没被盖住的屏上再录帧。
+        /// 带 `w`、`h`(点,都要大于 0,可只带一个)时连大小一起改,不低于窗口的最小尺寸:验窄窗 / 宽窗排版用。
+        case moveWindow(title: String, x: Double, y: Double, width: Double? = nil, height: Double? = nil)
         /// 当作指针停在灵动岛卡片的这一点上(卡片局部坐标,原点左上角),走真指针那一条判区域:落在只显示的那一截就穿透、挖洞
         /// (`debug/notch-pass-through?x=200&y=50`)。不动真鼠标验穿透和洞的位置。
         case notchPassThrough(x: Double, y: Double)
@@ -457,7 +460,8 @@ public enum LyrimuseDeepLink: Equatable, Sendable {
                     playing: value("playing").flatMap(Self.parseBool) ?? true, ad: value("ad").flatMap(Self.parseBool) ?? false,
                     artworkPath: value("artwork").flatMap { $0.hasPrefix("/") ? $0 : nil },
                     localFile: value("file").flatMap { $0.hasPrefix("/") ? $0 : nil },
-                    localFilePlayer: value("file_player").flatMap { $0.isEmpty ? nil : $0 }))
+                    localFilePlayer: value("file_player").flatMap { $0.isEmpty ? nil : $0 },
+                    volume: value("volume").flatMap(Int.init).flatMap { (0...100).contains($0) ? $0 : nil }))
             }
         case ("debug", "/favorite"):
             self = .debug(.toggleFavorite)
@@ -610,7 +614,10 @@ public enum LyrimuseDeepLink: Equatable, Sendable {
             guard let title = value("title"), !title.isEmpty,
                   let x = value("x").flatMap(Double.init), let y = value("y").flatMap(Double.init),
                   x.isFinite, y.isFinite else { return nil }
-            self = .debug(.moveWindow(title: title, x: x, y: y))
+            func length(_ name: String) -> Double? {
+                value(name).flatMap(Double.init).flatMap { $0.isFinite && $0 > 0 ? $0 : nil }
+            }
+            self = .debug(.moveWindow(title: title, x: x, y: y, width: length("w"), height: length("h")))
         case ("debug", "/overlay-layout"):
             let width = value("width").flatMap(Double.init).flatMap { $0.isFinite && $0 > 0 ? $0 : nil }
             let lineChange = value("line-change").flatMap(Self.parseBool)
@@ -887,7 +894,7 @@ public enum LyrimuseDeepLink: Equatable, Sendable {
             case .diagnostics: components.path = "/diagnostics"
             case .checkpoint: components.path = "/checkpoint"
             case .restore: components.path = "/restore"
-            case let .simulate(title, artist, album, duration, position, playing, ad, artworkPath, localFile, localFilePlayer):
+            case let .simulate(title, artist, album, duration, position, playing, ad, artworkPath, localFile, localFilePlayer, volume):
                 components.path = "/simulate"
                 var items = [
                     URLQueryItem(name: "title", value: title), URLQueryItem(name: "artist", value: artist),
@@ -900,6 +907,7 @@ public enum LyrimuseDeepLink: Equatable, Sendable {
                 if let artworkPath { items.append(URLQueryItem(name: "artwork", value: artworkPath)) }
                 if let localFile { items.append(URLQueryItem(name: "file", value: localFile)) }
                 if let localFilePlayer { items.append(URLQueryItem(name: "file_player", value: localFilePlayer)) }
+                if let volume { items.append(URLQueryItem(name: "volume", value: String(volume))) }
                 components.queryItems = items
             case .simulateIdle:
                 components.path = "/simulate"
@@ -1035,10 +1043,12 @@ public enum LyrimuseDeepLink: Equatable, Sendable {
                 }
                 if let realAudio { items.append(URLQueryItem(name: "real-audio", value: realAudio ? "1" : "0")) }
                 components.queryItems = items
-            case let .moveWindow(title, x, y):
+            case let .moveWindow(title, x, y, width, height):
                 components.path = "/move-window"
                 components.queryItems = [URLQueryItem(name: "title", value: title),
                                          URLQueryItem(name: "x", value: String(x)), URLQueryItem(name: "y", value: String(y))]
+                    + [width.map { URLQueryItem(name: "w", value: String($0)) },
+                       height.map { URLQueryItem(name: "h", value: String($0)) }].compactMap { $0 }
             case let .overlayLayout(width, lineChange, nextLine, overflow, arrangement):
                 components.path = "/overlay-layout"
                 var items: [URLQueryItem] = []

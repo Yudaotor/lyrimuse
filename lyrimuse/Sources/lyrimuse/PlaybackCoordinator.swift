@@ -649,6 +649,14 @@ final class PlaybackCoordinator: ObservableObject {
         return await MusicAutomationPermission.checkAppleMusicSafely(askIfNeeded: false)
     }
 
+    /// 模拟播放带了音量(`debug/simulate?volume=`):喜欢、播放模式照模拟播放器没有,音量用模拟那一份。
+    private func applySimulatedVolume(_ value: Int) {
+        if isFavorited != nil { isFavorited = nil }
+        applyPlaybackMode(nil)
+        applyVolumeHint(player: nil, volume: nil)
+        if soundVolume != value { soundVolume = value }
+    }
+
     private func clearExtendedControls() {
         if isFavorited != nil { isFavorited = nil }
         applyPlaybackMode(nil)
@@ -670,6 +678,10 @@ final class PlaybackCoordinator: ObservableObject {
     /// 三次 TCC 检查。三个 seq 守卫各管各的:期间用户点了喜欢/切了模式/拖了音量,对应项的回读结果
     /// 单独作废,不牵连另两项。
     func refreshExtendedControls() {
+        if let simulated = PlaybackSimulation.current?.volume {
+            applySimulatedVolume(simulated)
+            return
+        }
         guard let player = extendedControlPlayer else {
             if let web = youtubeMusicWebTarget {
                 // 不先清,换歌时几颗键不闪一下。
@@ -777,6 +789,10 @@ final class PlaybackCoordinator: ObservableObject {
 
     /// 重新读一次 Music.app 的音量。跟 refreshFavorited 同一套前置判断与守卫。
     func refreshVolume() {
+        if let simulated = PlaybackSimulation.current?.volume {
+            applySimulatedVolume(simulated)
+            return
+        }
         guard let player = extendedControlPlayer else {
             if let web = youtubeMusicWebTarget {
                 refreshYouTubeMusicWeb(web, mode: false, favorite: false, volume: true)
@@ -801,6 +817,11 @@ final class PlaybackCoordinator: ObservableObject {
     /// 拖音量滑杆。跟"喜欢"一样先乐观更新再写回去 —— 滑杆必须跟着手指走,不能等
     /// osascript 往返(实测约 125ms)才动。
     func setVolume(_ value: Int) {
+        if PlaybackSimulation.setVolume(value) {
+            let target = min(100, max(0, value))
+            if soundVolume != target { soundVolume = target }
+            return
+        }
         let writer: VolumeWriter
         if let player = extendedControlPlayer {
             writer = .player(player)

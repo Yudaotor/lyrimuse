@@ -3037,13 +3037,14 @@ struct LyricsWindowView: View {
                                     withAnimation(.easeOut(duration: 0.12)) { showsMoreMenu = false }
                                 }
                                 .transition(.opacity)
-                            moreMenuPanel
-                                .fixedSize()
-                                .padding(.leading, moreAnchorRect.maxX)
-                                .padding(.bottom, max(8, geo.size.height - moreAnchorRect.minY + 8))
-                                // 缩放锚在面板左下角 —— 正好是贴着「…」按钮的那个角,
-                                // 观感是从按钮上长出来(AM 同款,只是方向翻到右边)。
-                                .transition(.opacity.combined(with: .scale(scale: 0.96, anchor: .bottomLeading)))
+                            // 窗口窄时右侧放不下,FloatingPanelLayout 往左推回窗内(同输出面板)。
+                            FloatingPanelLayout(x: moreAnchorRect.maxX, y: moreAnchorRect.minY - 8, grows: .top,
+                                                topInset: geo.safeAreaInsets.top) {
+                                moreMenuPanel
+                                    // 缩放锚在面板左下角 —— 正好是贴着「…」按钮的那个角,
+                                    // 观感是从按钮上长出来(AM 同款,只是方向翻到右边)。
+                                    .transition(.opacity.combined(with: .scale(scale: 0.96, anchor: .bottomLeading)))
+                            }
                         }
                     }
                 }
@@ -3060,17 +3061,17 @@ struct LyricsWindowView: View {
                                     withAnimation(.easeOut(duration: 0.12)) { showsInfoPanel = false }
                                 }
                                 .transition(.opacity)
-                            trackInfoPanel
-                                .fixedSize()
-                                // 开着面板换了歌:不重取的话来源和链接还是上一首的。
-                                .onChange(of: moreMenuTrackIdentity) { _ in loadInfoPanelDetails() }
-                                // 换歌后引擎要几秒才把来源、链接写进缓存,打开那一刻也可能还没解码上来:内容版本变了再取一次。
-                                .onReceive(LocalPlaybackSource.shared.$enrichContentVersion.removeDuplicates().dropFirst()) { _ in
-                                    loadInfoPanelDetails()
-                                }
-                                .padding(.leading, moreAnchorRect.maxX)
-                                .padding(.bottom, max(8, geo.size.height - moreAnchorRect.minY + 8))
-                                .transition(.opacity.combined(with: .scale(scale: 0.96, anchor: .bottomLeading)))
+                            FloatingPanelLayout(x: moreAnchorRect.maxX, y: moreAnchorRect.minY - 8, grows: .top,
+                                                topInset: geo.safeAreaInsets.top) {
+                                trackInfoPanel
+                                    // 开着面板换了歌:不重取的话来源和链接还是上一首的。
+                                    .onChange(of: moreMenuTrackIdentity) { _ in loadInfoPanelDetails() }
+                                    // 换歌后引擎要几秒才把来源、链接写进缓存,打开那一刻也可能还没解码上来:内容版本变了再取一次。
+                                    .onReceive(LocalPlaybackSource.shared.$enrichContentVersion.removeDuplicates().dropFirst()) { _ in
+                                        loadInfoPanelDetails()
+                                    }
+                                    .transition(.opacity.combined(with: .scale(scale: 0.96, anchor: .bottomLeading)))
+                            }
                         }
                     }
                 }
@@ -3084,12 +3085,12 @@ struct LyricsWindowView: View {
                                     withAnimation(.easeOut(duration: 0.12)) { editorialPanel = nil }
                                 }
                                 .transition(.opacity)
-                            editorialPanelView(card)
-                                .fixedSize(horizontal: false, vertical: true)
-                                .frame(width: 340)
-                                .padding(.leading, moreAnchorRect.maxX)
-                                .padding(.bottom, max(8, geo.size.height - moreAnchorRect.minY + 8))
-                                .transition(.opacity.combined(with: .scale(scale: 0.96, anchor: .bottomLeading)))
+                            FloatingPanelLayout(x: moreAnchorRect.maxX, y: moreAnchorRect.minY - 8, grows: .top,
+                                                topInset: geo.safeAreaInsets.top) {
+                                editorialPanelView(card)
+                                    .frame(idealWidth: 340)
+                                    .transition(.opacity.combined(with: .scale(scale: 0.96, anchor: .bottomLeading)))
+                            }
                         }
                     }
                 }
@@ -3104,14 +3105,14 @@ struct LyricsWindowView: View {
                                     withAnimation(.easeOut(duration: 0.12)) { showsChartsPanel = false }
                                 }
                                 .transition(.opacity)
-                            ChartsPanelView()
-                                .fixedSize(horizontal: false, vertical: true)
-                                .frame(width: 300)
-                                .lyricsWindowFloatingPanelBackground()
-                                .environment(\.colorScheme, hasArtworkBackground ? .dark : colorScheme)
-                                .padding(.leading, moreAnchorRect.maxX)
-                                .padding(.bottom, max(8, geo.size.height - moreAnchorRect.minY + 8))
-                                .transition(.opacity.combined(with: .scale(scale: 0.96, anchor: .bottomLeading)))
+                            FloatingPanelLayout(x: moreAnchorRect.maxX, y: moreAnchorRect.minY - 8, grows: .top,
+                                                topInset: geo.safeAreaInsets.top) {
+                                ChartsPanelView()
+                                    .frame(idealWidth: 300)
+                                    .lyricsWindowFloatingPanelBackground()
+                                    .environment(\.colorScheme, hasArtworkBackground ? .dark : colorScheme)
+                                    .transition(.opacity.combined(with: .scale(scale: 0.96, anchor: .bottomLeading)))
+                            }
                         }
                     }
                 }
@@ -3186,6 +3187,8 @@ struct LyricsWindowView: View {
                 // 面板机制,锚在按钮**下方**(AM 的输出面板悬在胶囊下方)。按钮的锚点挂在胶囊的
                 // offset 里面,取到的已经是挪到真窗顶之后的位置(同 VolumeCapsuleBoundsKey),
                 // 别再减一次 safe area:那样面板顶边贴死胶囊下沿。
+                // 首选从按钮左边 16pt 向右长;胶囊贴着窗口右缘,面板比按钮到右缘那一段宽,
+                // 由 FloatingPanelLayout 往左推回窗内,别改回 padding 直接摆(右侧会被窗口边裁掉,见 07 章决策 211)。
                 .overlayPreferenceValue(OutputMenuButtonBoundsKey.self) { anchor in
                     if showsOutputMenu, let anchor {
                         let r = geo[anchor]
@@ -3197,11 +3200,10 @@ struct LyricsWindowView: View {
                                     withAnimation(.easeOut(duration: 0.12)) { showsOutputMenu = false }
                                 }
                                 .transition(.opacity)
-                            outputDevicePanel
-                                .fixedSize()
-                                .padding(.leading, max(8, r.minX - 16))
-                                .padding(.top, max(8, buttonBottom + 8))
-                                .transition(.opacity.combined(with: .scale(scale: 0.96, anchor: .top)))
+                            FloatingPanelLayout(x: r.minX - 16, y: buttonBottom + 8, grows: .bottom) {
+                                outputDevicePanel
+                                    .transition(.opacity.combined(with: .scale(scale: 0.96, anchor: .top)))
+                            }
                         }
                     } else if showsOutputMenu {
                         Color.clear.allowsHitTesting(false).onAppear { showsOutputMenu = false }
@@ -4345,7 +4347,7 @@ struct LyricsWindowView: View {
             }
             // 收听档案(Last.fm 系列):累计次数 + 首次/上次听。连着账号才有;首次/上次是面板
             // 打开那一刻才发的两个请求(user.getTrackScrobbles),到货前这几行整体缺席,面板高度
-            // 随之长一截 —— 面板本来就是 fixedSize 浮层,长高不顶别人。
+            // 随之长一截 —— 面板是按天然高度摆的浮层,长高不顶别人。
             InfoPanelListeningRows(title: playback.title, artist: playback.artist, onArtwork: hasArtworkBackground)
         }
         .padding(12)
@@ -7290,6 +7292,38 @@ private struct ListenHistoryPane: View {
     }
 }
 
+/// 窗级自绘浮层的承载:铺满整窗,浮层按 `FloatingPanelPlacement` 摆。先量理想尺寸,比窗口宽就按窗口收宽
+/// 再量一次高;首选位置出了窗口就往回推。`x` 是浮层左缘的首选位置;`grows` 为 `.bottom` 时 `y` 是上缘
+/// (向下长),为 `.top` 时 `y` 是下缘(向上长)。`topInset` 是摆它的内容区上面还属于窗口的那一截(顶部 safe area),
+/// 向上长的浮层可以伸进去,不出窗口上缘就行。浮层自己别再加 `.fixedSize()` / 定宽 `.frame(width:)`:
+/// 那样收不了宽,窄窗里照样伸出窗外。
+private struct FloatingPanelLayout: Layout {
+    let x: CGFloat
+    let y: CGFloat
+    let grows: VerticalEdge
+    var topInset: CGFloat = 0
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        proposal.replacingUnspecifiedDimensions()
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        let maxWidth = FloatingPanelPlacement.maxLength(container: bounds.width)
+        for panel in subviews {
+            var size = panel.sizeThatFits(.unspecified)
+            if size.width > maxWidth {
+                size = panel.sizeThatFits(ProposedViewSize(width: maxWidth, height: nil))
+                size.width = min(size.width, maxWidth)
+            }
+            let preferred = CGPoint(x: x, y: grows == .bottom ? y : y - size.height)
+            let window = CGRect(x: 0, y: -topInset, width: bounds.width, height: bounds.height + topInset)
+            let frame = FloatingPanelPlacement.frame(preferred: preferred, size: size, bounds: window)
+            panel.place(at: CGPoint(x: bounds.minX + frame.minX, y: bounds.minY + frame.minY),
+                        anchor: .topLeading, proposal: ProposedViewSize(frame.size))
+        }
+    }
+}
+
 /// 输出面板的设备列表。自己订阅 `AudioOutputMonitor`,设备增减 / 默认输出变化只失效这一块;
 /// 选择失败时不关面板,勾留在原来那台。
 private struct OutputDeviceList: View {
@@ -7951,7 +7985,7 @@ private struct ChartsPanelView: View {
 
     /// content 区域曾经渲染到过的最大高度——用来防止"加载时窗口先缩小再突然变大"。
     ///
-    /// 根因:面板整体靠外层 `.fixedSize(vertical: true)` 跟着 content 的天然高度走,而
+    /// 根因:面板整体按 content 的天然高度摆(`FloatingPanelLayout` 量的是理想高度),而
     /// content 四态天差地别 —— 有数据时最多 10 行(~300+pt),loading/失败/无数据只是一个
     /// spinner 或一行灰字(~50pt 出头)。切 kind/period 会触发 refreshChart 重新进入 loading
     /// 那一档(哪怕只是一瞬间),面板跟着缩成 spinner 那么高,数据一到又弹回大尺寸 —— 就是

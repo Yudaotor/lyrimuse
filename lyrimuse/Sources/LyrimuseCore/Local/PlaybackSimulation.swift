@@ -30,9 +30,11 @@ public struct PlaybackSimulation: Equatable, Sendable {
     public var idle: Bool
     /// 这一首的封面(图片原始字节);nil = 没有封面。取封面时直接交这一份,不读播放器。
     public var artwork: Data?
+    /// 播放器音量 0…100:有值时歌词窗口的音量胶囊照能调音量的播放器那样出现,拖它改的是这一份;nil = 不能调音量。
+    public var volume: Int?
 
     public init(title: String, artist: String, album: String, duration: Double?, position: Double, playing: Bool,
-                ad: Bool = false, idle: Bool = false, artwork: Data? = nil, anchoredAt: Date = Date()) {
+                ad: Bool = false, idle: Bool = false, artwork: Data? = nil, volume: Int? = nil, anchoredAt: Date = Date()) {
         self.title = title
         self.artist = artist
         self.album = album
@@ -42,6 +44,7 @@ public struct PlaybackSimulation: Equatable, Sendable {
         self.ad = ad
         self.idle = idle
         self.artwork = artwork
+        self.volume = volume.map { min(100, max(0, $0)) }
         self.anchoredAt = anchoredAt
     }
 
@@ -133,6 +136,16 @@ public struct PlaybackSimulation: Equatable, Sendable {
             var next = current.reanchored(at: now)
             next.position = min(max(0, seconds), current.duration ?? .infinity)
             s.current = next
+            return true
+        }
+    }
+
+    /// 模拟期间调音量(只在这一份带音量时收)。没在模拟或这一份不能调音量返回 false。
+    @discardableResult
+    public static func setVolume(_ value: Int) -> Bool {
+        state.withLock { s in
+            guard s.current?.volume != nil else { return false }
+            s.current?.volume = min(100, max(0, value))
             return true
         }
     }
