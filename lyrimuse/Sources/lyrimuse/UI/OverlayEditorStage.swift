@@ -639,7 +639,8 @@ struct OverlayEditorStage: View {
             case .placement: return 420
             // 「OBS」浏览器源地址那一行要放下地址和「预览」「拷贝」两颗按钮。
             case .obs: return 460
-            // 「行为」三列开关小块,最长的英文「Hide for Instrumentals & No Lyrics」+ ⓘ + 开关要两行排下。
+            // 「行为」三列开关小块,名字最多两行。各语言里最难排的是日语「悬停时显示播放控制」(ポインタを合わせたときに再生コントロールを表示),
+            // 它 + 开关要两行排下;改宽度或改这几格的译文时按各语言重新量。
             case .behavior: return 800
             }
         }
