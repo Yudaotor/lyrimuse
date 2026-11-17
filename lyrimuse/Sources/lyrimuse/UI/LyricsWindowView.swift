@@ -993,6 +993,13 @@ private final class LyricsWindowController: ObservableObject {
         trafficLights.place(in: window)
     }
 
+    /// `debug/state` 的 `lyricsWindowChrome.trafficLights`:露着的按钮外接矩形和组悬停跟踪区,窗口坐标(左上原点)的 [x, y, 宽, 高]。
+    var trafficLightDebugState: Any {
+        guard let window, let geometry = TitlebarButtonPlacement.hoverGeometry(in: window) else { return NSNull() }
+        func box(_ r: CGRect) -> [Int] { [Int(r.minX.rounded()), Int(r.minY.rounded()), Int(r.width.rounded()), Int(r.height.rounded())] }
+        return ["buttons": box(geometry.buttons), "hoverArea": geometry.hoverArea.map(box) ?? NSNull()] as [String: Any]
+    }
+
     /// 标题栏那一行里 SwiftUI 画的控件此刻的矩形(SwiftUI 全局坐标,左上原点),双击落在这些上面不算标题栏空白。
     private var titlebarControlRects: [CGRect] = []
     private var titlebarDoubleClickMonitor: Any?
@@ -8188,6 +8195,7 @@ final class LyricsWindowRemote: ObservableObject {
         var state = controller.chromeFade.debugState
         state["keyOverride"] = controller.debugKeyOverride.map { $0 ? "on" : "off" } ?? "auto"
         state["nativeFullScreen"] = controller.isNativeFullScreen
+        state["trafficLights"] = controller.trafficLightDebugState
         return state
     }
 

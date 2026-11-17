@@ -29,6 +29,18 @@ func checkLyricsWindowTrafficLights() {
             let dx = placed[0].x - systemDefault[0].x
             expectEqual(abs(dx) > 0.5 && zip(placed, systemDefault).allSatisfy { abs(($0.x - $1.x) - dx) < 0.5 }, true,
                         "红绿灯位置: 整组跟着关闭键平移,保留系统自己的间距")
+            let geometry = TitlebarButtonPlacement.hoverGeometry(in: window)
+            expectEqual(geometry?.hoverArea.map { $0.insetBy(dx: -0.5, dy: -0.5).contains(geometry!.buttons) } ?? false, true,
+                        "红绿灯悬停: 摆完组跟踪区跟到按钮现在的位置,不留在默认位(07 章决策 210)")
+            let bare = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 600, height: 400),
+                                styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView],
+                                backing: .buffered, defer: true)
+            let before = TitlebarButtonPlacement.hoverGeometry(in: bare)?.hoverArea
+            if let bareClose = bare.standardWindowButton(.closeButton) {
+                bareClose.setFrameOrigin(NSPoint(x: bareClose.frame.minX + 10, y: bareClose.frame.minY - 10))
+            }
+            expectEqual(before != nil && TitlebarButtonPlacement.hoverGeometry(in: bare)?.hoverArea == before, true,
+                        "红绿灯悬停: 前提 —— 只挪按钮时系统的组跟踪区留在原处")
         } else {
             expectEqual(false, true, "红绿灯位置: 离屏窗口有三颗标准按钮")
         }

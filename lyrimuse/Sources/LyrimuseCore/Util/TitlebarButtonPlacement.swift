@@ -6,6 +6,9 @@ import AppKit
 /// `isHidden` 就会当场触发这次重排,所以显隐一律走 `setHidden`,写完同一拍摆回去;别直接写按钮的 `isHidden`
 /// 再等别处(`didUpdate`)补摆 —— 没有事件进来时那一下不来,按钮就停在默认位上露出来。改标题、窗口开始 /
 /// 停止被录制这类别处触发的重排由 `track` 兜底。见 07 章决策 203。
+///
+/// 指针进三颗按钮那一组才画 × − ⤢,判据是系统挂在窗口框架上的一块组跟踪区。它按挂上那一刻按钮在哪来画,挪按钮
+/// 不跟着走,只在系统重排标题栏时重挂(那时按钮刚被拉回默认位),所以摆完要让它按新位置重挂,见 07 章决策 210。
 @MainActor
 public final class TitlebarButtonPlacement {
     public static let buttonTypes: [NSWindow.ButtonType] = [.closeButton, .miniaturizeButton, .zoomButton]
@@ -24,6 +27,7 @@ public final class TitlebarButtonPlacement {
     private var trackObservers: [NSObjectProtocol] = []
     private var canPlace: () -> Bool = { true }
     private let schedule: (@escaping @Sendable () -> Void) -> Void
+    private static let updateHoverTracking = NSSelectorFromString("_updateMouseTracking")
 
     /// `schedule` 决定 `track` 发现按钮被挪走后在哪一拍摆回去,默认排进主线程这一轮休眠之前(早于画面提交)。
     public init(closeCenterX: CGFloat, topMargin: CGFloat,
@@ -51,14 +55,39 @@ public final class TitlebarButtonPlacement {
         let wasWriting = writing
         writing = true
         defer { writing = wasWriting }
+        var moved = false
         for type in Self.buttonTypes {
             guard let button = window.standardWindowButton(type),
                   let defaultX = defaultXs[type.rawValue] else { continue }
             let targetX = defaultX + dx
             if abs(button.frame.origin.y - targetY) > 0.5 || abs(button.frame.origin.x - targetX) > 0.5 {
                 button.setFrameOrigin(NSPoint(x: targetX, y: targetY))
+                moved = true
             }
         }
+        if moved { Self.hoverOwner(of: closeButton)?.perform(Self.updateHoverTracking) }
+    }
+
+    /// 挂组跟踪区的那个视图(窗口框架):从按钮往上第一个认 `_updateMouseTracking` 的。
+    private static func hoverOwner(of button: NSView) -> NSView? {
+        var view = button.superview
+        while let current = view, !current.responds(to: updateHoverTracking) { view = current.superview }
+        return view
+    }
+
+    /// 三颗露着的按钮的外接矩形和那块组跟踪区,窗口坐标(左上原点);给 `debug/state` 和 selftest 对账。
+    public static func hoverGeometry(in window: NSWindow) -> (buttons: CGRect, hoverArea: CGRect?)? {
+        let buttons = buttonTypes.compactMap { window.standardWindowButton($0) }.filter { !$0.isHidden }
+        guard let first = buttons.first, let owner = hoverOwner(of: first) else { return nil }
+        let height = window.frame.height
+        func topLeft(_ rect: CGRect) -> CGRect {
+            CGRect(x: rect.minX, y: height - rect.maxY, width: rect.width, height: rect.height)
+        }
+        let union = buttons.map { $0.convert($0.bounds, to: nil) }.reduce(CGRect.null) { $0.union($1) }
+        let area = owner.trackingAreas
+            .first { $0.owner === owner && $0.rect.width < 200 && $0.rect.height < 60 }
+            .map { topLeft(owner.convert($0.rect, to: nil)) }
+        return (topLeft(union), area)
     }
 
     /// 按 `hidden(type)` 设三颗按钮的显隐,真有一颗翻了就当场摆回目标位。`reposition` 为 false 时只设显隐
