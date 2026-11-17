@@ -2367,7 +2367,7 @@ func runLyricsManagerTests() {
         let store = (try? String(contentsOf: appDir.appendingPathComponent("LyricsManager/EnrichCacheStore.swift"),
                                  encoding: .utf8)) ?? ""
         if let start = view.range(of: "private func saveEdits(key: String"),
-           let end = view.range(of: "guard await store.saveEdit(key: key", range: start.upperBound..<view.endIndex) {
+           let end = view.range(of: "let saved = await store.saveEdit(key: key", range: start.upperBound..<view.endIndex) {
             let body = String(view[start.upperBound..<end.lowerBound])
             let reload = body.range(of: "await store.reloadIfStale()")
             let read = body.range(of: "let disk = store.detail(for: key)")

@@ -71,7 +71,13 @@ struct LyricsSearchSheet: View {
     /// 「重新自动匹配」:请引擎按设置里的「匹配算法」重挑一轮、等结论(宿主转给 LyricsRematchRunner,跟歌词管理那颗
     /// 按钮同一条路),不经过这里的候选列表。参数是进度回调(回过话的源数 / 一共几个源);返回 nil = 没拿到结论。
     /// 宿主必须传(contracts 组守卫钉着)。
-    let onAutoMatch: (@escaping (Int, Int) -> Void) async -> LyricsRematch.Line?
+    let onAutoMatch: (@escaping (Int, Int) -> Void) async -> AutoMatchOutcome?
+
+    /// 一轮「重新自动匹配」的结果:结论,和撤这一轮用的 undo_id(这一轮没改歌词选择、引擎没给时 nil,结论旁不出「撤销」)。
+    struct AutoMatchOutcome {
+        let line: LyricsRematch.Line
+        let undoID: String?
+    }
 
     /// 正在写回的那条候选的来源(按钮禁用 + 文案变「正在采用…」);nil = 没有在飞的采纳。
     @State private var applyingSource: String?
@@ -109,9 +115,11 @@ struct LyricsSearchSheet: View {
         var undoable = false
     }
 
-    /// 采纳那一笔的 undo_id,和采纳之前面板上「当前使用」那几样(撤销成功后摆回去,宿主重读缓存后再按缓存校正)。
+    /// 采纳(或重新自动匹配)那一笔的 undo_id,和那一笔之前面板上「当前使用」那几样(撤销成功后摆回去,宿主重读缓存后再按缓存校正)。
     private struct PendingUndo {
-        let id: String
+        var id: String
+        /// 撤的是「重新自动匹配」那一轮:「撤销」挂在结论那一行,不在回声上。
+        var autoMatch = false
         let appliedSource: String?
         let appliedFingerprint: String?
         let appliedPick: ManualPickLock.Mark
@@ -552,7 +560,7 @@ struct LyricsSearchSheet: View {
          currentPick: ManualPickLock.Mark = .none,
          durationSecs: Double,
          isMarkedInstrumental: Bool, onSetInstrumental: @escaping (Bool) async -> Bool,
-         onAutoMatch: @escaping (@escaping (Int, Int) -> Void) async -> LyricsRematch.Line?,
+         onAutoMatch: @escaping (@escaping (Int, Int) -> Void) async -> AutoMatchOutcome?,
          onApply: @escaping (LyricsSearchService.Candidate) async -> ApplyOutcome,
          onUndo: @escaping (String) async -> EnrichEditChannel.Result) {
         self.originalArtist = artist
@@ -1584,11 +1592,7 @@ struct LyricsSearchSheet: View {
         // 比 @State 里的代数,不比 searchSubject:这个方法跑在按钮闭包捕获的那份视图副本上,副本的 let 属性
         // 永远是旧值,前后比较恒等;@State 读的是共享存储,换了歌(onChange(of: searchSubject))这里看得见。
         let subject = subjectGeneration
-        // 记采纳之前面板上实际显示的「当前使用」(宿主给的或刚采纳的),撤销时原样摆回,不等宿主重读缓存;没有当前使用记成空串。
-        let before = PendingUndo(id: "", appliedSource: effectiveCurrentSource ?? "", appliedFingerprint: effectiveCurrentFingerprint,
-                                 appliedPick: effectiveCurrentPick, instrumentalOverride: instrumentalOverride,
-                                 storedCandidate: storedCandidate, importedCandidate: importedCandidate,
-                                 selectedSource: selectedSource)
+        var before = undoBaseline
         applyingSource = c.source
         let outcome = await onApply(c)
         let saved = outcome.saved
@@ -1616,10 +1620,8 @@ struct LyricsSearchSheet: View {
         if saved {
             let name = sourceDisplayName(c.source)
             if let id = outcome.undoID {
-                pendingUndo = PendingUndo(id: id, appliedSource: before.appliedSource, appliedFingerprint: before.appliedFingerprint,
-                                          appliedPick: before.appliedPick, instrumentalOverride: before.instrumentalOverride,
-                                          storedCandidate: before.storedCandidate, importedCandidate: before.importedCandidate,
-                                          selectedSource: before.selectedSource)
+                before.id = id
+                pendingUndo = before
             }
             showApplyFeedback(String(format: L10n.t("已采用 %@ 的歌词"), name), ok: true, undoable: outcome.undoID != nil)
         } else {
@@ -1627,8 +1629,16 @@ struct LyricsSearchSheet: View {
         }
     }
 
-    /// 回声上的「撤销」:引擎核对这首在采纳之后没被动过,原样放回(见 11 章决策 177)。成功后「当前使用」、纯音乐标记、
-    /// 导入的那条摆回采纳之前的样子;失败说一句原因。等待期间换了歌就不动面板。
+    /// 记那一笔之前面板上实际显示的「当前使用」(宿主给的或刚采纳的),撤销时原样摆回,不等宿主重读缓存;没有当前使用记成空串。
+    private var undoBaseline: PendingUndo {
+        PendingUndo(id: "", appliedSource: effectiveCurrentSource ?? "", appliedFingerprint: effectiveCurrentFingerprint,
+                    appliedPick: effectiveCurrentPick, instrumentalOverride: instrumentalOverride,
+                    storedCandidate: storedCandidate, importedCandidate: importedCandidate,
+                    selectedSource: selectedSource)
+    }
+
+    /// 「撤销」:引擎核对这首在那一笔之后没被动过,原样放回(见 11 章决策 177、178)。成功后「当前使用」、纯音乐标记、
+    /// 导入的那条摆回那一笔之前的样子,撤的是重新匹配就收掉结论;失败说一句原因。等待期间换了歌就不动面板。
     private func undoApply() async {
         guard let pending = pendingUndo, !undoing, applyingSource == nil, !autoMatching else { return }
         let subject = subjectGeneration
@@ -1638,9 +1648,10 @@ struct LyricsSearchSheet: View {
         guard subject == subjectGeneration else { return }
         pendingUndo = nil
         guard result.ok else {
-            showApplyFeedback(Self.undoFailureText(result), ok: false)
+            showApplyFeedback(LyricsEditUndo.failureText(result), ok: false)
             return
         }
+        if pending.autoMatch { autoMatchLine = nil }
         appliedSource = pending.appliedSource
         appliedFingerprint = pending.appliedFingerprint
         appliedPick = pending.appliedPick
@@ -1649,13 +1660,6 @@ struct LyricsSearchSheet: View {
         importedCandidate = pending.importedCandidate
         if let selected = pending.selectedSource { selectedSource = selected }
         showApplyFeedback(L10n.t("已撤销"), ok: true)
-    }
-
-    private static func undoFailureText(_ result: EnrichEditChannel.Result) -> String {
-        switch LyricsEditUndo.failure(code: result.errorCode, localizedReason: result.errorIsLocalized ? result.error : nil) {
-        case let .key(key): L10n.t(key)
-        case let .format(format, reason): String(format: L10n.t(format), reason)
-        }
     }
 
     /// 「导入文件…」:选歌词文件,可多选(同名的译文 `.tr.lrc`、读音 `.roma.lrc` 一起选上就一起配上)。
@@ -1817,12 +1821,19 @@ struct LyricsSearchSheet: View {
             .padding(.horizontal, 24)
             .padding(.bottom, 10)
         } else if let line = autoMatchLine {
-            Label(LyricsRematchRunner.text(line), systemImage: LyricsRematchRunner.icon(line.tone))
-                .font(.callout)
-                .foregroundStyle(LyricsRematchRunner.tint(line.tone))
-                .fixedSize(horizontal: false, vertical: true)
-                .padding(.horizontal, 24)
-                .padding(.bottom, 10)
+            HStack(spacing: 8) {
+                Label(LyricsRematchRunner.text(line), systemImage: LyricsRematchRunner.icon(line.tone))
+                    .font(.callout)
+                    .foregroundStyle(LyricsRematchRunner.tint(line.tone))
+                    .fixedSize(horizontal: false, vertical: true)
+                if pendingUndo?.autoMatch == true {
+                    LyricsEditUndoButton(disabled: undoing || applyingSource != nil || autoMatching) {
+                        Task { await undoApply() }
+                    }
+                }
+            }
+            .padding(.horizontal, 24)
+            .padding(.bottom, 10)
         }
     }
 
@@ -1831,19 +1842,30 @@ struct LyricsSearchSheet: View {
     private func runAutoMatch() async {
         guard !autoMatching, !rematchActivity.isRunning, applyingSource == nil, !settingInstrumental else { return }
         let subject = subjectGeneration
+        var before = undoBaseline
         autoMatching = true
         autoMatchLine = nil
+        pendingUndo = nil
         autoMatchDone = 0
         autoMatchTotal = 0
-        let line = await onAutoMatch { sourcesDone, sourcesTotal in
+        let outcome = await onAutoMatch { sourcesDone, sourcesTotal in
             guard subject == subjectGeneration else { return }
             autoMatchDone = sourcesDone
             autoMatchTotal = sourcesTotal
         }
         guard subject == subjectGeneration else { return }
         autoMatching = false
-        guard let line else { return }
-        autoMatchLine = line
+        guard let outcome else { return }
+        autoMatchLine = outcome.line
+        // 结论那一行留着,「撤销」只停 offerSeconds;之后有别的回声、换歌、关窗同样作废。
+        guard let id = outcome.undoID else { return }
+        before.id = id
+        before.autoMatch = true
+        pendingUndo = before
+        Task {
+            try? await Task.sleep(for: .seconds(LyricsEditUndo.offerSeconds))
+            if pendingUndo?.id == id, !undoing { pendingUndo = nil }
+        }
     }
 
     /// 打开时正在放的就是这首、之后换了歌:标题行下面一行说现在放的是哪首,「搜这首」改搜它。窗口本身不跟着换歌
@@ -1919,6 +1941,8 @@ struct LyricsSearchSheet: View {
         settingInstrumental = false
         guard subject == subjectGeneration else { return }
         if saved {
+            // 标上不回声,刚才那一笔的「撤销」照样作废(这首又被改过,引擎也会拒绝)。
+            pendingUndo = nil
             instrumentalOverride = value
             // 标上时不回声:标题栏下面那条说明条说的就是这件事。撤掉时说明条收起,回一声。
             if !value {
@@ -1957,17 +1981,10 @@ struct LyricsSearchSheet: View {
                     .font(.callout)
                     .foregroundStyle(applyFeedback.ok ? Color.secondary : Color.orange)
                     .lineLimit(1)
-                if applyFeedback.undoable, pendingUndo != nil {
-                    Button(L10n.t("撤销")) {
+                if applyFeedback.undoable, let pending = pendingUndo, !pending.autoMatch {
+                    LyricsEditUndoButton(disabled: undoing || applyingSource != nil || autoMatching) {
                         Task { await undoApply() }
                     }
-                    .controlSize(.small)
-                    .settingsGlassButtons()
-                    .fixedSize()
-                    // 只在「撤销」出着的这几秒里占 ⌘Z,之后输入框照常用它撤销打字。
-                    .keyboardShortcut("z", modifiers: .command)
-                    .help(L10n.t("快捷键：⌘Z"))
-                    .disabled(undoing || applyingSource != nil || autoMatching)
                 }
             }
             .padding(.leading, 8)

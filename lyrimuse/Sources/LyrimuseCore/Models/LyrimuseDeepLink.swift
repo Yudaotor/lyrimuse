@@ -199,6 +199,9 @@ public enum LyrimuseDeepLink: Equatable, Sendable {
         /// 歌词管理里把这一条标成 / 取消纯音乐,跟详情页那颗开关走同一条路(交给引擎、改完重读):
         /// `debug/manager-instrumental?key=<写法键>&on=1|0`。验「改动之后的重读」用。
         case managerInstrumental(key: String, on: Bool)
+        /// 给这一条开一次「用外部编辑器改歌词」,跟歌词管理「⋯」那一项走同一条路,只是不启动编辑器(`debug/external-edit?key=<写法键>`):
+        /// 工作副本照常写好、每秒盯着,验证脚本改那个文件当作编辑器存盘。
+        case externalEdit(key: String)
         /// 首启引导翻到这一步,跟翻页走同一条路(`debug/onboarding-step?step=welcome|players|browser|background|display|done`)。
         /// 引导窗口要先开着(`onboarding?background=1`)。
         case onboardingStep(OnboardingStep)
@@ -705,6 +708,9 @@ public enum LyrimuseDeepLink: Equatable, Sendable {
         case ("debug", "/manager-instrumental"):
             guard let key = value("key"), !key.isEmpty, let on = value("on").flatMap(Self.parseBool) else { return nil }
             self = .debug(.managerInstrumental(key: key, on: on))
+        case ("debug", "/external-edit"):
+            guard let key = value("key"), !key.isEmpty else { return nil }
+            self = .debug(.externalEdit(key: key))
         case ("debug", "/onboarding-step"):
             guard let step = value("step").flatMap({ Self.onboardingStepNames[$0.lowercased()] }) else { return nil }
             self = .debug(.onboardingStep(step))
@@ -1090,6 +1096,9 @@ public enum LyrimuseDeepLink: Equatable, Sendable {
             case let .managerInstrumental(key, on):
                 components.path = "/manager-instrumental"
                 components.queryItems = [URLQueryItem(name: "key", value: key), URLQueryItem(name: "on", value: on ? "1" : "0")]
+            case let .externalEdit(key):
+                components.path = "/external-edit"
+                components.queryItems = [URLQueryItem(name: "key", value: key)]
             case let .managerVisibility(override):
                 components.path = "/manager-visibility"
                 components.queryItems = [URLQueryItem(name: "state", value: override.map { $0 ? "visible" : "hidden" } ?? "auto")]

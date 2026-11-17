@@ -352,6 +352,11 @@ enum DebugDeepLinks {
                 let ok = await EnrichCacheStore.shared.setInstrumental(key: key, on)
                 logger.notice("debug manager instrumental on=\(on, privacy: .public) ok=\(ok, privacy: .public)")
             }
+        case let .externalEdit(key):
+            let parts = key.split(separator: "|", maxSplits: 2, omittingEmptySubsequences: false).map(String.init)
+            LyricsExternalEditor.shared.open(artist: parts.first ?? "", title: parts.count > 1 ? parts[1] : "",
+                                             album: parts.count > 2 ? parts[2] : "", key: key, launchesEditor: false)
+            logger.notice("debug external edit opened")
         case let .managerVisibility(override):
             NotificationCenter.default.post(name: managerVisibilityNotification, object: override.map { NSNumber(value: $0) })
             logger.notice("debug manager visibility override=\(override.map { String($0) } ?? "auto", privacy: .public)")

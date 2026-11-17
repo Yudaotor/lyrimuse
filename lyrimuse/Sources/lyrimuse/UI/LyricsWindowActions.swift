@@ -4,7 +4,8 @@ import SwiftUI
 // 歌词窗口右下角「搜索歌词 / 重新自动匹配 / 用外部编辑器改歌词」三颗图标,和它们上方那句说明(07 章决策 112)。
 // 状态都放在下面两个单例里,只有胶囊和说明条订阅:重新匹配跑着时进度一直在变,不能让整扇窗跟着重估。
 
-/// 右下那排按钮发起的动作说的那一句(重新匹配的结论、外部编辑器的回执),几秒后自己收掉。
+/// 右下那排按钮发起的动作说的那一句(重新匹配的结论、外部编辑器的回执),几秒后自己收掉。引擎给了 undo_id 时那一句带「撤销」,
+/// 停 `LyricsEditUndo.offerSeconds`;别的一句顶掉它、换歌、关窗都作废(见 11 章决策 178)。
 @MainActor
 final class LyricsWindowActionNotes: ObservableObject {
     static let shared = LyricsWindowActionNotes()
@@ -22,26 +23,66 @@ final class LyricsWindowActionNotes: ObservableObject {
         let tint: Color
     }
 
+    /// 那一句上「撤销」撤的那一笔。
+    struct Undo {
+        let id: String
+        /// 撤销成功之后要做的(单曲偏移搬回去、外部编辑器按放回去的那份重新对齐)。
+        var undone: (@MainActor () -> Void)?
+    }
+
     @Published private(set) var note: Note?
+    /// 只对此刻的 `note` 有效;post 一句新的就换掉。
+    @Published private(set) var undo: Undo?
+    @Published private(set) var undoing = false
 
     private init() {}
 
-    func post(title: String, text: String, symbol: String, tint: Color, seconds: Double) {
+    func post(title: String, text: String, symbol: String, tint: Color, seconds: Double, undo: Undo? = nil) {
         let note = Note(title: title, text: text, symbol: symbol, tint: tint)
         self.note = note
+        self.undo = undo
+        let shown = undo == nil ? seconds : max(seconds, LyricsEditUndo.offerSeconds)
         Task { [weak self] in
-            try? await Task.sleep(for: .seconds(seconds))
-            if self?.note?.id == note.id { self?.note = nil }
+            try? await Task.sleep(for: .seconds(shown))
+            guard let self, self.note?.id == note.id, !self.undoing else { return }
+            self.note = nil
+            self.undo = nil
+        }
+        guard let undo else { return }
+        Task { [weak self] in
+            try? await Task.sleep(for: .seconds(LyricsEditUndo.offerSeconds))
+            guard let self, self.undo?.id == undo.id, !self.undoing else { return }
+            self.undo = nil
         }
     }
 
-    func post(_ tone: Tone, title: String, text: String) {
+    func post(_ tone: Tone, title: String, text: String, undo: Undo? = nil) {
         switch tone {
-        case .info: post(title: title, text: text, symbol: "info.circle", tint: .secondary, seconds: 6)
-        case .success: post(title: title, text: text, symbol: "checkmark.circle.fill", tint: .green, seconds: 6)
-        case .warning: post(title: title, text: text, symbol: "exclamationmark.circle.fill", tint: .orange, seconds: 10)
-        case .failure: post(title: title, text: text, symbol: "exclamationmark.triangle.fill", tint: .orange, seconds: 10)
+        case .info: post(title: title, text: text, symbol: "info.circle", tint: .secondary, seconds: 6, undo: undo)
+        case .success: post(title: title, text: text, symbol: "checkmark.circle.fill", tint: .green, seconds: 6, undo: undo)
+        case .warning: post(title: title, text: text, symbol: "exclamationmark.circle.fill", tint: .orange, seconds: 10, undo: undo)
+        case .failure: post(title: title, text: text, symbol: "exclamationmark.triangle.fill", tint: .orange, seconds: 10, undo: undo)
         }
+    }
+
+    /// 「撤销」作废(换歌、关窗),那一句照留。
+    func dropUndo() {
+        if undo != nil, !undoing { undo = nil }
+    }
+
+    /// 「撤销」:引擎核对那一笔之后没被动过,原样放回(见 11 章决策 177、178);成功说「已撤销」,失败说原因。
+    func performUndo() async {
+        guard let undo, !undoing, let title = note?.title else { return }
+        undoing = true
+        let result = await EnrichCacheStore.shared.undoEdit(undoID: undo.id)
+        undoing = false
+        self.undo = nil
+        guard result.ok else {
+            post(.failure, title: title, text: LyricsEditUndo.failureText(result))
+            return
+        }
+        undo.undone?()
+        post(.success, title: title, text: L10n.t("已撤销"))
     }
 
     /// 快捷键回声(`GlobalHotkeys.flashHint`):不带歌名,`seconds` 秒后收掉。见 07 章决策 132。
@@ -50,7 +91,9 @@ final class LyricsWindowActionNotes: ObservableObject {
     }
 
     func dismiss() {
+        guard !undoing else { return }
         note = nil
+        undo = nil
     }
 }
 
@@ -163,9 +206,11 @@ final class LyricsWindowRematch: ObservableObject {
             guard let line, round?.id == id else { return }
             round = nil
             if LyricsRematchRunner.rewroteLyrics(line) { PlaybackCoordinator.shared.refreshLyricsForCurrentTrack() }
+            // 这一轮改了歌词选择时引擎在结论里给 undo_id,那一句带「撤销」。
+            let undo = LyricsRematch.undoID(of: LyricsRematch.current, id: id).map { LyricsWindowActionNotes.Undo(id: $0) }
             LyricsWindowActionNotes.shared.post(
                 title: title, text: LyricsRematchRunner.text(line), symbol: LyricsRematchRunner.icon(line.tone),
-                tint: LyricsRematchRunner.tint(line.tone), seconds: line.tone == .changed ? 6 : 10)
+                tint: LyricsRematchRunner.tint(line.tone), seconds: line.tone == .changed ? 6 : 10, undo: undo)
         }
     }
 
@@ -382,10 +427,18 @@ struct LyricsWindowActionCaption: View {
             } else if let note = notes.note {
                 row(text: titled(note.title, note.text)) {
                     Image(systemName: note.symbol).foregroundStyle(note.tint)
+                } trailing: {
+                    if notes.undo != nil {
+                        LyricsEditUndoButton(disabled: notes.undoing || rematch.round != nil) {
+                            Task { await notes.performUndo() }
+                        }
+                    }
                 }
                 .onTapGesture { notes.dismiss() }
             }
         }
+        // 换了歌,那一句说的那首不能再撤。
+        .onChange(of: currentTitle) { _, _ in notes.dropUndo() }
         .animation(.easeOut(duration: 0.15), value: rematch.round == nil)
         .animation(.easeOut(duration: 0.15), value: notes.note?.id)
         // 箭头弹出的小菜单开着时让到它上面去。
@@ -398,12 +451,18 @@ struct LyricsWindowActionCaption: View {
     }
 
     private func row<Icon: View>(text: String, @ViewBuilder icon: () -> Icon) -> some View {
+        row(text: text, icon: icon) { EmptyView() }
+    }
+
+    private func row<Icon: View, Trailing: View>(text: String, @ViewBuilder icon: () -> Icon,
+                                                 @ViewBuilder trailing: () -> Trailing) -> some View {
         HStack(alignment: .firstTextBaseline, spacing: 7) {
             icon()
             Text(text)
                 .font(.system(size: 12))
                 .foregroundStyle(.primary)
                 .fixedSize(horizontal: false, vertical: true)
+            trailing()
         }
         .padding(.horizontal, 11)
         .padding(.vertical, 8)

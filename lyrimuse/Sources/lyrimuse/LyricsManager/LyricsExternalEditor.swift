@@ -52,7 +52,8 @@ final class LyricsExternalEditor {
 
     /// 给这首写好工作副本、交给编辑器。已经在编辑这首、歌词也没变过,就只把编辑器叫到前面。
     /// `key` 给了(歌词管理选中的那一条)就按它原样取条目;不给按三段找,会认正在放的那首、按时长挑变体(歌词窗口那个入口要的就是这个)。
-    func open(artist: String, title: String, album: String, key cacheKey: String? = nil) {
+    /// `launchesEditor` 为假时工作副本照常写好、盯着,不启动编辑器(`debug/external-edit`)。
+    func open(artist: String, title: String, album: String, key cacheKey: String? = nil, launchesEditor: Bool = true) {
         guard !title.isEmpty else { return }
         let stored = cacheKey.map { EnrichCacheReader.storedEntry(forKey: $0) }
             ?? EnrichCacheReader.storedEntry(artist: artist, title: title, album: album)
@@ -92,7 +93,9 @@ final class LyricsExternalEditor {
                 session.awaitingRebase = false
                 sessions[key] = session
             }
-            launch(session.url, key: key, title: title, mode: LyricsExternalEdit.mode(of: session.base), setAside: setAside)
+            if launchesEditor {
+                launch(session.url, key: key, title: title, mode: LyricsExternalEdit.mode(of: session.base), setAside: setAside)
+            }
             return
         }
 
@@ -116,7 +119,9 @@ final class LyricsExternalEditor {
         sessions[key] = Session(key: key, artist: artist, title: title, album: album, url: url,
                                 base: content, reference: fresh, seen: Self.stamp(url))
         startTimer()
-        launch(url, key: key, title: title, mode: LyricsExternalEdit.mode(of: content), setAside: setAside)
+        if launchesEditor {
+            launch(url, key: key, title: title, mode: LyricsExternalEdit.mode(of: content), setAside: setAside)
+        }
     }
 
     // MARK: - 打开编辑器
@@ -255,40 +260,61 @@ final class LyricsExternalEditor {
             }
             save(text, session: session, done: done, carriesOffsetTo: result.timingUnchanged ? (lyrics: result.lrc, yrc: result.yrc) : nil) {
                 await EnrichCacheStore.shared.saveEdit(key: session.key, lyrics: result.lrc, tr: stored?.lyricsTr ?? "",
-                                                       roma: stored?.lyricsRoma ?? "", yrc: result.yrc)
+                                                       roma: stored?.lyricsRoma ?? "", yrc: result.yrc, undoable: true)
             }
         case let .lines(lyrics):
             let sameTimes = LyricsWordTimingEdit.sameLineTimes(session.base.lyrics, lyrics)
             save(text, session: session, done: [L10n.t("已应用编辑器中的修改")],
                  carriesOffsetTo: sameTimes ? (lyrics: lyrics, yrc: session.base.yrc) : nil) {
                 await EnrichCacheStore.shared.saveEdit(key: session.key, lyrics: lyrics, tr: stored?.lyricsTr ?? "",
-                                                       roma: stored?.lyricsRoma ?? "")
+                                                       roma: stored?.lyricsRoma ?? "", undoable: true)
             }
         case let .plain(plain):
             save(text, session: session, done: [L10n.t("已保存为纯文本歌词，仅在歌词窗口中显示")], carriesOffsetTo: nil) {
-                await EnrichCacheStore.shared.savePlainTextEdit(key: session.key, plainLyrics: plain, source: "")
+                await EnrichCacheStore.shared.savePlainTextEdit(key: session.key, plainLyrics: plain, source: "", undoable: true)
             }
         }
     }
 
-    /// 交给引擎存(跟歌词管理「保存修改」同一条改动通道:手改的标人工修正,译文、读音原样交回)。
-    /// `carriesOffsetTo`:只改了字时新的正文和逐字,这首的单曲偏移搬过去。
+    /// 交给引擎存(跟歌词管理「保存修改」同一条改动通道:手改的标人工修正,译文、读音原样交回)。带 undoable:引擎给了 undo_id
+    /// 时回执带「撤销」(见 11 章决策 178)。`carriesOffsetTo`:只改了字时新的正文和逐字,这首的单曲偏移搬过去。
     private func save(_ text: String, session: Session, done: [String], carriesOffsetTo new: (lyrics: String, yrc: String)?,
-                      _ commit: @escaping @MainActor () async -> Bool) {
+                      _ commit: @escaping @MainActor () async -> EnrichEditChannel.Result) {
         sessions[session.key]?.applying = true
         Task {
-            let saved = await commit()
+            let result = await commit()
             sessions[session.key]?.applying = false
-            guard saved else {
+            guard result.ok else {
                 notes.post(.failure, title: session.title, text: L10n.t("保存失败，请重试"))
                 return
             }
+            // 这首自己有单曲偏移时才真搬了(读穿同曲别的写法的,放回旧正文之后照样读穿),撤销时搬回去。
+            let carried = new != nil && LyricsOffsetStore.shared.offset(forKey: Self.offsetKey(session, session.base.lyrics, session.base.yrc)) != 0
             if let new { carryOffset(session, to: new) }
             sessions[session.key]?.reference = text
             sessions[session.key]?.awaitingRebase = true
             Self.record(text, for: session.url)
-            notes.post(.success, title: session.title, text: done.joined(separator: "\n"))
+            let undo = result.undoID.map { id in
+                LyricsWindowActionNotes.Undo(id: id) {
+                    if carried, let new { self.carryOffsetBack(session, from: new) }
+                    // 放回去的是存之前那份:等读取器解到它,把这次编辑对着的底子换成它,工作副本里再存的修改照常套用。
+                    self.sessions[session.key]?.awaitingRebase = true
+                }
+            }
+            notes.post(.success, title: session.title, text: done.joined(separator: "\n"), undo: undo)
         }
+    }
+
+    private static func offsetKey(_ session: Session, _ lyrics: String, _ yrc: String) -> String {
+        LyricsOffsetStore.trackKey(artist: session.artist, title: session.title, lyrics: lyrics, lyricsYRC: yrc)
+    }
+
+    /// 撤销了只改字的那次保存:单曲偏移从新正文搬回存之前那份。
+    private func carryOffsetBack(_ session: Session, from new: (lyrics: String, yrc: String)) {
+        LyricsOffsetStore.shared.carryOffset(
+            from: Self.offsetKey(session, new.lyrics, new.yrc), to: Self.offsetKey(session, session.base.lyrics, session.base.yrc),
+            pinKey: session.key,
+            siblings: EnrichCacheReader.offsetSiblings(forKey: session.key))
     }
 
     /// 单曲偏移按正文指纹存:从旧正文的 key 搬到新正文下,新的下面已经有值就不动(同歌词管理 carryOffset)。

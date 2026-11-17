@@ -430,6 +430,10 @@ func runDeepLinkTests() {
                     "debug: 歌词管理把一条标成纯音乐")
         expectEqual(link("lyrimuse://debug/manager-instrumental?on=1") == nil && link("lyrimuse://debug/manager-instrumental?key=a%7Cb%7Cc") == nil,
                     true, "debug: 歌词管理标纯音乐没带 key 或 on 不认")
+        expectEqual(link("lyrimuse://debug/external-edit?key=a%7Cb%7Cc"), .debug(.externalEdit(key: "a|b|c")),
+                    "debug: 给一条开外部编辑、不启动编辑器")
+        expectEqual(link("lyrimuse://debug/external-edit") == nil && link("lyrimuse://debug/external-edit?key=") == nil,
+                    true, "debug: 外部编辑没带 key 不认")
         expectEqual([link("lyrimuse://debug/manager-list?op=search%3Ajay"), link("lyrimuse://debug/main-thread-gaps?on=1"),
                      link("lyrimuse://debug/main-thread-gaps?on=0"), link("lyrimuse://debug/main-thread-gaps?on=1&min=30"),
                      link("lyrimuse://debug/main-thread-gaps?on=1&min=0")],
@@ -768,8 +772,10 @@ func runDeepLinkTests() {
             .debug(.onboardingStep(.welcome)), .debug(.onboardingStep(.playerChoice)), .debug(.onboardingStep(.browserPairing)),
             .debug(.onboardingStep(.background)), .debug(.onboardingStep(.displayMode)), .debug(.onboardingStep(.done)),
             .debug(.managerInstrumental(key: "歌手|歌 & 名|专辑", on: true)), .debug(.managerInstrumental(key: "a|b|", on: false)),
+            .debug(.externalEdit(key: "歌手|歌 & 名|专辑")),
             .debug(.managerList(op: "search:歌 & 名")), .debug(.managerList(op: "key:down")),
-            .debug(.managerList(op: "rightclick:3")),
+            .debug(.managerList(op: "rightclick:3")), .debug(.managerList(op: "instrumental:on")),
+            .debug(.managerList(op: "text:[00:01.00]一 & 二\n[00:02.00]三")),
             .debug(.mainThreadGaps(on: true)), .debug(.mainThreadGaps(on: false)), .debug(.mainThreadGaps(on: true, minMs: 20)),
             .debug(.mainThreadStall(seconds: 7, throttle: nil)), .debug(.mainThreadStall(seconds: 6.5, throttle: "low_priority")),
             .debug(.rainbow(overlay: true, notch: nil)), .debug(.rainbow(overlay: false, notch: true)),

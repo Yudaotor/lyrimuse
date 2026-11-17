@@ -66,12 +66,14 @@ struct LyricsQuickSearchWindow: View {
                     onSetInstrumental: { value in await EnrichCacheStore.shared.setInstrumental(key: context.key, value) },
                     onAutoMatch: { progress in
                         // 跟歌词管理「重新自动匹配」同一条路;换了词让播放侧立刻重载,「当前使用」随 refreshCurrentMarker 挪过去。
-                        let line = await LyricsRematchRunner.run(key: context.key, onProgress: progress)
-                        if let line, LyricsRematchRunner.rewroteLyrics(line) {
+                        // 这一轮改了歌词选择时引擎在结论里给 undo_id,面板在结论旁边给「撤销」(经下面的 onUndo)。
+                        let id = UUID().uuidString
+                        guard let line = await LyricsRematchRunner.run(key: context.key, id: id, onProgress: progress) else { return nil }
+                        if LyricsRematchRunner.rewroteLyrics(line) {
                             PlaybackCoordinator.shared.refreshLyricsForCurrentTrack()
                         }
-                        if let line { AppActions.shared.lyricsSearchRematched.send(.init(key: context.key, line: line)) }
-                        return line
+                        AppActions.shared.lyricsSearchRematched.send(.init(key: context.key, line: line))
+                        return LyricsSearchSheet.AutoMatchOutcome(line: line, undoID: LyricsRematch.undoID(of: LyricsRematch.current, id: id))
                     }
                 ) { candidate in
                     // 同 LyricsWindowView 的 onApply:saveEdit → 让播放侧立刻重载,不等 2s 轮询的 mtime 检查。

@@ -754,6 +754,29 @@ struct LyricsManagerView: View {
         var icon: String { LyricsRematchRunner.icon(tone) }
         var tint: Color { LyricsRematchRunner.tint(tone) }
     }
+
+    // MARK: - 详情页那一行的回声与「撤销」
+    //
+    // 保存修改、标 / 撤纯音乐、撤销的结果说在重新匹配结论那一行(rematchStatusRow);引擎给了 undo_id 就带一颗「撤销」,
+    // 停 `LyricsEditUndo.offerSeconds`。换歌、关窗、进编辑、别的回声都作废。见 11 章决策 178。
+    @State private var detailEcho: DetailEcho?
+    @State private var detailUndo: DetailUndo?
+    @State private var detailUndoing = false
+    /// 单调换代:回声到点收起时 guard 它,后来的回声不被前一条的计时收掉。
+    @State private var detailEchoGeneration = 0
+
+    private struct DetailEcho {
+        let key: String
+        let text: String
+        let ok: Bool
+    }
+
+    private struct DetailUndo {
+        let id: String
+        let key: String
+        /// 保存修改时这首的单曲偏移从旧正文的指纹搬到了新正文下(两个偏移键);撤销成功后搬回去。没搬时 nil。
+        let carried: (from: String, to: String)?
+    }
     @State private var showDecisionSheet = false
     /// 「解析决策」弹窗的两槽,打开那一刻解一次(读旁路文件 + 解码),弹窗开着期间父视图重算不再重读。
     @State private var decisionSlots: DecisionSlots?
@@ -2005,11 +2028,11 @@ struct LyricsManagerView: View {
         // 纯音乐标记同样:保存修改时引擎见到有词就撤掉标记,编辑中标上的会在保存那一下静默没了。
         if summary.isInstrumental {
             items.append(.action(L10n.t("取消纯音乐标记"), enabled: !editingThis) {
-                Task { await store.setInstrumental(key: summary.key, false) }
+                Task { await setInstrumental(summary.key, false) }
             })
         } else {
             items.append(.action(L10n.t("标为纯音乐"), enabled: !editingThis) {
-                Task { await store.setInstrumental(key: summary.key, true) }
+                Task { await setInstrumental(summary.key, true) }
             })
         }
         items.append(.action(L10n.t("拷贝歌名与歌手")) { copySongName(summary) })
@@ -2427,6 +2450,8 @@ struct LyricsManagerView: View {
             // 见 pendingAutoFocus 的注释:@State 会跨关窗存活,得自己把这个闸复位,
             // 下次开窗才会重新定位一次。
             pendingAutoFocus = true
+            // 关窗之后不能再撤。
+            dropDetailEcho()
             dismissWindowPresentations()
             let cache = filteredCache
             closedContent.releaseLater(windowSurface.window) { cache.clear() }
@@ -3073,7 +3098,8 @@ struct LyricsManagerView: View {
     /// `key:down|up`(往表格发一次方向键)、`select:<行>`、`locate`(同「正在播放」那一行的「定位」)、`reload`(同「刷新」)、
     /// `menu:<行>`(这一行此刻的菜单里有哪几项,不改选中、只记日志不弹出)、`rightclick:<行>`(往这一行造一次右键按下,
     /// 选中照真右键跟过去,记下菜单里有哪几项,不弹出)、`emphasize:on|off`(当作列表有键盘焦点,选中行按有焦点的样子画,
-    /// 不用把窗口提到前台就能截图看配色)、`state`。
+    /// 不用把窗口提到前台就能截图看配色)、`instrumental:on|off`(详情页这首标 / 撤纯音乐,同「⋯」里那一项)、
+    /// `text:<正文>`(同「⋯ → 以文本方式编辑」,编辑框里的正文换成这一段;存用 `debug/window-key` 送 ⌘S)、`state`。
     private func runDebugListOp(_ op: String) {
         let parts = op.split(separator: ":", maxSplits: 1, omittingEmptySubsequences: false).map(String.init)
         let arg = parts.count > 1 ? parts[1] : ""
@@ -3096,6 +3122,11 @@ struct LyricsManagerView: View {
             let keys = groupByAlbum ? albumEntries.map(\.id) : sortedFiltered.map(\.key)
             if let row = Int(arg), keys.indices.contains(row) { _ = select(keys[row]) }
         case "locate": focusCurrentlyPlaying()
+        case "instrumental":
+            if let key = editingKey { Task { await setInstrumental(key, arg != "off") } }
+        case "text":
+            beginTextEditing()
+            if editMode == .text { editedLyricsBody = arg }
         case "menu":
             if let row = Int(arg) {
                 let titles = songTable.menuTitles(forRow: row).joined(separator: " | ")
@@ -3330,6 +3361,11 @@ struct LyricsManagerView: View {
                     if let id = rematchRequestID { LyricsRematch.cancel(id: id) }
                 }
                 rematchResult = nil
+                dropDetailEcho()
+            }
+            // 进编辑之后 ⌘Z 归编辑框:「撤销」作废。
+            .onChange(of: editMode) { _, mode in
+                if mode != .preview { detailUndo = nil }
             }
             // 编辑用的正文 ↔ 完整原文,四对两条 onChange 互不打圈,理由见 LyricsBodyEdit 头注:外部写进来的完整原文
             // (换曲 / 采纳候选 / 重新匹配)才重算正文;正文拼回去的那次(值恰好等于 reassembled)跳过,不然用户敲的
@@ -3408,6 +3444,7 @@ struct LyricsManagerView: View {
             // 「搜索歌词…」窗口里采纳了候选:详情正开着这首、编辑框没有没保存的改动时按盘上刚落下的那份重载(内容指纹变了,
             // 偏移也跟着换),再闪一下「已保存」。有没保存的改动时不动,保存时按格合并,同 finishRematch。
             .onReceive(AppActions.shared.lyricsSearchApplied) { key in
+                if detailUndo?.key == key { dropDetailEcho() }
                 guard editingKey == key, !isEditorDirty else { return }
                 loadDetail(key: key)
                 flashSaveEditFeedback()
@@ -3442,7 +3479,7 @@ struct LyricsManagerView: View {
                 factsRow(summary)
                     .padding(.top, 16)
                 // 故意不放进顶上那排按钮:一句长文案会把按钮排挤窄,转圈出现/消失也会让整排跳一下。
-                if rematchRunningKey == key || rematchResult?.key == key {
+                if rematchRunningKey == key || rematchResult?.key == key || detailEcho?.key == key {
                     rematchStatusRow(key: key, summary: summary)
                         .padding(.top, 10)
                 }
@@ -3597,11 +3634,11 @@ struct LyricsManagerView: View {
         // 编辑中点不了:保存修改时引擎见到有词就撤掉标记。
         let groupNote = instrumentalFollowsGroup ? L10n.t("；共用歌词的同曲条目也将一并更改") : ""
         if summary.isInstrumental {
-            Button(L10n.t("取消纯音乐标记")) { Task { await store.setInstrumental(key: summary.key, false) } }
+            Button(L10n.t("取消纯音乐标记")) { Task { await setInstrumental(summary.key, false) } }
                 .help(L10n.t("取消「纯音乐」标记：已有歌词的恢复显示，无歌词的重新加入自动匹配队列") + groupNote)
                 .disabled(editMode != .preview)
         } else {
-            Button(L10n.t("标为纯音乐")) { Task { await store.setInstrumental(key: summary.key, true) } }
+            Button(L10n.t("标为纯音乐")) { Task { await setInstrumental(summary.key, true) } }
                 .help(L10n.t("按纯音乐处理：不显示歌词，也不自动搜索；原有歌词将保留，取消标记即可恢复") + groupNote)
                 .disabled(editMode != .preview)
         }
@@ -4369,12 +4406,16 @@ struct LyricsManagerView: View {
         }
         let before = (lyrics: persistedLyricsForOffset, yrc: persistedYRCForOffset)
         // 没存上就到此为止:红字横幅已经在说,编辑缓冲里用户敲的内容原样留着,别闪「已保存」。
-        guard await store.saveEdit(key: key, lyrics: lyrics, tr: tr, roma: roma, yrc: yrc) else { return false }
+        // undoable:引擎留下这首改之前的完整状态,详情页那一行给「撤销」(见 11 章决策 178)。
+        let saved = await store.saveEdit(key: key, lyrics: lyrics, tr: tr, roma: roma, yrc: yrc, undoable: true)
+        guard saved.ok else { return false }
         // 存的过程中切到了别的歌:编辑缓冲和偏移已经是那一首的了,别用这首的结果去改。
         guard editingKey == key else { return true }
         // 只改了字、时间轴没动:单曲偏移按正文指纹存,搬到新正文下,不然调好的偏移看着像没了。
         let after = store.detail(for: key)
+        var carried: (from: String, to: String)?
         if word?.timingUnchanged ?? (yrc == nil && LyricsWordTimingEdit.sameLineTimes(before.lyrics, after.lyrics)) {
+            carried = ownOffsetCarry(summary, from: before, to: (after.lyrics, after.yrc))
             carryOffset(summary, from: before, to: (after.lyrics, after.yrc))
         }
         // 编辑缓冲换成刚落盘的权威内容(不再算未保存);歌词内容可能改了,offset 的 key(内容指纹)也跟着
@@ -4389,7 +4430,93 @@ struct LyricsManagerView: View {
             }
         }
         flashSaveEditFeedback()
+        if let id = saved.undoID {
+            showDetailEcho(key: key, text: L10n.t("已保存"), undoID: id, carried: carried)
+        }
         return true
+    }
+
+    /// 这首自己有单曲偏移(不是读穿同曲别的写法的)时,保存会把它从旧正文的偏移键搬到新正文下:返回这两个键,撤销时搬回去。
+    /// 读穿来的不用搬回:放回旧正文之后照样读穿那一份。
+    private func ownOffsetCarry(_ summary: EnrichCacheStore.Summary, from old: (lyrics: String, yrc: String),
+                                to new: (lyrics: String, yrc: String)) -> (from: String, to: String)? {
+        let oldKey = LyricsOffsetStore.trackKey(artist: summary.artist, title: summary.title, lyrics: old.lyrics, lyricsYRC: old.yrc)
+        let newKey = LyricsOffsetStore.trackKey(artist: summary.artist, title: summary.title, lyrics: new.lyrics, lyricsYRC: new.yrc)
+        guard oldKey != newKey, LyricsOffsetStore.shared.offset(forKey: oldKey) != 0 else { return nil }
+        return (oldKey, newKey)
+    }
+
+    /// 标 / 撤纯音乐(详情页按钮、「⋯」、列表右键):带 undoable 写回,引擎给了 undo_id 就在详情页那一行说一句、带「撤销」。
+    /// 右键的不是详情页正显示的那首时,回声挂在那首上,这一页看不到、到时收掉。
+    private func setInstrumental(_ key: String, _ value: Bool) async {
+        let result = await store.setInstrumental(key: key, value, undoable: true)
+        guard result.ok, let id = result.undoID else { return }
+        showDetailEcho(key: key, text: value ? L10n.t("已标为纯音乐") : L10n.t("已取消纯音乐标记"), undoID: id)
+    }
+
+    /// 详情页那一行说一句;给了 `undoID` 就带「撤销」、停 offerSeconds,不带的停 2.5 秒。重新匹配的结论、上一条回声和它的
+    /// 「撤销」都收掉。
+    private func showDetailEcho(key: String, text: String, ok: Bool = true, undoID: String? = nil,
+                                carried: (from: String, to: String)? = nil) {
+        detailEchoGeneration += 1
+        let generation = detailEchoGeneration
+        rematchResult = nil
+        detailUndo = undoID.map { DetailUndo(id: $0, key: key, carried: carried) }
+        withAnimation { detailEcho = DetailEcho(key: key, text: text, ok: ok) }
+        Task {
+            try? await Task.sleep(for: .seconds(undoID != nil ? LyricsEditUndo.offerSeconds : 2.5))
+            guard generation == detailEchoGeneration, !detailUndoing else { return }
+            detailUndo = nil
+            withAnimation { detailEcho = nil }
+        }
+    }
+
+    /// 重新匹配的结论旁边给「撤销」:结论那一行照旧留着,「撤销」停 offerSeconds。
+    private func offerRematchUndo(key: String, undoID: String) {
+        detailEchoGeneration += 1
+        let generation = detailEchoGeneration
+        detailUndo = DetailUndo(id: undoID, key: key, carried: nil)
+        Task {
+            try? await Task.sleep(for: .seconds(LyricsEditUndo.offerSeconds))
+            guard generation == detailEchoGeneration, !detailUndoing else { return }
+            detailUndo = nil
+        }
+    }
+
+    /// 收掉回声和「撤销」(换歌、关窗、别处又改了这首)。
+    private func dropDetailEcho() {
+        detailEchoGeneration += 1
+        detailUndo = nil
+        detailEcho = nil
+    }
+
+    @ViewBuilder
+    private func detailUndoButton(key: String) -> some View {
+        if let undo = detailUndo, undo.key == key, editMode == .preview {
+            LyricsEditUndoButton(disabled: detailUndoing || rematchRunningKey != nil || isSavingEdits) {
+                Task { await undoDetailEdit() }
+            }
+        }
+    }
+
+    /// 「撤销」:引擎核对这首在那一笔之后没被动过,原样放回(见 11 章决策 177、178)。保存时搬过的单曲偏移搬回去;成功后编辑框
+    /// 换成放回去的内容、说「已撤销」,失败说一句原因。等待期间换了歌就不动这一页。
+    private func undoDetailEdit() async {
+        guard let pending = detailUndo, !detailUndoing else { return }
+        detailUndoing = true
+        let result = await store.undoEdit(undoID: pending.id)
+        detailUndoing = false
+        if result.ok, let carried = pending.carried {
+            LyricsOffsetStore.shared.carryOffset(from: carried.to, to: carried.from, pinKey: pending.key,
+                                                 siblings: EnrichCacheReader.offsetSiblings(forKey: pending.key))
+        }
+        guard detailUndo?.id == pending.id else { return }
+        guard result.ok else {
+            showDetailEcho(key: pending.key, text: LyricsEditUndo.failureText(result), ok: false)
+            return
+        }
+        if editingKey == pending.key, !isEditorDirty { loadDetail(key: pending.key) }
+        showDetailEcho(key: pending.key, text: L10n.t("已撤销"))
     }
 
     /// 时间轴偏移 − / +:按设置里的步长在当前值上加减,跟敲一个数回车走同一条写入路径。
@@ -4432,7 +4559,7 @@ struct LyricsManagerView: View {
                     }
                     .disabled(rematchRunningKey != nil)
                     Button {
-                        Task { await store.setInstrumental(key: summary.key, true) }
+                        Task { await setInstrumental(summary.key, true) }
                     } label: {
                         Label(L10n.t("标为纯音乐"), systemImage: "pianokeys")
                     }
@@ -4533,7 +4660,7 @@ struct LyricsManagerView: View {
                 .frame(maxWidth: 470)
             HStack(spacing: 10) {
                 Button {
-                    Task { await store.setInstrumental(key: summary.key, false) }
+                    Task { await setInstrumental(summary.key, false) }
                 } label: {
                     Label(L10n.t("取消标记"), systemImage: "pianokeys.inverse")
                 }
@@ -4598,10 +4725,20 @@ struct LyricsManagerView: View {
             }
             .font(.caption)
             .foregroundStyle(.secondary)
+        } else if let echo = detailEcho, echo.key == key {
+            HStack(spacing: 8) {
+                Label(echo.text, systemImage: echo.ok ? "checkmark.circle.fill" : "exclamationmark.triangle.fill")
+                    .font(.caption)
+                    .foregroundStyle(echo.ok ? Color.secondary : Color.orange)
+                detailUndoButton(key: key)
+            }
         } else if let result = rematchResult, result.key == key {
-            Label(result.text, systemImage: result.icon)
-                .font(.caption)
-                .foregroundStyle(result.tint)
+            HStack(spacing: 8) {
+                Label(result.text, systemImage: result.icon)
+                    .font(.caption)
+                    .foregroundStyle(result.tint)
+                detailUndoButton(key: key)
+            }
         }
     }
 
@@ -4611,6 +4748,7 @@ struct LyricsManagerView: View {
         let generation = rematchGeneration
         rematchRunningKey = key
         rematchResult = nil
+        dropDetailEcho()
         rematchDone = 0
         rematchTotal = 0
         let id = UUID().uuidString
@@ -4625,6 +4763,8 @@ struct LyricsManagerView: View {
         await store.reload(onlyIfChanged: true)
         guard generation == rematchGeneration else { return }
         finishRematch(key: key, line: line)
+        // 这一轮改了歌词选择时引擎在结论里给 undo_id:结论旁边给「撤销」。
+        if let undoID = LyricsRematch.undoID(of: LyricsRematch.current, id: id) { offerRematchUndo(key: key, undoID: undoID) }
     }
 
     /// 一轮重新匹配的收尾(详情页那颗按钮、搜索面板那颗共用):换了词就把编辑框换成盘上的新内容(编辑框此刻属于
@@ -4638,6 +4778,7 @@ struct LyricsManagerView: View {
         if followers > 0 {
             text += String(format: L10n.t("；另外 %d 个同曲条目也将使用此版本"), followers)
         }
+        dropDetailEcho()
         rematchResult = RematchOutcome(key: key, tone: line.tone, text: text)
         rematchRunningKey = nil
     }

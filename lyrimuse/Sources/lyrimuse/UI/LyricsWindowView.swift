@@ -1291,6 +1291,8 @@ private final class LyricsWindowController: ObservableObject {
                 // 置顶只在这次打开期间有效:用户关掉完整那扇才清(SwiftUI 复用同一扇窗和这份控制器,层级会带到下次)。
                 // 切迷你的交接不算,回到完整尺寸时照旧置顶。
                 if !handoff, !(note.object is LyricsMiniPanel) { self?.setAlwaysOnTop(false) }
+                // 关窗之后说明条上的「撤销」作废;切迷你的交接不算。
+                if !handoff { LyricsWindowActionNotes.shared.dropUndo() }
                 self?.closeCount += 1
                 self?.hoverFade.windowClosed()
                 self?.chromeFade.windowClosed()

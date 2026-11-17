@@ -1503,8 +1503,9 @@ public final class EnrichCacheStore: ObservableObject {
         return await commit("save_edit", fields)
     }
 
-    /// 撤销 `saveEdit` / `savePlainTextEdit` 带 undoable 的那一笔:引擎核对这首之后没被动过,把条目、同组写法、导入库记录原样放回、
-    /// 重新导出歌词文件(enrichundo.go)。失败时 `errorCode` 说原因(`LyricsEditUndo.reasonKey`)。
+    /// 撤销带 undoable 的那一笔(`saveEdit` / `savePlainTextEdit` / `setInstrumental`,或者「重新自动匹配」结论里的 undo_id):
+    /// 引擎核对这首之后没被动过,把条目、同组写法、留底、导入库记录原样放回、重新导出歌词文件(enrichundo.go)。
+    /// 失败时 `errorCode` 说原因(`LyricsEditUndo.reasonKey`)。
     func undoEdit(undoID: String) async -> EnrichEditChannel.Result {
         await commit("undo_edit", ["undo_id": undoID])
     }
@@ -1669,7 +1670,14 @@ public final class EnrichCacheStore: ObservableObject {
     /// 撤掉之后歌词原样回来。回报有没有落盘。为什么标记压过歌词、哪些操作撤标,见 11 章决策 50。
     @discardableResult
     public func setInstrumental(key: String, _ value: Bool) async -> Bool {
-        await commit("set_instrumental", ["key": key, "value": value]).ok
+        await setInstrumental(key: key, value, undoable: false).ok
+    }
+
+    /// 同上,交回引擎的整份结果;`undoable` 为真时引擎留下这首(连同跟着改的同组写法)改之前的样子,成功时 `undoID` 撤这一笔用。
+    func setInstrumental(key: String, _ value: Bool, undoable: Bool) async -> EnrichEditChannel.Result {
+        var fields: [String: Any] = ["key": key, "value": value]
+        if undoable { fields["undoable"] = true }
+        return await commit("set_instrumental", fields)
     }
 
     /// 「写入歌曲文件」写之前:引擎查这个文件能不能写、里面原本有没有歌词,不写东西(11 章决策 162)。

@@ -4996,7 +4996,7 @@ func runSourceContractSettingsTests() {
                     "歌词管理: 标了纯音乐的条目存着歌词也显示「纯音乐」(列表行、详情页标签)")
         expectEqual(manager.contains("LyricsWordTimingEdit.editableText(yrc: loadedYRC)")
                     && manager.contains("LyricsWordTimingEdit.apply(edited: editedWordText, yrc: loadedYRC, lrc: lyrics)")
-                    && manager.contains("store.saveEdit(key: key, lyrics: lyrics, tr: tr, roma: roma, yrc: yrc)")
+                    && manager.contains("store.saveEdit(key: key, lyrics: lyrics, tr: tr, roma: roma, yrc: yrc, undoable: true)")
                     && manager.contains("carryOffset(summary, from: before, to: (after.lyrics, after.yrc))"), true,
                     "歌词管理: 逐字歌词的编辑框只改字、套回逐字,只改字时单曲偏移跟着搬")
         // 预览时间列:▶ 不进排版、悬停状态在每一行自己身上;图标进排版的话悬停会来回切换停不下来(11 章决策 61)。

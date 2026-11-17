@@ -1,7 +1,8 @@
 import Foundation
 
-/// 「搜索歌词…」采纳之后的撤销:引擎在采纳那一笔里留下这首改之前的完整状态、回一个 undo_id,`undo_edit` 原样放回
-/// (lyrimuse-engine/enrichundo.go)。这里是 App 一侧的常数和失败原因。见 11 章决策 177。
+/// 歌词改动之后的撤销:引擎在那一笔里留下改之前的完整状态、回一个 undo_id,`undo_edit` 原样放回(lyrimuse-engine/enrichundo.go)。
+/// 接了的入口:「搜索歌词…」采纳、歌词管理「保存修改」、外部编辑器存回、「重新自动匹配」、标 / 撤纯音乐(歌词管理详情页)。
+/// 这里是 App 一侧的常数和失败原因。见 11 章决策 177、178。
 public enum LyricsEditUndo {
     /// 「撤销」跟着回声停留的秒数。必须比引擎认 undo_id 的时限(enrichUndoTTL,60 秒)短。
     public static let offerSeconds: Double = 8
