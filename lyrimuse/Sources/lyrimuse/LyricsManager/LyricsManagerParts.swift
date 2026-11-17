@@ -24,6 +24,15 @@ enum LyricsManagerDisplayMode: String, CaseIterable, Identifiable {
         case .romanization: return L10n.t("原文 + 读音")
         }
     }
+
+    /// 三选一放不下完整档名时的短写法,悬停显示 `title`。
+    var compactTitle: String {
+        switch self {
+        case .original: return L10n.t("原文")
+        case .translation: return L10n.t("+ 译文")
+        case .romanization: return L10n.t("+ 读音")
+        }
+    }
 }
 
 /// 右边是预览,还是在编辑(逐句格子 / 整段文本)。
@@ -186,6 +195,8 @@ final class LyricsPreviewPositionLine: ObservableObject {
 /// 「跟随播放」开关:开着时当前句保持在视野里,手动滚一下就暂停(见 LyricsManagerPreviewList)。
 struct LyricsManagerFollowButton: View {
     @Binding var follow: Bool
+    /// 文案在本视图里取,输入只有 follow:不订阅界面语言的话,切换语言后父视图重算时 SwiftUI 跳过这里,文字停在旧语言。
+    @ObservedObject private var languageSettings = AppLanguageObserver.shared
 
     var body: some View {
         Button {
@@ -832,8 +843,19 @@ struct LyricsManagerModePicker: View {
     let isAvailable: (LyricsManagerDisplayMode) -> Bool
     /// 点不了的那一档,悬停时说为什么。
     let unavailableHelp: (LyricsManagerDisplayMode) -> String
+    /// 档名在本视图里取:同 `LyricsManagerFollowButton`,订阅界面语言才会跟着切换。
+    @ObservedObject private var languageSettings = AppLanguageObserver.shared
 
+    /// 给的宽度放不下完整档名时换成短写法(`compactTitle`,悬停显示全称),见 11 章决策 184。父布局要按可用宽度问它:
+    /// 放进 `SettingsFlowRow` 或 HStack 都行,外面别再套 `.fixedSize()`。
     var body: some View {
+        ViewThatFits(in: .horizontal) {
+            segments(compact: false)
+            segments(compact: true)
+        }
+    }
+
+    private func segments(compact: Bool) -> some View {
         HStack(spacing: 0) {
             ForEach(LyricsManagerDisplayMode.allCases) { option in
                 let enabled = isAvailable(option)
@@ -841,14 +863,16 @@ struct LyricsManagerModePicker: View {
                 Button {
                     if enabled { mode = option }
                 } label: {
-                    Text(option.title)
-                        .padding(.horizontal, 12)
+                    Text(compact ? option.compactTitle : option.title)
+                        .padding(.horizontal, compact ? 8 : 12)
                         .padding(.vertical, 5)
                         .background(Capsule().fill(shown == option ? Color.accentColor : Color.clear))
                         .contentShape(Capsule())
                 }
                 .buttonStyle(SettingsGlassHoverButtonStyle(showsFill: shown != option))
                 .foregroundStyle(shown == option ? Color.white : enabled ? Color.primary : Color.secondary.opacity(0.55))
+                .modifier(FullTitleHelp(title: compact && enabled ? option.title : nil))
+                .accessibilityLabel(option.title)
                 .modifier(UnavailableModeNote(text: enabled ? nil : unavailableHelp(option)))
             }
         }
@@ -857,6 +881,20 @@ struct LyricsManagerModePicker: View {
         .padding(3)
         .settingsCardBackground(cornerRadius: 16)
         .fixedSize()
+    }
+}
+
+/// 短档名悬停时显示全称;title 为 nil 时什么都不挂。
+private struct FullTitleHelp: ViewModifier {
+    let title: String?
+
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        if let title {
+            content.help(title)
+        } else {
+            content
+        }
     }
 }
 
@@ -1201,6 +1239,8 @@ enum LyricsCompareLayout {
 struct LyricsCompareHeader: View {
     let candidateSource: String
     let currentSource: String
+    /// 同 `LyricsManagerFollowButton`:文案在本视图里取,订阅界面语言才会跟着切换。
+    @ObservedObject private var languageSettings = AppLanguageObserver.shared
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {

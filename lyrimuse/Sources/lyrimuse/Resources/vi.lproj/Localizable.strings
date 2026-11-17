@@ -101,6 +101,8 @@
 "%d 次" = "%d lượt";
 "%d 秒后清除" = "Xóa sau %d giây";
 "%d 项存在差异（以红色标示）" = "%d chỗ khác biệt (tô màu đỏ)";
+"+ 译文" = "+ bản dịch";
+"+ 读音" = "+ phát âm";
 "/ %@ 页" = "/ %@";
 "1. 在 Pear Desktop 的「插件」菜单中打开「API 服务器 [测试]」，勾选「已启用」" = "1. Trong menu “Trình bổ sung” của Pear Desktop, mở “Máy chủ API [Thử nghiệm]” và đánh dấu “Đã bật”";
 "1. 在洛雪音乐中打开「设置」，找到「开放 API」" = "1. Trong LX Music, mở “Settings” và tìm “Open API”";

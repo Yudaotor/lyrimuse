@@ -126,6 +126,8 @@
 "%d 次" = "×%d";
 "%d 秒后清除" = "Rimuovi dopo %d s";
 "%d 项存在差异（以红色标示）" = "%d differenze (evidenziate in rosso)";
+"+ 译文" = "+ traduzione";
+"+ 读音" = "+ pronuncia";
 "/ %@ 页" = "di %@";
 "1. 在 Pear Desktop 的「插件」菜单中打开「API 服务器 [测试]」，勾选「已启用」" = "1. Nel menu “Plugin” di Pear Desktop, apri “API Server [Beta]” e seleziona “Attivato”";
 "1. 在洛雪音乐中打开「设置」，找到「开放 API」" = "1. In LX Music, apri “Settings” e trova “Open API”";

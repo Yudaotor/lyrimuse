@@ -272,6 +272,18 @@ func runSettingsInteractionTests() {
         expectEqual(G.rows(widths: widths(9), spacing: gap, limit: 0).count, 1, "芯片换行: 还没量到宽度时全塞一行")
         expectEqual(G.rows(widths: [], spacing: gap, limit: limit), [], "芯片换行: 没有候选 → 空")
         expectEqual(G.size(rows: [], rowHeight: chip, spacing: gap), .zero, "芯片换行: 没有候选时不占高")
+
+        // 比整行还宽的那一项按整行宽度再问一次(能收窄的换短写法,见 11 章决策 184);问最窄 / 不限 / 首帧时照理想宽度。
+        expectEqual(G.narrowedWidth(ideal: 427, available: 264), 264, "芯片换行: 超宽项按整行宽度再问")
+        expectEqual(G.narrowedWidth(ideal: 264, available: 264), nil, "芯片换行: 恰好放得下不再问")
+        expectEqual(G.narrowedWidth(ideal: 200, available: 264), nil, "芯片换行: 放得下的照理想宽度")
+        expectEqual(G.narrowedWidth(ideal: 427, available: nil), nil, "芯片换行: 不限宽时照理想宽度")
+        expectEqual(G.narrowedWidth(ideal: 427, available: 0), nil, "芯片换行: 父布局问最窄(0)时照理想宽度")
+        expectEqual(G.narrowedWidth(ideal: 427, available: .infinity), nil, "芯片换行: 无穷宽照理想宽度")
+        expectEqual(G.narrowedWidth(ideal: 427, available: .greatestFiniteMagnitude), nil, "芯片换行: 最大有限数按不限处理")
+        // 左边内容 + 右上角按钮:并排的判据。歌词管理控制行 428pt、按钮 141pt、间距 28 → 内容最多 259。
+        expectEqual(G.fitsBeside(content: 259, accessory: 141, spacing: 28, available: 428), true, "按钮并排: 恰好放得下并排")
+        expectEqual(G.fitsBeside(content: 259.5, accessory: 141, spacing: 28, available: 428), false, "按钮并排: 差 0.5pt 按钮单占一行")
     }
 
     // 「歌词来源」卡的排列:中文用户中文源在前,其余国外源在前;组内顺序不变。

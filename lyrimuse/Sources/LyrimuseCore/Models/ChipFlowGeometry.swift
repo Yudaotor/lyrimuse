@@ -40,6 +40,19 @@ public enum ChipFlowGeometry {
         return rows
     }
 
+    /// 理想宽度比整行还宽的那一项,要不要再按整行宽度问一次:要就返回该问的宽度,不用就 nil。`available` 是父布局
+    /// 给的宽度:nil(不限)、≤ 0(问最窄能到多少、或首帧还没量到)、不是有限数时一律 nil,照理想宽度排。
+    public static func narrowedWidth(ideal: CGFloat, available: CGFloat?) -> CGFloat? {
+        guard let available, available > 0, available.isFinite, available < .greatestFiniteMagnitude,
+              ideal > available else { return nil }
+        return available
+    }
+
+    /// 左边一块内容、右边一个按钮能不能并排:内容按扣掉按钮后的宽度排出来的宽度 + 间距 + 按钮宽 ≤ 整行宽。
+    public static func fitsBeside(content: CGFloat, accessory: CGFloat, spacing: CGFloat, available: CGFloat) -> Bool {
+        content + spacing + accessory <= available
+    }
+
     /// 整块的尺寸:最宽那一行 × 行高累加(行间同样留 spacing)。`rowHeight` 是单枚芯片的高(等高)。
     public static func size(rows: [Row], rowHeight: CGFloat, spacing: CGFloat) -> CGSize {
         guard !rows.isEmpty else { return .zero }

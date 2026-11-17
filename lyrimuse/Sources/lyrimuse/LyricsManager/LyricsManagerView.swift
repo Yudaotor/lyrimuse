@@ -3995,9 +3995,10 @@ struct LyricsManagerView: View {
         }
     }
 
-    /// 时间轴偏移、原文 / 译文 / 读音、跟随播放,右边「编辑歌词」。放不下时左边那几样折行。
+    /// 时间轴偏移、原文 / 译文 / 读音、跟随播放,右边「编辑歌词」。放不下时左边那几样折行、三选一换短档名;
+    /// 左边最宽那一样都放不下时「编辑歌词」单占一行(见 11 章决策 184)。
     private func controlsRow(_ summary: EnrichCacheStore.Summary) -> some View {
-        HStack(alignment: .top, spacing: 10) {
+        SettingsTrailingAccessoryRow(spacing: 28, lineSpacing: 10) {
             SettingsFlowRow(spacing: 10) {
                 LyricsManagerOffsetControl(
                     text: $editedOffsetSeconds,
@@ -4017,7 +4018,6 @@ struct LyricsManagerView: View {
                     LyricsManagerFollowButton(follow: $followPlayback)
                 }
             }
-            Spacer(minLength: 8)
             if editMode == .preview {
                 Button {
                     beginLineEditing()

@@ -2139,17 +2139,17 @@ struct LyricsSearchSheet: View {
     private var isSongPlaying: Bool { nowPlaying.key == songKey }
 
     /// 原文 / 原文 + 译文 / 原文 + 读音(这条候选没有的那一档灰掉,悬停说为什么),正在放这首时再加「跟随播放」。
-    /// 跟歌词管理详情页同一套零件。
+    /// 跟歌词管理详情页同一套零件;放不下时三选一换短档名、「跟随播放」折到下一行。
     private func previewControls(_ rows: PreviewRows) -> some View {
-        HStack(spacing: 10) {
+        SettingsFlowRow(spacing: 10, centersRowItems: true) {
             LyricsManagerModePicker(mode: $displayMode, shown: shownMode(rows),
                                     isAvailable: { isModeAvailable($0, rows) },
                                     unavailableHelp: { unavailableModeHelp($0, rows) })
             if isSongPlaying {
                 LyricsManagerFollowButton(follow: $followPlayback)
             }
-            Spacer(minLength: 0)
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private func isModeAvailable(_ mode: LyricsManagerDisplayMode, _ rows: PreviewRows) -> Bool {

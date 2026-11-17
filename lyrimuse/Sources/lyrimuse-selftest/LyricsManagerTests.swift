@@ -9,6 +9,45 @@ import Foundation
 func runLyricsManagerTests() {
     checkLyricsManagerAudit()
     checkLyricsEditUndo()
+    // ---- 三选一放不下时换短档名;跟随播放、对照表头随界面语言刷新(见 11 章决策 184) ----
+    do {
+        let dir = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("lyrimuse/LyricsManager")
+        func read(_ name: String) -> String {
+            (try? String(contentsOf: dir.appendingPathComponent(name), encoding: .utf8)) ?? ""
+        }
+        let parts = read("LyricsManagerParts.swift")
+        let picker = sourceBody("struct LyricsManagerModePicker: View {", in: parts)
+        expectEqual(sourceHas(sourceBody("var body: some View {", in: picker),
+                              "ViewThatFits(in: .horizontal) { segments(compact: false) segments(compact: true) }"),
+                    true, "三选一短档名: 先放完整档名,放不下换短写法")
+        let segments = sourceBody("private func segments(compact: Bool)", in: picker)
+        expectEqual(sourceHas(segments, "Text(compact ? option.compactTitle : option.title)")
+                    && sourceHas(segments, ".modifier(FullTitleHelp(title: compact && enabled ? option.title : nil))")
+                    && sourceHas(segments, ".accessibilityLabel(option.title)"),
+                    true, "三选一短档名: 短写法悬停和无障碍都给全称")
+        let compact = sourceBody("var compactTitle: String {", in: parts)
+        expectEqual(sourceHas(compact, #"L10n.t("原文")"#) && sourceHas(compact, #"L10n.t("+ 译文")"#)
+                    && sourceHas(compact, #"L10n.t("+ 读音")"#), true, "三选一短档名: 原文 / + 译文 / + 读音")
+        let view = read("LyricsManagerView.swift")
+        let sheet = read("LyricsSearchSheet.swift")
+        let rowSpot = sourceBody("private func controlsRow(", in: view)
+        let sheetSpot = sourceBody("private func previewControls(", in: sheet)
+        for (name, spot) in [("歌词管理控制行", rowSpot), ("搜索候选预览", sheetSpot)] {
+            let flow = sourceBody("SettingsFlowRow(spacing:", in: spot)
+            expectEqual(sourceHas(flow, "LyricsManagerModePicker(") && !sourceHas(spot, "HStack(spacing: 10) { LyricsManagerModePicker("),
+                        true, "三选一短档名: \(name)把三选一放在 SettingsFlowRow 里(它按整行宽度问超宽项)")
+        }
+        expectEqual(sourceHas(rowSpot, "SettingsTrailingAccessoryRow(spacing: 28, lineSpacing: 10) { SettingsFlowRow(spacing: 10) {")
+                    && !sourceHas(rowSpot, "Spacer(minLength:"), true,
+                    "三选一短档名: 控制行走 SettingsTrailingAccessoryRow,左边最宽那一样放不下时「编辑歌词」单占一行")
+        for signature in ["struct LyricsManagerFollowButton: View {", "struct LyricsCompareHeader: View {",
+                          "struct LyricsManagerModePicker: View {"] {
+            expectEqual(sourceHas(sourceBody(signature, in: parts),
+                                  "@ObservedObject private var languageSettings = AppLanguageObserver.shared"),
+                        true, "界面语言刷新: \(signature) 自己取文案、输入不随语言变,要订阅 AppLanguageObserver")
+        }
+    }
     // ---- 窗口关掉时放下挂在窗上的面板 / 确认框 / 浮层(见 11 章决策 167) ----
     do {
         let file = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()

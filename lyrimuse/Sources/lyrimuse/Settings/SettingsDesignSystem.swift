@@ -1886,11 +1886,23 @@ struct SettingsProportionBar: View {
 ///
 /// 装箱几何在 `LyrimuseCore.ChipFlowGeometry`(selftest 钉着:单项宽过 limit 仍独占一行、
 /// 不丢不压缩;`limit` ≤ 0 的首帧按"不限"处理)。行间距与项间距同为 `spacing`。
+/// 每项先按理想宽度量;比整行还宽的那项再按整行宽度问一次(`ChipFlowGeometry.narrowedWidth`),能收窄的
+/// (`ViewThatFits`、可折行的文字)就收窄,`.fixedSize()` 的照旧报原宽。
 struct SettingsFlowRow: Layout {
     var spacing: CGFloat
+    /// 一行里矮的那几项竖向贴顶(默认)还是居中。
+    var centersRowItems = false
+
+    private func measure(_ subviews: Subviews, available: CGFloat?) -> [CGSize] {
+        subviews.map { subview in
+            let ideal = subview.sizeThatFits(.unspecified)
+            guard let width = ChipFlowGeometry.narrowedWidth(ideal: ideal.width, available: available) else { return ideal }
+            return subview.sizeThatFits(ProposedViewSize(width: width, height: nil))
+        }
+    }
 
     func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
-        let sizes = subviews.map { $0.sizeThatFits(.unspecified) }
+        let sizes = measure(subviews, available: proposal.width)
         // 提议宽度 0 是父布局在问「最窄能到多少」:按每行一枚算(报最宽那枚的宽度)。交给 rows 的话 ≤0 会被
         // 当成「不限宽」(那是给 placeSubviews 首帧没量到宽度用的),报成全部排一行的宽度,等于声明自己
         // 一点都压不窄,HStack 只好去挤旁边的标题。
@@ -1900,18 +1912,67 @@ struct SettingsFlowRow: Layout {
     }
 
     func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
-        let sizes = subviews.map { $0.sizeThatFits(.unspecified) }
+        let sizes = measure(subviews, available: bounds.width)
         let rowHeight = sizes.map(\.height).max() ?? 0
         var y = bounds.minY
         for row in ChipFlowGeometry.rows(widths: sizes.map(\.width), spacing: spacing, limit: bounds.width) {
             var x = bounds.minX
             for index in row.indices {
-                subviews[index].place(at: CGPoint(x: x, y: y), anchor: .topLeading,
+                let dy = centersRowItems ? (rowHeight - sizes[index].height) / 2 : 0
+                subviews[index].place(at: CGPoint(x: x, y: y + dy), anchor: .topLeading,
                                       proposal: ProposedViewSize(sizes[index]))
                 x += sizes[index].width + spacing
             }
             y += rowHeight + spacing
         }
+    }
+}
+
+/// 左边一块内容(通常是 `SettingsFlowRow`)、右上角一个按钮:内容在扣掉按钮和 `spacing` 后的宽度里放得下就并排,
+/// 按钮贴右缘;连最窄的排法都放不下时按钮单占第一行贴右,内容挪到下一行、用整行宽度排。正好两个子视图:内容在前、按钮在后。
+struct SettingsTrailingAccessoryRow: Layout {
+    var spacing: CGFloat
+    var lineSpacing: CGFloat
+
+    private struct Arrangement {
+        let beside: Bool
+        let content: CGSize
+        let accessory: CGSize
+    }
+
+    private func arrange(width: CGFloat, _ subviews: Subviews) -> Arrangement {
+        let accessory = subviews[1].sizeThatFits(.unspecified)
+        let room = max(width - accessory.width - spacing, 0)
+        let content = subviews[0].sizeThatFits(ProposedViewSize(width: room, height: nil))
+        if ChipFlowGeometry.fitsBeside(content: content.width, accessory: accessory.width, spacing: spacing, available: width) {
+            return Arrangement(beside: true, content: content, accessory: accessory)
+        }
+        let full = subviews[0].sizeThatFits(ProposedViewSize(width: width, height: nil))
+        return Arrangement(beside: false, content: full, accessory: accessory)
+    }
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        guard subviews.count == 2 else { return .zero }
+        guard let width = proposal.width, width.isFinite, width < .greatestFiniteMagnitude else {
+            let content = subviews[0].sizeThatFits(.unspecified)
+            let accessory = subviews[1].sizeThatFits(.unspecified)
+            return CGSize(width: content.width + spacing + accessory.width, height: max(content.height, accessory.height))
+        }
+        let a = arrange(width: width, subviews)
+        if a.beside { return CGSize(width: width, height: max(a.content.height, a.accessory.height)) }
+        return CGSize(width: max(width, a.content.width, a.accessory.width),
+                      height: a.accessory.height + lineSpacing + a.content.height)
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        guard subviews.count == 2 else { return }
+        let a = arrange(width: bounds.width, subviews)
+        subviews[1].place(at: CGPoint(x: bounds.maxX - a.accessory.width, y: bounds.minY), anchor: .topLeading,
+                          proposal: ProposedViewSize(a.accessory))
+        let contentY = a.beside ? bounds.minY : bounds.minY + a.accessory.height + lineSpacing
+        subviews[0].place(at: CGPoint(x: bounds.minX, y: contentY), anchor: .topLeading,
+                          proposal: ProposedViewSize(width: a.beside ? bounds.width - a.accessory.width - spacing : bounds.width,
+                                                     height: nil))
     }
 }
 

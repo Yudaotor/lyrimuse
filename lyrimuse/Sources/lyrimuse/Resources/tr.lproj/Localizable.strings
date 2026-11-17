@@ -101,6 +101,8 @@
 "%d 次" = "×%d";
 "%d 秒后清除" = "%d Saniye Sonra Temizle";
 "%d 项存在差异（以红色标示）" = "%d fark (kırmızıyla gösterilir)";
+"+ 译文" = "+ Çeviri";
+"+ 读音" = "+ Telaffuz";
 "/ %@ 页" = "/ %@";
 "1. 在 Pear Desktop 的「插件」菜单中打开「API 服务器 [测试]」，勾选「已启用」" = "1. Pear Desktop’un “Plugins” menüsünde “API Server [Beta]” öğesini açın ve “Enabled” seçeneğini işaretleyin";
 "1. 在洛雪音乐中打开「设置」，找到「开放 API」" = "1. LX Music’te “Settings” bölümünü açın ve “Open API” seçeneğini bulun";

@@ -1556,6 +1556,16 @@ func runSourceContractTests() {
             expectEqual(count(row, "ChipFlowGeometry.rows(") >= 2, true,
                         "芯片换行: SettingsFlowRow 的量尺与落位都要调 ChipFlowGeometry.rows(现 \(count(row, "ChipFlowGeometry.rows(")) 处)")
             expectEqual(row.contains("ChipFlowGeometry.size("), true, "芯片换行: 整块尺寸也走同一份纯函数")
+            let flow = sourceBody("struct SettingsFlowRow: Layout {", in: row)
+            expectEqual(sourceHas(sourceBody("private func measure(", in: flow), "ChipFlowGeometry.narrowedWidth(")
+                        && sourceHas(sourceBody("func sizeThatFits(", in: flow), "measure(subviews, available: proposal.width)")
+                        && sourceHas(sourceBody("func placeSubviews(", in: flow), "measure(subviews, available: bounds.width)"),
+                        true, "芯片换行: 量尺与落位都按整行宽度再问超宽项(SettingsFlowRow.measure → narrowedWidth)")
+            let accessoryRow = sourceBody("struct SettingsTrailingAccessoryRow: Layout {", in: row)
+            expectEqual(sourceHas(sourceBody("private func arrange(", in: accessoryRow), "ChipFlowGeometry.fitsBeside(")
+                        && sourceHas(sourceBody("func sizeThatFits(", in: accessoryRow), "arrange(width: width, subviews)")
+                        && sourceHas(sourceBody("func placeSubviews(", in: accessoryRow), "arrange(width: bounds.width, subviews)"),
+                        true, "按钮并排: 量尺与落位都走 arrange → ChipFlowGeometry.fitsBeside")
         } else {
             expectEqual(true, false, "芯片换行: 读不到 lyrimuse/Settings/SettingsDesignSystem.swift(路径挪了?)")
         }
