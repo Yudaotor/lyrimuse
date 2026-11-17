@@ -3731,7 +3731,7 @@ public enum MediaControlClient {
         guard let last, let elapsed, let timestamp, last.track == track, last.timestamp != timestamp else { return false }
         if isFoobarArtworkRepublish(last: last, elapsed: elapsed, timestamp: timestamp, bundleID: bundleID) { return true }
         guard last.elapsed == elapsed else { return false }
-        // 酷我同 elapsed 换时间戳是如实报「还没走」(跳转后缓冲、长暂停恢复第一下),按重发判会从旧时刻外推、超前一个暂停长度。
+        // 酷我同 elapsed 换时间戳是如实报「还没走」(跳转后缓冲、长暂停恢复第一下),按重发判会从旧时刻外推、超前一个暂停长度(见 02 章决策 272)。
         if elapsed > 0, bundleID == PlaybackPlayer.kuwo.bundleIdentifier { return false }
         if elapsed <= 0 {
             guard PlaybackPlayer.builtin(forBundleID: bundleID)?.republishesZeroAnchor == true else { return false }
