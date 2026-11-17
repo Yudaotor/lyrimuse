@@ -1518,8 +1518,16 @@ func runRomanizationTests() {
         // 否决表剔掉的条目(08 章决策 69):上游关系只在古义、生僻读音上成立,目标字的现代字义是另一个字,不折。
         expectEqual(HanVariants.toSimplified["螆"], nil, "异体字表: 螆 不折成 蚝(蚝 是 蠔 的简体,牡蛎)")
         expectEqual(V.simplified.converted("如蚊螆"), "如蚊螆", "简体显示: 粤语 蚊螆 不变成 蚊蚝")
-        expectEqual(V.simplified.converted("张栢芝"), "张栢芝", "简体显示: 栢 不变成 彗星的 孛")
         expectEqual(V.simplified.converted("亂噏"), "乱噏", "简体显示: 粤语 噏 不变成 吸")
+        expectEqual(HanVariants.toSimplified["尃"], nil, "异体字表: 尃 不折成 敷(人名用字)")
+        expectEqual(V.simplified.converted("编曲:十尃"), "编曲:十尃", "简体显示: 署名 十尃 不变成 十敷")
+        // 覆盖表改成正确目标的条目(08 章决策 70):上游推出的 孛 / 遭 / 跐 / 呃 / 勰 / 拈 / 朐 是另一个字。
+        for (src, dst) in [("栢", "柏"), ("蹧", "糟"), ("跴", "踩"), ("阨", "厄"), ("恊", "协"), ("敁", "掂"), ("鸜", "鸲")] {
+            expectEqual(HanVariants.toSimplified[Character(src)], Character(dst), "异体字表: \(src) → \(dst)")
+        }
+        expectEqual(V.simplified.converted("张栢芝 梁栢堅"), "张柏芝 梁柏坚", "简体显示: 栢 → 柏")
+        expectEqual(V.simplified.converted("跴油門 阨運 恊助 敁量 鸜鵒"), "踩油门 厄运 协助 掂量 鸲鹆",
+                    "简体显示: 跴 / 阨 / 恊 / 敁 / 鸜 折到正确目标")
 
         // ⑨ 逐字替换的前提:ICU 对**它确实不转的那批 key**,整条链路的产物必须等于表里的
         //    规范字。只对这一批断言,不是对全表 —— 其余条目 ICU 自己就转掉了(它们留在表里

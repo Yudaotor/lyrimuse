@@ -1324,6 +1324,11 @@ func runLastfmTests() {
         expectNotEqual(F.foldTitle("感谢祢"), F.foldTitle("感谢你"), "折叠键: 祢 不折成 你(只在搜索对照里算)")
         expectNotEqual(F.foldTitle("奶茶"), F.foldTitle("你茶"), "折叠键: 不相干的字不并")
         expectNotEqual(F.foldTitle("蚊螆"), F.foldTitle("蚊蚝"), "折叠键: 螆 不折成 蚝(08 章决策 69)")
+        expectNotEqual(F.foldTitle("十尃"), F.foldTitle("十敷"), "折叠键: 尃 不折成 敷(08 章决策 70)")
+        expectEqual(F.key(artist: "張栢芝", title: "X"), F.key(artist: "张柏芝", title: "X"), "折叠键: 栢 == 柏(08 章决策 70)")
+        for (src, dst) in [("跴", "踩"), ("恊助", "协助"), ("敁量", "掂量"), ("鸜鹆", "鸲鹆")] {
+            expectEqual(F.foldTitle(src), F.foldTitle(dst), "折叠键: \(src) == \(dst)")
+        }
         // 段落交错的双语名不收敛(宁可漏合不错合)
         expectNotEqual(F.foldTitle("月食 The 月食 Woman"), F.foldTitle("月食"),
                        "折叠键: CJK/拉丁交错不折")
