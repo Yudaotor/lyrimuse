@@ -179,6 +179,13 @@ final class MenuBarLiveIconView: NSView {
         }
     }
 
+    /// 系统强调色换了:跟随强调色的 `tintOverride` 是动态色 `controlAccentColor`,对象和描述都不变,
+    /// 设值判重和位图缓存键都认不出,这里清掉缓存、按新颜色重染(见 06 章决策 107)。
+    func systemColorsDidChange() {
+        tintCache.removeAll()
+        applyColor()
+    }
+
     /// 菜单开合换色,不碰动画。
     func setHighlighted(_ on: Bool) {
         guard on != highlighted else { return }

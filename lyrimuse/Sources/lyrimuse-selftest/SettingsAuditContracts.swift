@@ -113,6 +113,8 @@ func runSettingsAuditContracts() {
                 && sourceHas(sourceBody("private nonisolated static func coveredByWindowsAbove(_ id: CGWindowID) -> Bool", in: coverage),
                              "CGWindowListCopyWindowInfo([.optionOnScreenAboveWindow], id)"), true,
                 "遮挡检测: 窗口清单在后台队列上问 WindowServer,主线程不同步等")
+    expectEqual(sourceHas(recomputeBody, "if asking { askAgain = true }\napply(covered)\nreturn"), true,
+                "遮挡检测: 后台查询没回来时快速判定定了(窗口刚成焦点),回来的旧结果不覆盖它")
 
     // ---- 全局件 ----
     let recorder = app("Settings/ShortcutRecorder.swift")

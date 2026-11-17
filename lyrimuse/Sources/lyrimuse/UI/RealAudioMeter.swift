@@ -264,7 +264,8 @@ private final class RealAudioEngine: @unchecked Sendable {
         let targets = rows.map(\.object)
         playerOutputting = rows.contains(where: \.outputting)
         latency = ProcessAudioOutput.defaultOutputLatencySeconds()
-        guard Set(targets) != Set(tapTargets) else { return }
+        guard ProcessAudioOutput.needsRetap(targets: targets, tapped: tapTargets, tapOutputUID: (tap as? ProcessAudioTap)?.outputDeviceUID,
+                                            outputUID: ProcessAudioTap.defaultOutputDeviceUID()) else { return }
         teardownTap()
         guard !targets.isEmpty else {
             schedule(interval: Self.idleInterval, immediately: false)

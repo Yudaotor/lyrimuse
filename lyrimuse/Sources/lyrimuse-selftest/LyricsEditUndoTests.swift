@@ -31,6 +31,17 @@ func checkLyricsEditUndo() {
         expectEqual(LyricsEditUndo.reasonKey(code: code) != nil, true, "采纳撤销: 错误码 \(code) 有对应的一句")
     }
     expectEqual(LyricsEditUndo.reasonKey(code: nil), nil, "采纳撤销: 没有错误码时交给通道的原因或通用那句")
+    let showFeedback = sourceBody("private func showApplyFeedback(_ text: String, ok: Bool, undoable: Bool = false)", in: sheet)
+    expectEqual(sourceHas(showFeedback, "let ownUndo = pendingUndo?.id")
+                && sourceHas(showFeedback, "guard !undoing else { return }\n if pendingUndo?.id == ownUndo { pendingUndo = nil }")
+                && !sourceHas(showFeedback, "guard !undoing else { return }\n pendingUndo = nil"), true,
+                "采纳撤销: 采纳回声到点只收自己那一笔,不把之后「重新自动匹配」挂上的撤销提前收掉")
+    expectEqual(LyricsEditUndo.engineErrorCodes.map { LyricsEditUndo.isRefusal(code: $0) }
+                + [LyricsEditUndo.isRefusal(code: nil), LyricsEditUndo.isRefusal(code: "io")], [true, true, false, false],
+                "采纳撤销: 只有引擎的两个拒绝码算「按规矩拒了」")
+    expectEqual(sourceHas(sourceBody("private func commit(_ op: String, _ fields: [String: Any] = [:]) async -> EnrichEditChannel.Result", in: store),
+                          "} else if LyricsEditUndo.isRefusal(code: result.errorCode) {"), true,
+                "采纳撤销: 撤销被拒(过时限、又被改过)时歌词管理不挂「写入本地记录文件失败」,原因只由回声说")
     expectEqual(sourceHas(edit, "Undoable bool   `json:\"undoable,omitempty\"`")
                 && sourceHas(edit, "UndoID   string `json:\"undo_id,omitempty\"`")
                 && sourceHas(edit, "UndoID string `json:\"undo_id,omitempty\"`")
@@ -123,7 +134,7 @@ func checkLyricsEditUndo() {
     let show = sourceBody("private func showApplyFeedback(_ text: String, ok: Bool, undoable: Bool = false) {", in: sheet)
     expectEqual(sourceHas(show, "if !undoable { pendingUndo = nil }")
                 && sourceHas(show, "try? await Task.sleep(for: .seconds(undoable ? LyricsEditUndo.offerSeconds : 2.5))")
-                && sourceHas(show, "pendingUndo = nil\n withAnimation { applyFeedback = nil }"), true,
+                && sourceHas(show, "if pendingUndo?.id == ownUndo { pendingUndo = nil }\n withAnimation { applyFeedback = nil }"), true,
                 "采纳撤销: 带「撤销」的回声停 offerSeconds,消失或被别的回声顶掉时撤销作废")
     let subjectChange = sourceBody(".onChange(of: searchSubject) { _, _ in", in: sheet)
     let disappear = sourceBody(".onDisappear {", in: sheet)

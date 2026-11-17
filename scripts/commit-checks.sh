@@ -80,6 +80,10 @@ if [ -n "${PRIVATE_COMMIT_COMPILED_MARK:-}" ] && [ -n "${PRIVATE_COMMIT_TREE:-}"
   printf '%s\n' "$PRIVATE_COMMIT_TREE" > "$PRIVATE_COMMIT_COMPILED_MARK"
 fi
 
+# 发版闸的第 1 道(弱导入白名单)只在打包时跑的话,新用一个高版本系统 API 要到发版才被拦;这里对刚编出的主程序先查一遍。
+step "主程序弱导入白名单"
+scripts/check-release-binaries.sh --weak-imports "$(cd lyrimuse && swift build --show-bin-path)/lyrimuse"
+
 light="${PRIVATE_COMMIT_LIGHT:-}"
 if [ -n "$light" ]; then
   step "selftest、nowplaying-clients 原生测试:轻校验,跳过"

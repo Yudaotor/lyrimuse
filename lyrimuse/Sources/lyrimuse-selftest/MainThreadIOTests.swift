@@ -267,9 +267,17 @@ func runMainThreadIOTests() {
                     "发版闸门(契约): 下载的 bottle 校验 sha256,不符拒绝")
         let gate = repoText("scripts/check-release-binaries.sh")
         expectEqual(["\"QuartzCore/_CADynamicRangeHigh\"", "\"AppKit/_OBJC_CLASS_\\$_NSGlassEffectView\"",
-                     "\"AppKit/_OBJC_METACLASS_\\$_NSGlassEffectView\"", "Contents/Resources/nowplaying-clients/libnowplaying-clients.dylib"]
+                     "\"AppKit/_OBJC_METACLASS_\\$_NSGlassEffectView\"", "\"CoreAudio/_AudioHardwareCreateProcessTap\"",
+                     "\"CoreAudio/_AudioHardwareDestroyProcessTap\"", "Contents/Resources/nowplaying-clients/libnowplaying-clients.dylib"]
                         .allSatisfy { gate.contains($0) }, true,
-                    "发版闸门(契约): 弱导入白名单只有这三个、minos 查到 dylib")
+                    "发版闸门(契约): 弱导入白名单(含音浪的 process tap)、minos 查到 dylib")
+        expectEqual(sourceHas(repoText("scripts/commit-checks.sh"),
+                              "scripts/check-release-binaries.sh --weak-imports \"$(cd lyrimuse && swift build --show-bin-path)/lyrimuse\""), true,
+                    "发版闸门(契约): 提交校验编完就查弱导入白名单,不等打包")
+        let minos = sourceBody("check_minos() {", in: gate)
+        expectEqual(sourceHas(minos, "if ! build=\"$(vtool -show-build \"$file\" 2>&1)\"; then") && sourceHas(minos, "if [ -z \"$minos_list\" ]; then")
+                        && !minos.contains("< <(vtool"), true,
+                    "发版闸门(契约): vtool 读不出或没有 minos 算不过,不放进进程替换里吞掉")
         expectEqual(["MediaRemoteAdapter.framework/Versions/A/MediaRemoteAdapter\"", "lib/media-control/MediaRemoteAdapterTestClient\"",
                      "for rel in \"${own_binaries[@]}\" \"${bundled_binaries[@]}\"; do"].allSatisfy { gate.contains($0) }
                         && !gate.contains("warn-only") && !package.contains("warn-only"), true,

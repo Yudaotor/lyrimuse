@@ -99,6 +99,16 @@ func runRealAudioTests() {
     expectEqual(delay.pop(now: 10, delay: .nan), [9], "真实音浪: 延迟读成 NaN 按 0")
     for i in 0..<100 { delay.push(time: Double(i), levels: []) }
     expectEqual(delay.count, RealAudioDelayLine.capacity, "真实音浪: 延迟线有上限")
+    expectEqual([ProcessAudioOutput.needsRetap(targets: [7, 9], tapped: [9, 7], tapOutputUID: "spk", outputUID: "spk"),
+                 ProcessAudioOutput.needsRetap(targets: [7], tapped: [9], tapOutputUID: "spk", outputUID: "spk"),
+                 ProcessAudioOutput.needsRetap(targets: [7], tapped: [7], tapOutputUID: "airpods", outputUID: "spk"),
+                 ProcessAudioOutput.needsRetap(targets: [7], tapped: [7], tapOutputUID: "airpods", outputUID: nil),
+                 ProcessAudioOutput.needsRetap(targets: [], tapped: [], tapOutputUID: nil, outputUID: "spk")],
+                [false, true, true, false, false], "真实音浪: 进程没换、输出设备没换不重建;换了进程或换了输出设备(拔耳机)重建")
+    expectEqual(sourceHas(sourceBody("private func retarget(bundleID: String, now: Double)", in: (try? String(contentsOf: URL(fileURLWithPath: #filePath)
+                    .deletingLastPathComponent().deletingLastPathComponent().appendingPathComponent("lyrimuse/UI/RealAudioMeter.swift"), encoding: .utf8)) ?? ""),
+                          "tapOutputUID: (tap as? ProcessAudioTap)?.outputDeviceUID"), true,
+                "真实音浪(契约): 重建与否连同输出设备一起判")
     expectEqual([ProcessAudioOutput.outputLatencySeconds(frames: 7680, sampleRate: 48000),
                  ProcessAudioOutput.outputLatencySeconds(frames: 0, sampleRate: 48000),
                  ProcessAudioOutput.outputLatencySeconds(frames: 480000, sampleRate: 48000),

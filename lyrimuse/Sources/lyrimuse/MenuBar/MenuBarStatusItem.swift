@@ -1515,7 +1515,7 @@ final class MenuBarStatusItem: NSObject {
                 showFixedWidth($0, text: lineText, windowWidth: windowWidth, pacing: pacing,
                                fillPath: karaokeFillPath(for: lineText),
                                followPath: followReadingPath(for: lineText), clockPaced: dwell != nil, icon: icon,
-                               gapWindow: gapWindow(for: lineText))
+                               gapWindow: gapWindow(for: lineText), holdsStill: lyricHoldsStill)
             }
         }
     }
@@ -1556,7 +1556,7 @@ final class MenuBarStatusItem: NSObject {
                           lineIndex: rowState.lineIndex, icon: icon,
                           secondaryText: rowState.secondaryText, secondaryKind: rowState.kind,
                           inlineTranslationStart: rowState.inlineTranslationStart,
-                          gapWindow: gap)
+                          gapWindow: gap, holdsStill: karaoke && !PlaybackCoordinator.shared.isPlayingNow)
         }
         centerLyrics.keep(only: placed)
         // 同 showFixedWidth 末尾:换句后立刻按真实播放位置对一次表。
@@ -1699,7 +1699,7 @@ final class MenuBarStatusItem: NSObject {
             showFixedWidth(button, text: lineText, windowWidth: win, pacing: pacing,
                            fillPath: karaokeFillPath(for: lineText),
                            followPath: followReadingPath(for: lineText), clockPaced: dwell != nil, icon: icon,
-                           gapWindow: gapWindow(for: lineText))
+                           gapWindow: gapWindow(for: lineText), holdsStill: lyricHoldsStill)
         }
     }
 
@@ -1778,13 +1778,19 @@ final class MenuBarStatusItem: NSObject {
     ///
     /// 固定宽度模式下装得下的句子**也**走这里,不走 button.title:button.title 那条路的宽度跟着
     /// 文字走,长短句来回切时菜单栏项就会伸缩、把右边的图标顶得左右晃。
+    /// 暂停时保留的那句歌词不装墙钟循环(「♪ 歌名」兜底照旧)。
+    private var lyricHoldsStill: Bool {
+        !titleFallbackActive && !PlaybackCoordinator.shared.isPlayingNow
+    }
+
     private func showFixedWidth(_ button: NSStatusBarButton, text: String, windowWidth: CGFloat,
                                 pacing: MenuBarMarquee.ScrollPacing?,
                                 fillPath: [MenuBarMarquee.KaraokeFillPoint]? = nil,
                                 followPath: [MenuBarMarquee.KaraokeFillPoint]? = nil,
                                 clockPaced: Bool = false,
                                 icon: MenuBarScrollingLabel.IconBadge? = nil,
-                                gapWindow: MenuBarScrollingLabel.GapWindow? = nil) {
+                                gapWindow: MenuBarScrollingLabel.GapWindow? = nil,
+                                holdsStill: Bool = false) {
         liveIconView.clear()
         // 这张**全透明**的占位图是整个固定宽度方案的支点,不是残留:variableLength 的
         // 状态栏项按 button.image 的尺寸算自己该占多宽。给它一张宽度恒为 windowWidth 的
@@ -1810,7 +1816,7 @@ final class MenuBarStatusItem: NSObject {
                                lineIndex: rowState.lineIndex, icon: icon,
                                secondaryText: rowState.secondaryText, secondaryKind: rowState.kind,
                                inlineTranslationStart: rowState.inlineTranslationStart,
-                               gapWindow: gapWindow)
+                               gapWindow: gapWindow, holdsStill: holdsStill)
         // 换句后立刻对一次表,填色 / 跟唱滚动 / 按时钟配速的滚动从此刻的真实播放位置起步,不等下一次锚点更新(~2s)。
         if fillPath != nil || followPath != nil || (clockPaced && pacing != nil) { syncKaraokeClock(force: true) }
         // 三点那一档没有 fillPath/followPath,上面那条对不到它;它同样要立刻起步,

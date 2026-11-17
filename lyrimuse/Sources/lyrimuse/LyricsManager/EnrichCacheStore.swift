@@ -1866,6 +1866,8 @@ public final class EnrichCacheStore: ObservableObject {
         if !isReleased { await reloadAfterEdit() }
         if result.ok {
             if editError != nil { editError = nil }
+        } else if LyricsEditUndo.isRefusal(code: result.errorCode) {
+            // 撤销被引擎按规矩拒了(过了时限、这首又被改过):什么都没写,原因由撤销按钮的回声说,不挂写盘失败(见 11 章决策 181)。
         } else if let error = result.error, result.errorIsLocalized {
             editError = String(format: L10n.t("写入本地记录文件失败：%@"), error)
         } else {

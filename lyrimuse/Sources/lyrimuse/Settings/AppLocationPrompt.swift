@@ -68,7 +68,7 @@ enum AppLocationPrompt {
             showFailure(message, activate: testDirectory == nil)
         case let .moved(destination, _):
             if let testDirectory { FileIO.write("\(outcome)\n", to: testDirectory.appendingPathComponent("outcome.txt")) }
-            if location == .translocated, testDirectory == nil { trashTranslocatedOriginal(of: bundle) }
+            if location == .translocated, testDirectory == nil { trashTranslocatedOriginal(of: bundle, movedTo: destination) }
             relaunch(destination, location: location, testDirectory: testDirectory)
         }
         if let testDirectory { finishTest(in: testDirectory, String(describing: outcome), bundle: bundle) }
@@ -203,13 +203,14 @@ enum AppLocationPrompt {
 
     /// Translocation 时用户真正下载下来的那一份(多半在「下载」里)也挪进废纸篓,不然下次又从那里打开、又被挂到临时位置。
     /// 取原路径用 Security 的 `SecTranslocateCreateOriginalPathForURL`(公开头文件里没有,按符号名取;取不到就不动)。
-    private static func trashTranslocatedOriginal(of bundle: URL) {
+    private static func trashTranslocatedOriginal(of bundle: URL, movedTo destination: URL) {
         typealias OriginalPath = @convention(c) (CFURL, UnsafeMutablePointer<Unmanaged<CFError>?>?) -> Unmanaged<CFURL>?
         guard let handle = dlopen("/System/Library/Frameworks/Security.framework/Security", RTLD_LAZY),
               let symbol = dlsym(handle, "SecTranslocateCreateOriginalPathForURL") else { return }
         let original = unsafeBitCast(symbol, to: OriginalPath.self)
         guard let url = original(bundle as CFURL, nil)?.takeRetainedValue() as URL?,
-              FileManager.default.fileExists(atPath: url.path) else { return }
+              FileManager.default.fileExists(atPath: url.path),
+              AppLocation.shouldTrashTranslocatedOriginal(url, movedTo: destination) else { return }
         do {
             _ = try AppBundleMover.moveToTrash(url)
         } catch {

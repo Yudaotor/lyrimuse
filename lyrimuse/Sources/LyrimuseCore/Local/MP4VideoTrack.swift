@@ -6,7 +6,7 @@ public enum MP4VideoTrack {
     static let moovLimit: UInt64 = 16 << 20
     /// 顶层盒子最多看几个才找到 `moov`。普通文件顶层只有几个盒子,分片的 `moov` 在 `moof` 前面;坏文件全是 8 字节小盒子时
     /// 每个盒子都要读一次盘,见 02 章决策 260。
-    static let maxTopLevelBoxes = 4096
+    public static let maxTopLevelBoxes = 4096
 
     /// 会读盘,别在主线程调。
     public static func present(path: String) -> Bool {
@@ -16,25 +16,31 @@ public enum MP4VideoTrack {
     /// 顶层 `moov` 的内容(不含盒子头);没有、超过 `limit`、前 `maxTopLevelBoxes` 个盒子里没有、读不出为 nil。只读顶层盒子头,
     /// 别的盒子跳过。会读盘。
     static func moov(path: String, limit: UInt64) -> [UInt8]? {
-        guard let handle = FileHandle(forReadingAtPath: path) else { return nil }
+        scanMoov(path: path, limit: limit).moov
+    }
+
+    /// `moov(path:limit:)` 的实现,另交回读了几个顶层盒子头(每个读一次盘),selftest 按它判上限,不按耗时判。
+    public static func scanMoov(path: String, limit: UInt64) -> (moov: [UInt8]?, boxesRead: Int) {
+        guard let handle = FileHandle(forReadingAtPath: path) else { return (nil, 0) }
         defer { try? handle.close() }
-        guard let size = try? handle.seekToEnd() else { return nil }
+        guard let size = try? handle.seekToEnd() else { return (nil, 0) }
         var offset: UInt64 = 0
         var boxes = 0
         while offset + 8 <= size, boxes < maxTopLevelBoxes {
             boxes += 1
             guard (try? handle.seek(toOffset: offset)) != nil,
                   let head = try? handle.read(upToCount: 16),
-                  let box = header([UInt8](head), remaining: size - offset) else { return nil }
+                  let box = header([UInt8](head), remaining: size - offset) else { return (nil, boxes) }
             if box.type == "moov" {
                 let length = box.size - box.headerSize
                 guard length <= limit, (try? handle.seek(toOffset: offset + box.headerSize)) != nil,
-                      let payload = try? handle.read(upToCount: Int(length)), UInt64(payload.count) == length else { return nil }
-                return [UInt8](payload)
+                      let payload = try? handle.read(upToCount: Int(length)),
+                      UInt64(payload.count) == length else { return (nil, boxes) }
+                return ([UInt8](payload), boxes)
             }
             offset += box.size
         }
-        return nil
+        return (nil, boxes)
     }
 
     /// 盒子头:大小(含头;1 = 后面 8 字节是 64 位大小,0 = 到 `remaining` 为止)、类型、头长。比 8 字节短、大小比头还小或超出

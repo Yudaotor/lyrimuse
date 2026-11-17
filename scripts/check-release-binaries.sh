@@ -2,6 +2,7 @@
 # 发版包里 Mach-O 的两道闸。lyrimuse/package.sh 打包前对每个 .app 调一次,也能单跑:
 #
 #     scripts/check-release-binaries.sh <Lyrimuse.app>
+#     scripts/check-release-binaries.sh --weak-imports <可执行文件>   # 只查第 1 道,提交校验在 swift build 之后对主程序跑
 #
 # 1. 主程序弱导入的系统符号(dyld_info -fixups 里标 [weak-import] 的)除了 Swift 符号和 Swift 运行时 / libSystem 自己
 #    管的那几个,只许出现白名单里的。弱导入的常量在旧系统上是空地址,`#available` 外面直接读它就是启动即崩;
@@ -16,14 +17,23 @@
 # 不过就打印原因、退出码 1。
 set -euo pipefail
 
-app="${1:?用法: check-release-binaries.sh <Lyrimuse.app>}"
-main="$app/Contents/MacOS/lyrimuse"
+weak_only=0
+if [ "${1:-}" = "--weak-imports" ]; then
+  weak_only=1
+  main="${2:?用法: check-release-binaries.sh --weak-imports <可执行文件>}"
+else
+  app="${1:?用法: check-release-binaries.sh <Lyrimuse.app>}"
+  main="$app/Contents/MacOS/lyrimuse"
+fi
 allowed_weak=(
   "QuartzCore/_CADynamicRangeHigh"
   "AppKit/_OBJC_CLASS_\$_NSGlassEffectView"
   "AppKit/_OBJC_METACLASS_\$_NSGlassEffectView"
   # 只在 x86_64 切片里、不是自家代码引用的;macOS 10.14.4 起就有,14.0 上不会是空地址。
   "libobjc/_objc_setHook_getClass"
+  # ProcessAudioTap(灵动岛音浪跟随音乐):类型标了 @available(macOS 14.2, *),调用处都在 #available 里。
+  "CoreAudio/_AudioHardwareCreateProcessTap"
+  "CoreAudio/_AudioHardwareDestroyProcessTap"
 )
 own_binaries=(
   "Contents/MacOS/lyrimuse"
@@ -54,6 +64,10 @@ for arch in $(lipo -archs "$main"); do
     fi
   done < <(dyld_info -arch "$arch" -fixups "$main" | awk '$NF == "[weak-import]" { print $(NF-1) }' | sort -u)
 done
+if [ "$weak_only" = 1 ]; then
+  [ "$failed" = 0 ] && echo "    弱导入校验通过"
+  exit "$failed"
+fi
 
 min_version="$(/usr/libexec/PlistBuddy -c 'Print :LSMinimumSystemVersion' "$app/Contents/Info.plist")"
 version_key() {
@@ -64,9 +78,21 @@ version_key() {
 }
 # check_minos <相对路径>
 check_minos() {
-  local rel="$1" file="$app/$1" minos
+  local rel="$1" file="$app/$1" minos build minos_list
   if [ ! -f "$file" ]; then
     echo "!! 找不到 $rel" >&2
+    failed=1
+    return
+  fi
+  # vtool 读不出、或没有一条 minos 时算不过:放进进程替换里读的话失败会被吞掉,这一项就静默通过了。
+  if ! build="$(vtool -show-build "$file" 2>&1)"; then
+    echo "!! $rel 读不出构建版本(vtool -show-build 失败):$build" >&2
+    failed=1
+    return
+  fi
+  minos_list="$(printf '%s\n' "$build" | awk '$1 == "minos" { print $2 }' | sort -u)"
+  if [ -z "$minos_list" ]; then
+    echo "!! $rel 没写 minos(没有 LC_BUILD_VERSION)" >&2
     failed=1
     return
   fi
@@ -75,7 +101,7 @@ check_minos() {
       echo "!! $rel 的 minos 是 $minos,高于 LSMinimumSystemVersion $min_version" >&2
       failed=1
     fi
-  done < <(vtool -show-build "$file" | awk '$1 == "minos" { print $2 }' | sort -u)
+  done <<< "$minos_list"
 }
 for rel in "${own_binaries[@]}" "${bundled_binaries[@]}"; do
   check_minos "$rel"

@@ -1954,17 +1954,19 @@ struct LyricsSearchSheet: View {
     }
 
     /// 回声 2.5 秒后自己消失;带「撤销」的停 `LyricsEditUndo.offerSeconds`,消失时「撤销」跟着作废。别的回声顶掉它时同样作废。
+    /// 到点只收这条回声自己那一笔:这期间「重新自动匹配」挂上的撤销有自己的计时(见 11 章决策 182)。
     private func showApplyFeedback(_ text: String, ok: Bool, undoable: Bool = false) {
         applyFeedbackGeneration += 1
         let generation = applyFeedbackGeneration
         if !undoable { pendingUndo = nil }
+        let ownUndo = pendingUndo?.id
         withAnimation { applyFeedback = ApplyFeedback(text: text, ok: ok, undoable: undoable) }
         Task {
             try? await Task.sleep(for: .seconds(undoable ? LyricsEditUndo.offerSeconds : 2.5))
             guard generation == applyFeedbackGeneration else { return }
             // 撤销在飞时等它收尾,由它换上自己的回声。
             guard !undoing else { return }
-            pendingUndo = nil
+            if pendingUndo?.id == ownUndo { pendingUndo = nil }
             withAnimation { applyFeedback = nil }
         }
     }

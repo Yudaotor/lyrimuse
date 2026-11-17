@@ -102,6 +102,8 @@ final class WindowCoverageMonitor {
     private func recompute() {
         guard let window else { return }
         if let covered = Self.quickVerdict(window) {
+            // 后台那次问的是这之前的窗口层级,回来时别拿它盖掉这个判定:记一笔,回来再算一次。
+            if asking { askAgain = true }
             apply(covered)
             return
         }

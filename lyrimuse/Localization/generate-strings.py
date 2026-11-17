@@ -310,6 +310,42 @@ def format_arg_problems(strings, source_lang):
     return out
 
 
+# 风格指南(`<语言>-STYLE.md`)允许的、以点结尾的缩写:只在很短的格子(不超过 `ABBREVIATION_MAX_WORDS` 个词,状态、单位)
+# 末尾时不算句号;整句说明末尾的缩写照样算。
+TRAILING_PERIOD_ABBREVIATIONS = {
+    "de": {"Min.", "Std."},
+    "fr": {"Nouv."},
+    "ru": {"Вкл.", "Выкл.", "вкл.", "выкл."},
+}
+ABBREVIATION_MAX_WORDS = 3
+PERIODS = (".", "。", "．")
+
+
+def trailing_period_problems(strings, source_lang):
+    """界面文案结尾不加句号:键不以句号结尾时,译文也不许以句号结尾(省略号、`TRAILING_PERIOD_ABBREVIATIONS` 里的缩写除外)。
+    键本身以句号结尾的是两句拼在一起的前半句,不管。"""
+    out = []
+    for key, entry in strings.items():
+        if key.endswith(PERIODS):
+            continue
+        for lang, loc in sorted(((entry or {}).get("localizations") or {}).items()):
+            if lang == source_lang:
+                continue
+            plural = ((loc or {}).get("variations") or {}).get("plural")
+            if plural is None:
+                values = [("", unit_value(loc))]
+            else:
+                values = [(f" {form}", unit_value(plural.get(form))) for form in plural]
+            for form, value in values:
+                if not value or not value.endswith(PERIODS) or value.endswith(("...", "…")):
+                    continue
+                words = value.split()
+                if len(words) <= ABBREVIATION_MAX_WORDS and words[-1] in TRAILING_PERIOD_ABBREVIATIONS.get(lang, ()):
+                    continue
+                out.append(f"{key[:60]}:{lang}{form} 结尾带句号「…{value[-24:]}」")
+    return out
+
+
 def escape(s: str) -> str:
     return s.replace("\\", "\\\\").replace('"', '\\"').replace("\n", "\\n").replace("\t", "\\t")
 
@@ -348,7 +384,8 @@ def add_keys(catalog, path) -> int:
                        "localizations": {**{lang: localization(v) for lang, v in langs.items()},
                                          catalog["sourceLanguage"]: localization(key)}}
                  for key, langs in new.items()}
-        errors = plural_problems(added, catalog["sourceLanguage"]) + format_arg_problems(added, catalog["sourceLanguage"])
+        errors = (plural_problems(added, catalog["sourceLanguage"]) + format_arg_problems(added, catalog["sourceLanguage"])
+                  + trailing_period_problems(added, catalog["sourceLanguage"]))
     if errors:
         print(f"✗ --add 没有写入,{len(errors)} 处问题:", file=sys.stderr)
         for e in errors:
@@ -417,7 +454,7 @@ def renamed_strings(catalog, mapping):
             if lang in spec:
                 locs[lang] = localization(spec[lang])
         out[spec["new"]] = renamed[spec["new"]] = entry
-    errors = plural_problems(renamed, source) + format_arg_problems(renamed, source)
+    errors = plural_problems(renamed, source) + format_arg_problems(renamed, source) + trailing_period_problems(renamed, source)
     return (None, errors) if errors else (out, [])
 
 
@@ -568,6 +605,16 @@ def selftest() -> int:
     check("拒绝:英文写了 few / many", not is_plural_value(en4, "en") and plural_problems(
         {"%lld 首": {"localizations": {"en": localization(en4)}}}, "zh-Hans") != [])
     check("拒绝:键以 #few 结尾", plural_problems({"a#few": {"localizations": {}}}, "zh-Hans") != [])
+    periods = {
+        "已暂停": {"localizations": {"en": localization("Paused."), "ja": localization("一時停止中。"), "ru": localization("Выкл."),
+                                  "de": localization("Lädt..."), "fr": localization("Nouv."), "it": localization("In pausa")}},
+        "外框为示意。": {"localizations": {"en": localization("The frame is illustrative.")}},
+        "不会播放": {"localizations": {"ru": localization("Пауза: «Уменьшение движения» вкл."), "de": localization("ca. %@ Min.")}},
+        "%lld 首": {"localizations": {"en": localization({"one": "%lld song.", "other": "%lld songs"})}},
+    }
+    check("结尾句号:译文带句号的拒绝,缩写、省略号、键本身带句号的放行",
+          [p.split(":")[1].split(" ")[0] for p in trailing_period_problems(periods, "zh-Hans")] == ["en", "ja", "ru", "en"],
+          repr(trailing_period_problems(periods, "zh-Hans")))
     rejects = {
         "格式参数个数不一样": {"另存副本：%@": {"new": "另存了副本", "en": "Saved a copy", "zh-Hant": "另存了副本"}},
         "格式参数类型不一样": {"把逐字歌词改存为 %@？": {"new": "改存为第 %lld 种格式？", "en": "Save as format %lld?",
@@ -699,6 +746,13 @@ def main() -> int:
             print(f"    {p}", file=sys.stderr)
         if len(arg_problems) > 20:
             print(f"    …还有 {len(arg_problems) - 20} 处", file=sys.stderr)
+        return 1
+    period_problems = trailing_period_problems(strings, catalog["sourceLanguage"])
+    if period_problems:
+        print(f"✗ {len(period_problems)} 处译文结尾带句号(界面文案结尾不加句号,见各语言 *-STYLE.md;"
+              f"风格指南允许的缩写登记在 TRAILING_PERIOD_ABBREVIATIONS):", file=sys.stderr)
+        for p in period_problems[:20]:
+            print(f"    {p}", file=sys.stderr)
         return 1
     for lang, lproj in TARGETS.items():
         lines = [HEADER]

@@ -204,6 +204,8 @@ final class MenuBarScrollingLabel: NSView {
         /// 这一档是前奏/间奏三点时,那段间奏的起止(歌词时间轴毫秒)。点亮进度按它算。
         /// nil = 这一档不是三点,或者拿不到窗口(那时三颗点只呼吸、不推进点亮)。
         var gapWindow: GapWindow?
+        /// 播放暂停着、这句是歌词:不按时钟走时不装墙钟循环,停在对齐位置(见 06 章决策 108)。按时钟走的滚动跟时钟一起停,不看它。
+        var holdsStill = false
     }
 
     /// 一段间奏的起止。跟 Core 的 `LyricsGapWindow` 同形但**不复用**:那个住在歌词引擎里,
@@ -385,7 +387,8 @@ final class MenuBarScrollingLabel: NSView {
                  secondaryText: String? = nil,
                  secondaryKind: LyricSecondaryLine = .off,
                  inlineTranslationStart: Int? = nil,
-                 gapWindow: GapWindow? = nil) {
+                 gapWindow: GapWindow? = nil,
+                 holdsStill: Bool = false) {
         let next = Plan(text: text, windowWidth: windowWidth,
                         alignment: alignmentOverride
                             ?? Self.restingAlignment(setting: AppSettings.shared.menuBarLyricsAlignment),
@@ -396,7 +399,7 @@ final class MenuBarScrollingLabel: NSView {
                         clockPaced: clockPaced, lineIndex: lineIndex, icon: icon,
                         secondaryText: secondaryText, secondaryKind: secondaryKind,
                         inlineTranslationStart: inlineTranslationStart,
-                        gapWindow: gapWindow)
+                        gapWindow: gapWindow, holdsStill: holdsStill)
         guard next != plan else {
             isHidden = false
             return
@@ -681,6 +684,8 @@ final class MenuBarScrollingLabel: NSView {
         lastBitmapInputs = nil
         bitmapCache.removeAll()
         refreshColors()
+        liveIconBase.systemColorsDidChange()
+        liveIconFill.systemColorsDidChange()
     }
 
     // MARK: - 内部
@@ -1256,15 +1261,15 @@ final class MenuBarScrollingLabel: NSView {
         // 按时钟走优先:这句有逐字时间轴(跟唱)、或按播放时钟配速,且判定要滚,就按存底时钟装;
         // 下面的墙钟循环只给不按时钟配速的文字(预览、歌名兜底)和还没对过表的那一下兜底。
         if applyFollowScroll() { return }
-        guard let pacing = plan.pacing,
+        guard !plan.holdsStill, let pacing = plan.pacing,
               let frames = MenuBarMarquee.scrollKeyframes(
                 maxOffset: maxOffset,
                 pointsPerSecond: pacing.pointsPerSecond,
                 headHoldSeconds: pacing.headHoldSeconds,
                 tailHoldSeconds: pacing.tailHoldSeconds)
         else {
-            // 两种情况会走到这儿:这一句本来就装得下(pacing == nil,固定宽度下这是常态),
-            // 或者调用方判断"要滚"和这里算出来的不一致(比如宽度刚好卡在边界)。
+            // 三种情况会走到这儿:这一句本来就装得下(pacing == nil,固定宽度下这是常态),
+            // 调用方判断"要滚"和这里算出来的不一致(比如宽度刚好卡在边界),或暂停着(holdsStill)。
             // 都是静止的,别留一条跑不起来的动画。
             //
             // 静止时的横向落点 = 「对齐模式」。slack 是格子比文字宽出来的那段;

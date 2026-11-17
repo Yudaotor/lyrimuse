@@ -1855,10 +1855,13 @@ struct LyricsManagerView: View {
 
     /// 选中要换成另一首单独的歌时,在改 `selectedKeys` 之前先把它的详情载好,两样同一拍交给 SwiftUI,详情页按新歌只画一轮;
     /// 详情页 `onChange(of: key)` 见到 `editingKey` 已经是它就不再重载。必须在有没保存修改的拦截之后调(见 11 章决策 172)。
+    /// 点回的正是还在编辑的那首(搜索把它筛掉、选中空了又点回来)时同详情页 `onAppear`:有没保存的改动就原样留着缓冲,
+    /// 没有就重载、留在编辑里(见 11 章决策 180)。
     private func preloadDetail(for keys: Set<String>) {
         guard keys.count == 1, let key = keys.first, key != singleSelectedKey, store.summary(forKey: key) != nil else { return }
+        if editingKey == key, isEditorDirty { return }
         store.dismissEditError()
-        endEditing()
+        if editingKey != key { endEditing() }
         loadDetail(key: key)
     }
 

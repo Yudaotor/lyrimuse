@@ -2108,10 +2108,20 @@ func runMenuBarTests() {
         expectEqual(item.contains("NSColor.systemColorsDidChangeNotification")
                     && sourceHas(item, "for label in [self.scrollingLabel] + self.centerLyrics.labels { label.systemColorsDidChange() }"), true,
                     "菜单栏: 换了系统强调色,状态栏那一格和正中几扇都重排")
+        let liveIcon = src("MenuBarLiveIconView.swift")
+        expectEqual(sourceHas(sourceBody("func systemColorsDidChange()", in: src("MenuBarScrollingLabel.swift")),
+                              "liveIconBase.systemColorsDidChange()\nliveIconFill.systemColorsDidChange()")
+                    && sourceHas(sourceBody("func systemColorsDidChange()", in: liveIcon), "tintCache.removeAll()\napplyColor()"), true,
+                    "菜单栏: 换了系统强调色,歌词旁律动图标的两份清掉着色缓存重染")
         expectEqual(sourceHas(item, "followPath: followReadingPath(for: lineText), clockPaced: dwell != nil, icon: icon,"), true,
                     "菜单栏: 没有逐字时间轴的长句按播放时钟配速(状态栏那一格)")
         expectEqual(sourceHas(item, "let clockPaced = karaoke && dwell != nil"), true,
                     "菜单栏正中: 没有逐字时间轴的长句按播放时钟配速,快捷键回声照旧循环")
+        expectEqual(sourceHas(src("MenuBarScrollingLabel.swift"), "if applyFollowScroll() { return }\nguard !plan.holdsStill, let pacing = plan.pacing,")
+                    && sourceCount(item, "gapWindow: gapWindow(for: lineText), holdsStill: lyricHoldsStill)") == 2
+                    && sourceHas(item, "!titleFallbackActive && !PlaybackCoordinator.shared.isPlayingNow")
+                    && sourceHas(item, "gapWindow: gap, holdsStill: karaoke && !PlaybackCoordinator.shared.isPlayingNow)"), true,
+                    "菜单栏: 暂停时保留的那句不按时钟走就不装墙钟循环,状态栏那一格和正中都停在对齐位置")
         let label = src("MenuBarScrollingLabel.swift")
         expectEqual(sourceHas(sourceBody("private func clockScrollPath()", in: label),
                               "} else if plan.clockPaced, let start = pacedStart, start.belongs(toText: plan.text, line: plan.lineIndex) {"), true,

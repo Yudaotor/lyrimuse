@@ -5209,6 +5209,8 @@ func runSourceContractSettingsTests() {
         // 换一首歌只让主线程停一下(11 章决策 172):详情跟选中同一拍载好,详情页 onChange(key) 见到载好了不重载;同组写法走
         // 同曲索引,不整表建 songMemberships();预览按理想高度排;标题和 ⌘⌫ 只数选中里看得见几首;表格写回选中先比选中行。
         let preload = sourceBody("private func preloadDetail(for keys: Set<String>)", in: manager)
+        expectEqual(sourceHas(preload, "if editingKey == key, isEditorDirty { return }\n store.dismissEditError()\n if editingKey != key { endEditing() }\n loadDetail(key: key)"),
+                    true, "歌词管理: 点回还在编辑的那首(搜索筛掉、选中空了又点回)时没保存的改动留着,不按盘上重载")
         let loadDetailBody = sourceBody("private func loadDetail(key: String)", in: manager)
         let preview = read("LyricsManager/LyricsPreviewScrollView.swift") ?? ""
         let store = read("LyricsManager/EnrichCacheStore.swift") ?? ""

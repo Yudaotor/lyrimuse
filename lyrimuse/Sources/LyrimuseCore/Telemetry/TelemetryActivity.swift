@@ -23,6 +23,11 @@ public final class TelemetryActivity: @unchecked Sendable {
     private let writeQueue = DispatchQueue(label: "me.yudaotor.lyrimuse.telemetry-activity-write")
     /// 记下的几天的内存副本,读都走它;nil = 还没从磁盘读过。
     private var cache: [TelemetryActivityDay]?
+    /// 有一次延后的写盘排着(`store(_:deferred:)`)。
+    private var deferredWritePending = false
+    private var queuedWriteCount = 0
+    /// 延后写盘等多久:布局超限振荡时每帧都来一次,同一种只加次数的那些攒到这么久写一次。
+    static let deferredWriteDelay: TimeInterval = 5
     private var recording = false
     private var trusted: Set<String> = []
     /// 上一次记下的播放器,同一个播放器连着报不重复写盘。
@@ -44,6 +49,9 @@ public final class TelemetryActivity: @unchecked Sendable {
         self.defaults = defaults
         self.key = key
     }
+
+    /// 排给写盘队列的写入次数(不含还在等的延后写)。selftest 按它判「振荡时不每帧写盘」。
+    public var queuedWrites: Int { lock.withLock { queuedWriteCount } }
 
     public var isRecording: Bool {
         get { lock.withLock { recording } }
@@ -153,12 +161,15 @@ public final class TelemetryActivity: @unchecked Sendable {
     }
 
     /// 窗口布局轮数超限被接住一次(`DisplayCycleLimit`)。同一种(窗口、类名、pass 都一样)只加次数,
-    /// 当天已经记满 `maxLayoutLimitsPerDay` 种时新的一种不记。
+    /// 当天已经记满 `maxLayoutLimitsPerDay` 种时新的一种不记。振荡时每帧都超一次:只加次数的不当场写盘,
+    /// 攒到 `deferredWriteDelay` 后写一次,不然每帧在主线程上编码一遍、再让 UserDefaults 发一次全域变更通知(见 14 章决策 209)。
     public func noteLayoutLimit(window: String?, windowClass: String, pass: String, now: Date = Date()) {
         let day = Telemetry.day(now)
         lock.withLock {
             guard recording else { return }
-            update(day: day) { d in
+            let known = load().first { $0.day == day }?.layoutLimits
+                .contains { $0.window == window && $0.windowClass == windowClass && $0.pass == pass } ?? false
+            update(day: day, deferWrite: known) { d in
                 if let i = d.layoutLimits.firstIndex(where: { $0.window == window && $0.windowClass == windowClass && $0.pass == pass }) {
                     d.layoutLimits[i].count = min(d.layoutLimits[i].count + 1, 10_000)
                 } else if d.layoutLimits.count < Self.maxLayoutLimitsPerDay {
@@ -212,14 +223,15 @@ public final class TelemetryActivity: @unchecked Sendable {
         }
     }
 
-    /// 等排着的写盘都落地(测试读磁盘前用)。
+    /// 等排着的写盘都落地(测试读磁盘前用);排着的延后写当场写。
     public func waitForPendingWrites() {
+        lock.withLock { if deferredWritePending { store(load()) } }
         writeQueue.sync {}
     }
 
     // 以下都在锁里调。
 
-    private func update(day: String, _ change: (inout TelemetryActivityDay) -> Void) {
+    private func update(day: String, deferWrite: Bool = false, _ change: (inout TelemetryActivityDay) -> Void) {
         var days = load()
         if let i = days.firstIndex(where: { $0.day == day }) {
             change(&days[i])
@@ -228,7 +240,7 @@ public final class TelemetryActivity: @unchecked Sendable {
             change(&fresh)
             days.append(fresh)
         }
-        store(days)
+        store(days, deferred: deferWrite)
     }
 
     private func load() -> [TelemetryActivityDay] {
@@ -239,10 +251,22 @@ public final class TelemetryActivity: @unchecked Sendable {
         return days
     }
 
-    /// 改内存副本,写盘交给 `writeQueue`(见它的注释)。
-    private func store(_ days: [TelemetryActivityDay]) {
+    /// 改内存副本,写盘交给 `writeQueue`(见它的注释)。`deferred`:过 `deferredWriteDelay` 再写当时的副本,
+    /// 已经排着一次就不再排;这期间有一次当场写就把延后的那次一起带走。
+    private func store(_ days: [TelemetryActivityDay], deferred: Bool = false) {
         let kept = Array(days.sorted { $0.day < $1.day }.suffix(Self.maxStoredDays))
         cache = kept
+        if deferred {
+            guard !deferredWritePending else { return }
+            deferredWritePending = true
+            writeQueue.asyncAfter(deadline: .now() + Self.deferredWriteDelay) { [weak self] in
+                guard let self else { return }
+                self.lock.withLock { if self.deferredWritePending { self.store(self.load()) } }
+            }
+            return
+        }
+        deferredWritePending = false
+        queuedWriteCount += 1
         let data = kept.isEmpty ? nil : try? JSONEncoder().encode(kept)
         let defaults = self.defaults, key = self.key
         writeQueue.async {

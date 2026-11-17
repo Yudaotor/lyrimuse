@@ -34,6 +34,12 @@ public enum AppLocation {
         return .diskImage(mountPoint: volume)
     }
 
+    /// Translocation 的原件搬完后要不要扔进废纸篓:原件就在搬去的位置(用 `mv` / 脚本放进「应用程序」、带着隔离标记,
+    /// 系统照样挂到临时位置跑)时,那条路径上已经是刚装好的那份,不扔。比较前去掉符号链接和 `.`、末尾斜杠(见 15 章决策 117)。
+    public static func shouldTrashTranslocatedOriginal(_ original: URL, movedTo destination: URL) -> Bool {
+        original.standardizedFileURL.resolvingSymlinksInPath().path != destination.standardizedFileURL.resolvingSymlinksInPath().path
+    }
+
     /// 要不要弹:位置不对,而且用户没对这一版说过「不了」。
     public static func shouldPrompt(_ kind: Kind, declinedVersion: String?, currentVersion: String) -> Bool {
         kind != .normal && declinedVersion != currentVersion

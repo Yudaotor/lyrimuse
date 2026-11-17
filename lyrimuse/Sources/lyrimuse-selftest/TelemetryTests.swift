@@ -539,6 +539,13 @@ func runTelemetryTests() {
         expectEqual(limits.first, TelemetryLayoutLimit(window: "onboarding", windowClass: "SwiftUI.AppKitWindow", pass: "layout", count: 3),
                     "超限记账: 同一种只加次数")
         expectEqual(limits.count, TelemetryActivity.maxLayoutLimitsPerDay, "超限记账: 每天最多记几种")
+        let writesBefore = activity.queuedWrites
+        for _ in 0..<500 { activity.noteLayoutLimit(window: "onboarding", windowClass: "SwiftUI.AppKitWindow", pass: "layout", now: day1) }
+        expectEqual(activity.queuedWrites - writesBefore, 0, "超限记账: 振荡时同一种只加次数,不每次写盘(攒着延后写)")
+        expectEqual(activity.completedDays(before: d2).first?.layoutLimits.first?.count, 503, "超限记账: 延后写之前读到的次数也是新的")
+        activity.waitForPendingWrites()
+        let stored = UserDefaults.standard.data(forKey: key).flatMap { try? JSONDecoder().decode([TelemetryActivityDay].self, from: $0) }
+        expectEqual(stored?.first?.layoutLimits.first?.count, 503, "超限记账: 延后的那次写盘带上攒下的次数")
         let json = (try? JSONEncoder().encode(limits.first)).flatMap { String(data: $0, encoding: .utf8) } ?? ""
         expectEqual(json.contains("\"class\":\"SwiftUI.AppKitWindow\"") && json.contains("\"window\":\"onboarding\""), true, "超限记账: 键名 class / window")
         let old = #"{"day":"2026-11-01","players_played":[],"hangs":0}"#

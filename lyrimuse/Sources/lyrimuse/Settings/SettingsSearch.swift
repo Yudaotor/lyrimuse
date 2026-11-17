@@ -199,7 +199,7 @@ final class SettingsSearchRouter: ObservableObject {
         case "notch.secondaryRomanization": return s.notchSecondaryLine == .romanization
         case "notch.lyricList": return s.notchExpandedLyricList
         case "notch.lyricListOff": return !s.notchExpandedLyricList
-        case "notch.equalizer": return s.notchShowsEqualizer
+        case "notch.equalizer": return s.notchShowsEqualizer && RealAudioMeter.isSupported
         case "overlay.karaoke": return s.overlayLyricsKaraoke
         case "overlay.notRainbow": return !s.overlayRainbow
         case "overlay.stroke": return s.textStrokeEnabled

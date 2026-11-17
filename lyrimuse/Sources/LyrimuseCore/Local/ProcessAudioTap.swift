@@ -13,6 +13,8 @@ public final class ProcessAudioTap: @unchecked Sendable {
     private static let logger = Logger(subsystem: LyrimuseIdentity.logSubsystem, category: "audio-tap")
 
     public let sampleRate: Double
+    /// 聚合设备的主子设备:建 tap 时的默认系统输出(`defaultOutputDeviceUID()`)。
+    public let outputDeviceUID: String
     /// 被 tap 的进程对象;全局 tap 是空数组。
     public let processObjects: [AudioObjectID]
     private let ring: SampleRing
@@ -102,6 +104,7 @@ public final class ProcessAudioTap: @unchecked Sendable {
         }
         // 这两样放到最后才赋值:前面任一步失败时对象还没初始化完,不会走 deinit 把已经拆掉的东西再拆一遍。
         sampleRate = format.mSampleRate
+        outputDeviceUID = outputUID
         self.ring = ring
         Self.logger.info("audio-tap: started label=\(label, privacy: .public) processes=\(processObjects.count, privacy: .public) rate=\(format.mSampleRate, privacy: .public)")
     }
@@ -133,7 +136,8 @@ public final class ProcessAudioTap: @unchecked Sendable {
         AudioObjectPropertyAddress(mSelector: selector, mScope: scope, mElement: kAudioObjectPropertyElementMain)
     }
 
-    private static func defaultOutputDeviceUID() -> String? {
+    /// 此刻默认系统输出设备的 UID;读不到为 nil。
+    public static func defaultOutputDeviceUID() -> String? {
         var addr = address(kAudioHardwarePropertyDefaultSystemOutputDevice)
         var device = AudioObjectID(0)
         var size = UInt32(MemoryLayout<AudioObjectID>.size)
@@ -265,6 +269,14 @@ extension ProcessAudioOutput {
         let hostPIDs = Set(hosts.compactMap { PlayerProcess.pid(exactBundleID: $0) })
         return tapTargetIndices(hosts: hosts, table: table, hostPIDs: hostPIDs,
                                 ownerLookup: PlayerProcess.canResolveResponsiblePID).map { table[$0] }
+    }
+
+    /// 现有的 tap 要不要拆了重建:要读的进程换了,或者默认输出设备换了(聚合设备的主子设备是建 tap 时那个输出,那个设备断开后
+    /// 回调就停了)。没有 tap、读不到此刻的输出设备时不因设备重建。纯函数,selftest 覆盖。见 05 章决策 151。
+    public static func needsRetap(targets: [AudioObjectID], tapped: [AudioObjectID], tapOutputUID: String?, outputUID: String?) -> Bool {
+        if Set(targets) != Set(tapped) { return true }
+        guard let tapOutputUID, let outputUID else { return false }
+        return tapOutputUID != outputUID
     }
 
     /// 默认输出设备从收到声音到出声大约晚多少秒(设备延迟 + 安全偏移 + 缓冲,按设备采样率折算)。读不到时 0。

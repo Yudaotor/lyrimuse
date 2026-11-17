@@ -130,6 +130,14 @@ func runCrashHardeningTests() {
                                diskImageMountPoints: ["/Volumes/RW"]), .normal, "位置: 可写的映像(自己挂的读写映像)不算")
         expectEqual(L.classify(bundlePath: "/Applications/Lyrimuse.app", volumeIsReadOnly: false, volumePath: "/System/Volumes/Data",
                                diskImageMountPoints: []), .normal, "位置: 应用程序文件夹")
+        let installed = URL(fileURLWithPath: "/Applications/Lyrimuse.app")
+        expectEqual([L.shouldTrashTranslocatedOriginal(URL(fileURLWithPath: "/Users/u/Downloads/Lyrimuse.app"), movedTo: installed),
+                     L.shouldTrashTranslocatedOriginal(URL(fileURLWithPath: "/Applications/Lyrimuse.app"), movedTo: installed),
+                     L.shouldTrashTranslocatedOriginal(URL(fileURLWithPath: "/Applications/./Lyrimuse.app/"), movedTo: installed)],
+                    [true, false, false], "Translocation: 原件在「下载」里扔;原件就是搬去的位置(命令行放进应用程序)不扔")
+        expectEqual(sourceHas(sourceBody("private static func trashTranslocatedOriginal(", in: source("lyrimuse/Settings/AppLocationPrompt.swift")),
+                              "AppLocation.shouldTrashTranslocatedOriginal(url, movedTo: destination) else { return }"), true,
+                    "Translocation(契约): 扔原件前核对它不是刚装好的那份")
         expectEqual(L.shouldPrompt(.normal, declinedVersion: nil, currentVersion: "1.14.0"), false, "提示: 位置没问题不问")
         expectEqual(L.shouldPrompt(.translocated, declinedVersion: nil, currentVersion: "1.14.0"), true, "提示: 没说过不了就问")
         expectEqual(L.shouldPrompt(.diskImage(mountPoint: "/Volumes/L"), declinedVersion: "1.14.0", currentVersion: "1.14.0"), false,

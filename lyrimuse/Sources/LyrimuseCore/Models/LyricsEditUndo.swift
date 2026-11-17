@@ -12,6 +12,11 @@ public enum LyricsEditUndo {
     /// 引擎的错误码(enrichUndoErrExpired / enrichUndoErrChanged)。
     public static let engineErrorCodes = ["undo_expired", "undo_changed"]
 
+    /// 引擎按规矩拒了这次撤销(没写盘):不是写入失败,歌词管理不挂「写入本地记录文件失败」。纯函数,selftest 覆盖。
+    public static func isRefusal(code: String?) -> Bool {
+        code.map(engineErrorCodes.contains) ?? false
+    }
+
     /// 撤销失败时那一句的 L10n 键。引擎没给错误码(没响应、执行失败)时 nil,调用方用通道给的原因或 `fallbackKey`。
     /// `batch`:撤的是多选那一笔(几首一起放回),动过时不说「这首」。
     public static func reasonKey(code: String?, batch: Bool = false) -> String? {
