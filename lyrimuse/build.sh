@@ -144,7 +144,26 @@ take_over_stale_build_lock() {
   rmdir "$gate" 2>/dev/null || true
 }
 
+# 排队有上限(15 章决策 121):等了 LYRIMUSE_BUILD_WAIT_MAX 秒(默认 3600,0 = 不限)还没轮到就报错退出(75),打出前面那次
+# 跑了多久;每 60 秒打一行还在等。以前前面那次卡住时这里永远等下去,会话里只看到一行「排队等它结束」。
+BUILD_WAIT_MAX="${LYRIMUSE_BUILD_WAIT_MAX:-3600}"
+build_wait_note() {
+  local what="$1" holder="$2" since="$3" now age
+  now="$(date +%s)"
+  age=$((now - since))
+  if [ "$BUILD_WAIT_MAX" -gt 0 ] 2>/dev/null && [ "$age" -ge "$BUILD_WAIT_MAX" ]; then
+    echo "!! 等$what等了 $age 秒(上限 LYRIMUSE_BUILD_WAIT_MAX=$BUILD_WAIT_MAX 秒),不等了。前面那次:pid ${holder:-?}" \
+      "$(ps -o etime=,time=,command= -p "${holder:-0}" 2>/dev/null | cut -c1-120 || true)。它跑了很久、CPU 时间不涨多半是卡住了;" \
+      "等得起就调大上限重跑" >&2
+    exit 75
+  fi
+  if [ $((now - ${BUILD_WAIT_NOTED:-$since})) -ge 60 ]; then
+    echo "==> 还在等$what(已等 $age 秒,前面那次 pid ${holder:-?})"
+    BUILD_WAIT_NOTED="$now"
+  fi
+}
 build_lock_waited=0
+build_lock_since="$(date +%s)"
 while ! mkdir "$BUILD_LOCK" 2>/dev/null; do
   coalesce_if_installed
   holder="$(cat "$BUILD_LOCK/pid" 2>/dev/null || true)"
@@ -162,6 +181,7 @@ while ! mkdir "$BUILD_LOCK" 2>/dev/null; do
     echo "==> 另一个 build.sh 正在跑(pid ${holder:-?}),排队等它结束…"
     build_lock_waited=1
   fi
+  build_wait_note "另一个 build.sh 结束" "$holder" "$build_lock_since"
   sleep 2
 done
 echo $$ > "$BUILD_LOCK/pid"
@@ -410,7 +430,9 @@ cleanup_build() {
 # 不装。见 15 章决策 119。
 SNAPSHOT_OWNER=""
 claim_source_snapshot() {
-  local owner owner_cmd waited=0
+  local owner owner_cmd waited=0 since
+  since="$(date +%s)"
+  BUILD_WAIT_NOTED=""
   while :; do
     owner="$(cat "$SNAPSHOT_OWNER" 2>/dev/null || true)"
     owner_cmd=""
@@ -423,6 +445,7 @@ claim_source_snapshot() {
       echo "==> 源码快照还在被 build.sh(pid $owner)用着,等它结束…"
       waited=1
     fi
+    build_wait_note "源码快照空出来" "$owner" "$since"
     sleep 2
   done
   echo $$ > "$SNAPSHOT_OWNER"

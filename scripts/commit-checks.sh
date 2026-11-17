@@ -7,7 +7,9 @@
 # verify 把要提交的路径写进 $PRIVATE_COMMIT_CHANGED 指向的文件(每行一个);没有这份清单时两道都跑。
 # go test 读到的模块外文件变了时怎么重跑,见下面 go test 那段。
 # verify 还给:$PRIVATE_COMMIT_TREE(这棵树的 id)、$PRIVATE_COMMIT_REPO(仓库根目录)、$PRIVATE_COMMIT_COMPILED_MARK
-# (编译走完就把树的 id 写进去,校验工具据此知道这个目录接着增量编译靠得住)。手动跑时没有这些,go test 整套重跑。
+# (编译走完就把树的 id 写进去,校验工具据此知道这个目录接着增量编译靠得住)、$PRIVATE_COMMIT_COMPILING_MARK(编译中
+# 标记,见 swift build 那段)、$PRIVATE_COMMIT_LABEL(这次提交的状态目录,写进重活闸的说明里,排队的人看得到在等谁)。
+# 手动跑时没有这些,go test 整套重跑。
 # PRIVATE_COMMIT_LIGHT=1(轻校验:commit --retry 在 rebase 进来的提交跟这次的路径没有交集时给):只重新编译、做静态检查,
 # 不跑 selftest、原生测试和 go test,也不更新 go test 通过的记录,下一次完整校验照样把这段改动算进去。见 15 章决策 80。
 set -euo pipefail
@@ -18,6 +20,8 @@ if [ ! -d lyrimuse ] || [ ! -d lyrimuse-engine ]; then
 fi
 
 # 全机重活闸(heavy-gate.sh):整套检查跟 build.sh 的编译共用,同一台机器同时最多两份,有装机在等时让它先。
+# 闸在只读检查(功能清单、字符串、台账、死键、gofmt、注释卫生)之后、swift build 之前才排(15 章决策 121):那几步合计
+# 几秒,漏跑功能清单、注释里写日期这类错不用先排队、编译、跑完测试才报。
 . "$(dirname "$0")/heavy-gate.sh"
 static_pid=""
 # 退出时先等后台那份 vet / deadcode 跑完再放闸:不等的话它会在下一个会话已经同步进来的目录里接着跑。
@@ -26,7 +30,9 @@ on_exit() {
   heavy_gate_release
 }
 trap on_exit EXIT
-heavy_gate_acquire "提交校验 $(basename "$(pwd)")" check
+# bash 3.2 收到没设 trap 的 SIGTERM / SIGHUP 直接退出、不走 EXIT trap,令牌要等别人判陈旧才回收。
+trap 'exit 143' TERM
+trap 'exit 129' HUP
 
 # 每一步打出用了几秒(下一步开始、或全部通过时打上一步的),排查「校验为什么慢」看这几行。
 checks_t0="$(date +%s)"
@@ -73,12 +79,60 @@ step "面板 / 灵动岛按钮台账"
 step "Swift 可选数组 + 链"
 /usr/bin/python3 -B scripts/check-swift-plus-chains.py
 
+step "发布版写过的偏好键删掉后登记成死键"
+/usr/bin/python3 -B scripts/check-retired-defaults.py --repo "${PRIVATE_COMMIT_REPO:-.}"
+
+step "gofmt"
+unformatted="$(cd lyrimuse-engine && gofmt -l .)"
+if [ -n "$unformatted" ]; then
+  echo "!! 这些文件没过 gofmt:" >&2
+  echo "$unformatted" >&2
+  exit 1
+fi
+
+# 只扫这次提交改到的文件(没改的提交时都扫过);改的是检查脚本自己、或者没有改动清单(手动跑)时扫全仓,
+# 不带参数时脚本还会先自检。
+step "注释卫生"
+hygiene_files=()
+if [ -n "${PRIVATE_COMMIT_CHANGED:-}" ] && [ -f "$PRIVATE_COMMIT_CHANGED" ] \
+    && ! /usr/bin/grep -qx 'scripts/check-comment-hygiene.py' "$PRIVATE_COMMIT_CHANGED"; then
+  while IFS= read -r f; do
+    if [ -f "$f" ]; then hygiene_files+=("$f"); fi
+  done < "$PRIVATE_COMMIT_CHANGED"
+  if [ "${#hygiene_files[@]}" -gt 0 ]; then
+    echo "    只扫这次改到的 ${#hygiene_files[@]} 个文件"
+    /usr/bin/python3 -B scripts/check-comment-hygiene.py "${hygiene_files[@]}"
+  else
+    echo "    这次没有要扫的文件"
+  fi
+else
+  /usr/bin/python3 -B scripts/check-comment-hygiene.py
+fi
+
+# 改到全机重活闸(heavy-gate.sh / heavy-run.sh / 它的自测)时跑一遍它的自测:十来秒、不编译、只用临时闸目录,
+# 排在排闸之前,闸本身写坏了也不会卡在下面那一步(15 章决策 121)。没有改动清单(手动跑)时不跑。
+if [ -n "${PRIVATE_COMMIT_CHANGED:-}" ] && [ -f "$PRIVATE_COMMIT_CHANGED" ] \
+    && /usr/bin/grep -qxE 'scripts/(heavy-gate|heavy-run|test-heavy-gate)\.sh' "$PRIVATE_COMMIT_CHANGED"; then
+  step "全机重活闸自测"
+  bash scripts/test-heavy-gate.sh scripts
+fi
+
+step "等全机重活闸"
+heavy_gate_acquire "提交校验 $(basename "$(pwd)")${PRIVATE_COMMIT_LABEL:+ $PRIVATE_COMMIT_LABEL}" check
+
 step "swift build"
+# 编译开始前留「编译中」标记,编完才删:校验工具据此分辨「上一次在编译中途被打断」(要整体重编)和「上一次还没开始编
+# 就停了」(排队超时、排队时被停掉,目录里的编译状态还是完整的,接着增量编)。
+if [ -n "${PRIVATE_COMMIT_COMPILING_MARK:-}" ]; then
+  mkdir -p "$(dirname "$PRIVATE_COMMIT_COMPILING_MARK")"
+  : > "$PRIVATE_COMMIT_COMPILING_MARK"
+fi
 (cd lyrimuse && swift build)
 if [ -n "${PRIVATE_COMMIT_COMPILED_MARK:-}" ] && [ -n "${PRIVATE_COMMIT_TREE:-}" ]; then
   mkdir -p "$(dirname "$PRIVATE_COMMIT_COMPILED_MARK")"
   printf '%s\n' "$PRIVATE_COMMIT_TREE" > "$PRIVATE_COMMIT_COMPILED_MARK"
 fi
+if [ -n "${PRIVATE_COMMIT_COMPILING_MARK:-}" ]; then rm -f "$PRIVATE_COMMIT_COMPILING_MARK"; fi
 
 # 发版闸的第 1 道(弱导入白名单)只在打包时跑的话,新用一个高版本系统 API 要到发版才被拦;这里对刚编出的主程序先查一遍。
 step "主程序弱导入白名单"
@@ -95,8 +149,6 @@ else
   sh scripts/test-nowplaying-clients.sh
 fi
 
-step "发布版写过的偏好键删掉后登记成死键"
-/usr/bin/python3 -B scripts/check-retired-defaults.py --repo "${PRIVATE_COMMIT_REPO:-.}"
 
 # 引擎测试由同目录的 go-test-shards.py 分几个进程并行跑(见它的头注),不走 go 自己的测试缓存:那份缓存只核对模块
 # 目录(lyrimuse-engine/)里的文件,引擎测试还读 Swift 源码、README、shared/ 这些模块外的文件。要不要跑、跑哪几个在
@@ -183,14 +235,6 @@ else
   fi
 fi
 
-step "gofmt"
-unformatted="$(cd lyrimuse-engine && gofmt -l .)"
-if [ -n "$unformatted" ]; then
-  echo "!! 这些文件没过 gofmt:" >&2
-  echo "$unformatted" >&2
-  exit 1
-fi
-
 if [ "$engine_changed" = 1 ]; then
   step "go vet / deadcode(跟 go test 一起在后台跑,这里只等结果)"
   static_rc=0
@@ -200,25 +244,6 @@ if [ "$engine_changed" = 1 ]; then
   if [ "$static_rc" != 0 ]; then exit 1; fi
 else
   step "go vet / deadcode:这次没改 lyrimuse-engine/,跳过"
-fi
-
-# 只扫这次提交改到的文件(没改的提交时都扫过);改的是检查脚本自己、或者没有改动清单(手动跑)时扫全仓,
-# 不带参数时脚本还会先自检。
-step "注释卫生"
-hygiene_files=()
-if [ -n "${PRIVATE_COMMIT_CHANGED:-}" ] && [ -f "$PRIVATE_COMMIT_CHANGED" ] \
-    && ! /usr/bin/grep -qx 'scripts/check-comment-hygiene.py' "$PRIVATE_COMMIT_CHANGED"; then
-  while IFS= read -r f; do
-    if [ -f "$f" ]; then hygiene_files+=("$f"); fi
-  done < "$PRIVATE_COMMIT_CHANGED"
-  if [ "${#hygiene_files[@]}" -gt 0 ]; then
-    echo "    只扫这次改到的 ${#hygiene_files[@]} 个文件"
-    /usr/bin/python3 -B scripts/check-comment-hygiene.py "${hygiene_files[@]}"
-  else
-    echo "    这次没有要扫的文件"
-  fi
-else
-  /usr/bin/python3 -B scripts/check-comment-hygiene.py
 fi
 
 step "全部通过"
