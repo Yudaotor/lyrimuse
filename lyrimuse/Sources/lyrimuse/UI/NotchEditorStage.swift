@@ -774,13 +774,13 @@ struct NotchEditorStage: View {
             // 先钉当下的真实尺寸:视图内层是 GeometryReader,耳朵宽度按 proxy.size.width 算,
             // 给错尺寸这一层就先失真了。
             .frame(width: cardWidth, height: cardHeight)
-            // 外形裁剪、1x 柔边、展开态的发丝描边和浅投影跟真窗口挂同一个 `NotchRevealClip`(出场动画那两个比例取终态),
+            // 外形裁剪、1x 柔边、发丝描边和浅投影跟真窗口挂同一个 `NotchRevealClip`(出场动画那两个比例取终态),
             // 卡片自己那道裁剪照真窗口关掉。别在预览里另画一套描边投影,参数只有 `NotchCardEdge` 一份。见 05 章决策 150。
             .environment(\.notchHostClipsCard, true)
             .modifier(NotchRevealClip(widthFraction: NotchRevealState.settled.widthFraction,
                                       heightFraction: NotchRevealState.settled.heightFraction,
                                       outline: chrome.cardOutline,
-                                      expanded: chrome.isExpanded))
+                                      showsEdge: chrome.showsCardEdge))
             // 卡片按**深色**外观画,不跟设置窗口走:真窗口把 appearance 锁死 `.darkAqua`
             // (`NotchLyricsWindow`),而「磨砂玻璃」风格的背景是系统材质 `.thickMaterial` ——
             // 同一个值在浅色外观下解析成另一套材质(一块发白的玻璃)。不钉这一层,浅色系统

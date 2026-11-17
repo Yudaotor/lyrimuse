@@ -225,6 +225,16 @@ public struct NotchCardLayout: Equatable, Sendable {
         return isExpanded ? expandedCardWidth : steadyCardWidth
     }
 
+    /// 卡片底边伸出顶行(刘海 / 菜单栏)超过这么多,没展开时也画发丝描边和浅投影:挂着歌词行(≥ 26)、掉歌名 / 横幅、报喜都够,
+    /// 只多 4pt 的底边进度线那一截不够。见 05 章决策 155。
+    public static let cardEdgeMinOverhang: CGFloat = 12
+
+    /// 发丝描边和浅投影(App 侧 `NotchCardEdge`)画不画:展开时总画;没展开时看卡片底边伸出顶行多少,收起态和只剩顶行的状态栏不画。
+    /// 按目标高度判,不按动画中的高度:形态切换时透明度单独淡入淡出,展开 / 收回之间两头都画就一直不灭。
+    public var showsCardEdge: Bool {
+        isExpanded || cardHeight - contentTopInset > Self.cardEdgeMinOverhang
+    }
+
     /// 卡片当前高度:收起只留顶行,报喜是顶行 + 报喜面板,其余按展开与否走 `cardHeight(expanded:)`。
     public var cardHeight: CGFloat {
         if isCollapsed { return contentTopInset }

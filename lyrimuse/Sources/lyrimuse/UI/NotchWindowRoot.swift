@@ -4,7 +4,7 @@ import SwiftUI
 
 // 真窗口里装 NotchLyricsView 的那一层壳。
 //
-// 窗口常驻最大尺寸(展开宽 × 展开高,左右和下方再各留 `NotchCardEdge.windowMargin` 给展开态的投影,见控制器 recomputeGeometry),
+// 窗口常驻最大尺寸(展开宽 × 展开高,左右和下方再各留 `NotchCardEdge.windowMargin` 给卡片的投影,见控制器 recomputeGeometry),
 // 卡片在里面自己变大变小:这一层把卡片钉成当前该有的尺寸、贴顶居中摆好,并给尺寸变化配弹簧动画(形态切换不走 NSWindow.setFrame)。
 //
 // 卡片以外的透明区域**绝对不能**加任何 background/contentShape:窗口 level 是 .screenSaver(在系统菜单栏之上),透明区正压着
@@ -161,7 +161,7 @@ struct NotchWindowRoot: View {
                     .modifier(NotchRevealClip(widthFraction: state.widthFraction,
                                               heightFraction: state.heightFraction,
                                               outline: controller.cardOutline,
-                                              expanded: controller.isExpanded))
+                                              showsEdge: controller.showsCardEdge))
             } keyframes: { _ in
                 KeyframeTrack(\.widthFraction) {
                     MoveKeyframe(revealStartWidth)

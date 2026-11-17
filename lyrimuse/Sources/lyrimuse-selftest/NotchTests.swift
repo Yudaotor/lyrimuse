@@ -390,6 +390,24 @@ func runNotchTests() {
         expectEqual(with { $0.showsLyrics = false; $0.transientBannerActive = true; $0.hasMilestone = true }.showsBannerStrip, false,
                     "卡片布局: 报喜时不画横幅那截")
         expectEqual(with { $0.showsProgressLine = true }.showsBottomProgressLine, true, "卡片布局: 稳态画底边进度线")
+        // 描边投影:卡片伸出顶行超过阈值才画,展开总画;收起、关歌词行的 32pt、只多一截底边进度线的 36pt 不画。
+        expectEqual([base.showsCardEdge, expanded.showsCardEdge, with { $0.lyricRowHeight = 26 }.showsCardEdge,
+                     with { $0.showsLyrics = false; $0.hasTrackDrop = true }.showsCardEdge,
+                     with { $0.showsLyrics = false; $0.transientBannerActive = true }.showsCardEdge,
+                     with { $0.showsLyrics = false; $0.hasMilestone = true }.showsCardEdge,
+                     with { $0.showsLyrics = false; $0.isExpanded = true }.showsCardEdge,
+                     with { $0.hasTrack = false; $0.isExpanded = true }.showsCardEdge],
+                    [true, true, true, true, true, true, true, true],
+                    "卡片边缘: 挂歌词行(含最矮 26)、掉歌名、横幅、报喜、展开都画描边投影")
+        expectEqual([collapsed.showsCardEdge, noLyrics.showsCardEdge, idle.showsCardEdge,
+                     with { $0.showsLyrics = false; $0.showsProgressLine = true }.showsCardEdge,
+                     with { $0.showsLyrics = false; $0.showsProgressLine = true; $0.progressLineStyle = .ears }.showsCardEdge,
+                     with { $0.hasMilestone = true; $0.isCollapsed = true }.showsCardEdge],
+                    [false, false, false, false, false, false],
+                    "卡片边缘: 收起、关歌词行 32pt、没曲目、底边进度线 36pt、耳朵进度线不画描边投影")
+        expectEqual(with { $0.notchWidth = 0; $0.contentTopInset = 24 }.showsCardEdge
+                    && !with { $0.notchWidth = 0; $0.contentTopInset = 24; $0.showsLyrics = false; $0.showsProgressLine = true }.showsCardEdge,
+                    true, "卡片边缘: 没有刘海的屏按菜单栏高度量伸出多少")
         expectEqual(with { $0.showsProgressLine = true; $0.isExpanded = true }.showsBottomProgressLine, false, "卡片布局: 展开不画底边进度线")
         expectEqual(with { $0.showsProgressLine = true; $0.isCollapsed = true }.showsBottomProgressLine, false, "卡片布局: 收起不画底边进度线")
         // 「耳朵」那一档:卡片不为它变高;关着歌词行时掉歌名 / 横幅那一截伸出来就让开。
@@ -1551,17 +1569,17 @@ func runNotchTests() {
             expectEqual(reveal.contains("notchHeight: outline.notchHeight, corner: outline.corner(live))"), true,
                         "外轮廓契约: 出场裁剪的圆角也从 NotchCornerLive 取")
             expectEqual(rootSrc.contains(".modifier(NotchRevealClip(widthFraction: state.widthFraction,")
-                        && sourceHas(rootSrc, "outline: controller.cardOutline,\n expanded: controller.isExpanded))"), true,
+                        && sourceHas(rootSrc, "outline: controller.cardOutline,\n showsEdge: controller.showsCardEdge))"), true,
                         "外轮廓契约: 出场裁剪传的是同一个刘海高度和圆角")
-            // 展开态的发丝描边和浅投影(05 章决策 150)。
+            // 发丝描边和浅投影(05 章决策 150 和 05 章决策 155)。
             let ctrlSrc = src("NotchLyricsWindowController.swift")
-            expectEqual(sourceHas(reveal, "NotchCardEdgeShadow(shape: shape, lowRes: lowRes)\n .animation(fade) { $0.opacity(expanded ? 1 : 0) }")
-                        && sourceHas(reveal, "NotchCardKeyline(shape: shape)\n .animation(fade) { $0.opacity(expanded ? 1 : 0) }")
+            expectEqual(sourceHas(reveal, "NotchCardEdgeShadow(shape: shape, lowRes: lowRes)\n .animation(fade) { $0.opacity(showsEdge ? 1 : 0) }")
+                        && sourceHas(reveal, "NotchCardKeyline(shape: shape)\n .animation(fade) { $0.opacity(showsEdge ? 1 : 0) }")
                         && sourceHas(reveal, "shape.stroke(Color.white.opacity(NotchCardEdge.keylineOpacity), lineWidth: 1)\n .clipShape(shape)")
                         && sourceHas(reveal, "shape.stroke(Color.black.opacity(lowRes ? NotchCardEdge.lowResOutlineOpacity : NotchCardEdge.outlineOpacity),")
                         && sourceHas(reveal, "shape.fill(Color.black.opacity(layer.opacity))\n .blur(radius: layer.radius)\n .offset(y: layer.y)")
                         && sourceHas(reveal, ".mask(NotchOutsideShape(inner: shape, outset: NotchCardEdge.windowMargin * 2).fill(style: FillStyle(eoFill: true)))"),
-                        true, "展开边缘: 展开时才显出内侧白描边、外侧黑描边和两层投影,投影与外描边挖掉卡片本身,跟裁剪是同一个形状")
+                        true, "卡片边缘: 按 showsEdge 显出内侧白描边、外侧黑描边和两层投影,投影与外描边挖掉卡片本身,跟裁剪是同一个形状")
             expectEqual(sourceHas(ctrlSrc, "let margin = NotchCardEdge.windowMargin\n let size = NSSize(\n width: expandedCardWidth + 2 * margin,")
                         && sourceHas(ctrlSrc, "geo.notchHeight + NotchExpandedMetrics.idlePanelMaxHeight) + margin)")
                         && sourceHas(ctrlSrc, "x: (geo.centerX - size.width / 2).rounded(.down),\n y: (screen.frame.maxY - size.height).rounded(.down),")
@@ -1587,8 +1605,8 @@ func runNotchTests() {
                         && sourceHas(reveal, "Color.clear.frame(height: fade.lowerBound)\n LinearGradient(colors: [.clear, .black], startPoint: .top, endPoint: .bottom)")
                         && sourceHas(reveal, ".frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)\n .padding(.horizontal, -outset)"), true,
                         "展开边缘: 描边和投影在卡片顶部渐隐,不沿屏幕上沿、刘海和菜单栏走(纯黑风格不露出刘海轮廓)")
-            // 编辑台预览挂同一个 NotchRevealClip(终态比例、跟预览的展开态走),不另画一套;舞台缩放把两侧投影余量算进去。
-            expectEqual(sourceHas(stageSrc, ".environment(\\.notchHostClipsCard, true)\n .modifier(NotchRevealClip(widthFraction: NotchRevealState.settled.widthFraction,\n heightFraction: NotchRevealState.settled.heightFraction,\n outline: chrome.cardOutline,\n expanded: chrome.isExpanded))")
+            // 编辑台预览挂同一个 NotchRevealClip(终态比例、按预览卡片的形态显描边投影),不另画一套;舞台缩放把两侧投影余量算进去。
+            expectEqual(sourceHas(stageSrc, ".environment(\\.notchHostClipsCard, true)\n .modifier(NotchRevealClip(widthFraction: NotchRevealState.settled.widthFraction,\n heightFraction: NotchRevealState.settled.heightFraction,\n outline: chrome.cardOutline,\n showsEdge: chrome.showsCardEdge))")
                         && !stageSrc.contains("NotchCardEdgeShadow") && !stageSrc.contains("NotchCardKeyline")
                         && sourceHas(stageSrc, "let needed = widestCardWidth + 2 * NotchCardEdge.windowMargin\n guard widestCardWidth > 0, needed > stageWidth + 0.5 else { return 1 }\n return stageWidth / needed"), true,
                         "展开边缘: 编辑台预览跟真窗口挂同一道外形裁剪和描边投影,舞台给投影留出两侧余量")

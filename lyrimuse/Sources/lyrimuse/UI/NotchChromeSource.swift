@@ -253,6 +253,7 @@ extension NotchChromeSource {
     func earWidth(cardWidth: CGFloat) -> CGFloat { cardLayout.earWidth(cardWidth: cardWidth) }
     var cardWidth: CGFloat { cardLayout.cardWidth }
     var cardHeight: CGFloat { cardLayout.cardHeight }
+    var showsCardEdge: Bool { cardLayout.showsCardEdge }
     func cardHeight(expanded: Bool) -> CGFloat { cardLayout.cardHeight(expanded: expanded) }
 
     /// 卡片此刻是否顶在**宽度下限**上:稳态真实宽已经贴着宽度滑杆能拖到的下界(`NotchLyricsWindowController.usableWidthRange`,

@@ -43,29 +43,30 @@ struct NotchRevealShape: Shape {
 /// 1x 屏上卡片外面再垫一圈柔边(`NotchLowResEdgeShadow`):一个点只有一个像素,圆角的抗锯齿过渡带只有一像素宽,深色卡片压在
 /// 浅色菜单栏上看得出台阶。2x 屏上不画。见 05 章决策 114。
 ///
-/// 展开态再加发丝描边和浅投影(`NotchCardEdge`),只在 `expanded` 时显出来,收起态、稳态不画。描边和投影跟裁剪是同一个形状值,
+/// 卡片伸到菜单栏下面时再加发丝描边和浅投影(`NotchCardEdge`),只在 `showsEdge`(chrome 的 `showsCardEdge`)时显出来:展开态、
+/// 挂着歌词行的稳态、临时长出歌名条 / 横幅 / 报喜时画,收起态和菜单栏高度里的状态栏不画。描边和投影跟裁剪是同一个形状值,
 /// 出场、展开收回、退场缩放都一起走。投影落在卡片外,窗口四周要留出 `NotchCardEdge.windowMargin`(控制器 `recomputeGeometry`)。
 struct NotchRevealClip: ViewModifier {
     var widthFraction: CGFloat
     var heightFraction: CGFloat
     var outline: NotchCardOutline
-    var expanded: Bool
+    var showsEdge: Bool
     @ObservedObject private var live = NotchCornerLive.shared
     @Environment(\.displayScale) private var displayScale
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-    init(widthFraction: CGFloat, heightFraction: CGFloat, outline: NotchCardOutline, expanded: Bool) {
+    init(widthFraction: CGFloat, heightFraction: CGFloat, outline: NotchCardOutline, showsEdge: Bool) {
         self.widthFraction = widthFraction
         self.heightFraction = heightFraction
         self.outline = outline
-        self.expanded = expanded
+        self.showsEdge = showsEdge
     }
 
     func body(content: Content) -> some View {
         let shape = NotchRevealShape(widthFraction: widthFraction, heightFraction: heightFraction,
                                      notchHeight: outline.notchHeight, corner: outline.corner(live))
         let lowRes = displayScale < 1.5
-        let fade = NotchCardEdge.fade(showing: expanded, reduceMotion: reduceMotion)
+        let fade = NotchCardEdge.fade(showing: showsEdge, reduceMotion: reduceMotion)
         content.clipShape(shape)
             .background {
                 if lowRes {
@@ -73,16 +74,16 @@ struct NotchRevealClip: ViewModifier {
                 }
                 // 曲线只套在透明度上,形状照跟卡片那条尺寸弹簧。
                 NotchCardEdgeShadow(shape: shape, lowRes: lowRes)
-                    .animation(fade) { $0.opacity(expanded ? 1 : 0) }
+                    .animation(fade) { $0.opacity(showsEdge ? 1 : 0) }
             }
             .overlay {
                 NotchCardKeyline(shape: shape)
-                    .animation(fade) { $0.opacity(expanded ? 1 : 0) }
+                    .animation(fade) { $0.opacity(showsEdge ? 1 : 0) }
             }
     }
 }
 
-/// 展开态卡片边缘的参数。见 05 章决策 150。
+/// 卡片边缘(发丝描边和浅投影)的参数。见 05 章决策 150。
 enum NotchCardEdge {
     /// 窗口在卡片左右、下方多留的透明余量,装得下投影的外沿;贴屏幕顶的那一边不留。
     static let windowMargin: CGFloat = 24
@@ -97,7 +98,7 @@ enum NotchCardEdge {
     static let strokeFade: ClosedRange<CGFloat> = 3...28
     static let shadowFade: ClosedRange<CGFloat> = 14...42
 
-    /// 淡入跟展开同长,淡出短一些:收回时卡片先缩,投影不该拖在后面。
+    /// 淡入跟展开同长,淡出短一些:卡片缩回菜单栏时先缩,投影不该拖在后面。
     static func fade(showing: Bool, reduceMotion: Bool) -> Animation? {
         if reduceMotion { return nil }
         return showing ? .easeOut(duration: 0.2) : .easeIn(duration: 0.12)
