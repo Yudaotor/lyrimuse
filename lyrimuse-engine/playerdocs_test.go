@@ -146,7 +146,7 @@ func TestDocsListEveryPlayer(t *testing.T) {
 		}
 	}
 
-	// 日文、韩文、西语、法语、德语、意大利语、巴西葡语、越南语、俄语、乌克兰语、泰语、土耳其语 README 只核两个数量(播放器总数、不用「自动化」权限的个数);向导那一句的名单以英文、中文 README 为准。
+	// 日文、韩文、西语、法语、德语、意大利语、巴西葡语、越南语、俄语、乌克兰语、泰语、土耳其语、印地语 README 只核两个数量(播放器总数、不用「自动化」权限的个数);向导那一句的名单以英文、中文 README 为准。
 	// 日文的「残りの10のプレーヤー」是后一个数,总数的正则不收前面紧挨「の」的数字;越南语「10 trình phát còn lại」同理,总数的正则不收后面跟着 còn 的。Go 正则的 \b 只认 ASCII,西里尔字母后面不写 \b;俄语、乌克兰语只认词干,21、31 这类数后面跟单数(「21 плеер」)。
 	for _, r := range []struct {
 		path          string
@@ -164,6 +164,7 @@ func TestDocsListEveryPlayer(t *testing.T) {
 		{"../README.uk.md", regexp.MustCompile(`\b(\d+) програвач`), regexp.MustCompile(`(?i)інші (\d+)\b`)},
 		{"../README.th.md", regexp.MustCompile(`เครื่องเล่น (\d+) ตัว`), regexp.MustCompile(`เครื่องเล่นอีก (\d+) ตัว`)},
 		{"../README.tr.md", regexp.MustCompile(`(?i)\btoplam (\d+) çalar`), regexp.MustCompile(`(?i)\bkalan (\d+) çalar`)},
+		{"../README.hi.md", regexp.MustCompile(`कुल (\d+) प्लेयर`), regexp.MustCompile(`शेष (\d+) प्लेयर`)},
 	} {
 		text := readText(t, r.path)
 		for _, check := range []struct {

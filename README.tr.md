@@ -6,7 +6,7 @@
 
 **Mac için yeniden düşünülmüş masaüstü şarkı sözleri.**
 
-**Language / 语言 / 語言 / 言語 / 언어 / Idioma / Langue / Sprache / Lingua / Язык / Мова / ภาษา / Dil:** [English](README.md) | [简体中文](README.zh-CN.md) | [繁體中文](README.zh-Hant.md) | [日本語](README.ja.md) | [한국어](README.ko.md) | [Español](README.es.md) | [Français](README.fr.md) | [Deutsch](README.de.md) | [Italiano](README.it.md) | [Português (Brasil)](README.pt-BR.md) | [Tiếng Việt](README.vi.md) | [Русский](README.ru.md) | [Українська](README.uk.md) | [ไทย](README.th.md) | **Türkçe**
+**Language / 语言 / 語言 / 言語 / 언어 / Idioma / Langue / Sprache / Lingua / Язык / Мова / ภาษา / Dil / भाषा:** [English](README.md) | [简体中文](README.zh-CN.md) | [繁體中文](README.zh-Hant.md) | [日本語](README.ja.md) | [한국어](README.ko.md) | [Español](README.es.md) | [Français](README.fr.md) | [Deutsch](README.de.md) | [Italiano](README.it.md) | [Português (Brasil)](README.pt-BR.md) | [Tiếng Việt](README.vi.md) | [Русский](README.ru.md) | [Українська](README.uk.md) | [ไทย](README.th.md) | **Türkçe** | [हिन्दी](README.hi.md)
 
 ![Platform](https://img.shields.io/badge/platform-macOS%2014%2B-blue)
 ![Architecture](https://img.shields.io/badge/arch-Apple%20Silicon%20%2B%20Intel-blue)
@@ -93,7 +93,7 @@ brew install --cask lyrimuse
 - **Duraklattığınızda kendini gizler**, böylece masaüstünüzde boşuna durmaz. Enstrümantal parçalarda, şarkı sözü olmayan parçalarda ve tam ekran uygulamalarda da kenara çekilebilir; katman, kullandığınız pencerenin bulunduğu ekrana sizinle birlikte geçebilir.
 
 ### Günlük ayrıntılar
-- **İngilizce, Basitleştirilmiş Çince, Geleneksel Çince, Japonca, Korece, İspanyolca, Fransızca, Almanca, İtalyanca, Brezilya Portekizcesi, Vietnamca, Rusça, Ukraynaca, Tayca ve Türkçe**; dil değişikliği yeniden başlatma gerektirmeden hemen etkili olur. Kulağa tuhaf gelen bir çeviri mi gördünüz? Çekme isteklerinizi bekliyoruz; her dilin `lyrimuse/Localization/` içinde bir stil kılavuzu var.
+- **İngilizce, Basitleştirilmiş Çince, Geleneksel Çince, Japonca, Korece, İspanyolca, Fransızca, Almanca, İtalyanca, Brezilya Portekizcesi, Vietnamca, Rusça, Ukraynaca, Tayca, Türkçe ve Hintçe**; dil değişikliği yeniden başlatma gerektirmeden hemen etkili olur. Kulağa tuhaf gelen bir çeviri mi gördünüz? Çekme isteklerinizi bekliyoruz; her dilin `lyrimuse/Localization/` içinde bir stil kılavuzu var.
 - **macOS 26’da Liquid Glass.** Ayarlar, menü çubuğu paneli, Şarkı Sözü Penceresi, Şarkı Sözü Yöneticisi ve kurulum kılavuzu onunla yapılmıştır; çoğu, sistemi izlemek yerine açık ya da koyu kalabilir.
 - Tüm şarkı sözlerini gizlemekten parçayı beğenmeye kadar her işlem için **klavye kestirmeleri**. Başlangıçta hiçbiri atanmamıştır, tuşları siz seçersiniz. Her işlemin Kestirmeler, Raycast ya da Alfred’den çağırabileceğiniz bir `lyrimuse://` bağlantısı da vardır; Kestirmeler’den çağrılan bir bağlantı çalan parçayı geri döndürebilir ([URL şeması](docs/url-scheme.tr.md)).
 - **Ayarlar’da arama.** Kenar çubuğuna yazın; eşleşen satıra kayar ve onu vurgular, gerekirse daraltılmış bir grubu açar.

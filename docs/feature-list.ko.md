@@ -2,7 +2,7 @@
 
 # Lyrimuse 기능 목록
 
-[English](feature-list.md) · [简体中文](feature-list.zh-CN.md) · [繁體中文](feature-list.zh-Hant.md) · [日本語](feature-list.ja.md) · 한국어 · [Español](feature-list.es.md) · [Français](feature-list.fr.md) · [Deutsch](feature-list.de.md) · [Italiano](feature-list.it.md) · [Português (Brasil)](feature-list.pt-BR.md) · [Tiếng Việt](feature-list.vi.md) · [Русский](feature-list.ru.md) · [Українська](feature-list.uk.md) · [ไทย](feature-list.th.md) · [Türkçe](feature-list.tr.md)
+[English](feature-list.md) · [简体中文](feature-list.zh-CN.md) · [繁體中文](feature-list.zh-Hant.md) · [日本語](feature-list.ja.md) · 한국어 · [Español](feature-list.es.md) · [Français](feature-list.fr.md) · [Deutsch](feature-list.de.md) · [Italiano](feature-list.it.md) · [Português (Brasil)](feature-list.pt-BR.md) · [Tiếng Việt](feature-list.vi.md) · [Русский](feature-list.ru.md) · [Українська](feature-list.uk.md) · [ไทย](feature-list.th.md) · [Türkçe](feature-list.tr.md) · [हिन्दी](feature-list.hi.md)
 
 Lyrimuse는 macOS 14 이상을 지원하고 Apple Silicon과 Intel 칩 모두와 호환되는 오픈 소스(GPL-3.0) macOS 단어별 가사 앱입니다. Apple Music, Spotify, QQ Music, NetEase Cloud Music, Kugou, Kuwo, Soda Music, KKBOX, Amazon Music, LX Music, Kaset, Pear Desktop, reAMP, VOX, Pine Player, foobar2000, Swinsian, Plexamp, MyGo Music, Audirvana, 그리고 브라우저에서 재생하는 YouTube Music과 Spotify 웹 플레이어의 가사를 단어 단위로 동기화해 표시합니다. 데스크탑 플로팅 가사, 노치, 메뉴 막대, Touch Bar, 가사 윈도우에 표시할 수 있고, 번역과 로마자 표기(병음, 광둥어 Jyutping, 일본어 로마자, 한국어 로마자)를 제공하며, 재생 기록을 Last.fm과 ListenBrainz에 스크로블하고 Discord에 지금 듣고 있는 노래를 표시할 수도 있습니다. 인터페이스는 중국어 간체, 중국어 번체, 영어, 일본어, 한국어, 스페인어, 프랑스어, 독일어, 이탈리아어, 브라질 포르투갈어, 베트남어, 러시아어, 우크라이나어, 태국어, 튀르키예어를 지원합니다.
 

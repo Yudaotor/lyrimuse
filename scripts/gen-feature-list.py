@@ -29,12 +29,12 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-LANGS = ("en", "zh-Hans", "zh-Hant", "ja", "ko", "es", "fr", "de", "it", "pt-BR", "vi", "ru", "uk", "th", "tr")
-LANG_LABELS = {"en": "English", "zh-Hans": "简体中文", "zh-Hant": "繁體中文", "ja": "日本語", "ko": "한국어", "es": "Español", "fr": "Français", "de": "Deutsch", "it": "Italiano", "pt-BR": "Português (Brasil)", "vi": "Tiếng Việt", "ru": "Русский", "uk": "Українська", "th": "ไทย", "tr": "Türkçe"}
+LANGS = ("en", "zh-Hans", "zh-Hant", "ja", "ko", "es", "fr", "de", "it", "pt-BR", "vi", "ru", "uk", "th", "tr", "hi")
+LANG_LABELS = {"en": "English", "zh-Hans": "简体中文", "zh-Hant": "繁體中文", "ja": "日本語", "ko": "한국어", "es": "Español", "fr": "Français", "de": "Deutsch", "it": "Italiano", "pt-BR": "Português (Brasil)", "vi": "Tiếng Việt", "ru": "Русский", "uk": "Українська", "th": "ไทย", "tr": "Türkçe", "hi": "हिन्दी"}
 DOC_FILES = {"en": "feature-list.md", "zh-Hans": "feature-list.zh-CN.md", "zh-Hant": "feature-list.zh-Hant.md",
              "ja": "feature-list.ja.md", "ko": "feature-list.ko.md", "es": "feature-list.es.md",
              "fr": "feature-list.fr.md", "de": "feature-list.de.md", "it": "feature-list.it.md",
-             "pt-BR": "feature-list.pt-BR.md", "vi": "feature-list.vi.md", "ru": "feature-list.ru.md", "uk": "feature-list.uk.md", "th": "feature-list.th.md", "tr": "feature-list.tr.md"}
+             "pt-BR": "feature-list.pt-BR.md", "vi": "feature-list.vi.md", "ru": "feature-list.ru.md", "uk": "feature-list.uk.md", "th": "feature-list.th.md", "tr": "feature-list.tr.md", "hi": "feature-list.hi.md"}
 BRANDS = {"ListenBrainz", "Last.fm", "Discord"}
 
 CHROME = {
@@ -338,6 +338,26 @@ CHROME = {
         "sep": ": ",
         "generated": "scripts/gen-feature-list.py tarafından shared/feature-list.json ve shared/settings-catalog.json dosyalarından oluşturuldu; listeyi değiştirmek için bu dosyaları düzenleyin.",
     },
+    "hi": {
+        "title": "Lyrimuse की सुविधाएँ",
+        "intro": "यहाँ Lyrimuse की सभी सुविधाएँ हैं : हर सुविधा क्या करती है, सेटिंग में कहाँ मिलती है और इंस्टॉल करने के बाद चालू रहती है या नहीं। आख़िर में सेटिंग विंडो की सभी सेटिंग की सूची है। यह सूची सोर्स कोड के साथ रखी जाती है और हर बदलाव के साथ अपडेट होती है।",
+        "toc": "विषय-सूची",
+        "off_title": "जब तक आप चालू न करें, बंद रहती हैं",
+        "off_intro": "ये सुविधाएँ इंस्टॉल करने के बाद बंद रहती हैं। पहले इन्हें सेटिंग में चालू करें (कुछ के लिए खाता या अनुमति भी चाहिए) :",
+        "col_feature": "सुविधा",
+        "col_where": "कहाँ चालू करें",
+        "default_on": "डिफ़ॉल्ट रूप से चालू",
+        "default_off": "डिफ़ॉल्ट रूप से बंद",
+        "where": "सेटिंग",
+        "index_title": "सभी सेटिंग",
+        "index_intro": "सेटिंग विंडो की सभी सेटिंग, उनकी जगह के अनुसार; कुल : {n}। किसी सेटिंग पर सीधे जाने के लिए साइडबार के ऊपर वाले खोज फ़ील्ड में उसका नाम लिखें।",
+        "settings": "सेटिंग",
+        "labs": "प्रयोग",
+        "mini_only": " (सिर्फ़ मिनी)",
+        "full_only": " (सिर्फ़ पूरा आकार)",
+        "sep": " : ",
+        "generated": "scripts/gen-feature-list.py ने shared/feature-list.json और shared/settings-catalog.json से बनाया है; सूची बदलने के लिए उन फ़ाइलों को संपादित करें।",
+    },
 }
 
 CALL_RE = re.compile(r"\b(SettingsRow|SettingsSubRow|SettingsCardHeader|SettingsChipToggle|SettingsToggleTile|SettingsControlCell)\(")
@@ -467,7 +487,7 @@ def load_model(root: Path = ROOT) -> dict:
             joined = ""
             for line in lines:
                 if joined:
-                    if lang in ("en", "ko", "es", "fr", "de", "it", "pt-BR", "vi", "ru", "uk", "th", "tr"):
+                    if lang in ("en", "ko", "es", "fr", "de", "it", "pt-BR", "vi", "ru", "uk", "th", "tr", "hi"):
                         joined += " "
                     elif lang == "ja":
                         joined += "" if joined[-1] in "。：！？" else "。"

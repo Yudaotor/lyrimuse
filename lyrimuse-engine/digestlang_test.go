@@ -70,7 +70,7 @@ func TestDigestWordsPluralForm(t *testing.T) {
 }
 
 func TestParseDigestLang(t *testing.T) {
-	for in, want := range map[string]digestLang{"": digestLangHans, "zh-hans": digestLangHans, " ZH-HANT ": digestLangHant, "en": digestLangEn, "ja": digestLangJa, "ko": digestLangKo, "es": digestLangEs, "fr": digestLangFr, "de": digestLangDe, "it": digestLangIt, "pt-br": digestLangPtBR, " PT-BR ": digestLangPtBR, "vi": digestLangVi, " VI ": digestLangVi, "ru": digestLangRu, " RU ": digestLangRu, "uk": digestLangUk, " UK ": digestLangUk, "th": digestLangTh, " TH ": digestLangTh, "tr": digestLangTr, " TR ": digestLangTr, "pl": digestLangHans} {
+	for in, want := range map[string]digestLang{"": digestLangHans, "zh-hans": digestLangHans, " ZH-HANT ": digestLangHant, "en": digestLangEn, "ja": digestLangJa, "ko": digestLangKo, "es": digestLangEs, "fr": digestLangFr, "de": digestLangDe, "it": digestLangIt, "pt-br": digestLangPtBR, " PT-BR ": digestLangPtBR, "vi": digestLangVi, " VI ": digestLangVi, "ru": digestLangRu, " RU ": digestLangRu, "uk": digestLangUk, " UK ": digestLangUk, "th": digestLangTh, " TH ": digestLangTh, "tr": digestLangTr, " TR ": digestLangTr, "hi": digestLangHi, " HI ": digestLangHi, "pl": digestLangHans} {
 		if got := parseDigestLang(in); got != want {
 			t.Errorf("parseDigestLang(%q) = %q, want %q", in, got, want)
 		}
@@ -284,6 +284,24 @@ func TestDigestReportInOtherLanguages(t *testing.T) {
 			t.Errorf("土耳其语标题 %s 不带关键词: %q", k, v)
 		}
 	}
+
+	// 印地语:0 和 1 都是 one(zero_is_one),月名放 month_names,标题都带「सुनने की रिपोर्ट」。
+	useDigestFeatures(t, featureFlags{DigestTopN: 2, ReportLanguage: digestLangHi})
+	w = dw()
+	if got := calendarDigestTitle(w, calendarDigestMonthly, now); got != "📅 अक्तूबर 2026 की सुनने की रिपोर्ट" {
+		t.Errorf("印地语月报标题: %q", got)
+	}
+	if got := calendarDigestPeriod(calendarDigestMonthly, now, now, false).prevLabel; got != "सितंबर" {
+		t.Errorf("印地语上一期: %q", got)
+	}
+	if got := w.count("new_artists", 0) + "|" + w.count("new_artists", 1) + "|" + w.count("new_artists", 2) + "|" + w.count("plays", 2); got != "0 नया कलाकार|1 नया कलाकार|2 नए कलाकार|2 बार सुना गया" {
+		t.Errorf("印地语计数: %q", got)
+	}
+	for k, v := range w {
+		if strings.HasPrefix(k, "title_") && !strings.Contains(v, w["keyword"]) {
+			t.Errorf("印地语标题 %s 不带关键词: %q", k, v)
+		}
+	}
 }
 
 // 切成英文以后推的报告:标题是英文,推送记录里认「同一期」的键仍是简体标题,同一期再推一次认得出已经推过。
@@ -368,7 +386,7 @@ func TestDigestReportLangSample(t *testing.T) {
 	s := loadNotifyPreviewSample(t)
 	path := filepath.Join("..", "shared", "testdata", "notify", "report-lang.json")
 	var got []reportLangCase
-	for _, lang := range []digestLang{digestLangHans, digestLangHant, digestLangEn, digestLangJa, digestLangKo, digestLangEs, digestLangFr, digestLangDe, digestLangIt, digestLangPtBR, digestLangVi, digestLangRu, digestLangUk, digestLangTh, digestLangTr} {
+	for _, lang := range []digestLang{digestLangHans, digestLangHant, digestLangEn, digestLangJa, digestLangKo, digestLangEs, digestLangFr, digestLangDe, digestLangIt, digestLangPtBR, digestLangVi, digestLangRu, digestLangUk, digestLangTh, digestLangTr, digestLangHi} {
 		for _, kind := range []string{"daily", "weekly"} {
 			for _, style := range []string{digestStyleFull, digestStyleBrief, digestStyleOverview} {
 				got = append(got, reportLangCaseFor(t, s, lang, kind, style, 3))

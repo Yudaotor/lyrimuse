@@ -1,6 +1,6 @@
 # รูปแบบ URL ของ Lyrimuse
 
-*[English](url-scheme.md) · [简体中文](url-scheme.zh-CN.md) · [日本語](url-scheme.ja.md) · [한국어](url-scheme.ko.md) · [Español](url-scheme.es.md) · [Français](url-scheme.fr.md) · [Deutsch](url-scheme.de.md) · [Italiano](url-scheme.it.md) · [Português (Brasil)](url-scheme.pt-BR.md) · [Tiếng Việt](url-scheme.vi.md) · [Русский](url-scheme.ru.md) · [Українська](url-scheme.uk.md) · **ไทย** · [Türkçe](url-scheme.tr.md)*
+*[English](url-scheme.md) · [简体中文](url-scheme.zh-CN.md) · [日本語](url-scheme.ja.md) · [한국어](url-scheme.ko.md) · [Español](url-scheme.es.md) · [Français](url-scheme.fr.md) · [Deutsch](url-scheme.de.md) · [Italiano](url-scheme.it.md) · [Português (Brasil)](url-scheme.pt-BR.md) · [Tiếng Việt](url-scheme.vi.md) · [Русский](url-scheme.ru.md) · [Українська](url-scheme.uk.md) · **ไทย** · [Türkçe](url-scheme.tr.md) · [हिन्दी](url-scheme.hi.md)*
 
 ลิงก์ที่ขึ้นต้นด้วย `lyrimuse://` ใช้ควบคุม Lyrimuse จากคำสั่งลัด, Raycast, Alfred, Stream Deck, เทอร์มินัล (`open 'lyrimuse://…'`) และเครื่องมืออื่นๆ ในทำนองเดียวกันได้ ทั้งเปิดหน้าต่างและหน้าการตั้งค่า แสดงหรือซ่อนเนื้อเพลง ควบคุมการเล่น ขยับจังหวะเวลาของเนื้อเพลง หรือดึงข้อมูลเพลงที่กำลังเล่นอยู่
 

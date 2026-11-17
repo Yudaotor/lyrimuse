@@ -159,15 +159,18 @@ func richLinkLabel(d *digestStats) string {
 
 func richFooter(d *digestStats) string { return dw().f("footer", "source", digestSourceName(d)) }
 
+const devanagariVirama = rune(0x094D)
+
 // clipRunes:超过 n 个字符的截掉,末尾放省略号(平台对标题有长度上限,超了整条拒收)。
-// 不截在组合符号前面:泰文的元音、声调符号跟着前一个字,截下来的字要连同它的符号一起去掉。
+// 不截在组合符号前面:泰文、天城文的元音、声调符号跟着前一个字,截下来的字要连同它的符号一起去掉;
+// 也不停在天城文 virama 后面(那是半字,跟下一个辅音合成一个字形)。
 func clipRunes(s string, n int) string {
 	if utf8.RuneCountInString(s) <= n {
 		return s
 	}
 	r := []rune(s)
 	k := n - 1
-	for k > 0 && unicode.Is(unicode.Mn, r[k]) {
+	for k > 0 && (unicode.Is(unicode.M, r[k]) || r[k-1] == devanagariVirama) {
 		k--
 	}
 	return string(r[:k]) + "…"

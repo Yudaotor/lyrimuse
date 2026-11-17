@@ -14,7 +14,7 @@ import Foundation
 public enum UILanguage {
     /// 界面有的语言包,顺序就是语言下拉里的顺序。加一种语言:这里加一项,`localeIdentifier(for:)`、`nativeName(of:)` 加映射,
     /// generate-strings.py 的 TARGETS 登记 catalog 语言码 → 目录名(目录名一律小写,SwiftPM 打包会把它转小写)。
-    public static let packs = ["zh-hans", "zh-hant", "en", "ja", "ko", "es", "fr", "de", "it", "pt-br", "vi", "ru", "uk", "th", "tr"]
+    public static let packs = ["zh-hans", "zh-hant", "en", "ja", "ko", "es", "fr", "de", "it", "pt-br", "vi", "ru", "uk", "th", "tr", "hi"]
 
     public static let traditionalRegions = ["-tw", "-hk", "-mo"]
 
@@ -33,6 +33,8 @@ public enum UILanguage {
         }
         let language = t.split(separator: "-").first.map(String.init) ?? t
         if language == "pt" { return "pt-br" }
+        // 印地语(拉丁字母)hi-Latn 读的是罗马字印地语,界面只有天城文,不归印地语包,往下一个首选语言找
+        if language == "hi" && t.split(separator: "-").contains("latn") { return nil }
         return packs.contains(language) ? language : nil
     }
 
@@ -94,6 +96,7 @@ public enum UILanguage {
         case "uk": return "Українська"
         case "th": return "ไทย"
         case "tr": return "Türkçe"
+        case "hi": return "हिन्दी"
         default: return pack
         }
     }
@@ -101,7 +104,7 @@ public enum UILanguage {
     /// 别的 App 的本地化目录名(「zh_CN」「zh-Hant」「English」「Japanese」这类)归哪个语言包,界面没有这种语言时为 nil。
     /// 老式的英文全称目录名先换成语言码,其余同 `pack(forTag:)`。
     public static func pack(forLocalization name: String) -> String? {
-        let legacyNames = ["english": "en", "chinese": "zh", "japanese": "ja", "korean": "ko", "spanish": "es", "french": "fr", "german": "de", "italian": "it", "portuguese": "pt", "vietnamese": "vi", "russian": "ru", "ukrainian": "uk", "thai": "th", "turkish": "tr"]
+        let legacyNames = ["english": "en", "chinese": "zh", "japanese": "ja", "korean": "ko", "spanish": "es", "french": "fr", "german": "de", "italian": "it", "portuguese": "pt", "vietnamese": "vi", "russian": "ru", "ukrainian": "uk", "thai": "th", "turkish": "tr", "hindi": "hi"]
         return pack(forTag: legacyNames[name.lowercased()] ?? name)
     }
 
@@ -115,7 +118,7 @@ public enum UILanguage {
     }
 
     /// 这个数量在这种界面语言里属于哪一类:
-    ///   - 多数语言只有 1 是 one;法语、葡萄牙语 0 和 1 都是 one(CLDR one = 0、1);
+    ///   - 多数语言只有 1 是 one;法语、葡萄牙语、印地语 0 和 1 都是 one(CLDR one 的整数是 0、1);
     ///   - 俄语、乌克兰语(`eastSlavicPluralPacks`,CLDR 同一套整数规则):个位 1 且末两位不是 11 → one,个位 2～4 且末两位不是 12～14 → few,其余(0、5～20、11～14 …)→ many;
     ///   - 日、韩、越南语、泰语、土耳其语不分单复数(土耳其语数词后的名词不变复数),catalog 里那一条不写成 plural 变体、没有派生键,返回什么都取同一条。
     public static func pluralCategory(_ count: Int, pack: String) -> PluralCategory {
@@ -125,6 +128,6 @@ public enum UILanguage {
             if (2...4).contains(mod10) && !(12...14).contains(mod100) { return .few }
             return .many
         }
-        return count == 1 || (count == 0 && (pack == "fr" || pack == "pt-br")) ? .one : .other
+        return count == 1 || (count == 0 && (pack == "fr" || pack == "pt-br" || pack == "hi")) ? .one : .other
     }
 }

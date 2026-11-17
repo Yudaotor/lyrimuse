@@ -1,0 +1,4 @@
+/* 由 Localization/Localizable.xcstrings 生成(键表见 generate-strings.py 的 INFO_PLIST_KEYS)—— 不要手改这个文件。 */
+
+"NSAppleEventsUsageDescription" = "सिंक किए गए बोल दिखाने के लिए Lyrimuse को प्लेयर और ब्राउज़र में चल रहा गीत पढ़ना होता है";
+"NSAudioCaptureUsageDescription" = "Lyrimuse सिर्फ़ प्लेयर का वॉल्यूम पढ़ता है, ताकि नॉच का ऑडियो वेव संगीत के साथ थिरके। कोई ऑडियो सहेजा नहीं जाता";

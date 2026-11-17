@@ -3,7 +3,7 @@ import Foundation
 /// 听歌报告用哪种语言写:App 的界面语言(`L10n.current`:zh-hans / zh-hant / en),写进 features.json 的
 /// `report_language` 给引擎(digestlang.go)。认不得的按简体。
 public enum ReportLanguage: String, CaseIterable, Sendable {
-    case zhHans = "zh-hans", zhHant = "zh-hant", en, ja, ko, es, fr, de, it, ptBR = "pt-br", vi, ru, uk, th, tr
+    case zhHans = "zh-hans", zhHant = "zh-hant", en, ja, ko, es, fr, de, it, ptBR = "pt-br", vi, ru, uk, th, tr, hi
 
     /// features.json 里的键名,同引擎 featureFlagsFile.ReportLanguage 的 json 标签。
     public static let featuresKey = "report_language"
@@ -54,7 +54,7 @@ public struct ReportWords: Sendable {
 
     /// 带数量 `{n}` 的那一句;数量属于 one / few / many 且表里有 `key_one` / `key_few` / `key_many` 时用那一句,否则用 key 本身,
     /// 同引擎 digestWords.count。类别:表里 `plural_rule` 是 ru / uk 的按俄语、乌克兰语(`UILanguage.pluralCategory(_, pack:)`);
-    /// 别的语言 1 是 one,表里有 `zero_is_one` 的(法语、葡萄牙语)0 也是 one。
+    /// 别的语言 1 是 one,表里有 `zero_is_one` 的(法语、葡萄牙语、印地语)0 也是 one。
     public func count(_ key: String, _ n: Int, _ values: [(String, String)] = []) -> String {
         let rule = self["plural_rule"]
         let category: UILanguage.PluralCategory = UILanguage.eastSlavicPluralPacks.contains(rule)
@@ -830,6 +830,56 @@ public struct ReportWords: Sendable {
             "title_yesterday": "🎧 Dünün Dinleme Raporu ({date})",
             "value_hm": "{h} sa {m} dk",
             "value_m": "{m} dk",
+        ],
+        .hi: [
+            "brief_line": "{label} : {name} · {n}",
+            "col_albums": "ऐल्बम",
+            "col_artists": "कलाकार",
+            "col_tracks": "गीत",
+            "colon": " :",
+            "compare": " ({label} : {prev}, {change})",
+            "cover": "कवर",
+            "date": "{d}/{m}",
+            "duration_hm": " · लगभग {h} घं॰ {m} मि॰",
+            "duration_m": " · लगभग {m} मि॰",
+            "flat": "कोई परिवर्तन नहीं",
+            "footer": "Lyrimuse · डेटा : {source}",
+            "head_albums": "टॉप ऐल्बम",
+            "head_artists": "टॉप कलाकार",
+            "head_tracks": "टॉप गीत",
+            "item": "{i}. {name} ({n})",
+            "keyword": "सुनने की रिपोर्ट",
+            "label_album": "ऐल्बम",
+            "label_artist": "कलाकार",
+            "label_track": "गीत",
+            "link": "पूरा चार्ट {source} पर देखें",
+            "month_names": "जनवरी,फ़रवरी,मार्च,अप्रैल,मई,जून,जुलाई,अगस्त,सितंबर,अक्तूबर,नवंबर,दिसंबर",
+            "more": " और अन्य",
+            "most_played": "सबसे ज़्यादा सुने गए",
+            "name_sep": ", ",
+            "names_lead": " : ",
+            "new_artists": "{n} नए कलाकार",
+            "new_artists_one": "{n} नया कलाकार",
+            "pair": "{artist} - {name}",
+            "plays": "{n} बार सुना गया",
+            "plays_truncated": "{n} से ज़्यादा बार सुना गया (बहुत ज़्यादा होने से सिर्फ़ हाल के गिने गए)",
+            "preset_brief": "{summary}\nटॉप कलाकार : {top_artist}\nटॉप ऐल्बम : {top_album}\nटॉप गीत : {top_track}\nनए कलाकार ({new_artists}) : {new_artist_names}",
+            "preset_full": "{summary}\n\nटॉप कलाकार :\n{top_artists}\n\nटॉप ऐल्बम :\n{top_albums}\n\nटॉप गीत :\n{top_tracks}\n\nनए कलाकार ({new_artists}) : {new_artist_names}",
+            "preset_overview": "{summary}\nनए कलाकार : {new_artists}",
+            "prev_month": "{month_name}",
+            "prev_month_year": "{month_name} {year}",
+            "prev_week": "पिछला सप्ताह",
+            "prev_year": "{year}",
+            "title_day": "🎧 सुनने की रिपोर्ट ({date})",
+            "title_month": "📅 {month_name} {year} की सुनने की रिपोर्ट",
+            "title_sample": "🎧 सुनने की रिपोर्ट का नमूना",
+            "title_today": "🎧 आज की सुनने की रिपोर्ट ({date})",
+            "title_week": "🎵 पिछले सप्ताह की सुनने की रिपोर्ट ({from} – {to})",
+            "title_year": "🏆 {year} की सुनने की रिपोर्ट",
+            "title_yesterday": "🎧 कल की सुनने की रिपोर्ट ({date})",
+            "value_hm": "{h} घं॰ {m} मि॰",
+            "value_m": "{m} मि॰",
+            "zero_is_one": "1",
         ],
     ]
 }

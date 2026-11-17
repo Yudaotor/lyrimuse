@@ -361,6 +361,10 @@ func TestClipRunesKeepsCombiningMarksWithTheirLetter(t *testing.T) {
 		{"เนื้อเพลง", 4, "เ…"},
 		{"เนื้อเพลง", 3, "เ…"},
 		{"เนื้อเพลง", 6, "เนื้อ…"},
+		{"गीत के", 4, "गीत…"},
+		{"गीत", 2, "…"},
+		{"गाना", 2, "…"},
+		{"मेरी क्या", 8, "मेरी …"},
 	} {
 		if got := clipRunes(c.in, c.n); got != c.want {
 			t.Errorf("clipRunes(%q, %d) = %q, want %q", c.in, c.n, got, c.want)

@@ -31,11 +31,12 @@ const (
 	digestLangUk   digestLang = "uk"
 	digestLangTh   digestLang = "th"
 	digestLangTr   digestLang = "tr"
+	digestLangHi   digestLang = "hi"
 )
 
 func parseDigestLang(s string) digestLang {
 	switch l := digestLang(strings.ToLower(strings.TrimSpace(s))); l {
-	case digestLangHant, digestLangEn, digestLangJa, digestLangKo, digestLangEs, digestLangFr, digestLangDe, digestLangIt, digestLangPtBR, digestLangVi, digestLangRu, digestLangUk, digestLangTh, digestLangTr:
+	case digestLangHant, digestLangEn, digestLangJa, digestLangKo, digestLangEs, digestLangFr, digestLangDe, digestLangIt, digestLangPtBR, digestLangVi, digestLangRu, digestLangUk, digestLangTh, digestLangTr, digestLangHi:
 		return l
 	}
 	return digestLangHans
@@ -87,7 +88,7 @@ func (w digestWords) count(key string, n int, kv ...string) string {
 
 // pluralForm:数量 n 在这张表的语言里属于哪一类(CLDR 整数规则),同 Core UILanguage.pluralCategory。
 // 表里 plural_rule 是 ru 或 uk 的按俄语、乌克兰语(同一套整数规则):个位 1 且末两位不是 11 → one,个位 2～4 且末两位不是 12～14 → few,其余 many;
-// 别的语言 1 是 one,表里有 zero_is_one 的(法语、葡萄牙语)0 也是 one,其余 other。
+// 别的语言 1 是 one,表里有 zero_is_one 的(法语、葡萄牙语、印地语)0 也是 one,其余 other。
 func (w digestWords) pluralForm(n int) string {
 	if r := w["plural_rule"]; r == "ru" || r == "uk" {
 		if n < 0 {
@@ -880,5 +881,55 @@ var digestWordTable = map[digestLang]digestWords{
 		"title_yesterday": "🎧 Dünün Dinleme Raporu ({date})",
 		"value_hm":        "{h} sa {m} dk",
 		"value_m":         "{m} dk",
+	},
+	digestLangHi: {
+		"brief_line":      "{label} : {name} · {n}",
+		"col_albums":      "ऐल्बम",
+		"col_artists":     "कलाकार",
+		"col_tracks":      "गीत",
+		"colon":           " :",
+		"compare":         " ({label} : {prev}, {change})",
+		"cover":           "कवर",
+		"date":            "{d}/{m}",
+		"duration_hm":     " · लगभग {h} घं॰ {m} मि॰",
+		"duration_m":      " · लगभग {m} मि॰",
+		"flat":            "कोई परिवर्तन नहीं",
+		"footer":          "Lyrimuse · डेटा : {source}",
+		"head_albums":     "टॉप ऐल्बम",
+		"head_artists":    "टॉप कलाकार",
+		"head_tracks":     "टॉप गीत",
+		"item":            "{i}. {name} ({n})",
+		"keyword":         "सुनने की रिपोर्ट",
+		"label_album":     "ऐल्बम",
+		"label_artist":    "कलाकार",
+		"label_track":     "गीत",
+		"link":            "पूरा चार्ट {source} पर देखें",
+		"month_names":     "जनवरी,फ़रवरी,मार्च,अप्रैल,मई,जून,जुलाई,अगस्त,सितंबर,अक्तूबर,नवंबर,दिसंबर",
+		"more":            " और अन्य",
+		"most_played":     "सबसे ज़्यादा सुने गए",
+		"name_sep":        ", ",
+		"names_lead":      " : ",
+		"new_artists":     "{n} नए कलाकार",
+		"new_artists_one": "{n} नया कलाकार",
+		"pair":            "{artist} - {name}",
+		"plays":           "{n} बार सुना गया",
+		"plays_truncated": "{n} से ज़्यादा बार सुना गया (बहुत ज़्यादा होने से सिर्फ़ हाल के गिने गए)",
+		"preset_brief":    "{summary}\nटॉप कलाकार : {top_artist}\nटॉप ऐल्बम : {top_album}\nटॉप गीत : {top_track}\nनए कलाकार ({new_artists}) : {new_artist_names}",
+		"preset_full":     "{summary}\n\nटॉप कलाकार :\n{top_artists}\n\nटॉप ऐल्बम :\n{top_albums}\n\nटॉप गीत :\n{top_tracks}\n\nनए कलाकार ({new_artists}) : {new_artist_names}",
+		"preset_overview": "{summary}\nनए कलाकार : {new_artists}",
+		"prev_month":      "{month_name}",
+		"prev_month_year": "{month_name} {year}",
+		"prev_week":       "पिछला सप्ताह",
+		"prev_year":       "{year}",
+		"title_day":       "🎧 सुनने की रिपोर्ट ({date})",
+		"title_month":     "📅 {month_name} {year} की सुनने की रिपोर्ट",
+		"title_sample":    "🎧 सुनने की रिपोर्ट का नमूना",
+		"title_today":     "🎧 आज की सुनने की रिपोर्ट ({date})",
+		"title_week":      "🎵 पिछले सप्ताह की सुनने की रिपोर्ट ({from} – {to})",
+		"title_year":      "🏆 {year} की सुनने की रिपोर्ट",
+		"title_yesterday": "🎧 कल की सुनने की रिपोर्ट ({date})",
+		"value_hm":        "{h} घं॰ {m} मि॰",
+		"value_m":         "{m} मि॰",
+		"zero_is_one":     "1",
 	},
 }

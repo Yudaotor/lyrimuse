@@ -783,11 +783,15 @@ public enum SettingsSearchMatcher {
     /// 去首尾空白、小写、连续空白折成一个,再转成 NFC(下面按 Unicode 标量比较,先统一组合形式)。CJK 没有大小写,这一步对它是恒等。
     /// 土耳其语的 i 两对(İ / i、I / ı)按语言无关的规则小写会对不上:「İ」成了 i + U+0307、「I」成了 i;
     /// 这里把 i + U+0307 和 ı 都折成 i,打「ileri」「isik」都能搜到「İleri」「Işık」。
+    /// 印地语输入时常省掉 nukta(U+093C)、拿 anusvara(U+0902)代 chandrabindu(U+0901):去掉 nukta、把 chandrabindu 折成 anusvara,
+    /// 打「फॉन्ट」「दिखाएं」也能搜到「फ़ॉन्ट」「दिखाएँ」。
     public static func normalize(_ text: String) -> String {
         text.precomposedStringWithCanonicalMapping.trimmingCharacters(in: .whitespacesAndNewlines)
             .lowercased()
             .replacingOccurrences(of: "i\u{307}", with: "i", options: .literal)
             .replacingOccurrences(of: "\u{131}", with: "i", options: .literal)
+            .replacingOccurrences(of: "\u{93C}", with: "", options: .literal)
+            .replacingOccurrences(of: "\u{901}", with: "\u{902}", options: .literal)
             .split(whereSeparator: { $0.isWhitespace })
             .joined(separator: " ")
     }

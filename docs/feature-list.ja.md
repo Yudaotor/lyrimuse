@@ -2,7 +2,7 @@
 
 # Lyrimuse 機能一覧
 
-[English](feature-list.md) · [简体中文](feature-list.zh-CN.md) · [繁體中文](feature-list.zh-Hant.md) · 日本語 · [한국어](feature-list.ko.md) · [Español](feature-list.es.md) · [Français](feature-list.fr.md) · [Deutsch](feature-list.de.md) · [Italiano](feature-list.it.md) · [Português (Brasil)](feature-list.pt-BR.md) · [Tiếng Việt](feature-list.vi.md) · [Русский](feature-list.ru.md) · [Українська](feature-list.uk.md) · [ไทย](feature-list.th.md) · [Türkçe](feature-list.tr.md)
+[English](feature-list.md) · [简体中文](feature-list.zh-CN.md) · [繁體中文](feature-list.zh-Hant.md) · 日本語 · [한국어](feature-list.ko.md) · [Español](feature-list.es.md) · [Français](feature-list.fr.md) · [Deutsch](feature-list.de.md) · [Italiano](feature-list.it.md) · [Português (Brasil)](feature-list.pt-BR.md) · [Tiếng Việt](feature-list.vi.md) · [Русский](feature-list.ru.md) · [Українська](feature-list.uk.md) · [ไทย](feature-list.th.md) · [Türkçe](feature-list.tr.md) · [हिन्दी](feature-list.hi.md)
 
 Lyrimuseは、オープンソース（GPL-3.0）のmacOS用の単語ごとの歌詞Appです。macOS 14以降に対応し、Apple SiliconとIntelのどちらでも動作します。Apple Music、Spotify、QQ Music、NetEase Cloud Music、Kugou、Kuwo、Soda Music、KKBOX、Amazon Music、LX Music、Kaset、Pear Desktop、reAMP、VOX、Pine Player、foobar2000、Swinsian、Plexamp、MyGo Music、Audirvana、そしてブラウザで再生するYouTube MusicとSpotify Web版の歌詞を単語ごとに同期して、デスクトップのフローティング歌詞、ノッチ、メニューバー、Touch Bar、歌詞ウインドウに表示します。翻訳とローマ字表記（ピンイン、粤拼、日本語のローマ字、韓国語のローマ字）にも対応し、再生履歴をLast.fmとListenBrainzにScrobbleしたり、再生中の曲をDiscordに表示したりできます。インターフェイスは簡体字中国語、繁体字中国語、英語、日本語、韓国語、スペイン語、フランス語、ドイツ語、イタリア語、ポルトガル語（ブラジル）、ベトナム語、ロシア語、ウクライナ語、タイ語、トルコ語に対応しています。
 

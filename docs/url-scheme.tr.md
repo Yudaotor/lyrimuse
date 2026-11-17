@@ -1,6 +1,6 @@
 # Lyrimuse URL şeması
 
-*[English](url-scheme.md) · [简体中文](url-scheme.zh-CN.md) · [日本語](url-scheme.ja.md) · [한국어](url-scheme.ko.md) · [Español](url-scheme.es.md) · [Français](url-scheme.fr.md) · [Deutsch](url-scheme.de.md) · [Italiano](url-scheme.it.md) · [Português (Brasil)](url-scheme.pt-BR.md) · [Tiếng Việt](url-scheme.vi.md) · [Русский](url-scheme.ru.md) · [Українська](url-scheme.uk.md) · [ไทย](url-scheme.th.md) · **Türkçe***
+*[English](url-scheme.md) · [简体中文](url-scheme.zh-CN.md) · [日本語](url-scheme.ja.md) · [한국어](url-scheme.ko.md) · [Español](url-scheme.es.md) · [Français](url-scheme.fr.md) · [Deutsch](url-scheme.de.md) · [Italiano](url-scheme.it.md) · [Português (Brasil)](url-scheme.pt-BR.md) · [Tiếng Việt](url-scheme.vi.md) · [Русский](url-scheme.ru.md) · [Українська](url-scheme.uk.md) · [ไทย](url-scheme.th.md) · **Türkçe** · [हिन्दी](url-scheme.hi.md)*
 
 `lyrimuse://` ile başlayan bağlantılarla Lyrimuse’u Kestirmeler, Raycast, Alfred, Stream Deck, Terminal (`open 'lyrimuse://…'`) ve benzeri araçlardan denetleyebilirsiniz: pencereleri ve ayar sayfalarını açabilir, şarkı sözlerini gösterip gizleyebilir, oynatmayı denetleyebilir, zamanlamayı kaydırabilir veya şu an çalınanı alabilirsiniz.
 
