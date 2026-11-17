@@ -210,7 +210,7 @@ cd lyrimuse/lyrimuse
 
 `build.sh` 最后会把包里每个二进制的架构列出来，跟目标不符（缺一半、或多带了一份）都会报出来。发布资产不要手工打，用 `./package.sh`，它自己会把两种架构各构建一次、各出一套 zip + sha256 + dmg，架构不符直接拒绝打包。
 
-QQ 音乐/网易云音乐/酷狗音乐/汽水音乐/KKBOX/Amazon Music/洛雪音乐/Spotify/Kaset/自动识别这几个播放源支持额外需要 [ungive/media-control](https://github.com/ungive/media-control)。本机没装的话 `build.sh` 会自动用 Homebrew 装一次，这一步也不需要你自己动手。
+QQ 音乐/网易云音乐/酷狗音乐/酷我音乐/汽水音乐/KKBOX/Amazon Music/洛雪音乐/Spotify/Kaset/Pear Desktop/reAMP/VOX/Pine Player/foobar2000/Swinsian/Plexamp/MyGo Music/微信读书/自动识别这几个播放源支持额外需要 [ungive/media-control](https://github.com/ungive/media-control)。本机没装的话 `build.sh` 会自动用 Homebrew 装一次，这一步也不需要你自己动手。
 
 ### 不管选哪种方案
 
@@ -221,7 +221,7 @@ QQ 音乐/网易云音乐/酷狗音乐/汽水音乐/KKBOX/Amazon Music/洛雪音
 ## 常见问题
 
 ### Mac 上怎么让 Apple Music 的歌词悬浮在桌面、一直置顶？
-在设置里打开桌面悬浮歌词就行。它浮在所有窗口上面，切换桌面也跟着。可以拖到任意位置，也可以固定在屏幕顶部居中，或者 Dock 上方居中。歌词带逐字时间轴的话，唱到哪个字就亮到哪个字。截屏、录屏和共享屏幕时可以让它只有你自己看得见，暂停时也能自动收起。QQ 音乐、网易云音乐、酷狗音乐、汽水音乐、KKBOX、Amazon Music、洛雪音乐、Spotify、Kaset 和网页播放器也都一样。
+在设置里打开桌面悬浮歌词就行。它浮在所有窗口上面，切换桌面也跟着。可以拖到任意位置，也可以固定在屏幕顶部居中，或者 Dock 上方居中。歌词带逐字时间轴的话，唱到哪个字就亮到哪个字。截屏、录屏和共享屏幕时可以让它只有你自己看得见，暂停时也能自动收起。QQ 音乐、网易云音乐、酷狗音乐、酷我音乐、汽水音乐、KKBOX、Amazon Music、洛雪音乐、Spotify、Kaset、Pear Desktop、reAMP、VOX、Pine Player、foobar2000、Swinsian、Plexamp、MyGo Music、Audirvana、微信读书和网页播放器也都一样。
 
 ### Spotify 的歌词能显示在 Mac 菜单栏上吗？
 能。打开菜单栏文字模式，当前这句歌词就显示在菜单栏上，Spotify 和其它支持的播放器都可以。句子太长会滚动，不会被截断；还能多加一行，显示下一句、译文或读音。不用登录 Spotify 账号。Lyrimuse 会请求一次控制 Spotify 的「自动化」权限，有了它进度才精确，播放按钮也才能用；不给的话歌词照样显示，只是进度改从 macOS 的 MediaRemote 读，可能差一秒左右。

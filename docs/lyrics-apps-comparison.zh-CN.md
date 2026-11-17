@@ -15,7 +15,7 @@
 - **[Lyric Fever](https://github.com/aviwad/LyricFever)**（MIT）——Spotify + Apple Music
   的歌词体验，要求 macOS 15+，自称 "spiritual successor to LyricsX"。
 - **[Lyrimuse](https://github.com/Yudaotor/lyrimuse)**（GPL-3.0，即本项目）——逐字同步歌词，
-  除 Apple Music、Spotify、Amazon Music 外**原生支持国内播放器（QQ 音乐、网易云音乐、酷狗、汽水音乐、洛雪音乐）和 KKBOX**，还支持
+  除 Apple Music、Spotify、Amazon Music 外**原生支持国内播放器（QQ 音乐、网易云音乐、酷狗、酷我、汽水音乐、洛雪音乐）和 KKBOX**，还支持
   YouTube Music 客户端 Kaset，以及浏览器里播放的 YouTube Music / Spotify 网页版；国内外歌词源自动查证，**全部候选统一打分、择优胜出**
   （每首歌的决策过程可查）；翻译，日语、韩语、普通话、粤语都能标读音；Last.fm 与 ListenBrainz 打卡（scrobble）
   加本地听歌统计；歌词还能显示在触控栏上，Discord 状态也能显示正在听的歌。macOS 14+，Apple Silicon 与 Intel 都有构建。
@@ -43,7 +43,7 @@
 
 ## Lyrimuse 的定位
 
-Lyrimuse 面向另外两家没有完全覆盖的听歌方式：你用 **QQ 音乐、网易云音乐、酷狗、汽水音乐、洛雪音乐、KKBOX、Amazon Music 或 Kaset** 听歌
+Lyrimuse 面向另外两家没有完全覆盖的听歌方式：你用 **QQ 音乐、网易云音乐、酷狗、酷我、汽水音乐、洛雪音乐、KKBOX、Amazon Music 或 Kaset** 听歌
 （不只是 Apple Music / Spotify）；你在**浏览器里开 YouTube Music 或 Spotify 网页版**、
 也想要跟着页面进度精确同步的桌面歌词；你想在原文旁边看到**普通话拼音、粤拼或韩语罗马音**；或者你想让
 **Last.fm / ListenBrainz 打卡和听歌统计**与歌词在同一个应用里完成——全部免费、开源、

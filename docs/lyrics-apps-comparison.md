@@ -17,7 +17,7 @@ of the actively maintained open-source options:
 - **[Lyric Fever](https://github.com/aviwad/LyricFever)** (MIT) — Spotify + Apple Music lyrics,
   macOS 15+. Describes itself as a "spiritual successor to LyricsX".
 - **[Lyrimuse](https://github.com/Yudaotor/lyrimuse)** (GPL-3.0, this project) — word-synced lyrics
-  for Apple Music, Spotify, Amazon Music **and the Chinese players (QQ Music, NetEase Cloud Music, Kugou, Soda Music, LX Music) and KKBOX**, plus
+  for Apple Music, Spotify, Amazon Music **and the Chinese players (QQ Music, NetEase Cloud Music, Kugou, Kuwo, Soda Music, LX Music) and KKBOX**, plus
   YouTube Music in the Kaset app or in any browser, and Spotify Web; Chinese and international lyric sources checked automatically, with
   **every candidate scored on one scale so the best match wins** (and the decision shown per
   track); translation, readings for Japanese, Korean, Mandarin and Cantonese; Last.fm & ListenBrainz scrobbling
@@ -47,7 +47,7 @@ of the actively maintained open-source options:
 ## Where Lyrimuse fits
 
 Lyrimuse is built for listeners the other two don't fully cover: you play music through
-**QQ Music, NetEase Cloud Music, Kugou, Soda Music, LX Music, KKBOX, Amazon Music or Kaset** (not just Apple Music / Spotify); you play
+**QQ Music, NetEase Cloud Music, Kugou, Kuwo, Soda Music, LX Music, KKBOX, Amazon Music or Kaset** (not just Apple Music / Spotify); you play
 **YouTube Music or Spotify in a browser** and still want desktop lyrics synced to the page's own
 progress; you want **Mandarin pinyin, Cantonese Jyutping or Korean romanization** alongside the
 original lines; or you want **Last.fm / ListenBrainz scrobbling and listening stats** in the same app that

@@ -208,7 +208,7 @@ cd lyrimuse/lyrimuse
 
 `build.sh` 最後會把包裡每個二進位檔的架構列出來，跟目標不符（缺一半、或多帶了一份）都會回報。發佈資產不要手工打，用 `./package.sh`，它自己會把兩種架構各建置一次、各出一套 zip + sha256 + dmg，架構不符直接拒絕打包。
 
-QQ 音樂／網易雲音樂／酷狗音樂／汽水音樂／KKBOX／Amazon Music／洛雪音樂／Spotify／Kaset／自動偵測這幾個播放來源支援額外需要 [ungive/media-control](https://github.com/ungive/media-control)。本機沒裝的話 `build.sh` 會自動用 Homebrew 裝一次，這一步也不需要你自己動手。
+QQ 音樂／網易雲音樂／酷狗音樂／酷我音樂／汽水音樂／KKBOX／Amazon Music／洛雪音樂／Spotify／Kaset／Pear Desktop／reAMP／VOX／Pine Player／foobar2000／Swinsian／Plexamp／MyGo Music／微信讀書／自動偵測這幾個播放來源支援額外需要 [ungive/media-control](https://github.com/ungive/media-control)。本機沒裝的話 `build.sh` 會自動用 Homebrew 裝一次，這一步也不需要你自己動手。
 
 ### 不管選哪種方案
 
@@ -219,7 +219,7 @@ QQ 音樂／網易雲音樂／酷狗音樂／汽水音樂／KKBOX／Amazon Music
 ## 常見問題
 
 ### Mac 上怎麼讓 Apple Music 的歌詞浮動在桌面、一直置頂？
-在設定裡打開桌面浮動歌詞就行。它浮在所有視窗上面，切換桌面也會跟著。可以拖到任何位置，也可以固定在螢幕頂部置中，或者 Dock 上方置中。歌詞帶逐字時間軸的話，唱到哪個字就亮到哪個字。螢幕快照、螢幕錄製和螢幕分享時可以讓它只有你自己看得見，暫停時也能自動收起。QQ 音樂、網易雲音樂、酷狗音樂、汽水音樂、KKBOX、Amazon Music、洛雪音樂、Spotify、Kaset 和網頁播放器也都一樣。
+在設定裡打開桌面浮動歌詞就行。它浮在所有視窗上面，切換桌面也會跟著。可以拖到任何位置，也可以固定在螢幕頂部置中，或者 Dock 上方置中。歌詞帶逐字時間軸的話，唱到哪個字就亮到哪個字。螢幕快照、螢幕錄製和螢幕分享時可以讓它只有你自己看得見，暫停時也能自動收起。QQ 音樂、網易雲音樂、酷狗音樂、酷我音樂、汽水音樂、KKBOX、Amazon Music、洛雪音樂、Spotify、Kaset、Pear Desktop、reAMP、VOX、Pine Player、foobar2000、Swinsian、Plexamp、MyGo Music、Audirvana、微信讀書和網頁播放器也都一樣。
 
 ### Spotify 的歌詞能顯示在 Mac 選單列上嗎？
 可以。打開選單列文字模式，目前這句歌詞就顯示在選單列上，Spotify 和其他支援的播放器都可以。句子太長會捲動，不會被截斷；還能多加一行，顯示下一句、譯文或讀音。不用登入 Spotify 帳號。Lyrimuse 會請求一次控制 Spotify 的「自動化」權限，有了它進度才精確，播放按鈕也才能用；不給的話歌詞照樣顯示，只是進度改從 macOS 的 MediaRemote 讀，可能差一秒左右。

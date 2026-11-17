@@ -211,7 +211,7 @@ cd lyrimuse/lyrimuse
 
 `build.sh` ends by listing the architectures of every binary in the bundle and flags anything that doesn't match the target, whether a slice is missing or there's an extra one. Don't assemble release assets by hand: `./package.sh` builds each architecture once and produces a zip + sha256 + dmg for each, refusing to package if the architectures are wrong.
 
-QQ Music / NetEase Cloud Music / Kugou Music / Soda Music / KKBOX / Amazon Music / LX Music / Spotify / Kaset / auto-detect support additionally needs [ungive/media-control](https://github.com/ungive/media-control). `build.sh` installs it via Homebrew automatically if it's missing, so this isn't a step you need to do yourself either.
+QQ Music / NetEase Cloud Music / Kugou Music / Kuwo Music / Soda Music / KKBOX / Amazon Music / LX Music / Spotify / Kaset / Pear Desktop / reAMP / VOX / Pine Player / foobar2000 / Swinsian / Plexamp / MyGo Music / WeRead / auto-detect support additionally needs [ungive/media-control](https://github.com/ungive/media-control). `build.sh` installs it via Homebrew automatically if it's missing, so this isn't a step you need to do yourself either.
 
 ### After any option
 
@@ -222,7 +222,7 @@ That's all you need for lyrics. The optional extras can be set up later from Set
 ## FAQ
 
 ### How do I get floating Apple Music lyrics on my Mac desktop, always on top?
-Turn on the desktop overlay in Settings. It stays above every window, on every Space. Drag it wherever you like, or pin it to the top center or just above the Dock. If the lyrics have word timing, each word fills in as it's sung. You can hide it from screenshots, recordings and screen shares, and have it disappear while the music is paused. It works the same way with QQ Music, NetEase Cloud Music, Kugou Music, Soda Music, KKBOX, Amazon Music, LX Music, Spotify, Kaset and web players.
+Turn on the desktop overlay in Settings. It stays above every window, on every Space. Drag it wherever you like, or pin it to the top center or just above the Dock. If the lyrics have word timing, each word fills in as it's sung. You can hide it from screenshots, recordings and screen shares, and have it disappear while the music is paused. It works the same way with QQ Music, NetEase Cloud Music, Kugou Music, Kuwo Music, Soda Music, KKBOX, Amazon Music, LX Music, Spotify, Kaset, Pear Desktop, reAMP, VOX, Pine Player, foobar2000, Swinsian, Plexamp, MyGo Music, Audirvana, WeRead and web players.
 
 ### Can I show Spotify lyrics in the Mac menu bar?
 Yes. Turn on menu bar text mode and the current line appears in the menu bar, for Spotify or any other supported player. Long lines scroll instead of being cut off, and a second row can show the next line, the translation or the romanization. You don't need to connect a Spotify account. Lyrimuse asks once for Automation access to Spotify, which gives it the exact playback position and makes the playback buttons work. If you say no, the lyrics still show, but the timing comes from macOS's MediaRemote and can be about a second off.
