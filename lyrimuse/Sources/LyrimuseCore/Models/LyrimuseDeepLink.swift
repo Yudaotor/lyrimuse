@@ -81,6 +81,10 @@ public enum LyrimuseDeepLink: Equatable, Sendable {
         case state
         /// 把此刻会发的那条遥测心跳写成 JSON(`telemetry-preview.json`),不发出去、不动记账。
         case telemetryPreview
+        /// 这首歌在「第 N 次听」里的写法族写成 JSON(`playcount-family.json`):族键、本尊和并进来的各写法
+        /// (`debug/playcount-family?artist=&title=[&counts=1]`)。`counts=1` 时每种写法问一次 Last.fm `track.getinfo`,
+        /// 按「第 N 次听」同一条身份去重规则求合计;只读,不写次数表、不算收听、不弹里程碑。
+        case playCountFamily(artist: String, title: String, counts: Bool)
         /// 走一遍启动时「移到应用程序文件夹」那一问(`debug/app-move?source=<.app 路径>&dest=<目录>&answer=move|decline`):
         /// 判 `source`(缺省是 App 自己)在不在磁盘映像 / 临时位置、这一版说没说过「不了」,该问就问(带 `answer` 不弹窗、
         /// 直接按它走),移动搬进 `dest`(缺省是 debug 输出目录下的 `app-move-target`,不收 `/Applications`)。不重开、不退出,
@@ -399,6 +403,9 @@ public enum LyrimuseDeepLink: Equatable, Sendable {
             self = .debug(.state)
         case ("debug", "/telemetry-preview"):
             self = .debug(.telemetryPreview)
+        case ("debug", "/playcount-family"):
+            guard let artist = value("artist"), !artist.isEmpty, let title = value("title"), !title.isEmpty else { return nil }
+            self = .debug(.playCountFamily(artist: artist, title: title, counts: value("counts").flatMap(Self.parseBool) ?? false))
         case ("debug", "/app-move"):
             let answer: Bool?
             switch value("answer")?.lowercased() {
@@ -816,6 +823,10 @@ public enum LyrimuseDeepLink: Equatable, Sendable {
                 components.queryItems = [URLQueryItem(name: "window", value: window)]
             case .state: components.path = "/state"
             case .telemetryPreview: components.path = "/telemetry-preview"
+            case let .playCountFamily(artist, title, counts):
+                components.path = "/playcount-family"
+                components.queryItems = [URLQueryItem(name: "artist", value: artist), URLQueryItem(name: "title", value: title)]
+                    + (counts ? [URLQueryItem(name: "counts", value: "1")] : [])
             case let .appMove(source, destination, answer):
                 components.path = "/app-move"
                 var items: [URLQueryItem] = []

@@ -1311,6 +1311,7 @@ final class LastfmStatsService: ObservableObject {
                 nowPlayingCountKey = ""
                 return
             }
+            // 求和规则跟 probePlayCountFamily 一致,两处要一起改。
             var identities = Set<String>()
             if let id = results[0]?.identity { identities.insert(id) }
             // 注:下面求和完之后会把这个新鲜总数写回 trackPlayCounts(见 adoptFreshTotal)
@@ -1472,6 +1473,79 @@ final class LastfmStatsService: ObservableObject {
     /// `resolvePlayCounts` 求合并总数用的是**同一个**候选集,明细列的才是「合并了哪些」的权威答案。
     func playCountFamily(artist: String, title: String) -> [(artist: String, title: String)] {
         [(artist, title)] + playCountSiblings(artist: artist, title: title)
+    }
+
+    /// 调试深链 `debug/playcount-family` 的结果:这首歌在「第 N 次听」里的写法族,带次数时每种写法的 userplaycount。
+    struct PlayCountFamilyProbe: Encodable {
+        struct Form: Encodable {
+            let artist: String
+            let title: String
+            /// 这一写法的 userplaycount;没问、或没答上来是 nil。
+            let count: Int?
+            /// Last.fm 纠正后的规范身份(歌手|歌名 小写键);没问、或请求失败是 nil。
+            let identity: String?
+            /// 合计里算没算它。
+            let counted: Bool
+        }
+        let artist: String
+        let title: String
+        /// `PlayCountFold.familyKey`:查族用的键(合唱归首位)。
+        let familyKey: String
+        /// `PlayCountFold.key`:写法索引按它分桶。
+        let foldKey: String
+        /// 写法索引建成没有;没建成时族是猜枚举出来的(`PlayCountVariants.siblings`)。
+        let indexReady: Bool
+        let countsRequested: Bool
+        let connected: Bool
+        /// 本尊在前,后面是 `playCountSiblings` 那批。
+        let forms: [Form]
+        /// 按 `refreshNowPlayingCount` 的规则求的合计;本尊没答上来是 nil。
+        let total: Int?
+    }
+
+    /// 只读:不写次数表、不动作废状态和缓存。`withCounts` 时每种写法并发问一次 track.getinfo。
+    func probePlayCountFamily(artist: String, title: String, withCounts: Bool) async -> PlayCountFamilyProbe {
+        let family = playCountFamily(artist: artist, title: title)
+        var results = [(count: Int?, identity: String?)](repeating: (nil, nil), count: family.count)
+        let cred = withCounts ? credentials : nil
+        if let cred {
+            await withTaskGroup(of: (Int, (count: Int?, identity: String?)).self) { group in
+                for (i, form) in family.enumerated() {
+                    group.addTask { [weak self] in
+                        (i, await self?.userPlayCount(artist: form.artist, title: form.title, cred: cred)
+                            ?? (count: nil, identity: nil))
+                    }
+                }
+                for await (i, r) in group { results[i] = r }
+            }
+        }
+        // 合计规则跟 refreshNowPlayingCount 那段一致,两处要一起改:本尊没答上来就没有合计;
+        // 孪生要带次数和身份,且身份没跟前面算过的重复才加。
+        var counted = [Bool](repeating: false, count: family.count)
+        var total: Int?
+        if let own = results[0].count {
+            var sum = own
+            counted[0] = true
+            var identities = Set<String>()
+            if let id = results[0].identity { identities.insert(id) }
+            for i in family.indices.dropFirst() {
+                guard let c = results[i].count, let id = results[i].identity,
+                      identities.insert(id).inserted else { continue }
+                sum += c
+                counted[i] = true
+            }
+            total = sum
+        }
+        let forms = family.indices.map {
+            PlayCountFamilyProbe.Form(artist: family[$0].artist, title: family[$0].title, count: results[$0].count,
+                                      identity: results[$0].identity, counted: counted[$0])
+        }
+        return PlayCountFamilyProbe(
+            artist: artist, title: title,
+            familyKey: PlayCountFold.familyKey(artist: artist, title: title),
+            foldKey: PlayCountFold.key(artist: artist, title: title),
+            indexReady: titleFormsSyncedThrough > 0, countsRequested: withCounts, connected: credentials != nil,
+            forms: forms, total: total)
     }
 
     /// track.getinfo 的 userplaycount + 响应里的规范身份(纠正后的 歌手|歌名 小写键)。

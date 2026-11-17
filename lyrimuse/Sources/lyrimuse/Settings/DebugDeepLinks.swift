@@ -51,6 +51,7 @@ enum DebugDeepLinks {
         case let .dragRegion(window): writeDragRegion(window)
         case .state: writeState()
         case .telemetryPreview: writeTelemetryPreview()
+        case let .playCountFamily(artist, title, counts): writePlayCountFamily(artist: artist, title: title, counts: counts)
         case let .appMove(source, destination, answer): appMove(source: source, destination: destination, answer: answer)
         case .diagnostics: writeDiagnostics()
         case .checkpoint: checkpoint()
@@ -531,6 +532,23 @@ enum DebugDeepLinks {
                 logger.notice("debug telemetry preview written: \(url.path, privacy: .public)")
             } catch {
                 logger.error("debug telemetry preview failed: \(error.localizedDescription, privacy: .public)")
+            }
+        }
+    }
+
+    /// 写 `playcount-family.json`;带次数时等 Last.fm 答完才写,写完记一行日志。
+    private static func writePlayCountFamily(artist: String, title: String, counts: Bool) {
+        let url = outputDir.appendingPathComponent("playcount-family.json")
+        Task { @MainActor in
+            let probe = await LastfmStatsService.shared.probePlayCountFamily(artist: artist, title: title, withCounts: counts)
+            do {
+                try FileManager.default.createDirectory(at: outputDir, withIntermediateDirectories: true)
+                let encoder = JSONEncoder()
+                encoder.outputFormatting = [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
+                try encoder.encode(probe).write(to: url, options: .atomic)
+                logger.notice("debug playcount family written: \(url.path, privacy: .public) forms=\(probe.forms.count, privacy: .public)")
+            } catch {
+                logger.error("debug playcount family failed: \(error.localizedDescription, privacy: .public)")
             }
         }
     }

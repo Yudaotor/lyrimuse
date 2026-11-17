@@ -10,8 +10,9 @@ import (
 // 歌词抬头行(「曲名 - 歌手」/「歌手 - 曲名」)的判据,逐条镜像 Swift 侧
 // LyricsSyncEngine.looksLikeHeaderLine 及其辅助函数(headerSplitCandidates / headerTitleForms /
 // headerMatchVariants / scriptRuns / longEnoughForHeaderMatch)。两边各维护一份,改一边必须同步改另一边。
-// 繁简孪生:Swift 用 HanScript.sibling 给歌名、歌手各生成另一种写法;这里两侧都过 toSimplified 再比,
-// 效果相同。翻译选行另有一档更宽的判据(looksLikeTranslationHeaderLine),不在镜像范围内。
+// 繁简与异体字:Swift 两侧都过 headerKey 再比(HanScript.foldedSimplified,即 ICU 转简体再按异体字表归一,
+// 见 08 章决策 68),另给歌名、歌手各加一份 HanScript.sibling 写法;这里两侧都过 toSimplified(同样含异体字表)
+// 再比,效果相同。翻译选行另有一档更宽的判据(looksLikeTranslationHeaderLine),不在镜像范围内。
 //
 // 两条取舍跟着一起镜像,少一条就会开始吞真歌词:
 //  1. 只在第一条正文行认。调用方负责只对第一行问。

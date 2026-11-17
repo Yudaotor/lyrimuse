@@ -178,6 +178,12 @@ func runDeepLinkTests() {
         expectEqual(link("lyrimuse://debug/app-move?answer=decline"), .debug(.appMove(source: nil, destination: nil, answer: false)), "debug: app-move 直接选不了")
         expectEqual(link("lyrimuse://debug/app-move?answer=maybe"), nil, "debug: app-move 认不出的 answer 整条不认")
         expectEqual(link("lyrimuse://debug/diagnostics"), .debug(.diagnostics), "debug: 不弹面板导出诊断包")
+        expectEqual(link("lyrimuse://debug/playcount-family?artist=%E5%91%A8%E6%9D%B0%E5%80%AB&title=%E5%A6%B3%E8%81%BD%E5%BE%97%E5%88%B0"),
+                    .debug(.playCountFamily(artist: "周杰倫", title: "妳聽得到", counts: false)), "debug: 「第 N 次听」写法族,默认不联网")
+        expectEqual(link("lyrimuse://debug/playcount-family?artist=Tank&title=Love%20(Live)&counts=1"),
+                    .debug(.playCountFamily(artist: "Tank", title: "Love (Live)", counts: true)), "debug: playcount-family 带 counts=1 问各写法次数,歌名原样")
+        expectEqual([link("lyrimuse://debug/playcount-family?artist=Tank"), link("lyrimuse://debug/playcount-family?title=x&artist=")],
+                    [nil, nil], "debug: playcount-family 缺歌手或歌名整条不认")
         expectEqual(link("lyrimuse://debug/drag-region?window=Lyrics-Window"), .debug(.dragRegion(window: "lyrics-window")),
                     "debug: 拖窗区")
         expectEqual(link("lyrimuse://debug/drag-region"), nil, "debug: 拖窗区不带窗口名认不出")
@@ -693,6 +699,8 @@ func runDeepLinkTests() {
             .setSurfaces(overlay: true, notch: false, menuBar: nil), .setLyricsOffset(ms: -300),
             .nowPlayingCallback(success: URL(string: "shortcuts://x-callback-url/ic-success")),
             .debug(.state), .debug(.telemetryPreview), .debug(.appMove(source: nil, destination: nil, answer: nil)),
+            .debug(.playCountFamily(artist: "張震嶽", title: "愛我別走", counts: false)),
+            .debug(.playCountFamily(artist: "陶喆", title: "今天妳要嫁給我 & more", counts: true)),
             .debug(.appMove(source: "/Volumes/X Y/Lyrimuse.app", destination: "/tmp/t", answer: false)), .debug(.diagnostics), .debug(.checkpoint), .debug(.restore), .debug(.snapshot(window: "panel")),
             .debug(.dragRegion(window: "lyrics-window")),
             .debug(.simulate(title: "Orange Moon", artist: "Khalil", album: "", duration: 280, position: 12.5, playing: false)),
