@@ -35,6 +35,17 @@ enum DebugDeepLinks {
     /// `debug/onboarding-step`:object 是 `OnboardingStep`,引导窗口收到后翻到那一步。
     static let onboardingStepNotification = Notification.Name("lyrimuse.debug.onboardingStep")
 
+    /// `debug/lyrics-window-traffic-hover`:当作指针停在歌词窗口红绿灯附近 `point`(窗口坐标,左上原点;nil = 离开)。
+    private static func trafficHover(at point: CGPoint?) {
+        guard let window = LyricsWindowSession.window else {
+            logger.notice("debug lyrics window traffic hover: no lyrics window")
+            return
+        }
+        let inside = TitlebarButtonPlacement.simulateGroupHover(in: window, at: point)
+        let area = TitlebarButtonPlacement.hoverGeometry(in: window)?.hoverArea.map { NSStringFromRect($0) } ?? "-"
+        logger.notice("debug lyrics window traffic hover at=\(point.map { "\($0.x),\($0.y)" } ?? "off", privacy: .public) inside=\(inside.map { String($0) } ?? "no-area", privacy: .public) area=\(area, privacy: .public)")
+    }
+
     static var outputDir: URL {
         let caches = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first
             ?? FileManager.default.temporaryDirectory
@@ -330,6 +341,17 @@ enum DebugDeepLinks {
         case let .lyricsWindowPointer(inside):
             LyricsWindowRemote.shared.simulatePointer(inside: inside)
             logger.notice("debug lyrics window pointer inside=\(inside, privacy: .public)")
+        case let .lyricsWindowTrafficHover(x, y):
+            trafficHover(at: CGPoint(x: x, y: y))
+        case .lyricsWindowTrafficHoverOff:
+            trafficHover(at: nil)
+        case let .lyricsWindowTrafficHoverLegacy(on):
+            guard let window = LyricsWindowSession.window else {
+                logger.notice("debug lyrics window traffic hover legacy=\(on, privacy: .public): no lyrics window")
+                return
+            }
+            let done = TitlebarButtonPlacement.rehangGroupHover(in: window, atSystemDefault: on)
+            logger.notice("debug lyrics window traffic hover legacy=\(on, privacy: .public) rehung=\(done, privacy: .public)")
         case let .lyricsWindowKey(override):
             LyricsWindowRemote.shared.setKeyOverride(override)
             logger.notice("debug lyrics window key override=\(override.map { String($0) } ?? "auto", privacy: .public)")

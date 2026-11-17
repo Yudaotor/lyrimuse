@@ -389,6 +389,17 @@ func runDeepLinkTests() {
                     "debug: 当作指针出了歌词窗口")
         expectEqual(link("lyrimuse://debug/lyrics-window-pointer?inside=maybe") == nil
                     && link("lyrimuse://debug/lyrics-window-pointer") == nil, true, "debug: 指针进出认不出、没带都不认")
+        expectEqual(link("lyrimuse://debug/lyrics-window-traffic-hover?x=26&y=19.5"),
+                    .debug(.lyricsWindowTrafficHover(x: 26, y: 19.5)), "debug: 当作指针停在红绿灯附近一点")
+        expectEqual([link("lyrimuse://debug/lyrics-window-traffic-hover?off=1"),
+                     link("lyrimuse://debug/lyrics-window-traffic-hover?legacy=1"),
+                     link("lyrimuse://debug/lyrics-window-traffic-hover?legacy=0")],
+                    [.debug(.lyricsWindowTrafficHoverOff), .debug(.lyricsWindowTrafficHoverLegacy(true)),
+                     .debug(.lyricsWindowTrafficHoverLegacy(false))], "debug: 红绿灯模拟悬停离开、按默认位 / 当前位重挂")
+        expectEqual(link("lyrimuse://debug/lyrics-window-traffic-hover?x=26") == nil
+                    && link("lyrimuse://debug/lyrics-window-traffic-hover?x=nan&y=3") == nil
+                    && link("lyrimuse://debug/lyrics-window-traffic-hover") == nil, true,
+                    "debug: 红绿灯模拟悬停缺坐标、坐标不是有限数、什么都没带不认")
         expectEqual([link("lyrimuse://debug/lyrics-window-key?state=on"), link("lyrimuse://debug/lyrics-window-key?state=OFF"),
                      link("lyrimuse://debug/lyrics-window-key?state=auto")],
                     [.debug(.lyricsWindowKey(override: true)), .debug(.lyricsWindowKey(override: false)),
@@ -798,6 +809,8 @@ func runDeepLinkTests() {
             .debug(.lyricsWindowControls(percent: 100)), .debug(.lyricsWindowControls(percent: 162.5)),
             .debug(.lyricsWindowControls(percent: 140, draft: true)),
             .debug(.lyricsWindowPointer(inside: true)), .debug(.lyricsWindowPointer(inside: false)),
+            .debug(.lyricsWindowTrafficHover(x: 26, y: 19.5)), .debug(.lyricsWindowTrafficHoverOff),
+            .debug(.lyricsWindowTrafficHoverLegacy(true)), .debug(.lyricsWindowTrafficHoverLegacy(false)),
             .debug(.lyricsWindowKey(override: true)), .debug(.lyricsWindowKey(override: false)), .debug(.lyricsWindowKey(override: nil)),
             .debug(.lyricsWindowFullScreen(on: true)), .debug(.lyricsWindowFullScreen(on: false)),
             .debug(.lyricsWindowPreview(mini: true)), .debug(.lyricsWindowPreview(mini: false)),

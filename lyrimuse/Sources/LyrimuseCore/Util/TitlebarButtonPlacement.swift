@@ -84,10 +84,64 @@ public final class TitlebarButtonPlacement {
             CGRect(x: rect.minX, y: height - rect.maxY, width: rect.width, height: rect.height)
         }
         let union = buttons.map { $0.convert($0.bounds, to: nil) }.reduce(CGRect.null) { $0.union($1) }
-        let area = owner.trackingAreas
-            .first { $0.owner === owner && $0.rect.width < 200 && $0.rect.height < 60 }
-            .map { topLeft(owner.convert($0.rect, to: nil)) }
+        let area = groupArea(of: owner).map { topLeft(owner.convert($0.rect, to: nil)) }
         return (topLeft(union), area)
+    }
+
+    /// 窗口框架自己挂的那块组跟踪区(框架上别的跟踪区都比它大得多)。
+    private static func groupArea(of owner: NSView) -> NSTrackingArea? {
+        owner.trackingAreas.first { $0.owner === owner && $0.rect.width < 200 && $0.rect.height < 60 }
+    }
+
+    private static var simulatedHoverWindows: Set<ObjectIdentifier> = []
+
+    /// 调试用:当作指针停在窗口坐标(左上原点)`point` 上,按组跟踪区此刻的矩形判在不在组里;跟上次报的不一样才给窗口框架报一次
+    /// `mouseEntered` / `mouseExited`(事件的跟踪号和 userData 照系统报这块跟踪区时的填)。`point` 为 nil = 当作离开。
+    /// 返回此刻算不算在组里;找不到组跟踪区返回 nil。
+    @discardableResult
+    public static func simulateGroupHover(in window: NSWindow, at point: CGPoint?) -> Bool? {
+        guard let button = window.standardWindowButton(.closeButton), let owner = hoverOwner(of: button),
+              let area = groupArea(of: owner) else { return nil }
+        let location = point.map { NSPoint(x: $0.x, y: window.frame.height - $0.y) } ?? NSPoint(x: -1, y: -1)
+        let inside = point != nil && area.rect.contains(owner.convert(location, from: nil))
+        let id = ObjectIdentifier(window)
+        guard simulatedHoverWindows.contains(id) != inside else { return inside }
+        let userInfo = area.userInfo.map { $0 as NSDictionary }
+        let event = withExtendedLifetime(userInfo) {
+            NSEvent.enterExitEvent(
+                with: inside ? .mouseEntered : .mouseExited, location: location, modifierFlags: [],
+                timestamp: ProcessInfo.processInfo.systemUptime, windowNumber: window.windowNumber, context: nil,
+                eventNumber: 0, trackingNumber: Int(bitPattern: Unmanaged.passUnretained(area).toOpaque()),
+                userData: userInfo.map { Unmanaged.passUnretained($0).toOpaque() })
+        }
+        guard let event else { return nil }
+        if inside {
+            simulatedHoverWindows.insert(id)
+            owner.mouseEntered(with: event)
+        } else {
+            simulatedHoverWindows.remove(id)
+            owner.mouseExited(with: event)
+        }
+        return inside
+    }
+
+    /// 调试用:`atSystemDefault` 为真时让系统重排一次标题栏(切一下关闭键的显隐),组跟踪区随之挂在默认位,再把三颗按钮
+    /// 只用 `setFrameOrigin` 摆回原处、不重挂,重现 07 章决策 210 修之前的样子;为假时按按钮此刻的位置重挂。返回有没有找到窗口框架。
+    @discardableResult
+    public static func rehangGroupHover(in window: NSWindow, atSystemDefault: Bool) -> Bool {
+        guard let closeButton = window.standardWindowButton(.closeButton),
+              let owner = hoverOwner(of: closeButton) else { return false }
+        // 重挂会把「在组里」清掉,模拟的进出跟着从头算。
+        simulatedHoverWindows.remove(ObjectIdentifier(window))
+        guard atSystemDefault else {
+            owner.perform(updateHoverTracking)
+            return true
+        }
+        let origins = buttonTypes.compactMap { type in window.standardWindowButton(type).map { ($0, $0.frame.origin) } }
+        closeButton.isHidden.toggle()
+        closeButton.isHidden.toggle()
+        for (button, origin) in origins { button.setFrameOrigin(origin) }
+        return true
     }
 
     /// 按 `hidden(type)` 设三颗按钮的显隐,真有一颗翻了就当场摆回目标位。`reposition` 为 false 时只设显隐

@@ -173,6 +173,13 @@ public enum LyrimuseDeepLink: Equatable, Sendable {
         /// 当作指针进 / 出歌词窗口(`debug/lyrics-window-pointer?inside=1|0`):完整尺寸走「闲置隐藏」的进出,迷你走面板的悬停进出,
         /// 跟真指针进出走同一处,不挪鼠标就能验按钮组和红绿灯的显隐。
         case lyricsWindowPointer(inside: Bool)
+        /// 当作指针停在歌词窗口红绿灯附近窗口坐标(左上原点)(x, y) 上(`debug/lyrics-window-traffic-hover?x=26&y=26`):按系统组悬停跟踪区
+        /// 此刻的矩形判进出,进出变了才给窗口框架报一次进 / 出,不挪鼠标就能验 × − ⤢ 画不画。`off=1` 当作离开。
+        case lyricsWindowTrafficHover(x: Double, y: Double)
+        case lyricsWindowTrafficHoverOff
+        /// 把红绿灯的组悬停跟踪区按系统默认位重挂、按钮留在原处(`debug/lyrics-window-traffic-hover?legacy=1`,重现 07 章决策 210
+        /// 修之前的样子),或按按钮此刻的位置重挂(`legacy=0`)。
+        case lyricsWindowTrafficHoverLegacy(Bool)
         /// 完整尺寸歌词窗口的红绿灯当作窗口是 / 不是 key 来显隐,不看真的 key 状态(`debug/lyrics-window-key?state=on|off|auto`,
         /// `auto` = 交还给它)。不提前台就能验完整尺寸红绿灯的显隐与摆位;只管红绿灯,别的按 key 走的照旧。nil = auto。
         case lyricsWindowKey(override: Bool?)
@@ -696,6 +703,18 @@ public enum LyrimuseDeepLink: Equatable, Sendable {
         case ("debug", "/lyrics-window-pointer"):
             guard let inside = value("inside").flatMap(Self.parseBool) else { return nil }
             self = .debug(.lyricsWindowPointer(inside: inside))
+        case ("debug", "/lyrics-window-traffic-hover"):
+            if value("off").flatMap(Self.parseBool) == true {
+                self = .debug(.lyricsWindowTrafficHoverOff)
+                break
+            }
+            if let legacy = value("legacy").flatMap(Self.parseBool) {
+                self = .debug(.lyricsWindowTrafficHoverLegacy(legacy))
+                break
+            }
+            guard let x = value("x").flatMap(Double.init), let y = value("y").flatMap(Double.init),
+                  x.isFinite, y.isFinite else { return nil }
+            self = .debug(.lyricsWindowTrafficHover(x: x, y: y))
         case ("debug", "/lyrics-window-key"):
             switch value("state")?.lowercased() {
             case "on": self = .debug(.lyricsWindowKey(override: true))
@@ -1125,6 +1144,15 @@ public enum LyrimuseDeepLink: Equatable, Sendable {
             case let .lyricsWindowPointer(inside):
                 components.path = "/lyrics-window-pointer"
                 components.queryItems = [URLQueryItem(name: "inside", value: inside ? "1" : "0")]
+            case let .lyricsWindowTrafficHover(x, y):
+                components.path = "/lyrics-window-traffic-hover"
+                components.queryItems = [URLQueryItem(name: "x", value: String(x)), URLQueryItem(name: "y", value: String(y))]
+            case .lyricsWindowTrafficHoverOff:
+                components.path = "/lyrics-window-traffic-hover"
+                components.queryItems = [URLQueryItem(name: "off", value: "1")]
+            case let .lyricsWindowTrafficHoverLegacy(on):
+                components.path = "/lyrics-window-traffic-hover"
+                components.queryItems = [URLQueryItem(name: "legacy", value: on ? "1" : "0")]
             case let .lyricsWindowKey(override):
                 components.path = "/lyrics-window-key"
                 components.queryItems = [URLQueryItem(name: "state", value: override.map { $0 ? "on" : "off" } ?? "auto")]
