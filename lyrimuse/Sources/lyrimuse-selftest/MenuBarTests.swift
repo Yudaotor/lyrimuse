@@ -2123,6 +2123,10 @@ func runMenuBarTests() {
                     && sourceHas(item, "gapWindow: gap, holdsStill: karaoke && !PlaybackCoordinator.shared.isPlayingNow)"), true,
                     "菜单栏: 暂停时保留的那句不按时钟走就不装墙钟循环,状态栏那一格和正中都停在对齐位置")
         let label = src("MenuBarScrollingLabel.swift")
+        expectEqual(sourceHas(sourceBody("func present(text: String", in: label), "&& $0.holdsStill == next.holdsStill\n} ?? false)")
+                    && sourceHas(sourceBody("func present(text: String", in: label),
+                                 "if !scrollUnchanged || contentLayer.animation(forKey: Self.scrollAnimationKey) == nil {\nrestartAnimation()"), true,
+                    "菜单栏标签: 暂停 / 恢复时 holdsStill 翻转算滚动参数变了,已在墙钟循环里的那句重装成静止 / 重新滚")
         expectEqual(sourceHas(sourceBody("private func clockScrollPath()", in: label),
                               "} else if plan.clockPaced, let start = pacedStart, start.belongs(toText: plan.text, line: plan.lineIndex) {"), true,
                     "菜单栏标签: 按时钟配速的路径从这一句记下的起点排")

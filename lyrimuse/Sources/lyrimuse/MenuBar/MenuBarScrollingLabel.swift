@@ -440,6 +440,9 @@ final class MenuBarScrollingLabel: NSView {
                 // 单双排切换主行字体从 13 变 10,滚动距离跟着变 → 算滚动参数;只换副行文字 / 在译文和
                 // 罗马音之间切档不算 —— 主行一个数都没动,别把正在滚的句子打回开头。
                 && $0.secondaryKind.showsSecondaryRow == next.secondaryKind.showsSecondaryRow
+                // 暂停 / 恢复时 holdsStill 翻转,不按时钟走的那句要在墙钟循环和静止之间切,算滚动参数。
+                // 按时钟走的那句不受影响:restartAnimation 先走 applyFollowScroll,按存底时钟落在原位(见 06 章决策 108)。
+                && $0.holdsStill == next.holdsStill
         } ?? false)
         plan = next
         isHidden = false
