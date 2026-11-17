@@ -222,7 +222,7 @@ func withCachedQQArtistNames(t *testing.T, entries map[string]string) {
 
 // 触发重试的判据是"有没有能用的候选"，不是"有没有候选"。
 // Score < 0 是一票否决标记（不是逐行时间戳 / 语言对不上 / 整份只有署名行……），
-// 不是"分低"。五个源都答了但全被判废时，以前 len(results)>0 会让重试根本不触发。
+// 不是"分低"。五个源都答了但全被判废时也要重试，别按 len(results)>0 判。
 func TestHasUsableLyricCandidate(t *testing.T) {
 	cases := []struct {
 		name string

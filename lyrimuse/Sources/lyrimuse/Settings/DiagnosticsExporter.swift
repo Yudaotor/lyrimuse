@@ -241,7 +241,7 @@ enum DiagnosticsExporter {
         lines.append("Player (last detected): \(PlaybackCoordinator.shared.resolvedPlayerDescription)")
         lines.append("Engine service enabled (setting): \(settings.engineServiceEnabled)")
         // 报完整三态而不是 true/false —— "注册了但起不来"正是最需要出现在诊断报告里的那
-        // 一档(带上次退出码),以前它跟"在跑"一样报 true,报告等于把最关键的线索抹掉了。
+        // 一档(带上次退出码),别跟"在跑"一样报成 true。
         lines.append("Engine service state: \(engineState)")
         // 「登录项与扩展 › 允许在后台」里关掉了引擎时这里是 requiresApproval,launchctl 的报错认不出这个原因(15 章决策 116)。
         lines.append("Engine background item: \(EngineServiceManager.backgroundItemStatusDescription)")

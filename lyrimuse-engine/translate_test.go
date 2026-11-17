@@ -255,12 +255,10 @@ func TestTranslateChunkLineCountMismatchFallsBackToSource(t *testing.T) {
 	}
 }
 
-// 副歌反复的歌(如 Michael Jackson《Beat It》)逐行独立发翻译请求,
-// 同一句话在原文里出现好几次,以前会分别各发一次、结果各自独立(可能一次翻了、另一次原样
-// 吐回来被当"没翻动"丢掉),同一句台词的译文因此在歌词里断断续续、时有时无。
-// 现在按原文去重再发,断言两件事:①重复的那句话只应该出现在**一次**请求里(不是发几次就
-// 收几次相同的 q,而是一次都不多发);②翻译结果要广播回原文里**全部**出现过的位置,不能
-// 只有第一次出现的那一行有译文、后面几次全是空。
+// 副歌反复的歌(如 Michael Jackson《Beat It》)同一句话在原文里出现好几次:翻译请求按原文去重再发,
+// 不然同一句台词各翻各的(可能一次翻了、另一次原样吐回来被当"没翻动"丢掉),译文断断续续。
+// 断言两件事:①重复的那句话只出现在**一次**请求里(一次都不多发);②翻译结果广播回原文里
+// **全部**出现过的位置,不能只有第一次出现的那一行有译文、后面几次全是空。
 func TestTranslateDedupesRepeatedLinesAndBroadcastsResult(t *testing.T) {
 	var requestedLines []string
 	srv := fakeMyMemory(t, func(w http.ResponseWriter, r *http.Request) {

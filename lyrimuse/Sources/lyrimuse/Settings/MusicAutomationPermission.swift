@@ -124,12 +124,10 @@ enum MusicAutomationPermission {
     }
 
     // GlobalHotkeys(播放/暂停/上一首/下一首)+ LyricsOverlayView/NotchLyricsView 的
-    // 播放控制按钮,一共 5 个调用点专用的安全版本——实测排查坐实:这几处
-    // 以前直接同步调用上面的 checkForCurrentPlayer(askIfNeeded: true),而这个函数在
-    // 还没问过、真的需要询问系统时会触达 AEDeterminePermissionToAutomateTarget,正是
-    // requestWithTimeout() 那段注释里点名"在主线程调用有据可查地可能永久挂起"的同一个
-    // 风险点——SettingsView/OnboardingView 已经为此专门包了安全封装,这几处播放控制
-    // 入口却全部绕开、直接同步调,理论上足以把整个 App UI 冻住。已经确定过的状态
+    // 播放控制按钮,一共 5 个调用点专用的安全版本。这几处别直接同步调上面的
+    // checkForCurrentPlayer(askIfNeeded: true):它在还没问过、真的需要询问系统时会触达
+    // AEDeterminePermissionToAutomateTarget,正是 requestWithTimeout() 那段注释里点名"在主线程调用
+    // 可能永久挂起"的风险点,足以把整个 App UI 冻住。已经确定过的状态
     // (authorized/denied)不碰这条风险路径,直接同步返回;只有真的还没问过、且调用方
     // 明确要求"可以顺便问一下"时,才走 requestWithTimeout() 同一套"真正检查 vs 超时"
     // 赛跑机制——传 launchMusicAppIfNeeded: false,不像"设置/引导页显式点请求权限

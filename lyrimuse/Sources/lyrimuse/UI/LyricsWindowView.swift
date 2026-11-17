@@ -1552,9 +1552,8 @@ private struct LyricsWindowCapture: NSViewRepresentable {
     /// 在视图被放进窗口的**那一刻**同步 attach,不等下一拍。
     ///
     /// attach 里要恢复上次的窗口位置尺寸、关掉开窗动画 —— 这些都必须赶在窗口第一次显示之前。
-    /// 原来是 `DispatchQueue.main.async` 里再 attach,那时窗口往往已经按 SwiftUI 的默认尺寸
-    /// (idealWidth / idealHeight)显示出来了,紧接着被恢复成上次的大小,表现就是"先出来一个小窗、
-    /// 一闪变大"(以前系统开窗动画把这一跳盖住了,去掉动画后才露出来,07 章决策 52)。
+    /// 别挪进 `DispatchQueue.main.async`:那时窗口往往已经按 SwiftUI 的默认尺寸(idealWidth / idealHeight)
+    /// 显示出来了,紧接着被恢复成上次的大小,表现就是"先出来一个小窗、一闪变大"(07 章决策 52)。
     final class CaptureView: NSView {
         var onWindow: ((NSWindow) -> Void)?
 
@@ -4864,10 +4863,8 @@ struct LyricsWindowView: View {
 
     /// 这扇窗此刻该不该用白字。
     ///
-    /// **名字留着没改**:它有十几处消费点(主文字/副行/时间/进度/图标/各个面板),而语义其实一直是
-    /// "背景是不是暗的" —— 以前背景只有"封面"和"没有"两种,`artworkData != nil` 正好等价于它,
-    /// 所以那时候写成这样没问题。用户能自己填背景色之后这个等价关系断了(填一个浅黄背景,白字直接
-    /// 消失),判据换成真的算背景亮度。改名会波及十几处调用点、跟并发改动撞车,收益只是名字更贴切。
+    /// 名字说的是"有封面背景",语义是"背景是不是暗的",十几处消费点(主文字/副行/时间/进度/图标/各个面板)
+    /// 都按后者用。判据按真实背景亮度算,别写回 `artworkData != nil`:用户自己填的浅色背景上白字会直接消失。
     private var hasArtworkBackground: Bool {
         switch activeBackgroundMode {
         case .artwork:

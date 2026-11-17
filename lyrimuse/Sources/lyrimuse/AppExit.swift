@@ -15,7 +15,7 @@ import OSLog
 ///   Sparkle 装更新时的重启由 `SparkleUpdaterManager.isInstallingUpdate` 认出来,记 `sparkle_install`;
 /// - **SIGTERM**(launchctl kickstart -k / bootout、uninstall.sh)AppKit 默认直接死、连 delegate 都不叫。
 ///   这里装一个 DispatchSource 把它改成登记 `sigterm` 后走正常 terminate —— 顺带让
-///   `applicationShouldTerminate` 里那次未保存配置的落盘也有机会跑到(以前 SIGTERM 把它连同进程一起带走)。
+///   `applicationShouldTerminate` 里那次未保存配置的落盘也有机会跑到。
 ///
 /// 崩溃不在此列(崩溃报告管);一次性子进程(lyrics-translate 等)不在此列。
 /// 所有主动 terminate 只准经 `request(_:)`,selftest contracts 组守着。

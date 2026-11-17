@@ -30,7 +30,7 @@ final class MenuBarStatusMenu: NSObject, NSMenuDelegate {
     private var onHighlightChange: ((Bool) -> Void)?
 
     /// - Parameter onHighlightChange: 菜单打开/关闭。状态栏那行滚动歌词要跟着反白 ——
-    ///   以前用模板图时这件事是系统免费做的,自己拿图层之后得自己转达。
+    ///   它自己画图层、不是模板图,系统不会替它反白,得自己转达。
     func makeMenu(onHighlightChange: @escaping (Bool) -> Void) -> NSMenu {
         self.onHighlightChange = onHighlightChange
         let menu = NSMenu()

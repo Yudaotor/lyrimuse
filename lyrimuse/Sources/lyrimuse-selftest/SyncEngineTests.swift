@@ -1923,11 +1923,9 @@ func runSyncEngineTests() {
     // ---- tickQuery.nextSide 独立于当前行分栏(《All Night》悬浮窗"下一句预览"
     // 案)----
     //
-    // 现象是:方大同/王诗安《All Night》副歌逐句男女交替,悬浮窗"下一句预览"却总是显示在
-    // 当前这句的同一边,像是同一个人接着唱。根因是 nextLineText 的引擎本体 nextTextAt(现
-    // nextAt)以前只取文字、不取 side——LyricsOverlayView 拿不到下一句自己的 side,只能借用
-    // 当前行的 duetSide。这里钉住 tickQuery(...).nextSide 必须取**下一行自己的**标记,不能
-    // 跟当前行 side 相等(除非两行真的同一位演唱者)。
+    // 副歌逐句男女交替的歌,悬浮窗"下一句预览"要显示在下一句自己那一边:LyricsOverlayView 用的是
+    // tickQuery(...).nextSide,它必须取**下一行自己的**标记,不能借当前行的 duetSide、跟当前行
+    // side 相等(除非两行真的同一位演唱者)。
     do {
         let engine = LyricsSyncEngine()
         // 形状照抄真实歌词:标记独占一行(唱完即丢,见 LyricDuet.plan 的 dropped),

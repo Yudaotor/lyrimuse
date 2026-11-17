@@ -7,12 +7,11 @@ import (
 
 // needsPeripheralBackfill 的回归测试。
 //
-// 两条都是补上的:
-//   - canonical_artist 之前不在触发条件里,而它在 backfillPeripheralFields 里本来就有补全
-//     分支 —— 于是那四个字段一旦齐了,缺 canonical 的记录就再也没机会补。实测撞到过:同一张
-//     专辑里一半曲目报 "Leah Dou"、一半报"窦靖童",后者其中两条 canonical 是空的。
-//   - 以前只有 10 分钟节流、没有次数上限,真的补不上的字段会让这条记录只要还在被播放就
-//     每 10 分钟重发一轮网络请求,永远停不下来。
+// 守两件事:
+//   - 缺 canonical_artist 也触发(backfillPeripheralFields 里有它的补全分支):不触发的话那四个字段
+//     一旦齐了,缺 canonical 的记录就再也没机会补。
+//   - 除了 10 分钟节流还有次数上限:真的补不上的字段不能让这条记录只要还在被播放就每 10 分钟
+//     重发一轮网络请求。
 func TestNeedsPeripheralBackfill(t *testing.T) {
 	// 主色是纯网页字段,"缺主色要不要补"整条判据都挂在中继有没有配上(见
 	// needsPeripheralBackfill 里 missingAccent 那段)。默认按"配了"跑,好让下面那批
@@ -61,11 +60,10 @@ func TestNeedsPeripheralBackfill(t *testing.T) {
 			}(),
 			artist: "窦靖童", want: false,
 		},
-		// 以下三条补:QQ 的专辑/歌手 mid 进了触发条件,而"搜索兜底链接"
-		// 以前压根不算缺(判据只有 QQURL == "")—— 本机实测 565 条里 40 条卡在那一档、
-		// 永远不会再被补一次,「前往专辑/前往艺人」对它们也就永远做不了。
+		// 以下三条:QQ 的专辑/歌手 mid 在触发条件里,"搜索兜底链接"也算缺(只判 QQURL == "" 的话
+		// 停在那一档的条目永远不会再被补,「前往专辑/前往艺人」也做不了,见 07 章)。
 		{
-			name: "QQ 链接还是搜索兜底:补(以前永远不补)",
+			name: "QQ 链接还是搜索兜底:补",
 			e: func() enrichEntry {
 				e := full
 				e.QQURL = qqSearchFallbackPrefix + "w=x"
@@ -103,8 +101,8 @@ func TestNeedsPeripheralBackfill(t *testing.T) {
 			}(),
 			artist: "窦靖童", want: true,
 		},
-		// 以下两条补:仿冒号名单上的艺人(周杰伦)网易云链接是 withholdImpersonatorRiddenIdentity
-		// 故意扣掉的,补多少轮都不会有 —— 以前照样算缺,本机 42 条只缺这一项的条目每条白补 5 轮。
+		// 以下两条:仿冒号名单上的艺人(周杰伦)网易云链接是 withholdImpersonatorRiddenIdentity
+		// 故意扣掉的,补多少轮都不会有,不算缺。
 		{
 			name:   "周杰伦只缺网易云链接:不补(那个链接是故意不给的)",
 			e:      func() enrichEntry { e := full; e.NeteaseURL = ""; return e }(),

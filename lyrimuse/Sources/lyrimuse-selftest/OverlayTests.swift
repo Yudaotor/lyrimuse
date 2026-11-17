@@ -1318,7 +1318,7 @@ func runOverlayTests() {
 
     // ---- WrapLayoutMath ----
     //
-    // 逐字歌词那个自动换行容器的几何。以前长在 LyricsOverlayView 里，改一次就只能盯屏幕看。
+    // 逐字歌词那个自动换行容器的几何(放在 Core 里才测得到，见「分层边界」)。
     do {
         func sz(_ w: CGFloat, _ h: CGFloat = 10) -> CGSize { CGSize(width: w, height: h) }
         func rowIndices(_ rows: [WrapLayoutMath.Row]) -> [[Int]] { rows.map { $0.indices } }

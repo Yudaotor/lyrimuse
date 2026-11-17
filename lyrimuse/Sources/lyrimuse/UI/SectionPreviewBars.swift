@@ -67,11 +67,9 @@ extension MenuBarPreviewBar where Lane == EmptyView {
 
 /// 菜单栏那一段的预览。
 ///
-/// 重做:以前这里是"仿"一条菜单栏 —— 圆角条 + 一个现实里根本不存在的音符
-/// 图标 + `.system(size: 13)` 的文字,而且滚动只演开头那一帧(静止的)。跟用户真正看到的
-/// 东西差得远(预览里要真实模拟实际的菜单栏)。
+/// 预览要跟用户真正看到的菜单栏一致,别另画一条"仿"的(圆角条 + 假图标 + 静止的文字)。
 ///
-/// 现在这条预览**就是菜单栏本体那套代码**:
+/// 这条预览**就是菜单栏本体那套代码**:
 ///   * 要不要滚、滚多快、首尾停多久 —— 走 MenuBarMarqueeRenderer.presentation,跟
 ///     MenuBarStatusItem 同一个函数,不可能漂;
 ///   * 需要滚的句子直接挂 MenuBarScrollingLabel(真窗口里那个 layer-backed NSView),

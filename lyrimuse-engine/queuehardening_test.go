@@ -19,7 +19,7 @@ func hugeUvarint() []byte {
 	return binary.AppendUvarint(nil, math.MaxUint64-3)
 }
 
-// 块里某条的 nonShared 长度接近 2^64:以前 uint64(i)+nonShared+vlen 回绕、绕过边界检查,切片越界 panic。
+// 块里某条的 nonShared 长度接近 2^64:uint64(i)+nonShared+vlen 会回绕、绕过边界检查,得拒收而不是切片越界 panic。
 func TestLdbBlockEntriesRejectsWrappingLengths(t *testing.T) {
 	var b []byte
 	b = append(b, 0) // shared

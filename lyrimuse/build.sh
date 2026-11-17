@@ -543,8 +543,8 @@ for arch in $ARCHES; do
   # --show-bin-path(.build/out/Products/Release),于是后一个架构原地覆盖前一个,两个
   # 切片路径指向同一个文件。表现是 universal 构建在 lipo 那步失败:
   #   lipo: same architectures (x86_64) found in '…/Release/lyrimuse' and '…/Release/lyrimuse'
-  # 旧的 native 构建系统给的是 .build/<arch>-apple-macosx/release,两者天然分开,所以这段
-  # 以前不拷也对。拷一份对两种构建系统都成立,不去赌 --show-bin-path 分不分架构。
+  # 旧的 native 构建系统给的是 .build/<arch>-apple-macosx/release,两者天然分开。
+  # 拷一份对两种构建系统都成立,不去赌 --show-bin-path 分不分架构。
   #
   # 拷贝排在 stamp_sdk_version 之后:戳的是 Mach-O 自身的 LC_BUILD_VERSION,拷贝会带上。
   SLICE_DIR="$FAT_DIR/slices/$arch"
@@ -648,10 +648,8 @@ cp AppIcon.icns "$APP_DIR/Contents/Resources/AppIcon.icns"
 # 一起封进包里。
 rm -f "$APP_DIR/Contents/Resources/collector" "$APP_DIR/Contents/Resources/$ENGINE_NAME"
 cp "$FAT_DIR/$ENGINE_NAME" "$APP_DIR/Contents/Resources/$ENGINE_NAME"
-# 引擎现在必须在这里显式补签。以前这份是 `go build` 的产物原样拷进来、
-# 自带工具链盖的 ad-hoc 签名,所以下面只做 `codesign -v` 验证;改成 universal 之后中间多了
-# 一步 lipo,而 lipo 会让原有签名失效(实测:合并后的文件 `codesign -v` 直接不通过),
-# 只验证会被 set -e 拦腰打断。签名必须在 lipo 之后做,顺序不能反。
+# 引擎必须在这里显式补签:universal 产物经过 lipo,lipo 会让 `go build` 自带的 ad-hoc 签名失效
+# (合并后的文件 `codesign -v` 直接不通过),只验证会被 set -e 拦腰打断。签名必须在 lipo 之后做,顺序不能反。
 codesign --force --sign "$SIGN_ID" "$APP_DIR/Contents/Resources/$ENGINE_NAME"
 # 旧名 collector 留一个指向引擎的相对符号链接,跟引擎一起被最外层签名封进包里。装过旧版本的机器上,launchd 的
 # plist 还写着 …/Resources/collector:更新装好、App 还没重新打开、对账还没改写 plist 的那段时间,launchd 靠它照常

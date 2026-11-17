@@ -61,8 +61,8 @@ func chmodUnreadable(t *testing.T, path string) {
 	t.Cleanup(func() { _ = os.Chmod(path, 0o644) })
 }
 
-// 没授权的机器上 stat 能过、读被拒:以前 stat 一过就发布「读得到」,把启动探测记下的「被拒」盖掉,
-// 设置页据此显示「已授权」。现在要真读成功才算;授权之后(文件读得了)下一次重建能自己恢复,
+// 没授权的机器上 stat 能过、读被拒:要真读成功才发布「读得到」,stat 过了不算(不然会盖掉启动探测记下的
+// 「被拒」,设置页跟着显示「已授权」);授权之后(文件读得了)下一次重建能自己恢复,
 // 不因为上一次失败时记下的库版本而一直不重试。
 func TestQQLocalDeniedReadStaysDenied(t *testing.T) {
 	read := resetLocalCacheAccessForTest(t)
@@ -114,7 +114,7 @@ func TestQQLocalDeniedReadStaysDenied(t *testing.T) {
 	}
 }
 
-// 网易云同一形态:以前每首歌在「被拒」(队列 ReadFile)和「读得到」(曲库 stat)之间翻一次。
+// 网易云同一形态:不能每首歌在「被拒」(队列 ReadFile)和「读得到」(曲库 stat)之间翻一次。
 func TestNeteaseLocalDeniedReadStaysDenied(t *testing.T) {
 	read := resetLocalCacheAccessForTest(t)
 	path := writeTestNeteaseDB(t, neteaseLocalTestTracks)
