@@ -7,15 +7,15 @@
 #
 # 令牌是 $LYRIMUSE_HEAVY_GATE_DIR(默认 ~/Library/Caches/lyrimuse-heavy-gate)下的 token-<n> 目录(mkdir 原子),
 # 里面 owner 文件三行:pid、说明、开始时刻。持有进程已经不在的令牌直接回收,不用等超时。装机优先:有装机在等
-# (want-install.<pid>)时,校验不去抢空出来的令牌。
+# (want-install.<pid>,排队时每轮刷新修改时间,30 秒没刷新的不算)时,校验不去抢空出来的令牌。
 # 排队(15 章决策 121):
 # - 先来先到:排队的登记 wait.<pid>(开始时刻、优先级、说明,排队时每轮刷新修改时间),同优先级里有更早来、还在排的,
-#   就不去拿空出来的令牌。以前谁轮询赶上谁拿,后来的能一直插到前面。
+#   就不去拿空出来的令牌。
 # - 有上限:排了 LYRIMUSE_HEAVY_WAIT_MAX 秒(默认 3600,0 = 不限)还没轮到就报错退出(返回 75),打出谁占着、各跑了
 #   多久;每 60 秒打一行还在排、前面几个、谁占着,跑过 LYRIMUSE_HEAVY_HOLD_WARN 秒(默认 1800)的持有者标出来。
 # - 可重入:拿到令牌后导出 LYRIMUSE_HEAVY_GATE_TOKEN=<令牌>:<pid>,子进程里再来排(heavy-run.sh 里的脚本又调
-#   commit-checks.sh、build.sh)时令牌还在这个 pid 手里就直接用,不再占第二个:以前两个这样套着的各拿一个、
-#   都等第二个,就永远等下去。跟 GNU make jobserver 把令牌传给子 make 一个道理。
+#   commit-checks.sh、build.sh)时,令牌在当前闸目录下、还在这个 pid 手里就直接用,不再占第二个。跟 GNU make jobserver
+#   把令牌传给子 make 一个道理。
 # - 留痕:拿到、放回、超时各记一行到 events.log(超过 1MB 换到 events.log.1),排查「时间都去哪了」看它。
 # 不生效的情况:LYRIMUSE_HEAVY_GATE=0、建不了令牌目录。
 # 用法:heavy_gate_acquire <说明> install|check || exit $?;退出前 heavy_gate_release(放进调用方自己的 EXIT trap)。
@@ -68,13 +68,17 @@ heavy_gate_take_over_stale() {
   rmdir "$gate" 2>/dev/null || true
 }
 
-# heavy_gate_install_waiting:有还活着的装机在排队(顺手清掉进程已经不在的登记)。
+# heavy_gate_install_waiting:有还活着、还在排的装机(顺手清掉进程已经不在的登记)。30 秒没刷新的(进程被停住)不算,
+# 同 heavy_gate_ahead。
 heavy_gate_install_waiting() {
-  local f pid found=1
+  local f pid found=1 now mtime
+  now="$(date +%s)"
   for f in "$HEAVY_GATE_DIR"/want-install.*; do
     [ -e "$f" ] || continue
     pid="${f##*.}"
-    if kill -0 "$pid" 2>/dev/null; then found=0; else rm -f "$f"; fi
+    if ! kill -0 "$pid" 2>/dev/null; then rm -f "$f"; continue; fi
+    mtime="$(stat -f %m "$f" 2>/dev/null || echo 0)"
+    if [ $((now - ${mtime:-0})) -le 30 ]; then found=0; fi
   done
   return $found
 }
@@ -118,12 +122,14 @@ heavy_gate_holders() {
   echo "${out:- 无}"
 }
 
-# 祖先进程已经拿着令牌(见头注「可重入」):令牌还在记下的那个 pid 手里、它也还活着。
+# 祖先进程已经拿着令牌(见头注「可重入」):令牌在当前的闸目录下、还在记下的那个 pid 手里、它也还活着。
+# 别的闸目录(闸自测的临时目录、另设 LYRIMUSE_HEAVY_GATE_DIR 的)里的令牌不算,不然在那边排的全被直接放行。
 heavy_gate_inherited() {
   local v="${LYRIMUSE_HEAVY_GATE_TOKEN:-}" tok pid
   [ -n "$v" ] || return 1
   tok="${v%:*}"
   pid="${v##*:}"
+  case "$tok" in "$HEAVY_GATE_DIR"/*) ;; *) return 1 ;; esac
   [ -n "$pid" ] && [ "$(heavy_gate_owner_pid "$tok")" = "$pid" ] && kill -0 "$pid" 2>/dev/null
 }
 
@@ -147,6 +153,7 @@ heavy_gate_acquire() {
   printf '%s %s %s\n' "$start" "$prio" "$label" > "$HEAVY_GATE_WAITFILE" 2>/dev/null || HEAVY_GATE_WAITFILE=""
   while :; do
     if [ -n "$HEAVY_GATE_WAITFILE" ]; then touch "$HEAVY_GATE_WAITFILE" 2>/dev/null || true; fi
+    if [ -n "$HEAVY_GATE_WANT" ]; then touch "$HEAVY_GATE_WANT" 2>/dev/null || true; fi
     ahead="$(heavy_gate_ahead "$start" "$prio")"
     if [ "$ahead" = 0 ] && { [ "$prio" = install ] || ! heavy_gate_install_waiting; }; then
       i=1

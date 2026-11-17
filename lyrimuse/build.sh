@@ -145,14 +145,14 @@ take_over_stale_build_lock() {
 }
 
 # 排队有上限(15 章决策 121):等了 LYRIMUSE_BUILD_WAIT_MAX 秒(默认 3600,0 = 不限)还没轮到就报错退出(75),打出前面那次
-# 跑了多久;每 60 秒打一行还在等。以前前面那次卡住时这里永远等下去,会话里只看到一行「排队等它结束」。
+# 跑了多久;每 60 秒打一行还在等。
 BUILD_WAIT_MAX="${LYRIMUSE_BUILD_WAIT_MAX:-3600}"
 build_wait_note() {
   local what="$1" holder="$2" since="$3" now age
   now="$(date +%s)"
   age=$((now - since))
   if [ "$BUILD_WAIT_MAX" -gt 0 ] 2>/dev/null && [ "$age" -ge "$BUILD_WAIT_MAX" ]; then
-    echo "!! 等$what等了 $age 秒(上限 LYRIMUSE_BUILD_WAIT_MAX=$BUILD_WAIT_MAX 秒),不等了。前面那次:pid ${holder:-?}" \
+    echo "!! 等${what}等了 $age 秒(上限 LYRIMUSE_BUILD_WAIT_MAX=$BUILD_WAIT_MAX 秒),不等了。前面那次:pid ${holder:-?}" \
       "$(ps -o etime=,time=,command= -p "${holder:-0}" 2>/dev/null | cut -c1-120 || true)。它跑了很久、CPU 时间不涨多半是卡住了;" \
       "等得起就调大上限重跑" >&2
     exit 75

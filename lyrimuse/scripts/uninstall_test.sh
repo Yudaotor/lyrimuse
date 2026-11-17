@@ -170,7 +170,7 @@ any_test_vault && fail "钥匙串凭据没删" || ok "钥匙串凭据已删"
 # 同一个坑：`defaults read` 对已删的 domain 照样退出 0（打印空字典），判据只能看内容。
 probe_defaults_left=$(/usr/bin/defaults read "$PROBE_B" 2>/dev/null | /usr/bin/tr -d '[:space:]')
 [[ -z "$probe_defaults_left" || "$probe_defaults_left" == "{}" ]] \
-  && ok "偏好设置项已删" || fail "偏好设置项没删（残留: $probe_defaults_left）"
+  && ok "偏好设置项已删" || fail "偏好设置项没删（残留: ${probe_defaults_left}）"
 
 echo
 echo "=== 6. 旧目录是软链接时 --purge 只删链接,不动它指向的目录 ==="
@@ -202,10 +202,10 @@ echo "=== 8. 全程没碰真实环境 ==="
 REAL_CONFIG_AFTER=$(real_data_count)
 REAL_ENGINE_AFTER=$(/bin/launchctl print "gui/$UID_/com.lyrimuse.collector" >/dev/null 2>&1 && echo yes || echo no)
 [[ "$REAL_CONFIG_BEFORE" == "$REAL_CONFIG_AFTER" ]] \
-  && ok "真实配置文件数不变（$REAL_CONFIG_BEFORE）" \
+  && ok "真实配置文件数不变（${REAL_CONFIG_BEFORE}）" \
   || fail "真实配置被动了：$REAL_CONFIG_BEFORE -> $REAL_CONFIG_AFTER"
 [[ "$REAL_ENGINE_BEFORE" == "$REAL_ENGINE_AFTER" ]] \
-  && ok "真实引擎服务状态不变（$REAL_ENGINE_BEFORE）" \
+  && ok "真实引擎服务状态不变（${REAL_ENGINE_BEFORE}）" \
   || fail "真实引擎被动了：$REAL_ENGINE_BEFORE -> $REAL_ENGINE_AFTER"
 REAL_DEFAULTS_AFTER=$(real_defaults_count)
 [[ "$REAL_DEFAULTS_BEFORE" == "$REAL_DEFAULTS_AFTER" ]] \

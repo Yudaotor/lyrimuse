@@ -3,8 +3,12 @@
 # 用法:scripts/test-heavy-gate.sh [放着 heavy-gate.sh 和 heavy-run.sh 的目录,默认本脚本所在目录]
 # 每项打 ok / FAIL,最后一行 all ok 或 N failure(s),退出码对应。
 # 测的是 15 章决策 43、120、121 的约定:同时持有不超过份数、持有者被 SIGKILL 后令牌回收、先来先到、装机优先、
-# 排队上限退出码 75、套着排(heavy-run 里再 heavy-run)不死等、拿到 / 放回 / 超时留痕。
+# 排队上限退出码 75、套着排(heavy-run 里再 heavy-run)不死等、拿到 / 放回 / 超时留痕、别的闸目录的令牌不继承、
+# 停住不刷新的装机登记不再让。
 set -u
+# 从外面带进来的闸设置一律清掉:在拿着令牌的进程里跑(heavy-run 里起的校验)时,继承来的令牌、上限会改掉每一项的结果。
+unset LYRIMUSE_HEAVY_GATE_TOKEN LYRIMUSE_HEAVY_GATE LYRIMUSE_HEAVY_GATE_DIR LYRIMUSE_HEAVY_SLOTS \
+  LYRIMUSE_HEAVY_WAIT_MAX LYRIMUSE_HEAVY_HOLD_WARN
 SRC="$(cd "${1:-$(dirname "$0")}" && pwd)"
 T="$(mktemp -d "${TMPDIR:-/tmp}/heavy-gate-test.XXXXXX")"
 trap 'rm -rf "$T"' EXIT
@@ -99,6 +103,43 @@ if [ "$order" = "install check " ]; then ok "装机优先($order)"; else fail "�
 if grep -q "	acquire	" "$T/g6/events.log" 2>/dev/null && grep -q "	release	" "$T/g6/events.log" 2>/dev/null; then
   ok "拿到 / 放回记进 events.log"
 else fail "拿到 / 放回记进 events.log"; fi
+
+# 8. 别的闸目录的令牌不继承:令牌在另一个目录、持有者还活着,这边 1 份被占着、上限 1 秒,照样排队到 75。
+G="$T/g8"; O="$T/g8-outer"; mkdir -p "$G" "$O/token-1"
+printf '%s\nouter\n%s\n' "$$" "$(date +%s)" > "$O/token-1/owner"
+sleep 30 & h8=$!
+mkdir "$G/token-1"; printf '%s\nheld\n%s\n' "$h8" "$(date +%s)" > "$G/token-1/owner"
+LYRIMUSE_HEAVY_GATE_TOKEN="$O/token-1:$$" LYRIMUSE_HEAVY_GATE_DIR="$G" LYRIMUSE_HEAVY_SLOTS=1 LYRIMUSE_HEAVY_WAIT_MAX=1 \
+  bounded 5 bash "$SRC/heavy-run.sh" t8 true > /dev/null 2>&1
+rc=$?
+if [ "$rc" = 75 ]; then ok "别的闸目录的令牌不继承"; else fail "别的闸目录的令牌不继承" "退出码 $rc(0 = 被当成祖先拿着令牌直接放行)"; fi
+kill "$h8" 2>/dev/null; wait "$h8" 2>/dev/null
+
+# 9. 装机登记要刷新:排着的装机每轮刷新 want-install.<pid>;进程还在、30 秒没刷新的(被 SIGSTOP 停住)校验不再让。
+G="$T/g9"; mkdir -p "$G"
+old="$(date -v-40S +%Y%m%d%H%M.%S)"
+LYRIMUSE_HEAVY_GATE_DIR="$G" LYRIMUSE_HEAVY_SLOTS=1 bash "$SRC/heavy-run.sh" head "sleep 2" > /dev/null 2>&1 &
+h9=$!
+for i in $(seq 50); do [ -d "$G/token-1" ] && break; sleep 0.05; done
+LYRIMUSE_HEAVY_GATE_DIR="$G" LYRIMUSE_HEAVY_SLOTS=1 bash -c ". '$SRC/heavy-gate.sh'; trap heavy_gate_release EXIT; heavy_gate_acquire inst install" > /dev/null 2>&1 &
+inst=$!
+for i in $(seq 50); do [ -e "$G/want-install.$inst" ] && break; sleep 0.05; done
+touch -t "$old" "$G/want-install.$inst" 2>/dev/null
+sleep 0.3
+age=$(( $(date +%s) - $(stat -f %m "$G/want-install.$inst" 2>/dev/null || echo 0) ))
+if [ "$age" -le 5 ]; then ok "排着的装机每轮刷新 want-install"; else fail "排着的装机每轮刷新 want-install" "登记 $age 秒没刷新"; fi
+wait "$h9" "$inst" 2>/dev/null
+sleep 30 & stopped=$!
+kill -STOP "$stopped"
+touch "$G/want-install.$stopped"
+out="$(LYRIMUSE_HEAVY_GATE_DIR="$G" LYRIMUSE_HEAVY_SLOTS=1 LYRIMUSE_HEAVY_WAIT_MAX=1 bounded 5 bash "$SRC/heavy-run.sh" fresh true 2>&1)"
+rc=$?
+if [ "$rc" = 75 ]; then ok "刚刷新过的装机登记照样让"; else fail "刚刷新过的装机登记照样让" "退出码 $rc:$out"; fi
+touch -t "$old" "$G/want-install.$stopped"
+out="$(LYRIMUSE_HEAVY_GATE_DIR="$G" LYRIMUSE_HEAVY_SLOTS=1 LYRIMUSE_HEAVY_WAIT_MAX=2 bounded 5 bash "$SRC/heavy-run.sh" stale true 2>&1)"
+rc=$?
+if [ "$rc" = 0 ]; then ok "停住 30 秒没刷新的装机登记不再让"; else fail "停住 30 秒没刷新的装机登记不再让" "退出码 $rc:$out"; fi
+kill -CONT "$stopped" 2>/dev/null; kill "$stopped" 2>/dev/null; wait "$stopped" 2>/dev/null
 
 if [ "$fails" = 0 ]; then echo "all ok"; else echo "$fails failure(s)"; fi
 [ "$fails" = 0 ]

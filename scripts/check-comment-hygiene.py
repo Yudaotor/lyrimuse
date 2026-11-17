@@ -21,6 +21,9 @@
   - emoji 标记     ⚠️;要提醒就直接写约束句「别写成 X」「必须…」
   - 不可见字符     源码任何位置(不只注释)出现真的不换行空格 / 全角空格 / 零宽字符 / BOM / 行分隔符 /
                    控制字符;写成转义(反斜杠 u 加码点),真字符看不见,grep / diff / 评审都发现不了
+  - shell 变量紧跟非 ASCII  shell 脚本代码行里 `$name` 后面紧挨着汉字、全角标点这类非 ASCII 字符(`等$what等了`);
+                   写成 `${what}`。bash 3.2 在 UTF-8 下把下一个字节读进变量名,zsh 把汉字读进变量名,
+                   开着 set -u 时直接报 unbound variable,还可能让退出码变成 0
   - (注释掉的旧代码:直接删,git 里有。这条机器判不了,靠评审。)
 
 应该写:调用时序与并发约束、反直觉的取舍、量出来的常数及其出处、字段语义与外部系统的
@@ -37,7 +40,8 @@ rune 字面量(含跨行的三引号字符串、Go / JS 反引号字符串、Swi
 注释标记之后的部分;shell heredoc 正文里的 XML 注释 `<!-- … -->`(build.sh 写 Info.plist 用)也算注释,所以字符串里的同样文字不算;shell 的 # 只在词首才算注释(`$#`、`${#x}` 不算)。
 别的字符串字面量一律不扫 —— 误报的代价比漏报大,规则宁可窄。不可见字符那一条例外:扫整行,字符串和
 rune 字面量里的同样算(这类字符最常藏在那里);允许的空白只有普通空格、tab、回车。命中任何一条即
-非零退出并打印 `file:line`。
+非零退出并打印 `file:line`。shell 变量那一条也例外:扫 shell 脚本(.sh、.zsh、shebang 是 sh / bash / zsh 的)整行注释
+以外的代码,行尾注释切掉;单引号字符串和带引号的 heredoc 里不展开,也照样算,那里改成 `${name}` 同样无害。
 
 易误伤:注释里的「用户」多数指 **App 的最终用户**(正当语义),「这一轮 / 上一轮」在本仓
 多指**一轮歌词源查询**(领域词) —— 所以人物归因那条只匹配「用户+要求/反馈/拍板…」这类
@@ -56,12 +60,12 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SCAN_DIRS = ['lyrimuse/Sources', 'lyrimuse/scripts', 'lyrimuse/Localization', 'lyrimuse-engine', 'web', 'scripts',
              'feishu-bot', '.githooks', '.github/scripts']
 # 不在上面这些目录里、但同样有注释的单个文件。
-SCAN_FILES = ['lyrimuse/Package.swift', 'lyrimuse/build.sh']
+SCAN_FILES = ['lyrimuse/Package.swift', 'lyrimuse/build.sh', 'lyrimuse/package.sh']
 SKIP_DIRS = {'.build', '.git', 'node_modules', '__pycache__', 'vendor', 'DerivedData'}
 # 本脚本自己必然写着每一类的**样例**,扫自己就是稳定误报(.githooks/commit-msg 同理,
 # 它的说明里写着 `#123` 样例 —— selftest 里那条守卫也为此先剥注释再判)。
 SKIP_FILES = {'scripts/check-comment-hygiene.py'}
-EXTS = ('.swift', '.go', '.js', '.mjs', '.ts', '.py', '.sh')
+EXTS = ('.swift', '.go', '.js', '.mjs', '.ts', '.py', '.sh', '.zsh')
 
 # 整行注释。行尾注释由 trailing_comments() 先去掉字符串再取。
 COMMENT_LINE = re.compile(r'^\s*(//|///|#|\*|/\*)')
@@ -104,6 +108,15 @@ RULES = [
 INVISIBLE_OK = {chr(32), chr(9), chr(13)}
 INVISIBLE_CATEGORIES = ('Zs', 'Zl', 'Zp', 'Cf', 'Cc')
 INVISIBLE_HINT = u'写成转义(反斜杠 u 加码点),真字符看不见,grep / diff / 评审都发现不了'
+
+# shell 变量后紧跟非 ASCII:`\$name` 不算(转义了不展开),`${name}`、`$1`、`$$` 不在这条里。
+SH_VAR_NON_ASCII = re.compile(u'(?<!\\\\)\\$[A-Za-z_][A-Za-z0-9_]*(?=[^\\x00-\\x7f])')
+SH_VAR_HINT = u'写成 ${name}:bash 3.2 / zsh 在 UTF-8 下会把后面的字节或汉字读进变量名,set -u 下报 unbound variable'
+SH_SHEBANG = re.compile(r'^#!.*\b(ba|z)?sh\b')
+
+
+def is_shell(fp, lines):
+    return fp.endswith(('.sh', '.zsh')) or bool(lines and SH_SHEBANG.match(lines[0]))
 
 
 def invisible_char(line):
@@ -328,6 +341,10 @@ def trailing_selftest():
                                            u'x := 1 // 09-02 起改\ns := "// 2026-09-02"\n')]
     if got != [(1, u'日期戳')]:
         bad.append(u'行尾注释没套词表:期望 [(1, 日期戳)],实际 %r' % (got,))
+    sh = u'echo "等$what等了"\necho "等${what}等了 $a（\\$b）"\n# 注释里的 $x等\necho ok # $y等\nx="$c"\n'
+    got = [(h[1], h[3]) for h in scan_text(os.path.join(ROOT, 'sample.sh'), sh) if h[2] == u'shell 变量紧跟非 ASCII']
+    if got != [(1, u'$what'), (2, u'$a')]:
+        bad.append(u'shell 变量紧跟非 ASCII:期望 [(1, $what), (2, $a)],实际 %r' % (got,))
     return bad
 
 
@@ -404,11 +421,21 @@ def scan_text(fp, text):
     lines = text.split('\n')
     docs = docstring_lines(fp, text)
     trailing = trailing_comments(fp, lines)
+    shell = is_shell(fp, lines)
     for i, line in enumerate(lines, 1):
         ch = invisible_char(line)
         if ch is not None:
             frag = u'U+%04X %s' % (ord(ch), unicodedata.name(ch, ''))
             hits.append((rel, i, u'不可见字符', frag, INVISIBLE_HINT, line.strip()))
+        if shell and not COMMENT_LINE.match(line):
+            code = line
+            if i in trailing:
+                cut = line.rfind('#' + trailing[i])
+                if cut >= 0:
+                    code = line[:cut]
+            m = SH_VAR_NON_ASCII.search(code)
+            if m:
+                hits.append((rel, i, u'shell 变量紧跟非 ASCII', m.group(0), SH_VAR_HINT, line.strip()))
         if COMMENT_LINE.match(line) or i in docs:
             target = line
         elif i in trailing:
