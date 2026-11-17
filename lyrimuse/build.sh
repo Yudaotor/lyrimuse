@@ -88,7 +88,7 @@ coalesce_if_installed() {
   last_pid="$(sed -n 's/^pid=//p' "$LAST_INSTALL" 2>/dev/null || true)"
   last_bundle_ino="$(sed -n 's/^bundle_ino=//p' "$LAST_INSTALL" 2>/dev/null || true)"
   current_bundle_ino="$(stat -f %i "$app" 2>/dev/null || true)"
-  running_pid="$(pgrep -f "$app/Contents/MacOS/lyrimuse" 2>/dev/null | tr '\n' ' ' || true)"
+  running_pid="$(pgrep -f "^$app/Contents/MacOS/lyrimuse" 2>/dev/null | tr '\n' ' ' || true)"
   if [ -n "$last_snapshot_at" ] && [ -n "$running_pid" ] && [ -n "$last_bundle_ino" ] \
       && [ "$last_bundle_ino" = "$current_bundle_ino" ] \
       && awk -v a="$last_snapshot_at" -v b="$BUILD_REQUESTED_AT" 'BEGIN { exit !(a > b) }'; then
@@ -121,7 +121,28 @@ cmux_build_done() {
   fi
 }
 trap 'cmux_build_done $?' EXIT
+# bash 3.2 收到没设 trap 的 SIGTERM / SIGHUP 直接退出、不跑 EXIT trap:锁留在原地,前台那条 swift build 成了孤儿,
+# 接着往快照的 .build 里写,下一个排队的已经接管了锁。设成 exit:bash 等前台命令结束、照常走 EXIT trap。见 15 章决策 119。
+trap 'exit 143' TERM
+trap 'exit 129' HUP
 cmux_stage 0 "排队"
+
+# 接管陈旧锁:几个排队者同时判定陈旧时只能有一个去删。删之前在接管闸(另一个 mkdir 目录)里再读一遍锁,还是判定时
+# 那一把才删:pid 没变;没写 pid 的,目录仍是一分钟前建的。不加闸时,后一个排队者会把前一个刚接管、刚建好的锁当成
+# 陈旧锁删掉,两次装机同时拿着锁。闸被占着时返回 1。见 15 章决策 119。
+take_over_stale_build_lock() {
+  local holder="$1" gate="$BUILD_LOCK.takeover" now
+  if ! mkdir "$gate" 2>/dev/null; then
+    # 闸只拿几毫秒,一分钟前建的是拿着它的进程被 SIGKILL 留下的。
+    if [ -n "$(find "$gate" -maxdepth 0 -mmin +1 2>/dev/null)" ]; then rmdir "$gate" 2>/dev/null || true; fi
+    return 1
+  fi
+  now="$(cat "$BUILD_LOCK/pid" 2>/dev/null || true)"
+  if [ "$now" = "$holder" ] && { [ -n "$holder" ] || [ -n "$(find "$BUILD_LOCK" -maxdepth 0 -mmin +1 2>/dev/null)" ]; }; then
+    rm -rf "$BUILD_LOCK"
+  fi
+  rmdir "$gate" 2>/dev/null || true
+}
 
 build_lock_waited=0
 while ! mkdir "$BUILD_LOCK" 2>/dev/null; do
@@ -133,9 +154,8 @@ while ! mkdir "$BUILD_LOCK" 2>/dev/null; do
   elif [ -n "$(find "$BUILD_LOCK" -maxdepth 0 -mmin +1 2>/dev/null)" ]; then
     stale=1 # 建了目录、还没写进 pid 就被杀
   fi
-  # 接管前再读一次 pid:别的排队者可能刚接管、写进了自己的 pid,那就不是陈旧锁了。
-  if [ "$stale" = 1 ] && [ "$(cat "$BUILD_LOCK/pid" 2>/dev/null || true)" = "$holder" ]; then
-    rm -rf "$BUILD_LOCK"
+  if [ "$stale" = 1 ]; then
+    take_over_stale_build_lock "$holder" || sleep 0.2
     continue
   fi
   if [ "$build_lock_waited" = 0 ]; then
@@ -153,7 +173,25 @@ else
   heavy_gate_acquire() { :; }
   heavy_gate_release() { :; }
 fi
-release_build_lock() { heavy_gate_release; rm -rf "$BUILD_LOCK"; }
+# 只删自己的锁:锁里记的已经不是自己时,删掉的是别人正拿着的锁,下一个排队的会跟它同时装机。
+release_build_lock() {
+  heavy_gate_release
+  if [ "$(cat "$BUILD_LOCK/pid" 2>/dev/null || true)" = "$$" ]; then rm -rf "$BUILD_LOCK"; fi
+}
+# 确认排队锁还在自己手里。锁目录没了(不核对持有者就删锁的旧版 build.sh 退出时删的)就重新拿回;已经被别的 build.sh
+# 拿走就停下,别跟它同时用源码快照和 /Applications。参数是当前阶段,写进提示里。
+ensure_build_lock() {
+  local now
+  now="$(cat "$BUILD_LOCK/pid" 2>/dev/null || true)"
+  [ "$now" = "$$" ] && return 0
+  if [ -z "$now" ] && mkdir "$BUILD_LOCK" 2>/dev/null; then
+    echo $$ > "$BUILD_LOCK/pid"
+    echo "==> 排队锁被删掉了,已重新拿回($1)"
+    return 0
+  fi
+  echo "!! 排队锁已经不在这次 build.sh(pid $$)手里,现在记的是 pid ${now:-?}($1)。不装,等它结束后重跑 ./build.sh" >&2
+  exit 1
+}
 trap 'cmux_build_done $?; release_build_lock' EXIT
 
 NO_RESTART=0
@@ -363,7 +401,49 @@ FAT_DIR="$(mktemp -d)"
 cleanup_build() {
   rm -rf "$FAT_DIR"
   if [ -n "$STAGE" ]; then rm -rf "$STAGE"; fi
+  release_source_snapshot
   release_build_lock
+}
+# 源码快照的持有者标记(快照根目录下的 .build-owner,内容是 pid):拍快照之前写上,拍完再写一次当基准时刻,退出时删
+# (只删自己的)。快照只该由拿着排队锁的那一次装机读写,标记是锁被弄丢时的第二道:拍之前标记里是另一个还在跑的
+# build.sh 就等它结束;用完快照之前核对标记还是自己、源码没有比基准新的文件,否则这次编进去的不全是自己拍的源码,
+# 不装。见 15 章决策 119。
+SNAPSHOT_OWNER=""
+claim_source_snapshot() {
+  local owner owner_cmd waited=0
+  while :; do
+    owner="$(cat "$SNAPSHOT_OWNER" 2>/dev/null || true)"
+    owner_cmd=""
+    if [ -n "$owner" ] && [ "$owner" != "$$" ]; then owner_cmd="$(ps -p "$owner" -o command= 2>/dev/null || true)"; fi
+    case "$owner_cmd" in
+      *build.sh*) ;;
+      *) break ;;
+    esac
+    if [ "$waited" = 0 ]; then
+      echo "==> 源码快照还在被 build.sh(pid $owner)用着,等它结束…"
+      waited=1
+    fi
+    sleep 2
+  done
+  echo $$ > "$SNAPSHOT_OWNER"
+}
+release_source_snapshot() {
+  if [ -n "$SNAPSHOT_OWNER" ] && [ "$(cat "$SNAPSHOT_OWNER" 2>/dev/null || true)" = "$$" ]; then
+    rm -f "$SNAPSHOT_OWNER"
+  fi
+}
+# 参数是当前阶段。快照里 .build 之外的东西构建本身不写;有比基准新的,就是别人在这期间往快照里同步过。
+verify_source_snapshot() {
+  ensure_build_lock "$1"
+  [ -n "$SNAPSHOT_OWNER" ] || return 0
+  local owner changed
+  owner="$(cat "$SNAPSHOT_OWNER" 2>/dev/null || true)"
+  changed="$(find "$SNAPSHOT_ROOT/lyrimuse" "$SNAPSHOT_ROOT/lyrimuse-engine" -path "$SNAPSHOT_ROOT/lyrimuse/.build" -prune \
+    -o -newer "$SNAPSHOT_OWNER" -print 2>/dev/null | head -3 | tr '\n' ' ' || true)"
+  if [ "$owner" != "$$" ] || [ -n "$changed" ]; then
+    echo "!! 源码快照在这次构建期间被改写过($1;标记 pid ${owner:-空},比拍快照晚的:${changed:-无})。编出来的不全是这次拍的源码,不装,重跑 ./build.sh" >&2
+    exit 1
+  fi
 }
 trap 'cmux_build_done $?; cleanup_build' EXIT
 
@@ -390,9 +470,12 @@ if [ -z "${LYRIMUSE_NO_SOURCE_SNAPSHOT:-}" ]; then
     SNAPSHOT_ROOT="$PWD/.build/source-snapshot"
     SNAPSHOT_RSYNC=(-a)
   fi
+  ensure_build_lock "拍源码快照之前"
+  mkdir -p "$SNAPSHOT_ROOT/lyrimuse" "$SNAPSHOT_ROOT/lyrimuse-engine"
+  SNAPSHOT_OWNER="$SNAPSHOT_ROOT/.build-owner"
+  claim_source_snapshot
   echo "==> snapshotting sources into $SNAPSHOT_ROOT"
   cmux_stage 0.05 "拍源码快照"
-  mkdir -p "$SNAPSHOT_ROOT/lyrimuse" "$SNAPSHOT_ROOT/lyrimuse-engine"
   rsync "${SNAPSHOT_RSYNC[@]}" --delete --exclude=/.build/ --exclude=/dist/ --exclude=.DS_Store ./ "$SNAPSHOT_ROOT/lyrimuse/"
   rsync "${SNAPSHOT_RSYNC[@]}" --delete --exclude=/collector --exclude=/lyrimuse-engine --exclude=.DS_Store \
     ../lyrimuse-engine/ "$SNAPSHOT_ROOT/lyrimuse-engine/"
@@ -404,11 +487,13 @@ if [ -z "${LYRIMUSE_NO_SOURCE_SNAPSHOT:-}" ]; then
       if [ -d ".build/$dep" ]; then cp -cR ".build/$dep" "$SNAPSHOT_ROOT/lyrimuse/.build/"; fi
     done
   fi
+  echo $$ > "$SNAPSHOT_OWNER"
   cd "$SNAPSHOT_ROOT/lyrimuse"
 fi
 
 cmux_stage 0.08 "等编译名额"
 heavy_gate_acquire "build.sh${DEST:+ --dest}" install
+verify_source_snapshot "编译之前"
 echo "==> building ($SWIFT_CONFIG${SWIFT_OPT_ARGS[@]+ ${SWIFT_OPT_ARGS[*]}}) [$ARCHES]"
 cmux_stage 0.1 "编译 App"
 # 每个架构单独编一次再 lipo 合并,而不是 `swift build --arch arm64 --arch x86_64` 一步
@@ -507,6 +592,7 @@ for arch in $ARCHES; do
 done
 merge_slices "$FAT_DIR/$ENGINE_NAME" "${ENGINE_SLICES[@]}"
 
+verify_source_snapshot "编译之后"
 # 编译到这里就完了,后面组装、签名、重启都轻,把全机重活闸让给排队的人。
 heavy_gate_release
 echo "==> assembling .app bundle"
@@ -1024,6 +1110,7 @@ fi
 # 换完之后 $STAGE 指向的是**旧包**,交给上面那个 EXIT trap 删 —— 顺带等于装完才删旧包,
 # 老进程在被重启之前一直有完整的一份可用。
 # 首装(目标还不存在)时 renamex_np 返回 ENOENT,回退 mv;那条路径上目标不存在,没有嵌套风险。
+verify_source_snapshot "换包之前"
 if [ -n "$STAGE" ]; then
   # 换包之前先卸掉引擎的 job,等老进程退出。引擎是裸可执行文件,TCC 按**路径**认它;
   # 换完之后老进程的可执行文件落在 $STAGE(带 pid 的临时路径)里,在被重装之前它还会照常问 Spotify,
@@ -1035,7 +1122,7 @@ if [ -n "$STAGE" ]; then
     launchctl bootout "gui/$(id -u)/$ENGINE_LABEL" 2>/dev/null || true
     ENGINE_BOOTED_OUT=1
     for _ in $(seq 1 20); do
-      pgrep -f "$FINAL_APP_DIR/$ENGINE_PATH_PATTERN" >/dev/null 2>&1 || break
+      pgrep -f "^$FINAL_APP_DIR/$ENGINE_PATH_PATTERN" >/dev/null 2>&1 || break
       sleep 0.5
     done
   fi
@@ -1052,8 +1139,8 @@ SWAP
   else
     mv "$STAGE" "$FINAL_APP_DIR"
   fi
-  # 必须重指回真实路径。下面 restart 段的 `pgrep -f "$BIN"`(三处)和
-  # `pgrep -f "$APP_DIR/$ENGINE_PATH_PATTERN"` 匹配的是进程命令行,那是
+  # 必须重指回真实路径。下面 restart 段的 `pgrep -f "^$BIN"`(三处)和
+  # `pgrep -f "^$APP_DIR/$ENGINE_PATH_PATTERN"` 匹配的是进程命令行,那是
   # /Applications/... —— 忘了这两行就会永远判定"没起来"然后 exit 1。
   # `open "$APP_DIR"` 同理,不重指就会去打开那个暂存包。
   APP_DIR="$FINAL_APP_DIR"
@@ -1096,20 +1183,22 @@ if launchctl list "$LABEL" >/dev/null 2>&1; then
   sleep 1
 fi
 # 旧实例的 pid **必须**记下来给最后那道校验用 —— 见下面 "pid 没变" 那一段。
-OLD_PIDS="$(pgrep -f "$BIN" 2>/dev/null | tr '\n' ' ' || true)"
+# 按命令行匹配时一律锚在开头(`^$BIN`):命令行中间带这个路径的别的进程(会话里跑 `./build.sh …; strings $BIN` 的那层
+# shell)也会匹配上,会被当成旧实例杀掉。见 15 章决策 119。
+OLD_PIDS="$(pgrep -f "^$BIN" 2>/dev/null | tr '\n' ' ' || true)"
 if [ -n "$OLD_PIDS" ]; then
   echo "==> stopping running instance (pid ${OLD_PIDS% })"
   kill $OLD_PIDS 2>/dev/null || true
   # 等它真的退出:旧进程还在时 `open` 只会把它激活、不会起新二进制(LaunchServices 单实例)。
   for _ in 1 2 3 4 5; do
-    pgrep -f "$BIN" >/dev/null 2>&1 || break
+    pgrep -f "^$BIN" >/dev/null 2>&1 || break
     sleep 1
   done
 fi
 # 记下旧引擎的 pid,给末尾「新引擎起来了没有」那道确认用。必须在 open 之前取:
 # App 一起来就会自己重装引擎(见末尾那段)。
 ENGINE_BIN="$APP_DIR/Contents/Resources/$ENGINE_NAME"
-OLD_ENGINE_PIDS="$(pgrep -f "$APP_DIR/$ENGINE_PATH_PATTERN" 2>/dev/null | tr '\n' ' ' || true)"
+OLD_ENGINE_PIDS="$(pgrep -f "^$APP_DIR/$ENGINE_PATH_PATTERN" 2>/dev/null | tr '\n' ' ' || true)"
 echo "==> launching via LaunchServices (open -g)"
 cmux_stage 0.92 "重启 App"
 open -g "$APP_DIR"
@@ -1117,7 +1206,7 @@ open -g "$APP_DIR"
 # 2 秒经常不够 —— 实测被误判成「没起来」(进程其实起了)。
 pid=""
 for _ in 1 2 3 4 5 6 7 8 9 10; do
-  pid="$(pgrep -f "$BIN" 2>/dev/null | tr '\n' ' ' || true)"
+  pid="$(pgrep -f "^$BIN" 2>/dev/null | tr '\n' ' ' || true)"
   [ -n "$pid" ] && break
   sleep 1
 done

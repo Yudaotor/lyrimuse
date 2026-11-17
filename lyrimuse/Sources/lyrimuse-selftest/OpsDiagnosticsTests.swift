@@ -1666,6 +1666,73 @@ func runOpsDiagnosticsTests() {
         }
     }
 
+    // ---- build.sh 排队锁只删自己的、陈旧锁走接管闸、源码快照有持有者标记 ----
+    //
+    // 不核对持有者就删锁时,一次「两个 build.sh 同时拿着锁」会顺着排队一直传下去:先结束的那个删掉的是后来者的锁,
+    // 再下一个排队的立刻进来、往全机共用的源码快照里同步自己那棵树,正在编的那次编进了别人的源码(15 章决策 119)。
+    do {
+        let buildScript = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()   // lyrimuse-selftest
+            .deletingLastPathComponent()   // Sources
+            .deletingLastPathComponent()   // lyrimuse
+            .appendingPathComponent("build.sh")
+        if let text = try? String(contentsOfFile: buildScript.path, encoding: .utf8) {
+            let codeLines = text.split(separator: "\n", omittingEmptySubsequences: false)
+                .map { String($0).trimmingCharacters(in: .whitespaces) }
+                .filter { !$0.hasPrefix("#") }
+            let code = codeLines.joined(separator: "\n")
+            expectEqual(code.contains("release_build_lock() {\nheavy_gate_release\nif [ \"$(cat \"$BUILD_LOCK/pid\" 2>/dev/null || true)\" = \"$$\" ]; then rm -rf \"$BUILD_LOCK\"; fi\n}"), true,
+                        "排队锁: 释放时只删记着自己 pid 的锁")
+            let lockRemovals = codeLines.filter { $0.contains("rm -rf \"$BUILD_LOCK\"") }
+            expectEqual(lockRemovals.count, 2,
+                        "排队锁: 删锁只有两处(释放自己的、接管闸里确认过的陈旧锁),多出来的就是不核对持有者的删法")
+            if let fn = code.range(of: "take_over_stale_build_lock() {"),
+               let gate = code.range(of: "if ! mkdir \"$gate\" 2>/dev/null; then", range: fn.upperBound..<code.endIndex),
+               let recheck = code.range(of: "if [ \"$now\" = \"$holder\" ]", range: fn.upperBound..<code.endIndex),
+               let remove = code.range(of: "rm -rf \"$BUILD_LOCK\"", range: fn.upperBound..<code.endIndex),
+               let loop = code.range(of: "while ! mkdir \"$BUILD_LOCK\" 2>/dev/null; do"),
+               let loopEnd = code.range(of: "\ndone\n", range: loop.upperBound..<code.endIndex) {
+                expectEqual(gate.lowerBound < recheck.lowerBound && recheck.lowerBound < remove.lowerBound, true,
+                            "排队锁: 陈旧锁先进接管闸、闸里重读确认还是同一把,再删")
+                let body = code[loop.upperBound..<loopEnd.lowerBound]
+                expectEqual(body.contains("take_over_stale_build_lock \"$holder\"") && !body.contains("rm -rf"), true,
+                            "排队锁: 排队循环里不直接删锁,陈旧锁一律交给接管函数")
+                if let term = code.range(of: "trap 'exit 143' TERM\ntrap 'exit 129' HUP") {
+                    expectEqual(term.lowerBound < loop.lowerBound, true,
+                                "排队锁: 排队之前给 SIGTERM / SIGHUP 设 trap(bash 3.2 没 trap 时被杀不跑 EXIT trap,锁和孤儿编译都留下)")
+                } else {
+                    expectEqual(true, false, "排队锁: 找不到 SIGTERM / SIGHUP 的 trap")
+                }
+            } else {
+                expectEqual(true, false, "排队锁: 找不到接管函数、闸、重读、删锁或排队循环(改写法了?)")
+            }
+            if let claim = code.range(of: "claim_source_snapshot\necho \"==> snapshotting sources into"),
+               let rsync = code.range(of: "rsync \"${SNAPSHOT_RSYNC[@]}\" --delete --exclude=/.build/"),
+               let stamp = code.range(of: "echo $$ > \"$SNAPSHOT_OWNER\"\ncd \"$SNAPSHOT_ROOT/lyrimuse\""),
+               let gateIn = code.range(of: "heavy_gate_acquire \"build.sh${DEST:+ --dest}\" install\nverify_source_snapshot \"编译之前\""),
+               let compile = code.range(of: "for product in lyrimuse lyrics-translate lyrics-romanize; do"),
+               let afterCompile = code.range(of: "verify_source_snapshot \"编译之后\"\nheavy_gate_release"),
+               let engine = code.range(of: "go build -trimpath"),
+               let beforeSwap = code.range(of: "verify_source_snapshot \"换包之前\"\nif [ -n \"$STAGE\" ]; then"),
+               let swap = code.range(of: "renamex_np(RENAME_SWAP)") {
+                expectEqual(claim.lowerBound < rsync.lowerBound && rsync.lowerBound < stamp.lowerBound
+                            && stamp.lowerBound < gateIn.lowerBound && gateIn.lowerBound < compile.lowerBound
+                            && engine.lowerBound < afterCompile.lowerBound && afterCompile.lowerBound < beforeSwap.lowerBound
+                            && beforeSwap.lowerBound < swap.lowerBound, true,
+                            "源码快照: 拍之前认领、拍完写基准,编译前、编译后、换包前各核对一次")
+            } else {
+                expectEqual(true, false, "源码快照: 找不到认领 / 基准 / 三处核对(改写法了?)")
+            }
+            expectEqual(code.contains("-o -newer \"$SNAPSHOT_OWNER\" -print"), true,
+                        "源码快照: 核对的是快照里有没有比基准新的源码文件")
+            let pgreps = codeLines.filter { $0.contains("pgrep -f \"") }
+            expectEqual(!pgreps.isEmpty && pgreps.allSatisfy { !$0.contains("pgrep -f \"$") }, true,
+                        "进程匹配: pgrep -f 一律锚在命令行开头(\"^…\"),否则会把命令行里带 App 路径的 shell 当成旧实例杀掉")
+        } else {
+            expectEqual(true, false, "排队锁: 读不到 build.sh(路径挪了?)")
+        }
+    }
+
     // ---- 提交信息不许引用 issue ----
     //
     // 「以后提交都不允许引用任何 issue」。为什么是 git hook 而不是写进文档:这个仓的
