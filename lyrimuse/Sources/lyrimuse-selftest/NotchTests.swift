@@ -1587,6 +1587,11 @@ func runNotchTests() {
                         && sourceHas(reveal, "Color.clear.frame(height: fade.lowerBound)\n LinearGradient(colors: [.clear, .black], startPoint: .top, endPoint: .bottom)")
                         && sourceHas(reveal, ".frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)\n .padding(.horizontal, -outset)"), true,
                         "展开边缘: 描边和投影在卡片顶部渐隐,不沿屏幕上沿、刘海和菜单栏走(纯黑风格不露出刘海轮廓)")
+            // 编辑台预览挂同一个 NotchRevealClip(终态比例、跟预览的展开态走),不另画一套;舞台缩放把两侧投影余量算进去。
+            expectEqual(sourceHas(stageSrc, ".environment(\\.notchHostClipsCard, true)\n .modifier(NotchRevealClip(widthFraction: NotchRevealState.settled.widthFraction,\n heightFraction: NotchRevealState.settled.heightFraction,\n outline: chrome.cardOutline,\n expanded: chrome.isExpanded))")
+                        && !stageSrc.contains("NotchCardEdgeShadow") && !stageSrc.contains("NotchCardKeyline")
+                        && sourceHas(stageSrc, "let needed = widestCardWidth + 2 * NotchCardEdge.windowMargin\n guard widestCardWidth > 0, needed > stageWidth + 0.5 else { return 1 }\n return stageWidth / needed"), true,
+                        "展开边缘: 编辑台预览跟真窗口挂同一道外形裁剪和描边投影,舞台给投影留出两侧余量")
             expectEqual(sourceHas(stageSrc, "NotchCardOutlineReader(outline: chrome.cardOutline) {\n            $0.stroke("), true,
                         "外轮廓契约: 编辑台拖宽度那圈虚线跟卡片同形")
             // 圆角按这一帧的高度算,不靠动画插值:两道形状都不该再声明 animatableData(插值的起点会把没展开那张卡片拉成直角再长回来)。

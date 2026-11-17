@@ -15,7 +15,7 @@ import SwiftUI
 // 顺序、标题跟工具栏的入口一一对应(中间多插宽度 / 展开宽度两根滑杆),每一组调的都是浮层背后同一份组件;「音浪」开关在
 // 左右耳两组顶部,跟浮层里一样。
 //
-// 舞台放得下就 1:1、放不下就整体缩小到刚好放下(`previewScale`)。缩放比 = min(1, 舞台宽 / 展开真实宽),按展开宽算、不按此刻的
+// 舞台放得下就 1:1、放不下就整体缩小到刚好放下(`previewScale`)。缩放比 = min(1, 舞台宽 / (展开真实宽 + 两侧投影余量)),按展开宽算、不按此刻的
 // 卡片宽,这样 hover 展开时比例不跳、稳态和展开态在同一把尺子下。别改成"居中裁切 + 两端渐隐":要的是看全,不是知道被裁了。
 // 缩放的是「屏幕顶端」整组(仿菜单栏条 + 卡片 + 刘海),三者描述的是同一块屏幕,只缩卡片会让刘海空当和菜单栏高度对不上;壁纸
 // 不缩(它只是背景)。缩了就在舞台左下角亮一颗「预览 NN%」胶囊(`scaleHint`),免得用户把缩过的尺寸当真。卡片宽度上限就是
@@ -23,8 +23,8 @@ import SwiftUI
 //
 // 舞台放不下 800:舞台宽 = 卡片列宽 = min(600, 设置窗内容区 − 40)。侧边栏能拉到最宽(中文 240,英文固定 250)、窗口能拖到最窄
 // (侧栏最宽 + 540,`SettingsSidebarWidth.windowMinWidth`;SettingsWindowConfigurator 往 styleMask 里插了 `.resizable`),两样推到
-// 极限时舞台约 499pt。缩放之后卡片永远不会比舞台宽,但舞台的裁切形状仍要是顶直角底圆角(见 stage 里那段):卡片恰好等宽时每侧
-// 余量是 0,顶上带圆角就会把卡片两个顶部直角削圆。
+// 极限时舞台约 499pt。缩放之后卡片永远不会比舞台宽,但舞台的裁切形状仍要是顶直角底圆角(见 stage 里那段):卡片两侧只剩投影余量,
+// 顶上带圆角就会把卡片两个顶部直角削圆。
 //
 // 舞台高度是常量(只随屏幕的刘海让位高度变,那是插拔显示器才会发生的事)。hover 展开时卡片长高 76pt,容器不跟着变:编辑台挂在
 // 可滚动内容区里,它一变高下面所有卡片都会跟着跳一下。
@@ -623,10 +623,9 @@ struct NotchEditorStage: View {
         //   ① 语义:这块舞台画的是**屏幕的上沿**,而屏幕上沿是直的。
         //   ② 几何:卡片在舞台里**顶对齐**,顶角是直角。舞台如果在顶上带 12pt 圆角,只要每侧
         //      余量小于 12pt,卡片那两个顶部直角就会落进圆弧要削掉的那块里被削圆 —— 而"1:1
-        //      还原它贴在屏幕上沿的样子"正是这块画布的卖点。余量小于 12pt 是**够得着**的:
-        //      舞台宽 = 卡片列宽 = min(600, 设置窗内容区 − 40),侧边栏拉到最宽、窗口拖到最窄
-        //      (SettingsSidebarWidth.windowMinWidth)时舞台约 499pt;卡片比舞台宽时整组按 previewScale
-        //      缩到恰好等宽,余量正好是 0。
+        //      还原它贴在屏幕上沿的样子"正是这块画布的卖点。余量没多少:previewScale 只给卡片两侧各留
+        //      `NotchCardEdge.windowMargin` 乘缩放比(舞台最窄约 499pt、展开宽 800 时约 14pt),仿菜单栏条
+        //      更是横贯整个舞台。
         .overlay(alignment: .top) {
             Color.clear
                 .frame(width: 1, height: 1)
@@ -775,6 +774,13 @@ struct NotchEditorStage: View {
             // 先钉当下的真实尺寸:视图内层是 GeometryReader,耳朵宽度按 proxy.size.width 算,
             // 给错尺寸这一层就先失真了。
             .frame(width: cardWidth, height: cardHeight)
+            // 外形裁剪、1x 柔边、展开态的发丝描边和浅投影跟真窗口挂同一个 `NotchRevealClip`(出场动画那两个比例取终态),
+            // 卡片自己那道裁剪照真窗口关掉。别在预览里另画一套描边投影,参数只有 `NotchCardEdge` 一份。见 05 章决策 150。
+            .environment(\.notchHostClipsCard, true)
+            .modifier(NotchRevealClip(widthFraction: NotchRevealState.settled.widthFraction,
+                                      heightFraction: NotchRevealState.settled.heightFraction,
+                                      outline: chrome.cardOutline,
+                                      expanded: chrome.isExpanded))
             // 卡片按**深色**外观画,不跟设置窗口走:真窗口把 appearance 锁死 `.darkAqua`
             // (`NotchLyricsWindow`),而「磨砂玻璃」风格的背景是系统材质 `.thickMaterial` ——
             // 同一个值在浅色外观下解析成另一套材质(一块发白的玻璃)。不钉这一层,浅色系统
@@ -1034,17 +1040,21 @@ struct NotchEditorStage: View {
             .accessibilityHidden(true)
     }
 
-    /// 「屏幕顶端」整组的预览缩放比:放得下就 1(1:1),放不下就缩到**最宽形态**刚好等于舞台宽。
+    /// 「屏幕顶端」整组的预览缩放比:放得下就 1(1:1),放不下就缩到**最宽形态**连同两侧投影余量刚好等于舞台宽。
     ///
     /// **按展开真实宽算,不按此刻画的卡片宽**:hover 时卡片从稳态宽长到展开宽,要是比例跟着此刻的
     /// 宽度走,鼠标一进一出整块屏幕就会忽大忽小;钉在展开宽上,稳态和展开态在同一把尺子下,展开时
-    /// 恰好把舞台撑满。拖上限那只滑块时展开宽在变,比例跟着连续变,是预期的("越拉越宽,预览越小")。
+    /// 连同两侧投影余量恰好把舞台撑满。拖上限那只滑块时展开宽在变,比例跟着连续变,是预期的("越拉越宽,预览越小")。
+    ///
+    /// 要放下的是卡片加左右各一份 `NotchCardEdge.windowMargin`(跟真窗口给投影留的余量同一个数):展开态的投影画在卡片外,
+    /// 卡片贴着舞台左右边时投影会被舞台的裁切硬切成直边。
     ///
     /// 0.5 的余量:宽度量化到 2pt、舞台宽度是测出来的浮点数,差几个 0.0x 不该触发缩放。
     /// `widestCardWidth <= 0` 不做除法,直接 1。
     static func previewScale(stageWidth: CGFloat, widestCardWidth: CGFloat) -> CGFloat {
-        guard widestCardWidth > stageWidth + 0.5, widestCardWidth > 0 else { return 1 }
-        return stageWidth / widestCardWidth
+        let needed = widestCardWidth + 2 * NotchCardEdge.windowMargin
+        guard widestCardWidth > 0, needed > stageWidth + 0.5 else { return 1 }
+        return stageWidth / needed
     }
 
     // MARK: - 宽度调整条

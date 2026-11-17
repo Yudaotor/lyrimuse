@@ -138,7 +138,7 @@ struct NotchWindowRoot: View {
             // NotchHangingShape.card 重合,见 NotchRevealShape 头注),NotchLyricsView 自己那道
             // 就不再裁了 —— 两道 clipShape 是两层 mask,尺寸动画期间每帧都要各重设一次路径
             // (Time Profiler:mask/clip 更新约占动画期间主线程忙时的 10%)。
-            // 设置页编辑台没有这层壳,那边照旧由 NotchLyricsView 自己裁。
+            // 设置页编辑台在预览卡片上挂同一个 NotchRevealClip(比例取终态),同样关掉卡片自己那道。
             .environment(\.notchHostClipsCard, true)
             // 窗口看不见时整卡停表(见 controller.isSurfaceVisible);cardBodyLayer 里每层再与自己的可见性取与。
             .environment(\.notchCardLayerActive, controller.isSurfaceVisible)

@@ -36,7 +36,7 @@ struct NotchLyricsView<Chrome: NotchChromeSource>: View {
     /// 出场动画期间内容的透明度(NotchWindowRoot 在那 0.3s 里改,默认 1)。只作用于内容 VStack,
     /// 背景层不受影响 —— 先看到卡片形状从刘海长出来、再看到字,见 NotchRevealShape 头注。
     @Environment(\.notchRevealContentOpacity) private var revealContentOpacity
-    /// 宿主是否已替卡片裁好外形(真窗口 true / 编辑台 false),见 EnvironmentValues.notchHostClipsCard。
+    /// 宿主是否已替卡片裁好外形(真窗口、编辑台都是 true),见 EnvironmentValues.notchHostClipsCard。
     @Environment(\.notchHostClipsCard) private var hostClipsCard
     /// 窗口此刻看不看得见(`notchCardLayerActive` 在本视图位置上的值,由 `NotchWindowRoot` 给)。
     /// 只给顶行用。`cardBodyLayer` 里的块要按**所在那一层**停表,必须经 `NotchLayerActiveReader`
@@ -202,7 +202,7 @@ struct NotchLyricsView<Chrome: NotchChromeSource>: View {
             // 背景打底层与收起态黑罩都是不带形状的纯色,底部圆角**只**靠这一道
             // (或宿主那道,见下)—— 别再把它们改回 NotchHangingShape.fill,那是每帧重画整卡。
             //
-            // 宿主已经在卡片外面裁过同一个形状时(真窗口的 NotchWindowRoot,那道 NotchRevealShape
+            // 宿主已经在卡片外面裁过同一个形状时(真窗口的 NotchWindowRoot、设置页编辑台,那道 NotchRevealShape
             // 终态与这里重合)这一道就省掉:两层 mask 在尺寸动画里每帧各重设一次路径,是白付的。
             // 这个环境值对某个宿主是常量(见其 doc),分支不会在运行期切换、不会重建子树。
             .modifier(NotchCardClip(enabled: !hostClipsCard, outline: controller.cardOutline))
@@ -220,8 +220,8 @@ struct NotchLyricsView<Chrome: NotchChromeSource>: View {
         .onDisappear { playback.syncAdSkipGate(adBreak: false) }
         // 这里不挂 .onHover:它覆盖的范围比卡片大一圈,窗口常驻最大尺寸时鼠标划过卡片下方的透明区也会展开。命中判定和触觉反馈
         // 在 NotchWindowRoot,那里拿精确坐标跟卡片矩形直接比;预览那边走自己的 onContinuousHover。
-        // 展开态的描边和投影不在这里画,挂在真窗口那道外形裁剪上(`NotchRevealClip`、`NotchCardEdge`),窗口为投影留的余量见
-        // NotchLyricsWindowController.recomputeGeometry。
+        // 展开态的描边和投影不在这里画,挂在宿主那道外形裁剪上(`NotchRevealClip`、`NotchCardEdge`,真窗口和编辑台预览同一个),
+        // 窗口为投影留的余量见 NotchLyricsWindowController.recomputeGeometry。
     }
 
     // 「跟随封面」背景:跟"歌词窗口"的 artworkBackground(LyricsWindowView.swift)同一套效果(封面整图放大、高斯模糊、压一层

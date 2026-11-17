@@ -36,7 +36,8 @@ struct NotchRevealShape: Shape {
     }
 }
 
-/// 真窗口挂 `NotchRevealShape` 的那一层。圆角从 `NotchCornerLive` 取、由这一层自己观察:拖圆角滑杆时只重算这道裁剪,
+/// 真窗口挂 `NotchRevealShape` 的那一层;设置页编辑台的预览卡片挂同一个(两个比例取终态),外形、描边、投影跟真窗口一致。
+/// 圆角从 `NotchCornerLive` 取、由这一层自己观察:拖圆角滑杆时只重算这道裁剪,
 /// `NotchWindowRoot` 和整张卡片都不跟着重算。
 ///
 /// 1x 屏上卡片外面再垫一圈柔边(`NotchLowResEdgeShadow`):一个点只有一个像素,圆角的抗锯齿过渡带只有一像素宽,深色卡片压在
@@ -209,9 +210,9 @@ extension EnvironmentValues {
         set { self[NotchRevealContentOpacityKey.self] = newValue }
     }
 
-    /// 宿主是否已经替卡片裁好了外形。`NotchWindowRoot` 设 true:它挂在卡片外面的那道
-    /// `NotchRevealShape` 终态就是 `NotchHangingShape.card`,`NotchLyricsView` 再裁一遍是重复的一层 mask,
-    /// 尺寸动画期间每帧多重设一次路径。默认 false —— 设置页编辑台等没有这层壳的宿主,卡片自己裁。
+    /// 宿主是否已经替卡片裁好了外形。`NotchWindowRoot` 和设置页编辑台都设 true:它们挂在卡片外面的那道
+    /// `NotchRevealShape`(`NotchRevealClip`)终态就是 `NotchHangingShape.card`,`NotchLyricsView` 再裁一遍是重复的一层 mask,
+    /// 尺寸动画期间每帧多重设一次路径,抗锯齿的边缘还会被乘两次、比真窗口细一圈。默认 false —— 没有这层壳的宿主,卡片自己裁。
     /// 这个值对某个宿主是**常量**,不要在运行期切换:`NotchLyricsView` 按它选 clipShape 分支,切换会
     /// 重建子树、丢掉跑马灯等 @State。
     var notchHostClipsCard: Bool {
