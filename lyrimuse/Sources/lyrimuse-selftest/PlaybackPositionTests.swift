@@ -356,6 +356,9 @@ func runPlaybackPositionTests() {
             // 换歌 → 不是
             expectEqual(MC.isStaleAnchorRepublish(last: last, track: "方大同|南音", elapsed: 10.477, timestamp: "T43", duration: 268.92, bundleID: PlaybackPlayer.spotify.bundleIdentifier, now: later),
                         false, "陈旧重发: 换歌不算")
+            // 酷我:同 elapsed 换时间戳是缓冲 / 恢复中的如实报数,不算重发;判成重发会从旧锚点时刻外推,13 秒暂停恢复后超前 14~19 秒
+            expectEqual(MC.isStaleAnchorRepublish(last: last, track: "方大同|忘了美麗", elapsed: 10.477, timestamp: "T43", duration: 268.92, bundleID: PlaybackPlayer.kuwo.bundleIdentifier, now: later),
+                        false, "陈旧重发: 酷我同 elapsed 新时间戳信新锚点")
             // elapsed == 0:跟「上一曲」重头播放签名相同,只按**时间**分(zeroAnchorRepublishWindowSecs)。
             // 实测两簇:开播双发挤在 2 秒内(汽水音乐 0.5~1.99s、连发累计 3.4s),真的回到 0 最近也在 175s 后。
             let atStart = MC.PlayingAnchor(track: "x|y", elapsed: 0, timestamp: "T00", instant: ts)

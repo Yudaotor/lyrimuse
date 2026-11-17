@@ -3723,7 +3723,7 @@ public enum MediaControlClient {
 
     /// 这次读到的播放锚点是不是上一个播放锚点的陈旧重发。纯函数,selftest 直接覆盖。
     /// `bundleID` 只用于 elapsed == 0 那条分支的准入(见上面那段);elapsed > 0 的签名是通用的
-    /// MediaRemote 行为,不分播放器。
+    /// MediaRemote 行为,只排除酷我(它同 elapsed 换时间戳是如实报「还没走」)。
     public nonisolated static func isStaleAnchorRepublish(
         last: PlayingAnchor?, track: String, elapsed: Double?, timestamp: String?, duration: Double?,
         bundleID: String?, now: Date
@@ -3731,6 +3731,8 @@ public enum MediaControlClient {
         guard let last, let elapsed, let timestamp, last.track == track, last.timestamp != timestamp else { return false }
         if isFoobarArtworkRepublish(last: last, elapsed: elapsed, timestamp: timestamp, bundleID: bundleID) { return true }
         guard last.elapsed == elapsed else { return false }
+        // 酷我同 elapsed 换时间戳是如实报「还没走」(跳转后缓冲、长暂停恢复第一下),按重发判会从旧时刻外推、超前一个暂停长度。
+        if elapsed > 0, bundleID == PlaybackPlayer.kuwo.bundleIdentifier { return false }
         if elapsed <= 0 {
             guard PlaybackPlayer.builtin(forBundleID: bundleID)?.republishesZeroAnchor == true else { return false }
             if republishGapSeconds(last: last, timestamp: timestamp, now: now) > zeroAnchorRepublishWindowSecs {
