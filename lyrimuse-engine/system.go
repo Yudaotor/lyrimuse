@@ -106,8 +106,12 @@ func cleanMediaTag(s string) string {
 	return composeNFC(strings.Join(strings.Fields(s), " "))
 }
 
-// fetchNowPlayingArtwork:设备直送封面,取自 App 写的当前封面文件(见 appPlaybackArtwork)。只在换歌后要封面那一刻调
-// (deviceCoverURLIfFresh);播放器 / 歌手 / 歌名对不上这首就当没拿到。
+// fetchNowPlayingArtwork:设备直送封面,取自 App 写的当前封面文件(见 appPlaybackArtwork);酷我从不往系统里报封面,取它容器里
+// 按歌手、专辑存的那张(kuwoLocalCoverArtwork)。只在换歌后要封面那一刻调(deviceCoverURLIfFresh);播放器 / 歌手 / 歌名对不上
+// 这首就当没拿到。
 func fetchNowPlayingArtwork(ctx context.Context, expectedBundleID, expectedArtist, expectedTitle string) (data []byte, mimeType string, ok bool) {
-	return appPlaybackArtwork(expectedBundleID, expectedArtist, expectedTitle)
+	if data, mimeType, ok = appPlaybackArtwork(expectedBundleID, expectedArtist, expectedTitle); ok {
+		return data, mimeType, true
+	}
+	return kuwoLocalCoverArtwork(expectedBundleID, expectedArtist, expectedTitle)
 }

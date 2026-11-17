@@ -201,6 +201,15 @@ func playerSongIDOK(bundleID, id string) bool {
 	return false
 }
 
+// kuwoSongPageURL:酷我记下的曲目 id 拼成酷我网页版歌曲页(不登录能开);形状不对(playerSongIDOK)为 ""。App 侧
+// PlatformLinks.kuwoSongURL 的形状闸与这里同源。
+func kuwoSongPageURL(songID string) string {
+	if !playerSongIDOK(kuwoMusicBundleID, songID) {
+		return ""
+	}
+	return "https://www.kuwo.cn/play_detail/" + songID
+}
+
 // rawDigitsID:JSON 里写成字符串或数字的 id,取出那串数字;别的形状、空的、0 都返回空串。
 func rawDigitsID(raw json.RawMessage) string {
 	s := strings.Trim(strings.TrimSpace(string(raw)), `"`)

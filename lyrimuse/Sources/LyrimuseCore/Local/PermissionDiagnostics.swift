@@ -257,6 +257,9 @@ public enum PermissionDiagnostics {
         case .readsLyricsAndQueue:
             return ("engine reads its lyrics cache and play queue in its private container",
                     "its own cached lyrics are skipped (lyrics are searched online) and upcoming tracks are not pre-resolved")
+        case .readsLyricsQueueFavoritesAndCovers:
+            return ("engine reads its lyrics cache, play queue, favorites and artwork in its private container",
+                    "its own cached lyrics and artwork are skipped (both are searched online), upcoming tracks are not pre-resolved and the favorite button is hidden")
         case .readsQueue:
             return ("engine reads its play queue in its private container",
                     "pre-resolve falls back to other tracks of the same album")

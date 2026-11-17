@@ -299,6 +299,7 @@ func runPlayerIdentityTests() {
                 let base = 1_794_838_168.448_114
                 let raw = MediaControlMicros.timestampString(base * 1_000_000)
                 func secs(_ s: String?) -> Double { s.flatMap { MediaControlMicros.date(fromTimestampString: $0)?.timeIntervalSince1970 } ?? -1 }
+                expectEqual(K.leadSecs, 0.14, "酷我锚点: 往后挪的是实测的 0.14 秒(02 章决策 263)")
                 expectEqual(K.lead(bundleID: kuwo, playing: true), K.leadSecs, "酷我锚点: 在放的往后挪")
                 expectEqual(K.lead(bundleID: kuwo, playing: false), 0, "酷我锚点: 暂停帧报的是停声位置,不挪(暂停时速率仍是 1,只认 playing)")
                 expectEqual(K.lead(bundleID: kuwo, playing: nil), 0, "酷我锚点: 不知道在不在放不挪")
@@ -316,12 +317,23 @@ func runPlayerIdentityTests() {
                 let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
                 let client = (try? String(contentsOfFile: root.appendingPathComponent("LyrimuseCore/Local/MediaControlClient.swift").path,
                                           encoding: .utf8)) ?? ""
-                expectEqual(sourceHas(client, "timestamp = KuwoSessionAnchor.shifted(mygo.timestamp, by: kuwoLead)"), true,
-                            "酷我锚点接线: 解码系统会话时挪时刻")
+                expectEqual(sourceHas(client, "let kuwoLead = KuwoSessionAnchor.lead(bundleID: bundleIdentifier, playing: playing)\n"
+                                      + "timestamp = KuwoSessionAnchor.shifted(mygo.timestamp, by: kuwoLead)"), true,
+                            "酷我锚点接线: 解码系统会话时按这一帧的播放器和在不在放挪时刻")
                 expectEqual(sourceHas(client, "times.elapsedTimeNow.map { $0 + lead - kuwoLead * (plexamp.rate ?? 1) }"), true,
                             "酷我锚点接线: 外推值同扣")
-                expectEqual(client.components(separatedBy: "snapshot = kuwoProbedSnapshot(probed.snapshot, anchor: probed.anchor, now: now)").count - 1,
-                            2, "酷我锚点接线: 两条单问路径都扣")
+                let flatClient = client.split(separator: "\n", omittingEmptySubsequences: false)
+                    .map { $0.trimmingCharacters(in: .whitespaces) }.joined(separator: "\n")
+                expectEqual(flatClient.components(separatedBy: "if target.bundleID == PlaybackPlayer.kuwo.bundleIdentifier {\n"
+                                                  + "snapshot = kuwoProbedSnapshot(probed.snapshot, anchor: probed.anchor, now: now)").count - 1,
+                            2, "酷我锚点接线: 两条单问路径问的是酷我时都扣")
+                expectEqual(sourceHas(sourceBody("private static func kuwoProbedSnapshot(", in: client),
+                                      "guard let position = KuwoSessionAnchor.probedPosition(\n"
+                                      + "bundleID: probed.bundleIdentifier, playing: probed.playing, elapsed: probed.anchorElapsedTime,\n"
+                                      + "anchorAt: anchor.timestamp, rate: probed.playbackRate, duration: probed.duration, now: now)\n"
+                                      + "else { return probed }\n"
+                                      + "var snapshot = probed.withPlayerClock(position, capturedAt: now)"), true,
+                            "酷我锚点接线: 单问那份按它自己的播放器、在不在放和锚点推位置")
             }
             do {
                 typealias X = KuwoModeControl
@@ -332,6 +344,47 @@ func runPlayerIdentityTests() {
                              X.presses(from: .repeatAll, to: .repeatOne), X.presses(from: .list, to: .list)],
                             [1, 1, 1, 1, 3, 0], "酷我模式: 列表循环 → 随机 → 顺序 → 单曲循环 → 列表循环,一下一档")
                 expectEqual(X.maxPresses > X.cycle.count - 1, true, "酷我模式: 绕一圈之外留重按(快速连按会丢一下)")
+                // 桩:按一下进一档,`drops` 里的第几下(从 1 数)被吞掉;`lag` 是按下后要读几次才看得到新档。
+                final class ModeKey {
+                    var mode: X.Mode
+                    var presses = 0
+                    var drops: Set<Int>
+                    var lag: Int
+                    var pendingReads = 0
+                    var pendingMode: X.Mode?
+                    init(_ mode: X.Mode, drops: Set<Int> = [], lag: Int = 0) { self.mode = mode; self.drops = drops; self.lag = lag }
+                    func press() {
+                        presses += 1
+                        guard !drops.contains(presses) else { return }
+                        let next = X.cycle[(X.cycle.firstIndex(of: pendingMode ?? mode)! + 1) % X.cycle.count]
+                        if lag == 0 { mode = next } else { pendingMode = next; pendingReads = lag }
+                    }
+                    func read() -> X.Mode? {
+                        if let pending = pendingMode {
+                            pendingReads -= 1
+                            if pendingReads <= 0 { mode = pending; pendingMode = nil }
+                        }
+                        return mode
+                    }
+                }
+                func drive(_ key: ModeKey, to target: X.Mode, polls: Int = 3) -> X.Mode {
+                    X.pressUntil(target, from: key.mode, polls: polls, pollInterval: 0, read: key.read, press: key.press)
+                }
+                let plain = ModeKey(.repeatAll)
+                expectEqual([drive(plain, to: .repeatOne).rawValue, "\(plain.presses)"], [X.Mode.repeatOne.rawValue, "3"],
+                            "酷我模式写入: 列表循环到单曲循环按三下,到目标档就停")
+                let slow = ModeKey(.repeatAll, lag: 2)
+                expectEqual([drive(slow, to: .list).rawValue, "\(slow.presses)"], [X.Mode.list.rawValue, "2"],
+                            "酷我模式写入: 档名晚两拍才变也等它变了再按下一下,不多按")
+                let dropped = ModeKey(.repeatAll, drops: [2, 3])
+                expectEqual([drive(dropped, to: .repeatOne).rawValue, "\(dropped.presses)"], [X.Mode.repeatOne.rawValue, "5"],
+                            "酷我模式写入: 被吞掉的那下等不到变化就重按,丢两下也按得到")
+                let stuck = ModeKey(.shuffle, drops: Set(1...20))
+                expectEqual([drive(stuck, to: .list).rawValue, "\(stuck.presses)"], [X.Mode.shuffle.rawValue, "\(X.maxPresses)"],
+                            "酷我模式写入: 一直按不动最多按 maxPresses 下,交回读到的档(不算成)")
+                let already = ModeKey(.shuffle)
+                expectEqual([drive(already, to: .shuffle).rawValue, "\(already.presses)"], [X.Mode.shuffle.rawValue, "0"],
+                            "酷我模式写入: 已经是目标档不按")
                 typealias C = MusicPlaybackController
                 expectEqual(C.supportsExtendedControls(.kuwo) && C.supportsRepeatOne(.kuwo) && C.supportsFavorite(.kuwo), true,
                             "酷我能力: 四档模式,有喜欢")
@@ -347,7 +400,10 @@ func runPlayerIdentityTests() {
                 let control = (try? String(contentsOfFile: root.appendingPathComponent("LyrimuseCore/Local/KuwoModeControl.swift").path,
                                            encoding: .utf8)) ?? ""
                 expectEqual(sourceHas(sourceBody("public static func setMode(", in: control),
-                                      "} while current == before && Date() < deadline\n}\nreturn current == target"),
+                                      "guard let key = modeKey(), let start = mode(help: help(key)) else { return false }\n"
+                                      + "return pressUntil(target, from: start, polls: Int(confirmWait / confirmPollInterval), pollInterval: confirmPollInterval,\n"
+                                      + "read: { mode(help: help(key)) },\n"
+                                      + "press: { _ = AXUIElementPerformAction(key, kAXPressAction as CFString) }) == target"),
                             true, "酷我契约: 按一下等档名变了再按下一下,读回到目标档才算成")
             }
             do {
@@ -362,6 +418,45 @@ func runPlayerIdentityTests() {
                 expectEqual(F.engineArguments(title: "至少还有你", artist: "姚贝娜"),
                             ["kuwo-favorite", "-title", "至少还有你", "-artist", "姚贝娜"], "酷我喜欢: 按系统报的歌名、歌手问引擎")
                 expectEqual([F.favorite.commandKey, F.menuTitle], ["L", "收藏/取消收藏"], "酷我喜欢: 按「编辑」菜单的收藏/取消收藏,连同 ⌘L 一起认")
+                expectEqual(F.favorite.confirmWait >= 1, true, "酷我喜欢: 按完等读回(引擎读库要几百毫秒),不是按完就算")
+                // 桩:先读、一样不按;不一样按一下,读回变过来才算(MenuTitleFavorite.write,QQ / 网易云 / 酷狗 / 酷我共用)。
+                final class Heart {
+                    var state: Bool?
+                    var presses = 0
+                    var reads = 0
+                    var pressWorks = true
+                    var flipsAfterReads = 0
+                    var pendingFlip = false
+                    init(_ state: Bool?) { self.state = state }
+                    func read() -> Bool? {
+                        reads += 1
+                        if pendingFlip {
+                            flipsAfterReads -= 1
+                            if flipsAfterReads <= 0, let s = state { state = !s; pendingFlip = false }
+                        }
+                        return state
+                    }
+                    func press() -> Bool {
+                        presses += 1
+                        guard pressWorks else { return false }
+                        pendingFlip = true
+                        return true
+                    }
+                }
+                func write(_ heart: Heart, _ value: Bool, polls: Int = 3) -> [String] {
+                    ["\(MenuTitleFavorite.write(value, read: heart.read, press: heart.press, polls: polls, interval: 0))", "\(heart.presses)"]
+                }
+                expectEqual(write(Heart(true), true), ["true", "0"], "菜单喜欢写入: 已经是要的样子不按")
+                let late = Heart(false)
+                late.flipsAfterReads = 2
+                expectEqual(write(late, true) + ["\(late.state ?? false)"], ["true", "1", "true"], "菜单喜欢写入: 按一下,读回变过来才算到")
+                let never = Heart(false)
+                never.flipsAfterReads = 10
+                expectEqual(write(never, true), ["false", "1"], "菜单喜欢写入: 等不到读回变过来算没到,不再按")
+                let greyed = Heart(false)
+                greyed.pressWorks = false
+                expectEqual(write(greyed, true), ["false", "1"], "菜单喜欢写入: 按不下去(灰掉)算没到")
+                expectEqual(write(Heart(nil), true), ["false", "0"], "菜单喜欢写入: 读不出状态不按")
                 let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
                 let controller = (try? String(contentsOfFile: root.appendingPathComponent("LyrimuseCore/Local/MusicPlaybackController.swift").path,
                                               encoding: .utf8)) ?? ""
@@ -1617,8 +1712,8 @@ func runPlayerIdentityTests() {
                     "完全磁盘访问判据: 客户端文件在私有容器里的就这六家(汽水、酷我是沙盒版,VOX 是播放列表库)")
         expectEqual(P([.auto]).playersNeedingFullDiskAccess, [.qqMusic, .netease, .kugou, .kuwo, .soda, .vox],
                     "完全磁盘访问判据: 纯 auto 按超集算")
-        expectEqual(PlaybackPlayer.allCases.compactMap(\.fullDiskAccessUse), [.readsLyricsAndQueue, .readsLyricsAndQueue, .readsLyricsAndQueue, .readsLyricsAndQueue, .readsQueue, .readsQueue],
-                    "完全磁盘访问判据: QQ / 网易云 / 酷狗 / 酷我读歌词缓存和队列,汽水、VOX 只读队列,授权说明和体检提示按这个分开写")
+        expectEqual(PlaybackPlayer.allCases.compactMap(\.fullDiskAccessUse), [.readsLyricsAndQueue, .readsLyricsAndQueue, .readsLyricsAndQueue, .readsLyricsQueueFavoritesAndCovers, .readsQueue, .readsQueue],
+                    "完全磁盘访问判据: QQ / 网易云 / 酷狗读歌词缓存和队列,酷我另读喜欢列表和封面,汽水、VOX 只读队列,授权说明和体检提示按这个分开写")
         expectEqual(P([.kugou, .spotify]).playersNeedingFullDiskAccess, [.kugou],
                     "完全磁盘访问判据: 多选里只挑出要授权的那几家")
         expectEqual(P([.spotify, .soda, .appleMusic]).playersNeedingFullDiskAccess, [.soda],
@@ -3454,6 +3549,11 @@ private func amazonFavoriteChecks() {
     expectEqual(PlatformLinks.kuwoSongURL(kuwoSongID: "6680"), URL(string: "https://www.kuwo.cn/play_detail/6680"), "酷我歌曲页: 曲目 id 拼进 play_detail")
     expectEqual(["", "12a", "MUSIC_6680", String(repeating: "9", count: 21)].map { PlatformLinks.kuwoSongURL(kuwoSongID: $0) } + [PlatformLinks.kuwoSongURL(kuwoSongID: nil)],
                 [nil, nil, nil, nil, nil], "酷我歌曲页: 空的、带字母的、带前缀的、过长的不拼")
+    expectEqual(PlatformLinks.kuwoSongURL("https://www.kuwo.cn/play_detail/4049098"), URL(string: "https://www.kuwo.cn/play_detail/4049098"),
+                "酷我歌曲页: 引擎存的 kuwo_url 原样给出")
+    expectEqual(["", "https://www.kuwo.cn/play_detail/", "http://www.kuwo.cn/play_detail/6680", "https://www.kuwo.cn/play_detail/6680?x=1",
+                 "https://kuwo.cn/play_detail/6680", "https://www.kuwo.cn/play_detail/" + String(repeating: "9", count: 21)].map { PlatformLinks.kuwoSongURL($0) },
+                [nil, nil, nil, nil, nil, nil], "酷我歌曲页: 引擎存的不是 play_detail/<数字> 形状的不给")
     expectEqual(kwLinks.songLink(forPlayerBundleID: kwBundle)?.platform, .kuwo, "酷我在放给酷我那页")
     expectEqual(kwLinks.songWebLink(forPlayerBundleID: kwBundle), kwPage, "酷我歌曲页: 给 App 外面(Discord)的也是它")
     expectEqual(PlatformLinks(appleMusic: nil, qqSong: qqPage, qqAlbum: nil, qqArtist: nil, neteaseSong: nePage)
@@ -3562,7 +3662,8 @@ private func menuControlDispatchTests() {
         let menuBar = read("MenuTitleFavorite.swift")
         expectEqual(sourceBytes(menuBar, contain: "return ((value as? [AXUIElement]) ?? []).map { timed($0, timeout: timeout) }")
                     && sourceBytes(menuBar, contain: "return timed(value as! AXUIElement)")
-                    && sourceBytes(menuBar, contain: "guard MenuBarAX.press(found.element) else { return false }"), true,
+                    && sourceBytes(menuBar, contain: "press: { MenuBarAX.press(found.element) },")
+                    && sourceBytes(menuBar, contain: "guard press() else { return false }"), true,
                     "播放器控制(契约): 菜单栏取到的每个元素都设超时,按「喜欢」之前看它灰没灰")
         let reampSource = read("ReampMenuControl.swift")
         expectEqual(sourceBytes(read("QQMusicMenuControl.swift"), contain: "return MenuBarAX.press(item.element)")

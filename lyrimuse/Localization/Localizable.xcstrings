@@ -289219,6 +289219,291 @@
           }
         }
       }
+    },
+    "%@ 的歌词缓存、播放队列、喜欢列表和封面位于受保护的目录中。授权后可直接使用本机已有的歌词和封面、预先解析即将播放的歌曲并显示喜欢按钮；未授权时仍可联网查找歌词和封面" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ speichert Liedtext-Cache, Warteschlange, Favoriten und Cover in geschützten Ordnern. Mit Zugriff werden Liedtexte und Cover auf diesem Mac direkt genutzt, kommende Titel vorab aufgelöst und die Favoritentaste angezeigt; ohne ihn werden Liedtexte und Cover weiterhin online gesucht"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ stores its lyrics cache, play queue, favorites and artwork in protected folders. With access, lyrics and artwork already on this Mac are used directly, upcoming tracks are resolved in advance and the Favorite button is shown; without it, lyrics and artwork are still found online"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ guarda su caché de letras, su cola de reproducción, sus favoritos y sus ilustraciones en carpetas protegidas. Con acceso, se usan directamente las letras y las ilustraciones que ya hay en este Mac, se busca por adelantado la letra de las próximas canciones y se muestra el botón de favorito; sin él, las letras y las ilustraciones se siguen buscando en internet"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ stocke son cache de paroles, sa file d’attente, ses favoris et ses illustrations dans des dossiers protégés. Avec l’accès, les paroles et illustrations déjà présentes sur ce Mac sont utilisées directement, les morceaux à venir sont résolus à l’avance et le bouton Favori s’affiche ; sans lui, paroles et illustrations sont toujours recherchées en ligne"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ salva la cache dei testi, la coda di riproduzione, i preferiti e le illustrazioni in cartelle protette. Con l’accesso, i testi e le illustrazioni già presenti su questo Mac vengono usati direttamente, i brani in arrivo vengono risolti in anticipo e compare il pulsante Preferito; senza, testi e illustrazioni vengono comunque cercati online"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@の歌詞キャッシュ、再生キュー、お気に入りリスト、アートワークは保護されたフォルダにあります。アクセスを許可すると、このMacにある歌詞とアートワークをそのまま使い、次に再生される曲を事前に解析し、お気に入りボタンを表示します。許可しなくても歌詞とアートワークはオンラインで検索できます"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@은(는) 가사 캐시, 재생 대기열, 즐겨찾기 목록과 아트워크를 보호된 폴더에 저장합니다. 접근을 허용하면 이 Mac에 있는 가사와 아트워크를 바로 사용하고 곧 재생될 노래를 미리 분석하며 즐겨찾기 버튼을 표시합니다. 허용하지 않아도 온라인에서 가사와 아트워크를 찾을 수 있습니다"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "O %@ guarda o cache de letras, a fila de reprodução, os favoritos e as capas em pastas protegidas. Com acesso, as letras e capas já presentes neste Mac são usadas diretamente, as próximas músicas são resolvidas com antecedência e o botão de favorito aparece; sem ele, letras e capas continuam sendo buscadas online"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Приложение %@ хранит кэш текстов, очередь воспроизведения, избранное и обложки в защищенных папках. С доступом тексты и обложки, уже имеющиеся на этом Mac, используются сразу, следующие треки обрабатываются заранее, а кнопка избранного отображается; без доступа тексты и обложки по-прежнему ищутся в интернете"
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ เก็บแคชเนื้อเพลง คิวการเล่น รายการโปรด และภาพหน้าปกไว้ในโฟลเดอร์ที่มีการป้องกัน เมื่ออนุญาตแล้ว จะใช้เนื้อเพลงและภาพหน้าปกที่มีอยู่ใน Mac เครื่องนี้ได้ทันที เตรียมเนื้อเพลงของเพลงถัดไปไว้ล่วงหน้า และแสดงปุ่มรายการโปรด หากไม่อนุญาต ยังค้นหาเนื้อเพลงและภาพหน้าปกทางออนไลน์ได้"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ uygulaması şarkı sözü önbelleğini, çalma sırasını, favorilerini ve kapaklarını korunan klasörlerde tutar. İzin verirseniz bu Mac’teki şarkı sözleri ve kapaklar doğrudan kullanılır, sıradaki parçalar önceden çözümlenir ve favori düğmesi gösterilir; izin vermezseniz şarkı sözleri ve kapaklar yine internette aranır"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ зберігає кеш текстів, чергу відтворення, улюблене й обкладинки в захищених папках. З доступом Lyrimuse одразу використовує тексти й обкладинки, що вже є на цьому Mac, заздалегідь опрацьовує наступні треки й показує кнопку «До Улюблених»; без доступу тексти й обкладинки все одно шукаються в інтернеті"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ lưu bộ nhớ đệm lời bài hát, hàng đợi phát, danh sách ưa thích và ảnh bìa trong thư mục được bảo vệ. Khi có quyền, Lyrimuse dùng ngay lời và ảnh bìa có sẵn trên máy, xử lý trước các bài sắp phát và hiện nút Ưa thích; khi chưa có quyền, lời bài hát và ảnh bìa vẫn được tìm trực tuyến"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ 的歌词缓存、播放队列、喜欢列表和封面位于受保护的目录中。授权后可直接使用本机已有的歌词和封面、预先解析即将播放的歌曲并显示喜欢按钮；未授权时仍可联网查找歌词和封面"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ 的歌詞快取、播放佇列、喜歡列表和封面位於受保護的目錄中。授權後可直接使用本機已有的歌詞和封面、預先解析即將播放的歌曲並顯示喜歡按鈕；未授權時仍可連線尋找歌詞和封面"
+          }
+        }
+      }
+    },
+    "未获得完全磁盘访问权限，无法读取 %@ 的本机歌词、封面和喜欢列表" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kein Festplattenvollzugriff; lokale Liedtexte, Cover und Favoriten von %@ sind nicht lesbar"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No Full Disk Access; %@’s local lyrics, artwork and favorites cannot be read"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sin acceso total al disco; no se pueden leer la letra local, las ilustraciones ni los favoritos de %@"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pas d’accès complet au disque ; impossible de lire les paroles locales, les illustrations et les favoris de %@"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nessun accesso completo al disco; impossibile leggere i testi locali, le illustrazioni e i preferiti di %@"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "フルディスクアクセスの権限がないため、%@のローカル歌詞、アートワーク、お気に入りリストを読み取れません"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "전체 디스크 접근 권한이 없어 %@의 로컬 가사, 아트워크 및 즐겨찾기 목록을 읽을 수 없습니다"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sem Acesso Total ao Disco; não é possível ler as letras locais, as capas e os favoritos de %@"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Нет разрешения «Доступ к диску» — локальные тексты, обложки и избранное приложения %@ не читаются"
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ไม่ได้รับสิทธิ์การเข้าถึงดิสก์ทั้งหมด จึงอ่านเนื้อเพลง ภาพหน้าปก และรายการโปรดในเครื่องของ %@ ไม่ได้"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tam Disk Erişimi yok; %@ uygulamasının yerel şarkı sözleri, kapakları ve favorileri okunamıyor"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Немає повного доступу до диска, тому не вдається прочитати локальні тексти, обкладинки й улюблене програми %@"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Chưa có quyền truy cập đầy đủ vào ổ đĩa, không thể đọc lời, ảnh bìa và danh sách ưa thích có sẵn trên máy của %@"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "未获得完全磁盘访问权限，无法读取 %@ 的本机歌词、封面和喜欢列表"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "未取得完整磁碟取用權限，無法讀取 %@ 的本機歌詞、封面和喜歡列表"
+          }
+        }
+      }
+    },
+    "完全磁盘访问权限可让%@直接使用本机已有的歌词和封面、显示喜欢按钮，仅读取其歌词缓存、播放队列、喜欢列表和封面" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mit Festplattenvollzugriff kann %@ Liedtexte und Cover auf diesem Mac nutzen und die Favoritentaste anzeigen; gelesen werden nur Liedtext-Cache, Warteschlange, Favoriten und Cover"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Full Disk Access lets %@ use lyrics and artwork already on this Mac and show the Favorite button; it only reads their lyrics cache, play queue, favorites and artwork"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "El acceso total al disco permite a %@ usar la letra y las ilustraciones que ya hay en este Mac y mostrar el botón de favorito; solo lee las cachés de letras, las colas de reproducción, los favoritos y las ilustraciones"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "L’accès complet au disque permet à %@ d’utiliser les paroles et illustrations déjà sur ce Mac et d’afficher le bouton Favori ; seuls le cache de paroles, la file d’attente, les favoris et les illustrations sont lus"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "L’accesso completo al disco consente di usare i testi e le illustrazioni di %@ già presenti su questo Mac e di mostrare il pulsante Preferito; vengono letti solo la cache dei testi, la coda di riproduzione, i preferiti e le illustrazioni"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "フルディスクアクセスがあると、%@はこのMacにある歌詞とアートワークをそのまま使用し、お気に入りボタンを表示できます。読み取るのは歌詞キャッシュ、再生キュー、お気に入りリスト、アートワークのみです"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "전체 디스크 접근 권한을 허용하면 %@에서 이 Mac에 이미 있는 가사와 아트워크를 바로 사용하고 즐겨찾기 버튼을 표시할 수 있으며 가사 캐시, 재생 대기열, 즐겨찾기 목록과 아트워크만 읽습니다"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "O Acesso Total ao Disco permite que %@ use letras e capas que já estão neste Mac e mostre o botão de favorito; só lê o cache de letras, a fila de reprodução, os favoritos e as capas"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Доступ к диску позволяет сразу использовать тексты и обложки, уже сохраненные на этом Mac в %@, и показывать кнопку избранного; читаются только кэш текстов, очередь воспроизведения, избранное и обложки"
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "การเข้าถึงดิสก์ทั้งหมดช่วยให้ %@ ใช้เนื้อเพลงและภาพหน้าปกที่มีอยู่แล้วใน Mac เครื่องนี้ได้และแสดงปุ่มรายการโปรด โดยอ่านเฉพาะแคชเนื้อเพลง คิวการเล่น รายการโปรด และภาพหน้าปกเท่านั้น"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tam Disk Erişimi, %@ uygulamasının bu Mac’teki şarkı sözleri ve kapaklarının doğrudan kullanılmasını ve favori düğmesinin gösterilmesini sağlar; yalnızca uygulamanın şarkı sözü önbelleği, çalma sırası, favorileri ve kapakları okunur"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Повний доступ до диска дає змогу брати тексти й обкладинки, що вже є на цьому Mac, із програми %@ і показувати кнопку «До Улюблених»; читаються лише її кеш текстів, черга відтворення, улюблене й обкладинки"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Quyền truy cập đầy đủ vào ổ đĩa giúp dùng ngay lời bài hát và ảnh bìa có sẵn của %@ trên máy Mac này và hiện nút Ưa thích; chỉ đọc bộ nhớ đệm lời bài hát, hàng đợi phát, danh sách ưa thích và ảnh bìa"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "完全磁盘访问权限可让%@直接使用本机已有的歌词和封面、显示喜欢按钮，仅读取其歌词缓存、播放队列、喜欢列表和封面"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "完整磁碟取用權限可讓%@直接使用本機已有的歌詞和封面、顯示喜歡按鈕，僅讀取其歌詞快取、播放佇列、喜歡列表和封面"
+          }
+        }
+      }
     }
   },
   "version" : "1.0"

@@ -266,8 +266,10 @@ extension PlaybackPlayer {
 
     /// 「完全磁盘访问」替这个播放器做什么。授权说明、体检提示、引导页按它分开写。
     public enum FullDiskAccessUse: Sendable {
-        /// 读它私有容器里的歌词缓存(QQ 音乐、网易云音乐是曲库里的曲目 id)和播放队列(QQ 音乐、网易云音乐、酷狗音乐、酷我音乐)。
+        /// 读它私有容器里的歌词缓存(QQ 音乐、网易云音乐是曲库里的曲目 id)和播放队列(QQ 音乐、网易云音乐、酷狗音乐)。
         case readsLyricsAndQueue
+        /// 歌词缓存、播放队列之外还读喜欢列表和本机封面(酷我音乐,见 02 章决策 267、269)。
+        case readsLyricsQueueFavoritesAndCovers
         /// 只读播放队列,给预解析用(汽水音乐、VOX)。
         case readsQueue
     }
@@ -275,7 +277,11 @@ extension PlaybackPlayer {
     /// 不要这项权限的播放器为 nil(`needsFullDiskAccess`,源头 shared/players.json)。
     public var fullDiskAccessUse: FullDiskAccessUse? {
         guard needsFullDiskAccess else { return nil }
-        return self == .soda || self == .vox ? .readsQueue : .readsLyricsAndQueue
+        switch self {
+        case .soda, .vox: return .readsQueue
+        case .kuwo: return .readsLyricsQueueFavoritesAndCovers
+        default: return .readsLyricsAndQueue
+        }
     }
 
     /// 引擎本机数据访问状态里这家的来源名(`localcacheprobe.go` `localCacheClientPaths` 的键):有自家歌词源的就是歌词源的名字,

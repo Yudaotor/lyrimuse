@@ -671,7 +671,7 @@ Apple Music、Spotify、QQ Music、NetEase Cloud Music、Kugou、Kuwo、Soda Mus
 
 ### 必要なときだけ権限を要求
 
-Apple Music、Spotify、Kaset、VOX、Swinsian、Audirvanaは、再生状態を読み取るために「オートメーション」の権限が必要です。QQ Music、Kuwo Music、NetEase Cloud Music、Kugou Musicは、ローカルの歌詞と再生キューを使うために「フルディスクアクセス」が必要で、Soda MusicとVOXは再生キューを読み取るためにこの権限が必要です。Amazon MusicとPine Playerの再生位置の補正、Pine Playerのプレイリスト、QQ Music、Kuwo Music、NetEase Cloud Music、Kugou Music、Soda Music、Amazon Music、reAMP、Pine Player、foobar2000のシャッフル、リピート、お気に入りボタン、foobar2000の音量、およびほかのAppが「再生中」を占有しているときのQQ Music、Kuwo Music、NetEase Cloud Music、Soda Music、Pine Player、foobar2000、MyGo Musicの再生ボタンには、「アクセシビリティ」の権限が必要です。ブラウザのWebプレーヤーには、ブラウザに対する「オートメーション」の権限と、ブラウザで「AppleイベントからのJavaScriptを許可」をオンにすることが必要です。そのほかのプレーヤーには権限は不要です。設定には各項目の現在の許可状態が表示されます。
+Apple Music、Spotify、Kaset、VOX、Swinsian、Audirvanaは、再生状態を読み取るために「オートメーション」の権限が必要です。QQ Music、Kuwo Music、NetEase Cloud Music、Kugou Musicは、ローカルの歌詞と再生キューを使うために「フルディスクアクセス」が必要で、Soda MusicとVOXは再生キューを読み取るためにこの権限が必要です。Kuwo Musicのお気に入りとローカルのアートワークにもこの権限を使います。Amazon MusicとPine Playerの再生位置の補正、Pine Playerのプレイリスト、QQ Music、Kuwo Music、NetEase Cloud Music、Kugou Music、Soda Music、Amazon Music、reAMP、Pine Player、foobar2000のシャッフル、リピート、お気に入りボタン、foobar2000の音量、およびほかのAppが「再生中」を占有しているときのQQ Music、Kuwo Music、NetEase Cloud Music、Soda Music、Pine Player、foobar2000、MyGo Musicの再生ボタンには、「アクセシビリティ」の権限が必要です。ブラウザのWebプレーヤーには、ブラウザに対する「オートメーション」の権限と、ブラウザで「AppleイベントからのJavaScriptを許可」をオンにすることが必要です。そのほかのプレーヤーには権限は不要です。設定には各項目の現在の許可状態が表示されます。
 
 - 設定の場所：プレーヤー › 権限とサービス › オートメーション権限
 - 設定の場所：プレーヤー › 権限とサービス › フルディスクアクセス

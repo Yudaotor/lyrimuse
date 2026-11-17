@@ -240,6 +240,11 @@ struct FullDiskAccessGuide: View {
             lines.append(String(format: L10n.t("%@ 的歌词缓存和播放队列位于受保护的目录中。授权后可直接使用本机已有的歌词，并预先解析即将播放的歌曲；未授权时仍可联网查找歌词"),
                                 model.playerNames(lyrics)))
         }
+        let library = players.filter { $0.fullDiskAccessUse == .readsLyricsQueueFavoritesAndCovers }
+        if !library.isEmpty {
+            lines.append(String(format: L10n.t("%@ 的歌词缓存、播放队列、喜欢列表和封面位于受保护的目录中。授权后可直接使用本机已有的歌词和封面、预先解析即将播放的歌曲并显示喜欢按钮；未授权时仍可联网查找歌词和封面"),
+                                model.playerNames(library)))
+        }
         let queue = players.filter { $0.fullDiskAccessUse == .readsQueue }
         if !queue.isEmpty {
             lines.append(String(format: L10n.t("%@ 的播放队列位于受保护的目录中。授权后可预先解析即将播放的歌曲；未授权时改为预先解析同一专辑中的其他歌曲"),

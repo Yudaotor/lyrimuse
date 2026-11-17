@@ -671,7 +671,7 @@ Apple Music、Spotify、QQ 音樂、網易雲音樂、酷狗音樂、酷我音�
 
 ### 依需求申請權限
 
-Apple Music、Spotify、Kaset、VOX、Swinsian 和 Audirvana 需要「自動化」權限才能讀取播放狀態；QQ 音樂、酷我音樂、網易雲音樂、酷狗音樂需要「完整磁碟取用權限」才能使用本機歌詞和播放佇列，汽水音樂和 VOX 需要該權限讀取播放佇列；Amazon Music 和 Pine Player 的進度校正，Pine Player 的播放列表，QQ 音樂、酷我音樂、網易雲音樂、酷狗音樂、汽水音樂、Amazon Music、reAMP、Pine Player 和 foobar2000 的隨機、循環、喜歡按鈕，foobar2000 的音量，以及其他 App 佔用「正在播放」時 QQ 音樂、酷我音樂、網易雲音樂、汽水音樂、Pine Player、foobar2000 和 MyGo Music 的播放按鈕，需要「輔助使用」權限；瀏覽器中的網頁播放器需要為瀏覽器開啟「自動化」權限，並在瀏覽器中開啟「允許 Apple 事件中的 JavaScript」。其他播放器無需權限。設定中會標明每項的目前授權狀態。
+Apple Music、Spotify、Kaset、VOX、Swinsian 和 Audirvana 需要「自動化」權限才能讀取播放狀態；QQ 音樂、酷我音樂、網易雲音樂、酷狗音樂需要「完整磁碟取用權限」才能使用本機歌詞和播放佇列，汽水音樂和 VOX 需要該權限讀取播放佇列，酷我音樂的喜歡狀態和本機封面也要用到它；Amazon Music 和 Pine Player 的進度校正，Pine Player 的播放列表，QQ 音樂、酷我音樂、網易雲音樂、酷狗音樂、汽水音樂、Amazon Music、reAMP、Pine Player 和 foobar2000 的隨機、循環、喜歡按鈕，foobar2000 的音量，以及其他 App 佔用「正在播放」時 QQ 音樂、酷我音樂、網易雲音樂、汽水音樂、Pine Player、foobar2000 和 MyGo Music 的播放按鈕，需要「輔助使用」權限；瀏覽器中的網頁播放器需要為瀏覽器開啟「自動化」權限，並在瀏覽器中開啟「允許 Apple 事件中的 JavaScript」。其他播放器無需權限。設定中會標明每項的目前授權狀態。
 
 - 設定位置：播放器 › 權限與服務 › 自動化權限
 - 設定位置：播放器 › 權限與服務 › 完整磁碟取用權限

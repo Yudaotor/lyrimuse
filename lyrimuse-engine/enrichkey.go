@@ -360,6 +360,10 @@ func mergePeripheralInto(winner, loser enrichEntry) enrichEntry {
 		winner.PlayerSongIDs[kugouMusicBundleID] == loser.PlayerSongIDs[kugouMusicBundleID]) {
 		winner.KugouURL = loser.KugouURL
 	}
+	if winner.KuwoURL == "" && (winner.PlayerSongIDs[kuwoMusicBundleID] == "" ||
+		winner.PlayerSongIDs[kuwoMusicBundleID] == loser.PlayerSongIDs[kuwoMusicBundleID]) {
+		winner.KuwoURL = loser.KuwoURL
+	}
 	// 两条都放过的播放器合在一起,上面补过来的 id 对应的播放器也记上。
 	winner.Players = slices.Clone(winner.Players)
 	for _, p := range loser.Players {

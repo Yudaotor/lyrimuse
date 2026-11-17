@@ -181,7 +181,9 @@ type enrichEntry struct {
 	QQAlbumMid  string `json:"qq_album_mid,omitempty"`
 	QQSingerMid string `json:"qq_singer_mid,omitempty"`
 	// KugouURL:酷狗网页歌曲页(用酷狗放这首时按它报的 mixId 找的,kugousongpage.go)。
-	KugouURL   string   `json:"kugou_url,omitempty"`
+	KugouURL string `json:"kugou_url,omitempty"`
+	// KuwoURL:酷我网页歌曲页,用酷我放这首时它记下的曲目 id 拼的(kuwoSongPageURL),跟 PlayerSongIDs 里酷我那一项一起记。
+	KuwoURL    string   `json:"kuwo_url,omitempty"`
 	SpotifyURL string   `json:"spotify_url,omitempty"`
 	Lyrics     bodyText `json:"lyrics,omitzero"`
 	LyricsTr   bodyText `json:"lyrics_tr,omitzero"` // 中文翻译(逐行 LRC)
@@ -584,6 +586,7 @@ func (e enrichEntry) fields() map[string]string {
 	put("youtube_music_url", e.YouTubeMusicURL)
 	put("soda_url", e.SodaURL)
 	put("kugou_url", e.KugouURL)
+	put("kuwo_url", e.KuwoURL)
 	put("youtube_music_album", e.YouTubeMusicAlbum)
 	put("isrc", e.confidentISRC())
 	// 标了纯音乐就不交歌词,网页和 ListenBrainz 都不显示;歌词还在条目里,撤掉标记就回来。App 读缓存同一口径
@@ -6686,7 +6689,7 @@ func notePlayerSongIDLocked(e *enrichEntry, bundleID, id string) bool {
 
 // notePlayerSongLocked:bundleID 这个播放器报的这一首,歌曲 id 记进 PlayerSongIDs,同一拍读到的专辑 id 记进 PlayerAlbumIDs。
 // 两张表成对:歌曲 id 换了、没给新的专辑 id 时,旧的专辑 id 跟着删;同一首这一拍没读到专辑的,记下的留着。空的歌曲 id 不记。
-// 酷狗的歌曲 id 换了,按旧 id 找的网页歌曲页(KugouURL)跟着删。
+// 酷狗的歌曲 id 换了,按旧 id 找的网页歌曲页(KugouURL)跟着删;酷我的歌曲页(KuwoURL)按记下的 id 重拼。
 // 返回改没改。换整张表、不原地改:条目是值拷贝,表跟落盘那份快照共用。调用方持 enrichMu。
 func notePlayerSongLocked(e *enrichEntry, bundleID, songID, albumID string) bool {
 	if bundleID == "" || songID == "" {
@@ -6702,6 +6705,11 @@ func notePlayerSongLocked(e *enrichEntry, bundleID, songID, albumID string) bool
 			e.KugouURL = ""
 		}
 		changed = true
+	}
+	if bundleID == kuwoMusicBundleID {
+		if page := kuwoSongPageURL(e.PlayerSongIDs[bundleID]); e.KuwoURL != page {
+			e.KuwoURL, changed = page, true
+		}
 	}
 	if albumID != "" && e.PlayerAlbumIDs[bundleID] != albumID {
 		e.PlayerAlbumIDs = withBundleValue(e.PlayerAlbumIDs, bundleID, albumID)

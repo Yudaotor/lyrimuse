@@ -69,6 +69,7 @@
 "%@ 次收听#one" = "%@ play";
 "%@ 点" = "%@:00";
 "%@ 的播放队列位于受保护的目录中。授权后可预先解析即将播放的歌曲；未授权时改为预先解析同一专辑中的其他歌曲" = "%@ keeps its play queue in a protected folder. With access, upcoming tracks are resolved in advance; without it, other songs from the same album are resolved instead";
+"%@ 的歌词缓存、播放队列、喜欢列表和封面位于受保护的目录中。授权后可直接使用本机已有的歌词和封面、预先解析即将播放的歌曲并显示喜欢按钮；未授权时仍可联网查找歌词和封面" = "%@ stores its lyrics cache, play queue, favorites and artwork in protected folders. With access, lyrics and artwork already on this Mac are used directly, upcoming tracks are resolved in advance and the Favorite button is shown; without it, lyrics and artwork are still found online";
 "%@ 的歌词缓存位于受系统保护的目录中。授予「完全磁盘访问权限」后，可直接使用本机已有的逐字歌词，无需每次联网搜索" = "%@ keeps its lyrics cache inside a system-protected folder. Grant Full Disk Access and the word-by-word lyrics already on this Mac can be used straight away, with no online search";
 "%@ 的歌词缓存和播放队列位于受保护的目录中。授权后可直接使用本机已有的歌词，并预先解析即将播放的歌曲；未授权时仍可联网查找歌词" = "%@ stores its lyrics cache and play queue in protected folders. With access, lyrics already on this Mac are used directly and upcoming tracks are resolved in advance; without it, lyrics are still found online";
 "%@ 的自动化权限未开启…" = "%@ Automation Access Is Off…";
@@ -991,6 +992,7 @@
 "完全一致" = "Identical";
 "完全同名 120 · 仅括号差异 60 · 中英双语同名 30" = "Exact title 120 · parenthetical-only difference 60 · bilingual same name 30";
 "完全磁盘访问权限" = "Full Disk Access";
+"完全磁盘访问权限可让%@直接使用本机已有的歌词和封面、显示喜欢按钮，仅读取其歌词缓存、播放队列、喜欢列表和封面" = "Full Disk Access lets %@ use lyrics and artwork already on this Mac and show the Favorite button; it only reads their lyrics cache, play queue, favorites and artwork";
 "完全磁盘访问权限可让%@直接使用本机已有的歌词，仅读取其歌词缓存和播放队列" = "Full Disk Access lets %@ use lyrics already on this Mac; it only reads their lyrics cache and play queue";
 "完全磁盘访问权限可让%@预先解析即将播放的歌曲，仅读取其播放队列" = "Full Disk Access lets upcoming tracks in %@ be resolved in advance; it only reads their play queue";
 "完成" = "Done";
@@ -1876,6 +1878,7 @@
 "未获得「辅助功能」权限，可能会盖住 App 菜单" = "Without Accessibility permission, lyrics may cover app menus";
 "未获得完全磁盘访问权限，无法读取 %@ 的播放队列" = "No Full Disk Access; %@’s play queue cannot be read";
 "未获得完全磁盘访问权限，无法读取 %@ 的本机歌词" = "No Full Disk Access; %@’s local lyrics cannot be read";
+"未获得完全磁盘访问权限，无法读取 %@ 的本机歌词、封面和喜欢列表" = "No Full Disk Access; %@’s local lyrics, artwork and favorites cannot be read";
 "未获得辅助功能权限，%@ 不显示喜欢按钮，失去系统媒体焦点时也无法控制暂停、恢复和切换上一首或下一首" = "Accessibility permission is missing: %@ has no Favorite button, and can’t pause, resume or skip tracks without system media focus";
 "未获得辅助功能权限，%@ 不显示随机、循环与喜欢按钮，失去焦点时也无法控制播放" = "No Accessibility permission; %@’s shuffle, repeat and Favorite buttons are hidden, and playback can’t be controlled while focus is elsewhere";
 "未获得辅助功能权限，%@ 不显示随机、循环与喜欢按钮，失去系统媒体焦点时也无法控制暂停、恢复和切换上一首或下一首" = "Accessibility permission is missing: %@ has no shuffle, repeat or Favorite buttons, and can’t pause, resume or skip tracks without system media focus";

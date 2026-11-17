@@ -53,6 +53,7 @@
 "%@ 次收听" = "%@ lượt phát";
 "%@ 点" = "%@:00";
 "%@ 的播放队列位于受保护的目录中。授权后可预先解析即将播放的歌曲；未授权时改为预先解析同一专辑中的其他歌曲" = "%@ lưu hàng đợi phát trong thư mục được bảo vệ. Khi được cấp quyền, các bài sắp phát được xử lý trước; nếu không, sẽ xử lý trước các bài khác cùng album";
+"%@ 的歌词缓存、播放队列、喜欢列表和封面位于受保护的目录中。授权后可直接使用本机已有的歌词和封面、预先解析即将播放的歌曲并显示喜欢按钮；未授权时仍可联网查找歌词和封面" = "%@ lưu bộ nhớ đệm lời bài hát, hàng đợi phát, danh sách ưa thích và ảnh bìa trong thư mục được bảo vệ. Khi có quyền, Lyrimuse dùng ngay lời và ảnh bìa có sẵn trên máy, xử lý trước các bài sắp phát và hiện nút Ưa thích; khi chưa có quyền, lời bài hát và ảnh bìa vẫn được tìm trực tuyến";
 "%@ 的歌词缓存位于受系统保护的目录中。授予「完全磁盘访问权限」后，可直接使用本机已有的逐字歌词，无需每次联网搜索" = "Bộ nhớ đệm lời của %@ nằm trong thư mục được hệ thống bảo vệ. Sau khi cấp “Quyền truy cập đầy đủ vào ổ đĩa”, có thể dùng ngay lời theo từng chữ có sẵn trên máy Mac này, không cần tìm trực tuyến mỗi lần";
 "%@ 的歌词缓存和播放队列位于受保护的目录中。授权后可直接使用本机已有的歌词，并预先解析即将播放的歌曲；未授权时仍可联网查找歌词" = "%@ lưu bộ nhớ đệm lời bài hát và hàng đợi phát trong thư mục được bảo vệ. Khi có quyền, Lyrimuse dùng ngay lời có sẵn trên máy và xử lý trước các bài sắp phát; khi chưa có quyền, lời bài hát vẫn được tìm trực tuyến";
 "%@ 的自动化权限未开启…" = "Quyền Tự động hóa cho %@ đang tắt…";
@@ -937,6 +938,7 @@
 "完全一致" = "Giống hệt";
 "完全同名 120 · 仅括号差异 60 · 中英双语同名 30" = "Trùng tên hoàn toàn 120 · chỉ khác phần ngoặc 60 · trùng tên song ngữ 30";
 "完全磁盘访问权限" = "Quyền truy cập đầy đủ vào ổ đĩa";
+"完全磁盘访问权限可让%@直接使用本机已有的歌词和封面、显示喜欢按钮，仅读取其歌词缓存、播放队列、喜欢列表和封面" = "Quyền truy cập đầy đủ vào ổ đĩa giúp dùng ngay lời bài hát và ảnh bìa có sẵn của %@ trên máy Mac này và hiện nút Ưa thích; chỉ đọc bộ nhớ đệm lời bài hát, hàng đợi phát, danh sách ưa thích và ảnh bìa";
 "完全磁盘访问权限可让%@直接使用本机已有的歌词，仅读取其歌词缓存和播放队列" = "Quyền truy cập đầy đủ vào ổ đĩa giúp dùng ngay lời bài hát có sẵn của %@ trên máy Mac này; chỉ đọc bộ nhớ đệm lời bài hát và hàng đợi phát";
 "完全磁盘访问权限可让%@预先解析即将播放的歌曲，仅读取其播放队列" = "Quyền truy cập đầy đủ vào ổ đĩa cho phép xử lý trước các bài sắp phát trong %@, chỉ đọc hàng đợi phát của nó";
 "完成" = "Xong";
@@ -1796,6 +1798,7 @@
 "未获得「辅助功能」权限，可能会盖住 App 菜单" = "Chưa có quyền Trợ năng, lời có thể che menu ứng dụng";
 "未获得完全磁盘访问权限，无法读取 %@ 的播放队列" = "Chưa có Quyền truy cập đầy đủ vào ổ đĩa, không đọc được hàng đợi phát của %@";
 "未获得完全磁盘访问权限，无法读取 %@ 的本机歌词" = "Chưa có quyền truy cập đầy đủ vào ổ đĩa, không thể đọc lời có sẵn trên máy của %@";
+"未获得完全磁盘访问权限，无法读取 %@ 的本机歌词、封面和喜欢列表" = "Chưa có quyền truy cập đầy đủ vào ổ đĩa, không thể đọc lời, ảnh bìa và danh sách ưa thích có sẵn trên máy của %@";
 "未获得辅助功能权限，%@ 不显示喜欢按钮，失去系统媒体焦点时也无法控制暂停、恢复和切换上一首或下一首" = "Chưa có quyền Trợ năng: %@ không hiện nút Ưa thích, và không thể tạm dừng, tiếp tục hay chuyển bài khi mất tiêu điểm phương tiện của hệ thống";
 "未获得辅助功能权限，%@ 不显示随机、循环与喜欢按钮，失去焦点时也无法控制播放" = "Chưa có quyền Trợ năng: %@ không hiện nút Xáo trộn, Lặp lại và Ưa thích, và không thể điều khiển phát khi mất tiêu điểm";
 "未获得辅助功能权限，%@ 不显示随机、循环与喜欢按钮，失去系统媒体焦点时也无法控制暂停、恢复和切换上一首或下一首" = "Chưa có quyền Trợ năng: %@ không có nút xáo trộn, lặp lại và Ưa thích, không thể tạm dừng, tiếp tục, chuyển bài trước hoặc bài sau khi mất tiêu điểm phương tiện của hệ thống";

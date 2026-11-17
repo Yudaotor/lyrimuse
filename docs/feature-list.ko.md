@@ -671,7 +671,7 @@ Apple Music, Spotify, QQ Music, NetEase Cloud Music, Kugou, Kuwo, Soda Music, LX
 
 ### 필요할 때만 권한 요청
 
-Apple Music, Spotify, Kaset, VOX, Swinsian, Audirvana는 재생 상태를 읽으려면 ‘자동화’ 권한이 필요합니다. QQ Music, Kuwo, NetEase Cloud Music, Kugou는 이 Mac의 가사와 재생 대기열을 사용하려면 ‘전체 디스크 접근 권한’이 필요하고, Soda Music과 VOX는 재생 대기열을 읽는 데 이 권한이 필요합니다. Amazon Music과 Pine Player의 진행 보정, Pine Player의 재생 목록, QQ Music, Kuwo Music, NetEase Cloud Music, Kugou, Soda Music, Amazon Music, reAMP, Pine Player, foobar2000의 임의 재생·반복·즐겨찾기 버튼, foobar2000의 음량, 그리고 다른 앱이 ‘지금 재생 중’을 차지하고 있을 때 QQ Music, Kuwo Music, NetEase Cloud Music, Soda Music, Pine Player, foobar2000, MyGo Music의 재생 버튼에는 ‘손쉬운 사용’ 권한이 필요합니다. 브라우저의 웹 플레이어는 브라우저에 ‘자동화’ 권한을 허용하고, 브라우저에서 ‘Apple 이벤트의 JavaScript 허용’을 켜야 합니다. 다른 플레이어는 권한이 필요 없습니다. 설정에 항목별 현재 권한 상태가 표시됩니다.
+Apple Music, Spotify, Kaset, VOX, Swinsian, Audirvana는 재생 상태를 읽으려면 ‘자동화’ 권한이 필요합니다. QQ Music, Kuwo, NetEase Cloud Music, Kugou는 이 Mac의 가사와 재생 대기열을 사용하려면 ‘전체 디스크 접근 권한’이 필요하고, Soda Music과 VOX는 재생 대기열을 읽는 데 이 권한이 필요합니다. Kuwo의 즐겨찾기와 로컬 아트워크에도 이 권한이 쓰입니다. Amazon Music과 Pine Player의 진행 보정, Pine Player의 재생 목록, QQ Music, Kuwo Music, NetEase Cloud Music, Kugou, Soda Music, Amazon Music, reAMP, Pine Player, foobar2000의 임의 재생·반복·즐겨찾기 버튼, foobar2000의 음량, 그리고 다른 앱이 ‘지금 재생 중’을 차지하고 있을 때 QQ Music, Kuwo Music, NetEase Cloud Music, Soda Music, Pine Player, foobar2000, MyGo Music의 재생 버튼에는 ‘손쉬운 사용’ 권한이 필요합니다. 브라우저의 웹 플레이어는 브라우저에 ‘자동화’ 권한을 허용하고, 브라우저에서 ‘Apple 이벤트의 JavaScript 허용’을 켜야 합니다. 다른 플레이어는 권한이 필요 없습니다. 설정에 항목별 현재 권한 상태가 표시됩니다.
 
 - 설정 위치: 플레이어 › 권한 및 서비스 › 자동화 권한
 - 설정 위치: 플레이어 › 권한 및 서비스 › 전체 디스크 접근 권한

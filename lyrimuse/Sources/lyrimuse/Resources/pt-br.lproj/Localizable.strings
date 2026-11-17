@@ -69,6 +69,7 @@
 "%@ 次收听#one" = "%@ reprodução";
 "%@ 点" = "%@h";
 "%@ 的播放队列位于受保护的目录中。授权后可预先解析即将播放的歌曲；未授权时改为预先解析同一专辑中的其他歌曲" = "%@ guarda a fila de reprodução em uma pasta protegida. Com acesso, a letra das próximas músicas é preparada com antecedência; sem ele, a de outras músicas do mesmo álbum";
+"%@ 的歌词缓存、播放队列、喜欢列表和封面位于受保护的目录中。授权后可直接使用本机已有的歌词和封面、预先解析即将播放的歌曲并显示喜欢按钮；未授权时仍可联网查找歌词和封面" = "O %@ guarda o cache de letras, a fila de reprodução, os favoritos e as capas em pastas protegidas. Com acesso, as letras e capas já presentes neste Mac são usadas diretamente, as próximas músicas são resolvidas com antecedência e o botão de favorito aparece; sem ele, letras e capas continuam sendo buscadas online";
 "%@ 的歌词缓存位于受系统保护的目录中。授予「完全磁盘访问权限」后，可直接使用本机已有的逐字歌词，无需每次联网搜索" = "%@ guarda o cache de letras numa pasta protegida pelo sistema. Conceda “Acesso Total ao Disco” e a letra palavra por palavra que já está neste Mac pode ser usada na hora, sem busca online";
 "%@ 的歌词缓存和播放队列位于受保护的目录中。授权后可直接使用本机已有的歌词，并预先解析即将播放的歌曲；未授权时仍可联网查找歌词" = "O %@ guarda o cache de letras e a fila de reprodução em pastas protegidas. Com acesso, as letras já presentes neste Mac são usadas diretamente e as próximas músicas são resolvidas com antecedência; sem ele, as letras continuam sendo buscadas online";
 "%@ 的自动化权限未开启…" = "O acesso de automação de %@ está desativado…";
@@ -991,6 +992,7 @@
 "完全一致" = "Idêntica";
 "完全同名 120 · 仅括号差异 60 · 中英双语同名 30" = "Título exato 120 · só difere nos parênteses 60 · mesmo nome bilíngue 30";
 "完全磁盘访问权限" = "Acesso Total ao Disco";
+"完全磁盘访问权限可让%@直接使用本机已有的歌词和封面、显示喜欢按钮，仅读取其歌词缓存、播放队列、喜欢列表和封面" = "O Acesso Total ao Disco permite que %@ use letras e capas que já estão neste Mac e mostre o botão de favorito; só lê o cache de letras, a fila de reprodução, os favoritos e as capas";
 "完全磁盘访问权限可让%@直接使用本机已有的歌词，仅读取其歌词缓存和播放队列" = "O Acesso Total ao Disco permite que %@ use letras que já estão neste Mac; só lê o cache de letras e a fila de reprodução";
 "完全磁盘访问权限可让%@预先解析即将播放的歌曲，仅读取其播放队列" = "O Acesso Total ao Disco permite preparar com antecedência a letra das próximas músicas de %@; só a fila de reprodução é lida";
 "完成" = "OK";
@@ -1876,6 +1878,7 @@
 "未获得「辅助功能」权限，可能会盖住 App 菜单" = "Sem a permissão de “Acessibilidade”, a letra pode cobrir os menus de apps";
 "未获得完全磁盘访问权限，无法读取 %@ 的播放队列" = "Sem Acesso Total ao Disco; não é possível ler a fila de reprodução de %@";
 "未获得完全磁盘访问权限，无法读取 %@ 的本机歌词" = "Sem Acesso Total ao Disco; não é possível ler as letras locais de %@";
+"未获得完全磁盘访问权限，无法读取 %@ 的本机歌词、封面和喜欢列表" = "Sem Acesso Total ao Disco; não é possível ler as letras locais, as capas e os favoritos de %@";
 "未获得辅助功能权限，%@ 不显示喜欢按钮，失去系统媒体焦点时也无法控制暂停、恢复和切换上一首或下一首" = "Falta a permissão de Acessibilidade: %@ fica sem botão de favorito e não é possível pausar, retomar nem pular músicas sem o foco de mídia do sistema";
 "未获得辅助功能权限，%@ 不显示随机、循环与喜欢按钮，失去焦点时也无法控制播放" = "Sem permissão de Acessibilidade; os botões de aleatório, repetir e favorito de %@ ficam ocultos e não é possível controlar a reprodução sem o foco";
 "未获得辅助功能权限，%@ 不显示随机、循环与喜欢按钮，失去系统媒体焦点时也无法控制暂停、恢复和切换上一首或下一首" = "Falta a permissão de Acessibilidade: %@ fica sem botões de aleatório, repetição e favorito e não é possível pausar, retomar nem trocar de música sem o foco de mídia do sistema";

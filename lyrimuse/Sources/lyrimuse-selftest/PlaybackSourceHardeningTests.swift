@@ -652,7 +652,8 @@ private func wiringContracts() {
                        in: sourceBody("public static func readMode(", in: amazon)), true,
                 "Amazon 读档: 没有辅助功能权限不报档位,两颗键不出现(按不了)")
     let menuFavorite = sourceBody("public func set(_ value: Bool) -> Bool {", in: code("LyrimuseCore/Local/MenuTitleFavorite.swift"))
-    expectEqual(before("lock.lock()", "item()", in: menuFavorite) && menuFavorite.contains("return MenuBarAX.waitFor(value"), true,
+    expectEqual(before("lock.lock()", "item()", in: menuFavorite)
+                && menuFavorite.contains("return Self.write(value, read: { state(after: found) }, press: { MenuBarAX.press(found.element) },"), true,
                 "菜单标题喜欢(QQ、网易云): 先排队再读标题,按完等标题翻过来")
     // 换歌后标题可能还是上一首的(07 章决策 147):写之前等到标题换好、等的时候又换了歌就作废;换歌后过一会儿再读一次;
     // 按了标题没翻(没登录弹登录窗口)这一首不再显示心、不再按。

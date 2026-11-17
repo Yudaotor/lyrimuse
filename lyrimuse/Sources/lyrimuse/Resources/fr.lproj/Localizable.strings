@@ -69,6 +69,7 @@
 "%@ 次收听#one" = "%@ écoute";
 "%@ 点" = "%@ h";
 "%@ 的播放队列位于受保护的目录中。授权后可预先解析即将播放的歌曲；未授权时改为预先解析同一专辑中的其他歌曲" = "%@ garde sa file d’attente dans un dossier protégé. Avec l’accès, les morceaux à venir sont préparés à l’avance ; sinon, ce sont d’autres morceaux du même album";
+"%@ 的歌词缓存、播放队列、喜欢列表和封面位于受保护的目录中。授权后可直接使用本机已有的歌词和封面、预先解析即将播放的歌曲并显示喜欢按钮；未授权时仍可联网查找歌词和封面" = "%@ stocke son cache de paroles, sa file d’attente, ses favoris et ses illustrations dans des dossiers protégés. Avec l’accès, les paroles et illustrations déjà présentes sur ce Mac sont utilisées directement, les morceaux à venir sont résolus à l’avance et le bouton Favori s’affiche ; sans lui, paroles et illustrations sont toujours recherchées en ligne";
 "%@ 的歌词缓存位于受系统保护的目录中。授予「完全磁盘访问权限」后，可直接使用本机已有的逐字歌词，无需每次联网搜索" = "%@ stocke son cache de paroles dans un dossier protégé par le système. Accordez l’accès complet au disque pour utiliser directement les paroles mot à mot déjà sur ce Mac, sans recherche en ligne";
 "%@ 的歌词缓存和播放队列位于受保护的目录中。授权后可直接使用本机已有的歌词，并预先解析即将播放的歌曲；未授权时仍可联网查找歌词" = "%@ stocke son cache de paroles et sa file d’attente dans des dossiers protégés. Avec l’accès, les paroles déjà présentes sur ce Mac sont utilisées directement et les morceaux à venir sont résolus à l’avance ; sans lui, les paroles sont toujours recherchées en ligne";
 "%@ 的自动化权限未开启…" = "L’automatisation de %@ est désactivée…";
@@ -991,6 +992,7 @@
 "完全一致" = "Identique";
 "完全同名 120 · 仅括号差异 60 · 中英双语同名 30" = "Titre exact 120 · seules les parenthèses diffèrent 60 · même nom bilingue 30";
 "完全磁盘访问权限" = "Accès complet au disque";
+"完全磁盘访问权限可让%@直接使用本机已有的歌词和封面、显示喜欢按钮，仅读取其歌词缓存、播放队列、喜欢列表和封面" = "L’accès complet au disque permet à %@ d’utiliser les paroles et illustrations déjà sur ce Mac et d’afficher le bouton Favori ; seuls le cache de paroles, la file d’attente, les favoris et les illustrations sont lus";
 "完全磁盘访问权限可让%@直接使用本机已有的歌词，仅读取其歌词缓存和播放队列" = "L’accès complet au disque permet à %@ d’utiliser les paroles déjà sur ce Mac ; seuls le cache de paroles et la file d’attente sont lus";
 "完全磁盘访问权限可让%@预先解析即将播放的歌曲，仅读取其播放队列" = "L’accès complet au disque permet de préparer à l’avance les morceaux à venir dans %@ ; seule sa file d’attente est lue";
 "完成" = "Terminé";
@@ -1876,6 +1878,7 @@
 "未获得「辅助功能」权限，可能会盖住 App 菜单" = "Sans l’autorisation Accessibilité, les paroles peuvent couvrir les menus des apps";
 "未获得完全磁盘访问权限，无法读取 %@ 的播放队列" = "Pas d’accès complet au disque ; impossible de lire la file d’attente de %@";
 "未获得完全磁盘访问权限，无法读取 %@ 的本机歌词" = "Pas d’accès complet au disque ; impossible de lire les paroles locales de %@";
+"未获得完全磁盘访问权限，无法读取 %@ 的本机歌词、封面和喜欢列表" = "Pas d’accès complet au disque ; impossible de lire les paroles locales, les illustrations et les favoris de %@";
 "未获得辅助功能权限，%@ 不显示喜欢按钮，失去系统媒体焦点时也无法控制暂停、恢复和切换上一首或下一首" = "Autorisation Accessibilité manquante : %@ n’a pas de bouton Favori et ne peut pas mettre en pause, reprendre ni changer de morceau sans le focus multimédia du système";
 "未获得辅助功能权限，%@ 不显示随机、循环与喜欢按钮，失去焦点时也无法控制播放" = "Pas d’autorisation Accessibilité ; les boutons Aléatoire, Répéter et Favori de %@ sont masqués et la lecture ne peut pas être contrôlée sans le focus";
 "未获得辅助功能权限，%@ 不显示随机、循环与喜欢按钮，失去系统媒体焦点时也无法控制暂停、恢复和切换上一首或下一首" = "Autorisation Accessibilité manquante : les boutons Aléatoire, Répéter et Favori de %@ sont masqués, et Lyrimuse ne peut pas mettre en pause, reprendre ou changer de morceau sans le focus multimédia du système";

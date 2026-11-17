@@ -46,19 +46,28 @@ public enum KuwoModeControl {
     public static func setMode(_ target: Mode) -> Bool {
         writeLock.lock()
         defer { writeLock.unlock() }
-        guard let key = modeKey(), var current = mode(help: help(key)) else { return false }
+        guard let key = modeKey(), let start = mode(help: help(key)) else { return false }
+        return pressUntil(target, from: start, polls: Int(confirmWait / confirmPollInterval), pollInterval: confirmPollInterval,
+                          read: { mode(help: help(key)) },
+                          press: { _ = AXUIElementPerformAction(key, kAXPressAction as CFString) }) == target
+    }
+
+    /// 从 `start` 一下一下按到 `target`:每按一下最多读 `polls` 次,档名变了才按下一下,最多按 `maxPresses` 下;返回最后读到的档。
+    /// 读不出的那一拍当没变。selftest 用桩测。
+    public static func pressUntil(_ target: Mode, from start: Mode, polls: Int, pollInterval: TimeInterval,
+                                  read: () -> Mode?, press: () -> Void) -> Mode {
+        var current = start
         var pressed = 0
         while current != target, pressed < maxPresses {
-            _ = AXUIElementPerformAction(key, kAXPressAction as CFString)
+            press()
             pressed += 1
             let before = current
-            let deadline = Date().addingTimeInterval(confirmWait)
-            repeat {
-                Thread.sleep(forTimeInterval: confirmPollInterval)
-                if let now = mode(help: help(key)) { current = now }
-            } while current == before && Date() < deadline
+            for _ in 0..<max(polls, 0) where current == before {
+                if pollInterval > 0 { Thread.sleep(forTimeInterval: pollInterval) }
+                if let now = read() { current = now }
+            }
         }
-        return current == target
+        return current
     }
 
     static let axTimeout: Float = 0.25

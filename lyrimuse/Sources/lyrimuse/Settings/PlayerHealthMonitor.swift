@@ -173,6 +173,10 @@ final class PlayerHealthMonitor: ObservableObject {
             if !lyrics.isEmpty {
                 parts.append(String(format: L10n.t("未获得完全磁盘访问权限，无法读取 %@ 的本机歌词"), names(lyrics)))
             }
+            let library = fullDiskAccessDeniedPlayers.filter { $0.fullDiskAccessUse == .readsLyricsQueueFavoritesAndCovers }
+            if !library.isEmpty {
+                parts.append(String(format: L10n.t("未获得完全磁盘访问权限，无法读取 %@ 的本机歌词、封面和喜欢列表"), names(library)))
+            }
             let queue = fullDiskAccessDeniedPlayers.filter { $0.fullDiskAccessUse == .readsQueue }
             if !queue.isEmpty {
                 parts.append(String(format: L10n.t("未获得完全磁盘访问权限，无法读取 %@ 的播放队列"), names(queue)))

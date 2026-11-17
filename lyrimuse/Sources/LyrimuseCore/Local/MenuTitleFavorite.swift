@@ -130,12 +130,18 @@ public final class MenuTitleFavorite: @unchecked Sendable {
     public func set(_ value: Bool) -> Bool {
         lock.lock()
         defer { lock.unlock() }
-        guard let found = item(), let now = state(after: found) else { return false }
+        guard let found = item() else { return false }
+        return Self.write(value, read: { state(after: found) }, press: { MenuBarAX.press(found.element) },
+                          polls: Int(confirmWait / confirmPollInterval), interval: confirmPollInterval)
+    }
+
+    /// 先读,已经是 `value` 就不按;不是就按一下,`polls` 次内读回变成 `value` 才算到。读不出、按不下去(灰掉)都算没到。
+    /// selftest 用桩测。
+    public static func write(_ value: Bool, read: () -> Bool?, press: () -> Bool, polls: Int, interval: TimeInterval) -> Bool {
+        guard let now = read() else { return false }
         if now == value { return true }
-        guard MenuBarAX.press(found.element) else { return false }
-        return MenuBarAX.waitFor(value, polls: Int(confirmWait / confirmPollInterval), interval: confirmPollInterval) {
-            state(after: found)
-        }
+        guard press() else { return false }
+        return MenuBarAX.waitFor(value, polls: polls, interval: interval, read: read)
     }
 
     /// 按过(或要按)`found` 那一项之后的状态。读标题时先读那一项本身,它读不出来(菜单重建过)再整个找一遍。

@@ -948,6 +948,11 @@ struct OnboardingView: View {
                 lines.append(L10n.formatNames(L10n.t("完全磁盘访问权限可让%@直接使用本机已有的歌词，仅读取其歌词缓存和播放队列"),
                                     fullDiskAccess.playerNames(lyrics)))
             }
+            let library = fdaTargets.filter { $0.fullDiskAccessUse == .readsLyricsQueueFavoritesAndCovers }
+            if !library.isEmpty {
+                lines.append(L10n.formatNames(L10n.t("完全磁盘访问权限可让%@直接使用本机已有的歌词和封面、显示喜欢按钮，仅读取其歌词缓存、播放队列、喜欢列表和封面"),
+                                    fullDiskAccess.playerNames(library)))
+            }
             let queue = fdaTargets.filter { $0.fullDiskAccessUse == .readsQueue }
             if !queue.isEmpty {
                 lines.append(L10n.formatNames(L10n.t("完全磁盘访问权限可让%@预先解析即将播放的歌曲，仅读取其播放队列"),

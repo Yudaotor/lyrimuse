@@ -219,6 +219,42 @@ func TestApplyPlayerCatalogIDs(t *testing.T) {
 	}
 }
 
+// 酷我歌曲页跟着它记下的曲目 id 走:记 id 时拼上、换 id 时重拼,存量条目只有 id 的再记一次时补上;形状不对的不拼。
+func TestKuwoSongPageFollowsPlayerSongID(t *testing.T) {
+	var e enrichEntry
+	if !applyPlayerCatalogIDsLocked(&e, kuwoMusicBundleID, playerCatalogIDs{songID: "4049098", songAlbum: "12"}) ||
+		e.KuwoURL != "https://www.kuwo.cn/play_detail/4049098" {
+		t.Errorf("记 id 时拼上歌曲页: %+v", e)
+	}
+	if applyPlayerCatalogIDsLocked(&e, kuwoMusicBundleID, playerCatalogIDs{songID: "4049098", songAlbum: "12"}) {
+		t.Error("没变不算改动")
+	}
+	if !applyPlayerCatalogIDsLocked(&e, kuwoMusicBundleID, playerCatalogIDs{songID: "6680"}) ||
+		e.KuwoURL != "https://www.kuwo.cn/play_detail/6680" {
+		t.Errorf("换 id 时重拼: %+v", e)
+	}
+	old := enrichEntry{PlayerSongIDs: map[string]string{kuwoMusicBundleID: "6680"}}
+	if !applyPlayerCatalogIDsLocked(&old, kuwoMusicBundleID, playerCatalogIDs{songID: "6680"}) ||
+		old.KuwoURL != "https://www.kuwo.cn/play_detail/6680" {
+		t.Errorf("存量条目只有 id 的补上歌曲页: %+v", old)
+	}
+	for _, id := range []string{"", "12a", "MUSIC_6680", strings.Repeat("9", 21)} {
+		if got := kuwoSongPageURL(id); got != "" {
+			t.Errorf("kuwoSongPageURL(%q) = %q,形状不对不拼", id, got)
+		}
+	}
+	var other enrichEntry
+	notePlayerSongLocked(&other, kugouMusicBundleID, "6680", "")
+	if other.KuwoURL != "" {
+		t.Errorf("别的播放器的 id 不拼酷我歌曲页: %+v", other)
+	}
+	merged := mergePeripheralInto(enrichEntry{PlayerSongIDs: map[string]string{kuwoMusicBundleID: "1"}},
+		enrichEntry{PlayerSongIDs: map[string]string{kuwoMusicBundleID: "2"}, KuwoURL: "https://www.kuwo.cn/play_detail/2"})
+	if merged.KuwoURL != "" {
+		t.Errorf("胜者记的酷我 id 是另一个时不带落选那条的歌曲页: %+v", merged)
+	}
+}
+
 func TestPlayerCatalogIDShapes(t *testing.T) {
 	for _, c := range []struct {
 		bundle, id string

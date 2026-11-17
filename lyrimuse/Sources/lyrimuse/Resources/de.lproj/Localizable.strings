@@ -69,6 +69,7 @@
 "%@ 次收听#one" = "%@ Wiedergabe";
 "%@ 点" = "%@ Uhr";
 "%@ 的播放队列位于受保护的目录中。授权后可预先解析即将播放的歌曲；未授权时改为预先解析同一专辑中的其他歌曲" = "%@ speichert seine Warteschlange in einem geschützten Ordner. Mit Zugriff werden kommende Titel vorab vorbereitet, ohne Zugriff stattdessen andere Titel desselben Albums";
+"%@ 的歌词缓存、播放队列、喜欢列表和封面位于受保护的目录中。授权后可直接使用本机已有的歌词和封面、预先解析即将播放的歌曲并显示喜欢按钮；未授权时仍可联网查找歌词和封面" = "%@ speichert Liedtext-Cache, Warteschlange, Favoriten und Cover in geschützten Ordnern. Mit Zugriff werden Liedtexte und Cover auf diesem Mac direkt genutzt, kommende Titel vorab aufgelöst und die Favoritentaste angezeigt; ohne ihn werden Liedtexte und Cover weiterhin online gesucht";
 "%@ 的歌词缓存位于受系统保护的目录中。授予「完全磁盘访问权限」后，可直接使用本机已有的逐字歌词，无需每次联网搜索" = "%@ speichert seinen Liedtext-Cache in einem vom System geschützten Ordner. Erteile „Festplattenvollzugriff“, damit die Wort-für-Wort-Texte auf diesem Mac direkt genutzt werden – ohne Onlinesuche";
 "%@ 的歌词缓存和播放队列位于受保护的目录中。授权后可直接使用本机已有的歌词，并预先解析即将播放的歌曲；未授权时仍可联网查找歌词" = "%@ speichert Liedtext-Cache und Warteschlange in geschützten Ordnern. Mit Zugriff werden Liedtexte auf diesem Mac direkt genutzt und kommende Titel vorab aufgelöst; ohne ihn werden Liedtexte weiterhin online gesucht";
 "%@ 的自动化权限未开启…" = "Automation für %@ ist aus …";
@@ -991,6 +992,7 @@
 "完全一致" = "Identisch";
 "完全同名 120 · 仅括号差异 60 · 中英双语同名 30" = "Exakter Titel 120 · nur Klammern verschieden 60 · zweisprachig gleich 30";
 "完全磁盘访问权限" = "Festplattenvollzugriff";
+"完全磁盘访问权限可让%@直接使用本机已有的歌词和封面、显示喜欢按钮，仅读取其歌词缓存、播放队列、喜欢列表和封面" = "Mit Festplattenvollzugriff kann %@ Liedtexte und Cover auf diesem Mac nutzen und die Favoritentaste anzeigen; gelesen werden nur Liedtext-Cache, Warteschlange, Favoriten und Cover";
 "完全磁盘访问权限可让%@直接使用本机已有的歌词，仅读取其歌词缓存和播放队列" = "Mit Festplattenvollzugriff kann %@ Liedtexte auf diesem Mac nutzen; gelesen werden nur der Liedtext-Cache und die Warteschlange";
 "完全磁盘访问权限可让%@预先解析即将播放的歌曲，仅读取其播放队列" = "Mit Festplattenvollzugriff werden kommende Titel in %@ vorab vorbereitet; gelesen wird nur die Warteschlange";
 "完成" = "Fertig";
@@ -1876,6 +1878,7 @@
 "未获得「辅助功能」权限，可能会盖住 App 菜单" = "Ohne Bedienungshilfen-Berechtigung kann der Text App-Menüs verdecken";
 "未获得完全磁盘访问权限，无法读取 %@ 的播放队列" = "Kein Festplattenvollzugriff; die Warteschlange von %@ kann nicht gelesen werden";
 "未获得完全磁盘访问权限，无法读取 %@ 的本机歌词" = "Kein Festplattenvollzugriff; lokale Liedtexte von %@ sind nicht lesbar";
+"未获得完全磁盘访问权限，无法读取 %@ 的本机歌词、封面和喜欢列表" = "Kein Festplattenvollzugriff; lokale Liedtexte, Cover und Favoriten von %@ sind nicht lesbar";
 "未获得辅助功能权限，%@ 不显示喜欢按钮，失去系统媒体焦点时也无法控制暂停、恢复和切换上一首或下一首" = "Bedienungshilfen-Berechtigung fehlt: %@ hat keine Favoritentaste und kann ohne System-Medienfokus nicht pausieren, fortsetzen oder Titel wechseln";
 "未获得辅助功能权限，%@ 不显示随机、循环与喜欢按钮，失去焦点时也无法控制播放" = "Keine Bedienungshilfen-Berechtigung; die Tasten für Zufall, Wiederholen und Favorit von %@ sind ausgeblendet und die Wiedergabe lässt sich ohne Fokus nicht steuern";
 "未获得辅助功能权限，%@ 不显示随机、循环与喜欢按钮，失去系统媒体焦点时也无法控制暂停、恢复和切换上一首或下一首" = "Bedienungshilfen-Berechtigung fehlt: %@ hat keine Tasten für Zufall, Wiederholen und Favorit und kann ohne Medienfokus des Systems nicht pausieren, fortsetzen oder Titel wechseln";

@@ -53,6 +53,7 @@
 "%@ 次收听" = "%@ dinleme";
 "%@ 点" = "%@:00";
 "%@ 的播放队列位于受保护的目录中。授权后可预先解析即将播放的歌曲；未授权时改为预先解析同一专辑中的其他歌曲" = "%@ uygulaması çalma sırasını korumalı bir klasörde tutar. İzin verirseniz sıradaki parçalar önceden hazırlanır; izin vermezseniz bunun yerine aynı albümdeki diğer parçalar hazırlanır";
+"%@ 的歌词缓存、播放队列、喜欢列表和封面位于受保护的目录中。授权后可直接使用本机已有的歌词和封面、预先解析即将播放的歌曲并显示喜欢按钮；未授权时仍可联网查找歌词和封面" = "%@ uygulaması şarkı sözü önbelleğini, çalma sırasını, favorilerini ve kapaklarını korunan klasörlerde tutar. İzin verirseniz bu Mac’teki şarkı sözleri ve kapaklar doğrudan kullanılır, sıradaki parçalar önceden çözümlenir ve favori düğmesi gösterilir; izin vermezseniz şarkı sözleri ve kapaklar yine internette aranır";
 "%@ 的歌词缓存位于受系统保护的目录中。授予「完全磁盘访问权限」后，可直接使用本机已有的逐字歌词，无需每次联网搜索" = "%@ uygulaması şarkı sözü önbelleğini sistem korumalı bir klasörde tutar. Tam Disk Erişimi izni verirseniz bu Mac’teki kelime kelime şarkı sözleri her seferinde çevrimiçi aranmadan doğrudan kullanılabilir";
 "%@ 的歌词缓存和播放队列位于受保护的目录中。授权后可直接使用本机已有的歌词，并预先解析即将播放的歌曲；未授权时仍可联网查找歌词" = "%@ uygulaması şarkı sözü önbelleğini ve çalma sırasını korunan klasörlerde tutar. İzin verirseniz bu Mac’teki şarkı sözleri doğrudan kullanılır ve sıradaki parçalar önceden çözümlenir; izin vermezseniz şarkı sözleri yine internette aranır";
 "%@ 的自动化权限未开启…" = "%@ Otomasyon İzni Kapalı…";
@@ -937,6 +938,7 @@
 "完全一致" = "Tamamen Aynı";
 "完全同名 120 · 仅括号差异 60 · 中英双语同名 30" = "Tam ad eşleşmesi 120 · yalnızca parantez farkı 60 · iki dilli aynı ad 30";
 "完全磁盘访问权限" = "Tam Disk Erişimi";
+"完全磁盘访问权限可让%@直接使用本机已有的歌词和封面、显示喜欢按钮，仅读取其歌词缓存、播放队列、喜欢列表和封面" = "Tam Disk Erişimi, %@ uygulamasının bu Mac’teki şarkı sözleri ve kapaklarının doğrudan kullanılmasını ve favori düğmesinin gösterilmesini sağlar; yalnızca uygulamanın şarkı sözü önbelleği, çalma sırası, favorileri ve kapakları okunur";
 "完全磁盘访问权限可让%@直接使用本机已有的歌词，仅读取其歌词缓存和播放队列" = "Tam Disk Erişimi, %@ uygulamasının bu Mac’teki şarkı sözlerinin doğrudan kullanılmasını sağlar; yalnızca uygulamanın şarkı sözü önbelleği ve çalma sırası okunur";
 "完全磁盘访问权限可让%@预先解析即将播放的歌曲，仅读取其播放队列" = "Tam Disk Erişimi, %@ uygulamasında sıradaki parçaların önceden hazırlanmasını sağlar; yalnızca çalma sırası okunur";
 "完成" = "Bitti";
@@ -1796,6 +1798,7 @@
 "未获得「辅助功能」权限，可能会盖住 App 菜单" = "“Erişilebilirlik” izni yoksa şarkı sözleri uygulama menülerinin üstünü kapatabilir";
 "未获得完全磁盘访问权限，无法读取 %@ 的播放队列" = "Tam Disk Erişimi yok; %@ uygulamasının çalma sırası okunamıyor";
 "未获得完全磁盘访问权限，无法读取 %@ 的本机歌词" = "Tam Disk Erişimi yok; %@ uygulamasının yerel şarkı sözleri okunamıyor";
+"未获得完全磁盘访问权限，无法读取 %@ 的本机歌词、封面和喜欢列表" = "Tam Disk Erişimi yok; %@ uygulamasının yerel şarkı sözleri, kapakları ve favorileri okunamıyor";
 "未获得辅助功能权限，%@ 不显示喜欢按钮，失去系统媒体焦点时也无法控制暂停、恢复和切换上一首或下一首" = "Erişilebilirlik izni yok: %@ için Favori düğmesi gösterilmez, sistem medya odağı kaybedildiğinde duraklatma, sürdürme ve önceki veya sonraki parçaya geçme yapılamaz";
 "未获得辅助功能权限，%@ 不显示随机、循环与喜欢按钮，失去焦点时也无法控制播放" = "Erişilebilirlik izni yok; %@ için karıştırma, yineleme ve favori düğmeleri gizli, odak başka yerdeyken çalma denetlenemez";
 "未获得辅助功能权限，%@ 不显示随机、循环与喜欢按钮，失去系统媒体焦点时也无法控制暂停、恢复和切换上一首或下一首" = "Erişilebilirlik izni yok; %@ uygulamasında karıştırma, yineleme ve favori düğmeleri gösterilmez, sistem medya odağı yokken duraklatma, sürdürme ve önceki ya da sonraki parçaya geçme yapılamaz";

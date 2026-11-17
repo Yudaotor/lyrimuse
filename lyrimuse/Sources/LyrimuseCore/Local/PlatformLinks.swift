@@ -76,8 +76,8 @@ public struct PlatformLinks: Sendable, Equatable {
     public let kkboxArtistWeb: URL?
     /// 洛雪里这一首来自哪个平台(QQ、网易云、酷我,见 `lxMusicPlatform(songID:)`):用洛雪放时简介面板给那家的歌曲页。
     public let lxMusicPlatform: Platform?
-    /// 酷我歌曲页:酷我在放时按它记下的曲目 id 拼(`kuwoSongURL(kuwoSongID:)`),洛雪里来自酷我的歌按它本地库的曲目 id 拼
-    /// (`kuwoSongURL(lxSongID:)`)。
+    /// 酷我歌曲页:引擎存的那份(`kuwoSongURL(_:)`),没有时按酷我记下的曲目 id 拼(`kuwoSongURL(kuwoSongID:)`),洛雪里来自酷我的歌
+    /// 按它本地库的曲目 id 拼(`kuwoSongURL(lxSongID:)`)。
     public let kuwoSong: URL?
     /// 酷狗网页歌曲页 `https://www.kugou.com/mixsong/<EMixSongID>.html`(浏览器)。引擎用酷狗放这首时按它报的 mixId 找的,
     /// 形状闸见 `kugouSongURL`。
@@ -201,6 +201,14 @@ public struct PlatformLinks: Sendable, Equatable {
     public static func kuwoSongURL(kuwoSongID id: String?) -> URL? {
         guard let id, !id.isEmpty, id.count <= 20, id.allSatisfy({ $0.isASCII && $0.isNumber }) else { return nil }
         return URL(string: "https://www.kuwo.cn/play_detail/" + id)
+    }
+
+    /// 引擎存的酷我网页歌曲页(`kuwo_url`)→ 原样给出;不是 `https://www.kuwo.cn/play_detail/<1～20 位数字>` 的 nil。形状闸同
+    /// `kuwoSongURL(kuwoSongID:)`、引擎的 `kuwoSongPageURL`。纯函数,selftest 覆盖。
+    public static func kuwoSongURL(_ raw: String) -> URL? {
+        let prefix = "https://www.kuwo.cn/play_detail/"
+        guard raw.hasPrefix(prefix) else { return nil }
+        return kuwoSongURL(kuwoSongID: String(raw.dropFirst(prefix.count)))
     }
 
     /// 引擎存的酷狗网页歌曲页 → 原样给出;不是 `https://www.kugou.com/mixsong/<4～16 位小写字母数字>.html` 的 nil。纯函数,selftest 覆盖。
