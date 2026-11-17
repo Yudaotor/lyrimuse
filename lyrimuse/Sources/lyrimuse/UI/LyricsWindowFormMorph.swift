@@ -45,10 +45,12 @@ final class LyricsWindowFormMorph {
     /// 临时窗上屏、真窗口回到原层级之后,各等这么久再动下一步,不留空帧。
     private static let settleFrames: Double = 2.0 / 60
 
-    /// 这一次能不能做动画。不能就由调用方直接切。
+    /// 这一次能不能做动画。不能就由调用方直接切。迷你开着「截屏时隐藏」时不做:面板 `sharingType = .none`,
+    /// 截出来是空白(07 章决策 209)。
     static func canAnimate(_ window: NSWindow, to target: NSRect) -> Bool {
         guard #available(macOS 14.4, *) else { return false }
-        return !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
+        return !AppSettings.shared.lyricsWindowMiniHideDuringScreenCapture
+            && !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
             && window.isVisible && !window.isMiniaturized
             && window.occlusionState.contains(.visible)
             && Plan.sameScreen(window.frame, target, screens: NSScreen.screens.map(\.frame))

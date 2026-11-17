@@ -491,11 +491,12 @@ Zeigst du auf den schwebenden Text, erscheint eine Reihe von Schnelltasten. Auch
 
 ### Unsichtbar in Bildschirmfotos und bei Bildschirmfreigabe
 
-Bildschirmfotos, Aufnahmen und geteilte Bildschirme lassen den Liedtext weg, während du ihn weiterhin siehst. Schwebender Text und Notch haben jeweils einen Schalter.
+Bildschirmfotos, Aufnahmen und geteilte Bildschirme lassen den Liedtext weg, während du ihn weiterhin siehst. Schwebender Text, Notch und Mini-Liedtextfenster haben jeweils einen Schalter.
 
 - Standardmäßig aus
 - Einstellungen: Liedtext-Anzeige › Schwebender Text › Verhalten › In Bildschirmfotos ausblenden
 - Einstellungen: Liedtext-Anzeige › Notch › Verhalten › In Bildschirmfotos ausblenden
+- Einstellungen: Liedtext-Anzeige › Liedtextfenster › Verhalten › In Bildschirmfotos ausblenden
 
 <a id="feature-hide-when-paused"></a>
 
@@ -520,15 +521,26 @@ Ist ein Titel instrumental oder hat die Suche keinen Liedtext gefunden, können 
 - Einstellungen: Liedtext-Anzeige › Notch › Verhalten › Bei Instrumental & ohne Text einklappen
 - Einstellungen: Liedtext-Anzeige › Touch Bar › Verhalten › Bei Instrumental & ohne Text einklappen
 
+<a id="feature-title-when-no-lyrics"></a>
+
+### Titel anzeigen, wenn es keinen Liedtext gibt
+
+Ist ein Titel instrumental oder findet die Suche keinen Liedtext, zeigt der schwebende Text Titel und Interpret statt einer Statusmeldung. Die Menüleiste zeigt den Titel, wenn es keinen Liedtext gibt oder die Suche noch läuft. Beide haben einen eigenen Schalter.
+
+- Standardmäßig ein
+- Einstellungen: Liedtext-Anzeige › Schwebender Text › Verhalten › Titel zeigen, wenn kein Text
+- Einstellungen: Liedtext-Anzeige › Menüleiste › Verhalten › Titel zeigen, wenn kein Text
+
 <a id="feature-hide-during-ads"></a>
 
 ### Bei Werbung ausweichen
 
-Spielt der Player Werbung, kann sich der schwebende Text ausblenden und die Notch auf ihren oberen Streifen schrumpfen; zeigst du auf die Notch, klappt sie trotzdem aus. Beide haben einen eigenen Schalter.
+Spielt der Player Werbung, können sich der schwebende Text und das Mini-Liedtextfenster ausblenden und die Notch auf ihren oberen Streifen schrumpfen; zeigst du auf die Notch, klappt sie trotzdem aus. Jede Anzeige hat einen eigenen Schalter.
 
 - Standardmäßig aus
 - Einstellungen: Liedtext-Anzeige › Schwebender Text › Verhalten › Bei Werbung ausblenden
 - Einstellungen: Liedtext-Anzeige › Notch › Verhalten › Bei Werbung einklappen
+- Einstellungen: Liedtext-Anzeige › Liedtextfenster › Verhalten › Bei Werbung ausblenden
 
 <a id="feature-hide-in-full-screen"></a>
 
@@ -943,7 +955,7 @@ Sendet höchstens einmal täglich Version, macOS, aktivierte Funktionen und Abst
 
 ## Alle Einstellungen
 
-Alle Einstellungen des Einstellungsfensters nach Ort: insgesamt 326. Gib einen Namen in das Suchfeld oben in der Seitenleiste der Einstellungen ein, um direkt dorthin zu springen.
+Alle Einstellungen des Einstellungsfensters nach Ort: insgesamt 329. Gib einen Namen in das Suchfeld oben in der Seitenleiste der Einstellungen ein, um direkt dorthin zu springen.
 
 ### Liedtext › Quelle
 
@@ -1083,6 +1095,7 @@ Alle Einstellungen des Einstellungsfensters nach Ort: insgesamt 326. Gib einen N
 - **Bei Instrumental & ohne Text ausblenden**
 - **Bei Werbung ausblenden**
 - **Im Vollbild ausblenden**
+- **Titel zeigen, wenn kein Text**
 
 ### Liedtext-Anzeige › Schwebender Text › Position
 
@@ -1195,7 +1208,7 @@ Alle Einstellungen des Einstellungsfensters nach Ort: insgesamt 326. Gib einen N
 ### Liedtext-Anzeige › Menüleiste › Verhalten
 
 - **Steuerung beim Überfahren zeigen**
-- **Titel zeigen, wenn kein Text**: Zeigt den Titelnamen anstelle des Liedtexts, solange keiner da ist oder noch gesucht wird
+- **Titel zeigen, wenn kein Text**
 - **Text bei Pause behalten**: Bleibt bei Pause auf der aktuellen Zeile, statt zum Symbol einzuklappen
 
 ### Liedtext-Anzeige › Touch Bar
@@ -1275,8 +1288,10 @@ Alle Einstellungen des Einstellungsfensters nach Ort: insgesamt 326. Gib einen N
 
 - **Beim Überfahren abblenden** (nur Mini)
 - **Verblasst durchklickbar** (nur Mini): Im verblassten Zustand gehen Klicks an das Fenster darunter. Halte ⌥ gedrückt, um es deckend zu machen und zu bedienen
+- **In Bildschirmfotos ausblenden** (nur Mini)
 - **Bei Pause ausblenden** (nur Mini)
 - **Bei Instrumental & ohne Text ausblenden** (nur Mini)
+- **Bei Werbung ausblenden** (nur Mini)
 - **Im Vollbild ausblenden** (nur Mini)
 
 ### Liedtext-Anzeige › Liedtextfenster › Farbe

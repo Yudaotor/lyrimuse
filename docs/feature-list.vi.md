@@ -491,11 +491,12 @@ Trỏ vào lời nổi sẽ hiện một hàng nút nhanh. Lời trên thanh men
 
 ### Ẩn khỏi ảnh chụp màn hình và chia sẻ màn hình
 
-Ảnh chụp màn hình, bản ghi màn hình và màn hình chia sẻ đều không có lời, trong khi bạn vẫn thấy bình thường. Lời nổi và Notch mỗi nơi có một công tắc.
+Ảnh chụp màn hình, bản ghi màn hình và màn hình chia sẻ đều không có lời, trong khi bạn vẫn thấy bình thường. Lời nổi, Notch và cửa sổ lời mini mỗi nơi có một công tắc.
 
 - Tắt theo mặc định
 - Cài đặt: Hiển thị lời › Lời nổi › Hành vi › Ẩn khi chụp màn hình
 - Cài đặt: Hiển thị lời › Notch › Hành vi › Ẩn khi chụp màn hình
+- Cài đặt: Hiển thị lời › Cửa sổ lời › Hành vi › Ẩn khi chụp màn hình
 
 <a id="feature-hide-when-paused"></a>
 
@@ -520,15 +521,26 @@ Khi bài hát là nhạc không lời, hoặc đã tìm xong mà không thấy l
 - Cài đặt: Hiển thị lời › Notch › Hành vi › Thu gọn dòng lời khi nhạc không lời/không có lời
 - Cài đặt: Hiển thị lời › Touch Bar › Hành vi › Thu gọn khi nhạc không lời/không có lời
 
+<a id="feature-title-when-no-lyrics"></a>
+
+### Hiện tên bài khi không có lời
+
+Khi bài hát là nhạc không lời hoặc tìm kiếm không thấy lời, lời nổi hiện tên bài và nghệ sĩ thay cho dòng trạng thái. Thanh menu hiện tên bài khi không có lời hoặc việc tìm kiếm vẫn đang chạy. Mỗi nơi có công tắc riêng.
+
+- Bật theo mặc định
+- Cài đặt: Hiển thị lời › Lời nổi › Hành vi › Hiện tên bài khi không có lời
+- Cài đặt: Hiển thị lời › Thanh menu › Hành vi › Hiện tên bài khi không có lời
+
 <a id="feature-hide-during-ads"></a>
 
 ### Tự ẩn khi có quảng cáo
 
-Khi trình phát đang phát quảng cáo, lời nổi có thể ẩn và Notch có thể thu về dải trên cùng; di chuột lên Notch vẫn mở rộng được. Mỗi nơi có công tắc riêng.
+Khi trình phát đang phát quảng cáo, lời nổi và cửa sổ lời mini có thể ẩn, còn Notch có thể thu về dải trên cùng; di chuột lên Notch vẫn mở rộng được. Mỗi nơi có công tắc riêng.
 
 - Tắt theo mặc định
 - Cài đặt: Hiển thị lời › Lời nổi › Hành vi › Ẩn khi có quảng cáo
 - Cài đặt: Hiển thị lời › Notch › Hành vi › Thu gọn khi có quảng cáo
+- Cài đặt: Hiển thị lời › Cửa sổ lời › Hành vi › Ẩn khi có quảng cáo
 
 <a id="feature-hide-in-full-screen"></a>
 
@@ -943,7 +955,7 @@ Tối đa một lần mỗi ngày, Lyrimuse gửi phiên bản, macOS, các tín
 
 ## Toàn bộ cài đặt
 
-Toàn bộ mục trong cửa sổ Cài đặt, theo vị trí: tổng cộng 326 mục. Gõ tên vào ô tìm kiếm ở đầu thanh bên của Cài đặt để đi thẳng tới mục đó.
+Toàn bộ mục trong cửa sổ Cài đặt, theo vị trí: tổng cộng 329 mục. Gõ tên vào ô tìm kiếm ở đầu thanh bên của Cài đặt để đi thẳng tới mục đó.
 
 ### Lời bài hát › Nguồn
 
@@ -1083,6 +1095,7 @@ Toàn bộ mục trong cửa sổ Cài đặt, theo vị trí: tổng cộng 326
 - **Ẩn khi nhạc không lời/không có lời**
 - **Ẩn khi có quảng cáo**
 - **Ẩn khi toàn màn hình**
+- **Hiện tên bài khi không có lời**
 
 ### Hiển thị lời › Lời nổi › Vị trí
 
@@ -1195,7 +1208,7 @@ Toàn bộ mục trong cửa sổ Cài đặt, theo vị trí: tổng cộng 326
 ### Hiển thị lời › Thanh menu › Hành vi
 
 - **Hiện điều khiển khi di chuột**
-- **Hiện tên bài khi không có lời**: Hiện tên bài ở vị trí lời khi bài hát không có lời hoặc đang tìm lời
+- **Hiện tên bài khi không có lời**
 - **Giữ lời khi tạm dừng**: Khi tạm dừng, giữ nguyên câu hiện tại thay vì thu gọn thành biểu tượng
 
 ### Hiển thị lời › Touch Bar
@@ -1275,8 +1288,10 @@ Toàn bộ mục trong cửa sổ Cài đặt, theo vị trí: tổng cộng 326
 
 - **Làm mờ khi di chuột qua** (chỉ Mini)
 - **Bấm xuyên qua khi mờ** (chỉ Mini): Khi mờ, thao tác bấm sẽ xuyên qua tới cửa sổ bên dưới. Giữ ⌥ để hiện rõ lại và thao tác
+- **Ẩn khi chụp màn hình** (chỉ Mini)
 - **Ẩn khi tạm dừng** (chỉ Mini)
 - **Ẩn khi nhạc không lời/không có lời** (chỉ Mini)
+- **Ẩn khi có quảng cáo** (chỉ Mini)
 - **Ẩn khi toàn màn hình** (chỉ Mini)
 
 ### Hiển thị lời › Cửa sổ lời › Màu

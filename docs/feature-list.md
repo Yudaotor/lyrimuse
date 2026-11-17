@@ -491,11 +491,12 @@ Pointing at floating lyrics brings up a row of quick buttons. Menu bar lyrics ca
 
 ### Hidden from screenshots and screen sharing
 
-Screenshots, recordings and shared screens leave the lyrics out while you still see them. Floating lyrics and the notch each have a switch.
+Screenshots, recordings and shared screens leave the lyrics out while you still see them. Floating lyrics, the notch and the mini lyrics window each have a switch.
 
 - Off by default
 - Settings: Lyrics Display › Floating Lyrics › Behavior › Hide in Screenshots
 - Settings: Lyrics Display › Notch › Behavior › Hide in Screenshots
+- Settings: Lyrics Display › Lyrics Window › Behavior › Hide in Screenshots
 
 <a id="feature-hide-when-paused"></a>
 
@@ -520,15 +521,26 @@ When a song is instrumental, or the search is done and found no lyrics, floating
 - Settings: Lyrics Display › Notch › Behavior › Collapse Lyric Row for Instrumentals & No Lyrics
 - Settings: Lyrics Display › Touch Bar › Behavior › Collapse for Instrumentals & No Lyrics
 
+<a id="feature-title-when-no-lyrics"></a>
+
+### Song title when there are no lyrics
+
+When a song is instrumental or the search finds no lyrics, floating lyrics show the song title and artist where the lyrics go, instead of a status line. The menu bar shows the song title when there are no lyrics or the search is still running. Each has its own switch.
+
+- On by default
+- Settings: Lyrics Display › Floating Lyrics › Behavior › Show Title When No Lyrics
+- Settings: Lyrics Display › Menu Bar › Behavior › Show Title When No Lyrics
+
 <a id="feature-hide-during-ads"></a>
 
 ### Step aside during ads
 
-While the player is playing an ad, floating lyrics can hide and the notch can shrink to its top strip; hovering over the notch still expands it. Each has its own switch.
+While the player is playing an ad, floating lyrics and the mini lyrics window can hide and the notch can shrink to its top strip; hovering over the notch still expands it. Each has its own switch.
 
 - Off by default
 - Settings: Lyrics Display › Floating Lyrics › Behavior › Hide During Ads
 - Settings: Lyrics Display › Notch › Behavior › Collapse During Ads
+- Settings: Lyrics Display › Lyrics Window › Behavior › Hide During Ads
 
 <a id="feature-hide-in-full-screen"></a>
 
@@ -943,7 +955,7 @@ At most once a day, sends the version, macOS, which features are on and crash su
 
 ## Every setting
 
-Every setting in the Settings window, by where it lives: 326 in all. Type a name into the search field at the top of the Settings sidebar to jump straight to it.
+Every setting in the Settings window, by where it lives: 329 in all. Type a name into the search field at the top of the Settings sidebar to jump straight to it.
 
 ### Lyrics › Source
 
@@ -1083,6 +1095,7 @@ Every setting in the Settings window, by where it lives: 326 in all. Type a name
 - **Hide for Instrumentals & No Lyrics**
 - **Hide During Ads**
 - **Hide in Full Screen**
+- **Show Title When No Lyrics**
 
 ### Lyrics Display › Floating Lyrics › Position
 
@@ -1195,7 +1208,7 @@ Every setting in the Settings window, by where it lives: 326 in all. Type a name
 ### Lyrics Display › Menu Bar › Behavior
 
 - **Show Controls on Hover**
-- **Show Title When No Lyrics**: Shows the song title in place of lyrics while there are none or they’re still being found
+- **Show Title When No Lyrics**
 - **Keep Lyrics When Paused**: Stays on the current line while paused instead of collapsing to the icon
 
 ### Lyrics Display › Touch Bar
@@ -1275,8 +1288,10 @@ Every setting in the Settings window, by where it lives: 326 in all. Type a name
 
 - **Fade on Hover** (mini size only)
 - **Click Through While Faded** (mini size only): While faded, clicks pass through to the window below. Hold ⌥ to make it opaque and interact with it
+- **Hide in Screenshots** (mini size only)
 - **Hide When Paused** (mini size only)
 - **Hide for Instrumentals & No Lyrics** (mini size only)
+- **Hide During Ads** (mini size only)
 - **Hide in Full Screen** (mini size only)
 
 ### Lyrics Display › Lyrics Window › Color

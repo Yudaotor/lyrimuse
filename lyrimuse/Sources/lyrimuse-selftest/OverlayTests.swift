@@ -8,6 +8,7 @@ import Foundation
 @MainActor
 func runOverlayTests() {
     checkOverlayFullScreenHide()
+    checkOverlayNoLyricsTitle()
     // ---- 下一句上下交替:当前句按下标奇偶占上下两行,前奏 / 间奏 / 最后一句也按奇偶摆,对唱也交替(04 章决策 89、96、97) ----
     do {
         typealias A = OverlayNextLineArrangement

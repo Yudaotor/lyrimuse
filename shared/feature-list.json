@@ -2285,21 +2285,21 @@
             "tr": "Ekran görüntülerinde ve ekran paylaşımında gizli"
           },
           "desc": {
-            "en": "Screenshots, recordings and shared screens leave the lyrics out while you still see them. Floating lyrics and the notch each have a switch.",
-            "zh-Hans": "截屏、录屏或在会议中共享屏幕时，其他人看不到歌词，你自己仍可正常看到。悬浮歌词和灵动岛各有独立开关。",
-            "zh-Hant": "拍攝螢幕快照、螢幕錄製或在會議中分享螢幕時，其他人看不到歌詞，你自己仍可正常看到。浮動歌詞和動態島各有獨立開關。",
-            "ja": "スクリーンショットや画面収録、会議での画面共有の際、ほかの人には歌詞が見えませんが、自分には通常どおり表示されます。フローティング歌詞とノッチで、それぞれ個別にオン/オフできます。",
-            "ko": "스크린샷을 찍거나 화면을 기록하거나 회의에서 화면을 공유할 때 다른 사람에게는 가사가 보이지 않고, 나에게는 평소처럼 보입니다. 플로팅 가사와 노치는 각각 따로 켜고 끌 수 있습니다.",
-            "es": "Al hacer capturas, grabar la pantalla o compartirla en una reunión, los demás no ven la letra, pero tú sí. La letra flotante y el notch tienen cada uno su interruptor.",
-            "fr": "Les captures d’écran, les enregistrements et les écrans partagés n’incluent pas les paroles, que vous continuez de voir. Les paroles flottantes et l’encoche ont chacune leur option.",
-            "de": "Bildschirmfotos, Aufnahmen und geteilte Bildschirme lassen den Liedtext weg, während du ihn weiterhin siehst. Schwebender Text und Notch haben jeweils einen Schalter.",
-            "it": "Screenshot, registrazioni e schermi condivisi non includono il testo, mentre tu continui a vederlo. Testo fluttuante e notch hanno ciascuno un’opzione.",
-            "pt-BR": "Capturas de tela, gravações e telas compartilhadas deixam a letra de fora, mas você continua vendo. A letra flutuante e o notch têm cada um a própria opção.",
-            "vi": "Ảnh chụp màn hình, bản ghi màn hình và màn hình chia sẻ đều không có lời, trong khi bạn vẫn thấy bình thường. Lời nổi và Notch mỗi nơi có một công tắc.",
-            "ru": "На снимках экрана, записях и при демонстрации экрана текста нет, хотя вы его по-прежнему видите. Для плавающего текста и выреза — отдельные переключатели.",
-            "uk": "На знімках екрана, записах і в спільному доступі до екрана тексту не видно, а ви його й далі бачите. Для плаваючого тексту й вирізу є окремі перемикачі.",
-            "th": "ภาพหน้าจอ การบันทึกหน้าจอ และการแชร์หน้าจอจะไม่มีเนื้อเพลง แต่คุณยังมองเห็นได้ตามปกติ เนื้อเพลงแบบลอยและรอยบากมีสวิตช์แยกกัน",
-            "tr": "Siz şarkı sözlerini görmeye devam ederken ekran görüntüleri, kayıtlar ve paylaşılan ekranlar onları içermez. Yüzen sözlerin ve çentiğin ayrı birer anahtarı var."
+            "en": "Screenshots, recordings and shared screens leave the lyrics out while you still see them. Floating lyrics, the notch and the mini lyrics window each have a switch.",
+            "zh-Hans": "截屏、录屏或在会议中共享屏幕时，其他人看不到歌词，你自己仍可正常看到。悬浮歌词、灵动岛和迷你歌词窗口各有独立开关。",
+            "zh-Hant": "拍攝螢幕快照、螢幕錄製或在會議中分享螢幕時，其他人看不到歌詞，你自己仍可正常看到。浮動歌詞、動態島和迷你歌詞視窗各有獨立開關。",
+            "ja": "スクリーンショットや画面収録、会議での画面共有の際、ほかの人には歌詞が見えませんが、自分には通常どおり表示されます。フローティング歌詞、ノッチ、ミニ歌詞ウインドウで、それぞれ個別にオン/オフできます。",
+            "ko": "스크린샷을 찍거나 화면을 기록하거나 회의에서 화면을 공유할 때 다른 사람에게는 가사가 보이지 않고, 나에게는 평소처럼 보입니다. 플로팅 가사, 노치, 미니 가사 윈도우는 각각 따로 켜고 끌 수 있습니다.",
+            "es": "Al hacer capturas, grabar la pantalla o compartirla en una reunión, los demás no ven la letra, pero tú sí. La letra flotante, el notch y la ventana de letra mini tienen cada uno su interruptor.",
+            "fr": "Les captures d’écran, les enregistrements et les écrans partagés n’incluent pas les paroles, que vous continuez de voir. Les paroles flottantes, l’encoche et la fenêtre des paroles mini ont chacune leur option.",
+            "de": "Bildschirmfotos, Aufnahmen und geteilte Bildschirme lassen den Liedtext weg, während du ihn weiterhin siehst. Schwebender Text, Notch und Mini-Liedtextfenster haben jeweils einen Schalter.",
+            "it": "Screenshot, registrazioni e schermi condivisi non includono il testo, mentre tu continui a vederlo. Testo fluttuante, notch e finestra testo Mini hanno ciascuno un’opzione.",
+            "pt-BR": "Capturas de tela, gravações e telas compartilhadas deixam a letra de fora, mas você continua vendo. A letra flutuante, o notch e a janela da letra mini têm cada um a própria opção.",
+            "vi": "Ảnh chụp màn hình, bản ghi màn hình và màn hình chia sẻ đều không có lời, trong khi bạn vẫn thấy bình thường. Lời nổi, Notch và cửa sổ lời mini mỗi nơi có một công tắc.",
+            "ru": "На снимках экрана, записях и при демонстрации экрана текста нет, хотя вы его по-прежнему видите. Для плавающего текста, выреза и мини-окна текста — отдельные переключатели.",
+            "uk": "На знімках екрана, записах і в спільному доступі до екрана тексту не видно, а ви його й далі бачите. Для плаваючого тексту, вирізу й мінівікна тексту є окремі перемикачі.",
+            "th": "ภาพหน้าจอ การบันทึกหน้าจอ และการแชร์หน้าจอจะไม่มีเนื้อเพลง แต่คุณยังมองเห็นได้ตามปกติ เนื้อเพลงแบบลอย รอยบาก และหน้าต่างเนื้อเพลงขนาดมินิมีสวิตช์แยกกัน",
+            "tr": "Siz şarkı sözlerini görmeye devam ederken ekran görüntüleri, kayıtlar ve paylaşılan ekranlar onları içermez. Yüzen sözlerin, çentiğin ve mini şarkı sözü penceresinin ayrı birer anahtarı var."
           },
           "default": "off",
           "check": {
@@ -2315,6 +2315,12 @@
             [
               "歌词显示",
               "灵动岛",
+              "行为",
+              "截屏时隐藏"
+            ],
+            [
+              "歌词显示",
+              "歌词窗口",
               "行为",
               "截屏时隐藏"
             ]
@@ -2449,6 +2455,61 @@
           ]
         },
         {
+          "id": "title-when-no-lyrics",
+          "title": {
+            "en": "Song title when there are no lyrics",
+            "zh-Hans": "无歌词时显示歌名",
+            "zh-Hant": "無歌詞時顯示歌名",
+            "ja": "歌詞がないときは曲名を表示",
+            "ko": "가사가 없을 때 노래 제목 표시",
+            "es": "Título de la canción cuando no hay letra",
+            "fr": "Titre du morceau quand il n’y a pas de paroles",
+            "de": "Titel anzeigen, wenn es keinen Liedtext gibt",
+            "it": "Titolo del brano quando manca il testo",
+            "pt-BR": "Título da música quando não há letra",
+            "vi": "Hiện tên bài khi không có lời",
+            "ru": "Название песни, когда нет текста",
+            "uk": "Назва пісні, коли немає тексту",
+            "th": "แสดงชื่อเพลงเมื่อไม่มีเนื้อเพลง",
+            "tr": "Şarkı sözü yokken şarkı adı"
+          },
+          "desc": {
+            "en": "When a song is instrumental or the search finds no lyrics, floating lyrics show the song title and artist where the lyrics go, instead of a status line. The menu bar shows the song title when there are no lyrics or the search is still running. Each has its own switch.",
+            "zh-Hans": "当前歌曲为纯音乐或搜索确认无歌词时，悬浮歌词在歌词位置显示歌名和歌手，不再显示状态提示；菜单栏在无歌词或仍在搜索时显示歌名。两处各有独立开关。",
+            "zh-Hant": "目前歌曲為純音樂或搜尋確認無歌詞時，浮動歌詞在歌詞位置顯示歌名和歌手，不再顯示狀態提示；選單列在無歌詞或仍在搜尋時顯示歌名。兩處各有獨立開關。",
+            "ja": "再生中の曲がインストゥルメンタルの場合や、検索の結果歌詞がないと確定した場合、フローティング歌詞は歌詞の位置に曲名とアーティスト名を表示し、状態メッセージは表示しません。メニューバーは、歌詞がないときや検索中に曲名を表示します。2か所それぞれ個別にオン/オフできます。",
+            "ko": "현재 노래가 연주곡이거나 검색 결과 가사가 없다고 확인되면 플로팅 가사는 가사 자리에 노래 제목과 아티스트를 표시하고 상태 메시지는 표시하지 않습니다. 메뉴 막대는 가사가 없거나 아직 검색 중일 때 노래 제목을 표시합니다. 두 곳 모두 따로 켜고 끌 수 있습니다.",
+            "es": "Si la canción es instrumental o la búsqueda confirma que no hay letra, la letra flotante muestra el título y el artista en lugar de un mensaje de estado. La barra de menús muestra el título cuando no hay letra o la búsqueda sigue en curso. Cada uno tiene su propio interruptor.",
+            "fr": "Quand un morceau est instrumental ou que la recherche ne trouve pas de paroles, les paroles flottantes affichent le titre et l’artiste à la place d’un message d’état. La barre des menus affiche le titre quand il n’y a pas de paroles ou que la recherche est en cours. Chacune a sa propre option.",
+            "de": "Ist ein Titel instrumental oder findet die Suche keinen Liedtext, zeigt der schwebende Text Titel und Interpret statt einer Statusmeldung. Die Menüleiste zeigt den Titel, wenn es keinen Liedtext gibt oder die Suche noch läuft. Beide haben einen eigenen Schalter.",
+            "it": "Quando un brano è strumentale o la ricerca non trova un testo, il testo fluttuante mostra titolo e artista al posto di un messaggio di stato. La barra dei menu mostra il titolo quando manca il testo o la ricerca è ancora in corso. Ciascuno ha la propria opzione.",
+            "pt-BR": "Quando a música é instrumental ou a busca não encontra letra, a letra flutuante mostra o título e o artista no lugar de uma mensagem de status. A barra de menus mostra o título quando não há letra ou a busca ainda está em andamento. Cada um tem a própria opção.",
+            "vi": "Khi bài hát là nhạc không lời hoặc tìm kiếm không thấy lời, lời nổi hiện tên bài và nghệ sĩ thay cho dòng trạng thái. Thanh menu hiện tên bài khi không có lời hoặc việc tìm kiếm vẫn đang chạy. Mỗi nơi có công tắc riêng.",
+            "ru": "Если песня инструментальная или поиск не нашел текст, плавающий текст показывает название и исполнителя вместо сообщения о состоянии. Строка меню показывает название, когда текста нет или поиск еще идет. У каждого свой переключатель.",
+            "uk": "Коли пісня інструментальна або пошук не знайшов тексту, плаваючий текст показує назву й виконавця замість повідомлення про стан. Смуга меню показує назву, коли тексту немає або пошук ще триває. Для кожного є окремий перемикач.",
+            "th": "เมื่อเพลงเป็นดนตรีบรรเลงหรือค้นหาแล้วไม่พบเนื้อเพลง เนื้อเพลงแบบลอยจะแสดงชื่อเพลงและศิลปินแทนข้อความสถานะ แถบเมนูจะแสดงชื่อเพลงเมื่อไม่มีเนื้อเพลงหรือยังค้นหาอยู่ แต่ละอย่างมีสวิตช์ของตัวเอง",
+            "tr": "Parça enstrümantalse ya da arama şarkı sözü bulamazsa yüzen sözler, durum mesajı yerine şarkı adını ve sanatçıyı gösterir. Menü çubuğu, şarkı sözü yokken ya da arama sürerken şarkı adını gösterir. Her birinin ayrı anahtarı var."
+          },
+          "default": "on",
+          "check": {
+            "appSetting": "overlayShowsTitleWhenNoLyrics"
+          },
+          "settings": [
+            [
+              "歌词显示",
+              "悬浮歌词",
+              "行为",
+              "无歌词时显示歌名"
+            ],
+            [
+              "歌词显示",
+              "菜单栏",
+              "行为",
+              "无歌词时显示歌名"
+            ]
+          ]
+        },
+        {
           "id": "hide-during-ads",
           "title": {
             "en": "Step aside during ads",
@@ -2468,21 +2529,21 @@
             "tr": "Reklamlarda kenara çekilme"
           },
           "desc": {
-            "en": "While the player is playing an ad, floating lyrics can hide and the notch can shrink to its top strip; hovering over the notch still expands it. Each has its own switch.",
-            "zh-Hans": "播放器播放广告时，悬浮歌词可隐藏，灵动岛可收起为顶部窄条，悬停时仍可展开。两处各有独立开关。",
-            "zh-Hant": "播放器播放廣告時，浮動歌詞可隱藏，動態島可收起為頂部窄條，指向時仍可展開。兩處各有獨立開關。",
-            "ja": "プレーヤーが広告を再生している間、フローティング歌詞は非表示に、ノッチは上部の細いバーに折りたたむことができ、ポインタを重ねれば展開できます。2か所それぞれ個別にオン/オフできます。",
-            "ko": "플레이어에서 광고가 재생되는 동안 플로팅 가사는 숨길 수 있고, 노치는 상단의 좁은 막대로 접을 수 있으며 포인터를 올리면 여전히 펼쳐집니다. 두 곳 모두 따로 켜고 끌 수 있습니다.",
-            "es": "Mientras el reproductor reproduce un anuncio, la letra flotante puede ocultarse y el notch puede contraerse a una franja superior, que se sigue expandiendo al pasar el puntero. Cada uno tiene su propio interruptor.",
-            "fr": "Pendant que le lecteur diffuse une pub, les paroles flottantes peuvent se masquer et l’encoche se réduire à sa bande du haut ; le survol de l’encoche la développe toujours. Chacune a sa propre option.",
-            "de": "Spielt der Player Werbung, kann sich der schwebende Text ausblenden und die Notch auf ihren oberen Streifen schrumpfen; zeigst du auf die Notch, klappt sie trotzdem aus. Beide haben einen eigenen Schalter.",
-            "it": "Mentre il player riproduce una pubblicità, il testo fluttuante può nascondersi e il notch può ridursi alla striscia superiore; passandoci sopra con il puntatore il notch si espande comunque. Ciascuno ha la propria opzione.",
-            "pt-BR": "Enquanto o player toca um anúncio, a letra flutuante pode sumir e o notch pode encolher até a faixa superior; passar o ponteiro sobre o notch ainda o expande. Cada um tem a própria opção.",
-            "vi": "Khi trình phát đang phát quảng cáo, lời nổi có thể ẩn và Notch có thể thu về dải trên cùng; di chuột lên Notch vẫn mở rộng được. Mỗi nơi có công tắc riêng.",
-            "ru": "Пока плеер воспроизводит рекламу, плавающий текст может скрываться, а вырез — сжиматься до узкой полосы сверху; при наведении на вырез он по-прежнему разворачивается. У каждого свой переключатель.",
-            "uk": "Поки програвач відтворює рекламу, плаваючий текст може ховатися, а виріз — зменшуватися до верхньої смужки; якщо навести курсор на виріз, він однаково розгортається. Для кожного є окремий перемикач.",
-            "th": "ขณะเครื่องเล่นกำลังเล่นโฆษณา เนื้อเพลงแบบลอยซ่อนได้ และรอยบากหดเหลือแถบแคบด้านบนได้ วางตัวชี้ไว้ที่รอยบากก็ยังขยายได้ แต่ละอย่างมีสวิตช์ของตัวเอง",
-            "tr": "Çalar reklam çalarken yüzen sözler gizlenebilir ve çentik üst şeridine küçülebilir; çentiğin üzerine gelince yine genişler. Her birinin ayrı anahtarı var."
+            "en": "While the player is playing an ad, floating lyrics and the mini lyrics window can hide and the notch can shrink to its top strip; hovering over the notch still expands it. Each has its own switch.",
+            "zh-Hans": "播放器播放广告时，悬浮歌词和迷你歌词窗口可隐藏，灵动岛可收起为顶部窄条，悬停时仍可展开。三处各有独立开关。",
+            "zh-Hant": "播放器播放廣告時，浮動歌詞和迷你歌詞視窗可隱藏，動態島可收起為頂部窄條，指向時仍可展開。三處各有獨立開關。",
+            "ja": "プレーヤーが広告を再生している間、フローティング歌詞とミニ歌詞ウインドウは非表示に、ノッチは上部の細いバーに折りたたむことができ、ポインタを重ねれば展開できます。3か所それぞれ個別にオン/オフできます。",
+            "ko": "플레이어에서 광고가 재생되는 동안 플로팅 가사와 미니 가사 윈도우는 숨길 수 있고, 노치는 상단의 좁은 막대로 접을 수 있으며 포인터를 올리면 여전히 펼쳐집니다. 세 곳 모두 따로 켜고 끌 수 있습니다.",
+            "es": "Mientras el reproductor reproduce un anuncio, la letra flotante y la ventana de letra mini pueden ocultarse y el notch puede contraerse a una franja superior, que se sigue expandiendo al pasar el puntero. Cada uno tiene su propio interruptor.",
+            "fr": "Pendant que le lecteur diffuse une pub, les paroles flottantes et la fenêtre des paroles mini peuvent se masquer et l’encoche se réduire à sa bande du haut ; le survol de l’encoche la développe toujours. Chacune a sa propre option.",
+            "de": "Spielt der Player Werbung, können sich der schwebende Text und das Mini-Liedtextfenster ausblenden und die Notch auf ihren oberen Streifen schrumpfen; zeigst du auf die Notch, klappt sie trotzdem aus. Jede Anzeige hat einen eigenen Schalter.",
+            "it": "Mentre il player riproduce una pubblicità, il testo fluttuante e la finestra testo Mini possono nascondersi e il notch può ridursi alla striscia superiore; passandoci sopra con il puntatore il notch si espande comunque. Ciascuno ha la propria opzione.",
+            "pt-BR": "Enquanto o player toca um anúncio, a letra flutuante e a janela da letra mini podem sumir e o notch pode encolher até a faixa superior; passar o ponteiro sobre o notch ainda o expande. Cada um tem a própria opção.",
+            "vi": "Khi trình phát đang phát quảng cáo, lời nổi và cửa sổ lời mini có thể ẩn, còn Notch có thể thu về dải trên cùng; di chuột lên Notch vẫn mở rộng được. Mỗi nơi có công tắc riêng.",
+            "ru": "Пока плеер воспроизводит рекламу, плавающий текст и мини-окно текста могут скрываться, а вырез — сжиматься до узкой полосы сверху; при наведении на вырез он по-прежнему разворачивается. У каждого свой переключатель.",
+            "uk": "Поки програвач відтворює рекламу, плаваючий текст і мінівікно тексту можуть ховатися, а виріз — зменшуватися до верхньої смужки; якщо навести курсор на виріз, він однаково розгортається. Для кожного є окремий перемикач.",
+            "th": "ขณะเครื่องเล่นกำลังเล่นโฆษณา เนื้อเพลงแบบลอยและหน้าต่างเนื้อเพลงขนาดมินิซ่อนได้ และรอยบากหดเหลือแถบแคบด้านบนได้ วางตัวชี้ไว้ที่รอยบากก็ยังขยายได้ แต่ละอย่างมีสวิตช์ของตัวเอง",
+            "tr": "Çalar reklam çalarken yüzen sözler ve mini şarkı sözü penceresi gizlenebilir, çentik de üst şeridine küçülebilir; çentiğin üzerine gelince yine genişler. Her birinin ayrı anahtarı var."
           },
           "default": "off",
           "check": {
@@ -2500,6 +2561,12 @@
               "灵动岛",
               "行为",
               "广告时收起"
+            ],
+            [
+              "歌词显示",
+              "歌词窗口",
+              "行为",
+              "广告时隐藏"
             ]
           ]
         },

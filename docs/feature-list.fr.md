@@ -491,11 +491,12 @@ Pointer les paroles flottantes fait apparaître une rangée de boutons rapides. 
 
 ### Masquées dans les captures et le partage d’écran
 
-Les captures d’écran, les enregistrements et les écrans partagés n’incluent pas les paroles, que vous continuez de voir. Les paroles flottantes et l’encoche ont chacune leur option.
+Les captures d’écran, les enregistrements et les écrans partagés n’incluent pas les paroles, que vous continuez de voir. Les paroles flottantes, l’encoche et la fenêtre des paroles mini ont chacune leur option.
 
 - Désactivée par défaut
 - Réglages : Affichage des paroles › Paroles flottantes › Comportement › Masquer dans les captures
 - Réglages : Affichage des paroles › Encoche › Comportement › Masquer dans les captures
+- Réglages : Affichage des paroles › Fenêtre des paroles › Comportement › Masquer dans les captures
 
 <a id="feature-hide-when-paused"></a>
 
@@ -520,15 +521,26 @@ Quand un morceau est instrumental, ou que la recherche est terminée sans trouve
 - Réglages : Affichage des paroles › Encoche › Comportement › Réduire si instrumental ou sans paroles
 - Réglages : Affichage des paroles › Touch Bar › Comportement › Réduire si instrumental ou sans paroles
 
+<a id="feature-title-when-no-lyrics"></a>
+
+### Titre du morceau quand il n’y a pas de paroles
+
+Quand un morceau est instrumental ou que la recherche ne trouve pas de paroles, les paroles flottantes affichent le titre et l’artiste à la place d’un message d’état. La barre des menus affiche le titre quand il n’y a pas de paroles ou que la recherche est en cours. Chacune a sa propre option.
+
+- Activée par défaut
+- Réglages : Affichage des paroles › Paroles flottantes › Comportement › Afficher le titre sans paroles
+- Réglages : Affichage des paroles › Barre des menus › Comportement › Afficher le titre sans paroles
+
 <a id="feature-hide-during-ads"></a>
 
 ### S’effacer pendant les pubs
 
-Pendant que le lecteur diffuse une pub, les paroles flottantes peuvent se masquer et l’encoche se réduire à sa bande du haut ; le survol de l’encoche la développe toujours. Chacune a sa propre option.
+Pendant que le lecteur diffuse une pub, les paroles flottantes et la fenêtre des paroles mini peuvent se masquer et l’encoche se réduire à sa bande du haut ; le survol de l’encoche la développe toujours. Chacune a sa propre option.
 
 - Désactivée par défaut
 - Réglages : Affichage des paroles › Paroles flottantes › Comportement › Masquer pendant les pubs
 - Réglages : Affichage des paroles › Encoche › Comportement › Réduire pendant les pubs
+- Réglages : Affichage des paroles › Fenêtre des paroles › Comportement › Masquer pendant les pubs
 
 <a id="feature-hide-in-full-screen"></a>
 
@@ -943,7 +955,7 @@ Au plus une fois par jour, envoie la version, macOS, les fonctions activées et 
 
 ## Tous les réglages
 
-Tous les réglages de la fenêtre Réglages, classés par emplacement : 326 au total. Tapez un nom dans le champ de recherche en haut de la barre latérale des Réglages pour y aller directement.
+Tous les réglages de la fenêtre Réglages, classés par emplacement : 329 au total. Tapez un nom dans le champ de recherche en haut de la barre latérale des Réglages pour y aller directement.
 
 ### Paroles › Source
 
@@ -1083,6 +1095,7 @@ Tous les réglages de la fenêtre Réglages, classés par emplacement : 326 au 
 - **Masquer si instrumental ou sans paroles**
 - **Masquer pendant les pubs**
 - **Masquer en plein écran**
+- **Afficher le titre sans paroles**
 
 ### Affichage des paroles › Paroles flottantes › Position
 
@@ -1195,7 +1208,7 @@ Tous les réglages de la fenêtre Réglages, classés par emplacement : 326 au 
 ### Affichage des paroles › Barre des menus › Comportement
 
 - **Commandes au survol**
-- **Afficher le titre sans paroles** : Affiche le titre du morceau à la place des paroles s’il n’y en a pas ou pendant leur recherche
+- **Afficher le titre sans paroles**
 - **Garder les paroles en pause** : En pause, reste sur la ligne en cours au lieu de se réduire en icône
 
 ### Affichage des paroles › Touch Bar
@@ -1275,8 +1288,10 @@ Tous les réglages de la fenêtre Réglages, classés par emplacement : 326 au 
 
 - **Estomper au survol** (taille mini uniquement)
 - **Clics traversants si estompé** (taille mini uniquement) : Une fois estompé, les clics passent à la fenêtre du dessous. Maintenez ⌥ pour le rendre opaque et interagir
+- **Masquer dans les captures** (taille mini uniquement)
 - **Masquer en pause** (taille mini uniquement)
 - **Masquer si instrumental ou sans paroles** (taille mini uniquement)
+- **Masquer pendant les pubs** (taille mini uniquement)
 - **Masquer en plein écran** (taille mini uniquement)
 
 ### Affichage des paroles › Fenêtre des paroles › Couleur

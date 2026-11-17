@@ -3306,8 +3306,10 @@ private struct AppearanceSettingsTab: View {
                 icon: "switch.2", title: L10n.t("行为"),
                 summary: SettingsToggleSummary.text([
                     (title: L10n.t("悬停时淡化"), isOn: settings.lyricsWindowMiniFadeOnHover),
+                    (title: L10n.t("截屏时隐藏"), isOn: settings.lyricsWindowMiniHideDuringScreenCapture),
                     (title: L10n.t("暂停时隐藏"), isOn: settings.lyricsWindowMiniHideWhenNotPlaying),
                     (title: L10n.t("纯音乐/无歌词时隐藏"), isOn: settings.lyricsWindowMiniHideWhenNoLyrics),
+                    (title: L10n.t("广告时隐藏"), isOn: settings.lyricsWindowMiniHideDuringAds),
                     (title: L10n.t("全屏时隐藏"), isOn: settings.lyricsWindowMiniHideInFullScreen),
                 ]))
         case .layout:
@@ -3430,9 +3432,9 @@ private struct AppearanceSettingsTab: View {
         }
     }
 
-    /// 「行为」那几行(工具栏浮层与抽屉同一份),只有迷你有(07 章决策 118、142)。标题、图标跟悬浮歌词「行为」里那颗
-    /// (`OverlayBehaviorItem.fadeOnHover`、`AutoHideItem.whenNotPlaying`)和灵动岛 `NotchBehaviorItem.hideInFullScreen`
-    /// 一样,几处一起改;值各管各的。
+    /// 「行为」那几行(工具栏浮层与抽屉同一份),只有迷你有(07 章决策 118、142、209)。标题、图标跟悬浮歌词「行为」里那颗
+    /// (`OverlayBehaviorItem.fadeOnHover`、`AutoHideItem` 各项)和灵动岛 `NotchBehaviorItem.hideInFullScreen`
+    /// 一样,几处一起改;值各管各的。自动隐藏几格的顺序同悬浮歌词:截屏、暂停、无歌词、广告、全屏。
     /// 两列小块:往上弹的浮层只有按钮上方约 200pt,一行一个开关放不下。
     @ViewBuilder
     private var lyricsWindowBehaviorRows: some View {
@@ -3445,12 +3447,17 @@ private struct AppearanceSettingsTab: View {
                                    help: L10n.t("淡化时点按将穿透到下层窗口；按住 ⌥ 可恢复不透明并进行操作"),
                                    isOn: $settings.lyricsWindowMiniFadeClickThrough)
             }
+            SettingsToggleTile(icon: "camera.viewfinder", title: L10n.t("截屏时隐藏"),
+                               help: L10n.t("截屏、录屏和屏幕共享均无法捕捉，但你仍可正常看到"),
+                               isOn: $settings.lyricsWindowMiniHideDuringScreenCapture)
             SettingsToggleTile(icon: "pause.circle", title: L10n.t("暂停时隐藏"),
                                help: L10n.t("迷你尺寸下，暂停或未播放时隐藏，开始播放后重新显示"),
                                isOn: $settings.lyricsWindowMiniHideWhenNotPlaying)
             SettingsToggleTile(icon: "text.badge.xmark", title: L10n.t("纯音乐/无歌词时隐藏"),
                                help: L10n.t("迷你尺寸下，搜索确认无歌词后才隐藏，搜索期间照常显示"),
                                isOn: $settings.lyricsWindowMiniHideWhenNoLyrics)
+            SettingsToggleTile(icon: "megaphone", title: L10n.t("广告时隐藏"),
+                               isOn: $settings.lyricsWindowMiniHideDuringAds)
             SettingsToggleTile(icon: "arrow.up.left.and.arrow.down.right", title: L10n.t("全屏时隐藏"),
                                help: L10n.t("迷你尺寸下，所在屏幕有 App 全屏时隐藏"),
                                isOn: $settings.lyricsWindowMiniHideInFullScreen)
@@ -4794,6 +4801,8 @@ enum LyricsWindowStyleDefaults {
             s.lyricsWindowMiniHideWhenNotPlaying = false
             s.lyricsWindowMiniHideInFullScreen = false
             s.lyricsWindowMiniHideWhenNoLyrics = false
+            s.lyricsWindowMiniHideDuringScreenCapture = false
+            s.lyricsWindowMiniHideDuringAds = false
             s.lyricsWindowMiniLyricsKaraoke = true
             s.lyricsWindowMiniFontWeight = .bold
             s.lyricsWindowMiniKaraokeFill = .text

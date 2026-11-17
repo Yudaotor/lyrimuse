@@ -2,8 +2,8 @@ import AppKit
 import Combine
 import LyrimuseCore
 
-/// 迷你窗「暂停时隐藏」「纯音乐/无歌词时隐藏」「全屏时隐藏」的执行(判据在 Core `LyricsWindowMiniAutoHide`,
-/// 见 07 章决策 142、190)。
+/// 迷你窗「暂停时隐藏」「纯音乐/无歌词时隐藏」「广告时隐藏」「全屏时隐藏」的执行(判据在 Core `LyricsWindowMiniAutoHide`,
+/// 见 07 章决策 142、190、209)。「截屏时隐藏」不藏面板,走 `sharingType`(`LyricsMiniPanelHost.make`)。
 ///
 /// 只在判据翻转那一拍动手:藏用 `orderOut`、不 close,「开着 / 是迷你」照旧记着;翻回来只摆回自己藏起来的那扇。
 /// 用户自己打开歌词窗口照常亮出来(`LyricsMiniPanelHost.show`),不被当场收回,到下一次翻转再按规则办。
@@ -17,9 +17,11 @@ final class LyricsMiniPanelAutoHide {
     private(set) var hides = false
     private var isPlaying = false
     private var lacksLyrics = false
+    private var isAdBreak = false
     private var fullScreenDisplays: Set<String> = []
     private var hideWhenNotPlaying = false
     private var hideWhenNoLyrics = false
+    private var hideDuringAds = false
     private var hideInFullScreen = false
     /// 订阅各报完一次当前值之后才动手。
     private var primed = false
@@ -34,12 +36,16 @@ final class LyricsMiniPanelAutoHide {
             .sink { [weak self] in self?.isPlaying = $0; self?.reevaluate() }.store(in: &cancellables)
         PlaybackCoordinator.shared.$currentTrackLacksLyrics.removeDuplicates()
             .sink { [weak self] in self?.lacksLyrics = $0; self?.reevaluate() }.store(in: &cancellables)
+        PlaybackCoordinator.shared.$isCurrentTrackAdBreak.removeDuplicates()
+            .sink { [weak self] in self?.isAdBreak = $0; self?.reevaluate() }.store(in: &cancellables)
         FullScreenSpaceMonitor.shared.$fullScreenDisplays.removeDuplicates()
             .sink { [weak self] in self?.fullScreenDisplays = $0; self?.reevaluate() }.store(in: &cancellables)
         settings.$lyricsWindowMiniHideWhenNotPlaying.removeDuplicates()
             .sink { [weak self] in self?.hideWhenNotPlaying = $0; self?.reevaluate() }.store(in: &cancellables)
         settings.$lyricsWindowMiniHideWhenNoLyrics.removeDuplicates()
             .sink { [weak self] in self?.hideWhenNoLyrics = $0; self?.reevaluate() }.store(in: &cancellables)
+        settings.$lyricsWindowMiniHideDuringAds.removeDuplicates()
+            .sink { [weak self] in self?.hideDuringAds = $0; self?.reevaluate() }.store(in: &cancellables)
         settings.$lyricsWindowMiniHideInFullScreen.removeDuplicates()
             .sink { [weak self] in self?.hideInFullScreen = $0; self?.reevaluate() }.store(in: &cancellables)
         primed = true
@@ -97,6 +103,7 @@ final class LyricsMiniPanelAutoHide {
     private func currentHides() -> Bool {
         LyricsWindowMiniAutoHide.hides(hideWhenNotPlaying: hideWhenNotPlaying, isPlaying: isPlaying,
                                        hideWhenNoLyrics: hideWhenNoLyrics, lacksLyrics: lacksLyrics,
+                                       hideDuringAds: hideDuringAds, isAdBreak: isAdBreak,
                                        hideInFullScreen: hideInFullScreen,
                                        coveredByFullScreen: hideInFullScreen && panelScreenIsFullScreen())
     }

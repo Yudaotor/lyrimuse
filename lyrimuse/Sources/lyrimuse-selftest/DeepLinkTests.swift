@@ -407,6 +407,23 @@ func runDeepLinkTests() {
         expectEqual(link("lyrimuse://debug/rainbow?menubar=1"), .debug(.rainbow(overlay: nil, notch: nil, menuBar: true)),
                     "debug: 只开菜单栏彩虹")
         expectEqual(link("lyrimuse://debug/rainbow"), nil, "debug: 彩虹什么都没带不认")
+        expectEqual(link("lyrimuse://debug/capture-hide?mini=1"), .debug(.captureHide(overlay: nil, notch: nil, mini: true)),
+                    "debug: 只开迷你截屏时隐藏")
+        expectEqual(link("lyrimuse://debug/capture-hide?overlay=0&notch=1&mini=0"),
+                    .debug(.captureHide(overlay: false, notch: true, mini: false)), "debug: 三处截屏时隐藏一起设")
+        expectEqual(link("lyrimuse://debug/capture-hide") == nil && link("lyrimuse://debug/capture-hide?mini=maybe") == nil, true,
+                    "debug: 截屏时隐藏什么都没带、值认不出都不认")
+        expectEqual(link("lyrimuse://debug/ad-hide?mini=1&notch=0"), .debug(.adHide(overlay: nil, notch: false, mini: true)),
+                    "debug: 迷你广告时隐藏、灵动岛广告时收起一起设")
+        expectEqual(link("lyrimuse://debug/ad-hide"), nil, "debug: 广告时隐藏什么都没带不认")
+        expectEqual(link("lyrimuse://debug/no-lyrics-hide?overlay=0"), .debug(.noLyricsHide(overlay: false, notch: nil, mini: nil)),
+                    "debug: 只关悬浮歌词纯音乐/无歌词时隐藏")
+        expectEqual(link("lyrimuse://debug/no-lyrics-hide"), nil, "debug: 纯音乐/无歌词时隐藏什么都没带不认")
+        expectEqual(link("lyrimuse://debug/no-lyrics-title?overlay=0"), .debug(.noLyricsTitle(overlay: false, menuBar: nil)),
+                    "debug: 只关悬浮歌词无歌词时显示歌名")
+        expectEqual(link("lyrimuse://debug/no-lyrics-title?overlay=1&menubar=0"), .debug(.noLyricsTitle(overlay: true, menuBar: false)),
+                    "debug: 悬浮歌词、菜单栏无歌词时显示歌名一起设")
+        expectEqual(link("lyrimuse://debug/no-lyrics-title"), nil, "debug: 无歌词时显示歌名什么都没带不认")
         expectEqual(link("lyrimuse://debug/overlay-text?opacity=0.4&color=Cover"),
                     .debug(.overlayText(opacity: 0.4, color: "cover")), "debug: 悬浮歌词文字不透明度和颜色来源一起设")
         expectEqual(link("lyrimuse://debug/overlay-text?color=custom"), .debug(.overlayText(opacity: nil, color: "custom")),
@@ -781,6 +798,11 @@ func runDeepLinkTests() {
             .debug(.mainThreadStall(seconds: 7, throttle: nil)), .debug(.mainThreadStall(seconds: 6.5, throttle: "low_priority")),
             .debug(.rainbow(overlay: true, notch: nil)), .debug(.rainbow(overlay: false, notch: true)),
             .debug(.rainbow(overlay: nil, notch: nil, menuBar: false)),
+            .debug(.captureHide(overlay: true, notch: nil, mini: nil)), .debug(.captureHide(overlay: false, notch: true, mini: false)),
+            .debug(.captureHide(overlay: nil, notch: nil, mini: true)),
+            .debug(.adHide(overlay: nil, notch: false, mini: true)), .debug(.adHide(overlay: true, notch: nil, mini: nil)),
+            .debug(.noLyricsTitle(overlay: true, menuBar: nil)), .debug(.noLyricsTitle(overlay: false, menuBar: true)),
+            .debug(.noLyricsHide(overlay: false, notch: nil, mini: nil)), .debug(.noLyricsHide(overlay: true, notch: false, mini: true)),
             .debug(.overlayText(opacity: 0.4, color: "cover")), .debug(.overlayText(opacity: 1, color: nil)),
             .debug(.overlayText(opacity: nil, color: "rainbow")),
             .debug(.menuBarDisplay(artwork: true, content: nil)), .debug(.menuBarDisplay(artwork: nil, content: "title")),

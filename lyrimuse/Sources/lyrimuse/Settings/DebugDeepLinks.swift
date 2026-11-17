@@ -341,6 +341,26 @@ enum DebugDeepLinks {
             if let notch { AppSettings.shared.notchLyricsColor = notch ? .rainbow : .accent }
             if let menuBar { AppSettings.shared.menuBarLyricsRainbow = menuBar }
             logger.notice("debug rainbow overlay=\(String(describing: overlay), privacy: .public) notch=\(String(describing: notch), privacy: .public) menubar=\(String(describing: menuBar), privacy: .public)")
+        case let .captureHide(overlay, notch, mini):
+            // 悬浮歌词那颗经设置页同一个 Binding:写设置之后还要让开着的窗口生效。
+            if let overlay { AutoHideItem.duringScreenCapture.binding(for: .desktopOverlay).wrappedValue = overlay }
+            if let notch { AutoHideItem.duringScreenCapture.binding(for: .notch).wrappedValue = notch }
+            if let mini { AppSettings.shared.lyricsWindowMiniHideDuringScreenCapture = mini }
+            logger.notice("debug capture hide overlay=\(String(describing: overlay), privacy: .public) notch=\(String(describing: notch), privacy: .public) mini=\(String(describing: mini), privacy: .public)")
+        case let .adHide(overlay, notch, mini):
+            if let overlay { AutoHideItem.duringAds.binding(for: .desktopOverlay).wrappedValue = overlay }
+            if let notch { AutoHideItem.duringAds.binding(for: .notch).wrappedValue = notch }
+            if let mini { AppSettings.shared.lyricsWindowMiniHideDuringAds = mini }
+            logger.notice("debug ad hide overlay=\(String(describing: overlay), privacy: .public) notch=\(String(describing: notch), privacy: .public) mini=\(String(describing: mini), privacy: .public)")
+        case let .noLyricsHide(overlay, notch, mini):
+            if let overlay { AutoHideItem.whenNoLyrics.binding(for: .desktopOverlay).wrappedValue = overlay }
+            if let notch { AutoHideItem.whenNoLyrics.binding(for: .notch).wrappedValue = notch }
+            if let mini { AppSettings.shared.lyricsWindowMiniHideWhenNoLyrics = mini }
+            logger.notice("debug no-lyrics hide overlay=\(String(describing: overlay), privacy: .public) notch=\(String(describing: notch), privacy: .public) mini=\(String(describing: mini), privacy: .public)")
+        case let .noLyricsTitle(overlay, menuBar):
+            if let overlay { AppSettings.shared.overlayShowsTitleWhenNoLyrics = overlay }
+            if let menuBar { AppSettings.shared.menuBarShowsTitleWhenNoLyrics = menuBar }
+            logger.notice("debug no-lyrics title overlay=\(String(describing: overlay), privacy: .public) menubar=\(String(describing: menuBar), privacy: .public)")
         case let .touchBarDisplay(color):
             AppSettings.shared.touchBarLyricsColorMode = color
             logger.notice("debug touch bar display color=\(color.rawValue, privacy: .public)")

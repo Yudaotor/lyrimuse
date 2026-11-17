@@ -491,11 +491,12 @@ Con el puntero sobre la letra flotante aparece una fila de botones rápidos. La 
 
 ### Ocultar en capturas, grabaciones y pantalla compartida
 
-Al hacer capturas, grabar la pantalla o compartirla en una reunión, los demás no ven la letra, pero tú sí. La letra flotante y el notch tienen cada uno su interruptor.
+Al hacer capturas, grabar la pantalla o compartirla en una reunión, los demás no ven la letra, pero tú sí. La letra flotante, el notch y la ventana de letra mini tienen cada uno su interruptor.
 
 - Desactivada por omisión
 - Ajustes: Mostrar letra › Letra flotante › Comportamiento › Ocultar en capturas
 - Ajustes: Mostrar letra › Notch › Comportamiento › Ocultar en capturas
+- Ajustes: Mostrar letra › Ventana de letra › Comportamiento › Ocultar en capturas
 
 <a id="feature-hide-when-paused"></a>
 
@@ -520,15 +521,26 @@ Si la canción es instrumental, o la búsqueda confirma que no hay letra, la let
 - Ajustes: Mostrar letra › Notch › Comportamiento › Contraer fila de letra en instrumentales y sin letra
 - Ajustes: Mostrar letra › Touch Bar › Comportamiento › Contraer en instrumentales y sin letra
 
+<a id="feature-title-when-no-lyrics"></a>
+
+### Título de la canción cuando no hay letra
+
+Si la canción es instrumental o la búsqueda confirma que no hay letra, la letra flotante muestra el título y el artista en lugar de un mensaje de estado. La barra de menús muestra el título cuando no hay letra o la búsqueda sigue en curso. Cada uno tiene su propio interruptor.
+
+- Activada por omisión
+- Ajustes: Mostrar letra › Letra flotante › Comportamiento › Mostrar título si no hay letra
+- Ajustes: Mostrar letra › Barra de menús › Comportamiento › Mostrar título si no hay letra
+
 <a id="feature-hide-during-ads"></a>
 
 ### Ocultar o contraer durante anuncios
 
-Mientras el reproductor reproduce un anuncio, la letra flotante puede ocultarse y el notch puede contraerse a una franja superior, que se sigue expandiendo al pasar el puntero. Cada uno tiene su propio interruptor.
+Mientras el reproductor reproduce un anuncio, la letra flotante y la ventana de letra mini pueden ocultarse y el notch puede contraerse a una franja superior, que se sigue expandiendo al pasar el puntero. Cada uno tiene su propio interruptor.
 
 - Desactivada por omisión
 - Ajustes: Mostrar letra › Letra flotante › Comportamiento › Ocultar durante anuncios
 - Ajustes: Mostrar letra › Notch › Comportamiento › Contraer durante anuncios
+- Ajustes: Mostrar letra › Ventana de letra › Comportamiento › Ocultar durante anuncios
 
 <a id="feature-hide-in-full-screen"></a>
 
@@ -943,7 +955,7 @@ Como máximo una vez al día, envía al servidor del propio autor la versión, e
 
 ## Todos los ajustes
 
-Todos los ajustes de la ventana Ajustes, según dónde están: 326 en total. Escribe un nombre en el campo de búsqueda de la parte superior de la barra lateral de Ajustes para ir directamente a él.
+Todos los ajustes de la ventana Ajustes, según dónde están: 329 en total. Escribe un nombre en el campo de búsqueda de la parte superior de la barra lateral de Ajustes para ir directamente a él.
 
 ### Letra › Fuente
 
@@ -1083,6 +1095,7 @@ Todos los ajustes de la ventana Ajustes, según dónde están: 326 en total. Esc
 - **Ocultar en instrumentales y sin letra**
 - **Ocultar durante anuncios**
 - **Ocultar en pantalla completa**
+- **Mostrar título si no hay letra**
 
 ### Mostrar letra › Letra flotante › Posición
 
@@ -1195,7 +1208,7 @@ Todos los ajustes de la ventana Ajustes, según dónde están: 326 en total. Esc
 ### Mostrar letra › Barra de menús › Comportamiento
 
 - **Mostrar controles al pasar el puntero**
-- **Mostrar título si no hay letra**: Muestra el título de la canción en lugar de la letra si no hay o aún se está buscando
+- **Mostrar título si no hay letra**
 - **Mantener letra en pausa**: En pausa se queda en la línea actual en lugar de contraerse al icono
 
 ### Mostrar letra › Touch Bar
@@ -1275,8 +1288,10 @@ Todos los ajustes de la ventana Ajustes, según dónde están: 326 en total. Esc
 
 - **Atenuar al pasar el puntero** (solo tamaño mini)
 - **Dejar pasar clics al atenuarse** (solo tamaño mini): Al atenuarse, los clics pasan a la ventana de abajo. Mantén pulsada ⌥ para volverla opaca e interactuar
+- **Ocultar en capturas** (solo tamaño mini)
 - **Ocultar en pausa** (solo tamaño mini)
 - **Ocultar en instrumentales y sin letra** (solo tamaño mini)
+- **Ocultar durante anuncios** (solo tamaño mini)
 - **Ocultar en pantalla completa** (solo tamaño mini)
 
 ### Mostrar letra › Ventana de letra › Color

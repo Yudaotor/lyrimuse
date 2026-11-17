@@ -491,11 +491,12 @@ Apontar para a letra flutuante mostra uma fileira de botões rápidos. A letra n
 
 ### Oculta em capturas e no compartilhamento de tela
 
-Capturas de tela, gravações e telas compartilhadas deixam a letra de fora, mas você continua vendo. A letra flutuante e o notch têm cada um a própria opção.
+Capturas de tela, gravações e telas compartilhadas deixam a letra de fora, mas você continua vendo. A letra flutuante, o notch e a janela da letra mini têm cada um a própria opção.
 
 - Desativado por padrão
 - Ajustes: Exibição da letra › Letra flutuante › Comportamento › Ocultar em capturas de tela
 - Ajustes: Exibição da letra › Notch › Comportamento › Ocultar em capturas de tela
+- Ajustes: Exibição da letra › Janela da letra › Comportamento › Ocultar em capturas de tela
 
 <a id="feature-hide-when-paused"></a>
 
@@ -520,15 +521,26 @@ Quando a música é instrumental, ou a busca terminou sem encontrar letra, a let
 - Ajustes: Exibição da letra › Notch › Comportamento › Recolher linha se não houver letra
 - Ajustes: Exibição da letra › Touch Bar › Comportamento › Recolher em instrumentais e sem letra
 
+<a id="feature-title-when-no-lyrics"></a>
+
+### Título da música quando não há letra
+
+Quando a música é instrumental ou a busca não encontra letra, a letra flutuante mostra o título e o artista no lugar de uma mensagem de status. A barra de menus mostra o título quando não há letra ou a busca ainda está em andamento. Cada um tem a própria opção.
+
+- Ativado por padrão
+- Ajustes: Exibição da letra › Letra flutuante › Comportamento › Mostrar título se não houver letra
+- Ajustes: Exibição da letra › Barra de menus › Comportamento › Mostrar título se não houver letra
+
 <a id="feature-hide-during-ads"></a>
 
 ### Sair de cena durante anúncios
 
-Enquanto o player toca um anúncio, a letra flutuante pode sumir e o notch pode encolher até a faixa superior; passar o ponteiro sobre o notch ainda o expande. Cada um tem a própria opção.
+Enquanto o player toca um anúncio, a letra flutuante e a janela da letra mini podem sumir e o notch pode encolher até a faixa superior; passar o ponteiro sobre o notch ainda o expande. Cada um tem a própria opção.
 
 - Desativado por padrão
 - Ajustes: Exibição da letra › Letra flutuante › Comportamento › Ocultar durante anúncios
 - Ajustes: Exibição da letra › Notch › Comportamento › Recolher durante anúncios
+- Ajustes: Exibição da letra › Janela da letra › Comportamento › Ocultar durante anúncios
 
 <a id="feature-hide-in-full-screen"></a>
 
@@ -943,7 +955,7 @@ No máximo uma vez por dia, envia a versão, o macOS, quais recursos estão ativ
 
 ## Todos os ajustes
 
-Todos os ajustes da janela Ajustes, por local: 326 no total. Digite um nome no campo de busca no topo da barra lateral dos Ajustes para ir direto até ele.
+Todos os ajustes da janela Ajustes, por local: 329 no total. Digite um nome no campo de busca no topo da barra lateral dos Ajustes para ir direto até ele.
 
 ### Letra › Origem
 
@@ -1083,6 +1095,7 @@ Todos os ajustes da janela Ajustes, por local: 326 no total. Digite um nome no c
 - **Ocultar se não houver letra**
 - **Ocultar durante anúncios**
 - **Ocultar em tela cheia**
+- **Mostrar título se não houver letra**
 
 ### Exibição da letra › Letra flutuante › Posição
 
@@ -1195,7 +1208,7 @@ Todos os ajustes da janela Ajustes, por local: 326 no total. Digite um nome no c
 ### Exibição da letra › Barra de menus › Comportamento
 
 - **Mostrar controles ao passar o ponteiro**
-- **Mostrar título se não houver letra**: Mostra o título da música no lugar da letra quando não há letra ou ela ainda está sendo buscada
+- **Mostrar título se não houver letra**
 - **Manter letra na pausa**: Na pausa, fica na linha atual em vez de recolher para o ícone
 
 ### Exibição da letra › Touch Bar
@@ -1275,8 +1288,10 @@ Todos os ajustes da janela Ajustes, por local: 326 no total. Digite um nome no c
 
 - **Esmaecer ao passar o ponteiro** (só Mini)
 - **Cliques passam ao esmaecer** (só Mini): Enquanto a janela está esmaecida, os cliques passam para a de baixo. Mantenha ⌥ pressionada para deixá-la opaca e interagir
+- **Ocultar em capturas de tela** (só Mini)
 - **Ocultar na pausa** (só Mini)
 - **Ocultar se não houver letra** (só Mini)
+- **Ocultar durante anúncios** (só Mini)
 - **Ocultar em tela cheia** (só Mini)
 
 ### Exibição da letra › Janela da letra › Cor

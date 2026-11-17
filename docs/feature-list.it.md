@@ -491,11 +491,12 @@ Quando punti il testo fluttuante compare una fila di pulsanti rapidi. Anche il t
 
 ### Nascosto negli screenshot e nella condivisione dello schermo
 
-Screenshot, registrazioni e schermi condivisi non includono il testo, mentre tu continui a vederlo. Testo fluttuante e notch hanno ciascuno un’opzione.
+Screenshot, registrazioni e schermi condivisi non includono il testo, mentre tu continui a vederlo. Testo fluttuante, notch e finestra testo Mini hanno ciascuno un’opzione.
 
 - Disattivata di default
 - Impostazioni: Visualizzazione testo › Testo fluttuante › Comportamento › Nascondi negli screenshot
 - Impostazioni: Visualizzazione testo › Notch › Comportamento › Nascondi negli screenshot
+- Impostazioni: Visualizzazione testo › Finestra testo › Comportamento › Nascondi negli screenshot
 
 <a id="feature-hide-when-paused"></a>
 
@@ -520,15 +521,26 @@ Quando un brano è strumentale, o la ricerca è finita senza trovare un testo, i
 - Impostazioni: Visualizzazione testo › Notch › Comportamento › Comprimi riga se non c’è testo
 - Impostazioni: Visualizzazione testo › Touch Bar › Comportamento › Comprimi per strumentali e senza testo
 
+<a id="feature-title-when-no-lyrics"></a>
+
+### Titolo del brano quando manca il testo
+
+Quando un brano è strumentale o la ricerca non trova un testo, il testo fluttuante mostra titolo e artista al posto di un messaggio di stato. La barra dei menu mostra il titolo quando manca il testo o la ricerca è ancora in corso. Ciascuno ha la propria opzione.
+
+- Attiva di default
+- Impostazioni: Visualizzazione testo › Testo fluttuante › Comportamento › Mostra titolo senza testo
+- Impostazioni: Visualizzazione testo › Barra dei menu › Comportamento › Mostra titolo senza testo
+
 <a id="feature-hide-during-ads"></a>
 
 ### Si fa da parte durante la pubblicità
 
-Mentre il player riproduce una pubblicità, il testo fluttuante può nascondersi e il notch può ridursi alla striscia superiore; passandoci sopra con il puntatore il notch si espande comunque. Ciascuno ha la propria opzione.
+Mentre il player riproduce una pubblicità, il testo fluttuante e la finestra testo Mini possono nascondersi e il notch può ridursi alla striscia superiore; passandoci sopra con il puntatore il notch si espande comunque. Ciascuno ha la propria opzione.
 
 - Disattivata di default
 - Impostazioni: Visualizzazione testo › Testo fluttuante › Comportamento › Nascondi durante la pubblicità
 - Impostazioni: Visualizzazione testo › Notch › Comportamento › Comprimi durante la pubblicità
+- Impostazioni: Visualizzazione testo › Finestra testo › Comportamento › Nascondi durante la pubblicità
 
 <a id="feature-hide-in-full-screen"></a>
 
@@ -943,7 +955,7 @@ Al massimo una volta al giorno invia versione, macOS, funzioni attive e riepilog
 
 ## Tutte le impostazioni
 
-Tutte le impostazioni della finestra Impostazioni, per posizione: 326 in tutto. Scrivi un nome nel campo di ricerca in cima alla barra laterale delle Impostazioni per andarci direttamente.
+Tutte le impostazioni della finestra Impostazioni, per posizione: 329 in tutto. Scrivi un nome nel campo di ricerca in cima alla barra laterale delle Impostazioni per andarci direttamente.
 
 ### Testo › Fonte
 
@@ -1083,6 +1095,7 @@ Tutte le impostazioni della finestra Impostazioni, per posizione: 326 in tutto. 
 - **Nascondi se non c’è testo**
 - **Nascondi durante la pubblicità**
 - **Nascondi a tutto schermo**
+- **Mostra titolo senza testo**
 
 ### Visualizzazione testo › Testo fluttuante › Posizione
 
@@ -1195,7 +1208,7 @@ Tutte le impostazioni della finestra Impostazioni, per posizione: 326 in tutto. 
 ### Visualizzazione testo › Barra dei menu › Comportamento
 
 - **Mostra controlli al passaggio**
-- **Mostra titolo senza testo**: Mostra il titolo del brano al posto del testo quando non c’è o è ancora in ricerca
+- **Mostra titolo senza testo**
 - **Mantieni testo in pausa**: In pausa resta sulla riga corrente invece di ridursi all’icona
 
 ### Visualizzazione testo › Touch Bar
@@ -1275,8 +1288,10 @@ Tutte le impostazioni della finestra Impostazioni, per posizione: 326 in tutto. 
 
 - **Sfuma al passaggio del mouse** (solo Mini)
 - **Clic passante se sfumato** (solo Mini): Quando è sfumato, i clic passano alla finestra sottostante. Tieni premuto ⌥ per renderlo opaco e interagire
+- **Nascondi negli screenshot** (solo Mini)
 - **Nascondi in pausa** (solo Mini)
 - **Nascondi se non c’è testo** (solo Mini)
+- **Nascondi durante la pubblicità** (solo Mini)
 - **Nascondi a tutto schermo** (solo Mini)
 
 ### Visualizzazione testo › Finestra testo › Colore

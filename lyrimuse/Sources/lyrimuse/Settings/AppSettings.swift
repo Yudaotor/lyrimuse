@@ -445,6 +445,7 @@ final class AppSettings: ObservableObject {
         static let notchCollapseLyricsWhenNoLyrics = "np:notchHideWhenNoLyrics"
         // 「广告时隐藏」(悬浮歌词)/「广告时收起」(灵动岛)。灵动岛那份第一次读取时从「暂停时收起」继承(那颗开关原来连广告一起收),见 init。
         static let hideDuringAds = "np:hideDuringAds"
+        static let overlayShowsTitleWhenNoLyrics = "np:overlayShowsTitleWhenNoLyrics"
         static let notchCollapsesDuringAds = "np:notchCollapsesDuringAds"
         // 收听里程碑:灵动岛自己撑开报喜(ListenMilestoneCenter)。
         static let notchListenMilestones = "np:notchListenMilestones"
@@ -512,6 +513,8 @@ final class AppSettings: ObservableObject {
         static let lyricsWindowMiniHideWhenNotPlaying = "np:lyricsWindowMiniHideWhenNotPlaying"
         static let lyricsWindowMiniHideInFullScreen = "np:lyricsWindowMiniHideInFullScreen"
         static let lyricsWindowMiniHideWhenNoLyrics = "np:lyricsWindowMiniHideWhenNoLyrics"
+        static let lyricsWindowMiniHideDuringScreenCapture = "np:lyricsWindowMiniHideDuringScreenCapture"
+        static let lyricsWindowMiniHideDuringAds = "np:lyricsWindowMiniHideDuringAds"
         static let lyricsWindowTextColorMode = "np:lyricsWindowTextColorMode"
         static let lyricsWindowTextColorHex = "np:lyricsWindowTextColorHex"
         static let lyricsWindowMiniTextColorMode = "np:lyricsWindowMiniTextColorMode"
@@ -747,6 +750,8 @@ final class AppSettings: ObservableObject {
     static let defaultMenuBarHoverShowsControls = false
     /// 见 `menuBarShowsTitleWhenNoLyrics`。默认开:固定宽度模式下有词没词几何完全不变,这是主要收益。
     static let defaultMenuBarShowsTitleWhenNoLyrics = true
+    /// 见 `overlayShowsTitleWhenNoLyrics`。默认开,同菜单栏那颗。
+    static let defaultOverlayShowsTitleWhenNoLyrics = true
     /// 见 `menuBarKeepsLyricsWhenPaused`。默认关:暂停收回图标是既有行为。在「重置」范围内。
     static let defaultMenuBarKeepsLyricsWhenPaused = false
     /// 菜单栏那一格显示歌词还是歌名。在「重置」范围内(`MenuBarStyleDefaults.restoreDefaults()`)。
@@ -1535,6 +1540,12 @@ final class AppSettings: ObservableObject {
     @Published var hideDuringAds: Bool {
         didSet { defaults.set(hideDuringAds, forKey: Keys.hideDuringAds) }
     }
+    /// 悬浮歌词「无歌词时显示歌名」:这首没有能同步显示的歌词时主行写「♪ 歌名 — 歌手」,不写「纯音乐」「暂无歌词」
+    /// (判据 Core `OverlayNoLyricsTitle`)。「纯音乐/无歌词时隐藏」开着时窗口整扇藏起来,这一项不起作用、设置里置灰。
+    /// 跟菜单栏那颗 `menuBarShowsTitleWhenNoLyrics` 各管各的。见 04 章决策 104。
+    @Published var overlayShowsTitleWhenNoLyrics: Bool {
+        didSet { defaults.set(overlayShowsTitleWhenNoLyrics, forKey: Keys.overlayShowsTitleWhenNoLyrics) }
+    }
     @Published var notchCollapsesDuringAds: Bool {
         didSet { defaults.set(notchCollapsesDuringAds, forKey: Keys.notchCollapsesDuringAds) }
     }
@@ -1984,6 +1995,14 @@ final class AppSettings: ObservableObject {
     /// 迷你窗「纯音乐/无歌词时隐藏」(07 章决策 190),默认关;判据同悬浮歌词那颗 `hideWhenNoLyrics`,开关各管各的。
     @Published var lyricsWindowMiniHideWhenNoLyrics: Bool {
         didSet { defaults.set(lyricsWindowMiniHideWhenNoLyrics, forKey: Keys.lyricsWindowMiniHideWhenNoLyrics) }
+    }
+    /// 迷你窗「截屏时隐藏」(面板 `sharingType = .none`,接线在 `LyricsMiniPanelHost.make`)、「广告时隐藏」(执行在
+    /// `LyricsMiniPanelAutoHide`),默认都关,同悬浮歌词那两颗;开关各管各的。见 07 章决策 209。
+    @Published var lyricsWindowMiniHideDuringScreenCapture: Bool {
+        didSet { defaults.set(lyricsWindowMiniHideDuringScreenCapture, forKey: Keys.lyricsWindowMiniHideDuringScreenCapture) }
+    }
+    @Published var lyricsWindowMiniHideDuringAds: Bool {
+        didSet { defaults.set(lyricsWindowMiniHideDuringAds, forKey: Keys.lyricsWindowMiniHideDuringAds) }
     }
     /// 歌词文字色怎么定(完整 / 迷你各一套,同这一族其余外观设置)。判据与边界见
     /// `LyricsWindowTextColorMode`;`.custom` 档才读下面那个 hex。
@@ -2999,6 +3018,10 @@ final class AppSettings: ObservableObject {
             (defaults.object(forKey: Keys.lyricsWindowMiniHideInFullScreen) as? Bool) ?? false
         lyricsWindowMiniHideWhenNoLyrics =
             (defaults.object(forKey: Keys.lyricsWindowMiniHideWhenNoLyrics) as? Bool) ?? false
+        lyricsWindowMiniHideDuringScreenCapture =
+            (defaults.object(forKey: Keys.lyricsWindowMiniHideDuringScreenCapture) as? Bool) ?? false
+        lyricsWindowMiniHideDuringAds =
+            (defaults.object(forKey: Keys.lyricsWindowMiniHideDuringAds) as? Bool) ?? false
         lyricsWindowTextColorMode = defaults.string(forKey: Keys.lyricsWindowTextColorMode)
             .flatMap(LyricsWindowTextColorMode.init(rawValue:)) ?? .auto
         lyricsWindowTextColorHex = defaults.string(forKey: Keys.lyricsWindowTextColorHex)
@@ -3027,6 +3050,8 @@ final class AppSettings: ObservableObject {
             ?? Self.defaultNotchCollapsesWhenPaused
         notchCollapsesWhenPaused = collapsesWhenPaused
         hideDuringAds = (defaults.object(forKey: Keys.hideDuringAds) as? Bool) ?? false
+        overlayShowsTitleWhenNoLyrics = (defaults.object(forKey: Keys.overlayShowsTitleWhenNoLyrics) as? Bool)
+            ?? Self.defaultOverlayShowsTitleWhenNoLyrics
         // 「暂停时收起」原来连广告一起收:没存过这一颗时照它的值,开着它的人广告时照旧收起。写回去,之后各管各的。
         if let stored = defaults.object(forKey: Keys.notchCollapsesDuringAds) as? Bool {
             notchCollapsesDuringAds = stored

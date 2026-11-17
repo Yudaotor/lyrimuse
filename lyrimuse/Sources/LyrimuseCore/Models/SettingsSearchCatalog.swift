@@ -118,8 +118,8 @@ public enum SettingsSearchCatalog {
     /// 「歌词窗口」那一段只在迷你预览下才有的行(按标题):完整尺寸那一套外观行不传字号、长句处理、歌词布局这些绑定,
     /// 「行为」「顶部信息」两组也只在迷你装配。设置页加了这类行要来这里登记。
     public static let lyricsWindowMiniOnlyTitles: Set<String> = [
-        "字号", "歌词布局", "长句处理", "悬停时淡化", "淡化时点按穿透", "暂停时隐藏",
-        "纯音乐/无歌词时隐藏", "全屏时隐藏", "歌名", "歌手", "专辑", "封面", "时间", "宽度", "高度", "进度条",
+        "字号", "歌词布局", "长句处理", "悬停时淡化", "淡化时点按穿透", "截屏时隐藏", "暂停时隐藏",
+        "纯音乐/无歌词时隐藏", "广告时隐藏", "全屏时隐藏", "歌名", "歌手", "专辑", "封面", "时间", "宽度", "高度", "进度条",
     ]
     /// 只在完整预览下才有的行:「封面」那一组(含「动态封面」下面的「来源」)、「布局」里的对齐方式和控件大小、「文字」里的 HDR 高亮、「背景」里的 Spotify Canvas。
     public static let lyricsWindowFullOnlyTitles: Set<String> = [
@@ -481,6 +481,7 @@ public enum SettingsSearchCatalog {
         surface(.overlay, "纯音乐/无歌词时隐藏", kw: ["自动隐藏", "纯音乐", "无歌词", "没有歌词", "伴奏", "instrumental"], group: "行为"),
         surface(.overlay, "广告时隐藏", kw: ["自动隐藏", "广告", "插播", "Spotify", "YouTube Music", "ad"], group: "行为"),
         surface(.overlay, "全屏时隐藏", kw: ["全屏", "隐藏", "自动隐藏", "遮挡", "看视频", "玩游戏", "fullscreen"], group: "行为"),
+        surface(.overlay, "无歌词时显示歌名", kw: ["歌名", "歌手", "兜底", "没有歌词", "纯音乐", "暂无歌词"], group: "行为"),
         // 「位置」自成一组(工具栏第二行第三颗 / 抽屉「位置」组),标题就是组名,不带 group。
         surface(.overlay, "位置", kw: ["自由", "顶部居中", "底部居中", "Dock", "预设", "对齐"]),
         surface(.overlay, "显示在", kw: ["屏幕", "所在屏幕", "多屏", "外接屏", "显示器", "跟随", "跟随当前窗口", "固定"], group: "位置"),
@@ -628,9 +629,11 @@ public enum SettingsSearchCatalog {
         lyricsWindow("淡化时点按穿透", sub: "淡化时点按将穿透到下层窗口；按住 ⌥ 可恢复不透明并进行操作",
                      kw: ["穿透", "点击穿透", "透明", "点不到", "下面的窗口", "option", "迷你"], group: "行为"),
         // 跟悬浮歌词、灵动岛那两条同名、不同段,各自跳到自己那一段。
+        lyricsWindow("截屏时隐藏", kw: ["截图", "录屏", "会议", "共享屏幕", "防截屏", "迷你"], group: "行为"),
         lyricsWindow("暂停时隐藏", kw: ["自动隐藏", "暂停", "没在播放", "迷你"], group: "行为"),
         lyricsWindow("纯音乐/无歌词时隐藏", kw: ["自动隐藏", "纯音乐", "无歌词", "没有歌词", "伴奏", "instrumental", "迷你"],
                      group: "行为"),
+        lyricsWindow("广告时隐藏", kw: ["自动隐藏", "广告", "插播", "Spotify", "YouTube Music", "ad", "迷你"], group: "行为"),
         lyricsWindow("全屏时隐藏", kw: ["全屏", "隐藏", "自动隐藏", "遮挡", "看视频", "fullscreen", "迷你"], group: "行为"),
         lyricsWindow("卡拉OK效果", kw: ["逐字", "染色", "karaoke", "迷你", "完整"], group: "颜色"),
         // 跟悬浮歌词那条「字体」同名、不同段:搜「字体」会同时列出两处,各自跳到自己那一段。

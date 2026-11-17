@@ -209,6 +209,18 @@ public enum LyrimuseDeepLink: Equatable, Sendable {
         /// 悬浮歌词、灵动岛、菜单栏的彩虹开关,跟设置页走同一个设置(`debug/rainbow?overlay=0|1&notch=0|1&menubar=0|1`,
         /// 至少带一个)。
         case rainbow(overlay: Bool?, notch: Bool?, menuBar: Bool? = nil)
+        /// 悬浮歌词、灵动岛、迷你歌词窗口的「截屏时隐藏」,跟设置页走同三个设置(`debug/capture-hide?overlay=0|1&notch=0|1&mini=0|1`,
+        /// 至少带一个)。
+        case captureHide(overlay: Bool?, notch: Bool?, mini: Bool?)
+        /// 悬浮歌词「广告时隐藏」、灵动岛「广告时收起」、迷你歌词窗口「广告时隐藏」,跟设置页走同三个设置
+        /// (`debug/ad-hide?overlay=0|1&notch=0|1&mini=0|1`,至少带一个)。
+        case adHide(overlay: Bool?, notch: Bool?, mini: Bool?)
+        /// 悬浮歌词「纯音乐/无歌词时隐藏」、灵动岛「纯音乐/无歌词时收起歌词行」、迷你歌词窗口「纯音乐/无歌词时隐藏」,跟设置页走同三个设置
+        /// (`debug/no-lyrics-hide?overlay=0|1&notch=0|1&mini=0|1`,至少带一个)。
+        case noLyricsHide(overlay: Bool?, notch: Bool?, mini: Bool?)
+        /// 悬浮歌词、菜单栏的「无歌词时显示歌名」,跟设置页走同两个设置(`debug/no-lyrics-title?overlay=0|1&menubar=0|1`,
+        /// 至少带一个)。
+        case noLyricsTitle(overlay: Bool?, menuBar: Bool?)
         /// 菜单栏左键面板的布局,跟面板里「编辑」改的同一个设置(`debug/panel-layout?json=<MenuBarPanelLayout.encoded()>`,
         /// 不带 json 恢复默认)。
         case panelLayout(json: String?)
@@ -699,6 +711,21 @@ public enum LyrimuseDeepLink: Equatable, Sendable {
             let menuBar = value("menubar").flatMap(Self.parseBool)
             guard overlay != nil || notch != nil || menuBar != nil else { return nil }
             self = .debug(.rainbow(overlay: overlay, notch: notch, menuBar: menuBar))
+        case ("debug", "/capture-hide"), ("debug", "/ad-hide"), ("debug", "/no-lyrics-hide"):
+            let overlay = value("overlay").flatMap(Self.parseBool)
+            let notch = value("notch").flatMap(Self.parseBool)
+            let mini = value("mini").flatMap(Self.parseBool)
+            guard overlay != nil || notch != nil || mini != nil else { return nil }
+            switch path {
+            case "/capture-hide": self = .debug(.captureHide(overlay: overlay, notch: notch, mini: mini))
+            case "/ad-hide": self = .debug(.adHide(overlay: overlay, notch: notch, mini: mini))
+            default: self = .debug(.noLyricsHide(overlay: overlay, notch: notch, mini: mini))
+            }
+        case ("debug", "/no-lyrics-title"):
+            let overlay = value("overlay").flatMap(Self.parseBool)
+            let menuBar = value("menubar").flatMap(Self.parseBool)
+            guard overlay != nil || menuBar != nil else { return nil }
+            self = .debug(.noLyricsTitle(overlay: overlay, menuBar: menuBar))
         case ("debug", "/touchbar-typing"):
             switch value("state")?.lowercased() {
             case "on": self = .debug(.touchBarTyping(override: true))
@@ -1086,6 +1113,23 @@ public enum LyrimuseDeepLink: Equatable, Sendable {
                 var items: [URLQueryItem] = []
                 if let overlay { items.append(URLQueryItem(name: "overlay", value: overlay ? "1" : "0")) }
                 if let notch { items.append(URLQueryItem(name: "notch", value: notch ? "1" : "0")) }
+                if let menuBar { items.append(URLQueryItem(name: "menubar", value: menuBar ? "1" : "0")) }
+                components.queryItems = items
+            case let .captureHide(overlay, notch, mini), let .adHide(overlay, notch, mini), let .noLyricsHide(overlay, notch, mini):
+                switch command {
+                case .captureHide: components.path = "/capture-hide"
+                case .adHide: components.path = "/ad-hide"
+                default: components.path = "/no-lyrics-hide"
+                }
+                var items: [URLQueryItem] = []
+                if let overlay { items.append(URLQueryItem(name: "overlay", value: overlay ? "1" : "0")) }
+                if let notch { items.append(URLQueryItem(name: "notch", value: notch ? "1" : "0")) }
+                if let mini { items.append(URLQueryItem(name: "mini", value: mini ? "1" : "0")) }
+                components.queryItems = items
+            case let .noLyricsTitle(overlay, menuBar):
+                components.path = "/no-lyrics-title"
+                var items: [URLQueryItem] = []
+                if let overlay { items.append(URLQueryItem(name: "overlay", value: overlay ? "1" : "0")) }
                 if let menuBar { items.append(URLQueryItem(name: "menubar", value: menuBar ? "1" : "0")) }
                 components.queryItems = items
             case let .touchBarDisplay(color):

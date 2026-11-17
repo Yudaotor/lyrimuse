@@ -491,11 +491,12 @@ Yüzen sözlerin üzerine gelince bir sıra hızlı düğme belirir. Menü çubu
 
 ### Ekran görüntülerinde ve ekran paylaşımında gizli
 
-Siz şarkı sözlerini görmeye devam ederken ekran görüntüleri, kayıtlar ve paylaşılan ekranlar onları içermez. Yüzen sözlerin ve çentiğin ayrı birer anahtarı var.
+Siz şarkı sözlerini görmeye devam ederken ekran görüntüleri, kayıtlar ve paylaşılan ekranlar onları içermez. Yüzen sözlerin, çentiğin ve mini şarkı sözü penceresinin ayrı birer anahtarı var.
 
 - Saptanmış olarak kapalı
 - Ayarlar: Şarkı Sözü Görünümü › Yüzen Sözler › Davranış › Ekran Resimlerinde Gizle
 - Ayarlar: Şarkı Sözü Görünümü › Çentik › Davranış › Ekran Resimlerinde Gizle
+- Ayarlar: Şarkı Sözü Görünümü › Şarkı Sözü Penceresi › Davranış › Ekran Resimlerinde Gizle
 
 <a id="feature-hide-when-paused"></a>
 
@@ -520,15 +521,26 @@ Parça enstrümantalse ya da arama bitip şarkı sözü bulunamadıysa yüzen s�
 - Ayarlar: Şarkı Sözü Görünümü › Çentik › Davranış › Söz Yoksa Satırı Daralt
 - Ayarlar: Şarkı Sözü Görünümü › Touch Bar › Davranış › Söz Yoksa Daralt
 
+<a id="feature-title-when-no-lyrics"></a>
+
+### Şarkı sözü yokken şarkı adı
+
+Parça enstrümantalse ya da arama şarkı sözü bulamazsa yüzen sözler, durum mesajı yerine şarkı adını ve sanatçıyı gösterir. Menü çubuğu, şarkı sözü yokken ya da arama sürerken şarkı adını gösterir. Her birinin ayrı anahtarı var.
+
+- Saptanmış olarak açık
+- Ayarlar: Şarkı Sözü Görünümü › Yüzen Sözler › Davranış › Şarkı Sözü Yoksa Parça Adını Göster
+- Ayarlar: Şarkı Sözü Görünümü › Menü Çubuğu › Davranış › Şarkı Sözü Yoksa Parça Adını Göster
+
 <a id="feature-hide-during-ads"></a>
 
 ### Reklamlarda kenara çekilme
 
-Çalar reklam çalarken yüzen sözler gizlenebilir ve çentik üst şeridine küçülebilir; çentiğin üzerine gelince yine genişler. Her birinin ayrı anahtarı var.
+Çalar reklam çalarken yüzen sözler ve mini şarkı sözü penceresi gizlenebilir, çentik de üst şeridine küçülebilir; çentiğin üzerine gelince yine genişler. Her birinin ayrı anahtarı var.
 
 - Saptanmış olarak kapalı
 - Ayarlar: Şarkı Sözü Görünümü › Yüzen Sözler › Davranış › Reklamlarda Gizle
 - Ayarlar: Şarkı Sözü Görünümü › Çentik › Davranış › Reklamlarda Daralt
+- Ayarlar: Şarkı Sözü Görünümü › Şarkı Sözü Penceresi › Davranış › Reklamlarda Gizle
 
 <a id="feature-hide-in-full-screen"></a>
 
@@ -943,7 +955,7 @@ Neyin önce düzeltileceğine karar vermek için günde en fazla bir kez sürüm
 
 ## Tüm Ayarlar
 
-Ayarlar penceresindeki tüm ayarlar, konumlarına göre; toplam: 326. Bir ayara hemen gitmek için adını kenar çubuğunun üstündeki arama alanına yazın.
+Ayarlar penceresindeki tüm ayarlar, konumlarına göre; toplam: 329. Bir ayara hemen gitmek için adını kenar çubuğunun üstündeki arama alanına yazın.
 
 ### Şarkı Sözleri › Kaynak
 
@@ -1083,6 +1095,7 @@ Ayarlar penceresindeki tüm ayarlar, konumlarına göre; toplam: 326. Bir ayara 
 - **Söz Yoksa Gizle**
 - **Reklamlarda Gizle**
 - **Tam Ekranda Gizle**
+- **Şarkı Sözü Yoksa Parça Adını Göster**
 
 ### Şarkı Sözü Görünümü › Yüzen Sözler › Konum
 
@@ -1195,7 +1208,7 @@ Ayarlar penceresindeki tüm ayarlar, konumlarına göre; toplam: 326. Bir ayara 
 ### Şarkı Sözü Görünümü › Menü Çubuğu › Davranış
 
 - **Üzerine Gelince Denetimleri Göster**
-- **Şarkı Sözü Yoksa Parça Adını Göster**: Parçanın şarkı sözü yokken veya sözler hâlâ aranırken şarkı sözlerinin yerinde parça adını gösterir
+- **Şarkı Sözü Yoksa Parça Adını Göster**
 - **Duraklatınca Sözleri Koru**: Duraklatıldığında simgeye daralmak yerine geçerli satırda kalır
 
 ### Şarkı Sözü Görünümü › Touch Bar
@@ -1275,8 +1288,10 @@ Ayarlar penceresindeki tüm ayarlar, konumlarına göre; toplam: 326. Bir ayara 
 
 - **Üzerine Gelince Soldur** (yalnızca Mini)
 - **Soluklaşınca Tıklamaları Geçir** (yalnızca Mini): Soluklaştığında tıklamalar alttaki pencereye geçer. Opak yapıp etkileşim kurmak için ⌥ tuşunu basılı tutun
+- **Ekran Resimlerinde Gizle** (yalnızca Mini)
 - **Duraklatınca Gizle** (yalnızca Mini)
 - **Söz Yoksa Gizle** (yalnızca Mini)
+- **Reklamlarda Gizle** (yalnızca Mini)
 - **Tam Ekranda Gizle** (yalnızca Mini)
 
 ### Şarkı Sözü Görünümü › Şarkı Sözü Penceresi › Renk

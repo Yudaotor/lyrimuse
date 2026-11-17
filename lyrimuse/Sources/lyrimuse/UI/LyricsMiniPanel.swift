@@ -1,4 +1,5 @@
 import AppKit
+import Combine
 import LyrimuseCore
 import SwiftUI
 
@@ -44,6 +45,7 @@ final class LyricsMiniHostingView<Content: View>: NSHostingView<Content> {
 enum LyricsMiniPanelHost {
     private(set) static var panel: LyricsMiniPanel?
     private static var closeObserver: NSObjectProtocol?
+    private static var captureHideObserver: AnyCancellable?
 
     /// 建好面板、摆到 `frame`,还不上屏(上屏由调用方决定:交接时先藏在桌面以下再亮出来)。已经有一扇就挪过去。
     static func make(frame: NSRect) -> LyricsMiniPanel {
@@ -61,6 +63,10 @@ enum LyricsMiniPanelHost {
         panel.setFrame(frame, display: false)
         self.panel = panel
         LyricsMiniPanelAutoHide.shared.attach(panel)
+        // 「截屏时隐藏」:订阅时先报一次当前值,建窗即写;之后每次变了直接写、不判等(运行中读回来的 sharingType 不可靠,
+        // 同灵动岛 `applyBehaviorSettings`)。关着时回到面板的默认 `.readOnly`。见 07 章决策 209。
+        captureHideObserver = AppSettings.shared.$lyricsWindowMiniHideDuringScreenCapture
+            .sink { [weak panel] hide in panel?.sharingType = hide ? .none : .readOnly }
         closeObserver = NotificationCenter.default.addObserver(
             forName: NSWindow.willCloseNotification, object: panel, queue: .main
         ) { _ in
@@ -94,6 +100,7 @@ enum LyricsMiniPanelHost {
         LyricsMiniPanelAutoHide.shared.detach()
         if let closeObserver { NotificationCenter.default.removeObserver(closeObserver) }
         closeObserver = nil
+        captureHideObserver = nil
         panel.contentView = nil
         self.panel = nil
     }

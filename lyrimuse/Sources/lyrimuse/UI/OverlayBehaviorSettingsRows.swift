@@ -24,7 +24,8 @@ import SwiftUI
 // 悬浮窗控制器。
 //
 // 例外是「全屏时隐藏」(`OverlayBehaviorItem.hideInFullScreen`):它只属于悬浮歌词(灵动岛的同名开关在
-// `NotchBehaviorItem` 里),所以留在这个枚举,只是按 `isAutoHide` 画进「自动隐藏」那一格。
+// `NotchBehaviorItem` 里),所以留在这个枚举,只是按 `isAutoHide` 画进「自动隐藏」那一格。「无歌词时显示歌名」
+// (`showsTitleWhenNoLyrics`)同样只属于悬浮歌词,画在那一格末尾,挨着跟它互斥的「纯音乐/无歌词时隐藏」。
 
 /// 行为项的唯一真源:文案、图标、以及那个"改了要连带让真窗口生效"的 Binding。
 ///
@@ -44,11 +45,13 @@ enum OverlayBehaviorItem: String, CaseIterable, Identifiable {
     /// 所在屏幕的当前 Space 是全屏 App 时整扇藏起来。画在「自动隐藏」那一格(`isAutoHide`),跟截屏 / 暂停
     /// 那几项并排;不并进 `AutoHideItem`:灵动岛的同名开关在 `NotchBehaviorItem` 里,两边不是一一对应。
     case hideInFullScreen
+    /// 这首没有能同步显示的歌词时主行写「♪ 歌名 — 歌手」(04 章决策 104)。画在「自动隐藏」那一格末尾(`isAutoHide`)。
+    case showsTitleWhenNoLyrics
 
     var id: String { rawValue }
 
     /// 画在「自动隐藏」那一格、不在「窗口」那一格。
-    var isAutoHide: Bool { self == .hideInFullScreen }
+    var isAutoHide: Bool { self == .hideInFullScreen || self == .showsTitleWhenNoLyrics }
 
     var icon: String {
         switch self {
@@ -59,6 +62,8 @@ enum OverlayBehaviorItem: String, CaseIterable, Identifiable {
         // 免得跟上一行的「悬停时淡化」在图标上也撞成一对。
         case .showHoverControls: return "playpause.circle"
         case .hideInFullScreen: return "arrow.up.left.and.arrow.down.right"
+        // 同菜单栏「无歌词时显示歌名」那颗。
+        case .showsTitleWhenNoLyrics: return "music.note.list"
         }
     }
 
@@ -69,6 +74,7 @@ enum OverlayBehaviorItem: String, CaseIterable, Identifiable {
         case .fadeOnHover: return L10n.t("悬停时淡化")
         case .showHoverControls: return L10n.t("悬停时显示播放控制")
         case .hideInFullScreen: return L10n.t("全屏时隐藏")
+        case .showsTitleWhenNoLyrics: return L10n.t("无歌词时显示歌名")
         }
     }
 
@@ -77,15 +83,17 @@ enum OverlayBehaviorItem: String, CaseIterable, Identifiable {
         switch self {
         case .hideInFullScreen: return L10n.t("所在屏幕有 App 全屏时隐藏")
         case .lockPosition: return L10n.t("锁定后无法拖动，悬停时也不显示播放控制")
-        case .dragNeedsLongPress, .fadeOnHover, .showHoverControls: return nil
+        case .dragNeedsLongPress, .fadeOnHover, .showHoverControls, .showsTitleWhenNoLyrics: return nil
         }
     }
 
     /// 这一项此刻管不管用。「长按拖动」只在「位置」是「自由」时有意义:顶部居中 / 底部居中下窗口本来就拖不动。
+    /// 「无歌词时显示歌名」在「纯音乐/无歌词时隐藏」开着时不起作用:没词时整扇窗已经藏起来了。
     @MainActor
     var isApplicable: Bool {
         switch self {
         case .dragNeedsLongPress: return AppSettings.shared.overlayPlacementMode == .free
+        case .showsTitleWhenNoLyrics: return !AppSettings.shared.hideWhenNoLyrics
         case .lockPosition, .fadeOnHover, .showHoverControls, .hideInFullScreen: return true
         }
     }
@@ -142,6 +150,10 @@ enum OverlayBehaviorItem: String, CaseIterable, Identifiable {
         // 只写设置:控制器自己订阅这个值(同「纯音乐/无歌词时隐藏」),不碰 `.shared`,也就不用守卫。
         case .hideInFullScreen:
             return Binding(get: { settings.overlayHideInFullScreen }, set: { settings.overlayHideInFullScreen = $0 })
+        // 只写设置:视图经 `OverlayPlayback` 订阅,不碰 `.shared`。
+        case .showsTitleWhenNoLyrics:
+            return Binding(get: { settings.overlayShowsTitleWhenNoLyrics },
+                           set: { settings.overlayShowsTitleWhenNoLyrics = $0 })
         case .fadeOnHover:
             return Binding(
                 get: { settings.overlayFadeOnHover },
@@ -161,7 +173,8 @@ enum OverlayBehaviorItem: String, CaseIterable, Identifiable {
 
 // MARK: - 「行为」组的行(浮层与抽屉同一份)
 
-/// 「行为」那一组:锁定位置 / 长按拖动 / 悬停时淡化 / 悬停时显示播放控制 + 自动隐藏几项(含 `OverlayBehaviorItem.hideInFullScreen`)。
+/// 「行为」那一组:锁定位置 / 长按拖动 / 悬停时淡化 / 悬停时显示播放控制 + 自动隐藏几项(含 `OverlayBehaviorItem.hideInFullScreen`、
+/// `showsTitleWhenNoLyrics`)。
 /// 编辑台「行为」浮层(`OverlayEditorStage.toolbarButton`)和抽屉「行为」组(`OverlayAllSettingsDrawer`)调的
 /// 是这同一份。
 ///

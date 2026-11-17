@@ -171,6 +171,8 @@ private final class OverlayPlayback: ObservableObject {
     /// 这首只有一份没时间戳的纯文本(`PlaybackCoordinator.currentTrackPlainLyrics` 非空)。悬浮窗没法跟唱它,
     /// 但也不该说「暂无歌词」—— 歌词窗口那边正把它当静态文字显示着,两处说法得对得上。
     @Published private(set) var hasPlainLyrics = false
+    /// 「无歌词时显示歌名」此刻要写的「歌名 — 歌手」(Core `OverlayNoLyricsTitle`),不换时 nil。
+    @Published private(set) var noLyricsTitle: String?
     @Published private(set) var playbackRate: Double = 1
     private var subs: [AnyCancellable] = []
 
@@ -313,6 +315,16 @@ private final class OverlayPlayback: ObservableObject {
             p.$anchor.map { $0?.rate ?? 1 }.removeDuplicates().sink { [weak self] in self?.playbackRate = $0 },
             p.$currentTrackPlainLyrics.map { !$0.isEmpty }.removeDuplicates()
                 .sink { [weak self] in self?.hasPlainLyrics = $0 },
+            // 五个输入同时从参数拿(同 hasTrack 那条):纯音乐 / 无歌词不走防抖过的 `currentTrackLacksLyrics`,
+            // 跟主行下面那两支读的是同两个值,不会先闪一下「纯音乐」再换成歌名。
+            Publishers.CombineLatest4(s.$overlayShowsTitleWhenNoLyrics, p.$isCurrentTrackInstrumental,
+                                      p.$currentTrackHasNoLyrics, Publishers.CombineLatest(p.$displayTitle, p.$displayArtist))
+                .map { enabled, instrumental, noLyrics, track in
+                    OverlayNoLyricsTitle.text(enabled: enabled, isInstrumental: instrumental, hasNoLyrics: noLyrics,
+                                              title: track.0, artist: track.1)
+                }
+                .removeDuplicates()
+                .sink { [weak self] in self?.noLyricsTitle = $0 },
         ]
     }
 }
@@ -2290,6 +2302,17 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
                 .font(playback.mainFont)
                 .foregroundStyle(playback.displayForegroundColor.opacity(0.5))
                 .lyricsTextStroke(playback.textStrokeEnabled, color: playback.textStrokeColor)
+        } else if let name = playback.noLyricsTitle {
+            // 「无歌词时显示歌名」:顶替下面「纯音乐」「暂无歌词」两支,排在广告、口白后面(那两段的歌名不是这首歌),
+            // 不动「搜索歌词中…」及之前的顺序(04 章决策 104)。音符同品牌标记走 SF Symbol;0.7 同品牌标记,
+            // 长句处理同整行歌词那一支。
+            (Text(Image(systemName: "music.note")) + Text(verbatim: " " + name))
+                .font(playback.mainFont)
+                .foregroundStyle(playback.displayForegroundColor.opacity(0.7))
+                .lyricsTextStroke(playback.textStrokeEnabled, color: playback.textStrokeColor)
+                .overlayLineFit(playback.lineOverflow)
+                .overlayScroll(playback.lineOverflow == .scroll, id: name, alignment: marqueeRestingAlignment,
+                               height: playback.scrollRowHeight(playback.overlayNSFonts.main))
         } else if playback.isCurrentTrackInstrumental {
             // 补上——联网查过了、明确是纯音乐,跟下面"还在搜索中"/"真的没搜到"
             // 两种含糊状态不一样,是有明确依据的结论,必须排在"还在搜索中"这个分支前面:

@@ -780,6 +780,15 @@
       "dest" : "tab:appearance",
       "path" : [
         "歌词显示",
+        "悬浮歌词",
+        "行为"
+      ],
+      "title" : "无歌词时显示歌名"
+    },
+    {
+      "dest" : "tab:appearance",
+      "path" : [
+        "歌词显示",
         "悬浮歌词"
       ],
       "title" : "位置"
@@ -1787,6 +1796,16 @@
         "歌词窗口",
         "行为"
       ],
+      "title" : "截屏时隐藏"
+    },
+    {
+      "dest" : "tab:appearance",
+      "lyricsWindowMini" : true,
+      "path" : [
+        "歌词显示",
+        "歌词窗口",
+        "行为"
+      ],
       "title" : "暂停时隐藏"
     },
     {
@@ -1798,6 +1817,16 @@
         "行为"
       ],
       "title" : "纯音乐/无歌词时隐藏"
+    },
+    {
+      "dest" : "tab:appearance",
+      "lyricsWindowMini" : true,
+      "path" : [
+        "歌词显示",
+        "歌词窗口",
+        "行为"
+      ],
+      "title" : "广告时隐藏"
     },
     {
       "dest" : "tab:appearance",
