@@ -605,6 +605,28 @@ func runCreditLineTests() {
         expectEqual(drops[9], true, "《白发》: 「著作权人：+© 2019、赋音乐」被滤掉")
         expectEqual(drops.prefix(12).allSatisfy { $0 }, true, "《白发》: 头部 12 行职员表一行不剩")
         expectEqual(drops.suffix(4).allSatisfy { !$0 }, true, "《白发》: 四行真歌词一行不少")
+
+        // 「改编」「填词」这类制作署名和经纪 / 宣传 / 制片这类职务进 creditRoleWords,见 08 章决策 72。
+        // 都落在开头署名块的最后一行、后面紧跟真歌词,夹心补漏(要求两侧都是署名)够不着。
+        let qiannian = [
+            "千年等一回 - 鞠婧祎", "词：左宏元", "曲：陈自为", "改编：栾慧",
+            "千年等一回", "千年等一回", "是谁在耳边 说", "爱我永不变",
+        ]
+        expectEqual(LyricsSyncEngine.creditLineDropDecisions(
+            qiannian, trackTitle: "千年等一回", trackArtist: "鞠婧祎"),
+                    [true, true, true, true, false, false, false, false],
+                    "角色词: 鞠婧祎《千年等一回》(酷我源)开头「改编：栾慧」删,正文不动")
+        for line in ["改编词：施人诚", "中文填词：圈9", "伴奏：Slick Rick – Children’s Story",
+                     "艺人经纪：青小桔@青桔娱乐", "平面宣传：李金霓", "制片助理：张容欣/陈嬑苇",
+                     "首席运营 : 哇唧唧哇", "副总经理：李宜勋", "配唱：某某", "改編：某某"] {
+            expectEqual(LyricsSyncEngine.matchesRoleWordCredit(line), true, "角色词: \(line)")
+        }
+        // 反向:不带冒号、或冒号后为空的「改编 / 宣传 / 经理」是真歌词,一条都不许删。
+        expectEqual(LyricsSyncEngine.creditLineDropDecisions(
+            ["这首歌被改编成了摇滚", "改编我们的结局", "我想把它改编：", "大肆宣传你的好",
+             "经理说明天别迟到", "当你的助理 帮你挡掉所有风暴"]),
+                    [false, false, false, false, false, false],
+                    "角色词(反向): 句子里的 改编 / 宣传 / 经理 / 助理 没有冒号或冒号后为空,不删")
     }
 
     // ---- 夹心补漏:前后**都**是署名的那一行,自己也是署名 ----
