@@ -517,10 +517,11 @@ public struct TelemetryCrash: Codable, Equatable, Sendable {
     public var terminationNamespace: String?
     public var terminationIndicator: String?
     public var terminationReasons: [String]
+    /// 故障线程的帧,截到 `Telemetry.maxCrashFrames`;补自家帧的规则同 `exceptionFrames`。
     public var frames: [Frame]
     /// 抛出未捕获异常时的调用栈(`CrashReportSummary.exceptionFrames`),同样截到 `Telemetry.maxCrashFrames`;没有就是空。
     /// 前 `maxCrashFrames` 帧里一个自家帧都没有、后面有时,末尾几帧换成后面最近的那几个自家帧(看得出是谁的代码引起的),
-    /// 接收端按自家帧归并。
+    /// 栈底入口那一串不算;接收端按自家帧归并。
     public var exceptionFrames: [Frame]
     public var env: TelemetryEnvironment
 
@@ -557,14 +558,19 @@ public struct TelemetryCrash: Codable, Equatable, Sendable {
                       offset: $0.imageOffset)
             }
         }
-        frames = payload(summary.frames)
         let isOwn = { (frame: CrashReportSummary.Frame) in frame.imageName == summary.processName }
-        let head = summary.exceptionFrames.prefix(Telemetry.maxCrashFrames)
-        let laterOwn = (summary.exceptionFrames.dropFirst(Telemetry.maxCrashFrames).filter(isOwn)
-            + summary.exceptionLaterOwnFrames).prefix(CrashReportSummary.maxLaterOwnFrames)
-        exceptionFrames = head.contains(where: isOwn) || laterOwn.isEmpty
-            ? payload(summary.exceptionFrames)
-            : payload(Array(head.prefix(Telemetry.maxCrashFrames - laterOwn.count)) + laterOwn)
+        func withLaterOwn(_ stack: [CrashReportSummary.Frame], later: [CrashReportSummary.Frame], entryStart: Int?) -> [Frame] {
+            let head = stack.prefix(Telemetry.maxCrashFrames)
+            let cut = entryStart ?? stack.count
+            let between = stack.indices.dropFirst(Telemetry.maxCrashFrames).filter { $0 < cut && isOwn(stack[$0]) }.map { stack[$0] }
+            let laterOwn = (between + later).prefix(CrashReportSummary.maxLaterOwnFrames)
+            return head.contains(where: isOwn) || laterOwn.isEmpty
+                ? payload(stack)
+                : payload(Array(head.prefix(Telemetry.maxCrashFrames - laterOwn.count)) + laterOwn)
+        }
+        frames = withLaterOwn(summary.frames, later: summary.laterOwnFrames, entryStart: summary.entryFrameStart)
+        exceptionFrames = withLaterOwn(summary.exceptionFrames, later: summary.exceptionLaterOwnFrames,
+                                       entryStart: summary.exceptionEntryFrameStart)
         self.env = env
     }
 }

@@ -54,13 +54,22 @@ public struct CrashReportSummary: Equatable {
     public var faultingThreadIndex: Int?
     public var frames: [Frame] = []
     public var totalFrames = 0
+    /// 故障线程里排在 `maxFrames` 之后的本进程帧,规则同 `exceptionLaterOwnFrames`。系统框架自己的断言
+    /// (EXC_BREAKPOINT 落在 AppKit 里)前十几帧全是系统帧,自家帧都在这里。
+    public var laterOwnFrames: [Frame] = []
+    /// 故障线程栈底入口那一串本进程帧(`dyld start` 上面的 `main` / `App.main()`)从第几帧起,没有为 nil。
+    /// 每个主线程栈都有它们,看不出是谁的代码,补自家帧时不算(`laterOwnFrames` 已经排除,遥测从 `frames` 里补时按它排除)。
+    public var entryFrameStart: Int?
     /// `lastExceptionBacktrace`:抛出未捕获异常时的调用栈,去掉开头抛异常的公共入口(`__exceptionPreprocess`、
     /// `objc_exception_throw`),最多 `maxFrames` 帧。没有异常的崩溃为空。
     public var exceptionFrames: [Frame] = []
     public var totalExceptionFrames = 0
-    /// 异常调用栈里排在 `maxFrames` 之后的本进程帧(镜像名等于进程名),从抛异常处往外数最近的 `maxLaterOwnFrames` 个。
-    /// 布局回调这类异常前面几十帧全是系统框架,自家帧都在这里;遥测拿它补进上报的那几帧(`TelemetryCrash`)。
+    /// 异常调用栈里排在 `maxFrames` 之后的本进程帧(镜像名等于进程名),从抛异常处往外数最近的 `maxLaterOwnFrames` 个,
+    /// 不含栈底入口那一串(`exceptionEntryFrameStart`)。布局回调这类异常前面几十帧全是系统框架,自家帧都在这里;
+    /// 遥测拿它补进上报的那几帧(`TelemetryCrash`)。
     public var exceptionLaterOwnFrames: [Frame] = []
+    /// 异常调用栈栈底入口那一串本进程帧从第几帧起(下标按 `exceptionFrames` 算),没有为 nil。
+    public var exceptionEntryFrameStart: Int?
     public static let maxLaterOwnFrames = 4
     /// 哪一段没解出来("header unreadable" / "body unreadable"),写进报告让读的人知道信息不全。
     public var parseNotes: [String] = []
@@ -132,20 +141,42 @@ public struct CrashReportSummary: Equatable {
             if let threads = body["threads"] as? [[String: Any]], let index = faulting,
                index >= 0, index < threads.count,
                let rawFrames = threads[index]["frames"] as? [[String: Any]] {
-                summary.totalFrames = rawFrames.count
-                summary.frames = rawFrames.prefix(maxFrames).map { frame($0, images: images) }
+                let parsed = rawFrames.map { frame($0, images: images) }
+                summary.totalFrames = parsed.count
+                summary.frames = Array(parsed.prefix(maxFrames))
+                summary.entryFrameStart = entryRunStart(parsed, process: summary.processName)
+                summary.laterOwnFrames = laterOwnFrames(parsed, process: summary.processName, entryStart: summary.entryFrameStart)
             }
             if let rawFrames = body["lastExceptionBacktrace"] as? [[String: Any]] {
-                let thrown = exceptionThrowSite(rawFrames)
+                let thrown = exceptionThrowSite(rawFrames).map { frame($0, images: images) }
                 summary.totalExceptionFrames = thrown.count
-                summary.exceptionFrames = thrown.prefix(maxFrames).map { frame($0, images: images) }
-                if let process = summary.processName {
-                    summary.exceptionLaterOwnFrames = Array(thrown.dropFirst(maxFrames).lazy.map { frame($0, images: images) }
-                        .filter { $0.imageName == process }.prefix(maxLaterOwnFrames))
-                }
+                summary.exceptionFrames = Array(thrown.prefix(maxFrames))
+                summary.exceptionEntryFrameStart = entryRunStart(thrown, process: summary.processName)
+                summary.exceptionLaterOwnFrames = laterOwnFrames(thrown, process: summary.processName,
+                                                                 entryStart: summary.exceptionEntryFrameStart)
             }
         }
         return summary
+    }
+
+    /// 栈底入口那一串本进程帧的起点:栈底是 `dyld` 的帧时,紧挨着它往上连续的本进程帧。栈底不是 `dyld`
+    /// (后台线程从 `thread_start` / `start_wqthread` 起)就没有入口这一串。
+    static func entryRunStart(_ frames: [Frame], process: String?) -> Int? {
+        guard let process else { return nil }
+        var end = frames.count
+        while end > 0, frames[end - 1].imageName == "dyld" { end -= 1 }
+        guard end < frames.count else { return nil }
+        var start = end
+        while start > 0, frames[start - 1].imageName == process { start -= 1 }
+        return start < end ? start : nil
+    }
+
+    /// 第 `maxFrames` 帧之后、入口那一串之前的本进程帧,从栈顶往下最近的 `maxLaterOwnFrames` 个。
+    static func laterOwnFrames(_ frames: [Frame], process: String?, entryStart: Int?) -> [Frame] {
+        guard let process else { return [] }
+        let end = entryStart ?? frames.count
+        guard end > maxFrames else { return [] }
+        return Array(frames[maxFrames..<end].lazy.filter { $0.imageName == process }.prefix(maxLaterOwnFrames))
     }
 
     /// 异常调用栈开头抛异常的公共入口,每份都一样,不带信息。

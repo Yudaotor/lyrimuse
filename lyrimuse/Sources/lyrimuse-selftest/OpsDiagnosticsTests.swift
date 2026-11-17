@@ -930,6 +930,37 @@ func runOpsDiagnosticsTests() {
         expectEqual(later?.exceptionLaterOwnFrames.map(\.imageOffset), [3022, 3025, 3027, 3029],
                     "崩溃报告: 第 15 帧之后的本进程帧留最近的 4 个")
 
+        // 系统框架自己的断言(EXC_BREAKPOINT 落在 AppKit 里):故障线程前十几帧全是系统帧,
+        // 自家帧在后面;栈底 `dyld start` 上面那串入口帧不算。
+        let faultJSON = (0..<30).map { i -> String in
+            let image = i == 29 ? 3 : ([18, 21, 27, 28].contains(i) ? 2 : 0)
+            return "{\"imageIndex\":\(image),\"imageOffset\":\(4000 + i)}"
+        }.joined(separator: ",")
+        let faultBody = """
+        {"procName":"lyrimuse","exception":{"type":"EXC_BREAKPOINT","signal":"SIGTRAP"},"faultingThread":0,"threads":[{"frames":[\(faultJSON)]}],"usedImages":[{"name":"AppKit"},{"name":"libobjc.A.dylib"},{"name":"lyrimuse"},{"name":"dyld"}]}
+        """
+        let fault = CrashReportSummary.parse(fileName: "lyrimuse-2026-11-17-192400.ips", data: ips("{}", faultBody))
+        expectEqual(fault?.entryFrameStart, 27, "崩溃报告: 栈底 dyld 上面连续的本进程帧是入口")
+        expectEqual(fault?.laterOwnFrames.map(\.imageOffset), [4018, 4021],
+                    "崩溃报告: 故障线程第 15 帧之后的本进程帧单独留下,入口那串不算")
+        let threadJSON = (0..<20).map { "{\"imageIndex\":\($0 == 19 ? 1 : ($0 == 18 ? 2 : 0)),\"imageOffset\":\(5000 + $0)}" }
+            .joined(separator: ",")
+        let threadBody = """
+        {"procName":"lyrimuse","faultingThread":0,"threads":[{"frames":[\(threadJSON)]}],"usedImages":[{"name":"AppKit"},{"name":"libsystem_pthread.dylib"},{"name":"lyrimuse"}]}
+        """
+        let thread = CrashReportSummary.parse(fileName: "lyrimuse-2026-11-17-192500.ips", data: ips("{}", threadBody))
+        expectEqual(thread?.entryFrameStart == nil && thread?.laterOwnFrames.map(\.imageOffset) == [5018], true,
+                    "崩溃报告: 栈底不是 dyld(后台线程)就没有入口这一串")
+        let entryOnlyJSON = (["__exceptionPreprocess", "objc_exception_throw"] + (0..<20).map { "x\($0)" }).enumerated().map { i, symbol in
+            "{\"imageIndex\":\(i < 2 ? 1 : (i == 21 ? 3 : (i == 20 ? 2 : 0))),\"imageOffset\":\(6000 + i),\"symbol\":\"\(symbol)\"}"
+        }.joined(separator: ",")
+        let entryOnlyBody = """
+        {"procName":"lyrimuse","faultingThread":0,"threads":[{"frames":[]}],"lastExceptionBacktrace":[\(entryOnlyJSON)],"usedImages":[{"name":"AppKit"},{"name":"libobjc.A.dylib"},{"name":"lyrimuse"},{"name":"dyld"}]}
+        """
+        let entryOnly = CrashReportSummary.parse(fileName: "lyrimuse-2026-11-17-192600.ips", data: ips("{}", entryOnlyBody))
+        expectEqual(entryOnly?.exceptionLaterOwnFrames, [], "崩溃报告: 异常调用栈里只有入口那一串本进程帧时不补")
+        expectEqual(entryOnly?.exceptionEntryFrameStart, 18, "崩溃报告: 异常调用栈的入口下标按去掉公共入口之后算")
+
         // 装了异常预处理器(SwallowedExceptionGuard):__exceptionPreprocess 和 objc_exception_throw 之间夹着预处理器的帧。
         let guardedJSON = ["__exceptionPreprocess", "closure #1 in static SwallowedExceptionGuard.install()",
                            "@objc closure #1 in static SwallowedExceptionGuard.install()", "objc_exception_throw",

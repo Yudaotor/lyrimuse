@@ -117,6 +117,30 @@ func runTelemetryTests() {
         expectEqual(TelemetryCrash(summary: ownInHead, reportID: id, executableName: "lyrimuse", installID: "i", env: env).exceptionFrames
                         .map(\.offset), Array(ownInHead.exceptionFrames.prefix(Telemetry.maxCrashFrames)).map(\.imageOffset),
                     "异常调用栈: 前面已经有自家帧就照原样截")
+        var appKitAssert = summary
+        appKitAssert.frames = (0..<15).map { CrashReportSummary.Frame(imageName: "AppKit", symbol: nil, imageOffset: 100 + $0) }
+        appKitAssert.laterOwnFrames = [CrashReportSummary.Frame(imageName: "lyrimuse", symbol: nil, imageOffset: 901)]
+        expectEqual(TelemetryCrash(summary: appKitAssert, reportID: id, executableName: "lyrimuse", installID: "i", env: env).frames
+                        .map { "\($0.image ?? "")+\($0.offset ?? -1)" },
+                    (0..<11).map { "AppKit+\(100 + $0)" } + ["lyrimuse+901"],
+                    "故障线程: 前 12 帧全是系统帧时,末尾换成后面最近的自家帧,总数不变")
+        var entryInTail = appKitAssert
+        entryInTail.laterOwnFrames = []
+        entryInTail.frames[13] = CrashReportSummary.Frame(imageName: "lyrimuse", symbol: nil, imageOffset: 913)
+        entryInTail.frames[14] = CrashReportSummary.Frame(imageName: "dyld", symbol: "start", imageOffset: 914)
+        entryInTail.entryFrameStart = 13
+        expectEqual(TelemetryCrash(summary: entryInTail, reportID: id, executableName: "lyrimuse", installID: "i", env: env).frames
+                        .map(\.offset), (0..<12).map { 100 + $0 },
+                    "故障线程: 第 12 帧之后只有入口那一串自家帧时照原样截")
+        entryInTail.frames[12] = CrashReportSummary.Frame(imageName: "lyrimuse", symbol: nil, imageOffset: 912)
+        entryInTail.entryFrameStart = 12
+        expectEqual(TelemetryCrash(summary: entryInTail, reportID: id, executableName: "lyrimuse", installID: "i", env: env).frames
+                        .map(\.offset), (0..<12).map { 100 + $0 },
+                    "故障线程: 入口那一串从第 12 帧起时一帧都不补")
+        entryInTail.entryFrameStart = 13
+        expectEqual(TelemetryCrash(summary: entryInTail, reportID: id, executableName: "lyrimuse", installID: "i", env: env).frames
+                        .map(\.offset), (0..<11).map { 100 + $0 } + [912],
+                    "故障线程: 第 12～14 帧里入口之前的自家帧照样补")
         let exceptionJSON = (try? JSONEncoder().encode(withException)).flatMap { String(data: $0, encoding: .utf8) } ?? ""
         expectEqual(exceptionJSON.contains("\"exception_frames\""), true, "异常调用栈: 键名 exception_frames")
         expectEqual(exceptionJSON.contains("alice") || exceptionJSON.contains("Bar.swift"), false, "异常调用栈: 不带路径、源码文件")
