@@ -182,6 +182,9 @@ public enum LyrimuseDeepLink: Equatable, Sendable {
         case lyricsWindowPreview(mini: Bool)
         /// 触控栏「歌词颜色」那一档,跟设置页走同一个设置(`debug/touchbar-display?color=white|cover|custom|rainbow`)。
         case touchBarDisplay(color: TouchBarLyricsColorMode)
+        /// 灵动岛「歌词颜色」那一档和自定义色,跟设置页走同一个设置(`debug/notch-lyrics-color?color=accent|custom|rainbow[&hex=RRGGBB]`)。
+        /// `hex` 解析时补成 `#RRGGBBAA`;`hex=` 带空值 = 清回没选过(空串);nil = 不动自定义色。
+        case notchLyricsColor(color: NotchLyricsColor, hex: String?)
         /// 当作键盘焦点在 / 不在输入框里,不看辅助功能读到的(`debug/touchbar-typing?state=on|off|auto`,`auto` = 交还给它)。
         /// 不动用户的焦点验「输入时收起」。nil = auto。
         case touchBarTyping(override: Bool?)
@@ -773,6 +776,19 @@ public enum LyrimuseDeepLink: Equatable, Sendable {
         case ("debug", "/touchbar-display"):
             guard let color = value("color").flatMap({ TouchBarLyricsColorMode(rawValue: $0.lowercased()) }) else { return nil }
             self = .debug(.touchBarDisplay(color: color))
+        case ("debug", "/notch-lyrics-color"):
+            guard let color = value("color").flatMap({ NotchLyricsColor(rawValue: $0.lowercased()) }) else { return nil }
+            var hex: String?
+            if let raw = value("hex"), raw.isEmpty {
+                hex = ""
+            } else if let raw = value("hex") {
+                var digits = raw.uppercased()
+                if digits.hasPrefix("#") { digits.removeFirst() }
+                if digits.count == 6 { digits += "FF" }
+                guard digits.count == 8, UInt32(digits, radix: 16) != nil else { return nil }
+                hex = "#" + digits
+            }
+            self = .debug(.notchLyricsColor(color: color, hex: hex))
         case ("lastfm-auth-callback", _):
             self = .lastfmAuthCallback
         default:
@@ -1135,6 +1151,11 @@ public enum LyrimuseDeepLink: Equatable, Sendable {
             case let .touchBarDisplay(color):
                 components.path = "/touchbar-display"
                 components.queryItems = [URLQueryItem(name: "color", value: color.rawValue)]
+            case let .notchLyricsColor(color, hex):
+                components.path = "/notch-lyrics-color"
+                var items = [URLQueryItem(name: "color", value: color.rawValue)]
+                if let hex { items.append(URLQueryItem(name: "hex", value: String(hex.dropFirst()))) }
+                components.queryItems = items
             case let .touchBarTyping(override):
                 components.path = "/touchbar-typing"
                 components.queryItems = [URLQueryItem(name: "state", value: override.map { $0 ? "on" : "off" } ?? "auto")]

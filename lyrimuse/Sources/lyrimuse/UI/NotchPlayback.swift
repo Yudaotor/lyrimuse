@@ -137,8 +137,12 @@ final class NotchPlayback: ObservableObject {
     /// 在"订阅还没首次投递"的那一帧闪一下另一个方向。
     @Published private(set) var lyricsAlignment: LyricsRestingAlignment =
         AppSettings.defaultNotchLyricsAlignment
-    /// 歌词行的颜色:强调色或流动彩虹(`AppSettings.notchLyricsColor`),同上走这里现读。
+    /// 歌词行的颜色:强调色、自定义色或流动彩虹(`AppSettings.notchLyricsColor`),同上走这里现读。
     @Published private(set) var lyricsColor: NotchLyricsColor = AppSettings.defaultNotchLyricsColor
+    /// 「自定义」那一档的颜色(`AppSettings.notchLyricsColorHex` 经 `NotchLyricsColor.customRGB(hex:)`),同上走这里现读。
+    @Published private(set) var lyricsCustomColor: Color = .white
+    /// 同一个自定义色未唱部分的颜色(`NotchLyricsColor.customUnsungRGB`,打 `WordKaraokeGradient.dimOpacity` 的折、不暗于白字打同一个折)。
+    @Published private(set) var lyricsCustomUnsungColor = NSColor(white: WordKaraokeGradient.dimOpacity, alpha: 1)
     /// 音浪「跟随音乐跳动」(`AppSettings.notchEqualizerFollowsAudio`),同上走这里现读。
     @Published private(set) var equalizerFollowsAudio: Bool = AppSettings.defaultNotchEqualizerFollowsAudio
     /// 灵动岛歌词的字体(设置页「字体」组):主行 / 主行同字号细一档(广告态倒计时)/ 副行与展开区
@@ -396,6 +400,13 @@ final class NotchPlayback: ObservableObject {
             s.$notchLyricRowArtworkPosition.removeDuplicates().sink { [weak self] in self?.lyricRowArtworkPosition = $0 },
             s.$notchLyricsAlignment.removeDuplicates().sink { [weak self] in self?.lyricsAlignment = $0 },
             s.$notchLyricsColor.removeDuplicates().sink { [weak self] in self?.lyricsColor = $0 },
+            s.$notchLyricsColorHex.removeDuplicates()
+                .sink { [weak self] hex in
+                    let c = NotchLyricsColor.customRGB(hex: hex)
+                    let u = NotchLyricsColor.customUnsungRGB(hex: hex, opacity: WordKaraokeGradient.dimOpacity)
+                    self?.lyricsCustomColor = Color(.sRGB, red: c.r, green: c.g, blue: c.b)
+                    self?.lyricsCustomUnsungColor = NSColor(srgbRed: u.r, green: u.g, blue: u.b, alpha: 1)
+                },
             s.$notchEqualizerFollowsAudio.removeDuplicates().sink { [weak self] in self?.equalizerFollowsAudio = $0 },
             // 字体三件:派生 Font 不是 Equatable,不去重 —— 上游只在三个输入之一真变时才重算,本来就低频。
             s.$notchMainFont.sink { [weak self] in self?.mainFont = $0 },

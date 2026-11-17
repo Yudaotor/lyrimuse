@@ -218,6 +218,7 @@ extension AppSettings {
             ("notchLyricRowArtworkPosition", notchLyricRowArtworkPosition),
             ("notchLyricsAlignment", notchLyricsAlignment),
             ("notchLyricsColor", notchLyricsColor),
+            ("notchLyricsColorHex", notchLyricsColorHex),
             ("notchSecondaryLine", notchSecondaryLine),
             ("notchSecondaryFallback", notchSecondaryFallback),
             ("notchFontFamilyName", notchFontFamilyName),

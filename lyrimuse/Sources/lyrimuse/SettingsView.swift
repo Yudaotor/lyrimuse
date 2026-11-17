@@ -4330,21 +4330,32 @@ private struct NotchLyricsAlignmentRow: View {
     }
 }
 
-/// 「歌词颜色」那一行:跟随强调色(歌名、音浪、进度线同一个颜色)或流动彩虹(`NotchLyricsColor`)。只管歌词字:
-/// 主行、副行、展开时的「下一句」;展开时的多行歌词列表不跟。
+/// 「歌词颜色」那一行:跟随强调色(歌名、音浪、进度线同一个颜色)、自定义色或流动彩虹(`NotchLyricsColor`)。只管歌词字:
+/// 主行、副行、展开时的「下一句」;展开时的多行歌词列表只跟自定义。选了自定义时档位右边露出取色器(同触控栏「文字颜色」)。
 @MainActor
 private struct NotchLyricsColorRow: View {
     @ObservedObject private var settings = AppSettings.shared
 
     var body: some View {
-        SettingsRow(icon: "paintpalette", title: L10n.t("歌词颜色")) {
-            SettingsGlassTabPicker(
-                selection: $settings.notchLyricsColor,
-                options: NotchLyricsColor.allCases,
-                label: \.displayName,
-                compact: true
-            )
-            .fixedSize()
+        SettingsRow(icon: "paintpalette", title: L10n.t("歌词颜色"), trailingWrapsBelow: true) {
+            HStack(spacing: 8) {
+                SettingsGlassTabPicker(
+                    selection: $settings.notchLyricsColor,
+                    options: NotchLyricsColor.allCases,
+                    label: \.displayName,
+                    compact: true
+                )
+                .fixedSize()
+                if settings.notchLyricsColor == .custom {
+                    AppColorPicker(selection: Binding(
+                        get: {
+                            let c = NotchLyricsColor.customRGB(hex: settings.notchLyricsColorHex)
+                            return Color(.sRGB, red: c.r, green: c.g, blue: c.b)
+                        },
+                        set: { settings.notchLyricsColorHex = $0.hexStringWithAlpha }
+                    ), supportsOpacity: false)
+                }
+            }
         }
     }
 }
@@ -4353,6 +4364,7 @@ extension NotchLyricsColor {
     var displayName: String {
         switch self {
         case .accent: return L10n.t("跟随强调色")
+        case .custom: return L10n.t("自定义")
         case .rainbow: return L10n.t("彩虹")
         }
     }

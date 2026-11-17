@@ -3164,7 +3164,7 @@ func runNotchTests() {
         expectEqual(v.components(separatedBy: "?? playback.currentDurationMs, tint: progressLineTint,").count == 3
                     && sourceHas(v, "private var progressLineTint: Color {\n playback.vividDeepAccent ?? accentOrWhite\n }"), true,
                     "进度线: 底边和耳朵两档都用封面大片那种色相的深色版,没有时退回前景色")
-        expectEqual(sourceHas(v, "NotchExpandedLyricList(tint: accentOrWhite)")
+        expectEqual(sourceHas(v, "NotchExpandedLyricList(tint: lyricListTint)")
                     && sourceHas(v, ".modifier(NotchCardLayerActive(active: expanded, staggered: staggered, waitsForResize: true))")
                     && sourceHas(v, "if waitsForResize { return curve.delay(Self.resizeSettleDelay) }")
                     && sourceHas(v, ".transformEnvironment(\\.notchCardLayerActive) { $0 = $0 && active }\n // 曲线只套在透明度上")
@@ -3353,7 +3353,7 @@ func runNotchTests() {
                     && sourceHas(list, "secondary.showsLyricListSecondary(in: MiniLyricsSelection.lines(all, karaoke: karaoke).lazy.map(\\.line))")
                     && !list.contains("feed.secondaryLine.showsLyricListSecondary"), true,
                     "多行歌词: 摆法按这首歌实际有没有小字算行距,不按设置里的副行")
-        expectEqual(sourceHas(v, "if showsList {\n NotchTransientHost(tint: accentOrWhite) { NotchExpandedLyricList(tint: accentOrWhite) }"), true,
+        expectEqual(sourceHas(v, "if showsList {\n NotchTransientHost(tint: accentOrWhite) { NotchExpandedLyricList(tint: lyricListTint) }"), true,
                     "多行歌词: 列表那一格也是横幅的宿主,展开且显示列表时横幅照样看得见")
         let layerActiveBody = sourceBody("struct NotchCardLayerActive: ViewModifier", in: src("NotchCardModifiers.swift"))
         expectEqual(sourceHas(layerActiveBody, ".allowsHitTesting(active)")
@@ -3421,5 +3421,70 @@ func runNotchTests() {
                         && sourceHas(appDelegate, "let lockScreenShowsLyrics = NotchLockScreenPresenter.isPresenting && !screensAreAsleep\n LocalPlaybackSource.shared.setScreenLocked(hidden && !lockScreenShowsLyrics)")
                         && appDelegate.contains("NotchLockScreenPresenter.start()"), true,
                     "锁屏显示: 先定锁屏那份露不露,再按它决定歌词那一拍停不停")
+    }
+
+    // ---- 歌词颜色「自定义」(05 章决策 153):只管歌词字,默认仍跟强调色;自定义也管展开时的多行歌词列表,彩虹不管 ----
+    do {
+        typealias C = NotchLyricsColor
+        expectEqual(C.allCases.map(\.rawValue), ["accent", "custom", "rainbow"], "歌词颜色: 三档,顺序同设置页")
+        expectEqual(C.resolved(stored: "custom", fallback: .accent).rawValue, "custom", "歌词颜色: 存过自定义就是自定义")
+        expectEqual(C.resolved(stored: nil, fallback: .accent), .accent, "歌词颜色: 没存过仍是跟随强调色")
+        func rgb(_ hex: String) -> [Int] {
+            let c = C.customRGB(hex: hex)
+            return [c.r, c.g, c.b].map { Int(($0 * 255).rounded()) }
+        }
+        expectEqual(rgb("#FF8000FF"), [255, 128, 0], "歌词颜色: 取色器存的 #RRGGBBAA 取 RGB")
+        expectEqual(rgb("#FF800040"), [255, 128, 0], "歌词颜色: 存着的不透明度不用,字恒不透明")
+        expectEqual(rgb("3366CC"), [51, 102, 204], "歌词颜色: 不带井号、不带不透明度也认")
+        expectEqual([rgb(""), rgb("#XYZ")], [[255, 255, 255], [255, 255, 255]], "歌词颜色: 没选过或认不出时是白色")
+        func luma(_ c: (r: Double, g: Double, b: Double)) -> Double { 0.2126 * c.r + 0.7152 * c.g + 0.0722 * c.b }
+        let orange = C.customRGB(hex: "#FF8000FF")
+        let orangeUnsung = C.customUnsungRGB(hex: "#FF8000FF", opacity: 0.35)
+        expectEqual(luma(orangeUnsung) >= 0.35 - 0.001 && luma(orangeUnsung) > luma((orange.r * 0.35, orange.g * 0.35, orange.b * 0.35)),
+                    true, "歌词颜色: 自定义色未唱的部分不暗于白字打同一个折,比直接打折亮")
+        expectEqual(luma(orangeUnsung) < luma(orange) && orangeUnsung.r > orangeUnsung.g && orangeUnsung.g > orangeUnsung.b, true,
+                    "歌词颜色: 未唱仍比已唱暗,色相族不变")
+        let whiteUnsung = C.customUnsungRGB(hex: "", opacity: 0.35)
+        expectEqual([whiteUnsung.r, whiteUnsung.g, whiteUnsung.b].allSatisfy { abs($0 - 0.35) < 0.001 }, true,
+                    "歌词颜色: 白色未唱就是同一个折的灰,跟强调色档白字时一样")
+        expectEqual(C.allCases.filter(\.tintsExpandedLyricList).map(\.rawValue), ["custom"],
+                    "歌词颜色: 展开时的多行歌词列表只跟自定义,彩虹、强调色两档照旧跟强调色")
+
+        let appDir = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("lyrimuse")
+        func app(_ n: String) -> String {
+            (try? String(contentsOf: appDir.appendingPathComponent(n), encoding: .utf8)) ?? ""
+        }
+        let settings = app("Settings/AppSettings.swift")
+        expectEqual(sourceHas(settings, "static let notchLyricsColorHex = \"np:notchLyricsColorHex\"")
+                        && sourceHas(settings, "static let defaultNotchLyricsColorHex = \"\"")
+                        && sourceHas(settings, "didSet { defaults.set(notchLyricsColorHex, forKey: Keys.notchLyricsColorHex) }")
+                        && sourceHas(settings, "notchLyricsColorHex = defaults.string(forKey: Keys.notchLyricsColorHex) ?? Self.defaultNotchLyricsColorHex"),
+                    true, "歌词颜色: 自定义色单存一个键,没存过是空串(= 白)")
+        let reset = app("UI/NotchSettingsRows.swift")
+        expectEqual(sourceHas(reset, "settings.notchLyricsColorHex = AppSettings.defaultNotchLyricsColorHex"), true,
+                    "歌词颜色: 「重置」连自定义色一起恢复")
+        let playback = app("UI/NotchPlayback.swift")
+        expectEqual(sourceHas(playback, "s.$notchLyricsColorHex.removeDuplicates()"), true,
+                    "歌词颜色: 自定义色走 NotchPlayback 现读")
+        let view = app("UI/NotchLyricsView.swift")
+        expectEqual(sourceHas(app("UI/NotchLyricsView+LyricRow.swift"),
+                              "baseColor: playback.lyricsColor == .custom ? playback.lyricsCustomUnsungColor\n: fg.withAlphaComponent(")
+                        && sourceHas(playback, "lyricsCustomUnsungColor = NSColor(srgbRed: u.r, green: u.g, blue: u.b, alpha: 1)")
+                        && sourceHas(playback, "NotchLyricsColor.customUnsungRGB(hex: hex, opacity: WordKaraokeGradient.dimOpacity)"), true,
+                    "歌词颜色: 自定义时逐字行未唱部分用提亮后的不透明色")
+        expectEqual(sourceHas(view, "case .custom: return playback.lyricsCustomColor")
+                        && sourceHas(view, "case .rainbow: return .white")
+                        && sourceHas(view, "case .accent: return accentOrWhite")
+                        && sourceHas(view, "NotchExpandedLyricList(tint: lyricListTint)")
+                        && sourceHas(view, "playback.lyricsColor.tintsExpandedLyricList ? lyricInk : accentOrWhite"), true,
+                    "歌词颜色: 歌词字按三档取色,多行列表只在自定义时跟歌词字")
+        let row = sourceBody("private struct NotchLyricsColorRow: View", in: app("SettingsView.swift"))
+        expectEqual(sourceHas(row, "if settings.notchLyricsColor == .custom {\nAppColorPicker(")
+                        && sourceHas(row, "set: { settings.notchLyricsColorHex = $0.hexStringWithAlpha }")
+                        && sourceHas(row, "supportsOpacity: false"), true,
+                    "歌词颜色: 选了自定义才露取色器,不给不透明度")
+        expectEqual(sourceHas(app("UI/NotchEditorStage.swift"), "settings.notchLyricsColor == .custom ? L10n.t(\"自定义颜色\")"), true,
+                    "歌词颜色: 工具栏摘要选了自定义报「自定义颜色」")
     }
 }

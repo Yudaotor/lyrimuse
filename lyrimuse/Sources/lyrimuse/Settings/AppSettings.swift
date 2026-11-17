@@ -551,6 +551,7 @@ final class AppSettings: ObservableObject {
         static let notchLyricRowArtworkPosition = "np:notchLyricRowArtworkPosition"
         static let notchLyricsAlignment = "np:notchLyricsAlignment"
         static let notchLyricsColor = "np:notchLyricsColor"
+        static let notchLyricsColorHex = "np:notchLyricsColorHex"
         static let notchSecondaryLine = "np:notchSecondaryLine"
         static let notchSecondaryFallback = "np:notchSecondaryFallback"
         static let notchFontFamilyName = "np:notchFontFamilyName"
@@ -713,6 +714,8 @@ final class AppSettings: ObservableObject {
     /// 正好退化成 leading(见 `LyricsRestingAlignment.resolved(duetSide:)`),非对唱歌的观感跟 `.leading` 一样。
     static let defaultNotchLyricsAlignment = LyricsRestingAlignment.automatic
     static let defaultNotchLyricsColor = NotchLyricsColor.accent
+    /// 空串 = 没选过,「自定义」那一档画白色(`NotchLyricsColor.customRGB(hex:)`)。
+    static let defaultNotchLyricsColorHex = ""
     /// 灵动岛歌词行「副行」默认「下一句」:这项的主要目的是让它可以提前看到下一行歌词,默认就该是那个。
     static let defaultNotchSecondaryLine = LyricSecondaryLine.nextLine
     static let defaultNotchSecondaryFallback = LyricSecondaryFallback.nextLine
@@ -2175,10 +2178,14 @@ final class AppSettings: ObservableObject {
     @Published var notchLyricsAlignment: LyricsRestingAlignment {
         didSet { defaults.set(notchLyricsAlignment.rawValue, forKey: Keys.notchLyricsAlignment) }
     }
-    /// 灵动岛歌词行的颜色:跟着强调色,或沿歌词流动的彩虹(主行、副行、展开态「下一句」,05 章决策 120)。
-    /// 只影响渲染,走 `NotchPlayback` 现读,同 `notchLyricsAlignment`。
+    /// 灵动岛歌词行的颜色:跟着强调色、自定义色,或沿歌词流动的彩虹(主行、副行、展开态「下一句」;自定义还管展开时的多行歌词列表,
+    /// 05 章决策 120、153)。只影响渲染,走 `NotchPlayback` 现读,同 `notchLyricsAlignment`。
     @Published var notchLyricsColor: NotchLyricsColor {
         didSet { defaults.set(notchLyricsColor.rawValue, forKey: Keys.notchLyricsColor) }
+    }
+    /// 「自定义」那一档的颜色(`#RRGGBBAA`,不透明度不用)。
+    @Published var notchLyricsColorHex: String {
+        didSet { defaults.set(notchLyricsColorHex, forKey: Keys.notchLyricsColorHex) }
     }
     /// 灵动岛歌词行的「副行」:主行下面那 11pt 显示什么,四选一(不显示 / 下一句 / 译文 / 罗马音)。
     /// 文字走 `NotchPlayback` 现读,跟 `notchLyricsAlignment` 一样;几何上它决定歌词行要不要装下两行
@@ -3094,6 +3101,7 @@ final class AppSettings: ObservableObject {
             .flatMap(LyricsRestingAlignment.init(rawValue:)) ?? Self.defaultNotchLyricsAlignment
         notchLyricsColor = NotchLyricsColor.resolved(stored: defaults.string(forKey: Keys.notchLyricsColor),
                                                      fallback: Self.defaultNotchLyricsColor)
+        notchLyricsColorHex = defaults.string(forKey: Keys.notchLyricsColorHex) ?? Self.defaultNotchLyricsColorHex
         notchSecondaryLine = defaults.string(forKey: Keys.notchSecondaryLine)
             .flatMap(LyricSecondaryLine.init(rawValue:)) ?? Self.defaultNotchSecondaryLine
         notchSecondaryFallback = defaults.string(forKey: Keys.notchSecondaryFallback)

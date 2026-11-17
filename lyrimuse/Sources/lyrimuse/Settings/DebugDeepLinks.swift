@@ -364,6 +364,10 @@ enum DebugDeepLinks {
         case let .touchBarDisplay(color):
             AppSettings.shared.touchBarLyricsColorMode = color
             logger.notice("debug touch bar display color=\(color.rawValue, privacy: .public)")
+        case let .notchLyricsColor(color, hex):
+            if let hex { AppSettings.shared.notchLyricsColorHex = hex }
+            AppSettings.shared.notchLyricsColor = color
+            logger.notice("debug notch lyrics color=\(color.rawValue, privacy: .public) hex=\(hex ?? "nil", privacy: .public)")
         case let .touchBarTyping(override):
             TouchBarLyricsController.shared.setTypingOverride(override)
             logger.notice("debug touch bar typing override=\(override.map { String($0) } ?? "auto", privacy: .public)")

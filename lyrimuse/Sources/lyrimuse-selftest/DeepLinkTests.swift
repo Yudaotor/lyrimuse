@@ -433,6 +433,15 @@ func runDeepLinkTests() {
         expectEqual(link("lyrimuse://debug/overlay-text"), nil, "debug: 文字设置什么都没带不认")
         expectEqual(link("lyrimuse://debug/touchbar-display?color=Rainbow"), .debug(.touchBarDisplay(color: .rainbow)),
                     "debug: 触控栏歌词颜色切彩虹(大小写不敏感)")
+        expectEqual(link("lyrimuse://debug/notch-lyrics-color?color=Custom&hex=ff8000"),
+                    .debug(.notchLyricsColor(color: .custom, hex: "#FF8000FF")), "debug: 灵动岛歌词切自定义色,hex 补成 #RRGGBBAA")
+        expectEqual(link("lyrimuse://debug/notch-lyrics-color?color=accent"), .debug(.notchLyricsColor(color: .accent, hex: nil)),
+                    "debug: 灵动岛歌词只切档、不带颜色")
+        expectEqual(link("lyrimuse://debug/notch-lyrics-color?color=accent&hex="), .debug(.notchLyricsColor(color: .accent, hex: "")),
+                    "debug: hex 带空值 = 自定义色清回没选过")
+        expectEqual([link("lyrimuse://debug/notch-lyrics-color?color=pink"), link("lyrimuse://debug/notch-lyrics-color"),
+                     link("lyrimuse://debug/notch-lyrics-color?color=custom&hex=orange")], [nil, nil, nil],
+                    "debug: 灵动岛歌词颜色认不出的档、没带档、hex 不对都不认")
         expectEqual([link("lyrimuse://debug/touchbar-typing?state=on"), link("lyrimuse://debug/touchbar-typing?state=OFF"),
                      link("lyrimuse://debug/touchbar-typing?state=auto")],
                     [.debug(.touchBarTyping(override: true)), .debug(.touchBarTyping(override: false)),
@@ -780,6 +789,8 @@ func runDeepLinkTests() {
             .debug(.lyricsWindowFullScreen(on: true)), .debug(.lyricsWindowFullScreen(on: false)),
             .debug(.lyricsWindowPreview(mini: true)), .debug(.lyricsWindowPreview(mini: false)),
             .debug(.touchBarDisplay(color: .rainbow)), .debug(.touchBarDisplay(color: .cover)),
+            .debug(.notchLyricsColor(color: .custom, hex: "#FF8000FF")), .debug(.notchLyricsColor(color: .rainbow, hex: nil)),
+            .debug(.notchLyricsColor(color: .accent, hex: "")),
             .debug(.touchBarTyping(override: true)), .debug(.touchBarTyping(override: false)), .debug(.touchBarTyping(override: nil)),
             .debug(.managerVisibility(override: true)), .debug(.managerVisibility(override: false)), .debug(.managerVisibility(override: nil)),
             .debug(.settingsVisibility(override: true)), .debug(.settingsVisibility(override: false)), .debug(.settingsVisibility(override: nil)),

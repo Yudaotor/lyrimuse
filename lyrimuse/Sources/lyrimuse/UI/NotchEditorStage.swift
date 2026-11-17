@@ -388,9 +388,9 @@ struct NotchEditorStage: View {
         if settings.notchLyricsAlignment != AppSettings.defaultNotchLyricsAlignment {
             parts.append(LyricsAlignmentSegmentedControl.label(for: settings.notchLyricsAlignment))
         }
-        // 「歌词颜色」同一条规则:只在选了彩虹时报。
+        // 「歌词颜色」同一条规则:只在非默认时报,自定义报「自定义颜色」(单说「自定义」看不出是哪一项)。
         if settings.notchLyricsColor != AppSettings.defaultNotchLyricsColor {
-            parts.append(settings.notchLyricsColor.displayName)
+            parts.append(settings.notchLyricsColor == .custom ? L10n.t("自定义颜色") : settings.notchLyricsColor.displayName)
         }
         // 「副行」同一条规则:四选一、默认「下一句」,只在非默认时报档名本身(「译文」),关掉时报「无副行」;
         // 不带「副行 ·」前缀,同菜单栏「内容」那颗。

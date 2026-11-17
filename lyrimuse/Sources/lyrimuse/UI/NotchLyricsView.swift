@@ -367,7 +367,7 @@ struct NotchLyricsView<Chrome: NotchChromeSource>: View {
             // 列表那一格同样是横幅的宿主:展开那份歌词行这时藏着,横幅盖在列表上。`showsTransientBanner` 认定展开态显示得了
             // 横幅,展开态里每一种歌词那一格都得接得住。
             if showsList {
-                NotchTransientHost(tint: accentOrWhite) { NotchExpandedLyricList(tint: accentOrWhite) }
+                NotchTransientHost(tint: accentOrWhite) { NotchExpandedLyricList(tint: lyricListTint) }
                     .frame(width: controller.expandedCardWidth, height: controller.expandedLyricListHeight)
                     .padding(.top, top + headerHeight)
                     .modifier(NotchCardLayerActive(active: expanded, staggered: staggered, waitsForResize: true))
@@ -394,8 +394,18 @@ struct NotchLyricsView<Chrome: NotchChromeSource>: View {
     /// 歌名、状态文字、音浪、进度线照旧跟强调色。
     var lyricsRainbow: Bool { playback.lyricsColor == .rainbow }
 
-    /// 歌词字的颜色:彩虹时是白色(只当蒙版的深浅),否则强调色。
-    var lyricInk: Color { lyricsRainbow ? .white : accentOrWhite }
+    /// 歌词字的颜色:彩虹时是白色(只当蒙版的深浅),自定义时是用户挑的颜色,否则强调色。已唱用它、未唱打它的折,
+    /// 跟强调色那一档同一套。
+    var lyricInk: Color {
+        switch playback.lyricsColor {
+        case .accent: return accentOrWhite
+        case .custom: return playback.lyricsCustomColor
+        case .rainbow: return .white
+        }
+    }
+
+    /// 展开时多行歌词列表的颜色:选了自定义跟歌词字,否则强调色(彩虹不进列表,05 章决策 120)。
+    var lyricListTint: Color { playback.lyricsColor.tintsExpandedLyricList ? lyricInk : accentOrWhite }
 
     /// 彩虹流不流:歌词时钟在走、灵动岛看得见时流。
     var lyricsRainbowFlowing: Bool { playback.lyricsClockRunning && surfaceVisible }
