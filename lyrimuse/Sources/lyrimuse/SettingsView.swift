@@ -2036,7 +2036,7 @@ private struct LyricsSettingsTab: View {
     private var chineseVariantCard: some View {
         SettingsCard(cornerRadius: 18) {
             SettingsCardHeader(title: L10n.t("繁简"))
-            SettingsRow(icon: "character.bubble", title: L10n.t("繁简转换")) {
+            SettingsRow(icon: "character.bubble", title: L10n.t("繁简转换"), trailingWrapsBelow: true) {
                 SettingsGlassTabPicker(
                     selection: Binding(
                         get: { settings.lyricsChineseVariant },

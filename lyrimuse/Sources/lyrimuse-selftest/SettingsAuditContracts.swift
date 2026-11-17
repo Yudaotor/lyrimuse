@@ -311,6 +311,8 @@ func runSettingsAuditContracts() {
                 && sourceHas(settingsRowBody, "ViewThatFits(in: .horizontal) {\ninlineRow(measuringTitleOnly: true)\nstackedRow\n}")
                 && sourceHas(settingsRowBody, ".frame(minWidth: 0, idealWidth: 0, alignment: .leading)"), true,
                 "触控栏「文字颜色」: 四档跟标题排不下一行时换到标题下面,判据只拿标题单行宽去比(17 章决策 57)")
+    expectEqual(sourceHas(app("SettingsView.swift"), "SettingsRow(icon: \"character.bubble\", title: L10n.t(\"繁简转换\"), trailingWrapsBelow: true) {"), true,
+                "设置「繁简转换」: 三选一跟行名排不下一行时换到行名下面(14 章决策 213)")
     expectEqual(sourceHas(menuBarStage, "icon: \"rectangle.split.1x2\",\ntitle: L10n.t(\"布局\"),"), true,
                 "菜单栏: 「布局」入口图标同歌词窗口、触控栏")
     let readout = app("UI/StableReadout.swift")
