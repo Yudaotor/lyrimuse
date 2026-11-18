@@ -34,12 +34,16 @@ type lastfmScrobbler struct {
 	// user:这把授权属于哪个账号(小写)。待重发队列按它认条目,换账号后不把旧账号的收听交到新账号上。
 	user string
 	hc   *http.Client
-	// dead:session key / API key 已被 Last.fm 判死(error 9/10/26 一击、error 4 两击,
+	// dead:session key / API key 已被 Last.fm 判死(授权失效 9、key 被拒一击,error 4 两击,
 	// 见 shouldDisable)。置位后停止一切后续提交 —— 原来这种情况下每首歌照样白打 2 个
 	// 注定失败的请求,且除了日志刷屏没有任何机制让用户知道 scrobble 早就全停了
 	// 。进程重启(保存配置/重连账号都会 kickstart 引擎)
 	// 自然复位。
 	dead atomic.Bool
+	// deadKeyRejected:这次熔断是因为 key 被拒(classifyLastfmError)。只有这一种熔断会被 reviveIfKeyAccepted 探测解除。
+	deadKeyRejected atomic.Bool
+	// lastKeyProbe:上次探测 key 的时刻(UnixNano)。
+	lastKeyProbe atomic.Int64
 	// suspect4:第一次撞上 error 4(Authentication Failed)的时刻(UnixNano,0=无嫌疑)。
 	// error 4 跟 9/10/26 不同:真撤销授权时它确实会出现,但 Last.fm 服务端不稳时也会
 	// **误报**(实测:一上午 500/超时/DNS 失败之后来了一发 error 4,授权
@@ -279,11 +283,8 @@ func (s *lastfmScrobbler) callInto(ctx context.Context, method string, params ma
 		} `json:"scrobbles"`
 	}
 	_ = json.Unmarshal(body, &out) // 解不开就当没有错误体,靠状态码兜底
-	if out.Error != 0 {
-		return &lastfmAPIError{Code: out.Error, Message: out.Message, Method: method}
-	}
-	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("lastfm %s: status %d: %s", method, resp.StatusCode, httpErrorBody(resp.Header.Get("Content-Type"), body))
+	if err := lastfmResponseError(method, resp.StatusCode, out.Error, out.Message, resp.Header.Get("Content-Type"), body); err != nil {
+		return err
 	}
 	// track.scrobble 的"被忽略"也是 200:accepted=0,原来会被当成功。不算致命错误,
 	// 但必须如实报出去让日志可见。
@@ -382,26 +383,31 @@ func provablyNeverSent(err error) bool {
 }
 
 // lastfmAPIError 是 Last.fm 应用层错误(区别于网络/HTTP 错误)。
+// Code 0 表示应答里没有 error 码,只是 HTTP 状态归进了 key 被拒(见 lastfmResponseError)。
 type lastfmAPIError struct {
 	Code    int
 	Message string
 	Method  string
+	// Status:应答的 HTTP 状态,0 = 不是从应答来的(熔断短路时造的)。
+	Status int
 }
 
 func (e *lastfmAPIError) Error() string {
+	if e.Status != 0 && e.Status != http.StatusOK {
+		return fmt.Sprintf("lastfm %s: api error %d (http %d): %s", e.Method, e.Code, e.Status, e.Message)
+	}
 	return fmt.Sprintf("lastfm %s: api error %d: %s", e.Method, e.Code, e.Message)
 }
 
-// fatal:这几个错误码属于"凭据级"错误 —— 4=Authentication Failed,9=Invalid session
-// key(用户在网站上撤销了授权),10=Invalid API key,26=API key suspended。其余
-// (服务暂时不可用/限流等)是暂时性的,永不熔断。注意 fatal 不直接等于熔断:error 4
-// 需要复发确认(服务端不稳时会误报),裁决在 shouldDisable。
+func (e *lastfmAPIError) class() lastfmErrClass {
+	return classifyLastfmError(e.Status, e.Code, e.Message)
+}
+
+// fatal:凭据级错误 —— 授权失效(4=Authentication Failed,9=Invalid session key)和 key 被拒(10=Invalid API key,
+// 26=API key suspended,以及 classifyLastfmError 认作被拒的其余形态)。其余(服务暂时不可用/限流等)是暂时性的,
+// 永不熔断。注意 fatal 不直接等于熔断:error 4 需要复发确认(服务端不稳时会误报),裁决在 shouldDisable。
 func (e *lastfmAPIError) fatal() bool {
-	switch e.Code {
-	case 4, 9, 10, 26:
-		return true
-	}
-	return false
+	return e.class() != lastfmErrOther
 }
 
 // mayHaveStored:这个错误码下,Last.fm **有可能已经落库、只是回执没回来**。
@@ -424,14 +430,17 @@ func (e *lastfmAPIError) mayHaveStored() bool {
 	return false
 }
 
-// shouldDisable 裁决这次 API 错误要不要熔断镜像:9/10/26 一击致命;4 要两击坐实
+// shouldDisable 裁决这次 API 错误要不要熔断镜像:9 和 key 被拒一击致命;4 要两击坐实
 // (间隔 ≥confirmGap 才算第二击 —— 换歌那一刻 nowPlaying+scrobble 几乎同时各失败
 // 一发,那是同一次故障;超过 suspectWindow 的旧嫌疑作废,隔了半天的两次孤立误报
 // 不该累积成死刑)。并发安全:CAS 输了说明别的 goroutine 刚记下同一桩嫌疑,这一发
 // 按 burst 处理返回 false 即可。
 func (s *lastfmScrobbler) shouldDisable(apiErr *lastfmAPIError, now time.Time) bool {
-	if !apiErr.fatal() {
+	switch apiErr.class() {
+	case lastfmErrOther:
 		return false
+	case lastfmErrKeyRejected:
+		return true
 	}
 	if apiErr.Code != 4 {
 		return true
@@ -666,16 +675,14 @@ func mirrorAsync(s *lastfmScrobbler, what string, call func(ctx context.Context)
 			// 干净的一次成功:把上次运行可能留下的"授权失效"状态文件清掉(App 的
 			// Last.fm 卡靠它显示红标),整个进程只查一次。
 			s.clearStatus.Do(func() { os.Remove(lastfmStatusPath) })
+			noteLastfmWriteOK()
 			return
 		}
 		var apiErr *lastfmAPIError
 		if errors.As(err, &apiErr) && s.shouldDisable(apiErr, time.Now()) {
 			// 只有第一个发现者负责收尾:打一条(且只有一条)显眼日志 + 落状态文件给
 			// App 读。之后 mirrorAsync 在入口处直接短路,不再刷屏、不再白打请求。
-			if s.dead.CompareAndSwap(false, true) {
-				warnf("lastfm mirror DISABLED: %v (fatal credential error; reconnect the account in Lyrimuse settings to resume)", apiErr)
-				writeLastfmMirrorStatus(apiErr)
-			}
+			s.disable(apiErr)
 			// 凭据判死 = 这一条确定没写进去,跟入口短路那条同样要留痕,重新授权后回填能补回来。
 			if onFail != nil {
 				onFail(err)
@@ -698,19 +705,40 @@ func mirrorAsync(s *lastfmScrobbler, what string, call func(ctx context.Context)
 	}()
 }
 
-// writeLastfmMirrorStatus 把致命的 Last.fm 写入错误落盘(lyrimuse-lastfm-status.json),
-// App 的账号卡读它来显示"授权已失效"红标 —— 沿用引擎落盘/Swift 读的既有约定
-// (同 lfmMirroredPath 等)。写失败只记日志:状态文件是通知通道,不是正确性依赖。
+// disable 熔断写入器:置 dead、记下是不是 key 被拒、打一条日志、落状态文件。只有第一个发现者做(CAS)。
+func (s *lastfmScrobbler) disable(apiErr *lastfmAPIError) {
+	if !s.dead.CompareAndSwap(false, true) {
+		return
+	}
+	keyRejected := apiErr.class() == lastfmErrKeyRejected
+	s.deadKeyRejected.Store(keyRejected)
+	lastfmStatusOwner.Store(lastfmStatusByWriter)
+	if keyRejected {
+		warnf("lastfm mirror DISABLED: %v (API key rejected, http %d; Last.fm requires the key owner to subscribe to Last.fm Pro; listens stay queued and resume once the key is accepted again)", apiErr, apiErr.Status)
+	} else {
+		warnf("lastfm mirror DISABLED: %v (fatal credential error; reconnect the account in Lyrimuse settings to resume)", apiErr)
+	}
+	writeLastfmMirrorStatus(apiErr)
+}
+
+// writeLastfmMirrorStatus 把致命的 Last.fm 错误落盘(lyrimuse-lastfm-status.json),
+// App 的账号卡读它来显示红标,reason 决定文案(key 被拒 / 授权失效)—— 沿用引擎落盘/Swift 读的既有约定
+// (同 lfmMirroredPath 等)。key 被拒时文件里已经是 key 被拒就沿用原来的 at:App 按 at 判是不是新的一次、要不要再弹通知,
+// 引擎重启、读写两路先后撞上同一次被拒都不该再弹。写失败只记日志:状态文件是通知通道,不是正确性依赖。
 func writeLastfmMirrorStatus(apiErr *lastfmAPIError) {
 	if lastfmStatusPath == "" {
 		return
 	}
-	data, err := json.Marshal(struct {
-		Error   int    `json:"error"`
-		Message string `json:"message"`
-		Method  string `json:"method"`
-		At      int64  `json:"at"`
-	}{apiErr.Code, apiErr.Message, apiErr.Method, time.Now().Unix()})
+	st := lastfmStatusFile{Error: apiErr.Code, Message: apiErr.Message, Method: apiErr.Method, At: time.Now().Unix(), Status: apiErr.Status}
+	if apiErr.class() == lastfmErrKeyRejected {
+		st.Reason = lastfmReasonKeyRejected
+		if prev, ok := readLastfmStatusFile(); ok && prev.Reason == lastfmReasonKeyRejected && prev.At > 0 {
+			st.At = prev.At
+		}
+	} else {
+		st.Reason = lastfmReasonSession
+	}
+	data, err := json.Marshal(st)
 	if err != nil {
 		return
 	}
@@ -775,20 +803,27 @@ func lastfmRecent(ctx context.Context, user, apiKey string) (page lastfmRecentPa
 	page, err = parseLastfmRecent(body)
 	var apiErr *lastfmAPIError
 	if errors.As(err, &apiErr) {
+		apiErr.Status = resp.StatusCode
 		if apiErr.Code == 29 {
 			lastfmRecentRateLimitedUntil.Store(time.Now().Add(lastfmRecentRateLimitBackoff).UnixNano())
 		}
+		noteLastfmKeyRejected(apiErr)
 		log.Printf("lastfmRecent: %v", err)
 		return lastfmRecentPage{}, false
 	}
 	if resp.StatusCode != http.StatusOK {
-		log.Printf("lastfmRecent: status %d", resp.StatusCode)
+		statusErr := lastfmResponseError("user.getrecenttracks", resp.StatusCode, 0, "", resp.Header.Get("Content-Type"), body)
+		if errors.As(statusErr, &apiErr) {
+			noteLastfmKeyRejected(apiErr)
+		}
+		log.Printf("lastfmRecent: %v", statusErr)
 		return lastfmRecentPage{}, false
 	}
 	if err != nil {
 		log.Printf("lastfmRecent: decode response: %v", err)
 		return lastfmRecentPage{}, false
 	}
+	noteLastfmReadOK()
 	return page, true
 }
 

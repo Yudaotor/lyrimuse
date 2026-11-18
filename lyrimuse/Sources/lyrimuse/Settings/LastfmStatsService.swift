@@ -1,3 +1,4 @@
+import Combine
 import Foundation
 import LyrimuseCore
 import OSLog
@@ -29,6 +30,26 @@ final class LastfmStatsService: ObservableObject {
         // 读和解在后台,并进来之后再读第一份 feed(通常比快照新,要盖在快照上面)。
         loadPersistedState()
         startFeedWatcher()
+        mirrorKeyRejectedSub = LastfmMirrorStatusWatcher.shared.$info
+            .map { $0?.keyRejected == true }
+            .removeDuplicates()
+            .sink { [weak self] rejected in
+                Task { @MainActor in self?.mirrorKeyRejected = rejected }
+            }
+    }
+
+    /// Last.fm 拒绝了 API Key(要求 key 的持有人订阅 Last.fm Pro):这边自己的请求撞上了,或者引擎的状态文件这么说
+    /// (引擎的读取和写入走同一把 key,桥接每轮都在读,通常比这边先撞上)。统计页、最近记录按它给出说明,不只是空着。
+    /// 判据见 `LastfmErrorClassifier`。
+    var keyRejected: Bool { keyRejectedByRequest || mirrorKeyRejected }
+    /// 这边最近一次请求被归成 key 被拒;下一次请求成功就复位。
+    @Published private(set) var keyRejectedByRequest = false
+    @Published private(set) var mirrorKeyRejected = false
+    private var mirrorKeyRejectedSub: AnyCancellable?
+
+    /// 一次应答归成 key 被拒时记下;这边的请求成功就撤掉。
+    private func noteKeyRejection(_ rejected: Bool) {
+        if keyRejectedByRequest != rejected { keyRejectedByRequest = rejected }
     }
 
     /// 启动时读过的快照和翻页缓存已经并进来(或者文件不在、读不出)。这之前不读 feed:feed 先到、快照后到,
@@ -115,6 +136,7 @@ final class LastfmStatsService: ObservableObject {
          "feedTotal": lastFeed.map { $0.total as Any } ?? NSNull(),
          "feedNowPlaying": lastFeed?.nowPlaying.map { $0.title as Any } ?? NSNull(),
          "recentRows": recent.count,
+         "keyRejected": ["byRequest": keyRejectedByRequest, "byEngine": mirrorKeyRejected],
          "familyIndex": familyIndexDebugState]
     }
 
@@ -4923,11 +4945,14 @@ final class LastfmStatsService: ObservableObject {
                     return (nil, false)
                 }
                 guard status == 200 else {
-                    logger.notice("\(method, privacy: .public): http \(status)")
+                    // 非 200 也读应答体:key 被拒是 403 + {"error":10 / 26},不读就只是一次没有原因的失败。
+                    let (cls, code, message) = LastfmErrorClassifier.classify(httpStatus: status, body: data)
+                    logger.notice("\(method, privacy: .public): http \(status) error \(code) \(message, privacy: .public)")
+                    if cls == .keyRejected { noteKeyRejection(true) }
                     return (nil, false)
                 }
                 let obj = try await Self.decodeJSONObject(data)
-                // Last.fm 的错误多以 200 + {"error":N} 返回(API key 失效就是这形态)。不识别
+                // Last.fm 的错误多以 200 + {"error":N} 返回(4xx 也带同样的应答体,见上面非 200 那支)。不识别
                 // 它的话,失效的 key 会让页面显示"0 scrobble/还没有记录"——一套看起来很确定、
                 // 实际全错的数据,比失败态糟糕得多。
                 if let errCode = obj?["error"] as? Int {
@@ -4938,9 +4963,14 @@ final class LastfmStatsService: ObservableObject {
                         await LastfmRateLimiter.shared.reportRateLimitExhausted()
                         return (nil, false)
                     }
-                    logger.notice("\(method, privacy: .public): api error \(errCode) \((obj?["message"] as? String) ?? "", privacy: .public)")
+                    let message = (obj?["message"] as? String) ?? ""
+                    logger.notice("\(method, privacy: .public): api error \(errCode) \(message, privacy: .public)")
+                    if LastfmErrorClassifier.classify(httpStatus: status, code: errCode, message: message) == .keyRejected {
+                        noteKeyRejection(true)
+                    }
                     return (nil, errCode == 6)
                 }
+                noteKeyRejection(false)
                 return (obj, false)
             } catch {
                 NetworkAuditLog.record(service: "lastfm", operation: method, host: url.host ?? "ws.audioscrobbler.com",

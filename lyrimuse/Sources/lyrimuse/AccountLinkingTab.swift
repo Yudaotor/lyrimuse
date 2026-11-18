@@ -362,9 +362,9 @@ func destinationStatus(for destination: AccountDestination, config: ConfigStore,
         // 徽标只报"连没连",不展开读/写两条链路各自的配置状态——那是内部架构,
         // 不是用户需要理解的东西,见 lastfmFields 顶部注释。
         if config.lastfmScrobbleSessionKey.isEmpty { return .notConfigured(L10n.t("未配置（可选）")) }
-        // 引擎报告凭据已死(用户在网站上撤销了授权等)——必须压过"已连接":
-        // 本地攥着的 session key 是废的,绿标就是在撒谎。
-        if mirrorInfo != nil { return .error(L10n.t("授权已失效")) }
+        // 引擎报告凭据已死——必须压过"已连接":本地攥着的凭据是废的,绿标就是在撒谎。key 被拒(要 Last.fm Pro)
+        // 跟授权失效出路不同,分开说。
+        if let mirrorInfo { return .error(mirrorInfo.keyRejected ? L10n.t("需要 Last.fm Pro") : L10n.t("授权已失效")) }
         let name = lastfmDisplayName(config: config)
         return .active(name.isEmpty ? nil : String(format: L10n.t("已连接 · %@"), name))
     case .bark:
@@ -1630,12 +1630,19 @@ struct AccountLinkingTab: View {
     }
 
     /// 页头右边一行(只在已连接时画):连接状态 + 对应动作。
-    ///  - 熔断(引擎落了 lyrimuse-lastfm-status.json):红点「授权已失效」+「重新连接…」,悬停看原因;
+    ///  - key 被拒(状态文件 reason 是 key_rejected):红点「需要 Last.fm Pro」+「了解 Last.fm Pro」,悬停看原因和出路;
+    ///    重新连接用的还是同一把 key,不给这颗按钮;
+    ///  - 授权失效(引擎落了 lyrimuse-lastfm-status.json):红点「授权已失效」+「重新连接…」,悬停看原因;
     ///  - 其余:绿点「已连接」+「断开…」(断开走确认框,理由见 showLastfmDisconnectConfirm)。
     @ViewBuilder
     private var lastfmProfileStatusLine: some View {
         HStack(spacing: 10) {
-            if mirrorStatus.info != nil {
+            if mirrorStatus.info?.keyRejected == true {
+                lastfmStatusDot(.red, L10n.t("需要 Last.fm Pro"))
+                    .foregroundStyle(.red)
+                    .help(L10n.t("Last.fm 现在要求 API Key 的持有人订阅 Last.fm Pro，订阅后自动恢复，也可改用 ListenBrainz"))
+                Button(L10n.t("了解 Last.fm Pro")) { openLastfmPro() }
+            } else if mirrorStatus.info != nil {
                 lastfmStatusDot(.red, L10n.t("授权已失效"))
                     .foregroundStyle(.red)
                     .help(L10n.t("Last.fm 拒绝写入，Scrobble 已暂停，授权可能已在网站上被撤销"))
@@ -1668,8 +1675,8 @@ struct AccountLinkingTab: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text(L10n.t("Scrobble 到 Last.fm"))
                     .font(.system(size: 13))
-                if lastfmConnected, mirrorStatus.info != nil {
-                    Text(L10n.t("已暂停：授权失效，重新连接后恢复"))
+                if lastfmConnected, let info = mirrorStatus.info {
+                    Text(info.keyRejected ? L10n.t("已暂停：需要 Last.fm Pro，订阅后自动补发") : L10n.t("已暂停：授权失效，重新连接后恢复"))
                         .font(.system(size: 11))
                         .foregroundStyle(.secondary)
                 }
@@ -1926,7 +1933,10 @@ struct AccountLinkingTab: View {
         lastfmKeyField("API Key", text: $config.lastfmScrobbleAPIKey, prompt: L10n.t("粘贴 API Key"))
         lastfmKeyField("Secret", text: $config.lastfmScrobbleSecret, prompt: L10n.t("粘贴 Shared Secret"))
         HStack(alignment: .top, spacing: 8) {
-            Text(L10n.t("申请页只需填写「应用名称」，其余可留空。提交后页面将显示 API Key 和 Shared Secret；Secret 仅显示一次，之后无法找回，遗失时请重新创建应用"))
+            VStack(alignment: .leading, spacing: 4) {
+                Text(L10n.t("2026 年 12 月 1 日起，申请和使用 API Key 都需要订阅 Last.fm Pro"))
+                Text(L10n.t("申请页只需填写「应用名称」，其余可留空。提交后页面将显示 API Key 和 Shared Secret；Secret 仅显示一次，之后无法找回，遗失时请重新创建应用"))
+            }
                 .font(.system(size: 11))
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)

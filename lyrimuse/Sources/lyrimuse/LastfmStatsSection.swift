@@ -87,11 +87,17 @@ struct LastfmStatsSection: View {
             case .stats:
                 // 间距跟页面的卡片间距(SettingsPage 的 14)一致;色光垫在两张卡共同的背后,见 12 章决策 63。
                 VStack(spacing: 14) {
+                    keyRejectedNotice
                     statsCard
                     recentCard
                 }
                 .background { LastfmGlassGlow() }
-            case .chart: chartCard.background { LastfmGlassGlow() }
+            case .chart:
+                VStack(spacing: 14) {
+                    keyRejectedNotice
+                    chartCard
+                }
+                .background { LastfmGlassGlow() }
             case .onThisDay:
                 LastfmFootprintView(heatmapYear: $heatmapYear)
             // 见 Tab.settings:内容由 AccountLinkingTab 画,这里只保持挂载不掉线。
@@ -1281,6 +1287,18 @@ struct LastfmStatsSection: View {
         .help(label)
         .accessibilityLabel(label)
         .disabled(!enabled || stats.recentPaging)
+    }
+
+    /// Last.fm 拒绝了 API Key 时压在统计、榜单两段最上面的说明:数据停在旧的或空着,原因和出路写在这里。
+    @ViewBuilder
+    private var keyRejectedNotice: some View {
+        if stats.keyRejected {
+            SettingsCard(cornerRadius: 18) {
+                LastfmKeyRejectedSuggestionRow()
+                    .padding(.horizontal, SettingsRowMetrics.horizontalPadding)
+                    .padding(.vertical, SettingsRowMetrics.verticalPadding)
+            }
+        }
     }
 
     private func placeholderRow(_ text: String) -> some View {

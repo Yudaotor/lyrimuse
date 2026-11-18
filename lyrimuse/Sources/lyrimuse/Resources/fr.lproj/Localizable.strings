@@ -135,6 +135,7 @@
 "1. 在洛雪音乐中打开「设置」，找到「开放 API」" = "1. Dans LX Music, ouvrez « Settings » et trouvez « Open API »";
 "2. 勾选「启用开放 API 服务」" = "2. Cochez « Enable Open API service »";
 "2. 首次连接时，在 Pear Desktop 弹出的窗口中点「允许」" = "2. À la première connexion, cliquez sur « Autoriser » dans la fenêtre affichée par Pear Desktop";
+"2026 年 12 月 1 日起，申请和使用 API Key 都需要订阅 Last.fm Pro" = "À partir du 1er décembre 2026, demander et utiliser une API Key nécessite un abonnement Last.fm Pro";
 "3. 无需勾选「允许来自局域网的访问」" = "3. Laissez « Allow access from LAN » décoché";
 "Amazon Music 专辑页" = "Page de l’album sur Amazon Music";
 "Amazon Music 曲目 ID 一致" = "Même ID de morceau Amazon Music";
@@ -185,7 +186,9 @@
 "Last.fm 已直接连接 Spotify，Lyrimuse 也在记录，保留其中一方即可" = "Last.fm est connecté directement à Spotify, et Lyrimuse scrobble aussi Spotify. N’en gardez qu’un";
 "Last.fm 已确认收到这次播放" = "Last.fm a confirmé cette écoute";
 "Last.fm 或 ListenBrainz" = "Last.fm ou ListenBrainz";
+"Last.fm 拒绝了 API Key" = "Last.fm a refusé l’API Key";
 "Last.fm 拒绝写入，Scrobble 已暂停，授权可能已在网站上被撤销" = "Last.fm refuse les scrobbles, ils sont donc suspendus. Votre autorisation a peut-être été révoquée sur le site de Last.fm";
+"Last.fm 现在要求 API Key 的持有人订阅 Last.fm Pro，订阅后自动恢复，也可改用 ListenBrainz" = "Last.fm exige désormais que le titulaire de l’API Key soit abonné à Last.fm Pro. Tout reprend automatiquement après l’abonnement, ou vous pouvez passer à ListenBrainz";
 "Last.fm 账号" = "Compte Last.fm";
 "Last.fm 账号建议" = "Suggestions pour le compte Last.fm";
 "Last.fm 返回错误：%@" = "Last.fm a renvoyé une erreur : %@";
@@ -418,6 +421,7 @@
 "之后的自动搜索或评分变化仍可能替换这份歌词" = "Des recherches automatiques ou changements de score ultérieurs peuvent encore remplacer ces paroles";
 "乌克兰国家体系（联合国推荐），如 Привіт → Pryvit" = "Système national ukrainien (recommandé par l’ONU), ex. Привіт → Pryvit";
 "乌克兰语" = "Ukrainien";
+"了解 Last.fm Pro" = "En savoir plus sur Last.fm Pro";
 "云盘里的文件暂不支持写入" = "Les fichiers stockés dans le cloud ne sont pas encore pris en charge en écriture";
 "五" = "V";
 "亚马逊的流媒体音乐 App" = "L’app de streaming musical d’Amazon";
@@ -1215,6 +1219,7 @@
 "已显示译文" = "Traduction affichée";
 "已显示读音" = "Romanisation affichée";
 "已暂停：授权失效，重新连接后恢复" = "En pause : autorisation révoquée. Reconnectez-vous pour reprendre";
+"已暂停：需要 Last.fm Pro，订阅后自动补发" = "En pause : Last.fm Pro requis. Les scrobbles en attente seront envoyés après l’abonnement";
 "已更换为「%1$@」（%2$@ 分），原为「%3$@」" = "Remplacé par « %1$@ » (%2$@ pts), auparavant « %3$@ »";
 "已更新 %@ 首" = "%@ mis à jour";
 "已更新到 %@" = "Mis à jour vers %@";
@@ -3027,6 +3032,7 @@
 "需先部署网页端并获取访问令牌。部署步骤见项目 README 的「网页端」一节：https://github.com/Yudaotor/lyrimuse#网页端" = "Déployez d’abord l’app web et obtenez un jeton d’accès. Étapes dans le README du projet : https://github.com/Yudaotor/lyrimuse";
 "需自行部署同步服务；只连接 ListenBrainz 时网页同样能显示正在播放" = "Nécessite un serveur de synchronisation que vous déployez. Avec ListenBrainz connecté, la page web peut quand même afficher la lecture en cours";
 "需要 Discord 桌面版" = "Nécessite l’app Discord pour ordinateur";
+"需要 Last.fm Pro" = "Last.fm Pro requis";
 "需要先完成配置" = "Configuration requise";
 "需要先配置「%@」（%@）" = "Configurez d’abord « %@ » (%@)";
 "需要在系统设置中允许控制 Apple Music" = "Autorisez le contrôle d’Apple Music dans Réglages Système";

@@ -34,7 +34,8 @@ final class LastfmSuggestionsStore: ObservableObject {
         let next = LastfmAccountSuggestion.current(
             connectFailure: connectFailure,
             connected: !ConfigStore.shared.lastfmScrobbleSessionKey.isEmpty,
-            authRevoked: LastfmMirrorStatusWatcher.shared.info != nil,
+            authRevoked: LastfmMirrorStatusWatcher.shared.info.map { !$0.keyRejected } ?? false,
+            keyRejected: LastfmMirrorStatusWatcher.shared.info?.keyRejected == true,
             spotify: LastfmSpotifyLinkMonitor.shared.hint)
         if next != items { items = next }
     }
@@ -84,6 +85,23 @@ struct LastfmReconnectSuggestionRow: View {
             }
         }
     }
+}
+
+/// Last.fm 拒绝了 API Key(要求 key 的持有人订阅 Last.fm Pro)时的那一条:出路是订阅 Pro 或改用 ListenBrainz,不给「重新连接」。
+/// 账号建议和 Last.fm 统计页顶部共用。
+struct LastfmKeyRejectedSuggestionRow: View {
+    var body: some View {
+        LastfmSuggestionRowLayout(icon: "exclamationmark", tint: .red, title: L10n.t("Last.fm 拒绝了 API Key"),
+                                  detail: L10n.t("Last.fm 现在要求 API Key 的持有人订阅 Last.fm Pro，订阅后自动恢复，也可改用 ListenBrainz")) {
+            Button(L10n.t("了解 Last.fm Pro")) { openLastfmPro() }
+        }
+    }
+}
+
+/// 打开 Last.fm Pro 的订阅页。
+@MainActor
+func openLastfmPro() {
+    NSWorkspace.shared.open(URL(string: "https://www.last.fm/pro")!)
 }
 
 /// Last.fm 跟 Spotify 的连接让 Spotify 重复记或漏记时的那一条建议,按钮点了才改,不替用户改勾选。Last.fm 账号页的「建议」
@@ -164,6 +182,8 @@ struct LastfmSuggestionsPage: View {
         case .authRevoked:
             LastfmReconnectSuggestionRow(title: L10n.t("授权已失效，Scrobble 已暂停"),
                                          detail: L10n.t("授权可能已在 Last.fm 网站上被撤销，重新连接即可恢复"))
+        case .keyRejected:
+            LastfmKeyRejectedSuggestionRow()
         case .spotify(let hint):
             LastfmSpotifySuggestionRow(hint: hint)
         }

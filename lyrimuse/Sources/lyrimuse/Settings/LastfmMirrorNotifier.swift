@@ -4,7 +4,7 @@ import LyrimuseCore
 import OSLog
 import UserNotifications
 
-/// Last.fm 授权失效(引擎熔断、停止打卡)时的系统通知。
+/// Last.fm 授权失效或 key 被拒(引擎熔断、停止打卡)时的系统通知。
 ///
 /// 红标只在菜单栏面板和设置里,不打开就不知道从哪天起没在打卡了。引擎没有通知权限,它只写状态文件
 /// (`LastfmMirrorStatus`);这里从 App 启动起盯着 `LastfmMirrorStatusWatcher`,看到一次新的熔断就投递。
@@ -42,14 +42,18 @@ final class LastfmMirrorNotifier {
         let defaults = UserDefaults.standard
         guard (defaults.object(forKey: Self.notifiedAtKey) as? NSNumber)?.int64Value != info.at else { return }
         defaults.set(NSNumber(value: info.at), forKey: Self.notifiedAtKey)
-        Task { await deliver() }
+        let keyRejected = info.keyRejected
+        Task { await deliver(keyRejected: keyRejected) }
     }
 
-    private func deliver() async {
+    /// key 被拒时出路是订阅 Pro 或改用 ListenBrainz,不写「重新连接」:重连用的还是同一把 key。
+    private func deliver(keyRejected: Bool) async {
         guard await UnknownPlayerNotifier.shared.ensureAuthorized() else { return }
         let content = UNMutableNotificationContent()
         content.title = "Last.fm"
-        content.body = L10n.t("授权已失效，Scrobble 已暂停") + "\n" + L10n.t("点按此处前往设置重新连接")
+        content.body = keyRejected
+            ? L10n.t("Last.fm 拒绝了 API Key") + "\n" + L10n.t("Last.fm 现在要求 API Key 的持有人订阅 Last.fm Pro，订阅后自动恢复，也可改用 ListenBrainz")
+            : L10n.t("授权已失效，Scrobble 已暂停") + "\n" + L10n.t("点按此处前往设置重新连接")
         content.categoryIdentifier = Self.categoryID
         content.threadIdentifier = Self.categoryID
         content.sound = .default

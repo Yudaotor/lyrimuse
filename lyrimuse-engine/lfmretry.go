@@ -224,7 +224,8 @@ func defaultLfmRetryHooks(user string) lfmRetryHooks {
 //   - 成功:写回执,移出;
 //   - 服务端拒收内容(accepted=0)、或别的确定没落库又重发也没用的应用层错误:移出;
 //   - 撞上可能已落库的(11/16、超时、连接中断):隔离后移出,隔离够久后由 reconcileQuarantined 核对;
-//   - 请求没发出去、限流(29)、凭据失效(4/9/10/26):这一轮停下,整队留到下一轮;
+//   - 请求没发出去、限流(29)、凭据失效(4/9)、key 被拒(10/26、认不出的 403 等,见 classifyLastfmError):
+//     这一轮停下,整队留到下一轮。key 被拒的收听留到用户订了 Pro、key 恢复之后补发,保留期照上一条的时间窗;
 //   - 超过补提交的时间窗(backfillMaxAge,Last.fm 不收更老的时间戳)、已被补提交交过 / 隔离、
 //     或入队时的账号不是现在这个(user,换过账号):移出。
 func processLfmRetry(ctx context.Context, now time.Time, user string, submit lfmRetrySubmitter, hooks lfmRetryHooks) int {
@@ -329,7 +330,8 @@ func processLfmRetry(ctx context.Context, now time.Time, user string, submit lfm
 }
 
 // startLfmRetryLoop 后台常驻:每 lfmRetryInterval 先核对一遍隔离够久的收听(reconcileQuarantined),再重发一轮。
-// 没配 Last.fm 写入、或凭据已判死时整轮跳过,重新授权(主循环换了新的写入器)之后自然接着做。
+// 没配 Last.fm 写入、或凭据已判死时整轮跳过,重新授权(主循环换了新的写入器)之后自然接着做;
+// 判死的原因是 key 被拒时,隔 lastfmKeyProbeInterval 探一次 key,恢复了就当轮接着重发。
 func startLfmRetryLoop(ctx context.Context) {
 	t := time.NewTicker(lfmRetryInterval)
 	defer t.Stop()
@@ -339,7 +341,10 @@ func startLfmRetryLoop(ctx context.Context) {
 			return
 		case <-t.C:
 			s := lfmRetryTarget.Load()
-			if s == nil || s.dead.Load() {
+			if s == nil {
+				continue
+			}
+			if s.dead.Load() && !s.reviveIfKeyAccepted(ctx, time.Now(), probeLastfmKey) {
 				continue
 			}
 			reconcileQuarantined(ctx, s, time.Now())
@@ -347,6 +352,9 @@ func startLfmRetryLoop(ctx context.Context) {
 				rctx, cancel := context.WithTimeout(ctx, mirrorTimeout())
 				defer cancel()
 				err := s.scrobble(withCatalogDurationUnknown(rctx, it.NotAudio), it.Artist, it.Title, it.Album, it.Timestamp, it.Duration)
+				if err == nil {
+					noteLastfmWriteOK()
+				}
 				disableLastfmOnFatal(s, err, time.Now())
 				return err
 			}, defaultLfmRetryHooks(s.user)) > 0 {
@@ -360,8 +368,7 @@ func startLfmRetryLoop(ctx context.Context) {
 // 不这样的话用户没在放歌时,只有重发在每 5 分钟拿一把死掉的凭据白打请求。
 func disableLastfmOnFatal(s *lastfmScrobbler, err error, now time.Time) {
 	var apiErr *lastfmAPIError
-	if errors.As(err, &apiErr) && s.shouldDisable(apiErr, now) && s.dead.CompareAndSwap(false, true) {
-		warnf("lastfm mirror DISABLED: %v (fatal credential error; reconnect the account in Lyrimuse settings to resume)", apiErr)
-		writeLastfmMirrorStatus(apiErr)
+	if errors.As(err, &apiErr) && s.shouldDisable(apiErr, now) {
+		s.disable(apiErr)
 	}
 }

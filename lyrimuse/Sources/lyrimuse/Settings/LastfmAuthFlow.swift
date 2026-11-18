@@ -24,12 +24,20 @@ enum LastfmConnectState: Equatable {
 enum LastfmAuthError: Error, LocalizedError {
     case api(String)
     case parse
+    /// Last.fm 拒绝了这把 API Key(要求 key 的持有人订阅 Last.fm Pro,判据见 `LastfmErrorClassifier`)。
+    case keyRejected
 
     var errorDescription: String? {
         switch self {
         case .api(let msg): return String(format: L10n.t("Last.fm 返回错误：%@"), msg)
         case .parse: return L10n.t("解析 Last.fm 响应失败")
+        case .keyRejected: return L10n.t("Last.fm 现在要求 API Key 的持有人订阅 Last.fm Pro，订阅后自动恢复，也可改用 ListenBrainz")
         }
+    }
+
+    /// 应答被归成 key 被拒时抛 `.keyRejected`,其余照旧。
+    static func throwIfKeyRejected(status: Int, data: Data) throws {
+        if LastfmErrorClassifier.classify(httpStatus: status, body: data).0 == .keyRejected { throw LastfmAuthError.keyRejected }
     }
 }
 
@@ -51,14 +59,14 @@ enum LastfmAuthFlow {
     // 直连 Last.fm 的地方(连接账号只发生一次,不值得为它接进那套带限速/重试的机制)。
     // 收进这一个小 helper,统一记一笔 NetworkAuditLog——理由和记什么见该类型头部注释,
     // 这里不重复。
-    private static func auditedGet(_ url: URL, operation: String) async throws -> Data {
+    private static func auditedGet(_ url: URL, operation: String) async throws -> (Data, Int) {
         let start = Date()
         do {
             let (data, resp) = try await URLSession.shared.data(from: url)
             let status = (resp as? HTTPURLResponse)?.statusCode
             NetworkAuditLog.record(service: "lastfm", operation: operation, host: url.host ?? "ws.audioscrobbler.com",
                                    statusCode: status, durationMs: Date().timeIntervalSince(start) * 1000, error: nil)
-            return data
+            return (data, status ?? -1)
         } catch {
             NetworkAuditLog.record(service: "lastfm", operation: operation, host: url.host ?? "ws.audioscrobbler.com",
                                    statusCode: nil, durationMs: Date().timeIntervalSince(start) * 1000, error: error)
@@ -66,15 +74,16 @@ enum LastfmAuthFlow {
         }
     }
 
-    // Last.fm 的错误(比如 api_key 无效)经常仍然是 HTTP 200、body 里带 message 字段,
-    // 不总是用非 200 状态码表达——这里不看 HTTP 状态,只看 body 能不能解析出预期字段,
-    // 更贴近 Last.fm 实际行为。
+    // Last.fm 的错误有时是 HTTP 200、body 里带 message 字段,有时是 4xx 带同样的 body —— 成败只看 body 能不能解析出
+    // 预期字段;HTTP 状态只用来认 key 被拒(403 等,见 LastfmErrorClassifier),认出来就报要订阅 Pro,不原样转述英文 message。
     static func requestToken(apiKey: String) async throws -> String {
         let url = buildURL(["method": "auth.gettoken", "api_key": apiKey, "format": "json"])
-        let data = try await auditedGet(url, operation: "auth.gettoken")
+        let (data, status) = try await auditedGet(url, operation: "auth.gettoken")
         struct Resp: Decodable { let token: String?; let message: String? }
-        guard let decoded = try? JSONDecoder().decode(Resp.self, from: data) else { throw LastfmAuthError.parse }
-        if let token = decoded.token, !token.isEmpty { return token }
+        let decoded = try? JSONDecoder().decode(Resp.self, from: data)
+        if let token = decoded?.token, !token.isEmpty { return token }
+        try LastfmAuthError.throwIfKeyRejected(status: status, data: data)
+        guard let decoded else { throw LastfmAuthError.parse }
         throw LastfmAuthError.api(decoded.message ?? L10n.t("未知错误"))
     }
 
@@ -100,14 +109,16 @@ enum LastfmAuthFlow {
             "method": "auth.getsession", "api_key": apiKey, "token": token,
             "api_sig": signed, "format": "json",
         ])
-        let data = try await auditedGet(url, operation: "auth.getsession")
+        let (data, status) = try await auditedGet(url, operation: "auth.getsession")
         struct Resp: Decodable {
             struct Session: Decodable { let name: String; let key: String }
             let session: Session?
             let message: String?
         }
-        guard let decoded = try? JSONDecoder().decode(Resp.self, from: data) else { throw LastfmAuthError.parse }
-        if let session = decoded.session { return (session.key, session.name) }
+        let decoded = try? JSONDecoder().decode(Resp.self, from: data)
+        if let session = decoded?.session { return (session.key, session.name) }
+        try LastfmAuthError.throwIfKeyRejected(status: status, data: data)
+        guard let decoded else { throw LastfmAuthError.parse }
         throw LastfmAuthError.api(decoded.message ?? L10n.t("未知错误"))
     }
 }

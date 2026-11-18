@@ -109,6 +109,7 @@
 "1. 在洛雪音乐中打开「设置」，找到「开放 API」" = "1. LX Music에서 ‘Settings’를 열고 ‘Open API’를 찾습니다";
 "2. 勾选「启用开放 API 服务」" = "2. ‘Enable Open API service’를 선택합니다";
 "2. 首次连接时，在 Pear Desktop 弹出的窗口中点「允许」" = "2. 처음 연결할 때 Pear Desktop에 뜨는 창에서 ‘허용’을 클릭합니다";
+"2026 年 12 月 1 日起，申请和使用 API Key 都需要订阅 Last.fm Pro" = "2026년 12월 1일부터 API Key를 신청하거나 사용하려면 Last.fm Pro 구독이 필요합니다";
 "3. 无需勾选「允许来自局域网的访问」" = "3. ‘Allow access from LAN’은 선택하지 않아도 됩니다";
 "Amazon Music 专辑页" = "Amazon Music 앨범 페이지";
 "Amazon Music 曲目 ID 一致" = "Amazon Music 트랙 ID 일치";
@@ -159,7 +160,9 @@
 "Last.fm 已直接连接 Spotify，Lyrimuse 也在记录，保留其中一方即可" = "Last.fm이 Spotify에 직접 연결되어 있고 Lyrimuse도 스크로블하고 있습니다. 한쪽만 유지하십시오";
 "Last.fm 已确认收到这次播放" = "Last.fm에서 이 재생을 수신했습니다";
 "Last.fm 或 ListenBrainz" = "Last.fm 또는 ListenBrainz";
+"Last.fm 拒绝了 API Key" = "Last.fm이 API Key를 거부했습니다";
 "Last.fm 拒绝写入，Scrobble 已暂停，授权可能已在网站上被撤销" = "Last.fm이 스크로블을 거부하여 스크로블이 일시 중지되었습니다. Last.fm 웹사이트에서 승인이 취소되었을 수 있습니다";
+"Last.fm 现在要求 API Key 的持有人订阅 Last.fm Pro，订阅后自动恢复，也可改用 ListenBrainz" = "이제 Last.fm은 API Key 소유자에게 Last.fm Pro 구독을 요구합니다. 구독하면 자동으로 재개되며, ListenBrainz로 전환할 수도 있습니다";
 "Last.fm 账号" = "Last.fm 계정";
 "Last.fm 账号建议" = "Last.fm 계정 제안";
 "Last.fm 返回错误：%@" = "Last.fm에서 오류를 반환했습니다: %@";
@@ -389,6 +392,7 @@
 "之后的自动搜索或评分变化仍可能替换这份歌词" = "이후 자동 검색이나 점수 변화로 이 가사가 교체될 수 있습니다";
 "乌克兰国家体系（联合国推荐），如 Привіт → Pryvit" = "우크라이나 국가 표기법(UN 권장), 예: Привіт → Pryvit";
 "乌克兰语" = "우크라이나어";
+"了解 Last.fm Pro" = "Last.fm Pro 알아보기";
 "云盘里的文件暂不支持写入" = "클라우드 저장소의 파일에는 아직 쓸 수 없습니다";
 "五" = "금";
 "亚马逊的流媒体音乐 App" = "Amazon의 스트리밍 음악 앱";
@@ -1148,6 +1152,7 @@
 "已显示译文" = "번역 표시됨";
 "已显示读音" = "로마자 표기 표시됨";
 "已暂停：授权失效，重新连接后恢复" = "일시 정지됨: 권한이 만료되었습니다. 다시 연결하면 재개됩니다";
+"已暂停：需要 Last.fm Pro，订阅后自动补发" = "일시 정지됨: Last.fm Pro가 필요합니다. 구독하면 밀린 스크로블을 자동으로 보냅니다";
 "已更换为「%1$@」（%2$@ 分），原为「%3$@」" = "‘%3$@’에서 ‘%1$@’(%2$@점)(으)로 변경됨";
 "已更新 %@ 首" = "%@곡 업데이트됨";
 "已更新到 %@" = "%@(으)로 업데이트됨";
@@ -2932,6 +2937,7 @@
 "需先部署网页端并获取访问令牌。部署步骤见项目 README 的「网页端」一节：https://github.com/Yudaotor/lyrimuse#网页端" = "먼저 웹 앱을 배포하고 액세스 토큰을 받으십시오. 배포 방법은 프로젝트 README의 ‘웹’ 섹션을 참고하십시오: https://github.com/Yudaotor/lyrimuse#网页端";
 "需自行部署同步服务；只连接 ListenBrainz 时网页同样能显示正在播放" = "동기화 서버를 직접 배포해야 합니다. ListenBrainz만 연결해도 웹 페이지에 지금 재생 중인 노래를 표시할 수 있습니다";
 "需要 Discord 桌面版" = "Discord 데스크탑 앱 필요";
+"需要 Last.fm Pro" = "Last.fm Pro 필요";
 "需要先完成配置" = "설정 필요";
 "需要先配置「%@」（%@）" = "먼저 ‘%@’을(를) 설정하십시오(%@)";
 "需要在系统设置中允许控制 Apple Music" = "시스템 설정에서 Apple Music 제어를 허용해야 합니다";

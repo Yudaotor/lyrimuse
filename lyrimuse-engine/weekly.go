@@ -3,7 +3,8 @@ package main
 import (
 	"context"
 	"encoding/json"
-	"fmt"
+	"errors"
+	"io"
 	"log/slog"
 	"net/http"
 	neturl "net/url"
@@ -80,6 +81,9 @@ func lastfmAPIGet(ctx context.Context, params neturl.Values, out any) error {
 }
 
 // lastfmAPIGetTimeout 同 lastfmAPIGet,超时自定。超时从进本地出站闸排队那一刻算起(排队也占这段时间)。
+// 应答体先认错误(200 + {"error":N} 和 4xx 都有),错误按 lastfmResponseError 归类:key 被拒报给 noteLastfmKeyRejected,
+// App 那边跟写入熔断看同一个状态文件;成功报 noteLastfmReadOK。200 + 凭据以外的码(6 查无此项、29 限流等)照旧解进 out、
+// 不报错,由调用方自己看 error 字段(lastfmArtistMbid 把 6 当「没有」)。
 func lastfmAPIGetTimeout(ctx context.Context, params neturl.Values, out any, timeout time.Duration) error {
 	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
@@ -94,11 +98,35 @@ func lastfmAPIGetTimeout(ctx context.Context, params neturl.Values, out any, tim
 		return err
 	}
 	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("lastfm status %d", resp.StatusCode)
+	body, err := io.ReadAll(io.LimitReader(resp.Body, lastfmReadBodyMax))
+	if err != nil {
+		return err
 	}
-	return json.NewDecoder(resp.Body).Decode(out)
+	var envelope struct {
+		Error   int    `json:"error"`
+		Message string `json:"message"`
+	}
+	_ = json.Unmarshal(body, &envelope)
+	credentialError := classifyLastfmError(resp.StatusCode, envelope.Error, envelope.Message) != lastfmErrOther
+	if resp.StatusCode != http.StatusOK || credentialError {
+		err := lastfmResponseError(params.Get("method"), resp.StatusCode, envelope.Error, envelope.Message, resp.Header.Get("Content-Type"), body)
+		var apiErr *lastfmAPIError
+		if errors.As(err, &apiErr) {
+			noteLastfmKeyRejected(apiErr)
+		}
+		return err
+	}
+	if err := json.Unmarshal(body, out); err != nil {
+		return err
+	}
+	if envelope.Error == 0 {
+		noteLastfmReadOK()
+	}
+	return nil
 }
+
+// lastfmReadBodyMax:只读接口应答体最多读多少。周榜、歌手曲目页近一年能有几 MB。
+const lastfmReadBodyMax = 64 << 20
 
 // lastfmWeeklyChartList 拉该用户全部已收官的周边界，最旧到最新排列。
 func lastfmWeeklyChartList(ctx context.Context, user, apiKey string) ([]lastfmChartWeek, error) {

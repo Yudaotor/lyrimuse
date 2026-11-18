@@ -6,6 +6,8 @@ public enum LastfmAccountSuggestion: Equatable, Sendable, Identifiable {
     case connectFailed(String)
     /// 授权失效(引擎熔断落了状态文件),Scrobble 已暂停。
     case authRevoked
+    /// Last.fm 拒绝了 API Key(要求 key 的持有人订阅 Last.fm Pro),重新连接没用。
+    case keyRejected
     /// Last.fm 跟 Spotify 的连接让 Spotify 重复记或漏记。
     case spotify(LastfmSpotifyLink.PlayersRowHint)
 
@@ -13,17 +15,20 @@ public enum LastfmAccountSuggestion: Equatable, Sendable, Identifiable {
         switch self {
         case .connectFailed: return "connect-failed"
         case .authRevoked: return "auth-revoked"
+        case .keyRejected: return "key-rejected"
         case .spotify: return "spotify"
         }
     }
 
-    /// 此刻有哪些建议,要紧的在前。连接失败和授权失效都要重新连接,只出一条,连接失败优先;授权失效只在本地还有 session key
-    /// 时才算(断开之后留下的状态文件不算)。跟账号状态 `destinationStatus` 的判定同一个顺序。
-    public static func current(connectFailure: String?, connected: Bool, authRevoked: Bool,
+    /// 此刻有哪些建议,要紧的在前。连接失败和授权失效都要重新连接,只出一条,连接失败优先;授权失效、key 被拒只在本地还有
+    /// session key 时才算(断开之后留下的状态文件不算),key 被拒压过授权失效。跟账号状态 `destinationStatus` 的判定同一个顺序。
+    public static func current(connectFailure: String?, connected: Bool, authRevoked: Bool, keyRejected: Bool,
                                spotify: LastfmSpotifyLink.PlayersRowHint?) -> [LastfmAccountSuggestion] {
         var out: [LastfmAccountSuggestion] = []
         if let connectFailure {
             out.append(.connectFailed(connectFailure))
+        } else if connected, keyRejected {
+            out.append(.keyRejected)
         } else if connected, authRevoked {
             out.append(.authRevoked)
         }

@@ -3030,17 +3030,66 @@ func runLastfmTests() {
         expectEqual(due(now.addingTimeInterval(60), now, 86_400, false), true, "Spotify 查询: 时钟倒退 → 查")
     }
 
+    // ---- Last.fm 错误归类:key 被拒(要 Last.fm Pro)和授权失效分开(见 LastfmErrorClassifier,判据同引擎 classifyLastfmError)----
+    do {
+        let classify = LastfmErrorClassifier.classify(httpStatus:code:message:)
+        expectEqual(classify(403, 10, "Invalid API key - You must be granted a valid key by last.fm"), .keyRejected, "Last.fm 归类: 403 + 10")
+        expectEqual(classify(403, 26, "Suspended API key"), .keyRejected, "Last.fm 归类: 403 + 26")
+        expectEqual(classify(403, 0, ""), .keyRejected, "Last.fm 归类: 认不出的 403(没有码)")
+        expectEqual(classify(403, 31, "new"), .keyRejected, "Last.fm 归类: 认不出的 403(新码)")
+        expectEqual(classify(400, 6, "Last.fm Pro required"), .keyRejected, "Last.fm 归类: message 提到 Pro")
+        expectEqual(classify(200, 9, "Invalid session key"), .sessionInvalid, "Last.fm 归类: 200 + 9 是授权失效")
+        expectEqual(classify(403, 9, "Invalid session key"), .sessionInvalid, "Last.fm 归类: 403 + 9 仍是授权失效")
+        expectEqual(classify(403, 6, "Invalid parameters"), .other, "Last.fm 归类: 403 + 认得的码不算被拒")
+        expectEqual(classify(200, 8, "There was an error processing your request"), .other, "Last.fm 归类: processing 不算提到 Pro")
+        let body = Data(#"{"message":"Invalid API key","error":10}"#.utf8)
+        let parsed = LastfmErrorClassifier.classify(httpStatus: 403, body: body)
+        expectEqual(parsed.0 == .keyRejected && parsed.code == 10 && parsed.message == "Invalid API key", true, "Last.fm 归类: 从 403 应答体读出码和 message")
+        expectEqual(LastfmErrorClassifier.classify(httpStatus: 403, body: Data("<html>Forbidden</html>".utf8)).0, .keyRejected,
+                    "Last.fm 归类: 403 网页应答体按没有码处理")
+        let fileRejected = LastfmErrorClassifier.statusFileKeyRejected
+        expectEqual(fileRejected("key_rejected", 0, 403, ""), true, "Last.fm 状态文件: reason key_rejected")
+        expectEqual(fileRejected("session", 10, nil, ""), false, "Last.fm 状态文件: 有 reason 就按 reason")
+        expectEqual(fileRejected(nil, 10, nil, "Invalid API key"), true, "Last.fm 状态文件: 旧文件按码判(10)")
+        expectEqual(fileRejected(nil, 9, nil, "Invalid session key"), false, "Last.fm 状态文件: 旧文件按码判(9)")
+    }
+
+    // ---- key 被拒接到界面(契约):统计请求读非 200 的应答体、账号状态 / 通知 / 页头按 keyRejected 分文案 ----
+    do {
+        func sourceText(_ path: String) -> String {
+            (try? String(contentsOf: URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+                .appendingPathComponent(path), encoding: .utf8)) ?? ""
+        }
+        let stats = sourceText("lyrimuse/Settings/LastfmStatsService.swift")
+        let request = sourceBody("private func requestDetailed(", in: stats)
+        expectEqual(sourceHas(request, "LastfmErrorClassifier.classify(httpStatus: status, body: data)")
+                    && sourceHas(request, "noteKeyRejection(true)") && sourceHas(request, "noteKeyRejection(false)"), true,
+                    "key 被拒: 统计请求非 200 也读应答体归类,成功复位")
+        let tab = sourceText("lyrimuse/AccountLinkingTab.swift")
+        expectEqual(sourceHas(tab, #"mirrorInfo.keyRejected ? L10n.t("需要 Last.fm Pro") : L10n.t("授权已失效")"#), true,
+                    "key 被拒: 账号状态红标说要 Pro,不说授权失效")
+        let notifier = sourceText("lyrimuse/Settings/LastfmMirrorNotifier.swift")
+        expectEqual(sourceHas(notifier, "deliver(keyRejected: keyRejected)") && sourceHas(notifier, #"L10n.t("Last.fm 拒绝了 API Key")"#), true,
+                    "key 被拒: 系统通知分文案")
+        let section = sourceText("lyrimuse/LastfmStatsSection.swift")
+        expectEqual(sourceHas(section, "if stats.keyRejected {") && sourceHas(sourceText("lyrimuse/UI/RecentListensPanel.swift"), "} else if stats.keyRejected {"),
+                    true, "key 被拒: 统计页与最近播放给出说明")
+    }
+
     // ---- 「Last.fm 账号建议」排哪几条(见 LastfmAccountSuggestion)----
     do {
         let spotify = LastfmSpotifyLink.PlayersRowHint.doubleScrobble
         let current = LastfmAccountSuggestion.current
-        expectEqual(current(nil, true, false, nil), [], "账号建议: 什么事都没有 → 没有建议")
-        expectEqual(current("超时", false, false, nil), [.connectFailed("超时")], "账号建议: 连接失败,还没连上也要出")
-        expectEqual(current("超时", true, true, nil), [.connectFailed("超时")], "账号建议: 连接失败和授权失效只出一条重新连接")
-        expectEqual(current(nil, true, true, nil), [.authRevoked], "账号建议: 授权失效")
-        expectEqual(current(nil, false, true, nil), [], "账号建议: 断开后留下的状态文件不算")
-        expectEqual(current(nil, true, false, spotify), [.spotify(spotify)], "账号建议: Spotify 那条")
-        expectEqual(current(nil, true, true, spotify), [.authRevoked, .spotify(spotify)], "账号建议: 要紧的在前")
+        expectEqual(current(nil, true, false, false, nil), [], "账号建议: 什么事都没有 → 没有建议")
+        expectEqual(current("超时", false, false, false, nil), [.connectFailed("超时")], "账号建议: 连接失败,还没连上也要出")
+        expectEqual(current("超时", true, true, false, nil), [.connectFailed("超时")], "账号建议: 连接失败和授权失效只出一条重新连接")
+        expectEqual(current(nil, true, true, false, nil), [.authRevoked], "账号建议: 授权失效")
+        expectEqual(current(nil, false, true, false, nil), [], "账号建议: 断开后留下的状态文件不算")
+        expectEqual(current(nil, true, false, false, spotify), [.spotify(spotify)], "账号建议: Spotify 那条")
+        expectEqual(current(nil, true, true, false, spotify), [.authRevoked, .spotify(spotify)], "账号建议: 要紧的在前")
+        expectEqual(current(nil, true, false, true, nil), [.keyRejected], "账号建议: key 被拒,出 Pro 那条而不是重新连接")
+        expectEqual(current(nil, true, true, true, nil), [.keyRejected], "账号建议: key 被拒压过授权失效")
+        expectEqual(current(nil, false, false, true, nil), [], "账号建议: 断开后留下的 key 被拒不算")
     }
 
     // ---- Spotify 连接提示的接线(契约) ----

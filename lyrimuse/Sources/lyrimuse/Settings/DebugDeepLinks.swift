@@ -576,7 +576,8 @@ enum DebugDeepLinks {
             "stateFiles": [
                 "lastfmMirror": ["loaded": LastfmMirrorStatusWatcher.shared.loaded,
                                  "error": LastfmMirrorStatusWatcher.shared.info.map { $0.error as Any } ?? NSNull(),
-                                 "at": LastfmMirrorStatusWatcher.shared.info.map { $0.at as Any } ?? NSNull()],
+                                 "at": LastfmMirrorStatusWatcher.shared.info.map { $0.at as Any } ?? NSNull(),
+                                 "keyRejected": LastfmMirrorStatusWatcher.shared.info.map { $0.keyRejected as Any } ?? NSNull()],
                 "engineNetworkDown": LocalPlaybackSource.shared.engineNetworkDown,
                 "engineNotRunning": LocalPlaybackSource.shared.engineNotRunning,
                 "listenBrainz": ["loaded": ListenBrainzSubmitStatusWatcher.shared.loaded,

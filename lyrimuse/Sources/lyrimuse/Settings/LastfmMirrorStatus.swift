@@ -3,10 +3,10 @@ import LyrimuseCore
 
 /// 读引擎落盘的 Last.fm 镜像状态文件(lyrimuse-lastfm-status.json)。
 ///
-/// 只有一种内容:凭据级致命错误(session key 被撤销/API key 失效,error 4/9/10/26)。
-/// 引擎遇到它会熔断停止提交并写这个文件(见 lyrimuse-engine/lastfm.go 的
-/// writeLastfmMirrorStatus),之后第一次提交成功会把它删掉。App 侧读到它就把账号卡
-/// 渲染成"授权已失效"红标 —— 没有这条通道的话,scrobble 全停时界面照样一片绿
+/// 只有一种内容:凭据级致命错误,分两类(`reason`):授权失效(session key 被撤销,error 4/9)和 key 被拒
+/// (Last.fm 要求 key 的持有人订阅 Last.fm Pro,error 10/26、认不出的 403 等,见 `LastfmErrorClassifier`)。
+/// 引擎写入熔断时写这个文件(见 lyrimuse-engine/lastfm.go 的 writeLastfmMirrorStatus),读取路径撞上 key 被拒也写;
+/// 之后提交成功会把它删掉。App 侧读到它就把账号卡渲染成红标,文案按 `keyRejected` 分 —— 没有这条通道的话,scrobble 全停时界面照样一片绿
 /// ("已连接"只看本地 session key 非空,信息页走只读 API 照常出数据),用户从任何
 /// 地方都发现不了。
 enum LastfmMirrorStatus {
@@ -14,6 +14,15 @@ enum LastfmMirrorStatus {
         let error: Int
         let message: String
         let at: Int64
+        /// `key_rejected` / `session`;旧版引擎写的文件没有这个字段。
+        var reason: String?
+        /// 应答的 HTTP 状态;旧版引擎写的文件没有。
+        var status: Int?
+
+        /// key 被拒(要订阅 Last.fm Pro),不是授权失效。没有 `reason` 的旧文件按 error 码判。
+        var keyRejected: Bool {
+            LastfmErrorClassifier.statusFileKeyRejected(reason: reason, error: error, status: status, message: message)
+        }
     }
 
     private static let url = LyrimusePaths.configFile("lyrimuse-lastfm-status.json")

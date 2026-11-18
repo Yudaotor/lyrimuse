@@ -365,11 +365,8 @@ func (s *lastfmScrobbler) callBatch(ctx context.Context, method string, params m
 		} `json:"scrobbles"`
 	}
 	_ = json.Unmarshal(body, &envelope)
-	if envelope.Error != 0 {
-		return nil, &lastfmAPIError{Code: envelope.Error, Message: envelope.Message, Method: method}
-	}
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("lastfm %s: status %d", method, resp.StatusCode)
+	if err := lastfmResponseError(method, resp.StatusCode, envelope.Error, envelope.Message, resp.Header.Get("Content-Type"), body); err != nil {
+		return nil, err
 	}
 	if envelope.Scrobbles == nil {
 		return nil, fmt.Errorf("lastfm %s: response has no scrobbles element", method)

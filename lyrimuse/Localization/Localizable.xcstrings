@@ -310529,6 +310529,612 @@
           }
         }
       }
+    },
+    "需要 Last.fm Pro" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Last.fm Pro erforderlich"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Last.fm Pro required"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Se requiere Last.fm Pro"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Last.fm Pro requis"
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Last.fm Pro ज़रूरी है"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Last.fm Pro richiesto"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Last.fm Proが必要です"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Last.fm Pro 필요"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Requer Last.fm Pro"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Нужен Last.fm Pro"
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ต้องใช้ Last.fm Pro"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Last.fm Pro gerekli"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Потрібен Last.fm Pro"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cần Last.fm Pro"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "需要 Last.fm Pro"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "需要 Last.fm Pro"
+          }
+        }
+      }
+    },
+    "Last.fm 现在要求 API Key 的持有人订阅 Last.fm Pro，订阅后自动恢复，也可改用 ListenBrainz" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Last.fm verlangt jetzt, dass der Inhaber des API Key Last.fm Pro abonniert. Nach dem Abo geht es automatisch weiter, oder du wechselst zu ListenBrainz"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Last.fm now requires API key owners to subscribe to Last.fm Pro. It resumes automatically once you subscribe, or you can switch to ListenBrainz"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Last.fm ahora exige que el titular de la API Key esté suscrito a Last.fm Pro. Se reanuda automáticamente al suscribirte, o puedes pasarte a ListenBrainz"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Last.fm exige désormais que le titulaire de l’API Key soit abonné à Last.fm Pro. Tout reprend automatiquement après l’abonnement, ou vous pouvez passer à ListenBrainz"
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Last.fm अब API Key के मालिक से Last.fm Pro की सदस्यता माँगता है। सदस्यता लेने के बाद यह अपने-आप फिर से चालू हो जाएगा, या आप ListenBrainz पर जा सकते हैं"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ora Last.fm richiede che il titolare della API Key sia abbonato a Last.fm Pro. Riprende automaticamente dopo l’abbonamento, oppure puoi passare a ListenBrainz"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Last.fmは現在、API Keyの所有者にLast.fm Proの購読を求めています。購読すると自動的に再開します。ListenBrainzに切り替えることもできます"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "이제 Last.fm은 API Key 소유자에게 Last.fm Pro 구독을 요구합니다. 구독하면 자동으로 재개되며, ListenBrainz로 전환할 수도 있습니다"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "O Last.fm agora exige que o titular da API Key assine o Last.fm Pro. Tudo volta automaticamente depois da assinatura, ou você pode mudar para o ListenBrainz"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Теперь Last.fm требует, чтобы владелец API Key был подписан на Last.fm Pro. После оформления подписки всё возобновится автоматически, или можно перейти на ListenBrainz"
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ตอนนี้ Last.fm กำหนดให้เจ้าของ API Key ต้องสมัคร Last.fm Pro เมื่อสมัครแล้วจะกลับมาทำงานเองโดยอัตโนมัติ หรือจะเปลี่ยนไปใช้ ListenBrainz ก็ได้"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Last.fm artık API Key sahibinin Last.fm Pro aboneliği olmasını şart koşuyor. Abone olduktan sonra otomatik olarak devam eder; ListenBrainz’e de geçebilirsiniz"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Тепер Last.fm вимагає, щоб власник API Key мав підписку Last.fm Pro. Після оформлення підписки все відновиться автоматично, або можна перейти на ListenBrainz"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Last.fm hiện yêu cầu người sở hữu API Key đăng ký Last.fm Pro. Sau khi đăng ký sẽ tự động hoạt động lại, hoặc bạn có thể chuyển sang ListenBrainz"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Last.fm 现在要求 API Key 的持有人订阅 Last.fm Pro，订阅后自动恢复，也可改用 ListenBrainz"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Last.fm 現在要求 API Key 的持有人訂閱 Last.fm Pro，訂閱後自動恢復，也可改用 ListenBrainz"
+          }
+        }
+      }
+    },
+    "已暂停：需要 Last.fm Pro，订阅后自动补发" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pausiert: Last.fm Pro erforderlich. Ausstehende Scrobbles werden nach dem Abo gesendet"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Paused: Last.fm Pro required. Queued scrobbles are sent once you subscribe"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "En pausa: se requiere Last.fm Pro. Los scrobbles pendientes se enviarán al suscribirte"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "En pause : Last.fm Pro requis. Les scrobbles en attente seront envoyés après l’abonnement"
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "रोका गया : Last.fm Pro ज़रूरी है। सदस्यता लेने के बाद बाकी स्क्रॉबल अपने-आप भेज दिए जाएँगे"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "In pausa: serve Last.fm Pro. Gli scrobble in sospeso verranno inviati dopo l’abbonamento"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "一時停止中：Last.fm Proが必要です。購読すると未送信分を自動で送信します"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "일시 정지됨: Last.fm Pro가 필요합니다. 구독하면 밀린 스크로블을 자동으로 보냅니다"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pausado: requer Last.fm Pro. Os scrobbles pendentes serão enviados depois da assinatura"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Приостановлено: нужен Last.fm Pro. Накопившиеся скробблы отправятся после оформления подписки"
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "หยุดพัก: ต้องใช้ Last.fm Pro รายการที่ค้างไว้จะส่งให้เองหลังสมัคร"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Duraklatıldı: Last.fm Pro gerekli. Bekleyen skroplamalar abone olunca gönderilir"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Призупинено: потрібен Last.fm Pro. Відкладені скроблі надішлються після оформлення підписки"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Đã tạm dừng: cần Last.fm Pro. Các lượt scrobble đang chờ sẽ được gửi sau khi đăng ký"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已暂停：需要 Last.fm Pro，订阅后自动补发"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已暫停：需要 Last.fm Pro，訂閱後自動補發"
+          }
+        }
+      }
+    },
+    "Last.fm 拒绝了 API Key" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Last.fm hat den API Key abgelehnt"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Last.fm rejected the API key"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Last.fm rechazó la API Key"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Last.fm a refusé l’API Key"
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Last.fm ने API Key अस्वीकार कर दी"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Last.fm ha rifiutato la API Key"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Last.fmがAPI Keyを拒否しました"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Last.fm이 API Key를 거부했습니다"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "O Last.fm recusou a API Key"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Last.fm отклонил API Key"
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Last.fm ปฏิเสธ API Key"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Last.fm API Key’i reddetti"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Last.fm відхилив API Key"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Last.fm đã từ chối API Key"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Last.fm 拒绝了 API Key"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Last.fm 拒絕了 API Key"
+          }
+        }
+      }
+    },
+    "了解 Last.fm Pro" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mehr über Last.fm Pro"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "About Last.fm Pro"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Más sobre Last.fm Pro"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "En savoir plus sur Last.fm Pro"
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Last.fm Pro के बारे में"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Scopri Last.fm Pro"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Last.fm Proについて"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Last.fm Pro 알아보기"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Saiba mais sobre o Last.fm Pro"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Подробнее о Last.fm Pro"
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ดูข้อมูล Last.fm Pro"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Last.fm Pro hakkında"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Докладніше про Last.fm Pro"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tìm hiểu Last.fm Pro"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "了解 Last.fm Pro"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "了解 Last.fm Pro"
+          }
+        }
+      }
+    },
+    "2026 年 12 月 1 日起，申请和使用 API Key 都需要订阅 Last.fm Pro" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ab dem 1. Dezember 2026 brauchst du ein Last.fm-Pro-Abo, um einen API Key zu beantragen und zu nutzen"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Starting December 1, 2026, creating and using an API key requires a Last.fm Pro subscription"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Desde el 1 de diciembre de 2026, solicitar y usar una API Key requiere una suscripción a Last.fm Pro"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "À partir du 1er décembre 2026, demander et utiliser une API Key nécessite un abonnement Last.fm Pro"
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "1 दिसंबर 2026 से API Key बनाने और इस्तेमाल करने के लिए Last.fm Pro सदस्यता ज़रूरी है"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dal 1° dicembre 2026, per richiedere e usare una API Key serve un abbonamento a Last.fm Pro"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "2026年12月1日から、API Keyの申請と利用にはLast.fm Proの購読が必要です"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "2026년 12월 1일부터 API Key를 신청하거나 사용하려면 Last.fm Pro 구독이 필요합니다"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "A partir de 1º de dezembro de 2026, solicitar e usar uma API Key exige assinatura do Last.fm Pro"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "С 1 декабря 2026 года для получения и использования API Key нужна подписка Last.fm Pro"
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ตั้งแต่วันที่ 1 ธันวาคม 2026 การขอและใช้ API Key ต้องสมัคร Last.fm Pro"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "1 Aralık 2026’dan itibaren API Key almak ve kullanmak için Last.fm Pro aboneliği gerekiyor"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "З 1 грудня 2026 року для отримання й використання API Key потрібна підписка Last.fm Pro"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Từ ngày 1/12/2026, đăng ký và sử dụng API Key đều cần gói Last.fm Pro"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "2026 年 12 月 1 日起，申请和使用 API Key 都需要订阅 Last.fm Pro"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "2026 年 12 月 1 日起，申請和使用 API Key 都需要訂閱 Last.fm Pro"
+          }
+        }
+      }
     }
   },
   "version" : "1.0"

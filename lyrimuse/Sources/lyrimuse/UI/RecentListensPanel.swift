@@ -201,6 +201,12 @@ struct RecentListensPanel: View {
         if stats.recentPaging {
             HStack { Spacer(); ProgressView().controlSize(.small); Spacer() }
                 .padding(.vertical, 24)
+        } else if stats.keyRejected {
+            Text(L10n.t("Last.fm 现在要求 API Key 的持有人订阅 Last.fm Pro，订阅后自动恢复，也可改用 ListenBrainz"))
+                .font(.system(size: 12))
+                .foregroundStyle(secondaryTextColor)
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.vertical, 16)
         } else if stats.baselineFailed {
             VStack(alignment: .leading, spacing: 8) {
                 Text(L10n.t("未能获取最近记录"))
