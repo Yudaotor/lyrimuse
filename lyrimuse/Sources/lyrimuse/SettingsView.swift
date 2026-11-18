@@ -713,6 +713,7 @@ struct SettingsView: View {
             guard closedContent.windowAppeared() else { return }
             AuxiliaryWindowActivation.windowDidAppear("settings")
             playerHealth.start()
+            SettingsSearchIndex.shared.prefetch()
             // 侧栏身份区的头像:行内 .task 在侧栏 List 的行上不触发,从这里拉一次,
             // 之后由 LastfmAvatarStore 盯着配置变化。
             LastfmAvatarStore.shared.refreshFromConfig()

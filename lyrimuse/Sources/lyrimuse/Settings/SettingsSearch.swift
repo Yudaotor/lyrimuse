@@ -10,9 +10,10 @@ private let logger = Logger(subsystem: "me.yudaotor.lyrimuse", category: "settin
 // 命中后翻到那一页、切到那一段、展开那个抽屉、把那一行高亮一下并滚进视野。
 //
 // 三块拼起来:
-//   - `SettingsSearchIndex`:把目录条目本地化成能搜的字段(当前语言标题 + 简体键 + 英文 / 繁体译文 +
-//     关键词 + 面包屑),按 `SettingsSearchMatcher` 排序。三语一起索引是为了「英文界面打中文、中文界面
+//   - `SettingsSearchIndex`:把目录条目本地化成能搜的字段(当前语言标题 + 简体键 + 其它语言包的译文 +
+//     关键词 + 面包屑),按 `SettingsSearchMatcher` 排序。各语言一起索引是为了「英文界面打中文、中文界面
 //     打英文」都能搜到——译文表从 bundle 里的 .lproj/Localizable.strings 读,跟 L10n.t 同一份文件。
+//     这十几份表由 `SettingsSearchTranslations` 在后台读,主线程不读(见 14 章决策 217)。
 //   - `SettingsSearchRouter`:命中后的"信号":高亮哪些标题、哪个抽屉该展开。SettingsView 根部把它
 //     塞进 Environment,行组件(SettingsRow / SettingsSubRow / SettingsCardHeader)只读 Environment ——
 //     不让一百多行各自订阅一个单例,也不让设置窗口之外(菜单栏面板)复用这些组件的地方被牵动。
@@ -46,7 +47,10 @@ final class SettingsSearchIndex {
     static let shared = SettingsSearchIndex()
 
     private var cached: (language: String, hits: [SettingsSearchHit])?
-    private var tables: [String: [String: String]] = [:]
+    private let translations = SettingsSearchTranslations()
+
+    /// 设置窗口一出现就调:在后台把各语言包的译文读好,第一次搜索时不用再读。
+    func prefetch() { translations.start() }
 
     func search(_ query: String) -> [SettingsSearchHit] {
         // 这台 Mac 此刻没有触控栏时,「歌词显示 › 触控栏」那一段只有一张说明卡:留着「触控栏歌词」那一条(搜到之后
@@ -70,12 +74,13 @@ final class SettingsSearchIndex {
     private func hits() -> [SettingsSearchHit] {
         let language = L10n.current
         if let cached, cached.language == language { return cached.hits }
-        let built = SettingsSearchCatalog.entries.map(localize)
+        let tables = translations.wait()
+        let built = SettingsSearchCatalog.entries.map { localize($0, tables: tables) }
         cached = (language, built)
         return built
     }
 
-    private func localize(_ entry: SettingsSearchEntry) -> SettingsSearchHit {
+    private func localize(_ entry: SettingsSearchEntry, tables: [String: [String: String]]) -> SettingsSearchHit {
         let title = L10n.t(entry.titleKey)
         let alternates = entry.alternateTitleKeys.map(L10n.t)
         let subtitle = entry.subtitleKey.map(L10n.t)
@@ -87,7 +92,7 @@ final class SettingsSearchIndex {
         if let subtitle { secondary.append(subtitle) }
         // 其它语言的译文:界面是中文时也能打英文搜到,反过来也成立。
         for language in UILanguage.packs where language != L10n.current {
-            let table = stringsTable(language)
+            let table = tables[language] ?? [:]
             for key in [entry.titleKey] + entry.alternateTitleKeys {
                 if let translated = table[key] { secondary.append(translated) }
             }
@@ -96,17 +101,53 @@ final class SettingsSearchIndex {
                                  breadcrumb: path.joined(separator: " › "), secondary: secondary)
     }
 
-    /// 某个语言的 Localizable.strings 全表。跟 L10n.swift 找 bundle 的方式一致(目录名小写);
-    /// `swift build` 直接跑、资源没打进 bundle 时拿到空表,搜索退化成只搜当前语言——不报错。
-    private func stringsTable(_ language: String) -> [String: String] {
-        if let table = tables[language] { return table }
-        var table: [String: String] = [:]
-        if let dir = Bundle.main.path(forResource: language, ofType: "lproj"),
-           let dict = NSDictionary(contentsOfFile: dir + "/Localizable.strings") as? [String: String] {
-            table = dict
+}
+
+/// 各语言包里设置搜索用得到的译文(目录条目的标题键、别名标题键),按语言分表。十几份 Localizable.strings
+/// 只在后台队列上读一次;主线程要用时还没读完就等它读完,不自己读,也不先拿缺了别的语言的结果出来。
+final class SettingsSearchTranslations: @unchecked Sendable {
+    private let condition = NSCondition()
+    private var started = false
+    private var tables: [String: [String: String]]?
+
+    func start() {
+        condition.lock()
+        defer { condition.unlock() }
+        guard !started else { return }
+        started = true
+        DispatchQueue.global(qos: .userInitiated).async {
+            let read = Self.read()
+            self.condition.lock()
+            self.tables = read
+            self.condition.broadcast()
+            self.condition.unlock()
         }
-        tables[language] = table
-        return table
+    }
+
+    func wait() -> [String: [String: String]] {
+        start()
+        condition.lock()
+        defer { condition.unlock() }
+        while tables == nil { condition.wait() }
+        return tables ?? [:]
+    }
+
+    /// 每个语言包只留目录用得到的那几百个键。找语言包的方式跟 L10n.swift 一致(目录名小写);
+    /// `swift build` 直接跑、资源没打进 bundle 时拿到空表,搜索退化成只搜当前语言——不报错。
+    private static func read() -> [String: [String: String]] {
+        let keys = Set(SettingsSearchCatalog.entries.flatMap { [$0.titleKey] + $0.alternateTitleKeys })
+        var result: [String: [String: String]] = [:]
+        for language in UILanguage.packs {
+            var table: [String: String] = [:]
+            if let dir = Bundle.main.path(forResource: language, ofType: "lproj"),
+               let dict = NSDictionary(contentsOfFile: dir + "/Localizable.strings") as? [String: String] {
+                for key in keys {
+                    if let translated = dict[key] { table[key] = translated }
+                }
+            }
+            result[language] = table
+        }
+        return result
     }
 }
 

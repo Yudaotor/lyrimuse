@@ -736,4 +736,32 @@ func runMainThreadIOTests() {
         expectEqual(sourceHas(pickerFile, "private var systemFamilies: [String] { catalog.snapshot?.families ?? [selection] }"), true,
                     "字体选单(契约): 没读好时系统字体区只列选中的那款")
     }
+
+    do {
+        print("\n== 主线程 I/O:设置搜索的各语言译文表在后台读(14 章决策 217) ==")
+        // 契约:App 代码里整份读 Localizable.strings 只在设置搜索的后台读取那一处;主线程上要用时只等它读完。
+        expectEqual(appCodeOccurrences(of: "/Localizable.strings\""), ["lyrimuse/Settings/SettingsSearch.swift"],
+                    "设置搜索(契约): App 里只有设置搜索整份读语言包的 Localizable.strings")
+        let searchFile = app("Settings/SettingsSearch.swift")
+        let translations = sourceBody("final class SettingsSearchTranslations: @unchecked Sendable {", in: searchFile)
+        let read = sourceBody("private static func read() -> [String: [String: String]] {", in: translations)
+        expectEqual(sourceHas(read, "NSDictionary(contentsOfFile: dir + \"/Localizable.strings\")")
+                        && sourceHas(read, "for language in UILanguage.packs {"), true,
+                    "设置搜索(契约): 读语言表的只有 SettingsSearchTranslations.read")
+        expectEqual(sourceCount(searchFile, "read()") == 2
+                        && sourceHas(sourceBody("func start() {", in: translations),
+                                     "DispatchQueue.global(qos: .userInitiated).async {\nlet read = Self.read()"), true,
+                    "设置搜索(契约): 语言表只在后台队列上读一次")
+        let wait = sourceBody("func wait() -> [String: [String: String]] {", in: translations)
+        expectEqual(sourceHas(wait, "start()") && sourceHas(wait, "while tables == nil { condition.wait() }"), true,
+                    "设置搜索(契约): 主线程要用时没读完就等后台读完,不自己读")
+        let index = sourceBody("final class SettingsSearchIndex {", in: searchFile)
+        expectEqual(sourceHas(index, "let tables = translations.wait()") && !sourceHas(index, "Localizable.strings")
+                        && !sourceHas(index, "contentsOfFile"), true,
+                    "设置搜索(契约): 搜索索引拿后台读好的译文表建")
+        expectEqual(sourceHas(app("SettingsView.swift"), "guard closedContent.windowAppeared() else { return }\n"
+                                  + "AuxiliaryWindowActivation.windowDidAppear(\"settings\")\nplayerHealth.start()\n"
+                                  + "SettingsSearchIndex.shared.prefetch()"), true,
+                    "设置搜索(契约): 设置窗口一出现就开始读")
+    }
 }
