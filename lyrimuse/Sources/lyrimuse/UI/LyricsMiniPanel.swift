@@ -62,6 +62,7 @@ enum LyricsMiniPanelHost {
         panel.contentView = host
         panel.setFrame(frame, display: false)
         self.panel = panel
+        WindowActivation.hideBeforeShowing(panel, scene: "lyrics-window")
         LyricsMiniPanelAutoHide.shared.attach(panel)
         // 「截屏时隐藏」:订阅时先报一次当前值,建窗即写;之后每次变了直接写、不判等(运行中读回来的 sharingType 不可靠,
         // 同灵动岛 `applyBehaviorSettings`)。关着时回到面板的默认 `.readOnly`。见 07 章决策 209。

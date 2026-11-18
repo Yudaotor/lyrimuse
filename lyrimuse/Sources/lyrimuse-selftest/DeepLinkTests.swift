@@ -756,11 +756,26 @@ func runDeepLinkTests() {
                                #"static func open(scene openScene: () -> Void) {"#)
                         && sourceHas(sourceBody("static func open(scene openScene: () -> Void) {", in: source("lyrimuse/UI/LyricsWindowView.swift")),
                                      #"WindowActivation.prepareOpen("lyrics-window")"#),
-                     sourceHas(source("lyrimuse/Settings/DeepLinkRouter.swift"), "if invisible { WindowActivation.beginInvisible(scene: sceneID(for: link)) }"),
+                     sourceHas(source("lyrimuse/Settings/DeepLinkRouter.swift"), "if invisible { WindowActivation.beginInvisible(scenes: invisibleScenes(for: link)) }"),
                      sourceHas(activation, "static let invisibleLevel = NSWindow.Level(rawValue: Int(CGWindowLevelForKey(.desktopWindow)) - 2)"),
                      sourceHas(sourceBody("private static func hide(", in: activation), "NSWindow.willCloseNotification")],
                     [true, true, true, true, true, true],
                     "隐身开窗: 设置 / 场景窗 / 歌词窗口入口都先 prepareOpen,压到墙纸后面(桌面层减二),关窗还原层级")
+        // 隐身开窗的几处漏口(14 章决策 221):切迷你当场建的面板、「歌词窗口 › 搜索」连带开的歌词窗口、不经 prepareOpen 摆出来的压着的窗口。
+        let invisibleRouter = source("lyrimuse/Settings/DeepLinkRouter.swift")
+        expectEqual([sourceHas(invisibleRouter, "defer { if invisible { WindowActivation.hideNewWindows() } if background, let scene = sceneToSurface(for: link)"),
+                     sourceHas(sourceBody("private static func invisibleScenes(", in: invisibleRouter),
+                               #"if case .lyricsWindowSearch = link { scenes.insert("lyrics-window") }"#),
+                     sourceHas(sourceBody("static func make(frame: NSRect) -> LyricsMiniPanel {", in: source("lyrimuse/UI/LyricsMiniPanel.swift")),
+                               #"self.panel = panel WindowActivation.hideBeforeShowing(panel, scene: "lyrics-window")"#),
+                     sourceHas(sourceBody("private static func hide(", in: activation),
+                               "NSWindow.didBecomeKeyNotification, object: window, queue: .main) { _ in MainActor.assumeIsolated { guard !isInvisible else { return } restore(key) } }"),
+                     sourceHas(sourceBody("private static func invisibleScene(of window: NSWindow) -> String? {", in: activation),
+                               #"if window is LyricsMiniPanel { return invisibleScenes.contains("lyrics-window") ? "lyrics-window" : nil }"#),
+                     sourceHas(sourceBody("static func open(scene openScene: () -> Void) {", in: source("lyrimuse/UI/LyricsWindowView.swift")),
+                               #"if !(WindowActivation.isInvisible && LyricsMiniPanelHost.panel?.isVisible == true) { WindowActivation.prepareOpen("lyrics-window") }"#)],
+                    [true, true, true, true, true, true],
+                    "隐身开窗: 深链处理完都扫一次、搜索连带歌词窗口、新面板上屏前就压下、压着的窗口当 key 时还原、面板开着时不预压完整那扇")
         // debug/lyrics-search 开的也是搜索小窗:background=1 时由路由摆到最前;列表没读完、晚开的那一次自己补上后台那一段。
         let router = source("lyrimuse/Settings/DeepLinkRouter.swift")
         let lateSearch = sourceBody("private static func openLyricsSearch(", in: debug)

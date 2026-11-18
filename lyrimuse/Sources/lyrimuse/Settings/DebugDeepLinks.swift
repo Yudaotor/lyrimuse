@@ -904,7 +904,7 @@ extension DebugDeepLinks {
             return
         }
         let late = attempt > 0 && background
-        if late, invisible { WindowActivation.beginInvisible(scene: "lyrics-quick-search") }
+        if late, invisible { WindowActivation.beginInvisible(scenes: ["lyrics-quick-search"]) }
         if late { WindowActivation.beginBackground() }
         AppActions.shared.openLyricsSearch(for: LyricsSearchTarget(summary: summary))
         if late { WindowActivation.surface(identifier: "lyrics-quick-search") }

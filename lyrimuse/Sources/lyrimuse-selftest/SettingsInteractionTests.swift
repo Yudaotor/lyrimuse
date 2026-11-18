@@ -1011,8 +1011,12 @@ func runSettingsInteractionTests() {
             expectEqual(store.contains("if settings.\(field) == font.familyName { settings.\(field) = \"\" }"), true,
                         "删除字体(契约): \(field) 仍指向删掉的族时退回系统字体")
         }
-        expectEqual(picker.contains("!customFonts.isImported($0) && customFonts.availableFamilies.contains($0)"), true,
+        expectEqual(picker.contains("!customFonts.isImported($0) && customFonts.isAvailable($0)"), true,
                     "字体选择器(契约): 系统字体区不重复列导入字体、不列已删掉的族")
+        expectEqual(sourceBody("private func refresh(then done:", in: store).contains("Task.detached(priority: .utility)")
+                    && store.components(separatedBy: "CustomFontFile.availableFamilyNames()").count == 2
+                    && sourceBody("private func refresh(then done:", in: store).contains("CustomFontFile.availableFamilyNames()"), true,
+                    "导入字体(契约): 可用族名只在 refresh 的后台任务里读,不在主线程上等 fontd")
         // 「未安装」收在 displayName(for:) 里:几处摘要(编辑台工具栏、菜单栏)跟选择器按钮说同一句话。
         expectEqual(picker.contains("CustomFontStore.shared.isAvailable(family) ? family : String(format: L10n.t(\"%@（未安装）\"), family)"), true,
                     "字体选择器(契约): 选中的族不在时标「未安装」")

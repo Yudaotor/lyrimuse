@@ -33,8 +33,11 @@ final class CustomFontStore: ObservableObject {
 
     /// 注册成功的导入字体,按族名排序,给 `FontFamilyPicker` 展示用。注册失败的文件不列:选了也只会显示系统字体。
     @Published private(set) var fonts: [ImportedFont] = []
-    /// 此刻进程里能用的字体族名(`CustomFontFile.availableFamilyNames`),在注册 / 反注册之后刷新。
-    @Published private(set) var availableFamilies: Set<String> = []
+    /// 此刻进程里能用的字体族名(`CustomFontFile.availableFamilyNames`),在注册 / 反注册之后到后台重读、读好再换。
+    /// 那一次要同步等 fontd、每次都现问不缓存(实测几十到两百多毫秒),所以不在主线程上读。还没读好时是 nil。
+    @Published private(set) var availableFamilies: Set<String>?
+    /// 重读的代次:先发的那次比后发的晚回来时丢掉。
+    private var familiesGeneration = 0
 
     enum ImportError: Error {
         /// 扩展名不是 .ttf / .otf。
@@ -56,9 +59,11 @@ final class CustomFontStore: ObservableObject {
         registerAll()
     }
 
-    /// 族名此刻有没有字体可用(系统已装或导入并注册成功)。空串是跟随系统字体,永远可用。
+    /// 族名此刻有没有字体可用(系统已装或导入并注册成功)。空串是跟随系统字体,永远可用。族名列表还没读好时按可用算,
+    /// 不先标「未安装」。
     func isAvailable(_ family: String) -> Bool {
-        !CustomFontFile.isMissing(family, available: availableFamilies)
+        guard let availableFamilies else { return true }
+        return !CustomFontFile.isMissing(family, available: availableFamilies)
     }
 
     /// 这个族名是不是导入字体(选择器的系统字体列表据此排除,免得同一款出现两次)。
@@ -132,14 +137,15 @@ final class CustomFontStore: ObservableObject {
             unregister(url)
             FileIO.remove(url)
         }
-        refresh()
-        guard !isAvailable(font.familyName) else { return }
-        let settings = AppSettings.shared
-        if settings.fontFamilyName == font.familyName { settings.fontFamilyName = "" }
-        if settings.notchFontFamilyName == font.familyName { settings.notchFontFamilyName = "" }
-        if settings.menuBarLyricsFontFamily == font.familyName { settings.menuBarLyricsFontFamily = "" }
-        if settings.lyricsWindowFontFamily == font.familyName { settings.lyricsWindowFontFamily = "" }
-        if settings.lyricsWindowMiniFontFamily == font.familyName { settings.lyricsWindowMiniFontFamily = "" }
+        refresh { available in
+            guard CustomFontFile.isMissing(font.familyName, available: available) else { return }
+            let settings = AppSettings.shared
+            if settings.fontFamilyName == font.familyName { settings.fontFamilyName = "" }
+            if settings.notchFontFamilyName == font.familyName { settings.notchFontFamilyName = "" }
+            if settings.menuBarLyricsFontFamily == font.familyName { settings.menuBarLyricsFontFamily = "" }
+            if settings.lyricsWindowFontFamily == font.familyName { settings.lyricsWindowFontFamily = "" }
+            if settings.lyricsWindowMiniFontFamily == font.familyName { settings.lyricsWindowMiniFontFamily = "" }
+        }
     }
 
     // MARK: - 启动时注册
@@ -174,7 +180,8 @@ final class CustomFontStore: ObservableObject {
         registered.remove(url.lastPathComponent)
     }
 
-    private func refresh() {
+    /// 重排已导入列表,再到后台重读可用族名;`done` 拿这次读到的族名在主线程上跑(被后发的重读盖掉时也跑)。
+    private func refresh(then done: (@MainActor (Set<String>) -> Void)? = nil) {
         let files = (try? fm.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil)) ?? []
         let entries = files
             .filter { CustomFontFile.isSupported($0) && registered.contains($0.lastPathComponent) }
@@ -183,6 +190,15 @@ final class CustomFontStore: ObservableObject {
                 return (fileName: url.lastPathComponent, family: family)
             }
         fonts = CustomFontFile.groupByFamily(entries).map { ImportedFont(familyName: $0.family, fileNames: $0.fileNames) }
-        availableFamilies = CustomFontFile.availableFamilyNames()
+        familiesGeneration += 1
+        let generation = familiesGeneration
+        Task.detached(priority: .utility) { [weak self] in
+            let families = CustomFontFile.availableFamilyNames()
+            await MainActor.run {
+                guard let self else { return }
+                if generation == self.familiesGeneration { self.availableFamilies = families }
+                done?(families)
+            }
+        }
     }
 }

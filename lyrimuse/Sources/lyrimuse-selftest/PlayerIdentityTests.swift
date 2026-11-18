@@ -3036,9 +3036,14 @@ func runPlayerIdentityTests() {
             expectEqual(sourceHas(delegate, "if !launches.isEmpty { PlayerLaunchFocusGuard.begin(launching: launches.map(\\.ids)) } for launch in launches {")
                         && sourceCount(delegate, "PlayerLaunchFocusGuard.begin(") == 1, true,
                         "还前台接线: 打开 Lyrimuse 时启动播放器,整批拉起之前只调一次、共用一个守卫")
-            expectEqual(sourceHas(sourceBody("static func ensureAppRunning(bundleID: String) async", in: src("lyrimuse/Settings/MusicAutomationPermission.swift")),
-                                  "await PlayerLaunchFocusGuard.begin(launching: [PlayerBundleAliases.all(for: bundleID)], keepSelf: true) do {"),
+            let automation = src("lyrimuse/Settings/MusicAutomationPermission.swift")
+            expectEqual(sourceHas(sourceBody("static func ensureAppRunning(bundleID: String, guardsFocus: Bool) async", in: automation),
+                                  "if guardsFocus { await PlayerLaunchFocusGuard.begin(launching: [PlayerBundleAliases.all(for: bundleID)], keepSelf: true) } do {"),
                         true, "还前台接线: 请求自动化权限前后台拉起目标 App,拉起前先记前台")
+            expectEqual(sourceHas(automation, "await ensureAppRunning(bundleID: bundleID, guardsFocus: true)")
+                        && sourceHas(sourceBody("static func ensureMusicAppRunning() async", in: automation),
+                                     "await ensureAppRunning(bundleID: musicBundleID, guardsFocus: false)"), true,
+                        "还前台接线: 请求权限那条挂守卫;前往专辑 / 歌手页拉起 Music 后自己要带到前台,不挂")
             let guardSource = src("LyrimuseCore/Local/PlayerLaunchFocusGuard.swift")
             expectEqual(sourceHas(guardSource, "target.activate(options: [])")
                         && !guardSource.contains("NSAppleScript") && !guardSource.contains("CGEvent("), true,

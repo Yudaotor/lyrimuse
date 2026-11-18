@@ -1813,7 +1813,7 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
         // (两者可以不同):窗口比稳态卡片宽出来的那两截跟下方多出来的高度一样是纯透明区,
         // 点击穿透到底下的菜单栏,见上面那条提醒。
         //
-        // 余量是给展开态投影(`NotchCardEdge`)留的:没有余量,投影被窗口的矩形边界硬裁,在底部两个圆角外侧留下
+        // 余量是给卡片投影(`NotchCardEdge`,展开态和垂到菜单栏下方的稳态都画)留的:没有余量,投影被窗口的矩形边界硬裁,在底部两个圆角外侧留下
         // 直角残影。改投影的范围要连着改余量。左右对称加、顶边不加,卡片在屏幕上的位置(`cardScreenFrame`)不变。
         // 收听里程碑的报喜卡片(顶行 + milestonePanelHeight)加上它下沿落出去的碎屑(`milestoneConfettiReach`)在展开区很矮的配置下
         // 可能比展开态还高,取两者大的;多出来的是透明区,点击穿透。

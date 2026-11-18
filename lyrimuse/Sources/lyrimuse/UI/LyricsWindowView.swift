@@ -372,7 +372,10 @@ enum LyricsWindowSession {
     /// 面板自己的控制器收到去切,这里不再开。`openScene` 激活 App 并开场景。
     @MainActor static func open(scene openScene: () -> Void) {
         // 隐身开窗时迷你面板由 `hideNewWindows` 压下去;正常打开时之前被隐身压下去的面板、场景窗还回原层级。
-        WindowActivation.prepareOpen("lyrics-window")
+        // 隐身开窗碰上开着的面板时不预先压 SwiftUI 留着的完整那扇:这一下不开它,压着的记录会在用户之后展开时提前还原、闪一下。
+        if !(WindowActivation.isInvisible && LyricsMiniPanelHost.panel?.isVisible == true) {
+            WindowActivation.prepareOpen("lyrics-window")
+        }
         // 最小化着的那扇(isVisible 为 false)先还原,别另开一扇:形态请求留给它上屏那一刻由遮挡观察者取走。
         if let minimized = [LyricsMiniPanelHost.panel, sceneWindow].compactMap({ $0 }).first(where: \.isMiniaturized) {
             minimized.deminiaturize(nil)

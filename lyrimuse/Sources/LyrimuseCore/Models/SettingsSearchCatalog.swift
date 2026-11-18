@@ -133,6 +133,8 @@ public enum SettingsSearchCatalog {
     public static let touchBarToggleTitleKey = "触控栏歌词"
     /// 「快捷键」页「展开/收起触控栏歌词」那一行的标题。那一行只在有触控栏时出现,没有触控栏时设置搜索不收这一条。
     public static let touchBarHotkeyTitleKey = LyrimuseAction.toggleTouchBarLyricsHotkey.titleKey
+    /// 灵动岛「左耳」音浪那一行的「跟随音乐跳动」按钮。系统录不了音频(macOS 14.2 以下)时没有这颗按钮,设置搜索不收这一条。
+    public static let notchFollowsAudioTitleKey = "跟随音乐跳动"
 
     /// 随设置显隐的一行:`condition` 为假时它不在页面上,搜到它时落到 `gate` 那一行(一起点亮、滚过去的就是那一行)。
     /// `condition` 是名字,真假由 App 侧 `SettingsSearchRouter.rowCondition` 按此刻的设置算,写法要跟那一行自己的
@@ -500,7 +502,7 @@ public enum SettingsSearchCatalog {
         surface(.notch, "左耳", kw: ["模块", "歌名", "歌手", "专辑", "封面", "播放控制", "已播时长", "剩余时长", "收听次数", "播放器"]),
         surface(.notch, "右耳", kw: ["模块", "歌名", "歌手", "专辑", "封面", "播放控制", "已播时长", "剩余时长", "收听次数", "播放器"]),
         surface(.notch, "音浪", kw: ["频谱", "音条", "律动"], group: "左耳"),
-        surface(.notch, "跟随音乐跳动",
+        surface(.notch, notchFollowsAudioTitleKey,
                 sub: "按播放器正在播放的声音跳动，需允许 Lyrimuse 录制系统音频；只读取音量，不保存声音",
                 kw: ["音浪", "频谱", "真实音频", "节奏", "鼓点", "系统录音"], group: "左耳"),
         surface(.notch, "宽度", kw: ["稳态宽", "pt"]),

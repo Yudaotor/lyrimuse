@@ -190,7 +190,7 @@ enum MusicAutomationPermission {
         // 用 activates=false 后台启动,不抢用户当前焦点,跟 AppDelegate.swift 里
         // 「打开 Lyrimuse 时启动播放器」那半用的是同一个"后台起、别抢前台"的做法。
         if launchIfNeeded {
-            await ensureAppRunning(bundleID: bundleID)
+            await ensureAppRunning(bundleID: bundleID, guardsFocus: true)
         }
         return await status(bundleID: bundleID, askIfNeeded: true, timeout: seconds)
     }
@@ -201,8 +201,9 @@ enum MusicAutomationPermission {
     /// 走到能接 Apple Event 那一步之前 URL 就丢了,用户看到的是"App 打开了,但停在上次
     /// 退出时的页面"而不是跳到链接指的那一页(现象是)。跟这里已经解决
     /// 过的"TCC 查权限前必须先让 Music.app 存在"是同一个根因,直接复用。
+    /// 调用方拉起之后紧接着 `open(music://…)` 把 Music 带到前台,这一步不挂还前台的守卫。
     static func ensureMusicAppRunning() async {
-        await ensureAppRunning(bundleID: musicBundleID)
+        await ensureAppRunning(bundleID: musicBundleID, guardsFocus: false)
     }
 
     /// 这个 bundle id 在跑没跑。`.notDetermined` 的两种含义要靠它区分(见 `check(bundleID:)`)。
@@ -215,7 +216,10 @@ enum MusicAutomationPermission {
     /// 这一步会**后台启动别人的 App**(`activates = false`,不抢焦点)。只在用户**显式点了
     /// "请求授权"**时才调 —— 别把它挂在"配对成功"这种顺带的路径上:用户点的是"把这个浏览器
     /// 加进列表",不是"现在把我的浏览器打开"。
-    static func ensureAppRunning(bundleID: String) async {
+    ///
+    /// `guardsFocus`:拉起后它自己跳到前台就还回去(`PlayerLaunchFocusGuard`)。拉起之后本来就要把它带到前台的调用方传 false,
+    /// 不然那次带到前台会被当成冷启动抢前台压回去。见 02 章决策 279。
+    static func ensureAppRunning(bundleID: String, guardsFocus: Bool) async {
         guard !isRunning(bundleID: bundleID) else { return }
         guard let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID) else {
             logger.error("cannot resolve app URL by bundle id, skip pre-launch")
@@ -224,7 +228,9 @@ enum MusicAutomationPermission {
         logger.notice("target app not running, launching in background before requesting automation permission")
         let config = NSWorkspace.OpenConfiguration()
         config.activates = false
-        await PlayerLaunchFocusGuard.begin(launching: [PlayerBundleAliases.all(for: bundleID)], keepSelf: true)
+        if guardsFocus {
+            await PlayerLaunchFocusGuard.begin(launching: [PlayerBundleAliases.all(for: bundleID)], keepSelf: true)
+        }
         do {
             _ = try await NSWorkspace.shared.openApplication(at: url, configuration: config)
         } catch {

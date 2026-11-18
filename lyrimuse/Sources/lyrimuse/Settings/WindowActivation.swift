@@ -14,8 +14,9 @@ import AppKit
 enum WindowActivation {
     private static var backgroundUntil: Date?
     private static var invisibleUntil: Date?
-    /// 这次隐身开窗开的是哪一扇场景(`DeepLinkRouter.sceneID`);期间新冒出来的窗口(迷你歌词面板这类)记在它名下。
-    private static var invisibleScene: String?
+    /// 这次隐身开窗要开的场景(`DeepLinkRouter.sceneIDs`,「歌词窗口 › 搜索」连带歌词窗口);期间新冒出来的窗口记在它认的那个场景名下,
+    /// 迷你歌词面板认作歌词窗口。
+    private static var invisibleScenes: Set<String> = []
     /// 隐身开窗开始前就在屏上的窗口:不压,用户正看着的不能被收走。
     private static var visibleBeforeInvisible: Set<ObjectIdentifier> = []
     private static var hidden: [ObjectIdentifier: HiddenWindow] = [:]
@@ -24,7 +25,7 @@ enum WindowActivation {
         weak var window: NSWindow?
         /// 压下去之前、或压着期间别处想设的层级,还回去时用。
         var level: NSWindow.Level
-        let scene: String?
+        let scene: String
         var observers: [NSObjectProtocol]
     }
 
@@ -50,11 +51,11 @@ enum WindowActivation {
         backgroundUntil = Date().addingTimeInterval(backgroundWindow)
     }
 
-    /// 隐身开窗(隐含后台开窗)。`scene` 是这次要开的场景 id,不开窗的链接传 nil。
-    static func beginInvisible(scene: String?) {
+    /// 隐身开窗(隐含后台开窗)。`scenes` 是这次要开的场景 id,不开窗的链接传空集。
+    static func beginInvisible(scenes: Set<String>) {
         beginBackground()
         invisibleUntil = backgroundUntil
-        invisibleScene = scene
+        invisibleScenes = scenes
         visibleBeforeInvisible = Set(NSApp.windows.filter(\.isVisible).map(ObjectIdentifier.init))
     }
 
@@ -79,7 +80,7 @@ enum WindowActivation {
     /// 正常开窗:这扇之前被隐身压下去的话还回原层级,用户自己打开的窗口得看得见。
     static func prepareOpen(_ identifier: String) {
         if isInvisible {
-            if let reused = window(matching: identifier, visibleOnly: false), !reused.isVisible { hide(reused) }
+            if let reused = window(matching: identifier, visibleOnly: false), !reused.isVisible { hide(reused, scene: identifier) }
         } else {
             reveal(scene: identifier)
         }
@@ -117,15 +118,14 @@ enum WindowActivation {
 
     static func isHidden(_ window: NSWindow) -> Bool { hidden[ObjectIdentifier(window)] != nil }
 
-    /// 隐身开窗期间新上屏的、这次要开的那扇场景窗压下去(开始前就在屏上的不动;歌词窗口连迷你面板)。开窗入口开完当场扫一次,
-    /// 之后每 1/120 秒再扫,直到这一小段结束:SwiftUI 头一次建场景窗可能晚一拍才上屏。
+    /// 隐身开窗期间新上屏的、这次要开的场景窗压下去(开始前就在屏上的不动;歌词窗口连迷你面板)。开窗入口开完当场扫一次,
+    /// 之后每 1/120 秒再扫,直到这一小段结束:SwiftUI 头一次建场景窗可能晚一拍才上屏。深链处理完不管开没开窗都扫一次
+    /// (`DeepLinkRouter`):切迷你这类当场建面板的入口不经过开窗入口。
     /// 只认场景窗:提示浮条这类反复复用、只 orderOut 不 close 的窗口压下去就还不回来了。
     static func hideNewWindows() {
-        guard isInvisible, let scene = invisibleScene else { return }
+        guard isInvisible, !invisibleScenes.isEmpty else { return }
         for window in NSApp.windows where window.isVisible && !visibleBeforeInvisible.contains(ObjectIdentifier(window)) {
-            let matches = window.identifier?.rawValue.localizedCaseInsensitiveContains(scene) == true
-                || (scene == "lyrics-window" && window is LyricsMiniPanel)
-            if matches { hide(window) }
+            if let scene = invisibleScene(of: window) { hide(window, scene: scene) }
         }
         guard sweepTimer == nil else { return }
         let timer = Timer(timeInterval: 1.0 / 120, repeats: true) { _ in
@@ -144,7 +144,20 @@ enum WindowActivation {
 
     private static var sweepTimer: Timer?
 
-    private static func hide(_ window: NSWindow) {
+    /// 隐身开窗期间新建、还没上屏的面板(迷你歌词面板)上屏前先压下去,不在原层级闪一下。这次没开 `scene` 时什么都不做。
+    static func hideBeforeShowing(_ window: NSWindow, scene: String) {
+        guard isInvisible, invisibleScenes.contains(scene) else { return }
+        hide(window, scene: scene)
+    }
+
+    /// `window` 是这次隐身开窗要开的哪个场景;都不是时 nil。
+    private static func invisibleScene(of window: NSWindow) -> String? {
+        if window is LyricsMiniPanel { return invisibleScenes.contains("lyrics-window") ? "lyrics-window" : nil }
+        let identifier = window.identifier?.rawValue ?? ""
+        return invisibleScenes.first { identifier.localizedCaseInsensitiveContains($0) }
+    }
+
+    private static func hide(_ window: NSWindow, scene: String) {
         let key = ObjectIdentifier(window)
         guard hidden[key] == nil else { return }
         let original = window.level == invisibleLevel ? .normal : window.level
@@ -160,7 +173,15 @@ enum WindowActivation {
         let close = center.addObserver(forName: NSWindow.willCloseNotification, object: window, queue: .main) { _ in
             MainActor.assumeIsolated { restore(key) }
         }
-        hidden[key] = HiddenWindow(window: window, level: original, scene: invisibleScene, observers: [pin, close])
+        // 不经 `prepareOpen` 的开窗入口(设置里的「打开歌词管理」、引导里的「打开设置」、主菜单 ⌘,)把压着的窗口当 key 摆出来时
+        // 还回原层级:不然用户打开的窗口看不见,键盘输入却落在墙纸后面那扇里。隐身开窗那一小段里成为 key 的不算。
+        let becameKey = center.addObserver(forName: NSWindow.didBecomeKeyNotification, object: window, queue: .main) { _ in
+            MainActor.assumeIsolated {
+                guard !isInvisible else { return }
+                restore(key)
+            }
+        }
+        hidden[key] = HiddenWindow(window: window, level: original, scene: scene, observers: [pin, close, becameKey])
         window.level = invisibleLevel
     }
 

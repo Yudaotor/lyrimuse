@@ -444,7 +444,12 @@ func runSettingsSearchTests() {
                     ["音浪", nil], "搜索门: 音浪关着时「跟随音乐跳动」落到「音浪」(开着时由那一行自己点亮)")
         expectEqual(sourceHas(source("Settings/SettingsSearch.swift"), "case \"notch.equalizer\": return s.notchShowsEqualizer && RealAudioMeter.isSupported")
                         && sourceHas(source("UI/NotchSettingsRows.swift"), "private var showsFollowsAudioButton: Bool { showsEqualizerHere && RealAudioMeter.isSupported }"), true,
-                    "搜索门(契约): 「跟随音乐跳动」的门跟按钮一样看系统支不支持(macOS 14.2 以下没有这颗按钮,落到「音浪」)")
+                    "搜索门(契约): 「跟随音乐跳动」的门跟按钮一样看系统支不支持")
+        expectEqual(sourceHas(sourceBody("func search(_ query: String) -> [SettingsSearchHit] {", in: source("Settings/SettingsSearch.swift")),
+                              "&& (showsFollowsAudio || $0.entry.titleKey != SettingsSearchCatalog.notchFollowsAudioTitleKey)")
+                        && sourceHas(source("Settings/SettingsSearch.swift"), "let showsFollowsAudio = RealAudioMeter.isSupported")
+                        && SettingsSearchCatalog.entries.contains { $0.titleKey == SettingsSearchCatalog.notchFollowsAudioTitleKey }, true,
+                    "搜索(契约): macOS 14.2 以下没有「跟随音乐跳动」按钮,这一条不进搜索结果(05 章决策 152)")
         expectEqual(gate(lastfm, "歌名", false: ["lastfm.matchCustom"]), "匹配模式", "搜索门: Last.fm 歌名落到「匹配模式」")
         expectEqual(gate(lastfm, "歌名", false: ["lastfm.mirror", "lastfm.matchCustom"]), "Scrobble 规则",
                     "搜索门: Scrobble 关着时落到「Scrobble 规则」")

@@ -42,7 +42,7 @@ struct FontFamilyPicker: View {
     /// 系统字体区:排除导入字体(它们在上面的「已导入」区,带删除键)和已经不存在的族(本次运行里删掉的导入字体)。
     private var filtered: [String] {
         let keyword = query.trimmingCharacters(in: .whitespaces)
-        let system = systemFamilies.filter { !customFonts.isImported($0) && customFonts.availableFamilies.contains($0) }
+        let system = systemFamilies.filter { !customFonts.isImported($0) && customFonts.isAvailable($0) }
         guard !keyword.isEmpty else { return system }
         return system.filter { family in
             family.localizedCaseInsensitiveContains(keyword)

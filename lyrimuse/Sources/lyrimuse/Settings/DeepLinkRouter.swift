@@ -22,11 +22,12 @@ enum DeepLinkRouter {
         let invisible = LyrimuseDeepLink.wantsInvisible(url) && DebugDeepLinks.isEnabled
         let background = invisible || LyrimuseDeepLink.wantsBackground(url)
         if invisible {
-            WindowActivation.beginInvisible(scene: sceneID(for: link))
+            WindowActivation.beginInvisible(scenes: invisibleScenes(for: link))
         } else if background {
             WindowActivation.beginBackground()
         }
         defer {
+            if invisible { WindowActivation.hideNewWindows() }
             if background, let scene = sceneToSurface(for: link) { WindowActivation.surface(identifier: scene) }
         }
         switch link {
@@ -85,6 +86,13 @@ enum DeepLinkRouter {
         guard let scene = sceneID(for: link) else { return nil }
         if scene == "lyrics-window", UserDefaults.standard.bool(forKey: LyricsWindowSession.miniModeKey) { return nil }
         return scene
+    }
+
+    /// `invisible=1` 时要压到墙纸后面的场景:开的那扇,「歌词窗口 › 搜索」连带它先开的歌词窗口(迷你时是面板)。见 14 章决策 221。
+    private static func invisibleScenes(for link: LyrimuseDeepLink) -> Set<String> {
+        var scenes = Set([sceneID(for: link)].compactMap { $0 })
+        if case .lyricsWindowSearch = link { scenes.insert("lyrics-window") }
+        return scenes
     }
 
     /// 开窗类链接开的是哪一扇 SwiftUI 场景窗(`background=1` 时开完摆到最前用);不开窗的是 nil。
