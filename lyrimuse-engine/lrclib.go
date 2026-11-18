@@ -5,6 +5,7 @@ import (
 	_ "image/jpeg" // 注册 JPEG 解码器
 	_ "image/png"  // 网易云取色缩略图有时是 PNG(content-type 却谎报 jpg)
 	"math"
+	"math/rand/v2"
 	"net/http"
 	neturl "net/url"
 	"strconv"
@@ -226,21 +227,34 @@ func lrclibUserAgent() string {
 
 // lrclibRetryWait:重发前等多久。后台请求还要等本地的后台暂停结束(第一次 503 / 429 刚把它暂停了,见
 // noteLyricSourceThrottled),不然重发那次在出站闸就被拦下、这一轮记成跳过;暂停还要超过 lyricSourceShortRetryMax
-// 时不重发(ok = false)。
+// 时不重发(ok = false)。要等的时间再加 lrclibRetryJitter 的随机抖动,只往后延:LRCLIB 的 API 文档要求重发前至少等满
+// Retry-After,并加最多 30% 的随机抖动,免得同一时刻被限流的客户端一起重发。见 09 章决策 385。
 func lrclibRetryWait(ctx context.Context, host string, wait time.Duration) (time.Duration, bool) {
 	if outboundLaneOf(ctx) != laneBackground {
-		return wait, true
+		return lrclibJittered(wait), true
 	}
 	g := sharedHostGuard()
 	until, paused := g.backgroundPausedUntil(host)
 	if !paused {
-		return wait, true
+		return lrclibJittered(wait), true
 	}
 	left := until.Sub(g.now()) + 10*time.Millisecond
 	if left > lyricSourceShortRetryMax {
 		return 0, false
 	}
-	return max(wait, left), true
+	return lrclibJittered(max(wait, left)), true
+}
+
+// lrclibRetryJitterMax:重发等待上随机加的比例上限。
+const lrclibRetryJitterMax = 0.3
+
+// lrclibRetryJitter 给出 [0, lrclibRetryJitterMax) 里的一个随机比例。可换,只为单测;生产路径永远是这个实现。
+var lrclibRetryJitter = func() float64 { return rand.Float64() * lrclibRetryJitterMax }
+
+// lrclibJittered 把 d 按 lrclibRetryJitter 往后延;比例越界时夹回 [0, lrclibRetryJitterMax],结果不会短于 d。
+func lrclibJittered(d time.Duration) time.Duration {
+	f := min(max(lrclibRetryJitter(), 0), lrclibRetryJitterMax)
+	return d + time.Duration(float64(d)*f)
 }
 
 // lrclibOverloadPause 等 d,ctx 先结束就返回 false。可换,只为单测;生产路径永远是这个实现。

@@ -5,6 +5,7 @@ import (
 	"crypto/tls"
 	"errors"
 	"io"
+	"math"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -269,10 +270,10 @@ func TestDoHTTPTrackedGuardedRequestNeverSent(t *testing.T) {
 	}
 }
 
-// 限速参数表:iTunes 每分钟 40 次(实测过线后失败率陡升)、Last.fm 每秒 1 次、其余默认。
+// 限速参数表:iTunes 每分钟 20 次(Search API 文档的上限)、Last.fm 每秒 1 次、其余默认。
 func TestHostRateFor(t *testing.T) {
-	if got := hostRateFor("itunes.apple.com"); got.perSec*60 != 40 {
-		t.Errorf("iTunes 该是每分钟 40 次: %+v", got)
+	if got := hostRateFor("itunes.apple.com"); math.Abs(got.perSec*60-20) > 1e-9 || got.burst != 10 || got.reserve != 3 {
+		t.Errorf("iTunes 该是每分钟 20 次、攒 10、留 3: %+v", got)
 	}
 	if got := hostRateFor("ws.audioscrobbler.com"); got.perSec != 1 {
 		t.Errorf("Last.fm 该是每秒 1 次: %+v", got)

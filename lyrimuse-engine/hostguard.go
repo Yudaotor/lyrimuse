@@ -76,7 +76,8 @@ var hostRateDefault = hostRate{perSec: 3, burst: 10, reserve: 3}
 func hostRateFor(host string) hostRate {
 	switch host {
 	case "itunes.apple.com":
-		return hostRate{perSec: 40.0 / 60, burst: 10, reserve: 3}
+		// Search API 文档写的是每分钟约 20 次,不要调到它之上。见 09 章决策 385。
+		return hostRate{perSec: 20.0 / 60, burst: 10, reserve: 3}
 	case "ws.audioscrobbler.com":
 		return hostRate{perSec: 1, burst: 5, reserve: 2}
 	case "lrclib.net":

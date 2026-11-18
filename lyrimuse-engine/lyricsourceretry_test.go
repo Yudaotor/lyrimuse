@@ -67,6 +67,7 @@ func TestLRCLIBRetryWaitRespectsBackgroundPause(t *testing.T) {
 	g := newHostGuard(func() time.Time { return now })
 	setSharedHostGuard(g)
 	t.Cleanup(func() { setSharedHostGuard(saved) })
+	pinLRCLIBRetryJitter(t, 0)
 	bg := withBackgroundOutbound(context.Background())
 
 	if d, ok := lrclibRetryWait(bg, "lrclib.net", time.Second); !ok || d != time.Second {
@@ -78,6 +79,10 @@ func TestLRCLIBRetryWaitRespectsBackgroundPause(t *testing.T) {
 	}
 	if d, ok := lrclibRetryWait(context.Background(), "lrclib.net", time.Second); !ok || d != time.Second {
 		t.Fatalf("前台请求不看后台暂停,got %v %v", d, ok)
+	}
+	pinLRCLIBRetryJitter(t, 0.3)
+	if d, ok := lrclibRetryWait(bg, "lrclib.net", time.Second); !ok || d != 1963*time.Millisecond {
+		t.Fatalf("暂停 1.5 秒、抖动 30%%:等到暂停结束再往后延,got %v %v", d, ok)
 	}
 	g.bgPause["lrclib.net"] = &lyricSourceBackgroundPause{until: now.Add(4 * time.Second)}
 	if _, ok := lrclibRetryWait(bg, "lrclib.net", time.Second); ok {

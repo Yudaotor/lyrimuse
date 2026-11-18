@@ -165,9 +165,10 @@ func TestLRCLIBOverloadWait(t *testing.T) {
 	}
 }
 
-// withLRCLIBInstantPause 把过载重试的等待换成不真等,记下每次要等多久。
+// withLRCLIBInstantPause 把过载重试的等待换成不真等,记下每次要等多久;抖动钉成 0,等多久跟 Retry-After 一样。
 func withLRCLIBInstantPause(t *testing.T) *[]time.Duration {
 	t.Helper()
+	pinLRCLIBRetryJitter(t, 0)
 	var waits []time.Duration
 	saved := lrclibOverloadPause
 	lrclibOverloadPause = func(ctx context.Context, d time.Duration) bool {
@@ -176,6 +177,70 @@ func withLRCLIBInstantPause(t *testing.T) *[]time.Duration {
 	}
 	t.Cleanup(func() { lrclibOverloadPause = saved })
 	return &waits
+}
+
+// pinLRCLIBRetryJitter 把重发等待的随机抖动钉成固定比例 f。
+func pinLRCLIBRetryJitter(t *testing.T, f float64) {
+	t.Helper()
+	saved := lrclibRetryJitter
+	lrclibRetryJitter = func() float64 { return f }
+	t.Cleanup(func() { lrclibRetryJitter = saved })
+}
+
+// 重发等待加随机抖动,只往后延:按钉住的比例加,越界的比例夹回 [0, 30%],不会短于 Retry-After。前台、没在暂停的后台一样。
+func TestLRCLIBRetryWaitJitter(t *testing.T) {
+	saved := sharedHostGuard()
+	setSharedHostGuard(newHostGuard(time.Now))
+	t.Cleanup(func() { setSharedHostGuard(saved) })
+	for _, c := range []struct {
+		jitter float64
+		want   time.Duration
+	}{
+		{0, time.Second}, {0.3, 1300 * time.Millisecond}, {0.15, 1150 * time.Millisecond},
+		{0.9, 1300 * time.Millisecond}, {-0.5, time.Second},
+	} {
+		pinLRCLIBRetryJitter(t, c.jitter)
+		for _, ctx := range []context.Context{context.Background(), withBackgroundOutbound(context.Background())} {
+			if d, ok := lrclibRetryWait(ctx, "lrclib.net", time.Second); !ok || d != c.want {
+				t.Errorf("抖动 %v(后台 %v): 等 %v %v,期望 %v", c.jitter, outboundLaneOf(ctx) == laneBackground, d, ok, c.want)
+			}
+		}
+	}
+}
+
+// 默认的随机源:每次都落在 [Retry-After, Retry-After × 1.3) 里,而且真的在变。
+func TestLRCLIBRetryJitterDefaultRange(t *testing.T) {
+	base := time.Second
+	seen := map[time.Duration]bool{}
+	for range 200 {
+		d := lrclibJittered(base)
+		if d < base || d >= base+base*3/10 {
+			t.Fatalf("抖动后 %v,应在 [%v, %v) 里", d, base, base+base*3/10)
+		}
+		seen[d] = true
+	}
+	if len(seen) < 10 {
+		t.Fatalf("200 次只出现 %d 种等待,抖动没在起作用", len(seen))
+	}
+}
+
+// 过载重发真的按抖动后的时长等。
+func TestLRCLIBOverloadRetryWaitsWithJitter(t *testing.T) {
+	waits := withLRCLIBInstantPause(t)
+	pinLRCLIBRetryJitter(t, 0.2)
+	calls := 0
+	withLRCLIBFake(t, func(r *http.Request) (int, http.Header, string) {
+		calls++
+		if calls == 1 {
+			return http.StatusServiceUnavailable, lrclibOverloaded, `{}`
+		}
+		return http.StatusNotFound, nil, `{}`
+	})
+	var out lrclibSearchItem
+	lrclibRequest(qqRoundCtx(), "https://lrclib.net/api/get?artist_name=a&track_name=b", time.Second, &out)
+	if len(*waits) != 1 || (*waits)[0] != 1200*time.Millisecond {
+		t.Fatalf("Retry-After 1 秒、抖动 20%%:应等 1.2 秒,got %v", *waits)
+	}
 }
 
 var lrclibOverloaded = http.Header{"Retry-After": {"1"}}
