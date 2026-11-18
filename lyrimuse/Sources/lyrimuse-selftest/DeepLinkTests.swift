@@ -767,6 +767,11 @@ func runDeepLinkTests() {
                      sourceHas(openSearch, "guard generation == lyricsSearchGeneration else { return }")],
                     [true, true, true, true, true],
                     "debug/restore: 隐身开的场景窗(含搜索歌词小窗)不管有没有记下一律关,晚开的 debug/lyrics-search 作废")
+        let closeHidden = sourceBody("private static func closeHidden(", in: source("lyrimuse/Settings/WindowActivation.swift"))
+        expectEqual(sourceHas(source("lyrimuse/Settings/WindowActivation.swift"),
+                              "NSWindow.willCloseNotification, object: window, queue: .main) { _ in MainActor.assumeIsolated { closeHidden(window, key: key) } }")
+                    && sourceHas(closeHidden, "window.animationBehavior = .none DispatchQueue.main.async { window.animationBehavior = behavior restore(key) }"), true,
+                    "隐身开窗: 压着的窗口关掉时不放关窗动画,收下去之后才还回原层级(不在用户屏幕上闪、锁屏时不卡在屏上)")
         expectEqual(sourceHas(sourceBody("static func window(named name: String) -> NSWindow? {", in: debug),
                               "case \"lyrics-window\": return visibleLyricsWindow"), true,
                     "debug: snapshot / window-click / window-key / drag-region 的 lyrics-window 也认迷你面板")

@@ -171,7 +171,7 @@ enum WindowActivation {
             }
         }
         let close = center.addObserver(forName: NSWindow.willCloseNotification, object: window, queue: .main) { _ in
-            MainActor.assumeIsolated { restore(key) }
+            MainActor.assumeIsolated { closeHidden(window, key: key) }
         }
         // 不经 `prepareOpen` 的开窗入口(设置里的「打开歌词管理」、引导里的「打开设置」、主菜单 ⌘,)把压着的窗口当 key 摆出来时
         // 还回原层级:不然用户打开的窗口看不见,键盘输入却落在墙纸后面那扇里。隐身开窗那一小段里成为 key 的不算。
@@ -183,6 +183,17 @@ enum WindowActivation {
         }
         hidden[key] = HiddenWindow(window: window, level: original, scene: scene, observers: [pin, close, becameKey])
         window.level = invisibleLevel
+    }
+
+    /// 压着的窗口要关了(willClose,窗口还在屏上):这一次关窗不放动画,收下去之后的下一拍才还回原层级。别在 willClose 里当场还层级:
+    /// 关窗动画会在原层级放完,用户屏幕上闪一下;锁屏时动画停住,窗口卡在原层级「在屏」。见 14 章决策 227。
+    private static func closeHidden(_ window: NSWindow, key: ObjectIdentifier) {
+        let behavior = window.animationBehavior
+        window.animationBehavior = .none
+        DispatchQueue.main.async {
+            window.animationBehavior = behavior
+            restore(key)
+        }
     }
 
     /// 正常开 `scene` 那扇窗时调:之前隐身压下去、记在它名下的窗口全部还回原层级。
