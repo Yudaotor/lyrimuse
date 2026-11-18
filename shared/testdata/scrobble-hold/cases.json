@@ -1,0 +1,16 @@
+{
+  "$doc": "测试期开关租约表(lyrimuse-scrobble-hold.json)此刻开到什么时候:引擎 scrobbleHoldUntil 与 App ScrobbleHold.activeUntil 跑同一批样例。until 为 0 = 关着。时刻都是 Unix 秒。",
+  "cases": [
+    {"name": "没有租约", "now": 1800000000, "holds": [], "until": 0},
+    {"name": "开着到 until", "now": 1800000000, "holds": [{"id": "a", "since": 1799999940, "until": 1800001800}], "until": 1800001800},
+    {"name": "到点就关", "now": 1800001800, "holds": [{"id": "a", "since": 1799999940, "until": 1800001800}], "until": 0},
+    {"name": "until 写得再远也从 since 起封顶两小时", "now": 1800003600, "holds": [{"id": "a", "since": 1800000000, "until": 1800018000}], "until": 1800007200},
+    {"name": "封顶到了就关", "now": 1800007200, "holds": [{"id": "a", "since": 1800000000, "until": 1800018000}], "until": 0},
+    {"name": "没写 since 的不认", "now": 1800000000, "holds": [{"id": "a", "since": 0, "until": 1800003600}], "until": 0},
+    {"name": "since 在一分钟以后的不认", "now": 1800000000, "holds": [{"id": "a", "since": 1800000061, "until": 1800003600}], "until": 0},
+    {"name": "since 在一分钟以内的将来照认", "now": 1800000000, "holds": [{"id": "a", "since": 1800000060, "until": 1800000600}], "until": 1800000600},
+    {"name": "几条取没到期里最晚的", "now": 1800000000,
+     "holds": [{"id": "a", "since": 1799996400, "until": 1799999940}, {"id": "c", "since": 1800000000, "until": 1800000600},
+               {"id": "b", "since": 1800000000, "until": 1800001200}], "until": 1800001200}
+  ]
+}

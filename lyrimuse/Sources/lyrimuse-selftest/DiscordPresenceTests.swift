@@ -26,7 +26,62 @@ func runDiscordPresenceTests() {
     checkDiscordLyrics()
     checkDiscordButtons()
     checkDiscordLayout()
+    checkDiscordTestHold()
     checkDiscordWiring()
+}
+
+/// 测试播放不显示(12 章决策 98、99):名单和例句读 `shared/test-tracks.json`,租约样例读 `shared/testdata/scrobble-hold`,
+/// 引擎 scrobblehold_test.go 跑同一批。
+private func checkDiscordTestHold() {
+    let repo = URL(fileURLWithPath: #filePath)
+        .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+    struct Spec: Decodable {
+        let artist_prefixes: [String]
+        let artists: [String]
+        let match: [String]
+        let keep: [String]
+    }
+    let spec = (try? Data(contentsOf: repo.appendingPathComponent("shared/test-tracks.json")))
+        .flatMap { try? JSONDecoder().decode(Spec.self, from: $0) }
+    expectEqual(spec.map { [$0.artist_prefixes, $0.artists] }, [ScrobbleHold.testArtistPrefixes, ScrobbleHold.testArtists],
+                "测试曲名单: TestTracks+Generated.swift 跟 shared/test-tracks.json 一致(不一致跑 scripts/gen-test-tracks.py)")
+    expectEqual((spec?.match.isEmpty ?? true) || (spec?.keep.isEmpty ?? true), false, "测试曲名单: 例句读得到")
+    for artist in spec?.match ?? [] {
+        expectEqual(ScrobbleHold.isTestTrack(artist: artist), true, "测试曲名单: \(artist) 认成测试曲")
+    }
+    for artist in spec?.keep ?? [] {
+        expectEqual(ScrobbleHold.isTestTrack(artist: artist), false, "测试曲名单: \(artist) 不认")
+    }
+
+    struct Case: Decodable {
+        let name: String
+        let now: Int64
+        let holds: [ScrobbleHold.Lease]
+        let until: Int64
+    }
+    struct Cases: Decodable { let cases: [Case] }
+    let cases = (try? Data(contentsOf: repo.appendingPathComponent("shared/testdata/scrobble-hold/cases.json")))
+        .flatMap { try? JSONDecoder().decode(Cases.self, from: $0) }?.cases ?? []
+    expectEqual(cases.isEmpty, false, "测试期开关: 共用样例读得到")
+    for c in cases {
+        let got = ScrobbleHold.activeUntil(c.holds, now: Date(timeIntervalSince1970: TimeInterval(c.now)))
+        expectEqual(got.map { Int64($0.timeIntervalSince1970) } ?? 0, c.until, "测试期开关(共用样例): \(c.name)")
+    }
+
+    let t0 = Date(timeIntervalSince1970: 1_800_000_000)
+    let open = [ScrobbleHold.Lease(id: "t", since: 1_800_000_000, until: 1_800_000_600)]
+    var gate = ScrobbleHold.TrackGate()
+    expectEqual(gate.isHeld(track: "浮夸", artist: "陈奕迅", leases: [], now: t0), false, "Discord 测试播放: 真歌、开关关着照常显示")
+    expectEqual(gate.isHeld(track: "对时", artist: "Lyrimuse测试", leases: [], now: t0), true, "Discord 测试播放: 测试曲不显示")
+    expectEqual(gate.isHeld(track: "浮夸", artist: "陈奕迅", leases: open, now: t0), true, "Discord 测试播放: 开关开着真歌也不显示")
+    expectEqual(gate.isHeld(track: "浮夸", artist: "陈奕迅", leases: [], now: t0.addingTimeInterval(60)), true,
+                "Discord 测试播放: 认上之后开关收掉,这一首照旧不显示")
+    expectEqual(gate.isHeld(track: "浮夸", artist: "陈奕迅", leases: open, now: t0.addingTimeInterval(600)), true,
+                "Discord 测试播放: 认上之后开关到期,这一首照旧不显示")
+    expectEqual(gate.isHeld(track: "十年", artist: "陈奕迅", leases: open, now: t0.addingTimeInterval(600)), false,
+                "Discord 测试播放: 开关到期后的下一首照常显示")
+    expectEqual(gate.isHeld(track: "浮夸", artist: "陈奕迅", leases: [], now: t0.addingTimeInterval(700)), false,
+                "Discord 测试播放: 换过一首再回来重新判")
 }
 
 private func jsonString(_ data: Data) -> String {
@@ -1324,6 +1379,17 @@ private func checkDiscordWiring() {
     expectEqual(sourceBytes(code("lyrimuse/AppDelegate.swift"), contain: "DiscordPresenceController.shared.start()"), true,
                 "Discord(接线): App 启动时开始盯")
     let controller = code("lyrimuse/Settings/DiscordPresenceController.swift")
+    // 12 章决策 99:测试播放在组曲目时就挡掉(预览同一条路);租约启动时读一次,深链改完送进来。
+    let makeTrackBody = sourceBody("private func makeTrack(", in: controller)
+    expectEqual(sourceBytes(makeTrackBody, contain: "testHold.isHeld(track:")
+                && sourceBytes(makeTrackBody, contain: "artist: playback.artist,")
+                && sourceBytes(makeTrackBody, contain: "leases: holdLeases, now: now)")
+                && makeTrackBody.range(of: "testHold.isHeld(")!.lowerBound < makeTrackBody.range(of: "return DiscordPresence.Track(")!.lowerBound,
+                true, "Discord 接线: 测试播放(名单、测试期开关)不组曲目")
+    expectEqual(sourceBytes(controller, contain: "ScrobbleHold.leases(from: FileIO.read(holdURL))")
+                && sourceBytes(code("lyrimuse/Settings/DebugDeepLinks.swift"),
+                               contain: "if saved { DiscordPresenceController.shared.scrobbleHoldChanged(leases) }"), true,
+                "Discord 接线: 测试期开关启动时读一次,深链改完送进来")
     // 12 章决策 88:观感层没跟上真值时先不判定;离曲终不到一个发送间隔时歌词那一行停住;最后一句带上唱完的时刻。
     let refreshBody = sourceBody("private func refresh() {", in: controller)
     expectEqual(sourceBytes(refreshBody, contain: "if playback.isPlayingSmoothed, !playback.isPlayingNow || playback.anchor?.rate == 0 {")

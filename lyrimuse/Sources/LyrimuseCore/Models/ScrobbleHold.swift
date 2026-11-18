@@ -1,8 +1,8 @@
 import Foundation
 
 /// 测试期开关的租约表(数据目录下 `lyrimuse-scrobble-hold.json`),`debug/scrobble-hold` 写,引擎 scrobblehold.go 读:
-/// 任一条没到期,测试播放就不发 Last.fm / ListenBrainz、不记本地收听日志。字段名、`since` 封顶的算法跟引擎那边一致,
-/// 两处一起改。见 12 章决策 98。
+/// 任一条没到期,测试播放就不发 Last.fm / ListenBrainz、不记本地收听日志、不推网页中继。字段名、`since` 封顶的算法跟引擎那边一致,
+/// 两处一起改。App 这边按同一套判定(租约 + 测试曲名单)挡 Discord「正在听」。见 12 章决策 98、99。
 public enum ScrobbleHold {
     public static let fileName = "lyrimuse-scrobble-hold.json"
 
@@ -47,6 +47,47 @@ public enum ScrobbleHold {
         let span = Int64(min(minutes, LyrimuseDeepLink.DebugCommand.maxScrobbleHoldMinutes)) * 60
         kept.append(Lease(id: key, since: nowSecs, until: nowSecs + span))
         return kept
+    }
+
+    /// 此刻开着的租约里最晚的到期时刻;没开着为 nil。跟引擎 `scrobbleHoldUntil` 同一个算法:没写 `since`、`since` 在一分钟以后的
+    /// 不认,`until` 最晚算到 `since` 加上限。两侧跑 `shared/testdata/scrobble-hold` 的同一批样例。
+    public static func activeUntil(_ leases: [Lease], now: Date) -> Date? {
+        let nowSecs = now.timeIntervalSince1970
+        let maxSecs = Int64(LyrimuseDeepLink.DebugCommand.maxScrobbleHoldMinutes) * 60
+        var latest: Int64?
+        for lease in leases where lease.since > 0 && Double(lease.since) <= nowSecs + 60 {
+            let until = min(lease.until, lease.since + maxSecs)
+            if nowSecs < Double(until), until > (latest ?? .min) { latest = until }
+        }
+        return latest.map { Date(timeIntervalSince1970: TimeInterval($0)) }
+    }
+
+    /// 歌手是合成测试曲专用的写法(名单 `testArtistPrefixes` / `testArtists`,生成自 `shared/test-tracks.json`)。
+    /// 去首尾空白、不分大小写,前缀或整串比对,不做子串;跟引擎 `isTestTrack` 同一口径。
+    public static func isTestTrack(artist: String) -> Bool {
+        let a = normalized(artist)
+        guard !a.isEmpty else { return false }
+        return normalizedPrefixes.contains { !$0.isEmpty && a.hasPrefix($0) } || normalizedArtists.contains(a)
+    }
+
+    private static func normalized(_ s: String) -> String { s.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() }
+    private static let normalizedPrefixes = testArtistPrefixes.map(normalized)
+    private static let normalizedArtists = Set(testArtists.map(normalized))
+
+    /// 按曲目棘轮的判定,跟引擎按会话的 `heldForTest` 同一个形状:这一首第一次判成测试播放(名单命中或开关开着)之后一直算,
+    /// 开关中途到期或被收掉也不回落;换了一首重新判。
+    public struct TrackGate: Sendable {
+        public private(set) var heldTrack: String?
+
+        public init() {}
+
+        public mutating func isHeld(track: String, artist: String, leases: [Lease], now: Date) -> Bool {
+            if heldTrack == track { return true }
+            heldTrack = nil
+            guard ScrobbleHold.isTestTrack(artist: artist) || ScrobbleHold.activeUntil(leases, now: now) != nil else { return false }
+            heldTrack = track
+            return true
+        }
     }
 
     public static func encode(_ leases: [Lease]) -> Data? {

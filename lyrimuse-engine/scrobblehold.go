@@ -1,9 +1,7 @@
 package main
 
 import (
-	_ "embed"
 	"encoding/json"
-	"fmt"
 	"log"
 	"os"
 	"strings"
@@ -11,14 +9,15 @@ import (
 )
 
 // 测试播放不记收听:命中下面任一条的会话不发 ListenBrainz 的 playing_now / single、不发 Last.fm 的 updateNowPlaying /
-// scrobble,也不写本地收听日志和两份待重发队列。见 12 章决策 98。
+// scrobble,也不写本地收听日志和两份待重发队列;网页中继也不把它当「Mac 正在放」推(pushRelayState)。见 12 章决策 98、99。
 //
 //   - 测试期开关(scrobbleHoldPath):App 的 `lyrimuse://debug/scrobble-hold` 写的租约表,任一租约没到期就算开着。
 //     每条租约最长 scrobbleHoldMax,从写入时刻(since)算起,until 写得再远也按这个封顶:忘了关最多吞掉这么久的真实收听。
-//   - 测试曲名单(testtracks.json,编进二进制):合成测试曲按歌手认,开关没开也不记。
+//   - 测试曲名单(testtracks_generated.go,生成自 shared/test-tracks.json,App 的 Discord「正在听」读同一份):
+//     合成测试曲按歌手认,开关没开也不记。
 //
 // 判定挂在会话上、只往上棘轮(playSession.scrobbleHold,跟 isAd 同一个形状):开关中途到期或被关掉,已经认成测试的那一首
-// 照旧不记;开关中途才打开,下一个出口(正在播放、到点提交、退出兜底)就认上。网页中继、歌词解析、Discord 不受影响。
+// 照旧不记;开关中途才打开,下一个出口(正在播放、到点提交、退出兜底、中继推送)就认上。歌词解析不受影响。
 
 // scrobbleHoldMax:一条租约最长多久。App 侧深链的上限(`LyrimuseDeepLink.maxScrobbleHoldMinutes`)跟它相同,两处一起改。
 const scrobbleHoldMax = 2 * time.Hour
@@ -70,28 +69,21 @@ func scrobbleHoldUntil(now time.Time) time.Time {
 	return latest
 }
 
-//go:embed testtracks.json
-var testTracksJSON []byte
-
 type testTrackMarks struct {
-	ArtistPrefixes []string `json:"artist_prefixes"`
-	Artists        []string `json:"artists"`
+	ArtistPrefixes []string
+	Artists        []string
 }
 
-var testTracks = mustParseTestTracks(testTracksJSON)
+var testTracks = testTrackMarks{ArtistPrefixes: normalizeTestArtists(testTrackArtistPrefixes),
+	Artists: normalizeTestArtists(testTrackArtists)}
 
-func mustParseTestTracks(data []byte) testTrackMarks {
-	var m testTrackMarks
-	if err := json.Unmarshal(data, &m); err != nil {
-		panic(fmt.Sprintf("testtracks.json: %v", err))
+// normalizeTestArtists:名单按比对口径(去首尾空白、小写)存一份。App 侧 ScrobbleHold.isTestTrack 同一口径。
+func normalizeTestArtists(list []string) []string {
+	out := make([]string, 0, len(list))
+	for _, s := range list {
+		out = append(out, strings.ToLower(strings.TrimSpace(s)))
 	}
-	for i, s := range m.ArtistPrefixes {
-		m.ArtistPrefixes[i] = strings.ToLower(strings.TrimSpace(s))
-	}
-	for i, s := range m.Artists {
-		m.Artists[i] = strings.ToLower(strings.TrimSpace(s))
-	}
-	return m
+	return out
 }
 
 // isTestTrack:歌手是合成测试曲专用的写法。整串比对或前缀比对,不做子串匹配:名单要窄,真实歌手不能被带进来。
@@ -134,6 +126,15 @@ func heldForTest(s *playSession, artist, title string, now time.Time) bool {
 		return false
 	}
 	s.scrobbleHold = reason
-	log.Printf("scrobble hold (%s): %s - %s, no now playing, listens or local listen log", reason, artist, title)
+	log.Printf("scrobble hold (%s): %s - %s, no now playing, listens, local listen log or relay card", reason, artist, title)
 	return true
+}
+
+// curHeldForTest:此刻的曲目(p.cur)是不是测试播放。会话就是这一首时按会话判(认上之后不回落,跟打卡同一个结论);
+// 会话还没跟上这一首时直接看名单和开关,不记账。
+func (p *poller) curHeldForTest(now time.Time) bool {
+	if p.sess != nil && p.sess.key == p.cur.key() {
+		return heldForTest(p.sess, p.cur.Artist, p.cur.Title, now)
+	}
+	return scrobbleHoldReason(p.cur.Artist, now) != ""
 }

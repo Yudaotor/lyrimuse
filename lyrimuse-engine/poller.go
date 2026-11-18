@@ -673,9 +673,10 @@ func (p *poller) pushRelayState(now time.Time, reanchored bool) {
 	// 判成 false 之后会顺着下面的 switch 落到 iPhone 正在放 / 上次播放,也就是广告这几十秒
 	// 网页停在上一首,跟"没在放"时的表现一致 —— 不会出现一张假的当前曲目卡。判据见 isAdBreak。
 	// 酷我的结论在后台问,到了之后要等下一次 handle 才置上 isSpoken;这期间别的结果(桥接、收听提交)触发的推送照样要挡。
+	// 测试播放(测试曲名单、测试期开关)同样不算,网页和飞书卡片停在上一首(12 章决策 99)。
 	macHasTrack := p.isTracked() && !isAdBreak(p.cur.Bundle, p.cur.Artist, p.cur.Title, p.cur.Album) &&
 		!(p.sess != nil && p.sess.isAd) && !p.cur.Spoken && !(p.sess != nil && p.sess.isSpoken) &&
-		!(p.cur.Bundle == kuwoMusicBundleID && playerMarksSpoken(p.cur))
+		!(p.cur.Bundle == kuwoMusicBundleID && playerMarksSpoken(p.cur)) && !p.curHeldForTest(now)
 	iphonePlaying := !p.remoteAt.IsZero() && now.Sub(p.remoteAt) < 90*time.Second
 	switch {
 	case macHasTrack && p.cur.Playing: // Mac 正在放 → 最高优先(带进度条)

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
@@ -83,19 +84,122 @@ func TestScrobbleHoldUntil(t *testing.T) {
 	}
 }
 
-// 名单:整串或前缀比对、不分大小写;不做子串,真实歌手、近似写法都不算。
+// 名单:整串或前缀比对、不分大小写;不做子串,真实歌手、近似写法都不算。名单和例句都读 shared/test-tracks.json,
+// App 侧 selftest discord 组跑同一批例句;编进来的名单跟那份 JSON 对不上(生成物过期)这里就红。
 func TestIsTestTrack(t *testing.T) {
-	for _, a := range []string{"Lyrimuse测试", "Lyrimuse测试A", "lyrimuse test", "LYRIMUSE TEST RADIO", " 测试歌手 ", "測試歌手",
-		"Test Artist", "test artist one", "Test Artist Two", "Test Artist Three", "歌手A-B"} {
+	data, err := os.ReadFile("../shared/test-tracks.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var spec struct {
+		Prefixes []string `json:"artist_prefixes"`
+		Artists  []string `json:"artists"`
+		Match    []string `json:"match"`
+		Keep     []string `json:"keep"`
+	}
+	if err := json.Unmarshal(data, &spec); err != nil {
+		t.Fatal(err)
+	}
+	if fmt.Sprint(testTrackArtistPrefixes) != fmt.Sprint(spec.Prefixes) || fmt.Sprint(testTrackArtists) != fmt.Sprint(spec.Artists) {
+		t.Fatal("testtracks_generated.go 跟 shared/test-tracks.json 对不上,跑 python3 scripts/gen-test-tracks.py")
+	}
+	if len(spec.Match) == 0 || len(spec.Keep) == 0 {
+		t.Fatal("例句读空了")
+	}
+	for _, a := range spec.Match {
 		if !isTestTrack(a) {
 			t.Errorf("%q 应认成测试曲", a)
 		}
 	}
-	for _, a := range []string{"", "陈奕迅", "Lyrimuse", "Test", "Test Artists", "Test Artist Four", "The Test Artist", "测试歌手乐队",
-		"新测试歌手", "歌手A", "Artist Test", "周杰伦, Lyrimuse测试"} {
+	for _, a := range spec.Keep {
 		if isTestTrack(a) {
 			t.Errorf("%q 不该认成测试曲", a)
 		}
+	}
+}
+
+// 租约表此刻开到什么时候:跑 shared/testdata/scrobble-hold 的共用样例,App 侧 ScrobbleHold.activeUntil 跑同一批。
+func TestScrobbleHoldSharedCases(t *testing.T) {
+	data, err := os.ReadFile("../shared/testdata/scrobble-hold/cases.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var spec struct {
+		Cases []struct {
+			Name  string              `json:"name"`
+			Now   int64               `json:"now"`
+			Holds []scrobbleHoldLease `json:"holds"`
+			Until int64               `json:"until"`
+		} `json:"cases"`
+	}
+	if err := json.Unmarshal(data, &spec); err != nil || len(spec.Cases) == 0 {
+		t.Fatalf("样例读不出来: %v", err)
+	}
+	withScrobbleHold(t)
+	for _, c := range spec.Cases {
+		writeScrobbleHold(t, c.Holds...)
+		got := scrobbleHoldUntil(time.Unix(c.Now, 0))
+		var gotUnix int64
+		if !got.IsZero() {
+			gotUnix = got.Unix()
+		}
+		if gotUnix != c.Until {
+			t.Errorf("%s: until=%d, want %d", c.Name, gotUnix, c.Until)
+		}
+	}
+}
+
+// relayKeyAfterPush:推一次,返回这次推送(或推迟)的去重 key。
+func relayKeyAfterPush(t *testing.T, p *poller, now time.Time) string {
+	t.Helper()
+	p.pushRelayState(now, false)
+	if p.relayInflight {
+		return (<-p.relayDoneCh).key
+	}
+	return p.relayDeferKey
+}
+
+// 网页中继:测试曲、开关开着时放的歌都不当「Mac 正在放」推,网页停在上一首;真歌照常推。会话认上之后开关收掉,
+// 这一首照旧不推。
+func TestPushRelayStateSkipsHeldTrack(t *testing.T) {
+	t0 := time.Now()
+	relayPoller := func(cur snapshot, held string) *poller {
+		return &poller{ctx: context.Background(), cfg: &config{StateRelayURL: "http://127.0.0.1:9"},
+			relayDoneCh: make(chan relayPushResult, 1), cur: cur,
+			sess: &playSession{key: cur.key(), meta: cur, startedAt: t0.Add(-time.Minute), scrobbleHold: held}}
+	}
+	withScrobbleHold(t)
+	for _, tc := range []struct {
+		name, artist string
+		hold         bool
+		wantMac      bool
+	}{
+		{"真歌照常推", "陈奕迅", false, true},
+		{"测试曲不推", "Lyrimuse测试", false, false},
+		{"名单里的整串不推", "Test Artist One", false, false},
+		{"开关开着真歌也不推", "陈奕迅", true, false},
+	} {
+		if tc.hold {
+			writeScrobbleHold(t, lease("t", t0, t0.Add(time.Hour)))
+		} else {
+			_ = os.Remove(scrobbleHoldPath)
+		}
+		p := relayPoller(heldSong(tc.artist, "浮夸", 20, t0), "")
+		key := relayKeyAfterPush(t, p, t0.Add(relayStartupWait))
+		if tc.wantMac && !strings.HasPrefix(key, "mac|") || !tc.wantMac && key != "empty" {
+			t.Errorf("%s: key=%q", tc.name, key)
+		}
+	}
+	_ = os.Remove(scrobbleHoldPath)
+	p := relayPoller(heldSong("陈奕迅", "浮夸", 20, t0), "test mode until 2026-11-18T00:00:00Z")
+	if key := relayKeyAfterPush(t, p, t0.Add(relayStartupWait)); key != "empty" {
+		t.Errorf("会话认上之后开关收掉,这一首照旧不推: key=%q", key)
+	}
+	p = relayPoller(heldSong("陈奕迅", "浮夸", 20, t0), "")
+	p.sess.key = "上一首"
+	p.cur = heldSong("Lyrimuse测试", "封面FLAC", 1, t0)
+	if key := relayKeyAfterPush(t, p, t0.Add(relayStartupWait)); key != "empty" || p.sess.scrobbleHold != "" {
+		t.Errorf("会话还没跟上的测试曲也不推,且不记到上一首的会话上: key=%q hold=%q", key, p.sess.scrobbleHold)
 	}
 }
 

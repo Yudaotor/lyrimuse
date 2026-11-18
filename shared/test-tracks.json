@@ -1,0 +1,25 @@
+{
+  "$doc": [
+    "合成测试曲的标记,引擎与 App 共用这一份:歌手命中的不发 Last.fm / ListenBrainz、不记本地收听日志,网页中继不推「正在播放」,Discord 不显示「正在听」;测试期开关没开也一样。见 12 章决策 98、99。",
+    "新造测试曲的歌手一律以 Lyrimuse测试 开头;artists 只收测试素材已经在用的整串写法,真实歌手名不进来。",
+    "比对去首尾空白、不分大小写;prefixes 按开头比,artists 整串比,不做子串。",
+    "改完跑 python3 scripts/gen-test-tracks.py 重新生成两侧代码;CI 跑 --check 对账。match / keep 是两侧测试都跑的例句:match 必须认成测试曲,keep 一句都不许认。"
+  ],
+  "artist_prefixes": [
+    "Lyrimuse测试",
+    "Lyrimuse Test"
+  ],
+  "artists": [
+    "测试歌手",
+    "測試歌手",
+    "Test Artist",
+    "Test Artist One",
+    "Test Artist Two",
+    "Test Artist Three",
+    "歌手A-B"
+  ],
+  "match": ["Lyrimuse测试", "Lyrimuse测试A", "lyrimuse test", "LYRIMUSE TEST RADIO", " 测试歌手 ", "測試歌手",
+    "Test Artist", "test artist one", "Test Artist Two", "Test Artist Three", "歌手A-B"],
+  "keep": ["", "陈奕迅", "Lyrimuse", "Test", "Test Artists", "Test Artist Four", "The Test Artist", "测试歌手乐队",
+    "新测试歌手", "歌手A", "Artist Test", "周杰伦, Lyrimuse测试"]
+}

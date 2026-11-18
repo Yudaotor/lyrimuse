@@ -100,11 +100,24 @@ final class DiscordPresenceController: ObservableObject {
     @Published private(set) var hiddenUntil: Date?
     private var unhideTask: Task<Void, Never>?
     static let hiddenUntilKey = "np:discordHiddenUntil"
+    /// 测试期开关的租约(`ScrobbleHold`):启动时在后台读一次,之后由 `debug/scrobble-hold` 改完送进来(`scrobbleHoldChanged`)。
+    /// 测试播放(租约开着、或歌手在测试曲名单里)不显示,按曲目棘轮(`testHold`),见 12 章决策 99。
+    private var holdLeases: [ScrobbleHold.Lease] = []
+    private var holdLeasesKnown = false
+    private var testHold = ScrobbleHold.TrackGate()
 
     func start() {
         guard observers.isEmpty else { return }
         let stored = UserDefaults.standard.double(forKey: Self.hiddenUntilKey)
         setHidden(until: stored > 0 ? Date(timeIntervalSince1970: stored) : nil)
+        let holdURL = LyrimusePaths.configFile(ScrobbleHold.fileName)
+        Task.detached(priority: .utility) { [weak self] in
+            let leases = ScrobbleHold.leases(from: FileIO.read(holdURL))
+            await MainActor.run {
+                guard let self, !self.holdLeasesKnown else { return }
+                self.scrobbleHoldChanged(leases)
+            }
+        }
         let playback = PlaybackCoordinator.shared
         let source = LocalPlaybackSource.shared
         let settings = AppSettings.shared
@@ -147,6 +160,13 @@ final class DiscordPresenceController: ObservableObject {
             .filter(Self.isDiscordDesktop)
             .sink { [weak self] _ in self?.discordTerminated() })
         refresh()
+    }
+
+    /// 测试期开关的租约表改了(`debug/scrobble-hold` 写完调这里):按新的租约重算一次。
+    func scrobbleHoldChanged(_ leases: [ScrobbleHold.Lease]) {
+        holdLeases = leases
+        holdLeasesKnown = true
+        if !observers.isEmpty { refresh() }
     }
 
     private func signal<P: Publisher>(_ publisher: P) -> AnyPublisher<Void, Never> where P.Failure == Never {
@@ -503,6 +523,15 @@ final class DiscordPresenceController: ObservableObject {
         // QQ 音乐、酷狗、酷我的有声节目不显示成在听歌(见 LocalPlaybackSource.isCurrentTrackSpokenAudio)。
         guard !playback.title.isEmpty, !playback.isCurrentTrackAdBreak, !playback.isRadioTalkBreak,
               !LocalPlaybackSource.shared.isCurrentTrackSpokenAudio else { return nil }
+        // 测试播放不显示,判定跟引擎挡打卡、中继的同一套(12 章决策 98、99)。
+        let wasHeld = testHold.heldTrack
+        if testHold.isHeld(track: "\(playback.title)\u{1F}\(playback.artist)\u{1F}\(playback.album)", artist: playback.artist,
+                           leases: holdLeases, now: now) {
+            if wasHeld != testHold.heldTrack {
+                discordLogger.notice("presence held for test: \(playback.artist, privacy: .public) - \(playback.title, privacy: .public)")
+            }
+            return nil
+        }
         let reported = LocalPlaybackSource.shared.lastResolvedBundleID
         let host = BrowserPositionProbe.probeTargetBundleID(forReported: reported)
         if let host, AppSettings.shared.discordExcludedBundles.contains(host) { return nil }

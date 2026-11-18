@@ -54,6 +54,10 @@ jobs:
         # 同上:两侧的规则表和例句都由那份 JSON 生成,过期或被手改时编译照样过。
         run: python3 scripts/gen-lyric-notices.py --check
 
+      - name: 合成测试曲名单与 shared/test-tracks.json 一致
+        # 同上:引擎挡打卡和中继、App 挡 Discord 用的名单都由那份 JSON 生成。
+        run: python3 scripts/gen-test-tracks.py --check
+
       - name: 功能清单与 shared/feature-list.json、设置目录一致
         # docs/feature-list*.md 由那份 JSON 和 shared/settings-catalog.json 生成;这一步还核对清单引用的设置位置
         # 都在目录里、写的默认开关跟代码一致,目录里每一项都被清单引用或登记在 shared/feature-list-unclaimed.json。
