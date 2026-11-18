@@ -784,29 +784,34 @@ public enum SettingsSearchCatalog {
 
 /// 匹配与排序:纯函数,App 侧把本地化后的字段喂进来。
 public enum SettingsSearchMatcher {
-    /// 去首尾空白、小写、连续空白折成一个,再转成 NFC(下面按 Unicode 标量比较,先统一组合形式)。CJK 没有大小写,这一步对它是恒等。
+    /// 比较用的形式:转成 NFC(下面按 Unicode 标量比较,先统一组合形式)、小写,再去掉全部标点和空白,
+    /// 打「lastfm」「last fm」都能搜到「Last.fm」,打「fontsize」能搜到「Font Size」(见 14 章决策 226)。CJK 没有大小写,小写对它是恒等。
+    /// 只去标点(`punctuationCharacters`)和空白,不去符号和组合附加符:泰文、印地语、越南语的元音和声调记号是组合符,去了就搜不准。
     /// 土耳其语的 i 两对(İ / i、I / ı)按语言无关的规则小写会对不上:「İ」成了 i + U+0307、「I」成了 i;
     /// 这里把 i + U+0307 和 ı 都折成 i,打「ileri」「isik」都能搜到「İleri」「Işık」。
     /// 印地语输入时常省掉 nukta(U+093C)、拿 anusvara(U+0902)代 chandrabindu(U+0901):去掉 nukta、把 chandrabindu 折成 anusvara,
     /// 打「फॉन्ट」「दिखाएं」也能搜到「फ़ॉन्ट」「दिखाएँ」。
     public static func normalize(_ text: String) -> String {
-        text.precomposedStringWithCanonicalMapping.trimmingCharacters(in: .whitespacesAndNewlines)
+        let folded = text.precomposedStringWithCanonicalMapping
             .lowercased()
             .replacingOccurrences(of: "i\u{307}", with: "i", options: .literal)
             .replacingOccurrences(of: "\u{131}", with: "i", options: .literal)
             .replacingOccurrences(of: "\u{93C}", with: "", options: .literal)
             .replacingOccurrences(of: "\u{901}", with: "\u{902}", options: .literal)
-            .split(whereSeparator: { $0.isWhitespace })
-            .joined(separator: " ")
+        var kept = String.UnicodeScalarView()
+        kept.append(contentsOf: folded.unicodeScalars.lazy.filter { !ignoredScalars.contains($0) })
+        return String(kept)
     }
 
+    private static let ignoredScalars = CharacterSet.punctuationCharacters.union(.whitespacesAndNewlines)
+
     /// 命中等级:0 = 标题以查询开头,1 = 标题包含,2 = 只在副标题/关键词/面包屑里;nil = 不命中。
-    /// 查询按空白拆成多个词,**每个词**都得在标题或次要字段里出现,等级取最好的那个词决定的标题命中。
+    /// 查询先按空白拆成多个词再各自归一化,**每个词**都得在标题或次要字段里出现,等级取最好的那个词决定的标题命中;
+    /// 只剩标点的词丢掉,全是标点的查询不命中。
     /// 按 Unicode 标量比较(`.literal`),不按字形簇:泰文打到一半(「เนื」还没打声调符号)也要能命中「เนื้อเพลง」。
     public static func rank(query: String, title: String, secondary: [String]) -> Int? {
-        let q = normalize(query)
-        guard !q.isEmpty else { return nil }
-        let terms = q.split(separator: " ").map(String.init)
+        let terms = query.split(whereSeparator: { $0.isWhitespace }).map { normalize(String($0)) }.filter { !$0.isEmpty }
+        guard !terms.isEmpty else { return nil }
         let t = normalize(title)
         let others = secondary.map(normalize)
         var best = 3

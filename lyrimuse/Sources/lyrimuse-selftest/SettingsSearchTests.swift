@@ -338,7 +338,16 @@ func runSettingsSearchTests() {
                 "匹配: 多词——每个词都得命中,等级看标题")
     expectEqual(SettingsSearchMatcher.rank(query: "菜单栏 abc", title: "字号", secondary: ["歌词显示 › 菜单栏"]), nil,
                 "匹配: 多词——有一个词落空就不命中")
-    expectEqual(SettingsSearchMatcher.normalize("  Font   Size \n"), "font size", "匹配: 归一化去首尾空白、折叠空白、小写")
+    expectEqual(SettingsSearchMatcher.normalize("  Font   Size \n"), "fontsize", "匹配: 归一化去掉全部空白、小写")
+    expectEqual(SettingsSearchMatcher.normalize("Last.fm · 歌词显示 › 菜单栏，「字号」"), "lastfm歌词显示菜单栏字号", "匹配: 归一化去掉中英文标点")
+    expectEqual(["lastfm", "LastFM", "last fm", "last.fm", "Last.fm", "LAST-FM", "fm"].map { SettingsSearchMatcher.rank(query: $0, title: "Last.fm", secondary: []) },
+                [0, 0, 0, 0, 0, 0, 1], "匹配: 搜 Last.fm 不管带不带点、空格、连字符都命中(14 章决策 226)")
+    expectEqual(SettingsSearchMatcher.rank(query: "lastfm", title: "Scrobble 规则", secondary: ["Last.fm", "规则"]), 2,
+                "匹配: 次要字段里的 Last.fm 也忽略标点")
+    expectEqual(SettingsSearchMatcher.rank(query: "fontsize", title: "Font Size", secondary: []), 0, "匹配: 查询不带空格也能搜到带空格的标题")
+    expectEqual(SettingsSearchMatcher.rank(query: "歌词，显示", title: "歌词显示", secondary: []), 0, "匹配: 中文全角标点同样忽略")
+    expectEqual(["...", " · ", "》"].map { SettingsSearchMatcher.rank(query: $0, title: "Last.fm", secondary: ["歌词显示 › 菜单栏"]) },
+                [nil, nil, nil], "匹配: 全是标点的查询不命中,不会把整份目录都列出来")
     let ranked = SettingsSearchMatcher.ranked(
         [("字体", ["背景"]), ("毛玻璃背景", [String]()), ("背景颜色", [String]())],
         query: "背景", title: { $0.0 }, secondary: { $0.1 })
@@ -352,6 +361,10 @@ func runSettingsSearchTests() {
                 "目录: 「字号」命中悬浮歌词、灵动岛、菜单栏、触控栏、歌词窗口迷你尺寸五条,按目录顺序")
     expectEqual(fontSizeHits.filter { $0.pathKeys == ["快捷键"] }.map(\.titleKey), ["放大悬浮歌词字号", "缩小悬浮歌词字号"],
                 "目录: 「字号」也命中快捷键页的放大 / 缩小悬浮歌词字号")
+    let lastfmHits = SettingsSearchMatcher.ranked(entries, query: "lastfm", title: { $0.titleKey }, secondary: { $0.keywords + $0.pathKeys })
+    expectEqual(lastfmHits.count == SettingsSearchMatcher.ranked(entries, query: "Last.fm", title: { $0.titleKey }, secondary: { $0.keywords + $0.pathKeys }).count
+                && lastfmHits.contains { $0.titleKey == "Scrobble 规则" }, true,
+                "目录: 搜「lastfm」跟搜「Last.fm」命中同样多条,含 Last.fm 页的 Scrobble 规则")
     let qqHits = SettingsSearchMatcher.ranked(entries, query: "QQ", title: { $0.titleKey }, secondary: { $0.keywords + $0.pathKeys })
     expectEqual(qqHits.map(\.titleKey).contains("歌词来源"), true, "目录: 搜「QQ」能落到「歌词来源」卡")
     expectEqual(qqHits.map(\.titleKey).contains("音乐 App"), true, "目录: 搜「QQ」也能落到「音乐 App」卡")

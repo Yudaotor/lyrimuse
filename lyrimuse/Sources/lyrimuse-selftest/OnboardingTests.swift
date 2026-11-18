@@ -305,16 +305,20 @@ private func checkOnboardingFlow() {
         let elsewhere = allSteps.filter { $0 != .background &&
             F.autoStartsBackgroundService(at: $0, engineRunning: false, installing: false, lastAttemptFailed: false) }
         expectEqual(elsewhere, [], "自动启用: 只在后台服务那一步发生")
-        expectEqual(F.bringsBackAfterGrant(grantedBefore: 0, grantedNow: 1, appIsActive: false), true,
-                    "带回前台: 窗口在后面时刚多授权了一项 → 带回来")
-        expectEqual(F.bringsBackAfterGrant(grantedBefore: 1, grantedNow: 2, appIsActive: false), true,
+        expectEqual(F.bringsBackAfterGrant(grantedBefore: 0, grantedNow: 1, appIsActive: false, askedOnThisPage: true), true,
+                    "带回前台: 点过权限按钮、窗口在后面时刚多授权了一项 → 带回来")
+        expectEqual(F.bringsBackAfterGrant(grantedBefore: 1, grantedNow: 2, appIsActive: false, askedOnThisPage: true), true,
                     "带回前台: 已有一项、又授权了一项 → 也带回来")
-        expectEqual(F.bringsBackAfterGrant(grantedBefore: 0, grantedNow: 1, appIsActive: true), false,
+        expectEqual(F.bringsBackAfterGrant(grantedBefore: 0, grantedNow: 1, appIsActive: true, askedOnThisPage: true), false,
                     "带回前台: 本来就在前台不用抢")
-        expectEqual(F.bringsBackAfterGrant(grantedBefore: 2, grantedNow: 2, appIsActive: false), false,
+        expectEqual(F.bringsBackAfterGrant(grantedBefore: 2, grantedNow: 2, appIsActive: false, askedOnThisPage: true), false,
                     "带回前台: 数量没变,每次刷新不重复抢焦点")
-        expectEqual(F.bringsBackAfterGrant(grantedBefore: 2, grantedNow: 1, appIsActive: false), false,
+        expectEqual(F.bringsBackAfterGrant(grantedBefore: 2, grantedNow: 1, appIsActive: false, askedOnThisPage: true), false,
                     "带回前台: 权限被撤不抢焦点")
+        expectEqual(F.bringsBackAfterGrant(grantedBefore: 0, grantedNow: 3, appIsActive: false, askedOnThisPage: false), false,
+                    "带回前台: 翻进权限页时已授权项从 0 数成 N(窗口在后面)不抢前台")
+        expectEqual(F.bringsBackAfterGrant(grantedBefore: 2, grantedNow: 3, appIsActive: false, askedOnThisPage: false), false,
+                    "带回前台: 没点过权限按钮,权限状态异步读回来多了一项也不抢前台")
     }
 
     // ---- 收尾页「放一首歌试试」----

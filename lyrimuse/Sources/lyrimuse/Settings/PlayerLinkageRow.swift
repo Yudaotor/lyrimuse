@@ -5,7 +5,7 @@ import SwiftUI
 ///
 /// 图标芯片沿用上面那张播放器网格的同一套图标(`PlayerIconView` 三级兜底取图),一眼看出每项联动绑了谁。
 /// 芯片别摆回行尾:候选最多十几个,跟标题挤在一行时标题会被压成竖排的几个字。
-/// 未勾选的芯片去饱和 + 半透明,勾选的带强调色描边,跟 `PlayerChoiceCard` 的选中态同源。
+/// 未勾选的芯片去饱和 + 半透明,勾选的带强调色描边和右上角对号,悬停弹播放器名(见 `PlayerChip`)。
 ///
 /// **没有副标题**:勾了哪几个芯片已经说清楚,再用文字写一遍只是复述。旁白靠每枚芯片自己的
 /// `.accessibilityLabel` + `.isSelected`(见 `PlayerChip`)。
@@ -196,11 +196,13 @@ enum PlayerChipMetrics {
     static let flowMaxWidth: CGFloat = 320
 }
 
-/// 一枚可勾选的播放器芯片:未勾选去饱和 + 半透明,勾选带强调色描边与浅底。两个行组件共用,
+/// 一枚可勾选的播放器芯片:未勾选去饱和 + 半透明,勾选带强调色描边、浅底和右上角的对号。两个行组件共用,
 /// 免得调样式时漏改一处。
 ///
 /// 底色/描边走 `ChoiceHighlight`,跟同一页「播放器」网格里那些卡同一份 —— 芯片和卡片表达的
 /// 是同一件事("这一颗勾上了"),两处各调各的就会在同一页里出现两种深浅的蓝。
+/// 对号跟 `PlayerChoiceCard` 同一个符号:只靠饱和度和描边,一排全没勾、或图标本来就是灰的时候看不出勾没勾。
+/// 名字用 `hoverNote`,别换回 `.help`:系统 tooltip 只在 lyrimuse 是前台 App 时才弹。见 02 章决策 280。
 private struct PlayerChip<Icon: View>: View {
     let selected: Bool
     let label: String
@@ -221,9 +223,20 @@ private struct PlayerChip<Icon: View>: View {
                     RoundedRectangle(cornerRadius: 8, style: .continuous)
                         .strokeBorder(ChoiceHighlight.stroke(isSelected: selected, scheme: colorScheme),
                                       lineWidth: ChoiceHighlight.lineWidth(isSelected: selected)))
+                // 不参与布局:芯片大小和一行放几枚不变。
+                .overlay(alignment: .topTrailing) {
+                    if selected {
+                        Image(systemName: "checkmark.circle.fill")
+                            .font(.system(size: 10, weight: .bold))
+                            .foregroundStyle(Color.accentColor)
+                            .background(Circle().fill(Color(nsColor: .windowBackgroundColor)))
+                            .offset(x: 4, y: -4)
+                            .accessibilityHidden(true)
+                    }
+                }
         }
         .buttonStyle(SettingsGlassHoverButtonStyle(cornerRadius: 8))
-        .help(label)
+        .hoverNote(label)
         // 旁白要能读出"勾没勾"—— 视觉上只在描边和饱和度里,VoiceOver 听不出来。
         .accessibilityLabel(label)
         .accessibilityAddTraits(selected ? .isSelected : [])

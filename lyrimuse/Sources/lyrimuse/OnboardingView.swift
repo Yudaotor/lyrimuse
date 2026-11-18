@@ -39,6 +39,8 @@ struct OnboardingView: View {
     /// 后台那次 `launchctl print` 还没回来:2 秒一拍的轮询不再叠一个。
     @State private var refreshingEngineRunning = false
     @State private var isTogglingEngineService = false
+    /// 用户在「启用歌词引擎与权限」这一页点过权限按钮;翻页清掉。授权完带回前台只认它(见 `OnboardingFlow.bringsBackAfterGrant`)。
+    @State private var askedForPermissionOnThisPage = false
     /// 收尾页「放一首歌试试」那一行的输入,只订阅用得到的几个属性(理由同 `isPlayingNow`)。
     @State private var liveInput = OnboardingFlow.LiveInput(
         title: "", artist: "", hasLyrics: false, instrumental: false,
@@ -237,8 +239,11 @@ struct OnboardingView: View {
                 .padding(.top, 24)
                 .padding(.bottom, 20)
             }
+            // 滚动内容裁在标题栏下沿:窗口是 `.hiddenTitleBar`,不裁的话往下滚时内容会滚进标题栏、压在红绿灯和窗口标题底下。
+            // 选播放器那一步装了二十来家时就要滚(见 14 章决策 225)。
             .scrollBounceBehavior(.basedOnSize)
             .frame(maxHeight: .infinity)
+            .clipped()
 
             Divider()
 
@@ -350,6 +355,7 @@ struct OnboardingView: View {
         .onChange(of: currentStep) { _, new in
             // 开场还在放就翻走了(回车键按的是「开始」):直接收掉。
             if new != .welcome, introStart != nil { skipIntro() }
+            askedForPermissionOnThisPage = false
             if new == .done { confettiBurst += 1 }
             if new == .done || new == .background { fullDiskAccess.refresh() }
         }
@@ -377,7 +383,8 @@ struct OnboardingView: View {
         // 在系统设置里授权完、窗口还在后面时,把引导带回前台(只在已授权的项多了一项的那一刻)。
         .onChange(of: grantedPermissionCount) { before, now in
             if OnboardingFlow.bringsBackAfterGrant(grantedBefore: before, grantedNow: now,
-                                                   appIsActive: NSApp.isActive) {
+                                                   appIsActive: NSApp.isActive,
+                                                   askedOnThisPage: askedForPermissionOnThisPage) {
                 AppActions.shared.openOnboarding?()
             }
         }
@@ -794,7 +801,10 @@ struct OnboardingView: View {
                         if automation.isRequesting(player) {
                             ProgressView().controlSize(.small)
                         } else if automation.status(player) != .authorized {
-                            Button(automation.actionTitle(player)) { automation.handleAction(player) }
+                            Button(automation.actionTitle(player)) {
+                                askedForPermissionOnThisPage = true
+                                automation.handleAction(player)
+                            }
                                 .controlSize(.small)
                         }
                     }
@@ -873,8 +883,11 @@ struct OnboardingView: View {
             if fullDiskAccess.restartPhase == .waiting {
                 ProgressView().controlSize(.small)
             } else if !granted {
-                Button(L10n.t("打开系统设置")) { fullDiskAccess.openSystemSettings() }
-                    .controlSize(.small)
+                Button(L10n.t("打开系统设置")) {
+                    askedForPermissionOnThisPage = true
+                    fullDiskAccess.openSystemSettings()
+                }
+                .controlSize(.small)
             }
         }
         if !granted {
@@ -912,8 +925,11 @@ struct OnboardingView: View {
         setupRow(icon: accessibility.iconName, tint: accessibility.iconColor,
                  title: L10n.t("辅助功能权限"), subtitle: accessibility.caption) {
             if !accessibility.trusted {
-                Button(accessibility.actionTitle) { accessibility.handleAction() }
-                    .controlSize(.small)
+                Button(accessibility.actionTitle) {
+                    askedForPermissionOnThisPage = true
+                    accessibility.handleAction()
+                }
+                .controlSize(.small)
             }
         }
         if !accessibility.trusted, accessibility.prompted || accessibility.everGranted {

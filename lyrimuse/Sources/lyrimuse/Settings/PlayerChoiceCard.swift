@@ -282,8 +282,7 @@ private struct ChoiceCardChrome: ViewModifier {
                 }
             }
             // 右上角的对号 —— 见 `PlayerChoiceCard` 头注那条的推翻说明:多选之后
-            // 光靠颜色表达不了"勾了哪几个"。`.overlay` 不参与布局,卡片高度/网格行数不变
-            // (这一步没有 ScrollView,高度预算很紧,见 OnboardingView 里那几条约束)。
+            // 光靠颜色表达不了"勾了哪几个"。`.overlay` 不参与布局,卡片高度/网格行数不变。
             .overlay(alignment: .topTrailing) {
                 if isSelected {
                     Image(systemName: "checkmark.circle.fill")

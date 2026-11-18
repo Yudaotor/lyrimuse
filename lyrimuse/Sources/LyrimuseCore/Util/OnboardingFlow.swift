@@ -106,9 +106,12 @@ public enum OnboardingFlow {
     }
 
     /// 用户在系统设置里授权完、引导窗口此刻不在前台时,要不要把它带回来。只在「这一页已授权的
-    /// 权限多了一项」的那一刻触发,不在每次状态刷新时抢焦点。
-    public static func bringsBackAfterGrant(grantedBefore: Int, grantedNow: Int, appIsActive: Bool) -> Bool {
-        grantedNow > grantedBefore && !appIsActive
+    /// 权限多了一项」的那一刻触发,不在每次状态刷新时抢焦点;而且要用户在这一页点过权限按钮(请求权限 /
+    /// 打开系统设置):翻进这一页时已授权的项从 0 数成 N、权限状态异步读回来,都会让计数变多,
+    /// 窗口在后面时不能因此抢前台。见 14 章决策 225。
+    public static func bringsBackAfterGrant(grantedBefore: Int, grantedNow: Int, appIsActive: Bool,
+                                            askedOnThisPage: Bool) -> Bool {
+        askedOnThisPage && grantedNow > grantedBefore && !appIsActive
     }
 
     /// 点「开始使用」时要不要把引导记成走完。服务没在跑就不记:标记一旦置真这扇窗口不会再自动

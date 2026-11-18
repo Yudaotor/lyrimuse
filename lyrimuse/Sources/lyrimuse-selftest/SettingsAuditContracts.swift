@@ -155,6 +155,19 @@ func runSettingsAuditContracts() {
                 "引擎服务状态: launchctl print 带超时")
     expectEqual(sourceHas(app("OnboardingView.swift"), "!refreshingEngineRunning {"), true,
                 "引导页: 上一次查询没回来不再叠一次")
+    let onboardingBody = sourceBody("var body: some View", in: app("OnboardingView.swift"))
+    expectEqual(sourceHas(onboardingBody, ".scrollBounceBehavior(.basedOnSize)\n.frame(maxHeight: .infinity)\n.clipped()")
+                && !app("Settings/PlayerChoiceCard.swift").contains("没有 ScrollView"), true,
+                "引导页: 滚动区裁在标题栏下沿,选播放器那一步往下滚不压到红绿灯和标题(14 章决策 225)")
+    expectEqual(sourceHas(onboardingBody, "askedOnThisPage: askedForPermissionOnThisPage")
+                && sourceHas(onboardingBody, "if new != .welcome, introStart != nil { skipIntro() }\naskedForPermissionOnThisPage = false")
+                && app("OnboardingView.swift").components(separatedBy: "askedForPermissionOnThisPage = true").count - 1 == 3, true,
+                "引导页: 授权完带回前台只认这一页点过的三种权限按钮,翻页清掉;翻进权限页不抢前台(14 章决策 225)")
+    let chip = sourceBody("private struct PlayerChip<Icon: View>: View", in: app("Settings/PlayerLinkageRow.swift"))
+    expectEqual(sourceHas(chip, ".hoverNote(label)") && !chip.contains(".help(")
+                && sourceHas(chip, "if selected {\nImage(systemName: \"checkmark.circle.fill\")")
+                && sourceHas(chip, ".accessibilityAddTraits(selected ? .isSelected : [])"), true,
+                "播放器芯片: 悬停用自绘气泡弹名字(不用 .help),勾上的带对号(02 章决策 280)")
     expectEqual(sourceHas(app("Settings/DiagnosticsExporter.swift"), "} else if let current = try? OSLogStore(scope: .currentProcessIdentifier) {"), true,
                 "诊断导出: 系统日志库打不开时退到本次启动的记录")
 
