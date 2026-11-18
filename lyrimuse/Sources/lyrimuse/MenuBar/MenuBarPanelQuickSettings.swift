@@ -964,10 +964,11 @@ struct PanelQuickSettings: View {
                     // 不钉高度它会把这一行撑到父容器那么高。16pt 跟旁边几根 `.controlSize(.mini)`
                     // 的 `SteppedSlider` 一边高。
                     .frame(width: 128, height: 16)
-                Text(notchWidthValueText)
-                    .font(.system(size: 10).monospacedDigit())
+                StableReadout(text: notchWidthValueText,
+                              widest: String(format: L10n.t("%@–%@pt"), "\(Int(NotchWidthBounds.storageRange.upperBound))",
+                                             "\(Int(NotchWidthBounds.storageRange.upperBound))"),
+                              font: .system(size: 10), minWidth: 62)
                     .foregroundStyle(.tertiary)
-                    .frame(width: 62, alignment: .trailing)
                     // 读数是两只滑块的镜像、不是第三个可读元素:它们各自带着 accessibilityValue,
                     // 都进无障碍树 VoiceOver 会把同一个值读两遍(同编辑台那根)。
                     .accessibilityHidden(true)

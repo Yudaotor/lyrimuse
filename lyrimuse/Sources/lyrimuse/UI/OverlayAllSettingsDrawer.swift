@@ -169,10 +169,9 @@ struct OverlayAllSettingsDrawer: View {
                 ), in: OverlayEditorStage.widthRange, step: 10,
                    onEditingChanged: { widthThrottle.editingChanged($0, commit: commitWidth) })
                 .frame(width: 150)
-                Text(String(format: L10n.t("%@pt"), "\(Int(widthThrottle.value(or: settings.overlayWidth)))"))
+                StableReadout(text: String(format: L10n.t("%@pt"), "\(Int(widthThrottle.value(or: settings.overlayWidth)))"),
+                              widest: StableReadout.points(OverlayEditorStage.widthRange.upperBound), font: nil, minWidth: 46)
                     .foregroundStyle(.secondary)
-                    .monospacedDigit()
-                    .frame(width: 46, alignment: .trailing)
             }
         }
     }

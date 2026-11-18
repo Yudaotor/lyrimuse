@@ -3551,11 +3551,9 @@ private struct AppearanceSettingsTab: View {
                 ), in: LyricsWindowMiniHeaderWidth.percentRange, step: LyricsWindowMiniHeaderWidth.percentStep,
                    onEditingChanged: { miniHeaderWidthThrottle.editingChanged($0, commit: commitMiniHeaderWidth) })
                     .frame(width: 130)
-                Text(verbatim: "\(Int(miniHeaderWidthThrottle.value(or: settings.lyricsWindowMiniHeaderWidthPercent).rounded()))%")
+                StableReadout(text: "\(Int(miniHeaderWidthThrottle.value(or: settings.lyricsWindowMiniHeaderWidthPercent).rounded()))%",
+                              widest: StableReadout.percent(LyricsWindowMiniHeaderWidth.percentRange.upperBound), font: nil, minWidth: 38)
                     .foregroundStyle(.secondary)
-                    .monospacedDigit()
-                    // 按最宽的「100%」留位,拖到两位数时滑杆不左右挪。
-                    .frame(width: 38, alignment: .trailing)
             }
         }
         CardDivider()
@@ -3571,10 +3569,9 @@ private struct AppearanceSettingsTab: View {
                 ), in: LyricsWindowMiniHeaderSize.percentRange, step: LyricsWindowMiniHeaderSize.percentStep,
                    onEditingChanged: { miniHeaderHeightThrottle.editingChanged($0, commit: commitMiniHeaderHeight) })
                     .frame(width: 130)
-                Text(verbatim: "\(Int(miniHeaderHeightThrottle.value(or: settings.lyricsWindowMiniHeaderHeightPercent).rounded()))%")
+                StableReadout(text: "\(Int(miniHeaderHeightThrottle.value(or: settings.lyricsWindowMiniHeaderHeightPercent).rounded()))%",
+                              widest: StableReadout.percent(LyricsWindowMiniHeaderSize.percentRange.upperBound), font: nil, minWidth: 38)
                     .foregroundStyle(.secondary)
-                    .monospacedDigit()
-                    .frame(width: 38, alignment: .trailing)
             }
         }
     }
@@ -3842,10 +3839,9 @@ private struct AppearanceSettingsTab: View {
                             ), in: AppSettings.lyricsWindowMiniFontSizeRange, step: 1,
                                onEditingChanged: { miniFontSizeThrottle.editingChanged($0, commit: commit) })
                                 .frame(width: 96)
-                            Text(String(format: L10n.t("%@pt"), "\(Int(miniFontSizeThrottle.value(or: fontSize.wrappedValue)))"))
+                            StableReadout(text: String(format: L10n.t("%@pt"), "\(Int(miniFontSizeThrottle.value(or: fontSize.wrappedValue)))"),
+                                          widest: StableReadout.points(AppSettings.lyricsWindowMiniFontSizeRange.upperBound), font: nil, minWidth: 36)
                                 .foregroundStyle(.secondary)
-                                .monospacedDigit()
-                                .frame(width: 36, alignment: .trailing)
                         }
                     }
                 }
@@ -4436,10 +4432,9 @@ private struct NotchLyricRowHeightRow: View {
                 ), in: settings.notchLyricRowHeightRange, step: 1,
                    onEditingChanged: { heightThrottle.editingChanged($0, commit: { settings.setNotchLyricRowHeight(fromSlider: $0) }) })
                     .frame(width: 150)
-                Text(String(format: L10n.t("%@pt"), "\(Int(heightThrottle.value(or: Double(settings.notchEffectiveLyricRowHeight))))"))
+                StableReadout(text: String(format: L10n.t("%@pt"), "\(Int(heightThrottle.value(or: Double(settings.notchEffectiveLyricRowHeight))))"),
+                              widest: StableReadout.points(settings.notchLyricRowHeightRange.upperBound), font: nil, minWidth: 46)
                     .foregroundStyle(.secondary)
-                    .monospacedDigit()
-                    .frame(width: 46, alignment: .trailing)
             }
         }
     }
@@ -4567,10 +4562,9 @@ struct NotchFontSettingsRows: View {
                            onEditingChanged: { fontSizeThrottle.editingChanged($0, commit: commitFontSize) })
                             .frame(width: 150)
                         // 报实际画字用的字号:存的是原值、画的时候才夹(手改 / 旧版写下的越界值)。
-                        Text(String(format: L10n.t("%@pt"), "\(Int(NotchLyricRowMetrics.clampedMainFontSize(CGFloat(fontSizeThrottle.value(or: settings.notchFontSize)))))"))
+                        StableReadout(text: String(format: L10n.t("%@pt"), "\(Int(NotchLyricRowMetrics.clampedMainFontSize(CGFloat(fontSizeThrottle.value(or: settings.notchFontSize)))))"),
+                                      widest: StableReadout.points(sizeRange.upperBound), font: nil, minWidth: 46)
                             .foregroundStyle(.secondary)
-                            .monospacedDigit()
-                            .frame(width: 46, alignment: .trailing)
                     }
                 }
             }
@@ -5086,11 +5080,10 @@ private struct NotchAllSettingsDrawer: View {
                        if !began { expandedAtWidthDragStart = nil }
                    })
                 .frame(width: 150)
-                Text(String(format: L10n.t("%@pt"),
-                            "\(Int(widthThrottle.value(or: NotchEditorStage.effectiveWidth(baseWidth: settings.notchContentWidth))))"))
+                StableReadout(text: String(format: L10n.t("%@pt"),
+                                           "\(Int(widthThrottle.value(or: NotchEditorStage.effectiveWidth(baseWidth: settings.notchContentWidth))))"),
+                              widest: StableReadout.points(NotchWidthBounds.storageRange.upperBound), font: nil, minWidth: 46)
                     .foregroundStyle(.secondary)
-                    .monospacedDigit()
-                    .frame(width: 46, alignment: .trailing)
             }
         }
     }
@@ -5114,11 +5107,10 @@ private struct NotchAllSettingsDrawer: View {
                    onEditingChanged: { expandedWidthThrottle.editingChanged($0, commit: { NotchEditorStage.commitWidths(expanded: $0) }) })
                 .frame(width: 150)
                 // 读数跟滑块同一个值(拖动中是节流器的草稿),不然每 0.12 秒才跳一次、跟滑块对不上。
-                Text(String(format: L10n.t("%@pt"),
-                            "\(Int(expandedWidthThrottle.value(or: NotchEditorStage.effectiveExpandedWidth(steadyBase: settings.notchContentWidth, expandedBase: settings.notchExpandedContentWidth))))"))
+                StableReadout(text: String(format: L10n.t("%@pt"),
+                                           "\(Int(expandedWidthThrottle.value(or: NotchEditorStage.effectiveExpandedWidth(steadyBase: settings.notchContentWidth, expandedBase: settings.notchExpandedContentWidth))))"),
+                              widest: StableReadout.points(NotchWidthBounds.storageRange.upperBound), font: nil, minWidth: 46)
                     .foregroundStyle(.secondary)
-                    .monospacedDigit()
-                    .frame(width: 46, alignment: .trailing)
             }
         }
     }

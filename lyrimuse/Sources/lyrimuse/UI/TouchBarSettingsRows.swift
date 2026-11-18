@@ -95,11 +95,10 @@ struct TouchBarContentRows: View {
                             ), in: TouchBarLyricsStyle.fontSizeRange, step: 1,
                                onEditingChanged: { fontSizeThrottle.editingChanged($0, commit: commitFontSize) })
                             .frame(width: 150)
-                            Text(String(format: L10n.t("%@pt"),
-                                        "\(Int(fontSizeThrottle.value(or: TouchBarLyricsStyle.clampedFontSize(settings.touchBarLyricsFontSize))))"))
+                            StableReadout(text: String(format: L10n.t("%@pt"),
+                                                       "\(Int(fontSizeThrottle.value(or: TouchBarLyricsStyle.clampedFontSize(settings.touchBarLyricsFontSize))))"),
+                                          widest: StableReadout.points(TouchBarLyricsStyle.fontSizeRange.upperBound), font: nil, minWidth: 46)
                                 .foregroundStyle(.secondary)
-                                .monospacedDigit()
-                                .frame(width: 46, alignment: .trailing)
                         }
                     }
                 }
@@ -168,10 +167,9 @@ struct TouchBarColorRows: View {
                         ), in: TouchBarLyricsStyle.dimLevelRange, step: 0.05,
                            onEditingChanged: { dimThrottle.editingChanged($0, commit: commitDimLevel) })
                         .frame(width: 150)
-                        Text(verbatim: "\(Int((dimThrottle.value(or: TouchBarLyricsStyle.clampedDimLevel(settings.touchBarLyricsDimLevel)) * 100).rounded()))%")
+                        StableReadout(text: "\(Int((dimThrottle.value(or: TouchBarLyricsStyle.clampedDimLevel(settings.touchBarLyricsDimLevel)) * 100).rounded()))%",
+                                      widest: StableReadout.percent(TouchBarLyricsStyle.dimLevelRange.upperBound * 100), font: nil, minWidth: 46)
                             .foregroundStyle(.secondary)
-                            .monospacedDigit()
-                            .frame(width: 46, alignment: .trailing)
                     }
                 }
             }

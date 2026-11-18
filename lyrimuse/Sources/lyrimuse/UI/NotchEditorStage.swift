@@ -1114,10 +1114,10 @@ struct NotchEditorStage: View {
                     }
                 })
             .frame(width: Self.widthBarSliderWidth)
-            Text(widthValueText)
-                .font(.system(size: 11, weight: .medium))
-                .monospacedDigit()
-                .frame(width: 72, alignment: .trailing)
+            StableReadout(text: widthValueText,
+                          widest: String(format: L10n.t("%@–%@pt"), "\(Int(NotchWidthBounds.storageRange.upperBound))",
+                                         "\(Int(NotchWidthBounds.storageRange.upperBound))"),
+                          minWidth: 72)
                 // 读数是滑块的镜像、不是第二个可读元素:都进无障碍树的话 VoiceOver 会把同一个
                 // 值读两遍(两只滑块各自带着 accessibilityValue)。
                 .accessibilityHidden(true)

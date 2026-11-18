@@ -210,11 +210,9 @@ struct AppColorPicker: View {
                 draggingOpacity = editing
                 if !editing { commit() }
             })
-            Text("\(Int(opacity * 100))%")
-                .font(.system(size: 11))
-                .monospacedDigit()
+            StableReadout(text: "\(Int(opacity * 100))%", widest: StableReadout.percent(100),
+                          font: .system(size: 11), minWidth: 34)
                 .foregroundStyle(.secondary)
-                .frame(width: 34, alignment: .trailing)
         }
     }
 

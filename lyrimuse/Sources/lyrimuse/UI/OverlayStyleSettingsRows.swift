@@ -81,10 +81,9 @@ struct OverlayTypeSettingsRows: View {
                     ), in: AppSettings.overlayFontSizeRange, step: 1,
                        onEditingChanged: { fontSizeThrottle.editingChanged($0, commit: commitFontSize) })
                         .frame(width: 150)
-                    Text(String(format: L10n.t("%@pt"), "\(Int(fontSizeThrottle.value(or: settings.fontSize)))"))
+                    StableReadout(text: String(format: L10n.t("%@pt"), "\(Int(fontSizeThrottle.value(or: settings.fontSize)))"),
+                                  widest: StableReadout.points(AppSettings.overlayFontSizeRange.upperBound), font: nil, minWidth: 46)
                         .foregroundStyle(.secondary)
-                        .monospacedDigit()
-                        .frame(width: 46, alignment: .trailing)
                 }
             }
         }
@@ -549,10 +548,9 @@ struct OverlayTextOpacityCell: View {
                               in: OverlayTextOpacity.range, step: OverlayTextOpacity.step,
                               onEditingChanged: { throttle.editingChanged($0, commit: commit) })
                     .frame(width: 96)
-                Text(verbatim: OverlayTextOpacity.percentText(value))
+                StableReadout(text: OverlayTextOpacity.percentText(value),
+                              widest: OverlayTextOpacity.percentText(OverlayTextOpacity.range.upperBound), font: nil, minWidth: 36)
                     .foregroundStyle(.secondary)
-                    .monospacedDigit()
-                    .frame(width: 36, alignment: .trailing)
             }
         }
         // 浮层在拖动中途被关掉时收不到松手那一下,把拖到的值提交掉。

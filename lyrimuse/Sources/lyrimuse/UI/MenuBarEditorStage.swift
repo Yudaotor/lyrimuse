@@ -285,10 +285,9 @@ struct MenuBarWidthRow: View {
                 ), in: AppSettings.menuBarLyricsWidthRange, step: 10,
                    onEditingChanged: { widthThrottle.editingChanged($0, commit: settings.setMenuBarLyricsWidth(fromSlider:)) })
                 .frame(width: 150)
-                Text(String(format: L10n.t("%@pt"), "\(Int(widthThrottle.value(or: Double(settings.menuBarLyricsWidth))))"))
+                StableReadout(text: String(format: L10n.t("%@pt"), "\(Int(widthThrottle.value(or: Double(settings.menuBarLyricsWidth))))"),
+                              widest: StableReadout.points(AppSettings.menuBarLyricsWidthRange.upperBound), font: nil, minWidth: 46)
                     .foregroundStyle(.secondary)
-                    .monospacedDigit()
-                    .frame(width: 46, alignment: .trailing)
             }
         }
     }
@@ -898,10 +897,9 @@ struct MenuBarFontSizeRow: View {
                     ), in: Double(MenuBarMarqueeRenderer.fontSizeRange.lowerBound)...Double(MenuBarMarqueeRenderer.fontSizeRange.upperBound), step: 1,
                        onEditingChanged: { throttle.editingChanged($0, commit: commitFontSize) })
                         .frame(width: 150)
-                    Text(String(format: L10n.t("%@pt"), "\(Int(throttle.value(or: Double(MenuBarMarqueeRenderer.font.pointSize))))"))
+                    StableReadout(text: String(format: L10n.t("%@pt"), "\(Int(throttle.value(or: Double(MenuBarMarqueeRenderer.font.pointSize))))"),
+                                  widest: StableReadout.points(Double(MenuBarMarqueeRenderer.fontSizeRange.upperBound)), font: nil, minWidth: 46)
                         .foregroundStyle(.secondary)
-                        .monospacedDigit()
-                        .frame(width: 46, alignment: .trailing)
                 }
             }
         }

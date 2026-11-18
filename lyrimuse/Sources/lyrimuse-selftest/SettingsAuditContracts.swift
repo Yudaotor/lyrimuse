@@ -319,12 +319,34 @@ func runSettingsAuditContracts() {
     let panelQuick = app("MenuBar/MenuBarPanelQuickSettings.swift")
     expectEqual(sourceHas(overlayStage, "StableReadout(text: widthValueText,\nwidest: String(format: L10n.t(\"%@pt\"), \"\\(Int(Self.widthRange.upperBound))\"))")
                 && sourceHas(menuBarStage, "StableReadout(text: widthValueText,\nwidest: String(format: L10n.t(\"%@pt\"), \"\\(Int(AppSettings.menuBarLyricsWidthRange.upperBound))\"))")
-                && sourceHas(readout, "ZStack(alignment: .trailing) {\nText(widest).hidden()\nText(text)\n}")
+                && sourceHas(readout, "ZStack(alignment: .trailing) {\nColor.clear.frame(width: minWidth, height: 0)\nText(widest).hidden()\nText(text)\n}")
                 && sourceHas(readout, ".lineLimit(1)\n.fixedSize()")
                 && sourceHas(panelQuick, "private static var readoutWidest: String { String(format: L10n.t(\"%@pt\"), \"0000\") }")
                 && panelQuick.components(separatedBy: "widest: Self.readoutWidest, font: .system(size: 10))").count == 3
                 && !sourceHas(panelQuick, ".frame(width: 38, alignment: .trailing)"), true,
                 "滑杆读数: 编辑台宽度条按最大值那一串、菜单栏面板各滑杆一律按四位数留宽(滑杆逐行对齐),不折行,不写定宽(俄语「1270 пт」放不进 44pt / 38pt)")
+    // 滑杆读数一律走 StableReadout:按最大值留宽、单行、`minWidth` 只当下限。定宽 `.frame(width: N, alignment: .trailing)`
+    // 放不下时折成两行(13pt 的「100%」要 37pt)。见 14 章决策 220。
+    let opacityCell = sourceBody("struct OverlayTextOpacityCell: View {", in: app("UI/OverlayStyleSettingsRows.swift"))
+    expectEqual(sourceHas(opacityCell, "StableReadout(text: OverlayTextOpacity.percentText(value),\nwidest: OverlayTextOpacity.percentText(OverlayTextOpacity.range.upperBound), font: nil, minWidth: 36)")
+                && sourceHas(readout, ".font(font ?? inheritedFont)")
+                && sourceHas(readout, "static func points(_ upperBound: Double) -> String {\nString(format: L10n.t(\"%@pt\"), \"\\(Int(upperBound))\")"), true,
+                "滑杆读数: 悬浮歌词「文字不透明度」按「100%」留宽、单行,字号沿用外面")
+    let fixedReadout = try! NSRegularExpression(pattern:
+        #"\.monospacedDigit\(\)\)?(?: //[^.]*)?(?: \.[A-Za-z]+\([^()]*\))*(?: //[^.]*)? \.frame\(width: [0-9.]+, alignment: \.trailing\)"#)
+    var fixedReadouts: [String] = []
+    for rel in (FileManager.default.enumerator(atPath: appDir.path)?.allObjects as? [String] ?? []).sorted() where rel.hasSuffix(".swift") {
+        let text = app(rel)
+        guard sourceBytes(text, contain: "Slider(") else { continue }
+        let flat = text.replacingOccurrences(of: "\\s+", with: " ", options: .regularExpression) as NSString
+        for m in fixedReadout.matches(in: flat as String, range: NSRange(location: 0, length: flat.length)) {
+            let head = flat.substring(with: NSRange(location: max(0, m.range.location - 80), length: min(80, m.range.location)))
+            if rel == "UI/LyricsWindowView.swift" && head.contains("Text(\"\\(entry.rank)\")") { continue }
+            fixedReadouts.append(rel)
+        }
+    }
+    expectEqual(fixedReadouts, [],
+                "滑杆读数: 带滑杆的文件里没有定宽的数字读数(`.monospacedDigit()` 接 `.frame(width: N, alignment: .trailing)`),一律用 StableReadout")
     let panelRow = sourceBody("struct PanelQuickRow<Control: View>: View {", in: panelQuick)
     let controlCell = sourceBody("struct SettingsControlCell<Control: View>: View {", in: designSystem)
     expectEqual(sourceHas(panelRow, "ViewThatFits(in: .horizontal) {\ninline(titleSize: 11.5)\ninline(titleSize: 11.5 * 0.9)\nVStack(alignment: .leading, spacing: 4) {")

@@ -51,11 +51,9 @@ struct LyricsWindowControlScaleSlider: View {
                 draft.percent = nil
             })
                 .frame(width: 130)
-            Text(verbatim: "\(Int(shown.rounded()))%")
+            StableReadout(text: "\(Int(shown.rounded()))%",
+                          widest: StableReadout.percent(LyricsWindowControlScale.percentRange.upperBound), font: nil, minWidth: 38)
                 .foregroundStyle(.secondary)
-                .monospacedDigit()
-                // 按最宽的「200%」留位,拖动时滑杆不左右挪。
-                .frame(width: 38, alignment: .trailing)
         }
         // 拖到一半这一行没了(翻页、关窗口):草稿交给设置,别让预览一直停在没写进去的值上。
         .onDisappear {
