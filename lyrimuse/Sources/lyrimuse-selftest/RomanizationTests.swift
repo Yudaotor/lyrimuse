@@ -1972,6 +1972,12 @@ func checkRomanizationPunctuation() {
     expectEqual(LyricsSyncEngine.buildWordGroups(words: words(["好きだよ」", "!"]), line: "好きだよ」!",
                                                   japanese: true)?.map(\.romanization),
                 ["suki da yo", nil], "逐词读音: 词带着的标点不进读音")
+    expectEqual(LyricsSyncEngine.buildWordGroups(words: words(["夢/", "君よ"]), line: "夢/君よ",
+                                                  japanese: true)?.map(\.romanization),
+                ["yume", "kimi yo"], "逐词读音: 「/」这类分隔符也不进读音")
+    expectEqual(LyricsSyncEngine.buildWordGroups(words: words(["Yeah, ", "好き"]), line: "Yeah, 好き",
+                                                  japanese: true)?.map(\.romanization),
+                [nil, "suki"], "逐词读音: 英文词带着标点,读音跟原文只差标点时不标")
 
     // 屏上:源给的 / 存着的预生成读音照原样存,日文行显示时贴上;韩文行不动。
     let engine = LyricsSyncEngine()
