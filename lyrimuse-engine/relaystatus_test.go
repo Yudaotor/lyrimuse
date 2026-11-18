@@ -160,6 +160,7 @@ func TestRelayStatusMatchesSharedSamples(t *testing.T) {
 	cases := map[string]relayStatusFile{
 		"auth.json":    {Schema: relayStatusSchema, Kind: relayFailAuth, Status: 401, Since: 1_800_000_000},
 		"network.json": {Schema: relayStatusSchema, Kind: relayFailNetwork, Since: 1_800_000_000},
+		"quota.json":   {Schema: relayStatusSchema, Kind: relayFailQuota, Status: 503, Since: 1_800_000_000, Until: 1_800_028_800},
 	}
 	for name, f := range cases {
 		raw, err := os.ReadFile(filepath.Join("..", "shared", "testdata", "relay-status", name))

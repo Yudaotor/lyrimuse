@@ -230,6 +230,9 @@ func webSafeCoverURL(coverURL string) string {
 // scheduleArtworkUpload 起一个后台上传。调用方是 lbMeta(每次轮询都会走到),所以这里
 // 必须廉价且幂等:同一个 sha 同时只有一个在飞,失败的进冷却期。
 func scheduleArtworkUpload(sha, path string) {
+	if relayQuotaPaused(time.Now()) {
+		return
+	}
 	artworkMu.Lock()
 	if artworkInflight[sha] || time.Now().Before(artworkNextRetry[sha]) {
 		artworkMu.Unlock()

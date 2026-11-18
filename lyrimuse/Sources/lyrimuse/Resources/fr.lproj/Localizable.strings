@@ -847,6 +847,7 @@
 "同步失败" = "Échec de synchronisation";
 "同步已关闭" = "Synchro désactivée";
 "同步播放记录" = "Synchronisez vos écoutes";
+"同步服务今日写入额度已用完，%@ 恢复推送" = "Quota quotidien d’écriture du serveur de synchronisation atteint, reprise de l’envoi à %@";
 "同步服务地址" = "URL du serveur de synchronisation";
 "同步服务地址有误" = "L’URL du serveur de synchronisation semble incorrecte";
 "同步服务拒绝推送（%d）" = "Le serveur de synchronisation a refusé l’envoi (%d)";

@@ -310428,6 +310428,107 @@
           }
         }
       }
+    },
+    "同步服务今日写入额度已用完，%@ 恢复推送" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tageslimit für Schreibvorgänge des Sync-Servers erreicht, Übertragung wieder ab %@"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The sync server’s daily write limit is used up; pushing resumes at %@"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Límite diario de escritura del servidor de sincronización alcanzado; el envío se reanuda a las %@"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Quota quotidien d’écriture du serveur de synchronisation atteint, reprise de l’envoi à %@"
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "सिंक सर्वर का आज का राइट कोटा पूरा हो गया, %@ पर भेजना फिर शुरू होगा"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Limite giornaliero di scrittura del server di sincronizzazione raggiunto; l’invio riprende alle %@"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "同期サーバの本日の書き込み上限に達しました。%@に送信を再開"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "동기화 서비스의 오늘 쓰기 한도를 모두 사용했습니다. %@에 전송 재개"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Limite diário de gravação do servidor de sincronização atingido; o envio volta às %@"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Дневной лимит записи на сервере синхронизации исчерпан, отправка возобновится в %@"
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "เซิร์ฟเวอร์เชื่อมข้อมูลใช้โควตาการเขียนของวันนี้หมดแล้ว จะส่งต่อเวลา %@"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Eşzamanlama sunucusunun günlük yazma kotası doldu, gönderim saat %@ itibarıyla yeniden başlar"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Денний ліміт запису на сервері синхронізації вичерпано, надсилання відновиться о %@"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Máy chủ đồng bộ đã hết hạn mức ghi hôm nay, tiếp tục gửi lúc %@"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "同步服务今日写入额度已用完，%@ 恢复推送"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "同步伺服器今日寫入額度已用完，%@ 恢復推送"
+          }
+        }
+      }
     }
   },
   "version" : "1.0"

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"log"
 	"os"
+	"slices"
 	"strings"
 	"time"
 )
@@ -14,7 +15,7 @@ import (
 //   - 测试期开关(scrobbleHoldPath):App 的 `lyrimuse://debug/scrobble-hold` 写的租约表,任一租约没到期就算开着。
 //     每条租约最长 scrobbleHoldMax,从写入时刻(since)算起,until 写得再远也按这个封顶:忘了关最多吞掉这么久的真实收听。
 //   - 测试曲名单(testtracks_generated.go,生成自 shared/test-tracks.json,App 的 Discord「正在听」读同一份):
-//     合成测试曲按歌手认,开关没开也不记。
+//     合成测试曲按歌手认;没写歌手标签的现成素材按歌名整串认(歌手为空才看,13 章决策 17)。开关没开也不记。
 //
 // 判定挂在会话上、只往上棘轮(playSession.scrobbleHold,跟 isAd 同一个形状):开关中途到期或被关掉,已经认成测试的那一首
 // 照旧不记;开关中途才打开,下一个出口(正在播放、到点提交、退出兜底、中继推送)就认上。歌词解析不受影响。
@@ -72,10 +73,11 @@ func scrobbleHoldUntil(now time.Time) time.Time {
 type testTrackMarks struct {
 	ArtistPrefixes []string
 	Artists        []string
+	UntaggedTitles []string
 }
 
 var testTracks = testTrackMarks{ArtistPrefixes: normalizeTestArtists(testTrackArtistPrefixes),
-	Artists: normalizeTestArtists(testTrackArtists)}
+	Artists: normalizeTestArtists(testTrackArtists), UntaggedTitles: normalizeTestArtists(testTrackUntaggedTitles)}
 
 // normalizeTestArtists:名单按比对口径(去首尾空白、小写)存一份。App 侧 ScrobbleHold.isTestTrack 同一口径。
 func normalizeTestArtists(list []string) []string {
@@ -86,11 +88,13 @@ func normalizeTestArtists(list []string) []string {
 	return out
 }
 
-// isTestTrack:歌手是合成测试曲专用的写法。整串比对或前缀比对,不做子串匹配:名单要窄,真实歌手不能被带进来。
-func isTestTrack(artist string) bool {
+// isTestTrack:歌手是合成测试曲专用的写法,或者歌手为空、歌名是名单里没写歌手标签的测试素材。整串比对或前缀比对,
+// 不做子串匹配:名单要窄,真实歌手、真歌不能被带进来。
+func isTestTrack(artist, title string) bool {
 	a := strings.ToLower(strings.TrimSpace(artist))
 	if a == "" {
-		return false
+		t := strings.ToLower(strings.TrimSpace(title))
+		return t != "" && slices.Contains(testTracks.UntaggedTitles, t)
 	}
 	for _, p := range testTracks.ArtistPrefixes {
 		if p != "" && strings.HasPrefix(a, p) {
@@ -106,8 +110,8 @@ func isTestTrack(artist string) bool {
 }
 
 // scrobbleHoldReason:这一首此刻该不该挡、因为什么;空串 = 照常记。名单优先,命中名单的不用看开关。
-func scrobbleHoldReason(artist string, now time.Time) string {
-	if isTestTrack(artist) {
+func scrobbleHoldReason(artist, title string, now time.Time) string {
+	if isTestTrack(artist, title) {
 		return "test track"
 	}
 	if until := scrobbleHoldUntil(now); !until.IsZero() {
@@ -121,7 +125,7 @@ func heldForTest(s *playSession, artist, title string, now time.Time) bool {
 	if s.scrobbleHold != "" {
 		return true
 	}
-	reason := scrobbleHoldReason(artist, now)
+	reason := scrobbleHoldReason(artist, title, now)
 	if reason == "" {
 		return false
 	}
@@ -136,5 +140,5 @@ func (p *poller) curHeldForTest(now time.Time) bool {
 	if p.sess != nil && p.sess.key == p.cur.key() {
 		return heldForTest(p.sess, p.cur.Artist, p.cur.Title, now)
 	}
-	return scrobbleHoldReason(p.cur.Artist, now) != ""
+	return scrobbleHoldReason(p.cur.Artist, p.cur.Title, now) != ""
 }

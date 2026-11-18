@@ -1,9 +1,10 @@
 {
   "$doc": [
-    "合成测试曲的标记,引擎与 App 共用这一份:歌手命中的不发 Last.fm / ListenBrainz、不记本地收听日志,网页中继不推「正在播放」,Discord 不显示「正在听」;测试期开关没开也一样。见 12 章决策 98、99。",
-    "新造测试曲的歌手一律以 Lyrimuse测试 开头;artists 只收测试素材已经在用的整串写法,真实歌手名不进来。",
-    "比对去首尾空白、不分大小写;prefixes 按开头比,artists 整串比,不做子串。",
-    "改完跑 python3 scripts/gen-test-tracks.py 重新生成两侧代码;CI 跑 --check 对账。match / keep 是两侧测试都跑的例句:match 必须认成测试曲,keep 一句都不许认。"
+    "合成测试曲的标记,引擎与 App 共用这一份:命中的不发 Last.fm / ListenBrainz、不记本地收听日志,网页中继不推「正在播放」,Discord 不显示「正在听」;测试期开关没开也一样。见 12 章决策 98、99。",
+    "新造测试素材一律写歌手标签,歌手以 Lyrimuse测试 开头;artists 只收测试素材已经在用的整串写法,真实歌手名不进来。",
+    "untagged_titles 只给已有的、没写歌手标签的测试素材兜底:歌手为空、歌名整串等于其中一个才算(播放器按文件名报歌名时带不带扩展名都列上)。只收一看就是合成素材的文件名,Silence、track08 这类真歌也可能叫的不收。见 13 章决策 17。",
+    "比对去首尾空白、不分大小写;prefixes 按开头比,artists、untagged_titles 整串比,不做子串。",
+    "改完跑 python3 scripts/gen-test-tracks.py 重新生成两侧代码;CI 跑 --check 对账。match / keep 是两侧测试都跑的歌手例句,match_untagged 是歌手为空时必须认上的歌名,keep_tracks 是一首都不许认的歌手 + 歌名。"
   ],
   "artist_prefixes": [
     "Lyrimuse测试",
@@ -18,8 +19,49 @@
     "Test Artist Three",
     "歌手A-B"
   ],
+  "untagged_titles": [
+    "ToneClick",
+    "ToneClick.wav",
+    "Click A",
+    "Click A.wav",
+    "Click B",
+    "Click B.wav",
+    "Click C",
+    "Click C.wav",
+    "NoTag",
+    "NoTag.mp3",
+    "TagDash",
+    "TagDash.mp3",
+    "TagCtrl",
+    "TagCtrl.mp3",
+    "MyGo Click A",
+    "MyGo Click A.wav",
+    "MyGo Click B",
+    "MyGo Click B.wav",
+    "MyGo Click C",
+    "MyGo Click C.wav",
+    "MyGo Click M",
+    "MyGo Click M.mp3",
+    "MyGo Click N",
+    "MyGo Click N.mp3",
+    "Audirvana Click",
+    "Audirvana Click.wav"
+  ],
   "match": ["Lyrimuse测试", "Lyrimuse测试A", "lyrimuse test", "LYRIMUSE TEST RADIO", " 测试歌手 ", "測試歌手",
     "Test Artist", "test artist one", "Test Artist Two", "Test Artist Three", "歌手A-B"],
   "keep": ["", "陈奕迅", "Lyrimuse", "Test", "Test Artists", "Test Artist Four", "The Test Artist", "测试歌手乐队",
-    "新测试歌手", "歌手A", "Artist Test", "周杰伦, Lyrimuse测试"]
+    "新测试歌手", "歌手A", "Artist Test", "周杰伦, Lyrimuse测试"],
+  "match_untagged": ["ToneClick", " click a.wav ", "Click C", "NoTag.mp3", "MyGo Click N", "AUDIRVANA CLICK.WAV"],
+  "keep_tracks": [
+    {"artist": "陈奕迅", "title": "Click A"},
+    {"artist": "Lyrimuse", "title": "NoTag"},
+    {"artist": "", "title": ""},
+    {"artist": "", "title": "Click"},
+    {"artist": "", "title": "Click D"},
+    {"artist": "", "title": "ToneClick 2"},
+    {"artist": "", "title": "Click A - Remix"},
+    {"artist": "", "title": "radio"},
+    {"artist": "", "title": "Silence.mp3"},
+    {"artist": "", "title": "track08"}
+  ]
 }

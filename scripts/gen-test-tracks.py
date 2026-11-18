@@ -8,8 +8,8 @@
 - lyrimuse-engine/testtracks_generated.go                     名单(引擎)
 - lyrimuse/Sources/LyrimuseCore/Models/TestTracks+Generated.swift  名单(App)
 
-比对逻辑手写在 scrobblehold.go `isTestTrack` / ScrobbleHold.swift `isTestTrack`;JSON 里的 match / keep 例句由两侧测试
-在测试时直接读这份 JSON 去跑,不生成。
+比对逻辑手写在 scrobblehold.go `isTestTrack` / ScrobbleHold.swift `isTestTrack`;JSON 里的 match / keep / match_untagged /
+keep_tracks 例句由两侧测试在测试时直接读这份 JSON 去跑,不生成。
 """
 import json
 import shutil
@@ -41,12 +41,12 @@ def fail(msg):
 def load():
     spec = json.loads(SPEC.read_text(encoding="utf-8"))
     out = {}
-    for key in ("artist_prefixes", "artists", "match", "keep"):
+    for key in ("artist_prefixes", "artists", "untagged_titles", "match", "keep", "match_untagged"):
         values = spec.get(key)
         if not isinstance(values, list) or not all(isinstance(v, str) for v in values):
             fail(f"{key} 必须是字符串数组")
         out[key] = values
-    for key in ("artist_prefixes", "artists"):
+    for key in ("artist_prefixes", "artists", "untagged_titles"):
         seen = set()
         for v in out[key]:
             norm = v.strip().lower()
@@ -55,8 +55,13 @@ def load():
             if norm in seen:
                 fail(f"{key} 重复: {v}")
             seen.add(norm)
-    if not out["match"] or not out["keep"]:
-        fail("match、keep 各至少一句")
+    tracks = spec.get("keep_tracks")
+    if not isinstance(tracks, list) or not all(
+            isinstance(t, dict) and set(t) == {"artist", "title"} and all(isinstance(v, str) for v in t.values()) for t in tracks):
+        fail("keep_tracks 必须是 {artist, title} 字符串对象数组")
+    out["keep_tracks"] = tracks
+    if not out["match"] or not out["keep"] or not out["match_untagged"] or not tracks:
+        fail("match、keep、match_untagged、keep_tracks 各至少一句")
     return out
 
 
@@ -83,6 +88,8 @@ def render_go(spec):
     lines += ["\t%s,\n" % quote(v) for v in spec["artist_prefixes"]]
     lines.append("}\n\nvar testTrackArtists = []string{\n")
     lines += ["\t%s,\n" % quote(v) for v in spec["artists"]]
+    lines.append("}\n\nvar testTrackUntaggedTitles = []string{\n")
+    lines += ["\t%s,\n" % quote(v) for v in spec["untagged_titles"]]
     lines.append("}\n")
     return "".join(lines)
 
@@ -92,6 +99,8 @@ def render_core_swift(spec):
     lines += ["        %s,\n" % quote(v) for v in spec["artist_prefixes"]]
     lines.append("    ]\n\n    public static let testArtists: [String] = [\n")
     lines += ["        %s,\n" % quote(v) for v in spec["artists"]]
+    lines.append("    ]\n\n    public static let testUntaggedTitles: [String] = [\n")
+    lines += ["        %s,\n" % quote(v) for v in spec["untagged_titles"]]
     lines.append("    ]\n}\n")
     return "".join(lines)
 
@@ -116,8 +125,8 @@ def main():
     if check and stale:
         print("\n✗ 生成物过期或被手改。跑 `python3 scripts/gen-test-tracks.py` 重新生成后再提交。")
         return 1
-    print("\n✓ %d 个前缀、%d 个整串,两侧生成物与 shared/test-tracks.json 一致"
-          % (len(spec["artist_prefixes"]), len(spec["artists"])))
+    print("\n✓ %d 个前缀、%d 个整串、%d 个无歌手素材名,两侧生成物与 shared/test-tracks.json 一致"
+          % (len(spec["artist_prefixes"]), len(spec["artists"]), len(spec["untagged_titles"])))
     return 0
 
 

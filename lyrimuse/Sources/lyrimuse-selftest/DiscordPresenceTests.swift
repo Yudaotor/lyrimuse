@@ -35,22 +35,39 @@ func runDiscordPresenceTests() {
 private func checkDiscordTestHold() {
     let repo = URL(fileURLWithPath: #filePath)
         .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+    struct Track: Decodable {
+        let artist: String
+        let title: String
+    }
     struct Spec: Decodable {
         let artist_prefixes: [String]
         let artists: [String]
+        let untagged_titles: [String]
         let match: [String]
         let keep: [String]
+        let match_untagged: [String]
+        let keep_tracks: [Track]
     }
     let spec = (try? Data(contentsOf: repo.appendingPathComponent("shared/test-tracks.json")))
         .flatMap { try? JSONDecoder().decode(Spec.self, from: $0) }
-    expectEqual(spec.map { [$0.artist_prefixes, $0.artists] }, [ScrobbleHold.testArtistPrefixes, ScrobbleHold.testArtists],
+    expectEqual(spec.map { [$0.artist_prefixes, $0.artists, $0.untagged_titles] },
+                [ScrobbleHold.testArtistPrefixes, ScrobbleHold.testArtists, ScrobbleHold.testUntaggedTitles],
                 "测试曲名单: TestTracks+Generated.swift 跟 shared/test-tracks.json 一致(不一致跑 scripts/gen-test-tracks.py)")
-    expectEqual((spec?.match.isEmpty ?? true) || (spec?.keep.isEmpty ?? true), false, "测试曲名单: 例句读得到")
+    expectEqual((spec?.match.isEmpty ?? true) || (spec?.keep.isEmpty ?? true) || (spec?.match_untagged.isEmpty ?? true)
+                || (spec?.keep_tracks.isEmpty ?? true), false, "测试曲名单: 例句读得到")
     for artist in spec?.match ?? [] {
-        expectEqual(ScrobbleHold.isTestTrack(artist: artist), true, "测试曲名单: \(artist) 认成测试曲")
+        expectEqual(ScrobbleHold.isTestTrack(artist: artist, title: "浮夸"), true, "测试曲名单: \(artist) 认成测试曲")
     }
     for artist in spec?.keep ?? [] {
-        expectEqual(ScrobbleHold.isTestTrack(artist: artist), false, "测试曲名单: \(artist) 不认")
+        expectEqual(ScrobbleHold.isTestTrack(artist: artist, title: "浮夸"), false, "测试曲名单: \(artist) 不认")
+    }
+    for title in spec?.match_untagged ?? [] {
+        expectEqual(ScrobbleHold.isTestTrack(artist: "", title: title), true, "测试曲名单: 没有歌手的 \(title) 认成测试曲")
+        expectEqual(ScrobbleHold.isTestTrack(artist: "陈奕迅", title: title), false, "测试曲名单: 有歌手的 \(title) 不按素材名认")
+    }
+    for track in spec?.keep_tracks ?? [] {
+        expectEqual(ScrobbleHold.isTestTrack(artist: track.artist, title: track.title), false,
+                    "测试曲名单: \(track.artist) - \(track.title) 不认")
     }
 
     struct Case: Decodable {
@@ -71,17 +88,19 @@ private func checkDiscordTestHold() {
     let t0 = Date(timeIntervalSince1970: 1_800_000_000)
     let open = [ScrobbleHold.Lease(id: "t", since: 1_800_000_000, until: 1_800_000_600)]
     var gate = ScrobbleHold.TrackGate()
-    expectEqual(gate.isHeld(track: "浮夸", artist: "陈奕迅", leases: [], now: t0), false, "Discord 测试播放: 真歌、开关关着照常显示")
-    expectEqual(gate.isHeld(track: "对时", artist: "Lyrimuse测试", leases: [], now: t0), true, "Discord 测试播放: 测试曲不显示")
-    expectEqual(gate.isHeld(track: "浮夸", artist: "陈奕迅", leases: open, now: t0), true, "Discord 测试播放: 开关开着真歌也不显示")
-    expectEqual(gate.isHeld(track: "浮夸", artist: "陈奕迅", leases: [], now: t0.addingTimeInterval(60)), true,
+    expectEqual(gate.isHeld(track: "浮夸", artist: "陈奕迅", title: "浮夸", leases: [], now: t0), false, "Discord 测试播放: 真歌、开关关着照常显示")
+    expectEqual(gate.isHeld(track: "对时", artist: "Lyrimuse测试", title: "对时", leases: [], now: t0), true, "Discord 测试播放: 测试曲不显示")
+    expectEqual(gate.isHeld(track: "浮夸", artist: "陈奕迅", title: "浮夸", leases: open, now: t0), true, "Discord 测试播放: 开关开着真歌也不显示")
+    expectEqual(gate.isHeld(track: "浮夸", artist: "陈奕迅", title: "浮夸", leases: [], now: t0.addingTimeInterval(60)), true,
                 "Discord 测试播放: 认上之后开关收掉,这一首照旧不显示")
-    expectEqual(gate.isHeld(track: "浮夸", artist: "陈奕迅", leases: open, now: t0.addingTimeInterval(600)), true,
+    expectEqual(gate.isHeld(track: "浮夸", artist: "陈奕迅", title: "浮夸", leases: open, now: t0.addingTimeInterval(600)), true,
                 "Discord 测试播放: 认上之后开关到期,这一首照旧不显示")
-    expectEqual(gate.isHeld(track: "十年", artist: "陈奕迅", leases: open, now: t0.addingTimeInterval(600)), false,
+    expectEqual(gate.isHeld(track: "十年", artist: "陈奕迅", title: "十年", leases: open, now: t0.addingTimeInterval(600)), false,
                 "Discord 测试播放: 开关到期后的下一首照常显示")
-    expectEqual(gate.isHeld(track: "浮夸", artist: "陈奕迅", leases: [], now: t0.addingTimeInterval(700)), false,
+    expectEqual(gate.isHeld(track: "浮夸", artist: "陈奕迅", title: "浮夸", leases: [], now: t0.addingTimeInterval(700)), false,
                 "Discord 测试播放: 换过一首再回来重新判")
+    expectEqual(gate.isHeld(track: "ToneClick", artist: "", title: "ToneClick", leases: [], now: t0.addingTimeInterval(800)), true,
+                "Discord 测试播放: 没写歌手标签的测试素材不显示")
 }
 
 private func jsonString(_ data: Data) -> String {

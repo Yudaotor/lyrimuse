@@ -847,6 +847,7 @@
 "同步失败" = "Synchronisierung fehlgeschlagen";
 "同步已关闭" = "Sync aus";
 "同步播放记录" = "Wiedergaben synchronisieren";
+"同步服务今日写入额度已用完，%@ 恢复推送" = "Tageslimit für Schreibvorgänge des Sync-Servers erreicht, Übertragung wieder ab %@";
 "同步服务地址" = "Sync-Server-URL";
 "同步服务地址有误" = "Die URL des Sync-Servers scheint falsch zu sein";
 "同步服务拒绝推送（%d）" = "Der Sync-Server hat den Push abgelehnt (%d)";

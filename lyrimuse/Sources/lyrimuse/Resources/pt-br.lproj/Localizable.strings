@@ -847,6 +847,7 @@
 "同步失败" = "Falha na sincronização";
 "同步已关闭" = "Sincronização desativada";
 "同步播放记录" = "Sincronize suas reproduções";
+"同步服务今日写入额度已用完，%@ 恢复推送" = "Limite diário de gravação do servidor de sincronização atingido; o envio volta às %@";
 "同步服务地址" = "URL do servidor de sincronização";
 "同步服务地址有误" = "A URL do servidor de sincronização parece errada";
 "同步服务拒绝推送（%d）" = "O servidor de sincronização rejeitou o envio (%d)";

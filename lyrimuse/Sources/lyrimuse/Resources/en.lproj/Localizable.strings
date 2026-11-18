@@ -847,6 +847,7 @@
 "同步失败" = "Sync failed";
 "同步已关闭" = "Sync Off";
 "同步播放记录" = "Sync your plays";
+"同步服务今日写入额度已用完，%@ 恢复推送" = "The sync server’s daily write limit is used up; pushing resumes at %@";
 "同步服务地址" = "Sync Server URL";
 "同步服务地址有误" = "The sync server URL looks wrong";
 "同步服务拒绝推送（%d）" = "The sync server rejected the push (%d)";

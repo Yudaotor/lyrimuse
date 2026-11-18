@@ -793,6 +793,7 @@
 "同步失败" = "Không đồng bộ được";
 "同步已关闭" = "Đã tắt đồng bộ";
 "同步播放记录" = "Đồng bộ lượt phát";
+"同步服务今日写入额度已用完，%@ 恢复推送" = "Máy chủ đồng bộ đã hết hạn mức ghi hôm nay, tiếp tục gửi lúc %@";
 "同步服务地址" = "URL máy chủ đồng bộ";
 "同步服务地址有误" = "Địa chỉ máy chủ đồng bộ không đúng";
 "同步服务拒绝推送（%d）" = "Máy chủ đồng bộ từ chối lần đẩy (%d)";

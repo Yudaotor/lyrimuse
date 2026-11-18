@@ -16,4 +16,33 @@ extension ScrobbleHold {
         "Test Artist Three",
         "歌手A-B",
     ]
+
+    public static let testUntaggedTitles: [String] = [
+        "ToneClick",
+        "ToneClick.wav",
+        "Click A",
+        "Click A.wav",
+        "Click B",
+        "Click B.wav",
+        "Click C",
+        "Click C.wav",
+        "NoTag",
+        "NoTag.mp3",
+        "TagDash",
+        "TagDash.mp3",
+        "TagCtrl",
+        "TagCtrl.mp3",
+        "MyGo Click A",
+        "MyGo Click A.wav",
+        "MyGo Click B",
+        "MyGo Click B.wav",
+        "MyGo Click C",
+        "MyGo Click C.wav",
+        "MyGo Click M",
+        "MyGo Click M.mp3",
+        "MyGo Click N",
+        "MyGo Click N.mp3",
+        "Audirvana Click",
+        "Audirvana Click.wav",
+    ]
 }

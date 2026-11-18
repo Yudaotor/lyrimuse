@@ -526,7 +526,7 @@ final class DiscordPresenceController: ObservableObject {
         // 测试播放不显示,判定跟引擎挡打卡、中继的同一套(12 章决策 98、99)。
         let wasHeld = testHold.heldTrack
         if testHold.isHeld(track: "\(playback.title)\u{1F}\(playback.artist)\u{1F}\(playback.album)", artist: playback.artist,
-                           leases: holdLeases, now: now) {
+                           title: playback.title, leases: holdLeases, now: now) {
             if wasHeld != testHold.heldTrack {
                 discordLogger.notice("presence held for test: \(playback.artist, privacy: .public) - \(playback.title, privacy: .public)")
             }

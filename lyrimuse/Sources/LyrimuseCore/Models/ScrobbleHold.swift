@@ -62,17 +62,22 @@ public enum ScrobbleHold {
         return latest.map { Date(timeIntervalSince1970: TimeInterval($0)) }
     }
 
-    /// 歌手是合成测试曲专用的写法(名单 `testArtistPrefixes` / `testArtists`,生成自 `shared/test-tracks.json`)。
+    /// 歌手是合成测试曲专用的写法(名单 `testArtistPrefixes` / `testArtists`,生成自 `shared/test-tracks.json`),
+    /// 或者歌手为空、歌名整串等于没写歌手标签的测试素材(`testUntaggedTitles`)。
     /// 去首尾空白、不分大小写,前缀或整串比对,不做子串;跟引擎 `isTestTrack` 同一口径。
-    public static func isTestTrack(artist: String) -> Bool {
+    public static func isTestTrack(artist: String, title: String) -> Bool {
         let a = normalized(artist)
-        guard !a.isEmpty else { return false }
+        guard !a.isEmpty else {
+            let t = normalized(title)
+            return !t.isEmpty && normalizedUntaggedTitles.contains(t)
+        }
         return normalizedPrefixes.contains { !$0.isEmpty && a.hasPrefix($0) } || normalizedArtists.contains(a)
     }
 
     private static func normalized(_ s: String) -> String { s.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() }
     private static let normalizedPrefixes = testArtistPrefixes.map(normalized)
     private static let normalizedArtists = Set(testArtists.map(normalized))
+    private static let normalizedUntaggedTitles = Set(testUntaggedTitles.map(normalized))
 
     /// 按曲目棘轮的判定,跟引擎按会话的 `heldForTest` 同一个形状:这一首第一次判成测试播放(名单命中或开关开着)之后一直算,
     /// 开关中途到期或被收掉也不回落;换了一首重新判。
@@ -81,10 +86,12 @@ public enum ScrobbleHold {
 
         public init() {}
 
-        public mutating func isHeld(track: String, artist: String, leases: [Lease], now: Date) -> Bool {
+        public mutating func isHeld(track: String, artist: String, title: String, leases: [Lease], now: Date) -> Bool {
             if heldTrack == track { return true }
             heldTrack = nil
-            guard ScrobbleHold.isTestTrack(artist: artist) || ScrobbleHold.activeUntil(leases, now: now) != nil else { return false }
+            guard ScrobbleHold.isTestTrack(artist: artist, title: title) || ScrobbleHold.activeUntil(leases, now: now) != nil else {
+                return false
+            }
             heldTrack = track
             return true
         }

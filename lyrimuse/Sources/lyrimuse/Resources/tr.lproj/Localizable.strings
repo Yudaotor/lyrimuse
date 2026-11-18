@@ -793,6 +793,7 @@
 "同步失败" = "Eşzamanlama başarısız";
 "同步已关闭" = "Eşzamanlama Kapalı";
 "同步播放记录" = "Dinlemelerinizi eşzamanlayın";
+"同步服务今日写入额度已用完，%@ 恢复推送" = "Eşzamanlama sunucusunun günlük yazma kotası doldu, gönderim saat %@ itibarıyla yeniden başlar";
 "同步服务地址" = "Eşzamanlama Sunucusu URL’si";
 "同步服务地址有误" = "Eşzamanlama sunucusunun URL’si hatalı görünüyor";
 "同步服务拒绝推送（%d）" = "Eşzamanlama sunucusu gönderimi reddetti (%d)";

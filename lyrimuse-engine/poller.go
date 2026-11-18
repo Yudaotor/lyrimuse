@@ -329,7 +329,10 @@ type poller struct {
 	// 推送健康度(见 relaystatus.go)。
 	relayGen          int       // 中继地址或令牌每改一次加一;在飞的推送带着它,回来时不是这一份就不记账
 	relayFailingSince time.Time // 这一串推送失败从什么时候开始;零 = 上一次推成功了或还没推过
-	relayStatusKey    string    // 上次写进状态文件的失败类别(kind|status),同一类不重写
+	relayStatusKey    string    // 上次写进状态文件的失败(relayStatusFile.key),同一类不重写
+	relayQuotaUntil   time.Time // 中继的 KV 写额度用完、停推到这一刻(relayQuotaResumeAt);零 = 没停
+	// relayReanchorPending:App 重锚了、还没推出去(离上次推送不到 relayReanchorMinGap),到点补推一次。
+	relayReanchorPending bool
 
 	// Last.fm bridge (iPhone via FastScrobbler→Last.fm) state.
 	forwardedSet    persistedTTLSet
@@ -738,6 +741,9 @@ const (
 	// 推送失败后的退避:从 relayBackoffMin 起每失败一次翻倍,封顶 relayBackoffMax(见 applyRelayResult)。
 	relayBackoffMin = 30 * time.Second
 	relayBackoffMax = 10 * time.Minute
+	// 只因重锚而推,离上次推送至少隔这么久;间隔里的重锚记下来到点补推一次。播放器进度来回抖、几乎每拍都判成重锚时,
+	// 一首歌不至于每拍写一次 KV。换歌、暂停、继续不受它限制。见 13 章决策 17。
+	relayReanchorMinGap = 30 * time.Second
 )
 
 // relayTrackOf 取 key 里标识曲目的那段(去掉状态前缀和 |c / |a 后缀),用来判断是不是换了一首歌。
@@ -787,10 +793,16 @@ func relayHasProgress(key string) bool {
 // relayShouldPush 决定这一拍要不要推、为什么推(给日志埋点)。只读写中继相关的 poller 字段,
 // 在主循环上调用。
 func (p *poller) relayShouldPush(now time.Time, key string, payload map[string]any, reanchored bool) (string, bool) {
-	progress := relayHasProgress(key)
-	if !progress {
-		reanchored = false // 没有进度条的状态,重锚改不了网页上任何东西
+	// 中继的 KV 写额度今天用完了:停到 relayQuotaUntil,换歌、暂停也不推。到点后按 key 跟已推那份的差别照常推。
+	if now.Before(p.relayQuotaUntil) {
+		return "", false
 	}
+	progress := relayHasProgress(key)
+	if progress && reanchored {
+		p.relayReanchorPending = true
+	}
+	// 没有进度条的状态,重锚改不了网页上任何东西
+	reanchored = progress && p.relayReanchorPending
 	changed := key != p.relayLastState
 	if !changed {
 		// 又回到推上去的那份(等的封面回来了、暂停又被撤回):之前开始等的那条作废,下次再出现从头等。
@@ -856,6 +868,12 @@ func (p *poller) relayShouldPush(now time.Time, key string, payload map[string]a
 			return "", false
 		}
 	}
+	if reanchored && !changed && !contentChanged {
+		if wait := relayReanchorMinGap - now.Sub(p.relayLastAt); wait > 0 {
+			p.wakeRelayAfter(wait)
+			return "", false
+		}
+	}
 	if !changed && !reanchored && !contentChanged {
 		if now.Sub(p.relayLastAt) < relayHeartbeat {
 			return "", false
@@ -874,19 +892,25 @@ func (p *poller) relayShouldPush(now time.Time, key string, payload map[string]a
 	case contentChanged:
 		reason = "content"
 	}
-	// 退避:上次推送失败(配额爆/中继挂)后别每轮硬试(否则每 5s 白烧一次 worker 请求+刷屏)。
-	// 内容变了(key 变,如换歌)→ 清退避立即再试,让 KV 恢复后尽快回主路径;同内容按退避重试。
-	if key != p.relayFailKey {
-		p.relayFailAt, p.relayBackoff = time.Time{}, 0
-	}
-	if !p.relayFailAt.IsZero() && now.Sub(p.relayFailAt) < p.relayBackoff {
-		return "", false
+	// 退避:上次推送失败(中继挂、限流)后别每轮硬试(否则每 5s 白烧一次 worker 请求+刷屏)。同一个 key 按退避重试;
+	// key 变了(换歌、暂停)可以提前再试,但离上次失败至少 relayBackoffMin。退避时长只在推成功时清零,接连换歌也一直翻倍。
+	// 见 13 章决策 17。
+	if !p.relayFailAt.IsZero() {
+		wait := p.relayBackoff
+		if key != p.relayFailKey {
+			wait = min(wait, relayBackoffMin)
+		}
+		if now.Sub(p.relayFailAt) < wait {
+			return "", false
+		}
 	}
 	if p.relayInflight {
 		return "", false
 	}
-	// 这一拍真要推了:等过的那条作废。同一首下次再从暂停到在放、或再等封面,重新从头等。
+	// 这一拍真要推了:等过的那条作废。同一首下次再从暂停到在放、或再等封面,重新从头等。推上去的负载带着此刻的进度锚,
+	// 挂着的重锚一并了结。
 	p.relayDeferKey, p.relayDeferSince = "", time.Time{}
+	p.relayReanchorPending = false
 	return reason, true
 }
 
@@ -1493,7 +1517,8 @@ func (p *poller) handle(now time.Time, reanchored, loopRestart bool) {
 	p.settleLastfmPending(p.sess)
 	// Publish a fresh anchor on a re-anchor (seek / sleep-wake) or on the
 	// periodic refresh, so the web always extrapolates from a recent point.
-	if !submitted && (reanchored || now.Sub(p.sess.pnTriedAt) >= playingNowRefresh) {
+	// 重锚触发的离上一次至少隔 playingNowReanchorGap。
+	if sincePN := now.Sub(p.sess.pnTriedAt); !submitted && (reanchored && sincePN >= playingNowReanchorGap || sincePN >= playingNowRefresh) {
 		p.announce(now, "refresh")
 	}
 	if !p.sess.listenSent && !p.sess.submitting && !p.sess.sodaPreviewPending && !now.Before(p.sess.listenRetryAt) &&
@@ -2045,6 +2070,7 @@ func run(ctx context.Context, cfg *config, lb *lbClient) error {
 		go seedLastListen(ctx, lb.apiRoot(), cfg.User, p.lastListenSeedCh)
 	}
 	p.relayStartupUntil = time.Now().Add(relayStartupWait)
+	p.restoreRelayQuotaPause(time.Now())
 	p.resume = takeSessionResume(sessionResumePath)
 	p.poll() // render immediately, don't wait a full interval on startup
 	if lb != nil {

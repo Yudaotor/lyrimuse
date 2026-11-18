@@ -91,6 +91,13 @@ func runSettingsInteractionTests() {
         expectEqual(R.verdict(info("server", 503), now: late.addingTimeInterval(-1)), .ok, "网页推送状态: 中继出错不到 10 分钟不报")
         expectEqual(R.verdict(info("server", 503), now: late), .unreachable(.server(503)), "网页推送状态: 中继一直出错报橙")
         expectEqual(R.verdict(info("network"), now: late), .unreachable(.network), "网页推送状态: 一直连不上报橙")
+        let quotaUntil: Int64 = start + 8 * 3600
+        let quota = R.Info(schema: R.currentSchema, kind: "quota", status: 503, since: start, until: quotaUntil)
+        let resumeAt = Date(timeIntervalSince1970: TimeInterval(quotaUntil))
+        expectEqual(R.verdict(quota, now: soon), .unreachable(.quota(until: resumeAt)), "网页推送状态: 额度用完一出现就报橙,带上恢复时刻")
+        expectEqual(R.verdict(quota, now: resumeAt), .ok, "网页推送状态: 到了恢复时刻不再报额度用完")
+        expectEqual(R.verdict(R.Info(schema: R.currentSchema, kind: "quota", status: 503, since: start), now: late),
+                    .unreachable(.network), "网页推送状态: 额度用完却没带恢复时刻,按暂时出错的老规矩")
         expectEqual(R.parse(Data(#"{"schema":2,"kind":"auth","status":401,"since":1}"#.utf8)) == nil, true,
                     "网页推送状态: 版本不认识当作没有")
         let samples = URL(fileURLWithPath: #filePath)
@@ -101,6 +108,8 @@ func runSettingsInteractionTests() {
         }
         expectEqual(sample("auth.json"), info("auth", 401), "网页推送状态: 读得懂共用样例(令牌被拒)")
         expectEqual(sample("network.json"), info("network"), "网页推送状态: 读得懂共用样例(连不上,没有状态码)")
+        expectEqual(sample("quota.json"), R.Info(schema: R.currentSchema, kind: "quota", status: 503, since: start, until: start + 8 * 3600),
+                    "网页推送状态: 读得懂共用样例(额度用完,带恢复时刻)")
         // 媒体信息通道坏了时谁受影响:只勾了通道坏了也读得到的那几家才不弹通知。
         typealias MC = MediaControlClient
         expectEqual(MC.channelOutageAffects(selected: [.appleMusic]), false, "媒体通道: 只勾 Apple Music 不受影响")

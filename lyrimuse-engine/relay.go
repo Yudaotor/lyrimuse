@@ -129,9 +129,9 @@ func postRelay(ctx context.Context, cfg *config, path string, payload any) error
 		return err
 	}
 	defer resp.Body.Close()
-	io.Copy(io.Discard, io.LimitReader(resp.Body, 1024))
+	head, _ := io.ReadAll(io.LimitReader(resp.Body, 1024))
 	if resp.StatusCode != http.StatusOK {
-		return &relayHTTPError{path: path, status: resp.StatusCode}
+		return &relayHTTPError{path: path, status: resp.StatusCode, quota: relayQuotaExhausted(resp.StatusCode, head)}
 	}
 	return nil
 }

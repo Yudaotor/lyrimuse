@@ -436,6 +436,9 @@ private func relayPushProblemText(_ problem: RelayPushStatus.Problem) -> String 
     case .rejected(let code): return String(format: L10n.t("同步服务拒绝推送（%d）"), code)
     case .server(let code): return String(format: L10n.t("同步服务持续出错（%d），网页上的状态未更新"), code)
     case .network: return L10n.t("无法连接同步服务，网页上的状态未更新")
+    case .quota(let until):
+        return String(format: L10n.t("同步服务今日写入额度已用完，%@ 恢复推送"),
+                      until.formatted(Date.FormatStyle(date: .omitted, time: .shortened, locale: L10n.locale)))
     }
 }
 

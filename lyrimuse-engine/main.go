@@ -47,6 +47,9 @@ const (
 
 	pollInterval      = 5 * time.Second
 	playingNowRefresh = 60 * time.Second
+	// 重锚(拖进度、睡醒)触发的 playing_now 离上一次至少隔这么久;播放器进度来回抖、几乎每拍都判成重锚时不每拍发。
+	// 见 13 章决策 17。
+	playingNowReanchorGap = 30 * time.Second
 	// 未缓存新歌:开播时挂起首条 playing_now,最多等这么久让 enrich 解析出歌词再发
 	// (LB 只认换曲那条,歌词须在首条;enrichNotify 通常更早触发)。
 	pnPendingMax = 8 * time.Second

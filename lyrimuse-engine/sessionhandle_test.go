@@ -329,3 +329,56 @@ func TestHandleBackfillsLateSpotifyWebTrackID(t *testing.T) {
 		t.Fatal("补上 ID 的网页版播放,LB 上送要带 music_service")
 	}
 }
+
+// 重锚触发的 playing_now 离上一次至少隔 playingNowReanchorGap:进度来回抖、几乎每拍都判成重锚时不每拍发;
+// 周期刷新照旧。见 13 章决策 17。
+func TestHandleReanchorPlayingNowHasMinGap(t *testing.T) {
+	at := handleClock()
+	a := handleSong("浮夸", 0, at(0))
+	p := handleTestPoller(t, a)
+	var sent []int
+	last := time.Time{}
+	for s := 0; s <= 150; s += 2 {
+		p.cur, p.curStale = handleSong("浮夸", float64(s), at(s)), false
+		p.handle(at(s), s > 0, false)
+		if p.sess.announcing {
+			select {
+			case o := <-p.announceDoneCh:
+				p.applyAnnounceOutcome(o)
+			case <-time.After(2 * time.Second):
+				t.Fatal("playing_now 没回来")
+			}
+		}
+		if !p.sess.pnTriedAt.Equal(last) {
+			last = p.sess.pnTriedAt
+			sent = append(sent, s)
+		}
+	}
+	if len(sent) < 2 {
+		t.Fatalf("开播和之后都该发过: %v", sent)
+	}
+	for i := 1; i < len(sent); i++ {
+		if gap := time.Duration(sent[i]-sent[i-1]) * time.Second; gap < playingNowReanchorGap {
+			t.Fatalf("两次 playing_now 只隔 %v: %v", gap, sent)
+		}
+	}
+	if len(sent) > int(150*time.Second/playingNowReanchorGap)+1 {
+		t.Fatalf("每拍重锚 150 秒发了 %d 次: %v", len(sent), sent)
+	}
+	// 不重锚时周期刷新照旧:每 playingNowRefresh 一次。
+	from := len(sent)
+	for s := 152; s <= 300; s += 2 {
+		p.cur, p.curStale = handleSong("浮夸", float64(s), at(s)), false
+		p.handle(at(s), false, false)
+		if p.sess.announcing {
+			p.applyAnnounceOutcome(<-p.announceDoneCh)
+		}
+		if !p.sess.pnTriedAt.Equal(last) {
+			last = p.sess.pnTriedAt
+			sent = append(sent, s)
+		}
+	}
+	if n := len(sent) - from; n < 2 || n > 3 {
+		t.Fatalf("不重锚的 150 秒里周期刷新 %d 次: %v", n, sent[from:])
+	}
+}
