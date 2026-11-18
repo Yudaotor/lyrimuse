@@ -60,7 +60,9 @@ Apple's own default when nothing else works is the masculine singular; use it on
 
 Lyrimuse, Last.fm, ListenBrainz, Discord, Telegram, Slack, Bark, ntfy, Server酱 (ServerChan), Apple Music, Spotify, YouTube Music, Genius, Musixmatch, Cloudflare, GitHub, Sparkle, Touch Bar, Dock, Finder, Safari, Chrome, Arc, Edge, Spotlight, AirPlay, iCloud, Mac, macOS, Dynamic Island, Liquid Glass, Webhook, URL, API.
 Transliterated like Apple: Wi‑Fi → वाई-फ़ाई.
-Chinese music services use the names in the English string (NetEase Cloud Music, QQ Music, Kugou, Kuwo, Migu, Soda Music…). DingTalk and Feishu (Lark) have no Hindi UI; quote their option names in English as they appear in their English UI.
+Chinese music services use the names in the English string (NetEase Cloud Music, QQ Music, Kugou, Kuwo, Migu, Soda Music…). DingTalk, Feishu (Lark), Slack and LX Music have no Hindi UI; quote their option names in English as they appear in their English UI.
+Discord has a Hindi UI and writes its own name in Latin letters (“Discord मोबाइल ऐप”). Quote its labels exactly as its Hindi UI shows them (dump of its web client, English → Hindi: `~/.config/lyrimuse-i18n/hi/discord/pairs-main.json`): “यूज़र सेटिंग › एक्टिविटी प्राइवेसी”, “सर्वर सेटिंग → इंटीग्रेशन → वेबहुक → नया वेबहुक”, “वेबहुक URL कॉपी करें”, the profile header “एक्टिविटी”, “%@ को सुन रहे हैं” (Listening to), “%@ खेल रहे हैं” (Playing). The activity name comes before “सुन रहे हैं”, so “after ‘Listening to’” becomes “‘सुन रहे हैं’ से पहले”.
+Dynamic Island stays in Latin letters, as in Apple's Hindi iPhone User Guide (“Dynamic Island में लाइव ऐक्टिविटी देखें”). It names only Apple's feature or a comparison (“Dynamic Island जैसा कैप्सूल”); Lyrimuse's own feature is नॉच.
 The Music app is “संगीत ऐप” in Apple's Hindi; Apple Music the service stays “Apple Music”.
 
 ## Glossary
@@ -80,7 +82,7 @@ The Music app is “संगीत ऐप” in Apple's Hindi; Apple Music the 
 | 关于 | About | जानकारी |
 | 实验室 | Labs | प्रयोग |
 | 推送提醒 | Push Alerts | पुश सूचनाएँ |
-| 网页推送 | Web Push | वेब पुश |
+| 网页推送 | Web Push | वेब पुश (also for “the web relay” in the docs: it is this page) |
 | 关联平台 | Linked Platforms | लिंक की गई सेवाएँ |
 | 桌面悬浮歌词 / 悬浮歌词 | (Desktop) Floating Lyrics | फ़्लोटिंग बोल (in sentences: फ़्लोटिंग गीत के बोल) |
 | 灵动岛 | Notch | नॉच |
@@ -109,6 +111,7 @@ The Music app is “संगीत ऐप” in Apple's Hindi; Apple Music the 
 | 喜欢 (Last.fm) | Love | पसंद करें / पसंद हटाएँ / पसंद किया गया; list “पसंद किए गए गीत”. Never नापसंद (that is Dislike). When both appear on one screen, prefix the platform: “Last.fm पर पसंद करें” |
 | 推送渠道 | Push Channels | चैनल |
 | 偏移 | Offset | ऑफ़सेट |
+| 提前 / 延后 (offset buttons) | Advance / Delay | पहले / बाद में (Apple: Earlier / Later); a pair of the same kind, never विलंब next to a verb |
 | 正在播放 | Now Playing | अभी चल रहा है; status चल रहा है / नहीं चल रहा; nothing playing “कुछ नहीं चल रहा” |
 | 设置 | Settings | सेटिंग (Apple; never सेटिंग्स) |
 | 系统设置 | System Settings | सिस्टम सेटिंग |
@@ -181,6 +184,6 @@ The Music app is “संगीत ऐप” in Apple's Hindi; Apple Music the 
 System UI names, exactly as in Hindi macOS and the browsers' Hindi UI:
 - Safari: सेटिंग › एडवांस › “वेब डेवलपर के लिए फ़ीचर दिखाएँ”; menu डेवलप › “Apple इवेंट से JavaScript को अनुमति दें”.
 - Chrome: देखें › डेवलपर › “Apple Events से JavaScript की अनुमति दें”. Edge: दृश्य › डेवलपर › “Apple ईवेंट्स से JavaScript की अनुमति दें”. Arc's own menus are English in every language: View › Developer › “Allow JavaScript from Apple Events”.
-- Gatekeeper: “Apple द्वारा यह सत्यापित नहीं किया जा सका कि “%@” में ऐसा मालवेयर नहीं है जो आपके Mac को नुक़सान पहुँचा सकता है या आपकी गोपनीयता प्रभावित कर सकता है”, button “फिर भी खोलें”.
+- Gatekeeper: “Apple द्वारा यह सत्यापित नहीं किया जा सका कि “%@” में ऐसा मालवेयर नहीं है जो आपके Mac को नुक़सान पहुँचा सकता है या आपकी गोपनीयता प्रभावित कर सकता है”, button “फिर भी खोलें”; unidentified developer ““%@” अनजान डेवलपर से है”. Quote the whole sentence, not a shortened one with “…”; inside quotation marks the app name takes single quotes (‘Lyrimuse’). The older English wording “can't be opened because Apple cannot check it for malicious software” has no Hindi string on current macOS; use this one.
 
 When a term names macOS, Music, Safari or Gatekeeper UI, look up the exact Hindi string in the system's own resources instead of guessing: on this Mac the `.loctable` column is `hi` and app folders are `hi.lproj`.
