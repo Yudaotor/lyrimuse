@@ -54,6 +54,18 @@ const MAX_LAYOUT_LIMITS_PER_DAY = 5;
 const MAX_HANG_FRAMES = 6;
 const MAX_CRASHES_PER_INSTALL_DAY = 20;
 const DAY_MS = 86_400_000;
+const MINUTE_MS = 60_000;
+// 活动最多收多少天前的(App 本地只留最近 3 天,心跳连着几天发不出去时那几天就更早);再早的丢掉。
+const MAX_ACTIVITY_DAYS_BACK = 30;
+// 按来源 IP 的限额,计数在 D1 表 ingest_quota(见 quota())。Workers 的 [[ratelimits]] 绑定各机房各自计数、拦不住
+// 连发(14 章决策 187),只当第一道,兜底的是这几个。
+// 心跳:正常一台机器一天一条,同一出口 IP 每分钟 5 条已经要好几台同时开机。
+const HEARTBEAT_PER_IP_PER_MINUTE = 5;
+// 新出现的安装 ID(installs 表里原来没有的):要容得下公司、学校、同一个代理节点后面多台正常机器同一天新装,
+// 别为了挡刷量调到个位数(依据见 14 章决策 229)。
+const NEW_INSTALLS_PER_IP_PER_DAY = 20;
+// 崩溃:App 每台每天最多发 5 份。
+const CRASHES_PER_IP_PER_MINUTE = 30;
 
 export default {
   async fetch(request, env) {
@@ -61,7 +73,8 @@ export default {
     try {
       if (request.method === "POST" && (url.pathname === "/v1/heartbeat" || url.pathname === "/v1/crash")) {
         // 按来源 IP 限流,防有人刷请求灌假数据、耗光 D1 写额度。超了回 503 而不是 4xx:App 把 4xx 当成这一份本身不合格、
-        // 不再重发,503 才会过一阵再试。正常一台机器一天只发一条心跳、最多 5 份崩溃。
+        // 不再重发,503 才会过一阵再试。正常一台机器一天只发一条心跳、最多 5 份崩溃。这个绑定拦不住连发,
+        // 按 IP 的硬限额在 heartbeat() / crash() 里(quota())。
         if (env.INGEST_LIMITER) {
           const ip = request.headers.get("cf-connecting-ip") || "unknown";
           const { success } = await env.INGEST_LIMITER.limit({ key: ip });
@@ -94,19 +107,49 @@ function json(body, status = 200) {
   });
 }
 
+const TOO_LARGE = Symbol("too large");
+
+// 请求体按字节算 MAX_BODY:先看 content-length,再边读边数,超了立刻停(别先整个读进来再按字符数判)。
+// 返回解析好的对象、TOO_LARGE,或 null(不是 JSON 对象)。
 async function readBody(request) {
-  const text = await request.text();
-  if (text.length > MAX_BODY) return null;
+  const declared = Number(request.headers.get("content-length"));
+  if (declared > MAX_BODY) return TOO_LARGE;
+  if (!request.body) return null;
+  const reader = request.body.getReader();
+  const chunks = [];
+  let size = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    size += value.byteLength;
+    if (size > MAX_BODY) {
+      await reader.cancel();
+      return TOO_LARGE;
+    }
+    chunks.push(value);
+  }
+  const bytes = new Uint8Array(size);
+  let at = 0;
+  for (const c of chunks) { bytes.set(c, at); at += c.byteLength; }
   try {
-    const obj = JSON.parse(text);
+    const obj = JSON.parse(new TextDecoder().decode(bytes));
     return obj && typeof obj === "object" && !Array.isArray(obj) ? obj : null;
   } catch {
     return null;
   }
 }
 
+function badBody(body) {
+  return body === TOO_LARGE ? json({ error: "too large" }, 413) : json({ error: "bad request" }, 400);
+}
+
+// 截到 max 个 UTF-16 码元;截断处落在代理对中间时去掉那半个,不存半个字符。
 function str(v, max = 64) {
-  return typeof v === "string" && v.length > 0 ? v.slice(0, max) : null;
+  if (typeof v !== "string" || v.length === 0) return null;
+  if (v.length <= max) return v;
+  const cut = v.slice(0, max);
+  const last = cut.charCodeAt(cut.length - 1);
+  return last >= 0xd800 && last <= 0xdbff ? cut.slice(0, -1) : cut;
 }
 
 function tag(v) {
@@ -165,6 +208,15 @@ function bjDay(ms) {
   return utcDay(ms + 8 * 3600 * 1000);
 }
 
+// 格式对且是真实存在的公历日期(13 月、小月的 31 日、全 0 都不算)。只查 DAY_RE 不够:有的 Date.parse 得 NaN,
+// dayDistance 跟着是 NaN,跟任何数比都是 false,范围判断全部放行;小月的 31 日被顺延到下月 1 日,所以要转回来比对。
+function validDay(s) {
+  if (typeof s !== "string" || !DAY_RE.test(s)) return false;
+  const ms = Date.parse(s + "T00:00:00Z");
+  return Number.isFinite(ms) && utcDay(ms) === s;
+}
+
+// 两边都要先过 validDay。
 function dayDistance(a, b) {
   return Math.round((Date.parse(a + "T00:00:00Z") - Date.parse(b + "T00:00:00Z")) / DAY_MS);
 }
@@ -200,15 +252,20 @@ function cleanFeatures(f) {
 
 async function heartbeat(request, env) {
   const body = await readBody(request);
-  if (!body || body.v !== 1) return json({ error: "bad request" }, 400);
+  if (!body || body === TOO_LARGE || body.v !== 1) return badBody(body);
   const installID = body.install_id;
   const day = body.day;
   const now = Date.now();
   if (typeof installID !== "string" || !UUID_RE.test(installID)) return json({ error: "bad install_id" }, 400);
   // 客户端按本地自然日记;跟服务器的 UTC 日期最多差一天,放宽到两天。
-  if (typeof day !== "string" || !DAY_RE.test(day) || Math.abs(dayDistance(day, utcDay(now))) > 2) {
+  if (!validDay(day) || Math.abs(dayDistance(day, utcDay(now))) > 2) {
     return json({ error: "bad day" }, 400);
   }
+  // 限额只数格式合格的心跳(不合格的回 400、不碰 D1)。超了回 429:App 的心跳不论什么状态码都下次再发。
+  const ip = clientIP(request);
+  if (!(await quota(env, "heartbeat", ip, now, MINUTE_MS, HEARTBEAT_PER_IP_PER_MINUTE))) return rateLimited(429);
+  const known = await env.DB.prepare(`SELECT 1 AS n FROM installs WHERE install_id = ?1`).bind(installID).first();
+  if (!known && !(await quota(env, "new_install", ip, now, DAY_MS, NEW_INSTALLS_PER_IP_PER_DAY))) return rateLimited(429);
   const e = cleanEnv(body.env);
   const features = JSON.stringify(cleanFeatures(body.features));
   const country = str(request.cf && request.cf.country, 2);
@@ -234,9 +291,9 @@ async function heartbeat(request, env) {
   ];
   const activity = Array.isArray(body.activity) ? body.activity.slice(0, 3) : [];
   for (const a of activity) {
-    if (!a || typeof a.day !== "string" || !DAY_RE.test(a.day)) continue;
+    if (!a || !validDay(a.day)) continue;
     const back = dayDistance(day, a.day);
-    if (back < 1 || back > 7) continue;
+    if (back < 1 || back > MAX_ACTIVITY_DAYS_BACK) continue;
     const hangs = int(a.hangs, 0, 10_000) ?? 0;
     // 其中停顿期间主线程被系统压着的次数;旧版 App 不发,存空。
     const throttledHangs = int(a.throttled_hangs, 0, 10_000);
@@ -256,8 +313,9 @@ async function heartbeat(request, env) {
            a.lyric_sources === undefined ? null : JSON.stringify(lyricSourceCounts(a.lyric_sources))));
     // 那一天的卡顿概况整批替换(同一天重发时以新的为准)。版本与系统取这条心跳的,活动是之前几天的,升级当天可能差一版。
     statements.push(env.DB.prepare(`DELETE FROM hang_events WHERE day = ?1 AND install_id = ?2`).bind(a.day, installID));
+    // 概况条数不超过当天报的卡顿次数。
     const details = Array.isArray(a.hang_details)
-      ? a.hang_details.slice(0, MAX_HANG_DETAILS_PER_DAY + MAX_THROTTLED_HANG_DETAILS_PER_DAY) : [];
+      ? a.hang_details.slice(0, Math.min(MAX_HANG_DETAILS_PER_DAY + MAX_THROTTLED_HANG_DETAILS_PER_DAY, hangs)) : [];
     details.map(cleanHang).filter(Boolean).forEach((h, seq) => statements.push(env.DB.prepare(
       `INSERT INTO hang_events (day, install_id, seq, received_at, app_version, os_version, arch, duration, since_launch,
                                 since_wake, player, windows, thermal, stack, signature, throttled, memory_pressure, pageins)
@@ -268,6 +326,42 @@ async function heartbeat(request, env) {
   }
   await env.DB.batch(statements);
   return json({ ok: true });
+}
+
+function clientIP(request) {
+  return request.headers.get("cf-connecting-ip") || "unknown";
+}
+
+function rateLimited(status) {
+  return new Response(JSON.stringify({ error: "rate limited" }), {
+    status, headers: { "content-type": "application/json; charset=utf-8", "retry-after": "60", "cache-control": "no-store" },
+  });
+}
+
+// 按来源 IP 的计数:ingest_quota 一行 = (哪种限额, 第几个时间窗, IP 的键)。IP 本身不存,键是带密钥的 HMAC
+// (密钥是 ADMIN_TOKEN,时间窗也算进去,同一个 IP 换个时间窗就是另一个键),只取前 16 位十六进制;
+// 两个时间窗以前的行在这里顺手删掉。名额没满就加一返回 true,满了不加、返回 false。
+async function quota(env, kind, ip, now, windowMs, limit) {
+  const win = Math.floor(now / windowMs);
+  const key = await ipKey(env, `${kind}/${win}/${ip}`);
+  const [hit] = await env.DB.batch([
+    env.DB.prepare(
+      `INSERT INTO ingest_quota (kind, win, ip_key, n) VALUES (?1, ?2, ?3, 1)
+       ON CONFLICT (kind, win, ip_key) DO UPDATE SET n = n + 1 WHERE n < ?4 RETURNING n`
+    ).bind(kind, win, key, limit),
+    env.DB.prepare(`DELETE FROM ingest_quota WHERE kind = ?1 AND win < ?2`).bind(kind, win - 1),
+  ]);
+  return hit.results.length > 0;
+}
+
+let hmacKey = null;
+async function ipKey(env, message) {
+  if (!hmacKey) {
+    hmacKey = await crypto.subtle.importKey("raw", new TextEncoder().encode("ingest-quota:" + (env.ADMIN_TOKEN || "local")),
+                                            { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
+  }
+  const mac = new Uint8Array(await crypto.subtle.sign("HMAC", hmacKey, new TextEncoder().encode(message)));
+  return [...mac.slice(0, 8)].map((b) => b.toString(16).padStart(2, "0")).join("");
 }
 
 // 旧版本 App 不发这一项,存成空数组。不合法的条目整条丢掉。
@@ -307,7 +401,7 @@ function cleanHang(h) {
 // 卡顿的归并键:最深那一帧(卡在什么上:等锁、等跨进程回复、画图……)+ 栈里前两个自家帧(谁在那儿等)。没采样的单独一组。
 function hangSignature(stack) {
   if (!stack.length) return "(no stack)";
-  const name = (f) => f.symbol || `${f.image}+${f.offset}`;
+  const name = frameName;
   const own = stack.slice(1).filter((f) => f.image && OWN_IMAGE_RE.test(f.image)).slice(0, 2);
   return [stack[0], ...own].map(name).join(" | ").slice(0, 500);
 }
@@ -324,6 +418,11 @@ function cleanFrames(v) {
 // dyld 启动失败(缺库、签名)没有有用的帧,用终止原因第一句(`Library not loaded: …`)。
 // 带异常调用栈的(未捕获的 Objective-C 异常)按异常调用栈取帧:故障线程那几帧每份都是 abort / 重抛。
 const OWN_IMAGE_RE = /^(lyrimuse|lyrimuse-engine|collector|LyrimuseCore)/i;
+// 归并键里的一帧:有符号用符号,有镜像名用「镜像+偏移」;两样都没有(落在没映射的地址上)写 `?`,
+// 别写 `null+<地址>`:那是绝对地址,每次都不一样,同一族会被拆成好几组。
+function frameName(f) {
+  return f.symbol || (f.image ? `${f.image}+${f.offset}` : "?");
+}
 const TEARDOWN_IMAGE_RE = /^(libsystem_kernel|libsystem_pthread|libc\+\+abi|libobjc\.A)\.dylib$/;
 const TEARDOWN_SYMBOL_RE = /^(abort|__abort|abort_with_payload|__assert_rtn|__cxa_(re)?throw|objc_exception_(re)?throw|_objc_terminate|.*precondition_failure|.*(_assertionFailure|_fatalErrorMessage))\b/;
 
@@ -336,27 +435,33 @@ function crashSignature(c) {
   const own = pool.filter((f) => f.image && OWN_IMAGE_RE.test(f.image));
   const meaningful = pool.filter((f) => !TEARDOWN_IMAGE_RE.test(f.image || "") && !TEARDOWN_SYMBOL_RE.test(f.symbol || ""));
   const source = own.length ? own : (meaningful.length ? meaningful : pool);
-  const picked = source.slice(0, 3).map((f) => f.symbol || `${f.image}+${f.offset}`);
+  const picked = source.slice(0, 3).map(frameName);
   const tail = picked.length ? picked.join(" | ") : (c.termination_indicator || "no frames");
   return `${head} :: ${tail}`.slice(0, 500);
 }
 
 async function crash(request, env) {
   const body = await readBody(request);
-  if (!body || body.v !== 1) return json({ error: "bad request" }, 400);
+  if (!body || body === TOO_LARGE || body.v !== 1) return badBody(body);
   const installID = body.install_id;
   if (typeof installID !== "string" || !UUID_RE.test(installID)) return json({ error: "bad install_id" }, 400);
   if (typeof body.report_id !== "string" || !HEX16_RE.test(body.report_id)) return json({ error: "bad report_id" }, 400);
   const now = Date.now();
+  // 崩溃超额跟 INGEST_LIMITER 一样回 503(15 章决策 102)。
+  if (!(await quota(env, "crash", clientIP(request), now, MINUTE_MS, CRASHES_PER_IP_PER_MINUTE))) return rateLimited(503);
   const day = bjDay(now);
   const { n } = await env.DB.prepare(`SELECT COUNT(*) AS n FROM crashes WHERE install_id = ?1 AND day = ?2`)
     .bind(installID, day).first();
   if (n >= MAX_CRASHES_PER_INSTALL_DAY) return json({ ok: true, dropped: "daily limit" });
+  const crashEnv = cleanEnv(body.env);
+  // 长度上限跟 App 侧 Core Telemetry 的 crash*Limit 一致(短字段 80、终止标志 200、原因与符号 300、镜像名 80),两处一起改。
   const c = {
     process: body.process === "engine" ? "engine" : "app",
-    app_version: str(body.app_version, 32), os_version: str(body.os_version, 64), occurred_at: str(body.occurred_at, 40),
-    exception_type: str(body.exception_type, 80), exception_signal: str(body.exception_signal, 40),
-    termination_namespace: str(body.termination_namespace, 40), termination_indicator: str(body.termination_indicator, 200),
+    // 报告自己记的版本;有些 .ips 不带(从推出了的磁盘映像里运行时),退回发报告时 App 的版本。
+    app_version: str(body.app_version, 32) ?? crashEnv.app_version,
+    os_version: str(body.os_version, 80), occurred_at: str(body.occurred_at, 40),
+    exception_type: str(body.exception_type, 80), exception_signal: str(body.exception_signal, 80),
+    termination_namespace: str(body.termination_namespace, 80), termination_indicator: str(body.termination_indicator, 200),
     termination_reasons: Array.isArray(body.termination_reasons)
       ? body.termination_reasons.slice(0, 3).map((r) => str(r, 300)).filter(Boolean) : [],
     frames: cleanFrames(body.frames),
@@ -369,7 +474,7 @@ async function crash(request, env) {
      VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17)`
   ).bind(installID, body.report_id, now, day, c.process, c.app_version, c.os_version, c.occurred_at, c.exception_type,
          c.exception_signal, c.termination_namespace, c.termination_indicator, JSON.stringify(c.termination_reasons),
-         JSON.stringify(c.frames), JSON.stringify(c.exception_frames), crashSignature(c), JSON.stringify(cleanEnv(body.env))).run();
+         JSON.stringify(c.frames), JSON.stringify(c.exception_frames), crashSignature(c), JSON.stringify(crashEnv)).run();
   return json({ ok: true });
 }
 
@@ -436,7 +541,8 @@ async function loadStatsRows(db, since) {
     db.prepare(`SELECT day, install_id, players_played, hangs, throttled_hangs, actions, lyrics, languages, lyric_sources
                 FROM activity WHERE day >= ?1`)
       .bind(since).all(),
-    db.prepare(`SELECT day, install_id, received_at, signature, process, exception_type, termination_indicator, app_version, frames,
+    db.prepare(`SELECT day, install_id, received_at, signature, process, exception_type, termination_indicator,
+                       COALESCE(app_version, json_extract(env, '$.app_version')) AS app_version, frames,
                        termination_reasons, exception_frames FROM crashes WHERE day >= ?1`).bind(since).all(),
     db.prepare(`SELECT day, install_id, app_version, duration, since_launch, since_wake, player, windows, thermal, stack, signature, received_at,
                        throttled, memory_pressure, pageins

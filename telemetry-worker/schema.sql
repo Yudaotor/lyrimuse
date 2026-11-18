@@ -97,3 +97,13 @@ CREATE TABLE IF NOT EXISTS excluded_installs (
   note       TEXT,
   added_day  TEXT NOT NULL
 );
+
+-- 按来源 IP 的限额计数(index.js 的 quota()):kind 是哪种限额(heartbeat / new_install / crash),win 是第几个时间窗
+-- (按分钟或按天),ip_key 是 IP 的带密钥 HMAC 前 16 位十六进制,不存 IP 本身;两个时间窗以前的行随写随删。
+CREATE TABLE IF NOT EXISTS ingest_quota (
+  kind   TEXT NOT NULL,
+  win    INTEGER NOT NULL,
+  ip_key TEXT NOT NULL,
+  n      INTEGER NOT NULL,
+  PRIMARY KEY (kind, win, ip_key)
+);
