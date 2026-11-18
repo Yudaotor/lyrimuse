@@ -55,6 +55,13 @@ npx wrangler d1 execute lyrimuse-telemetry --remote --command "ALTER TABLE activ
 npx wrangler d1 execute lyrimuse-telemetry --remote --command "ALTER TABLE hang_events ADD COLUMN throttled TEXT"
 ```
 
+Each hang summary also carries the tightest system memory pressure seen during the stall (`normal` / `warning` / `critical`) and how many pages the app had to read back in (page-ins) meanwhile, so a hang where the main thread waited on paging can be told apart from slow code. Older apps don't send them; both columns stay empty. Added once before deploying:
+
+```sh
+npx wrangler d1 execute lyrimuse-telemetry --remote --command "ALTER TABLE hang_events ADD COLUMN memory_pressure TEXT"
+npx wrangler d1 execute lyrimuse-telemetry --remote --command "ALTER TABLE hang_events ADD COLUMN pageins INTEGER"
+```
+
 `activity.lyric_sources` counts, per day, which lyric source the shown lyrics came from for each word-synced, line-synced or plain-text song (keys like `netease:line`, sources and tiers from a fixed list). `/v1/stats` returns it as `lyric_sources`. Added once before deploying:
 
 ```sh

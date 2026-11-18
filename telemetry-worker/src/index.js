@@ -39,6 +39,10 @@ const HANG_WINDOWS = ["settings", "lyrics-manager", "lyrics-window", "lyrics-qui
 // 停顿期间主线程被系统压着(锁屏、App Nap 把优先级压到后台档)的标记,跟 Core MainThreadThrottle.reasons 一致。
 // 这类卡顿照收,统计默认不算(hangs),hangs_all 连它们一起算(14 章决策 202)。
 const HANG_THROTTLE = ["locked", "low_priority"];
+// 停顿期间看到的最紧的系统内存压力(从松到紧)和 App 进程的换页次数,跟 Core HangMemory.pressureLevels / maxPageins 一致。
+// 旧版 App 不发,两列为空(14 章决策 222)。
+const HANG_MEMORY_PRESSURE = ["normal", "warning", "critical"];
+const MAX_HANG_PAGEINS = 10000000;
 // 每台每天的卡顿概况条数:没被压着的、被压着的各有名额(Core TelemetryActivity 的两个同名常量)。
 const MAX_HANG_DETAILS_PER_DAY = 3;
 const MAX_THROTTLED_HANG_DETAILS_PER_DAY = 1;
@@ -256,11 +260,11 @@ async function heartbeat(request, env) {
       ? a.hang_details.slice(0, MAX_HANG_DETAILS_PER_DAY + MAX_THROTTLED_HANG_DETAILS_PER_DAY) : [];
     details.map(cleanHang).filter(Boolean).forEach((h, seq) => statements.push(env.DB.prepare(
       `INSERT INTO hang_events (day, install_id, seq, received_at, app_version, os_version, arch, duration, since_launch,
-                                since_wake, player, windows, thermal, stack, signature, throttled)
-       VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16)`
+                                since_wake, player, windows, thermal, stack, signature, throttled, memory_pressure, pageins)
+       VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18)`
     ).bind(a.day, installID, seq, now, e.app_version, e.os_version, e.arch, h.duration, h.since_launch, h.since_wake,
            h.player, JSON.stringify(h.windows), h.thermal, JSON.stringify(h.stack), hangSignature(h.stack),
-           h.throttled.length ? JSON.stringify(h.throttled) : null)));
+           h.throttled.length ? JSON.stringify(h.throttled) : null, h.memory_pressure, h.pageins)));
   }
   await env.DB.batch(statements);
   return json({ ok: true });
@@ -294,6 +298,9 @@ function cleanHang(h) {
     stack: cleanFrames(h.stack).slice(0, MAX_HANG_FRAMES),
     // 旧版 App 不发,记成空(没被压着)。
     throttled: Array.isArray(h.throttled) ? [...new Set(h.throttled.filter((r) => HANG_THROTTLE.includes(r)))].sort() : [],
+    // 旧版 App 不发、或 App 读不到,记成空。
+    memory_pressure: oneOf(h.memory_pressure, HANG_MEMORY_PRESSURE),
+    pageins: int(h.pageins, 0, MAX_HANG_PAGEINS),
   };
 }
 
@@ -432,7 +439,7 @@ async function loadStatsRows(db, since) {
     db.prepare(`SELECT day, install_id, received_at, signature, process, exception_type, termination_indicator, app_version, frames,
                        termination_reasons, exception_frames FROM crashes WHERE day >= ?1`).bind(since).all(),
     db.prepare(`SELECT day, install_id, app_version, duration, since_launch, since_wake, player, windows, thermal, stack, signature, received_at,
-                       throttled
+                       throttled, memory_pressure, pageins
                 FROM hang_events WHERE day >= ?1`).bind(since).all(),
     db.prepare(`SELECT install_id FROM excluded_installs`).all(),
   ]);
@@ -653,6 +660,8 @@ function hangSummary(parsed) {
     windows: countBy(parsed, (h) => (h.windows.length ? h.windows : ["(none)"])),
     thermal: countBy(parsed, (h) => h.thermal),
     throttled: countBy(parsed, (h) => (h.throttled.length ? h.throttled : ["(none)"])),
+    memory_pressure: countBy(parsed, (h) => h.memory_pressure || "(not reported)"),
+    pageins: countBy(parsed, (h) => pageinsBucket(h.pageins)),
   };
   const groups = {};
   for (const h of parsed) (groups[h.signature] ||= []).push(h);
@@ -665,9 +674,21 @@ function hangSummary(parsed) {
       stack: latest.stack, duration: countBy(list, (h) => h.duration), since_wake: countBy(list, (h) => h.since_wake || "(no sleep)"),
       player: countBy(list, (h) => h.player), windows: countBy(list, (h) => (h.windows.length ? h.windows : ["(none)"])),
       throttled: list.filter((h) => h.throttled.length).length,
+      memory_pressure: countBy(list, (h) => h.memory_pressure || "(not reported)"),
+      pageins: countBy(list, (h) => pageinsBucket(h.pageins)),
     };
   }).sort((a, b) => b.n - a.n).slice(0, 50);
   return { detailed: parsed.length, context, hotspots };
+}
+
+// 卡顿期间换页次数的分档;旧版 App 没报的单独一档。
+function pageinsBucket(n) {
+  if (n == null) return "(not reported)";
+  if (n === 0) return "0";
+  if (n < 10) return "1-9";
+  if (n < 100) return "10-99";
+  if (n < 1000) return "100-999";
+  return n < 10000 ? "1000-9999" : "10000+";
 }
 
 function primaryWordFormat(r) {
@@ -799,14 +820,17 @@ function render(s) {
   if (hg.detailed) {
     const ctx = hg.context || {};
     html += '<div class="grid">' + [["duration", "卡顿时长"], ["since_launch", "启动后多久"], ["since_wake", "唤醒后多久"],
-      ["player", "最近放歌的播放器"], ["windows", "开着的窗口"], ["thermal", "温度状态"]].map(([k, label]) =>
+      ["player", "最近放歌的播放器"], ["windows", "开着的窗口"], ["thermal", "温度状态"], ["memory_pressure", "内存压力"],
+      ["pageins", "换页次数"]].map(([k, label]) =>
       '<div class="card"><h2>' + label + "(带概况的 " + hg.detailed + " 次)</h2>" + table(ctx[k] || [], hg.detailed) + "</div>").join("") + "</div>";
     html += '<div class="card"><h2>卡顿(按卡住的位置)</h2>' + (hg.hotspots || []).map((h) =>
       "<details><summary><b>" + h.n + " 次 · " + h.installs + " 台</b> " + esc(h.signature) + ' <span class="muted">' +
       esc(h.min_version) + (h.max_version !== h.min_version ? "–" + esc(h.max_version) : "") + "</span></summary><pre>" +
       esc([...(h.stack || []).map(frameLine), "时长: " + h.duration.map(([k, v]) => k + " " + v).join(" · "),
            "唤醒后: " + h.since_wake.map(([k, v]) => k + " " + v).join(" · "),
-           "窗口: " + h.windows.map(([k, v]) => k + " " + v).join(" · ")].join("\\n")) + "</pre></details>").join("") + "</div>";
+           "窗口: " + h.windows.map(([k, v]) => k + " " + v).join(" · "),
+           "内存压力: " + (h.memory_pressure || []).map(([k, v]) => k + " " + v).join(" · "),
+           "换页次数: " + (h.pageins || []).map(([k, v]) => k + " " + v).join(" · ")].join("\\n")) + "</pre></details>").join("") + "</div>";
   }
   html += '<div class="card"><h2>崩溃(按归并键)</h2>' + (s.crashes.length ? s.crashes.map((c) =>
     "<details><summary><b>" + c.n + " 次 · " + c.installs + " 台</b> " + esc(c.signature) + ' <span class="muted">' +

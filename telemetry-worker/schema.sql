@@ -83,6 +83,10 @@ CREATE TABLE IF NOT EXISTS hang_events (
   signature    TEXT,
   throttled    TEXT,  -- ["locked", "low_priority"] 的子集(JSON),停顿期间主线程被系统压着;没被压着、旧版 App 为空。
                       -- 旧库:ALTER TABLE hang_events ADD COLUMN throttled TEXT
+  memory_pressure TEXT,  -- normal / warning / critical:停顿期间看到的最紧的系统内存压力;旧版 App、读不到为空。
+                         -- 旧库:ALTER TABLE hang_events ADD COLUMN memory_pressure TEXT
+  pageins      INTEGER,  -- 停顿期间 App 进程的换页次数(page-in);旧版 App、读不到为空。
+                         -- 旧库:ALTER TABLE hang_events ADD COLUMN pageins INTEGER
   PRIMARY KEY (day, install_id, seq)
 );
 CREATE INDEX IF NOT EXISTS hang_events_day ON hang_events(day);
