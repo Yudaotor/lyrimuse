@@ -285,6 +285,26 @@ func runCogTests() {
                     "Cog 放流: 网上文件只放了零点几秒、elapsed 没往回退,换台后第一首照样不给进度")
         expectEqual(S.position(S.Clock(), kind: .file(artist: "", title: "TagDash"), elapsed: 7.5), 7.5, "Cog 放流: 网上文件照系统那份的位置")
 
+        // 复用放过的地址条目:连上那一拍(elapsed 0)先报这一行存着的上一次的标题,0.926 秒后才换上真正的第一首(数照真机 xr9)
+        let played = step(step(step(S.Clock(), "radio", nil, 0), "Lyrimuse测试 - x", "Lyrimuse测试", 0.906), "Second Song", "Test Artist Two", 40.0)
+        let stored = step(played, "Second Song", "Test Artist Two", 0)
+        expectEqual([stored.start == nil, stored.songAtConnect], [true, true], "Cog 放流 复用地址: 连上那一拍报的存着的标题不给进度")
+        var reuse = step(stored, "Cog对时测试", "Lyrimuse测试", 0.926)
+        expectEqual([reuse.start == nil, reuse.sawSong, reuse.songAtConnect], [true, true, false],
+                    "Cog 放流 复用地址: 紧跟着换上的才是连上后的第一首,不从它的标题起算")
+        reuse = step(reuse, "First Song", "Test Artist One", 19.923)
+        expectEqual(reuse.start, 19.923, "Cog 放流 复用地址: 第二首照常从标题出现那份锚点起算")
+        let same = step(step(played, "Cog对时测试", "Lyrimuse测试", 0), "First Song", "Test Artist One", 19.871)
+        expectEqual(same.start, 19.871, "Cog 放流 复用地址: 存着的标题就是第一首时(Cog 不再推同一个标题)下一首照常起算")
+        expectEqual(step(stored, "Cog对时测试", "Lyrimuse测试", 12).start, 12,
+                    "Cog 放流 复用地址: 连上 10 秒之后才换的标题不当第一首(第一份 ICY 标题不会来得这么晚)")
+        let noReconnect = S.Clock(song: "Second Song", start: 0.2, sawSong: true, lastAnchor: 0.3)
+        expectEqual(step(noReconnect, "First Song", "Test Artist One", 0).start, nil,
+                    "Cog 放流 复用地址: 上一次连接太短、elapsed 没往回退时,连上那一拍的标题也不给进度")
+        let placeholderConnect = step(noReconnect, "radio", nil, 0)
+        expectEqual([placeholderConnect.sawSong, step(placeholderConnect, "First Song", "Test Artist One", 0.9).start == nil], [false, true],
+                    "Cog 放流: 连上那一拍报占位时,上一次连接见过的歌不算,下一首是连上后的第一首")
+
         S.reset()
         let rows: [(String, String?, Double, Double)] = [
             ("radio", nil, 0, 0.5), ("First Song", "Test Artist One", 0.906, 5), ("Second Song", "Test Artist Two", 19.906, 19.906),
@@ -295,6 +315,13 @@ func runCogTests() {
                     "Cog 放流 回放: 占位、第一首都不给进度,第二首从 0 起走")
         expectEqual(got.map { $0?.anchorPosition.map { ($0 * 1000).rounded() / 1000 } }, [nil, nil, 0, 0],
                     "Cog 放流 回放: 锚点也换成这一首的")
+        let reused: [(String, String?, Double, Double)] = [
+            ("Second Song", "Test Artist Two", 0, 0.5), ("Cog对时测试", "Lyrimuse测试", 0.926, 5), ("First Song", "Test Artist One", 19.923, 19.923),
+            ("First Song", "Test Artist One", 19.923, 30),
+        ]
+        let gotReused = reused.map { S.reading(bundleID: cog, title: $0.0, artist: $0.1, duration: 0, anchorElapsed: $0.2, elapsed: $0.3) }
+        expectEqual(gotReused.map { $0?.position.map { ($0 * 1000).rounded() / 1000 } }, [nil, nil, 0, 10.077],
+                    "Cog 放流 回放: 复用放过的地址条目(真机 xr9 那串),存着的标题和第一首都不给进度,第二首从 0 起走")
         S.reset()
 
         // 上一首留下的歌手:同一次连接里推不带「 - 」的标题,系统那份照报上一首的歌手(数照真机 ICY 测试台那一轮)
@@ -409,7 +436,9 @@ func runCogTests() {
         expectEqual(sourceHas(sourceText("lyrimuse/UI/IdlePlaybackActions.swift"), "case .swinsian, .kuwo, .cog: PlayerProcess.pid(bundleID: player.bundleIdentifier) != nil"),
                     true, "Cog 接线: 停播页只在它开着时给继续播放")
         expectEqual(sourceHas(sourceBody("public static func applied(to snapshot: MediaControlSnapshot?", in: sourceText("LyrimuseCore/Local/PlayerOpenFile.swift")),
-                              "bundleIDs.contains(bundleID),\n              !CogStream.isNetworkStream(bundleID: bundleID, duration: snapshot.duration),"),
+                              "bundleIDs.contains(bundleID),\n!playsNetworkStream(bundleID: bundleID, duration: snapshot.duration),")
+                        && sourceHas(sourceBody("public static func playsNetworkStream(", in: sourceText("LyrimuseCore/Local/PlayerOpenFile.swift")),
+                                     "return CogStream.isNetworkStream(bundleID: bundleID, duration: duration)"),
                     true, "Cog 接线: 按开着的文件认曲目跳过放流(同名本机文件的时长不套到电台里的歌上)")
     }
 }

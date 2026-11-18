@@ -7,7 +7,8 @@ import os
 /// - 电台里的一首:Cog 把 ICY 标题按「 - 」拆成歌手和歌名,放到这段声音时才换标题(按解码块落地,跟电台开头多推几秒无关),
 ///   所以不套 reAMP / VOX 的延迟线。换标题比出声早晚随连接和缓冲状态变、App 看不到,不加固定补偿。系统那份的 elapsed 是连上
 ///   以来的总秒数、换歌不归零,这一首的位置 = 现在的 elapsed − 这个标题第一次出现时那份锚点的 elapsed;连上后的第一首
-///   不知道从哪里进来的,不给进度。elapsed 往回退了就是重连了。
+///   不知道从哪里进来的,不给进度。elapsed 往回退了就是重连了。连上那一拍(elapsed 为 0)Cog 先按播放列表这一行存着的
+///   元数据发一份,复用放过的地址条目时那是上一次连接最后的标题;紧跟着换上的才是连上后的第一首(`storedTitleWindowSecs`)。
 /// - 同一次连接里只有歌名、没有「 - 」的 ICY 标题,Cog 发给系统的那份不带歌手键,系统会话留着上一首的歌手(`checkedArtist` 读
 ///   Cog 播放列表那一行核对)。
 /// - 网上的音频文件:Cog 不读 http 条目的标签,标题是地址最后一段(「歌手 - 歌名.mp3」),去扩展名再拆(`networkFile`),
@@ -56,6 +57,11 @@ public enum CogStream {
 
     /// elapsed 往回退超过这么多秒算重连。
     static let reconnectSlackSecs: Double = 0.5
+    /// 锚点 elapsed 不超过这么多秒算连上那一拍:Cog 起播时还没放出声音,先按播放列表这一行存着的元数据发一份。
+    static let connectBeatSecs: Double = 0.05
+    /// 连上那一拍之后这么多秒(连上以来的秒数)以内换的标题,才是连上后真正的第一首:第一份 ICY 标题跟在一个元数据间隔的
+    /// 声音后面到,常见的台几秒以内。见 02 章决策 275。
+    static let storedTitleWindowSecs: Double = 10
 
     /// 电台这一路的表。
     public struct Clock: Equatable, Sendable {
@@ -67,12 +73,16 @@ public enum CogStream {
         public var sawSong: Bool
         /// 上一份锚点的 elapsed。
         public var lastAnchor: Double?
+        /// 屏上这首是连上那一拍报的,是播放列表这一行存着的标题(可能是上一次连接最后那首)。
+        public var songAtConnect: Bool
 
-        public init(song: String? = nil, start: Double? = nil, sawSong: Bool = false, lastAnchor: Double? = nil) {
+        public init(song: String? = nil, start: Double? = nil, sawSong: Bool = false, lastAnchor: Double? = nil,
+                    songAtConnect: Bool = false) {
             self.song = song
             self.start = start
             self.sawSong = sawSong
             self.lastAnchor = lastAnchor
+            self.songAtConnect = songAtConnect
         }
     }
 
@@ -81,17 +91,22 @@ public enum CogStream {
         var clock = clock
         if let anchorElapsed, let last = clock.lastAnchor, anchorElapsed + reconnectSlackSecs < last { clock = Clock() }
         if let anchorElapsed { clock.lastAnchor = anchorElapsed }
+        let connectBeat = anchorElapsed.map { $0 <= connectBeatSecs } ?? false
         switch kind {
         case .song:
             guard song != clock.song else { break }
-            clock.start = clock.sawSong ? anchorElapsed : nil
+            let afterStoredTitle = clock.songAtConnect && (anchorElapsed ?? .infinity) < storedTitleWindowSecs
+            clock.start = clock.sawSong && !connectBeat && !afterStoredTitle ? anchorElapsed : nil
             clock.song = song
             clock.sawSong = true
+            clock.songAtConnect = connectBeat
         case .file:
             clock = Clock(lastAnchor: clock.lastAnchor)
         case .placeholder:
             clock.song = nil
             clock.start = nil
+            clock.songAtConnect = false
+            if connectBeat { clock.sawSong = false }
         }
         return clock
     }

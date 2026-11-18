@@ -285,5 +285,24 @@ func runFoobarTests() {
                     "foobar 接线: 解码那一拍位置换成取余后的")
         expectEqual(sourceHas(openFile, "acceptsBaseName: baseName)") && sourceHas(openFile, "static let baseNameBundleIDs: Set<String> = [\nPlaybackPlayer.foobar2000.bundleIdentifier,"), true,
                     "foobar 接线: 认当前文件时没写标签的按不带扩展名的文件名拆")
+        expectEqual(sourceHas(sourceBody("public static func applied(to snapshot: MediaControlSnapshot?", in: openFile),
+                              "bundleIDs.contains(bundleID),\n!playsNetworkStream(bundleID: bundleID, duration: snapshot.duration),"),
+                    true, "foobar 接线: 放电台时不按同名本机文件认(文件的专辑、时长不套到流上)")
+    }
+
+    // ---- 放网络电台不按开着的文件认(真机:电台报的没有时长,本地文件报 193 秒这类整数) ----
+    do {
+        typealias O = PlayerOpenFile
+        expectEqual([O.playsNetworkStream(bundleID: foobar, duration: nil), O.playsNetworkStream(bundleID: foobar, duration: 0),
+                     O.playsNetworkStream(bundleID: foobar, duration: .infinity), O.playsNetworkStream(bundleID: foobar, duration: 193),
+                     O.playsNetworkStream(bundleID: foobar, duration: 114.477)],
+                    [true, true, true, false, false], "foobar 放流: 没有正数时长就是电台,不按记下的本机文件认")
+        let cog = PlaybackPlayer.cog.bundleIdentifier
+        expectEqual([O.playsNetworkStream(bundleID: cog, duration: 0), O.playsNetworkStream(bundleID: cog, duration: nil),
+                     O.playsNetworkStream(bundleID: cog, duration: 114.477),
+                     O.playsNetworkStream(bundleID: PlaybackPlayer.swinsian.bundleIdentifier, duration: nil),
+                     O.playsNetworkStream(bundleID: PlaybackPlayer.qqMusic.bundleIdentifier, duration: 0),
+                     O.playsNetworkStream(bundleID: nil, duration: nil)],
+                    [true, false, false, false, false, false], "foobar 放流: Cog 照旧只认时长报 0,别的播放器不受影响")
     }
 }
