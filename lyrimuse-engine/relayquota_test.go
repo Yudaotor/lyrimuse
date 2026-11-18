@@ -278,7 +278,7 @@ func TestRelayShouldPushReanchorMinGap(t *testing.T) {
 		t.Error("继续播放只等 relayResumeSettle,不等重锚间隔")
 	}
 
-	// 照 Eye Hate U 那次:约每 2 秒判一次重锚、连着 25 分钟。改前每拍一写(日志里 30 秒 15 次),改后每 30 秒最多一次。
+	// 每 2 秒判一次重锚、连着 25 分钟:每 relayReanchorMinGap 最多写一次。
 	q := fresh()
 	writes := 0
 	for at := 2 * time.Second; at <= 25*time.Minute; at += 2 * time.Second {
@@ -363,5 +363,79 @@ func TestArtworkUploadWaitsOutRelayQuota(t *testing.T) {
 	artworkMu.Unlock()
 	if hits.Load() == 0 || !uploaded {
 		t.Fatalf("停推撤掉后照常传: hits=%d uploaded=%v", hits.Load(), uploaded)
+	}
+}
+
+// 中继额度用完、停推期间不取 Top10 歌手榜,也不记这次检查;到点后的第一轮就推。
+func TestTopArtistsDigestWaitsOutRelayQuota(t *testing.T) {
+	t.Cleanup(func() { setRelayQuotaPause(time.Time{}) })
+	useTopArtistSeams(t)
+	f := useFakeLastfmRead(t, topArtistsRoute(3))
+	relay, sink := newRelaySink(t, http.StatusOK)
+	p := &poller{topArtistsState: topArtistsState{path: filepath.Join(t.TempDir(), "top.json")}}
+	now := time.Now()
+	setRelayQuotaPause(now.Add(time.Hour))
+	p.topArtistsDigest(now, topArtistsEnv(relay.URL))
+	if f.count() != 0 || len(sink.bodies) != 0 || !p.topArtistsLastCheckedAt.IsZero() {
+		t.Fatalf("停推期间不取榜、不推、不记检查: fetch=%d push=%d checked=%v", f.count(), len(sink.bodies), p.topArtistsLastCheckedAt)
+	}
+	setRelayQuotaPause(time.Time{})
+	p.topArtistsDigest(now.Add(time.Hour), topArtistsEnv(relay.URL))
+	if f.count() != 1 || len(sink.bodies) != 1 {
+		t.Fatalf("到点就推: fetch=%d push=%d", f.count(), len(sink.bodies))
+	}
+}
+
+// /top-artists 收到额度用完:交回主循环停推到 UTC 0 点(状态文件、封面托管同 /push 撞上时),这次检查不算;
+// 主循环接手之前和停推期间都不再取榜。普通失败不停推。
+func TestTopArtistsQuotaHitPausesRelay(t *testing.T) {
+	statusPath := useRelayStatusPathForTest(t)
+	t.Cleanup(func() { setRelayQuotaPause(time.Time{}) })
+	useTopArtistSeams(t)
+	f := useFakeLastfmRead(t, topArtistsRoute(3))
+	status, body := http.StatusServiceUnavailable, relayQuotaBody
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(status)
+		fmt.Fprint(w, body)
+	}))
+	t.Cleanup(srv.Close)
+	env := topArtistsEnv(srv.URL)
+	p := &poller{ctx: context.Background(), cfg: env.cfg, relayDoneCh: make(chan relayPushResult, 4),
+		topArtistsState: topArtistsState{path: filepath.Join(t.TempDir(), "top.json")}}
+	now := time.Now()
+	p.topArtistsDigest(now, env)
+	if p.relayQuotaHitPending.Load() == nil || !p.topArtistsLastCheckedAt.IsZero() || p.topArtistsState.load() != 0 {
+		t.Fatalf("额度用完交回主循环、这次检查不算: hit=%v checked=%v", p.relayQuotaHitPending.Load(), p.topArtistsLastCheckedAt)
+	}
+	p.topArtistsDigest(now.Add(time.Minute), env)
+	if f.count() != 1 {
+		t.Fatalf("主循环接手之前不再取榜: %d", f.count())
+	}
+	p.pushRelayState(now.Add(time.Minute), false)
+	if want := relayQuotaResumeAt(now); !p.relayQuotaUntil.Equal(want) || !relayQuotaPaused(now.Add(time.Minute)) {
+		t.Fatalf("主循环按 /push 同一套停推: until=%v want=%v", p.relayQuotaUntil, want)
+	}
+	if st, ok := readRelayStatusForTest(t, statusPath); !ok || st.Kind != relayFailQuota {
+		t.Fatalf("设置页那条状态照写: %+v ok=%v", st, ok)
+	}
+	if p.relayQuotaHitPending.Load() != nil {
+		t.Fatal("接手之后清掉")
+	}
+	p.topArtistsDigest(now.Add(2*time.Minute), env)
+	if f.count() != 1 {
+		t.Fatalf("停推期间不取榜: %d", f.count())
+	}
+	p.noteRelayQuotaHit(relayQuotaErr(), now)
+	p.resetRelayPush()
+	if p.relayQuotaHitPending.Load() != nil || p.relayQuotaPausedOrHit(now) {
+		t.Fatal("改了中继地址或令牌:后台报来的额度用完一并作废")
+	}
+
+	q := &poller{cfg: env.cfg, topArtistsState: topArtistsState{path: filepath.Join(t.TempDir(), "top.json")}}
+	setRelayQuotaPause(time.Time{})
+	body = relayKVBusyBody
+	q.topArtistsDigest(now, env)
+	if q.relayQuotaHitPending.Load() != nil || q.topArtistsLastCheckedAt.IsZero() {
+		t.Fatalf("普通 503 不停推,照旧等下个检查周期: hit=%v checked=%v", q.relayQuotaHitPending.Load(), q.topArtistsLastCheckedAt)
 	}
 }

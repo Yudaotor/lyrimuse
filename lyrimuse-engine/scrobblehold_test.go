@@ -4,9 +4,12 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -368,5 +371,72 @@ func TestScrobbleHoldMatchesSwift(t *testing.T) {
 	}
 	if scrobbleHoldUntil(now).IsZero() {
 		t.Fatal("App 写出的租约表引擎要读得懂")
+	}
+}
+
+// 测试播放过了门槛:不提交,但「本机刚放过」照记,桥接据此认出播放器自己往 Last.fm 打的那条回声。
+func TestHeldListenStillRecordsMacListen(t *testing.T) {
+	at := handleClock()
+	withScrobbleHold(t, lease("t", at(0), at(0).Add(time.Hour)))
+	p := handleTestPoller(t, heldSong("陈奕迅", "浮夸", 0, at(0)))
+	for s := 0; s <= 40; s += 5 {
+		handleTick(p, at(s), heldSong("陈奕迅", "浮夸", float64(s), at(s)))
+	}
+	if !p.sess.listenSent || len(p.submitsInflight) != 0 {
+		t.Fatalf("开关开着不提交: sent=%v inflight=%d", p.sess.listenSent, len(p.submitsInflight))
+	}
+	if !p.recentlyPlayedOnMac("陈奕迅", "浮夸 (Remaster)", p.sess.listenStart().Unix()+300) {
+		t.Fatalf("测试播放也要记进本机刚放过: %+v", p.recentMacListens)
+	}
+}
+
+// bridgeTestPoller:配了 LB 的桥接,LB 那头只数请求。
+func bridgeTestPoller(t *testing.T) (*poller, *atomic.Int32) {
+	t.Helper()
+	var hits atomic.Int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		hits.Add(1)
+		w.WriteHeader(http.StatusOK)
+	}))
+	t.Cleanup(srv.Close)
+	dir := t.TempDir()
+	return &poller{
+		ctx:                 context.Background(),
+		cfg:                 &config{LastfmUser: "someone", LastfmAPIKey: "key", User: "lb-user", Token: "lb-token"},
+		lb:                  &lbClient{root: srv.URL, token: "lb-token", hc: &http.Client{}},
+		fwdSeeded:           true,
+		forwarded:           map[int64]bool{},
+		lfmMirrored:         map[int64]bool{},
+		forwardedSet:        persistedTTLSet{path: dir + "/forwarded.json", ttl: forwardedTTL},
+		lfmMirroredSet:      persistedTTLSet{path: dir + "/mirrored.json", ttl: lfmMirroredTTL},
+		bridgeForwardDoneCh: make(chan []bridgeForwardResult, 1),
+	}, &hits
+}
+
+// Last.fm 上的测试曲(播放器自己打的卡、报的正在播放)不当 iPhone 的收听转发,也不当 iPhone 在放;真歌照常。
+func TestBridgeSkipsTestTracks(t *testing.T) {
+	now := time.Now()
+	p, _ := bridgeTestPoller(t)
+	p.remoteTrack, p.remoteAt = snapshot{Title: "十年", Artist: "陈奕迅", Playing: true, Remote: true}, now.Add(-time.Minute)
+	held := lastfmTrack{Artist: "Lyrimuse测试", Title: "对时测试", UTS: now.Unix() - 60}
+	untagged := lastfmTrack{Artist: "", Title: "ToneClick", UTS: now.Unix() - 50}
+	p.applyBridgeResult(bridgeFetchResult{now: now, ok: true,
+		page: lastfmRecentPage{NowPlaying: &held, Done: []lastfmTrack{untagged, held}}})
+	if p.bridgeForwarding || !p.forwarded[held.UTS] || !p.forwarded[untagged.UTS] {
+		t.Fatalf("测试曲不转发、记成处理过: forwarding=%v forwarded=%v", p.bridgeForwarding, p.forwarded)
+	}
+	if !p.remoteAt.IsZero() || p.remoteKey != "" {
+		t.Fatalf("测试曲的正在播放不当 iPhone 在放,之前那首也撤掉: remoteAt=%v key=%q", p.remoteAt, p.remoteKey)
+	}
+
+	q, _ := bridgeTestPoller(t)
+	real := lastfmTrack{Artist: "陈奕迅", Title: "浮夸", UTS: now.Unix() - 60}
+	q.applyBridgeResult(bridgeFetchResult{now: now, ok: true,
+		page: lastfmRecentPage{NowPlaying: &real, Done: []lastfmTrack{real}}})
+	if !q.bridgeForwarding || q.remoteAt.IsZero() {
+		t.Fatalf("真歌照常转发、照常当 iPhone 在放: forwarding=%v remoteAt=%v", q.bridgeForwarding, q.remoteAt)
+	}
+	if r := <-q.bridgeForwardDoneCh; len(r) != 1 {
+		t.Fatalf("真歌转发一条: %v", r)
 	}
 }

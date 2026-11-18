@@ -5,7 +5,8 @@
 #
 #   0. 先打开 Lyrimuse 的测试期开关(深链 debug/scrobble-hold,带本次的 id,时长 N 秒再加 10 分钟、最多 2 小时):这段时间放的歌
 #      不发 Last.fm / ListenBrainz、不记本地收听日志。开不上(App 没开调试深链)就不跑、退出码 146。实验本身要验打卡的加 --scrobble,
-#      不开开关。收尾时只收掉本次这一条,别的实验开的不动。见 12 章决策 98。
+#      不开开关。收尾时只收掉本次这一条,别的实验开的不动。开关封顶 2 小时,不带 --scrobble 时 N 最多 6600 秒,超了不跑、退出码 2。
+#      见 12 章决策 98、101。
 #   1. 开跑前记下谁在放:系统「正在播放」(media-control get,哪个播放器都认),每个播放器各自那份会话
 #      (App 里的 nowplaying-clients 探针),Music / Spotify / Kaset 自己报的播放状态(只问已经在跑的,
 #      不会把没开的拉起来),再录 1 秒系统声音当基线(audio-level.swift,只算音量、不存声音)。
@@ -40,7 +41,18 @@ while [ $# -gt 0 ]; do
     esac
 done
 if [ $# -eq 0 ]; then
-    sed -n '2,24p' "$0" | sed 's/^# \{0,1\}//'
+    sed -n '2,25p' "$0" | sed 's/^# \{0,1\}//'
+    exit 2
+fi
+case "$max" in
+    ''|*[!0-9]*)
+        echo "play-experiment: --max-seconds 要是正整数秒数:$max"
+        exit 2
+        ;;
+esac
+# 测试期开关最长 120 分钟、这里留 10 分钟余量:实验跑得比开关久,开关到期之后放的歌就会记进收听。
+if [ "$scrobble" = 0 ] && [ "$max" -gt 6600 ]; then
+    echo "play-experiment: --max-seconds 最多 6600(测试期开关封顶 2 小时);更长的实验拆成几次跑"
     exit 2
 fi
 
@@ -132,7 +144,6 @@ PY
 
 if [ "$scrobble" = 0 ]; then
     hold_minutes=$(( (max + 59) / 60 + 10 ))
-    [ "$hold_minutes" -gt 120 ] && hold_minutes=120
     /usr/bin/open -g "lyrimuse://debug/scrobble-hold?minutes=${hold_minutes}&id=${hold_id}"
     ok=0
     for _ in 1 2 3 4 5 6 7 8 9 10; do

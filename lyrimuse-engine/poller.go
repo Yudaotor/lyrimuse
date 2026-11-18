@@ -41,6 +41,9 @@ type playSession struct {
 	// pnTriedAt:上一次往 LB 发 playing_now 的时刻,成败都算。周期刷新、挂起首条的重发都按它隔 playingNowRefresh:
 	// LB 挂着时失败了就等下一次刷新,别改成每拍重发(一个 8 秒超时接一个,对着一个挂掉的服务每 10 秒打一次)。
 	pnTriedAt time.Time
+	// pnReanchorPending:重锚了、离上一次 playing_now 不到 playingNowReanchorGap,到点补发一次(跟中继的 relayReanchorPending
+	// 同一个做法)。下一次发出(哪种原因都算)就了结。
+	pnReanchorPending bool
 	// lastfmNPAt:上一次发 Last.fm now-playing 的时刻。LB 那条在播放 / 暂停切换、重新对时这些时候都会发,
 	// Last.fm 那一路自己节流(见 announce 里的 lastfmDue),不跟着发。
 	lastfmNPAt  time.Time
@@ -331,6 +334,8 @@ type poller struct {
 	relayFailingSince time.Time // 这一串推送失败从什么时候开始;零 = 上一次推成功了或还没推过
 	relayStatusKey    string    // 上次写进状态文件的失败(relayStatusFile.key),同一类不重写
 	relayQuotaUntil   time.Time // 中继的 KV 写额度用完、停推到这一刻(relayQuotaResumeAt);零 = 没停
+	// relayQuotaHitPending:后台任务写中继撞上额度用完,等主循环接手(takeRelayQuotaHit)。
+	relayQuotaHitPending atomic.Pointer[relayQuotaHit]
 	// relayReanchorPending:App 重锚了、还没推出去(离上次推送不到 relayReanchorMinGap),到点补推一次。
 	relayReanchorPending bool
 
@@ -658,6 +663,7 @@ func (p *poller) pushRelayState(now time.Time, reanchored bool) {
 	if p.cfg.StateRelayURL == "" {
 		return
 	}
+	p.takeRelayQuotaHit()
 	// QQ、酷我这一条是不是有声节目还没判出来:先不推,网页留着上一份(见 awaitsSpokenVerdict)。
 	if p.sess != nil && p.sess.key == p.cur.key() && awaitsSpokenVerdict(p.cur, p.sess.startedAt, now) {
 		return
@@ -1064,10 +1070,12 @@ func (p *poller) submitSingleAsync(sess *playSession, meta snapshot, startedAt i
 		sess.listenSent = true
 		return
 	}
-	// 测试播放:两边都不提交,本地收听日志、待重发队列也不进(它们都挂在这个漏斗后面)。
+	// 测试播放:两边都不提交,本地收听日志、待重发队列也不进(它们都挂在这个漏斗后面)。「本机刚放过」照记:播放器自己
+	// 往 Last.fm 打卡的那条回声要靠它认出来,不然桥接会当成 iPhone 的收听转发(见 12 章决策 101)。
 	if heldForTest(sess, meta.Artist, meta.Title, time.Now()) {
 		log.Printf("listen skipped (%s): %s - %s", sess.scrobbleHold, meta.Artist, meta.Title)
 		sess.listenSent = true
+		p.recordRecentMacListen(meta.Artist, meta.Title, startedAt)
 		return
 	}
 	lm := lbMeta(meta)
@@ -1254,7 +1262,7 @@ func (p *poller) announce(now time.Time, why string) {
 		return
 	}
 	p.sess.announcing = true
-	p.sess.pnTriedAt = now
+	p.sess.pnTriedAt, p.sess.pnReanchorPending = now, false
 	sess := p.sess
 	m := lbMeta(p.cur)
 	// artist 给 Last.fm 用:跟 m.ArtistName(给 LB 用)取同一份,保证 now-playing 与
@@ -1517,9 +1525,14 @@ func (p *poller) handle(now time.Time, reanchored, loopRestart bool) {
 	p.settleLastfmPending(p.sess)
 	// Publish a fresh anchor on a re-anchor (seek / sleep-wake) or on the
 	// periodic refresh, so the web always extrapolates from a recent point.
-	// 重锚触发的离上一次至少隔 playingNowReanchorGap。
-	if sincePN := now.Sub(p.sess.pnTriedAt); !submitted && (reanchored && sincePN >= playingNowReanchorGap || sincePN >= playingNowRefresh) {
-		p.announce(now, "refresh")
+	// 重锚触发的离上一次至少隔 playingNowReanchorGap;间隔里的重锚记下,到点补发一次。见 13 章决策 18。
+	if sincePN := now.Sub(p.sess.pnTriedAt); !submitted {
+		if reanchored && sincePN < playingNowReanchorGap {
+			p.sess.pnReanchorPending = true
+		}
+		if (reanchored || p.sess.pnReanchorPending) && sincePN >= playingNowReanchorGap || sincePN >= playingNowRefresh {
+			p.announce(now, "refresh")
+		}
 	}
 	if !p.sess.listenSent && !p.sess.submitting && !p.sess.sodaPreviewPending && !now.Before(p.sess.listenRetryAt) &&
 		p.sess.playedSecs >= listenThreshold(p.sess.meta.Duration) &&
@@ -1788,6 +1801,12 @@ func (p *poller) applyBridgeResult(r bridgeFetchResult) {
 				p.forwarded[s.UTS], fwdChanged = true, true
 				continue
 			}
+			if isTestTrack(s.Artist, s.Title) {
+				// 测试曲:播放器自己往 Last.fm 打的卡(Spotify 直连、FastScrobbler 跨设备补记),不是 iPhone 的收听。
+				// 名单不随引擎重启丢,上一个进程放的测试曲回声同样认得出(见 12 章决策 101)。
+				p.forwarded[s.UTS], fwdChanged = true, true
+				continue
+			}
 			if p.recentlyPlayedOnMac(s.Artist, s.Title, s.UTS) {
 				// 上面的精确 uts 匹配抓不到、但名字够像+时间够近——见
 				// recordRecentMacListen 注释:大概率是 FastScrobbler 经跨设备"最近
@@ -1853,6 +1872,11 @@ func (p *poller) applyBridgeResult(r bridgeFetchResult) {
 		// Last.fm 上的"正在播放"跟本地 Mac 当前/最近曲目同名——很可能是我们自己刚
 		// 镜像写入、Mac 已暂停但 Last.fm 侧还没自然过期的残留状态,不是真实 iPhone
 		// 在放同一首歌。宁可漏判(小概率两台设备真放同一首)也不能误判成 iPhone。
+		return
+	}
+	if isTestTrack(np.Artist, np.Title) {
+		// 测试曲:是播放器自己往 Last.fm 报的正在播放,不当 iPhone 在放,网页和 LB 都不跟(见 12 章决策 101)。
+		p.remoteAt = time.Time{}
 		return
 	}
 	// 记录 iPhone 当前在播,供中继 /push 显示(Mac 空闲时)。

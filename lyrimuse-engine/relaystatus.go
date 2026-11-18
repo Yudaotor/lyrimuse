@@ -223,6 +223,31 @@ func (p *poller) noteRelayFailure(err error, at time.Time) {
 	writeRelayStatus(f)
 }
 
+// relayQuotaHit:后台任务(Top10 歌手推送)写中继时认出额度用完,交回主循环按同一套停推(takeRelayQuotaHit)。
+type relayQuotaHit struct {
+	err error
+	at  time.Time
+}
+
+// noteRelayQuotaHit:后台任务写中继失败时调。只收额度用完这一种,别的失败各自重试、不影响网页推送的退避。
+func (p *poller) noteRelayQuotaHit(err error, at time.Time) {
+	if kind, _ := relayFailureKind(err); kind == relayFailQuota {
+		p.relayQuotaHitPending.Store(&relayQuotaHit{err: err, at: at})
+	}
+}
+
+// relayQuotaPausedOrHit:停推中,或者后台已经撞上额度用完、主循环还没接手。后台任务开写之前问它。
+func (p *poller) relayQuotaPausedOrHit(now time.Time) bool {
+	return relayQuotaPaused(now) || p.relayQuotaHitPending.Load() != nil
+}
+
+// takeRelayQuotaHit:主循环接手后台报来的额度用完,跟 /push 自己撞上一样停推、写状态。
+func (p *poller) takeRelayQuotaHit() {
+	if h := p.relayQuotaHitPending.Swap(nil); h != nil && !h.at.Before(p.relayQuotaUntil) {
+		p.noteRelayFailure(h.err, h.at)
+	}
+}
+
 // noteRelaySuccess:推成功了,之前报过的失败撤掉。
 func (p *poller) noteRelaySuccess() {
 	if !p.relayQuotaUntil.IsZero() {
@@ -245,6 +270,7 @@ func (p *poller) resetRelayPush() {
 	p.relayDeferKey, p.relayDeferSince = "", time.Time{}
 	p.relayFailingSince, p.relayStatusKey = time.Time{}, ""
 	p.relayQuotaUntil, p.relayReanchorPending = time.Time{}, false
+	p.relayQuotaHitPending.Store(nil)
 	setRelayQuotaPause(time.Time{})
 	clearRelayStatus()
 }

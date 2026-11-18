@@ -168,3 +168,39 @@ func TestFlushSessionOnExitRecordsListenSent(t *testing.T) {
 		t.Fatalf("退出兜底交过了,记下的该是已提交: %+v", r)
 	}
 }
+
+// 重启前这一首已认成测试播放、还没到门槛,开关在重启前后被收掉:续接回来照旧不宣布、不提交,退出时也照样记下。
+func TestSessionResumeKeepsScrobbleHold(t *testing.T) {
+	withScrobbleHold(t)
+	at := handleClock()
+	song := handleSong("浮夸", 0, time.Time{})
+	p := resumePoller(t, song)
+	r := resumeRecord(song, at, 70, 60, 60, false)
+	r.ScrobbleHold = "test mode until 2026-11-19T00:00:00Z"
+	p.resume = r
+	for s := 0; s <= 60; s += 10 {
+		handleTick(p, at(s), handleSong("浮夸", float64(65+s), at(s)))
+	}
+	if p.sess.scrobbleHold != r.ScrobbleHold || p.sess.announcing || len(p.submitsInflight) != 0 || !p.sess.listenSent {
+		t.Fatalf("续接回来照旧挡: hold=%q announcing=%v inflight=%d sent=%v",
+			p.sess.scrobbleHold, p.sess.announcing, len(p.submitsInflight), p.sess.listenSent)
+	}
+	path := filepath.Join(t.TempDir(), "resume.json")
+	saved := sessionResumePath
+	sessionResumePath = path
+	t.Cleanup(func() { sessionResumePath = saved })
+	p.saveSessionResume(at(61))
+	if got := takeSessionResume(path); got == nil || got.ScrobbleHold != r.ScrobbleHold {
+		t.Fatalf("退出时记下测试播放的原因: %+v", got)
+	}
+
+	// 没认成测试播放的照常:续接回来过门槛提交一次。
+	q := resumePoller(t, song)
+	q.resume = resumeRecord(song, at, 70, 60, 60, false)
+	for s := 0; s <= 60; s += 10 {
+		handleTick(q, at(s), handleSong("浮夸", float64(65+s), at(s)))
+	}
+	if q.sess.scrobbleHold != "" || len(q.submitsInflight) != 1 {
+		t.Fatalf("真歌续接照常提交: hold=%q inflight=%d", q.sess.scrobbleHold, len(q.submitsInflight))
+	}
+}

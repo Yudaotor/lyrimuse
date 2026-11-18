@@ -553,11 +553,15 @@ func (p *poller) topArtistsDigest(now time.Time, env digestEnv) {
 	if env.cfg.LastfmUser == "" || env.cfg.lastfmBridgeAPIKey() == "" {
 		return
 	}
+	relay := env.cfg.StateRelayURL != ""
+	// 中继额度用完、停推期间不取榜(推了也写不进去),也不记这次检查:到点后的第一轮就推。见 13 章决策 18。
+	if relay && p.relayQuotaPausedOrHit(now) {
+		return
+	}
 	if !digestCheckDue(now, p.topArtistsLastCheckedAt, topArtistsCheckInterval) {
 		return
 	}
 	p.topArtistsLastCheckedAt = now.Round(0)
-	relay := env.cfg.StateRelayURL != ""
 	if last := p.topArtistsState.load(); relay && last > 0 && now.Sub(time.Unix(last, 0)) < topArtistsCheckInterval {
 		return // 磁盘上记录的上次成功推送还没满一天(比如刚重启,内存态丢了但磁盘状态还在)
 	}
@@ -604,7 +608,12 @@ func (p *poller) topArtistsDigest(now time.Time, env digestEnv) {
 	}
 	payload := map[string]any{"artists": artists, "updatedAt": now.Unix()}
 	if err := postRelay(env.ctx, env.cfg, "/top-artists", payload); err != nil {
-		return // 推失败就不存状态,下个检查周期(至多 24h 后)会自然重试,不会因为一次失败长期卡死
+		// 额度用完:交给主循环停推到 UTC 0 点,这次检查不算,到点后重推。别的失败不存状态,下个检查周期(至多 24h 后)自然重试。
+		p.noteRelayQuotaHit(err, now)
+		if p.relayQuotaHitPending.Load() != nil {
+			p.topArtistsLastCheckedAt = time.Time{}
+		}
+		return
 	}
 	p.topArtistsState.save(now.Unix())
 }

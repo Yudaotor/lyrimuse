@@ -14,7 +14,7 @@ import (
 // 收听两边都不记;前一段已经记过的,后一段要是自己又放够了门槛,还会以新的开播时刻再记一次。
 //
 // 退出时把当前会话记一份(saveSessionResume):会话键、App 的 app_pid / play_seq、开播时刻、已播时长、收听提交过没有、
-// Last.fm 那一路发过没有 / 还挂着没有、最近一拍的位置。新进程第一次开会话时(handle 的换曲分支)这一首还是同一首、
+// Last.fm 那一路发过没有 / 还挂着没有、最近一拍的位置、认成测试播放的原因(scrobbleHold,续接回来照旧不记)。新进程第一次开会话时(handle 的换曲分支)这一首还是同一首、
 // App 进程和 play_seq 都没变(同一次起播,不是重新放了一遍)、离退出不到 nullResumeGraceWindow,就照 recentFinalized
 // 那样接着这次收听:开播时刻、已播时长、两路是否发过都带过来,中间那段空档按 App 报的位置补(listenAccrualSecs)。
 // 别的情况一律另开会话,跟没有这份记录时一样。
@@ -35,6 +35,9 @@ type sessionResumeFile struct {
 	ListenSent    bool    `json:"listen_sent"`
 	LastfmSettled bool    `json:"lastfm_settled"`
 	LastfmPending bool    `json:"lastfm_pending"`
+	// ScrobbleHold:这一首认成测试播放的原因(playSession.scrobbleHold),空 = 照常记。开关在重启前后被收掉,续接回来的这一首
+	// 照旧不记。只跟着续接走:App 也重启了(app_pid 变了)就是另一次起播,不带过去(见 12 章决策 101)。
+	ScrobbleHold string `json:"scrobble_hold,omitempty"`
 	// LastSeen*:计时起点(playSession.lastSeen 那三项),LastSeenAt 为 0 = 没在计时(暂停着)。LastPos*:「曲终」档的位置书签。
 	LastSeenAt     int64   `json:"last_seen_at,omitempty"` // Unix 毫秒
 	LastSeenPos    float64 `json:"last_seen_pos,omitempty"`
@@ -52,7 +55,7 @@ func (p *poller) saveSessionResume(now time.Time) {
 	}
 	f := sessionResumeFile{Key: s.key, AppPID: p.app.marks.pid, PlaySeq: p.app.marks.playSeq, StartedAt: s.listenStart().Unix(),
 		PlayedSecs: s.playedSecs, ListenSent: s.listenSent, LastfmSettled: s.lastfmSettled, LastfmPending: s.lastfmPending != nil,
-		SavedAt: now.UnixMilli()}
+		ScrobbleHold: s.scrobbleHold, SavedAt: now.UnixMilli()}
 	if !s.lastSeen.IsZero() {
 		f.LastSeenAt, f.LastSeenPos, f.LastSeenHasPos = s.lastSeen.UnixMilli(), s.lastSeenPos, s.lastSeenHasPos
 	}
@@ -108,6 +111,9 @@ func (p *poller) resumeSession(s *playSession, now time.Time) bool {
 	}
 	s.playedSecs = r.PlayedSecs
 	s.listenSent, s.lastfmSettled = r.ListenSent, r.LastfmSettled
+	if r.ScrobbleHold != "" {
+		s.scrobbleHold = r.ScrobbleHold
+	}
 	if r.LastfmPending && !r.LastfmSettled && !s.lastfmExcluded {
 		s.lastfmPending = &pendingLastfmListen{artistName: lbMeta(s.meta).ArtistName, meta: s.meta, startedAt: r.StartedAt}
 	}

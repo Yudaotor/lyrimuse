@@ -382,3 +382,29 @@ func TestHandleReanchorPlayingNowHasMinGap(t *testing.T) {
 		t.Fatalf("不重锚的 150 秒里周期刷新 %d 次: %v", n, sent[from:])
 	}
 }
+
+// 间隔里的一次重锚不丢:离上一次 playing_now 满 playingNowReanchorGap 时补发一次,不等到周期刷新。
+func TestHandleReanchorPlayingNowCatchesUp(t *testing.T) {
+	at := handleClock()
+	p := handleTestPoller(t, handleSong("浮夸", 0, at(0)))
+	var sent []int
+	last := time.Time{}
+	for s := 0; s <= 58; s += 2 {
+		p.cur, p.curStale = handleSong("浮夸", float64(s), at(s)), false
+		p.handle(at(s), s == 16, false)
+		if p.sess.announcing {
+			p.applyAnnounceOutcome(<-p.announceDoneCh)
+		}
+		if !p.sess.pnTriedAt.Equal(last) {
+			last = p.sess.pnTriedAt
+			sent = append(sent, s)
+		}
+	}
+	gap := int(playingNowReanchorGap / time.Second)
+	if len(sent) != 2 || sent[0] >= 16 || sent[1]-sent[0] != gap {
+		t.Fatalf("开播发一次,第 16 秒的重锚在上一次之后 %d 秒补发: %v", gap, sent)
+	}
+	if p.sess.pnReanchorPending {
+		t.Fatal("补发之后了结")
+	}
+}
