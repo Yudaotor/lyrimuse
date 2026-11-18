@@ -63,6 +63,28 @@ func runSourceContractTests() {
         expectEqual(linked, [], "私有符号: 不用 @_silgen_name 强链接,改成 dlsym 运行时查找、查不到降级")
     }
 
+    // 把窗口藏到用户看不见的地方只有一个层级:WindowActivation.invisibleLevel(墙纸后面)。墙纸窗口就在桌面层减一,
+    // 桌面层、桌面层减一的窗口排在墙纸前面,桌面露出来处看得见;别处另写桌面层的算式容易又写成减一(07 章决策 214)。
+    do {
+        let sources = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+        var scanned = 0, desktopLevels: [String] = []
+        for dir in ["lyrimuse", "LyrimuseCore"] {
+            let root = sources.appendingPathComponent(dir)
+            guard let walker = FileManager.default.enumerator(atPath: root.path) else { continue }
+            for case let rel as String in walker where rel.hasSuffix(".swift") {
+                guard let text = try? String(contentsOfFile: root.appendingPathComponent(rel).path, encoding: .utf8) else { continue }
+                scanned += 1
+                if ["CGWindowLevelForKey(.desktop", "kCGDesktopWindowLevel", "kCGDesktopIconWindowLevel", "CGWindowLevelKey.desktop"]
+                    .contains(where: { sourceBytes(text, contain: $0) }) {
+                    desktopLevels.append("\(dir)/\(rel)")
+                }
+            }
+        }
+        expectEqual(scanned > 100, true, "藏窗口层级: 至少扫到 100 个源文件(实际 \(scanned)),少了说明路径不对")
+        expectEqual(desktopLevels, ["lyrimuse/Settings/WindowActivation.swift"],
+                    "藏窗口层级: 桌面层的算式只在 WindowActivation.invisibleLevel 写一处,别处藏窗口引用它")
+    }
+
     // 换歌后要及时做的去抖挂主队列(01 章决策 11):Combine 挂 RunLoop.main 的计时器只在默认模式走,菜单栏菜单开着时不触发。
     do {
         let appSources = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
@@ -2353,8 +2375,10 @@ func runSourceContractSurfaceTests() {
                 expectEqual(morph.components(separatedBy: "SCShareableContent.").count
                                 == morph.components(separatedBy: "SCShareableContent.currentProcess").count, true,
                             "变形动画: 截图只列本进程的窗口(不经录屏授权),不用 SCShareableContent.current")
-                expectEqual(morph.contains("CGWindowLevelForKey(.desktopWindow)) - 1"), true,
-                            "变形动画: 真窗口藏在桌面层级以下(透明度为 0 截出来全透明)")
+                // 墙纸窗口就在桌面层减一,同层后上屏的排在墙纸前面:藏真窗口跟隐身开窗共用墙纸后面那一层(07 章决策 214)。
+                expectEqual(sourceHas(morph, "static let hiddenLevel = WindowActivation.invisibleLevel")
+                                && !sourceBytes(morph, contain: "CGWindowLevelForKey"), true,
+                            "变形动画: 真窗口压在墙纸后面,层级跟隐身开窗共用 WindowActivation.invisibleLevel(透明度为 0 截出来全透明)")
                 expectEqual(morph.contains("accessibilityDisplayShouldReduceMotion"), true, "变形动画: 减弱动态效果时不做")
                 // 新图要在卡片起步时就在手里,跟几何同一条曲线淡入;卡片起步后才去截,尺寸走完才换内容(07 章决策 205)。
                 expectEqual(sourceHas(morph, "let staged = Task { @MainActor () -> (window: NSWindow, level: NSWindow.Level)? in")

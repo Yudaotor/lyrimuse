@@ -30,6 +30,7 @@ enum WindowActivation {
 
     /// 桌面层往下两层,压在墙纸窗口(桌面层下一层)后面:坐标在屏幕内、照常画,被不透明的墙纸整片盖住。别写成桌面层减一:
     /// 那是墙纸自己的层级,同层里后摆上来的窗口排在墙纸前面,桌面露出来的地方用户看得见。挪到屏幕外截图会报 `could not create image`。
+    /// 歌词窗口变形动画藏真窗口也用这一层(`LyricsWindowFormMorph.hiddenLevel`);别处要把窗口藏到用户看不见的地方同样引用它,不另写桌面层的算式。
     static let invisibleLevel = NSWindow.Level(rawValue: Int(CGWindowLevelForKey(.desktopWindow)) - 2)
 
     /// 「后台开窗」那一小段:开窗入口里的激活被跳过。足够覆盖开窗入口里的异步一拍,又不至于让之后用户自己点的开窗也不激活。

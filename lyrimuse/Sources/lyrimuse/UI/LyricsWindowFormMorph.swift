@@ -15,7 +15,7 @@ import ScreenCaptureKit
 /// 新图晚到时尺寸已经走完,看着是先变大、后换内容(07 章决策 205)。卡片几何一开始就交给渲染进程、推迟 `newImageWait` 起步,新图在那之前到了就一起提前起步,
 /// 没到就按时起步、到了再补淡入:目标窗口排版占住主线程时,卡片停在原处的时间也不超过 `newImageWait`。
 ///
-/// 动画期间真窗口降到桌面层级以下:用户看不见,截图照样截得到最新内容。别改成调透明度或挪到屏幕外 ——
+/// 动画期间真窗口压到墙纸后面(`hiddenLevel`):用户看不见,截图照样截得到最新内容。别改成调透明度或挪到屏幕外 ——
 /// 透明度为 0 的窗口截出来全透明,带标题栏的窗口挪出屏幕会被系统拉回屏内。
 ///
 /// 截图走 `SCShareableContent.currentProcess`(macOS 14.4 起),只列本进程自己的窗口、不经录屏授权。别换成
@@ -38,8 +38,9 @@ final class LyricsWindowFormMorph {
     private var hold: (window: NSWindow, wanted: NSWindow.Level?, timer: Timer)?
     private var isWarming = false
 
-    /// 藏真窗口用的层级:桌面图片那一层之下。
-    static let hiddenLevel = NSWindow.Level(rawValue: Int(CGWindowLevelForKey(.desktopWindow)) - 1)
+    /// 藏真窗口用的层级:跟隐身开窗共用,压在墙纸窗口后面(见 `WindowActivation.invisibleLevel`)。别另写成桌面层减一:
+    /// 那是墙纸自己的层级,同层里后摆上来的窗口排在墙纸前面,桌面露出来的地方看得见(07 章决策 214)。
+    static let hiddenLevel = WindowActivation.invisibleLevel
     /// 预热拿到的过滤器多久内可以直接拿来截第一张(指针移到键上到点下去通常一两秒)。
     private static let warmFilterLifetime: CFTimeInterval = 5
     /// 临时窗上屏、真窗口回到原层级之后,各等这么久再动下一步,不留空帧。
