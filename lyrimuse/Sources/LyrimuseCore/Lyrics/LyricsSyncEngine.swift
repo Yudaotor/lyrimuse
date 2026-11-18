@@ -2397,7 +2397,10 @@ public final class LyricsSyncEngine {
         {
             return computed
         }
-        return filled
+        // 日文行源给的 / 存着的预生成读音里单独成词的标点贴到相邻的词上,跟现算同一个写法;缓存里的原样不动。
+        // 韩文、中文行不动:逐词读音按整行罗马音的词跟原文对(`readingSpans`)。见 10 章决策 76。
+        guard Romanizer.readsAsJapanese(line, songLooksJapanese: songLooksJapanese) else { return filled }
+        return Romanizer.attachingPunctuation(filled)
     }
 
     /// 源读音里没转的原文片段按现算补上(`SourceReadingResidue`)。按源读音行缓存:每一拍都调。
@@ -2738,14 +2741,15 @@ public final class LyricsSyncEngine {
                 i = j + 1
                 continue
             }
-            let latins = inGroup.map(\.latin)
+            // 标点片段不标读音:只有标点的组读音格留空,词带着标点(「よ」」)只标词的读音。见 10 章决策 76。
+            let latins = inGroup.map(\.latin).filter { !Romanizer.isPunctuationOnly($0) }
             let joined = latins.isEmpty ? nil : Romanizer.joinLatin(latins)
             // 组里混进的纯拉丁词(中日韩歌词夹的英文单词)读音就是它自己 —— 跟原文一模一样
             // 没有信息增量,不该占一行重复自己。这条判据在整行罗马音那一层本来就有
             // (Romanizer.readingFromSegments 的 `joined != text`),这里是把它下沉到逐词这一级——
-            // 混合语言行整行判据不会触发(韩文部分读音确实不同),必须逐组各自比对。
+            // 混合语言行整行判据不会触发(韩文部分读音确实不同),必须逐组各自比对。只差标点、空白的也算一样。
             let groupText = words[i...j].map(\.text).joined().trimmingCharacters(in: .whitespaces)
-            let romanization = (joined == groupText) ? nil : joined
+            let romanization = joined.map { Self.letterKey($0) == Self.letterKey(groupText) } == true ? nil : joined
             groups.append(SyncedLyricWordGroup(
                 id: groups.count,
                 words: Array(words[i...j]),
@@ -2754,6 +2758,13 @@ public final class LyricsSyncEngine {
         }
         // 一组罗马音都配不上(整行都是拉丁字母之类)时当作没有,让视图退回整行罗马音。
         return groups.contains { $0.romanization != nil } ? groups : nil
+    }
+
+    /// 只留字母、数字、汉字假名这些「字」,去掉标点和空白:逐词读音跟原文只差标点空白时算没有信息增量。
+    private static func letterKey(_ text: String) -> String {
+        String(String.UnicodeScalarView(text.unicodeScalars.filter {
+            CharacterSet.alphanumerics.contains($0) || $0.properties.isIdeographic
+        }))
     }
 
     // ---- 逐拍热路径的两级省功 --------------------------

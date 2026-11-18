@@ -235,19 +235,19 @@ func checkWorldRomanization() {
     expectEqual(R.patched("a ラーメン b") { $0 == "ラーメン" ? "rāmen" : nil }, "a ramen b", "残留: 片段里的长音跟着片段走")
 
     let jaRoma = "[00:01.00]tsukame ! egai ta 梦 o\n[00:02.00]sora"
-    expectEqual(sourceReading("[00:01.00]つかめ! 描いた夢を\n[00:02.00]空", roma: jaRoma), "tsukame ! egai ta yume o",
+    expectEqual(sourceReading("[00:01.00]つかめ! 描いた夢を\n[00:02.00]空", roma: jaRoma), "tsukame! egai ta yume o",
                 "接入: 源读音里的简体字,原文显示的是修过的日文汉字,按原文分词读")
-    expectEqual(sourceReading("[00:01.00]つかめ! 描いた梦を\n[00:02.00]空", roma: jaRoma), "tsukame ! egai ta yume o",
+    expectEqual(sourceReading("[00:01.00]つかめ! 描いた梦を\n[00:02.00]空", roma: jaRoma), "tsukame! egai ta yume o",
                 "接入: 原文也是简体字,转繁体再读")
     expectEqual(sourceReading("[00:01.00]つかめ! 描いた梦を\n[00:02.00]空", roma: jaRoma,
                               scripts: RomanizationScripts.default.subtracting(.chinese)),
-                "tsukame ! egai ta yume o", "接入: 拼音开关关着,日文歌源读音里的简体字照样按日文补")
+                "tsukame! egai ta yume o", "接入: 拼音开关关着,日文歌源读音里的简体字照样按日文补")
     // 不在日文字集里的简体字单独成片段:按整行(日文)读、归日文开关,不单独判成中文。
     let jisOutsideRoma = "[00:01.00]tsukame ! egai ta 尘 o\n[00:02.00]sora"
     let jisOutsideLyrics = "[00:01.00]つかめ! 描いた尘を\n[00:02.00]空"
     let dustPinyinOff = sourceReading(jisOutsideLyrics, roma: jisOutsideRoma)
     let dustPinyinOn = sourceReading(jisOutsideLyrics, roma: jisOutsideRoma, scripts: RomanizationScripts.default.union(.chinese))
-    expectEqual(dustPinyinOff.map { !$0.contains("尘") && $0.hasPrefix("tsukame ! egai ta ") }, true,
+    expectEqual(dustPinyinOff.map { !$0.contains("尘") && $0.hasPrefix("tsukame! egai ta ") }, true,
                 "接入: 日文字集外的简体字片段,拼音开关关着也按日文补:\(dustPinyinOff ?? "")")
     expectEqual(dustPinyinOn.map { !$0.contains("chén") && !$0.contains("chen") } == true && dustPinyinOn == dustPinyinOff, true,
                 "接入: 日文字集外的简体字片段,拼音开关开着也不补成普通话:\(dustPinyinOn ?? "")")
@@ -303,7 +303,7 @@ func checkWorldRomanization() {
                 "源拼音: 汉字行的拼音照源给的")
 
     // 分词器读不出的简体字按繁体读;古木基文、天城文没有带点写法的点不出字。
-    expectEqual(sourceReading("[00:01.00]つかめ! 描いた梦を\n[00:02.00]空", roma: ""), "tsukame ! egai ta yume o",
+    expectEqual(sourceReading("[00:01.00]つかめ! 描いた梦を\n[00:02.00]空", roma: ""), "tsukame! egai ta yume o",
                 "现算: 日文歌里分词器读不出的简体字按繁体读")
     let unreadBoth = sourceReading("[00:01.00]僕们の歌を\n[00:02.00]空", roma: "")
     expectEqual(unreadBoth.map { $0.contains("们") && !$0.contains("們") }, true, "现算: 繁体也读不出就照原样留着")

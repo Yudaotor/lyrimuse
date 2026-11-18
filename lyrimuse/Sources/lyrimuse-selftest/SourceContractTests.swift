@@ -4937,7 +4937,7 @@ func runSourceContractSettingsTests() {
                     "搜索候选歌词: 自动匹配在飞时不采纳、不标纯音乐")
         // 搜索进度只在侧栏表头下面那一行(用户定的):右边还没有候选时空着,别再放一个大转圈。
         expectEqual(sheet.components(separatedBy: "L10n.t(\"正在查询各个歌词源…\")").count - 1 == 1
-                    && sheet.contains("Text((candidates.isEmpty ? L10n.t(\"正在查询各个歌词源…\") : L10n.t(\"其他歌词源仍在搜索中…\"))"), true,
+                    && sourceHas(sourceBody("private var candidatesHeader: some View", in: sheet), "Text(searchProgressText)"), true,
                     "搜索候选歌词: 搜索进度只在侧栏那一行,右边还没有候选时空着")
         // 来源名、来源色走全局 sourceDisplayName / sourceColor:本地歌词那几家不在 LyricsSource 里(11 章决策 88)。
         expectEqual(!sheet.contains("LyricsSource(rawValue:")

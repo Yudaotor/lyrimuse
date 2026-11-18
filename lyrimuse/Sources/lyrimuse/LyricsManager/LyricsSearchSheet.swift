@@ -234,26 +234,25 @@ struct LyricsSearchSheet: View {
             return rows
         }
     }
-    /// 给侧栏那一行"还在搜索"提示缀的进度,形如 "（还剩 3）"(还有几个源没回)。还没收到任何一行时是空串。
-    /// 不写成「已回 / 总数」:表头右边的徽标已经是「有结果的源 / 总数」(`sourceAvailabilityBadge`),两个分母一样的
-    /// 分数并排,读不出哪个是哪个。
-    ///
-    /// 轮次标识:引擎的兜底轮(首歌手变体/标题反查,见
-    /// 第 09 章)每轮都重新扫全部源,进度"到 8/8 又回到 1/8"——数字回跳没有任何标注,
-    /// 读起来像出了错。第 2 轮起在进度后面缀"［2］"标出轮次(放后面是刻意的);
-    /// 第 1 轮不缀——绝大多数搜索只有一轮,常驻一个"［1］"是噪音,而标识恰好在数字
-    /// 回跳那一刻出现,自己解释自己。
-    private var searchProgressSuffix: String {
-        guard sourcesTotal > 0 else { return "" }
-        let left = max(0, sourcesTotal - sourcesDone)
-        // 这一轮都回完、兜底轮还没起的那几秒不写「还剩 0」(跟前面「仍在搜索中」自相矛盾),只留轮次。
-        let remaining = left > 0 ? String(format: L10n.t("还剩 %@"), "\(left)") : nil
-        if !L10n.usesFullWidthBrackets {
-            let roundSuffix = searchRound >= 2 ? " [\(searchRound)]" : ""
-            return (remaining.map { " (\($0))" } ?? "") + roundSuffix
-        }
-        let roundSuffix = searchRound >= 2 ? "［\(searchRound)］" : ""
-        return (remaining.map { "（\($0)）" } ?? "") + roundSuffix
+    /// 表头那一行「还在搜索」的进度,一句一件事、用「 · 」连起来:「6 个源已有结果 · 还有 7 个源在搜」,第二轮起
+    /// 「第 2 轮：换个写法再搜 · 还有 7 个源在搜」。哪几句、什么时候不写见 `LyricsSearchProgress`;「已有结果」的数跟右边
+    /// 徽标的分子是同一个数,徽标就读得懂了。见 11 章决策 185。
+    private var searchProgressText: String {
+        let responded = Self.allLyricSourceNames.filter(respondedSources.contains).count
+        return LyricsSearchProgress.parts(responded: responded, done: sourcesDone, total: sourcesTotal, round: searchRound)
+            .map { part in
+                switch part {
+                case .querying:
+                    return L10n.t("正在查询各个歌词源…")
+                case let .responded(n):
+                    return String(format: L10n.plural("%@ 个源已有结果", count: n), n.formatted())
+                case let .retrying(round):
+                    return String(format: L10n.t("第 %@ 轮：换个写法再搜"), round.formatted())
+                case let .waiting(n):
+                    return String(format: L10n.plural("还有 %@ 个源在搜", count: n), n.formatted())
+                }
+            }
+            .joined(separator: " · ")
     }
 
     // 歌词源的完整名单,直接读 LyricsSource.allCases(FeatureSettingsStore.swift),别在这里手抄一份。Go / Swift 两份名单
@@ -496,12 +495,12 @@ struct LyricsSearchSheet: View {
     @State private var sourceResumeAt: [String: Double] = [:]
 
     @State private var isSearching = false
-    // 已经回来几个源 / 一共几个 —— 只用来在"还在搜"的提示后面缀一个 (X/Y),让干等的时候
-    // 知道进度在动。总数为 0(还没收到任何一行)时不显示,不写成 (0/0)。
+    // 这一轮已经回来几个源 / 一共几个 —— 给 searchProgressText 算「还有 N 个源在搜」,让干等的时候知道进度在动。
+    // 总数为 0(还没收到任何一行)时不写数。
     @State private var sourcesDone = 0
     @State private var sourcesTotal = 0
-    // 第几轮全源检索(引擎兜底轮每轮把开着的源重扫一遍),给 searchProgressSuffix 的
-    // 轮次前缀用,语义见 LyricsSearchService.SearchUpdate.round。
+    // 第几轮全源检索(引擎兜底轮每轮把开着的源重扫一遍),给 searchProgressText 的
+    // 「第 N 轮」用,语义见 LyricsSearchService.SearchUpdate.round。
     @State private var searchRound = 1
     // searchGeneration:第几轮搜索。load() 有三个入口(.task 首次进入、「重新搜索」按钮、输入框 .onSubmit),
     // 上一轮没结束时都能开下一轮。每轮发一个自增序号,进度回调和收尾都先核对自己还是不是最新那一轮,不是就整段丢弃:
@@ -818,12 +817,11 @@ struct LyricsSearchSheet: View {
             Text("\(searchResults.count)")
                 .font(.headline)
                 .foregroundStyle(.secondary)
-            // 一条候选都还没到时说「正在查询」,到了几条之后说「其它源仍在搜索」。放不下时截尾,徽标不让位。
+            // 搜索中接一句进度(searchProgressText)。放不下时截尾,徽标不让位。
             if isSearching {
                 ProgressView().controlSize(.small)
                     .padding(.leading, 4)
-                Text((candidates.isEmpty ? L10n.t("正在查询各个歌词源…") : L10n.t("其他歌词源仍在搜索中…"))
-                     + searchProgressSuffix)
+                Text(searchProgressText)
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .lineLimit(1)

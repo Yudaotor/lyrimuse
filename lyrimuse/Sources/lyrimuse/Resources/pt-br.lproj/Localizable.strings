@@ -42,6 +42,8 @@
 "%@ 个文件导入失败，其余已导入#one" = "%@ arquivo não pôde ser importado; o restante foi importado";
 "%@ 个歌词源无法连接" = "Não foi possível acessar %@ fontes de letras";
 "%@ 个歌词源无法连接#one" = "Não foi possível acessar %@ fonte de letras";
+"%@ 个源已有结果" = "%@ fontes com resultados";
+"%@ 个源已有结果#one" = "%@ fonte com resultados";
 "%@ 份导入的歌词" = "%@ letras importadas";
 "%@ 份导入的歌词#one" = "%@ letra importada";
 "%@ 分钟" = "%@ min";
@@ -624,7 +626,6 @@
 "其他平台包括 %@" = "Outras plataformas: %@";
 "其他折叠规则" = "Outra regra de junção";
 "其他文字" = "Outras escritas";
-"其他歌词源仍在搜索中…" = "Ainda buscando em outras fontes de letras…";
 "其他歌词源标注的曲目时长与本地一致，该源标注的时长却相差 5% 以上，可能是现场版、混音版等其他录音" = "Outras fontes de letras informam a mesma duração da música local, mas a desta fonte difere em mais de 5%; provavelmente é outra gravação, como uma versão ao vivo ou remix";
 "其余 %@ 个源" = "Mais %@ fontes";
 "其余 %@ 个源#one" = "Mais %@ fonte";
@@ -2393,6 +2394,7 @@
 "第 %@ 天" = "Dia %@";
 "第 %@ 次" = "Reprodução nº %@";
 "第 %@ 次收听" = "Reprodução nº %@";
+"第 %@ 轮：换个写法再搜" = "Rodada %@: outras grafias";
 "第一行" = "Primeira linha";
 "第三方许可" = "Licenças de terceiros";
 "第三行" = "Terceira linha";
@@ -2786,6 +2788,8 @@
 "还剩 %@" = "Restam %@";
 "还原" = "Reverter";
 "还差最后几步：请完成下方标为橙色的项目" = "Quase lá: conclua os itens marcados em laranja abaixo";
+"还有 %@ 个源在搜" = "Faltam %@ fontes";
+"还有 %@ 个源在搜#one" = "Falta %@ fonte";
 "还有 %@ 条" = "e mais %@";
 "还有未完成的项目" = "Há itens pendentes";
 "还没唱到歌词" = "A letra ainda não começou";

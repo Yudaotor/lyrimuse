@@ -450,10 +450,95 @@ public enum Romanizer {
     }
 
     /// 把若干个片段的读音拼成一段罗马音。跟 `japaneseReading` 用同一套促音归并规则,
-    /// 分组渲染时才不会跟整行渲染出现不一致的写法。
+    /// 分组渲染时才不会跟整行渲染出现不一致的写法。标点片段不单独占一个词,贴到相邻的词上(`attachingPunctuation`)。
     public static func joinLatin(_ pieces: [String]) -> String {
-        mergeSokuon(pieces).joined(separator: " ")
+        attachingPunctuation(mergeSokuon(pieces).joined(separator: " "))
     }
+
+    /// 罗马音里单独成词的标点贴到相邻的词上:左括号、左引号贴后一个词,其余贴前一个词(「｢ suki da yo ｣」→「「suki da yo」」,
+    /// 「hontou ni ? ano」→「hontou ni? ano」)。分词器把「。「」、・」转写成半角片假名区的「｡｢｣､･」,换成「.「」,·」。
+    /// 破折号这类连接号照旧两边留空格;词与词之间原有的空白不动。见 10 章决策 76。
+    public static func attachingPunctuation(_ reading: String) -> String {
+        guard reading.unicodeScalars.contains(where: { isAttachablePunctuation($0) || halfwidthPunctuation[$0] != nil })
+        else { return reading }
+        let mapped = String(String.UnicodeScalarView(reading.unicodeScalars.flatMap { scalar -> [Unicode.Scalar] in
+            guard let replacement = halfwidthPunctuation[scalar] else { return [scalar] }
+            return Array(replacement.unicodeScalars)
+        }))
+        var pieces: [(gap: String, text: String)] = []
+        var gap = ""
+        var text = ""
+        for ch in mapped {
+            if ch.isWhitespace {
+                if !text.isEmpty {
+                    pieces.append((gap, text))
+                    gap = ""
+                    text = ""
+                }
+                gap.append(ch)
+            } else {
+                text.append(ch)
+            }
+        }
+        if !text.isEmpty {
+            pieces.append((gap, text))
+            gap = ""
+        }
+        var out: [(gap: String, text: String)] = []
+        var pending: (gap: String, text: String)?
+        for piece in pieces {
+            guard piece.text.unicodeScalars.allSatisfy(isAttachablePunctuation) else {
+                if let held = pending {
+                    out.append((held.gap, held.text + piece.text))
+                    pending = nil
+                } else {
+                    out.append(piece)
+                }
+                continue
+            }
+            if let held = pending {
+                pending = (held.gap, held.text + piece.text)
+            } else if !out.isEmpty, !isOpeningPunctuation(piece.text) {
+                out[out.count - 1].text += piece.text
+            } else {
+                pending = piece
+            }
+        }
+        if let held = pending {
+            if out.isEmpty { out.append(held) } else { out[out.count - 1].text += held.text }
+        }
+        return out.map { $0.gap + $0.text }.joined() + gap
+    }
+
+    /// 这一段是不是只有标点(含连接号、波浪号)。逐词读音里只有标点的片段不标读音。
+    public static func isPunctuationOnly(_ text: String) -> Bool {
+        !text.isEmpty && text.unicodeScalars.allSatisfy {
+            isAttachablePunctuation($0) || halfwidthPunctuation[$0] != nil
+                || $0.properties.generalCategory == .dashPunctuation || $0.properties.generalCategory == .otherPunctuation
+        }
+    }
+
+    /// 贴到相邻词上的标点:括号、引号、句读、问叹号、省略号、波浪号。「&」「/」「·」「—」这类分隔用的照旧两边留空格。
+    private static func isAttachablePunctuation(_ scalar: Unicode.Scalar) -> Bool {
+        switch scalar.properties.generalCategory {
+        case .openPunctuation, .closePunctuation, .initialPunctuation, .finalPunctuation:
+            return true
+        default:
+            return attachablePunctuation.contains(scalar)
+        }
+    }
+
+    private static let attachablePunctuation = Set(".,!?:;…‥、。，．！？：；~～〜〰".unicodeScalars)
+
+    private static func isOpeningPunctuation(_ text: String) -> Bool {
+        text.unicodeScalars.allSatisfy {
+            $0.properties.generalCategory == .openPunctuation || $0.properties.generalCategory == .initialPunctuation
+        }
+    }
+
+    private static let halfwidthPunctuation: [Unicode.Scalar: String] = [
+        "\u{FF61}": ".", "\u{FF62}": "「", "\u{FF63}": "」", "\u{FF64}": ",", "\u{FF65}": "·",
+    ]
 
     /// 从一份已分好词的片段直接派生整行读音 —— 语义等价于 `japaneseReading(text)`
     /// (两条管线的片段级优先级一致:particleLatin > 假名标注 > 分词器转写 > 原文,
@@ -1156,7 +1241,7 @@ public enum Romanizer {
             return tokens
         } ?? []
         guard !tokens.isEmpty else { return nil }
-        return mergeSokuon(tokens).joined(separator: " ")
+        return joinLatin(tokens)
     }
 
     /// 促音「っ」被单独切成一个词时,ICU 转写成字面的 "~tsu" —— 直接显示出来是乱码。

@@ -42,6 +42,8 @@
 "%@ 个文件导入失败，其余已导入#one" = "%@ file failed to import; the rest were imported";
 "%@ 个歌词源无法连接" = "%@ lyrics sources could not be reached";
 "%@ 个歌词源无法连接#one" = "%@ lyrics source could not be reached";
+"%@ 个源已有结果" = "%@ sources have results";
+"%@ 个源已有结果#one" = "%@ source has results";
 "%@ 份导入的歌词" = "%@ imported lyrics files";
 "%@ 份导入的歌词#one" = "%@ imported lyrics file";
 "%@ 分钟" = "%@ min";
@@ -624,7 +626,6 @@
 "其他平台包括 %@" = "Other platforms: %@";
 "其他折叠规则" = "Other fold rule";
 "其他文字" = "Other Scripts";
-"其他歌词源仍在搜索中…" = "Still searching other sources…";
 "其他歌词源标注的曲目时长与本地一致，该源标注的时长却相差 5% 以上，可能是现场版、混音版等其他录音" = "Other lyric sources report the same track length as the local one, but this source’s differs by more than 5%; likely another recording such as a live version or remix";
 "其余 %@ 个源" = "%@ other sources";
 "其余 %@ 个源#one" = "%@ other source";
@@ -2393,6 +2394,7 @@
 "第 %@ 天" = "Day %@";
 "第 %@ 次" = "Play #%@";
 "第 %@ 次收听" = "Play #%@";
+"第 %@ 轮：换个写法再搜" = "Round %@: trying other spellings";
 "第一行" = "First Line";
 "第三方许可" = "Third-Party Licenses";
 "第三行" = "Third Line";
@@ -2786,6 +2788,8 @@
 "还剩 %@" = "%@ left";
 "还原" = "Revert";
 "还差最后几步：请完成下方标为橙色的项目" = "Almost there: complete the items marked in orange below";
+"还有 %@ 个源在搜" = "%@ sources still searching";
+"还有 %@ 个源在搜#one" = "%@ source still searching";
 "还有 %@ 条" = "and %@ more";
 "还有未完成的项目" = "Some Items Need Attention";
 "还没唱到歌词" = "No lyric line yet";

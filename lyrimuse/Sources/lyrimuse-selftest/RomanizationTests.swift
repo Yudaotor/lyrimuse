@@ -8,6 +8,7 @@ import Foundation
 @MainActor
 func runRomanizationTests() {
     runExportRomanizationChecks()
+    checkRomanizationPunctuation()
     // ---- Romanizer: 罗马音客户端兜底(服务端没给 lyrics_roma 时用系统 ICU 音译现算一份) ----
 
     expectEqual(Romanizer.romanize(""), nil, "Romanizer: 空输入返回 nil")
@@ -1913,4 +1914,77 @@ func runRomanizationTests() {
     }
     runKanaReadingContracts()
     checkWorldRomanization()
+}
+
+/// 读音行里的标点不单独成词:贴到相邻的词上;逐词读音里只有标点的格留空。见 10 章决策 76。
+@MainActor
+func checkRomanizationPunctuation() {
+    typealias R = Romanizer
+    let attached: [(String, String)] = [
+        ("｢ suki da yo ｣", "「suki da yo」"),
+        ("hontou ni ? ano yume ni ､ hontou ni ? tte ima mo", "hontou ni? ano yume ni, hontou ni? tte ima mo"),
+        ("kimi wa ｡", "kimi wa."),
+        ("Hello , sekai !", "Hello, sekai!"),
+        ("nee ､ “ suki ” tte", "nee, “suki” tte"),
+        ("( suki ) da yo !", "(suki) da yo!"),
+        ("「 yume 」 ､ 「 kimi 」", "「yume」, 「kimi」"),
+        ("aishi teru … !", "aishi teru…!"),
+        ("kimi 〜 ne ～", "kimi〜 ne～"),
+        ("nani ? ! ", "nani?! "),
+    ]
+    for (raw, want) in attached {
+        expectEqual(R.attachingPunctuation(raw), want, "标点贴词: \(raw)")
+    }
+    for kept in ["rock & roll", "a — i", "a / b", "teu reul  kkae", "plain words", "", "  "] {
+        expectEqual(R.attachingPunctuation(kept), kept, "标点贴词: 分隔用的符号、原有空白不动: [\(kept)]")
+    }
+    expectEqual(R.attachingPunctuation("ra ･ ra ･ rando"), "ra · ra · rando", "标点贴词: 中点换成 ·,两边照旧留空格")
+    expectEqual(R.joinLatin(["｢", "suki", "da", "yo", "｣"]), "「suki da yo」", "标点贴词: joinLatin 拼接时就贴上")
+    for (text, want) in [("｢", true), ("?", true), ("､", true), ("…!", true), ("—", true), ("a", false), ("a?", false), ("", false)] {
+        expectEqual(R.isPunctuationOnly(text), want, "只有标点: \(text)")
+    }
+
+    // 分词器出来的整行读音(现算和引擎预生成是同一个函数):日文全角 / 半角括号、？、、、！
+    let lines: [(String, String)] = [
+        ("「好きだよ」", "「suki da yo」"),
+        ("本当に？あの夢に、本当に？って今も", "hontou ni? ano yume ni, hontou ni? tte ima mo"),
+        ("夏の夜、君と、並ぶ影が二つ", "natsu no yoru, kimi to, narabu kage ga futa tsu"),
+        ("｢好き｣だよ!", "「suki」 da yo!"),
+        ("(好き)だよ！", "(suki) da yo!"),
+        ("愛してる…！", "aishi teru…!"),
+    ]
+    for (line, want) in lines {
+        let reading = R.lineReading(line, songLooksJapanese: true, songScript: .japanese, segments: R.japaneseSegments(line))
+        expectEqual(reading, want, "整行读音: \(line) 的标点贴在相邻的词上")
+        expectEqual(R.romanize(line, japanese: true), reading, "整行读音: \(line) 两条管线一致")
+    }
+
+    // 逐词读音:只有标点的格留空,词带着的标点不进读音。
+    func words(_ texts: [String]) -> [SyncedLyricWord] {
+        texts.enumerated().map { SyncedLyricWord(text: $1, startMs: $0 * 100, durationMs: 100) }
+    }
+    expectEqual(LyricsSyncEngine.buildWordGroups(words: words(["「", "好き", "だよ", "」"]), line: "「好きだよ」",
+                                                  japanese: true)?.map(\.romanization),
+                [nil, "suki", "da yo", nil], "逐词读音: 括号下面的格留空")
+    expectEqual(LyricsSyncEngine.buildWordGroups(words: words(["本当に", "？", "あの", "夢に", "、"]), line: "本当に？あの夢に、",
+                                                  japanese: true)?.map(\.romanization),
+                ["hontou ni", nil, "ano", "yume ni", nil], "逐词读音: ？、下面的格留空")
+    expectEqual(LyricsSyncEngine.buildWordGroups(words: words(["好きだよ」", "!"]), line: "好きだよ」!",
+                                                  japanese: true)?.map(\.romanization),
+                ["suki da yo", nil], "逐词读音: 词带着的标点不进读音")
+
+    // 屏上:源给的 / 存着的预生成读音照原样存,日文行显示时贴上;韩文行不动。
+    let engine = LyricsSyncEngine()
+    engine.load(lyrics: "[00:01.00]「好きだよ」\n[00:03.00]本当に？あの夢に、本当に？って今も\n[00:05.00]夜の空",
+                lyricsTr: "",
+                lyricsRoma: "[00:01.00]｢ suki da yo ｣\n[00:03.00]hontou ni ? ano yume ni ､ hontou ni ? tte ima mo\n[00:05.00]yoru no sora",
+                lyricsYRC: "", romanizationScripts: .default, songIsCantonese: false)
+    expectEqual(engine.activeLine(atMs: 1500)?.romanization, "「suki da yo」", "屏上读音: 存着的「｢ suki da yo ｣」贴上括号")
+    expectEqual(engine.activeLine(atMs: 3500)?.romanization, "hontou ni? ano yume ni, hontou ni? tte ima mo",
+                "屏上读音: 存着的读音里单独的 ? ､ 贴到前一个词")
+    let korean = LyricsSyncEngine()
+    korean.load(lyrics: "[00:01.00]사랑해 , 너를\n[00:03.00]보고 싶어", lyricsTr: "",
+                lyricsRoma: "[00:01.00]saranghae , neoreul\n[00:03.00]bogo sipeo", lyricsYRC: "",
+                romanizationScripts: .default, songIsCantonese: false)
+    expectEqual(korean.activeLine(atMs: 1500)?.romanization, "saranghae , neoreul", "屏上读音: 韩文行源给的读音不动(逐词按词对)")
 }

@@ -13,6 +13,20 @@ func checkLyricsManagerAudit() {
         expectEqual(E.hasTimedLines("[00:01.00]第一句"), true, "拒存判据: 带时间戳的一行")
     }
 
+    // ---- 搜索候选的进度句 ----
+    do {
+        typealias P = LyricsSearchProgress
+        expectEqual(P.parts(responded: 0, done: 0, total: 0, round: 1), [.querying], "搜索进度: 还没收到第一行时说正在查询")
+        expectEqual(P.parts(responded: 0, done: 3, total: 16, round: 1), [.waiting(13)], "搜索进度: 还没有源给结果时只说还有几个在搜")
+        expectEqual(P.parts(responded: 6, done: 9, total: 16, round: 1), [.responded(6), .waiting(7)],
+                    "搜索进度: 第一轮先说几个源已有结果(徽标的分子),再说还有几个在搜")
+        expectEqual(P.parts(responded: 6, done: 16, total: 16, round: 1), [.responded(6)], "搜索进度: 这一轮都回来了不写 0")
+        expectEqual(P.parts(responded: 0, done: 16, total: 16, round: 1), [.querying], "搜索进度: 都回来了又没有结果时不留空")
+        expectEqual(P.parts(responded: 6, done: 4, total: 16, round: 2), [.retrying(round: 2), .waiting(12)],
+                    "搜索进度: 第二轮另说一句,接着说这一轮还有几个在搜")
+        expectEqual(P.parts(responded: 6, done: 20, total: 16, round: 3), [.retrying(round: 3)], "搜索进度: 第三轮照样标轮次,回来的比总数多也不写负数")
+    }
+
     // ---- 接线(契约) ----
     let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
     func source(_ path: String) -> String {
@@ -99,9 +113,21 @@ func checkLyricsManagerAudit() {
                     && searchCLI.contains("cacheKey := fs.String(\"key\", \"\",")
                     && sourceHas(searchCLI, "if *cacheKey != \"\" {\n key = *cacheKey\n }"), true,
                     "搜索候选: 查询词没改过就把条目 key 原样交给引擎,不按剥过括号的歌名重拼")
-        expectEqual(sheet.contains("let remaining = left > 0 ? String(format: L10n.t(\"还剩 %@\"), \"\\(left)\") : nil")
+        // 快照还没读好(首次开窗、放掉后再开)时首数留空,不写假的 0。
+        expectEqual(sourceHas(store, "private var isReleased = true {\n didSet { if summariesLoaded == isReleased { summariesLoaded = !isReleased } }")
+                    && sourceHas(store, "@Published public private(set) var summariesLoaded = false")
+                    && sourceHas(sourceBody("private var sidebarHeader: some View", in: manager),
+                                 "if store.summariesLoaded {\n Text(String(format: L10n.plural(\"共 %@ 首\"")
+                    && sourceHas(manager, "count: store.summariesLoaded && ((count ?? 0) > 0 || status == .all) ? count : nil,")
+                    && sourceHas(sourceBody("private var listHeader: some View", in: manager),
+                                 "if committedSearchText.isEmpty, store.summariesLoaded {\n Text(selectableFiltered.count.formatted())"), true,
+                    "歌词管理: 加载中标题、「全部」胶囊、列表头的首数留空,不显示 0")
+        let progress = sourceBody("private var searchProgressText: String", in: sheet)
+        expectEqual(sourceHas(progress, "let responded = Self.allLyricSourceNames.filter(respondedSources.contains).count")
+                    && sourceHas(progress, "LyricsSearchProgress.parts(responded: responded, done: sourcesDone, total: sourcesTotal, round: searchRound)")
+                    && sourceHas(progress, ".joined(separator: \" · \")")
                     && sheet.contains("Text(\"\\(Self.allLyricSourceNames.filter(respondedSources.contains).count)/\\(availabilityDenominator)\")"), true,
-                    "搜索候选: 不写「还剩 0」;应答源计数只数联网歌词源")
+                    "搜索候选: 进度句「N 个源已有结果」跟徽标分子同一个数,应答源计数只数联网歌词源(11 章决策 185)")
         expectEqual(quick.contains("stored?.lyricsSource") && !quick.contains("EnrichCacheStore.shared.summary(forKey: key)"), true,
                     "搜索候选: 「当前使用」徽标读条目自己的来源,不依赖歌词管理的快照")
     }

@@ -1435,11 +1435,13 @@ struct LyricsManagerView: View {
             Text(L10n.t("歌词管理"))
                 .font(.system(size: 15, weight: .bold))
                 .lineLimit(1)
-            Text(String(format: L10n.plural("共 %@ 首", count: store.summaries.count), store.summaries.count.formatted()))
-                .font(.system(size: 12))
-                .monospacedDigit()
-                .foregroundStyle(.secondary)
-                .lineLimit(1)
+            if store.summariesLoaded {
+                Text(String(format: L10n.plural("共 %@ 首", count: store.summaries.count), store.summaries.count.formatted()))
+                    .font(.system(size: 12))
+                    .monospacedDigit()
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+            }
             Spacer(minLength: 4)
             // 两颗都是玻璃,同详情顶栏那一排(「⋯」同 moreMenuButton)。
             Button(action: refreshWithFeedback) {
@@ -1650,8 +1652,9 @@ struct LyricsManagerView: View {
         Button {
             statusFilter = statusFilter == status ? .all : status
         } label: {
+            // 快照还没读好时不标数(不写 0),见 store.summariesLoaded。
             LyricsManagerChip(title: Self.statusTitle(status),
-                              count: (count ?? 0) > 0 || status == .all ? count : nil,
+                              count: store.summariesLoaded && ((count ?? 0) > 0 || status == .all) ? count : nil,
                               selected: statusFilter == status)
         }
         .lyricsManagerChipButton(selected: statusFilter == status)
@@ -1775,7 +1778,7 @@ struct LyricsManagerView: View {
             Text(listTitle)
                 .font(.system(size: 13, weight: .semibold))
                 .lineLimit(1)
-            if committedSearchText.isEmpty {
+            if committedSearchText.isEmpty, store.summariesLoaded {
                 Text(selectableFiltered.count.formatted())
                     .font(.system(size: 13))
                     .monospacedDigit()

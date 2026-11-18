@@ -349,7 +349,12 @@ public final class EnrichCacheStore: ObservableObject {
     private var raw = EnrichRawSnapshot()
     // true = 内存里没有可用的快照:从没读过、上次读盘失败,或被 `dropSnapshotIfIdle` 清掉了。改动交给引擎
     // 之后据此决定要不要 reload(没人在看就不读)。
-    private var isReleased = true
+    private var isReleased = true {
+        didSet { if summariesLoaded == isReleased { summariesLoaded = !isReleased } }
+    }
+    /// 列表是不是一份读好的快照(`isReleased` 的反面)。首次开窗、快照放掉后再开的那几秒是 false:界面的首数留空,
+    /// 不写 0,看着像歌词库被清空了。见 11 章决策 186。
+    @Published public private(set) var summariesLoaded = false
     // 正在看这份快照的界面(「歌词管理」窗口)。都不看了 `releaseDelay` 之后清掉快照:
     // 开着「歌词管理」时它连同列表约占 300 MB。
     private var snapshotHolders: Set<String> = []
