@@ -252,6 +252,9 @@ func runCogTests() {
                      S.kind(bundleID: cog, title: "NoTag.mp3", artist: nil, duration: 20) == nil,
                      S.kind(bundleID: cog, title: "radio", artist: nil, duration: nil) == nil],
                     [true, true, true], "Cog 放流: 只认 Cog、只认时长报 0 的那份")
+        expectEqual([S.isNetworkStream(bundleID: cog, duration: 0), S.isNetworkStream(bundleID: cog, duration: 114.477),
+                     S.isNetworkStream(bundleID: cog, duration: nil), S.isNetworkStream(bundleID: "com.coppertino.Vox", duration: 0)],
+                    [true, false, false, false], "Cog 放流: 认网络流只看 Cog 和时长报 0")
         expectEqual([PlayerTitleSplit.hasAudioExtension("a.MP3"), PlayerTitleSplit.hasAudioExtension("radio"),
                      PlayerTitleSplit.hasAudioExtension(".mp3"), PlayerTitleSplit.hasAudioExtension("live.stream")],
                     [true, false, false, false], "Cog 放流: 认音频扩展名")
@@ -405,5 +408,8 @@ func runCogTests() {
                     true, "Cog 接线: 辅助功能授权说明写到放流时读播放列表核对歌手")
         expectEqual(sourceHas(sourceText("lyrimuse/UI/IdlePlaybackActions.swift"), "case .swinsian, .kuwo, .cog: PlayerProcess.pid(bundleID: player.bundleIdentifier) != nil"),
                     true, "Cog 接线: 停播页只在它开着时给继续播放")
+        expectEqual(sourceHas(sourceBody("public static func applied(to snapshot: MediaControlSnapshot?", in: sourceText("LyrimuseCore/Local/PlayerOpenFile.swift")),
+                              "bundleIDs.contains(bundleID),\n              !CogStream.isNetworkStream(bundleID: bundleID, duration: snapshot.duration),"),
+                    true, "Cog 接线: 按开着的文件认曲目跳过放流(同名本机文件的时长不套到电台里的歌上)")
     }
 }

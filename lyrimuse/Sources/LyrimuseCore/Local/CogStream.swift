@@ -25,9 +25,15 @@ public enum CogStream {
         case placeholder
     }
 
+    /// Cog 在放网络流:只认 Cog、只认时长报 0 的那份(本地文件的时长都大于 0)。纯函数,selftest 覆盖。
+    public static func isNetworkStream(bundleID: String?, duration: Double?) -> Bool {
+        guard bundleID == Self.bundleID, let duration else { return false }
+        return !(duration > 0)
+    }
+
     /// 不是 Cog 放流(别的播放器、本地文件)为 nil。纯函数,selftest 覆盖。
     public static func kind(bundleID: String?, title: String?, artist: String?, duration: Double?) -> Kind? {
-        guard bundleID == Self.bundleID, let duration, !(duration > 0) else { return nil }
+        guard isNetworkStream(bundleID: bundleID, duration: duration) else { return nil }
         if !(artist ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { return .song }
         guard let title, PlayerTitleSplit.hasAudioExtension(title), let named = VoxPlayerInfo.fileNameIdentity(title) else {
             return .placeholder

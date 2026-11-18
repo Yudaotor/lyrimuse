@@ -137,7 +137,10 @@ public enum PlayerOpenFile {
 
     /// 换到快照上:对上了开着的文件、标签里有歌名就换成标签那份;都不用换时原样返回。会读盘(同一首只读一次),在轮询的后台线程上调。
     public static func applied(to snapshot: MediaControlSnapshot?, now: Date = Date()) -> MediaControlSnapshot? {
+        // Cog 放网络流时没有开着的文件:按(歌手、歌名)记下的本机文件跟电台里的歌同名时,别把它的时长和标签套上去
+        // (有曲长、没位置的快照下游每拍按 0 秒重锚)。见 02 章决策 275。
         guard let snapshot, !SourceKnockout.isOut(.playerFile), let bundleID = snapshot.bundleIdentifier, bundleIDs.contains(bundleID),
+              !CogStream.isNetworkStream(bundleID: bundleID, duration: snapshot.duration),
               let title = snapshot.title, !title.isEmpty,
               let file = fileIdentity(artist: snapshot.artist, title: title, duration: snapshot.duration,
                                       pid: snapshot.processIdentifier ?? PlayerProcess.pid(bundleID: bundleID).map { Int($0) },
