@@ -122,3 +122,31 @@ func foldFullwidthAlnum(s string) string {
 func isFullwidthAlnumOrSpace(r rune) bool {
 	return r == '\u3000' || (r >= '０' && r <= '９') || (r >= 'Ａ' && r <= 'Ｚ') || (r >= 'ａ' && r <= 'ｚ')
 }
+
+const (
+	devanagariChandrabindu = rune(0x0901)
+	devanagariAnusvara     = rune(0x0902)
+	devanagariNukta        = rune(0x093C)
+)
+
+// looseMark:比对用的归一化里组合符号 r 留不留、留成什么。婆罗米系文字(天城文、孟加拉文、泰米尔文、泰卢固文……)
+// 和泰文的元音符号、virama、声调符号是拼写的一部分,去掉就成了另一个词(दिल 与 दल 只差一个元音符号),
+// 跟字母一样留下。折掉的是写不写两可的那类:通用组合附加符号(文字属性 Inherited:拉丁、希腊、西里尔的变音,
+// 假名浊点)、希伯来文与阿拉伯文的元音点、天城文 nukta;天城文 chandrabindu 折成 anusvara。见 09 章决策 384。
+func looseMark(r rune) (rune, bool) {
+	switch {
+	case !unicode.Is(unicode.M, r), r == devanagariNukta, unicode.In(r, unicode.Inherited, unicode.Hebrew, unicode.Arabic):
+		return 0, false
+	case r == devanagariChandrabindu:
+		return devanagariAnusvara, true
+	}
+	return r, true
+}
+
+// looseKeyRune:比对键里留下的字符 —— 字母、数字,加上 looseMark 留下的组合符号。
+func looseKeyRune(r rune) (rune, bool) {
+	if unicode.IsLetter(r) || unicode.IsDigit(r) {
+		return r, true
+	}
+	return looseMark(r)
+}

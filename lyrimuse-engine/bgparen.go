@@ -100,12 +100,12 @@ func parenBGHasWord(s string) bool {
 	return false
 }
 
-// parenBGNormKey:配对用的键,只留字母和数字、转小写。
+// parenBGNormKey:配对用的键,只留字母和数字(looseKeyRune)、转小写。
 func parenBGNormKey(s string) string {
 	var b strings.Builder
 	for _, r := range s {
-		if unicode.IsLetter(r) || unicode.IsDigit(r) {
-			b.WriteRune(unicode.ToLower(r))
+		if k, ok := looseKeyRune(r); ok {
+			b.WriteRune(unicode.ToLower(k))
 		}
 	}
 	return b.String()

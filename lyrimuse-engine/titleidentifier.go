@@ -242,14 +242,14 @@ func versionLabelBan(s string) (string, bool) {
 	return versionLabelParts(s)
 }
 
-// versionLabelParts:去掉标注词之后的那一段按分隔符拆开、每段只留字母和数字、排好序连起来;什么都不剩时 ok 为假。
+// versionLabelParts:去掉标注词之后的那一段按分隔符拆开、每段只留字母和数字(looseKeyRune)、排好序连起来;什么都不剩时 ok 为假。
 func versionLabelParts(s string) (string, bool) {
 	var parts []string
 	for _, seg := range versionLabelSeparatorRe.Split(s, -1) {
 		var b strings.Builder
 		for _, r := range seg {
-			if unicode.IsLetter(r) || unicode.IsDigit(r) {
-				b.WriteRune(r)
+			if k, ok := looseKeyRune(r); ok {
+				b.WriteRune(k)
 			}
 		}
 		if b.Len() > 0 {

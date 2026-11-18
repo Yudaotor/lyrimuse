@@ -5,7 +5,6 @@ import (
 	"sort"
 	"strconv"
 	"strings"
-	"unicode"
 )
 
 // LRC与YRC 时间轴自洽修复。
@@ -68,13 +67,13 @@ func yrcLineHeads(yrc string) []yrcLineHead {
 }
 
 // normTimelineText 是配对用的归一化 —— 繁转简(实测有条目 LRC 繁体、YRC 简体,不归一化
-// 配对数直接 0)、小写、只留字母/数字/汉字/假名(unicode.IsLetter 同时覆盖三者)。
+// 配对数直接 0)、小写、只留字母/数字/汉字/假名(looseKeyRune)。
 func normTimelineText(s string) string {
 	s = toSimplified(strings.ToLower(s))
 	var b strings.Builder
 	for _, r := range s {
-		if unicode.IsLetter(r) || unicode.IsDigit(r) {
-			b.WriteRune(r)
+		if k, ok := looseKeyRune(r); ok {
+			b.WriteRune(k)
 		}
 	}
 	return b.String()

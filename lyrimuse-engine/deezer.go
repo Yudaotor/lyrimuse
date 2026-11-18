@@ -721,12 +721,12 @@ func deezerBuildYRC(lines []deezerWordLine) string {
 	return strings.TrimSuffix(b.String(), "\n")
 }
 
-// deezerTextKey 是逐字行与逐行比对文字用的归一形:只留字母和数字、转小写。
+// deezerTextKey 是逐字行与逐行比对文字用的归一形:只留字母和数字(looseKeyRune)、转小写。
 func deezerTextKey(s string) string {
 	var b strings.Builder
 	for _, r := range strings.ToLower(s) {
-		if unicode.IsLetter(r) || unicode.IsDigit(r) {
-			b.WriteRune(r)
+		if k, ok := looseKeyRune(r); ok {
+			b.WriteRune(k)
 		}
 	}
 	return b.String()

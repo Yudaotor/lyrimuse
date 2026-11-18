@@ -324,12 +324,12 @@ func headerContainsAny(s string, subs []string) bool {
 	return false
 }
 
-// headerNorm 只留字母和数字再小写 —— 空格/标点/大小写在抬头和本地标签之间从来对不齐。
+// headerNorm 只留字母和数字(looseKeyRune)再小写 —— 空格/标点/大小写在抬头和本地标签之间从来对不齐。
 func headerNorm(s string) string {
 	var b strings.Builder
 	for _, r := range s {
-		if unicode.IsLetter(r) || unicode.IsDigit(r) {
-			b.WriteRune(unicode.ToLower(r))
+		if k, ok := looseKeyRune(r); ok {
+			b.WriteRune(unicode.ToLower(k))
 		}
 	}
 	return b.String()

@@ -55,7 +55,7 @@ func accentSplitPoint(a, b string) bool {
 }
 
 func isWordRune(r rune) bool {
-	return unicode.IsLetter(r) || unicode.Is(unicode.Mn, r)
+	return unicode.IsLetter(r) || unicode.Is(unicode.M, r)
 }
 
 // trailingLetters / leadingLetters:片段末尾 / 开头的连续字母(含组合附加符号)。

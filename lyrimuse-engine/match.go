@@ -1196,7 +1196,8 @@ func applyWordTimingTitleOverride(results []scoredLyricCandidateResult) {
 	winner.ScoreTerms = append(winner.ScoreTerms, scoreTerm{Kind: scoreTermWordTimingOverride, Points: -wtPoints})
 }
 
-// normLoose lowercases and drops everything but letters/digits (keeps CJK), so
+// normLoose lowercases and drops everything but letters/digits (keeps CJK, and the
+// combining marks looseMark keeps), so
 // "BLOOD ON THE DANCE FLOOR/ HIStory In The Mix" and "Blood On the Dance Floor:
 // HIStory In the Mix" compare equal when matching albums across services.
 // 顺带先过一遍 toSimplified——候选的标题/专辑字段有时是简体、本地 Apple Music 标签是
@@ -1237,8 +1238,8 @@ func normLooseUncached(s string) string {
 	// 变音折叠、全角字母数字折成半角(foldFullwidthAlnum)跟 toSimplified 同一个下沉位置、同一个理由:在这里做一次,全部源的匹配
 	// 同时受益,而不是让每个调用点各自记得处理(见 fold.go)。
 	for _, r := range foldDiacritics(strings.ToLower(toSimplified(foldFullwidthAlnum(s)))) {
-		if unicode.IsLetter(r) || unicode.IsDigit(r) {
-			b.WriteRune(r)
+		if k, ok := looseKeyRune(r); ok {
+			b.WriteRune(k)
 		}
 	}
 	return b.String()
@@ -2294,6 +2295,13 @@ func albumTokens(s string) map[string]bool {
 		cur = cur[:0]
 	}
 	for _, r := range s {
+		if unicode.Is(unicode.M, r) {
+			// 组合符号跟着前一个字,不断词;留不留同 normLoose(looseMark)。
+			if m, ok := looseMark(r); ok && prevKind != kindNone {
+				cur = append(cur, m)
+			}
+			continue
+		}
 		k := kindNone
 		switch {
 		case unicode.IsDigit(r):
@@ -2759,6 +2767,13 @@ func versionTagTokens(seg string) []string {
 		}
 	}
 	for _, r := range foldDiacritics(strings.ToLower(toSimplified(seg))) {
+		if unicode.Is(unicode.M, r) {
+			// 组合符号跟着前一个字,不断词;留不留同 normLoose(looseMark)。
+			if m, ok := looseMark(r); ok && prev != kindNone {
+				cur = append(cur, m)
+			}
+			continue
+		}
 		k := kindNone
 		switch {
 		case unicode.IsDigit(r):
@@ -3780,7 +3795,7 @@ func contentWordCount(lyrics string) int {
 			case unicode.In(r, unicode.Han, unicode.Hiragana, unicode.Katakana, unicode.Hangul):
 				n++
 				inWord = false
-			case unicode.IsLetter(r) || unicode.IsDigit(r) || unicode.Is(unicode.Mn, r):
+			case unicode.IsLetter(r) || unicode.IsDigit(r) || unicode.Is(unicode.M, r):
 				if !inWord {
 					n++
 				}
