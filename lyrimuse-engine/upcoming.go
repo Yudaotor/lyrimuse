@@ -127,6 +127,9 @@ func upcomingFromQueue(artist, title, album, bundleID string, durationSecs float
 	case myGoMusicBundleID:
 		// 没有对外队列接口,读它的会话快照(mygoqueue.go;最多晚 30 秒,当前这首对不上就退回)。
 		return myGoUpcoming(artist, title, n)
+	case cogBundleID:
+		// 脚本接口只给当前那一条,读它沙盒容器里的库(cogqueue.go)。
+		return cogUpcoming(artist, title, n)
 	case weReadBundleID:
 		// 听书整段按有声内容处理、开播就不预取(playerMarksSpoken);走到这里也没有可预取的歌,不退回同专辑预取。
 		return nil, true
@@ -255,6 +258,8 @@ func upcomingQueueStamp(bundleID string) string {
 		return foobarQueueStamp()
 	case myGoMusicBundleID:
 		return myGoQueueStamp()
+	case cogBundleID:
+		return cogQueueStamp()
 	}
 	return ""
 }

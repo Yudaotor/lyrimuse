@@ -241,6 +241,9 @@ extension PlaybackPlayer {
         /// 读界面进度条把整秒的位置补准(Pine Player `PinePlayhead`),读播放列表给预解析(`PinePlaylist`),按菜单切循环(`PineMenuControl`),
         /// 读写音量滑块(`PineVolume`),失焦时按播放控制菜单(`PlaybackMenuControl`)。
         case refinesProgress
+        /// 读窗口里的 Position 滑块校准开播、恢复那一拍的位置并量变速(Cog `CogPlayhead`),按菜单「Playlist」切随机 / 循环
+        /// (`CogMenuControl`),读音量滑块、按菜单 Volume Up / Down 逐下调音量(`CogVolume`),失焦时按「Control」菜单里的播放 / 暂停、上一首、下一首(`PlaybackMenuControl`)。
+        case calibratesAndPressesPlayMode
         /// 读、按主窗口播放条上的随机 / 循环键,读写音量滑块(Audirvana `AudirvanaControls`);播放控制走它的脚本,不要这项权限。
         case adjustsModeAndVolume
         /// 读、按窗口播放条上那颗模式键(酷我 `KuwoModeControl`),按「编辑」菜单里的收藏 / 取消收藏(`KuwoFavoriteControl`),
@@ -259,6 +262,7 @@ extension PlaybackPlayer {
         case .amazonMusic: return .calibratesProgress
         case .reamp, .foobar2000: return .pressesPlayMode
         case .pinePlayer: return .refinesProgress
+        case .cog: return .calibratesAndPressesPlayMode
         case .audirvana: return .adjustsModeAndVolume
         default: return nil
         }
@@ -278,16 +282,16 @@ extension PlaybackPlayer {
     public var fullDiskAccessUse: FullDiskAccessUse? {
         guard needsFullDiskAccess else { return nil }
         switch self {
-        case .soda, .vox: return .readsQueue
+        case .soda, .vox, .cog: return .readsQueue
         case .kuwo: return .readsLyricsQueueFavoritesAndCovers
         default: return .readsLyricsAndQueue
         }
     }
 
     /// 引擎本机数据访问状态里这家的来源名(`localcacheprobe.go` `localCacheClientPaths` 的键):有自家歌词源的就是歌词源的名字,
-    /// VOX 只读播放列表、用 `vox`。
+    /// VOX、Cog 只读播放列表,用各自的 id(`vox`、`cog`)。
     public var localCacheSource: String? {
-        self == .vox ? "vox" : nativeLyricSource
+        self == .vox || self == .cog ? rawValue : nativeLyricSource
     }
 
     /// 「自动化」权限替这个播放器做什么。引导页、设置页那张卡的说明按它分开写。

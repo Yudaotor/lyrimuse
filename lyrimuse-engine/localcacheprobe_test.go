@@ -18,7 +18,7 @@ func TestPlayersNeedFullDiskAccessMatchesClientPaths(t *testing.T) {
 		&qqLocalDBOverride, &qqUpcomingOverride, &neteaseLocalDBOverride, &neteaseUpcomingOverride,
 		&sodaLocalQueueOverride, &sodaPreloadOverride, &applemusicLocalDirOverride, &spotifyISRCUsersDirOverride,
 		&kkboxLocalStorageOverride, &kkboxCacheDirOverride, &lxMusicDataDirOverride, &voxUpcomingOverride,
-		&kuwoLocalDirOverride, &kuwoUpcomingOverride,
+		&kuwoLocalDirOverride, &kuwoUpcomingOverride, &cogUpcomingOverride, &cogPrefsOverride,
 	}
 	saved := make([]string, len(overrides))
 	for i, o := range overrides {
@@ -53,6 +53,7 @@ func TestPlayersNeedFullDiskAccessMatchesClientPaths(t *testing.T) {
 		playerWeRead:      "",
 		playerMyGoMusic:   "",
 		playerKuwo:        "kuwo",
+		playerCog:         "cog",
 	}
 	paths := localCacheClientPaths()
 	for _, player := range allPlayerIDs {

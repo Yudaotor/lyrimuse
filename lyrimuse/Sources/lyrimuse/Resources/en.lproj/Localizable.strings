@@ -1321,6 +1321,7 @@
 "开源推送服务：在手机或电脑上安装 ntfy 并订阅主题即可接收，无需注册，也可自建服务器" = "An open-source push service. Install ntfy on your phone or computer and subscribe to a topic; no sign-up needed, and you can self-host it";
 "开源的 YouTube Music 桌面客户端" = "An open-source desktop client for YouTube Music";
 "开源的多音源音乐播放器" = "An open-source music player with multiple audio sources";
+"开源的本地音乐播放器，游戏音乐等冷门格式也能放" = "An open-source local music player that also plays niche formats like game music";
 "开源的音乐播放器，曲库来自国内各大平台" = "An open-source player for music from Chinese streaming platforms";
 "开源组件与词典" = "Open-source components and dictionaries";
 "开源许可证" = "Open-Source License";
@@ -1504,6 +1505,7 @@
 "换行（默认）：一行显示不下时折行显示\n滚动：每句只占一行，超出部分横向滚动；有逐字时间轴时随演唱进度滚动" = "Wrap (default): long lines fold onto the next line\nScroll: every line stays one line tall and the overflow scrolls sideways — following the singing when the line has word-level timings";
 "换行（默认）：一行显示不下时折行显示，窗口随之增高\n滚动：每句只占一行，超出部分横向滚动；有逐字时间轴时随演唱进度滚动" = "Wrap (default): long lines fold onto the next line and the window grows taller\nScroll: every line stays one line tall and the overflow scrolls sideways — following the singing when the line has word-level timings";
 "授权可能已在 Last.fm 网站上被撤销，重新连接即可恢复" = "The authorization may have been revoked on the Last.fm website. Reconnect to resume";
+"授权后，Lyrimuse 将读取%@的进度条校准播放位置，读取其随机和循环状态，并在你点按这两个按钮时代为操作其菜单中的对应项，也可读取和调节其音量；系统媒体焦点被其他 App 占用时，也可暂停、恢复和切换上一首或下一首。未授权时仍可显示歌词，但开播后歌词可能差零点几秒，不提供随机、循环按钮和音量调节，失去焦点时也无法控制播放" = "With permission, Lyrimuse reads the progress bar of %@ to correct the playback position, reads whether shuffle and repeat are on and uses the matching menu item when you click one of those buttons, reads and sets its volume, and can pause, resume and skip tracks while another app holds the system media focus. Lyrics still work without permission, but they may be a fraction of a second off after playback starts, the shuffle, repeat and volume controls are unavailable and playback can’t be controlled without the media focus";
 "授权后，Lyrimuse 将读取%@的随机和循环状态，并在你点按这两个按钮时代为操作其菜单中的对应项，也可读取和调节其音量；系统媒体焦点被其他 App 占用时，也可暂停、恢复和切换上一首或下一首。未授权时仍可显示歌词，但不提供随机、循环按钮和音量调节，失去焦点时也无法控制播放" = "With permission, Lyrimuse reads whether shuffle and repeat are on in %@ and uses the matching menu item when you click one of those buttons, reads and sets its volume, and can pause, resume and skip tracks while another app holds the system media focus. Lyrics still work without permission, but the shuffle, repeat and volume controls are unavailable and playback can’t be controlled without the media focus";
 "授权后，Lyrimuse 将读取%@窗口上的播放模式，并在你点按随机或循环按钮时代为按下其模式按钮，点按喜欢时代为操作其收藏菜单；系统媒体焦点被其他 App 占用时，也可暂停、恢复和切换上一首或下一首。未授权时仍可显示歌词，但不提供随机、循环与喜欢按钮，失去焦点时也无法控制播放" = "With permission, Lyrimuse reads the play mode shown in the %@ window and presses its mode button for you when you click shuffle or repeat, presses its favorite menu item when you click Favorite, and can pause, resume and skip tracks while another app holds the system media focus. Lyrics still work without permission, but the shuffle, repeat and Favorite buttons are unavailable and playback can’t be controlled without the media focus";
 "授权后，Lyrimuse 将读取%@窗口上的随机和循环状态，并在你点按这两个按钮时代为按下对应按钮，也可读取和调节其音量。未授权时仍可显示歌词和控制播放，但不提供随机、循环按钮和音量调节" = "With permission, Lyrimuse reads whether shuffle and repeat are on in the %@ window and presses the matching button there when you click one of those buttons, and reads and sets its volume. Lyrics and playback controls still work without permission, but the shuffle, repeat and volume controls are unavailable";
@@ -1888,6 +1890,7 @@
 "未获得辅助功能权限，%@ 不显示随机、循环按钮和音量调节" = "Accessibility permission is missing: %@ has no shuffle, repeat or volume controls";
 "未获得辅助功能权限，%@ 不显示随机、循环按钮和音量调节，失去系统媒体焦点时也无法控制暂停、恢复和切换上一首或下一首" = "Accessibility permission is missing: %@ has no shuffle, repeat or volume controls, and can’t pause, resume or skip tracks without system media focus";
 "未获得辅助功能权限，%@ 失去系统媒体焦点时无法控制暂停、恢复和切换上一首或下一首" = "Accessibility permission is missing: %@ can’t pause, resume or skip tracks without system media focus";
+"未获得辅助功能权限，%@ 开播后歌词可能差零点几秒，不显示随机、循环按钮和音量调节，失去系统媒体焦点时也无法控制暂停、恢复和切换上一首或下一首" = "Accessibility permission is missing: lyrics for %@ may be a fraction of a second off after playback starts, there are no shuffle, repeat or volume controls, and it can’t pause, resume or skip tracks without system media focus";
 "未获得辅助功能权限，%@ 拖动进度后歌词可能差半秒左右，不显示循环按钮和音量调节，失去焦点时也无法控制播放" = "No Accessibility permission; lyrics for %@ may be off by about half a second after seeking, the repeat button and volume control are hidden, and playback can’t be controlled while focus is elsewhere";
 "未获得辅助功能权限，无法校准 %@ 的播放进度" = "No Accessibility permission; %@’s progress cannot be calibrated";
 "未获授权" = "Not granted";
@@ -2691,6 +2694,7 @@
 "请开启此权限，以显示%@的随机、循环与喜欢按钮，并在失去系统媒体焦点时控制暂停、恢复和切换上一首或下一首" = "Enable this permission to show the shuffle, repeat and Favorite buttons for %@ and to pause, resume and skip tracks when it loses system media focus";
 "请开启此权限，以显示%@的随机、循环按钮和音量调节" = "Enable this permission to show the shuffle, repeat and volume controls for %@";
 "请开启此权限，以显示%@的随机、循环按钮和音量调节，并在失去系统媒体焦点时控制暂停、恢复和切换上一首或下一首" = "Enable this permission to show the shuffle, repeat and volume controls for %@ and to pause, resume and skip tracks when it loses system media focus";
+"请开启此权限，以校准%@开播后的播放位置，显示随机、循环按钮和音量调节，并在失去系统媒体焦点时控制暂停、恢复和切换上一首或下一首" = "Enable this permission to correct the playback position of %@ after playback starts, show the shuffle, repeat and volume controls, and pause, resume and skip tracks when it loses system media focus";
 "请开启此权限，以校准%@拖动进度后的播放位置、显示循环按钮和音量调节，并在失去系统媒体焦点时控制播放" = "Turn this on to calibrate the position for %@ after seeking, show its repeat button and volume control, and control playback when it loses the system media focus";
 "请打开 Discord" = "Discord needs to be open";
 "请按下快捷键…" = "Type Shortcut…";
@@ -2759,6 +2763,7 @@
 "辅助功能权限可显示%@的随机、循环与喜欢按钮，也可在系统媒体焦点被其他 App 占用时，通过菜单暂停、恢复和切换上一首或下一首" = "Accessibility permission enables the shuffle, repeat and Favorite buttons for %@, and lets Lyrimuse pause, resume and skip tracks through its menus while another app holds the system media focus";
 "辅助功能权限可显示%@的随机、循环按钮和音量调节" = "Accessibility permission enables shuffle, repeat and volume for %@";
 "辅助功能权限可显示%@的随机、循环按钮和音量调节，也可在系统媒体焦点被其他 App 占用时控制暂停、恢复和切换上一首或下一首" = "Accessibility permission enables shuffle, repeat and volume for %@, and lets Lyrimuse pause, resume and skip tracks when another app holds system media focus";
+"辅助功能权限可让%@开播后的歌词更准，显示随机、循环按钮和音量调节，也可在系统媒体焦点被其他 App 占用时控制暂停、恢复和切换上一首或下一首" = "Accessibility permission keeps lyrics for %@ accurate after playback starts, enables shuffle, repeat and volume, and lets Lyrimuse pause, resume and skip tracks when another app holds system media focus";
 "辅助功能权限可让%@拖动进度后的歌词更准、显示循环按钮和音量调节，也可在系统媒体焦点被其他 App 占用时，通过菜单暂停、恢复和切换上一首或下一首" = "Accessibility permission keeps lyrics for %@ accurate after seeking, enables its repeat button and volume control, and lets Lyrimuse pause, resume and skip tracks through its menus while another app holds the system media focus";
 "输入收起" = "Collapse While Typing";
 "输入时收起" = "Collapse While Typing";

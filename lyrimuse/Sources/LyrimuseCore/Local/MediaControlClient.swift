@@ -1210,6 +1210,9 @@ public enum MediaControlClient {
             if target.bundleID == PinePlayerInfo.bundleID {
                 snapshot = pineProbedSnapshot(probed.snapshot, anchor: probed.anchor, now: now)
             }
+            if target.bundleID == CogPlayhead.bundleID {
+                snapshot = cogProbedSnapshot(probed.snapshot, anchor: probed.anchor, now: now)
+            }
             if target.bundleID == PlaybackPlayer.foobar2000.bundleIdentifier {
                 snapshot = foobarProbedSnapshot(probed.snapshot, now: now)
             }
@@ -2280,6 +2283,9 @@ public enum MediaControlClient {
             if target.bundleID == PinePlayerInfo.bundleID {
                 snapshot = pineProbedSnapshot(probed.snapshot, anchor: probed.anchor, now: now)
             }
+            if target.bundleID == CogPlayhead.bundleID {
+                snapshot = cogProbedSnapshot(probed.snapshot, anchor: probed.anchor, now: now)
+            }
             if target.bundleID == PlaybackPlayer.foobar2000.bundleIdentifier {
                 snapshot = snapshot.map { foobarProbedSnapshot($0, now: now) }
             }
@@ -2936,6 +2942,25 @@ public enum MediaControlClient {
             if reading.precise { snapshot.positionIsPrecise = true }
             snapshot.republishDueBy = reading.dueBy
         }
+        return snapshot
+    }
+
+    /// 按 bundle id 单问到的 Cog 那份(焦点被别的 App 占着时):位置过主路径同一块表(`CogPlayhead`)。单问那份没有原始锚点时原样交回。
+    private static func cogProbedSnapshot(_ probed: MediaControlSnapshot, anchor: NowPlayingClientsProbe.SessionAnchor,
+                                          now: Date) -> MediaControlSnapshot {
+        var snapshot = probed
+        if snapshot.processIdentifier == nil { snapshot.processIdentifier = anchor.processIdentifier.map { Int($0) } }
+        guard let reading = CogPlayhead.reading(
+            track: probed.trackKey, playing: probed.playing == true, anchorElapsed: probed.anchorElapsedTime,
+            anchorAt: anchor.timestamp.map { Date(timeIntervalSince1970: $0) }, duration: probed.duration,
+            pid: snapshot.processIdentifier, now: now) else { return snapshot }
+        let pid = snapshot.processIdentifier
+        let rate = reading.rate != 1 && probed.playing == true ? reading.rate : nil
+        snapshot = snapshot.withPlayerClock(reading.position, capturedAt: now, rate: rate)
+        snapshot.processIdentifier = pid
+        snapshot.nowPlayingItemID = probed.nowPlayingItemID
+        if reading.precise { snapshot.positionIsPrecise = true }
+        snapshot.republishDueBy = reading.dueBy
         return snapshot
     }
 
@@ -4066,6 +4091,12 @@ public enum MediaControlClient {
             ? PinePlayhead.reading(track: trackKey, playing: playing == true, anchorElapsed: raw.elapsedTime,
                                    anchorAt: timestampDate, duration: raw.duration, pid: raw.processIdentifier, now: sampledAt)
             : nil
+        // Cog 恢复、点播、冷启动的锚点不准,开了变速还照报速率 1:位置换成 CogPlayhead 那块表(按 Position 滑块校准),理由同 Amazon。
+        let cog = bundleID == CogPlayhead.bundleID && !isRadio
+            ? CogPlayhead.reading(track: trackKey, playing: playing == true, anchorElapsed: raw.elapsedTime,
+                                  anchorAt: timestampDate, duration: raw.duration, pid: raw.processIdentifier, now: sampledAt)
+            : nil
+        let cogRate = cog.flatMap { $0.rate != 1 && playing == true ? $0.rate : nil }
         // Swinsian 的位置换成 SwinsianPlayhead 那块表:按脚本整秒的跳变对时,理由同 Amazon。
         let swinsian = bundleID == SwinsianPlayerInfo.bundleID && !isRadio
             ? swinsianReading(track: trackKey, title: raw.title, artist: raw.artist, playing: playing == true,
@@ -4090,9 +4121,9 @@ public enum MediaControlClient {
             artist: raw.artist,
             album: raw.album,
             duration: raw.duration,
-            elapsedTime: amazonPosition ?? radioPosition ?? pine?.position ?? swinsian?.position ?? foobarLoop ?? stretched,
+            elapsedTime: amazonPosition ?? radioPosition ?? pine?.position ?? cog?.position ?? swinsian?.position ?? foobarLoop ?? stretched,
             playing: held ? false : playing,
-            playbackRate: held ? 0 : (foobarRate != 1 && playing == true ? foobarRate : raw.playbackRate),
+            playbackRate: held ? 0 : (foobarRate != 1 && playing == true ? foobarRate : cogRate ?? raw.playbackRate),
             // 复用这个字段原本的语义("这是当前选定播放器的一份有效快照",见
             // MediaControlSnapshot 注释)——调用方(fetchMediaControlSnapshot/
             // fetchAutoDetectedSnapshot)已经各自核实过 bundleID 是它关心的那个,
@@ -4106,13 +4137,13 @@ public enum MediaControlClient {
         )
         // 读到之后主线程可能要等一两百毫秒才处理(换歌那一刻加载封面 / 歌词,实测 0.21s),位置得按读到的时刻
         // 补到处理那一刻(见 MediaControlSnapshot.capturedAt)。只对实测过的播放器开(02 章决策 41)。
-        if Self.stampsCaptureTime(bundleID: bundleID) || amazonPosition != nil || pine != nil || swinsian != nil
+        if Self.stampsCaptureTime(bundleID: bundleID) || amazonPosition != nil || pine != nil || cog != nil || swinsian != nil
             || bundleID == PlaybackPlayer.foobar2000.bundleIdentifier {
             snapshot.capturedAt = sampledAt
         }
         if held { snapshot.isWaitingToPlay = true }
-        if pine?.precise == true || swinsian?.precise == true { snapshot.positionIsPrecise = true }
-        snapshot.republishDueBy = republish.dueBy ?? pine?.dueBy ?? swinsian?.dueBy
+        if pine?.precise == true || cog?.precise == true || swinsian?.precise == true { snapshot.positionIsPrecise = true }
+        snapshot.republishDueBy = republish.dueBy ?? pine?.dueBy ?? cog?.dueBy ?? swinsian?.dueBy
             ?? Self.foobarLoopCheckAt(bundleID: bundleID, playing: playing, position: foobarLoop ?? stretched,
                                       duration: raw.duration, now: sampledAt)
         snapshot.processIdentifier = raw.processIdentifier

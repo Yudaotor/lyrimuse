@@ -99,8 +99,8 @@ func TestProbeWithoutFullDiskAccessMarksInstalledDenied(t *testing.T) {
 
 func TestLocalCacheContainerBundlesMatchClientPaths(t *testing.T) {
 	withFullDiskAccess(t, true)
-	// TestMain 把酷我读的两条都指到了容器外,这里要真实路径。
-	for _, p := range []*string{&kuwoLocalDirOverride, &kuwoUpcomingOverride} {
+	// TestMain 把酷我、Cog 读的几条都指到了容器外,这里要真实路径。
+	for _, p := range []*string{&kuwoLocalDirOverride, &kuwoUpcomingOverride, &cogUpcomingOverride, &cogPrefsOverride} {
 		old := *p
 		*p = ""
 		t.Cleanup(func() { *p = old })

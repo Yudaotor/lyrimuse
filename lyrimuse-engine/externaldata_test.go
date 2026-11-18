@@ -91,6 +91,8 @@ func TestMain(m *testing.M) {
 	kugouLibraryDBOverride = filepath.Join(missing, "kugou3.sqlite")
 	kuwoLocalDirOverride = filepath.Join(missing, "KuwoLyric")
 	kuwoUpcomingOverride = filepath.Join(missing, "kwmusic.db")
+	cogUpcomingOverride = filepath.Join(missing, "DataModel.sqlite")
+	cogPrefsOverride = filepath.Join(missing, "org.cogx.cog.plist")
 	// 两家网页版的队列要请 App 去浏览器里读;测试里一律"读不到",要测的用例自己换。
 	ytmusicQueueScript = func(string) (appQueryTracks, bool) { return appQueryTracks{}, false }
 	spotifyWebQueueScript = func(string) (appQueryTracks, bool) { return appQueryTracks{}, false }

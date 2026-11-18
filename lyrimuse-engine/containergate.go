@@ -68,6 +68,7 @@ func otherAppContainer(path string) string {
 // localCacheContainerBundles 是每个来源读的那几个容器的 bundle id,没授权时启动探测按它判「装了、被挡着」
 // (只看容器目录在不在,不进 Data)。跟 localCacheClientPaths 对得上,TestLocalCacheContainerBundlesMatchClientPaths 守着。
 var localCacheContainerBundles = map[string][]string{
+	"cog":     {"org.cogx.cog"},
 	"kugou":   {"com.kugou.mac.Music"},
 	"kuwo":    {"com.wenyu.kwplayermac"},
 	"qq":      {"com.tencent.QQMusicMac"},

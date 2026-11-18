@@ -292,8 +292,8 @@ func runSwinsianTests() {
                     "Swinsian 接线: 开着的文件认不到时按通知、脚本给的路径写 local_file")
         let client = src("LyrimuseCore/Local/MediaControlClient.swift")
         expectEqual(sourceHas(client, "swinsian: () => \\(SwinsianPlayerInfo.script)"), true, "Swinsian 接线: 常驻 osascript 能跑它的脚本")
-        expectEqual(sourceHas(client, "elapsedTime: amazonPosition ?? radioPosition ?? pine?.position ?? swinsian?.position ?? foobarLoop ?? stretched,")
-                    && sourceHas(client, "if pine?.precise == true || swinsian?.precise == true { snapshot.positionIsPrecise = true }"),
+        expectEqual(sourceHas(client, "elapsedTime: amazonPosition ?? radioPosition ?? pine?.position ?? cog?.position ?? swinsian?.position ?? foobarLoop ?? stretched,")
+                    && sourceHas(client, "if pine?.precise == true || cog?.precise == true || swinsian?.precise == true { snapshot.positionIsPrecise = true }"),
                     true, "Swinsian 接线: 主路径的位置换成那块表,量准了标精确")
         expectEqual(sourceHas(client, "if target.bundleID == SwinsianPlayerInfo.bundleID {\nsnapshot = swinsianProbedSnapshot(probed.snapshot, anchor: probed.anchor, now: now)"),
                     true, "Swinsian 接线: 焦点被占时单问到的那份也过那块表")
@@ -305,7 +305,7 @@ func runSwinsianTests() {
                     && sourceHas(info, "[\"-readonly\", database, podcastTableQuery(path: path)]"),
                     true, "Swinsian 接线: 脚本说不清时只读查它的播客表")
         let idle = src("lyrimuse/UI/IdlePlaybackActions.swift")
-        expectEqual(sourceHas(idle, "case .swinsian, .kuwo: PlayerProcess.pid(bundleID: player.bundleIdentifier) != nil")
+        expectEqual(sourceHas(idle, "case .swinsian, .kuwo, .cog: PlayerProcess.pid(bundleID: player.bundleIdentifier) != nil")
                     && sourceHas(idle, "ok = MusicPlaybackController.resumeSwinsianPlayback()"),
                     true, "Swinsian 接线: 停播页开着它时给「继续播放」,发它的脚本")
         let head = src("LyrimuseCore/Local/SwinsianPlayhead.swift")

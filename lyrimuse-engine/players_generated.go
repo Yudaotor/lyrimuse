@@ -28,6 +28,7 @@ const (
 	playerPlexamp     = "plexamp"
 	playerMyGoMusic   = "mygo_music"
 	playerAudirvana   = "audirvana"
+	playerCog         = "cog"
 	playerWeRead      = "weread"
 	playerAuto        = "auto"
 )
@@ -54,6 +55,7 @@ const (
 	plexampBundleID      = "tv.plex.plexamp"
 	myGoMusicBundleID    = "dev.egoist.music"
 	audirvanaBundleID    = "com.audirvana.Audirvana-Studio"
+	cogBundleID          = "org.cogx.cog"
 	weReadBundleID       = "com.tencent.weread"
 )
 
@@ -79,6 +81,7 @@ var allPlayerIDs = []string{
 	playerPlexamp,
 	playerMyGoMusic,
 	playerAudirvana,
+	playerCog,
 	playerWeRead,
 	playerAuto,
 }
@@ -106,6 +109,7 @@ var playerBundleIDs = map[string]string{
 	playerPlexamp:     plexampBundleID,
 	playerMyGoMusic:   myGoMusicBundleID,
 	playerAudirvana:   audirvanaBundleID,
+	playerCog:         cogBundleID,
 	playerWeRead:      weReadBundleID,
 }
 
@@ -132,6 +136,7 @@ var builtinPlayerBundleIDs = map[string]bool{
 	plexampBundleID:      true,
 	myGoMusicBundleID:    true,
 	audirvanaBundleID:    true,
+	cogBundleID:          true,
 	weReadBundleID:       true,
 }
 
@@ -158,6 +163,7 @@ var playerProcessNames = map[string]string{
 	playerPlexamp:     "Plexamp",
 	playerMyGoMusic:   "MyGo Music",
 	playerAudirvana:   "Audirvana Studio",
+	playerCog:         "Cog",
 	playerWeRead:      "WeRead",
 }
 
@@ -168,7 +174,7 @@ var playerOtherProcessNames = map[string][]string{
 }
 
 // knownPlayerProcessNames 是上面两张表的全部取值 —— 选了「自动识别」时盯全部。
-var knownPlayerProcessNames = []string{"Music", "QQMusic", "NeteaseMusic", "neteasemusic", "酷狗音乐", "KuwoMusic", "汽水音乐", "KKBOX", "Spotify", "Amazon Music", "Kaset", "YouTube Music", "Reamp", "lx-music-desktop", "VOX", "Pine Player", "foobar2000", "Swinsian", "Plexamp", "MyGo Music", "Audirvana Studio", "Audirvana Origin", "WeRead"}
+var knownPlayerProcessNames = []string{"Music", "QQMusic", "NeteaseMusic", "neteasemusic", "酷狗音乐", "KuwoMusic", "汽水音乐", "KKBOX", "Spotify", "Amazon Music", "Kaset", "YouTube Music", "Reamp", "lx-music-desktop", "VOX", "Pine Player", "foobar2000", "Swinsian", "Plexamp", "MyGo Music", "Audirvana Studio", "Audirvana Origin", "Cog", "WeRead"}
 
 // playerScrobbleLabels 是「bundle id → ListenBrainz 的 media_player 标签」。
 var playerScrobbleLabels = map[string]string{
@@ -192,6 +198,7 @@ var playerScrobbleLabels = map[string]string{
 	plexampBundleID:      "Plexamp (macOS)",
 	myGoMusicBundleID:    "MyGo Music (macOS)",
 	audirvanaBundleID:    "Audirvana (macOS)",
+	cogBundleID:          "Cog (macOS)",
 	weReadBundleID:       "WeRead (macOS)",
 }
 
@@ -219,6 +226,7 @@ var playerNativeLyricSources = map[string]string{
 	playerSwinsian:    "localfile",
 	playerMyGoMusic:   "localfile",
 	playerAudirvana:   "localfile",
+	playerCog:         "localfile",
 }
 
 // playerNeedsFullDiskAccess 是「播放器标识 → 引擎读它的客户端文件要不要
@@ -231,6 +239,7 @@ var playerNeedsFullDiskAccess = map[string]bool{
 	playerKuwo:    true,
 	playerSoda:    true,
 	playerVox:     true,
+	playerCog:     true,
 }
 
 // playerArtistlessNotMusic 是「bundle id → 歌手空、时长 > 0、在放的是非歌曲内容(播客单集)」。

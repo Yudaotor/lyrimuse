@@ -284,8 +284,8 @@ func runPlayerIdentityTests() {
             expectEqual(shown(menuRoute, true, false, false), false, "播放键反馈: 菜单连按第二下按显示的翻回去")
             expectEqual(shown(menuRoute, true, false, true), true, "播放键反馈: 菜单回报前回读已到 → 跟真值,不再翻")
             expectEqual(shown(menuRoute, false, true, false), false, "播放键反馈: 回读先到的是暂停 → 跟真值")
-            expectEqual(PlaybackMenuControl.players, [.qqMusic, .netease, .kugou, .kuwo, .soda, .pinePlayer, .reamp, .foobar2000, .mygoMusic],
-                        "失焦按界面控制: QQ 音乐、网易云、酷狗、酷我、Pine Player、reAMP 按菜单,汽水按播放条")
+            expectEqual(PlaybackMenuControl.players, [.qqMusic, .netease, .kugou, .kuwo, .soda, .pinePlayer, .reamp, .foobar2000, .mygoMusic, .cog],
+                        "失焦按界面控制: QQ 音乐、网易云、酷狗、酷我、Pine Player、reAMP、Cog 按菜单,汽水按播放条")
             for (t, command) in [("播放", Command.playPause), ("暂停", .playPause), ("播放/暂停", .playPause),
                                  ("下一首", .nextTrack), ("上一首", .previousTrack)] {
                 expectEqual(PlaybackMenuControl.command(forMenuTitle: t, player: .kuwo), command, "酷我菜单: \(t)")
@@ -790,6 +790,7 @@ func runPlayerIdentityTests() {
             .weread: ("weread", "com.tencent.weread"),
             .mygoMusic: ("mygo_music", "dev.egoist.music"),
             .audirvana: ("audirvana", "com.audirvana.Audirvana-Studio"),
+            .cog: ("cog", "org.cogx.cog"),
         ]
         for (player, want) in expected {
             expectEqual(player.rawValue, want.raw, "播放器契约: \(player) 的 rawValue")
@@ -1474,6 +1475,7 @@ func runPlayerIdentityTests() {
             .plexamp: (nil, [.extendedControls, .repeatOne, .gaplessLead, .learnsAnchorLag, .arrivesWhole]),
             .mygoMusic: (nil, [.favorite, .gaplessLead, .lateAnchorProbe]),
             .audirvana: (nil, [.extendedControls, .repeatOne, .arrivesWhole]),
+            .cog: (nil, [.extendedControls, .repeatOne, .resume, .snapsToReportedPosition, .arrivesWhole]),
             .pearDesktop: (.youtubeMusic, [.extendedControls, .repeatOne, .favorite, .resume, .lateAnchorProbe, .learnsAnchorLag,
                                            .holdsAnchorLagSeed, .catalogMenuRows]),
         ]
@@ -1709,20 +1711,20 @@ func runPlayerIdentityTests() {
     // TestPlayersNeedFullDiskAccessMatchesClientPaths 按真实路径对账),含 auto 时按超集算。
     do {
         typealias P = Set<PlaybackPlayer>
-        expectEqual(PlaybackPlayer.allCases.filter(\.needsFullDiskAccess), [.qqMusic, .netease, .kugou, .kuwo, .soda, .vox],
-                    "完全磁盘访问判据: 客户端文件在私有容器里的就这六家(汽水、酷我是沙盒版,VOX 是播放列表库)")
-        expectEqual(P([.auto]).playersNeedingFullDiskAccess, [.qqMusic, .netease, .kugou, .kuwo, .soda, .vox],
+        expectEqual(PlaybackPlayer.allCases.filter(\.needsFullDiskAccess), [.qqMusic, .netease, .kugou, .kuwo, .soda, .vox, .cog],
+                    "完全磁盘访问判据: 客户端文件在私有容器里的就这七家(汽水、酷我是沙盒版,VOX、Cog 是播放列表库)")
+        expectEqual(P([.auto]).playersNeedingFullDiskAccess, [.qqMusic, .netease, .kugou, .kuwo, .soda, .vox, .cog],
                     "完全磁盘访问判据: 纯 auto 按超集算")
-        expectEqual(PlaybackPlayer.allCases.compactMap(\.fullDiskAccessUse), [.readsLyricsAndQueue, .readsLyricsAndQueue, .readsLyricsAndQueue, .readsLyricsQueueFavoritesAndCovers, .readsQueue, .readsQueue],
-                    "完全磁盘访问判据: QQ / 网易云 / 酷狗读歌词缓存和队列,酷我另读喜欢列表和封面,汽水、VOX 只读队列,授权说明和体检提示按这个分开写")
+        expectEqual(PlaybackPlayer.allCases.compactMap(\.fullDiskAccessUse), [.readsLyricsAndQueue, .readsLyricsAndQueue, .readsLyricsAndQueue, .readsLyricsQueueFavoritesAndCovers, .readsQueue, .readsQueue, .readsQueue],
+                    "完全磁盘访问判据: QQ / 网易云 / 酷狗读歌词缓存和队列,酷我另读喜欢列表和封面,汽水、VOX、Cog 只读队列,授权说明和体检提示按这个分开写")
         expectEqual(P([.kugou, .spotify]).playersNeedingFullDiskAccess, [.kugou],
                     "完全磁盘访问判据: 多选里只挑出要授权的那几家")
         expectEqual(P([.spotify, .soda, .appleMusic]).playersNeedingFullDiskAccess, [.soda],
                     "完全磁盘访问判据: Spotify / Apple Music 的文件不在私有容器里,不出现;汽水在")
         // 状态文件里的来源名(localCacheSource)要跟引擎 localCacheClientPaths 的键一致 —— 对不上的话结论永远是「还没确认」。
         expectEqual(PlaybackPlayer.allCases.filter(\.needsFullDiskAccess).map(\.localCacheSource),
-                    ["qq", "netease", "kugou", "kuwo", "soda", "vox"],
-                    "完全磁盘访问判据: 要授权的每家都有引擎状态文件里的来源名(有自家歌词源的就是它,VOX 是 vox)")
+                    ["qq", "netease", "kugou", "kuwo", "soda", "vox", "cog"],
+                    "完全磁盘访问判据: 要授权的每家都有引擎状态文件里的来源名(有自家歌词源的就是它,VOX、Cog 是各自的 id)")
     }
 
     // `Set<PlaybackPlayer>.playersNeedingAccessibility` 决定设置页那张卡、引导页那一行、体检清单那一项
@@ -1730,16 +1732,16 @@ func runPlayerIdentityTests() {
     do {
         typealias P = Set<PlaybackPlayer>
         expectEqual(PlaybackPlayer.allCases.filter(\.needsAccessibilityPermission),
-                    [.qqMusic, .netease, .kugou, .kuwo, .soda, .amazonMusic, .reamp, .pinePlayer, .foobar2000, .mygoMusic, .audirvana],
-                    "辅助功能判据: 读界面的 Amazon Music / Pine Player、按菜单控制的 QQ 音乐/网易云/酷狗/酷我/reAMP、按播放条控制的汽水和 Audirvana(改 shared/players.json 的 needsAccessibilityPermission)")
+                    [.qqMusic, .netease, .kugou, .kuwo, .soda, .amazonMusic, .reamp, .pinePlayer, .foobar2000, .mygoMusic, .audirvana, .cog],
+                    "辅助功能判据: 读界面的 Amazon Music / Pine Player / Cog、按菜单控制的 QQ 音乐/网易云/酷狗/酷我/reAMP、按播放条控制的汽水和 Audirvana(改 shared/players.json 的 needsAccessibilityPermission)")
         expectEqual(PlaybackPlayer.allCases.compactMap(\.accessibilityUse),
                     [.switchesPlayMode, .controlsPlayback, .controlsPlayback, .switchesModeAndTransport, .controlsPlayback, .calibratesProgress, .pressesPlayMode,
-                     .refinesProgress, .pressesPlayMode, .controlsTransport, .adjustsModeAndVolume],
-                    "辅助功能判据: QQ 音乐是切模式、网易云/酷狗/汽水是喜欢加失焦播放、Amazon Music 是读进度加随机循环、reAMP 只有随机循环、Pine Player 是读进度条补位置加失焦播放,授权说明和体检提示按这个分开写")
+                     .refinesProgress, .pressesPlayMode, .controlsTransport, .adjustsModeAndVolume, .calibratesAndPressesPlayMode],
+                    "辅助功能判据: QQ 音乐是切模式、网易云/酷狗/汽水是喜欢加失焦播放、Amazon Music 是读进度加随机循环、reAMP 只有随机循环、Pine Player 是读进度条补位置加失焦播放、Cog 是读滑块校准加随机循环和失焦播放,授权说明和体检提示按这个分开写")
         expectEqual(PlaybackPlayer.allCases.compactMap(\.automationUse),
                     [.refinesProgress, .refinesProgress, .readsTrack, .readsTrack, .refinesProgress, .readsTrack],
                     "自动化判据: Apple Music、Spotify、Swinsian 只让进度更准,Kaset、VOX、Audirvana 的曲目整份靠它,引导页和设置页的说明按这个分开写")
-        expectEqual(P([.auto]).playersNeedingAccessibility, [.qqMusic, .netease, .kugou, .kuwo, .soda, .amazonMusic, .reamp, .pinePlayer, .foobar2000, .mygoMusic, .audirvana],
+        expectEqual(P([.auto]).playersNeedingAccessibility, [.qqMusic, .netease, .kugou, .kuwo, .soda, .amazonMusic, .reamp, .pinePlayer, .foobar2000, .mygoMusic, .audirvana, .cog],
                     "辅助功能判据: 纯 auto 按超集算")
         expectEqual(P([.kugou]).playersNeedingAccessibility, [.kugou], "酷狗单选也显示 AX 授权入口(喜欢键、失焦播放控制要它)")
         expectEqual(P([.netease]).playersNeedingAccessibility, [.netease], "网易云单选也显示 AX 授权入口")

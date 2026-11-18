@@ -1166,6 +1166,7 @@ public final class LocalPlaybackSource: ObservableObject {
     /// Pine Player 的位置是 `PinePlayhead` 从它恢复那份锚点起算的(暂停前的位置接上,或进度条校准过),同样原样采信。
     /// Swinsian 的位置是 `SwinsianPlayhead` 从它恢复的锚点起算、再按脚本整秒的跳变对时的,同样原样采信。
     /// Audirvana 的位置是它脚本报的播放头,跟真实出声差 0.01~0.03 秒、暂停期间不走,同样原样采信。
+    /// Cog 的位置是 `CogPlayhead` 从它恢复那份锚点补上固定量、再按 Position 滑块校准的,同样原样采信。
     /// Plexamp 暂停那条锚点比实际停下处少约 0.3 秒,恢复那条是准的:按暂停位置封顶会把恢复后的位置压慢 0.2 秒、直到下一份
     /// 锚点,同样原样采信(见 02 章决策 242)。
     /// iPad 版网易云(`client`:这份会话实际是谁报的)恢复那一拍的锚点对真值在 0.01 秒上下,换歌开播那一拍补过提前量
@@ -1176,7 +1177,7 @@ public final class LocalPlaybackSource: ObservableObject {
         bundleID == PlaybackPlayer.kaset.bundleIdentifier || bundleID == PlaybackPlayer.vox.bundleIdentifier
             || bundleID == PlaybackPlayer.pinePlayer.bundleIdentifier || bundleID == PlaybackPlayer.swinsian.bundleIdentifier
             || bundleID == PlaybackPlayer.plexamp.bundleIdentifier || bundleID == PlaybackPlayer.mygoMusic.bundleIdentifier
-            || bundleID == PlaybackPlayer.audirvana.bundleIdentifier
+            || bundleID == PlaybackPlayer.audirvana.bundleIdentifier || bundleID == PlaybackPlayer.cog.bundleIdentifier
             || client == NetEaseIPadNowPlaying.bundleID || client == QQIPadNowPlaying.bundleID
     }
 
@@ -1852,12 +1853,14 @@ public final class LocalPlaybackSource: ObservableObject {
     ///
     /// Audirvana 不走:没有锚点,每一拍都是脚本报的播放头。
     ///
+    /// Cog 不走:每份新锚点都按 Position 滑块校准(`CogPlayhead`),锚点早晚多少已经量掉了。
+    ///
     /// 听书播放器(`PlayerSubtitles`)不走:字幕按它发的锚点对时,补上锚点比出声晚的那截反而跟字幕错开。
     public nonisolated static func learnsAnchorLag(bundleID: String?) -> Bool {
         bundleID != PlaybackPlayer.kugou.bundleIdentifier && bundleID != PlaybackPlayer.reamp.bundleIdentifier
             && bundleID != PlaybackPlayer.lxMusic.bundleIdentifier && bundleID != PlaybackPlayer.pinePlayer.bundleIdentifier
             && bundleID != PlaybackPlayer.swinsian.bundleIdentifier && bundleID != PlaybackPlayer.mygoMusic.bundleIdentifier
-            && bundleID != PlaybackPlayer.audirvana.bundleIdentifier
+            && bundleID != PlaybackPlayer.audirvana.bundleIdentifier && bundleID != PlaybackPlayer.cog.bundleIdentifier
             && !PlayerSubtitles.carriesSubtitles(bundleID: bundleID)
     }
 
@@ -1874,7 +1877,7 @@ public final class LocalPlaybackSource: ObservableObject {
     /// 稳定播放时偏差过了 `republishedAnchorSnapSecs` 就直接对齐读数、不走 EMA 慢慢收的播放器:跟随重发锚点的(KKBOX、酷我),
     /// 加上位置是按它自己的日志算出来的 Amazon Music(读数就是干净的时钟,界面校准改提前量时一步到位,别被 EMA 拆成
     /// 每拍半秒的几次小跳),和位置是 `PinePlayhead` 那块表的 Pine Player(进度条校准改的零点几秒要当拍到屏上),
-    /// Swinsian 同理(`SwinsianPlayhead` 按整秒跳变对时改的那一截)。
+    /// Swinsian 同理(`SwinsianPlayhead` 按整秒跳变对时改的那一截),Cog 同理(`CogPlayhead` 按 Position 滑块校准改的那一截)。
     /// iPad 版网易云(`client`:这份会话实际是谁报的)也是:「锁屏歌词」开着时它每换一句都带着准的进度重报一次,开播那个锚点却
     /// 早晚不定(实测早 0.1~0.3 秒或晚 0.45 秒),按网易云 Mac 版那档(只往前纠)早了的整首纠不回来。见 02 章决策 198。
     /// iPad 版 QQ 音乐也是:开播那一帧有时比紧跟的改写帧早 0.58 秒,改写帧和之后的重报才准。见 02 章决策 204。
@@ -1882,6 +1885,7 @@ public final class LocalPlaybackSource: ObservableObject {
     public nonisolated static func snapsToReportedPosition(bundleID: String?, client: String? = nil) -> Bool {
         followsRepublishedAnchors(bundleID: bundleID) || bundleID == PlaybackPlayer.amazonMusic.bundleIdentifier
             || bundleID == PlaybackPlayer.pinePlayer.bundleIdentifier || bundleID == PlaybackPlayer.swinsian.bundleIdentifier
+            || bundleID == PlaybackPlayer.cog.bundleIdentifier
             || client == NetEaseIPadNowPlaying.bundleID || client == QQIPadNowPlaying.bundleID
     }
 

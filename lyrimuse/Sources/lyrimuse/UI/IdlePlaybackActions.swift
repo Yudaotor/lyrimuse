@@ -28,13 +28,14 @@ enum IdlePlaybackActions {
     /// Pear Desktop 开着、本机接口能用时给,直接经接口开播;它冷启动时自己跳到前台,没开着时只给「打开」(02 章决策 228)。
     /// Swinsian 同理:开着时发它的脚本 `play`,冷启动会自己跳到前台,没开着只给「打开」(02 章决策 241)。
     /// 酷我同理:开着时按它菜单里的播放(`resumeViaMenu`),隐藏不激活启动它照样跳到前台,没开着只给「打开」(02 章决策 263)。
+    /// Cog 同理:开着时按它菜单里的播放 / 暂停(停住时放列表里选中的那一行),没开着只给「打开」(02 章决策 275)。
     /// Plexamp 不给:停播页只在它整个列表放完、撤掉会话时出现,这时它已清掉播放队列,接口发 play 也放不起来(02 章决策 242)。
     static func canResume(_ player: PlaybackPlayer) -> Bool {
         guard !PlayerProcess.sessionIsOtherClient(bundleID: player.bundleIdentifier) else { return false }
         return switch player {
         case .appleMusic, .spotify, .kugou, .qqMusic, .netease, .pinePlayer, .foobar2000, .lxMusic: true
         case .pearDesktop: PearDesktopAPI.shared.canControl()
-        case .swinsian, .kuwo: PlayerProcess.pid(bundleID: player.bundleIdentifier) != nil
+        case .swinsian, .kuwo, .cog: PlayerProcess.pid(bundleID: player.bundleIdentifier) != nil
         default: false
         }
     }
@@ -60,7 +61,7 @@ enum IdlePlaybackActions {
                 }
             case .spotify:
                 ok = MusicPlaybackController.resumeSpotifyPlayback()
-            case .kugou, .qqMusic, .netease, .pinePlayer, .foobar2000, .kuwo:
+            case .kugou, .qqMusic, .netease, .pinePlayer, .foobar2000, .kuwo, .cog:
                 ok = await resumeViaMenu(player)
             case .lxMusic:
                 ok = LXMusicOpenAPI.shared.sendDirect("play", arguments: [])

@@ -569,7 +569,7 @@ func runDeepLinkTests() {
         expectEqual(link("lyrimuse://debug/seek?seconds=99.7"), .debug(.seek(seconds: 99.7)), "debug: 跳转")
         expectEqual([link("lyrimuse://debug/seek?seconds=-1"), link("lyrimuse://debug/seek"), link("lyrimuse://debug/seek?seconds=nan")]
                         .allSatisfy { $0 == nil }, true, "debug: 跳转负数、没带、不是数都认不出")
-        for leg in ["apple-music-script", "spotify-script", "kaset-script", "player-file", "foobar-slider"] {
+        for leg in ["apple-music-script", "spotify-script", "kaset-script", "player-file", "foobar-slider", "cog-slider"] {
             expectEqual(link("lyrimuse://debug/knockout?leg=\(leg)&on=0").map { "\($0)" }?.contains("knockout") ?? false, true,
                         "debug: 拔腿开关认得 \(leg)")
         }

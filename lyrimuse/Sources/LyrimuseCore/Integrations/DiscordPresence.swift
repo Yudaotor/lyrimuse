@@ -87,7 +87,7 @@ public enum DiscordPresence {
     /// 发什么内容都改不了,所以按播放器分开建,名字和图标用那个播放器的。
     public enum Application: String, CaseIterable, Sendable {
         case lyrimuse, appleMusic, youtubeMusic, spotify, qqMusic, netease, kugou, soda, kkbox, amazonMusic, reamp, lxMusic, vox,
-            pinePlayer, foobar2000, pearDesktop, swinsian, plexamp, mygoMusic, audirvana, kuwo
+            pinePlayer, foobar2000, pearDesktop, swinsian, plexamp, mygoMusic, audirvana, kuwo, cog
 
         /// 在开发者后台注册的名字:activity 没覆盖应用名时 Discord 显示它。
         public var registeredName: String {
@@ -113,6 +113,7 @@ public enum DiscordPresence {
             case .mygoMusic: return "MyGo Music"
             case .audirvana: return "Audirvana"
             case .kuwo: return "酷我音乐"
+            case .cog: return "Cog"
             }
         }
     }
@@ -140,6 +141,7 @@ public enum DiscordPresence {
         .mygoMusic: "1569161936246145085",
         .audirvana: "1569688108205744248",
         .kuwo: "1572195425639993444",
+        .cog: "1572445910128918528",
     ]
 
     /// 这个播放器归哪个应用。网页平台优先(浏览器的 bundle id 不对应任何平台);Kaset 归 YouTube Music。
@@ -170,6 +172,7 @@ public enum DiscordPresence {
         case .mygoMusic?: return .mygoMusic
         case .audirvana?: return .audirvana
         case .kuwo?: return .kuwo
+        case .cog?: return .cog
         default: return .lyrimuse
         }
     }
@@ -264,6 +267,7 @@ public enum DiscordPresence {
         .mygoMusic: "97e739d53ecd5ac21e7892ebc045fa51",
         .audirvana: "cad42f238baf7340fa4994eae04ce31e",
         .kuwo: "a007b24443113483878bc754c7574198",
+        .cog: "e563054b5a82d56118fd3ecaf0eff95d",
     ]
 
     /// 这个应用的 APP 图标在 Discord 图床上的地址。

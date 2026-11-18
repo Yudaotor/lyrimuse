@@ -1,7 +1,7 @@
 import Foundation
 import os
 
-/// QQ 音乐、网易云、酷狗用「打开文件」、酷我从「下载的音乐」、Spotify 从它的「本地文件」列表放本机的音频文件时,以及 foobar2000、Swinsian(只放本机文件,
+/// QQ 音乐、网易云、酷狗用「打开文件」、酷我从「下载的音乐」、Spotify 从它的「本地文件」列表放本机的音频文件时,以及 foobar2000、Swinsian、Cog(只放本机文件,
 /// 只开着正在放的那一个;它们自己报的标签已经齐全,这里主要为了拿到路径)、MyGo Music 放本机文件时,按快照里的进程号找到它开着的
 /// 那个文件(`ProcessOpenFiles`;快照没带进程号时按 bundle id 找主进程,Spotify 的快照来自脚本、不带):
 /// 路径写进播放状态(`local_file`,引擎读同名 .lrc 和文件里的歌词)、没报封面时用这个文件自带的封面(取之前核对它此刻还开着,
@@ -15,6 +15,7 @@ public enum PlayerOpenFile {
         PlaybackPlayer.kugou.bundleIdentifier, PlaybackPlayer.spotify.bundleIdentifier,
         PlaybackPlayer.foobar2000.bundleIdentifier, PlaybackPlayer.swinsian.bundleIdentifier,
         PlaybackPlayer.mygoMusic.bundleIdentifier, PlaybackPlayer.kuwo.bundleIdentifier,
+        PlaybackPlayer.cog.bundleIdentifier,
     ]
 
     /// 没写歌名的文件报成不带扩展名的文件名的播放器(`fileNameIdentity` 的 `acceptsBaseName`)。

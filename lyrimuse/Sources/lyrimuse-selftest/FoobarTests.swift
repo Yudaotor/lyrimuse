@@ -254,7 +254,7 @@ func runFoobarTests() {
                     "foobar 接线: 按了还停着(列表是空的)就算没放起来,退回打开它")
         expectEqual(sourceHas(client, "? FoobarStretch.rate(anchorKey: anchorKey, playing: playing == true && republish.hold == nil,"), true,
                     "foobar 接线: 在放、没卡住时按进度条量速度")
-        expectEqual(sourceHas(client, "playbackRate: held ? 0 : (foobarRate != 1 && playing == true ? foobarRate : raw.playbackRate),"), true,
+        expectEqual(sourceHas(client, "playbackRate: held ? 0 : (foobarRate != 1 && playing == true ? foobarRate : cogRate ?? raw.playbackRate),"), true,
                     "foobar 接线: 量出的速度交给下游外推")
         expectEqual(sourceHas(client, "Self.foobarLoopPosition(bundleID: bundleID, playing: playing, position: stretched, duration: raw.duration)"), true,
                     "foobar 接线: 单曲循环按变速后的位置取余")
@@ -281,7 +281,7 @@ func runFoobarTests() {
                     "foobar 接线: 拔了 player-file 不写 local_file")
         expectEqual(sourceHas(openFile, "out.republishDueBy = snapshot.republishDueBy"), true,
                     "foobar 接线: 换成标签那份要带上补查时刻,不然曲尾那一查排不上")
-        expectEqual(sourceHas(client, "elapsedTime: amazonPosition ?? radioPosition ?? pine?.position ?? swinsian?.position ?? foobarLoop ?? stretched,"), true,
+        expectEqual(sourceHas(client, "elapsedTime: amazonPosition ?? radioPosition ?? pine?.position ?? cog?.position ?? swinsian?.position ?? foobarLoop ?? stretched,"), true,
                     "foobar 接线: 解码那一拍位置换成取余后的")
         expectEqual(sourceHas(openFile, "acceptsBaseName: baseName)") && sourceHas(openFile, "static let baseNameBundleIDs: Set<String> = [\nPlaybackPlayer.foobar2000.bundleIdentifier,"), true,
                     "foobar 接线: 认当前文件时没写标签的按不带扩展名的文件名拆")

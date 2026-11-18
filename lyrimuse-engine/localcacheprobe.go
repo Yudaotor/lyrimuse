@@ -36,6 +36,7 @@ func localCacheClientPaths() map[string][]string {
 		"lxmusic":    {lxMusicStatePath(), lxMusicDBPath(), lxMusicConfigPath()},
 		"vox":        {voxUpcomingPath()},
 		"kuwo":       {kuwoLocalLyricDir(), kuwoUpcomingPath()},
+		"cog":        {cogUpcomingPath(), cogPrefsPath()},
 	}
 }
 

@@ -1321,6 +1321,7 @@
 "开源推送服务：在手机或电脑上安装 ntfy 并订阅主题即可接收，无需注册，也可自建服务器" = "Serviço push de código aberto. Instale o ntfy no celular ou computador e assine um tópico; sem cadastro, e você pode hospedá-lo";
 "开源的 YouTube Music 桌面客户端" = "Cliente de desktop de código aberto para o YouTube Music";
 "开源的多音源音乐播放器" = "Um player de música de código aberto com várias fontes de áudio";
+"开源的本地音乐播放器，游戏音乐等冷门格式也能放" = "Um player de música local de código aberto que também toca formatos incomuns, como música de videogame";
 "开源的音乐播放器，曲库来自国内各大平台" = "Player de código aberto para música de plataformas chinesas";
 "开源组件与词典" = "Componentes e dicionários de código aberto";
 "开源许可证" = "Licença de código aberto";
@@ -1504,6 +1505,7 @@
 "换行（默认）：一行显示不下时折行显示\n滚动：每句只占一行，超出部分横向滚动；有逐字时间轴时随演唱进度滚动" = "Quebrar (padrão): linhas longas continuam na linha seguinte\nRolar: cada linha ocupa uma só linha e o excesso rola na horizontal, acompanhando o canto quando a linha tem tempos por palavra";
 "换行（默认）：一行显示不下时折行显示，窗口随之增高\n滚动：每句只占一行，超出部分横向滚动；有逐字时间轴时随演唱进度滚动" = "Quebrar (padrão): linhas longas continuam na linha seguinte e a janela fica mais alta\nRolar: cada linha ocupa uma só linha e o excesso rola na horizontal, acompanhando o canto se a linha tiver tempos por palavra";
 "授权可能已在 Last.fm 网站上被撤销，重新连接即可恢复" = "A autorização pode ter sido revogada no site do Last.fm. Reconecte para retomar";
+"授权后，Lyrimuse 将读取%@的进度条校准播放位置，读取其随机和循环状态，并在你点按这两个按钮时代为操作其菜单中的对应项，也可读取和调节其音量；系统媒体焦点被其他 App 占用时，也可暂停、恢复和切换上一首或下一首。未授权时仍可显示歌词，但开播后歌词可能差零点几秒，不提供随机、循环按钮和音量调节，失去焦点时也无法控制播放" = "Com a permissão, o Lyrimuse lê a barra de progresso do %@ para corrigir a posição de reprodução, lê se aleatório e repetição estão ativados e usa o item de menu correspondente quando você clica em um desses botões, lê e ajusta o volume e pode pausar, retomar e trocar de música enquanto outro app está com o foco de mídia do sistema. Sem a permissão a letra continua funcionando, mas pode ficar alguns décimos de segundo fora de sincronia depois que a reprodução começa, os controles de aleatório, repetição e volume ficam indisponíveis e não é possível controlar a reprodução sem o foco de mídia";
 "授权后，Lyrimuse 将读取%@的随机和循环状态，并在你点按这两个按钮时代为操作其菜单中的对应项，也可读取和调节其音量；系统媒体焦点被其他 App 占用时，也可暂停、恢复和切换上一首或下一首。未授权时仍可显示歌词，但不提供随机、循环按钮和音量调节，失去焦点时也无法控制播放" = "Com a permissão, o Lyrimuse lê se o aleatório e a repetição estão ativados em %@ e usa o item de menu correspondente quando você clica em um desses botões, lê e ajusta o volume e pode pausar, retomar e trocar de música quando outro app está com o foco de mídia do sistema. A letra funciona sem a permissão, mas os controles de aleatório, repetição e volume ficam indisponíveis e não é possível controlar a reprodução sem o foco de mídia";
 "授权后，Lyrimuse 将读取%@窗口上的播放模式，并在你点按随机或循环按钮时代为按下其模式按钮，点按喜欢时代为操作其收藏菜单；系统媒体焦点被其他 App 占用时，也可暂停、恢复和切换上一首或下一首。未授权时仍可显示歌词，但不提供随机、循环与喜欢按钮，失去焦点时也无法控制播放" = "Com a permissão, o Lyrimuse lê o modo de reprodução mostrado na janela do %@, pressiona o botão de modo quando você clica em aleatório ou repetição e o item de menu de favoritos quando você clica em favoritar, e pode pausar, retomar e trocar de música quando outro app está com o foco de mídia do sistema. A letra funciona sem a permissão, mas os botões de aleatório, repetição e favorito ficam indisponíveis e não é possível controlar a reprodução sem o foco de mídia";
 "授权后，Lyrimuse 将读取%@窗口上的随机和循环状态，并在你点按这两个按钮时代为按下对应按钮，也可读取和调节其音量。未授权时仍可显示歌词和控制播放，但不提供随机、循环按钮和音量调节" = "Com a permissão, o Lyrimuse lê se o aleatório e a repetição estão ativados na janela de %@ e aperta o botão correspondente quando você clica em um desses botões, e lê e ajusta o volume. A letra e os controles de reprodução funcionam sem a permissão, mas os controles de aleatório, repetição e volume ficam indisponíveis";
@@ -1888,6 +1890,7 @@
 "未获得辅助功能权限，%@ 不显示随机、循环按钮和音量调节" = "Falta a permissão de Acessibilidade: %@ fica sem controles de aleatório, repetição e volume";
 "未获得辅助功能权限，%@ 不显示随机、循环按钮和音量调节，失去系统媒体焦点时也无法控制暂停、恢复和切换上一首或下一首" = "Falta a permissão de Acessibilidade: %@ fica sem controles de aleatório, repetição e volume e não é possível pausar, retomar nem trocar de música sem o foco de mídia do sistema";
 "未获得辅助功能权限，%@ 失去系统媒体焦点时无法控制暂停、恢复和切换上一首或下一首" = "Falta a permissão de Acessibilidade: não é possível pausar, retomar nem pular músicas no %@ sem o foco de mídia do sistema";
+"未获得辅助功能权限，%@ 开播后歌词可能差零点几秒，不显示随机、循环按钮和音量调节，失去系统媒体焦点时也无法控制暂停、恢复和切换上一首或下一首" = "Falta a permissão de Acessibilidade: a letra de %@ pode ficar alguns décimos de segundo fora de sincronia depois que a reprodução começa, não há controles de aleatório, repetição e volume e não é possível pausar, retomar nem trocar de música sem o foco de mídia do sistema";
 "未获得辅助功能权限，%@ 拖动进度后歌词可能差半秒左右，不显示循环按钮和音量调节，失去焦点时也无法控制播放" = "Sem permissão de Acessibilidade, a letra de %@ pode ficar cerca de meio segundo defasada após mudar a posição, o botão de repetição e o controle de volume ficam ocultos e não é possível controlar a reprodução com o foco em outro lugar";
 "未获得辅助功能权限，无法校准 %@ 的播放进度" = "Sem permissão de Acessibilidade; não é possível calibrar o progresso de %@";
 "未获授权" = "Não concedido";
@@ -2691,6 +2694,7 @@
 "请开启此权限，以显示%@的随机、循环与喜欢按钮，并在失去系统媒体焦点时控制暂停、恢复和切换上一首或下一首" = "Ative para mostrar os botões de aleatório, repetição e favorito de %@ e para pausar, retomar e trocar de música quando ele perder o foco de mídia do sistema";
 "请开启此权限，以显示%@的随机、循环按钮和音量调节" = "Ative para mostrar os controles de aleatório, repetição e volume de %@";
 "请开启此权限，以显示%@的随机、循环按钮和音量调节，并在失去系统媒体焦点时控制暂停、恢复和切换上一首或下一首" = "Ative para mostrar os controles de aleatório, repetição e volume de %@ e para pausar, retomar e trocar de música quando ele perder o foco de mídia do sistema";
+"请开启此权限，以校准%@开播后的播放位置，显示随机、循环按钮和音量调节，并在失去系统媒体焦点时控制暂停、恢复和切换上一首或下一首" = "Ative para corrigir a posição de reprodução do %@ depois que a reprodução começa, mostrar os controles de aleatório, repetição e volume e pausar, retomar e trocar de música quando ele perder o foco de mídia do sistema";
 "请开启此权限，以校准%@拖动进度后的播放位置、显示循环按钮和音量调节，并在失去系统媒体焦点时控制播放" = "Ative para calibrar o tempo de %@ após mudar a posição, mostrar os botões de repetição e de volume e controlar a reprodução quando ele perder o foco de mídia do sistema";
 "请打开 Discord" = "O Discord precisa estar aberto";
 "请按下快捷键…" = "Pressione o atalho…";
@@ -2759,6 +2763,7 @@
 "辅助功能权限可显示%@的随机、循环与喜欢按钮，也可在系统媒体焦点被其他 App 占用时，通过菜单暂停、恢复和切换上一首或下一首" = "A permissão de Acessibilidade ativa os botões de aleatório, repetir e favorito de %@ e permite que o Lyrimuse pause, retome e pule músicas pelos menus dele enquanto outro app tem o foco de mídia do sistema";
 "辅助功能权限可显示%@的随机、循环按钮和音量调节" = "A permissão de Acessibilidade ativa aleatório, repetição e volume em %@";
 "辅助功能权限可显示%@的随机、循环按钮和音量调节，也可在系统媒体焦点被其他 App 占用时控制暂停、恢复和切换上一首或下一首" = "A permissão de Acessibilidade ativa aleatório, repetição e volume em %@ e permite que o Lyrimuse pause, retome e troque de música quando outro app está com o foco de mídia do sistema";
+"辅助功能权限可让%@开播后的歌词更准，显示随机、循环按钮和音量调节，也可在系统媒体焦点被其他 App 占用时控制暂停、恢复和切换上一首或下一首" = "A permissão de Acessibilidade mantém a letra de %@ sincronizada depois que a reprodução começa, ativa aleatório, repetição e volume e permite que o Lyrimuse pause, retome e troque de música quando outro app está com o foco de mídia do sistema";
 "辅助功能权限可让%@拖动进度后的歌词更准、显示循环按钮和音量调节，也可在系统媒体焦点被其他 App 占用时，通过菜单暂停、恢复和切换上一首或下一首" = "A permissão de Acessibilidade mantém a letra de %@ precisa após mudar a posição, ativa os botões de repetição e de volume e permite que o Lyrimuse pause, retome e troque de música pelos menus dele quando outro app está com o foco de mídia do sistema";
 "输入收起" = "Recolher ao digitar";
 "输入时收起" = "Recolher ao digitar";

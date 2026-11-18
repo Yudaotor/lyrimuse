@@ -410,20 +410,22 @@ public enum MusicPlaybackController {
     /// 音量读写它窗口里的滑块(`FoobarVolume`);Pear Desktop 开着本机接口时有随机、循环和音量(`PearDesktopAPI`);Swinsian 的随机、
     /// 两种循环和音量都是可写的脚本属性;Plexamp 的两种循环和音量走它的本机播放器接口(`PlexampPlayerAPI`,随机写不进);Audirvana 的
     /// 随机、两种循环和音量读写它主窗口播放条上的控件(`AudirvanaControls`);酷我只有模式,按它窗口播放条上那颗四档轮转的模式键
-    /// (`KuwoModeControl`),音量读不出来、不接。网易云、酷狗等没有
+    /// (`KuwoModeControl`),音量读不出来、不接;Cog 的随机、两种循环按它菜单栏「Playlist」里的两个子菜单(`CogMenuControl`),
+    /// 音量读它窗口里的滑块、按它「Control」菜单里的 Volume Up / Down 逐下调(`CogVolume`)。网易云、酷狗等没有
     /// .sdef(不可脚本化),而
     /// media-control 走的系统级 MediaRemote 只有播放控制 —— 对它们只能不显示这些控件(各家实测见 07 章决策 130)。
     public static func supportsExtendedControls(_ player: PlaybackPlayer) -> Bool {
         player == .appleMusic || player == .spotify || player == .kaset || player == .qqMusic || player == .amazonMusic
             || player == .reamp || player == .lxMusic || player == .vox || player == .pinePlayer || player == .foobar2000
             || player == .pearDesktop || player == .swinsian || player == .plexamp || player == .audirvana || player == .kuwo
+            || player == .cog
     }
 
     /// 这个播放器的循环档位里有没有「单曲循环」。见 MusicPlaybackMode.nextRepeat。
     public static func supportsRepeatOne(_ player: PlaybackPlayer) -> Bool {
         player == .appleMusic || player == .kaset || player == .qqMusic || player == .amazonMusic || player == .vox
             || player == .pinePlayer || player == .foobar2000 || player == .pearDesktop || player == .swinsian || player == .plexamp
-            || player == .audirvana || player == .kuwo
+            || player == .audirvana || player == .kuwo || player == .cog
     }
 
     /// 这个播放器有没有「喜欢」:Apple Music(收藏)、Kaset(YouTube Music 的赞)、QQ 音乐、网易云音乐和酷狗音乐(菜单栏「喜欢歌曲」)、
@@ -850,6 +852,11 @@ public enum MusicPlaybackController {
                                          mode: PineMenuControl.readMode()
                                              .map { PlaybackModeState(mode: $0, options: PineMenuControl.options) },
                                          volume: PineVolume.read())
+        case .cog:
+            return ExtendedControlsState(favorited: nil,
+                                         mode: CogMenuControl.readMode()
+                                             .map { PlaybackModeState(mode: $0, options: CogMenuControl.options) },
+                                         volume: CogVolume.read())
         case .foobar2000:
             return ExtendedControlsState(favorited: nil,
                                          mode: FoobarMenuControl.readMode()
@@ -999,6 +1006,8 @@ public enum MusicPlaybackController {
             return ReampMenuControl.readMode().map { PlaybackModeState(mode: $0, options: ReampMenuControl.options) }
         case .pinePlayer:
             return PineMenuControl.readMode().map { PlaybackModeState(mode: $0, options: PineMenuControl.options) }
+        case .cog:
+            return CogMenuControl.readMode().map { PlaybackModeState(mode: $0, options: CogMenuControl.options) }
         case .foobar2000:
             return FoobarMenuControl.readMode().map { PlaybackModeState(mode: $0, options: FoobarMenuControl.options) }
         case .audirvana:
@@ -1095,6 +1104,8 @@ public enum MusicPlaybackController {
             return ReampMenuControl.setMode(mode)
         case .pinePlayer:
             return PineMenuControl.setMode(mode)
+        case .cog:
+            return CogMenuControl.setMode(mode)
         case .foobar2000:
             return FoobarMenuControl.setMode(mode)
         case .audirvana:
@@ -1146,6 +1157,8 @@ public enum MusicPlaybackController {
             return ReampVolume.read()
         case .pinePlayer:
             return PineVolume.read()
+        case .cog:
+            return CogVolume.read()
         case .foobar2000:
             return FoobarVolume.read()
         case .audirvana:
@@ -1187,6 +1200,8 @@ public enum MusicPlaybackController {
             return ReampVolume.set(v)
         case .pinePlayer:
             return PineVolume.set(v)
+        case .cog:
+            return CogVolume.set(v)
         case .foobar2000:
             return FoobarVolume.set(v)
         case .audirvana:
