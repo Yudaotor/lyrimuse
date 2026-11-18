@@ -412,3 +412,37 @@ func TestCogQueueStampFollowsQueuedRows(t *testing.T) {
 		t.Errorf("文件没变时标记不变:%q → %q", queued, again)
 	}
 }
+
+// 放电台流(时长不是正数)时 local_file 是同名本机文件:三家都不按队列定位,退回同专辑预取;有时长照旧按文件认。
+func TestUpcomingFromQueueSkipsStreamWithCachedFile(t *testing.T) {
+	withCogPrefs(t, "<key>repeat</key><integer>0</integer>")
+	withCogAppMode(t, "", false)
+	withCogDB(t, cogBasicList())
+	t.Cleanup(func() { noteLocalFileCurrentTrack("", "", "", "") })
+	noteLocalFileCurrentTrack(cogBundleID, "Band", "C", "/Music/c.flac")
+	if res, ok := upcomingFromQueue("Band", "C", "", cogBundleID, 0, 2); ok {
+		t.Errorf("Cog 放流:得到 %q,该退回", cogTitles(res))
+	}
+	if res, ok := upcomingFromQueue("Band", "C", "One", cogBundleID, 180, 2); !ok || cogTitles(res) != "D,E" {
+		t.Errorf("Cog 放文件:得到 %q ok=%v,期望 D,E", cogTitles(res), ok)
+	}
+
+	for _, c := range []struct {
+		bundle string
+		with   func(*testing.T, string, []pineQueueTrack)
+	}{{foobar2000BundleID, withFoobarQueue}, {reampBundleID, withReampQueue}} {
+		tracks := pineTracks("A", "B", "C", "D")
+		for i := range tracks {
+			tracks[i].File = "/Music/" + tracks[i].File
+		}
+		c.with(t, "off", tracks)
+		noteLocalFileCurrentTrack(c.bundle, "歌手B", "B", "/Music/B.mp3")
+		if res, ok := upcomingFromQueue("歌手B", "B", "", c.bundle, 0, 2); ok {
+			t.Errorf("%s 放流:得到 %q,该退回", c.bundle, pineGot(res))
+		}
+		c.with(t, "off", tracks)
+		if res, ok := upcomingFromQueue("歌手B", "B", "专辑", c.bundle, 200, 2); !ok || pineGot(res) != "C,D" {
+			t.Errorf("%s 放文件:得到 %q ok=%v,期望 C,D", c.bundle, pineGot(res), ok)
+		}
+	}
+}

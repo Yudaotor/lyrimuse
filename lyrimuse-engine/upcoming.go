@@ -72,6 +72,9 @@ type upcomingTrack struct {
 // 不在队列里(用户刚手点了另一首)、Apple Music 可能开着随机播放。**宁可退回也不硬撑**,
 // 猜错的代价是预取一批不会播的歌,白占那条本就稀缺的解析带宽。
 func upcomingFromQueue(artist, title, album, bundleID string, durationSecs float64, n int) ([]upcomingTrack, bool) {
+	if queueStreamHasCachedFile(bundleID, durationSecs) {
+		return nil, false
+	}
 	switch bundleID {
 	case sodaMusicBundleID:
 		// 推荐流与听歌模式的队列落在 QueueCache;歌单、专辑这类点播的队列不落盘,改看客户端预载了哪几首。
@@ -135,6 +138,17 @@ func upcomingFromQueue(artist, title, album, bundleID string, durationSecs float
 		return nil, true
 	}
 	return browserUpcoming(artist, title, bundleID, durationSecs, n)
+}
+
+// queueStreamHasCachedFile:Cog、foobar2000、reAMP 放网络电台流时 App 报的时长不是正数(跟 App 判它们放流的口径一样),
+// 而 local_file 仍可能是按歌手歌名记下的同名本机文件;队列定位按文件认会认成列表里那个文件那一行,预取它后面的几首。
+// 流的后面没有可推的下一首,退回同专辑预取(流没有专辑,等于不预取)。见 02 章决策 278。
+func queueStreamHasCachedFile(bundleID string, durationSecs float64) bool {
+	switch bundleID {
+	case cogBundleID, foobar2000BundleID, reampBundleID:
+		return durationSecs <= 0
+	}
+	return false
 }
 
 // browserQueueStatus 是浏览器里一路队列探针的结论。
