@@ -113,8 +113,11 @@ func runCogTests() {
                      first.rateFrom == H.Tick(value: 3, at: at(3.4)), first.sampleAt == at(8.4)],
                     [true, true, true, true, true, true], "Cog 校准: 跳格值加滑块滞后 0.04 秒当基准,5 秒后再读")
         let steady = H.calibrated(first, tick: H.Tick(value: 8, at: at(8.4)))
-        expectEqual([steady.rate == 1, near(steady.base, 8.04), steady.rateFrom == first.rateFrom], [true, true, true],
-                    "Cog 校准: 第二次跳格隔够 4 秒,原速仍是 1、量速率的起点不动")
+        expectEqual([steady.rate == 1, near(steady.base, 8.04), steady.rateFrom == H.Tick(value: 8, at: at(8.4))], [true, true, true],
+                    "Cog 校准: 第二次跳格隔够 4 秒,原速仍是 1、量完从这一跳起重新量")
+        let faster = H.calibrated(steady, tick: H.Tick(value: 15.5, at: at(13.4)))
+        let slower = H.calibrated(faster, tick: H.Tick(value: 19.25, at: at(18.4)))
+        expectEqual([faster.rate, slower.rate], [1.5, 0.75], "Cog 校准: 中途改速,下一跳就按最近一段量")
         let tempo = H.calibrated(first, tick: H.Tick(value: 10.5, at: at(8.4)))
         expectEqual([tempo.rate == 1.5, near(tempo.base, 10.56)], [true, true], "Cog 校准: 开了变速量出 1.5 倍,滞后也按速率折")
         let back = H.calibrated(first, tick: H.Tick(value: 1, at: at(5)))

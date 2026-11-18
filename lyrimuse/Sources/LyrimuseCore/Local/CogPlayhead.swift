@@ -10,8 +10,8 @@ import os
 /// - 开了工具栏的 Speed 变速时,系统那份照报速率 1,位置却按原曲时间走。
 ///
 /// 所以每来一份新锚点就在后台读它窗口里的 Position 滑块(值是带小数的原曲秒数,界面定时器每 0.2 秒刷一次):每 20 毫秒读一次,
-/// 读到值变了,那一刻(前后两次读的中点)的位置 = 新值 + `sliderLagSecs`。在放时每过 `recheckSecs` 再读一次,同一段里两次读数
-/// 隔 `rateWindowSecs` 以上就算出速率。滑块读不到(没授辅助功能、`SourceKnockout` 关了 `cog-slider`、窗口里没有)时,恢复锚点补
+/// 读到值变了,那一刻(前后两次读的中点)的位置 = 新值 + `sliderLagSecs`。在放时每过 `recheckSecs` 再读一次,同一段里相邻两次读数
+/// 隔 `rateWindowSecs` 以上就算出速率,量完从这一跳起重新量(中途改速一跳就跟上)。滑块读不到(没授辅助功能、`SourceKnockout` 关了 `cog-slider`、窗口里没有)时,恢复锚点补
 /// `resumeLagSecs`,别的照锚点走。见 02 章决策 275。
 public enum CogPlayhead {
     public static let bundleID = PlaybackPlayer.cog.bundleIdentifier
@@ -188,6 +188,7 @@ public enum CogPlayhead {
         if let from = clock.rateFrom {
             if let rate = measuredRate(from: from, to: tick) {
                 out.rate = rate
+                out.rateFrom = tick
             } else if tick.value < from.value || tick.at.timeIntervalSince(from.at) < 0 {
                 out.rateFrom = tick
             }
