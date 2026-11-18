@@ -233,6 +233,85 @@ func runCogTests() {
                     [true, true, true], "Cog 登记: 有模式和音量、能单曲循环、辅助功能用途")
     }
 
+    // ---- 放网络流:标题分三种、电台每首自己的表(数照本机 ICY 测试台开头多推 4 秒那一轮录到的锚点) ----
+    do {
+        typealias S = CogStream
+        let cog = S.bundleID
+        expectEqual([S.kind(bundleID: cog, title: "radio", artist: nil, duration: 0) == .placeholder,
+                     S.kind(bundleID: cog, title: "Some Title Only", artist: "", duration: 0) == .placeholder,
+                     S.kind(bundleID: cog, title: "groove", artist: nil, duration: 0) == .placeholder],
+                    [true, true, true], "Cog 放流: 没歌手、不带音频扩展名的标题(连上那一拍的占位、只有歌名的 ICY 标题)不当歌")
+        expectEqual([S.kind(bundleID: cog, title: "radio", artist: "Test Artist", duration: 0) == .song,
+                     S.isPlaceholder(bundleID: cog, title: "radio", artist: "Test Artist", duration: 0)],
+                    [true, false], "Cog 放流 反例: 「Test Artist - radio」拆出了歌手,歌名刚好跟地址段同名也照样是歌")
+        expectEqual([S.kind(bundleID: cog, title: "TagDash.mp3", artist: nil, duration: 0) == .file(artist: "", title: "TagDash"),
+                     S.kind(bundleID: cog, title: "Accident - Marjoram.FLAC", artist: "", duration: 0)
+                        == .file(artist: "Accident", title: "Marjoram")],
+                    [true, true], "Cog 放流: 带音频扩展名的是网上文件,去扩展名、拆「歌手 - 歌名」")
+        expectEqual([S.kind(bundleID: "com.coppertino.Vox", title: "radio", artist: nil, duration: 0) == nil,
+                     S.kind(bundleID: cog, title: "NoTag.mp3", artist: nil, duration: 20) == nil,
+                     S.kind(bundleID: cog, title: "radio", artist: nil, duration: nil) == nil],
+                    [true, true, true], "Cog 放流: 只认 Cog、只认时长报 0 的那份")
+        expectEqual([PlayerTitleSplit.hasAudioExtension("a.MP3"), PlayerTitleSplit.hasAudioExtension("radio"),
+                     PlayerTitleSplit.hasAudioExtension(".mp3"), PlayerTitleSplit.hasAudioExtension("live.stream")],
+                    [true, false, false, false], "Cog 放流: 认音频扩展名")
+        expectEqual([VoxPlayerInfo.fileNameIdentity("Accident - Marjoram.flac").map { "\($0.artist)|\($0.title)" },
+                     VoxPlayerInfo.fileNameIdentity("").map { $0.title }, VoxPlayerInfo.fileNameIdentity("a/b.mp3").map { $0.title }],
+                    ["Accident|Marjoram", nil, nil], "Cog 放流: 文件名认歌名歌手跟 VOX 网上文件同一套")
+
+        func step(_ c: S.Clock, _ title: String, _ artist: String?, _ anchor: Double) -> S.Clock {
+            let kind = S.kind(bundleID: cog, title: title, artist: artist, duration: 0)!
+            return S.advance(c, kind: kind, song: MediaControlSnapshot.trackKey(artist: artist, title: title), anchorElapsed: anchor)
+        }
+        var c = step(S.Clock(), "radio", nil, 0)
+        c = step(c, "First Song", "Test Artist One", 0.906)
+        expectEqual([c.start == nil, S.position(c, kind: .song, elapsed: 10) == nil], [true, true], "Cog 放流: 连上后的第一首不给进度")
+        c = step(c, "Second Song", "Test Artist Two", 19.906)
+        expectEqual(S.position(c, kind: .song, elapsed: 25).map { abs($0 - 5.094) < 1e-9 }, true,
+                    "Cog 放流: 第二首从标题第一次出现时的 elapsed 起算,不加提前量")
+        expectEqual(step(c, "Second Song", "Test Artist Two", 30).start, 19.906, "Cog 放流: 同一首重发锚点(暂停恢复)不动起点")
+        let jingle = step(c, "Station ID", nil, 33)
+        expectEqual([jingle.song == nil, jingle.sawSong, step(jingle, "Third Song", "Test Artist Three", 39.906).start == 39.906],
+                    [true, true, true], "Cog 放流: 中间插一条不当歌的标题,下一首照样有起点")
+        let reconnect = step(step(c, "radio", nil, 0), "First Song", "Test Artist One", 0.9)
+        expectEqual([reconnect.start == nil, reconnect.lastAnchor == 0.9], [true, true], "Cog 放流: elapsed 往回退是重连,第一首又不给进度")
+        let afterFile = step(step(c, "TagDash.mp3", nil, 0), "First Song", "Test Artist One", 0.5)
+        expectEqual(afterFile.start, nil, "Cog 放流: 网上文件之后连上的电台第一首也不给进度")
+        let shortFile = step(step(step(S.Clock(), "First Song", "Test Artist One", 0.906), "TagDash.mp3", nil, 0.45), "radio", nil, 0)
+        expectEqual([shortFile.sawSong, step(shortFile, "First Song", "Test Artist One", 0.906).start == nil], [false, true],
+                    "Cog 放流: 网上文件只放了零点几秒、elapsed 没往回退,换台后第一首照样不给进度")
+        expectEqual(S.position(S.Clock(), kind: .file(artist: "", title: "TagDash"), elapsed: 7.5), 7.5, "Cog 放流: 网上文件照系统那份的位置")
+
+        S.reset()
+        let rows: [(String, String?, Double, Double)] = [
+            ("radio", nil, 0, 0.5), ("First Song", "Test Artist One", 0.906, 5), ("Second Song", "Test Artist Two", 19.906, 19.906),
+            ("Second Song", "Test Artist Two", 19.906, 31.2),
+        ]
+        let got = rows.map { S.reading(bundleID: cog, title: $0.0, artist: $0.1, duration: 0, anchorElapsed: $0.2, elapsed: $0.3) }
+        expectEqual(got.map { $0?.position.map { ($0 * 1000).rounded() / 1000 } }, [nil, nil, 0, 11.294],
+                    "Cog 放流 回放: 占位、第一首都不给进度,第二首从 0 起走")
+        expectEqual(got.map { $0?.anchorPosition }, [nil, nil, 0, 0], "Cog 放流 回放: 锚点也换成这一首的")
+        S.reset()
+
+        let applied = PlayerTitleSplit.applied(to: .forReplay(
+            title: "Accident - Marjoram.mp3", artist: "", duration: 0, elapsedTime: 3, playing: true,
+            bundleIdentifier: cog, anchorElapsedTime: 0))
+        expectEqual([applied?.title == "Marjoram", applied?.artist == "Accident",
+                     PlayerTitleSplit.identityParts(bundleID: cog, title: "Accident - Marjoram.mp3", artist: "").map { "\($0.artist)|\($0.title)" }
+                        == "Accident|Marjoram"],
+                    [true, true, true], "Cog 放流 出口: 网上文件换成拆出来的歌手歌名,封面那份载荷同一份身份")
+        let song = PlayerTitleSplit.applied(to: .forReplay(
+            title: "Second Song", artist: "Test Artist Two", duration: 0, elapsedTime: 3, playing: true,
+            bundleIdentifier: cog, anchorElapsedTime: 0))
+        expectEqual([song?.title == "Second Song", song?.artist == "Test Artist Two", song?.elapsedTime == 3], [true, true, true],
+                    "Cog 放流 出口: 电台里的歌不拆、不排延迟线")
+        expectEqual([PlayerTitleSplit.streamClockKnown(bundleID: cog, duration: 0, elapsed: 5),
+                     PlayerTitleSplit.streamClockKnown(bundleID: cog, duration: 0, elapsed: nil),
+                     PlayerTitleSplit.streamClockKnown(bundleID: cog, duration: 200, elapsed: 5)],
+                    [true, false, false], "Cog 放流: 有起点的才拿歌词缓存里的曲长")
+        expectEqual(PlayerTitleSplit.streamBundleIDs.contains(cog), false, "Cog 放流: 不进 reAMP / VOX 的电台拆法和延迟线")
+    }
+
     // ---- 接线契约 ----
     do {
         let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
@@ -247,6 +326,13 @@ func runCogTests() {
                      sourceHas(client, "|| cog?.precise == true ||"),
                      sourceHas(client, "?? cog?.dueBy ??")],
                     [true, true, true, true], "Cog 接线: 位置、速率、精确档、补查时刻都从那块表来")
+        expectEqual([sourceHas(client, "let cogStream = isRadio ? nil : CogStream.reading("),
+                     sourceHas(client, "let cog = bundleID == CogPlayhead.bundleID && !isRadio && cogStream == nil"),
+                     sourceHas(client, "|| CogStream.isPlaceholder(bundleID: bundleID, title: snapshot.title, artist: snapshot.artist,"),
+                     sourceHas(client, "if let stream = CogStream.reading(bundleID: CogStream.bundleID, title: probed.title, artist: probed.artist,"),
+                     sourceHas(client, "reportedElapsed = cogStream.position"),
+                     sourceHas(client, "reportedAnchor = cogStream.anchorPosition")],
+                    [true, true, true, true, true, true], "Cog 接线: 放流走 CogStream(主路径的位置和锚点、不是歌的闸、焦点被占时单问那份)")
         expectEqual(sourceHas(sourceText("LyrimuseCore/Local/CogPlayhead.swift"), "guard !SourceKnockout.isOut(.cogSlider), AXIsProcessTrusted() else { return false }"),
                     true, "Cog 接线: 读滑块能拔掉(拔腿测试)")
         expectEqual(sourceHas(sourceText("lyrimuse/UI/IdlePlaybackActions.swift"), "case .swinsian, .kuwo, .cog: PlayerProcess.pid(bundleID: player.bundleIdentifier) != nil"),

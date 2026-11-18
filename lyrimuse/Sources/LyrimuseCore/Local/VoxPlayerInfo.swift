@@ -505,8 +505,13 @@ public enum VoxPlayerInfo {
     /// (去扩展名,有「 - 」按第一个拆)。不是 http(s) 地址、地址里没有文件名为 nil。纯函数,selftest 覆盖。
     public static func streamURLName(_ title: String) -> (title: String, artist: String)? {
         guard title.hasPrefix("http://") || title.hasPrefix("https://"), let url = URL(string: title) else { return nil }
-        let name = url.lastPathComponent
-        guard !name.isEmpty, name != "/" else { return nil }
+        return fileNameIdentity(url.lastPathComponent)
+    }
+
+    /// 网上音频文件的文件名(地址最后一段)认成歌名和歌手:去扩展名,有「 - 」按第一个拆。空的、只有「/」的为 nil。
+    /// Cog 放网上文件时标题就是这一段(`CogStream`)。纯函数,selftest 覆盖。
+    public static func fileNameIdentity(_ name: String) -> (title: String, artist: String)? {
+        guard !name.isEmpty, name != "/", !name.contains("/") else { return nil }
         let id = identity(title: name.lowercased(), artist: "", album: "", filePath: "/" + name)
         return id.title.isEmpty ? nil : (id.title, id.artist)
     }

@@ -71,17 +71,19 @@ public enum PlayerTitleSplit {
             if let duration = file.duration { out = out.withDuration(duration) }
             return out
         }
+        if let named = CogStream.networkFile(bundleID: snapshot.bundleIdentifier, title: snapshot.title,
+                                             artist: snapshot.artist, duration: snapshot.duration) {
+            if let title = snapshot.title { rememberStreamTitle(title, parts: named) }
+            var out = snapshot.withTitle(named.title)
+            if !named.artist.isEmpty { out = out.withArtist(named.artist) }
+            return out
+        }
         let stream = isStream(duration: snapshot.duration)
             && (snapshot.bundleIdentifier != VoxPlayerInfo.bundleID || VoxPlayerInfo.isRadioTitle(snapshot.title))
         guard let parts = split(bundleID: snapshot.bundleIdentifier, title: snapshot.title, artist: snapshot.artist,
                                 isStream: stream)
         else { return snapshot }
-        if stream, let title = snapshot.title {
-            streamTitles.withLock { entries in
-                if entries.count > 16 { entries.removeAll() }
-                entries[title] = parts
-            }
-        }
+        if stream, let title = snapshot.title { rememberStreamTitle(title, parts: parts) }
         var out = snapshot.withTitle(parts.title)
         if !parts.artist.isEmpty { out = out.withArtist(parts.artist) }
         if stream, let raw = snapshot.title {
@@ -180,9 +182,10 @@ public enum PlayerTitleSplit {
         streamLine.withLock { $0 = StreamDelayLine() }
     }
 
-    /// 这份快照是延迟线排出来、起点推算过的电台流:位置解算可以拿歌词缓存里的曲长建锚点。纯函数,selftest 覆盖。
+    /// 这份快照是起点推算过的电台流(reAMP、VOX 的延迟线,Cog 的 `CogStream`)或 Cog 放的网上文件:位置解算可以拿歌词缓存里的
+    /// 曲长建锚点。纯函数,selftest 覆盖。
     public static func streamClockKnown(bundleID: String?, duration: Double?, elapsed: Double?) -> Bool {
-        guard let bundleID, streamBundleIDs.contains(bundleID) else { return false }
+        guard let bundleID, streamBundleIDs.contains(bundleID) || bundleID == CogStream.bundleID else { return false }
         return isStream(duration: duration) && elapsed != nil
     }
 
@@ -194,15 +197,22 @@ public enum PlayerTitleSplit {
            let file = cache.withLock({ $0[title]?.identity }) {
             return (file.artist, file.title)
         }
-        if let bundleID, bundleIDs.contains(bundleID), let title,
+        if let bundleID, bundleIDs.contains(bundleID) || bundleID == CogStream.bundleID, let title,
            let stream = streamTitles.withLock({ $0[title] }) {
             return stream
         }
         return split(bundleID: bundleID, title: title, artist: artist)
     }
 
-    /// 电台流那几串标题拆出来的结果,按播放器原样报的标题记(`applied` 记,`identityParts` 查)。
+    /// 电台流那几串标题(和 Cog 网上文件的文件名)拆出来的结果,按播放器原样报的标题记(`applied` 记,`identityParts` 查)。
     private static let streamTitles = OSAllocatedUnfairLock<[String: (artist: String, title: String)]>(initialState: [:])
+
+    private static func rememberStreamTitle(_ title: String, parts: (artist: String, title: String)) {
+        streamTitles.withLock { entries in
+            if entries.count > 16 { entries.removeAll() }
+            entries[title] = parts
+        }
+    }
 
     /// 电台流里不是歌的那几种,调用方当成没在放音乐(`MediaControlClient.playerContentNotMusic`),不拿去查歌词:
     /// 标题里带网址的(「[connecting to host] 网址」:连接那一拍;没收到第一份标题时在放也一直是它);攒缓冲那几拍
@@ -577,6 +587,11 @@ public enum PlayerTitleSplit {
              0x2160...0x217F, 0x2190...0x2199, 0x2460...0x24FF, 0x25A0...0x26FF: return true
         default: return false
         }
+    }
+
+    /// 末尾是 `audioExtensions` 里的扩展名(不分大小写)。纯函数,selftest 覆盖。
+    public static func hasAudioExtension(_ title: String) -> Bool {
+        strippingAudioExtension(title) != title
     }
 
     static func strippingAudioExtension(_ title: String) -> String {

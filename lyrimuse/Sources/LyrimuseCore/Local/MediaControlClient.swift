@@ -168,6 +168,8 @@ public enum MediaControlClient {
                 || PlayerTitleSplit.streamPlaceholder(bundleID: bundleID, title: snapshot.title, artist: snapshot.artist,
                                                       duration: snapshot.duration, playing: snapshot.playing)
                 || PinePlayerInfo.isNetworkRadio(snapshot) || PinePlayerInfo.isVideo(snapshot)
+                || CogStream.isPlaceholder(bundleID: bundleID, title: snapshot.title, artist: snapshot.artist,
+                                           duration: snapshot.duration)
                 || SwinsianPlayerInfo.isPodcastEpisode(snapshot)
         else { return false }
         setSnapshotFailure(.targetNotPlayingMusic)
@@ -2945,11 +2947,24 @@ public enum MediaControlClient {
         return snapshot
     }
 
-    /// 按 bundle id 单问到的 Cog 那份(焦点被别的 App 占着时):位置过主路径同一块表(`CogPlayhead`)。单问那份没有原始锚点时原样交回。
+    /// 按 bundle id 单问到的 Cog 那份(焦点被别的 App 占着时):位置过主路径同一块表(放流时 `CogStream`,否则 `CogPlayhead`)。
+    /// 单问那份没有原始锚点时原样交回。
     private static func cogProbedSnapshot(_ probed: MediaControlSnapshot, anchor: NowPlayingClientsProbe.SessionAnchor,
                                           now: Date) -> MediaControlSnapshot {
         var snapshot = probed
         if snapshot.processIdentifier == nil { snapshot.processIdentifier = anchor.processIdentifier.map { Int($0) } }
+        let anchorAt = anchor.timestamp.map { Date(timeIntervalSince1970: $0) }
+        let live = probed.anchorElapsedTime.map { elapsed in
+            probed.playing == true ? elapsed + max(0, anchorAt.map { now.timeIntervalSince($0) } ?? 0) : elapsed
+        }
+        if let stream = CogStream.reading(bundleID: CogStream.bundleID, title: probed.title, artist: probed.artist,
+                                          duration: probed.duration, anchorElapsed: probed.anchorElapsedTime, elapsed: live) {
+            let pid = snapshot.processIdentifier
+            snapshot = snapshot.withElapsed(stream.position, capturedAt: now)
+            snapshot.processIdentifier = pid
+            snapshot.nowPlayingItemID = probed.nowPlayingItemID
+            return snapshot
+        }
         guard let reading = CogPlayhead.reading(
             track: probed.trackKey, playing: probed.playing == true, anchorElapsed: probed.anchorElapsedTime,
             anchorAt: anchor.timestamp.map { Date(timeIntervalSince1970: $0) }, duration: probed.duration,
@@ -4091,8 +4106,12 @@ public enum MediaControlClient {
             ? PinePlayhead.reading(track: trackKey, playing: playing == true, anchorElapsed: raw.elapsedTime,
                                    anchorAt: timestampDate, duration: raw.duration, pid: raw.processIdentifier, now: sampledAt)
             : nil
+        // Cog 放网络流(时长报 0):电台每首按标题第一次出现时的 elapsed 起算,网上文件照系统那份(见 CogStream),不过 CogPlayhead。
+        let cogStream = isRadio ? nil : CogStream.reading(
+            bundleID: bundleID, title: raw.title, artist: raw.artist, duration: raw.duration,
+            anchorElapsed: raw.elapsedTime, elapsed: elapsed)
         // Cog 恢复、点播、冷启动的锚点不准,开了变速还照报速率 1:位置换成 CogPlayhead 那块表(按 Position 滑块校准),理由同 Amazon。
-        let cog = bundleID == CogPlayhead.bundleID && !isRadio
+        let cog = bundleID == CogPlayhead.bundleID && !isRadio && cogStream == nil
             ? CogPlayhead.reading(track: trackKey, playing: playing == true, anchorElapsed: raw.elapsedTime,
                                   anchorAt: timestampDate, duration: raw.duration, pid: raw.processIdentifier, now: sampledAt)
             : nil
@@ -4116,12 +4135,21 @@ public enum MediaControlClient {
             logger.notice("repeat-one loop (\(bundleID ?? "", privacy: .public)): \(raw.title ?? "", privacy: .public) past the end without a new anchor, extrapolated=\(stretched, format: .fixed(precision: 3)) duration=\(duration, format: .fixed(precision: 3)) → \(foobarLoop, format: .fixed(precision: 3))")
         }
         let held = republish.hold != nil || pine?.waiting == true
+        let reportedElapsed: Double?
+        let reportedAnchor: Double?
+        if let cogStream {
+            reportedElapsed = cogStream.position
+            reportedAnchor = cogStream.anchorPosition
+        } else {
+            reportedElapsed = amazonPosition ?? radioPosition ?? pine?.position ?? cog?.position ?? swinsian?.position ?? foobarLoop ?? stretched
+            reportedAnchor = amazonPosition ?? radioPosition ?? foobarLoop ?? raw.elapsedTime
+        }
         var snapshot = MediaControlSnapshot(
             title: raw.title,
             artist: raw.artist,
             album: raw.album,
             duration: raw.duration,
-            elapsedTime: amazonPosition ?? radioPosition ?? pine?.position ?? cog?.position ?? swinsian?.position ?? foobarLoop ?? stretched,
+            elapsedTime: reportedElapsed,
             playing: held ? false : playing,
             playbackRate: held ? 0 : (foobarRate != 1 && playing == true ? foobarRate : cogRate ?? raw.playbackRate),
             // 复用这个字段原本的语义("这是当前选定播放器的一份有效快照",见
@@ -4132,12 +4160,13 @@ public enum MediaControlClient {
             bundleIdentifier: bundleID,
             // 电台把锚点也换成自己那块表:留着原始值会让下游"锚点是不是开播那个"的判定
             // (anchorElapsedTime == 0)按整档节目的钟去解读,自相矛盾。
-            anchorElapsedTime: amazonPosition ?? radioPosition ?? foobarLoop ?? raw.elapsedTime,
+            anchorElapsedTime: reportedAnchor,
             isRadio: isRadio ? true : nil
         )
         // 读到之后主线程可能要等一两百毫秒才处理(换歌那一刻加载封面 / 歌词,实测 0.21s),位置得按读到的时刻
         // 补到处理那一刻(见 MediaControlSnapshot.capturedAt)。只对实测过的播放器开(02 章决策 41)。
-        if Self.stampsCaptureTime(bundleID: bundleID) || amazonPosition != nil || pine != nil || cog != nil || swinsian != nil
+        if Self.stampsCaptureTime(bundleID: bundleID) || amazonPosition != nil || pine != nil || cog != nil || cogStream != nil
+            || swinsian != nil
             || bundleID == PlaybackPlayer.foobar2000.bundleIdentifier {
             snapshot.capturedAt = sampledAt
         }
