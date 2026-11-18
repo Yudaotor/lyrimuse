@@ -653,6 +653,21 @@ func runDeepLinkTests() {
                     .debug(.importLyricsFolder(path: "/Users/a/歌词")), "debug: 导入歌词文件夹,路径原样")
         expectEqual(link("lyrimuse://debug/import-lyrics-folder") == nil && link("lyrimuse://debug/import-lyrics-folder?path=rel") == nil, true,
                     "debug: 导入歌词文件夹没带绝对路径认不出")
+        expectEqual(link("lyrimuse://debug/font-import?path=/Users/a/%E5%AD%97%20%E4%BD%93.ttf"),
+                    .debug(.fontImport(path: "/Users/a/字 体.ttf")), "debug: 导入字体,路径原样")
+        expectEqual(link("lyrimuse://debug/font-import") == nil && link("lyrimuse://debug/font-import?path=rel.ttf") == nil, true,
+                    "debug: 导入字体没带绝对路径认不出")
+        expectEqual(link("lyrimuse://debug/font-remove?family=Lyrimuse%20Test%20Font"), .debug(.fontRemove(family: "Lyrimuse Test Font")),
+                    "debug: 删除导入字体,族名原样(不转小写)")
+        expectEqual(link("lyrimuse://debug/font-remove") == nil && link("lyrimuse://debug/font-remove?family=") == nil, true,
+                    "debug: 删除导入字体没带族名认不出")
+        expectEqual([link("lyrimuse://debug/font-family?surface=Mini&family=Lyrimuse%20Test%20Font"),
+                     link("lyrimuse://debug/font-family?surface=overlay&family="), link("lyrimuse://debug/font-family?surface=notch")],
+                    [.debug(.fontFamily(surface: "mini", family: "Lyrimuse Test Font")),
+                     .debug(.fontFamily(surface: "overlay", family: "")), .debug(.fontFamily(surface: "notch", family: ""))],
+                    "debug: 设某处字体,surface 不分大小写,family 空或不带是系统字体")
+        expectEqual(link("lyrimuse://debug/font-family?surface=dock&family=X") == nil && link("lyrimuse://debug/font-family?family=X") == nil,
+                    true, "debug: 设某处字体,surface 不在名单里认不出")
         expectEqual([link("lyrimuse://debug/import-library"), link("lyrimuse://debug/import-watch?path=/Users/a/x"),
                      link("lyrimuse://debug/import-watch?off=1")],
                     [.debug(.importLibrary), .debug(.importWatch(path: "/Users/a/x")), .debug(.importWatch(path: nil))],
@@ -694,6 +709,10 @@ func runDeepLinkTests() {
                     && debug.contains("guard isEnabled else {"), true,
                     "debug: 只在本机偏好 debug:deepLinks 打开时执行(网页改不了本机偏好)")
         expectEqual(debug.contains("enabledKey = \"np:"), false, "debug: 开关键不带 np: 前缀,导出配置不带走")
+        let fontSetter = sourceBody("private static func setFontFamily(", in: debug)
+        for surface in LyrimuseDeepLink.fontFamilySurfaces {
+            expectEqual(sourceHas(fontSetter, "case \"\(surface)\": s."), true, "debug: font-family 的 \(surface) 在 App 侧有对应的设置")
+        }
         let lyricsWindowLookup = sourceBody("private static var visibleLyricsWindow: NSWindow? {", in: debug)
         expectEqual(sourceHas(lyricsWindowLookup, "$0.identifier?.rawValue.hasPrefix(\"lyrics-window\") == true")
                     && !lyricsWindowLookup.contains("== \"lyrics-window\""), true,
@@ -978,6 +997,8 @@ func runDeepLinkTests() {
             .debug(.importLyrics(paths: [])),
             .debug(.importLyricsFolder(path: "/tmp/歌 词")),
             .debug(.importLibrary), .debug(.importWatch(path: "/tmp/歌 词")), .debug(.importWatch(path: nil)),
+            .debug(.fontImport(path: "/tmp/字 体/Test Font.ttf")), .debug(.fontRemove(family: "Lyrimuse Test Font")),
+            .debug(.fontFamily(surface: "window", family: "PingFang SC")), .debug(.fontFamily(surface: "menubar", family: "")),
             .debug(.managerDecision(key: nil)), .debug(.managerDecision(key: "Michael Jackson|Billie Jean|Thriller")),
             .debug(.lyricsSearch(key: "Michael Jackson|Blood on the Dance Floor|HIStory ~dur254")),
             .debug(.editNotifyChannel(id: nil)), .debug(.editNotifyChannel(id: "Legacy-1")),

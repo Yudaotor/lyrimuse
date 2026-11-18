@@ -138,13 +138,19 @@ final class CustomFontStore: ObservableObject {
             FileIO.remove(url)
         }
         refresh { available in
-            guard CustomFontFile.isMissing(font.familyName, available: available) else { return }
+            guard CustomFontFile.isMissing(font.familyName, available: available) else {
+                logger.notice("remove \(font.familyName, privacy: .public): still available after refresh, settings kept")
+                return
+            }
             let settings = AppSettings.shared
+            let reset = [settings.fontFamilyName, settings.notchFontFamilyName, settings.menuBarLyricsFontFamily,
+                         settings.lyricsWindowFontFamily, settings.lyricsWindowMiniFontFamily].filter { $0 == font.familyName }.count
             if settings.fontFamilyName == font.familyName { settings.fontFamilyName = "" }
             if settings.notchFontFamilyName == font.familyName { settings.notchFontFamilyName = "" }
             if settings.menuBarLyricsFontFamily == font.familyName { settings.menuBarLyricsFontFamily = "" }
             if settings.lyricsWindowFontFamily == font.familyName { settings.lyricsWindowFontFamily = "" }
             if settings.lyricsWindowMiniFontFamily == font.familyName { settings.lyricsWindowMiniFontFamily = "" }
+            logger.notice("remove \(font.familyName, privacy: .public): gone from refreshed list (\(available.count, privacy: .public) families), reset \(reset, privacy: .public) settings")
         }
     }
 

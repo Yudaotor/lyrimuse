@@ -354,7 +354,19 @@ public enum LyrimuseDeepLink: Equatable, Sendable {
         case lyricsWriteback(step: String)
         /// 设监视文件夹(`debug/import-watch?path=<绝对路径>`),`debug/import-watch?off=1` 停止监视。
         case importWatch(path: String?)
+        /// 导入一份 .ttf / .otf,跟字体选单「导入字体…」选完文件走同一条路,不弹选文件框(`debug/font-import?path=<绝对路径>`)。
+        /// 三条字体深链和 `state` 的 `fonts` 节见 04 章决策 108。
+        case fontImport(path: String)
+        /// 删掉这一族导入字体,跟字体选单「已导入」那一行的删除键走同一条路(`debug/font-remove?family=<族名>`):
+        /// 仍指向它的字体设置等重读的族名单确认它没了才退回系统字体。不是导入字体的族名只记日志。
+        case fontRemove(family: String)
+        /// 一处的字体设成这个族名,跟字体选单选中一行写同一个设置
+        /// (`debug/font-family?surface=<fontFamilySurfaces 之一>&family=<族名>`,`family` 空或不带 = 系统字体)。
+        case fontFamily(surface: String, family: String)
     }
+
+    /// `debug/font-family` 认的几处字体设置:悬浮歌词、灵动岛、菜单栏、歌词窗口完整尺寸、迷你尺寸。App 侧 `DebugDeepLinks.setFontFamily` 逐个对应,两处同步改。
+    public static let fontFamilySurfaces = ["overlay", "notch", "menubar", "window", "mini"]
 
     /// `debug/window-key` 除单个小写字母外认的键名。
     public static let windowKeyNames = ["up", "down", "left", "right", "return", "escape", "tab", "space"]
@@ -572,6 +584,15 @@ public enum LyrimuseDeepLink: Equatable, Sendable {
                 guard let path = value("path"), path.hasPrefix("/") else { return nil }
                 self = .debug(.importWatch(path: path))
             }
+        case ("debug", "/font-import"):
+            guard let path = value("path"), path.hasPrefix("/") else { return nil }
+            self = .debug(.fontImport(path: path))
+        case ("debug", "/font-remove"):
+            guard let family = value("family"), !family.isEmpty else { return nil }
+            self = .debug(.fontRemove(family: family))
+        case ("debug", "/font-family"):
+            guard let surface = value("surface")?.lowercased(), Self.fontFamilySurfaces.contains(surface) else { return nil }
+            self = .debug(.fontFamily(surface: surface, family: value("family") ?? ""))
         case ("debug", "/import-lyrics-folder"):
             guard let path = value("path"), path.hasPrefix("/") else { return nil }
             self = .debug(.importLyricsFolder(path: path))
@@ -1055,6 +1076,15 @@ public enum LyrimuseDeepLink: Equatable, Sendable {
             case let .importWatch(path):
                 components.path = "/import-watch"
                 components.queryItems = [path.map { URLQueryItem(name: "path", value: $0) } ?? URLQueryItem(name: "off", value: "1")]
+            case let .fontImport(path):
+                components.path = "/font-import"
+                components.queryItems = [URLQueryItem(name: "path", value: path)]
+            case let .fontRemove(family):
+                components.path = "/font-remove"
+                components.queryItems = [URLQueryItem(name: "family", value: family)]
+            case let .fontFamily(surface, family):
+                components.path = "/font-family"
+                components.queryItems = [URLQueryItem(name: "surface", value: surface), URLQueryItem(name: "family", value: family)]
             case let .reportingSwitchHint(bundleID):
                 components.path = "/reporting-switch-hint"
                 components.queryItems = [URLQueryItem(name: "bundle", value: bundleID)]

@@ -269,6 +269,23 @@ enum DebugDeepLinks {
         case let .importLyrics(paths):
             AppActions.shared.requestLyricsImport(key: nil, urls: paths.map { URL(fileURLWithPath: $0) })
             logger.notice("debug import lyrics files=\(paths.count, privacy: .public)")
+        case let .fontImport(path):
+            let url = URL(fileURLWithPath: path)
+            do {
+                try CustomFontStore.shared.importFont(from: url)
+                logger.notice("debug font import ok file=\(url.lastPathComponent, privacy: .public)")
+            } catch {
+                logger.notice("debug font import failed file=\(url.lastPathComponent, privacy: .public) error=\(String(describing: error), privacy: .public)")
+            }
+        case let .fontRemove(family):
+            guard let font = CustomFontStore.shared.fonts.first(where: { $0.familyName == family }) else {
+                logger.notice("debug font remove: not an imported family \(family, privacy: .public)")
+                return
+            }
+            logger.notice("debug font remove family=\(family, privacy: .public)")
+            CustomFontStore.shared.remove(font)
+        case let .fontFamily(surface, family):
+            setFontFamily(surface: surface, family: family)
         case .milestonePreview:
             ListenMilestoneCenter.shared.preview()
             logger.notice("debug milestone preview")
@@ -440,6 +457,22 @@ enum DebugDeepLinks {
         }
     }
 
+    /// `debug/font-family`:名单同 `LyrimuseDeepLink.fontFamilySurfaces`,两处同步改。
+    private static func setFontFamily(surface: String, family: String) {
+        let s = AppSettings.shared
+        switch surface {
+        case "overlay": s.fontFamilyName = family
+        case "notch": s.notchFontFamilyName = family
+        case "menubar": s.menuBarLyricsFontFamily = family
+        case "window": s.lyricsWindowFontFamily = family
+        case "mini": s.lyricsWindowMiniFontFamily = family
+        default:
+            logger.notice("debug font family: unknown surface \(surface, privacy: .public)")
+            return
+        }
+        logger.notice("debug font family surface=\(surface, privacy: .public) family=\(family.isEmpty ? "system" : family, privacy: .public)")
+    }
+
     // MARK: 状态快照
 
     /// 验证脚本读这一份断言,不靠截图:开着哪些窗口、各自在哪、面板翻在哪一格、当前播放到哪一句、各开关。
@@ -484,6 +517,13 @@ enum DebugDeepLinks {
                              "editing": MenuBarPanelDebugState.editing,
                              "layout": AppSettings.shared.menuBarPanelLayout.encoded()],
             "knockedOut": SourceKnockout.knockedOut,
+            // 导入字体(字体选单「已导入」区)、此刻能用的字体族(后台重读好之前是 null)、五处字体设置(空串 = 系统字体)。
+            "fonts": [
+                "imported": CustomFontStore.shared.fonts.map { ["family": $0.familyName, "files": $0.fileNames] },
+                "available": CustomFontStore.shared.availableFamilies.map { $0.sorted() as Any } ?? NSNull(),
+                "settings": ["overlay": s.fontFamilyName, "notch": s.notchFontFamilyName, "menubar": s.menuBarLyricsFontFamily,
+                             "window": s.lyricsWindowFontFamily, "mini": s.lyricsWindowMiniFontFamily],
+            ] as [String: Any],
             // `debug/hold-opens` 开着时点了没打开、只记下的外部链接,按点的先后。
             "heldOpens": ["holding": DebugExternalOpens.holding, "urls": DebugExternalOpens.held],
             // 读取器此刻解到哪一版;`published` 是按版本重算的各处订阅的那个信号(`enrichContentVersion`)。
