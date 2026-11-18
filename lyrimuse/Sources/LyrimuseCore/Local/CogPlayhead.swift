@@ -125,6 +125,11 @@ public enum CogPlayhead {
                 out.sampleAt = nil
                 return out
             }
+            // 已经停着又来一份、离停住的位置远(不是补发的旧值):暂停中跳转,值就是停住的位置,不补。
+            if let same, !same.anchor.playing, !isResume(anchor.elapsed, after: same) {
+                return Clock(anchor: anchor, kind: .paused, base: anchor.elapsed, baseAt: anchor.at, rate: rate,
+                             precise: false, pausedPosition: anchor.elapsed)
+            }
             let stopped = anchor.elapsed > 0 ? anchor.elapsed + resumeLagSecs : anchor.elapsed
             return Clock(anchor: anchor, kind: .paused, base: anchor.elapsed, baseAt: anchor.at, rate: rate,
                          precise: false, pausedPosition: stopped)

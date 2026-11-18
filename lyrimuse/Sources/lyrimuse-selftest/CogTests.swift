@@ -54,6 +54,14 @@ func runCogTests() {
                     "Cog 表: 锚点补 0.33 秒比停住的位置靠后时取补过的")
         expectEqual(H.advance(carriedPause, anchor: anchor(11.6, 28), now: at(28)).kind, .seek, "Cog 表: 比停住的位置小 0.8 秒以上算跳转")
         expectEqual(H.advance(carriedPause, anchor: anchor(12.6, 28), now: at(28)).kind, .seek, "Cog 表: 比停住的位置靠后算跳转")
+        let pausedSeek = H.advance(carriedPause, anchor: anchor(30, 20, playing: false), now: at(20))
+        expectEqual([pausedSeek.kind == .paused, pausedSeek.pausedPosition == 30], [true, true],
+                    "Cog 表: 停着时跳到别处,停住的位置就是跳到的值、不补")
+        expectEqual(H.advance(carriedPause, anchor: anchor(12.2, 13, playing: false), now: at(13)).pausedPosition.map { near($0, 12.53) }, true,
+                    "Cog 表: 停住后补发的暂停锚点(停住位置往下 0.8 秒内)照旧补 0.33 秒")
+        let seekResume = H.advance(pausedSeek, anchor: anchor(30, 25), now: at(25))
+        expectEqual([seekResume.kind == .resume, near(seekResume.base, 30.33)], [true, true],
+                    "Cog 表: 停着跳转后恢复,恢复锚点照补 0.33 秒")
         let lateRepublish = H.advance(H.advance(start, anchor: anchor(10, 10.1), now: at(10.1)), anchor: anchor(10, 10.1, playing: false), now: at(15))
         let sameValue = H.advance(lateRepublish, anchor: anchor(10, 30), now: at(30))
         expectEqual([sameValue.kind == .resume, sameValue.base == 15], [true, true],
