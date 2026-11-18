@@ -388,6 +388,31 @@ func runSettingsAuditContracts() {
         (0, 898, 0, "最小尺寸查询(提议宽 0): 不拿容器宽撑开"),
         (700, 690, 700, "容器比提议还窄: 按提议宽"),
     ]
+    // 歌词源「测试」:用完每日额度的源报 daily_quota_exhausted,带上引擎给的恢复时刻,按本机时区、界面语言写成时刻(09 章决策 387)。
+    let failureReason = app("LyricSourceFailureReason.swift")
+    expectEqual(sourceHas(sourceBody("static func text(forCode code: String, resumeAt: Date?) -> String", in: failureReason), """
+                    if code == "daily_quota_exhausted", let resumeAt {
+                    return String(format: L10n.t("今日请求额度已用完，%@ 恢复"),
+                    resumeAt.formatted(Date.FormatStyle(date: .omitted, time: .shortened, locale: L10n.locale)))
+                    }
+                    return text(forCode: code)
+                    """)
+                && sourceHas(failureReason, "case \"daily_quota_exhausted\":"), true,
+                "歌词源测试: 额度用完报恢复时刻,没带时刻只说用完")
+    let testService = app("Settings/LyricSourceTestService.swift")
+    expectEqual(sourceHas(testService, "let resumeAt: Double?")
+                && sourceHas(testService, "resumeAt: raw.resumeAt.map { Date(timeIntervalSince1970: $0) })")
+                && sourceHas(testService, "LyricSourceFailureReason.text(forCode: reasonCode, resumeAt: resumeAt)"), true,
+                "歌词源测试: 读引擎结果行的 resumeAt(unix 秒)交给原因文案")
+    expectEqual(lyricsView.components(separatedBy: "detail: result.reasonText)").count - 1, 2,
+                "歌词源测试: 单测和全部测试两处都按结果行(带恢复时刻)出原因")
+    expectEqual(sourceHas(sourceBody("private func sourceTestAccessory(_ source: LyricsSource) -> some View", in: lyricsView), """
+                    .onReceive(NotificationCenter.default.publisher(for: DebugDeepLinks.hoverNoteNotification)) { note in
+                    let query = note.object as? String ?? ""
+                    if !query.isEmpty, tooltip?.contains(query) == true {
+                    accessoryHoverSource = source
+                    """), true,
+                "歌词源测试: debug/hover-note 能弹出测试结果的原因气泡(不提前台验文案)")
     for c in pageWidthCases {
         expectEqual(SettingsPageContentWidth.resolve(visible: c.visible, container: c.container, scrollerWidth: 17), c.want,
                     "设置页内容宽: \(c.label)")

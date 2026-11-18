@@ -438,6 +438,8 @@
 "今日、近 7 天，以及收听最多的歌手和歌曲" = "Hôm nay, 7 ngày qua, cùng nghệ sĩ và bài hát nghe nhiều nhất";
 "今日已收听 %@ 次" = "%@ lượt phát hôm nay";
 "今日收听" = "Nghe hôm nay";
+"今日请求额度已用完" = "Đã hết hạn mức yêu cầu hôm nay";
+"今日请求额度已用完，%@ 恢复" = "Đã hết hạn mức yêu cầu hôm nay, khôi phục lúc %@";
 "从 Windows 移植来的老牌本地音乐播放器" = "Trình phát nhạc trên máy lâu đời, chuyển từ Windows sang Mac";
 "从「%@」导出的备份" = "Bản sao lưu xuất từ “%@”";
 "从「应用程序」中选择，无需等待其开始播放" = "Chọn từ “Ứng dụng”, không cần đợi ứng dụng bắt đầu phát";

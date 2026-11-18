@@ -1840,6 +1840,15 @@ private struct LyricsSettingsTab: View {
             guard !testBlockedForConnection else { return }
             accessoryHoverSource = hovering ? source : (accessoryHoverSource == source ? nil : accessoryHoverSource)
         }
+        // `debug/hover-note?q=`:原因里含这段文字就当作指针停在这颗图标上,弹出原因;`off=1` 收起。
+        .onReceive(NotificationCenter.default.publisher(for: DebugDeepLinks.hoverNoteNotification)) { note in
+            let query = note.object as? String ?? ""
+            if !query.isEmpty, tooltip?.contains(query) == true {
+                accessoryHoverSource = source
+            } else if accessoryHoverSource == source {
+                accessoryHoverSource = nil
+            }
+        }
         .popover(isPresented: Binding(
             get: { isAccessoryHovered && tooltip != nil },
             set: { shown in if !shown { accessoryHoverSource = nil } }
@@ -1912,7 +1921,7 @@ private struct LyricsSettingsTab: View {
                           let matched = LyricsSource(rawValue: result.source) else { return }
                     sourceTestStates[matched] = .result(
                         status: result.status,
-                        detail: LyricSourceFailureReason.text(forCode: result.reasonCode))
+                        detail: result.reasonText)
                 }
             } catch {
                 if generation == lyricSourceTestGeneration {
@@ -1945,7 +1954,7 @@ private struct LyricsSettingsTab: View {
                           let matched = LyricsSource(rawValue: result.source) else { return }
                     sourceTestStates[matched] = .result(
                         status: result.status,
-                        detail: LyricSourceFailureReason.text(forCode: result.reasonCode))
+                        detail: result.reasonText)
                 }
             } catch {
                 // 子进程整个没跑起来(比如引擎二进制缺失)——已经标成"测试中"的

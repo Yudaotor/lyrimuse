@@ -84,4 +84,7 @@ const (
 const (
 	lyricTestReasonNoResponse  = "no_response"
 	lyricTestReasonNetworkDown = "network_down"
+	// daily_quota_exhausted:这个源用完了每日额度、停到重置时刻(sourcedayquota.go),这一轮不问它;
+	// 结果行的 ResumeAt 带恢复时刻。见 09 章决策 387。
+	lyricTestReasonDailyQuotaExhausted = "daily_quota_exhausted"
 )

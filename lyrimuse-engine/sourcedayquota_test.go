@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"crypto/tls"
+	"encoding/json"
 	"errors"
 	"net"
 	"net/http"
@@ -271,5 +272,39 @@ func TestLyricSourceQuotaWiredIntoSubcommands(t *testing.T) {
 		if !containsCode(body, "useSharedLyricSourceQuota()") {
 			t.Errorf("%s 的 %s 没接共用的额度记账", file, fn)
 		}
+	}
+}
+
+// 设置页「测试」:常驻引擎记下用完每日额度后,子进程读同一份状态文件,当场报额度用完和恢复时刻,一个请求都不发。
+func TestTestLyricSourcesReportsDailyQuotaPause(t *testing.T) {
+	resetSourceDayQuotaForTest(t)
+	dir := useCLIConfigDir(t, map[string]string{})
+	f := withKugouFakeReq(t, func(*http.Request, string) (int, string) { return http.StatusTooManyRequests, "" })
+	resumeAt := time.Now().Add(3 * time.Hour).Unix()
+	state, _ := json.Marshal(map[string]sourceDayQuotaRecord{lyricSourceMegalobiz: {
+		Remaining: 0, ResetAt: resumeAt, SeenAt: time.Now().Add(-time.Minute).Unix(), PausedUntil: resumeAt,
+	}})
+	if err := os.WriteFile(filepath.Join(dir, sourceDayQuotaFileName), state, 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	out := captureStdout(t, func() { runTestLyricSourcesCLI([]string{"-source", lyricSourceMegalobiz}) })
+
+	lines := strings.Split(strings.TrimSpace(out), "\n")
+	if len(lines) != 1 {
+		t.Fatalf("只报 Megalobiz 一行: %q", out)
+	}
+	var got lyricSourceTestResult
+	if err := json.Unmarshal([]byte(lines[0]), &got); err != nil {
+		t.Fatalf("不是 JSON: %q", lines[0])
+	}
+	if got.Source != lyricSourceMegalobiz || got.Status != "warn" ||
+		got.ReasonCode != lyricTestReasonDailyQuotaExhausted || got.ResumeAt != resumeAt {
+		t.Errorf("额度用完时报额度原因和恢复时刻: %+v", got)
+	}
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if len(f.hits) != 0 {
+		t.Errorf("停着的时候不发请求: %v", f.hits)
 	}
 }

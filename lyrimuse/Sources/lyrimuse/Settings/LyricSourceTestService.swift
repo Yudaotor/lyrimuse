@@ -43,11 +43,17 @@ final class LyricSourceTestService {
         let source: String
         let status: Status
         /// 稳定代码,不是文案(从 detail 改名——见 `LyricSourceFailureReason` 的
-        /// 头注)。ok 状态下恒为空串。调用方要显示给用户时经
-        /// `LyricSourceFailureReason.text(forCode:)` 翻成当前 App 界面语言的人话,不要
-        /// 直接显示这个原始值。
+        /// 头注)。ok 状态下恒为空串。调用方要显示给用户时用 `reasonText`(带上 `resumeAt`
+        /// 翻成当前 App 界面语言的人话),不要直接显示这个原始值。
         let reasonCode: String
         let networkLooksDown: Bool
+        /// `daily_quota_exhausted` 时这个源几点恢复;别的情况为 nil。
+        let resumeAt: Date?
+
+        /// 给用户看的原因(当前界面语言)。
+        var reasonText: String {
+            LyricSourceFailureReason.text(forCode: reasonCode, resumeAt: resumeAt)
+        }
     }
 
     enum TestError: LocalizedError {
@@ -128,7 +134,8 @@ final class LyricSourceTestService {
                     }
                     let result = Result(
                         source: raw.source, status: raw.status, reasonCode: raw.reasonCode,
-                        networkLooksDown: raw.networkLooksDown)
+                        networkLooksDown: raw.networkLooksDown,
+                        resumeAt: raw.resumeAt.map { Date(timeIntervalSince1970: $0) })
                     Task { @MainActor in onUpdate(result) }
                 }
             }
@@ -187,4 +194,6 @@ private struct RawTestResult: Decodable {
     let status: LyricSourceTestService.Status
     let reasonCode: String
     let networkLooksDown: Bool
+    /// unix 秒;引擎只在 `daily_quota_exhausted` 时输出。
+    let resumeAt: Double?
 }

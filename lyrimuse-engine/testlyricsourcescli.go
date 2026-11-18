@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"sync"
+	"time"
 )
 
 // runTestLyricSourcesCLI implements `lyrimuse-engine test-lyric-sources [-source <name>]`:
@@ -86,19 +87,20 @@ func runTestLyricSourcesCLI(args []string) {
 	}
 
 	enc := json.NewEncoder(os.Stdout)
-	emitResult := func(source, status, reasonCode string) {
+	emit := func(r lyricSourceTestResult) {
 		mu.Lock()
 		defer mu.Unlock()
-		if reported[source] {
+		if reported[r.Source] {
 			return
 		}
-		reported[source] = true
-		if err := enc.Encode(lyricSourceTestResult{
-			Source: source, Status: status, ReasonCode: reasonCode,
-			NetworkLooksDown: networkLooksDown(),
-		}); err != nil {
+		reported[r.Source] = true
+		r.NetworkLooksDown = networkLooksDown()
+		if err := enc.Encode(r); err != nil {
 			log.Fatalf("test-lyric-sources: encode result: %v", err)
 		}
+	}
+	emitResult := func(source, status, reasonCode string) {
+		emit(lyricSourceTestResult{Source: source, Status: status, ReasonCode: reasonCode})
 	}
 
 	// probe1/probe2 各跑一遍这套逻辑:results 是"到目前为止全部已知结果"的累积列表
@@ -149,6 +151,14 @@ func runTestLyricSourcesCLI(args []string) {
 	// SettingsView.sourceTestAccessory),所以这条路平时只有"全部测试"会走到。
 	if wanted[lyricSourceAppleMusic] && !applemusicConnected() {
 		emitResult(lyricSourceAppleMusic, "warn", lyricFailureReasonAppleMusicNotConnected)
+	}
+	// 用完每日额度、停到重置时刻的源这一轮必然不问,当场报额度用完和恢复时刻,不跑探测曲。
+	now := time.Now()
+	for _, src := range targets {
+		if left, paused := sourceDayQuotaPausedFor(src, now); paused {
+			emit(lyricSourceTestResult{Source: src, Status: "warn",
+				ReasonCode: lyricTestReasonDailyQuotaExhausted, ResumeAt: now.Add(left).Unix()})
+		}
 	}
 
 	// 配了专用探测曲的源(lyricSourceOwnProbes)另外单独问一次,跟下面两首并行:共用的两首不在它的曲库里,
@@ -246,4 +256,6 @@ type lyricSourceTestResult struct {
 	// 头注,人话交给 Swift 侧按 App 界面语言翻译)。ok 状态下恒为空串,Swift 侧从不读它。
 	ReasonCode       string `json:"reasonCode"`
 	NetworkLooksDown bool   `json:"networkLooksDown"`
+	// ResumeAt:ReasonCode 为 daily_quota_exhausted 时这个源几点恢复(unix 秒),别的情况不输出。
+	ResumeAt int64 `json:"resumeAt,omitempty"`
 }

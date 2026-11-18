@@ -12,6 +12,15 @@ import Foundation
 /// 新代码,这个 `switch` 也要补一个 case,漏了的后果是界面显示一串谁都看不懂的代码本身
 /// (下面的兜底分支),比"忘了翻译"更难排查。
 enum LyricSourceFailureReason {
+    /// - resumeAt:`daily_quota_exhausted` 时这个源几点恢复,按本机时区、界面语言写成时刻;别的代码不看它。
+    static func text(forCode code: String, resumeAt: Date?) -> String {
+        if code == "daily_quota_exhausted", let resumeAt {
+            return String(format: L10n.t("今日请求额度已用完，%@ 恢复"),
+                          resumeAt.formatted(Date.FormatStyle(date: .omitted, time: .shortened, locale: L10n.locale)))
+        }
+        return text(forCode: code)
+    }
+
     static func text(forCode code: String) -> String {
         switch code {
         case "lyricfind_region_restricted":
@@ -68,6 +77,10 @@ enum LyricSourceFailureReason {
             return L10n.t("两首探测曲均无响应，该源目前可能不可用")
         case "network_down":
             return L10n.t("网络请求全部失败（DNS / 连接问题），本轮探测未能执行")
+        case "daily_quota_exhausted":
+            // 这个源用完了每日额度,引擎停到重置时刻、这一轮没问它,不是源坏了(引擎 sourcedayquota.go)。
+            // 带了恢复时刻的走 text(forCode:resumeAt:)。
+            return L10n.t("今日请求额度已用完")
         default:
             // 理论不该发生(引擎只会吐上面几个已知代码)——原样显示代码本身,
             // 好过静默吞掉或崩溃,至少排查时能看出"两侧哪个漏了同步"。

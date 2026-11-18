@@ -438,6 +438,8 @@
 "今日、近 7 天，以及收听最多的歌手和歌曲" = "Bugün, son 7 gün ve en çok dinlediğiniz sanatçılar ile parçalar";
 "今日已收听 %@ 次" = "Bugün %@ dinleme";
 "今日收听" = "Bugün";
+"今日请求额度已用完" = "Günlük istek kotası doldu";
+"今日请求额度已用完，%@ 恢复" = "Günlük istek kotası doldu, saat %@ itibarıyla devam eder";
 "从 Windows 移植来的老牌本地音乐播放器" = "Windows’tan Mac’e taşınan klasik yerel müzik çalar";
 "从「%@」导出的备份" = "“%@” aygıtından dışa aktarılan yedek";
 "从「应用程序」中选择，无需等待其开始播放" = "“Uygulamalar” klasöründen seçin; çalmaya başlamasını beklemenize gerek yok";

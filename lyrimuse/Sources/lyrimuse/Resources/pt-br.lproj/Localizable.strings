@@ -469,6 +469,8 @@
 "今日已收听 %@ 次" = "%@ reproduções hoje";
 "今日已收听 %@ 次#one" = "%@ reprodução hoje";
 "今日收听" = "Ouvido hoje";
+"今日请求额度已用完" = "Limite diário de solicitações atingido";
+"今日请求额度已用完，%@ 恢复" = "Limite diário de solicitações atingido; volta às %@";
 "从 Windows 移植来的老牌本地音乐播放器" = "O clássico player de música local do Windows, adaptado para Mac";
 "从「%@」导出的备份" = "Backup exportado de “%@”";
 "从「应用程序」中选择，无需等待其开始播放" = "Escolha um em Aplicativos, sem esperar que comece a tocar";
