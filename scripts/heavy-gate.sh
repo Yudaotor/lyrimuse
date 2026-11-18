@@ -41,11 +41,27 @@ heavy_gate_log() {
   printf '%s\t%s\t%s\t%s\t%s\n' "$(date '+%Y-%m-%d %H:%M:%S')" "$1" "$$" "$2" "${3:-}" >> "$log" 2>/dev/null || true
 }
 
-# heavy_gate_stale <令牌目录> <读到的 pid>:持有进程不在了;或者 owner 一直没写上(建了目录就被杀)、目录超过一分钟。
+# heavy_gate_started_by <pid> <时刻>:pid 还在,且在 <时刻>(秒)之前(留 2 秒余量)就起来了;没给时刻只看在不在。
+# 只看 kill -0 不够:SIGKILL 留下的令牌,pid 被后起的别的进程复用后会一直当成有人拿着。见 15 章决策 123。
+heavy_gate_started_by() {
+  local pid="$1" since="$2" etime days=0 h=0 m=0 s=0 a b c
+  etime="$(ps -o etime= -p "$pid" 2>/dev/null | tr -d ' ' || true)"
+  [ -n "$etime" ] || return 1
+  [ -n "$since" ] || return 0
+  case "$etime" in *-*) days="${etime%%-*}"; etime="${etime#*-}" ;; esac
+  IFS=: read -r a b c <<EOF_ETIME
+$etime
+EOF_ETIME
+  if [ -n "$c" ]; then h="$a"; m="$b"; s="$c"; else m="$a"; s="${b:-0}"; fi
+  [ $(( $(date +%s) - (10#$days * 86400 + 10#$h * 3600 + 10#$m * 60 + 10#$s) )) -le $((since + 2)) ]
+}
+
+# heavy_gate_stale <令牌目录> <读到的 pid>:持有进程不在了(或 pid 已被后起的进程复用);或者 owner 一直没写上(建了目录就被杀)、
+# 目录超过一分钟。
 heavy_gate_stale() {
   local pid="$2"
   if [ -n "$pid" ]; then
-    ! kill -0 "$pid" 2>/dev/null
+    ! heavy_gate_started_by "$pid" "$(sed -n 3p "$1/owner" 2>/dev/null || true)"
   else
     [ -n "$(find "$1" -maxdepth 0 -mmin +1 2>/dev/null)" ]
   fi

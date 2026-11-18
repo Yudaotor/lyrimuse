@@ -1752,9 +1752,12 @@ func runOpsDiagnosticsTests() {
                 let body = code[loop.upperBound..<loopEnd.lowerBound]
                 expectEqual(body.contains("take_over_stale_build_lock \"$holder\"") && !body.contains("rm -rf"), true,
                             "排队锁: 排队循环里不直接删锁,陈旧锁一律交给接管函数")
+                expectEqual(body.contains("case \"$(ps -p \"$holder\" -o command= 2>/dev/null || true)\" in\n*build.sh*) ;;\n*) stale=1 ;;\nesac")
+                                && !body.contains("kill -0 \"$holder\""), true,
+                            "排队锁: 持有者看命令行是不是 build.sh,pid 被别的进程复用时也算陈旧(15 章决策 123)")
                 if let term = code.range(of: "trap 'exit 143' TERM\ntrap 'exit 129' HUP") {
                     expectEqual(term.lowerBound < loop.lowerBound, true,
-                                "排队锁: 排队之前给 SIGTERM / SIGHUP 设 trap(bash 3.2 没 trap 时被杀不跑 EXIT trap,锁和孤儿编译都留下)")
+                                "排队锁: 排队之前给 SIGTERM / SIGHUP 设 trap(没 trap 时 bash 当场退出,前台编译成了孤儿、不持锁接着写)")
                 } else {
                     expectEqual(true, false, "排队锁: 找不到 SIGTERM / SIGHUP 的 trap")
                 }

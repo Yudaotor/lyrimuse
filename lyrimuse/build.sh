@@ -121,8 +121,8 @@ cmux_build_done() {
   fi
 }
 trap 'cmux_build_done $?' EXIT
-# bash 3.2 收到没设 trap 的 SIGTERM / SIGHUP 直接退出、不跑 EXIT trap:锁留在原地,前台那条 swift build 成了孤儿,
-# 接着往快照的 .build 里写,下一个排队的已经接管了锁。设成 exit:bash 等前台命令结束、照常走 EXIT trap。见 15 章决策 119。
+# 没设 trap 时 bash 收到 SIGTERM / SIGHUP 当场退出(EXIT trap 照跑、锁放掉),前台那条 swift build 成了孤儿,不持锁
+# 接着往快照的 .build 里写,下一个排队的已经拿到锁开编。设成 exit:bash 等前台命令结束再退出、走 EXIT trap。见 15 章决策 119。
 trap 'exit 143' TERM
 trap 'exit 129' HUP
 cmux_stage 0 "排队"
@@ -169,7 +169,11 @@ while ! mkdir "$BUILD_LOCK" 2>/dev/null; do
   holder="$(cat "$BUILD_LOCK/pid" 2>/dev/null || true)"
   stale=0
   if [ -n "$holder" ]; then
-    kill -0 "$holder" 2>/dev/null || stale=1
+    # 只看 kill -0 不够:SIGKILL 留下的锁,pid 被别的进程复用后会一直当成有人拿着。见 15 章决策 123。
+    case "$(ps -p "$holder" -o command= 2>/dev/null || true)" in
+      *build.sh*) ;;
+      *) stale=1 ;;
+    esac
   elif [ -n "$(find "$BUILD_LOCK" -maxdepth 0 -mmin +1 2>/dev/null)" ]; then
     stale=1 # 建了目录、还没写进 pid 就被杀
   fi

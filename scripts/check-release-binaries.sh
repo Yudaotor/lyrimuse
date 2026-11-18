@@ -48,7 +48,19 @@ bundled_binaries=(
 )
 failed=0
 
-for arch in $(lipo -archs "$main"); do
+# lipo / dyld_info 失败时算不过:写在 for 的列表或进程替换里,失败会被吞掉、一个架构都不查就报通过。
+archs=""
+if ! archs="$(lipo -archs "$main")" || [ -z "$archs" ]; then
+  echo "!! 读不出 $main 的架构(lipo -archs 失败)" >&2
+  failed=1
+  archs=""
+fi
+for arch in $archs; do
+  if ! fixups="$(dyld_info -arch "$arch" -fixups "$main")"; then
+    echo "!! $arch 主程序读不出 fixups(dyld_info 失败)" >&2
+    failed=1
+    continue
+  fi
   while IFS= read -r symbol; do
     [ -z "$symbol" ] && continue
     case "$symbol" in
@@ -62,7 +74,7 @@ for arch in $(lipo -archs "$main"); do
       echo "!! $arch 主程序弱导入了不在白名单里的系统符号: $symbol(确认读它的地方都在 #available 里面后加进 $0 的白名单)" >&2
       failed=1
     fi
-  done < <(dyld_info -arch "$arch" -fixups "$main" | awk '$NF == "[weak-import]" { print $(NF-1) }' | sort -u)
+  done < <(printf '%s\n' "$fixups" | awk '$NF == "[weak-import]" { print $(NF-1) }' | sort -u)
 done
 if [ "$weak_only" = 1 ]; then
   [ "$failed" = 0 ] && echo "    弱导入校验通过"

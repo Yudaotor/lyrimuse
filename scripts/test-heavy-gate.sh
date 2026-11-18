@@ -4,7 +4,7 @@
 # 每项打 ok / FAIL,最后一行 all ok 或 N failure(s),退出码对应。
 # 测的是 15 章决策 43、120、121 的约定:同时持有不超过份数、持有者被 SIGKILL 后令牌回收、先来先到、装机优先、
 # 排队上限退出码 75、套着排(heavy-run 里再 heavy-run)不死等、拿到 / 放回 / 超时留痕、别的闸目录的令牌不继承、
-# 停住不刷新的装机登记不再让。
+# 停住不刷新的装机登记不再让、持有者的 pid 被后起的进程复用时照样回收、命令里有 build.sh 的不拿令牌。
 set -u
 # 从外面带进来的闸设置一律清掉:在拿着令牌的进程里跑(heavy-run 里起的校验)时,继承来的令牌、上限会改掉每一项的结果。
 unset LYRIMUSE_HEAVY_GATE_TOKEN LYRIMUSE_HEAVY_GATE LYRIMUSE_HEAVY_GATE_DIR LYRIMUSE_HEAVY_SLOTS \
@@ -118,15 +118,20 @@ kill "$h8" 2>/dev/null; wait "$h8" 2>/dev/null
 # 9. 装机登记要刷新:排着的装机每轮刷新 want-install.<pid>;进程还在、30 秒没刷新的(被 SIGSTOP 停住)校验不再让。
 G="$T/g9"; mkdir -p "$G"
 old="$(date -v-40S +%Y%m%d%H%M.%S)"
-LYRIMUSE_HEAVY_GATE_DIR="$G" LYRIMUSE_HEAVY_SLOTS=1 bash "$SRC/heavy-run.sh" head "sleep 2" > /dev/null 2>&1 &
+# 占着令牌的一直拿着,直到读完刷新时间放行:负载高时固定睡几秒会先放掉令牌,装机拿到令牌删了登记,下面的 touch 再建出一个旧文件。
+LYRIMUSE_HEAVY_GATE_DIR="$G" LYRIMUSE_HEAVY_SLOTS=1 bash "$SRC/heavy-run.sh" head "for i in \$(seq 200); do [ -e '$G/release' ] && break; sleep 0.05; done" > /dev/null 2>&1 &
 h9=$!
 for i in $(seq 50); do [ -d "$G/token-1" ] && break; sleep 0.05; done
 LYRIMUSE_HEAVY_GATE_DIR="$G" LYRIMUSE_HEAVY_SLOTS=1 bash -c ". '$SRC/heavy-gate.sh'; trap heavy_gate_release EXIT; heavy_gate_acquire inst install" > /dev/null 2>&1 &
 inst=$!
 for i in $(seq 50); do [ -e "$G/want-install.$inst" ] && break; sleep 0.05; done
-touch -t "$old" "$G/want-install.$inst" 2>/dev/null
-sleep 0.3
-age=$(( $(date +%s) - $(stat -f %m "$G/want-install.$inst" 2>/dev/null || echo 0) ))
+touch -c -t "$old" "$G/want-install.$inst" 2>/dev/null
+for i in $(seq 60); do
+  sleep 0.05
+  age=$(( $(date +%s) - $(stat -f %m "$G/want-install.$inst" 2>/dev/null || echo 0) ))
+  [ "$age" -le 5 ] && break
+done
+touch "$G/release"
 if [ "$age" -le 5 ]; then ok "排着的装机每轮刷新 want-install"; else fail "排着的装机每轮刷新 want-install" "登记 $age 秒没刷新"; fi
 wait "$h9" "$inst" 2>/dev/null
 sleep 30 & stopped=$!
@@ -140,6 +145,25 @@ out="$(LYRIMUSE_HEAVY_GATE_DIR="$G" LYRIMUSE_HEAVY_SLOTS=1 LYRIMUSE_HEAVY_WAIT_M
 rc=$?
 if [ "$rc" = 0 ]; then ok "停住 30 秒没刷新的装机登记不再让"; else fail "停住 30 秒没刷新的装机登记不再让" "退出码 $rc:$out"; fi
 kill -CONT "$stopped" 2>/dev/null; kill "$stopped" 2>/dev/null; wait "$stopped" 2>/dev/null
+
+# 10. pid 被复用:令牌记的开始时刻在那个 pid 的进程起来之前十分钟,当作 SIGKILL 留下的令牌回收;开始时刻在它起来之后的照样等。
+G="$T/g10"; mkdir -p "$G"
+sleep 30 & reused=$!
+mkdir "$G/token-1"; printf '%s\nx\n%s\n' "$reused" "$(( $(date +%s) - 600 ))" > "$G/token-1/owner"
+if bounded 5 env LYRIMUSE_HEAVY_GATE_DIR="$G" LYRIMUSE_HEAVY_SLOTS=1 bash "$SRC/heavy-run.sh" t10 true > /dev/null 2>&1; then
+  ok "持有者 pid 被后起的进程复用时令牌回收"
+else fail "持有者 pid 被后起的进程复用时令牌回收"; fi
+rm -rf "$G/token-1"; mkdir "$G/token-1"; printf '%s\nx\n%s\n' "$reused" "$(date +%s)" > "$G/token-1/owner"
+out="$(LYRIMUSE_HEAVY_GATE_DIR="$G" LYRIMUSE_HEAVY_SLOTS=1 LYRIMUSE_HEAVY_WAIT_MAX=1 bounded 5 bash "$SRC/heavy-run.sh" t10b true 2>&1)"
+rc=$?
+if [ "$rc" = 75 ]; then ok "持有者在开始时刻之前就起来了照样等"; else fail "持有者在开始时刻之前就起来了照样等" "退出码 $rc:$out"; fi
+
+# 11. 命令里有 build.sh 的不拿令牌:1 份被占着,照样当场跑完。
+rm -rf "$G/token-1"; mkdir "$G/token-1"; printf '%s\nx\n%s\n' "$reused" "$(date +%s)" > "$G/token-1/owner"
+out="$(LYRIMUSE_HEAVY_GATE_DIR="$G" LYRIMUSE_HEAVY_SLOTS=1 LYRIMUSE_HEAVY_WAIT_MAX=1 bounded 5 bash "$SRC/heavy-run.sh" t11 "echo ./build.sh" 2>&1)"
+rc=$?
+if [ "$rc" = 0 ] && printf '%s' "$out" | grep -q build.sh; then ok "命令里有 build.sh 的不拿令牌"; else fail "命令里有 build.sh 的不拿令牌" "退出码 $rc:$out"; fi
+kill "$reused" 2>/dev/null; wait "$reused" 2>/dev/null
 
 if [ "$fails" = 0 ]; then echo "all ok"; else echo "$fails failure(s)"; fi
 [ "$fails" = 0 ]

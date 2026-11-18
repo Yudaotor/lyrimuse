@@ -30,7 +30,8 @@ on_exit() {
   heavy_gate_release
 }
 trap on_exit EXIT
-# bash 3.2 收到没设 trap 的 SIGTERM / SIGHUP 直接退出、不走 EXIT trap,令牌要等别人判陈旧才回收。
+# 没设 trap 时 bash 收到 SIGTERM / SIGHUP 当场退出(EXIT trap 照跑、令牌放回),前台那条编译 / 测试成了孤儿,不持令牌
+# 接着跑,闸限不住份数。设成 exit:等前台命令结束再退出。
 trap 'exit 143' TERM
 trap 'exit 129' HUP
 
