@@ -422,6 +422,7 @@ Police (celle du système, ou votre propre .ttf / .otf), taille, graisse, couleu
 - Réglages : Affichage des paroles › Paroles flottantes › Police › Police
 - Réglages : Affichage des paroles › Paroles flottantes › Couleur › Fond dépoli
 - Réglages : Affichage des paroles › Paroles flottantes › Couleur › Opacité du texte
+- Réglages : Affichage des paroles › Paroles flottantes › Couleur › Épaisseur du contour
 - Réglages : Raccourcis clavier › Agrandir les paroles flottantes
 - Réglages : Raccourcis clavier › Réduire les paroles flottantes
 
@@ -956,7 +957,7 @@ Au plus une fois par jour, envoie la version, macOS, les fonctions activées et 
 
 ## Tous les réglages
 
-Tous les réglages de la fenêtre Réglages, classés par emplacement : 329 au total. Tapez un nom dans le champ de recherche en haut de la barre latérale des Réglages pour y aller directement.
+Tous les réglages de la fenêtre Réglages, classés par emplacement : 330 au total. Tapez un nom dans le champ de recherche en haut de la barre latérale des Réglages pour y aller directement.
 
 ### Paroles › Source
 
@@ -1063,6 +1064,7 @@ Tous les réglages de la fenêtre Réglages, classés par emplacement : 329 au 
 - **Couleur du texte**
 - **Contour du texte**
 - **Couleur du contour**
+- **Épaisseur du contour**
 - **Opacité du texte**
 - **Couleur non chantée**
 - **Couleur de fond**

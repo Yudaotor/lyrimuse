@@ -422,6 +422,7 @@ Fuente (la del sistema, o una .ttf / .otf importada), tamaño, grosor, color del
 - Ajustes: Mostrar letra › Letra flotante › Fuente › Fuente
 - Ajustes: Mostrar letra › Letra flotante › Color › Fondo esmerilado
 - Ajustes: Mostrar letra › Letra flotante › Color › Opacidad del texto
+- Ajustes: Mostrar letra › Letra flotante › Color › Grosor del contorno
 - Ajustes: Atajos de teclado › Aumentar tamaño de la letra flotante
 - Ajustes: Atajos de teclado › Reducir tamaño de la letra flotante
 
@@ -956,7 +957,7 @@ Como máximo una vez al día, envía al servidor del propio autor la versión, e
 
 ## Todos los ajustes
 
-Todos los ajustes de la ventana Ajustes, según dónde están: 329 en total. Escribe un nombre en el campo de búsqueda de la parte superior de la barra lateral de Ajustes para ir directamente a él.
+Todos los ajustes de la ventana Ajustes, según dónde están: 330 en total. Escribe un nombre en el campo de búsqueda de la parte superior de la barra lateral de Ajustes para ir directamente a él.
 
 ### Letra › Fuente
 
@@ -1063,6 +1064,7 @@ Todos los ajustes de la ventana Ajustes, según dónde están: 329 en total. Esc
 - **Color del texto**
 - **Contorno del texto**
 - **Color del contorno**
+- **Grosor del contorno**
 - **Opacidad del texto**
 - **Color sin cantar**
 - **Color de fondo**

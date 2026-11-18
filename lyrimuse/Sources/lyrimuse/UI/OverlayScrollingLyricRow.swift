@@ -28,9 +28,17 @@ import SwiftUI
 // 从右往左的行(`LyricTextDirection`):排版、填色、滚动都照从左往右算,长图里每个词、每段读音在自己的格子里
 // 镜像着画,再由 mirrorLayer 把整行翻回来 —— 两次镜像抵消,字是正的,词序、填色、滚动方向一起变成从右往左。
 // 尾部渐隐和对齐方式按视觉位置跟着镜像(见 `place`)。
-// 描边必须跟换行模式(`OptionalTextStroke`)同一个算法、同一组参数(`LyricsTextStrokeMetrics`):
-// 剪影高斯模糊 σ = width,再按 alphaRamp 拉成实心轮廓。别换成 AppKit 的 `.strokeWidth` ——
+// 描边必须跟换行模式(`OptionalTextStroke`)同一个算法、同一组参数(`LyricsTextStrokeMetrics`、同一档
+// `OverlayTextStrokeWidth`):剪影高斯模糊 σ = 这一档的 points,再按 alphaRamp 拉成实心轮廓。别换成 AppKit 的 `.strokeWidth` ——
 // 那是沿轮廓居中描的细线,粗细和形状都跟换行模式对不上。
+/// 图层行的描边:颜色和粗细档。四周预留 `inset` 跟换行模式那条 `OptionalTextStroke` 的 padding 同一个量。
+struct LyricLayerStroke: Equatable {
+    var color: NSColor
+    var width: OverlayTextStrokeWidth
+
+    var inset: CGFloat { width.inset }
+}
+
 @MainActor
 struct OverlayScrollingLyricRow: NSViewRepresentable {
     /// 这一行的全部渲染输入。只有它变了才重画长图 / 重装动画(`updateNSView` 会被 SwiftUI 的
@@ -51,7 +59,7 @@ struct OverlayScrollingLyricRow: NSViewRepresentable {
         var romaBaseColor: NSColor
         var romaFillColor: NSColor
         /// nil = 不描边。
-        var strokeColor: NSColor?
+        var stroke: LyricLayerStroke?
         var alignment: LyricDuet.Side
         var paused: Bool
         /// 非 nil = 按显示时长配速(没有逐字时间轴的行、译文 / 罗马音 / 下一句这些副行):不填色、
@@ -165,7 +173,7 @@ final class OverlayLyricScrollView: NSView {
     private var imageWidth: CGFloat = 0
     /// 长图位图按哪个倍率画的,0 = 还没画过。
     private var imageScale: CGFloat = 0
-    /// 长图四周的预留 = 描边预留(开着 = `LyricsTextStrokeMetrics.inset`,同 `OptionalTextStroke` 的
+    /// 长图四周的预留 = 描边预留(开着 = 这一档的 `OverlayTextStrokeWidth.inset`,同 `OptionalTextStroke` 的
     /// padding)+ 阴影出血 `bleed`。
     private var inset: CGFloat = 0
     /// 阴影出血:长图四周多留的这一圈只为了装下阴影,**不参与排版** —— 摆位时整张图往外挪
@@ -329,7 +337,7 @@ final class OverlayLyricScrollView: NSView {
     /// 文字在一行里实际占据的矩形(左上原点):放得下按对齐方式摆(同 `place` 的静置落点,从右往左的行翻转后
     /// 落在同一侧),放不下要滚时占满整行。排版宽度跟 `layout` 同一个式子,不算阴影出血(悬浮歌词不带阴影)。
     static func textRect(spec: OverlayScrollingLyricRow.Spec, width: CGFloat, height: CGFloat) -> CGRect {
-        let inset = spec.strokeColor == nil ? 0 : LyricsTextStrokeMetrics.inset
+        let inset = spec.stroke?.inset ?? 0
         let w = OverlayRowLayout.layOut(
             words: spec.words, groups: spec.groups, inset: inset, strokeInset: inset,
             measureMain: { MenuBarMarqueeRenderer.width(of: $0, font: spec.font, translation: spec.translation) },
@@ -373,7 +381,7 @@ final class OverlayLyricScrollView: NSView {
     private static func layout(spec: OverlayScrollingLyricRow.Spec, scale: CGFloat,
                                extraBleed: CGFloat) -> OverlayRowGeometry {
         let bleed = (spec.shadow.map { ceil($0.radius * 2 + abs($0.offsetY)) } ?? 0) + extraBleed
-        let inset = (spec.strokeColor == nil ? 0 : LyricsTextStrokeMetrics.inset) + bleed
+        let inset = (spec.stroke?.inset ?? 0) + bleed
         let mainHeight = textHeight(spec.font)
         let romaHeight = spec.groups == nil ? 0 : textHeight(spec.romaFont)
         let romaGap = spec.groups == nil ? 0 : spec.romaGap
@@ -385,7 +393,7 @@ final class OverlayLyricScrollView: NSView {
         // `OverlayRowLayout`(selftest 钉着),这里只把字体测宽喂进去。
         let r = OverlayRowLayout.layOut(
             words: spec.words, groups: spec.groups, inset: inset,
-            strokeInset: spec.strokeColor == nil ? 0 : LyricsTextStrokeMetrics.inset,
+            strokeInset: spec.stroke?.inset ?? 0,
             measureMain: { MenuBarMarqueeRenderer.width(of: $0, font: spec.font, translation: spec.translation) },
             measureRoma: { MenuBarMarqueeRenderer.width(of: $0, font: spec.romaFont) })
         // 阅读位置按"不含预留"的坐标算、再整体平移 inset:否则开头那一截填色边界会先在左侧预留里
@@ -702,7 +710,7 @@ enum OverlayRowRaster {
         OverlayRowImages(
             base: drawText(g, spec: spec, main: spec.baseColor, roma: spec.romaBaseColor),
             fill: drawText(g, spec: spec, main: spec.fillColor, roma: spec.romaFillColor),
-            stroke: spec.strokeColor.flatMap { drawStroke(g, spec: spec, color: $0) })
+            stroke: spec.stroke.flatMap { drawStroke(g, spec: spec, stroke: $0) })
     }
 
     /// 一张空白长图的绘制上下文(sRGB、预乘 alpha、已按 scale 缩放到点坐标)。
@@ -822,21 +830,22 @@ enum OverlayRowRaster {
         ctx.restoreGState()
     }
 
-    /// 描边:剪影高斯模糊 σ = width,透明度按 `LyricsTextStrokeMetrics.alphaRamp` 拉成实心轮廓、
+    /// 描边:剪影高斯模糊 σ = 这一档的 points,透明度按 `LyricsTextStrokeMetrics.alphaRamp` 拉成实心轮廓、
     /// 再乘描边色 —— 跟 `OptionalTextStroke`(Canvas `.colorMatrix` + `.blur(radius:)`)同一个算法、
     /// 同一组参数。模糊结果裁回长图范围,对应那边 Canvas 裁在"内容 + inset"之内。
     private static func drawStroke(_ g: OverlayRowGeometry, spec: OverlayScrollingLyricRow.Spec,
-                                   color: NSColor) -> CGImage? {
+                                   stroke: LyricLayerStroke) -> CGImage? {
         let scale = g.scale
+        let width = stroke.width.points
         guard let silhouette = drawText(g, spec: spec, main: .black, roma: .black, withShadow: false),
-              let rgb = color.usingColorSpace(.sRGB) else { return nil }
+              let rgb = stroke.color.usingColorSpace(.sRGB) else { return nil }
         let source = CIImage(cgImage: silhouette)
         // 拉伸在 CoreImage 的浮点中间结果上做:外沿那段透明度只有百分之几,先落成 8 位就只剩几级。
-        let ramp = LyricsTextStrokeMetrics.alphaRamp(scale: scale)
+        let ramp = LyricsTextStrokeMetrics.alphaRamp(width: width, scale: scale)
         let k = CGFloat(1 / (ramp.hi - ramp.lo))
         let zero = CIVector(x: 0, y: 0, z: 0, w: 0)
         let mask = source.clampedToExtent()
-            .applyingGaussianBlur(sigma: LyricsTextStrokeMetrics.width * scale)
+            .applyingGaussianBlur(sigma: width * scale)
             .cropped(to: source.extent)
             .applyingFilter("CIColorMatrix", parameters: [
                 "inputRVector": zero, "inputGVector": zero, "inputBVector": zero,

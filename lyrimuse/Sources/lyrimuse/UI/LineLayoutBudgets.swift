@@ -42,13 +42,15 @@ final class LineLayoutBudgets {
         let notchKind = p.shownSecondaryLinePublisher(setting: s.$notchSecondaryLine, fallback: s.$notchSecondaryFallback)
         let touchBarKind = p.shownSecondaryLinePublisher(setting: s.$touchBarSecondaryLine, fallback: s.$touchBarSecondaryFallback)
         subs = [
-            Publishers.CombineLatest3(s.$overlayWidth, s.$overlayNSFonts, s.$textStrokeEnabled)
+            Publishers.CombineLatest3(s.$overlayWidth, s.$overlayNSFonts,
+                                      s.$textStrokeEnabled.combineLatest(s.$textStrokeWidth)
+                                          .map { OverlayTextStrokeWidth.inset(enabled: $0, width: $1) }.removeDuplicates())
                 .combineLatest(Publishers.CombineLatest3(s.$overlayShowTranslation, s.$overlayShowRomanization,
                                                          s.$showNextLinePreview))
                 .sink { a, b in
-                    let (width, fonts, stroke) = a
+                    let (width, fonts, strokeInset) = a
                     let (translation, romanization, preview) = b
-                    Self.reportOverlay(width: CGFloat(width), fonts: fonts, stroke: stroke, translation: translation,
+                    Self.reportOverlay(width: CGFloat(width), fonts: fonts, strokeInset: strokeInset, translation: translation,
                                        romanization: romanization, preview: preview)
                 },
             Publishers.CombineLatest4(s.$menuBarLyricsWidth, s.$menuBarLyricsFontFamily,
@@ -90,15 +92,14 @@ final class LineLayoutBudgets {
 
     /// 悬浮歌词:每一行的宽 = 窗宽 − 卡片两侧内边距 − 描边两侧预留,对唱行也一样。下一句换人唱时用主行字号
     /// (nextLinePreviewFont),所以按主行和预览两种字号里宽的那个量。
-    private static func reportOverlay(width: CGFloat, fonts: OverlayNSFonts, stroke: Bool,
+    private static func reportOverlay(width: CGFloat, fonts: OverlayNSFonts, strokeInset: CGFloat,
                                       translation: Bool, romanization: Bool, preview: Bool) {
-        let strokeInset = stroke ? LyricsTextStrokeMetrics.inset : 0
         let rowWidth = width - OverlayMetrics.cardHorizontalPadding * 2 - strokeInset * 2 - safety
         let main = measurer(fonts.main)
         let previewMeasure = measurer(fonts.preview)
         let key: [AnyHashable] = [LyricsSurface.overlay, (rowWidth * 2).rounded(), fontKey(fonts.main),
                                   fontKey(fonts.preview), fontKey(fonts.translation), fontKey(fonts.romanization),
-                                  stroke, translation, romanization, preview]
+                                  strokeInset, translation, romanization, preview]
         report(.overlay, LineLayoutBudget(
             key: key,
             main: .init(maxWidth: rowWidth, measure: main),

@@ -15,7 +15,7 @@ import SwiftUI
 // 行高用图层行自己的式子(字高 +2 接住下伸部分,见 `OverlayLyricScrollView.textHeight`),行间不再
 // 另加 `WrapLayout` 那 2pt:两者的行距因此相等。
 //
-// 描边:每一行的长图四周各留一圈 `LyricsTextStrokeMetrics.inset`,行与行的这圈预留**互相重叠**
+// 描边:每一行的长图四周各留一圈描边预留(`LyricLayerStroke.inset`),行与行的这圈预留**互相重叠**
 // (行距只算字高),整块的外沿跟 SwiftUI 那条「整句套一次 lyricsTextStroke、四周 padding 一圈」一样。
 //
 // 鼠标命中:布局时把「文字实际占据的矩形」写进 `WrapContentRectSink`(同 `WrapLayout` 的约定,
@@ -37,7 +37,7 @@ struct WrappedKaraokeRows: NSViewRepresentable {
         var fillColor: NSColor
         var romaBaseColor: NSColor
         var romaFillColor: NSColor
-        var strokeColor: NSColor?
+        var stroke: LyricLayerStroke?
         var rowAlignment: WrapLayoutMath.RowAlignment
         var paused: Bool
         /// 同 OverlayScrollingLyricRow.Spec 的两项,原样交给每一行。
@@ -114,7 +114,7 @@ final class WrappedKaraokeRowsView: NSView {
 
         @MainActor
         init(spec: WrappedKaraokeRows.Spec, width: CGFloat?) {
-            let inset = spec.strokeColor == nil ? 0 : LyricsTextStrokeMetrics.inset
+            let inset = spec.stroke?.inset ?? 0
             let pitch = OverlayRowLayout.blockHeight(
                 main: Self.textHeight(spec.font),
                 roma: spec.groups == nil ? nil : Self.textHeight(spec.romaFont),
@@ -385,7 +385,7 @@ final class WrappedKaraokeRowsView: NSView {
             fillColor: spec.fillColor,
             romaBaseColor: spec.romaBaseColor,
             romaFillColor: spec.romaFillColor,
-            strokeColor: spec.strokeColor,
+            stroke: spec.stroke,
             alignment: .leading,
             paused: spec.paused,
             timingEpoch: spec.timingEpoch,

@@ -501,6 +501,8 @@
 "候选" = "Adaylar";
 "假名" = "Kana";
 "偏移" = "Kaydırma";
+"偏粗" = "Kalın";
+"偏细" = "İnce";
 "停止" = "Durdur";
 "停止搜索" = "Aramayı Durdur";
 "停止监视" = "İzlemeyi Durdur";
@@ -1455,6 +1457,7 @@
 "推送渠道信息不完整" = "Kanal bilgileri eksik";
 "推送渠道均已停用" = "Tüm kanallar kapalı";
 "推送记录" = "Gönderim Geçmişi";
+"描边粗细" = "Kontur Kalınlığı";
 "描边颜色" = "Kontur Rengi";
 "提前" = "Öne Al";
 "提前 %@ 秒显示" = "%@ sn önce göster";

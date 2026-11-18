@@ -334,7 +334,7 @@ extension NotchLyricsView {
                 fillColor: fg,
                 romaBaseColor: fg,
                 romaFillColor: fg,
-                strokeColor: nil,
+                stroke: nil,
                 alignment: side,
                 paused: !playback.lyricsClockRunning || playback.currentLineFillSettled || !layerActive,
                 shadow: .init(color: NSColor.black.withAlphaComponent(0.45), radius: 2, offsetY: 1),

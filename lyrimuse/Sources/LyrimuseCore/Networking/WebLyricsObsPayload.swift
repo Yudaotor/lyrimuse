@@ -23,6 +23,8 @@ public enum WebLyricsObsPayload {
         public var sung: String
         public var unsung: String
         public var stroke: String?
+        /// 描边粗细档,同悬浮歌词(`OverlayTextStrokeWidth`);只在 `stroke` 非 nil 时发出去。
+        public var strokeWidth: OverlayTextStrokeWidth
         public var card: String?
         public var showRomanization: Bool
         public var showTranslation: Bool
@@ -44,7 +46,8 @@ public enum WebLyricsObsPayload {
         public var rainbow: Bool
 
         public init(fontFamily: String, fontSize: Double, weights: [Int], sung: String, unsung: String,
-                    stroke: String?, card: String?, showRomanization: Bool, showTranslation: Bool, showNextLine: Bool,
+                    stroke: String?, strokeWidth: OverlayTextStrokeWidth = .default, card: String?,
+                    showRomanization: Bool, showTranslation: Bool, showNextLine: Bool,
                     karaoke: Bool, alignment: OverlayDuetAlignmentOverride, overflow: OverlayLineOverflow,
                     spacing: OverlayRowSpacing.Values, scale: OverlayRowFontScale.Values = .standard, width: Double, hideWhenPaused: Bool, lineChangeAnimation: Bool,
                     duetStageInset: Double, duetCenterInset: Double, songCard: SongCard = .off, rainbow: Bool = false) {
@@ -54,6 +57,7 @@ public enum WebLyricsObsPayload {
             self.sung = sung
             self.unsung = unsung
             self.stroke = stroke
+            self.strokeWidth = strokeWidth
             self.card = card
             self.showRomanization = showRomanization
             self.showTranslation = showTranslation
@@ -87,7 +91,10 @@ public enum WebLyricsObsPayload {
             "width": s.width, "hidePaused": s.hideWhenPaused, "anim": s.lineChangeAnimation,
             "duet": [s.duetStageInset, s.duetCenterInset], "songCard": s.songCard.rawValue,
         ]
-        if let stroke = s.stroke { o["stroke"] = stroke }
+        if let stroke = s.stroke {
+            o["stroke"] = stroke
+            o["strokeWidth"] = Double(s.strokeWidth.points)
+        }
         if let card = s.card { o["card"] = card }
         if s.rainbow {
             // 一圈的色标(首尾同色)、流过一圈的秒数、未唱的透明度;网页照触控栏那套从左往右流。

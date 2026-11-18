@@ -533,6 +533,8 @@
 "候选" = "Résultats";
 "假名" = "Kana";
 "偏移" = "Décalage";
+"偏粗" = "Épais";
+"偏细" = "Fin";
 "停止" = "Arrêter";
 "停止搜索" = "Arrêter la recherche";
 "停止监视" = "Arrêter la surveillance";
@@ -1531,6 +1533,7 @@
 "推送渠道信息不完整" = "Informations du canal incomplètes";
 "推送渠道均已停用" = "Tous les canaux sont désactivés";
 "推送记录" = "Historique d’envoi";
+"描边粗细" = "Épaisseur du contour";
 "描边颜色" = "Couleur du contour";
 "提前" = "Avancer";
 "提前 %@ 秒显示" = "Afficher %@ s plus tôt";

@@ -834,7 +834,7 @@ enum WebLyricsPages {
     /// 主行逐字填色,下面依次是读音、译文、下一句(字号、字重、颜色深浅、行距、对齐、对唱两侧留白、换行或滚动都照
     /// `LyricsOverlayView`,日文逐词读音按「字在上、读音在下」一列一列排,读音按整组填色);前奏和够格的间奏里画「•••」
     /// (`GapDotsCurve` 同一条曲线)和接下来那句。换句动画照 `OverlayLineRise`:新的一句从下一句的位置、字号、亮度起步走到
-    /// 当前行,旧的一句原地淡完,新的下一句后半程淡入。描边照 `LyricsTextStrokeMetrics`:模糊剪影再把透明度拉成实心。
+    /// 当前行,旧的一句原地淡完,新的下一句后半程淡入。描边照 `LyricsTextStrokeMetrics`:模糊剪影再把透明度拉成实心,σ 取 `style.strokeWidth`(悬浮歌词那一档)。
     /// 停播、广告 / 口白、断线时淡出,暂停时按悬浮歌词的「暂停时隐藏」。带 `preview=1` 时铺棋盘格底(设置里的「预览」)。
     /// 左上角的歌名卡(歌名、歌手 — 专辑、封面)字体、颜色、描边、背景卡同歌词卡,何时显示按 `style.songCard`(`songCardShown`)。
     /// 逐字填色跟着 `requestAnimationFrame` 刷;OBS 窗口不在前台时浏览器源里的 rAF 可能被挂起,另有定时器在 rAF 停了时接着刷。
@@ -1003,7 +1003,7 @@ enum WebLyricsPages {
             card.classList.toggle('scroll', style.overflow === 'scroll');
             card.classList.toggle('stroked', !!style.stroke);
             // 描边外沿取模糊剪影透明度 1% 的等值线(离字边 2.326σ),透明度在跨一个设备像素的区间里拉到 0…1。
-            const sigma = 1.2 * u;
+            const sigma = (style.strokeWidth || 1.2) * u;
             const half = 0.5 / (sigma * Math.max(devicePixelRatio || 1, 1 / u));
             const tail = (x) => 0.5 * erfc(x / Math.SQRT2);
             const lo = tail(2.326 + half), hi = tail(2.326 - half);

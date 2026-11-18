@@ -313,7 +313,7 @@ enum TouchBarLyricsCell {
             lineKey: key, words: words, groups: nil,
             font: inputs.font, romaFont: inputs.font,
             baseColor: base, fillColor: fill, romaBaseColor: base, romaFillColor: fill,
-            strokeColor: nil, alignment: alignment,
+            stroke: nil, alignment: alignment,
             paused: !inputs.isPlaying,
             pacedWindow: window,
             edgeFadeWidth: edgeFadeWidth,

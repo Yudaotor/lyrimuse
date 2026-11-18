@@ -44,8 +44,10 @@ private struct ThemeSampleLyric: View {
         let halves = halves
         sample(halves)
             .rainbowFill(theme.rainbow, flowing: true)
+            // 主题不带描边粗细,预览卡一律按默认档画。
             .lyricsTextStroke(
                 theme.textStrokeEnabled,
+                width: .default,
                 color: Color(hexWithAlpha: theme.textStrokeColorHex, fallback: .black.opacity(0.65))
             ) {
                 sample(halves)

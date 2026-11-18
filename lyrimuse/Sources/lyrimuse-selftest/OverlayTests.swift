@@ -1198,6 +1198,94 @@ func runOverlayTests() {
                     true, "文字不透明度接线: 「颜色」按钮摘要末尾接上不是 100% 的读数")
     }
 
+    // ---- 描边粗细:三档,默认档 = 原来写死的 1.2,两条描边路和按描边预留算的排版读同一档 ----
+    do {
+        typealias W = OverlayTextStrokeWidth
+        expectEqual([W.default == .standard, W.standard.points == 1.2, W.standard.inset == 2.4], [true, true, true],
+                    "描边粗细: 默认「标准」= 原来的 σ 1.2、四周预留 2.4,没碰过这项的人描边逐像素不变")
+        expectEqual(W.allCases, [.thin, .standard, .thick], "描边粗细: 三档,由细到粗")
+        expectEqual(W.allCases.map(\.points), [0.8, 1.2, 1.6], "描边粗细: 细 / 标准 / 粗 的 σ")
+        expectEqual(W.allCases.allSatisfy { $0.inset == $0.points * 2 }, true, "描边粗细: 每档的预留都是 σ 的两倍")
+        expectEqual(W.allCases.map { W.inset(enabled: false, width: $0) }, [0, 0, 0], "描边粗细: 描边关着时哪一档都不留预留")
+        expectEqual(W.allCases.map { W.inset(enabled: true, width: $0) }, W.allCases.map(\.inset), "描边粗细: 开着时预留随档变")
+        expectEqual(W(rawValue: "standard"), .standard, "描边粗细: 存的是英文名")
+
+        // 按描边预留算的排版随档变:读音两侧留白、逐组列宽、下一句断行宽。
+        typealias L = OverlayRowLayout
+        let pads = W.allCases.map { L.romaSidePadding(strokeInset: $0.inset) }
+        expectEqual(pads[0] < pads[1] && pads[1] < pads[2], true, "描边粗细: 读音两侧留白随档变宽")
+        expectEqual(pads[1], L.romaSidePadding + 2.4, "描边粗细: 默认档的读音留白跟原来一样")
+        func w(_ t: String) -> SyncedLyricWord { SyncedLyricWord(text: t, startMs: 0, durationMs: 100) }
+        let groups = [SyncedLyricWordGroup(id: 0, words: [w("痛")], romanization: "tung3"),
+                      SyncedLyricWordGroup(id: 1, words: [w("到")], romanization: "dou2")]
+        let boxes = W.allCases.map {
+            L.layOut(words: [], groups: groups, inset: $0.inset, strokeInset: $0.inset,
+                     measureMain: { CGFloat($0.count) * 10 }, measureRoma: { CGFloat($0.count) * 6 }).boxWidth
+        }
+        expectEqual(boxes[0] < boxes[1] && boxes[1] < boxes[2], true, "描边粗细: 图层行长图宽随档变")
+        let breaks = W.allCases.map {
+            OverlayCardGeometry.previewBreakWidth(width: 400, ratio: 0.7, inset: $0.inset, unscaledWidth: 500)
+        }
+        expectEqual(breaks[0] < breaks[1] && breaks[1] < breaks[2], true, "描边粗细: 下一句收窄时描边预留按这一档留、不缩")
+
+        let sources = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+        func src(_ rel: String) -> String {
+            (try? String(contentsOf: sources.appendingPathComponent(rel), encoding: .utf8)) ?? ""
+        }
+        let overlay = src("lyrimuse/UI/LyricsOverlayView.swift")
+        let row = src("lyrimuse/UI/OverlayScrollingLyricRow.swift")
+        let wrapped = src("lyrimuse/UI/WrappedKaraokeRows.swift")
+        let budgets = src("lyrimuse/UI/LineLayoutBudgets.swift")
+        expectEqual([overlay, row, wrapped, budgets].map { $0.isEmpty }, [false, false, false, false],
+                    "描边粗细接线: 读得到四个源文件")
+        expectEqual([sourceHas(overlay, "s.$textStrokeWidth.removeDuplicates().sink { [weak self] in self?.textStrokeWidth = $0 },"),
+                     sourceHas(sourceBody("var textStrokeInset: CGFloat", in: overlay),
+                               "OverlayTextStrokeWidth.inset(enabled: textStrokeEnabled, width: textStrokeWidth)"),
+                     sourceHas(sourceBody("var layerStroke: LyricLayerStroke?", in: overlay), "width: textStrokeWidth"),
+                     sourceHas(sourceBody("var scrollStrokePadding: CGFloat", in: overlay), "textStrokeInset * 2")],
+                    [true, true, true, true], "描边粗细接线: 悬浮窗从这一项设置取档,预留、图层描边、滚动行高都由它算")
+        // SwiftUI 那条(换行模式、读音 / 译文 / 下一句)每一处都带上这一档。
+        expectEqual(sourceCount(overlay, ".lyricsTextStroke(playback.textStrokeEnabled,"),
+                    sourceCount(overlay, ".lyricsTextStroke(playback.textStrokeEnabled, width: playback.textStrokeWidth,"),
+                    "描边粗细接线: SwiftUI 描边每一处都传这一档")
+        expectEqual(sourceCount(overlay, ".modifier(LyricStrokeRainbow("),
+                    sourceCount(overlay, "strokeEnabled: playback.textStrokeEnabled, strokeWidth: playback.textStrokeWidth,"),
+                    "描边粗细接线: 彩虹那条描边也传这一档")
+        // 图层那条(滚动模式、换行模式的逐字行)只经 `layerStroke` 拿颜色和档。
+        expectEqual([sourceCount(overlay, "stroke: playback.layerStroke,") >= 5, sourceHas(overlay, "? NSColor(playback.textStrokeColor)")],
+                    [true, false],
+                    "描边粗细接线: 图层行的描边都经 layerStroke 带上这一档")
+        expectEqual([sourceHas(row, "let inset = (spec.stroke?.inset ?? 0) + bleed"),
+                     sourceHas(row, "strokeInset: spec.stroke?.inset ?? 0,"),
+                     sourceHas(wrapped, "let inset = spec.stroke?.inset ?? 0")],
+                    [true, true, true], "描边粗细接线: 图层行四周预留和读音留白按同一档")
+        expectEqual(sourceHas(budgets, "OverlayTextStrokeWidth.inset(enabled: $0, width: $1)"), true,
+                    "描边粗细接线: 长句拆分的行宽扣的描边预留跟着档变")
+        let stale = ["LyricsTextStrokeMetrics.inset", "LyricsTextStrokeMetrics.width"]
+        expectEqual([overlay, row, wrapped, budgets].map { text in stale.contains { text.contains($0) } }, [false, false, false, false],
+                    "描边粗细接线: 不再有写死粗细的常量可读")
+        expectEqual([sourceHas(overlay, "let strokeInset = playback.textStrokeInset"),
+                     sourceHas(overlay, "private var strokeInset: CGFloat { playback.textStrokeInset }"),
+                     sourceHas(overlay, "strokeInset: playback.textStrokeInset))")],
+                    [true, true, true], "描边粗细接线: 卡片自然宽、交错块宽、下一句列宽和断点都读同一个预留")
+
+        let settings = src("lyrimuse/Settings/AppSettings.swift")
+        expectEqual(sourceHas(settings, "textStrokeWidth = defaults.string(forKey: Keys.textStrokeWidth).flatMap(OverlayTextStrokeWidth.init(rawValue:)) ?? .default"),
+                    true, "描边粗细接线: 没存过按默认档,启动不写回")
+        let rows = src("lyrimuse/UI/OverlayStyleSettingsRows.swift")
+        let strokeOn = sourceBody("if settings.textStrokeEnabled {", in: sourceBody("struct OverlayColorSettingsRows: View", in: rows))
+        let colorAt = strokeOn.range(of: "L10n.t(\"描边颜色\")")?.lowerBound
+        let widthAt = strokeOn.range(of: "L10n.t(\"描边粗细\")")?.lowerBound
+        expectEqual([colorAt != nil, widthAt != nil, colorAt.flatMap { c in widthAt.map { c < $0 } } ?? false,
+                     sourceHas(strokeOn, "SettingsGlassTabPicker(\n selection: $settings.textStrokeWidth,")],
+                    [true, true, true, true], "描边粗细接线: 玻璃分段在「颜色」组、开着描边时紧跟在描边颜色后面")
+        expectEqual(sourceHas(rows, "settings.textStrokeWidth = .default"), true, "描边粗细接线: 「恢复默认」带上它")
+        let page = src("lyrimuse/WebLyrics/WebLyricsPages.swift")
+        expectEqual([sourceHas(page, "const sigma = (style.strokeWidth || 1.2) * u;"),
+                     sourceHas(src("lyrimuse/WebLyrics/WebLyricsObsFeed.swift"), "strokeWidth: s.textStrokeWidth")],
+                    [true, true], "描边粗细接线: OBS 页的描边跟悬浮歌词同一档")
+    }
+
     // ---- 副行字号比例:读音 / 译文 / 下一句各占主句多少 ----
     do {
         typealias S = OverlayRowFontScale

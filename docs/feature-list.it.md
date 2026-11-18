@@ -422,6 +422,7 @@ Font (quello di sistema o un tuo .ttf / .otf), dimensione, spessore, colori del 
 - Impostazioni: Visualizzazione testo › Testo fluttuante › Font › Font
 - Impostazioni: Visualizzazione testo › Testo fluttuante › Colore › Sfondo smerigliato
 - Impostazioni: Visualizzazione testo › Testo fluttuante › Colore › Opacità testo
+- Impostazioni: Visualizzazione testo › Testo fluttuante › Colore › Spessore contorno
 - Impostazioni: Scorciatoie da tastiera › Ingrandisci testo fluttuante
 - Impostazioni: Scorciatoie da tastiera › Rimpicciolisci testo fluttuante
 
@@ -956,7 +957,7 @@ Al massimo una volta al giorno invia versione, macOS, funzioni attive e riepilog
 
 ## Tutte le impostazioni
 
-Tutte le impostazioni della finestra Impostazioni, per posizione: 329 in tutto. Scrivi un nome nel campo di ricerca in cima alla barra laterale delle Impostazioni per andarci direttamente.
+Tutte le impostazioni della finestra Impostazioni, per posizione: 330 in tutto. Scrivi un nome nel campo di ricerca in cima alla barra laterale delle Impostazioni per andarci direttamente.
 
 ### Testo › Fonte
 
@@ -1063,6 +1064,7 @@ Tutte le impostazioni della finestra Impostazioni, per posizione: 329 in tutto. 
 - **Colore testo**
 - **Contorno testo**
 - **Colore contorno**
+- **Spessore contorno**
 - **Opacità testo**
 - **Colore non cantato**
 - **Colore di sfondo**

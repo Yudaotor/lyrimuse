@@ -106,6 +106,17 @@ extension OverlayFontWeight {
     }
 }
 
+extension OverlayTextStrokeWidth {
+    /// 「描边粗细」分段里的显示名。两头不用「细」:那个键是字重「细」(Light),译文对不上描边。
+    var displayName: String {
+        switch self {
+        case .thin: return L10n.t("偏细")
+        case .standard: return L10n.t("标准")
+        case .thick: return L10n.t("偏粗")
+        }
+    }
+}
+
 extension Font {
     /// familyName 为空字符串 = "跟随系统",直接走 .system 分支,和悬浮窗改动前的硬编码
     /// 视觉完全一致。familyName 非空但这台 Mac 没装(比如从别的 Mac 抄的配置)时,

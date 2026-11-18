@@ -115,6 +115,7 @@ extension AppSettings {
             ("menuBarLyricsContent", menuBarLyricsContent),
             ("textStrokeEnabled", textStrokeEnabled),
             ("textStrokeColorHex", textStrokeColorHex),
+            ("textStrokeWidth", textStrokeWidth),
             ("karaokeUnsungFollowsCoverArt", karaokeUnsungFollowsCoverArt),
             ("karaokeUnsungColorHex", karaokeUnsungColorHex),
             ("lockPosition", lockPosition),

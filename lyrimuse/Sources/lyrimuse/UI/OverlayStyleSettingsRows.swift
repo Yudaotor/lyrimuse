@@ -94,11 +94,11 @@ struct OverlayTypeSettingsRows: View {
 // MARK: - 颜色
 
 /// 「颜色」那一组:卡拉OK效果 / 文字描边 / 毛玻璃背景三个开关一行小块,下面文字颜色 / 未唱颜色 / 描边颜色 /
-/// 背景颜色几格(两列)。
+/// 描边粗细 / 背景颜色几格(两列)。
 ///
 /// - 未唱颜色只在开着卡拉OK时出现:没有卡拉OK就没有"已唱 / 未唱"。那时文字颜色那一格(`foregroundColor`,唱到的那半)
 ///   改叫「已唱颜色」,跟未唱颜色成对;关着或选了彩虹时只有一格,叫「文字颜色」。四个形态同一套叫法和图标。
-/// - 描边颜色只在开着描边时出现;描边只让选颜色(含 alpha),粗细是固定常量(LyricsOverlayView 的 OptionalTextStroke)。
+/// - 描边颜色、描边粗细只在开着描边时出现,粗细紧跟在颜色后面;粗细三档(`OverlayTextStrokeWidth`),换行 / 滚动两种模式同一档。
 /// - 毛玻璃改变的是背景颜色的含义(从卡片本色变成玻璃上的着色);开着时浓淡下拉挂在毛玻璃那一块上
 ///   (SwiftUI 的 Material 做不成连续滑杆,见 OverlayGlassIntensity)。
 /// - 文字颜色、背景颜色都开透明度:alpha 拖到 0 窗口会整个看不见,退路是工具栏「重置 ▾」和抽屉「恢复默认」。
@@ -169,6 +169,14 @@ struct OverlayColorSettingsRows: View {
                             get: { settings.textStrokeColor },
                             set: { settings.textStrokeColorHex = $0.hexStringWithAlpha }
                         ), supportsOpacity: true)
+                    }
+                    SettingsControlCell(icon: "lineweight", title: L10n.t("描边粗细")) {
+                        SettingsGlassTabPicker(
+                            selection: $settings.textStrokeWidth,
+                            options: OverlayTextStrokeWidth.allCases,
+                            label: \.displayName,
+                            compact: true
+                        )
                     }
                 }
                 SettingsControlCell(icon: "rectangle.fill", title: L10n.t("背景颜色")) {
@@ -873,6 +881,8 @@ enum OverlayStyleDefaults {
         settings.overlayRainbow = ColorTheme.defaultTheme.rainbow
         settings.textStrokeEnabled = ColorTheme.defaultTheme.textStrokeEnabled
         settings.textStrokeColorHex = ColorTheme.defaultTheme.textStrokeColorHex
+        // 描边粗细同在「颜色」那一组;不进主题,只在这里回到默认。
+        settings.textStrokeWidth = .default
         // 「已唱/未唱」是文字组多出来的一对独立颜色,新加字段不进这个函数,点"恢复默认"时它会被漏掉。
         // 取值跟「默认」主题一致。
         settings.karaokeUnsungFollowsCoverArt = ColorTheme.defaultTheme.karaokeUnsungFollowsCoverArt

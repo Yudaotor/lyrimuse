@@ -586,12 +586,22 @@ func runWebLyricsTests() {
         expectEqual(styleObject?["hidePaused"] as? Bool, true, "网页歌词: style 带暂停时隐藏")
         expectEqual(styleObject?["anim"] as? Bool, true, "网页歌词: style 带换句动画")
         expectEqual(styleObject?["rainbow"] == nil, true, "网页歌词: 没选彩虹时 style 不带彩虹")
+        expectEqual(styleObject?["strokeWidth"] == nil, true, "网页歌词: 不描边时 style 不带描边粗细")
         let rainbowJSON = WebLyricsObsPayload.style(.init(
             fontFamily: "", fontSize: 31, weights: [600, 400, 300, 400], sung: "rgba(255,255,255,1.0)", unsung: "rgba(255,255,255,0.45)",
             stroke: "rgba(0,0,0,0.9)", card: nil, showRomanization: true, showTranslation: false, showNextLine: true, karaoke: true,
             alignment: .leading, overflow: .scroll, spacing: .init(romanization: 4, translation: 6, nextLine: 99),
             width: 640, hideWhenPaused: true, lineChangeAnimation: true, duetStageInset: 76, duetCenterInset: 84, rainbow: true))
-        let rainbow = ((try? JSONSerialization.jsonObject(with: Data(rainbowJSON.utf8))) as? [String: Any])?["rainbow"] as? [String: Any]
+        let rainbowObject = (try? JSONSerialization.jsonObject(with: Data(rainbowJSON.utf8))) as? [String: Any]
+        expectEqual(rainbowObject?["strokeWidth"] as? Double, 1.2, "网页歌词: 描边时 style 带描边粗细,默认档 1.2")
+        let thinJSON = WebLyricsObsPayload.style(.init(
+            fontFamily: "", fontSize: 31, weights: [600, 400, 300, 400], sung: "rgba(0,0,0,1.0)", unsung: "rgba(0,0,0,0.55)",
+            stroke: "rgba(255,255,255,1.0)", strokeWidth: .thin, card: nil, showRomanization: true, showTranslation: false,
+            showNextLine: true, karaoke: true, alignment: .leading, overflow: .wrap, spacing: .standard, width: 640,
+            hideWhenPaused: true, lineChangeAnimation: false, duetStageInset: 76, duetCenterInset: 84))
+        expectEqual(((try? JSONSerialization.jsonObject(with: Data(thinJSON.utf8))) as? [String: Any])?["strokeWidth"] as? Double,
+                    Double(OverlayTextStrokeWidth.thin.points), "网页歌词: 描边粗细跟悬浮歌词那一档")
+        let rainbow = rainbowObject?["rainbow"] as? [String: Any]
         expectEqual((rainbow?["stops"] as? [String])?.count, RainbowLyrics.cycleStops.count,
                     "网页歌词: 彩虹带一圈的色标(首尾同色)")
         expectEqual((rainbow?["stops"] as? [String])?.first, (rainbow?["stops"] as? [String])?.last, "网页歌词: 彩虹色标首尾同色")

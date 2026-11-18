@@ -58,6 +58,7 @@ final class WebLyricsObsFeed {
             s.$overlayRainbow.map { _ in () }.eraseToAnyPublisher(),
             s.$textStrokeEnabled.map { _ in () }.eraseToAnyPublisher(),
             s.$textStrokeColor.map { _ in () }.eraseToAnyPublisher(),
+            s.$textStrokeWidth.map { _ in () }.eraseToAnyPublisher(),
             s.$backgroundIsVisible.map { _ in () }.eraseToAnyPublisher(),
             s.$backgroundColor.map { _ in () }.eraseToAnyPublisher(),
             s.$fontFamilyName.map { _ in () }.eraseToAnyPublisher(),
@@ -172,7 +173,7 @@ final class WebLyricsObsFeed {
         return WebLyricsObsPayload.style(.init(
             fontFamily: s.fontFamilyName, fontSize: s.fontSize, weights: WebLyricsObsPayload.cssWeights(s.overlayFontWeight),
             sung: css(sung), unsung: css(unsung),
-            stroke: s.textStrokeEnabled ? css(s.textStrokeColor) : nil,
+            stroke: s.textStrokeEnabled ? css(s.textStrokeColor) : nil, strokeWidth: s.textStrokeWidth,
             card: s.backgroundIsVisible ? css(s.backgroundColor) : nil,
             showRomanization: s.overlayShowRomanization, showTranslation: s.overlayShowTranslation,
             showNextLine: s.showNextLinePreview, karaoke: s.overlayLyricsKaraoke,

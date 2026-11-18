@@ -422,6 +422,7 @@ Schrift (die des Systems oder deine eigene .ttf / .otf), Größe, Stärke, Text-
 - Einstellungen: Liedtext-Anzeige › Schwebender Text › Schrift › Schrift
 - Einstellungen: Liedtext-Anzeige › Schwebender Text › Farbe › Milchglas-Hintergrund
 - Einstellungen: Liedtext-Anzeige › Schwebender Text › Farbe › Textdeckkraft
+- Einstellungen: Liedtext-Anzeige › Schwebender Text › Farbe › Konturstärke
 - Einstellungen: Tastaturkurzbefehle › Schwebenden Text vergrößern
 - Einstellungen: Tastaturkurzbefehle › Schwebenden Text verkleinern
 
@@ -956,7 +957,7 @@ Sendet höchstens einmal täglich Version, macOS, aktivierte Funktionen und Abst
 
 ## Alle Einstellungen
 
-Alle Einstellungen des Einstellungsfensters nach Ort: insgesamt 329. Gib einen Namen in das Suchfeld oben in der Seitenleiste der Einstellungen ein, um direkt dorthin zu springen.
+Alle Einstellungen des Einstellungsfensters nach Ort: insgesamt 330. Gib einen Namen in das Suchfeld oben in der Seitenleiste der Einstellungen ein, um direkt dorthin zu springen.
 
 ### Liedtext › Quelle
 
@@ -1063,6 +1064,7 @@ Alle Einstellungen des Einstellungsfensters nach Ort: insgesamt 329. Gib einen N
 - **Textfarbe**
 - **Textkontur**
 - **Konturfarbe**
+- **Konturstärke**
 - **Textdeckkraft**
 - **Farbe ungesungen**
 - **Hintergrundfarbe**

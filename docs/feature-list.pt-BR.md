@@ -422,6 +422,7 @@ Fonte (a do sistema ou uma sua em .ttf / .otf), tamanho, peso, cores do texto e 
 - Ajustes: Exibição da letra › Letra flutuante › Fonte › Fonte
 - Ajustes: Exibição da letra › Letra flutuante › Cor › Fundo de vidro fosco
 - Ajustes: Exibição da letra › Letra flutuante › Cor › Opacidade do texto
+- Ajustes: Exibição da letra › Letra flutuante › Cor › Espessura do contorno
 - Ajustes: Atalhos de teclado › Aumentar tamanho da letra flutuante
 - Ajustes: Atalhos de teclado › Diminuir tamanho da letra flutuante
 
@@ -956,7 +957,7 @@ No máximo uma vez por dia, envia a versão, o macOS, quais recursos estão ativ
 
 ## Todos os ajustes
 
-Todos os ajustes da janela Ajustes, por local: 329 no total. Digite um nome no campo de busca no topo da barra lateral dos Ajustes para ir direto até ele.
+Todos os ajustes da janela Ajustes, por local: 330 no total. Digite um nome no campo de busca no topo da barra lateral dos Ajustes para ir direto até ele.
 
 ### Letra › Origem
 
@@ -1063,6 +1064,7 @@ Todos os ajustes da janela Ajustes, por local: 329 no total. Digite um nome no c
 - **Cor do texto**
 - **Contorno do texto**
 - **Cor do contorno**
+- **Espessura do contorno**
 - **Opacidade do texto**
 - **Cor não cantada**
 - **Cor de fundo**

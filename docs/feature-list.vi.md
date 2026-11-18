@@ -422,6 +422,7 @@ Phông chữ (của hệ thống, hoặc tệp .ttf / .otf của bạn), cỡ ch
 - Cài đặt: Hiển thị lời › Lời nổi › Phông chữ › Phông chữ
 - Cài đặt: Hiển thị lời › Lời nổi › Màu › Nền kính mờ
 - Cài đặt: Hiển thị lời › Lời nổi › Màu › Độ chắn sáng của chữ
+- Cài đặt: Hiển thị lời › Lời nổi › Màu › Độ dày viền
 - Cài đặt: Phím tắt › Tăng cỡ Lời nổi
 - Cài đặt: Phím tắt › Giảm cỡ Lời nổi
 
@@ -956,7 +957,7 @@ Tối đa một lần mỗi ngày, Lyrimuse gửi phiên bản, macOS, các tín
 
 ## Toàn bộ cài đặt
 
-Toàn bộ mục trong cửa sổ Cài đặt, theo vị trí: tổng cộng 329 mục. Gõ tên vào ô tìm kiếm ở đầu thanh bên của Cài đặt để đi thẳng tới mục đó.
+Toàn bộ mục trong cửa sổ Cài đặt, theo vị trí: tổng cộng 330 mục. Gõ tên vào ô tìm kiếm ở đầu thanh bên của Cài đặt để đi thẳng tới mục đó.
 
 ### Lời bài hát › Nguồn
 
@@ -1063,6 +1064,7 @@ Toàn bộ mục trong cửa sổ Cài đặt, theo vị trí: tổng cộng 329
 - **Màu chữ**
 - **Viền chữ**
 - **Màu viền**
+- **Độ dày viền**
 - **Độ chắn sáng của chữ**
 - **Màu chưa hát**
 - **Màu nền**

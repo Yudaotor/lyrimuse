@@ -422,6 +422,7 @@ Font (sistemin ya da kendi .ttf / .otf dosyanız), boyut, kalınlık, metin ve a
 - Ayarlar: Şarkı Sözü Görünümü › Yüzen Sözler › Font › Font
 - Ayarlar: Şarkı Sözü Görünümü › Yüzen Sözler › Renk › Buzlu Cam Arka Plan
 - Ayarlar: Şarkı Sözü Görünümü › Yüzen Sözler › Renk › Metin Opaklığı
+- Ayarlar: Şarkı Sözü Görünümü › Yüzen Sözler › Renk › Kontur Kalınlığı
 - Ayarlar: Klavye Kestirmeleri › Yüzen Sözlerin Puntosunu Büyüt
 - Ayarlar: Klavye Kestirmeleri › Yüzen Sözlerin Puntosunu Küçült
 
@@ -956,7 +957,7 @@ Neyin önce düzeltileceğine karar vermek için günde en fazla bir kez sürüm
 
 ## Tüm Ayarlar
 
-Ayarlar penceresindeki tüm ayarlar, konumlarına göre; toplam: 329. Bir ayara hemen gitmek için adını kenar çubuğunun üstündeki arama alanına yazın.
+Ayarlar penceresindeki tüm ayarlar, konumlarına göre; toplam: 330. Bir ayara hemen gitmek için adını kenar çubuğunun üstündeki arama alanına yazın.
 
 ### Şarkı Sözleri › Kaynak
 
@@ -1063,6 +1064,7 @@ Ayarlar penceresindeki tüm ayarlar, konumlarına göre; toplam: 329. Bir ayara 
 - **Metin Rengi**
 - **Metin Konturu**
 - **Kontur Rengi**
+- **Kontur Kalınlığı**
 - **Metin Opaklığı**
 - **Söylenmemiş Kısım Rengi**
 - **Arka Plan Rengi**

@@ -2718,11 +2718,11 @@ func runSourceContractSurfaceTests() {
                 expectEqual(true, false, "描边: 找不到 stillUpcomingText(改名了?)")
             }
             // 换行模式那条 SwiftUI 描边跟滚动模式的图层描边同一组参数。
-            expectEqual(view.contains("private let width = LyricsTextStrokeMetrics.width"), true,
-                        "描边: SwiftUI 那条的粗细读共享常量")
-            expectEqual(view.contains("LyricsTextStrokeMetrics.alphaRamp(scale: scale)")
-                        && view.contains(".colorMatrix(Self.alphaRampMatrix(scale: displayScale))"), true,
-                        "描边: SwiftUI 那条的外沿过渡读共享参数、按屏幕比例取")
+            expectEqual(view.contains("self.width = width.points"), true,
+                        "描边: SwiftUI 那条的粗细取设置里那一档(`OverlayTextStrokeWidth`)")
+            expectEqual(view.contains("LyricsTextStrokeMetrics.alphaRamp(width: width, scale: scale)")
+                        && view.contains(".colorMatrix(Self.alphaRampMatrix(width: width, scale: displayScale))"), true,
+                        "描边: SwiftUI 那条的外沿过渡读共享参数、按这一档和屏幕比例取")
             // 硬阈值 = 外沿二值化,1x 屏上成锯齿;8 位画布同理只剩几级。
             expectEqual(view.contains(".alphaThreshold(") || !view.contains("Canvas(colorMode: .linear)"), false,
                         "描边: SwiftUI 那条不用硬阈值、画布用浮点存储")
@@ -2807,10 +2807,10 @@ func runSourceContractSurfaceTests() {
             // 暂停时外推要冻住,否则停着也会每 250ms 判一次漂移重装。
             expectEqual(row.contains("if spec?.paused == true { return installed }"), true,
                         "图层滚动行: 暂停时 predictedMs 冻在装动画那一刻")
-            expectEqual(row.contains("applyingGaussianBlur(sigma: LyricsTextStrokeMetrics.width * scale)"), true,
-                        "描边: 图层那条的模糊半径读共享常量(跟换行模式同一个 σ)")
-            expectEqual(row.contains("LyricsTextStrokeMetrics.alphaRamp(scale: scale)"), true,
-                        "描边: 图层那条的外沿过渡读共享参数、按位图比例取")
+            expectEqual(row.contains("let width = stroke.width.points") && row.contains("applyingGaussianBlur(sigma: width * scale)"), true,
+                        "描边: 图层那条的模糊半径取同一档(跟换行模式同一个 σ)")
+            expectEqual(row.contains("LyricsTextStrokeMetrics.alphaRamp(width: width, scale: scale)"), true,
+                        "描边: 图层那条的外沿过渡读共享参数、按这一档和位图比例取")
         } else {
             expectEqual(true, false, "图层滚动行: 读不到 UI/OverlayScrollingLyricRow.swift(路径挪了?)")
         }

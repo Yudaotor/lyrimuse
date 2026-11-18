@@ -422,6 +422,7 @@ Font (the system's, or your own .ttf / .otf), size, weight, text and background 
 - Settings: Lyrics Display › Floating Lyrics › Font › Font
 - Settings: Lyrics Display › Floating Lyrics › Color › Frosted Glass Background
 - Settings: Lyrics Display › Floating Lyrics › Color › Text Opacity
+- Settings: Lyrics Display › Floating Lyrics › Color › Outline Width
 - Settings: Keyboard Shortcuts › Increase Floating Lyrics Font Size
 - Settings: Keyboard Shortcuts › Decrease Floating Lyrics Font Size
 
@@ -956,7 +957,7 @@ At most once a day, sends the version, macOS, which features are on and crash su
 
 ## Every setting
 
-Every setting in the Settings window, by where it lives: 329 in all. Type a name into the search field at the top of the Settings sidebar to jump straight to it.
+Every setting in the Settings window, by where it lives: 330 in all. Type a name into the search field at the top of the Settings sidebar to jump straight to it.
 
 ### Lyrics › Source
 
@@ -1063,6 +1064,7 @@ Every setting in the Settings window, by where it lives: 329 in all. Type a name
 - **Text Color**
 - **Text Outline**
 - **Outline Color**
+- **Outline Width**
 - **Text Opacity**
 - **Unsung Color**
 - **Background Color**

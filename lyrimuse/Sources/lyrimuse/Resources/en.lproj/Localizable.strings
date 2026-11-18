@@ -533,6 +533,8 @@
 "候选" = "Candidates";
 "假名" = "Kana";
 "偏移" = "Offset";
+"偏粗" = "Thick";
+"偏细" = "Thin";
 "停止" = "Stop";
 "停止搜索" = "Stop Searching";
 "停止监视" = "Stop Watching";
@@ -1531,6 +1533,7 @@
 "推送渠道信息不完整" = "Push channel details are incomplete";
 "推送渠道均已停用" = "All push channels are off";
 "推送记录" = "Delivery History";
+"描边粗细" = "Outline Width";
 "描边颜色" = "Outline Color";
 "提前" = "Advance";
 "提前 %@ 秒显示" = "Show %@s earlier";

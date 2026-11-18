@@ -398,6 +398,8 @@ final class AppSettings: ObservableObject {
         static let manualPickLocksLyrics = "np:manualPickLocksLyrics"
         static let textStrokeEnabled = "np:textStrokeEnabled"
         static let textStrokeColorHex = "np:textStrokeColorHex"
+        // 悬浮歌词描边粗细(细 / 标准 / 粗),见 `OverlayTextStrokeWidth`。
+        static let textStrokeWidth = "np:textStrokeWidth"
         static let karaokeUnsungFollowsCoverArt = "np:karaokeUnsungFollowsCoverArt"
         static let karaokeUnsungColorHex = "np:karaokeUnsungColorHex"
         static let fontFamilyName = "np:fontFamilyName"
@@ -1439,15 +1441,18 @@ final class AppSettings: ObservableObject {
     @Published var textStrokeEnabled: Bool {
         didSet { defaults.set(textStrokeEnabled, forKey: Keys.textStrokeEnabled) }
     }
-    // #RRGGBBAA。只让用户调"颜色"(含 alpha),描边粗细是代码里的固定常量
-    // (OptionalTextStroke 的 width,1.2pt),不做成单独的滑杆——同类实现普遍也只开一个
-    // 带 alpha 的取色器,保持这个克制的取舍。默认 #000000A6(黑色、
-    // alpha≈0.65),没碰过这个设置的人从阴影切到描边后颜色不会跳变。
+    // #RRGGBBAA,含 alpha。默认 #000000A6(黑色、alpha≈0.65),没碰过这个设置的人从阴影切到描边后颜色不会跳变。
+    // 粗细是另一项 `textStrokeWidth`。
     @Published var textStrokeColorHex: String {
         didSet {
             defaults.set(textStrokeColorHex, forKey: Keys.textStrokeColorHex)
             textStrokeColor = Color(hexWithAlpha: textStrokeColorHex, fallback: .black.opacity(0.65))
         }
+    }
+    /// 悬浮歌词描边粗细三档,没存过是「标准」(= 加这项设置前的粗细)。换行 / 滚动两种模式和按描边预留算的排版都读它。
+    /// 不进配色主题。见 04 章决策 106。
+    @Published var textStrokeWidth: OverlayTextStrokeWidth {
+        didSet { defaults.set(textStrokeWidth.rawValue, forKey: Keys.textStrokeWidth) }
     }
     // 卡拉OK"已唱/未唱"两段颜色。跟"文字颜色"是完全独立的一对——已唱色 = 文字颜色,未唱色是
     // 这一对里单独的一半,不是"文字颜色调暗"那种派生关系。
@@ -2843,6 +2848,7 @@ final class AppSettings: ObservableObject {
             .flatMap(OverlayGlassIntensity.init(rawValue:)) ?? .default
         overlayTextOpacity = OverlayTextOpacity.clamped(defaults.object(forKey: Keys.overlayTextOpacity) as? Double)
         textStrokeColorHex = defaults.string(forKey: Keys.textStrokeColorHex) ?? ColorTheme.defaultTheme.textStrokeColorHex
+        textStrokeWidth = defaults.string(forKey: Keys.textStrokeWidth).flatMap(OverlayTextStrokeWidth.init(rawValue:)) ?? .default
         lockPosition = (defaults.object(forKey: Keys.lockPosition) as? Bool) ?? false
         overlayFadeOnHover = (defaults.object(forKey: Keys.overlayFadeOnHover) as? Bool) ?? false
         overlayDragNeedsLongPress =

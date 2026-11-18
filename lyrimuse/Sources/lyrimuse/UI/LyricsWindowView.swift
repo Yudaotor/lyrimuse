@@ -5755,7 +5755,7 @@ private struct MiniLyricsReel: View, Equatable {
                         fillColor: NSColor(fill ?? color),
                         romaBaseColor: unsung,
                         romaFillColor: NSColor(color.opacity(0.75)),
-                        strokeColor: nil,
+                        stroke: nil,
                         alignment: .center,
                         // 还没开唱、提前占住当前那一格的那一句不拿引擎的定格,否则画成已唱完。
                         paused: !isPlaying || (!currentIsUpcoming && fillSettled),
@@ -5776,7 +5776,7 @@ private struct MiniLyricsReel: View, Equatable {
                         fillColor: NSColor(fill ?? color),
                         romaBaseColor: unsung,
                         romaFillColor: NSColor(color.opacity(0.75)),
-                        strokeColor: nil,
+                        stroke: nil,
                         rowAlignment: .center,
                         paused: !isPlaying || (!currentIsUpcoming && fillSettled),
                         timingEpoch: timing.epoch,

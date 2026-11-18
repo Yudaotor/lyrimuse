@@ -448,6 +448,11 @@ func runDeepLinkTests() {
         expectEqual(link("lyrimuse://debug/overlay-text?color=accent"), nil, "debug: 文字颜色来源不认的值不认")
         expectEqual(link("lyrimuse://debug/overlay-text?opacity=0"), nil, "debug: 不透明度不是正数不认")
         expectEqual(link("lyrimuse://debug/overlay-text"), nil, "debug: 文字设置什么都没带不认")
+        expectEqual(link("lyrimuse://debug/overlay-text?stroke=1&stroke-width=Thin"),
+                    .debug(.overlayText(opacity: nil, color: nil, stroke: true, strokeWidth: .thin)), "debug: 开描边并设粗细")
+        expectEqual(link("lyrimuse://debug/overlay-text?stroke-width=thick"),
+                    .debug(.overlayText(opacity: nil, color: nil, stroke: nil, strokeWidth: .thick)), "debug: 只设描边粗细")
+        expectEqual(link("lyrimuse://debug/overlay-text?stroke-width=bold"), nil, "debug: 描边粗细不认的值不认")
         expectEqual(link("lyrimuse://debug/touchbar-display?color=Rainbow"), .debug(.touchBarDisplay(color: .rainbow)),
                     "debug: 触控栏歌词颜色切彩虹(大小写不敏感)")
         expectEqual(link("lyrimuse://debug/notch-lyrics-color?color=Custom&hex=ff8000"),
@@ -905,6 +910,8 @@ func runDeepLinkTests() {
             .debug(.noLyricsHide(overlay: false, notch: nil, mini: nil)), .debug(.noLyricsHide(overlay: true, notch: false, mini: true)),
             .debug(.overlayText(opacity: 0.4, color: "cover")), .debug(.overlayText(opacity: 1, color: nil)),
             .debug(.overlayText(opacity: nil, color: "rainbow")),
+            .debug(.overlayText(opacity: nil, color: nil, stroke: false, strokeWidth: nil)),
+            .debug(.overlayText(opacity: 0.5, color: "custom", stroke: true, strokeWidth: .standard)),
             .debug(.menuBarDisplay(artwork: true, content: nil)), .debug(.menuBarDisplay(artwork: nil, content: "title")),
             .debug(.menuBarDisplay(artwork: false, content: "lyrics")),
             .debug(.menuBarDisplay(artwork: nil, content: nil, iconSize: "small")),

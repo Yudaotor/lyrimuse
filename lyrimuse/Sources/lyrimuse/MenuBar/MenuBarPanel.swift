@@ -1673,7 +1673,7 @@ private struct MenuBarPanelView: View {
                 fillColor: fg,
                 romaBaseColor: fg,
                 romaFillColor: fg,
-                strokeColor: nil,
+                stroke: nil,
                 alignment: .leading,
                 paused: !playback.lyricsClockRunning || playback.currentLineFillSettled,
                 timingEpoch: LyricsTimingEpoch.of(anchor: playback.anchor, pausedPositionMs: playback.pausedPositionMs,

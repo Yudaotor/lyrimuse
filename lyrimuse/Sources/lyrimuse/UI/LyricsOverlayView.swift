@@ -115,7 +115,7 @@ private final class OverlayPlayback: ObservableObject {
     ///
     /// 滚动行必须显式定高:`MarqueeText` 的外壳是 `GeometryReader`,没有固有高度,不定高会在卡片的
     /// VStack 里跟别的行平分高度、互相重叠。
-    /// 描边那圈不能漏:内容套了 `lyricsTextStroke`,四周各多出 `LyricsTextStrokeMetrics.inset`,
+    /// 描边那圈不能漏:内容套了 `lyricsTextStroke`,四周各多出 `textStrokeInset`,
     /// 框只给字高的话描边上下沿会被裁掉。
     func scrollRowHeight(_ font: NSFont) -> CGFloat {
         scrollTextHeight(font) + scrollStrokePadding
@@ -129,7 +129,18 @@ private final class OverlayPlayback: ObservableObject {
 
     /// 描边开着时一行上下两份预留加起来多高;关着为 0。
     var scrollStrokePadding: CGFloat {
-        textStrokeEnabled ? LyricsTextStrokeMetrics.inset * 2 : 0
+        textStrokeInset * 2
+    }
+
+    /// 描边开着时每行四周各预留多少(这一档的 `OverlayTextStrokeWidth.inset`);关着为 0。按描边预留算的排版都读它,
+    /// 跟两条描边路画出来的粗细是同一档。
+    var textStrokeInset: CGFloat {
+        OverlayTextStrokeWidth.inset(enabled: textStrokeEnabled, width: textStrokeWidth)
+    }
+
+    /// 图层行(滚动模式、换行模式的逐字行)的描边;关着为 nil。
+    var layerStroke: LyricLayerStroke? {
+        textStrokeEnabled ? LyricLayerStroke(color: NSColor(textStrokeColor), width: textStrokeWidth) : nil
     }
 
     @Published private(set) var mainFont: Font = .system(size: 20, weight: .bold)
@@ -142,6 +153,7 @@ private final class OverlayPlayback: ObservableObject {
     @Published private(set) var previewRomanizationFont: Font = .system(size: 9, weight: .medium)
     @Published private(set) var textStrokeEnabled = false
     @Published private(set) var textStrokeColor: Color = .black.opacity(0.65)
+    @Published private(set) var textStrokeWidth: OverlayTextStrokeWidth = .default
     /// 卡拉OK"未唱到"那一段实际显示用的颜色——跟 displayForegroundColor
     /// 完全对称的一对:「跟随封面」开着且这首歌已算出动态高亮色时用它,否则退回用户手选的
     /// 固定未唱色。两者是独立的颜色,不是同一个值的两种状态。
@@ -266,6 +278,7 @@ private final class OverlayPlayback: ObservableObject {
             s.$previewRomanizationFont.removeDuplicates().sink { [weak self] in self?.previewRomanizationFont = $0 },
             s.$textStrokeEnabled.removeDuplicates().sink { [weak self] in self?.textStrokeEnabled = $0 },
             s.$textStrokeColor.removeDuplicates().sink { [weak self] in self?.textStrokeColor = $0 },
+            s.$textStrokeWidth.removeDuplicates().sink { [weak self] in self?.textStrokeWidth = $0 },
             // 跟随封面时**不能**直接给 accent 本身:已唱色(displayForegroundColor)在
             // 跟随封面时同样是这个 accent,原样传出去的话两段会是完全相同的颜色,卡拉OK的
             // 进度效果直接消失。这里补一次 dimOpacity,复现"未唱比已唱调暗"的观感,只是源头
@@ -779,7 +792,7 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
     /// 不比眼下这两句窄(逐词读音按组排时比只量文字宽)。还不知道整首多宽时撑满卡片。
     private var alternateBlockWidth: CGFloat {
         guard let widest = playback.songWidestMainRow, widest > 0 else { return .infinity }
-        let strokeInset = playback.textStrokeEnabled ? LyricsTextStrokeMetrics.inset : 0
+        let strokeInset = playback.textStrokeInset
         return max(widest + strokeInset * 2, cardNaturalWidth)
     }
 
@@ -830,7 +843,7 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
     /// 四行都要量:留白是加在整块上的,只顾主行的话译文/下一句会替它提前折行。
     private var cardNaturalWidth: CGFloat {
         let fonts = playback.overlayNSFonts
-        let strokeInset = playback.textStrokeEnabled ? LyricsTextStrokeMetrics.inset : 0
+        let strokeInset = playback.textStrokeInset
         var widest: CGFloat = 0
         // 主行跟断句判「放不放得下」同一个量法(`LyricsSegmenter.mainWidth`:逐词相加与整串取大,逐词读音按组量,
         // 组两侧的留白跟排版同一个式子)。
@@ -858,7 +871,7 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
                                         sidePadding: OverlayRowLayout.romaSidePadding(strokeInset: strokeInset))))
         }
         guard widest > 0 else { return 0 }
-        // 每一行四周都留着描边那圈(开着时各 `LyricsTextStrokeMetrics.inset`),排版要占这么宽:漏算的话留白正好把这一截
+        // 每一行四周都留着描边那圈(开着时各 `playback.textStrokeInset`),排版要占这么宽:漏算的话留白正好把这一截
         // 吃掉,贴满一行的句子末尾一个字折到下一行。
         return widest + strokeInset * 2
     }
@@ -1095,7 +1108,7 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
                 // 那套派生关系才有意义)。
                 romaBaseColor: karaokeUnsungInk,
                 romaFillColor: karaokeFillInk.withAlphaComponent(karaokeFillInk.alphaComponent * 0.75),
-                strokeColor: playback.textStrokeEnabled ? NSColor(playback.textStrokeColor) : nil,
+                stroke: playback.layerStroke,
                 alignment: duetSide,
                 // 跟 SwiftUI 那条逐字染色的 TimelineView 同一条 paused 判据。
                 paused: !playback.lyricsClockRunning || playback.currentLineFillSettled || !surfaceVisible,
@@ -1140,7 +1153,7 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
             fillColor: karaokeFillInk,
             romaBaseColor: karaokeUnsungInk,
             romaFillColor: karaokeFillInk.withAlphaComponent(karaokeFillInk.alphaComponent * 0.75),
-            strokeColor: playback.textStrokeEnabled ? NSColor(playback.textStrokeColor) : nil,
+            stroke: playback.layerStroke,
             rowAlignment: rowAlignment,
             paused: !playback.lyricsClockRunning || playback.currentLineFillSettled || !surfaceVisible,
             timingEpoch: playback.timingEpoch,
@@ -1219,7 +1232,8 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
     /// (`LyricStrokeRainbow`)。状态文案、提示不走这里,彩虹时照旧白字。
     private func lyricStroke<V: View>(_ text: V) -> some View {
         text.modifier(LyricStrokeRainbow(rainbow: playback.rainbow, flowing: rainbowFlowing,
-                                         strokeEnabled: playback.textStrokeEnabled, strokeColor: playback.textStrokeColor))
+                                         strokeEnabled: playback.textStrokeEnabled, strokeWidth: playback.textStrokeWidth,
+                                         strokeColor: playback.textStrokeColor))
     }
 
     /// 彩虹流不流:时钟在走、悬浮窗看得见时流。不跟逐字填色那条「唱完一句就停表」走,两句之间照样流。
@@ -1248,7 +1262,7 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
                 font: font,
                 romaFont: playback.overlayNSFonts.romanization,
                 baseColor: ns, fillColor: ns, romaBaseColor: ns, romaFillColor: ns,
-                strokeColor: playback.textStrokeEnabled ? NSColor(playback.textStrokeColor) : nil,
+                stroke: playback.layerStroke,
                 alignment: alignment,
                 paused: !playback.lyricsClockRunning || !surfaceVisible,
                 pacedWindow: window,
@@ -1440,7 +1454,7 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
                     font: translation ? playback.overlayNSFonts.translation : playback.overlayNSFonts.romanization,
                     romaFont: playback.overlayNSFonts.romanization,
                     baseColor: ns, fillColor: ns, romaBaseColor: ns, romaFillColor: ns,
-                    strokeColor: playback.textStrokeEnabled ? NSColor(playback.textStrokeColor) : nil,
+                    stroke: playback.layerStroke,
                     alignment: nextLineDuetSide,
                     paused: true,
                     translation: translation,
@@ -1591,7 +1605,7 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
             Text(hint)
                 .font(.caption)
                 .foregroundStyle(playback.displayForegroundColor.opacity(0.8))
-                .lyricsTextStroke(playback.textStrokeEnabled, color: playback.textStrokeColor)
+                .lyricsTextStroke(playback.textStrokeEnabled, width: playback.textStrokeWidth, color: playback.textStrokeColor)
                 .padding(.top, 4)
                 .padding(.leading, hintDuetPadding.leading)
                 .padding(.trailing, hintDuetPadding.trailing)
@@ -1602,7 +1616,7 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
                     : L10n.t("按住歌词即可拖动位置"))
                 .font(.caption)
                 .foregroundStyle(playback.displayForegroundColor.opacity(0.8))
-                .lyricsTextStroke(playback.textStrokeEnabled, color: playback.textStrokeColor)
+                .lyricsTextStroke(playback.textStrokeEnabled, width: playback.textStrokeWidth, color: playback.textStrokeColor)
                 .padding(.top, 4)
                 .padding(.leading, hintDuetPadding.leading)
                 .padding(.trailing, hintDuetPadding.trailing)
@@ -1788,7 +1802,7 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
     }
 
     /// 描边开着时每行四周的预留(`OptionalTextStroke` 的 padding);关着为 0。
-    private var strokeInset: CGFloat { playback.textStrokeEnabled ? LyricsTextStrokeMetrics.inset : 0 }
+    private var strokeInset: CGFloat { playback.textStrokeInset }
 
     static func droppingTrailingWhitespace(_ text: String) -> String {
         String(text.reversed().drop { $0.isWhitespace }.reversed())
@@ -1798,7 +1812,7 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
     private func upcomingColumnWidth(_ group: SyncedLyricWordGroup) -> CGFloat {
         WrappedKaraokeRowsView.Geometry.itemWidths(
             words: group.words, groups: [group], font: nextLinePreviewNSFont, romaFont: nextLineReadingNSFont,
-            strokeInset: playback.textStrokeEnabled ? LyricsTextStrokeMetrics.inset : 0).first ?? 0
+            strokeInset: playback.textStrokeInset).first ?? 0
     }
 
     /// 开唱后主行那一句每一项的宽(字或一组),下一句预览按它断行。
@@ -1806,7 +1820,7 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
         WrappedKaraokeRowsView.Geometry.itemWidths(
             words: words, groups: groups, font: playback.overlayNSFonts.main,
             romaFont: playback.overlayNSFonts.romanization,
-            strokeInset: playback.textStrokeEnabled ? LyricsTextStrokeMetrics.inset : 0)
+            strokeInset: playback.textStrokeInset)
     }
 
     /// 下一句能不能把罗马音逐词标在底下(前奏 / 间奏「•••」下方那句和唱着时的下一句预览都一样)—— 判据同
@@ -1841,7 +1855,7 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
                 font: fonts.main,
                 romaFont: fonts.romanization,
                 baseColor: ink, fillColor: ink, romaBaseColor: ink, romaFillColor: ink,
-                strokeColor: playback.textStrokeEnabled ? NSColor(playback.textStrokeColor) : nil,
+                stroke: playback.layerStroke,
                 alignment: nextLineDuetSide,
                 paused: true,
                 still: true,
@@ -1880,7 +1894,8 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
                     .clipped()
             }
             .modifier(LyricStrokeRainbow(rainbow: playback.rainbow, flowing: rainbowFlowing,
-                                         strokeEnabled: playback.textStrokeEnabled, strokeColor: playback.textStrokeColor))
+                                         strokeEnabled: playback.textStrokeEnabled, strokeWidth: playback.textStrokeWidth,
+                                         strokeColor: playback.textStrokeColor))
         } else if still {
             stillUpcomingText(next, font: nextLinePreviewFont, color: color)
         } else if let groups = upcomingWordGroups {
@@ -1949,7 +1964,7 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
                     .lineLimit(1)
                     .fixedSize()
                     .padding(.horizontal, OverlayRowLayout.romaSidePadding(
-                        strokeInset: playback.textStrokeEnabled ? LyricsTextStrokeMetrics.inset : 0))
+                        strokeInset: playback.textStrokeInset))
                     .padding(.trailing, tail.isEmpty ? 0 : OverlayNaturalWidth.width(tail, font: nextLinePreviewNSFont))
                     .opacity(g.romanization == nil ? 0 : 1)
             }
@@ -1978,7 +1993,7 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
             line: OverlayLineKey(text: words.map(\.text).joined(), roma: false, mainFont: nextLinePreviewFont,
                                  romaFont: nextLinePreviewFont, romaGap: 0, overflow: playback.lineOverflow),
             breakFont: playback.mainFont, breakRomaFont: playback.romanizationFont,
-            stroked: playback.textStrokeEnabled))
+            strokeInset: playback.textStrokeInset))
     }
 
     private func upcomingGroupColumnsKey(_ key: String) -> AnyHashable {
@@ -1987,7 +2002,7 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
                 text: key, roma: true, mainFont: nextLinePreviewFont, romaFont: nextLineReadingFont,
                 romaGap: rowSpacing.perWordReadingGap, overflow: playback.lineOverflow),
             breakFont: playback.mainFont, breakRomaFont: playback.romanizationFont,
-            stroked: playback.textStrokeEnabled))
+            strokeInset: playback.textStrokeInset))
     }
 
     /// 下一句预览报进歌词文字矩形的并集。折行的那两支是 WrapLayout,撑满整宽,直接拿 frame 会把左右两片空白也算成
@@ -2284,7 +2299,7 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
             (Text(Image(systemName: "music.note")) + Text(verbatim: " Lyrimuse"))
                 .font(playback.mainFont)
                 .foregroundStyle(playback.displayForegroundColor.opacity(0.7))
-                .lyricsTextStroke(playback.textStrokeEnabled, color: playback.textStrokeColor)
+                .lyricsTextStroke(playback.textStrokeEnabled, width: playback.textStrokeWidth, color: playback.textStrokeColor)
         } else if playback.isCurrentTrackAdBreak {
             // 补上——Spotify 广告插播,同样要排在"还在搜索中"分支前面:广告
             // 的标题/歌手永远不会被写进歌词缓存(见 lyrimuse-engine/enrich.go
@@ -2294,14 +2309,14 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
             Text(L10n.t("广告中"))
                 .font(playback.mainFont)
                 .foregroundStyle(playback.displayForegroundColor.opacity(0.5))
-                .lyricsTextStroke(playback.textStrokeEnabled, color: playback.textStrokeColor)
+                .lyricsTextStroke(playback.textStrokeEnabled, width: playback.textStrokeWidth, color: playback.textStrokeColor)
         } else if playback.isRadioTalkBreak {
             // 电台口白:这首歌放完了、台里在说话。排在"还在搜索中"之前的理由跟上面
             // 那条广告分支一样 —— 口白期间元数据还停在上一首,不拦就一直显示「搜索歌词中…」。
             Text(L10n.t("口白"))
                 .font(playback.mainFont)
                 .foregroundStyle(playback.displayForegroundColor.opacity(0.5))
-                .lyricsTextStroke(playback.textStrokeEnabled, color: playback.textStrokeColor)
+                .lyricsTextStroke(playback.textStrokeEnabled, width: playback.textStrokeWidth, color: playback.textStrokeColor)
         } else if let name = playback.noLyricsTitle {
             // 「无歌词时显示歌名」:顶替下面「纯音乐」「暂无歌词」两支,排在广告、口白后面(那两段的歌名不是这首歌),
             // 不动「搜索歌词中…」及之前的顺序(04 章决策 104)。音符同品牌标记走 SF Symbol;0.7 同品牌标记,
@@ -2309,7 +2324,7 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
             (Text(Image(systemName: "music.note")) + Text(verbatim: " " + name))
                 .font(playback.mainFont)
                 .foregroundStyle(playback.displayForegroundColor.opacity(0.7))
-                .lyricsTextStroke(playback.textStrokeEnabled, color: playback.textStrokeColor)
+                .lyricsTextStroke(playback.textStrokeEnabled, width: playback.textStrokeWidth, color: playback.textStrokeColor)
                 .overlayLineFit(playback.lineOverflow)
                 .overlayScroll(playback.lineOverflow == .scroll, id: name, alignment: marqueeRestingAlignment,
                                height: playback.scrollRowHeight(playback.overlayNSFonts.main))
@@ -2321,21 +2336,21 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
             Text(L10n.t("纯音乐"))
                 .font(playback.mainFont)
                 .foregroundStyle(playback.displayForegroundColor.opacity(0.5))
-                .lyricsTextStroke(playback.textStrokeEnabled, color: playback.textStrokeColor)
+                .lyricsTextStroke(playback.textStrokeEnabled, width: playback.textStrokeWidth, color: playback.textStrokeColor)
         } else if playback.currentTrackHasNoLyrics {
             // 搜完了、确实一句都没有。必须排在下面那个"搜索歌词中…"分支前面,否则这首歌
             // 只要还在播,那句"搜索中"就会一直挂着(见 PlaybackCoordinator.currentTrackHasNoLyrics)。
             Text(playback.hasPlainLyrics ? L10n.t("仅有纯文本，无时间戳") : L10n.t("暂无歌词"))
                 .font(playback.mainFont)
                 .foregroundStyle(playback.displayForegroundColor.opacity(0.5))
-                .lyricsTextStroke(playback.textStrokeEnabled, color: playback.textStrokeColor)
+                .lyricsTextStroke(playback.textStrokeEnabled, width: playback.textStrokeWidth, color: playback.textStrokeColor)
         } else if playback.engineNotRunning && playback.isPlayingNow && !playback.hasLyricsContent {
             // 引擎常驻进程一直不在,没人去搜。顺序与判据同 LyricsLineDisplay:排在「暂无歌词」后、「网络连接失败」和
             // 「搜索歌词中…」前(见 15 章决策 115)。
             Text(L10n.t("歌词引擎未运行"))
                 .font(playback.mainFont)
                 .foregroundStyle(playback.displayForegroundColor.opacity(0.5))
-                .lyricsTextStroke(playback.textStrokeEnabled, color: playback.textStrokeColor)
+                .lyricsTextStroke(playback.textStrokeEnabled, width: playback.textStrokeWidth, color: playback.textStrokeColor)
         } else if playback.engineNetworkDown && !playback.hasLyricsContent {
             // 补上——必须排在下面"搜索歌词中…"**前面**,否则永远到不了这里。
             //
@@ -2348,7 +2363,7 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
             Text(L10n.t("网络连接失败"))
                 .font(playback.mainFont)
                 .foregroundStyle(playback.displayForegroundColor.opacity(0.5))
-                .lyricsTextStroke(playback.textStrokeEnabled, color: playback.textStrokeColor)
+                .lyricsTextStroke(playback.textStrokeEnabled, width: playback.textStrokeWidth, color: playback.textStrokeColor)
         } else if playback.isPlayingNow && !playback.hasLyricsContent {
             // 换到一首还没解析过的新歌,引擎后台搜索通常要几秒——这段空窗期跟"这首
             // 歌确实没有歌词/正在间奏"共用同一个 currentLine==nil,但含义完全不同,不能
@@ -2357,7 +2372,7 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
             Text(L10n.t("搜索歌词中…"))
                 .font(playback.mainFont)
                 .foregroundStyle(playback.displayForegroundColor.opacity(0.5))
-                .lyricsTextStroke(playback.textStrokeEnabled, color: playback.textStrokeColor)
+                .lyricsTextStroke(playback.textStrokeEnabled, width: playback.textStrokeWidth, color: playback.textStrokeColor)
         } else if let window = playback.rawGapWindow {
             // 前奏/间奏,跟歌词窗口同一份「•••」呼吸圆点(LyricsGapDotsView)——**不设门槛**
             // (rawGapWindow,见其头注):悬浮窗没有"沿用上一行"这条退路,哪怕这段静默不到
@@ -2390,7 +2405,7 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
             Text("♪")
                 .font(playback.mainFont)
                 .foregroundStyle(playback.displayForegroundColor.opacity(0.3))
-                .lyricsTextStroke(playback.textStrokeEnabled, color: playback.textStrokeColor)
+                .lyricsTextStroke(playback.textStrokeEnabled, width: playback.textStrokeWidth, color: playback.textStrokeColor)
         }
     }
 
@@ -2439,7 +2454,7 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
         let line: OverlayLineKey
         let breakFont: Font
         let breakRomaFont: Font
-        let stroked: Bool
+        let strokeInset: CGFloat
     }
 }
 
@@ -2460,21 +2475,17 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
 // Canvas symbol 就失效,整行位图被二次合成并重跑高斯模糊 + 透明度拉伸,而 mask 只
 // 消费 alpha 剪影,剪影在一行存续期内根本不变。那条路径改传一份同排版的纯色副本,
 // 描边层就只随换行/字体/宽度变化重建。
-/// 歌词描边的几何参数。换行模式(`OptionalTextStroke`,SwiftUI)和滚动模式
+/// 歌词描边的外沿参数。换行模式(`OptionalTextStroke`,SwiftUI)和滚动模式
 /// (`OverlayScrollingLyricRow`,位图)两条渲染路都读这一份 —— 两边算法相同(剪影模糊后
-/// 按透明度拉成实心轮廓),参数也必须相同,否则两种模式的描边粗细不一样。
+/// 按透明度拉成实心轮廓),粗细都取 `OverlayTextStrokeWidth` 的同一档,否则两种模式的描边粗细不一样。
 enum LyricsTextStrokeMetrics {
-    /// 剪影模糊半径(点)。不做成可调项,设置里只开颜色。
-    static let width: CGFloat = 1.2
-    /// 描边在内容四周预留的空白(点):模糊会让剪影往外胀,不留这一圈就会被裁掉。
-    static var inset: CGFloat { width * 2 }
     /// 描边外沿 = 模糊剪影透明度 1% 的等值线,在直边上离字边 2.326σ。
     private static let edgeSigmas = 2.326
 
-    /// 模糊剪影的透明度在 `lo...hi` 之间线性拉到 0...1,低于 lo 全透、高于 hi 实心。
+    /// 模糊剪影的透明度在 `lo...hi` 之间线性拉到 0...1,低于 lo 全透、高于 hi 实心。`width` 是这一档的 σ(点)。
     /// 区间按直边算:以外沿等值线为中心、横跨一个设备像素,所以描边粗细不随比例变,
     /// 外沿有一像素的过渡。别改回单一硬阈值:外沿二值化,1x 屏上是一格一格的锯齿。
-    static func alphaRamp(scale: CGFloat) -> (lo: Double, hi: Double) {
+    static func alphaRamp(width: CGFloat, scale: CGFloat) -> (lo: Double, hi: Double) {
         let half = Double(0.5 / (width * max(scale, 1)))
         func tail(_ x: Double) -> Double { 0.5 * erfc(x / 2.0.squareRoot()) }
         return (tail(edgeSigmas + half), tail(edgeSigmas - half))
@@ -2485,12 +2496,14 @@ private struct OptionalTextStroke<MaskSource: View>: ViewModifier {
     let enabled: Bool
     let color: Color
     let maskSource: MaskSource?
-    private let width = LyricsTextStrokeMetrics.width
+    /// 剪影模糊半径 σ(点),取 `OverlayTextStrokeWidth.points`,跟图层那条同一档。
+    private let width: CGFloat
     private let symbolID = "np-lyrics-stroke"
     @Environment(\.displayScale) private var displayScale
 
-    init(enabled: Bool, color: Color, maskSource: MaskSource?) {
+    init(enabled: Bool, width: OverlayTextStrokeWidth, color: Color, maskSource: MaskSource?) {
         self.enabled = enabled
+        self.width = width.points
         self.color = color
         self.maskSource = maskSource
     }
@@ -2508,7 +2521,7 @@ private struct OptionalTextStroke<MaskSource: View>: ViewModifier {
                         .mask {
                             // 浮点画布:外沿那段透明度只有百分之几,8 位存储只剩几级,过渡又成台阶。
                             Canvas(colorMode: .linear) { context, size in
-                                context.addFilter(.colorMatrix(Self.alphaRampMatrix(scale: displayScale)))
+                                context.addFilter(.colorMatrix(Self.alphaRampMatrix(width: width, scale: displayScale)))
                                 context.drawLayer { ctx in
                                     if let resolved = context.resolveSymbol(id: symbolID) {
                                         ctx.draw(resolved, at: CGPoint(x: size.width / 2, y: size.height / 2))
@@ -2529,7 +2542,7 @@ private struct OptionalTextStroke<MaskSource: View>: ViewModifier {
                                 //
                                 // 居中对齐时(非对唱歌)两边各差一半、正好抵消,看不出来;一旦
                                 // 按 leading/trailing 靠边(对唱歌的左右声部),文字就分别贴在
-                                // 各自矩形的边上 —— 偏移 width*2 = 2.4pt,而描边本身只有 1.2pt,
+                                // 各自矩形的边上 —— 偏移 width*2,比描边本身还宽,
                                 // 于是整圈描边甩到一侧。
                                 symbolSource(content: content)
                                     .padding(width * 2)
@@ -2544,8 +2557,8 @@ private struct OptionalTextStroke<MaskSource: View>: ViewModifier {
     }
 
     /// 只看 alpha 的 mask:透明度按 `LyricsTextStrokeMetrics.alphaRamp` 线性拉伸。
-    private static func alphaRampMatrix(scale: CGFloat) -> ColorMatrix {
-        let ramp = LyricsTextStrokeMetrics.alphaRamp(scale: scale)
+    private static func alphaRampMatrix(width: CGFloat, scale: CGFloat) -> ColorMatrix {
+        let ramp = LyricsTextStrokeMetrics.alphaRamp(width: width, scale: scale)
         let k = 1 / (ramp.hi - ramp.lo)
         var m = ColorMatrix()
         m.a4 = Float(k)
@@ -2571,15 +2584,16 @@ struct LyricStrokeRainbow: ViewModifier {
     let rainbow: Bool
     let flowing: Bool
     let strokeEnabled: Bool
+    let strokeWidth: OverlayTextStrokeWidth
     let strokeColor: Color
 
     func body(content: Content) -> some View {
         if rainbow {
             content
                 .rainbowFill(true, flowing: flowing)
-                .lyricsTextStroke(strokeEnabled, color: strokeColor) { content }
+                .lyricsTextStroke(strokeEnabled, width: strokeWidth, color: strokeColor) { content }
         } else {
-            content.lyricsTextStroke(strokeEnabled, color: strokeColor)
+            content.lyricsTextStroke(strokeEnabled, width: strokeWidth, color: strokeColor)
         }
     }
 }
@@ -2587,16 +2601,16 @@ struct LyricStrokeRainbow: ViewModifier {
 // internal(而不是 private):设置页顶部的实时预览要用同一个描边实现渲染同一段歌词 ——
 // 预览和真窗口各写一份描边最终一定会漂,而描边是这一页最难凭想象判断效果的一项。
 extension View {
-    func lyricsTextStroke(_ enabled: Bool, color: Color) -> some View {
-        modifier(OptionalTextStroke<EmptyView>(enabled: enabled, color: color, maskSource: nil))
+    func lyricsTextStroke(_ enabled: Bool, width: OverlayTextStrokeWidth, color: Color) -> some View {
+        modifier(OptionalTextStroke<EmptyView>(enabled: enabled, width: width, color: color, maskSource: nil))
     }
 
     /// 带静态剪影源的版本,给逐字填色这类 content 逐帧变化的热路径用 —— 见
     /// OptionalTextStroke 顶部 maskSource 的注释。
     func lyricsTextStroke<M: View>(
-        _ enabled: Bool, color: Color, @ViewBuilder maskSource: () -> M
+        _ enabled: Bool, width: OverlayTextStrokeWidth, color: Color, @ViewBuilder maskSource: () -> M
     ) -> some View {
-        modifier(OptionalTextStroke(enabled: enabled, color: color, maskSource: maskSource()))
+        modifier(OptionalTextStroke(enabled: enabled, width: width, color: color, maskSource: maskSource()))
     }
 
     /// 悬浮窗控制胶囊的材质(液态玻璃 + 纯色兜底):

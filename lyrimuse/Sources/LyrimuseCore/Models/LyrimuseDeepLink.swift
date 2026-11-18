@@ -296,9 +296,9 @@ public enum LyrimuseDeepLink: Equatable, Sendable {
         /// 至少带一个。
         case overlayLayout(width: Double?, lineChange: Bool?, nextLine: Double? = nil, overflow: OverlayLineOverflow? = nil,
                            nextArrangement: OverlayNextLineArrangement? = nil)
-        /// 悬浮歌词「文字不透明度」(按设置的区间夹取)和「文字颜色」从哪来,跟设置页「颜色」走同几个设置:
-        /// `debug/overlay-text?opacity=0.4&color=cover|custom|rainbow`,至少带一个。
-        case overlayText(opacity: Double?, color: String?)
+        /// 悬浮歌词「文字不透明度」(按设置的区间夹取)、「文字颜色」从哪来、「文字描边」开关和「描边粗细」,跟设置页「颜色」走同几个设置:
+        /// `debug/overlay-text?opacity=0.4&color=cover|custom|rainbow&stroke=0|1&stroke-width=thin|standard|thick`,至少带一个。
+        case overlayText(opacity: Double?, color: String?, stroke: Bool? = nil, strokeWidth: OverlayTextStrokeWidth? = nil)
         /// 把标题为 `title` 的那扇 App 窗口挪到 (x, y):全局坐标、左上角原点(同 `check-windows.swift` 打印的),不激活。
         /// `debug/move-window?title=搜索歌词…&x=-200&y=-1200`:把预览会停表的窗口挪到没被盖住的屏上再录帧。
         /// 带 `w`、`h`(点,都要大于 0,可只带一个)时连大小一起改,不低于窗口的最小尺寸:验窄窗 / 宽窗排版用。
@@ -647,8 +647,12 @@ public enum LyrimuseDeepLink: Equatable, Sendable {
             let opacity = value("opacity").flatMap(Double.init).flatMap { $0.isFinite && $0 > 0 ? $0 : nil }
             let color = value("color")?.lowercased()
             if let color, !["cover", "custom", "rainbow"].contains(color) { return nil }
-            guard opacity != nil || color != nil else { return nil }
-            self = .debug(.overlayText(opacity: opacity, color: color))
+            let stroke = value("stroke").flatMap(Self.parseBool)
+            let strokeWidthValue = value("stroke-width")
+            let strokeWidth = strokeWidthValue.flatMap { OverlayTextStrokeWidth(rawValue: $0.lowercased()) }
+            if strokeWidthValue != nil, strokeWidth == nil { return nil }
+            guard opacity != nil || color != nil || stroke != nil || strokeWidth != nil else { return nil }
+            self = .debug(.overlayText(opacity: opacity, color: color, stroke: stroke, strokeWidth: strokeWidth))
         case ("debug", "/notch-style"):
             let style = value("style").flatMap { $0.isEmpty ? nil : $0 }
             let expanded = value("expanded").flatMap { $0.isEmpty ? nil : $0 }
@@ -1089,11 +1093,13 @@ public enum LyrimuseDeepLink: Equatable, Sendable {
                 if let overflow { items.append(URLQueryItem(name: "overflow", value: overflow.rawValue)) }
                 if let arrangement { items.append(URLQueryItem(name: "next-arrangement", value: arrangement.rawValue)) }
                 components.queryItems = items
-            case let .overlayText(opacity, color):
+            case let .overlayText(opacity, color, stroke, strokeWidth):
                 components.path = "/overlay-text"
                 var items: [URLQueryItem] = []
                 if let opacity { items.append(URLQueryItem(name: "opacity", value: String(opacity))) }
                 if let color { items.append(URLQueryItem(name: "color", value: color)) }
+                if let stroke { items.append(URLQueryItem(name: "stroke", value: stroke ? "1" : "0")) }
+                if let strokeWidth { items.append(URLQueryItem(name: "stroke-width", value: strokeWidth.rawValue)) }
                 components.queryItems = items
             case let .notchStyle(style, expanded):
                 components.path = "/notch-style"

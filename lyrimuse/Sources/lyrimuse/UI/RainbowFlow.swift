@@ -117,7 +117,7 @@ struct RainbowFlowView: NSViewRepresentable {
 extension View {
     /// 开着时把这段内容的颜色换成流动彩虹:内容自己只当蒙版(透明度照旧,所以未唱、副行打的折保留),颜色由底下那块
     /// `RainbowFlowView` 给。内容要用白色画、透明度表示深浅。描边、阴影这类按内容剪影画的修饰挂在它外面时,剪影源要另给
-    /// 一份纯文字(`lyricsTextStroke(_:color:maskSource:)`):剪影画不出 AppKit 视图。
+    /// 一份纯文字(`lyricsTextStroke(_:width:color:maskSource:)`):剪影画不出 AppKit 视图。
     @ViewBuilder
     func rainbowFill(_ on: Bool, flowing: Bool) -> some View {
         if on {
