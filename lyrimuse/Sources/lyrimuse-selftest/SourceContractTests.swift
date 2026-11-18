@@ -5141,16 +5141,20 @@ func runSourceContractSettingsTests() {
                     && !managerParts.contains("pausedMs: pausedMs)\n                            .transition(.opacity)")
                     && sourceHas(karaokeOverlay, "text\n.font(.system(size: 16))"),
                     true, "歌词管理: 预览换句时颜色淡入淡出、逐字染色层进场直接出现(不吃掉第一个字)退场淡出,字重不变")
-        // 预览的滚动容器是 AppKit NSScrollView,跟随播放由 clip view 的 animator 滚过去;别换回 SwiftUI ScrollView + scrollTo(11 章决策 146)。
+        // 预览的滚动容器是 AppKit NSScrollView,跟随播放一次落位、clip view 图层上挂加法动画由渲染服务播;别换回 SwiftUI ScrollView + scrollTo
+        //(11 章决策 146),也别换回主线程逐帧推的 animator(换句那一刻主线程一忙就被吃掉前半截,11 章决策 187)。
         let previewScroll = read("LyricsManager/LyricsPreviewScrollView.swift") ?? ""
         expectEqual(managerParts.contains("LyricsPreviewScrollView(scrollRequest: scrollRequest, topFadeHeight: Self.topFadeHeight,")
                     && !managerParts.contains("ScrollViewReader { proxy in\n            ScrollView {\n                LazyVStack(alignment: .leading, spacing: 13)")
                     && managerParts.contains(".lyricsPreviewRowFrame(index)")
-                    && previewScroll.contains("clip.animator().setBoundsOrigin(origin)")
+                    && previewScroll.contains("CABasicAnimation(keyPath: \"bounds.origin.y\")")
+                    && previewScroll.contains("animation.isAdditive = true")
+                    && sourceHas(previewScroll, "clip.scroll(to: origin)\n scrollView.reflectScrolledClipView(clip)\n if animated { slide(clip, by: shown - origin.y) }")
+                    && !previewScroll.contains("animator()")
                     && previewScroll.contains("static var scrollAnimationDuration: TimeInterval { 0.45 }")
                     && previewScroll.contains("host.safeAreaRegions = []")
                     && previewScroll.contains("if event.momentumPhase.isEmpty, event.phase.isEmpty || event.phase.contains(.began) || event.phase.contains(.changed) {\n            onUserScroll?()"),
-                    true, "歌词管理: 预览滚动用 NSScrollView、AppKit 动画滚到当前句,手动滚动暂停跟随(惯性阶段不算)")
+                    true, "歌词管理: 预览滚动用 NSScrollView、渲染服务播的加法动画滚到当前句,手动滚动暂停跟随(惯性阶段不算)")
         // 滚动容器每轮布局都调 relayout:只比尺寸、不量内层宿主;内容总高由内容自己报上来(15 章决策 109、11 章决策 187)。
         let previewRelayout = sourceBody("func relayout()", in: previewScroll)
         expectEqual(previewRelayout.contains("guard width != laidOutWidth || height != laidOutHeight else { return }")

@@ -18,8 +18,9 @@ struct LyricsPreviewScrollRequest: Equatable {
 }
 
 /// 歌词管理 / 搜索候选歌词那份预览的滚动容器:AppKit `NSScrollView`,文档视图里一个托管着全部行的 `QuietHostingView`。
-/// 跟随播放滚到当前句由 AppKit 动画推进(clip view 的 animator)。别换回 SwiftUI `ScrollView` + `scrollTo`:滚动途中会掉帧
-///(见 11 章决策 146)。
+/// 跟随播放滚到当前句:一次落到目标位置,再给 clip view 的图层挂一条从旧位置走回来的加法动画,由渲染服务播(`slide`)。
+/// 别换回 SwiftUI `ScrollView` + `scrollTo`(滚动途中会掉帧,见 11 章决策 146),也别换回 clip view 的 animator:它在主线程上
+/// 逐帧推,换句那一刻主线程一忙就被吃掉前半截、一下跳过去(见 11 章决策 187)。
 ///
 /// 行的位置和内容总高都由内容自己上报(`lyricsPreviewRowFrame`、`LyricsPreviewContentHeightKey`);还没量到就先记着,量到了再滚。
 /// 嵌套的托管视图不继承外面的 SwiftUI 环境,行里要用的环境值由调用方挂在 `content` 上。
@@ -170,29 +171,45 @@ struct LyricsPreviewScrollView<Content: View>: NSViewRepresentable {
             let maxY = max(0, (scrollView.documentView?.frame.height ?? 0) - clip.bounds.height)
             let origin = NSPoint(x: 0, y: min(max(0, target.rounded()), maxY))
             guard origin != clip.bounds.origin else { return }
-            if request.animated && !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion {
-                NSAnimationContext.runAnimationGroup { context in
-                    context.duration = LyricsPreviewScrollView.scrollAnimationDuration
-                    context.timingFunction = CAMediaTimingFunction(controlPoints: 0.25, 0.1, 0.25, 1)
-                    clip.animator().setBoundsOrigin(origin)
-                } completionHandler: { [weak scrollView] in
-                    guard let scrollView else { return }
-                    scrollView.reflectScrolledClipView(scrollView.contentView)
-                }
-            } else {
-                cancelAnimation()
-                clip.scroll(to: origin)
-                scrollView.reflectScrolledClipView(clip)
-            }
+            let animated = request.animated && !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
+            // 从此刻画在屏上的位置起滑:上一段还没走完时接着走,不先跳回它的终点。
+            let shown = animated ? shownOriginY(clip) : clip.bounds.origin.y
+            cancelAnimation()
+            clip.scroll(to: origin)
+            scrollView.reflectScrolledClipView(clip)
+            if animated { slide(clip, by: shown - origin.y) }
         }
 
-        /// 停掉正在走的程序滚动:用户一动手就以他为准,别跟动画抢。
+        /// clip view 的图层此刻画在屏上的滚动位置(滑动动画走到哪了);图层的 bounds 原点就是 clip view 的 bounds 原点。
+        private func shownOriginY(_ clip: NSClipView) -> CGFloat {
+            clip.layer?.presentation()?.bounds.origin.y ?? clip.bounds.origin.y
+        }
+
+        /// 已经落到目标位置的 clip view 挂一条加法动画:从差 `delta` 的地方走回 0,时长和曲线不变。起步时刻是这一轮提交那一刻,
+        /// 之后主线程再卡也不影响,渲染服务逐帧插值。
+        private func slide(_ clip: NSClipView, by delta: CGFloat) {
+            guard let layer = clip.layer, abs(delta) > 0.5 else { return }
+            let animation = CABasicAnimation(keyPath: "bounds.origin.y")
+            animation.isAdditive = true
+            animation.fromValue = delta
+            animation.toValue = 0
+            animation.duration = LyricsPreviewScrollView.scrollAnimationDuration
+            animation.timingFunction = CAMediaTimingFunction(controlPoints: 0.25, 0.1, 0.25, 1)
+            animation.fillMode = .backwards
+            layer.add(animation, forKey: Self.slideKey)
+        }
+
+        private static var slideKey: String { "lyricsPreviewSlide" }
+
+        /// 停掉正在走的程序滚动:用户一动手就以他为准,别跟动画抢。停在此刻画在屏上的位置,不跳到终点。
         func cancelAnimation() {
-            guard let clip = scrollView?.contentView else { return }
-            NSAnimationContext.runAnimationGroup { context in
-                context.duration = 0
-                clip.animator().setBoundsOrigin(clip.bounds.origin)
-            }
+            guard let scrollView, let layer = scrollView.contentView.layer,
+                  layer.animation(forKey: Self.slideKey) != nil else { return }
+            let clip = scrollView.contentView
+            let shown = shownOriginY(clip)
+            layer.removeAnimation(forKey: Self.slideKey)
+            clip.scroll(to: NSPoint(x: 0, y: shown.rounded()))
+            scrollView.reflectScrolledClipView(clip)
         }
     }
 }
