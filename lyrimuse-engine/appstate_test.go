@@ -281,3 +281,15 @@ func TestAppStateSnapshotClampsToDuration(t *testing.T) {
 		t.Fatalf("position should clamp to duration, got %.3f", s.Position)
 	}
 }
+
+// App 写的 stream 键(Swift PlaybackStateFile.Track.stream,selftest 钉同一个键名)读进快照的 Stream。
+func TestAppStateStreamKey(t *testing.T) {
+	var rec appStateRecord
+	raw := `{"schema":1,"state":"playing","player":"org.cogx.cog","track":{"title":"C","artist":"Band","album":"","duration_secs":180,"stream":true}}`
+	if err := json.Unmarshal([]byte(raw), &rec); err != nil {
+		t.Fatal(err)
+	}
+	if s := appStateSnapshot(rec, time.Now()); !s.Stream || s.Duration != 180 || s.upcomingDurationSecs() != 0 {
+		t.Fatalf("stream 键读进快照、待播预取按时长未知: %+v", s)
+	}
+}

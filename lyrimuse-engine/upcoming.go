@@ -140,8 +140,8 @@ func upcomingFromQueue(artist, title, album, bundleID string, durationSecs float
 	return browserUpcoming(artist, title, bundleID, durationSecs, n)
 }
 
-// queueStreamHasCachedFile:Cog、foobar2000、reAMP 放网络电台流时 App 报的时长不是正数(跟 App 判它们放流的口径一样),
-// 而 local_file 仍可能是按歌手歌名记下的同名本机文件;队列定位按文件认会认成列表里那个文件那一行,预取它后面的几首。
+// queueStreamHasCachedFile:Cog、foobar2000、reAMP 放网络电台流时传进来的时长不是正数(播放器原始报的;App 补上缓存曲长的,
+// 调用方按 App 的 stream 标记换回 0,见 snapshot.upcomingDurationSecs),而 local_file 仍可能是按歌手歌名记下的同名本机文件;队列定位按文件认会认成列表里那个文件那一行,预取它后面的几首。
 // 流的后面没有可推的下一首,退回同专辑预取(流没有专辑,等于不预取)。见 02 章决策 278。
 func queueStreamHasCachedFile(bundleID string, durationSecs float64) bool {
 	switch bundleID {

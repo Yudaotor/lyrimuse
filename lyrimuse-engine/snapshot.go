@@ -29,6 +29,9 @@ type snapshot struct {
 	AnchorTS time.Time
 	// Radio:电台 / 直播流。Duration 与位置都已是单曲口径。
 	Radio bool
+	// Stream:App 报 Cog、foobar2000、reAMP 在放网络流(appStateTrack.Stream)。Duration 可能是 App 补上的缓存曲长,
+	// 判流要看它,不看 Duration(见 upcomingDurationSecs)。
+	Stream bool
 	// NotAudio:这一首报的不是"音乐音频"(Apple Music 的 MV、YouTube Music 网页里的 MV,App 报 music_video)。
 	// **Duration 不动**:它还是打卡门槛、上送时长、专辑回填和网页进度条的分母;只有交给歌词解析时按"未知"处理,
 	// 见 lyricsDurationSecs。
@@ -68,6 +71,15 @@ func (s snapshot) albumForUpload() string {
 		return s.Album
 	}
 	return s.AlbumHint
+}
+
+// upcomingDurationSecs:交给待播预取(prefetchUpcoming)的时长。App 标了在放流时是 0,跟播放器原始报的一样:
+// queueStreamHasCachedFile 按时长不是正数认流,App 补上的缓存曲长会让它认不出(02 章决策 281)。
+func (s snapshot) upcomingDurationSecs() float64 {
+	if s.Stream {
+		return 0
+	}
+	return s.Duration
 }
 
 // lyricsDurationSecs:交给歌词解析(trackEnrichment)的时长。MV 返回 0 = "未知":视频时长含前导与片尾,拿它打分会

@@ -67,6 +67,9 @@ type appStateTrack struct {
 	// AppleCatalogStream:Apple Music 从资料库放的这首是它目录里的音频(订阅 / 购买),App 问过 Music.app;CatalogTrackID 这时是
 	// 资料库 persistent ID,不是目录 ID。别的情形没有这个键。
 	AppleCatalogStream bool `json:"apple_catalog_stream,omitempty"`
+	// Stream:Cog、foobar2000、reAMP 在放网络流(播放器报的时长不是正数)。App 给流补上缓存里的曲长之后 DurationSecs
+	// 是正数,这个键照样在;别的情形没有这个键(02 章决策 281)。
+	Stream bool `json:"stream,omitempty"`
 }
 
 type appStatePosition struct {
@@ -241,7 +244,7 @@ func appStateSnapshot(rec appStateRecord, now time.Time) snapshot {
 		Title: t.Title, Artist: t.Artist, Album: t.Album, Bundle: rec.Player,
 		Playing: rec.State == "playing", Radio: t.Radio != nil, NotAudio: t.MusicVideo,
 		Spoken: t.Spoken != nil && *t.Spoken, SpokenPending: rec.Player == qqMusicBundleID && t.Spoken == nil,
-		SpotifyTrackID: t.SpotifyTrackID,
+		SpotifyTrackID: t.SpotifyTrackID, Stream: t.Stream,
 	}
 	if t.DurationSecs != nil {
 		s.Duration, s.ReportedDuration = *t.DurationSecs, *t.DurationSecs

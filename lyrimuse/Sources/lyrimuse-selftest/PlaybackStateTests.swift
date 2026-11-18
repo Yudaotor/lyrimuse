@@ -282,6 +282,35 @@ func runPlaybackStateTests() {
         expectEqual(written.contains(#""apple_catalog_stream":true"#), true, "Apple Music 资料库: 目录音频写进播放状态")
     }
 
+    // ---- Cog、foobar2000、reAMP 放网络流:按播放器原始报的时长标 stream,补了缓存曲长也照标(02 章决策 281)----
+    do {
+        let cog = PlaybackPlayer.cog.bundleIdentifier
+        for bundle in [cog, PlaybackPlayer.foobar2000.bundleIdentifier, PlaybackPlayer.reamp.bundleIdentifier] {
+            expectEqual(F.reportsStream(bundleID: bundle, duration: 0) && F.reportsStream(bundleID: bundle, duration: nil)
+                        && F.reportsStream(bundleID: bundle, duration: -1), true, "放流标记: \(bundle) 时长不是正数算流")
+            expectEqual(F.reportsStream(bundleID: bundle, duration: 180), false, "放流标记: \(bundle) 有时长不算")
+        }
+        expectEqual(F.reportsStream(bundleID: PlaybackPlayer.spotify.bundleIdentifier, duration: 0)
+                    || F.reportsStream(bundleID: nil, duration: 0), false, "放流标记: 别的播放器不标")
+        let localSource = (try? String(contentsOf: URL(fileURLWithPath: #filePath).deletingLastPathComponent()
+            .deletingLastPathComponent().appendingPathComponent("LyrimuseCore/Local/LocalPlaybackSource.swift"), encoding: .utf8)) ?? ""
+        let applyBody = sourceBody("private func apply(_ rawSnapshot: MediaControlSnapshot)", in: localSource)
+        expectEqual(sourceHas(applyBody, "lastSnapshotReportsStream = PlaybackStateFile.reportsStream(bundleID: rawSnapshot.bundleIdentifier, duration: rawSnapshot.duration)")
+                    && sourceHas(sourceBody("private func publishPlaybackState(", in: localSource),
+                                 "stream: lastSnapshotReportsStream ? true : nil"), true,
+                    "放流标记: 按换曲长之前的原始快照判,写进播放状态")
+        var tracker = PlaybackStateFile.Tracker()
+        var input = PlaybackStateFile.Input(player: cog, title: "Song", artist: "Band", album: "",
+                                            raw: .init(title: "Song", artist: "Band", album: ""), appliedFixRev: 0,
+                                            playing: true, durationSecs: 180, positionSecs: 1)
+        let encode = { (input: PlaybackStateFile.Input) -> String in
+            (try? JSONEncoder().encode(tracker.advance(input, now: Date()).track)).flatMap { String(data: $0, encoding: .utf8) } ?? ""
+        }
+        expectEqual(encode(input).contains(#""stream""#), false, "放流标记: 不是流不写这个键")
+        input.stream = true
+        expectEqual(encode(input).contains(#""stream":true"#), true, "放流标记: 流 + 补上的曲长照写 stream(引擎 appStateTrack.Stream 同一个键)")
+    }
+
     // ---- 放歌时持有系统活动(防 App Nap 推迟保活),别的状态不持有(02 章决策 89)----
     expectEqual(PlaybackStatePublisher.holdsActivity(for: .playing), true, "防节能: 放歌时持有活动")
     for state in [F.State.paused, .idle, .exiting] {

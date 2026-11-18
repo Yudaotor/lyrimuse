@@ -34,7 +34,7 @@ final class CustomFontStore: ObservableObject {
     /// 注册成功的导入字体,按族名排序,给 `FontFamilyPicker` 展示用。注册失败的文件不列:选了也只会显示系统字体。
     @Published private(set) var fonts: [ImportedFont] = []
     /// 此刻进程里能用的字体族名(`CustomFontFile.availableFamilyNames`),在注册 / 反注册之后到后台重读、读好再换。
-    /// 那一次要同步等 fontd、每次都现问不缓存(实测几十到两百多毫秒),所以不在主线程上读。还没读好时是 nil。
+    /// 那一次要同步等 fontd、每次都现问不缓存,不在主线程上读(04 章决策 107)。还没读好时是 nil。
     @Published private(set) var availableFamilies: Set<String>?
     /// 重读的代次:先发的那次比后发的晚回来时丢掉。
     private var familiesGeneration = 0
@@ -131,13 +131,18 @@ final class CustomFontStore: ObservableObject {
     /// 反注册并删除这一族的全部文件,再把仍指向这一族的字体设置(悬浮歌词、灵动岛、菜单栏、歌词窗口完整 /
     /// 迷你五处)退回系统字体 —— 不退的话别处的按钮上留着一款查无此字的族名。系统里另装了同名字体族时不退,
     /// 那一族还在。先反注册再删文件:反过来万一删除中途失败,会留下「文件没了但 Core Text 仍然认得」的悬空注册。
+    /// 名单读回来之前又导入了同一族时也不退:这次读到的名单可能是导入之前的(见 04 章决策 110)。
     func remove(_ font: ImportedFont) {
         for name in font.fileNames {
             let url = directory.appendingPathComponent(name)
             unregister(url)
             FileIO.remove(url)
         }
-        refresh { available in
+        refresh { [weak self] available in
+            if self?.isImported(font.familyName) == true {
+                logger.notice("remove \(font.familyName, privacy: .public): imported again before the refresh came back, settings kept")
+                return
+            }
             guard CustomFontFile.isMissing(font.familyName, available: available) else {
                 logger.notice("remove \(font.familyName, privacy: .public): still available after refresh, settings kept")
                 return

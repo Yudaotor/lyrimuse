@@ -1931,6 +1931,10 @@ func checkRomanizationPunctuation() {
         ("aishi teru … !", "aishi teru…!"),
         ("kimi 〜 ne ～", "kimi〜 ne～"),
         ("nani ? ! ", "nani?! "),
+        ("suki !( warai ) da yo", "suki! (warai) da yo"),
+        ("「 yume 」「 kimi 」", "「yume」 「kimi」"),
+        ("kimi ､｢ yume ｣", "kimi, 「yume」"),
+        ("ne … “( a )", "ne… “(a)"),
     ]
     for (raw, want) in attached {
         expectEqual(R.attachingPunctuation(raw), want, "标点贴词: \(raw)")
@@ -1952,12 +1956,60 @@ func checkRomanizationPunctuation() {
         ("｢好き｣だよ!", "「suki」 da yo!"),
         ("(好き)だよ！", "(suki) da yo!"),
         ("愛してる…！", "aishi teru…!"),
+        ("好き!(笑)だよ", "suki! (warai) da yo"),
+        ("夢」「君", "yume」 「kimi"),
     ]
     for (line, want) in lines {
         let reading = R.lineReading(line, songLooksJapanese: true, songScript: .japanese, segments: R.japaneseSegments(line))
         expectEqual(reading, want, "整行读音: \(line) 的标点贴在相邻的词上")
         expectEqual(R.romanize(line, japanese: true), reading, "整行读音: \(line) 两条管线一致")
     }
+
+    // 缓存里早先预生成的读音标点两边还带空格:判「是不是我们生成的」时照样认得出(两边先按行贴好标点再比)。
+    let jaLyrics = ["本当に？あの夢に", "夏の夜、君と", "「好きだよ」", "君の名前を呼んだ", "明日はきっと晴れる！"]
+        .enumerated().map { "[00:0\($0).00]\($1)" }.joined(separator: "\n")
+    let jaFresh = LyricsRomanization.romanizeLRC(jaLyrics) ?? ""
+    let spaced = { (lrc: String) -> String in
+        lrc.split(separator: "\n").map { line -> String in
+            let tags = String(line.prefix(10))
+            var body = ""
+            for ch in line.dropFirst(10) {
+                body += ",?!「」".contains(ch) ? " \(ch) " : String(ch)
+            }
+            return tags + body.split(separator: " ").joined(separator: " ")
+        }.joined(separator: "\n")
+    }
+    let oldStored = spaced(jaFresh)
+    expectEqual(oldStored != jaFresh && oldStored.contains(" ?") && oldStored.contains("「 "), true,
+                "旧缓存读音: 造出来的样子标点两边带空格:\(oldStored)")
+    expectEqual(LyricsRomanization.sourceProvidedRomanization(oldStored, lyrics: jaLyrics), "",
+                "旧缓存读音: 只差标点空格的仍算预生成,不标「自带读音」")
+    expectEqual(LyricsRomanization.sourceProvidedRomanization("[00:00.00]hontou ni ano yume", lyrics: jaLyrics),
+                "[00:00.00]hontou ni ano yume", "旧缓存读音: 写法不同的照旧算自带")
+    expectEqual(LyricsRomanization.refreshedGeneratedRomanization(oldStored, lyrics: jaLyrics) == nil, true,
+                "旧缓存读音: 只差标点空格不算过时,不重写")
+    let oldLines = oldStored.split(separator: "\n").map(String.init)
+    let oldStale = (oldLines.dropLast() + ["[00:04.00]ashita wa kitto hare ru !"]).joined(separator: "\n")
+    expectEqual(LyricsRomanization.refreshedGeneratedRomanization(oldStale, lyrics: jaLyrics), jaFresh,
+                "旧缓存读音: 标点带空格、八成行对得上的照样认成过时,换成现算的")
+    // 中文行的拼音不贴标点(决策 76 只管日文行):现算那份里标点照旧两边带空格,比的时候同样两边都贴好。
+    let zhLyrics = ["你好，世界", "我爱你！", "風吹過，雨停了", "明天見", "再見了，朋友"]
+        .enumerated().map { "[00:0\($0).00]\($1)" }.joined(separator: "\n")
+    let zhFresh = LyricsRomanization.romanizeLRC(zhLyrics) ?? ""
+    let zhLines = zhFresh.split(separator: "\n").map(String.init)
+    let zhStale = (zhLines.dropLast() + ["[00:04.00]zai jian le peng you"]).joined(separator: "\n")
+    expectEqual(LyricsRomanization.refreshedGeneratedRomanization(zhStale, lyrics: zhLyrics), zhFresh,
+                "旧缓存读音: 中文行八成对得上照样认成过时:\(zhFresh)")
+    // 韩文行的读音按原文的空白走,原文标点前有空格时现算那份里标点也单独成词:两边都贴好再逐行比,不然这些行永远对不上。
+    let koLyrics = ["사랑해 , 같이 가자", "보고 싶어 !", "너를 , 기다려", "같이 가자 !", "사랑해"]
+        .enumerated().map { "[00:0\($0).00]\($1)" }.joined(separator: "\n")
+    let koFresh = LyricsRomanization.romanizeLRC(koLyrics) ?? ""
+    let koLines = koFresh.split(separator: "\n").map(String.init)
+    let koStale = (koLines.dropLast() + ["[00:04.00]sa rang hae"]).joined(separator: "\n")
+    expectEqual(koFresh.contains(" ,") && koFresh.contains(" !"), true, "旧缓存读音: 韩文现算读音里标点单独成词:\(koFresh)")
+    expectEqual(LyricsRomanization.refreshedGeneratedRomanization(
+        LyricsRomanization.attachingPunctuationByLine(koStale), lyrics: koLyrics), koFresh,
+                "旧缓存读音: 存着的标点已贴、现算的没贴,八成行对得上照样认成过时")
 
     // 逐词读音:只有标点的格留空,词带着的标点不进读音。
     func words(_ texts: [String]) -> [SyncedLyricWord] {

@@ -10,6 +10,7 @@ import (
 	"sort"
 	"strings"
 	"testing"
+	"time"
 )
 
 // cogFixture 是库里的一条。tags 按 Cog 的写法给:每个键一组字符串;nil = 没有元数据。
@@ -443,6 +444,22 @@ func TestUpcomingFromQueueSkipsStreamWithCachedFile(t *testing.T) {
 		c.with(t, "off", tracks)
 		if res, ok := upcomingFromQueue("歌手B", "B", "专辑", c.bundle, 200, 2); !ok || pineGot(res) != "C,D" {
 			t.Errorf("%s 放文件:得到 %q ok=%v,期望 C,D", c.bundle, pineGot(res), ok)
+		}
+	}
+
+	// App 给流补上了缓存里的曲长(时长是正数),播放状态里标着 stream:照样退回;没标的正数时长照旧按文件认。
+	noteLocalFileCurrentTrack(cogBundleID, "Band", "C", "/Music/c.flac")
+	for _, stream := range []bool{true, false} {
+		d := 180.0
+		rec := appStateRecord{Schema: appStateSchema, State: "playing", Player: cogBundleID,
+			Track: &appStateTrack{Title: "C", Artist: "Band", Album: "One", DurationSecs: &d, Stream: stream}}
+		snap := appStateSnapshot(rec, time.Now())
+		res, ok := upcomingFromQueue(snap.Artist, snap.Title, snap.Album, snap.Bundle, snap.upcomingDurationSecs(), 2)
+		if stream && ok {
+			t.Errorf("Cog 放流、App 补了曲长:得到 %q,该退回", cogTitles(res))
+		}
+		if !stream && (!ok || cogTitles(res) != "D,E") {
+			t.Errorf("Cog 放文件:得到 %q ok=%v,期望 D,E", cogTitles(res), ok)
 		}
 	}
 }

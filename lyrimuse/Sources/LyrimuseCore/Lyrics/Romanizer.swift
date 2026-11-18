@@ -456,7 +456,8 @@ public enum Romanizer {
     }
 
     /// 罗马音里单独成词的标点贴到相邻的词上:左括号、左引号贴后一个词,其余贴前一个词(「｢ suki da yo ｣」→「「suki da yo」」,
-    /// 「hontou ni ? ano」→「hontou ni? ano」)。分词器把「。「」、・」转写成半角片假名区的「｡｢｣､･」,换成「.「」,·」。
+    /// 「hontou ni ? ano」→「hontou ni? ano」)。一段里收尾的标点后面连着左括号、左引号(「!(」「」「」)时拆开,
+    /// 前半贴前一个词、后半贴后一个词。分词器把「。「」、・」转写成半角片假名区的「｡｢｣､･」,换成「.「」,·」。
     /// 破折号这类连接号照旧两边留空格;词与词之间原有的空白不动。见 10 章决策 76。
     public static func attachingPunctuation(_ reading: String) -> String {
         guard reading.unicodeScalars.contains(where: { isAttachablePunctuation($0) || halfwidthPunctuation[$0] != nil })
@@ -499,7 +500,9 @@ public enum Romanizer {
             if let held = pending {
                 pending = (held.gap, held.text + piece.text)
             } else if !out.isEmpty, !isOpeningPunctuation(piece.text) {
-                out[out.count - 1].text += piece.text
+                let (closing, opening) = splittingTrailingOpening(piece.text)
+                out[out.count - 1].text += closing
+                if !opening.isEmpty { pending = (piece.gap, opening) }
             } else {
                 pending = piece
             }
@@ -529,6 +532,16 @@ public enum Romanizer {
     }
 
     private static let attachablePunctuation = Set(".,!?:;…‥、。，．！？：；~～〜〰".unicodeScalars)
+
+    /// 一段标点末尾连着的左括号、左引号拆出来:(前半, 末尾的左括号串)。末尾不是左括号时后半为空。
+    private static func splittingTrailingOpening(_ text: String) -> (String, String) {
+        var scalars = Array(text.unicodeScalars)
+        var opening: [Unicode.Scalar] = []
+        while let last = scalars.last, isOpeningPunctuation(String(last)) {
+            opening.insert(scalars.removeLast(), at: 0)
+        }
+        return (String(String.UnicodeScalarView(scalars)), String(String.UnicodeScalarView(opening)))
+    }
 
     private static func isOpeningPunctuation(_ text: String) -> Bool {
         text.unicodeScalars.allSatisfy {

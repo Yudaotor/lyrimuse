@@ -1415,7 +1415,7 @@ func (p *poller) handle(now time.Time, reanchored, loopRestart bool) {
 		// 广告不预取:它的「专辑」不是专辑、队列里也找不到它,读一遍队列只会白等重试再退回同专辑预取。
 		if features().AlbumPrefetch && !p.sess.isAd && !p.sess.isSpoken && !waiting &&
 			!isAdBreak(p.cur.Bundle, p.cur.Artist, p.cur.Title, p.cur.Album) {
-			prefetchUpcoming(p.cur.Artist, p.cur.Title, p.cur.Album, p.cur.Bundle, p.cur.Duration)
+			prefetchUpcoming(p.cur.Artist, p.cur.Title, p.cur.Album, p.cur.Bundle, p.cur.upcomingDurationSecs())
 		}
 		// LB 的 playing_now 只在"换曲"时更新、同曲存活期内拒绝覆盖,迟到的歌词再也进不去。
 		// 故首条须在 enrich 解析完后再发(那时才知有无歌词、有则带上)。已解析(缓存命中,无论
@@ -1474,12 +1474,12 @@ func (p *poller) handle(now time.Time, reanchored, loopRestart bool) {
 		p.sess.prefetchDeferred = false
 		if features().AlbumPrefetch && !p.sess.isAd && !p.sess.isSpoken &&
 			!isAdBreak(p.cur.Bundle, p.cur.Artist, p.cur.Title, p.cur.Album) {
-			prefetchUpcoming(p.cur.Artist, p.cur.Title, p.cur.Album, p.cur.Bundle, p.cur.Duration)
+			prefetchUpcoming(p.cur.Artist, p.cur.Title, p.cur.Album, p.cur.Bundle, p.cur.upcomingDurationSecs())
 		}
 	}
 	// 播放器的队列在这首歌中途被改写了(网易云「下一首播放」):重读一次,把新排进来的补进预解析。
 	if features().AlbumPrefetch && !p.sess.isAd && !p.sess.isSpoken && !p.sess.prefetchDeferred {
-		refreshUpcomingOnQueueChange(p.cur.Artist, p.cur.Title, p.cur.Album, p.cur.Bundle, p.cur.Duration)
+		refreshUpcomingOnQueueChange(p.cur.Artist, p.cur.Title, p.cur.Album, p.cur.Bundle, p.cur.upcomingDurationSecs())
 	}
 
 	// Same track: on a play/pause transition, re-announce immediately so the

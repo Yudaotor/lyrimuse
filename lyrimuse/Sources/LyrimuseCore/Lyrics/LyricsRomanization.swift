@@ -60,10 +60,29 @@ public enum LyricsRomanization {
 
     /// 缓存里的 `lyrics_roma` 去掉引擎按 `romanizeLRC` 预生成的那份(跟现算逐字一致的就是预生成的),剩下的才是歌词源
     /// 自带或手改的读音;是预生成的返回空串。「搜索候选歌词」里在用的那一版据此标不标「读音」:搜到的同一份候选
-    /// 不带预生成读音,两边口径要一样(见 11 章决策 104)。
+    /// 不带预生成读音,两边口径要一样(见 11 章决策 104)。两边先按行贴好标点再比(`attachingPunctuationByLine`)。
     public static func sourceProvidedRomanization(_ roma: String, lyrics: String, kanaDonor: String = "") -> String {
-        guard !roma.isEmpty, roma != romanizeLRC(lyrics, kanaDonor: kanaDonor) else { return "" }
-        return roma
+        guard !roma.isEmpty else { return "" }
+        guard let fresh = romanizeLRC(lyrics, kanaDonor: kanaDonor),
+              attachingPunctuationByLine(fresh) == attachingPunctuationByLine(roma)
+        else { return roma }
+        return ""
+    }
+
+    /// 读音 LRC 逐行贴好标点(`Romanizer.attachingPunctuation`,时间标签原样)。判「是不是我们生成的」时两边都先过它:
+    /// 现算的读音标点已经贴在词上,早先预生成、存进缓存的那份标点两边还带空格,逐字比会把它们全当成歌词源给的。
+    /// 见 10 章决策 77。
+    public static func attachingPunctuationByLine(_ lrc: String) -> String {
+        lrc.replacingOccurrences(of: "\r\n", with: "\n").split(separator: "\n", omittingEmptySubsequences: false)
+            .map { raw -> String in
+                let line = String(raw)
+                let ns = line as NSString
+                guard let tagMatch = leadingTagsRegex.firstMatch(in: line, range: NSRange(location: 0, length: ns.length))
+                else { return Romanizer.attachingPunctuation(line) }
+                return ns.substring(to: tagMatch.range.length)
+                    + Romanizer.attachingPunctuation(ns.substring(from: tagMatch.range.length))
+            }
+            .joined(separator: "\n")
     }
 
     /// `roma` 是不是旧版韩文读音(ICU `Any-Latin` 逐字母转写)给这份正文算出来的。启动迁移靠它只换掉
@@ -85,7 +104,8 @@ public enum LyricsRomanization {
 
     /// `roma` 是引擎早先按 `romanizeLRC` 预生成、读音算法改过之后已经过时的那份时,返回现在该存的那份;
     /// 跟现算一字不差、或者对不上(歌词源给的)返回 nil。启动迁移靠它只换掉我们自己生成的(手改过的条目
-    /// 引擎那边整条跳过,不送来判)。按时间标签串逐行比:`roma` 的行里跟现算一字不差的占八成以上才算。
+    /// 引擎那边整条跳过,不送来判)。按时间标签串逐行比:`roma` 的行里跟现算一字不差的占八成以上才算;两边都先贴好标点
+    /// 再比(`attachingPunctuationByLine`),只差标点两边空格的不算过时、也不算对不上。
     /// 改了读音算法(`Romanizer`、这里的预处理)之后,引擎那边的迁移版本号加一,存量就会按新算法重算一遍。
     /// 带 `kanaDonor` 时现算的是用上借来标注的那份;借来的标注可能改掉很多行,所以「是不是我们生成的」跟
     /// 不用借来标注的现算也比一次,取对上多的那边。
@@ -96,12 +116,13 @@ public enum LyricsRomanization {
         guard let fresh = romanizeLRC(lyrics, kanaDonor: kanaDonor) else {
             return storedReadsLookalikeLines(roma, lyrics: lyrics) ? "" : nil
         }
-        guard fresh != roma else { return nil }
-        let stored = taggedLines(roma)
+        let storedAttached = attachingPunctuationByLine(roma)
+        guard attachingPunctuationByLine(fresh) != storedAttached else { return nil }
+        let stored = taggedLines(storedAttached)
         guard !stored.isEmpty else { return nil }
         func same(_ lrc: String?) -> Int {
             guard let lrc else { return 0 }
-            let current = taggedLines(lrc)
+            let current = taggedLines(attachingPunctuationByLine(lrc))
             return stored.filter { current[$0.key] == $0.value }.count
         }
         let matched = max(same(fresh), kanaDonor.isEmpty ? 0 : same(romanizeLRC(lyrics)))

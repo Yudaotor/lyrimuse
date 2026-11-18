@@ -397,6 +397,9 @@ public final class LocalPlaybackSource: ObservableObject {
     }
     /// `lastSnapshot` 最近一次被换上的时刻。跳转之后核「播放器到没到」时,靠它认读数是不是跳转之后才拿到的。
     private var lastSnapshotAppliedAt: Date?
+    /// `lastSnapshot` 是不是网络流,按播放器原始报的时长判(`PlaybackStateFile.reportsStream`)。`apply` 会给流换上缓存曲长,
+    /// 换完的快照看不出来,写播放状态的 `stream` 用这个。
+    private var lastSnapshotReportsStream = false
     /// `lastSnapshot` 是怎么来的(原始标签、套用的署名纠正版本、系统原始标识),写播放状态文件用。
     private var lastProvenance: MediaControlClient.SnapshotProvenance?
     private var tornHold = TornTrackHold()
@@ -4076,7 +4079,8 @@ public final class LocalPlaybackSource: ObservableObject {
                         ? SwinsianPlayerInfo.currentFilePath(rawTitle: snapshot.title) : nil),
             spoken: Self.spokenAudioPlayers.contains(bundleID) && spokenAudioKey == snapshot.identityKey
                 ? spokenAudioVerdict : nil,
-            appleCatalogStream: appleLibraryTrack?.catalogStream == true ? true : nil)
+            appleCatalogStream: appleLibraryTrack?.catalogStream == true ? true : nil,
+            stream: lastSnapshotReportsStream ? true : nil)
         NowPlayingLocalFileModel.shared.update(input.localFile.map { NowPlayingLocalFile(player: bundleID, path: $0) })
         PlaybackStatePublisher.shared.publish(input, now: now)
     }
@@ -4553,6 +4557,8 @@ public final class LocalPlaybackSource: ObservableObject {
             // 节目那个大数、判定恒 false —— 那种"安静地不生效"只有日志看得见。
             logger.notice("radio track finished=\(finished) card=\(stationCardName != nil) pos=\(snapshot.elapsedTime ?? -1, format: .fixed(precision: 1)) dur=\(snapshot.duration ?? -1, format: .fixed(precision: 1))")
         }
+        lastSnapshotReportsStream = PlaybackStateFile.reportsStream(bundleID: rawSnapshot.bundleIdentifier,
+                                                                    duration: rawSnapshot.duration)
         lastSnapshot = snapshot
         scheduleRepublishCheck(dueBy: snapshot.republishDueBy)
         // title/artist/album/isPlayingNow 只在真的变化时才赋值——理由跟 fastTick() 里

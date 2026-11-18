@@ -1020,6 +1020,11 @@ func runSettingsInteractionTests() {
             expectEqual(store.contains("if settings.\(field) == font.familyName { settings.\(field) = \"\" }"), true,
                         "删除字体(契约): \(field) 仍指向删掉的族时退回系统字体")
         }
+        let removeBody = sourceBody("func remove(_ font: ImportedFont)", in: store)
+        let reimportAt = removeBody.range(of: "if self?.isImported(font.familyName) == true {")?.lowerBound
+        let resetAt = removeBody.range(of: "settings.fontFamilyName = \"\"")?.lowerBound
+        expectEqual(reimportAt != nil && resetAt != nil && reimportAt! < resetAt!, true,
+                    "删除字体(契约): 名单读回来之前又导入了同一族,不退五处设置(04 章决策 110)")
         expectEqual(picker.contains("!customFonts.isImported($0) && customFonts.isAvailable($0)"), true,
                     "字体选择器(契约): 系统字体区不重复列导入字体、不列已删掉的族")
         expectEqual(sourceBody("private func refresh(then done:", in: store).contains("Task.detached(priority: .utility)")

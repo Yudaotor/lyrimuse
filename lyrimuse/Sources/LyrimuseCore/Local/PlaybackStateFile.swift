@@ -102,6 +102,9 @@ public enum PlaybackStateFile {
         /// Apple Music 从资料库放的这首是它目录里的音频(订阅 / 购买,`AppleMusicLocalFile`),引擎据此按锚点认目录 ID。
         /// 别的播放器、带目录 ID、还没问出来、不是目录音频时为 nil(不写这个键)。
         public var appleCatalogStream: Bool? = nil
+        /// Cog、foobar2000、reAMP 在放网络流(`PlaybackStateFile.reportsStream`,按播放器原始报的时长判)。`durationSecs` 可能是
+        /// 给流补上的缓存曲长,引擎判流看这个键。不是流为 nil(不写这个键)。见 02 章决策 281。
+        public var stream: Bool? = nil
 
         enum CodingKeys: String, CodingKey {
             case playSeq = "play_seq"
@@ -119,6 +122,7 @@ public enum PlaybackStateFile {
             case localFile = "local_file"
             case spoken
             case appleCatalogStream = "apple_catalog_stream"
+            case stream
         }
     }
 
@@ -214,6 +218,16 @@ public enum PlaybackStateFile {
 
     // MARK: - 每拍的输入与推导
 
+    /// 播放状态里要标 `stream` 的播放器:放网络流时报的时长不是正数,而 App 会给流补上缓存里的曲长(引擎靠这个键认流)。
+    static let streamPlayers: Set<String> = [PlaybackPlayer.cog.bundleIdentifier, PlaybackPlayer.foobar2000.bundleIdentifier,
+                                             PlaybackPlayer.reamp.bundleIdentifier]
+
+    /// 这一拍是不是 `streamPlayers` 在放网络流。`duration` 要传播放器原始报的,不能传补过缓存曲长的。纯函数,selftest 覆盖。
+    public static func reportsStream(bundleID: String?, duration: Double?) -> Bool {
+        guard let bundleID, streamPlayers.contains(bundleID) else { return false }
+        return PlayerTitleSplit.isStream(duration: duration)
+    }
+
     /// App 这一拍认定的播放状态。`title` 为空 = 此刻没有可认的音乐在放(写成 `idle`)。
     public struct Input: Equatable, Sendable {
         public var player: String
@@ -238,13 +252,14 @@ public enum PlaybackStateFile {
         public var localFile: String?
         public var spoken: Bool?
         public var appleCatalogStream: Bool?
+        public var stream: Bool?
 
         public init(player: String, title: String, artist: String, album: String, raw: Tags,
                     appliedFixRev: Int64, playing: Bool, durationSecs: Double?,
                     catalogTrackID: Int64? = nil, trackNumber: Int? = nil, mediaType: String? = nil,
                     musicVideo: Bool = false, radio: Radio? = nil, ad: Bool = false, positionSecs: Double?,
                     spotifyTrackID: String? = nil, amazonTrackID: String? = nil, youtubeMusicVideoID: String? = nil,
-                    localFile: String? = nil, spoken: Bool? = nil, appleCatalogStream: Bool? = nil) {
+                    localFile: String? = nil, spoken: Bool? = nil, appleCatalogStream: Bool? = nil, stream: Bool? = nil) {
             self.player = player
             self.title = title
             self.artist = artist
@@ -266,6 +281,7 @@ public enum PlaybackStateFile {
             self.localFile = localFile
             self.spoken = spoken
             self.appleCatalogStream = appleCatalogStream
+            self.stream = stream
         }
 
         public static func idle() -> Input {
@@ -324,7 +340,8 @@ public enum PlaybackStateFile {
                 catalogTrackID: input.catalogTrackID, trackNumber: input.trackNumber, mediaType: input.mediaType,
                 musicVideo: input.musicVideo, radio: input.radio, ad: input.ad, spotifyTrackID: input.spotifyTrackID,
                 amazonTrackID: input.amazonTrackID, youtubeMusicVideoID: input.youtubeMusicVideoID,
-                localFile: input.localFile, spoken: input.spoken, appleCatalogStream: input.appleCatalogStream)
+                localFile: input.localFile, spoken: input.spoken, appleCatalogStream: input.appleCatalogStream,
+                stream: input.stream)
             return Content(state: input.playing ? .playing : .paused, player: input.player, track: track,
                            position: published, artwork: artwork)
         }
