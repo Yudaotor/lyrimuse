@@ -348,6 +348,17 @@ func runSettingsSearchTests() {
     expectEqual(SettingsSearchMatcher.rank(query: "歌词，显示", title: "歌词显示", secondary: []), 0, "匹配: 中文全角标点同样忽略")
     expectEqual(["...", " · ", "》"].map { SettingsSearchMatcher.rank(query: $0, title: "Last.fm", secondary: ["歌词显示 › 菜单栏"]) },
                 [nil, nil, nil], "匹配: 全是标点的查询不命中,不会把整份目录都列出来")
+    // 字体选单的搜索跟设置搜索同一套比较规则(04 章决策 109)。
+    expectEqual(["sfpro", "SF-Pro", "sf pro", "SF.PRO", "pro", "mono"].map { FontFamilySearch.matches(query: $0, family: "SF Pro", localizedName: nil) },
+                [true, true, true, true, true, false], "字体搜索: 忽略大小写、标点和空白,「sfpro」「SF-Pro」都命中「SF Pro」")
+    expectEqual(["苹方", "pingfangsc", "PingFang-SC", "宋体"].map { FontFamilySearch.matches(query: $0, family: "PingFang SC", localizedName: "苹方-简") },
+                [true, true, true, false], "字体搜索: 族名、本地化名都拿来比")
+    expectEqual(FontFamilySearch.matches(query: "-", family: "SF Pro", localizedName: nil), false, "字体搜索: 全是标点的查询不命中")
+    let picker = source("UI/FontFamilyPicker.swift")
+    expectEqual(sourceHas(picker, "system.filter { FontFamilySearch.matches(query: keyword, family: $0, localizedName: localizedName(of: $0)) }")
+                && sourceHas(picker, "customFonts.fonts.filter { FontFamilySearch.matches(query: keyword, family: $0.familyName, localizedName: nil) }")
+                && !picker.contains("localizedCaseInsensitiveContains(keyword)"), true,
+                "字体搜索: 系统字体区和「已导入」区都走 FontFamilySearch")
     let ranked = SettingsSearchMatcher.ranked(
         [("字体", ["背景"]), ("毛玻璃背景", [String]()), ("背景颜色", [String]())],
         query: "背景", title: { $0.0 }, secondary: { $0.1 })

@@ -756,6 +756,17 @@ func runDeepLinkTests() {
                      sourceHas(restoreWindows, "WindowActivation.beginBackground() LyrimuseActionRunner.perform(.toggleLyricsWindowMiniHotkey, on: mini)")],
                     [true, true, true, true, true, true],
                     "debug/restore: 记下迷你面板,歌词窗口不按场景 id 关,按形态走切换动作、不激活 App")
+        // debug/restore 关隐身开的场景窗(含「搜索歌词…」小窗):没记下、记下时就开着也关;还在等列表的 debug/lyrics-search 作废(14 章决策 227)。
+        let restoreBody = sourceBody("private static func restore()", in: debug)
+        let openSearch = sourceBody("private static func openLyricsSearch(", in: debug)
+        expectEqual([sourceHas(debug, "private static let sceneIDs = [\"settings\", \"lyrics-manager\", \"lyrics-quick-search\","),
+                     sourceHas(restoreBody, "for (id, window) in openSceneWindows() where WindowActivation.isHidden(window) || saved?.sceneWindows.contains(id) == false {"),
+                     (restoreBody.range(of: "openSceneWindows()")?.lowerBound ?? restoreBody.endIndex)
+                        < (restoreBody.range(of: "guard let saved else {")?.lowerBound ?? restoreBody.startIndex),
+                     sourceHas(restoreBody, "lyricsSearchGeneration += 1"),
+                     sourceHas(openSearch, "guard generation == lyricsSearchGeneration else { return }")],
+                    [true, true, true, true, true],
+                    "debug/restore: 隐身开的场景窗(含搜索歌词小窗)不管有没有记下一律关,晚开的 debug/lyrics-search 作废")
         expectEqual(sourceHas(sourceBody("static func window(named name: String) -> NSWindow? {", in: debug),
                               "case \"lyrics-window\": return visibleLyricsWindow"), true,
                     "debug: snapshot / window-click / window-key / drag-region 的 lyrics-window 也认迷你面板")
@@ -799,7 +810,7 @@ func runDeepLinkTests() {
         let router = source("lyrimuse/Settings/DeepLinkRouter.swift")
         let lateSearch = sourceBody("private static func openLyricsSearch(", in: debug)
         expectEqual([sourceHas(router, ".debug(.lyricsSearch): return \"lyrics-quick-search\""),
-                     sourceHas(debug, "openLyricsSearch(key: key, background: WindowActivation.isBackground, invisible: WindowActivation.isInvisible, attempt: 0)"),
+                     sourceHas(debug, "openLyricsSearch(key: key, background: WindowActivation.isBackground, invisible: WindowActivation.isInvisible, generation: lyricsSearchGeneration, attempt: 0)"),
                      sourceHas(lateSearch, "if late { WindowActivation.beginBackground() } AppActions.shared.openLyricsSearch(for:")
                          && sourceHas(lateSearch, "if late { WindowActivation.surface(identifier: \"lyrics-quick-search\") }")],
                     [true, true, true],

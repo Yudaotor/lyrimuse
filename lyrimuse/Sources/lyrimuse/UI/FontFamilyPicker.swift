@@ -36,7 +36,7 @@ struct FontFamilyPicker: View {
     /// 而且删掉之后快照不会变 —— 所以列出来之前再按 `CustomFontStore` 过一遍(见 `filtered`)。
     private var systemFamilies: [String] { catalog.snapshot?.families ?? [selection] }
 
-    /// 中文字体的族名是英文的("PingFang SC"),但用户多半想按中文名找。两个都拿来匹配。
+    /// 中文字体的族名是英文的("PingFang SC"),但用户多半想按中文名找。两个都拿来匹配(`FontFamilySearch`)。
     private func localizedName(of family: String) -> String? { catalog.snapshot?.localizedNames[family] }
 
     /// 系统字体区:排除导入字体(它们在上面的「已导入」区,带删除键)和已经不存在的族(本次运行里删掉的导入字体)。
@@ -44,16 +44,13 @@ struct FontFamilyPicker: View {
         let keyword = query.trimmingCharacters(in: .whitespaces)
         let system = systemFamilies.filter { !customFonts.isImported($0) && customFonts.isAvailable($0) }
         guard !keyword.isEmpty else { return system }
-        return system.filter { family in
-            family.localizedCaseInsensitiveContains(keyword)
-                || (localizedName(of: family)?.localizedCaseInsensitiveContains(keyword) ?? false)
-        }
+        return system.filter { FontFamilySearch.matches(query: keyword, family: $0, localizedName: localizedName(of: $0)) }
     }
 
     private var filteredCustomFonts: [CustomFontStore.ImportedFont] {
         let keyword = query.trimmingCharacters(in: .whitespaces)
         guard !keyword.isEmpty else { return customFonts.fonts }
-        return customFonts.fonts.filter { $0.familyName.localizedCaseInsensitiveContains(keyword) }
+        return customFonts.fonts.filter { FontFamilySearch.matches(query: keyword, family: $0.familyName, localizedName: nil) }
     }
 
     /// 族名怎么显示给人看:空串是"跟随系统字体",其余直接用族名。

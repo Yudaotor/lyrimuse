@@ -256,7 +256,9 @@ enum DebugDeepLinks {
             AppActions.shared.requestLyricsManagerSheet(.decision(key: key), open: false)
             logger.notice("debug manager decision key=\(key == nil ? "selected" : "given", privacy: .public)")
         case let .lyricsSearch(key):
-            openLyricsSearch(key: key, background: WindowActivation.isBackground, invisible: WindowActivation.isInvisible, attempt: 0)
+            lyricsSearchGeneration += 1
+            openLyricsSearch(key: key, background: WindowActivation.isBackground, invisible: WindowActivation.isInvisible,
+                             generation: lyricsSearchGeneration, attempt: 0)
         case let .lyricsWriteback(step):
             NotificationCenter.default.post(name: lyricsWritebackNotification, object: step)
             logger.notice("debug lyrics writeback step=\(step, privacy: .public)")
@@ -837,14 +839,22 @@ enum DebugDeepLinks {
 
     /// 关掉记下之后才开出来的场景窗口、歌词窗口回到记下时的形态、收起记下时没开的面板;开关只设有变化的那几个
     /// (走同一套开关动作,不一下闪一串回声)。模拟播放不管记下时开没开,一律收掉。
+    /// 隐身开窗压在墙纸后面的场景窗(`WindowActivation.isHidden`)不管有没有记下、记下时开没开,一律关掉:用户看不见它,
+    /// 只可能是验证开的。还在等列表的 `debug/lyrics-search` 作废,悬停气泡收回。见 14 章决策 227。
     private static func restore() {
         endSimulation()
-        guard let saved = checkpointSaved else {
+        lyricsSearchGeneration += 1
+        if !hoverNoteQuery.isEmpty {
+            hoverNoteQuery = ""
+            NotificationCenter.default.post(name: hoverNoteNotification, object: hoverNoteQuery)
+        }
+        let saved = checkpointSaved
+        for (id, window) in openSceneWindows() where WindowActivation.isHidden(window) || saved?.sceneWindows.contains(id) == false {
+            window.close()
+        }
+        guard let saved else {
             logger.notice("debug restore: no checkpoint")
             return
-        }
-        for (id, window) in openSceneWindows() where !saved.sceneWindows.contains(id) {
-            window.close()
         }
         restoreLyricsWindow(saved)
         if MenuBarStatusItem.shared.isPanelOpen && !saved.panelOpen {
@@ -929,15 +939,19 @@ extension DebugDeepLinks {
         }
     }
 
+    /// 最近一次 `debug/lyrics-search` 的代号。还在等列表读完的那一次代号对不上(来了新的一次,或 `restore` 作废)就不再开窗。
+    private static var lyricsSearchGeneration = 0
+
     /// `debug/lyrics-search`:按写法键开「搜索歌词…」窗口。歌词管理的列表还没读完时每 0.5 秒再找一次、最多 6 秒;
     /// 链接带了 `background=1` / `invisible=1` 的,晚开的那一次同样不激活 App、同样隐身(深链那一段时限已经过了)。
-    private static func openLyricsSearch(key: String, background: Bool, invisible: Bool = false, attempt: Int) {
+    private static func openLyricsSearch(key: String, background: Bool, invisible: Bool = false, generation: Int, attempt: Int) {
+        guard generation == lyricsSearchGeneration else { return }
         let store = EnrichCacheStore.shared
         guard let summary = store.summary(forKey: key) else {
             let listReady = !store.isLoading && !store.summaries.isEmpty
             if !listReady, attempt < 12 {
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-                    openLyricsSearch(key: key, background: background, invisible: invisible, attempt: attempt + 1)
+                    openLyricsSearch(key: key, background: background, invisible: invisible, generation: generation, attempt: attempt + 1)
                 }
                 return
             }

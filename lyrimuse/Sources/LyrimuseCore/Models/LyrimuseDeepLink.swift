@@ -97,7 +97,8 @@ public enum LyrimuseDeepLink: Equatable, Sendable {
         case diagnostics
         /// 记下此刻的窗口与开关,`restore` 时按它恢复。
         case checkpoint
-        /// 回到最近一次 `checkpoint`:关掉之后开出来的窗口,开关设回原值。
+        /// 回到最近一次 `checkpoint`:关掉之后开出来的窗口,开关设回原值。`invisible=1` 开、压在墙纸后面的场景窗
+        /// 没有记点也关(14 章决策 227)。
         case restore
         /// 模拟播放(`PlaybackSimulation`):不读播放器,按这首驱动界面。时长、位置以秒计,`playing=0` 停在 `position`,
         /// `ad=1` 这一首按广告报;`artwork=<本机图片的绝对路径>` 给这一首一张封面(验跟随封面的背景、配色);

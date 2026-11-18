@@ -33,3 +33,11 @@ public enum SystemFontFamilies {
         return Snapshot(families: families, localizedNames: localized)
     }
 }
+
+/// 字体选单的搜索:族名或本地化名命中就列出来。比较规则同设置搜索(`SettingsSearchMatcher`:按空白拆词、每个词都得命中、
+/// 忽略大小写、标点和空白),打「sfpro」「SF-Pro」都能搜到「SF Pro」。别另写一份归一化,见 04 章决策 109。
+public enum FontFamilySearch {
+    public static func matches(query: String, family: String, localizedName: String?) -> Bool {
+        SettingsSearchMatcher.rank(query: query, title: family, secondary: localizedName.map { [$0] } ?? []) != nil
+    }
+}
