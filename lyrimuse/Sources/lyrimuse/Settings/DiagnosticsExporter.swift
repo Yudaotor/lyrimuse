@@ -486,8 +486,8 @@ enum DiagnosticsExporter {
     }
 
     /// `cutoff` 之后改过的、本 App 家族(App 本体 + 包内引擎)的崩溃报告。文件名前缀粗筛(`<可执行名>-*.ips` / 引擎的
-    /// 新旧两个名字 `-*.ips`),正文再按 bundle id / 包路径确认是本变体的(别的 App 也可能有叫 collector 的进程;Dev 与
-    /// 正式版互不混入)。诊断导出和遥测(TelemetryService)共用。
+    /// 新旧两个名字 `-*.ips`),正文再按 bundle id / 包路径确认是本 App 的(别的 App 也可能有叫 collector 的进程)。
+    /// 诊断导出和遥测(TelemetryService)共用。
     /// `skip` 按文件名先筛掉不用读的(遥测已经发过的),筛掉的不读、不解析、不计入 scanned。
     static func scanCrashReports(since cutoff: Date, skip: (String) -> Bool = { _ in false }) -> CrashReportScan {
         let fm = FileManager.default
@@ -500,7 +500,7 @@ enum DiagnosticsExporter {
             scan.listError = "(cannot list \(dir.path): \(error.localizedDescription))"
             return scan
         }
-        // 进程名取自运行时,不写死:正式版与 Dev 的可执行文件同名,.ips 文件名前缀就是它。
+        // 进程名取自运行时,不写死:.ips 文件名前缀就是它。
         let executable = crashExecutableName
         for name in names where name.hasSuffix(".ips") && (name.hasPrefix("\(executable)-") || LyrimuseIdentity.engineProcessNames.contains { name.hasPrefix("\($0)-") }) {
             if skip(name) { continue }

@@ -8402,7 +8402,7 @@ private struct AboutSettingsTab: View {
                 // 图标的粉色已经够跳,再铺一层就腻了。
                 .shadow(color: .black.opacity(0.14), radius: 12, y: 6)
                 .padding(.bottom, 6)
-            // 正式版 "Lyrimuse",Dev 构建 "Lyrimuse Dev"(图标上另有角标)——两个并排跑时靠这里认。
+            // 显示名取自 LyrimuseIdentity,不写死。
             Text(LyrimuseIdentity.displayName)
                 .font(.system(size: 24, weight: .bold))
             versionChip

@@ -2,7 +2,8 @@ import Foundation
 
 /// 心跳里「之前几天的活动」的记账:放过哪些播放器、主线程卡住几次(前几次带概况)、几个动作各做了几次、放过的歌各拿到哪档歌词、显示的那份来自哪个源、是什么语言,按本地自然日一天一格,存在 UserDefaults。
 /// 播放源换播放器、看门狗报卡住时各记一笔;`isRecording` 为假(遥测关着)时一律不记。心跳发出去之后
-/// `remove(days:)` 删掉发过的那几天。最多留 `maxStoredDays` 天,多了丢最早的。
+/// `remove(days:)` 删掉发过的那几天。最多留 `maxStoredDays` 天,多了丢最早的。早于 `sentBefore`(已随心跳发出)、
+/// 或比今天晚一天以上(系统日期往前调过)的日子不记也不留。
 public final class TelemetryActivity: @unchecked Sendable {
     public static let shared = TelemetryActivity(defaults: .standard)
 
@@ -14,6 +15,8 @@ public final class TelemetryActivity: @unchecked Sendable {
     public static let maxThrottledHangDetailsPerDay = 1
     /// 每天最多记几种窗口布局超限(按窗口 + 类名 + pass 分;同一种只加次数)。
     public static let maxLayoutLimitsPerDay = 5
+    /// 每天每项计数的上限,跟 Worker 收的上限(`int(v, …, 10_000)`)一致,超了 Worker 判这一项不合法。两处一起改。
+    public static let maxCount = 10_000
 
     private let defaults: UserDefaults
     private let key: String
@@ -31,6 +34,8 @@ public final class TelemetryActivity: @unchecked Sendable {
     /// 延后写盘等多久:布局超限振荡时每帧都来一次,同一种只加次数的那些攒到这么久写一次。
     static let deferredWriteDelay: TimeInterval = 5
     private var recording = false
+    private var sentDay: String?
+    private let clock: @Sendable () -> Date
     private var trusted: Set<String> = []
     /// 上一次记下的播放器,同一个播放器连着报不重复写盘。
     private var lastPlayer: (day: String, tag: String)?
@@ -47,9 +52,10 @@ public final class TelemetryActivity: @unchecked Sendable {
         var sourceKey: String?
     }
 
-    public init(defaults: UserDefaults, key: String = TelemetryActivity.storageKey) {
+    public init(defaults: UserDefaults, key: String = TelemetryActivity.storageKey, clock: @escaping @Sendable () -> Date = { Date() }) {
         self.defaults = defaults
         self.key = key
+        self.clock = clock
     }
 
     /// 排给写盘队列的写入次数(不含还在等的延后写)。selftest 按它判「振荡时不每帧写盘」。
@@ -58,6 +64,13 @@ public final class TelemetryActivity: @unchecked Sendable {
     public var isRecording: Bool {
         get { lock.withLock { recording } }
         set { lock.withLock { recording = newValue } }
+    }
+
+    /// 上次发心跳的那天(App 从 `TelemetryService.Keys.lastHeartbeatDay` 同步):更早的日子已随心跳发出,不再记、存着的也丢。
+    /// 系统日期往回调后接着记的话,下一条心跳会拿半截数据把服务器上那天已收的整行盖掉(14 章决策 230)。
+    public var sentBefore: String? {
+        get { lock.withLock { sentDay } }
+        set { lock.withLock { sentDay = newValue } }
     }
 
     /// 用户信任的第三方播放器与浏览器(bundle id):放过歌时记 bundle id,不记 `other`。
@@ -80,7 +93,7 @@ public final class TelemetryActivity: @unchecked Sendable {
         let day = Telemetry.day(now)
         lock.withLock {
             guard recording else { return }
-            update(day: day) { $0.actions[action.rawValue, default: 0] += 1 }
+            update(day: day) { Self.increment(&$0.actions, action.rawValue) }
         }
     }
 
@@ -104,11 +117,15 @@ public final class TelemetryActivity: @unchecked Sendable {
                     if let old = previous.language { Self.decrement(&d.languages, old.rawValue) }
                     if let old = previous.sourceKey { Self.decrement(&d.lyricSources, old) }
                 }
-                d.lyrics[result.rawValue, default: 0] += 1
-                if let language { d.languages[language.rawValue, default: 0] += 1 }
-                if let key = note.sourceKey { d.lyricSources[key, default: 0] += 1 }
+                Self.increment(&d.lyrics, result.rawValue)
+                if let language { Self.increment(&d.languages, language.rawValue) }
+                if let key = note.sourceKey { Self.increment(&d.lyricSources, key) }
             }
         }
+    }
+
+    private static func increment(_ counts: inout [String: Int], _ key: String) {
+        counts[key] = min((counts[key] ?? 0) + 1, maxCount)
     }
 
     private static func decrement(_ counts: inout [String: Int], _ key: String) {
@@ -127,8 +144,8 @@ public final class TelemetryActivity: @unchecked Sendable {
             let throttled = detail?.throttled != nil
             var index: Int?
             update(day: day) { d in
-                d.hangs += 1
-                if throttled { d.throttledHangs += 1 }
+                d.hangs = min(d.hangs + 1, Self.maxCount)
+                if throttled { d.throttledHangs = min(d.throttledHangs + 1, d.hangs) }
                 guard var detail, Self.hasDetailSlot(d.hangDetails, throttled: throttled) else { return }
                 if detail.player == nil { detail.player = lastPlayer?.tag }
                 d.hangDetails.append(detail)
@@ -173,7 +190,7 @@ public final class TelemetryActivity: @unchecked Sendable {
                 .contains { $0.window == window && $0.windowClass == windowClass && $0.pass == pass } ?? false
             update(day: day, deferWrite: known) { d in
                 if let i = d.layoutLimits.firstIndex(where: { $0.window == window && $0.windowClass == windowClass && $0.pass == pass }) {
-                    d.layoutLimits[i].count = min(d.layoutLimits[i].count + 1, 10_000)
+                    d.layoutLimits[i].count = min(d.layoutLimits[i].count + 1, Self.maxCount)
                 } else if d.layoutLimits.count < Self.maxLayoutLimitsPerDay {
                     d.layoutLimits.append(TelemetryLayoutLimit(window: window, windowClass: windowClass, pass: pass, count: 1))
                 }
@@ -210,7 +227,10 @@ public final class TelemetryActivity: @unchecked Sendable {
 
     /// 今天之前记下的几天,按日期升序。
     public func completedDays(before today: String) -> [TelemetryActivityDay] {
-        lock.withLock { load().filter { $0.day < today } }
+        lock.withLock {
+            let accepts = acceptsDay()
+            return load().filter { $0.day < today && accepts($0.day) }
+        }
     }
 
     public func remove(days: [String]) {
@@ -220,7 +240,8 @@ public final class TelemetryActivity: @unchecked Sendable {
         }
     }
 
-    /// 遥测关掉时清空记下的全部活动。
+    /// 遥测关掉、清除所有设置时清空记下的全部活动。清除所有设置时先把 `isRecording` 置假再删偏好键、删完再调这里:
+    /// 不然删键之后到重启之间记的一笔会把内存里清除前的活动整份写回(14 章决策 230)。
     public func clear() {
         lock.withLock {
             lastPlayer = nil
@@ -255,6 +276,7 @@ public final class TelemetryActivity: @unchecked Sendable {
     // 以下都在锁里调。
 
     private func update(day: String, deferWrite: Bool = false, _ change: (inout TelemetryActivityDay) -> Void) {
+        guard acceptsDay()(day) else { return }
         var days = load()
         if let i = days.firstIndex(where: { $0.day == day }) {
             change(&days[i])
@@ -264,6 +286,13 @@ public final class TelemetryActivity: @unchecked Sendable {
             days.append(fresh)
         }
         store(days, deferred: deferWrite)
+    }
+
+    /// 还记、还留的日子:不早于 `sentBefore`,也不晚于明天。
+    private func acceptsDay() -> (String) -> Bool {
+        let latest = Telemetry.day(clock().addingTimeInterval(86_400))
+        let sentDay = self.sentDay
+        return { day in day <= latest && !(sentDay.map { day < $0 } ?? false) }
     }
 
     private func load() -> [TelemetryActivityDay] {
@@ -277,7 +306,8 @@ public final class TelemetryActivity: @unchecked Sendable {
     /// 改内存副本,写盘交给 `writeQueue`(见它的注释)。`deferred`:过 `deferredWriteDelay` 再写当时的副本,
     /// 已经排着一次就不再排;这期间有一次当场写就把延后的那次一起带走。
     private func store(_ days: [TelemetryActivityDay], deferred: Bool = false) {
-        let kept = Array(days.sorted { $0.day < $1.day }.suffix(Self.maxStoredDays))
+        let accepts = acceptsDay()
+        let kept = Array(days.filter { accepts($0.day) }.sorted { $0.day < $1.day }.suffix(Self.maxStoredDays))
         cache = kept
         if deferred {
             guard !deferredWritePending else { return }

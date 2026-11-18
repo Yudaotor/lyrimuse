@@ -12,6 +12,8 @@ func runTelemetryTests() {
         expectEqual(Telemetry.heartbeatDue(today: "2026-10-31", lastSentDay: nil), true, "心跳: 从没发过要发")
         expectEqual(Telemetry.heartbeatDue(today: "2026-10-31", lastSentDay: "2026-10-30"), true, "心跳: 新的一天要发")
         expectEqual(Telemetry.heartbeatDue(today: "2026-10-31", lastSentDay: "2026-10-31"), false, "心跳: 今天发过不再发")
+        expectEqual(Telemetry.heartbeatDue(today: "2026-10-30", lastSentDay: "2026-10-31"), false,
+                    "心跳: 系统日期往回调过不发(补发会拿半截活动盖掉服务器上那天已收的)")
 
         expectEqual(Telemetry.playerTag(forBundleID: PlaybackPlayer.appleMusic.bundleIdentifier),
                     PlaybackPlayer.appleMusic.rawValue, "播放器: 内置的用目录 id")
@@ -272,6 +274,186 @@ func runTelemetryTests() {
         expectEqual(sourceCount(src, "defaults.set(") == 1 && sourceCount(src, "defaults.removeObject(") == 1
                     && sourceHas(sourceBody("private func store(", in: src), "writeQueue.async {"), true,
                     "写盘: 只在 writeQueue 里写 UserDefaults,不持锁写(持锁写会跟主线程互相等死)")
+    }
+
+    do {
+        print("\n== 遥测:系统日期往前 / 往回调、计数封顶、清除所有设置 ==")
+        final class Clock: @unchecked Sendable { var now = Date(timeIntervalSince1970: 1_793_300_000) }
+        let clock = Clock()
+        let base = clock.now
+        func at(_ offset: Int) -> Date { base.addingTimeInterval(Double(offset) * 86_400) }
+        func day(_ offset: Int) -> String { Telemetry.day(at(offset)) }
+        let key = "selftest.telemetryActivityClock.\(getpid())"
+        defer { UserDefaults.standard.removeObject(forKey: key) }
+        let activity = TelemetryActivity(defaults: .standard, key: key, clock: { clock.now })
+        func days() -> [String] { activity.completedDays(before: "9999-12-31").map(\.day) }
+        activity.isRecording = true
+        activity.noteHang(now: at(0))
+        activity.noteHang(now: at(1))
+        activity.noteHang(now: at(3))
+        expectEqual(days(), [day(0), day(1)], "往前调: 明天的照记(换时区),晚一天以上的不记")
+        clock.now = at(5)
+        activity.noteHang(now: at(5))
+        expectEqual(days(), [day(0), day(1), day(5)], "往前调: 系统日期就在那天时照记")
+        clock.now = base
+        activity.noteAction(.shareCard, now: at(0))
+        expectEqual(days(), [day(0), day(1)], "往前调: 日期改回来后,比今天晚一天以上的那天丢掉,不一直占名额")
+
+        activity.clear()
+        activity.sentBefore = day(1)
+        activity.noteHang(now: at(0))
+        activity.noteAction(.shareCard, now: at(0))
+        activity.noteLyricsResult(track: "a", result: .word, source: "qq", language: .zh, now: at(0))
+        activity.noteLayoutLimit(window: nil, windowClass: "NSWindow", pass: "layout", now: at(0))
+        expectEqual(days(), [], "往回调: 早于上次发心跳那天的日子不再记(已随心跳发出)")
+        activity.noteHang(now: at(1))
+        expectEqual(days(), [day(1)], "往回调: 发心跳那天本身照记(那条心跳只带它之前的日子)")
+        activity.sentBefore = nil
+        activity.noteHang(now: at(0))
+        activity.sentBefore = day(1)
+        expectEqual(activity.completedDays(before: day(2)).map(\.day), [day(1)], "往回调: 存着的更早日子不再随心跳发出")
+        activity.noteHang(now: at(1))
+        activity.waitForPendingWrites()
+        expectEqual(TelemetryActivity(defaults: .standard, key: key).completedDays(before: "9999-12-31").map(\.day), [day(1)],
+                    "往回调: 存着的更早日子下一次写盘时丢掉")
+        activity.sentBefore = nil
+        activity.clear()
+
+        let cap = TelemetryActivity.maxCount
+        let capKey = "selftest.telemetryActivityCap.\(getpid())"
+        defer { UserDefaults.standard.removeObject(forKey: capKey) }
+        let sourceKey = TelemetryLyricSource.key(source: "qq", result: .word) ?? ""
+        let full = TelemetryActivityDay(day: day(0), hangs: cap, throttledHangs: cap,
+                                        actions: [TelemetryAction.shareCard.rawValue: cap],
+                                        lyrics: [TelemetryLyricsResult.word.rawValue: cap],
+                                        languages: [TelemetrySongLanguage.zh.rawValue: cap], lyricSources: [sourceKey: cap],
+                                        layoutLimits: [TelemetryLayoutLimit(window: nil, windowClass: "NSWindow", pass: "layout", count: cap)])
+        UserDefaults.standard.set(try? JSONEncoder().encode([full]), forKey: capKey)
+        let capped = TelemetryActivity(defaults: .standard, key: capKey, clock: { base })
+        capped.isRecording = true
+        capped.noteHang(TelemetryHang(sinceLaunch: "0-1m", sinceWake: nil, windows: [], thermal: "nominal", throttled: ["locked"]),
+                        now: base)
+        capped.noteAction(.shareCard, now: base)
+        capped.noteLyricsResult(track: "a", result: .word, source: "qq", language: .zh, now: base)
+        capped.noteLayoutLimit(window: nil, windowClass: "NSWindow", pass: "layout", now: base)
+        let got = capped.completedDays(before: "9999-12-31").first
+        expectEqual([got?.hangs, got?.throttledHangs, got?.actions[TelemetryAction.shareCard.rawValue],
+                     got?.lyrics[TelemetryLyricsResult.word.rawValue], got?.languages[TelemetrySongLanguage.zh.rawValue],
+                     got?.lyricSources[sourceKey], got?.layoutLimits.first?.count],
+                    Array(repeating: cap, count: 7), "封顶: 每天各项计数到 Worker 收的上限为止,超了 Worker 判这一项不合法")
+        capped.clear()
+        capped.waitForPendingWrites()
+
+        let resetKey = "selftest.telemetryActivityReset.\(getpid())"
+        defer { UserDefaults.standard.removeObject(forKey: resetKey) }
+        let reset = TelemetryActivity(defaults: .standard, key: resetKey)
+        reset.isRecording = true
+        reset.noteHang(now: base)
+        reset.noteLayoutLimit(window: nil, windowClass: "NSWindow", pass: "layout", now: base)
+        reset.noteLayoutLimit(window: nil, windowClass: "NSWindow", pass: "layout", now: base)
+        // 清除所有设置的顺序:停记 → 删偏好键 → clear();删键之后、重启之前的记账不落下。
+        reset.isRecording = false
+        UserDefaults.standard.removeObject(forKey: resetKey)
+        reset.noteHang(now: base)
+        reset.clear()
+        reset.noteAction(.shareCard, now: base)
+        reset.waitForPendingWrites()
+        expectEqual(UserDefaults.standard.data(forKey: resetKey) == nil && reset.completedDays(before: "9999-12-31").isEmpty
+                    && TelemetryActivity(defaults: .standard, key: resetKey).completedDays(before: "9999-12-31").isEmpty, true,
+                    "清除所有设置: 停记、删键、清空之后,排着的延后写盘和之后的记账都不把清除前的活动写回")
+    }
+
+    do {
+        print("\n== 遥测:崩溃报告的发送记账 ==")
+        typealias L = TelemetryCrashLedger
+        let statuses: [Int?] = [200, 204, 400, 413, 401, 403, 404, 408, 422, 429, 500, 502, 503, 504, nil]
+        expectEqual(statuses.map { L.outcome(status: $0) },
+                    [.accepted, .accepted, .rejected, .rejected, .later, .later, .later, .later, .later, .later,
+                     .serverError, .serverError, .later, .serverError, .later],
+                    "崩溃: 只有 Worker 回的 400(负载不合格)/ 413(过大)算这一份不合格;网关的 4xx、限流、连不上下次再发")
+        final class Server: @unchecked Sendable {
+            var posted: [String] = []
+            let respond: (String, Int) -> Int?
+            init(_ respond: @escaping (String, Int) -> Int?) { self.respond = respond }
+            func post(_ id: String) -> Int? {
+                posted.append(id)
+                return respond(id, posted.filter { $0 == id }.count)
+            }
+        }
+        final class Round: @unchecked Sendable {
+            var ledger: L
+            var saved: L?
+            init(_ ledger: L) { self.ledger = ledger }
+        }
+        let today = "2026-11-19"
+        func round(_ ledger: L, _ ids: [String], _ server: Server, on day: String = "2026-11-19") -> (ledger: L, saved: L?) {
+            let box = Round(ledger)
+            let done = DispatchSemaphore(value: 0)
+            Task.detached {
+                await box.ledger.send(ids.map { (id: $0, report: $0) }, today: day,
+                                      post: { server.post($0) }, save: { box.saved = $0 })
+                done.signal()
+            }
+            done.wait()
+            return (box.ledger, box.saved)
+        }
+
+        let broken = Server { id, _ in id == "a" ? 500 : 200 }
+        var r = round(L(), ["a", "b", "c"], broken)
+        expectEqual([broken.posted, r.ledger.sent] as [[String]], [["a"], []], "崩溃: 服务器出错停下,不发后面的")
+        expectEqual([r.ledger.failingID == "a", r.ledger.failures == 1, r.saved == r.ledger], [true, true, true],
+                    "崩溃: 服务器出错记一次,当场存下")
+        r = round(r.ledger, ["a", "b", "c"], broken)
+        expectEqual([broken.posted == ["a", "a"], r.ledger.failures == 2, r.ledger.sent.isEmpty], [true, true, true],
+                    "崩溃: 连着第二次还挡着")
+        r = round(r.ledger, ["a", "b", "c"], broken)
+        expectEqual(broken.posted, ["a", "a", "a", "b", "c"], "崩溃: 同一份连着 3 次服务器出错就跳过,接着发后面的")
+        expectEqual([r.ledger.sent == ["a", "b", "c"], r.ledger.failingID == nil, r.ledger.sentCount(on: today) == 2,
+                     r.saved == r.ledger], [true, true, true, true], "崩溃: 跳过的记为发过、不算当天条数")
+
+        for status in [nil, 429, 503, 401, 403, 404, 408] as [Int?] {
+            let flaky = Server { _, _ in status }
+            let start = L(failingID: "a", failures: 2)
+            let out = round(start, ["a", "b"], flaky)
+            expectEqual([flaky.posted == ["a"], out.ledger == start, out.saved == nil], [true, true, true],
+                        "崩溃: \(status.map(String.init) ?? "连不上") 停下等下次,不记为发过、不算服务器出错")
+        }
+        let rejects = Server { id, _ in id == "a" ? 400 : (id == "b" ? 413 : 200) }
+        r = round(L(failingID: "a", failures: 2), ["a", "b", "c"], rejects)
+        expectEqual([rejects.posted == ["a", "b", "c"], r.ledger.sent == ["a", "b", "c"], r.ledger.sentCount(on: today) == 1,
+                     r.ledger.failingID == nil], [true, true, true, true], "崩溃: 400 / 413 记为发过、接着发下一份,不算当天条数")
+        let other = Server { _, _ in 500 }
+        r = round(L(failingID: "x", failures: 2), ["a"], other)
+        expectEqual([r.ledger.failingID == "a", r.ledger.failures == 1, r.ledger.sent.isEmpty], [true, true, true],
+                    "崩溃: 排在最前面的换了一份,从头计次")
+
+        let ok = Server { _, _ in 200 }
+        let ids = (0..<(Telemetry.maxCrashesPerDay + 2)).map { "r\($0)" }
+        r = round(L(sentDay: today, sentOnDay: Telemetry.maxCrashesPerDay - 1), ids, ok)
+        expectEqual([ok.posted == ["r0"], r.ledger.sentCount(on: today) == Telemetry.maxCrashesPerDay], [true, true],
+                    "崩溃: 每天最多发 maxCrashesPerDay 条")
+        let nextDay = Server { _, _ in 200 }
+        r = round(r.ledger, Array(ids.dropFirst()), nextDay, on: "2026-11-20")
+        expectEqual([nextDay.posted.count == Telemetry.maxCrashesPerDay, r.ledger.sentCount(on: "2026-11-20") == Telemetry.maxCrashesPerDay],
+                    [true, true], "崩溃: 换天重新计条数")
+        let skip = Server { _, _ in 200 }
+        _ = round(L(sent: ["a"]), ["a", "b"], skip)
+        expectEqual(skip.posted, ["b"], "崩溃: 发过的不再发")
+
+        let keys = L.Keys(sent: "selftest.crashSent.\(getpid())", sentDay: "selftest.crashDay.\(getpid())",
+                          serverFailures: "selftest.crashFailures.\(getpid())")
+        defer { [keys.sent, keys.sentDay, keys.serverFailures].forEach { UserDefaults.standard.removeObject(forKey: $0) } }
+        let stored = L(sent: ["a", "b"], sentDay: today, sentOnDay: 2, failingID: "c", failures: 2)
+        stored.save(to: .standard, keys: keys)
+        expectEqual(L.load(from: .standard, keys: keys), stored, "崩溃: 记账存进偏好、读得回")
+        L(sent: ["a"], sentDay: today, sentOnDay: 1).save(to: .standard, keys: keys)
+        expectEqual([UserDefaults.standard.string(forKey: keys.serverFailures) == nil,
+                     UserDefaults.standard.string(forKey: keys.sentDay) == "\(today)|1"], [true, true],
+                    "崩溃: 不再挡着时删掉计次键;当天条数沿用旧版的「日期|条数」写法")
+        var many = L()
+        for i in 0..<(Telemetry.sentCrashMemory + 5) { many = round(many, ["m\(i)"], Server { _, _ in 400 }).ledger }
+        expectEqual([many.sent.count == Telemetry.sentCrashMemory, many.sent.last == "m\(Telemetry.sentCrashMemory + 4)"], [true, true],
+                    "崩溃: 发过的最多记 sentCrashMemory 条")
     }
 
     do {
@@ -889,8 +1071,14 @@ func runTelemetryTests() {
         expectEqual(sourceHas(sourceBody("private func post<T: Encodable>", in: service),
                               "guard AppSettings.shared.telemetryEnabled else { return nil }"), true, "接线: 关着不发")
         let crashes = sourceBody("private func sendNewCrashes(", in: service)
-        expectEqual(sourceHas(crashes, "if let status, (400..<500).contains(status), status != 429 {"), true,
-                    "接线: 崩溃负载被拒(4xx)记为发过,不卡住后面的;限流(429)不算,下次再发")
+        expectEqual(sourceHas(crashes, "var ledger = TelemetryCrashLedger.load(from: defaults, keys: Keys.crashLedger)")
+                    && sourceHas(crashes, "await ledger.send(reports, today: today, post: { summary in")
+                    && sourceHas(crashes, "}, save: { $0.save(to: self.defaults, keys: Keys.crashLedger) })"), true,
+                    "接线: 崩溃报告按记账发(只有负载不合格才记为发过,同一份连着服务器出错几次就跳过),每份有了结果就存")
+        expectEqual(sourceHas(sourceBody("func start()", in: service), "TelemetryActivity.shared.sentBefore = defaults.string(forKey: Keys.lastHeartbeatDay)")
+                    && sourceHas(sourceBody("func checkNow() async", in: service),
+                                 "defaults.set(today, forKey: Keys.lastHeartbeatDay)\nTelemetryActivity.shared.sentBefore = today"), true,
+                    "接线: 上次发心跳那天同步给活动记账,更早的日子不再记")
         expectEqual(sourceHas(crashes, "DiagnosticsExporter.scanCrashReports(since: cutoff) { alreadySent.contains(Telemetry.reportID(fileName: $0)) }"),
                     true, "接线: 发过的崩溃报告按文件名先跳过,不再读")
         expectEqual(sourceHas(service, "TelemetryActivity.shared.trustedBundleIDs = Set(trusted.keys)"), true,
@@ -911,6 +1099,13 @@ func runTelemetryTests() {
                     "接线: 安装 ID 等记账键是机器专属的,不随配置搬家")
         expectEqual(obsolete.contains("Telemetry"), false, "接线: 遥测的键不在过时键表里(那张表启动时就删)")
         expectEqual(sourceHas(machineLocal, "TelemetryService.Keys.installOrigin,"), true, "接线: 新装还是升级的判定是机器专属的")
+        expectEqual(sourceHas(machineLocal, "TelemetryService.Keys.crashServerFailures,"), true, "接线: 崩溃报告的出错计次是机器专属的")
+        let clearAll = sourceBody("static func clearAllConfig() async -> Bool", in: portability)
+        let stopAt = clearAll.range(of: "TelemetryActivity.shared.isRecording = false")?.lowerBound
+        let loopAt = clearAll.range(of: "for key in UserDefaults.standard.dictionaryRepresentation().keys {")?.lowerBound
+        let wipeAt = clearAll.range(of: "TelemetryActivity.shared.clear()")?.lowerBound
+        expectEqual(stopAt != nil && loopAt != nil && wipeAt != nil && stopAt! < loopAt! && loopAt! < wipeAt!, true,
+                    "接线: 清除所有设置先停记遥测活动、删完偏好键再清空内存里那份")
         let delegate = sourceText("lyrimuse/AppDelegate.swift")
         if let a = delegate.range(of: "TelemetryService.shared.start()"), let b = delegate.range(of: "WhatsNewCenter.shared.start()") {
             expectEqual(a.lowerBound < b.lowerBound, true, "接线: 遥测先于更新提示启动(判定读的是上次启动留下的版本记录)")

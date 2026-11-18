@@ -37,9 +37,11 @@ public enum Telemetry {
         return String(format: "%04d-%02d-%02d", c.year ?? 0, c.month ?? 0, c.day ?? 0)
     }
 
-    /// 今天还没发过心跳。
+    /// 今天还没发过心跳:今天晚于上次发的那天才发。系统日期往回调过(今天早于上次)不发,别写成「不等于」:
+    /// Worker 按天整行覆盖,补发会拿半截活动盖掉那天已收的数据(14 章决策 230)。
     public static func heartbeatDue(today: String, lastSentDay: String?) -> Bool {
-        lastSentDay != today
+        guard let lastSentDay else { return true }
+        return today > lastSentDay
     }
 
     public static func newInstallID() -> String { UUID().uuidString.lowercased() }

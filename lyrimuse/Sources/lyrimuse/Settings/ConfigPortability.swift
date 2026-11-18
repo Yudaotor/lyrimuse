@@ -84,6 +84,7 @@ enum ConfigPortability {
         TelemetryService.Keys.lastHeartbeatDay,
         TelemetryService.Keys.sentCrashReports,
         TelemetryService.Keys.crashesSentDay,
+        TelemetryService.Keys.crashServerFailures,
         TelemetryService.Keys.enabledSince,
         TelemetryService.Keys.installOrigin,
         TelemetryActivity.storageKey,
@@ -529,6 +530,8 @@ enum ConfigPortability {
             FeatureSettingsStore.shared.suspendWritesForReset()
             AppSettingsMirror.writesSuspended = true
         }
+        // 遥测活动同理:先停记,删完偏好键再清内存里那份(14 章决策 230)。
+        TelemetryActivity.shared.isRecording = false
         var ok = true
         if FileManager.default.fileExists(atPath: configURL.path) {
             do { try FileManager.default.removeItem(at: configURL) }
@@ -556,6 +559,7 @@ enum ConfigPortability {
             UserDefaults.standard.removeObject(forKey: key)
             clearedCount += 1
         }
+        TelemetryActivity.shared.clear()
         // 镜像也要删。留着它下次启动就会被 restoreIfPristine 原样恢复回来 —— 用户点的
         // 那个"恢复到刚装完时的样子"等于白点。
         AppSettingsMirror.remove()

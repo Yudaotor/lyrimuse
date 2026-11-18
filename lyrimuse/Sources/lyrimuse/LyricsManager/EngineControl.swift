@@ -12,7 +12,7 @@ private let logger = Logger(subsystem: "me.yudaotor.lyrimuse", category: "engine
 // label 还没被 launchctl 加载过)这种情况。`launchctl kickstart -k` 本身只是给 launchd
 // 发一条控制指令、不等目标进程完整启动完,同步等它退出不会明显卡住调用方。
 public enum EngineControl {
-    /// 按变体派生(正式 com.lyrimuse.collector,Dev 加 .dev),唯一口径在 Core LyrimuseIdentity。
+    /// 唯一口径在 Core LyrimuseIdentity。
     public static let label = LyrimuseIdentity.engineLaunchdLabel
 
     /// 重启引擎,并**确认新进程真的起来了**才返回 true。

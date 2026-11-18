@@ -9,7 +9,8 @@ private let logger = Logger(subsystem: LyrimuseIdentity.logSubsystem, category: 
 /// 发什么、怎么脱敏在 Core `Telemetry`;这边只读设置、扫崩溃报告、发请求、记账。
 ///
 /// 关着(`AppSettings.telemetryEnabled` 为假)时不发,也不记活动;关掉那一刻清空记下的活动。崩溃报告只发打开遥测
-/// 之后出现的。只在正式身份下跑,Dev 变体与 selftest 不发。见 14 章决策 149。
+/// 之后出现的。只在 bundle id 是 `LyrimuseIdentity.bundleIdentifier` 时跑,selftest 不发;build.sh 装的开发版是同一个身份,
+/// 照样发,作者自己的机器由接收端的 `excluded_installs` 排除出统计。见 14 章决策 149。
 @MainActor
 final class TelemetryService {
     static let shared = TelemetryService()
@@ -21,6 +22,10 @@ final class TelemetryService {
         static let sentCrashReports = "np:telemetrySentCrashReports"
         /// `yyyy-MM-dd|条数`:今天发了几条崩溃。
         static let crashesSentDay = "np:telemetryCrashesSentDay"
+        /// `报告键|次数`:排在最前面的崩溃报告连着几次碰上服务器出错。
+        static let crashServerFailures = "np:telemetryCrashServerFailures"
+        static let crashLedger = TelemetryCrashLedger.Keys(sent: sentCrashReports, sentDay: crashesSentDay,
+                                                           serverFailures: crashServerFailures)
         /// 这一次打开遥测的时刻;更早的崩溃报告不发。
         static let enabledSince = "np:telemetryEnabledSince"
         /// `TelemetryInstallOrigin` 的取值,判不出记 `unknown`;只判一次。
@@ -42,6 +47,7 @@ final class TelemetryService {
         guard !started, Bundle.main.bundleIdentifier == LyrimuseIdentity.bundleIdentifier else { return }
         started = true
         decideInstallOrigin()
+        TelemetryActivity.shared.sentBefore = defaults.string(forKey: Keys.lastHeartbeatDay)
         apply(enabled: AppSettings.shared.telemetryEnabled)
         trustedSubscription = FeatureSettingsStore.shared.$trustedPlayers.sink { trusted in
             TelemetryActivity.shared.trustedBundleIDs = Set(trusted.keys)
@@ -89,6 +95,7 @@ final class TelemetryService {
                                           origin: defaults.string(forKey: Keys.installOrigin).flatMap(TelemetryInstallOrigin.init(rawValue:)))
             if let status = await post(beat, to: Telemetry.heartbeatURL, operation: "heartbeat"), (200..<300).contains(status) {
                 defaults.set(today, forKey: Keys.lastHeartbeatDay)
+                TelemetryActivity.shared.sentBefore = today
                 TelemetryActivity.shared.remove(days: activity.map(\.day))
             }
         }
@@ -109,41 +116,27 @@ final class TelemetryService {
 
     private func sendNewCrashes(installID: String, env: TelemetryEnvironment, today: String) async {
         guard let since = defaults.object(forKey: Keys.enabledSince) as? Date else { return }
-        var count = crashesSent(on: today)
-        guard count < Telemetry.maxCrashesPerDay else { return }
+        var ledger = TelemetryCrashLedger.load(from: defaults, keys: Keys.crashLedger)
+        guard ledger.sentCount(on: today) < Telemetry.maxCrashesPerDay else { return }
         let cutoff = max(since, Date().addingTimeInterval(-Telemetry.crashLookback))
-        var sent = defaults.stringArray(forKey: Keys.sentCrashReports) ?? []
-        let alreadySent = Set(sent)
+        let alreadySent = Set(ledger.sent)
         // 发过的按文件名先跳过,不再读、不再解析。
         let scan = await Task.detached {
             DiagnosticsExporter.scanCrashReports(since: cutoff) { alreadySent.contains(Telemetry.reportID(fileName: $0)) }
         }.value
-        for report in scan.reports.sorted(by: { $0.modified < $1.modified }) {
-            guard count < Telemetry.maxCrashesPerDay else { break }
-            let id = Telemetry.reportID(fileName: report.summary.fileName)
-            let crash = TelemetryCrash(summary: report.summary, reportID: id,
-                                       executableName: DiagnosticsExporter.crashExecutableName,
-                                       installID: installID, env: env)
-            let status = await post(crash, to: Telemetry.crashURL, operation: "crash")
-            // 4xx 是这一份本身不合格(过大、字段不对),重发也一样,记为发过、接着发下一份;连不上、5xx、429(限流)才停下等下次。
-            if let status, (400..<500).contains(status), status != 429 {
-                logger.notice("telemetry: crash report rejected with \(status, privacy: .public), skipped")
-            } else if !(status.map { (200..<300).contains($0) } ?? false) {
-                break
-            } else {
-                count += 1
-                defaults.set("\(today)|\(count)", forKey: Keys.crashesSentDay)
-            }
-            sent.append(id)
-            defaults.set(Array(sent.suffix(Telemetry.sentCrashMemory)), forKey: Keys.sentCrashReports)
+        let reports = scan.reports.sorted(by: { $0.modified < $1.modified }).map { report in
+            (id: Telemetry.reportID(fileName: report.summary.fileName), report: report.summary)
         }
-    }
-
-    private func crashesSent(on today: String) -> Int {
-        guard let raw = defaults.string(forKey: Keys.crashesSentDay) else { return 0 }
-        let parts = raw.split(separator: "|")
-        guard parts.count == 2, parts[0] == today else { return 0 }
-        return Int(parts[1]) ?? 0
+        let executable = DiagnosticsExporter.crashExecutableName
+        await ledger.send(reports, today: today, post: { summary in
+            let crash = TelemetryCrash(summary: summary, reportID: Telemetry.reportID(fileName: summary.fileName),
+                                       executableName: executable, installID: installID, env: env)
+            let status = await self.post(crash, to: Telemetry.crashURL, operation: "crash")
+            if let status, TelemetryCrashLedger.outcome(status: status) != .accepted {
+                logger.notice("telemetry: crash report got \(status, privacy: .public)")
+            }
+            return status
+        }, save: { $0.save(to: self.defaults, keys: Keys.crashLedger) })
     }
 
     /// 读的是上次启动留下的版本记录,所以 `start()` 必须排在 `WhatsNewCenter.shared.start()` 前面。

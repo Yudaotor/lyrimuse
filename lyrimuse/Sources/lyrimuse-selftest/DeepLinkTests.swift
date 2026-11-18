@@ -58,7 +58,7 @@ func runDeepLinkTests() {
             expectEqual(link(bad) == nil, true, "深链: 认不出 \(bad)")
         }
         expectEqual(URL(string: "lyrimuse-dev://lyrics-manager").flatMap { LyrimuseDeepLink(url: $0, scheme: "lyrimuse-dev") },
-                    .lyricsManager, "深链: Dev 变体按自己的 scheme 认")
+                    .lyricsManager, "深链: 按传入的 scheme 认")
     }
 
     // ---- 动作(= 全局快捷键那一套) ----
