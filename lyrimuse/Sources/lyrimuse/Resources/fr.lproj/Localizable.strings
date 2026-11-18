@@ -2331,7 +2331,6 @@
 "用「导入歌词文件夹…」导入，或在下方设置监视文件夹" = "Utilisez « Importer un dossier de paroles… » ou définissez un dossier surveillé ci-dessous";
 "用于改进 Lyrimuse：版本、系统、用了哪些功能和崩溃报告，不含歌名和账号" = "Aide à améliorer Lyrimuse : version, système, fonctions utilisées et rapports de plantage. Jamais de titres ni de comptes";
 "用当前配色覆盖" = "Remplacer par les couleurs actuelles";
-"用户上传的同步歌词库，只在听歌时查询" = "Paroles synchronisées envoyées par les utilisateurs, consultées seulement pendant l’écoute";
 "用户名下方显示" = "Sous votre nom";
 "用这一期的真实数据看看推送在这个平台上的样子" = "Voyez l’aspect d’un push sur cette plateforme avec les données réelles de cette période";
 "用这首歌在 Spotify 上的循环短片当背景；仅限在 Spotify 中放过的歌曲" = "Utilise la vidéo en boucle du morceau sur Spotify comme fond ; uniquement pour les morceaux lus dans Spotify";
@@ -2482,6 +2481,7 @@
 "缩小悬浮歌词字号" = "Réduire les paroles flottantes";
 "缺少用户名" = "Nom d’utilisateur manquant";
 "缺少用户名，无法生成听歌报告" = "Nom d’utilisateur manquant : impossible de générer les bilans d’écoute";
+"网友上传的逐行歌词站" = "Site de paroles ligne par ligne envoyées par les utilisateurs";
 "网易云音乐" = "NetEase Cloud Music";
 "网易云音乐或 QQ 音乐已收录这首歌曲，但尚未提供歌词，常见于新发行的歌曲。重新匹配效果有限，可搜索候选歌词或稍后重试" = "NetEase Cloud Music ou QQ Music répertorie ce morceau mais n’a pas encore ses paroles, ce qui est courant pour les nouveautés. Réassocier aidera peu ; recherchez des paroles ou réessayez plus tard";
 "网易云音乐接口限流（短时间内请求过多，code 405），并非网络故障" = "L’API de NetEase Cloud Music limite le débit (trop de requêtes en peu de temps, code 405) : ce n’est pas une panne réseau";

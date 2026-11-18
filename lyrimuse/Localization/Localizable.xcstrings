@@ -308751,103 +308751,103 @@
         }
       }
     },
-    "用户上传的同步歌词库，只在听歌时查询" : {
+    "网友上传的逐行歌词站" : {
       "extractionState" : "manual",
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Von Nutzern hochgeladene synchronisierte Liedtexte, nur beim Hören abgefragt"
+            "value" : "Seite mit zeilenweisen Liedtexten von Nutzern"
           }
         },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Synced lyrics uploaded by users, looked up only while you listen"
+            "value" : "Line-synced lyrics site uploaded by users"
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Letras sincronizadas subidas por usuarios, solo se consultan mientras escuchas"
+            "value" : "Sitio de letras por línea subidas por usuarios"
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Paroles synchronisées envoyées par les utilisateurs, consultées seulement pendant l’écoute"
+            "value" : "Site de paroles ligne par ligne envoyées par les utilisateurs"
           }
         },
         "hi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "उपयोगकर्ताओं के अपलोड किए सिंक बोल, सिर्फ़ सुनते समय खोजे जाते हैं"
+            "value" : "उपयोगकर्ताओं के अपलोड किए पंक्ति-दर-पंक्ति बोल की साइट"
           }
         },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Testi sincronizzati caricati dagli utenti, cercati solo durante l’ascolto"
+            "value" : "Sito di testi riga per riga caricati dagli utenti"
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "ユーザーが投稿した同期歌詞ライブラリ、再生中の曲だけを検索"
+            "value" : "ユーザーが投稿する行単位の歌詞サイト"
           }
         },
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "사용자가 올린 싱크 가사 보관함, 듣는 중에만 검색"
+            "value" : "사용자가 올린 줄 단위 가사 사이트"
           }
         },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Letras sincronizadas enviadas por usuários, consultadas só enquanto você ouve"
+            "value" : "Site de letras linha a linha enviadas por usuários"
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Синхронизированные тексты от пользователей, запрашиваются только во время прослушивания"
+            "value" : "Сайт текстов по строкам, загруженных пользователями"
           }
         },
         "th" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "คลังเนื้อเพลงแบบตรงจังหวะที่ผู้ใช้อัปโหลด ค้นหาเฉพาะตอนกำลังฟัง"
+            "value" : "เว็บไซต์เนื้อเพลงทีละบรรทัดที่ผู้ใช้อัปโหลด"
           }
         },
         "tr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Kullanıcıların yüklediği eşzamanlı şarkı sözleri, yalnızca dinlerken aranır"
+            "value" : "Kullanıcıların yüklediği satır satır şarkı sözü sitesi"
           }
         },
         "uk" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Синхронізовані тексти від користувачів, запитуються лише під час прослуховування"
+            "value" : "Сайт текстів по рядках, завантажених користувачами"
           }
         },
         "vi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Kho lời đồng bộ do người dùng tải lên, chỉ tra cứu khi đang nghe"
+            "value" : "Trang lời từng dòng do người dùng tải lên"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "用户上传的同步歌词库，只在听歌时查询"
+            "value" : "网友上传的逐行歌词站"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "使用者上傳的同步歌詞庫，只在聽歌時查詢"
+            "value" : "網友上傳的逐行歌詞站"
           }
         }
       }

@@ -59,7 +59,7 @@ extension LyricsSource {
         case .genie: return L10n.t("韩国 KT 旗下的音乐平台")
         case .petitlyrics: return L10n.t("日本 SyncPower 运营的同步歌词服务")
         case .zing: return L10n.t("越南 VNG 旗下的音乐平台")
-        case .megalobiz: return L10n.t("用户上传的同步歌词库，只在听歌时查询")
+        case .megalobiz: return L10n.t("网友上传的逐行歌词站")
         }
     }
 }
