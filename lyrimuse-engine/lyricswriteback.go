@@ -370,7 +370,7 @@ func cloneForWriteback(real string) (string, error) {
 		return "", wbErr(wbErrIO, err)
 	}
 	dir, name := filepath.Split(real)
-	clone := filepath.Join(dir, "."+strings.TrimSuffix(name, filepath.Ext(name))+".lyrimuse-"+hex.EncodeToString(suffix[:])+filepath.Ext(name))
+	clone := filepath.Join(dir, writebackCloneName(name, hex.EncodeToString(suffix[:])))
 	if _, err := os.Lstat(clone); err == nil {
 		return "", wbErrf(wbErrIO, "temporary file already exists")
 	}
@@ -382,6 +382,20 @@ func cloneForWriteback(real string) (string, error) {
 		}
 	}
 	return clone, nil
+}
+
+// writebackCloneMaxStem:克隆文件名里沿用原文件名(去掉扩展名)的最多这么多个字符。原名本身已经顶到文件名上限
+// (APFS / HFS+ / exFAT 都是 255 个字符)时,整段照抄再加前后缀会超长、建不出克隆。
+const writebackCloneMaxStem = 64
+
+// writebackCloneName:克隆的文件名「.原名前段.lyrimuse-<tag>.扩展名」。
+func writebackCloneName(name, tag string) string {
+	ext := filepath.Ext(name)
+	stem := []rune(strings.TrimSuffix(name, ext))
+	if len(stem) > writebackCloneMaxStem {
+		stem = stem[:writebackCloneMaxStem]
+	}
+	return "." + string(stem) + ".lyrimuse-" + tag + ext
 }
 
 // writeWritebackClone 把新标签区写进克隆:长度不变时只覆盖那一段;变了(或 copyTail 要改写后面的字节)就从原文件把

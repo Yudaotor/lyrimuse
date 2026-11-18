@@ -625,3 +625,20 @@ func TestLyricsWritebackEditChannel(t *testing.T) {
 		t.Errorf("不支持的格式:%+v", res)
 	}
 }
+
+func TestLyricsWritebackLongFileName(t *testing.T) {
+	_, data := sampleMP3WithLyrics(t)
+	for _, stem := range []string{strings.Repeat("a", 250), strings.Repeat("歌", 250)} {
+		path := writeTemp(t, stem+".mp3", data)
+		if _, err := writeLyricsToFile(path, writebackLRC, true); err != nil {
+			t.Fatalf("文件名 %d 个字符:%v", len([]rune(stem))+4, err)
+		}
+		if tags := readLocalFileTags(path); tags.lyrics != writebackLRC {
+			t.Errorf("回读:%q", tags.lyrics)
+		}
+		noLeftoverClones(t, filepath.Dir(path))
+	}
+	if got := writebackCloneName("短名.flac", "abc"); got != ".短名.lyrimuse-abc.flac" {
+		t.Errorf("短名照抄:%q", got)
+	}
+}
