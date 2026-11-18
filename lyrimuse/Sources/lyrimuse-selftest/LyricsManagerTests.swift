@@ -9,7 +9,7 @@ import Foundation
 func runLyricsManagerTests() {
     checkLyricsManagerAudit()
     checkLyricsEditUndo()
-    // ---- 歌词来源处的链接:只有 Megalobiz、存了它自己的 https 歌词页才有(见 09 章决策 386) ----
+    // ---- 歌词来源处的链接:只有 Megalobiz、AMLL 存了它自己的 https 页面才有(见 09 章决策 386、388) ----
     do {
         typealias L = LyricsSourceLink
         expectEqual(L.url(source: "megalobiz", stored: "https://megalobiz.com/lrc/323234/mode-de-vie")?.absoluteString,
@@ -28,6 +28,28 @@ func runLyricsManagerTests() {
             expectEqual(L.url(source: source, stored: stored) == nil, true, "来源链接: \(why)不做链接")
         }
         expectEqual(L.url(source: nil, stored: "https://megalobiz.com/lrc/1/x") == nil, true, "来源链接: 来源为 nil 不做链接")
+        let amllFile = "https://github.com/amll-dev/amll-ttml-db/blob/main/ncm-lyrics/1824020871.ttml"
+        expectEqual(L.url(source: "amll", stored: amllFile)?.absoluteString, amllFile, "来源链接: AMLL 链回仓库里那份 TTML")
+        expectEqual(L.url(source: "amll", stored: "https://github.com/amll-dev/amll-ttml-db")?.absoluteString,
+                    "https://github.com/amll-dev/amll-ttml-db", "来源链接: AMLL 仓库主页也认")
+        for (stored, why) in [("https://github.com/someone/else/blob/main/x.ttml", "github.com 上别的仓库"),
+                              ("https://github.com/amll-dev/amll-ttml-db-fork/blob/main/x.ttml", "名字带前缀的别的仓库"),
+                              ("https://github.com/amll-dev/applemusic-like-lyrics", "同组织别的仓库"),
+                              ("https://github.com/amll-dev", "只到组织"),
+                              ("https://github.com/amll-dev/amll-ttml-db/", "结尾斜杠"),
+                              ("https://github.com/amll-dev/amll-ttml-db/../../evil/x", "点段"),
+                              ("https://github.com/amll-dev/amll-ttml-db/%2e%2e/%2e%2e/evil", "编码过的点段"),
+                              ("https://github.com/amll-dev/amll-ttml-db//blob", "空段"),
+                              ("https://github.com/amll-dev/amll-ttml-db?tab=readme", "带查询串"),
+                              ("https://github.com/amll-dev/amll-ttml-db#readme", "带片段"),
+                              ("http://github.com/amll-dev/amll-ttml-db", "不是 https"),
+                              ("https://github.com:8443/amll-dev/amll-ttml-db", "别的端口"),
+                              ("https://user@github.com/amll-dev/amll-ttml-db", "带用户名"),
+                              ("https://raw.githubusercontent.com/amll-dev/amll-ttml-db/main/x", "别的主机")] {
+            expectEqual(L.url(source: "amll", stored: stored) == nil, true, "来源链接: AMLL \(why)不做链接")
+        }
+        expectEqual(L.url(source: "megalobiz", stored: amllFile) == nil && L.url(source: "lrclib", stored: amllFile) == nil, true,
+                    "来源链接: AMLL 仓库的地址只给 AMLL 用")
 
         let src = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
         func read(_ rel: String) -> String { (try? String(contentsOf: src.appendingPathComponent(rel), encoding: .utf8)) ?? "" }

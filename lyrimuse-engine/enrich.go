@@ -276,7 +276,7 @@ type enrichEntry struct {
 	// 干脆哪个平台都没有)。
 	CoverSource  string `json:"cover_source,omitempty"`
 	LyricsSource string `json:"lyrics_source,omitempty"`
-	// LyricsSourceURL:这份歌词在源网站上的页面(只有 megalobiz 给,条款要求显示时链回),App 在来源处做成链接。跟 LyricsSource
+	// LyricsSourceURL:这份歌词在源网站上的页面(megalobiz 条款要求显示时链回;amll 链回仓库里那份 TTML),App 在来源处做成链接。跟 LyricsSource
 	// 同进同出:写 LyricsSource 的地方都要同时写它(TestLyricsSourceURLWrittenWithSource 守着)。
 	LyricsSourceURL string `json:"lyrics_source_url,omitempty"`
 	// CoverAlbum 是这张封面在**来源平台上所属的专辑名**。存它是为了事后能判断
@@ -4476,7 +4476,7 @@ type scoredLyricCandidateResult struct {
 	// (applyBorrowedCovers)。只给「搜索候选歌词」显示缩略图,不参与打分,不进歌词判决、不当条目封面。
 	BorrowedCoverURL  string `json:"borrowed_cover_url,omitempty"`
 	BorrowedCoverFrom string `json:"borrowed_cover_from,omitempty"`
-	// SourceURL:这份歌词在源网站上的页面(只有 megalobiz 给),选中后写进条目的 lyrics_source_url,App 在来源处做成链接。
+	// SourceURL:这份歌词在源网站上的页面(只有 megalobiz、amll 给),选中后写进条目的 lyrics_source_url,App 在来源处做成链接。
 	// 不参与打分。
 	SourceURL string `json:"source_url,omitempty"`
 	// RetryMethod/RetriedTitle:这条候选是**标题反查改写标题之后**那一轮搜出来的。
@@ -5387,7 +5387,7 @@ type lyricSourceResult struct {
 	matchAlbum, matchCover  string
 	srcDur                  float64 // 源自己声明的曲长(秒),0=没给。见 lyricCandidate.sourceReportedDurationSecs
 	isrc                    string  // 源报的这条录音的 ISRC,applemusic、deezer、petitlyrics 填,见 isrcretry.go
-	// sourceURL:这份歌词在源网站上的页面,显示时做成来源链接。只有 megalobiz 填(条款要求链回),见 lyricCandidate.sourceURL。
+	// sourceURL:这份歌词在源网站上的页面,显示时做成来源链接。只有 megalobiz、amll 填,见 lyricCandidate.sourceURL。
 	sourceURL string
 	// trackIDs:这一路匹配到的曲目在该平台上的 ID。只有 qq 走这里(songmid 与数字 ID,见 qqTrackIDs),amll 借封面时
 	// 跟 TTML 登记的 ID 比(amllCandidateCover);网易云的在 ne.SongID。
@@ -5726,6 +5726,7 @@ func rankLyricSourceResults(artist, title, album string, durationSecs float64, r
 			hasUsableTranslation:  amllTr,
 			hasUsableRomanization: amllRoma,
 			title:                 amllTitle, artist: amllArtist, album: amllAlbum, cover: amllCover,
+			sourceURL: amll.pageURL,
 		})
 	}
 	// 重音字母旁多切的空格,拿整批候选与缓存里见过的拼法证实之后删掉(见 accentsplit.go)。只删空格、不动时间轴。

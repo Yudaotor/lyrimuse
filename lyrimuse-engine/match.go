@@ -331,7 +331,7 @@ type lyricCandidate struct {
 	sourceReportedDurationSecs float64
 	// isrc:源报的这条录音的 ISRC,没有时为空。只透传,不参与打分,见 isrcretry.go。
 	isrc string
-	// sourceURL:这份歌词在源网站上的页面,没有时为空。只透传,不参与打分;只有 megalobiz 给(条款要求显示时链回)。
+	// sourceURL:这份歌词在源网站上的页面,没有时为空。只透传,不参与打分;只有 megalobiz、amll 给。
 	sourceURL string
 	// title/artist/album/cover 是这个源实际匹配到的歌名/歌手/专辑/封面,给"搜索候选歌词"
 	// 弹窗展示("这个候选到底对应哪首歌/哪个版本")。不同源可能匹配到同一首歌的不同版本

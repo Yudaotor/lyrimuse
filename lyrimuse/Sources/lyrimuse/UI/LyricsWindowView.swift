@@ -1715,7 +1715,7 @@ struct LyricsWindowView: View {
     @State private var scrollPendingWhileHidden = false
     /// 简介面板里的歌词来源(EnrichCacheReader 异步查,面板打开时取一次)。
     @State private var infoLyricsSource: String?
-    /// 「来源」行的链接(`LyricsSourceLink`,只有 Megalobiz 的词有),跟 infoLyricsSource 一起取。
+    /// 「来源」行的链接(`LyricsSourceLink`,只有 Megalobiz、AMLL 的词有),跟 infoLyricsSource 一起取。
     @State private var infoLyricsSourceLink: URL?
     /// 「…」菜单里直接执行的那几行(资料库、减少推荐、平台页、在播放器中显示)的状态与动作,跟网页歌词副屏共用一份实现。
     @StateObject private var moreMenu = LyricsMoreMenuModel()
@@ -4307,7 +4307,7 @@ struct LyricsWindowView: View {
             }
             InfoPanelRow(label: L10n.t("歌词"), value: lyricsKind, onArtwork: hasArtworkBackground)
             if let source = infoLyricsSource, !source.isEmpty {
-                // 条款要求链回的源(Megalobiz)存了歌词页时,值写成「平台名 ↗」,同下面「网页」行;别的源照旧是字。
+                // 要链回的源(Megalobiz、AMLL)存了歌词页时,值写成「平台名 ↗」,同下面「网页」行;别的源照旧是字。
                 if let link = infoLyricsSourceLink {
                     InfoPanelLinksRow(label: L10n.t("来源"), name: sourceDisplayName(source), url: link,
                                       help: LyricsSourceLinkOpener.help(source: source), onArtwork: hasArtworkBackground) {

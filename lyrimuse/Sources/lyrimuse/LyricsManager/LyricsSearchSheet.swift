@@ -2336,7 +2336,7 @@ struct LyricsSearchSheet: View {
     }
 
     /// 名字和颜色走全局那一份:Spotify、Amazon Music、KKBOX 的本地歌词不在 `LyricsSource` 里,别改成按枚举取名
-    /// (取不到就露出小写的原始 id)。条款要求链回的源(Megalobiz)带了歌词页时,同歌词管理详情的来源胶囊:名字后加「↗」,
+    /// (取不到就露出小写的原始 id)。要链回的源(Megalobiz、AMLL)带了歌词页时,同歌词管理详情的来源胶囊:名字后加「↗」,
     /// 点了经 `LyricsSourceLinkOpener` 打开;按钮先接住点击,不会顺带选中这一行。
     @ViewBuilder
     private func sourceBadge(_ source: String, link: URL? = nil) -> some View {

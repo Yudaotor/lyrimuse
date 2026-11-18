@@ -341,7 +341,7 @@ final class LyricsSearchService {
         let album: String
         /// 搜索窗口摆「当前使用」时,这条没有封面会补上这首自己的(`LyricsSearchSheet.currentShown`)。
         var coverURL: URL?
-        /// 这份歌词在源网站上的页面(引擎 `source_url`,只有 Megalobiz 给),采纳时写进条目,来源处做成链接。
+        /// 这份歌词在源网站上的页面(引擎 `source_url`,只有 Megalobiz、AMLL 给),采纳时写进条目,来源处做成链接。
         var sourceURL = ""
         // true 时 lyrics 装的是没有时间戳的纯文本(见引擎
         // scoredLyricCandidateResult.PlainTextOnly 头注)。跟别的候选不同,这条**不能**

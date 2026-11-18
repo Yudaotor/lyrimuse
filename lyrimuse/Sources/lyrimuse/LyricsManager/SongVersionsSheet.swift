@@ -81,7 +81,7 @@ struct SongVersionsSheet: View {
         let mergeKeys: [String]
         /// 各播放器原样报的写法(跟写法键不一样时才有)。
         let reported: [SongVersions.ReportedName]
-        /// 歌词来源处的链接(`LyricsSourceLink`,只有 Megalobiz 存了歌词页时有):对照表「歌词来源」那一格做成可点的。
+        /// 歌词来源处的链接(`LyricsSourceLink`,只有 Megalobiz、AMLL 存了歌词页时有):对照表「歌词来源」那一格做成可点的。
         var sourceLink: URL?
         var id: String { key }
         /// 跟当前条目比的结论;当前条目自己算完全一致。
@@ -685,7 +685,7 @@ struct SongVersionsSheet: View {
 
     /// 逐行对比:按块排(`SongVersions.compareLyrics`),左边当前条目、右边所选条目各是这一块的几句;所选条目这一块有字对不上、
     /// 或者只有一边有时右边整格标红,对不上的字两边都标红;块开头那句时间差超过 0.5 秒时右边那个时间标红。
-    /// 逐项对照的一格:缺的用最淡的字,空的写一道短横。带来源链接的(Megalobiz)名字后加「↗」,点了经
+    /// 逐项对照的一格:缺的用最淡的字,空的写一道短横。带来源链接的(Megalobiz、AMLL)名字后加「↗」,点了经
     /// `LyricsSourceLinkOpener` 打开,同歌词管理详情的来源胶囊。
     @ViewBuilder
     private func compareValue(_ text: String, missing: Bool, color: Color, link: URL? = nil, source: String = "") -> some View {

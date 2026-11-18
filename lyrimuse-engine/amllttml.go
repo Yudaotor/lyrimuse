@@ -47,7 +47,9 @@ import (
 // 索引里时,按 ISRC、按歌名歌手专辑在索引里找(见 amllLyric)。
 
 const (
-	amllRawBase     = "https://raw.githubusercontent.com/amll-dev/amll-ttml-db/main"
+	amllRawBase = "https://raw.githubusercontent.com/amll-dev/amll-ttml-db/main"
+	// amllRepoURL:同一个仓库在 GitHub 上的主页,跟 amllRawBase 一起改。来源处的链接指到这个仓库里(amllRepoFileURL,见 09 章决策 388)。
+	amllRepoURL     = "https://github.com/amll-dev/amll-ttml-db"
 	amllHTTPTimeout = 8 * time.Second
 	// 背景人声(ttm:role="x-bg")单独成一轨(amllResult.bg),不并进主歌词:它跟主歌词时间轴重叠,
 	// 并进去会让逐字填色同一时刻有两个词在亮。
@@ -86,6 +88,9 @@ type amllResult struct {
 	spatialOffsetSecs float64
 	// songwriters:head 里 <iTunesMetadata><songwriters> 的词曲作者名单(ttmlSongwriters 整理过),没有时为空。
 	songwriters []string
+	// pageURL:取回的那份 TTML 在仓库里的 GitHub 页面(amllRepoFileURL),候选的 source_url,显示时做成来源链接。
+	// 只有 amllLyric 填。
+	pageURL string
 }
 
 func (r amllResult) empty() bool { return r.lrc == "" && r.yrc == "" }
@@ -1140,6 +1145,51 @@ func amllFetchAPI(ctx context.Context, platformDir, musicID string) (string, boo
 	return out.Data.Lyrics, true, nil
 }
 
+// amllRepoFileURL:平台目录 + 音乐 ID 那份 TTML 在仓库里的 GitHub 页面(`{仓库}/blob/main/{平台}-lyrics/{id}.ttml`,
+// 镜像和官方接口给的是同一份);拼出来的地址过不了 amllPageURL(ID 里有别的字符)时退回仓库主页。
+func amllRepoFileURL(dir, id string) string {
+	if u := amllPageURL(amllRepoURL + "/blob/main/" + dir + "/" + id + ".ttml"); u != "" {
+		return u
+	}
+	return amllRepoURL
+}
+
+// amllPageURL:只收 amll-ttml-db 仓库自己的 GitHub 页面:https、github.com、默认端口,路径是 /amll-dev/amll-ttml-db
+// 或在它下面,每段只有字母、数字和「._-」且不是「.」「..」,不带查询串和片段。别的地址(含 github.com 上别的仓库、
+// 百分号编码过的路径)一律当没给。App 侧 LyricsSourceLink.url 同一口径,两边一起改。纯函数,便于单测。
+func amllPageURL(raw string) string {
+	u, err := neturl.Parse(strings.TrimSpace(raw))
+	if err != nil || u.Scheme != "https" || u.User != nil || (u.Port() != "" && u.Port() != "443") ||
+		strings.ToLower(u.Hostname()) != "github.com" || u.Opaque != "" || u.RawQuery != "" || u.ForceQuery ||
+		u.Fragment != "" || strings.ContainsAny(raw, "?#") {
+		return ""
+	}
+	segs := strings.Split(u.EscapedPath(), "/")
+	if len(segs) < 3 || segs[0] != "" || segs[1] != "amll-dev" || segs[2] != "amll-ttml-db" {
+		return ""
+	}
+	for _, s := range segs[1:] {
+		if !amllPageSegment(s) {
+			return ""
+		}
+	}
+	return u.String()
+}
+
+// amllPageSegment:路径里的一段只有 ASCII 字母、数字和「._-」,而且不是「.」「..」。
+func amllPageSegment(s string) bool {
+	if s == "" || s == "." || s == ".." {
+		return false
+	}
+	for i := 0; i < len(s); i++ {
+		c := s[i]
+		if !('a' <= c && c <= 'z' || 'A' <= c && c <= 'Z' || '0' <= c && c <= '9' || c == '.' || c == '_' || c == '-') {
+			return false
+		}
+	}
+	return true
+}
+
 // amllFetchAt:err 非 nil 是没问成;ok=false、err=nil 是 404(库里没有)。
 func amllFetchAt(ctx context.Context, base, platformDir, musicID string) (string, bool, error) {
 	url := fmt.Sprintf("%s/%s/%s.ttml", base, platformDir, musicID)
@@ -1238,7 +1288,7 @@ func amllLyric(ctx context.Context, q amllQuery) amllResult {
 		}
 		noteAMLLFetchShape(try.dir, try.id, listed, ok, answered, parsed)
 		if parsed {
-			r.platform = try.dir
+			r.platform, r.pageURL = try.dir, amllRepoFileURL(try.dir, try.id)
 			return r
 		}
 	}
@@ -1260,6 +1310,7 @@ func amllLyric(ctx context.Context, q amllQuery) amllResult {
 			continue
 		}
 		r.matchTitle, r.matchArtist, r.matchAlbum = m.title, m.artist, m.album
+		r.pageURL = amllRepoFileURL(dir, id)
 		return r
 	}
 	return amllResult{}

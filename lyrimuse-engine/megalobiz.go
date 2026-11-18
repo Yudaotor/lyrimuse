@@ -295,10 +295,13 @@ func megalobizPageURL(raw string) string {
 
 // lyricSourcePageURL:source 这个源的歌词页地址核过之后的样子;不是要链回的源、地址不对时为空。
 func lyricSourcePageURL(source, raw string) string {
-	if source != lyricSourceMegalobiz {
-		return ""
+	switch source {
+	case lyricSourceMegalobiz:
+		return megalobizPageURL(raw)
+	case "amll":
+		return amllPageURL(raw)
 	}
-	return megalobizPageURL(raw)
+	return ""
 }
 
 // megalobizSiteTagRe:歌名开头挂的下载站标记(「[SPOTDOWNLOADER.COM] 」),方括号里带点号的才算。

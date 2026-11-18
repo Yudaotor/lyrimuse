@@ -3818,7 +3818,7 @@ struct LyricsManagerView: View {
                 LyricsManagerTag(icon: "waveform", text: L10n.t("正在播放"), tint: .accentColor)
             }
             if !summary.lyricsSource.isEmpty {
-                // 条款要求链回的源(Megalobiz)存了歌词页时,胶囊带「↗」、点了用默认浏览器打开它;别的源照旧只是标签。
+                // 要链回的源(Megalobiz、AMLL)存了歌词页时,胶囊带「↗」、点了用默认浏览器打开它;别的源照旧只是标签。
                 if let link = LyricsSourceLink.url(source: summary.lyricsSource, stored: summary.lyricsSourceURL) {
                     Button {
                         LyricsSourceLinkOpener.open(link)

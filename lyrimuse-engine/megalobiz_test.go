@@ -657,6 +657,12 @@ func TestSaveEditSourceURL(t *testing.T) {
 	if got := apply(enrichEditRequest{Source: "megalobiz", SourceURL: "https://megalobiz.com:8443/lrc/2"}); got != "https://megalobiz.com/lrc/1/a" {
 		t.Errorf("编辑保存给了核不过的地址时不写进去、留着原来的: %q", got)
 	}
+	if got := apply(enrichEditRequest{Source: "amll", SourceURL: "https://github.com/amll-dev/amll-ttml-db/blob/main/ncm-lyrics/1.ttml", FromManualPick: true}); got != "https://github.com/amll-dev/amll-ttml-db/blob/main/ncm-lyrics/1.ttml" {
+		t.Errorf("采纳 AMLL 候选写它在仓库里的页面: %q", got)
+	}
+	if got := apply(enrichEditRequest{Source: "amll", SourceURL: "https://github.com/someone/else/blob/main/x.ttml", FromManualPick: true}); got != "" {
+		t.Errorf("AMLL 候选带 github.com 上别的仓库的地址不收: %q", got)
+	}
 	if got := apply(enrichEditRequest{Source: "lrclib", SourceURL: "https://megalobiz.com/lrc/2/b", FromManualPick: true}); got != "" {
 		t.Errorf("别的源不收页地址: %q", got)
 	}

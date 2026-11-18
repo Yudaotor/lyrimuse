@@ -244,3 +244,61 @@ func TestParseAMLLTTMLBackgroundVocals(t *testing.T) {
 		t.Errorf("背景人声轨不对:\n got %q\nwant %q", r.bg, want)
 	}
 }
+
+// 来源链接:只收 amll-ttml-db 仓库自己的 GitHub 页面,github.com 上别的路径、别的主机、http、别的端口、带查询串、
+// 片段、点段或百分号编码的一律不收;拼不出合法地址时退回仓库主页。
+func TestAMLLPageURL(t *testing.T) {
+	const file = "https://github.com/amll-dev/amll-ttml-db/blob/main/ncm-lyrics/1824020871.ttml"
+	for in, want := range map[string]string{
+		file:              file,
+		" " + file + "\n": file,
+		"https://github.com/amll-dev/amll-ttml-db":                                  "https://github.com/amll-dev/amll-ttml-db",
+		"https://GitHub.com/amll-dev/amll-ttml-db/blob/main/am-lyrics/1.ttml":       "https://GitHub.com/amll-dev/amll-ttml-db/blob/main/am-lyrics/1.ttml",
+		"https://github.com:443/amll-dev/amll-ttml-db/blob/main/qq-lyrics/0aB.ttml": "https://github.com:443/amll-dev/amll-ttml-db/blob/main/qq-lyrics/0aB.ttml",
+		"https://github.com/":                                            "",
+		"https://github.com/amll-dev":                                    "",
+		"https://github.com/amll-dev/":                                   "",
+		"https://github.com/amll-dev/amll-ttml-db/":                      "",
+		"https://github.com/amll-dev/amll-ttml-db-fork/blob/main/x.ttml": "",
+		"https://github.com/amll-dev/applemusic-like-lyrics":             "",
+		"https://github.com/someone/amll-ttml-db/blob/main/x.ttml":       "",
+		"https://github.com/amll-dev/amll-ttml-db/../../evil/x":          "",
+		"https://github.com/amll-dev/amll-ttml-db/blob/./main":           "",
+		"https://github.com/amll-dev/amll-ttml-db/%2e%2e/%2e%2e/evil":    "",
+		"https://github.com/amll-dev/amll-ttml-db/blob/main/a%20b.ttml":  "",
+		"https://github.com/amll-dev/amll-ttml-db//blob":                 "",
+		"https://github.com/amll-dev/amll-ttml-db?tab=readme":            "",
+		"https://github.com/amll-dev/amll-ttml-db?":                      "",
+		"https://github.com/amll-dev/amll-ttml-db#readme":                "",
+		"https://github.com/amll-dev/amll-ttml-db#":                      "",
+		"http://github.com/amll-dev/amll-ttml-db":                        "",
+		"https://github.com:8443/amll-dev/amll-ttml-db":                  "",
+		"https://user@github.com/amll-dev/amll-ttml-db":                  "",
+		"https://github.com.evil.example/amll-dev/amll-ttml-db":          "",
+		"https://raw.githubusercontent.com/amll-dev/amll-ttml-db/main/x": "",
+		"https://gist.github.com/amll-dev/amll-ttml-db":                  "",
+		"javascript:alert(1)":                                            "",
+		"":                                                               "",
+	} {
+		if got := amllPageURL(in); got != want {
+			t.Errorf("amllPageURL(%q) = %q 期望 %q", in, got, want)
+		}
+	}
+	if got := amllRepoFileURL("spotify-lyrics", "4uLU6hMCjMI75M1A2tKUQC"); got != "https://github.com/amll-dev/amll-ttml-db/blob/main/spotify-lyrics/4uLU6hMCjMI75M1A2tKUQC.ttml" {
+		t.Errorf("平台目录 + ID 拼成仓库里那份 TTML 的页面: %q", got)
+	}
+	for _, id := range []string{"a/../../x", "a b", "a?b", "a#b"} {
+		if got := amllRepoFileURL("ncm-lyrics", id); got != amllRepoURL {
+			t.Errorf("ID %q 拼不出合法地址时退回仓库主页: %q", id, got)
+		}
+	}
+	if got := lyricSourcePageURL("amll", file); got != file {
+		t.Errorf("amll 来源收仓库里的页面: %q", got)
+	}
+	if got := lyricSourcePageURL("lrclib", file); got != "" {
+		t.Errorf("别的源不收: %q", got)
+	}
+	if got := lyricSourcePageURL("megalobiz", file); got != "" {
+		t.Errorf("Megalobiz 不收 GitHub 地址: %q", got)
+	}
+}

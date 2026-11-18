@@ -88,7 +88,7 @@ type enrichEditRequest struct {
 	Roma   string  `json:"roma,omitempty"`
 	YRC    *string `json:"yrc,omitempty"`
 	Source string  `json:"source,omitempty"`
-	// SourceURL:采纳的候选在源网站上的页面(候选的 source_url,只有 megalobiz 给,按 lyricSourcePageURL 再核一遍)。
+	// SourceURL:采纳的候选在源网站上的页面(候选的 source_url,只有 megalobiz、amll 给,按 lyricSourcePageURL 再核一遍)。
 	// 采纳候选时没给或核不过就清掉原来的(那是上一份的页);别的保存来源没变时留着,换了来源时清掉。
 	SourceURL      string  `json:"source_url,omitempty"`
 	MarkManual     bool    `json:"mark_manual,omitempty"`

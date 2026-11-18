@@ -1194,7 +1194,7 @@ final class WebLyricsScreenRenderer {
         }
         rows.append(.init(label: L10n.t("歌词"), value: lyricsKind))
         if let source = infoDetails?.source, !source.isEmpty {
-            // 同歌词窗口:要链回的源(Megalobiz)存了歌词页时是链接,网页在看副屏的那台设备上打开。
+            // 同歌词窗口:要链回的源(Megalobiz、AMLL)存了歌词页时是链接,网页在看副屏的那台设备上打开。
             rows.append(.init(label: L10n.t("来源"), value: sourceDisplayName(source), link: infoDetails?.sourceLink))
         }
         if let link = infoDetails?.links?.songLink(forPlayerBundleID: PlaybackCoordinator.shared.resolvedPlayerBundleID,

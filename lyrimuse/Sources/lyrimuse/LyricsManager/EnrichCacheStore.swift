@@ -50,7 +50,7 @@ public final class EnrichCacheStore: ObservableObject {
         /// 这首的封面(缓存里的 `cover_url`:播放器送来的存成本机文件,其余是各家图床的地址);没有为 nil。
         public let coverURL: URL?
         public let lyricsSource: String
-        /// 这份歌词在源网站上的页面(`lyrics_source_url`,只有 Megalobiz 给),详情页来源胶囊的链接用,见 `LyricsSourceLink`。
+        /// 这份歌词在源网站上的页面(`lyrics_source_url`,只有 Megalobiz、AMLL 给),详情页来源胶囊的链接用,见 `LyricsSourceLink`。
         public let lyricsSourceURL: String
         public let hasWordTiming: Bool
         public let isManual: Bool
@@ -1472,7 +1472,7 @@ public final class EnrichCacheStore: ObservableObject {
     ///   - bg: 采纳候选时这条候选的背景人声轨(`Candidate.lyricsBG`);nil = 不是采纳候选。
     ///   - trLang: 采纳候选时这条候选的译文语言(`Candidate.lyricsTrLang`);nil = 不动。
     ///   - trFrom: 采纳候选时这条候选的译文借自哪个源(`Candidate.lyricsTrFrom`);空 = 自带的。
-    ///   - sourceURL: 采纳候选时这条候选在源网站上的页面(`Candidate.sourceURL`,只有 Megalobiz 有);空 = 没给,来源没变时引擎留着原来的。
+    ///   - sourceURL: 采纳候选时这条候选在源网站上的页面(`Candidate.sourceURL`,只有 Megalobiz、AMLL 有);空 = 没给,来源没变时引擎留着原来的。
     /// - Returns: 引擎有没有执行成功。「采纳候选」的面板等着它
     ///   决定挪不挪「当前使用」徽标、给成功还是失败的回声;失败原因照旧写在 `lastError`。
     ///   老调用点不关心结果,所以 `@discardableResult`。

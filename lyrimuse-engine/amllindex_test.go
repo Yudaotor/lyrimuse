@@ -320,6 +320,9 @@ func TestAMLLLyricIndexGatesIDs(t *testing.T) {
 	if r.empty() || r.platform != "qq-lyrics" {
 		t.Fatalf("该按 QQ 的 ID 取到: %+v", r)
 	}
+	if r.pageURL != "https://github.com/amll-dev/amll-ttml-db/blob/main/qq-lyrics/mid1.ttml" {
+		t.Errorf("按 ID 取到的链回仓库里那份 TTML: %q", r.pageURL)
+	}
 	if n := f.count(amllRawBaseForTest + "/ncm-lyrics/999.ttml"); n != 0 {
 		t.Errorf("不在索引里的 ID 不该发请求,发了 %d 次", n)
 	}
@@ -358,6 +361,9 @@ func TestAMLLLyricLooksUpIndex(t *testing.T) {
 	r := amllLyric(qqRoundCtx(), q)
 	if r.empty() || r.platform != "" || r.matchTitle != "晴天" || r.matchArtist != "周杰伦" || r.matchAlbum != "叶惠美" {
 		t.Fatalf("按歌名找到的报索引里的元数据、不带平台: %+v", r)
+	}
+	if r.pageURL != "https://github.com/amll-dev/amll-ttml-db/blob/main/am-lyrics/a1.ttml" {
+		t.Errorf("按歌名找到的链回实际取的那份 TTML: %q", r.pageURL)
 	}
 
 	q.durationSecs = 400
@@ -405,6 +411,8 @@ func TestAMLLPipelineLooksUpIndex(t *testing.T) {
 	_, got := fetchScoredLyricCandidatesStreaming(qqRoundCtx(), "周杰伦", "晴天", "叶惠美", 210, nil)
 	if r := amllOf(got); r.Title != "晴天" || r.Album != "叶惠美" {
 		t.Errorf("按歌名该找到: %+v", r)
+	} else if r.SourceURL != "https://github.com/amll-dev/amll-ttml-db/blob/main/am-lyrics/a1.ttml" {
+		t.Errorf("候选的 source_url 该是仓库里那份 TTML 的页面: %q", r.SourceURL)
 	}
 	_, got = fetchScoredLyricCandidatesStreaming(withRecordingISRC(qqRoundCtx(), "FR2X42551676"), "Sān-Z", "Stars Align", "Stars Align", 210, nil)
 	if r := amllOf(got); r.Title != "Stars Align" || r.Album != "别的专辑" {

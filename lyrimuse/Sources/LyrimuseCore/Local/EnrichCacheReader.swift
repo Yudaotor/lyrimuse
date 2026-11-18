@@ -29,7 +29,7 @@ public final class EnrichCacheEntry: Decodable, Sendable {
     /// `[kana:]` 时读音按它标,见 KanaAnnotation.parse(lrc:donor:)。不在正文小文件里。
     let lyricsKana: String?
     let lyricsSource: String?
-    /// 这份歌词在源网站上的页面(引擎 `lyrics_source_url`,只有 Megalobiz 给),来源处的链接用,见 `LyricsSourceLink`。
+    /// 这份歌词在源网站上的页面(引擎 `lyrics_source_url`,只有 Megalobiz、AMLL 给),来源处的链接用,见 `LyricsSourceLink`。
     let lyricsSourceURL: String?
     let coverSource: String?
     // 引擎解析出的封面地址(网易云/QQ/Apple)。桌面这边原来只读歌词字段,封面一直
