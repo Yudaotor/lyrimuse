@@ -657,6 +657,8 @@ func runMainThreadIOTests() {
                         && sourceHas(cache, "queue.maxConcurrentOperationCount = 2")
                         && !sourceHas(cache, "Task.detached") && !sourceHas(cache, "SingleFlightBackgroundRead"), true,
                     "App 图标(契约): 在自己最多 2 个并发的队列上读,不占 Swift 并发的协作线程(同步等 iconservicesagent 会把它们占满)")
+        expectEqual(sourceHas(cache, "queue.qualityOfService = .userInitiated"), true,
+                    "App 图标(契约): 读图标的队列是 userInitiated(utility 档在机器忙时等 iconservicesagent 一两分钟)")
         let ownGetter = sourceBody("var ownIcon: NSImage {", in: cache)
         expectEqual(sourceHas(ownGetter, "if let own { return own }\nloadOwnIcon(priority: .veryHigh)\nreturn Self.pendingPlaceholder"), true,
                     "App 图标(契约): 自家图标还没读好时给占位,不在主线程上现读")

@@ -183,6 +183,10 @@ enum AppIconResolver {
 ///
 /// 读在自己的 `loadQueue` 上(最多 2 个并发),别改成 `Task.detached`:那几次同步等 iconservicesagent 会占住 Swift 并发的
 /// 协作线程(总数等于核数),勾了很多播放器时启动预热能把它们全占满,别处的后台读跟着排队。
+///
+/// 队列用 userInitiated,别降到 utility / background:iconservicesagent 按请求方的 QoS 生成各档图、读盘,
+/// 它的缓存在 LaunchServices 登记变了(装、更新任何 App)之后整个作废;机器忙时 utility 档的一批播放器图标
+/// 要读一两分钟,userInitiated 两三秒(14 章决策 224)。
 @MainActor
 final class AppIconCache: ObservableObject {
     static let shared = AppIconCache()
@@ -224,7 +228,7 @@ final class AppIconCache: ObservableObject {
         let queue = OperationQueue()
         queue.name = "lyrimuse.app-icons"
         queue.maxConcurrentOperationCount = 2
-        queue.qualityOfService = .utility
+        queue.qualityOfService = .userInitiated
         return queue
     }()
 
