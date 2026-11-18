@@ -634,6 +634,13 @@ public enum EnrichCacheReader {
         return out
     }
 
+    /// 同一个实体 id 的全部写法,按键排序;跟 `songMemberships()` 里筛出 `.song == song` 的那几条是同一批。走 `songIndex`,
+    /// 不整表建一遍:歌词管理换歌时要问。缓存没加载好时是空的。
+    public static func songWritings(of song: String) -> [String] {
+        guard let all = loadEntries() else { return [] }
+        return songIndex(in: all)[song] ?? []
+    }
+
     /// 跟这一组(实体 id + 共享组)一样的写法,按键排序;跟 `songMemberships()` 里筛出 `== membership` 的那几条是同一批。
     /// 走按实体 id 记住的索引(`songIndex`),不整表建一遍:歌词管理每换一首歌都要问。缓存没加载好时是空的。
     public static func songShareMembers(of membership: SongVersions.Membership) -> [String] {

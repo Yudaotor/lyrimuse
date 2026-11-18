@@ -5280,6 +5280,10 @@ func runSourceContractSettingsTests() {
                     && sourceHas(sourceBody("func applySelection(_ keys: Set<String>)", in: songTable),
                                  "if LyricsManagerListTable.selectionMatches(keys, selectedRows: table.selectedRowIndexes, key: entries.key(at:)) { return }\n let rows = LyricsManagerListTable.rows(of: keys"), true,
                     "歌词管理: 换一首歌时详情同一拍载好、同组写法走索引、预览按理想高度排、选中计数不整表排")
+        let borrowedName = sourceBody("private func borrowedOffsetDisplayName(_ name: String, ownKey: String) -> String", in: manager)
+        expectEqual(sourceHas(borrowedName, "EnrichCacheReader.songWritings(of: song).first { LyricsOffsetSiblings.name(ofWritingKey: $0) == name }")
+                    && !borrowedName.contains("songMemberships()"), true,
+                    "歌词管理: 换到偏移借自同曲别的写法的歌时,借来那条的名字从同曲索引里找,不整表建 songMemberships()")
         // 预览换歌原地换内容,不按 key 重建整个滚动容器:回到开头(在跟随就落到当前句),这一下不带换句过渡。
         let previewList = sourceBody("struct LyricsManagerPreviewList: View", in: managerParts)
         expectEqual(manager.contains("resetKey: summary.key)")

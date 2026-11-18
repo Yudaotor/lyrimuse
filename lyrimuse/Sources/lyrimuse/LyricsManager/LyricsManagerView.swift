@@ -5039,9 +5039,7 @@ struct LyricsManagerView: View {
     /// 偏移借来的那条(单曲偏移键前两段)给人看的名字:同一首歌里前两段对得上的第一条写法;找不到时照原样显示。
     private func borrowedOffsetDisplayName(_ name: String, ownKey: String) -> String {
         guard let song = store.songMembership(forKey: ownKey)?.song else { return name }
-        let match = EnrichCacheReader.songMemberships()
-            .filter { $0.value.song == song && LyricsOffsetSiblings.name(ofWritingKey: $0.key) == name }
-            .map(\.key).sorted().first
+        let match = EnrichCacheReader.songWritings(of: song).first { LyricsOffsetSiblings.name(ofWritingKey: $0) == name }
         return match.map(writingDisplayName) ?? name
     }
 }
