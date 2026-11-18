@@ -20,6 +20,129 @@ each version's git tag annotation and on its
   完整流程见 docs/releasing.md。
 -->
 
+## v1.14.0
+
+New / 新功能
+- Added Türkçe and हिन्दी as interface languages, bringing the total to
+  sixteen
+  新增土耳其语与印地语界面，界面语言增至 16 种
+- Added Kuwo Music and Cog as built-in players, bringing the total to
+  twenty-two
+  新增内置播放器酷我音乐与 Cog，内置播放器增至 22 款
+- Added Zing MP3 as a lyric source, with word-by-word lyrics for
+  Vietnamese songs
+  新增歌词源 Zing MP3，越南语歌可用上逐字歌词
+- Added Megalobiz as a lyric source, bringing the total to sixteen
+  新增歌词源 Megalobiz，歌词源增至 16 个
+- You can now write lyrics into song files from the Lyrics Manager, or
+  automatically through Labs
+  歌词管理可以把歌词写进歌曲文件，也可在实验室里开启自动写入
+- Added Undo after picking a search result, saving, rematching or marking
+  songs as instrumental
+  采用搜索到的歌词、保存修改、重新自动匹配或标为纯音乐后可撤销
+- Added Move with the Music, letting the notch audio wave follow the
+  music you hear
+  灵动岛音浪新增「跟随音乐跳动」，随播放器真实的声音跳动
+- You can now pick a custom lyrics color for the notch
+  灵动岛的歌词颜色可以自定义
+- You can now show the next line in the notch and menu bar when a song
+  lacks translation or reading
+  灵动岛与菜单栏的副行在这首没有译文或读音时，可改显示下一句
+- Added Keep Lyrics When Paused, so the menu bar stays on the current line
+  菜单栏新增「暂停时保留歌词」，暂停时停在当前这一句
+- You can now scroll over the panel's Sound tile to change the volume
+  在菜单栏面板的「声音」格上滚动即可调节音量
+- Added a Text Opacity slider for floating lyrics
+  悬浮歌词新增「文字不透明度」滑杆
+- You can now set the floating lyrics outline to Thin, Standard or Thick
+  悬浮歌词的描边粗细可选偏细、标准、偏粗
+- Added Show Title When No Lyrics to floating lyrics
+  悬浮歌词新增「无歌词时显示歌名」，没有歌词时显示歌名与歌手
+- Added Hide in Screenshots and Hide During Ads to the mini lyrics window
+  迷你歌词窗口新增「截屏时隐藏」与「广告时隐藏」
+- You can now choose where the lyrics window's animated artwork comes
+  from
+  歌词窗口的动态封面可以选择来源
+- Added a prompt to move Lyrimuse to Applications when it is opened from
+  a disk image
+  直接从磁盘映像打开时，会提示移到「应用程序」文件夹
+- Added a notice pointing to the QQ Music setting to turn on when its
+  songs aren't recognized
+  QQ 音乐在放歌却识别不到时，会提示该打开它的哪个设置
+
+Improved / 改进
+- Removed Musixmatch as a lyric source; songs that used it, even
+  hand-picked ones, switch to other sources automatically
+  移除了歌词源 Musixmatch，用它的歌（含手动选定的）会自动改用其他来源
+- Improved the Staggered layout to show each line's translation and
+  reading
+  悬浮歌词「交错」排法下也显示每句的译文与读音
+- Improved Animate Icon so the menu bar icon also moves while lyrics are
+  shown
+  菜单栏「图标动画」在显示歌词时也会律动
+- Improved local files to show their embedded cover when the player
+  provides none
+  播放器不给封面时，本机歌曲改用文件内嵌的封面
+- Improved Lyrics Manager speed with large libraries when sorting,
+  searching and switching songs
+  歌词库很大时，歌词管理的排序、搜索与切换歌曲更快
+- Improved Japanese songs to get word-by-word lyrics more often
+  日语歌更多用上逐字歌词
+- Improved the lyrics window's previous, play and next buttons so they
+  are easier to click
+  歌词窗口的上一首、播放、下一首按钮更容易点中
+- Improved the Korean and French translations of the interface
+  修订韩语与法语界面译文
+
+Fixed / 修复
+- Fixed a crash and several hangs, including the menu bar panel freezing
+  right after launch
+  修复一处崩溃和几处卡顿，包括刚启动时打开菜单栏面板卡住
+- Fixed memory use staying high after closing Settings and the Lyrics
+  Manager
+  修复关闭设置和歌词管理后内存占用不回落
+- Fixed Settings pages being cut off on the right and the Settings
+  window not resizing
+  修复设置页右侧被裁掉、设置窗口拖不大
+- Fixed the interface appearing in English when the system language is
+  Cantonese
+  修复系统语言是粤语时界面显示成英文
+- Fixed lyrics staying on Searching for lyrics… when the lyrics engine
+  isn't running
+  修复歌词引擎没运行时一直停在「搜索歌词中…」
+- Fixed the lyrics window's title bar not dragging and its window buttons
+  jumping or flickering
+  修复歌词窗口标题栏拖不动，以及左上角按钮跳动、闪烁
+- Fixed Soda Music lyrics not being found, and NetEase Cloud Music
+  searches failing in Japan, South Korea and Singapore
+  修复搜不到汽水音乐歌词，以及在日韩与新加坡搜不到网易云歌词
+- Fixed some Hindi and Thai songs getting the lyrics of a song with a
+  similar title
+  修复部分印地语、泰语歌匹配到歌名相近的另一首歌的歌词
+- Fixed players opened along with Lyrimuse jumping to the front
+  修复随 Lyrimuse 一起启动的播放器跳到前台
+- Fixed the players' Auto-detect switch not turning off
+  修复播放器的「自动识别」开关关不掉
+- Fixed the expanded notch's progress bar not showing the played part
+  修复灵动岛展开时进度条不显示已播部分
+
+| Chip / 芯片 | dmg | zip |
+|---|---|---|
+| **Apple Silicon** (M1 and later, recommended) / **Apple M 系列**（推荐） | [Lyrimuse-v1.14.0-macos.dmg](https://github.com/Yudaotor/lyrimuse/releases/download/v1.14.0/Lyrimuse-v1.14.0-macos.dmg) | [Lyrimuse-v1.14.0-macos.zip](https://github.com/Yudaotor/lyrimuse/releases/download/v1.14.0/Lyrimuse-v1.14.0-macos.zip) |
+| **Intel** / **Intel 芯片**（也能在 Apple Silicon 上跑，但体积更大、没必要） | [Lyrimuse-v1.14.0-macos-intel.dmg](https://github.com/Yudaotor/lyrimuse/releases/download/v1.14.0/Lyrimuse-v1.14.0-macos-intel.dmg) | [Lyrimuse-v1.14.0-macos-intel.zip](https://github.com/Yudaotor/lyrimuse/releases/download/v1.14.0/Lyrimuse-v1.14.0-macos-intel.zip) |
+
+Not sure which one? Check your chip under **About This Mac**.
+不确定该下哪个？打开「关于本机」看芯片是 Apple M… 还是 Intel Core…
+
+Contributors / 贡献者
+- Thanks to @HeizoFinds for their first contribution, fixing the
+  Auto-detect switch and the notch progress bar (#83, #84)
+  感谢 @HeizoFinds 的首次贡献，修复「自动识别」开关关不掉和灵动岛进度条不显示已播部分（#83、#84）
+
+224 commits since v1.13.0.
+
+**Full Changelog**: https://github.com/Yudaotor/lyrimuse/compare/v1.13.0...v1.14.0
+
 ## v1.13.0
 
 New / 新功能
