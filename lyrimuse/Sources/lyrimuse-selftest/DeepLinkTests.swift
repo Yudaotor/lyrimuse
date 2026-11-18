@@ -522,6 +522,19 @@ func runDeepLinkTests() {
         expectEqual(LyrimuseDeepLink.wantsBackground(URL(string: "lyrimuse://lyrics-manager?background=1")!), true, "后台开窗: 带了")
         expectEqual(LyrimuseDeepLink.wantsBackground(URL(string: "lyrimuse://lyrics-manager")!), false, "后台开窗: 没带")
         expectEqual(link("lyrimuse://lyrics-manager?background=1"), .lyricsManager, "后台开窗: 不影响认哪条链接")
+        expectEqual(["lyrimuse://lyrics-manager?invisible=1", "lyrimuse://settings/general?INVISIBLE=true",
+                     "lyrimuse://lyrics-window?invisible=0", "lyrimuse://lyrics-window?invisible=maybe", "lyrimuse://lyrics-window"]
+                        .map { LyrimuseDeepLink.wantsInvisible(URL(string: $0)!) },
+                    [true, true, false, false, false], "隐身开窗: 认法同 on=,写坏、没带都不算")
+        expectEqual([link("lyrimuse://lyrics-manager?invisible=1"), link("lyrimuse://lyrics-window?invisible=1&background=1"),
+                     link("lyrimuse://settings/general?invisible=1")],
+                    [.lyricsManager, .lyricsWindow, .settings(path: "/general", checkForUpdates: false)],
+                    "隐身开窗: 不影响认哪条链接")
+        expectEqual([LyrimuseDeepLink.lyricsManager, .lyricsWindow, .settings(path: "/general", checkForUpdates: false)]
+                        .compactMap { $0.url(scheme: "lyrimuse") }.map { URL(string: $0.absoluteString + "?invisible=1")! }
+                        .map { LyrimuseDeepLink(url: $0, scheme: "lyrimuse") },
+                    [.lyricsManager, .lyricsWindow, .settings(path: "/general", checkForUpdates: false)],
+                    "隐身开窗: 歌词管理 / 歌词窗口 / 设置往返后带上 invisible=1 仍认回同一条")
         expectEqual(link("lyrimuse://debug/simulate?title=Orange%20Moon&artist=Khalil&album=Orange&duration=280&position=12.5"),
                     .debug(.simulate(title: "Orange Moon", artist: "Khalil", album: "Orange", duration: 280, position: 12.5,
                                      playing: true)), "模拟播放: 带全了")
@@ -689,13 +702,27 @@ func runDeepLinkTests() {
                               "if surfaceIfOnScreen(identifier) { return } activateApp() open()"),
                     true, "后台开窗: openScene 先看窗口在不在屏上,在就不再 open;不带 background 时照旧激活再开")
         expectEqual(sourceHas(sourceBody("static func surfaceIfOnScreen(", in: activation),
-                              "guard isBackground, let window = window(matching: identifier, visibleOnly: true) else { return false } window.orderFrontRegardless()"),
-                    true, "后台开窗: 只在 background=1 那一段、窗口可见时跳过 openWindow,摆到最前不当 key")
+                              "guard isBackground, let window = window(matching: identifier, visibleOnly: true) else { return false } if isInvisible, !isHidden(window) { return true } window.orderFrontRegardless()"),
+                    true, "后台开窗: 只在 background=1 那一段、窗口可见时跳过 openWindow,摆到最前不当 key;隐身开窗不动用户屏上那扇")
+        // 隐身开窗(invisible=1):开窗入口先 prepareOpen(复用的那扇先压下去 / 正常打开时还回原层级),开完当场压新窗口。
+        expectEqual([sourceHas(sourceBody("static func openScene(", in: activation),
+                               "prepareOpen(identifier) if surfaceIfOnScreen(identifier) { return } activateApp() open() hideNewWindows()"),
+                     sourceHas(sourceBody("static func presentSettings(", in: scene),
+                               #"WindowActivation.prepareOpen("settings") if WindowActivation.surfaceIfOnScreen("settings")"#),
+                     sourceHas(source("lyrimuse/UI/LyricsWindowView.swift"),
+                               #"static func open(scene openScene: () -> Void) {"#)
+                        && sourceHas(sourceBody("static func open(scene openScene: () -> Void) {", in: source("lyrimuse/UI/LyricsWindowView.swift")),
+                                     #"WindowActivation.prepareOpen("lyrics-window")"#),
+                     sourceHas(source("lyrimuse/Settings/DeepLinkRouter.swift"), "if invisible { WindowActivation.beginInvisible(scene: sceneID(for: link)) }"),
+                     sourceHas(activation, "static let invisibleLevel = NSWindow.Level(rawValue: Int(CGWindowLevelForKey(.desktopWindow)) - 2)"),
+                     sourceHas(sourceBody("private static func hide(", in: activation), "NSWindow.willCloseNotification")],
+                    [true, true, true, true, true, true],
+                    "隐身开窗: 设置 / 场景窗 / 歌词窗口入口都先 prepareOpen,压到墙纸后面(桌面层减二),关窗还原层级")
         // debug/lyrics-search 开的也是搜索小窗:background=1 时由路由摆到最前;列表没读完、晚开的那一次自己补上后台那一段。
         let router = source("lyrimuse/Settings/DeepLinkRouter.swift")
         let lateSearch = sourceBody("private static func openLyricsSearch(", in: debug)
         expectEqual([sourceHas(router, ".debug(.lyricsSearch): return \"lyrics-quick-search\""),
-                     sourceHas(debug, "openLyricsSearch(key: key, background: WindowActivation.isBackground, attempt: 0)"),
+                     sourceHas(debug, "openLyricsSearch(key: key, background: WindowActivation.isBackground, invisible: WindowActivation.isInvisible, attempt: 0)"),
                      sourceHas(lateSearch, "if late { WindowActivation.beginBackground() } AppActions.shared.openLyricsSearch(for:")
                          && sourceHas(lateSearch, "if late { WindowActivation.surface(identifier: \"lyrics-quick-search\") }")],
                     [true, true, true],

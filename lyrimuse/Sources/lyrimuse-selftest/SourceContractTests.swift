@@ -2378,7 +2378,7 @@ func runSourceContractSurfaceTests() {
             }
             expectEqual(lwv.contains("windowController.toggleMini(animated: true)"), true, "歌词窗口: 切换键带变形动画")
             expectEqual(lwv.contains("guard !formMorph.isRunning else { return false }"), true, "歌词窗口: 动画没走完时不再切")
-            expectEqual(lwv.contains("if formMorph.isRunning { formMorph.levelAfterMorph = level } else { window.level = level }"), true,
+            expectEqual(lwv.contains("if formMorph.isRunning { formMorph.levelAfterMorph = level } else { WindowActivation.setLevel(level, of: window) }"), true,
                         "歌词窗口: 动画期间置顶不直接改窗口层级")
             // 逐字填色那层必须是 overlay、不进布局链:放回布局链的话每帧一失效,SwiftUI 就把整张
             // 列表 / 整扇窗从下往上重测一遍(07 章决策 50)。
@@ -2496,7 +2496,7 @@ func runSourceContractSurfaceTests() {
                         && lwv.contains("reused.level = LyricsWindowFormMorph.hiddenLevel")
                         && lwv.contains("if window == nil, let reused { reused.level = reusedLevel }"), true,
                         "迷你面板: 反复切换时关掉的窗口层级还原、复用的场景窗拿得到")
-            expectEqual(sourceHas(lwv, "if mini {\n            LyricsMiniPanelHost.show()\n        } else {\n            LyricsMiniPanelHost.closeHeldPanel()\n            openScene()\n        }")
+            expectEqual(sourceHas(lwv, "if mini {\n            LyricsMiniPanelHost.show()\n            WindowActivation.hideNewWindows()\n        } else {\n            LyricsMiniPanelHost.closeHeldPanel()\n            openScene()\n        }")
                         && lwv.contains("if formRequest.map({ !$0.mini && $0.isFresh(now: Date()) }) == true { return }"), true,
                         "迷你面板: 打开入口按形态分流,面板开着、要完整尺寸时交给面板自己切")
             expectEqual(lwv.contains("let inactive = window is LyricsMiniPanel ? !miniPointerInside : !(debugKeyOverride ?? window.isKeyWindow)")

@@ -371,6 +371,8 @@ enum LyricsWindowSession {
     /// 按要的形态开(请求优先,其次上次的形态,07 章决策 133)。面板开着、请求的是完整尺寸:请求已经发了通知,
     /// 面板自己的控制器收到去切,这里不再开。`openScene` 激活 App 并开场景。
     @MainActor static func open(scene openScene: () -> Void) {
+        // 隐身开窗时迷你面板由 `hideNewWindows` 压下去;正常打开时之前被隐身压下去的面板、场景窗还回原层级。
+        WindowActivation.prepareOpen("lyrics-window")
         // 最小化着的那扇(isVisible 为 false)先还原,别另开一扇:形态请求留给它上屏那一刻由遮挡观察者取走。
         if let minimized = [LyricsMiniPanelHost.panel, sceneWindow].compactMap({ $0 }).first(where: \.isMiniaturized) {
             minimized.deminiaturize(nil)
@@ -390,6 +392,7 @@ enum LyricsWindowSession {
         UserDefaults.standard.set(mini, forKey: miniModeKey)
         if mini {
             LyricsMiniPanelHost.show()
+            WindowActivation.hideNewWindows()
         } else {
             LyricsMiniPanelHost.closeHeldPanel()
             openScene()
@@ -1437,7 +1440,7 @@ private final class LyricsWindowController: ObservableObject {
         isAlwaysOnTop = on
         let level: NSWindow.Level = on ? .floating : .normal
         // 变形动画期间真窗口藏在桌面层级以下,层级等动画收尾一起还(见 LyricsWindowFormMorph.levelAfterMorph)。
-        if formMorph.isRunning { formMorph.levelAfterMorph = level } else { window.level = level }
+        if formMorph.isRunning { formMorph.levelAfterMorph = level } else { WindowActivation.setLevel(level, of: window) }
         // 迷你跨桌面、浮在全屏上跟着置顶走,当场补,不等下一次 didUpdate(07 章决策 134)。
         Self.enforceSpaceBehavior(window, mini: isMini, floating: on)
     }

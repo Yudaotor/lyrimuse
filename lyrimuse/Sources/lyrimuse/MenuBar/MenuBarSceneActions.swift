@@ -59,10 +59,12 @@ enum MenuBarSceneActions {
         LaunchPhase.settingsRequested = true
         ClosedWindowContent.finishPendingReshows()
         // 后台开窗时设置窗口已经开着就只摆到最前:菜单项那条路对它 makeKeyAndOrderFront,会把 App 切到前台。
+        WindowActivation.prepareOpen("settings")
         if WindowActivation.surfaceIfOnScreen("settings") { return }
         WindowActivation.activateApp()
         if let item = mainMenuSettingsItem(), let action = item.action,
            NSApp.sendAction(action, to: item.target, from: item) {
+            WindowActivation.hideNewWindows()
             return
         }
         // 找不到那一项(SwiftUI 换了主菜单的搭法?)就退回环境 action —— 它至少能把已经

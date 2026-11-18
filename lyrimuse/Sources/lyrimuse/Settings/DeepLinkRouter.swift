@@ -18,8 +18,14 @@ enum DeepLinkRouter {
             return
         }
         logger.info("deep link: \(logged, privacy: .public)")
-        let background = LyrimuseDeepLink.wantsBackground(url)
-        if background { WindowActivation.beginBackground() }
+        // 隐身开窗跟 debug/* 同一道闸:只给本机验证用,没打开时当 background=1。
+        let invisible = LyrimuseDeepLink.wantsInvisible(url) && DebugDeepLinks.isEnabled
+        let background = invisible || LyrimuseDeepLink.wantsBackground(url)
+        if invisible {
+            WindowActivation.beginInvisible(scene: sceneID(for: link))
+        } else if background {
+            WindowActivation.beginBackground()
+        }
         defer {
             if background, let scene = sceneToSurface(for: link) { WindowActivation.surface(identifier: scene) }
         }

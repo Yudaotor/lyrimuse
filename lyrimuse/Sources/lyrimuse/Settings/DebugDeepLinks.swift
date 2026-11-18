@@ -254,7 +254,7 @@ enum DebugDeepLinks {
             AppActions.shared.requestLyricsManagerSheet(.decision(key: key), open: false)
             logger.notice("debug manager decision key=\(key == nil ? "selected" : "given", privacy: .public)")
         case let .lyricsSearch(key):
-            openLyricsSearch(key: key, background: WindowActivation.isBackground, attempt: 0)
+            openLyricsSearch(key: key, background: WindowActivation.isBackground, invisible: WindowActivation.isInvisible, attempt: 0)
         case let .lyricsWriteback(step):
             NotificationCenter.default.post(name: lyricsWritebackNotification, object: step)
             logger.notice("debug lyrics writeback step=\(step, privacy: .public)")
@@ -452,6 +452,9 @@ enum DebugDeepLinks {
                 "onActiveSpace": w.isOnActiveSpace,
                 "occlusionVisible": w.occlusionState.contains(.visible),
                 "level": w.level.rawValue,
+                // `screencapture -x -o -l <windowNumber>` 用的窗口号;invisible = 隐身开窗压在墙纸后面(14 章决策 218)。
+                "windowNumber": w.windowNumber,
+                "invisible": WindowActivation.isHidden(w),
                 "appearance": w.effectiveAppearance.name.rawValue,
             ]
         }
@@ -858,14 +861,14 @@ extension DebugDeepLinks {
     }
 
     /// `debug/lyrics-search`:按写法键开「搜索歌词…」窗口。歌词管理的列表还没读完时每 0.5 秒再找一次、最多 6 秒;
-    /// 链接带了 `background=1` 的,晚开的那一次同样不激活 App(深链那一段后台时限已经过了)。
-    private static func openLyricsSearch(key: String, background: Bool, attempt: Int) {
+    /// 链接带了 `background=1` / `invisible=1` 的,晚开的那一次同样不激活 App、同样隐身(深链那一段时限已经过了)。
+    private static func openLyricsSearch(key: String, background: Bool, invisible: Bool = false, attempt: Int) {
         let store = EnrichCacheStore.shared
         guard let summary = store.summary(forKey: key) else {
             let listReady = !store.isLoading && !store.summaries.isEmpty
             if !listReady, attempt < 12 {
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-                    openLyricsSearch(key: key, background: background, attempt: attempt + 1)
+                    openLyricsSearch(key: key, background: background, invisible: invisible, attempt: attempt + 1)
                 }
                 return
             }
@@ -873,6 +876,7 @@ extension DebugDeepLinks {
             return
         }
         let late = attempt > 0 && background
+        if late, invisible { WindowActivation.beginInvisible(scene: "lyrics-quick-search") }
         if late { WindowActivation.beginBackground() }
         AppActions.shared.openLyricsSearch(for: LyricsSearchTarget(summary: summary))
         if late { WindowActivation.surface(identifier: "lyrics-quick-search") }

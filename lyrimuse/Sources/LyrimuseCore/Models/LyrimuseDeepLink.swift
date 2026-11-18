@@ -27,7 +27,9 @@ import Foundation
 ///     debug/<命令>                  本机验证用(见 `DebugCommand`),只在本机偏好 `debug:deepLinks` 打开时才执行
 ///
 /// 开窗类的链接(settings、lyrics-manager、lyrics-window、lyrics-search、lyrics-share、whats-new、onboarding、action/open-*)可以再带
-/// `background=1`:窗口摆出来,但不激活 App、不抢键盘焦点(`wantsBackground(_:)`)。
+/// `background=1`:窗口摆出来,但不激活 App、不抢键盘焦点(`wantsBackground(_:)`)。窗口仍在用户屏幕上。
+/// `invisible=1`:在 background 之外把开出来的窗口压到墙纸后面,用户看不见,`screencapture -l` 照样截得到(`wantsInvisible(_:)`),
+/// 本机验证截图、录帧用这个(14 章决策 218)。
 /// host 和路径大小写不敏感;scheme 由调用方给(正式 `lyrimuse`,Dev `lyrimuse-dev`,`LyrimuseIdentity.urlScheme`)。
 /// 改名、删除任何一条都要先看对外说过没有(CHANGELOG、README、支持回复),说过的保持能用。对外开放的链接都写在
 /// docs/url-scheme.md 及其简中、日、韩、西、法、德、意、葡、越、俄、乌克兰、泰、土耳其、印地语版(`docsLanguages`),加、改一条几份一起改(selftest deep-links 组对着动作、设置页和分段查)。
@@ -1231,6 +1233,13 @@ public enum LyrimuseDeepLink: Equatable, Sendable {
     public static func wantsBackground(_ url: URL) -> Bool {
         let items = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems ?? []
         return items.first { $0.name.lowercased() == "background" }?.value.flatMap(parseBool) ?? false
+    }
+
+    /// 链接带了 `invisible=1`(认法同 `on=`):隐身开窗,含 `background=1` 的全部效果,另把开出来的窗口压到墙纸后面。
+    /// 只对开窗类有意义,别的链接带了当后台开窗。
+    public static func wantsInvisible(_ url: URL) -> Bool {
+        let items = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems ?? []
+        return items.first { $0.name.lowercased() == "invisible" }?.value.flatMap(parseBool) ?? false
     }
 
     /// x-callback 的回传地址先按 scheme 挡掉网页、文件、脚本这几类(解析时用):任何网页都能拉起 `lyrimuse://`,回传给
