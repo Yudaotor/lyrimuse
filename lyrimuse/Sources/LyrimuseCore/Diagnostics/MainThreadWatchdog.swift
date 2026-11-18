@@ -22,9 +22,14 @@ import os
 /// 卡住之后才锁屏的也补上(`Tracker.Event.throttled`)。见 14 章决策 202。
 ///
 /// 同样的几个时刻读系统内存压力,概况记停顿期间最紧的一档;每次投探测时记下进程累计的换页次数,报卡顿、恢复时
-/// 取差值记进概况(`HangMemory`)。见 14 章决策 222。
+/// 取差值记进概况(`HangMemory`),恢复时的那个数扣掉 `/usr/bin/sample` 采栈那几秒造成的换页。见 14 章决策 222、231。
 ///
-/// 状态(定时器、Tracker、上次采样时刻、预期停顿、节流读数、内存读数)只在 `queue` 上读写。
+/// 看门狗队列上读的都只问内核(线程优先级、内存压力、换页次数),锁屏状态读 `ScreenLockState` 的标志位,不同步问
+/// WindowServer:WindowServer 卡住时看门狗不能跟着卡。见 14 章决策 231。
+///
+/// 一次停顿在遥测里记成哪一条,按 `noteHang` 给的回执(`HangLedger`)补时长、补标记、补调用栈,不按「最近一次」补。
+///
+/// 状态(定时器、Tracker、上次采样时刻、预期停顿、节流读数、内存读数、卡顿回执)只在 `queue` 上读写。
 public final class MainThreadWatchdog: @unchecked Sendable {
     public static let shared = MainThreadWatchdog()
 
@@ -137,8 +142,12 @@ public final class MainThreadWatchdog: @unchecked Sendable {
     private var simulatedThrottle: MainThreadThrottle.Reading?
     /// 最近一次节流读数,日志里带主线程优先级用。
     private var lastThrottleReading: MainThreadThrottle.Reading?
-    /// 在等的这次探测期间的内存读数:投出时的换页累计、看到过的最紧的内存压力。
+    /// 在等的这次探测期间的内存读数:投出时的换页累计、看到过的最紧的内存压力、采栈造成的换页。
     private var memory = HangMemory.Stall()
+    /// `memory` 是哪一次探测的(投出时刻);采栈跑完回报换页时按它对上。
+    private var memorySentAt: TimeInterval?
+    private var hangs = HangLedger(activity: .shared)
+    private let answer = ProbeAnswerBox()
 
     private init() {
         enabled = Bundle.main.bundleIdentifier == LyrimuseIdentity.bundleIdentifier
@@ -167,6 +176,7 @@ public final class MainThreadWatchdog: @unchecked Sendable {
     /// 在主线程上调。
     public func start() {
         guard enabled else { return }
+        if onEvent == nil { ScreenLockState.shared.start() }
         let main = Thread.isMainThread ? pthread_mach_thread_np(pthread_self()) : nil
         queue.async { [self] in
             if let main { mainThread = main }
@@ -209,26 +219,35 @@ public final class MainThreadWatchdog: @unchecked Sendable {
     private func tick() {
         let now = ProcessInfo.processInfo.systemUptime
         wake.observe(uptime: now, continuous: WakeDetector.continuousNow)
+        // 主线程已经执行到、回应块还没排到这条队列的那次先算掉:不然 4.9 秒执行到的,这一拍会照报一次卡满 5 秒。
+        takeAnswer()
         let sentAt = tracker.pendingSince
         if sentAt != nil { observeStall(at: now, probeSentAt: sentAt) }
         if let event = tracker.check(now: now) { handle(event, at: now, probeSentAt: sentAt) }
         guard tracker.shouldProbe(now: now) else { return }
         memory = HangMemory.Stall(pageinsAtStart: HangMemory.readPageins())
+        memorySentAt = now
+        hangs.reset()
         let provider = windowProvider
+        let answer = answer
         DispatchQueue.main.async { [weak self] in
             let answeredAt = ProcessInfo.processInfo.systemUptime
             let windows = provider.map { provider in MainActor.assumeIsolated { provider() } }
-            self?.queue.async {
-                guard let self else { return }
-                if let windows { self.lastWindows = windows }
-                let sentAt = self.tracker.pendingSince
-                if let sentAt, answeredAt - sentAt >= self.tracker.stallThreshold {
-                    self.observeStall(at: answeredAt, probeSentAt: sentAt)
-                }
-                guard let event = self.tracker.answered(now: answeredAt) else { return }
-                self.handle(event, at: answeredAt, probeSentAt: sentAt)
-            }
+            answer.put(ProbeAnswerBox.Answer(sentAt: now, answeredAt: answeredAt, windows: windows))
+            self?.queue.async { self?.takeAnswer() }
         }
+    }
+
+    /// 处理主线程对探测任务的回应(定时器那一拍和回应块谁先到谁处理,另一个取到空)。
+    private func takeAnswer() {
+        guard let answered = answer.take() else { return }
+        if let windows = answered.windows { lastWindows = windows }
+        let sentAt = tracker.pendingSince
+        guard let sentAt, sentAt == answered.sentAt else { return }
+        let answeredAt = answered.answeredAt
+        if answeredAt - sentAt >= tracker.stallThreshold { observeStall(at: answeredAt, probeSentAt: sentAt) }
+        guard let event = tracker.answered(now: answeredAt) else { return }
+        handle(event, at: answeredAt, probeSentAt: sentAt)
     }
 
     /// 读一次节流状态和内存压力,并进在等的那次探测。
@@ -257,26 +276,26 @@ public final class MainThreadWatchdog: @unchecked Sendable {
         }
         switch event {
         case .recovered(let seconds, let throttle):
-            let pageins = memory.pageins(now: HangMemory.readPageins())
+            let pageins = memory.pageinsExcludingSample(now: HangMemory.readPageins())
             let memoryNote = HangMemory.logNote(pressure: memory.pressure, pageins: pageins)
             logger.notice("main thread: stalled for \(String(format: "%.1f", seconds), privacy: .public)s\(self.throttleNote(throttle), privacy: .public)\(memoryNote, privacy: .public)")
             // 报过 unresponsive 的那次才补时长;没卡满 sampleAfter 的不算一次卡顿。
             if tracker.reportedStill {
-                TelemetryActivity.shared.finishHang(seconds: seconds, memoryPressure: memory.pressure, pageins: pageins)
+                hangs.recovered(seconds: seconds, memoryPressure: memory.pressure, pageins: pageins)
             }
         case .stillStalled(let seconds, let throttle):
             let context = hangContext(at: now, throttle: throttle)
-            let detailed = TelemetryActivity.shared.noteHang(context)
-            let sample = Self.shouldSample(tookDetailSlot: detailed, lastSampleAt: lastSampleAt, now: now)
+            let hang = hangs.stalled(context)
+            let sample = Self.shouldSample(tookDetailSlot: hang?.detailed == true, lastSampleAt: lastSampleAt, now: now)
             let memoryNote = HangMemory.logNote(pressure: context.memoryPressure, pageins: context.pageins)
             logger.error("main thread: unresponsive for \(Int(seconds), privacy: .public)s\(sample ? ", sampling its stack" : "", privacy: .public)\(self.throttleNote(throttle), privacy: .public)\(memoryNote, privacy: .public)")
             if sample {
                 lastSampleAt = now
-                takeSample()
+                takeSample(for: hang)
             }
         case .throttled(let throttle):
             logger.notice("main thread: still stalled\(self.throttleNote(throttle), privacy: .public)")
-            TelemetryActivity.shared.markHangThrottled(throttle.sorted())
+            hangs.throttled(throttle.sorted())
         }
     }
 
@@ -292,24 +311,92 @@ public final class MainThreadWatchdog: @unchecked Sendable {
                       windows: TelemetryHang.windowTags(identifiers: lastWindows),
                       thermal: TelemetryHang.thermalTag(ProcessInfo.processInfo.thermalState),
                       throttled: throttle.isEmpty ? nil : throttle.sorted(),
-                      memoryPressure: memory.pressure, pageins: memory.pageins(now: HangMemory.readPageins()))
+                      memoryPressure: memory.pressure, pageins: memory.pageins(now: HangMemory.readPageins()),
+                      appVersion: TelemetryHang.currentAppVersion)
     }
 
-    private func takeSample() {
+    /// 采一次主线程调用栈;`hang` 是报卡顿时拿到的回执,栈补到那一条(遥测没在记时为 nil,只写本机日志)。
+    /// 采栈前后各读一次换页累计,回报给这次停顿,恢复时从整段里扣掉(`HangMemory.Stall.pageinsExcludingSample`)。
+    private func takeSample(for hang: TelemetryActivity.HangTicket?) {
         let path = LogFiles.mainThreadStall.path
         let args = [String(getpid()), String(Self.sampleSeconds), "-mayDie", "-file", path]
         let logger = logger
         let executable = Bundle.main.executableURL?.lastPathComponent ?? "lyrimuse"
-        sampleQueue.async {
+        let sentAt = memorySentAt
+        memory.sampleStarted()
+        sampleQueue.async { [weak self] in
+            let pageinsBefore = HangMemory.readPageins()
             let result = ProcessRunner.run("/usr/bin/sample", args, timeout: 30, captureStderr: true)
+            let samplePageins = HangMemory.pageinsBetween(pageinsBefore, HangMemory.readPageins())
+            self?.queue.async { self?.sampleFinished(probeSentAt: sentAt, pageins: samplePageins) }
             if result?.succeeded == true {
                 logger.notice("main thread: stall sample written to \(LogFiles.mainThreadStall.lastPathComponent, privacy: .public)")
-                if let text = try? String(contentsOfFile: path, encoding: .utf8) {
-                    TelemetryActivity.shared.attachHangStack(TelemetryHang.mainThreadStack(fromSample: text, executable: executable))
+                if let hang, let text = try? String(contentsOfFile: path, encoding: .utf8) {
+                    TelemetryActivity.shared.attachHangStack(TelemetryHang.mainThreadStack(fromSample: text, executable: executable), to: hang)
                 }
             } else {
                 logger.error("main thread: could not sample the stall, status=\(result?.status ?? -1, privacy: .public) timed_out=\(result?.timedOut ?? false, privacy: .public)")
             }
+        }
+    }
+
+    /// 采栈跑完了:还是同一次停顿的话,记下采栈期间的换页。
+    private func sampleFinished(probeSentAt: TimeInterval?, pageins: Int?) {
+        guard probeSentAt != nil, probeSentAt == memorySentAt else { return }
+        memory.sampleFinished(pageins: pageins)
+    }
+}
+
+/// 看门狗这边一次停顿的遥测记账:报卡顿时 `noteHang` 给的回执,恢复时补时长、后来看到被压着补标记,都按它补。
+/// 遥测关着时回执为 nil,这次停顿什么都不补,不会补到上一次卡顿那一条上。只在看门狗队列上用。
+public struct HangLedger {
+    public let activity: TelemetryActivity
+    public private(set) var current: TelemetryActivity.HangTicket?
+
+    public init(activity: TelemetryActivity) {
+        self.activity = activity
+    }
+
+    /// 报卡顿;返回的回执给采栈用(栈补到这一次)。
+    public mutating func stalled(_ context: TelemetryHang, now: Date = Date()) -> TelemetryActivity.HangTicket? {
+        current = activity.noteHang(context, now: now)
+        return current
+    }
+
+    public mutating func recovered(seconds: TimeInterval, memoryPressure: String?, pageins: Int?) {
+        if let current { activity.finishHang(current, seconds: seconds, memoryPressure: memoryPressure, pageins: pageins) }
+        current = nil
+    }
+
+    public func throttled(_ reasons: [String]) {
+        if let current { activity.markHangThrottled(reasons, for: current) }
+    }
+
+    /// 投新的探测时调:上一次停顿的回执不再补。
+    public mutating func reset() {
+        current = nil
+    }
+}
+
+/// 主线程执行到探测任务的那一刻:主线程写,看门狗队列取(定时器那一拍和回应块谁先到谁取)。
+private final class ProbeAnswerBox: @unchecked Sendable {
+    struct Answer {
+        let sentAt: TimeInterval
+        let answeredAt: TimeInterval
+        let windows: [String]?
+    }
+
+    private let lock = NSLock()
+    private var answer: Answer?
+
+    func put(_ answer: Answer) {
+        lock.withLock { self.answer = answer }
+    }
+
+    func take() -> Answer? {
+        lock.withLock {
+            defer { answer = nil }
+            return answer
         }
     }
 }

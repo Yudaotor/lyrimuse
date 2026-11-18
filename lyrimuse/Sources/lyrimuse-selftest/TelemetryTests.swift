@@ -551,35 +551,143 @@ func runTelemetryTests() {
         let day1 = Date(timeIntervalSince1970: 1_793_300_000)
         let d2 = Telemetry.day(day1.addingTimeInterval(86_400))
         let base = H(sinceLaunch: "1-10m", sinceWake: nil, windows: ["settings"], thermal: "nominal")
-        expectEqual(activity.noteHang(base, now: day1), false, "记账: 关着时不占概况名额(看门狗按冷却决定采不采)")
-        activity.finishHang(seconds: 12)
+        typealias Ticket = TelemetryActivity.HangTicket
+        func frame(_ offset: Int) -> [TelemetryCrash.Frame] { [TelemetryCrash.Frame(image: "lyrimuse", symbol: nil, offset: offset)] }
+        func finish(_ on: TelemetryActivity, _ hang: Ticket?, _ seconds: TimeInterval) {
+            if let hang { on.finishHang(hang, seconds: seconds) }
+        }
+        func attachStack(_ on: TelemetryActivity, _ hang: Ticket?, _ offset: Int) {
+            if let hang { on.attachHangStack(frame(offset), to: hang) }
+        }
+        expectEqual(activity.noteHang(base, now: day1), nil, "记账: 关着时不记、没有回执(看门狗按冷却决定采不采)")
         expectEqual(activity.completedDays(before: d2), [], "记账: 关着时不记概况")
         activity.isRecording = true
         activity.notePlayer(bundleID: PlaybackPlayer.spotify.bundleIdentifier, now: day1)
-        expectEqual(activity.noteHang(base, now: day1), true, "记账: 当天第一次占到概况名额")
+        let first = activity.noteHang(base, now: day1)
+        expectEqual(first?.detailed, true, "记账: 当天第一次占到概况名额")
         var details = activity.completedDays(before: d2).first?.hangDetails ?? []
         expectEqual(details.map(\.duration), [H.unrecovered], "记账: 刚卡住记成没恢复")
         expectEqual(details.first?.player, PlaybackPlayer.spotify.rawValue, "记账: 播放器填最近放歌的那个")
-        activity.attachHangStack([TelemetryCrash.Frame(image: "lyrimuse", symbol: nil, offset: 42)])
-        activity.attachHangStack([TelemetryCrash.Frame(image: "lyrimuse", symbol: nil, offset: 7)])
-        activity.finishHang(seconds: 12)
+        attachStack(activity, first, 42)
+        attachStack(activity, first, 7)
+        finish(activity, first, 12)
         details = activity.completedDays(before: d2).first?.hangDetails ?? []
         expectEqual(details.first?.duration, "10-30s", "记账: 恢复后补上时长")
         expectEqual(details.first?.stack.map(\.offset), [42], "记账: 调用栈只补第一份")
-        expectEqual((0..<5).map { _ in activity.noteHang(base, now: day1) }, [true, true, false, false, false],
-                    "记账: 名额只有每天前 3 次,之后不占")
+        let more = (0..<5).map { _ in activity.noteHang(base, now: day1) }
+        expectEqual(more.map { $0?.detailed }, [true, true, false, false, false], "记账: 名额只有每天前 3 次,之后不占")
         let got = activity.completedDays(before: d2).first
         expectEqual(got?.hangs, 6, "记账: 次数照记")
         expectEqual(got?.hangDetails.count, TelemetryActivity.maxHangDetailsPerDay, "记账: 概况每天最多记几条")
-        activity.finishHang(seconds: 40)
+        finish(activity, more.last ?? nil, 40)
         expectEqual(activity.completedDays(before: d2).first?.hangDetails.last?.duration, H.unrecovered,
                     "记账: 超出名额的那次恢复了不改前一条")
-        expectEqual(activity.noteHang(nil, now: day1), false, "记账: 不带概况的不占名额")
-        activity.finishHang(seconds: 40)
+        let bare = activity.noteHang(nil, now: day1)
+        expectEqual(bare?.detailed, false, "记账: 不带概况的不占名额")
+        finish(activity, bare, 40)
         expectEqual(activity.completedDays(before: d2).first?.hangDetails.map(\.duration), ["10-30s", H.unrecovered, H.unrecovered],
                     "记账: 不带概况的那次之后不补到旧的一条")
         activity.clear()
         activity.waitForPendingWrites()
+
+        // 连着两次卡顿(14 章决策 231):采栈在报卡顿之后好几秒才跑完,这期间又卡了一次;栈、时长按回执补到各自那一条。
+        let pairKey = "selftest.telemetryHangPair.\(getpid())"
+        defer { UserDefaults.standard.removeObject(forKey: pairKey) }
+        let pair = TelemetryActivity(defaults: .standard, key: pairKey)
+        pair.isRecording = true
+        let hangA = pair.noteHang(base, now: day1), hangB = pair.noteHang(base, now: day1)
+        attachStack(pair, hangB, 2)
+        attachStack(pair, hangA, 1)
+        finish(pair, hangA, 7)
+        finish(pair, hangB, 40)
+        let pairDetails = pair.completedDays(before: d2).first?.hangDetails ?? []
+        expectEqual(pairDetails.map { $0.stack.first?.offset }, [1, 2], "回执: 先卡的那次的栈晚到,补回它自己那一条,不占后一次的")
+        expectEqual(pairDetails.map(\.duration), ["5-10s", "30s+"], "回执: 时长各补各的")
+        pair.clear()
+
+        // 看门狗这边的回执(14 章决策 231):遥测关着时卡的那次没有回执,之后恢复、被压着都不补到上一次卡顿那条上。
+        pair.isRecording = true
+        var ledger = HangLedger(activity: pair)
+        _ = ledger.stalled(base, now: day1)
+        ledger.recovered(seconds: 12, memoryPressure: nil, pageins: nil)
+        pair.isRecording = false
+        expectEqual(ledger.stalled(base, now: day1), nil, "回执: 遥测关着时卡住,不记、没有回执")
+        pair.isRecording = true
+        ledger.throttled([MainThreadThrottle.locked])
+        ledger.recovered(seconds: 40, memoryPressure: HangMemory.critical, pageins: 9)
+        let ledgerDay = pair.completedDays(before: d2).first
+        expectEqual([ledgerDay?.hangDetails.map(\.duration), ledgerDay?.hangDetails.map { $0.throttled?.joined() ?? "-" }],
+                    [["10-30s"], ["-"]], "回执: 关着时那次的恢复、节流标记不补到上一次卡顿")
+        expectEqual(ledgerDay?.throttledHangs, 0, "回执: 关着时那次不补进被压着的次数")
+        pair.clear()
+        pair.waitForPendingWrites()
+
+        // 遥测开关还没定(App 启动、TelemetryService 读设置之前,14 章决策 231):卡顿记进内存不写盘,定下来开着就写、关着就丢。
+        let undecidedKey = "selftest.telemetryHangUndecided.\(getpid())"
+        defer { UserDefaults.standard.removeObject(forKey: undecidedKey) }
+        let early = TelemetryActivity(defaults: .standard, key: undecidedKey, recording: .undecided)
+        early.notePlayer(bundleID: PlaybackPlayer.spotify.bundleIdentifier, now: day1)
+        early.noteAction(.shareCard, now: day1)
+        let earlyHang = early.noteHang(base, now: day1)
+        attachStack(early, earlyHang, 5)
+        finish(early, earlyHang, 12)
+        _ = early.noteHang(nil, now: day1)
+        early.waitForPendingWrites()
+        expectEqual([earlyHang?.detailed, early.isRecording, early.queuedWrites == 0, UserDefaults.standard.data(forKey: undecidedKey) == nil],
+                    [true, false, true, true], "还没定开关: 卡顿照记、占名额(看门狗照样采栈),不写盘")
+        early.isRecording = true
+        early.waitForPendingWrites()
+        let earlyStored = UserDefaults.standard.data(forKey: undecidedKey)
+            .flatMap { try? JSONDecoder().decode([TelemetryActivityDay].self, from: $0) }?.first
+        expectEqual(earlyStored.map { [String($0.hangs), $0.hangDetails.first?.duration, $0.hangDetails.first?.stack.first.map { "\($0.offset ?? -1)" }] },
+                    ["2", "10-30s", "5"], "还没定开关: 定下来开着时,这期间的卡顿连时长、栈一起写盘")
+        expectEqual(earlyStored.map { [$0.playersPlayed.isEmpty, $0.actions.isEmpty] }, [true, true],
+                    "还没定开关: 这期间别的记账(放歌、动作)不记")
+        early.clear()
+        early.waitForPendingWrites()
+        let dropped = TelemetryActivity(defaults: .standard, key: undecidedKey, recording: .undecided)
+        let droppedHang = dropped.noteHang(base, now: day1)
+        dropped.isRecording = false
+        dropped.isRecording = true
+        finish(dropped, droppedHang, 12)
+        dropped.waitForPendingWrites()
+        expectEqual([dropped.completedDays(before: d2).isEmpty, UserDefaults.standard.data(forKey: undecidedKey) == nil], [true, true],
+                    "还没定开关: 定下来关着时丢掉这期间的卡顿,之后再打开也不补回来")
+
+        // 主线程堵着时后台写偏好不排队等它(14 章决策 175、231):偏好变更观察者走 UserDefaultsChangeRelay,
+        // 看门狗记下的卡顿在主线程卡住期间就能落盘,用户这时强制退出也不丢。
+        final class Hits: @unchecked Sendable {
+            private let lock = NSLock()
+            private var count = 0
+            func hit() { lock.withLock { count += 1 } }
+            var value: Int { lock.withLock { count } }
+        }
+        let relayKey = "selftest.telemetryHangRelay.\(getpid())"
+        defer { UserDefaults.standard.removeObject(forKey: relayKey) }
+        let hits = Hits()
+        let relay = UserDefaultsChangeRelay.observe(.standard) { hits.hit() }
+        let busy = TelemetryActivity(defaults: .standard, key: relayKey)
+        busy.isRecording = true
+        _ = busy.noteHang(base, now: day1)
+        let landed = DispatchSemaphore(value: 0)
+        DispatchQueue.global().async {
+            busy.waitForPendingWrites()
+            landed.signal()
+        }
+        // 主线程在这里等着,不跑主队列:观察者要是排进主队列同步等,写盘就落不了地。
+        let landedWhileMainBusy = landed.wait(timeout: .now() + 1) == .success
+        let drainUntil = Date().addingTimeInterval(5)
+        while !landedWhileMainBusy, landed.wait(timeout: .now()) != .success, Date() < drainUntil {
+            RunLoop.main.run(until: Date().addingTimeInterval(0.05))
+        }
+        RunLoop.main.run(until: Date().addingTimeInterval(0.1))
+        NotificationCenter.default.removeObserver(relay)
+        let busyStored = UserDefaults.standard.data(forKey: relayKey)
+            .flatMap { try? JSONDecoder().decode([TelemetryActivityDay].self, from: $0) }?.first?.hangs
+        expectEqual([landedWhileMainBusy, busyStored == 1, hits.value > 0], [true, true, true],
+                    "写盘: 主线程堵着时卡顿记账照样落盘,偏好变更的回调等主线程空下来再跑")
+        busy.clear()
+        busy.waitForPendingWrites()
         let encoded = try? JSONEncoder().encode(TelemetryActivityDay(day: "2026-11-09", hangs: 1, hangDetails: [base]))
         expectEqual(encoded.flatMap { try? JSONDecoder().decode(TelemetryActivityDay.self, from: $0) }?.hangDetails, [base],
                     "记账: 概况能存能读")
@@ -604,8 +712,9 @@ func runTelemetryTests() {
         var tight = base
         tight.memoryPressure = HangMemory.critical
         tight.pageins = 40
-        memoryActivity.noteHang(tight, now: day1)
-        memoryActivity.finishHang(seconds: 12, memoryPressure: HangMemory.warning, pageins: 900)
+        if let hang = memoryActivity.noteHang(tight, now: day1) {
+            memoryActivity.finishHang(hang, seconds: 12, memoryPressure: HangMemory.warning, pageins: 900)
+        }
         var memoryHang = memoryActivity.completedDays(before: d2).first?.hangDetails.first
         expectEqual([memoryHang?.memoryPressure, memoryHang?.pageins.map(String.init), memoryHang?.duration],
                     [HangMemory.critical, "900", "10-30s"], "内存记账: 恢复时换页次数换成整段的,内存压力不降档,时长照补")
@@ -613,8 +722,9 @@ func runTelemetryTests() {
         var loose = base
         loose.memoryPressure = HangMemory.normal
         loose.pageins = 3
-        memoryActivity.noteHang(loose, now: day1)
-        memoryActivity.finishHang(seconds: 6, memoryPressure: HangMemory.warning)
+        if let hang = memoryActivity.noteHang(loose, now: day1) {
+            memoryActivity.finishHang(hang, seconds: 6, memoryPressure: HangMemory.warning)
+        }
         memoryHang = memoryActivity.completedDays(before: d2).first?.hangDetails.first
         expectEqual([memoryHang?.memoryPressure, memoryHang?.pageins.map(String.init)], [HangMemory.warning, "3"],
                     "内存记账: 停顿后半段才紧起来的升档;恢复时读不到换页次数就留着报卡顿时的")
@@ -630,38 +740,49 @@ func runTelemetryTests() {
         let throttling = TelemetryActivity(defaults: .standard, key: throttleKey)
         throttling.isRecording = true
         let lockedHang = H(sinceLaunch: "1-6h", sinceWake: nil, windows: [], thermal: "nominal", throttled: [MainThreadThrottle.locked])
-        expectEqual([throttling.noteHang(lockedHang, now: day1), throttling.noteHang(lockedHang, now: day1)], [true, false],
+        expectEqual([throttling.noteHang(lockedHang, now: day1)?.detailed, throttling.noteHang(lockedHang, now: day1)?.detailed], [true, false],
                     "节流记账: 被压着的每天另有名额")
-        expectEqual((0..<4).map { _ in throttling.noteHang(base, now: day1) }, [true, true, true, false],
-                    "节流记账: 被压着的不占没被压着的名额")
+        let unthrottled = (0..<4).map { _ in throttling.noteHang(base, now: day1) }
+        expectEqual(unthrottled.map { $0?.detailed }, [true, true, true, false], "节流记账: 被压着的不占没被压着的名额")
         var throttledDay = throttling.completedDays(before: d2).first
         expectEqual([throttledDay?.hangs, throttledDay?.throttledHangs], [6, 2], "节流记账: 次数照记,被压着的另记")
         expectEqual(throttledDay?.hangDetails.map { $0.throttled != nil }, [true, false, false, false], "节流记账: 概况各占各的名额")
-        throttling.markHangThrottled([MainThreadThrottle.locked])
+        func mark(_ hang: Ticket?, _ reasons: [String]) {
+            if let hang { throttling.markHangThrottled(reasons, for: hang) }
+        }
+        mark(unthrottled.last ?? nil, [MainThreadThrottle.locked])
         throttledDay = throttling.completedDays(before: d2).first
         expectEqual([throttledDay?.throttledHangs, throttledDay?.hangDetails.filter { $0.throttled != nil }.count], [3, 1],
                     "节流记账: 没占到名额的那次后来被压着,只补次数")
+        // 名额占满之后只加次数的(锁屏一夜被压着的那一串)不每次当场写盘,攒着延后写(14 章决策 231)。
+        let writesBeforeCountOnly = throttling.queuedWrites
+        for _ in 0..<20 { _ = throttling.noteHang(lockedHang, now: day1) }
+        expectEqual([throttling.queuedWrites - writesBeforeCountOnly, throttling.completedDays(before: d2).first?.hangs], [0, 26],
+                    "节流记账: 名额占满后只加次数的不当场写盘,内存里次数照加")
+        throttling.waitForPendingWrites()
+        expectEqual(UserDefaults.standard.data(forKey: throttleKey)
+                        .flatMap { try? JSONDecoder().decode([TelemetryActivityDay].self, from: $0) }?.first?.hangs, 26,
+                    "节流记账: 攒着的次数延后一起落盘")
         throttling.clear()
         throttling.noteHang(nil, now: day1)
-        throttling.noteHang(base, now: day1)
-        throttling.markHangThrottled([MainThreadThrottle.locked])
-        throttling.markHangThrottled([MainThreadThrottle.locked, MainThreadThrottle.lowPriority])
-        throttling.finishHang(seconds: 20)
+        let lateThrottled = throttling.noteHang(base, now: day1)
+        mark(lateThrottled, [MainThreadThrottle.locked])
+        mark(lateThrottled, [MainThreadThrottle.locked, MainThreadThrottle.lowPriority])
+        finish(throttling, lateThrottled, 20)
         throttledDay = throttling.completedDays(before: d2).first
         expectEqual(throttledDay?.throttledHangs, 1, "节流记账: 卡住之后才被压着,补进次数只补一次")
         expectEqual(throttledDay?.hangDetails.first?.throttled, [MainThreadThrottle.locked, MainThreadThrottle.lowPriority],
                     "节流记账: 概况补上标记(并起来的全部)")
         expectEqual(throttledDay?.hangDetails.first?.duration, "10-30s", "节流记账: 补过标记之后恢复照样补时长")
-        throttling.noteHang(nil, now: day1)
-        throttling.markHangThrottled([MainThreadThrottle.locked])
+        mark(throttling.noteHang(nil, now: day1), [MainThreadThrottle.locked])
         expectEqual(throttling.completedDays(before: d2).first?.throttledHangs, 2, "节流记账: 不带概况的那次后补次数,不碰旧的一条")
+        let beforeClear = throttling.noteHang(nil, now: day1)
         throttling.clear()
-        throttling.markHangThrottled([MainThreadThrottle.locked])
+        mark(beforeClear, [MainThreadThrottle.locked])
         expectEqual(throttling.completedDays(before: d2), [], "节流记账: 清空之后不凭空补出一天")
         _ = throttling.noteHang(lockedHang, now: day1)
-        _ = throttling.noteHang(base, now: day1)
-        throttling.markHangThrottled([MainThreadThrottle.locked])
-        expectEqual((0..<3).map { _ in throttling.noteHang(base, now: day1) }, [true, true, false],
+        mark(throttling.noteHang(base, now: day1), [MainThreadThrottle.locked])
+        expectEqual((0..<3).map { _ in throttling.noteHang(base, now: day1)?.detailed }, [true, true, false],
                     "节流记账: 后补成被压着的那条仍占着名额,两类合计不超过上限之和")
         expectEqual(throttling.completedDays(before: d2).first?.hangDetails.count,
                     TelemetryActivity.maxHangDetailsPerDay + TelemetryActivity.maxThrottledHangDetailsPerDay, "节流记账: 概况每天最多 3 + 1 条")
@@ -792,6 +913,18 @@ func runTelemetryTests() {
         expectEqual([pendingBeforeFlush, flushedInTime, activity.hasPendingWrites], [true, true, false],
                     "超限记账: 退出用的 flushPendingWrites 把攒着的延后写当场写掉,写完回调、不留没落盘的")
         expectEqual(afterFlush?.first?.layoutLimits.first?.count, 510, "超限记账: 退出前写掉的那次带上攒下的次数")
+        // 当天记满几种之后新的一种、次数封顶之后,数据不变就不写盘,也不排延后写(14 章决策 231)。
+        let writesWhenFull = activity.queuedWrites
+        for _ in 0..<500 { activity.noteLayoutLimit(window: nil, windowClass: "Unlisted", pass: "display", now: day1) }
+        expectEqual([activity.queuedWrites - writesWhenFull, activity.hasPendingWrites ? 1 : 0], [0, 0],
+                    "超限记账: 记满几种之后新的一种每帧都来,不写盘")
+        for _ in 0..<10_000 { activity.noteLayoutLimit(window: nil, windowClass: "NSPanel", pass: "update-constraints", now: day1) }
+        activity.waitForPendingWrites()
+        let writesWhenCapped = activity.queuedWrites
+        for _ in 0..<200 { activity.noteLayoutLimit(window: nil, windowClass: "NSPanel", pass: "update-constraints", now: day1) }
+        expectEqual([activity.queuedWrites - writesWhenCapped, activity.hasPendingWrites ? 1 : 0,
+                     activity.completedDays(before: d2).first?.layoutLimits.first { $0.windowClass == "NSPanel" }?.count],
+                    [0, 0, 10_000], "超限记账: 次数封顶之后不再写盘")
         let json = (try? JSONEncoder().encode(limits.first)).flatMap { String(data: $0, encoding: .utf8) } ?? ""
         expectEqual(json.contains("\"class\":\"SwiftUI.AppKitWindow\"") && json.contains("\"window\":\"onboarding\""), true, "超限记账: 键名 class / window")
         let old = #"{"day":"2026-11-01","players_played":[],"hangs":0}"#
@@ -900,6 +1033,12 @@ func runTelemetryTests() {
         throttledHang.pageins = 0
         expectEqual(Set(keys(throttledHang)).subtracting(keys(hang)).sorted(), ["memory_pressure", "pageins", "throttled"],
                     "卡顿概况: 读到内存情况时带 memory_pressure、pageins(0 次也带),读不到时不带")
+        var versionedHang = hang
+        versionedHang.appVersion = "1.14.0"
+        expectEqual(Set(keys(versionedHang)).subtracting(keys(hang)).sorted(), ["app_version"],
+                    "卡顿概况: 带记卡顿时的版本 app_version,取不到时不带")
+        expectEqual(sourceHas(worker, "app_version: str(h.app_version, 32),") && sourceHas(worker, "h.app_version ?? e.app_version"), true,
+                    "Worker: 卡顿概况的版本先取概况自己带的,旧版 App 不带时退回心跳的")
         let fields = keys(regional) + keys(features) + keys(TelemetryActivityDay(day: "2026-10-30")) + keys(throttledHang)
             + ["install_id", "origin", "report_id", "exception_type", "termination_indicator", "frames", "exception_frames"]
             + TelemetryAction.allCases.map(\.rawValue)
@@ -1026,17 +1165,31 @@ func runTelemetryTests() {
         let watchdog = sourceText("LyrimuseCore/Diagnostics/MainThreadWatchdog.swift")
         let handleBody = sourceBody("private func handle(", in: watchdog)
         expectEqual(sourceHas(handleBody, "let context = hangContext(at: now, throttle: throttle)")
-                        && sourceHas(handleBody, "TelemetryActivity.shared.noteHang(context)")
-                        && sourceHas(handleBody, "TelemetryActivity.shared.finishHang(seconds: seconds, memoryPressure: memory.pressure, pageins: pageins)")
+                        && sourceHas(handleBody, "let hang = hangs.stalled(context)")
+                        && sourceHas(handleBody, "hangs.recovered(seconds: seconds, memoryPressure: memory.pressure, pageins: pageins)")
                         && sourceHas(sourceBody("case .recovered(let seconds, let throttle):", in: handleBody), "if tracker.reportedStill {")
-                        && sourceHas(handleBody, "TelemetryActivity.shared.markHangThrottled(throttle.sorted())"),
-                    true, "接线: 主线程卡住记一笔概况(带节流标记),恢复时补时长(没卡满的不补),卡住之后才被压着的补标记")
+                        && sourceHas(handleBody, "hangs.throttled(throttle.sorted())")
+                        && sourceHas(watchdog, "private var hangs = HangLedger(activity: .shared)"),
+                    true, "接线: 主线程卡住记一笔概况(带节流标记),恢复时补时长(没卡满的不补),卡住之后才被压着的补标记,都按回执补")
         let tickBody = sourceBody("private func tick()", in: watchdog)
+        let answerBody = sourceBody("private func takeAnswer()", in: watchdog)
+        let takeAnswerAt = tickBody.range(of: "takeAnswer()")
         let throttleAt = tickBody.range(of: "if sentAt != nil { observeStall(at: now, probeSentAt: sentAt) }")
         let checkAt = tickBody.range(of: "tracker.check(now: now)")
         expectEqual(throttleAt != nil && checkAt != nil && throttleAt!.lowerBound < checkAt!.lowerBound
-                        && sourceHas(tickBody, "if let sentAt, answeredAt - sentAt >= self.tracker.stallThreshold { self.observeStall(at: answeredAt, probeSentAt: sentAt) }"),
+                        && sourceHas(answerBody, "if answeredAt - sentAt >= tracker.stallThreshold { observeStall(at: answeredAt, probeSentAt: sentAt) }"),
                     true, "接线: 探测过了一拍还没被执行到时先读节流状态再判卡顿,卡过阈值后被执行到时再读一次")
+        expectEqual(takeAnswerAt != nil && takeAnswerAt!.lowerBound < checkAt!.lowerBound
+                        && sourceHas(tickBody, "answer.put(ProbeAnswerBox.Answer(sentAt: now, answeredAt: answeredAt, windows: windows))"),
+                    true, "接线: 主线程执行到探测先记下,定时器那一拍判卡顿前先处理它(差一点卡满 5 秒的不报成卡顿)")
+        // 看门狗队列上不同步问 WindowServer(14 章决策 231):锁屏读通知维护的标志位。
+        let throttleSource = sourceText("LyrimuseCore/Diagnostics/MainThreadThrottle.swift")
+        expectEqual(sourceHas(sourceBody("public static func read(thread: mach_port_t?) -> Reading", in: throttleSource),
+                              "ScreenLockState.shared.isLocked")
+                        && !sourceBody("public static func read(thread: mach_port_t?) -> Reading", in: throttleSource).contains("screenIsLocked()")
+                        && !sourceBody("private func observeStall(", in: watchdog).contains("screenIsLocked")
+                        && sourceHas(sourceBody("public func start()", in: watchdog), "ScreenLockState.shared.start()"),
+                    true, "接线: 看门狗读节流不碰 CGSessionCopyCurrentDictionary,锁屏状态由通知维护、看门狗启动时开始听")
         expectEqual(sourceHas(sourceBody("private func hangContext(", in: watchdog), "throttled: throttle.isEmpty ? nil : throttle.sorted()"),
                     true, "接线: 卡顿概况带上停顿期间看到的节流标记")
         // 卡顿期间的内存情况(14 章决策 222):投探测时记下换页累计,停顿期间读内存压力的时机跟节流读数相同。
@@ -1045,17 +1198,48 @@ func runTelemetryTests() {
         expectEqual(probeAt != nil && baselineAt != nil && probeAt!.upperBound <= baselineAt!.lowerBound
                         && sourceHas(sourceBody("private func observeStall(", in: watchdog), "memory.observe(pressure: HangMemory.readPressure())")
                         && sourceHas(sourceBody("private func hangContext(", in: watchdog),
-                                     "memoryPressure: memory.pressure, pageins: memory.pageins(now: HangMemory.readPageins())")
+                                     "memoryPressure: memory.pressure, pageins: memory.pageins(now: HangMemory.readPageins()),")
+                        && sourceHas(sourceBody("private func hangContext(", in: watchdog), "appVersion: TelemetryHang.currentAppVersion")
                         && sourceHas(sourceBody("case .recovered(let seconds, let throttle):", in: handleBody),
-                                     "let pageins = memory.pageins(now: HangMemory.readPageins())"),
-                    true, "接线: 每次投探测记下换页累计,停顿期间读内存压力,报卡顿和恢复时各取一次换页差值记进概况")
-        expectEqual(sourceHas(sourceBody("private func takeSample()", in: watchdog),
-                              "TelemetryActivity.shared.attachHangStack(TelemetryHang.mainThreadStack(fromSample: text, executable: executable))")
+                                     "let pageins = memory.pageinsExcludingSample(now: HangMemory.readPageins())"),
+                    true, "接线: 每次投探测记下换页累计,停顿期间读内存压力,报卡顿和恢复时各取一次换页差值(恢复时扣掉采栈的)记进概况,带上记卡顿时的版本")
+        let sampleBody = sourceBody("private func takeSample(for hang: TelemetryActivity.HangTicket?)", in: watchdog)
+        let beforeSampleAt = sampleBody.range(of: "let pageinsBefore = HangMemory.readPageins()")
+        let runSampleAt = sampleBody.range(of: #"ProcessRunner.run("/usr/bin/sample""#)
+        let afterSampleAt = sampleBody.range(of: "let samplePageins = HangMemory.pageinsBetween(pageinsBefore, HangMemory.readPageins())")
+        expectEqual(beforeSampleAt != nil && runSampleAt != nil && afterSampleAt != nil
+                        && beforeSampleAt!.lowerBound < runSampleAt!.lowerBound && runSampleAt!.lowerBound < afterSampleAt!.lowerBound
+                        && sourceHas(sampleBody, "memory.sampleStarted()")
+                        && sourceHas(sourceBody("private func sampleFinished(", in: watchdog), "memory.sampleFinished(pageins: pageins)"),
+                    true, "接线: 采栈前后在采样队列上各读一次换页累计,回报给这次停顿")
+        expectEqual(sourceHas(sampleBody,
+                              "TelemetryActivity.shared.attachHangStack(TelemetryHang.mainThreadStack(fromSample: text, executable: executable), to: hang)")
+                        && sourceHas(handleBody, "takeSample(for: hang)")
                         && sourceHas(sourceBody("private func tick()", in: watchdog), "wake.observe(uptime: now, continuous: WakeDetector.continuousNow)")
-                        && sourceHas(sourceBody("private func tick()", in: watchdog), "if let windows { self.lastWindows = windows }"),
-                    true, "接线: 采样补调用栈、每拍认唤醒、主线程还能动时记下开着的窗口")
+                        && sourceHas(answerBody, "if let windows = answered.windows { lastWindows = windows }"),
+                    true, "接线: 采样按报卡顿时的回执补调用栈、每拍认唤醒、主线程还能动时记下开着的窗口")
         expectEqual(sourceHas(sourceText("lyrimuse/AppDelegate.swift"), "MainThreadWatchdog.shared.setWindowProvider {"), true,
                     "接线: App 给看门狗窗口提供者")
+        // 偏好变更的观察者不能让后台线程写偏好时同步等主线程(14 章决策 175、231):全仓只有 UserDefaultsChangeRelay 直接登记。
+        var directObservers: [String] = []
+        if let files = FileManager.default.enumerator(atPath: root.path) {
+            for case let rel as String in files where rel.hasSuffix(".swift") && !rel.hasPrefix("lyrimuse-selftest/")
+                && rel != "LyrimuseCore/Util/UserDefaultsChangeRelay.swift" {
+                let lines = sourceText(rel).split(separator: "\n")
+                if lines.contains(where: { line in
+                    !line.trimmingCharacters(in: .whitespaces).hasPrefix("//") && line.contains("UserDefaults.didChangeNotification")
+                }) { directObservers.append(rel) }
+            }
+        }
+        expectEqual(directObservers, [], "接线: 没有绕过 UserDefaultsChangeRelay 直接听偏好变更通知的")
+        expectEqual(sourceHas(sourceBody("static func startObserving()", in: sourceText("lyrimuse/Settings/AppSettingsMirror.swift")),
+                              "UserDefaultsChangeRelay.observe(.standard) {")
+                        && sourceHas(sourceText("LyrimuseCore/Util/UserDefaultsChangeRelay.swift"),
+                                     "addObserver(forName: UserDefaults.didChangeNotification, object: defaults, queue: nil)"), true,
+                    "接线: 设置镜像听偏好变更走 UserDefaultsChangeRelay(回调登记在发通知的线程上)")
+        expectEqual(sourceHas(sourceText("LyrimuseCore/Telemetry/TelemetryActivity.swift"),
+                              "public static let shared = TelemetryActivity(defaults: .standard, recording: .undecided)"), true,
+                    "接线: App 的记账启动时开关未定,看门狗先报的卡顿等 TelemetryService 定下来再写")
         expectEqual(sourceHas(sourceText("lyrimuse/SettingsView.swift"), "Toggle(\"\", isOn: $settings.telemetryEnabled)"), true,
                     "接线: 设置页开关")
         expectEqual(sourceHas(sourceText("lyrimuse/OnboardingView.swift"), "isOn: $settings.telemetryEnabled"), true,

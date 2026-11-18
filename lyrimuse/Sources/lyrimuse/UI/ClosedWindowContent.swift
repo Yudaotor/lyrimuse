@@ -41,6 +41,8 @@ final class ClosedWindowContent: ObservableObject {
     private weak var deferredWindow: NSWindow?
     /// 这一次摆回去是延后拆的(拆得慢,告诉卡顿探针);占位报到过没有。
     private var reshowIsDeferred = false
+    /// 告诉过卡顿探针「接下来是有意占住主线程」、还没说结束。
+    private var expectedStallOpen = false
     private var deferredReason = ""
     private var placeholderShown = false
     /// 占位一直没报到也要收尾的时限。
@@ -133,9 +135,23 @@ final class ClosedWindowContent: ObservableObject {
             // 上一回没换成(占位没报到就超时收尾了):内容已经是占位状态,再摆回去一次。
             DispatchQueue.main.async { [weak self] in self?.beginReshow(window) }
         } else {
+            // prepare 清缓存同样要占主线程,在它之前就告诉卡顿探针。
+            beginExpectedStall()
             prepare?()
             release(window)
         }
+    }
+
+    private func beginExpectedStall() {
+        guard !expectedStallOpen else { return }
+        expectedStallOpen = true
+        MainThreadWatchdog.shared.beginExpectedStall("release closed window: \(deferredReason)")
+    }
+
+    private func endExpectedStall() {
+        guard expectedStallOpen else { return }
+        expectedStallOpen = false
+        MainThreadWatchdog.shared.endExpectedStall()
     }
 
     /// 占位的 onAppear 调。推到下一拍再关:别在 SwiftUI 更新视图的当中关窗。
@@ -146,15 +162,19 @@ final class ClosedWindowContent: ObservableObject {
     }
 
     private func beginReshow(_ window: NSWindow) {
-        // 这一拍之前已经重新开窗(released 被 windowAppeared 放下)或窗口还在屏上,就不动它。
-        guard released, reshow == nil, !window.isVisible else { return }
+        // 这一拍之前已经重新开窗(released 被 windowAppeared 放下)或窗口还在屏上,就不动它;fireDeferred 先开的预期停顿
+        // 这时就结束,别一直开着把之后的真卡顿都当成有意的(正摆回去的那次自己会在收尾时结束)。
+        guard released, reshow == nil, !window.isVisible else {
+            if reshow == nil { endExpectedStall() }
+            return
+        }
         reshow = Reshow(window: window, alpha: window.alphaValue,
                         animation: window.animationBehavior, ignoresMouse: window.ignoresMouseEvents)
         window.animationBehavior = .none
         window.alphaValue = 0
         window.ignoresMouseEvents = true
         placeholderShown = false
-        if reshowIsDeferred { MainThreadWatchdog.shared.beginExpectedStall("release closed window: \(deferredReason)") }
+        if reshowIsDeferred { beginExpectedStall() }
         window.orderBack(nil)
         Self.inReshow[ObjectIdentifier(self)] = self
         fallback = Task { [weak self] in
@@ -177,7 +197,7 @@ final class ClosedWindowContent: ObservableObject {
         reshow = nil
         guard reshowIsDeferred else { return }
         reshowIsDeferred = false
-        MainThreadWatchdog.shared.endExpectedStall()
+        endExpectedStall()
         // 占位没报到就超时收尾了(显示器睡着时可能不画):留到下一次锁屏 / 睡眠再摆一次。
         if released, !placeholderShown {
             deferredWindow = r.window

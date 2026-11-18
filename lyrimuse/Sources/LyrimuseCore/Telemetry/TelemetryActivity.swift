@@ -4,8 +4,22 @@ import Foundation
 /// 播放源换播放器、看门狗报卡住时各记一笔;`isRecording` 为假(遥测关着)时一律不记。心跳发出去之后
 /// `remove(days:)` 删掉发过的那几天。最多留 `maxStoredDays` 天,多了丢最早的。早于 `sentBefore`(已随心跳发出)、
 /// 或比今天晚一天以上(系统日期往前调过)的日子不记也不留。
+///
+/// App 里的这份启动时开关还没定(`Recording.undecided`,`TelemetryService` 读设置之前):这段里只记卡顿,记进内存、不写盘;
+/// 定下来时开着就写盘、关着就丢(`isRecording` 的 setter)。看门狗比遥测先起,启动那几步卡住也要报得上来。见 14 章决策 231。
 public final class TelemetryActivity: @unchecked Sendable {
-    public static let shared = TelemetryActivity(defaults: .standard)
+    public static let shared = TelemetryActivity(defaults: .standard, recording: .undecided)
+
+    /// 遥测开没开:`undecided` 是 App 启动后、还没读到设置的那一段。
+    public enum Recording: Sendable { case undecided, on, off }
+
+    /// `noteHang` 给的回执:这一次卡顿记在哪一天、是本进程第几次,有没有占到当天的概况名额(占到了,看门狗就该采栈)。
+    /// 恢复补时长、采样补栈、后来才看到被压着补标记,都按回执补到这一次,连着两次卡顿时不会补错。
+    public struct HangTicket: Equatable, Sendable {
+        public let day: String
+        public let serial: Int
+        public let detailed: Bool
+    }
 
     public static let storageKey = "np:telemetryActivity"
     public static let maxStoredDays = 3
@@ -33,15 +47,25 @@ public final class TelemetryActivity: @unchecked Sendable {
     private var finishedWriteCount = 0
     /// 延后写盘等多久:布局超限振荡时每帧都来一次,同一种只加次数的那些攒到这么久写一次。
     static let deferredWriteDelay: TimeInterval = 5
-    private var recording = false
+    private var recording: Recording
+    /// `undecided` 期间改过内存副本、还没写盘。
+    private var heldWhileUndecided = false
     private var sentDay: String?
     private let clock: @Sendable () -> Date
     private var trusted: Set<String> = []
     /// 上一次记下的播放器,同一个播放器连着报不重复写盘。
     private var lastPlayer: (day: String, tag: String)?
-    /// 最近那次卡顿记在哪一天、概况是第几条(没占到名额为 nil)、算没算进被压着的次数:恢复时补时长、采样完补调用栈、
-    /// 后来才看到被压着时补标记,都补到它。只在内存里。
-    private var openHang: (day: String, index: Int?, throttled: Bool)?
+    /// 最近几次卡顿(按 `HangTicket.serial`)记在哪一天、概况是第几条(没占到名额为 nil)、算没算进被压着的次数:
+    /// 恢复时补时长、采样完补调用栈、后来才看到被压着时补标记,按回执找到它。只在内存里,留最近 `maxOpenHangs` 次。
+    private var openHangs: [Int: OpenHang] = [:]
+    private var hangSerial = 0
+    static let maxOpenHangs = 8
+
+    private struct OpenHang {
+        var day: String
+        var index: Int?
+        var throttled: Bool
+    }
     /// 今天记过歌词结果的歌(曲目键 → 记下的那一笔)。只在内存里,不写盘、不上报;换天清空。
     private var lyricsNoted: (day: String, songs: [String: LyricsNote]) = ("", [:])
 
@@ -52,18 +76,35 @@ public final class TelemetryActivity: @unchecked Sendable {
         var sourceKey: String?
     }
 
-    public init(defaults: UserDefaults, key: String = TelemetryActivity.storageKey, clock: @escaping @Sendable () -> Date = { Date() }) {
+    public init(defaults: UserDefaults, key: String = TelemetryActivity.storageKey, recording: Recording = .off,
+                clock: @escaping @Sendable () -> Date = { Date() }) {
         self.defaults = defaults
         self.key = key
+        self.recording = recording
         self.clock = clock
     }
 
     /// 排给写盘队列的写入次数(不含还在等的延后写)。selftest 按它判「振荡时不每帧写盘」。
     public var queuedWrites: Int { lock.withLock { queuedWriteCount } }
 
+    /// 遥测开着。从 `undecided` 定下来时:开着就把这期间记下的卡顿写盘,关着就丢掉。
     public var isRecording: Bool {
-        get { lock.withLock { recording } }
-        set { lock.withLock { recording = newValue } }
+        get { lock.withLock { recording == .on } }
+        set {
+            lock.withLock {
+                let was = recording
+                recording = newValue ? .on : .off
+                guard was == .undecided else { return }
+                let held = heldWhileUndecided
+                heldWhileUndecided = false
+                if newValue {
+                    if held { store(load()) }
+                } else {
+                    cache = nil
+                    openHangs = [:]
+                }
+            }
+        }
     }
 
     /// 上次发心跳的那天(App 从 `TelemetryService.Keys.lastHeartbeatDay` 同步):更早的日子已随心跳发出,不再记、存着的也丢。
@@ -83,7 +124,7 @@ public final class TelemetryActivity: @unchecked Sendable {
         guard let tag = Telemetry.playerTag(forBundleID: bundleID, trusted: trustedBundleIDs) else { return }
         let day = Telemetry.day(now)
         lock.withLock {
-            guard recording, lastPlayer?.day != day || lastPlayer?.tag != tag else { return }
+            guard recording == .on, lastPlayer?.day != day || lastPlayer?.tag != tag else { return }
             lastPlayer = (day, tag)
             update(day: day) { if !$0.playersPlayed.contains(tag) { $0.playersPlayed.append(tag); $0.playersPlayed.sort() } }
         }
@@ -92,7 +133,7 @@ public final class TelemetryActivity: @unchecked Sendable {
     public func noteAction(_ action: TelemetryAction, now: Date = Date()) {
         let day = Telemetry.day(now)
         lock.withLock {
-            guard recording else { return }
+            guard recording == .on else { return }
             update(day: day) { Self.increment(&$0.actions, action.rawValue) }
         }
     }
@@ -106,7 +147,7 @@ public final class TelemetryActivity: @unchecked Sendable {
         let note = LyricsNote(result: result, language: language,
                               sourceKey: TelemetryLyricSource.key(source: source, result: result))
         lock.withLock {
-            guard recording else { return }
+            guard recording == .on else { return }
             if lyricsNoted.day != day { lyricsNoted = (day, [:]) }
             let previous = lyricsNoted.songs[track]
             guard previous != note else { return }
@@ -134,25 +175,30 @@ public final class TelemetryActivity: @unchecked Sendable {
     }
 
     /// 主线程卡住一次。`detail` 带了 `throttled` 的同时记进被压着的次数。`detail` 给了且当天同一类(被压着 / 没被压着)
-    /// 还有名额,记下概况(播放器填最近一次放歌的那个),之后的 `finishHang` / `attachHangStack` / `markHangThrottled`
-    /// 补到这一条。返回这一次有没有占到当天的概况名额(占到了,看门狗就该采栈)。
+    /// 还有名额,记下概况(播放器填最近一次放歌的那个)。返回回执,之后的 `finishHang` / `attachHangStack` /
+    /// `markHangThrottled` 带着它补到这一次;遥测关着时不记、返回 nil。
+    /// 没占到概况名额、只加次数的(锁屏一夜被压着的那一串)攒到 `deferredWriteDelay` 后写一次。
     @discardableResult
-    public func noteHang(_ detail: TelemetryHang? = nil, now: Date = Date()) -> Bool {
+    public func noteHang(_ detail: TelemetryHang? = nil, now: Date = Date()) -> HangTicket? {
         let day = Telemetry.day(now)
         return lock.withLock {
-            guard recording else { return false }
+            guard recording != .off else { return nil }
             let throttled = detail?.throttled != nil
+            let takesSlot = detail != nil
+                && Self.hasDetailSlot(load().first { $0.day == day }?.hangDetails ?? [], throttled: throttled)
             var index: Int?
-            update(day: day) { d in
+            update(day: day, deferWrite: !takesSlot) { d in
                 d.hangs = min(d.hangs + 1, Self.maxCount)
                 if throttled { d.throttledHangs = min(d.throttledHangs + 1, d.hangs) }
-                guard var detail, Self.hasDetailSlot(d.hangDetails, throttled: throttled) else { return }
+                guard takesSlot, var detail else { return }
                 if detail.player == nil { detail.player = lastPlayer?.tag }
                 d.hangDetails.append(detail)
                 index = d.hangDetails.count - 1
             }
-            openHang = (day, index, throttled)
-            return index != nil
+            hangSerial += 1
+            openHangs[hangSerial] = OpenHang(day: day, index: index, throttled: throttled)
+            if openHangs.count > Self.maxOpenHangs, let oldest = openHangs.keys.min() { openHangs[oldest] = nil }
+            return HangTicket(day: day, serial: hangSerial, detailed: index != nil)
         }
     }
 
@@ -163,29 +209,29 @@ public final class TelemetryActivity: @unchecked Sendable {
             && details.count < maxHangDetailsPerDay + maxThrottledHangDetailsPerDay
     }
 
-    /// 最近那次卡顿记下之后才看到主线程被系统压着(`reasons` 是并起来的全部):这一次补进被压着的次数(只补一次),
+    /// `hang` 那次卡顿记下之后才看到主线程被系统压着(`reasons` 是并起来的全部):这一次补进被压着的次数(只补一次),
     /// 概况补上标记。那一天已经随心跳发出、删掉了的不补。
-    public func markHangThrottled(_ reasons: [String]) {
+    public func markHangThrottled(_ reasons: [String], for hang: HangTicket) {
         guard !reasons.isEmpty else { return }
         lock.withLock {
-            guard recording, let open = openHang else { return }
+            guard recording != .off, let open = openHangs[hang.serial] else { return }
             var days = load()
             guard let i = days.firstIndex(where: { $0.day == open.day }) else { return }
             let before = days[i]
             if !open.throttled { days[i].throttledHangs = min(days[i].throttledHangs + 1, days[i].hangs) }
             if let index = open.index, index < days[i].hangDetails.count { days[i].hangDetails[index].throttled = reasons }
-            openHang = (open.day, open.index, true)
+            openHangs[hang.serial]?.throttled = true
             if days[i] != before { store(days) }
         }
     }
 
     /// 窗口布局轮数超限被接住一次(`DisplayCycleLimit`)。同一种(窗口、类名、pass 都一样)只加次数,
-    /// 当天已经记满 `maxLayoutLimitsPerDay` 种时新的一种不记。振荡时每帧都超一次:只加次数的不当场写盘,
+    /// 当天已经记满 `maxLayoutLimitsPerDay` 种时新的一种不记、不写盘(`update` 见到没变化就不写)。振荡时每帧都超一次:只加次数的不当场写盘,
     /// 攒到 `deferredWriteDelay` 后写一次,不然每帧在主线程上编码一遍、再让 UserDefaults 发一次全域变更通知(见 14 章决策 209)。
     public func noteLayoutLimit(window: String?, windowClass: String, pass: String, now: Date = Date()) {
         let day = Telemetry.day(now)
         lock.withLock {
-            guard recording else { return }
+            guard recording == .on else { return }
             let known = load().first { $0.day == day }?.layoutLimits
                 .contains { $0.window == window && $0.windowClass == windowClass && $0.pass == pass } ?? false
             update(day: day, deferWrite: known) { d in
@@ -198,25 +244,25 @@ public final class TelemetryActivity: @unchecked Sendable {
         }
     }
 
-    /// 最近那次卡顿恢复了,一共卡了 `seconds` 秒。`memoryPressure` 是整段停顿里看到的最紧的一档(跟记下时的取紧的),
-    /// `pageins` 是整段的换页次数(换掉记下时到报卡顿为止的那个数);读不到的不改。
-    public func finishHang(seconds: TimeInterval, memoryPressure: String? = nil, pageins: Int? = nil) {
-        changeOpenHang {
+    /// `hang` 那次卡顿恢复了,一共卡了 `seconds` 秒。`memoryPressure` 是整段停顿里看到的最紧的一档(跟记下时的取紧的),
+    /// `pageins` 是整段的换页次数(换掉记下时到报卡顿为止的那个数);nil(读不到、扣不出采栈那几秒的)不改。
+    public func finishHang(_ hang: HangTicket, seconds: TimeInterval, memoryPressure: String? = nil, pageins: Int? = nil) {
+        changeOpenHang(hang) {
             $0.duration = TelemetryHang.durationBucket(seconds: seconds)
             $0.memoryPressure = HangMemory.tighter($0.memoryPressure, memoryPressure)
             if let pageins { $0.pageins = pageins }
         }
     }
 
-    /// 最近那次卡顿采到了调用栈(只补一次)。
-    public func attachHangStack(_ stack: [TelemetryCrash.Frame]) {
+    /// `hang` 那次卡顿采到了调用栈(只补一次)。采样在报卡顿之后好几秒才跑完,这期间可能已经又卡了一次。
+    public func attachHangStack(_ stack: [TelemetryCrash.Frame], to hang: HangTicket) {
         guard !stack.isEmpty else { return }
-        changeOpenHang { if $0.stack.isEmpty { $0.stack = stack } }
+        changeOpenHang(hang) { if $0.stack.isEmpty { $0.stack = stack } }
     }
 
-    private func changeOpenHang(_ change: (inout TelemetryHang) -> Void) {
+    private func changeOpenHang(_ hang: HangTicket, _ change: (inout TelemetryHang) -> Void) {
         lock.withLock {
-            guard recording, let open = openHang, let index = open.index else { return }
+            guard recording != .off, let open = openHangs[hang.serial], let index = open.index else { return }
             var days = load()
             guard let i = days.firstIndex(where: { $0.day == open.day }), index < days[i].hangDetails.count else { return }
             let before = days[i].hangDetails[index]
@@ -245,7 +291,7 @@ public final class TelemetryActivity: @unchecked Sendable {
     public func clear() {
         lock.withLock {
             lastPlayer = nil
-            openHang = nil
+            openHangs = [:]
             lyricsNoted = ("", [:])
             store([])
         }
@@ -275,14 +321,18 @@ public final class TelemetryActivity: @unchecked Sendable {
 
     // 以下都在锁里调。
 
+    /// 这一天的数据没变就不写盘:布局超限当天记满几种、次数封顶之后,振荡时每帧还会来一次。
     private func update(day: String, deferWrite: Bool = false, _ change: (inout TelemetryActivityDay) -> Void) {
         guard acceptsDay()(day) else { return }
         var days = load()
         if let i = days.firstIndex(where: { $0.day == day }) {
+            let before = days[i]
             change(&days[i])
+            guard days[i] != before else { return }
         } else {
             var fresh = TelemetryActivityDay(day: day)
             change(&fresh)
+            guard fresh != TelemetryActivityDay(day: day) else { return }
             days.append(fresh)
         }
         store(days, deferred: deferWrite)
@@ -309,6 +359,10 @@ public final class TelemetryActivity: @unchecked Sendable {
         let accepts = acceptsDay()
         let kept = Array(days.filter { accepts($0.day) }.sorted { $0.day < $1.day }.suffix(Self.maxStoredDays))
         cache = kept
+        if recording == .undecided {
+            heldWhileUndecided = true
+            return
+        }
         if deferred {
             guard !deferredWritePending else { return }
             deferredWritePending = true

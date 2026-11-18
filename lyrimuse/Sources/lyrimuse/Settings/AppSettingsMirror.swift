@@ -78,20 +78,17 @@ enum AppSettingsMirror {
     /// 很难发现的缺口。这个通知是全域的,任何键变化都会来,配上防抖正好。
     ///
     /// 不会自激:这里写的是**文件**,不碰 UserDefaults。
+    ///
+    /// 走 `UserDefaultsChangeRelay`,别直接 `addObserver(…, queue: .main)`:那样后台线程每写一次偏好都要同步等主线程跑完
+    /// 这个回调,主线程卡住时遥测记账的写盘跟着卡住(见它的头注)。
     @MainActor
     static func startObserving() {
-        NotificationCenter.default.addObserver(
-            forName: UserDefaults.didChangeNotification,
-            object: UserDefaults.standard,
-            queue: .main
-        ) { _ in
-            MainActor.assumeIsolated {
-                pendingWrite?.cancel()
-                pendingWrite = Task { @MainActor in
-                    try? await Task.sleep(for: debounce)
-                    guard !Task.isCancelled else { return }
-                    write()
-                }
+        UserDefaultsChangeRelay.observe(.standard) {
+            pendingWrite?.cancel()
+            pendingWrite = Task { @MainActor in
+                try? await Task.sleep(for: debounce)
+                guard !Task.isCancelled else { return }
+                write()
             }
         }
     }

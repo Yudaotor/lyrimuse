@@ -1173,6 +1173,26 @@ func runOpsDiagnosticsTests() {
         expectEqual(T.Reading(simulating: "asleep") == nil && T.logNote([], priority: 4) == "", true, "节流判据: 认不出的不造;没看到节流时日志不加说明")
         expectEqual(T.logNote([T.lowPriority, T.locked], priority: 4), " (throttled: locked,low_priority; main thread priority 4)",
                     "节流判据: 日志说明")
+        // 锁屏标志位(14 章决策 231):由通知维护,通知在自己的队列上收,主线程堵着也收得到;没开始听时照旧当场问。
+        // 用本进程自己的通知名,别发系统的锁屏通知(正在跑的 Lyrimuse 会去拆关着的窗口)。
+        let lockState = ScreenLockState(lockedName: Notification.Name("me.yudaotor.lyrimuse.selftest.locked.\(getpid())"),
+                                        unlockedName: Notification.Name("me.yudaotor.lyrimuse.selftest.unlocked.\(getpid())"))
+        lockState.start(initial: { true })
+        let initialLocked = lockState.isLocked
+        func waitLock(_ expected: Bool, posting name: String) -> Bool {
+            DistributedNotificationCenter.default().postNotificationName(
+                Notification.Name("me.yudaotor.lyrimuse.selftest.\(name).\(getpid())"), object: nil, userInfo: nil, deliverImmediately: true)
+            // 主线程在这里干等、不跑 run loop:收通知不能靠主线程。
+            let deadline = Date().addingTimeInterval(3)
+            while lockState.isLocked != expected, Date() < deadline { Thread.sleep(forTimeInterval: 0.01) }
+            return lockState.isLocked == expected
+        }
+        let unlockedSeen = waitLock(false, posting: "unlocked")
+        let lockedSeen = waitLock(true, posting: "locked")
+        lockState.stop()
+        expectEqual([initialLocked, unlockedSeen, lockedSeen], [true, true, true],
+                    "锁屏标志位: 初值取启动时问到的,之后跟着解锁 / 锁屏通知变,主线程堵着也收得到")
+
         // 真读数:在别的线程上读一条被压到后台档的线程(看门狗就是这样读主线程的)。
         var bgPort: mach_port_t = 0
         let bgReady = DispatchSemaphore(value: 0), bgDone = DispatchSemaphore(value: 0)
@@ -1206,6 +1226,18 @@ func runOpsDiagnosticsTests() {
         stallMemory.observe(pressure: M.normal)
         expectEqual([stallMemory.pressure, stallMemory.pageins(now: 1_250).map(String.init), M.Stall().pageins(now: 1_250).map(String.init)],
                     [M.warning, "250", nil], "内存读数: 一次停顿里压力只升不降,换页从投探测时算起,没记下起点的不报")
+        // 恢复时报的换页扣掉 /usr/bin/sample 采栈那几秒造成的(14 章决策 231):采完了扣,还在采就扣不出、留着报卡顿时的数。
+        var sampled = M.Stall(pageinsAtStart: 1_000)
+        let notSampled = sampled.pageinsExcludingSample(now: 1_090)
+        sampled.sampleStarted()
+        let whileSampling = sampled.pageinsExcludingSample(now: 1_090)
+        sampled.sampleFinished(pageins: 76)
+        let afterSample = sampled.pageinsExcludingSample(now: 1_090)
+        sampled.sampleFinished(pageins: 500)
+        let overSubtracted = sampled.pageinsExcludingSample(now: 1_090)
+        sampled.sampleFinished(pageins: nil)
+        expectEqual([notSampled, whileSampling, afterSample, overSubtracted, sampled.pageinsExcludingSample(now: 1_090)],
+                    [90, nil, 14, 0, nil], "换页次数: 恢复时扣掉采栈那几秒的;还在采、采栈的读不到时不报(留着报卡顿时的),扣过头记 0")
         expectEqual([M.logNote(pressure: M.critical, pageins: 1_200), M.logNote(pressure: nil, pageins: 0), M.logNote(pressure: nil, pageins: nil)],
                     [" (memory pressure critical, 1200 page-ins)", " (0 page-ins)", ""], "内存读数: 日志说明")
         // 真读数:进程自己的换页累计读得到、不倒退;系统内存压力读得到三档之一(这台机器此刻是哪档都行)。
@@ -1236,10 +1268,10 @@ func runOpsDiagnosticsTests() {
                                      encoding: .utf8)) ?? ""
         let handleBody = sourceBody("private func handle(_ event: Tracker.Event", in: dogSource)
         let expectedAt = handleBody.range(of: "if Self.isExpected(probeSentAt: probeSentAt, expected")
-        let telemetryAt = handleBody.range(of: "TelemetryActivity.shared")
+        let telemetryAt = handleBody.range(of: "hangs.stalled(context)")
         expectEqual(expectedAt != nil && telemetryAt != nil && expectedAt!.lowerBound < telemetryAt!.lowerBound
-                    && sourceHas(dogSource, "let sentAt = self.tracker.pendingSince")
-                    && sourceHas(dogSource, "let sentAt = tracker.pendingSince"), true,
+                    && sourceHas(sourceBody("private func takeAnswer()", in: dogSource), "let sentAt = tracker.pendingSince")
+                    && sourceHas(sourceBody("private func tick()", in: dogSource), "let sentAt = tracker.pendingSince"), true,
                     "预期停顿: 记遥测、采样之前先看是不是预期内的,两处判卡顿都带上探测投出的时刻")
         // 接线:真的投探测、主线程执行到、报事件。间隔与阈值调短,事件交给回调(不记日志、不采样)。
         // 空闲那段要比卡顿阈值短一截:机器被别的编译占满时主线程晚几百毫秒才执行到探测是常事,

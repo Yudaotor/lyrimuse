@@ -72,8 +72,9 @@ export default {
     const url = new URL(request.url);
     try {
       if (request.method === "POST" && (url.pathname === "/v1/heartbeat" || url.pathname === "/v1/crash")) {
-        // 按来源 IP 限流,防有人刷请求灌假数据、耗光 D1 写额度。超了回 503 而不是 4xx:App 把 4xx 当成这一份本身不合格、
-        // 不再重发,503 才会过一阵再试。正常一台机器一天只发一条心跳、最多 5 份崩溃。这个绑定拦不住连发,
+        // 按来源 IP 限流,防有人刷请求灌假数据、耗光 D1 写额度。超了回 503:App 只把 400 / 413 当作这一份永久拒收,
+        // 其余 4xx、503 和连不上都下次重发;同一份连续 3 次 5xx(503 除外)才跳过,所以限流不会让崩溃报告被跳过。
+        // 正常一台机器一天只发一条心跳、最多 5 份崩溃。这个绑定拦不住连发,
         // 按 IP 的硬限额在 heartbeat() / crash() 里(quota())。
         if (env.INGEST_LIMITER) {
           const ip = request.headers.get("cf-connecting-ip") || "unknown";
@@ -311,7 +312,8 @@ async function heartbeat(request, env) {
            throttledHangs == null ? null : Math.min(throttledHangs, hangs),
            // 旧版 App 不发 lyric_sources,存空,统计里跟「报了但一首都没有」分得开。
            a.lyric_sources === undefined ? null : JSON.stringify(lyricSourceCounts(a.lyric_sources))));
-    // 那一天的卡顿概况整批替换(同一天重发时以新的为准)。版本与系统取这条心跳的,活动是之前几天的,升级当天可能差一版。
+    // 那一天的卡顿概况整批替换(同一天重发时以新的为准)。版本取概况自己带的(记卡顿时的版本),旧版 App 不带时取这条
+    // 心跳的,那样升级当天旧版记的卡顿会算到新版上;系统、芯片取心跳的。
     statements.push(env.DB.prepare(`DELETE FROM hang_events WHERE day = ?1 AND install_id = ?2`).bind(a.day, installID));
     // 概况条数不超过当天报的卡顿次数。
     const details = Array.isArray(a.hang_details)
@@ -320,7 +322,7 @@ async function heartbeat(request, env) {
       `INSERT INTO hang_events (day, install_id, seq, received_at, app_version, os_version, arch, duration, since_launch,
                                 since_wake, player, windows, thermal, stack, signature, throttled, memory_pressure, pageins)
        VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18)`
-    ).bind(a.day, installID, seq, now, e.app_version, e.os_version, e.arch, h.duration, h.since_launch, h.since_wake,
+    ).bind(a.day, installID, seq, now, h.app_version ?? e.app_version, e.os_version, e.arch, h.duration, h.since_launch, h.since_wake,
            h.player, JSON.stringify(h.windows), h.thermal, JSON.stringify(h.stack), hangSignature(h.stack),
            h.throttled.length ? JSON.stringify(h.throttled) : null, h.memory_pressure, h.pageins)));
   }
@@ -395,6 +397,8 @@ function cleanHang(h) {
     // 旧版 App 不发、或 App 读不到,记成空。
     memory_pressure: oneOf(h.memory_pressure, HANG_MEMORY_PRESSURE),
     pageins: int(h.pageins, 0, MAX_HANG_PAGEINS),
+    // 记卡顿时的 App 版本;旧版 App 不发,入库时退回心跳的版本。
+    app_version: str(h.app_version, 32),
   };
 }
 

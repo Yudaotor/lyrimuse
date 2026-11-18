@@ -52,8 +52,9 @@ public enum MainThreadThrottle {
     }
 
     /// 读这一刻的状态。`thread` 是要看的那条线程的 mach 端口(看门狗传主线程的),可以在别的线程上读。
+    /// 锁屏读 `ScreenLockState` 的标志位,不问 WindowServer。
     public static func read(thread: mach_port_t?) -> Reading {
-        Reading(screenLocked: screenIsLocked(), priority: thread.flatMap(priority(ofThread:)))
+        Reading(screenLocked: ScreenLockState.shared.isLocked, priority: thread.flatMap(priority(ofThread:)))
     }
 
     /// 在主线程上调:读主线程自己。
@@ -62,6 +63,8 @@ public enum MainThreadThrottle {
     }
 
     /// 会话字典里没有 `CGSSessionScreenIsLocked` 这一项就是没锁(解锁状态下这一项不存在)。
+    /// 这是发给 WindowServer 的同步 mach 消息(实测一次约 0.24 毫秒),WindowServer 卡住时调用方跟着卡;
+    /// 看门狗队列上别直接调,读 `ScreenLockState`。
     public static func screenIsLocked() -> Bool {
         let session = CGSessionCopyCurrentDictionary() as? [String: Any]
         return session?["CGSSessionScreenIsLocked"] as? Bool ?? false
@@ -78,5 +81,71 @@ public enum MainThreadThrottle {
         }
         guard status == KERN_SUCCESS else { return nil }
         return min(info.pth_curpri, info.pth_priority)
+    }
+}
+
+/// 屏幕锁没锁的标志位,由系统的 `com.apple.screenIsLocked` / `com.apple.screenIsUnlocked` 分布式通知维护。通知在自己的
+/// 队列上收,主线程卡住时也收得到;读标志位不碰 WindowServer。`start()` 时问一次 `screenIsLocked()` 作初值(之前
+/// 已经收到通知的不覆盖),之后只认通知。没 `start()` 过时照旧当场问。见 14 章决策 231。
+public final class ScreenLockState: @unchecked Sendable {
+    public static let shared = ScreenLockState()
+    public static let lockedNotification = Notification.Name("com.apple.screenIsLocked")
+    public static let unlockedNotification = Notification.Name("com.apple.screenIsUnlocked")
+
+    private let lockedName: Notification.Name
+    private let unlockedName: Notification.Name
+    private let lock = NSLock()
+    private var locked = false
+    private var heard = false
+    private var observers: [NSObjectProtocol] = []
+    private let delivery: OperationQueue = {
+        let queue = OperationQueue()
+        queue.maxConcurrentOperationCount = 1
+        queue.qualityOfService = .utility
+        return queue
+    }()
+
+    /// 单测用自己的通知名,别发系统那两个(正在跑的 Lyrimuse 收到锁屏通知会去拆关着的窗口)。
+    public init(lockedName: Notification.Name = ScreenLockState.lockedNotification,
+                unlockedName: Notification.Name = ScreenLockState.unlockedNotification) {
+        self.lockedName = lockedName
+        self.unlockedName = unlockedName
+    }
+
+    public var isLocked: Bool {
+        let value: Bool? = lock.withLock { observers.isEmpty ? nil : locked }
+        return value ?? MainThreadThrottle.screenIsLocked()
+    }
+
+    /// 开始听通知(重复调只登记一次)。`initial` 给初值。
+    public func start(initial: () -> Bool = MainThreadThrottle.screenIsLocked) {
+        let center = DistributedNotificationCenter.default()
+        let registered: Bool = lock.withLock {
+            guard observers.isEmpty else { return false }
+            observers = [
+                center.addObserver(forName: lockedName, object: nil, queue: delivery) { [weak self] _ in self?.heard(locked: true) },
+                center.addObserver(forName: unlockedName, object: nil, queue: delivery) { [weak self] _ in self?.heard(locked: false) },
+            ]
+            return true
+        }
+        guard registered else { return }
+        let value = initial()
+        lock.withLock { if !heard { locked = value } }
+    }
+
+    /// 撤掉通知(单测收尾用)。
+    public func stop() {
+        let removed: [NSObjectProtocol] = lock.withLock {
+            defer { observers = []; heard = false }
+            return observers
+        }
+        removed.forEach { DistributedNotificationCenter.default().removeObserver($0) }
+    }
+
+    private func heard(locked value: Bool) {
+        lock.withLock {
+            heard = true
+            locked = value
+        }
     }
 }

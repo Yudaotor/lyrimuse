@@ -23,10 +23,13 @@ public struct TelemetryHang: Codable, Equatable, Sendable {
     public var memoryPressure: String?
     /// 停顿期间 App 进程的换页次数(page-in):先记到报卡顿那一刻为止的,恢复时补成整段的;读不到为 nil,编码时不带这个键。
     public var pageins: Int?
+    /// 记这一条时的 App 版本(`CFBundleShortVersionString`)。心跳带的是发出时的版本,升级当天旧版记的卡顿要按这一项归版本;
+    /// 取不到为 nil,编码时不带这个键,接收端退回心跳的版本。
+    public var appVersion: String?
 
     public init(duration: String = TelemetryHang.unrecovered, sinceLaunch: String, sinceWake: String?, player: String? = nil,
                 windows: [String], thermal: String, stack: [TelemetryCrash.Frame] = [], throttled: [String]? = nil,
-                memoryPressure: String? = nil, pageins: Int? = nil) {
+                memoryPressure: String? = nil, pageins: Int? = nil, appVersion: String? = nil) {
         self.duration = duration
         self.sinceLaunch = sinceLaunch
         self.sinceWake = sinceWake
@@ -37,14 +40,17 @@ public struct TelemetryHang: Codable, Equatable, Sendable {
         self.throttled = throttled
         self.memoryPressure = memoryPressure
         self.pageins = pageins
+        self.appVersion = appVersion
     }
 
     enum CodingKeys: String, CodingKey {
         case duration, sinceLaunch = "since_launch", sinceWake = "since_wake", player, windows, thermal, stack, throttled
-        case memoryPressure = "memory_pressure", pageins
+        case memoryPressure = "memory_pressure", pageins, appVersion = "app_version"
     }
 
     public static let unrecovered = "unrecovered"
+    /// 本进程的 App 版本,看门狗记概况时填进 `appVersion`;不是以 App 身份跑(selftest)时为 nil。
+    public static let currentAppVersion = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String
     /// Worker(telemetry-worker/src/index.js 的 HANG_DURATIONS / HANG_ELAPSED / HANG_WINDOWS / HANG_THERMAL)认的取值,两处一起改。
     public static let durationBuckets = ["5-10s", "10-30s", "30s+", unrecovered]
     public static let elapsedBuckets = ["<1m", "1-10m", "10-60m", "1-6h", "6h+"]

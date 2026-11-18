@@ -61,10 +61,12 @@ public enum HangMemory {
         return UInt64(UInt32(bitPattern: info.pageins))
     }
 
-    /// 一次探测期间的读数:投出时的换页累计,和这期间看到过的最紧的内存压力。
+    /// 一次探测期间的读数:投出时的换页累计,这期间看到过的最紧的内存压力,和 `/usr/bin/sample` 采栈造成的换页。
     public struct Stall: Equatable, Sendable {
         public var pageinsAtStart: UInt64?
         public private(set) var pressure: String?
+        /// 采栈那几秒的换页次数:没采为 0;还在采、或读不到时为 nil(扣不出来)。采栈读目标进程的内存,换页记在 App 头上。
+        public private(set) var samplePageins: Int? = 0
 
         public init(pageinsAtStart: UInt64? = nil, pressure: String? = nil) {
             self.pageinsAtStart = pageinsAtStart
@@ -78,6 +80,21 @@ public enum HangMemory {
         /// 从投出到读数 `now` 之间的换页次数。
         public func pageins(now: UInt64?) -> Int? {
             HangMemory.pageinsBetween(pageinsAtStart, now)
+        }
+
+        public mutating func sampleStarted() {
+            samplePageins = nil
+        }
+
+        public mutating func sampleFinished(pageins: Int?) {
+            samplePageins = pageins
+        }
+
+        /// 恢复时报的整段换页次数:扣掉采栈那几秒的(同一时段主线程自己的换页一起扣掉,只会少报);采栈还没跑完、
+        /// 或它的换页读不到时为 nil,概况留着报卡顿时的那个数。
+        public func pageinsExcludingSample(now: UInt64?) -> Int? {
+            guard let sample = samplePageins, let total = pageins(now: now) else { return nil }
+            return max(0, total - sample)
         }
     }
 }

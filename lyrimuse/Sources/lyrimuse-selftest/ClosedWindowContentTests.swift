@@ -50,10 +50,17 @@ func runClosedWindowContentContracts() {
                 && sourceHas(triggers, "forName: NSWorkspace.screensDidSleepNotification")
                 && sourceHas(read("AppDelegate.swift"), "ClosedWindowContent.installDeferredReleaseTriggers()"), true,
                 "关窗放内容: 启动时装好锁屏、显示器睡眠两个触发")
-    expectEqual(sourceHas(begin, "if reshowIsDeferred { MainThreadWatchdog.shared.beginExpectedStall(")
-                && sourceHas(finish, "MainThreadWatchdog.shared.endExpectedStall()"), true,
-                "关窗放内容: 延后拆的那一段告诉卡顿探针是有意的,收尾时结束")
     let fire = sourceBody("private func fireDeferred(", in: helper)
+    let fireBeginAt = fire.range(of: "beginExpectedStall()")
+    let prepareAt = fire.range(of: "prepare?()")
+    expectEqual(sourceHas(begin, "if reshowIsDeferred { beginExpectedStall() }")
+                && sourceHas(finish, "endExpectedStall()")
+                && fireBeginAt != nil && prepareAt != nil && fireBeginAt!.lowerBound < prepareAt!.lowerBound
+                && sourceHas(sourceBody("private func beginExpectedStall()", in: helper), "MainThreadWatchdog.shared.beginExpectedStall(")
+                && sourceHas(sourceBody("private func endExpectedStall()", in: helper), "MainThreadWatchdog.shared.endExpectedStall()"), true,
+                "关窗放内容: 延后拆的那一段(从清缓存的 prepare 起)告诉卡顿探针是有意的,收尾时结束")
+    expectEqual(sourceHas(begin, "if reshow == nil { endExpectedStall() }"), true,
+                "关窗放内容: 摆回去之前窗口已经重新开着、不拆了,先开的预期停顿当场结束")
     expectEqual(sourceHas(fire, "guard let window = deferredWindow, !window.isVisible else {")
                 && sourceHas(sourceBody("func windowAppeared() -> Bool", in: helper), "cancelDeferred()"), true,
                 "关窗放内容: 锁屏时窗口已经重新开着就不拆,重开时作废登记")
