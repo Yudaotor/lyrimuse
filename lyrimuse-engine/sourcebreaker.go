@@ -305,12 +305,16 @@ func (b *lyricSourceBreaker) blockedFor(source string) (time.Duration, bool) {
 	return b.blockedForLocked(source, b.now())
 }
 
+// 用完每日额度(sourcedayquota.go)也算在这里:同样是停到某个时刻、前台也不问。
 func (b *lyricSourceBreaker) blockedForLocked(source string, now time.Time) (time.Duration, bool) {
-	bs := b.blocked[source]
-	if bs == nil || !bs.until.After(now) {
-		return 0, false
+	var left time.Duration
+	if bs := b.blocked[source]; bs != nil && bs.until.After(now) {
+		left = bs.until.Sub(now)
 	}
-	return bs.until.Sub(now), true
+	if d, ok := sourceDayQuotaPausedFor(source, now); ok && d > left {
+		left = d
+	}
+	return left, left > 0
 }
 
 // cooldownReason:source 这会儿为什么不能问(lyricSourceCooldownReason*);能问返回空串。反爬暂停排在前面:
@@ -319,6 +323,9 @@ func (b *lyricSourceBreaker) cooldownReason(source string) string {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	now := b.now()
+	if _, ok := sourceDayQuotaPausedFor(source, now); ok {
+		return lyricSourceSkipReasonBudget
+	}
 	if _, ok := b.blockedForLocked(source, now); ok {
 		return lyricSourceCooldownReasonBlocked
 	}

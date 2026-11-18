@@ -49,6 +49,8 @@ func runTestLyricSourcesCLI(args []string) {
 	if configDir() != "" {
 		cfgPath := filepath.Join(configDir(), "config.json")
 		setFeatures(loadFeatureFlags(filepath.Join(filepath.Dir(cfgPath), clientName+"-features.json")))
+		// 歌词源的小时 / 每日额度跟常驻引擎共用(sourcedayquota.go)。
+		useSharedLyricSourceQuota()
 	}
 
 	targets := enabledLyricSourceNames()
@@ -68,7 +70,7 @@ func runTestLyricSourcesCLI(args []string) {
 
 	// 取消闸:targets 里每个源都已经有结论之后,这一轮探测剩下的部分再跑也不会改变
 	// 任何输出——取消掉让 runProbe 立刻收工,理由见函数头注。
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(withOnDemandLyricRound(context.Background()))
 	defer cancel()
 	// 专用探测曲在别的 goroutine 里报结论,reported 的读写都要过 mu。
 	var mu sync.Mutex

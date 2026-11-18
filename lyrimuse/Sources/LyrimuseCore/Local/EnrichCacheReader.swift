@@ -996,6 +996,8 @@ public enum EnrichCacheReader {
         public let complete: Bool
         /// 手动采纳留下的正文指纹(`manual_pick_sha`),没有时为空。
         public var manualPickSHA: String = ""
+        /// 这份歌词在源网站上的页面(`lyrics_source_url`),搜索候选歌词面板「当前使用」那条的来源链接用。
+        public var lyricsSourceURL: String = ""
 
         /// 当前这份是不是用户手动选定的、锁没锁。正文没读全时不标。
         public var manualPickMark: ManualPickLock.Mark {
@@ -1042,7 +1044,8 @@ public enum EnrichCacheReader {
         }
         return StoredEntry(key: key, lyrics: lyrics, lyricsTr: tr, lyricsRoma: roma, lyricsYRC: yrc, plainLyrics: plain,
                            lyricsKana: entry.lyricsKana ?? "", instrumental: entry.instrumental ?? false, manualLyrics: entry.manualLyrics ?? false,
-                           lyricsSource: entry.lyricsSource, complete: complete, manualPickSHA: entry.manualPickSHA ?? "")
+                           lyricsSource: entry.lyricsSource, complete: complete, manualPickSHA: entry.manualPickSHA ?? "",
+                           lyricsSourceURL: entry.lyricsSourceURL ?? "")
     }
 
     /// 精确 key 没命中时,再按"忽略空格/大小写/繁简"找一次。

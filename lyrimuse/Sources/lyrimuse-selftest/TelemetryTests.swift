@@ -750,7 +750,7 @@ func runTelemetryTests() {
         expectEqual(Set(TelemetryLyricSource.tags).count == TelemetryLyricSource.tags.count
                         && ["unknown", "other", TelemetryLyricSource.subtitles].allSatisfy(TelemetryLyricSource.tags.contains), true,
                     "歌词来源: 名单不重复,带 unknown / other / subtitles")
-        // 引擎会写进条目 lyrics_source 的值:十五个歌词源(lyricSourceNames)和各本机来源常量(`const …LyricsSource = "…"`)。
+        // 引擎会写进条目 lyrics_source 的值:十六个歌词源(lyricSourceNames)和各本机来源常量(`const …LyricsSource = "…"`)。
         // 漏了的会在遥测里全记成 other。
         let engineDir = root.appendingPathComponent("../../lyrimuse-engine")
         let enrichGo = (try? String(contentsOf: engineDir.appendingPathComponent("enrich.go"), encoding: .utf8)) ?? ""

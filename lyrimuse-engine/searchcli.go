@@ -128,6 +128,8 @@ func runSearchLyricsCLI(args []string) {
 		// 常驻引擎存着的反爬暂停(被拦后停 15 分钟～4 小时,见 sourcebreaker.go)只读读进来:暂停期里手动搜索照样不去碰它。
 		// 不写回 —— 存盘那份归常驻进程,两个进程各写各的会互相盖掉。
 		loadLyricSourceBlocksReadOnly(filepath.Join(filepath.Dir(cfgPath), lyricSourceBlocksFileName))
+		// 歌词源的小时 / 每日额度跟常驻引擎记在同一份文件里:这里发的请求一样算数,那边记下的用完了这里也不问(sourcedayquota.go)。
+		useSharedLyricSourceQuota()
 		// AMLL 索引只读磁盘上那份,核对交给常驻引擎(见 amllIndexRefreshEnabled)。
 		amllIndexRefreshEnabled.Store(false)
 		// 搜的是正在放的这首时,播放器给的身份照常驻进程那样记下,见 notePlaybackIDsFromAppState。

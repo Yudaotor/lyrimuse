@@ -107,7 +107,7 @@ func TestPlayerNoVocalsWired(t *testing.T) {
 	for file, needles := range map[string][]string{
 		"enrich.go": {
 			"} else if !enrichInflight[key] && playerNoVocalsFillDue(e, key, bundleID, artist, title, album) {",
-			"go playerNoVocalsFill(withLyricSearchTitle(context.Background(), searchTitle), key, bundleID, artist, title, album, durationSecs)",
+			"go playerNoVocalsFill(withLyricSearchTitle(withOnDemandLyricRound(context.Background()), searchTitle), key, bundleID, artist, title, album, durationSecs)",
 		},
 		"playernovocals.go": {
 			"ctx, cancel := withCancelAfter(withLyricSourceOnly(ctx, []string{src}), playerNoVocalsProbeTimeout)",

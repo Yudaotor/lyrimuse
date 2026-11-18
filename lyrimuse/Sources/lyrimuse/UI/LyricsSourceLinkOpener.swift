@@ -2,7 +2,8 @@ import AppKit
 import LyrimuseCore
 import os
 
-/// 打开歌词来源处的链接(`LyricsSourceLink`):歌词窗口简介的「来源」行、歌词管理详情的来源胶囊共用。用默认浏览器打开;
+/// 打开歌词来源处的链接(`LyricsSourceLink`):歌词窗口简介的「来源」行、歌词管理详情的来源胶囊、搜索候选歌词面板的来源标、
+/// 歌词版本对照表的「歌词来源」格共用。用默认浏览器打开;
 /// 本机验证时 `debug/hold-opens` 开着就只记下要打开的地址(`debug/state` 的 `heldOpens`),不弹浏览器。
 @MainActor
 enum LyricsSourceLinkOpener {

@@ -1123,14 +1123,14 @@ func trackEnrichment(artist, title, album, bundleID string, durationSecs float64
 		// 头注)。后台补封面给专辑定下的封面(coverSettled)设备封面不再顶掉,也不起。
 		if isNewTrack && e.CoverSource != "device" && e.CoverSource != "player" && !coverSettled(e) && !enrichInflight[key] {
 			enrichInflight[key] = true
-			go applyDeviceCoverUpgrade(withPlayerCover(context.Background(), playerCover), key, artist, title, album, bundleID)
+			go applyDeviceCoverUpgrade(withPlayerCover(withOnDemandLyricRound(context.Background()), playerCover), key, artist, title, album, bundleID)
 		} else if isNewTrack && e.CoverSource == "device" && !deviceCoverUpgradeTried[key] && !enrichInflight[key] &&
 			deviceCoverSmall(e.CoverURL) {
 			// 存量的小设备封面换成同一张图的清晰版(见 upgradeSmallDeviceCover)。每个条目每次启动只试一次:
 			// 换不成的条目每次都会走到这一档,不限次数的话后面的外围补全(按远程结果再比一次)永远轮不到。
 			deviceCoverUpgradeTried[key] = true
 			enrichInflight[key] = true
-			go upgradeSmallDeviceCover(withPlayerCover(context.Background(), playerCover), key, e.CoverURL,
+			go upgradeSmallDeviceCover(withPlayerCover(withOnDemandLyricRound(context.Background()), playerCover), key, e.CoverURL,
 				artist, title, album, durationSecs)
 		} else if (motionVerdictStale(e) || motionVerdictSourcesChanged(e) || motionCoverFallbackUnasked(e)) && !motionRecheckTried[motionRecheckKey(key)] && !enrichInflight[key] {
 			// 动态封面结论是对着别的封面核的(封面后来换过),或者核出「没有」时 QQ / 网易云那支还没问过、酷狗本机后来有了:按现在这张重核。每个条目每次
@@ -1152,25 +1152,26 @@ func trackEnrichment(artist, title, album, bundleID string, durationSecs float64
 			// 共用同一套上限与节流,而**不是**塞进 needsPeripheralBackfill:那个函数被四个测试文件
 			// 按三参数签名调着,为一条判据改签名不值得。三态判据见 motionCoverWorthBackfill。
 			enrichInflight[key] = true
-			go backfillPeripheralFields(withPlayerCover(withLyricSearchTitle(context.Background(), searchTitle), playerCover), key, artist, title, album, durationSecs)
+			go backfillPeripheralFields(withPlayerCover(withLyricSearchTitle(withOnDemandLyricRound(context.Background()), searchTitle), playerCover), key, artist, title, album, durationSecs)
 		} else if needsLyricsFirstFill(e) && !enrichInflight[key] {
 			// "条目已存在但一条歌词都没有" —— 少了这条,一首歌搜砸一次就永久卡住,见
 			// needsLyricsFirstFill 的注释。排在下面两条前面无所谓先后:那两条对空歌词条目都
-			// 直接 return false。
+			// 直接 return false。只因为补空扫描没问只在播放那一侧问的源才补的,只补问那几个(lyricsFirstFillOnly)。
 			enrichInflight[key] = true
-			go retryLyricsUpgrade(withLyricSearchTitle(context.Background(), searchTitle), key, artist, title, album, durationSecs, true)
+			go retryLyricsUpgradeWith(withLyricSearchTitle(withOnDemandLyricRound(context.Background()), searchTitle), key, artist, title, album, durationSecs, true,
+				lyricsRescoreOpts{onlySources: lyricsFirstFillOnly(e)})
 		} else if !enrichInflight[key] && playerNoVocalsFillDue(e, key, bundleID, artist, title, album) {
 			// 预取、补空存下的没词条目正被能给纯音乐信号的播放器放着:它说没有人声就不等退避补一轮(见 playernovocals.go)。
 			enrichInflight[key] = true
-			go playerNoVocalsFill(withLyricSearchTitle(context.Background(), searchTitle), key, bundleID, artist, title, album, durationSecs)
+			go playerNoVocalsFill(withLyricSearchTitle(withOnDemandLyricRound(context.Background()), searchTitle), key, bundleID, artist, title, album, durationSecs)
 		} else if needsLyricsRescore(e, pinned, features().LyricsAutoUpgrade) && !enrichInflight[key] {
 			enrichInflight[key] = true
-			go rescoreLyrics(withLyricSearchTitle(context.Background(), searchTitle), key, artist, title, album, durationSecs)
+			go rescoreLyrics(withLyricSearchTitle(withOnDemandLyricRound(context.Background()), searchTitle), key, artist, title, album, durationSecs)
 		} else if recheck.due() && !enrichInflight[key] {
 			// 已经有词、值得再全源搜一轮:这一刻成立的理由这一轮全部带上(见 lyricsRecheck)。
 			recheck.consumeLocked(key)
 			enrichInflight[key] = true
-			go retryLyricsUpgradeWith(withLyricSearchTitle(context.Background(), searchTitle), key, artist, title, album, durationSecs, false,
+			go retryLyricsUpgradeWith(withLyricSearchTitle(withOnDemandLyricRound(context.Background()), searchTitle), key, artist, title, album, durationSecs, false,
 				lyricsRescoreOpts{reasons: recheck.String()})
 		} else if needsBackgroundVocalsBackfill(e) && !enrichInflight[key] && bgBackfillOnce(key) {
 			// 存量 amll / applemusic 条目补背景人声,只重取那一个源、不动正文(见 bgbackfill.go)。
@@ -1179,11 +1180,11 @@ func trackEnrichment(artist, title, album, bundleID string, durationSecs float64
 		} else if needsLyricsKanaBackfill(e) && !enrichInflight[key] && kanaBackfillOnce(key, e) {
 			// 日文歌补借假名标注、让生成的罗马音用上它,不动正文(见 kanabackfill.go)。
 			enrichInflight[key] = true
-			go backfillLyricsKana(withLyricSearchTitle(context.Background(), searchTitle), key, artist, title, album, durationSecs)
+			go backfillLyricsKana(withLyricSearchTitle(withOnDemandLyricRound(context.Background()), searchTitle), key, artist, title, album, durationSecs)
 		} else if needsPlayerLyricsCheck(e, bundleID, durationSecs) && !enrichInflight[key] && playerLyricsCheckOnce(key, bundleID, e) {
 			// 在这个播放器里放、主歌词不是它自家源:只问它自家那个源、比一次时间轴(见 playerlyrics.go)。
 			enrichInflight[key] = true
-			go checkPlayerLyrics(withLyricSearchTitle(context.Background(), searchTitle), key, artist, title, album, durationSecs, bundleID)
+			go checkPlayerLyrics(withLyricSearchTitle(withOnDemandLyricRound(context.Background()), searchTitle), key, artist, title, album, durationSecs, bundleID)
 		}
 		// 机翻不排上面这条链,跟哪一路都能同时跑,理由见 translatestart.go。
 		startTranslationBackfillLocked(key, e)
@@ -1230,7 +1231,7 @@ func trackEnrichment(artist, title, album, bundleID string, durationSecs float64
 		// 主进程一起消失,不需要额外传导那层取消;这里只需要"能单独取消某一个 key"
 		// 这一件事。
 		// 解析的是正在播的这首时,首轮里歌词可以先上屏(见 earlylyrics.go);判据按 playKey,poller 记在播那首用的就是它。
-		cancelCtx, cancel := context.WithCancel(withEarlyLyricsTarget(withYouTubeMusicVideoID(context.Background(), kasetVideoID), playKey))
+		cancelCtx, cancel := context.WithCancel(withEarlyLyricsTarget(withYouTubeMusicVideoID(withOnDemandLyricRound(context.Background()), kasetVideoID), playKey))
 		cancelCtx = withLyricSearchTitle(cancelCtx, searchTitle)
 		cancelCtx = withPlayerCover(cancelCtx, playerCover)
 		enrichCancelFuncs[key] = cancel
@@ -1755,6 +1756,21 @@ func needsLyricsFirstFill(e enrichEntry) bool {
 	return needsLyricsFirstFillFor(e, false)
 }
 
+// lyricsFirstFillOnly:播放时补空只因为有只在播放那一侧问的源没问过(补空扫描不问它们,名单里缺它们)时,只补问这几个源;
+// 别的理由(退避到期、新开了别的源、时长改了)也成立时返回 nil,全源补一轮。
+func lyricsFirstFillOnly(e enrichEntry) []string {
+	if needsLyricsFirstFillFor(e, true) || !needsLyricsFirstFillFor(e, false) {
+		return nil
+	}
+	var out []string
+	for _, s := range enabledNetworkLyricSources() {
+		if lyricSourceOnDemandOnly[s] && !slices.Contains(e.LyricsSourcesEnabled, s) {
+			out = append(out, s)
+		}
+	}
+	return out
+}
+
 // needsLyricsFirstFillFor:bulk 为真时是补空扫描在问,「新开的源」不算只在播放那一侧问的源(lyricSourceEnabledSinceFor)。
 func needsLyricsFirstFillFor(e enrichEntry, bulk bool) bool {
 	if !e.Lyrics.IsZero() || e.ManualLyrics || e.Instrumental {
@@ -2179,6 +2195,7 @@ func retryLyricsUpgrade(ctx context.Context, key, artist, title, album string, d
 func retryLyricsUpgradeWith(ctx context.Context, key, artist, title, album string, durationSecs float64, firstFill bool, opts lyricsRescoreOpts) {
 	// 已经有词在屏上、不急:主用主机答了却没有能用的结果时也问备用主机,见 lyricSearchAsksBackupHosts。
 	ctx = withLyricSearchBackupHosts(ctx)
+	ctx = withLyricSourceOnly(ctx, opts.onlySources)
 	defer func() {
 		enrichMu.Lock()
 		delete(enrichInflight, key)
@@ -2299,8 +2316,9 @@ func retryLyricsUpgradeWith(ctx context.Context, key, artist, title, album strin
 	// 一个歌词源都没连上(断网、DNS 抽风、全被熔断)的这一轮不算一次尝试:计数只记时间戳。
 	// 算上的话,补空的指数退避、「有源被跳过就快点重来」那一次机会(只认计数 0)、没歌手没专辑
 	// 满 3 次就放弃(lyricsNoAnchorGaveUp)都会被一次断网白白用掉。时间戳照记,免得断网期间每拍重搜。
+	// 只补问几个源的那一轮(onlySources)不算一次补空:别的源这一轮没问,退避照旧按上一次全源那轮算。
 	if firstFill {
-		if reached {
+		if reached && len(opts.onlySources) == 0 {
 			e.LyricsFillCount++
 		}
 		e.LyricsFillTS = time.Now().Unix()
@@ -2310,18 +2328,20 @@ func retryLyricsUpgradeWith(ctx context.Context, key, artist, title, album strin
 		}
 		e.LyricsRetryTS = time.Now().Unix()
 	}
-	if len(seen) > 0 {
-		e.LyricsSourcesSeen = seen
+	if s := opts.mergedSources(e.LyricsSourcesSeen, seen); len(s) > 0 {
+		e.LyricsSourcesSeen = s
 	}
-	if responded := lyricSourcesResponded(scored); len(responded) > 0 {
-		e.LyricsSourcesResponded = responded
+	if s := opts.mergedSources(e.LyricsSourcesResponded, lyricSourcesResponded(scored)); len(s) > 0 {
+		e.LyricsSourcesResponded = s
 	}
 	roundSkipped := round.skippedSources()
-	e.LyricsSourcesSkipped = lyricSourcesSkippedForRetry(roundSkipped)
+	e.LyricsSourcesSkipped = opts.mergedSources(e.LyricsSourcesSkipped, lyricSourcesSkippedForRetry(roundSkipped))
 	if reached {
-		e.LyricsListedAlbum = listedAlbum
-		e.LyricsNativeVideoID = kasetNativeLyricsVideoID(ctx, round, scored)
-		e.LyricsSourcesEnabled = round.enabledSources()
+		if len(opts.onlySources) == 0 {
+			e.LyricsListedAlbum = listedAlbum
+			e.LyricsNativeVideoID = kasetNativeLyricsVideoID(ctx, round, scored)
+		}
+		e.LyricsSourcesEnabled = opts.mergedSources(e.LyricsSourcesEnabled, round.enabledSources())
 	}
 	if sw := songwritersFromScored(scored); len(sw) > 0 {
 		e.LyricsSongwriters = sw
@@ -2333,13 +2353,16 @@ func retryLyricsUpgradeWith(ctx context.Context, key, artist, title, album strin
 		path = lyricsDecisionPathRefill
 	}
 	path = opts.decisionPath(path)
-	// 无论换没换,这一轮完整评估都值得留证(Applied 区分两种含义,见 decision.go)。
-	e.LyricsDecision = buildLyricsDecision(
-		path, artist, title, searchAlbum, durationSecs, scored, picked, upgraded, opts.logAttrs()...)
-	e.LyricsDecision.SourcesSkipped = roundSkipped
-	e.LyricsDecision.statsSkips = round.statsSkips()
-	e.LyricsDecision.QueriesTried = queries.queries()
-	traceLyricsDecision(key, e.LyricsDecision)
+	// 无论换没换,这一轮完整评估都值得留证(Applied 区分两种含义,见 decision.go)。只补问几个源、什么都没选出来的那一轮
+	// 不算完整评估,留着上一次全源那轮的记录。
+	if len(opts.onlySources) == 0 || picked != nil {
+		e.LyricsDecision = buildLyricsDecision(
+			path, artist, title, searchAlbum, durationSecs, scored, picked, upgraded, opts.logAttrs()...)
+		e.LyricsDecision.SourcesSkipped = roundSkipped
+		e.LyricsDecision.statsSkips = round.statsSkips()
+		e.LyricsDecision.QueriesTried = queries.queries()
+		traceLyricsDecision(key, e.LyricsDecision)
+	}
 	// 换上了新的、或胜者就是现存这份(分数没严格更高所以没"升级",但等于再次确认了当前
 	// 选择):两种都算"当前歌词的出处"(分槽语义见 LyricsDecisionApplied)。注意此刻
 	// e.Lyrics/e.LyricsSource 还是旧值,判的是"胜者=现存"。刻意源+正文双比(跟
@@ -5265,6 +5288,7 @@ func mergeLyricCandidateRounds(artist, title, album string, durationSecs float64
 	// 时间轴平移扣分同理,且排在它前面(见 applyTimelineOffsetPenalty)。
 	applySourceDurationNearMissPenalty(out, durationSecs)
 	applyTimelineOffsetPenalty(out, durationSecs)
+	applyMegalobizTimelinePenalty(out)
 	applyTimelineIntrusionPenalty(out, durationSecs)
 	applyGarbledTextPenalty(out)
 	applyDurationNearTie(out, durationSecs)
@@ -5942,6 +5966,7 @@ func rankLyricSourceResults(artist, title, album string, durationSecs float64, r
 	// 时间轴整体平移的扣分排在它前面:那一步要看的是扣完之后谁赢(见 applyTimelineOffsetPenalty)。
 	applySourceDurationNearMissPenalty(results, durationSecs)
 	applyTimelineOffsetPenalty(results, durationSecs)
+	applyMegalobizTimelinePenalty(results)
 	applyTimelineIntrusionPenalty(results, durationSecs)
 	applyGarbledTextPenalty(results)
 	applyDurationNearTie(results, durationSecs)

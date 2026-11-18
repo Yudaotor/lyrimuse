@@ -70,9 +70,11 @@ func TestLyricsSourcesEnabledWrittenAtRoundEnd(t *testing.T) {
 	}
 	src := string(data)
 	if !containsCode(src, `if reached {
-		e.LyricsListedAlbum = listedAlbum
-		e.LyricsNativeVideoID = kasetNativeLyricsVideoID(ctx, round, scored)
-		e.LyricsSourcesEnabled = round.enabledSources()
+		if len(opts.onlySources) == 0 {
+			e.LyricsListedAlbum = listedAlbum
+			e.LyricsNativeVideoID = kasetNativeLyricsVideoID(ctx, round, scored)
+		}
+		e.LyricsSourcesEnabled = opts.mergedSources(e.LyricsSourcesEnabled, round.enabledSources())
 	}`) {
 		t.Error("补空 / 升级重试那一支该只在 reached 时更新名单")
 	}
@@ -81,7 +83,7 @@ func TestLyricsSourcesEnabledWrittenAtRoundEnd(t *testing.T) {
 	recordISRCs(`) {
 		t.Error("首次解析那一支没记名单")
 	}
-	if n := countCode(src, "e.LyricsSourcesEnabled = round.enabledSources()"); n != 2 {
+	if n := countCode(src, "e.LyricsSourcesEnabled = round.enabledSources()") + countCode(src, "e.LyricsSourcesEnabled = opts.mergedSources(e.LyricsSourcesEnabled, round.enabledSources())"); n != 2 {
 		t.Errorf("enrich.go 里写名单 %d 处,该是 2 处", n)
 	}
 }

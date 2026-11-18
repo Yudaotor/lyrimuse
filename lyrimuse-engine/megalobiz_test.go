@@ -6,6 +6,8 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -29,11 +31,14 @@ func resetMegalobizCacheForTest(t *testing.T) {
 	t.Helper()
 	megalobizMu.Lock()
 	saved := megalobizCache
+	savedAnswers := megalobizAnswers
 	megalobizCache = map[string]megalobizResult{}
+	megalobizAnswers = map[string]megalobizAnswer{}
 	megalobizMu.Unlock()
 	t.Cleanup(func() {
 		megalobizMu.Lock()
 		megalobizCache = saved
+		megalobizAnswers = savedAnswers
 		megalobizMu.Unlock()
 	})
 }
@@ -110,6 +115,16 @@ func TestMegalobizBuildLRC(t *testing.T) {
 	if got != "[00:05.07]Eh\n[00:06.92]Tu\n" {
 		t.Errorf("lines 空时退回 lrc 全文、去掉标签行: %q", got)
 	}
+	got = megalobizBuildLRC(megalobizLRCBody{Lines: []megalobizLine{
+		{TimeMs: 1000, Text: "a"}, {TimeMs: 2000, Text: "====="}, {TimeMs: 3000, Text: " ~ "}, {TimeMs: 4000, Text: "b!"}, {TimeMs: 5000, Text: "1"},
+	}})
+	if got != "[00:01.00]a\n[00:02.00]\n[00:03.00]\n[00:04.00]b!\n[00:05.00]1\n" {
+		t.Errorf("装饰行只留时间戳: %q", got)
+	}
+	got = megalobizBuildLRC(megalobizLRCBody{LRC: "[00:05.07]Eh\n[00:06.00]=====\n[00:06.92]Tu\n"})
+	if got != "[00:05.07]Eh\n[00:06.00]\n[00:06.92]Tu\n" {
+		t.Errorf("lrc 全文里的装饰行同样只留时间戳: %q", got)
+	}
 }
 
 func TestMegalobizMarkupHeavy(t *testing.T) {
@@ -134,6 +149,8 @@ func TestMegalobizPageURL(t *testing.T) {
 		"http://megalobiz.com/lrc/1/x":                        "",
 		"https://megalobiz.com.evil.example/lrc/1":            "",
 		"https://user@megalobiz.com/lrc/1":                    "",
+		"https://megalobiz.com:8443/lrc/1":                    "",
+		"https://megalobiz.com:443/lrc/1":                     "https://megalobiz.com:443/lrc/1",
 		"javascript:alert(1)":                                 "",
 		"":                                                    "",
 		"https://api.megalobiz.com/api/public/v1/lrc/1":       "",
@@ -150,6 +167,18 @@ func TestMegalobizQueriesAndSearchURL(t *testing.T) {
 	want := []megalobizQuery{{"Mode de vie", "Tiakola"}, {"Mode de vie", ""}}
 	if len(got) != len(want) || got[0] != want[0] || got[1] != want[1] {
 		t.Errorf("没被清理的歌名只有两条检索: %+v", got)
+	}
+	if got := megalobizQueries("", "X"); len(got) != 0 {
+		t.Errorf("不带歌手的单字歌名不搜(接口回 400 还扣额度): %+v", got)
+	}
+	if got := megalobizQueries("Adele", "X"); len(got) != 1 || got[0] != (megalobizQuery{"X", "Adele"}) {
+		t.Errorf("带歌手的单字歌名照搜,只按歌名那条不发: %+v", got)
+	}
+	if got := megalobizQueries("", "愛"); len(got) != 0 {
+		t.Errorf("单个汉字也不够两个字母数字: %+v", got)
+	}
+	if got := megalobizQueries("", "22"); len(got) != 1 {
+		t.Errorf("两位数字够了: %+v", got)
 	}
 	if u := megalobizSearchURL("Mode de vie", "Tiakola", 190.4); u != megalobizAPIBase+"/search?artist=Tiakola&duration=190&limit=10&title=Mode+de+vie" {
 		t.Errorf("搜索地址: %s", u)
@@ -200,6 +229,69 @@ func TestResolveMegalobizLyricEndToEnd(t *testing.T) {
 		if !strings.HasPrefix(ua, clientName+"/") || !strings.Contains(ua, "https://github.com/Yudaotor/lyrimuse") {
 			t.Errorf("条款要求 User-Agent 写明 App 名和联系网址: %q", ua)
 		}
+	}
+}
+
+// 按请求地址存答复:别名轮换了歌手,「只按歌名」那条跟首轮一字不差,不重发;空结果也存;没问成的(429、5xx)不存;过了 30 分钟再问。
+func TestMegalobizAnswersCachedByURL(t *testing.T) {
+	resetMegalobizCacheForTest(t)
+	now := time.Unix(1_800_000_000, 0)
+	savedNow := megalobizNow
+	megalobizNow = func() time.Time { return now }
+	t.Cleanup(func() { megalobizNow = savedNow })
+	var mu sync.Mutex
+	sent := map[string]int{}
+	status := http.StatusOK
+	withKugouFakeReq(t, func(r *http.Request, target string) (int, string) {
+		mu.Lock()
+		defer mu.Unlock()
+		sent[r.URL.RawQuery]++
+		return status, `{"count":0,"results":[]}`
+	})
+	count := func() (total int, max int) {
+		mu.Lock()
+		defer mu.Unlock()
+		for _, n := range sent {
+			total += n
+			if n > max {
+				max = n
+			}
+		}
+		return
+	}
+	megalobizLyric(qqRoundCtx(), "Artist", "Nothing Here", "", 200)
+	if total, _ := count(); total != 2 {
+		t.Fatalf("首轮两条检索词: %v", sent)
+	}
+	megalobizLyric(qqRoundCtx(), "Artist Alias", "Nothing Here", "", 200)
+	if total, max := count(); total != 3 || max != 1 {
+		t.Errorf("别名轮只多发换了歌手那一条,只按歌名的空结果不重发: %v", sent)
+	}
+	now = now.Add(megalobizAnswerTTL)
+	megalobizLyric(qqRoundCtx(), "Artist Alias", "Nothing Here", "", 200)
+	if total, _ := count(); total != 5 {
+		t.Errorf("过了存的时限再问: %v", sent)
+	}
+	resetMegalobizCacheForTest(t)
+	for _, st := range []int{http.StatusTooManyRequests, http.StatusBadGateway} {
+		mu.Lock()
+		status, sent = st, map[string]int{}
+		mu.Unlock()
+		megalobizSearch(qqRoundCtx(), "Song", "", 200)
+		megalobizSearch(qqRoundCtx(), "Song", "", 200)
+		if total, _ := count(); total != 2 {
+			t.Errorf("%d 没问成,不存: %v", st, sent)
+		}
+	}
+	mu.Lock()
+	status, sent = http.StatusNotFound, map[string]int{}
+	mu.Unlock()
+	megalobizFetchLRC(qqRoundCtx(), 9)
+	if _, err := megalobizFetchLRC(qqRoundCtx(), 9); !megalobizAnsweredNone(err) {
+		t.Errorf("存下的 404 照样报「答了没有」: %v", err)
+	}
+	if total, _ := count(); total != 1 {
+		t.Errorf("答了没有的 404 也存: %v", sent)
 	}
 }
 
@@ -316,8 +408,8 @@ func TestMegalobizRateAndBudgetWithinTerms(t *testing.T) {
 	}
 }
 
-// 条款不许整库批量下载:批量轮次(ctx 带 withBackgroundOutbound,全量扫库、补空扫描、按组重搜、专辑预取、导入清单)一律不问
-// Megalobiz,也不记跳过;正在放的那首、待播队列、手动搜索照问。别的源不受影响。
+// 条款不许整库批量下载:只有带 withOnDemandLyricRound 的轮次(正在放的那首、待播队列、手动搜索 / 重新匹配、设置页测试)问
+// Megalobiz;别的轮次(全量扫库、补空扫描、按组重搜、专辑预取、导入清单、开发命令行)一律不问,也不记跳过。别的源不受影响。
 func TestMegalobizSkippedInBulkRounds(t *testing.T) {
 	saved := features()
 	t.Cleanup(func() { setFeatures(saved) })
@@ -347,11 +439,13 @@ func TestMegalobizSkippedInBulkRounds(t *testing.T) {
 		ctx  context.Context
 		want bool
 	}{
-		{"正在放的那首", context.Background(), true},
-		{"手动搜索", withManualLyricSearch(context.Background()), true},
+		{"正在放的那首", withOnDemandLyricRound(context.Background()), true},
+		{"手动搜索 / 重新匹配", withManualLyricSearch(context.Background()), true},
 		{"待播队列的预解析", withBackgroundOutbound(withPlayerQueueTrack(context.Background())), true},
 		{"补空扫描 / 全量扫库", withBackgroundOutbound(withOtherTrackRound(context.Background())), false},
 		{"专辑预取 / 导入清单", withBackgroundOutbound(context.Background()), false},
+		{"开发命令行(没标记的前台入口)", context.Background(), false},
+		{"只带后台标记的待播写法", withBackgroundOutbound(context.Background()), false},
 	} {
 		mu.Lock()
 		hits = map[string]int{}
@@ -392,25 +486,64 @@ func TestMegalobizNewSourceFillOnlyOnPlayback(t *testing.T) {
 	}
 }
 
-// 批量入口都带 withBackgroundOutbound(lyricSourceAllowedForRound 认的就是它);待播队列那一处另带 withPlayerQueueTrack,
-// 专辑预取、导入清单不带。
-func TestMegalobizBulkEntryPointsMarkedBackground(t *testing.T) {
-	for file, needle := range map[string]string{
-		"lyricsfullscan.go":  "rescoreLyrics(withBackgroundOutbound(",
-		"lyricsfillsweep.go": "retryLyricsUpgrade(withBackgroundOutbound(",
-		"bgbackfill.go":      "withBackgroundOutbound(context.Background())",
-		"prefetchimport.go":  "resolveEnrichAsync(withBackgroundOutbound(withLyricSearchTitle(",
-		"albumprefetch.go":   "resolveEnrichAsync(withBackgroundOutbound(withLyricSearchTitle(",
-		"songentityshare.go": "searchShareRound(withBackgroundOutbound(ctx)",
-		"upcoming.go":        "resolveEnrichAsync(withBackgroundOutbound(withPlayerQueueTrack(",
-	} {
-		src, err := os.ReadFile(file)
+// 白名单:isOnDemandLyricRound 认的三种标记只在这几个函数里打。扫全部源码,不是只看固定几个文件:新加的入口打了标记就得来
+// 这里登记,没打的默认不问只在播放那一侧问的源。Megalobiz 也只能经 fetchScoredLyricCandidatesStreaming 那道闸问。
+func TestOnDemandLyricRoundMarkedOnlyAtWhitelist(t *testing.T) {
+	allowed := map[string]map[string]bool{
+		"withOnDemandLyricRound(": {"trackEnrichment": true, "runTestLyricSourcesCLI": true}, // 正在放的那首、设置页的「测试」
+		"withPlayerQueueTrack(":   {"queueUpcomingEnrich": true},                             // 待播队列
+		"withManualLyricSearch(":  {"runSearchLyricsCLI": true, "runLyricsRematchOne": true}, // 手动搜索、重新匹配
+	}
+	files, err := filepath.Glob("*.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	funcName := regexp.MustCompile(`^func (?:\([^)]*\) )?(\w+)`)
+	found := map[string]map[string]bool{}
+	callers := map[string][]string{}
+	for _, f := range files {
+		if strings.HasSuffix(f, "_test.go") {
+			continue
+		}
+		raw, err := os.ReadFile(f)
 		if err != nil {
 			t.Fatal(err)
 		}
-		if !containsCode(string(src), needle) {
-			t.Errorf("%s 里找不到 %q", file, needle)
+		fn := ""
+		for i, l := range strings.Split(string(raw), "\n") {
+			if m := funcName.FindStringSubmatch(l); m != nil {
+				fn = m[1]
+			}
+			code := strings.TrimSpace(l)
+			if strings.HasPrefix(code, "//") {
+				continue
+			}
+			for marker, fns := range allowed {
+				if !strings.Contains(code, marker) || strings.HasPrefix(code, "func "+marker) {
+					continue
+				}
+				if !fns[fn] {
+					t.Errorf("%s:%d 在 %s 里打了 %s),不在白名单里", f, i+1, fn, marker)
+				}
+				if found[marker] == nil {
+					found[marker] = map[string]bool{}
+				}
+				found[marker][fn] = true
+			}
+			if strings.Contains(code, "megalobizLyric(") && !strings.HasPrefix(code, "func megalobizLyric(") {
+				callers[f+":"+fn] = append(callers[f+":"+fn], strconv.Itoa(i+1))
+			}
 		}
+	}
+	for marker, fns := range allowed {
+		for fn := range fns {
+			if !found[marker][fn] {
+				t.Errorf("白名单里的 %s 没打 %s)", fn, marker)
+			}
+		}
+	}
+	if len(callers) != 1 || callers["enrich.go:fetchScoredLyricCandidatesStreaming"] == nil {
+		t.Errorf("megalobizLyric 只能在 fetchScoredLyricCandidatesStreaming 里调(那里有 skipSource 的闸): %v", callers)
 	}
 }
 
@@ -495,7 +628,7 @@ func TestRankLyricSourceResultsMegalobiz(t *testing.T) {
 	}
 }
 
-// 采纳候选:带页地址的写进去;来源没变、没给页地址时留着原来的;换了来源清掉。
+// 采纳候选:带页地址的写进去;采纳候选没给或地址核不过时清掉原来的;编辑保存来源没变、没给页地址时留着原来的;换了来源清掉。
 func TestSaveEditSourceURL(t *testing.T) {
 	lrc := "[00:01.00]a\n[00:02.00]b\n[00:03.00]c\n"
 	apply := func(req enrichEditRequest) string {
@@ -515,6 +648,18 @@ func TestSaveEditSourceURL(t *testing.T) {
 	if got := apply(enrichEditRequest{Source: "lrclib", FromManualPick: true}); got != "" {
 		t.Errorf("换了来源清掉: %q", got)
 	}
+	if got := apply(enrichEditRequest{Source: "megalobiz", FromManualPick: true}); got != "" {
+		t.Errorf("采纳另一份 Megalobiz 词、没给页地址时清掉上一份的: %q", got)
+	}
+	if got := apply(enrichEditRequest{Source: "megalobiz", SourceURL: "https://evil.example/lrc/2", FromManualPick: true}); got != "" {
+		t.Errorf("页地址核不过时清掉: %q", got)
+	}
+	if got := apply(enrichEditRequest{Source: "megalobiz", SourceURL: "https://megalobiz.com:8443/lrc/2"}); got != "https://megalobiz.com/lrc/1/a" {
+		t.Errorf("编辑保存给了核不过的地址时不写进去、留着原来的: %q", got)
+	}
+	if got := apply(enrichEditRequest{Source: "lrclib", SourceURL: "https://megalobiz.com/lrc/2/b", FromManualPick: true}); got != "" {
+		t.Errorf("别的源不收页地址: %q", got)
+	}
 }
 
 // 第一份正文满是编辑器标记:跳过、取第二份。
@@ -533,5 +678,128 @@ func TestResolveMegalobizSkipsMarkupHeavySheet(t *testing.T) {
 	})
 	if r := resolveMegalobizLyric(qqRoundCtx(), "Artist", "Song", "", 200); r.url != "https://megalobiz.com/lrc/22/song" {
 		t.Errorf("应跳过带标记的第一份: %+v", r)
+	}
+}
+
+// 恢复备份:先采纳的元数据带着来源页、不带来源名,再从歌词文件补上来源名时来源页留着;原来有别的来源时照样清掉。
+func TestLyricsImportKeepsSourceURLAfterMetaRestore(t *testing.T) {
+	dir := t.TempDir()
+	body := "[ar:A]\n[ti:B]\n[al:C]\n[source:megalobiz]\n\n[00:01.00]one\n[00:02.00]two\n[00:03.00]three"
+	if err := os.WriteFile(filepath.Join(dir, "A - B - C.lrc"), []byte(body), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	savedDir, savedCache := lyricsDir(), enrichCache
+	t.Cleanup(func() {
+		enrichMu.Lock()
+		setLyricsDir(savedDir)
+		enrichCache = savedCache
+		enrichMu.Unlock()
+	})
+	key := enrichKey("A", "B", "C")
+	for _, c := range []struct {
+		name, prevSource, want string
+	}{
+		{"元数据不带来源名", "", "https://megalobiz.com/lrc/1/b"},
+		{"原来是别的来源", "lrclib", ""},
+	} {
+		enrichMu.Lock()
+		setLyricsDir(dir)
+		enrichCache = map[string]enrichEntry{key: {LyricsSource: c.prevSource, LyricsSourceURL: "https://megalobiz.com/lrc/1/b"}}
+		lyricsImportRestoreAll = true
+		enrichMu.Unlock()
+		importLyricsFromFiles()
+		enrichMu.Lock()
+		e := enrichCache[key]
+		enrichMu.Unlock()
+		if e.LyricsSource != "megalobiz" || e.LyricsSourceURL != c.want {
+			t.Errorf("%s: source=%q url=%q,期望 url=%q", c.name, e.LyricsSource, e.LyricsSourceURL, c.want)
+		}
+	}
+}
+
+// 只补问几个源的那一轮:名单里别的源沿用上一轮的,这几个源换成这一轮的;全源那一轮整份换掉。
+func TestLyricsRescoreOptsMergedSources(t *testing.T) {
+	only := lyricsRescoreOpts{onlySources: []string{"megalobiz"}}
+	if got := only.mergedSources([]string{"deezer", "megalobiz"}, []string{"deezer", "qq", "megalobiz"}); !slices.Equal(got, []string{"deezer", "megalobiz"}) {
+		t.Errorf("这一轮没问的源(qq)不进名单: %v", got)
+	}
+	if got := only.mergedSources([]string{"deezer", "megalobiz"}, nil); !slices.Equal(got, []string{"deezer"}) {
+		t.Errorf("这一轮它没出现就拿掉它,别的照留: %v", got)
+	}
+	if got := (lyricsRescoreOpts{}).mergedSources([]string{"deezer"}, []string{"qq"}); !slices.Equal(got, []string{"qq"}) {
+		t.Errorf("全源整份换: %v", got)
+	}
+}
+
+// 补空扫描不问 Megalobiz,条目里「开过的源」缺它;播到这首没词的歌时只补问 Megalobiz,不把别的源全重搜一遍。
+// 补问那一轮只改 Megalobiz 的账、不算一次补空;什么都没给出时留着上一次全源那轮的决策记录。
+func TestMegalobizFirstFillOnlyAsksMissingOnDemandSource(t *testing.T) {
+	deezerCalls := 0
+	setupRescoreTest(t, []string{"deezer", "megalobiz"}, func(context.Context) { deezerCalls++ })
+	resetMegalobizCacheForTest(t)
+	found := true
+	withKugouFakeReq(t, func(r *http.Request, target string) (int, string) {
+		switch {
+		case strings.HasSuffix(target, "/search") && found:
+			return http.StatusOK, `{"results":[{"id":5,"title":"Fill Song","artist":"` + rescoreTestArtist + `","duration":180,"url":"https://megalobiz.com/lrc/5/fill-song"}]}`
+		case strings.HasSuffix(target, "/search"):
+			return http.StatusOK, `{"results":[]}`
+		case strings.HasSuffix(target, "/lrc/5"):
+			return http.StatusOK, `{"id":5,"duration":180,"url":"https://megalobiz.com/lrc/5/fill-song","lines":[{"time_ms":5000,"text":"Fill line one"},{"time_ms":15000,"text":"Fill line two"},{"time_ms":25000,"text":"Fill line three"},{"time_ms":35000,"text":"Fill line four"}]}`
+		}
+		return http.StatusNotFound, ""
+	})
+	now := time.Now().Unix()
+	prevDecision := &lyricsDecision{Path: lyricsDecisionPathRefill}
+	base := enrichEntry{TS: now, LyricsFillTS: now - 3600, LyricsFillCount: 1, LyricsSourcesEnabled: []string{"deezer"},
+		LyricsSourcesSeen: []string{"deezer"}, LyricsSourcesResponded: []string{"deezer"}, LyricsDecision: prevDecision}
+	if got := lyricsFirstFillOnly(base); !slices.Equal(got, []string{"megalobiz"}) {
+		t.Fatalf("只因为缺 Megalobiz 才补的,只补问它: %v", got)
+	}
+	due := base
+	due.LyricsFillTS, due.TS = now-30*24*3600, now-30*24*3600
+	if got := lyricsFirstFillOnly(due); got != nil {
+		t.Errorf("退避也到期了就全源补一轮: %v", got)
+	}
+	if got := lyricsFirstFillOnly(enrichEntry{TS: now, LyricsFillTS: now, LyricsSourcesEnabled: []string{"deezer", "megalobiz"}}); got != nil {
+		t.Errorf("不用补的不补: %v", got)
+	}
+
+	key := enrichKey(rescoreTestArtist, "Fill Song", "")
+	run := func() enrichEntry {
+		enrichMu.Lock()
+		enrichCache = map[string]enrichEntry{key: base}
+		enrichMu.Unlock()
+		retryLyricsUpgradeWith(withOnDemandLyricRound(context.Background()), key, rescoreTestArtist, "Fill Song", "", 180, true,
+			lyricsRescoreOpts{onlySources: lyricsFirstFillOnly(base)})
+		enrichMu.Lock()
+		defer enrichMu.Unlock()
+		return enrichCache[key]
+	}
+	e := run()
+	if deezerCalls != 0 {
+		t.Errorf("别的源不重搜: deezer 问了 %d 次", deezerCalls)
+	}
+	if e.LyricsSource != "megalobiz" || e.LyricsSourceURL != "https://megalobiz.com/lrc/5/fill-song" || e.Lyrics.IsZero() {
+		t.Errorf("Megalobiz 给出的词换上: %q %q", e.LyricsSource, e.LyricsSourceURL)
+	}
+	if !slices.Equal(e.LyricsSourcesEnabled, []string{"deezer", "megalobiz"}) || !slices.Contains(e.LyricsSourcesSeen, "deezer") ||
+		!slices.Contains(e.LyricsSourcesSeen, "megalobiz") || !slices.Contains(e.LyricsSourcesResponded, "deezer") {
+		t.Errorf("只改 Megalobiz 的账: enabled=%v seen=%v responded=%v", e.LyricsSourcesEnabled, e.LyricsSourcesSeen, e.LyricsSourcesResponded)
+	}
+	if e.LyricsFillCount != 1 {
+		t.Errorf("补问不算一次补空: %d", e.LyricsFillCount)
+	}
+	found = false
+	resetMegalobizCacheForTest(t)
+	e = run()
+	if e.LyricsDecision != prevDecision || !e.Lyrics.IsZero() {
+		t.Errorf("什么都没给出时留着上一次全源那轮的决策记录: %+v", e.LyricsDecision)
+	}
+	if !slices.Equal(e.LyricsSourcesEnabled, []string{"deezer", "megalobiz"}) || lyricsFirstFillOnly(e) != nil || needsLyricsFirstFill(e) {
+		t.Errorf("问过之后名单补齐、不再补问: %v", e.LyricsSourcesEnabled)
+	}
+	if deezerCalls != 0 {
+		t.Errorf("别的源不重搜: deezer 问了 %d 次", deezerCalls)
 	}
 }

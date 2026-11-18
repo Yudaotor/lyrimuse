@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"slices"
 	"sync"
 	"time"
 )
@@ -90,6 +91,28 @@ type lyricsRescoreOpts struct {
 	reasons string
 	// undo:非 nil 时写回那一刻留一份撤销记录放进去(只有手动重新匹配给)。
 	undo **enrichUndoRecord
+	// onlySources:这一轮只问这几个源(lyricsFirstFillOnly);条目里各源的账只改这几个源的,见 mergedSources。nil = 全源。
+	onlySources []string
+}
+
+// mergedSources:按源记的名单(问到的、答了的、跳过的、开着的)写回时用。全源的一轮整份换成 round;只补问几个源的一轮
+// 留着 prev 里别的源,这几个源换成 round 里的。
+func (o lyricsRescoreOpts) mergedSources(prev, round []string) []string {
+	if len(o.onlySources) == 0 {
+		return round
+	}
+	var out []string
+	for _, s := range prev {
+		if !slices.Contains(o.onlySources, s) {
+			out = append(out, s)
+		}
+	}
+	for _, s := range round {
+		if slices.Contains(o.onlySources, s) && !slices.Contains(out, s) {
+			out = append(out, s)
+		}
+	}
+	return out
 }
 
 // beginUndoLocked:写回 key 之前调。调用方持 enrichMu。

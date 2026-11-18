@@ -1236,6 +1236,7 @@ struct LyricsSearchSheet: View {
             timeline: LyricsCandidateDuplicates.lineTimestamps(text),
             isStored: true)
         stored.lyricsKana = plainOnly ? "" : entry.lyricsKana
+        stored.sourceURL = entry.lyricsSourceURL
         return stored
     }
 
@@ -1430,7 +1431,7 @@ struct LyricsSearchSheet: View {
                     Spacer(minLength: 0)
                     // 来源标钉在歌名那一行的右端,各行右缘对齐。`fixedSize()`:不钉住 SwiftUI 会先压它(「网易云音乐」折两行、
                     // 长的英文来源名截出省略号),宁可让歌名换行。
-                    sourceBadge(c.source)
+                    sourceBadge(c.source, link: LyricsSourceLink.url(source: c.source, stored: c.sourceURL))
                         .font(.caption2)
                         .fixedSize()
                 }
@@ -2302,7 +2303,7 @@ struct LyricsSearchSheet: View {
                     .help(L10n.t("歌词源自带的读音。无此标记的歌词也将按设置中的「标注读音的语言」自动标注"))
             }
             // 来源:用它在别处(歌词管理列表、设置里的来源勾选)一贯的身份色,一眼能对上号。
-            sourceBadge(source)
+            sourceBadge(source, link: LyricsSourceLink.url(source: source, stored: c.sourceURL))
             if let duplicate {
                 // 跟排在前面的某个源一样(见 LyricsCandidateDuplicates):词和每行时间都一样写「内容相同」,只有词一样
                 // 写「文字相同」;逐字时间与译文不比,所以不写「完全相同」,悬停说明把口径讲清。**只标注不隐藏**——
@@ -2335,14 +2336,30 @@ struct LyricsSearchSheet: View {
     }
 
     /// 名字和颜色走全局那一份:Spotify、Amazon Music、KKBOX 的本地歌词不在 `LyricsSource` 里,别改成按枚举取名
-    /// (取不到就露出小写的原始 id)。
-    private func sourceBadge(_ source: String) -> some View {
+    /// (取不到就露出小写的原始 id)。条款要求链回的源(Megalobiz)带了歌词页时,同歌词管理详情的来源胶囊:名字后加「↗」,
+    /// 点了经 `LyricsSourceLinkOpener` 打开;按钮先接住点击,不会顺带选中这一行。
+    @ViewBuilder
+    private func sourceBadge(_ source: String, link: URL? = nil) -> some View {
         let tint = sourceColor(source)
-        return Text(sourceDisplayName(source))
+        let badge = Text(sourceDisplayName(source) + (link == nil ? "" : " ↗"))
             .foregroundStyle(tint)
             .padding(.horizontal, 6)
             .padding(.vertical, 2)
             .background(tint.opacity(0.12), in: Capsule())
+        if let link {
+            Button {
+                LyricsSourceLinkOpener.open(link)
+            } label: {
+                badge
+            }
+            .buttonStyle(.plain)
+            .onHover { inside in
+                if inside { NSCursor.pointingHand.push() } else { NSCursor.pop() }
+            }
+            .help(LyricsSourceLinkOpener.help(source: source))
+        } else {
+            badge
+        }
     }
 
     /// 「分数 742 · 82 行」那一行,带一个悬停说明,摊开分数是怎么加出来的。被排除的候选(分数 -1)不写分数,直接写原因

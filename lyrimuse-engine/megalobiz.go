@@ -13,6 +13,8 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
+	"unicode"
 )
 
 // megalobizLyric 是 Megalobiz 这一路:公开接口搜索 → 按元数据重新打分排序 → 按名次逐条取词,第一份带时间轴的就用。
@@ -20,17 +22,19 @@ import (
 // 只有逐行(用户手打上传的 LRC,`lines[].time_ms` + `text`),没有逐字、译文、罗马音、封面、专辑。
 //
 // 条款(见 09 章决策 386):
-//   - 不许整库镜像、批量下载,只查用户实际在放的歌:全量扫库、补空扫描、专辑预取、导入清单这些批量轮次一律不问它,
-//     只在正在放的那首、待播队列、手动搜索 / 重新匹配时问(lyricSourceAllowedForRound)。
+//   - 不许整库镜像、批量下载,只查用户实际在放的歌:只在正在放的那首、待播队列、手动搜索 / 重新匹配、设置页测试时问,
+//     别的轮次(全量扫库、补空扫描、专辑预取、导入清单、开发命令行)一律不问(lyricSourceAllowedForRound,白名单)。
 //   - 请求带写明 App 名和联系网址的 User-Agent(megalobizUserAgent)。
 //   - 不带 key 时每个 IP 每分钟 30 次、每天 1000 次:令牌桶按每分钟不超过 30 次配(hostRateFor),后台的小时额度见
-//     lyricSourceHourlyBudget,429 走歌词源熔断和后台暂停。
+//     lyricSourceHourlyBudget,429 走歌词源熔断和后台暂停;应答头报的每日剩余次数见 sourcedayquota.go(剩得少只给前台、
+//     用完停到重置)。这几样跟手动搜索的子进程共用一份记账。同一个请求地址的答复存 megalobizAnswerTTL,别名轮不重发。
 //   - 显示它的歌词时链回这首在 megalobiz.com 上的歌词页:页地址(`url`)随候选带到条目的 lyrics_source_url,App 在来源处做成链接。
 //
 // 曲库是用户上传的,写法不齐:约三成条目歌手栏是空的,其中一部分把歌手写进歌名(「Dorofeeva - Кохаю, але не зовсім」),还有挂着下载站
 // 标记的(「[SPOTDOWNLOADER.COM] Обійми」)。歌名由 megalobizSongTitle 整理;歌手栏空、也拆不出歌手的条目,只在歌名归一后相同、
-// 候选歌名没有本地没有的括号段、时长差不超过 megalobizNoArtistMaxDiffSecs 时才收。时间轴准度不齐(实测热门歌多数在半秒内,个别整体晚好几秒),
-// 靠时长闸和跨源共识把关,不按源写死偏移(09 章决策 294)。
+// 候选歌名没有本地没有的括号段、时长差不超过 megalobizNoArtistMaxDiffSecs 时才收。时间轴准度不齐(实测热门歌多数在半秒内,个别整体晚好几秒):
+// 正文共识只比文字,整体错开的照样拿共识分,所以另跟正文共识的那几家逐行对一次时间轴,错开的重扣(applyMegalobizTimelinePenalty);
+// 没有别家可比时不扣,也不按源写死偏移(09 章决策 294)。
 type megalobizResult struct {
 	lyrics, title, artist string
 	// url:这份歌词在 megalobiz.com 上的歌词页,只收 megalobiz.com 自己的 https 地址(megalobizPageURL)。
@@ -58,7 +62,54 @@ const (
 var (
 	megalobizMu    sync.Mutex
 	megalobizCache = map[string]megalobizResult{}
+	// megalobizAnswers:请求地址 → 对方的答复(搜索结果含空的、取到的词、答了「没有」的 400 / 404),megalobizAnswerTTL 内同一地址不再发。
+	// 别名轮换了歌手再走一遍检索词时,「只按歌名」那条跟首轮一字不差,靠它不重发;没问成的(429、5xx、网络)不存。
+	megalobizAnswers = map[string]megalobizAnswer{}
+	megalobizNow     = time.Now
 )
+
+type megalobizAnswer struct {
+	at  time.Time
+	val any
+	err error
+}
+
+const (
+	megalobizAnswerTTL = 30 * time.Minute
+	// megalobizAnswerMax:存的地址数上限,满了先丢过期的,还满就整份清掉。
+	megalobizAnswerMax = 512
+)
+
+// megalobizGetCached:按地址取一份答复,megalobizAnswerTTL 内同一地址直接用存下的。
+func megalobizGetCached[T any](ctx context.Context, u string) (T, error) {
+	megalobizMu.Lock()
+	if a, ok := megalobizAnswers[u]; ok && megalobizNow().Sub(a.at) < megalobizAnswerTTL {
+		megalobizMu.Unlock()
+		v, _ := a.val.(T)
+		return v, a.err
+	}
+	megalobizMu.Unlock()
+	var out T
+	err := megalobizGetJSON(ctx, u, &out)
+	if err != nil && !megalobizAnsweredNone(err) {
+		return out, err
+	}
+	megalobizMu.Lock()
+	defer megalobizMu.Unlock()
+	now := megalobizNow()
+	if len(megalobizAnswers) >= megalobizAnswerMax {
+		for k, a := range megalobizAnswers {
+			if now.Sub(a.at) >= megalobizAnswerTTL {
+				delete(megalobizAnswers, k)
+			}
+		}
+		if len(megalobizAnswers) >= megalobizAnswerMax {
+			megalobizAnswers = map[string]megalobizAnswer{}
+		}
+	}
+	megalobizAnswers[u] = megalobizAnswer{at: now, val: out, err: err}
+	return out, err
+}
 
 func megalobizLyric(ctx context.Context, artist, title, album string, durationSecs float64) megalobizResult {
 	if title == "" {
@@ -136,6 +187,7 @@ func megalobizGetJSON(ctx context.Context, u string, out any) error {
 		return err
 	}
 	defer resp.Body.Close()
+	noteSourceDayQuota(lyricSourceMegalobiz, resp.StatusCode, resp.Header, time.Now())
 	if resp.StatusCode != http.StatusOK {
 		return megalobizStatusError(resp.StatusCode)
 	}
@@ -156,27 +208,29 @@ func megalobizSearchURL(title, artist string, durationSecs float64) string {
 	return megalobizAPIBase + "/search?" + q.Encode()
 }
 
+// megalobizSearchBody 是 /search 的应答。
+type megalobizSearchBody struct {
+	Results []megalobizSearchItem `json:"results"`
+}
+
 func megalobizSearch(ctx context.Context, title, artist string, durationSecs float64) ([]megalobizSearchItem, error) {
-	var out struct {
-		Results []megalobizSearchItem `json:"results"`
-	}
-	if err := megalobizGetJSON(ctx, megalobizSearchURL(title, artist, durationSecs), &out); err != nil {
+	out, err := megalobizGetCached[megalobizSearchBody](ctx, megalobizSearchURL(title, artist, durationSecs))
+	if err != nil {
 		return nil, err
 	}
 	return out.Results, nil
 }
 
 func megalobizFetchLRC(ctx context.Context, id int64) (megalobizLRCBody, error) {
-	var out megalobizLRCBody
-	err := megalobizGetJSON(ctx, fmt.Sprintf("%s/lrc/%d", megalobizAPIBase, id), &out)
-	return out, err
+	return megalobizGetCached[megalobizLRCBody](ctx, fmt.Sprintf("%s/lrc/%d", megalobizAPIBase, id))
 }
 
 // megalobizIDTagRe:LRC 开头的标签行([ar:]、[ti:]、[length:]、[re:Megalobiz]、[by:]…)。
 var megalobizIDTagRe = regexp.MustCompile(`^\[[A-Za-z]+:[^\]]*\]$`)
 
-// megalobizBuildLRC 把 lines 拼成 LRC。空句写成只有时间戳的行(一句唱完、后面是间奏的标记);时间倒退的句子丢掉。
-// lines 是空的时退回应答里的 lrc 全文,去掉开头的标签行。纯函数,便于单测。
+// megalobizBuildLRC 把 lines 拼成 LRC。空句写成只有时间戳的行(一句唱完、后面是间奏的标记);上传者加的装饰行
+// (「====」「~」这类没有字母数字的)同空句处理;时间倒退的句子丢掉。
+// lines 是空的时退回应答里的 lrc 全文,去掉开头的标签行,装饰行同样只留时间戳。纯函数,便于单测。
 func megalobizBuildLRC(body megalobizLRCBody) string {
 	if len(body.Lines) == 0 {
 		var b strings.Builder
@@ -184,6 +238,9 @@ func megalobizBuildLRC(body megalobizLRCBody) string {
 			l = strings.TrimSpace(l)
 			if l == "" || megalobizIDTagRe.MatchString(l) {
 				continue
+			}
+			if text := strings.TrimSpace(lrcTimestampRe.ReplaceAllString(l, "")); text != "" && megalobizAlnumCount(text) == 0 {
+				l = strings.TrimSpace(strings.TrimSuffix(l, text))
 			}
 			b.WriteString(l + "\n")
 		}
@@ -196,7 +253,11 @@ func megalobizBuildLRC(body megalobizLRCBody) string {
 			continue
 		}
 		last = l.TimeMs
-		b.WriteString(formatLRCStamp(l.TimeMs) + strings.TrimSpace(l.Text) + "\n")
+		text := strings.TrimSpace(l.Text)
+		if megalobizAlnumCount(text) == 0 {
+			text = ""
+		}
+		b.WriteString(formatLRCStamp(l.TimeMs) + text + "\n")
 	}
 	return b.String()
 }
@@ -219,16 +280,25 @@ func megalobizMarkupHeavy(lrc string) bool {
 	return total > 0 && marked*5 > total
 }
 
-// megalobizPageURL:只收 megalobiz.com 自己的 https 歌词页,别的地址(含 http、别的域名)一律当没给。纯函数,便于单测。
+// megalobizPageURL:只收 megalobiz.com 自己的 https 歌词页(默认端口),别的地址(含 http、别的域名、别的端口)一律当没给。
+// App 侧 LyricsSourceLink.url 同一口径,两边一起改。纯函数,便于单测。
 func megalobizPageURL(raw string) string {
 	u, err := neturl.Parse(strings.TrimSpace(raw))
-	if err != nil || u.Scheme != "https" || u.User != nil {
+	if err != nil || u.Scheme != "https" || u.User != nil || (u.Port() != "" && u.Port() != "443") {
 		return ""
 	}
 	if h := strings.ToLower(u.Hostname()); h != "megalobiz.com" && h != "www.megalobiz.com" {
 		return ""
 	}
 	return u.String()
+}
+
+// lyricSourcePageURL:source 这个源的歌词页地址核过之后的样子;不是要链回的源、地址不对时为空。
+func lyricSourcePageURL(source, raw string) string {
+	if source != lyricSourceMegalobiz {
+		return ""
+	}
+	return megalobizPageURL(raw)
 }
 
 // megalobizSiteTagRe:歌名开头挂的下载站标记(「[SPOTDOWNLOADER.COM] 」),方括号里带点号的才算。
@@ -292,17 +362,35 @@ func megalobizCandidateScore(item megalobizSearchItem, artist, title, album stri
 // megalobizQuery 是一次搜索的两个参数。
 type megalobizQuery struct{ title, artist string }
 
-// megalobizQueries:按顺序要搜的检索词(「清理过的歌名 + 第一位歌手」、只按歌名、原样的歌名),去掉空的和重复的。纯函数,便于单测。
+// megalobizQueries:按顺序要搜的检索词(「清理过的歌名 + 第一位歌手」、只按歌名、原样的歌名),去掉空的和重复的。
+// 不带歌手、歌名里字母数字不到 megalobizMinQueryAlnum 个的不搜:接口回 400 还扣额度。纯函数,便于单测。
 func megalobizQueries(artist, title string) []megalobizQuery {
 	qTitle := strings.TrimSpace(lyricQueryTitle(title))
 	raw := strings.TrimSpace(title)
 	var out []megalobizQuery
 	for _, q := range []megalobizQuery{{qTitle, strings.TrimSpace(firstCreditedArtist(artist))}, {qTitle, ""}, {raw, ""}} {
-		if q.title != "" && !slices.Contains(out, q) {
-			out = append(out, q)
+		if q.title == "" || slices.Contains(out, q) {
+			continue
 		}
+		if q.artist == "" && megalobizAlnumCount(q.title) < megalobizMinQueryAlnum {
+			continue
+		}
+		out = append(out, q)
 	}
 	return out
+}
+
+// megalobizMinQueryAlnum:接口要求检索词里至少有这么多个字母或数字(「at least 2 letters or digits」)。
+const megalobizMinQueryAlnum = 2
+
+func megalobizAlnumCount(s string) int {
+	n := 0
+	for _, r := range s {
+		if unicode.IsLetter(r) || unicode.IsDigit(r) {
+			n++
+		}
+	}
+	return n
 }
 
 // resolveMegalobizLyric:先按「歌名 + 第一位歌手」搜,一条都没过闸再只按歌名搜(歌手在 Megalobiz 上常是另一种写法或干脆空着),
@@ -366,4 +454,47 @@ func resolveMegalobizLyric(ctx context.Context, artist, title, album string, dur
 		return megalobizResult{lyrics: lrc, title: name, artist: credit, url: page, durationSecs: d}
 	}
 	return megalobizResult{}
+}
+
+// megalobizTimelineShiftMs:Megalobiz 那份跟正文共识的另一家逐行对齐后,中位偏移到这么多就算整体错开。取值依据见 09 章决策 387。
+const megalobizTimelineShiftMs = 1500
+
+// applyMegalobizTimelinePenalty:Megalobiz 的时间轴是上传者手打的,个别整体晚好几秒,而正文共识只比文字、照样给分。
+// 它跟正文共识的另一家(ConsensusPeers 里的信源家族)逐行对齐:有一家对得上就不动;对不上的里至少一家整体平移
+// megalobizTimelineShiftMs 以上、方向一致时,扣 timelineOffsetPenalty 分、记一条 scoreTermTimelineOffset。
+// 没有别家可比(只有它一家、共识的几家都是纯文本或配不上行)时不扣。只看 Megalobiz,别的源的分不动。
+// 调用位置紧跟 applyTimelineOffsetPenalty,两条流水线都要调;那一步已经扣过它的就不再扣。
+func applyMegalobizTimelinePenalty(results []scoredLyricCandidateResult) {
+	for i := range results {
+		r := &results[i]
+		if r.Source != lyricSourceMegalobiz || r.Score < 0 || r.Lyrics == "" || len(r.ConsensusPeers) == 0 ||
+			scoreTermPoints(r.ScoreTerms, scoreTermTimelineOffset) != 0 {
+			continue
+		}
+		families := map[string]bool{}
+		for _, p := range r.ConsensusPeers {
+			families[lyricSourceConsensusFamily(p)] = true
+		}
+		own := displayedTimeline(r.Lyrics, r.LyricsYRC)
+		later, earlier := 0, 0
+		aligned := false
+		for j, peer := range results {
+			if j == i || peer.Score < 0 || peer.Lyrics == "" || !families[lyricSourceConsensusFamily(peer.Source)] {
+				continue
+			}
+			switch classifyTimelines(own, displayedTimeline(peer.Lyrics, peer.LyricsYRC), megalobizTimelineShiftMs) {
+			case timelineAligned:
+				aligned = true
+			case timelineShiftedLater:
+				later++
+			case timelineShiftedEarlier:
+				earlier++
+			}
+		}
+		if aligned || later+earlier == 0 || (later > 0 && earlier > 0) {
+			continue
+		}
+		r.Score = max(r.Score-timelineOffsetPenalty, 1)
+		r.ScoreTerms = append(r.ScoreTerms, scoreTerm{Kind: scoreTermTimelineOffset, Points: -timelineOffsetPenalty})
+	}
 }

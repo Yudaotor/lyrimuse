@@ -4944,7 +4944,7 @@ func runSourceContractSettingsTests() {
                     "搜索候选歌词: 搜索进度只在侧栏那一行,右边还没有候选时空着")
         // 来源名、来源色走全局 sourceDisplayName / sourceColor:本地歌词那几家不在 LyricsSource 里(11 章决策 88)。
         expectEqual(!sheet.contains("LyricsSource(rawValue:")
-                    && sourceHas(sheet, "let tint = sourceColor(source)\n        return Text(sourceDisplayName(source))")
+                    && sourceHas(sheet, "let tint = sourceColor(source)\n        let badge = Text(sourceDisplayName(source) + (link == nil ? \"\" : \" ↗\"))")
                     && sheet.contains("let name = sourceDisplayName(c.source)")
                     && sheet.contains("let anchor = sourceDisplayName(duplicate.anchor)"), true,
                     "搜索候选歌词: 来源名和来源色走全局那一份,Spotify / Amazon Music / KKBOX 不露小写的原始 id")

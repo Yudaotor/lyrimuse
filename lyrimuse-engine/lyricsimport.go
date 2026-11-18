@@ -461,9 +461,14 @@ func importLyricsFromOpts(dir string, persist, cleanTemps bool) []string {
 				e.LyricsKana, changed = kana, true
 			}
 		}
-		// 文件里只记来源名、不记来源页:换了来源时来源页跟着清掉。
+		// 文件里只记来源名、不记来源页:换了来源时来源页跟着清掉。条目原来没有来源的不清:恢复备份时先采纳的元数据带着来源页、
+		// 不带来源名(App 侧 LyricsBackupArchive.lyricFieldKeys 剥掉的那几个字段),来源名要等这里从文件补上。
 		if e.LyricsSource != parsed.source {
-			e.LyricsSource, e.LyricsSourceURL, changed = parsed.source, "", true
+			sourceURL := e.LyricsSourceURL
+			if e.LyricsSource != "" {
+				sourceURL = ""
+			}
+			e.LyricsSource, e.LyricsSourceURL, changed = parsed.source, sourceURL, true
 		}
 		if e.ManualLyrics != parsed.manual {
 			e.ManualLyrics, changed = parsed.manual, true

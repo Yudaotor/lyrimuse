@@ -14,12 +14,15 @@ func runLyricsManagerTests() {
         typealias L = LyricsSourceLink
         expectEqual(L.url(source: "megalobiz", stored: "https://megalobiz.com/lrc/323234/mode-de-vie")?.absoluteString,
                     "https://megalobiz.com/lrc/323234/mode-de-vie", "来源链接: Megalobiz 存了歌词页就是链接")
+        expectEqual(L.url(source: "megalobiz", stored: "https://megalobiz.com:443/lrc/1/x")?.absoluteString,
+                    "https://megalobiz.com:443/lrc/1/x", "来源链接: 写明默认端口也认")
         expectEqual(L.url(source: "megalobiz", stored: " https://www.megalobiz.com/lrc/1/x\n")?.absoluteString,
                     "https://www.megalobiz.com/lrc/1/x", "来源链接: 去掉首尾空白,www 也认")
         for (source, stored, why) in [("megalobiz", nil, "没存地址"), ("megalobiz", "", "空地址"),
                                       ("megalobiz", "http://megalobiz.com/lrc/1/x", "不是 https"),
                                       ("megalobiz", "https://megalobiz.com.evil.example/lrc/1", "别的主机"),
                                       ("megalobiz", "https://user@megalobiz.com/lrc/1", "带用户名"),
+                                      ("megalobiz", "https://megalobiz.com:8443/lrc/1", "别的端口"),
                                       ("lrclib", "https://megalobiz.com/lrc/1/x", "别的源不加链接"),
                                       ("", "https://megalobiz.com/lrc/1/x", "没来源")] as [(String, String?, String)] {
             expectEqual(L.url(source: source, stored: stored) == nil, true, "来源链接: \(why)不做链接")
@@ -52,6 +55,20 @@ func runLyricsManagerTests() {
         let quick = read("lyrimuse/LyricsManager/LyricsQuickSearchWindow.swift")
         expectEqual(sourceHas(quick, "sourceURL: candidate.sourceURL, undoable: true"), true,
                     "来源链接: 采纳候选时把候选的歌词页交给引擎(条目的 lyrics_source_url)")
+        let sheet = read("lyrimuse/LyricsManager/LyricsSearchSheet.swift")
+        let badge = sourceBody("private func sourceBadge(", in: sheet)
+        expectEqual(sourceHas(sheet, "sourceBadge(c.source, link: LyricsSourceLink.url(source: c.source, stored: c.sourceURL))")
+                    && sourceHas(sheet, "sourceBadge(source, link: LyricsSourceLink.url(source: source, stored: c.sourceURL))")
+                    && sourceHas(sheet, "stored.sourceURL = entry.lyricsSourceURL")
+                    && sourceHas(badge, "sourceDisplayName(source) + (link == nil ? \"\" : \" ↗\")")
+                    && sourceHas(badge, "LyricsSourceLinkOpener.open(link)")
+                    && sourceHas(badge, ".help(LyricsSourceLinkOpener.help(source: source))"), true,
+                    "来源链接: 搜索候选歌词面板(列表行、预览、当前使用那条)的来源标带「↗」、悬停说明、点了打开")
+        let versions = read("lyrimuse/LyricsManager/SongVersionsSheet.swift")
+        expectEqual(sourceHas(versions, "sourceLink: LyricsSourceLink.url(source: s.lyricsSource, stored: s.lyricsSourceURL)")
+                    && sourceHas(versions, "currentLink: c.sourceLink, otherLink: v.sourceLink")
+                    && sourceHas(sourceBody("private func compareValue(", in: versions), "LyricsSourceLinkOpener.open(link)"), true,
+                    "来源链接: 歌词版本对照表的「歌词来源」格(这张表下面有逐行歌词对比)带链接")
     }
     // ---- 三选一放不下时换短档名;跟随播放、对照表头随界面语言刷新(见 11 章决策 184) ----
     do {

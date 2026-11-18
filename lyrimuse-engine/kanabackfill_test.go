@@ -169,7 +169,7 @@ func TestLyricsKanaBackfillIsWired(t *testing.T) {
 		t.Fatal(err)
 	}
 	if !containsCode(string(b), "} else if needsLyricsKanaBackfill(e) && !enrichInflight[key] && kanaBackfillOnce(key, e) {\n") ||
-		!containsCode(string(b), "go backfillLyricsKana(withLyricSearchTitle(context.Background(), searchTitle), key, artist, title, album, durationSecs)\n") {
+		!containsCode(string(b), "go backfillLyricsKana(withLyricSearchTitle(withOnDemandLyricRound(context.Background()), searchTitle), key, artist, title, album, durationSecs)\n") {
 		t.Error("trackEnrichment 的派发链缺补借假名标注")
 	}
 }

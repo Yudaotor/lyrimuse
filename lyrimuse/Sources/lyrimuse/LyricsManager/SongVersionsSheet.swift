@@ -81,6 +81,8 @@ struct SongVersionsSheet: View {
         let mergeKeys: [String]
         /// 各播放器原样报的写法(跟写法键不一样时才有)。
         let reported: [SongVersions.ReportedName]
+        /// 歌词来源处的链接(`LyricsSourceLink`,只有 Megalobiz 存了歌词页时有):对照表「歌词来源」那一格做成可点的。
+        var sourceLink: URL?
         var id: String { key }
         /// 跟当前条目比的结论;当前条目自己算完全一致。
         var match: SongVersions.LyricsMatch { comparison?.match ?? .identical }
@@ -624,6 +626,9 @@ struct SongVersionsSheet: View {
         var compared = true
         var currentMissing = false
         var otherMissing = false
+        /// 两边各自的来源链接(只有「歌词来源」那一行给),有就把那一格做成可点的。
+        var currentLink: URL?
+        var otherLink: URL?
 
         var differs: Bool { compared && !currentMissing && !otherMissing && current != other }
     }
@@ -639,7 +644,8 @@ struct SongVersionsSheet: View {
             CompareRow(label: L10n.t("时长"), current: durationText(c), other: durationText(v),
                        currentMissing: c.durationSecs == nil, otherMissing: v.durationSecs == nil),
             CompareRow(label: L10n.t("歌词来源"), current: sourceText(c), other: sourceText(v),
-                       currentMissing: c.source.isEmpty, otherMissing: v.source.isEmpty),
+                       currentMissing: c.source.isEmpty, otherMissing: v.source.isEmpty,
+                       currentLink: c.sourceLink, otherLink: v.sourceLink),
             CompareRow(label: L10n.t("歌词格式"), current: featuresText(c), other: featuresText(v)),
         ]
         // 原始写法放在专辑后面。
@@ -659,8 +665,10 @@ struct SongVersionsSheet: View {
                 ForEach(Array(rows.enumerated()), id: \.offset) { _, row in
                     GridRow {
                         Text(row.label).font(.caption).foregroundStyle(.secondary)
-                        compareValue(row.current, missing: row.currentMissing, color: row.differs ? .primary : .secondary)
-                        compareValue(row.other, missing: row.otherMissing, color: row.differs ? .red : .secondary)
+                        compareValue(row.current, missing: row.currentMissing, color: row.differs ? .primary : .secondary,
+                                     link: row.currentLink, source: c.source)
+                        compareValue(row.other, missing: row.otherMissing, color: row.differs ? .red : .secondary,
+                                     link: row.otherLink, source: v.source)
                             .fontWeight(row.differs ? .medium : .regular)
                     }
                 }
@@ -677,10 +685,26 @@ struct SongVersionsSheet: View {
 
     /// 逐行对比:按块排(`SongVersions.compareLyrics`),左边当前条目、右边所选条目各是这一块的几句;所选条目这一块有字对不上、
     /// 或者只有一边有时右边整格标红,对不上的字两边都标红;块开头那句时间差超过 0.5 秒时右边那个时间标红。
-    /// 逐项对照的一格:缺的用最淡的字,空的写一道短横。
-    private func compareValue(_ text: String, missing: Bool, color: Color) -> some View {
-        Text(text.isEmpty ? "—" : text)
+    /// 逐项对照的一格:缺的用最淡的字,空的写一道短横。带来源链接的(Megalobiz)名字后加「↗」,点了经
+    /// `LyricsSourceLinkOpener` 打开,同歌词管理详情的来源胶囊。
+    @ViewBuilder
+    private func compareValue(_ text: String, missing: Bool, color: Color, link: URL? = nil, source: String = "") -> some View {
+        let value = Text(text.isEmpty ? "—" : (link == nil ? text : text + " ↗"))
             .foregroundStyle(missing ? AnyShapeStyle(HierarchicalShapeStyle.tertiary) : AnyShapeStyle(color))
+        if let link {
+            Button {
+                LyricsSourceLinkOpener.open(link)
+            } label: {
+                value
+            }
+            .buttonStyle(.plain)
+            .onHover { inside in
+                if inside { NSCursor.pointingHand.push() } else { NSCursor.pop() }
+            }
+            .help(LyricsSourceLinkOpener.help(source: source))
+        } else {
+            value
+        }
     }
 
     private func lyricDiffSection(_ c: Version, _ v: Version) -> some View {
@@ -1134,7 +1158,8 @@ struct SongVersionsSheet: View {
                        players: players, playersInferred: facts.playersInferred, durationSecs: facts.durationSecs,
                        source: s.lyricsSource, score: facts.score, features: features,
                        lyrics: facts.lyrics, yrc: facts.yrc, shown: shown,
-                       lyricsKnown: facts.complete, comparison: comparison, mergeKeys: mergeKeys, reported: s.reportedNames)
+                       lyricsKnown: facts.complete, comparison: comparison, mergeKeys: mergeKeys, reported: s.reportedNames,
+                       sourceLink: LyricsSourceLink.url(source: s.lyricsSource, stored: s.lyricsSourceURL))
     }
 
     static func evidenceLabel(_ kind: String) -> String {

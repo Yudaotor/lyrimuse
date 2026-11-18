@@ -168,6 +168,8 @@ type hostGuard struct {
 	sourceBudget func(source string) int
 	sourceHits   map[string][]time.Time
 	budgetPath   string
+	// budgetMtime:上一次读写额度文件时它的修改时刻,变了说明别的进程记过请求。
+	budgetMtime time.Time
 	// budgetSaveMu:额度存盘串行。取快照和写文件都在它里面,后取的快照不会被先取的那份盖掉。
 	budgetSaveMu sync.Mutex
 }
@@ -351,6 +353,11 @@ func (g *hostGuard) admit(req *http.Request) error {
 		}
 		if left, limited := g.sourceBudgetLeft(source); limited && left <= 0 {
 			g.logHeld(host, "background requests to "+source+" used up the hourly budget")
+			round.markSkippedBecause(source, lyricSourceSkipReasonBudget)
+			return errHostGuarded
+		}
+		if sourceDayQuotaLow(source, g.now()) {
+			g.logHeld(host, "background requests to "+source+" held back, little of the daily quota left")
 			round.markSkippedBecause(source, lyricSourceSkipReasonBudget)
 			return errHostGuarded
 		}

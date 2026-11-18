@@ -15,7 +15,8 @@ import (
 // 各源近况统计不算它这一轮。导入清单也不等额度:用完之后这一小时导入的歌不问这个源,播到时再补问。
 //
 // 窗口里的请求时刻存进 sourceBudgetPath,启动时读回来:引擎一天被重启很多次(改设置、装新版),只记在内存里的话每次重启
-// 额度都从零算,等于没限。
+// 额度都从零算,等于没限。手动搜索、设置页测试的子进程也读写同一份(useSharedLyricSourceQuota):写之前在文件锁里并上盘上那份,
+// 判额度之前看到文件变了就并一次,两个进程发的请求都算进同一个窗口。
 
 // sourceBudgetWindow:额度按多长的滚动窗口算。
 const sourceBudgetWindow = time.Hour
@@ -44,16 +45,77 @@ func (g *hostGuard) noteSourceHit(source string) {
 	g.mu.Lock()
 	now := g.now()
 	g.sourceHits[source] = append(pruneSourceHits(g.sourceHits[source], now), now)
-	path, snapshot := g.budgetPath, sourceHitsFile(g.sourceHits)
+	path := g.budgetPath
 	g.mu.Unlock()
 	if path == "" {
 		return
 	}
+	unlock := exclusiveFileLock(path)
+	defer unlock()
+	g.mergeSourceBudgetFile(path)
+	g.mu.Lock()
+	snapshot := sourceHitsFile(g.sourceHits)
+	g.mu.Unlock()
 	data, err := json.Marshal(snapshot)
 	if err != nil {
 		return
 	}
-	_ = writeFileAtomic(path, data)
+	if writeFileAtomic(path, data) == nil {
+		if st, err := os.Stat(path); err == nil {
+			g.mu.Lock()
+			g.budgetMtime = st.ModTime()
+			g.mu.Unlock()
+		}
+	}
+}
+
+// mergeSourceBudgetFile:把盘上那份(别的进程记的)并进 g.sourceHits。按毫秒对:同一毫秒两边各有几条取多的那边(自己写出去
+// 又读回来的不重复算),比此刻还晚的不要。
+func (g *hostGuard) mergeSourceBudgetFile(path string) {
+	st, err := os.Stat(path)
+	if err != nil {
+		return
+	}
+	var saved map[string][]int64
+	data, err := os.ReadFile(path)
+	if err != nil || json.Unmarshal(data, &saved) != nil {
+		return
+	}
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	g.budgetMtime = st.ModTime()
+	now := g.now()
+	for src, ms := range saved {
+		hits := g.sourceHits[src]
+		mine := map[int64]int{}
+		for _, h := range hits {
+			mine[h.UnixMilli()]++
+		}
+		theirs := map[int64]int{}
+		for _, m := range ms {
+			theirs[m]++
+		}
+		for m, n := range theirs {
+			t := time.UnixMilli(m)
+			for ; n > mine[m] && !t.After(now); n-- {
+				hits = append(hits, t)
+			}
+		}
+		slices.SortFunc(hits, func(a, b time.Time) int { return a.Compare(b) })
+		g.sourceHits[src] = pruneSourceHits(hits, now)
+	}
+}
+
+// budgetFileChanged:额度文件在上一次读写之后被别的进程改过。
+func (g *hostGuard) budgetFileChanged() (string, bool) {
+	g.mu.Lock()
+	path, seen := g.budgetPath, g.budgetMtime
+	g.mu.Unlock()
+	if path == "" {
+		return "", false
+	}
+	st, err := os.Stat(path)
+	return path, err == nil && !st.ModTime().Equal(seen)
 }
 
 // sourceHitsFile:存盘的形状,源 → 请求时刻(unix 毫秒)。
@@ -79,6 +141,9 @@ func (g *hostGuard) useSourceBudgetFile(path string) {
 	g.mu.Lock()
 	defer g.mu.Unlock()
 	g.budgetPath = path
+	if st, err := os.Stat(path); err == nil {
+		g.budgetMtime = st.ModTime()
+	}
 	// 比此刻还晚的不要(上一个进程写的时候墙钟偏快、之后被校正回来):它要等墙钟追上再过一小时才剪得掉,一直占着额度。
 	// 剩下的排好序,pruneSourceHits 遇到第一条没过期的就停。
 	now := g.now()
@@ -99,6 +164,9 @@ func (g *hostGuard) sourceBudgetLeft(source string) (left int, ok bool) {
 	budget := g.sourceBudget(source)
 	if budget <= 0 {
 		return 0, false
+	}
+	if path, changed := g.budgetFileChanged(); changed {
+		g.mergeSourceBudgetFile(path)
 	}
 	g.mu.Lock()
 	defer g.mu.Unlock()

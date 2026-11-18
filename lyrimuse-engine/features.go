@@ -720,14 +720,27 @@ func lyricSourceEnabledSinceFor(prev []string, bulk bool) bool {
 // lyricSourceOnDemandOnly:只在用户实际在听、在找的时候问的源。Megalobiz 的条款不许整库镜像、批量下载(megalobiz.go 头注)。
 var lyricSourceOnDemandOnly = map[string]bool{lyricSourceMegalobiz: true}
 
-// lyricSourceAllowedForRound:这一轮问不问这个源。只在播放那一侧问的源,批量轮次(全量扫库、补空扫描、按组重搜、专辑预取、
-// 导入清单,ctx 带 withBackgroundOutbound)一律不问;正在放的那首、待播队列的预解析(withPlayerQueueTrack)、手动搜索和重新匹配照问。
-// 别的源不受影响。
+// lyricSourceAllowedForRound:这一轮问不问这个源。只在播放那一侧问的源只在 isOnDemandLyricRound 的轮次里问,别的轮次
+// (全量扫库、补空扫描、按组重搜、专辑预取、导入清单、开发用的命令行)一律不问。别的源不受影响。
 func lyricSourceAllowedForRound(ctx context.Context, source string) bool {
-	if !lyricSourceOnDemandOnly[source] {
-		return true
-	}
-	return !isBackgroundOutbound(ctx) || isPlayerQueueTrack(ctx)
+	return !lyricSourceOnDemandOnly[source] || isOnDemandLyricRound(ctx)
+}
+
+type onDemandLyricRoundKey struct{}
+
+// withOnDemandLyricRound 标记这一轮是为用户此刻在听的那首问的:正在放的那首(trackEnrichment 起的各路)、设置页的「测试」
+// (testlyricsourcescli.go)。
+func withOnDemandLyricRound(ctx context.Context) context.Context {
+	return context.WithValue(ctx, onDemandLyricRoundKey{}, true)
+}
+
+// isOnDemandLyricRound:这一轮是为用户此刻在听、在找的那首问的。认三种标记:withOnDemandLyricRound、待播队列的
+// withPlayerQueueTrack(upcoming.go)、手动搜索 / 重新匹配的 withManualLyricSearch(searchcli.go、lyricsrematch.go)。
+// 三种标记只许打在白名单里那几个函数里,TestOnDemandLyricRoundMarkedOnlyAtWhitelist 扫全部源码守着;新加的入口默认不问
+// 只在播放那一侧问的源。
+func isOnDemandLyricRound(ctx context.Context) bool {
+	v, _ := ctx.Value(onDemandLyricRoundKey{}).(bool)
+	return v || isPlayerQueueTrack(ctx) || manualLyricSearch(ctx)
 }
 
 // isPlayerLocalLyricSource:这份候选是不是读播放器自己缓存来的(KKBOX / Spotify / Amazon Music 本地歌词)。
