@@ -150,6 +150,16 @@ public struct MediaControlSnapshot: Decodable {
             anchorElapsedTime: anchorElapsedTime, isRadio: isRadio, capturedAt: newCapturedAt)
     }
 
+    /// 位置和锚点各换成给定值的副本。用处是焦点回退问到的 Cog 放网络流(`MediaControlClient.cogProbedSnapshot`):两者都按
+    /// 这一首的标题换上来时起算,跟主路径就地构造出的形状一致。写成显式方法,理由同 `withAlbum`。
+    public func withElapsed(_ newElapsed: Double?, anchor newAnchor: Double?, capturedAt newCapturedAt: Date) -> MediaControlSnapshot {
+        MediaControlSnapshot(
+            title: title, artist: artist, album: album, duration: duration,
+            elapsedTime: newElapsed, playing: playing, playbackRate: playbackRate,
+            isMusicApp: isMusicApp, bundleIdentifier: bundleIdentifier,
+            anchorElapsedTime: newAnchor, isRadio: isRadio, capturedAt: newCapturedAt)
+    }
+
     /// 换成网络电台里这一首的副本:歌名换成电台流里的标题,歌手、专辑、时长清空,位置是这个标题换上来之后过了多久。
     /// 用处是 VOX 放网络电台(`VoxPlayerInfo.radioSnapshot`),之后由 `PlayerTitleSplit` 拆歌手、排延迟线。写成显式方法,
     /// 理由同 `withAlbum`。

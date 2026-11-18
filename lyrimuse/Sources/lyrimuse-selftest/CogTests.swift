@@ -386,8 +386,12 @@ func runCogTests() {
                      sourceHas(client, "|| CogStream.isPlaceholder(bundleID: bundleID, title: snapshot.title, artist: snapshot.artist,"),
                      sourceHas(client, "if let stream = CogStream.reading(bundleID: CogStream.bundleID, title: probed.title, artist: probed.artist,"),
                      sourceHas(client, "reportedElapsed = cogStream.position"),
-                     sourceHas(client, "reportedAnchor = cogStream.anchorPosition")],
-                    [true, true, true, true, true, true], "Cog 接线: 放流走 CogStream(主路径的位置和锚点、不是歌的闸、焦点被占时单问那份)")
+                     sourceHas(client, "reportedAnchor = cogStream.anchorPosition"),
+                     sourceHas(client, "snapshot = snapshot.withElapsed(stream.position, anchor: stream.anchorPosition, capturedAt: now)")],
+                    [true, true, true, true, true, true, true], "Cog 接线: 放流走 CogStream(主路径的位置和锚点、不是歌的闸、焦点被占时单问那份的位置和锚点)")
+        expectEqual([LocalPlaybackSource.resumeReadingNeverLeads(bundleID: CogPlayhead.bundleID),
+                     LocalPlaybackSource.resumeReadingNeverLeads(bundleID: PlaybackPlayer.spotify.bundleIdentifier)], [true, false],
+                    "Cog 接线: 恢复那一拍原样采信,不按暂停位置封顶")
         expectEqual(sourceHas(sourceText("LyrimuseCore/Local/CogPlayhead.swift"), "guard !SourceKnockout.isOut(.cogSlider), AXIsProcessTrusted() else { return false }"),
                     true, "Cog 接线: 读滑块能拔掉(拔腿测试)")
         let mainFix = client.range(of: "raw.artist = CogStream.checkedArtist(bundleID: bundleID, title: raw.title, artist: raw.artist,")

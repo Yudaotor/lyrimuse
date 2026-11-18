@@ -2970,7 +2970,7 @@ public enum MediaControlClient {
         if let stream = CogStream.reading(bundleID: CogStream.bundleID, title: probed.title, artist: probed.artist,
                                           duration: probed.duration, anchorElapsed: probed.anchorElapsedTime, elapsed: live) {
             let pid = snapshot.processIdentifier
-            snapshot = snapshot.withElapsed(stream.position, capturedAt: now)
+            snapshot = snapshot.withElapsed(stream.position, anchor: stream.anchorPosition, capturedAt: now)
             snapshot.processIdentifier = pid
             snapshot.nowPlayingItemID = probed.nowPlayingItemID
             return snapshot
