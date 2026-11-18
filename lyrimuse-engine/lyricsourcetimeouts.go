@@ -18,6 +18,8 @@ const (
 	// petitHTTPTimeout:PetitLyrics 的搜索偶尔要五六秒(一次回二十条元数据)。
 	petitHTTPTimeout = 8 * time.Second
 	zingHTTPTimeout  = 6 * time.Second
+	// megalobizHTTPTimeout:Megalobiz 的搜索和取词,实测一两百毫秒。
+	megalobizHTTPTimeout = 6 * time.Second
 	// miguAlbumInfoTimeout:咪咕按专辑 ID 取专辑信息。
 	miguAlbumInfoTimeout = 4 * time.Second
 	// ytmusicHomePageTimeout:取 YouTube Music 首页拿 VISITOR_DATA。

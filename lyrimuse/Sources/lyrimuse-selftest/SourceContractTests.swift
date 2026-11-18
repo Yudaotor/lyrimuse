@@ -29,7 +29,9 @@ func runSourceContractTests() {
             .appendingPathComponent("lyrimuse/UI/LyricsWindowView.swift"), encoding: .utf8)) ?? ""
         // 单行的 .help(…) 后面紧跟 .accessibilityLabel(…)(中间可以隔注释行);带文字的控件读的是自己的字,列在 textHelps 里。
         let textHelps = [".help(L10n.t(\"重置\"))", ".help(L10n.t(\"在设置中查看 Last.fm\"))",
-                         ".help(L10n.t(\"近 12 周的收听热力", ".help(L10n.t(\"在 Apple Music 中打开\"))"]
+                         ".help(L10n.t(\"近 12 周的收听热力", ".help(L10n.t(\"在 Apple Music 中打开\"))",
+                         // 简介面板带链接的那几行(「网页」、Megalobiz 的「来源」),读的是「平台名 ↗」。
+                         ".help(help ?? \"\")"]
         let lines = window.components(separatedBy: "\n").map { $0.trimmingCharacters(in: .whitespaces) }
         var unlabeled: [String] = []
         for (i, line) in lines.enumerated() where line.hasPrefix(".help(")

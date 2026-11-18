@@ -220,13 +220,13 @@ func putSongSharePre(key string, e enrichEntry, synced string, now time.Time, up
 }
 
 // songShareLyricsFields:同步与恢复动的字段,把 src 的搬到 dst:歌词选择(正文、译文、罗马音、逐字、背景人声、来源、分数、
-// 打分版本、按多长的时长选的、演唱者标注、纯文本)、跟着正文走的语种与译文账、手改标记与原件、这份歌词出自哪一轮(出现过 /
+// 打分版本、按多长的时长选的、演唱者标注、纯文本、来源页)、跟着正文走的语种与译文账、手改标记与原件、这份歌词出自哪一轮(出现过 /
 // 应答过 / 跳过的源、当前歌词的出处)。引擎各处的闸看的就是这几项。字段归属登记(songEntityFieldClasses)里歌词选择那一类
 // 加了字段,这里跟着加,TestSongShareFieldsCoverLyricsChoice 守着。
 func songShareLyricsFields(dst *enrichEntry, src enrichEntry) {
 	dst.Lyrics, dst.LyricsTr, dst.LyricsRoma, dst.LyricsYRC = src.Lyrics, src.LyricsTr, src.LyricsRoma, src.LyricsYRC
 	dst.LyricsBG, dst.LyricsBGChecked = src.LyricsBG, src.LyricsBGChecked
-	dst.LyricsSource, dst.LyricsScore = src.LyricsSource, src.LyricsScore
+	dst.LyricsSource, dst.LyricsSourceURL, dst.LyricsScore = src.LyricsSource, src.LyricsSourceURL, src.LyricsScore
 	dst.LyricsScoringVersion, dst.LyricsScoringRevision = src.LyricsScoringVersion, src.LyricsScoringRevision
 	dst.ResolvedDurationSecs = src.ResolvedDurationSecs
 	dst.LyricsKana, dst.LyricsKanaChecked, dst.LyricsKanaRomaFor = src.LyricsKana, src.LyricsKanaChecked, src.LyricsKanaRomaFor
@@ -526,7 +526,7 @@ func songShareApplyChoice(e *enrichEntry, c *scoredLyricCandidateResult, r *song
 	e.applyPregeneratedRoma(roma)
 	e.LyricsTrLang, e.LyricsTrSource = c.LyricsTrLang, lyricsTrSourceFor(c)
 	e.resetTranslationAttempts()
-	e.LyricsSource, e.LyricsScore = c.Source, c.Score
+	e.LyricsSource, e.LyricsSourceURL, e.LyricsScore = c.Source, c.SourceURL, c.Score
 	if r.complete() {
 		e.stampLyricsScoring()
 	}

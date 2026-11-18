@@ -73,9 +73,9 @@ Các tính năng này tắt sau khi cài. Hãy bật chúng trong cài đặt tr
 
 <a id="feature-lyric-sources"></a>
 
-### 15 nguồn lời bài hát, tìm tự động
+### 16 nguồn lời bài hát, tìm tự động
 
-NetEase Cloud Music, QQ Music, Kugou, Kuwo, Migu, LRCLIB, LyricFind, Deezer, AMLL, Soda Music, VIBE, Genie, PetitLyrics, Zing MP3 và Apple Music. Mỗi nguồn đều có thể tắt, sắp xếp lại hoặc kiểm tra xem hiện có kết nối được không.
+NetEase Cloud Music, QQ Music, Kugou, Kuwo, Migu, LRCLIB, LyricFind, Deezer, AMLL, Soda Music, VIBE, Genie, PetitLyrics, Zing MP3, Megalobiz và Apple Music. Mỗi nguồn đều có thể tắt, sắp xếp lại hoặc kiểm tra xem hiện có kết nối được không.
 
 - Bật theo mặc định
 - Cài đặt: Lời bài hát › Nguồn › Nguồn lời bài hát

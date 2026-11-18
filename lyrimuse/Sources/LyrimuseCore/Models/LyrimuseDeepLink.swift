@@ -242,6 +242,9 @@ public enum LyrimuseDeepLink: Equatable, Sendable {
         /// 菜单栏面板点到外面、切 App、切桌面空间时不自动收起(`debug/panel-pin?on=1`,`on=0` 恢复),不落盘:
         /// 验证脚本得先把窗口提到前台才能拖动,一提前台面板就被当成点到外面收掉了。
         case panelPin(on: Bool)
+        /// 打开外部链接(歌词来源处的链接,`LyricsSourceLinkOpener`)时只记下地址、不弹浏览器(`debug/hold-opens?on=1`,`on=0` 恢复),
+        /// 记下的在 `state` 的 `heldOpens` 里,打开时清空;不落盘。验点了打开的是哪个地址时用,不在用户面前开浏览器。
+        case holdOpens(on: Bool)
         /// 在菜单栏面板里从 (x1, y1) 按下、拖到 (x2, y2) 松开(面板窗口内的点坐标,左上角为原点),事件直接送进面板窗口,
         /// 跟手拖走同一条路:`debug/panel-drag?from=205,436&to=350,436`。验证脚本合成的系统鼠标事件进不了这扇面板。
         /// `via=x,y;x,y` 按住不放先依次拖过这几个点再到 `to`(验一次拖动里来回调);`in=gallery` 按在编辑时旁边那块
@@ -536,6 +539,9 @@ public enum LyrimuseDeepLink: Equatable, Sendable {
         case ("debug", "/panel-pin"):
             guard let on = value("on").flatMap(Self.parseBool) else { return nil }
             self = .debug(.panelPin(on: on))
+        case ("debug", "/hold-opens"):
+            guard let on = value("on").flatMap(Self.parseBool) else { return nil }
+            self = .debug(.holdOpens(on: on))
         case ("debug", "/stall"):
             guard let ms = value("ms").flatMap(Int.init), (1...Self.maxStallMs).contains(ms) else { return nil }
             self = .debug(.stall(ms: ms))
@@ -997,6 +1003,9 @@ public enum LyrimuseDeepLink: Equatable, Sendable {
                 if steps != 1 { components.queryItems?.append(URLQueryItem(name: "steps", value: String(steps))) }
             case let .panelPin(on):
                 components.path = "/panel-pin"
+                components.queryItems = [URLQueryItem(name: "on", value: on ? "1" : "0")]
+            case let .holdOpens(on):
+                components.path = "/hold-opens"
                 components.queryItems = [URLQueryItem(name: "on", value: on ? "1" : "0")]
             case let .stall(ms):
                 components.path = "/stall"

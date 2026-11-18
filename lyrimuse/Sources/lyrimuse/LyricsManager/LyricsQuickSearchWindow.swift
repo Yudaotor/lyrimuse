@@ -103,7 +103,7 @@ struct LyricsQuickSearchWindow: View {
                             source: candidate.source,
                             markManual: candidate.isImported || AppSettings.shared.manualPickLocksLyrics,
                             sourceChoice: "", fromManualPick: true, bg: candidate.lyricsBG, trLang: candidate.lyricsTrLang,
-                            trFrom: candidate.lyricsTrFrom, undoable: true)
+                            trFrom: candidate.lyricsTrFrom, sourceURL: candidate.sourceURL, undoable: true)
                     }
                     // 正在放的那首重读歌词由 EnrichCacheStore.commit 收尾时做,这里不再调一次。
                     if result.ok { AppActions.shared.lyricsSearchApplied.send(context.key) }

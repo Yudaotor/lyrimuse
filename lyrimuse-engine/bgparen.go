@@ -19,7 +19,7 @@ import (
 // 而且存量回填(bgbackfill.go)会整份换掉它们的 lyrics_bg;本机文件、各客户端缓存里的用户歌词不动。
 var parenBGSources = map[string]bool{
 	"netease": true, "qq": true, "kugou": true, "lrclib": true, "lyricfind": true, "kuwo": true,
-	"migu": true, "deezer": true, "soda": true, "vibe": true, "genie": true, "petitlyrics": true, "zing": true,
+	"migu": true, "deezer": true, "soda": true, "vibe": true, "genie": true, "petitlyrics": true, "zing": true, "megalobiz": true,
 	lxMusicLocalLyricsSource: true,
 }
 

@@ -73,9 +73,9 @@ Ces fonctionnalités restent désactivées après l’installation. Activez-les 
 
 <a id="feature-lyric-sources"></a>
 
-### 15 sources de paroles, interrogées automatiquement
+### 16 sources de paroles, interrogées automatiquement
 
-NetEase Cloud Music, QQ Music, Kugou, Kuwo, Migu, LRCLIB, LyricFind, Deezer, AMLL, Soda Music, VIBE, Genie, PetitLyrics, Zing MP3 et Apple Music. Chaque source peut être désactivée, déplacée dans l’ordre ou testée pour savoir si elle est joignable en ce moment.
+NetEase Cloud Music, QQ Music, Kugou, Kuwo, Migu, LRCLIB, LyricFind, Deezer, AMLL, Soda Music, VIBE, Genie, PetitLyrics, Zing MP3, Megalobiz et Apple Music. Chaque source peut être désactivée, déplacée dans l’ordre ou testée pour savoir si elle est joignable en ce moment.
 
 - Activée par défaut
 - Réglages : Paroles › Source › Sources de paroles

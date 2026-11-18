@@ -885,6 +885,7 @@
 "图标自下而上填充以表示播放进度，颜色取自「颜色」组" = "The icon fills from the bottom up to show playback progress, using the colors set under Color";
 "圆角" = "Corners";
 "在 %@ 上收听" = "Listen on %@";
+"在 %@ 上查看这首歌的歌词" = "View this song’s lyrics on %@";
 "在 %@ 中打开" = "Open in %@";
 "在 %@ 中搜索" = "Search in %@";
 "在 %@ 中播放" = "Play in %@";
@@ -2320,6 +2321,7 @@
 "用「导入歌词文件夹…」导入，或在下方设置监视文件夹" = "Use Import Lyrics Folder… or set a watched folder below";
 "用于改进 Lyrimuse：版本、系统、用了哪些功能和崩溃报告，不含歌名和账号" = "Helps improve Lyrimuse: version, system, features in use and crash reports. Never song titles or accounts";
 "用当前配色覆盖" = "Overwrite with Current Colors";
+"用户上传的同步歌词库，只在听歌时查询" = "Synced lyrics uploaded by users, looked up only while you listen";
 "用户名下方显示" = "Shown Under Your Name";
 "用这一期的真实数据看看推送在这个平台上的样子" = "See how a push looks on this platform, using real data from this period";
 "用这首歌在 Spotify 上的循环短片当背景；仅限在 Spotify 中放过的歌曲" = "Uses the song’s looping Spotify video as the background; only for songs you’ve played in Spotify";

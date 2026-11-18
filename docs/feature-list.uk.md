@@ -73,9 +73,9 @@ Lyrimuse — програма з відкритим кодом (GPL-3.0) для 
 
 <a id="feature-lyric-sources"></a>
 
-### 15 джерел текстів з автоматичним пошуком
+### 16 джерел текстів з автоматичним пошуком
 
-NetEase Cloud Music, QQ Music, Kugou, Kuwo, Migu, LRCLIB, LyricFind, Deezer, AMLL, Soda Music, VIBE, Genie, PetitLyrics, Zing MP3 і Apple Music. Кожне джерело можна вимкнути, перемістити в списку або перевірити, чи воно доступне просто зараз.
+NetEase Cloud Music, QQ Music, Kugou, Kuwo, Migu, LRCLIB, LyricFind, Deezer, AMLL, Soda Music, VIBE, Genie, PetitLyrics, Zing MP3, Megalobiz і Apple Music. Кожне джерело можна вимкнути, перемістити в списку або перевірити, чи воно доступне просто зараз.
 
 - Типово ввімкнено
 - Параметри: Текст › Джерело › Джерела текстів

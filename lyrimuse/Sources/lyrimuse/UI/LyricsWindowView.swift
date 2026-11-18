@@ -1715,6 +1715,8 @@ struct LyricsWindowView: View {
     @State private var scrollPendingWhileHidden = false
     /// 简介面板里的歌词来源(EnrichCacheReader 异步查,面板打开时取一次)。
     @State private var infoLyricsSource: String?
+    /// 「来源」行的链接(`LyricsSourceLink`,只有 Megalobiz 的词有),跟 infoLyricsSource 一起取。
+    @State private var infoLyricsSourceLink: URL?
     /// 「…」菜单里直接执行的那几行(资料库、减少推荐、平台页、在播放器中显示)的状态与动作,跟网页歌词副屏共用一份实现。
     @StateObject private var moreMenu = LyricsMoreMenuModel()
     /// 「显示简介」面板「网页」那一行用的各平台链接,面板打开时读一次。
@@ -4070,7 +4072,9 @@ struct LyricsWindowView: View {
         // 歌词来源与各平台链接都在 enrich 缓存里,在主线程直接读(理由同 moreMenu 那处:EnrichCacheReader
         // 只许在主线程用),缓存已加载时是 µs 级。
         let artist = playback.artist, title = playback.title, album = playback.album
-        infoLyricsSource = EnrichCacheReader.sourceInfo(artist: artist, title: title, album: album)?.lyricsSource
+        let sourceInfo = EnrichCacheReader.sourceInfo(artist: artist, title: title, album: album)
+        infoLyricsSource = sourceInfo?.lyricsSource
+        infoLyricsSourceLink = sourceInfo?.lyricsSourceLink
         infoPlatformLinks = EnrichCacheReader.platformLinks(artist: artist, title: title, album: album)
     }
 
@@ -4303,7 +4307,15 @@ struct LyricsWindowView: View {
             }
             InfoPanelRow(label: L10n.t("歌词"), value: lyricsKind, onArtwork: hasArtworkBackground)
             if let source = infoLyricsSource, !source.isEmpty {
-                InfoPanelRow(label: L10n.t("来源"), value: sourceDisplayName(source), onArtwork: hasArtworkBackground)
+                // 条款要求链回的源(Megalobiz)存了歌词页时,值写成「平台名 ↗」,同下面「网页」行;别的源照旧是字。
+                if let link = infoLyricsSourceLink {
+                    InfoPanelLinksRow(label: L10n.t("来源"), name: sourceDisplayName(source), url: link,
+                                      help: LyricsSourceLinkOpener.help(source: source), onArtwork: hasArtworkBackground) {
+                        LyricsSourceLinkOpener.open(link)
+                    }
+                } else {
+                    InfoPanelRow(label: L10n.t("来源"), value: sourceDisplayName(source), onArtwork: hasArtworkBackground)
+                }
             }
             // 「网页」行:**只显示当前播放器自己那个平台**的歌曲页。三个平台全铺(QQ / 网易云 /
             // Apple Music)的话,酷狗播放时面板上会摆着 QQ 音乐和 Apple Music 两个别家的链接,
@@ -7450,19 +7462,24 @@ private struct InfoPanelRow: View {
 /// QQ 音乐 / 网易云 / Spotify 都落到**浏览器**(理由见 PlatformLinks 头注)。与其在一行里
 /// 解释两种落点,不如统一说"网页"、把唯一的例外(AM 进 App)当成惊喜。
 private struct InfoPanelLinksRow: View {
+    var label = L10n.t("网页")
     let name: String
     let url: URL
+    /// 悬停提示,nil = 没有。
+    var help: String? = nil
     var onArtwork: Bool = false
+    /// 点了做什么,nil = 用默认浏览器 / 对应的 App 打开 url。
+    var open: (() -> Void)? = nil
 
     var body: some View {
         HStack(alignment: .firstTextBaseline, spacing: 10) {
-            Text(L10n.t("网页"))
+            Text(label)
                 .font(.system(size: 12))
                 .foregroundStyle(onArtwork ? Color.white.opacity(0.75) : Color.secondary)
                 .shadow(color: onArtwork ? .black.opacity(0.5) : .clear, radius: 1.5)
                 .frame(width: 52, alignment: .leading)
             Button {
-                NSWorkspace.shared.open(url)
+                if let open { open() } else { NSWorkspace.shared.open(url) }
             } label: {
                 Text(name + " ↗")
                     .font(.system(size: 13, weight: .medium))
@@ -7471,6 +7488,7 @@ private struct InfoPanelLinksRow: View {
             }
             .buttonStyle(.glassIcon())
             .foregroundStyle(onArtwork ? Color.white : Color.accentColor)
+            .help(help ?? "")
         }
     }
 }

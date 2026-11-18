@@ -266,7 +266,7 @@ func applyResync(cur enrichEntry, picked *scoredLyricCandidateResult, p resyncPl
 	cur.dropHokkienRoma()
 	cur.dropUnusableCantoneseRoma()
 	cur.applyPregeneratedRoma(preparedRoma)
-	cur.LyricsSource = picked.Source
+	cur.LyricsSource, cur.LyricsSourceURL = picked.Source, picked.SourceURL
 	cur.LyricsScore = picked.Score
 	cur.stampLyricsScoring()
 	return cur

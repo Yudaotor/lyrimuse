@@ -73,9 +73,9 @@ Diese Funktionen bleiben nach der Installation aus. Schalte sie zuerst in den Ei
 
 <a id="feature-lyric-sources"></a>
 
-### 15 Liedtextquellen, automatisch durchsucht
+### 16 Liedtextquellen, automatisch durchsucht
 
-NetEase Cloud Music, QQ Music, Kugou, Kuwo, Migu, LRCLIB, LyricFind, Deezer, AMLL, Soda Music, VIBE, Genie, PetitLyrics, Zing MP3 und Apple Music. Jede Quelle lässt sich ausschalten, umsortieren oder testen, um zu sehen, ob sie gerade erreichbar ist.
+NetEase Cloud Music, QQ Music, Kugou, Kuwo, Migu, LRCLIB, LyricFind, Deezer, AMLL, Soda Music, VIBE, Genie, PetitLyrics, Zing MP3, Megalobiz und Apple Music. Jede Quelle lässt sich ausschalten, umsortieren oder testen, um zu sehen, ob sie gerade erreichbar ist.
 
 - Standardmäßig ein
 - Einstellungen: Liedtext › Quelle › Liedtextquellen

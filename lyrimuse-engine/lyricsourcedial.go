@@ -82,7 +82,7 @@ func lyricHTTPClient(timeout time.Duration) *http.Client {
 var lyricSourceProxyFallbackSources = map[string]bool{
 	lyricSourceLRCLIB: true, lyricSourceAMLL: true, lyricSourceLyricFind: true, lyricSourceDeezer: true,
 	lyricSourceAppleMusic: true, lyricSourceVibe: true, lyricSourceGenie: true, lyricSourcePetitLyrics: true,
-	lyricSourceZing: true,
+	lyricSourceZing: true, lyricSourceMegalobiz: true,
 }
 
 type lyricSourceRoundTripper struct{}

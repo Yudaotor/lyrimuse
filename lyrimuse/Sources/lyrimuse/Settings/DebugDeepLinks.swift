@@ -303,6 +303,10 @@ enum DebugDeepLinks {
         case let .panelPin(on):
             MenuBarPanelDebugState.pinned = on
             logger.notice("debug panel pin \(on, privacy: .public)")
+        case let .holdOpens(on):
+            DebugExternalOpens.holding = on
+            if on { DebugExternalOpens.held = [] }
+            logger.notice("debug hold opens \(on, privacy: .public)")
         case let .panelLayout(json):
             AppSettings.shared.menuBarPanelLayout = MenuBarPanelLayout.decode(json)
             logger.notice("debug panel layout \(AppSettings.shared.menuBarPanelLayout.encoded(), privacy: .public)")
@@ -476,6 +480,8 @@ enum DebugDeepLinks {
                              "editing": MenuBarPanelDebugState.editing,
                              "layout": AppSettings.shared.menuBarPanelLayout.encoded()],
             "knockedOut": SourceKnockout.knockedOut,
+            // `debug/hold-opens` 开着时点了没打开、只记下的外部链接,按点的先后。
+            "heldOpens": ["holding": DebugExternalOpens.holding, "urls": DebugExternalOpens.held],
             // 读取器此刻解到哪一版;`published` 是按版本重算的各处订阅的那个信号(`enrichContentVersion`)。
             "enrichCache": EnrichCacheReader.debugState.merging(
                 ["published": LocalPlaybackSource.shared.enrichContentVersion?.description ?? NSNull()]) { a, _ in a },
@@ -1002,6 +1008,13 @@ extension DebugDeepLinks {
 }
 
 /// 菜单栏面板此刻翻在哪一格(深链取值,nil = 钮块网格或面板没开)。只给 `debug/state` 读,面板自己不读它。
+/// `debug/hold-opens`:开着时外部链接只记下、不打开(不落盘),见 `LyricsSourceLinkOpener`。
+@MainActor
+enum DebugExternalOpens {
+    static var holding = false
+    static var held: [String] = []
+}
+
 @MainActor
 enum MenuBarPanelDebugState {
     static var quickTarget: String?

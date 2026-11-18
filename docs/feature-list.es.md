@@ -73,9 +73,9 @@ Estas funciones siguen desactivadas después de instalar. Actívalas primero en 
 
 <a id="feature-lyric-sources"></a>
 
-### Quince fuentes de letras con búsqueda automática
+### Dieciséis fuentes de letras con búsqueda automática
 
-NetEase Cloud Music, QQ Music, Kugou, Kuwo, Migu, LRCLIB, LyricFind, Deezer, AMLL, Soda Music, VIBE, Genie, PetitLyrics, Zing MP3 y Apple Music. Cada fuente se puede desactivar, reordenar o probar para ver si está accesible ahora mismo.
+NetEase Cloud Music, QQ Music, Kugou, Kuwo, Migu, LRCLIB, LyricFind, Deezer, AMLL, Soda Music, VIBE, Genie, PetitLyrics, Zing MP3, Megalobiz y Apple Music. Cada fuente se puede desactivar, reordenar o probar para ver si está accesible ahora mismo.
 
 - Activada por omisión
 - Ajustes: Letra › Fuente › Fuentes de letras

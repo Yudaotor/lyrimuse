@@ -461,8 +461,9 @@ func importLyricsFromOpts(dir string, persist, cleanTemps bool) []string {
 				e.LyricsKana, changed = kana, true
 			}
 		}
+		// 文件里只记来源名、不记来源页:换了来源时来源页跟着清掉。
 		if e.LyricsSource != parsed.source {
-			e.LyricsSource, changed = parsed.source, true
+			e.LyricsSource, e.LyricsSourceURL, changed = parsed.source, "", true
 		}
 		if e.ManualLyrics != parsed.manual {
 			e.ManualLyrics, changed = parsed.manual, true

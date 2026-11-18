@@ -76,6 +76,9 @@ const (
 	lyricSourcePetitLyrics = "petitlyrics"
 	// Zing MP3(越南,见 zing.go 头注)。越南曲库;逐行加逐字。补的是越南歌。
 	lyricSourceZing = "zing"
+	// Megalobiz(见 megalobiz.go 头注)。用户上传的逐行 LRC,官方公开接口;欧洲各语种的歌补一点。条款不许批量下载,
+	// 只在播放那一侧问(lyricSourceAllowedForRound)。默认排在最后。
+	lyricSourceMegalobiz = "megalobiz"
 )
 
 const (
@@ -107,6 +110,7 @@ var lyricsSourceDefaultOrder = []string{
 	lyricSourceKugou, lyricSourceNetease, lyricSourceQQ, lyricSourceLRCLIB,
 	lyricSourceAMLL, lyricSourceLyricFind, lyricSourceKuwo, lyricSourceMigu, lyricSourceDeezer,
 	lyricSourceAppleMusic, lyricSourceSoda, lyricSourceVibe, lyricSourceGenie, lyricSourcePetitLyrics, lyricSourceZing,
+	lyricSourceMegalobiz,
 }
 
 // lyricsPriorityPlayerLocal:「顺序优先」顺序表(lyrics_source_order)里「播放器自带歌词」那一项,不是歌词源。App
@@ -693,15 +697,37 @@ func enabledNetworkLyricSources() []string {
 // lyricSourceEnabledSince:prev 是某一轮开搜时开着的联网歌词源,现在开着、那时没开的有没有。
 // prev 为空(没记这份名单的老条目)一律 false。
 func lyricSourceEnabledSince(prev []string) bool {
+	return lyricSourceEnabledSinceFor(prev, false)
+}
+
+// lyricSourceEnabledSinceFor:bulk 为真时问的是批量轮次(补空扫描)补不补,只在播放那一侧问的源不算:批量轮次本来就不问它,
+// 算进来的话每一轮扫描都把这些空条目重搜一遍、名单照旧缺它。
+func lyricSourceEnabledSinceFor(prev []string, bulk bool) bool {
 	if len(prev) == 0 {
 		return false
 	}
 	for _, s := range enabledNetworkLyricSources() {
+		if bulk && lyricSourceOnDemandOnly[s] {
+			continue
+		}
 		if !slices.Contains(prev, s) {
 			return true
 		}
 	}
 	return false
+}
+
+// lyricSourceOnDemandOnly:只在用户实际在听、在找的时候问的源。Megalobiz 的条款不许整库镜像、批量下载(megalobiz.go 头注)。
+var lyricSourceOnDemandOnly = map[string]bool{lyricSourceMegalobiz: true}
+
+// lyricSourceAllowedForRound:这一轮问不问这个源。只在播放那一侧问的源,批量轮次(全量扫库、补空扫描、按组重搜、专辑预取、
+// 导入清单,ctx 带 withBackgroundOutbound)一律不问;正在放的那首、待播队列的预解析(withPlayerQueueTrack)、手动搜索和重新匹配照问。
+// 别的源不受影响。
+func lyricSourceAllowedForRound(ctx context.Context, source string) bool {
+	if !lyricSourceOnDemandOnly[source] {
+		return true
+	}
+	return !isBackgroundOutbound(ctx) || isPlayerQueueTrack(ctx)
 }
 
 // isPlayerLocalLyricSource:这份候选是不是读播放器自己缓存来的(KKBOX / Spotify / Amazon Music 本地歌词)。

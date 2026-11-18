@@ -22,6 +22,7 @@ func allLyricSourceConstants() []string {
 		lyricSourceLRCLIB, lyricSourceAMLL, lyricSourceLyricFind,
 		lyricSourceKuwo, lyricSourceMigu, lyricSourceDeezer, lyricSourceAppleMusic,
 		lyricSourceSoda, lyricSourceVibe, lyricSourceGenie, lyricSourcePetitLyrics, lyricSourceZing,
+		lyricSourceMegalobiz,
 	}
 }
 
@@ -245,7 +246,7 @@ func TestSwiftSourceDisplayNameCoversAllSources(t *testing.T) {
 // 不是"某句文案里的数字过期了")。现在这两句改成不带数字的「启用的歌词源……」(用户关掉几个源时
 // 写全部源数本来就不对),没有数字就没有可过期的;这里守的是以后谁再把数字写回来时它得对。
 func TestSwiftSearchEmptyStateCountMatchesSourceCount(t *testing.T) {
-	chineseDigits := map[int]string{5: "五", 6: "六", 7: "七", 8: "八", 9: "九", 10: "十", 11: "十一", 12: "十二", 13: "十三", 14: "十四", 15: "十五"}
+	chineseDigits := map[int]string{5: "五", 6: "六", 7: "七", 8: "八", 9: "九", 10: "十", 11: "十一", 12: "十二", 13: "十三", 14: "十四", 15: "十五", 16: "十六"}
 	n := len(allLyricSourceConstants())
 	digit, ok := chineseDigits[n]
 	if !ok {
@@ -272,9 +273,9 @@ func TestSwiftSearchEmptyStateCountMatchesSourceCount(t *testing.T) {
 // 「%d/8」(表现是界面上「歌词源数量还是 8」)。这里把**带具体数字的现状描述**钉死;其它地方从此
 // 一律写"全部源 / 各源",不带数字(带日期的历史记录除外),新加源时就不会再有第二批漏网。
 func TestDocsSourceCountMatchesSourceCount(t *testing.T) {
-	chineseDigits := map[int]string{5: "五", 6: "六", 7: "七", 8: "八", 9: "九", 10: "十", 11: "十一", 12: "十二", 13: "十三", 14: "十四", 15: "十五"}
-	englishWords := map[int]string{5: "Five", 6: "Six", 7: "Seven", 8: "Eight", 9: "Nine", 10: "Ten", 11: "Eleven", 12: "Twelve", 13: "Thirteen", 14: "Fourteen", 15: "Fifteen"}
-	spanishWords := map[int]string{5: "cinco", 6: "seis", 7: "siete", 8: "ocho", 9: "nueve", 10: "diez", 11: "once", 12: "doce", 13: "trece", 14: "catorce", 15: "quince"}
+	chineseDigits := map[int]string{5: "五", 6: "六", 7: "七", 8: "八", 9: "九", 10: "十", 11: "十一", 12: "十二", 13: "十三", 14: "十四", 15: "十五", 16: "十六"}
+	englishWords := map[int]string{5: "Five", 6: "Six", 7: "Seven", 8: "Eight", 9: "Nine", 10: "Ten", 11: "Eleven", 12: "Twelve", 13: "Thirteen", 14: "Fourteen", 15: "Fifteen", 16: "Sixteen"}
+	spanishWords := map[int]string{5: "cinco", 6: "seis", 7: "siete", 8: "ocho", 9: "nueve", 10: "diez", 11: "once", 12: "doce", 13: "trece", 14: "catorce", 15: "quince", 16: "dieciséis"}
 	n := len(allLyricSourceConstants())
 	zh, okZh := chineseDigits[n]
 	en, okEn := englishWords[n]
@@ -320,12 +321,12 @@ func TestDocsSourceCountMatchesSourceCount(t *testing.T) {
 		re   *regexp.Regexp
 		want string
 	}{
-		{"../README.md", regexp.MustCompile(`(?i)\b(five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|\d+) lyrics? sources?\b`), strings.ToLower(en)},
+		{"../README.md", regexp.MustCompile(`(?i)\b(five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|\d+) lyrics? sources?\b`), strings.ToLower(en)},
 		{"../README.zh-CN.md", regexp.MustCompile(`([一二三四五六七八九十]+|\d+)个歌词源`), zh},
 		{"../README.zh-Hant.md", regexp.MustCompile(`([一二三四五六七八九十]+|\d+)個歌詞來?源`), zh},
 		{"../README.ja.md", regexp.MustCompile(`(\d+)の歌詞ソース`), strconv.Itoa(n)},
 		{"../README.ko.md", regexp.MustCompile(`(\d+)개 가사 소스`), strconv.Itoa(n)},
-		{"../README.es.md", regexp.MustCompile(`(?i)\b(cinco|seis|siete|ocho|nueve|diez|once|doce|trece|catorce|quince|\d+) fuentes de letras\b`), es},
+		{"../README.es.md", regexp.MustCompile(`(?i)\b(cinco|seis|siete|ocho|nueve|diez|once|doce|trece|catorce|quince|dieciséis|\d+) fuentes de letras\b`), es},
 		{"../README.fr.md", regexp.MustCompile(`\b(\d+) sources de paroles\b`), strconv.Itoa(n)},
 		{"../README.de.md", regexp.MustCompile(`\b(\d+) Liedtextquellen\b`), strconv.Itoa(n)},
 		{"../README.it.md", regexp.MustCompile(`\b(\d+) fonti dei testi\b`), strconv.Itoa(n)},

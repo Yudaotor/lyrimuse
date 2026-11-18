@@ -130,7 +130,7 @@ func adoptCrossAlbumSiblingLyrics(key string, e *enrichEntry) bool {
 	e.LyricsTrLang = src.LyricsTrLang
 	e.resetTranslationAttempts()
 	e.LyricsRoma = src.LyricsRoma
-	e.LyricsSource = src.LyricsSource
+	e.LyricsSource, e.LyricsSourceURL = src.LyricsSource, src.LyricsSourceURL
 	e.LyricsScore = src.LyricsScore
 	if len(e.LyricsSongwriters) == 0 {
 		e.LyricsSongwriters = src.LyricsSongwriters

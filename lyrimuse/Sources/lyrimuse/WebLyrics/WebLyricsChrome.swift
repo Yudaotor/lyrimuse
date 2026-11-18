@@ -17,7 +17,7 @@ enum WebLyricsControl: Hashable {
     case platform(String)
 }
 
-/// 「显示简介」面板的一行:标签 + 值;`link` 有值时值是一个可点的链接(「网页」那一行)。
+/// 「显示简介」面板的一行:标签 + 值;`link` 有值时值是一个可点的链接(「网页」那一行,Megalobiz 的词的「来源」行)。
 struct WebLyricsInfoRow: Equatable {
     let label: String
     let value: String
@@ -664,7 +664,7 @@ final class WebLyricsChromeLayer: CALayer {
     }
 
     /// 「显示简介」(`trackInfoPanel`):内边距 12、行间 6,宽 240…360;标签 12pt、52 宽,值 13pt 中粗、放不下折行;
-    /// 「网页」那一行的值是强调色的「平台名 ↗」,点了在看副屏的那台设备上打开。
+    /// 带链接的行(「网页」、Megalobiz 的「来源」)的值是强调色的「平台名 ↗」,点了在看副屏的那台设备上打开。
     private func layoutInfoPanel(_ s: State, anchor: CGRect, ink: NSColor, secondaryInk: NSColor,
                                  place item: ((image: CGImage, size: CGSize)?, CGPoint) -> Void) {
         let labelFont = NSFont.systemFont(ofSize: 12)

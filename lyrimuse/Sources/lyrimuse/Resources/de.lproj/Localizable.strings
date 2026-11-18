@@ -885,6 +885,7 @@
 "图标自下而上填充以表示播放进度，颜色取自「颜色」组" = "Das Symbol füllt sich von unten, um den Fortschritt zu zeigen, in den Farben unter „Farbe“";
 "圆角" = "Ecken";
 "在 %@ 上收听" = "Auf %@ anhören";
+"在 %@ 上查看这首歌的歌词" = "Liedtext dieses Songs auf %@ ansehen";
 "在 %@ 中打开" = "In %@ öffnen";
 "在 %@ 中搜索" = "In %@ suchen";
 "在 %@ 中播放" = "In %@ abspielen";
@@ -2320,6 +2321,7 @@
 "用「导入歌词文件夹…」导入，或在下方设置监视文件夹" = "Nutze „Liedtext-Ordner importieren …“ oder lege unten einen überwachten Ordner fest";
 "用于改进 Lyrimuse：版本、系统、用了哪些功能和崩溃报告，不含歌名和账号" = "Hilft, Lyrimuse zu verbessern: Version, System, genutzte Funktionen und Absturzberichte. Nie Titel oder Accounts";
 "用当前配色覆盖" = "Mit aktuellen Farben überschreiben";
+"用户上传的同步歌词库，只在听歌时查询" = "Von Nutzern hochgeladene synchronisierte Liedtexte, nur beim Hören abgefragt";
 "用户名下方显示" = "Unter deinem Namen";
 "用这一期的真实数据看看推送在这个平台上的样子" = "Sieh mit echten Daten dieses Zeitraums, wie ein Push auf dieser Plattform aussieht";
 "用这首歌在 Spotify 上的循环短片当背景；仅限在 Spotify 中放过的歌曲" = "Nutzt das Endlosvideo des Titels auf Spotify als Hintergrund; nur für Titel, die du in Spotify abgespielt hast";

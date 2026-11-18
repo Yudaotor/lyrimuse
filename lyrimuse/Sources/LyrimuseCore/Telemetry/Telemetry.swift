@@ -153,12 +153,12 @@ public enum TelemetryLyricsResult: String, CaseIterable, Codable, Sendable {
 
 /// 一首歌显示的那份歌词来自哪里(活动里 `lyric_sources` 键的前半段)。只在逐字 / 逐行 / 纯文本三档记。见 14 章决策 208。
 public enum TelemetryLyricSource {
-    /// 记得下的来源:引擎的十五个歌词源(`lyricSourceNames`)、播放器自带 / 本机的几种(引擎各 `…LyricsSource` 常量)、
+    /// 记得下的来源:引擎的十六个歌词源(`lyricSourceNames`)、播放器自带 / 本机的几种(引擎各 `…LyricsSource` 常量)、
     /// 听书播放器推来的字幕 `subtitles`,条目没记来源的(手改过、老条目)`unknown`,其余一律 `other`。
     /// Worker 的 `LYRIC_SOURCES` 跟它逐字一致,selftest telemetry 组核对。
     public static let tags = [
         "netease", "qq", "kugou", "lrclib", "amll", "lyricfind", "kuwo", "migu", "deezer", "applemusic", "soda", "vibe", "genie",
-        "petitlyrics", "zing", "kkbox", "spotify", "amazon", "localfile", "lxmusic", "import", "subtitles", "unknown", "other",
+        "petitlyrics", "zing", "megalobiz", "kkbox", "spotify", "amazon", "localfile", "lxmusic", "import", "subtitles", "unknown", "other",
     ]
     public static let subtitles = "subtitles"
     /// 计得到来源的几档,`lyric_sources` 键的后半段。

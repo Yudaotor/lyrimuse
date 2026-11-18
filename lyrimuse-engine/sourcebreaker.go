@@ -406,6 +406,10 @@ func lyricSourceForHost(host string) string {
 		// Zing MP3 的接口在 zingmp3.vn、LRC 文件在 static-zmp3.zmdcdn.me(zing.go),全仓只有这一源请求它们;封面图在
 		// photo-zmp3.zmdcdn.me / photo-resize-zmp3.zmdcdn.me,跟歌词无关,不进来。
 		return "zing"
+	case h == "api.megalobiz.com":
+		// Megalobiz 的公开接口(megalobiz.go),搜索和取词都在这一个主机上,全仓只有这一源请求它。歌词页 megalobiz.com 只给 App
+		// 做来源链接、引擎不请求,不进来。
+		return "megalobiz"
 	}
 	return ""
 }
@@ -665,9 +669,16 @@ type lyricSourceRound struct {
 
 type lyricSourceRoundKey struct{}
 
+// enabled 只记这一轮会问的源:批量轮次不问的(lyricSourceAllowedForRound)不记,播到时它算「新开的源」补问一次。
 func withLyricSourceRound(ctx context.Context) (context.Context, *lyricSourceRound) {
+	var enabled []string
+	for _, s := range enabledNetworkLyricSources() {
+		if lyricSourceAllowedForRound(ctx, s) {
+			enabled = append(enabled, s)
+		}
+	}
 	r := &lyricSourceRound{skipped: map[string]bool{}, skipReason: map[string]string{}, reached: map[string]bool{},
-		parent: lyricSourceRoundFrom(ctx), enabled: enabledNetworkLyricSources()}
+		parent: lyricSourceRoundFrom(ctx), enabled: enabled}
 	return context.WithValue(ctx, lyricSourceRoundKey{}, r), r
 }
 

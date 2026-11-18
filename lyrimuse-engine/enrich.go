@@ -276,6 +276,9 @@ type enrichEntry struct {
 	// 干脆哪个平台都没有)。
 	CoverSource  string `json:"cover_source,omitempty"`
 	LyricsSource string `json:"lyrics_source,omitempty"`
+	// LyricsSourceURL:这份歌词在源网站上的页面(只有 megalobiz 给,条款要求显示时链回),App 在来源处做成链接。跟 LyricsSource
+	// 同进同出:写 LyricsSource 的地方都要同时写它(TestLyricsSourceURLWrittenWithSource 守着)。
+	LyricsSourceURL string `json:"lyrics_source_url,omitempty"`
 	// CoverAlbum 是这张封面在**来源平台上所属的专辑名**。存它是为了事后能判断
 	// "这张封面对不上正在播的这张专辑" —— 见 preferAppleCoverOverNetease 与
 	// coverNeedsAlbumCheck。老条目没有这个字段(读成空 = 不详)。
@@ -1749,6 +1752,11 @@ func lyricsFillBackoff(count int) time.Duration {
 //   - **明确判定为纯音乐的不重搜** —— 那是有依据的结论(lrclib 的 instrumental 标记),
 //     不是"没搜到"这种含糊状态,重搜一万次也不会有歌词。
 func needsLyricsFirstFill(e enrichEntry) bool {
+	return needsLyricsFirstFillFor(e, false)
+}
+
+// needsLyricsFirstFillFor:bulk 为真时是补空扫描在问,「新开的源」不算只在播放那一侧问的源(lyricSourceEnabledSinceFor)。
+func needsLyricsFirstFillFor(e enrichEntry, bulk bool) bool {
 	if !e.Lyrics.IsZero() || e.ManualLyrics || e.Instrumental {
 		return false
 	}
@@ -1759,7 +1767,7 @@ func needsLyricsFirstFill(e enrichEntry) bool {
 	}
 	// 设置里新开了歌词源、上一轮搜的时候它还没开:不等退避,按现在开着的源补一次。补完名单跟着更新,不会反复触发;
 	// 一个源都没连上的那一轮不更新名单,隔 lyricsFillSkippedReadyRetryInterval 再来,别在断网时每拍重搜。见 09 章决策 311。
-	if lyricSourceEnabledSince(e.LyricsSourcesEnabled) &&
+	if lyricSourceEnabledSinceFor(e.LyricsSourcesEnabled, bulk) &&
 		time.Now().Unix()-e.LyricsFillTS >= int64(lyricsFillSkippedReadyRetryInterval/time.Second) {
 		return true
 	}
@@ -2349,7 +2357,7 @@ func retryLyricsUpgradeWith(ctx context.Context, key, artist, title, album strin
 			keptRoma = e.LyricsRoma
 		}
 		e.Lyrics = bt(picked.Lyrics)
-		e.LyricsSource = picked.Source
+		e.LyricsSource, e.LyricsSourceURL = picked.Source, picked.SourceURL
 		e.LyricsScore = picked.Score
 		e.stampLyricsScoring()
 		e.ResolvedDurationSecs = durationSecs
@@ -2888,7 +2896,7 @@ func rescoreLyricsWith(ctx context.Context, key, artist, title, album string, du
 			}
 			e.ManualLyrics, e.LyricsSourceChoice = false, ""
 		}
-		e.LyricsSource = picked.Source
+		e.LyricsSource, e.LyricsSourceURL = picked.Source, picked.SourceURL
 		e.LyricsScore = picked.Score
 		if complete {
 			e.stampLyricsScoring()
@@ -4445,6 +4453,9 @@ type scoredLyricCandidateResult struct {
 	// (applyBorrowedCovers)。只给「搜索候选歌词」显示缩略图,不参与打分,不进歌词判决、不当条目封面。
 	BorrowedCoverURL  string `json:"borrowed_cover_url,omitempty"`
 	BorrowedCoverFrom string `json:"borrowed_cover_from,omitempty"`
+	// SourceURL:这份歌词在源网站上的页面(只有 megalobiz 给),选中后写进条目的 lyrics_source_url,App 在来源处做成链接。
+	// 不参与打分。
+	SourceURL string `json:"source_url,omitempty"`
 	// RetryMethod/RetriedTitle:这条候选是**标题反查改写标题之后**那一轮搜出来的。
 	// RetryMethod 是 "title-from-album" / "title-from-artist-search",RetriedTitle 是改写后
 	// 实际拿去搜的标题。两者都空 = 这条来自按本地标题的正常那一轮。
@@ -5311,14 +5322,14 @@ func keepShownRoundUpdate(onUpdate lyricSearchUpdateFunc, base []scoredLyricCand
 
 // lyricSourceNames 是全部歌词源的名字,每个源一个并发 goroutine。顺序只决定「有歌没词」标记、日志和设置项里的源序;
 // 同分候选谁赢看 lyricCandidateTieOrder,不看这里。
-var lyricSourceNames = []string{"netease", "qq", "kugou", "lrclib", "amll", "lyricfind", "kuwo", "migu", "deezer", "applemusic", "soda", "vibe", "genie", "petitlyrics", "zing"}
+var lyricSourceNames = []string{"netease", "qq", "kugou", "lrclib", "amll", "lyricfind", "kuwo", "migu", "deezer", "applemusic", "soda", "vibe", "genie", "petitlyrics", "zing", "megalobiz"}
 
 // lyricCandidateTieOrder:同分候选按这个源序决胜,就是 rankLyricSourceResults 构造候选的顺序(本机几家的歌词夹在
 // 汽水和 AMLL 之间)。合并几轮结果的 mergeLyricCandidateRounds 按它重建顺序,两边才是同一个口径:不然同一首歌走没走
 // 补查轮,同分时会在 lrclib / lyricfind、applemusic / amll 之间换源。rankLyricSourceResults 里加了源、挪了顺序,这里
 // 跟着改(lyrictieorder_test.go 用源码扫描钉着两边一致)。
 var lyricCandidateTieOrder = []string{
-	"netease", "qq", "kugou", "lrclib", "lyricfind", "kuwo", "migu", "deezer", "applemusic", "soda", "vibe", "genie", "petitlyrics", "zing",
+	"netease", "qq", "kugou", "lrclib", "lyricfind", "kuwo", "migu", "deezer", "applemusic", "soda", "vibe", "genie", "petitlyrics", "zing", "megalobiz",
 	kkboxLocalLyricsSource, amazonLocalLyricsSource, lxMusicLocalLyricsSource, localFileLyricsSource, importLyricsSource,
 	spotifyLocalLyricsSource,
 	"amll",
@@ -5352,6 +5363,8 @@ type lyricSourceResult struct {
 	matchAlbum, matchCover  string
 	srcDur                  float64 // 源自己声明的曲长(秒),0=没给。见 lyricCandidate.sourceReportedDurationSecs
 	isrc                    string  // 源报的这条录音的 ISRC,applemusic、deezer、petitlyrics 填,见 isrcretry.go
+	// sourceURL:这份歌词在源网站上的页面,显示时做成来源链接。只有 megalobiz 填(条款要求链回),见 lyricCandidate.sourceURL。
+	sourceURL string
 	// trackIDs:这一路匹配到的曲目在该平台上的 ID。只有 qq 走这里(songmid 与数字 ID,见 qqTrackIDs),amll 借封面时
 	// 跟 TTML 登记的 ID 比(amllCandidateCover);网易云的在 ne.SongID。
 	trackIDs []string
@@ -5445,6 +5458,7 @@ func rankLyricSourceResults(artist, title, album string, durationSecs float64, r
 	genie := raw["genie"]
 	petit := raw["petitlyrics"]
 	zing := raw["zing"]
+	mgz := raw["megalobiz"]
 	kk := raw[kkboxLocalLyricsSource]
 	spl := raw[spotifyLocalLyricsSource]
 	amz := raw[amazonLocalLyricsSource]
@@ -5598,6 +5612,11 @@ func rankLyricSourceResults(artist, title, album string, durationSecs float64, r
 			sourceReportedDurationSecs: zing.srcDur, title: zing.matchTitle, artist: zing.matchArtist, album: zing.matchAlbum,
 			cover: zing.matchCover})
 	}
+	if mgz.lyr != "" {
+		// 逐行,没有逐字、译文、罗马音、封面、专辑、纯文本;时长是这份歌词登记的,歌词页地址给来源链接用(见 megalobiz.go 头注)。
+		candidates = append(candidates, lyricCandidate{source: "megalobiz", lyrics: mgz.lyr,
+			sourceReportedDurationSecs: mgz.srcDur, title: mgz.matchTitle, artist: mgz.matchArtist, sourceURL: mgz.sourceURL})
+	}
 	if kk.lyr != "" {
 		// KKBOX 本地歌词(用 KKBOX 放歌时读它自己缓存里的那份,逐行,见 kkboxlyrics.go)。只精确到整秒的那类不置
 		// identityFromLocalClient,不享受同源加权。
@@ -5742,6 +5761,7 @@ func rankLyricSourceResults(artist, title, album string, durationSecs float64, r
 			Artist:                     c.artist,
 			Album:                      c.album,
 			CoverURL:                   c.cover,
+			SourceURL:                  c.sourceURL,
 			Language:                   c.language,
 			PlainTextOnly:              c.plainTextOnly,
 			IdentityFromLocalClient:    c.identityFromLocalClient,
@@ -6081,6 +6101,10 @@ func fetchScoredLyricCandidatesStreaming(ctx context.Context, artist, title, alb
 		if only != nil && !only[source] {
 			return true
 		}
+		// 只在播放那一侧问的源(lyricSourceAllowedForRound):批量轮次里静默跳过,同关掉的源,不记跳过、不打日志。
+		if !lyricSourceAllowedForRound(ctx, source) {
+			return true
+		}
 		switch lyricSourceSkipFor(source, lyricSourceEnabled, breakerPlan) {
 		case lyricSourceSkipDisabled:
 			return true
@@ -6360,6 +6384,15 @@ func fetchScoredLyricCandidatesStreaming(ctx context.Context, artist, title, alb
 		// 独立检索,同 vibe。
 		r := zingLyric(ctx, artist, srcTitle, album, durationSecs)
 		resultsCh <- lyricSourceResult{source: "zing", lyr: r.lyrics, yrc: r.yrc, matchTitle: r.title, matchArtist: r.artist, matchAlbum: r.album, matchCover: r.cover, srcDur: r.durationSecs}
+	}()
+	go func() {
+		if skipSource("megalobiz") {
+			resultsCh <- lyricSourceResult{source: "megalobiz"}
+			return
+		}
+		// 独立检索,同 vibe。
+		r := megalobizLyric(ctx, artist, srcTitle, album, durationSecs)
+		resultsCh <- lyricSourceResult{source: "megalobiz", lyr: r.lyrics, matchTitle: r.title, matchArtist: r.artist, srcDur: r.durationSecs, sourceURL: r.url}
 	}()
 
 	// raw:目前为止到手的各源原始应答,按源名存。打分/排序全部下放给

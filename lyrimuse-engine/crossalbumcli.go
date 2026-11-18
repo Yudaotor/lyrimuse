@@ -221,7 +221,7 @@ func applyCrossAlbumReuse(groups []crossAlbumGroup) (applied, skipped int) {
 			dst.LyricsTrSource = src.LyricsTrSource
 			dst.LyricsTrLang = src.LyricsTrLang
 			dst.LyricsRoma = src.LyricsRoma
-			dst.LyricsSource = src.LyricsSource
+			dst.LyricsSource, dst.LyricsSourceURL = src.LyricsSource, src.LyricsSourceURL
 			dst.LyricsScore = src.LyricsScore
 			dst.LyricsScoringVersion, dst.LyricsScoringRevision = src.LyricsScoringVersion, src.LyricsScoringRevision
 			if len(dst.LyricsSongwriters) == 0 {

@@ -50,6 +50,8 @@ public final class EnrichCacheStore: ObservableObject {
         /// 这首的封面(缓存里的 `cover_url`:播放器送来的存成本机文件,其余是各家图床的地址);没有为 nil。
         public let coverURL: URL?
         public let lyricsSource: String
+        /// 这份歌词在源网站上的页面(`lyrics_source_url`,只有 Megalobiz 给),详情页来源胶囊的链接用,见 `LyricsSourceLink`。
+        public let lyricsSourceURL: String
         public let hasWordTiming: Bool
         public let isManual: Bool
         /// 这份手改是从同一首歌的另一条写法同步来的副本时,原件的键(`lyrics_entity_origin`);不是副本时为空。
@@ -168,6 +170,7 @@ public final class EnrichCacheStore: ObservableObject {
             isListedMV: Bool,
             coverURL: URL?,
             lyricsSource: String,
+            lyricsSourceURL: String = "",
             hasWordTiming: Bool,
             isManual: Bool,
             manualOrigin: String = "",
@@ -206,6 +209,7 @@ public final class EnrichCacheStore: ObservableObject {
             self.isListedMV = isListedMV
             self.coverURL = coverURL
             self.lyricsSource = lyricsSource
+            self.lyricsSourceURL = lyricsSourceURL
             self.hasWordTiming = hasWordTiming
             self.isManual = isManual
             self.manualOrigin = manualOrigin
@@ -1223,6 +1227,7 @@ public final class EnrichCacheStore: ObservableObject {
             isListedMV: displayAlbum.isEmpty && (entry["youtube_music_mv"] as? Bool ?? false),
             coverURL: ManagerCoverURL.from(entry),
             lyricsSource: entry["lyrics_source"] as? String ?? "",
+            lyricsSourceURL: entry["lyrics_source_url"] as? String ?? "",
             hasWordTiming: bodyFields.contains(.yrc),
             isManual: entry["manual_lyrics"] as? Bool ?? false,
             manualOrigin: entry["lyrics_entity_origin"] as? String ?? "",
@@ -1467,6 +1472,7 @@ public final class EnrichCacheStore: ObservableObject {
     ///   - bg: 采纳候选时这条候选的背景人声轨(`Candidate.lyricsBG`);nil = 不是采纳候选。
     ///   - trLang: 采纳候选时这条候选的译文语言(`Candidate.lyricsTrLang`);nil = 不动。
     ///   - trFrom: 采纳候选时这条候选的译文借自哪个源(`Candidate.lyricsTrFrom`);空 = 自带的。
+    ///   - sourceURL: 采纳候选时这条候选在源网站上的页面(`Candidate.sourceURL`,只有 Megalobiz 有);空 = 没给,来源没变时引擎留着原来的。
     /// - Returns: 引擎有没有执行成功。「采纳候选」的面板等着它
     ///   决定挪不挪「当前使用」徽标、给成功还是失败的回声;失败原因照旧写在 `lastError`。
     ///   老调用点不关心结果,所以 `@discardableResult`。
@@ -1474,10 +1480,10 @@ public final class EnrichCacheStore: ObservableObject {
     public func saveEdit(key: String, lyrics: String, tr: String, roma: String, yrc: String? = nil,
                          source: String? = nil, markManual: Bool = true,
                          sourceChoice: String? = nil, fromManualPick: Bool = false,
-                         bg: String? = nil, trLang: String? = nil, trFrom: String = "") async -> Bool {
+                         bg: String? = nil, trLang: String? = nil, trFrom: String = "", sourceURL: String = "") async -> Bool {
         await saveEdit(key: key, lyrics: lyrics, tr: tr, roma: roma, yrc: yrc, source: source, markManual: markManual,
                        sourceChoice: sourceChoice, fromManualPick: fromManualPick, bg: bg, trLang: trLang, trFrom: trFrom,
-                       undoable: false).ok
+                       sourceURL: sourceURL, undoable: false).ok
     }
 
     /// 同上,交回引擎的整份结果。`undoable` 为真时引擎留下这首改之前的完整状态,成功时 `undoID` 是撤这一笔用的 id
@@ -1485,7 +1491,7 @@ public final class EnrichCacheStore: ObservableObject {
     func saveEdit(key: String, lyrics: String, tr: String, roma: String, yrc: String? = nil,
                   source: String? = nil, markManual: Bool = true,
                   sourceChoice: String? = nil, fromManualPick: Bool = false,
-                  bg: String? = nil, trLang: String? = nil, trFrom: String = "",
+                  bg: String? = nil, trLang: String? = nil, trFrom: String = "", sourceURL: String = "",
                   undoable: Bool) async -> EnrichEditChannel.Result {
         // 字段规则(译文换了清译文记录、罗马音描述旧正文就清掉、采纳留内容指纹……)都在引擎的
         // applySaveEdit,这里只把参数原样交过去。nil 的参数不传 = 引擎那边不动这个字段。
@@ -1499,6 +1505,7 @@ public final class EnrichCacheStore: ObservableObject {
         if let bg { fields["bg"] = bg }
         if let trLang { fields["tr_lang"] = trLang }
         if !trFrom.isEmpty { fields["tr_from"] = trFrom }
+        if !sourceURL.isEmpty { fields["source_url"] = sourceURL }
         if undoable { fields["undoable"] = true }
         return await commit("save_edit", fields)
     }

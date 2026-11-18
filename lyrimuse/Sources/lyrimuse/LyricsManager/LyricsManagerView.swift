@@ -305,6 +305,8 @@ func sourceColor(_ source: String) -> Color {
     case "petitlyrics": return Color(hue: 0.02, saturation: 0.45, brightness: 0.9)
     // Zing MP3(见 lyrimuse-engine/zing.go 头注)。品牌是紫色一系,.purple(LRCLIB)被占了,取更淡、偏蓝的薰衣草紫。
     case "zing": return Color(hue: 0.72, saturation: 0.45, brightness: 0.9)
+    // Megalobiz(见 lyrimuse-engine/megalobiz.go 头注)。系统色都被占了,取 .blue(Apple Music)和 .purple(LRCLIB)之间、偏蓝的靛青。
+    case "megalobiz": return Color(hue: 0.68, saturation: 0.65, brightness: 0.85)
     // KKBOX 本地歌词(不是歌词源:用 KKBOX 放歌时读它自己缓存里的那份,见 lyrimuse-engine/kkboxlyrics.go 头注)。
     // 品牌色是青蓝一系,.cyan / .teal / .blue 都被占了,取最后一个未占用色 .yellow。
     case "kkbox": return .yellow
@@ -372,6 +374,8 @@ func sourceDisplayName(_ source: String) -> String {
     case "petitlyrics": return "PetitLyrics"
     // Zing MP3——越南 VNG 旗下的音乐服务,品牌名,保留原名。
     case "zing": return "Zing MP3"
+    // Megalobiz——用户上传同步歌词的网站,品牌名,保留原名。
+    case "megalobiz": return "Megalobiz"
     // KKBOX 本地歌词——品牌名,中文界面里也写 KKBOX,保留原名。不在 LyricsSource 里(设置里没有它的开关),
     // 只在这份词确实来自 KKBOX 时显示出来。
     case "kkbox": return "KKBOX"
@@ -3814,8 +3818,23 @@ struct LyricsManagerView: View {
                 LyricsManagerTag(icon: "waveform", text: L10n.t("正在播放"), tint: .accentColor)
             }
             if !summary.lyricsSource.isEmpty {
-                LyricsManagerTag(icon: "arrow.down.circle", text: sourceDisplayName(summary.lyricsSource),
-                                 tint: sourceColor(summary.lyricsSource))
+                // 条款要求链回的源(Megalobiz)存了歌词页时,胶囊带「↗」、点了用默认浏览器打开它;别的源照旧只是标签。
+                if let link = LyricsSourceLink.url(source: summary.lyricsSource, stored: summary.lyricsSourceURL) {
+                    Button {
+                        LyricsSourceLinkOpener.open(link)
+                    } label: {
+                        LyricsManagerTag(icon: "arrow.down.circle", text: sourceDisplayName(summary.lyricsSource) + " ↗",
+                                         tint: sourceColor(summary.lyricsSource))
+                    }
+                    .buttonStyle(.plain)
+                    .onHover { inside in
+                        if inside { NSCursor.pointingHand.push() } else { NSCursor.pop() }
+                    }
+                    .help(LyricsSourceLinkOpener.help(source: summary.lyricsSource))
+                } else {
+                    LyricsManagerTag(icon: "arrow.down.circle", text: sourceDisplayName(summary.lyricsSource),
+                                     tint: sourceColor(summary.lyricsSource))
+                }
             }
             // hasWordTiming 在"完全没有歌词"时也是 false,不加 hasLyrics 这道闸的话无歌词的条目会显示一个像真结论的「整行时间轴」。
             if summary.hasLyrics && !summary.isInstrumental {

@@ -341,6 +341,8 @@ final class LyricsSearchService {
         let album: String
         /// 搜索窗口摆「当前使用」时,这条没有封面会补上这首自己的(`LyricsSearchSheet.currentShown`)。
         var coverURL: URL?
+        /// 这份歌词在源网站上的页面(引擎 `source_url`,只有 Megalobiz 给),采纳时写进条目,来源处做成链接。
+        var sourceURL = ""
         // true 时 lyrics 装的是没有时间戳的纯文本(见引擎
         // scoredLyricCandidateResult.PlainTextOnly 头注)。跟别的候选不同,这条**不能**
         // 用来做逐字/逐行同步展示,只能当静态文字读——「搜索候选歌词」弹窗要用它决定
@@ -772,9 +774,11 @@ private struct RawCandidate: Decodable {
     let sourceReportedDurationSecs: Double?
     let borrowedDurationSecs: Double?
     let borrowedDurationFrom: String?
+    let sourceURL: String?
 
     enum CodingKeys: String, CodingKey {
         case source, lyrics, score, title, artist, album
+        case sourceURL = "source_url"
         case lyricsTr = "lyrics_tr"
         case lyricsRoma = "lyrics_roma"
         case lyricsYRC = "lyrics_yrc"
@@ -819,6 +823,7 @@ private extension LyricsSearchService.Candidate {
             sourceDurationSecs: reported > 0 ? reported : borrowed,
             durationBorrowedFrom: borrowed > 0 ? raw.borrowedDurationFrom ?? "" : ""
         )
+        sourceURL = raw.sourceURL ?? ""
     }
 }
 

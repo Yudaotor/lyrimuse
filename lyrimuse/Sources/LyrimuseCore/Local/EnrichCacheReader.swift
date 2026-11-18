@@ -29,6 +29,8 @@ public final class EnrichCacheEntry: Decodable, Sendable {
     /// `[kana:]` 时读音按它标,见 KanaAnnotation.parse(lrc:donor:)。不在正文小文件里。
     let lyricsKana: String?
     let lyricsSource: String?
+    /// 这份歌词在源网站上的页面(引擎 `lyrics_source_url`,只有 Megalobiz 给),来源处的链接用,见 `LyricsSourceLink`。
+    let lyricsSourceURL: String?
     let coverSource: String?
     // 引擎解析出的封面地址(网易云/QQ/Apple)。桌面这边原来只读歌词字段,封面一直
     // 没人用 —— 直到「最近播放」列表需要一个 Last.fm 之外的兜底,见 coverURL(artist:...)。
@@ -182,6 +184,7 @@ public final class EnrichCacheEntry: Decodable, Sendable {
         case playerLyrics = "player_lyrics"
         case lyricsKana = "lyrics_kana"
         case lyricsSource = "lyrics_source"
+        case lyricsSourceURL = "lyrics_source_url"
         case coverSource = "cover_source"
         case coverURL = "cover_url"
         case motionCoverURL = "motion_cover_url"
@@ -270,6 +273,7 @@ public final class EnrichCacheEntry: Decodable, Sendable {
         playerLyrics = try? c.decodeIfPresent([String: PlayerLyricsVersion].self, forKey: .playerLyrics)
         lyricsKana = try c.decodeIfPresent(String.self, forKey: .lyricsKana)
         lyricsSource = try c.decodeIfPresent(String.self, forKey: .lyricsSource)
+        lyricsSourceURL = try? c.decodeIfPresent(String.self, forKey: .lyricsSourceURL)
         coverSource = try c.decodeIfPresent(String.self, forKey: .coverSource)
         coverURL = try c.decodeIfPresent(String.self, forKey: .coverURL)
         motionCoverURL = try c.decodeIfPresent(String.self, forKey: .motionCoverURL)
@@ -504,12 +508,15 @@ public enum EnrichCacheReader {
     public struct SourceInfo: Sendable {
         public let lyricsSource: String?
         public let coverSource: String?
+        /// 来源处的链接(`LyricsSourceLink`),只有要链回的源、存了歌词页时才有。
+        public var lyricsSourceLink: URL? = nil
     }
 
     public static func sourceInfo(artist: String, title: String, album: String) -> SourceInfo? {
         let key = EnrichCacheKeys.normalizedKey(artist: artist, title: title, album: album)
         guard let entry = currentEntry(key) else { return nil }
-        return SourceInfo(lyricsSource: entry.lyricsSource, coverSource: entry.coverSource)
+        return SourceInfo(lyricsSource: entry.lyricsSource, coverSource: entry.coverSource,
+                          lyricsSourceLink: LyricsSourceLink.url(source: entry.lyricsSource, stored: entry.lyricsSourceURL))
     }
 
     /// 这首歌所属的 Apple Music 专辑(专辑简介用),取自 `apple_music_url`:专辑 ID + 链接里的店面。**零网络**,

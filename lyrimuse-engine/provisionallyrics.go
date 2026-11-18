@@ -135,7 +135,7 @@ func lyricsEntryFromScored(decisionPath, artist, title, album string, durationSe
 	// 选中了 → 这一轮就是当前歌词的出处(分槽语义见 LyricsDecisionApplied)。
 	e.LyricsDecisionApplied = e.LyricsDecision
 	e.Lyrics = bt(picked.Lyrics)
-	e.LyricsSource = picked.Source
+	e.LyricsSource, e.LyricsSourceURL = picked.Source, picked.SourceURL
 	e.LyricsScore = picked.Score
 	e.stampLyricsScoring()
 	e.ResolvedDurationSecs = durationSecs

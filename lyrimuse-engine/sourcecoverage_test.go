@@ -32,6 +32,7 @@ func TestEveryLyricSourceHasAHostMapping(t *testing.T) {
 		"petitlyrics": {"p1.petitlyrics.com", "p0.petitlyrics.com", "on.petitlyrics.com"},
 		"soda":        {sodaSeoTrackHost, sodaSearchHost},
 		"zing":        {"zingmp3.vn", "static-zmp3.zmdcdn.me"},
+		"megalobiz":   {"api.megalobiz.com"},
 	}
 	for _, source := range lyricSourceNames {
 		hs, ok := hosts[source]

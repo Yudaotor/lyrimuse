@@ -27,7 +27,7 @@ const LYRICS_WORD_FORMATS = ["yrc", "ttml", "qrc", "krc", "enhanced-lrc"];
 // 每日活动里逐字 / 逐行 / 纯文本的歌显示的那份各来自哪个源,键是「源:档」(如 netease:line)。源名单跟 Core TelemetryLyricSource.tags
 // 逐字一致(引擎的歌词源、本机来源、字幕,加 unknown / other),档跟 TelemetryLyricSource.results 一致,selftest telemetry 组核对。
 // 见 14 章决策 208。
-const LYRIC_SOURCES = ["netease", "qq", "kugou", "lrclib", "amll", "lyricfind", "kuwo", "migu", "deezer", "applemusic", "soda", "vibe", "genie", "petitlyrics", "zing", "kkbox", "spotify", "amazon", "localfile", "lxmusic", "import", "subtitles", "unknown", "other"];
+const LYRIC_SOURCES = ["netease", "qq", "kugou", "lrclib", "amll", "lyricfind", "kuwo", "migu", "deezer", "applemusic", "soda", "vibe", "genie", "petitlyrics", "zing", "megalobiz", "kkbox", "spotify", "amazon", "localfile", "lxmusic", "import", "subtitles", "unknown", "other"];
 const LYRIC_SOURCE_RESULTS = ["word", "line", "plain"];
 const MAX_LYRIC_SOURCE_KEYS = 40;
 const SONG_LANGUAGES = ["zh", "yue", "ja", "ko", "ru", "uk", "bg", "be", "sr", "mk", "kk", "el", "th", "ar", "hi", "bn", "pa", "gu", "ta", "te", "kn", "ml", "si", "en", "es", "pt", "fr", "de", "it", "nl", "sv", "pl", "tr", "vi", "he", "other"];

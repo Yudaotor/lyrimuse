@@ -83,11 +83,13 @@ type enrichEditRequest struct {
 	Keys []string `json:"keys,omitempty"`
 
 	// save_edit
-	Lyrics         string  `json:"lyrics,omitempty"`
-	Tr             string  `json:"tr,omitempty"`
-	Roma           string  `json:"roma,omitempty"`
-	YRC            *string `json:"yrc,omitempty"`
-	Source         string  `json:"source,omitempty"`
+	Lyrics string  `json:"lyrics,omitempty"`
+	Tr     string  `json:"tr,omitempty"`
+	Roma   string  `json:"roma,omitempty"`
+	YRC    *string `json:"yrc,omitempty"`
+	Source string  `json:"source,omitempty"`
+	// SourceURL:采纳的候选在源网站上的页面(候选的 source_url,只有 megalobiz 给)。空 = 没给:来源没变时留着原来的,换了来源时清掉。
+	SourceURL      string  `json:"source_url,omitempty"`
 	MarkManual     bool    `json:"mark_manual,omitempty"`
 	SourceChoice   *string `json:"source_choice,omitempty"`
 	FromManualPick bool    `json:"from_manual_pick,omitempty"`
@@ -494,6 +496,12 @@ func applySaveEdit(e *enrichEntry, req enrichEditRequest) error {
 		if req.FromManualPick {
 			e.LyricsKanaChecked = 0
 		}
+	}
+	switch {
+	case req.SourceURL != "":
+		e.LyricsSourceURL = req.SourceURL
+	case req.Source != e.LyricsSource:
+		e.LyricsSourceURL = ""
 	}
 	e.LyricsSource = req.Source
 	// 用户直接改的这一条是原件,不再是从别的写法同步过来的副本。

@@ -359,7 +359,7 @@ func lyricsFillSweepCandidates(req lyricsFillRequest) []string {
 		if !e.Lyrics.IsZero() || e.ManualLyrics || e.Instrumental || enrichInflight[key] {
 			continue
 		}
-		if !req.manual && !needsLyricsFirstFill(e) {
+		if !req.manual && !needsLyricsFirstFillFor(e, true) {
 			continue
 		}
 		// 自动这一轮跳过再搜也不会有的,见 lyricsretryskip.go;手动点了就照搜。

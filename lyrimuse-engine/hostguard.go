@@ -84,6 +84,9 @@ func hostRateFor(host string) hostRate {
 		// lrclib 拿 503 限流,调用越密比例越高(每分钟 5 次以下 2.7%、31 次以上 6.5%),快速切歌时
 		// 一分钟能打到两百次。攒 6 个够首轮加一轮别名不排队。见 09 章决策 108。
 		return hostRate{perSec: 1, burst: 6, reserve: 3}
+	case "api.megalobiz.com":
+		// 不带 key 时每个 IP 每分钟 30 次:攒满 6 个再按每秒 0.4 个补,任意一分钟里最多 6 + 24 = 30 个(megalobiz.go 头注)。
+		return hostRate{perSec: 0.4, burst: 6, reserve: 2}
 	}
 	return hostRateDefault
 }

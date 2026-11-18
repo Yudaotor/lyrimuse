@@ -832,6 +832,7 @@
 "图标自下而上填充以表示播放进度，颜色取自「颜色」组" = "Simge, çalma ilerlemesini göstermek için alttan yukarı dolar; renkler “Renk” grubundan alınır";
 "圆角" = "Köşeler";
 "在 %@ 上收听" = "%@ ile Dinle";
+"在 %@ 上查看这首歌的歌词" = "Bu şarkının sözlerini %@ üzerinde görüntüle";
 "在 %@ 中打开" = "%@ ile Aç";
 "在 %@ 中搜索" = "%@ İçinde Ara";
 "在 %@ 中播放" = "%@ ile Çal";
@@ -2236,6 +2237,7 @@
 "用「导入歌词文件夹…」导入，或在下方设置监视文件夹" = "“Şarkı Sözü Klasörü İçe Aktar…” ile içe aktarın veya aşağıda izlenen bir klasör ayarlayın";
 "用于改进 Lyrimuse：版本、系统、用了哪些功能和崩溃报告，不含歌名和账号" = "Lyrimuse’u geliştirmeye yardımcı olur: sürüm, sistem, kullanılan özellikler ve çökme raporları. Parça adları ve hesaplar asla gönderilmez";
 "用当前配色覆盖" = "Geçerli Renklerle Üzerine Yaz";
+"用户上传的同步歌词库，只在听歌时查询" = "Kullanıcıların yüklediği eşzamanlı şarkı sözleri, yalnızca dinlerken aranır";
 "用户名下方显示" = "Adınızın Altında";
 "用这一期的真实数据看看推送在这个平台上的样子" = "Bu dönemin gerçek verileriyle bildirimin bu platformda nasıl göründüğüne bakın";
 "用这首歌在 Spotify 上的循环短片当背景；仅限在 Spotify 中放过的歌曲" = "Parçanın Spotify’daki döngülü videosunu arka plan yapar; yalnızca Spotify’da çaldığınız parçalar için";

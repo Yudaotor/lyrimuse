@@ -31,7 +31,7 @@ const (
 var songEntityFieldClasses = map[string]songFieldClass{
 	"lyrics": songFieldLyricsChoice, "lyrics_tr": songFieldLyricsChoice, "lyrics_roma": songFieldLyricsChoice,
 	"lyrics_yrc": songFieldLyricsChoice, "lyrics_bg": songFieldLyricsChoice, "lyrics_bg_checked": songFieldLyricsChoice,
-	"body_crc": songFieldLyricsChoice, "body_fields": songFieldLyricsChoice, "lyrics_source": songFieldLyricsChoice,
+	"body_crc": songFieldLyricsChoice, "body_fields": songFieldLyricsChoice, "lyrics_source": songFieldLyricsChoice, "lyrics_source_url": songFieldLyricsChoice,
 	"lyrics_score": songFieldLyricsChoice, "lyrics_scoring_version": songFieldLyricsChoice,
 	"lyrics_scoring_revision": songFieldLyricsChoice,
 	"resolved_duration_secs":  songFieldLyricsChoice,

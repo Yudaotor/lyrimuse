@@ -50,7 +50,7 @@ func TestLyricSourcesWorthAliasRetry(t *testing.T) {
 	// soda 在名单里是对的:它有自己的搜索(本地队列缓存拿不到曲目 id 时的兜底),
 	// 别名确实会影响命中。别以「它不搜索」为由排除它:那只对本地那条路成立,
 	// 搜索那条路正是别名要救的场景。
-	want := []string{"qq", "kugou", "lrclib", "amll", "soda", "vibe", "genie", "petitlyrics", "zing"}
+	want := []string{"qq", "kugou", "lrclib", "amll", "soda", "vibe", "genie", "petitlyrics", "zing", "megalobiz"}
 	if strings.Join(got, ",") != strings.Join(want, ",") {
 		t.Fatalf("got %v want %v", got, want)
 	}

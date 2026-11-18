@@ -9,6 +9,50 @@ import Foundation
 func runLyricsManagerTests() {
     checkLyricsManagerAudit()
     checkLyricsEditUndo()
+    // ---- 歌词来源处的链接:只有 Megalobiz、存了它自己的 https 歌词页才有(见 09 章决策 386) ----
+    do {
+        typealias L = LyricsSourceLink
+        expectEqual(L.url(source: "megalobiz", stored: "https://megalobiz.com/lrc/323234/mode-de-vie")?.absoluteString,
+                    "https://megalobiz.com/lrc/323234/mode-de-vie", "来源链接: Megalobiz 存了歌词页就是链接")
+        expectEqual(L.url(source: "megalobiz", stored: " https://www.megalobiz.com/lrc/1/x\n")?.absoluteString,
+                    "https://www.megalobiz.com/lrc/1/x", "来源链接: 去掉首尾空白,www 也认")
+        for (source, stored, why) in [("megalobiz", nil, "没存地址"), ("megalobiz", "", "空地址"),
+                                      ("megalobiz", "http://megalobiz.com/lrc/1/x", "不是 https"),
+                                      ("megalobiz", "https://megalobiz.com.evil.example/lrc/1", "别的主机"),
+                                      ("megalobiz", "https://user@megalobiz.com/lrc/1", "带用户名"),
+                                      ("lrclib", "https://megalobiz.com/lrc/1/x", "别的源不加链接"),
+                                      ("", "https://megalobiz.com/lrc/1/x", "没来源")] as [(String, String?, String)] {
+            expectEqual(L.url(source: source, stored: stored) == nil, true, "来源链接: \(why)不做链接")
+        }
+        expectEqual(L.url(source: nil, stored: "https://megalobiz.com/lrc/1/x") == nil, true, "来源链接: 来源为 nil 不做链接")
+
+        let src = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+        func read(_ rel: String) -> String { (try? String(contentsOf: src.appendingPathComponent(rel), encoding: .utf8)) ?? "" }
+        let window = read("lyrimuse/UI/LyricsWindowView.swift")
+        expectEqual(sourceHas(window, "infoLyricsSourceLink = sourceInfo?.lyricsSourceLink")
+                    && sourceHas(window, "if let link = infoLyricsSourceLink { InfoPanelLinksRow(label: L10n.t(\"来源\"), name: sourceDisplayName(source), url: link, help: LyricsSourceLinkOpener.help(source: source)")
+                    && sourceHas(window, "LyricsSourceLinkOpener.open(link)"), true,
+                    "来源链接: 歌词窗口简介的「来源」行有链接时写成「平台名 ↗」,点了经 LyricsSourceLinkOpener 打开")
+        let web = read("lyrimuse/WebLyrics/WebLyricsScreen.swift")
+        expectEqual(sourceHas(web, "rows.append(.init(label: L10n.t(\"来源\"), value: sourceDisplayName(source), link: infoDetails?.sourceLink))")
+                    && sourceHas(web, "sourceInfo?.lyricsSource, sourceInfo?.lyricsSourceLink,"), true,
+                    "来源链接: 网页歌词简介的「来源」行带上同一个链接")
+        let manager = read("lyrimuse/LyricsManager/LyricsManagerView.swift")
+        let tags = sourceBody("private func headerTags(", in: manager)
+        expectEqual(sourceHas(tags, "if let link = LyricsSourceLink.url(source: summary.lyricsSource, stored: summary.lyricsSourceURL)")
+                    && sourceHas(tags, "text: sourceDisplayName(summary.lyricsSource) + \" ↗\"")
+                    && sourceHas(tags, ".help(LyricsSourceLinkOpener.help(source: summary.lyricsSource))")
+                    && sourceHas(tags, "LyricsSourceLinkOpener.open(link)"), true,
+                    "来源链接: 歌词管理详情的来源胶囊带「↗」、悬停说明、点了打开")
+        let opener = read("lyrimuse/UI/LyricsSourceLinkOpener.swift")
+        expectEqual(sourceHas(opener, "if DebugExternalOpens.holding { DebugExternalOpens.held.append(url.absoluteString)")
+                    && sourceHas(opener, "NSWorkspace.shared.open(url)")
+                    && sourceHas(opener, "String(format: L10n.t(\"在 %@ 上查看这首歌的歌词\"), sourceDisplayName(source))"), true,
+                    "来源链接: 用默认浏览器打开,debug/hold-opens 开着时只记下")
+        let quick = read("lyrimuse/LyricsManager/LyricsQuickSearchWindow.swift")
+        expectEqual(sourceHas(quick, "sourceURL: candidate.sourceURL, undoable: true"), true,
+                    "来源链接: 采纳候选时把候选的歌词页交给引擎(条目的 lyrics_source_url)")
+    }
     // ---- 三选一放不下时换短档名;跟随播放、对照表头随界面语言刷新(见 11 章决策 184) ----
     do {
         let dir = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()

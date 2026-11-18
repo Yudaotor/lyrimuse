@@ -298,7 +298,8 @@ final class WebLyricsScreenRenderer {
     /// 简介正文滚到哪了。
     private var panelScroll: CGFloat = 0
     /// 「显示简介」打开时读的歌词来源与平台链接(同歌词窗口 `loadInfoPanelDetails`),换歌、缓存内容版本变了时重读。
-    private var infoDetails: (track: String, version: EnrichCacheReader.ContentVersion?, source: String?, links: PlatformLinks?)?
+    private var infoDetails: (track: String, version: EnrichCacheReader.ContentVersion?, source: String?, sourceLink: URL?,
+                              links: PlatformLinks?)?
     private var chromeIdle = LyricsWindowChromeIdle.State()
     private var chromeShown = true
     /// 左栏此刻摆在哪(左缘 x);nil = 还没摆过,第一次不做动画。
@@ -1153,7 +1154,7 @@ final class WebLyricsScreenRenderer {
         return items
     }
 
-    /// 「显示简介」各行,同歌词窗口 `trackInfoPanel`:歌名、歌手、专辑、时长、播放器、歌词形态、来源、本平台的网页,
+    /// 「显示简介」各行,同歌词窗口 `trackInfoPanel`:歌名、歌手、专辑、时长、播放器、歌词形态、来源(要链回的源是链接)、本平台的网页,
     /// 连着 Last.fm 时再加累计次数与首次 / 上次收听。
     private func infoRows() -> [WebLyricsInfoRow] {
         let track = "\(playback.title)|\(playback.artist)|\(playback.album)"
@@ -1161,9 +1162,8 @@ final class WebLyricsScreenRenderer {
         let version = LocalPlaybackSource.shared.enrichContentVersion
         if infoDetails?.track != track || infoDetails?.version != version {
             let trackChanged = infoDetails?.track != track
-            infoDetails = (track, version,
-                           EnrichCacheReader.sourceInfo(artist: playback.artist, title: playback.title, album: playback.album)?
-                               .lyricsSource,
+            let sourceInfo = EnrichCacheReader.sourceInfo(artist: playback.artist, title: playback.title, album: playback.album)
+            infoDetails = (track, version, sourceInfo?.lyricsSource, sourceInfo?.lyricsSourceLink,
                            EnrichCacheReader.platformLinks(artist: playback.artist, title: playback.title, album: playback.album))
             if trackChanged, !playback.title.isEmpty, LastfmStatsService.shared.isConnected {
                 LastfmStatsService.shared.refreshNowPlayingCount(title: playback.title, artist: playback.artist)
@@ -1194,7 +1194,8 @@ final class WebLyricsScreenRenderer {
         }
         rows.append(.init(label: L10n.t("歌词"), value: lyricsKind))
         if let source = infoDetails?.source, !source.isEmpty {
-            rows.append(.init(label: L10n.t("来源"), value: sourceDisplayName(source)))
+            // 同歌词窗口:要链回的源(Megalobiz)存了歌词页时是链接,网页在看副屏的那台设备上打开。
+            rows.append(.init(label: L10n.t("来源"), value: sourceDisplayName(source), link: infoDetails?.sourceLink))
         }
         if let link = infoDetails?.links?.songLink(forPlayerBundleID: PlaybackCoordinator.shared.resolvedPlayerBundleID,
                                                    webPlatformID: PlaybackCoordinator.shared.resolvedWebPlatformID) {

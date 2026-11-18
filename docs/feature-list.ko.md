@@ -73,9 +73,9 @@ Lyrimuse의 모든 기능을 무엇을 하는지, 설정의 어디에 있는지,
 
 <a id="feature-lyric-sources"></a>
 
-### 15개 가사 소스 자동 검색
+### 16개 가사 소스 자동 검색
 
-NetEase Cloud Music, QQ Music, Kugou, Kuwo, Migu, LRCLIB, LyricFind, Deezer, AMLL, Soda Music, VIBE, Genie, PetitLyrics, Zing MP3, Apple Music. 각 가사 소스는 따로 켜거나 끄고, 순서를 바꾸고, 지금 연결할 수 있는지 테스트할 수 있습니다.
+NetEase Cloud Music, QQ Music, Kugou, Kuwo, Migu, LRCLIB, LyricFind, Deezer, AMLL, Soda Music, VIBE, Genie, PetitLyrics, Zing MP3, Megalobiz, Apple Music. 각 가사 소스는 따로 켜거나 끄고, 순서를 바꾸고, 지금 연결할 수 있는지 테스트할 수 있습니다.
 
 - 기본으로 켜짐
 - 설정 위치: 가사 › 출처 › 가사 소스

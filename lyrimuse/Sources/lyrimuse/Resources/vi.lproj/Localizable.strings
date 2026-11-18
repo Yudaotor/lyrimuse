@@ -832,6 +832,7 @@
 "图标自下而上填充以表示播放进度，颜色取自「颜色」组" = "Biểu tượng được tô đầy từ dưới lên để thể hiện tiến độ phát, màu lấy từ nhóm “Màu”";
 "圆角" = "Bo góc";
 "在 %@ 上收听" = "Nghe trên %@";
+"在 %@ 上查看这首歌的歌词" = "Xem lời bài hát này trên %@";
 "在 %@ 中打开" = "Mở trong %@";
 "在 %@ 中搜索" = "Tìm trong %@";
 "在 %@ 中播放" = "Phát trong %@";
@@ -2236,6 +2237,7 @@
 "用「导入歌词文件夹…」导入，或在下方设置监视文件夹" = "Dùng “Nhập thư mục lời…” để nhập, hoặc đặt thư mục theo dõi bên dưới";
 "用于改进 Lyrimuse：版本、系统、用了哪些功能和崩溃报告，不含歌名和账号" = "Giúp cải thiện Lyrimuse: phiên bản, hệ thống, tính năng đã dùng và báo cáo sự cố, không gồm tên bài và tài khoản";
 "用当前配色覆盖" = "Ghi đè bằng bảng màu hiện tại";
+"用户上传的同步歌词库，只在听歌时查询" = "Kho lời đồng bộ do người dùng tải lên, chỉ tra cứu khi đang nghe";
 "用户名下方显示" = "Hiện dưới tên của bạn";
 "用这一期的真实数据看看推送在这个平台上的样子" = "Xem thông báo trông thế nào trên nền tảng này với dữ liệu thật của kỳ này";
 "用这首歌在 Spotify 上的循环短片当背景；仅限在 Spotify 中放过的歌曲" = "Dùng video lặp của bài trên Spotify làm nền; chỉ với bài bạn đã phát trong Spotify";

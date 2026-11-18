@@ -21,7 +21,16 @@ import (
 const sourceBudgetWindow = time.Hour
 
 // newHostGuardSourceBudget:各歌词源一小时的请求额度,0 = 不限。单测总入口换成全部不限,专测额度的用例自己设。
-var newHostGuardSourceBudget = func(source string) int {
+var newHostGuardSourceBudget = lyricSourceHourlyBudget
+
+// megalobizHourlyBudget:Megalobiz 不带 key 时每个 IP 每天 1000 次,摊到每小时约 41 次。后台(待播队列的预解析)用完这一小时的
+// 就不问它,正在放的那首照问;超了对方回 429,走熔断和后台暂停。
+const megalobizHourlyBudget = 40
+
+func lyricSourceHourlyBudget(source string) int {
+	if source == lyricSourceMegalobiz {
+		return megalobizHourlyBudget
+	}
 	return 0
 }
 

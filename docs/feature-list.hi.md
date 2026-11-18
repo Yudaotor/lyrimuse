@@ -73,9 +73,9 @@ Lyrimuse एक ओपन-सोर्स (GPL-3.0) Mac ऐप है, जो �
 
 <a id="feature-lyric-sources"></a>
 
-### गीत के बोल के 15 स्रोत, अपने-आप खोज
+### गीत के बोल के 16 स्रोत, अपने-आप खोज
 
-NetEase Cloud Music, QQ Music, Kugou, Kuwo, Migu, LRCLIB, LyricFind, Deezer, AMLL, Soda Music, VIBE, Genie, PetitLyrics, Zing MP3 और Apple Music। हर स्रोत को बंद किया जा सकता है, उसका क्रम बदला जा सकता है, या जाँचा जा सकता है कि वह अभी पहुँच में है या नहीं।
+NetEase Cloud Music, QQ Music, Kugou, Kuwo, Migu, LRCLIB, LyricFind, Deezer, AMLL, Soda Music, VIBE, Genie, PetitLyrics, Zing MP3, Megalobiz और Apple Music। हर स्रोत को बंद किया जा सकता है, उसका क्रम बदला जा सकता है, या जाँचा जा सकता है कि वह अभी पहुँच में है या नहीं।
 
 - डिफ़ॉल्ट रूप से चालू
 - सेटिंग : गीत के बोल › स्रोत › बोल के स्रोत
