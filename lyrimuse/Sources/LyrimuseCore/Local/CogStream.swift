@@ -4,9 +4,9 @@ import os
 
 /// Cog 放网络流(系统那份时长报 0)时这一首是什么、放到哪。三种标题:
 ///
-/// - 电台里的一首:Cog 把 ICY 标题按「 - 」拆成歌手和歌名,放到这段声音时才换标题(按解码块落地,比真正出声晚 -0.03~+0.95 秒,
-///   跟电台开头多推几秒无关),所以不套 reAMP / VOX 的延迟线,只补一个固定量 `titleLagSecs`。系统那份的 elapsed 是连上以来的
-///   总秒数、换歌不归零,这一首的位置 = 现在的 elapsed − 这个标题第一次出现时那份锚点的 elapsed + `titleLagSecs`;连上后的第一首
+/// - 电台里的一首:Cog 把 ICY 标题按「 - 」拆成歌手和歌名,放到这段声音时才换标题(按解码块落地,跟电台开头多推几秒无关),
+///   所以不套 reAMP / VOX 的延迟线。换标题比出声早晚随连接和缓冲状态变、App 看不到,不加固定补偿。系统那份的 elapsed 是连上
+///   以来的总秒数、换歌不归零,这一首的位置 = 现在的 elapsed − 这个标题第一次出现时那份锚点的 elapsed;连上后的第一首
 ///   不知道从哪里进来的,不给进度。elapsed 往回退了就是重连了。
 /// - 同一次连接里只有歌名、没有「 - 」的 ICY 标题,Cog 发给系统的那份不带歌手键,系统会话留着上一首的歌手(`checkedArtist` 读
 ///   Cog 播放列表那一行核对)。
@@ -50,9 +50,6 @@ public enum CogStream {
 
     /// elapsed 往回退超过这么多秒算重连。
     static let reconnectSlackSecs: Double = 0.5
-
-    /// Cog 换标题比这段声音真正出声平均晚这么多秒(锯齿 -0.03~+0.95 取中点),电台里的歌位置都加上它。见 02 章决策 275。
-    public static let titleLagSecs: Double = 0.46
 
     /// 电台这一路的表。
     public struct Clock: Equatable, Sendable {
@@ -99,7 +96,7 @@ public enum CogStream {
         case .file: return elapsed
         case .song:
             guard let start = clock.start, let elapsed else { return nil }
-            return max(0, elapsed - start + titleLagSecs)
+            return max(0, elapsed - start)
         case .placeholder: return nil
         }
     }

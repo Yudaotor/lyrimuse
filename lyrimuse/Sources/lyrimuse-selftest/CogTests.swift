@@ -267,9 +267,8 @@ func runCogTests() {
         c = step(c, "First Song", "Test Artist One", 0.906)
         expectEqual([c.start == nil, S.position(c, kind: .song, elapsed: 10) == nil], [true, true], "Cog 放流: 连上后的第一首不给进度")
         c = step(c, "Second Song", "Test Artist Two", 19.906)
-        expectEqual(S.titleLagSecs, 0.46, "Cog 放流: 换标题比出声平均晚 0.46 秒(02 章决策 275 出声真值)")
-        expectEqual(S.position(c, kind: .song, elapsed: 25).map { abs($0 - 5.554) < 1e-9 }, true,
-                    "Cog 放流: 第二首从标题第一次出现时的 elapsed 起算,补上换标题晚的那 0.46 秒")
+        expectEqual(S.position(c, kind: .song, elapsed: 25).map { abs($0 - 5.094) < 1e-9 }, true,
+                    "Cog 放流: 第二首从标题第一次出现时的 elapsed 起算,不加固定补偿(02 章决策 275)")
         expectEqual(step(c, "Second Song", "Test Artist Two", 30).start, 19.906, "Cog 放流: 同一首重发锚点(暂停恢复)不动起点")
         let jingle = step(c, "Station ID", nil, 33)
         expectEqual([jingle.song == nil, jingle.sawSong, step(jingle, "Third Song", "Test Artist Three", 39.906).start == 39.906],
@@ -289,9 +288,9 @@ func runCogTests() {
             ("Second Song", "Test Artist Two", 19.906, 31.2),
         ]
         let got = rows.map { S.reading(bundleID: cog, title: $0.0, artist: $0.1, duration: 0, anchorElapsed: $0.2, elapsed: $0.3) }
-        expectEqual(got.map { $0?.position.map { ($0 * 1000).rounded() / 1000 } }, [nil, nil, 0.46, 11.754],
-                    "Cog 放流 回放: 占位、第一首都不给进度,第二首从 0.46 起走")
-        expectEqual(got.map { $0?.anchorPosition.map { ($0 * 1000).rounded() / 1000 } }, [nil, nil, 0.46, 0.46],
+        expectEqual(got.map { $0?.position.map { ($0 * 1000).rounded() / 1000 } }, [nil, nil, 0, 11.294],
+                    "Cog 放流 回放: 占位、第一首都不给进度,第二首从 0 起走")
+        expectEqual(got.map { $0?.anchorPosition.map { ($0 * 1000).rounded() / 1000 } }, [nil, nil, 0, 0],
                     "Cog 放流 回放: 锚点也换成这一首的")
         S.reset()
 
