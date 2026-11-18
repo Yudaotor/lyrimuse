@@ -6621,14 +6621,12 @@ private struct PlayerSettingsTab: View {
     /// 按 bundle id 取这个 App 的真图标,取不到才退回一个 SF Symbol。
     /// - fallbackSymbol: 取不到时画什么。浏览器那几处用 `app.dashed`(读作"这个 App 是谁
     ///   我们还不确定"),已信任那张卡用 `checkmark.seal`(那一格的语义是"信任过",不是"不确定")。
+    /// 读图标的是 `InstalledAppIcon`,别改回在这里直接读:已信任格子把它放在 `CompactTileLabel` 的闭包里,
+    /// 这一页观察缓存也换不上读好的图标(14 章决策 223)。
     private static func appIconView(bundleID: String, size: CGFloat,
                                     fallbackSymbol: String) -> some View {
-        Group {
-            if let icon = AppIconResolver.icon(forBundleID: bundleID) {
-                Image(nsImage: icon).resizable()
-            } else {
-                Image(systemName: fallbackSymbol)
-            }
+        InstalledAppIcon(bundleID: bundleID) { Image(nsImage: $0).resizable() } fallback: {
+            Image(systemName: fallbackSymbol)
         }
         .frame(width: size, height: size)
         .clipShape(RoundedRectangle(cornerRadius: size * 0.23, style: .continuous))

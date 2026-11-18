@@ -355,3 +355,28 @@ struct LyrimuseAppIconImage: View {
         Image(nsImage: cache.ownIcon).resizable()
     }
 }
+
+/// 按 bundle id 画一个 App 的图标:读好了(含还在读时的透明占位图)交给 `icon`,没装交给 `fallback`。
+///
+/// 自己观察缓存、在自己的 body 里读,别改成在外层视图里读好再塞进子视图的 `@ViewBuilder` 闭包:外层观察缓存只能让外层重算,
+/// 子视图存着的闭包只捕获了 bundle id、尺寸这类没变的值时,SwiftUI 判它没变、不重算那一格,图标读好了也一直是占位图(14 章决策 223)。
+struct InstalledAppIcon<Icon: View, Fallback: View>: View {
+    let bundleID: String
+    let icon: (NSImage) -> Icon
+    let fallback: () -> Fallback
+    @ObservedObject private var cache = AppIconCache.shared
+
+    init(bundleID: String, @ViewBuilder icon: @escaping (NSImage) -> Icon, @ViewBuilder fallback: @escaping () -> Fallback) {
+        self.bundleID = bundleID
+        self.icon = icon
+        self.fallback = fallback
+    }
+
+    var body: some View {
+        if let image = AppIconResolver.icon(forBundleID: bundleID) {
+            icon(image)
+        } else {
+            fallback()
+        }
+    }
+}

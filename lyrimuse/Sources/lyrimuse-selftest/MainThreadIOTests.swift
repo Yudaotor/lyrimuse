@@ -693,11 +693,38 @@ func runMainThreadIOTests() {
             expectEqual(sourceHas(sourceBody(reader.type, in: app(reader.file)), observe), true,
                         "App 图标(契约): \(reader.type) 观察 AppIconCache")
         }
-        let readerFiles = Set(readers.map { "lyrimuse/" + $0.file })
+        let readerFiles = Set(readers.map { "lyrimuse/" + $0.file } + ["lyrimuse/Settings/AppIconResolver.swift"])
         let callers = Set(appCodeOccurrences(of: "AppIconResolver.icon(forBundleID:") + appCodeOccurrences(of: ".resolvedPlayerIcon")
                           + appCodeOccurrences(of: "discordApplicationIcon(model"))
         expectEqual(callers.subtracting(readerFiles).sorted(), ["lyrimuse/PlaybackCoordinator.swift"],
                     "App 图标(契约): 取播放器图标的视图都在上面的观察名单里")
+        // 外层观察缓存不够:读写在子视图存着的 `@ViewBuilder` 闭包里、闭包只捕获了没变的值时,SwiftUI 不重算那一格,
+        // 读好的图标换不上,一直是透明占位图。这种地方走自己观察缓存的 `InstalledAppIcon`。
+        let leaf = sourceBody("struct InstalledAppIcon<Icon: View, Fallback: View>: View {", in: resolverFile)
+        expectEqual(sourceHas(leaf, "@ObservedObject private var cache = AppIconCache.shared")
+                        && sourceHas(leaf, "var body: some View {\nif let image = AppIconResolver.icon(forBundleID: bundleID) {\nicon(image)\n} else {\nfallback()"), true,
+                    "App 图标(契约): InstalledAppIcon 自己观察缓存、在自己的 body 里读")
+        let tileIcon = sourceBody("private static func appIconView(bundleID: String, size: CGFloat,", in: app("SettingsView.swift"))
+        expectEqual(sourceHas(tileIcon, "InstalledAppIcon(bundleID: bundleID)") && !sourceHas(tileIcon, "AppIconResolver.icon(forBundleID:"), true,
+                    "App 图标(契约): 设置页「其他 App」格子、浏览器头像走 InstalledAppIcon")
+        let idleChip = sourceBody("private func idleActionButton(prominent: Bool = false) -> some View {", in: app("MenuBar/MenuBarPanel.swift"))
+        expectEqual(sourceHas(idleChip, "InstalledAppIcon(bundleID: player.bundleIdentifier)")
+                        && !sourceHas(idleChip, "AppIconResolver.icon(forBundleID:"), true,
+                    "App 图标(契约): 面板「打开」键上的播放器图标走 InstalledAppIcon")
+        // 存着 `@ViewBuilder` 闭包的方块格和面板按键:闭包里不直接读播放器图标。
+        var closureReads: [String] = []
+        for container in ["CompactTileLabel(", "ChipButton("] {
+            for file in Set(appCodeOccurrences(of: container)) {
+                let text = app(String(file.dropFirst("lyrimuse/".count)))
+                for chunk in text.components(separatedBy: container).dropFirst() {
+                    let body = sourceBody(container, in: container + chunk)
+                    if ["AppIconResolver.icon(forBundleID:", ".resolvedPlayerIcon", "discordApplicationIcon("].contains(where: { sourceHas(body, $0) }) {
+                        closureReads.append("\(file) \(container)")
+                    }
+                }
+            }
+        }
+        expectEqual(closureReads, [], "App 图标(契约): CompactTileLabel / ChipButton 的闭包里不直接读播放器图标(用 InstalledAppIcon)")
     }
 
     do {

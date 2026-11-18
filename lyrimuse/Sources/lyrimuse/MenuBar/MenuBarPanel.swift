@@ -1548,13 +1548,16 @@ private struct MenuBarPanelView: View {
                     if canResume {
                         Image(systemName: "play.fill")
                             .font(.system(size: 10.5, weight: .semibold))
-                    } else if let idlePlayerIcon = AppIconResolver.icon(forBundleID: player.bundleIdentifier) {
-                        Image(nsImage: idlePlayerIcon)
-                            .resizable()
-                            .frame(width: prominent ? 15 : 14, height: prominent ? 15 : 14)
                     } else {
-                        Image(systemName: "arrow.up.forward.app")
-                            .font(.system(size: 10.5, weight: .semibold))
+                        // 走 `InstalledAppIcon`、别在这个闭包里直接读:闭包只捕获了几个没变的值,图标读好时 ChipButton 不重算(14 章决策 223)。
+                        InstalledAppIcon(bundleID: player.bundleIdentifier) { icon in
+                            Image(nsImage: icon)
+                                .resizable()
+                                .frame(width: prominent ? 15 : 14, height: prominent ? 15 : 14)
+                        } fallback: {
+                            Image(systemName: "arrow.up.forward.app")
+                                .font(.system(size: 10.5, weight: .semibold))
+                        }
                     }
                     Text(canResume ? L10n.t("继续播放") : L10n.t("打开"))
                         .font(.system(size: prominent ? 12 : 11.5, weight: .semibold))
