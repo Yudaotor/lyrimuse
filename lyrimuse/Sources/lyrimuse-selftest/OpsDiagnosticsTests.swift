@@ -1190,6 +1190,30 @@ func runOpsDiagnosticsTests() {
         expectEqual([bgReading.priority.map { $0 <= T.lowPriorityCeiling }, ownPriority.map { $0 > T.lowPriorityCeiling }], [true, true],
                     "节流读数: 跨线程读得到优先级,后台档的线程读到 4 及以下,平常的线程在它之上")
 
+        // 卡顿期间的内存情况(14 章决策 222):内存压力取停顿期间最紧的一档,换页次数取两次累计读数的差。
+        typealias M = HangMemory
+        expectEqual([1, 2, 4, 0, 3, 8].map { M.pressureTag(kernelLevel: $0) }, [M.normal, M.warning, M.critical, nil, nil, nil],
+                    "内存压力: 内核的 1 / 2 / 4 对上三档,认不出的不报")
+        expectEqual([M.tighter(M.normal, M.warning), M.tighter(M.critical, M.normal), M.tighter(nil, M.normal),
+                     M.tighter(M.warning, nil), M.tighter(nil, nil), M.tighter("bogus", M.normal)],
+                    [M.warning, M.critical, M.normal, M.warning, nil, M.normal], "内存压力: 取紧的那档,读不到的不算")
+        expectEqual([M.pageinsBetween(100, 160), M.pageinsBetween(5, 5), M.pageinsBetween(nil, 9), M.pageinsBetween(9, nil),
+                     M.pageinsBetween(10, 4), M.pageinsBetween(0, UInt64(M.maxPageins) + 50)],
+                    [60, 0, nil, nil, nil, M.maxPageins], "换页次数: 两次读数的差;读不到、倒退的不报,超过上限按上限")
+        var stallMemory = M.Stall(pageinsAtStart: 1_000)
+        stallMemory.observe(pressure: M.warning)
+        stallMemory.observe(pressure: nil)
+        stallMemory.observe(pressure: M.normal)
+        expectEqual([stallMemory.pressure, stallMemory.pageins(now: 1_250).map(String.init), M.Stall().pageins(now: 1_250).map(String.init)],
+                    [M.warning, "250", nil], "内存读数: 一次停顿里压力只升不降,换页从投探测时算起,没记下起点的不报")
+        expectEqual([M.logNote(pressure: M.critical, pageins: 1_200), M.logNote(pressure: nil, pageins: 0), M.logNote(pressure: nil, pageins: nil)],
+                    [" (memory pressure critical, 1200 page-ins)", " (0 page-ins)", ""], "内存读数: 日志说明")
+        // 真读数:进程自己的换页累计读得到、不倒退;系统内存压力读得到三档之一(这台机器此刻是哪档都行)。
+        let pageinsBefore = M.readPageins(), pageinsAfter = M.readPageins()
+        expectEqual([pageinsBefore != nil, pageinsAfter.flatMap { after in pageinsBefore.map { after >= $0 } } ?? false,
+                     M.readPressure().map(M.pressureLevels.contains) ?? false], [true, true, true],
+                    "内存读数: 换页累计和内存压力在这台机器上读得到")
+
         typealias Dog = MainThreadWatchdog
         expectEqual([Dog.shouldSample(tookDetailSlot: true, lastSampleAt: 100, now: 101),
                      Dog.shouldSample(tookDetailSlot: false, lastSampleAt: 100, now: 101),

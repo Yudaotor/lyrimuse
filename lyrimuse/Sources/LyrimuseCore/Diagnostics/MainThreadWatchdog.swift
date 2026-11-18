@@ -21,7 +21,10 @@ import os
 /// (`MainThreadThrottle`:锁屏、优先级落到后台档)。停顿期间任何一次看到就算:日志和遥测概况照记,带上节流标记,
 /// 卡住之后才锁屏的也补上(`Tracker.Event.throttled`)。见 14 章决策 202。
 ///
-/// 状态(定时器、Tracker、上次采样时刻、预期停顿、节流读数)只在 `queue` 上读写。
+/// 同样的几个时刻读系统内存压力,概况记停顿期间最紧的一档;每次投探测时记下进程累计的换页次数,报卡顿、恢复时
+/// 取差值记进概况(`HangMemory`)。见 14 章决策 222。
+///
+/// 状态(定时器、Tracker、上次采样时刻、预期停顿、节流读数、内存读数)只在 `queue` 上读写。
 public final class MainThreadWatchdog: @unchecked Sendable {
     public static let shared = MainThreadWatchdog()
 
@@ -134,6 +137,8 @@ public final class MainThreadWatchdog: @unchecked Sendable {
     private var simulatedThrottle: MainThreadThrottle.Reading?
     /// 最近一次节流读数,日志里带主线程优先级用。
     private var lastThrottleReading: MainThreadThrottle.Reading?
+    /// 在等的这次探测期间的内存读数:投出时的换页累计、看到过的最紧的内存压力。
+    private var memory = HangMemory.Stall()
 
     private init() {
         enabled = Bundle.main.bundleIdentifier == LyrimuseIdentity.bundleIdentifier
@@ -205,9 +210,10 @@ public final class MainThreadWatchdog: @unchecked Sendable {
         let now = ProcessInfo.processInfo.systemUptime
         wake.observe(uptime: now, continuous: WakeDetector.continuousNow)
         let sentAt = tracker.pendingSince
-        if sentAt != nil { observeThrottle(at: now, probeSentAt: sentAt) }
+        if sentAt != nil { observeStall(at: now, probeSentAt: sentAt) }
         if let event = tracker.check(now: now) { handle(event, at: now, probeSentAt: sentAt) }
         guard tracker.shouldProbe(now: now) else { return }
+        memory = HangMemory.Stall(pageinsAtStart: HangMemory.readPageins())
         let provider = windowProvider
         DispatchQueue.main.async { [weak self] in
             let answeredAt = ProcessInfo.processInfo.systemUptime
@@ -217,7 +223,7 @@ public final class MainThreadWatchdog: @unchecked Sendable {
                 if let windows { self.lastWindows = windows }
                 let sentAt = self.tracker.pendingSince
                 if let sentAt, answeredAt - sentAt >= self.tracker.stallThreshold {
-                    self.observeThrottle(at: answeredAt, probeSentAt: sentAt)
+                    self.observeStall(at: answeredAt, probeSentAt: sentAt)
                 }
                 guard let event = self.tracker.answered(now: answeredAt) else { return }
                 self.handle(event, at: answeredAt, probeSentAt: sentAt)
@@ -225,8 +231,9 @@ public final class MainThreadWatchdog: @unchecked Sendable {
         }
     }
 
-    /// 读一次节流状态,并进在等的那次探测。
-    private func observeThrottle(at now: TimeInterval, probeSentAt: TimeInterval?) {
+    /// 读一次节流状态和内存压力,并进在等的那次探测。
+    private func observeStall(at now: TimeInterval, probeSentAt: TimeInterval?) {
+        memory.observe(pressure: HangMemory.readPressure())
         let reading = simulatedThrottle ?? readThrottle(mainThread)
         lastThrottleReading = reading
         if let event = tracker.observe(throttle: reading.reasons) { handle(event, at: now, probeSentAt: probeSentAt) }
@@ -250,13 +257,19 @@ public final class MainThreadWatchdog: @unchecked Sendable {
         }
         switch event {
         case .recovered(let seconds, let throttle):
-            logger.notice("main thread: stalled for \(String(format: "%.1f", seconds), privacy: .public)s\(self.throttleNote(throttle), privacy: .public)")
+            let pageins = memory.pageins(now: HangMemory.readPageins())
+            let memoryNote = HangMemory.logNote(pressure: memory.pressure, pageins: pageins)
+            logger.notice("main thread: stalled for \(String(format: "%.1f", seconds), privacy: .public)s\(self.throttleNote(throttle), privacy: .public)\(memoryNote, privacy: .public)")
             // 报过 unresponsive 的那次才补时长;没卡满 sampleAfter 的不算一次卡顿。
-            if tracker.reportedStill { TelemetryActivity.shared.finishHang(seconds: seconds) }
+            if tracker.reportedStill {
+                TelemetryActivity.shared.finishHang(seconds: seconds, memoryPressure: memory.pressure, pageins: pageins)
+            }
         case .stillStalled(let seconds, let throttle):
-            let detailed = TelemetryActivity.shared.noteHang(hangContext(at: now, throttle: throttle))
+            let context = hangContext(at: now, throttle: throttle)
+            let detailed = TelemetryActivity.shared.noteHang(context)
             let sample = Self.shouldSample(tookDetailSlot: detailed, lastSampleAt: lastSampleAt, now: now)
-            logger.error("main thread: unresponsive for \(Int(seconds), privacy: .public)s\(sample ? ", sampling its stack" : "", privacy: .public)\(self.throttleNote(throttle), privacy: .public)")
+            let memoryNote = HangMemory.logNote(pressure: context.memoryPressure, pageins: context.pageins)
+            logger.error("main thread: unresponsive for \(Int(seconds), privacy: .public)s\(sample ? ", sampling its stack" : "", privacy: .public)\(self.throttleNote(throttle), privacy: .public)\(memoryNote, privacy: .public)")
             if sample {
                 lastSampleAt = now
                 takeSample()
@@ -278,7 +291,8 @@ public final class MainThreadWatchdog: @unchecked Sendable {
                       sinceWake: wake.lastWakeUptime.map { TelemetryHang.elapsedBucket(seconds: now - $0) },
                       windows: TelemetryHang.windowTags(identifiers: lastWindows),
                       thermal: TelemetryHang.thermalTag(ProcessInfo.processInfo.thermalState),
-                      throttled: throttle.isEmpty ? nil : throttle.sorted())
+                      throttled: throttle.isEmpty ? nil : throttle.sorted(),
+                      memoryPressure: memory.pressure, pageins: memory.pageins(now: HangMemory.readPageins()))
     }
 
     private func takeSample() {

@@ -181,9 +181,14 @@ public final class TelemetryActivity: @unchecked Sendable {
         }
     }
 
-    /// 最近那次卡顿恢复了,一共卡了 `seconds` 秒。
-    public func finishHang(seconds: TimeInterval) {
-        changeOpenHang { $0.duration = TelemetryHang.durationBucket(seconds: seconds) }
+    /// 最近那次卡顿恢复了,一共卡了 `seconds` 秒。`memoryPressure` 是整段停顿里看到的最紧的一档(跟记下时的取紧的),
+    /// `pageins` 是整段的换页次数(换掉记下时到报卡顿为止的那个数);读不到的不改。
+    public func finishHang(seconds: TimeInterval, memoryPressure: String? = nil, pageins: Int? = nil) {
+        changeOpenHang {
+            $0.duration = TelemetryHang.durationBucket(seconds: seconds)
+            $0.memoryPressure = HangMemory.tighter($0.memoryPressure, memoryPressure)
+            if let pageins { $0.pageins = pageins }
+        }
     }
 
     /// 最近那次卡顿采到了调用栈(只补一次)。

@@ -1,7 +1,7 @@
 import Foundation
 
 /// 一次主线程卡顿(`MainThreadWatchdog` 报「unresponsive」)的概况,跟着那一天的活动随心跳发出。
-/// 只有分档、枚举值和调用栈帧(系统库符号、Lyrimuse 自己的偏移),不带歌名、路径和账号。见 14 章决策 183。
+/// 只有分档、枚举值、换页次数和调用栈帧(系统库符号、Lyrimuse 自己的偏移),不带歌名、路径和账号。见 14 章决策 183。
 public struct TelemetryHang: Codable, Equatable, Sendable {
     /// 卡了多久:`durationBuckets` 之一;还没恢复(随后被强制退出、或这一条写进去时还卡着)是 `unrecovered`。
     public var duration: String
@@ -19,9 +19,14 @@ public struct TelemetryHang: Codable, Equatable, Sendable {
     public var stack: [TelemetryCrash.Frame]
     /// 停顿期间主线程被系统压着(`MainThreadThrottle.reasons` 里的取值,排好序);没看到为 nil,编码时不带这个键。
     public var throttled: [String]?
+    /// 停顿期间看到的最紧的系统内存压力档位(`HangMemory.pressureLevels`);读不到为 nil,编码时不带这个键。
+    public var memoryPressure: String?
+    /// 停顿期间 App 进程的换页次数(page-in):先记到报卡顿那一刻为止的,恢复时补成整段的;读不到为 nil,编码时不带这个键。
+    public var pageins: Int?
 
     public init(duration: String = TelemetryHang.unrecovered, sinceLaunch: String, sinceWake: String?, player: String? = nil,
-                windows: [String], thermal: String, stack: [TelemetryCrash.Frame] = [], throttled: [String]? = nil) {
+                windows: [String], thermal: String, stack: [TelemetryCrash.Frame] = [], throttled: [String]? = nil,
+                memoryPressure: String? = nil, pageins: Int? = nil) {
         self.duration = duration
         self.sinceLaunch = sinceLaunch
         self.sinceWake = sinceWake
@@ -30,10 +35,13 @@ public struct TelemetryHang: Codable, Equatable, Sendable {
         self.thermal = thermal
         self.stack = stack
         self.throttled = throttled
+        self.memoryPressure = memoryPressure
+        self.pageins = pageins
     }
 
     enum CodingKeys: String, CodingKey {
         case duration, sinceLaunch = "since_launch", sinceWake = "since_wake", player, windows, thermal, stack, throttled
+        case memoryPressure = "memory_pressure", pageins
     }
 
     public static let unrecovered = "unrecovered"

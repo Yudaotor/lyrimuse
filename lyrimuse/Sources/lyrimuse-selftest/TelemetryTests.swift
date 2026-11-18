@@ -411,6 +411,36 @@ func runTelemetryTests() {
         let oldHang = #"{"duration":"5-10s","since_launch":"<1m","windows":[],"thermal":"nominal","stack":[]}"#
         expectEqual((try? JSONDecoder().decode(H.self, from: Data(oldHang.utf8))).map { $0.throttled == nil }, true,
                     "记账: 旧版本存下的概况没有节流标记")
+        expectEqual((try? JSONDecoder().decode(H.self, from: Data(oldHang.utf8))).map { [$0.memoryPressure, $0.pageins.map(String.init)] },
+                    [nil, nil], "记账: 旧版本存下的概况没有内存压力和换页次数")
+
+        // 卡顿期间的内存情况(14 章决策 222):报卡顿时记到那一刻为止的,恢复时换成整段的;内存压力取紧的。
+        let memoryKey = "selftest.telemetryHangMemory.\(getpid())"
+        defer { UserDefaults.standard.removeObject(forKey: memoryKey) }
+        let memoryActivity = TelemetryActivity(defaults: .standard, key: memoryKey)
+        memoryActivity.isRecording = true
+        var tight = base
+        tight.memoryPressure = HangMemory.critical
+        tight.pageins = 40
+        memoryActivity.noteHang(tight, now: day1)
+        memoryActivity.finishHang(seconds: 12, memoryPressure: HangMemory.warning, pageins: 900)
+        var memoryHang = memoryActivity.completedDays(before: d2).first?.hangDetails.first
+        expectEqual([memoryHang?.memoryPressure, memoryHang?.pageins.map(String.init), memoryHang?.duration],
+                    [HangMemory.critical, "900", "10-30s"], "内存记账: 恢复时换页次数换成整段的,内存压力不降档,时长照补")
+        memoryActivity.clear()
+        var loose = base
+        loose.memoryPressure = HangMemory.normal
+        loose.pageins = 3
+        memoryActivity.noteHang(loose, now: day1)
+        memoryActivity.finishHang(seconds: 6, memoryPressure: HangMemory.warning)
+        memoryHang = memoryActivity.completedDays(before: d2).first?.hangDetails.first
+        expectEqual([memoryHang?.memoryPressure, memoryHang?.pageins.map(String.init)], [HangMemory.warning, "3"],
+                    "内存记账: 停顿后半段才紧起来的升档;恢复时读不到换页次数就留着报卡顿时的")
+        let memoryRoundTrip = TelemetryActivityDay(day: "2026-11-18", hangs: 1, hangDetails: [tight])
+        expectEqual((try? JSONEncoder().encode(memoryRoundTrip)).flatMap { try? JSONDecoder().decode(TelemetryActivityDay.self, from: $0) },
+                    memoryRoundTrip, "内存记账: 内存压力和换页次数能存能读")
+        memoryActivity.clear()
+        memoryActivity.waitForPendingWrites()
 
         // 被系统压着的卡顿(14 章决策 202):次数照记、另记一份;概况另占名额,不挤掉没被压着的。
         let throttleKey = "selftest.telemetryHangThrottle.\(getpid())"
@@ -684,6 +714,10 @@ func runTelemetryTests() {
         throttledHang.throttled = [MainThreadThrottle.locked]
         expectEqual(keys(throttledHang).contains("throttled") && keys(TelemetryActivityDay(day: "2026-10-30")).contains("throttled_hangs"),
                     true, "卡顿概况: 被压着的带 throttled,每天的活动带 throttled_hangs")
+        throttledHang.memoryPressure = HangMemory.warning
+        throttledHang.pageins = 0
+        expectEqual(Set(keys(throttledHang)).subtracting(keys(hang)).sorted(), ["memory_pressure", "pageins", "throttled"],
+                    "卡顿概况: 读到内存情况时带 memory_pressure、pageins(0 次也带),读不到时不带")
         let fields = keys(regional) + keys(features) + keys(TelemetryActivityDay(day: "2026-10-30")) + keys(throttledHang)
             + ["install_id", "origin", "report_id", "exception_type", "termination_indicator", "frames", "exception_frames"]
             + TelemetryAction.allCases.map(\.rawValue)
@@ -703,6 +737,9 @@ func runTelemetryTests() {
                     [TelemetryHang.durationBuckets.sorted(), TelemetryHang.elapsedBuckets.sorted(), TelemetryHang.thermalStates.sorted(),
                      TelemetryHang.windowTags.sorted()], "Worker: 卡顿概况的取值名单跟 Core 一致")
         expectEqual(workerList("HANG_THROTTLE"), MainThreadThrottle.reasons.sorted(), "Worker: 节流标记的取值名单跟 Core 一致")
+        expectEqual(sourceHas(worker, "const HANG_MEMORY_PRESSURE = [" + HangMemory.pressureLevels.map { "\"\($0)\"" }.joined(separator: ", ") + "];")
+                        && worker.contains("const MAX_HANG_PAGEINS = \(HangMemory.maxPageins);"),
+                    true, "Worker: 内存压力档位(从松到紧)、换页次数上限跟 Core 一致")
         expectEqual(worker.contains("const MAX_HANG_DETAILS_PER_DAY = \(TelemetryActivity.maxHangDetailsPerDay);")
                         && worker.contains("const MAX_THROTTLED_HANG_DETAILS_PER_DAY = \(TelemetryActivity.maxThrottledHangDetailsPerDay);"),
                     true, "Worker: 卡顿概况每天的条数上限(两类)跟 Core 一致")
@@ -806,18 +843,30 @@ func runTelemetryTests() {
                     true, "接线: 换歌、换播放器都记一笔(连着几天用同一个播放器也每天记到)")
         let watchdog = sourceText("LyrimuseCore/Diagnostics/MainThreadWatchdog.swift")
         let handleBody = sourceBody("private func handle(", in: watchdog)
-        expectEqual(sourceHas(handleBody, "TelemetryActivity.shared.noteHang(hangContext(at: now, throttle: throttle))")
-                        && sourceHas(handleBody, "if tracker.reportedStill { TelemetryActivity.shared.finishHang(seconds: seconds) }")
+        expectEqual(sourceHas(handleBody, "let context = hangContext(at: now, throttle: throttle)")
+                        && sourceHas(handleBody, "TelemetryActivity.shared.noteHang(context)")
+                        && sourceHas(handleBody, "TelemetryActivity.shared.finishHang(seconds: seconds, memoryPressure: memory.pressure, pageins: pageins)")
+                        && sourceHas(sourceBody("case .recovered(let seconds, let throttle):", in: handleBody), "if tracker.reportedStill {")
                         && sourceHas(handleBody, "TelemetryActivity.shared.markHangThrottled(throttle.sorted())"),
                     true, "接线: 主线程卡住记一笔概况(带节流标记),恢复时补时长(没卡满的不补),卡住之后才被压着的补标记")
         let tickBody = sourceBody("private func tick()", in: watchdog)
-        let throttleAt = tickBody.range(of: "if sentAt != nil { observeThrottle(at: now, probeSentAt: sentAt) }")
+        let throttleAt = tickBody.range(of: "if sentAt != nil { observeStall(at: now, probeSentAt: sentAt) }")
         let checkAt = tickBody.range(of: "tracker.check(now: now)")
         expectEqual(throttleAt != nil && checkAt != nil && throttleAt!.lowerBound < checkAt!.lowerBound
-                        && sourceHas(tickBody, "if let sentAt, answeredAt - sentAt >= self.tracker.stallThreshold { self.observeThrottle(at: answeredAt, probeSentAt: sentAt) }"),
+                        && sourceHas(tickBody, "if let sentAt, answeredAt - sentAt >= self.tracker.stallThreshold { self.observeStall(at: answeredAt, probeSentAt: sentAt) }"),
                     true, "接线: 探测过了一拍还没被执行到时先读节流状态再判卡顿,卡过阈值后被执行到时再读一次")
         expectEqual(sourceHas(sourceBody("private func hangContext(", in: watchdog), "throttled: throttle.isEmpty ? nil : throttle.sorted()"),
                     true, "接线: 卡顿概况带上停顿期间看到的节流标记")
+        // 卡顿期间的内存情况(14 章决策 222):投探测时记下换页累计,停顿期间读内存压力的时机跟节流读数相同。
+        let probeAt = tickBody.range(of: "guard tracker.shouldProbe(now: now) else { return }")
+        let baselineAt = tickBody.range(of: "memory = HangMemory.Stall(pageinsAtStart: HangMemory.readPageins())")
+        expectEqual(probeAt != nil && baselineAt != nil && probeAt!.upperBound <= baselineAt!.lowerBound
+                        && sourceHas(sourceBody("private func observeStall(", in: watchdog), "memory.observe(pressure: HangMemory.readPressure())")
+                        && sourceHas(sourceBody("private func hangContext(", in: watchdog),
+                                     "memoryPressure: memory.pressure, pageins: memory.pageins(now: HangMemory.readPageins())")
+                        && sourceHas(sourceBody("case .recovered(let seconds, let throttle):", in: handleBody),
+                                     "let pageins = memory.pageins(now: HangMemory.readPageins())"),
+                    true, "接线: 每次投探测记下换页累计,停顿期间读内存压力,报卡顿和恢复时各取一次换页差值记进概况")
         expectEqual(sourceHas(sourceBody("private func takeSample()", in: watchdog),
                               "TelemetryActivity.shared.attachHangStack(TelemetryHang.mainThreadStack(fromSample: text, executable: executable))")
                         && sourceHas(sourceBody("private func tick()", in: watchdog), "wake.observe(uptime: now, continuous: WakeDetector.continuousNow)")
