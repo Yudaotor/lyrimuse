@@ -453,6 +453,9 @@ enum DebugDeepLinks {
             LocalPlaybackSource.shared.setEngineDaemonPresenceOverride(override)
         case let .engineBackgroundItem(disabled):
             EngineServiceManager.setBackgroundItemDisabledOverride(disabled)
+        case let .lastfmStatus(keyRejected):
+            LastfmMirrorStatusWatcher.shared.setDebugOverride(keyRejected: keyRejected)
+            logger.notice("debug lastfm status override=\(keyRejected.map { $0 ? "key-rejected" : "revoked" } ?? "off", privacy: .public)")
         case let .onboardingStep(step):
             NotificationCenter.default.post(name: onboardingStepNotification, object: step)
             logger.notice("debug onboarding step=\(String(describing: step), privacy: .public)")
@@ -577,7 +580,9 @@ enum DebugDeepLinks {
                 "lastfmMirror": ["loaded": LastfmMirrorStatusWatcher.shared.loaded,
                                  "error": LastfmMirrorStatusWatcher.shared.info.map { $0.error as Any } ?? NSNull(),
                                  "at": LastfmMirrorStatusWatcher.shared.info.map { $0.at as Any } ?? NSNull(),
-                                 "keyRejected": LastfmMirrorStatusWatcher.shared.info.map { $0.keyRejected as Any } ?? NSNull()],
+                                 "keyRejected": LastfmMirrorStatusWatcher.shared.info.map { $0.keyRejected as Any } ?? NSNull(),
+                                 "fileError": LastfmMirrorStatusWatcher.shared.fileInfo.map { $0.error as Any } ?? NSNull(),
+                                 "debugOverride": LastfmMirrorStatusWatcher.shared.debugOverride.map { ($0.keyRejected ? "key-rejected" : "revoked") as Any } ?? NSNull()],
                 "engineNetworkDown": LocalPlaybackSource.shared.engineNetworkDown,
                 "engineNotRunning": LocalPlaybackSource.shared.engineNotRunning,
                 "listenBrainz": ["loaded": ListenBrainzSubmitStatusWatcher.shared.loaded,

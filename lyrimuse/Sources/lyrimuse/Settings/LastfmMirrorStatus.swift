@@ -71,11 +71,19 @@ enum LastfmMirrorStatus {
 ///
 /// 读文件在后台,回到主线程才发布:主线程上 stat 碰上磁盘卡住就是几秒的卡顿(14 章决策 194)。第一次读完之前
 /// `info` 是 nil、`loaded` 是 false;要区分「没读到」和「读过、没有错误」的(系统通知)看 `loaded`。
+///
+/// 界面读 `info`;系统通知读 `fileInfo`(状态文件本身)。两者只在本机验证用的 `debug/lastfm-status` 盖着时不同,
+/// 盖上去的那一份只给界面看,不弹通知、不记「弹过」。
 @MainActor
 final class LastfmMirrorStatusWatcher: ObservableObject {
     static let shared = LastfmMirrorStatusWatcher()
 
+    /// 界面显示的结论:有调试覆盖时是覆盖值,否则同 `fileInfo`。
     @Published private(set) var info: LastfmMirrorStatus.Info?
+    /// 状态文件里读到的结论。
+    @Published private(set) var fileInfo: LastfmMirrorStatus.Info?
+    /// `debug/lastfm-status` 盖上去的那一份;nil = 没盖。不落盘,App 重启即撤。
+    private(set) var debugOverride: LastfmMirrorStatus.Info?
     /// 第一次后台读已经落下。
     @Published private(set) var loaded = false
 
@@ -113,14 +121,32 @@ final class LastfmMirrorStatusWatcher: ObservableObject {
         readInFlight = false
         guard read > readsApplied else { return }
         readsApplied = read
-        if latest != info { info = latest }
+        if latest != fileInfo { fileInfo = latest }
+        publishInfo()
         if !loaded { loaded = true }
+    }
+
+    private func publishInfo() {
+        let shown = debugOverride ?? fileInfo
+        if shown != info { info = shown }
+    }
+
+    /// 本机验证用(`debug/lastfm-status`):true = 当作 key 被拒,false = 当作授权失效,nil = 撤掉、交还状态文件。
+    func setDebugOverride(keyRejected: Bool?) {
+        debugOverride = keyRejected.map {
+            $0 ? LastfmMirrorStatus.Info(error: 10, message: "Invalid API key - You must be granted a valid key by last.fm", at: 0,
+                                         reason: "key_rejected", status: 403)
+               : LastfmMirrorStatus.Info(error: 9, message: "Invalid session key - Please re-authenticate", at: 0,
+                                         reason: "session", status: 200)
+        }
+        publishInfo()
     }
 
     /// `LastfmMirrorStatus.clear()` 删掉状态文件之后:当场发布「没有错误」,还在飞的那次读(可能读到删之前的文件)作废。
     func noteCleared() {
         readsApplied = readsIssued
-        if info != nil { info = nil }
+        if fileInfo != nil { fileInfo = nil }
+        publishInfo()
         if !loaded { loaded = true }
     }
 }

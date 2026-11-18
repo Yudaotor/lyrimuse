@@ -221,6 +221,10 @@ public enum LyrimuseDeepLink: Equatable, Sendable {
         /// 歌词引擎当作被「登录项与扩展 › 允许在后台」关掉 / 没关,不问系统(`debug/engine-background-item?state=disabled|enabled|auto`,
         /// `auto` = 交还给它)。不动用户的系统设置就能验设置播放器页的说明和按钮。nil = auto。
         case engineBackgroundItem(disabled: Bool?)
+        /// 界面当作 Last.fm 拒绝了 API Key / 授权已失效,不看引擎的状态文件(`debug/lastfm-status?state=key-rejected|revoked|off`,
+        /// `off` = 交还给它)。只改 App 内存里发布的那一份:不写状态文件、不熔断引擎、不弹系统通知。true = key 被拒,
+        /// false = 授权失效,nil = off。
+        case lastfmStatus(keyRejected: Bool?)
         /// 歌词管理里把这一条标成 / 取消纯音乐,跟详情页那颗开关走同一条路(交给引擎、改完重读):
         /// `debug/manager-instrumental?key=<写法键>&on=1|0`。验「改动之后的重读」用。
         case managerInstrumental(key: String, on: Bool)
@@ -844,6 +848,13 @@ public enum LyrimuseDeepLink: Equatable, Sendable {
             case "auto": self = .debug(.engineBackgroundItem(disabled: nil))
             default: return nil
             }
+        case ("debug", "/lastfm-status"):
+            switch value("state")?.lowercased() {
+            case "key-rejected": self = .debug(.lastfmStatus(keyRejected: true))
+            case "revoked": self = .debug(.lastfmStatus(keyRejected: false))
+            case "off": self = .debug(.lastfmStatus(keyRejected: nil))
+            default: return nil
+            }
         case ("debug", "/settings-visibility"):
             switch value("state")?.lowercased() {
             case "visible": self = .debug(.settingsVisibility(override: true))
@@ -1285,6 +1296,9 @@ public enum LyrimuseDeepLink: Equatable, Sendable {
             case let .engineBackgroundItem(disabled):
                 components.path = "/engine-background-item"
                 components.queryItems = [URLQueryItem(name: "state", value: disabled.map { $0 ? "disabled" : "enabled" } ?? "auto")]
+            case let .lastfmStatus(keyRejected):
+                components.path = "/lastfm-status"
+                components.queryItems = [URLQueryItem(name: "state", value: keyRejected.map { $0 ? "key-rejected" : "revoked" } ?? "off")]
             case let .onboardingStep(step):
                 components.path = "/onboarding-step"
                 components.queryItems = [URLQueryItem(name: "step", value: Self.onboardingStepNames.first { $0.value == step }?.key)]

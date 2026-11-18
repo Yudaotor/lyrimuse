@@ -552,6 +552,12 @@ func runDeepLinkTests() {
                      .debug(.engineBackgroundItem(disabled: nil))], "debug: 引擎后台项目当作被关 / 没关 / 交还")
         expectEqual(link("lyrimuse://debug/engine-background-item?state=off") == nil
                     && link("lyrimuse://debug/engine-background-item") == nil, true, "debug: 引擎后台项目认不出的、没带都不认")
+        expectEqual([link("lyrimuse://debug/lastfm-status?state=key-rejected"), link("lyrimuse://debug/lastfm-status?state=Revoked"),
+                     link("lyrimuse://debug/lastfm-status?state=off")],
+                    [.debug(.lastfmStatus(keyRejected: true)), .debug(.lastfmStatus(keyRejected: false)),
+                     .debug(.lastfmStatus(keyRejected: nil))], "debug: Last.fm 当作 key 被拒 / 授权失效 / 交还")
+        expectEqual(link("lyrimuse://debug/lastfm-status?state=pro") == nil
+                    && link("lyrimuse://debug/lastfm-status") == nil, true, "debug: Last.fm 状态认不出的、没带都不认")
         expectEqual(link("lyrimuse://debug/settings-visibility?state=on") == nil
                     && link("lyrimuse://debug/settings-visibility") == nil, true, "debug: 设置窗口可见性认不出的、没带都不认")
         expectEqual([link("lyrimuse://debug/onboarding-step?step=done"), link("lyrimuse://debug/onboarding-step?step=Background"),
@@ -987,6 +993,7 @@ func runDeepLinkTests() {
             .debug(.engineAlive(override: true)), .debug(.engineAlive(override: false)), .debug(.engineAlive(override: nil)),
             .debug(.engineBackgroundItem(disabled: true)), .debug(.engineBackgroundItem(disabled: false)),
             .debug(.engineBackgroundItem(disabled: nil)),
+            .debug(.lastfmStatus(keyRejected: true)), .debug(.lastfmStatus(keyRejected: false)), .debug(.lastfmStatus(keyRejected: nil)),
             .debug(.onboardingStep(.welcome)), .debug(.onboardingStep(.playerChoice)), .debug(.onboardingStep(.browserPairing)),
             .debug(.onboardingStep(.background)), .debug(.onboardingStep(.displayMode)), .debug(.onboardingStep(.done)),
             .debug(.managerInstrumental(key: "歌手|歌 & 名|专辑", on: true)), .debug(.managerInstrumental(key: "a|b|", on: false)),

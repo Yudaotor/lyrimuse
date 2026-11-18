@@ -1290,13 +1290,12 @@ struct LastfmStatsSection: View {
     }
 
     /// Last.fm 拒绝了 API Key 时压在统计、榜单两段最上面的说明:数据停在旧的或空着,原因和出路写在这里。
+    /// 跟「Last.fm 账号建议」页同一张卡:行距由 `LastfmSuggestionRowLayout` 自己留,这里别再套 padding。
     @ViewBuilder
     private var keyRejectedNotice: some View {
         if stats.keyRejected {
             SettingsCard(cornerRadius: 18) {
                 LastfmKeyRejectedSuggestionRow()
-                    .padding(.horizontal, SettingsRowMetrics.horizontalPadding)
-                    .padding(.vertical, SettingsRowMetrics.verticalPadding)
             }
         }
     }

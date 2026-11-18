@@ -22,8 +22,15 @@ func runLastfmTests() {
                     && sourceHas(refresh, "guard !readInFlight else { return }")
                     && !sourceHas(sourceBody("static func clear()", in: file), "cached"), true,
                     "镜像状态(契约): 只在观察器的后台读里读文件,面板、设置页、clear 都不在主线程上碰它")
-        expectEqual(sourceHas(notifier, "watcher.$info.combineLatest(watcher.$loaded) .filter { $0.1 }"), true,
+        expectEqual(sourceHas(notifier, "watcher.$fileInfo.combineLatest(watcher.$loaded) .filter { $0.1 }"), true,
                     "镜像状态(契约): 通知等第一次读落下再看,读到之前的 nil 不撤通知")
+        // debug/lastfm-status 的覆盖只给界面看:通知读状态文件本身,覆盖撤掉后界面回到状态文件的结论。
+        let publish = sourceBody("private func publishInfo()", in: file)
+        expectEqual(!sourceHas(notifier, "$info") && sourceHas(publish, "debugOverride ?? fileInfo")
+                    && sourceHas(sourceBody("private func finishRead(", in: file), "publishInfo()")
+                    && sourceHas(sourceBody("func noteCleared()", in: file), "publishInfo()")
+                    && !sourceHas(sourceBody("func setDebugOverride(", in: file), "FileIO"), true,
+                    "镜像状态(契约): 调试覆盖不弹通知、不写状态文件,撤掉后交还状态文件")
     }
 
     // ---- 授权成功后桥接用户名(lastfm_user)跟不跟着换 ----
@@ -3074,6 +3081,9 @@ func runLastfmTests() {
         let section = sourceText("lyrimuse/LastfmStatsSection.swift")
         expectEqual(sourceHas(section, "if stats.keyRejected {") && sourceHas(sourceText("lyrimuse/UI/RecentListensPanel.swift"), "} else if stats.keyRejected {"),
                     true, "key 被拒: 统计页与最近播放给出说明")
+        expectEqual(sourceHas(sourceBody("private var keyRejectedNotice: some View", in: section), "LastfmKeyRejectedSuggestionRow()")
+                    && !sourceHas(sourceBody("private var keyRejectedNotice: some View", in: section), ".padding("), true,
+                    "key 被拒: 统计页说明卡跟账号建议页同一张卡,不再叠一层行距")
     }
 
     // ---- 「Last.fm 账号建议」排哪几条(见 LastfmAccountSuggestion)----
