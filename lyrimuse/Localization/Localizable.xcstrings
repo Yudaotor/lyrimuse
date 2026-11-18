@@ -297408,103 +297408,103 @@
         }
       }
     },
-    "腾讯旗下的读书 App，听书时把正在念的原文当字幕显示" : {
+    "腾讯旗下的读书和听书 App" : {
       "extractionState" : "manual",
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Die Lese-App von Tencent; beim Hören erscheint der vorgelesene Text als Untertitel"
+            "value" : "Die Lese- und Hörbuch-App von Tencent"
           }
         },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Tencent’s reading app; when you listen, the text being read shows as subtitles"
+            "value" : "Tencent’s reading and audiobook app"
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "La app de lectura de Tencent; al escuchar, el texto que se lee aparece como subtítulos"
+            "value" : "La app de lectura y audiolibros de Tencent"
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "L’app de lecture de Tencent ; à l’écoute, le texte lu s’affiche en sous-titres"
+            "value" : "L’app de lecture et de livres audio de Tencent"
           }
         },
         "hi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Tencent का रीडिंग ऐप; सुनते समय पढ़ा जा रहा टेक्स्ट सबटाइटल की तरह दिखता है"
+            "value" : "Tencent का रीडिंग और ऑडियोबुक ऐप"
           }
         },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "L’app di lettura di Tencent; durante l’ascolto il testo letto appare come sottotitoli"
+            "value" : "L’app di lettura e audiolibri di Tencent"
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Tencentの読書App。聴く読書では読み上げ中の本文を字幕として表示"
+            "value" : "Tencentの読書・聴く読書App"
           }
         },
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Tencent의 독서 앱, 듣기 중에는 읽고 있는 원문을 자막으로 표시"
+            "value" : "Tencent의 독서 및 오디오북 앱"
           }
         },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "O app de leitura da Tencent; ao ouvir, o texto lido aparece como legendas"
+            "value" : "O app de leitura e audiolivros da Tencent"
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Приложение для чтения от Tencent; при прослушивании читаемый текст показывается как субтитры"
+            "value" : "Приложение Tencent для чтения и аудиокниг"
           }
         },
         "th" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "แอปอ่านหนังสือของ Tencent เมื่อฟังหนังสือจะแสดงข้อความที่กำลังอ่านเป็นคำบรรยาย"
+            "value" : "แอปอ่านหนังสือและหนังสือเสียงของ Tencent"
           }
         },
         "tr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Tencent’in okuma uygulaması; dinlerken okunan metin altyazı olarak görünür"
+            "value" : "Tencent’in okuma ve sesli kitap uygulaması"
           }
         },
         "uk" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Програма для читання від Tencent; під час прослуховування текст, що читається, показується як субтитри"
+            "value" : "Програма від Tencent для читання та аудіокниг"
           }
         },
         "vi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Ứng dụng đọc sách của Tencent, khi nghe sách sẽ hiện đoạn văn đang đọc làm phụ đề"
+            "value" : "Ứng dụng đọc sách và sách nói của Tencent"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "腾讯旗下的读书 App，听书时把正在念的原文当字幕显示"
+            "value" : "腾讯旗下的读书和听书 App"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "騰訊旗下的讀書 App，聽書時把正在朗讀的原文當字幕顯示"
+            "value" : "騰訊旗下的讀書和聽書 App"
           }
         }
       }
@@ -308852,103 +308852,103 @@
         }
       }
     },
-    "开源的本地音乐播放器，游戏音乐等冷门格式也能放" : {
+    "轻巧的开源本地音乐播放器" : {
       "extractionState" : "manual",
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Ein quelloffener Player für lokale Musik, der auch seltene Formate wie Spielemusik abspielt"
+            "value" : "Ein schlanker, quelloffener Player für lokale Musik"
           }
         },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "An open-source local music player that also plays niche formats like game music"
+            "value" : "A lightweight open-source local music player"
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Un reproductor de música local de código abierto que también reproduce formatos poco comunes, como música de videojuegos"
+            "value" : "Un reproductor de música local ligero y de código abierto"
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Un lecteur de musique locale open source qui lit aussi des formats rares comme la musique de jeux vidéo"
+            "value" : "Un lecteur de musique local léger et open source"
           }
         },
         "hi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "ओपन-सोर्स लोकल म्यूज़िक प्लेयर, जो गेम म्यूज़िक जैसे कम आम फ़ॉर्मैट भी चलाता है"
+            "value" : "हल्का ओपन-सोर्स लोकल म्यूज़िक प्लेयर"
           }
         },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Un player di musica locale open source che riproduce anche formati rari come la musica dei videogiochi"
+            "value" : "Un player di musica locale leggero e open source"
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "ゲーム音楽などのマイナーな形式も再生できる、オープンソースのローカル音楽プレーヤー"
+            "value" : "軽量なオープンソースのローカル音楽プレーヤー"
           }
         },
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "게임 음악 같은 드문 형식도 재생하는 오픈 소스 로컬 음악 플레이어"
+            "value" : "가벼운 오픈 소스 로컬 음악 플레이어"
           }
         },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Um player de música local de código aberto que também toca formatos incomuns, como música de videogame"
+            "value" : "Um player de música local leve e de código aberto"
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Плеер локальной музыки с открытым кодом, который воспроизводит и редкие форматы вроде музыки из игр"
+            "value" : "Лёгкий плеер локальной музыки с открытым кодом"
           }
         },
         "th" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "เครื่องเล่นเพลงในเครื่องแบบโอเพนซอร์ส เล่นได้แม้รูปแบบที่ไม่ค่อยพบอย่างเพลงเกม"
+            "value" : "เครื่องเล่นเพลงในเครื่องแบบโอเพนซอร์สที่เบาและเร็ว"
           }
         },
         "tr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Oyun müziği gibi az rastlanan biçimleri de çalan açık kaynaklı yerel müzik çalar"
+            "value" : "Hafif, açık kaynaklı yerel müzik çalar"
           }
         },
         "uk" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Програвач локальної музики з відкритим кодом, що відтворює й рідкісні формати на кшталт музики з ігор"
+            "value" : "Легкий програвач локальної музики з відкритим кодом"
           }
         },
         "vi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Trình phát nhạc cục bộ mã nguồn mở, phát được cả định dạng hiếm như nhạc trò chơi"
+            "value" : "Trình phát nhạc cục bộ mã nguồn mở, gọn nhẹ"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "开源的本地音乐播放器，游戏音乐等冷门格式也能放"
+            "value" : "轻巧的开源本地音乐播放器"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "開源的本地音樂播放器，遊戲音樂等冷門格式也能播放"
+            "value" : "輕巧的開源本機音樂播放器"
           }
         }
       }

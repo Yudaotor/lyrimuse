@@ -1254,7 +1254,6 @@
 "开源推送服务：在手机或电脑上安装 ntfy 并订阅主题即可接收，无需注册，也可自建服务器" = "Dịch vụ đẩy mã nguồn mở: cài ntfy trên điện thoại hoặc máy tính và đăng ký chủ đề là nhận được, không cần tạo tài khoản, cũng có thể tự dựng máy chủ";
 "开源的 YouTube Music 桌面客户端" = "Ứng dụng máy tính mã nguồn mở cho YouTube Music";
 "开源的多音源音乐播放器" = "Trình phát nhạc mã nguồn mở với nhiều nguồn nhạc";
-"开源的本地音乐播放器，游戏音乐等冷门格式也能放" = "Trình phát nhạc cục bộ mã nguồn mở, phát được cả định dạng hiếm như nhạc trò chơi";
 "开源的音乐播放器，曲库来自国内各大平台" = "Trình phát nhạc mã nguồn mở, kho nhạc lấy từ các nền tảng lớn của Trung Quốc";
 "开源组件与词典" = "Thành phần mã nguồn mở và từ điển";
 "开源许可证" = "Giấy phép mã nguồn mở";
@@ -2432,7 +2431,7 @@
 "背景" = "Nền";
 "背景颜色" = "Màu nền";
 "胜者" = "Thắng cuộc";
-"腾讯旗下的读书 App，听书时把正在念的原文当字幕显示" = "Ứng dụng đọc sách của Tencent, khi nghe sách sẽ hiện đoạn văn đang đọc làm phụ đề";
+"腾讯旗下的读书和听书 App" = "Ứng dụng đọc sách và sách nói của Tencent";
 "腾讯旗下的音乐 App" = "Ứng dụng nghe nhạc của Tencent";
 "腾讯旗下的音乐平台" = "Nền tảng nhạc của Tencent";
 "腾讯音乐旗下的音乐 App" = "Ứng dụng nghe nhạc của Tencent Music";
@@ -2667,6 +2666,7 @@
 "跳过广告" = "Bỏ qua quảng cáo";
 "跳过广告需要「辅助功能」权限" = "Bỏ qua quảng cáo cần quyền “Trợ năng”";
 "软件更新" = "Cập nhật phần mềm";
+"轻巧的开源本地音乐播放器" = "Trình phát nhạc cục bộ mã nguồn mở, gọn nhẹ";
 "轻点功能栏图标展开" = "Chạm vào biểu tượng trong Control Strip để mở rộng";
 "较上周 %@" = "%@ so với tuần trước";
 "较粗" = "Hơi đậm";

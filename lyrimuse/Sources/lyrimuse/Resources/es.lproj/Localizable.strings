@@ -1327,7 +1327,6 @@
 "开源推送服务：在手机或电脑上安装 ntfy 并订阅主题即可接收，无需注册，也可自建服务器" = "Servicio push de código abierto. Instala ntfy en tu teléfono o tu Mac y suscríbete a un tema; sin registro, y puedes alojarlo tú mismo";
 "开源的 YouTube Music 桌面客户端" = "Cliente de escritorio de código abierto para YouTube Music";
 "开源的多音源音乐播放器" = "Un reproductor de música de código abierto con múltiples fuentes";
-"开源的本地音乐播放器，游戏音乐等冷门格式也能放" = "Un reproductor de música local de código abierto que también reproduce formatos poco comunes, como música de videojuegos";
 "开源的音乐播放器，曲库来自国内各大平台" = "Reproductor de código abierto para música de plataformas chinas";
 "开源组件与词典" = "Componentes y diccionarios de código abierto";
 "开源许可证" = "Licencia de código abierto";
@@ -2522,7 +2521,7 @@
 "背景" = "Fondo";
 "背景颜色" = "Color de fondo";
 "胜者" = "Ganadora";
-"腾讯旗下的读书 App，听书时把正在念的原文当字幕显示" = "La app de lectura de Tencent; al escuchar, el texto que se lee aparece como subtítulos";
+"腾讯旗下的读书和听书 App" = "La app de lectura y audiolibros de Tencent";
 "腾讯旗下的音乐 App" = "La app de música de Tencent";
 "腾讯旗下的音乐平台" = "Servicio de música de Tencent";
 "腾讯音乐旗下的音乐 App" = "Una app de música de Tencent Music";
@@ -2759,6 +2758,7 @@
 "跳过广告" = "Omitir anuncio";
 "跳过广告需要「辅助功能」权限" = "Omitir anuncios requiere el permiso de «Accesibilidad»";
 "软件更新" = "Actualización de software";
+"轻巧的开源本地音乐播放器" = "Un reproductor de música local ligero y de código abierto";
 "轻点功能栏图标展开" = "Toca el icono de la Control Strip para desplegarla";
 "较上周 %@" = "%@ frente a la semana pasada";
 "较粗" = "Seminegrita";

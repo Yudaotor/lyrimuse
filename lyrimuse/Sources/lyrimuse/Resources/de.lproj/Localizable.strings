@@ -1327,7 +1327,6 @@
 "开源推送服务：在手机或电脑上安装 ntfy 并订阅主题即可接收，无需注册，也可自建服务器" = "Ein Open-Source-Push-Dienst. Installiere ntfy auf deinem Handy oder Computer und abonniere ein Thema; keine Registrierung nötig, auch selbst hostbar";
 "开源的 YouTube Music 桌面客户端" = "Ein Open-Source-Desktop-Client für YouTube Music";
 "开源的多音源音乐播放器" = "Ein quelloffener Musikplayer mit mehreren Musikquellen";
-"开源的本地音乐播放器，游戏音乐等冷门格式也能放" = "Ein quelloffener Player für lokale Musik, der auch seltene Formate wie Spielemusik abspielt";
 "开源的音乐播放器，曲库来自国内各大平台" = "Open-Source-Player für Musik von chinesischen Streamingdiensten";
 "开源组件与词典" = "Open-Source-Komponenten und Wörterbücher";
 "开源许可证" = "Open-Source-Lizenz";
@@ -2522,7 +2521,7 @@
 "背景" = "Hintergrund";
 "背景颜色" = "Hintergrundfarbe";
 "胜者" = "Gewinner";
-"腾讯旗下的读书 App，听书时把正在念的原文当字幕显示" = "Die Lese-App von Tencent; beim Hören erscheint der vorgelesene Text als Untertitel";
+"腾讯旗下的读书和听书 App" = "Die Lese- und Hörbuch-App von Tencent";
 "腾讯旗下的音乐 App" = "Die Musik-App von Tencent";
 "腾讯旗下的音乐平台" = "Musikdienst von Tencent";
 "腾讯音乐旗下的音乐 App" = "Eine Musik-App von Tencent Music";
@@ -2759,6 +2758,7 @@
 "跳过广告" = "Werbung überspringen";
 "跳过广告需要「辅助功能」权限" = "Zum Überspringen von Werbung ist die Berechtigung „Bedienungshilfen“ nötig";
 "软件更新" = "Softwareupdate";
+"轻巧的开源本地音乐播放器" = "Ein schlanker, quelloffener Player für lokale Musik";
 "轻点功能栏图标展开" = "Tippe auf das Symbol im Control Strip, um es zu erweitern";
 "较上周 %@" = "%@ zur Vorwoche";
 "较粗" = "Halbfett";

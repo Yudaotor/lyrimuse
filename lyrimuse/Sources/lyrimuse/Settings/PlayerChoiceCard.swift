@@ -91,11 +91,11 @@ struct PlayerChoiceCard: View {
         case .foobar2000: return L10n.t("从 Windows 移植来的老牌本地音乐播放器")
         case .swinsian: return L10n.t("为大曲库设计的本地音乐播放器")
         case .audirvana: return L10n.t("面向发烧友的高解析音频播放器")
-        case .cog: return L10n.t("开源的本地音乐播放器，游戏音乐等冷门格式也能放")
+        case .cog: return L10n.t("轻巧的开源本地音乐播放器")
         case .plexamp: return L10n.t("Plex 的音乐播放器，播放自建服务器上的曲库")
         case .mygoMusic: return L10n.t("开源的多音源音乐播放器")
         case .lxMusic: return L10n.t("开源的音乐播放器，曲库来自国内各大平台")
-        case .weread: return L10n.t("腾讯旗下的读书 App，听书时把正在念的原文当字幕显示")
+        case .weread: return L10n.t("腾讯旗下的读书和听书 App")
         case .auto: return nil
         }
     }
