@@ -308,3 +308,36 @@ func TestTestLyricSourcesReportsDailyQuotaPause(t *testing.T) {
 		t.Errorf("停着的时候不发请求: %v", f.hits)
 	}
 }
+
+// 「搜索候选歌词」:额度停着的 Megalobiz 没给出候选时,失败原因是额度用完、带恢复时刻;给过候选或用户关了就不报(09 章决策 387)。
+func TestSearchLyricsReportsDailyQuotaPause(t *testing.T) {
+	resetSourceDayQuotaForTest(t)
+	dir := useCLIConfigDir(t, map[string]string{})
+	now := time.Now()
+	resumeAt := now.Add(3 * time.Hour).Unix()
+	state, _ := json.Marshal(map[string]sourceDayQuotaRecord{lyricSourceMegalobiz: {
+		Remaining: 0, ResetAt: resumeAt, SeenAt: now.Add(-time.Minute).Unix(), PausedUntil: resumeAt,
+	}})
+	if err := os.WriteFile(filepath.Join(dir, sourceDayQuotaFileName), state, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	useSourceDayQuotaFile(filepath.Join(dir, sourceDayQuotaFileName))
+	on := func(string) bool { return true }
+	got := lyricSourceResumeAts(nil, on, now)
+	if got[lyricSourceMegalobiz] != resumeAt {
+		t.Errorf("停着的源带恢复时刻: %v", got)
+	}
+	if r := lyricSourceFailureReasons(nil); r[lyricSourceMegalobiz] != lyricTestReasonDailyQuotaExhausted {
+		t.Errorf("原因是额度用完: %v", r)
+	}
+	answered := []scoredLyricCandidateResult{{Source: lyricSourceMegalobiz, Score: 300}}
+	if got := lyricSourceResumeAts(answered, on, now); len(got) != 0 {
+		t.Errorf("给过候选的不报: %v", got)
+	}
+	if got := lyricSourceResumeAts(nil, func(s string) bool { return s != lyricSourceMegalobiz }, now); len(got) != 0 {
+		t.Errorf("关掉的源不报: %v", got)
+	}
+	if got := lyricSourceResumeAts(nil, on, now.Add(4*time.Hour)); len(got) != 0 {
+		t.Errorf("过了恢复时刻不报: %v", got)
+	}
+}

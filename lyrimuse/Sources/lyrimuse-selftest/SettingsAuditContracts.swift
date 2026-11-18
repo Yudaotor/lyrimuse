@@ -406,6 +406,14 @@ func runSettingsAuditContracts() {
                 "歌词源测试: 读引擎结果行的 resumeAt(unix 秒)交给原因文案")
     expectEqual(lyricsView.components(separatedBy: "detail: result.reasonText)").count - 1, 2,
                 "歌词源测试: 单测和全部测试两处都按结果行(带恢复时刻)出原因")
+    // 「搜索候选歌词」弹窗的源可用情况:额度用完的源同样带恢复时刻,复用同一条文案(09 章决策 387)。
+    let searchSheet = app("LyricsManager/LyricsSearchSheet.swift")
+    let searchService = app("LyricsManager/LyricsSearchService.swift")
+    expectEqual(sourceHas(searchService, "sourceResumeAt: raw.sourceResumeAt ?? [:],")
+                && sourceHas(searchService, "let sourceResumeAt: [String: Double]?")
+                && sourceHas(searchSheet, "sourceResumeAt = update.sourceResumeAt")
+                && sourceHas(searchSheet, "LyricSourceFailureReason.text(forCode: $0, resumeAt: sourceResumeAt[source].map { Date(timeIntervalSince1970: $0) })"),
+                true, "搜索候选: 额度用完的源读引擎的 sourceResumeAt,经同一条文案显示恢复时刻")
     expectEqual(sourceHas(sourceBody("private func sourceTestAccessory(_ source: LyricsSource) -> some View", in: lyricsView), """
                     .onReceive(NotificationCenter.default.publisher(for: DebugDeepLinks.hoverNoteNotification)) { note in
                     let query = note.object as? String ?? ""

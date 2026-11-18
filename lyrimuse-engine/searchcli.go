@@ -216,6 +216,7 @@ func runSearchLyricsCLI(args []string) {
 			AppleTitle:               appleTitle,
 			AppleAlbum:               appleAlbum,
 			SourceFailureReasonCodes: lyricSourceFailureReasons(results),
+			SourceResumeAt:           lyricSourceResumeAts(results, lyricSourceEnabled, time.Now()),
 			TracksFoundNoLyrics:      tracksFoundNoLyrics(results),
 		}
 		for _, r := range results {
@@ -383,6 +384,8 @@ type searchLyricsUpdate struct {
 	// (从 SourceFailureReasons 改名——见 lyricsourcefailure.go 头注,人话交给
 	// Swift 侧的 LyricSourceFailureReason.text(forCode:) 按 App 界面语言翻译)。
 	SourceFailureReasonCodes map[string]string `json:"sourceFailureReasonCodes,omitempty"`
+	// SourceResumeAt:SourceFailureReasonCodes 里报 daily_quota_exhausted 的源几点恢复(unix 秒)。见 09 章决策 387。
+	SourceResumeAt map[string]int64 `json:"sourceResumeAt,omitempty"`
 	// Instrumental:有源明确断言"这首本来就没有词"(lrclib / 网易云 / QQ 都可能给,
 	// 见第 09 章「纯音乐标记的三个来源」)。
 	Instrumental bool `json:"instrumental,omitempty"`
@@ -489,8 +492,36 @@ func tracksFoundNoLyrics(results []scoredLyricCandidateResult) []trackFoundNoLyr
 // 模式,原因会在这次进程里被设置一次,读到的就是这次搜索本身的真实原因,不是别的进程/
 // 别的时间点残留下来的陈旧值。
 func lyricSourceFailureReasons(results []scoredLyricCandidateResult) map[string]string {
-	return lyricSourceFailureReasonsWith(results, sharedLyricSourceBreaker().transportFailureCodes(),
+	reasons := lyricSourceFailureReasonsWith(results, sharedLyricSourceBreaker().transportFailureCodes(),
 		lyricSourceEnabled, amllSkippedForMissingIDsNow())
+	// 停着的源这一轮没发请求,原因就是额度用完,盖过传输层留下的旧记录。
+	for source := range lyricSourceResumeAts(results, lyricSourceEnabled, time.Now()) {
+		if reasons == nil {
+			reasons = make(map[string]string)
+		}
+		reasons[source] = lyricTestReasonDailyQuotaExhausted
+	}
+	return reasons
+}
+
+// lyricSourceResumeAts:启用、这一轮没给出候选、且正停在每日额度里的源 -> 恢复时刻(unix 秒)。没有则 nil。
+func lyricSourceResumeAts(results []scoredLyricCandidateResult, enabled func(string) bool, now time.Time) map[string]int64 {
+	responded := lyricSourcesResponded(results)
+	var out map[string]int64
+	for _, source := range lyricSourceNames {
+		if containsString(responded, source) || !enabled(source) {
+			continue
+		}
+		left, paused := sourceDayQuotaPausedFor(source, now)
+		if !paused {
+			continue
+		}
+		if out == nil {
+			out = make(map[string]int64)
+		}
+		out[source] = now.Add(left).Unix()
+	}
+	return out
 }
 
 // lyricSourceFailureReasonsWith 是上面那个的可测版本:传输层代码表、启用判定、amll 缺 ID 标记

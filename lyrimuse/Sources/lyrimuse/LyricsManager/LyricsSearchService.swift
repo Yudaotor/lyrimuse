@@ -411,6 +411,8 @@ final class LyricsSearchService {
         /// `LyricSourceFailureReason.text(forCode:)` 翻译);两层都没命中的源不会出现在这个
         /// 字典里(比如拿到了 200 / 404 但没这首歌),不编一个没核实过的理由。
         let sourceFailureReasonCodes: [String: String]
+        /// 报 daily_quota_exhausted 的源几点恢复(引擎给的 unix 秒);见 09 章决策 387。
+        let sourceResumeAt: [String: Double]
         /// 至少一个源明确说这首是纯音乐(不只 lrclib,网易云 pureMusic 也会置位)。
         /// 用来把"一个候选都没有"这个结局分成"这首歌本来就没词"和"真的谁都没搜到"。
         let instrumental: Bool
@@ -636,6 +638,7 @@ final class LyricsSearchService {
                         sourcesTotal: raw.sourcesTotal ?? 0,
                         round: raw.round ?? 1, // 旧引擎不发,按单轮兜底,见 SearchUpdate.round
                         sourceFailureReasonCodes: raw.sourceFailureReasonCodes ?? [:],
+                        sourceResumeAt: raw.sourceResumeAt ?? [:],
                         instrumental: raw.instrumental ?? false,
                         // 引擎带 omitempty,没有时不出现 —— 解码成空数组,界面退回那句笼统的"没找到候选"。
                         tracksFoundNoLyrics: raw.tracksFoundNoLyrics ?? [])
@@ -744,6 +747,7 @@ private struct RawSearchUpdate: Decodable {
     /// 第几轮全源检索,旧引擎不发(解码方兜底成 1),见 SearchUpdate.round。
     let round: Int?
     let sourceFailureReasonCodes: [String: String]?
+    let sourceResumeAt: [String: Double]?
     /// 有源明确说这首是纯音乐(引擎带 omitempty,不是时不出现)。搜索面板据此把"一个候选都没有"
     /// 分成"这首歌本来就没词"和"真的谁都没搜到"两种。
     let instrumental: Bool?

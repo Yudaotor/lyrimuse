@@ -448,8 +448,9 @@ struct LyricsSearchSheet: View {
         // sourcebreaker.go 的传输层失败分类)。两层都没命中才是 nil,如实只显示
         // "未返回候选",不编一个没核实过的理由。sourceFailureReasonCodes 里存的是稳定代码,经
         // LyricSourceFailureReason 翻成当前 App 界面语言的人话再显示,见该类型的头注。
-        let reason = responded ? nil : sourceFailureReasonCodes[source]
-            .map(LyricSourceFailureReason.text(forCode:))
+        let reason = responded ? nil : sourceFailureReasonCodes[source].map {
+            LyricSourceFailureReason.text(forCode: $0, resumeAt: sourceResumeAt[source].map { Date(timeIntervalSince1970: $0) })
+        }
         return VStack(alignment: .leading, spacing: 2) {
             HStack(spacing: 6) {
                 Image(systemName: responded ? "checkmark.circle.fill" : "xmark.circle")
@@ -491,6 +492,8 @@ struct LyricsSearchSheet: View {
     // 未返回候选的源,查得到具体原因的那几个——给 sourceAvailabilityList
     // 那颗弹出面板用,见 LyricsSearchService.SearchUpdate.sourceFailureReasonCodes 的注释。
     @State private var sourceFailureReasonCodes: [String: String] = [:]
+    // 额度用完的源几点恢复,跟 sourceFailureReasonCodes 同一批到、同一批清。
+    @State private var sourceResumeAt: [String: Double] = [:]
 
     @State private var isSearching = false
     // 已经回来几个源 / 一共几个 —— 只用来在"还在搜"的提示后面缀一个 (X/Y),让干等的时候
@@ -2506,6 +2509,7 @@ struct LyricsSearchSheet: View {
         sourcesTotal = 0
         searchRound = 1
         sourceFailureReasonCodes = [:]
+        sourceResumeAt = [:]
         showsSameGroup = false
         showsExcludedGroup = false
         // 这一轮开着的源,跟引擎子进程读同一份 features.json;语义见 enabledSources 的注释。
@@ -2534,6 +2538,7 @@ struct LyricsSearchSheet: View {
                 sourcesTotal = update.sourcesTotal
                 searchRound = update.round
                 sourceFailureReasonCodes = update.sourceFailureReasonCodes
+                sourceResumeAt = update.sourceResumeAt
                 // 默认项优先选"这首歌眼下实际生效的来源"(currentSource)——候选是陆续
                 // 到达的,currentSource 对应的那条不一定在第一批就到,所以只要用户还没
                 // 手动点过(userPickedSource),每来一批新候选都重新评估一次,等它一出现
