@@ -5151,16 +5151,24 @@ func runSourceContractSettingsTests() {
                     && previewScroll.contains("host.safeAreaRegions = []")
                     && previewScroll.contains("if event.momentumPhase.isEmpty, event.phase.isEmpty || event.phase.contains(.began) || event.phase.contains(.changed) {\n            onUserScroll?()"),
                     true, "歌词管理: 预览滚动用 NSScrollView、AppKit 动画滚到当前句,手动滚动暂停跟随(惯性阶段不算)")
-        // 滚动容器每轮布局都调 relayout:宽度和内容都没变就不量内层宿主,守卫在 sizeThatFits 之前;换内容时 updateNSView 记一笔(15 章决策 109)。
-        let previewRelayout = sourceBody("func relayout(force: Bool = false)", in: previewScroll)
-        if let guardAt = previewRelayout.range(of: "guard force || contentChanged || width != laidOutWidth else { return }"),
-           let measureAt = previewRelayout.range(of: "host.sizeThatFits(") {
-            expectEqual(guardAt.upperBound <= measureAt.lowerBound
-                        && sourceHas(previewScroll, "coordinator?.rowFramesChanged(frames)\n})\ncoordinator.contentChanged = true\ncoordinator.relayout()"),
-                        true, "歌词管理: 预览宽度和内容都没变就不在布局里量内层宿主")
-        } else {
-            expectEqual(false, true, "歌词管理: 预览 relayout 先判宽度 / 内容变没变,再量内层宿主")
-        }
+        // 滚动容器每轮布局都调 relayout:只比尺寸、不量内层宿主;内容总高由内容自己报上来(15 章决策 109、11 章决策 187)。
+        let previewRelayout = sourceBody("func relayout()", in: previewScroll)
+        expectEqual(previewRelayout.contains("guard width != laidOutWidth || height != laidOutHeight else { return }")
+                    && !previewScroll.contains("sizeThatFits(")
+                    && previewScroll.contains("Color.clear.preference(key: LyricsPreviewContentHeightKey.self, value: proxy.size.height)")
+                    && sourceHas(previewScroll, ".onPreferenceChange(LyricsPreviewContentHeightKey.self) { [weak coordinator] height in\n coordinator?.contentHeightChanged(height)"),
+                    true, "歌词管理: 预览在布局里只比尺寸、不量内层宿主,总高由内容自己报")
+        // 嵌在窗口里的托管视图(预览内容、逐字染色那一层)刷新时不置 needsUpdateConstraints:不然这一下沿父视图报到窗口根,
+        // 逐字染色每帧都让整扇窗重排、重算最小尺寸,换句滚动只剩一两帧(11 章决策 187)。
+        let quietHost = sourceBody("class QuietHostingView<Content: View>: NSHostingView<Content>", in: previewScroll)
+        expectEqual(sourceHas(quietHost, "override var needsUpdateConstraints: Bool {\n get { super.needsUpdateConstraints }\n set { if !newValue { super.needsUpdateConstraints = false } }")
+                    && previewScroll.contains("let host = QuietHostingView<AnyView>(rootView: AnyView(EmptyView()))")
+                    && !previewScroll.contains("NSHostingController")
+                    && managerParts.contains("private final class LyricsManagerKaraokeHostingView: QuietHostingView<AnyView> {")
+                    && songTable.contains("host = QuietHostingView(rootView: content)"),
+                    true, "歌词预览 / 歌词管理列表: 内容宿主、逐字染色宿主、列表单元格都是 QuietHostingView,刷新不往窗口根报约束失效")
+        expectEqual(sourceHas(sourceBody("private func updatePosition()", in: managerParts), "playback.tracksCurrent = highlight == .playingLine"),
+                    true, "歌词预览: 按候选自己的时间轴找当前句时不转发播放侧的当前句,换句不多重算一遍")
         expectEqual([previewScroll.contains("coordinator.settle = request.animated ? nil : request"),
                      previewScroll.contains("if pending == nil, let settle { pending = settle }"),
                      previewScroll.contains("coordinator?.settle = nil")], [true, true, true],

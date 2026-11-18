@@ -91,6 +91,16 @@ final class LyricsManagerPlaybackLine: ObservableObject {
     /// 暂停时的时间基准(冻结位置 + 歌词偏移),播放中 nil。
     @Published private(set) var pausedMs: Int?
     private var subs: [AnyCancellable] = []
+    /// 播放侧最新的那一句;`tracksCurrent` 关着时只记在这里、不发布。
+    private var latest: Current?
+    /// 要不要转发播放侧的当前句。按候选自己的时间轴找当前句时(`.ownTimeline`)用不上,换句也就不用带着整张预览重算一遍。
+    var tracksCurrent = true {
+        didSet {
+            guard tracksCurrent != oldValue else { return }
+            let shown = tracksCurrent ? latest : nil
+            if current != shown { current = shown }
+        }
+    }
 
     init() {
         let p = PlaybackCoordinator.shared
@@ -101,7 +111,11 @@ final class LyricsManagerPlaybackLine: ObservableObject {
                 return Current(timeMs: line.timeMs, text: line.line.plainText, words: line.line.words)
             }
             .removeDuplicates()
-            .sink { [weak self] in self?.current = $0 })
+            .sink { [weak self] value in
+                guard let self else { return }
+                latest = value
+                if tracksCurrent { current = value }
+            })
         subs.append(p.$isPlayingNow
             .removeDuplicates()
             .sink { [weak self] in self?.isPlaying = $0 })
@@ -1141,6 +1155,7 @@ struct LyricsManagerPreviewList: View {
     }
 
     private func updatePosition() {
+        playback.tracksCurrent = highlight == .playingLine
         position.update(times: rows.map(\.timeMs), highlight: highlight, active: isNowPlaying && hostVisible)
         comparePosition.update(times: compareTimes,
                                highlight: .ownTimeline(embeddedOffsetMs: compareEmbeddedOffsetMs, isCurrent: true),
@@ -1641,7 +1656,8 @@ private struct LyricsManagerKaraokeOverlay: View {
 }
 
 /// 逐字染色那一层的独立宿主。环境不会穿过 NSHostingView,时钟要显式交进去;不接鼠标,底下那层正文照样能选字。
-/// 尺寸跟着外面给的走(`sizingOptions = []`),跟底下那层同宽、同样折行。
+/// 尺寸跟着外面给的走(`sizingOptions = []`),跟底下那层同宽、同样折行。宿主是 `QuietHostingView`:每帧刷新不往上报
+/// 约束失效,不然整扇窗每帧重排一遍(11 章决策 187)。
 private struct LyricsManagerKaraokeHost: NSViewRepresentable {
     let clock: FrameClock
     let content: AnyView
@@ -1663,7 +1679,7 @@ private struct LyricsManagerKaraokeHost: NSViewRepresentable {
     }
 }
 
-private final class LyricsManagerKaraokeHostingView: NSHostingView<AnyView> {
+private final class LyricsManagerKaraokeHostingView: QuietHostingView<AnyView> {
     override func hitTest(_ point: NSPoint) -> NSView? { nil }
 }
 

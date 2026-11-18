@@ -344,12 +344,12 @@ final class LyricsManagerSongTableView: NSTableView {
     }
 }
 
-/// 列表的一格:一个复用的 NSHostingView,换行时只换 rootView。
+/// 列表的一格:一个复用的 `QuietHostingView`,换行时只换 rootView;刷新不往歌词管理的根宿主报约束失效(11 章决策 187)。
 final class LyricsManagerSongCell: NSTableCellView {
-    private let host: NSHostingView<LyricsManagerSongCellContent>
+    private let host: QuietHostingView<LyricsManagerSongCellContent>
 
     init(content: LyricsManagerSongCellContent) {
-        host = NSHostingView(rootView: content)
+        host = QuietHostingView(rootView: content)
         super.init(frame: .zero)
         host.sizingOptions = []
         // 行高 56 = 行内容 48 + 上下各 4(同 SwiftUI 列表 .inset 样式每行自带的那 8)。

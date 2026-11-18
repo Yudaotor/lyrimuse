@@ -17,12 +17,12 @@ struct LyricsPreviewScrollRequest: Equatable {
     var serial: Int
 }
 
-/// 歌词管理 / 搜索候选歌词那份预览的滚动容器:AppKit `NSScrollView`,文档视图里一个托管着全部行的 `NSHostingController`。
+/// 歌词管理 / 搜索候选歌词那份预览的滚动容器:AppKit `NSScrollView`,文档视图里一个托管着全部行的 `QuietHostingView`。
 /// 跟随播放滚到当前句由 AppKit 动画推进(clip view 的 animator)。别换回 SwiftUI `ScrollView` + `scrollTo`:滚动途中会掉帧
 ///(见 11 章决策 146)。
 ///
-/// 行的位置由内容自己上报(`lyricsPreviewRowFrame`);还没量到就先记着,量到了再滚。嵌套的托管视图不继承外面的 SwiftUI 环境,
-/// 行里要用的环境值由调用方挂在 `content` 上。
+/// 行的位置和内容总高都由内容自己上报(`lyricsPreviewRowFrame`、`LyricsPreviewContentHeightKey`);还没量到就先记着,量到了再滚。
+/// 嵌套的托管视图不继承外面的 SwiftUI 环境,行里要用的环境值由调用方挂在 `content` 上。
 struct LyricsPreviewScrollView<Content: View>: NSViewRepresentable {
     var scrollRequest: LyricsPreviewScrollRequest?
     /// 顶边渐隐多高:滚上去的行在顶边淡出,不在上面那排控件底下被齐刷刷切掉。滚动条那一列不渐隐。
@@ -49,11 +49,11 @@ struct LyricsPreviewScrollView<Content: View>: NSViewRepresentable {
         scrollView.topFadeHeight = topFadeHeight
         let document = LyricsPreviewDocumentView()
         scrollView.documentView = document
-        let host = NSHostingController(rootView: AnyView(EmptyView()))
+        let host = QuietHostingView<AnyView>(rootView: AnyView(EmptyView()))
         host.sizingOptions = []
         // 嵌套的托管视图别吃窗口的安全区,理由同 OverlayLineChangeStage(04 章决策 79)。
         host.safeAreaRegions = []
-        document.addSubview(host.view)
+        document.addSubview(host)
         coordinator.scrollView = scrollView
         coordinator.document = document
         coordinator.host = host
@@ -70,15 +70,22 @@ struct LyricsPreviewScrollView<Content: View>: NSViewRepresentable {
         let coordinator = context.coordinator
         coordinator.onUserScroll = onUserScroll
         scrollView.topFadeHeight = topFadeHeight
-        // 纵向按理想高度排:量文档高度给的是极大的建议高度,不固定的话 VStack 每一行都要按弹性试排(见 11 章决策 172)。
+        // 纵向按理想高度排,总高由内容自己报上来(不在这里量整份内容,见 11 章决策 187);不固定的话 VStack 每一行都要按弹性试排
+        //(见 11 章决策 172)。文档视图比内容高时(新高度还没报到)内容贴顶,行的位置跟画出来的一致。
         coordinator.host?.rootView = AnyView(
             content()
                 .fixedSize(horizontal: false, vertical: true)
                 .coordinateSpace(name: LyricsPreviewRowFrameKey.space)
+                .background(GeometryReader { proxy in
+                    Color.clear.preference(key: LyricsPreviewContentHeightKey.self, value: proxy.size.height)
+                })
                 .onPreferenceChange(LyricsPreviewRowFrameKey.self) { [weak coordinator] frames in
                     coordinator?.rowFramesChanged(frames)
-                })
-        coordinator.contentChanged = true
+                }
+                .onPreferenceChange(LyricsPreviewContentHeightKey.self) { [weak coordinator] height in
+                    coordinator?.contentHeightChanged(height)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading))
         coordinator.relayout()
         if let request = scrollRequest, request.serial != coordinator.handledSerial {
             coordinator.handledSerial = request.serial
@@ -97,7 +104,7 @@ struct LyricsPreviewScrollView<Content: View>: NSViewRepresentable {
     final class Coordinator {
         weak var scrollView: LyricsPreviewNSScrollView?
         weak var document: LyricsPreviewDocumentView?
-        var host: NSHostingController<AnyView>?
+        var host: QuietHostingView<AnyView>?
         var onUserScroll: () -> Void = {}
         var handledSerial: Int?
         var pending: LyricsPreviewScrollRequest?
@@ -105,35 +112,38 @@ struct LyricsPreviewScrollView<Content: View>: NSViewRepresentable {
         /// 用户自己滚、或来了带动画的定位(换句)就作废。
         var settle: LyricsPreviewScrollRequest?
         private var rowFrames: [Int: CGRect] = [:]
+        /// 内容在当前宽度下排出来的总高(内容自己报的);还没报到时 nil。
+        private var contentHeight: CGFloat?
         private var laidOutWidth: CGFloat = -1
         private var laidOutHeight: CGFloat = -1
-        /// 换过内容、还没按新内容量过高度。
-        var contentChanged = true
 
         func rowFramesChanged(_ frames: [Int: CGRect]) {
             rowFrames = frames
-            // 行的高度变了(换显示模式、换歌),文档视图跟着长短。
-            relayout(force: true)
             if pending == nil, let settle { pending = settle }
             applyPending()
         }
 
-        /// 文档视图跟可视区一样宽,高度按内容在这个宽度下排出来的高度。
-        /// 宽度和内容都没变就不量:滚动容器每轮布局都来调一次,在布局里量内层宿主会让它再排一遍。行高自己变了走
-        /// `rowFramesChanged`(force)。
-        func relayout(force: Bool = false) {
+        /// 行的高度变了(换显示模式、换歌、换宽度),文档视图跟着长短,再按新位置对一次。
+        func contentHeightChanged(_ height: CGFloat) {
+            contentHeight = height
+            relayout()
+            if pending == nil, let settle { pending = settle }
+            applyPending()
+        }
+
+        /// 文档视图跟可视区一样宽,高度是内容报上来的总高。宽度一变内容按新宽度重排、报来新高度,再走一次这里。
+        /// 滚动容器每轮布局都来调,只比尺寸、不量内容。
+        func relayout() {
             guard let scrollView, let document, let host else { return }
             let width = Self.documentWidth(scrollView)
             guard width > 0 else { return }
-            guard force || contentChanged || width != laidOutWidth else { return }
-            contentChanged = false
-            let height = ceil(host.sizeThatFits(in: CGSize(width: width, height: .greatestFiniteMagnitude)).height)
-            guard force || width != laidOutWidth || height != laidOutHeight else { return }
+            let height = ceil(contentHeight ?? scrollView.contentSize.height)
+            guard width != laidOutWidth || height != laidOutHeight else { return }
             laidOutWidth = width
             laidOutHeight = height
             let size = CGSize(width: width, height: max(height, 1))
             if document.frame.size != size { document.setFrameSize(size) }
-            if host.view.frame != document.bounds { host.view.frame = document.bounds }
+            if host.frame != document.bounds { host.frame = document.bounds }
         }
 
         /// 按「竖滚动条一直占着位置」的宽度排:传统滚动条出没会改 `contentSize.width`,按它排的话内容高度跟着变,
@@ -184,6 +194,24 @@ struct LyricsPreviewScrollView<Content: View>: NSViewRepresentable {
                 clip.animator().setBoundsOrigin(clip.bounds.origin)
             }
         }
+    }
+}
+
+/// 预览内容的总高,文档视图按它定高。
+struct LyricsPreviewContentHeightKey: PreferenceKey {
+    static let defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = max(value, nextValue())
+    }
+}
+
+/// 嵌在别的 SwiftUI 窗口里的托管视图:自己刷新时不置 `needsUpdateConstraints`。NSHostingView 每次刷新都置它,
+/// 这一下沿父视图一路报到窗口根的 SwiftUI 宿主,整扇窗跟着重排、重算最小尺寸(逐字染色每帧一次就是整窗每帧重排)。
+/// 只给 `sizingOptions = []`、尺寸由外面定的宿主用:约束那一趟对它没有活可干,刷新照样走 layout。见 11 章决策 187。
+class QuietHostingView<Content: View>: NSHostingView<Content> {
+    override var needsUpdateConstraints: Bool {
+        get { super.needsUpdateConstraints }
+        set { if !newValue { super.needsUpdateConstraints = false } }
     }
 }
 
