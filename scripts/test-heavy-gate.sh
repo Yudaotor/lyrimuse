@@ -90,11 +90,16 @@ if [ "$order" = "1 2 3 4 5 " ]; then ok "先来先到(顺序 $order)"; else fail
 
 # 6. 装机优先:1 份被占,先来一个校验、后来一个装机,装机先拿到。
 G="$T/g6"; mkdir -p "$G"
-LYRIMUSE_HEAVY_GATE_DIR="$G" LYRIMUSE_HEAVY_SLOTS=1 bash "$SRC/heavy-run.sh" head "sleep 1" > /dev/null 2>&1 &
+# 占着令牌的等两边都排上才放行,不按固定秒数:负载高时装机还没排上令牌就空出来了。
+LYRIMUSE_HEAVY_GATE_DIR="$G" LYRIMUSE_HEAVY_SLOTS=1 bash "$SRC/heavy-run.sh" head "for i in \$(seq 200); do [ -e '$G/release' ] && break; sleep 0.05; done" > /dev/null 2>&1 &
 for i in $(seq 50); do [ -d "$G/token-1" ] && break; sleep 0.05; done
 LYRIMUSE_HEAVY_GATE_DIR="$G" LYRIMUSE_HEAVY_SLOTS=1 bash "$SRC/heavy-run.sh" check "echo check >> '$G/order'" > /dev/null 2>&1 &
-sleep 0.3
+c6=$!
+for i in $(seq 100); do [ -e "$G/wait.$c6" ] && break; sleep 0.05; done
 LYRIMUSE_HEAVY_GATE_DIR="$G" LYRIMUSE_HEAVY_SLOTS=1 bash -c ". '$SRC/heavy-gate.sh'; trap heavy_gate_release EXIT; heavy_gate_acquire inst install && echo install >> '$G/order'" > /dev/null 2>&1 &
+i6=$!
+for i in $(seq 100); do [ -e "$G/want-install.$i6" ] && break; sleep 0.05; done
+touch "$G/release"
 wait
 order="$(tr '\n' ' ' < "$G/order")"
 if [ "$order" = "install check " ]; then ok "装机优先($order)"; else fail "装机优先" "顺序 $order"; fi
