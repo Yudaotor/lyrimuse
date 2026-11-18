@@ -78,7 +78,7 @@ enum DiagnosticsExporter {
         // 不是三个散文件落进下载目录。
         let bundleName = url.deletingPathExtension().lastPathComponent
         // 状态段要读 @MainActor 的单例,在主线程取。日志段(慢的那部分)扔后台。
-        let head = stateLines(engineState: await engineStateOffMain())
+        let head = stateLines(engine: await engineFactsOffMain())
         // 要查的播放器各自在不在跑、在不在出声、按 bundle id 单问到什么:要起 helper 子进程,在后台取。
         let reporting = await Task.detached(priority: .userInitiated) { PlayerReportingDiagnostics.reportLines() }.value
         let permissions = await permissionLines()
@@ -95,7 +95,7 @@ enum DiagnosticsExporter {
     @MainActor
     static func buildReport() async -> String {
         let permissions = await permissionLines()
-        return (stateLines(engineState: await engineStateOffMain()) + permissions + [""] + logLines(secrets: ConfigStore.shared.secretsForRedaction,
+        return (stateLines(engine: await engineFactsOffMain()) + permissions + [""] + logLines(secrets: ConfigStore.shared.secretsForRedaction,
                                         currentTrackLines: currentTrackLyricsLines()))
             .joined(separator: "\n")
     }
@@ -178,15 +178,17 @@ enum DiagnosticsExporter {
         }.value
     }
 
-    /// launchd 里那条服务的状态。`EngineServiceManager.state` 会起 `launchctl print` 子进程并同步等它退出,
-    /// 而 stateLines 在主线程上跑 —— 在后台取好再传进去。
-    private static func engineStateOffMain() async -> LaunchdJobState {
-        await Task.detached(priority: .userInitiated) { EngineServiceManager.state }.value
+    /// 引擎那两行要问系统的事实:launchd 状态(起 `launchctl print` 子进程并同步等它退出)和「允许在后台」的登记状态
+    /// (跟后台项目服务同步往返,它忙时要等几秒)。stateLines 在主线程上跑,这两样在后台取好再传进去。
+    private static func engineFactsOffMain() async -> (state: LaunchdJobState, backgroundItem: String) {
+        await Task.detached(priority: .userInitiated) {
+            (EngineServiceManager.state, EngineServiceManager.backgroundItemStatusDescription)
+        }.value
     }
 
-    /// 报告的状态段 —— 全部来自 @MainActor 隔离的单例,但都是内存读,很便宜(launchd 状态由调用方在后台取好传进来)。
+    /// 报告的状态段 —— 全部来自 @MainActor 隔离的单例,但都是内存读,很便宜(要问系统的引擎状态由调用方在后台取好传进来)。
     @MainActor
-    private static func stateLines(engineState: LaunchdJobState) -> [String] {
+    private static func stateLines(engine: (state: LaunchdJobState, backgroundItem: String)) -> [String] {
         var lines: [String] = []
 
         lines.append("Lyrimuse Diagnostics")
@@ -242,9 +244,9 @@ enum DiagnosticsExporter {
         lines.append("Engine service enabled (setting): \(settings.engineServiceEnabled)")
         // 报完整三态而不是 true/false —— "注册了但起不来"正是最需要出现在诊断报告里的那
         // 一档(带上次退出码),别跟"在跑"一样报成 true。
-        lines.append("Engine service state: \(engineState)")
+        lines.append("Engine service state: \(engine.state)")
         // 「登录项与扩展 › 允许在后台」里关掉了引擎时这里是 requiresApproval,launchctl 的报错认不出这个原因(15 章决策 116)。
-        lines.append("Engine background item: \(EngineServiceManager.backgroundItemStatusDescription)")
+        lines.append("Engine background item: \(engine.backgroundItem)")
         // 引擎要写的几处主目录位置归不归当前用户、写不写得进。不对时引擎装不上或起不来,而 launchctl 只给笼统的报错。
         lines.append(contentsOf: HomeFolderAccess.diagnosticLines(
             for: HomeFolderAccess.check(), checkedCount: HomeFolderAccess.targets.count))

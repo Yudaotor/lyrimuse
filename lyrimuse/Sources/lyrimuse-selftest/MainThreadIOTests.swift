@@ -191,6 +191,12 @@ func runMainThreadIOTests() {
         let settingsView = app("SettingsView.swift")
         expectEqual(sourceHas(sourceBody("private func refreshLoginItemState()", in: settingsView), "LoginItemManager.shared.refreshStatus {"), true,
                     "登录项(契约): 设置页两件事用同一次后台问到的结论")
+        let exporter = app("Settings/DiagnosticsExporter.swift")
+        let engineFacts = sourceBody("private static func engineFactsOffMain()", in: exporter)
+        expectEqual(sourceHas(engineFacts, "Task.detached(priority: .userInitiated) {")
+                    && sourceHas(engineFacts, "EngineServiceManager.backgroundItemStatusDescription")
+                    && !sourceHas(sourceBody("private static func stateLines(", in: exporter), "EngineServiceManager.backgroundItemStatus"), true,
+                    "后台项目(契约): 诊断导出在后台问「允许在后台」的登记状态,主线程上的状态段只用传进来的结论")
 
         expectEqual(sourceHas(settingsView, ".disabled(!ICloudConfigStore.isAvailable"), false,
                     "iCloud(契约): 按钮的可用性读 @State,不在 body 里 stat")

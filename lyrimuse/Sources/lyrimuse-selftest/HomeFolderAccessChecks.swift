@@ -139,8 +139,9 @@ func engineBackgroundItemChecks() {
     expectEqual(sourceHas(sourceBody("private static func install()", in: manager),
                           "backgroundItem=\\(backgroundItemStatusDescription, privacy: .public)"), true,
                 "后台项目: 装完仍没跑起来时日志带上登记状态")
-    expectEqual(sourceHas(app("Settings/DiagnosticsExporter.swift"),
-                          "lines.append(\"Engine background item: \\(EngineServiceManager.backgroundItemStatusDescription)\")"), true,
+    let exporter = app("Settings/DiagnosticsExporter.swift")
+    expectEqual(sourceHas(sourceBody("private static func stateLines(", in: exporter),
+                          "lines.append(\"Engine background item: \\(engine.backgroundItem)\")"), true,
                 "后台项目: 诊断导出有这一行")
 
     let settings = app("SettingsView.swift")
