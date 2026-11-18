@@ -2395,6 +2395,17 @@ func runSourceContractSurfaceTests() {
                 expectEqual(sourceHas(morph, "window.level = Self.hiddenLevel\n            self.holdHidden(window)")
                                 && sourceHas(morph, "let wanted = releaseHold()\n        destination.level = levelAfterMorph ?? wanted ?? destinationLevel"),
                             true, "变形动画: 目标窗口藏着期间被改层级会压回桌面以下,收尾按改成的层级还")
+                // 看守同时登记给 WindowActivation:目标面板自己的控制器置顶(setLevel)、隐身窗口还原(reveal)都只记下,
+                // 不在墙纸前露一下;没开出来的那条路也放掉看守(07 章决策 215)。
+                let holdBody = sourceBody("func holdHidden(_ window: NSWindow) {", in: morph)
+                expectEqual([sourceHas(holdBody, "WindowActivation.beginTransitionHold(window) window.level = Self.hiddenLevel if hold?.window === window { return }"),
+                             sourceHas(sourceBody("func releaseHold() -> NSWindow.Level? {", in: morph),
+                                       "let wanted = WindowActivation.endTransitionHold(held.window) ?? held.wanted"),
+                             sourceHas(morph, "guard let (destination, level) = await staged.value else { _ = releaseHold() isRunning = false return failed() }"),
+                             sourceHas(sourceBody("static func canAnimate(_ window: NSWindow, to target: NSRect) -> Bool {", in: morph),
+                                       "&& !WindowActivation.isInvisible")],
+                            [true, true, true, true],
+                            "变形动画: 看守登记给 WindowActivation、没开出来也放掉;隐身开窗的切换不做动画")
                 // 07 章决策 128:上沿伸进菜单栏的普通窗口上屏时会被往下推,卡片跟着下移。
                 expectEqual(morph.contains("override func constrainFrameRect(_ frameRect: NSRect, to screen: NSScreen?) -> NSRect { frameRect }")
                                 && morph.contains("let window = MorphWindow(contentRect: frame, styleMask: [.borderless]"), true,
@@ -2520,8 +2531,20 @@ func runSourceContractSurfaceTests() {
                         && lwv.contains("if let scene = sceneWindow, scene.isVisible { return deliverFullWindow(scene) }")
                         && sourceHas(lwv, "} else {\n            LyricsWindowSession.sceneWindow = window\n        }")
                         && lwv.contains("reused.level = LyricsWindowFormMorph.hiddenLevel")
-                        && lwv.contains("if window == nil, let reused { reused.level = reusedLevel }"), true,
+                        && sourceHas(lwv, "if window == nil, let reused { _ = self?.formMorph.releaseHold() reused.level = reusedLevel }"), true,
                         "迷你面板: 反复切换时关掉的窗口层级还原、复用的场景窗拿得到")
+            // 出迷你:复用的完整那扇在开窗入口打开它之前就压下、看守上(开窗入口会把隐身压着的同一扇还回原层级);
+            // 隐身压着的面板交接期间由切换管着,不被正常打开先还上来(07 章决策 215)。
+            let toFull = sourceBody("private func switchToFullWindow(from panel: NSWindow, animated: Bool) {", in: lwv)
+            let heldAt = toFull.range(of: "self?.formMorph.holdHidden(reused)")?.lowerBound
+            let openAt = toFull.range(of: "AppActions.shared.openLyricsWindowScene?()")?.lowerBound
+            expectEqual([heldAt != nil && openAt != nil && heldAt! < openAt!,
+                         sourceHas(toFull, "WindowActivation.levelBeforeHiding($0) ??"),
+                         sourceHas(toFull, "let holdsPanel = WindowActivation.isHidden(panel) if holdsPanel { WindowActivation.beginTransitionHold(panel) }"),
+                         sourceHas(toFull, "self?.closeForHandoff(panel) if holdsPanel { _ = WindowActivation.endTransitionHold(panel) }"),
+                         sourceHas(toFull, "if holdsPanel, let level = WindowActivation.endTransitionHold(panel) { panel.level = level }")],
+                        [true, true, true, true, true],
+                        "迷你面板: 出迷你先压复用的完整那扇再开窗;隐身压着的面板交接到关掉都不还层级,没开出来才按想要的还")
             expectEqual(sourceHas(lwv, "if mini {\n            LyricsMiniPanelHost.show()\n            WindowActivation.hideNewWindows()\n        } else {\n            LyricsMiniPanelHost.closeHeldPanel()\n            openScene()\n        }")
                         && lwv.contains("if formRequest.map({ !$0.mini && $0.isFresh(now: Date()) }) == true { return }"), true,
                         "迷你面板: 打开入口按形态分流,面板开着、要完整尺寸时交给面板自己切")

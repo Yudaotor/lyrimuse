@@ -811,6 +811,16 @@ func runDeepLinkTests() {
                                #"if !(WindowActivation.isInvisible && LyricsMiniPanelHost.panel?.isVisible == true) { WindowActivation.prepareOpen("lyrics-window") }"#)],
                     [true, true, true, true, true, true],
                     "隐身开窗: 深链处理完都扫一次、搜索连带歌词窗口、新面板上屏前就压下、压着的窗口当 key 时还原、面板开着时不预压完整那扇")
+        // 形态切换管着的窗口(07 章决策 215):setLevel、隐身窗口还原都只记下想要的层级;后台开窗收尾头一次找到的还没上屏就不摆,
+        // 等开窗入口自己摆(出迷你的变形动画先把复用的完整那扇压到墙纸后面),抢在前面摆会在原层级露一下。
+        expectEqual([sourceHas(sourceBody("static func setLevel(", in: activation),
+                               "} else if transitionHolds[key] != nil { transitionHolds[key]?.wanted = level } else { window.level = level }"),
+                     sourceHas(sourceBody("private static func restore(", in: activation),
+                               "if transitionHolds[key] != nil { transitionHolds[key]?.wanted = entry.level } else { window.level = entry.level }"),
+                     sourceHas(sourceBody("static func surface(identifier: String, attempt: Int = 0) {", in: activation),
+                               "if let match = window(matching: identifier, visibleOnly: false), match.isVisible || attempt > 0 { if !match.isVisible { hideBeforeShowing(match, scene: identifier) }")],
+                    [true, true, true],
+                    "形态切换: 管着的窗口不被 setLevel / 隐身还原抬上来;后台开窗收尾不抢先摆还没上屏的窗口")
         // debug/lyrics-search 开的也是搜索小窗:background=1 时由路由摆到最前;列表没读完、晚开的那一次自己补上后台那一段。
         let router = source("lyrimuse/Settings/DeepLinkRouter.swift")
         let lateSearch = sourceBody("private static func openLyricsSearch(", in: debug)

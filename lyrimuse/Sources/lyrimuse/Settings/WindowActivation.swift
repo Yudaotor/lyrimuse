@@ -29,6 +29,15 @@ enum WindowActivation {
         var observers: [NSObjectProtocol]
     }
 
+    /// 歌词窗口进 / 出迷你时由切换那一头管层级的窗口(变形动画压在墙纸后面的目标窗口、交接里要关掉的源面板),值里是这期间
+    /// 别处想设的层级。`setLevel` 和隐身窗口的还原碰到它们只记下、不当场改:切换没走完就回到原层级,会在用户屏幕上露一下。
+    /// 见 07 章决策 215。
+    private static var transitionHolds: [ObjectIdentifier: TransitionHold] = [:]
+
+    private struct TransitionHold {
+        var wanted: NSWindow.Level?
+    }
+
     /// 桌面层往下两层,压在墙纸窗口(桌面层下一层)后面:坐标在屏幕内、照常画,被不透明的墙纸整片盖住。别写成桌面层减一:
     /// 那是墙纸自己的层级,同层里后摆上来的窗口排在墙纸前面,桌面露出来的地方用户看得见。挪到屏幕外截图会报 `could not create image`。
     /// 歌词窗口变形动画藏真窗口也用这一层(`LyricsWindowFormMorph.hiddenLevel`);别处要把窗口藏到用户看不见的地方同样引用它,不另写桌面层的算式。
@@ -104,9 +113,12 @@ enum WindowActivation {
     }
 
     /// 后台开窗之后把那扇窗摆到最前(不当 key)。窗口是 SwiftUI 场景现建的,要等一拍,隔 0.25 秒找一次、最多两秒。
+    /// 头一次找到的还没上屏就先不摆,等开窗入口自己摆上来:出迷你的变形动画要先把复用的完整那扇压到墙纸后面再上屏,
+    /// 抢在它前面 `orderFrontRegardless` 会在原层级露一下(07 章决策 215)。隔一拍还没上屏才自己摆,隐身开窗时先压下去再摆。
     static func surface(identifier: String, attempt: Int = 0) {
         hideNewWindows()
-        if let match = window(matching: identifier, visibleOnly: false) {
+        if let match = window(matching: identifier, visibleOnly: false), match.isVisible || attempt > 0 {
+            if !match.isVisible { hideBeforeShowing(match, scene: identifier) }
             if !(isInvisible && match.isVisible && !isHidden(match)) { match.orderFrontRegardless() }
             if match.isVisible { return }
         }
@@ -204,19 +216,42 @@ enum WindowActivation {
         }
     }
 
-    /// 压着期间别处要设层级(歌词窗口「置顶」):压着的窗口只记下、不当场改,免得抬到桌面以上闪一下。
+    /// 压着期间别处要设层级(歌词窗口「置顶」):压着的窗口只记下、不当场改,免得抬到桌面以上闪一下。形态切换管着的窗口同样只记下。
     static func setLevel(_ level: NSWindow.Level, of window: NSWindow) {
         let key = ObjectIdentifier(window)
         if hidden[key] != nil {
             hidden[key]?.level = level
+        } else if transitionHolds[key] != nil {
+            transitionHolds[key]?.wanted = level
         } else {
             window.level = level
         }
     }
 
+    /// 隐身压着的窗口压下去之前(或压着期间别处想设)的层级;没压着是 nil。
+    static func levelBeforeHiding(_ window: NSWindow) -> NSWindow.Level? {
+        hidden[ObjectIdentifier(window)]?.level
+    }
+
+    /// 形态切换开始管 `window` 的层级(见 `transitionHolds`)。已经在管就不动。
+    static func beginTransitionHold(_ window: NSWindow) {
+        let key = ObjectIdentifier(window)
+        if transitionHolds[key] == nil { transitionHolds[key] = TransitionHold() }
+    }
+
+    /// 形态切换不再管 `window`:交回这期间别处想设的层级(没人设过是 nil),窗口层级不动。
+    static func endTransitionHold(_ window: NSWindow) -> NSWindow.Level? {
+        transitionHolds.removeValue(forKey: ObjectIdentifier(window))?.wanted
+    }
+
     private static func restore(_ key: ObjectIdentifier) {
         guard let entry = hidden.removeValue(forKey: key) else { return }
         entry.observers.forEach(NotificationCenter.default.removeObserver)
-        if let window = entry.window, window.level == invisibleLevel { window.level = entry.level }
+        guard let window = entry.window, window.level == invisibleLevel else { return }
+        if transitionHolds[key] != nil {
+            transitionHolds[key]?.wanted = entry.level
+        } else {
+            window.level = entry.level
+        }
     }
 }

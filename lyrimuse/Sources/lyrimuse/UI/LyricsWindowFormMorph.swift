@@ -47,10 +47,12 @@ final class LyricsWindowFormMorph {
     private static let settleFrames: Double = 2.0 / 60
 
     /// 这一次能不能做动画。不能就由调用方直接切。迷你开着「截屏时隐藏」时不做:面板 `sharingType = .none`,
-    /// 截出来是空白(07 章决策 209)。
+    /// 截出来是空白(07 章决策 209)。隐身开窗(`invisible=1`)的切换也不做:目标窗口压在墙纸后面,临时窗却在源窗口的
+    /// 层级上把卡片缩放到用户看不见的那扇窗上(14 章决策 228)。
     static func canAnimate(_ window: NSWindow, to target: NSRect) -> Bool {
         guard #available(macOS 14.4, *) else { return false }
         return !AppSettings.shared.lyricsWindowMiniHideDuringScreenCapture
+            && !WindowActivation.isInvisible
             && !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
             && window.isVisible && !window.isMiniaturized
             && window.occlusionState.contains(.visible)
@@ -103,7 +105,7 @@ final class LyricsWindowFormMorph {
                 Task { @MainActor in prepare { done.resume(returning: $0) } }
             }
             guard let window else { return nil }
-            let level = window.level
+            let level = window.level == Self.hiddenLevel ? NSWindow.Level.normal : window.level
             window.level = Self.hiddenLevel
             self.holdHidden(window)
             if !window.isVisible { window.orderFrontRegardless() }
@@ -125,6 +127,7 @@ final class LyricsWindowFormMorph {
               source.isVisible, source.frame == start else {
             newImage.cancel()
             guard let (destination, level) = await staged.value else {
+                _ = releaseHold()
                 isRunning = false
                 return failed()
             }
@@ -215,8 +218,14 @@ final class LyricsWindowFormMorph {
         }
     }
 
-    private func holdHidden(_ window: NSWindow) {
-        hold?.timer.invalidate()
+    /// 把 `window` 压在墙纸后面看守到 `releaseHold`:经 `WindowActivation.setLevel` 改层级的(它自己的控制器置顶、隐身窗口还原)
+    /// 记在 `WindowActivation` 那边,直接写 `level` 的每拍压回来、记在这里。出迷你复用的完整那扇在开出来之前就调:
+    /// 开窗入口会把隐身压着的同一扇还回原层级,交回来再压就晚了(07 章决策 215)。同一扇再调只确认压着。
+    func holdHidden(_ window: NSWindow) {
+        WindowActivation.beginTransitionHold(window)
+        window.level = Self.hiddenLevel
+        if hold?.window === window { return }
+        if hold != nil { _ = releaseHold() }
         let timer = Timer(timeInterval: 1.0 / 120, repeats: true) { [weak self] _ in
             MainActor.assumeIsolated { self?.reassertHidden() }
         }
@@ -230,12 +239,13 @@ final class LyricsWindowFormMorph {
         held.window.level = Self.hiddenLevel
     }
 
-    /// 停掉看守,交回藏着期间被改成的层级(没人改过是 nil)。
-    private func releaseHold() -> NSWindow.Level? {
+    /// 停掉看守,交回藏着期间被改成的层级(没人改过是 nil),经 `WindowActivation.setLevel` 记下的优先。窗口层级不动。
+    func releaseHold() -> NSWindow.Level? {
         reassertHidden()
-        let wanted = hold?.wanted
-        hold?.timer.invalidate()
+        guard let held = hold else { return nil }
+        held.timer.invalidate()
         hold = nil
+        let wanted = WindowActivation.endTransitionHold(held.window) ?? held.wanted
         if let wanted { Self.log.info("form morph: destination asked for level \(wanted.rawValue, privacy: .public) while hidden") }
         return wanted
     }

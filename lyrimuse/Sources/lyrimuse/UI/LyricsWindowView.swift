@@ -843,31 +843,45 @@ private final class LyricsWindowController: ObservableObject {
         UserDefaults.standard.set(false, forKey: LyricsWindowSession.miniModeKey)
         isSwitchingForm = true
         let morphs = animated && LyricsWindowFormMorph.canAnimate(panel, to: target)
+        // 隐身压着的面板交接完就关:开完整那扇的正常打开会把它还回原层级,关掉之前在用户屏幕上露一下。由这里管到关掉,
+        // 没开出来时按这期间想要的层级还(07 章决策 215)。
+        let holdsPanel = WindowActivation.isHidden(panel)
+        if holdsPanel { WindowActivation.beginTransitionHold(panel) }
         let prepare: @MainActor (@escaping (NSWindow?) -> Void) -> Void = { [weak self] done in
-            // 这次会复用的那扇(关掉后 SwiftUI 留着):做动画时先藏到桌面以下再让 SwiftUI 摆出来,免得在卡片外面闪一下;
-            // 收尾回到它原来的层级,没开出来就当场还回去(07 章决策 135)。
+            // 这次会复用的那扇(关掉后 SwiftUI 留着):做动画时先压到墙纸后面、看守着再让 SwiftUI 摆出来,免得在卡片外面闪一下;
+            // 收尾回到它原来的层级(隐身压着的取压下去之前那一层),没开出来就当场还回去(07 章决策 135)。
             let reused = morphs ? LyricsWindowSession.sceneWindow.flatMap { $0.isVisible ? nil : $0 } : nil
             let reusedLevel: NSWindow.Level = reused.map {
-                $0.level == LyricsWindowFormMorph.hiddenLevel ? .normal : $0.level
+                WindowActivation.levelBeforeHiding($0) ?? ($0.level == LyricsWindowFormMorph.hiddenLevel ? .normal : $0.level)
             } ?? .normal
             if let reused {
                 self?.formMorph.levelAfterMorph = reusedLevel
                 reused.level = LyricsWindowFormMorph.hiddenLevel
+                self?.formMorph.holdHidden(reused)
             }
             LyricsWindowSession.awaitFullWindow { window in
                 if let window, window.frame != target { window.setFrame(target, display: false) }
-                if window == nil, let reused { reused.level = reusedLevel }
+                if window == nil, let reused {
+                    _ = self?.formMorph.releaseHold()
+                    reused.level = reusedLevel
+                }
                 done(window)
             }
             AppActions.shared.openLyricsWindowScene?()
         }
-        let finish: @MainActor (NSWindow) -> Void = { [weak self] _ in self?.closeForHandoff(panel) }
+        let finish: @MainActor (NSWindow) -> Void = { [weak self] _ in
+            self?.closeForHandoff(panel)
+            if holdsPanel { _ = WindowActivation.endTransitionHold(panel) }
+        }
+        let failed: @MainActor () -> Void = { [weak self] in
+            if holdsPanel, let level = WindowActivation.endTransitionHold(panel) { panel.level = level }
+            self?.handoffFailed()
+        }
         if morphs {
-            formMorph.handoff(from: panel, to: target, prepare: prepare, finish: finish,
-                              failed: { [weak self] in self?.handoffFailed() })
+            formMorph.handoff(from: panel, to: target, prepare: prepare, finish: finish, failed: failed)
         } else {
-            prepare { [weak self] window in
-                if let window { finish(window) } else { self?.handoffFailed() }
+            prepare { window in
+                if let window { finish(window) } else { failed() }
             }
         }
     }
