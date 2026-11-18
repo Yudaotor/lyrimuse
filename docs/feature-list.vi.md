@@ -48,6 +48,7 @@ Các tính năng này tắt sau khi cài. Hãy bật chúng trong cài đặt tr
 | [Ẩn khỏi ảnh chụp màn hình và chia sẻ màn hình](#feature-hide-in-screenshots) | Cài đặt › Hiển thị lời › Lời nổi › Hành vi › Ẩn khi chụp màn hình |
 | [Ẩn hoặc thu nhỏ khi tạm dừng](#feature-hide-when-paused) | Cài đặt › Hiển thị lời › Lời nổi › Hành vi › Ẩn khi tạm dừng |
 | [Ẩn khi nhạc không lời và bài không có lời](#feature-hide-when-no-lyrics) | Cài đặt › Hiển thị lời › Lời nổi › Hành vi › Ẩn khi nhạc không lời/không có lời |
+| [Hiện tên bài khi không có lời](#feature-title-when-no-lyrics) | Cài đặt › Hiển thị lời › Lời nổi › Hành vi › Hiện tên bài khi không có lời |
 | [Tự ẩn khi có quảng cáo](#feature-hide-during-ads) | Cài đặt › Hiển thị lời › Lời nổi › Hành vi › Ẩn khi có quảng cáo |
 | [Notch trên Màn hình khóa](#feature-notch-show-on-lock-screen) | Cài đặt › Hiển thị lời › Notch › Hành vi › Hiện trên màn hình khóa |
 | [Lời nổi tự ẩn khi toàn màn hình](#feature-overlay-hide-in-full-screen) | Cài đặt › Hiển thị lời › Lời nổi › Hành vi › Ẩn khi toàn màn hình |
@@ -525,9 +526,9 @@ Khi bài hát là nhạc không lời, hoặc đã tìm xong mà không thấy l
 
 ### Hiện tên bài khi không có lời
 
-Khi bài hát là nhạc không lời hoặc tìm kiếm không thấy lời, lời nổi hiện tên bài và nghệ sĩ thay cho dòng trạng thái. Thanh menu hiện tên bài khi không có lời hoặc việc tìm kiếm vẫn đang chạy. Mỗi nơi có công tắc riêng.
+Khi bài hát là nhạc không lời hoặc tìm kiếm không thấy lời, lời nổi hiện tên bài và nghệ sĩ thay cho dòng trạng thái. Thanh menu hiện tên bài khi không có lời hoặc việc tìm kiếm vẫn đang chạy. Mỗi nơi có công tắc riêng, công tắc của thanh menu được bật theo mặc định.
 
-- Bật theo mặc định
+- Tắt theo mặc định
 - Cài đặt: Hiển thị lời › Lời nổi › Hành vi › Hiện tên bài khi không có lời
 - Cài đặt: Hiển thị lời › Thanh menu › Hành vi › Hiện tên bài khi không có lời
 

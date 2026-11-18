@@ -27,10 +27,10 @@ func checkOverlayNoLyricsTitle() {
     let debugLinks = source("lyrimuse/Settings/DebugDeepLinks.swift")
 
     expectEqual(sourceHas(appSettings, "static let overlayShowsTitleWhenNoLyrics = \"np:overlayShowsTitleWhenNoLyrics\"")
-                && sourceHas(appSettings, "static let defaultOverlayShowsTitleWhenNoLyrics = true")
+                && sourceHas(appSettings, "static let defaultOverlayShowsTitleWhenNoLyrics = false")
                 && sourceHas(appSettings, "overlayShowsTitleWhenNoLyrics = (defaults.object(forKey: Keys.overlayShowsTitleWhenNoLyrics) as? Bool)\n ?? Self.defaultOverlayShowsTitleWhenNoLyrics")
                 && sourceHas(appSettings, "didSet { defaults.set(overlayShowsTitleWhenNoLyrics, forKey: Keys.overlayShowsTitleWhenNoLyrics) }"),
-                true, "无歌词时显示歌名: 自己一个 np: 键,默认开(同菜单栏那颗),改了就写回")
+                true, "无歌词时显示歌名: 自己一个 np: 键,默认关(菜单栏那颗默认开),改了就写回")
     expectEqual(sourceHas(view, "Publishers.CombineLatest4(s.$overlayShowsTitleWhenNoLyrics, p.$isCurrentTrackInstrumental,\n p.$currentTrackHasNoLyrics, Publishers.CombineLatest(p.$displayTitle, p.$displayArtist))")
                 && sourceHas(view, "OverlayNoLyricsTitle.text(enabled: enabled, isInstrumental: instrumental, hasNoLyrics: noLyrics,\n title: track.0, artist: track.1)"),
                 true, "无歌词时显示歌名: 代理里五个输入同时从 sink 参数拿,用界面上显示的歌名、歌手")

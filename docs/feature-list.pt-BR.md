@@ -48,6 +48,7 @@ Estes recursos vêm desativados depois da instalação. Ative-os antes nos ajust
 | [Oculta em capturas e no compartilhamento de tela](#feature-hide-in-screenshots) | Ajustes › Exibição da letra › Letra flutuante › Comportamento › Ocultar em capturas de tela |
 | [Ocultar ou encolher na pausa](#feature-hide-when-paused) | Ajustes › Exibição da letra › Letra flutuante › Comportamento › Ocultar na pausa |
 | [Ocultar em instrumentais e músicas sem letra](#feature-hide-when-no-lyrics) | Ajustes › Exibição da letra › Letra flutuante › Comportamento › Ocultar se não houver letra |
+| [Título da música quando não há letra](#feature-title-when-no-lyrics) | Ajustes › Exibição da letra › Letra flutuante › Comportamento › Mostrar título se não houver letra |
 | [Sair de cena durante anúncios](#feature-hide-during-ads) | Ajustes › Exibição da letra › Letra flutuante › Comportamento › Ocultar durante anúncios |
 | [Notch na Tela Bloqueada](#feature-notch-show-on-lock-screen) | Ajustes › Exibição da letra › Notch › Comportamento › Mostrar na Tela Bloqueada |
 | [Letra flutuante sai de cena em tela cheia](#feature-overlay-hide-in-full-screen) | Ajustes › Exibição da letra › Letra flutuante › Comportamento › Ocultar em tela cheia |
@@ -525,9 +526,9 @@ Quando a música é instrumental, ou a busca terminou sem encontrar letra, a let
 
 ### Título da música quando não há letra
 
-Quando a música é instrumental ou a busca não encontra letra, a letra flutuante mostra o título e o artista no lugar de uma mensagem de status. A barra de menus mostra o título quando não há letra ou a busca ainda está em andamento. Cada um tem a própria opção.
+Quando a música é instrumental ou a busca não encontra letra, a letra flutuante mostra o título e o artista no lugar de uma mensagem de status. A barra de menus mostra o título quando não há letra ou a busca ainda está em andamento. Cada um tem a própria opção; a da barra de menus vem ativada por padrão.
 
-- Ativado por padrão
+- Desativado por padrão
 - Ajustes: Exibição da letra › Letra flutuante › Comportamento › Mostrar título se não houver letra
 - Ajustes: Exibição da letra › Barra de menus › Comportamento › Mostrar título se não houver letra
 

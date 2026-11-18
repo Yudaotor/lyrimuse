@@ -48,6 +48,7 @@ Estas funciones siguen desactivadas después de instalar. Actívalas primero en 
 | [Ocultar en capturas, grabaciones y pantalla compartida](#feature-hide-in-screenshots) | Ajustes › Mostrar letra › Letra flotante › Comportamiento › Ocultar en capturas |
 | [Ocultar o contraer en pausa](#feature-hide-when-paused) | Ajustes › Mostrar letra › Letra flotante › Comportamiento › Ocultar en pausa |
 | [Ocultar o contraer en instrumentales y sin letra](#feature-hide-when-no-lyrics) | Ajustes › Mostrar letra › Letra flotante › Comportamiento › Ocultar si no hay letra |
+| [Título de la canción cuando no hay letra](#feature-title-when-no-lyrics) | Ajustes › Mostrar letra › Letra flotante › Comportamiento › Mostrar título si no hay letra |
 | [Ocultar o contraer durante anuncios](#feature-hide-during-ads) | Ajustes › Mostrar letra › Letra flotante › Comportamiento › Ocultar durante anuncios |
 | [Notch en la pantalla bloqueada](#feature-notch-show-on-lock-screen) | Ajustes › Mostrar letra › Notch › Comportamiento › Mostrar en pantalla bloqueada |
 | [Ocultar la letra flotante en pantalla completa](#feature-overlay-hide-in-full-screen) | Ajustes › Mostrar letra › Letra flotante › Comportamiento › Ocultar en pantalla completa |
@@ -525,9 +526,9 @@ Si la canción es instrumental, o la búsqueda confirma que no hay letra, la let
 
 ### Título de la canción cuando no hay letra
 
-Si la canción es instrumental o la búsqueda confirma que no hay letra, la letra flotante muestra el título y el artista en lugar de un mensaje de estado. La barra de menús muestra el título cuando no hay letra o la búsqueda sigue en curso. Cada uno tiene su propio interruptor.
+Si la canción es instrumental o la búsqueda confirma que no hay letra, la letra flotante muestra el título y el artista en lugar de un mensaje de estado. La barra de menús muestra el título cuando no hay letra o la búsqueda sigue en curso. Cada uno tiene su propio interruptor; el de la barra de menús está activado de forma predeterminada.
 
-- Activada por omisión
+- Desactivada por omisión
 - Ajustes: Mostrar letra › Letra flotante › Comportamiento › Mostrar título si no hay letra
 - Ajustes: Mostrar letra › Barra de menús › Comportamiento › Mostrar título si no hay letra
 

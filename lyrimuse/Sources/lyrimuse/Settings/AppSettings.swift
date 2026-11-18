@@ -753,8 +753,8 @@ final class AppSettings: ObservableObject {
     static let defaultMenuBarHoverShowsControls = false
     /// 见 `menuBarShowsTitleWhenNoLyrics`。默认开:固定宽度模式下有词没词几何完全不变,这是主要收益。
     static let defaultMenuBarShowsTitleWhenNoLyrics = true
-    /// 见 `overlayShowsTitleWhenNoLyrics`。默认开,同菜单栏那颗。
-    static let defaultOverlayShowsTitleWhenNoLyrics = true
+    /// 见 `overlayShowsTitleWhenNoLyrics`。默认关(菜单栏那颗默认开,两颗各管各的)。
+    static let defaultOverlayShowsTitleWhenNoLyrics = false
     /// 见 `menuBarKeepsLyricsWhenPaused`。默认关:暂停收回图标是既有行为。在「重置」范围内。
     static let defaultMenuBarKeepsLyricsWhenPaused = false
     /// 菜单栏那一格显示歌词还是歌名。在「重置」范围内(`MenuBarStyleDefaults.restoreDefaults()`)。

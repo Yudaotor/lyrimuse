@@ -48,6 +48,7 @@ Bu özellikler yüklendikten sonra kapalıdır. Önce ayarlardan açın (bazıla
 | [Ekran görüntülerinde ve ekran paylaşımında gizli](#feature-hide-in-screenshots) | Ayarlar › Şarkı Sözü Görünümü › Yüzen Sözler › Davranış › Ekran Resimlerinde Gizle |
 | [Duraklatınca gizleme veya küçültme](#feature-hide-when-paused) | Ayarlar › Şarkı Sözü Görünümü › Yüzen Sözler › Davranış › Duraklatınca Gizle |
 | [Enstrümantallerde ve sözsüz parçalarda gizleme](#feature-hide-when-no-lyrics) | Ayarlar › Şarkı Sözü Görünümü › Yüzen Sözler › Davranış › Söz Yoksa Gizle |
+| [Şarkı sözü yokken şarkı adı](#feature-title-when-no-lyrics) | Ayarlar › Şarkı Sözü Görünümü › Yüzen Sözler › Davranış › Şarkı Sözü Yoksa Parça Adını Göster |
 | [Reklamlarda kenara çekilme](#feature-hide-during-ads) | Ayarlar › Şarkı Sözü Görünümü › Yüzen Sözler › Davranış › Reklamlarda Gizle |
 | [Kilitli ekranda çentik](#feature-notch-show-on-lock-screen) | Ayarlar › Şarkı Sözü Görünümü › Çentik › Davranış › Kilitli Ekranda Göster |
 | [Tam ekranda yüzen sözler kenara çekilir](#feature-overlay-hide-in-full-screen) | Ayarlar › Şarkı Sözü Görünümü › Yüzen Sözler › Davranış › Tam Ekranda Gizle |
@@ -525,9 +526,9 @@ Parça enstrümantalse ya da arama bitip şarkı sözü bulunamadıysa yüzen s�
 
 ### Şarkı sözü yokken şarkı adı
 
-Parça enstrümantalse ya da arama şarkı sözü bulamazsa yüzen sözler, durum mesajı yerine şarkı adını ve sanatçıyı gösterir. Menü çubuğu, şarkı sözü yokken ya da arama sürerken şarkı adını gösterir. Her birinin ayrı anahtarı var.
+Parça enstrümantalse ya da arama şarkı sözü bulamazsa yüzen sözler, durum mesajı yerine şarkı adını ve sanatçıyı gösterir. Menü çubuğu, şarkı sözü yokken ya da arama sürerken şarkı adını gösterir. Her birinin ayrı anahtarı var; menü çubuğununki varsayılan olarak açık.
 
-- Saptanmış olarak açık
+- Saptanmış olarak kapalı
 - Ayarlar: Şarkı Sözü Görünümü › Yüzen Sözler › Davranış › Şarkı Sözü Yoksa Parça Adını Göster
 - Ayarlar: Şarkı Sözü Görünümü › Menü Çubuğu › Davranış › Şarkı Sözü Yoksa Parça Adını Göster
 

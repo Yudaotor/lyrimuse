@@ -48,6 +48,7 @@ Ces fonctionnalités restent désactivées après l’installation. Activez-les 
 | [Masquées dans les captures et le partage d’écran](#feature-hide-in-screenshots) | Réglages › Affichage des paroles › Paroles flottantes › Comportement › Masquer dans les captures |
 | [Masquer ou réduire en pause](#feature-hide-when-paused) | Réglages › Affichage des paroles › Paroles flottantes › Comportement › Masquer en pause |
 | [Masquer si instrumental ou sans paroles](#feature-hide-when-no-lyrics) | Réglages › Affichage des paroles › Paroles flottantes › Comportement › Masquer sans paroles |
+| [Titre du morceau quand il n’y a pas de paroles](#feature-title-when-no-lyrics) | Réglages › Affichage des paroles › Paroles flottantes › Comportement › Afficher le titre sans paroles |
 | [S’effacer pendant les pubs](#feature-hide-during-ads) | Réglages › Affichage des paroles › Paroles flottantes › Comportement › Masquer pendant les pubs |
 | [Encoche sur l’écran verrouillé](#feature-notch-show-on-lock-screen) | Réglages › Affichage des paroles › Encoche › Comportement › Afficher sur l’écran verrouillé |
 | [Paroles flottantes masquées en plein écran](#feature-overlay-hide-in-full-screen) | Réglages › Affichage des paroles › Paroles flottantes › Comportement › Masquer en plein écran |
@@ -525,9 +526,9 @@ Quand un morceau est instrumental, ou que la recherche est terminée sans trouve
 
 ### Titre du morceau quand il n’y a pas de paroles
 
-Quand un morceau est instrumental ou que la recherche ne trouve pas de paroles, les paroles flottantes affichent le titre et l’artiste à la place d’un message d’état. La barre des menus affiche le titre quand il n’y a pas de paroles ou que la recherche est en cours. Chacune a sa propre option.
+Quand un morceau est instrumental ou que la recherche ne trouve pas de paroles, les paroles flottantes affichent le titre et l’artiste à la place d’un message d’état. La barre des menus affiche le titre quand il n’y a pas de paroles ou que la recherche est en cours. Chacune a sa propre option ; celle de la barre des menus est activée par défaut.
 
-- Activée par défaut
+- Désactivée par défaut
 - Réglages : Affichage des paroles › Paroles flottantes › Comportement › Afficher le titre sans paroles
 - Réglages : Affichage des paroles › Barre des menus › Comportement › Afficher le titre sans paroles
 

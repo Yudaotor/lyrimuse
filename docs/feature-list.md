@@ -48,6 +48,7 @@ These features stay off after you install. Turn them on in Settings first (some 
 | [Hidden from screenshots and screen sharing](#feature-hide-in-screenshots) | Settings › Lyrics Display › Floating Lyrics › Behavior › Hide in Screenshots |
 | [Hide or shrink when paused](#feature-hide-when-paused) | Settings › Lyrics Display › Floating Lyrics › Behavior › Hide When Paused |
 | [Hide for instrumentals and songs without lyrics](#feature-hide-when-no-lyrics) | Settings › Lyrics Display › Floating Lyrics › Behavior › Hide When No Lyrics |
+| [Song title when there are no lyrics](#feature-title-when-no-lyrics) | Settings › Lyrics Display › Floating Lyrics › Behavior › Show Title When No Lyrics |
 | [Step aside during ads](#feature-hide-during-ads) | Settings › Lyrics Display › Floating Lyrics › Behavior › Hide During Ads |
 | [Notch on the Lock Screen](#feature-notch-show-on-lock-screen) | Settings › Lyrics Display › Notch › Behavior › Show on Lock Screen |
 | [Floating lyrics step aside in full screen](#feature-overlay-hide-in-full-screen) | Settings › Lyrics Display › Floating Lyrics › Behavior › Hide in Full Screen |
@@ -525,9 +526,9 @@ When a song is instrumental, or the search is done and found no lyrics, floating
 
 ### Song title when there are no lyrics
 
-When a song is instrumental or the search finds no lyrics, floating lyrics show the song title and artist where the lyrics go, instead of a status line. The menu bar shows the song title when there are no lyrics or the search is still running. Each has its own switch.
+When a song is instrumental or the search finds no lyrics, floating lyrics show the song title and artist where the lyrics go, instead of a status line. The menu bar shows the song title when there are no lyrics or the search is still running. Each has its own switch. The menu bar one is on by default.
 
-- On by default
+- Off by default
 - Settings: Lyrics Display › Floating Lyrics › Behavior › Show Title When No Lyrics
 - Settings: Lyrics Display › Menu Bar › Behavior › Show Title When No Lyrics
 

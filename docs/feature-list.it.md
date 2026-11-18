@@ -48,6 +48,7 @@ Queste funzioni restano disattivate dopo l’installazione. Attivale prima nelle
 | [Nascosto negli screenshot e nella condivisione dello schermo](#feature-hide-in-screenshots) | Impostazioni › Visualizzazione testo › Testo fluttuante › Comportamento › Nascondi negli screenshot |
 | [Nascondi o riduci in pausa](#feature-hide-when-paused) | Impostazioni › Visualizzazione testo › Testo fluttuante › Comportamento › Nascondi in pausa |
 | [Nascondi se non c’è testo](#feature-hide-when-no-lyrics) | Impostazioni › Visualizzazione testo › Testo fluttuante › Comportamento › Nascondi se non c’è testo |
+| [Titolo del brano quando manca il testo](#feature-title-when-no-lyrics) | Impostazioni › Visualizzazione testo › Testo fluttuante › Comportamento › Mostra titolo senza testo |
 | [Si fa da parte durante la pubblicità](#feature-hide-during-ads) | Impostazioni › Visualizzazione testo › Testo fluttuante › Comportamento › Nascondi durante la pubblicità |
 | [Notch sulla schermata di blocco](#feature-notch-show-on-lock-screen) | Impostazioni › Visualizzazione testo › Notch › Comportamento › Mostra in schermata di blocco |
 | [Il testo fluttuante si fa da parte a tutto schermo](#feature-overlay-hide-in-full-screen) | Impostazioni › Visualizzazione testo › Testo fluttuante › Comportamento › Nascondi a tutto schermo |
@@ -525,9 +526,9 @@ Quando un brano è strumentale, o la ricerca è finita senza trovare un testo, i
 
 ### Titolo del brano quando manca il testo
 
-Quando un brano è strumentale o la ricerca non trova un testo, il testo fluttuante mostra titolo e artista al posto di un messaggio di stato. La barra dei menu mostra il titolo quando manca il testo o la ricerca è ancora in corso. Ciascuno ha la propria opzione.
+Quando un brano è strumentale o la ricerca non trova un testo, il testo fluttuante mostra titolo e artista al posto di un messaggio di stato. La barra dei menu mostra il titolo quando manca il testo o la ricerca è ancora in corso. Ciascuno ha la propria opzione; quella della barra dei menu è attiva per impostazione predefinita.
 
-- Attiva di default
+- Disattivata di default
 - Impostazioni: Visualizzazione testo › Testo fluttuante › Comportamento › Mostra titolo senza testo
 - Impostazioni: Visualizzazione testo › Barra dei menu › Comportamento › Mostra titolo senza testo
 

@@ -48,6 +48,7 @@ Diese Funktionen bleiben nach der Installation aus. Schalte sie zuerst in den Ei
 | [Unsichtbar in Bildschirmfotos und bei Bildschirmfreigabe](#feature-hide-in-screenshots) | Einstellungen › Liedtext-Anzeige › Schwebender Text › Verhalten › In Bildschirmfotos ausblenden |
 | [Bei Pause ausblenden oder verkleinern](#feature-hide-when-paused) | Einstellungen › Liedtext-Anzeige › Schwebender Text › Verhalten › Bei Pause ausblenden |
 | [Bei Instrumentals und Titeln ohne Liedtext ausblenden](#feature-hide-when-no-lyrics) | Einstellungen › Liedtext-Anzeige › Schwebender Text › Verhalten › Ohne Liedtext ausblenden |
+| [Titel anzeigen, wenn es keinen Liedtext gibt](#feature-title-when-no-lyrics) | Einstellungen › Liedtext-Anzeige › Schwebender Text › Verhalten › Titel zeigen, wenn kein Text |
 | [Bei Werbung ausweichen](#feature-hide-during-ads) | Einstellungen › Liedtext-Anzeige › Schwebender Text › Verhalten › Bei Werbung ausblenden |
 | [Notch auf dem Sperrbildschirm](#feature-notch-show-on-lock-screen) | Einstellungen › Liedtext-Anzeige › Notch › Verhalten › Auf Sperrbildschirm zeigen |
 | [Schwebender Text weicht im Vollbild aus](#feature-overlay-hide-in-full-screen) | Einstellungen › Liedtext-Anzeige › Schwebender Text › Verhalten › Im Vollbild ausblenden |
@@ -525,9 +526,9 @@ Ist ein Titel instrumental oder hat die Suche keinen Liedtext gefunden, können 
 
 ### Titel anzeigen, wenn es keinen Liedtext gibt
 
-Ist ein Titel instrumental oder findet die Suche keinen Liedtext, zeigt der schwebende Text Titel und Interpret statt einer Statusmeldung. Die Menüleiste zeigt den Titel, wenn es keinen Liedtext gibt oder die Suche noch läuft. Beide haben einen eigenen Schalter.
+Ist ein Titel instrumental oder findet die Suche keinen Liedtext, zeigt der schwebende Text Titel und Interpret statt einer Statusmeldung. Die Menüleiste zeigt den Titel, wenn es keinen Liedtext gibt oder die Suche noch läuft. Beide haben einen eigenen Schalter, der für die Menüleiste ist standardmäßig an.
 
-- Standardmäßig ein
+- Standardmäßig aus
 - Einstellungen: Liedtext-Anzeige › Schwebender Text › Verhalten › Titel zeigen, wenn kein Text
 - Einstellungen: Liedtext-Anzeige › Menüleiste › Verhalten › Titel zeigen, wenn kein Text
 
