@@ -344,10 +344,17 @@ public enum PlayerTitleSplit {
         !openAudioPaths.isEmpty && !openAudioPaths.contains(cachedPath)
     }
 
-    /// 正在放的那个文件换来的身份;不归这里管、没进程号、找不到对得上的文件时为 nil。
+    /// 这份快照该不该按开着的文件认:只认 reAMP,放电台流(没有正数时长)时不认。按标题记下的本机文件跟电台里
+    /// 不带台名的标题同名时,别把文件的标签和时长套到流上(套上就绕过延迟线)。见 02 章决策 276。纯函数,selftest 覆盖。
+    public static func readsOpenFile(bundleID: String?, duration: Double?) -> Bool {
+        guard let bundleID, bundleIDs.contains(bundleID) else { return false }
+        return !isStream(duration: duration)
+    }
+
+    /// 正在放的那个文件换来的身份;不归这里管、在放电台流、没进程号、找不到对得上的文件时为 nil。
     static func fileIdentity(bundleID: String?, title: String?, duration: Double?, pid: Int?,
                              now: Date = Date()) -> FileIdentity? {
-        guard let bundleID, bundleIDs.contains(bundleID), let title, !title.isEmpty else { return nil }
+        guard readsOpenFile(bundleID: bundleID, duration: duration), let title, !title.isEmpty else { return nil }
         let hit = cache.withLock { $0[title] }
         if let hit, !shouldLookUpFile(found: hit.path != nil, attempts: hit.attempts,
                                       sinceChecked: now.timeIntervalSince(hit.checkedAt)) {

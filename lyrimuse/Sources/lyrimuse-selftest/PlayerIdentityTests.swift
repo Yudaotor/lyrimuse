@@ -1184,6 +1184,16 @@ func runPlayerIdentityTests() {
                      P.cachedFileReplaced(cachedPath: "/m/a.mp3", openAudioPaths: ["/m/a.mp3"]),
                      P.cachedFileReplaced(cachedPath: "/m/a.mp3", openAudioPaths: [])],
                     [true, false, false], "文件标签: 同一串标题换了文件才重找,一个都没开着时照旧")
+        expectEqual([P.readsOpenFile(bundleID: reamp, duration: 114), P.readsOpenFile(bundleID: reamp, duration: nil),
+                     P.readsOpenFile(bundleID: reamp, duration: 0), P.readsOpenFile(bundleID: reamp, duration: .infinity),
+                     P.readsOpenFile(bundleID: PlaybackPlayer.vox.bundleIdentifier, duration: 114),
+                     P.readsOpenFile(bundleID: nil, duration: 114)],
+                    [true, false, false, false, false, false], "文件标签: 只认 reAMP,放电台流(没有正数时长)时不按开着的文件认")
+        expectEqual(sourceHas(sourceBody("static func fileIdentity(bundleID: String?", in: (try? String(contentsOfFile: URL(fileURLWithPath: #filePath)
+                                  .deletingLastPathComponent().deletingLastPathComponent()
+                                  .appendingPathComponent("LyrimuseCore/Local/PlayerTitleSplit.swift").path, encoding: .utf8)) ?? ""),
+                              "guard readsOpenFile(bundleID: bundleID, duration: duration), let title, !title.isEmpty else { return nil }"),
+                    true, "文件标签: 按标题记下的文件在放电台流时不查(同名本机文件的标签和时长不套到流上)")
         let untagged = Tags(title: "", artist: "", album: "", duration: 245.3)
         expectEqual(fileMatch("AJR - Karma.mp3", 245, untagged, file: "AJR - Karma.mp3"), true, "文件标签: 没写标签按文件名对")
         expectEqual(P.identity(from: untagged) == nil, true, "文件标签: 没写歌名的交回拆标题")
