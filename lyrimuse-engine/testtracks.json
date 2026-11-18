@@ -1,0 +1,16 @@
+{
+  "_说明": "合成测试曲的标记:歌手是这些的不发 Last.fm / ListenBrainz、不记本地收听日志,测试期开关没开也一样。新造测试曲的歌手一律以 Lyrimuse测试 开头;只收测试素材专用的写法,真实歌手名不进来。比对去首尾空白、不分大小写。见 12 章决策 98",
+  "artist_prefixes": [
+    "Lyrimuse测试",
+    "Lyrimuse Test"
+  ],
+  "artists": [
+    "测试歌手",
+    "測試歌手",
+    "Test Artist",
+    "Test Artist One",
+    "Test Artist Two",
+    "Test Artist Three",
+    "歌手A-B"
+  ]
+}

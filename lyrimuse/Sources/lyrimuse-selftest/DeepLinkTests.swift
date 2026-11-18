@@ -254,6 +254,33 @@ func runDeepLinkTests() {
                     "debug: 接回一条来源,名字大小写不敏感")
         expectEqual(link("lyrimuse://debug/knockout?leg=nope&on=0") == nil && link("lyrimuse://debug/knockout?leg=vox-script") == nil,
                     true, "debug: 认不出的来源、没带 on 都不认")
+        expectEqual(link("lyrimuse://debug/scrobble-hold?minutes=45&id=pe-1"), .debug(.scrobbleHold(minutes: 45, id: "pe-1")),
+                    "debug: 测试期开关开 45 分钟")
+        expectEqual(link("lyrimuse://debug/scrobble-hold"), .debug(.scrobbleHold(minutes: 30, id: nil)), "debug: 测试期开关不带分钟按默认")
+        expectEqual(link("lyrimuse://debug/scrobble-hold?off=1&id=pe-1"), .debug(.scrobbleHold(minutes: 0, id: "pe-1")),
+                    "debug: 收掉一条测试期开关")
+        expectEqual(link("lyrimuse://debug/scrobble-hold?off=1"), .debug(.scrobbleHold(minutes: 0, id: nil)), "debug: 收掉全部测试期开关")
+        expectEqual([link("lyrimuse://debug/scrobble-hold?minutes=0"), link("lyrimuse://debug/scrobble-hold?minutes=121"),
+                     link("lyrimuse://debug/scrobble-hold?minutes=x")], [nil, nil, nil], "debug: 测试期开关分钟数 0、超上限、不是数都不认")
+        do {
+            let now = Date(timeIntervalSince1970: 1_800_000_000)
+            let t = Int64(1_800_000_000)
+            let one = ScrobbleHold.updated([], minutes: 30, id: "a", now: now)
+            expectEqual(one, [ScrobbleHold.Lease(id: "a", since: t, until: t + 1800)], "测试期开关: 加一条,从现在起算")
+            let two = ScrobbleHold.updated(one + [ScrobbleHold.Lease(id: "old", since: t - 7200, until: t - 1)], minutes: 10, id: nil, now: now)
+            expectEqual(two, [ScrobbleHold.Lease(id: "a", since: t, until: t + 1800), ScrobbleHold.Lease(id: "manual", since: t, until: t + 600)],
+                        "测试期开关: 不带 id 记在 manual 名下,顺带丢掉到期的")
+            expectEqual(ScrobbleHold.updated(one, minutes: 60, id: "a", now: now), [ScrobbleHold.Lease(id: "a", since: t, until: t + 3600)],
+                        "测试期开关: 同一个 id 换掉原来那条")
+            expectEqual(ScrobbleHold.updated(two, minutes: 0, id: "a", now: now), [ScrobbleHold.Lease(id: "manual", since: t, until: t + 600)],
+                        "测试期开关: 收掉只收这个 id")
+            expectEqual(ScrobbleHold.updated(two, minutes: 0, id: nil, now: now), [], "测试期开关: 不带 id 收掉全部")
+            expectEqual(ScrobbleHold.updated([], minutes: 999, id: "a", now: now).first?.until, t + 7200, "测试期开关: 最多两小时")
+            expectEqual(ScrobbleHold.leases(from: ScrobbleHold.encode(two)), two, "测试期开关: 写出去读回来一样")
+            expectEqual(ScrobbleHold.leases(from: Data("{bad".utf8)), [], "测试期开关: 坏文件当没有")
+            expectEqual(ScrobbleHold.encode(one).flatMap { String(data: $0, encoding: .utf8) },
+                        #"{"holds":[{"id":"a","since":1800000000,"until":1800001800}]}"#, "测试期开关: 字段名跟引擎 scrobblehold.go 一致")
+        }
         expectEqual(link("lyrimuse://debug/menubar-center?center=1&ignore-notch=1"),
                     .debug(.menuBarCenter(center: true, ignoreNotch: true)), "debug: 菜单栏歌词放正中并忽略刘海")
         expectEqual(link("lyrimuse://debug/menubar-center?ignore-notch=0"), .debug(.menuBarCenter(center: nil, ignoreNotch: false)),
@@ -939,6 +966,8 @@ func runDeepLinkTests() {
             .debug(.managerDecision(key: nil)), .debug(.managerDecision(key: "Michael Jackson|Billie Jean|Thriller")),
             .debug(.lyricsSearch(key: "Michael Jackson|Blood on the Dance Floor|HIStory ~dur254")),
             .debug(.editNotifyChannel(id: nil)), .debug(.editNotifyChannel(id: "Legacy-1")),
+            .debug(.scrobbleHold(minutes: 45, id: "pe 1")), .debug(.scrobbleHold(minutes: 30, id: nil)),
+            .debug(.scrobbleHold(minutes: 0, id: "pe-1")), .debug(.scrobbleHold(minutes: 0, id: nil)),
             .setPlayMode(.list), .setPlayMode(.shuffle), .setPlayMode(.repeatAll), .setPlayMode(.repeatOne),
         ] + LyrimuseAction.allCases.map { .action($0, on: nil, stepSeconds: nil) }
         for value in all {

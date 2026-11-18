@@ -319,6 +319,8 @@ enum DebugDeepLinks {
         case let .knockout(leg, on):
             SourceKnockout.set(leg, out: !on)
             LocalPlaybackSource.shared.simulationChanged()
+        case let .scrobbleHold(minutes, id):
+            applyScrobbleHold(minutes: minutes, id: id)
         case let .menuBarCenter(center, ignoreNotch, screen, hover, click):
             if let ignoreNotch { MenuBarCenterLyrics.ignoresNotchForDebug = ignoreNotch }
             if let center { AppSettings.shared.menuBarLyricsPlacement = center ? .screenCenter : .statusItem }
@@ -599,6 +601,24 @@ enum DebugDeepLinks {
                 logger.error("debug app-move failed: \(error.localizedDescription, privacy: .public)")
             }
         }
+    }
+
+    /// `debug/scrobble-hold`:改数据目录里的租约表(空了就删文件),再把改完的样子写进 debug 输出目录的 `scrobble-hold.json`,
+    /// 脚本按它确认开关真的开上了。
+    private static func applyScrobbleHold(minutes: Int, id: String?) {
+        let url = LyrimusePaths.configFile(ScrobbleHold.fileName)
+        let leases = ScrobbleHold.updated(ScrobbleHold.leases(from: FileIO.read(url)), minutes: minutes, id: id, now: Date())
+        let saved: Bool
+        if leases.isEmpty {
+            saved = !FileManager.default.fileExists(atPath: url.path) || FileIO.remove(url)
+        } else {
+            saved = ScrobbleHold.encode(leases).map { FileIO.write($0, to: url) } ?? false
+        }
+        let report = ScrobbleHold.encode(saved ? leases : []) ?? Data()
+        if FileIO.createDirectory(outputDir) {
+            _ = FileIO.write(report, to: outputDir.appendingPathComponent("scrobble-hold.json"))
+        }
+        logger.notice("debug scrobble hold minutes=\(minutes, privacy: .public) id=\(id ?? "-", privacy: .public) saved=\(saved, privacy: .public) holds=\(leases.count, privacy: .public)")
     }
 
     private static func writeTelemetryPreview() {

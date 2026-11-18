@@ -1,0 +1,139 @@
+package main
+
+import (
+	_ "embed"
+	"encoding/json"
+	"fmt"
+	"log"
+	"os"
+	"strings"
+	"time"
+)
+
+// 测试播放不记收听:命中下面任一条的会话不发 ListenBrainz 的 playing_now / single、不发 Last.fm 的 updateNowPlaying /
+// scrobble,也不写本地收听日志和两份待重发队列。见 12 章决策 98。
+//
+//   - 测试期开关(scrobbleHoldPath):App 的 `lyrimuse://debug/scrobble-hold` 写的租约表,任一租约没到期就算开着。
+//     每条租约最长 scrobbleHoldMax,从写入时刻(since)算起,until 写得再远也按这个封顶:忘了关最多吞掉这么久的真实收听。
+//   - 测试曲名单(testtracks.json,编进二进制):合成测试曲按歌手认,开关没开也不记。
+//
+// 判定挂在会话上、只往上棘轮(playSession.scrobbleHold,跟 isAd 同一个形状):开关中途到期或被关掉,已经认成测试的那一首
+// 照旧不记;开关中途才打开,下一个出口(正在播放、到点提交、退出兜底)就认上。网页中继、歌词解析、Discord 不受影响。
+
+// scrobbleHoldMax:一条租约最长多久。App 侧深链的上限(`LyrimuseDeepLink.maxScrobbleHoldMinutes`)跟它相同,两处一起改。
+const scrobbleHoldMax = 2 * time.Hour
+
+// scrobbleHoldPath 由 main() 设定;为空(单测、一次性子命令)时开关一律当关着。
+var scrobbleHoldPath string
+
+type scrobbleHoldLease struct {
+	ID    string `json:"id"`
+	Since int64  `json:"since"`
+	Until int64  `json:"until"`
+}
+
+type scrobbleHoldFile struct {
+	Holds []scrobbleHoldLease `json:"holds"`
+}
+
+// scrobbleHoldUntil:此刻开着的租约里最晚的到期时刻;没开着返回零值。文件不在、读不了、解析不了都当关着
+// (这道闸只拦测试,坏文件不该吞掉真实收听)。
+func scrobbleHoldUntil(now time.Time) time.Time {
+	if scrobbleHoldPath == "" {
+		return time.Time{}
+	}
+	data, err := os.ReadFile(scrobbleHoldPath)
+	if err != nil {
+		noteFileErr("read", scrobbleHoldPath, err)
+		return time.Time{}
+	}
+	var f scrobbleHoldFile
+	if err := json.Unmarshal(data, &f); err != nil {
+		warnf("scrobble hold: cannot parse %s, treating as off: %v", scrobbleHoldPath, err)
+		return time.Time{}
+	}
+	var latest time.Time
+	for _, h := range f.Holds {
+		since := time.Unix(h.Since, 0)
+		// 没写 since、或 since 在将来的租约封顶算不出来,不认。
+		if h.Since <= 0 || since.After(now.Add(time.Minute)) {
+			continue
+		}
+		until := time.Unix(h.Until, 0)
+		if limit := since.Add(scrobbleHoldMax); until.After(limit) {
+			until = limit
+		}
+		if now.Before(until) && until.After(latest) {
+			latest = until
+		}
+	}
+	return latest
+}
+
+//go:embed testtracks.json
+var testTracksJSON []byte
+
+type testTrackMarks struct {
+	ArtistPrefixes []string `json:"artist_prefixes"`
+	Artists        []string `json:"artists"`
+}
+
+var testTracks = mustParseTestTracks(testTracksJSON)
+
+func mustParseTestTracks(data []byte) testTrackMarks {
+	var m testTrackMarks
+	if err := json.Unmarshal(data, &m); err != nil {
+		panic(fmt.Sprintf("testtracks.json: %v", err))
+	}
+	for i, s := range m.ArtistPrefixes {
+		m.ArtistPrefixes[i] = strings.ToLower(strings.TrimSpace(s))
+	}
+	for i, s := range m.Artists {
+		m.Artists[i] = strings.ToLower(strings.TrimSpace(s))
+	}
+	return m
+}
+
+// isTestTrack:歌手是合成测试曲专用的写法。整串比对或前缀比对,不做子串匹配:名单要窄,真实歌手不能被带进来。
+func isTestTrack(artist string) bool {
+	a := strings.ToLower(strings.TrimSpace(artist))
+	if a == "" {
+		return false
+	}
+	for _, p := range testTracks.ArtistPrefixes {
+		if p != "" && strings.HasPrefix(a, p) {
+			return true
+		}
+	}
+	for _, x := range testTracks.Artists {
+		if a == x {
+			return true
+		}
+	}
+	return false
+}
+
+// scrobbleHoldReason:这一首此刻该不该挡、因为什么;空串 = 照常记。名单优先,命中名单的不用看开关。
+func scrobbleHoldReason(artist string, now time.Time) string {
+	if isTestTrack(artist) {
+		return "test track"
+	}
+	if until := scrobbleHoldUntil(now); !until.IsZero() {
+		return "test mode until " + until.UTC().Format(time.RFC3339)
+	}
+	return ""
+}
+
+// heldForTest:会话 s(这一拍的歌手是 artist)要不要挡。第一次判成要挡时记进会话并打一行日志,之后一直挡。
+func heldForTest(s *playSession, artist, title string, now time.Time) bool {
+	if s.scrobbleHold != "" {
+		return true
+	}
+	reason := scrobbleHoldReason(artist, now)
+	if reason == "" {
+		return false
+	}
+	s.scrobbleHold = reason
+	log.Printf("scrobble hold (%s): %s - %s, no now playing, listens or local listen log", reason, artist, title)
+	return true
+}

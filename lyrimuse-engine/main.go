@@ -451,6 +451,8 @@ func main() {
 	sessionResumePath = filepath.Join(filepath.Dir(*cfgPath), clientName+"-session-resume.json")
 	// ListenBrainz 待重发队列(lbretry.go):会话结束后才失败的收听存在这里,后台重发。
 	lbRetryPath = filepath.Join(filepath.Dir(*cfgPath), clientName+"-lb-retry.json")
+	// 测试期开关(scrobblehold.go):App 的调试深链写,开着时测试播放不记收听。
+	scrobbleHoldPath = filepath.Join(filepath.Dir(*cfgPath), clientName+"-scrobble-hold.json")
 	lfmRetryPath = filepath.Join(filepath.Dir(*cfgPath), clientName+"-lastfm-retry.json")
 	lastfmStatusPath = filepath.Join(filepath.Dir(*cfgPath), clientName+"-lastfm-status.json")
 	// 「智能」档的编目判定缓存(见 lastfmcatalog.go)。必须在 lastfmScrobblerIfEnabled

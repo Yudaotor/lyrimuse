@@ -70,6 +70,9 @@ type playSession struct {
 	// 不记给它兜底的本地收听日志,announce 不发 track.updateNowPlaying;ListenBrainz / 网页中继照旧。
 	// 同曲期间不重算 —— 改设置伴随引擎重启,新会话自然拿到新值。
 	lastfmExcluded bool
+	// scrobbleHold:这一首被认成测试播放的原因(测试期开关 / 测试曲名单),空串 = 照常记。认上之后不回落,
+	// 挡正在播放、收听提交和退出兜底,见 heldForTest(scrobblehold.go)。
+	scrobbleHold string
 	// lastfmPending / lastfmSettled(Last.fm scrobble 时点):这次收听过了官方阈值
 	// (ListenBrainz / 网页中继那一刻已经提交)之后,Last.fm 那一路按用户选的更严时点
 	// (features().LastfmScrobblePoint)挂起、到点再发。pending 非 nil = 挂着;settled = 已经发过
@@ -1036,6 +1039,12 @@ func (p *poller) submitSingleAsync(sess *playSession, meta snapshot, startedAt i
 		sess.listenSent = true
 		return
 	}
+	// 测试播放:两边都不提交,本地收听日志、待重发队列也不进(它们都挂在这个漏斗后面)。
+	if heldForTest(sess, meta.Artist, meta.Title, time.Now()) {
+		log.Printf("listen skipped (%s): %s - %s", sess.scrobbleHold, meta.Artist, meta.Title)
+		sess.listenSent = true
+		return
+	}
 	lm := lbMeta(meta)
 	// 没有歌手就别上送 —— 两个平台都把 artist 当必填,发过去只会 400(理由与实测见 recordLastfmListen
 	// 里那道同款闸)。标成已处理,免得每一轮 poll 都重来一次。
@@ -1208,6 +1217,10 @@ func (p *poller) announce(now time.Time, why string) {
 		return
 	}
 	if p.sess.isSpoken || p.cur.Spoken {
+		return
+	}
+	// 测试播放不宣布正在播放(LB 与 Last.fm 两路)。
+	if heldForTest(p.sess, p.cur.Artist, p.cur.Title, now) {
 		return
 	}
 	// 没有歌手就别宣布"正在播放" —— 同一道闸(见 submitSingleAsync):两个平台都把 artist 当必填,
@@ -1922,6 +1935,15 @@ func (p *poller) applyAppPlaybackTick(now time.Time, t appPlaybackTick) (reancho
 	return t.reanchor, t.loopRestart
 }
 
+// exitFlushHeldForTest:退出兜底这一首是测试播放,不同步提交。它不经过 submitSingleAsync,所以单独挡一次。
+func (p *poller) exitFlushHeldForTest() bool {
+	if !heldForTest(p.sess, p.sess.meta.Artist, p.sess.meta.Title, time.Now()) {
+		return false
+	}
+	log.Printf("listen skipped (%s): %s - %s", p.sess.scrobbleHold, p.sess.meta.Artist, p.sess.meta.Title)
+	return true
+}
+
 // flushSessionOnExit 是 run() 退出兜底里管当前会话的那一段:挂着的 Last.fm 收听到点就同步发,过了门槛还没提交的
 // 同步提交,再记下续接状态(sessionresume.go)。调用前 drainSubmitsOnExit 已经处理过别的会话。
 func (p *poller) flushSessionOnExit(flushCtx context.Context) {
@@ -1936,7 +1958,8 @@ func (p *poller) flushSessionOnExit(flushCtx context.Context) {
 	}
 	if p.sess != nil && !p.sess.listenSent && !p.sess.sodaPreviewPending && p.sess.playedSecs >= listenThreshold(p.sess.meta.Duration) &&
 		!tooShortToScrobble(p.sess.meta.Duration) && !p.sess.isSpoken && !p.sess.meta.Spoken && lbMeta(p.sess.meta).ArtistName != "" &&
-		!p.sess.isAd && !isAdBreak(p.sess.meta.Bundle, p.sess.meta.Artist, p.sess.meta.Title, p.sess.meta.Album) {
+		!p.sess.isAd && !isAdBreak(p.sess.meta.Bundle, p.sess.meta.Artist, p.sess.meta.Title, p.sess.meta.Album) &&
+		!p.exitFlushHeldForTest() {
 		// Last.fm 镜像:与 LB 解耦,同样服从 scrobble 时点(默认档当场发),且必须走同步变体。
 		//
 		// 艺人名跟 LB 提交取同一份(lm.ArtistName)。lbMeta 不做

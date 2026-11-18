@@ -25,6 +25,7 @@ import Foundation
 ///     x-callback-url/now-playing?x-success=…   把正在播放的信息作为参数打开 x-success(只回给本机 App)
 ///     lastfm-auth-callback          Last.fm 浏览器授权回跳(内部用)
 ///     debug/<命令>                  本机验证用(见 `DebugCommand`),只在本机偏好 `debug:deepLinks` 打开时才执行
+///     debug/scrobble-hold?minutes=60&id=<名字>   测试期开关:这段时间放的歌不记收听(`off=1` 收掉)
 ///
 /// 开窗类的链接(settings、lyrics-manager、lyrics-window、lyrics-search、lyrics-share、whats-new、onboarding、action/open-*)可以再带
 /// `background=1`:窗口摆出来,但不激活 App、不抢键盘焦点(`wantsBackground(_:)`)。窗口仍在用户屏幕上。
@@ -149,6 +150,13 @@ public enum LyrimuseDeepLink: Equatable, Sendable {
         public static let maxMainThreadStallSeconds: Double = 12
         /// 关掉 / 接回一条来源(`debug/knockout?leg=<名字>&on=0|1`,`on=0` 关掉):验证退路撑不撑得住,见 `SourceKnockout`。
         case knockout(leg: SourceKnockout.Leg, on: Bool)
+        /// 测试期开关(`debug/scrobble-hold?minutes=<分钟>&id=<名字>`,不带 minutes 是 `defaultScrobbleHoldMinutes`;`off=1` 收掉
+        /// 这个 id 那一条,不带 id 全部收掉,`minutes` 记成 0):开着时测试播放不发 Last.fm / ListenBrainz、不记本地收听日志,
+        /// 每条最多 `maxScrobbleHoldMinutes` 分钟、到点自己失效。租约表见 `ScrobbleHold`,12 章决策 98。
+        case scrobbleHold(minutes: Int, id: String?)
+        /// 跟引擎 scrobblehold.go 的 scrobbleHoldMax 相同,两处一起改。
+        public static let maxScrobbleHoldMinutes = 120
+        public static let defaultScrobbleHoldMinutes = 30
         /// 当作这个播放器已经在出声却没报 Now Playing 满了提示的时长,发一次跟轮询同一条的提示信号
         /// (`debug/reporting-switch-hint?bundle=<bundle id>`,见 `PlayerReportingDiagnostics.reportingSwitchHintNotification`)。
         case reportingSwitchHint(bundleID: String)
@@ -581,6 +589,15 @@ public enum LyrimuseDeepLink: Equatable, Sendable {
             self = .debug(.hoverNote(query: off || text.isEmpty ? nil : text))
         case ("debug", "/notify-channel"):
             self = .debug(.editNotifyChannel(id: value("id").flatMap { $0.isEmpty ? nil : $0 }))
+        case ("debug", "/scrobble-hold"):
+            let id = value("id").flatMap { $0.isEmpty ? nil : $0 }
+            if value("off").flatMap(Self.parseBool) == true {
+                self = .debug(.scrobbleHold(minutes: 0, id: id))
+            } else {
+                let minutes = value("minutes").map { Int($0) } ?? DebugCommand.defaultScrobbleHoldMinutes
+                guard let minutes, (1...DebugCommand.maxScrobbleHoldMinutes).contains(minutes) else { return nil }
+                self = .debug(.scrobbleHold(minutes: minutes, id: id))
+            }
         case ("debug", "/reporting-switch-hint"):
             guard let bundleID = value("bundle"), !bundleID.isEmpty else { return nil }
             self = .debug(.reportingSwitchHint(bundleID: bundleID))
@@ -964,6 +981,10 @@ public enum LyrimuseDeepLink: Equatable, Sendable {
             case let .hoverNote(query):
                 components.path = "/hover-note"
                 components.queryItems = [query.map { URLQueryItem(name: "q", value: $0) } ?? URLQueryItem(name: "off", value: "1")]
+            case let .scrobbleHold(minutes, id):
+                components.path = "/scrobble-hold"
+                components.queryItems = [minutes > 0 ? URLQueryItem(name: "minutes", value: String(minutes)) : URLQueryItem(name: "off", value: "1")]
+                if let id { components.queryItems?.append(URLQueryItem(name: "id", value: id)) }
             case let .editNotifyChannel(id):
                 components.path = "/notify-channel"
                 if let id { components.queryItems = [URLQueryItem(name: "id", value: id)] }
