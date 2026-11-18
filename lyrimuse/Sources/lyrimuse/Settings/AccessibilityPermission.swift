@@ -143,7 +143,7 @@ struct AccessibilityPermissionGuide: View {
         }
         let calibrated = players.filter { $0.accessibilityUse == .calibratesAndPressesPlayMode }
         if !calibrated.isEmpty {
-            lines.append(String(format: L10n.t("授权后，Lyrimuse 将读取%@的进度条校准播放位置，读取其随机和循环状态，并在你点按这两个按钮时代为操作其菜单中的对应项，也可读取和调节其音量；系统媒体焦点被其他 App 占用时，也可暂停、恢复和切换上一首或下一首。未授权时仍可显示歌词，但开播后歌词可能差零点几秒，不提供随机、循环按钮和音量调节，失去焦点时也无法控制播放"),
+            lines.append(String(format: L10n.t("授权后，Lyrimuse 将读取%@的进度条校准播放位置，读取其随机和循环状态，并在你点按这两个按钮时代为操作其菜单中的对应项，也可读取和调节其音量，放网络电台时读取其播放列表核对歌手；系统媒体焦点被其他 App 占用时，也可暂停、恢复和切换上一首或下一首。未授权时仍可显示歌词，但开播后歌词可能差零点几秒，不提供随机、循环按钮和音量调节，失去焦点时也无法控制播放"),
                                 model.playerNames(calibrated)))
         }
         let windowControls = players.filter { $0.accessibilityUse == .adjustsModeAndVolume }

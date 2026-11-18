@@ -401,6 +401,8 @@ func runCogTests() {
                         && sourceHas(client, "if checkedArtist != probed.artist {\n            let pid = probed.processIdentifier, itemID = probed.nowPlayingItemID\n            probed = probed.withArtist(checkedArtist ?? \"\")"),
                      sourceHas(sourceText("LyrimuseCore/Local/CogStream.swift"), "guard !SourceKnockout.isOut(.cogPlaylist), AXIsProcessTrusted() else { return .unreadable }")],
                     [true, true, true], "Cog 接线: 歌手核对排在主路径按歌手认曲目之前、焦点被占时单问那份也过,读列表能拔掉")
+        expectEqual(sourceHas(sourceText("lyrimuse/Settings/AccessibilityPermission.swift"), "也可读取和调节其音量，放网络电台时读取其播放列表核对歌手；"),
+                    true, "Cog 接线: 辅助功能授权说明写到放流时读播放列表核对歌手")
         expectEqual(sourceHas(sourceText("lyrimuse/UI/IdlePlaybackActions.swift"), "case .swinsian, .kuwo, .cog: PlayerProcess.pid(bundleID: player.bundleIdentifier) != nil"),
                     true, "Cog 接线: 停播页只在它开着时给继续播放")
     }

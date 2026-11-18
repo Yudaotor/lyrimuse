@@ -244,7 +244,7 @@ public enum PermissionDiagnostics {
             return ("reads its progress bar to refine whole-second position; reads its playlist for pre-resolve; presses repeat in its menu; reads and sets volume",
                     "lyrics may be about 0.5 s off after seeking; no repeat button or volume; playback controls do nothing while it lacks Now Playing focus")
         case .calibratesAndPressesPlayMode:
-            return ("reads its position slider to correct start / resume position and measure tempo; reads and presses shuffle / repeat in its menu; reads and sets its volume slider; presses its playback menu while another app holds Now Playing focus",
+            return ("reads its position slider to correct start / resume position and measure tempo; reads and presses shuffle / repeat in its menu; reads and sets its volume slider; reads its playlist to check a radio song's artist; presses its playback menu while another app holds Now Playing focus",
                     "lyrics may be a fraction of a second off after playback starts; no shuffle / repeat buttons or volume; playback controls do nothing while it lacks Now Playing focus")
         case .adjustsModeAndVolume:
             return ("reads and presses shuffle / repeat on its window; reads and sets its volume slider",
