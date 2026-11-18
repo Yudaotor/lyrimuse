@@ -398,7 +398,7 @@ final class AppSettings: ObservableObject {
         static let manualPickLocksLyrics = "np:manualPickLocksLyrics"
         static let textStrokeEnabled = "np:textStrokeEnabled"
         static let textStrokeColorHex = "np:textStrokeColorHex"
-        // 悬浮歌词描边粗细(细 / 标准 / 粗),见 `OverlayTextStrokeWidth`。
+        // 悬浮歌词描边粗细(偏细 / 标准 / 偏粗),见 `OverlayTextStrokeWidth`。
         static let textStrokeWidth = "np:textStrokeWidth"
         static let karaokeUnsungFollowsCoverArt = "np:karaokeUnsungFollowsCoverArt"
         static let karaokeUnsungColorHex = "np:karaokeUnsungColorHex"
@@ -1449,7 +1449,7 @@ final class AppSettings: ObservableObject {
             textStrokeColor = Color(hexWithAlpha: textStrokeColorHex, fallback: .black.opacity(0.65))
         }
     }
-    /// 悬浮歌词描边粗细三档,没存过是「标准」(= 加这项设置前的粗细)。换行 / 滚动两种模式和按描边预留算的排版都读它。
+    /// 悬浮歌词描边粗细三档,没存过是「标准」,启动不写回。换行 / 滚动两种模式和按描边预留算的排版都读它。
     /// 不进配色主题。见 04 章决策 106。
     @Published var textStrokeWidth: OverlayTextStrokeWidth {
         didSet { defaults.set(textStrokeWidth.rawValue, forKey: Keys.textStrokeWidth) }

@@ -453,6 +453,15 @@ func runDeepLinkTests() {
         expectEqual(link("lyrimuse://debug/overlay-text?stroke-width=thick"),
                     .debug(.overlayText(opacity: nil, color: nil, stroke: nil, strokeWidth: .thick)), "debug: 只设描边粗细")
         expectEqual(link("lyrimuse://debug/overlay-text?stroke-width=bold"), nil, "debug: 描边粗细不认的值不认")
+        // 描边开关不认的值静默丢掉、不让整条失效,跟别的布尔参数(如 no-lyrics-title 的 overlay)同一个口径。
+        let badStroke = link("lyrimuse://debug/overlay-text?stroke=abc&stroke-width=thin")
+        expectEqual([badStroke, link("lyrimuse://debug/no-lyrics-title?overlay=abc&menubar=0")],
+                    [.debug(.overlayText(opacity: nil, color: nil, stroke: nil, strokeWidth: .thin)),
+                     .debug(.noLyricsTitle(overlay: nil, menuBar: false))],
+                    "debug: 描边开关不认的值静默忽略,别的参数照常生效")
+        expectEqual(badStroke?.url(scheme: scheme)?.absoluteString, "\(scheme)://debug/overlay-text?stroke-width=thin",
+                    "debug: 忽略掉的描边开关往返时不再出现")
+        expectEqual(link("lyrimuse://debug/overlay-text?stroke=abc"), nil, "debug: 只带一个不认的描边开关,等于什么都没带")
         expectEqual(link("lyrimuse://debug/touchbar-display?color=Rainbow"), .debug(.touchBarDisplay(color: .rainbow)),
                     "debug: 触控栏歌词颜色切彩虹(大小写不敏感)")
         expectEqual(link("lyrimuse://debug/notch-lyrics-color?color=Custom&hex=ff8000"),

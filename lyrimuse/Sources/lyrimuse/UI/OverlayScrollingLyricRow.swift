@@ -31,78 +31,12 @@ import SwiftUI
 // 描边必须跟换行模式(`OptionalTextStroke`)同一个算法、同一组参数(`LyricsTextStrokeMetrics`、同一档
 // `OverlayTextStrokeWidth`):剪影高斯模糊 σ = 这一档的 points,再按 alphaRamp 拉成实心轮廓。别换成 AppKit 的 `.strokeWidth` ——
 // 那是沿轮廓居中描的细线,粗细和形状都跟换行模式对不上。
-/// 图层行的描边:颜色和粗细档。四周预留 `inset` 跟换行模式那条 `OptionalTextStroke` 的 padding 同一个量。
-struct LyricLayerStroke: Equatable {
-    var color: NSColor
-    var width: OverlayTextStrokeWidth
-
-    var inset: CGFloat { width.inset }
-}
-
 @MainActor
 struct OverlayScrollingLyricRow: NSViewRepresentable {
-    /// 这一行的全部渲染输入。只有它变了才重画长图 / 重装动画(`updateNSView` 会被 SwiftUI 的
-    /// 任意一次重估叫到)。
-    struct Spec: Equatable {
-        var lineKey: String
-        var words: [SyncedLyricWord]
-        /// 非 nil = 开了逐词罗马音:每一列是「这一组的字 + 它的读音」上下两行,列宽取更宽的
-        /// 那一行(同 SwiftUI 那边 VStack 取更宽子视图)。nil = 只有一行字。
-        var groups: [SyncedLyricWordGroup]?
-        /// 逐词读音跟上面那行字之间多出来的距离(可以是负的),只在 `groups` 非 nil 时起作用。只有悬浮歌词传,
-        /// 见 `OverlayRowSpacing.perWordReadingGap`。
-        var romaGap: CGFloat = 0
-        var font: NSFont
-        var romaFont: NSFont
-        var baseColor: NSColor
-        var fillColor: NSColor
-        var romaBaseColor: NSColor
-        var romaFillColor: NSColor
-        /// nil = 不描边。
-        var stroke: LyricLayerStroke?
-        var alignment: LyricDuet.Side
-        var paused: Bool
-        /// 非 nil = 按显示时长配速(没有逐字时间轴的行、译文 / 罗马音 / 下一句这些副行):不填色、
-        /// 整行按 `fillColor` 画,滚动路径由 `MenuBarMarquee.pacedScrollPath` 按这个窗口算。
-        /// nil = 跟唱:填色和滚动都跟着 `words` 的逐字时间轴走。
-        var pacedWindow: PacedWindow? = nil
-        /// 非 nil = 整行投一层阴影(灵动岛那条 `.compositingGroup().shadow(...)` 的图层版)。直接画进
-        /// 两张长图里,之后每帧零开销。阴影只占位图四周的出血,不参与排版(见 `bleed`)。
-        var shadow: TextShadow? = nil
-        /// > 0 = 放不下、还没开始滚的时候,尾部留一条这么宽的渐隐带(同 `MarqueeText.edgeFadeWidth`,
-        /// 判据同 `MarqueeMath.trailingFadeWidth`:一开始滚就收掉)。
-        var edgeFadeWidth: CGFloat = 0
-        /// 时间基准的指纹(宿主传歌词时间轴总偏移之类):一变就按新基准重装动画,不等漂移超过
-        /// `resyncToleranceMs`。调一次偏移常常只有 200ms,小于那道阈值,不强制重装的话这一行一直按旧偏移走。
-        var timingEpoch: Int = 0
-        /// 播放速率(锚点的 rate,倍速播放时不是 1)。关键帧按「歌词毫秒 ÷ 速率 = 墙钟秒」排,
-        /// 写死 1 的话倍速时填色和滚动越走越偏,只能靠漂移超过阈值时一次次重装去追。
-        var rate: Double = 1
-        /// 这一行是译文(排字语言按译文判,见 `LyricTypesetting`)。
-        var translation: Bool = false
-        /// true = 不装滚动和填色动画:整行按 `fillColor` 画,放不下时停在开头、尾部渐隐(触控栏在系统开了
-        /// 「减弱动态效果」时传,见 17 章决策 43)。
-        var still: Bool = false
-        /// true = 字的颜色换成沿这一行流动的彩虹(`RainbowLyrics`):两张长图只当蒙版用,透明度照旧(未唱的字暗一档),
-        /// 颜色由底下横向循环平移的渐变给。`still` 时彩虹停住。触控栏、悬浮歌词、灵动岛传,见 17 章决策 54。
-        var rainbow: Bool = false
-        /// 彩虹停不停:nil = 跟着 `paused`。逐字填色唱完一句就停表的宿主(悬浮歌词、灵动岛)单独给,彩虹不在两句之间停住。
-        var rainbowPaused: Bool? = nil
-    }
-
-    /// 整行阴影。`offsetY` 取 SwiftUI 的口径(正 = 往下)。
-    struct TextShadow: Equatable {
-        var color: NSColor
-        var radius: CGFloat
-        var offsetY: CGFloat
-    }
-
-    /// 一行的显示窗口(歌词时间轴毫秒,跟 `nowMs` 同一个基准)。
-    struct PacedWindow: Equatable {
-        var startMs: Int
-        /// nil = 不知道会显示多久,配速退回固定速度。
-        var dwellMs: Int?
-    }
+    /// 这一行的全部渲染输入,定义和「哪些字段换了要重画」的判据在 Core `LyricLayerRowSpec`。
+    typealias Spec = LyricLayerRowSpec
+    typealias TextShadow = LyricLayerRowSpec.TextShadow
+    typealias PacedWindow = LyricLayerRowSpec.PacedWindow
 
     let spec: Spec
     /// 这一刻的播放位置(毫秒,含歌词时间轴偏移)。装动画时读一次,之后不按帧调。
@@ -281,7 +215,7 @@ final class OverlayLyricScrollView: NSView {
     }
 
     func apply(spec next: OverlayScrollingLyricRow.Spec, nowMs: Int) {
-        let imagesChanged = spec.map { !Self.sameImages($0, next) } ?? true
+        let imagesChanged = spec.map { !OverlayScrollingLyricRow.Spec.sameImages($0, next) } ?? true
         let timingChanged = spec?.paused != next.paused || spec?.pacedWindow != next.pacedWindow
             || spec?.timingEpoch != next.timingEpoch || spec?.rate != next.rate || spec?.still != next.still
             || spec?.rainbowPaused != next.rainbowPaused
@@ -295,19 +229,6 @@ final class OverlayLyricScrollView: NSView {
             && fillClipLayer.animation(forKey: Self.fillKey) == nil
         guard imagesChanged || timingChanged || missing || drifted(nowMs: nowMs) else { return }
         place(nowMs: nowMs, reinstall: true)
-    }
-
-    /// 两份输入画出来的长图是不是同一张 —— 除了 `paused` / `pacedWindow` / `timingEpoch` / `rate` / `still` / `rainbowPaused` 全都一样。
-    /// 这几项只影响动画和摆位,不重画位图。
-    static func sameImages(_ a: OverlayScrollingLyricRow.Spec, _ b: OverlayScrollingLyricRow.Spec) -> Bool {
-        var a = a
-        a.paused = b.paused
-        a.pacedWindow = b.pacedWindow
-        a.timingEpoch = b.timingEpoch
-        a.rate = b.rate
-        a.still = b.still
-        a.rainbowPaused = b.rainbowPaused
-        return a == b
     }
 
     private func drifted(nowMs: Int) -> Bool {
@@ -334,22 +255,11 @@ final class OverlayLyricScrollView: NSView {
         window?.backingScaleFactor ?? NSScreen.screens.first?.backingScaleFactor ?? 2
     }
 
-    /// 文字在一行里实际占据的矩形(左上原点):放得下按对齐方式摆(同 `place` 的静置落点,从右往左的行翻转后
-    /// 落在同一侧),放不下要滚时占满整行。排版宽度跟 `layout` 同一个式子,不算阴影出血(悬浮歌词不带阴影)。
+    /// 文字在一行里实际占据的矩形(左上原点),算式见 `LyricLayerRowSpec.textRect`,这里只接上量字宽。
     static func textRect(spec: OverlayScrollingLyricRow.Spec, width: CGFloat, height: CGFloat) -> CGRect {
-        let inset = spec.stroke?.inset ?? 0
-        let w = OverlayRowLayout.layOut(
-            words: spec.words, groups: spec.groups, inset: inset, strokeInset: inset,
-            measureMain: { MenuBarMarqueeRenderer.width(of: $0, font: spec.font, translation: spec.translation) },
-            measureRoma: { MenuBarMarqueeRenderer.width(of: $0, font: spec.romaFont) }).boxWidth
-        guard w > 0, w < width else { return CGRect(x: 0, y: 0, width: width, height: height) }
-        let x: CGFloat
-        switch spec.alignment {
-        case .leading: x = 0
-        case .center: x = (width - w) / 2
-        case .trailing: x = width - w
-        }
-        return CGRect(x: x, y: 0, width: w, height: height)
+        spec.textRect(width: width, height: height,
+                      measureMain: { MenuBarMarqueeRenderer.width(of: $0, font: spec.font, translation: spec.translation) },
+                      measureRoma: { MenuBarMarqueeRenderer.width(of: $0, font: spec.romaFont) })
     }
 
     /// 一行字本身的高度。必须跟 `OverlayPlayback.scrollTextHeight` 同一个式子,否则视图框和
@@ -470,7 +380,7 @@ final class OverlayLyricScrollView: NSView {
 
     /// 装着的长图就是 `next` 要的那一份(时机可以不同)。
     func showsImages(of next: OverlayScrollingLyricRow.Spec) -> Bool {
-        spec.map { Self.sameImages($0, next) } ?? false
+        spec.map { OverlayScrollingLyricRow.Spec.sameImages($0, next) } ?? false
     }
 
     private static func alignedUp(_ v: CGFloat, scale: CGFloat) -> CGFloat {

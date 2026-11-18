@@ -12,7 +12,7 @@ public enum OverlayTextStrokeWidth: String, Codable, Hashable, CaseIterable, Sen
 
     public var id: Self { self }
 
-    /// 默认档,也是加这项设置前的粗细。
+    /// 默认档:没存过这项设置时读它。
     public static let `default`: OverlayTextStrokeWidth = .standard
 
     /// 剪影模糊半径 σ(点)。`standard` 必须是 1.2:没碰过这项设置的人升级后描边逐像素不变。

@@ -259,7 +259,7 @@ final class WrappedKaraokeRowsView: NSView {
         }
         // 后台在画的就是这几张长图:记下最新的落点与时机,画好时照它装。
         if let p = pending, p.targets.count == targets.count,
-           zip(p.targets, targets).allSatisfy({ OverlayLyricScrollView.sameImages($0.spec, $1.spec) }) {
+           zip(p.targets, targets).allSatisfy({ OverlayScrollingLyricRow.Spec.sameImages($0.spec, $1.spec) }) {
             pending?.targets = targets
             return
         }
@@ -405,8 +405,8 @@ private struct RowRasterResult: @unchecked Sendable {
     var images: [OverlayRowImages]
 }
 
-/// 换行模式的出图缓存:按「出图相关的字段」认 —— 位图只看字、字体、颜色、描边和排版,跟逐字时间戳、动画参数无关,
-/// 比较前先把时间戳抹平(`sameImages` 本身连时间戳一起比)。只留最近几行:一行三张长图,宽窗下一份就上 MB。
+/// 换行模式的出图缓存:按「出图相关的字段」认,键的判据见 `LyricLayerRowSpec.sameImageKey`。
+/// 只留最近几行:一行三张长图,宽窗下一份就上 MB。
 @MainActor
 enum WrappedRowImageCache {
     private static var entries: [(spec: OverlayScrollingLyricRow.Spec, scale: CGFloat, images: OverlayRowImages)] = []
@@ -423,17 +423,7 @@ enum WrappedRowImageCache {
     }
 
     static func sameImageKey(_ a: OverlayScrollingLyricRow.Spec, _ b: OverlayScrollingLyricRow.Spec) -> Bool {
-        OverlayLyricScrollView.sameImages(untimed(a), untimed(b))
-    }
-
-    private static func untimed(_ spec: OverlayScrollingLyricRow.Spec) -> OverlayScrollingLyricRow.Spec {
-        func strip(_ words: [SyncedLyricWord]) -> [SyncedLyricWord] {
-            words.map { SyncedLyricWord(text: $0.text, startMs: 0, durationMs: 0) }
-        }
-        var s = spec
-        s.words = strip(s.words)
-        s.groups = s.groups?.map { SyncedLyricWordGroup(id: $0.id, words: strip($0.words), romanization: $0.romanization) }
-        return s
+        OverlayScrollingLyricRow.Spec.sameImageKey(a, b)
     }
 }
 

@@ -2801,9 +2801,6 @@ func runSourceContractSurfaceTests() {
                         "图层滚动行: 位图宽高对齐到整像素,贴图不拉伸")
             expectEqual(row.contains("let restingX = pixelAligned(") && row.contains("pixelAligned((bounds.height - (boxHeight - inkPadTop - inkPadBottom)) / 2) - inkPadBottom"), true,
                         "图层滚动行: 静置落点对齐到整像素")
-            // 停 / 走、显示窗口只影响动画,不重画长图。
-            expectEqual(row.contains("a.paused = b.paused") && row.contains("a.pacedWindow = b.pacedWindow"), true,
-                        "图层滚动行: sameImages 忽略 paused / pacedWindow")
             // 暂停时外推要冻住,否则停着也会每 250ms 判一次漂移重装。
             expectEqual(row.contains("if spec?.paused == true { return installed }"), true,
                         "图层滚动行: 暂停时 predictedMs 冻在装动画那一刻")
@@ -2946,7 +2943,7 @@ func runSourceContractSurfaceTests() {
         expectEqual(wrap.contains("guard latest.isCurrent(generation) else { return }"), true,
                     "后台出图: 排队期间又来了更新的一批时,过时的这批不画")
         expectEqual(sourceHas(wrap, "WrappedRowImageCache.images(for: t.spec, scale: g.scale) ?? {")
-                        && sourceHas(wrap, "s.words = strip(s.words)"), true,
+                        && sourceHas(wrap, "OverlayScrollingLyricRow.Spec.sameImageKey(a, b)"), true,
                     "后台出图: 第一次出现先找出图缓存,缓存按字和样式认、不看逐字时间戳")
         let overlayView = read("LyricsOverlayView.swift")
         expectEqual(sourceHas(overlayView, "if animatesLineChange, let words = playback.nextLineWords")

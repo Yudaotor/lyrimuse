@@ -993,7 +993,6 @@ func runTouchBarTests() {
         // 彩虹扩到悬浮歌词、灵动岛(04 章决策 78、05 章决策 120):图层行的「彩虹停不停」单独给,不跟「唱完一句就停表」走;
         // 判图层要不要重画位图时不算它。
         expectEqual(sourceHas(rainbowRow, "flowing: !(spec.rainbowPaused ?? spec.paused) && !spec.still)")
-                        && rainbowRow.contains("a.rainbowPaused = b.rainbowPaused")
                         && rainbowRow.contains("|| spec?.rainbowPaused != next.rainbowPaused"), true,
                     "彩虹: 图层行的彩虹停不停单独给,不触发重画位图")
         let overlayView = code(appDir.appendingPathComponent("UI/LyricsOverlayView.swift")) ?? ""
@@ -1112,7 +1111,6 @@ func runTouchBarTests() {
         expectEqual(sourceHas(scrollRow, "if spec.still {\n            scrollPath = []")
                         && scrollRow.contains("let running = reinstall && !spec.paused && !spec.still")
                         && scrollRow.contains("spec.pacedWindow != nil || spec.still")
-                        && scrollRow.contains("a.still = b.still")
                         && scrollRow.contains("spec?.still != next.still"), true,
                     "触控栏减弱动态: 图层行 still 时不装动画、停在开头、整行用已唱那张")
         expectEqual(controller.contains("still: NSWorkspace.shared.accessibilityDisplayShouldReduceMotion,")

@@ -1003,7 +1003,7 @@ enum WebLyricsPages {
             card.classList.toggle('scroll', style.overflow === 'scroll');
             card.classList.toggle('stroked', !!style.stroke);
             // 描边外沿取模糊剪影透明度 1% 的等值线(离字边 2.326σ),透明度在跨一个设备像素的区间里拉到 0…1。
-            const sigma = (style.strokeWidth || 1.2) * u;
+            const sigma = (style.strokeWidth || \(OverlayTextStrokeWidth.default.points)) * u;
             const half = 0.5 / (sigma * Math.max(devicePixelRatio || 1, 1 / u));
             const tail = (x) => 0.5 * erfc(x / Math.SQRT2);
             const lo = tail(2.326 + half), hi = tail(2.326 - half);

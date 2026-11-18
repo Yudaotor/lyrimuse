@@ -1,3 +1,4 @@
+import AppKit
 import LyrimuseCore
 import Foundation
 
@@ -1198,13 +1199,13 @@ func runOverlayTests() {
                     true, "文字不透明度接线: 「颜色」按钮摘要末尾接上不是 100% 的读数")
     }
 
-    // ---- 描边粗细:三档,默认档 = 原来写死的 1.2,两条描边路和按描边预留算的排版读同一档 ----
+    // ---- 描边粗细:三档,默认档 σ 1.2,两条描边路和按描边预留算的排版读同一档 ----
     do {
         typealias W = OverlayTextStrokeWidth
         expectEqual([W.default == .standard, W.standard.points == 1.2, W.standard.inset == 2.4], [true, true, true],
                     "描边粗细: 默认「标准」= 原来的 σ 1.2、四周预留 2.4,没碰过这项的人描边逐像素不变")
         expectEqual(W.allCases, [.thin, .standard, .thick], "描边粗细: 三档,由细到粗")
-        expectEqual(W.allCases.map(\.points), [0.8, 1.2, 1.6], "描边粗细: 细 / 标准 / 粗 的 σ")
+        expectEqual(W.allCases.map(\.points), [0.8, 1.2, 1.6], "描边粗细: 偏细 / 标准 / 偏粗 的 σ")
         expectEqual(W.allCases.allSatisfy { $0.inset == $0.points * 2 }, true, "描边粗细: 每档的预留都是 σ 的两倍")
         expectEqual(W.allCases.map { W.inset(enabled: false, width: $0) }, [0, 0, 0], "描边粗细: 描边关着时哪一档都不留预留")
         expectEqual(W.allCases.map { W.inset(enabled: true, width: $0) }, W.allCases.map(\.inset), "描边粗细: 开着时预留随档变")
@@ -1227,6 +1228,42 @@ func runOverlayTests() {
             OverlayCardGeometry.previewBreakWidth(width: 400, ratio: 0.7, inset: $0.inset, unscaledWidth: 500)
         }
         expectEqual(breaks[0] < breaks[1] && breaks[1] < breaks[2], true, "描边粗细: 下一句收窄时描边预留按这一档留、不缩")
+
+        // 图层行输入(`LyricLayerRowSpec`)只差描边粗细:长图要重画、换行出图缓存不能复用、文字占的宽随档变。
+        func layerRow(_ stroke: LyricLayerStroke?) -> LyricLayerRowSpec {
+            LyricLayerRowSpec(lineKey: "k", words: [w("痛"), w("到")],
+                              font: .systemFont(ofSize: 30), romaFont: .systemFont(ofSize: 18),
+                              baseColor: .white, fillColor: .white, romaBaseColor: .white, romaFillColor: .white,
+                              stroke: stroke, alignment: .center, paused: false)
+        }
+        let layerRows = W.allCases.map { layerRow(LyricLayerStroke(color: .black, width: $0)) }
+        typealias R = LyricLayerRowSpec
+        expectEqual([R.sameImages(layerRows[0], layerRows[1]), R.sameImages(layerRows[1], layerRows[2]),
+                     R.sameImages(layerRows[1], layerRow(LyricLayerStroke(color: .black, width: .standard)))],
+                    [false, false, true], "描边粗细: 只差粗细的两行图层输入,长图判为不同")
+        var retimed = layerRows[1]
+        retimed.words = retimed.words.map { SyncedLyricWord(text: $0.text, startMs: $0.startMs + 500, durationMs: 300) }
+        retimed.paused = true
+        retimed.pacedWindow = R.PacedWindow(startMs: 0, dwellMs: 900)
+        var restyled = retimed
+        restyled.stroke?.width = .thick
+        expectEqual([R.sameImageKey(layerRows[0], layerRows[1]), R.sameImageKey(layerRows[1], layerRows[2]),
+                     R.sameImageKey(layerRows[1], retimed), R.sameImageKey(layerRows[1], restyled)],
+                    [false, false, true, false], "描边粗细: 换行出图缓存按粗细分开认,只差时间戳 / 停走 / 显示窗口的仍复用")
+        var paused = layerRows[1]
+        paused.paused = true
+        paused.pacedWindow = R.PacedWindow(startMs: 0, dwellMs: 900)
+        paused.timingEpoch = 7
+        paused.rate = 1.5
+        paused.still = true
+        paused.rainbowPaused = true
+        expectEqual(R.sameImages(layerRows[1], paused), true,
+                    "图层行: 停 / 走、显示窗口、时间基准、速率、减弱动态、彩虹停不停只影响动画,不重画长图")
+        let rectWidths = ([layerRow(nil)] + layerRows).map {
+            $0.textRect(width: 500, height: 40, measureMain: { CGFloat($0.count) * 30 }, measureRoma: { CGFloat($0.count) * 18 }).width
+        }
+        expectEqual(zip(rectWidths.map { $0 - rectWidths[0] }, [0] + W.allCases.map { $0.inset * 2 }).map { abs($0 - $1) < 0.001 },
+                    [true, true, true, true], "描边粗细: 图层行文字占的宽 = 不描边的宽 + 两侧各一份这一档的预留")
 
         let sources = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
         func src(_ rel: String) -> String {
@@ -1261,6 +1298,10 @@ func runOverlayTests() {
                     [true, true, true], "描边粗细接线: 图层行四周预留和读音留白按同一档")
         expectEqual(sourceHas(budgets, "OverlayTextStrokeWidth.inset(enabled: $0, width: $1)"), true,
                     "描边粗细接线: 长句拆分的行宽扣的描边预留跟着档变")
+        expectEqual([sourceHas(row, "typealias Spec = LyricLayerRowSpec"),
+                     sourceHas(sourceBody("static func sameImageKey(", in: wrapped), "OverlayScrollingLyricRow.Spec.sameImageKey(a, b)"),
+                     sourceHas(sourceBody("static func textRect(spec: OverlayScrollingLyricRow.Spec", in: row), "spec.textRect(")],
+                    [true, true, true], "描边粗细接线: 图层行、换行出图缓存、命中矩形用的就是上面验过的 Core 判据")
         let stale = ["LyricsTextStrokeMetrics.inset", "LyricsTextStrokeMetrics.width"]
         expectEqual([overlay, row, wrapped, budgets].map { text in stale.contains { text.contains($0) } }, [false, false, false, false],
                     "描边粗细接线: 不再有写死粗细的常量可读")
@@ -1281,7 +1322,7 @@ func runOverlayTests() {
                     [true, true, true, true], "描边粗细接线: 玻璃分段在「颜色」组、开着描边时紧跟在描边颜色后面")
         expectEqual(sourceHas(rows, "settings.textStrokeWidth = .default"), true, "描边粗细接线: 「恢复默认」带上它")
         let page = src("lyrimuse/WebLyrics/WebLyricsPages.swift")
-        expectEqual([sourceHas(page, "const sigma = (style.strokeWidth || 1.2) * u;"),
+        expectEqual([sourceHas(page, "const sigma = (style.strokeWidth || \\(OverlayTextStrokeWidth.default.points)) * u;"),
                      sourceHas(src("lyrimuse/WebLyrics/WebLyricsObsFeed.swift"), "strokeWidth: s.textStrokeWidth")],
                     [true, true], "描边粗细接线: OBS 页的描边跟悬浮歌词同一档")
     }
@@ -1355,7 +1396,7 @@ func runOverlayTests() {
         let scrollSizing = sourceBody("func sizeThatFits(_ proposal: ProposedViewSize, nsView: OverlayLyricScrollView", in: scrollRowSource)
         expectEqual([sourceHas(scrollSizing, "OverlayLyricScrollView.textRect("), sourceHas(scrollSizing, "return nil"),
                      sourceHas(sourceBody("static func textRect(spec: OverlayScrollingLyricRow.Spec", in: scrollRowSource),
-                               "OverlayRowLayout.layOut("),
+                               "spec.textRect(width: width, height: height,"),
                      sourceHas(sourceBody("private func layerScrollingKaraokeRow", in: overlay), "contentRectSink: wrapContentSink"),
                      sourceHas(sourceBody("@ViewBuilder private var translationRow", in: overlay), "reportingSinkRect("),
                      sourceHas(sourceBody("@ViewBuilder private var romanizationRow", in: overlay), "reportingSinkRect(")],
