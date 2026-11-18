@@ -30,6 +30,8 @@ public enum SourceKnockout {
         /// Cog 窗口里的 Position 滑块(恢复、点播、冷启动之后校准位置,量变速后的速率,`CogPlayhead`):关掉后当成没授「辅助功能」权限,
         /// 恢复锚点按固定量补,别的照锚点走。
         case cogSlider = "cog-slider"
+        /// Cog 主窗口的播放列表(放流时核对系统那份是不是留着上一首的歌手,`CogStream.checkedArtist`):关掉后当成读不到,照系统那份。
+        case cogPlaylist = "cog-playlist"
         /// foobar2000 主窗口的进度条(量 DSP 变速后的实际速度,`FoobarStretch`):关掉后照最后量出的速度走。
         case foobarSlider = "foobar-slider"
         /// Amazon Music 的日志(位置时钟、暂停 / 拖动的即时信号、当前曲目的 ASIN):关掉后当成日志读不到,位置落到自记时。

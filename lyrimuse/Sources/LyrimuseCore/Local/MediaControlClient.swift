@@ -1608,7 +1608,7 @@ public enum MediaControlClient {
     // 做一次字段搬运,不是简单的一比一字段映射。
     private struct RawPayload: Decodable {
         let title: String?
-        let artist: String?
+        var artist: String?
         let album: String?
         let bundleIdentifier: String?
         let duration: Double?
@@ -2951,6 +2951,16 @@ public enum MediaControlClient {
     /// 单问那份没有原始锚点时原样交回。
     private static func cogProbedSnapshot(_ probed: MediaControlSnapshot, anchor: NowPlayingClientsProbe.SessionAnchor,
                                           now: Date) -> MediaControlSnapshot {
+        var probed = probed
+        let checkedArtist = CogStream.checkedArtist(
+            bundleID: CogStream.bundleID, title: probed.title, artist: probed.artist, duration: probed.duration,
+            pid: probed.processIdentifier ?? anchor.processIdentifier.map { Int($0) })
+        if checkedArtist != probed.artist {
+            let pid = probed.processIdentifier, itemID = probed.nowPlayingItemID
+            probed = probed.withArtist(checkedArtist ?? "")
+            probed.processIdentifier = pid
+            probed.nowPlayingItemID = itemID
+        }
         var snapshot = probed
         if snapshot.processIdentifier == nil { snapshot.processIdentifier = anchor.processIdentifier.map { Int($0) } }
         let anchorAt = anchor.timestamp.map { Date(timeIntervalSince1970: $0) }
@@ -3974,7 +3984,7 @@ public enum MediaControlClient {
         // 退出码仍是 0——JSONDecoder 对着 "null" 解码 RawPayload 会失败,走
         // `try?` 落到下面的 guard raw != nil,行为跟"没有可报告的正在播放"一致。
         // 退出码已经由上面的 r.succeeded 判过。
-        guard let raw = try? JSONDecoder().decode(RawPayload.self, from: data),
+        guard var raw = try? JSONDecoder().decode(RawPayload.self, from: data),
               let reportedBundleID = raw.bundleIdentifier else {
             setSnapshotFailure(.nobodyReporting)
             return nil
@@ -3986,6 +3996,11 @@ public enum MediaControlClient {
         noteReportingClient(reportedBundleID, forBundleID: bundleID)
         // 真读到了一份快照:通道是好的,自检留下的「坏了」也作废。
         noteChannelReadSnapshot()
+        // Cog 放流时系统那份可能留着上一首的歌手(见 CogStream.checkedArtist),排在一切按歌手认曲目的地方之前。
+        if bundleID == CogStream.bundleID {
+            raw.artist = CogStream.checkedArtist(bundleID: bundleID, title: raw.title, artist: raw.artist,
+                                                 duration: raw.duration, pid: raw.processIdentifier)
+        }
         setNowPlayingIdentifiers(bundleID: bundleID, title: raw.title, artist: raw.artist,
                                  uniqueIdentifier: raw.uniqueIdentifier, trackNumber: raw.trackNumber,
                                  mediaType: raw.mediaType)

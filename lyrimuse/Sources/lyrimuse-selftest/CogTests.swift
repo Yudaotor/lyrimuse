@@ -267,8 +267,9 @@ func runCogTests() {
         c = step(c, "First Song", "Test Artist One", 0.906)
         expectEqual([c.start == nil, S.position(c, kind: .song, elapsed: 10) == nil], [true, true], "Cog 放流: 连上后的第一首不给进度")
         c = step(c, "Second Song", "Test Artist Two", 19.906)
-        expectEqual(S.position(c, kind: .song, elapsed: 25).map { abs($0 - 5.094) < 1e-9 }, true,
-                    "Cog 放流: 第二首从标题第一次出现时的 elapsed 起算,不加提前量")
+        expectEqual(S.titleLagSecs, 0.46, "Cog 放流: 换标题比出声平均晚 0.46 秒(02 章决策 275 出声真值)")
+        expectEqual(S.position(c, kind: .song, elapsed: 25).map { abs($0 - 5.554) < 1e-9 }, true,
+                    "Cog 放流: 第二首从标题第一次出现时的 elapsed 起算,补上换标题晚的那 0.46 秒")
         expectEqual(step(c, "Second Song", "Test Artist Two", 30).start, 19.906, "Cog 放流: 同一首重发锚点(暂停恢复)不动起点")
         let jingle = step(c, "Station ID", nil, 33)
         expectEqual([jingle.song == nil, jingle.sawSong, step(jingle, "Third Song", "Test Artist Three", 39.906).start == 39.906],
@@ -288,9 +289,64 @@ func runCogTests() {
             ("Second Song", "Test Artist Two", 19.906, 31.2),
         ]
         let got = rows.map { S.reading(bundleID: cog, title: $0.0, artist: $0.1, duration: 0, anchorElapsed: $0.2, elapsed: $0.3) }
-        expectEqual(got.map { $0?.position.map { ($0 * 1000).rounded() / 1000 } }, [nil, nil, 0, 11.294],
-                    "Cog 放流 回放: 占位、第一首都不给进度,第二首从 0 起走")
-        expectEqual(got.map { $0?.anchorPosition }, [nil, nil, 0, 0], "Cog 放流 回放: 锚点也换成这一首的")
+        expectEqual(got.map { $0?.position.map { ($0 * 1000).rounded() / 1000 } }, [nil, nil, 0.46, 11.754],
+                    "Cog 放流 回放: 占位、第一首都不给进度,第二首从 0.46 起走")
+        expectEqual(got.map { $0?.anchorPosition.map { ($0 * 1000).rounded() / 1000 } }, [nil, nil, 0.46, 0.46],
+                    "Cog 放流 回放: 锚点也换成这一首的")
+        S.reset()
+
+        // 上一首留下的歌手:同一次连接里推不带「 - 」的标题,系统那份照报上一首的歌手(数照真机 ICY 测试台那一轮)
+        let first = S.step(S.ArtistCheck(), title: "First Song", artist: "Test Artist")
+        let bare = S.step(first.check, title: "Just A Title", artist: "Test Artist")
+        expectEqual([first.needsRead, bare.needsRead,
+                     S.step(bare.check, title: "Second Song", artist: "Test Artist Two").needsRead,
+                     S.step(S.step(bare.check, title: "radio", artist: "").check, title: "radio2", artist: "Test Artist").needsRead,
+                     S.step(S.step(S.ArtistCheck(), title: "radio", artist: "").check, title: "Just A Title", artist: "").needsRead],
+                    [false, true, false, false, false], "Cog 放流 歌手核对: 只有标题变了、歌手跟上一个标题完全相同才读列表")
+        var checked = bare.check
+        checked.verdict = .empty
+        expectEqual([S.step(checked, title: "Just A Title", artist: "Test Artist").needsRead,
+                     S.step(checked, title: "Just A Title", artist: "Other").check.verdict == nil],
+                    [false, true], "Cog 放流 歌手核对: 同一个标题读过不再读,歌手变了重新核对")
+        expectEqual([S.Playlist.verdict(rowArtists: []), S.Playlist.verdict(rowArtists: ["", ""]),
+                     S.Playlist.verdict(rowArtists: ["", "Test Artist"])],
+                    [.unreadable, .empty, .present], "Cog 放流 歌手核对: 没有这一行读不到,都是空才当没有歌手")
+        var reads: [String] = []
+        func checkedArtist(_ title: String, _ artist: String?, _ row: S.PlaylistArtist, duration: Double = 0) -> String? {
+            S.checkedArtist(bundleID: cog, title: title, artist: artist, duration: duration) { reads.append($0); return row }
+        }
+        let artists = [checkedArtist("First Song", "Test Artist", .empty), checkedArtist("Just A Title", "Test Artist", .empty),
+                       checkedArtist("Just A Title", "Test Artist", .present), checkedArtist("Second Song", "Test Artist", .present),
+                       checkedArtist("Third Song", "Test Artist Three", .empty)]
+        expectEqual(artists, ["Test Artist", nil, nil, "Test Artist", "Test Artist Three"],
+                    "Cog 放流 歌手核对: 读到空不当歌手,同一歌手连播读到有照样是歌,歌手不同不读")
+        expectEqual(reads, ["Just A Title", "Second Song"], "Cog 放流 歌手核对: 每个标题最多读一次")
+        S.reset()
+        reads = []
+        _ = checkedArtist("First Song", "Test Artist", .empty)
+        var nested: String?? = .none
+        let outer = S.checkedArtist(bundleID: cog, title: "Just A Title", artist: "Test Artist", duration: 0) { title in
+            reads.append(title)
+            nested = .some(checkedArtist("Just A Title", "Test Artist", .empty))
+            return .empty
+        }
+        expectEqual([outer == nil, nested == .some("Test Artist"), reads == ["Just A Title"]], [true, true, true],
+                    "Cog 放流 歌手核对: 正在读列表时同一个标题再来一拍不重读,先照系统那份")
+        expectEqual(S.kind(bundleID: cog, title: "Just A Title", artist: artists[1], duration: 0), .placeholder,
+                    "Cog 放流 歌手核对: 读到空的那个标题不当歌")
+        S.reset()
+        reads = []
+        let unreadable = [checkedArtist("First Song", "Test Artist", .unreadable), checkedArtist("Just A Title", "Test Artist", .unreadable)]
+        expectEqual([unreadable == ["Test Artist", "Test Artist"], reads == ["Just A Title"]], [true, true],
+                    "Cog 放流 歌手核对: 读不到维持原样,照系统那份的歌手")
+        S.reset()
+        reads = []
+        let local = [checkedArtist("A", "X", .empty, duration: 200), checkedArtist("B", "X", .empty, duration: 200)]
+        expectEqual([local == ["X", "X"], reads.isEmpty,
+                     [S.checkedArtist(bundleID: "com.coppertino.Vox", title: "A", artist: "X", duration: 0) { reads.append($0); return .empty },
+                      S.checkedArtist(bundleID: "com.coppertino.Vox", title: "B", artist: "X", duration: 0) { reads.append($0); return .empty }]
+                        == ["X", "X"] && reads.isEmpty],
+                    [true, true, true], "Cog 放流 歌手核对: 本地文件、别的播放器不读")
         S.reset()
 
         let applied = PlayerTitleSplit.applied(to: .forReplay(
@@ -335,6 +391,13 @@ func runCogTests() {
                     [true, true, true, true, true, true], "Cog 接线: 放流走 CogStream(主路径的位置和锚点、不是歌的闸、焦点被占时单问那份)")
         expectEqual(sourceHas(sourceText("LyrimuseCore/Local/CogPlayhead.swift"), "guard !SourceKnockout.isOut(.cogSlider), AXIsProcessTrusted() else { return false }"),
                     true, "Cog 接线: 读滑块能拔掉(拔腿测试)")
+        let mainFix = client.range(of: "raw.artist = CogStream.checkedArtist(bundleID: bundleID, title: raw.title, artist: raw.artist,")
+        let firstUse = client.range(of: "setNowPlayingIdentifiers(bundleID: bundleID, title: raw.title, artist: raw.artist,")
+        expectEqual([mainFix != nil && firstUse != nil && mainFix!.lowerBound < firstUse!.lowerBound,
+                     sourceHas(client, "let checkedArtist = CogStream.checkedArtist(\n            bundleID: CogStream.bundleID, title: probed.title, artist: probed.artist,")
+                        && sourceHas(client, "if checkedArtist != probed.artist {\n            let pid = probed.processIdentifier, itemID = probed.nowPlayingItemID\n            probed = probed.withArtist(checkedArtist ?? \"\")"),
+                     sourceHas(sourceText("LyrimuseCore/Local/CogStream.swift"), "guard !SourceKnockout.isOut(.cogPlaylist), AXIsProcessTrusted() else { return .unreadable }")],
+                    [true, true, true], "Cog 接线: 歌手核对排在主路径按歌手认曲目之前、焦点被占时单问那份也过,读列表能拔掉")
         expectEqual(sourceHas(sourceText("lyrimuse/UI/IdlePlaybackActions.swift"), "case .swinsian, .kuwo, .cog: PlayerProcess.pid(bundleID: player.bundleIdentifier) != nil"),
                     true, "Cog 接线: 停播页只在它开着时给继续播放")
     }
