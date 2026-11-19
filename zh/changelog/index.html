@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Lyrimuse 更新日志：每个版本更新了什么</title>
-<meta name="description" content="Lyrimuse 自 v1.5.0 以来每个版本的新功能、改进和修复。最新版本 v1.13.0，2026 年 11 月 11 日发布。">
+<meta name="description" content="Lyrimuse 自 v1.5.0 以来每个版本的新功能、改进和修复。最新版本 v1.14.0，2026 年 11 月 19 日发布。">
 <link rel="canonical" href="https://yudaotor.github.io/lyrimuse/zh/changelog/">
 <link rel="alternate" hreflang="en" href="https://yudaotor.github.io/lyrimuse/changelog/">
 <link rel="alternate" hreflang="zh-Hans" href="https://yudaotor.github.io/lyrimuse/zh/changelog/">
@@ -20,13 +20,15 @@
 <link rel="alternate" hreflang="ru" href="https://yudaotor.github.io/lyrimuse/ru/changelog/">
 <link rel="alternate" hreflang="uk" href="https://yudaotor.github.io/lyrimuse/uk/changelog/">
 <link rel="alternate" hreflang="th" href="https://yudaotor.github.io/lyrimuse/th/changelog/">
+<link rel="alternate" hreflang="tr" href="https://yudaotor.github.io/lyrimuse/tr/changelog/">
+<link rel="alternate" hreflang="hi" href="https://yudaotor.github.io/lyrimuse/hi/changelog/">
 <link rel="alternate" hreflang="x-default" href="https://yudaotor.github.io/lyrimuse/changelog/">
 <link rel="icon" type="image/png" sizes="64x64" href="../../assets/img/favicon.png">
 <link rel="apple-touch-icon" href="../../assets/img/apple-touch-icon.png">
 <meta name="color-scheme" content="light dark">
 <meta name="theme-color" content="#fbfbfd" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#000000" media="(prefers-color-scheme: dark)">
-<script src="../../assets/sub.js?v=202611131406" defer fetchpriority="high"></script>
+<script src="../../assets/sub.js?v=202611191657" defer fetchpriority="high"></script>
 <style>:root {
 --bg: #fbfbfd;
 --bg-alt: #f5f5f7;
@@ -396,22 +398,24 @@ animation: flpop .7s cubic-bezier(.3, 1.45, .5, 1) backwards; animation-delay: c
 .fl-2 { left: -30px; top: 52%; width: 64px; height: 64px; }
 .fl-3 { right: -48px; top: 2%; width: 70px; height: 70px; }
 .fl-4 { right: -60px; top: 50%; width: 78px; height: 78px; }
-.fl-5 { left: 4%; bottom: -34px; width: 60px; height: 60px; }
-.fl-6 { right: 7%; bottom: -30px; width: 62px; height: 62px; }
+.fl-5 { left: 3%; bottom: -34px; width: 60px; height: 60px; }
+.fl-6 { right: 4%; bottom: -30px; width: 62px; height: 62px; }
 .fl-7 { left: -44px; top: 36%; width: 60px; height: 60px; transform: rotate(6deg); }
 .fl-8 { right: -40px; top: 18%; width: 58px; height: 58px; transform: rotate(-6deg); }
-.fl-9 { left: 26%; bottom: -30px; width: 58px; height: 58px; }
-.fl-10 { left: 59%; bottom: -32px; width: 56px; height: 56px; transform: rotate(-4deg); }
+.fl-9 { left: 22%; bottom: -30px; width: 58px; height: 58px; }
+.fl-10 { left: 60%; bottom: -32px; width: 56px; height: 56px; transform: rotate(-4deg); }
 .fl-11 { right: -36px; top: 68%; width: 56px; height: 56px; transform: rotate(5deg); }
 .fl-12 { left: -40px; top: 84%; width: 58px; height: 58px; transform: rotate(-5deg); }
-.fl-13 { left: 15%; bottom: -36px; width: 56px; height: 56px; transform: rotate(5deg); }
-.fl-14 { left: 48%; bottom: -30px; width: 58px; height: 58px; transform: rotate(-3deg); }
+.fl-13 { left: 12.5%; bottom: -36px; width: 56px; height: 56px; transform: rotate(5deg); }
+.fl-14 { left: 41%; bottom: -30px; width: 58px; height: 58px; transform: rotate(-3deg); }
 .fl-15 { left: -36px; top: 20%; width: 62px; height: 62px; transform: rotate(4deg); }
 .fl-16 { left: -46px; top: 68%; width: 60px; height: 60px; transform: rotate(-4deg); }
 .fl-17 { right: -52px; top: 34%; width: 64px; height: 64px; transform: rotate(4deg); }
 .fl-18 { right: -44px; top: 84%; width: 60px; height: 60px; transform: rotate(-5deg); }
-.fl-19 { left: 37%; bottom: -34px; width: 58px; height: 58px; transform: rotate(4deg); }
-.fl-20 { left: 70%; bottom: -30px; width: 56px; height: 56px; transform: rotate(-5deg); }
+.fl-19 { left: 31.5%; bottom: -34px; width: 58px; height: 58px; transform: rotate(4deg); }
+.fl-20 { left: 69.5%; bottom: -30px; width: 56px; height: 56px; transform: rotate(-5deg); }
+.fl-21 { left: 50.5%; bottom: -36px; width: 58px; height: 58px; transform: rotate(3deg); }
+.fl-22 { left: 79%; bottom: -32px; width: 56px; height: 56px; transform: rotate(-3deg); }
 @keyframes flpop { from { opacity: 0; scale: .3; } }
 .players { padding: 56px 0 72px; text-align: center; }
 .kicker { margin: 0 0 22px; font-size: 13px; font-weight: 600; letter-spacing: .08em; color: var(--ink-3); text-transform: uppercase; }
@@ -1393,7 +1397,7 @@ transition: transform .3s var(--ease-out), background .2s, opacity .2s;
 .fl { width: 44px !important; height: 44px !important; }
 .fl-1, .fl-2, .fl-7, .fl-12, .fl-15, .fl-16 { left: -12px; }
 .fl-3, .fl-4, .fl-8, .fl-11, .fl-17, .fl-18 { right: -12px; }
-.fl-5, .fl-6, .fl-9, .fl-10, .fl-13, .fl-14, .fl-19, .fl-20 { bottom: -18px; }
+.fl-5, .fl-6, .fl-9, .fl-10, .fl-13, .fl-14, .fl-19, .fl-20, .fl-21, .fl-22 { bottom: -18px; }
 .mb-left span { display: none; }
 .ch { padding-top: 104px; }
 #display { padding-top: 40px; }
@@ -1421,7 +1425,7 @@ transition: transform .3s var(--ease-out), background .2s, opacity .2s;
 @media (max-width: 480px) {
 .hero { padding-top: 28px; }
 .fl { width: 36px !important; height: 36px !important; }
-.fl-15, .fl-16, .fl-17, .fl-18, .fl-19, .fl-20 { display: none; }
+.fl-15, .fl-16, .fl-17, .fl-18, .fl-19, .fl-20, .fl-21, .fl-22 { display: none; }
 .fl-1 { top: 16%; } .fl-7 { top: 39%; } .fl-2 { top: 62%; } .fl-12 { top: 84%; }
 .fl-3 { top: 12%; } .fl-8 { top: 31%; } .fl-4 { top: 55%; } .fl-11 { top: 78%; }
 .fl-5 { left: 8%; } .fl-13 { left: 22%; } .fl-9 { left: 36%; } .fl-14 { left: 50%; } .fl-10 { left: 64%; } .fl-6 { right: 12%; }
@@ -1761,12 +1765,14 @@ color: var(--ink); transition: box-shadow .25s, transform .25s;
       <a class="dl-item" role="menuitem" lang="ru" href="../../ru/changelog/">Русский</a>
       <a class="dl-item" role="menuitem" lang="uk" href="../../uk/changelog/">Українська</a>
       <a class="dl-item" role="menuitem" lang="th" href="../../th/changelog/">ไทย</a>
+      <a class="dl-item" role="menuitem" lang="tr" href="../../tr/changelog/">Türkçe</a>
+      <a class="dl-item" role="menuitem" lang="hi" href="../../hi/changelog/">हिन्दी</a>
     </div></div>
     <div class="dl dl-end dl-download"><a class="btn btn-dark btn-sm dl-trigger" href="https://github.com/Yudaotor/lyrimuse/releases/latest" aria-haspopup="menu" aria-expanded="false">下载<svg class="chev" viewBox="0 0 12 12" aria-hidden="true"><path d="m3 4.5 3 3 3-3" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></a>
     <div class="dl-menu" role="menu">
-      <p class="dl-head">最新版本 <span class="dl-ver">v1.13.0</span></p>
-      <a class="dl-item" role="menuitem" data-arch="arm" href="https://github.com/Yudaotor/lyrimuse/releases/download/v1.13.0/Lyrimuse-v1.13.0-macos.dmg"><span class="dl-ico"><svg viewBox="0 0 20 20" aria-hidden="true"><rect x="5" y="5" width="10" height="10" rx="2.2" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M8 2.5V5M12 2.5V5M8 15v2.5M12 15v2.5M2.5 8H5M2.5 12H5M15 8h2.5M15 12h2.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></span><span class="dl-txt"><b>Apple Silicon 版<span class="dl-rec">推荐</span></b><em>M1 及更新的芯片 · DMG · <span class="dl-size">22 MB</span></em></span></a>
-      <a class="dl-item" role="menuitem" data-arch="x86" href="https://github.com/Yudaotor/lyrimuse/releases/download/v1.13.0/Lyrimuse-v1.13.0-macos-intel.dmg"><span class="dl-ico"><svg viewBox="0 0 20 20" aria-hidden="true"><rect x="5" y="5" width="10" height="10" rx="2.2" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M8 2.5V5M12 2.5V5M8 15v2.5M12 15v2.5M2.5 8H5M2.5 12H5M15 8h2.5M15 12h2.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></span><span class="dl-txt"><b>Intel 版<span class="dl-rec">推荐</span></b><em>Intel 芯片的 Mac · DMG · <span class="dl-size">41 MB</span></em></span></a>
+      <p class="dl-head">最新版本 <span class="dl-ver">v1.14.0</span></p>
+      <a class="dl-item" role="menuitem" data-arch="arm" href="https://github.com/Yudaotor/lyrimuse/releases/download/v1.14.0/Lyrimuse-v1.14.0-macos.dmg"><span class="dl-ico"><svg viewBox="0 0 20 20" aria-hidden="true"><rect x="5" y="5" width="10" height="10" rx="2.2" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M8 2.5V5M12 2.5V5M8 15v2.5M12 15v2.5M2.5 8H5M2.5 12H5M15 8h2.5M15 12h2.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></span><span class="dl-txt"><b>Apple Silicon 版<span class="dl-rec">推荐</span></b><em>M1 及更新的芯片 · DMG · <span class="dl-size">24 MB</span></em></span></a>
+      <a class="dl-item" role="menuitem" data-arch="x86" href="https://github.com/Yudaotor/lyrimuse/releases/download/v1.14.0/Lyrimuse-v1.14.0-macos-intel.dmg"><span class="dl-ico"><svg viewBox="0 0 20 20" aria-hidden="true"><rect x="5" y="5" width="10" height="10" rx="2.2" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M8 2.5V5M12 2.5V5M8 15v2.5M12 15v2.5M2.5 8H5M2.5 12H5M15 8h2.5M15 12h2.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></span><span class="dl-txt"><b>Intel 版<span class="dl-rec">推荐</span></b><em>Intel 芯片的 Mac · DMG · <span class="dl-size">44 MB</span></em></span></a>
       <a class="dl-item" role="menuitem" href="https://github.com/Yudaotor/lyrimuse/releases/latest"><span class="dl-ico"><svg viewBox="0 0 20 20" aria-hidden="true"><path fill="currentColor" d="M10 1.8a8.2 8.2 0 0 0-2.6 16c.4.1.6-.2.6-.4v-1.5c-2.3.5-2.8-1-2.8-1-.4-.9-.9-1.2-.9-1.2-.7-.5.1-.5.1-.5.8.1 1.3.9 1.3.9.7 1.3 2 .9 2.4.7.1-.5.3-.9.5-1.1-1.8-.2-3.7-.9-3.7-4 0-.9.3-1.6.9-2.2-.1-.2-.4-1 .1-2.2 0 0 .7-.2 2.3.9a7.9 7.9 0 0 1 4.1 0c1.6-1.1 2.3-.9 2.3-.9.4 1.2.2 2 .1 2.2.5.6.9 1.3.9 2.2 0 3.2-1.9 3.8-3.7 4 .3.3.6.8.6 1.5v2.3c0 .2.1.5.6.4A8.2 8.2 0 0 0 10 1.8z"/></svg></span><span class="dl-txt"><b>前往 GitHub 下载</b><em>全部版本、ZIP 与校验文件</em></span></a>
       <p class="dl-note">DMG 没有经过 Apple 公证，第一次打开会被系统拦下：到「系统设置 → 隐私与安全」点「仍要打开」。用 Homebrew 装不会遇到。</p>
     </div></div>
@@ -1780,9 +1786,13 @@ color: var(--ink); transition: box-shadow .25s, transform .25s;
   <h1 class="sub-h1"><span>每个版本</span><span class="pe">更新了什么。</span></h1>
 </section>
 <section class="cl">
-<details class="cl-ver" id="v1.13.0" open>
-  <summary class="cl-sum"><h2 class="cl-v">v1.13.0</h2><span class="cl-badge">最新</span><time class="cl-date" datetime="2026-11-11">2026 年 11 月 11 日</time><span class="cl-count">新功能 19 · 改进 12 · 修复 13</span><i class="cl-chev" aria-hidden="true"></i></summary>
-  <div class="cl-body"><section class="cl-g cl-new"><h3>新功能</h3><ul><li>新增意大利语、巴西葡萄牙语、越南语、俄语、乌克兰语与泰语界面</li><li>手动选过界面语言的，升级后有了自己系统语言的界面时会提示改用</li><li>新增内置播放器 Pear Desktop、Swinsian、Plexamp、MyGo Music 与 Audirvana（Studio 与 Origin）</li><li>新增微信读书听书，正在朗读的段落作为字幕显示，内置播放器增至 20 款</li><li>Pear Desktop 支持跳过广告和「喜欢」，它与网页版 YouTube Music 都支持随机播放</li><li>MyGo Music 放本机文件时可用文件旁的 .lrc 与内嵌歌词，支持「喜欢」，并会预先解析接下来的歌</li><li>菜单栏面板可以像「控制中心」一样自定义：拖动排列、调整大小、添加或移除格子，正在播放卡片也是其中一格</li><li>新增「声音」「今日收听」、显示译文、显示读音、字号、歌词窗口置顶与全屏等面板格子</li><li>面板底栏的项目可以增删、排序，新增的格子也能长按或右键翻面调整设置</li><li>面板里可以用键盘播放／暂停、切歌、调歌词偏移，并新增打开面板的全局快捷键</li><li>灵动岛展开卡头部的快捷操作可以自己排：两行固定格子、可以留空，可选的按钮也多了很多</li><li>新增「按音量键时提示」开关，关闭后按键盘音量键不再弹出灵动岛的音量横幅</li><li>悬浮歌词的读音、译文与下一句字号可以分别调整</li><li>悬浮歌词的下一句新增「交错」排法：两句同字号，一左一右轮流唱</li><li>歌词窗口完整尺寸新增「控件大小」（100%～200%），网页歌词跟着一起放大</li><li>触控栏副行选了译文或读音、这首歌却没有时，可改为显示下一句或只显示歌词</li><li>触控栏新增「输入时收起」，在输入框里打字时收起歌词、露出输入法候选与输入建议</li><li>搜索候选歌词里没有一条与播放器时长相符时，会换个时长补搜，结果列在「不可用」里并注明时长不符</li><li>网页播放器的浏览器菜单里重新默认列出 Arc</li></ul></section><section class="cl-g cl-improved"><h3>改进</h3><ul><li>没有在放歌时，菜单栏面板照常显示上一首的封面、歌名、歌词与走带键，并注明上次播放时间</li><li>悬浮歌词的下一句预览也逐词标读音，折行位置与唱到这一句时一致</li><li>改进 Spotify 的进度：暂停后恢复、切换输出设备后，歌词不再整体偏移</li><li>改进纯音乐识别：Apple Music 的古典乐不再卡在「搜索中」或误报暂无歌词，QQ 音乐、汽水音乐等刚点播的歌也能认出</li><li>改进整串带括号的歌名、外文名在前的双语歌名，以及演唱会录音的歌词匹配</li><li>中文与粤语逐字歌词的读音一字对一个音节；借用的日语假名遇到数字等字符也能对齐</li><li>搜索候选歌词的「当前使用」照实标出正在放的这首实际用的是哪份</li><li>「导入文件…」移入搜索候选歌词标题栏的 ⋯ 菜单</li><li>菜单栏只显示图标时改用系统标准宽度，不再两侧留空</li><li>设置页在文字较长的语言下，工具栏摘要与数值读数不再被截断</li><li>纯文本歌词的「此歌词无时间戳」提示移到末尾并调淡</li><li>在设置里拖动滑杆和颜色选择器时不再卡顿</li></ul></section><section class="cl-g cl-fixed"><h3>修复</h3><ul><li>修复播放 QQ 音乐等播放器里没放过的歌时，反复弹窗请求读取其他 App 数据的问题</li><li>修复 macOS 15 及更早系统上，歌词窗口开着「HDR 高亮」时每次启动都崩溃的问题</li><li>修复几处偶发崩溃</li><li>修复手动选定的歌词被换成播放器自家歌词的问题</li><li>修复 Amazon Music 卡顿后歌词进度不准的问题</li><li>修复在 AirPods Max 上恢复播放后，foobar2000 与洛雪音乐的歌词整体超前的问题</li><li>修复第二声部只唱很少几句的歌被当成对唱、译文忽左忽中的问题</li><li>修复菜单栏彩虹色逐字歌词换句时整句提前高亮的问题</li><li>修复指针停在悬浮歌词文字两侧的空白处时，「悬停时淡化」就让歌词变淡的问题</li><li>修复歌词导入的几处问题，包括非 UTF-8 的日文、韩文文件乱码，以及空文件被当成歌词</li><li>修复没有刘海的屏幕上，广告期间灵动岛缩得很小的问题</li><li>修复指针从下方移不进灵动岛、横向移过时直接滑过去的问题</li><li>修复出现滚动条时设置页整体往左挤的问题</li></ul></section><p class="cl-gh"><a href="https://github.com/Yudaotor/lyrimuse/releases/tag/v1.13.0">在 GitHub 查看这一版和下载 ›</a></p></div>
+<details class="cl-ver" id="v1.14.0" open>
+  <summary class="cl-sum"><h2 class="cl-v">v1.14.0</h2><span class="cl-badge">最新</span><time class="cl-date" datetime="2026-11-19">2026 年 11 月 19 日</time><span class="cl-count">新功能 18 · 改进 9 · 修复 12</span><i class="cl-chev" aria-hidden="true"></i></summary>
+  <div class="cl-body"><section class="cl-g cl-new"><h3>新功能</h3><ul><li>新增土耳其语与印地语界面，界面语言增至 16 种</li><li>新增内置播放器酷我音乐与 Cog，内置播放器增至 22 款</li><li>新增歌词源 Zing MP3，越南语歌可用上逐字歌词</li><li>新增歌词源 Megalobiz，歌词源增至 16 个</li><li>歌词管理可以把歌词写进歌曲文件，也可在实验室里开启自动写入</li><li>采用搜索到的歌词、保存修改、重新自动匹配或标为纯音乐后可撤销</li><li>灵动岛音浪新增「跟随音乐跳动」，随播放器真实的声音跳动</li><li>灵动岛的歌词颜色可以自定义</li><li>灵动岛与菜单栏的副行在这首没有译文或读音时，可改显示下一句</li><li>菜单栏新增「暂停时保留歌词」，暂停时停在当前这一句</li><li>在菜单栏面板的「声音」格上滚动即可调节音量</li><li>悬浮歌词新增「文字不透明度」滑杆</li><li>悬浮歌词的描边粗细可选偏细、标准、偏粗</li><li>悬浮歌词新增「无歌词时显示歌名」，没有歌词时显示歌名与歌手</li><li>迷你歌词窗口新增「截屏时隐藏」与「广告时隐藏」</li><li>歌词窗口的动态封面可以选择来源</li><li>直接从磁盘映像打开时，会提示移到「应用程序」文件夹</li><li>QQ 音乐在放歌却识别不到时，会提示该打开它的哪个设置</li></ul></section><section class="cl-g cl-improved"><h3>改进</h3><ul><li>移除了歌词源 Musixmatch，用它的歌（含手动选定的）会自动改用其他来源</li><li>悬浮歌词「交错」排法下也显示每句的译文与读音</li><li>菜单栏「图标动画」在显示歌词时也会律动</li><li>播放器不给封面时，本机歌曲改用文件内嵌的封面</li><li>歌词库很大时，歌词管理的排序、搜索与切换歌曲更快</li><li>日语歌更多用上逐字歌词</li><li>歌词窗口的上一首、播放、下一首按钮更容易点中</li><li>Last.fm 拒收 API Key 时说明需订阅 Last.fm Pro，收听留到恢复后补发</li><li>修订韩语与法语界面译文</li></ul></section><section class="cl-g cl-fixed"><h3>修复</h3><ul><li>修复一处崩溃和几处卡顿，包括刚启动时打开菜单栏面板卡住</li><li>修复关闭设置和歌词管理后内存占用不回落</li><li>修复歌词管理与「搜索候选歌词」里的歌词预览滚动卡顿</li><li>修复设置页右侧被裁掉、设置窗口拖不大</li><li>修复系统语言是粤语时界面显示成英文</li><li>修复歌词引擎没运行时一直停在「搜索歌词中…」</li><li>修复歌词窗口标题栏拖不动，以及左上角按钮跳动、闪烁</li><li>修复搜不到汽水音乐歌词，以及在日韩与新加坡搜不到网易云歌词</li><li>修复部分印地语、泰语歌匹配到歌名相近的另一首歌的歌词</li><li>修复随 Lyrimuse 一起启动的播放器跳到前台</li><li>修复播放器的「自动识别」开关关不掉</li><li>修复灵动岛展开时进度条不显示已播部分</li></ul></section><p class="cl-gh"><a href="https://github.com/Yudaotor/lyrimuse/releases/tag/v1.14.0">在 GitHub 查看这一版和下载 ›</a></p></div>
+</details>
+<details class="cl-ver" id="v1.13.0">
+  <summary class="cl-sum"><h2 class="cl-v">v1.13.0</h2><time class="cl-date" datetime="2026-11-11">2026 年 11 月 11 日</time><span class="cl-count">新功能 19 · 改进 12 · 修复 13</span><i class="cl-chev" aria-hidden="true"></i></summary>
+  <div class="cl-body"><section class="cl-g cl-new"><h3>新功能</h3><ul><li>新增意大利语、巴西葡萄牙语、越南语、俄语、乌克兰语与泰语界面</li><li>手动选过界面语言的，升级后有了自己系统语言的界面时会提示改用</li><li>内置播放器新增五款：Pear Desktop、Swinsian、Plexamp、MyGo Music，以及 Audirvana（含 Studio 与 Origin 两个版本）</li><li>新增微信读书听书，正在朗读的段落作为字幕显示，内置播放器增至 20 款</li><li>Pear Desktop 支持跳过广告和「喜欢」，它与网页版 YouTube Music 都支持随机播放</li><li>MyGo Music 放本机文件时可用文件旁的 .lrc 与内嵌歌词，支持「喜欢」，并会预先解析接下来的歌</li><li>菜单栏面板可以像「控制中心」一样自定义：拖动排列、调整大小、添加或移除格子，正在播放卡片也是其中一格</li><li>新增「声音」「今日收听」、显示译文、显示读音、字号、歌词窗口置顶与全屏等面板格子</li><li>面板底栏的项目可以增删、排序，新增的格子也能长按或右键翻面调整设置</li><li>面板里可以用键盘播放／暂停、切歌、调歌词偏移，并新增打开面板的全局快捷键</li><li>灵动岛展开卡头部的快捷操作可以自己排：两行固定格子、可以留空，可选的按钮也多了很多</li><li>新增「按音量键时提示」开关，关闭后按键盘音量键不再弹出灵动岛的音量横幅</li><li>悬浮歌词的读音、译文与下一句字号可以分别调整</li><li>悬浮歌词的下一句新增「交错」排法：两句同字号，一左一右轮流唱</li><li>歌词窗口完整尺寸新增「控件大小」（100%～200%），网页歌词跟着一起放大</li><li>触控栏副行选了译文或读音、这首歌却没有时，可改为显示下一句或只显示歌词</li><li>触控栏新增「输入时收起」，在输入框里打字时收起歌词、露出输入法候选与输入建议</li><li>搜索候选歌词里没有一条与播放器时长相符时，会换个时长补搜，结果列在「不可用」里并注明时长不符</li><li>网页播放器的浏览器菜单里重新默认列出 Arc</li></ul></section><section class="cl-g cl-improved"><h3>改进</h3><ul><li>没有在放歌时，菜单栏面板照常显示上一首的封面、歌名、歌词与走带键，并注明上次播放时间</li><li>悬浮歌词的下一句预览也逐词标读音，折行位置与唱到这一句时一致</li><li>改进 Spotify 的进度：暂停后恢复、切换输出设备后，歌词不再整体偏移</li><li>改进纯音乐识别：Apple Music 的古典乐不再卡在「搜索中」或误报暂无歌词，QQ 音乐、汽水音乐等刚点播的歌也能认出</li><li>改进整串带括号的歌名、外文名在前的双语歌名，以及演唱会录音的歌词匹配</li><li>中文与粤语逐字歌词的读音一字对一个音节；借用的日语假名遇到数字等字符也能对齐</li><li>搜索候选歌词的「当前使用」照实标出正在放的这首实际用的是哪份</li><li>「导入文件…」移入搜索候选歌词标题栏的 ⋯ 菜单</li><li>菜单栏只显示图标时改用系统标准宽度，不再两侧留空</li><li>设置页在文字较长的语言下，工具栏摘要与数值读数不再被截断</li><li>纯文本歌词的「此歌词无时间戳」提示移到末尾并调淡</li><li>在设置里拖动滑杆和颜色选择器时不再卡顿</li></ul></section><section class="cl-g cl-fixed"><h3>修复</h3><ul><li>修复播放 QQ 音乐等播放器里没放过的歌时，反复弹窗请求读取其他 App 数据的问题</li><li>修复 macOS 15 及更早系统上，歌词窗口开着「HDR 高亮」时每次启动都崩溃的问题</li><li>修复几处偶发崩溃</li><li>修复手动选定的歌词被换成播放器自家歌词的问题</li><li>修复 Amazon Music 卡顿后歌词进度不准的问题</li><li>修复在 AirPods Max 上恢复播放后，foobar2000 与洛雪音乐的歌词整体超前的问题</li><li>修复第二声部只唱很少几句的歌被当成对唱、译文忽左忽中的问题</li><li>修复菜单栏彩虹色逐字歌词换句时整句提前高亮的问题</li><li>修复指针停在悬浮歌词文字两侧的空白处时，「悬停时淡化」就让歌词变淡的问题</li><li>修复歌词导入的几处问题，包括非 UTF-8 的日文、韩文文件乱码，以及空文件被当成歌词</li><li>修复没有刘海的屏幕上，广告期间灵动岛缩得很小的问题</li><li>修复指针从下方移不进灵动岛、横向移过时直接滑过去的问题</li><li>修复出现滚动条时设置页整体往左挤的问题</li></ul></section><p class="cl-gh"><a href="https://github.com/Yudaotor/lyrimuse/releases/tag/v1.13.0">在 GitHub 查看这一版和下载 ›</a></p></div>
 </details>
 <details class="cl-ver" id="v1.12.0">
   <summary class="cl-sum"><h2 class="cl-v">v1.12.0</h2><time class="cl-date" datetime="2026-11-01">2026 年 11 月 1 日</time><span class="cl-count">新功能 30 · 改进 23 · 修复 20</span><i class="cl-chev" aria-hidden="true"></i></summary>
@@ -1827,9 +1837,9 @@ color: var(--ink); transition: box-shadow .25s, transform .25s;
     <div class="cta">
       <div class="dl dl-download"><a class="btn btn-white dl-trigger mag" href="https://github.com/Yudaotor/lyrimuse/releases/latest" aria-haspopup="menu" aria-expanded="false">下载 Lyrimuse<svg class="chev" viewBox="0 0 12 12" aria-hidden="true"><path d="m3 4.5 3 3 3-3" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></a>
       <div class="dl-menu" role="menu">
-      <p class="dl-head">最新版本 <span class="dl-ver">v1.13.0</span></p>
-      <a class="dl-item" role="menuitem" data-arch="arm" href="https://github.com/Yudaotor/lyrimuse/releases/download/v1.13.0/Lyrimuse-v1.13.0-macos.dmg"><span class="dl-ico"><svg viewBox="0 0 20 20" aria-hidden="true"><rect x="5" y="5" width="10" height="10" rx="2.2" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M8 2.5V5M12 2.5V5M8 15v2.5M12 15v2.5M2.5 8H5M2.5 12H5M15 8h2.5M15 12h2.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></span><span class="dl-txt"><b>Apple Silicon 版<span class="dl-rec">推荐</span></b><em>M1 及更新的芯片 · DMG · <span class="dl-size">22 MB</span></em></span></a>
-      <a class="dl-item" role="menuitem" data-arch="x86" href="https://github.com/Yudaotor/lyrimuse/releases/download/v1.13.0/Lyrimuse-v1.13.0-macos-intel.dmg"><span class="dl-ico"><svg viewBox="0 0 20 20" aria-hidden="true"><rect x="5" y="5" width="10" height="10" rx="2.2" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M8 2.5V5M12 2.5V5M8 15v2.5M12 15v2.5M2.5 8H5M2.5 12H5M15 8h2.5M15 12h2.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></span><span class="dl-txt"><b>Intel 版<span class="dl-rec">推荐</span></b><em>Intel 芯片的 Mac · DMG · <span class="dl-size">41 MB</span></em></span></a>
+      <p class="dl-head">最新版本 <span class="dl-ver">v1.14.0</span></p>
+      <a class="dl-item" role="menuitem" data-arch="arm" href="https://github.com/Yudaotor/lyrimuse/releases/download/v1.14.0/Lyrimuse-v1.14.0-macos.dmg"><span class="dl-ico"><svg viewBox="0 0 20 20" aria-hidden="true"><rect x="5" y="5" width="10" height="10" rx="2.2" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M8 2.5V5M12 2.5V5M8 15v2.5M12 15v2.5M2.5 8H5M2.5 12H5M15 8h2.5M15 12h2.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></span><span class="dl-txt"><b>Apple Silicon 版<span class="dl-rec">推荐</span></b><em>M1 及更新的芯片 · DMG · <span class="dl-size">24 MB</span></em></span></a>
+      <a class="dl-item" role="menuitem" data-arch="x86" href="https://github.com/Yudaotor/lyrimuse/releases/download/v1.14.0/Lyrimuse-v1.14.0-macos-intel.dmg"><span class="dl-ico"><svg viewBox="0 0 20 20" aria-hidden="true"><rect x="5" y="5" width="10" height="10" rx="2.2" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M8 2.5V5M12 2.5V5M8 15v2.5M12 15v2.5M2.5 8H5M2.5 12H5M15 8h2.5M15 12h2.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></span><span class="dl-txt"><b>Intel 版<span class="dl-rec">推荐</span></b><em>Intel 芯片的 Mac · DMG · <span class="dl-size">44 MB</span></em></span></a>
       <a class="dl-item" role="menuitem" href="https://github.com/Yudaotor/lyrimuse/releases/latest"><span class="dl-ico"><svg viewBox="0 0 20 20" aria-hidden="true"><path fill="currentColor" d="M10 1.8a8.2 8.2 0 0 0-2.6 16c.4.1.6-.2.6-.4v-1.5c-2.3.5-2.8-1-2.8-1-.4-.9-.9-1.2-.9-1.2-.7-.5.1-.5.1-.5.8.1 1.3.9 1.3.9.7 1.3 2 .9 2.4.7.1-.5.3-.9.5-1.1-1.8-.2-3.7-.9-3.7-4 0-.9.3-1.6.9-2.2-.1-.2-.4-1 .1-2.2 0 0 .7-.2 2.3.9a7.9 7.9 0 0 1 4.1 0c1.6-1.1 2.3-.9 2.3-.9.4 1.2.2 2 .1 2.2.5.6.9 1.3.9 2.2 0 3.2-1.9 3.8-3.7 4 .3.3.6.8.6 1.5v2.3c0 .2.1.5.6.4A8.2 8.2 0 0 0 10 1.8z"/></svg></span><span class="dl-txt"><b>前往 GitHub 下载</b><em>全部版本、ZIP 与校验文件</em></span></a>
       <p class="dl-note">DMG 没有经过 Apple 公证，第一次打开会被系统拦下：到「系统设置 → 隐私与安全」点「仍要打开」。用 Homebrew 装不会遇到。</p>
     </div></div>
@@ -1852,7 +1862,7 @@ color: var(--ink); transition: box-shadow .25s, transform .25s;
         <div class="foot-col"><p class="foot-h">产品</p><ul><li><a href="../features/">功能清单</a></li><li><a href="../players/">支持的播放器</a></li><li><a href="./">更新日志</a></li><li><a href="https://github.com/Yudaotor/lyrimuse/releases">Releases</a></li></ul></div>
         <div class="foot-col"><p class="foot-h">帮助</p><ul><li><a href="../#faq">常见问题</a></li><li><a href="https://github.com/Yudaotor/lyrimuse/issues/new/choose">反馈问题</a></li><li><a href="https://github.com/Yudaotor/lyrimuse/discussions/categories/q-a">使用求助</a></li><li><a href="../privacy/">隐私政策</a></li><li><a href="../terms/">使用条款</a></li></ul></div>
         <div class="foot-col"><p class="foot-h">关于</p><ul><li><a href="https://github.com/Yudaotor/lyrimuse/blob/main/README.zh-CN.md">GitHub（中文说明）</a></li><li><a href="https://www.bilibili.com/video/BV1CXH66yEUJ/">视频介绍</a></li><li><a href="https://yudaotor.github.io/donate/">赞助</a></li><li><a href="https://github.com/Yudaotor/lyrimuse/blob/main/LICENSE">GPL-3.0</a></li></ul></div>
-        <div class="foot-col"><p class="foot-h">语言</p><ul><li><a href="../../changelog/" lang="en">English</a></li><li><a href="./" lang="zh-Hans" aria-current="page">简体中文</a></li><li><a href="../../zh-Hant/changelog/" lang="zh-Hant">繁體中文</a></li><li><a href="../../ja/changelog/" lang="ja">日本語</a></li><li><a href="../../ko/changelog/" lang="ko">한국어</a></li><li><a href="../../es/changelog/" lang="es">Español</a></li><li><a href="../../fr/changelog/" lang="fr">Français</a></li><li><a href="../../de/changelog/" lang="de">Deutsch</a></li><li><a href="../../it/changelog/" lang="it">Italiano</a></li><li><a href="../../pt-BR/changelog/" lang="pt-BR">Português (Brasil)</a></li><li><a href="../../vi/changelog/" lang="vi">Tiếng Việt</a></li><li><a href="../../ru/changelog/" lang="ru">Русский</a></li><li><a href="../../uk/changelog/" lang="uk">Українська</a></li><li><a href="../../th/changelog/" lang="th">ไทย</a></li></ul></div>
+        <div class="foot-col"><p class="foot-h">语言</p><ul><li><a href="../../changelog/" lang="en">English</a></li><li><a href="./" lang="zh-Hans" aria-current="page">简体中文</a></li><li><a href="../../zh-Hant/changelog/" lang="zh-Hant">繁體中文</a></li><li><a href="../../ja/changelog/" lang="ja">日本語</a></li><li><a href="../../ko/changelog/" lang="ko">한국어</a></li><li><a href="../../es/changelog/" lang="es">Español</a></li><li><a href="../../fr/changelog/" lang="fr">Français</a></li><li><a href="../../de/changelog/" lang="de">Deutsch</a></li><li><a href="../../it/changelog/" lang="it">Italiano</a></li><li><a href="../../pt-BR/changelog/" lang="pt-BR">Português (Brasil)</a></li><li><a href="../../vi/changelog/" lang="vi">Tiếng Việt</a></li><li><a href="../../ru/changelog/" lang="ru">Русский</a></li><li><a href="../../uk/changelog/" lang="uk">Українська</a></li><li><a href="../../th/changelog/" lang="th">ไทย</a></li><li><a href="../../tr/changelog/" lang="tr">Türkçe</a></li><li><a href="../../hi/changelog/" lang="hi">हिन्दी</a></li></ul></div>
       </nav>
     </div>
     <p class="foot-note">Apple Music、Spotify、KKBOX 等名称和图标归各自所有者，Lyrimuse 是独立的开源项目，与它们没有隶属或合作关系。</p>

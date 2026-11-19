@@ -6,7 +6,7 @@
 
 
 <title>Lyrimuse｜Mac 桌面歌词：Apple Music、QQ 音乐、网易云逐字歌词</title>
-<meta name="description" content="开源的 Mac 桌面歌词：Apple Music、Spotify、QQ 音乐、网易云音乐等二十款播放器的逐字歌词，浮在桌面、收进刘海、挂在菜单栏，带翻译和读音。">
+<meta name="description" content="开源的 Mac 桌面歌词：Apple Music、Spotify、QQ 音乐、网易云音乐等二十二款播放器的逐字歌词，浮在桌面、收进刘海、挂在菜单栏，带翻译和读音。">
 <link rel="canonical" href="https://yudaotor.github.io/lyrimuse/zh/">
 <link rel="alternate" hreflang="en" href="https://yudaotor.github.io/lyrimuse/">
 <link rel="alternate" hreflang="zh-Hans" href="https://yudaotor.github.io/lyrimuse/zh/">
@@ -22,13 +22,15 @@
 <link rel="alternate" hreflang="ru" href="https://yudaotor.github.io/lyrimuse/ru/">
 <link rel="alternate" hreflang="uk" href="https://yudaotor.github.io/lyrimuse/uk/">
 <link rel="alternate" hreflang="th" href="https://yudaotor.github.io/lyrimuse/th/">
+<link rel="alternate" hreflang="tr" href="https://yudaotor.github.io/lyrimuse/tr/">
+<link rel="alternate" hreflang="hi" href="https://yudaotor.github.io/lyrimuse/hi/">
 <link rel="alternate" hreflang="x-default" href="https://yudaotor.github.io/lyrimuse/">
 <link rel="icon" type="image/png" sizes="64x64" href="../assets/img/favicon.png">
 <link rel="apple-touch-icon" href="../assets/img/apple-touch-icon.png">
 <meta name="color-scheme" content="light dark">
 <meta name="theme-color" content="#fbfbfd" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#000000" media="(prefers-color-scheme: dark)">
-<script src="../assets/lp.js?v=202611131406" defer fetchpriority="high"></script>
+<script src="../assets/lp.js?v=202611191657" defer fetchpriority="high"></script>
 <style>:root {
 --bg: #fbfbfd;
 --bg-alt: #f5f5f7;
@@ -398,22 +400,24 @@ animation: flpop .7s cubic-bezier(.3, 1.45, .5, 1) backwards; animation-delay: c
 .fl-2 { left: -30px; top: 52%; width: 64px; height: 64px; }
 .fl-3 { right: -48px; top: 2%; width: 70px; height: 70px; }
 .fl-4 { right: -60px; top: 50%; width: 78px; height: 78px; }
-.fl-5 { left: 4%; bottom: -34px; width: 60px; height: 60px; }
-.fl-6 { right: 7%; bottom: -30px; width: 62px; height: 62px; }
+.fl-5 { left: 3%; bottom: -34px; width: 60px; height: 60px; }
+.fl-6 { right: 4%; bottom: -30px; width: 62px; height: 62px; }
 .fl-7 { left: -44px; top: 36%; width: 60px; height: 60px; transform: rotate(6deg); }
 .fl-8 { right: -40px; top: 18%; width: 58px; height: 58px; transform: rotate(-6deg); }
-.fl-9 { left: 26%; bottom: -30px; width: 58px; height: 58px; }
-.fl-10 { left: 59%; bottom: -32px; width: 56px; height: 56px; transform: rotate(-4deg); }
+.fl-9 { left: 22%; bottom: -30px; width: 58px; height: 58px; }
+.fl-10 { left: 60%; bottom: -32px; width: 56px; height: 56px; transform: rotate(-4deg); }
 .fl-11 { right: -36px; top: 68%; width: 56px; height: 56px; transform: rotate(5deg); }
 .fl-12 { left: -40px; top: 84%; width: 58px; height: 58px; transform: rotate(-5deg); }
-.fl-13 { left: 15%; bottom: -36px; width: 56px; height: 56px; transform: rotate(5deg); }
-.fl-14 { left: 48%; bottom: -30px; width: 58px; height: 58px; transform: rotate(-3deg); }
+.fl-13 { left: 12.5%; bottom: -36px; width: 56px; height: 56px; transform: rotate(5deg); }
+.fl-14 { left: 41%; bottom: -30px; width: 58px; height: 58px; transform: rotate(-3deg); }
 .fl-15 { left: -36px; top: 20%; width: 62px; height: 62px; transform: rotate(4deg); }
 .fl-16 { left: -46px; top: 68%; width: 60px; height: 60px; transform: rotate(-4deg); }
 .fl-17 { right: -52px; top: 34%; width: 64px; height: 64px; transform: rotate(4deg); }
 .fl-18 { right: -44px; top: 84%; width: 60px; height: 60px; transform: rotate(-5deg); }
-.fl-19 { left: 37%; bottom: -34px; width: 58px; height: 58px; transform: rotate(4deg); }
-.fl-20 { left: 70%; bottom: -30px; width: 56px; height: 56px; transform: rotate(-5deg); }
+.fl-19 { left: 31.5%; bottom: -34px; width: 58px; height: 58px; transform: rotate(4deg); }
+.fl-20 { left: 69.5%; bottom: -30px; width: 56px; height: 56px; transform: rotate(-5deg); }
+.fl-21 { left: 50.5%; bottom: -36px; width: 58px; height: 58px; transform: rotate(3deg); }
+.fl-22 { left: 79%; bottom: -32px; width: 56px; height: 56px; transform: rotate(-3deg); }
 @keyframes flpop { from { opacity: 0; scale: .3; } }
 .players { padding: 56px 0 72px; text-align: center; }
 .kicker { margin: 0 0 22px; font-size: 13px; font-weight: 600; letter-spacing: .08em; color: var(--ink-3); text-transform: uppercase; }
@@ -1395,7 +1399,7 @@ transition: transform .3s var(--ease-out), background .2s, opacity .2s;
 .fl { width: 44px !important; height: 44px !important; }
 .fl-1, .fl-2, .fl-7, .fl-12, .fl-15, .fl-16 { left: -12px; }
 .fl-3, .fl-4, .fl-8, .fl-11, .fl-17, .fl-18 { right: -12px; }
-.fl-5, .fl-6, .fl-9, .fl-10, .fl-13, .fl-14, .fl-19, .fl-20 { bottom: -18px; }
+.fl-5, .fl-6, .fl-9, .fl-10, .fl-13, .fl-14, .fl-19, .fl-20, .fl-21, .fl-22 { bottom: -18px; }
 .mb-left span { display: none; }
 .ch { padding-top: 104px; }
 #display { padding-top: 40px; }
@@ -1423,7 +1427,7 @@ transition: transform .3s var(--ease-out), background .2s, opacity .2s;
 @media (max-width: 480px) {
 .hero { padding-top: 28px; }
 .fl { width: 36px !important; height: 36px !important; }
-.fl-15, .fl-16, .fl-17, .fl-18, .fl-19, .fl-20 { display: none; }
+.fl-15, .fl-16, .fl-17, .fl-18, .fl-19, .fl-20, .fl-21, .fl-22 { display: none; }
 .fl-1 { top: 16%; } .fl-7 { top: 39%; } .fl-2 { top: 62%; } .fl-12 { top: 84%; }
 .fl-3 { top: 12%; } .fl-8 { top: 31%; } .fl-4 { top: 55%; } .fl-11 { top: 78%; }
 .fl-5 { left: 8%; } .fl-13 { left: 22%; } .fl-9 { left: 36%; } .fl-14 { left: 50%; } .fl-10 { left: 64%; } .fl-6 { right: 12%; }
@@ -1511,7 +1515,7 @@ html { scroll-behavior: auto; }
 <meta property="og:url" content="https://yudaotor.github.io/lyrimuse/zh/">
 <meta property="og:locale" content="zh_CN">
 <meta property="og:title" content="Lyrimuse｜Mac 桌面歌词：Apple Music、QQ 音乐、网易云逐字歌词">
-<meta property="og:description" content="桌面歌词，为 Mac 全新构想。Apple Music、Spotify、QQ 音乐、网易云音乐等二十款播放器的逐字歌词，浮在桌面、收进刘海、挂在菜单栏。">
+<meta property="og:description" content="桌面歌词，为 Mac 全新构想。Apple Music、Spotify、QQ 音乐、网易云音乐等二十二款播放器的逐字歌词，浮在桌面、收进刘海、挂在菜单栏。">
 <meta property="og:image" content="https://yudaotor.github.io/lyrimuse/assets/img/og-banner-zh.jpg">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
@@ -1530,13 +1534,13 @@ html { scroll-behavior: auto; }
     "priceCurrency": "USD"
   },
   "downloadUrl": "https://github.com/Yudaotor/lyrimuse/releases/latest",
-  "softwareVersion": "1.13.0",
+  "softwareVersion": "1.14.0",
   "releaseNotes": "https://yudaotor.github.io/lyrimuse/zh/changelog/",
   "license": "https://www.gnu.org/licenses/gpl-3.0.html",
   "url": "https://yudaotor.github.io/lyrimuse/zh/",
   "inLanguage": "zh-Hans",
   "image": "https://yudaotor.github.io/lyrimuse/assets/img/og-banner-zh.jpg",
-  "description": "开源的 Mac 桌面歌词：Apple Music、Spotify、QQ 音乐、网易云音乐等二十款播放器的逐字歌词，浮在桌面、收进刘海、挂在菜单栏，带翻译和读音。",
+  "description": "开源的 Mac 桌面歌词：Apple Music、Spotify、QQ 音乐、网易云音乐等二十二款播放器的逐字歌词，浮在桌面、收进刘海、挂在菜单栏，带翻译和读音。",
   "author": {
     "@type": "Person",
     "name": "Yudaotor",
@@ -1617,7 +1621,7 @@ html { scroll-behavior: auto; }
       "name": "和 LyricsX 有什么区别？",
       "acceptedAnswer": {
         "@type": "Answer",
-        "text": "LyricsX 最后一个版本是 2022 年 4 月的 v1.6.3。Lyrimuse 需要 macOS 14 以上，多支持了 QQ 音乐、网易云音乐、酷狗、汽水音乐、KKBOX、Amazon Music、YouTube Music、Pear Desktop、洛雪音乐、reAMP、Pine Player、foobar2000、Plexamp、MyGo Music 和微信读书，歌词按打分挑选，有粤拼，日文能标罗马音或假名，还能记录到 Last.fm。详见逐项核实的对比。"
+        "text": "LyricsX 最后一个版本是 2022 年 4 月的 v1.6.3。Lyrimuse 需要 macOS 14 以上，多支持了 QQ 音乐、网易云音乐、酷狗、酷我、汽水音乐、KKBOX、Amazon Music、YouTube Music、Pear Desktop、洛雪音乐、reAMP、Pine Player、foobar2000、Cog、Plexamp、MyGo Music 和微信读书，歌词按打分挑选，有粤拼，日文能标罗马音或假名，还能记录到 Last.fm。详见逐项核实的对比。"
       }
     }
   ]
@@ -1666,12 +1670,14 @@ html { scroll-behavior: auto; }
       <a class="dl-item" role="menuitem" lang="ru" href="../ru/">Русский</a>
       <a class="dl-item" role="menuitem" lang="uk" href="../uk/">Українська</a>
       <a class="dl-item" role="menuitem" lang="th" href="../th/">ไทย</a>
+      <a class="dl-item" role="menuitem" lang="tr" href="../tr/">Türkçe</a>
+      <a class="dl-item" role="menuitem" lang="hi" href="../hi/">हिन्दी</a>
     </div></div>
     <div class="dl dl-end dl-download"><a class="btn btn-dark btn-sm dl-trigger" href="https://github.com/Yudaotor/lyrimuse/releases/latest" aria-haspopup="menu" aria-expanded="false">下载<svg class="chev" viewBox="0 0 12 12" aria-hidden="true"><path d="m3 4.5 3 3 3-3" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></a>
     <div class="dl-menu" role="menu">
-      <p class="dl-head">最新版本 <span class="dl-ver">v1.13.0</span></p>
-      <a class="dl-item" role="menuitem" data-arch="arm" href="https://github.com/Yudaotor/lyrimuse/releases/download/v1.13.0/Lyrimuse-v1.13.0-macos.dmg"><span class="dl-ico"><svg viewBox="0 0 20 20" aria-hidden="true"><rect x="5" y="5" width="10" height="10" rx="2.2" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M8 2.5V5M12 2.5V5M8 15v2.5M12 15v2.5M2.5 8H5M2.5 12H5M15 8h2.5M15 12h2.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></span><span class="dl-txt"><b>Apple Silicon 版<span class="dl-rec">推荐</span></b><em>M1 及更新的芯片 · DMG · <span class="dl-size">22 MB</span></em></span></a>
-      <a class="dl-item" role="menuitem" data-arch="x86" href="https://github.com/Yudaotor/lyrimuse/releases/download/v1.13.0/Lyrimuse-v1.13.0-macos-intel.dmg"><span class="dl-ico"><svg viewBox="0 0 20 20" aria-hidden="true"><rect x="5" y="5" width="10" height="10" rx="2.2" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M8 2.5V5M12 2.5V5M8 15v2.5M12 15v2.5M2.5 8H5M2.5 12H5M15 8h2.5M15 12h2.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></span><span class="dl-txt"><b>Intel 版<span class="dl-rec">推荐</span></b><em>Intel 芯片的 Mac · DMG · <span class="dl-size">41 MB</span></em></span></a>
+      <p class="dl-head">最新版本 <span class="dl-ver">v1.14.0</span></p>
+      <a class="dl-item" role="menuitem" data-arch="arm" href="https://github.com/Yudaotor/lyrimuse/releases/download/v1.14.0/Lyrimuse-v1.14.0-macos.dmg"><span class="dl-ico"><svg viewBox="0 0 20 20" aria-hidden="true"><rect x="5" y="5" width="10" height="10" rx="2.2" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M8 2.5V5M12 2.5V5M8 15v2.5M12 15v2.5M2.5 8H5M2.5 12H5M15 8h2.5M15 12h2.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></span><span class="dl-txt"><b>Apple Silicon 版<span class="dl-rec">推荐</span></b><em>M1 及更新的芯片 · DMG · <span class="dl-size">24 MB</span></em></span></a>
+      <a class="dl-item" role="menuitem" data-arch="x86" href="https://github.com/Yudaotor/lyrimuse/releases/download/v1.14.0/Lyrimuse-v1.14.0-macos-intel.dmg"><span class="dl-ico"><svg viewBox="0 0 20 20" aria-hidden="true"><rect x="5" y="5" width="10" height="10" rx="2.2" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M8 2.5V5M12 2.5V5M8 15v2.5M12 15v2.5M2.5 8H5M2.5 12H5M15 8h2.5M15 12h2.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></span><span class="dl-txt"><b>Intel 版<span class="dl-rec">推荐</span></b><em>Intel 芯片的 Mac · DMG · <span class="dl-size">44 MB</span></em></span></a>
       <a class="dl-item" role="menuitem" href="https://github.com/Yudaotor/lyrimuse/releases/latest"><span class="dl-ico"><svg viewBox="0 0 20 20" aria-hidden="true"><path fill="currentColor" d="M10 1.8a8.2 8.2 0 0 0-2.6 16c.4.1.6-.2.6-.4v-1.5c-2.3.5-2.8-1-2.8-1-.4-.9-.9-1.2-.9-1.2-.7-.5.1-.5.1-.5.8.1 1.3.9 1.3.9.7 1.3 2 .9 2.4.7.1-.5.3-.9.5-1.1-1.8-.2-3.7-.9-3.7-4 0-.9.3-1.6.9-2.2-.1-.2-.4-1 .1-2.2 0 0 .7-.2 2.3.9a7.9 7.9 0 0 1 4.1 0c1.6-1.1 2.3-.9 2.3-.9.4 1.2.2 2 .1 2.2.5.6.9 1.3.9 2.2 0 3.2-1.9 3.8-3.7 4 .3.3.6.8.6 1.5v2.3c0 .2.1.5.6.4A8.2 8.2 0 0 0 10 1.8z"/></svg></span><span class="dl-txt"><b>前往 GitHub 下载</b><em>全部版本、ZIP 与校验文件</em></span></a>
       <p class="dl-note">DMG 没有经过 Apple 公证，第一次打开会被系统拦下：到「系统设置 → 隐私与安全」点「仍要打开」。用 Homebrew 装不会遇到。</p>
     </div></div>
@@ -1682,17 +1688,17 @@ html { scroll-behavior: auto; }
 <main id="top">
 
 <section class="hero">
-  <a class="eyebrow reveal" href="changelog/#v1.13.0"><span class="orbit" aria-hidden="true"><i></i></span><span class="dot"></span>1.13.0 新增六款播放器、六种界面语言，菜单栏面板随你排 <span class="arrow">›</span></a>
+  <a class="eyebrow reveal" href="changelog/#v1.14.0"><span class="orbit" aria-hidden="true"><i></i></span><span class="dot"></span>1.14.0 新增酷我音乐与 Cog、土耳其语与印地语，歌词能写进歌曲文件 <span class="arrow">›</span></a>
 
   <h1 class="reveal sing"><span class="pe">桌面歌词，</span><span><span class="wu">为</span> <span class="wu">Mac</span> <span class="wu pe">全新构想。</span></span></h1>
-  <p class="lede reveal">逐字同步的歌词，挂在桌面、菜单栏和刘海上。<span>Apple Music、Spotify、QQ 音乐、网易云等 20 款播放器都能用。</span></p>
+  <p class="lede reveal">逐字同步的歌词，挂在桌面、菜单栏和刘海上。<span>Apple Music、Spotify、QQ 音乐、网易云等 22 款播放器都能用。</span></p>
 
   <div class="cta reveal">
     <div class="dl dl-download"><a class="btn btn-dark dl-trigger mag" href="https://github.com/Yudaotor/lyrimuse/releases/latest" aria-haspopup="menu" aria-expanded="false"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 1.5v9m0 0-3.5-3.5M8 10.5l3.5-3.5M2.5 13.5h11" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>下载 Lyrimuse<svg class="chev" viewBox="0 0 12 12" aria-hidden="true"><path d="m3 4.5 3 3 3-3" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></a>
     <div class="dl-menu" role="menu">
-      <p class="dl-head">最新版本 <span class="dl-ver">v1.13.0</span></p>
-      <a class="dl-item" role="menuitem" data-arch="arm" href="https://github.com/Yudaotor/lyrimuse/releases/download/v1.13.0/Lyrimuse-v1.13.0-macos.dmg"><span class="dl-ico"><svg viewBox="0 0 20 20" aria-hidden="true"><rect x="5" y="5" width="10" height="10" rx="2.2" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M8 2.5V5M12 2.5V5M8 15v2.5M12 15v2.5M2.5 8H5M2.5 12H5M15 8h2.5M15 12h2.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></span><span class="dl-txt"><b>Apple Silicon 版<span class="dl-rec">推荐</span></b><em>M1 及更新的芯片 · DMG · <span class="dl-size">22 MB</span></em></span></a>
-      <a class="dl-item" role="menuitem" data-arch="x86" href="https://github.com/Yudaotor/lyrimuse/releases/download/v1.13.0/Lyrimuse-v1.13.0-macos-intel.dmg"><span class="dl-ico"><svg viewBox="0 0 20 20" aria-hidden="true"><rect x="5" y="5" width="10" height="10" rx="2.2" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M8 2.5V5M12 2.5V5M8 15v2.5M12 15v2.5M2.5 8H5M2.5 12H5M15 8h2.5M15 12h2.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></span><span class="dl-txt"><b>Intel 版<span class="dl-rec">推荐</span></b><em>Intel 芯片的 Mac · DMG · <span class="dl-size">41 MB</span></em></span></a>
+      <p class="dl-head">最新版本 <span class="dl-ver">v1.14.0</span></p>
+      <a class="dl-item" role="menuitem" data-arch="arm" href="https://github.com/Yudaotor/lyrimuse/releases/download/v1.14.0/Lyrimuse-v1.14.0-macos.dmg"><span class="dl-ico"><svg viewBox="0 0 20 20" aria-hidden="true"><rect x="5" y="5" width="10" height="10" rx="2.2" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M8 2.5V5M12 2.5V5M8 15v2.5M12 15v2.5M2.5 8H5M2.5 12H5M15 8h2.5M15 12h2.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></span><span class="dl-txt"><b>Apple Silicon 版<span class="dl-rec">推荐</span></b><em>M1 及更新的芯片 · DMG · <span class="dl-size">24 MB</span></em></span></a>
+      <a class="dl-item" role="menuitem" data-arch="x86" href="https://github.com/Yudaotor/lyrimuse/releases/download/v1.14.0/Lyrimuse-v1.14.0-macos-intel.dmg"><span class="dl-ico"><svg viewBox="0 0 20 20" aria-hidden="true"><rect x="5" y="5" width="10" height="10" rx="2.2" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M8 2.5V5M12 2.5V5M8 15v2.5M12 15v2.5M2.5 8H5M2.5 12H5M15 8h2.5M15 12h2.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></span><span class="dl-txt"><b>Intel 版<span class="dl-rec">推荐</span></b><em>Intel 芯片的 Mac · DMG · <span class="dl-size">44 MB</span></em></span></a>
       <a class="dl-item" role="menuitem" href="https://github.com/Yudaotor/lyrimuse/releases/latest"><span class="dl-ico"><svg viewBox="0 0 20 20" aria-hidden="true"><path fill="currentColor" d="M10 1.8a8.2 8.2 0 0 0-2.6 16c.4.1.6-.2.6-.4v-1.5c-2.3.5-2.8-1-2.8-1-.4-.9-.9-1.2-.9-1.2-.7-.5.1-.5.1-.5.8.1 1.3.9 1.3.9.7 1.3 2 .9 2.4.7.1-.5.3-.9.5-1.1-1.8-.2-3.7-.9-3.7-4 0-.9.3-1.6.9-2.2-.1-.2-.4-1 .1-2.2 0 0 .7-.2 2.3.9a7.9 7.9 0 0 1 4.1 0c1.6-1.1 2.3-.9 2.3-.9.4 1.2.2 2 .1 2.2.5.6.9 1.3.9 2.2 0 3.2-1.9 3.8-3.7 4 .3.3.6.8.6 1.5v2.3c0 .2.1.5.6.4A8.2 8.2 0 0 0 10 1.8z"/></svg></span><span class="dl-txt"><b>前往 GitHub 下载</b><em>全部版本、ZIP 与校验文件</em></span></a>
       <p class="dl-note">DMG 没有经过 Apple 公证，第一次打开会被系统拦下：到「系统设置 → 隐私与安全」点「仍要打开」。用 Homebrew 装不会遇到。</p>
     </div></div>
@@ -1766,6 +1772,8 @@ html { scroll-behavior: auto; }
         <img class="fl fl-18" data-icon="../assets/img/players/MyGoMusic.webp" alt="" style="--k:17">
         <img class="fl fl-19" data-icon="../assets/img/players/Audirvana.webp" alt="" style="--k:18">
         <img class="fl fl-20" data-icon="../assets/img/players/WeRead.webp" alt="" style="--k:19">
+        <img class="fl fl-21" data-icon="../assets/img/players/Kuwo.webp" alt="" style="--k:20">
+        <img class="fl fl-22" data-icon="../assets/img/players/Cog.webp" alt="" style="--k:21">
       </div>
     </div>
   </div>
@@ -1782,6 +1790,7 @@ html { scroll-behavior: auto; }
       <a class="pl" href="players/qq-music/"><img data-icon="../assets/img/players/QQMusic.webp" alt="">QQ 音乐</a>
       <a class="pl" href="players/netease-cloud-music/"><img data-icon="../assets/img/players/Netease.webp" alt="">网易云音乐</a>
       <a class="pl" href="players/kugou/"><img data-icon="../assets/img/players/Kugou.webp" alt="">酷狗音乐</a>
+      <a class="pl" href="players/kuwo/"><img data-icon="../assets/img/players/Kuwo.webp" alt="">酷我音乐</a>
       <a class="pl" href="players/soda-music/"><img data-icon="../assets/img/players/SodaMusic.webp" alt="">汽水音乐</a>
       <a class="pl" href="players/youtube-music/"><img data-icon="../assets/img/players/YouTubeMusic.webp" alt="">YouTube Music</a>
       <a class="pl" href="players/lx-music/"><img data-icon="../assets/img/players/LXMusic.webp" alt="">洛雪音乐</a>
@@ -1789,6 +1798,7 @@ html { scroll-behavior: auto; }
       <a class="pl" href="players/vox/"><img data-icon="../assets/img/players/Vox.webp" alt="">VOX</a>
       <a class="pl" href="players/pine-player/"><img data-icon="../assets/img/players/PinePlayer.webp" alt="">Pine Player</a>
       <a class="pl" href="players/foobar2000/"><img data-icon="../assets/img/players/Foobar2000.webp" alt="">foobar2000</a>
+      <a class="pl" href="players/cog/"><img data-icon="../assets/img/players/Cog.webp" alt="">Cog</a>
       <a class="pl" href="players/pear-desktop/"><img data-icon="../assets/img/players/PearDesktop.webp" alt="">Pear Desktop</a>
       <a class="pl" href="players/swinsian/"><img data-icon="../assets/img/players/Swinsian.webp" alt="">Swinsian</a>
       <a class="pl" href="players/plexamp/"><img data-icon="../assets/img/players/Plexamp.webp" alt="">Plexamp</a>
@@ -1884,7 +1894,7 @@ html { scroll-behavior: auto; }
           </div>
           <div class="mbp-row3"><div class="mbp-tile"><i class="mbp-dot on"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M4 4.5h12a1.5 1.5 0 0 1 1.5 1.5v6.5A1.5 1.5 0 0 1 16 14h-6l-3.5 2.8V14H4A1.5 1.5 0 0 1 2.5 12.5V6A1.5 1.5 0 0 1 4 4.5z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path d="M6 8h8M6 10.8h5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></i><span>悬浮歌词</span></div><div class="mbp-tile"><i class="mbp-dot on"><svg viewBox="0 0 20 20" aria-hidden="true"><rect x="3" y="4.5" width="14" height="11" rx="2" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M3 8h14" stroke="currentColor" stroke-width="1.6"/></svg></i><span>灵动岛歌词</span></div><div class="mbp-tile"><i class="mbp-dot on"><svg viewBox="0 0 20 20" aria-hidden="true"><rect x="3" y="4.5" width="14" height="11" rx="2" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M3 8h14" stroke="currentColor" stroke-width="1.6"/></svg></i><span>菜单栏歌词</span></div></div>
           <div class="mbp-row2"><div class="mbp-tile"><i class="mbp-dot"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3.5 5h4.5M3.5 9h9M3.5 13h13M3.5 16.5h9" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M12.5 3.2c1.4 0 2.4.8 2.4 2s-1 2-2.2 2" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></i><span>歌词窗口</span></div><div class="mbp-tile"><i class="mbp-dot"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3.5 5.5h7M3.5 9.5h7M3.5 13.5h5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M14 4v8.5" stroke="currentColor" stroke-width="1.8"/><circle cx="12.4" cy="13.2" r="2.2" fill="currentColor"/><path d="M14 4c1.6.3 2.6 1.3 3 2.6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></i><span>歌词管理</span></div></div>
-          <div class="mbp-foot"><span><svg viewBox="0 0 20 20" aria-hidden="true"><path fill-rule="evenodd" d="M8.6 1.5h2.8l.5 2.3 1.6.7 2-1.2 2 2-1.3 2 .7 1.6 2.3.5v2.8l-2.3.5-.7 1.6 1.3 2-2 2-2-1.3-1.6.7-.5 2.3H8.6l-.5-2.3-1.6-.7-2 1.3-2-2 1.3-2-.7-1.6-2.3-.5V8.6l2.3-.5.7-1.6-1.3-2 2-2 2 1.2 1.6-.7zM10 7a3 3 0 1 0 0 6 3 3 0 0 0 0-6z" fill="currentColor"/></svg>设置…</span><span><svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="7.2" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M10 9v4.5M10 6.4v.2" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>版本 1.13.0</span></div>
+          <div class="mbp-foot"><span><svg viewBox="0 0 20 20" aria-hidden="true"><path fill-rule="evenodd" d="M8.6 1.5h2.8l.5 2.3 1.6.7 2-1.2 2 2-1.3 2 .7 1.6 2.3.5v2.8l-2.3.5-.7 1.6 1.3 2-2 2-2-1.3-1.6.7-.5 2.3H8.6l-.5-2.3-1.6-.7-2 1.3-2-2 1.3-2-.7-1.6-2.3-.5V8.6l2.3-.5.7-1.6-1.3-2 2-2 2 1.2 1.6-.7zM10 7a3 3 0 1 0 0 6 3 3 0 0 0 0-6z" fill="currentColor"/></svg>设置…</span><span><svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="7.2" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M10 9v4.5M10 6.4v.2" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>版本 1.14.0</span></div>
         </div>
       </div></div></figure>
       <figure class="view v-tb"><div class="tbz live" role="img" aria-label="触控栏上的歌词，在封面和播放控制旁逐字点亮"><div class="tb-deck">
@@ -1925,7 +1935,7 @@ html { scroll-behavior: auto; }
 <section class="ch ch-split wall-lilac" id="matching">
   <header class="ch-head ch-split reveal">
     <div class="ch-title"><p class="k">歌词匹配</p>
-    <h2><span class="lead pe">十四个歌词源，</span><span class="fx pe">挑最对的那份。</span></h2></div>
+    <h2><span class="lead pe">十六个歌词源，</span><span class="fx pe">挑最对的那份。</span></h2></div>
     <p class="ch-lede">所有结果统一打分，分最高的胜出；找错了就手动搜、手动改，选中的那份会被锁定。</p>
   </header>
   <div class="show reveal">
@@ -1947,7 +1957,7 @@ html { scroll-behavior: auto; }
             <div class="dp-top"><span class="src" style="--c:#c23bb4">LRCLIB</span><b>876</b><em>-378</em><i class="dp-bar" style="--c:#c23bb4;--w:69.9%"><s></s></i></div>
             <p>逐字时间轴 -400 · 时长吻合 +12 · 行数 +10</p></li></ul>
         <p class="dp-tie">5 条候选在这些项上完全相同：标题吻合 +120 · 内容获印证 +250</p>
-        <p class="dp-foot"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="m8 5 5 5-5 5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>5/14 个源应答</p>
+        <p class="dp-foot"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="m8 5 5 5-5 5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>5/16 个源应答</p>
       </div></div></figure>
       <figure class="view v-pn"><div class="pn pn-ms" role="img" aria-label="手动搜索：每个结果的分数、逐字和译文标记"><div class="pn-in ms">
         <aside class="ms-side">
@@ -1958,7 +1968,7 @@ html { scroll-behavior: auto; }
           <ul><li class="ms-row sel"><img class="cv" src="../assets/img/demo/qingtian.webp" alt="" loading="lazy" decoding="async">
             <div class="ms-txt"><b>晴天</b><span>周杰伦</span><span>叶惠美</span><span class="dim">分数 1,254 · 63 行 <svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="7.2" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M10 9v4.5M10 6.4v.2" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span></div>
             <div class="ms-chips"><span class="src" style="--c:#1fa34a">QQ音乐</span><span class="c-word"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3 5h9M3 8.5h14M3 12h7M3 15.5h12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>逐字时间轴</span><span class="c-use"><svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="8" fill="currentColor"/><path d="m6.5 10.2 2.4 2.4 4.6-4.8" fill="none" stroke="#fff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>当前使用</span></div></li></ul>
-          <b class="ms-h">候选<em>4</em><span class="ms-ans">5/14</span></b>
+          <b class="ms-h">候选<em>4</em><span class="ms-ans">5/16</span></b>
           <ul><li class="ms-row "><img class="cv" src="../assets/img/demo/qingtian.webp" alt="" loading="lazy" decoding="async">
             <div class="ms-txt"><b>晴天</b><span>周杰伦</span><span>叶惠美</span><span class="dim">分数 1,243 · 63 行 <svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="7.2" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M10 9v4.5M10 6.4v.2" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span></div>
             <div class="ms-chips"><span class="src" style="--c:#1593e0">酷狗音乐</span><span class="c-word"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3 5h9M3 8.5h14M3 12h7M3 15.5h12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>逐字时间轴</span></div></li><li class="ms-row "><img class="cv" src="../assets/img/demo/qingtian.webp" alt="" loading="lazy" decoding="async">
@@ -2229,7 +2239,7 @@ html { scroll-behavior: auto; }
       <li class="pill glass" style="--i:6"><i class="pill-ico"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3.4 3.7v5l4.2-2.5z" fill="currentColor"/><path d="M10.5 6.2h6.3M3.6 11.3h13.2M3.6 15.6h8.6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></i><span>待播歌曲提前解析</span></li>
       <li class="pill glass" style="--i:7"><i class="pill-ico"><svg viewBox="0 0 20 20" aria-hidden="true"><rect x="5.8" y="2.5" width="8.4" height="15" rx="2.2" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M8.8 14.6h2.4" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></i><span>手机副屏与 OBS 直播</span></li>
       <li class="pill glass" style="--i:8"><i class="pill-ico"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M11 4.17A5 5 0 1 1 6 4.17" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M3.4 3.9 6 4.17l-1.05 2.4" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="m12.1 12.1 4.5 4.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></i><span>缺失歌词自动补搜</span></li>
-      <li class="pill glass" style="--i:9"><i class="pill-ico"><svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="7.3" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M2.8 10h14.4M10 2.7c2.1 2.2 3.1 4.6 3.1 7.3s-1 5.1-3.1 7.3c-2.1-2.2-3.1-4.6-3.1-7.3s1-5.1 3.1-7.3z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></i><span>十四种界面语言</span></li>
+      <li class="pill glass" style="--i:9"><i class="pill-ico"><svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="7.3" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M2.8 10h14.4M10 2.7c2.1 2.2 3.1 4.6 3.1 7.3s-1 5.1-3.1 7.3c-2.1-2.2-3.1-4.6-3.1-7.3s1-5.1 3.1-7.3z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></i><span>十六种界面语言</span></li>
       <li class="pill glass" style="--i:10"><i class="pill-ico"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M10 2.8a7.2 7.2 0 0 0 0 14.4c1 0 1.6-.6 1.6-1.4 0-.9-.8-1.2-.8-2 0-.7.6-1.3 1.3-1.3h1.6a3.5 3.5 0 0 0 3.5-3.5c0-3.4-3.2-6.2-7.2-6.2z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><circle cx="6.4" cy="9" r="1" fill="currentColor"/><circle cx="8.6" cy="6" r="1" fill="currentColor"/><circle cx="12.4" cy="6.2" r="1" fill="currentColor"/></svg></i><span>流动的彩虹歌词色</span></li>
       <li class="pill glass" style="--i:11"><i class="pill-ico"><svg viewBox="0 0 20 20" aria-hidden="true"><rect x="2.5" y="4" width="15" height="12" rx="2" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="m4.5 14 4-4 3 3 2-2 2.5 3" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><circle cx="13" cy="7.6" r="1.3" fill="currentColor"/></svg></i><span>歌词分享成图片卡片</span></li>
       <li class="pill glass" style="--i:12"><i class="pill-ico"><svg viewBox="0 0 20 20" aria-hidden="true"><rect x="2.5" y="3.5" width="15" height="5.5" rx="2.75" fill="none" stroke="currentColor" stroke-width="1.5"/><circle cx="14.6" cy="6.25" r="1.6" fill="currentColor"/><rect x="2.5" y="11" width="15" height="5.5" rx="2.75" fill="none" stroke="currentColor" stroke-width="1.5"/><circle cx="5.4" cy="13.75" r="1.6" fill="currentColor"/></svg></i><span>菜单栏面板随你排</span></li>
@@ -2258,8 +2268,8 @@ html { scroll-behavior: auto; }
 
 <section class="news reveal" aria-labelledby="newsTitle">
   <div class="news-in">
-    <div class="news-meta"><p class="news-k">最近更新</p><h2 id="newsTitle"><a href="changelog/#v1.13.0">v1.13.0</a></h2><time datetime="2026-11-11">2026 年 11 月 11 日</time></div>
-    <ul class="news-list"><li>新增意大利语、巴西葡萄牙语、越南语、俄语、乌克兰语与泰语界面</li><li>手动选过界面语言的，升级后有了自己系统语言的界面时会提示改用</li><li>新增内置播放器 Pear Desktop、Swinsian、Plexamp、MyGo Music 与 Audirvana（Studio 与 Origin）</li></ul>
+    <div class="news-meta"><p class="news-k">最近更新</p><h2 id="newsTitle"><a href="changelog/#v1.14.0">v1.14.0</a></h2><time datetime="2026-11-19">2026 年 11 月 19 日</time></div>
+    <ul class="news-list"><li>新增土耳其语与印地语界面，界面语言增至 16 种</li><li>新增内置播放器酷我音乐与 Cog，内置播放器增至 22 款</li><li>新增歌词源 Zing MP3，越南语歌可用上逐字歌词</li></ul>
     <a class="news-all" href="changelog/">查看全部更新 <span aria-hidden="true">›</span></a>
   </div>
 </section>
@@ -2279,7 +2289,7 @@ html { scroll-behavior: auto; }
       <details class="qa" style="--i:4"><summary><span class="qa-q">没有网络能看歌词吗？</span><i class="qa-ico" aria-hidden="true"></i></summary><div class="qa-a"><p>能。找过一次的歌词会存在本机，之后不联网也能显示；第一次找歌词和联网翻译需要网络。</p></div></details>
       <details class="qa" style="--i:5"><summary><span class="qa-q">没有刘海的 Mac 能用灵动岛吗？</span><i class="qa-ico" aria-hidden="true"></i></summary><div class="qa-a"><p>能。在没有刘海的屏幕上（老款 MacBook 或外接显示器），胶囊贴在屏幕顶部居中，跟菜单栏一样高，放在哪块屏幕可以在设置里选。</p></div></details>
       <details class="qa" style="--i:6"><summary><span class="qa-q">歌词不对或者不同步怎么办？</span><i class="qa-ico" aria-hidden="true"></i></summary><div class="qa-a"><p>时间对不上，就给这首歌调个偏移，之后会一直记住；版本不对，就打开手动搜索换一份，选中的那份会被锁定。也可以在「歌词管理」里直接改。</p></div></details>
-      <details class="qa" style="--i:7"><summary><span class="qa-q">和 LyricsX 有什么区别？</span><i class="qa-ico" aria-hidden="true"></i></summary><div class="qa-a"><p>LyricsX 最后一个版本是 2022 年 4 月的 v1.6.3。Lyrimuse 需要 macOS 14 以上，多支持了 QQ 音乐、网易云音乐、酷狗、汽水音乐、KKBOX、Amazon Music、YouTube Music、Pear Desktop、洛雪音乐、reAMP、Pine Player、foobar2000、Plexamp、MyGo Music 和微信读书，歌词按打分挑选，有粤拼，日文能标罗马音或假名，还能记录到 Last.fm。详见<a href="compare/">逐项核实的对比</a>。</p></div></details>
+      <details class="qa" style="--i:7"><summary><span class="qa-q">和 LyricsX 有什么区别？</span><i class="qa-ico" aria-hidden="true"></i></summary><div class="qa-a"><p>LyricsX 最后一个版本是 2022 年 4 月的 v1.6.3。Lyrimuse 需要 macOS 14 以上，多支持了 QQ 音乐、网易云音乐、酷狗、酷我、汽水音乐、KKBOX、Amazon Music、YouTube Music、Pear Desktop、洛雪音乐、reAMP、Pine Player、foobar2000、Cog、Plexamp、MyGo Music 和微信读书，歌词按打分挑选，有粤拼，日文能标罗马音或假名，还能记录到 Last.fm。详见<a href="compare/">逐项核实的对比</a>。</p></div></details>
     </div>
   </div>
 </section>
@@ -2297,9 +2307,9 @@ html { scroll-behavior: auto; }
     <div class="cta">
       <div class="dl dl-download"><a class="btn btn-white dl-trigger mag" href="https://github.com/Yudaotor/lyrimuse/releases/latest" aria-haspopup="menu" aria-expanded="false">下载 Lyrimuse<svg class="chev" viewBox="0 0 12 12" aria-hidden="true"><path d="m3 4.5 3 3 3-3" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></a>
       <div class="dl-menu" role="menu">
-      <p class="dl-head">最新版本 <span class="dl-ver">v1.13.0</span></p>
-      <a class="dl-item" role="menuitem" data-arch="arm" href="https://github.com/Yudaotor/lyrimuse/releases/download/v1.13.0/Lyrimuse-v1.13.0-macos.dmg"><span class="dl-ico"><svg viewBox="0 0 20 20" aria-hidden="true"><rect x="5" y="5" width="10" height="10" rx="2.2" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M8 2.5V5M12 2.5V5M8 15v2.5M12 15v2.5M2.5 8H5M2.5 12H5M15 8h2.5M15 12h2.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></span><span class="dl-txt"><b>Apple Silicon 版<span class="dl-rec">推荐</span></b><em>M1 及更新的芯片 · DMG · <span class="dl-size">22 MB</span></em></span></a>
-      <a class="dl-item" role="menuitem" data-arch="x86" href="https://github.com/Yudaotor/lyrimuse/releases/download/v1.13.0/Lyrimuse-v1.13.0-macos-intel.dmg"><span class="dl-ico"><svg viewBox="0 0 20 20" aria-hidden="true"><rect x="5" y="5" width="10" height="10" rx="2.2" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M8 2.5V5M12 2.5V5M8 15v2.5M12 15v2.5M2.5 8H5M2.5 12H5M15 8h2.5M15 12h2.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></span><span class="dl-txt"><b>Intel 版<span class="dl-rec">推荐</span></b><em>Intel 芯片的 Mac · DMG · <span class="dl-size">41 MB</span></em></span></a>
+      <p class="dl-head">最新版本 <span class="dl-ver">v1.14.0</span></p>
+      <a class="dl-item" role="menuitem" data-arch="arm" href="https://github.com/Yudaotor/lyrimuse/releases/download/v1.14.0/Lyrimuse-v1.14.0-macos.dmg"><span class="dl-ico"><svg viewBox="0 0 20 20" aria-hidden="true"><rect x="5" y="5" width="10" height="10" rx="2.2" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M8 2.5V5M12 2.5V5M8 15v2.5M12 15v2.5M2.5 8H5M2.5 12H5M15 8h2.5M15 12h2.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></span><span class="dl-txt"><b>Apple Silicon 版<span class="dl-rec">推荐</span></b><em>M1 及更新的芯片 · DMG · <span class="dl-size">24 MB</span></em></span></a>
+      <a class="dl-item" role="menuitem" data-arch="x86" href="https://github.com/Yudaotor/lyrimuse/releases/download/v1.14.0/Lyrimuse-v1.14.0-macos-intel.dmg"><span class="dl-ico"><svg viewBox="0 0 20 20" aria-hidden="true"><rect x="5" y="5" width="10" height="10" rx="2.2" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M8 2.5V5M12 2.5V5M8 15v2.5M12 15v2.5M2.5 8H5M2.5 12H5M15 8h2.5M15 12h2.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></span><span class="dl-txt"><b>Intel 版<span class="dl-rec">推荐</span></b><em>Intel 芯片的 Mac · DMG · <span class="dl-size">44 MB</span></em></span></a>
       <a class="dl-item" role="menuitem" href="https://github.com/Yudaotor/lyrimuse/releases/latest"><span class="dl-ico"><svg viewBox="0 0 20 20" aria-hidden="true"><path fill="currentColor" d="M10 1.8a8.2 8.2 0 0 0-2.6 16c.4.1.6-.2.6-.4v-1.5c-2.3.5-2.8-1-2.8-1-.4-.9-.9-1.2-.9-1.2-.7-.5.1-.5.1-.5.8.1 1.3.9 1.3.9.7 1.3 2 .9 2.4.7.1-.5.3-.9.5-1.1-1.8-.2-3.7-.9-3.7-4 0-.9.3-1.6.9-2.2-.1-.2-.4-1 .1-2.2 0 0 .7-.2 2.3.9a7.9 7.9 0 0 1 4.1 0c1.6-1.1 2.3-.9 2.3-.9.4 1.2.2 2 .1 2.2.5.6.9 1.3.9 2.2 0 3.2-1.9 3.8-3.7 4 .3.3.6.8.6 1.5v2.3c0 .2.1.5.6.4A8.2 8.2 0 0 0 10 1.8z"/></svg></span><span class="dl-txt"><b>前往 GitHub 下载</b><em>全部版本、ZIP 与校验文件</em></span></a>
       <p class="dl-note">DMG 没有经过 Apple 公证，第一次打开会被系统拦下：到「系统设置 → 隐私与安全」点「仍要打开」。用 Homebrew 装不会遇到。</p>
     </div></div>
@@ -2321,7 +2331,7 @@ html { scroll-behavior: auto; }
         <div class="foot-col"><p class="foot-h">产品</p><ul><li><a href="features/">功能清单</a></li><li><a href="players/">支持的播放器</a></li><li><a href="changelog/">更新日志</a></li><li><a href="https://github.com/Yudaotor/lyrimuse/releases">Releases</a></li></ul></div>
         <div class="foot-col"><p class="foot-h">帮助</p><ul><li><a href="#faq">常见问题</a></li><li><a href="https://github.com/Yudaotor/lyrimuse/issues/new/choose">反馈问题</a></li><li><a href="https://github.com/Yudaotor/lyrimuse/discussions/categories/q-a">使用求助</a></li><li><a href="privacy/">隐私政策</a></li><li><a href="terms/">使用条款</a></li></ul></div>
         <div class="foot-col"><p class="foot-h">关于</p><ul><li><a href="https://github.com/Yudaotor/lyrimuse/blob/main/README.zh-CN.md">GitHub（中文说明）</a></li><li><a href="https://www.bilibili.com/video/BV1CXH66yEUJ/">视频介绍</a></li><li><a href="https://yudaotor.github.io/donate/">赞助</a></li><li><a href="https://github.com/Yudaotor/lyrimuse/blob/main/LICENSE">GPL-3.0</a></li></ul></div>
-        <div class="foot-col"><p class="foot-h">语言</p><ul><li><a href="../" lang="en">English</a></li><li><a href="./" lang="zh-Hans" aria-current="page">简体中文</a></li><li><a href="../zh-Hant/" lang="zh-Hant">繁體中文</a></li><li><a href="../ja/" lang="ja">日本語</a></li><li><a href="../ko/" lang="ko">한국어</a></li><li><a href="../es/" lang="es">Español</a></li><li><a href="../fr/" lang="fr">Français</a></li><li><a href="../de/" lang="de">Deutsch</a></li><li><a href="../it/" lang="it">Italiano</a></li><li><a href="../pt-BR/" lang="pt-BR">Português (Brasil)</a></li><li><a href="../vi/" lang="vi">Tiếng Việt</a></li><li><a href="../ru/" lang="ru">Русский</a></li><li><a href="../uk/" lang="uk">Українська</a></li><li><a href="../th/" lang="th">ไทย</a></li></ul></div>
+        <div class="foot-col"><p class="foot-h">语言</p><ul><li><a href="../" lang="en">English</a></li><li><a href="./" lang="zh-Hans" aria-current="page">简体中文</a></li><li><a href="../zh-Hant/" lang="zh-Hant">繁體中文</a></li><li><a href="../ja/" lang="ja">日本語</a></li><li><a href="../ko/" lang="ko">한국어</a></li><li><a href="../es/" lang="es">Español</a></li><li><a href="../fr/" lang="fr">Français</a></li><li><a href="../de/" lang="de">Deutsch</a></li><li><a href="../it/" lang="it">Italiano</a></li><li><a href="../pt-BR/" lang="pt-BR">Português (Brasil)</a></li><li><a href="../vi/" lang="vi">Tiếng Việt</a></li><li><a href="../ru/" lang="ru">Русский</a></li><li><a href="../uk/" lang="uk">Українська</a></li><li><a href="../th/" lang="th">ไทย</a></li><li><a href="../tr/" lang="tr">Türkçe</a></li><li><a href="../hi/" lang="hi">हिन्दी</a></li></ul></div>
       </nav>
     </div>
     <p class="foot-note">Apple Music、Spotify、KKBOX 等名称和图标归各自所有者，Lyrimuse 是独立的开源项目，与它们没有隶属或合作关系。</p>
