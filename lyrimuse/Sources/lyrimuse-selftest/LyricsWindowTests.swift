@@ -776,8 +776,39 @@ func runLyricsWindowTests() {
         let monitor = (try? String(contentsOf: root.appendingPathComponent("lyrimuse/UI/WindowCoverageMonitor.swift"),
                                    encoding: .utf8)) ?? ""
         expectEqual(monitor.isEmpty, false, "覆盖(契约): 读到源码")
-        expectEqual(sourceBytes(monitor, contain: "guard window.isVisible, !window.isMiniaturized, window.occlusionState.contains(.visible) else { return true }"), true,
-                    "覆盖(契约): 没上屏 / 最小化 / 被遮住直接算盖住 —— 窗口一上屏就被整扇盖住时系统不发遮挡通知,宿主的初值停在「可见」")
+        expectEqual(sourceBytes(monitor, contain: "guard window.isVisible, !window.isMiniaturized, WindowSurfaceState.occlusionVisible(window) else { return true }"), true,
+                    "覆盖(契约): 没上屏 / 最小化 / 被遮住 / 屏幕锁着直接算盖住 —— 窗口一上屏就被整扇盖住时系统不发遮挡通知,宿主的初值停在「可见」")
+    }
+
+    // MARK: - 锁屏 / 解锁后照常走表:宿主按当下重读遮挡状态,不只信通知(源码契约,11 章决策 188)
+    do {
+        let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+        func source(_ path: String) -> String {
+            (try? String(contentsOf: root.appendingPathComponent(path), encoding: .utf8)) ?? ""
+        }
+        let monitor = source("lyrimuse/UI/WindowCoverageMonitor.swift")
+        let surface = source("lyrimuse/UI/PreviewHostVisibility.swift")
+        let window = source("lyrimuse/UI/LyricsWindowView.swift")
+        let clock = source("lyrimuse/UI/FrameTimeline.swift")
+        expectEqual([monitor, surface, window, clock].contains(where: \.isEmpty), false, "解锁后走表(契约): 读到源码")
+        let apply = sourceBody("private func apply(_ covered: Bool)", in: monitor)
+        expectEqual(sourceHas(apply, "isCovered = covered\nonUpdate(covered)") && !sourceHas(apply, "covered != isCovered"), true,
+                    "解锁后走表(契约): 遮挡检测每次重算都回调,不只在结果变了时 —— 宿主靠这一下按当下重读遮挡状态")
+        expectEqual(sourceHas(monitor, "visibleObservation = window.observe(\\.isVisible, options: [.new])")
+                    && sourceHas(monitor, "screenObserver = WindowSurfaceState.screenChanges.sink"), true,
+                    "解锁后走表(契约): 窗口上屏 / 收起、屏幕锁上 / 解锁时遮挡检测立刻重算并接上计时器,不等遮挡变化通知")
+        let occlusion = sourceBody("static func occlusionVisible(_ window: NSWindow) -> Bool", in: monitor)
+        expectEqual(sourceHas(occlusion, "guard !screenHidden(window) else { return false }")
+                    && sourceHas(sourceBody("static func screenHidden(_ window: NSWindow) -> Bool", in: monitor), "ScreenVisibility.shared.isHidden"), true,
+                    "解锁后走表(契约): 屏幕锁着、熄屏、切到别的用户时窗口一律算看不见")
+        let reread = "if let window, window.isVisible { occlusionVisible = WindowSurfaceState.occlusionVisible(window) }"
+        expectEqual(sourceHas(sourceBody("private func refresh()", in: surface), reread)
+                    && sourceHas(sourceBody("private func refreshSurfaceVisible()", in: window), reread), true,
+                    "解锁后走表(契约): 设置 / 歌词管理 / 搜索歌词窗口和歌词窗口每次重算都按当下重读遮挡状态")
+        expectEqual(sourceHas(sourceBody("private func reportVisibility()", in: clock), "WindowSurfaceState.occlusionVisible"), true,
+                    "解锁后走表(契约): 预览的逐帧时钟同一个判据")
+        expectEqual([surface, window, clock].filter { sourceBytes($0, contain: "occlusionState.contains(.visible)") }.count, 0,
+                    "解锁后走表(契约): 这几处宿主不直接读 occlusionState,经 WindowSurfaceState")
     }
 
     // MARK: - 左栏跑马灯走图层、看不见时不滚(源码契约)

@@ -449,6 +449,9 @@ enum DebugDeepLinks {
         case let .settingsVisibility(override):
             NotificationCenter.default.post(name: settingsVisibilityNotification, object: override.map { NSNumber(value: $0) })
             logger.notice("debug settings visibility override=\(override.map { String($0) } ?? "auto", privacy: .public)")
+        case let .screenLock(locked):
+            WindowSurfaceState.setDebugScreenLocked(locked)
+            logger.notice("debug screen-lock locked=\(locked, privacy: .public)")
         case let .engineAlive(override):
             LocalPlaybackSource.shared.setEngineDaemonPresenceOverride(override)
         case let .engineBackgroundItem(disabled):
@@ -855,6 +858,7 @@ enum DebugDeepLinks {
     /// 只可能是验证开的。还在等列表的 `debug/lyrics-search` 作废,悬停气泡收回。见 14 章决策 227。
     private static func restore() {
         endSimulation()
+        WindowSurfaceState.setDebugScreenLocked(false)
         lyricsSearchGeneration += 1
         if !hoverNoteQuery.isEmpty {
             hoverNoteQuery = ""

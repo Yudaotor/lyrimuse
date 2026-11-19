@@ -270,7 +270,7 @@ final class FrameClockHostView: NSView {
 
     private func reportVisibility() {
         guard pausesWhenOccluded else { return }
-        clock.setHostVisible((window?.occlusionState.contains(.visible) ?? false) && !coveredByOthers)
+        clock.setHostVisible((window.map(WindowSurfaceState.occlusionVisible) ?? false) && !coveredByOthers)
     }
 
     override func hitTest(_ point: NSPoint) -> NSView? { nil }

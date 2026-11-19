@@ -510,6 +510,10 @@ func runDeepLinkTests() {
                      link("lyrimuse://debug/manager-visibility?state=auto")],
                     [.debug(.managerVisibility(override: false)), .debug(.managerVisibility(override: true)),
                      .debug(.managerVisibility(override: nil))], "debug: 歌词管理当作挡住 / 露出来 / 交还")
+        expectEqual([link("lyrimuse://debug/screen-lock?state=locked"), link("lyrimuse://debug/screen-lock?state=Unlocked")],
+                    [.debug(.screenLock(locked: true)), .debug(.screenLock(locked: false))], "debug: 验证窗口当作锁屏 / 解锁")
+        expectEqual([link("lyrimuse://debug/screen-lock?state=auto"), link("lyrimuse://debug/screen-lock")], [nil, nil],
+                    "debug: 锁屏模拟认不出的、没带都不认")
         expectEqual(link("lyrimuse://debug/manager-instrumental?key=a%7Cb%7Cc&on=1"), .debug(.managerInstrumental(key: "a|b|c", on: true)),
                     "debug: 歌词管理把一条标成纯音乐")
         expectEqual(link("lyrimuse://debug/manager-instrumental?on=1") == nil && link("lyrimuse://debug/manager-instrumental?key=a%7Cb%7Cc") == nil,
@@ -995,6 +999,7 @@ func runDeepLinkTests() {
             .debug(.touchBarTyping(override: true)), .debug(.touchBarTyping(override: false)), .debug(.touchBarTyping(override: nil)),
             .debug(.managerVisibility(override: true)), .debug(.managerVisibility(override: false)), .debug(.managerVisibility(override: nil)),
             .debug(.settingsVisibility(override: true)), .debug(.settingsVisibility(override: false)), .debug(.settingsVisibility(override: nil)),
+            .debug(.screenLock(locked: true)), .debug(.screenLock(locked: false)),
             .debug(.engineAlive(override: true)), .debug(.engineAlive(override: false)), .debug(.engineAlive(override: nil)),
             .debug(.engineBackgroundItem(disabled: true)), .debug(.engineBackgroundItem(disabled: false)),
             .debug(.engineBackgroundItem(disabled: nil)),

@@ -43,6 +43,7 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject,
     /// 见 `OverlayChromeSource.isSurfaceVisible`。默认 true:宁可多跑,不能把看得见的窗口停表。
     @Published private(set) var isSurfaceVisible = true
     private var occlusionObserver: NSObjectProtocol?
+    private var screenLockObserver: AnyCancellable?
 
     /// orderOut 之后系统不一定补发遮挡通知,显隐那一处自己也调一次。刚 orderFront 那一拍 occlusionState
     /// 可能还是「不可见」,那时先记成看不见,窗口真正上屏时系统会发遮挡变化通知,这里再翻回来。
@@ -527,6 +528,10 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject,
         occlusionObserver = NotificationCenter.default.addObserver(
             forName: NSWindow.didChangeOcclusionStateNotification, object: panel, queue: .main
         ) { [weak self] _ in
+            MainActor.assumeIsolated { self?.refreshSurfaceVisible() }
+        }
+        // 解锁后系统不一定补发「又看得见了」那条遮挡通知,屏幕锁上 / 解锁时按当下重读一次(11 章决策 188)。
+        screenLockObserver = WindowSurfaceState.screenChanges.sink { [weak self] in
             MainActor.assumeIsolated { self?.refreshSurfaceVisible() }
         }
 

@@ -22,9 +22,11 @@ extension EnvironmentValues {
     }
 }
 
-/// 一扇窗口的可见性:occlusionState(遮挡、最小化、切到别的桌面都会让它失去 .visible)与「是不是几乎被别的
+/// 一扇窗口的可见性:系统那一侧(`WindowSurfaceState.occlusionVisible`:遮挡、最小化、切到别的桌面、锁屏都算看不见)与「是不是几乎被别的
 /// 窗口整扇盖住」取与。后一项补 occlusionState 的盲区:只要还露着一个像素它就报 .visible,窗口被别的窗口盖得
 /// 只剩一条缝时预览和轮询照跑。判据与歌词窗口同一个(`WindowCoverageMonitor`,见 07 章决策 56)。
+/// 窗口在屏上时每次重算(遮挡检测每次回调都算)按当下重读遮挡状态,遮挡变化通知记下的值只在窗口不在屏上时用:锁屏前后系统
+/// 不一定补发「又看得见了」那一条,只信通知记的值会一直停在看不见(11 章决策 188)。
 /// 设置窗口由 `SettingsWindowConfigurator` 接上,「歌词管理」窗口由 `LyricsManagerWindowCapture` 接上。
 @MainActor
 final class SettingsWindowSurface: ObservableObject {
@@ -46,14 +48,14 @@ final class SettingsWindowSurface: ObservableObject {
         if let observer { NotificationCenter.default.removeObserver(observer) }
         // 接上时窗口可能还没 orderFront(此时 occlusionState 也是"不可见"),先按可见算,
         // 首次显示后系统会补一次通知。同 LyricsWindowController.attach。
-        occlusionVisible = window.isVisible ? window.occlusionState.contains(.visible) : true
+        occlusionVisible = window.isVisible ? WindowSurfaceState.occlusionVisible(window) : true
         coveredByOthers = false
         observer = NotificationCenter.default.addObserver(
             forName: NSWindow.didChangeOcclusionStateNotification, object: window, queue: .main
         ) { [weak self] note in
             guard let win = note.object as? NSWindow else { return }
             MainActor.assumeIsolated {
-                self?.occlusionVisible = win.occlusionState.contains(.visible)
+                self?.occlusionVisible = WindowSurfaceState.occlusionVisible(win)
                 self?.refresh()
             }
         }
@@ -66,6 +68,7 @@ final class SettingsWindowSurface: ObservableObject {
     }
 
     private func refresh() {
+        if let window, window.isVisible { occlusionVisible = WindowSurfaceState.occlusionVisible(window) }
         let visible = debugOverride ?? (occlusionVisible && !coveredByOthers)
         if isVisible != visible { isVisible = visible }
     }

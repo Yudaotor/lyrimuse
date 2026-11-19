@@ -215,6 +215,9 @@ public enum LyrimuseDeepLink: Equatable, Sendable {
         /// 设置窗口当作被挡住 / 露出来,不看遮挡状态和桌面空间(`debug/settings-visibility?state=hidden|visible|auto`,
         /// `auto` = 交还给它)。不提前台就能验设置页里看得见才跑的轮询(歌词库、账号页)。nil = auto。
         case settingsVisibility(override: Bool?)
+        /// 隐身开的验证窗口当作屏幕锁上 / 解锁了(`debug/screen-lock?state=locked|unlocked`),用户看得见的窗口和歌词那一拍不受影响。
+        /// 不锁用户的屏幕就能验「锁屏时停表、解锁后接着走」。
+        case screenLock(locked: Bool)
         /// 歌词引擎常驻进程当作在 / 不在,不看真的进程(`debug/engine-alive?state=present|absent|auto`,`auto` = 交还给它)。
         /// 宽限照算,不停用户的引擎就能验展示面的「歌词引擎未运行」。nil = auto。
         case engineAlive(override: Bool?)
@@ -840,6 +843,12 @@ public enum LyrimuseDeepLink: Equatable, Sendable {
             case "auto": self = .debug(.managerVisibility(override: nil))
             default: return nil
             }
+        case ("debug", "/screen-lock"):
+            switch value("state")?.lowercased() {
+            case "locked": self = .debug(.screenLock(locked: true))
+            case "unlocked": self = .debug(.screenLock(locked: false))
+            default: return nil
+            }
         case ("debug", "/engine-alive"):
             switch value("state")?.lowercased() {
             case "present": self = .debug(.engineAlive(override: true))
@@ -1302,6 +1311,9 @@ public enum LyrimuseDeepLink: Equatable, Sendable {
             case let .settingsVisibility(override):
                 components.path = "/settings-visibility"
                 components.queryItems = [URLQueryItem(name: "state", value: override.map { $0 ? "visible" : "hidden" } ?? "auto")]
+            case let .screenLock(locked):
+                components.path = "/screen-lock"
+                components.queryItems = [URLQueryItem(name: "state", value: locked ? "locked" : "unlocked")]
             case let .engineAlive(override):
                 components.path = "/engine-alive"
                 components.queryItems = [URLQueryItem(name: "state", value: override.map { $0 ? "present" : "absent" } ?? "auto")]

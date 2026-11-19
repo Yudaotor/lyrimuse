@@ -367,18 +367,17 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
             forName: NSWindow.didChangeOcclusionStateNotification, object: panel, queue: .main
         ) { [weak self] note in
             guard let win = note.object as? NSWindow else { return }
+            MainActor.assumeIsolated { self?.applySurfaceVisible(win.occlusionState.contains(.visible)) }
+        }
+        // 解锁后系统不一定补发「又看得见了」那条遮挡通知,屏幕锁上 / 解锁时按当下重读一次(11 章决策 188)。
+        // 只在窗口在屏上时读:还没 orderFront 时 occlusionState 也是「不可见」。
+        WindowSurfaceState.screenChanges.sink { [weak self] in
             MainActor.assumeIsolated {
-                let visible = win.occlusionState.contains(.visible)
-                if self?.isSurfaceVisible != visible {
-                    self?.isSurfaceVisible = visible
-                    Self.hoverLog.notice("surface visible=\(visible, privacy: .public)")
-                    // 看不见了(锁屏、屏保、熄屏;灵动岛在屏保层,别的窗口挡不住它):控制器这份悬停也清掉,跟视图那份
-                    // (NotchWindowRoot 里 isSurfaceVisible 的 onChange)配对。只清视图那份的话,解锁时指针已经移开,
-                    // 之后的离开事件都不算边沿,卡片一直停在展开态。
-                    if !visible { self?.resetHoverAfterHide() }
-                }
+                guard let self, let panel = self.window, panel.isVisible else { return }
+                self.applySurfaceVisible(panel.occlusionState.contains(.visible))
             }
         }
+        .store(in: &subscriptions)
 
         // 外接显示器插拔/切换分辨率时,"这台屏幕有没有真刘海"这个前提可能整个变了
         // (外接显示器基本不会有刘海)——重新算一遍。系统触发的几何变化不需要过渡动画,直接跳变。
@@ -792,6 +791,16 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
     deinit {
         if let screenParamsObserver { NotificationCenter.default.removeObserver(screenParamsObserver) }
         if let occlusionObserver { NotificationCenter.default.removeObserver(occlusionObserver) }
+    }
+
+    private func applySurfaceVisible(_ visible: Bool) {
+        guard isSurfaceVisible != visible else { return }
+        isSurfaceVisible = visible
+        Self.hoverLog.notice("surface visible=\(visible, privacy: .public)")
+        // 看不见了(锁屏、屏保、熄屏;灵动岛在屏保层,别的窗口挡不住它):控制器这份悬停也清掉,跟视图那份
+        // (NotchWindowRoot 里 isSurfaceVisible 的 onChange)配对。只清视图那份的话,解锁时指针已经移开,
+        // 之后的离开事件都不算边沿,卡片一直停在展开态。
+        if !visible { resetHoverAfterHide() }
     }
 
     /// 展开态头部快捷操作里那颗 ✕:关掉「灵动岛歌词」总开关。只是 `setVisible(false)`

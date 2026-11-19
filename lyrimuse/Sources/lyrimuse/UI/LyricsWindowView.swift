@@ -504,7 +504,9 @@ private final class LyricsWindowController: ObservableObject {
     private var chromeHidden = false
     private var chromeFadeObserver: AnyCancellable?
 
+    /// 窗口在屏上时按当下重读遮挡状态,不只信遮挡变化通知记下的值(见 `SettingsWindowSurface` 头注)。
     private func refreshSurfaceVisible() {
+        if let window, window.isVisible { occlusionVisible = WindowSurfaceState.occlusionVisible(window) }
         let visible = occlusionVisible && !coveredByOthers
         if isSurfaceVisible != visible { isSurfaceVisible = visible }
         LyricsWindowHintSurface.report(visible, from: self)
@@ -1272,7 +1274,7 @@ private final class LyricsWindowController: ObservableObject {
         // attach 时窗口可能还没 orderFront(此时 occlusionState 也是"不可见"),先按可见算——
         // 首次显示后系统会补一次通知(探针实测 orderFront 后 ~30ms 到),再以它为准。
         if let occlusionObserver { NotificationCenter.default.removeObserver(occlusionObserver) }
-        occlusionVisible = window.isVisible ? window.occlusionState.contains(.visible) : true
+        occlusionVisible = window.isVisible ? WindowSurfaceState.occlusionVisible(window) : true
         coveredByOthers = false
         refreshSurfaceVisible()
         occlusionObserver = NotificationCenter.default.addObserver(
@@ -1280,7 +1282,7 @@ private final class LyricsWindowController: ObservableObject {
         ) { [weak self] note in
             guard let win = note.object as? NSWindow else { return }
             MainActor.assumeIsolated {
-                self?.occlusionVisible = win.occlusionState.contains(.visible)
+                self?.occlusionVisible = WindowSurfaceState.occlusionVisible(win)
                 self?.refreshSurfaceVisible()
                 // 关了再开同一扇窗时 attach 不一定再走一遍,上屏这一下由这里补记「开着」、
                 // 补上「设置 › 打开」要的形态、按钮组先露那一段,并重新登记给菜单栏面板(出迷你回来时登记的还是迷你那份)。
