@@ -322,17 +322,15 @@ func TestPrefetchUpcomingSkipsRepeatOfSameTrack(t *testing.T) {
 	upcomingMu.Lock()
 	lastUpcomingKey = ""
 	upcomingMu.Unlock()
-
-	// bundle 用未知播放器:分发一定返回 false,不会真的起解析 goroutine,
-	// 这条测的是去重那把锁本身。
-	prefetchUpcoming("甲", "乙", "丙", "com.example.player", 0)
+	// 这条测的是去重那把锁本身。专辑留空:未知播放器读不到队列,会退到同专辑预取,带专辑名就在后台联网查曲目。
+	prefetchUpcoming("甲", "乙", "", "com.example.player", 0)
 	upcomingMu.Lock()
 	first := lastUpcomingKey
 	upcomingMu.Unlock()
 	if first == "" {
 		t.Fatalf("第一次调用该记下当前这首")
 	}
-	prefetchUpcoming("甲", "乙", "丙", "com.example.player", 0)
+	prefetchUpcoming("甲", "乙", "", "com.example.player", 0)
 	upcomingMu.Lock()
 	again := lastUpcomingKey
 	upcomingMu.Unlock()

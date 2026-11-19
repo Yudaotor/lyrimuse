@@ -184,6 +184,7 @@ func skipLiveInShort(t *testing.T) {
 	if testing.Short() {
 		t.Skip("按设计打真实网络,-short 下跳过")
 	}
+	allowRealNetwork(t)
 }
 
 // TestAppleStorefrontArtistIdentitiesLive 是真实网络集成测试(加,方大同

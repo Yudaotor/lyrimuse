@@ -134,6 +134,47 @@ func runUpdateChannelTests() {
                     && page.contains("private static func parse(html: String) -> AttributedString?"), true,
                     "发版说明(契约): 同一份 HTML 只在主线程上解一次")
     }
+
+    // ---- 「软件更新」页发起检查:会话正给用户看着时 Sparkle 只回 showUpdateInFocus ----
+    do {
+        print("\n== 软件更新页:再查一次不卡在「正在检查」 ==")
+        typealias R = SoftwareUpdateCheckRules
+        typealias F = SoftwareUpdateFlow
+        expectEqual(R.startsCheck(flow: .idle, holdingReply: true, canCheck: true), false,
+                    "发起检查: 已查到新版、攥着「找到了」没答时不再发(Sparkle 只会拉到前面)")
+        expectEqual(R.startsCheck(flow: .readyToInstall, holdingReply: true, canCheck: true), false,
+                    "发起检查: 下完待装时不再发")
+        expectEqual(R.startsCheck(flow: .idle, holdingReply: false, canCheck: true), true, "发起检查: 没有会话照常发")
+        expectEqual(R.startsCheck(flow: .failed(message: "x"), holdingReply: false, canCheck: true), true, "发起检查: 失败后重试照常发")
+        expectEqual(R.startsCheck(flow: .idle, holdingReply: false, canCheck: false), false, "发起检查: Sparkle 不接受时不发")
+        for busy: F in [.checking, .downloading(received: 1, expected: 2), .extracting(progress: 0.5),
+                        .installing(applicationTerminated: false)] {
+            expectEqual(R.startsCheck(flow: busy, holdingReply: false, canCheck: true), false,
+                        "发起检查: \(busy) 时不发、进度不被「正在检查」盖掉")
+        }
+        expectEqual(R.flowAfterFocusRequest(current: .checking, flowBeforeCheck: .idle), .idle,
+                    "拉到前面: 页面刚进的「正在检查」退回发起前")
+        expectEqual(R.flowAfterFocusRequest(current: .checking, flowBeforeCheck: .downloading(received: 5, expected: 9)),
+                    .downloading(received: 5, expected: 9), "拉到前面: 下载中被盖掉的进度退回来")
+        expectEqual(R.flowAfterFocusRequest(current: .checking, flowBeforeCheck: nil), .checking,
+                    "拉到前面: Sparkle 已开始的那次检查不动")
+        expectEqual(R.flowAfterFocusRequest(current: .readyToInstall, flowBeforeCheck: .idle), .readyToInstall,
+                    "拉到前面: 不在「正在检查」时不动")
+        expectEqual(R.flowAfterFocusRequest(current: .checking, flowBeforeCheck: .checking), .idle,
+                    "拉到前面: 发起前也是「正在检查」时回到空闲,不留在原地")
+
+        let sparkle = (try? String(contentsOf: URL(fileURLWithPath: #filePath).deletingLastPathComponent()
+            .deletingLastPathComponent().appendingPathComponent("lyrimuse/Settings/SparkleUpdaterManager.swift"),
+            encoding: .utf8)) ?? ""
+        let gate = "guard SoftwareUpdateCheckRules.startsCheck(flow: flow, holdingReply: holdingReply, canCheck: canCheckForUpdates)"
+        expectEqual(sourceHas(sourceBody("func checkForUpdates()", in: sparkle), gate)
+                    && sourceHas(sourceBody("func installPendingUpdate()", in: sparkle), gate), true,
+                    "软件更新页(契约): 「检查更新」与「立即更新」发起检查前都过同一道判断")
+        expectEqual(sourceHas(sparkle, "case .focusRequested: let restored = SoftwareUpdateCheckRules.flowAfterFocusRequest("), true,
+                    "软件更新页(契约): 收到 showUpdateInFocus 时退回发起前的进行态")
+        expectEqual(sourceHas(sourceBody("private func beginPageCheck(", in: sparkle), "flowBeforeCheck = flow"), true,
+                    "软件更新页(契约): 发起检查时记下之前的进行态")
+    }
 }
 
 /// 并发跑脚本时各自写自己那一格,互不重叠。

@@ -20,6 +20,8 @@ func TestPlayingKeyFollowsDurationVariant(t *testing.T) {
 	}
 	origPlaying := enrichPlayingKey.Load()
 	t.Cleanup(func() { enrichPlayingKey.Store(origPlaying) })
+	// trackEnrichment 碰到已有条目会在后台起补全、重评这些联网的活,用例结束后还在跑。先标成解析在途。
+	holdEnrichResolution(t, base, variant)
 	snapshot := func(t *testing.T) playingEntryFile {
 		t.Helper()
 		b, err := os.ReadFile(playingEntryPath())

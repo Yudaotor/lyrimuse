@@ -125,7 +125,10 @@ func TestMain(m *testing.M) {
 	newHostGuardRateFor = func(string) hostRate { return hostRate{perSec: 1000, burst: 1000} }
 	newHostGuardSourceBudget = func(string) int { return 0 }
 	setSharedHostGuard(newHostGuard(time.Now))
+	// 真实出站一律当场拦下(realnetguard_test.go)。
+	installRealNetworkGuard()
 	code := m.Run()
+	reportRealNetworkHits()
 	_ = os.RemoveAll(sandbox)
 	os.Exit(code)
 }

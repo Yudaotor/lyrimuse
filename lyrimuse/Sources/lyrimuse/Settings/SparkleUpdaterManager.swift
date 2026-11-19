@@ -36,26 +36,6 @@ private let logger = Logger(subsystem: "me.yudaotor.lyrimuse", category: "update
 //     <sparkle:channel>beta</sparkle:channel>,这是第二道保险。
 // 为什么必须自己挑 appcast、以及 Sparkle 版本比较器对 "-beta.N" 的实测行为,见 Core
 // `UpdateChannel` / `ReleaseVersion` 头注与 15 章决策 11。
-/// 「软件更新」页的进行态。只描述"正在发生什么";"有没有查到新版本"另看 `pendingItem`。
-enum SoftwareUpdateFlow: Equatable {
-    case idle
-    case checking
-    /// expected 为 nil = Sparkle 还没报总长度,画不定长进度条。
-    case downloading(received: UInt64, expected: UInt64?)
-    case extracting(progress: Double)
-    case readyToInstall
-    case installing(applicationTerminated: Bool)
-    case failed(message: String)
-
-    /// 窗口关掉也该继续跑的阶段(下载 / 解包 / 安装),关窗时不动它。
-    var isBusyInBackground: Bool {
-        switch self {
-        case .downloading, .extracting, .installing: return true
-        case .idle, .checking, .readyToInstall, .failed: return false
-        }
-    }
-}
-
 /// 「软件更新」页要显示的一次更新:从 Sparkle 的 `SUAppcastItem` 抄下页面要用的几项。
 struct SoftwareUpdateItem: Equatable {
     let version: String
@@ -170,6 +150,19 @@ final class SparkleUpdaterManager: ObservableObject {
     /// 这段时间 cancelCheck 还是 nil、取消只能重置界面;不核对的话那个 Task 之后照样发起检查,
     /// 页面跳回「正在检查」,找到的结果又因为 pageIntent 已清空被当成周期检查直接 dismiss 掉。
     private var checkGeneration = 0
+    /// 页面发起、Sparkle 还没回 showUserInitiatedUpdateCheck 的那次检查之前的进行态;Sparkle 回的是
+    /// showUpdateInFocus(会话还在给用户看、没开新检查)时据此退回去(Core `SoftwareUpdateCheckRules`)。
+    private var flowBeforeCheck: SoftwareUpdateFlow?
+    /// 手里攥着 Sparkle 在等答复的闭包 = 这一轮会话正给用户看着。
+    private var holdingReply: Bool { foundReply != nil || readyReply != nil }
+
+    /// 页面发起一次检查:先进「正在检查」,记下之前的进行态,再交给 Sparkle。
+    private func beginPageCheck(_ intent: PageIntent) {
+        flowBeforeCheck = flow
+        pageIntent = intent
+        flow = .checking
+        startCheck()
+    }
 
     /// 「立即更新」/「立即重启」。手里有 Sparkle 在等的 reply 就直接答 install;没有(周期检查早就 dismiss 过了)
     /// 就再发一次检查,found 里按 `.install` 意图自动答 —— 已经下好的包 Sparkle 会直接进安装。
@@ -185,10 +178,9 @@ final class SparkleUpdaterManager: ObservableObject {
             reply(.install)
             return
         }
-        guard canCheckForUpdates else { return }
-        pageIntent = .install
-        flow = .checking
-        startCheck()
+        guard SoftwareUpdateCheckRules.startsCheck(flow: flow, holdingReply: holdingReply, canCheck: canCheckForUpdates)
+        else { return }
+        beginPageCheck(.install)
     }
 
     /// 「退出时安装」:包已经下好,Sparkle 在 App 退出时装(dismiss 在这一步的语义,见 SPUUserDriver.h)。
@@ -207,6 +199,7 @@ final class SparkleUpdaterManager: ObservableObject {
             checkGeneration += 1
             cancelCheck?()
             cancelCheck = nil
+            flowBeforeCheck = nil
             pageIntent = .none
             flow = .idle
         case .downloading:
@@ -239,9 +232,19 @@ final class SparkleUpdaterManager: ObservableObject {
         if case .checking = flow {
             cancelCheck?()
             cancelCheck = nil
+            flowBeforeCheck = nil
             pageIntent = .none
         }
         if flow != .idle, !flow.isBusyInBackground { flow = .idle }
+    }
+
+    /// `debug/state` 的 softwareUpdate 一节:页面进行态、显示的版本、手里有没有攥着 Sparkle 的答复。
+    var debugState: [String: Any] {
+        ["flow": String(describing: flow),
+         "pendingVersion": pendingItem?.version as Any? ?? NSNull(),
+         "holdingReply": holdingReply,
+         "installOnQuit": installOnQuit,
+         "canCheck": canCheckForUpdates]
     }
 
     /// 把设置窗口翻到「软件更新」页并叫出来(信箱 + subject 两条路,见 AppActions.requestSettings)。
@@ -259,6 +262,10 @@ final class SparkleUpdaterManager: ObservableObject {
     }
 
     private func handleDriver(_ event: SoftwareUpdateDriver.Event) {
+        switch event {
+        case .permissionRequest, .releaseNotes, .releaseNotesFailed, .focusRequested: break
+        default: flowBeforeCheck = nil
+        }
         switch event {
         case .permissionRequest(let reply):
             // 首次运行「要不要自动检查」的问询:不弹窗,按设置页那个开关的当前值答;不发系统档案。
@@ -358,6 +365,12 @@ final class SparkleUpdaterManager: ObservableObject {
             if case .failed = flow { return }
             flow = .idle
         case .focusRequested:
+            let restored = SoftwareUpdateCheckRules.flowAfterFocusRequest(current: flow, flowBeforeCheck: flowBeforeCheck)
+            if restored != flow {
+                pageIntent = .none
+                flow = restored
+            }
+            flowBeforeCheck = nil
             showUpdatePage()
         }
     }
@@ -495,13 +508,13 @@ final class SparkleUpdaterManager: ObservableObject {
     /// 用户发起的「检查更新」(「软件更新」页的按钮、菜单栏右键菜单、面板底栏)。先把设置窗口翻到
     /// 「软件更新」页再查 —— 检查中 / 已是最新 / 发现新版本都显示在那一页上,跟系统设置从菜单点「检查更新」
     /// 会落到软件更新面板一个意思;不再有 Sparkle 自己的弹窗。Sparkle 已有会话在跑(比如后台正在下载)时
-    /// 它不接受新检查,这里同样不动,页面照旧显示进行中的状态。
+    /// 它不接受新检查,这一轮正给用户看着(已查到、下载中、下完待装)时它只把那一轮拉到前面,这两种都不发、不进
+    /// 「正在检查」,页面照旧显示原来的状态(`SoftwareUpdateCheckRules`)。
     func checkForUpdates() {
         showUpdatePage()
-        guard canCheckForUpdates else { return }
-        pageIntent = .check
-        flow = .checking
-        startCheck()
+        guard SoftwareUpdateCheckRules.startsCheck(flow: flow, holdingReply: holdingReply, canCheck: canCheckForUpdates)
+        else { return }
+        beginPageCheck(.check)
     }
 
     /// 真正把检查交给 Sparkle。开着「接收测试版」时先(按 TTL)把 Release 列表刷一遍:地址是它开始检查那一刻

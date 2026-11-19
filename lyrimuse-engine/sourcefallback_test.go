@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"strings"
 	"testing"
+	"time"
 )
 
 // 下面几条复用 kugoufallback_test.go 的 withKugouFake:它把真实主机名经改写的传输层指到本地
@@ -23,6 +24,43 @@ func TestKuwoSearchFallsBackToHTTP(t *testing.T) {
 	items, err := kuwoSearch(qqRoundCtx(), "陈奕迅", "浮夸")
 	if err != nil || len(items) != 1 {
 		t.Fatalf("该从 http 拿到: %+v %v", items, err)
+	}
+}
+
+// 换替身之前发出、还在途的同一个搜索(上一个用例留下的后台解析,打的是真实网络或别的替身)不能经同 URL 合并
+// 把它那份结果交给这一个用例:这里拿到的必须是自己替身的回答。
+func TestKuwoSearchIgnoresRequestInflightBeforeFakeSwap(t *testing.T) {
+	release := make(chan struct{})
+	stale := withKugouFake(t, func(target string) (int, string) {
+		select {
+		case <-release:
+		case <-time.After(300 * time.Millisecond):
+		}
+		return http.StatusOK, `{"abslist":[{"MUSICRID":"MUSIC_110247","SONGNAME":"浮夸"}]}`
+	})
+	leaderDone := make(chan struct{})
+	go func() {
+		defer close(leaderDone)
+		_, _ = kuwoSearch(qqRoundCtx(), "陈奕迅", "浮夸")
+	}()
+	t.Cleanup(func() { <-leaderDone })
+	deadline := time.Now().Add(2 * time.Second)
+	for stale.count("https://search.kuwo.cn/r.s") == 0 {
+		if time.Now().After(deadline) {
+			t.Fatal("在途的那次搜索 2 秒内没发出去")
+		}
+		time.Sleep(time.Millisecond)
+	}
+	withKugouFake(t, func(target string) (int, string) {
+		if target == "https://search.kuwo.cn/r.s" {
+			return http.StatusOK, `{"abslist":[{"MUSICRID":"MUSIC_1","SONGNAME":"浮夸"}]}`
+		}
+		return http.StatusNotFound, ""
+	})
+	items, err := kuwoSearch(qqRoundCtx(), "陈奕迅", "浮夸")
+	close(release)
+	if err != nil || len(items) != 1 || items[0].MusicRID != "MUSIC_1" {
+		t.Fatalf("该拿到自己替身的回答: %+v %v", items, err)
 	}
 }
 

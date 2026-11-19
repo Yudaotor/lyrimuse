@@ -193,6 +193,8 @@ func TestPushRelayStateSkipsHeldTrack(t *testing.T) {
 			sess: &playSession{key: cur.key(), meta: cur, startedAt: t0.Add(-time.Minute), scrobbleHold: held}}
 	}
 	withScrobbleHold(t)
+	// 推送要带这一首的补全信息,没缓存时会在后台起整轮联网解析,用例结束后还在跑。先标成解析在途。
+	holdEnrichResolution(t, enrichKey("陈奕迅", "浮夸", "测试专辑"), enrichKey("", "Silence.mp3", "测试专辑"))
 	for _, tc := range []struct {
 		name, artist, title string
 		hold                bool
@@ -321,6 +323,8 @@ func TestHandleScrobbleHoldTurnedOnMidSong(t *testing.T) {
 
 // 退出兜底:测试播放不同步提交、不写本地收听日志;真歌照常写(没连 Last.fm 时落本地收听日志)。
 func TestExitFlushSkipsHeldListen(t *testing.T) {
+	// 写本地收听日志要带这一首的补全信息,没缓存时会在后台起整轮联网解析。先标成解析在途。
+	holdEnrichResolution(t, enrichKey("陈奕迅", "浮夸", "测试专辑"), enrichKey("Test Artist One", "浮夸", "测试专辑"))
 	for _, tc := range []struct {
 		artist string
 		hold   bool

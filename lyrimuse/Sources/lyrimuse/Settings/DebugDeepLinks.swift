@@ -535,6 +535,7 @@ enum DebugDeepLinks {
                              "editing": MenuBarPanelDebugState.editing,
                              "layout": AppSettings.shared.menuBarPanelLayout.encoded()],
             "knockedOut": SourceKnockout.knockedOut,
+            "softwareUpdate": SparkleUpdaterManager.shared.debugState,
             // 导入字体(字体选单「已导入」区)、此刻能用的字体族(后台重读好之前是 null)、五处字体设置(空串 = 系统字体)。
             "fonts": [
                 "imported": CustomFontStore.shared.fonts.map { ["family": $0.familyName, "files": $0.fileNames] },

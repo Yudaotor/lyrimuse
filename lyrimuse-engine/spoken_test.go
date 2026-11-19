@@ -106,6 +106,8 @@ func TestHandleWaitsForSpokenVerdict(t *testing.T) {
 func TestPushRelayStateWaitsForSpokenVerdict(t *testing.T) {
 	t0 := time.Now()
 	cur := qqSpokenTick("通史-000引言", 0, t0, nil)
+	// 走到推送那一步会带这一首的补全信息,没缓存时在后台起整轮联网解析。先标成解析在途。
+	holdEnrichResolution(t, enrichKey(cur.Artist, cur.Title, cur.Album))
 	p := &poller{ctx: context.Background(), cfg: &config{StateRelayURL: "http://127.0.0.1:9"}, relayDoneCh: make(chan relayPushResult, 1),
 		cur: cur, sess: &playSession{key: cur.key(), startedAt: t0}}
 	p.pushRelayState(t0.Add(time.Second), false)

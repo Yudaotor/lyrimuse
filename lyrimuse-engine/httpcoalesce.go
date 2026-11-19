@@ -52,7 +52,9 @@ func httpCoalesceKey(req *http.Request) (string, bool) {
 	}
 	var b strings.Builder
 	// 带上出站档位:前台请求不跟着后台 / 补查那一个排出站闸的队(那边最长等 30 秒,前台这一轮可能先到期)。
-	fmt.Fprintf(&b, "%d\x00", outboundLaneOf(req.Context()))
+	// 再带上此刻的共享传输层:生产里它从不换;单测换成替身之后,换之前发出、还在途的同一个请求(上一个用例留下的
+	// 后台协程,打的是真实网络或别的替身)不能把结果交给这一个用例。见 15 章决策 125。
+	fmt.Fprintf(&b, "%d\x00%p\x00", outboundLaneOf(req.Context()), sharedLyricSourceTransport())
 	b.WriteString(req.URL.String())
 	names := make([]string, 0, len(req.Header))
 	for k := range req.Header {
