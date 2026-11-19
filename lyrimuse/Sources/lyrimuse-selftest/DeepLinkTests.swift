@@ -514,6 +514,12 @@ func runDeepLinkTests() {
                     [.debug(.screenLock(locked: true)), .debug(.screenLock(locked: false))], "debug: 验证窗口当作锁屏 / 解锁")
         expectEqual([link("lyrimuse://debug/screen-lock?state=auto"), link("lyrimuse://debug/screen-lock")], [nil, nil],
                     "debug: 锁屏模拟认不出的、没带都不认")
+        let debugLinks = (try? String(contentsOf: URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("lyrimuse/Settings/DebugDeepLinks.swift"), encoding: .utf8)) ?? ""
+        expectEqual(sourceHas(debugLinks, "WindowSurfaceState.setDebugScreenLocked(locked)")
+                    && sourceHas(sourceBody("private static func restore()", in: debugLinks), "WindowSurfaceState.setDebugScreenLocked(false)")
+                    && sourceHas(debugLinks, "\"previews\": LyricsPreviewDebugState.snapshot,"), true,
+                    "debug: 锁屏模拟走 WindowSurfaceState、restore 解掉;debug/state 带各份预览的当前句和跟随(11 章决策 188)")
         expectEqual(link("lyrimuse://debug/manager-instrumental?key=a%7Cb%7Cc&on=1"), .debug(.managerInstrumental(key: "a|b|c", on: true)),
                     "debug: 歌词管理把一条标成纯音乐")
         expectEqual(link("lyrimuse://debug/manager-instrumental?on=1") == nil && link("lyrimuse://debug/manager-instrumental?key=a%7Cb%7Cc") == nil,

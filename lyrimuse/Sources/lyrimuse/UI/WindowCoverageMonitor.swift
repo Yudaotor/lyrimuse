@@ -202,8 +202,9 @@ final class WindowCoverageMonitor {
 /// 按窗口可见性停表的宿主一律经这里读,别直接读 `occlusionState`:
 /// - 屏幕锁着、熄屏、切到别的用户(`ScreenVisibility`)时算看不见。解锁那一下(`screenChanges`)是可靠的边沿,
 ///   遮挡变化通知锁屏前后不一定补发。
-/// - 隐身开窗压在墙纸后面的验证窗口(`WindowActivation.isHidden`)只要上了屏就算看得见:那是验证开的窗,预览、逐字染色照常走表,
-///   按窗口截图、录帧看得到动画(14 章决策 218)。
+/// - 隐身开窗压在墙纸后面的验证窗口(`WindowActivation.isHidden`)只要上了屏就算看得见:那是验证开的窗,当前句、跟随滚动、
+///   轮询照常走。预览嵌套的托管视图在墙纸后面不一定重画,按窗口截图看到的当前句可能是旧的,以 `debug/state` 的 `previews` 为准
+///  (11 章决策 188)。
 @MainActor
 enum WindowSurfaceState {
     /// `debug/screen-lock`:隐身开的验证窗口当作屏幕锁着,用户看得见的窗口不受影响。
