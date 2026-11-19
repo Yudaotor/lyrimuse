@@ -186,7 +186,8 @@ func fetchAppleNames(ctx context.Context, ids []string, have map[string]appleCat
 	return requests, true
 }
 
-// sleepCtx 等 d;ctx 先取消时返回 false。
+// sleepCtx 等 d;ctx 先取消时返回 false。d 不大于零时只看 ctx 取消了没有,别写成 select 里零时长的定时器跟
+// ctx.Done() 并列:两个分支同时就绪时 select 随机挑一个。
 func sleepCtx(ctx context.Context, d time.Duration) bool {
 	if d <= 0 {
 		return ctx.Err() == nil

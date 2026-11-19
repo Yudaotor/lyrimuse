@@ -308,9 +308,7 @@ func (s *lastfmScrobbler) scrobbleBatch(ctx context.Context, items []listenLogLi
 			return res, err
 		}
 		log.Printf("backfill: batch never left this machine (%v), sending it again in %s", err, backfillResendDelays[attempt])
-		select {
-		case <-time.After(backfillResendDelays[attempt]):
-		case <-ctx.Done():
+		if !sleepCtx(ctx, backfillResendDelays[attempt]) {
 			return nil, fmt.Errorf("%w: %w", errScrobbleBatchNotSent, err)
 		}
 	}
@@ -591,13 +589,9 @@ func runBackfill(ctx context.Context, s *lastfmScrobbler, dryRun bool) backfillO
 			}
 		}
 
-		if end < len(pending) {
-			select {
-			case <-time.After(backfillBatchPause):
-			case <-ctx.Done():
-				out.AbortedReason = "cancelled"
-				return out
-			}
+		if end < len(pending) && !sleepCtx(ctx, backfillBatchPause) {
+			out.AbortedReason = "cancelled"
+			return out
 		}
 	}
 	log.Printf("backfill: done — accepted=%d ignored=%d quarantined=%d tooOld=%d",

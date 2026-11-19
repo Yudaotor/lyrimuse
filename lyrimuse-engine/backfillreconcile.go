@@ -85,12 +85,8 @@ func reconcileQuarantined(ctx context.Context, s *lastfmScrobbler, now time.Time
 	}
 	log.Printf("lastfm retry: checking %d quarantined listen(s) against Last.fm", len(due))
 	for i, q := range due {
-		if i > 0 {
-			select {
-			case <-time.After(backfillLookupPause):
-			case <-ctx.Done():
-				return recovered, released
-			}
+		if i > 0 && !sleepCtx(ctx, backfillLookupPause) {
+			return recovered, released
 		}
 		found, err := s.lastfmHasScrobbleAt(ctx, q.line.UTS)
 		if err != nil {
