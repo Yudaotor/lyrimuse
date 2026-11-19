@@ -42,6 +42,9 @@ type providerParitySource struct {
 	baseCtx func(context.Context) context.Context
 	// guard:假服务器装好后调一下新换上的出站闸(单测总入口把速率和小时额度都放开了,要按生产的表测的源在这里换回来)。
 	guard func(g *hostGuard)
+	// extraHosts:这个源还会问、但主机不归它名下的(汽水的曲目分享页、Apple Music 抓 developer token 的网页),
+	// 照样记下来、交给 handle。
+	extraHosts []string
 }
 
 // parityRequest:假服务器收到的一个发给被测源的请求。
@@ -109,7 +112,7 @@ func withParityFake(t *testing.T, s providerParitySource, handle func(parityRequ
 			if h, _, err := net.SplitHostPort(host); err == nil {
 				host = h
 			}
-			if lyricSourceForHost(host) != s.name {
+			if lyricSourceForHost(host) != s.name && !slices.Contains(s.extraHosts, host) {
 				w.WriteHeader(http.StatusNotFound)
 				return
 			}
@@ -509,4 +512,6 @@ var migratedLyricSources = []struct{ name, file, entry, call string }{
 	{lyricSourceLyricFind, "ytmusic.go", "ytmusicLyric", "ytmusicLyric(ctx, q.Artist, q.SourceTitle, q.Album, q.DurationSecs)"},
 	{lyricSourceKugou, "kugou.go", "kugouLyric", "kugouLyric(ctx, q.Artist, q.SourceTitle, q.Album, q.DurationSecs)"},
 	{lyricSourceKuwo, "kuwo.go", "kuwoLyric", "kuwoLyric(ctx, q.Artist, q.SourceTitle, q.Album, q.DurationSecs)"},
+	{lyricSourceSoda, "soda.go", "sodaLyric", "sodaLyric(ctx, q.Artist, q.SourceTitle, q.Album, q.DurationSecs)"},
+	{lyricSourceAppleMusic, "applemusic.go", "applemusicLyric", "applemusicLyric(ctx, q.Artist, q.SourceTitle, q.Album, q.DurationSecs, appleID, lyricSourceISRC(ctx, q.Artist, q.Title, q.Album))"},
 }

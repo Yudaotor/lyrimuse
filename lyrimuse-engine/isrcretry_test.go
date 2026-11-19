@@ -77,7 +77,7 @@ func TestISRCRetryFetchesSourceMissedByName(t *testing.T) {
 }
 
 // 接线守卫:applemusic 结果把 ISRC 带进候选;补取轮排在所有轮次之后;deezer / applemusic 两路读 lyricSourceISRC
-// (deezer 那一路在 deezerProvider.Resolve 里,按不带编号的歌名读)。
+// (各在自己的 Resolve 里,按不带编号的歌名读)。
 func TestISRCRetryIsWired(t *testing.T) {
 	b, err := os.ReadFile("enrich.go")
 	if err != nil {
@@ -85,11 +85,9 @@ func TestISRCRetryIsWired(t *testing.T) {
 	}
 	src := string(b)
 	for _, n := range []string{
-		"srcDur: r.durationSecs, isrc: r.isrc,",
 		"isrc:                       am.isrc,",
 		"ISRC:                       c.isrc,",
 		"isrc:                       r.ISRC,",
-		"r := applemusicLyric(ctx, artist, srcTitle, album, durationSecs, appleID, lyricSourceISRC(ctx, artist, title, album))",
 		"if isrc, sources := isrcRetryPlan(ctx, results, durationSecs); isrc != \"\" {",
 	} {
 		if !containsCode(src, n) {
@@ -120,5 +118,13 @@ func TestISRCRetryIsWired(t *testing.T) {
 	}
 	if !strings.Contains(string(a), "`json:\"isrc\"`") || !strings.Contains(string(a), "isrc: s.Attributes.Isrc,") {
 		t.Error("applemusic 没解析 / 没透传 song attributes 里的 isrc")
+	}
+	for _, n := range []string{
+		"r := applemusicLyric(ctx, q.Artist, q.SourceTitle, q.Album, q.DurationSecs, appleID, lyricSourceISRC(ctx, q.Artist, q.Title, q.Album))",
+		"srcDur: r.durationSecs, isrc: r.isrc,",
+	} {
+		if !containsCode(string(a), n) {
+			t.Errorf("applemusic.go 缺 %q", n)
+		}
 	}
 }

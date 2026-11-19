@@ -101,7 +101,7 @@ func TestApplemusicCatalogIDFallsBackToNameSearch(t *testing.T) {
 
 // 按目录 id 取到的那份要跟本地缓存那份一样带上同源加权的准入。
 func TestApplemusicPlayerCatalogIdentityIsWired(t *testing.T) {
-	b, err := os.ReadFile("enrich.go")
+	b, err := os.ReadFile("applemusic.go")
 	if err != nil {
 		t.Fatal(err)
 	}

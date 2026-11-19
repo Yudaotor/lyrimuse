@@ -113,13 +113,21 @@ func TestLyricIdentityFieldsIsWired(t *testing.T) {
 		"enrich.go": {
 			"idArtist, idTitle, idAlbum := lyricIdentityFields(ctx, artist, title, album)",
 			"appleCatalogID, spotifyTrackID := playbackTrackIDsForRound(ctx, idArtist, idTitle, idAlbum)",
-			"appleID, _ := playbackTrackIDsForRound(ctx, idArtist, idTitle, idAlbum)",
+			"providerEnv := RoundEnv{ForPlayingTrack: forPlaying, identityArtist: idArtist, identityTitle: idTitle, identityAlbum: idAlbum}",
 			"kkboxLocalLyricsFor(idArtist, idTitle, durationSecs)",
 			"spotifyLocalLyricsFor(idArtist, idTitle, idAlbum)",
 			"amazonLocalLyricsFor(idArtist, idTitle, idAlbum)",
 		},
-		"isrcretry.go":  {"a, t, al := lyricIdentityFields(ctx, artist, title, album)\n\tif code := playbackISRCForRound(ctx, a, t, al); code != \"\" {"},
-		"applemusic.go": {"applemusicLocalLyric(catalogID, idArtist, idTitle, idAlbum, durationSecs)"},
+		"isrcretry.go": {"a, t, al := lyricIdentityFields(ctx, artist, title, album)\n\tif code := playbackISRCForRound(ctx, a, t, al); code != \"\" {"},
+		"applemusic.go": {
+			"applemusicLocalLyric(catalogID, idArtist, idTitle, idAlbum, durationSecs)",
+			"appleID, _ := env.PlaybackTrackIDs(ctx)",
+			"appleID = env.AwaitPlayingAppleCatalogID(ctx)",
+		},
+		"lyricprovider.go": {
+			"return playbackTrackIDsForRound(ctx, e.identityArtist, e.identityTitle, e.identityAlbum)",
+			"return waitPlayingAppleCatalogID(ctx, e.identityArtist, e.identityTitle, e.identityAlbum)",
+		},
 	} {
 		b, err := os.ReadFile(file)
 		if err != nil {

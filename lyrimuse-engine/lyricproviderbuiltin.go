@@ -87,7 +87,7 @@ func newBuiltinLyricProviderRegistry() *lyricProviderRegistry {
 		QueryIndependentFailure: deezerLastFailureReasonNow,
 	}, 0)})
 
-	r.registerBuiltin(&ProviderDescriptor{
+	r.implement(appleMusicProvider{desc: r.registerBuiltin(&ProviderDescriptor{
 		Name: lyricSourceAppleMusic, Order: 10, TieRank: 9, DefaultPriorityRank: 10,
 		Hosts: []HostRule{
 			{"amp-api.music.apple.com", hostExact}, {"amp-api-edge.music.apple.com", hostExact},
@@ -97,15 +97,15 @@ func newBuiltinLyricProviderRegistry() *lyricProviderRegistry {
 		SongwritersRank: 1, ISRCAuthority: true,
 		PeerGroup:               peerGroupGlobal,
 		QueryIndependentFailure: applemusicLastFailureReasonNow,
-	}, privLocalClientIdentity|privPlaybackTrackIDs|privPlayerNoVocals|privRefetchByID)
+	}, privLocalClientIdentity|privPlaybackTrackIDs|privPlayerNoVocals|privRefetchByID)})
 
-	r.registerBuiltin(&ProviderDescriptor{
+	r.implement(sodaProvider{desc: r.registerBuiltin(&ProviderDescriptor{
 		Name: lyricSourceSoda, Order: 11, TieRank: 10, DefaultPriorityRank: 11,
 		Hosts:           []HostRule{{sodaSeoTrackHost, hostExact}, {sodaSearchHost, hostExact}},
 		ParenBackground: true,
 		PeerGroup:       peerGroupChinese,
 		Probe:           &ProbeTrack{Artist: "陈奕迅", Title: "十年"},
-	}, privLocalClientIdentity|privPlaybackTrackIDs|privPlayerNoVocals)
+	}, privLocalClientIdentity|privPlaybackTrackIDs|privPlayerNoVocals)})
 
 	r.implement(vibeProvider{desc: r.registerBuiltin(&ProviderDescriptor{
 		Name: lyricSourceVibe, Order: 12, TieRank: 11, DefaultPriorityRank: 12,

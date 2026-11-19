@@ -182,6 +182,18 @@ func sodaLastFailureReasonNow() string {
 	return sodaLastFailure
 }
 
+// sodaProvider 把 sodaLyric 接到 LyricProvider 上。结果的源名由调度填(runLyricProvider)。曲目 id 来自汽水客户端
+// (播放队列缓存或预载缓存)时,seo_track 或队列缓存里的 vocal==2 就是这一条没有人声(sodalocal.go,09 章决策 363)。
+type sodaProvider struct{ desc *ProviderDescriptor }
+
+func (p sodaProvider) Descriptor() *ProviderDescriptor { return p.desc }
+
+func (p sodaProvider) Resolve(ctx context.Context, q ProviderQuery, _ RoundEnv) SourceResult {
+	r, noLyrics := sodaLyric(ctx, q.Artist, q.SourceTitle, q.Album, q.DurationSecs)
+	noVocals := r.fromLocalClient && (r.noVocals || sodaLocalInstrumental(q.Artist, q.SourceTitle, q.Album, q.DurationSecs))
+	return SourceResult{lyr: r.lyrics, yrc: r.yrc, tr: r.tr, matchTitle: r.title, matchArtist: r.artist, matchAlbum: r.album, matchCover: r.cover, srcDur: r.durationSecs, trackFoundNoLyrics: noLyrics, noVocals: noVocals, identityFromLocalClient: r.fromLocalClient}
+}
+
 // sodaLyric 取汽水歌词。拿不到本地曲目 id 就直接空手返回 —— 没装汽水 / 没用汽水放过
 // 这首,本来就不该有它的候选,这时一个请求都不发。
 // 第二个返回值是「汽水曲库里有这首歌、但平台没给词」——跟 netease/qq 那两路的同名结论

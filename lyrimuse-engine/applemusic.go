@@ -1571,6 +1571,28 @@ func applemusicResultFrom(s applemusicSong, p amllResult, plainOnly bool) applem
 	}
 }
 
+// appleMusicProvider 把 applemusicLyric 接到 LyricProvider 上。结果的源名由调度填(runLyricProvider)。播放侧记下的
+// Apple 目录 id 经环境读(RoundEnv.PlaybackTrackIDs):有它就能先问 Music.app 自己的歌词缓存、按 id 直取。这条录音的
+// ISRC 按不带编号的歌名取(lyricSourceISRC),取词用带编号的那份 SourceTitle,两个别混。
+type appleMusicProvider struct{ desc *ProviderDescriptor }
+
+func (p appleMusicProvider) Descriptor() *ProviderDescriptor { return p.desc }
+
+func (p appleMusicProvider) Resolve(ctx context.Context, q ProviderQuery, env RoundEnv) SourceResult {
+	appleID, _ := env.PlaybackTrackIDs(ctx)
+	r := applemusicLyric(ctx, q.Artist, q.SourceTitle, q.Album, q.DurationSecs, appleID, lyricSourceISRC(ctx, q.Artist, q.Title, q.Album))
+	// 正在用 Apple Music 放、它自己没给这一条的歌词时,问一次这条录音有没有人声(播放器自己的信号,见 playerInstrumentalSource)。
+	// 目录 id 开搜那一刻多半还没核对完,在放的这首等它就绪再问;待播队列、同专辑预取那几首没有提示,不等(见 applenovocals.go)。
+	appleNoVocals := false
+	if env.PlayerNoVocalsSignalApplies() && r.lyrics == "" && playingPlayer() == playerAppleMusic {
+		if appleID == "" && !isPlayerQueueTrack(ctx) {
+			appleID = env.AwaitPlayingAppleCatalogID(ctx)
+		}
+		appleNoVocals = appleID != "" && applemusicCatalogNoVocals(ctx, appleID)
+	}
+	return SourceResult{noVocals: appleNoVocals, lyr: r.lyrics, yrc: r.yrc, tr: r.tr, trLang: r.trLang, roma: r.roma, bg: r.bg, songwriters: r.songwriters, matchTitle: r.title, matchArtist: r.artist, matchAlbum: r.album, matchCover: r.cover, srcDur: r.durationSecs, isrc: r.isrc, plainOnly: r.plainOnly, identityFromLocalClient: r.fromLocalClient || r.fromPlayerCatalogID || appleNoVocals}
+}
+
 // applemusicLyric 是这一路的入口,带进程内缓存(同 deezer)。
 // catalogID:正在播的这首歌在 Apple 目录里的 id(platformtrackid.go 记的,已过
 // appleCatalogAnchor 校验)。非空时先问 Music.app 自己的缓存要官方歌词 —— 那份带

@@ -574,8 +574,6 @@ func TestLyricSearchTitleIsWired(t *testing.T) {
 		"qrc := qqQRCLyric(ctx, qqMid, artist, srcTitle, album, durationSecs)",
 		"artist: artist, title: srcTitle, album: album,",
 		"providerQuery := ProviderQuery{Artist: artist, Title: title, Album: album, SourceTitle: srcTitle, DurationSecs: durationSecs}",
-		"applemusicLyric(ctx, artist, srcTitle, album, durationSecs, appleID, lyricSourceISRC(ctx, artist, title, album))",
-		"sodaLyric(ctx, artist, srcTitle, album, durationSecs)",
 	} {
 		if !containsCode(enrich, n) {
 			t.Errorf("enrich.go 缺 %q", n)
@@ -594,6 +592,11 @@ func TestLyricSearchTitleIsWired(t *testing.T) {
 		"kuwo.go": {
 			"kuwoLyric(ctx, q.Artist, q.SourceTitle, q.Album, q.DurationSecs)",
 			"kuwoLocalLyric(q.Artist, q.SourceTitle, q.DurationSecs)",
+		},
+		"applemusic.go": {"applemusicLyric(ctx, q.Artist, q.SourceTitle, q.Album, q.DurationSecs, appleID, lyricSourceISRC(ctx, q.Artist, q.Title, q.Album))"},
+		"soda.go": {
+			"sodaLyric(ctx, q.Artist, q.SourceTitle, q.Album, q.DurationSecs)",
+			"sodaLocalInstrumental(q.Artist, q.SourceTitle, q.Album, q.DurationSecs)",
 		},
 	} {
 		for _, n := range needles {

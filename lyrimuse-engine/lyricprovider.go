@@ -27,10 +27,46 @@ type ProviderQuery struct {
 	DurationSecs float64
 }
 
-// RoundEnv 是这一轮交给源的环境。
+// RoundEnv 是这一轮交给源的环境。带特权的那几样(播放侧记下的平台曲目编号、播放器自己的无人声信号)只经下面的方法读,
+// 方法按 granted 放行:收集循环建的那份 granted 是 0,调度交给源之前按它的描述符填(grantedTo),没有对应特权位的源
+// 读到的是零值。见 09 章决策 392。
 type RoundEnv struct {
 	// ForPlayingTrack:这一轮解析的是正在放的那首或它的待播队列(playerSignalApplies)。
 	ForPlayingTrack bool
+	// identityArtist / identityTitle / identityAlbum:播放器原样标签(lyricIdentityFields),播放侧按它记平台曲目编号。
+	identityArtist, identityTitle, identityAlbum string
+	// granted:拿到这份环境的源的特权位。
+	granted builtinPrivileges
+}
+
+// grantedTo:交给描述符是 d 的那个源的一份,特权位照 d 的填。
+func (e RoundEnv) grantedTo(d *ProviderDescriptor) RoundEnv {
+	e.granted = d.Privileges
+	return e
+}
+
+// PlaybackTrackIDs:播放侧为这一首记下的平台曲目编号(playbackTrackIDsForRound),别的歌那一轮不给。
+// 要 privPlaybackTrackIDs,没有这一位的源拿到两个空串。
+func (e RoundEnv) PlaybackTrackIDs(ctx context.Context) (appleCatalogID, spotifyTrackID string) {
+	if !e.granted.has(privPlaybackTrackIDs) {
+		return "", ""
+	}
+	return playbackTrackIDsForRound(ctx, e.identityArtist, e.identityTitle, e.identityAlbum)
+}
+
+// AwaitPlayingAppleCatalogID:在放的这首的 Apple 目录 id,播放侧还没核对完时等它就绪(waitPlayingAppleCatalogID)。
+// 要 privPlaybackTrackIDs,没有这一位的源不等、拿到空串。
+func (e RoundEnv) AwaitPlayingAppleCatalogID(ctx context.Context) string {
+	if !e.granted.has(privPlaybackTrackIDs) {
+		return ""
+	}
+	return waitPlayingAppleCatalogID(ctx, e.identityArtist, e.identityTitle, e.identityAlbum)
+}
+
+// PlayerNoVocalsSignalApplies:这一轮能不能用正在放的播放器自己的无人声信号(ForPlayingTrack)。
+// 要 privPlayerNoVocals,没有这一位的源一律拿到 false。
+func (e RoundEnv) PlayerNoVocalsSignalApplies() bool {
+	return e.granted.has(privPlayerNoVocals) && e.ForPlayingTrack
 }
 
 // SourceResult 是一个源这一轮交回的结果。

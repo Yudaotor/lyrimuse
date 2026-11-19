@@ -2,7 +2,11 @@ package main
 
 import (
 	"context"
+	"os"
+	"path/filepath"
 	"reflect"
+	"regexp"
+	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -124,5 +128,128 @@ func TestLocalClientIdentityOnlyFromPrivilegedProviders(t *testing.T) {
 				t.Errorf("结果 %+v,期望 %+v", got, want)
 			}
 		})
+	}
+}
+
+// 环境里带特权的读取(播放侧记下的平台曲目编号、等在放的这首的 Apple 目录 id、播放器自己的无人声信号)按调度填的特权位
+// 放行:没有对应那一位的源经调度拿到的环境读出来是零值,收集循环建的那份(还没交给任何源)也一样。
+func TestRoundEnvPrivilegedReadsNeedPrivilege(t *testing.T) {
+	withCleanPlaybackHints(t)
+	withAppleNoVocalsWait(t, 2*time.Second)
+	const artist, title, album = "原样歌手", "原样歌名", "原样专辑"
+	notePlayingAppleCatalogID(artist, title, album, 4242)
+	notePlayingSpotifyTrackID(artist, title, album, "sp4242")
+	full := RoundEnv{ForPlayingTrack: true, identityArtist: artist, identityTitle: title, identityAlbum: album}
+	ctx := context.Background()
+	read := func(env RoundEnv, ctx context.Context) (apple, spotify, awaited string, signal bool) {
+		apple, spotify = env.PlaybackTrackIDs(ctx)
+		return apple, spotify, env.AwaitPlayingAppleCatalogID(ctx), env.PlayerNoVocalsSignalApplies()
+	}
+	if apple, spotify, awaited, signal := read(full, ctx); apple != "" || spotify != "" || awaited != "" || signal {
+		t.Errorf("还没经调度交给源的环境不放行:%q %q %q %v", apple, spotify, awaited, signal)
+	}
+	for _, c := range []struct {
+		name       string
+		privileges builtinPrivileges
+		wantIDs    bool
+		wantSignal bool
+	}{
+		{name: "没有特权位"},
+		{name: "只有不相干的位", privileges: privLocalClientIdentity | privOfflineLeg | privTrackIDPublish | privTrackIDConsume | privPeripheral | privBorrowFromPeers | privRefetchByID | privBreakerControl},
+		{name: "读播放侧编号", privileges: privPlaybackTrackIDs, wantIDs: true},
+		{name: "播放器无人声信号", privileges: privPlayerNoVocals, wantSignal: true},
+		{name: "两位都有", privileges: privPlaybackTrackIDs | privPlayerNoVocals, wantIDs: true, wantSignal: true},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			enableOnlyLyricSources(t, "stub")
+			stub := &stubLyricProvider{desc: &ProviderDescriptor{Name: "stub", Privileges: c.privileges}}
+			runLyricProvider(ctx, stub, ProviderQuery{}, full, newLyricRoundPlan(ctx, nil))
+			if stub.calls.Load() != 1 {
+				t.Fatalf("Resolve 应被问一次,实际 %d 次", stub.calls.Load())
+			}
+			start := time.Now()
+			apple, spotify, awaited, signal := read(stub.gotEnv, ctx)
+			wantApple, wantSpotify := "", ""
+			if c.wantIDs {
+				wantApple, wantSpotify = "4242", "sp4242"
+			}
+			if apple != wantApple || spotify != wantSpotify || awaited != wantApple || signal != c.wantSignal {
+				t.Errorf("读到 apple=%q spotify=%q 等到=%q 信号=%v,期望 %q %q %q %v", apple, spotify, awaited, signal, wantApple, wantSpotify, wantApple, c.wantSignal)
+			}
+			// 别的歌那一轮,有这一位也不给(playbackTrackIDsForRound)。
+			if apple, spotify := stub.gotEnv.PlaybackTrackIDs(withOtherTrackRound(ctx)); apple != "" || spotify != "" {
+				t.Errorf("别的歌那一轮不该给播放侧编号:%q %q", apple, spotify)
+			}
+			// 没记过编号的另一首:没有这一位的源不等锚点,立刻拿到空串。
+			other := stub.gotEnv
+			other.identityTitle = "还没核对的曲目"
+			if !c.wantIDs {
+				if got := other.AwaitPlayingAppleCatalogID(ctx); got != "" || time.Since(start) > time.Second {
+					t.Errorf("没有这一位不该等:%q,用时 %v", got, time.Since(start))
+				}
+			}
+			noSignal := stub.gotEnv
+			noSignal.ForPlayingTrack = false
+			if noSignal.PlayerNoVocalsSignalApplies() {
+				t.Error("不是在放的那首时,有这一位也没有信号")
+			}
+		})
+	}
+}
+
+// 各源的 Resolve 不直接读播放侧编号、不直接判播放器信号能不能用:这几样只经 RoundEnv 的方法,特权位只由调度填。
+func TestProviderPrivilegedReadsGoThroughRoundEnv(t *testing.T) {
+	files, err := filepath.Glob("*.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	resolves, granters, grantWrites := 0, []string{}, []string{}
+	for _, f := range files {
+		if strings.HasSuffix(f, "_test.go") {
+			continue
+		}
+		raw, err := os.ReadFile(f)
+		if err != nil {
+			t.Fatal(err)
+		}
+		src := string(raw)
+		if n := countCode(src, ".grantedTo("); n > 0 {
+			granters = append(granters, f+":"+strings.Repeat("x", n))
+		}
+		if containsCode(src, ".granted = ") {
+			grantWrites = append(grantWrites, f)
+		}
+		for rest := src; ; {
+			i := strings.Index(rest, "Provider) Resolve(ctx context.Context, q ProviderQuery,")
+			if i < 0 {
+				break
+			}
+			rest = rest[i:]
+			end := strings.Index(rest, "\n}\n")
+			if end < 0 {
+				t.Fatalf("%s 里有一个 Resolve 没有收尾", f)
+			}
+			body := rest[:end]
+			rest = rest[end:]
+			resolves++
+			for _, direct := range []string{"playbackTrackIDsForRound", "playbackTrackIDsFor", "waitPlayingAppleCatalogID", "playerSignalApplies", "lyricIdentityFields"} {
+				if regexp.MustCompile(`\b` + direct + `\(`).MatchString(body) {
+					t.Errorf("%s 的 Resolve 直接调了 %s():这类读取只经 RoundEnv 的方法", f, direct)
+				}
+			}
+		}
+	}
+	if resolves != len(lyricProviders().providers) {
+		t.Errorf("扫到 %d 个 Resolve,登记的实现有 %d 个", resolves, len(lyricProviders().providers))
+	}
+	if len(granters) != 1 || granters[0] != "lyricproviderrun.go:x" {
+		t.Errorf("环境的特权位只该由调度在 runLyricProvider 里填一次:%v", granters)
+	}
+	if len(grantWrites) != 1 || grantWrites[0] != "lyricprovider.go" {
+		t.Errorf("granted 只该在 RoundEnv.grantedTo 里写:%v", grantWrites)
+	}
+	run := goFuncSource(t, "lyricproviderrun.go", "runLyricProvider")
+	if !containsCode(run, "r := p.Resolve(ctx, q, env.grantedTo(d))") {
+		t.Error("runLyricProvider 交给 Resolve 的环境要按这个源的描述符放行")
 	}
 }

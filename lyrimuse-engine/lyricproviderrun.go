@@ -61,7 +61,7 @@ func (p lyricRoundPlan) decide(d *ProviderDescriptor) providerRoundDecision {
 // runLyricProvider 问一个源一轮,不管问没问都恰好交回一份结果,源名是描述符里的名字。被跳过的交只带源名的空结果:
 // 收集循环按源名数「都回来了没有」,少交一份这一轮就会等到截止。ctx 原样传给 Resolve,循环返回时靠它取消还在飞的请求。
 // 熔断冷却的那一轮,带 privOfflineLeg 的源仍读本机那一份(offlineLegResult):本机命中算这一轮它答了,不记跳过;
-// 名单外、关掉的源本机那份也不读。
+// 名单外、关掉的源本机那份也不读。交给 Resolve 的环境按描述符的特权位放行(RoundEnv.grantedTo)。
 func runLyricProvider(ctx context.Context, p LyricProvider, q ProviderQuery, env RoundEnv, plan lyricRoundPlan) SourceResult {
 	d := p.Descriptor()
 	switch plan.decide(d) {
@@ -75,7 +75,7 @@ func runLyricProvider(ctx context.Context, p LyricProvider, q ProviderQuery, env
 		log.Printf("lyrics: source %s skipped this round, cooling down for another %s", d.Name, plan.cooling[d.Name].Round(time.Second))
 		return SourceResult{source: d.Name}
 	}
-	r := p.Resolve(ctx, q, env)
+	r := p.Resolve(ctx, q, env.grantedTo(d))
 	return sealProviderResult(d, r)
 }
 

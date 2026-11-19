@@ -51,16 +51,21 @@ func TestWaitPlayingAppleCatalogID(t *testing.T) {
 
 // 解析那一路在没拿到词时等锚点。源码契约(要全套源和播放状态才搭得起来)。
 func TestAppleNoVocalsWired(t *testing.T) {
-	data, err := os.ReadFile("enrich.go")
-	if err != nil {
-		t.Fatal(err)
-	}
-	for _, needle := range []string{
-		"if appleID == \"\" && !isPlayerQueueTrack(ctx) {\n\t\t\t\tappleID = waitPlayingAppleCatalogID(ctx, idArtist, idTitle, idAlbum)",
-		"appleNoVocals = appleID != \"\" && applemusicCatalogNoVocals(ctx, appleID)",
+	for file, needles := range map[string][]string{
+		"applemusic.go": {
+			"if appleID == \"\" && !isPlayerQueueTrack(ctx) {\n\t\t\tappleID = env.AwaitPlayingAppleCatalogID(ctx)",
+			"appleNoVocals = appleID != \"\" && applemusicCatalogNoVocals(ctx, appleID)",
+		},
+		"lyricprovider.go": {"return waitPlayingAppleCatalogID(ctx, e.identityArtist, e.identityTitle, e.identityAlbum)"},
 	} {
-		if !containsCode(string(data), needle) {
-			t.Errorf("enrich.go 缺 %q", needle)
+		data, err := os.ReadFile(file)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, needle := range needles {
+			if !containsCode(string(data), needle) {
+				t.Errorf("%s 缺 %q", file, needle)
+			}
 		}
 	}
 }

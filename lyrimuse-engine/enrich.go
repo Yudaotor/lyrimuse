@@ -6151,7 +6151,7 @@ func fetchScoredLyricCandidatesStreaming(ctx context.Context, artist, title, alb
 	// 已经接到 LyricProvider 上的源由调度来起(startLyricProviders),跳过判断在调度里,不走 skipSource。
 	providerPlan := newLyricRoundPlan(ctx, breakerPlan)
 	providerQuery := ProviderQuery{Artist: artist, Title: title, Album: album, SourceTitle: srcTitle, DurationSecs: durationSecs}
-	providerEnv := RoundEnv{ForPlayingTrack: forPlaying}
+	providerEnv := RoundEnv{ForPlayingTrack: forPlaying, identityArtist: idArtist, identityTitle: idTitle, identityAlbum: idAlbum}
 
 	// amll-ttml-db 按**平台音乐 ID**取歌词,所以它得等网易云/QQ 先把 ID 搜出来。
 	// 用两个带缓冲的 channel 把 ID 递过去,而不是把查询塞进那两个 goroutine 里 ——
@@ -6259,42 +6259,6 @@ func fetchScoredLyricCandidatesStreaming(ctx context.Context, artist, title, alb
 		})}
 	}()
 	startLyricProviders(ctx, lyricProviders().providers, providerQuery, providerEnv, providerPlan, resultsCh)
-	go func() {
-		if skipSource("applemusic") {
-			resultsCh <- lyricSourceResult{source: "applemusic"}
-			return
-		}
-		// 独立检索(不等任何其它源的 ID),同 kuwo/migu/deezer。这一路是全部源里唯一能给出
-		// **逐字**时间轴的官方源,yrc 因此常有值;tr 来自 TTML 里的 <translations>,多数曲目为空。
-		// 用户没连过 Apple Music 时它安静返回空(applemusic_not_connected),不是故障。
-		// Apple 目录 id 由播放侧顺带记下(platformtrackid.go,同 amll 那路);有它就能先问
-		// Music.app 自己的歌词缓存,拿到官方逐字 + 官方译文,见 applemusiclocal.go。
-		// isrc 有值时(同 deezer 那路)先按 ISRC 直取这条录音,再按名字搜。
-		appleID, _ := playbackTrackIDsForRound(ctx, idArtist, idTitle, idAlbum)
-		r := applemusicLyric(ctx, artist, srcTitle, album, durationSecs, appleID, lyricSourceISRC(ctx, artist, title, album))
-		// 正在用 Apple Music 放、它自己没给这一条的歌词时,问一次这条录音有没有人声(播放器自己的信号,见 playerInstrumentalSource)。
-		// 目录 id 开搜那一刻多半还没核对完,在放的这首等它就绪再问;待播队列、同专辑预取那几首没有提示,不等(见 applenovocals.go)。
-		appleNoVocals := false
-		if forPlaying && r.lyrics == "" && playingPlayer() == playerAppleMusic {
-			if appleID == "" && !isPlayerQueueTrack(ctx) {
-				appleID = waitPlayingAppleCatalogID(ctx, idArtist, idTitle, idAlbum)
-			}
-			appleNoVocals = appleID != "" && applemusicCatalogNoVocals(ctx, appleID)
-		}
-		resultsCh <- lyricSourceResult{noVocals: appleNoVocals, source: "applemusic", lyr: r.lyrics, yrc: r.yrc, tr: r.tr, trLang: r.trLang, roma: r.roma, bg: r.bg, songwriters: r.songwriters, matchTitle: r.title, matchArtist: r.artist, matchAlbum: r.album, matchCover: r.cover, srcDur: r.durationSecs, isrc: r.isrc, plainOnly: r.plainOnly, identityFromLocalClient: r.fromLocalClient || r.fromPlayerCatalogID || appleNoVocals}
-	}()
-	go func() {
-		if skipSource("soda") {
-			resultsCh <- lyricSourceResult{source: "soda"}
-			return
-		}
-		// 曲目 id 先取汽水客户端的播放队列缓存,拿不到再按歌手 + 歌名搜索(见 soda.go 头注)。取词走无签名的 seo_track。
-		r, noLyrics := sodaLyric(ctx, artist, srcTitle, album, durationSecs)
-		// 曲目 id 来自汽水客户端(播放队列缓存或预载缓存)时,seo_track 或队列缓存里的 vocal==2 就是这一条没有人声
-		// (见 sodalocal.go、09 章决策 363)。
-		noVocals := r.fromLocalClient && (r.noVocals || sodaLocalInstrumental(artist, srcTitle, album, durationSecs))
-		resultsCh <- lyricSourceResult{source: "soda", lyr: r.lyrics, yrc: r.yrc, tr: r.tr, matchTitle: r.title, matchArtist: r.artist, matchAlbum: r.album, matchCover: r.cover, srcDur: r.durationSecs, trackFoundNoLyrics: noLyrics, noVocals: noVocals, identityFromLocalClient: r.fromLocalClient}
-	}()
 
 	// raw:目前为止到手的各源原始应答,按源名存。打分/排序全部下放给
 	// rankLyricSourceResults(包级纯函数,回归金标集与生产共用),这里只负责收结果、喂进去。

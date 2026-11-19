@@ -379,14 +379,9 @@ func TestPlayerInstrumentalSignalsAreWired(t *testing.T) {
 		"qqNoVocals := qqMeta.id != 0 && qqMeta.language == qqLanguagePureMusic",
 		"instrumental: qqInstrumental, noVocals: qqNoVocals,",
 		"language: r.language, noVocals: r.noVocals,",
-		"noVocals := r.fromLocalClient && (r.noVocals || sodaLocalInstrumental(artist, srcTitle, album, durationSecs))",
-		"trackFoundNoLyrics: noLyrics, noVocals: noVocals,",
-		"if forPlaying && r.lyrics == \"\" && playingPlayer() == playerAppleMusic {",
-		"appleNoVocals = appleID != \"\" && applemusicCatalogNoVocals(ctx, appleID)",
-		"lyricSourceResult{noVocals: appleNoVocals, source: \"applemusic\",",
-		"identityFromLocalClient: r.fromLocalClient || r.fromPlayerCatalogID || appleNoVocals}",
 		"if src := playerInstrumentalSource(raw, results); src != \"\" {",
 		"forPlaying := playerSignalApplies(ctx)",
+		"providerEnv := RoundEnv{ForPlayingTrack: forPlaying,",
 		"r.forPlayingTrack = forPlaying\n\t\t\traw[r.source] = r",
 		"if forPlaying && playingPlayer() == playerSpotify && spotifyLocalNoVocals(",
 		"earlyWatch.holdForNative = playerLocalNoVocalsHint(artist, srcTitle, album, durationSecs)",
@@ -394,6 +389,28 @@ func TestPlayerInstrumentalSignalsAreWired(t *testing.T) {
 	} {
 		if !containsCode(enrich, n) {
 			t.Errorf("enrich.go 缺 %q", n)
+		}
+	}
+	// 汽水、Apple Music 两路的信号在各自的 Resolve 里;Apple 那一路「能不能用播放器的信号」经环境读,要 privPlayerNoVocals。
+	for file, needles := range map[string][]string{
+		"soda.go": {
+			"noVocals := r.fromLocalClient && (r.noVocals || sodaLocalInstrumental(q.Artist, q.SourceTitle, q.Album, q.DurationSecs))",
+			"trackFoundNoLyrics: noLyrics, noVocals: noVocals,",
+		},
+		"applemusic.go": {
+			"if env.PlayerNoVocalsSignalApplies() && r.lyrics == \"\" && playingPlayer() == playerAppleMusic {",
+			"appleNoVocals = appleID != \"\" && applemusicCatalogNoVocals(ctx, appleID)",
+			"SourceResult{noVocals: appleNoVocals, lyr: r.lyrics,",
+			"identityFromLocalClient: r.fromLocalClient || r.fromPlayerCatalogID || appleNoVocals}",
+		},
+		"lyricprovider.go":    {"return e.granted.has(privPlayerNoVocals) && e.ForPlayingTrack"},
+		"lyricproviderrun.go": {"r := p.Resolve(ctx, q, env.grantedTo(d))"},
+	} {
+		src := string(mustRead(t, file))
+		for _, n := range needles {
+			if !containsCode(src, n) {
+				t.Errorf("%s 缺 %q", file, n)
+			}
 		}
 	}
 	i := strings.Index(enrich, "func scoredLyricCandidatesStreaming(")

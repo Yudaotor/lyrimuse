@@ -559,7 +559,7 @@ func TestOnDemandLyricRoundMarkedOnlyAtWhitelist(t *testing.T) {
 		"only: lyricSourceOnlyFrom(ctx), onDemand: isOnDemandLyricRound(ctx), enabled: lyricSourceEnabled,",
 		"if d.Rounds == roundsOnDemand && !p.onDemand {\n\t\treturn providerRoundSkipSilent\n\t}",
 		"d := p.Descriptor()\n\tswitch plan.decide(d) {\n\tcase providerRoundSkipSilent:\n\t\treturn SourceResult{source: d.Name}\n\tcase providerRoundSkipCooling:",
-		"return SourceResult{source: d.Name}\n\t}\n\tr := p.Resolve(ctx, q, env)",
+		"return SourceResult{source: d.Name}\n\t}\n\tr := p.Resolve(ctx, q, env.grantedTo(d))",
 	} {
 		if !containsCode(sources["lyricproviderrun.go"], n) {
 			t.Errorf("lyricproviderrun.go 缺 %q:调度得先按描述符的 Rounds 判轮次、不问的不调 Resolve", n)
