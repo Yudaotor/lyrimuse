@@ -5202,27 +5202,28 @@ func runSourceContractSettingsTests() {
         // 逐字染色每帧都让整扇窗重排、重算最小尺寸,换句滚动只剩一两帧(11 章决策 187)。
         let quietHost = sourceBody("class QuietHostingView<Content: View>: NSHostingView<Content>", in: previewScroll)
         expectEqual(sourceHas(quietHost, "override var needsUpdateConstraints: Bool {\n get { super.needsUpdateConstraints }\n set { if !newValue { super.needsUpdateConstraints = false } }")
-                    && previewScroll.contains("let host = LyricsPreviewHostingView(rootView: AnyView(EmptyView()))")
-                    && previewScroll.contains("final class LyricsPreviewHostingView: QuietHostingView<AnyView> {")
+                    && previewScroll.contains("let host = QuietHostingView<AnyView>(rootView: AnyView(EmptyView()))")
                     && !previewScroll.contains("NSHostingController")
                     && managerParts.contains("private final class LyricsManagerKaraokeHostingView: QuietHostingView<AnyView> {")
                     && songTable.contains("host = QuietHostingView(rootView: content)"),
                     true, "歌词预览 / 歌词管理列表: 内容宿主、逐字染色宿主、列表单元格都是 QuietHostingView,刷新不往窗口根报约束失效")
-        // 换句滑动那 0.45 秒里 clip view 已在目标位置、图层还在路上:按下鼠标先把滑动停在画面所在处再交给 SwiftUI,命中的是画面上
-        // 那一句;指针移动按画面位置换算(11 章决策 189)。所有行在同一个宿主里,在 hitTest 里挪点没用:SwiftUI 按事件自己的位置判。
-        let previewHost = sourceBody("final class LyricsPreviewHostingView: QuietHostingView<AnyView>", in: previewScroll)
-        expectEqual([sourceHas(previewHost, "override func mouseDown(with event: NSEvent) {\n stopSlide()\n super.mouseDown(with: event)"),
-                     sourceHas(previewHost, "override func rightMouseDown(with event: NSEvent) {\n stopSlide()\n super.rightMouseDown(with: event)"),
-                     sourceHas(previewHost, "guard let offset = shownOffset(), let shifted = Self.shifted(event, by: offset, in: self) else {"),
-                     sourceHas(previewHost, "super.mouseMoved(with: shifted)"),
-                     sourceHas(previewHost, "point.y += view.isFlipped ? offset : -offset"),
-                     sourceHas(previewScroll, "host.stopSlide = { [weak coordinator] in coordinator?.cancelAnimation() }"),
-                     sourceHas(previewScroll, "host.shownOffset = { [weak coordinator] in coordinator?.shownOffset() }"),
+        // 换句滑动那 0.45 秒里 clip view 已在目标位置、图层还在路上:落在可视区里的鼠标事件在本地事件监听里改写成画面上那一点,
+        // 按住到松开用按下时那一份滑动量(11 章决策 189)。SwiftUI 按窗口正在分发的事件取位置:在 hitTest / 视图的 mouseDown 里挪点
+        // 不生效,在 mouseDown 里先停住滑动会让这次按下作废,两种都别回去。
+        let redirectBody = sourceBody("private func redirect(_ event: NSEvent) -> NSEvent", in: previewScroll)
+        expectEqual([sourceHas(previewScroll, "eventMonitor = NSEvent.addLocalMonitorForEvents(matching: Self.redirectedEvents) { [weak self] event in"),
+                     sourceHas(redirectBody, "pressOffset = contains(event) ? shownOffset() : nil"),
+                     sourceHas(redirectBody, "case .leftMouseUp, .rightMouseUp, .otherMouseUp:\n offset = pressOffset\n pressOffset = nil"),
+                     sourceHas(redirectBody, "return Self.shifted(event, by: offset, in: document) ?? event"),
+                     sourceHas(previewScroll, "point.y += view.isFlipped ? offset : -offset"),
+                     sourceHas(previewScroll, "scrollView.shownOffset = { [weak coordinator] in coordinator?.shownOffset() }"),
                      sourceHas(sourceBody("func shownOffset() -> CGFloat?", in: previewScroll),
                                "let offset = shownOriginY(clip) - clip.bounds.origin.y"),
-                     previewScroll.contains("override func hitTest(")],
-                    [true, true, true, true, true, true, true, true, false],
-                    "歌词预览: 换句滑动途中按下鼠标先停在画面所在处,指针移动按画面位置换算,点中、悬停的都是画面上那一句")
+                     sourceHas(previewScroll, "if let e = event(.leftMouseDown) { NSApp.sendEvent(e) }"),
+                     previewScroll.contains("override func hitTest("),
+                     previewScroll.contains("override func mouseDown(")],
+                    [true, true, true, true, true, true, true, true, false, false],
+                    "歌词预览: 换句滑动途中的鼠标事件在分发之前改写到画面位置,点中、悬停的都是画面上那一句,滑动本身不停")
         expectEqual(sourceHas(sourceBody("private func updatePosition()", in: managerParts), "playback.tracksCurrent = highlight == .playingLine"),
                     true, "歌词预览: 按候选自己的时间轴找当前句时不转发播放侧的当前句,换句不多重算一遍")
         expectEqual([previewScroll.contains("coordinator.settle = request.animated ? nil : request"),
