@@ -654,6 +654,43 @@ func runTelemetryTests() {
         expectEqual([dropped.completedDays(before: d2).isEmpty, UserDefaults.standard.data(forKey: undecidedKey) == nil], [true, true],
                     "还没定开关: 定下来关着时丢掉这期间的卡顿,之后再打开也不补回来")
 
+        // 看门狗起来之前按偏好先定开关(14 章决策 232):之后的卡顿当场排进写盘队列,不在内存里等 TelemetryService。
+        let prefsSuite = "selftest.telemetryDecide.\(getpid())"
+        let prefs = UserDefaults(suiteName: prefsSuite)!
+        defer { prefs.removePersistentDomain(forName: prefsSuite) }
+        let enabledKey = "selftest.enabled", sentKey = "selftest.lastHeartbeatDay", decideKey = "selftest.activity"
+        let decided = TelemetryActivity(defaults: prefs, key: decideKey, recording: .undecided)
+        decided.decideFromPreferences(enabledKey: enabledKey, lastHeartbeatDayKey: sentKey)
+        let decidedHang = decided.noteHang(base, now: day1)
+        expectEqual([decided.isRecording, decidedHang?.detailed, decided.queuedWrites == 1], [true, true, true],
+                    "按偏好定开关: 开关没存过按开,定下来之后的卡顿当场排写盘")
+        decided.waitForPendingWrites()
+        expectEqual(prefs.data(forKey: decideKey).flatMap { try? JSONDecoder().decode([TelemetryActivityDay].self, from: $0) }?
+                        .first.map { [$0.day, String($0.hangs), String($0.hangDetails.count)] },
+                    [Telemetry.day(day1), "1", "1"], "按偏好定开关: 卡顿连概况落盘")
+        prefs.removeObject(forKey: decideKey)
+        let heldFirst = TelemetryActivity(defaults: prefs, key: decideKey, recording: .undecided)
+        _ = heldFirst.noteHang(base, now: day1)
+        prefs.set(Telemetry.day(day1), forKey: sentKey)
+        heldFirst.decideFromPreferences(enabledKey: enabledKey, lastHeartbeatDayKey: sentKey)
+        heldFirst.waitForPendingWrites()
+        expectEqual([heldFirst.sentBefore, prefs.data(forKey: decideKey) == nil ? "无" : "有"], [Telemetry.day(day1), "有"],
+                    "按偏好定开关: 上次发心跳那天同步给 sentBefore,定之前记在内存里的卡顿一起写盘")
+        prefs.removeObject(forKey: decideKey)
+        prefs.set(false, forKey: enabledKey)
+        let declined = TelemetryActivity(defaults: prefs, key: decideKey, recording: .undecided)
+        _ = declined.noteHang(base, now: day1)
+        declined.decideFromPreferences(enabledKey: enabledKey, lastHeartbeatDayKey: sentKey)
+        let declinedHang = declined.noteHang(base, now: day1)
+        declined.waitForPendingWrites()
+        expectEqual([declined.isRecording, declinedHang == nil, prefs.data(forKey: decideKey) == nil], [false, true, true],
+                    "按偏好定开关: 存着关,之前和之后的卡顿都不记")
+        prefs.removeObject(forKey: enabledKey)
+        let already = TelemetryActivity(defaults: prefs, key: decideKey, recording: .undecided)
+        already.isRecording = false
+        already.decideFromPreferences(enabledKey: enabledKey, lastHeartbeatDayKey: sentKey)
+        expectEqual([already.isRecording, already.sentBefore == nil], [false, true], "按偏好定开关: 已经定过的不改")
+
         // 主线程堵着时后台写偏好不排队等它(14 章决策 175、231):偏好变更观察者走 UserDefaultsChangeRelay,
         // 看门狗记下的卡顿在主线程卡住期间就能落盘,用户这时强制退出也不丢。
         final class Hits: @unchecked Sendable {
@@ -1039,6 +1076,10 @@ func runTelemetryTests() {
                     "卡顿概况: 带记卡顿时的版本 app_version,取不到时不带")
         expectEqual(sourceHas(worker, "app_version: str(h.app_version, 32),") && sourceHas(worker, "h.app_version ?? e.app_version"), true,
                     "Worker: 卡顿概况的版本先取概况自己带的,旧版 App 不带时退回心跳的")
+        expectEqual(sourceHas(worker, "return quotaIPKey(request.headers.get(\"cf-connecting-ip\"));")
+                    && sourceHas(worker, "env.INGEST_LIMITER.limit({ key: clientIP(request) })")
+                    && !worker.contains("limit({ key: ip })"), true,
+                    "Worker: 入口限流和按 IP 的硬限额都按 quotaIPKey 计(IPv6 取前缀),行为单测在 telemetry-worker/test")
         let fields = keys(regional) + keys(features) + keys(TelemetryActivityDay(day: "2026-10-30")) + keys(throttledHang)
             + ["install_id", "origin", "report_id", "exception_type", "termination_indicator", "frames", "exception_frames"]
             + TelemetryAction.allCases.map(\.rawValue)
@@ -1297,6 +1338,18 @@ func runTelemetryTests() {
             expectEqual(false, true, "接线: 找得到遥测和更新提示的启动调用")
         }
         expectEqual(sourceHas(sourceBody("func start()", in: service), "decideInstallOrigin()"), true, "接线: 启动时判新装还是升级")
+        let decideAt = delegate.range(of: "TelemetryService.decideRecordingAtLaunch()")?.lowerBound
+        let watchdogAt = delegate.range(of: "MainThreadWatchdog.shared.start()")?.lowerBound
+        let launchStallAt = delegate.range(of: "DebugLaunchStall.runIfRequested()")?.lowerBound
+        let serviceAt = delegate.range(of: "TelemetryService.shared.start()")?.lowerBound
+        expectEqual(decideAt != nil && watchdogAt != nil && launchStallAt != nil && serviceAt != nil
+                    && decideAt! < watchdogAt! && watchdogAt! < launchStallAt! && launchStallAt! < serviceAt!, true,
+                    "接线: 看门狗起来之前按偏好定遥测开关;调试用的启动停顿在看门狗之后、遥测服务之前")
+        expectEqual(sourceHas(sourceBody("static func decideRecordingAtLaunch()", in: service),
+                              "TelemetryActivity.shared.decideFromPreferences(enabledKey: Keys.enabled, lastHeartbeatDayKey: Keys.lastHeartbeatDay)")
+                    && sourceHas(service, "static let enabled = \"np:telemetryEnabled\"")
+                    && sourceHas(settings, "static let telemetryEnabled = \"np:telemetryEnabled\""), true,
+                    "接线: 启动时提前定开关读的是设置「发送匿名使用数据」同一个偏好键")
 
         let features = sourceBody("private func features() async -> TelemetryFeatures", in: service)
         expectEqual(["Telemetry.caskroomPaths",

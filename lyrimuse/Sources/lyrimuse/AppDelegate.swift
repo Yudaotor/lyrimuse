@@ -141,12 +141,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // 卸载辅助模式:willFinishLaunching 里已经请求退出,这里什么都不建。
         if isUnregisterLoginItemRun { return }
         // 主线程卡住几秒就记一行、卡久了采一次调用栈(见 MainThreadWatchdog)。窗口提供者给遥测的卡顿概况报开着哪些窗口。
-        // 排在启动的头一件:下面的启动步骤卡住也要报得上来。
+        // 排在启动的头一件:下面的启动步骤卡住也要报得上来。遥测记不记先按偏好定下,这时记下的卡顿当场落盘。
+        TelemetryService.decideRecordingAtLaunch()
         MainThreadWatchdog.shared.setWindowProvider {
             NSApp.windows.filter(\.isVisible).compactMap { $0.identifier?.rawValue }
                 + (MenuBarStatusItem.shared.isPanelOpen ? ["menubar-panel"] : [])
         }
         MainThreadWatchdog.shared.start()
+        DebugLaunchStall.runIfRequested()
         ClosedWindowContent.installDeferredReleaseTriggers()
         // 必须是这个函数里第一个碰 AppSettings 的事之前:CustomFontStore.shared 的 init
         // 会把用户导入的字体注册进 Core Text(进程级,每次启动都要重新注册一遍)。下面一行

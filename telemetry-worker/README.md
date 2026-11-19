@@ -12,7 +12,7 @@ Receives Lyrimuse's anonymous usage data ("Share Anonymous Usage Data" in Settin
 
 Only whitelisted fields are stored; strings and lists are truncated. No IP addresses are stored, only the country code Cloudflare derives from the request.
 
-Request bodies over 64 KB (counted in bytes) get `413`. Dates must be real calendar days (`2026-13-01` or `2026-11-31` get `400`); activity days up to 30 days before the heartbeat's day are kept. Per source IP, at most 5 heartbeats a minute, 20 new install IDs a day and 30 crash reports a minute are accepted; past that heartbeats get `429` and crash reports `503` (the app retries both later). The counters live in the `ingest_quota` table, keyed by a keyed HMAC of the IP and the time window (the IP itself is never stored), and rows older than two windows are deleted as new ones are written. A crash report without its own app version is stored with the version of the app that sent it. The app never sends song titles, artists, local paths, account names or credentials (see `lyrimuse/Sources/LyrimuseCore/Telemetry/Telemetry.swift`).
+Request bodies over 64 KB (counted in bytes) get `413`. Dates must be real calendar days (`2026-13-01` or `2026-11-31` get `400`); activity days up to 30 days before the heartbeat's day are kept. Per source IP (an IPv6 address counts by its /56 prefix, so rotating addresses inside one network doesn't reset the count; an IPv4-mapped IPv6 address counts as its IPv4 address), at most 5 heartbeats a minute, 20 new install IDs a day and 30 crash reports a minute are accepted; past that heartbeats get `429` and crash reports `503` (the app retries both later). The counters live in the `ingest_quota` table, keyed by a keyed HMAC of the IP and the time window (the IP itself is never stored), and rows older than two windows are deleted as new ones are written. A crash report without its own app version is stored with the version of the app that sent it. The app never sends song titles, artists, local paths, account names or credentials (see `lyrimuse/Sources/LyrimuseCore/Telemetry/Telemetry.swift`).
 
 ## Deploy
 
@@ -74,6 +74,12 @@ npx wrangler d1 execute lyrimuse-telemetry --remote --command "ALTER TABLE activ
 
 The per-IP limits need the `ingest_quota` table; on an existing database run `schema.sql` again before deploying (every statement is `IF NOT EXISTS`).
 
+## Tests
+
+```sh
+npm test    # node --test: the IP prefix key, and the per-IP limits against index.js with node:sqlite standing in for D1
+```
+
 ---
 
-接收 Lyrimuse 的匿名使用数据（设置 › 关于 › 诊断与数据「发送匿名使用数据」，默认开），跑在 Cloudflare Workers + D1 上，域名 `telemetry.yudaotor.me`。只存白名单字段，不存 IP，只存 Cloudflare 按 IP 给的国家 / 地区码；App 另报系统设置里的地区（`system_region`）。请求体超过 64 KB（按字节）回 413；日期要是真实存在的公历日期；活动最多收心跳那天之前 30 天的。按来源 IP 限额：心跳每分钟 5 条、新安装 ID 每天 20 个、崩溃每分钟 30 份，超了心跳回 429、崩溃回 503，App 都会下次再发；计数在 `ingest_quota` 表，键是 IP 加时间窗的带密钥 HMAC，不存 IP 本身，旧时间窗的行随写随删。App 不发歌名、歌手、本机路径、账号名和凭据。部署步骤同上（用 wrangler 4 部署）；上面列的这几列之前建的库，部署前先按对应的 `ALTER TABLE` 各补一次，`ingest_quota` 表重跑一遍 `schema.sql` 建出来。
+接收 Lyrimuse 的匿名使用数据（设置 › 关于 › 诊断与数据「发送匿名使用数据」，默认开），跑在 Cloudflare Workers + D1 上，域名 `telemetry.yudaotor.me`。只存白名单字段，不存 IP，只存 Cloudflare 按 IP 给的国家 / 地区码；App 另报系统设置里的地区（`system_region`）。请求体超过 64 KB（按字节）回 413；日期要是真实存在的公历日期；活动最多收心跳那天之前 30 天的。按来源 IP 限额（IPv6 按前 56 位算一个来源，同一段里换源地址不重新计；IPv4 映射的 IPv6 按里面的 IPv4 算）：心跳每分钟 5 条、新安装 ID 每天 20 个、崩溃每分钟 30 份，超了心跳回 429、崩溃回 503，App 都会下次再发；计数在 `ingest_quota` 表，键是 IP 加时间窗的带密钥 HMAC，不存 IP 本身，旧时间窗的行随写随删。App 不发歌名、歌手、本机路径、账号名和凭据。部署步骤同上（用 wrangler 4 部署）；上面列的这几列之前建的库，部署前先按对应的 `ALTER TABLE` 各补一次，`ingest_quota` 表重跑一遍 `schema.sql` 建出来。单测：`npm test`（node 自带的测试，D1 用 `node:sqlite` 代）。

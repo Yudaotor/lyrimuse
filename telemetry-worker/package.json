@@ -1,7 +1,9 @@
 {
   "name": "lyrimuse-telemetry-worker",
   "private": true,
+  "type": "module",
   "scripts": {
-    "deploy": "npx wrangler deploy"
+    "deploy": "npx wrangler deploy",
+    "test": "node --test 'test/*.test.mjs'"
   }
 }

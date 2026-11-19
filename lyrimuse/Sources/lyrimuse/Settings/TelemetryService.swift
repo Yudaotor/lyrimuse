@@ -30,6 +30,8 @@ final class TelemetryService {
         static let enabledSince = "np:telemetryEnabledSince"
         /// `TelemetryInstallOrigin` 的取值,判不出记 `unknown`;只判一次。
         static let installOrigin = "np:telemetryInstallOrigin"
+        /// 设置「发送匿名使用数据」的偏好键,跟 `AppSettings.Keys.telemetryEnabled` 同一个(那边是 private),两处一起改。
+        static let enabled = "np:telemetryEnabled"
     }
 
     static let firstCheckDelay: Duration = .seconds(60)
@@ -42,6 +44,12 @@ final class TelemetryService {
     private var checking = false
 
     private init() {}
+
+    /// 看门狗起来之前调:按偏好先定下记不记活动,启动那几步卡住时记下的卡顿当场落盘(14 章决策 232)。
+    static func decideRecordingAtLaunch() {
+        guard Bundle.main.bundleIdentifier == LyrimuseIdentity.bundleIdentifier else { return }
+        TelemetryActivity.shared.decideFromPreferences(enabledKey: Keys.enabled, lastHeartbeatDayKey: Keys.lastHeartbeatDay)
+    }
 
     func start() {
         guard !started, Bundle.main.bundleIdentifier == LyrimuseIdentity.bundleIdentifier else { return }

@@ -5,8 +5,9 @@ import Foundation
 /// `remove(days:)` 删掉发过的那几天。最多留 `maxStoredDays` 天,多了丢最早的。早于 `sentBefore`(已随心跳发出)、
 /// 或比今天晚一天以上(系统日期往前调过)的日子不记也不留。
 ///
-/// App 里的这份启动时开关还没定(`Recording.undecided`,`TelemetryService` 读设置之前):这段里只记卡顿,记进内存、不写盘;
-/// 定下来时开着就写盘、关着就丢(`isRecording` 的 setter)。看门狗比遥测先起,启动那几步卡住也要报得上来。见 14 章决策 231。
+/// App 里的这份启动时开关还没定(`Recording.undecided`):这段里只记卡顿,记进内存、不写盘;定下来时开着就写盘、关着就丢
+/// (`isRecording` 的 setter)。App 在看门狗起来之前就按偏好定下(`decideFromPreferences`),启动那几步卡住记下的卡顿当场落盘,
+/// 这时被强杀也不丢;`undecided` 只剩没定的那一小段和不是正式身份的进程。见 14 章决策 231、232。
 public final class TelemetryActivity: @unchecked Sendable {
     public static let shared = TelemetryActivity(defaults: .standard, recording: .undecided)
 
@@ -90,20 +91,18 @@ public final class TelemetryActivity: @unchecked Sendable {
     /// 遥测开着。从 `undecided` 定下来时:开着就把这期间记下的卡顿写盘,关着就丢掉。
     public var isRecording: Bool {
         get { lock.withLock { recording == .on } }
-        set {
-            lock.withLock {
-                let was = recording
-                recording = newValue ? .on : .off
-                guard was == .undecided else { return }
-                let held = heldWhileUndecided
-                heldWhileUndecided = false
-                if newValue {
-                    if held { store(load()) }
-                } else {
-                    cache = nil
-                    openHangs = [:]
-                }
-            }
+        set { lock.withLock { decide(newValue) } }
+    }
+
+    /// 还没定开关时,按偏好里存的先定下来:`enabledKey` 没存过按开(跟设置的默认值一致),`lastHeartbeatDayKey` 同步给
+    /// `sentBefore`。App 在看门狗起来之前调,不等 `TelemetryService` 读设置;定过的不动,之后 `TelemetryService` 照常再定一次。
+    public func decideFromPreferences(enabledKey: String, lastHeartbeatDayKey: String) {
+        let enabled = (defaults.object(forKey: enabledKey) as? Bool) ?? true
+        let sent = defaults.string(forKey: lastHeartbeatDayKey)
+        lock.withLock {
+            guard recording == .undecided else { return }
+            sentDay = sent
+            decide(enabled)
         }
     }
 
@@ -320,6 +319,20 @@ public final class TelemetryActivity: @unchecked Sendable {
     }
 
     // 以下都在锁里调。
+
+    private func decide(_ on: Bool) {
+        let was = recording
+        recording = on ? .on : .off
+        guard was == .undecided else { return }
+        let held = heldWhileUndecided
+        heldWhileUndecided = false
+        if on {
+            if held { store(load()) }
+        } else {
+            cache = nil
+            openHangs = [:]
+        }
+    }
 
     /// 这一天的数据没变就不写盘:布局超限当天记满几种、次数封顶之后,振荡时每帧还会来一次。
     private func update(day: String, deferWrite: Bool = false, _ change: (inout TelemetryActivityDay) -> Void) {

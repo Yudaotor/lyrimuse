@@ -1101,6 +1101,24 @@ extension DebugDeepLinks {
     }
 }
 
+/// 启动参数 `--debug-launch-stall=<秒>`:看门狗起来之后、遥测服务启动之前让主线程停这么久(不超过
+/// `DebugCommand.maxMainThreadStallSeconds`),验启动阶段的卡顿记账;深链要等启动走完才处理,够不着这一段。
+/// 跟深链一样只在本机偏好 `debug:deepLinks` 为真时生效。见 14 章决策 232。
+@MainActor
+enum DebugLaunchStall {
+    static let argumentPrefix = "--debug-launch-stall="
+
+    static func runIfRequested(arguments: [String] = CommandLine.arguments) {
+        guard let arg = arguments.first(where: { $0.hasPrefix(argumentPrefix) }),
+              let seconds = Double(arg.dropFirst(argumentPrefix.count)), seconds > 0,
+              seconds <= LyrimuseDeepLink.DebugCommand.maxMainThreadStallSeconds,
+              UserDefaults.standard.bool(forKey: DebugDeepLinks.enabledKey) else { return }
+        Logger(subsystem: LyrimuseIdentity.logSubsystem, category: "debug")
+            .notice("debug launch stall seconds=\(seconds, privacy: .public)")
+        Thread.sleep(forTimeInterval: seconds)
+    }
+}
+
 /// 菜单栏面板此刻翻在哪一格(深链取值,nil = 钮块网格或面板没开)。只给 `debug/state` 读,面板自己不读它。
 /// `debug/hold-opens`:开着时外部链接只记下、不打开(不落盘),见 `LyricsSourceLinkOpener`。
 @MainActor

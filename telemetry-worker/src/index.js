@@ -9,6 +9,8 @@
 // 只认白名单字段,其余丢掉;字符串截长度、列表截条数。不存 IP,只存 Cloudflare 按 IP 给的国家/地区码。
 // 字段与 App 侧 Core Telemetry.swift 的 CodingKeys 一一对应,selftest telemetry 组核对。
 
+import { quotaIPKey } from "./ip.js";
+
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 const DAY_RE = /^\d{4}-\d{2}-\d{2}$/;
 // 枚举值:PlaybackPlayer 的 rawValue(apple_music)、网页平台 id(youtubeMusic)、arch(x86_64) 都要过。
@@ -77,8 +79,7 @@ export default {
         // 正常一台机器一天只发一条心跳、最多 5 份崩溃。这个绑定拦不住连发,
         // 按 IP 的硬限额在 heartbeat() / crash() 里(quota())。
         if (env.INGEST_LIMITER) {
-          const ip = request.headers.get("cf-connecting-ip") || "unknown";
-          const { success } = await env.INGEST_LIMITER.limit({ key: ip });
+          const { success } = await env.INGEST_LIMITER.limit({ key: clientIP(request) });
           if (!success) return new Response(JSON.stringify({ error: "rate limited" }), {
             status: 503, headers: { "content-type": "application/json; charset=utf-8", "retry-after": "60", "cache-control": "no-store" },
           });
@@ -330,8 +331,9 @@ async function heartbeat(request, env) {
   return json({ ok: true });
 }
 
+// 限额按来源 IP 计的键:IPv6 只取前缀(quotaIPKey),不然同一段里换个源地址就绕过。
 function clientIP(request) {
-  return request.headers.get("cf-connecting-ip") || "unknown";
+  return quotaIPKey(request.headers.get("cf-connecting-ip"));
 }
 
 function rateLimited(status) {

@@ -17,6 +17,7 @@ database_id = "91b9af83-1f3c-4ad9-abd2-9725e0d4b0dd"
 
 # 心跳和崩溃上报按来源 IP 限流:每个 IP 每分钟最多 30 次,超了回 503(src/index.js)。这个绑定各机房各自计数、拦不住连发,
 # 按 IP 的硬限额(心跳每分钟 5 条、每天新安装 20 个、崩溃每分钟 30 份)记在 D1 表 ingest_quota,见 src/index.js 的 quota()。
+# 两处的键都是 src/ip.js 的 quotaIPKey:IPv6 只取 /56 前缀。
 [[ratelimits]]
 name = "INGEST_LIMITER"
 namespace_id = "1001"
