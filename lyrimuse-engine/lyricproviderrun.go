@@ -97,19 +97,34 @@ func offlineLegResult(p LyricProvider, d *ProviderDescriptor, q ProviderQuery) (
 }
 
 // sealProviderResult:源交回的结果进收集循环之前,源名按描述符填;没有 privLocalClientIdentity 的源交的结果不算
-// 「身份由播放器本机数据给定」。
+// 「身份由播放器本机数据给定」(两处:identityFromLocalClient 和 ne.FromLocalClient);没有 privPeripheral 的源顺带交的
+// 封面、平台链接、规范歌手名(ne.Cover / ne.SongURL / ne.Artist)不收。
 func sealProviderResult(d *ProviderDescriptor, r SourceResult) SourceResult {
 	r.source = d.Name
 	if !d.Privileges.has(privLocalClientIdentity) {
-		r.identityFromLocalClient = false
+		r.identityFromLocalClient, r.ne.FromLocalClient = false, false
+	}
+	if !d.Privileges.has(privPeripheral) {
+		r.ne.Cover, r.ne.SongURL, r.ne.Artist = "", "", ""
 	}
 	return r
 }
 
 // startLyricProviders 给每个源起一个 goroutine,各往 out 送一份结果。out 的缓冲必须放得下每个源各一份:
-// 收集循环到截止或被取消后不再读 out,晚到的结果要能不阻塞地送进去。
-func startLyricProviders(ctx context.Context, providers []LyricProvider, q ProviderQuery, env RoundEnv, plan lyricRoundPlan, out chan<- SourceResult) {
+// 收集循环到截止或被取消后不再读 out,晚到的结果要能不阻塞地送进去。这一轮源之间递曲目编号的地方在这里建,
+// 返回给还没接到调度上、要等编号的调用方。
+func startLyricProviders(ctx context.Context, providers []LyricProvider, q ProviderQuery, env RoundEnv, plan lyricRoundPlan, out chan<- SourceResult) *roundTrackIDs {
+	env.trackIDs = newRoundTrackIDs(providers)
 	for _, p := range providers {
-		go func() { out <- runLyricProvider(ctx, p, q, env, plan) }()
+		go func() { out <- runLyricProviderInRound(ctx, p, q, env, plan) }()
 	}
+	return env.trackIDs
+}
+
+// runLyricProviderInRound 是一个源在一轮里的那一趟:runLyricProvider 之外管源之间递曲目编号的先后。往外递编号的源
+// (这一轮有它的一格)返回之前一定递过:被跳过的、Resolve 里没递的,在这里代递空串,先于交结果;漏了这一步,等它的源会
+// 挂到这一轮截止。源在 Resolve 中途递出去的编号先到先算,这里只兜没递的。见 09 章决策 393。
+func runLyricProviderInRound(ctx context.Context, p LyricProvider, q ProviderQuery, env RoundEnv, plan lyricRoundPlan) SourceResult {
+	defer env.trackIDs.slot(p.Descriptor().Name).publish("")
+	return runLyricProvider(ctx, p, q, env, plan)
 }

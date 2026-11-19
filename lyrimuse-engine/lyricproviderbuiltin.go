@@ -11,19 +11,26 @@ const (
 func newBuiltinLyricProviderRegistry() *lyricProviderRegistry {
 	r := &lyricProviderRegistry{byName: map[string]*ProviderDescriptor{}}
 
-	r.registerBuiltin(&ProviderDescriptor{
+	r.implement(neteaseProvider{desc: r.registerBuiltin(&ProviderDescriptor{
 		Name: lyricSourceNetease, Order: 1, TieRank: 1, DefaultPriorityRank: 2,
 		Hosts: []HostRule{{"163.com", hostSubdomainsOnly}},
 		Baked: bakedAdopt, ParenBackground: true, InstrumentalRank: 3, PlainText: plainTextLast,
 		PeerGroup: peerGroupChinese,
-	}, privLocalClientIdentity|privTrackIDPublish|privPeripheral|privPlayerNoVocals)
+	}, privLocalClientIdentity|privTrackIDPublish|privPeripheral|privPlayerNoVocals)})
 
-	r.registerBuiltin(&ProviderDescriptor{
+	r.implement(qqProvider{desc: r.registerBuiltin(&ProviderDescriptor{
 		Name: lyricSourceQQ, Order: 2, TieRank: 2, DefaultPriorityRank: 3,
 		Hosts: []HostRule{{"qq.com", hostWithSubdomains}}, MaxInflight: 4,
 		Baked: bakedAdopt, ParenBackground: true, CarriesKana: true, InstrumentalRank: 2, PlainText: plainTextLast,
 		PeerGroup: peerGroupChinese,
-	}, privLocalClientIdentity|privTrackIDPublish|privPlayerNoVocals)
+	}, privLocalClientIdentity|privTrackIDPublish|privPlayerNoVocals)})
+
+	r.implement(kugouProvider{desc: r.registerBuiltin(&ProviderDescriptor{
+		Name: lyricSourceKugou, Order: 3, TieRank: 3, DefaultPriorityRank: 1,
+		Hosts: []HostRule{{"kugou.com", hostWithSubdomains}},
+		Baked: bakedAdopt, ParenBackground: true, CarriesKana: true, InstrumentalRank: 5,
+		PeerGroup: peerGroupChinese,
+	}, privLocalClientIdentity|privOfflineLeg)})
 
 	r.implement(lrclibProvider{desc: r.registerBuiltin(&ProviderDescriptor{
 		Name: lyricSourceLRCLIB, Order: 4, TieRank: 4, DefaultPriorityRank: 4,
@@ -33,13 +40,6 @@ func newBuiltinLyricProviderRegistry() *lyricProviderRegistry {
 		Baked: bakedStripOnly, ParenBackground: true, CarriesKana: true, InstrumentalRank: 1,
 		PeerGroup: peerGroupGlobal,
 	}, 0)})
-
-	r.implement(kugouProvider{desc: r.registerBuiltin(&ProviderDescriptor{
-		Name: lyricSourceKugou, Order: 3, TieRank: 3, DefaultPriorityRank: 1,
-		Hosts: []HostRule{{"kugou.com", hostWithSubdomains}},
-		Baked: bakedAdopt, ParenBackground: true, CarriesKana: true, InstrumentalRank: 5,
-		PeerGroup: peerGroupChinese,
-	}, privLocalClientIdentity|privOfflineLeg)})
 
 	r.registerBuiltin(&ProviderDescriptor{
 		Name: lyricSourceAMLL, Order: 5, TieRank: 22, DefaultPriorityRank: 5,

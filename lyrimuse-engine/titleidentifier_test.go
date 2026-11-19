@@ -569,9 +569,6 @@ func TestLyricSearchTitleIsWired(t *testing.T) {
 		"e.LyricsSearchTitle = lyricSearchTitleToStore(ctx, title)",
 		"ctx = withLyricSourceTitle(ctx, lyricSearchTitleFor(ctx, title), artist, title, searchAlbum)\n\tartist, title, searchAlbum = searchQueryFields(artist, title, searchAlbum)",
 		"srcTitle := lyricSourceTitleFor(ctx, title)",
-		"info := neteaseLookup(ctx, artist, srcTitle, album, durationSecs)",
-		"match := qqMusicMatchCached(ctx, artist, srcTitle, album, durationSecs)",
-		"qrc := qqQRCLyric(ctx, qqMid, artist, srcTitle, album, durationSecs)",
 		"artist: artist, title: srcTitle, album: album,",
 		"providerQuery := ProviderQuery{Artist: artist, Title: title, Album: album, SourceTitle: srcTitle, DurationSecs: durationSecs}",
 	} {
@@ -581,6 +578,11 @@ func TestLyricSearchTitleIsWired(t *testing.T) {
 	}
 	// 接到 LyricProvider 上的源从查询里取歌名,取的得是 SourceTitle。
 	for file, needles := range map[string][]string{
+		"netease.go": {"info := neteaseLookup(ctx, q.Artist, q.SourceTitle, q.Album, q.DurationSecs)"},
+		"qq.go": {
+			"match := qqMusicMatchCached(ctx, q.Artist, q.SourceTitle, q.Album, q.DurationSecs)",
+			"qrc := qqQRCLyric(ctx, qqMid, q.Artist, q.SourceTitle, q.Album, q.DurationSecs)",
+		},
 		"lrclib.go":  {"lrclibLyric(ctx, q.Artist, q.SourceTitle, q.Album, q.DurationSecs)"},
 		"migu.go":    {"miguLyric(ctx, q.Artist, q.SourceTitle, q.Album, q.DurationSecs)"},
 		"ytmusic.go": {"ytmusicLyric(ctx, q.Artist, q.SourceTitle, q.Album, q.DurationSecs)"},

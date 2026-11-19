@@ -15,7 +15,6 @@ import (
 	"reflect"
 	"slices"
 	"sort"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -6148,103 +6147,19 @@ func fetchScoredLyricCandidatesStreaming(ctx context.Context, artist, title, alb
 	skipSource := func(source string) bool {
 		return lyricSourceSkippedThisRound(ctx, source, only, breakerPlan, round)
 	}
-	// 已经接到 LyricProvider 上的源由调度来起(startLyricProviders),跳过判断在调度里,不走 skipSource。
+	// 已经接到 LyricProvider 上的源由调度来起(startLyricProviders),跳过判断在调度里,不走 skipSource。网易云那一次查询
+	// 顺带交封面和「网易云」链接,amll 要网易云 / QQ 搜出来的曲目 ID(经调度建的 roundTrackIDs 递),都在各自的实现里。
 	providerPlan := newLyricRoundPlan(ctx, breakerPlan)
 	providerQuery := ProviderQuery{Artist: artist, Title: title, Album: album, SourceTitle: srcTitle, DurationSecs: durationSecs}
 	providerEnv := RoundEnv{ForPlayingTrack: forPlaying, identityArtist: idArtist, identityTitle: idTitle, identityAlbum: idAlbum}
 
-	// amll-ttml-db 按**平台音乐 ID**取歌词,所以它得等网易云/QQ 先把 ID 搜出来。
-	// 用两个带缓冲的 channel 把 ID 递过去,而不是把查询塞进那两个 goroutine 里 ——
-	// 那样会把 amll 的网络耗时串到它们头上,拖慢主力源的到达时间。
-	neteaseIDCh := make(chan string, 1)
-	qqIDCh := make(chan string, 1)
+	trackIDs := startLyricProviders(ctx, lyricProviders().providers, providerQuery, providerEnv, providerPlan, resultsCh)
 
 	go func() {
-		if skipSource("netease") {
-			neteaseIDCh <- ""
-			resultsCh <- lyricSourceResult{source: "netease"}
-			return
-		}
-		info := neteaseLookup(ctx, artist, srcTitle, album, durationSecs)
-		if info.SongID > 0 {
-			neteaseIDCh <- strconv.FormatInt(info.SongID, 10)
-		} else {
-			neteaseIDCh <- ""
-		}
-		resultsCh <- lyricSourceResult{source: "netease", ne: info}
-	}()
-	go func() {
-		if skipSource("qq") {
-			qqIDCh <- ""
-			resultsCh <- lyricSourceResult{source: "qq"}
-			return
-		}
-		// qqMusicMatchCached 本身也是一次网络请求(smartbox 搜索,6秒超时,按
-		// artist|title|album 缓存)——挪进这个 goroutine 一起并发,不再是这个函数最
-		// 前面的一步单独阻塞;resolveTrackEnrichment 那边为封面/跳转链接另外调用
-		// qqMusicURL 时会命中这里可能已经写热的缓存,反过来也一样,谁先算出来谁写
-		// 缓存,不要求哪边一定在前(两者共用同一份 qqURLCache,见 qq.go)。
-		match := qqMusicMatchCached(ctx, artist, srcTitle, album, durationSecs)
-		qqMid := qqMidFromURL(match.url)
-		// 曲目 ID 一到手就交给 amll,不等下面取词:amll 只要 ID,等取词就是白等。
-		qqIDCh <- qqMid
-		var lyr, yrc, tr, roma string
-		var qqDur float64
-		var qqInstrumental, qqNoLyrics, qqPlainOnly bool
-		var qqCover string
-		if qqMid != "" {
-			// 整行歌词与逐字(QRC)两套接口互不依赖,并发取。
-			var qqLyr qqLyricResult
-			lyricDone := make(chan struct{})
-			go func() {
-				defer close(lyricDone)
-				qqLyr = qqLyric(ctx, qqMid)
-			}()
-			// 逐字(QRC)是完全独立的一套接口/密钥,自己失败不影响整行歌词——
-			// 见 qq.go 顶部注释。同一份响应还带中文译文/罗马音两轨(见 qqQRCLyric 注释),
-			// 时间戳与 qqLyric 的整行歌词逐行一致。
-			qrc := qqQRCLyric(ctx, qqMid, artist, srcTitle, album, durationSecs)
-			// qqCover:qqMid 这时已经是经过身份闸校验过的那首歌,不需要像 qqCoverFallback
-			// (resolveTrackEnrichment 那条独立的封面兜底路径)那样另外核对 singer,直接取
-			// cover 即可。查不到就留空(候选不拿别的封面兜底,见 rankLyricSourceResults)。
-			// 排在 QRC 之后、不跟它并发:两边都读同一份单曲详情(qqSongDetail),QRC 走通时详情已在缓存里,
-			// 并发的话两边同时没命中缓存,同一个详情请求会发两次。
-			qqCover, _, _ = qqSongCoverAndSinger(ctx, qqMid)
-			<-lyricDone
-			// 整行接口没给词时用 QRC 压出来的整行,见 qqLineLyric。
-			lyr, qqInstrumental, qqNoLyrics = qqLineLyric(qqLyr, qrc), qqLyr.instrumental, qqLyr.trackFoundNoLyrics
-			// 只有不带时间戳的歌词时交成 plainOnly,见 qqPlainLyric。
-			if lyr == "" {
-				if lyr = qqPlainLyric(qqLyr, qrc); lyr != "" {
-					qqPlainOnly = true
-				}
-			}
-			yrc, tr, roma = qrc.yrc, qrc.tr, qrc.roma
-			// QRC 正文里的 `[kana:…]` 假名标注行拼到整行歌词开头,App 侧 KanaAnnotation 才
-			// 读得到(跟酷狗 LRC 自带的那一行同格式,见 qqQRCResult.kana 注释)。
-			lyr = attachKanaLine(lyr, qrc.kana)
-			// 专辑维度路线(resolveQQMatchViaAlbum)选中时曲目单里就带官方时长,直接用;
-			// 否则只读缓存:QRC 那步走通时(它内部查过同一首的单曲详情)这里是热的,没走通
-			// (会话拿不到 sid / 详情接口失败,那边不写负缓存)就留 0。srcDur 是纯透传的
-			// 评测数据,不值得为它在歌词主路径上多挂一次最多 6s 的请求。
-			qqDur = match.interval
-			if qqDur <= 0 {
-				qqDur = qqSongMetaCachedOnly(qqMid).interval
-			}
-		}
-		// language 跟 qqDur 同一个只读缓存、同一条"QRC 那步走通时这里是热的"理由,见上面
-		// qqDur 那行注释——不为它单独发请求。
-		qqMeta := qqSongMetaCachedOnly(qqMid)
-		qqLang := qqCanonicalLanguage(qqMeta.language)
-		qqNoVocals := qqMeta.id != 0 && qqMeta.language == qqLanguagePureMusic
-		resultsCh <- lyricSourceResult{source: "qq", lyr: lyr, yrc: yrc, tr: tr, roma: roma, matchTitle: match.title, matchArtist: match.artist, matchAlbum: match.album, matchCover: qqCover, srcDur: qqDur, language: qqLang, instrumental: qqInstrumental, noVocals: qqNoVocals, trackFoundNoLyrics: qqTrackFoundNoLyrics(qqNoLyrics, lyr, yrc), identityFromLocalClient: match.fromLocalLibrary, plainOnly: qqPlainOnly, trackIDs: qqTrackIDs(qqMid)}
-	}()
-	go func() {
-		// 等两个 ID 都到齐再查。两个 goroutine 都是无条件启动的(源关掉 / 冷却中时
-		// skipSource 那支也会往 channel 里送一个空串),所以这两个 channel 一定会收到值,
-		// 不会在这里挂死。网易云 / QQ 都关掉时这里拿到两个空串,amllLyric 只剩 Apple / Spotify 的 ID
-		// 和在索引里按 ISRC / 歌名找。
-		neteaseID, qqID := <-neteaseIDCh, <-qqIDCh
+		// amll-ttml-db 按平台音乐 ID 取歌词,等网易云、QQ 把这一轮搜到的曲目 ID 递出来再查。这两个源被跳过(关掉、别名轮
+		// 名单外、冷却中)或没搜到时调度代递空串(runLyricProviderInRound),所以一定等得到,不会在这里挂死。都是空串时
+		// amllLyric 只剩 Apple / Spotify 的 ID 和在索引里按 ISRC / 歌名找。
+		neteaseID, qqID := trackIDs.slot(lyricSourceNetease).await(), trackIDs.slot(lyricSourceQQ).await()
 		if skipSource("amll") {
 			resultsCh <- lyricSourceResult{source: "amll"}
 			return
@@ -6258,7 +6173,6 @@ func fetchScoredLyricCandidatesStreaming(ctx context.Context, artist, title, alb
 			durationSecs: durationSecs, translationLang: features().LyricsTranslationLanguage,
 		})}
 	}()
-	startLyricProviders(ctx, lyricProviders().providers, providerQuery, providerEnv, providerPlan, resultsCh)
 
 	// raw:目前为止到手的各源原始应答,按源名存。打分/排序全部下放给
 	// rankLyricSourceResults(包级纯函数,回归金标集与生产共用),这里只负责收结果、喂进去。

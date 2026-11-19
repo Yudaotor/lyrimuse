@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -251,5 +252,269 @@ func TestProviderPrivilegedReadsGoThroughRoundEnv(t *testing.T) {
 	run := goFuncSource(t, "lyricproviderrun.go", "runLyricProvider")
 	if !containsCode(run, "r := p.Resolve(ctx, q, env.grantedTo(d))") {
 		t.Error("runLyricProvider 交给 Resolve 的环境要按这个源的描述符放行")
+	}
+}
+
+// ---- 源之间递曲目编号、网易云顺带交的周边信息:同样按描述符的特权位放行。见 09 章决策 393。 ----
+
+// trackIDBoardFor:一轮里这几个假源的递编号的地方,连同交给调度的那份环境。
+func trackIDBoardFor(stubs ...*stubLyricProvider) RoundEnv {
+	providers := make([]LyricProvider, 0, len(stubs))
+	for _, s := range stubs {
+		providers = append(providers, s)
+	}
+	return RoundEnv{trackIDs: newRoundTrackIDs(providers)}
+}
+
+// publishedTrackID:这一格递出来没有,递的是什么。不等。
+func publishedTrackID(s *roundTrackID) (string, bool) {
+	if s == nil {
+		return "", false
+	}
+	select {
+	case <-s.done:
+		return s.id, true
+	default:
+		return "", false
+	}
+}
+
+// 往外递曲目编号要 privTrackIDPublish:这一轮只给带这一位的源留格子;没有这一位的源调了 PublishTrackID 没有效果,
+// 哪怕手上的环境里有别人的格子;收集循环建的那份环境(还没交给任何源)也递不出去。一格只有第一次递的算数。
+func TestTrackIDPublishNeedsPrivilege(t *testing.T) {
+	enabled := lyricRoundPlan{enabled: func(string) bool { return true }}
+	ctx := context.Background()
+	t.Run("带这一位的源在 Resolve 里递,先递的算数", func(t *testing.T) {
+		pub := &stubLyricProvider{desc: &ProviderDescriptor{Name: "pub", Privileges: privTrackIDPublish}}
+		pub.resolve = func() SourceResult {
+			pub.gotEnv.PublishTrackID("123")
+			pub.gotEnv.PublishTrackID("456")
+			return SourceResult{lyr: "[00:01.00]a"}
+		}
+		env := trackIDBoardFor(pub)
+		got := runLyricProviderInRound(ctx, pub, ProviderQuery{}, env, enabled)
+		if id, ok := publishedTrackID(env.trackIDs.slot("pub")); !ok || id != "123" || got.lyr == "" {
+			t.Errorf("应递出 123:%q %v,结果 %+v", id, ok, got)
+		}
+	})
+	t.Run("没有这一位的源这一轮没有格子,调了没有效果", func(t *testing.T) {
+		pub := &stubLyricProvider{desc: &ProviderDescriptor{Name: "pub", Privileges: privTrackIDPublish}}
+		plain := &stubLyricProvider{desc: &ProviderDescriptor{Name: "plain", Privileges: privLocalClientIdentity | privPlaybackTrackIDs | privTrackIDConsume | privPeripheral}}
+		plain.resolve = func() SourceResult {
+			plain.gotEnv.PublishTrackID("999")
+			return SourceResult{}
+		}
+		env := trackIDBoardFor(pub, plain)
+		runLyricProviderInRound(ctx, plain, ProviderQuery{}, env, enabled)
+		if env.trackIDs.slot("plain") != nil || plain.gotEnv.ownTrackID != nil {
+			t.Error("没有 privTrackIDPublish 的源不该有格子")
+		}
+		if id, ok := publishedTrackID(env.trackIDs.slot("pub")); ok {
+			t.Errorf("别人的格子不该被它递进去:%q", id)
+		}
+	})
+	t.Run("手上有格子、没有这一位:照样递不出去", func(t *testing.T) {
+		pub := &stubLyricProvider{desc: &ProviderDescriptor{Name: "pub", Privileges: privTrackIDPublish}}
+		env := trackIDBoardFor(pub)
+		for _, privileges := range []builtinPrivileges{0, privTrackIDConsume | privPeripheral | privLocalClientIdentity} {
+			forged := env.grantedTo(&ProviderDescriptor{Name: "pub", Privileges: privileges})
+			if forged.ownTrackID == nil {
+				t.Fatal("这个用例要的是手上有格子")
+			}
+			forged.PublishTrackID("999")
+		}
+		env.PublishTrackID("999")
+		if id, ok := publishedTrackID(env.trackIDs.slot("pub")); ok {
+			t.Errorf("没有 privTrackIDPublish 不该递得出去:%q", id)
+		}
+		env.grantedTo(pub.desc).PublishTrackID("123")
+		if id, ok := publishedTrackID(env.trackIDs.slot("pub")); !ok || id != "123" {
+			t.Errorf("带这一位的应递得出去:%q %v", id, ok)
+		}
+	})
+	t.Run("这一轮没有递编号的地方:调了不出错", func(t *testing.T) {
+		RoundEnv{}.grantedTo(&ProviderDescriptor{Name: "pub", Privileges: privTrackIDPublish}).PublishTrackID("123")
+	})
+}
+
+// 往外递编号的源不管这一轮问没问它、Resolve 里递没递,交结果之前一定递过:被跳过的(设置里关掉、别名轮名单外、
+// 这种轮次不问、熔断冷却)和没递就返回的由调度代递空串。漏了这一步,等它编号的源会挂到这一轮截止。
+func TestSkippedPublisherStillPublishesEmptyTrackID(t *testing.T) {
+	for _, c := range []struct {
+		name    string
+		plan    func(round *lyricSourceRound) lyricRoundPlan
+		rounds  RoundPolicy
+		resolve func(p *stubLyricProvider) SourceResult
+		wantAsk int32
+		wantID  string
+	}{
+		{name: "设置里关掉", plan: func(*lyricSourceRound) lyricRoundPlan {
+			return lyricRoundPlan{enabled: func(string) bool { return false }}
+		}},
+		{name: "别名轮名单外", plan: func(*lyricSourceRound) lyricRoundPlan {
+			return lyricRoundPlan{only: map[string]bool{"other": true}, enabled: func(string) bool { return true }}
+		}},
+		{name: "这种轮次不问它", rounds: roundsOnDemand, plan: func(*lyricSourceRound) lyricRoundPlan {
+			return lyricRoundPlan{enabled: func(string) bool { return true }}
+		}},
+		{name: "熔断冷却中", plan: func(round *lyricSourceRound) lyricRoundPlan {
+			return lyricRoundPlan{enabled: func(string) bool { return true }, cooling: lyricSourceRoundPlan{"pub": time.Minute}, round: round}
+		}},
+		{name: "问了、Resolve 里没递", wantAsk: 1, plan: func(*lyricSourceRound) lyricRoundPlan {
+			return lyricRoundPlan{enabled: func(string) bool { return true }}
+		}},
+		{name: "问了、Resolve 里递了:代递的空串不盖掉它", wantAsk: 1, wantID: "123",
+			plan: func(*lyricSourceRound) lyricRoundPlan {
+				return lyricRoundPlan{enabled: func(string) bool { return true }}
+			},
+			resolve: func(p *stubLyricProvider) SourceResult {
+				p.gotEnv.PublishTrackID("123")
+				return SourceResult{}
+			}},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			pub := &stubLyricProvider{desc: &ProviderDescriptor{Name: "pub", Rounds: c.rounds, Privileges: privTrackIDPublish}}
+			if c.resolve != nil {
+				pub.resolve = func() SourceResult { return c.resolve(pub) }
+			}
+			env := trackIDBoardFor(pub)
+			_, round := withLyricSourceRound(context.Background())
+			got := runLyricProviderInRound(context.Background(), pub, ProviderQuery{}, env, c.plan(round))
+			if got.source != "pub" || pub.calls.Load() != c.wantAsk {
+				t.Errorf("结果 %+v,Resolve 被问了 %d 次,期望 %d 次", got, pub.calls.Load(), c.wantAsk)
+			}
+			if id, ok := publishedTrackID(env.trackIDs.slot("pub")); !ok || id != c.wantID {
+				t.Errorf("返回时应已递出 %q:%q 递了=%v", c.wantID, id, ok)
+			}
+		})
+	}
+}
+
+// 编号在 Resolve 中途递出去就能被等的一方拿到,不用等 Resolve 返回(QQ 认出这首之后还要取词,amll 只要 songmid)。
+func TestTrackIDPublishedBeforeResolveReturns(t *testing.T) {
+	release, returned := make(chan struct{}), make(chan SourceResult, 1)
+	pub := &stubLyricProvider{desc: &ProviderDescriptor{Name: "pub", Privileges: privTrackIDPublish}}
+	pub.resolve = func() SourceResult {
+		pub.gotEnv.PublishTrackID("123")
+		<-release
+		return SourceResult{lyr: "[00:01.00]取完词才返回"}
+	}
+	env := trackIDBoardFor(pub)
+	go func() {
+		returned <- runLyricProviderInRound(context.Background(), pub, ProviderQuery{}, env, lyricRoundPlan{enabled: func(string) bool { return true }})
+	}()
+	got := make(chan string, 1)
+	go func() { got <- env.trackIDs.slot("pub").await() }()
+	select {
+	case id := <-got:
+		if id != "123" {
+			t.Errorf("等到的编号 %q", id)
+		}
+	case <-time.After(4 * time.Second):
+		t.Fatal("Resolve 还没返回时等不到它中途递出来的编号")
+	}
+	select {
+	case r := <-returned:
+		t.Fatalf("Resolve 还挂着,不该已经交了结果:%+v", r)
+	default:
+	}
+	close(release)
+	select {
+	case r := <-returned:
+		if r.lyr == "" {
+			t.Errorf("结果 %+v", r)
+		}
+	case <-time.After(4 * time.Second):
+		t.Fatal("放行后没交结果")
+	}
+}
+
+// 网易云那份结果(ne)里顺带交的封面、平台链接、规范歌手名只收带 privPeripheral 的源交的;「身份由播放器本机数据给定」
+// 在 ne 上的那一位(FromLocalClient)同 identityFromLocalClient,只认带 privLocalClientIdentity 的源交的。歌词、曲目
+// id 这些不受这两位管。
+func TestPeripheralAndNeteaseLocalIdentityOnlyFromPrivilegedProviders(t *testing.T) {
+	claimed := SourceResult{ne: neteaseInfo{
+		Cover: "https://p1.music.126.net/x.jpg", SongURL: "https://music.163.com/song?id=1", Artist: "规范歌手名",
+		Lyrics: "[00:01.00]a", Title: "歌名", Album: "专辑", SongID: 1, AlbumID: 2, DurationSecs: 200, FromLocalClient: true, NoVocals: true,
+	}}
+	for _, c := range []struct {
+		name                      string
+		privileges                builtinPrivileges
+		wantPeripheral, wantLocal bool
+	}{
+		{name: "两位都有", privileges: privPeripheral | privLocalClientIdentity, wantPeripheral: true, wantLocal: true},
+		{name: "只有周边信息", privileges: privPeripheral, wantPeripheral: true},
+		{name: "只有本机身份", privileges: privLocalClientIdentity, wantLocal: true},
+		{name: "没有特权位"},
+		{name: "只有不相干的位", privileges: privTrackIDPublish | privTrackIDConsume | privPlaybackTrackIDs | privPlayerNoVocals | privOfflineLeg | privBorrowFromPeers | privRefetchByID | privBreakerControl},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			stub := &stubLyricProvider{desc: &ProviderDescriptor{Name: "stub", Privileges: c.privileges}, resolve: func() SourceResult { return claimed }}
+			got := runLyricProvider(context.Background(), stub, ProviderQuery{}, RoundEnv{}, lyricRoundPlan{enabled: func(string) bool { return true }})
+			want := claimed
+			want.source = "stub"
+			if !c.wantPeripheral {
+				want.ne.Cover, want.ne.SongURL, want.ne.Artist = "", "", ""
+			}
+			want.ne.FromLocalClient = c.wantLocal
+			if !reflect.DeepEqual(got, want) {
+				t.Errorf("结果 %+v\n期望 %+v", got.ne, want.ne)
+			}
+		})
+	}
+}
+
+// 递编号只经调度和 RoundEnv:格子只在起这一轮的源时建(startLyricProviders),各源的 goroutine 走 runLyricProviderInRound
+// (它兜底代递空串),往格子里写只有 PublishTrackID 和那一处兜底,「自己的格子」只在 grantedTo 里填。
+func TestTrackIDsOnlyTravelThroughScheduler(t *testing.T) {
+	files, err := filepath.Glob("*.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	where := map[string][]string{}
+	for _, f := range files {
+		if strings.HasSuffix(f, "_test.go") {
+			continue
+		}
+		raw, err := os.ReadFile(f)
+		if err != nil {
+			t.Fatal(err)
+		}
+		src := string(raw)
+		for _, needle := range []string{".publish(", "newRoundTrackIDs(", ".ownTrackID = ", "runLyricProviderInRound(", "&roundTrackID{"} {
+			if n := countCode(src, needle); n > 0 {
+				where[needle] = append(where[needle], fmt.Sprintf("%s×%d", f, n))
+			}
+		}
+	}
+	for needle, want := range map[string][]string{
+		".publish(":                {"lyricprovider.go×1", "lyricproviderrun.go×1"},
+		"newRoundTrackIDs(":        {"lyricprovider.go×1", "lyricproviderrun.go×1"},
+		".ownTrackID = ":           {"lyricprovider.go×1"},
+		"runLyricProviderInRound(": {"lyricproviderrun.go×2"},
+		"&roundTrackID{":           {"lyricprovider.go×1"},
+	} {
+		if !reflect.DeepEqual(where[needle], want) {
+			t.Errorf("%q 出现在 %v,应只在 %v", needle, where[needle], want)
+		}
+	}
+	run := string(mustRead(t, "lyricproviderrun.go"))
+	for _, n := range []string{
+		"env.trackIDs = newRoundTrackIDs(providers)\n\tfor _, p := range providers {\n\t\tgo func() { out <- runLyricProviderInRound(ctx, p, q, env, plan) }()",
+		"defer env.trackIDs.slot(p.Descriptor().Name).publish(\"\")\n\treturn runLyricProvider(ctx, p, q, env, plan)",
+	} {
+		if !containsCode(run, n) {
+			t.Errorf("lyricproviderrun.go 缺 %q", n)
+		}
+	}
+	provider := string(mustRead(t, "lyricprovider.go"))
+	for _, n := range []string{
+		"if !e.granted.has(privTrackIDPublish) {\n\t\treturn\n\t}\n\te.ownTrackID.publish(id)",
+		"e.ownTrackID = e.trackIDs.slot(d.Name)",
+		"if d := p.Descriptor(); d.Privileges.has(privTrackIDPublish) {\n\t\t\tb.slots[d.Name] = &roundTrackID{done: make(chan struct{})}",
+	} {
+		if !containsCode(provider, n) {
+			t.Errorf("lyricprovider.go 缺 %q", n)
+		}
 	}
 }

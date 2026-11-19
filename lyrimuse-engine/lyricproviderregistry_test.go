@@ -690,12 +690,15 @@ func TestProviderRegistryPrivilegesMatchCode(t *testing.T) {
 		}
 	}
 
-	// 递编号:收集循环里各有一处按源名写的代码。熔断冷却时的本机那条腿:登记的实现有没有 ResolveOffline,
-	// 它里面读的是这个源自己的本机那份;收集循环里不再有按源名写的这一支。
-	offlineImpl := map[string]bool{}
+	// 递编号:登记的实现在 Resolve 里经环境递(env.PublishTrackID),收集循环里不再有按源名写的通道。熔断冷却时的
+	// 本机那条腿:登记的实现有没有 ResolveOffline,它里面读的是这个源自己的本机那份;收集循环里不再有按源名写的这一支。
+	offlineImpl, publishes := map[string]bool{}, map[string]bool{}
 	for _, p := range lyricProviders().providers {
 		if _, ok := p.(OfflineResolver); ok {
 			offlineImpl[p.Descriptor().Name] = true
+		}
+		if containsCode(lyricProviderResolveSource(t, p), "env.PublishTrackID(") {
+			publishes[p.Descriptor().Name] = true
 		}
 	}
 	if containsCode(enrichSrc, "case lyricSourceSkipCooling: if r, ok := ") {
@@ -703,8 +706,11 @@ func TestProviderRegistryPrivilegesMatchCode(t *testing.T) {
 	}
 	for _, name := range network {
 		d := lyricProviders().descriptor(name)
-		if got := containsCode(enrichSrc, name+"IDCh <- "); got != d.Privileges.has(privTrackIDPublish) {
-			t.Errorf("%s:收集循环里递不递编号(%v)跟 privTrackIDPublish 对不上", name, got)
+		if publishes[name] != d.Privileges.has(privTrackIDPublish) {
+			t.Errorf("%s:Resolve 里递不递编号(%v)跟 privTrackIDPublish 对不上", name, publishes[name])
+		}
+		if containsCode(enrichSrc, name+"IDCh") {
+			t.Errorf("收集循环里不该再有按源名写的递编号通道 %sIDCh:递编号经调度建的 roundTrackIDs", name)
 		}
 		if offlineImpl[name] != d.Privileges.has(privOfflineLeg) {
 			t.Errorf("%s:实现了 ResolveOffline(%v)跟 privOfflineLeg 对不上", name, offlineImpl[name])

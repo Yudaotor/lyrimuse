@@ -583,7 +583,7 @@ func TestLRCLIBProviderWithCancelledRoundMatchesHandwritten(t *testing.T) {
 		if viaScheduler {
 			plan := newLyricRoundPlan(ctx, sharedLyricSourceBreaker().planRound(lyricSourceNames))
 			q := ProviderQuery{Artist: "Artist", Title: "Song", SourceTitle: lyricSourceTitleFor(ctx, "Song"), DurationSecs: 200}
-			r = runLyricProvider(ctx, lyricProviders().providers[0], q, RoundEnv{}, plan)
+			r = runLyricProvider(ctx, lyricProviderNamed(t, lyricSourceLRCLIB), q, RoundEnv{}, plan)
 		} else {
 			r = handwrittenLRCLIBRound(ctx, "Artist", "Song", "", 200)
 		}

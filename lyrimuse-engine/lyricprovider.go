@@ -27,9 +27,11 @@ type ProviderQuery struct {
 	DurationSecs float64
 }
 
-// RoundEnv 是这一轮交给源的环境。带特权的那几样(播放侧记下的平台曲目编号、播放器自己的无人声信号)只经下面的方法读,
-// 方法按 granted 放行:收集循环建的那份 granted 是 0,调度交给源之前按它的描述符填(grantedTo),没有对应特权位的源
-// 读到的是零值。见 09 章决策 392。
+// RoundEnv 是这一轮交给源的环境。带特权的那几样(播放侧记下的平台曲目编号、播放器自己的无人声信号、源之间递的曲目编号)
+// 只经下面的方法读写,方法按 granted 放行:收集循环建的那份 granted 是 0,调度交给源之前按它的描述符填(grantedTo),
+// 没有对应特权位的源读到的是零值、递的编号没有效果。见 09 章决策 392、393。
+//
+// 这个结构要能用 == 比:别往里加切片、map、函数字段。
 type RoundEnv struct {
 	// ForPlayingTrack:这一轮解析的是正在放的那首或它的待播队列(playerSignalApplies)。
 	ForPlayingTrack bool
@@ -37,12 +39,77 @@ type RoundEnv struct {
 	identityArtist, identityTitle, identityAlbum string
 	// granted:拿到这份环境的源的特权位。
 	granted builtinPrivileges
+	// trackIDs:这一轮源之间递曲目编号的地方,调度起这一轮的源时建(startLyricProviders);nil 时不递。
+	trackIDs *roundTrackIDs
+	// ownTrackID:拿到这份环境的源自己往外递编号的那一格,这一轮没有它的格时是 nil。
+	ownTrackID *roundTrackID
 }
 
-// grantedTo:交给描述符是 d 的那个源的一份,特权位照 d 的填。
+// grantedTo:交给描述符是 d 的那个源的一份,特权位照 d 的填,往外递编号的那一格是 d 自己的。
 func (e RoundEnv) grantedTo(d *ProviderDescriptor) RoundEnv {
 	e.granted = d.Privileges
+	e.ownTrackID = e.trackIDs.slot(d.Name)
 	return e
+}
+
+// PublishTrackID:把这一轮搜到的曲目编号递给等它的源,没搜到递空串。编号一到手就该递,不必等取完词:等的一方只要编号。
+// 一轮只有第一次递的算数。要 privTrackIDPublish,没有这一位的源调了没有效果。
+func (e RoundEnv) PublishTrackID(id string) {
+	if !e.granted.has(privTrackIDPublish) {
+		return
+	}
+	e.ownTrackID.publish(id)
+}
+
+// roundTrackIDs 是一轮里源之间递曲目编号的地方:这一轮起的源里带 privTrackIDPublish 的各有一格。见 09 章决策 393。
+type roundTrackIDs struct {
+	slots map[string]*roundTrackID
+}
+
+// roundTrackID 是一个源这一轮递出来的曲目编号。等的一方在它递出来之前一直等、不看 ctx,所以每一格都必须有人递:
+// 源自己没递的由调度在它返回时代递空串(runLyricProviderInRound),漏了这一步等的一方会挂到这一轮截止。
+type roundTrackID struct {
+	once sync.Once
+	done chan struct{}
+	id   string
+}
+
+func newRoundTrackIDs(providers []LyricProvider) *roundTrackIDs {
+	b := &roundTrackIDs{slots: map[string]*roundTrackID{}}
+	for _, p := range providers {
+		if d := p.Descriptor(); d.Privileges.has(privTrackIDPublish) {
+			b.slots[d.Name] = &roundTrackID{done: make(chan struct{})}
+		}
+	}
+	return b
+}
+
+// slot:source 这一轮的那一格。这一轮没起它、它不往外递编号,或者 b 是 nil 时返回 nil。
+func (b *roundTrackIDs) slot(source string) *roundTrackID {
+	if b == nil {
+		return nil
+	}
+	return b.slots[source]
+}
+
+// publish:只有第一次算数。s 是 nil 时什么都不做。
+func (s *roundTrackID) publish(id string) {
+	if s == nil {
+		return
+	}
+	s.once.Do(func() {
+		s.id = id
+		close(s.done)
+	})
+}
+
+// await:等这一格递出来。s 是 nil(这一轮没有这个源递编号)时立刻返回空串。
+func (s *roundTrackID) await() string {
+	if s == nil {
+		return ""
+	}
+	<-s.done
+	return s.id
 }
 
 // PlaybackTrackIDs:播放侧为这一首记下的平台曲目编号(playbackTrackIDsForRound),别的歌那一轮不给。

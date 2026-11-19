@@ -303,6 +303,22 @@ func neteaseLastFailureReasonNow() string {
 	return neteaseLastFailureReason
 }
 
+// neteaseProvider 把 neteaseLookup 接到 LyricProvider 上。结果整份在 ne 里:歌词之外,这次查询顺带的封面、「网易云」链接、
+// 规范歌手名也在(要 privPeripheral),源名由调度填(runLyricProvider)。查完把曲目 id 递给等它的源,没查到递空串。
+type neteaseProvider struct{ desc *ProviderDescriptor }
+
+func (p neteaseProvider) Descriptor() *ProviderDescriptor { return p.desc }
+
+func (p neteaseProvider) Resolve(ctx context.Context, q ProviderQuery, env RoundEnv) SourceResult {
+	info := neteaseLookup(ctx, q.Artist, q.SourceTitle, q.Album, q.DurationSecs)
+	if info.SongID > 0 {
+		env.PublishTrackID(strconv.FormatInt(info.SongID, 10))
+	} else {
+		env.PublishTrackID("")
+	}
+	return SourceResult{ne: info}
+}
+
 // neteaseLookup returns a China-reachable album cover URL (p*.music.126.net) and
 // the NetEase song page URL for a track. The album is used to disambiguate: the
 // same song appears on many NetEase albums (originals, compilations, "This Is

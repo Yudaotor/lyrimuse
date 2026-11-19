@@ -95,6 +95,70 @@ func qqMusicMatchCached(ctx context.Context, artist, title, album string, durati
 	return m
 }
 
+// qqProvider 把 QQ 音乐这一路接到 LyricProvider 上:认出这首(qqMusicMatchCached)、取整行与逐字、封面、时长与语种。
+// 结果的源名由调度填(runLyricProvider)。
+type qqProvider struct{ desc *ProviderDescriptor }
+
+func (p qqProvider) Descriptor() *ProviderDescriptor { return p.desc }
+
+func (p qqProvider) Resolve(ctx context.Context, q ProviderQuery, env RoundEnv) SourceResult {
+	// qqMusicMatchCached 本身是一次网络请求(按 artist|title|album 缓存)。resolveTrackEnrichment 那边为封面 / 跳转链接
+	// 另外调 qqMusicURL 时共用同一份 qqURLCache,谁先算出来谁写缓存,不要求哪边在前。
+	match := qqMusicMatchCached(ctx, q.Artist, q.SourceTitle, q.Album, q.DurationSecs)
+	qqMid := qqMidFromURL(match.url)
+	// 曲目 ID 一到手就递给等它的源,不等下面取词:它们只要 ID,等取词就是白等。
+	env.PublishTrackID(qqMid)
+	var lyr, yrc, tr, roma string
+	var qqDur float64
+	var qqInstrumental, qqNoLyrics, qqPlainOnly bool
+	var qqCover string
+	if qqMid != "" {
+		// 整行歌词与逐字(QRC)两套接口互不依赖,并发取。
+		var qqLyr qqLyricResult
+		lyricDone := make(chan struct{})
+		go func() {
+			defer close(lyricDone)
+			qqLyr = qqLyric(ctx, qqMid)
+		}()
+		// 逐字(QRC)是完全独立的一套接口/密钥,自己失败不影响整行歌词。同一份响应还带中文译文/罗马音两轨
+		// (见 qqQRCLyric 注释),时间戳与 qqLyric 的整行歌词逐行一致。
+		qrc := qqQRCLyric(ctx, qqMid, q.Artist, q.SourceTitle, q.Album, q.DurationSecs)
+		// qqCover:qqMid 这时已经是经过身份闸校验过的那首歌,不需要像 qqCoverFallback
+		// (resolveTrackEnrichment 那条独立的封面兜底路径)那样另外核对 singer,直接取
+		// cover 即可。查不到就留空(候选不拿别的封面兜底,见 rankLyricSourceResults)。
+		// 排在 QRC 之后、不跟它并发:两边都读同一份单曲详情(qqSongDetail),QRC 走通时详情已在缓存里,
+		// 并发的话两边同时没命中缓存,同一个详情请求会发两次。
+		qqCover, _, _ = qqSongCoverAndSinger(ctx, qqMid)
+		<-lyricDone
+		// 整行接口没给词时用 QRC 压出来的整行,见 qqLineLyric。
+		lyr, qqInstrumental, qqNoLyrics = qqLineLyric(qqLyr, qrc), qqLyr.instrumental, qqLyr.trackFoundNoLyrics
+		// 只有不带时间戳的歌词时交成 plainOnly,见 qqPlainLyric。
+		if lyr == "" {
+			if lyr = qqPlainLyric(qqLyr, qrc); lyr != "" {
+				qqPlainOnly = true
+			}
+		}
+		yrc, tr, roma = qrc.yrc, qrc.tr, qrc.roma
+		// QRC 正文里的 `[kana:…]` 假名标注行拼到整行歌词开头,App 侧 KanaAnnotation 才
+		// 读得到(跟酷狗 LRC 自带的那一行同格式,见 qqQRCResult.kana 注释)。
+		lyr = attachKanaLine(lyr, qrc.kana)
+		// 专辑维度路线(resolveQQMatchViaAlbum)选中时曲目单里就带官方时长,直接用;
+		// 否则只读缓存:QRC 那步走通时(它内部查过同一首的单曲详情)这里是热的,没走通
+		// (会话拿不到 sid / 详情接口失败,那边不写负缓存)就留 0。srcDur 是纯透传的
+		// 评测数据,不值得为它在歌词主路径上多挂一次最多 6s 的请求。
+		qqDur = match.interval
+		if qqDur <= 0 {
+			qqDur = qqSongMetaCachedOnly(qqMid).interval
+		}
+	}
+	// language 跟 qqDur 同一个只读缓存、同一条"QRC 那步走通时这里是热的"理由,见上面
+	// qqDur 那行注释——不为它单独发请求。
+	qqMeta := qqSongMetaCachedOnly(qqMid)
+	qqLang := qqCanonicalLanguage(qqMeta.language)
+	qqNoVocals := qqMeta.id != 0 && qqMeta.language == qqLanguagePureMusic
+	return SourceResult{lyr: lyr, yrc: yrc, tr: tr, roma: roma, matchTitle: match.title, matchArtist: match.artist, matchAlbum: match.album, matchCover: qqCover, srcDur: qqDur, language: qqLang, instrumental: qqInstrumental, noVocals: qqNoVocals, trackFoundNoLyrics: qqTrackFoundNoLyrics(qqNoLyrics, lyr, yrc), identityFromLocalClient: match.fromLocalLibrary, plainOnly: qqPlainOnly, trackIDs: qqTrackIDs(qqMid)}
+}
+
 // qqSmartboxItem is one suggestion from smartbox_new.fcg (mid + song name +
 // singer; no album — enriched separately via qqSongAlbum when disambiguating).
 type qqSmartboxItem struct {

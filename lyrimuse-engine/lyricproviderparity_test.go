@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"path/filepath"
 	"reflect"
 	"slices"
 	"sort"
@@ -212,6 +213,37 @@ func handwrittenProviderRound(ctx context.Context, s providerParitySource, artis
 		return lyricSourceResult{source: s.name}
 	}
 	return s.handwritten(ctx, artist, title, srcTitle, album, durationSecs)
+}
+
+// lyricProviderResolveSource:登记的实现 p 的 Resolve 的源码,从 func 那一行到收尾的花括号。
+func lyricProviderResolveSource(t *testing.T, p LyricProvider) string {
+	t.Helper()
+	head := "\nfunc (p " + reflect.TypeOf(p).Name() + ") Resolve(ctx context.Context, q ProviderQuery,"
+	files, err := filepath.Glob("*.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, f := range files {
+		if strings.HasSuffix(f, "_test.go") {
+			continue
+		}
+		raw, err := os.ReadFile(f)
+		if err != nil {
+			t.Fatal(err)
+		}
+		src := string(raw)
+		start := strings.Index(src, head)
+		if start < 0 {
+			continue
+		}
+		end := strings.Index(src[start+1:], "\n}\n")
+		if end < 0 {
+			t.Fatalf("%s 里 %s 的 Resolve 没有收尾", f, reflect.TypeOf(p).Name())
+		}
+		return src[start+1 : start+1+end+3]
+	}
+	t.Fatalf("找不到 %s 的 Resolve", reflect.TypeOf(p).Name())
+	return ""
 }
 
 // lyricProviderNamed:登记表里这个源的实现。
@@ -514,4 +546,6 @@ var migratedLyricSources = []struct{ name, file, entry, call string }{
 	{lyricSourceKuwo, "kuwo.go", "kuwoLyric", "kuwoLyric(ctx, q.Artist, q.SourceTitle, q.Album, q.DurationSecs)"},
 	{lyricSourceSoda, "soda.go", "sodaLyric", "sodaLyric(ctx, q.Artist, q.SourceTitle, q.Album, q.DurationSecs)"},
 	{lyricSourceAppleMusic, "applemusic.go", "applemusicLyric", "applemusicLyric(ctx, q.Artist, q.SourceTitle, q.Album, q.DurationSecs, appleID, lyricSourceISRC(ctx, q.Artist, q.Title, q.Album))"},
+	{lyricSourceNetease, "netease.go", "neteaseLookup", "neteaseLookup(ctx, q.Artist, q.SourceTitle, q.Album, q.DurationSecs)"},
+	{lyricSourceQQ, "qq.go", "qqMusicMatchCached", "qqMusicMatchCached(ctx, q.Artist, q.SourceTitle, q.Album, q.DurationSecs)"},
 }

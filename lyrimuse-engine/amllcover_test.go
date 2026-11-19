@@ -2,7 +2,6 @@ package main
 
 import (
 	"fmt"
-	"os"
 	"strings"
 	"testing"
 )
@@ -208,11 +207,7 @@ func TestQQTrackIDs(t *testing.T) {
 
 // QQ 那一路把曲目 ID 带进原始应答:少了它,amll 借封面认不出 QQ 那首是不是 TTML 登记的那一条。
 func TestQQResultCarriesTrackIDs(t *testing.T) {
-	src, err := os.ReadFile("enrich.go")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !strings.Contains(string(src), "trackIDs: qqTrackIDs(qqMid)") {
-		t.Error("qq 那一路的 lyricSourceResult 没带 trackIDs")
+	if !containsCode(lyricProviderResolveSource(t, lyricProviderNamed(t, lyricSourceQQ)), "trackIDs: qqTrackIDs(qqMid)}") {
+		t.Error("qq 那一路的结果没带 trackIDs")
 	}
 }

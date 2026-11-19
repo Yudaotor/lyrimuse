@@ -376,8 +376,6 @@ func TestApplemusicCatalogNoVocalsWithoutAccountStorefront(t *testing.T) {
 func TestPlayerInstrumentalSignalsAreWired(t *testing.T) {
 	enrich := string(mustRead(t, "enrich.go"))
 	for _, n := range []string{
-		"qqNoVocals := qqMeta.id != 0 && qqMeta.language == qqLanguagePureMusic",
-		"instrumental: qqInstrumental, noVocals: qqNoVocals,",
 		"language: r.language, noVocals: r.noVocals,",
 		"if src := playerInstrumentalSource(raw, results); src != \"\" {",
 		"forPlaying := playerSignalApplies(ctx)",
@@ -391,8 +389,12 @@ func TestPlayerInstrumentalSignalsAreWired(t *testing.T) {
 			t.Errorf("enrich.go 缺 %q", n)
 		}
 	}
-	// 汽水、Apple Music 两路的信号在各自的 Resolve 里;Apple 那一路「能不能用播放器的信号」经环境读,要 privPlayerNoVocals。
+	// QQ、汽水、Apple Music 三路的信号在各自的 Resolve 里;Apple 那一路「能不能用播放器的信号」经环境读,要 privPlayerNoVocals。
 	for file, needles := range map[string][]string{
+		"qq.go": {
+			"qqNoVocals := qqMeta.id != 0 && qqMeta.language == qqLanguagePureMusic",
+			"instrumental: qqInstrumental, noVocals: qqNoVocals,",
+		},
 		"soda.go": {
 			"noVocals := r.fromLocalClient && (r.noVocals || sodaLocalInstrumental(q.Artist, q.SourceTitle, q.Album, q.DurationSecs))",
 			"trackFoundNoLyrics: noLyrics, noVocals: noVocals,",
