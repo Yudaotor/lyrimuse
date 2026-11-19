@@ -187,6 +187,15 @@ private final class OverlayPlayback: ObservableObject {
     @Published private(set) var noLyricsTitle: String?
     @Published private(set) var playbackRate: Double = 1
     private var subs: [AnyCancellable] = []
+    /// 窗口摆没摆出来(`SurfaceFeedGate`):收起时换句才变的那几项(`gated`)不发,摆出来之前补发。编辑台预览不接闸,一直发。
+    private let live = CurrentValueSubject<Bool, Never>(true)
+    private var gateSubscription: AnyCancellable?
+
+    /// 接上真窗口的闸(视图出现时接一次)。
+    func follow(_ gate: SurfaceFeedGate?) {
+        guard let gate, gateSubscription == nil else { return }
+        gateSubscription = gate.$isLive.sink { [live] in live.send($0) }
+    }
 
     init() {
         let p = PlaybackCoordinator.shared
@@ -200,28 +209,24 @@ private final class OverlayPlayback: ObservableObject {
             // 当前句的显示窗口都从这里取,别混用逐行的 currentLine / nextLine*。
             Publishers.CombineLatest(p.$overlayLyrics.map(\.line), s.$overlayLyricsKaraoke)
                 .map { line, karaoke in karaoke ? line : line?.lineLevel }
-                .removeDuplicates()
-                .sink { [weak self] in self?.currentLine = $0 },
-            p.$overlayLyrics.map(\.lineIndex).removeDuplicates().sink { [weak self] in self?.lineIndex = $0 },
+                .gated(by: live, assign: \.currentLine, on: self),
+            p.$overlayLyrics.map(\.lineIndex).gated(by: live, assign: \.lineIndex, on: self),
             p.$overlayWidestMainRow.removeDuplicates().sink { [weak self] in self?.songWidestMainRow = $0 },
-            p.$overlayLyrics.map(\.nextText).removeDuplicates().sink { [weak self] in self?.nextLineText = $0 },
-            p.$overlayLyrics.map(\.nextSide).removeDuplicates().sink { [weak self] in self?.nextLineSide = $0 },
-            p.$overlayLyrics.map(\.nextRomanization).removeDuplicates().sink { [weak self] in self?.nextLineRomanization = $0 },
-            p.$overlayLyrics.map(\.nextTranslation).removeDuplicates().sink { [weak self] in self?.nextLineTranslation = $0 },
+            p.$overlayLyrics.map(\.nextText).gated(by: live, assign: \.nextLineText, on: self),
+            p.$overlayLyrics.map(\.nextSide).gated(by: live, assign: \.nextLineSide, on: self),
+            p.$overlayLyrics.map(\.nextRomanization).gated(by: live, assign: \.nextLineRomanization, on: self),
+            p.$overlayLyrics.map(\.nextTranslation).gated(by: live, assign: \.nextLineTranslation, on: self),
             p.$overlayLyrics
                 .map { lyrics -> OverlayScrollingLyricRow.PacedWindow? in
                     lyrics.lineWindow.map { .init(startMs: $0.startMs, dwellMs: $0.dwellMs) }
                 }
-                .removeDuplicates()
-                .sink { [weak self] in self?.currentLineWindow = $0 },
+                .gated(by: live, assign: \.currentLineWindow, on: self),
             Publishers.CombineLatest(p.$overlayLyrics.map(\.nextWordGroups), s.$overlayLyricsKaraoke)
                 .map { groups, karaoke in karaoke ? groups : nil }
-                .removeDuplicates()
-                .sink { [weak self] in self?.nextLineWordGroups = $0 },
+                .gated(by: live, assign: \.nextLineWordGroups, on: self),
             Publishers.CombineLatest(p.$overlayLyrics.map(\.nextWords), s.$overlayLyricsKaraoke)
                 .map { words, karaoke in karaoke ? words : nil }
-                .removeDuplicates()
-                .sink { [weak self] in self?.nextLineWords = $0 },
+                .gated(by: live, assign: \.nextLineWords, on: self),
             p.$isPlayingNow.removeDuplicates().sink { [weak self] in self?.isPlayingNow = $0 },
             Publishers.CombineLatest(p.$isPlayingNow, p.$anchor.map { $0?.isFrozen ?? false })
                 .map { playing, frozen in playing && !frozen }
@@ -242,12 +247,11 @@ private final class OverlayPlayback: ObservableObject {
             p.$engineNotRunning.removeDuplicates().sink { [weak self] in self?.engineNotRunning = $0 },
             p.$isCurrentTrackAdBreak.removeDuplicates().sink { [weak self] in self?.isCurrentTrackAdBreak = $0 },
             p.$isRadioTalkBreak.removeDuplicates().sink { [weak self] in self?.isRadioTalkBreak = $0 },
-            p.$currentLineFillSettled.removeDuplicates().sink { [weak self] in self?.currentLineFillSettled = $0 },
-            p.$rawGapWindow.removeDuplicates().sink { [weak self] in self?.rawGapWindow = $0 },
+            p.$currentLineFillSettled.gated(by: live, assign: \.currentLineFillSettled, on: self),
+            p.$rawGapWindow.gated(by: live, assign: \.rawGapWindow, on: self),
             p.$rawGapWindow.combineLatest(p.$lyricsGapMarkers)
                 .map { raw, markers in raw?.isMarked(in: markers) ?? false }
-                .removeDuplicates()
-                .sink { [weak self] in self?.inMarkedInterlude = $0 },
+                .gated(by: live, assign: \.inMarkedInterlude, on: self),
             Publishers.CombineLatest3(p.$artworkAccentColor, s.$followsCoverArt, s.$foregroundColor)
                 .map { accent, follows, fg in (follows ? accent : nil) ?? fg }
                 .removeDuplicates()
@@ -404,10 +408,13 @@ protocol OverlayChromeSource: ObservableObject {
     /// 间奏点停表,同灵动岛、歌词窗口按各自的可见性停表。
     /// 预览外壳没有自己的窗口,走默认的 true,停不停由设置窗口推下来的 `previewHostVisible` 管。
     var isSurfaceVisible: Bool { get }
+    /// 真窗口摆没摆出来,`OverlayPlayback` 按它停发换句才变的那几项(`SurfaceFeedGate`)。预览外壳没有,一直发。
+    var feedGate: SurfaceFeedGate? { get }
 }
 
 extension OverlayChromeSource {
     var isSurfaceVisible: Bool { true }
+    var feedGate: SurfaceFeedGate? { nil }
     var rowSpacingDraft: OverlayRowSpacing.Values? { nil }
 }
 
@@ -632,6 +639,7 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
         .onChange(of: controlsVisible) { _, visible in
             if visible { overlayController.controlsDidBecomeVisible() }
         }
+        .onAppear { playback.follow(overlayController.feedGate) }
         // 指针压上按钮排的那一刻把横向落点冻住,离开立刻解冻 —— 理由(以及为什么判据是
         // "压在按钮排上"而不是"控制排显示着")见 OverlayControlsSidePin。
         .onChange(of: overlayController.isHoveringControlPill) { _, onPill in

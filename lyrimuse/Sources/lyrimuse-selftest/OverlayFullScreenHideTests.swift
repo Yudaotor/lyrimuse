@@ -51,7 +51,7 @@ func checkOverlayFullScreenHide() {
                 true, "悬浮歌词跟随当前窗口: 单屏时不开每秒一次的兜底,插拔屏幕时重判")
     expectEqual(sourceHas(controller, "        recomputeControlsBelowCard()\n        // 藏着(orderOut)的窗口换了屏不一定收到 didChangeScreen"),
                 true, "悬浮歌词跟随当前窗口: 搬到别的屏后当场重判全屏隐藏")
-    expectEqual(sourceHas(controller, "if shouldShow { window?.orderFront(nil) } else { window?.orderOut(nil) }\n        syncActiveScreenTracking()"),
+    expectEqual(sourceHas(controller, "window?.orderOut(nil)\n surfaceFeed.set(false)\n }\n syncActiveScreenTracking()"),
                 true, "悬浮歌词跟随当前窗口: 显示状态一变就同步要不要盯焦点屏")
     expectEqual(sourceBytes(appSettings, contain: "overlayHideInFullScreen = (defaults.object(forKey: Keys.overlayHideInFullScreen) as? Bool) ?? false"),
                 true, "悬浮歌词全屏时隐藏: 默认关")

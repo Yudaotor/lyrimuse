@@ -534,6 +534,13 @@ func runDeepLinkTests() {
                     [.debug(.managerList(op: "search:jay")), .debug(.mainThreadGaps(on: true)), .debug(.mainThreadGaps(on: false)),
                      .debug(.mainThreadGaps(on: true, minMs: 30)), .debug(.mainThreadGaps(on: true))],
                     "debug: 歌词管理列表动作、主线程心跳")
+        expectEqual([link("lyrimuse://debug/preview-click"), link("lyrimuse://debug/preview-click?delay=200&dy=-30"),
+                     link("lyrimuse://debug/preview-click?dy=40")],
+                    [.debug(.previewClick(delayMs: 150, dy: 0)), .debug(.previewClick(delayMs: 200, dy: -30)),
+                     .debug(.previewClick(delayMs: 150, dy: 40))], "debug: 预览换句滑动途中点一下时间按钮,默认 150 毫秒、正中")
+        expectEqual([link("lyrimuse://debug/preview-click?delay=2001"), link("lyrimuse://debug/preview-click?delay=-1"),
+                     link("lyrimuse://debug/preview-click?delay=x"), link("lyrimuse://debug/preview-click?dy=1.5")],
+                    [nil, nil, nil, nil], "debug: 预览点击的延时超出 0~2000、不是整数,纵向偏移不是整数都不认")
         expectEqual(link("lyrimuse://debug/manager-list") == nil && link("lyrimuse://debug/manager-list?op=") == nil
                     && link("lyrimuse://debug/main-thread-gaps") == nil, true, "debug: 列表动作没带 op、心跳没带 on 不认")
         expectEqual([link("lyrimuse://debug/main-thread-stall?seconds=7"), link("lyrimuse://debug/main-thread-stall?seconds=6.5&throttle=locked"),
@@ -1019,6 +1026,7 @@ func runDeepLinkTests() {
             .debug(.managerList(op: "rightclick:3")), .debug(.managerList(op: "instrumental:on")),
             .debug(.managerList(op: "selectrows:0,1,2")), .debug(.managerList(op: "batch:instrumental")),
             .debug(.managerList(op: "text:[00:01.00]一 & 二\n[00:02.00]三")),
+            .debug(.previewClick(delayMs: 150, dy: 0)), .debug(.previewClick(delayMs: 0, dy: -24)),
             .debug(.mainThreadGaps(on: true)), .debug(.mainThreadGaps(on: false)), .debug(.mainThreadGaps(on: true, minMs: 20)),
             .debug(.mainThreadStall(seconds: 7, throttle: nil)), .debug(.mainThreadStall(seconds: 6.5, throttle: "low_priority")),
             .debug(.rainbow(overlay: true, notch: nil)), .debug(.rainbow(overlay: false, notch: true)),

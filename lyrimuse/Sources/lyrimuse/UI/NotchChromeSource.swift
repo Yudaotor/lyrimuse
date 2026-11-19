@@ -209,6 +209,8 @@ protocol NotchChromeSource: ObservableObject {
     func toggleEditorial(_ kind: EditorialCard.Kind)
     /// 本对象 `objectWillChange` 的转发,`NotchLyricsView` 订阅它(视图存的是存在类型,订阅不了协议本身)。
     var chromeChanges: NotchChromeChanges { get }
+    /// 真窗口摆没摆出来,`NotchPlayback` 按它停发换句才变的那几项(`SurfaceFeedGate`)。编辑台预览没有,一直发。
+    var feedGate: SurfaceFeedGate? { get }
 }
 
 /// 把承载方的 `objectWillChange` 原样转发出来:承载方发一次,这里同步发一次,视图失效的时机跟直接订阅承载方一样。
@@ -224,6 +226,8 @@ final class NotchChromeChanges: ObservableObject {
 }
 
 extension NotchChromeSource {
+    var feedGate: SurfaceFeedGate? { nil }
+
     /// 把承载方此刻的状态填进 Core 的 `NotchCardLayout`:卡片宽高和各块画不画的公式都在那里(selftest 按数值断言),
     /// 下面这些属性只是转发。真窗口和编辑台读的是同一份。
     var cardLayout: NotchCardLayout {

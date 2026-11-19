@@ -276,8 +276,11 @@ final class NotchPlayback: ObservableObject {
     /// 头部快捷操作那颗「喜欢」读的状态(`PlaybackCoordinator.isFavorited`);nil = 这个播放器没有「喜欢」,那颗键不画。
     @Published private(set) var isFavorited: Bool?
     private var subs: [AnyCancellable] = []
+    /// 窗口摆没摆出来(`SurfaceFeedGate`):收起时换句才变的那几项(`gated`)不发,摆出来之前补发。编辑台预览没有闸,一直发。
+    private let live = CurrentValueSubject<Bool, Never>(true)
 
-    init() {
+    init(gate: SurfaceFeedGate? = nil) {
+        if let gate { subs.append(gate.$isLive.sink { [live] in live.send($0) }) }
         let p = PlaybackCoordinator.shared
         let s = AppSettings.shared
         // 主行 / 副行认的当前句:够格的间奏里当作没有(`LyricSecondaryLine.currentLine(_:inMarkedInterlude:)`)。
@@ -288,7 +291,7 @@ final class NotchPlayback: ObservableObject {
             .map { LyricSecondaryLine.currentLine($0, inMarkedInterlude: $1) }
         // 副行这首实际用的那一档:主行取句、副行文字、展开区「下一句」都认它。
         let shown = p.shownSecondaryLinePublisher(setting: s.$notchSecondaryLine, fallback: s.$notchSecondaryFallback)
-        subs = [
+        subs += [
             p.$title.removeDuplicates().sink { [weak self] in self?.title = $0 },
             p.$displayTitle.removeDuplicates().sink { [weak self] in self?.displayTitle = $0 },
             p.$artist.removeDuplicates().sink { [weak self] in self?.artist = $0 },
@@ -300,7 +303,7 @@ final class NotchPlayback: ObservableObject {
             p.$playbackControlsWithheldReason.removeDuplicates().sink { [weak self] in self?.controlsWithheldReason = $0 },
             // 当前句、要显示的那一句、下一句都取灵动岛自己那一份(按这一面的宽度断句,见
             // LocalPlaybackSource.notchLyrics),别混用逐行的 currentLine / compactLine / nextLine*。
-            p.$notchLyrics.map(\.line).removeDuplicates().sink { [weak self] in self?.currentLine = $0 },
+            p.$notchLyrics.map(\.line).gated(by: live, assign: \.currentLine, on: self),
             // 主行画哪一句(见 displayLine 的注释):副行关着取 compactLine(唱完就切),副行开着取
             // currentLine(跟悬浮歌词同一套语义)。「卡拉OK效果」关着时再把**要画的那一行**压成整行
             // (`SyncedLyricLine.lineLevel`):歌词行的逐字填色按 `displayLine?.words` 走,
@@ -314,27 +317,23 @@ final class NotchPlayback: ObservableObject {
                     let line = secondary.displayedLine(compactLine: compact, currentLine: current)
                     return karaoke ? line : line?.lineLevel
                 }
-                .removeDuplicates()
-                .sink { [weak self] in self?.displayLine = $0 },
+                .gated(by: live, assign: \.displayLine, on: self),
             // 副行文本:按四选一取下一句 / 当前句译文 / 当前句罗马音,空白算没有。
             Publishers.CombineLatest3(shownCurrentLine, p.$notchLyrics.map(\.nextText), shown)
                 .map { current, next, secondary -> String? in
                     // 取值规则在 Core(`LyricSecondaryLine.secondaryText`),菜单栏副行读的是同一份。
                     secondary.secondaryText(currentLine: current, nextLineText: next)
                 }
-                .removeDuplicates()
-                .sink { [weak self] in self?.secondaryText = $0 },
+                .gated(by: live, assign: \.secondaryText, on: self),
             s.$notchSecondaryLine.removeDuplicates().sink { [weak self] in self?.secondaryLine = $0 },
             shown.sink { [weak self] in self?.shownSecondaryLine = $0 },
             // 展开区「下一句」预览:接主行显示的那一句往后数;副行这首显示的就是下一句时留空(`expandedPreviewText`)。
             Publishers.CombineLatest(p.$notchLyrics, shown)
                 .map { lyrics, secondary in secondary.expandedPreviewText(next: lyrics.nextText, afterCompact: lyrics.compactNextText) }
-                .removeDuplicates()
-                .sink { [weak self] in self?.nextLineText = $0 },
+                .gated(by: live, assign: \.nextLineText, on: self),
             Publishers.CombineLatest(p.$notchLyrics, shown)
                 .map { lyrics, secondary in secondary.expandedNextLine(next: lyrics.nextSide, afterCompact: lyrics.compactNextSide) }
-                .removeDuplicates()
-                .sink { [weak self] in self?.nextLineSide = $0 },
+                .gated(by: live, assign: \.nextLineSide, on: self),
             Publishers.CombineLatest(p.$playbackMode, p.$playbackModeOptions)
                 .map { mode, options in options.contains(.shuffle) && options.canRepeat ? mode : nil }
                 .removeDuplicates()
@@ -358,13 +357,11 @@ final class NotchPlayback: ObservableObject {
             p.$radioStationName.removeDuplicates().sink { [weak self] in self?.radioStationName = $0 },
             p.$radioStationImage.removeDuplicates(by: { $0 === $1 })
                 .sink { [weak self] in self?.radioStationImage = $0 },
-            p.$rawGapWindow.removeDuplicates()
-                .sink { [weak self] in self?.rawGapWindow = $0 },
-            p.$notchLyrics.map(\.compactPlaceholder).removeDuplicates()
-                .sink { [weak self] in self?.compactShowsPlaceholder = $0 },
+            p.$rawGapWindow.gated(by: live, assign: \.rawGapWindow, on: self),
+            p.$notchLyrics.map(\.compactPlaceholder).gated(by: live, assign: \.compactShowsPlaceholder, on: self),
             p.$currentAdSlot.removeDuplicates().sink { [weak self] in self?.currentAdSlot = $0 },
             p.$adCountdown.removeDuplicates().sink { [weak self] in self?.adCountdown = $0 },
-            p.$currentLineFillSettled.removeDuplicates().sink { [weak self] in self?.currentLineFillSettled = $0 },
+            p.$currentLineFillSettled.gated(by: live, assign: \.currentLineFillSettled, on: self),
             p.$artworkImage.removeDuplicates(by: { $0 === $1 })
                 .sink { [weak self] in self?.artworkImage = $0 },
             p.$highResArtworkImage.removeDuplicates(by: { $0 === $1 })

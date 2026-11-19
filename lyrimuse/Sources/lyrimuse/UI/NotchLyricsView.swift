@@ -35,7 +35,7 @@ struct NotchLyricsView: View {
     // NotchTransientCenter 也不在这里订阅:banner 只被歌词行 / 多行歌词那一格消费,订阅下沉到
     // NotchTransientHost 子视图,横幅出现/消失只失效那一格,不打醒整卡。
     // 进度条拖动的三个交互状态(@GestureState/宽度/悬停)同理下沉进 NotchScrubber,挂在这里的话拖动时每个指针事件都整卡重估。
-    @StateObject var playback = NotchPlayback()
+    @StateObject var playback: NotchPlayback
     @Environment(\.accessibilityReduceMotion) var reduceMotion
     /// 出场动画期间内容的透明度(NotchWindowRoot 在那 0.3s 里改,默认 1)。只作用于内容 VStack,
     /// 背景层不受影响 —— 先看到卡片形状从刘海长出来、再看到字,见 NotchRevealShape 头注。
@@ -58,6 +58,7 @@ struct NotchLyricsView: View {
          drivesAdSkipGate: Bool = false, offersQuickActionsTip: Bool = false) {
         self.controller = controller
         chromeChanges = controller.chromeChanges
+        _playback = StateObject(wrappedValue: NotchPlayback(gate: controller.feedGate))
         self.prompt = prompt
         self.reportsLineLayout = reportsLineLayout
         self.drivesAdSkipGate = drivesAdSkipGate

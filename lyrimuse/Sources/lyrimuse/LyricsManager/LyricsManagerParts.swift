@@ -1111,7 +1111,10 @@ struct LyricsManagerPreviewList: View {
                                                 pausedMs: isCurrent ? playback.pausedMs : nil,
                                                 karaokeOffsetMs: karaokeOffset,
                                                 showsTimeColumn: showsTimeColumn,
-                                                canSeek: canSeek, onSeek: onSeek,
+                                                canSeek: canSeek, onSeek: { ms in
+                                                    if DebugDeepLinks.isEnabled { LyricsPreviewClickProbe.seekedRow = index }
+                                                    onSeek(ms)
+                                                },
                                                 compare: compare.flatMap { $0.indices.contains(index) ? $0[index] : nil },
                                                 compareCurrentIndex: compare == nil ? nil : comparePosition.index,
                                                 comparePlaying: compare != nil && playback.isPlaying,

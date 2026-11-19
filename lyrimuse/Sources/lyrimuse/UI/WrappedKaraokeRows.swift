@@ -1,5 +1,6 @@
 import AppKit
 import LyrimuseCore
+import os
 import SwiftUI
 
 // 悬浮歌词「长句处理 = 换行」时带逐字填色的主行:按可用宽度把这一句切成几行,每一行是一条
@@ -279,6 +280,7 @@ final class WrappedKaraokeRowsView: NSView {
             pending?.targets = targets
             return
         }
+        if DebugDeepLinks.isEnabled { WrappedRowImageCache.logLookup(targets.map(\.spec), scale: scale, fresh: rowViews.isEmpty) }
         // 缓存里有这一行的墨迹就不再量:上下交替时开唱的那一句上一拍作为下一句排过、画过(04 章决策 111)。
         let geometries = targets.map {
             OverlayLyricScrollView.geometry(spec: $0.spec, scale: scale,
@@ -449,6 +451,48 @@ enum WrappedRowImageCache {
 
     static func sameImageKey(_ a: OverlayScrollingLyricRow.Spec, _ b: OverlayScrollingLyricRow.Spec) -> Bool {
         OverlayScrollingLyricRow.Spec.sameImageKey(a, b)
+    }
+
+    private static let logger = Logger(subsystem: LyrimuseIdentity.logSubsystem, category: "wrapped-rows")
+
+    /// 调试深链开着时每排一句记一行:各行命没命中;没命中的跟缓存里字最像的那一条比,哪几项不同。
+    static func logLookup(_ specs: [OverlayScrollingLyricRow.Spec], scale: CGFloat, fresh: Bool) {
+        let parts = specs.map { spec -> String in
+            let text = spec.words.map(\.text).joined()
+            if images(for: spec, scale: scale) != nil { return "hit[\(text)]" }
+            let near = entries.filter { $0.geometry.scale == scale }
+                .max { overlap($0.spec, spec) < overlap($1.spec, spec) }
+            guard let near else { return "miss[\(text)] empty" }
+            let nearText = near.spec.words.map(\.text).joined()
+            return "miss[\(text)] near[\(nearText)] diff=\(differences(near.spec, spec).joined(separator: ","))"
+        }
+        logger.notice("lookup fresh=\(fresh, privacy: .public) cached=\(entries.count, privacy: .public) \(parts.joined(separator: " | "), privacy: .public)")
+    }
+
+    private static func overlap(_ a: OverlayScrollingLyricRow.Spec, _ b: OverlayScrollingLyricRow.Spec) -> Int {
+        Set(a.words.map(\.text)).intersection(b.words.map(\.text)).count
+    }
+
+    private static func differences(_ a: OverlayScrollingLyricRow.Spec, _ b: OverlayScrollingLyricRow.Spec) -> [String] {
+        var out: [String] = []
+        if a.lineKey != b.lineKey { out.append("lineKey(\(a.lineKey)|\(b.lineKey))") }
+        if a.words.map(\.text) != b.words.map(\.text) { out.append("words") }
+        if a.groups?.map(\.romanization) != b.groups?.map(\.romanization) || (a.groups == nil) != (b.groups == nil) { out.append("groups") }
+        if a.romaGap != b.romaGap { out.append("romaGap") }
+        if a.font != b.font { out.append("font(\(a.font.fontName) \(a.font.pointSize)|\(b.font.fontName) \(b.font.pointSize))") }
+        if a.romaFont != b.romaFont { out.append("romaFont") }
+        if a.baseColor != b.baseColor { out.append("baseColor(\(a.baseColor)|\(b.baseColor))") }
+        if a.fillColor != b.fillColor { out.append("fillColor(\(a.fillColor)|\(b.fillColor))") }
+        if a.romaBaseColor != b.romaBaseColor { out.append("romaBaseColor") }
+        if a.romaFillColor != b.romaFillColor { out.append("romaFillColor") }
+        if a.stroke != b.stroke { out.append("stroke") }
+        if a.alignment != b.alignment { out.append("alignment") }
+        if a.shadow != b.shadow { out.append("shadow") }
+        if a.edgeFadeWidth != b.edgeFadeWidth { out.append("edgeFadeWidth") }
+        if a.translation != b.translation { out.append("translation") }
+        if a.rainbow != b.rainbow { out.append("rainbow") }
+        if out.isEmpty, !sameImageKey(a, b) { out.append("other") }
+        return out
     }
 }
 

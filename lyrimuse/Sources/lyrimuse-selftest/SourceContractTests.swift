@@ -2983,6 +2983,20 @@ func runSourceContractSurfaceTests() {
                     [true, true, true, true, true, true, true, false],
                     "换句开销: 换行逐字行的墨迹出框随长图缓存,折行几何按规格和宽度记住")
         let overlayView = read("LyricsOverlayView.swift")
+        // 关掉 / 自动收起的悬浮歌词换句时不重求 body:窄订阅代理换句才变的那几项走闸,窗口上屏之前开闸、收走之后关闸(05 章决策 157)。
+        let overlayFeedView = read("LyricsOverlayView.swift")
+        let overlayController = read("LyricsOverlayWindowController.swift")
+        let gatedOverlayFields = ["currentLine", "lineIndex", "nextLineText", "nextLineSide", "nextLineRomanization",
+                                  "nextLineTranslation", "currentLineWindow", "nextLineWordGroups", "nextLineWords",
+                                  "currentLineFillSettled", "rawGapWindow", "inMarkedInterlude"]
+        expectEqual(gatedOverlayFields.filter { !overlayFeedView.contains("gated(by: live, assign: \\.\($0), on: self)") }, [],
+                    "换句停发: 悬浮歌词换句才变的几项都走闸")
+        expectEqual(gatedOverlayFields.filter { overlayFeedView.contains("self?.\($0) = $0") }, [],
+                    "换句停发: 悬浮歌词换句才变的几项没有绕过闸的直写")
+        expectEqual([sourceHas(overlayFeedView, ".onAppear { playback.follow(overlayController.feedGate) }"),
+                     sourceHas(overlayController, "var feedGate: SurfaceFeedGate? { surfaceFeed }"),
+                     sourceHas(overlayController, "if shouldShow {\n surfaceFeed.set(true)\n window?.orderFront(nil)\n } else {\n window?.orderOut(nil)\n surfaceFeed.set(false)")],
+                    [true, true, true], "换句停发: 悬浮歌词真窗口接闸,上屏之前开、收走之后关")
         expectEqual(sourceHas(overlayView, "if animatesLineChange, let words = playback.nextLineWords")
                         && sourceHas(overlayView, "prewarmOnly: true)")
                         && sourceHas(overlayView, ".background { nextMainPrewarm }"), true,
@@ -5180,11 +5194,27 @@ func runSourceContractSettingsTests() {
         // 逐字染色每帧都让整扇窗重排、重算最小尺寸,换句滚动只剩一两帧(11 章决策 187)。
         let quietHost = sourceBody("class QuietHostingView<Content: View>: NSHostingView<Content>", in: previewScroll)
         expectEqual(sourceHas(quietHost, "override var needsUpdateConstraints: Bool {\n get { super.needsUpdateConstraints }\n set { if !newValue { super.needsUpdateConstraints = false } }")
-                    && previewScroll.contains("let host = QuietHostingView<AnyView>(rootView: AnyView(EmptyView()))")
+                    && previewScroll.contains("let host = LyricsPreviewHostingView(rootView: AnyView(EmptyView()))")
+                    && previewScroll.contains("final class LyricsPreviewHostingView: QuietHostingView<AnyView> {")
                     && !previewScroll.contains("NSHostingController")
                     && managerParts.contains("private final class LyricsManagerKaraokeHostingView: QuietHostingView<AnyView> {")
                     && songTable.contains("host = QuietHostingView(rootView: content)"),
                     true, "歌词预览 / 歌词管理列表: 内容宿主、逐字染色宿主、列表单元格都是 QuietHostingView,刷新不往窗口根报约束失效")
+        // 换句滑动那 0.45 秒里 clip view 已在目标位置、图层还在路上:按下鼠标先把滑动停在画面所在处再交给 SwiftUI,命中的是画面上
+        // 那一句;指针移动按画面位置换算(11 章决策 189)。所有行在同一个宿主里,在 hitTest 里挪点没用:SwiftUI 按事件自己的位置判。
+        let previewHost = sourceBody("final class LyricsPreviewHostingView: QuietHostingView<AnyView>", in: previewScroll)
+        expectEqual([sourceHas(previewHost, "override func mouseDown(with event: NSEvent) {\n stopSlide()\n super.mouseDown(with: event)"),
+                     sourceHas(previewHost, "override func rightMouseDown(with event: NSEvent) {\n stopSlide()\n super.rightMouseDown(with: event)"),
+                     sourceHas(previewHost, "guard let offset = shownOffset(), let shifted = Self.shifted(event, by: offset, in: self) else {"),
+                     sourceHas(previewHost, "super.mouseMoved(with: shifted)"),
+                     sourceHas(previewHost, "point.y += view.isFlipped ? offset : -offset"),
+                     sourceHas(previewScroll, "host.stopSlide = { [weak coordinator] in coordinator?.cancelAnimation() }"),
+                     sourceHas(previewScroll, "host.shownOffset = { [weak coordinator] in coordinator?.shownOffset() }"),
+                     sourceHas(sourceBody("func shownOffset() -> CGFloat?", in: previewScroll),
+                               "let offset = shownOriginY(clip) - clip.bounds.origin.y"),
+                     previewScroll.contains("override func hitTest(")],
+                    [true, true, true, true, true, true, true, true, false],
+                    "歌词预览: 换句滑动途中按下鼠标先停在画面所在处,指针移动按画面位置换算,点中、悬停的都是画面上那一句")
         expectEqual(sourceHas(sourceBody("private func updatePosition()", in: managerParts), "playback.tracksCurrent = highlight == .playingLine"),
                     true, "歌词预览: 按候选自己的时间轴找当前句时不转发播放侧的当前句,换句不多重算一遍")
         expectEqual([previewScroll.contains("coordinator.settle = request.animated ? nil : request"),

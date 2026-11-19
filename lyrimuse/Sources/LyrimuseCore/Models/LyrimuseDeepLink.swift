@@ -140,6 +140,11 @@ public enum LyrimuseDeepLink: Equatable, Sendable {
         /// 动作原样交给 App(`LyricsManagerDebugOp`)。歌词管理要开着。`selectrows:0,1,2` 按不分组的列表行号多选,
         /// `batch:instrumental` 同多选面板「全部标为纯音乐」。
         case managerList(op: String)
+        /// 歌词预览下一次跟随换句开始滑动 `delayMs` 毫秒后,往可视区正中(往下挪 `dy` 点)此刻画着的那一行的时间按钮点一下,
+        /// 跟真点击同一条路;画面上是哪一行、按落点算是哪一行、跳到了哪一行写进 `preview-click.json`
+        /// (`debug/preview-click[?delay=<毫秒>&dy=<点>]`,默认 150 毫秒、0 点)。预览要开着、在跟随。见 11 章决策 189。
+        case previewClick(delayMs: Int, dy: Int)
+        public static let defaultPreviewClickDelayMs = 150
         /// 主线程心跳(`debug/main-thread-gaps?on=1|0[&min=<毫秒>]`):每 10 毫秒一拍,两拍隔了 `min`(默认 100)毫秒以上记一行
         /// `gap <毫秒> ms after [<最近一次 manager-list 动作>]`,量一个动作让主线程停了多久。
         case mainThreadGaps(on: Bool, minMs: Int? = nil)
@@ -533,6 +538,11 @@ public enum LyrimuseDeepLink: Equatable, Sendable {
         case ("debug", "/manager-list"):
             guard let op = value("op"), !op.isEmpty else { return nil }
             self = .debug(.managerList(op: op))
+        case ("debug", "/preview-click"):
+            let delay = value("delay").map { Int($0) } ?? DebugCommand.defaultPreviewClickDelayMs
+            let dy = value("dy").map { Int($0) } ?? 0
+            guard let delay, (0...2_000).contains(delay), let dy else { return nil }
+            self = .debug(.previewClick(delayMs: delay, dy: dy))
         case ("debug", "/main-thread-gaps"):
             guard let on = value("on").flatMap(Self.parseBool) else { return nil }
             self = .debug(.mainThreadGaps(on: on, minMs: value("min").flatMap { Int($0) }.flatMap { $0 > 0 ? $0 : nil }))
@@ -1047,6 +1057,9 @@ public enum LyrimuseDeepLink: Equatable, Sendable {
             case let .managerList(op):
                 components.path = "/manager-list"
                 components.queryItems = [URLQueryItem(name: "op", value: op)]
+            case let .previewClick(delayMs, dy):
+                components.path = "/preview-click"
+                components.queryItems = [URLQueryItem(name: "delay", value: String(delayMs)), URLQueryItem(name: "dy", value: String(dy))]
             case let .mainThreadGaps(on, minMs):
                 components.path = "/main-thread-gaps"
                 components.queryItems = [URLQueryItem(name: "on", value: on ? "1" : "0")]

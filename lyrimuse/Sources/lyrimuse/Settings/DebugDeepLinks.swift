@@ -294,6 +294,9 @@ enum DebugDeepLinks {
         case .releaseClosedWindows:
             ClosedWindowContent.releaseDeferred(reason: "debug")
             logger.notice("debug release closed windows")
+        case let .previewClick(delayMs, dy):
+            LyricsPreviewClickProbe.arm(delayMs: delayMs, dy: CGFloat(dy))
+            logger.notice("debug preview click armed delay=\(delayMs, privacy: .public) dy=\(dy, privacy: .public)")
         case let .managerList(op):
             MainThreadGapProbe.label = op
             logger.notice("debug manager list op=\(op, privacy: .public)")
@@ -707,6 +710,19 @@ enum DebugDeepLinks {
             } catch {
                 logger.error("debug playcount family failed: \(error.localizedDescription, privacy: .public)")
             }
+        }
+    }
+
+    /// 一份调试结果写进 `outputDir` 下的 `name`,写完记一行日志。
+    static func writeJSON(_ object: [String: Any], name: String) {
+        let url = outputDir.appendingPathComponent(name)
+        do {
+            try FileManager.default.createDirectory(at: outputDir, withIntermediateDirectories: true)
+            let data = try SafeSerialization.jsonDataThrowing(object, options: [.prettyPrinted, .sortedKeys])
+            try data.write(to: url, options: .atomic)
+            logger.notice("debug \(name, privacy: .public) written")
+        } catch {
+            logger.error("debug \(name, privacy: .public) failed: \(error.localizedDescription, privacy: .public)")
         }
     }
 

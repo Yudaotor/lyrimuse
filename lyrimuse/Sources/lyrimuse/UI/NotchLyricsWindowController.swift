@@ -32,6 +32,9 @@ import os
 final class NotchLyricsWindowController: NSWindowController, ObservableObject, NotchChromeSource {
     static let shared = NotchLyricsWindowController(pinnedScreenID: nil)
     private(set) lazy var chromeChanges = NotchChromeChanges(self)
+    /// 窗口摆没摆出来:orderFront 之前置真、orderOut 之后置假(`syncFeedGate`),卡片的窄订阅代理按它停发换句。
+    private let surfaceFeed = SurfaceFeedGate()
+    var feedGate: SurfaceFeedGate? { surfaceFeed }
 
     // 真值在 AppSettings.notchOverlayEnabled,这里只是它的镜像(菜单栏要观察这个
     // @Published)。只能经 setVisible(_:) 改,那是打开/关闭的唯一入口。
@@ -1435,6 +1438,7 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
     private func updateActualVisibility(isPlayingNow: Bool) {
         // 跟随当前窗口:显示状态定下来之后同步要不要盯焦点屏(主实例才盯),换屏放在这一步执行完之后。
         defer {
+            syncFeedGate()
             if pinnedScreenID == nil {
                 shownApartFromFullScreen = NotchVisibility.shouldShow(
                     isVisible: isVisible, hideWhenNotPlaying: hideWhenNotPlaying, isPlaying: isPlayingNow,
@@ -1462,6 +1466,8 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
                 Self.hoverLog.notice("window show replayReveal=\(replayReveal, privacy: .public)")
                 // orderFrontRegardless(),不是 orderFront(nil)——这个 App 是 .accessory 策略、
                 // 从不激活成前台 App,只有它能不看"当前是否是活跃 App"这个前提就把窗口调到最前。
+                // 先补发当前句再上屏:同一拍里 SwiftUI 看到的就是新的那一句,不先露一帧收起前的旧句。
+                surfaceFeed.set(true)
                 window?.orderFrontRegardless()
                 // 显式管点击时收起期间设成了放过,指针停着不动也要按此刻的位置对一次。
                 passThrough?.refresh()
@@ -1512,6 +1518,7 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
                 }
                 self.lastAppliedShouldShow = false
                 self.window?.orderOut(nil)   // isVanished 保持 true:下次露面从刘海里长出来
+                self.syncFeedGate()
                 self.resetHoverAfterHide()
                 Self.hoverLog.notice("window hide after vanish")
             }
@@ -1712,6 +1719,11 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
             return ScreenIdentity.screen(withID: pinnedScreenID)
         }
         return Self.targetScreen()
+    }
+
+    /// 窗口不在屏上时卡片停发换句(`SurfaceFeedGate`)。只往假的方向跟:置真要在 orderFront 之前,由显示那一步自己做。
+    private func syncFeedGate() {
+        if window?.isVisible != true { surfaceFeed.set(false) }
     }
 
     /// 副本建出来、或「灵动岛歌词」总开关翻转时,由 NotchMirrorManager 调:按当前偏好整体同步一遍。之后自动隐藏、宽度的变化

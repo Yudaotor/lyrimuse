@@ -22,6 +22,8 @@ struct LyricsPreviewScrollRequest: Equatable {
 /// 别换回 SwiftUI `ScrollView` + `scrollTo`(滚动途中会掉帧,见 11 章决策 146),也别换回 clip view 的 animator:它在主线程上
 /// 逐帧推,换句那一刻主线程一忙就被吃掉前半截、一下跳过去(见 11 章决策 187)。
 ///
+/// 滑动途中 clip view 已在目标位置、图层还在路上:点击和悬停按画面位置判(`LyricsPreviewHostingView`)。
+///
 /// 行的位置和内容总高都由内容自己上报(`lyricsPreviewRowFrame`、`LyricsPreviewContentHeightKey`);还没量到就先记着,量到了再滚。
 /// 嵌套的托管视图不继承外面的 SwiftUI 环境,行里要用的环境值由调用方挂在 `content` 上。
 struct LyricsPreviewScrollView<Content: View>: NSViewRepresentable {
@@ -50,7 +52,7 @@ struct LyricsPreviewScrollView<Content: View>: NSViewRepresentable {
         scrollView.topFadeHeight = topFadeHeight
         let document = LyricsPreviewDocumentView()
         scrollView.documentView = document
-        let host = QuietHostingView<AnyView>(rootView: AnyView(EmptyView()))
+        let host = LyricsPreviewHostingView(rootView: AnyView(EmptyView()))
         host.sizingOptions = []
         // 嵌套的托管视图别吃窗口的安全区,理由同 OverlayLineChangeStage(04 章决策 79)。
         host.safeAreaRegions = []
@@ -58,6 +60,8 @@ struct LyricsPreviewScrollView<Content: View>: NSViewRepresentable {
         coordinator.scrollView = scrollView
         coordinator.document = document
         coordinator.host = host
+        host.shownOffset = { [weak coordinator] in coordinator?.shownOffset() }
+        host.stopSlide = { [weak coordinator] in coordinator?.cancelAnimation() }
         scrollView.onUserScroll = { [weak coordinator] in
             coordinator?.cancelAnimation()
             coordinator?.settle = nil
@@ -105,7 +109,7 @@ struct LyricsPreviewScrollView<Content: View>: NSViewRepresentable {
     final class Coordinator {
         weak var scrollView: LyricsPreviewNSScrollView?
         weak var document: LyricsPreviewDocumentView?
-        var host: QuietHostingView<AnyView>?
+        var host: LyricsPreviewHostingView?
         var onUserScroll: () -> Void = {}
         var handledSerial: Int?
         var pending: LyricsPreviewScrollRequest?
@@ -178,6 +182,61 @@ struct LyricsPreviewScrollView<Content: View>: NSViewRepresentable {
             clip.scroll(to: origin)
             scrollView.reflectScrolledClipView(clip)
             if animated { slide(clip, by: shown - origin.y) }
+            if DebugDeepLinks.isEnabled, animated, let probe = LyricsPreviewClickProbe.take() {
+                DispatchQueue.main.asyncAfter(deadline: .now() + .milliseconds(probe.delayMs)) { [weak self] in
+                    self?.probeClick(dy: probe.dy)
+                }
+            }
+        }
+
+        /// 画面位置减落点位置(文档坐标,向下为正):滑动还在走时非 nil。
+        func shownOffset() -> CGFloat? {
+            guard let scrollView, let layer = scrollView.contentView.layer,
+                  layer.animation(forKey: Self.slideKey) != nil else { return nil }
+            let clip = scrollView.contentView
+            let offset = shownOriginY(clip) - clip.bounds.origin.y
+            return abs(offset) < 0.5 ? nil : offset
+        }
+
+        /// `debug/preview-click`:往可视区正中(加 `dy`)此刻画着的那一行的时间按钮点一下,跟真点击同一条路
+        /// (按窗口命中、交给命中的视图按下再松开),记下画面上是哪一行、按落点算是哪一行、命中了谁。
+        private func probeClick(dy: CGFloat) {
+            guard let scrollView, let window = scrollView.window, let host, var top = window.contentView else { return }
+            while let parent = top.superview { top = parent }
+            let clip = scrollView.contentView
+            let target = clip.bounds.origin.y
+            let shown = shownOriginY(clip)
+            let probeY = clip.bounds.height / 2 + dy
+            // 行间空白算上面那一行。
+            func row(at y: CGFloat) -> Int? { rowFrames.filter { $0.value.minY <= y }.max { $0.value.minY < $1.value.minY }?.key }
+            guard let drawnRow = row(at: shown + probeY), let frame = rowFrames[drawnRow] else {
+                LyricsPreviewClickProbe.finish(["error": "no row at probe point"])
+                return
+            }
+            // 时间按钮在行首那一栏、靠右排(`LyricsCompareLayout.timeWidth`),点在字上;纵向点在第一行字的中间。
+            let drawnY = frame.minY + 10
+            let docPoint = NSPoint(x: frame.minX + LyricsCompareLayout.timeWidth - 20, y: drawnY - shown + target)
+            let windowPoint = host.convert(docPoint, to: nil)
+            let modelRow = row(at: docPoint.y)
+            let hit = top.hitTest(windowPoint)
+            let report: [String: Any] = [
+                "sliding": abs(shown - target) >= 0.5, "shownY": shown, "targetY": target,
+                "drawnRow": drawnRow, "modelRow": modelRow.map { $0 as Any } ?? NSNull(),
+                "hitView": hit.map { String(describing: type(of: $0)) } ?? "nil",
+            ]
+            LyricsPreviewClickProbe.seekedRow = nil
+            if let hit {
+                for type in [NSEvent.EventType.leftMouseDown, .leftMouseUp] {
+                    guard let event = NSEvent.mouseEvent(
+                        with: type, location: windowPoint, modifierFlags: [], timestamp: ProcessInfo.processInfo.systemUptime,
+                        windowNumber: window.windowNumber, context: nil, eventNumber: 0, clickCount: 1, pressure: 1) else { continue }
+                    if type == .leftMouseDown { hit.mouseDown(with: event) } else { hit.mouseUp(with: event) }
+                }
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                let seeked: Any = LyricsPreviewClickProbe.seekedRow.map { $0 as Any } ?? NSNull()
+                LyricsPreviewClickProbe.finish(report.merging(["seekedRow": seeked]) { $1 })
+            }
         }
 
         /// clip view 的图层此刻画在屏上的滚动位置(滑动动画走到哪了);图层的 bounds 原点就是 clip view 的 bounds 原点。
@@ -211,6 +270,94 @@ struct LyricsPreviewScrollView<Content: View>: NSViewRepresentable {
             clip.scroll(to: NSPoint(x: 0, y: shown.rounded()))
             scrollView.reflectScrolledClipView(clip)
         }
+    }
+}
+
+/// 预览的内容宿主。换句滚动时 clip view 先落到目标位置、图层再从旧位置滑过来(`slide`),那 0.45 秒里
+/// 画面和点击判定差一个滑动量:按下鼠标先把滑动停在画面所在处再往下交(命中的就是画面上那一句,按住时它也不再挪),
+/// 指针移动按画面位置换算后交给 SwiftUI(悬停标记画在指针底下那一行)。只挪事件、不碰滑动本身,见 11 章决策 189。
+final class LyricsPreviewHostingView: QuietHostingView<AnyView> {
+    /// 画面位置减落点位置(文档坐标,向下为正);没在滑为 nil。
+    var shownOffset: () -> CGFloat? = { nil }
+    /// 把还在走的滑动停在画面所在处。
+    var stopSlide: () -> Void = {}
+    /// 这次滑动里按画面位置换算过悬停:滑完按真实位置再对一次,指针不动时悬停也落到停稳后指针底下那一行。
+    private var hoverResyncPending = false
+
+    override func mouseDown(with event: NSEvent) {
+        stopSlide()
+        super.mouseDown(with: event)
+    }
+
+    override func rightMouseDown(with event: NSEvent) {
+        stopSlide()
+        super.rightMouseDown(with: event)
+    }
+
+    override func otherMouseDown(with event: NSEvent) {
+        stopSlide()
+        super.otherMouseDown(with: event)
+    }
+
+    override func mouseMoved(with event: NSEvent) {
+        guard let offset = shownOffset(), let shifted = Self.shifted(event, by: offset, in: self) else {
+            super.mouseMoved(with: event)
+            return
+        }
+        super.mouseMoved(with: shifted)
+        guard !hoverResyncPending else { return }
+        hoverResyncPending = true
+        DispatchQueue.main.asyncAfter(deadline: .now() + LyricsPreviewScrollView<EmptyView>.scrollAnimationDuration) { [weak self] in
+            self?.resyncHover()
+        }
+    }
+
+    private func resyncHover() {
+        hoverResyncPending = false
+        guard let window, shownOffset() == nil else { return }
+        let point = window.mouseLocationOutsideOfEventStream
+        guard visibleRect.contains(convert(point, from: nil)),
+              let event = NSEvent.mouseEvent(with: .mouseMoved, location: point, modifierFlags: [],
+                                             timestamp: ProcessInfo.processInfo.systemUptime,
+                                             windowNumber: window.windowNumber, context: nil, eventNumber: 0,
+                                             clickCount: 0, pressure: 0) else { return }
+        super.mouseMoved(with: event)
+    }
+
+    /// 同一个事件挪到画面上那一点:文档坐标里纵向加 `offset`。
+    static func shifted(_ event: NSEvent, by offset: CGFloat, in view: NSView) -> NSEvent? {
+        var point = view.convert(event.locationInWindow, from: nil)
+        point.y += view.isFlipped ? offset : -offset
+        return NSEvent.mouseEvent(with: event.type, location: view.convert(point, to: nil), modifierFlags: event.modifierFlags,
+                                  timestamp: event.timestamp, windowNumber: event.windowNumber, context: nil,
+                                  eventNumber: event.eventNumber, clickCount: event.clickCount, pressure: event.pressure)
+    }
+}
+
+/// `debug/preview-click` 的一次性请求和结果:下一次跟随滑动开始 `delayMs` 毫秒后点一下(`probeClick`),结果写进
+/// `preview-click.json`。只在调试深链开着时用。
+@MainActor
+enum LyricsPreviewClickProbe {
+    struct Request {
+        var delayMs: Int
+        var dy: CGFloat
+    }
+
+    private static var pending: Request?
+    /// 预览的时间按钮最近一次跳到第几行(`LyricsManagerPreviewList` 报)。
+    static var seekedRow: Int?
+
+    static func arm(delayMs: Int, dy: CGFloat) {
+        pending = Request(delayMs: delayMs, dy: dy)
+    }
+
+    static func take() -> Request? {
+        defer { pending = nil }
+        return pending
+    }
+
+    static func finish(_ report: [String: Any]) {
+        DebugDeepLinks.writeJSON(report, name: "preview-click.json")
     }
 }
 

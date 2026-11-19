@@ -1,3 +1,4 @@
+import Combine
 import LyrimuseCore
 import Foundation
 import CoreGraphics
@@ -2448,6 +2449,50 @@ func runNotchTests() {
                      sourceHas(controller, "private(set) lazy var chromeChanges = NotchChromeChanges(self)")],
                     [false, true, true, true, true, true, true, true],
                     "换句开销: NotchLyricsView 不是泛型,承载方的变更经 chromeChanges 原样转发")
+        // 关掉的、自动收起的显示面换句时不重求 body:窄订阅代理换句才变的那几项按窗口摆没摆出来停发,摆出来之前同一拍补发
+        // 最新一份(05 章决策 157)。
+        do {
+            final class FeedSink {
+                var line: String? { didSet { writes += 1 } }
+                var writes = 0
+            }
+            let source = CurrentValueSubject<String?, Never>("a")
+            let gate = SurfaceFeedGate()
+            let sink = FeedSink()
+            let subscription = source.gated(by: gate.$isLive, assign: \FeedSink.line, on: sink)
+            source.send("b")
+            let live = (sink.line, sink.writes)
+            gate.set(false)
+            source.send("c")
+            source.send("d")
+            let held = (sink.line, sink.writes)
+            gate.set(true)
+            let resumed = (sink.line, sink.writes)
+            gate.set(false)
+            gate.set(true)
+            source.send("d")
+            let unchanged = (sink.line, sink.writes)
+            withExtendedLifetime(subscription) {}
+            expectEqual([live.0, held.0, resumed.0, unchanged.0], ["b", "b", "d", "d"],
+                        "换句停发: 摆着时照发,收起时停在收起前那一句,摆出来那一刻补发最新的")
+            expectEqual([live.1, held.1, resumed.1, unchanged.1], [2, 2, 3, 3],
+                        "换句停发: 收起期间一次都不写,摆出来只补一次,跟已发过的一样不再写")
+        }
+        let notchFeed = read("NotchPlayback.swift")
+        expectEqual([sourceHas(notchFeed, "init(gate: SurfaceFeedGate? = nil) {\n if let gate { subs.append(gate.$isLive.sink { [live] in live.send($0) }) }"),
+                     notchFeed.contains("gated(by: live, assign: \\.currentLine, on: self)"),
+                     notchFeed.contains("gated(by: live, assign: \\.displayLine, on: self)"),
+                     notchFeed.contains("gated(by: live, assign: \\.secondaryText, on: self)"),
+                     notchFeed.contains("gated(by: live, assign: \\.nextLineText, on: self)"),
+                     notchFeed.contains("gated(by: live, assign: \\.currentLineFillSettled, on: self)"),
+                     notchFeed.contains("self?.displayLine = $0") || notchFeed.contains("self?.currentLine = $0"),
+                     sourceHas(viewStruct, "_playback = StateObject(wrappedValue: NotchPlayback(gate: controller.feedGate))"),
+                     sourceHas(controller, "var feedGate: SurfaceFeedGate? { surfaceFeed }"),
+                     sourceHas(controller, "surfaceFeed.set(true)\n window?.orderFrontRegardless()"),
+                     sourceHas(controller, "defer {\n syncFeedGate()"),
+                     sourceHas(controller, "self.window?.orderOut(nil) // isVanished 保持 true:下次露面从刘海里长出来\n self.syncFeedGate()")],
+                    [true, true, true, true, true, true, false, true, true, true, true, true],
+                    "换句停发: 灵动岛换句才变的几项走闸,窗口上屏之前开闸、收走之后关闸")
         expectEqual(viewStruct.contains("private var cardLayerActive"), false,
                     "停表契约: NotchLyricsView 不许在自己的属性上按层读 notchCardLayerActive(那样藏着的那份永不停表)")
         expectEqual(view.components(separatedBy: "NotchLayerActiveReader {").count - 1 >= 2, true,

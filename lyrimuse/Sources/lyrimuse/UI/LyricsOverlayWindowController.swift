@@ -42,6 +42,9 @@ private let overlayDefaultHeight: CGFloat = 120
 final class LyricsOverlayWindowController: NSWindowController, ObservableObject, OverlayChromeSource {
     /// 见 `OverlayChromeSource.isSurfaceVisible`。默认 true:宁可多跑,不能把看得见的窗口停表。
     @Published private(set) var isSurfaceVisible = true
+    /// 窗口摆没摆出来:orderFront 之前置真、orderOut 之后置假,`OverlayPlayback` 按它停发换句(`SurfaceFeedGate`)。
+    private let surfaceFeed = SurfaceFeedGate()
+    var feedGate: SurfaceFeedGate? { surfaceFeed }
     private var occlusionObserver: NSObjectProtocol?
     private var screenLockObserver: AnyCancellable?
 
@@ -783,7 +786,14 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject,
                                                                 coveredByFullScreen: false,
                                                                 hideWhenNotPlaying: hideWhenNotPlaying, isPlaying: isPlayingNow,
                                                                 hiddenForAd: hiddenForAd)
-        if shouldShow { window?.orderFront(nil) } else { window?.orderOut(nil) }
+        // 先补发当前句再上屏,同一拍里 SwiftUI 看到的就是新的那一句;收起之后停发。
+        if shouldShow {
+            surfaceFeed.set(true)
+            window?.orderFront(nil)
+        } else {
+            window?.orderOut(nil)
+            surfaceFeed.set(false)
+        }
         syncActiveScreenTracking()
         refreshSurfaceVisible()
         // 兜底:万一上屏之后系统没发遮挡变化通知,这里过一小会儿再核一次,别让填色停在「看不见」。
