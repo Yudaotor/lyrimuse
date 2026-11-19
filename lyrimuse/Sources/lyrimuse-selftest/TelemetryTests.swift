@@ -1379,7 +1379,7 @@ func runTelemetryTests() {
                     && sourceHas(sourceBody("private func noteLyricsTelemetry(", in: source), "source: result == .plain ? plainSource : source"),
                     true, "接线: 来源取显示的那份(播放器自家那份优先),纯文本档取纯文本的来源")
         let window = sourceText("lyrimuse/UI/LyricsWindowView.swift")
-        expectEqual(sourceHas(sourceBody("static func markOpen()", in: window), "guard !UserDefaults.standard.bool(forKey: openKey) else { return }")
+        expectEqual(sourceHas(sourceBody("static func markOpen()", in: window), "guard LyricsWindowOpenRecord.markOpen(.standard, invisibly: invisibly) else { return }")
                     && sourceHas(sourceBody("static func markOpen()", in: window), "TelemetryActivity.shared.noteAction(.lyricsWindow)"),
                     true, "接线: 歌词窗口从没开变成开着才记一次")
         expectEqual(window.contains("UserDefaults.standard.set(true, forKey: LyricsWindowSession.openKey)"), false,

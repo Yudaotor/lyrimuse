@@ -604,6 +604,7 @@ enum DebugDeepLinks {
                 "overlayRomanization": s.overlayShowRomanization, "windowRomanization": s.showRomanization,
                 "lyricsWindowOpen": defaults.bool(forKey: LyricsWindowSession.openKey),
                 "lyricsWindowMini": defaults.bool(forKey: LyricsWindowSession.miniModeKey),
+                "lyricsWindowInvisibleOpen": LyricsWindowOpenRecord.isInvisibleOpen(defaults),
             ],
             "appearance": ["mode": s.appearanceMode.rawValue, "app": NSApp.effectiveAppearance.name.rawValue,
                            "systemDark": SystemAppearanceStore.shared.isDark,

@@ -143,6 +143,7 @@ enum ConfigPortability {
         // 不是偏好。带去新机器等于一导入完重启就弹出一扇窗。
         "np:lyricsWindowOpen",
         "np:lyricsWindowMiniMode",
+        LyricsWindowOpenRecord.invisibleOpenKey,
         // Discord「暂时隐藏」到几点(DiscordPresenceController.hiddenUntilKey):眼下这一段的状态,不是偏好。
         "np:discordHiddenUntil",
         "np:launchAtLoginEnabled",

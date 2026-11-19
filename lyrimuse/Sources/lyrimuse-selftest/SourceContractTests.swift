@@ -3181,7 +3181,7 @@ func runSourceContractSurfaceTests() {
                 expectEqual(view.contains("&& a.suspendsBlur == b.suspendsBlur"), true,
                             "歌词窗口拖动: 行的 Equatable 比较带上 suspendsBlur")
                 // 歌词窗口跨重启接着上次:开着没有、是不是迷你(07 章决策 72)。
-                expectEqual(view.contains("if !AppExit.isTerminating, !handoff { UserDefaults.standard.set(false, forKey: LyricsWindowSession.openKey) }"), true,
+                expectEqual(view.contains("if !AppExit.isTerminating, !handoff { LyricsWindowSession.forgetOpen() }"), true,
                             "歌词窗口重开: 退出 App 途中、两扇窗交接时的关窗都不清「开着」标记")
                 expectEqual(sourceHas(view, "if !isMiniPanel, UserDefaults.standard.bool(forKey: LyricsWindowSession.miniModeKey) {\n            DispatchQueue.main.async { [weak self] in self?.toggleMini() }"), true,
                             "歌词窗口重开: 首次 attach 按上次状态进迷你")
@@ -3196,7 +3196,7 @@ func runSourceContractSurfaceTests() {
                             "开窗形态: 窗口已经开着时收通知当场切")
                 // attach 会被 updateNSView 反复调用:「开着」只在真的在屏上、而且值不一样时才写。
                 expectEqual(view.contains("guard window.isVisible else { return }\n        LyricsWindowSession.markOpen()")
-                            && view.contains("guard !UserDefaults.standard.bool(forKey: openKey) else { return }\n        UserDefaults.standard.set(true, forKey: openKey)"), true,
+                            && view.contains("guard LyricsWindowOpenRecord.markOpen(.standard, invisibly: invisibly) else { return }"), true,
                             "歌词窗口重开: 记「开着」只在窗口在屏上、且原来不是 true 时写")
                 expectEqual(sourceHas(view, "            UserDefaults.standard.set(true, forKey: LyricsWindowSession.openKey)\n            return\n"), false,
                             "歌词窗口重开: 同一扇窗再次 attach 时别无条件写「开着」(关窗后保活的视图树一刷新就会写回去)")
@@ -3229,8 +3229,9 @@ func runSourceContractSurfaceTests() {
                                 "歌词窗口重开: 进退出流程第一件事就置 isTerminating")
                 }
                 if let portability = read("Settings/ConfigPortability.swift") {
-                    expectEqual(portability.contains("\"np:lyricsWindowOpen\",") && portability.contains("\"np:lyricsWindowMiniMode\","), true,
-                                "歌词窗口重开: 两个会话状态键不进配置备份")
+                    expectEqual(portability.contains("\"np:lyricsWindowOpen\",") && portability.contains("\"np:lyricsWindowMiniMode\",")
+                                && portability.contains("LyricsWindowOpenRecord.invisibleOpenKey,"), true,
+                                "歌词窗口重开: 会话状态键(含隐身开窗标记)不进配置备份")
                 }
                 if let mini = read("UI/MiniIdleStandby.swift") {
                     expectEqual(mini.contains("在 %@ 播放任意歌曲"), false,

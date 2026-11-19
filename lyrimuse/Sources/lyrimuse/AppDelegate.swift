@@ -41,6 +41,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // 从磁盘映像 / 临时位置启动时先问要不要移走;必须在请走旧实例之前:移走就从新位置重开,不该先把在跑的那份关掉。
         AppLocationPrompt.runAtLaunch()
         terminateOlderInstances()
+        // 上次开着的歌词窗口是隐身开的就记成没开,要赶在启动重开、深链读「开着」之前。
+        LyricsWindowSession.settleAtLaunch()
         // 钥匙串保险箱在后台先读一次(起 `security` 子进程,一次几十毫秒,钥匙串忙时更久):读到就进缓存,
         // ConfigStore / AppleMusicConnection 第一次加载时在主线程上只读缓存。读不出(锁着)不进缓存,照旧由它们自己再读。
         // 保存凭据仍在主线程上同步写(`ConfigStore.persistFile` 要当场知道写没写成),见 14 章决策 194。

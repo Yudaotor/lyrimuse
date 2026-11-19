@@ -56,6 +56,11 @@ enum WindowActivation {
         return Date() < until
     }
 
+    /// 隐身开窗那一小段里、而且这次要开 `scene`。
+    static func isInvisible(scene: String) -> Bool {
+        isInvisible && invisibleScenes.contains(scene)
+    }
+
     static func beginBackground() {
         backgroundUntil = Date().addingTimeInterval(backgroundWindow)
     }

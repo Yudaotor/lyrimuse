@@ -315,22 +315,30 @@ enum LyricsWindowMiniMetrics {
 }
 
 /// 歌词窗口跨重启要接着的两件事:退出时开着没有、是不是迷你。位置尺寸不在这里(LyricsWindowController 自己存)。
+/// 两个键怎么读写、隐身开窗留的标记在 Core `LyricsWindowOpenRecord`。
 enum LyricsWindowSession {
-    /// 窗口此刻开着没有:打开写 true,用户关窗写 false,退出 App 途中的关窗不算(那是"开着退出")。
-    /// 启动时据它把窗口重新开出来(见 SceneActionRegistrar)。
-    static let openKey = "np:lyricsWindowOpen"
+    /// 窗口此刻开着没有。启动时据它把窗口重新开出来(见 SceneActionRegistrar)。
+    static let openKey = LyricsWindowOpenRecord.openKey
     /// 上次是不是迷你:每次切换都写,启动后第一次打开时照这个进(见 LyricsWindowController.attach)。
-    static let miniModeKey = "np:lyricsWindowMiniMode"
+    static let miniModeKey = LyricsWindowOpenRecord.miniModeKey
 
-    static var shouldReopenAtLaunch: Bool { UserDefaults.standard.bool(forKey: openKey) }
+    static var shouldReopenAtLaunch: Bool { LyricsWindowOpenRecord.isOpen(.standard) }
     /// 记「窗口开着」;从没开变成开着时给遥测记一次打开(完整 / 迷你互切、重复 attach 都不算)。
+    /// 隐身开窗那一小段里、或这扇窗正被隐身压着时开出来的,记成隐身开的(重启不重开)。
     static func markOpen() {
-        guard !UserDefaults.standard.bool(forKey: openKey) else { return }
-        UserDefaults.standard.set(true, forKey: openKey)
+        let invisibly = MainActor.assumeIsolated { opensInvisibly }
+        guard LyricsWindowOpenRecord.markOpen(.standard, invisibly: invisibly) else { return }
         TelemetryActivity.shared.noteAction(.lyricsWindow)
     }
-    /// 静默启动这次没重开窗口:把「开着」记成没开,「切换迷你」快捷键和下次启动才按实情判断(`LaunchWindowPlan`)。
-    static func forgetOpen() { UserDefaults.standard.set(false, forKey: openKey) }
+    /// 用户关窗、静默启动这次没重开窗口:把「开着」记成没开,「切换迷你」快捷键和下次启动才按实情判断(`LaunchWindowPlan`)。
+    static func forgetOpen() { LyricsWindowOpenRecord.forget(.standard) }
+    /// 启动时、任何地方读「开着」之前调一次:上次开着的是隐身开的那扇就记成没开,不重开(14 章决策 234)。
+    static func settleAtLaunch() { LyricsWindowOpenRecord.settleAtLaunch(.standard) }
+
+    /// 此刻开歌词窗口算不算隐身:隐身开窗那一小段要开它,或登记的那扇正被隐身压着。
+    @MainActor private static var opensInvisibly: Bool {
+        WindowActivation.isInvisible(scene: "lyrics-window") || window.map(WindowActivation.isHidden) == true
+    }
 
     /// 此刻那扇歌词窗口(控制器 attach 新窗口时登记)。启动重开靠它核对窗口真的上了屏(`LyricsWindowLaunchRestorer`)。
     @MainActor static weak var window: NSWindow?
@@ -380,6 +388,12 @@ enum LyricsWindowSession {
     /// 按要的形态开(请求优先,其次上次的形态,07 章决策 133)。面板开着、请求的是完整尺寸:请求已经发了通知,
     /// 面板自己的控制器收到去切,这里不再开。`openScene` 激活 App 并开场景。
     @MainActor static func open(scene openScene: () -> Void) {
+        // 隐身开窗先记下原本的形态(下面会改写「是不是迷你」);正常打开时隐身开着的那扇从此算用户的。
+        if WindowActivation.isInvisible(scene: "lyrics-window") {
+            LyricsWindowOpenRecord.noteInvisibleOpen(.standard)
+        } else {
+            LyricsWindowOpenRecord.claim(.standard)
+        }
         // 隐身开窗时迷你面板由 `hideNewWindows` 压下去;正常打开时之前被隐身压下去的面板、场景窗还回原层级。
         // 隐身开窗碰上开着的面板时不预先压 SwiftUI 留着的完整那扇:这一下不开它,压着的记录会在用户之后展开时提前还原、闪一下。
         if !(WindowActivation.isInvisible && LyricsMiniPanelHost.panel?.isVisible == true) {
@@ -1325,7 +1339,7 @@ private final class LyricsWindowController: ObservableObject {
                 if let self { LyricsWindowHintSurface.report(false, from: self) }
                 let handoff = self?.handingOff ?? false
                 self?.handingOff = false
-                if !AppExit.isTerminating, !handoff { UserDefaults.standard.set(false, forKey: LyricsWindowSession.openKey) }
+                if !AppExit.isTerminating, !handoff { LyricsWindowSession.forgetOpen() }
                 // 置顶只在这次打开期间有效:用户关掉完整那扇才清(SwiftUI 复用同一扇窗和这份控制器,层级会带到下次)。
                 // 切迷你的交接不算,回到完整尺寸时照旧置顶。
                 if !handoff, !(note.object is LyricsMiniPanel) { self?.setAlwaysOnTop(false) }

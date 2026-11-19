@@ -29,10 +29,69 @@ private func checkLaunchWindowPlan() {
     }
 }
 
+/// 隐身开窗(`invisible=1`)开的歌词窗口重启不重开;用户原本开着的照常重开(14 章决策 234)。
+private func checkLyricsWindowOpenRecord() {
+    typealias R = LyricsWindowOpenRecord
+    func fresh(open: Bool, mini: Bool) -> UserDefaults {
+        let defaults = InMemoryUserDefaults.make()!
+        defaults.set(open, forKey: R.openKey)
+        defaults.set(mini, forKey: R.miniModeKey)
+        return defaults
+    }
+    /// 深链隐身开窗走的那一串:开窗入口先记形态、再改写「是不是迷你」,窗口 attach 时记开着。
+    func openInvisibly(_ defaults: UserDefaults, mini: Bool) {
+        R.noteInvisibleOpen(defaults)
+        defaults.set(mini, forKey: R.miniModeKey)
+        R.markOpen(defaults, invisibly: true)
+    }
+
+    let closed = fresh(open: false, mini: false)
+    openInvisibly(closed, mini: true)
+    expectEqual([R.isOpen(closed), R.isInvisibleOpen(closed)], [true, true], "隐身开窗: 开着期间照实记开着,另记隐身标记")
+    R.settleAtLaunch(closed)
+    expectEqual([R.isOpen(closed), R.isInvisibleOpen(closed), closed.bool(forKey: R.miniModeKey)], [false, false, false],
+                "隐身开窗: 原本没开、隐身开着时重启,启动时记成没开(不重开),形态还回隐身开之前")
+
+    let userOpen = fresh(open: true, mini: false)
+    openInvisibly(userOpen, mini: false)
+    R.markOpen(userOpen, invisibly: true)
+    R.settleAtLaunch(userOpen)
+    expectEqual([R.isOpen(userOpen), R.isInvisibleOpen(userOpen)], [true, false],
+                "隐身开窗: 用户原本开着、验证再隐身操作,重启照原样重开")
+
+    let attachOnly = fresh(open: false, mini: true)
+    expectEqual(R.markOpen(attachOnly, invisibly: true), true, "隐身开窗: 从没开变成开着仍算一次打开")
+    R.settleAtLaunch(attachOnly)
+    expectEqual([R.isOpen(attachOnly), attachOnly.bool(forKey: R.miniModeKey)], [false, true],
+                "隐身开窗: 不经开窗入口、窗口 attach 时才认出隐身的,重启同样不重开")
+
+    let claimed = fresh(open: false, mini: false)
+    openInvisibly(claimed, mini: true)
+    R.claim(claimed)
+    R.settleAtLaunch(claimed)
+    expectEqual([R.isOpen(claimed), claimed.bool(forKey: R.miniModeKey)], [true, true],
+                "隐身开窗: 之后用户正常打开了这扇,算用户的,重启照常重开")
+
+    let closedAfter = fresh(open: false, mini: false)
+    openInvisibly(closedAfter, mini: true)
+    R.forget(closedAfter)
+    expectEqual([R.isOpen(closedAfter), R.isInvisibleOpen(closedAfter), closedAfter.bool(forKey: R.miniModeKey)], [false, false, false],
+                "隐身开窗: 隐身开的那扇关掉,记成没开、形态还回去")
+
+    let normal = fresh(open: false, mini: true)
+    expectEqual(R.markOpen(normal, invisibly: false), true, "正常打开: 从没开变成开着")
+    expectEqual(R.markOpen(normal, invisibly: false), false, "正常打开: 已经开着不再算一次")
+    R.settleAtLaunch(normal)
+    expectEqual([R.isOpen(normal), R.isInvisibleOpen(normal)], [true, false], "正常打开: 重启照常重开")
+    R.forget(normal)
+    expectEqual([R.isOpen(normal), normal.bool(forKey: R.miniModeKey)], [false, true], "正常打开: 关窗只记没开,形态不动")
+}
+
 /// 启动重开歌词窗口(07 章决策 124):开了核对、没上屏再开的状态机,以及 App 侧接线。
 func checkLyricsWindowLaunchRestore() {
     print("\n== 歌词窗口启动重开 ==")
     checkLaunchWindowPlan()
+    checkLyricsWindowOpenRecord()
     typealias R = LyricsWindowLaunchRestore
     let hidden = R.Probe(onScreen: false, stillWanted: true)
     let shown = R.Probe(onScreen: true, stillWanted: true)
@@ -94,9 +153,17 @@ func checkLyricsWindowLaunchRestore() {
                 true, "启动重开: 照 LaunchWindowPlan 办(引导走完、上次开着、没开静默启动才重开;静默启动时把「开着」记成没开),开窗走不激活 App 的那条(决策 123)")
     expectEqual(sourceBytes(actions, contain: "if !settings.hasCompletedOnboarding {"), false,
                 "启动时开窗: 引导也照 LaunchWindowPlan 判,不另写一份条件")
-    expectEqual(sourceBytes(window, contain: "static func forgetOpen() { UserDefaults.standard.set(false, forKey: openKey) }"), true,
+    expectEqual(sourceBytes(window, contain: "static func forgetOpen() { LyricsWindowOpenRecord.forget(.standard) }"), true,
                 "静默启动: 没重开时把「开着」记成没开")
     let delegate = source("lyrimuse/AppDelegate.swift")
+    expectEqual(sourceHas(sourceBody("func applicationWillFinishLaunching(", in: delegate),
+                          "terminateOlderInstances()\n        // 上次开着的歌词窗口是隐身开的就记成没开,要赶在启动重开、深链读「开着」之前。\n        LyricsWindowSession.settleAtLaunch()"),
+                true, "隐身开窗: 启动时最早一拍就把隐身开的那扇记成没开(早于启动重开和深链)")
+    expectEqual(sourceHas(sourceBody("@MainActor static func open(scene openScene: () -> Void)", in: window),
+                          "if WindowActivation.isInvisible(scene: \"lyrics-window\") {\n            LyricsWindowOpenRecord.noteInvisibleOpen(.standard)\n        } else {\n            LyricsWindowOpenRecord.claim(.standard)\n        }"),
+                true, "隐身开窗: 开窗入口隐身时先记原本的形态,正常打开时把隐身开的那扇认作用户的")
+    expectEqual(sourceHas(window, "WindowActivation.isInvisible(scene: \"lyrics-window\") || window.map(WindowActivation.isHidden) == true"),
+                true, "隐身开窗: 记开着时,隐身那一小段要开歌词窗口、或那扇正被压着,都算隐身开的")
     let settingsView = source("lyrimuse/SettingsView.swift")
     expectEqual(sourceHas(delegate, "_ = SparkleUpdaterManager.shared\n"
                             + "        // 放到下一拍:启动流程里排在这之后的窗口(SwiftUI 默认开的设置窗口)也还算启动阶段。\n"
