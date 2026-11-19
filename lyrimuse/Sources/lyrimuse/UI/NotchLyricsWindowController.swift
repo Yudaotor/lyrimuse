@@ -31,6 +31,7 @@ import os
 // 遵循 NotchChromeSource:设置页的预览拿一个轻量替身(NotchPreviewChrome)装同一份 NotchLyricsView。
 final class NotchLyricsWindowController: NSWindowController, ObservableObject, NotchChromeSource {
     static let shared = NotchLyricsWindowController(pinnedScreenID: nil)
+    private(set) lazy var chromeChanges = NotchChromeChanges(self)
 
     // 真值在 AppSettings.notchOverlayEnabled,这里只是它的镜像(菜单栏要观察这个
     // @Published)。只能经 setVisible(_:) 改,那是打开/关闭的唯一入口。

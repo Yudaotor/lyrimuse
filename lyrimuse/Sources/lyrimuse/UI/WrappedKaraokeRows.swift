@@ -65,7 +65,7 @@ struct WrappedKaraokeRows: NSViewRepresentable {
     }
 
     func sizeThatFits(_ proposal: ProposedViewSize, nsView: WrappedKaraokeRowsView, context: Context) -> CGSize? {
-        let geo = WrappedKaraokeRowsView.Geometry(spec: spec, width: proposal.width.flatMap { $0.isFinite ? $0 : nil })
+        let geo = nsView.geometry(spec: spec, width: proposal.width.flatMap { $0.isFinite ? $0 : nil })
         if proposal.width.map({ $0.isFinite }) == true {
             nsView.sizedWidth = proposal.width
             // 跟 `WrapLayout.placeSubviews` 同一个时机的等价物:悬浮窗读热区的那条 GeometryReader
@@ -175,6 +175,10 @@ final class WrappedKaraokeRowsView: NSView {
 
     private var spec: WrappedKaraokeRows.Spec?
     private var nowMs: (() -> Int)?
+    /// 这一句按各个宽度折好的几何(没有宽度限制记在 -1 下),换了规格就清。一次布局里 `sizeThatFits` 要问好几回、
+    /// `layout` 再排一遍,同一句同一宽度只量一次。
+    private var geometryMemoSpec: WrappedKaraokeRows.Spec?
+    private var geometryMemo: [CGFloat: Geometry] = [:]
     private var rowViews: [OverlayLyricScrollView] = []
 
     /// 一行要显示成什么:落点和规格。
@@ -224,6 +228,18 @@ final class WrappedKaraokeRowsView: NSView {
         if let nowMs { layoutRows(nowMs: nowMs()) }
     }
 
+    func geometry(spec: WrappedKaraokeRows.Spec, width: CGFloat?) -> Geometry {
+        if geometryMemoSpec != spec || geometryMemo.count >= 8 {
+            geometryMemoSpec = spec
+            geometryMemo.removeAll(keepingCapacity: true)
+        }
+        let key = width ?? -1
+        if let g = geometryMemo[key] { return g }
+        let g = Geometry(spec: spec, width: width)
+        geometryMemo[key] = g
+        return g
+    }
+
     func report(_ geo: Geometry) {
         guard let sink = contentRectSink else { return }
         var g = geo
@@ -234,7 +250,7 @@ final class WrappedKaraokeRowsView: NSView {
 
     private func layoutRows(nowMs: Int) {
         guard let spec, bounds.width > 0 else { return }
-        var geo = Geometry(spec: spec, width: WrapLayoutMath.drawWidth(sized: sizedWidth, bounds: bounds.width))
+        var geo = geometry(spec: spec, width: WrapLayoutMath.drawWidth(sized: sizedWidth, bounds: bounds.width))
         geo.alignment = spec.rowAlignment
         report(geo)
 
@@ -263,15 +279,19 @@ final class WrappedKaraokeRowsView: NSView {
             pending?.targets = targets
             return
         }
-        let geometries = targets.map { OverlayLyricScrollView.geometry(spec: $0.spec, scale: scale) }
-        // 一行都还没有(刚出现):先找缓存(换句动画预先画好的下一句、编辑台跟真窗口显示的同一句),没有的当场画,
-        // 不留一拍空白。
+        // 缓存里有这一行的排版就直接用:上下交替时开唱的那一句上一拍作为下一句排过、画过(04 章决策 111)。
+        let geometries = targets.map {
+            WrappedRowImageCache.geometry(for: $0.spec, scale: scale)
+                ?? OverlayLyricScrollView.geometry(spec: $0.spec, scale: scale)
+        }
+        // 一行都还没有(刚出现):先找缓存(换句动画预先画好的下一句、上下交替时上一拍的下一句、编辑台跟真窗口显示的同一句),
+        // 没有的当场画,不留一拍空白。
         if rowViews.isEmpty {
             pending = nil
             let images = zip(geometries, targets).map { g, t in
                 WrappedRowImageCache.images(for: t.spec, scale: g.scale) ?? {
                     let rendered = OverlayRowRaster.render(g, spec: t.spec)
-                    WrappedRowImageCache.store(rendered, for: t.spec, scale: g.scale)
+                    WrappedRowImageCache.store(rendered, geometry: g, for: t.spec)
                     return rendered
                 }()
             }
@@ -310,7 +330,7 @@ final class WrappedKaraokeRowsView: NSView {
             DispatchQueue.main.async {
                 MainActor.assumeIsolated {
                     for (item, images) in zip(batch.items, result.images) {
-                        WrappedRowImageCache.store(images, for: item.1, scale: item.0.scale)
+                        WrappedRowImageCache.store(images, geometry: item.0, for: item.1)
                     }
                 }
             }
@@ -327,7 +347,7 @@ final class WrappedKaraokeRowsView: NSView {
             return
         }
         for (target, (geometry, rowImages)) in zip(p.targets, zip(p.geometries, images)) {
-            WrappedRowImageCache.store(rowImages, for: target.spec, scale: geometry.scale)
+            WrappedRowImageCache.store(rowImages, geometry: geometry, for: target.spec)
         }
         install(p.targets, geometries: p.geometries, images: images, nowMs: nowMs?() ?? 0)
     }
@@ -405,20 +425,27 @@ private struct RowRasterResult: @unchecked Sendable {
     var images: [OverlayRowImages]
 }
 
-/// 换行模式的出图缓存:按「出图相关的字段」认,键的判据见 `LyricLayerRowSpec.sameImageKey`。
-/// 只留最近几行:一行三张长图,宽窗下一份就上 MB。
+/// 换行模式的出图缓存:按「出图相关的字段」认,键的判据见 `LyricLayerRowSpec.sameImageKey`。连同画它用的排版一起记,
+/// 排版要逐字时间戳也一样才拿来用(阅读路径按时间戳算)。只留最近几行:一行三张长图,宽窗下一份就上 MB。
 @MainActor
 enum WrappedRowImageCache {
-    private static var entries: [(spec: OverlayScrollingLyricRow.Spec, scale: CGFloat, images: OverlayRowImages)] = []
+    private static var entries: [(spec: OverlayScrollingLyricRow.Spec, images: OverlayRowImages, geometry: OverlayRowGeometry)] = []
     private static let capacity = 6
 
     static func images(for spec: OverlayScrollingLyricRow.Spec, scale: CGFloat) -> OverlayRowImages? {
-        entries.last { $0.scale == scale && sameImageKey($0.spec, spec) }?.images
+        entries.last { $0.geometry.scale == scale && sameImageKey($0.spec, spec) }?.images
     }
 
-    static func store(_ images: OverlayRowImages, for spec: OverlayScrollingLyricRow.Spec, scale: CGFloat) {
-        entries.removeAll { $0.scale == scale && sameImageKey($0.spec, spec) }
-        entries.append((spec, scale, images))
+    static func geometry(for spec: OverlayScrollingLyricRow.Spec, scale: CGFloat) -> OverlayRowGeometry? {
+        entries.last {
+            $0.geometry.scale == scale && OverlayScrollingLyricRow.Spec.sameImages($0.spec, spec)
+                && $0.spec.pacedWindow == spec.pacedWindow
+        }?.geometry
+    }
+
+    static func store(_ images: OverlayRowImages, geometry: OverlayRowGeometry, for spec: OverlayScrollingLyricRow.Spec) {
+        entries.removeAll { $0.geometry.scale == geometry.scale && sameImageKey($0.spec, spec) }
+        entries.append((spec, images, geometry))
         if entries.count > capacity { entries.removeFirst(entries.count - capacity) }
     }
 

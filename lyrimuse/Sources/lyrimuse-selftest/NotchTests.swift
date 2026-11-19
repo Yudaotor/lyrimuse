@@ -2429,12 +2429,25 @@ func runNotchTests() {
         // NotchCardLayerActive 设的层值(同构复现:属性上读 63 次/2 秒不停,子视图里读 0 次)。
         // 只看 NotchLyricsView 结构体本身:NotchScrubber 这类独立子视图在自己的属性上读是对的。
         let viewStruct: String = {
-            guard let a = view.range(of: "struct NotchLyricsView<"),
+            guard let a = view.range(of: "struct NotchLyricsView: View {"),
                   let b = view.range(of: "\nstruct NotchTransientHost", range: a.upperBound..<view.endIndex)
             else { return "" }
             return String(view[a.lowerBound..<b.lowerBound])
         }()
         expectEqual(viewStruct.isEmpty, false, "停表契约: 切得出 NotchLyricsView 结构体那一段")
+        // 换句开销:泛型视图每次求 body 都在运行时按泛型参数现解各个 `some View` 的具体类型,换句时占灵动岛主线程开销的大半
+        // (05 章决策 156)。承载方存成存在类型,订阅走它转发的 chromeChanges。
+        let chromeSource = read("NotchChromeSource.swift")
+        expectEqual([view.contains("struct NotchLyricsView<"),
+                     sourceHas(viewStruct, "let controller: any NotchChromeSource"),
+                     sourceHas(viewStruct, "@ObservedObject private var chromeChanges: NotchChromeChanges"),
+                     sourceHas(viewStruct, "chromeChanges = controller.chromeChanges"),
+                     sourceHas(chromeSource, "var chromeChanges: NotchChromeChanges { get }"),
+                     sourceHas(chromeSource, "subscription = source.objectWillChange.sink { [weak self] _ in self?.objectWillChange.send() }"),
+                     sourceHas(read("NotchPreviewChrome.swift"), "private(set) lazy var chromeChanges = NotchChromeChanges(self)"),
+                     sourceHas(controller, "private(set) lazy var chromeChanges = NotchChromeChanges(self)")],
+                    [false, true, true, true, true, true, true, true],
+                    "换句开销: NotchLyricsView 不是泛型,承载方的变更经 chromeChanges 原样转发")
         expectEqual(viewStruct.contains("private var cardLayerActive"), false,
                     "停表契约: NotchLyricsView 不许在自己的属性上按层读 notchCardLayerActive(那样藏着的那份永不停表)")
         expectEqual(view.components(separatedBy: "NotchLayerActiveReader {").count - 1 >= 2, true,

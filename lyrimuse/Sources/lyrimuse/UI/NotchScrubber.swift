@@ -279,8 +279,7 @@ struct NotchScrubber: View {
 /// 时间格式不一样(一处补前导零、一处不补)是那种没人会当 bug 报、但看着就是不对劲的东西。
 enum NotchTimeFormat {
     /// 拿不到锚点时那条秒表的兜底起点。
-    /// 放在这里而不是 NotchLyricsView 里:那是个泛型类型(`<Chrome: NotchChromeSource>`),
-    /// Swift 不允许泛型类型有 static 存储属性。
+    /// 放在这里而不是 NotchLyricsView 里:这是卡片上几处时间格式共用的那一份。
     static let clockEpoch = Date(timeIntervalSince1970: 0)
 
     /// 时间类耳朵模块那条秒表的时刻表。相位算术在 Core(`NotchClockPhase.tick`,selftest 覆盖),

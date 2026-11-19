@@ -2968,6 +2968,18 @@ func runSourceContractSurfaceTests() {
         expectEqual(sourceHas(wrap, "WrappedRowImageCache.images(for: t.spec, scale: g.scale) ?? {")
                         && sourceHas(wrap, "OverlayScrollingLyricRow.Spec.sameImageKey(a, b)"), true,
                     "后台出图: 第一次出现先找出图缓存,缓存按字和样式认、不看逐字时间戳")
+        // 换句开销:排版(含按位图量墨迹出框)连同长图一起记,上下交替时开唱的那一句直接用上一拍排好的;
+        // 折行几何按(规格, 宽度)记住,sizeThatFits 反复问不重排(04 章决策 111)。
+        let cacheBody = sourceBody("enum WrappedRowImageCache {", in: wrap)
+        expectEqual([sourceHas(wrap, "WrappedRowImageCache.geometry(for: $0.spec, scale: scale)\n ?? OverlayLyricScrollView.geometry(spec: $0.spec, scale: scale)"),
+                     sourceHas(cacheBody, "OverlayScrollingLyricRow.Spec.sameImages($0.spec, spec)\n && $0.spec.pacedWindow == spec.pacedWindow"),
+                     sourceHas(wrap, "WrappedRowImageCache.store(rendered, geometry: g, for: t.spec)"),
+                     sourceHas(wrap, "WrappedRowImageCache.store(rowImages, geometry: geometry, for: target.spec)"),
+                     sourceHas(wrap, "let geo = nsView.geometry(spec: spec, width:"),
+                     sourceHas(wrap, "if geometryMemoSpec != spec || geometryMemo.count >= 8 {"),
+                     wrap.contains("WrappedKaraokeRowsView.Geometry(spec: spec")],
+                    [true, true, true, true, true, true, false],
+                    "换句开销: 换行逐字行的排版随长图缓存,折行几何按规格和宽度记住")
         let overlayView = read("LyricsOverlayView.swift")
         expectEqual(sourceHas(overlayView, "if animatesLineChange, let words = playback.nextLineWords")
                         && sourceHas(overlayView, "prewarmOnly: true)")

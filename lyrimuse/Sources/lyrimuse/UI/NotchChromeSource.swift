@@ -207,6 +207,20 @@ protocol NotchChromeSource: ObservableObject {
     func closeFromQuickAction()
     /// 展开态头部点歌名 / 专辑名 / 歌手名:开 / 关 / 切换简介浮框(`NotchEditorialPanel`)。预览里是空实现,理由同上。
     func toggleEditorial(_ kind: EditorialCard.Kind)
+    /// 本对象 `objectWillChange` 的转发,`NotchLyricsView` 订阅它(视图存的是存在类型,订阅不了协议本身)。
+    var chromeChanges: NotchChromeChanges { get }
+}
+
+/// 把承载方的 `objectWillChange` 原样转发出来:承载方发一次,这里同步发一次,视图失效的时机跟直接订阅承载方一样。
+/// 由承载方自己持有(`lazy var chromeChanges = NotchChromeChanges(self)`),只弱引用回去的订阅不成环。
+@MainActor
+final class NotchChromeChanges: ObservableObject {
+    let objectWillChange = ObservableObjectPublisher()
+    private var subscription: AnyCancellable?
+
+    init<Source: ObservableObject>(_ source: Source) where Source.ObjectWillChangePublisher == ObservableObjectPublisher {
+        subscription = source.objectWillChange.sink { [weak self] _ in self?.objectWillChange.send() }
+    }
 }
 
 extension NotchChromeSource {

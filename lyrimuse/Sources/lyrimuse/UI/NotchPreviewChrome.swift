@@ -16,6 +16,7 @@ import SwiftUI
 /// 用独立实例还有第二个好处:鼠标划过编辑台时展开的是**这一份**,不会顺手把真窗口也撑开。
 @MainActor
 final class NotchPreviewChrome: ObservableObject, NotchChromeSource {
+    private(set) lazy var chromeChanges = NotchChromeChanges(self)
     /// 指针 / 浮层 / 宽度调整条给出的展开态(`setExpandedFromPreview`)。
     @Published private var pointerExpanded = false
     /// 正在调「圆角 / 展开圆角」哪一态(`NotchCornerLive.focusPublisher`:按着那根滑杆,或指针停在那一行上)。

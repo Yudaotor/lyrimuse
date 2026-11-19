@@ -8,8 +8,12 @@ import os
 // 品牌胶囊(notchSeam),两侧是两只可配的耳朵;顶行以下是歌词行,hover 展开时再长出曲目信息头部、下一句 / 多行歌词、进度条和
 // 播放控制(cardBodyLayer)。卡片只在底部两角做圆角、顶边贴着屏幕顶(NotchHangingShape)。背景按「风格」设置(NotchCardStyle,
 // 展开时可另选一种),前景色跟着封面主色(NotchPlayback.accent / expandedAccent)。
-struct NotchLyricsView<Chrome: NotchChromeSource>: View {
-    @ObservedObject var controller: Chrome
+//
+// 不做成按承载方泛型的(`NotchLyricsView<Chrome>`):泛型视图每次求 body 都要在运行时按泛型参数现解一遍里面各个 `some View`
+// 的具体类型,换句时这一项占了灵动岛主线程开销的大半(05 章决策 156)。承载方存成存在类型,订阅走它给的 `chromeChanges`。
+struct NotchLyricsView: View {
+    let controller: any NotchChromeSource
+    @ObservedObject private var chromeChanges: NotchChromeChanges
 
     /// 「发现新播放器」提示的状态源。**这里不订阅**(不是 @ObservedObject),只往下传给两个宿主
     /// 子视图(`NotchIdleEarIconHost` / `NotchIdlePanelHost`)各自订阅 —— 同 NotchTransientCenter 那条纪律,
@@ -49,6 +53,16 @@ struct NotchLyricsView<Chrome: NotchChromeSource>: View {
     /// 真正画出来的那一条。跟 `hoveredQuickAction` 分开存是为了那 260ms 的首次延迟(扫过一排键时
     /// 不该一路闪气泡);存整个 hint 而不只是文案,是因为气泡要**定位到那颗键**,文案和落点必须同源。
     @State var shownQuickActionTooltip: QuickActionHint?
+
+    init(controller: any NotchChromeSource, prompt: NotchUnknownPlayerPrompt = .inert, reportsLineLayout: Bool = false,
+         drivesAdSkipGate: Bool = false, offersQuickActionsTip: Bool = false) {
+        self.controller = controller
+        chromeChanges = controller.chromeChanges
+        self.prompt = prompt
+        self.reportsLineLayout = reportsLineLayout
+        self.drivesAdSkipGate = drivesAdSkipGate
+        self.offersQuickActionsTip = offersQuickActionsTip
+    }
 
     var body: some View {
         GeometryReader { proxy in

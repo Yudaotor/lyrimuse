@@ -2500,7 +2500,7 @@ func runOverlayTests() {
         overlayClickReplayChecks()
         let karaokeRows = src("WrappedKaraokeRows.swift")
         expectEqual(karaokeRows.contains("nsView.sizedWidth = proposal.width")
-                    && karaokeRows.contains("var geo = Geometry(spec: spec, width: WrapLayoutMath.drawWidth(sized: sizedWidth, bounds: bounds.width))"),
+                    && karaokeRows.contains("var geo = geometry(spec: spec, width: WrapLayoutMath.drawWidth(sized: sizedWidth, bounds: bounds.width))"),
                     true, "悬浮接线: 逐字折行按定高度时的提议宽度画,行数跟留出的高度一致")
     }
 
