@@ -1079,7 +1079,7 @@ func runOverlayTests() {
                     "字形出框: 没有描边时以长图边沿为界,1x 屏对齐到整点")
         let row = (try? String(contentsOf: URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
             .appendingPathComponent("lyrimuse/UI/OverlayScrollingLyricRow.swift"), encoding: .utf8)) ?? ""
-        expectEqual(sourceHas(row, "let ink = OverlayRowRaster.inkOverflow(first, spec: spec)")
+        expectEqual(sourceHas(row, "let ink = knownInk ?? OverlayRowRaster.inkOverflow(first, spec: spec)")
                         && sourceHas(row, "var g = ink.side > 0 ? layout(spec: spec, scale: scale, extraBleed: ink.side) : first"), true,
                     "字形出框(契约): 排版后量墨迹,左右出框的加宽出血重排")
         expectEqual(sourceHas(row, "let mainY = g.inset + g.inkPadBottom + g.romaHeight + g.romaGap + 1"), true,

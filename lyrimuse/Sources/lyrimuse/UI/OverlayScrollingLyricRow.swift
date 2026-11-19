@@ -276,11 +276,14 @@ final class OverlayLyricScrollView: NSView {
     /// 按 `spec` 排好一行长图:四周预留、行高、逐词 / 逐组落点、长图总宽、阅读路径。量宽查
     /// `MenuBarMarqueeRenderer` 的缓存,只在主线程调;画图交给 `OverlayRowRaster`。
     /// 排完量一遍墨迹(`OverlayRowRaster.inkOverflow`):左右画出预留的,出血加宽同样多重排一次;上下画出的
-    /// 加进 `inkPadTop` / `inkPadBottom`。见 04 章决策 75。
-    static func geometry(spec: OverlayScrollingLyricRow.Spec, scale: CGFloat) -> OverlayRowGeometry {
+    /// 加进 `inkPadTop` / `inkPadBottom`。见 04 章决策 75。`ink`:同一行字、同一套样式早先量过的墨迹(换行出图缓存记着),
+    /// 给了就不再量。
+    static func geometry(spec: OverlayScrollingLyricRow.Spec, scale: CGFloat,
+                         ink knownInk: LyricInkExtent.Overflow? = nil) -> OverlayRowGeometry {
         let first = layout(spec: spec, scale: scale, extraBleed: 0)
-        let ink = OverlayRowRaster.inkOverflow(first, spec: spec)
+        let ink = knownInk ?? OverlayRowRaster.inkOverflow(first, spec: spec)
         var g = ink.side > 0 ? layout(spec: spec, scale: scale, extraBleed: ink.side) : first
+        g.ink = ink
         g.inkPadTop = ink.top
         g.inkPadBottom = ink.bottom
         g.boxHeight += ink.top + ink.bottom
@@ -599,6 +602,8 @@ struct OverlayRowGeometry {
     /// 左右画出的不在这里,加进了 `bleed`。
     var inkPadTop: CGFloat = 0
     var inkPadBottom: CGFloat = 0
+    /// 排版时量到的墨迹出框(上面三项由它来),只跟字、字体、描边和排版有关,跟逐字时间戳无关。
+    var ink: LyricInkExtent.Overflow = .none
 }
 
 /// 一行的三张长图。

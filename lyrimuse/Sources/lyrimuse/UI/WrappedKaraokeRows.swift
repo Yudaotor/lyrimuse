@@ -279,10 +279,10 @@ final class WrappedKaraokeRowsView: NSView {
             pending?.targets = targets
             return
         }
-        // 缓存里有这一行的排版就直接用:上下交替时开唱的那一句上一拍作为下一句排过、画过(04 章决策 111)。
+        // 缓存里有这一行的墨迹就不再量:上下交替时开唱的那一句上一拍作为下一句排过、画过(04 章决策 111)。
         let geometries = targets.map {
-            WrappedRowImageCache.geometry(for: $0.spec, scale: scale)
-                ?? OverlayLyricScrollView.geometry(spec: $0.spec, scale: scale)
+            OverlayLyricScrollView.geometry(spec: $0.spec, scale: scale,
+                                            ink: WrappedRowImageCache.ink(for: $0.spec, scale: scale))
         }
         // 一行都还没有(刚出现):先找缓存(换句动画预先画好的下一句、上下交替时上一拍的下一句、编辑台跟真窗口显示的同一句),
         // 没有的当场画,不留一拍空白。
@@ -426,7 +426,8 @@ private struct RowRasterResult: @unchecked Sendable {
 }
 
 /// 换行模式的出图缓存:按「出图相关的字段」认,键的判据见 `LyricLayerRowSpec.sameImageKey`。连同画它用的排版一起记,
-/// 排版要逐字时间戳也一样才拿来用(阅读路径按时间戳算)。只留最近几行:一行三张长图,宽窗下一份就上 MB。
+/// 别的行只拿它的墨迹出框(`ink`):排版里的阅读路径按逐字时间戳算,同一句字下一次出现时时间戳可能不同,要现排。
+/// 只留最近几行:一行三张长图,宽窗下一份就上 MB。
 @MainActor
 enum WrappedRowImageCache {
     private static var entries: [(spec: OverlayScrollingLyricRow.Spec, images: OverlayRowImages, geometry: OverlayRowGeometry)] = []
@@ -436,11 +437,8 @@ enum WrappedRowImageCache {
         entries.last { $0.geometry.scale == scale && sameImageKey($0.spec, spec) }?.images
     }
 
-    static func geometry(for spec: OverlayScrollingLyricRow.Spec, scale: CGFloat) -> OverlayRowGeometry? {
-        entries.last {
-            $0.geometry.scale == scale && OverlayScrollingLyricRow.Spec.sameImages($0.spec, spec)
-                && $0.spec.pacedWindow == spec.pacedWindow
-        }?.geometry
+    static func ink(for spec: OverlayScrollingLyricRow.Spec, scale: CGFloat) -> LyricInkExtent.Overflow? {
+        entries.last { $0.geometry.scale == scale && sameImageKey($0.spec, spec) }?.geometry.ink
     }
 
     static func store(_ images: OverlayRowImages, geometry: OverlayRowGeometry, for spec: OverlayScrollingLyricRow.Spec) {
