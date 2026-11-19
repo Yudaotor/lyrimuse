@@ -1637,18 +1637,19 @@ struct AccountLinkingTab: View {
     }
 
     /// 页头右边一行(只在已连接时画):连接状态 + 对应动作。
-    ///  - key 被拒(状态文件 reason 是 key_rejected):红点「需要 Last.fm Pro」+「了解 Last.fm Pro」,悬停看原因和出路;
-    ///    重新连接用的还是同一把 key,不给这颗按钮;
+    ///  - key 被拒(状态文件 reason 是 key_rejected):红点「需要 Last.fm Pro」+「了解 Last.fm Pro」+「断开…」,悬停看原因和出路;
+    ///    重新连接、更改 API Key 都不给:用的还是同一个账号申请的 key,一样被拒。「断开…」是改用 ListenBrainz 那条出路(12 章决策 100);
     ///  - 授权失效(引擎落了 lyrimuse-lastfm-status.json):红点「授权已失效」+「重新连接…」,悬停看原因;
     ///  - 其余:绿点「已连接」+「断开…」(断开走确认框,理由见 showLastfmDisconnectConfirm)。
     @ViewBuilder
     private var lastfmProfileStatusLine: some View {
         HStack(spacing: 10) {
             if mirrorStatus.info?.keyRejected == true {
-                lastfmStatusDot(.red, L10n.t("需要 Last.fm Pro"))
-                    .foregroundStyle(.red)
-                    .help(L10n.t("Last.fm 现在要求 API Key 的持有人订阅 Last.fm Pro，订阅后自动恢复，也可改用 ListenBrainz"))
-                Button(L10n.t("了解 Last.fm Pro")) { openLastfmPro() }
+                // 放不下三样时先省掉红点旁的字:下面 Scrobble 开关的副标题同样写着要 Pro,悬停仍看得到原因。
+                ViewThatFits(in: .horizontal) {
+                    lastfmKeyRejectedStatusLine(showsLabel: true)
+                    lastfmKeyRejectedStatusLine(showsLabel: false)
+                }
             } else if mirrorStatus.info != nil {
                 lastfmStatusDot(.red, L10n.t("授权已失效"))
                     .foregroundStyle(.red)
@@ -1663,6 +1664,23 @@ struct AccountLinkingTab: View {
         // 跟下面规则卡的「选择…」、各段的玻璃胶囊同一种形状。
         .settingsGlassButtons()
         .buttonBorderShape(.capsule)
+    }
+
+    private func lastfmKeyRejectedStatusLine(showsLabel: Bool) -> some View {
+        HStack(spacing: 10) {
+            Group {
+                if showsLabel {
+                    lastfmStatusDot(.red, L10n.t("需要 Last.fm Pro"))
+                } else {
+                    Circle().fill(Color.red).frame(width: 8, height: 8)
+                }
+            }
+            .foregroundStyle(.red)
+            .help(L10n.t("Last.fm 现在要求 API Key 的持有人订阅 Last.fm Pro，订阅后自动恢复，也可改用 ListenBrainz"))
+            Button(L10n.t("了解 Last.fm Pro")) { openLastfmPro() }
+            Button(L10n.t("断开…")) { showLastfmDisconnectConfirm = true }
+        }
+        .fixedSize()
     }
 
     private func lastfmStatusDot(_ color: Color, _ text: String) -> some View {

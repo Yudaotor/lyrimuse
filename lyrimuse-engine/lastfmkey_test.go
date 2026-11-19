@@ -20,12 +20,15 @@ import (
 
 func resetLastfmKeyState(t *testing.T) {
 	t.Helper()
-	lastfmStatusOwner.Store(lastfmStatusNone)
-	lastfmStaleStatusChecked.Store(false)
-	t.Cleanup(func() {
+	reset := func() {
 		lastfmStatusOwner.Store(lastfmStatusNone)
 		lastfmStaleStatusChecked.Store(false)
-	})
+		lastfmKeyRejectedAt.Store(0)
+		lastfmReadKeyRejected.Store(false)
+		lastfmWriteKeyRejected.Store(false)
+	}
+	reset()
+	t.Cleanup(reset)
 }
 
 func fakeLastfmClient(status int, contentType, body string) *http.Client {
@@ -78,6 +81,73 @@ func TestClassifyLastfmError(t *testing.T) {
 		if got := classifyLastfmError(c.status, c.code, c.message); got != c.want {
 			t.Errorf("%s: classify(%d, %d, %q) = %d, want %d", c.name, c.status, c.code, c.message, got, c.want)
 		}
+	}
+}
+
+// lastfmOfficialErrorMessages:Last.fm 官方错误表(https://www.last.fm/api/errorcodes)逐条的说明。App 侧 selftest
+// 用同一张表(LastfmTests.swift),表里改了两边一起改。
+var lastfmOfficialErrorMessages = map[int]string{
+	2:  "Invalid service - This service does not exist",
+	3:  "Invalid Method - No method with that name in this package",
+	4:  "Authentication Failed - You do not have permissions to access the service",
+	5:  "Invalid format - This service doesn't exist in that format",
+	6:  "Invalid parameters - Your request is missing a required parameter",
+	7:  "Invalid resource specified",
+	8:  "Operation failed - Most likely the backend service failed. Please try again.",
+	9:  "Invalid session key - Please re-authenticate",
+	10: "Invalid API key - You must be granted a valid key by last.fm",
+	11: "Service Offline - This service is temporarily offline. Try again later.",
+	12: "Subscribers Only - This station is only available to paid last.fm subscribers",
+	13: "Invalid method signature supplied",
+	14: "Unauthorized Token - This token has not been authorized",
+	15: "This item is not available for streaming.",
+	16: "The service is temporarily unavailable, please try again.",
+	17: "Login: User requires to be logged in",
+	18: "Trial Expired - This user has no free radio plays left. Subscription required.",
+	20: "Not Enough Content - There is not enough content to play this station",
+	21: "Not Enough Members - This group does not have enough members for radio",
+	22: "Not Enough Fans - This artist does not have enough fans for for radio",
+	23: "Not Enough Neighbours - There are not enough neighbours for radio",
+	24: "No Peak Radio - This user is not allowed to listen to radio during peak usage",
+	25: "Radio Not Found - Radio station not found",
+	26: "API Key Suspended - This application is not allowed to make requests to the web services",
+	27: "Deprecated - This type of request is no longer supported",
+	29: "Rate Limit Exceded - Your IP has made too many requests in a short period, exceeding our API guidelines",
+}
+
+// 官方错误表里每个码配 HTTP 403 回来都不当「认不出的 403」:只有 10 / 26 和说明里提到订阅的 12 / 18 算 key 被拒,
+// 4 / 9 是授权失效,其余是别的错误。14 是实测形态:新 token 还没在浏览器里点同意就换 session,回 403 + 14。
+func TestClassifyLastfmErrorOfficialCodesWith403(t *testing.T) {
+	want := func(code int) lastfmErrClass {
+		switch code {
+		case 10, 26, 12, 18:
+			return lastfmErrKeyRejected
+		case 4, 9:
+			return lastfmErrSessionInvalid
+		}
+		return lastfmErrOther
+	}
+	for code, msg := range lastfmOfficialErrorMessages {
+		if !lastfmKnownErrorCode(code) {
+			t.Errorf("error %d is in the official table but not in lastfmKnownErrorCodes", code)
+		}
+		if got := classifyLastfmError(http.StatusForbidden, code, msg); got != want(code) {
+			t.Errorf("403 + %d (%q) = %d, want %d", code, msg, got, want(code))
+		}
+	}
+	if len(lastfmKnownErrorCodes) != len(lastfmOfficialErrorMessages) {
+		t.Errorf("lastfmKnownErrorCodes has %d codes, the official table %d", len(lastfmKnownErrorCodes), len(lastfmOfficialErrorMessages))
+	}
+	err := lastfmResponseError("auth.getsession", 403, 14, lastfmOfficialErrorMessages[14], "application/json", nil)
+	var apiErr *lastfmAPIError
+	if !errors.As(err, &apiErr) || apiErr.class() != lastfmErrOther {
+		t.Fatalf("403 + 14 = %v, want a plain lastfmAPIError, not a key rejection", err)
+	}
+	useMirrorFiles(t)
+	resetLastfmKeyState(t)
+	noteLastfmKeyRejected(&lastfmAPIError{Code: 17, Status: 403, Message: lastfmOfficialErrorMessages[17]})
+	if _, ok := readStatusFile(t); ok {
+		t.Fatal("a read hitting 403 + 17 must not write the key-rejected status file")
 	}
 }
 
@@ -155,12 +225,12 @@ func TestMirrorKeyRejectedDisablesQueuesAndKeepsAt(t *testing.T) {
 	if err := os.WriteFile(lastfmStatusPath, data, 0o644); err != nil {
 		t.Fatal(err)
 	}
-	writeLastfmMirrorStatus(&lastfmAPIError{Code: 26, Status: 403, Method: "track.scrobble"})
+	writeLastfmMirrorStatus(&lastfmAPIError{Code: 26, Status: 403, Method: "track.scrobble"}, lastfmStatusByWriterTag)
 	if st2, _ := readStatusFile(t); st2.At != old {
 		t.Fatalf("at = %d, want the earlier %d kept for the same key rejection", st2.At, old)
 	}
 	// 授权失效照旧换新的 at、reason=session。
-	writeLastfmMirrorStatus(&lastfmAPIError{Code: 9, Status: 200, Method: "track.scrobble"})
+	writeLastfmMirrorStatus(&lastfmAPIError{Code: 9, Status: 200, Method: "track.scrobble"}, lastfmStatusByWriterTag)
 	if st3, _ := readStatusFile(t); st3.Reason != lastfmReasonSession || st3.At == old {
 		t.Fatalf("session error status = %+v, want reason session with a fresh at", st3)
 	}
@@ -232,6 +302,7 @@ func TestLastfmReadKeyRejectedSharesStatus(t *testing.T) {
 	}
 
 	// 写入器熔断写的状态文件:读取成功不撤。
+	withFeatures(t, featureFlags{LastfmMirrorScrobble: true})
 	s := newLastfmScrobbler("key", "secret", "sk")
 	s.disable(&lastfmAPIError{Code: 10, Status: 403, Method: "track.scrobble"})
 	if _, ok := lastfmRecent(context.Background(), "u", "k"); !ok {
@@ -243,6 +314,115 @@ func TestLastfmReadKeyRejectedSharesStatus(t *testing.T) {
 	noteLastfmWriteOK()
 	if _, ok := readStatusFile(t); ok {
 		t.Fatal("a write success clears the status file")
+	}
+}
+
+// 读写两路结论不一致时,App 按 at 只弹一次通知:
+//   - 读被拒、写成功:每首歌写成功撤一次文件、下一轮读又写回来,at 沿用本进程记着的;
+//   - 读通、写被拒,反复重启引擎:读取成功不撤上次运行写入器留下的文件,写入器再熔断时沿用文件里的 at。
+//
+// 两路都恢复之后再被拒是新的一次,换新的 at;镜像写入关着时,写入器留下的文件由读取成功撤。
+func TestLastfmKeyRejectedSplitVerdictNotifiesOnce(t *testing.T) {
+	useMirrorFiles(t)
+	useUnthrottledGuard(t)
+	resetLastfmKeyState(t)
+	withFeatures(t, featureFlags{LastfmMirrorScrobble: true})
+	savedClient, savedClock := lastfmReadClient, lastfmStatusClock
+	t.Cleanup(func() { lastfmReadClient, lastfmStatusClock = savedClient, savedClock })
+	clock := time.Unix(1_800_000_000, 0)
+	lastfmStatusClock = func() time.Time { clock = clock.Add(time.Minute); return clock }
+
+	// App 侧 LastfmMirrorNotifier:状态文件的 at 跟上次弹过的不一样就弹。
+	notified, notifications := int64(0), 0
+	appSees := func() {
+		if st, ok := readStatusFile(t); ok && st.At != notified {
+			notified = st.At
+			notifications++
+		}
+	}
+	rejected := func() *http.Client {
+		return fakeLastfmClient(403, "application/json", `{"message":"Invalid API key","error":10}`)
+	}
+	accepted := fakeLastfmClient(200, "application/json", `{"recenttracks":{"@attr":{"total":"0"},"track":[]}}`)
+	restart := func() {
+		lastfmStatusOwner.Store(lastfmStatusNone)
+		lastfmStaleStatusChecked.Store(false)
+		lastfmKeyRejectedAt.Store(0)
+		lastfmReadKeyRejected.Store(false)
+		lastfmWriteKeyRejected.Store(false)
+	}
+
+	// 读被拒、写成功,放五首歌。
+	for song := 0; song < 5; song++ {
+		lastfmReadClient = rejected()
+		if _, ok := lastfmRecent(context.Background(), "u", "k"); ok {
+			t.Fatal("read should be rejected")
+		}
+		appSees()
+		if st, _ := readStatusFile(t); st.By != lastfmStatusByReadTag {
+			t.Fatalf("song %d: status file by = %q, want read", song, st.By)
+		}
+		noteLastfmWriteOK()
+		appSees()
+	}
+	if notifications != 1 {
+		t.Fatalf("read rejected / write ok over 5 songs: %d notifications, want 1", notifications)
+	}
+
+	// 两路都恢复:文件撤了,下一次被拒是新的一次。
+	lastfmReadClient = accepted
+	if _, ok := lastfmRecent(context.Background(), "u", "k"); !ok {
+		t.Fatal("read should succeed")
+	}
+	if _, ok := readStatusFile(t); ok {
+		t.Fatal("status file should be gone once both paths are fine")
+	}
+	lastfmReadClient = rejected()
+	if _, ok := lastfmRecent(context.Background(), "u", "k"); ok {
+		t.Fatal("read should be rejected")
+	}
+	appSees()
+	if notifications != 2 {
+		t.Fatalf("a rejection after both paths recovered: %d notifications, want 2 (a new one)", notifications)
+	}
+	restart()
+
+	// 读通、写被拒,引擎重启三次:每次先读成功,再写入器熔断。
+	for run := 0; run < 3; run++ {
+		lastfmReadClient = accepted
+		if _, ok := lastfmRecent(context.Background(), "u", "k"); !ok {
+			t.Fatal("read should succeed")
+		}
+		appSees()
+		s := newLastfmScrobbler("key", "secret", "sk")
+		s.disable(&lastfmAPIError{Code: 10, Status: 403, Method: "track.scrobble", Message: "Invalid API key"})
+		appSees()
+		if st, _ := readStatusFile(t); st.By != lastfmStatusByWriterTag {
+			t.Fatalf("run %d: status file by = %q, want writer", run, st.By)
+		}
+		if run < 2 {
+			restart()
+		}
+	}
+	if notifications != 3 {
+		t.Fatalf("read ok / write rejected over 3 restarts: %d notifications in total, want 3 (one per distinct rejection)", notifications)
+	}
+
+	// 镜像写入关了再重启:写入器不会再写成功,它留下的文件由读取成功撤。
+	restart()
+	withFeatures(t, featureFlags{})
+	if _, ok := lastfmRecent(context.Background(), "u", "k"); !ok {
+		t.Fatal("read should succeed")
+	}
+	if _, ok := readStatusFile(t); ok {
+		t.Fatal("with the mirror writer off, a read success clears the writer's leftover status file")
+	}
+	newLastfmScrobbler("key", "secret", "sk").disable(&lastfmAPIError{Code: 10, Status: 403, Method: "track.scrobble"})
+	if _, ok := lastfmRecent(context.Background(), "u", "k"); !ok {
+		t.Fatal("read should succeed")
+	}
+	if _, ok := readStatusFile(t); ok {
+		t.Fatal("with the mirror writer off, a read success clears what the writer wrote in this run too")
 	}
 }
 

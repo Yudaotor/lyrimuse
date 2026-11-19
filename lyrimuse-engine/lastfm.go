@@ -712,29 +712,36 @@ func (s *lastfmScrobbler) disable(apiErr *lastfmAPIError) {
 	}
 	keyRejected := apiErr.class() == lastfmErrKeyRejected
 	s.deadKeyRejected.Store(keyRejected)
+	if keyRejected {
+		lastfmWriteKeyRejected.Store(true)
+	}
 	lastfmStatusOwner.Store(lastfmStatusByWriter)
 	if keyRejected {
 		warnf("lastfm mirror DISABLED: %v (API key rejected, http %d; Last.fm requires the key owner to subscribe to Last.fm Pro; listens stay queued and resume once the key is accepted again)", apiErr, apiErr.Status)
 	} else {
 		warnf("lastfm mirror DISABLED: %v (fatal credential error; reconnect the account in Lyrimuse settings to resume)", apiErr)
 	}
-	writeLastfmMirrorStatus(apiErr)
+	writeLastfmMirrorStatus(apiErr, lastfmStatusByWriterTag)
 }
 
-// writeLastfmMirrorStatus 把致命的 Last.fm 错误落盘(lyrimuse-lastfm-status.json),
+// writeLastfmMirrorStatus 把致命的 Last.fm 错误落盘(lyrimuse-lastfm-status.json),by 记是谁写的(读取路径 / 写入器),
 // App 的账号卡读它来显示红标,reason 决定文案(key 被拒 / 授权失效)—— 沿用引擎落盘/Swift 读的既有约定
-// (同 lfmMirroredPath 等)。key 被拒时文件里已经是 key 被拒就沿用原来的 at:App 按 at 判是不是新的一次、要不要再弹通知,
-// 引擎重启、读写两路先后撞上同一次被拒都不该再弹。写失败只记日志:状态文件是通知通道,不是正确性依赖。
-func writeLastfmMirrorStatus(apiErr *lastfmAPIError) {
+// (同 lfmMirroredPath 等)。key 被拒时沿用同一次被拒的 at:文件里已经是 key 被拒用它的,文件被撤了用本进程记着的
+// (lastfmKeyRejectedAt)。App 按 at 判是不是新的一次、要不要再弹通知,引擎重启、读写两路先后撞上或结论不一致都不该再弹。
+// 写失败只记日志:状态文件是通知通道,不是正确性依赖。
+func writeLastfmMirrorStatus(apiErr *lastfmAPIError, by string) {
 	if lastfmStatusPath == "" {
 		return
 	}
-	st := lastfmStatusFile{Error: apiErr.Code, Message: apiErr.Message, Method: apiErr.Method, At: time.Now().Unix(), Status: apiErr.Status}
+	st := lastfmStatusFile{Error: apiErr.Code, Message: apiErr.Message, Method: apiErr.Method, At: lastfmStatusClock().Unix(), Status: apiErr.Status, By: by}
 	if apiErr.class() == lastfmErrKeyRejected {
 		st.Reason = lastfmReasonKeyRejected
 		if prev, ok := readLastfmStatusFile(); ok && prev.Reason == lastfmReasonKeyRejected && prev.At > 0 {
 			st.At = prev.At
+		} else if at := lastfmKeyRejectedAt.Load(); at > 0 {
+			st.At = at
 		}
+		lastfmKeyRejectedAt.Store(st.At)
 	} else {
 		st.Reason = lastfmReasonSession
 	}

@@ -30,8 +30,9 @@ const (
 	lastfmErrKeyRejected
 )
 
-// lastfmKnownErrorCodes:Last.fm 文档里列出过的 error 码。403 带着这之外的码(或者干脆没有码)算「认不出的 403」。
-var lastfmKnownErrorCodes = []int{2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 13, 16, 26, 29}
+// lastfmKnownErrorCodes:Last.fm 官方错误表(https://www.last.fm/api/errorcodes)列出的码,1 和 19 写着不存在、表里没有 28。
+// 403 带着这之外的码(或者干脆没有码)算「认不出的 403」。14(token 还没授权)实测就配 403,漏了会被报成要 Pro(12 章决策 100)。
+var lastfmKnownErrorCodes = []int{2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 20, 21, 22, 23, 24, 25, 26, 27, 29}
 
 // lastfmProMessagePattern:message 里提到 Pro 或订阅就算 key 被拒,不管带的是哪个码。
 const lastfmProMessagePattern = `(?i)\bpro\b|subscri`
@@ -84,8 +85,9 @@ func lastfmResponseError(method string, status, code int, message, contentType s
 // ---- 状态文件归谁 ----
 //
 // lyrimuse-lastfm-status.json 有两个写入方:写入器熔断(writeLastfmMirrorStatus,任何凭据错误),读取路径撞上 key 被拒
-// (noteLastfmKeyRejected)。读取成功只撤读取路径自己写的那份,不撤写入器的:读得通不等于写得进,
-// 写入器的熔断由它自己的探测(reviveIfKeyAccepted)和下一次写入成功解除。
+// (noteLastfmKeyRejected),文件里的 by 记是谁写的。读取成功只撤读取路径写的那份,不撤写入器的(上次运行留下的也一样):
+// 读得通不等于写得进,写入器的熔断由它自己的探测(reviveIfKeyAccepted)和下一次写入成功解除。写入器没开(镜像关着)时
+// 没有谁会再写成功,那份由读取成功撤。
 
 const (
 	lastfmStatusNone int32 = iota
@@ -98,23 +100,52 @@ var lastfmStatusOwner atomic.Int32
 // lastfmStaleStatusChecked:本进程查过上次运行留下的状态文件没有(只查一次,之后读取成功不再读文件)。
 var lastfmStaleStatusChecked atomic.Bool
 
+// lastfmKeyRejectedAt:本进程最近一次落盘的 key 被拒用的 at(Unix 秒,0 = 没有)。状态文件被另一条路径的成功撤掉后
+// 再撞上被拒,沿用它而不换新的 at:App 按 at 判要不要再弹通知,读写两路结论不一致时不能每首歌弹一次。
+// lastfmReadKeyRejected / lastfmWriteKeyRejected:两条路径最近一次的结论是不是 key 被拒,两路都不是了才忘掉这个 at。
+var (
+	lastfmKeyRejectedAt    atomic.Int64
+	lastfmReadKeyRejected  atomic.Bool
+	lastfmWriteKeyRejected atomic.Bool
+)
+
+// forgetLastfmKeyRejectedAtIfClear:读写两路都没有在被拒,下一次被拒就是新的一次,换新的 at。
+func forgetLastfmKeyRejectedAtIfClear() {
+	if !lastfmReadKeyRejected.Load() && !lastfmWriteKeyRejected.Load() {
+		lastfmKeyRejectedAt.Store(0)
+	}
+}
+
+// lastfmStatusClock:状态文件 at 取的时刻,测试换成可控的钟。
+var lastfmStatusClock = time.Now
+
+// lastfmWriterOff:镜像写入关着,写入器留下的状态文件不会再等到写入成功。
+func lastfmWriterOff() bool { return !features().LastfmMirrorScrobble }
+
 // noteLastfmKeyRejected:读取路径撞上 key 被拒。状态文件还没人写过才写(写入器的熔断优先),同一次被拒只记一条日志。
 func noteLastfmKeyRejected(apiErr *lastfmAPIError) {
 	if apiErr == nil || apiErr.class() != lastfmErrKeyRejected {
 		return
 	}
+	lastfmReadKeyRejected.Store(true)
 	if !lastfmStatusOwner.CompareAndSwap(lastfmStatusNone, lastfmStatusByRead) {
 		return
 	}
 	warnf("lastfm: API key rejected on a read (http %d, error %d): %s - Last.fm requires the key owner to subscribe to Last.fm Pro",
 		apiErr.Status, apiErr.Code, apiErr.Message)
-	writeLastfmMirrorStatus(apiErr)
+	writeLastfmMirrorStatus(apiErr, lastfmStatusByReadTag)
 }
 
-// noteLastfmReadOK:读取成功。状态文件是读取路径写的(或者是上次运行读取路径留下的 key 被拒)就撤掉。
+// noteLastfmReadOK:读取成功。状态文件是读取路径写的(或者是上次运行读取路径留下的 key 被拒)就撤掉;
+// 写入器写的只在镜像写入关着时撤。
 func noteLastfmReadOK() {
+	lastfmReadKeyRejected.Store(false)
+	forgetLastfmKeyRejectedAtIfClear()
 	switch lastfmStatusOwner.Load() {
 	case lastfmStatusByWriter:
+		if lastfmWriterOff() && lastfmStatusOwner.CompareAndSwap(lastfmStatusByWriter, lastfmStatusNone) {
+			removeLastfmStatusFile()
+		}
 		return
 	case lastfmStatusByRead:
 		if lastfmStatusOwner.CompareAndSwap(lastfmStatusByRead, lastfmStatusNone) {
@@ -125,13 +156,19 @@ func noteLastfmReadOK() {
 	if lastfmStatusPath == "" || !lastfmStaleStatusChecked.CompareAndSwap(false, true) {
 		return
 	}
-	if st, ok := readLastfmStatusFile(); ok && st.Reason == lastfmReasonKeyRejected && lastfmStatusOwner.Load() == lastfmStatusNone {
+	st, ok := readLastfmStatusFile()
+	if !ok || st.Reason != lastfmReasonKeyRejected || (st.By == lastfmStatusByWriterTag && !lastfmWriterOff()) {
+		return
+	}
+	if lastfmStatusOwner.Load() == lastfmStatusNone {
 		removeLastfmStatusFile()
 	}
 }
 
 // noteLastfmWriteOK:写入成功,key 和授权都没问题,谁写的状态文件都撤。
 func noteLastfmWriteOK() {
+	lastfmWriteKeyRejected.Store(false)
+	forgetLastfmKeyRejectedAtIfClear()
 	if lastfmStatusOwner.Swap(lastfmStatusNone) != lastfmStatusNone {
 		removeLastfmStatusFile()
 	}
@@ -151,6 +188,12 @@ const (
 	lastfmReasonSession     = "session"
 )
 
+// 状态文件 by 字段:谁写的。没有 by 的(这个字段之前写的)按读取路径处理。
+const (
+	lastfmStatusByReadTag   = "read"
+	lastfmStatusByWriterTag = "writer"
+)
+
 // lastfmStatusFile 是 lyrimuse-lastfm-status.json 的内容,App 侧 LastfmMirrorStatus.Info 读。
 type lastfmStatusFile struct {
 	Error   int    `json:"error"`
@@ -159,6 +202,7 @@ type lastfmStatusFile struct {
 	At      int64  `json:"at"`
 	Reason  string `json:"reason,omitempty"`
 	Status  int    `json:"status,omitempty"`
+	By      string `json:"by,omitempty"`
 }
 
 func readLastfmStatusFile() (lastfmStatusFile, bool) {

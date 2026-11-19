@@ -3054,6 +3054,44 @@ func runLastfmTests() {
         expectEqual(parsed.0 == .keyRejected && parsed.code == 10 && parsed.message == "Invalid API key", true, "Last.fm 归类: 从 403 应答体读出码和 message")
         expectEqual(LastfmErrorClassifier.classify(httpStatus: 403, body: Data("<html>Forbidden</html>".utf8)).0, .keyRejected,
                     "Last.fm 归类: 403 网页应答体按没有码处理")
+        // 官方错误表逐条配 403:只有 10 / 26 和说明里提到订阅的 12 / 18 算 key 被拒,4 / 9 是授权失效,其余是别的错误。
+        // 表跟引擎 lastfmkey_test.go 的 lastfmOfficialErrorMessages 是同一张,改了两边一起改。
+        let official: [Int: String] = [
+            2: "Invalid service - This service does not exist",
+            3: "Invalid Method - No method with that name in this package",
+            4: "Authentication Failed - You do not have permissions to access the service",
+            5: "Invalid format - This service doesn't exist in that format",
+            6: "Invalid parameters - Your request is missing a required parameter",
+            7: "Invalid resource specified",
+            8: "Operation failed - Most likely the backend service failed. Please try again.",
+            9: "Invalid session key - Please re-authenticate",
+            10: "Invalid API key - You must be granted a valid key by last.fm",
+            11: "Service Offline - This service is temporarily offline. Try again later.",
+            12: "Subscribers Only - This station is only available to paid last.fm subscribers",
+            13: "Invalid method signature supplied",
+            14: "Unauthorized Token - This token has not been authorized",
+            15: "This item is not available for streaming.",
+            16: "The service is temporarily unavailable, please try again.",
+            17: "Login: User requires to be logged in",
+            18: "Trial Expired - This user has no free radio plays left. Subscription required.",
+            20: "Not Enough Content - There is not enough content to play this station",
+            21: "Not Enough Members - This group does not have enough members for radio",
+            22: "Not Enough Fans - This artist does not have enough fans for for radio",
+            23: "Not Enough Neighbours - There are not enough neighbours for radio",
+            24: "No Peak Radio - This user is not allowed to listen to radio during peak usage",
+            25: "Radio Not Found - Radio station not found",
+            26: "API Key Suspended - This application is not allowed to make requests to the web services",
+            27: "Deprecated - This type of request is no longer supported",
+            29: "Rate Limit Exceded - Your IP has made too many requests in a short period, exceeding our API guidelines",
+        ]
+        expectEqual(Set(official.keys), LastfmErrorClassifier.knownCodes, "Last.fm 归类: 已知码表就是官方错误表")
+        for (code, message) in official.sorted(by: { $0.key < $1.key }) {
+            let want: LastfmErrorClass = [10, 26, 12, 18].contains(code) ? .keyRejected : [4, 9].contains(code) ? .sessionInvalid : .other
+            expectEqual(classify(403, code, message), want, "Last.fm 归类: 403 + 官方码 \(code)")
+        }
+        let unauthorizedToken = LastfmErrorClassifier.classify(httpStatus: 403,
+            body: Data(#"{"message":"Unauthorized Token - This token has not been authorized","error":14}"#.utf8))
+        expectEqual(unauthorizedToken.0, .other, "Last.fm 归类: 换 session 时 token 还没授权(实测 403 + 14)不报要 Pro")
         let fileRejected = LastfmErrorClassifier.statusFileKeyRejected
         expectEqual(fileRejected("key_rejected", 0, 403, ""), true, "Last.fm 状态文件: reason key_rejected")
         expectEqual(fileRejected("session", 10, nil, ""), false, "Last.fm 状态文件: 有 reason 就按 reason")
@@ -3075,6 +3113,13 @@ func runLastfmTests() {
         let tab = sourceText("lyrimuse/AccountLinkingTab.swift")
         expectEqual(sourceHas(tab, #"mirrorInfo.keyRejected ? L10n.t("需要 Last.fm Pro") : L10n.t("授权已失效")"#), true,
                     "key 被拒: 账号状态红标说要 Pro,不说授权失效")
+        let keyRejectedLine = sourceBody("private func lastfmKeyRejectedStatusLine(showsLabel: Bool) -> some View", in: tab)
+        expectEqual(sourceHas(keyRejectedLine, "openLastfmPro()") && sourceHas(keyRejectedLine, "showLastfmDisconnectConfirm = true")
+                    && !sourceHas(keyRejectedLine, "showLastfmWizard = true"), true,
+                    "key 被拒: 页头留着「断开…」(改用 ListenBrainz 的出路),不给重新连接")
+        expectEqual(sourceHas(sourceBody("private var lastfmProfileStatusLine: some View", in: tab),
+                              "lastfmKeyRejectedStatusLine(showsLabel: true)\n                    lastfmKeyRejectedStatusLine(showsLabel: false)"), true,
+                    "key 被拒: 页头放不下时先省掉红点旁的字")
         let notifier = sourceText("lyrimuse/Settings/LastfmMirrorNotifier.swift")
         expectEqual(sourceHas(notifier, "deliver(keyRejected: keyRejected)") && sourceHas(notifier, #"L10n.t("Last.fm 拒绝了 API Key")"#), true,
                     "key 被拒: 系统通知分文案")

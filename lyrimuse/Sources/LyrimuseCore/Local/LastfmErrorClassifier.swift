@@ -11,8 +11,9 @@ public enum LastfmErrorClass: Equatable, Sendable {
 }
 
 public enum LastfmErrorClassifier {
-    /// Last.fm 文档里列出过的 error 码。403 带着这之外的码(或者干脆没有码)算「认不出的 403」。
-    public static let knownCodes: Set<Int> = [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 13, 16, 26, 29]
+    /// Last.fm 官方错误表(https://www.last.fm/api/errorcodes)列出的码,1 和 19 写着不存在、表里没有 28。
+    /// 403 带着这之外的码(或者干脆没有码)算「认不出的 403」。14(token 还没授权)实测就配 403,漏了会被报成要 Pro(12 章决策 100)。
+    public static let knownCodes: Set<Int> = [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 20, 21, 22, 23, 24, 25, 26, 27, 29]
     /// message 里提到 Pro 或订阅就算 key 被拒,不管带的是哪个码。
     public static let proMessagePattern = #"(?i)\bpro\b|subscri"#
 
