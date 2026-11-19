@@ -87,6 +87,16 @@ var (
 	petitCache = map[string]petitResult{}
 )
 
+// petitProvider 把 petitLyric 接到 LyricProvider 上。结果的源名由调度填(runLyricProvider)。
+type petitProvider struct{ desc *ProviderDescriptor }
+
+func (p petitProvider) Descriptor() *ProviderDescriptor { return p.desc }
+
+func (p petitProvider) Resolve(ctx context.Context, q ProviderQuery, _ RoundEnv) SourceResult {
+	r := petitLyric(ctx, q.Artist, q.SourceTitle, q.Album, q.DurationSecs)
+	return SourceResult{lyr: r.lyrics, yrc: r.yrc, matchTitle: r.title, matchArtist: r.artist, matchAlbum: r.album, matchCover: r.cover, srcDur: r.durationSecs, isrc: r.isrc, plainOnly: r.plainOnly}
+}
+
 func petitLyric(ctx context.Context, artist, title, album string, durationSecs float64) petitResult {
 	if title == "" {
 		return petitResult{}

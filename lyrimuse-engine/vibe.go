@@ -58,6 +58,16 @@ var (
 	vibeCache = map[string]vibeResult{}
 )
 
+// vibeProvider 把 vibeLyric 接到 LyricProvider 上。结果的源名由调度填(runLyricProvider)。
+type vibeProvider struct{ desc *ProviderDescriptor }
+
+func (p vibeProvider) Descriptor() *ProviderDescriptor { return p.desc }
+
+func (p vibeProvider) Resolve(ctx context.Context, q ProviderQuery, _ RoundEnv) SourceResult {
+	r := vibeLyric(ctx, q.Artist, q.SourceTitle, q.Album, q.DurationSecs)
+	return SourceResult{lyr: r.lyrics, tr: r.tr, matchTitle: r.title, matchArtist: r.artist, matchAlbum: r.album, matchCover: r.cover, srcDur: r.durationSecs, plainOnly: r.plainOnly}
+}
+
 func vibeLyric(ctx context.Context, artist, title, album string, durationSecs float64) vibeResult {
 	if title == "" {
 		return vibeResult{}

@@ -61,6 +61,13 @@ func parityOK(body string) parityReply         { return parityReply{body: body} 
 func parityStatus(status int) parityReply      { return parityReply{status: status} }
 func parityNotFound(parityRequest) parityReply { return parityReply{status: http.StatusNotFound} }
 
+// parityHang 把这个请求挂到它被取消为止。源并发发两条检索、一条失败就返回时,另一条用它:让那一条在两条路上都是
+// 「这一轮结束时被取消」,不然它的应答到得早晚会让这一轮记下的东西(问到了没有、熔断计数)时有时无。
+func parityHang(r parityRequest) parityReply {
+	<-r.Context().Done()
+	return parityReply{status: http.StatusServiceUnavailable}
+}
+
 type parityFake struct {
 	mu    sync.Mutex
 	lines []string
@@ -184,8 +191,10 @@ type providerParityOutcome struct {
 }
 
 // handwrittenProviderRound 照收集循环里手写 goroutine 的写法问一个源一轮:lyricSourceSkippedThisRound 判跳过,没跳过的
-// 走 s.handwritten。
+// 走 s.handwritten。跟收集循环一样,返回时取消这一轮的 ctx:源里并发发出去、还没回来的请求在两条路上都跟着断。
 func handwrittenProviderRound(ctx context.Context, s providerParitySource, artist, title, album string, durationSecs float64) lyricSourceResult {
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
 	srcTitle := lyricSourceTitleFor(ctx, title)
 	breakerPlan := sharedLyricSourceBreaker().planRound(lyricSourceNames)
 	if lyricSourceSkippedThisRound(ctx, s.name, lyricSourceOnlyFrom(ctx), breakerPlan, lyricSourceRoundFrom(ctx)) {
@@ -220,13 +229,21 @@ func (s providerParitySource) roundCtx(c providerParityCase) context.Context {
 // providerParityGuardState:出站闸和熔断器里跟这个源有关的状态。还剩多久按真实时钟算(每日额度的重置时刻还只记到整秒),
 // 取整到 10 秒、每日额度取整到分钟再比。
 func providerParityGuardState(name string) []string {
-	d := lyricProviders().descriptor(name)
 	b, g := sharedLyricSourceBreaker(), sharedHostGuard()
 	left, cooling := b.coolingDown(name)
 	out := []string{fmt.Sprintf("breaker cooling=%v left=%s reason=%q", cooling, left.Round(10*time.Second), b.cooldownReason(name))}
-	for _, h := range d.Hosts {
-		if until, paused := g.backgroundPausedUntil(h.Host); paused {
-			out = append(out, fmt.Sprintf("background paused %s for %s", h.Host, time.Until(until).Round(10*time.Second)))
+	g.mu.Lock()
+	var hosts []string
+	for host := range g.bgPause {
+		if lyricSourceForHost(host) == name {
+			hosts = append(hosts, host)
+		}
+	}
+	g.mu.Unlock()
+	sort.Strings(hosts)
+	for _, host := range hosts {
+		if until, paused := g.backgroundPausedUntil(host); paused {
+			out = append(out, fmt.Sprintf("background paused %s for %s", host, time.Until(until).Round(10*time.Second)))
 		}
 	}
 	if left, limited := g.sourceBudgetLeft(name); limited {
@@ -458,4 +475,9 @@ func TestMigratedLyricSourcesAreWiredThroughProviders(t *testing.T) {
 // migratedLyricSources:LRCLIB 之后迁到 LyricProvider 上的源,和各自 Resolve 里调入口函数的那一行。
 var migratedLyricSources = []struct{ name, file, entry, call string }{
 	{lyricSourceMegalobiz, "megalobiz.go", "megalobizLyric", "megalobizLyric(ctx, q.Artist, q.SourceTitle, q.Album, q.DurationSecs)"},
+	{lyricSourceVibe, "vibe.go", "vibeLyric", "vibeLyric(ctx, q.Artist, q.SourceTitle, q.Album, q.DurationSecs)"},
+	{lyricSourceGenie, "genie.go", "genieLyric", "genieLyric(ctx, q.Artist, q.SourceTitle, q.Album, q.DurationSecs)"},
+	{lyricSourcePetitLyrics, "petitlyrics.go", "petitLyric", "petitLyric(ctx, q.Artist, q.SourceTitle, q.Album, q.DurationSecs)"},
+	{lyricSourceZing, "zing.go", "zingLyric", "zingLyric(ctx, q.Artist, q.SourceTitle, q.Album, q.DurationSecs)"},
+	{lyricSourceMigu, "migu.go", "miguLyric", "miguLyric(ctx, q.Artist, q.SourceTitle, q.Album, q.DurationSecs)"},
 }

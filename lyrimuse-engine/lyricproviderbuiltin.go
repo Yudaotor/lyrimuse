@@ -70,12 +70,12 @@ func newBuiltinLyricProviderRegistry() *lyricProviderRegistry {
 		PeerGroup: peerGroupChinese,
 	}, privLocalClientIdentity|privOfflineLeg)
 
-	r.registerBuiltin(&ProviderDescriptor{
+	r.implement(miguProvider{desc: r.registerBuiltin(&ProviderDescriptor{
 		Name: lyricSourceMigu, Order: 8, TieRank: 7, DefaultPriorityRank: 8,
 		Hosts:           []HostRule{{"migu.cn", hostWithSubdomains}},
 		ParenBackground: true, InstrumentalRank: 4,
 		PeerGroup: peerGroupChinese,
-	}, 0)
+	}, 0)})
 
 	r.registerBuiltin(&ProviderDescriptor{
 		Name: lyricSourceDeezer, Order: 9, TieRank: 8, DefaultPriorityRank: 9,
@@ -107,33 +107,33 @@ func newBuiltinLyricProviderRegistry() *lyricProviderRegistry {
 		Probe:           &ProbeTrack{Artist: "陈奕迅", Title: "十年"},
 	}, privLocalClientIdentity|privPlaybackTrackIDs|privPlayerNoVocals)
 
-	r.registerBuiltin(&ProviderDescriptor{
+	r.implement(vibeProvider{desc: r.registerBuiltin(&ProviderDescriptor{
 		Name: lyricSourceVibe, Order: 12, TieRank: 11, DefaultPriorityRank: 12,
 		Hosts:         []HostRule{{"apis.naver.com", hostExact}},
 		ProxyFallback: true, ParenBackground: true,
-	}, 0)
+	}, 0)})
 
-	r.registerBuiltin(&ProviderDescriptor{
+	r.implement(genieProvider{desc: r.registerBuiltin(&ProviderDescriptor{
 		Name: lyricSourceGenie, Order: 13, TieRank: 12, DefaultPriorityRank: 13,
 		Hosts:         []HostRule{{"app.genie.co.kr", hostExact}, {"dn.genie.co.kr", hostExact}},
 		ProxyFallback: true, ParenBackground: true,
-	}, 0)
+	}, 0)})
 
-	r.registerBuiltin(&ProviderDescriptor{
+	r.implement(petitProvider{desc: r.registerBuiltin(&ProviderDescriptor{
 		Name: lyricSourcePetitLyrics, Order: 14, TieRank: 13, DefaultPriorityRank: 14,
 		Hosts: []HostRule{
 			{"p1.petitlyrics.com", hostExact}, {"p0.petitlyrics.com", hostExact}, {"on.petitlyrics.com", hostExact},
 		},
 		ProxyFallback: true, ParenBackground: true,
-	}, 0)
+	}, 0)})
 
-	r.registerBuiltin(&ProviderDescriptor{
+	r.implement(zingProvider{desc: r.registerBuiltin(&ProviderDescriptor{
 		Name: lyricSourceZing, Order: 15, TieRank: 14, DefaultPriorityRank: 15,
 		Hosts:         []HostRule{{"zingmp3.vn", hostExact}, {"static-zmp3.zmdcdn.me", hostExact}},
 		ProxyFallback: true, ParenBackground: true,
 		Probe:                   &ProbeTrack{Artist: "Sơn Tùng M-TP", Title: "Lạc Trôi"},
 		QueryIndependentFailure: zingLastFailureReasonNow,
-	}, privBreakerControl)
+	}, privBreakerControl)})
 
 	r.implement(megalobizProvider{desc: r.registerBuiltin(&ProviderDescriptor{
 		Name: lyricSourceMegalobiz, Order: 16, TieRank: 15, DefaultPriorityRank: 16,

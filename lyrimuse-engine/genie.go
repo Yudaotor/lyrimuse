@@ -54,6 +54,16 @@ var (
 	genieCache = map[string]genieResult{}
 )
 
+// genieProvider 把 genieLyric 接到 LyricProvider 上。结果的源名由调度填(runLyricProvider)。
+type genieProvider struct{ desc *ProviderDescriptor }
+
+func (p genieProvider) Descriptor() *ProviderDescriptor { return p.desc }
+
+func (p genieProvider) Resolve(ctx context.Context, q ProviderQuery, _ RoundEnv) SourceResult {
+	r := genieLyric(ctx, q.Artist, q.SourceTitle, q.Album, q.DurationSecs)
+	return SourceResult{lyr: r.lyrics, matchTitle: r.title, matchArtist: r.artist, matchAlbum: r.album, matchCover: r.cover, srcDur: r.durationSecs, plainOnly: r.plainOnly}
+}
+
 func genieLyric(ctx context.Context, artist, title, album string, durationSecs float64) genieResult {
 	if title == "" {
 		return genieResult{}

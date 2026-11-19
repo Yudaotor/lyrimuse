@@ -6322,15 +6322,6 @@ func fetchScoredLyricCandidatesStreaming(ctx context.Context, artist, title, alb
 		resultsCh <- kuwoSourceResult(kuwoLyric(ctx, artist, srcTitle, album, durationSecs))
 	}()
 	go func() {
-		if skipSource("migu") {
-			resultsCh <- lyricSourceResult{source: "migu"}
-			return
-		}
-		// 独立检索(不等任何其它源的 ID),同 kuwo;tr 是 trcUrl 拉回来的中文译文,多数曲目为空。
-		r := miguLyric(ctx, artist, srcTitle, album, durationSecs)
-		resultsCh <- lyricSourceResult{source: "migu", lyr: r.lyrics, yrc: r.yrc, tr: r.tr, matchTitle: r.title, matchArtist: r.artist, matchAlbum: r.album, matchCover: r.cover, srcDur: r.durationSecs, plainOnly: r.plainOnly}
-	}()
-	go func() {
 		if skipSource("deezer") {
 			resultsCh <- lyricSourceResult{source: "deezer"}
 			return
@@ -6378,42 +6369,6 @@ func fetchScoredLyricCandidatesStreaming(ctx context.Context, artist, title, alb
 		// (见 sodalocal.go、09 章决策 363)。
 		noVocals := r.fromLocalClient && (r.noVocals || sodaLocalInstrumental(artist, srcTitle, album, durationSecs))
 		resultsCh <- lyricSourceResult{source: "soda", lyr: r.lyrics, yrc: r.yrc, tr: r.tr, matchTitle: r.title, matchArtist: r.artist, matchAlbum: r.album, matchCover: r.cover, srcDur: r.durationSecs, trackFoundNoLyrics: noLyrics, noVocals: noVocals, identityFromLocalClient: r.fromLocalClient}
-	}()
-	go func() {
-		if skipSource("vibe") {
-			resultsCh <- lyricSourceResult{source: "vibe"}
-			return
-		}
-		// 独立检索(不等任何其它源的 ID),同 kuwo / migu / deezer。只有纯文本时 plainOnly=true。
-		r := vibeLyric(ctx, artist, srcTitle, album, durationSecs)
-		resultsCh <- lyricSourceResult{source: "vibe", lyr: r.lyrics, tr: r.tr, matchTitle: r.title, matchArtist: r.artist, matchAlbum: r.album, matchCover: r.cover, srcDur: r.durationSecs, plainOnly: r.plainOnly}
-	}()
-	go func() {
-		if skipSource("genie") {
-			resultsCh <- lyricSourceResult{source: "genie"}
-			return
-		}
-		// 独立检索,同 vibe。只有纯文本时 plainOnly=true。
-		r := genieLyric(ctx, artist, srcTitle, album, durationSecs)
-		resultsCh <- lyricSourceResult{source: "genie", lyr: r.lyrics, matchTitle: r.title, matchArtist: r.artist, matchAlbum: r.album, matchCover: r.cover, srcDur: r.durationSecs, plainOnly: r.plainOnly}
-	}()
-	go func() {
-		if skipSource("petitlyrics") {
-			resultsCh <- lyricSourceResult{source: "petitlyrics"}
-			return
-		}
-		// 独立检索,同 vibe。只有纯文本时 plainOnly=true。
-		r := petitLyric(ctx, artist, srcTitle, album, durationSecs)
-		resultsCh <- lyricSourceResult{source: "petitlyrics", lyr: r.lyrics, yrc: r.yrc, matchTitle: r.title, matchArtist: r.artist, matchAlbum: r.album, matchCover: r.cover, srcDur: r.durationSecs, isrc: r.isrc, plainOnly: r.plainOnly}
-	}()
-	go func() {
-		if skipSource("zing") {
-			resultsCh <- lyricSourceResult{source: "zing"}
-			return
-		}
-		// 独立检索,同 vibe。
-		r := zingLyric(ctx, artist, srcTitle, album, durationSecs)
-		resultsCh <- lyricSourceResult{source: "zing", lyr: r.lyrics, yrc: r.yrc, matchTitle: r.title, matchArtist: r.artist, matchAlbum: r.album, matchCover: r.cover, srcDur: r.durationSecs}
 	}()
 
 	// raw:目前为止到手的各源原始应答,按源名存。打分/排序全部下放给

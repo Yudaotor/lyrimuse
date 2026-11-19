@@ -117,6 +117,16 @@ func zingLastFailureReasonNow() string {
 	return zingLastFailure
 }
 
+// zingProvider 把 zingLyric 接到 LyricProvider 上。结果的源名由调度填(runLyricProvider)。
+type zingProvider struct{ desc *ProviderDescriptor }
+
+func (p zingProvider) Descriptor() *ProviderDescriptor { return p.desc }
+
+func (p zingProvider) Resolve(ctx context.Context, q ProviderQuery, _ RoundEnv) SourceResult {
+	r := zingLyric(ctx, q.Artist, q.SourceTitle, q.Album, q.DurationSecs)
+	return SourceResult{lyr: r.lyrics, yrc: r.yrc, matchTitle: r.title, matchArtist: r.artist, matchAlbum: r.album, matchCover: r.cover, srcDur: r.durationSecs}
+}
+
 func zingLyric(ctx context.Context, artist, title, album string, durationSecs float64) zingResult {
 	if title == "" {
 		return zingResult{}

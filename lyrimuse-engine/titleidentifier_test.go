@@ -578,7 +578,6 @@ func TestLyricSearchTitleIsWired(t *testing.T) {
 		"providerQuery := ProviderQuery{Artist: artist, Title: title, Album: album, SourceTitle: srcTitle, DurationSecs: durationSecs}",
 		"ytmusicLyric(ctx, artist, srcTitle, album, durationSecs)",
 		"kuwoLyric(ctx, artist, srcTitle, album, durationSecs)",
-		"miguLyric(ctx, artist, srcTitle, album, durationSecs)",
 		"deezerLyric(ctx, artist, srcTitle, album, durationSecs, lyricSourceISRC(ctx, artist, title, album))",
 		"applemusicLyric(ctx, artist, srcTitle, album, durationSecs, appleID, lyricSourceISRC(ctx, artist, title, album))",
 		"sodaLyric(ctx, artist, srcTitle, album, durationSecs)",
@@ -588,8 +587,13 @@ func TestLyricSearchTitleIsWired(t *testing.T) {
 		}
 	}
 	// 接到 LyricProvider 上的源从查询里取歌名,取的得是 SourceTitle。
-	if n := "lrclibLyric(ctx, q.Artist, q.SourceTitle, q.Album, q.DurationSecs)"; !containsCode(read("lrclib.go"), n) {
-		t.Errorf("lrclib.go 缺 %q", n)
+	for file, n := range map[string]string{
+		"lrclib.go": "lrclibLyric(ctx, q.Artist, q.SourceTitle, q.Album, q.DurationSecs)",
+		"migu.go":   "miguLyric(ctx, q.Artist, q.SourceTitle, q.Album, q.DurationSecs)",
+	} {
+		if !containsCode(read(file), n) {
+			t.Errorf("%s 缺 %q", file, n)
+		}
 	}
 	if n := strings.Count(enrich, "roundCtx = withLyricSourceTitle(roundCtx, lyricSearchTitleOrStored(ctx, storedSearchTitle, title), artist, title, searchAlbum)"); n != 2 {
 		t.Errorf("升级重试、重打分两处都要把带编号的歌名交给各源,实际 %d 处", n)

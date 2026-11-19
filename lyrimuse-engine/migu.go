@@ -65,6 +65,16 @@ var (
 	miguCache = map[string]miguResult{}
 )
 
+// miguProvider 把 miguLyric 接到 LyricProvider 上。结果的源名由调度填(runLyricProvider)。
+type miguProvider struct{ desc *ProviderDescriptor }
+
+func (p miguProvider) Descriptor() *ProviderDescriptor { return p.desc }
+
+func (p miguProvider) Resolve(ctx context.Context, q ProviderQuery, _ RoundEnv) SourceResult {
+	r := miguLyric(ctx, q.Artist, q.SourceTitle, q.Album, q.DurationSecs)
+	return SourceResult{lyr: r.lyrics, yrc: r.yrc, tr: r.tr, matchTitle: r.title, matchArtist: r.artist, matchAlbum: r.album, matchCover: r.cover, srcDur: r.durationSecs, plainOnly: r.plainOnly}
+}
+
 func miguLyric(ctx context.Context, artist, title, album string, durationSecs float64) miguResult {
 	if title == "" {
 		return miguResult{}
