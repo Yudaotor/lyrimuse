@@ -225,6 +225,12 @@ public enum LyrimuseDeepLink: Equatable, Sendable {
         /// `off` = 交还给它)。只改 App 内存里发布的那一份:不写状态文件、不熔断引擎、不弹系统通知。true = key 被拒,
         /// false = 授权失效,nil = off。
         case lastfmStatus(keyRejected: Bool?)
+        /// 打开「连接 Last.fm」向导,跟账号建议里「重新连接…」走同一条路(`debug/lastfm-wizard`,`keys=1` 打开时第一步展开成
+        /// 填密钥那一档,同点「更改」):只摆出向导,不发授权请求、不改密钥和 session。向导是 Last.fm 设置页的 sheet,那一页
+        /// 要先开着(`settings/account/lastfm?invisible=1`),没开着的话下次进那一页时弹。
+        case lastfmWizard(editingKeys: Bool)
+        /// 关掉连接向导,同点向导右上角的 ×(`debug/lastfm-wizard?off=1`)。
+        case lastfmWizardClose
         /// 歌词管理里把这一条标成 / 取消纯音乐,跟详情页那颗开关走同一条路(交给引擎、改完重读):
         /// `debug/manager-instrumental?key=<写法键>&on=1|0`。验「改动之后的重读」用。
         case managerInstrumental(key: String, on: Bool)
@@ -855,6 +861,12 @@ public enum LyrimuseDeepLink: Equatable, Sendable {
             case "off": self = .debug(.lastfmStatus(keyRejected: nil))
             default: return nil
             }
+        case ("debug", "/lastfm-wizard"):
+            if value("off").flatMap(Self.parseBool) == true {
+                self = .debug(.lastfmWizardClose)
+            } else {
+                self = .debug(.lastfmWizard(editingKeys: value("keys").flatMap(Self.parseBool) ?? false))
+            }
         case ("debug", "/settings-visibility"):
             switch value("state")?.lowercased() {
             case "visible": self = .debug(.settingsVisibility(override: true))
@@ -1299,6 +1311,12 @@ public enum LyrimuseDeepLink: Equatable, Sendable {
             case let .lastfmStatus(keyRejected):
                 components.path = "/lastfm-status"
                 components.queryItems = [URLQueryItem(name: "state", value: keyRejected.map { $0 ? "key-rejected" : "revoked" } ?? "off")]
+            case let .lastfmWizard(editingKeys):
+                components.path = "/lastfm-wizard"
+                if editingKeys { components.queryItems = [URLQueryItem(name: "keys", value: "1")] }
+            case .lastfmWizardClose:
+                components.path = "/lastfm-wizard"
+                components.queryItems = [URLQueryItem(name: "off", value: "1")]
             case let .onboardingStep(step):
                 components.path = "/onboarding-step"
                 components.queryItems = [URLQueryItem(name: "step", value: Self.onboardingStepNames.first { $0.value == step }?.key)]

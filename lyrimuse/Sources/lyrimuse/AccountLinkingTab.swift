@@ -1567,7 +1567,14 @@ struct AccountLinkingTab: View {
         .sheet(isPresented: $showLastfmWizard) { lastfmWizardSheet }
         .onReceive(AppActions.shared.lastfmWizardRequests) { _ in
             AppActions.shared.pendingLastfmWizard = false
+            // 向导已经开着时 onAppear 不会再跑,展开密钥那一档在这里取走。
+            if showLastfmWizard, AppActions.shared.takeLastfmWizardKeyEditing() { lastfmKeysEditing = true }
             showLastfmWizard = true
+        }
+        .onReceive(AppActions.shared.lastfmWizardDismissals) { _ in
+            guard showLastfmWizard else { return }
+            lastfmConnect.reset()
+            showLastfmWizard = false
         }
         .alert(L10n.t("断开 Last.fm？"), isPresented: $showLastfmDisconnectConfirm) {
             Button(L10n.t("取消"), role: .cancel) {}
@@ -1846,7 +1853,10 @@ struct AccountLinkingTab: View {
         }
         .padding(20)
         .frame(width: 460)
-        .onAppear { lastfmKeysEditing = !lastfmKeysReady }
+        .onAppear {
+            let editingRequested = AppActions.shared.takeLastfmWizardKeyEditing()
+            lastfmKeysEditing = !lastfmKeysReady || editingRequested
+        }
         // Esc / 点外面关掉 sheet 时状态机跟着复位,不然残留在 waitingForBrowserAuth,下次打开向导直接停在
         // 中间步骤,还带着一个已经作废的 token。成功自动关闭那条路里 reset 已经调用过,这里重复调用无害(幂等)。
         .onDisappear { lastfmConnect.reset() }

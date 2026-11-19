@@ -456,6 +456,12 @@ enum DebugDeepLinks {
         case let .lastfmStatus(keyRejected):
             LastfmMirrorStatusWatcher.shared.setDebugOverride(keyRejected: keyRejected)
             logger.notice("debug lastfm status override=\(keyRejected.map { $0 ? "key-rejected" : "revoked" } ?? "off", privacy: .public)")
+        case let .lastfmWizard(editingKeys):
+            AppActions.shared.requestLastfmWizard(editingKeys: editingKeys)
+            logger.notice("debug lastfm wizard open keys=\(editingKeys, privacy: .public)")
+        case .lastfmWizardClose:
+            AppActions.shared.dismissLastfmWizard()
+            logger.notice("debug lastfm wizard close")
         case let .onboardingStep(step):
             NotificationCenter.default.post(name: onboardingStepNotification, object: step)
             logger.notice("debug onboarding step=\(String(describing: step), privacy: .public)")

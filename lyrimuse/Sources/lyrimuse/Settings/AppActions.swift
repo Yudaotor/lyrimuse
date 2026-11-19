@@ -146,10 +146,26 @@ final class AppActions {
     /// 一起走:信箱管那一页还没建出来(从建议页切过去),subject 管那一页已经开着。
     var pendingLastfmWizard = false
     let lastfmWizardRequests = PassthroughSubject<Void, Never>()
+    /// 向导打开时第一步展开成填密钥那一档(`debug/lastfm-wizard?keys=1`),由向导取走(`takeLastfmWizardKeyEditing`)。
+    private var pendingLastfmWizardKeyEditing = false
+    /// `debug/lastfm-wizard?off=1`:关掉向导,同点向导的 ×。
+    let lastfmWizardDismissals = PassthroughSubject<Void, Never>()
 
-    func requestLastfmWizard() {
+    func requestLastfmWizard(editingKeys: Bool = false) {
         pendingLastfmWizard = true
+        pendingLastfmWizardKeyEditing = editingKeys
         lastfmWizardRequests.send()
+    }
+
+    func takeLastfmWizardKeyEditing() -> Bool {
+        defer { pendingLastfmWizardKeyEditing = false }
+        return pendingLastfmWizardKeyEditing
+    }
+
+    func dismissLastfmWizard() {
+        pendingLastfmWizard = false
+        pendingLastfmWizardKeyEditing = false
+        lastfmWizardDismissals.send()
     }
 
     /// 「这段时间内的 reopen 别开歌词窗口」—— 点系统通知时用。

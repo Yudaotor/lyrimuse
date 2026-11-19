@@ -558,6 +558,11 @@ func runDeepLinkTests() {
                      .debug(.lastfmStatus(keyRejected: nil))], "debug: Last.fm 当作 key 被拒 / 授权失效 / 交还")
         expectEqual(link("lyrimuse://debug/lastfm-status?state=pro") == nil
                     && link("lyrimuse://debug/lastfm-status") == nil, true, "debug: Last.fm 状态认不出的、没带都不认")
+        expectEqual([link("lyrimuse://debug/lastfm-wizard"), link("lyrimuse://debug/lastfm-wizard?keys=1"),
+                     link("lyrimuse://debug/lastfm-wizard?keys=0"), link("lyrimuse://debug/Lastfm-Wizard?off=1&keys=1")],
+                    [.debug(.lastfmWizard(editingKeys: false)), .debug(.lastfmWizard(editingKeys: true)),
+                     .debug(.lastfmWizard(editingKeys: false)), .debug(.lastfmWizardClose)],
+                    "debug: Last.fm 连接向导打开 / 展开密钥 / 关掉(off 压过 keys)")
         expectEqual(link("lyrimuse://debug/settings-visibility?state=on") == nil
                     && link("lyrimuse://debug/settings-visibility") == nil, true, "debug: 设置窗口可见性认不出的、没带都不认")
         expectEqual([link("lyrimuse://debug/onboarding-step?step=done"), link("lyrimuse://debug/onboarding-step?step=Background"),
@@ -994,6 +999,7 @@ func runDeepLinkTests() {
             .debug(.engineBackgroundItem(disabled: true)), .debug(.engineBackgroundItem(disabled: false)),
             .debug(.engineBackgroundItem(disabled: nil)),
             .debug(.lastfmStatus(keyRejected: true)), .debug(.lastfmStatus(keyRejected: false)), .debug(.lastfmStatus(keyRejected: nil)),
+            .debug(.lastfmWizard(editingKeys: false)), .debug(.lastfmWizard(editingKeys: true)), .debug(.lastfmWizardClose),
             .debug(.onboardingStep(.welcome)), .debug(.onboardingStep(.playerChoice)), .debug(.onboardingStep(.browserPairing)),
             .debug(.onboardingStep(.background)), .debug(.onboardingStep(.displayMode)), .debug(.onboardingStep(.done)),
             .debug(.managerInstrumental(key: "歌手|歌 & 名|专辑", on: true)), .debug(.managerInstrumental(key: "a|b|", on: false)),
