@@ -575,7 +575,7 @@ func TestLyricSearchTitleIsWired(t *testing.T) {
 		"artist: artist, title: srcTitle, album: album,",
 		"kugouLocalLyric(artist, srcTitle, album, durationSecs)",
 		"kugouLyric(ctx, artist, srcTitle, album, durationSecs)",
-		"lrclibLyric(ctx, artist, srcTitle, album, durationSecs)",
+		"providerQuery := ProviderQuery{Artist: artist, Title: title, Album: album, SourceTitle: srcTitle, DurationSecs: durationSecs}",
 		"ytmusicLyric(ctx, artist, srcTitle, album, durationSecs)",
 		"kuwoLyric(ctx, artist, srcTitle, album, durationSecs)",
 		"miguLyric(ctx, artist, srcTitle, album, durationSecs)",
@@ -586,6 +586,10 @@ func TestLyricSearchTitleIsWired(t *testing.T) {
 		if !containsCode(enrich, n) {
 			t.Errorf("enrich.go 缺 %q", n)
 		}
+	}
+	// 接到 LyricProvider 上的源从查询里取歌名,取的得是 SourceTitle。
+	if n := "lrclibLyric(ctx, q.Artist, q.SourceTitle, q.Album, q.DurationSecs)"; !containsCode(read("lrclib.go"), n) {
+		t.Errorf("lrclib.go 缺 %q", n)
 	}
 	if n := strings.Count(enrich, "roundCtx = withLyricSourceTitle(roundCtx, lyricSearchTitleOrStored(ctx, storedSearchTitle, title), artist, title, searchAlbum)"); n != 2 {
 		t.Errorf("升级重试、重打分两处都要把带编号的歌名交给各源,实际 %d 处", n)

@@ -6071,6 +6071,30 @@ func lyricSourceSkipFor(source string, enabled func(string) bool, plan lyricSour
 	return lyricSourceQuery
 }
 
+// lyricSourceSkippedThisRound:收集循环里手写 goroutine 的源这一轮发不发请求,true = 不发、交空结果。only 是别名轮
+// 「只查这些源」的名单(nil = 不限),breakerPlan 是这一轮在冷却的源,round 记被冷却跳过的源(nil 时不记)。
+// 接到 LyricProvider 上的源由 lyricRoundPlan.decide 判,两处判据必须一致(lyricproviderrun_test.go 逐个源对着比)。
+func lyricSourceSkippedThisRound(ctx context.Context, source string, only map[string]bool, breakerPlan lyricSourceRoundPlan, round *lyricSourceRound) bool {
+	// 别名轮的"只查缺着的源"(withLyricSourceOnly):名单外的源静默跳过 ——
+	// 它们在原名那一轮已经答过了,不重复打、不记账、不打日志。名单为 nil = 不限制。
+	if only != nil && !only[source] {
+		return true
+	}
+	// 只在播放那一侧问的源(lyricSourceAllowedForRound):批量轮次里静默跳过,同关掉的源,不记跳过、不打日志。
+	if !lyricSourceAllowedForRound(ctx, source) {
+		return true
+	}
+	switch lyricSourceSkipFor(source, lyricSourceEnabled, breakerPlan) {
+	case lyricSourceSkipDisabled:
+		return true
+	case lyricSourceSkipCooling:
+		round.markSkippedBecause(source, sharedLyricSourceBreaker().cooldownReason(source))
+		log.Printf("lyrics: source %s skipped this round, cooling down for another %s", source, breakerPlan[source].Round(time.Second))
+		return true
+	}
+	return false
+}
+
 // fetchScoredLyricCandidatesStreaming 是实际实现:全部歌词源(含网易云)一起并发发出去,用带缓冲的 channel 收集结果。
 // 网易云必须跟其它源同批起跑,别为了封面/跳转链接单独同步先查一遍:那等于把网易云自己最坏能到小三十秒的串行耗时原样
 // 叠加在整体等待时间最前面。用 channel 而不是"WaitGroup + 共享变量":超时后放弃继续等、先用已到手的候选这件事是并发
@@ -6122,25 +6146,12 @@ func fetchScoredLyricCandidatesStreaming(ctx context.Context, artist, title, alb
 	// 触发一次补搜),也不打日志(是设置,不是事件)。进度分母本来就只数开着的源,不受影响。
 	only := lyricSourceOnlyFrom(ctx)
 	skipSource := func(source string) bool {
-		// 别名轮的"只查缺着的源"(withLyricSourceOnly):名单外的源静默跳过 ——
-		// 它们在原名那一轮已经答过了,不重复打、不记账、不打日志。名单为 nil = 不限制。
-		if only != nil && !only[source] {
-			return true
-		}
-		// 只在播放那一侧问的源(lyricSourceAllowedForRound):批量轮次里静默跳过,同关掉的源,不记跳过、不打日志。
-		if !lyricSourceAllowedForRound(ctx, source) {
-			return true
-		}
-		switch lyricSourceSkipFor(source, lyricSourceEnabled, breakerPlan) {
-		case lyricSourceSkipDisabled:
-			return true
-		case lyricSourceSkipCooling:
-			round.markSkippedBecause(source, sharedLyricSourceBreaker().cooldownReason(source))
-			log.Printf("lyrics: source %s skipped this round, cooling down for another %s", source, breakerPlan[source].Round(time.Second))
-			return true
-		}
-		return false
+		return lyricSourceSkippedThisRound(ctx, source, only, breakerPlan, round)
 	}
+	// 已经接到 LyricProvider 上的源由调度来起(startLyricProviders),跳过判断在调度里,不走 skipSource。
+	providerPlan := newLyricRoundPlan(ctx, breakerPlan)
+	providerQuery := ProviderQuery{Artist: artist, Title: title, Album: album, SourceTitle: srcTitle, DurationSecs: durationSecs}
+	providerEnv := RoundEnv{ForPlayingTrack: forPlaying}
 
 	// amll-ttml-db 按**平台音乐 ID**取歌词,所以它得等网易云/QQ 先把 ID 搜出来。
 	// 用两个带缓冲的 channel 把 ID 递过去,而不是把查询塞进那两个 goroutine 里 ——
@@ -6277,14 +6288,7 @@ func fetchScoredLyricCandidatesStreaming(ctx context.Context, artist, title, alb
 		}
 		resultsCh <- kugouSourceResult(kugouLyric(ctx, artist, srcTitle, album, durationSecs))
 	}()
-	go func() {
-		if skipSource("lrclib") {
-			resultsCh <- lyricSourceResult{source: "lrclib"}
-			return
-		}
-		r := lrclibLyric(ctx, artist, srcTitle, album, durationSecs)
-		resultsCh <- lyricSourceResult{source: "lrclib", lyr: r.lyrics, yrc: r.yrc, roma: r.roma, matchTitle: r.title, matchArtist: r.artist, matchAlbum: r.album, srcDur: r.durationSecs, instrumental: r.instrumental, plainOnly: r.plainOnly}
-	}()
+	startLyricProviders(ctx, lyricProviders().providers, providerQuery, providerEnv, providerPlan, resultsCh)
 	go func() {
 		if skipSource("lyricfind") {
 			resultsCh <- lyricSourceResult{source: "lyricfind"}

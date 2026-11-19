@@ -54,6 +54,16 @@ var (
 	lrclibCache = map[string]lrclibResult{} // artist|title|album -> result
 )
 
+// lrclibProvider 把 lrclibLyric 接到 LyricProvider 上。结果的源名由调度填(runLyricProvider)。
+type lrclibProvider struct{ desc *ProviderDescriptor }
+
+func (p lrclibProvider) Descriptor() *ProviderDescriptor { return p.desc }
+
+func (p lrclibProvider) Resolve(ctx context.Context, q ProviderQuery, _ RoundEnv) SourceResult {
+	r := lrclibLyric(ctx, q.Artist, q.SourceTitle, q.Album, q.DurationSecs)
+	return SourceResult{lyr: r.lyrics, yrc: r.yrc, roma: r.roma, matchTitle: r.title, matchArtist: r.artist, matchAlbum: r.album, srcDur: r.durationSecs, instrumental: r.instrumental, plainOnly: r.plainOnly}
+}
+
 func lrclibLyric(ctx context.Context, artist, title, album string, durationSecs float64) lrclibResult {
 	if title == "" {
 		return lrclibResult{}

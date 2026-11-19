@@ -213,17 +213,26 @@ type ProviderDescriptor struct {
 	DependsOnIDsFrom []string
 }
 
-// lyricProviderRegistry 是全部歌词来源的登记表:联网源和本机来源各一份描述符。
+// lyricProviderRegistry 是全部歌词来源的登记表:联网源和本机来源各一份描述符,已经接到 LyricProvider 上的源另有一份实现。
 type lyricProviderRegistry struct {
 	descriptors []*ProviderDescriptor
 	byName      map[string]*ProviderDescriptor
+	// providers:已经接到统一接口上的源。收集循环由调度起它们(startLyricProviders),不在这里的源仍是循环里手写的
+	// goroutine;一个源只能走其中一条路,两条都走会多交一份结果,都不走这一轮会等到截止。
+	providers []LyricProvider
 }
 
-// registerBuiltin 登记一个编在核心里的源,特权位写在调用处。
-func (r *lyricProviderRegistry) registerBuiltin(d *ProviderDescriptor, privileges builtinPrivileges) {
+// registerBuiltin 登记一个编在核心里的源,特权位写在调用处。返回登记好的描述符。
+func (r *lyricProviderRegistry) registerBuiltin(d *ProviderDescriptor, privileges builtinPrivileges) *ProviderDescriptor {
 	d.Privileges = privileges
 	r.descriptors = append(r.descriptors, d)
 	r.byName[d.Name] = d
+	return d
+}
+
+// implement 登记一个源的实现。
+func (r *lyricProviderRegistry) implement(p LyricProvider) {
+	r.providers = append(r.providers, p)
 }
 
 // descriptor:没登记的名字返回 nil。

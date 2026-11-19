@@ -32,14 +32,14 @@ func newBuiltinLyricProviderRegistry() *lyricProviderRegistry {
 		PeerGroup: peerGroupChinese,
 	}, privLocalClientIdentity|privOfflineLeg)
 
-	r.registerBuiltin(&ProviderDescriptor{
+	r.implement(lrclibProvider{desc: r.registerBuiltin(&ProviderDescriptor{
 		Name: lyricSourceLRCLIB, Order: 4, TieRank: 4, DefaultPriorityRank: 4,
 		Hosts:       []HostRule{{"lrclib.net", hostWithSubdomains}},
 		HostRates:   map[string]hostRate{"lrclib.net": {perSec: 1, burst: 6, reserve: 3}},
 		MaxInflight: 3, ProxyFallback: true,
 		Baked: bakedStripOnly, ParenBackground: true, CarriesKana: true, InstrumentalRank: 1,
 		PeerGroup: peerGroupGlobal,
-	}, 0)
+	}, 0)})
 
 	r.registerBuiltin(&ProviderDescriptor{
 		Name: lyricSourceAMLL, Order: 5, TieRank: 22, DefaultPriorityRank: 5,
