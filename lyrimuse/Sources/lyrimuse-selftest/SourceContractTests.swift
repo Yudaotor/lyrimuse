@@ -2982,6 +2982,14 @@ func runSourceContractSurfaceTests() {
                      wrap.contains("WrappedKaraokeRowsView.Geometry(spec: spec")],
                     [true, true, true, true, true, true, true, false],
                     "换句开销: 换行逐字行的墨迹出框随长图缓存,折行几何按规格和宽度记住")
+        // 上下交替时开唱的那一句命中长图缓存,靠的是下一句那一格跟开唱后同一个规格构造、只多停表一项(停表不进键);
+        // 调试深链开着时每排一句记一行命中与否、没命中差在哪几项(04 章决策 111)。
+        let nextSpecBody = sourceBody("private func alternateNextSpec(_ next: String, words: [SyncedLyricWord])",
+                                      in: read("LyricsOverlayView.swift"))
+        expectEqual([sourceHas(nextSpecBody, "var spec = wrappedKaraokeSpec(lineKey: next, words: words, groups: upcomingWordGroups, rowAlignment: nextLineRowAlignment)\n spec.paused = true\n return spec"),
+                     sourceHas(wrap, "if DebugDeepLinks.isEnabled { WrappedRowImageCache.logLookup(targets.map(\\.spec), scale: scale, fresh: rowViews.isEmpty) }"),
+                     sourceHas(sourceBody("static func logLookup(", in: wrap), "if images(for: spec, scale: scale) != nil { return \"hit[\\(text)]\" }")],
+                    [true, true, true], "换句开销: 上下交替的下一句跟开唱后同一个规格,只差停表;调试时记长图缓存命中")
         let overlayView = read("LyricsOverlayView.swift")
         // 关掉 / 自动收起的悬浮歌词换句时不重求 body:窄订阅代理换句才变的那几项走闸,窗口上屏之前开闸、收走之后关闸(05 章决策 157)。
         let overlayFeedView = read("LyricsOverlayView.swift")

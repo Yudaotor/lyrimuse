@@ -199,7 +199,7 @@ struct LyricsPreviewScrollView<Content: View>: NSViewRepresentable {
         }
 
         /// `debug/preview-click`:往可视区正中(加 `dy`)此刻画着的那一行的时间按钮点一下,跟真点击同一条路
-        /// (按窗口命中、交给命中的视图按下再松开),记下画面上是哪一行、按落点算是哪一行、命中了谁。
+        /// (`NSWindow.sendEvent` 按下、30 毫秒后松开),记下画面上是哪一行、按落点算是哪一行、命中了谁、跳到了哪一行。
         private func probeClick(dy: CGFloat) {
             guard let scrollView, let window = scrollView.window, let host, var top = window.contentView else { return }
             while let parent = top.superview { top = parent }
@@ -225,15 +225,18 @@ struct LyricsPreviewScrollView<Content: View>: NSViewRepresentable {
                 "hitView": hit.map { String(describing: type(of: $0)) } ?? "nil",
             ]
             LyricsPreviewClickProbe.seekedRow = nil
-            if let hit {
-                for type in [NSEvent.EventType.leftMouseDown, .leftMouseUp] {
-                    guard let event = NSEvent.mouseEvent(
-                        with: type, location: windowPoint, modifierFlags: [], timestamp: ProcessInfo.processInfo.systemUptime,
-                        windowNumber: window.windowNumber, context: nil, eventNumber: 0, clickCount: 1, pressure: 1) else { continue }
-                    if type == .leftMouseDown { hit.mouseDown(with: event) } else { hit.mouseUp(with: event) }
-                }
+            func event(_ type: NSEvent.EventType) -> NSEvent? {
+                NSEvent.mouseEvent(with: type, location: windowPoint, modifierFlags: [],
+                                   timestamp: ProcessInfo.processInfo.systemUptime, windowNumber: window.windowNumber,
+                                   context: nil, eventNumber: 0, clickCount: 1, pressure: type == .leftMouseUp ? 0 : 1)
             }
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+            // 经 `NSWindow.sendEvent` 送,同 `debug/window-click`:SwiftUI 按钮只认这条路,直接调视图的 `mouseDown` 不响应。
+            Task { @MainActor in
+                NSApp.preventWindowOrdering()
+                if let e = event(.leftMouseDown) { window.sendEvent(e) }
+                try? await Task.sleep(nanoseconds: 30_000_000)
+                if let e = event(.leftMouseUp) { window.sendEvent(e) }
+                try? await Task.sleep(nanoseconds: 300_000_000)
                 let seeked: Any = LyricsPreviewClickProbe.seekedRow.map { $0 as Any } ?? NSNull()
                 LyricsPreviewClickProbe.finish(report.merging(["seekedRow": seeked]) { $1 })
             }
