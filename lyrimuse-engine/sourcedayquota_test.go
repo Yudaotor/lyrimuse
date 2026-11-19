@@ -174,6 +174,11 @@ func TestMegalobizStopsAfterDailyQuotaUsedUp(t *testing.T) {
 	hits := 0
 	withKugouFakeReq(t, nil)
 	srv := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// 共享传输层把所有主机都导到这里;只数发给 Megalobiz 的,别的源的请求回 404。
+		if host, _, _ := strings.Cut(r.Host, ":"); host != "api.megalobiz.com" {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
 		mu.Lock()
 		hits++
 		mu.Unlock()
@@ -304,8 +309,11 @@ func TestTestLyricSourcesReportsDailyQuotaPause(t *testing.T) {
 	}
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	if len(f.hits) != 0 {
-		t.Errorf("停着的时候不发请求: %v", f.hits)
+	// 共享传输层把所有主机都导到假服务器;只看发给 Megalobiz 的。
+	for target := range f.hits {
+		if strings.HasPrefix(target, "https://api.megalobiz.com/") {
+			t.Errorf("停着的时候不发请求: %v", f.hits)
+		}
 	}
 }
 

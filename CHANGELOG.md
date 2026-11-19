@@ -145,7 +145,7 @@ Contributors / 贡献者
   Auto-detect switch and the notch progress bar (#83, #84)
   感谢 @HeizoFinds 的首次贡献，修复「自动识别」开关关不掉和灵动岛进度条不显示已播部分（#83、#84）
 
-264 commits since v1.13.0.
+265 commits since v1.13.0.
 
 **Full Changelog**: https://github.com/Yudaotor/lyrimuse/compare/v1.13.0...v1.14.0
 

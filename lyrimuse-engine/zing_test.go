@@ -483,7 +483,13 @@ func TestZingCallErrorsAreNotAnswers(t *testing.T) {
 	}
 	// -201 但没下发 cookie:不重发,算没问成。
 	calls := 0
-	zingSimpleFake(t, func(*http.Request, string) (int, string) { calls++; return http.StatusOK, `{"err":-201}` })
+	// 共享传输层把所有主机都导到假服务器;只数 Zing 的搜索请求。
+	zingSimpleFake(t, func(_ *http.Request, target string) (int, string) {
+		if target == "https://zingmp3.vn"+zingSearchPath {
+			calls++
+		}
+		return http.StatusOK, `{"err":-201}`
+	})
 	if _, err := zingSearch(qqRoundCtx(), "x"); err == nil || calls != 1 {
 		t.Errorf("没下发 cookie 的 -201 不重发: err=%v calls=%d", err, calls)
 	}
