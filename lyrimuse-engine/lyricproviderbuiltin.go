@@ -135,14 +135,14 @@ func newBuiltinLyricProviderRegistry() *lyricProviderRegistry {
 		QueryIndependentFailure: zingLastFailureReasonNow,
 	}, privBreakerControl)
 
-	r.registerBuiltin(&ProviderDescriptor{
+	r.implement(megalobizProvider{desc: r.registerBuiltin(&ProviderDescriptor{
 		Name: lyricSourceMegalobiz, Order: 16, TieRank: 15, DefaultPriorityRank: 16,
 		Rounds:       roundsOnDemand,
 		Hosts:        []HostRule{{"api.megalobiz.com", hostExact}},
 		HostRates:    map[string]hostRate{"api.megalobiz.com": {perSec: 0.4, burst: 6, reserve: 2}},
 		HourlyBudget: megalobizHourlyBudget, DayQuotaReserve: megalobizDayQuotaReserve, ProxyFallback: true,
 		ParenBackground: true, PageURL: megalobizPageURL,
-	}, 0)
+	}, 0)})
 
 	r.registerBuiltin(&ProviderDescriptor{Name: kkboxLocalLyricsSource, Kind: providerKindPlayerLocal, TieRank: 16},
 		privLocalClientIdentity)

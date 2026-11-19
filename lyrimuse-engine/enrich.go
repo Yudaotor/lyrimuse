@@ -6415,15 +6415,6 @@ func fetchScoredLyricCandidatesStreaming(ctx context.Context, artist, title, alb
 		r := zingLyric(ctx, artist, srcTitle, album, durationSecs)
 		resultsCh <- lyricSourceResult{source: "zing", lyr: r.lyrics, yrc: r.yrc, matchTitle: r.title, matchArtist: r.artist, matchAlbum: r.album, matchCover: r.cover, srcDur: r.durationSecs}
 	}()
-	go func() {
-		if skipSource("megalobiz") {
-			resultsCh <- lyricSourceResult{source: "megalobiz"}
-			return
-		}
-		// 独立检索,同 vibe。
-		r := megalobizLyric(ctx, artist, srcTitle, album, durationSecs)
-		resultsCh <- lyricSourceResult{source: "megalobiz", lyr: r.lyrics, matchTitle: r.title, matchArtist: r.artist, srcDur: r.durationSecs, sourceURL: r.url}
-	}()
 
 	// raw:目前为止到手的各源原始应答,按源名存。打分/排序全部下放给
 	// rankLyricSourceResults(包级纯函数,回归金标集与生产共用),这里只负责收结果、喂进去。

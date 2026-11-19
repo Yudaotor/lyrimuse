@@ -487,7 +487,8 @@ func TestMegalobizNewSourceFillOnlyOnPlayback(t *testing.T) {
 }
 
 // 白名单:isOnDemandLyricRound 认的三种标记只在这几个函数里打。扫全部源码,不是只看固定几个文件:新加的入口打了标记就得来
-// 这里登记,没打的默认不问只在播放那一侧问的源。Megalobiz 也只能经 fetchScoredLyricCandidatesStreaming 那道闸问。
+// 这里登记,没打的默认不问只在播放那一侧问的源。Megalobiz 也只能经调度那道闸问:megalobizLyric 只在 megalobizProvider.Resolve
+// 里调,各源的 Resolve 只由 runLyricProvider 调,runLyricProvider 先按描述符的 Rounds 判这种轮次问不问。
 func TestOnDemandLyricRoundMarkedOnlyAtWhitelist(t *testing.T) {
 	allowed := map[string]map[string]bool{
 		"withOnDemandLyricRound(": {"trackEnrichment": true, "runTestLyricSourcesCLI": true}, // 正在放的那首、设置页的「测试」
@@ -500,7 +501,8 @@ func TestOnDemandLyricRoundMarkedOnlyAtWhitelist(t *testing.T) {
 	}
 	funcName := regexp.MustCompile(`^func (?:\([^)]*\) )?(\w+)`)
 	found := map[string]map[string]bool{}
-	callers := map[string][]string{}
+	callers, resolveCallers := map[string][]string{}, map[string][]string{}
+	sources := map[string]string{}
 	for _, f := range files {
 		if strings.HasSuffix(f, "_test.go") {
 			continue
@@ -510,6 +512,7 @@ func TestOnDemandLyricRoundMarkedOnlyAtWhitelist(t *testing.T) {
 			t.Fatal(err)
 		}
 		fn := ""
+		sources[f] = string(raw)
 		for i, l := range strings.Split(string(raw), "\n") {
 			if m := funcName.FindStringSubmatch(l); m != nil {
 				fn = m[1]
@@ -533,6 +536,9 @@ func TestOnDemandLyricRoundMarkedOnlyAtWhitelist(t *testing.T) {
 			if strings.Contains(code, "megalobizLyric(") && !strings.HasPrefix(code, "func megalobizLyric(") {
 				callers[f+":"+fn] = append(callers[f+":"+fn], strconv.Itoa(i+1))
 			}
+			if strings.Contains(code, ".Resolve(") {
+				resolveCallers[f+":"+fn] = append(resolveCallers[f+":"+fn], strconv.Itoa(i+1))
+			}
 		}
 	}
 	for marker, fns := range allowed {
@@ -542,8 +548,25 @@ func TestOnDemandLyricRoundMarkedOnlyAtWhitelist(t *testing.T) {
 			}
 		}
 	}
-	if len(callers) != 1 || callers["enrich.go:fetchScoredLyricCandidatesStreaming"] == nil {
-		t.Errorf("megalobizLyric 只能在 fetchScoredLyricCandidatesStreaming 里调(那里有 skipSource 的闸): %v", callers)
+	if len(callers) != 1 || len(callers["megalobiz.go:Resolve"]) != 1 ||
+		!containsCode(sources["megalobiz.go"], "func (p megalobizProvider) Resolve(ctx context.Context, q ProviderQuery, _ RoundEnv) SourceResult {\n\tr := megalobizLyric(") {
+		t.Errorf("megalobizLyric 只能在 megalobizProvider.Resolve 里调: %v", callers)
+	}
+	if len(resolveCallers) != 1 || len(resolveCallers["lyricproviderrun.go:runLyricProvider"]) != 1 {
+		t.Errorf("各源的 Resolve 只能由 runLyricProvider 调(那里按描述符判这一轮问不问): %v", resolveCallers)
+	}
+	for _, n := range []string{
+		"only: lyricSourceOnlyFrom(ctx), onDemand: isOnDemandLyricRound(ctx), enabled: lyricSourceEnabled,",
+		"if d.Rounds == roundsOnDemand && !p.onDemand {\n\t\treturn providerRoundSkipSilent\n\t}",
+		"d := p.Descriptor()\n\tswitch plan.decide(d) {\n\tcase providerRoundSkipSilent:\n\t\treturn SourceResult{source: d.Name}\n\tcase providerRoundSkipCooling:",
+		"return SourceResult{source: d.Name}\n\t}\n\tr := p.Resolve(ctx, q, env)",
+	} {
+		if !containsCode(sources["lyricproviderrun.go"], n) {
+			t.Errorf("lyricproviderrun.go 缺 %q:调度得先按描述符的 Rounds 判轮次、不问的不调 Resolve", n)
+		}
+	}
+	if d := lyricProviders().descriptor(lyricSourceMegalobiz); d == nil || d.Rounds != roundsOnDemand {
+		t.Errorf("Megalobiz 的描述符应是只在用户在听、在找的轮次里问: %+v", d)
 	}
 }
 

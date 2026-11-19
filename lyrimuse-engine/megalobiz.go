@@ -111,6 +111,17 @@ func megalobizGetCached[T any](ctx context.Context, u string) (T, error) {
 	return out, err
 }
 
+// megalobizProvider 把 megalobizLyric 接到 LyricProvider 上。结果的源名由调度填(runLyricProvider);只在用户在听、在找的
+// 轮次里问它由描述符的 Rounds 定,调度按它判,这里不看轮次。
+type megalobizProvider struct{ desc *ProviderDescriptor }
+
+func (p megalobizProvider) Descriptor() *ProviderDescriptor { return p.desc }
+
+func (p megalobizProvider) Resolve(ctx context.Context, q ProviderQuery, _ RoundEnv) SourceResult {
+	r := megalobizLyric(ctx, q.Artist, q.SourceTitle, q.Album, q.DurationSecs)
+	return SourceResult{lyr: r.lyrics, matchTitle: r.title, matchArtist: r.artist, srcDur: r.durationSecs, sourceURL: r.url}
+}
+
 func megalobizLyric(ctx context.Context, artist, title, album string, durationSecs float64) megalobizResult {
 	if title == "" {
 		return megalobizResult{}
