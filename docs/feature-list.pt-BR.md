@@ -347,13 +347,18 @@ Enquanto o cursor está em um campo de texto, a letra na Touch Bar pode se recol
 
 ### Janela da letra
 
-Letra em página inteira inspirada na visualização de letras do Apple Music: capa desfocada ao fundo, a música inteira rolando até a linha atual, duetos separados por cantor, vocais de fundo em linha própria, notas longas que crescem e brilham. O fundo pode seguir a capa ou ser sólido, degradê ou vidro fosco, e o peso do texto, a cor da parte cantada e o alinhamento podem ser alterados. Abra-a pelo ícone da barra de menus ou por um atalho.
+Letra em página inteira inspirada na visualização de letras do Apple Music: capa desfocada ao fundo, a música inteira rolando até a linha atual, duetos separados por cantor, vocais de fundo em linha própria, notas longas que crescem e brilham. O fundo pode seguir a capa ou ser sólido, degradê ou vidro fosco, e o peso e o tamanho do texto, a cor da parte cantada, o alinhamento, as entrelinhas e o escurecimento e o desfoque das outras linhas podem ser alterados. Abra-a pelo ícone da barra de menus ou por um atalho.
 
 - Ajustes: Exibição da letra › Janela da letra › Janela da letra
 - Ajustes: Exibição da letra › Janela da letra › Fundo › Fundo
 - Ajustes: Atalhos de teclado › Abrir janela da letra
 - Ajustes: Exibição da letra › Janela da letra › Layout › Alinhamento
 - Ajustes: Exibição da letra › Janela da letra › Layout › Tamanho dos controles
+- Ajustes: Exibição da letra › Janela da letra › Fonte › Escala do texto
+- Ajustes: Exibição da letra › Janela da letra › Layout › Entrelinhas
+- Ajustes: Exibição da letra › Janela da letra › Profundidade › Escurecer não cantado
+- Ajustes: Exibição da letra › Janela da letra › Profundidade › Escurecer cantado
+- Ajustes: Exibição da letra › Janela da letra › Profundidade › Desfoque
 
 <a id="feature-lyrics-window-hdr"></a>
 
@@ -957,7 +962,7 @@ No máximo uma vez por dia, envia a versão, o macOS, quais recursos estão ativ
 
 ## Todos os ajustes
 
-Todos os ajustes da janela Ajustes, por local: 330 no total. Digite um nome no campo de busca no topo da barra lateral dos Ajustes para ir direto até ele.
+Todos os ajustes da janela Ajustes, por local: 339 no total. Digite um nome no campo de busca no topo da barra lateral dos Ajustes para ir direto até ele.
 
 ### Letra › Origem
 
@@ -1279,11 +1284,17 @@ Todos os ajustes da janela Ajustes, por local: 330 no total. Digite um nome no c
 - **Tamanho** (só Mini): Tamanho máximo da letra no Mini
 - **Fonte**: Fonte da letra na janela da letra (texto, tradução e pronúncia)
 - **Peso**
+- **Escala do texto** (só Completo): Aumenta ou reduz o tamanho do texto ajustado à janela, inclusive na letra na web
+- **Corpo da pronúncia** (só Completo)
+- **Corpo da tradução** (só Completo)
 
 ### Exibição da letra › Janela da letra › Layout
 
 - **Linhas longas** (só Mini): Se as linhas longas quebram ou rolam no tamanho mini
 - **Layout da letra** (só Mini): Uma linha: só a linha atual Duas linhas: a linha atual e a próxima Várias linhas: uma página de letra com rolagem, como no tamanho completo
+- **Entrelinhas** (só Completo)
+- **Pronúncia** (só Completo)
+- **Tradução** (só Completo)
 - **Alinhamento** (só Completo): Alinhamento da letra no tamanho completo; “Auto” segue as vozes do dueto
 - **Tamanho dos controles** (só Completo): Aumenta os controles de reprodução e os outros botões, inclusive na letra na web
 
@@ -1304,6 +1315,12 @@ Todos os ajustes da janela Ajustes, por local: 330 no total. Digite um nome no c
 - **Cor personalizada**
 - **Cor cantada**
 - **Destaque HDR** (só Completo): Ilumina a parte cantada em telas HDR. Gasta mais energia quando ativado
+
+### Exibição da letra › Janela da letra › Profundidade
+
+- **Escurecer não cantado** (só Completo): Quanto as linhas ainda não cantadas ficam mais escuras que a atual
+- **Escurecer cantado** (só Completo): Quanto as linhas já cantadas ficam mais escuras que a atual
+- **Desfoque** (só Completo)
 
 ### Exibição da letra › Janela da letra › Conteúdo
 

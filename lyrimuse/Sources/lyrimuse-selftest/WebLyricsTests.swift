@@ -438,7 +438,7 @@ func runWebLyricsTests() {
                         && sourceHas(screenSource, "showsScrollIndicator: arrangement != .phoneStacked,"), true,
                     "网页歌词: 手机竖放顶上那一块用歌词窗口左栏那一列,块高和那一列整组高同一个函数,歌词从它下面开始、不画滚动指示条")
         expectEqual(sourceHas(screenSource, "centered: false, wordRise: true,")
-                        && sourceHas(screenSource, "forcedSide: playback.fullAlignment.forcedDuetSide)"), true,
+                        && sourceHas(screenSource, "forcedSide: playback.fullAlignment.forcedDuetSide,"), true,
                     "网页歌词: 歌词对齐跟歌词窗口完整尺寸的「对齐方式」,不按排法写死")
         expectEqual(arrangement(640, 640), .columns, "网页歌词: 正方形按横着算(高大于宽才算竖)")
         let laptop = WebLyricsViewport(query: ["w": "1512", "h": "900", "dpr": "2"])

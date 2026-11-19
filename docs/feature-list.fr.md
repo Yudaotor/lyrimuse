@@ -347,13 +347,18 @@ Tant que le curseur est dans un champ de texte, les paroles de la Touch Bar peuv
 
 ### Fenêtre des paroles
 
-Des paroles en pleine page inspirées de la vue paroles d’Apple Music : illustration floutée en fond, toute la chanson qui défile jusqu’à la ligne en cours, duos séparés par chanteur, chœurs sur leur propre ligne, notes tenues qui gonflent et brillent. Le fond peut suivre l’illustration ou être uni, en dégradé ou en verre dépoli, et la graisse du texte, la couleur chantée et l’alignement sont réglables. Ouvrez-la depuis l’icône de la barre des menus ou avec un raccourci.
+Des paroles en pleine page inspirées de la vue paroles d’Apple Music : illustration floutée en fond, toute la chanson qui défile jusqu’à la ligne en cours, duos séparés par chanteur, chœurs sur leur propre ligne, notes tenues qui gonflent et brillent. Le fond peut suivre l’illustration ou être uni, en dégradé ou en verre dépoli, et la graisse et la taille du texte, la couleur chantée, l’alignement, l’interligne ainsi que l’atténuation et le flou des autres lignes sont réglables. Ouvrez-la depuis l’icône de la barre des menus ou avec un raccourci.
 
 - Réglages : Affichage des paroles › Fenêtre des paroles › Fenêtre des paroles
 - Réglages : Affichage des paroles › Fenêtre des paroles › Fond › Fond
 - Réglages : Raccourcis clavier › Ouvrir la fenêtre des paroles
 - Réglages : Affichage des paroles › Fenêtre des paroles › Disposition › Alignement
 - Réglages : Affichage des paroles › Fenêtre des paroles › Disposition › Taille des commandes
+- Réglages : Affichage des paroles › Fenêtre des paroles › Police › Échelle du texte
+- Réglages : Affichage des paroles › Fenêtre des paroles › Disposition › Interligne
+- Réglages : Affichage des paroles › Fenêtre des paroles › Profondeur › Atténuer non chanté
+- Réglages : Affichage des paroles › Fenêtre des paroles › Profondeur › Atténuer chanté
+- Réglages : Affichage des paroles › Fenêtre des paroles › Profondeur › Flou
 
 <a id="feature-lyrics-window-hdr"></a>
 
@@ -957,7 +962,7 @@ Au plus une fois par jour, envoie la version, macOS, les fonctions activées et 
 
 ## Tous les réglages
 
-Tous les réglages de la fenêtre Réglages, classés par emplacement : 330 au total. Tapez un nom dans le champ de recherche en haut de la barre latérale des Réglages pour y aller directement.
+Tous les réglages de la fenêtre Réglages, classés par emplacement : 339 au total. Tapez un nom dans le champ de recherche en haut de la barre latérale des Réglages pour y aller directement.
 
 ### Paroles › Source
 
@@ -1279,11 +1284,17 @@ Tous les réglages de la fenêtre Réglages, classés par emplacement : 330 au 
 - **Taille** (taille mini uniquement) : Taille maximale des paroles en taille mini
 - **Police** : Police des paroles de la fenêtre des paroles (texte, traduction, romanisation)
 - **Graisse**
+- **Échelle du texte** (taille complète uniquement) : Agrandit ou réduit la taille du texte ajustée à la fenêtre, y compris dans les paroles web
+- **Taille romanisation** (taille complète uniquement)
+- **Taille traduction** (taille complète uniquement)
 
 ### Affichage des paroles › Fenêtre des paroles › Disposition
 
 - **Lignes longues** (taille mini uniquement) : Retour à la ligne ou défilement des lignes longues en taille Mini
 - **Disposition des paroles** (taille mini uniquement) : Une ligne : ligne actuelle uniquement Deux lignes : ligne actuelle et suivante Multiligne : page de paroles défilante, comme en taille complète
+- **Interligne** (taille complète uniquement)
+- **Romanisation** (taille complète uniquement)
+- **Traduction** (taille complète uniquement)
 - **Alignement** (taille complète uniquement) : Alignement des paroles en taille complète ; « Auto » suit les voix du duo
 - **Taille des commandes** (taille complète uniquement) : Agrandit les commandes de lecture et les autres boutons, y compris dans les paroles web
 
@@ -1304,6 +1315,12 @@ Tous les réglages de la fenêtre Réglages, classés par emplacement : 330 au 
 - **Personnalisée**
 - **Couleur chantée**
 - **Surbrillance HDR** (taille complète uniquement) : Éclaircit la partie chantée sur les écrans HDR. Consomme plus d’énergie
+
+### Affichage des paroles › Fenêtre des paroles › Profondeur
+
+- **Atténuer non chanté** (taille complète uniquement) : À quel point les lignes à venir sont plus sombres que la ligne en cours
+- **Atténuer chanté** (taille complète uniquement) : À quel point les lignes déjà chantées sont plus sombres que la ligne en cours
+- **Flou** (taille complète uniquement)
 
 ### Affichage des paroles › Fenêtre des paroles › Contenu
 

@@ -347,13 +347,18 @@ Khi con trỏ ở trong ô nhập, lời trên Touch Bar có thể tự thu gọ
 
 ### Cửa sổ lời
 
-Lời toàn trang theo phong cách màn hình lời bài hát của Apple Music: nền là ảnh bìa làm mờ, cả bài cuộn tới dòng hiện tại, song ca tách theo người hát, bè phụ trên dòng riêng, nốt ngân dài phóng to và phát sáng. Nền có thể theo ảnh bìa hoặc dùng màu đơn, dải màu hay kính mờ; độ đậm chữ, màu phần đã hát và căn lề đều đổi được. Mở cửa sổ từ biểu tượng trên thanh menu hoặc bằng phím tắt.
+Lời toàn trang theo phong cách màn hình lời bài hát của Apple Music: nền là ảnh bìa làm mờ, cả bài cuộn tới dòng hiện tại, song ca tách theo người hát, bè phụ trên dòng riêng, nốt ngân dài phóng to và phát sáng. Nền có thể theo ảnh bìa hoặc dùng màu đơn, dải màu hay kính mờ; độ đậm và cỡ chữ, màu phần đã hát, căn lề, giãn dòng cùng độ tối và độ mờ của các dòng khác đều đổi được. Mở cửa sổ từ biểu tượng trên thanh menu hoặc bằng phím tắt.
 
 - Cài đặt: Hiển thị lời › Cửa sổ lời › Cửa sổ lời
 - Cài đặt: Hiển thị lời › Cửa sổ lời › Nền › Nền
 - Cài đặt: Phím tắt › Mở Cửa sổ lời
 - Cài đặt: Hiển thị lời › Cửa sổ lời › Bố cục › Căn chỉnh
 - Cài đặt: Hiển thị lời › Cửa sổ lời › Bố cục › Cỡ nút điều khiển
+- Cài đặt: Hiển thị lời › Cửa sổ lời › Phông chữ › Tỉ lệ cỡ chữ
+- Cài đặt: Hiển thị lời › Cửa sổ lời › Bố cục › Giãn dòng
+- Cài đặt: Hiển thị lời › Cửa sổ lời › Độ sâu › Làm tối dòng chưa hát
+- Cài đặt: Hiển thị lời › Cửa sổ lời › Độ sâu › Làm tối dòng đã hát
+- Cài đặt: Hiển thị lời › Cửa sổ lời › Độ sâu › Làm mờ
 
 <a id="feature-lyrics-window-hdr"></a>
 
@@ -957,7 +962,7 @@ Tối đa một lần mỗi ngày, Lyrimuse gửi phiên bản, macOS, các tín
 
 ## Toàn bộ cài đặt
 
-Toàn bộ mục trong cửa sổ Cài đặt, theo vị trí: tổng cộng 330 mục. Gõ tên vào ô tìm kiếm ở đầu thanh bên của Cài đặt để đi thẳng tới mục đó.
+Toàn bộ mục trong cửa sổ Cài đặt, theo vị trí: tổng cộng 339 mục. Gõ tên vào ô tìm kiếm ở đầu thanh bên của Cài đặt để đi thẳng tới mục đó.
 
 ### Lời bài hát › Nguồn
 
@@ -1279,11 +1284,17 @@ Toàn bộ mục trong cửa sổ Cài đặt, theo vị trí: tổng cộng 330
 - **Cỡ** (chỉ Mini): Cỡ chữ lời tối đa ở cỡ Mini
 - **Phông chữ**: Phông chữ lời trong Cửa sổ lời (lời, bản dịch, phát âm)
 - **Độ đậm**
+- **Tỉ lệ cỡ chữ** (chỉ Đầy đủ): Phóng to hoặc thu nhỏ cỡ chữ vốn tự điều chỉnh theo cửa sổ, áp dụng cả cho lời trên web
+- **Cỡ phát âm** (chỉ Đầy đủ)
+- **Cỡ bản dịch** (chỉ Đầy đủ)
 
 ### Hiển thị lời › Cửa sổ lời › Bố cục
 
 - **Dòng dài** (chỉ Mini): Xuống dòng hoặc cuộn khi một dòng quá dài ở cỡ Mini
 - **Bố cục lời** (chỉ Mini): Một dòng: chỉ hiện dòng hiện tại Hai dòng: hiện dòng hiện tại và dòng tiếp theo Nhiều dòng: giống cỡ đầy đủ, cuộn cả trang lời
+- **Giãn dòng** (chỉ Đầy đủ)
+- **Giãn cách phát âm** (chỉ Đầy đủ)
+- **Giãn cách bản dịch** (chỉ Đầy đủ)
 - **Căn chỉnh** (chỉ Đầy đủ): Căn lề lời ở cỡ đầy đủ; “Tự động” căn theo bè song ca
 - **Cỡ nút điều khiển** (chỉ Đầy đủ): Phóng to nút điều khiển phát và các nút khác, áp dụng cả cho lời trên web
 
@@ -1304,6 +1315,12 @@ Toàn bộ mục trong cửa sổ Cài đặt, theo vị trí: tổng cộng 330
 - **Màu tùy chỉnh**
 - **Màu đã hát**
 - **Tô sáng HDR** (chỉ Đầy đủ): Làm sáng phần đã hát trên màn hình hỗ trợ HDR, tốn pin hơn khi bật
+
+### Hiển thị lời › Cửa sổ lời › Độ sâu
+
+- **Làm tối dòng chưa hát** (chỉ Đầy đủ): Các dòng chưa hát tối hơn dòng hiện tại bao nhiêu
+- **Làm tối dòng đã hát** (chỉ Đầy đủ): Các dòng đã hát tối hơn dòng hiện tại bao nhiêu
+- **Làm mờ** (chỉ Đầy đủ)
 
 ### Hiển thị lời › Cửa sổ lời › Nội dung
 

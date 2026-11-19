@@ -412,6 +412,18 @@ func runDeepLinkTests() {
         expectEqual(link("lyrimuse://debug/lyrics-window-controls?percent=90") == nil
                     && link("lyrimuse://debug/lyrics-window-controls?percent=abc") == nil
                     && link("lyrimuse://debug/lyrics-window-controls") == nil, true, "debug: 控件大小越界、不是数、没带都不认")
+        expectEqual(link("lyrimuse://debug/lyrics-window-typesetting?font-scale=120&line-spacing=-20&blur=0"),
+                    .debug(.lyricsWindowTypesetting(values: [.fontScale: 120, .lineSpacing: -20, .blur: 0])),
+                    "debug: 歌词窗口排版 / 景深按参数名设对应几项")
+        expectEqual(link("lyrimuse://debug/lyrics-window-typesetting?romanization-size=60&translation-size=45&romanization-gap=5"
+                         + "&translation-gap=-10&upcoming-dim=50&past-dim=150&draft=1"),
+                    .debug(.lyricsWindowTypesetting(values: [.romanizationSize: 60, .translationSize: 45, .romanizationGap: 5,
+                                                             .translationGap: -10, .upcomingDim: 50, .pastDim: 150], draft: true)),
+                    "debug: 排版 / 景深带 draft 只给预览(同拖动途中)")
+        expectEqual(link("lyrimuse://debug/lyrics-window-typesetting?font-scale=200") == nil
+                    && link("lyrimuse://debug/lyrics-window-typesetting?blur=abc") == nil
+                    && link("lyrimuse://debug/lyrics-window-typesetting?draft=1") == nil
+                    && link("lyrimuse://debug/lyrics-window-typesetting") == nil, true, "debug: 排版 / 景深越界、不是数、一项都没带都不认")
         expectEqual(link("lyrimuse://debug/lyrics-window-pointer?inside=1"), .debug(.lyricsWindowPointer(inside: true)),
                     "debug: 当作指针进了歌词窗口")
         expectEqual(link("lyrimuse://debug/lyrics-window-pointer?inside=0"), .debug(.lyricsWindowPointer(inside: false)),
@@ -1000,6 +1012,9 @@ func runDeepLinkTests() {
             .debug(.japaneseReading(.kana)), .debug(.japaneseReading(.romaji)),
             .debug(.lyricsWindowControls(percent: 100)), .debug(.lyricsWindowControls(percent: 162.5)),
             .debug(.lyricsWindowControls(percent: 140, draft: true)),
+            .debug(.lyricsWindowTypesetting(values: [.fontScale: 100])),
+            .debug(.lyricsWindowTypesetting(values: [.lineSpacing: -12.5, .romanizationGap: 3, .blur: 0, .pastDim: 150], draft: true)),
+            .debug(.lyricsWindowTypesetting(values: Dictionary(uniqueKeysWithValues: LyricsWindowListTuning.Item.allCases.map { ($0, $0.defaultPercent) }))),
             .debug(.lyricsWindowPointer(inside: true)), .debug(.lyricsWindowPointer(inside: false)),
             .debug(.lyricsWindowTrafficHover(x: 26, y: 19.5)), .debug(.lyricsWindowTrafficHoverOff),
             .debug(.lyricsWindowTrafficHoverLegacy(true)), .debug(.lyricsWindowTrafficHoverLegacy(false)),

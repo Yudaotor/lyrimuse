@@ -396,6 +396,7 @@ struct PanelQuickSettings: View {
     @State private var menuBarWidthThrottle = SliderCommitThrottle()
     @State private var menuBarFontSizeThrottle = SliderCommitThrottle()
     @State private var miniFontSizeThrottle = SliderCommitThrottle()
+    @State private var fullFontScaleThrottle = SliderCommitThrottle()
 
     var body: some View {
         VStack(spacing: 0) {
@@ -676,11 +677,19 @@ struct PanelQuickSettings: View {
             toggleRow(L10n.t("动态封面"),
                       help: L10n.t("仅部分专辑提供；低电量或「减弱动态效果」时自动暂停"),
                       isOn: $settings.motionCoverEnabled)
-            // 同设置页「布局 › 对齐方式」(完整尺寸)。完整尺寸没有字号可调(字号随窗口大小推出),迷你的字号在「迷你窗口」那一格。
+            // 同设置页「布局 › 对齐方式」(完整尺寸)。
             alignmentRow(selection: $settings.lyricsWindowLyricsAlignment,
                          options: LyricsRestingAlignment.notchOptions,
                          label: LyricsAlignmentSegmentedControl.label(for:),
                          help: L10n.t("「自动」按对唱声部对齐，合唱居中，无对唱信息时靠左"))
+            // 同设置页「字体 › 字号缩放」(完整尺寸,在随窗口算出的字号上整体乘),跟「迷你窗口」那一格的字号对称。
+            // 这一块没有预览,拖动中节流写设置(同迷你字号那根)。
+            sliderRow(L10n.t("字号缩放"), value: Binding(
+                get: { fullFontScaleThrottle.value(or: settings.lyricsWindowFontScalePercent) },
+                set: { fullFontScaleThrottle.update($0, commit: commitFullFontScale) }
+            ), range: LyricsWindowListTuning.Item.fontScale.range, step: LyricsWindowListTuning.Item.fontScale.step,
+               readout: LyricsWindowListTuning.Item.fontScale.percentText,
+               onEditingChanged: { fullFontScaleThrottle.editingChanged($0, commit: commitFullFontScale) })
         case .lyricsManager:
             // 行在 PanelLyricsManagerRows(带自己的小标题和分组框),body 里单独摆。
             EmptyView()
@@ -868,6 +877,11 @@ struct PanelQuickSettings: View {
         settings.notchFontSize = value
     }
 
+    private func commitFullFontScale(_ value: Double) {
+        guard value != settings.lyricsWindowFontScalePercent else { return }
+        settings.lyricsWindowFontScalePercent = value
+    }
+
     private func commitMiniFontSize(_ value: Double) {
         guard value != settings.lyricsWindowMiniFontSize else { return }
         settings.lyricsWindowMiniFontSize = value
@@ -904,6 +918,7 @@ struct PanelQuickSettings: View {
     private func sliderRow(_ title: String, value: Binding<Double>,
                            range: ClosedRange<Double>, step: Double = 1,
                            displayValue: ((Double) -> Double)? = nil,
+                           readout: ((Double) -> String)? = nil,
                            help: String? = nil,
                            onEditingChanged: @escaping (Bool) -> Void = { _ in }) -> some View {
         row(title, help: help) {
@@ -914,8 +929,8 @@ struct PanelQuickSettings: View {
                 SteppedSlider(value: value, in: range, step: step, onEditingChanged: onEditingChanged)
                     .controlSize(.mini)
                     .frame(width: 128)
-                StableReadout(text: String(format: L10n.t("%@pt"),
-                                           "\(Int(displayValue?(value.wrappedValue) ?? value.wrappedValue))"),
+                StableReadout(text: readout?(value.wrappedValue)
+                                  ?? String(format: L10n.t("%@pt"), "\(Int(displayValue?(value.wrappedValue) ?? value.wrappedValue))"),
                               widest: Self.readoutWidest, font: .system(size: 10))
                     .foregroundStyle(.tertiary)
             }

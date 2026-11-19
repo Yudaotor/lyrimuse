@@ -187,6 +187,11 @@ public enum LyrimuseDeepLink: Equatable, Sendable {
         /// 歌词窗口完整尺寸的「控件大小」百分比,跟设置页走同一个设置(`debug/lyrics-window-controls?percent=130`,
         /// 100…200,`LyricsWindowControlScale.percentRange`)。带 `draft=1` 时跟拖滑杆途中一样,只给设置页预览、不写设置。
         case lyricsWindowControls(percent: Double, draft: Bool = false)
+        /// 歌词窗口完整尺寸的排版与景深(九根滑杆,跟设置页走同一个设置):参数名是 `LyricsWindowListTuning.Item` 的原始值,
+        /// 值是百分数,至少带一项,越界、不是数的整条不认:
+        /// `debug/lyrics-window-typesetting?font-scale=120&romanization-size=60&translation-size=60&line-spacing=-20&romanization-gap=10&translation-gap=10&upcoming-dim=50&past-dim=120&blur=0`。
+        /// 带 `draft=1` 时跟拖滑杆途中一样,只给设置页预览、不写设置;不带时写设置并清掉草稿。
+        case lyricsWindowTypesetting(values: [LyricsWindowListTuning.Item: Double], draft: Bool = false)
         /// 当作指针进 / 出歌词窗口(`debug/lyrics-window-pointer?inside=1|0`):完整尺寸走「闲置隐藏」的进出,迷你走面板的悬停进出,
         /// 跟真指针进出走同一处,不挪鼠标就能验按钮组和红绿灯的显隐。
         case lyricsWindowPointer(inside: Bool)
@@ -775,6 +780,15 @@ public enum LyrimuseDeepLink: Equatable, Sendable {
             guard let percent = value("percent").flatMap(Double.init),
                   LyricsWindowControlScale.percentRange.contains(percent) else { return nil }
             self = .debug(.lyricsWindowControls(percent: percent, draft: value("draft").flatMap(Self.parseBool) ?? false))
+        case ("debug", "/lyrics-window-typesetting"):
+            var values: [LyricsWindowListTuning.Item: Double] = [:]
+            for item in LyricsWindowListTuning.Item.allCases {
+                guard let text = value(item.rawValue) else { continue }
+                guard let v = Double(text), item.range.contains(v) else { return nil }
+                values[item] = v
+            }
+            guard !values.isEmpty else { return nil }
+            self = .debug(.lyricsWindowTypesetting(values: values, draft: value("draft").flatMap(Self.parseBool) ?? false))
         case ("debug", "/lyrics-window-pointer"):
             guard let inside = value("inside").flatMap(Self.parseBool) else { return nil }
             self = .debug(.lyricsWindowPointer(inside: inside))
@@ -1255,6 +1269,14 @@ public enum LyrimuseDeepLink: Equatable, Sendable {
                 components.path = "/lyrics-window-controls"
                 let text = percent == percent.rounded() ? String(Int(percent)) : String(percent)
                 components.queryItems = [URLQueryItem(name: "percent", value: text)]
+                if draft { components.queryItems?.append(URLQueryItem(name: "draft", value: "1")) }
+            case let .lyricsWindowTypesetting(values, draft):
+                components.path = "/lyrics-window-typesetting"
+                components.queryItems = LyricsWindowListTuning.Item.allCases.compactMap { item in
+                    values[item].map { v in
+                        URLQueryItem(name: item.rawValue, value: v == v.rounded() ? String(Int(v)) : String(v))
+                    }
+                }
                 if draft { components.queryItems?.append(URLQueryItem(name: "draft", value: "1")) }
             case let .lyricsWindowPointer(inside):
                 components.path = "/lyrics-window-pointer"

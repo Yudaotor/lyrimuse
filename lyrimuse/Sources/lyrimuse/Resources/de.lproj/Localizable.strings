@@ -878,6 +878,7 @@
 "哈萨克语" = "Kasachisch";
 "唯一的差异在于「%@」一项" = "Einziger Unterschied ist „%@“";
 "唯一的差异是胜者在「%1$@」一项多 %2$d 分" = "Einziger Unterschied: Der Gewinner hat bei „%1$@“ %2$d Punkte mehr";
+"唱过的行比当前行暗多少" = "Wie viel dunkler bereits gesungene Zeilen als die aktuelle sind";
 "喜欢" = "Favorit";
 "喜欢/取消喜欢" = "Favorisieren/Favorit entfernen";
 "回到逐句编辑" = "Zurück zur Zeilenbearbeitung";
@@ -952,6 +953,7 @@
 "在该浏览器的开发者菜单中开启「允许 Apple 事件中的 JavaScript」" = "Aktiviere „JavaScript von Apple Events erlauben“ im Entwicklermenü dieses Browsers";
 "在钉钉群中：群设置 → 智能群助手 → 添加机器人 → 自定义，创建后拷贝 Webhook 地址。安全设置建议选择「加签」，并将生成的密钥填入下方的「加签密钥」" = "In deiner DingTalk-Gruppe: Gruppeneinstellungen → Gruppenassistent → Roboter hinzufügen → Benutzerdefiniert, danach die Webhook-URL kopieren. Wähle zur Sicherheit „Signatur“ und trage den erzeugten Schlüssel unten bei „Signaturschlüssel“ ein";
 "在防火墙设置中允许 Lyrimuse 的传入连接后，其他设备才能打开链接" = "Erlaube in den Firewall-Einstellungen eingehende Verbindungen für Lyrimuse, damit andere Geräte den Link öffnen können";
+"在随窗口大小自动调整的字号上放大或缩小，网页歌词同样生效" = "Vergrößert oder verkleinert die an das Fenster angepasste Schriftgröße, auch im Web-Liedtext";
 "在飞书群中：设置 → 群机器人 → 添加机器人 → 自定义机器人，创建后拷贝 Webhook 地址。如需额外校验，可开启「签名校验」，并将密钥填入下方的「签名密钥」" = "In deiner Feishu-Gruppe: Einstellungen → Gruppen-Bots → Bot hinzufügen → Eigener Bot, danach die Webhook-URL kopieren. Für eine zusätzliche Prüfung aktiviere „Signaturprüfung“ und trage den Schlüssel unten bei „Signaturschlüssel“ ein";
 "地址不存在" = "URL nicht gefunden";
 "均为独立匹配" = "Alle einzeln zugeordnet";
@@ -995,6 +997,7 @@
 "字号 %@pt" = "Größe %@ pt";
 "字号仅对悬浮歌词有效" = "Die Größe gilt nur für schwebenden Text";
 "字号快捷键仅对悬浮歌词有效" = "Kurzbefehle für die Größe gelten nur für schwebenden Text";
+"字号缩放" = "Schriftskalierung";
 "字节跳动旗下的音乐 App" = "Die Musik-App von ByteDance";
 "字节跳动旗下的音乐平台" = "Musikdienst von ByteDance";
 "存储" = "Speicher";
@@ -1154,6 +1157,7 @@
 "已取消喜欢" = "Favorit entfernt";
 "已取消纯音乐标记" = "Instrumental-Markierung entfernt";
 "已启用的歌词源均未找到可用的候选" = "Keine Quelle hat einen Liedtext";
+"已唱变暗" = "Abdunkeln gesungen";
 "已唱颜色" = "Farbe gesungen";
 "已喜欢" = "Favorisiert";
 "已在 Last.fm 上喜欢" = "Auf Last.fm geliebt";
@@ -1765,6 +1769,7 @@
 "显示进度条" = "Fortschrittsbalken anzeigen";
 "晚 %@ 秒" = "%@ s später";
 "普通话" = "Mandarin";
+"景深" = "Tiefe";
 "智能" = "Smart";
 "智能算法" = "Smarte Zuordnung";
 "暂停 10 秒后收起为功能栏图标，恢复播放时自动展开" = "Klappt nach 10 Sekunden Pause zur Control Strip-Taste ein und bei Wiedergabe wieder aus";
@@ -1851,6 +1856,7 @@
 "未发现无效记录" = "Keine ungültigen Einträge";
 "未启用" = "Nicht aktiviert";
 "未启用的来源" = "Deaktivierte Quellen";
+"未唱变暗" = "Abdunkeln ungesungen";
 "未唱部分与副行的亮度" = "Helligkeit ungesungener Wörter und der zweiten Zeile";
 "未唱颜色" = "Farbe ungesungen";
 "未在上方列出的 App 也可作为播放器：添加后将显示其正在播放的歌曲，并计入收听记录" = "Nicht aufgeführte Apps können auch als Player dienen: Nach dem Hinzufügen zeigen ihre Titel Liedtext und zählen zu deinem Hörverlauf";
@@ -2010,6 +2016,7 @@
 "概况和歌手、专辑、歌曲各自的第一名" = "Übersicht sowie Top-Künstler, Top-Album und Top-Titel";
 "榜单" = "Charts";
 "榜单链接" = "Link zur Rangliste";
+"模糊" = "Unschärfe";
 "次" = "Wiedergaben";
 "欢迎使用 Lyrimuse" = "Willkommen bei Lyrimuse";
 "歌名" = "Titel";
@@ -2598,6 +2605,7 @@
 "行为" = "Verhalten";
 "行数" = "Zeilen";
 "行时间略有出入" = "Zeilenzeiten weichen leicht ab";
+"行间距" = "Zeilenabstand";
 "补交" = "Nachtragen";
 "补交中 %@/%@" = "Wird nachgereicht: %@ von %@";
 "补交未完成，请稍后重试" = "Nachtrag nicht abgeschlossen. Versuch es später erneut";
@@ -2799,6 +2807,7 @@
 "还有 %@ 条" = "und %@ weitere";
 "还有未完成的项目" = "Noch nicht alles erledigt";
 "还没唱到歌词" = "Noch keine Liedzeile";
+"还没唱到的行比当前行暗多少" = "Wie viel dunkler noch nicht gesungene Zeilen als die aktuelle sind";
 "还没填 Chat ID" = "Noch keine Chat-ID";
 "还没填地址" = "Noch keine URL";
 "还没推送过" = "Noch nichts gesendet";
@@ -3040,6 +3049,7 @@
 "霓虹" = "Neon";
 "静音" = "Stumm";
 "静默启动" = "Still starten";
+"非当前行的模糊程度，设为 0% 不模糊" = "Unschärfe der Zeilen außer der aktuellen; bei 0 % keine Unschärfe";
 "面向发烧友的高解析音频播放器" = "Hi-Res-Audioplayer für Audiophile";
 "韩国 KT 旗下的音乐平台" = "Musikdienst von KT aus Korea";
 "韩国 Naver 旗下的音乐平台" = "Musikdienst von Naver aus Korea";

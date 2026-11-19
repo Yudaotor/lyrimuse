@@ -186,7 +186,7 @@ func runSettingsSearchTests() {
         "颜色", "内容", "排版", "行为",                              // 悬浮歌词抽屉的组标题(「内容」也是歌词窗口抽屉的卡头,「颜色」也是菜单栏抽屉的卡头;「主题」组按标题登记了)
         // 「封面」同「背景」:迷你「顶部信息」里有一行真的叫这个名字、已登记在目录里,
         // 所以完整尺寸那张同名卡头顺带被目录覆盖,不能再留在白名单里(两者必须不相交)。
-        "顶部信息", "布局",                                       // 歌词显示 › 歌词窗口 的卡头
+        "顶部信息", "布局", "景深",                               // 歌词显示 › 歌词窗口 的卡头
         "断句",                                                   // 歌词 › 时间与断句 的卡头
         "繁简",                                                   // 歌词 › 语言 的卡头(「读音」卡头跟悬浮歌词「内容」里那一行同名,已登记)
         "批量匹配", "存储",                                 // 歌词 › 歌词库 的卡头
@@ -368,8 +368,9 @@ func runSettingsSearchTests() {
 
     // 目录层面的抽查:五个面的「字号」都能被同一个词搜到,且顺序跟目录一致;快捷键页那两格也搜得到。
     let fontSizeHits = SettingsSearchMatcher.ranked(entries, query: "字号", title: { $0.titleKey }, secondary: { $0.keywords + $0.pathKeys })
-    expectEqual(fontSizeHits.filter { $0.pathKeys != ["快捷键"] }.map(\.sectionValue), ["overlay", "notch", "menuBar", "touchBar", "lyricsWindow"],
-                "目录: 「字号」命中悬浮歌词、灵动岛、菜单栏、触控栏、歌词窗口迷你尺寸五条,按目录顺序")
+    expectEqual(fontSizeHits.filter { $0.pathKeys != ["快捷键"] }.map(\.sectionValue),
+                ["overlay", "notch", "menuBar", "touchBar", "lyricsWindow", "lyricsWindow"],
+                "目录: 「字号」命中悬浮歌词、灵动岛、菜单栏、触控栏、歌词窗口迷你尺寸五条,按目录顺序,再是完整尺寸的「字号缩放」")
     expectEqual(fontSizeHits.filter { $0.pathKeys == ["快捷键"] }.map(\.titleKey), ["放大悬浮歌词字号", "缩小悬浮歌词字号"],
                 "目录: 「字号」也命中快捷键页的放大 / 缩小悬浮歌词字号")
     let lastfmHits = SettingsSearchMatcher.ranked(entries, query: "lastfm", title: { $0.titleKey }, secondary: { $0.keywords + $0.pathKeys })
@@ -425,6 +426,8 @@ func runSettingsSearchTests() {
         block(from: "    private var lyricsWindowCoverRows: some View {", to: "\n    }\n"),
         block(from: "private struct MotionCoverCacheRow: View {", to: "\n}\n"),
         block(from: "    private func lyricsWindowAlignmentRows(", to: "\n    }\n"),
+        block(from: "    private var lyricsWindowFontScaleTiles: some View {", to: "\n    }\n"),
+        block(from: "    private var lyricsWindowDepthTiles: some View {", to: "\n    }\n"),
     ]
     expectEqual(miniBlocks.allSatisfy { !$0.isEmpty } && fullBlocks.allSatisfy { !$0.isEmpty }, true,
                 "歌词窗口尺寸(契约): 认得出设置页里只在一种尺寸下才画的几组(认不出 = 改名了,先改这里)")

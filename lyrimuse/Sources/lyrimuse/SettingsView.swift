@@ -3148,6 +3148,7 @@ private struct AppearanceSettingsTab: View {
                     if lyricsWindowPreviewShowsMini {
                         SettingsGroupCard(title: L10n.t("顶部信息")) { lyricsWindowMiniHeaderRows }
                     } else {
+                        SettingsGroupCard(title: L10n.t("景深")) { lyricsWindowDepthTiles }
                         SettingsGroupCard(title: L10n.t("封面")) { lyricsWindowCoverRows }
                     }
                     // 网页显示的就是歌词窗口的完整布局、用的是这一套样式(19 章决策 12)。两种尺寸都有这一组。
@@ -3179,7 +3180,7 @@ private struct AppearanceSettingsTab: View {
     private var lyricsWindowDrawerGroupNames: [String] {
         lyricsWindowPreviewShowsMini
             ? [L10n.t("背景"), L10n.t("字体"), L10n.t("颜色"), L10n.t("行为"), L10n.t("内容"), L10n.t("布局"), L10n.t("顶部信息"), L10n.t("网页歌词")]
-            : [L10n.t("背景"), L10n.t("字体"), L10n.t("颜色"), L10n.t("内容"), L10n.t("布局"), L10n.t("封面"), L10n.t("网页歌词")]
+            : [L10n.t("背景"), L10n.t("字体"), L10n.t("颜色"), L10n.t("内容"), L10n.t("布局"), L10n.t("景深"), L10n.t("封面"), L10n.t("网页歌词")]
     }
 
     private var lyricsWindowResetRow: some View {
@@ -3204,7 +3205,7 @@ private struct AppearanceSettingsTab: View {
     /// 见 `lyricsWindowResetScope`。
     ///
     /// 按钮按抽屉的顺序从上往下、从左往右排满,中间不留空:第一行两种尺寸都是「背景 · 字体 · 颜色」(管长什么样,同悬浮歌词
-    /// 第一行),第二行迷你是「行为 · 内容 · 布局 · 顶部信息 · 网页歌词」,完整是「内容 · 布局 · 封面 · 网页歌词」。第二行比
+    /// 第一行),第二行迷你是「行为 · 内容 · 布局 · 顶部信息 · 网页歌词」,完整是「内容 · 布局 · 景深 · 封面 · 网页歌词」。第二行比
     /// 第一行多、本来对不成列,不放 `EditorToolbarResetReserve` 占位,同悬浮歌词第二行(19 章决策 19)。
     private var lyricsWindowToolbar: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -3230,6 +3231,9 @@ private struct AppearanceSettingsTab: View {
                 }
                 lyricsWindowToolbarButton(.content)
                 lyricsWindowToolbarButton(.layout)
+                if !lyricsWindowPreviewShowsMini {
+                    lyricsWindowToolbarButton(.depth)
+                }
                 lyricsWindowToolbarButton(.info)
                 lyricsWindowToolbarButton(.web)
             }
@@ -3306,6 +3310,8 @@ private struct AppearanceSettingsTab: View {
                 + " " + (mini ? settings.lyricsWindowMiniFontWeight : settings.lyricsWindowFontWeight).displayName
             if mini {
                 summary += " " + String(format: L10n.t("%@pt"), "\(Int(settings.lyricsWindowMiniFontSize))")
+            } else if settings.lyricsWindowFontScalePercent != LyricsWindowListTuning.Item.fontScale.defaultPercent {
+                summary += " · " + LyricsWindowListTuning.Item.fontScale.percentText(settings.lyricsWindowFontScalePercent)
             }
             return EditorToolbarButtonLabel(icon: "textformat", title: L10n.t("字体"), summary: summary)
         case .color:
@@ -3341,6 +3347,11 @@ private struct AppearanceSettingsTab: View {
                 summary += " · " + OverlayLineOverflowLabel.text(for: .scroll)
             }
             return EditorToolbarButtonLabel(icon: "rectangle.split.1x2", title: L10n.t("布局"), summary: summary)
+        case .depth:
+            // 三项都是默认报「默认」,调过任一项报「自定义」。
+            let tuning = settings.lyricsWindowListTuning.depth
+            return EditorToolbarButtonLabel(icon: "camera.aperture", title: L10n.t("景深"),
+                                            summary: tuning == .standard ? L10n.t("默认") : L10n.t("自定义"))
         case .content:
             var items = [
                 (title: L10n.t("读音"), isOn: settings.showRomanization),
@@ -3422,8 +3433,13 @@ private struct AppearanceSettingsTab: View {
                 VStack(spacing: 0) { lyricsWindowBehaviorRows }
             }
         case .layout:
-            SettingsPopoverShell(title: L10n.t("布局"), width: 540) {
+            // 完整尺寸下面一排三格间距,西语、德语、英语的格名要 680 才不截断;迷你那几行不受影响。
+            SettingsPopoverShell(title: L10n.t("布局"), width: lyricsWindowPreviewShowsMini ? 540 : 680) {
                 VStack(spacing: 0) { lyricsWindowAppearanceRows(.layout) }
+            }
+        case .depth:
+            SettingsPopoverShell(title: L10n.t("景深"), width: 680) {
+                VStack(spacing: 0) { lyricsWindowDepthTiles }
             }
         case .content:
             SettingsPopoverShell(title: L10n.t("内容"), width: 440) {
@@ -3679,7 +3695,8 @@ private struct AppearanceSettingsTab: View {
                 hdrHighlight: $settings.lyricsWindowHDRHighlight,
                 spotifyCanvas: $settings.spotifyCanvasEnabled,
                 alignment: $settings.lyricsWindowLyricsAlignment,
-                showsControlScale: true)
+                showsControlScale: true,
+                showsListTuning: true)
         }
     }
 
@@ -3697,7 +3714,7 @@ private struct AppearanceSettingsTab: View {
         textColorMode: Binding<LyricsWindowTextColorMode>,
         textColor: Binding<Color>,
         font: Binding<String>,
-        /// 只有迷你尺寸传:完整尺寸的字号由视口高度反推,不给滑杆(理由见 AppSettings 那颗设置)。
+        /// 只有迷你尺寸传:完整尺寸的字号由视口高宽反推,不给上限,给「字号缩放」(见 AppSettings 那颗设置)。
         fontSize: Binding<Double>? = nil,
         /// 同样只有迷你尺寸传:完整尺寸是一整页正文,恒换行。
         lineOverflow: Binding<OverlayLineOverflow>? = nil,
@@ -3715,7 +3732,9 @@ private struct AppearanceSettingsTab: View {
         /// 只有完整尺寸传:迷你单行 / 双行居中、多行是完整布局那份列表的迷你版,不给对齐。
         alignment: Binding<LyricsRestingAlignment>? = nil,
         /// 只有完整尺寸传:「控件大小」(07 章决策 195)。迷你的控制条另有一套,不跟。
-        showsControlScale: Bool = false
+        showsControlScale: Bool = false,
+        /// 只有完整尺寸传:「字体」里的字号缩放、读音 / 译文大小(07 章决策 216)。迷你「多行」共用这份列表但不跟。
+        showsListTuning: Bool = false
     ) -> some View {
         switch part {
         case .background:
@@ -3794,56 +3813,61 @@ private struct AppearanceSettingsTab: View {
             }
             .animation(.default, value: mode.wrappedValue)
         case .font:
-            // 字体 → 粗细 → 字号,同悬浮歌词、菜单栏、灵动岛的「字体」组。字号只有迷你传。
-            // 完整尺寸的字号不给配:这扇窗的字号是跟着窗口尺寸算出来的(完整走 lyricFontSize、迷你走
-            // miniFontSize),再给一根滑杆就是让两套规则打架 —— 拖窗口会把用户调好的数悄悄改掉。
+            // 字体 → 粗细 → 字号,同悬浮歌词、菜单栏、灵动岛的「字体」组。字号上限只有迷你传。
+            // 完整尺寸的字号跟着窗口尺寸算(lyricFontSize),不给固定字号或上限,给的是在算出来的字号上整体乘的「字号缩放」,
+            // 跟读音 / 译文大小排成下面一排三格(`lyricsWindowFontScaleTiles`)。
             // 两列小块:往上弹的浮层只有按钮上方约 200pt,一行一个控件放不下。
-            SettingsTileGrid {
-                SettingsControlCell(
-                    icon: "textformat",
-                    title: L10n.t("字体"),
-                    // 完整尺寸的字号由窗口大小推出、不给滑杆;迷你有「字号」上限滑杆。
-                    help: fontSize != nil
-                        ? L10n.t("仅作用于歌词；顶部信息和播放控制仍用系统字体")
-                        : L10n.t("仅作用于歌词；字号随窗口大小自动调整")
-                ) {
-                    FontFamilyPicker(selection: font)
-                }
-                // 排在字体和字号之间,同悬浮歌词:粗细是「这个字体族的哪一个粗细」。选的是正文那一档,读音 / 译文跟着细。
-                if let fontWeight {
-                    SettingsControlCell(icon: "bold", title: L10n.t("粗细")) {
-                        SettingsGlassMenuPicker(
-                            selection: fontWeight,
-                            options: OverlayFontWeight.allCases,
-                            label: \.displayName,
-                            compact: true
-                        )
-                    }
-                }
-                if let fontSize {
+            SettingsRowGroupStack {
+                SettingsTileGrid {
                     SettingsControlCell(
-                        icon: "textformat.size",
-                        title: L10n.t("字号"),
-                        help: L10n.t("此为上限：窗口足够大时使用此字号，窗口缩小时文字随之缩小，以免超出窗口")
+                        icon: "textformat",
+                        title: L10n.t("字体"),
+                        // 完整尺寸的字号由窗口大小推出、不给滑杆;迷你有「字号」上限滑杆。
+                        help: fontSize != nil
+                            ? L10n.t("仅作用于歌词；顶部信息和播放控制仍用系统字体")
+                            : L10n.t("仅作用于歌词；字号随窗口大小自动调整")
                     ) {
-                        HStack(spacing: 6) {
-                            // SteppedSlider 而不是原生带步长的构造器:后者会在轨道下面画一排刻度点。
-                            // 相等守卫:拖动中量化后的等值赋值照样广播 objectWillChange,所有观察 AppSettings 的界面跟着白跑。
-                            let commit: (Double) -> Void = { v in
-                                guard v != fontSize.wrappedValue else { return }
-                                fontSize.wrappedValue = v
-                            }
-                            SteppedSlider(value: Binding(
-                                get: { miniFontSizeThrottle.value(or: fontSize.wrappedValue) },
-                                set: { miniFontSizeThrottle.update($0, commit: commit) }
-                            ), in: AppSettings.lyricsWindowMiniFontSizeRange, step: 1,
-                               onEditingChanged: { miniFontSizeThrottle.editingChanged($0, commit: commit) })
-                                .frame(width: 96)
-                            StableReadout(text: String(format: L10n.t("%@pt"), "\(Int(miniFontSizeThrottle.value(or: fontSize.wrappedValue)))"),
-                                          widest: StableReadout.points(AppSettings.lyricsWindowMiniFontSizeRange.upperBound), font: nil, minWidth: 36)
-                                .foregroundStyle(.secondary)
+                        FontFamilyPicker(selection: font)
+                    }
+                    // 排在字体和字号之间,同悬浮歌词:粗细是「这个字体族的哪一个粗细」。选的是正文那一档,读音 / 译文跟着细。
+                    if let fontWeight {
+                        SettingsControlCell(icon: "bold", title: L10n.t("粗细")) {
+                            SettingsGlassMenuPicker(
+                                selection: fontWeight,
+                                options: OverlayFontWeight.allCases,
+                                label: \.displayName,
+                                compact: true
+                            )
                         }
                     }
+                    if let fontSize {
+                        SettingsControlCell(
+                            icon: "textformat.size",
+                            title: L10n.t("字号"),
+                            help: L10n.t("此为上限：窗口足够大时使用此字号，窗口缩小时文字随之缩小，以免超出窗口")
+                        ) {
+                            HStack(spacing: 6) {
+                                // SteppedSlider 而不是原生带步长的构造器:后者会在轨道下面画一排刻度点。
+                                // 相等守卫:拖动中量化后的等值赋值照样广播 objectWillChange,所有观察 AppSettings 的界面跟着白跑。
+                                let commit: (Double) -> Void = { v in
+                                    guard v != fontSize.wrappedValue else { return }
+                                    fontSize.wrappedValue = v
+                                }
+                                SteppedSlider(value: Binding(
+                                    get: { miniFontSizeThrottle.value(or: fontSize.wrappedValue) },
+                                    set: { miniFontSizeThrottle.update($0, commit: commit) }
+                                ), in: AppSettings.lyricsWindowMiniFontSizeRange, step: 1,
+                                   onEditingChanged: { miniFontSizeThrottle.editingChanged($0, commit: commit) })
+                                    .frame(width: 96)
+                                StableReadout(text: String(format: L10n.t("%@pt"), "\(Int(miniFontSizeThrottle.value(or: fontSize.wrappedValue)))"),
+                                              widest: StableReadout.points(AppSettings.lyricsWindowMiniFontSizeRange.upperBound), font: nil, minWidth: 36)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                    }
+                }
+                if showsListTuning {
+                    lyricsWindowFontScaleTiles
                 }
             }
         case .color:
@@ -3950,26 +3974,62 @@ private struct AppearanceSettingsTab: View {
         }
     }
 
-    /// 完整尺寸「布局」那一组:对齐方式(四档,同灵动岛)、控件大小(100%～200% 滑杆)。只有完整尺寸有,设置搜索那份名单靠这个函数认它们。
+    /// 完整尺寸「布局」那一组:对齐方式(四档,同灵动岛)、控件大小(100%～200% 滑杆),下面一排三格歌词间距。
+    /// 只有完整尺寸有,设置搜索那份名单靠这个函数认它们。
     private func lyricsWindowAlignmentRows(_ alignment: Binding<LyricsRestingAlignment>,
                                            showsControlScale: Bool) -> some View {
-        SettingsRowGroup {
-            SettingsRow(
-                icon: "text.alignleft",
-                title: L10n.t("对齐方式"),
-                help: L10n.t("「自动」按对唱声部对齐，合唱居中，无对唱信息时靠左")
-            ) {
-                LyricsAlignmentSegmentedControl(selection: alignment, options: LyricsRestingAlignment.notchOptions)
-            }
-            if showsControlScale {
+        SettingsRowGroupStack {
+            SettingsRowGroup {
                 SettingsRow(
-                    icon: "hand.tap",
-                    title: L10n.t("控件大小"),
-                    help: L10n.t("放大播放控制和其他按钮，网页歌词同样生效")
+                    icon: "text.alignleft",
+                    title: L10n.t("对齐方式"),
+                    help: L10n.t("「自动」按对唱声部对齐，合唱居中，无对唱信息时靠左")
                 ) {
-                    LyricsWindowControlScaleSlider()
+                    LyricsAlignmentSegmentedControl(selection: alignment, options: LyricsRestingAlignment.notchOptions)
+                }
+                if showsControlScale {
+                    SettingsRow(
+                        icon: "hand.tap",
+                        title: L10n.t("控件大小"),
+                        help: L10n.t("放大播放控制和其他按钮，网页歌词同样生效")
+                    ) {
+                        LyricsWindowControlScaleSlider()
+                    }
                 }
             }
+            if showsControlScale {
+                // 行与行、正文与读音、读音与译文之间,按卡片里从上到下的顺序。那一行在「内容」里关着时置灰。
+                SettingsTileGrid(columns: 3) {
+                    LyricsWindowListTuningTile(item: .lineSpacing, title: L10n.t("行间距"))
+                    LyricsWindowListTuningTile(item: .romanizationGap, title: L10n.t("读音间距"))
+                        .disabled(!settings.showRomanization)
+                    LyricsWindowListTuningTile(item: .translationGap, title: L10n.t("译文间距"))
+                        .disabled(!settings.showTranslation)
+                }
+            }
+        }
+    }
+
+    /// 完整尺寸「字体」那一排:字号缩放、读音大小、译文大小(百分数,`LyricsWindowListTuning`)。只有完整尺寸有。
+    @ViewBuilder
+    private var lyricsWindowFontScaleTiles: some View {
+        SettingsTileGrid(columns: 3) {
+            LyricsWindowListTuningTile(item: .fontScale, title: L10n.t("字号缩放"))
+            LyricsWindowListTuningTile(item: .romanizationSize, title: L10n.t("读音大小"))
+                .disabled(!settings.showRomanization)
+            LyricsWindowListTuningTile(item: .translationSize, title: L10n.t("译文大小"))
+                .disabled(!settings.showTranslation)
+        }
+    }
+
+    /// 完整尺寸「景深」:没唱到的行、唱过的行各自变暗多少,非当前行模糊多少(都是相对默认的倍数,随距离渐变的形状不变)。
+    /// 只有完整尺寸有;系统「减弱动态效果」开着时模糊照旧全关。
+    @ViewBuilder
+    private var lyricsWindowDepthTiles: some View {
+        SettingsTileGrid(columns: 3) {
+            LyricsWindowListTuningTile(item: .upcomingDim, title: L10n.t("未唱变暗"))
+            LyricsWindowListTuningTile(item: .pastDim, title: L10n.t("已唱变暗"))
+            LyricsWindowListTuningTile(item: .blur, title: L10n.t("模糊"))
         }
     }
 
@@ -4849,13 +4909,14 @@ enum LyricsWindowStyleDefaults {
             s.lyricsWindowLyricsAlignment = .automatic
             s.lyricsWindowControlScalePercent = LyricsWindowControlScale.defaultPercent
             s.lyricsWindowHDRHighlight = false
+            s.lyricsWindowListTuning = .standard
             s.motionCoverEnabled = AppSettings.defaultMotionCoverEnabled
             s.spotifyCanvasEnabled = AppSettings.defaultSpotifyCanvasEnabled
         }
     }
 }
 
-/// 「歌词窗口」工具栏的胶囊。`info` 按尺寸是「顶部信息」(迷你)或「封面」(完整);`behavior`、`layout` 只有迷你有。
+/// 「歌词窗口」工具栏的胶囊。`info` 按尺寸是「顶部信息」(迷你)或「封面」(完整);`behavior` 只有迷你有,`depth` 只有完整有。
 enum LyricsWindowToolbarItem: Equatable {
     case background
     case font
@@ -4863,6 +4924,8 @@ enum LyricsWindowToolbarItem: Equatable {
     case behavior
     case content
     case layout
+    /// 只有完整尺寸有:未唱 / 已唱变暗、模糊。
+    case depth
     case info
     case web
 }

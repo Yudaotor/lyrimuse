@@ -205,6 +205,140 @@ func runLyricsWindowTests() {
         expectEqual(r3(D.blurRadius(distance: nil, fontSize: 100)), 3, "景深: 没有锚点 0.03×字号")
     }
 
+    // MARK: - 完整尺寸的排版与景深调节(LyricsWindowListTuning,07 章决策 216)
+    do {
+        typealias D = LyricsWindowDepth
+        typealias T = LyricsWindowListTuning
+        let std = T.standard
+        // 默认值下跟加这项设置前写死的那些数逐数相等(不取整、不留误差)。
+        let upcoming: [Double] = [0.56, 0.54, 0.44, 0.34], past: [Double] = [0.36, 0.31, 0.26, 0.22]
+        var exact = true
+        for f in [22.0, 31.7, 37.3, 50.6, 68.25] as [CGFloat] {
+            exact = exact && std.fontSize(auto: f) == f
+                && std.romanizationFontSize(f) == f * 0.54 && std.translationFontSize(f) == f * 0.57
+                && std.lineSpacing(f) == f * 0.98
+                && std.romanizationGap(f) == 6 && std.perWordRomanizationOffset(f) == 0
+                && std.translationGap(f) == 6 + f * 0.12
+                && D.blurRadius(distance: nil, fontSize: f, tuning: std.depth) == f * 0.03
+            for d in -4...4 where d != 0 {
+                let rows = CGFloat(abs(d))
+                exact = exact && D.blurRadius(distance: d, fontSize: f, tuning: std.depth)
+                    == f * ((d > 0 ? 0.023 : 0.036) + 0.019 * rows)
+            }
+            exact = exact && LyricsLineStagger.reachRows(viewportHeight: 800, fontSize: Double(f), extraSpacingEm: Double(std.extraLineSpacingEm))
+                == Int((800 / (2.1 * Double(f))).rounded(.up)) + LyricsLineStagger.reachMarginRows
+                && LyricsLineStagger.delayMs(distanceFromTop: 240, fontSize: Double(f), extraSpacingEm: Double(std.extraLineSpacingEm))
+                == min(400, 240 / (3.0 * Double(f)) * 50)
+        }
+        for d in 1...4 {
+            exact = exact && D.opacity(distance: d, tuning: std.depth) == upcoming[d - 1]
+                && D.opacity(distance: -d, tuning: std.depth) == past[d - 1]
+        }
+        exact = exact && D.opacity(distance: 0, tuning: std.depth) == 1 && D.opacity(distance: nil, tuning: std.depth) == 0.45
+            && D.opacity(distance: 5, tuning: std.depth) == 0.34
+        expectEqual(exact, true, "排版景深: 九项默认时字号、读音 / 译文字号、行距、行内间距、各行不透明度、模糊半径、错开跟原来逐数相等")
+        expectEqual(std.depth == .standard && T() == std && std.isStandard
+                    && T.Item.allCases.allSatisfy { std[$0] == $0.defaultPercent && $0.range.contains($0.defaultPercent) },
+                    true, "排版景深: 默认值都在各自范围里,景深三项默认都是 1 倍")
+
+        // 变暗强度 k:0 不变暗,随距离渐变的形状不变,夹在 0…1;模糊强度 0 不糊。
+        let off = T([.upcomingDim: 0, .pastDim: 0, .blur: 0]).depth
+        expectEqual(([nil] + (-4...4).map { Optional($0) }).allSatisfy {
+            D.opacity(distance: $0, tuning: off) == 1 && D.blurRadius(distance: $0, fontSize: 50, tuning: off) == 0
+        }, true, "排版景深: 变暗 0% 时各行都不变暗(含还没唱到第一句),模糊 0% 时都不糊")
+        let half = T([.upcomingDim: 50, .pastDim: 150, .blur: 200]).depth
+        expectEqual(r3(D.opacity(distance: 1, tuning: half)), 0.78, "排版景深: 未唱变暗 50% → 1 − 0.44 × 0.5")
+        expectEqual(r3(D.opacity(distance: nil, tuning: half)), 0.725, "排版景深: 还没唱到第一句按未唱那一项")
+        expectEqual(r3(D.opacity(distance: -1, tuning: half)), 0.04, "排版景深: 已唱变暗 150% → 1 − 0.64 × 1.5")
+        expectEqual(D.opacity(distance: -4, tuning: half), 0, "排版景深: 变暗再强也不低于 0")
+        expectEqual((1..<4).allSatisfy { D.opacity(distance: -$0 - 1, tuning: half) <= D.opacity(distance: -$0, tuning: half)
+                        && D.opacity(distance: $0 + 1, tuning: half) <= D.opacity(distance: $0, tuning: half) },
+                    true, "排版景深: 调过强度仍是越远越暗")
+        expectEqual(r3(D.blurRadius(distance: -1, fontSize: 100, tuning: half)), 11, "排版景深: 模糊 200% 半径翻倍")
+
+        // 字号缩放乘在自动字号上,下限 22 跟着乘;副行大小是占正文的比例;间距三项是多出多少个字号的百分之几。
+        let t = T([.fontScale: 150, .romanizationSize: 70, .translationSize: 40, .lineSpacing: -50,
+                   .romanizationGap: 10, .translationGap: -20])
+        let auto = LyricsWindowTypography.listFontSize(columnWidth: 100, viewportHeight: 100)
+        expectEqual(t.fontSize(auto: auto), 33, "排版: 字号缩放 150% 时下限 22 也乘成 33")
+        expectEqual([r3(t.romanizationFontSize(40)), r3(t.translationFontSize(40))], [28, 16], "排版: 读音 / 译文字号按占正文的比例")
+        expectEqual(r3(t.lineSpacing(40)), 19.2, "排版: 行间距 −50% → (0.98 − 0.5) × 字号")
+        expectEqual([r3(t.romanizationGap(40)), r3(t.perWordRomanizationOffset(40))], [10, 4],
+                    "排版: 读音间距 +10% → 整行读音 6 + 4、逐词读音往下挪 4")
+        expectEqual(r3(t.translationGap(40)), 2.8, "排版: 译文间距 −20% → 6 + (0.12 − 0.2) × 40")
+        expectEqual(T([.translationGap: -20, .romanizationGap: -10]).translationGap(200) == 0
+                    && T([.romanizationGap: -10]).romanizationGap(200) == 0, true, "排版: 行内间距不小于 0")
+        expectEqual([T([.fontScale: 10])[.fontScale], T([.blur: 999])[.blur], T([.lineSpacing: .nan])[.lineSpacing]], [60, 200, 0],
+                    "排版景深: 越界夹回范围,坏值按默认")
+        expectEqual([T.Item.lineSpacing.percentText(10), T.Item.lineSpacing.percentText(0), T.Item.romanizationGap.percentText(-5),
+                     T.Item.fontScale.percentText(120)], ["+10%", "0%", "\u{2212}5%", "120%"],
+                    "排版景深: 间距带正负号,别的照常")
+        expectEqual(t.layoutOnly == t && T([.blur: 0, .lineSpacing: 20]).layoutOnly == T([.lineSpacing: 20]), true,
+                    "排版景深: 进重建键的那份只留排版几项,调景深不重建列表")
+        expectEqual(std.overriding([.blur: 40])[.blur] == 40 && std.overriding([.blur: 40])[.fontScale] == 100, true,
+                    "排版景深: 拖动途中的草稿只盖被拖的那一项")
+
+        // 行间距调小,换句错开按实际行距:相邻两行起步差仍是 50ms,一屏多放下的行也带上。
+        let tight = Double(T([.lineSpacing: -50]).extraLineSpacingEm)
+        expectEqual(r3(LyricsLineStagger.delayMs(distanceFromTop: 2.5 * 50, fontSize: 50, extraSpacingEm: tight)), 50,
+                    "错开: 行间距 −50% 时往下一行(2.5 倍字号)晚 50ms")
+        expectEqual(LyricsLineStagger.reachRows(viewportHeight: 800, fontSize: 48, extraSpacingEm: tight)
+                    > LyricsLineStagger.reachRows(viewportHeight: 800, fontSize: 48), true,
+                    "错开范围: 行间距调小,带上的行变多")
+        expectEqual(LyricsLineStagger.reachRows(viewportHeight: 800, fontSize: 48, extraSpacingEm: -5)
+                    == Int((800 / (1.1 * 48)).rounded(.up)) + 4, true, "错开范围: 一行最矮按 1.1 倍字号算,不除到 0")
+
+        // 图层版列表:行间距变了当场重排(不进重建键),锚点 / 间奏变了照换句走。
+        typealias R = LyricsListRelayout
+        let base = R.Inputs(scrollLineIndex: 4, currentGapIndex: nil, lineSpacing: 49)
+        var spaced = base
+        spaced.lineSpacing = 30
+        var moved = spaced
+        moved.scrollLineIndex = 5
+        var gap = base
+        gap.currentGapIndex = 4
+        expectEqual([R.between(previous: nil, next: base), R.between(previous: base, next: base), R.between(previous: base, next: spaced),
+                     R.between(previous: base, next: moved), R.between(previous: base, next: gap)],
+                    [.none, .none, .geometry, .anchor, .anchor],
+                    "排版: 只有行间距变了当场重排,锚点 / 间奏变了照换句的过渡走")
+    }
+
+    // MARK: - 完整尺寸的排版与景深调节(源码契约)
+    do {
+        let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+        func source(_ path: String) -> String {
+            (try? String(contentsOf: root.appendingPathComponent(path), encoding: .utf8)) ?? ""
+        }
+        let window = source("lyrimuse/UI/LyricsWindowView.swift")
+        let layer = source("lyrimuse/UI/LyricsLayerList.swift")
+        let row = source("lyrimuse/UI/LyricsLayerListRow.swift")
+        let web = source("lyrimuse/WebLyrics/WebLyricsScreen.swift")
+        expectEqual(sourceHas(window, "guard !showsMiniLayout else { return .standard }\n        return playback.fullListTuning.overriding(listTuningOverride)"),
+                    true, "排版景深(契约): 迷你「多行」共用列表但一律按默认画,完整尺寸叠上设置页预览的草稿")
+        expectEqual(sourceBytes(window, contain: "listTuning.fontSize(auto: LyricsWindowTypography.listFontSize(")
+                    && sourceBytes(window, contain: "private var lyricLineSpacing: CGFloat { listTuning.lineSpacing(lyricFontSize) }")
+                    && sourceBytes(window, contain: "layout: listTuning.layoutOnly),")
+                    && sourceBytes(window, contain: "depth: listTuning.depth, showsScrollIndicator: !centered,"),
+                    true, "排版景深(契约): 图层版列表拿到字号、行距、行内间距和景深")
+        expectEqual(sourceHas(layer, "let change = LyricsListRelayout.between(previous: previous?.relayoutInputs, next: next.relayoutInputs)")
+                    && sourceHas(layer, "} else if change == .geometry {\n            relayout(next, transition: .none)"),
+                    true, "排版(契约): 图层版列表行间距变了当场重排,暂停时拖滑杆也动")
+        expectEqual(sourceBytes(layer, contain: "LyricsWindowDepth.opacity(distance: d, tuning: s.depth)")
+                    && sourceBytes(layer, contain: "extraSpacingEm: Double(s.extraLineSpacingEm)"),
+                    true, "景深(契约): 图层版各行和末尾创作者按景深滑杆,换句错开按实际行距")
+        expectEqual(sourceBytes(row, contain: "y += style.layout.romanizationGap(style.fontSize)")
+                    && sourceBytes(row, contain: "y += style.layout.translationGap(style.fontSize)")
+                    && sourceBytes(row, contain: "style.layout.perWordRomanizationOffset(style.fontSize)"),
+                    true, "排版(契约): 整行读音、逐词读音、译文的间距按滑杆")
+        expectEqual(sourceBytes(web, contain: "playback.fullListTuning.fontSize(auto: LyricsWindowTypography.listFontSize(")
+                    && sourceBytes(web, contain: "lineSpacing: tuning.lineSpacing(fs), extraLineSpacingEm: tuning.extraLineSpacingEm,")
+                    && sourceBytes(web, contain: "depth: tuning.depth, showsScrollIndicator:"),
+                    true, "网页歌词(契约): 字号、行距、间距、景深跟歌词窗口完整尺寸那九项")
+        expectEqual(SettingsSearchCatalog.lyricsWindowFullOnlyTitles.isSuperset(of: ["字号缩放", "读音大小", "译文大小", "行间距", "读音间距",
+                                                                                      "译文间距", "未唱变暗", "已唱变暗", "模糊"]),
+                    true, "排版景深: 九项设置搜索只在完整尺寸")
+    }
+
     // MARK: - 换句逐行错开
     do {
         typealias S = LyricsLineStagger
@@ -240,7 +374,8 @@ func runLyricsWindowTests() {
         let window = (try? String(contentsOf: root.appendingPathComponent("lyrimuse/UI/LyricsWindowView.swift"),
                                   encoding: .utf8)) ?? ""
         expectEqual(window.isEmpty, false, "命中(契约): 读到源码")
-        expectEqual(sourceHas(window, ".modifier(LineStagger(model: staggers ? stagger : .inert, fontSize: fontSize))\n        .allowsHitTesting(false)\n"),
+        expectEqual(sourceHas(window, ".modifier(LineStagger(model: staggers ? stagger : .inert, fontSize: fontSize,\n"
+                              + "extraSpacingEm: tuning.extraLineSpacingEm))\n        .allowsHitTesting(false)\n"),
                     true, "命中(契约): 歌词行的错开位移连同行内容不参与命中,悬停 / 点按由外面不动的矩形接 —— 在动的可命中内容让主线程每帧重算标题栏拖窗区")
     }
 
@@ -708,7 +843,7 @@ func runLyricsWindowTests() {
         let window = (try? String(contentsOf: root.appendingPathComponent("lyrimuse/UI/LyricsWindowView.swift"),
                                   encoding: .utf8)) ?? ""
         expectEqual(window.isEmpty, false, "错开范围(契约): 读到源码")
-        expectEqual(sourceBytes(window, contain: ".modifier(LineStagger(model: staggers ? stagger : .inert, fontSize: fontSize))"), true,
+        expectEqual(sourceBytes(window, contain: ".modifier(LineStagger(model: staggers ? stagger : .inert, fontSize: fontSize,"), true,
                     "错开范围(契约): 离得远的行挂从不开始的那一份")
         expectEqual(sourceBytes(window, contain: "&& a.staggers == b.staggers"), true,
                     "错开范围(契约): 参不参与进行的 ==,换句时只有跨过边界的行重算")
@@ -1073,8 +1208,8 @@ func runLyricsWindowTests() {
         expectEqual(window.components(separatedBy: "weight: lyricFontWeight,").count - 1 == 2
                     && sourceBytes(window, contain: "private var lyricFontWeight: OverlayFontWeight { showsMiniLayout ? playback.miniFontWeight : playback.fullFontWeight }"),
                     true, "迷你粗细接线: 多行的 SwiftUI 列表和图层版列表都按此刻尺寸那一档画")
-        expectEqual(sourceHas(window, "fontFamily: fontFamily,\n            weight: weight))"), true,
-                    "迷你粗细接线: 逐字行的排版缓存键带上粗细")
+        expectEqual(sourceHas(window, "fontFamily: fontFamily,\n            weight: weight,\n            romaOffset: romaOffset))"), true,
+                    "迷你粗细接线: 逐字行的排版缓存键带上粗细(和逐词读音的间距)")
         expectEqual(sourceBytes(layerRows, contain: "main = style.font(style.fontSize, style.weight)"), true,
                     "迷你粗细接线: 图层版列表的正文按 style.weight")
         expectEqual(sourceBytes(window, contain: "if let fill, !forceFilled {"), true, "已唱颜色接线: 非当前行不用填色颜色")
@@ -1135,8 +1270,9 @@ func runLyricsWindowTests() {
                     true, "设置分组: 工具栏第一行两种尺寸都是背景、字体、颜色,按内容分宽(04 章决策 87)")
         expectEqual(sourceHas(settingsView, "if lyricsWindowPreviewShowsMini {\nlyricsWindowToolbarButton(.behavior)\n}\n"
                                 + "lyricsWindowToolbarButton(.content)\nlyricsWindowToolbarButton(.layout)\n"
+                                + "if !lyricsWindowPreviewShowsMini {\nlyricsWindowToolbarButton(.depth)\n}\n"
                                 + "lyricsWindowToolbarButton(.info)\nlyricsWindowToolbarButton(.web)\n"),
-                    true, "设置分组: 第二行迷你是行为、内容、布局、顶部信息、网页歌词,完整是内容、布局、封面、网页歌词")
+                    true, "设置分组: 第二行迷你是行为、内容、布局、顶部信息、网页歌词,完整是内容、布局、景深、封面、网页歌词")
         // 网页歌词那一组(19 章):工具栏浮层和抽屉同一份行,抽屉里排在最后,原来那张单独的卡不要了。
         let webCard = (try? String(contentsOf: root.appendingPathComponent("lyrimuse/Settings/WebLyricsSettingsCard.swift"), encoding: .utf8)) ?? ""
         expectEqual(sourceHas(settingsView, "SettingsGroupCard(title: L10n.t(\"网页歌词\"), beta: true) { LyricsWindowWebSettingsRows() }\n"
@@ -1274,11 +1410,12 @@ func runLyricsWindowTests() {
                                 + "            s.lyricsWindowKaraokeFillColorHex = AppSettings.defaultLyricsWindowMiniKaraokeFillColorHex\n"
                                 + "            s.lyricsWindowLyricsAlignment = .automatic\n"
                                 + "            s.lyricsWindowControlScalePercent = LyricsWindowControlScale.defaultPercent\n"
-                                + "            s.lyricsWindowHDRHighlight = false\n"),
-                    true, "完整尺寸: 「重置」恢复这几项,含 HDR 高亮")
+                                + "            s.lyricsWindowHDRHighlight = false\n"
+                                + "            s.lyricsWindowListTuning = .standard\n"),
+                    true, "完整尺寸: 「重置」恢复这几项,含 HDR 高亮和排版 / 景深九项")
         expectEqual(sourceHas(settingsView, "karaoke: $settings.lyricsWindowLyricsKaraoke,\n                fontWeight: $settings.lyricsWindowFontWeight,\n"
                                 + "                karaokeFill: $settings.lyricsWindowKaraokeFill,")
-                    && sourceBytes(settingsView, contain: "alignment: $settings.lyricsWindowLyricsAlignment,\n                showsControlScale: true)")
+                    && sourceBytes(settingsView, contain: "alignment: $settings.lyricsWindowLyricsAlignment,\n                showsControlScale: true,\n                showsListTuning: true)")
                     && sourceBytes(settingsView, contain: "LyricsAlignmentSegmentedControl(selection: alignment, options: LyricsRestingAlignment.notchOptions)"),
                     true, "完整尺寸: 设置页绑完整那一套,对齐四档含自动")
         let hits = SettingsSearchMatcher.ranked(SettingsSearchCatalog.entries, query: "对齐方式", title: { $0.titleKey },

@@ -347,13 +347,18 @@ While the cursor is in a text field, the Touch Bar lyrics can collapse so input 
 
 ### Lyrics window
 
-Full-page lyrics modelled on Apple Music's lyrics view: blurred artwork behind, the whole song scrolling to the current line, duets split by singer, background vocals on their own line, held notes that swell and glow. The background can follow the artwork or be solid, a gradient or frosted glass, and the text weight, sung color and alignment can be changed. Open it from the menu bar icon or a shortcut.
+Full-page lyrics modelled on Apple Music's lyrics view: blurred artwork behind, the whole song scrolling to the current line, duets split by singer, background vocals on their own line, held notes that swell and glow. The background can follow the artwork or be solid, a gradient or frosted glass, and the text weight and size, sung color, alignment, line spacing and the dimming and blur of other lines can be changed. Open it from the menu bar icon or a shortcut.
 
 - Settings: Lyrics Display › Lyrics Window › Lyrics Window
 - Settings: Lyrics Display › Lyrics Window › Background › Background
 - Settings: Keyboard Shortcuts › Open Lyrics Window
 - Settings: Lyrics Display › Lyrics Window › Layout › Alignment
 - Settings: Lyrics Display › Lyrics Window › Layout › Control Size
+- Settings: Lyrics Display › Lyrics Window › Font › Font Scale
+- Settings: Lyrics Display › Lyrics Window › Layout › Line Spacing
+- Settings: Lyrics Display › Lyrics Window › Depth › Unsung Dimming
+- Settings: Lyrics Display › Lyrics Window › Depth › Sung Dimming
+- Settings: Lyrics Display › Lyrics Window › Depth › Blur
 
 <a id="feature-lyrics-window-hdr"></a>
 
@@ -957,7 +962,7 @@ At most once a day, sends the version, macOS, which features are on and crash su
 
 ## Every setting
 
-Every setting in the Settings window, by where it lives: 330 in all. Type a name into the search field at the top of the Settings sidebar to jump straight to it.
+Every setting in the Settings window, by where it lives: 339 in all. Type a name into the search field at the top of the Settings sidebar to jump straight to it.
 
 ### Lyrics › Source
 
@@ -1279,11 +1284,17 @@ Every setting in the Settings window, by where it lives: 330 in all. Type a name
 - **Font Size** (mini size only): Ceiling for the mini size’s lyrics font size
 - **Font**: Lyrics font for the lyrics window (main text, translation, romanization)
 - **Weight**
+- **Font Scale** (full size only): Scales up or down the font size that adjusts with the window, Web Lyrics included
+- **Romanization Size** (full size only)
+- **Translation Size** (full size only)
 
 ### Lyrics Display › Lyrics Window › Layout
 
 - **Long Lines** (mini size only): Whether long lines wrap or scroll in the mini size
 - **Lyrics Layout** (mini size only): One Line: only the current line Two Lines: the current line and the next one Multi-Line: a scrolling page of lyrics, like the full size
+- **Line Spacing** (full size only)
+- **Romanization Spacing** (full size only)
+- **Translation Spacing** (full size only)
 - **Alignment** (full size only): Lyrics alignment in the full size; Auto follows the duet parts
 - **Control Size** (full size only): Enlarges the playback controls and other buttons, Web Lyrics included
 
@@ -1304,6 +1315,12 @@ Every setting in the Settings window, by where it lives: 330 in all. Type a name
 - **Custom Color**
 - **Sung Color**
 - **HDR Highlight** (full size only): Brightens the sung part on HDR displays. Uses more power when on
+
+### Lyrics Display › Lyrics Window › Depth
+
+- **Unsung Dimming** (full size only): How much dimmer upcoming lines are than the current line
+- **Sung Dimming** (full size only): How much dimmer sung lines are than the current line
+- **Blur** (full size only)
 
 ### Lyrics Display › Lyrics Window › Content
 

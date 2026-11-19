@@ -347,13 +347,18 @@ Mientras el cursor está en un campo de texto, la letra de la Touch Bar puede co
 
 ### Ventana de letra
 
-Letra a página completa inspirada en la vista de letras de Apple Music: la ilustración difuminada de fondo y toda la canción desplazándose hasta la línea actual; los duetos se separan por cantante, los coros van en su propia línea y las notas sostenidas se agrandan y brillan. El fondo puede seguir la ilustración o ser un color sólido, un degradado o vidrio esmerilado, y se pueden ajustar el grosor del texto, el color de lo cantado y la alineación. Ábrela desde el icono de la barra de menús o con un atajo.
+Letra a página completa inspirada en la vista de letras de Apple Music: la ilustración difuminada de fondo y toda la canción desplazándose hasta la línea actual; los duetos se separan por cantante, los coros van en su propia línea y las notas sostenidas se agrandan y brillan. El fondo puede seguir la ilustración o ser un color sólido, un degradado o vidrio esmerilado, y se pueden ajustar el grosor y el tamaño del texto, el color de lo cantado, la alineación, el interlineado y la atenuación y el desenfoque de las demás líneas. Ábrela desde el icono de la barra de menús o con un atajo.
 
 - Ajustes: Mostrar letra › Ventana de letra › Ventana de letra
 - Ajustes: Mostrar letra › Ventana de letra › Fondo › Fondo
 - Ajustes: Atajos de teclado › Abrir ventana de letra
 - Ajustes: Mostrar letra › Ventana de letra › Diseño › Alineación
 - Ajustes: Mostrar letra › Ventana de letra › Diseño › Tamaño de los controles
+- Ajustes: Mostrar letra › Ventana de letra › Fuente › Escala del texto
+- Ajustes: Mostrar letra › Ventana de letra › Diseño › Interlineado
+- Ajustes: Mostrar letra › Ventana de letra › Profundidad › Atenuar sin cantar
+- Ajustes: Mostrar letra › Ventana de letra › Profundidad › Atenuar cantado
+- Ajustes: Mostrar letra › Ventana de letra › Profundidad › Desenfoque
 
 <a id="feature-lyrics-window-hdr"></a>
 
@@ -957,7 +962,7 @@ Como máximo una vez al día, envía al servidor del propio autor la versión, e
 
 ## Todos los ajustes
 
-Todos los ajustes de la ventana Ajustes, según dónde están: 330 en total. Escribe un nombre en el campo de búsqueda de la parte superior de la barra lateral de Ajustes para ir directamente a él.
+Todos los ajustes de la ventana Ajustes, según dónde están: 339 en total. Escribe un nombre en el campo de búsqueda de la parte superior de la barra lateral de Ajustes para ir directamente a él.
 
 ### Letra › Fuente
 
@@ -1279,11 +1284,17 @@ Todos los ajustes de la ventana Ajustes, según dónde están: 330 en total. Esc
 - **Tamaño** (solo tamaño mini): Tamaño máximo del texto de la letra en tamaño mini
 - **Fuente**: Fuente de la ventana de letra (texto, traducción y romanización)
 - **Grosor**
+- **Escala del texto** (solo tamaño completo): Amplía o reduce el tamaño de letra que se ajusta a la ventana, también en la letra web
+- **Tamaño romanización** (solo tamaño completo)
+- **Tamaño traducción** (solo tamaño completo)
 
 ### Mostrar letra › Ventana de letra › Diseño
 
 - **Líneas largas** (solo tamaño mini): Si las líneas largas se ajustan o se desplazan en el tamaño mini
 - **Diseño de la letra** (solo tamaño mini): Una línea: solo la línea actual Dos líneas: la actual y la siguiente Varias líneas: una página de letra con desplazamiento, como en el tamaño completo
+- **Interlineado** (solo tamaño completo)
+- **Espaciado de romanización** (solo tamaño completo)
+- **Espaciado de traducción** (solo tamaño completo)
 - **Alineación** (solo tamaño completo): Alineación de la letra en tamaño completo; «Auto» sigue las voces del dueto
 - **Tamaño de los controles** (solo tamaño completo): Agranda los controles de reproducción y otros botones, también en la letra web
 
@@ -1304,6 +1315,12 @@ Todos los ajustes de la ventana Ajustes, según dónde están: 330 en total. Esc
 - **Color personalizado**
 - **Color cantado**
 - **Resaltado HDR** (solo tamaño completo): Ilumina la parte cantada en pantallas HDR. Consume más energía al activarlo
+
+### Mostrar letra › Ventana de letra › Profundidad
+
+- **Atenuar sin cantar** (solo tamaño completo): Cuánto más tenues se ven las líneas aún sin cantar que la actual
+- **Atenuar cantado** (solo tamaño completo): Cuánto más tenues se ven las líneas ya cantadas que la actual
+- **Desenfoque** (solo tamaño completo)
 
 ### Mostrar letra › Ventana de letra › Contenido
 

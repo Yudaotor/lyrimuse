@@ -378,6 +378,16 @@ enum DebugDeepLinks {
                 AppSettings.shared.lyricsWindowControlScalePercent = percent
             }
             logger.notice("debug lyrics window controls \(percent, privacy: .public)% draft=\(draft, privacy: .public)")
+        case let .lyricsWindowTypesetting(values, draft):
+            if draft {
+                LyricsWindowListTuningDraft.shared.values.merge(values) { _, new in new }
+            } else {
+                LyricsWindowListTuningDraft.shared.values = [:]
+                AppSettings.shared.lyricsWindowListTuning = AppSettings.shared.lyricsWindowListTuning.overriding(values)
+            }
+            let text = LyricsWindowListTuning.Item.allCases.compactMap { item in values[item].map { "\(item.rawValue)=\($0)" } }
+                .joined(separator: " ")
+            logger.notice("debug lyrics window typesetting \(text, privacy: .public) draft=\(draft, privacy: .public)")
         case let .lyricsWindowPointer(inside):
             LyricsWindowRemote.shared.simulatePointer(inside: inside)
             logger.notice("debug lyrics window pointer inside=\(inside, privacy: .public)")

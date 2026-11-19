@@ -878,6 +878,7 @@
 "哈萨克语" = "Kazakh";
 "唯一的差异在于「%@」一项" = "La seule différence porte sur « %@ »";
 "唯一的差异是胜者在「%1$@」一项多 %2$d 分" = "Seule différence : le gagnant a %2$d de plus sur « %1$@ »";
+"唱过的行比当前行暗多少" = "À quel point les lignes déjà chantées sont plus sombres que la ligne en cours";
 "喜欢" = "Favori";
 "喜欢/取消喜欢" = "Ajouter/retirer des favoris";
 "回到逐句编辑" = "Retour à l’édition par ligne";
@@ -952,6 +953,7 @@
 "在该浏览器的开发者菜单中开启「允许 Apple 事件中的 JavaScript」" = "Activez « Autoriser JavaScript à partir des événements Apple » dans le menu Développement de ce navigateur";
 "在钉钉群中：群设置 → 智能群助手 → 添加机器人 → 自定义，创建后拷贝 Webhook 地址。安全设置建议选择「加签」，并将生成的密钥填入下方的「加签密钥」" = "Dans votre groupe DingTalk : Réglages du groupe → Assistant du groupe → Ajouter un robot → Personnalisé, puis copiez l’URL du webhook une fois le robot créé. Pour la sécurité, choisissez « Signature » et saisissez le secret généré dans le champ « Secret de signature » ci-dessous";
 "在防火墙设置中允许 Lyrimuse 的传入连接后，其他设备才能打开链接" = "Autorisez les connexions entrantes pour Lyrimuse dans les réglages du pare-feu pour que les autres appareils puissent ouvrir le lien";
+"在随窗口大小自动调整的字号上放大或缩小，网页歌词同样生效" = "Agrandit ou réduit la taille du texte ajustée à la fenêtre, y compris dans les paroles web";
 "在飞书群中：设置 → 群机器人 → 添加机器人 → 自定义机器人，创建后拷贝 Webhook 地址。如需额外校验，可开启「签名校验」，并将密钥填入下方的「签名密钥」" = "Dans votre groupe Feishu : Réglages → Bots du groupe → Ajouter un bot → Bot personnalisé, puis copiez l’URL du webhook une fois le bot créé. Pour une vérification supplémentaire, activez « Vérification de signature » et saisissez le secret dans le champ « Clé de signature » ci-dessous";
 "地址不存在" = "URL introuvable";
 "均为独立匹配" = "Toutes indépendantes";
@@ -995,6 +997,7 @@
 "字号 %@pt" = "Taille %@ pt";
 "字号仅对悬浮歌词有效" = "La taille ne concerne que les paroles flottantes";
 "字号快捷键仅对悬浮歌词有效" = "Les raccourcis de taille ne concernent que les paroles flottantes";
+"字号缩放" = "Échelle du texte";
 "字节跳动旗下的音乐 App" = "L’app de musique de ByteDance";
 "字节跳动旗下的音乐平台" = "Service musical de ByteDance";
 "存储" = "Stockage";
@@ -1154,6 +1157,7 @@
 "已取消喜欢" = "Retiré des favoris";
 "已取消纯音乐标记" = "Marque instrumentale retirée";
 "已启用的歌词源均未找到可用的候选" = "Aucune source n’a de paroles";
+"已唱变暗" = "Atténuer chanté";
 "已唱颜色" = "Couleur chantée";
 "已喜欢" = "Ajouté aux favoris";
 "已在 Last.fm 上喜欢" = "Coup de cœur ajouté sur Last.fm";
@@ -1765,6 +1769,7 @@
 "显示进度条" = "Afficher la barre de progression";
 "晚 %@ 秒" = "%@ s plus tard";
 "普通话" = "Mandarin";
+"景深" = "Profondeur";
 "智能" = "Intelligent";
 "智能算法" = "Association intelligente";
 "暂停 10 秒后收起为功能栏图标，恢复播放时自动展开" = "Se réduit au bouton de la Control Strip après 10 secondes de pause, et se développe à la reprise";
@@ -1851,6 +1856,7 @@
 "未发现无效记录" = "Aucune entrée non valide";
 "未启用" = "Non activé";
 "未启用的来源" = "Sources désactivées";
+"未唱变暗" = "Atténuer non chanté";
 "未唱部分与副行的亮度" = "Luminosité des mots non chantés et de la seconde ligne";
 "未唱颜色" = "Couleur non chantée";
 "未在上方列出的 App 也可作为播放器：添加后将显示其正在播放的歌曲，并计入收听记录" = "Les apps non listées ci-dessus peuvent aussi servir de lecteur : une fois ajoutées, leurs morceaux affichent les paroles et comptent dans votre historique d’écoute";
@@ -2010,6 +2016,7 @@
 "概况和歌手、专辑、歌曲各自的第一名" = "Résumé, et l’artiste, l’album et le morceau les plus écoutés";
 "榜单" = "Classements";
 "榜单链接" = "Lien du classement";
+"模糊" = "Flou";
 "次" = "écoutes";
 "欢迎使用 Lyrimuse" = "Bienvenue dans Lyrimuse";
 "歌名" = "Titre";
@@ -2598,6 +2605,7 @@
 "行为" = "Comportement";
 "行数" = "Lignes";
 "行时间略有出入" = "minutage des lignes légèrement différent";
+"行间距" = "Interligne";
 "补交" = "Rattraper";
 "补交中 %@/%@" = "Envoi de %@ sur %@";
 "补交未完成，请稍后重试" = "Rattrapage inachevé. Réessayez plus tard";
@@ -2799,6 +2807,7 @@
 "还有 %@ 条" = "et %@ autres";
 "还有未完成的项目" = "Éléments à vérifier";
 "还没唱到歌词" = "Les paroles n’ont pas encore commencé";
+"还没唱到的行比当前行暗多少" = "À quel point les lignes à venir sont plus sombres que la ligne en cours";
 "还没填 Chat ID" = "Aucun Chat ID";
 "还没填地址" = "Aucune URL";
 "还没推送过" = "Aucun envoi pour l’instant";
@@ -3040,6 +3049,7 @@
 "霓虹" = "Néon";
 "静音" = "Couper le son";
 "静默启动" = "Lancement silencieux";
+"非当前行的模糊程度，设为 0% 不模糊" = "Flou des lignes autres que la ligne en cours ; à 0 %, aucun flou";
 "面向发烧友的高解析音频播放器" = "Lecteur audio haute résolution pour audiophiles";
 "韩国 KT 旗下的音乐平台" = "Service musical coréen de KT";
 "韩国 Naver 旗下的音乐平台" = "Service musical coréen de Naver";

@@ -878,6 +878,7 @@
 "哈萨克语" = "Kazakh";
 "唯一的差异在于「%@」一项" = "The only difference is on “%@”";
 "唯一的差异是胜者在「%1$@」一项多 %2$d 分" = "The only difference: the winner scored %2$d more on “%1$@”";
+"唱过的行比当前行暗多少" = "How much dimmer sung lines are than the current line";
 "喜欢" = "Favorite";
 "喜欢/取消喜欢" = "Favorite/Remove Favorite";
 "回到逐句编辑" = "Back to Line Editing";
@@ -952,6 +953,7 @@
 "在该浏览器的开发者菜单中开启「允许 Apple 事件中的 JavaScript」" = "Turn on “Allow JavaScript from Apple Events” in this browser’s Developer menu";
 "在钉钉群中：群设置 → 智能群助手 → 添加机器人 → 自定义，创建后拷贝 Webhook 地址。安全设置建议选择「加签」，并将生成的密钥填入下方的「加签密钥」" = "In your DingTalk group: Group Settings → Group Assistant → Add Robot → Custom, then copy the webhook URL after creating it. For security, choose “Signature” and put the generated secret in the “Signing Secret” field below";
 "在防火墙设置中允许 Lyrimuse 的传入连接后，其他设备才能打开链接" = "Allow incoming connections for Lyrimuse in Firewall settings so other devices can open the link";
+"在随窗口大小自动调整的字号上放大或缩小，网页歌词同样生效" = "Scales up or down the font size that adjusts with the window, Web Lyrics included";
 "在飞书群中：设置 → 群机器人 → 添加机器人 → 自定义机器人，创建后拷贝 Webhook 地址。如需额外校验，可开启「签名校验」，并将密钥填入下方的「签名密钥」" = "In your Feishu group: Settings → Group Bots → Add Bot → Custom Bot, then copy the webhook URL after creating it. For an extra layer of verification, enable “Signature Verification” and enter the secret in the “Signature Secret” field below";
 "地址不存在" = "URL not found";
 "均为独立匹配" = "All Matched Separately";
@@ -995,6 +997,7 @@
 "字号 %@pt" = "Font size %@pt";
 "字号仅对悬浮歌词有效" = "Font size only applies to Floating Lyrics";
 "字号快捷键仅对悬浮歌词有效" = "Font size shortcuts only apply to Floating Lyrics";
+"字号缩放" = "Font Scale";
 "字节跳动旗下的音乐 App" = "ByteDance’s music app";
 "字节跳动旗下的音乐平台" = "ByteDance’s music service";
 "存储" = "Storage";
@@ -1154,6 +1157,7 @@
 "已取消喜欢" = "Favorite removed";
 "已取消纯音乐标记" = "Instrumental mark removed";
 "已启用的歌词源均未找到可用的候选" = "No Lyrics from Any Source";
+"已唱变暗" = "Sung Dimming";
 "已唱颜色" = "Sung Color";
 "已喜欢" = "Favorited";
 "已在 Last.fm 上喜欢" = "Loved on Last.fm";
@@ -1765,6 +1769,7 @@
 "显示进度条" = "Show Progress Bar";
 "晚 %@ 秒" = "%@ s later";
 "普通话" = "Mandarin";
+"景深" = "Depth";
 "智能" = "Smart";
 "智能算法" = "Smart Matching";
 "暂停 10 秒后收起为功能栏图标，恢复播放时自动展开" = "Collapses to the Control Strip button after 10 seconds paused, and expands again when playback resumes";
@@ -1851,6 +1856,7 @@
 "未发现无效记录" = "No Invalid Entries";
 "未启用" = "Not Enabled";
 "未启用的来源" = "Sources That Are Off";
+"未唱变暗" = "Unsung Dimming";
 "未唱部分与副行的亮度" = "Brightness of unsung words and the second line";
 "未唱颜色" = "Unsung Color";
 "未在上方列出的 App 也可作为播放器：添加后将显示其正在播放的歌曲，并计入收听记录" = "Apps not listed above can be used as players too: once added, their songs show lyrics and count toward your listening history";
@@ -2010,6 +2016,7 @@
 "概况和歌手、专辑、歌曲各自的第一名" = "Summary and your top artist, album and track";
 "榜单" = "Charts";
 "榜单链接" = "Chart link";
+"模糊" = "Blur";
 "次" = "plays";
 "欢迎使用 Lyrimuse" = "Welcome to Lyrimuse";
 "歌名" = "Title";
@@ -2598,6 +2605,7 @@
 "行为" = "Behavior";
 "行数" = "Lines";
 "行时间略有出入" = "line timing differs slightly";
+"行间距" = "Line Spacing";
 "补交" = "Backfill";
 "补交中 %@/%@" = "Submitting %@ of %@";
 "补交未完成，请稍后重试" = "Backfill didn’t finish. Try again later";
@@ -2799,6 +2807,7 @@
 "还有 %@ 条" = "and %@ more";
 "还有未完成的项目" = "Some Items Need Attention";
 "还没唱到歌词" = "No lyric line yet";
+"还没唱到的行比当前行暗多少" = "How much dimmer upcoming lines are than the current line";
 "还没填 Chat ID" = "No Chat ID yet";
 "还没填地址" = "No URL yet";
 "还没推送过" = "Nothing pushed yet";
@@ -3040,6 +3049,7 @@
 "霓虹" = "Neon";
 "静音" = "Mute";
 "静默启动" = "Launch Silently";
+"非当前行的模糊程度，设为 0% 不模糊" = "How blurred lines other than the current one are; 0% turns blur off";
 "面向发烧友的高解析音频播放器" = "A high-resolution audio player for audiophiles";
 "韩国 KT 旗下的音乐平台" = "KT’s music service from Korea";
 "韩国 Naver 旗下的音乐平台" = "Naver’s music service from Korea";

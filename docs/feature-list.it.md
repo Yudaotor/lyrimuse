@@ -347,13 +347,18 @@ Mentre il cursore è in un campo di testo, il testo sulla Touch Bar può comprim
 
 ### Finestra testo
 
-Testo a tutta pagina ispirato alla vista del testo di Apple Music: illustrazione sfocata sullo sfondo, l’intero brano che scorre fino alla riga attuale, duetti divisi per cantante, cori su una riga a parte, note tenute che si gonfiano e brillano. Lo sfondo può seguire l’illustrazione o essere uniforme, a gradiente o smerigliato, e puoi cambiare spessore del testo, colore cantato e allineamento. Aprila dall’icona nella barra dei menu o con una scorciatoia.
+Testo a tutta pagina ispirato alla vista del testo di Apple Music: illustrazione sfocata sullo sfondo, l’intero brano che scorre fino alla riga attuale, duetti divisi per cantante, cori su una riga a parte, note tenute che si gonfiano e brillano. Lo sfondo può seguire l’illustrazione o essere uniforme, a gradiente o smerigliato, e puoi cambiare spessore e dimensione del testo, colore cantato, allineamento, interlinea e l’attenuazione e la sfocatura delle altre righe. Aprila dall’icona nella barra dei menu o con una scorciatoia.
 
 - Impostazioni: Visualizzazione testo › Finestra testo › Finestra testo
 - Impostazioni: Visualizzazione testo › Finestra testo › Sfondo › Sfondo
 - Impostazioni: Scorciatoie da tastiera › Apri finestra testo
 - Impostazioni: Visualizzazione testo › Finestra testo › Layout › Allineamento
 - Impostazioni: Visualizzazione testo › Finestra testo › Layout › Dimensioni dei controlli
+- Impostazioni: Visualizzazione testo › Finestra testo › Font › Scala del testo
+- Impostazioni: Visualizzazione testo › Finestra testo › Layout › Interlinea
+- Impostazioni: Visualizzazione testo › Finestra testo › Profondità › Attenua non cantato
+- Impostazioni: Visualizzazione testo › Finestra testo › Profondità › Attenua cantato
+- Impostazioni: Visualizzazione testo › Finestra testo › Profondità › Sfocatura
 
 <a id="feature-lyrics-window-hdr"></a>
 
@@ -957,7 +962,7 @@ Al massimo una volta al giorno invia versione, macOS, funzioni attive e riepilog
 
 ## Tutte le impostazioni
 
-Tutte le impostazioni della finestra Impostazioni, per posizione: 330 in tutto. Scrivi un nome nel campo di ricerca in cima alla barra laterale delle Impostazioni per andarci direttamente.
+Tutte le impostazioni della finestra Impostazioni, per posizione: 339 in tutto. Scrivi un nome nel campo di ricerca in cima alla barra laterale delle Impostazioni per andarci direttamente.
 
 ### Testo › Fonte
 
@@ -1279,11 +1284,17 @@ Tutte le impostazioni della finestra Impostazioni, per posizione: 330 in tutto. 
 - **Corpo** (solo Mini): Dimensione massima del testo in formato Mini
 - **Font**: Font della finestra testo (testo principale, traduzione, pronuncia)
 - **Spessore**
+- **Scala del testo** (solo Completa): Ingrandisce o riduce la dimensione del testo adattata alla finestra, anche nel testo web
+- **Corpo pronuncia** (solo Completa)
+- **Corpo traduzione** (solo Completa)
 
 ### Visualizzazione testo › Finestra testo › Layout
 
 - **Righe lunghe** (solo Mini): Se nella vista Mini le righe lunghe vanno a capo o scorrono
 - **Layout testo** (solo Mini): Una riga: solo la riga attuale Due righe: la riga attuale e la successiva Multiriga: una pagina di testo che scorre, come nella vista Completa
+- **Interlinea** (solo Completa)
+- **Pronuncia** (solo Completa)
+- **Traduzione** (solo Completa)
 - **Allineamento** (solo Completa): Allineamento del testo nella dimensione Completa; “Auto” segue le parti del duetto
 - **Dimensioni dei controlli** (solo Completa): Ingrandisce i controlli di riproduzione e gli altri pulsanti, anche nel testo web
 
@@ -1304,6 +1315,12 @@ Tutte le impostazioni della finestra Impostazioni, per posizione: 330 in tutto. 
 - **Colore personalizzato**
 - **Colore cantato**
 - **Evidenziazione HDR** (solo Completa): Illumina la parte cantata sugli schermi HDR. Consuma più energia se attiva
+
+### Visualizzazione testo › Finestra testo › Profondità
+
+- **Attenua non cantato** (solo Completa): Quanto sono più scure le righe non ancora cantate rispetto a quella attuale
+- **Attenua cantato** (solo Completa): Quanto sono più scure le righe già cantate rispetto a quella attuale
+- **Sfocatura** (solo Completa)
 
 ### Visualizzazione testo › Finestra testo › Contenuto
 

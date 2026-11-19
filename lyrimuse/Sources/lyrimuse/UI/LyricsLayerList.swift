@@ -16,8 +16,12 @@ struct LyricsLayerList: NSViewRepresentable {
         /// 末尾「创作者：…」的名单;迷你「多行」不显示。
         var songwriters: [String]
         var style: LyricsLayerRowStyle
-        /// 行与行之间的距离。
+        /// 行与行之间的距离。只改它不重建,`apply` 当场重排(`LyricsListRelayout`)。
         var lineSpacing: CGFloat
+        /// 行间距比默认多出的字号倍数,换句错开按它修正行高(`LyricsLineStagger.delayMs`)。
+        var extraLineSpacingEm: CGFloat = 0
+        /// 「景深」三根滑杆(完整尺寸、网页歌词);只改各行透明度和模糊,不重建。
+        var depth: LyricsWindowDepth.Tuning = .standard
         /// 右边的滚动指示条;迷你「多行」不画。
         var showsScrollIndicator: Bool
         /// 指示条下端离列表底边多远。右下那排按钮放大(「控件大小」)后会伸到指示条底下,由外面按那排的上沿算。
@@ -38,6 +42,11 @@ struct LyricsLayerList: NSViewRepresentable {
         /// 时间基准的指纹(锚点、暂停位置、歌词偏移,`LyricsTimingEpoch`):一变就按新基准重装填色动画。
         var timingEpoch: Int
         var rate: Double
+
+        /// `LyricsListRelayout` 判要不要重排时看的那几样。
+        var relayoutInputs: LyricsListRelayout.Inputs {
+            .init(scrollLineIndex: scrollLineIndex, currentGapIndex: currentGapIndex, lineSpacing: lineSpacing)
+        }
     }
 
     let spec: Spec
@@ -313,14 +322,16 @@ final class LyricsLayerListView: NSView {
         rowsCurrent = builtKey?.lines == next.lines
         guard rowsCurrent else { return }
         let gapChanged = previous?.currentGapIndex != next.currentGapIndex
-        let anchorChanged = previous?.scrollLineIndex != next.scrollLineIndex
+        let change = LyricsListRelayout.between(previous: previous?.relayoutInputs, next: next.relayoutInputs)
         if gapChanged || force {
             syncGapView(next)
         }
         if force {
             pendingRepositionWhileHidden = false
             relayout(next, transition: .none)
-        } else if gapChanged || anchorChanged {
+        } else if change == .geometry {
+            relayout(next, transition: .none)
+        } else if change == .anchor {
             if !next.surfaceVisible {
                 pendingRepositionWhileHidden = true
                 relayout(next, transition: .none)
@@ -518,7 +529,8 @@ final class LyricsLayerListView: NSView {
                 let omega = 2 * Double.pi / LyricsLineStagger.springResponse
                 spring.stiffness = omega * omega
                 spring.damping = 2 * LyricsLineStagger.springDampingRatio * omega
-                delay = LyricsLineStagger.delayMs(distanceFromTop: Double(oldScreen), fontSize: Double(fontSize)) / 1000
+                delay = LyricsLineStagger.delayMs(distanceFromTop: Double(oldScreen), fontSize: Double(fontSize),
+                                                  extraSpacingEm: Double(s.extraLineSpacingEm)) / 1000
             case .page, .none:
                 // 同 `.smooth(duration: 0.45)`:临界阻尼,响应 0.45 秒(`LyricsDepthMotion.line` 同一条)
                 let omega = 2 * Double.pi / LyricsDepthMotion.lineResponse
@@ -664,9 +676,9 @@ final class LyricsLayerListView: NSView {
         for (i, r) in rows.enumerated() {
             let hovered = hoveredLine == i
             let d: Int? = s.overlapping.contains(i) ? 0 : LyricsWindowDepth.distance(index: i, anchorIndex: anchor, inGap: inGap)
-            let opacity = hovered ? 1 : Float(LyricsWindowDepth.opacity(distance: d))
+            let opacity = hovered ? 1 : Float(LyricsWindowDepth.opacity(distance: d, tuning: s.depth))
             let blur = (s.style.reduceMotion || hovered || s.suspendsBlur) ? 0
-                : LyricsWindowDepth.blurRadius(distance: d, fontSize: s.style.fontSize)
+                : LyricsWindowDepth.blurRadius(distance: d, fontSize: s.style.fontSize, tuning: s.depth)
             // 离屏渲染时每个逐字遮罩都是一趟单独的绘制,画在 App 主线程上:不在唱的行内容不变,缓存成位图,
             // 每帧只重画当前行。挂在窗口上时由 WindowServer 合成,不缓存。见 19 章决策 3。
             if rendersDetached {
@@ -686,8 +698,9 @@ final class LyricsLayerListView: NSView {
         }
         if let footer {
             let d = LyricsWindowDepth.distance(index: rows.count, anchorIndex: anchor, inGap: inGap)
-            let opacity = Float(LyricsWindowDepth.opacity(distance: d))
-            let blur = (s.style.reduceMotion || s.suspendsBlur) ? 0 : LyricsWindowDepth.blurRadius(distance: d, fontSize: s.style.fontSize)
+            let opacity = Float(LyricsWindowDepth.opacity(distance: d, tuning: s.depth))
+            let blur = (s.style.reduceMotion || s.suspendsBlur) ? 0
+                : LyricsWindowDepth.blurRadius(distance: d, fontSize: s.style.fontSize, tuning: s.depth)
             if footerDepth?.opacity != opacity || footerDepth?.blur != blur {
                 let curve: DepthCurve = !animated || footerDepth == nil ? .instant : .line
                 footerDepth = (opacity, blur)

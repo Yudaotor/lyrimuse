@@ -52,6 +52,8 @@ final class WindowPlayback: ObservableObject {
     /// 完整尺寸能点的控件放大的倍数(「控件大小」,07 章决策 195、196)。
     @Published private(set) var fullControlScale: CGFloat = 1
     @Published private(set) var fullHDRHighlight = false
+    /// 完整尺寸歌词列表的排版与景深(字号缩放、副行大小、三种间距、变暗、模糊,07 章决策 216)。
+    @Published private(set) var fullListTuning: LyricsWindowListTuning = .standard
     /// 封面均值色(十六进制,高清替代那份优先),「已唱颜色 › 跟随封面」用。
     @Published private(set) var coverAverageHex: String?
     @Published private(set) var lyricsGapMarkers: [LyricsGapMarker] = []
@@ -182,6 +184,7 @@ final class WindowPlayback: ObservableObject {
             s.$lyricsWindowLyricsAlignment.removeDuplicates().sink { [weak self] in self?.fullAlignment = $0 },
             s.$lyricsWindowControlScalePercent.map(LyricsWindowControlScale.factor(percent:)).removeDuplicates()
                 .sink { [weak self] in self?.fullControlScale = $0 },
+            s.lyricsWindowListTuningPublisher.removeDuplicates().sink { [weak self] in self?.fullListTuning = $0 },
             Publishers.CombineLatest(LocalPlaybackSource.shared.$artworkAverageHex, p.$highResAverageHex)
                 .map { system, highRes in highRes ?? system }
                 .removeDuplicates()
@@ -3365,9 +3368,15 @@ struct LyricsWindowView: View {
     /// 疯狂折行)。上界不再夹死在 56 上:AM 全屏字号能到 68pt+,一比一就该跟着长。
     private var lyricFontSize: CGFloat {
         // 迷你「多行」也吃设置里那根「字号」上限,跟两行那套同一个语义(上限,不是定值)。
-        LyricsWindowTypography.listFontSize(
+        // 完整尺寸再乘「字号缩放」(listTuning;迷你恒为默认)。
+        listTuning.fontSize(auto: LyricsWindowTypography.listFontSize(
             columnWidth: lyricsColumnWidth, viewportHeight: lyricsViewportHeight,
-            cap: showsMiniLayout ? CGFloat(playback.miniFontSizeCap) : nil)
+            cap: showsMiniLayout ? CGFloat(playback.miniFontSizeCap) : nil))
+    }
+    /// 歌词列表的排版与景深调节:完整尺寸取设置(设置页预览里拖滑杆途中叠上草稿),迷你「多行」共用这份列表、一律默认。
+    private var listTuning: LyricsWindowListTuning {
+        guard !showsMiniLayout else { return .standard }
+        return playback.fullListTuning.overriding(listTuningOverride)
     }
     // 罗马音跟正文保持原来的比例(15/28);译文照 Apple 同窗口实测 0.57(07 章决策 87)。
     /// 对唱行两侧留白的基准量(见 LyricDuetLayout)。在父视图算一次传下去 —— 每一行
@@ -3380,12 +3389,12 @@ struct LyricsWindowView: View {
         ).trailing
     }
 
-    private var romaFontSize: CGFloat { lyricFontSize * 0.54 }
-    private var translationFontSize: CGFloat { lyricFontSize * 0.57 }
+    // 默认 0.54 / 0.57 倍,完整尺寸按「读音大小」「译文大小」(LyricsWindowListTuning)。
+    private var romaFontSize: CGFloat { listTuning.romanizationFontSize(lyricFontSize) }
+    private var translationFontSize: CGFloat { listTuning.translationFontSize(lyricFontSize) }
     /// 行间距:AM 行距(基线到基线)218px / 字号 101px = 2.156em;单行 Text 视图高
-    /// 1.175em(同一次 ImageRenderer 标定),VStack spacing = 2.156 − 1.175 ≈ 0.98em。
-    /// 旧值 1.14em 比 AM 松 8%,是"一屏 7 行"差一口气的原因之一。
-    private var lyricLineSpacing: CGFloat { lyricFontSize * 0.98 }
+    /// 1.175em(同一次 ImageRenderer 标定),VStack spacing = 2.156 − 1.175 ≈ 0.98em。完整尺寸再加「行间距」多出的那一截。
+    private var lyricLineSpacing: CGFloat { listTuning.lineSpacing(lyricFontSize) }
 
     @ViewBuilder
     /// `centered`:迷你「多行」传 true —— 没有对唱标记的行居中(同两行那套);有标记的行仍按声部
@@ -3435,7 +3444,9 @@ struct LyricsWindowView: View {
                     // 离滚动锚多远的行跟着换句错开(07 章决策 109)。
                     let staggerAnchor = playback.scrollLineIndex ?? playback.currentLineIndex
                     let staggerReach = LyricsLineStagger.reachRows(viewportHeight: Double(lyricsViewportHeight),
-                                                                   fontSize: Double(lyricFontSize))
+                                                                   fontSize: Double(lyricFontSize),
+                                                                   extraSpacingEm: Double(listTuning.extraLineSpacingEm))
+                    let rowTuning = listTuning
                     ForEach(Array(lyricLines.enumerated()), id: \.element.id) { index, item in
                         // .equatable():没有它,**每一行**都会跟着整页 body 重算一遍 —— 稳定播放期间主线程
                         // 曾有 ~22% 的时间耗在 NSHostingView.layout → ViewGraphRootValueUpdater.render 里,
@@ -3499,7 +3510,8 @@ struct LyricsWindowView: View {
                             staggers: staggerAnchor.map { abs(index - $0) <= staggerReach } ?? true,
                             weight: lyricFontWeight,
                             fill: karaokeFillColor,
-                            forcedSide: lyricForcedSide
+                            forcedSide: lyricForcedSide,
+                            tuning: rowTuning
                         )
                         .equatable()
                         .id(item.id)
@@ -3518,10 +3530,12 @@ struct LyricsWindowView: View {
                             textColor: rowTextColor,
                             side: listSide(centered: centered),
                             reduceMotion: reduceMotion,
-                            suspendsBlur: windowController.isLiveResizing
+                            suspendsBlur: windowController.isLiveResizing,
+                            depth: listTuning.depth
                         )
                         .equatable()
-                        .modifier(LineStagger(model: lineStagger, fontSize: lyricFontSize))
+                        .modifier(LineStagger(model: lineStagger, fontSize: lyricFontSize,
+                                              extraSpacingEm: listTuning.extraLineSpacingEm))
                         // 跟着换句错开移动、本身不可点,不参与命中(理由见 LyricsLineRow.stagger)。
                         .allowsHitTesting(false)
                     }
@@ -3619,8 +3633,10 @@ struct LyricsWindowView: View {
                              duetInsetUnit: duetInsetUnit, scale: displayScale,
                              weight: lyricFontWeight,
                              fillColor: karaokeFillColor.map { NSColor($0) }, forcedSide: lyricForcedSide,
-                             hdrHighlight: !showsMiniLayout && playback.fullHDRHighlight),
-                lineSpacing: lyricLineSpacing, showsScrollIndicator: !centered,
+                             hdrHighlight: !showsMiniLayout && playback.fullHDRHighlight,
+                             layout: listTuning.layoutOnly),
+                lineSpacing: lyricLineSpacing, extraLineSpacingEm: listTuning.extraLineSpacingEm,
+                depth: listTuning.depth, showsScrollIndicator: !centered,
                 // 100% 时右下那排不在指示条底下,照原样离底 40;放大后停在那排上沿再往上 8。
                 indicatorBottomInset: controlFactor > 1 ? 11 + 36 * controlFactor + 8 : 40,
                 leading: leading, trailing: trailing,
@@ -4499,6 +4515,8 @@ struct LyricsWindowView: View {
     }
     /// 设置页预览里拖「控件大小」滑杆时还没写进设置的倍数;真窗口里恒为 nil。
     @Environment(\.lyricsWindowControlScaleOverride) private var controlScaleOverride
+    /// 设置页预览里拖排版 / 景深滑杆时还没写进设置的那几项;真窗口里恒为空。
+    @Environment(\.lyricsWindowListTuningOverride) private var listTuningOverride
 
     /// 主三键的不透明度,照 Apple Music 同窗口截图(07 章决策 93):播放键 0.85、上 / 下一首 0.72,
     /// 不是纯白。随机 / 循环熄灭态见 modeToggleButton。
@@ -4846,7 +4864,7 @@ struct LyricsWindowView: View {
                     + PlaybackCoordinator.shared.currentLyricsOffsetMs
             }
             .frame(height: lyricFontSize * 0.5)
-            .modifier(LineStagger(model: lineStagger, fontSize: lyricFontSize))
+            .modifier(LineStagger(model: lineStagger, fontSize: lyricFontSize, extraSpacingEm: listTuning.extraLineSpacingEm))
             // 跟着换句错开移动、本身不可点,不参与命中(理由见 LyricsLineRow.stagger)。
             .allowsHitTesting(false)
             .id(id)
@@ -5280,6 +5298,8 @@ private struct LyricsLineRow: View, Equatable {
     var fill: Color? = nil
     /// 完整尺寸「对齐方式」选了左 / 中 / 右:所有行一律按它排、不给对唱留白;nil = 自动。
     var forcedSide: LyricDuet.Side? = nil
+    /// 读音 / 译文间距、景深三项(完整尺寸的「排版」「景深」滑杆;迷你「多行」恒为默认)。字号已由父视图乘好传进来。
+    var tuning: LyricsWindowListTuning = .standard
 
     static func == (a: LyricsLineRow, b: LyricsLineRow) -> Bool {
         // item 比整行而不只比 id:id 只保证同一首、同一份歌词正文,译文 / 罗马音 / 逐字是后补进来的,
@@ -5317,6 +5337,7 @@ private struct LyricsLineRow: View, Equatable {
             && a.reduceMotion == b.reduceMotion
             && a.displayScale == b.displayScale
             && a.staggers == b.staggers
+            && a.tuning == b.tuning
     }
 
     private var secondaryTextColor: Color { secondaryColor }
@@ -5325,9 +5346,6 @@ private struct LyricsLineRow: View, Equatable {
     static let backgroundVocalsOpacity: Double = 0.6
     /// 背景人声的字号(正文的倍数,决策 62)。
     static let backgroundVocalsScale: CGFloat = 0.61
-    /// 译文跟正文之间多留的距离(正文字号的倍数):照 Apple 同窗口实测,正文基线到译文字顶约 0.58 个
-    /// 正文字号,行里那条 6pt 的间距不够(07 章决策 87)。
-    static let translationExtraGap: CGFloat = 0.12
 
     /// 对唱歌词的左右分栏(见 LyricDuet)。
     ///
@@ -5381,10 +5399,10 @@ private struct LyricsLineRow: View, Equatable {
 
     // Apple Music 歌词页的景深:上面唱过的行比下面没唱到的暗、也更糊,数值从同窗口截图拟合
     // (07 章决策 90,算式在 LyricsWindowDepth)。
-    private var lineOpacity: Double { LyricsWindowDepth.opacity(distance: distance) }
+    private var lineOpacity: Double { LyricsWindowDepth.opacity(distance: distance, tuning: tuning.depth) }
 
     // 景深的模糊半径;过渡见 RowDepth。
-    private var lineBlur: CGFloat { LyricsWindowDepth.blurRadius(distance: distance, fontSize: fontSize) }
+    private var lineBlur: CGFloat { LyricsWindowDepth.blurRadius(distance: distance, fontSize: fontSize, tuning: tuning.depth) }
 
     /// 背景人声显示用的词(`SyncedLyricLine.backgroundDisplayWords`)。只在完整布局显示,迷你「多行」字小行紧、不上浮,不显示。
     private var backgroundDisplayWords: [SyncedLyricWord]? {
@@ -5432,6 +5450,8 @@ private struct LyricsLineRow: View, Equatable {
                     .font(.overlayFont(familyName: fontFamily, size: romaFontSize,
                                        weight: weight.lighter(by: OverlayFontWeight.lyricsWindowRomanizationSteps)))
                     .foregroundStyle(secondaryTextColor)
+                    // VStack 已隔 6pt,多出(或少掉)的是「读音间距」。
+                    .padding(.top, tuning.romanizationGap(fontSize) - LyricsWindowListTuning.blockSpacing)
             }
             // 背景人声的读音排在主句读音下面,跟背景人声一样淡:正文、背景人声、两行读音按同一个先后。
             if showRomanization, backgroundDisplayWords != nil, let bgRoma = item.line.backgroundRomanization {
@@ -5447,7 +5467,7 @@ private struct LyricsLineRow: View, Equatable {
                                        weight: weight.lighter(by: OverlayFontWeight.lyricsWindowTranslationSteps)))
                     .lyricTypesetting(tr, translation: true)
                     .foregroundStyle(secondaryTextColor)
-                    .padding(.top, fontSize * Self.translationExtraGap)
+                    .padding(.top, tuning.translationGap(fontSize) - LyricsWindowListTuning.blockSpacing)
             }
         }
         // Apple Music 歌词是左对齐排版,从居中改过来。对唱歌词按演唱者分左右
@@ -5479,7 +5499,8 @@ private struct LyricsLineRow: View, Equatable {
         // 2% 的放大本来就几乎看不出来,而"当前行"的强调其实是另外三样在扛:满不透明度、
         // 零模糊、逐字填色。为了一个看不见的收益去糊掉正文,不划算。
         // 换句错开的位移和整行内容都不参与命中,理由见 `stagger`。
-        .modifier(LineStagger(model: staggers ? stagger : .inert, fontSize: fontSize))
+        .modifier(LineStagger(model: staggers ? stagger : .inert, fontSize: fontSize,
+                              extraSpacingEm: tuning.extraLineSpacingEm))
         .allowsHitTesting(false)
         // 命中区要盖满整行(含左右空白),否则只有文字上才点得到
         .contentShape(Rectangle())
@@ -5523,7 +5544,8 @@ private struct LyricsLineRow: View, Equatable {
                 raisedWhenInactive: wordsSung,
                 pausedMs: pausedMs,
                 weight: weight,
-                fill: fill
+                fill: fill,
+                romaOffset: usesPerWordRomanization ? tuning.perWordRomanizationOffset(fontSize) : 0
             )
         } else {
             Text(item.line.plainText ?? "")
@@ -5546,6 +5568,7 @@ private struct LyricsSongwritersFooter: View, Equatable {
     var side: LyricDuet.Side = .leading
     let reduceMotion: Bool
     let suspendsBlur: Bool
+    var depth: LyricsWindowDepth.Tuning = .standard
 
     var body: some View {
         let list = names.joined(separator: L10n.t("、"))
@@ -5559,8 +5582,9 @@ private struct LyricsSongwritersFooter: View, Equatable {
             .multilineTextAlignment(side.textAlignment)
             .frame(maxWidth: .infinity, alignment: Alignment(horizontal: side.horizontalAlignment, vertical: .center))
             .modifier(RowDepth(inputs: .init(
-                opacity: LyricsWindowDepth.opacity(distance: distance),
-                blur: (reduceMotion || suspendsBlur) ? 0 : LyricsWindowDepth.blurRadius(distance: distance, fontSize: fontSize),
+                opacity: LyricsWindowDepth.opacity(distance: distance, tuning: depth),
+                blur: (reduceMotion || suspendsBlur) ? 0
+                    : LyricsWindowDepth.blurRadius(distance: distance, fontSize: fontSize, tuning: depth),
                 distance: distance, isHovered: false, isActive: false)))
             .animation(nil, value: distance)
     }
@@ -5920,6 +5944,8 @@ private struct KaraokeLineText: View {
     var weight: OverlayFontWeight = .bold
     /// 当前行唱过那一端的颜色,nil = 跟 `base`(见 KaraokeWordText.fill)。
     var fill: Color? = nil
+    /// 逐词读音离正文多远(默认 0 紧贴,「读音间距」调过时挪,可以是负的)。
+    var romaOffset: CGFloat = 0
 
     /// WrapLayout 的内容身份:行文本/字号/字体族/罗马音形态都没变时,
     /// 布局回合跳过整行 CoreText 重新测宽(见 WrapLayout.Cache 守卫注释)。
@@ -5937,7 +5963,8 @@ private struct KaraokeLineText: View {
             fontSize: fontSize,
             romaFontSize: romaFontSize,
             fontFamily: fontFamily,
-            weight: weight))
+            weight: weight,
+            romaOffset: romaOffset))
     }
 
     private struct WindowLineKey: Hashable {
@@ -5948,6 +5975,8 @@ private struct KaraokeLineText: View {
         let fontFamily: String
         /// 粗细也改每个词的宽度,同字体族那条理由。
         let weight: OverlayFontWeight
+        /// 逐词读音挪了,每一列的高跟着变。
+        let romaOffset: CGFloat
     }
 
     var body: some View {
@@ -6030,7 +6059,7 @@ private struct KaraokeLineText: View {
                 // 两者更宽的那个 —— 主文字的间距因此被读音撑开,跟 Apple 一样。
                 ForEach(groups) { g in
                     // 组内左对齐:罗马音跟这一组的**第一个字**对齐,不是居中。
-                    VStack(alignment: .leading, spacing: 0) {
+                    VStack(alignment: .leading, spacing: romaOffset) {
                         HStack(spacing: 0) {
                             ForEach(g.words.indices, id: \.self) { i in
                                 KaraokeWordText(word: g.words[i], base: base, isPlaying: isPlaying,
@@ -7110,20 +7139,23 @@ private struct RowDepth: ViewModifier {
 private struct LineStagger: ViewModifier {
     @ObservedObject var model: LyricsLineStaggerModel
     let fontSize: CGFloat
+    /// 行间距比默认多出的字号倍数(`LyricsLineStagger.delayMs`)。
+    var extraSpacingEm: CGFloat = 0
 
     func body(content: Content) -> some View {
         let shifts = model.shifts
         let probe = model.scrollProbe
         FrameTimeline(timebase: .transition, paused: shifts.isEmpty) { now in
-            content.visualEffect { [now, fontSize = fontSize] effect, proxy in
-                effect.offset(y: Self.offset(shifts: shifts, now: now, proxy: proxy, fontSize: fontSize, probe: probe))
+            content.visualEffect { [now, fontSize = fontSize, extraSpacingEm = extraSpacingEm] effect, proxy in
+                effect.offset(y: Self.offset(shifts: shifts, now: now, proxy: proxy, fontSize: fontSize,
+                                             extraSpacingEm: extraSpacingEm, probe: probe))
             }
         }
     }
 
     /// 顺手把此刻的滚动量记进 `probe`:没有换句时也记,换句开始那一刻要读它。
     nonisolated private static func offset(shifts: [LyricsLineStaggerModel.Shift], now: Date,
-                                           proxy: GeometryProxy, fontSize: CGFloat,
+                                           proxy: GeometryProxy, fontSize: CGFloat, extraSpacingEm: CGFloat,
                                            probe: LyricsScrollProbe) -> CGFloat {
         let inScroll = proxy.frame(in: .named("lyricsScroll")).minY
         let scrollNow = proxy.frame(in: .named(lyricsContentSpace)).minY - inScroll
@@ -7135,7 +7167,8 @@ private struct LineStagger: ViewModifier {
             guard abs(amount) > 0.5 else { continue }
             // 这一行在这一笔开始前离视口顶多远。
             let before = inScroll + scrollNow - shift.scrollBefore
-            let delay = LyricsLineStagger.delayMs(distanceFromTop: Double(before), fontSize: Double(fontSize))
+            let delay = LyricsLineStagger.delayMs(distanceFromTop: Double(before), fontSize: Double(fontSize),
+                                                  extraSpacingEm: Double(extraSpacingEm))
             let elapsed = now.timeIntervalSince(shift.start) * 1000
             total += amount * CGFloat(LyricsLineStagger.remaining(elapsedMs: elapsed, delayMs: delay))
         }

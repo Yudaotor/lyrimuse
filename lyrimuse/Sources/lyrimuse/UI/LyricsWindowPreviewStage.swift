@@ -35,6 +35,7 @@ struct LyricsWindowPreviewStage: View {
     /// 不用每次重选。纯 UI 偏好,不进 AppSettings(引擎不需要知道)。
     @AppStorage(showsMiniStorageKey) private var showsMini = false
     @ObservedObject private var controlScaleDraft = LyricsWindowControlScaleDraft.shared
+    @ObservedObject private var listTuningDraft = LyricsWindowListTuningDraft.shared
     /// 窗口内容有多不透明,`LyricsWindowView` 在预览里报上来(`LyricsWindowPreviewOpacityKey`)。
     @State private var windowOpacity: Double = 1
 
@@ -155,6 +156,8 @@ struct LyricsWindowPreviewStage: View {
             .environment(\.settingsGlassDisabled, true)
             // 拖「控件大小」滑杆时还没写进设置的值只在这里生效(LyricsWindowControlScaleDraft)。
             .environment(\.lyricsWindowControlScaleOverride, controlScaleDraft.percent.map(LyricsWindowControlScale.factor(percent:)))
+            // 拖排版 / 景深滑杆时同理(LyricsWindowListTuningDraft)。
+            .environment(\.lyricsWindowListTuningOverride, listTuningDraft.values)
             .frame(width: contentSize.width, height: contentSize.height)
             // 在缩放之前取范围:这里拿到的是内容坐标,下面叠可点区域时再乘 scale。
             .overlayPreferenceValue(LyricsWindowPreviewHeaderAnchorKey.self) { anchor in

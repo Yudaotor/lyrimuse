@@ -764,9 +764,10 @@ final class WebLyricsScreenRenderer {
         }
     }
     /// 字号按歌词那一栏的宽算;竖排、手机时那一栏是整宽,扣掉左右边距再算,不然平板竖放时字比横放还大一圈。
+    /// 再乘歌词窗口完整尺寸的「字号缩放」。
     private var fontSize: CGFloat {
         let column = arrangement == .columns ? width - listX : width - listLeading - listTrailing
-        return LyricsWindowTypography.listFontSize(columnWidth: column, viewportHeight: height)
+        return playback.fullListTuning.fontSize(auto: LyricsWindowTypography.listFontSize(columnWidth: column, viewportHeight: height))
     }
     private var paneStyle: WebLyricsPlayerPane.Style {
         switch arrangement {
@@ -1069,8 +1070,10 @@ final class WebLyricsScreenRenderer {
         if showsList {
             let fs = fontSize
             let columnWidth = listFrame.width
+            // 排版与景深跟歌词窗口完整尺寸那九根滑杆走(字号缩放已乘在 fontSize 里)
+            let tuning = playback.fullListTuning
             let style = LyricsLayerRowStyle(
-                fontSize: fs, romaFontSize: fs * 0.54, translationFontSize: fs * 0.57,
+                fontSize: fs, romaFontSize: tuning.romanizationFontSize(fs), translationFontSize: tuning.translationFontSize(fs),
                 fontFamily: playback.lyricsFontFamily, textColor: text, secondaryColor: secondary,
                 showRomanization: playback.showRomanization, showTranslation: playback.showTranslation,
                 centered: false, wordRise: true,
@@ -1078,11 +1081,13 @@ final class WebLyricsScreenRenderer {
                 duetInsetUnit: LyricDuetLayout.insets(for: .leading, availableWidth: columnWidth, fontSize: fs).trailing,
                 scale: CGFloat(viewport.scale),
                 // 对齐跟歌词窗口完整尺寸的「对齐方式」走
-                forcedSide: playback.fullAlignment.forcedDuetSide)
+                forcedSide: playback.fullAlignment.forcedDuetSide,
+                layout: tuning.layoutOnly)
             // 手机竖放不画滚动指示条:上面那一列居中,右缘一根条跟它不搭
             list.apply(LyricsLayerList.Spec(
                 lines: playback.allLines, gapMarkers: playback.lyricsGapMarkersByIndex, songwriters: playback.songwriters,
-                style: style, lineSpacing: fs * 0.98, showsScrollIndicator: arrangement != .phoneStacked,
+                style: style, lineSpacing: tuning.lineSpacing(fs), extraLineSpacingEm: tuning.extraLineSpacingEm,
+                depth: tuning.depth, showsScrollIndicator: arrangement != .phoneStacked,
                 indicatorBottomInset: indicatorBottomInset,
                 leading: listLeading, trailing: listTrailing, onArtwork: onArtwork, suspendsBlur: false,
                 currentLineIndex: lookahead.map(\.index) ?? playback.currentLineIndex,

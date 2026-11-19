@@ -347,13 +347,18 @@ Touch Bar’lı bir MacBook Pro’da geçerli satır söylendikçe kayar; isters
 
 ### Şarkı sözü penceresi
 
-Apple Music’in şarkı sözü görünümünden esinlenen tam sayfa şarkı sözleri: arkada bulanık kapak, geçerli satıra kayan parçanın tamamı, şarkıcılara göre ayrılan düetler, kendi satırında arka vokaller, uzatılan notalarda büyüyüp parlayan sözler. Arka plan kapağa göre olabilir ya da düz renk, gradyan veya buzlu cam; metin kalınlığı, söylenmiş kısmın rengi ve hizalama değiştirilebilir. Menü çubuğu simgesinden veya bir kestirmeyle açın.
+Apple Music’in şarkı sözü görünümünden esinlenen tam sayfa şarkı sözleri: arkada bulanık kapak, geçerli satıra kayan parçanın tamamı, şarkıcılara göre ayrılan düetler, kendi satırında arka vokaller, uzatılan notalarda büyüyüp parlayan sözler. Arka plan kapağa göre olabilir ya da düz renk, gradyan veya buzlu cam; metin kalınlığı ve boyutu, söylenmiş kısmın rengi, hizalama, satır aralığı ile diğer satırların kararması ve bulanıklığı değiştirilebilir. Menü çubuğu simgesinden veya bir kestirmeyle açın.
 
 - Ayarlar: Şarkı Sözü Görünümü › Şarkı Sözü Penceresi › Şarkı Sözü Penceresi
 - Ayarlar: Şarkı Sözü Görünümü › Şarkı Sözü Penceresi › Arka Plan › Arka Plan
 - Ayarlar: Klavye Kestirmeleri › Şarkı Sözü Penceresini Aç
 - Ayarlar: Şarkı Sözü Görünümü › Şarkı Sözü Penceresi › Yerleşim › Hizalama
 - Ayarlar: Şarkı Sözü Görünümü › Şarkı Sözü Penceresi › Yerleşim › Denetim Boyutu
+- Ayarlar: Şarkı Sözü Görünümü › Şarkı Sözü Penceresi › Font › Yazı Ölçeği
+- Ayarlar: Şarkı Sözü Görünümü › Şarkı Sözü Penceresi › Yerleşim › Satır Aralığı
+- Ayarlar: Şarkı Sözü Görünümü › Şarkı Sözü Penceresi › Derinlik › Söylenmemişi Karart
+- Ayarlar: Şarkı Sözü Görünümü › Şarkı Sözü Penceresi › Derinlik › Söyleneni Karart
+- Ayarlar: Şarkı Sözü Görünümü › Şarkı Sözü Penceresi › Derinlik › Bulanıklık
 
 <a id="feature-lyrics-window-hdr"></a>
 
@@ -957,7 +962,7 @@ Neyin önce düzeltileceğine karar vermek için günde en fazla bir kez sürüm
 
 ## Tüm Ayarlar
 
-Ayarlar penceresindeki tüm ayarlar, konumlarına göre; toplam: 330. Bir ayara hemen gitmek için adını kenar çubuğunun üstündeki arama alanına yazın.
+Ayarlar penceresindeki tüm ayarlar, konumlarına göre; toplam: 339. Bir ayara hemen gitmek için adını kenar çubuğunun üstündeki arama alanına yazın.
 
 ### Şarkı Sözleri › Kaynak
 
@@ -1279,11 +1284,17 @@ Ayarlar penceresindeki tüm ayarlar, konumlarına göre; toplam: 330. Bir ayara 
 - **Punto** (yalnızca Mini): Mini boyutta şarkı sözü puntosu üst sınırı
 - **Font**: Şarkı sözü penceresinin şarkı sözü fontu (ana metin, çeviri, telaffuz)
 - **Kalınlık**
+- **Yazı Ölçeği** (yalnızca Tam Boyut): Pencereye göre ayarlanan yazı boyutunu büyütür veya küçültür; tarayıcıdaki şarkı sözlerinde de geçerlidir
+- **Telaffuz Puntosu** (yalnızca Tam Boyut)
+- **Çeviri Puntosu** (yalnızca Tam Boyut)
 
 ### Şarkı Sözü Görünümü › Şarkı Sözü Penceresi › Yerleşim
 
 - **Uzun Satırlar** (yalnızca Mini): Mini boyutta uzun satırların alt satıra geçmesi veya kaydırılması
 - **Şarkı Sözü Yerleşimi** (yalnızca Mini): Tek Satır: yalnızca geçerli satır İki Satır: geçerli satır ve sonraki satır Çok Satır: tam boyuttaki gibi kayan bir sayfa şarkı sözü
+- **Satır Aralığı** (yalnızca Tam Boyut)
+- **Telaffuz Aralığı** (yalnızca Tam Boyut)
+- **Çeviri Aralığı** (yalnızca Tam Boyut)
 - **Hizalama** (yalnızca Tam Boyut): Tam Boyut’ta sözlerin hizalaması; “Otomatik” düet seslerine göre hizalar
 - **Denetim Boyutu** (yalnızca Tam Boyut): Çalma denetimlerini ve diğer düğmeleri büyütür; tarayıcıdaki şarkı sözlerinde de geçerlidir
 
@@ -1304,6 +1315,12 @@ Ayarlar penceresindeki tüm ayarlar, konumlarına göre; toplam: 330. Bir ayara 
 - **Özel Renk**
 - **Söylenmiş Kısım Rengi**
 - **HDR Vurgusu** (yalnızca Tam Boyut): HDR destekli ekranlarda söylenmiş kısmı parlatır; açıkken daha fazla enerji kullanır
+
+### Şarkı Sözü Görünümü › Şarkı Sözü Penceresi › Derinlik
+
+- **Söylenmemişi Karart** (yalnızca Tam Boyut): Henüz söylenmemiş satırların geçerli satırdan ne kadar koyu olacağı
+- **Söyleneni Karart** (yalnızca Tam Boyut): Söylenmiş satırların geçerli satırdan ne kadar koyu olacağı
+- **Bulanıklık** (yalnızca Tam Boyut)
 
 ### Şarkı Sözü Görünümü › Şarkı Sözü Penceresi › İçerik
 

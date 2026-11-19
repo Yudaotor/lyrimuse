@@ -100,7 +100,8 @@ public enum LyricsWindowTypography {
     /// 0.0598×视口高、0.0564×栏宽,取小的那个 —— 窗口偏矮时高度锚接管(保住"一屏约 7 行"),
     /// 偏窄时宽度锚接管(别让长句疯狂折行)。下限 22。
     ///
-    /// 栏宽 / 视口高还没量到(≤0)时按 460 / 640 算。`cap` 是迷你档那根「字号」上限,完整布局传 nil。
+    /// 栏宽 / 视口高还没量到(≤0)时按 460 / 640 算。`cap` 是迷你档那根「字号」上限,完整布局传 nil;
+    /// 完整布局的「字号缩放」在这个结果上整体乘(`LyricsWindowListTuning.fontSize(auto:)`),下限跟着乘。
     public static func listFontSize(columnWidth: CGFloat, viewportHeight: CGFloat,
                                     cap: CGFloat? = nil) -> CGFloat {
         let w = columnWidth > 0 ? columnWidth : 460
@@ -131,13 +132,40 @@ public enum LyricsWindowDepth {
         return min(max(d, -maxDistance), maxDistance)
     }
 
+    /// 「景深」三根滑杆:未唱 / 已唱变暗的强度、模糊强度,都是倍数,1 = 原样(07 章决策 216)。
+    public struct Tuning: Equatable, Sendable {
+        public var upcomingDim: Double
+        public var pastDim: Double
+        public var blur: Double
+
+        public init(upcomingDim: Double = 1, pastDim: Double = 1, blur: Double = 1) {
+            self.upcomingDim = upcomingDim
+            self.pastDim = pastDim
+            self.blur = blur
+        }
+
+        public static let standard = Tuning()
+    }
+
     /// 不透明度:当前行 1;下面(没唱到的)比上面(唱过的)亮,按 Apple Music 同窗口截图拟合
     /// (07 章决策 90)。没有锚点 0.45。
-    public static func opacity(distance: Int?) -> Double {
-        guard let d = distance else { return 0.45 }
-        if d == 0 { return 1 }
-        let rows = min(abs(d), maxDistance)
-        return (d > 0 ? upcomingOpacity : pastOpacity)[rows - 1]
+    ///
+    /// 变暗强度 k 作用在「比全亮暗了多少」上:1 − (1 − 原值) × k,随距离渐变的形状不变,夹在 0…1;k = 1 原样返回。
+    /// 还没唱到第一句时整页都是没唱到的行,按未唱那一项。
+    public static func opacity(distance: Int?, tuning: Tuning = .standard) -> Double {
+        let base: Double
+        let k: Double
+        if let d = distance {
+            if d == 0 { return 1 }
+            let rows = min(abs(d), maxDistance)
+            base = (d > 0 ? upcomingOpacity : pastOpacity)[rows - 1]
+            k = d > 0 ? tuning.upcomingDim : tuning.pastDim
+        } else {
+            base = 0.45
+            k = tuning.upcomingDim
+        }
+        guard k != 1 else { return base }
+        return min(1, max(0, 1 - (1 - base) * k))
     }
 
     /// 下面 / 上面第 1…4 行的不透明度。
@@ -145,12 +173,17 @@ public enum LyricsWindowDepth {
     private static let pastOpacity: [Double] = [0.36, 0.31, 0.26, 0.22]
 
     /// 模糊半径:每远一行加 0.019 × 字号,下面第 1 行 0.042 × 字号、上面第 1 行 0.055 × 字号;
-    /// 当前行不糊,没有锚点按 0.03 × 字号。
-    public static func blurRadius(distance: Int?, fontSize: CGFloat) -> CGFloat {
-        guard let d = distance else { return fontSize * 0.03 }
-        if d == 0 { return 0 }
-        let rows = CGFloat(min(abs(d), maxDistance))
-        return fontSize * ((d > 0 ? 0.023 : 0.036) + 0.019 * rows)
+    /// 当前行不糊,没有锚点按 0.03 × 字号。整体乘模糊强度,0 = 不糊(图层版这时摘掉滤镜)。
+    public static func blurRadius(distance: Int?, fontSize: CGFloat, tuning: Tuning = .standard) -> CGFloat {
+        let radius: CGFloat
+        if let d = distance {
+            if d == 0 { return 0 }
+            let rows = CGFloat(min(abs(d), maxDistance))
+            radius = fontSize * ((d > 0 ? 0.023 : 0.036) + 0.019 * rows)
+        } else {
+            radius = fontSize * 0.03
+        }
+        return tuning.blur == 1 ? radius : radius * CGFloat(max(0, tuning.blur))
     }
 }
 

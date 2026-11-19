@@ -216,6 +216,8 @@ struct LyricsLayerRowStyle: Equatable, @unchecked Sendable {
     var forcedSide: LyricDuet.Side? = nil
     /// 「HDR 高亮」:当前行已唱那一端提亮到普通白以上(`LyricsWindowHDR`)。只有完整尺寸开,迷你和网页歌词恒为 false。
     var hdrHighlight = false
+    /// 完整尺寸的读音 / 译文间距(`LyricsWindowListTuning`)。只放排版那几项(`layoutOnly`):这份进重建键,景深滑杆不该触发重建。
+    var layout: LyricsWindowListTuning = .standard
 
     /// 不分声部的那几样(间奏点、末尾创作者)靠哪一侧。
     var listSide: LyricDuet.Side { forcedSide ?? (centered ? .center : .leading) }
@@ -223,10 +225,9 @@ struct LyricsLayerRowStyle: Equatable, @unchecked Sendable {
     /// 背景人声的字号(正文的倍数)和整行透明度,同 SwiftUI 版 `LyricsLineRow`。
     static let backgroundScale: CGFloat = 0.61
     static let backgroundOpacity: Float = 0.6
-    /// 译文跟正文之间多留的距离(正文字号的倍数)。
-    static let translationExtraGap: CGFloat = 0.12
-    /// 行内各块(正文、背景人声、读音、译文)之间的间距,同 SwiftUI 版 VStack 的 spacing。
-    static let blockSpacing: CGFloat = 6
+    /// 行内各块(正文、背景人声、读音、译文)之间的间距,同 SwiftUI 版 VStack 的 spacing。读音、译文顶上那一段
+    /// 按「读音间距」「译文间距」算(`LyricsWindowListTuning`,默认时就是这个数,译文再多 0.12 倍字号)。
+    static let blockSpacing: CGFloat = LyricsWindowListTuning.blockSpacing
     /// 逐字折行后各行之间的行距,同 SwiftUI 版 `WrapLayout` 的 verticalSpacing。
     static let wrapRowSpacing: CGFloat = 2
 
@@ -474,7 +475,7 @@ extension LyricsLayerRowPlan {
         if style.showRomanization, !perWordRoma, let roma = line.romanization, !roma.isEmpty,
            let para = paragraph(roma, font: ink.roma, color: ink.secondary, translation: false, width: blockW,
                                 side: side, scale: style.scale) {
-            y += LyricsLayerRowStyle.blockSpacing
+            y += style.layout.romanizationGap(style.fontSize)
             pictures += placed(para, x: blockX, y: y)
             y += para.text.height
         }
@@ -491,7 +492,7 @@ extension LyricsLayerRowPlan {
         if style.showTranslation, let tr = line.translation, !tr.isEmpty,
            let para = paragraph(tr, font: ink.translation, color: ink.secondary, translation: true, width: blockW,
                                 side: side, scale: style.scale) {
-            y += LyricsLayerRowStyle.blockSpacing + style.fontSize * LyricsLayerRowStyle.translationExtraGap
+            y += style.layout.translationGap(style.fontSize)
             pictures += placed(para, x: blockX, y: y)
             y += para.text.height
         }
@@ -590,6 +591,8 @@ extension LyricsLayerRowPlan {
                                   side: LyricDuet.Side, style: LyricsLayerRowStyle,
                                   silhouettes: LyricsLayerListText.Silhouettes) -> (elements: [Element], height: CGFloat) {
         let dim = CGFloat(WordKaraokeGradient.windowDimOpacity)
+        // 逐词读音离正文多远:按「读音间距」比默认多出的那一截挪(默认 0,紧贴正文)。
+        let romaOffset = groups?.isEmpty == false ? style.layout.perWordRomanizationOffset(style.fontSize) : 0
         let unsung = color.copy(alpha: color.alpha * dim) ?? color
         let romaColor = color.copy(alpha: color.alpha * 0.75) ?? color
         let romaUnsung = romaColor.copy(alpha: romaColor.alpha * dim) ?? romaColor
@@ -616,7 +619,7 @@ extension LyricsLayerRowPlan {
                     trailingSpace: tail.isEmpty ? 0 : MenuBarMarqueeRenderer.measure(tail, font: font))
                 units.append(Unit(tokens: ids,
                                   roma: (text, rm, g.startMs, max(1, g.endMs - g.startMs), g.romanization != nil),
-                                  size: CGSize(width: columnW, height: mainH + rm.height), mainHeight: mainH))
+                                  size: CGSize(width: columnW, height: mainH + romaOffset + rm.height), mainHeight: mainH))
             }
             // 各列等高:字那一格取整句最高的。组末尾的空格落在拉丁字体上,这一组的行框比纯谚文的组高;各列高矮不一的话,
             // 折行按行高把每列居中,读音就跟着一高一低,对不成一条线。
@@ -692,7 +695,8 @@ extension LyricsLayerRowPlan {
             if let roma = unit.roma {
                 let unitFrame = mirrored(CGRect(x: p.origin.x, y: p.origin.y, width: unit.size.width, height: unit.size.height),
                                          rowY: p.origin.y)
-                let frame = CGRect(x: unitFrame.minX + 2, y: p.origin.y + unit.mainHeight, width: roma.metrics.width, height: roma.metrics.height)
+                let frame = CGRect(x: unitFrame.minX + 2, y: p.origin.y + unit.mainHeight + romaOffset,
+                                   width: roma.metrics.width, height: roma.metrics.height)
                 elements.append(Element(
                     frame: frame,
                     silhouette: LyricsLayerListText.silhouette(roma.text, font: romaFont, translation: false,

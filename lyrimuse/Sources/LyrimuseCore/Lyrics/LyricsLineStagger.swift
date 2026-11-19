@@ -23,10 +23,12 @@ public enum LyricsLineStagger {
         return 1 - exp(-zeta * omega * t) * (cos(damped * t) + zeta * omega / damped * sin(damped * t))
     }
 
-    /// 离视口顶 `distanceFromTop`(点)的那一行起步晚多少毫秒。视口顶上面的行不等。
-    public static func delayMs(distanceFromTop: Double, fontSize: Double) -> Double {
+    /// 离视口顶 `distanceFromTop`(点)的那一行起步晚多少毫秒。视口顶上面的行不等。`extraSpacingEm` 是行间距比默认
+    /// 多出的字号倍数(「行间距」滑杆,可以是负的):行挨得近了,相邻两行起步差仍是 `rowDelayMs`。
+    public static func delayMs(distanceFromTop: Double, fontSize: Double, extraSpacingEm: Double = 0) -> Double {
         guard fontSize > 0 else { return 0 }
-        return min(maxDelayMs, max(0, distanceFromTop) / (rowPitchEm * fontSize) * rowDelayMs)
+        let pitch = max(minimumRowPitchFloorEm, rowPitchEm + extraSpacingEm)
+        return min(maxDelayMs, max(0, distanceFromTop) / (pitch * fontSize) * rowDelayMs)
     }
 
     /// 这一行此刻还要垫回多少,占这次滚动量的比例。
@@ -45,7 +47,10 @@ public enum LyricsLineStagger {
     public static var settleMs: Double { maxDelayMs + springSettleMs }
 
     /// 一行至少这么高(字号的倍数):单行、不带译文时字高约 1.175 倍字号,行距 0.98 倍字号(歌词窗口 `lyricLineSpacing`),往小取。
+    /// 行间距调过时加上比默认多出的那一截(`reachRows` 的 `extraSpacingEm`)。
     public static let minimumRowPitchEm = 2.1
+    /// 行间距调到最小时一行也不会矮过这个(只剩字高)。
+    static let minimumRowPitchFloorEm = 1.1
     /// 视口外再多带几行:页面一次最多滚 `maxStaggerJumpRows` 行,错开期间刚出视口、还没进视口的行也会露出来。
     public static let reachMarginRows = 4
     /// 一次换句滚动锚最多跳这么多行还走错开;跳得更远(点了远处一句、跳转)整页带动画滚过去(07 章决策 109)。
@@ -54,8 +59,10 @@ public enum LyricsLineStagger {
     public static let maxStaggerDriftFraction = 0.25
 
     /// 离滚动锚多少行以内的行跟着错开:视口按最矮的行放得下几行,再加 `reachMarginRows`。还没量出尺寸时全都带上。
-    public static func reachRows(viewportHeight: Double, fontSize: Double) -> Int {
+    /// `extraSpacingEm` 同 `delayMs`:行间距调小,一屏放得下的行变多,带上的行跟着变多。
+    public static func reachRows(viewportHeight: Double, fontSize: Double, extraSpacingEm: Double = 0) -> Int {
         guard viewportHeight > 0, fontSize > 0 else { return Int.max }
-        return Int((viewportHeight / (minimumRowPitchEm * fontSize)).rounded(.up)) + reachMarginRows
+        let pitch = max(minimumRowPitchFloorEm, minimumRowPitchEm + extraSpacingEm)
+        return Int((viewportHeight / (pitch * fontSize)).rounded(.up)) + reachMarginRows
     }
 }

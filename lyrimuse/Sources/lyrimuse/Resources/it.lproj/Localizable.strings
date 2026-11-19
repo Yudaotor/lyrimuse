@@ -878,6 +878,7 @@
 "哈萨克语" = "Kazako";
 "唯一的差异在于「%@」一项" = "L’unica differenza è su “%@”";
 "唯一的差异是胜者在「%1$@」一项多 %2$d 分" = "Unica differenza: il vincitore ha %2$d in più su “%1$@”";
+"唱过的行比当前行暗多少" = "Quanto sono più scure le righe già cantate rispetto a quella attuale";
 "喜欢" = "Preferito";
 "喜欢/取消喜欢" = "Aggiungi/rimuovi dai preferiti";
 "回到逐句编辑" = "Torna alla modifica per riga";
@@ -952,6 +953,7 @@
 "在该浏览器的开发者菜单中开启「允许 Apple 事件中的 JavaScript」" = "Attiva “Consenti JavaScript da Apple Events” nel menu sviluppatore di questo browser";
 "在钉钉群中：群设置 → 智能群助手 → 添加机器人 → 自定义，创建后拷贝 Webhook 地址。安全设置建议选择「加签」，并将生成的密钥填入下方的「加签密钥」" = "Nel gruppo DingTalk: Impostazioni gruppo → Assistente del gruppo → Aggiungi robot → Personalizzato, poi copia l’URL del webhook dopo averlo creato. Per sicurezza scegli “Firma” e inserisci la chiave generata nel campo “Chiave di firma” qui sotto";
 "在防火墙设置中允许 Lyrimuse 的传入连接后，其他设备才能打开链接" = "Consenti le connessioni in entrata per Lyrimuse nelle impostazioni del firewall perché gli altri dispositivi possano aprire il link";
+"在随窗口大小自动调整的字号上放大或缩小，网页歌词同样生效" = "Ingrandisce o riduce la dimensione del testo adattata alla finestra, anche nel testo web";
 "在飞书群中：设置 → 群机器人 → 添加机器人 → 自定义机器人，创建后拷贝 Webhook 地址。如需额外校验，可开启「签名校验」，并将密钥填入下方的「签名密钥」" = "Nel gruppo Feishu: Impostazioni → Bot del gruppo → Aggiungi bot → Bot personalizzato, poi copia l’URL del webhook dopo averlo creato. Per una verifica in più attiva “Verifica della firma” e inserisci la chiave nel campo “Chiave di firma” qui sotto";
 "地址不存在" = "URL non trovato";
 "均为独立匹配" = "Tutte indipendenti";
@@ -995,6 +997,7 @@
 "字号 %@pt" = "Corpo %@ pt";
 "字号仅对悬浮歌词有效" = "La dimensione del font vale solo per il testo fluttuante";
 "字号快捷键仅对悬浮歌词有效" = "Le scorciatoie per la dimensione del font valgono solo per il testo fluttuante";
+"字号缩放" = "Scala del testo";
 "字节跳动旗下的音乐 App" = "L’app di musica di ByteDance";
 "字节跳动旗下的音乐平台" = "Servizio musicale di ByteDance";
 "存储" = "Archiviazione";
@@ -1154,6 +1157,7 @@
 "已取消喜欢" = "Rimosso dai preferiti";
 "已取消纯音乐标记" = "Contrassegno strumentale rimosso";
 "已启用的歌词源均未找到可用的候选" = "Nessun testo dalle fonti";
+"已唱变暗" = "Attenua cantato";
 "已唱颜色" = "Colore cantato";
 "已喜欢" = "Aggiunto ai preferiti";
 "已在 Last.fm 上喜欢" = "Ti piace su Last.fm";
@@ -1765,6 +1769,7 @@
 "显示进度条" = "Mostra barra di avanzamento";
 "晚 %@ 秒" = "%@ s dopo";
 "普通话" = "Mandarino";
+"景深" = "Profondità";
 "智能" = "Smart";
 "智能算法" = "Associazione intelligente";
 "暂停 10 秒后收起为功能栏图标，恢复播放时自动展开" = "Si comprime nel pulsante della Control Strip dopo 10 secondi di pausa e si espande di nuovo alla ripresa";
@@ -1851,6 +1856,7 @@
 "未发现无效记录" = "Nessuna voce non valida";
 "未启用" = "Non attivo";
 "未启用的来源" = "Fonti disattivate";
+"未唱变暗" = "Attenua non cantato";
 "未唱部分与副行的亮度" = "Luminosità delle parole non cantate e della seconda riga";
 "未唱颜色" = "Colore non cantato";
 "未在上方列出的 App 也可作为播放器：添加后将显示其正在播放的歌曲，并计入收听记录" = "Anche le app non elencate sopra possono essere usate come player: una volta aggiunte, i loro brani mostrano il testo e contano nella cronologia ascolti";
@@ -2010,6 +2016,7 @@
 "概况和歌手、专辑、歌曲各自的第一名" = "Panoramica e il primo artista, album e brano";
 "榜单" = "Classifiche";
 "榜单链接" = "Link classifica";
+"模糊" = "Sfocatura";
 "次" = "ascolti";
 "欢迎使用 Lyrimuse" = "Lyrimuse ti dà il benvenuto";
 "歌名" = "Titolo";
@@ -2598,6 +2605,7 @@
 "行为" = "Comportamento";
 "行数" = "Righe";
 "行时间略有出入" = "tempi delle righe leggermente diversi";
+"行间距" = "Interlinea";
 "补交" = "Recupera";
 "补交中 %@/%@" = "Invio %@ di %@";
 "补交未完成，请稍后重试" = "Recupero non completato. Riprova più tardi";
@@ -2799,6 +2807,7 @@
 "还有 %@ 条" = "e altre %@";
 "还有未完成的项目" = "Alcuni elementi da completare";
 "还没唱到歌词" = "Ancora nessuna riga di testo";
+"还没唱到的行比当前行暗多少" = "Quanto sono più scure le righe non ancora cantate rispetto a quella attuale";
 "还没填 Chat ID" = "Ancora nessun Chat ID";
 "还没填地址" = "Ancora nessun URL";
 "还没推送过" = "Ancora nessun push";
@@ -3040,6 +3049,7 @@
 "霓虹" = "Neon";
 "静音" = "Disattiva audio";
 "静默启动" = "Avvio silenzioso";
+"非当前行的模糊程度，设为 0% 不模糊" = "Sfocatura delle righe diverse da quella attuale; con 0% nessuna sfocatura";
 "面向发烧友的高解析音频播放器" = "Lettore audio ad alta risoluzione per audiofili";
 "韩国 KT 旗下的音乐平台" = "Servizio musicale coreano di KT";
 "韩国 Naver 旗下的音乐平台" = "Servizio musicale coreano di Naver";

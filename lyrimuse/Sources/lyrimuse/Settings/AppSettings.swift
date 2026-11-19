@@ -1,3 +1,4 @@
+import Combine
 import Foundation
 import LyrimuseCore
 import SwiftUI
@@ -499,6 +500,15 @@ final class AppSettings: ObservableObject {
         static let lyricsWindowHDRHighlight = "np:lyricsWindowHDRHighlight"
         static let lyricsWindowLyricsAlignment = "np:lyricsWindowLyricsAlignment"
         static let lyricsWindowControlScalePercent = "np:lyricsWindowControlScalePercent"
+        static let lyricsWindowFontScalePercent = "np:lyricsWindowFontScalePercent"
+        static let lyricsWindowRomanizationSizePercent = "np:lyricsWindowRomanizationSizePercent"
+        static let lyricsWindowTranslationSizePercent = "np:lyricsWindowTranslationSizePercent"
+        static let lyricsWindowLineSpacingPercent = "np:lyricsWindowLineSpacingPercent"
+        static let lyricsWindowRomanizationGapPercent = "np:lyricsWindowRomanizationGapPercent"
+        static let lyricsWindowTranslationGapPercent = "np:lyricsWindowTranslationGapPercent"
+        static let lyricsWindowUpcomingDimPercent = "np:lyricsWindowUpcomingDimPercent"
+        static let lyricsWindowPastDimPercent = "np:lyricsWindowPastDimPercent"
+        static let lyricsWindowBlurPercent = "np:lyricsWindowBlurPercent"
         static let lyricsWindowMiniHeaderFields = "np:lyricsWindowMiniHeaderFields"
         static let lyricsWindowMiniShowsTime = "np:lyricsWindowMiniShowsTime"
         static let lyricsWindowMiniShowsCover = "np:lyricsWindowMiniShowsCover"
@@ -1870,6 +1880,78 @@ final class AppSettings: ObservableObject {
     @Published var lyricsWindowControlScalePercent: Double {
         didSet { defaults.set(lyricsWindowControlScalePercent, forKey: Keys.lyricsWindowControlScalePercent) }
     }
+    // 完整尺寸歌词列表的排版与景深(「字体」「布局」「景深」里那九根滑杆),各存一个百分数;合起来读写走
+    // `lyricsWindowListTuning`。迷你尺寸没有这几项,网页歌词跟完整尺寸同一套。见 07 章决策 216。
+    @Published var lyricsWindowFontScalePercent: Double {
+        didSet { defaults.set(lyricsWindowFontScalePercent, forKey: Keys.lyricsWindowFontScalePercent) }
+    }
+    @Published var lyricsWindowRomanizationSizePercent: Double {
+        didSet { defaults.set(lyricsWindowRomanizationSizePercent, forKey: Keys.lyricsWindowRomanizationSizePercent) }
+    }
+    @Published var lyricsWindowTranslationSizePercent: Double {
+        didSet { defaults.set(lyricsWindowTranslationSizePercent, forKey: Keys.lyricsWindowTranslationSizePercent) }
+    }
+    @Published var lyricsWindowLineSpacingPercent: Double {
+        didSet { defaults.set(lyricsWindowLineSpacingPercent, forKey: Keys.lyricsWindowLineSpacingPercent) }
+    }
+    @Published var lyricsWindowRomanizationGapPercent: Double {
+        didSet { defaults.set(lyricsWindowRomanizationGapPercent, forKey: Keys.lyricsWindowRomanizationGapPercent) }
+    }
+    @Published var lyricsWindowTranslationGapPercent: Double {
+        didSet { defaults.set(lyricsWindowTranslationGapPercent, forKey: Keys.lyricsWindowTranslationGapPercent) }
+    }
+    @Published var lyricsWindowUpcomingDimPercent: Double {
+        didSet { defaults.set(lyricsWindowUpcomingDimPercent, forKey: Keys.lyricsWindowUpcomingDimPercent) }
+    }
+    @Published var lyricsWindowPastDimPercent: Double {
+        didSet { defaults.set(lyricsWindowPastDimPercent, forKey: Keys.lyricsWindowPastDimPercent) }
+    }
+    @Published var lyricsWindowBlurPercent: Double {
+        didSet { defaults.set(lyricsWindowBlurPercent, forKey: Keys.lyricsWindowBlurPercent) }
+    }
+    /// 九项合成一份;写的时候只改变了的那几项(没变的不广播)。
+    var lyricsWindowListTuning: LyricsWindowListTuning {
+        get {
+            LyricsWindowListTuning([
+                .fontScale: lyricsWindowFontScalePercent,
+                .romanizationSize: lyricsWindowRomanizationSizePercent,
+                .translationSize: lyricsWindowTranslationSizePercent,
+                .lineSpacing: lyricsWindowLineSpacingPercent,
+                .romanizationGap: lyricsWindowRomanizationGapPercent,
+                .translationGap: lyricsWindowTranslationGapPercent,
+                .upcomingDim: lyricsWindowUpcomingDimPercent,
+                .pastDim: lyricsWindowPastDimPercent,
+                .blur: lyricsWindowBlurPercent,
+            ])
+        }
+        set {
+            if newValue[.fontScale] != lyricsWindowFontScalePercent { lyricsWindowFontScalePercent = newValue[.fontScale] }
+            if newValue[.romanizationSize] != lyricsWindowRomanizationSizePercent { lyricsWindowRomanizationSizePercent = newValue[.romanizationSize] }
+            if newValue[.translationSize] != lyricsWindowTranslationSizePercent { lyricsWindowTranslationSizePercent = newValue[.translationSize] }
+            if newValue[.lineSpacing] != lyricsWindowLineSpacingPercent { lyricsWindowLineSpacingPercent = newValue[.lineSpacing] }
+            if newValue[.romanizationGap] != lyricsWindowRomanizationGapPercent { lyricsWindowRomanizationGapPercent = newValue[.romanizationGap] }
+            if newValue[.translationGap] != lyricsWindowTranslationGapPercent { lyricsWindowTranslationGapPercent = newValue[.translationGap] }
+            if newValue[.upcomingDim] != lyricsWindowUpcomingDimPercent { lyricsWindowUpcomingDimPercent = newValue[.upcomingDim] }
+            if newValue[.pastDim] != lyricsWindowPastDimPercent { lyricsWindowPastDimPercent = newValue[.pastDim] }
+            if newValue[.blur] != lyricsWindowBlurPercent { lyricsWindowBlurPercent = newValue[.blur] }
+        }
+    }
+    /// 九项任一变了就发出新的一份(读发布出来的值现算:@Published 是 willSet 语义,在回调里读属性拿到的还是旧值)。
+    var lyricsWindowListTuningPublisher: AnyPublisher<LyricsWindowListTuning, Never> {
+        Publishers.CombineLatest3(
+            Publishers.CombineLatest3($lyricsWindowFontScalePercent, $lyricsWindowRomanizationSizePercent,
+                                      $lyricsWindowTranslationSizePercent),
+            Publishers.CombineLatest3($lyricsWindowLineSpacingPercent, $lyricsWindowRomanizationGapPercent,
+                                      $lyricsWindowTranslationGapPercent),
+            Publishers.CombineLatest3($lyricsWindowUpcomingDimPercent, $lyricsWindowPastDimPercent,
+                                      $lyricsWindowBlurPercent))
+            .map { a, b, c in
+                LyricsWindowListTuning([.fontScale: a.0, .romanizationSize: a.1, .translationSize: a.2,
+                                        .lineSpacing: b.0, .romanizationGap: b.1, .translationGap: b.2,
+                                        .upcomingDim: c.0, .pastDim: c.1, .blur: c.2])
+            }
+            .eraseToAnyPublisher()
+    }
     // MARK: 迷你尺寸自己那一套外观
     //
     // 跟上面完整尺寸那组**同名同结构、各存各的**。两种尺寸是两种用法:完整尺寸多半是摊开来看的,
@@ -2044,8 +2126,8 @@ final class AppSettings: ObservableObject {
     /// 要占三行),这颗设置给的是那个算式的上限 —— 窗口够大时按用户设定,窗口小了仍被宽高压下来
     /// (见 LyricsWindowView.miniFontSize)。默认 34 = 460pt 宽的窗口按那个算式算出来的值。
     ///
-    /// 完整尺寸**不给**这颗:那边一屏排七行、字号由视口高度反推(lyricFontSize),再加一根滑杆
-    /// 就是两套规则打架 —— 拖窗口会把用户调好的数悄悄改掉。
+    /// 完整尺寸没有这颗上限:那边字号由视口高宽反推(lyricFontSize),给的是「字号缩放」(`lyricsWindowFontScalePercent`),
+    /// 在自动算出的字号上整体乘,拖窗口时照样跟着窗口变。
     @Published var lyricsWindowMiniFontSize: Double {
         didSet { defaults.set(lyricsWindowMiniFontSize, forKey: Keys.lyricsWindowMiniFontSize) }
     }
@@ -2982,6 +3064,24 @@ final class AppSettings: ObservableObject {
             (defaults.object(forKey: Keys.lyricsWindowControlScalePercent) as? Double)
                 ?? LyricsWindowControlScale.defaultPercent,
             to: LyricsWindowControlScale.percentRange)
+        lyricsWindowFontScalePercent = LyricsWindowListTuning.Item.fontScale.clamped(
+            (defaults.object(forKey: Keys.lyricsWindowFontScalePercent) as? Double) ?? LyricsWindowListTuning.Item.fontScale.defaultPercent)
+        lyricsWindowRomanizationSizePercent = LyricsWindowListTuning.Item.romanizationSize.clamped(
+            (defaults.object(forKey: Keys.lyricsWindowRomanizationSizePercent) as? Double) ?? LyricsWindowListTuning.Item.romanizationSize.defaultPercent)
+        lyricsWindowTranslationSizePercent = LyricsWindowListTuning.Item.translationSize.clamped(
+            (defaults.object(forKey: Keys.lyricsWindowTranslationSizePercent) as? Double) ?? LyricsWindowListTuning.Item.translationSize.defaultPercent)
+        lyricsWindowLineSpacingPercent = LyricsWindowListTuning.Item.lineSpacing.clamped(
+            (defaults.object(forKey: Keys.lyricsWindowLineSpacingPercent) as? Double) ?? LyricsWindowListTuning.Item.lineSpacing.defaultPercent)
+        lyricsWindowRomanizationGapPercent = LyricsWindowListTuning.Item.romanizationGap.clamped(
+            (defaults.object(forKey: Keys.lyricsWindowRomanizationGapPercent) as? Double) ?? LyricsWindowListTuning.Item.romanizationGap.defaultPercent)
+        lyricsWindowTranslationGapPercent = LyricsWindowListTuning.Item.translationGap.clamped(
+            (defaults.object(forKey: Keys.lyricsWindowTranslationGapPercent) as? Double) ?? LyricsWindowListTuning.Item.translationGap.defaultPercent)
+        lyricsWindowUpcomingDimPercent = LyricsWindowListTuning.Item.upcomingDim.clamped(
+            (defaults.object(forKey: Keys.lyricsWindowUpcomingDimPercent) as? Double) ?? LyricsWindowListTuning.Item.upcomingDim.defaultPercent)
+        lyricsWindowPastDimPercent = LyricsWindowListTuning.Item.pastDim.clamped(
+            (defaults.object(forKey: Keys.lyricsWindowPastDimPercent) as? Double) ?? LyricsWindowListTuning.Item.pastDim.defaultPercent)
+        lyricsWindowBlurPercent = LyricsWindowListTuning.Item.blur.clamped(
+            (defaults.object(forKey: Keys.lyricsWindowBlurPercent) as? Double) ?? LyricsWindowListTuning.Item.blur.defaultPercent)
         lyricsWindowHDRHighlight = (defaults.object(forKey: Keys.lyricsWindowHDRHighlight) as? Bool) ?? false
         // 没存过(全新安装 / 老用户升级)才落默认档。不能用 `integer(forKey:)` 直接取 ——
         // 它对"没存过"和"存了 0(一样都不显示)"返回同一个 0,后者是合法选择,会被悄悄改回默认。
