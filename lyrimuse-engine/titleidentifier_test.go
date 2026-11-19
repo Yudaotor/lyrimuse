@@ -573,10 +573,7 @@ func TestLyricSearchTitleIsWired(t *testing.T) {
 		"match := qqMusicMatchCached(ctx, artist, srcTitle, album, durationSecs)",
 		"qrc := qqQRCLyric(ctx, qqMid, artist, srcTitle, album, durationSecs)",
 		"artist: artist, title: srcTitle, album: album,",
-		"kugouLocalLyric(artist, srcTitle, album, durationSecs)",
-		"kugouLyric(ctx, artist, srcTitle, album, durationSecs)",
 		"providerQuery := ProviderQuery{Artist: artist, Title: title, Album: album, SourceTitle: srcTitle, DurationSecs: durationSecs}",
-		"kuwoLyric(ctx, artist, srcTitle, album, durationSecs)",
 		"applemusicLyric(ctx, artist, srcTitle, album, durationSecs, appleID, lyricSourceISRC(ctx, artist, title, album))",
 		"sodaLyric(ctx, artist, srcTitle, album, durationSecs)",
 	} {
@@ -585,14 +582,24 @@ func TestLyricSearchTitleIsWired(t *testing.T) {
 		}
 	}
 	// 接到 LyricProvider 上的源从查询里取歌名,取的得是 SourceTitle。
-	for file, n := range map[string]string{
-		"lrclib.go":  "lrclibLyric(ctx, q.Artist, q.SourceTitle, q.Album, q.DurationSecs)",
-		"migu.go":    "miguLyric(ctx, q.Artist, q.SourceTitle, q.Album, q.DurationSecs)",
-		"ytmusic.go": "ytmusicLyric(ctx, q.Artist, q.SourceTitle, q.Album, q.DurationSecs)",
-		"deezer.go":  "deezerLyric(ctx, q.Artist, q.SourceTitle, q.Album, q.DurationSecs, lyricSourceISRC(ctx, q.Artist, q.Title, q.Album))",
+	for file, needles := range map[string][]string{
+		"lrclib.go":  {"lrclibLyric(ctx, q.Artist, q.SourceTitle, q.Album, q.DurationSecs)"},
+		"migu.go":    {"miguLyric(ctx, q.Artist, q.SourceTitle, q.Album, q.DurationSecs)"},
+		"ytmusic.go": {"ytmusicLyric(ctx, q.Artist, q.SourceTitle, q.Album, q.DurationSecs)"},
+		"deezer.go":  {"deezerLyric(ctx, q.Artist, q.SourceTitle, q.Album, q.DurationSecs, lyricSourceISRC(ctx, q.Artist, q.Title, q.Album))"},
+		"kugou.go": {
+			"kugouLyric(ctx, q.Artist, q.SourceTitle, q.Album, q.DurationSecs)",
+			"kugouLocalLyric(q.Artist, q.SourceTitle, q.Album, q.DurationSecs)",
+		},
+		"kuwo.go": {
+			"kuwoLyric(ctx, q.Artist, q.SourceTitle, q.Album, q.DurationSecs)",
+			"kuwoLocalLyric(q.Artist, q.SourceTitle, q.DurationSecs)",
+		},
 	} {
-		if !containsCode(read(file), n) {
-			t.Errorf("%s 缺 %q", file, n)
+		for _, n := range needles {
+			if !containsCode(read(file), n) {
+				t.Errorf("%s 缺 %q", file, n)
+			}
 		}
 	}
 	if n := strings.Count(enrich, "roundCtx = withLyricSourceTitle(roundCtx, lyricSearchTitleOrStored(ctx, storedSearchTitle, title), artist, title, searchAlbum)"); n != 2 {

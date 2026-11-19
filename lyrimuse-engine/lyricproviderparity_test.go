@@ -12,6 +12,7 @@ import (
 	"reflect"
 	"slices"
 	"sort"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -26,6 +27,9 @@ type providerParitySource struct {
 	name string
 	// handwritten:迁移前收集循环里这个源那个 goroutine 判完跳过之后的部分,原样留着当参照。
 	handwritten func(ctx context.Context, artist, title, srcTitle, album string, durationSecs float64) lyricSourceResult
+	// handwrittenRound:自己判跳过的源(酷狗、酷我:熔断冷却时仍读本机那份)迁移前那个 goroutine 的整段,连同它的三档
+	// 跳过。非 nil 时参照路径走它,不走 lyricSourceSkippedThisRound 加 handwritten。
+	handwrittenRound func(ctx context.Context, artist, srcTitle, album string, durationSecs float64, only map[string]bool, breakerPlan lyricSourceRoundPlan, round *lyricSourceRound) lyricSourceResult
 	// reset:把这个源的进程内状态(缓存、会话、密钥位置、失败原因……)换成空的,测完换回。
 	reset func(t *testing.T)
 	// cacheKeys:进程内缓存里现在的键。
@@ -191,12 +195,16 @@ type providerParityOutcome struct {
 }
 
 // handwrittenProviderRound 照收集循环里手写 goroutine 的写法问一个源一轮:lyricSourceSkippedThisRound 判跳过,没跳过的
-// 走 s.handwritten。跟收集循环一样,返回时取消这一轮的 ctx:源里并发发出去、还没回来的请求在两条路上都跟着断。
+// 走 s.handwritten;自己判跳过的源整段走 s.handwrittenRound。跟收集循环一样,返回时取消这一轮的 ctx:源里并发发出去、
+// 还没回来的请求在两条路上都跟着断。
 func handwrittenProviderRound(ctx context.Context, s providerParitySource, artist, title, album string, durationSecs float64) lyricSourceResult {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 	srcTitle := lyricSourceTitleFor(ctx, title)
 	breakerPlan := sharedLyricSourceBreaker().planRound(lyricSourceNames)
+	if s.handwrittenRound != nil {
+		return s.handwrittenRound(ctx, artist, srcTitle, album, durationSecs, lyricSourceOnlyFrom(ctx), breakerPlan, lyricSourceRoundFrom(ctx))
+	}
 	if lyricSourceSkippedThisRound(ctx, s.name, lyricSourceOnlyFrom(ctx), breakerPlan, lyricSourceRoundFrom(ctx)) {
 		return lyricSourceResult{source: s.name}
 	}
@@ -253,6 +261,23 @@ func providerParityGuardState(name string) []string {
 	if pause, paused := sourceDayQuotaPausedFor(name, now); paused || sourceDayQuotaLow(name, now) {
 		out = append(out, fmt.Sprintf("day quota low=%v paused=%v for %s", sourceDayQuotaLow(name, now), paused, pause.Round(time.Minute)))
 	}
+	return out
+}
+
+// parityEndpointHealth:出站闸里按端点记的失败、拒绝计数和跳没跳闸(主机归这个源的),一行一个端点。自己从应答体里认
+// 拒绝码的源(reportEndpointRejected)把它放进 state 一起比。
+func parityEndpointHealth(name string) []string {
+	g := sharedHostGuard()
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	var out []string
+	for key, h := range g.health {
+		host, _, _ := strings.Cut(key, "/")
+		if lyricSourceForHost(host) == name {
+			out = append(out, fmt.Sprintf("endpoint %s fails=%d rejects=%d trips=%d open=%v", key, h.fails, h.rejects, h.trips, g.now().Before(h.until)))
+		}
+	}
+	sort.Strings(out)
 	return out
 }
 
@@ -482,4 +507,6 @@ var migratedLyricSources = []struct{ name, file, entry, call string }{
 	{lyricSourceMigu, "migu.go", "miguLyric", "miguLyric(ctx, q.Artist, q.SourceTitle, q.Album, q.DurationSecs)"},
 	{lyricSourceDeezer, "deezer.go", "deezerLyric", "deezerLyric(ctx, q.Artist, q.SourceTitle, q.Album, q.DurationSecs, lyricSourceISRC(ctx, q.Artist, q.Title, q.Album))"},
 	{lyricSourceLyricFind, "ytmusic.go", "ytmusicLyric", "ytmusicLyric(ctx, q.Artist, q.SourceTitle, q.Album, q.DurationSecs)"},
+	{lyricSourceKugou, "kugou.go", "kugouLyric", "kugouLyric(ctx, q.Artist, q.SourceTitle, q.Album, q.DurationSecs)"},
+	{lyricSourceKuwo, "kuwo.go", "kuwoLyric", "kuwoLyric(ctx, q.Artist, q.SourceTitle, q.Album, q.DurationSecs)"},
 }

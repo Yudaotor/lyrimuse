@@ -59,6 +59,24 @@ var (
 	kugouCache = map[string]kugouResult{}
 )
 
+// kugouProvider 把 kugouLyric 接到 LyricProvider 上,两个产出点(Resolve、ResolveOffline)都经 kugouSourceResult 摊平。
+type kugouProvider struct{ desc *ProviderDescriptor }
+
+func (p kugouProvider) Descriptor() *ProviderDescriptor { return p.desc }
+
+func (p kugouProvider) Resolve(ctx context.Context, q ProviderQuery, _ RoundEnv) SourceResult {
+	return kugouSourceResult(kugouLyric(ctx, q.Artist, q.SourceTitle, q.Album, q.DurationSecs))
+}
+
+// ResolveOffline:熔断冷却时只读客户端下在本机的那份 KRC(kugouLocalLyric),不发请求,也不为封面去搜。
+func (p kugouProvider) ResolveOffline(q ProviderQuery) (SourceResult, bool) {
+	r, ok := kugouLocalLyric(q.Artist, q.SourceTitle, q.Album, q.DurationSecs)
+	if !ok {
+		return SourceResult{}, false
+	}
+	return kugouSourceResult(r), true
+}
+
 func kugouLyric(ctx context.Context, artist, title, album string, durationSecs float64) kugouResult {
 	if title == "" {
 		return kugouResult{}

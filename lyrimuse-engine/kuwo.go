@@ -58,6 +58,24 @@ var (
 	kuwoCache = map[string]kuwoResult{}
 )
 
+// kuwoProvider 把 kuwoLyric 接到 LyricProvider 上,两个产出点(Resolve、ResolveOffline)都经 kuwoSourceResult 摊平。
+type kuwoProvider struct{ desc *ProviderDescriptor }
+
+func (p kuwoProvider) Descriptor() *ProviderDescriptor { return p.desc }
+
+func (p kuwoProvider) Resolve(ctx context.Context, q ProviderQuery, _ RoundEnv) SourceResult {
+	return kuwoSourceResult(kuwoLyric(ctx, q.Artist, q.SourceTitle, q.Album, q.DurationSecs))
+}
+
+// ResolveOffline:熔断冷却时只读客户端落盘的那份歌词(kuwoLocalLyric),不发请求,也不为封面去搜。
+func (p kuwoProvider) ResolveOffline(q ProviderQuery) (SourceResult, bool) {
+	r, ok := kuwoLocalLyric(q.Artist, q.SourceTitle, q.DurationSecs)
+	if !ok {
+		return SourceResult{}, false
+	}
+	return kuwoSourceResult(r), true
+}
+
 func kuwoLyric(ctx context.Context, artist, title, album string, durationSecs float64) kuwoResult {
 	if title == "" {
 		return kuwoResult{}

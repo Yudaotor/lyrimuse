@@ -690,16 +690,45 @@ func TestProviderRegistryPrivilegesMatchCode(t *testing.T) {
 		}
 	}
 
-	// 递编号、熔断冷却时的本机那条腿:收集循环里各有一处按源名写的代码。
+	// 递编号:收集循环里各有一处按源名写的代码。熔断冷却时的本机那条腿:登记的实现有没有 ResolveOffline,
+	// 它里面读的是这个源自己的本机那份;收集循环里不再有按源名写的这一支。
+	offlineImpl := map[string]bool{}
+	for _, p := range lyricProviders().providers {
+		if _, ok := p.(OfflineResolver); ok {
+			offlineImpl[p.Descriptor().Name] = true
+		}
+	}
+	if containsCode(enrichSrc, "case lyricSourceSkipCooling: if r, ok := ") {
+		t.Error("收集循环里不该再有按源名写的「冷却时读本机那份」:这一支在调度里(offlineLegResult)")
+	}
 	for _, name := range network {
 		d := lyricProviders().descriptor(name)
 		if got := containsCode(enrichSrc, name+"IDCh <- "); got != d.Privileges.has(privTrackIDPublish) {
 			t.Errorf("%s:收集循环里递不递编号(%v)跟 privTrackIDPublish 对不上", name, got)
 		}
-		offline := containsCode(enrichSrc, "case lyricSourceSkipCooling: if r, ok := "+name+"LocalLyric(")
-		if offline != d.Privileges.has(privOfflineLeg) {
-			t.Errorf("%s:冷却时读不读本机那份(%v)跟 privOfflineLeg 对不上", name, offline)
+		if offlineImpl[name] != d.Privileges.has(privOfflineLeg) {
+			t.Errorf("%s:实现了 ResolveOffline(%v)跟 privOfflineLeg 对不上", name, offlineImpl[name])
 		}
+		if !offlineImpl[name] {
+			continue
+		}
+		raw, err := os.ReadFile(name + ".go")
+		if err != nil {
+			t.Fatal(err)
+		}
+		body := string(raw)
+		start := strings.Index(body, "Provider) ResolveOffline(q ProviderQuery) (SourceResult, bool) {")
+		if start < 0 {
+			t.Fatalf("%s.go 里找不到 ResolveOffline", name)
+		}
+		body = body[start:]
+		body = body[:strings.Index(body, "\n}\n")]
+		if !containsCode(body, "r, ok := "+name+"LocalLyric(q.Artist, q.SourceTitle,") || containsCode(body, name+"Lyric(") {
+			t.Errorf("%s 的 ResolveOffline 应只读它自己的本机那份(%sLocalLyric),不调联网的入口:\n%s", name, name, body)
+		}
+	}
+	if len(offlineImpl) == 0 {
+		t.Error("没有一个源实现 ResolveOffline:酷狗、酷我应各有一份")
 	}
 
 	// 播放器自己的无人声信号:playerInstrumentalSource 认的那几路。

@@ -25,13 +25,6 @@ func newBuiltinLyricProviderRegistry() *lyricProviderRegistry {
 		PeerGroup: peerGroupChinese,
 	}, privLocalClientIdentity|privTrackIDPublish|privPlayerNoVocals)
 
-	r.registerBuiltin(&ProviderDescriptor{
-		Name: lyricSourceKugou, Order: 3, TieRank: 3, DefaultPriorityRank: 1,
-		Hosts: []HostRule{{"kugou.com", hostWithSubdomains}},
-		Baked: bakedAdopt, ParenBackground: true, CarriesKana: true, InstrumentalRank: 5,
-		PeerGroup: peerGroupChinese,
-	}, privLocalClientIdentity|privOfflineLeg)
-
 	r.implement(lrclibProvider{desc: r.registerBuiltin(&ProviderDescriptor{
 		Name: lyricSourceLRCLIB, Order: 4, TieRank: 4, DefaultPriorityRank: 4,
 		Hosts:       []HostRule{{"lrclib.net", hostWithSubdomains}},
@@ -40,6 +33,13 @@ func newBuiltinLyricProviderRegistry() *lyricProviderRegistry {
 		Baked: bakedStripOnly, ParenBackground: true, CarriesKana: true, InstrumentalRank: 1,
 		PeerGroup: peerGroupGlobal,
 	}, 0)})
+
+	r.implement(kugouProvider{desc: r.registerBuiltin(&ProviderDescriptor{
+		Name: lyricSourceKugou, Order: 3, TieRank: 3, DefaultPriorityRank: 1,
+		Hosts: []HostRule{{"kugou.com", hostWithSubdomains}},
+		Baked: bakedAdopt, ParenBackground: true, CarriesKana: true, InstrumentalRank: 5,
+		PeerGroup: peerGroupChinese,
+	}, privLocalClientIdentity|privOfflineLeg)})
 
 	r.registerBuiltin(&ProviderDescriptor{
 		Name: lyricSourceAMLL, Order: 5, TieRank: 22, DefaultPriorityRank: 5,
@@ -63,12 +63,12 @@ func newBuiltinLyricProviderRegistry() *lyricProviderRegistry {
 		QueryIndependentFailure: ytmusicLastFailureReasonNow,
 	}, privLocalClientIdentity|privPlaybackTrackIDs)})
 
-	r.registerBuiltin(&ProviderDescriptor{
+	r.implement(kuwoProvider{desc: r.registerBuiltin(&ProviderDescriptor{
 		Name: lyricSourceKuwo, Order: 7, TieRank: 6, DefaultPriorityRank: 7,
 		Hosts: []HostRule{{"kuwo.cn", hostWithSubdomains}},
 		Baked: bakedCustom, BakedSplit: adoptKuwoBakedTranslation, ParenBackground: true,
 		PeerGroup: peerGroupChinese,
-	}, privLocalClientIdentity|privOfflineLeg)
+	}, privLocalClientIdentity|privOfflineLeg)})
 
 	r.implement(miguProvider{desc: r.registerBuiltin(&ProviderDescriptor{
 		Name: lyricSourceMigu, Order: 8, TieRank: 7, DefaultPriorityRank: 8,

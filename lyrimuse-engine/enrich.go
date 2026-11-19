@@ -6258,59 +6258,7 @@ func fetchScoredLyricCandidatesStreaming(ctx context.Context, artist, title, alb
 			durationSecs: durationSecs, translationLang: features().LyricsTranslationLanguage,
 		})}
 	}()
-	go func() {
-		// 酷狗这一路**不能直接用 skipSource**:它比别的源多一条完全不经网络的路 ——
-		// 客户端自己下在本地的 KRC(kugoulocal.go)。熔断冷却挡的是"别再打那台服务器了",
-		// 而读本地文件跟服务器挂没挂毫无关系;恰恰是网络不通那阵子,本地那份最该顶上。
-		// 所以冷却期间仍然问一次本地,只是不发请求。
-		//
-		// 三档区别:①别名轮的 only 名单外 —— 静默跳过(它上一轮已经答过);②用户在设置里
-		// **关掉**了酷狗源 —— 那是"我不要酷狗的歌词",本地那份同样不要;③熔断冷却 ——
-		// 只放弃网络那一半。本地命中时**不记 lyrics_sources_skipped**:这一轮它确实答了,
-		// 记成跳过会让 needsLyricsRetry 以为缺了它、白重搜一轮。
-		if only != nil && !only["kugou"] {
-			resultsCh <- lyricSourceResult{source: "kugou"}
-			return
-		}
-		switch lyricSourceSkipFor("kugou", lyricSourceEnabled, breakerPlan) {
-		case lyricSourceSkipDisabled:
-			resultsCh <- lyricSourceResult{source: "kugou"}
-			return
-		case lyricSourceSkipCooling:
-			if r, ok := kugouLocalLyric(artist, srcTitle, album, durationSecs); ok {
-				resultsCh <- kugouSourceResult(r)
-				return
-			}
-			round.markSkippedBecause("kugou", sharedLyricSourceBreaker().cooldownReason("kugou"))
-			log.Printf("lyrics: source kugou skipped this round, cooling down for another %s", breakerPlan["kugou"].Round(time.Second))
-			resultsCh <- lyricSourceResult{source: "kugou"}
-			return
-		}
-		resultsCh <- kugouSourceResult(kugouLyric(ctx, artist, srcTitle, album, durationSecs))
-	}()
 	startLyricProviders(ctx, lyricProviders().providers, providerQuery, providerEnv, providerPlan, resultsCh)
-	go func() {
-		// 三档同酷狗那路:关掉的源本地那份也不要;熔断冷却时只放弃网络那一半,本地命中照常交、不记跳过。
-		if only != nil && !only["kuwo"] {
-			resultsCh <- lyricSourceResult{source: "kuwo"}
-			return
-		}
-		switch lyricSourceSkipFor("kuwo", lyricSourceEnabled, breakerPlan) {
-		case lyricSourceSkipDisabled:
-			resultsCh <- lyricSourceResult{source: "kuwo"}
-			return
-		case lyricSourceSkipCooling:
-			if r, ok := kuwoLocalLyric(artist, srcTitle, durationSecs); ok {
-				resultsCh <- kuwoSourceResult(r)
-				return
-			}
-			round.markSkippedBecause("kuwo", sharedLyricSourceBreaker().cooldownReason("kuwo"))
-			log.Printf("lyrics: source kuwo skipped this round, cooling down for another %s", breakerPlan["kuwo"].Round(time.Second))
-			resultsCh <- lyricSourceResult{source: "kuwo"}
-			return
-		}
-		resultsCh <- kuwoSourceResult(kuwoLyric(ctx, artist, srcTitle, album, durationSecs))
-	}()
 	go func() {
 		if skipSource("applemusic") {
 			resultsCh <- lyricSourceResult{source: "applemusic"}

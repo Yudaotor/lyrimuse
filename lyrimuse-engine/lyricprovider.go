@@ -12,6 +12,12 @@ type LyricProvider interface {
 	Resolve(ctx context.Context, q ProviderQuery, env RoundEnv) SourceResult
 }
 
+// OfflineResolver 由带 privOfflineLeg 的源实现:这个源在熔断冷却的那一轮,调度不调 Resolve,改调 ResolveOffline,
+// 只读客户端下在本机的那一份,不发请求。ok=false 是本机没有这首,这一轮照冷却跳过记。
+type OfflineResolver interface {
+	ResolveOffline(q ProviderQuery) (r SourceResult, ok bool)
+}
+
 // ProviderQuery 是这一轮交给源的查询。源内部读的 ctx 值(原样写法、子请求完成度、出站档位……)照旧挂在 ctx 上,不在这里。
 type ProviderQuery struct {
 	// Artist / Title / Album:这一轮的检索词。

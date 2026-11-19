@@ -60,18 +60,49 @@ func (p lyricRoundPlan) decide(d *ProviderDescriptor) providerRoundDecision {
 
 // runLyricProvider 问一个源一轮,不管问没问都恰好交回一份结果,源名是描述符里的名字。被跳过的交只带源名的空结果:
 // 收集循环按源名数「都回来了没有」,少交一份这一轮就会等到截止。ctx 原样传给 Resolve,循环返回时靠它取消还在飞的请求。
+// 熔断冷却的那一轮,带 privOfflineLeg 的源仍读本机那一份(offlineLegResult):本机命中算这一轮它答了,不记跳过;
+// 名单外、关掉的源本机那份也不读。
 func runLyricProvider(ctx context.Context, p LyricProvider, q ProviderQuery, env RoundEnv, plan lyricRoundPlan) SourceResult {
 	d := p.Descriptor()
 	switch plan.decide(d) {
 	case providerRoundSkipSilent:
 		return SourceResult{source: d.Name}
 	case providerRoundSkipCooling:
+		if r, ok := offlineLegResult(p, d, q); ok {
+			return r
+		}
 		plan.round.markSkippedBecause(d.Name, sharedLyricSourceBreaker().cooldownReason(d.Name))
 		log.Printf("lyrics: source %s skipped this round, cooling down for another %s", d.Name, plan.cooling[d.Name].Round(time.Second))
 		return SourceResult{source: d.Name}
 	}
 	r := p.Resolve(ctx, q, env)
+	return sealProviderResult(d, r)
+}
+
+// offlineLegResult:描述符带 privOfflineLeg 的源读客户端下在本机的那一份(OfflineResolver),不发请求。没有这一位的源
+// 不问,实现了 OfflineResolver 也一样。见 09 章决策 392。
+func offlineLegResult(p LyricProvider, d *ProviderDescriptor, q ProviderQuery) (SourceResult, bool) {
+	if !d.Privileges.has(privOfflineLeg) {
+		return SourceResult{}, false
+	}
+	offline, ok := p.(OfflineResolver)
+	if !ok {
+		return SourceResult{}, false
+	}
+	r, ok := offline.ResolveOffline(q)
+	if !ok {
+		return SourceResult{}, false
+	}
+	return sealProviderResult(d, r), true
+}
+
+// sealProviderResult:源交回的结果进收集循环之前,源名按描述符填;没有 privLocalClientIdentity 的源交的结果不算
+// 「身份由播放器本机数据给定」。
+func sealProviderResult(d *ProviderDescriptor, r SourceResult) SourceResult {
 	r.source = d.Name
+	if !d.Privileges.has(privLocalClientIdentity) {
+		r.identityFromLocalClient = false
+	}
 	return r
 }
 
