@@ -192,6 +192,13 @@ public enum LyrimuseDeepLink: Equatable, Sendable {
         /// `debug/lyrics-window-typesetting?font-scale=120&romanization-size=60&translation-size=60&line-spacing=-20&romanization-gap=10&translation-gap=10&upcoming-dim=50&past-dim=120&blur=0`。
         /// 带 `draft=1` 时跟拖滑杆途中一样,只给设置页预览、不写设置;不带时写设置并清掉草稿。
         case lyricsWindowTypesetting(values: [LyricsWindowListTuning.Item: Double], draft: Bool = false)
+        /// 歌词窗口完整尺寸读音行、译文行的字体、粗细、颜色(跟设置页走同一个设置):参数名是 `LyricsWindowSubLines.Item`
+        /// 的原始值,值按 `Item.storedValue(fromQuery:)` 认(`follow` 跟随正文,字体另认 `system`),至少带一项,认不出来的整条不认:
+        /// `debug/lyrics-window-sublines?romanization-font=Georgia&romanization-weight=light&romanization-color=FF6A00&translation-font=system&translation-weight=follow&translation-color=follow`。
+        case lyricsWindowSubLines(values: [LyricsWindowSubLines.Item: String])
+        /// 歌词窗口完整尺寸的「文字颜色」档位、迷你的「歌词布局」(跟设置页走同一个设置,原始值同存盘值,至少带一项,认不出来的整条不认):
+        /// `debug/lyrics-window-style?text-color=auto|light|dark|custom&mini-layout=oneLine|compact|list`。
+        case lyricsWindowStyle(textColor: LyricsWindowTextColorMode?, miniLayout: LyricsWindowMiniLyricsLayout?)
         /// 当作指针进 / 出歌词窗口(`debug/lyrics-window-pointer?inside=1|0`):完整尺寸走「闲置隐藏」的进出,迷你走面板的悬停进出,
         /// 跟真指针进出走同一处,不挪鼠标就能验按钮组和红绿灯的显隐。
         case lyricsWindowPointer(inside: Bool)
@@ -789,6 +796,23 @@ public enum LyrimuseDeepLink: Equatable, Sendable {
             }
             guard !values.isEmpty else { return nil }
             self = .debug(.lyricsWindowTypesetting(values: values, draft: value("draft").flatMap(Self.parseBool) ?? false))
+        case ("debug", "/lyrics-window-sublines"):
+            var values: [LyricsWindowSubLines.Item: String] = [:]
+            for item in LyricsWindowSubLines.Item.allCases {
+                guard let text = value(item.rawValue) else { continue }
+                guard let stored = item.storedValue(fromQuery: text) else { return nil }
+                values[item] = stored
+            }
+            guard !values.isEmpty else { return nil }
+            self = .debug(.lyricsWindowSubLines(values: values))
+        case ("debug", "/lyrics-window-style"):
+            let textColor = value("text-color")
+            let miniLayout = value("mini-layout")
+            guard textColor != nil || miniLayout != nil else { return nil }
+            let mode = textColor.flatMap(LyricsWindowTextColorMode.init(rawValue:))
+            let layout = miniLayout.flatMap(LyricsWindowMiniLyricsLayout.init(rawValue:))
+            guard (textColor == nil) == (mode == nil), (miniLayout == nil) == (layout == nil) else { return nil }
+            self = .debug(.lyricsWindowStyle(textColor: mode, miniLayout: layout))
         case ("debug", "/lyrics-window-pointer"):
             guard let inside = value("inside").flatMap(Self.parseBool) else { return nil }
             self = .debug(.lyricsWindowPointer(inside: inside))
@@ -1278,6 +1302,15 @@ public enum LyrimuseDeepLink: Equatable, Sendable {
                     }
                 }
                 if draft { components.queryItems?.append(URLQueryItem(name: "draft", value: "1")) }
+            case let .lyricsWindowStyle(textColor, miniLayout):
+                components.path = "/lyrics-window-style"
+                components.queryItems = [textColor.map { URLQueryItem(name: "text-color", value: $0.rawValue) },
+                                         miniLayout.map { URLQueryItem(name: "mini-layout", value: $0.rawValue) }].compactMap { $0 }
+            case let .lyricsWindowSubLines(values):
+                components.path = "/lyrics-window-sublines"
+                components.queryItems = LyricsWindowSubLines.Item.allCases.compactMap { item in
+                    values[item].map { URLQueryItem(name: item.rawValue, value: item.queryValue(stored: $0)) }
+                }
             case let .lyricsWindowPointer(inside):
                 components.path = "/lyrics-window-pointer"
                 components.queryItems = [URLQueryItem(name: "inside", value: inside ? "1" : "0")]

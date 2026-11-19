@@ -3815,7 +3815,7 @@ private struct AppearanceSettingsTab: View {
         case .font:
             // 字体 → 粗细 → 字号,同悬浮歌词、菜单栏、灵动岛的「字体」组。字号上限只有迷你传。
             // 完整尺寸的字号跟着窗口尺寸算(lyricFontSize),不给固定字号或上限,给的是在算出来的字号上整体乘的「字号缩放」,
-            // 跟读音 / 译文大小排成下面一排三格(`lyricsWindowFontScaleTiles`)。
+            // 跟读音 / 译文大小排成下面一排三格(`lyricsWindowFontScaleTiles`),再下面是读音、译文各自的字体和粗细。
             // 两列小块:往上弹的浮层只有按钮上方约 200pt,一行一个控件放不下。
             SettingsRowGroupStack {
                 SettingsTileGrid {
@@ -3868,71 +3868,78 @@ private struct AppearanceSettingsTab: View {
                 }
                 if showsListTuning {
                     lyricsWindowFontScaleTiles
+                    lyricsWindowSubLineFontTiles
                 }
             }
         case .color:
             // 卡拉OK效果 → 文字颜色(开着卡拉OK时叫「未唱颜色」)→ 已唱颜色(只在开着卡拉OK时出现)→ HDR 高亮,
             // 叫法和图标同另外三个形态的「颜色」组。两列小块,理由同「字体」。
-            SettingsTileGrid {
-                // 生效链路见 AppSettings.lyricsWindowMiniLyricsKaraoke / lyricsWindowLyricsKaraoke;关着时整行高亮(07 章决策 116)。
-                if let karaoke {
-                    SettingsToggleTile(icon: "sparkles", title: L10n.t("卡拉OK效果"),
-                                       help: L10n.t("逐字歌词随演唱逐字高亮；无逐字数据的歌曲整行高亮"),
-                                       isOn: karaoke)
-                }
-                // 文字颜色是**自己一颗设置**,不是背景的派生物:「深底配深字」「毛玻璃上钉死白字」这类搭配要能表达。
-                // `.auto` 档按背景亮度算(LyricsWindowBackgroundLuma),仍是默认。
-                // 选「自定义」时取色块挂在这一格上;它叫「指定颜色」(悬停提示与搜索高亮),别叫「颜色」——
-                // 背景那一组已经有一格「颜色」。
-                SettingsControlCell(
-                    icon: karaoke?.wrappedValue == true ? "circle.lefthalf.filled" : "paintpalette",
-                    title: karaoke?.wrappedValue == true ? L10n.t("未唱颜色") : L10n.t("文字颜色"),
-                    // 迷你的顶部信息和控制条跟歌词紧挨成一块,文字色一起走(LyricsWindowView.miniPrimaryColor);
-                    // 完整尺寸只管歌词。说明按尺寸分开写,别合成一句。
-                    help: fontSize != nil
-                        ? L10n.t("作用于歌词、顶部信息和播放控制；「自动」根据背景亮度在浅色与深色之间切换")
-                        : L10n.t("仅作用于歌词；「自动」根据背景亮度在浅色与深色之间切换")
-                ) {
-                    HStack(spacing: 6) {
-                        SettingsGlassMenuPicker(
-                            selection: textColorMode,
-                            options: [LyricsWindowTextColorMode.auto, .light, .dark, .custom],
-                            label: lyricsWindowTextColorModeName,
-                            compact: true
-                        )
-                        if textColorMode.wrappedValue.usesCustomColor {
-                            AppColorPicker(selection: textColor)
-                                .help(L10n.t("指定颜色"))
-                                .settingsSearchHighlight(title: L10n.t("指定颜色"))
-                        }
+            // 完整尺寸下面另一排是读音、译文各自的颜色(`lyricsWindowSubLineColorTiles`)。
+            SettingsRowGroupStack {
+                SettingsTileGrid {
+                    // 生效链路见 AppSettings.lyricsWindowMiniLyricsKaraoke / lyricsWindowLyricsKaraoke;关着时整行高亮(07 章决策 116)。
+                    if let karaoke {
+                        SettingsToggleTile(icon: "sparkles", title: L10n.t("卡拉OK效果"),
+                                           help: L10n.t("逐字歌词随演唱逐字高亮；无逐字数据的歌曲整行高亮"),
+                                           isOn: karaoke)
                     }
-                }
-                // 一格下拉,选「自定义」时旁边露出取色器(同悬浮歌词「未唱颜色」)。卡拉OK效果关着时没有已唱部分,不摆这一格。
-                if karaoke?.wrappedValue == true, let karaokeFill, let karaokeFillColor {
+                    // 文字颜色是**自己一颗设置**,不是背景的派生物:「深底配深字」「毛玻璃上钉死白字」这类搭配要能表达。
+                    // `.auto` 档按背景亮度算(LyricsWindowBackgroundLuma),仍是默认。
+                    // 选「自定义」时取色块挂在这一格上;它叫「指定颜色」(悬停提示与搜索高亮),别叫「颜色」——
+                    // 背景那一组已经有一格「颜色」。
                     SettingsControlCell(
-                        icon: "paintbrush.pointed",
-                        title: L10n.t("已唱颜色"),
-                        help: L10n.t("逐字填色时已唱部分使用此颜色")
+                        icon: karaoke?.wrappedValue == true ? "circle.lefthalf.filled" : "paintpalette",
+                        title: karaoke?.wrappedValue == true ? L10n.t("未唱颜色") : L10n.t("文字颜色"),
+                        // 迷你的顶部信息和控制条跟歌词紧挨成一块,文字色一起走(LyricsWindowView.miniPrimaryColor);
+                        // 完整尺寸只管歌词。说明按尺寸分开写,别合成一句。
+                        help: fontSize != nil
+                            ? L10n.t("作用于歌词、顶部信息和播放控制；「自动」根据背景亮度在浅色与深色之间切换")
+                            : L10n.t("仅作用于歌词；「自动」根据背景亮度在浅色与深色之间切换")
                     ) {
                         HStack(spacing: 6) {
                             SettingsGlassMenuPicker(
-                                selection: karaokeFill,
-                                options: LyricsWindowKaraokeFill.allCases,
-                                label: LyricsWindowKaraokeFillLabel.text(for:),
+                                selection: textColorMode,
+                                options: [LyricsWindowTextColorMode.auto, .light, .dark, .custom],
+                                label: lyricsWindowTextColorModeName,
                                 compact: true
                             )
-                            if karaokeFill.wrappedValue == .custom {
-                                AppColorPicker(selection: karaokeFillColor)
+                            if textColorMode.wrappedValue.usesCustomColor {
+                                AppColorPicker(selection: textColor)
+                                    .help(L10n.t("指定颜色"))
+                                    .settingsSearchHighlight(title: L10n.t("指定颜色"))
                             }
                         }
                     }
+                    // 一格下拉,选「自定义」时旁边露出取色器(同悬浮歌词「未唱颜色」)。卡拉OK效果关着时没有已唱部分,不摆这一格。
+                    if karaoke?.wrappedValue == true, let karaokeFill, let karaokeFillColor {
+                        SettingsControlCell(
+                            icon: "paintbrush.pointed",
+                            title: L10n.t("已唱颜色"),
+                            help: L10n.t("逐字填色时已唱部分使用此颜色")
+                        ) {
+                            HStack(spacing: 6) {
+                                SettingsGlassMenuPicker(
+                                    selection: karaokeFill,
+                                    options: LyricsWindowKaraokeFill.allCases,
+                                    label: LyricsWindowKaraokeFillLabel.text(for:),
+                                    compact: true
+                                )
+                                if karaokeFill.wrappedValue == .custom {
+                                    AppColorPicker(selection: karaokeFillColor)
+                                }
+                            }
+                        }
+                    }
+                    if let hdrHighlight {
+                        SettingsToggleTile(
+                            icon: "sun.max",
+                            title: L10n.t("HDR 高亮"),
+                            help: L10n.t("在支持 HDR 的屏幕上提亮已唱部分，开启后更耗电"),
+                            isOn: hdrHighlight)
+                    }
                 }
-                if let hdrHighlight {
-                    SettingsToggleTile(
-                        icon: "sun.max",
-                        title: L10n.t("HDR 高亮"),
-                        help: L10n.t("在支持 HDR 的屏幕上提亮已唱部分，开启后更耗电"),
-                        isOn: hdrHighlight)
+                if showsListTuning {
+                    lyricsWindowSubLineColorTiles
                 }
             }
             .animation(.default, value: karaoke?.wrappedValue)
@@ -4031,6 +4038,98 @@ private struct AppearanceSettingsTab: View {
             LyricsWindowListTuningTile(item: .pastDim, title: L10n.t("已唱变暗"))
             LyricsWindowListTuningTile(item: .blur, title: L10n.t("模糊"))
         }
+    }
+
+    /// 完整尺寸「字体」里读音、译文各自的字体和粗细(`LyricsWindowSubLineStyle`),左列读音、右列译文,每项都能跟随正文。
+    /// 只有完整尺寸有;「内容」里关着读音 / 译文时那一格置灰。
+    @ViewBuilder
+    private var lyricsWindowSubLineFontTiles: some View {
+        SettingsTileGrid {
+            SettingsControlCell(icon: "textformat.alt", title: L10n.t("读音字体")) {
+                FontFamilyPicker(selection: $settings.lyricsWindowRomanizationFontFamily, followsMain: true)
+            }
+            .disabled(!settings.showRomanization)
+            SettingsControlCell(icon: "text.bubble", title: L10n.t("译文字体")) {
+                FontFamilyPicker(selection: $settings.lyricsWindowTranslationFontFamily, followsMain: true)
+            }
+            .disabled(!settings.showTranslation)
+            SettingsControlCell(icon: "bold", title: L10n.t("读音粗细"), help: L10n.t("「跟随正文」时比正文细两档")) {
+                lyricsWindowSubLineWeightPicker($settings.lyricsWindowRomanizationFontWeight)
+            }
+            .disabled(!settings.showRomanization)
+            SettingsControlCell(icon: "bold", title: L10n.t("译文粗细"), help: L10n.t("「跟随正文」时比正文细一档")) {
+                lyricsWindowSubLineWeightPicker($settings.lyricsWindowTranslationFontWeight)
+            }
+            .disabled(!settings.showTranslation)
+        }
+    }
+
+    /// 完整尺寸「颜色」里读音、译文各自的颜色:跟随正文,或自定义(旁边露出取色器)。只有完整尺寸有。
+    @ViewBuilder
+    private var lyricsWindowSubLineColorTiles: some View {
+        SettingsTileGrid {
+            SettingsControlCell(icon: "textformat.alt", title: L10n.t("读音颜色")) {
+                lyricsWindowSubLineColorPicker($settings.lyricsWindowRomanizationColorHex)
+            }
+            .disabled(!settings.showRomanization)
+            SettingsControlCell(icon: "text.bubble", title: L10n.t("译文颜色")) {
+                lyricsWindowSubLineColorPicker($settings.lyricsWindowTranslationColorHex)
+            }
+            .disabled(!settings.showTranslation)
+        }
+    }
+
+    /// 读音 / 译文的粗细:「跟随正文」(存空串)或六档之一(存 `OverlayFontWeight` 的原始值)。
+    private func lyricsWindowSubLineWeightPicker(_ stored: Binding<String>) -> some View {
+        SettingsGlassMenuPicker(
+            selection: Binding<OverlayFontWeight?>(
+                get: { OverlayFontWeight(rawValue: stored.wrappedValue) },
+                set: { stored.wrappedValue = $0?.rawValue ?? "" }),
+            options: [nil] + OverlayFontWeight.allCases.map { Optional($0) },
+            label: { $0?.displayName ?? L10n.t("跟随正文") },
+            compact: true)
+    }
+
+    /// 读音 / 译文的颜色:「跟随正文」(存空串)或「自定义」。切到自定义时先填上此刻跟随出来的那个颜色,画面不跳。
+    private func lyricsWindowSubLineColorPicker(_ hex: Binding<String>) -> some View {
+        HStack(spacing: 6) {
+            SettingsGlassMenuPicker(
+                selection: Binding<Bool>(
+                    get: { !hex.wrappedValue.isEmpty },
+                    set: { custom in
+                        guard custom != !hex.wrappedValue.isEmpty else { return }
+                        hex.wrappedValue = custom ? lyricsWindowSubLineSeedHex : ""
+                    }),
+                options: [false, true],
+                label: { $0 ? L10n.t("自定义") : L10n.t("跟随正文") },
+                compact: true)
+            if !hex.wrappedValue.isEmpty {
+                AppColorPicker(selection: Binding(
+                    get: { Color(hexWithAlpha: hex.wrappedValue) },
+                    set: { hex.wrappedValue = $0.hexStringWithAlpha }))
+            }
+        }
+    }
+
+    /// 读音 / 译文跟随正文时此刻的颜色(按完整尺寸的文字颜色档;「自动」档背景跟随封面时按白字算)。
+    private var lyricsWindowSubLineSeedHex: String {
+        let tone = settings.lyricsWindowTextColorMode.tone(hasArtworkBackground: settings.lyricsWindowBackgroundMode == .artwork)
+        let color: NSColor
+        switch LyricsWindowSubLineStyle.followColor(tone) {
+        case let .white(opacity): color = NSColor.white.withAlphaComponent(opacity)
+        case .systemSecondary:
+            var resolved = NSColor.secondaryLabelColor
+            NSApp.effectiveAppearance.performAsCurrentDrawingAppearance {
+                resolved = NSColor.secondaryLabelColor.usingColorSpace(.sRGB) ?? resolved
+            }
+            color = resolved
+        case let .black(opacity): color = NSColor.black.withAlphaComponent(opacity)
+        case let .textColor(opacity):
+            let text = NSColor(hexStringWithAlpha: settings.lyricsWindowTextColorHex) ?? .white
+            color = text.withAlphaComponent(text.alphaComponent * opacity)
+        case let .fixed(rgba): color = rgba.nsColor
+        }
+        return color.hexStringWithAlpha
     }
 
     /// 迷你顶部那一行的某一样勾没勾。
@@ -4910,6 +5009,7 @@ enum LyricsWindowStyleDefaults {
             s.lyricsWindowControlScalePercent = LyricsWindowControlScale.defaultPercent
             s.lyricsWindowHDRHighlight = false
             s.lyricsWindowListTuning = .standard
+            s.lyricsWindowSubLines = .follow
             s.motionCoverEnabled = AppSettings.defaultMotionCoverEnabled
             s.spotifyCanvasEnabled = AppSettings.defaultSpotifyCanvasEnabled
         }

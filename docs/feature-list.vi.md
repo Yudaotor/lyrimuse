@@ -347,7 +347,7 @@ Khi con trỏ ở trong ô nhập, lời trên Touch Bar có thể tự thu gọ
 
 ### Cửa sổ lời
 
-Lời toàn trang theo phong cách màn hình lời bài hát của Apple Music: nền là ảnh bìa làm mờ, cả bài cuộn tới dòng hiện tại, song ca tách theo người hát, bè phụ trên dòng riêng, nốt ngân dài phóng to và phát sáng. Nền có thể theo ảnh bìa hoặc dùng màu đơn, dải màu hay kính mờ; độ đậm và cỡ chữ, màu phần đã hát, căn lề, giãn dòng cùng độ tối và độ mờ của các dòng khác đều đổi được. Mở cửa sổ từ biểu tượng trên thanh menu hoặc bằng phím tắt.
+Lời toàn trang theo phong cách màn hình lời bài hát của Apple Music: nền là ảnh bìa làm mờ, cả bài cuộn tới dòng hiện tại, song ca tách theo người hát, bè phụ trên dòng riêng, nốt ngân dài phóng to và phát sáng. Nền có thể theo ảnh bìa hoặc dùng màu đơn, dải màu hay kính mờ; độ đậm và cỡ chữ, màu phần đã hát, căn lề, giãn dòng cùng độ tối và độ mờ của các dòng khác đều đổi được. Phát âm và bản dịch có thể đặt phông, độ đậm và màu riêng. Mở cửa sổ từ biểu tượng trên thanh menu hoặc bằng phím tắt.
 
 - Cài đặt: Hiển thị lời › Cửa sổ lời › Cửa sổ lời
 - Cài đặt: Hiển thị lời › Cửa sổ lời › Nền › Nền
@@ -962,7 +962,7 @@ Tối đa một lần mỗi ngày, Lyrimuse gửi phiên bản, macOS, các tín
 
 ## Toàn bộ cài đặt
 
-Toàn bộ mục trong cửa sổ Cài đặt, theo vị trí: tổng cộng 339 mục. Gõ tên vào ô tìm kiếm ở đầu thanh bên của Cài đặt để đi thẳng tới mục đó.
+Toàn bộ mục trong cửa sổ Cài đặt, theo vị trí: tổng cộng 345 mục. Gõ tên vào ô tìm kiếm ở đầu thanh bên của Cài đặt để đi thẳng tới mục đó.
 
 ### Lời bài hát › Nguồn
 
@@ -1287,6 +1287,10 @@ Toàn bộ mục trong cửa sổ Cài đặt, theo vị trí: tổng cộng 339
 - **Tỉ lệ cỡ chữ** (chỉ Đầy đủ): Phóng to hoặc thu nhỏ cỡ chữ vốn tự điều chỉnh theo cửa sổ, áp dụng cả cho lời trên web
 - **Cỡ phát âm** (chỉ Đầy đủ)
 - **Cỡ bản dịch** (chỉ Đầy đủ)
+- **Phông phát âm** (chỉ Đầy đủ)
+- **Phông bản dịch** (chỉ Đầy đủ)
+- **Độ đậm phát âm** (chỉ Đầy đủ): “Theo lời chính” mảnh hơn lời chính hai bậc
+- **Độ đậm bản dịch** (chỉ Đầy đủ): “Theo lời chính” mảnh hơn lời chính một bậc
 
 ### Hiển thị lời › Cửa sổ lời › Bố cục
 
@@ -1315,6 +1319,8 @@ Toàn bộ mục trong cửa sổ Cài đặt, theo vị trí: tổng cộng 339
 - **Màu tùy chỉnh**
 - **Màu đã hát**
 - **Tô sáng HDR** (chỉ Đầy đủ): Làm sáng phần đã hát trên màn hình hỗ trợ HDR, tốn pin hơn khi bật
+- **Màu phát âm** (chỉ Đầy đủ)
+- **Màu bản dịch** (chỉ Đầy đủ)
 
 ### Hiển thị lời › Cửa sổ lời › Độ sâu
 

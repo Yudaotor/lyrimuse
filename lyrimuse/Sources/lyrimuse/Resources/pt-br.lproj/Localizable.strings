@@ -292,6 +292,8 @@
 "「自动」按对唱声部对齐，合唱居中，无对唱信息时靠左" = "“Auto” segue as vozes do dueto: os coros ficam centralizados e as linhas sem informação de dueto ficam à esquerda";
 "「自动」选择带刘海的屏幕；「全部屏幕」在每块屏幕上各显示一个；指定的屏幕断开时按「自动」显示，插回后回到那块屏幕" = "“Auto” escolhe a tela com notch; “Todas as telas” mostra um em cada tela; enquanto a tela escolhida estiver desconectada, segue “Auto” e volta para ela quando for reconectada";
 "「获取 Lyrimuse」" = "“Obter Lyrimuse”";
+"「跟随正文」时比正文细一档" = "“Igual à letra” fica um nível mais fino que a letra";
+"「跟随正文」时比正文细两档" = "“Igual à letra” fica dois níveis mais fino que a letra";
 "一" = "S";
 "一切就绪" = "Tudo pronto";
 "一周结束后的 %@ 推送上一周的小结" = "Enviado às %@ no fim de cada semana, com o resumo semanal";
@@ -2662,9 +2664,12 @@
 "译文" = "Tradução";
 "译文与读音" = "Tradução e pronúncia";
 "译文大小" = "Corpo da tradução";
+"译文字体" = "Fonte da tradução";
 "译文接在原文后面，排成一行，「字号」照常生效" = "A tradução vem depois do original na mesma linha e “Tamanho” continua valendo";
+"译文粗细" = "Peso da tradução";
 "译文语言" = "Idioma da tradução";
 "译文间距" = "Tradução";
+"译文颜色" = "Cor da tradução";
 "译文（同一行）" = "Tradução (mesma linha)";
 "译文（机器翻译）" = "Tradução (automática)";
 "译文（歌词源自带）" = "Tradução (da fonte de letras)";
@@ -2737,7 +2742,10 @@
 "读取本地记录文件失败" = "Não foi possível ler o arquivo de registros locais";
 "读音" = "Pronúncia";
 "读音大小" = "Corpo da pronúncia";
+"读音字体" = "Fonte da pronúncia";
+"读音粗细" = "Peso da pronúncia";
 "读音间距" = "Pronúncia";
+"读音颜色" = "Cor da pronúncia";
 "调低音量" = "Diminuir volume";
 "调整" = "Ajustar";
 "调整宽度" = "Ajustar largura";
@@ -2762,6 +2770,7 @@
 "跟随播放器启动" = "Abrir com o player";
 "跟随播放器退出" = "Encerrar com o player";
 "跟随未唱颜色" = "Igual à não cantada";
+"跟随正文" = "Igual à letra";
 "跟随窗口" = "Seguir janela";
 "跟随系统" = "Sistema";
 "跟随系统语言" = "Idioma do sistema";

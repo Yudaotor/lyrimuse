@@ -388,6 +388,16 @@ enum DebugDeepLinks {
             let text = LyricsWindowListTuning.Item.allCases.compactMap { item in values[item].map { "\(item.rawValue)=\($0)" } }
                 .joined(separator: " ")
             logger.notice("debug lyrics window typesetting \(text, privacy: .public) draft=\(draft, privacy: .public)")
+        case let .lyricsWindowSubLines(values):
+            AppSettings.shared.lyricsWindowSubLines = AppSettings.shared.lyricsWindowSubLines.overriding(values)
+            let text = LyricsWindowSubLines.Item.allCases.compactMap { item in
+                values[item].map { "\(item.rawValue)=\(item.queryValue(stored: $0))" }
+            }.joined(separator: " ")
+            logger.notice("debug lyrics window sublines \(text, privacy: .public)")
+        case let .lyricsWindowStyle(textColor, miniLayout):
+            if let textColor { AppSettings.shared.lyricsWindowTextColorMode = textColor }
+            if let miniLayout { AppSettings.shared.lyricsWindowMiniLyricsLayout = miniLayout }
+            logger.notice("debug lyrics window style textColor=\(textColor?.rawValue ?? "-", privacy: .public) miniLayout=\(miniLayout?.rawValue ?? "-", privacy: .public)")
         case let .lyricsWindowPointer(inside):
             LyricsWindowRemote.shared.simulatePointer(inside: inside)
             logger.notice("debug lyrics window pointer inside=\(inside, privacy: .public)")
@@ -546,12 +556,15 @@ enum DebugDeepLinks {
                              "layout": AppSettings.shared.menuBarPanelLayout.encoded()],
             "knockedOut": SourceKnockout.knockedOut,
             "softwareUpdate": SparkleUpdaterManager.shared.debugState,
-            // 导入字体(字体选单「已导入」区)、此刻能用的字体族(后台重读好之前是 null)、五处字体设置(空串 = 系统字体)。
+            // 导入字体(字体选单「已导入」区)、此刻能用的字体族(后台重读好之前是 null)、五处字体设置(空串 = 系统字体),
+            // 歌词窗口读音 / 译文两处(空串 = 跟随正文)。
             "fonts": [
                 "imported": CustomFontStore.shared.fonts.map { ["family": $0.familyName, "files": $0.fileNames] },
                 "available": CustomFontStore.shared.availableFamilies.map { $0.sorted() as Any } ?? NSNull(),
                 "settings": ["overlay": s.fontFamilyName, "notch": s.notchFontFamilyName, "menubar": s.menuBarLyricsFontFamily,
-                             "window": s.lyricsWindowFontFamily, "mini": s.lyricsWindowMiniFontFamily],
+                             "window": s.lyricsWindowFontFamily, "mini": s.lyricsWindowMiniFontFamily,
+                             "window-romanization": s.lyricsWindowRomanizationFontFamily,
+                             "window-translation": s.lyricsWindowTranslationFontFamily],
             ] as [String: Any],
             // `debug/hold-opens` 开着时点了没打开、只记下的外部链接,按点的先后。
             "heldOpens": ["holding": DebugExternalOpens.holding, "urls": DebugExternalOpens.held],

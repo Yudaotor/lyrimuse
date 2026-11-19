@@ -1020,6 +1020,11 @@ func runSettingsInteractionTests() {
             expectEqual(store.contains("if settings.\(field) == font.familyName { settings.\(field) = \"\" }"), true,
                         "删除字体(契约): \(field) 仍指向删掉的族时退回系统字体")
         }
+        // 歌词窗口读音 / 译文的空串是跟随正文(`LyricsWindowSubLineStyle.fontFamily`)。
+        for field in ["lyricsWindowRomanizationFontFamily", "lyricsWindowTranslationFontFamily"] {
+            expectEqual(store.contains("if settings.\(field) == font.familyName { settings.\(field) = \"\" }"), true,
+                        "删除字体(契约): \(field) 仍指向删掉的族时退回跟随正文")
+        }
         let removeBody = sourceBody("func remove(_ font: ImportedFont)", in: store)
         let reimportAt = removeBody.range(of: "if self?.isImported(font.familyName) == true {")?.lowerBound
         let resetAt = removeBody.range(of: "settings.fontFamilyName = \"\"")?.lowerBound

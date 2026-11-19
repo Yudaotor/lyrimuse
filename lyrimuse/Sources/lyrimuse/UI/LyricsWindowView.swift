@@ -54,6 +54,8 @@ final class WindowPlayback: ObservableObject {
     @Published private(set) var fullHDRHighlight = false
     /// 完整尺寸歌词列表的排版与景深(字号缩放、副行大小、三种间距、变暗、模糊,07 章决策 216)。
     @Published private(set) var fullListTuning: LyricsWindowListTuning = .standard
+    /// 完整尺寸读音行、译文行各自的字体、粗细、颜色(07 章决策 217)。指定的字体此刻不可用时已按跟随正文。
+    @Published private(set) var fullSubLines: LyricsWindowSubLines = .follow
     /// 封面均值色(十六进制,高清替代那份优先),「已唱颜色 › 跟随封面」用。
     @Published private(set) var coverAverageHex: String?
     @Published private(set) var lyricsGapMarkers: [LyricsGapMarker] = []
@@ -185,6 +187,10 @@ final class WindowPlayback: ObservableObject {
             s.$lyricsWindowControlScalePercent.map(LyricsWindowControlScale.factor(percent:)).removeDuplicates()
                 .sink { [weak self] in self?.fullControlScale = $0 },
             s.lyricsWindowListTuningPublisher.removeDuplicates().sink { [weak self] in self?.fullListTuning = $0 },
+            Publishers.CombineLatest(s.lyricsWindowSubLinesPublisher, CustomFontStore.shared.$availableFamilies)
+                .map { lines, available in lines.droppingMissingFonts(available: available) }
+                .removeDuplicates()
+                .sink { [weak self] in self?.fullSubLines = $0 },
             Publishers.CombineLatest(LocalPlaybackSource.shared.$artworkAverageHex, p.$highResAverageHex)
                 .map { system, highRes in highRes ?? system }
                 .removeDuplicates()
@@ -1951,15 +1957,21 @@ struct LyricsWindowView: View {
         }
     }
 
-    /// 译文 / 罗马音那两行的色。三个钉死档一律按正文色降透明度,不走 AM 那套 vibrancy 派生 ——
-    /// 用户明确指定了颜色,再拿封面去调一个"相近但不同"的色出来只会显得没听话。
-    /// 白字降到 0.73:Apple 同窗口实测译文的亮度(07 章决策 87)。
+    /// 译文 / 罗马音那两行跟随正文时的色(完整尺寸可以各自指定,见 `subLines`)。三个钉死档一律按正文色降透明度,
+    /// 不走 AM 那套 vibrancy 派生 —— 用户明确指定了颜色,再拿封面去调一个"相近但不同"的色出来只会显得没听话。
+    /// 各档取值在 Core `LyricsWindowSubLineStyle.followColor`(白字 0.73 是 Apple 同窗口实测译文的亮度,07 章决策 87)。
     private var lyricSecondaryTextColor: Color {
-        switch activeTextColorMode.tone(hasArtworkBackground: hasArtworkBackground) {
-        case .white: return .white.opacity(0.73)
-        case .systemPrimary: return .secondary
-        case .dark: return .black.opacity(0.5)
-        case .custom: return activeCustomTextColor.opacity(0.73)
+        subLineColor(LyricsWindowSubLineStyle.followColor(activeTextColorMode.tone(hasArtworkBackground: hasArtworkBackground)))
+    }
+
+    /// 读音 / 译文解析出来的颜色换成具体颜色。
+    private func subLineColor(_ color: LyricsWindowSubLineColor) -> Color {
+        switch color {
+        case let .white(opacity): return .white.opacity(opacity)
+        case .systemSecondary: return .secondary
+        case let .black(opacity): return .black.opacity(opacity)
+        case let .textColor(opacity): return lyricTextColor.opacity(opacity)
+        case let .fixed(rgba): return rgba.color
         }
     }
 
@@ -3378,6 +3390,10 @@ struct LyricsWindowView: View {
         guard !showsMiniLayout else { return .standard }
         return playback.fullListTuning.overriding(listTuningOverride)
     }
+    /// 读音行、译文行各自的字体、粗细、颜色:完整尺寸取设置,迷你「多行」共用这份列表、一律跟随正文(07 章决策 217)。
+    private var subLines: LyricsWindowSubLines {
+        showsMiniLayout ? .follow : playback.fullSubLines
+    }
     // 罗马音跟正文保持原来的比例(15/28);译文照 Apple 同窗口实测 0.57(07 章决策 87)。
     /// 对唱行两侧留白的基准量(见 LyricDuetLayout)。在父视图算一次传下去 —— 每一行
     /// 自己去算的话,窗口拖动时整表行都要重跑同一个式子。
@@ -3447,6 +3463,7 @@ struct LyricsWindowView: View {
                                                                    fontSize: Double(lyricFontSize),
                                                                    extraSpacingEm: Double(listTuning.extraLineSpacingEm))
                     let rowTuning = listTuning
+                    let rowSubLines = subLines
                     ForEach(Array(lyricLines.enumerated()), id: \.element.id) { index, item in
                         // .equatable():没有它,**每一行**都会跟着整页 body 重算一遍 —— 稳定播放期间主线程
                         // 曾有 ~22% 的时间耗在 NSHostingView.layout → ViewGraphRootValueUpdater.render 里,
@@ -3511,7 +3528,8 @@ struct LyricsWindowView: View {
                             weight: lyricFontWeight,
                             fill: karaokeFillColor,
                             forcedSide: lyricForcedSide,
-                            tuning: rowTuning
+                            tuning: rowTuning,
+                            subLines: rowSubLines
                         )
                         .equatable()
                         .id(item.id)
@@ -3634,7 +3652,7 @@ struct LyricsWindowView: View {
                              weight: lyricFontWeight,
                              fillColor: karaokeFillColor.map { NSColor($0) }, forcedSide: lyricForcedSide,
                              hdrHighlight: !showsMiniLayout && playback.fullHDRHighlight,
-                             layout: listTuning.layoutOnly),
+                             layout: listTuning.layoutOnly, subLines: subLines),
                 lineSpacing: lyricLineSpacing, extraLineSpacingEm: listTuning.extraLineSpacingEm,
                 depth: listTuning.depth, showsScrollIndicator: !centered,
                 // 100% 时右下那排不在指示条底下,照原样离底 40;放大后停在那排上沿再往上 8。
@@ -5300,6 +5318,8 @@ private struct LyricsLineRow: View, Equatable {
     var forcedSide: LyricDuet.Side? = nil
     /// 读音 / 译文间距、景深三项(完整尺寸的「排版」「景深」滑杆;迷你「多行」恒为默认)。字号已由父视图乘好传进来。
     var tuning: LyricsWindowListTuning = .standard
+    /// 读音行、译文行各自的字体、粗细、颜色(完整尺寸;迷你「多行」恒跟随正文)。跟随的颜色是 `secondaryColor`。
+    var subLines: LyricsWindowSubLines = .follow
 
     static func == (a: LyricsLineRow, b: LyricsLineRow) -> Bool {
         // item 比整行而不只比 id:id 只保证同一首、同一份歌词正文,译文 / 罗马音 / 逐字是后补进来的,
@@ -5338,9 +5358,13 @@ private struct LyricsLineRow: View, Equatable {
             && a.displayScale == b.displayScale
             && a.staggers == b.staggers
             && a.tuning == b.tuning
+            && a.subLines == b.subLines
     }
 
-    private var secondaryTextColor: Color { secondaryColor }
+    private var romanizationColor: Color { subLines.romanization.fixedColor?.color ?? secondaryColor }
+    private var translationColor: Color { subLines.translation.fixedColor?.color ?? secondaryColor }
+    private var romanizationFamily: String { subLines.romanization.resolvedFontFamily(main: fontFamily) }
+    private var romanizationWeight: OverlayFontWeight { subLines.romanization.resolvedWeight(main: weight, line: .romanization) }
 
     /// 背景人声整行的不透明度,叠在逐字填色之上:唱到的字也不会跟主句一样亮。
     static let backgroundVocalsOpacity: Double = 0.6
@@ -5447,26 +5471,25 @@ private struct LyricsLineRow: View, Equatable {
                 Text(roma)
                     // 复用悬浮歌词那条字体解析(空 family 走系统、装不上兜底系统),
                     // 名字带 overlay 只是它最早的出处,逻辑是通用的 —— 别再复制一份。
-                    .font(.overlayFont(familyName: fontFamily, size: romaFontSize,
-                                       weight: weight.lighter(by: OverlayFontWeight.lyricsWindowRomanizationSteps)))
-                    .foregroundStyle(secondaryTextColor)
+                    .font(.overlayFont(familyName: romanizationFamily, size: romaFontSize, weight: romanizationWeight))
+                    .foregroundStyle(romanizationColor)
                     // VStack 已隔 6pt,多出(或少掉)的是「读音间距」。
                     .padding(.top, tuning.romanizationGap(fontSize) - LyricsWindowListTuning.blockSpacing)
             }
             // 背景人声的读音排在主句读音下面,跟背景人声一样淡:正文、背景人声、两行读音按同一个先后。
             if showRomanization, backgroundDisplayWords != nil, let bgRoma = item.line.backgroundRomanization {
                 Text(bgRoma)
-                    .font(.overlayFont(familyName: fontFamily, size: romaFontSize,
-                                       weight: weight.lighter(by: OverlayFontWeight.lyricsWindowRomanizationSteps)))
-                    .foregroundStyle(secondaryTextColor)
+                    .font(.overlayFont(familyName: romanizationFamily, size: romaFontSize, weight: romanizationWeight))
+                    .foregroundStyle(romanizationColor)
                     .opacity(Self.backgroundVocalsOpacity)
             }
             if showTranslation, let tr = item.line.translation {
                 Text(tr)
-                    .font(.overlayFont(familyName: fontFamily, size: translationFontSize,
-                                       weight: weight.lighter(by: OverlayFontWeight.lyricsWindowTranslationSteps)))
+                    .font(.overlayFont(familyName: subLines.translation.resolvedFontFamily(main: fontFamily),
+                                       size: translationFontSize,
+                                       weight: subLines.translation.resolvedWeight(main: weight, line: .translation)))
                     .lyricTypesetting(tr, translation: true)
-                    .foregroundStyle(secondaryTextColor)
+                    .foregroundStyle(translationColor)
                     .padding(.top, tuning.translationGap(fontSize) - LyricsWindowListTuning.blockSpacing)
             }
         }
@@ -5545,7 +5568,10 @@ private struct LyricsLineRow: View, Equatable {
                 pausedMs: pausedMs,
                 weight: weight,
                 fill: fill,
-                romaOffset: usesPerWordRomanization ? tuning.perWordRomanizationOffset(fontSize) : 0
+                romaOffset: usesPerWordRomanization ? tuning.perWordRomanizationOffset(fontSize) : 0,
+                romaFontFamily: romanizationFamily,
+                romaWeight: romanizationWeight,
+                romaColor: subLines.romanization.fixedColor?.color
             )
         } else {
             Text(item.line.plainText ?? "")
@@ -5946,6 +5972,16 @@ private struct KaraokeLineText: View {
     var fill: Color? = nil
     /// 逐词读音离正文多远(默认 0 紧贴,「读音间距」调过时挪,可以是负的)。
     var romaOffset: CGFloat = 0
+    /// 逐词读音的字体族、粗细;nil 跟正文(字体同 `fontFamily`,粗细比正文细 `lyricsWindowRomanizationSteps` 档)。
+    var romaFontFamily: String? = nil
+    var romaWeight: OverlayFontWeight? = nil
+    /// 逐词读音的颜色;nil = `base` × `LyricsWindowSubLineStyle.perWordFollowOpacity`。
+    var romaColor: Color? = nil
+
+    private var resolvedRomaFontFamily: String { romaFontFamily ?? fontFamily }
+    private var resolvedRomaWeight: OverlayFontWeight {
+        romaWeight ?? weight.lighter(by: OverlayFontWeight.lyricsWindowRomanizationSteps)
+    }
 
     /// WrapLayout 的内容身份:行文本/字号/字体族/罗马音形态都没变时,
     /// 布局回合跳过整行 CoreText 重新测宽(见 WrapLayout.Cache 守卫注释)。
@@ -5964,7 +6000,9 @@ private struct KaraokeLineText: View {
             romaFontSize: romaFontSize,
             fontFamily: fontFamily,
             weight: weight,
-            romaOffset: romaOffset))
+            romaOffset: romaOffset,
+            romaFontFamily: resolvedRomaFontFamily,
+            romaWeight: resolvedRomaWeight))
     }
 
     private struct WindowLineKey: Hashable {
@@ -5977,6 +6015,9 @@ private struct KaraokeLineText: View {
         let weight: OverlayFontWeight
         /// 逐词读音挪了,每一列的高跟着变。
         let romaOffset: CGFloat
+        /// 逐词读音的字体、粗细改每一列的宽,同字体族那条理由。
+        let romaFontFamily: String
+        let romaWeight: OverlayFontWeight
     }
 
     var body: some View {
@@ -6090,11 +6131,11 @@ private struct KaraokeLineText: View {
                             durationMs: max(1, g.endMs - g.startMs))
                         KaraokeWordText(
                             word: romaWord,
-                            base: base.opacity(0.75), isPlaying: isPlaying,
+                            base: romaColor ?? base.opacity(LyricsWindowSubLineStyle.perWordFollowOpacity), isPlaying: isPlaying,
                             isLive: isLive(romaWord, atMs: coarseMs),
                             staticDate: coarseDate,
-                            fontSize: romaFontSize, fontFamily: fontFamily,
-                            weight: weight.lighter(by: OverlayFontWeight.lyricsWindowRomanizationSteps),
+                            fontSize: romaFontSize, fontFamily: resolvedRomaFontFamily,
+                            weight: resolvedRomaWeight,
                             reduceMotion: reduceMotion, displayScale: displayScale,
                             rises: false, // 读音不跟着抬,只有正文的字会浮起来
                             forceFilled: !isActive,

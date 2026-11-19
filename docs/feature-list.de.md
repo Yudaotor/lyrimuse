@@ -347,7 +347,7 @@ Solange der Cursor in einem Textfeld steht, kann der Liedtext auf der Touch Bar 
 
 ### Liedtextfenster
 
-Ganzseitiger Liedtext nach dem Vorbild der Liedtextansicht von Apple Music: unscharfes Cover im Hintergrund, der ganze Titel scrollt zur aktuellen Zeile, Duette nach Stimme getrennt, Hintergrundgesang in eigener Zeile, gehaltene Töne, die anschwellen und leuchten. Der Hintergrund kann dem Cover folgen oder einfarbig, ein Verlauf oder Milchglas sein, und Schriftstärke und -größe, Farbe für Gesungenes, Ausrichtung, Zeilenabstand sowie Abdunkeln und Unschärfe der übrigen Zeilen lassen sich ändern. Öffne es über das Menüleistensymbol oder einen Tastaturkurzbefehl.
+Ganzseitiger Liedtext nach dem Vorbild der Liedtextansicht von Apple Music: unscharfes Cover im Hintergrund, der ganze Titel scrollt zur aktuellen Zeile, Duette nach Stimme getrennt, Hintergrundgesang in eigener Zeile, gehaltene Töne, die anschwellen und leuchten. Der Hintergrund kann dem Cover folgen oder einfarbig, ein Verlauf oder Milchglas sein, und Schriftstärke und -größe, Farbe für Gesungenes, Ausrichtung, Zeilenabstand sowie Abdunkeln und Unschärfe der übrigen Zeilen lassen sich ändern. Umschrift und Übersetzung können jeweils eine eigene Schrift, Stärke und Farbe haben. Öffne es über das Menüleistensymbol oder einen Tastaturkurzbefehl.
 
 - Einstellungen: Liedtext-Anzeige › Liedtextfenster › Liedtextfenster
 - Einstellungen: Liedtext-Anzeige › Liedtextfenster › Hintergrund › Hintergrund
@@ -962,7 +962,7 @@ Sendet höchstens einmal täglich Version, macOS, aktivierte Funktionen und Abst
 
 ## Alle Einstellungen
 
-Alle Einstellungen des Einstellungsfensters nach Ort: insgesamt 339. Gib einen Namen in das Suchfeld oben in der Seitenleiste der Einstellungen ein, um direkt dorthin zu springen.
+Alle Einstellungen des Einstellungsfensters nach Ort: insgesamt 345. Gib einen Namen in das Suchfeld oben in der Seitenleiste der Einstellungen ein, um direkt dorthin zu springen.
 
 ### Liedtext › Quelle
 
@@ -1287,6 +1287,10 @@ Alle Einstellungen des Einstellungsfensters nach Ort: insgesamt 339. Gib einen N
 - **Schriftskalierung** (nur Vollgröße): Vergrößert oder verkleinert die an das Fenster angepasste Schriftgröße, auch im Web-Liedtext
 - **Größe Umschrift** (nur Vollgröße)
 - **Größe Übersetzung** (nur Vollgröße)
+- **Schrift Umschrift** (nur Vollgröße)
+- **Schrift Übersetzung** (nur Vollgröße)
+- **Stärke Umschrift** (nur Vollgröße): „Wie Liedtext“ ist zwei Stufen dünner als der Liedtext
+- **Stärke Übersetzung** (nur Vollgröße): „Wie Liedtext“ ist eine Stufe dünner als der Liedtext
 
 ### Liedtext-Anzeige › Liedtextfenster › Layout
 
@@ -1315,6 +1319,8 @@ Alle Einstellungen des Einstellungsfensters nach Ort: insgesamt 339. Gib einen N
 - **Eigene Farbe**
 - **Farbe gesungen**
 - **HDR-Hervorhebung** (nur Vollgröße): Hellt den gesungenen Teil auf HDR-Displays auf. Verbraucht mehr Energie
+- **Farbe Umschrift** (nur Vollgröße)
+- **Farbe Übersetzung** (nur Vollgröße)
 
 ### Liedtext-Anzeige › Liedtextfenster › Tiefe
 

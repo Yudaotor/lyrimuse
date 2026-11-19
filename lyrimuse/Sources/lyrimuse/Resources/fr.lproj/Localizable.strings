@@ -292,6 +292,8 @@
 "「自动」按对唱声部对齐，合唱居中，无对唱信息时靠左" = "« Auto » suit les voix du duo : les chœurs sont centrés, et les lignes sans info de duo restent à gauche";
 "「自动」选择带刘海的屏幕；「全部屏幕」在每块屏幕上各显示一个；指定的屏幕断开时按「自动」显示，插回后回到那块屏幕" = "« Auto » choisit l’écran avec encoche ; « Tous les écrans » en affiche une sur chaque écran ; si l’écran choisi est débranché, l’affichage suit « Auto » et y revient quand il est rebranché";
 "「获取 Lyrimuse」" = "« Obtenir Lyrimuse »";
+"「跟随正文」时比正文细一档" = "« Comme les paroles » est une graisse plus fin que les paroles";
+"「跟随正文」时比正文细两档" = "« Comme les paroles » est deux graisses plus fin que les paroles";
 "一" = "L";
 "一切就绪" = "Tout est prêt";
 "一周结束后的 %@ 推送上一周的小结" = "Envoyé à %@ à la fin de chaque semaine, avec le récap de la semaine écoulée";
@@ -2662,9 +2664,12 @@
 "译文" = "Traduction";
 "译文与读音" = "Traduction et romanisation";
 "译文大小" = "Taille traduction";
+"译文字体" = "Police traduction";
 "译文接在原文后面，排成一行，「字号」照常生效" = "La traduction suit l’original sur la même ligne, et « Taille » s’applique toujours";
+"译文粗细" = "Graisse traduction";
 "译文语言" = "Langue de traduction";
 "译文间距" = "Traduction";
+"译文颜色" = "Couleur traduction";
 "译文（同一行）" = "Traduction (même ligne)";
 "译文（机器翻译）" = "Traduction (automatique)";
 "译文（歌词源自带）" = "Traduction (de la source)";
@@ -2737,7 +2742,10 @@
 "读取本地记录文件失败" = "Impossible de lire le fichier des enregistrements locaux";
 "读音" = "Romanisation";
 "读音大小" = "Taille romanisation";
+"读音字体" = "Police romanisation";
+"读音粗细" = "Graisse romanisation";
 "读音间距" = "Romanisation";
+"读音颜色" = "Couleur romanisation";
 "调低音量" = "Baisser le volume";
 "调整" = "Ajuster";
 "调整宽度" = "Ajuster la largeur";
@@ -2762,6 +2770,7 @@
 "跟随播放器启动" = "Ouvrir avec le lecteur";
 "跟随播放器退出" = "Quitter avec le lecteur";
 "跟随未唱颜色" = "Identique";
+"跟随正文" = "Comme les paroles";
 "跟随窗口" = "Suivre la fenêtre";
 "跟随系统" = "Système";
 "跟随系统语言" = "Langue du système";

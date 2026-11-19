@@ -347,7 +347,7 @@ Tant que le curseur est dans un champ de texte, les paroles de la Touch Bar peuv
 
 ### Fenêtre des paroles
 
-Des paroles en pleine page inspirées de la vue paroles d’Apple Music : illustration floutée en fond, toute la chanson qui défile jusqu’à la ligne en cours, duos séparés par chanteur, chœurs sur leur propre ligne, notes tenues qui gonflent et brillent. Le fond peut suivre l’illustration ou être uni, en dégradé ou en verre dépoli, et la graisse et la taille du texte, la couleur chantée, l’alignement, l’interligne ainsi que l’atténuation et le flou des autres lignes sont réglables. Ouvrez-la depuis l’icône de la barre des menus ou avec un raccourci.
+Des paroles en pleine page inspirées de la vue paroles d’Apple Music : illustration floutée en fond, toute la chanson qui défile jusqu’à la ligne en cours, duos séparés par chanteur, chœurs sur leur propre ligne, notes tenues qui gonflent et brillent. Le fond peut suivre l’illustration ou être uni, en dégradé ou en verre dépoli, et la graisse et la taille du texte, la couleur chantée, l’alignement, l’interligne ainsi que l’atténuation et le flou des autres lignes sont réglables. La romanisation et la traduction peuvent avoir chacune leur propre police, graisse et couleur. Ouvrez-la depuis l’icône de la barre des menus ou avec un raccourci.
 
 - Réglages : Affichage des paroles › Fenêtre des paroles › Fenêtre des paroles
 - Réglages : Affichage des paroles › Fenêtre des paroles › Fond › Fond
@@ -962,7 +962,7 @@ Au plus une fois par jour, envoie la version, macOS, les fonctions activées et 
 
 ## Tous les réglages
 
-Tous les réglages de la fenêtre Réglages, classés par emplacement : 339 au total. Tapez un nom dans le champ de recherche en haut de la barre latérale des Réglages pour y aller directement.
+Tous les réglages de la fenêtre Réglages, classés par emplacement : 345 au total. Tapez un nom dans le champ de recherche en haut de la barre latérale des Réglages pour y aller directement.
 
 ### Paroles › Source
 
@@ -1287,6 +1287,10 @@ Tous les réglages de la fenêtre Réglages, classés par emplacement : 339 au 
 - **Échelle du texte** (taille complète uniquement) : Agrandit ou réduit la taille du texte ajustée à la fenêtre, y compris dans les paroles web
 - **Taille romanisation** (taille complète uniquement)
 - **Taille traduction** (taille complète uniquement)
+- **Police romanisation** (taille complète uniquement)
+- **Police traduction** (taille complète uniquement)
+- **Graisse romanisation** (taille complète uniquement) : « Comme les paroles » est deux graisses plus fin que les paroles
+- **Graisse traduction** (taille complète uniquement) : « Comme les paroles » est une graisse plus fin que les paroles
 
 ### Affichage des paroles › Fenêtre des paroles › Disposition
 
@@ -1315,6 +1319,8 @@ Tous les réglages de la fenêtre Réglages, classés par emplacement : 339 au 
 - **Personnalisée**
 - **Couleur chantée**
 - **Surbrillance HDR** (taille complète uniquement) : Éclaircit la partie chantée sur les écrans HDR. Consomme plus d’énergie
+- **Couleur romanisation** (taille complète uniquement)
+- **Couleur traduction** (taille complète uniquement)
 
 ### Affichage des paroles › Fenêtre des paroles › Profondeur
 

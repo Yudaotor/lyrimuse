@@ -950,20 +950,20 @@ final class WebLyricsScreenRenderer {
         let onArtwork = hasArtworkBackground
         let tone = playback.textColorMode.tone(hasArtworkBackground: onArtwork)
         let text: NSColor
-        let secondary: NSColor
         switch tone {
-        case .white:
-            text = .white
-            secondary = NSColor.white.withAlphaComponent(0.73)
-        case .systemPrimary:
-            text = resolved(.primary)
-            secondary = resolved(.secondary)
-        case .dark:
-            text = NSColor.black.withAlphaComponent(0.85)
-            secondary = NSColor.black.withAlphaComponent(0.5)
-        case .custom:
-            text = resolved(playback.textColor)
-            secondary = text.withAlphaComponent(text.alphaComponent * 0.73)
+        case .white: text = .white
+        case .systemPrimary: text = resolved(.primary)
+        case .dark: text = NSColor.black.withAlphaComponent(0.85)
+        case .custom: text = resolved(playback.textColor)
+        }
+        // 读音 / 译文跟随正文时的色,同歌词窗口(`LyricsWindowSubLineStyle.followColor`);各自指定的颜色在列表里另取。
+        let secondary: NSColor
+        switch LyricsWindowSubLineStyle.followColor(tone) {
+        case let .white(opacity): secondary = NSColor.white.withAlphaComponent(opacity)
+        case .systemSecondary: secondary = resolved(.secondary)
+        case let .black(opacity): secondary = NSColor.black.withAlphaComponent(opacity)
+        case let .textColor(opacity): secondary = text.withAlphaComponent(text.alphaComponent * opacity)
+        case let .fixed(rgba): secondary = rgba.nsColor
         }
 
         CATransaction.begin()
@@ -1082,7 +1082,9 @@ final class WebLyricsScreenRenderer {
                 scale: CGFloat(viewport.scale),
                 // 对齐跟歌词窗口完整尺寸的「对齐方式」走
                 forcedSide: playback.fullAlignment.forcedDuetSide,
-                layout: tuning.layoutOnly)
+                layout: tuning.layoutOnly,
+                // 读音 / 译文的字体、粗细、颜色同样跟歌词窗口完整尺寸(画字在 App 里,网页拿到的是画好的画面)
+                subLines: playback.fullSubLines)
             // 手机竖放不画滚动指示条:上面那一列居中,右缘一根条跟它不搭
             list.apply(LyricsLayerList.Spec(
                 lines: playback.allLines, gapMarkers: playback.lyricsGapMarkersByIndex, songwriters: playback.songwriters,

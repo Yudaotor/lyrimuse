@@ -317,7 +317,7 @@ func runLyricsWindowTests() {
                     true, "排版景深(契约): 迷你「多行」共用列表但一律按默认画,完整尺寸叠上设置页预览的草稿")
         expectEqual(sourceBytes(window, contain: "listTuning.fontSize(auto: LyricsWindowTypography.listFontSize(")
                     && sourceBytes(window, contain: "private var lyricLineSpacing: CGFloat { listTuning.lineSpacing(lyricFontSize) }")
-                    && sourceBytes(window, contain: "layout: listTuning.layoutOnly),")
+                    && sourceBytes(window, contain: "layout: listTuning.layoutOnly, subLines: subLines),")
                     && sourceBytes(window, contain: "depth: listTuning.depth, showsScrollIndicator: !centered,"),
                     true, "排版景深(契约): 图层版列表拿到字号、行距、行内间距和景深")
         expectEqual(sourceHas(layer, "let change = LyricsListRelayout.between(previous: previous?.relayoutInputs, next: next.relayoutInputs)")
@@ -337,6 +337,124 @@ func runLyricsWindowTests() {
         expectEqual(SettingsSearchCatalog.lyricsWindowFullOnlyTitles.isSuperset(of: ["字号缩放", "读音大小", "译文大小", "行间距", "读音间距",
                                                                                       "译文间距", "未唱变暗", "已唱变暗", "模糊"]),
                     true, "排版景深: 九项设置搜索只在完整尺寸")
+    }
+
+    // MARK: - 完整尺寸读音行、译文行各自的字体、粗细、颜色(LyricsWindowSubLineStyle,07 章决策 217)
+    do {
+        typealias S = LyricsWindowSubLineStyle
+        typealias C = LyricsWindowSubLineColor
+        let follow = LyricsWindowSubLines.follow
+        // 全跟随时跟加这项设置前写死的那些逐个相等:字体同正文,粗细读音细 2 档、译文细 1 档(正文粗体时是中等 / 半粗),
+        // 颜色白字 0.73、跟随系统用次级色、深色档黑 0.5、自定义正文色 × 0.73,逐词读音正文色 × 0.75。
+        var exact = true
+        for main in ["", "PingFang SC", "Lato"] {
+            exact = exact && follow.romanization.resolvedFontFamily(main: main) == main
+                && follow.translation.resolvedFontFamily(main: main) == main
+        }
+        for w in OverlayFontWeight.allCases {
+            exact = exact && follow.romanization.resolvedWeight(main: w, line: .romanization) == w.lighter(by: 2)
+                && follow.translation.resolvedWeight(main: w, line: .translation) == w.lighter(by: 1)
+        }
+        exact = exact && follow.romanization.resolvedWeight(main: .bold, line: .romanization) == .medium
+            && follow.translation.resolvedWeight(main: .bold, line: .translation) == .semibold
+        let tones: [(LyricsWindowTextColorMode.Tone, C)] = [
+            (.white, .white(opacity: 0.73)), (.systemPrimary, .systemSecondary),
+            (.dark, .black(opacity: 0.5)), (.custom, .textColor(opacity: 0.73)),
+        ]
+        for (tone, expected) in tones {
+            exact = exact && follow.romanization.color(textTone: tone) == expected && follow.translation.color(textTone: tone) == expected
+                && S.followColor(tone) == expected
+        }
+        exact = exact && follow.romanization.perWordColor == .textColor(opacity: 0.75)
+            && follow.romanization.fixedColor == nil && follow.translation.fixedColor == nil
+        expectEqual(exact, true, "读音译文样式: 全跟随时字体、粗细、颜色跟原来逐个相等")
+        expectEqual(follow.isFollow && LyricsWindowSubLines() == follow && S() == .follow
+                    && LyricsWindowSubLines.Item.allCases.allSatisfy { follow[$0] == "" }, true,
+                    "读音译文样式: 默认六项都是跟随(存空串)")
+
+        // 自动 / 浅色 / 深色三种配色下的取值:跟随时按配色变,指定颜色时三种配色都用它、不再降透明度。
+        let auto = LyricsWindowTextColorMode.auto
+        expectEqual([follow.translation.color(textTone: auto.tone(hasArtworkBackground: true)),
+                     follow.translation.color(textTone: auto.tone(hasArtworkBackground: false)),
+                     follow.translation.color(textTone: LyricsWindowTextColorMode.light.tone(hasArtworkBackground: false)),
+                     follow.translation.color(textTone: LyricsWindowTextColorMode.dark.tone(hasArtworkBackground: true))],
+                    [.white(opacity: 0.73), .systemSecondary, .white(opacity: 0.73), .black(opacity: 0.5)],
+                    "读音译文颜色: 跟随时自动(封面背景 / 别的背景)、浅色、深色各按正文色调")
+        let orange = S(colorHex: "#FF6A00")
+        let rgba = C.RGBA(red: 1, green: Double(0x6A) / 255, blue: 0, alpha: 1)
+        expectEqual([auto.tone(hasArtworkBackground: true), auto.tone(hasArtworkBackground: false),
+                      LyricsWindowTextColorMode.light.tone(hasArtworkBackground: false),
+                      LyricsWindowTextColorMode.dark.tone(hasArtworkBackground: false)].map { orange.color(textTone: $0) },
+                     Array(repeating: .fixed(rgba), count: 4), "读音译文颜色: 指定颜色时三种配色都用它,不降透明度")
+        expectEqual(orange.perWordColor, .fixed(rgba), "读音译文颜色: 逐词读音同样用指定颜色")
+        expectEqual(S(colorHex: "#FF6A0080").fixedColor?.alpha == Double(0x80) / 255, true, "读音译文颜色: 指定颜色带不透明度")
+        expectEqual(S(colorHex: "坏了").color(textTone: .white), .white(opacity: 0.73), "读音译文颜色: 认不出来的颜色按跟随")
+
+        // 字体:系统字体用记号存,解析成空串交给 NSFont.overlayFont;指定的族不可用(删掉了)时回落跟随正文。
+        expectEqual([S(fontFamily: S.systemFontFamily).resolvedFontFamily(main: "Lato"), S(fontFamily: "Georgia").resolvedFontFamily(main: "Lato")],
+                    ["", "Georgia"], "读音译文字体: 系统字体解析成空串,指定的族原样")
+        let gone = LyricsWindowSubLines(romanization: S(fontFamily: "Deleted Font", weight: .light),
+                                        translation: S(fontFamily: S.systemFontFamily))
+        let dropped = gone.droppingMissingFonts(available: ["Lato", "Georgia"])
+        expectEqual(dropped.romanization.resolvedFontFamily(main: "Lato"), "Lato", "读音译文字体: 指定的字体删掉之后回落跟随正文")
+        expectEqual(dropped.romanization.weight == .light && dropped.translation == gone.translation, true,
+                    "读音译文字体: 回落只改字体,粗细不动,系统字体记号不当成缺的字体")
+        expectEqual(gone.droppingMissingFonts(available: nil) == gone
+                    && gone.droppingMissingFonts(available: ["Deleted Font"]) == gone, true,
+                    "读音译文字体: 可用字体还没读到、或字体还在时原样")
+        expectEqual(S(weight: .heavy).resolvedWeight(main: .light, line: .romanization), .heavy, "读音译文粗细: 指定的粗细不看正文")
+
+        // 存着的字符串 ↔ 调试深链里的写法(往返不变);认不出来的粗细按跟随。
+        typealias I = LyricsWindowSubLines.Item
+        expectEqual([I.romanizationFont.storedValue(fromQuery: "follow"), I.translationFont.storedValue(fromQuery: "System"),
+                     I.romanizationFont.storedValue(fromQuery: "PingFang SC"), I.romanizationWeight.storedValue(fromQuery: "Light"),
+                     I.translationColor.storedValue(fromQuery: "ff6a00"), I.translationColor.storedValue(fromQuery: "#FF6A0080"),
+                     I.romanizationWeight.storedValue(fromQuery: "thin"), I.romanizationColor.storedValue(fromQuery: "red"),
+                     I.romanizationFont.storedValue(fromQuery: " ")],
+                    ["", S.systemFontFamily, "PingFang SC", "light", "#FF6A00FF", "#FF6A0080", nil, nil, nil],
+                    "读音译文深链: 跟随、系统字体、族名、粗细、颜色各认得,认不出来的不收")
+        let stored = LyricsWindowSubLines(romanization: S(fontFamily: "Georgia", weight: .light, colorHex: "#FF6A00FF"),
+                                          translation: S(fontFamily: S.systemFontFamily))
+        expectEqual(I.allCases.allSatisfy { $0.storedValue(fromQuery: $0.queryValue(stored: stored[$0])) == stored[$0] }, true,
+                    "读音译文深链: 存着的值写成深链再读回来不变")
+        var edited = follow
+        edited[.translationWeight] = "semibold"
+        edited[.romanizationWeight] = "不是粗细"
+        expectEqual([edited.translation.weight, edited.romanization.weight], [.semibold, nil], "读音译文粗细: 按项写,认不出来的按跟随")
+        expectEqual(follow.overriding([.romanizationColor: "#FF6A00FF"]).romanization.colorHex == "#FF6A00FF"
+                    && follow.overriding([.romanizationColor: "#FF6A00FF"]).translation == .follow, true,
+                    "读音译文样式: 深链只改带了的那几项")
+    }
+
+    // MARK: - 完整尺寸读音行、译文行的样式(源码契约)
+    do {
+        let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+        func source(_ path: String) -> String {
+            (try? String(contentsOf: root.appendingPathComponent(path), encoding: .utf8)) ?? ""
+        }
+        let window = source("lyrimuse/UI/LyricsWindowView.swift")
+        let row = source("lyrimuse/UI/LyricsLayerListRow.swift")
+        let web = source("lyrimuse/WebLyrics/WebLyricsScreen.swift")
+        let settingsView = source("lyrimuse/SettingsView.swift")
+        expectEqual(sourceHas(window, "private var subLines: LyricsWindowSubLines {\n        showsMiniLayout ? .follow : playback.fullSubLines\n    }")
+                    && sourceHas(window, "layout: listTuning.layoutOnly, subLines: subLines),")
+                    && sourceHas(window, "tuning: rowTuning,\n                            subLines: rowSubLines"),
+                    true, "读音译文样式(契约): 迷你「多行」共用列表但一律跟随,完整尺寸的两份列表都拿到设置")
+        expectEqual(sourceHas(window, ".map { lines, available in lines.droppingMissingFonts(available: available) }"), true,
+                    "读音译文字体(契约): 指定的字体不可用时窗口按跟随正文画")
+        expectEqual(sourceHas(window, "romaFontFamily: resolvedRomaFontFamily,\n            romaWeight: resolvedRomaWeight))")
+                    && sourceHas(window, "base: romaColor ?? base.opacity(LyricsWindowSubLineStyle.perWordFollowOpacity)"),
+                    true, "读音译文样式(契约): 逐词读音的字体、粗细进排版缓存键,颜色跟随时同原来正文色 × 0.75")
+        expectEqual(sourceHas(row, "romaStyle.resolvedWeight(main: style.weight, line: .romanization)")
+                    && sourceHas(row, "translationStyle.resolvedWeight(main: style.weight, line: .translation)")
+                    && sourceHas(row, "romanization = romaStyle.fixedColor?.nsColor.cgColor ?? secondary")
+                    && sourceHas(row, "romaColor fixedRomaColor: CGColor?, color: CGColor,"),
+                    true, "读音译文样式(契约): 图层版列表的读音、译文、逐词读音按各自的字体、粗细、颜色")
+        expectEqual(sourceHas(web, "subLines: playback.fullSubLines)")
+                    && sourceHas(web, "switch LyricsWindowSubLineStyle.followColor(tone) {"),
+                    true, "网页歌词(契约): 读音、译文的字体、粗细、颜色跟歌词窗口完整尺寸")
+        expectEqual(sourceHas(settingsView, "s.lyricsWindowListTuning = .standard\n            s.lyricsWindowSubLines = .follow"), true,
+                    "读音译文样式(契约): 完整尺寸「重置」把六项恢复成跟随")
     }
 
     // MARK: - 换句逐行错开
@@ -1208,7 +1326,7 @@ func runLyricsWindowTests() {
         expectEqual(window.components(separatedBy: "weight: lyricFontWeight,").count - 1 == 2
                     && sourceBytes(window, contain: "private var lyricFontWeight: OverlayFontWeight { showsMiniLayout ? playback.miniFontWeight : playback.fullFontWeight }"),
                     true, "迷你粗细接线: 多行的 SwiftUI 列表和图层版列表都按此刻尺寸那一档画")
-        expectEqual(sourceHas(window, "fontFamily: fontFamily,\n            weight: weight,\n            romaOffset: romaOffset))"), true,
+        expectEqual(sourceHas(window, "fontFamily: fontFamily,\n            weight: weight,\n            romaOffset: romaOffset,"), true,
                     "迷你粗细接线: 逐字行的排版缓存键带上粗细(和逐词读音的间距)")
         expectEqual(sourceBytes(layerRows, contain: "main = style.font(style.fontSize, style.weight)"), true,
                     "迷你粗细接线: 图层版列表的正文按 style.weight")

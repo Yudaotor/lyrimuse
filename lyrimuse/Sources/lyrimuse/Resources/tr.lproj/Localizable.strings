@@ -266,6 +266,8 @@
 "「自动」按对唱声部对齐，合唱居中，无对唱信息时靠左" = "“Otomatik” düet seslerine göre hizalar: koro ortalanır, düet bilgisi olmayan satırlar sola yaslanır";
 "「自动」选择带刘海的屏幕；「全部屏幕」在每块屏幕上各显示一个；指定的屏幕断开时按「自动」显示，插回后回到那块屏幕" = "“Otomatik” çentikli ekranı seçer; “Tüm Ekranlar” her ekranda bir tane gösterir; seçilen ekranın bağlantısı kesilince “Otomatik” gibi davranır, yeniden takılınca o ekrana döner";
 "「获取 Lyrimuse」" = "“Lyrimuse’u İndir”";
+"「跟随正文」时比正文细一档" = "“Ana Metne Uy” ana metinden bir kademe ince olur";
+"「跟随正文」时比正文细两档" = "“Ana Metne Uy” ana metinden iki kademe ince olur";
 "一" = "P";
 "一切就绪" = "Her Şey Hazır";
 "一周结束后的 %@ 推送上一周的小结" = "Geçen haftanın özeti, hafta bittikten sonra saat %@ gönderilir";
@@ -2570,9 +2572,12 @@
 "译文" = "Çeviri";
 "译文与读音" = "Çeviri ve Telaffuz";
 "译文大小" = "Çeviri Puntosu";
+"译文字体" = "Çeviri Fontu";
 "译文接在原文后面，排成一行，「字号」照常生效" = "Çeviri aynı satırda özgün metnin ardından gelir; “Punto” yine geçerlidir";
+"译文粗细" = "Çeviri Kalınlığı";
 "译文语言" = "Çeviri Dili";
 "译文间距" = "Çeviri Aralığı";
+"译文颜色" = "Çeviri Rengi";
 "译文（同一行）" = "Çeviri (Aynı Satır)";
 "译文（机器翻译）" = "Çeviri (makine)";
 "译文（歌词源自带）" = "Çeviri (kaynaktan)";
@@ -2645,7 +2650,10 @@
 "读取本地记录文件失败" = "Yerel kayıt dosyası okunamadı";
 "读音" = "Telaffuz";
 "读音大小" = "Telaffuz Puntosu";
+"读音字体" = "Telaffuz Fontu";
+"读音粗细" = "Telaffuz Kalınlığı";
 "读音间距" = "Telaffuz Aralığı";
+"读音颜色" = "Telaffuz Rengi";
 "调低音量" = "Sesi Azalt";
 "调整" = "Ayarla";
 "调整宽度" = "Genişliği Ayarla";
@@ -2670,6 +2678,7 @@
 "跟随播放器启动" = "Çalarla Birlikte Başlat";
 "跟随播放器退出" = "Çalarla Birlikte Çık";
 "跟随未唱颜色" = "Söylenmemiş Kısım Rengine Uy";
+"跟随正文" = "Ana Metne Uy";
 "跟随窗口" = "Pencereye Göre";
 "跟随系统" = "Sistem";
 "跟随系统语言" = "Sistem Dili";

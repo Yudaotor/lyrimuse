@@ -122,10 +122,12 @@ public enum SettingsSearchCatalog {
         "纯音乐/无歌词时隐藏", "广告时隐藏", "全屏时隐藏", "歌名", "歌手", "专辑", "封面", "时间", "宽度", "高度", "进度条",
     ]
     /// 只在完整预览下才有的行:「封面」那一组(含「动态封面」下面的「来源」)、「布局」里的对齐方式、控件大小和三格间距、
-    /// 「字体」里的字号缩放和读音 / 译文大小、「景深」那一组、「文字」里的 HDR 高亮、「背景」里的 Spotify Canvas。
+    /// 「字体」里的字号缩放、读音 / 译文大小和它们各自的字体、粗细,「景深」那一组,「颜色」里的 HDR 高亮和读音 / 译文颜色,
+    /// 「背景」里的 Spotify Canvas。
     public static let lyricsWindowFullOnlyTitles: Set<String> = [
         "动态封面", "来源", "动态封面缓存", "对齐方式", "控件大小", "HDR 高亮", "Spotify Canvas",
         "字号缩放", "读音大小", "译文大小", "行间距", "读音间距", "译文间距", "未唱变暗", "已唱变暗", "模糊",
+        "读音字体", "译文字体", "读音粗细", "译文粗细", "读音颜色", "译文颜色",
     ]
 
     /// 「歌词显示」页「触控栏」那一段的分段取值(`AppearanceSettingsTab.Section.touchBar`)。跟歌词窗口一样
@@ -656,6 +658,11 @@ public enum SettingsSearchCatalog {
         // 跟悬浮歌词那几条同名、不同段,各自跳到自己那一段。
         lyricsWindow("读音大小", kw: ["罗马音", "注音", "副行", "完整"], group: "字体"),
         lyricsWindow("译文大小", kw: ["翻译", "副行", "完整"], group: "字体"),
+        // 读音行、译文行各自的字体、粗细、颜色(`LyricsWindowSubLineStyle`),每项都能跟随正文,网页歌词同样生效。
+        lyricsWindow("读音字体", kw: ["罗马音", "注音", "副行", "字型", "font", "完整"], group: "字体"),
+        lyricsWindow("译文字体", kw: ["翻译", "副行", "字型", "font", "完整"], group: "字体"),
+        lyricsWindow("读音粗细", kw: ["罗马音", "注音", "副行", "字重", "weight", "完整"], group: "字体"),
+        lyricsWindow("译文粗细", kw: ["翻译", "副行", "字重", "weight", "完整"], group: "字体"),
         lyricsWindow("行间距", kw: ["行距", "间距", "松", "紧", "line spacing", "完整"], group: "布局"),
         lyricsWindow("读音间距", kw: ["罗马音", "注音", "间距", "完整"], group: "布局"),
         lyricsWindow("译文间距", kw: ["翻译", "间距", "完整"], group: "布局"),
@@ -667,6 +674,8 @@ public enum SettingsSearchCatalog {
                      kw: ["景深", "高斯模糊", "虚化", "清晰", "blur", "非当前行", "完整"], group: "景深"),
         lyricsWindow("已唱颜色", kw: ["卡拉OK", "填色", "逐字", "跟随封面", "颜色", "迷你", "完整"], group: "颜色"),
         lyricsWindow("HDR 高亮", kw: ["HDR", "EDR", "高亮", "提亮", "亮度", "已唱", "完整"], group: "颜色"),
+        lyricsWindow("读音颜色", kw: ["罗马音", "注音", "副行", "文字颜色", "完整"], group: "颜色"),
+        lyricsWindow("译文颜色", kw: ["翻译", "副行", "文字颜色", "完整"], group: "颜色"),
         // 跟灵动岛、菜单栏、触控栏那几条同名、不同段,各自跳到自己那一段。
         lyricsWindow("对齐方式", sub: "完整尺寸歌词的对齐；「自动」按对唱声部对齐",
                      kw: ["对齐", "左对齐", "居中", "右对齐", "靠左", "靠右", "对唱", "alignment"], group: "布局"),

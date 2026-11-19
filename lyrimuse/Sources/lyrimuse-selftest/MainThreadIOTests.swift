@@ -768,8 +768,8 @@ func runMainThreadIOTests() {
                     "字体选单(契约): 在后台读一次,读好回主线程整份发布")
         expectEqual(sourceHas(sourceBody("struct FontFamilyPicker: View {", in: pickerFile), ".onAppear { catalog.load() }"), true,
                     "字体选单(契约): 按钮出现就开始读")
-        expectEqual(sourceHas(pickerFile, "private var systemFamilies: [String] { catalog.snapshot?.families ?? [selection] }"), true,
-                    "字体选单(契约): 没读好时系统字体区只列选中的那款")
+        expectEqual(sourceHas(pickerFile, "catalog.snapshot?.families ?? (Self.isSubLineSentinel(selection, followsMain: followsMain) ? [] : [selection])"), true,
+                    "字体选单(契约): 没读好时系统字体区只列选中的那款(读音 / 译文的跟随正文、系统字体两个记号不算)")
     }
 
     do {

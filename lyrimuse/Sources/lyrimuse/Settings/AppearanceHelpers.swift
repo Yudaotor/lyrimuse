@@ -48,6 +48,12 @@ extension Color {
     var hexStringWithAlpha: String { NSColor(self).hexStringWithAlpha }
 }
 
+extension LyricsWindowSubLineColor.RGBA {
+    /// 读音 / 译文的指定颜色,解法同 `Color(hexWithAlpha:)`:sRGB 分量直接建 NSColor。
+    var nsColor: NSColor { NSColor(srgbRed: red, green: green, blue: blue, alpha: alpha) }
+    var color: Color { Color(nsColor: nsColor) }
+}
+
 // 字体族名+字号 -> SwiftUI Font,带显式的、可推理的降级——不用 Font.custom(name:size:)
 // 那种"取不到就默默换系统字体、你毫无感知"的隐式行为,而是先用 NSFontManager 显式查一次
 // 是否真的装了这个字体族。

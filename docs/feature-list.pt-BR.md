@@ -347,7 +347,7 @@ Enquanto o cursor está em um campo de texto, a letra na Touch Bar pode se recol
 
 ### Janela da letra
 
-Letra em página inteira inspirada na visualização de letras do Apple Music: capa desfocada ao fundo, a música inteira rolando até a linha atual, duetos separados por cantor, vocais de fundo em linha própria, notas longas que crescem e brilham. O fundo pode seguir a capa ou ser sólido, degradê ou vidro fosco, e o peso e o tamanho do texto, a cor da parte cantada, o alinhamento, as entrelinhas e o escurecimento e o desfoque das outras linhas podem ser alterados. Abra-a pelo ícone da barra de menus ou por um atalho.
+Letra em página inteira inspirada na visualização de letras do Apple Music: capa desfocada ao fundo, a música inteira rolando até a linha atual, duetos separados por cantor, vocais de fundo em linha própria, notas longas que crescem e brilham. O fundo pode seguir a capa ou ser sólido, degradê ou vidro fosco, e o peso e o tamanho do texto, a cor da parte cantada, o alinhamento, as entrelinhas e o escurecimento e o desfoque das outras linhas podem ser alterados. A pronúncia e a tradução podem ter cada uma sua própria fonte, peso e cor. Abra-a pelo ícone da barra de menus ou por um atalho.
 
 - Ajustes: Exibição da letra › Janela da letra › Janela da letra
 - Ajustes: Exibição da letra › Janela da letra › Fundo › Fundo
@@ -962,7 +962,7 @@ No máximo uma vez por dia, envia a versão, o macOS, quais recursos estão ativ
 
 ## Todos os ajustes
 
-Todos os ajustes da janela Ajustes, por local: 339 no total. Digite um nome no campo de busca no topo da barra lateral dos Ajustes para ir direto até ele.
+Todos os ajustes da janela Ajustes, por local: 345 no total. Digite um nome no campo de busca no topo da barra lateral dos Ajustes para ir direto até ele.
 
 ### Letra › Origem
 
@@ -1287,6 +1287,10 @@ Todos os ajustes da janela Ajustes, por local: 339 no total. Digite um nome no c
 - **Escala do texto** (só Completo): Aumenta ou reduz o tamanho do texto ajustado à janela, inclusive na letra na web
 - **Corpo da pronúncia** (só Completo)
 - **Corpo da tradução** (só Completo)
+- **Fonte da pronúncia** (só Completo)
+- **Fonte da tradução** (só Completo)
+- **Peso da pronúncia** (só Completo): “Igual à letra” fica dois níveis mais fino que a letra
+- **Peso da tradução** (só Completo): “Igual à letra” fica um nível mais fino que a letra
 
 ### Exibição da letra › Janela da letra › Layout
 
@@ -1315,6 +1319,8 @@ Todos os ajustes da janela Ajustes, por local: 339 no total. Digite um nome no c
 - **Cor personalizada**
 - **Cor cantada**
 - **Destaque HDR** (só Completo): Ilumina a parte cantada em telas HDR. Gasta mais energia quando ativado
+- **Cor da pronúncia** (só Completo)
+- **Cor da tradução** (só Completo)
 
 ### Exibição da letra › Janela da letra › Profundidade
 

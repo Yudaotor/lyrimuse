@@ -266,6 +266,8 @@
 "「自动」按对唱声部对齐，合唱居中，无对唱信息时靠左" = "“Tự động” căn theo bè song ca: đồng ca ở giữa, không có thông tin song ca thì căn trái";
 "「自动」选择带刘海的屏幕；「全部屏幕」在每块屏幕上各显示一个；指定的屏幕断开时按「自动」显示，插回后回到那块屏幕" = "“Tự động” chọn màn hình có notch; “Tất cả màn hình” hiện trên từng màn hình; khi màn hình đã chọn bị ngắt kết nối thì hiển thị như “Tự động”, cắm lại sẽ quay về màn hình đó";
 "「获取 Lyrimuse」" = "“Tải Lyrimuse”";
+"「跟随正文」时比正文细一档" = "“Theo lời chính” mảnh hơn lời chính một bậc";
+"「跟随正文」时比正文细两档" = "“Theo lời chính” mảnh hơn lời chính hai bậc";
 "一" = "T2";
 "一切就绪" = "Đã sẵn sàng";
 "一周结束后的 %@ 推送上一周的小结" = "Gửi tổng kết tuần trước lúc %@ sau khi hết tuần";
@@ -2570,9 +2572,12 @@
 "译文" = "Bản dịch";
 "译文与读音" = "Bản dịch & phát âm";
 "译文大小" = "Cỡ bản dịch";
+"译文字体" = "Phông bản dịch";
 "译文接在原文后面，排成一行，「字号」照常生效" = "Bản dịch nối sau nguyên văn trên một dòng, “Cỡ” vẫn áp dụng";
+"译文粗细" = "Độ đậm bản dịch";
 "译文语言" = "Ngôn ngữ dịch";
 "译文间距" = "Giãn cách bản dịch";
+"译文颜色" = "Màu bản dịch";
 "译文（同一行）" = "Bản dịch (cùng dòng)";
 "译文（机器翻译）" = "Bản dịch (dịch máy)";
 "译文（歌词源自带）" = "Bản dịch (từ nguồn lời)";
@@ -2645,7 +2650,10 @@
 "读取本地记录文件失败" = "Không đọc được tệp bản ghi cục bộ";
 "读音" = "Phát âm";
 "读音大小" = "Cỡ phát âm";
+"读音字体" = "Phông phát âm";
+"读音粗细" = "Độ đậm phát âm";
 "读音间距" = "Giãn cách phát âm";
+"读音颜色" = "Màu phát âm";
 "调低音量" = "Giảm âm lượng";
 "调整" = "Điều chỉnh";
 "调整宽度" = "Chỉnh độ rộng";
@@ -2670,6 +2678,7 @@
 "跟随播放器启动" = "Khởi động cùng trình phát";
 "跟随播放器退出" = "Thoát theo trình phát";
 "跟随未唱颜色" = "Theo màu chưa hát";
+"跟随正文" = "Theo lời chính";
 "跟随窗口" = "Theo cửa sổ";
 "跟随系统" = "Hệ thống";
 "跟随系统语言" = "Theo ngôn ngữ hệ thống";

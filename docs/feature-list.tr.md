@@ -347,7 +347,7 @@ Touch Bar’lı bir MacBook Pro’da geçerli satır söylendikçe kayar; isters
 
 ### Şarkı sözü penceresi
 
-Apple Music’in şarkı sözü görünümünden esinlenen tam sayfa şarkı sözleri: arkada bulanık kapak, geçerli satıra kayan parçanın tamamı, şarkıcılara göre ayrılan düetler, kendi satırında arka vokaller, uzatılan notalarda büyüyüp parlayan sözler. Arka plan kapağa göre olabilir ya da düz renk, gradyan veya buzlu cam; metin kalınlığı ve boyutu, söylenmiş kısmın rengi, hizalama, satır aralığı ile diğer satırların kararması ve bulanıklığı değiştirilebilir. Menü çubuğu simgesinden veya bir kestirmeyle açın.
+Apple Music’in şarkı sözü görünümünden esinlenen tam sayfa şarkı sözleri: arkada bulanık kapak, geçerli satıra kayan parçanın tamamı, şarkıcılara göre ayrılan düetler, kendi satırında arka vokaller, uzatılan notalarda büyüyüp parlayan sözler. Arka plan kapağa göre olabilir ya da düz renk, gradyan veya buzlu cam; metin kalınlığı ve boyutu, söylenmiş kısmın rengi, hizalama, satır aralığı ile diğer satırların kararması ve bulanıklığı değiştirilebilir. Telaffuz ve çeviri için ayrı font, kalınlık ve renk seçilebilir. Menü çubuğu simgesinden veya bir kestirmeyle açın.
 
 - Ayarlar: Şarkı Sözü Görünümü › Şarkı Sözü Penceresi › Şarkı Sözü Penceresi
 - Ayarlar: Şarkı Sözü Görünümü › Şarkı Sözü Penceresi › Arka Plan › Arka Plan
@@ -962,7 +962,7 @@ Neyin önce düzeltileceğine karar vermek için günde en fazla bir kez sürüm
 
 ## Tüm Ayarlar
 
-Ayarlar penceresindeki tüm ayarlar, konumlarına göre; toplam: 339. Bir ayara hemen gitmek için adını kenar çubuğunun üstündeki arama alanına yazın.
+Ayarlar penceresindeki tüm ayarlar, konumlarına göre; toplam: 345. Bir ayara hemen gitmek için adını kenar çubuğunun üstündeki arama alanına yazın.
 
 ### Şarkı Sözleri › Kaynak
 
@@ -1287,6 +1287,10 @@ Ayarlar penceresindeki tüm ayarlar, konumlarına göre; toplam: 339. Bir ayara 
 - **Yazı Ölçeği** (yalnızca Tam Boyut): Pencereye göre ayarlanan yazı boyutunu büyütür veya küçültür; tarayıcıdaki şarkı sözlerinde de geçerlidir
 - **Telaffuz Puntosu** (yalnızca Tam Boyut)
 - **Çeviri Puntosu** (yalnızca Tam Boyut)
+- **Telaffuz Fontu** (yalnızca Tam Boyut)
+- **Çeviri Fontu** (yalnızca Tam Boyut)
+- **Telaffuz Kalınlığı** (yalnızca Tam Boyut): “Ana Metne Uy” ana metinden iki kademe ince olur
+- **Çeviri Kalınlığı** (yalnızca Tam Boyut): “Ana Metne Uy” ana metinden bir kademe ince olur
 
 ### Şarkı Sözü Görünümü › Şarkı Sözü Penceresi › Yerleşim
 
@@ -1315,6 +1319,8 @@ Ayarlar penceresindeki tüm ayarlar, konumlarına göre; toplam: 339. Bir ayara 
 - **Özel Renk**
 - **Söylenmiş Kısım Rengi**
 - **HDR Vurgusu** (yalnızca Tam Boyut): HDR destekli ekranlarda söylenmiş kısmı parlatır; açıkken daha fazla enerji kullanır
+- **Telaffuz Rengi** (yalnızca Tam Boyut)
+- **Çeviri Rengi** (yalnızca Tam Boyut)
 
 ### Şarkı Sözü Görünümü › Şarkı Sözü Penceresi › Derinlik
 

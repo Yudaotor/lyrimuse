@@ -424,6 +424,27 @@ func runDeepLinkTests() {
                     && link("lyrimuse://debug/lyrics-window-typesetting?blur=abc") == nil
                     && link("lyrimuse://debug/lyrics-window-typesetting?draft=1") == nil
                     && link("lyrimuse://debug/lyrics-window-typesetting") == nil, true, "debug: 排版 / 景深越界、不是数、一项都没带都不认")
+        expectEqual(link("lyrimuse://debug/lyrics-window-sublines?romanization-font=PingFang%20SC&romanization-weight=light"
+                         + "&romanization-color=ff6a00&translation-font=system&translation-weight=follow&translation-color=follow"),
+                    .debug(.lyricsWindowSubLines(values: [.romanizationFont: "PingFang SC", .romanizationWeight: "light",
+                                                          .romanizationColor: "#FF6A00FF",
+                                                          .translationFont: LyricsWindowSubLineStyle.systemFontFamily,
+                                                          .translationWeight: "", .translationColor: ""])),
+                    "debug: 读音 / 译文的字体、粗细、颜色按参数名设对应几项,follow 是跟随正文")
+        expectEqual(link("lyrimuse://debug/lyrics-window-sublines?translation-font=follow"),
+                    .debug(.lyricsWindowSubLines(values: [.translationFont: ""])), "debug: 读音 / 译文只带一项")
+        expectEqual(link("lyrimuse://debug/lyrics-window-sublines?romanization-weight=thin") == nil
+                    && link("lyrimuse://debug/lyrics-window-sublines?translation-color=red") == nil
+                    && link("lyrimuse://debug/lyrics-window-sublines?romanization-font=") == nil
+                    && link("lyrimuse://debug/lyrics-window-sublines") == nil, true,
+                    "debug: 读音 / 译文认不出来的粗细、颜色,空字体名,一项都没带都不认")
+        expectEqual(link("lyrimuse://debug/lyrics-window-style?text-color=dark&mini-layout=list"),
+                    .debug(.lyricsWindowStyle(textColor: .dark, miniLayout: .list)), "debug: 歌词窗口文字颜色档位、迷你歌词布局")
+        expectEqual(link("lyrimuse://debug/lyrics-window-style?mini-layout=compact"),
+                    .debug(.lyricsWindowStyle(textColor: nil, miniLayout: .twoLines)), "debug: 歌词窗口样式只带一项")
+        expectEqual(link("lyrimuse://debug/lyrics-window-style?text-color=pink") == nil
+                    && link("lyrimuse://debug/lyrics-window-style?text-color=light&mini-layout=grid") == nil
+                    && link("lyrimuse://debug/lyrics-window-style") == nil, true, "debug: 歌词窗口样式认不出来、一项都没带都不认")
         expectEqual(link("lyrimuse://debug/lyrics-window-pointer?inside=1"), .debug(.lyricsWindowPointer(inside: true)),
                     "debug: 当作指针进了歌词窗口")
         expectEqual(link("lyrimuse://debug/lyrics-window-pointer?inside=0"), .debug(.lyricsWindowPointer(inside: false)),
@@ -1015,6 +1036,12 @@ func runDeepLinkTests() {
             .debug(.lyricsWindowTypesetting(values: [.fontScale: 100])),
             .debug(.lyricsWindowTypesetting(values: [.lineSpacing: -12.5, .romanizationGap: 3, .blur: 0, .pastDim: 150], draft: true)),
             .debug(.lyricsWindowTypesetting(values: Dictionary(uniqueKeysWithValues: LyricsWindowListTuning.Item.allCases.map { ($0, $0.defaultPercent) }))),
+            .debug(.lyricsWindowSubLines(values: [.romanizationFont: "PingFang SC", .translationColor: "#FF6A0080"])),
+            .debug(.lyricsWindowStyle(textColor: .light, miniLayout: nil)),
+            .debug(.lyricsWindowStyle(textColor: .custom, miniLayout: .oneLine)),
+            .debug(.lyricsWindowSubLines(values: [.romanizationFont: LyricsWindowSubLineStyle.systemFontFamily, .romanizationWeight: "heavy",
+                                                  .romanizationColor: "", .translationFont: "", .translationWeight: "",
+                                                  .translationColor: "#FFFFFFBA"])),
             .debug(.lyricsWindowPointer(inside: true)), .debug(.lyricsWindowPointer(inside: false)),
             .debug(.lyricsWindowTrafficHover(x: 26, y: 19.5)), .debug(.lyricsWindowTrafficHoverOff),
             .debug(.lyricsWindowTrafficHoverLegacy(true)), .debug(.lyricsWindowTrafficHoverLegacy(false)),

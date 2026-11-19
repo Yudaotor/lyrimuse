@@ -428,6 +428,8 @@ func runSettingsSearchTests() {
         block(from: "    private func lyricsWindowAlignmentRows(", to: "\n    }\n"),
         block(from: "    private var lyricsWindowFontScaleTiles: some View {", to: "\n    }\n"),
         block(from: "    private var lyricsWindowDepthTiles: some View {", to: "\n    }\n"),
+        block(from: "    private var lyricsWindowSubLineFontTiles: some View {", to: "\n    }\n"),
+        block(from: "    private var lyricsWindowSubLineColorTiles: some View {", to: "\n    }\n"),
     ]
     expectEqual(miniBlocks.allSatisfy { !$0.isEmpty } && fullBlocks.allSatisfy { !$0.isEmpty }, true,
                 "歌词窗口尺寸(契约): 认得出设置页里只在一种尺寸下才画的几组(认不出 = 改名了,先改这里)")

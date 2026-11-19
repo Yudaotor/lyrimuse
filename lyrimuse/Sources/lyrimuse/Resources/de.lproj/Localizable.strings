@@ -292,6 +292,8 @@
 "「自动」按对唱声部对齐，合唱居中，无对唱信息时靠左" = "„Auto“ folgt den Duettstimmen: Chorpassagen zentriert, Zeilen ohne Duettinfo links";
 "「自动」选择带刘海的屏幕；「全部屏幕」在每块屏幕上各显示一个；指定的屏幕断开时按「自动」显示，插回后回到那块屏幕" = "„Auto“ wählt das Display mit Notch; „Alle Displays“ zeigt je einen auf jedem Display; ist das gewählte Display getrennt, gilt „Auto“, bis es wieder angeschlossen ist";
 "「获取 Lyrimuse」" = "„Lyrimuse laden“";
+"「跟随正文」时比正文细一档" = "„Wie Liedtext“ ist eine Stufe dünner als der Liedtext";
+"「跟随正文」时比正文细两档" = "„Wie Liedtext“ ist zwei Stufen dünner als der Liedtext";
 "一" = "M";
 "一切就绪" = "Alles bereit";
 "一周结束后的 %@ 推送上一周的小结" = "Um %@ nach Ende jeder Woche, mit dem Rückblick auf die Vorwoche";
@@ -2662,9 +2664,12 @@
 "译文" = "Übersetzung";
 "译文与读音" = "Übersetzung & Umschrift";
 "译文大小" = "Größe Übersetzung";
+"译文字体" = "Schrift Übersetzung";
 "译文接在原文后面，排成一行，「字号」照常生效" = "Die Übersetzung folgt dem Original in derselben Zeile, „Größe“ gilt weiterhin";
+"译文粗细" = "Stärke Übersetzung";
 "译文语言" = "Übersetzungssprache";
 "译文间距" = "Abstand Übersetzung";
+"译文颜色" = "Farbe Übersetzung";
 "译文（同一行）" = "Übersetzung (gleiche Zeile)";
 "译文（机器翻译）" = "Übersetzung (maschinell)";
 "译文（歌词源自带）" = "Übersetzung (von der Quelle)";
@@ -2737,7 +2742,10 @@
 "读取本地记录文件失败" = "Lokale Datensatzdatei nicht lesbar";
 "读音" = "Umschrift";
 "读音大小" = "Größe Umschrift";
+"读音字体" = "Schrift Umschrift";
+"读音粗细" = "Stärke Umschrift";
 "读音间距" = "Abstand Umschrift";
+"读音颜色" = "Farbe Umschrift";
 "调低音量" = "Leiser";
 "调整" = "Anpassen";
 "调整宽度" = "Breite anpassen";
@@ -2762,6 +2770,7 @@
 "跟随播放器启动" = "Mit Player starten";
 "跟随播放器退出" = "Mit Player beenden";
 "跟随未唱颜色" = "Gleich";
+"跟随正文" = "Wie Liedtext";
 "跟随窗口" = "Fenster folgen";
 "跟随系统" = "System";
 "跟随系统语言" = "Systemsprache";

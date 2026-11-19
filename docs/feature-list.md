@@ -347,7 +347,7 @@ While the cursor is in a text field, the Touch Bar lyrics can collapse so input 
 
 ### Lyrics window
 
-Full-page lyrics modelled on Apple Music's lyrics view: blurred artwork behind, the whole song scrolling to the current line, duets split by singer, background vocals on their own line, held notes that swell and glow. The background can follow the artwork or be solid, a gradient or frosted glass, and the text weight and size, sung color, alignment, line spacing and the dimming and blur of other lines can be changed. Open it from the menu bar icon or a shortcut.
+Full-page lyrics modelled on Apple Music's lyrics view: blurred artwork behind, the whole song scrolling to the current line, duets split by singer, background vocals on their own line, held notes that swell and glow. The background can follow the artwork or be solid, a gradient or frosted glass, and the text weight and size, sung color, alignment, line spacing and the dimming and blur of other lines can be changed. Romanization and translation can each have their own font, weight and color. Open it from the menu bar icon or a shortcut.
 
 - Settings: Lyrics Display › Lyrics Window › Lyrics Window
 - Settings: Lyrics Display › Lyrics Window › Background › Background
@@ -962,7 +962,7 @@ At most once a day, sends the version, macOS, which features are on and crash su
 
 ## Every setting
 
-Every setting in the Settings window, by where it lives: 339 in all. Type a name into the search field at the top of the Settings sidebar to jump straight to it.
+Every setting in the Settings window, by where it lives: 345 in all. Type a name into the search field at the top of the Settings sidebar to jump straight to it.
 
 ### Lyrics › Source
 
@@ -1287,6 +1287,10 @@ Every setting in the Settings window, by where it lives: 339 in all. Type a name
 - **Font Scale** (full size only): Scales up or down the font size that adjusts with the window, Web Lyrics included
 - **Romanization Size** (full size only)
 - **Translation Size** (full size only)
+- **Romanization Font** (full size only)
+- **Translation Font** (full size only)
+- **Romanization Weight** (full size only): Match Lyrics is two steps lighter than the lyrics
+- **Translation Weight** (full size only): Match Lyrics is one step lighter than the lyrics
 
 ### Lyrics Display › Lyrics Window › Layout
 
@@ -1315,6 +1319,8 @@ Every setting in the Settings window, by where it lives: 339 in all. Type a name
 - **Custom Color**
 - **Sung Color**
 - **HDR Highlight** (full size only): Brightens the sung part on HDR displays. Uses more power when on
+- **Romanization Color** (full size only)
+- **Translation Color** (full size only)
 
 ### Lyrics Display › Lyrics Window › Depth
 

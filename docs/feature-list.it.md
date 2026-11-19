@@ -347,7 +347,7 @@ Mentre il cursore è in un campo di testo, il testo sulla Touch Bar può comprim
 
 ### Finestra testo
 
-Testo a tutta pagina ispirato alla vista del testo di Apple Music: illustrazione sfocata sullo sfondo, l’intero brano che scorre fino alla riga attuale, duetti divisi per cantante, cori su una riga a parte, note tenute che si gonfiano e brillano. Lo sfondo può seguire l’illustrazione o essere uniforme, a gradiente o smerigliato, e puoi cambiare spessore e dimensione del testo, colore cantato, allineamento, interlinea e l’attenuazione e la sfocatura delle altre righe. Aprila dall’icona nella barra dei menu o con una scorciatoia.
+Testo a tutta pagina ispirato alla vista del testo di Apple Music: illustrazione sfocata sullo sfondo, l’intero brano che scorre fino alla riga attuale, duetti divisi per cantante, cori su una riga a parte, note tenute che si gonfiano e brillano. Lo sfondo può seguire l’illustrazione o essere uniforme, a gradiente o smerigliato, e puoi cambiare spessore e dimensione del testo, colore cantato, allineamento, interlinea e l’attenuazione e la sfocatura delle altre righe. Pronuncia e traduzione possono avere ciascuna font, spessore e colore propri. Aprila dall’icona nella barra dei menu o con una scorciatoia.
 
 - Impostazioni: Visualizzazione testo › Finestra testo › Finestra testo
 - Impostazioni: Visualizzazione testo › Finestra testo › Sfondo › Sfondo
@@ -962,7 +962,7 @@ Al massimo una volta al giorno invia versione, macOS, funzioni attive e riepilog
 
 ## Tutte le impostazioni
 
-Tutte le impostazioni della finestra Impostazioni, per posizione: 339 in tutto. Scrivi un nome nel campo di ricerca in cima alla barra laterale delle Impostazioni per andarci direttamente.
+Tutte le impostazioni della finestra Impostazioni, per posizione: 345 in tutto. Scrivi un nome nel campo di ricerca in cima alla barra laterale delle Impostazioni per andarci direttamente.
 
 ### Testo › Fonte
 
@@ -1287,6 +1287,10 @@ Tutte le impostazioni della finestra Impostazioni, per posizione: 339 in tutto. 
 - **Scala del testo** (solo Completa): Ingrandisce o riduce la dimensione del testo adattata alla finestra, anche nel testo web
 - **Corpo pronuncia** (solo Completa)
 - **Corpo traduzione** (solo Completa)
+- **Font pronuncia** (solo Completa)
+- **Font traduzione** (solo Completa)
+- **Spessore pronuncia** (solo Completa): “Come il testo” è due livelli più sottile del testo
+- **Spessore traduzione** (solo Completa): “Come il testo” è un livello più sottile del testo
 
 ### Visualizzazione testo › Finestra testo › Layout
 
@@ -1315,6 +1319,8 @@ Tutte le impostazioni della finestra Impostazioni, per posizione: 339 in tutto. 
 - **Colore personalizzato**
 - **Colore cantato**
 - **Evidenziazione HDR** (solo Completa): Illumina la parte cantata sugli schermi HDR. Consuma più energia se attiva
+- **Colore pronuncia** (solo Completa)
+- **Colore traduzione** (solo Completa)
 
 ### Visualizzazione testo › Finestra testo › Profondità
 

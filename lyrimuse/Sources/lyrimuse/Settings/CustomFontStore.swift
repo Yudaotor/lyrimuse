@@ -129,7 +129,7 @@ final class CustomFontStore: ObservableObject {
     }
 
     /// 反注册并删除这一族的全部文件,再把仍指向这一族的字体设置(悬浮歌词、灵动岛、菜单栏、歌词窗口完整 /
-    /// 迷你五处)退回系统字体 —— 不退的话别处的按钮上留着一款查无此字的族名。系统里另装了同名字体族时不退,
+    /// 迷你五处)退回系统字体、歌词窗口读音 / 译文那两处退回跟随正文 —— 不退的话别处的按钮上留着一款查无此字的族名。系统里另装了同名字体族时不退,
     /// 那一族还在。先反注册再删文件:反过来万一删除中途失败,会留下「文件没了但 Core Text 仍然认得」的悬空注册。
     /// 名单读回来之前又导入了同一族时也不退:这次读到的名单可能是导入之前的(见 04 章决策 110)。
     func remove(_ font: ImportedFont) {
@@ -149,12 +149,17 @@ final class CustomFontStore: ObservableObject {
             }
             let settings = AppSettings.shared
             let reset = [settings.fontFamilyName, settings.notchFontFamilyName, settings.menuBarLyricsFontFamily,
-                         settings.lyricsWindowFontFamily, settings.lyricsWindowMiniFontFamily].filter { $0 == font.familyName }.count
+                         settings.lyricsWindowFontFamily, settings.lyricsWindowMiniFontFamily,
+                         settings.lyricsWindowRomanizationFontFamily, settings.lyricsWindowTranslationFontFamily]
+                .filter { $0 == font.familyName }.count
             if settings.fontFamilyName == font.familyName { settings.fontFamilyName = "" }
             if settings.notchFontFamilyName == font.familyName { settings.notchFontFamilyName = "" }
             if settings.menuBarLyricsFontFamily == font.familyName { settings.menuBarLyricsFontFamily = "" }
             if settings.lyricsWindowFontFamily == font.familyName { settings.lyricsWindowFontFamily = "" }
             if settings.lyricsWindowMiniFontFamily == font.familyName { settings.lyricsWindowMiniFontFamily = "" }
+            // 读音 / 译文的空串是跟随正文(`LyricsWindowSubLineStyle.fontFamily`)。
+            if settings.lyricsWindowRomanizationFontFamily == font.familyName { settings.lyricsWindowRomanizationFontFamily = "" }
+            if settings.lyricsWindowTranslationFontFamily == font.familyName { settings.lyricsWindowTranslationFontFamily = "" }
             logger.notice("remove \(font.familyName, privacy: .public): gone from refreshed list (\(available.count, privacy: .public) families), reset \(reset, privacy: .public) settings")
         }
     }

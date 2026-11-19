@@ -19,8 +19,11 @@ import UniformTypeIdentifiers
 // 挑选体验跟系统字体一致(同样能搜、同样自己渲染族名)。
 @MainActor
 struct FontFamilyPicker: View {
-    /// 空字符串 = 跟随系统字体。
+    /// 空字符串 = 跟随系统字体(`followsMain` 时是跟随正文)。
     @Binding var selection: String
+    /// 歌词窗口读音 / 译文的字体:列表顶上多一行「跟随正文」(空串),「系统字体」那一行存
+    /// `LyricsWindowSubLineStyle.systemFontFamily`(`LyricsWindowSubLineStyle.fontFamily`)。
+    var followsMain = false
 
     /// 用户从本地文件导入的字体(见 CustomFontStore 头注)。跟系统字体列表并列展示在
     /// 同一个选择器里——对选字体这件事来说,一款字体是系统自带的还是自己导入的不该是
@@ -34,7 +37,17 @@ struct FontFamilyPicker: View {
 
     /// 系统字体族快照还没读好时,系统字体区只列选中的那一款,下面跟一个转圈。导入字体启动时就注册了,也在快照里,
     /// 而且删掉之后快照不会变 —— 所以列出来之前再按 `CustomFontStore` 过一遍(见 `filtered`)。
-    private var systemFamilies: [String] { catalog.snapshot?.families ?? [selection] }
+    private var systemFamilies: [String] {
+        catalog.snapshot?.families ?? (Self.isSubLineSentinel(selection, followsMain: followsMain) ? [] : [selection])
+    }
+
+    /// 「系统字体」那一行的值。
+    private var systemFontValue: String { followsMain ? LyricsWindowSubLineStyle.systemFontFamily : "" }
+
+    /// `followsMain` 时的两个记号(跟随正文、系统字体),不是族名。
+    private static func isSubLineSentinel(_ family: String, followsMain: Bool) -> Bool {
+        followsMain && (family.isEmpty || family == LyricsWindowSubLineStyle.systemFontFamily)
+    }
 
     /// 中文字体的族名是英文的("PingFang SC"),但用户多半想按中文名找。两个都拿来匹配(`FontFamilySearch`)。
     private func localizedName(of family: String) -> String? { catalog.snapshot?.localizedNames[family] }
@@ -71,6 +84,15 @@ struct FontFamilyPicker: View {
 
     private var currentLabel: String { Self.displayName(for: selection) }
 
+    /// 读音 / 译文那两处字体的显示名:空串「跟随正文」、记号「系统字体」,其余同 `displayName(for:)`。
+    static func subLineDisplayName(for family: String) -> String {
+        if family.isEmpty { return L10n.t("跟随正文") }
+        if family == LyricsWindowSubLineStyle.systemFontFamily { return L10n.t("系统字体") }
+        return displayName(for: family)
+    }
+
+    private var buttonLabel: String { followsMain ? Self.subLineDisplayName(for: selection) : currentLabel }
+
     var body: some View {
         Button {
             query = ""
@@ -79,7 +101,7 @@ struct FontFamilyPicker: View {
         } label: {
             HStack(spacing: 5) {
                 // 按钮上就用选中的那款字体显示它自己的名字,不用点开也知道现在是什么样。
-                Text(currentLabel)
+                Text(buttonLabel)
                     .font(selection.isEmpty || selectionMissing ? .system(size: 13) : .custom(selection, size: 13))
                     .lineLimit(1)
                 Image(systemName: "chevron.down")
@@ -115,7 +137,10 @@ struct FontFamilyPicker: View {
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 0) {
                     if query.trimmingCharacters(in: .whitespaces).isEmpty {
-                        row(family: "", label: L10n.t("系统字体"))
+                        if followsMain {
+                            row(family: "", label: L10n.t("跟随正文"))
+                        }
+                        row(family: systemFontValue, label: L10n.t("系统字体"))
                         Divider().padding(.vertical, 2)
                     }
                     if !filteredCustomFonts.isEmpty {
@@ -128,7 +153,7 @@ struct FontFamilyPicker: View {
                                     showingList = false
                                 },
                                 onDelete: {
-                                    // 五处字体设置里仍指向这一族的,由 remove 一起退回系统字体。
+                                    // 各处字体设置里仍指向这一族的,由 remove 一起退回系统字体(读音 / 译文退回跟随正文)。
                                     customFonts.remove(font)
                                 }
                             )
@@ -235,7 +260,7 @@ struct FontFamilyPicker: View {
                 VStack(alignment: .leading, spacing: 0) {
                     // 每一行用这一款字体本身渲染 —— 这才是挑字体时真正需要看到的东西。
                     Text(label)
-                        .font(family.isEmpty ? .system(size: 13) : .custom(family, size: 13))
+                        .font(family.isEmpty || family == systemFontValue ? .system(size: 13) : .custom(family, size: 13))
                         .lineLimit(1)
                     if let localized = localizedName(of: family) {
                         Text(localized)

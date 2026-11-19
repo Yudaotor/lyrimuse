@@ -509,6 +509,12 @@ final class AppSettings: ObservableObject {
         static let lyricsWindowUpcomingDimPercent = "np:lyricsWindowUpcomingDimPercent"
         static let lyricsWindowPastDimPercent = "np:lyricsWindowPastDimPercent"
         static let lyricsWindowBlurPercent = "np:lyricsWindowBlurPercent"
+        static let lyricsWindowRomanizationFontFamily = "np:lyricsWindowRomanizationFontFamily"
+        static let lyricsWindowTranslationFontFamily = "np:lyricsWindowTranslationFontFamily"
+        static let lyricsWindowRomanizationFontWeight = "np:lyricsWindowRomanizationFontWeight"
+        static let lyricsWindowTranslationFontWeight = "np:lyricsWindowTranslationFontWeight"
+        static let lyricsWindowRomanizationColorHex = "np:lyricsWindowRomanizationColorHex"
+        static let lyricsWindowTranslationColorHex = "np:lyricsWindowTranslationColorHex"
         static let lyricsWindowMiniHeaderFields = "np:lyricsWindowMiniHeaderFields"
         static let lyricsWindowMiniShowsTime = "np:lyricsWindowMiniShowsTime"
         static let lyricsWindowMiniShowsCover = "np:lyricsWindowMiniShowsCover"
@@ -1952,6 +1958,61 @@ final class AppSettings: ObservableObject {
             }
             .eraseToAnyPublisher()
     }
+    // 完整尺寸读音行、译文行各自的字体、粗细、颜色(「字体」「颜色」里那六格),空串都是跟随正文;字体另有「系统字体」那个记号
+    // (`LyricsWindowSubLineStyle.systemFontFamily`),粗细存 `OverlayFontWeight` 的原始值。合起来读写走 `lyricsWindowSubLines`。
+    // 迷你尺寸没有这几项,网页歌词跟完整尺寸同一套。见 07 章决策 217。
+    @Published var lyricsWindowRomanizationFontFamily: String {
+        didSet { defaults.set(lyricsWindowRomanizationFontFamily, forKey: Keys.lyricsWindowRomanizationFontFamily) }
+    }
+    @Published var lyricsWindowTranslationFontFamily: String {
+        didSet { defaults.set(lyricsWindowTranslationFontFamily, forKey: Keys.lyricsWindowTranslationFontFamily) }
+    }
+    @Published var lyricsWindowRomanizationFontWeight: String {
+        didSet { defaults.set(lyricsWindowRomanizationFontWeight, forKey: Keys.lyricsWindowRomanizationFontWeight) }
+    }
+    @Published var lyricsWindowTranslationFontWeight: String {
+        didSet { defaults.set(lyricsWindowTranslationFontWeight, forKey: Keys.lyricsWindowTranslationFontWeight) }
+    }
+    @Published var lyricsWindowRomanizationColorHex: String {
+        didSet { defaults.set(lyricsWindowRomanizationColorHex, forKey: Keys.lyricsWindowRomanizationColorHex) }
+    }
+    @Published var lyricsWindowTranslationColorHex: String {
+        didSet { defaults.set(lyricsWindowTranslationColorHex, forKey: Keys.lyricsWindowTranslationColorHex) }
+    }
+    /// 六项合成两行;写的时候只改变了的那几项(没变的不广播)。
+    var lyricsWindowSubLines: LyricsWindowSubLines {
+        get {
+            LyricsWindowSubLines().overriding([
+                .romanizationFont: lyricsWindowRomanizationFontFamily,
+                .romanizationWeight: lyricsWindowRomanizationFontWeight,
+                .romanizationColor: lyricsWindowRomanizationColorHex,
+                .translationFont: lyricsWindowTranslationFontFamily,
+                .translationWeight: lyricsWindowTranslationFontWeight,
+                .translationColor: lyricsWindowTranslationColorHex,
+            ])
+        }
+        set {
+            if newValue[.romanizationFont] != lyricsWindowRomanizationFontFamily { lyricsWindowRomanizationFontFamily = newValue[.romanizationFont] }
+            if newValue[.romanizationWeight] != lyricsWindowRomanizationFontWeight { lyricsWindowRomanizationFontWeight = newValue[.romanizationWeight] }
+            if newValue[.romanizationColor] != lyricsWindowRomanizationColorHex { lyricsWindowRomanizationColorHex = newValue[.romanizationColor] }
+            if newValue[.translationFont] != lyricsWindowTranslationFontFamily { lyricsWindowTranslationFontFamily = newValue[.translationFont] }
+            if newValue[.translationWeight] != lyricsWindowTranslationFontWeight { lyricsWindowTranslationFontWeight = newValue[.translationWeight] }
+            if newValue[.translationColor] != lyricsWindowTranslationColorHex { lyricsWindowTranslationColorHex = newValue[.translationColor] }
+        }
+    }
+    /// 六项任一变了就发出新的一份(读发布出来的值现算,理由同 `lyricsWindowListTuningPublisher`)。
+    var lyricsWindowSubLinesPublisher: AnyPublisher<LyricsWindowSubLines, Never> {
+        Publishers.CombineLatest(
+            Publishers.CombineLatest3($lyricsWindowRomanizationFontFamily, $lyricsWindowRomanizationFontWeight,
+                                      $lyricsWindowRomanizationColorHex),
+            Publishers.CombineLatest3($lyricsWindowTranslationFontFamily, $lyricsWindowTranslationFontWeight,
+                                      $lyricsWindowTranslationColorHex))
+            .map { r, t in
+                LyricsWindowSubLines().overriding([.romanizationFont: r.0, .romanizationWeight: r.1, .romanizationColor: r.2,
+                                                   .translationFont: t.0, .translationWeight: t.1, .translationColor: t.2])
+            }
+            .eraseToAnyPublisher()
+    }
     // MARK: 迷你尺寸自己那一套外观
     //
     // 跟上面完整尺寸那组**同名同结构、各存各的**。两种尺寸是两种用法:完整尺寸多半是摊开来看的,
@@ -3082,6 +3143,12 @@ final class AppSettings: ObservableObject {
             (defaults.object(forKey: Keys.lyricsWindowPastDimPercent) as? Double) ?? LyricsWindowListTuning.Item.pastDim.defaultPercent)
         lyricsWindowBlurPercent = LyricsWindowListTuning.Item.blur.clamped(
             (defaults.object(forKey: Keys.lyricsWindowBlurPercent) as? Double) ?? LyricsWindowListTuning.Item.blur.defaultPercent)
+        lyricsWindowRomanizationFontFamily = defaults.string(forKey: Keys.lyricsWindowRomanizationFontFamily) ?? ""
+        lyricsWindowTranslationFontFamily = defaults.string(forKey: Keys.lyricsWindowTranslationFontFamily) ?? ""
+        lyricsWindowRomanizationFontWeight = defaults.string(forKey: Keys.lyricsWindowRomanizationFontWeight) ?? ""
+        lyricsWindowTranslationFontWeight = defaults.string(forKey: Keys.lyricsWindowTranslationFontWeight) ?? ""
+        lyricsWindowRomanizationColorHex = defaults.string(forKey: Keys.lyricsWindowRomanizationColorHex) ?? ""
+        lyricsWindowTranslationColorHex = defaults.string(forKey: Keys.lyricsWindowTranslationColorHex) ?? ""
         lyricsWindowHDRHighlight = (defaults.object(forKey: Keys.lyricsWindowHDRHighlight) as? Bool) ?? false
         // 没存过(全新安装 / 老用户升级)才落默认档。不能用 `integer(forKey:)` 直接取 ——
         // 它对"没存过"和"存了 0(一样都不显示)"返回同一个 0,后者是合法选择,会被悄悄改回默认。

@@ -218,6 +218,9 @@ struct LyricsLayerRowStyle: Equatable, @unchecked Sendable {
     var hdrHighlight = false
     /// 完整尺寸的读音 / 译文间距(`LyricsWindowListTuning`)。只放排版那几项(`layoutOnly`):这份进重建键,景深滑杆不该触发重建。
     var layout: LyricsWindowListTuning = .standard
+    /// 完整尺寸读音行、译文行各自的字体、粗细、颜色(`LyricsWindowSubLineStyle`);跟随的颜色是 `secondaryColor`,
+    /// 逐词读音跟随时是正文色 × `perWordFollowOpacity`。迷你「多行」和灵动岛恒为 `.follow`。
+    var subLines: LyricsWindowSubLines = .follow
 
     /// 不分声部的那几样(间奏点、末尾创作者)靠哪一侧。
     var listSide: LyricDuet.Side { forcedSide ?? (centered ? .center : .leading) }
@@ -253,7 +256,11 @@ struct LyricsLayerRowInk: @unchecked Sendable {
     let translation: NSFont
     let footerNames: NSFont
     let text: CGColor
-    let secondary: CGColor
+    /// 整行读音、译文的颜色。
+    let romanization: CGColor
+    let translationColor: CGColor
+    /// 逐词读音指定的颜色;nil = 正文色 × `LyricsWindowSubLineStyle.perWordFollowOpacity`。
+    let perWordRomanization: CGColor?
     /// 当前行逐字填色的已唱色:迷你的「已唱颜色」,没设时就是 `text`。
     let activeText: CGColor
     /// 末尾创作者行的标签(「创作者：」)和名单分隔号,按界面语言取。
@@ -264,9 +271,12 @@ struct LyricsLayerRowInk: @unchecked Sendable {
     init(style: LyricsLayerRowStyle, appearance: NSAppearance) {
         main = style.font(style.fontSize, style.weight)
         background = style.font(style.fontSize * LyricsLayerRowStyle.backgroundScale, style.weight)
-        roma = style.font(style.romaFontSize, style.weight.lighter(by: OverlayFontWeight.lyricsWindowRomanizationSteps))
-        translation = style.font(style.translationFontSize,
-                                 style.weight.lighter(by: OverlayFontWeight.lyricsWindowTranslationSteps))
+        let romaStyle = style.subLines.romanization, translationStyle = style.subLines.translation
+        roma = NSFont.overlayFont(familyName: romaStyle.resolvedFontFamily(main: style.fontFamily), size: style.romaFontSize,
+                                  weight: romaStyle.resolvedWeight(main: style.weight, line: .romanization))
+        translation = NSFont.overlayFont(familyName: translationStyle.resolvedFontFamily(main: style.fontFamily),
+                                         size: style.translationFontSize,
+                                         weight: translationStyle.resolvedWeight(main: style.weight, line: .translation))
         footerNames = style.font(style.fontSize, .regular)
         let active = style.fillColor ?? style.textColor
         var text = style.textColor.cgColor, secondary = style.secondaryColor.cgColor, activeText = active.cgColor
@@ -276,7 +286,9 @@ struct LyricsLayerRowInk: @unchecked Sendable {
             activeText = active.cgColor
         }
         self.text = text
-        self.secondary = secondary
+        romanization = romaStyle.fixedColor?.nsColor.cgColor ?? secondary
+        translationColor = translationStyle.fixedColor?.nsColor.cgColor ?? secondary
+        perWordRomanization = romaStyle.fixedColor?.nsColor.cgColor
         self.activeText = style.hdrHighlight ? LyricsWindowHDR.boosted(activeText) : activeText
         footerLabel = L10n.t("创作者：")
         footerSeparator = L10n.t("、")
@@ -442,7 +454,8 @@ extension LyricsLayerRowPlan {
         let perWordRoma = style.showRomanization && line.wordGroups?.isEmpty == false && line.words != nil
         if let words = line.words, !words.isEmpty {
             let block = wordBlock(words: words, groups: perWordRoma ? line.wordGroups : nil, font: ink.main,
-                                  romaFont: ink.roma, color: ink.text, activeColor: ink.activeText, rises: style.rises,
+                                  romaFont: ink.roma, romaColor: ink.perWordRomanization, color: ink.text, activeColor: ink.activeText,
+                                  rises: style.rises,
                                   origin: CGPoint(x: blockX, y: y), width: blockW, side: side, style: style,
                                   silhouettes: silhouettes)
             elements += block.elements
@@ -466,14 +479,14 @@ extension LyricsLayerRowPlan {
             }
         } else if let bg = backgroundShown {
             y += LyricsLayerRowStyle.blockSpacing
-            let block = wordBlock(words: bg, groups: nil, font: ink.background, romaFont: ink.roma, color: ink.text,
+            let block = wordBlock(words: bg, groups: nil, font: ink.background, romaFont: ink.roma, romaColor: nil, color: ink.text,
                                   activeColor: ink.text, rises: false, origin: CGPoint(x: blockX, y: y), width: blockW, side: side, style: style,
                                   silhouettes: silhouettes)
             background = block.elements
             y += block.height
         }
         if style.showRomanization, !perWordRoma, let roma = line.romanization, !roma.isEmpty,
-           let para = paragraph(roma, font: ink.roma, color: ink.secondary, translation: false, width: blockW,
+           let para = paragraph(roma, font: ink.roma, color: ink.romanization, translation: false, width: blockW,
                                 side: side, scale: style.scale) {
             y += style.layout.romanizationGap(style.fontSize)
             pictures += placed(para, x: blockX, y: y)
@@ -482,15 +495,15 @@ extension LyricsLayerRowPlan {
         // 背景人声的读音排在主句读音下面,跟背景人声一样淡(同 SwiftUI 版 `LyricsLineRow`)。
         if style.showRomanization, backgroundShown != nil, let roma = line.backgroundRomanization, !roma.isEmpty,
            let para = paragraph(roma, font: ink.roma,
-                                color: ink.secondary.copy(alpha: ink.secondary.alpha * CGFloat(LyricsLayerRowStyle.backgroundOpacity))
-                                    ?? ink.secondary,
+                                color: ink.romanization.copy(alpha: ink.romanization.alpha * CGFloat(LyricsLayerRowStyle.backgroundOpacity))
+                                    ?? ink.romanization,
                                 translation: false, width: blockW, side: side, scale: style.scale) {
             y += LyricsLayerRowStyle.blockSpacing
             pictures += placed(para, x: blockX, y: y)
             y += para.text.height
         }
         if style.showTranslation, let tr = line.translation, !tr.isEmpty,
-           let para = paragraph(tr, font: ink.translation, color: ink.secondary, translation: true, width: blockW,
+           let para = paragraph(tr, font: ink.translation, color: ink.translationColor, translation: true, width: blockW,
                                 side: side, scale: style.scale) {
             y += style.layout.translationGap(style.fontSize)
             pictures += placed(para, x: blockX, y: y)
@@ -587,14 +600,15 @@ extension LyricsLayerRowPlan {
     /// 逐字的那一块(正文或背景人声):按宽度折行(`WrapLayoutMath`,同 SwiftUI 版 `WrapLayout`)、每个 token 一个元素。
     /// 开了逐词罗马音时折行单位是一组(字 + 读音一列),列宽取字和读音里更宽的那个。
     private static func wordBlock(words: [SyncedLyricWord], groups: [SyncedLyricWordGroup]?, font: NSFont, romaFont: NSFont,
-                                  color: CGColor, activeColor: CGColor, rises: Bool, origin: CGPoint, width: CGFloat,
+                                  romaColor fixedRomaColor: CGColor?, color: CGColor, activeColor: CGColor, rises: Bool, origin: CGPoint, width: CGFloat,
                                   side: LyricDuet.Side, style: LyricsLayerRowStyle,
                                   silhouettes: LyricsLayerListText.Silhouettes) -> (elements: [Element], height: CGFloat) {
         let dim = CGFloat(WordKaraokeGradient.windowDimOpacity)
         // 逐词读音离正文多远:按「读音间距」比默认多出的那一截挪(默认 0,紧贴正文)。
         let romaOffset = groups?.isEmpty == false ? style.layout.perWordRomanizationOffset(style.fontSize) : 0
         let unsung = color.copy(alpha: color.alpha * dim) ?? color
-        let romaColor = color.copy(alpha: color.alpha * 0.75) ?? color
+        let romaColor = fixedRomaColor
+            ?? color.copy(alpha: color.alpha * CGFloat(LyricsWindowSubLineStyle.perWordFollowOpacity)) ?? color
         let romaUnsung = romaColor.copy(alpha: romaColor.alpha * dim) ?? romaColor
         let spans: [LyricsWordEmphasis.Span?] = rises && groups == nil
             ? LyricsWordEmphasis.spans(for: words) : Array(repeating: nil, count: words.count)

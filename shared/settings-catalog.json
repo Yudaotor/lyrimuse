@@ -1931,6 +1931,46 @@
       "path" : [
         "歌词显示",
         "歌词窗口",
+        "字体"
+      ],
+      "title" : "读音字体"
+    },
+    {
+      "dest" : "tab:appearance",
+      "lyricsWindowMini" : false,
+      "path" : [
+        "歌词显示",
+        "歌词窗口",
+        "字体"
+      ],
+      "title" : "译文字体"
+    },
+    {
+      "dest" : "tab:appearance",
+      "lyricsWindowMini" : false,
+      "path" : [
+        "歌词显示",
+        "歌词窗口",
+        "字体"
+      ],
+      "title" : "读音粗细"
+    },
+    {
+      "dest" : "tab:appearance",
+      "lyricsWindowMini" : false,
+      "path" : [
+        "歌词显示",
+        "歌词窗口",
+        "字体"
+      ],
+      "title" : "译文粗细"
+    },
+    {
+      "dest" : "tab:appearance",
+      "lyricsWindowMini" : false,
+      "path" : [
+        "歌词显示",
+        "歌词窗口",
         "布局"
       ],
       "title" : "行间距"
@@ -2006,6 +2046,26 @@
         "颜色"
       ],
       "title" : "HDR 高亮"
+    },
+    {
+      "dest" : "tab:appearance",
+      "lyricsWindowMini" : false,
+      "path" : [
+        "歌词显示",
+        "歌词窗口",
+        "颜色"
+      ],
+      "title" : "读音颜色"
+    },
+    {
+      "dest" : "tab:appearance",
+      "lyricsWindowMini" : false,
+      "path" : [
+        "歌词显示",
+        "歌词窗口",
+        "颜色"
+      ],
+      "title" : "译文颜色"
     },
     {
       "dest" : "tab:appearance",

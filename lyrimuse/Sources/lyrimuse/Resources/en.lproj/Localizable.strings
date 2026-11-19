@@ -292,6 +292,8 @@
 "「自动」按对唱声部对齐，合唱居中，无对唱信息时靠左" = "Auto follows the duet parts: choruses are centered, and lines without duet info stay left";
 "「自动」选择带刘海的屏幕；「全部屏幕」在每块屏幕上各显示一个；指定的屏幕断开时按「自动」显示，插回后回到那块屏幕" = "Auto picks the display with the notch; All Displays shows one on every display; while the chosen display is unplugged it follows Auto and moves back when it’s plugged in again";
 "「获取 Lyrimuse」" = "“Get Lyrimuse”";
+"「跟随正文」时比正文细一档" = "Match Lyrics is one step lighter than the lyrics";
+"「跟随正文」时比正文细两档" = "Match Lyrics is two steps lighter than the lyrics";
 "一" = "M";
 "一切就绪" = "All Set";
 "一周结束后的 %@ 推送上一周的小结" = "Pushed at %@ after each week ends, with last week’s summary";
@@ -2662,9 +2664,12 @@
 "译文" = "Translation";
 "译文与读音" = "Translation & Romanization";
 "译文大小" = "Translation Size";
+"译文字体" = "Translation Font";
 "译文接在原文后面，排成一行，「字号」照常生效" = "The translation follows the original on one line, and Font Size still applies";
+"译文粗细" = "Translation Weight";
 "译文语言" = "Translation Language";
 "译文间距" = "Translation Spacing";
+"译文颜色" = "Translation Color";
 "译文（同一行）" = "Translation (Same Line)";
 "译文（机器翻译）" = "Translation (machine)";
 "译文（歌词源自带）" = "Translation (from the source)";
@@ -2737,7 +2742,10 @@
 "读取本地记录文件失败" = "Couldn’t read the local records file";
 "读音" = "Romanization";
 "读音大小" = "Romanization Size";
+"读音字体" = "Romanization Font";
+"读音粗细" = "Romanization Weight";
 "读音间距" = "Romanization Spacing";
+"读音颜色" = "Romanization Color";
 "调低音量" = "Volume Down";
 "调整" = "Adjust";
 "调整宽度" = "Adjust Width";
@@ -2762,6 +2770,7 @@
 "跟随播放器启动" = "Launch with Player";
 "跟随播放器退出" = "Quit with Player";
 "跟随未唱颜色" = "Match Unsung Color";
+"跟随正文" = "Match Lyrics";
 "跟随窗口" = "Follow Window";
 "跟随系统" = "Follow System";
 "跟随系统语言" = "Follow System Language";
