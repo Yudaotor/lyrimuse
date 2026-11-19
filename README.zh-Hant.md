@@ -194,7 +194,7 @@ brew install --cask lyrimuse
 
 ```bash
 xcode-select --install   # Xcode 的 Command Line Tools，跑 Swift 用——`swift --version` 能跑就說明已經裝過
-brew install go          # 任何 ≥1.21 的 Go 都行——build.sh 會透過 GOTOOLCHAIN 自動切到 1.24.4
+brew install go          # 任何 ≥1.21 的 Go 都行——build.sh 會透過 GOTOOLCHAIN 自動切到 1.27.4
 ```
 
 裝好之後，`build.sh` 會一次性把 App 和它的背景擷取器都建置好：

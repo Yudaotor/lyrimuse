@@ -197,7 +197,7 @@ brew install --cask lyrimuse
 
 ```bash
 xcode-select --install   # Xcode Command Line Tools, for Swift — skip if `swift --version` already works
-brew install go          # any Go ≥ 1.21 — build.sh switches to 1.24.4 automatically via GOTOOLCHAIN
+brew install go          # any Go ≥ 1.21 — build.sh switches to 1.27.4 automatically via GOTOOLCHAIN
 ```
 
 Потім `build.sh` за один раз збирає і програму, і її рушій текстів (фоновий процес `lyrimuse-engine`):

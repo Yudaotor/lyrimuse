@@ -197,7 +197,7 @@ brew install --cask lyrimuse
 
 ```bash
 xcode-select --install   # Xcode Command Line Tools, for Swift — skip if `swift --version` already works
-brew install go          # any Go ≥ 1.21 — build.sh switches to 1.24.4 automatically via GOTOOLCHAIN
+brew install go          # any Go ≥ 1.21 — build.sh switches to 1.27.4 automatically via GOTOOLCHAIN
 ```
 
 그다음 `build.sh`가 앱과 가사 엔진(`lyrimuse-engine`이라는 이름의 백그라운드 프로세스)을 한 번에 빌드합니다:

@@ -505,7 +505,7 @@ func writeSearchGoldenFixture(fx *searchGoldenFixture) error {
 // (网易云/酷狗会按标题变体查多次,取第一次选出结果的那批,都选不出就取第一批非空的)写成样本:
 //
 //	LYRICS_SEARCH_GOLDEN_CAPTURE=1 LYRICS_GOLDEN_KEY='歌手|歌名|专辑' LYRICS_GOLDEN_ID=<前缀> \
-//	[LYRICS_GOLDEN_NOTE='…'] GOTOOLCHAIN=go1.24.4 go test -run 'TestLyricsSearchGoldenCapture$' -v .
+//	[LYRICS_GOLDEN_NOTE='…'] GOTOOLCHAIN=go1.27.4 go test -run 'TestLyricsSearchGoldenCapture$' -v .
 //
 // 文件名 <前缀>-<源>.json。每个源写入前都要过 goldenJudgeSearchPick;lrclib 的正文置乱后要过
 // "置乱前后挑选结果相同"的闸。缓存只读(同第一层采集器)。

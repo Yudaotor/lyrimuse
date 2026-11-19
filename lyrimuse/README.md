@@ -24,8 +24,8 @@ QQ 音乐、网易云音乐、酷狗音乐、酷我音乐、汽水音乐和 Amaz
 
 - Swift 工具链（Command Line Tools 自带即可，不需要装完整 Xcode——已实测确认，
   `Package.swift` 用的是纯 SwiftPM 可执行 target，不是 `.xcodeproj`）。
-- 2026-07-21 起 `build.sh` 还会额外 `go build` 一份 `../lyrimuse-engine`（`GOTOOLCHAIN=
-  go1.24.4`，原因见 `lyrimuse-engine/build.sh` 顶部注释）塞进 `.app` 包里，所以也需要
+- 2026-07-21 起 `build.sh` 还会额外 `go build` 一份 `../lyrimuse-engine`（工具链取
+  `lyrimuse-engine/go.mod` 的 toolchain 行，原因见 `lyrimuse-engine/build.sh` 顶部注释）塞进 `.app` 包里，所以也需要
   本机装了 Go 工具链——这样引擎不再要求用户单独构建/手动装 LaunchAgent，App 自己
   的 `EngineServiceManager.swift` 就能装/卸它（见首次启动引导，或设置的"通用"tab）。
 - 2026-07-24 起，构建 QQ 音乐/网易云音乐/Spotify/自动识别这几个播放源的支持需要

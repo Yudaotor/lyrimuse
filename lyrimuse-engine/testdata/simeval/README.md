@@ -96,5 +96,5 @@ SIMEVAL_DATA=<目录> SIMEVAL_WRITE_GOLDEN=1 go test -run TestSimEval .
 2. **聚类平手要确定序**(靠 Go map 迭代序会导致跨运行结果不同);
 3. **YRC 与 LRC 的末尾比较要同类量**(末行 start vs 末行 start)。拿"末词唱完时刻"比
    "末行起点"天然带一行歌词长度的正偏差,会误杀真逐字候选;
-4. **本机必须用 `/opt/homebrew/bin/go`**:PATH 里的 go1.21 产出的测试二进制缺 LC_UUID,
-   在本机 Darwin 27 上被 dyld 拒载(与代码无关)。
+4. **工具链用 `go.mod` 的 toolchain 行那一版**(`GOTOOLCHAIN=go1.27.4`,别用 `GOTOOLCHAIN=local`):PATH 里的
+   go1.21 产出的测试二进制缺 LC_UUID,在本机 Darwin 27 上被 dyld 拒载(与代码无关)。

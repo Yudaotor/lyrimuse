@@ -4,7 +4,7 @@
 「改了打分/守卫之后,这一类歌还选得对」。跑法就是普通 `go test`:
 
 ```sh
-GOTOOLCHAIN=go1.24.4 go test -run 'TestLyricsGolden|TestGolden' -v .
+GOTOOLCHAIN=go1.27.4 go test -run 'TestLyricsGolden|TestGolden' -v .
 ```
 
 四个测试,全部默认开启:
@@ -26,14 +26,14 @@ GOTOOLCHAIN=go1.24.4 go test -run 'TestLyricsGolden|TestGolden' -v .
 2. 变化是有意的(比如调了一档权重)→ 重生成期望,然后**看 git diff** 逐首确认哪一项动了:
 
    ```sh
-   LYRICS_GOLDEN_UPDATE=1 GOTOOLCHAIN=go1.24.4 go test -run 'TestLyricsGolden$' .
+   LYRICS_GOLDEN_UPDATE=1 GOTOOLCHAIN=go1.27.4 go test -run 'TestLyricsGolden$' .
    ```
 
 3. 有样本的**冠军/判决**变了(`[语义]`),UPDATE 会拒绝改写——这是刻意的:换冠军等于"这首歌以后显示
    另一份歌词",必须逐首点头。确认之后:
 
    ```sh
-   LYRICS_GOLDEN_UPDATE=1 LYRICS_GOLDEN_ACCEPT_SEMANTIC=<样本id,样本id>  GOTOOLCHAIN=go1.24.4 go test -run 'TestLyricsGolden$' .
+   LYRICS_GOLDEN_UPDATE=1 LYRICS_GOLDEN_ACCEPT_SEMANTIC=<样本id,样本id>  GOTOOLCHAIN=go1.27.4 go test -run 'TestLyricsGolden$' .
    ```
 
    (`all` 接受全部——只在你真的逐首看过之后用。)
@@ -51,7 +51,7 @@ LYRICS_GOLDEN_ID=<kebab-case 文件名> \
 LYRICS_GOLDEN_CATEGORY=<类别键> \
 LYRICS_GOLDEN_NOTE='为什么挑这首、它守什么' \
 [LYRICS_GOLDEN_PLAYER=com.netease.163music] \   # 这一刻"在放"的播放器,同源 +250 的判据;缺省不加分
-GOTOOLCHAIN=go1.24.4 go test -run 'TestLyricsGoldenCapture$' -v .
+GOTOOLCHAIN=go1.27.4 go test -run 'TestLyricsGoldenCapture$' -v .
 ```
 
 采集器联网跑一次真实检索,写入前过四道闸,任一不过就不写(见 `lyricsgolden_capture_test.go` 头注):
@@ -103,7 +103,7 @@ GOTOOLCHAIN=go1.24.4 go test -run 'TestLyricsGoldenCapture$' -v .
 
 ```sh
 LYRICS_SEARCH_GOLDEN_CAPTURE=1 LYRICS_GOLDEN_KEY='歌手|歌名|专辑' LYRICS_GOLDEN_ID=<前缀> \
-[LYRICS_GOLDEN_NOTE='…'] GOTOOLCHAIN=go1.24.4 go test -run 'TestLyricsSearchGoldenCapture$' -v .
+[LYRICS_GOLDEN_NOTE='…'] GOTOOLCHAIN=go1.27.4 go test -run 'TestLyricsSearchGoldenCapture$' -v .
 ```
 
 一次联网检索给四个源各写一份 `<前缀>-<源>.json`(该源这次没搜到就跳过)。网易云/酷狗按标题变体查多次,

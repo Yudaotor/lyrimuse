@@ -37,7 +37,9 @@ import subprocess
 import sys
 import time
 
-GO_ENV = {'GOTOOLCHAIN': 'go1.24.4', 'GOFLAGS': ''}
+import go_toolchain
+
+GO_ENV = {'GOFLAGS': ''}
 SWITCH_VAR = 'goMutateActiveID'
 SWITCH_ENV = 'GO_MUTATE_ID'
 MARKER = '.go-mutate-work'
@@ -101,7 +103,8 @@ class Runner:
         self.logs = os.path.join(work, 'logs')
         for d in (self.gen, self.bin, self.logs):
             os.makedirs(d, exist_ok=True)
-        self.env = dict(os.environ, GOCACHE=os.path.join(work, 'gocache'), **GO_ENV)
+        self.env = dict(os.environ, GOCACHE=os.path.join(work, 'gocache'),
+                        GOTOOLCHAIN=go_toolchain.toolchain(os.path.join(engine, 'go.mod')), **GO_ENV)
         self.env.pop(SWITCH_ENV, None)
         self.originals = {}
         self.build_count, self.build_secs, self.run_count, self.run_secs = 0, 0.0, 0, 0.0

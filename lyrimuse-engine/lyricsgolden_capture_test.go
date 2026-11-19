@@ -8,7 +8,7 @@
 //	LYRICS_GOLDEN_NOTE='...' \                      # 为什么挑这首
 //	[LYRICS_GOLDEN_PLAYER=com.apple.Music] \        # 这一刻"在放"的播放器(同源 +250 的判据),缺省不加分
 //	[LYRICS_GOLDEN_CACHE_KNOWN_WRONG=1] \           # 见下:缓存里那份就是被修的 bug 本身时,解除"缓存不一致即拒绝"
-//	GOTOOLCHAIN=go1.24.4 go test -run TestLyricsGoldenCapture -v .
+//	GOTOOLCHAIN=go1.27.4 go test -run TestLyricsGoldenCapture -v .
 //
 // 写入前的四道硬闸,任何一道不过就不写文件:
 //  1. **可回放**:只回放第一轮(按本地标签的那一轮)的原始应答,rankLyricSourceResults 的冠军必须与

@@ -39,6 +39,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+import go_toolchain
+
 ROOT = Path(__file__).resolve().parent.parent
 SPEC = ROOT / "shared" / "lyric-notices.json"
 
@@ -104,7 +106,7 @@ def load():
 
 def gofmt(text):
     """过一遍 gofmt:CI 第一步就是 gofmt -l。--check 与写盘走同一条路径。"""
-    exe = shutil.which("gofmt")
+    exe = go_toolchain.gofmt_exe()
     if not exe:
         print("  ! 没找到 gofmt,Go 生成物未格式化(CI 的 gofmt 检查会红)")
         return text

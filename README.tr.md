@@ -197,7 +197,7 @@ Bu, kurulumun bir parçası olarak tek seferlik Gatekeeper karantinasını otoma
 
 ```bash
 xcode-select --install   # Xcode Command Line Tools, for Swift — skip if `swift --version` already works
-brew install go          # any Go ≥ 1.21 — build.sh switches to 1.24.4 automatically via GOTOOLCHAIN
+brew install go          # any Go ≥ 1.21 — build.sh switches to 1.27.4 automatically via GOTOOLCHAIN
 ```
 
 Sonra `build.sh` hem uygulamayı hem de şarkı sözü motorunu (`lyrimuse-engine` adlı arka plan işlemi) tek seferde derler:

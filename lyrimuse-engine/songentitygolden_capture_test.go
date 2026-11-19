@@ -3,7 +3,7 @@
 // songentitygolden_capture_test.go — 歌曲实体案例的采集器。默认跳过;只在显式给出案例清单时读一次本机缓存,
 // 把挑中的写法置乱后写成 testdata/songentity/<id>.json。
 //
-//	SONG_ENTITY_GOLDEN_CAPTURE=<清单.json> GOTOOLCHAIN=go1.24.4 go test -run 'TestSongEntityGoldenCapture$' -v .
+//	SONG_ENTITY_GOLDEN_CAPTURE=<清单.json> GOTOOLCHAIN=go1.27.4 go test -run 'TestSongEntityGoldenCapture$' -v .
 //
 // 清单是一个数组,每项 {"id", "category", "note", "truth": [[写法键…], …]}:truth 是人判的同一份录音分组,要列全
 // 它涉及的实体的每一条写法(全库建表时那几个实体整个搬进来)。写入前的硬闸,任何一道不过就不写:

@@ -197,7 +197,7 @@ A instalação já remove automaticamente a quarentena do Gatekeeper, que só ex
 
 ```bash
 xcode-select --install   # Xcode Command Line Tools, for Swift — skip if `swift --version` already works
-brew install go          # any Go ≥ 1.21 — build.sh switches to 1.24.4 automatically via GOTOOLCHAIN
+brew install go          # any Go ≥ 1.21 — build.sh switches to 1.27.4 automatically via GOTOOLCHAIN
 ```
 
 Depois, o `build.sh` compila o app e o motor de letras dele (o processo em segundo plano chamado `lyrimuse-engine`) de uma vez só:

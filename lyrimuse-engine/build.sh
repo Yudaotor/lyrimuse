@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 # 只重建引擎到仓库根的 bin/lyrimuse-engine,给手动 -dry-run、单独跑子命令调试用。重建时用本脚本,别直接 `go build`。
 #
-# 为什么：系统 Go 是 1.21（工作项目锁定，别动），它的内部链接器在这台 macOS 27 上
+# 工具链：系统 Go 是 1.21（工作项目锁定，别动），它的内部链接器在这台 macOS 27 上
 # 产出的二进制缺 LC_UUID / 签名不被 AMFI 接受 → launchd 会静默拒启（报误导性的
 # "dyld: missing LC_UUID" / 退出原因 OS_REASON_CODESIGNING），采集器起不来、网页停更。
-# 解法：用 GOTOOLCHAIN 临时拉 go1.24 工具链重编，它原生就发 LC_UUID + 合规签名，
-# 不用任何 -ldflags 花招、也不用手动 codesign。系统 Go 仍留 1.21、不受影响。
+# 所以用 GOTOOLCHAIN 切到 go.mod 的 toolchain 行那一版重编，它原生就发 LC_UUID + 合规签名，
+# 不用任何 -ldflags 花招、也不用手动 codesign。版本只在 go.mod 里写，这里不另写。系统 Go 仍留 1.21、不受影响。
 #
 # 不碰 /Applications/Lyrimuse.app,也不重启 launchd 管的那份引擎。往已装好的包里换引擎只走
 # lyrimuse/build.sh:它拿排队锁、先删再拷(同一个 inode 上反复覆盖会被内核按签名无效 SIGKILL,见那份脚本
@@ -17,7 +17,8 @@ set -euo pipefail
 
 cd "$(dirname "$0")" # lyrimuse-engine/
 BIN="../bin/lyrimuse-engine"
-TOOLCHAIN=go1.24.4 # 原生发 LC_UUID + 有效签名的工具链
+TOOLCHAIN="$(sed -n 's/^toolchain //p' go.mod)" # 原生发 LC_UUID + 有效签名的工具链
+[ -n "$TOOLCHAIN" ] || { echo "!! go.mod 里没有 toolchain 行" >&2; exit 1; }
 
 case "${1:-}" in
   "" | --no-restart) ;;

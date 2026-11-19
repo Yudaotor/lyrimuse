@@ -19,11 +19,6 @@ concurrency:
 permissions:
   contents: write
 
-env:
-  # Same toolchain lyrimuse/build.sh and lyrimuse-engine/build.sh pin with GOTOOLCHAIN;
-  # older Go emits binaries AMFI rejects on this project's machines.
-  GO_VERSION: "1.24.4"
-
 jobs:
   tag:
     name: Validate release tag
@@ -76,6 +71,14 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
+
+      # The Go version lives only in lyrimuse-engine/go.mod's toolchain line, which build.sh also reads;
+      # older Go emits binaries AMFI rejects on this project's machines.
+      - name: Read the Go version pinned in the engine's go.mod
+        run: |
+          v="$(sed -n 's/^toolchain go//p' lyrimuse-engine/go.mod)"
+          if [ -z "$v" ]; then echo "::error::lyrimuse-engine/go.mod has no toolchain line" >&2; exit 1; fi
+          echo "GO_VERSION=$v" >> "$GITHUB_ENV"
 
       - name: Set up Go ${{ env.GO_VERSION }}
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0

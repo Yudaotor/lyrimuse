@@ -197,7 +197,7 @@ Quá trình cài đặt tự động gỡ cờ cách ly Gatekeeper một lần, 
 
 ```bash
 xcode-select --install   # Xcode Command Line Tools, for Swift — skip if `swift --version` already works
-brew install go          # any Go ≥ 1.21 — build.sh switches to 1.24.4 automatically via GOTOOLCHAIN
+brew install go          # any Go ≥ 1.21 — build.sh switches to 1.27.4 automatically via GOTOOLCHAIN
 ```
 
 Sau đó `build.sh` dựng cả ứng dụng lẫn công cụ lời bài hát (tiến trình nền tên `lyrimuse-engine`) trong một lần:

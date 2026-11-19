@@ -4,7 +4,7 @@
 规格见 `docs/features/18-song-entity.md`(决策 7)。跑法就是普通 `go test`:
 
 ```sh
-GOTOOLCHAIN=go1.24.4 go test -run 'TestSongEntityGolden' -v .
+GOTOOLCHAIN=go1.27.4 go test -run 'TestSongEntityGolden' -v .
 ```
 
 | 测试 | 守什么 |
@@ -23,7 +23,7 @@ GOTOOLCHAIN=go1.24.4 go test -run 'TestSongEntityGolden' -v .
 2. `[快照]` 是边、否决、共享组、闸的计数变了。有意的改动就重写,再看 git diff 逐个确认:
 
    ```sh
-   SONG_ENTITY_GOLDEN_UPDATE=1 GOTOOLCHAIN=go1.24.4 go test -run 'TestSongEntityGolden$' .
+   SONG_ENTITY_GOLDEN_UPDATE=1 GOTOOLCHAIN=go1.27.4 go test -run 'TestSongEntityGolden$' .
    ```
 
 ## 加一组
@@ -32,7 +32,7 @@ GOTOOLCHAIN=go1.24.4 go test -run 'TestSongEntityGolden' -v .
 `truth`(同一份录音分组,要列全涉及的实体的每一条写法;`song-entities -entity <关键字>` 能列出来):
 
 ```sh
-SONG_ENTITY_GOLDEN_CAPTURE=<清单.json> GOTOOLCHAIN=go1.24.4 go test -tags devtools -run 'TestSongEntityGoldenCapture$' -v .
+SONG_ENTITY_GOLDEN_CAPTURE=<清单.json> GOTOOLCHAIN=go1.27.4 go test -tags devtools -run 'TestSongEntityGoldenCapture$' -v .
 ```
 
 采集器只读本机缓存,写入前过四道闸,任一不过就不写(见 `songentitygolden_capture_test.go` 头注):`truth` 恰好是那几个实体的

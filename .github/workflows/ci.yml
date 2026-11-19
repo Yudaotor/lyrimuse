@@ -19,11 +19,6 @@ concurrency:
 permissions:
   contents: read
 
-env:
-  # 跟 lyrimuse/build.sh、lyrimuse-engine/build.sh 里硬编码的 GOTOOLCHAIN 保持一致。
-  # 更老的工具链产出的二进制缺 LC_UUID，AMFI 会拒签（详见 AGENTS.md）。
-  GO_VERSION: "1.24.4"
-
 jobs:
   test:
     name: 测试
@@ -33,6 +28,14 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      # Go 版本只写在 lyrimuse-engine/go.mod 的 toolchain 行，两份 build.sh 和 scripts/commit-checks.sh 也读它。
+      # 更老的工具链产出的二进制缺 LC_UUID，AMFI 会拒签（详见 AGENTS.md）。
+      - name: 读引擎 go.mod 钉的 Go 版本
+        run: |
+          v="$(sed -n 's/^toolchain go//p' lyrimuse-engine/go.mod)"
+          if [ -z "$v" ]; then echo "::error::lyrimuse-engine/go.mod 里没有 toolchain 行" >&2; exit 1; fi
+          echo "GO_VERSION=$v" >> "$GITHUB_ENV"
 
       - name: Setup Go
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
@@ -84,7 +87,7 @@ jobs:
 
       # 挡住新长出来的死代码。不是"零死代码"——允许清单在
       # lyrimuse-engine/deadcode-baseline.txt，文件头写了往里加之前该问什么。
-      # deadcode 的版本必须钉住：v0.50.0 起要求 go >= 1.26，装不上本仓的工具链。
+      # deadcode 的版本必须钉住：换版本可能改判，换时连同 deadcode-baseline.txt 一起重核。
       - name: 死代码（不得新增）
         run: |
           cd lyrimuse-engine

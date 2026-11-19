@@ -63,11 +63,11 @@ func TestDashVersionTailAsBracket(t *testing.T) {
 	for in, want := range map[string]string{
 		"漂向北方 - Live at 13th KKBOX Music Awards": "漂向北方 (Live at 13th KKBOX Music Awards)",
 		"揪你出去玩 (feat. 謝和弦) - Unplugged 花絮版":      "揪你出去玩 (feat. 謝和弦) (Unplugged 花絮版)",
-		"Bad - 2012 Remaster":                    "Bad (2012 Remaster)",
-		"Boyfriend - Acoustic Version":           "Boyfriend (Acoustic Version)",
-		"Hello - Goodbye":                        "Hello - Goodbye",
-		"蘇州河 - 慕容雪":                              "蘇州河 - 慕容雪",
-		"Sorry":                                  "Sorry",
+		"Bad - 2012 Remaster":          "Bad (2012 Remaster)",
+		"Boyfriend - Acoustic Version": "Boyfriend (Acoustic Version)",
+		"Hello - Goodbye":              "Hello - Goodbye",
+		"蘇州河 - 慕容雪":                    "蘇州河 - 慕容雪",
+		"Sorry":                        "Sorry",
 	} {
 		if got := dashVersionTailAsBracket(in); got != want {
 			t.Errorf("dashVersionTailAsBracket(%q) = %q, want %q", in, got, want)

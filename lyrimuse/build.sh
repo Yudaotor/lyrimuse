@@ -583,14 +583,16 @@ done
 
 # 引擎打包进 .app 里(Contents/Resources/$ENGINE_NAME),不要求
 # 用户手动单独构建它——EngineServiceManager.swift 靠 Bundle.main.bundleURL 精确知道
-# 它在哪，跟 LoginItemManager 认自己的方式一样。跟 lyrimuse-engine/build.sh 同款
-# GOTOOLCHAIN=go1.24.4(系统 Go 1.21 产出的二进制缺 LC_UUID，AMFI 拒签，见那份脚本的
+# 它在哪，跟 LoginItemManager 认自己的方式一样。跟 lyrimuse-engine/build.sh 同款，
+# GOTOOLCHAIN 取引擎 go.mod 的 toolchain 行(系统 Go 1.21 产出的二进制缺 LC_UUID，AMFI 拒签，见那份脚本的
 # 注释)。
 echo "==> building $ENGINE_NAME [$ARCHES]"
 cmux_stage 0.55 "编译引擎"
 # 引擎是纯 Go(没有 import "C",核实过),所以 GOARCH 交叉编译不需要交叉
 # 工具链,直接编两份再 lipo 合并即可。GOARCH 的写法跟 uname -m 不一样:x86_64 在 Go 里
 # 叫 amd64。
+ENGINE_GOTOOLCHAIN="$(sed -n 's/^toolchain //p' ../lyrimuse-engine/go.mod)"
+[ -n "$ENGINE_GOTOOLCHAIN" ] || { echo "!! lyrimuse-engine/go.mod 里没有 toolchain 行" >&2; exit 1; }
 ENGINE_SLICES=()
 for arch in $ARCHES; do
   case "$arch" in
@@ -610,10 +612,10 @@ for arch in $ARCHES; do
   # -X 对 const **静默失败**:构建照样成功、不报错,值原封不动——所以这条注入
   # "看起来生效了"是靠不住的,真正的把关在 versioninjection_test.go 和下面装配完
   # 之后那道引擎/App 版本一致性校验。
-  # GOTOOLCHAIN 钉 go1.24.4:系统 1.21 的产物缺 LC_UUID,AMFI 拒签。
+  # GOTOOLCHAIN 用 go.mod 的 toolchain 行那一版:系统 1.21 的产物缺 LC_UUID,AMFI 拒签。
   # -s -w:不带符号表和 DWARF(约 4.7 MB);pclntab 还在,panic 栈照样有函数名和行号。见 15 章决策 33。
   # -trimpath:不带源码快照的本机路径(panic 栈写模块路径),跟提交校验、各工作树共用 go 的编译缓存。
-  (cd ../lyrimuse-engine && GOTOOLCHAIN=go1.24.4 GOOS=darwin GOARCH="$goarch" \
+  (cd ../lyrimuse-engine && GOTOOLCHAIN="$ENGINE_GOTOOLCHAIN" GOOS=darwin GOARCH="$goarch" \
     go build -trimpath -ldflags "-s -w -X main.clientVersion=$APP_VERSION" -o "$out" .)
   ENGINE_SLICES+=("$out")
 done

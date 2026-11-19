@@ -25,6 +25,8 @@ import subprocess
 import sys
 import time
 
+import go_toolchain
+
 TOP = re.compile(r'^--- (PASS|FAIL|SKIP): (\S+) \(([\d.]+)s\)')
 
 
@@ -77,7 +79,8 @@ def main(argv):
     pattern = argv[argv.index('--run') + 1] if '--run' in argv else None
     work = os.path.join(os.path.dirname(engine), '.build', 'go-test')
     os.makedirs(work, exist_ok=True)
-    os.environ.setdefault('GOTOOLCHAIN', 'go1.24.4')
+    # 以被测那棵树 go.mod 的 toolchain 行为准,覆盖调用方环境里的 GOTOOLCHAIN。
+    os.environ['GOTOOLCHAIN'] = go_toolchain.toolchain(os.path.join(engine, 'go.mod'))
     binary = os.path.join(work, 'engine.test')
     durations_path = os.path.join(work, 'durations.json')
 

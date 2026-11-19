@@ -19,6 +19,14 @@ if [ ! -d lyrimuse ] || [ ! -d lyrimuse-engine ]; then
   exit 2
 fi
 
+# Go 工具链只认引擎 go.mod 的 toolchain 行:下面的 go、go-test-shards.py 都用它;gofmt 也用那一版自带的,
+# 不同版本的 gofmt 对齐结果不一样,PATH 上的旧版会跟 CI 判得不同。
+GOTOOLCHAIN="$(sed -n 's/^toolchain //p' lyrimuse-engine/go.mod)"
+[ -n "$GOTOOLCHAIN" ] || { echo "!! lyrimuse-engine/go.mod 里没有 toolchain 行" >&2; exit 2; }
+export GOTOOLCHAIN
+PATH="$(cd lyrimuse-engine && go env GOROOT)/bin:$PATH"
+export PATH
+
 # 全机重活闸(heavy-gate.sh):整套检查跟 build.sh 的编译共用,同一台机器同时最多两份,有装机在等时让它先。
 # 闸在只读检查(功能清单、字符串、台账、死键、gofmt、注释卫生)之后、swift build 之前才排(15 章决策 121):那几步合计
 # 几秒,漏跑功能清单、注释里写日期这类错不用先排队、编译、跑完测试才报。
@@ -160,12 +168,12 @@ fi
 # 后面到它那一步再等结果。
 engine_static_checks() {
   # -trimpath 跟 go-test-shards.py 一样:各校验目录共用 go 的编译缓存。
-  (cd lyrimuse-engine && GOTOOLCHAIN=go1.24.4 go vet -trimpath ./... \
-    && GOTOOLCHAIN=go1.24.4 go vet -trimpath -tags devtools ./...) || return 1
+  (cd lyrimuse-engine && go vet -trimpath ./... \
+    && go vet -trimpath -tags devtools ./...) || return 1
   local dc_now dc_base added rc=0
   dc_now="$(mktemp)"
   dc_base="$(mktemp)"
-  if ! (cd lyrimuse-engine && GOTOOLCHAIN=go1.24.4 go run golang.org/x/tools/cmd/deadcode@v0.30.0 -test ./...) \
+  if ! (cd lyrimuse-engine && go run golang.org/x/tools/cmd/deadcode@v0.30.0 -test ./...) \
       | sed 's/.*unreachable func: //' | sort -u > "$dc_now"; then
     echo "!! deadcode 没跑成" >&2
     rc=1
@@ -193,7 +201,7 @@ if [ -n "$light" ]; then
     step "go test:轻校验,跳过(引擎的编译和类型检查由后台的 go vet 做)"
   else
     step "go vet:轻校验,只编译、类型检查引擎和它的测试"
-    (cd lyrimuse-engine && GOTOOLCHAIN=go1.24.4 go vet -trimpath -tags devtools ./...)
+    (cd lyrimuse-engine && go vet -trimpath -tags devtools ./...)
   fi
 else
   step "go test"
