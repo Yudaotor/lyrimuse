@@ -188,6 +188,17 @@ func deezerLastFailureReasonNow() string {
 // deezerResolve 可换,只为单测;生产路径永远是 resolveDeezerLyric。
 var deezerResolve = resolveDeezerLyric
 
+// deezerProvider 把 deezerLyric 接到 LyricProvider 上。结果的源名由调度填(runLyricProvider)。这条录音的 ISRC 按不带编号的
+// 歌名取(lyricSourceISRC 读 ctx 上播放侧记下的那份),取词用带编号的那份 SourceTitle,两个别混。
+type deezerProvider struct{ desc *ProviderDescriptor }
+
+func (p deezerProvider) Descriptor() *ProviderDescriptor { return p.desc }
+
+func (p deezerProvider) Resolve(ctx context.Context, q ProviderQuery, _ RoundEnv) SourceResult {
+	r := deezerLyric(ctx, q.Artist, q.SourceTitle, q.Album, q.DurationSecs, lyricSourceISRC(ctx, q.Artist, q.Title, q.Album))
+	return SourceResult{lyr: r.lyrics, yrc: r.yrc, tr: r.tr, songwriters: r.songwriters, matchTitle: r.title, matchArtist: r.artist, matchAlbum: r.album, matchCover: r.cover, srcDur: r.durationSecs, isrc: r.isrc, plainOnly: r.plainOnly}
+}
+
 // isrc:这次播放的这条录音的 ISRC(spotifyisrc.go;只有 Spotify 原生客户端在播、且它的
 // 缓存里记了才有)。空串 = 照原样走名称搜索。
 func deezerLyric(ctx context.Context, artist, title, album string, durationSecs float64, isrc string) deezerResult {

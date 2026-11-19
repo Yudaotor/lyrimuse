@@ -6290,16 +6290,6 @@ func fetchScoredLyricCandidatesStreaming(ctx context.Context, artist, title, alb
 	}()
 	startLyricProviders(ctx, lyricProviders().providers, providerQuery, providerEnv, providerPlan, resultsCh)
 	go func() {
-		if skipSource("lyricfind") {
-			resultsCh <- lyricSourceResult{source: "lyricfind"}
-			return
-		}
-		// ytmusicLyric 检索机制上是"查 YouTube Music",但对外只暴露真正是 LyricFind 的
-		// 那部分(见 ytmusic.go 头注的过滤理由)——source 因此标 "lyricfind" 不是 "ytmusic"。
-		r := ytmusicLyric(ctx, artist, srcTitle, album, durationSecs)
-		resultsCh <- lyricSourceResult{source: "lyricfind", lyr: r.lyrics, matchTitle: r.title, matchArtist: r.artist, matchAlbum: r.album, matchCover: r.cover, srcDur: r.durationSecs, plainOnly: r.plainOnly, identityFromLocalClient: r.fromLocalClient}
-	}()
-	go func() {
 		// 三档同酷狗那路:关掉的源本地那份也不要;熔断冷却时只放弃网络那一半,本地命中照常交、不记跳过。
 		if only != nil && !only["kuwo"] {
 			resultsCh <- lyricSourceResult{source: "kuwo"}
@@ -6320,19 +6310,6 @@ func fetchScoredLyricCandidatesStreaming(ctx context.Context, artist, title, alb
 			return
 		}
 		resultsCh <- kuwoSourceResult(kuwoLyric(ctx, artist, srcTitle, album, durationSecs))
-	}()
-	go func() {
-		if skipSource("deezer") {
-			resultsCh <- lyricSourceResult{source: "deezer"}
-			return
-		}
-		// 独立检索(不等任何其它源的 ID),同 kuwo/migu。搜索结果自带时长,srcDur 有值;
-		// 没有同步歌词、只有纯文本时 plainOnly=true(分数恒 -1,见 deezer.go 头注)。
-		//
-		// isrc 有值时(Spotify 原生客户端在播、且它缓存里记了这条录音,见 spotifyisrc.go)
-		// 走 /track/isrc: 直取,跳过搜索与名称打分——那是录音级身份,比名字硬。
-		r := deezerLyric(ctx, artist, srcTitle, album, durationSecs, lyricSourceISRC(ctx, artist, title, album))
-		resultsCh <- lyricSourceResult{source: "deezer", lyr: r.lyrics, yrc: r.yrc, tr: r.tr, songwriters: r.songwriters, matchTitle: r.title, matchArtist: r.artist, matchAlbum: r.album, matchCover: r.cover, srcDur: r.durationSecs, isrc: r.isrc, plainOnly: r.plainOnly}
 	}()
 	go func() {
 		if skipSource("applemusic") {

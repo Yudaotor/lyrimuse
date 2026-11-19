@@ -480,4 +480,6 @@ var migratedLyricSources = []struct{ name, file, entry, call string }{
 	{lyricSourcePetitLyrics, "petitlyrics.go", "petitLyric", "petitLyric(ctx, q.Artist, q.SourceTitle, q.Album, q.DurationSecs)"},
 	{lyricSourceZing, "zing.go", "zingLyric", "zingLyric(ctx, q.Artist, q.SourceTitle, q.Album, q.DurationSecs)"},
 	{lyricSourceMigu, "migu.go", "miguLyric", "miguLyric(ctx, q.Artist, q.SourceTitle, q.Album, q.DurationSecs)"},
+	{lyricSourceDeezer, "deezer.go", "deezerLyric", "deezerLyric(ctx, q.Artist, q.SourceTitle, q.Album, q.DurationSecs, lyricSourceISRC(ctx, q.Artist, q.Title, q.Album))"},
+	{lyricSourceLyricFind, "ytmusic.go", "ytmusicLyric", "ytmusicLyric(ctx, q.Artist, q.SourceTitle, q.Album, q.DurationSecs)"},
 }

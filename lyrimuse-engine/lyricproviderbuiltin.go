@@ -52,7 +52,7 @@ func newBuiltinLyricProviderRegistry() *lyricProviderRegistry {
 		DependsOnIDsFrom: []string{lyricSourceNetease, lyricSourceQQ},
 	}, privPlaybackTrackIDs|privTrackIDConsume|privBorrowFromPeers|privRefetchByID)
 
-	r.registerBuiltin(&ProviderDescriptor{
+	r.implement(lyricFindProvider{desc: r.registerBuiltin(&ProviderDescriptor{
 		Name: lyricSourceLyricFind, Order: 6, TieRank: 5, DefaultPriorityRank: 6,
 		Hosts: []HostRule{
 			{"music.youtube.com", hostExact}, {"youtubei.googleapis.com", hostExact}, {"www.youtube.com", hostExact},
@@ -61,7 +61,7 @@ func newBuiltinLyricProviderRegistry() *lyricProviderRegistry {
 		Baked:         bakedStripOnly, ParenBackground: true, ConsensusFamily: lyricSourceLyricFind,
 		PeerGroup:               peerGroupGlobal,
 		QueryIndependentFailure: ytmusicLastFailureReasonNow,
-	}, privLocalClientIdentity|privPlaybackTrackIDs)
+	}, privLocalClientIdentity|privPlaybackTrackIDs)})
 
 	r.registerBuiltin(&ProviderDescriptor{
 		Name: lyricSourceKuwo, Order: 7, TieRank: 6, DefaultPriorityRank: 7,
@@ -77,7 +77,7 @@ func newBuiltinLyricProviderRegistry() *lyricProviderRegistry {
 		PeerGroup: peerGroupChinese,
 	}, 0)})
 
-	r.registerBuiltin(&ProviderDescriptor{
+	r.implement(deezerProvider{desc: r.registerBuiltin(&ProviderDescriptor{
 		Name: lyricSourceDeezer, Order: 9, TieRank: 8, DefaultPriorityRank: 9,
 		Hosts:           []HostRule{{"deezer.com", hostWithSubdomains}},
 		ProxyFallback:   true,
@@ -85,7 +85,7 @@ func newBuiltinLyricProviderRegistry() *lyricProviderRegistry {
 		ISRCLookup: isrcLookupDirect, ISRCAuthority: true,
 		PeerGroup:               peerGroupGlobal,
 		QueryIndependentFailure: deezerLastFailureReasonNow,
-	}, 0)
+	}, 0)})
 
 	r.registerBuiltin(&ProviderDescriptor{
 		Name: lyricSourceAppleMusic, Order: 10, TieRank: 9, DefaultPriorityRank: 10,

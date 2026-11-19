@@ -813,6 +813,18 @@ func ytmusicFetchPlainLyrics(ctx context.Context, browseID string) (string, stri
 
 // ---- 对外入口 ----
 
+// lyricFindProvider 把 ytmusicLyric 接到 LyricProvider 上。结果的源名由调度填(runLyricProvider):检索走的是 YouTube Music,
+// 对外只交其中来源标注是 LyricFind 的那部分,所以源名是 lyricfind。播放器报的 videoId 照旧由 ytmusicLyric 从 ctx 上读
+// (youTubeMusicVideoIDFrom),按它取到的那份带 identityFromLocalClient。
+type lyricFindProvider struct{ desc *ProviderDescriptor }
+
+func (p lyricFindProvider) Descriptor() *ProviderDescriptor { return p.desc }
+
+func (p lyricFindProvider) Resolve(ctx context.Context, q ProviderQuery, _ RoundEnv) SourceResult {
+	r := ytmusicLyric(ctx, q.Artist, q.SourceTitle, q.Album, q.DurationSecs)
+	return SourceResult{lyr: r.lyrics, matchTitle: r.title, matchArtist: r.artist, matchAlbum: r.album, matchCover: r.cover, srcDur: r.durationSecs, plainOnly: r.plainOnly, identityFromLocalClient: r.fromLocalClient}
+}
+
 // ytmusicLyric:ctx 上有这首的 videoId 时先按它取(ytmusicVideoLyric),取不到再按名字搜(resolveYTMusicLyric)。
 func ytmusicLyric(ctx context.Context, artist, title, album string, durationSecs float64) ytmusicResult {
 	if title == "" {

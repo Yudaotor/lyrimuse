@@ -576,9 +576,7 @@ func TestLyricSearchTitleIsWired(t *testing.T) {
 		"kugouLocalLyric(artist, srcTitle, album, durationSecs)",
 		"kugouLyric(ctx, artist, srcTitle, album, durationSecs)",
 		"providerQuery := ProviderQuery{Artist: artist, Title: title, Album: album, SourceTitle: srcTitle, DurationSecs: durationSecs}",
-		"ytmusicLyric(ctx, artist, srcTitle, album, durationSecs)",
 		"kuwoLyric(ctx, artist, srcTitle, album, durationSecs)",
-		"deezerLyric(ctx, artist, srcTitle, album, durationSecs, lyricSourceISRC(ctx, artist, title, album))",
 		"applemusicLyric(ctx, artist, srcTitle, album, durationSecs, appleID, lyricSourceISRC(ctx, artist, title, album))",
 		"sodaLyric(ctx, artist, srcTitle, album, durationSecs)",
 	} {
@@ -588,8 +586,10 @@ func TestLyricSearchTitleIsWired(t *testing.T) {
 	}
 	// 接到 LyricProvider 上的源从查询里取歌名,取的得是 SourceTitle。
 	for file, n := range map[string]string{
-		"lrclib.go": "lrclibLyric(ctx, q.Artist, q.SourceTitle, q.Album, q.DurationSecs)",
-		"migu.go":   "miguLyric(ctx, q.Artist, q.SourceTitle, q.Album, q.DurationSecs)",
+		"lrclib.go":  "lrclibLyric(ctx, q.Artist, q.SourceTitle, q.Album, q.DurationSecs)",
+		"migu.go":    "miguLyric(ctx, q.Artist, q.SourceTitle, q.Album, q.DurationSecs)",
+		"ytmusic.go": "ytmusicLyric(ctx, q.Artist, q.SourceTitle, q.Album, q.DurationSecs)",
+		"deezer.go":  "deezerLyric(ctx, q.Artist, q.SourceTitle, q.Album, q.DurationSecs, lyricSourceISRC(ctx, q.Artist, q.Title, q.Album))",
 	} {
 		if !containsCode(read(file), n) {
 			t.Errorf("%s 缺 %q", file, n)
