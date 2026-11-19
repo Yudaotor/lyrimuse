@@ -91,6 +91,9 @@ Improved / 改进
 - Improved the lyrics window's previous, play and next buttons so they
   are easier to click
   歌词窗口的上一首、播放、下一首按钮更容易点中
+- Improved Last.fm: a rejected API key now explains that Last.fm Pro is
+  required, and scrobbles are kept until the key works again
+  Last.fm 拒收 API Key 时说明需订阅 Last.fm Pro，收听留到恢复后补发
 - Improved the Korean and French translations of the interface
   修订韩语与法语界面译文
 
@@ -101,6 +104,9 @@ Fixed / 修复
 - Fixed memory use staying high after closing Settings and the Lyrics
   Manager
   修复关闭设置和歌词管理后内存占用不回落
+- Fixed choppy lyrics scrolling in the Lyrics Manager and Search for
+  Lyrics previews
+  修复歌词管理与「搜索候选歌词」里的歌词预览滚动卡顿
 - Fixed Settings pages being cut off on the right and the Settings
   window not resizing
   修复设置页右侧被裁掉、设置窗口拖不大
@@ -139,7 +145,7 @@ Contributors / 贡献者
   Auto-detect switch and the notch progress bar (#83, #84)
   感谢 @HeizoFinds 的首次贡献，修复「自动识别」开关关不掉和灵动岛进度条不显示已播部分（#83、#84）
 
-224 commits since v1.13.0.
+264 commits since v1.13.0.
 
 **Full Changelog**: https://github.com/Yudaotor/lyrimuse/compare/v1.13.0...v1.14.0
 
