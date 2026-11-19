@@ -520,6 +520,7 @@ enum DebugDeepLinks {
                     "isFrontmost": NSWorkspace.shared.frontmostApplication?.processIdentifier
                         == ProcessInfo.processInfo.processIdentifier],
             "windows": windows,
+            "previews": LyricsPreviewDebugState.snapshot,
             "menuBarCenter": MenuBarStatusItem.shared.centerDebugState,
             "notch": NotchLyricsWindowController.shared.debugState,
             "realAudio": RealAudioMeter.shared.debugState,

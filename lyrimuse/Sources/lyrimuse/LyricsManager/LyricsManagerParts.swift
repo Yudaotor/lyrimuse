@@ -1090,6 +1090,8 @@ struct LyricsManagerPreviewList: View {
     @State private var frameClock = FrameClock()
     /// 交给滚动容器的那次「滚到哪」(见 `LyricsPreviewScrollView`);`serial` 每发一次加一。
     @State private var scrollRequest: LyricsPreviewScrollRequest?
+    /// 这份预览在 `debug/state` 的 `previews` 里那一条的键。
+    @State private var debugID = UUID().uuidString
     private static let topFadeHeight: CGFloat = 24
 
     var body: some View {
@@ -1127,8 +1129,14 @@ struct LyricsManagerPreviewList: View {
                 .transaction(value: resetKey) { $0.disablesAnimations = true }
             }
             .background(FrameClockHost(clock: frameClock, pausesWhenOccluded: true).frame(width: 0, height: 0))
-            .onChange(of: current) { _, _ in scrollToCurrent(animated: true) }
-            .onChange(of: follow) { _, _ in scrollToCurrent(animated: true) }
+            .onChange(of: current) { _, _ in
+                scrollToCurrent(animated: true)
+                reportDebugState()
+            }
+            .onChange(of: follow) { _, _ in
+                scrollToCurrent(animated: true)
+                reportDebugState()
+            }
             // 行换了也重新对一次位:换歌时新歌的行在预览出现之后才算好,切原文 / 译文 / 读音也换行;当前句的值可能没变,
             // 上面那条不会触发,列表就停在按旧行滚到的地方。
             .onChange(of: resetKey) { _, _ in
@@ -1147,11 +1155,31 @@ struct LyricsManagerPreviewList: View {
             .onChange(of: highlight) { _, _ in updatePosition() }
             .onChange(of: compareTimes) { _, _ in updatePosition() }
             .onChange(of: isNowPlaying) { _, _ in updatePosition() }
-            .onChange(of: hostVisible) { _, _ in updatePosition() }
+            .onChange(of: hostVisible) { _, _ in
+                updatePosition()
+                reportDebugState()
+            }
             .onAppear {
                 updatePosition()
                 scrollToCurrent(animated: false)
+                reportDebugState()
             }
+            .onDisappear { LyricsPreviewDebugState.remove(debugID) }
+    }
+
+    /// `currentRow`、`scrollRow` 是视图最近一次刷新时的值,`positionRow` 是读 `debug/state` 那一刻按候选时间轴算的那一句。
+    private func reportDebugState() {
+        guard DebugDeepLinks.isEnabled else { return }
+        let values: [String: Any] = [
+            "rows": rows.count, "nowPlaying": isNowPlaying, "hostVisible": hostVisible, "follow": follow,
+            "currentRow": currentIndex.map { $0 as Any } ?? NSNull(),
+            "scrollRow": scrollRequest.map { ($0.anchor == .top ? -1 : $0.row) as Any } ?? NSNull(),
+            "at": Date().timeIntervalSince1970,
+        ]
+        let position = position
+        LyricsPreviewDebugState.report(debugID) {
+            values.merging(["positionRow": position.index.map { $0 as Any } ?? NSNull()]) { $1 }
+        }
     }
 
     private func updatePosition() {
@@ -1189,6 +1217,23 @@ struct LyricsManagerPreviewList: View {
         guard highlight == .playingLine else { return rows[index].karaoke }
         guard let words = playback.current?.words, !words.isEmpty else { return nil }
         return LyricsPreviewText.karaokeSegments(text: rows[index].text, words: words)
+    }
+}
+
+/// `debug/state` 的 `previews`:每份开着的歌词预览此刻看不看得见、标在第几句、跟没跟随、最近一次滚到第几句(`-1` = 回到顶上)。
+/// 只在调试深链开着时记,验证用。
+@MainActor
+enum LyricsPreviewDebugState {
+    private static var entries: [String: () -> [String: Any]] = [:]
+
+    static var snapshot: [[String: Any]] { entries.values.map { $0() } }
+
+    static func report(_ id: String, _ values: @escaping () -> [String: Any]) {
+        entries[id] = values
+    }
+
+    static func remove(_ id: String) {
+        entries[id] = nil
     }
 }
 
