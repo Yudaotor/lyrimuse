@@ -10,7 +10,7 @@ const (
 // 先后看各自的 Order / TieRank / DefaultPriorityRank;本机类源调度按登记的先后同步问(runLocalLyricProviders):KKBOX、
 // Spotify、Amazon Music、文件旁的歌词、洛雪、导入库。
 func newBuiltinLyricProviderRegistry() *lyricProviderRegistry {
-	r := &lyricProviderRegistry{byName: map[string]*ProviderDescriptor{}}
+	r := &lyricProviderRegistry{byName: map[string]*ProviderDescriptor{}, byProvider: map[string]LyricProvider{}}
 
 	r.implement(neteaseProvider{desc: r.registerBuiltin(&ProviderDescriptor{
 		Name: lyricSourceNetease, Order: 1, TieRank: 1, DefaultPriorityRank: 2,

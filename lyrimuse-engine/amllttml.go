@@ -1242,6 +1242,11 @@ type amllProvider struct{ desc *ProviderDescriptor }
 
 func (p amllProvider) Descriptor() *ProviderDescriptor { return p.desc }
 
+// HasISRC:本地索引里有没有这个 ISRC 的条目。
+func (p amllProvider) HasISRC(isrc string) bool {
+	return sharedAMLLIndexStore().current().hasISRC(isrc)
+}
+
 func (p amllProvider) Resolve(ctx context.Context, q ProviderQuery, env RoundEnv) SourceResult {
 	neteaseID, qqID := env.TrackIDFrom(lyricSourceNetease), env.TrackIDFrom(lyricSourceQQ)
 	// Apple / Spotify 的曲目 ID 由播放侧顺带记下(见 platformtrackid.go),这里只读。

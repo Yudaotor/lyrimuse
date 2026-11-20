@@ -142,9 +142,9 @@ func TestHealthProbeItemsWhenTruncated(t *testing.T) {
 
 func stubOwnLyricSourceProbes(t *testing.T, m map[string]func(ctx context.Context) bool) {
 	t.Helper()
-	saved := lyricSourceOwnProbes
-	lyricSourceOwnProbes = m
-	t.Cleanup(func() { lyricSourceOwnProbes = saved })
+	saved := ownLyricSourceProbe
+	ownLyricSourceProbe = func(source string) func(context.Context) bool { return m[source] }
+	t.Cleanup(func() { ownLyricSourceProbe = saved })
 }
 
 // 专用探测曲:只给启用了、配了它的源起跑;问出来的记下;到点没回的被取消、算没答;都回来了立刻返回;不理取消的不等过 grace。
@@ -207,10 +207,52 @@ func TestHealthProbeItemsOwnProbe(t *testing.T) {
 
 // 配了专用探测曲的源都得在已登记的源里。
 func TestLyricSourceOwnProbesAreRegisteredSources(t *testing.T) {
-	for src := range lyricSourceOwnProbes {
-		if !slices.Contains(allLyricSourceConstants(), src) {
-			t.Errorf("%s 不是登记过的源", src)
+	probed := 0
+	for _, d := range registryDescriptors() {
+		if ownLyricSourceProbe(d.Name) == nil {
+			continue
 		}
+		probed++
+		if !slices.Contains(allLyricSourceConstants(), d.Name) {
+			t.Errorf("%s 不是登记过的源", d.Name)
+		}
+	}
+	if probed != len(lyricSourceOwnProbeTracks) {
+		t.Errorf("配了专用探测曲的源有 %d 个,期望表里 %d 个", probed, len(lyricSourceOwnProbeTracks))
+	}
+}
+
+// Zing 的专用探测曲:搜得到、取得到词就算答了;搜不到不算。问的是描述符里登记的那一首。
+func TestZingOwnProbeAsksItsProbeTrack(t *testing.T) {
+	resetZingState(t)
+	const fileURL = "https://static-zmp3.zmdcdn.me/lyrics/probe.lrc"
+	found := true
+	var asked []string
+	zingSimpleFake(t, func(r *http.Request, target string) (int, string) {
+		switch target {
+		case "https://zingmp3.vn" + zingSearchPath:
+			asked = append(asked, r.URL.Query().Get("q"))
+			if !found {
+				return http.StatusOK, zingTestEmptySearch
+			}
+			return http.StatusOK, `{"err":0,"data":{"items":[{"encodeId":"ZPROBE","title":"Lạc Trôi","artistsNames":"Sơn Tùng M-TP","duration":233,"hasLyric":true}]}}`
+		case "https://zingmp3.vn" + zingLyricPath:
+			return http.StatusOK, zingTestLyric(fileURL)
+		case fileURL:
+			return http.StatusOK, zingTestLRC
+		}
+		return http.StatusNotFound, ""
+	})
+	if !ownLyricSourceProbe(lyricSourceZing)(qqRoundCtx()) {
+		t.Error("搜到《Lạc Trôi》并取到词,该算答了")
+	}
+	if len(asked) == 0 || !strings.Contains(asked[0], "Lạc Trôi") {
+		t.Errorf("探测问的不是登记的那一首: %q", asked)
+	}
+	resetZingState(t)
+	found = false
+	if ownLyricSourceProbe(lyricSourceZing)(qqRoundCtx()) {
+		t.Error("搜不到,不该算答了")
 	}
 }
 
@@ -220,11 +262,11 @@ func TestSodaOwnProbeUsesSearchPath(t *testing.T) {
 	sodaSuggestFake(t, http.StatusOK, "", sug, map[string]sodaSeoTrackResponse{
 		"91": sodaTestSeoFor("91", "十年", "陈奕迅", 205000, sodaTestLyricContent),
 	})
-	if !lyricSourceOwnProbes[lyricSourceSoda](qqRoundCtx()) {
+	if !ownLyricSourceProbe(lyricSourceSoda)(qqRoundCtx()) {
 		t.Error("联想问到《十年》并取到词,该算答了")
 	}
 	sodaSuggestFake(t, http.StatusOK, "", `{"status_info":{}}`, nil)
-	if lyricSourceOwnProbes[lyricSourceSoda](qqRoundCtx()) {
+	if ownLyricSourceProbe(lyricSourceSoda)(qqRoundCtx()) {
 		t.Error("联想里没有,不该算答了")
 	}
 }

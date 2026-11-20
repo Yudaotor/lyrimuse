@@ -161,12 +161,12 @@ func runTestLyricSourcesCLI(args []string) {
 		}
 	}
 
-	// 配了专用探测曲的源(lyricSourceOwnProbes)另外单独问一次,跟下面两首并行:共用的两首不在它的曲库里,
+	// 配了专用探测曲的源(ownLyricSourceProbe)另外单独问一次,跟下面两首并行:共用的两首不在它的曲库里,
 	// 只靠那两首必然误报。没问出来的照样看下面两首的结果。
 	var ownProbes sync.WaitGroup
 	for _, src := range targets {
-		probe, ok := lyricSourceOwnProbes[src]
-		if !ok {
+		probe := ownLyricSourceProbe(src)
+		if probe == nil {
 			continue
 		}
 		ownProbes.Add(1)

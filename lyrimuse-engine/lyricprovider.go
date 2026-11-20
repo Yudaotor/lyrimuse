@@ -13,6 +13,17 @@ type LyricProvider interface {
 	Resolve(ctx context.Context, q ProviderQuery, env RoundEnv) SourceResult
 }
 
+// OwnProbeProvider 由描述符带 Probe 的源实现:曲库盖不到共用探测曲的源,拿自己那首探测曲直接问一次这个源自己的取词,
+// 不经整轮搜索、不打扰别的源;问出了歌词返回 true。test-lyric-sources 和 healthcheck 共用(ownLyricSourceProbe)。
+type OwnProbeProvider interface {
+	ProbeOwnTrack(ctx context.Context) bool
+}
+
+// ISRCIndexProvider 由 ISRCLookup 是 isrcLookupIndexed 的源实现:按 ISRC 补取那一轮只在它的本地索引里有这个 ISRC 时问它。
+type ISRCIndexProvider interface {
+	HasISRC(isrc string) bool
+}
+
 // OfflineResolver 由带 privOfflineLeg 的源实现:这个源在熔断冷却的那一轮,调度不调 Resolve,改调 ResolveOffline,
 // 只读客户端下在本机的那一份,不发请求。ok=false 是本机没有这首,这一轮照冷却跳过记。
 type OfflineResolver interface {
@@ -343,12 +354,13 @@ type ProviderDescriptor struct {
 	ISRCLookup      ISRCLookupMode
 	// ISRCAuthority:它报的 ISRC 可以当这条录音的记下来(recordingISRCsFromScored)。
 	ISRCAuthority bool
-	// PageURL:核对这份歌词在源网站上的页面地址(lyricSourcePageURL),nil = 不链回。
+	// PageURL:核对这份歌词在源网站上的页面地址(verifiedLyricSourcePageURL),nil = 不链回。
 	PageURL func(raw string) string
 
-	// PeerGroup:近况统计的同类组(lyricSourcePeerGroups),空 = 不进任何一组。
+	// PeerGroup:近况统计的同类组(lyricSourcePeerGroup),空 = 不进任何一组。同组的是曲库覆盖面可比的源:按平台 ID 直取的、
+	// 只在某一种语言的歌上是主力的、只在播放那一侧问而且曲库小的,跟谁都不可比,不进组。本机类源不统计,不填。
 	PeerGroup string
-	// Probe:自己的探测曲(lyricSourceOwnProbes),nil = 用共用的探测曲。
+	// Probe:自己的探测曲,nil = 用共用的探测曲。有它的源要实现 OwnProbeProvider。
 	Probe *ProbeTrack
 	// QueryIndependentFailure:最近一次跟检索词无关的失败原因(鉴权、换票、地区受限、签名被拒),非空时补查轮不问它
 	// (lyricSourcesWorthRetry);nil = 没有这类原因。
@@ -364,6 +376,8 @@ type ProviderDescriptor struct {
 type lyricProviderRegistry struct {
 	descriptors []*ProviderDescriptor
 	byName      map[string]*ProviderDescriptor
+	// byProvider:源名 → 它的实现。
+	byProvider map[string]LyricProvider
 	// providers:各来源的实现,一个来源至多一份。联网源每个恰好一份:收集循环按源名单数「都回来了没有」,少登记一个
 	// 这一轮会等到截止,多登记一份会多交一份结果。本机类源按这里的先后同步问。
 	providers []LyricProvider
@@ -375,6 +389,8 @@ type lyricProviderRegistry struct {
 	tieOrder []string
 	// defaultPriorityOrder:联网源按 DefaultPriorityRank。
 	defaultPriorityOrder []string
+	// peerGroups:同类组的名字 → 组里的联网源按 Order。
+	peerGroups map[string][]string
 }
 
 // index 按描述符算出各份名单。全部登记完调一次;之后再改描述符里的 Kind、名次要重调。
@@ -383,6 +399,18 @@ func (r *lyricProviderRegistry) index() {
 	r.networkNames = r.rankedNames(network, func(d *ProviderDescriptor) int { return d.Order })
 	r.tieOrder = r.rankedNames(func(*ProviderDescriptor) bool { return true }, func(d *ProviderDescriptor) int { return d.TieRank })
 	r.defaultPriorityOrder = r.rankedNames(network, func(d *ProviderDescriptor) int { return d.DefaultPriorityRank })
+	r.indexPeerGroups()
+}
+
+// indexPeerGroups 按描述符的 PeerGroup 重算同类组。
+func (r *lyricProviderRegistry) indexPeerGroups() {
+	groups := map[string][]string{}
+	for _, name := range r.networkNames {
+		if g := r.byName[name].PeerGroup; g != "" {
+			groups[g] = append(groups[g], name)
+		}
+	}
+	r.peerGroups = groups
 }
 
 // rankedNames:keep 选中的描述符的源名,按 rank 从小到大。
@@ -412,6 +440,12 @@ func (r *lyricProviderRegistry) registerBuiltin(d *ProviderDescriptor, privilege
 // implement 登记一个源的实现。
 func (r *lyricProviderRegistry) implement(p LyricProvider) {
 	r.providers = append(r.providers, p)
+	r.byProvider[p.Descriptor().Name] = p
+}
+
+// provider:name 这个源的实现,没登记的名字返回 nil。问源的可选接口时用:`p, ok := r.provider(name).(接口)`。
+func (r *lyricProviderRegistry) provider(name string) LyricProvider {
+	return r.byProvider[name]
 }
 
 // descriptor:没登记的名字返回 nil。
@@ -437,6 +471,44 @@ func networkLyricSourceNames() []string { return lyricProviders().networkNames }
 
 // isNetworkLyricSource:name 是不是登记过的联网歌词源。
 func isNetworkLyricSource(name string) bool { return lyricSourceKindIs(name, providerKindNetwork) }
+
+// lyricSourcePeerGroup:source 所在的同类组(近况统计拿同组的源互相比),联网源按 Order;不在任何一组时是 nil。
+// 返回的是登记表里那一份,别改它。
+func lyricSourcePeerGroup(source string) []string {
+	r := lyricProviders()
+	d := r.descriptor(source)
+	if d == nil || d.PeerGroup == "" {
+		return nil
+	}
+	return r.peerGroups[d.PeerGroup]
+}
+
+// verifiedLyricSourcePageURL:source 这个源的歌词页地址核过之后的样子(描述符的 PageURL);不是要链回的源、地址不对时为空。
+func verifiedLyricSourcePageURL(source, raw string) string {
+	d := lyricProviders().descriptor(source)
+	if d == nil || d.PageURL == nil {
+		return ""
+	}
+	return d.PageURL(raw)
+}
+
+// lyricSourceTakesISRC:按 ISRC 补取那一轮问不问 source(描述符的 ISRCLookup):能直取的问;索引里有才问的,看它自己的索引里
+// 有没有这个 ISRC(ISRCIndexProvider)。
+func lyricSourceTakesISRC(source, isrc string) bool {
+	r := lyricProviders()
+	d := r.descriptor(source)
+	if d == nil {
+		return false
+	}
+	switch d.ISRCLookup {
+	case isrcLookupDirect:
+		return true
+	case isrcLookupIndexed:
+		index, ok := r.provider(source).(ISRCIndexProvider)
+		return ok && index.HasISRC(isrc)
+	}
+	return false
+}
 
 // lyricSourceKindIs:name 这一路登记的是不是 kind 这一类。没登记的名字一律不是。播放器本机(providerKindPlayerLocal)和导入库
 // (providerKindUserLibrary)是两类:前者是读播放器自己缓存、文件旁歌词的那几路,开搜时同步读好、只在用对应播放器时有;

@@ -122,6 +122,12 @@ type zingProvider struct{ desc *ProviderDescriptor }
 
 func (p zingProvider) Descriptor() *ProviderDescriptor { return p.desc }
 
+// ProbeOwnTrack:Zing MP3 只有越南曲库,共用的两首探测曲一首搜不到、一首只有不带歌词的条目(09 章决策 373)。
+func (p zingProvider) ProbeOwnTrack(ctx context.Context) bool {
+	t := p.desc.Probe
+	return zingLyric(ctx, t.Artist, t.Title, "", 0).lyrics != ""
+}
+
 func (p zingProvider) Resolve(ctx context.Context, q ProviderQuery, _ RoundEnv) SourceResult {
 	r := zingLyric(ctx, q.Artist, q.SourceTitle, q.Album, q.DurationSecs)
 	return SourceResult{lyr: r.lyrics, yrc: r.yrc, matchTitle: r.title, matchArtist: r.artist, matchAlbum: r.album, matchCover: r.cover, srcDur: r.durationSecs}

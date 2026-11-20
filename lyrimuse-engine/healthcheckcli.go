@@ -280,23 +280,21 @@ var healthProbeSearch = func(ctx context.Context, p healthProbeTrack) []scoredLy
 
 type healthProbeOutcome struct {
 	answered    map[string]int  // 源 → 给出过候选的探测曲数,不看分数(跟 test-lyric-sources 同一口径)
-	ownAnswered map[string]bool // 源 → 专用探测曲(lyricSourceOwnProbes)问出了歌词
+	ownAnswered map[string]bool // 源 → 专用探测曲(ownLyricSourceProbe)问出了歌词
 	elapsed     time.Duration
 	truncated   bool // 时限到了还没跑完
 }
 
-// lyricSourceOwnProbes:曲库覆盖不到两首共用探测曲的源,各配一首它曲库里稳有的歌,直接调这个源自己的取词去问,
-// 不经整轮搜索、不打扰别的源。test-lyric-sources 和 healthcheck 共用;单测可换。
-var lyricSourceOwnProbes = map[string]func(ctx context.Context) bool{
-	// Zing MP3 只有越南曲库,《少年》搜不到,《Yesterday》只有不带歌词的条目(09 章决策 373)。
-	lyricSourceZing: func(ctx context.Context) bool {
-		return zingLyric(ctx, "Sơn Tùng M-TP", "Lạc Trôi", "", 0).lyrics != ""
-	},
-	// 汽水:《少年》只有翻唱、《Yesterday》不在曲库;走搜索那条路(不看本地队列缓存),问的是联想 + seo_track(09 章决策 376)。
-	lyricSourceSoda: func(ctx context.Context) bool {
-		r, _ := sodaLyricBySearch(ctx, "陈奕迅", "十年", "", 0)
-		return !r.empty()
-	},
+// ownLyricSourceProbe:source 这个源自己的探测(OwnProbeProvider.ProbeOwnTrack),没配专用探测曲的源返回 nil。曲库覆盖不到
+// 两首共用探测曲的源,各配一首它曲库里稳有的歌(描述符的 Probe),直接调这个源自己的取词去问,不经整轮搜索、不打扰别的源。
+// test-lyric-sources 和 healthcheck 共用;单测可换。
+var ownLyricSourceProbe = func(source string) func(ctx context.Context) bool {
+	r := lyricProviders()
+	p, ok := r.provider(source).(OwnProbeProvider)
+	if !ok || r.descriptor(source).Probe == nil {
+		return nil
+	}
+	return p.ProbeOwnTrack
 }
 
 // startOwnLyricSourceProbes 在后台对启用的、配了专用探测曲的源各问一次,跟共用探测曲同时起跑、同一个时限
@@ -311,8 +309,8 @@ func startOwnLyricSourceProbes(enabled []string, budget time.Duration) func(grac
 	answers := make(chan answer, len(enabled))
 	n := 0
 	for _, src := range enabled {
-		probe, ok := lyricSourceOwnProbes[src]
-		if !ok {
+		probe := ownLyricSourceProbe(src)
+		if probe == nil {
 			continue
 		}
 		n++

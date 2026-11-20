@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"fmt"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -409,26 +408,70 @@ func TestProviderRegistryPeerGroupsMatch(t *testing.T) {
 		if d.Kind != providerKindNetwork && d.PeerGroup != "" {
 			t.Errorf("%s 是本机来源,不进同类组", d.Name)
 		}
+		var want []string
+		for _, g := range lyricSourcePeerGroups {
+			if slices.Contains(g, d.Name) {
+				want = g
+			}
+		}
+		if read := lyricSourcePeerGroup(d.Name); !slices.Equal(read, want) || (read == nil) != (want == nil) {
+			t.Errorf("%s:生产代码读到的同类组 %v,期望表 %v", d.Name, read, want)
+		}
+	}
+	if lyricSourcePeerGroup("nope") != nil {
+		t.Error("没登记的名字不在任何一组")
 	}
 }
 
+// 专用探测曲:哪几个源有、各是哪一首,跟期望表逐项相等;有探测曲的源恰好是实现了 OwnProbeProvider 的那几个,
+// 它们的 ProbeOwnTrack 拿描述符里那一首去问。
 func TestProviderRegistryProbesMatchOwnProbes(t *testing.T) {
-	got := registryNameSet(func(d *ProviderDescriptor) bool { return d.Probe != nil })
-	want := map[string]bool{}
-	for s := range lyricSourceOwnProbes {
-		want[s] = true
+	got := map[string]ProbeTrack{}
+	for _, d := range registryDescriptors() {
+		if d.Probe != nil {
+			got[d.Name] = *d.Probe
+		}
 	}
-	if !reflect.DeepEqual(got, want) {
-		t.Fatalf("登记表 %v\nlyricSourceOwnProbes %v", sortedKeys(got), sortedKeys(want))
+	if !reflect.DeepEqual(got, lyricSourceOwnProbeTracks) || len(got) == 0 {
+		t.Fatalf("登记表 %v\n期望表 %v", got, lyricSourceOwnProbeTracks)
 	}
-	raw, err := os.ReadFile("healthcheckcli.go")
-	if err != nil {
-		t.Fatal(err)
+	for _, d := range registryDescriptors() {
+		_, implemented := lyricProviders().provider(d.Name).(OwnProbeProvider)
+		if implemented != (d.Probe != nil) {
+			t.Errorf("%s:实现了 OwnProbeProvider(%v)跟描述符有没有 Probe 对不上", d.Name, implemented)
+		}
+		if (ownLyricSourceProbe(d.Name) != nil) != (d.Probe != nil) {
+			t.Errorf("%s:ownLyricSourceProbe 给不给探测跟描述符有没有 Probe 对不上", d.Name)
+		}
+		if d.Probe == nil {
+			continue
+		}
+		raw, err := os.ReadFile(d.Name + ".go")
+		if err != nil {
+			t.Fatal(err)
+		}
+		body := string(raw)
+		start := strings.Index(body, "Provider) ProbeOwnTrack(ctx context.Context) bool {")
+		if start < 0 {
+			t.Fatalf("%s.go 里找不到 ProbeOwnTrack", d.Name)
+		}
+		body = body[start:]
+		body = body[:strings.Index(body, "\n}\n")]
+		if !containsCode(body, "t := p.desc.Probe") || !containsCode(body, lyricSourceOwnProbeCalls[d.Name]) {
+			t.Errorf("%s 的 ProbeOwnTrack 应拿描述符里的探测曲、照期望表里那一句去问(%s):\n%s", d.Name, lyricSourceOwnProbeCalls[d.Name], body)
+		}
 	}
-	for name := range got {
-		p := lyricProviders().descriptor(name).Probe
-		if call := fmt.Sprintf(`(ctx, %q, %q, "", 0)`, p.Artist, p.Title); !containsCode(string(raw), call) {
-			t.Errorf("%s 的探测曲:healthcheckcli.go 里没有按 %s 问的那一处", name, call)
+	if ownLyricSourceProbe("nope") != nil {
+		t.Error("没登记的名字没有专用探测")
+	}
+	// 两处消费面(healthcheck、设置页的「测试」)都经 ownLyricSourceProbe 找探测。
+	for _, f := range []string{"healthcheckcli.go", "testlyricsourcescli.go"} {
+		raw, err := os.ReadFile(f)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !containsCode(string(raw), "probe := ownLyricSourceProbe(src)\n\t\tif probe == nil {\n\t\t\tcontinue\n\t\t}") {
+			t.Errorf("%s 里没有按源找专用探测的那一段", f)
 		}
 	}
 }
@@ -622,15 +665,27 @@ func TestProviderRegistryISRCMatches(t *testing.T) {
 	if !slices.Equal(direct, want) {
 		t.Errorf("按 ISRC 直取:登记表 %v\nisrcRetryableSources %v", direct, want)
 	}
-	plan := goFuncSource(t, "isrcretry.go", "isrcRetryPlan")
 	indexed := sortedKeys(registryNameSet(func(d *ProviderDescriptor) bool { return d.ISRCLookup == isrcLookupIndexed }))
-	for _, name := range indexed {
-		if cond := fmt.Sprintf(`(s == %q && sharedAMLLIndexStore().current().hasISRC(isrc))`, name); !containsCode(plan, cond) {
-			t.Errorf("%s 登记成索引里有才问,isrcRetryPlan 里没有 %s", name, cond)
+	if !slices.Equal(indexed, isrcIndexedSources) || len(indexed) == 0 {
+		t.Errorf("索引里有才问:登记表 %v\nisrcIndexedSources %v", indexed, isrcIndexedSources)
+	}
+	// 生产代码的读法:直取的一律问;索引里有才问的,问这个源自己的索引(ISRCIndexProvider);别的不问。
+	for _, d := range registryDescriptors() {
+		index, implemented := lyricProviders().provider(d.Name).(ISRCIndexProvider)
+		if implemented != (d.ISRCLookup == isrcLookupIndexed) {
+			t.Errorf("%s:实现了 ISRCIndexProvider(%v)跟 ISRCLookup=%v 对不上", d.Name, implemented, d.ISRCLookup)
+		}
+		const code = "USRC17607839"
+		want := slices.Contains(isrcRetryableSources, d.Name) || (implemented && index.HasISRC(code))
+		if got := lyricSourceTakesISRC(d.Name, code); got != want {
+			t.Errorf("%s:lyricSourceTakesISRC=%v,期望 %v", d.Name, got, want)
 		}
 	}
-	if n := countCode(plan, ".hasISRC(isrc)"); n != len(indexed) || n == 0 {
-		t.Errorf("isrcRetryPlan 里看索引的有 %d 处,登记表里 %v", n, indexed)
+	if lyricSourceTakesISRC("nope", "USRC17607839") {
+		t.Error("没登记的名字不按 ISRC 问")
+	}
+	if plan := goFuncSource(t, "isrcretry.go", "isrcRetryPlan"); !containsCode(plan, "if lyricSourceTakesISRC(s, isrc) {") {
+		t.Error("isrcRetryPlan 应按 lyricSourceTakesISRC 挑源")
 	}
 
 	authority := map[string]bool{}
@@ -666,11 +721,17 @@ func TestProviderRegistryPageURLMatches(t *testing.T) {
 			if got != want {
 				t.Errorf("%s 的 %q:登记表核成 %q,lyricSourcePageURL 核成 %q", d.Name, raw, got, want)
 			}
+			if read := verifiedLyricSourcePageURL(d.Name, raw); read != want {
+				t.Errorf("%s 的 %q:生产代码核成 %q,期望 %q", d.Name, raw, read, want)
+			}
 			linked = linked || want != ""
 		}
 		if linked != (d.PageURL != nil) {
 			t.Errorf("%s:lyricSourcePageURL 链不链回(%v)跟登记表有没有 PageURL 对不上", d.Name, linked)
 		}
+	}
+	if verifiedLyricSourcePageURL("nope", samples[0]) != "" {
+		t.Error("没登记的名字不链回")
 	}
 }
 

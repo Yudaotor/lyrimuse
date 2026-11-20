@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"slices"
 	"sort"
 )
 
@@ -33,11 +32,8 @@ func lyricSourceISRC(ctx context.Context, artist, title, album string) string {
 	return code
 }
 
-// isrcRetryableSources:能按 ISRC 直取的歌词源。
-var isrcRetryableSources = []string{"deezer"}
-
-// isrcRetryPlan:拿哪个 ISRC、去问哪几个源。源:能按 ISRC 直取、启用着、这一轮没给出可用候选、换个身份还
-// 值得再问(lyricSourcesWorthRetry 剔掉连不上的、地区受限的);amll 还要索引里有这个 ISRC(amllIndex.hasISRC)。
+// isrcRetryPlan:拿哪个 ISRC、去问哪几个源。源:能按 ISRC 取(lyricSourceTakesISRC:直取的,或者本地索引里有这个 ISRC 的)、
+// 启用着、这一轮没给出可用候选、换个身份还值得再问(lyricSourcesWorthRetry 剔掉连不上的、地区受限的)。
 // ISRC 见 acceptedAppleMusicISRC。任何一样没有就返回空。
 func isrcRetryPlan(ctx context.Context, results []scoredLyricCandidateResult, durationSecs float64) (string, []string) {
 	isrc := acceptedAppleMusicISRC(results, durationSecs)
@@ -46,7 +42,7 @@ func isrcRetryPlan(ctx context.Context, results []scoredLyricCandidateResult, du
 	}
 	var sources []string
 	for _, s := range lyricSourcesWorthRetry(ctx, results) {
-		if slices.Contains(isrcRetryableSources, s) || (s == "amll" && sharedAMLLIndexStore().current().hasISRC(isrc)) {
+		if lyricSourceTakesISRC(s, isrc) {
 			sources = append(sources, s)
 		}
 	}

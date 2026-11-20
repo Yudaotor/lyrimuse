@@ -304,17 +304,6 @@ func megalobizPageURL(raw string) string {
 	return u.String()
 }
 
-// lyricSourcePageURL:source 这个源的歌词页地址核过之后的样子;不是要链回的源、地址不对时为空。
-func lyricSourcePageURL(source, raw string) string {
-	switch source {
-	case lyricSourceMegalobiz:
-		return megalobizPageURL(raw)
-	case "amll":
-		return amllPageURL(raw)
-	}
-	return ""
-}
-
 // megalobizSiteTagRe:歌名开头挂的下载站标记(「[SPOTDOWNLOADER.COM] 」),方括号里带点号的才算。
 var megalobizSiteTagRe = regexp.MustCompile(`^\s*\[[^\]]*\.[^\]]*\]\s*`)
 

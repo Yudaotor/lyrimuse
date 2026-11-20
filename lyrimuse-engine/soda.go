@@ -188,6 +188,14 @@ type sodaProvider struct{ desc *ProviderDescriptor }
 
 func (p sodaProvider) Descriptor() *ProviderDescriptor { return p.desc }
 
+// ProbeOwnTrack:共用的两首探测曲汽水一首只有翻唱、一首不在曲库。走搜索那条路(不看本地队列缓存),问的是联想 + seo_track
+// (09 章决策 376)。
+func (p sodaProvider) ProbeOwnTrack(ctx context.Context) bool {
+	t := p.desc.Probe
+	r, _ := sodaLyricBySearch(ctx, t.Artist, t.Title, "", 0)
+	return !r.empty()
+}
+
 func (p sodaProvider) Resolve(ctx context.Context, q ProviderQuery, _ RoundEnv) SourceResult {
 	r, noLyrics := sodaLyric(ctx, q.Artist, q.SourceTitle, q.Album, q.DurationSecs)
 	noVocals := r.fromLocalClient && (r.noVocals || sodaLocalInstrumental(q.Artist, q.SourceTitle, q.Album, q.DurationSecs))

@@ -20,9 +20,12 @@ func allLyricSourcesOn(string) bool { return true }
 // withVibeInWesternPeers:几条判定要西文那一组凑够五家才测得出来,用例里把 vibe 临时并进那一组。
 func withVibeInWesternPeers(t *testing.T) {
 	t.Helper()
-	saved := lyricSourcePeerGroups
-	lyricSourcePeerGroups = [][]string{saved[0], append(slices.Clone(saved[1]), "vibe")}
-	t.Cleanup(func() { lyricSourcePeerGroups = saved })
+	r := lyricProviders()
+	d := r.descriptor("vibe")
+	saved := d.PeerGroup
+	d.PeerGroup = peerGroupGlobal
+	r.indexPeerGroups()
+	t.Cleanup(func() { d.PeerGroup = saved; r.indexPeerGroups() })
 }
 
 // lyricSourceTestDays 按「往前第几天 → 源 → 计数」拼出 days。

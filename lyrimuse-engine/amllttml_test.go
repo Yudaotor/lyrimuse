@@ -292,13 +292,13 @@ func TestAMLLPageURL(t *testing.T) {
 			t.Errorf("ID %q 拼不出合法地址时退回仓库主页: %q", id, got)
 		}
 	}
-	if got := lyricSourcePageURL("amll", file); got != file {
+	if got := verifiedLyricSourcePageURL("amll", file); got != file {
 		t.Errorf("amll 来源收仓库里的页面: %q", got)
 	}
-	if got := lyricSourcePageURL("lrclib", file); got != "" {
+	if got := verifiedLyricSourcePageURL("lrclib", file); got != "" {
 		t.Errorf("别的源不收: %q", got)
 	}
-	if got := lyricSourcePageURL("megalobiz", file); got != "" {
+	if got := verifiedLyricSourcePageURL("megalobiz", file); got != "" {
 		t.Errorf("Megalobiz 不收 GitHub 地址: %q", got)
 	}
 }
