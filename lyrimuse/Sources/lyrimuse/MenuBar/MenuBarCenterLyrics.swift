@@ -13,8 +13,8 @@ private let logger = Logger(subsystem: "me.yudaotor.lyrimuse", category: "menuba
 /// 读状态栏项要挨个问每个 App 要 `AXExtrasMenuBar`,全量问一遍约 3 秒(一部分进程到超时才回),所以:
 /// 全量只在打开时和每 `fullScanEvery` 轮做一次、放在后台队列;平时每 `pollSeconds` 秒只复查已知有图标的那几家,
 /// 新开的 App 单独问。前台 App 的菜单每次切换前台时读一次,菜单常在激活后才换好,隔一会儿再读一次。
-/// 没授权时什么都不读、读数清空,两侧按屏幕边缘算。只在「菜单栏正中」用着、有词要显示、屏幕亮着时运行(`setActive`);
-/// 停下时读数留着,再开时先按它摆,同时后台补读一轮。
+/// 没授权时什么都不读、读数清空,两侧按屏幕边缘算。只在有人要用时运行(`setActive(_:client:)`):「菜单栏正中」用着、有词要显示、
+/// 屏幕亮着,或灵动岛在没有刘海的屏上放顶行歌词;停下时读数留着,再开时先按它摆,同时后台补读一轮。
 @MainActor
 final class MenuBarOccupancy {
     static let shared = MenuBarOccupancy()
@@ -25,6 +25,8 @@ final class MenuBarOccupancy {
     private(set) var frontMenuFrames: [CGRect] = []
     /// 读数变了(值真的变了才调;打开后第一轮全量扫完也调一次)。
     var onChange: (() -> Void)?
+    /// 同 `onChange`,给菜单栏以外的使用方(灵动岛顶行歌词)订阅。
+    let changes = PassthroughSubject<Void, Never>()
     /// 打开后第一轮全量扫完了(或没授权、不扫)。没扫完之前右侧按屏幕边缘算,刘海屏上会先落到刘海右边、扫完再跳到左边,
     /// 所以正中那几扇等它为真再出来。
     var isReady: Bool { firstScanDone || !AXIsProcessTrusted() }
@@ -34,6 +36,8 @@ final class MenuBarOccupancy {
     private var pendingRescan: DispatchWorkItem?
 
     private var active = false
+    /// 此刻要读数的使用方。有一个就开着。
+    private var clients = Set<ObjectIdentifier>()
     /// 每次打开 / 关掉加一。后台那一轮回来时代数对不上就丢掉:关了又开时,上一轮的结果不能算成这一轮的首轮扫描。
     private var generation = 0
     private var timer: Timer?
@@ -48,11 +52,23 @@ final class MenuBarOccupancy {
 
     private init() {}
 
+    /// 「菜单栏正中」那一方。
     func setActive(_ on: Bool) {
-        guard on != active else { return }
-        active = on
+        setActive(on, client: ObjectIdentifier(MenuBarCenterLyrics.self))
+    }
+
+    func setActive(_ on: Bool, client: ObjectIdentifier) {
+        if on { clients.insert(client) } else { clients.remove(client) }
+        let wanted = !clients.isEmpty
+        guard wanted != active else { return }
+        active = wanted
         generation += 1
-        if on { start() } else { stop() }
+        if wanted { start() } else { stop() }
+    }
+
+    private func notifyChange() {
+        onChange?()
+        changes.send()
     }
 
     private func start() {
@@ -78,7 +94,7 @@ final class MenuBarOccupancy {
                 guard let pid = WorkspaceAppNote.pid(note) else { return }
                 MainActor.assumeIsolated {
                     guard let self, self.statusItemFrames.removeValue(forKey: pid) != nil else { return }
-                    self.onChange?()
+                    self.notifyChange()
                 }
             },
         ]
@@ -133,7 +149,7 @@ final class MenuBarOccupancy {
             statusItemFrames = [:]
             frontMenuFrames = []
             firstScanDone = false
-            onChange?()
+            notifyChange()
         }
         return true
     }
@@ -196,7 +212,7 @@ final class MenuBarOccupancy {
                     if full { self.firstScanDone = true }
                     guard next != self.statusItemFrames || firstFull else { return }
                     self.statusItemFrames = next
-                    self.onChange?()
+                    self.notifyChange()
                 }
             }
         }
@@ -213,7 +229,7 @@ final class MenuBarOccupancy {
                 MainActor.assumeIsolated {
                     guard let self, self.active, self.generation == generation, frames != self.frontMenuFrames else { return }
                     self.frontMenuFrames = frames
-                    self.onChange?()
+                    self.notifyChange()
                 }
             }
         }
@@ -388,6 +404,15 @@ final class MenuBarCenterLyrics {
 
     /// 这块屏的菜单栏里能放歌词的那一段。nil = 两侧挤得放不下。
     func span(on screen: NSScreen) -> ClosedRange<CGFloat>? {
+        let occupied = Self.occupiedSpan(on: screen, notch: Self.notchRange(of: screen))
+        readings[Self.key(of: screen)] = occupied.span.map { ($0, occupied.menusMaxX, occupied.statusItemsMinX) }
+        return occupied.span
+    }
+
+    /// 按 `MenuBarOccupancy` 此刻的读数,这块屏菜单栏两侧之间空着的那一段(`MenuBarCenterLayout.usableSpan`),连同两侧的读数。
+    /// 灵动岛顶行歌词拿它夹卡片宽(`notch` 传 nil:那一档只在没有刘海的屏上画)。
+    static func occupiedSpan(on screen: NSScreen, notch: ClosedRange<CGFloat>?)
+        -> (span: ClosedRange<CGFloat>?, menusMaxX: CGFloat?, statusItemsMinX: CGFloat?) {
         let occupancy = MenuBarOccupancy.shared
         let screenFrames = NSScreen.screens.map(\.frame)
         let menusMaxX = MenuBarCenterLayout.menusMaxX(
@@ -395,12 +420,11 @@ final class MenuBarCenterLyrics {
         let statusItemsMinX = MenuBarCenterLayout.statusItemsMinX(
             itemFrames: occupancy.statusItemFrames.values.flatMap { $0 }, screenFrames: screenFrames,
             target: screen.frame, primaryMaxY: NSScreen.screens.first?.frame.maxY ?? screen.frame.maxY,
-            menuBarHeight: Self.menuBarHeight(of: screen))
+            menuBarHeight: menuBarHeight(of: screen))
         let span = MenuBarCenterLayout.usableSpan(
             screenMinX: screen.frame.minX, screenMaxX: screen.frame.maxX,
-            menusMaxX: menusMaxX, statusItemsMinX: statusItemsMinX, notch: Self.notchRange(of: screen))
-        readings[Self.key(of: screen)] = span.map { ($0, menusMaxX, statusItemsMinX) }
-        return span
+            menusMaxX: menusMaxX, statusItemsMinX: statusItemsMinX, notch: notch)
+        return (span, menusMaxX, statusItemsMinX)
     }
 
     /// 只留这几块屏上的那一扇,别的立刻收掉、拆掉(换了「显示在」、拔了显示器、某块屏两侧挤得放不下);锚着面板的那一扇除外。

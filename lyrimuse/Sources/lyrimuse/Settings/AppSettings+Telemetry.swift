@@ -154,6 +154,7 @@ extension AppSettings {
             ("notchCardStyle", notchCardStyle),
             ("notchExpandedCardStyle", notchExpandedCardStyle),
             ("notchShowLyrics", notchShowLyrics),
+            ("notchLyricsInTopRow", notchLyricsInTopRow),
             ("motionCoverEnabled", motionCoverEnabled),
             ("spotifyCanvasEnabled", spotifyCanvasEnabled),
             ("lyricsWindowBackgroundMode", lyricsWindowBackgroundMode),

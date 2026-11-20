@@ -90,6 +90,10 @@ struct NotchLyricsView: View {
                 notchSeam
                     .frame(height: controller.contentTopInset)
                     .opacity(revealContentOpacity)
+                if controller.topRowLyricsWidth > 0, controller.hasTrack {
+                    topRowLyrics
+                        .opacity(revealContentOpacity)
+                }
                 VStack(spacing: 0) {
                     // 顶行占菜单栏那一条高度,收起后跟菜单栏齐平、不额外占屏。两种形态:
                     // 收起(没在播放)= iPhone 灵动岛式极简(左耳封面、右耳音浪,

@@ -319,6 +319,12 @@ func runDeepLinkTests() {
         expectEqual(link("lyrimuse://debug/notch-behavior?show-lyrics=0"),
                     .debug(.notchBehavior(collapseWhenPaused: nil, hideWhenNotPlaying: nil, showLyrics: false)),
                     "debug: 只关灵动岛显示歌词")
+        expectEqual(link("lyrimuse://debug/notch-behavior?lyrics=topRow&ignore-notch=1"),
+                    .debug(.notchBehavior(collapseWhenPaused: nil, hideWhenNotPlaying: nil, lyricsPlacement: .topRow, ignoreNotch: true)),
+                    "debug: 灵动岛歌词放顶行并当作没有刘海")
+        expectEqual([link("lyrimuse://debug/notch-behavior?lyrics=below"), link("lyrimuse://debug/notch-behavior?ignore-notch=0")],
+                    [nil, .debug(.notchBehavior(collapseWhenPaused: nil, hideWhenNotPlaying: nil, ignoreNotch: false))],
+                    "debug: 歌词三档只认 rawValue;单带 ignore-notch 也认")
         expectEqual(link("lyrimuse://debug/notch-behavior?lyric-row-fade=1"),
                     .debug(.notchBehavior(collapseWhenPaused: nil, hideWhenNotPlaying: nil, lyricRowFade: true)),
                     "debug: 只开灵动岛悬浮淡化")
@@ -1024,6 +1030,9 @@ func runDeepLinkTests() {
             .debug(.notchHint(key: "heart")), .debug(.notchHint(key: nil)),
             .debug(.notchBehavior(collapseWhenPaused: nil, hideWhenNotPlaying: nil, showLyrics: true)),
             .debug(.notchBehavior(collapseWhenPaused: nil, hideWhenNotPlaying: nil, lyricRowFade: false)),
+            .debug(.notchBehavior(collapseWhenPaused: nil, hideWhenNotPlaying: nil, lyricsPlacement: .hidden)),
+            .debug(.notchBehavior(collapseWhenPaused: nil, hideWhenNotPlaying: nil, lyricsPlacement: .belowRow, ignoreNotch: false)),
+            .debug(.notchBehavior(collapseWhenPaused: nil, hideWhenNotPlaying: nil, lyricsPlacement: .topRow, ignoreNotch: true)),
             .debug(.knockout(leg: .voxScript, on: false)), .debug(.knockout(leg: .systemArtwork, on: true)),
             .debug(.reportingSwitchHint(bundleID: "com.tencent.QQMusic")),
             .debug(.menuBarCenter(center: true, ignoreNotch: true)), .debug(.menuBarCenter(center: false, ignoreNotch: nil)),

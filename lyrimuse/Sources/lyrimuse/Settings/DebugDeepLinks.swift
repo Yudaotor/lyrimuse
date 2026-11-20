@@ -133,10 +133,16 @@ enum DebugDeepLinks {
         case let .stall(ms):
             logger.notice("debug stall: blocking main thread \(ms, privacy: .public) ms")
             usleep(UInt32(ms) * 1000)
-        case let .notchBehavior(collapse, hide, progressLine, allScreens, showLyrics, lyricRowFade, volumeKeyBanner, realAudio):
+        case let .notchBehavior(collapse, hide, progressLine, allScreens, showLyrics, lyricRowFade, volumeKeyBanner, realAudio,
+                                placement, ignoreNotch):
             if let volumeKeyBanner { AppSettings.shared.notchVolumeBannerForVolumeKeys = volumeKeyBanner }
             if let realAudio { AppSettings.shared.notchEqualizerFollowsAudio = realAudio }
             if let showLyrics { AppSettings.shared.notchShowLyrics = showLyrics }
+            if let placement { AppSettings.shared.notchLyricsPlacement = placement }
+            if let ignoreNotch, ignoreNotch != NotchLyricsWindowController.ignoresNotchForDebug {
+                NotchLyricsWindowController.ignoresNotchForDebug = ignoreNotch
+                NotificationCenter.default.post(name: NotchLyricsWindowController.debugGeometryChanged, object: nil)
+            }
             if let lyricRowFade { AppSettings.shared.notchFadeLyricRowOnHover = lyricRowFade }
             if let collapse { AppSettings.shared.notchCollapsesWhenPaused = collapse }
             if let allScreens { AppSettings.shared.notchAllScreens = allScreens }
@@ -145,7 +151,7 @@ enum DebugDeepLinks {
                 if let style = progressLine.style { AppSettings.shared.notchProgressLineStyle = style }
                 AppSettings.shared.notchShowsProgressLine = progressLine.shows
             }
-            logger.notice("debug notch behavior collapse=\(String(describing: collapse), privacy: .public) hide=\(String(describing: hide), privacy: .public) progressLine=\(progressLine?.rawValue ?? "nil", privacy: .public) allScreens=\(String(describing: allScreens), privacy: .public) showLyrics=\(String(describing: showLyrics), privacy: .public) lyricRowFade=\(String(describing: lyricRowFade), privacy: .public) volumeKeyBanner=\(String(describing: volumeKeyBanner), privacy: .public) realAudio=\(String(describing: realAudio), privacy: .public)")
+            logger.notice("debug notch behavior collapse=\(String(describing: collapse), privacy: .public) hide=\(String(describing: hide), privacy: .public) progressLine=\(progressLine?.rawValue ?? "nil", privacy: .public) allScreens=\(String(describing: allScreens), privacy: .public) showLyrics=\(String(describing: showLyrics), privacy: .public) lyricRowFade=\(String(describing: lyricRowFade), privacy: .public) placement=\(placement?.rawValue ?? "nil", privacy: .public) ignoreNotch=\(String(describing: ignoreNotch), privacy: .public) volumeKeyBanner=\(String(describing: volumeKeyBanner), privacy: .public) realAudio=\(String(describing: realAudio), privacy: .public)")
         case let .moveWindow(title, x, y, width, height):
             // 全局坐标的原点是主屏左上角;NSWindow 的原点在左下角、y 朝上。
             guard let window = NSApp.windows.first(where: { $0.title == title && $0.isVisible }),
@@ -902,6 +908,10 @@ enum DebugDeepLinks {
         endSimulation()
         WindowSurfaceState.setDebugScreenLocked(false)
         lyricsSearchGeneration += 1
+        if NotchLyricsWindowController.ignoresNotchForDebug {
+            NotchLyricsWindowController.ignoresNotchForDebug = false
+            NotificationCenter.default.post(name: NotchLyricsWindowController.debugGeometryChanged, object: nil)
+        }
         if !hoverNoteQuery.isEmpty {
             hoverNoteQuery = ""
             NotificationCenter.default.post(name: hoverNoteNotification, object: hoverNoteQuery)

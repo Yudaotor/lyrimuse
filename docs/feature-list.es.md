@@ -297,13 +297,14 @@ Letra sobre todas las ventanas, siempre visible, iluminada palabra por palabra. 
 
 ### Letra del notch
 
-Una cápsula pegada al notch, arriba en la pantalla; también funciona en Mac sin notch y en pantallas externas. Cada lado puede mostrar título, artista, álbum, ilustración, controles de reproducción, o tiempo transcurrido o restante, junto a una onda de audio que se mueve con la música. Al pasar el puntero se expande con controles, barra de progreso, calibración de la letra y botones rápidos como favorito o buscar letra. Durante los anuncios muestra el tiempo restante.
+Una cápsula pegada al notch, arriba en la pantalla; también funciona en Mac sin notch y en pantallas externas. Cada lado puede mostrar título, artista, álbum, ilustración, controles de reproducción, o tiempo transcurrido o restante, junto a una onda de audio que se mueve con la música. En pantallas sin notch, la línea actual también puede ir entre los dos lados, con la cápsula a la altura de la barra de menús. Al pasar el puntero se expande con controles, barra de progreso, calibración de la letra y botones rápidos como favorito o buscar letra. Durante los anuncios muestra el tiempo restante.
 
 - Desactivada por omisión
 - Ajustes: Mostrar letra › Notch › Letra en el notch
 - Ajustes: Mostrar letra › Notch › Estilo
 - Ajustes: Mostrar letra › Notch › Pantalla
 - Ajustes: Mostrar letra › Notch › Izquierda
+- Ajustes: Mostrar letra › Notch › Fila de letra › Mostrar letra al contraer
 - Ajustes: Atajos de teclado › Mostrar/ocultar letra en el notch
 - Ajustes: Atajos de teclado › Echar un vistazo al notch
 - Ajustes: Mostrar letra › Notch › Expandido › Acciones rápidas
@@ -1134,7 +1135,7 @@ Todos los ajustes de la ventana Ajustes, según dónde están: 345 en total. Esc
 
 ### Mostrar letra › Notch › Fila de letra
 
-- **Mostrar letra al contraer**: Si se desactiva, solo queda la franja a la altura del notch hasta que pases el puntero para expandir
+- **Mostrar letra al contraer**
 - **Alineación**
 - **Color de la letra**
 - **Segunda línea**

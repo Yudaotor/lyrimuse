@@ -294,6 +294,7 @@
 "「获取 Lyrimuse」" = "“Obter Lyrimuse”";
 "「跟随正文」时比正文细一档" = "“Igual à letra” fica um nível mais fino que a letra";
 "「跟随正文」时比正文细两档" = "“Igual à letra” fica dois níveis mais fino que a letra";
+"「顶行」将歌词放在两只耳朵之间，卡片不加高，仅适用于无刘海的屏幕" = "“Linha superior” mostra a letra entre as duas orelhas sem aumentar o cartão; só em telas sem notch";
 "一" = "S";
 "一切就绪" = "Tudo pronto";
 "一周结束后的 %@ 推送上一周的小结" = "Enviado às %@ no fim de cada semana, com o resumo semanal";
@@ -605,7 +606,6 @@
 "关闭后不显示进度条，Discord 将改为显示已播放时长，该计时无法关闭" = "Quando desativado, não há barra de progresso; o Discord mostra o tempo decorrido, que não pode ser desativado";
 "关闭后仅保留菜单栏图标" = "Quando desativado, só o ícone da barra de menus permanece";
 "关闭后只在灵动岛上滑动调节音量时显示音量提示，键盘音量键等只显示系统自带的提示" = "Quando desativado, o indicador de volume só aparece ao deslizar no notch para ajustar o volume; teclas de volume e outras mudanças mostram só o indicador do sistema";
-"关闭后平时只保留刘海高度，悬停展开时照常显示" = "Quando desativado, só fica a faixa da altura do notch até você passar o ponteiro para expandir";
 "关闭后暂停推送到这个渠道，填写的内容会保留" = "Desative para pausar os envios para este canal; o que você preencheu é mantido";
 "关闭后，仅在悬停显示播放控制时出现" = "Quando desativada, só aparece junto com os controles de reprodução ao passar o ponteiro";
 "关闭悬浮歌词" = "Fechar letra flutuante";
@@ -1349,6 +1349,7 @@
 "当前使用" = "Em uso";
 "当前动态" = "Atividade";
 "当前启用的其余歌词源未应答：%@" = "Outras fontes ativadas não responderam: %@";
+"当前屏幕有刘海，顶行不显示歌词" = "Esta tela tem notch, então a letra não aparece na linha superior";
 "当前播放器不支持喜欢" = "Este player não suporta favoritos";
 "当前播放器将这首歌曲标记为纯音乐，其他候选均不采用" = "Seu player marca esta música como instrumental, então nenhum resultado é usado";
 "当前播放的是 DJ Mix 专辑中的片段（歌名带 [Mixed]，专辑名带 (DJ Mix)）。此类曲目截取自完整演出，前后带有过渡，时长与原版不同，原版歌词的时间轴无法对齐，且暂无歌词源收录混音版的时间轴" = "Este é um trecho de um álbum DJ Mix (o título traz [Mixed] e o álbum, (DJ Mix)). Essas faixas são cortadas de um set completo, com transições nas pontas e duração diferente, então os tempos da letra original não se alinham, e nenhuma fonte de letras oferece tempos para a versão mixada";
@@ -3069,6 +3070,8 @@
 "音符" = "Nota";
 "音量" = "Volume";
 "音频输出" = "Saída de áudio";
+"顶行" = "Linha superior";
+"顶行歌词" = "Letra no topo";
 "顶部信息" = "Cabeçalho";
 "顶部信息区占窗口宽度的百分比；文字超出时末尾显示省略号" = "Quanto da largura da janela o cabeçalho ocupa; o texto que não cabe termina em reticências";
 "顶部信息区占窗口高度的百分比（按歌名、歌手、时间三行均显示计算），字号与封面等比缩放" = "Quanto da altura da janela o cabeçalho ocupa (contando as três linhas), com o texto e a capa redimensionados juntos";

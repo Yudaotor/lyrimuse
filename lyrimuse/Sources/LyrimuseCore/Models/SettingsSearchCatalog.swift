@@ -175,9 +175,13 @@ public enum SettingsSearchCatalog {
             RowGate(menuBar, "文字颜色", "menuBar.colorRowsShown", "彩虹"),
             RowGate(menuBar, "已唱颜色", "menuBar.colorRowsShown", "彩虹"),
         ]
-        // 灵动岛「歌词行」组:收起时不显示歌词时整组藏起(`NotchLyricRowSettingsRows`)。
-        for title in ["对齐方式", "歌词颜色", "副行", "无译文时", "无读音时", "高度", "卡拉OK效果", "显示封面", "封面位置", "悬停时淡化"] {
+        // 灵动岛「歌词行」组:「收起时显示歌词」选「不显示」时整组藏起;选「顶行」时只留管那一句怎么画的三项
+        // (`NotchLyricRowSettingsRows`)。
+        for title in ["对齐方式", "歌词颜色", "卡拉OK效果"] {
             gates.append(RowGate(notch, title, "notch.showLyrics", "收起时显示歌词"))
+        }
+        for title in ["副行", "无译文时", "无读音时", "高度", "显示封面", "封面位置", "悬停时淡化"] {
+            gates.append(RowGate(notch, title, "notch.lyricRowShown", "收起时显示歌词"))
         }
         // Last.fm「Scrobble 规则」:上面的「Scrobble 到 Last.fm」关着时整组换成一句提示,落到组标题上。
         for title in ["匹配模式", "歌名", "歌手", "Scrobble 时机", "Scrobble 短于 30 秒的曲目", "Scrobble 的播放器"] {
@@ -511,7 +515,7 @@ public enum SettingsSearchCatalog {
                 kw: ["音浪", "频谱", "真实音频", "节奏", "鼓点", "系统录音"], group: "左耳"),
         surface(.notch, "宽度", kw: ["稳态宽", "pt"]),
         surface(.notch, "展开宽度", kw: ["展开态", "pt"]),
-        surface(.notch, "收起时显示歌词", kw: ["显示歌词", "歌词行", "状态条"], group: "歌词行"),
+        surface(.notch, "收起时显示歌词", kw: ["显示歌词", "歌词行", "状态条", "顶行", "两耳之间"], group: "歌词行"),
         surface(.notch, "对齐方式", kw: ["居中", "左对齐", "右对齐"], group: "歌词行"),
         surface(.notch, "歌词颜色", kw: ["颜色", "彩虹", "渐变", "强调色", "自定义", "自定义颜色", "取色"], group: "歌词行"),
         surface(.notch, "副行", kw: ["下一句", "译文", "读音", "罗马音", "两行"], group: "歌词行"),

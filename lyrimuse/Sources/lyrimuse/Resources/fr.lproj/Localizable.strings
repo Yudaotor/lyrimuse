@@ -294,6 +294,7 @@
 "「获取 Lyrimuse」" = "« Obtenir Lyrimuse »";
 "「跟随正文」时比正文细一档" = "« Comme les paroles » est une graisse plus fin que les paroles";
 "「跟随正文」时比正文细两档" = "« Comme les paroles » est deux graisses plus fin que les paroles";
+"「顶行」将歌词放在两只耳朵之间，卡片不加高，仅适用于无刘海的屏幕" = "« Ligne du haut » place les paroles entre les deux oreilles sans agrandir la carte ; uniquement sur les écrans sans encoche";
 "一" = "L";
 "一切就绪" = "Tout est prêt";
 "一周结束后的 %@ 推送上一周的小结" = "Envoyé à %@ à la fin de chaque semaine, avec le récap de la semaine écoulée";
@@ -605,7 +606,6 @@
 "关闭后不显示进度条，Discord 将改为显示已播放时长，该计时无法关闭" = "Désactivé, pas de barre de progression ; Discord affiche alors le temps écoulé, qui ne peut pas être désactivé";
 "关闭后仅保留菜单栏图标" = "Si désactivé, seule l’icône de la barre des menus reste";
 "关闭后只在灵动岛上滑动调节音量时显示音量提示，键盘音量键等只显示系统自带的提示" = "Désactivé, l’indicateur de volume n’apparaît que lorsque vous balayez l’encoche pour régler le volume ; les touches de volume et les autres changements n’affichent que celui du système";
-"关闭后平时只保留刘海高度，悬停展开时照常显示" = "Si désactivé, seule une bande à la hauteur de l’encoche reste visible jusqu’au survol";
 "关闭后暂停推送到这个渠道，填写的内容会保留" = "Désactivez pour suspendre les envois vers ce canal ; vos saisies sont conservées";
 "关闭后，仅在悬停显示播放控制时出现" = "Si désactivée, n’apparaît qu’avec les commandes de lecture au survol";
 "关闭悬浮歌词" = "Fermer les paroles flottantes";
@@ -1349,6 +1349,7 @@
 "当前使用" = "Utilisé";
 "当前动态" = "Activité";
 "当前启用的其余歌词源未应答：%@" = "Autres sources activées sans réponse : %@";
+"当前屏幕有刘海，顶行不显示歌词" = "Cet écran a une encoche : les paroles ne s’affichent pas sur la ligne du haut";
 "当前播放器不支持喜欢" = "Ce lecteur ne prend pas en charge les favoris";
 "当前播放器将这首歌曲标记为纯音乐，其他候选均不采用" = "Votre lecteur marque ce morceau comme instrumental : aucun résultat n’est utilisé";
 "当前播放的是 DJ Mix 专辑中的片段（歌名带 [Mixed]，专辑名带 (DJ Mix)）。此类曲目截取自完整演出，前后带有过渡，时长与原版不同，原版歌词的时间轴无法对齐，且暂无歌词源收录混音版的时间轴" = "C’est un extrait d’un album DJ Mix (titre marqué [Mixed], album (DJ Mix)). Ces pistes sont tirées d’un set complet, avec des transitions de chaque côté et une autre durée : le minutage des paroles d’origine ne peut pas s’aligner, et aucune source de paroles ne fournit de minutage pour la version mixée";
@@ -3069,6 +3070,8 @@
 "音符" = "Note";
 "音量" = "Volume";
 "音频输出" = "Sortie audio";
+"顶行" = "Ligne du haut";
+"顶行歌词" = "Paroles en haut";
 "顶部信息" = "En-tête";
 "顶部信息区占窗口宽度的百分比；文字超出时末尾显示省略号" = "Part de la largeur de la fenêtre occupée par l’en-tête ; le texte qui ne tient pas se termine par des points de suspension";
 "顶部信息区占窗口高度的百分比（按歌名、歌手、时间三行均显示计算），字号与封面等比缩放" = "Part de la hauteur de la fenêtre occupée par l’en-tête (sur trois lignes), texte et illustration mis à l’échelle en conséquence";

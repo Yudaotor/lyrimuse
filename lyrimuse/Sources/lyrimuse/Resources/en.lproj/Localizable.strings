@@ -294,6 +294,7 @@
 "「获取 Lyrimuse」" = "“Get Lyrimuse”";
 "「跟随正文」时比正文细一档" = "Match Lyrics is one step lighter than the lyrics";
 "「跟随正文」时比正文细两档" = "Match Lyrics is two steps lighter than the lyrics";
+"「顶行」将歌词放在两只耳朵之间，卡片不加高，仅适用于无刘海的屏幕" = "“Top Row” places lyrics between the two ears without making the card taller; only on screens without a notch";
 "一" = "M";
 "一切就绪" = "All Set";
 "一周结束后的 %@ 推送上一周的小结" = "Pushed at %@ after each week ends, with last week’s summary";
@@ -605,7 +606,6 @@
 "关闭后不显示进度条，Discord 将改为显示已播放时长，该计时无法关闭" = "When off, there’s no progress bar; Discord shows the elapsed time instead, which can’t be turned off";
 "关闭后仅保留菜单栏图标" = "When off, only the menu bar icon remains";
 "关闭后只在灵动岛上滑动调节音量时显示音量提示，键盘音量键等只显示系统自带的提示" = "When off, the volume indicator appears only when you swipe on the notch to adjust the volume; volume keys and other changes show only the system indicator";
-"关闭后平时只保留刘海高度，悬停展开时照常显示" = "When off, only the notch-height strip stays until you hover to expand";
 "关闭后暂停推送到这个渠道，填写的内容会保留" = "Turn off to pause pushes to this channel; what you filled in is kept";
 "关闭后，仅在悬停显示播放控制时出现" = "When off, appears only while the playback controls show on hover";
 "关闭悬浮歌词" = "Close Floating Lyrics";
@@ -1349,6 +1349,7 @@
 "当前使用" = "In use";
 "当前动态" = "Activity";
 "当前启用的其余歌词源未应答：%@" = "Other enabled sources did not respond: %@";
+"当前屏幕有刘海，顶行不显示歌词" = "This screen has a notch, so lyrics are not shown in the top row";
 "当前播放器不支持喜欢" = "This player doesn’t support favorites";
 "当前播放器将这首歌曲标记为纯音乐，其他候选均不采用" = "Your player marks this track as instrumental, so no candidate is used";
 "当前播放的是 DJ Mix 专辑中的片段（歌名带 [Mixed]，专辑名带 (DJ Mix)）。此类曲目截取自完整演出，前后带有过渡，时长与原版不同，原版歌词的时间轴无法对齐，且暂无歌词源收录混音版的时间轴" = "This is a segment of a DJ Mix album (the title is tagged [Mixed] and the album (DJ Mix)). Such tracks are cut from a full set with transitions on either side and a different length, so the original lyrics’ timing can’t line up, and no lyrics source provides timing for the mixed version";
@@ -3069,6 +3070,8 @@
 "音符" = "Note";
 "音量" = "Volume";
 "音频输出" = "Audio Output";
+"顶行" = "Top Row";
+"顶行歌词" = "Lyrics in Top Row";
 "顶部信息" = "Header";
 "顶部信息区占窗口宽度的百分比；文字超出时末尾显示省略号" = "How much of the window’s width the header takes up; text that doesn’t fit ends with an ellipsis";
 "顶部信息区占窗口高度的百分比（按歌名、歌手、时间三行均显示计算），字号与封面等比缩放" = "How much of the window’s height the header takes up (counting all three lines), with the text and artwork scaled to match";

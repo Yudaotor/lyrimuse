@@ -533,7 +533,10 @@ struct PanelQuickSettings: View {
             //
             // 位置刻意紧挨着下面的「对齐方式」,跟设置页同序:那两项都是"歌词行自己的事",
             // 而上面的风格/宽度说的是整张卡。
-            toggleRow(L10n.t("收起时显示歌词"), isOn: $settings.notchShowLyrics)
+            row(L10n.t("收起时显示歌词")) {
+                PanelGlassMenuPicker(selection: $settings.notchLyricsPlacement,
+                                     options: NotchLyricsPlacement.allCases, label: { $0.displayName })
+            }
             // **跟着 `notchShowLyrics` 一起显隐**,跟设置页那一行拉齐了。
             // 在此之前这里是故意不藏的,理由是"这块面板里没有「显示歌词」这一项,跟着藏就成了
             // 凭空少一行、看不出为什么"——那条理由随着上面这个开关搬进来已经不成立:关掉的
@@ -551,9 +554,13 @@ struct PanelQuickSettings: View {
                 //
                 // 顺序跟设置页「歌词行」组一致(显示歌词 → 对齐方式 → 副行),字号来自「字体」组、
                 // 排在这一段最后 —— 上面的风格/宽度说的是整张卡,这四行是"歌词行自己的事"。
-                secondaryLineRow(selection: $settings.notchSecondaryLine)
+                // 副行、高度只属于下面的歌词行,放在顶行时不给(同设置页 `NotchLyricRowSettingsRows`)。
+                let belowRow = settings.notchLyricsPlacement == .belowRow
+                if belowRow {
+                    secondaryLineRow(selection: $settings.notchSecondaryLine)
+                }
                 // 同设置页:选了译文 / 读音才有「无译文时 / 无读音时」(05 章决策 148)。
-                if settings.notchSecondaryLine.isPerLineText {
+                if belowRow, settings.notchSecondaryLine.isPerLineText {
                     secondaryFallbackRow(secondary: settings.notchSecondaryLine, selection: $settings.notchSecondaryFallback)
                 }
                 // 灵动岛的字号跟「副行」**互不影响**,不要照搬菜单栏那边的「由副行决定」:
@@ -566,13 +573,15 @@ struct PanelQuickSettings: View {
                    onEditingChanged: { notchFontSizeThrottle.editingChanged($0, commit: commitNotchFontSize) })
                 // 歌词行「高度」,设置页「歌词行」组那根的第二个入口:区间(下界跟着字号和副行现算)和显示值(实际画出来的
                 // 高度)都读 AppSettings 那一份,排在字号后面 —— 字号一变,它的下界当场跟着变,挨着看得出因果。
-                sliderRow(L10n.t("高度"), value: Binding(
-                    get: { notchRowHeightThrottle.value(or: Double(settings.notchEffectiveLyricRowHeight)) },
-                    set: { notchRowHeightThrottle.update($0, commit: settings.setNotchLyricRowHeight(fromSlider:)) }
-                ), range: settings.notchLyricRowHeightRange,
-                   onEditingChanged: {
-                       notchRowHeightThrottle.editingChanged($0, commit: settings.setNotchLyricRowHeight(fromSlider:))
-                   })
+                if belowRow {
+                    sliderRow(L10n.t("高度"), value: Binding(
+                        get: { notchRowHeightThrottle.value(or: Double(settings.notchEffectiveLyricRowHeight)) },
+                        set: { notchRowHeightThrottle.update($0, commit: settings.setNotchLyricRowHeight(fromSlider:)) }
+                    ), range: settings.notchLyricRowHeightRange,
+                       onEditingChanged: {
+                           notchRowHeightThrottle.editingChanged($0, commit: settings.setNotchLyricRowHeight(fromSlider:))
+                       })
+                }
             }
         case .surface(.menuBar):
             row(L10n.t("显示内容")) {

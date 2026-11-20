@@ -16,10 +16,18 @@ extension NotchLyricsView {
     ///    选了"只在有曲目时画",而不是参考实现那种常驻)。
     /// 「截屏/录屏时隐藏」开着时整窗不进截图,不必另加开关。高度按顶行让 8pt 边、夹在
     /// 14～22pt(矮刘海机型顶行可能不到 26pt)。装饰元素,读屏不念。
-    /// 顶行中间刘海那一段的**占位**:只有宽度,什么都不画。胶囊本体(notchSeam)自钉在 body 的
-    /// ZStack 顶部居中(理由见那里),顶行只需要把这段宽度让出来。
+    /// 顶行中间刘海那一段的**占位**:只有宽度,什么都不画。胶囊本体(notchSeam)和顶行歌词(`topRowLyrics`)都自钉在 body 的
+    /// ZStack 顶部居中(理由见那里),顶行只需要把这段宽度让出来。宽度跟耳宽同一份(`NotchCardLayout.topRowGap`)。
     private var notchGap: some View {
-        Spacer(minLength: 0).frame(width: controller.notchWidth)
+        Spacer(minLength: 0).frame(width: controller.cardLayout.topRowGap)
+    }
+
+    /// 没有刘海的屏上,两只耳朵之间那一段当前句(「收起时显示歌词」选「顶行」)。定宽、以卡片中心为锚、常驻只切透明度,
+    /// 同 `cardBodyLayer` 里的各块:展开 / 收起时原地淡出,不跟着耳朵平移。
+    var topRowLyrics: some View {
+        singleLyricLine(.current)
+            .frame(width: controller.topRowLyricsWidth, height: controller.contentTopInset)
+            .modifier(NotchCardLayerActive(active: controller.showsTopRowLyrics))
     }
 
     var notchSeam: some View {
@@ -124,7 +132,7 @@ extension NotchLyricsView {
             cardPadding: controller.topRowPadding,
             shoulder: NotchOutline.shoulderRadius(notchHeight: controller.contentTopInset),
             expanded: controller.isExpanded,
-            atMinimumWidth: controller.isCardAtMinimumWidth)
+            atMinimumWidth: controller.isCardAtMinimumWidth && !controller.showsTopRowLyrics)
         return HStack(spacing: 0) {
             // 左耳:模块 + (可选)音浪。音浪贴哪只耳朵可配,
             // 这里跟下面右耳是完全对称的结构——只是音浪在外缘,外缘在左耳是"最左",

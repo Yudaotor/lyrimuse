@@ -297,13 +297,14 @@ Des paroles qui flottent au-dessus de toutes les fenêtres, toujours au premier 
 
 ### Paroles de l’encoche
 
-Une capsule façon Dynamic Island près de l’encoche, en haut de l’écran ; les Mac sans encoche et les écrans externes y ont droit aussi. Chaque côté peut afficher le titre, l’artiste, l’album, l’illustration, les commandes de lecture, ou le temps écoulé ou restant, à côté d’une onde audio animée. Survolez-la pour la développer et accéder aux commandes, à une barre de progression cliquable, au minutage des paroles et à des boutons rapides comme Favori ou Rechercher les paroles. Pendant les pubs, elle affiche un compte à rebours du temps restant.
+Une capsule façon Dynamic Island près de l’encoche, en haut de l’écran ; les Mac sans encoche et les écrans externes y ont droit aussi. Chaque côté peut afficher le titre, l’artiste, l’album, l’illustration, les commandes de lecture, ou le temps écoulé ou restant, à côté d’une onde audio animée. Sur les écrans sans encoche, la ligne en cours peut aussi s’afficher entre les deux côtés, la capsule gardant la hauteur de la barre des menus. Survolez-la pour la développer et accéder aux commandes, à une barre de progression cliquable, au minutage des paroles et à des boutons rapides comme Favori ou Rechercher les paroles. Pendant les pubs, elle affiche un compte à rebours du temps restant.
 
 - Désactivée par défaut
 - Réglages : Affichage des paroles › Encoche › Paroles de l’encoche
 - Réglages : Affichage des paroles › Encoche › Style
 - Réglages : Affichage des paroles › Encoche › Écran
 - Réglages : Affichage des paroles › Encoche › Gauche
+- Réglages : Affichage des paroles › Encoche › Ligne de paroles › Paroles en mode réduit
 - Réglages : Raccourcis clavier › Afficher/masquer les paroles de l’encoche
 - Réglages : Raccourcis clavier › Développer l’encoche un instant
 - Réglages : Affichage des paroles › Encoche › Développé › Actions rapides
@@ -1134,7 +1135,7 @@ Tous les réglages de la fenêtre Réglages, classés par emplacement : 345 au 
 
 ### Affichage des paroles › Encoche › Ligne de paroles
 
-- **Paroles en mode réduit** : Si désactivé, seule une bande à la hauteur de l’encoche reste visible jusqu’au survol
+- **Paroles en mode réduit**
 - **Alignement**
 - **Couleur des paroles**
 - **Seconde ligne**

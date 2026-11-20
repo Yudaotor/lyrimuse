@@ -64,8 +64,19 @@ final class NotchPreviewChrome: ObservableObject, NotchChromeSource {
     /// 「显示歌词」现读设置 —— 这一项**必须**反映真实配置(它决定卡片还剩不剩歌词行,
     /// 正是用户在这块画布上要看的东西),不能像上面几项那样为了"看样式"钉成常量。
     /// 不用 @Published 镜像:设置一变由 `settingsSubscription` 发一次 objectWillChange,预览按新值重画。
-    var showsLyrics: Bool { AppSettings.shared.notchShowLyrics }
+    var showsLyrics: Bool { AppSettings.shared.notchLyricsPlacement.presentation(hasNotch: notchWidth > 0) == .belowRow }
     var showsLyricsSetting: Bool { AppSettings.shared.notchShowLyrics }
+    /// 顶行歌词那段,同真窗口一套公式(`NotchTopRowLyrics.fit`),只是不按菜单栏两侧夹:编辑台里没有那份读数,
+    /// 舞台按稳态宽画。
+    var topRowLyricsWidth: CGFloat {
+        let s = AppSettings.shared
+        guard s.notchLyricsPlacement.presentation(hasNotch: notchWidth > 0) == .topRow else { return 0 }
+        let ear = NotchLyricsWindowController.topRowEarWidth(
+            leftEar: s.notchLeftEar, rightEar: s.notchRightEar, showsEqualizer: s.notchShowsEqualizer,
+            equalizerEar: s.notchEqualizerEar, contentTopInset: contentTopInset)
+        return NotchTopRowLyrics.fit(steadyWidth: steadyCardWidth, earWidth: ear,
+                                     cardPadding: NotchMetrics.cardHorizontalPadding, maxCardWidth: nil)?.lyricWidth ?? 0
+    }
     /// 歌词行实际高度,同上现读:拖「行高」滑杆时预览卡片跟着变矮(舞台本身按上限留高度,不跟着动,见 `cardAreaHeight`)。
     var lyricRowHeight: CGFloat { AppSettings.shared.notchEffectiveLyricRowHeight }
     /// 音浪开关/贴哪只耳朵,同上现读设置——预览要如实反映用户正在配的效果。
@@ -115,6 +126,8 @@ final class NotchPreviewChrome: ObservableObject, NotchChromeSource {
         )
             .receive(on: DispatchQueue.main)
             .sink { [weak self] _ in self?.refreshGeometry() }
+        debugGeometrySubscription = NotificationCenter.default.publisher(for: NotchLyricsWindowController.debugGeometryChanged)
+            .sink { [weak self] _ in MainActor.assumeIsolated { self?.refreshGeometry() } }
         cornerSubscription = NotchCornerLive.shared.focusPublisher
             .sink { [weak self] slot in self?.cornerFocus = slot }
         // 同真窗口:三个输入一次给全,存 sink 参数值(@Published 在 willSet 发布)。
@@ -135,6 +148,7 @@ final class NotchPreviewChrome: ObservableObject, NotchChromeSource {
         }
         settingsSubscription = Publishers.MergeMany([
             changed(s.$notchShowsProgressLine), changed(s.$notchProgressLineStyle), changed(s.$notchShowLyrics),
+            changed(s.$notchLyricsInTopRow), changed(s.$notchLeftEar), changed(s.$notchRightEar),
             changed(s.$notchShowsEqualizer), changed(s.$notchEqualizerEar), changed(s.$notchExpandedShowsNextLine),
             changed(s.$notchSecondaryLine), changed(s.$notchExpandedShowsControls), changed(s.$notchExpandedShowsArtwork),
             changed(s.$notchExpandedShowsTrackTitle), changed(s.$notchExpandedShowsArtist), changed(s.$notchExpandedShowsAlbum),
@@ -151,6 +165,7 @@ final class NotchPreviewChrome: ObservableObject, NotchChromeSource {
     }
 
     private var screenSubscription: AnyCancellable?
+    private var debugGeometrySubscription: AnyCancellable?
     private var cornerSubscription: AnyCancellable?
     private var trackSubscription: AnyCancellable?
     private var idlePanelSubscription: AnyCancellable?

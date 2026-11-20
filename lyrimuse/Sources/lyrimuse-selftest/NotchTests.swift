@@ -330,6 +330,67 @@ func runNotchTests() {
                     "出场: 比退场 0.2s 长但不拖沓")
     }
 
+    // ---- 「收起时显示歌词」三档与顶行歌词的几何(NotchLyricsPlacement / NotchTopRowLyrics,05 章决策 158)----
+    do {
+        typealias P = NotchLyricsPlacement
+        expectEqual([P(showsLyrics: true, inTopRow: false), P(showsLyrics: false, inTopRow: false),
+                     P(showsLyrics: true, inTopRow: true), P(showsLyrics: false, inTopRow: true)],
+                    [.belowRow, .hidden, .topRow, .hidden],
+                    "歌词三档: 旧配置开 = 歌词行、关 = 不显示;关着时不看放在哪")
+        expectEqual(P.allCases.map { P(showsLyrics: $0.storage.showsLyrics, inTopRow: $0.storage.inTopRow ?? true) }, P.allCases,
+                    "歌词三档: 存回两个设置再读出来不变")
+        expectEqual(P.hidden.storage.inTopRow == nil, true, "歌词三档: 选不显示不改放在哪,再打开回到原处")
+        expectEqual([P.topRow.presentation(hasNotch: true), P.topRow.presentation(hasNotch: false),
+                     P.belowRow.presentation(hasNotch: true), P.hidden.presentation(hasNotch: false)],
+                    [.hidden, .topRow, .belowRow, .hidden], "歌词三档: 有刘海的屏选顶行按不显示画")
+
+        typealias T = NotchTopRowLyrics
+        expectEqual(T.fit(steadyWidth: 322, earWidth: 28, cardPadding: 10, maxCardWidth: nil),
+                    T.Fit(cardWidth: 322, lyricWidth: 246), "顶行歌词: 不夹时按稳态宽,中间 = 宽 − 两耳 − 两侧内边距")
+        expectEqual(T.fit(steadyWidth: 482, earWidth: 28, cardPadding: 10, maxCardWidth: 322),
+                    T.Fit(cardWidth: 322, lyricWidth: 246), "顶行歌词: 稳态宽超过菜单栏两侧之间那段就夹到上限")
+        expectEqual(T.fit(steadyWidth: 100, earWidth: 28, cardPadding: 10, maxCardWidth: 400),
+                    T.Fit(cardWidth: 136, lyricWidth: 60), "顶行歌词: 稳态宽太窄时抬到放得下最窄的一段歌词")
+        expectEqual(T.fit(steadyWidth: 322, earWidth: 28, cardPadding: 10, maxCardWidth: 135), nil,
+                    "顶行歌词: 上限连最窄的一段都放不下就不画")
+        expectEqual([T.maxCardWidth(centerX: 735, span: 436...896), T.maxCardWidth(centerX: 735, span: nil),
+                     T.maxCardWidth(centerX: 735, span: 800...900), T.maxCardWidth(centerX: 720, span: 16...1424)],
+                    [322, 0, 0, 1408], "顶行歌词: 上限 = 以中线居中、两侧都不越过可用那段;那段在中线一侧或放不下时 0")
+        expectEqual(T.minimumLyricWidth, MenuBarCenterLayout.minimumSpan, "顶行歌词: 最窄一段跟菜单栏正中歌词同一个数")
+        func app(_ path: String) -> String {
+            (try? String(contentsOf: URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+                .appendingPathComponent("lyrimuse/" + path), encoding: .utf8)) ?? ""
+        }
+        let controller = app("UI/NotchLyricsWindowController.swift"), topRowView = app("UI/NotchLyricsView+TopRow.swift")
+        let settings = app("Settings/AppSettings.swift"), preview = app("UI/NotchPreviewChrome.swift")
+        let occupancy = app("MenuBar/MenuBarCenterLyrics.swift")
+        expectEqual(sourceHas(controller, "let cap = presentsOnLockScreen ? nil : topRowMaxCardWidth(on: screen, centerX: geo.centerX)")
+                    && sourceHas(controller, "cardPadding: NotchMetrics.cardHorizontalPadding, maxCardWidth: cap) {\nsteadyWidth = fit.cardWidth")
+                    && sourceHas(controller, "let newExpanded = NotchWidthBounds.expandedWidth(\nsteady: steadyWidth,"), true,
+                    "顶行歌词(契约): 真窗口稳态宽按菜单栏两侧夹过,展开宽在夹过的稳态宽上取")
+        expectEqual(sourceHas(controller, "let occupied = MenuBarCenterLyrics.occupiedSpan(on: screen, notch: nil)\nlet cap = NotchTopRowLyrics.maxCardWidth(centerX: centerX, span: occupied.span)")
+                    && sourceHas(occupancy, "let occupied = Self.occupiedSpan(on: screen, notch: Self.notchRange(of: screen))"), true,
+                    "顶行歌词(契约): 两侧占用跟菜单栏正中歌词读同一份")
+        expectEqual(sourceHas(controller, "MenuBarOccupancy.shared.setActive(wants, client: ObjectIdentifier(self))")
+                    && sourceHas(controller, "MenuBarOccupancy.shared.setActive(false, client: ObjectIdentifier(self))")
+                    && sourceHas(controller, "MenuBarOccupancy.shared.changes.sink"), true,
+                    "顶行歌词(契约): 放顶行歌词时登记要两侧读数、拆掉时放手、读数变了重算几何")
+        expectEqual(sourceHas(controller, "setting: lyricsPlacement.presentation(hasNotch: notchWidth > 0) == .belowRow,")
+                    && sourceHas(controller, "if notchHeight > 0, !ignoresNotchForDebug,"), true,
+                    "顶行歌词(契约): 下面的歌词行只在「歌词行」那档画,有刘海的屏选顶行按不显示;调试开关按无刘海几何摆")
+        expectEqual(sourceHas(topRowView, "Spacer(minLength: 0).frame(width: controller.cardLayout.topRowGap)")
+                    && sourceHas(topRowView, ".modifier(NotchCardLayerActive(active: controller.showsTopRowLyrics))")
+                    && sourceHas(topRowView, "atMinimumWidth: controller.isCardAtMinimumWidth && !controller.showsTopRowLyrics)"), true,
+                    "顶行歌词(契约): 顶行空当跟耳宽同一份,那一句只切透明度,音浪贴外缘")
+        expectEqual(sourceHas(preview, "cardPadding: NotchMetrics.cardHorizontalPadding, maxCardWidth: nil)?.lyricWidth ?? 0"), true,
+                    "顶行歌词(契约): 编辑台预览同一套公式,不按菜单栏夹")
+        expectEqual(sourceHas(settings, "notchShowLyrics = (defaults.object(forKey: Keys.notchShowLyrics) as? Bool) ?? Self.defaultNotchShowLyrics")
+                    && sourceHas(settings, "notchLyricsInTopRow = (defaults.object(forKey: Keys.notchLyricsInTopRow) as? Bool) ?? Self.defaultNotchLyricsInTopRow")
+                    && !settings.contains("removeObject(forKey: Keys.notchShowLyrics)")
+                    && sourceHas(settings, "static let defaultNotchLyricsInTopRow = false"), true,
+                    "歌词三档(契约): 旧的「收起时显示歌词」原样读,新加的「放在顶行」默认关,升级上来的配置不改写")
+    }
+
     // ---- NotchCardLayout:卡片宽高、各块画不画、收起判据(真窗口和编辑台读同一份,05 章决策 109)----
     //
     // 数字按 NotchExpandedMetrics 现行尺寸手算:展开区满配 = 三键 35 + 下一句 17 + 进度条 24 = 76;头部三行字 14+12+11+2、
@@ -409,6 +470,25 @@ func runNotchTests() {
         expectEqual(with { $0.notchWidth = 0; $0.contentTopInset = 24 }.showsCardEdge
                     && !with { $0.notchWidth = 0; $0.contentTopInset = 24; $0.showsLyrics = false; $0.showsProgressLine = true }.showsCardEdge,
                     true, "卡片边缘: 没有刘海的屏按菜单栏高度量伸出多少")
+        // 顶行歌词(05 章决策 158):没有刘海的屏、选「顶行」,稳态 322 宽、两耳各 28,中间 246 给当前句;卡片就是菜单栏那么高。
+        let topRow = with { $0.notchWidth = 0; $0.contentTopInset = 24; $0.showsLyrics = false
+            $0.steadyCardWidth = 322; $0.topRowLyricsWidth = 246 }
+        expectEqual([topRow.cardHeight, topRow.cardWidth, topRow.earWidth(cardWidth: 322), topRow.topRowGap], [24, 322, 28, 246],
+                    "顶行歌词: 卡片高 = 菜单栏高、宽 = 稳态宽,耳朵收到 28,中间 246 给歌词")
+        expectEqual([topRow.showsTopRowLyrics, topRow.showsCardEdge, topRow.showsLyricRow], [true, false, false],
+                    "顶行歌词: 画顶行那句,不伸出菜单栏、不画描边投影,不画下面的歌词行")
+        expectEqual([with { $0.topRowLyricsWidth = 246; $0.isExpanded = true }.showsTopRowLyrics,
+                     with { $0.topRowLyricsWidth = 246; $0.isCollapsed = true }.showsTopRowLyrics,
+                     with { $0.topRowLyricsWidth = 246; $0.hasMilestone = true }.showsTopRowLyrics,
+                     with { $0.topRowLyricsWidth = 246; $0.hasTrack = false }.showsTopRowLyrics,
+                     with { $0.topRowLyricsWidth = 0 }.showsTopRowLyrics],
+                    [false, false, false, false, false], "顶行歌词: 展开、收起、报喜、没曲目、宽度 0 时不画")
+        let topRowExpanded = with { $0.notchWidth = 0; $0.contentTopInset = 24; $0.showsLyrics = false
+            $0.steadyCardWidth = 322; $0.topRowLyricsWidth = 246; $0.isExpanded = true }
+        expectEqual([topRowExpanded.topRowGap, topRowExpanded.showsLyricRow ? 1 : 0], [0, 1],
+                    "顶行歌词: 展开时中间不再留歌词那段,当前句回到下面那份歌词行")
+        expectEqual(with { $0.notchWidth = 0; $0.contentTopInset = 24; $0.showsLyrics = false; $0.topRowLyricsWidth = 246
+            $0.hasTrackDrop = true }.cardHeight, 50, "顶行歌词: 掉歌名照「不显示」那样临时多长 26")
         expectEqual(with { $0.showsProgressLine = true; $0.isExpanded = true }.showsBottomProgressLine, false, "卡片布局: 展开不画底边进度线")
         expectEqual(with { $0.showsProgressLine = true; $0.isCollapsed = true }.showsBottomProgressLine, false, "卡片布局: 收起不画底边进度线")
         // 「耳朵」那一档:卡片不为它变高;关着歌词行时掉歌名 / 横幅那一截伸出来就让开。
@@ -2538,9 +2618,9 @@ func runNotchTests() {
                     "无歌词收起契约: 灵动岛没有歌词时只收歌词行,不进显隐判据")
         expectEqual(sourceHas(controller, "AppSettings.shared.$notchCollapseLyricsWhenNoLyrics\n            .combineLatest(PlaybackCoordinator.shared.$currentTrackLacksLyrics)"), true,
                     "无歌词收起契约: 每个实例(含镜像副本)自己订阅开关与「这首有没有歌词」,值从 sink 参数拿")
-        expectEqual(sourceHas(controller, "let shows = NotchVisibility.showsLyrics(setting: showsLyricsSetting,\n                                                collapsedForNoLyrics: lyricsCollapsedForNoLyrics)")
-                    && controller.components(separatedBy: "applyShowsLyrics()").count - 1 == 3, true,
-                    "无歌词收起契约: 卡片读的 showsLyrics 由 Core 合成,「显示歌词」开关和无歌词两路变化都重算")
+        expectEqual(sourceHas(controller, "let shows = NotchVisibility.showsLyrics(\nsetting: lyricsPlacement.presentation(hasNotch: notchWidth > 0) == .belowRow,\ncollapsedForNoLyrics: lyricsCollapsedForNoLyrics)")
+                    && controller.components(separatedBy: "applyShowsLyrics()").count - 1 == 4, true,
+                    "无歌词收起契约: 卡片读的 showsLyrics 由 Core 合成,「显示歌词」三档、无歌词、几何重算三路变化都重算")
         expectEqual(controller.contains("subscriptions.removeAll()"), true, "无歌词收起契约: 副本 teardown 摘掉订阅")
         expectEqual(sourceHas(controller, "NotchCardLayout.isCollapsed(collapsesWhenPaused: collapsesWhenPaused, isPlaying: isPlayingNow,")
                     && sourceHas(controller, "collapsesDuringAds: collapsesDuringAds, isAdBreak: isAdBreakNow, isExpanded: isExpanded)")

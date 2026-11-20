@@ -275,6 +275,32 @@ extension NotchLyricsView {
         }
     }
 
+    /// 单行歌词:当前句(逐字填色 / 跑马灯、各种状态占位,同歌词行的主行)或下一句(跑马灯,淡一档)。宽度由调用方给,
+    /// 字体跟歌词行主行同一份。顶行歌词用它画当前句。
+    @ViewBuilder
+    func singleLyricLine(_ kind: NotchLyricLineKind) -> some View {
+        switch kind {
+        case .current: mainLyricLine
+        case .next: nextLyricLine
+        }
+    }
+
+    private var nextLyricLine: some View {
+        LayerMarquee(id: playback.nextLineText ?? "",
+                     edgeFadeWidth: NotchMetrics.lyricEdgeFadeWidth,
+                     restingAlignment: playback.nextLineAlignment,
+                     loops: false,
+                     isActive: surfaceVisible) {
+            Text(playback.nextLineText ?? "")
+                .font(playback.mainFont)
+                .lyricTypesetting(playback.nextLineText)
+                .foregroundStyle(lyricInk.opacity(0.45))
+                .notchTextShadow()
+                .lineLimit(1)
+        }
+        .font(playback.mainFont)
+    }
+
     /// 主行本体,从 `lyricRowContent` 拆出来给副行让位。用这一行纯文本(不含逐字填色进度)当跑马灯的 id:换到新的一句才重新
     /// 测量/重新开始滚动,同一句内部逐字变色的高频刷新不打断正在进行的滚动。
     /// restingAlignment 与 edgeFadeWidth 的理由见 `lyricRowContent` 里紧挨着 `lyricTextColumn` 的那段注释。

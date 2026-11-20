@@ -294,6 +294,7 @@
 "「获取 Lyrimuse」" = "“Ottieni Lyrimuse”";
 "「跟随正文」时比正文细一档" = "“Come il testo” è un livello più sottile del testo";
 "「跟随正文」时比正文细两档" = "“Come il testo” è due livelli più sottile del testo";
+"「顶行」将歌词放在两只耳朵之间，卡片不加高，仅适用于无刘海的屏幕" = "“Riga superiore” mostra il testo tra le due orecchie senza ingrandire la scheda; solo su schermi senza notch";
 "一" = "L";
 "一切就绪" = "Tutto pronto";
 "一周结束后的 %@ 推送上一周的小结" = "Inviato alle %@ a fine settimana con il riepilogo settimanale";
@@ -605,7 +606,6 @@
 "关闭后不显示进度条，Discord 将改为显示已播放时长，该计时无法关闭" = "Se disattivata, non c’è la barra di avanzamento; Discord mostra invece il tempo trascorso, che non si può disattivare";
 "关闭后仅保留菜单栏图标" = "Se disattivato, resta solo l’icona nella barra dei menu";
 "关闭后只在灵动岛上滑动调节音量时显示音量提示，键盘音量键等只显示系统自带的提示" = "Se disattivato, l’indicatore del volume appare solo quando scorri sul notch per regolarlo; i tasti del volume e le altre modifiche mostrano solo l’indicatore di sistema";
-"关闭后平时只保留刘海高度，悬停展开时照常显示" = "Se disattivato, resta solo una striscia alta quanto il notch finché non ci passi sopra per espanderla";
 "关闭后暂停推送到这个渠道，填写的内容会保留" = "Disattiva per sospendere i push a questo canale; i dati inseriti restano";
 "关闭后，仅在悬停显示播放控制时出现" = "Se disattivata, appare solo quando compaiono i controlli di riproduzione al passaggio del mouse";
 "关闭悬浮歌词" = "Chiudi testo fluttuante";
@@ -1349,6 +1349,7 @@
 "当前使用" = "In uso";
 "当前动态" = "Attività";
 "当前启用的其余歌词源未应答：%@" = "Altre fonti attive senza risposta: %@";
+"当前屏幕有刘海，顶行不显示歌词" = "Questo schermo ha il notch, quindi il testo non viene mostrato nella riga superiore";
 "当前播放器不支持喜欢" = "Questo player non supporta i preferiti";
 "当前播放器将这首歌曲标记为纯音乐，其他候选均不采用" = "Il tuo player indica questo brano come strumentale, quindi nessun risultato viene usato";
 "当前播放的是 DJ Mix 专辑中的片段（歌名带 [Mixed]，专辑名带 (DJ Mix)）。此类曲目截取自完整演出，前后带有过渡，时长与原版不同，原版歌词的时间轴无法对齐，且暂无歌词源收录混音版的时间轴" = "È un estratto di un album DJ Mix (il titolo ha il tag [Mixed] e l’album (DJ Mix)). Questi brani sono tagliati da un set completo, con transizioni prima e dopo e una durata diversa, quindi il timing del testo originale non può allinearsi, e nessuna fonte dei testi fornisce il timing della versione mixata";
@@ -3069,6 +3070,8 @@
 "音符" = "Nota";
 "音量" = "Volume";
 "音频输出" = "Uscita audio";
+"顶行" = "Riga superiore";
+"顶行歌词" = "Testo in alto";
 "顶部信息" = "Intestazione";
 "顶部信息区占窗口宽度的百分比；文字超出时末尾显示省略号" = "Quanta larghezza della finestra occupa l’intestazione; il testo che non entra termina con i puntini di sospensione";
 "顶部信息区占窗口高度的百分比（按歌名、歌手、时间三行均显示计算），字号与封面等比缩放" = "Quanta altezza della finestra occupa l’intestazione (contando tutte e tre le righe), con testo e illustrazione ridimensionati di conseguenza";

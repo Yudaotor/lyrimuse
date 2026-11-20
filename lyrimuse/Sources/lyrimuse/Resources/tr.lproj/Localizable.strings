@@ -268,6 +268,7 @@
 "「获取 Lyrimuse」" = "“Lyrimuse’u İndir”";
 "「跟随正文」时比正文细一档" = "“Ana Metne Uy” ana metinden bir kademe ince olur";
 "「跟随正文」时比正文细两档" = "“Ana Metne Uy” ana metinden iki kademe ince olur";
+"「顶行」将歌词放在两只耳朵之间，卡片不加高，仅适用于无刘海的屏幕" = "“Üst Satır”, sözleri iki yan arasında gösterir ve kartı uzatmaz; yalnızca çentiksiz ekranlarda";
 "一" = "P";
 "一切就绪" = "Her Şey Hazır";
 "一周结束后的 %@ 推送上一周的小结" = "Geçen haftanın özeti, hafta bittikten sonra saat %@ gönderilir";
@@ -567,7 +568,6 @@
 "关闭后不显示进度条，Discord 将改为显示已播放时长，该计时无法关闭" = "Kapalıyken ilerleme çubuğu gösterilmez; Discord bunun yerine geçen süreyi gösterir ve bu süre kapatılamaz";
 "关闭后仅保留菜单栏图标" = "Kapalıyken yalnızca menü çubuğu simgesi kalır";
 "关闭后只在灵动岛上滑动调节音量时显示音量提示，键盘音量键等只显示系统自带的提示" = "Kapalıyken ses göstergesi yalnızca çentikte kaydırarak ses yüksekliğini ayarladığınızda görünür; klavyedeki ses tuşları ve diğer değişikliklerde yalnızca sistem göstergesi görünür";
-"关闭后平时只保留刘海高度，悬停展开时照常显示" = "Kapalıyken yalnızca çentik yüksekliğinde bir şerit kalır, üzerine gelince genişler";
 "关闭后暂停推送到这个渠道，填写的内容会保留" = "Kapalıyken bu kanala gönderim duraklatılır; girdiğiniz bilgiler korunur";
 "关闭后，仅在悬停显示播放控制时出现" = "Kapalıyken yalnızca imleç üzerindeyken çalma denetimleriyle birlikte görünür";
 "关闭悬浮歌词" = "Yüzen Sözleri Kapat";
@@ -1276,6 +1276,7 @@
 "当前使用" = "Kullanımda";
 "当前动态" = "Etkinlik";
 "当前启用的其余歌词源未应答：%@" = "Etkin diğer kaynaklar yanıt vermedi: %@";
+"当前屏幕有刘海，顶行不显示歌词" = "Bu ekranda çentik olduğu için üst satırda söz gösterilmez";
 "当前播放器不支持喜欢" = "Bu çalar favorileri desteklemiyor";
 "当前播放器将这首歌曲标记为纯音乐，其他候选均不采用" = "Çalarınız bu parçayı enstrümantal olarak işaretliyor, hiçbir aday kullanılmaz";
 "当前播放的是 DJ Mix 专辑中的片段（歌名带 [Mixed]，专辑名带 (DJ Mix)）。此类曲目截取自完整演出，前后带有过渡，时长与原版不同，原版歌词的时间轴无法对齐，且暂无歌词源收录混音版的时间轴" = "Bu, bir DJ Mix albümünden bir bölüm (adında [Mixed], albüm adında (DJ Mix) var). Bu tür parçalar geçişleriyle birlikte tam bir setten kesilir ve süreleri farklıdır; bu yüzden orijinal şarkı sözlerinin zamanlaması uymaz ve hiçbir şarkı sözü kaynağı miks sürümün zamanlamasını sunmaz";
@@ -2974,6 +2975,8 @@
 "音符" = "Nota";
 "音量" = "Ses Yüksekliği";
 "音频输出" = "Ses Çıkışı";
+"顶行" = "Üst Satır";
+"顶行歌词" = "Üst Satırda Sözler";
 "顶部信息" = "Üst Bilgi";
 "顶部信息区占窗口宽度的百分比；文字超出时末尾显示省略号" = "Üst bilginin kapladığı pencere genişliği yüzdesi; sığmayan metin üç noktayla biter";
 "顶部信息区占窗口高度的百分比（按歌名、歌手、时间三行均显示计算），字号与封面等比缩放" = "Üst bilginin kapladığı pencere yüksekliği yüzdesi (parça adı, sanatçı ve süre satırlarının üçü de gösterilerek hesaplanır); metin ve kapak orantılı ölçeklenir";

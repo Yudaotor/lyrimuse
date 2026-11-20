@@ -297,13 +297,14 @@ Tüm pencerelerin üstünde, her zaman en önde duran ve kelime kelime vurgulana
 
 ### Çentik sözleri
 
-Ekranın üstünde, çentiğin yanında Dynamic Island tarzında bir kapsül; çentiği olmayan Mac’lerde ve harici ekranlarda da çıkar. Her iki yanda parça adı, sanatçı, albüm, kapak, oynatma denetimleri veya geçen ya da kalan süre, hareketli bir ses dalgasının yanında gösterilebilir. Denetimler, sürüklenebilir ilerleme çubuğu, şarkı sözü zamanlaması ve beğenme, şarkı sözü arama gibi hızlı düğmeler için üzerine gelerek genişletin. Reklamlar sırasında kalan süreyi geri sayar.
+Ekranın üstünde, çentiğin yanında Dynamic Island tarzında bir kapsül; çentiği olmayan Mac’lerde ve harici ekranlarda da çıkar. Her iki yanda parça adı, sanatçı, albüm, kapak, oynatma denetimleri veya geçen ya da kalan süre, hareketli bir ses dalgasının yanında gösterilebilir. Çentiksiz ekranlarda geçerli satır iki yanın arasında da gösterilebilir; kapsül menü çubuğu yüksekliğinde kalır. Denetimler, sürüklenebilir ilerleme çubuğu, şarkı sözü zamanlaması ve beğenme, şarkı sözü arama gibi hızlı düğmeler için üzerine gelerek genişletin. Reklamlar sırasında kalan süreyi geri sayar.
 
 - Saptanmış olarak kapalı
 - Ayarlar: Şarkı Sözü Görünümü › Çentik › Çentik Sözleri
 - Ayarlar: Şarkı Sözü Görünümü › Çentik › Stil
 - Ayarlar: Şarkı Sözü Görünümü › Çentik › Ekran
 - Ayarlar: Şarkı Sözü Görünümü › Çentik › Sol Kulak
+- Ayarlar: Şarkı Sözü Görünümü › Çentik › Şarkı Sözü Satırı › Daraltıldığında Sözleri Göster
 - Ayarlar: Klavye Kestirmeleri › Çentik Sözlerini Göster/Gizle
 - Ayarlar: Klavye Kestirmeleri › Çentiği Geçici Olarak Genişlet
 - Ayarlar: Şarkı Sözü Görünümü › Çentik › Genişletildiğinde › Hızlı Eylemler
@@ -1134,7 +1135,7 @@ Ayarlar penceresindeki tüm ayarlar, konumlarına göre; toplam: 345. Bir ayara 
 
 ### Şarkı Sözü Görünümü › Çentik › Şarkı Sözü Satırı
 
-- **Daraltıldığında Sözleri Göster**: Kapalıyken yalnızca çentik yüksekliğinde bir şerit kalır, üzerine gelince genişler
+- **Daraltıldığında Sözleri Göster**
 - **Hizalama**
 - **Şarkı Sözü Rengi**
 - **İkinci Satır**

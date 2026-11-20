@@ -1997,7 +1997,7 @@ func runSourceContractSurfaceTests() {
                     "副行回退: 菜单栏「字体」摘要报字号的条件同「字号」那一行")
         let quick = read("MenuBar/MenuBarPanelQuickSettings.swift")
         expectEqual(quick.contains("secondaryFallbackRow(secondary: settings.notchSecondaryLine, selection: $settings.notchSecondaryFallback)")
-                        && quick.contains("if settings.notchSecondaryLine.isPerLineText {")
+                        && quick.contains("if belowRow, settings.notchSecondaryLine.isPerLineText {")
                         && quick.contains("if settings.menuBarShowsSecondaryFallback {")
                         && quick.contains("secondaryFallbackRow(secondary: settings.menuBarSecondaryLine, selection: $settings.menuBarSecondaryFallback)")
                         && quick.contains("if !settings.menuBarFontSizeApplies {")

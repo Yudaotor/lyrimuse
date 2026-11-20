@@ -25991,103 +25991,103 @@
         }
       }
     },
-    "关闭后平时只保留刘海高度，悬停展开时照常显示" : {
+    "「顶行」将歌词放在两只耳朵之间，卡片不加高，仅适用于无刘海的屏幕" : {
       "extractionState" : "manual",
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Wenn aus, bleibt nur ein Streifen in Notch-Höhe, bis du zum Ausklappen darauf zeigst"
+            "value" : "„Obere Zeile“ zeigt den Liedtext zwischen den beiden Ohren, ohne die Karte zu vergrößern; nur auf Bildschirmen ohne Notch"
           }
         },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "When off, only the notch-height strip stays until you hover to expand"
+            "value" : "“Top Row” places lyrics between the two ears without making the card taller; only on screens without a notch"
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Si se desactiva, solo queda la franja a la altura del notch hasta que pases el puntero para expandir"
+            "value" : "«Fila superior» coloca la letra entre las dos orejas sin agrandar la tarjeta; solo en pantallas sin notch"
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Si désactivé, seule une bande à la hauteur de l’encoche reste visible jusqu’au survol"
+            "value" : "« Ligne du haut » place les paroles entre les deux oreilles sans agrandir la carte ; uniquement sur les écrans sans encoche"
           }
         },
         "hi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "बंद होने पर आम तौर पर सिर्फ़ नॉच जितनी ऊँचाई रहती है; पॉइंटर रखकर विस्तारित करने पर सब पहले की तरह दिखता है"
+            "value" : "“ऊपरी पंक्ति” बोल को दोनों ओर के बीच दिखाती है और कार्ड की ऊँचाई नहीं बढ़ाती; सिर्फ़ बिना नॉच वाली स्क्रीन पर"
           }
         },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Se disattivato, resta solo una striscia alta quanto il notch finché non ci passi sopra per espanderla"
+            "value" : "“Riga superiore” mostra il testo tra le due orecchie senza ingrandire la scheda; solo su schermi senza notch"
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "オフにすると、通常はノッチの高さだけを残し、ポインタを置いて展開したときは通常どおり表示します"
+            "value" : "「上段」では歌詞を左右の耳の間に表示し、カードは高くなりません（ノッチのない画面のみ）"
           }
         },
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "끄면 평소에는 노치 높이만 유지되며, 포인터를 올려 펼치면 평소대로 표시됩니다"
+            "value" : "‘상단 행’은 가사를 양쪽 귀 사이에 표시하며 카드 높이는 그대로입니다(노치가 없는 화면에서만)"
           }
         },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Quando desativado, só fica a faixa da altura do notch até você passar o ponteiro para expandir"
+            "value" : "“Linha superior” mostra a letra entre as duas orelhas sem aumentar o cartão; só em telas sem notch"
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Если выключено, остается только полоска высотой с вырез, пока вы не наведете указатель, чтобы развернуть"
+            "value" : "«Верхняя строка» показывает текст между ушами, не увеличивая карточку; только на экранах без выреза"
           }
         },
         "th" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "เมื่อปิด จะเหลือเพียงแถบสูงเท่ารอยบาก และยังแสดงตามปกติเมื่อวางตัวชี้เพื่อขยาย"
+            "value" : "“แถวบน” จะแสดงเนื้อเพลงระหว่างสองข้างโดยไม่ทำให้การ์ดสูงขึ้น ใช้ได้เฉพาะหน้าจอที่ไม่มีรอยบาก"
           }
         },
         "tr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Kapalıyken yalnızca çentik yüksekliğinde bir şerit kalır, üzerine gelince genişler"
+            "value" : "“Üst Satır”, sözleri iki yan arasında gösterir ve kartı uzatmaz; yalnızca çentiksiz ekranlarda"
           }
         },
         "uk" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Якщо вимкнено, лишається тільки смуга на висоту вирізу, а під час наведення все показується як завжди"
+            "value" : "«Верхній рядок» показує текст між вушками, не збільшуючи картку; лише на екранах без вирізу"
           }
         },
         "vi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Khi tắt, bình thường chỉ giữ dải cao bằng notch, khi di chuột để mở rộng vẫn hiển thị như thường"
+            "value" : "“Hàng trên” hiển thị lời giữa hai bên mà không làm thẻ cao hơn; chỉ trên màn hình không có notch"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "关闭后平时只保留刘海高度，悬停展开时照常显示"
+            "value" : "「顶行」将歌词放在两只耳朵之间，卡片不加高，仅适用于无刘海的屏幕"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "關閉後平時只保留瀏海高度，指向展開時照常顯示"
+            "value" : "「頂行」將歌詞放在兩隻耳朵之間，卡片不加高，僅適用於無瀏海的螢幕"
           }
         }
       }
@@ -313051,6 +313051,309 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "「跟隨正文」時比正文細一檔"
+          }
+        }
+      }
+    },
+    "顶行" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Obere Zeile"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Top Row"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fila superior"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ligne du haut"
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ऊपरी पंक्ति"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Riga superiore"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "上段"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "상단 행"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Linha superior"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Верхняя строка"
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "แถวบน"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Üst Satır"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Верхній рядок"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hàng trên"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "顶行"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "頂行"
+          }
+        }
+      }
+    },
+    "顶行歌词" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Liedtext oben"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lyrics in Top Row"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Letra en fila superior"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Paroles en haut"
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ऊपरी पंक्ति में बोल"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Testo in alto"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "上段に歌詞"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "상단 행 가사"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Letra no topo"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Текст сверху"
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "เนื้อเพลงแถวบน"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Üst Satırda Sözler"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Текст угорі"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lời ở hàng trên"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "顶行歌词"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "頂行歌詞"
+          }
+        }
+      }
+    },
+    "当前屏幕有刘海，顶行不显示歌词" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dieser Bildschirm hat eine Notch, daher wird in der oberen Zeile kein Liedtext angezeigt"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This screen has a notch, so lyrics are not shown in the top row"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Esta pantalla tiene notch, así que la letra no se muestra en la fila superior"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cet écran a une encoche : les paroles ne s’affichent pas sur la ligne du haut"
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "इस स्क्रीन में नॉच है, इसलिए ऊपरी पंक्ति में बोल नहीं दिखते"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Questo schermo ha il notch, quindi il testo non viene mostrato nella riga superiore"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "この画面にはノッチがあるため、上段に歌詞は表示されません"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "현재 화면에 노치가 있어 상단 행에 가사가 표시되지 않습니다"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Esta tela tem notch, então a letra não aparece na linha superior"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "У этого экрана есть вырез, поэтому текст в верхней строке не показывается"
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "หน้าจอนี้มีรอยบาก จึงไม่แสดงเนื้อเพลงในแถวบน"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bu ekranda çentik olduğu için üst satırda söz gösterilmez"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Цей екран має виріз, тому текст у верхньому рядку не показується"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Màn hình hiện tại có notch nên lời không hiển thị ở hàng trên"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "当前屏幕有刘海，顶行不显示歌词"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "目前螢幕有瀏海，頂行不顯示歌詞"
           }
         }
       }

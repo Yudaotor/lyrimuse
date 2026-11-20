@@ -297,13 +297,14 @@ Lyrics floating above every window, always on top, lit up word by word. Leave th
 
 ### Notch lyrics
 
-A Dynamic Island-style capsule beside the notch at the top of the screen; Macs without a notch and external displays get one too. Each side can show the title, artist, album, artwork, playback controls, or elapsed or remaining time, next to a moving audio wave. Hover to expand it for controls, a seekable progress bar, lyrics timing and quick buttons such as like and search lyrics. During ads it counts down the time left.
+A Dynamic Island-style capsule beside the notch at the top of the screen; Macs without a notch and external displays get one too. Each side can show the title, artist, album, artwork, playback controls, or elapsed or remaining time, next to a moving audio wave. On screens without a notch, the current lyric can also sit between the two sides, keeping the capsule as tall as the menu bar. Hover to expand it for controls, a seekable progress bar, lyrics timing and quick buttons such as like and search lyrics. During ads it counts down the time left.
 
 - Off by default
 - Settings: Lyrics Display › Notch › Notch Lyrics
 - Settings: Lyrics Display › Notch › Style
 - Settings: Lyrics Display › Notch › Display
 - Settings: Lyrics Display › Notch › Left Ear
+- Settings: Lyrics Display › Notch › Lyric Row › Show Lyrics When Collapsed
 - Settings: Keyboard Shortcuts › Show/Hide Notch Lyrics
 - Settings: Keyboard Shortcuts › Peek at Notch Lyrics
 - Settings: Lyrics Display › Notch › Expanded › Quick Actions
@@ -1134,7 +1135,7 @@ Every setting in the Settings window, by where it lives: 345 in all. Type a name
 
 ### Lyrics Display › Notch › Lyric Row
 
-- **Show Lyrics When Collapsed**: When off, only the notch-height strip stays until you hover to expand
+- **Show Lyrics When Collapsed**
 - **Alignment**
 - **Lyrics Color**
 - **Second Line**

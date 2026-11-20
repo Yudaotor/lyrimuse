@@ -4622,13 +4622,19 @@ private struct NotchLyricRowHeightRow: View {
 struct NotchLyricRowSettingsRows: View {
     @ObservedObject private var settings = AppSettings.shared
 
-    // 开关排成两列小块(显示歌词 / 卡拉OK / 封面 / 悬浮淡化 / 预览下一句),其余带下拉、分段、滑杆的行一框。
+    // 最上面一行「收起时显示歌词」三档;开关排成两列小块(卡拉OK / 封面 / 悬浮淡化 / 预览下一句),其余带下拉、分段、滑杆的行一框。
+    // 放在顶行时只留管那一句怎么画的几项(卡拉OK、对齐、颜色);副行、高度、封面、悬停时淡化只属于下面的歌词行。
     var body: some View {
+        let placement = settings.notchLyricsPlacement
         SettingsRowGroupStack {
+            SettingsRowGroup {
+                NotchLyricsPlacementRow()
+            }
             SettingsTileGrid {
-                NotchBehaviorToggleTile(item: .showLyrics)
-                if settings.notchShowLyrics {
+                if placement != .hidden {
                     NotchBehaviorToggleTile(item: .karaoke)
+                }
+                if placement == .belowRow {
                     NotchBehaviorToggleTile(item: .lyricRowArtwork)
                     NotchBehaviorToggleTile(item: .lyricRowFade)
                 }
@@ -4636,25 +4642,27 @@ struct NotchLyricRowSettingsRows: View {
                     NotchBehaviorToggleTile(item: .expandedNextLine)
                 }
             }
-            if settings.notchShowLyrics {
+            if placement != .hidden {
                 SettingsRowGroup {
                     VStack(spacing: 0) {
                         NotchLyricsAlignmentRow()
                         CardDivider()
                         NotchLyricsColorRow()
-                        CardDivider()
-                        LyricSecondaryLineRow()
-                        // 只有译文 / 读音会整首没有(05 章决策 148)。
-                        if settings.notchSecondaryLine.isPerLineText {
+                        if placement == .belowRow {
                             CardDivider()
-                            LyricSecondaryFallbackRow(secondary: settings.notchSecondaryLine,
-                                                      selection: $settings.notchSecondaryFallback)
-                        }
-                        CardDivider()
-                        NotchLyricRowHeightRow()
-                        if settings.notchLyricRowShowsArtwork {
+                            LyricSecondaryLineRow()
+                            // 只有译文 / 读音会整首没有(05 章决策 148)。
+                            if settings.notchSecondaryLine.isPerLineText {
+                                CardDivider()
+                                LyricSecondaryFallbackRow(secondary: settings.notchSecondaryLine,
+                                                          selection: $settings.notchSecondaryFallback)
+                            }
                             CardDivider()
-                            NotchLyricRowArtworkPositionRow()
+                            NotchLyricRowHeightRow()
+                            if settings.notchLyricRowShowsArtwork {
+                                CardDivider()
+                                NotchLyricRowArtworkPositionRow()
+                            }
                         }
                     }
                 }

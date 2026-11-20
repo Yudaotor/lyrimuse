@@ -463,10 +463,14 @@ func runSettingsSearchTests() {
         expectEqual(gate(menuBar, "对齐方式", false: []), nil, "搜索门: 两种宽度模式都有对齐方式,不加门")
         expectEqual(gate(notch, "对齐方式", false: ["menuBar.centerIdle"]), nil, "搜索门: 按段区分,菜单栏的条件管不到灵动岛同名行")
         expectEqual(gate(notch, "封面位置", false: ["notch.lyricRowArtwork"]), "显示封面", "搜索门: 灵动岛封面位置落到「显示封面」")
-        expectEqual(gate(notch, "封面位置", false: ["notch.showLyrics", "notch.lyricRowArtwork"]), "收起时显示歌词",
+        expectEqual(gate(notch, "封面位置", false: ["notch.lyricRowShown", "notch.lyricRowArtwork"]), "收起时显示歌词",
                     "搜索门: 歌词行整组藏着时落到「收起时显示歌词」")
-        expectEqual(gate(notch, "展开时预览下一句", false: ["notch.expandedNextLine", "notch.showLyrics"]), "收起时显示歌词",
+        expectEqual(gate(notch, "展开时预览下一句", false: ["notch.expandedNextLine", "notch.lyricRowShown"]), "收起时显示歌词",
                     "搜索门: 落点自己也藏着时接着往上找")
+        expectEqual([gate(notch, "对齐方式", false: ["notch.lyricRowShown"]), gate(notch, "副行", false: ["notch.lyricRowShown"]),
+                     gate(notch, "对齐方式", false: ["notch.showLyrics", "notch.lyricRowShown"])],
+                    [nil, "收起时显示歌词", "收起时显示歌词"],
+                    "搜索门: 歌词放在顶行时对齐方式还在、副行落到「收起时显示歌词」,不显示时都落过去")
         expectEqual(gate(notch, "展开时预览下一句", false: ["notch.expandedNextLine"]), "副行", "搜索门: 只隔一层时停在「副行」")
         let notchEar = ["歌词显示", "灵动岛", "左耳"]
         expectEqual([gate(notchEar, "跟随音乐跳动", false: ["notch.equalizer"]), gate(notchEar, "跟随音乐跳动", false: [])],

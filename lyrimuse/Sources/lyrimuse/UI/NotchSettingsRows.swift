@@ -48,24 +48,32 @@ struct NotchStylePopover: View {
     }
 }
 
-/// 「显示歌词」开关(「多一种形态,对于有一些想要显示播放状态、但又不想
-/// 有歌词挡住视线的人」)。关掉之后卡片只剩顶行那一条,退化成贴着刘海的状态栏。
-///
-/// 从「风格」浮层里搬出来,单独放在编辑台下面自己一张卡("不要合并到
-/// 风格里面去")——它跟四种背景不是同一类东西:一个是卡片长什么样、一个是卡片还剩几行,
-/// 值得有自己独立的位置。放在设置页正常流里而不是再开一个工具栏入口,理由不变:工具栏
-/// 横向空间已经被四个入口占满(窄窗约 499pt,见 toolbar 那段横向账)。
+/// 「收起时显示歌词」三档(`AppSettings.notchLyricsPlacement`):顶行下面的歌词行 / 顶行两只耳朵之间 / 不显示。
+/// 放在「歌词行」浮层与「全部设置」抽屉的「歌词行」组最上面。选「顶行」而灵动岛此刻在有刘海的屏上时,下面补一句按不显示画。
 @MainActor
-struct NotchShowLyricsRow: View {
+struct NotchLyricsPlacementRow: View {
     @ObservedObject private var settings = AppSettings.shared
 
+    /// 灵动岛此刻所在那块屏有没有刘海(`targetScreen()` / `geometry(for:)` 都是 static,不碰 `.shared`)。
+    private var targetHasNotch: Bool {
+        NotchLyricsWindowController.targetScreen().map { NotchLyricsWindowController.geometry(for: $0).notchWidth > 0 } ?? false
+    }
+
     var body: some View {
-        SettingsRow(
-            icon: "text.alignleft",
-            title: L10n.t("收起时显示歌词"),
-            help: L10n.t("关闭后平时只保留刘海高度，悬停展开时照常显示")
-        ) {
-            Toggle("", isOn: $settings.notchShowLyrics)
+        VStack(spacing: 0) {
+            SettingsRow(
+                icon: "text.alignleft",
+                title: NotchBehaviorItem.showLyrics.title,
+                help: L10n.t("「顶行」将歌词放在两只耳朵之间，卡片不加高，仅适用于无刘海的屏幕")
+            ) {
+                SettingsGlassTabPicker(selection: $settings.notchLyricsPlacement,
+                                       options: NotchLyricsPlacement.allCases,
+                                       label: \.displayName,
+                                       compact: true)
+            }
+            if settings.notchLyricsPlacement == .topRow, targetHasNotch {
+                SettingsNote { Text(L10n.t("当前屏幕有刘海，顶行不显示歌词")) }
+            }
         }
     }
 }
@@ -273,6 +281,7 @@ enum NotchStyleDefaults {
         settings.notchAllScreens = AppSettings.defaultNotchAllScreens
         settings.notchFollowsActiveScreen = AppSettings.defaultNotchFollowsActiveScreen
         settings.notchScreenID = AppSettings.defaultNotchScreenID
+        settings.notchLyricsInTopRow = AppSettings.defaultNotchLyricsInTopRow
         settings.notchShowLyrics = AppSettings.defaultNotchShowLyrics
         settings.notchCollapsesWhenPaused = AppSettings.defaultNotchCollapsesWhenPaused
         settings.notchShowsEqualizer = AppSettings.defaultNotchShowsEqualizer
@@ -320,6 +329,16 @@ enum NotchStyleDefaults {
         settings.notchFadeLyricRowOnHover = AppSettings.defaultNotchFadeLyricRowOnHover
         settings.notchShowsProgressLine = AppSettings.defaultNotchShowsProgressLine
         settings.notchProgressLineStyle = AppSettings.defaultNotchProgressLineStyle
+    }
+}
+
+extension NotchLyricsPlacement {
+    var displayName: String {
+        switch self {
+        case .belowRow: return L10n.t("歌词行")
+        case .topRow: return L10n.t("顶行")
+        case .hidden: return L10n.t("不显示")
+        }
     }
 }
 

@@ -268,6 +268,7 @@
 "「获取 Lyrimuse」" = "“Tải Lyrimuse”";
 "「跟随正文」时比正文细一档" = "“Theo lời chính” mảnh hơn lời chính một bậc";
 "「跟随正文」时比正文细两档" = "“Theo lời chính” mảnh hơn lời chính hai bậc";
+"「顶行」将歌词放在两只耳朵之间，卡片不加高，仅适用于无刘海的屏幕" = "“Hàng trên” hiển thị lời giữa hai bên mà không làm thẻ cao hơn; chỉ trên màn hình không có notch";
 "一" = "T2";
 "一切就绪" = "Đã sẵn sàng";
 "一周结束后的 %@ 推送上一周的小结" = "Gửi tổng kết tuần trước lúc %@ sau khi hết tuần";
@@ -567,7 +568,6 @@
 "关闭后不显示进度条，Discord 将改为显示已播放时长，该计时无法关闭" = "Khi tắt sẽ không có thanh tiến trình; Discord chuyển sang hiện thời gian đã phát và không tắt được bộ đếm này";
 "关闭后仅保留菜单栏图标" = "Khi tắt, chỉ giữ biểu tượng trên thanh menu";
 "关闭后只在灵动岛上滑动调节音量时显示音量提示，键盘音量键等只显示系统自带的提示" = "Khi tắt, chỉ hiện chỉ báo âm lượng khi vuốt trên Notch để chỉnh âm lượng; phím âm lượng và các cách khác chỉ hiện chỉ báo của hệ thống";
-"关闭后平时只保留刘海高度，悬停展开时照常显示" = "Khi tắt, bình thường chỉ giữ dải cao bằng notch, khi di chuột để mở rộng vẫn hiển thị như thường";
 "关闭后暂停推送到这个渠道，填写的内容会保留" = "Tắt để tạm dừng gửi đến kênh này, nội dung đã nhập vẫn được giữ";
 "关闭后，仅在悬停显示播放控制时出现" = "Khi tắt, chỉ hiện cùng điều khiển phát lúc di chuột lên";
 "关闭悬浮歌词" = "Đóng Lời nổi";
@@ -1276,6 +1276,7 @@
 "当前使用" = "Đang dùng";
 "当前动态" = "Hoạt động";
 "当前启用的其余歌词源未应答：%@" = "Các nguồn lời đang bật khác không phản hồi: %@";
+"当前屏幕有刘海，顶行不显示歌词" = "Màn hình hiện tại có notch nên lời không hiển thị ở hàng trên";
 "当前播放器不支持喜欢" = "Trình phát hiện tại không hỗ trợ Ưa thích";
 "当前播放器将这首歌曲标记为纯音乐，其他候选均不采用" = "Trình phát hiện tại đánh dấu bài hát này là nhạc không lời, không dùng kết quả nào khác";
 "当前播放的是 DJ Mix 专辑中的片段（歌名带 [Mixed]，专辑名带 (DJ Mix)）。此类曲目截取自完整演出，前后带有过渡，时长与原版不同，原版歌词的时间轴无法对齐，且暂无歌词源收录混音版的时间轴" = "Bài đang phát là một đoạn trong album DJ Mix (tên bài có [Mixed], tên album có (DJ Mix)). Những bài này được cắt từ một buổi diễn đầy đủ, có đoạn chuyển tiếp ở hai đầu, thời lượng khác bản gốc nên thời gian của lời bản gốc không khớp được, và hiện chưa có nguồn lời nào có thời gian cho bản mix";
@@ -2974,6 +2975,8 @@
 "音符" = "Nốt nhạc";
 "音量" = "Âm lượng";
 "音频输出" = "Đầu ra âm thanh";
+"顶行" = "Hàng trên";
+"顶行歌词" = "Lời ở hàng trên";
 "顶部信息" = "Phần đầu";
 "顶部信息区占窗口宽度的百分比；文字超出时末尾显示省略号" = "Phần trăm chiều rộng cửa sổ dành cho thông tin phía trên; chữ dài quá sẽ hiện dấu ba chấm ở cuối";
 "顶部信息区占窗口高度的百分比（按歌名、歌手、时间三行均显示计算），字号与封面等比缩放" = "Phần trăm chiều cao cửa sổ dành cho thông tin phía trên (tính khi hiện đủ ba dòng tên bài, nghệ sĩ, thời gian); cỡ chữ và ảnh bìa co giãn theo tỷ lệ";

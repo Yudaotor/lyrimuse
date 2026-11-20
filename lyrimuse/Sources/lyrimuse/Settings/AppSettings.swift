@@ -486,6 +486,7 @@ final class AppSettings: ObservableObject {
         static let notchCardStyle = "np:notchCardStyle"
         static let notchExpandedCardStyle = "np:notchExpandedCardStyle"
         static let notchShowLyrics = "np:notchShowLyrics"
+        static let notchLyricsInTopRow = "np:notchLyricsInTopRow"
         static let motionCoverEnabled = "np:motionCoverEnabled"
         static let spotifyCanvasEnabled = "np:spotifyCanvasEnabled"
         static let lyricsWindowBackgroundMode = "np:lyricsWindowBackgroundMode"
@@ -694,6 +695,7 @@ final class AppSettings: ObservableObject {
     /// 默认关:换歌时弹一条系统通知(歌名、「歌手 — 专辑」、封面),见 `NowPlayingNotifier`。
     static let defaultNowPlayingNotifications = false
     static let defaultNotchShowLyrics = true
+    static let defaultNotchLyricsInTopRow = false
     /// 动态封面(Apple Music 的 motion artwork)默认**开**。
     ///
     /// 默认开的理由跟大多数装饰性开关相反,但站得住:① 它是功能;② 覆盖率只有三成
@@ -1800,6 +1802,21 @@ final class AppSettings: ObservableObject {
     /// 高度还留着"。
     @Published var notchShowLyrics: Bool {
         didSet { defaults.set(notchShowLyrics, forKey: Keys.notchShowLyrics) }
+    }
+    /// 「收起时显示歌词」开着时歌词放在顶行两只耳朵之间(只在没有刘海的屏上画,卡片不加高),关着放在下面的歌词行。
+    /// 跟 `notchShowLyrics` 合成三档 `notchLyricsPlacement`,见 05 章决策 158。
+    @Published var notchLyricsInTopRow: Bool {
+        didSet { defaults.set(notchLyricsInTopRow, forKey: Keys.notchLyricsInTopRow) }
+    }
+    /// 「收起时显示歌词」三档。写的时候先写 `notchLyricsInTopRow`、后写 `notchShowLyrics`:订阅两者合成值的地方中间那一拍
+    /// 不会读到一个没选过的档(从「不显示」切到「顶行」时先落成「不显示」+ 顶行,再打开)。
+    var notchLyricsPlacement: NotchLyricsPlacement {
+        get { NotchLyricsPlacement(showsLyrics: notchShowLyrics, inTopRow: notchLyricsInTopRow) }
+        set {
+            let storage = newValue.storage
+            if let inTopRow = storage.inTopRow, inTopRow != notchLyricsInTopRow { notchLyricsInTopRow = inTopRow }
+            if storage.showsLyrics != notchShowLyrics { notchShowLyrics = storage.showsLyrics }
+        }
     }
     /// 有动态封面的专辑要不要让封面动起来。
     ///
@@ -3097,6 +3114,7 @@ final class AppSettings: ObservableObject {
         notchExpandedCardStyle = defaults.string(forKey: Keys.notchExpandedCardStyle)
             .flatMap(NotchCardStyle.init(rawValue:)) ?? Self.defaultNotchExpandedCardStyle
         notchShowLyrics = (defaults.object(forKey: Keys.notchShowLyrics) as? Bool) ?? Self.defaultNotchShowLyrics
+        notchLyricsInTopRow = (defaults.object(forKey: Keys.notchLyricsInTopRow) as? Bool) ?? Self.defaultNotchLyricsInTopRow
         motionCoverEnabled = (defaults.object(forKey: Keys.motionCoverEnabled) as? Bool) ?? Self.defaultMotionCoverEnabled
         spotifyCanvasEnabled = (defaults.object(forKey: Keys.spotifyCanvasEnabled) as? Bool) ?? Self.defaultSpotifyCanvasEnabled
         lyricsWindowBackgroundMode = defaults.string(forKey: Keys.lyricsWindowBackgroundMode)

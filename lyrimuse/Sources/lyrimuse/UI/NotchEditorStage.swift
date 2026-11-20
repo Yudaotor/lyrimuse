@@ -378,7 +378,11 @@ struct NotchEditorStage: View {
     /// 那边"封面"两个字,不新造一个词),报数量的话"贴左还是贴右"这个用户在意的信息会丢。
     private var lyricRowSummary: String {
         var parts: [String] = []
-        if settings.notchShowLyrics { parts.append(NotchBehaviorItem.showLyrics.title) }
+        switch settings.notchLyricsPlacement {
+        case .belowRow: parts.append(NotchBehaviorItem.showLyrics.title)
+        case .topRow: parts.append(L10n.t("顶行歌词"))
+        case .hidden: break
+        }
         // 「对齐方式」只在**非默认**时才报。三选一不是开关,套不进上面那条
         // "只列开着的"规则;而默认值(左对齐)是绝大多数人的状态,无条件报出来等于给每个人的
         // 按钮上加一句恒定噪声、还要跟 140pt 限宽抢地方。非默认才报 = 跟"只列开着的"同一个
@@ -411,7 +415,7 @@ struct NotchEditorStage: View {
         if settings.notchLyricRowShowsArtwork {
             parts.append("\(NotchEarModule.artwork.displayName) · \(settings.notchLyricRowArtworkPosition.displayName)")
         }
-        if settings.notchShowLyrics, settings.notchFadeLyricRowOnHover {
+        if settings.notchLyricsPlacement == .belowRow, settings.notchFadeLyricRowOnHover {
             parts.append(NotchBehaviorItem.lyricRowFade.title)
         }
         guard !parts.isEmpty else { return L10n.t("全部关闭") }

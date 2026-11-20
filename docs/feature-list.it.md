@@ -297,13 +297,14 @@ Testo che fluttua sopra tutte le finestre, sempre in primo piano, e si illumina 
 
 ### Testo nel notch
 
-Una capsula in stile Dynamic Island accanto al notch, in alto sullo schermo; ce l’hanno anche i Mac senza notch e gli schermi esterni. Ogni lato può mostrare titolo, artista, album, illustrazione, controlli di riproduzione, o tempo trascorso o rimanente, accanto a un’onda audio animata. Passaci sopra con il puntatore per espanderla e avere i controlli, una barra di avanzamento su cui spostarti, il timing del testo e pulsanti rapidi come Preferito e Cerca testo. Durante la pubblicità mostra il conto alla rovescia del tempo rimanente.
+Una capsula in stile Dynamic Island accanto al notch, in alto sullo schermo; ce l’hanno anche i Mac senza notch e gli schermi esterni. Ogni lato può mostrare titolo, artista, album, illustrazione, controlli di riproduzione, o tempo trascorso o rimanente, accanto a un’onda audio animata. Sugli schermi senza notch la riga corrente può stare anche tra i due lati, con la capsula alta quanto la barra dei menu. Passaci sopra con il puntatore per espanderla e avere i controlli, una barra di avanzamento su cui spostarti, il timing del testo e pulsanti rapidi come Preferito e Cerca testo. Durante la pubblicità mostra il conto alla rovescia del tempo rimanente.
 
 - Disattivata di default
 - Impostazioni: Visualizzazione testo › Notch › Testo nel notch
 - Impostazioni: Visualizzazione testo › Notch › Stile
 - Impostazioni: Visualizzazione testo › Notch › Schermo
 - Impostazioni: Visualizzazione testo › Notch › Sinistra
+- Impostazioni: Visualizzazione testo › Notch › Riga del testo › Mostra testo se compresso
 - Impostazioni: Scorciatoie da tastiera › Mostra/nascondi testo nel notch
 - Impostazioni: Scorciatoie da tastiera › Espandi il notch per un attimo
 - Impostazioni: Visualizzazione testo › Notch › Espanso › Azioni rapide
@@ -1134,7 +1135,7 @@ Tutte le impostazioni della finestra Impostazioni, per posizione: 345 in tutto. 
 
 ### Visualizzazione testo › Notch › Riga del testo
 
-- **Mostra testo se compresso**: Se disattivato, resta solo una striscia alta quanto il notch finché non ci passi sopra per espanderla
+- **Mostra testo se compresso**
 - **Allineamento**
 - **Colore testo**
 - **Seconda riga**

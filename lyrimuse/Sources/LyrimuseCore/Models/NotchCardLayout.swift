@@ -77,6 +77,8 @@ public struct NotchCardLayout: Equatable, Sendable {
     public var expandedQuickActionRows: Int
     /// 没有曲目时展开出来那块空闲面板的高度(`NotchExpandedMetrics.idlePanelHeight(showsLastTrack:showsQuote:)` 三档之一)。
     public var idlePanelHeight: CGFloat
+    /// 顶行歌词那段的宽度(`NotchTopRowLyrics.Fit.lyricWidth`);0 = 这块屏、这首歌不在顶行画歌词。
+    public var topRowLyricsWidth: CGFloat
 
     public init(metrics: Metrics, isCollapsed: Bool, isExpanded: Bool, notchWidth: CGFloat, contentTopInset: CGFloat,
                 steadyCardWidth: CGFloat, expandedCardWidth: CGFloat, lyricRowHeight: CGFloat,
@@ -86,7 +88,8 @@ public struct NotchCardLayout: Equatable, Sendable {
                 expandedShowsControls: Bool, trackInfoShowsArtwork: Bool, trackInfoShowsTitle: Bool,
                 trackInfoShowsArtist: Bool, trackInfoShowsAlbum: Bool, expandedShowsQuickActions: Bool,
                 expandedQuickActionRows: Int = 1,
-                idlePanelHeight: CGFloat = NotchExpandedMetrics.idlePanelHeight(showsLastTrack: false, showsQuote: false)) {
+                idlePanelHeight: CGFloat = NotchExpandedMetrics.idlePanelHeight(showsLastTrack: false, showsQuote: false),
+                topRowLyricsWidth: CGFloat = 0) {
         self.metrics = metrics
         self.isCollapsed = isCollapsed
         self.isExpanded = isExpanded
@@ -115,6 +118,7 @@ public struct NotchCardLayout: Equatable, Sendable {
         self.expandedShowsQuickActions = expandedShowsQuickActions
         self.expandedQuickActionRows = expandedQuickActionRows
         self.idlePanelHeight = idlePanelHeight
+        self.topRowLyricsWidth = topRowLyricsWidth
     }
 
     /// 收起态判据。`collapsesWhenPaused` 关掉暂停时就不收;`hideWhenNotPlaying` 开着时暂停直接缩进刘海、不经过收起态,
@@ -131,6 +135,12 @@ public struct NotchCardLayout: Equatable, Sendable {
     /// 「正在播放」那一行歌词行画不画。关着「显示歌词」时稳态不画(退化成贴着刘海的状态栏),但展开后照常画:
     /// 只放开「下一句预览」不够,这一行也被同一个开关挡着的话,展开后有下一句、却看不到正在播放的当前行。
     public var showsLyricRow: Bool { hasTrack && (showsLyrics || isExpanded) }
+
+    /// 顶行两只耳朵之间此刻画不画歌词:只在稳态(没收起、没展开、没报喜)、有曲目时画。展开时歌词在下面那份歌词行里,
+    /// 收起时跟歌词行一样不画。
+    public var showsTopRowLyrics: Bool {
+        topRowLyricsWidth > 0 && hasTrack && !isCollapsed && !isExpanded && !hasMilestone
+    }
 
     /// 瞬态横幅画在卡片为它多长的那一截里:关着歌词行、没展开、没收起、没报喜时(开着歌词行或展开时横幅盖在歌词行上)。
     public var showsBannerStrip: Bool {
@@ -206,10 +216,15 @@ public struct NotchCardLayout: Equatable, Sendable {
                                        cardPadding: metrics.cardPadding, contentInset: metrics.contentInset)
     }
 
-    /// 一只耳朵的宽度(两只恒等宽):卡片宽扣掉刘海空当和两侧内边距后平分。真窗口按此刻(动画中)的卡片宽算,编辑台热区按
-    /// 目标卡片宽算。内边距不能漏扣:漏了顶行比卡片宽 2×padding,背景形状超出窗口,底部圆角被窗口裁成直角。
+    /// 一只耳朵的宽度(两只恒等宽):卡片宽扣掉刘海空当(画顶行歌词时再扣歌词那段)和两侧内边距后平分。真窗口按此刻(动画中)的
+    /// 卡片宽算,编辑台热区按目标卡片宽算。内边距不能漏扣:漏了顶行比卡片宽 2×padding,背景形状超出窗口,底部圆角被窗口裁成直角。
     public func earWidth(cardWidth: CGFloat) -> CGFloat {
-        max(0, (cardWidth - notchWidth - topRowPadding * 2) / 2)
+        max(0, (cardWidth - topRowGap - topRowPadding * 2) / 2)
+    }
+
+    /// 顶行两只耳朵中间空出来的宽度:刘海,加上此刻画着的顶行歌词那段。
+    public var topRowGap: CGFloat {
+        notchWidth + (showsTopRowLyrics ? topRowLyricsWidth : 0)
     }
 
     /// 没有刘海的屏(外接屏)收起时,两只耳朵中间按这么宽的一块刘海留空,跟 MacBook 内建屏(刘海约 180pt)收起时一样大。

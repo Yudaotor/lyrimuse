@@ -236,6 +236,7 @@ final class SettingsSearchRouter: ObservableObject {
         case "menuBar.fillColorShown": return s.menuBarLyricsKaraoke || s.menuBarLyricsIconPosition != .off
         case "menuBar.colorRowsShown": return !s.menuBarLyricsRainbow || s.menuBarLyricsIconPosition != .off
         case "notch.showLyrics": return s.notchShowLyrics
+        case "notch.lyricRowShown": return s.notchLyricsPlacement == .belowRow
         case "notch.lyricRowArtwork": return s.notchLyricRowShowsArtwork
         case "notch.expandedNextLine": return !s.notchSecondaryLine.hidesExpandedNextLinePreview
         case "notch.secondaryTranslation": return s.notchSecondaryLine == .translation

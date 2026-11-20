@@ -158,6 +158,9 @@ protocol NotchChromeSource: ObservableObject {
     var showsLyrics: Bool { get }
     /// 用户「显示歌词」开关本身。只给展开态快捷操作那颗「显示 / 隐藏歌词」键用。
     var showsLyricsSetting: Bool { get }
+    /// 顶行两只耳朵之间那段歌词的宽度(`NotchCardLayout.topRowLyricsWidth`),0 = 不在顶行画歌词:没选「顶行」、这块屏有刘海、
+    /// 放不下,或这首被「纯音乐/无歌词时收起歌词行」收掉。此刻画不画看 `showsTopRowLyrics`。
+    var topRowLyricsWidth: CGFloat { get }
     /// 要不要显示播放指示条(音浪)。同上,走 chrome 不直接读 AppSettings——它同时影响
     /// 渲染(NotchLyricsView.topRow)和宽度下限(NotchLyricsWindowController.minEarWidth)。
     var showsEqualizer: Bool { get }
@@ -243,7 +246,8 @@ extension NotchChromeSource {
             trackInfoShowsArtwork: expandedTrackInfoShowsArtwork, trackInfoShowsTitle: expandedTrackInfoShowsTitle,
             trackInfoShowsArtist: expandedTrackInfoShowsArtist, trackInfoShowsAlbum: expandedTrackInfoShowsAlbum,
             expandedShowsQuickActions: expandedShowsQuickActions,
-            expandedQuickActionRows: quickSlots.usedRowCount(visibleSlots: expandedQuickVisibleSlots), idlePanelHeight: idlePanelHeight)
+            expandedQuickActionRows: quickSlots.usedRowCount(visibleSlots: expandedQuickVisibleSlots), idlePanelHeight: idlePanelHeight,
+            topRowLyricsWidth: topRowLyricsWidth)
     }
 
     /// 展开卡头部快捷操作一行看得见几格:按展开卡的真实宽度、封面和文字开着没有算(按设置算、不看广告态:广告期间文字项
@@ -257,6 +261,7 @@ extension NotchChromeSource {
     }
 
     var showsLyricRow: Bool { cardLayout.showsLyricRow }
+    var showsTopRowLyrics: Bool { cardLayout.showsTopRowLyrics }
     var showsBannerStrip: Bool { cardLayout.showsBannerStrip }
     var showsBottomProgressLine: Bool { cardLayout.showsBottomProgressLine }
     var showsEarProgressLine: Bool { cardLayout.showsEarProgressLine }

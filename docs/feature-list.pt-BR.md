@@ -297,13 +297,14 @@ A letra flutua acima de todas as janelas, sempre na frente, acendendo palavra po
 
 ### Letra no notch
 
-Uma cápsula no estilo Dynamic Island ao lado do notch, no topo da tela; Macs sem notch e telas externas também ganham uma. Cada lado pode mostrar o título, o artista, o álbum, a capa, os controles de reprodução ou o tempo decorrido ou restante, junto de uma onda de áudio animada. Passe o ponteiro sobre ela para expandi-la e ver controles, uma barra de progresso em que dá para mudar a posição, o ajuste de tempo da letra e botões rápidos como favoritar e buscar letra. Durante anúncios, mostra a contagem regressiva do tempo restante.
+Uma cápsula no estilo Dynamic Island ao lado do notch, no topo da tela; Macs sem notch e telas externas também ganham uma. Cada lado pode mostrar o título, o artista, o álbum, a capa, os controles de reprodução ou o tempo decorrido ou restante, junto de uma onda de áudio animada. Em telas sem notch, a linha atual também pode ficar entre os dois lados, com a cápsula da altura da barra de menus. Passe o ponteiro sobre ela para expandi-la e ver controles, uma barra de progresso em que dá para mudar a posição, o ajuste de tempo da letra e botões rápidos como favoritar e buscar letra. Durante anúncios, mostra a contagem regressiva do tempo restante.
 
 - Desativado por padrão
 - Ajustes: Exibição da letra › Notch › Letra no notch
 - Ajustes: Exibição da letra › Notch › Estilo
 - Ajustes: Exibição da letra › Notch › Tela
 - Ajustes: Exibição da letra › Notch › Ouvido esquerdo
+- Ajustes: Exibição da letra › Notch › Linha da letra › Letra no modo recolhido
 - Ajustes: Atalhos de teclado › Mostrar/ocultar letra no notch
 - Ajustes: Atalhos de teclado › Espiar a letra no notch
 - Ajustes: Exibição da letra › Notch › Expandido › Ações rápidas
@@ -1134,7 +1135,7 @@ Todos os ajustes da janela Ajustes, por local: 345 no total. Digite um nome no c
 
 ### Exibição da letra › Notch › Linha da letra
 
-- **Letra no modo recolhido**: Quando desativado, só fica a faixa da altura do notch até você passar o ponteiro para expandir
+- **Letra no modo recolhido**
 - **Alinhamento**
 - **Cor da letra**
 - **Segunda linha**
