@@ -283,6 +283,11 @@ func runMainThreadIOTests() {
         expectEqual(sourceHas(quit, "guard askingSettled else {") && sourceHas(sourceBody("guard askingSettled else {", in: quit), "AppExit.request(.appVolumeUnmounting) return")
                     && !sourceHas(sourceBody("guard askingSettled else {", in: quit), "EngineServiceManager"), true,
                     "卷卸载(契约): 提示还开着时直接走正常退出、不停别的实例装的引擎")
+        let shouldTerminate = sourceBody("func applicationShouldTerminate(_ sender: NSApplication)", in: app("AppDelegate.swift"))
+        expectEqual(sourceHas(sourceBody("guard askingSettled else {", in: quit), "quittingWhileAsking = true AppExit.request(.appVolumeUnmounting)")
+                    && sourceHas(shouldTerminate, "if !AppLocationPrompt.quittingWhileAsking { PlaybackStatePublisher.shared.markExiting() }")
+                    && sourceCount(shouldTerminate, "markExiting()") == 1, true,
+                    "卷卸载(契约): 提示还开着时退出不写「App 要走了」的播放状态(那份状态文件是别的实例的)")
 
         let build = repoText("lyrimuse/build.sh")
         expectEqual(sourceHas(build, "clang -dynamiclib -fobjc-arc -O2 -arch \"$arch\" -mmacosx-version-min=14.0"), true,

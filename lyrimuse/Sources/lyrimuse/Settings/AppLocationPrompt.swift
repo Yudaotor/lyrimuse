@@ -82,12 +82,14 @@ enum AppLocationPrompt {
     }
 
     /// App 所在的卷要被卸载了:停掉引擎(它的可执行文件也在这个卷上),再走正常退出。停引擎最多等 1.5 秒。
-    /// 还没问完时(提示开着)直接走正常退出、不停引擎:这份进程还没装引擎,在跑的那个是别的实例的。
+    /// 还没问完时(提示开着)直接走正常退出,不停引擎、也不写「App 要走了」的播放状态(`quittingWhileAsking`):
+    /// 这份进程还没装引擎、没发布过播放状态,在跑的引擎和那份状态文件都是别的实例的。
     @MainActor private static func quitForUnmount() {
         guard !quittingForUnmount else { return }
         quittingForUnmount = true
         guard askingSettled else {
             logger.notice("app location: the volume holding the app is being unmounted while asking to move, quitting")
+            quittingWhileAsking = true
             AppExit.request(.appVolumeUnmounting)
             return
         }
@@ -102,6 +104,8 @@ enum AppLocationPrompt {
     }
 
     @MainActor private static var quittingForUnmount = false
+    /// 提示还开着时因卷被卸载而退出:`applicationShouldTerminate` 据此不写退出的播放状态。见 15 章决策 128。
+    @MainActor private(set) static var quittingWhileAsking = false
     /// 问完了(或不用问):之后卷被卸载要先停引擎。
     @MainActor private static var askingSettled = false
     /// 测试模式下写进 `outcome.txt` 的结果,还没问完时是 `asking`。
