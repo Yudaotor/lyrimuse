@@ -396,6 +396,31 @@ func runNotchTests() {
         expectEqual([earLayout.showsEarLyrics, earLyrics { $0.isExpanded = true }, earLyrics { $0.isCollapsed = true },
                      earLyrics { $0.hasTrack = false }, earLyrics { $0.isAdBreak = true }],
                     [true, false, false, false, false], "耳朵歌词: 只在稳态画,展开、收起、没曲目、广告时不画")
+        // 歌词耳朵与音浪并存(05 章决策 165):音浪画在外沿,歌词槽扣掉音浪那一截;只有播放控制让位。
+        // 音浪宽 16、间距 5、朝刘海内缩 6 住在 app target,下面「耳朵歌词 + 音浪(契约)」钉着取值处读的是同一份常量。
+        typealias EQ = NotchEarEqualizer
+        let eqBars: CGFloat = 16, eqSpacing: CGFloat = 5, notchInset: CGFloat = 6
+        expectEqual([EQ.draws(showsEqualizer: true, onThisEar: true, yieldsToModule: false),
+                     EQ.draws(showsEqualizer: true, onThisEar: true, yieldsToModule: true),
+                     EQ.draws(showsEqualizer: true, onThisEar: false, yieldsToModule: false),
+                     EQ.draws(showsEqualizer: false, onThisEar: true, yieldsToModule: false)],
+                    [true, false, false, false],
+                    "耳朵歌词 + 音浪: 歌词耳朵配着音浪时两样都画;播放控制让位;音浪在另一侧或关着时这只耳朵不画")
+        let eqSpace = EQ.allowance(draws: true, barsWidth: eqBars, spacing: eqSpacing)
+        let earAt362 = earLayout.earWidth(cardWidth: earLayout.cardWidth)
+        expectEqual([eqSpace, EQ.allowance(draws: false, barsWidth: eqBars, spacing: eqSpacing),
+                     EQ.slotWidth(earWidth: earAt362, notchInset: notchInset, allowance: eqSpace),
+                     EQ.slotWidth(earWidth: earAt362, notchInset: notchInset, allowance: 0),
+                     EQ.slotWidth(earWidth: 20, notchInset: notchInset, allowance: eqSpace)],
+                    [21, 0, 54.5, 75.5, 0],
+                    "耳朵歌词 + 音浪: 设定 362 时歌词槽 81.5 − 6 − 21 = 54.5(没音浪 75.5),耳朵窄过音浪时槽宽停在 0")
+        // 宽度下限 = 模块下限 + 音浪占位 + 内缩:歌词跑马灯 0 + 21 + 6 = 27,顶行歌词时文字耳 64 + 21 + 6 = 91;播放控制 48 + 0 + 6。
+        func earFloor(content: CGFloat, yields: Bool) -> CGFloat {
+            content + EQ.allowance(draws: EQ.draws(showsEqualizer: true, onThisEar: true, yieldsToModule: yields),
+                                   barsWidth: eqBars, spacing: eqSpacing) + notchInset
+        }
+        expectEqual([earFloor(content: 0, yields: false), earFloor(content: 64, yields: false), earFloor(content: 48, yields: true)],
+                    [27, 91, 54], "耳朵歌词 + 音浪: 歌词耳朵的宽度下限把音浪算进去,播放控制照旧不算")
         func app(_ path: String) -> String {
             (try? String(contentsOf: URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
                 .appendingPathComponent("lyrimuse/" + path), encoding: .utf8)) ?? ""
@@ -440,13 +465,28 @@ func runNotchTests() {
                     && sourceHas(settings, "didSet { defaults.set(notchLeftEar.rawValue, forKey: Keys.notchLeftEar) }"), true,
                     "耳朵歌词(契约): 歌词、当前句、下一句按 rawValue 存取,认不出的值退回默认,「不显示」仍排最后")
         expectEqual(sourceHas(display, "case .lyrics: return .alternating\n case .currentLine: return .current\n case .nextLine: return .next")
-                    && sourceHas(display, "var yieldsEqualizer: Bool { self == .controls || earLyric != nil }")
+                    && sourceHas(display, "var yieldsEqualizer: Bool { self == .controls }")
+                    && sourceHas(display, "NotchEarEqualizer.draws(showsEqualizer: showsEqualizer, onThisEar: equalizerEar == side, yieldsToModule: yieldsEqualizer)")
                     && sourceHas(display, "case .none, .title, .artist, .album, .lyrics, .currentLine, .nextLine: return 0")
-                    && sourceHas(controller, "guard showsEqualizer, equalizerEar == ear, !module.yieldsEqualizer else { return 0 }")
+                    && sourceHas(controller, "equalizerSpace(drawn: module.drawsEqualizer(showsEqualizer: showsEqualizer, equalizerEar: equalizerEar, side: ear))")
+                    && sourceHas(controller, "NotchEarEqualizer.allowance(draws: drawn, barsWidth: EqualizerBars.width, spacing: NotchMetrics.earWaveSpacing)")
                     && sourceHas(controller, "case .title, .artist, .album, .lyrics, .currentLine, .nextLine: floor = textEarWidth")
-                    && sourceHas(topRowView, "controller.showsEqualizer && controller.equalizerEar == side && !module.yieldsEqualizer")
-                    && sourceHas(stage, "guard equalizerHere, !module.yieldsEqualizer else { return module.displayName }"), true,
-                    "耳朵歌词(契约): 歌词耳朵不挂音浪,渲染、宽度下限、工具栏摘要读同一个判据;下限按跑马灯给 0,顶行歌词时同文字给 64")
+                    && sourceHas(controller, "\"leftEarSlotWidth\": steadyEarSlotWidth(.left), \"rightEarSlotWidth\": steadyEarSlotWidth(.right),")
+                    && sourceHas(app("UI/NotchChromeSource.swift"), "static let earNotchInset: CGFloat = 6")
+                    && sourceHas(app("UI/NotchChromeSource.swift"), "static let earWaveSpacing: CGFloat = 5")
+                    && sourceHas(topRowView, "-> Bool {\n module.drawsEqualizer(showsEqualizer: controller.showsEqualizer, equalizerEar: controller.equalizerEar, side: side)\n }")
+                    && sourceHas(stage, "guard module.drawsEqualizer(showsEqualizer: settings.notchShowsEqualizer, equalizerEar: settings.notchEqualizerEar,\n side: side == .left ? .left : .right) else { return module.displayName }"), true,
+                    "耳朵歌词 + 音浪(契约): 只有播放控制让位音浪,渲染、宽度下限、工具栏摘要、debug/state 读同一个判据;下限按跑马灯给 0,顶行歌词时同文字给 64")
+        // 音浪在耳朵 HStack 里、歌词视图外面:两耳轮流换句(`NotchEarLyricTurn` 只切歌词那两份的透明度)时音浪不跟着动,
+        // 画不画只看这只耳朵配的模块,不看它此刻是当前句还是下一句。
+        let earLyricBody = sourceBody("private func earLyricLine(alignment: Alignment)", in: topRowView)
+        expectEqual([!earLyricBody.isEmpty, earLyricBody.contains("equalizer"), earLyricBody.contains("Equalizer")]
+                    + [sourceHas(topRowView, "let equalizerOnLeft = !isIdleNoTrack && !collapsed && showsEqualizer(on: .left, module: playback.leftEar)"),
+                       sourceHas(topRowView, "let equalizerOnRight = !isIdleNoTrack && (collapsed || showsEqualizer(on: .right, module: playback.rightEar))"),
+                       sourceHas(topRowView, "if equalizerOnLeft {\n equalizerBars\n }"),
+                       sourceHas(topRowView, "earContent(rightModule, alignment: .trailing)\n }\n if equalizerOnRight {\n equalizerBars\n }")],
+                    [true, false, false, true, true, true, true],
+                    "耳朵歌词 + 音浪(契约): 音浪排在耳朵外沿、歌词视图之外,按配置的模块判、不看轮流到哪一句,换句时不动")
         expectEqual(sourceHas(topRowView, "case .lyrics, .currentLine, .nextLine:\n earLyricLine(alignment: alignment)")
                     && sourceHas(topRowView, "let resting: Alignment = alignment.horizontal == .leading ? .trailing : .leading")
                     && sourceHas(topRowView, ".modifier(NotchCardLayerActive(active: controller.showsEarLyrics))")

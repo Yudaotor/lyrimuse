@@ -57,7 +57,8 @@ enum NotchEarModule: String, Codable, Hashable, CaseIterable {
     /// 正在放的播放器的图标(跟菜单栏面板那枚来源角标同一个),点它切到那个播放器。
     case player
     /// 歌词 / 当前句 / 下一句(单行歌词视图 `NotchLyricsView.singleLyricLine`)。只在稳态画(`NotchCardLayout.showsEarLyrics`),
-    /// 不挂音浪;有一只耳朵在画当前句时,下面的歌词行和顶行歌词不再画当前句(`NotchLyricsPlacement.presentation`)。
+    /// 音浪贴在这只耳朵时画在外沿、歌词排在它内侧(`NotchEarEqualizer`,05 章决策 165);有一只耳朵在画当前句时,下面的歌词行和顶行歌词
+    /// 不再画当前句(`NotchLyricsPlacement.presentation`)。
     /// 见 05 章决策 159。
     /// 「歌词」两耳都选时按句子序号左右轮流,只有一只耳朵选时补另一只没画的那句(`NotchEarLyricLines`)。见 05 章决策 163。
     case lyrics

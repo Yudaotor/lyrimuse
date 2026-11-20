@@ -35,9 +35,14 @@ extension NotchEarModule {
         }
     }
 
-    /// 这只耳朵挂着音浪时音浪让位:播放控制的播放 / 暂停键、逐字填色的歌词本身就在报播放状态,再摆音浪是同一件事说两遍。
-    /// 渲染(`NotchLyricsView.topRow`)、宽度下限(`NotchLyricsWindowController.minEarWidth`)、工具栏摘要三处读这一份。
-    var yieldsEqualizer: Bool { self == .controls || earLyric != nil }
+    /// 这只耳朵挂着音浪时音浪让位:只有播放控制(播放 / 暂停键本身就在报播放状态)。歌词耳朵照挂音浪,歌词排在音浪内侧。
+    /// 画不画、占多宽经 `NotchEarEqualizer`,渲染、宽度下限、工具栏摘要、`debug/state` 读同一份。见 05 章决策 165。
+    var yieldsEqualizer: Bool { self == .controls }
+
+    /// 这只耳朵此刻画不画音浪(`NotchEarEqualizer.draws`)。
+    func drawsEqualizer(showsEqualizer: Bool, equalizerEar: NotchEqualizerEar, side: NotchEqualizerEar) -> Bool {
+        NotchEarEqualizer.draws(showsEqualizer: showsEqualizer, onThisEar: equalizerEar == side, yieldsToModule: yieldsEqualizer)
+    }
 
     /// 有没有一只耳朵在画当前句:有的话下面的歌词行、顶行歌词不再画当前句(`NotchLyricsPlacement.presentation`)。
     static func currentLineInEar(left: NotchEarModule, right: NotchEarModule) -> Bool {

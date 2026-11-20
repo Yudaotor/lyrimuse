@@ -565,10 +565,9 @@ struct NotchEditorStage: View {
     /// 且音浪在这侧时只报「音浪」。
     private func earSummary(_ side: NotchEarPopover.Side) -> String {
         let module = side == .left ? settings.notchLeftEar : settings.notchRightEar
-        let equalizerHere = settings.notchShowsEqualizer
-            && settings.notchEqualizerEar == (side == .left ? NotchEqualizerEar.left : .right)
-        // 播放控制、歌词模块音浪让位(`yieldsEqualizer`),卡片上没有音浪,摘要也不报。
-        guard equalizerHere, !module.yieldsEqualizer else { return module.displayName }
+        // 播放控制让位音浪(`yieldsEqualizer`),卡片上没有音浪,摘要也不报;歌词耳朵照报「歌词、音浪」。
+        guard module.drawsEqualizer(showsEqualizer: settings.notchShowsEqualizer, equalizerEar: settings.notchEqualizerEar,
+                                    side: side == .left ? .left : .right) else { return module.displayName }
         if module == NotchEarModule.none { return L10n.t("音浪") }
         return L10n.list([module.displayName, L10n.t("音浪")])
     }

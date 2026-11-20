@@ -276,17 +276,30 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
         return max(sides.left, sides.right)
     }
 
+    /// 音浪在一只耳朵里占的宽(`NotchEarEqualizer.allowance`,条宽 + 跟模块的间距);不画时 0。
+    static func equalizerSpace(drawn: Bool) -> CGFloat {
+        NotchEarEqualizer.allowance(draws: drawn, barsWidth: EqualizerBars.width, spacing: NotchMetrics.earWaveSpacing)
+    }
+
+    /// 稳态时一只耳朵里模块那一格的宽:耳宽减朝刘海内缩、音浪占位(`NotchEarEqualizer.slotWidth`)。只给 `debug/state` 报。
+    private func steadyEarSlotWidth(_ side: NotchEqualizerEar) -> CGFloat {
+        let module = side == .left ? leftEarModule : rightEarModule
+        let ears = cardLayout.earWidths(cardWidth: cardLayout.steadyCardWidth, offset: cardLayout.steadyOffset)
+        let drawn = module.drawsEqualizer(showsEqualizer: showsEqualizer, equalizerEar: equalizerEar, side: side)
+        return NotchEarEqualizer.slotWidth(earWidth: side == .left ? ears.left : ears.right,
+                                           notchInset: NotchMetrics.earNotchInset, allowance: Self.equalizerSpace(drawn: drawn))
+    }
+
     /// 左右耳各自的最低可用宽度(`minEarWidth` 取两者较大者)。关掉「两耳等宽」后每只耳朵只看自己的模块,见 05 章决策 160。
     static func minEarWidths(leftEar: NotchEarModule, rightEar: NotchEarModule,
                              showsEqualizer: Bool, equalizerEar: NotchEqualizerEar,
                              contentTopInset: CGFloat, textEarWidth: CGFloat = 0) -> NotchEarSpan {
         // 音浪贴哪只耳朵外缘是可配的,所以两只耳朵都要按
         // "自己是不是那一侧"单独判断要不要多留音浪的空间。它是播放指示灯、不是可配模块
-        // (见 NotchEarModule 上方那段),例外是那只耳朵选了播放控制或歌词——那时音浪
-        // 让位(`NotchEarModule.yieldsEqualizer`)。
+        // (见 NotchEarModule 上方那段),例外是那只耳朵选了播放控制——那时音浪
+        // 让位(`NotchEarModule.yieldsEqualizer`)。歌词耳朵照留(05 章决策 165)。
         func equalizerAllowance(forEar ear: NotchEqualizerEar, module: NotchEarModule) -> CGFloat {
-            guard showsEqualizer, equalizerEar == ear, !module.yieldsEqualizer else { return 0 }
-            return EqualizerBars.width + NotchMetrics.earWaveSpacing
+            equalizerSpace(drawn: module.drawsEqualizer(showsEqualizer: showsEqualizer, equalizerEar: equalizerEar, side: ear))
         }
         func content(_ module: NotchEarModule) -> CGFloat {
             let floor: CGFloat
@@ -1158,6 +1171,7 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
                 "showsEarLyrics": showsEarLyrics, "earWidth": earWidth(cardWidth: steadyCardWidth),
                 "earWidthsLinked": earWidthsLinked, "steadyCardOffset": steadyCardOffset,
                 "leftEarWidth": cardLayout.steadySpan.left, "rightEarWidth": cardLayout.steadySpan.right,
+                "leftEarSlotWidth": steadyEarSlotWidth(.left), "rightEarSlotWidth": steadyEarSlotWidth(.right),
                 "leftEarWidthSetting": leftEarWidthSetting, "rightEarWidthSetting": rightEarWidthSetting,
                 "expandedCardWidth": expandedCardWidth]
     }

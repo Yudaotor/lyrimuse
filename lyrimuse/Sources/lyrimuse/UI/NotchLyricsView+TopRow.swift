@@ -66,11 +66,11 @@ extension NotchLyricsView {
         return lum > 0.179 ? .black : .white
     }
 
-    /// 播放指示条(音浪)是不是配给了这只耳朵,而且这只耳朵没选播放控制或歌词(`NotchEarModule.yieldsEqualizer`):
-    /// 三键、逐字填色本身已经在报播放状态,音浪摆在旁边是同一件事说两遍;窄宽度下三键的 48pt 也挤不进音浪的 16+5。
+    /// 播放指示条(音浪)是不是配给了这只耳朵,而且这只耳朵没选播放控制(`NotchEarModule.yieldsEqualizer`):
+    /// 三键本身已经在报播放状态,窄宽度下三键的 48pt 也挤不进音浪的 16+5。歌词耳朵照挂,歌词排在音浪内侧(05 章决策 165)。
     /// 这是"音浪贴这只耳朵外缘"唯一的例外,跟哪只耳朵无关。
     private func showsEqualizer(on side: NotchEqualizerEar, module: NotchEarModule) -> Bool {
-        controller.showsEqualizer && controller.equalizerEar == side && !module.yieldsEqualizer
+        module.drawsEqualizer(showsEqualizer: controller.showsEqualizer, equalizerEar: controller.equalizerEar, side: side)
     }
 
     private var equalizerBars: some View {
