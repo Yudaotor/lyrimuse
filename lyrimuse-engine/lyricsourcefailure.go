@@ -52,7 +52,7 @@ const (
 
 // 传输层通用代码。由 sourcebreaker.go
 // 的 classifyLyricSourceTransportFailure 按 http.Client.Do 的错误 / 状态码分类、按请求主机归源
-// (lyricSourceForHost),「搜索候选歌词」弹窗对**这一轮一个 HTTP 响应都没拿到**的源报出来
+// (lyricSourceOwningHost),「搜索候选歌词」弹窗对**这一轮一个 HTTP 响应都没拿到**的源报出来
 // (searchcli.go 的 lyricSourceFailureReasons)。跟上面几个"某源特有"的代码不同,这三个对任何源
 // 都可能出现;具体代码(限流 / 地区限制 / 直连被堵)优先,这三个只填空。同样"稳定代码不是文案",
 // Swift 侧的 switch 要同步补 case(守卫见 lyricsourcefailure_test.go)。

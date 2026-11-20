@@ -129,7 +129,7 @@ func doHTTPTrackedOnce(cli *http.Client, req *http.Request) (*http.Response, err
 			recordAPICall(summaryKey, elapsed, true, false, time.Now())
 		}
 		// 歌词源级熔断的失败观察(见 sourcebreaker.go):只有歌词源的主机会被记,别的请求
-		// 在 lyricSourceForHost 那里直接归零。
+		// 在 lyricSourceOwningHost 那里直接归零。
 		sharedLyricSourceBreaker().observeTraced(req.URL.Host, guardEndpointKey(req.URL), err, 0, "", tr)
 		if !errors.Is(err, context.Canceled) {
 			err = loggedTransportError{err}
@@ -147,7 +147,7 @@ func doHTTPTrackedOnce(cli *http.Client, req *http.Request) (*http.Response, err
 	}
 	sharedHostGuard().observe(req, resp.StatusCode, resp.Header.Get("Retry-After"))
 	if resp.StatusCode < 500 && resp.StatusCode != http.StatusTooManyRequests {
-		if src := lyricSourceForHost(req.URL.Host); src != "" {
+		if src := lyricSourceOwningHost(req.URL.Host); src != "" {
 			lyricSourceRoundFrom(req.Context()).markReached(src)
 		}
 	}
@@ -192,7 +192,7 @@ func rateLimitAnswerPaused(req *http.Request, status int) bool {
 		return false
 	}
 	host := guardHost(req.URL)
-	return host == musicbrainzHost || lyricSourceForHost(host) != "" && guardApplies(req)
+	return host == musicbrainzHost || lyricSourceOwningHost(host) != "" && guardApplies(req)
 }
 
 // loggedTransportError:上面已经按「api call … FAILED」记过一条 WARN 的传输层错误。调用方再用 warnf / infoFailf
@@ -215,7 +215,7 @@ func (e loggedTransportError) Unwrap() error { return e.err }
 //
 // 逐 target 那一行只在窗口里有失败、或最慢一次不短于 apiCallSlowMax 时落 Info,其余落 Debug
 // (log_level=debug 时可见,按接口量速率用这一档)。每次结算另写一行 Info 总计(api call rollup),
-// 按歌词源(lyricSourceForHost)或主机给出调用次数:搜一首歌要打二三十个接口,逐接口各一行
+// 按歌词源(lyricSourceOwningHost)或主机给出调用次数:搜一首歌要打二三十个接口,逐接口各一行
 // 的话这一类会占掉日志的一半以上。
 
 const apiCallSummaryWindow = time.Minute
@@ -466,7 +466,7 @@ func apiCallRollupGroup(target string) string {
 	if sp := strings.IndexByte(host, ' '); sp >= 0 {
 		host = host[:sp]
 	}
-	if src := lyricSourceForHost(host); src != "" {
+	if src := lyricSourceOwningHost(host); src != "" {
 		return src
 	}
 	return host

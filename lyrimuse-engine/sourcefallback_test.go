@@ -200,8 +200,8 @@ func TestSodaSeoTrackFallsBackToSharePage(t *testing.T) {
 
 // 分享页主机不进汽水的熔断映射:专辑预取也取它,那边的故障不该停掉歌词源。
 func TestSodaSharePageHostStaysUnmapped(t *testing.T) {
-	if got := lyricSourceForHost("music.douyin.com"); got != "" {
-		t.Errorf("lyricSourceForHost(music.douyin.com) = %q, 应为空", got)
+	if got := lyricSourceOwningHost("music.douyin.com"); got != "" {
+		t.Errorf("lyricSourceOwningHost(music.douyin.com) = %q, 应为空", got)
 	}
 }
 
@@ -262,7 +262,7 @@ func TestFallbackHostsMapToTheirLyricSource(t *testing.T) {
 		"shu.y.qq.com":             "qq",
 	}
 	for host, want := range cases {
-		if got := lyricSourceForHost(host); got != want {
+		if got := lyricSourceOwningHost(host); got != want {
 			t.Errorf("%s: got %q, want %q", host, got, want)
 		}
 	}

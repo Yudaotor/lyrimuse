@@ -34,7 +34,7 @@ func lyricSourceSlotsFor(source string) chan struct{} {
 
 // acquireLyricSourceSlot:给发往 host 的请求占一个名额;不是歌词源的主机直接放行。返回的 release 必须调用一次。
 func acquireLyricSourceSlot(ctx context.Context, host string) (release func(), err error) {
-	source := lyricSourceForHost(host)
+	source := lyricSourceOwningHost(host)
 	if source == "" {
 		return func() {}, nil
 	}

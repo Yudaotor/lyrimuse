@@ -2,7 +2,9 @@ package main
 
 import (
 	"context"
+	"net"
 	"sort"
+	"strings"
 	"sync"
 )
 
@@ -343,7 +345,9 @@ type ProviderDescriptor struct {
 
 	Rounds RoundPolicy
 
-	// Hosts:哪些请求主机归这个源(lyricSourceForHost)。
+	// Hosts:哪些请求主机归这个源(lyricSourceOwningHost)。联网源至少登记一个:主机没登记的请求不归任何源,它的失败一次都
+	// 不记进熔断。一个主机只能归一个源(各源的规则不能重叠);只登记这个源取词、搜索真正请求的主机,别把同一个域名下用途
+	// 不同的主机卷进来(它们的故障会连带停掉这个源)。
 	Hosts []HostRule
 	// HostRates:单独定了令牌桶参数的主机(hostRateFor 经 lyricProviderRegistry.hostRates 读),没列的用 hostRateDefault。
 	// 键是小写、不带端口的主机名,只对这一个主机生效。
@@ -412,6 +416,9 @@ type lyricProviderRegistry struct {
 	peerGroups map[string][]string
 	// hostRates:单独定了令牌桶参数的主机 → 参数,各描述符的 HostRates 并在一起。
 	hostRates map[string]hostRate
+	// hostOwners / domainOwners:各描述符的 Hosts 摊成的查表结构。hostOwners 是主机 → 源(规则认主机自己的);
+	// domainOwners 是域名 → 源(规则认它各级子域的)。
+	hostOwners, domainOwners map[string]string
 }
 
 // index 按描述符算出各份名单。全部登记完调一次;之后再改描述符里的 Kind、名次要重调。
@@ -422,9 +429,36 @@ func (r *lyricProviderRegistry) index() {
 	r.defaultPriorityOrder = r.rankedNames(network, func(d *ProviderDescriptor) int { return d.DefaultPriorityRank })
 	r.indexPeerGroups()
 	r.hostRates = map[string]hostRate{}
+	r.hostOwners, r.domainOwners = map[string]string{}, map[string]string{}
 	for _, d := range r.descriptors {
 		for host, rate := range d.HostRates {
 			r.hostRates[host] = rate
+		}
+		for _, rule := range d.Hosts {
+			if rule.Scope != hostSubdomainsOnly {
+				r.hostOwners[rule.Host] = d.Name
+			}
+			if rule.Scope != hostExact {
+				r.domainOwners[rule.Host] = d.Name
+			}
+		}
+	}
+}
+
+// sourceOwningHost:host(小写、不带端口)按各描述符的 Hosts 归到哪个源,都不认是空串。先看主机自己,再从左到右逐级
+// 去掉一段看父域;不遍历描述符、不分配。
+func (r *lyricProviderRegistry) sourceOwningHost(host string) string {
+	if source, ok := r.hostOwners[host]; ok {
+		return source
+	}
+	for rest := host; ; {
+		dot := strings.IndexByte(rest, '.')
+		if dot < 0 {
+			return ""
+		}
+		rest = rest[dot+1:]
+		if source, ok := r.domainOwners[rest]; ok {
+			return source
 		}
 	}
 }
@@ -535,6 +569,18 @@ func lyricSourceTakesISRC(source, isrc string) bool {
 		return ok && index.HasISRC(isrc)
 	}
 	return false
+}
+
+// lyricSourceOwningHost 把请求主机归到歌词源名(描述符的 Hosts);不是歌词源的主机(Last.fm / ListenBrainz / MusicBrainz /
+// iTunes / DoH …)返回空串。host 可以带端口、大写、首尾空白。
+func lyricSourceOwningHost(host string) string {
+	h := strings.ToLower(strings.TrimSpace(host))
+	if strings.Contains(h, ":") {
+		if hostOnly, _, err := net.SplitHostPort(h); err == nil {
+			h = hostOnly
+		}
+	}
+	return lyricProviders().sourceOwningHost(h)
 }
 
 // lyricSourceMaxInflight:source 同时在途的请求上限(描述符的 MaxInflight)。没单独定的、没登记的名字都是

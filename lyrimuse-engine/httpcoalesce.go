@@ -40,7 +40,7 @@ var (
 	httpCoalesceMu       sync.Mutex
 	httpCoalesceInflight = map[string]*coalescedCall{}
 	// httpCoalesceHostOK 只为单测可换(httptest 服务器在回环地址上,不是歌词源主机)。
-	httpCoalesceHostOK = func(host string) bool { return lyricSourceForHost(host) != "" }
+	httpCoalesceHostOK = func(host string) bool { return lyricSourceOwningHost(host) != "" }
 )
 
 func httpCoalesceKey(req *http.Request) (string, bool) {
@@ -145,7 +145,7 @@ func noteCoalescedReached(req *http.Request, status int) {
 	if status >= 500 || status == http.StatusTooManyRequests {
 		return
 	}
-	if src := lyricSourceForHost(req.URL.Host); src != "" {
+	if src := lyricSourceOwningHost(req.URL.Host); src != "" {
 		lyricSourceRoundFrom(req.Context()).markReached(src)
 	}
 }

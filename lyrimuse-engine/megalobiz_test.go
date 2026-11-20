@@ -403,7 +403,7 @@ func TestMegalobizRateAndBudgetWithinTerms(t *testing.T) {
 			t.Errorf("别的源不该有小时额度: %s", s)
 		}
 	}
-	if lyricSourceForHost("api.megalobiz.com") != lyricSourceMegalobiz {
+	if lyricSourceOwningHost("api.megalobiz.com") != lyricSourceMegalobiz {
 		t.Errorf("接口主机要归到这个源,429 才走歌词源熔断")
 	}
 }

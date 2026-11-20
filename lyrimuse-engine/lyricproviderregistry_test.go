@@ -264,7 +264,7 @@ func TestProviderRegistryRoundsMatchOnDemandOnly(t *testing.T) {
 	}
 }
 
-// registrySourceForHost:照 lyricSourceForHost 的归一(小写、去空白、去端口)之后按描述符的主机规则归源;
+// registrySourceForHost:小写、去空白、去端口之后按描述符的主机规则逐条扫着归源(不经登记表的查表结构);
 // 第二个返回值是命中了几个源。
 func registrySourceForHost(host string) (string, int) {
 	h := strings.ToLower(strings.TrimSpace(host))
@@ -280,16 +280,28 @@ func registrySourceForHost(host string) (string, int) {
 	return source, n
 }
 
-func TestProviderRegistryHostsMatchSourceForHost(t *testing.T) {
-	bases := map[string]bool{
+// hostAttributionSamples:主机归源的样本。期望表那个旧函数体里写到的每个主机字面量、每条主机规则的主机、各源实际
+// 请求的主机、不是歌词源的主机和歌词源域名下不该卷进来的那几个,各自再变出子域、父域、粘连前缀、端口、大写带空白、
+// 首尾带点几种写法;另加一批写坏的。
+func hostAttributionSamples(t *testing.T) (bases map[string]bool, probes []string) {
+	t.Helper()
+	bases = map[string]bool{
 		// 不是歌词源的主机,以及歌词源域名下不该卷进来的那几个。
 		"itunes.apple.com": true, "music.apple.com": true, "mvod.itunes.apple.com": true, "is1-ssl.mzstatic.com": true,
 		"ws.audioscrobbler.com": true, "musicbrainz.org": true, "douyin.com": true, "music.douyin.com": true,
 		"megalobiz.com": true, "www.megalobiz.com": true, "youtube.com": true, "naver.com": true, "github.com": true,
 		"petitlyrics.com": true, "genie.co.kr": true, "zmdcdn.me": true, "photo-zmp3.zmdcdn.me": true, "com": true,
+		"api.listenbrainz.org": true, "1.1.1.1": true, "notqq.com": true, "evil-163.com": true, "example.com": true,
+		"localhost": true, "np.yudaotor.me": true, "image.genie.co.kr": true, "musicmeta-phinf.pstatic.net": true,
+		// 各源实际请求的主机(sourcecoverage_test.go、sourcebreaker_test.go、sourcefallback_test.go 里的样本)。
+		"c.y.qq.com": true, "u.y.qq.com": true, "shu.y.qq.com": true, "mobilecdn.kugou.com": true, "lyrics.kugou.com": true,
+		"krcs.kugou.com": true, "ioscdn.kugou.com": true, "search.kuwo.cn": true, "www.kuwo.cn": true,
+		"pd.musicapp.migu.cn": true, "d.musicapp.migu.cn": true, "c.musicapp.migu.cn": true, "api.deezer.com": true,
+		"pipe.deezer.com": true, "auth.deezer.com": true, "www.deezer.com": true, "interface3.music.163.com": true,
+		"api.qishui.com": true,
 	}
-	// 表这一侧:lyricSourceForHost 函数体里写到的每个主机字面量。
-	body := goFuncSource(t, "sourcebreaker.go", "lyricSourceForHost")
+	// 期望表这一侧:lyricSourceForHost 函数体里写到的每个主机字面量。
+	body := goFuncSource(t, "lyricsourceexpect_test.go", "lyricSourceForHost")
 	literals := regexp.MustCompile(`"\.?([a-z0-9][a-z0-9.-]*\.[a-z]{2,})"`).FindAllStringSubmatch(body, -1)
 	if len(literals) < 30 {
 		t.Fatalf("lyricSourceForHost 里只扫到 %d 个主机字面量,扫描式跟不上源码了", len(literals))
@@ -299,22 +311,81 @@ func TestProviderRegistryHostsMatchSourceForHost(t *testing.T) {
 	}
 	// 描述符这一侧:每条主机规则。
 	for _, d := range registryDescriptors() {
-		if d.Kind == providerKindNetwork && len(d.Hosts) == 0 {
-			t.Errorf("%s 没有登记主机", d.Name)
-		}
 		for _, r := range d.Hosts {
 			bases[r.Host] = true
 		}
 	}
-	for base := range bases {
-		for _, probe := range []string{base, "x." + base, "x.y." + base, "x" + base, base + ":443", " " + strings.ToUpper(base) + " "} {
-			got, n := registrySourceForHost(probe)
-			if n > 1 {
-				t.Errorf("%q 被 %d 个源的主机规则同时命中", probe, n)
+	for _, base := range sortedKeys(bases) {
+		probes = append(probes, base, "x."+base, "x.y."+base, "x"+base, base+":443", " "+strings.ToUpper(base)+" ", "."+base, base+".")
+		if _, parent, ok := strings.Cut(base, "."); ok {
+			probes = append(probes, parent)
+		}
+	}
+	return bases, append(probes, "", " ", ":", ".", "lrclib.net:", "lrclib.net:443:1", "[::1]:80", "::1", "a..qq.com", "qq.com:x", "net", "cn")
+}
+
+func TestProviderRegistryHostsMatchSourceForHost(t *testing.T) {
+	for _, d := range registryDescriptors() {
+		if d.Kind == providerKindNetwork && len(d.Hosts) == 0 {
+			t.Errorf("%s 没有登记主机", d.Name)
+		}
+	}
+	bases, probes := hostAttributionSamples(t)
+	owned := map[string]bool{}
+	for _, probe := range probes {
+		want := lyricSourceForHost(probe)
+		got, n := registrySourceForHost(probe)
+		if n > 1 {
+			t.Errorf("%q 被 %d 个源的主机规则同时命中", probe, n)
+		}
+		// 写坏的那几个(多个冒号)这个辅助函数的去端口跟生产代码不是一个写法,只比生产代码那一侧。
+		if strings.Count(probe, ":") <= 1 && got != want {
+			t.Errorf("%q:描述符的规则归到 %q,期望表归到 %q", probe, got, want)
+		}
+		if read := lyricSourceOwningHost(probe); read != want {
+			t.Errorf("%q:生产代码归到 %q,期望表归到 %q", probe, read, want)
+		}
+		if want != "" {
+			owned[want] = true
+		}
+	}
+	for name := range registryNameSet(func(d *ProviderDescriptor) bool { return d.Kind == providerKindNetwork }) {
+		if !owned[name] {
+			t.Errorf("样本里没有一个主机归到联网源 %s", name)
+		}
+	}
+	t.Logf("主机归源:%d 个主机、%d 个样本,描述符的规则、生产代码读到的、期望表三方相等;归到 %d 个源", len(bases), len(probes), len(owned))
+}
+
+// 查表结构跟逐条规则扫的结果相等:只认这一个主机、连子域、只认子域三种范围各一条,加一个什么都不认的。
+func TestHostOwnerIndexMatchesRuleScan(t *testing.T) {
+	r := &lyricProviderRegistry{byName: map[string]*ProviderDescriptor{}, byProvider: map[string]LyricProvider{}}
+	r.registerBuiltin(&ProviderDescriptor{Name: "exact", Hosts: []HostRule{{"api.one.example", hostExact}, {"one.example", hostExact}}}, 0)
+	r.registerBuiltin(&ProviderDescriptor{Name: "with-sub", Hosts: []HostRule{{"two.example", hostWithSubdomains}}}, 0)
+	r.registerBuiltin(&ProviderDescriptor{Name: "sub-only", Hosts: []HostRule{{"three.example", hostSubdomainsOnly}, {"cdn.four.example", hostSubdomainsOnly}}}, 0)
+	r.registerBuiltin(&ProviderDescriptor{Name: "no-hosts"}, 0)
+	r.index()
+	scan := func(host string) string {
+		for _, d := range r.descriptors {
+			if slices.ContainsFunc(d.Hosts, func(rule HostRule) bool { return rule.matches(host) }) {
+				return d.Name
 			}
-			if want := lyricSourceForHost(probe); got != want {
-				t.Errorf("%q:登记表归到 %q,lyricSourceForHost 归到 %q", probe, got, want)
-			}
+		}
+		return ""
+	}
+	want := map[string]string{
+		"api.one.example": "exact", "one.example": "exact", "x.one.example": "", "x.api.one.example": "",
+		"two.example": "with-sub", "a.two.example": "with-sub", "a.b.two.example": "with-sub", "xtwo.example": "",
+		"three.example": "", "a.three.example": "sub-only", "a.b.three.example": "sub-only", "xthree.example": "",
+		"cdn.four.example": "", "a.cdn.four.example": "sub-only", "four.example": "", "b.four.example": "",
+		"example": "", "": "", ".": "", ".two.example": "with-sub", "two.example.": "", "a..three.example": "sub-only",
+	}
+	for host, source := range want {
+		if got := r.sourceOwningHost(host); got != source {
+			t.Errorf("%q:查表归到 %q,期望 %q", host, got, source)
+		}
+		if got := scan(host); got != source {
+			t.Errorf("%q:逐条规则扫归到 %q,期望 %q", host, got, source)
 		}
 	}
 }

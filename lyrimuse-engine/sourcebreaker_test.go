@@ -50,8 +50,8 @@ func TestLyricSourceForHost(t *testing.T) {
 		"evil-163.com":              "",
 	}
 	for host, want := range cases {
-		if got := lyricSourceForHost(host); got != want {
-			t.Errorf("lyricSourceForHost(%q) = %q, want %q", host, got, want)
+		if got := lyricSourceOwningHost(host); got != want {
+			t.Errorf("lyricSourceOwningHost(%q) = %q, want %q", host, got, want)
 		}
 	}
 }

@@ -1,7 +1,12 @@
 package main
 
+import (
+	"net"
+	"strings"
+)
+
 // 登记表(lyricprovider.go)的期望值。生产代码里名单、顺序、轮次、哪几路是播放器本机、近况统计的同类组、专用探测曲、
-// 来源链接、按 ISRC 补取、出站的速率与额度(主机速率、在途上限、小时额度、每日额度留量、代理回退)这几类只读登记表里的
+// 来源链接、按 ISRC 补取、出站的归源、速率与额度(主机归源、主机速率、在途上限、小时额度、每日额度留量、代理回退)这几类只读登记表里的
 // 描述符,两种失败原因问源的可选接口;这里是同一份事实冻结在测试里的写法,lyricproviderregistry_test.go
 // 逐项比「登记表推出来的 == 这里」。加减来源、改描述符里这几类字段,要同步改这里。
 // 别的测试拿这几张表当「全部联网源」「决胜序」的输入;App 的 selftest 从这个文件抠 lyricSourceNames 的字面量跟
@@ -129,4 +134,77 @@ var lyricSourceProxyFallbackSources = map[string]bool{
 	lyricSourceLRCLIB: true, lyricSourceAMLL: true, lyricSourceLyricFind: true, lyricSourceDeezer: true,
 	lyricSourceAppleMusic: true, lyricSourceVibe: true, lyricSourceGenie: true, lyricSourcePetitLyrics: true,
 	lyricSourceZing: true, lyricSourceMegalobiz: true,
+}
+
+// lyricSourceForHost:请求主机归到哪个歌词源(ProviderDescriptor.Hosts),不是歌词源的主机返回空串。
+func lyricSourceForHost(host string) string {
+	h := strings.ToLower(strings.TrimSpace(host))
+	if strings.Contains(h, ":") {
+		if hostOnly, _, err := net.SplitHostPort(h); err == nil {
+			h = hostOnly
+		}
+	}
+	switch {
+	case h == "music.163.com" || strings.HasSuffix(h, ".163.com"):
+		return "netease"
+	case h == "qq.com" || strings.HasSuffix(h, ".qq.com"):
+		return "qq"
+	case h == "kugou.com" || strings.HasSuffix(h, ".kugou.com"):
+		return "kugou"
+	case h == "lrclib.net" || strings.HasSuffix(h, ".lrclib.net"):
+		return "lrclib"
+	case h == "raw.githubusercontent.com" || h == "cdn.jsdelivr.net" || h == "fastly.jsdelivr.net" || h == "api.amll.dev":
+		// jsDelivr 两个是 amll-ttml-db 的镜像(sourcefallback.go 的 amllBases),api.amll.dev 是 AMLL 官方接口(amllttml.go 的
+		// amllAPIBase),全仓只有 amll 在用。
+		return "amll"
+	case h == "music.youtube.com" || h == "youtubei.googleapis.com" || h == "www.youtube.com":
+		// 后两个是同一套 InnerTube 的备用主机(sourcefallback.go 的 ytmusicAPIBases)。
+		return "lyricfind"
+	case h == "kuwo.cn" || strings.HasSuffix(h, ".kuwo.cn"):
+		return "kuwo"
+	case h == "migu.cn" || strings.HasSuffix(h, ".migu.cn"):
+		return "migu" // 搜索 pd.musicapp.migu.cn、歌词文件 d.musicapp.migu.cn 都归这一源
+	case h == "deezer.com" || strings.HasSuffix(h, ".deezer.com"):
+		return "deezer" // 搜索 api.deezer.com、取词 www.deezer.com 都归这一源
+	case h == "amp-api.music.apple.com" || h == "amp-api-edge.music.apple.com" || h == "api.music.apple.com":
+		// Apple Music 的 catalog API —— applemusic 这个歌词源真正发请求的地方。
+		//
+		// 只认这三个主机(主用加搜索、取词各一个备用,见 sourcefallback.go),别扩成 `*.apple.com`,那会把另外两个用途完全不同的主机
+		// 卷进来、让它们的故障去停掉一个能出歌词的源:
+		//   - itunes.apple.com:公开的目录检索(专辑提示/封面/标题反查/目录 id),跟歌词
+		//     正文无关,而且被限流得最狠(实测 49.8% 失败)。它有自己的端点级退避,
+		//     见 apple.go 的 itunesSearchCoolingDown。
+		//   - music.apple.com:抓 developer token 的 web origin。它失败意味着"没凭据"
+		//     (applemusic_not_connected),不是"源坏了" —— 那种情况 resolveApplemusicLyric
+		//     在发请求之前就安静返回空了,本来也轮不到熔断。
+		//
+		// 不在这张表里的源,observe 拿到空源名直接返回,失败一次都不记:新加歌词源别漏登记它的主机。
+		return "applemusic"
+	case h == sodaSeoTrackHost || h == sodaSearchHost:
+		// 汽水的两个主机,取词(seo_track)和搜索两个端点都在上面,互为备用(sourcefallback.go)。
+		// beta-luna 只认这一个主机,别扩成 `*.douyin.com`:那个域名下还有抖音自己的一大
+		// 堆服务,跟歌词无关的故障会连带停掉这个源。分享页的 music.douyin.com 同理不进来(见 soda.go
+		// sodaSharePageURL)。
+		return "soda"
+	case h == "apis.naver.com":
+		// VIBE 的搜索和取词都在这个主机的 /vibeWeb/ 下(vibe.go)。全仓只有这一源请求它;封面图在 musicmeta-phinf.pstatic.net,
+		// 跟歌词无关,不进来。
+		return "vibe"
+	case h == "app.genie.co.kr" || h == "dn.genie.co.kr":
+		// Genie 的搜索在 app.genie.co.kr、取词在 dn.genie.co.kr(genie.go)。全仓只有这一源请求它们;封面图在
+		// image.genie.co.kr,跟歌词无关,不进来。
+		return "genie"
+	case h == "p1.petitlyrics.com" || h == "p0.petitlyrics.com" || h == "on.petitlyrics.com":
+		// PetitLyrics 轮换着用的三个主机(petitlyrics.go 的 petitClients),全仓只有这一源请求它们。
+		return "petitlyrics"
+	case h == "zingmp3.vn" || h == "static-zmp3.zmdcdn.me":
+		// Zing MP3 的接口在 zingmp3.vn、LRC 文件在 static-zmp3.zmdcdn.me(zing.go),全仓只有这一源请求它们;封面图在
+		// photo-zmp3.zmdcdn.me / photo-resize-zmp3.zmdcdn.me,跟歌词无关,不进来。
+		return "zing"
+	case h == "api.megalobiz.com":
+		// Megalobiz 的公开接口(megalobiz.go),搜索和取词都在这一个主机上,全仓只有这一源请求它。歌词页 megalobiz.com 只给 App
+		// 做来源链接、引擎不请求,不进来。
+		return "megalobiz"
+	}
+	return ""
 }

@@ -66,7 +66,7 @@ func TestHostGuardSourceHoldPerLane(t *testing.T) {
 
 func TestLyricSourceInflightCap(t *testing.T) {
 	const host = "lrclib.net"
-	if lyricSourceForHost(host) != "lrclib" {
+	if lyricSourceOwningHost(host) != "lrclib" {
 		t.Skip("主机归属变了,改用别的歌词源主机")
 	}
 	cap := lyricSourceInflightCaps["lrclib"]

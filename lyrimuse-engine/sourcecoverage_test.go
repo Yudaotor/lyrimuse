@@ -41,8 +41,8 @@ func TestEveryLyricSourceHasAHostMapping(t *testing.T) {
 			continue
 		}
 		for _, h := range hs {
-			if got := lyricSourceForHost(h); got != source {
-				t.Errorf("lyricSourceForHost(%q) = %q, 期望 %q —— 该源的失败不会被熔断记录", h, got, source)
+			if got := lyricSourceOwningHost(h); got != source {
+				t.Errorf("lyricSourceOwningHost(%q) = %q, 期望 %q —— 该源的失败不会被熔断记录", h, got, source)
 			}
 		}
 	}
@@ -57,8 +57,8 @@ func TestNonLyricAppleHostsStayUnmapped(t *testing.T) {
 		"mvod.itunes.apple.com", // 试听流
 		"is1-ssl.mzstatic.com",  // 封面 CDN
 	} {
-		if got := lyricSourceForHost(h); got != "" {
-			t.Errorf("lyricSourceForHost(%q) = %q —— 这个主机跟歌词正文无关,不该进歌词源熔断", h, got)
+		if got := lyricSourceOwningHost(h); got != "" {
+			t.Errorf("lyricSourceOwningHost(%q) = %q —— 这个主机跟歌词正文无关,不该进歌词源熔断", h, got)
 		}
 	}
 }

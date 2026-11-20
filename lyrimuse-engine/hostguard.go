@@ -315,7 +315,7 @@ func (g *hostGuard) admit(req *http.Request) error {
 	}
 	ctx := req.Context()
 	host := guardHost(req.URL)
-	source := lyricSourceForHost(host)
+	source := lyricSourceOwningHost(host)
 	round := lyricSourceRoundFrom(ctx)
 	key := guardEndpointKey(req.URL)
 
@@ -529,7 +529,7 @@ func (g *hostGuard) observe(req *http.Request, status int, retryAfter string) {
 	} else {
 		g.noteEndpointHealthy(guardEndpointKey(req.URL))
 	}
-	if lyricSourceForHost(guardHost(req.URL)) != "" {
+	if lyricSourceOwningHost(guardHost(req.URL)) != "" {
 		if status == http.StatusServiceUnavailable || status == http.StatusTooManyRequests {
 			g.noteLyricSourceThrottled(guardHost(req.URL), retryAfter)
 		}
@@ -728,7 +728,7 @@ func reportEndpointAccepted(u *url.URL) {
 // 让这个端点按 retryAfter(可空)进入窗口。只对非歌词源主机生效,同 observe。回环地址也照记,
 // 反正 admit 不查它们。
 func reportEndpointRateLimited(u *url.URL, retryAfter string) {
-	if u == nil || lyricSourceForHost(guardHost(u)) != "" {
+	if u == nil || lyricSourceOwningHost(guardHost(u)) != "" {
 		return
 	}
 	sharedHostGuard().block(guardHost(u), guardEndpointKey(u), parseLyricSourceRetryAfter(retryAfter))

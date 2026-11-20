@@ -14,6 +14,7 @@ func newBuiltinLyricProviderRegistry() *lyricProviderRegistry {
 
 	r.implement(neteaseProvider{desc: r.registerBuiltin(&ProviderDescriptor{
 		Name: lyricSourceNetease, Order: 1, TieRank: 1, DefaultPriorityRank: 2,
+		// 只认 163.com 的各级子域(music.163.com、interface3.music.163.com …),不认 163.com 自己。
 		Hosts: []HostRule{{"163.com", hostSubdomainsOnly}},
 		Baked: bakedAdopt, ParenBackground: true, InstrumentalRank: 3, PlainText: plainTextLast,
 		PeerGroup: peerGroupChinese,
@@ -46,6 +47,8 @@ func newBuiltinLyricProviderRegistry() *lyricProviderRegistry {
 
 	r.implement(amllProvider{desc: r.registerBuiltin(&ProviderDescriptor{
 		Name: lyricSourceAMLL, Order: 5, TieRank: 22, DefaultPriorityRank: 5,
+		// raw.githubusercontent.com 和 jsDelivr 两个是 amll-ttml-db 的镜像(sourcefallback.go 的 amllBases),api.amll.dev 是 AMLL
+		// 官方接口(amllttml.go 的 amllAPIBase),全仓只有 amll 请求它们。
 		Hosts: []HostRule{
 			{"raw.githubusercontent.com", hostExact}, {"cdn.jsdelivr.net", hostExact}, {"fastly.jsdelivr.net", hostExact},
 			{"api.amll.dev", hostExact},
@@ -57,6 +60,7 @@ func newBuiltinLyricProviderRegistry() *lyricProviderRegistry {
 
 	r.implement(lyricFindProvider{desc: r.registerBuiltin(&ProviderDescriptor{
 		Name: lyricSourceLyricFind, Order: 6, TieRank: 5, DefaultPriorityRank: 6,
+		// 后两个是同一套 InnerTube 的备用主机(sourcefallback.go 的 ytmusicAPIBases)。
 		Hosts: []HostRule{
 			{"music.youtube.com", hostExact}, {"youtubei.googleapis.com", hostExact}, {"www.youtube.com", hostExact},
 		},
@@ -74,6 +78,7 @@ func newBuiltinLyricProviderRegistry() *lyricProviderRegistry {
 
 	r.implement(miguProvider{desc: r.registerBuiltin(&ProviderDescriptor{
 		Name: lyricSourceMigu, Order: 8, TieRank: 7, DefaultPriorityRank: 8,
+		// 搜索 pd.musicapp.migu.cn、歌词文件 d.musicapp.migu.cn 都归这一源。
 		Hosts:           []HostRule{{"migu.cn", hostWithSubdomains}},
 		ParenBackground: true, InstrumentalRank: 4,
 		PeerGroup: peerGroupChinese,
@@ -81,6 +86,7 @@ func newBuiltinLyricProviderRegistry() *lyricProviderRegistry {
 
 	r.implement(deezerProvider{desc: r.registerBuiltin(&ProviderDescriptor{
 		Name: lyricSourceDeezer, Order: 9, TieRank: 8, DefaultPriorityRank: 9,
+		// 搜索 api.deezer.com、取词 www.deezer.com 都归这一源。
 		Hosts:           []HostRule{{"deezer.com", hostWithSubdomains}},
 		ProxyFallback:   true,
 		ParenBackground: true, SongwritersRank: 3, SongwritersSkipCJK: true, ConsensusFamily: lyricSourceLyricFind,
@@ -90,6 +96,9 @@ func newBuiltinLyricProviderRegistry() *lyricProviderRegistry {
 
 	r.implement(appleMusicProvider{desc: r.registerBuiltin(&ProviderDescriptor{
 		Name: lyricSourceAppleMusic, Order: 10, TieRank: 9, DefaultPriorityRank: 10,
+		// catalog API 的三个主机(主用加搜索、取词各一个备用,见 sourcefallback.go)。只认这三个,别扩成 `*.apple.com`:
+		// itunes.apple.com 是公开的目录检索(专辑提示、封面、标题反查、目录 id),有自己的端点级退避(apple.go 的
+		// itunesSearchCoolingDown);music.apple.com 是抓 developer token 的 web origin,它失败是没凭据,不是源坏了。
 		Hosts: []HostRule{
 			{"amp-api.music.apple.com", hostExact}, {"amp-api-edge.music.apple.com", hostExact},
 			{"api.music.apple.com", hostExact},
@@ -101,6 +110,8 @@ func newBuiltinLyricProviderRegistry() *lyricProviderRegistry {
 
 	r.implement(sodaProvider{desc: r.registerBuiltin(&ProviderDescriptor{
 		Name: lyricSourceSoda, Order: 11, TieRank: 10, DefaultPriorityRank: 11,
+		// 取词(seo_track)和搜索两个端点都在这两个主机上,互为备用(sourcefallback.go)。别扩成 `*.douyin.com`:那个域名下还有
+		// 抖音自己的一大堆服务;分享页的 music.douyin.com 同样不进来(soda.go 的 sodaSharePageURL)。
 		Hosts:           []HostRule{{sodaSeoTrackHost, hostExact}, {sodaSearchHost, hostExact}},
 		ParenBackground: true,
 		PeerGroup:       peerGroupChinese,
@@ -109,18 +120,21 @@ func newBuiltinLyricProviderRegistry() *lyricProviderRegistry {
 
 	r.implement(vibeProvider{desc: r.registerBuiltin(&ProviderDescriptor{
 		Name: lyricSourceVibe, Order: 12, TieRank: 11, DefaultPriorityRank: 12,
+		// 搜索和取词都在这个主机的 /vibeWeb/ 下(vibe.go);封面图在 musicmeta-phinf.pstatic.net,不进来。
 		Hosts:         []HostRule{{"apis.naver.com", hostExact}},
 		ProxyFallback: true, ParenBackground: true,
 	}, 0)})
 
 	r.implement(genieProvider{desc: r.registerBuiltin(&ProviderDescriptor{
 		Name: lyricSourceGenie, Order: 13, TieRank: 12, DefaultPriorityRank: 13,
+		// 搜索在 app.genie.co.kr、取词在 dn.genie.co.kr(genie.go);封面图在 image.genie.co.kr,不进来。
 		Hosts:         []HostRule{{"app.genie.co.kr", hostExact}, {"dn.genie.co.kr", hostExact}},
 		ProxyFallback: true, ParenBackground: true,
 	}, 0)})
 
 	r.implement(petitProvider{desc: r.registerBuiltin(&ProviderDescriptor{
 		Name: lyricSourcePetitLyrics, Order: 14, TieRank: 13, DefaultPriorityRank: 14,
+		// 轮换着用的三个主机(petitlyrics.go 的 petitClients)。
 		Hosts: []HostRule{
 			{"p1.petitlyrics.com", hostExact}, {"p0.petitlyrics.com", hostExact}, {"on.petitlyrics.com", hostExact},
 		},
@@ -129,6 +143,8 @@ func newBuiltinLyricProviderRegistry() *lyricProviderRegistry {
 
 	r.implement(zingProvider{desc: r.registerBuiltin(&ProviderDescriptor{
 		Name: lyricSourceZing, Order: 15, TieRank: 14, DefaultPriorityRank: 15,
+		// 接口在 zingmp3.vn、LRC 文件在 static-zmp3.zmdcdn.me(zing.go);封面图在 photo-zmp3.zmdcdn.me /
+		// photo-resize-zmp3.zmdcdn.me,不进来。
 		Hosts:         []HostRule{{"zingmp3.vn", hostExact}, {"static-zmp3.zmdcdn.me", hostExact}},
 		ProxyFallback: true, ParenBackground: true,
 		Probe: &ProbeTrack{Artist: "Sơn Tùng M-TP", Title: "Lạc Trôi"},
@@ -137,7 +153,8 @@ func newBuiltinLyricProviderRegistry() *lyricProviderRegistry {
 	r.implement(megalobizProvider{desc: r.registerBuiltin(&ProviderDescriptor{
 		Name: lyricSourceMegalobiz, Order: 16, TieRank: 15, DefaultPriorityRank: 16,
 		Rounds: roundsOnDemand,
-		Hosts:  []HostRule{{"api.megalobiz.com", hostExact}},
+		// 搜索和取词都在这一个主机上;歌词页 megalobiz.com 只给 App 做来源链接、引擎不请求,不进来。
+		Hosts: []HostRule{{"api.megalobiz.com", hostExact}},
 		// 不带 key 时每个 IP 每分钟 30 次:攒满 6 个再按每秒 0.4 个补,任意一分钟里最多 6 + 24 = 30 个(megalobiz.go 头注)。
 		HostRates:    map[string]hostRate{"api.megalobiz.com": {perSec: 0.4, burst: 6, reserve: 2}},
 		HourlyBudget: megalobizHourlyBudget, DayQuotaReserve: megalobizDayQuotaReserve, ProxyFallback: true,
