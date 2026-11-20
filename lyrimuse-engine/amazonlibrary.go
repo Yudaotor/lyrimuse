@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -388,6 +389,18 @@ func amazonASINFromTrackURL(u string) string {
 func amazonLocalLyricsFor(artist, title, album string) (lyricSourceResult, bool) {
 	r, _, ok := amazonLocalLyrics(artist, title, album)
 	return r, ok
+}
+
+// amazonLocalProvider 把 Amazon Music 本地歌词接到统一接口上:按播放器原样标签认这首的 ASIN(amazonLocalLyricsFor),
+// 不是在用 Amazon Music 放、缓存里没有这首时交空结果。
+type amazonLocalProvider struct{ desc *ProviderDescriptor }
+
+func (p amazonLocalProvider) Descriptor() *ProviderDescriptor { return p.desc }
+
+func (p amazonLocalProvider) Resolve(ctx context.Context, q ProviderQuery, env RoundEnv) SourceResult {
+	artist, title, album := env.IdentityFields()
+	r, _ := amazonLocalLyricsFor(artist, title, album)
+	return r
 }
 
 // amazonLocalLyrics 同 amazonLocalLyricsFor,另带回这份正文是不是借来的(amazonLyricsBorrowedBy 非空):借来的

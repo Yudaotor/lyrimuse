@@ -483,8 +483,17 @@ func TestLXMusicLocalLyricsIsWired(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	lx, err := os.ReadFile("lxmusic.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if wire := "artist, title, _ := env.IdentityFields()\n\tr, _ := lxMusicLocalLyricsFor(ctx, artist, title, q.DurationSecs)\n\treturn r"; !containsCode(string(lx), wire) {
+		t.Errorf("lxmusic.go 缺 %q", wire)
+	}
+	if d := lyricProviders().descriptor(lxMusicLocalLyricsSource); d == nil || d.Rounds != roundsPrimaryOnly || lyricProviderNamed(t, lxMusicLocalLyricsSource).Descriptor() != d {
+		t.Errorf("洛雪那一路应登记了实现、只在首轮问:%+v", d)
+	}
 	for _, wire := range []string{
-		"if r, ok := lxMusicLocalLyricsFor(ctx, idArtist, idTitle, durationSecs); ok {\n\t\t\traw[lxMusicLocalLyricsSource] = r",
 		"source: lxMusicLocalLyricsSource, lyrics: lxm.lyr,",
 		"case lxMusicLocalLyricsSource:\n",
 		"lxMusicLyrics: lxMusicLyricsAvail",

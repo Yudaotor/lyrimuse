@@ -113,10 +113,13 @@ func TestLyricIdentityFieldsIsWired(t *testing.T) {
 		"enrich.go": {
 			"idArtist, idTitle, idAlbum := lyricIdentityFields(ctx, artist, title, album)",
 			"providerEnv := RoundEnv{ForPlayingTrack: forPlaying, identityArtist: idArtist, identityTitle: idTitle, identityAlbum: idAlbum}",
-			"spotifyLocalLyricsFor(idArtist, idTitle, idAlbum)",
-			"amazonLocalLyricsFor(idArtist, idTitle, idAlbum)",
 		},
-		"isrcretry.go": {"a, t, al := lyricIdentityFields(ctx, artist, title, album)\n\tif code := playbackISRCForRound(ctx, a, t, al); code != \"\" {"},
+		"spotifylyrics.go":   {"artist, title, album := env.IdentityFields()\n\tr, _ := spotifyLocalLyricsFor(artist, title, album)"},
+		"amazonlibrary.go":   {"artist, title, album := env.IdentityFields()\n\tr, _ := amazonLocalLyricsFor(artist, title, album)"},
+		"localfilelyrics.go": {"artist, title, _ := env.IdentityFields()\n\tr, _ := localFileLyricsFor(artist, title, q.DurationSecs)"},
+		"lxmusic.go":         {"artist, title, _ := env.IdentityFields()\n\tr, _ := lxMusicLocalLyricsFor(ctx, artist, title, q.DurationSecs)"},
+		"importstore.go":     {"artist, title, album := env.IdentityFields()\n\tr, _ := importedLyricsFor(artist, title, album, q.DurationSecs)"},
+		"isrcretry.go":       {"a, t, al := lyricIdentityFields(ctx, artist, title, album)\n\tif code := playbackISRCForRound(ctx, a, t, al); code != \"\" {"},
 		"applemusic.go": {
 			"applemusicLocalLyric(catalogID, idArtist, idTitle, idAlbum, durationSecs)",
 			"appleID, _ := env.PlaybackTrackIDs(ctx)",

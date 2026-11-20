@@ -584,6 +584,18 @@ func lxMusicLocalLyricsFor(ctx context.Context, artist, title string, durationSe
 	}, true
 }
 
+// lxMusicLocalProvider 把洛雪存下的歌词接到统一接口上:按播放器原样标签在它的列表里认这一首,库里没有再问它的开放
+// API(lxMusicLocalLyricsFor,最多等 3 秒);不是在用洛雪放、两边都没有时交空结果。ctx 是这一轮的,循环返回时跟着取消。
+type lxMusicLocalProvider struct{ desc *ProviderDescriptor }
+
+func (p lxMusicLocalProvider) Descriptor() *ProviderDescriptor { return p.desc }
+
+func (p lxMusicLocalProvider) Resolve(ctx context.Context, q ProviderQuery, env RoundEnv) SourceResult {
+	artist, title, _ := env.IdentityFields()
+	r, _ := lxMusicLocalLyricsFor(ctx, artist, title, q.DurationSecs)
+	return r
+}
+
 // lxMusicOpenAPIStatus 是开放 API `/status` 回的那几项。
 type lxMusicOpenAPIStatus struct {
 	Name      string  `json:"name"`

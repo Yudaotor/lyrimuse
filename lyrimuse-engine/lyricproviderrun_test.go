@@ -203,6 +203,7 @@ func TestStartLyricProvidersSendsOneResultEach(t *testing.T) {
 
 // 一个来源只走一条路。联网源:登记了实现的由调度起,没登记的在收集循环里有且只有一个手写的 goroutine。本机类源:
 // 登记了实现的由调度同步问,没登记的在收集循环里有且只有一处手写的读取。登记表里的每个来源都得占一条。
+// 哪一类走哪一段由 TestStartLyricProvidersRunsLocalKindsSynchronously 钉:联网走并发段、本机类走同步段。
 func TestEveryLyricSourceHasExactlyOneCollector(t *testing.T) {
 	raw, err := os.ReadFile("enrich.go")
 	if err != nil {
@@ -266,11 +267,16 @@ func TestEveryLyricSourceHasExactlyOneCollector(t *testing.T) {
 var localLyricSources = []struct{ name, file, entry, call string }{
 	{kkboxLocalLyricsSource, "kkboxlyrics.go", "kkboxLocalLyricsFor",
 		"artist, title, _ := env.IdentityFields()\n\tr, _ := kkboxLocalLyricsFor(artist, title, q.DurationSecs)\n\treturn r"},
-	{spotifyLocalLyricsSource, "spotifylyrics.go", "spotifyLocalLyricsFor", ""},
-	{amazonLocalLyricsSource, "amazonlibrary.go", "amazonLocalLyricsFor", ""},
-	{localFileLyricsSource, "localfilelyrics.go", "localFileLyricsFor", ""},
-	{lxMusicLocalLyricsSource, "lxmusic.go", "lxMusicLocalLyricsFor", ""},
-	{importLyricsSource, "importstore.go", "importedLyricsFor", ""},
+	{spotifyLocalLyricsSource, "spotifylyrics.go", "spotifyLocalLyricsFor",
+		"artist, title, album := env.IdentityFields()\n\tr, _ := spotifyLocalLyricsFor(artist, title, album)"},
+	{amazonLocalLyricsSource, "amazonlibrary.go", "amazonLocalLyricsFor",
+		"artist, title, album := env.IdentityFields()\n\tr, _ := amazonLocalLyricsFor(artist, title, album)\n\treturn r"},
+	{localFileLyricsSource, "localfilelyrics.go", "localFileLyricsFor",
+		"artist, title, _ := env.IdentityFields()\n\tr, _ := localFileLyricsFor(artist, title, q.DurationSecs)\n\treturn r"},
+	{lxMusicLocalLyricsSource, "lxmusic.go", "lxMusicLocalLyricsFor",
+		"artist, title, _ := env.IdentityFields()\n\tr, _ := lxMusicLocalLyricsFor(ctx, artist, title, q.DurationSecs)\n\treturn r"},
+	{importLyricsSource, "importstore.go", "importedLyricsFor",
+		"artist, title, album := env.IdentityFields()\n\tr, _ := importedLyricsFor(artist, title, album, q.DurationSecs)\n\treturn r"},
 }
 
 // ---- LRCLIB:经调度问出来的,跟照手写 goroutine 的写法问出来的对拍 ----

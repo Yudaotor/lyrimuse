@@ -27,8 +27,8 @@ type ProviderQuery struct {
 	DurationSecs float64
 }
 
-// RoundEnv 是这一轮交给源的环境。带特权的那几样(播放器原样标签、播放侧记下的平台曲目编号、播放器自己的无人声信号、
-// 源之间递的曲目编号)只经下面的方法读写,方法按 granted 放行:收集循环建的那份 granted 是 0,调度交给源之前按它的描述符填
+// RoundEnv 是这一轮交给源的环境。带特权的那几样(播放器原样标签、在放的是哪个播放器、播放侧记下的平台曲目编号、
+// 播放器自己的无人声信号、源之间递的曲目编号)只经下面的方法读写,方法按 granted 放行:收集循环建的那份 granted 是 0,调度交给源之前按它的描述符填
 // (grantedTo),没有对应特权位的源读到的是零值、等不到别人的编号、递的编号没有效果。见 09 章决策 392、393、395。
 //
 // 这个结构要能用 == 比:别往里加切片、map、函数字段。
@@ -131,6 +131,14 @@ func (e RoundEnv) IdentityFields() (artist, title, album string) {
 		return "", "", ""
 	}
 	return e.identityArtist, e.identityTitle, e.identityAlbum
+}
+
+// PlayingPlayer:现在在放的播放器(playingPlayer)。要 privLocalClientIdentity,没有这一位的源拿到空串。
+func (e RoundEnv) PlayingPlayer() string {
+	if !e.granted.has(privLocalClientIdentity) {
+		return ""
+	}
+	return playingPlayer()
 }
 
 // PlaybackTrackIDs:播放侧为这一首记下的平台曲目编号(playbackTrackIDsForRound),别的歌那一轮不给。

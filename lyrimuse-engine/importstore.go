@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"crypto/sha1"
 	"encoding/hex"
 	"encoding/json"
@@ -597,6 +598,18 @@ func importedLyricsFor(artist, title, album string, durationSecs float64) (lyric
 		source: importLyricsSource, lyr: rec.Lyrics, yrc: rec.YRC, tr: rec.Tr, roma: rec.Roma, bg: rec.BG, trLang: rec.TrLang,
 		matchTitle: title, matchArtist: artist, matchAlbum: album,
 	}, true
+}
+
+// importLibraryProvider 把导入库接到统一接口上:按播放器原样标签找这首导入的那份(importedLyricsFor),不看播放器;
+// 库里没有时交空结果。
+type importLibraryProvider struct{ desc *ProviderDescriptor }
+
+func (p importLibraryProvider) Descriptor() *ProviderDescriptor { return p.desc }
+
+func (p importLibraryProvider) Resolve(ctx context.Context, q ProviderQuery, env RoundEnv) SourceResult {
+	artist, title, album := env.IdentityFields()
+	r, _ := importedLyricsFor(artist, title, album, q.DurationSecs)
+	return r
 }
 
 // importedTrLang:导入的译文标了语言就用它,没标按设置里的译文语言(用户导入的译文多半就是想看的那种)。

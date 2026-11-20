@@ -536,6 +536,9 @@ func TestMigratedLyricSourcesAreWiredThroughProviders(t *testing.T) {
 	if len(implementedLocal) != 0 {
 		t.Errorf("登记了实现的本机类源不在 localLyricSources 里:%v", sortedKeys(implementedLocal))
 	}
+	if got, want := len(lyricProviders().providers), len(registryDescriptors()); got != want || want != len(lyricSourceNames)+len(localLyricSources) {
+		t.Errorf("登记表里 %d 个来源、%d 份实现(联网 %d、本机类 %d):每个来源都该恰好一份实现", want, got, len(lyricSourceNames), len(localLyricSources))
+	}
 	for _, m := range migratedLyricSources {
 		if !implemented[m.name] {
 			t.Errorf("%s 应登记一份实现", m.name)
@@ -571,10 +574,19 @@ func TestMigratedLyricSourcesAreWiredThroughProviders(t *testing.T) {
 	if n := countCode(collect, "startLyricProviders("); n != 1 {
 		t.Errorf("收集循环里应恰好起一次调度,找到 %d 处", n)
 	}
-	// 调度同步段交回的本机类源结果原样进 raw:不经结果通道,不记进「回来了的源」。
+	// 调度同步段交回的本机类源结果进 raw 之前只过「别的歌那一轮不算播放器给定的身份」这一道:不经结果通道,
+	// 不记进「回来了的源」,不填 forPlayingTrack。收集循环里不自己读哪一路本机来源,也不自己判是不是首轮。
 	if !containsCode(collect, "localResults := startLyricProviders(ctx, lyricProviders().providers, providerQuery, providerEnv, providerPlan, resultsCh)") ||
-		!containsCode(collect, "for _, r := range localResults {\n\t\traw[r.source] = r\n\t}") {
+		!containsCode(collect, "raw := map[string]lyricSourceResult{}\n\tfor _, r := range localResults {\n\t\traw[r.source] = withoutPlayerIdentity(ctx, r)\n\t}\n\t// scoreAndSort") {
 		t.Error("收集循环应把调度同步段交回的本机类源结果放进 raw")
+	}
+	for _, banned := range []string{"lyricQueryReasonPrimary", "playingPlayer()", "spotifyLocalNoVocals(", "LocalLyricsSource]", "raw[importLyricsSource]"} {
+		if containsCode(collect, banned) {
+			t.Errorf("收集循环里不该再有 %q:本机类源由调度同步问、由调度判是不是首轮", banned)
+		}
+	}
+	if n := countCode(collect, "raw[r.source] = "); n != 2 {
+		t.Errorf("收集循环里往 raw 放结果应只有两处(同步段交回的、结果通道收到的),找到 %d 处", n)
 	}
 }
 

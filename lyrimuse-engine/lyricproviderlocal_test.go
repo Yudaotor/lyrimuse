@@ -536,6 +536,64 @@ func TestRoundEnvIdentityFieldsNeedPrivilege(t *testing.T) {
 	}
 }
 
+// 读「现在在放的是哪个播放器」要 privLocalClientIdentity:没有这一位的源拿到空串,收集循环建的那份环境也一样。
+func TestRoundEnvPlayingPlayerNeedsPrivilege(t *testing.T) {
+	playingFor(t, playerSpotify)
+	if got := (RoundEnv{ForPlayingTrack: true}).PlayingPlayer(); got != "" {
+		t.Errorf("还没经调度交给源的环境不放行:%q", got)
+	}
+	ctx := context.Background()
+	for _, c := range []struct {
+		name       string
+		privileges builtinPrivileges
+		want       string
+	}{
+		{name: "没有特权位"},
+		{name: "只有不相干的位", privileges: privPlaybackTrackIDs | privOfflineLeg | privTrackIDPublish | privTrackIDConsume | privPeripheral | privPlayerNoVocals | privBorrowFromPeers | privRefetchByID | privBreakerControl},
+		{name: "本机客户端身份", privileges: privLocalClientIdentity, want: playerSpotify},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			enableOnlyLyricSources(t, "stub")
+			stub := &stubLyricProvider{desc: &ProviderDescriptor{Name: "stub", Kind: providerKindPlayerLocal, Privileges: c.privileges}}
+			runLyricProvider(ctx, stub, ProviderQuery{}, RoundEnv{}, newLyricRoundPlan(ctx, nil))
+			if stub.calls.Load() != 1 {
+				t.Fatalf("Resolve 应被问一次,实际 %d 次", stub.calls.Load())
+			}
+			if got := stub.gotEnv.PlayingPlayer(); got != c.want {
+				t.Errorf("读到 %q,应是 %q", got, c.want)
+			}
+		})
+	}
+}
+
+// 结果上的 forPlayingTrack 只认带 privPlayerNoVocals 的源自己填的:没有这一位的源填了也清掉。它跟 noVocals、本机身份
+// 一起才让 playerInstrumentalSource 认这是播放器自己的信号。
+func TestForPlayingTrackOnlyFromPrivilegedProviders(t *testing.T) {
+	claimed := SourceResult{noVocals: true, identityFromLocalClient: true, forPlayingTrack: true}
+	for _, c := range []struct {
+		name       string
+		privileges builtinPrivileges
+		want       bool
+	}{
+		{name: "播放器无人声信号", privileges: privLocalClientIdentity | privPlayerNoVocals, want: true},
+		{name: "只有本机客户端身份", privileges: privLocalClientIdentity},
+		{name: "只有不相干的位", privileges: privLocalClientIdentity | privPlaybackTrackIDs | privOfflineLeg | privTrackIDPublish | privTrackIDConsume | privPeripheral | privBorrowFromPeers | privRefetchByID | privBreakerControl},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			for _, kind := range []ProviderKind{providerKindNetwork, providerKindPlayerLocal, providerKindUserLibrary} {
+				stub := &stubLyricProvider{desc: &ProviderDescriptor{Name: "stub", Kind: kind, Privileges: c.privileges}, resolve: func() SourceResult { return claimed }}
+				plan := lyricRoundPlan{primary: true, enabled: func(string) bool { return true }}
+				got := runLyricProvider(context.Background(), stub, ProviderQuery{}, RoundEnv{ForPlayingTrack: true}, plan)
+				want := claimed
+				want.source, want.forPlayingTrack = "stub", c.want
+				if !reflect.DeepEqual(got, want) {
+					t.Errorf("kind=%v:结果 %+v,期望 %+v", kind, got, want)
+				}
+			}
+		})
+	}
+}
+
 // 排序层分不出「raw 里有一份只带源名的空结果」和「raw 里没有这个来源」:金标集每个样本各加六路本机来源的空结果再排,
 // 结果逐字段一样;播放器自己的无人声信号(playerInstrumentalSource)同样不认空结果。调度仍然不把空结果放进 raw。
 func TestEmptyLocalResultRanksSameAsAbsent(t *testing.T) {

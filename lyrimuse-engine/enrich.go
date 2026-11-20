@@ -6150,48 +6150,17 @@ func fetchScoredLyricCandidatesStreaming(ctx context.Context, artist, title, alb
 	providerPlan := newLyricRoundPlan(ctx, breakerPlan)
 	providerQuery := ProviderQuery{Artist: artist, Title: title, Album: album, SourceTitle: srcTitle, DurationSecs: durationSecs}
 	providerEnv := RoundEnv{ForPlayingTrack: forPlaying, identityArtist: idArtist, identityTitle: idTitle, identityAlbum: idAlbum}
-	// 本机类源(KKBOX 本地歌词)不是歌词源,不进上面那组并发(源清单、进度分母、收集循环都只数歌词源):调度起完联网源就
-	// 同步问它们(本机文件,毫秒级),交了东西的当一份候选放进 raw;只在首轮问(描述符的 Rounds)。
+	// 本机类源(KKBOX / Spotify / Amazon Music 本地歌词、正在放的文件旁的歌词、洛雪存下的歌词、导入库)不是歌词源,不进
+	// 上面那组并发(源清单、进度分母、收集循环都只数歌词源):调度起完联网源就同步问它们(本机文件,毫秒级),交了东西的
+	// 当一份候选放进 raw,所以第一份联网结果到达时它们已经在场。只在首轮问(描述符的 Rounds);各自「只在正用某个播放器
+	// 放歌时读」的条件在各自的入口函数里。它们的 forPlayingTrack 这里不填。
 	localResults := startLyricProviders(ctx, lyricProviders().providers, providerQuery, providerEnv, providerPlan, resultsCh)
 
 	// raw:目前为止到手的各源原始应答,按源名存。打分/排序全部下放给
 	// rankLyricSourceResults(包级纯函数,回归金标集与生产共用),这里只负责收结果、喂进去。
 	raw := map[string]lyricSourceResult{}
 	for _, r := range localResults {
-		raw[r.source] = r
-	}
-	// 还没接到调度上的几路本机来源同 KKBOX,只在首轮读:它们按时长、按曲目 ID 就认得出这首,跟查询用的歌手写法无关,
-	// 别名轮 / 反查轮里再放一份,会被当成「这个别名救回了候选」。首轮那份靠 mergeLyricCandidateRounds 的只增不减留到最后。
-	if lyricQueryReasonFrom(ctx) == lyricQueryReasonPrimary {
-		// Spotify 本地歌词(见 spotifylyrics.go)不看当前播放器:按曲目 ID 找得到就放。
-		if r, ok := spotifyLocalLyricsFor(idArtist, idTitle, idAlbum); ok {
-			raw[spotifyLocalLyricsSource] = r
-		}
-		// 正在用 Spotify 放时,换曲那一拍记下的曲目在它元数据缓存里没有人声:播放器自己的信号(见 playerInstrumentalSource)。
-		if forPlaying && playingPlayer() == playerSpotify && spotifyLocalNoVocals(spotifyTrackIDHintFor(idArtist, idTitle)) {
-			r := raw[spotifyLocalLyricsSource]
-			r.source, r.noVocals, r.identityFromLocalClient, r.forPlayingTrack = spotifyLocalLyricsSource, true, true, true
-			raw[spotifyLocalLyricsSource] = r
-		}
-		// Amazon Music 本地歌词同 KKBOX:正用它放歌时读,按 ASIN 认这首(见 amazonlibrary.go)。
-		if r, ok := amazonLocalLyricsFor(idArtist, idTitle, idAlbum); ok {
-			raw[amazonLocalLyricsSource] = r
-		}
-		// reAMP 正在放的文件同目录同名的 .lrc 同 KKBOX:正用它放这首时读(见 localfilelyrics.go)。
-		if r, ok := localFileLyricsFor(idArtist, idTitle, durationSecs); ok {
-			raw[localFileLyricsSource] = r
-		}
-		// 洛雪存下的原版歌词同 KKBOX:正用洛雪放这首时读(见 lxmusic.go)。
-		if r, ok := lxMusicLocalLyricsFor(ctx, idArtist, idTitle, durationSecs); ok {
-			raw[lxMusicLocalLyricsSource] = r
-		}
-		// 导入库里这首的那份(importstore.go),不看播放器。
-		if r, ok := importedLyricsFor(idArtist, idTitle, idAlbum, durationSecs); ok {
-			raw[importLyricsSource] = r
-		}
-		for s, r := range raw {
-			raw[s] = withoutPlayerIdentity(ctx, r)
-		}
+		raw[r.source] = withoutPlayerIdentity(ctx, r)
 	}
 	// scoreAndSort 用目前为止已经到手的原始结果重新构建候选、算 corroboratedEndings、
 	// 打分、排序——每次有新结果到达都会重新跑一遍(而不是缓存增量),因为一份候选的

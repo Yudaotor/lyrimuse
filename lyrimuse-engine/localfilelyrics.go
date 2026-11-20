@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -228,6 +229,18 @@ func localFileLyricsFor(artist, title string, durationSecs float64) (lyricSource
 		source: localFileLyricsSource, lyr: lrc, matchTitle: title, matchArtist: artist, srcDur: durationSecs,
 		identityFromLocalClient: true, plainOnly: !localFileLRCTimestamp.MatchString(lrc),
 	}, true
+}
+
+// localFileProvider 把正在放的本地文件旁的歌词接到统一接口上:按播放器原样标签认正在放的这个文件(localFileLyricsFor),
+// 不是放本地文件的播放器在放、这首没有同名 .lrc 也没有内嵌歌词时交空结果。
+type localFileProvider struct{ desc *ProviderDescriptor }
+
+func (p localFileProvider) Descriptor() *ProviderDescriptor { return p.desc }
+
+func (p localFileProvider) Resolve(ctx context.Context, q ProviderQuery, env RoundEnv) SourceResult {
+	artist, title, _ := env.IdentityFields()
+	r, _ := localFileLyricsFor(artist, title, q.DurationSecs)
+	return r
 }
 
 // localFileLyricsAvailableTTL:同一首的「有没有 .lrc」记多久。trackEnrichment 在播放期间反复调,不必每次读目录。

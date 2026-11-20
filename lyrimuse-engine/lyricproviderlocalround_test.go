@@ -355,6 +355,20 @@ func TestLocalSourcesInFullRoundMatchHandwrittenRound(t *testing.T) {
 			}
 		}
 	}
+	// playerInstrumental:每一次回调和最终结果是不是都按「播放器自己说这一条没有人声」处理。
+	playerInstrumental := func(want bool) func(t *testing.T, o lyricRoundParityOutcome) {
+		return func(t *testing.T, o lyricRoundParityOutcome) {
+			t.Helper()
+			for i, u := range o.updates {
+				if playerSaysInstrumental(u.scored) != want {
+					t.Errorf("第 %d 次回调:播放器无人声信号(应是 %v)跟场景不符:%v", i+1, want, scoredSources(u.scored))
+				}
+			}
+			if playerSaysInstrumental(o.final) != want || (pickLyricCandidate(o.final) == nil) != want {
+				t.Errorf("最终结果:播放器无人声信号(应是 %v)跟场景不符:%v", want, scoredSources(o.final))
+			}
+		}
+	}
 	runLyricRoundParity(t, []lyricRoundParityCase{
 		{
 			name: "KKBOX 在放、缓存里有这首,三个联网源也都有", enabled: all, artist: artist, title: title, album: album, durationSecs: secs,
@@ -391,6 +405,55 @@ func TestLocalSourcesInFullRoundMatchHandwrittenRound(t *testing.T) {
 			name: "只开着网易云:本机那份照样在场", enabled: []string{lyricSourceNetease}, artist: artist, title: title, album: album, durationSecs: secs,
 			prepare: kkbox, fake: hit, wantOrder: [][]string{{lyricSourceNetease, lyricSourceQQ}, {lyricSourceAMLL}}, wantProgress: []string{"0/1", "1/1"},
 			wantFirst: []string{kkboxLocalLyricsSource},
+		},
+		{
+			name: "Spotify 在放、它说这一条没有人声:从第一次回调起就按纯音乐处理", enabled: all, artist: artist, title: title, album: album, durationSecs: secs,
+			prepare: spotifyParityData{player: spotifyBundleID, hint: true, languages: []string{"zxx"}}.prepare(artist, title, album),
+			fake:    hit, wantOrder: lyricRoundOrder, wantProgress: lyricRoundProgress, check: playerInstrumental(true),
+		},
+		{
+			name: "Spotify 说没有人声、但这一轮是手动搜索:照常给词", ctx: localManualRound, enabled: all, artist: artist, title: title, album: album, durationSecs: secs,
+			prepare: spotifyParityData{player: spotifyBundleID, hint: true, languages: []string{"zxx"}}.prepare(artist, title, album),
+			fake:    hit, wantOrder: lyricRoundOrder, wantProgress: lyricRoundProgress, wantNever: []string{spotifyLocalLyricsSource}, check: playerInstrumental(false),
+		},
+		{
+			name: "Spotify 缓存里有这首的词", enabled: all, artist: artist, title: title, album: album, durationSecs: secs,
+			prepare: spotifyParityData{player: spotifyBundleID, hint: true, lyrics: spotifyLyricsTestJSON}.prepare(artist, title, album),
+			fake:    hit, wantOrder: lyricRoundOrder, wantProgress: lyricRoundProgress, wantFirst: []string{spotifyLocalLyricsSource}, check: playerInstrumental(false),
+		},
+		{
+			name: "正在放的文件旁有双语行的 .lrc", enabled: all, artist: artist, title: title, album: album, durationSecs: secs,
+			prepare: localFileParityData{player: reampBundleID, sidecar: []byte("[00:01.00]突然好想你\n[00:01.00]Suddenly I miss you\n[00:05.00]你会在哪里\n[00:05.00]Where would you be\n[00:09.00]过得快乐或委屈\n[00:09.00]Happy or wronged\n")}.prepare(artist, title),
+			fake:    hit, wantOrder: lyricRoundOrder, wantProgress: lyricRoundProgress, wantFirst: []string{localFileLyricsSource},
+		},
+		{
+			name: "洛雪库里有这首", enabled: all, artist: artist, title: title, album: album, durationSecs: secs,
+			prepare: func(t *testing.T) {
+				withLXMusicData(t, []lxTestTrack{{"temp", "kw_1", "突然好想你", "五月天", "04:25", "后青春期的诗"}},
+					[]lxTestLyric{{"kw_1", "raw", "lyric", "[00:01.00]突然好想你\n[00:05.00]你会在哪里\n[00:09.00]过得快乐或委屈"}}, "temp", 0, "")
+				setNativeLyricSourcesForPlayer(lxMusicBundleID)
+				t.Cleanup(func() { setNativeLyricSourcesForPlayer("") })
+			},
+			fake: hit, wantOrder: lyricRoundOrder, wantProgress: lyricRoundProgress, wantFirst: []string{lxMusicLocalLyricsSource},
+		},
+		{
+			name: "导入库和 KKBOX 都有这首:两份都在场", enabled: all, artist: artist, title: title, album: album, durationSecs: secs,
+			prepare: func(t *testing.T) {
+				kkbox(t)
+				importParityRecords(nil, importedLyricsRecord{Key: enrichKey(artist, title, album), Lyrics: lrcBody(20, 10)})(t)
+			},
+			fake: hit, wantOrder: lyricRoundOrder, wantProgress: lyricRoundProgress, wantFirst: []string{kkboxLocalLyricsSource, importLyricsSource},
+		},
+		{
+			name: "导入库有这首、别名轮:不读", ctx: localAliasRound, enabled: all, artist: artist, title: title, album: album, durationSecs: secs,
+			prepare: importParityRecords(nil, importedLyricsRecord{Key: enrichKey(artist, title, album), Lyrics: lrcBody(20, 10)}),
+			fake:    hit, wantOrder: lyricRoundOrder, wantProgress: lyricRoundProgress, wantNever: []string{importLyricsSource},
+		},
+		{
+			name: "Amazon Music 在放、缓存里有这首", enabled: all, artist: artist, title: title, album: album, durationSecs: secs,
+			prepare: amazonParityData{player: amazonMusicBundleID, currentASIN: "B0TESTMD01",
+				hammer: []string{"B0TESTMD01-ATVPDKIKX0DER", amazonParityLyrics("B0TESTMD01", 1500, "突然好想你", 5500, "你会在哪里", 9500, "过得快乐或委屈")}}.prepare(artist, title),
+			fake: hit, wantOrder: lyricRoundOrder, wantProgress: lyricRoundProgress, wantFirst: []string{amazonLocalLyricsSource},
 		},
 	})
 }

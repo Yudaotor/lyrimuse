@@ -381,7 +381,6 @@ func TestPlayerInstrumentalSignalsAreWired(t *testing.T) {
 		"forPlaying := playerSignalApplies(ctx)",
 		"providerEnv := RoundEnv{ForPlayingTrack: forPlaying,",
 		"r.forPlayingTrack = forPlaying\n\t\t\traw[r.source] = r",
-		"if forPlaying && playingPlayer() == playerSpotify && spotifyLocalNoVocals(",
 		"earlyWatch.holdForNative = playerLocalNoVocalsHint(artist, srcTitle, album, durationSecs)",
 		"if !turnedInstrumental && adoptCrossAlbumSiblingLyrics(key, &e) {",
 	} {
@@ -405,8 +404,17 @@ func TestPlayerInstrumentalSignalsAreWired(t *testing.T) {
 			"SourceResult{noVocals: appleNoVocals, lyr: r.lyrics,",
 			"identityFromLocalClient: r.fromLocalClient || r.fromPlayerCatalogID || appleNoVocals}",
 		},
-		"lyricprovider.go":    {"return e.granted.has(privPlayerNoVocals) && e.ForPlayingTrack"},
-		"lyricproviderrun.go": {"r := p.Resolve(ctx, q, env.grantedTo(d))"},
+		"spotifylyrics.go": {
+			"if env.PlayerNoVocalsSignalApplies() && env.PlayingPlayer() == playerSpotify && spotifyLocalNoVocals(spotifyTrackIDHintFor(artist, title)) {\n\t\tr.noVocals, r.identityFromLocalClient, r.forPlayingTrack = true, true, true\n\t}",
+		},
+		"lyricprovider.go": {
+			"return e.granted.has(privPlayerNoVocals) && e.ForPlayingTrack",
+			"if !e.granted.has(privLocalClientIdentity) {\n\t\treturn \"\"\n\t}\n\treturn playingPlayer()",
+		},
+		"lyricproviderrun.go": {
+			"r := p.Resolve(ctx, q, env.grantedTo(d))",
+			"if !d.Privileges.has(privPlayerNoVocals) {\n\t\tr.forPlayingTrack = false\n\t}",
+		},
 	} {
 		src := string(mustRead(t, file))
 		for _, n := range needles {

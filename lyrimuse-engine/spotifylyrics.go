@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"compress/gzip"
+	"context"
 	"encoding/binary"
 	"encoding/json"
 	"fmt"
@@ -407,6 +408,23 @@ func spotifyLocalLyricsFor(artist, title, album string) (lyricSourceResult, bool
 	}
 	r.matchCover = spotifyLocalCover(id)
 	return r, true
+}
+
+// spotifyLocalProvider 把 Spotify 本地歌词接到统一接口上,一个源名下两样东西:缓存里这首的逐行歌词(spotifyLocalLyricsFor,
+// 不看当前播放器,按曲目 ID 找得到就交),和播放器自己的无人声信号。两样都没有时交空结果。
+type spotifyLocalProvider struct{ desc *ProviderDescriptor }
+
+func (p spotifyLocalProvider) Descriptor() *ProviderDescriptor { return p.desc }
+
+func (p spotifyLocalProvider) Resolve(ctx context.Context, q ProviderQuery, env RoundEnv) SourceResult {
+	artist, title, album := env.IdentityFields()
+	r, _ := spotifyLocalLyricsFor(artist, title, album)
+	// 正在用 Spotify 放时,换曲那一拍记下的曲目在它元数据缓存里没有人声:播放器自己的信号(见 playerInstrumentalSource)。
+	// 缓存里没有这首的歌词也照交,只带这个信号。forPlayingTrack 在这里填:本机类源的结果收集循环不统一填这一栏。
+	if env.PlayerNoVocalsSignalApplies() && env.PlayingPlayer() == playerSpotify && spotifyLocalNoVocals(spotifyTrackIDHintFor(artist, title)) {
+		r.noVocals, r.identityFromLocalClient, r.forPlayingTrack = true, true, true
+	}
+	return r
 }
 
 // spotifyLocalLyricsByTrackID 读这首在缓存里的逐行歌词。
