@@ -1,0 +1,116 @@
+{
+  "titles": {
+    "新功能": "Novità",
+    "改进": "Miglioramenti",
+    "修复": "Correzioni",
+    "贡献者": "Contributori"
+  },
+  "versions": {
+    "1.14.0": {
+      "新功能": [
+        "Turco e hindi tra le lingue dell’interfaccia, ora 16 in tutto",
+        "Kuwo Music e Cog tra i player integrati, ora 22 in tutto",
+        "Zing MP3 come fonte dei testi, con testi parola per parola per i brani vietnamiti",
+        "Megalobiz come fonte dei testi, ora 16 in tutto",
+        "Gestione testi può scrivere i testi nei file dei brani, e nel Lab puoi attivare la scrittura automatica",
+        "Puoi annullare dopo aver applicato un testo trovato, salvato modifiche, riassociato automaticamente o segnato un brano come strumentale",
+        "L’onda audio del Notch aggiunge “Segui la musica”, che si muove con il suono reale del player",
+        "Puoi personalizzare il colore del testo nel Notch",
+        "Se un brano non ha traduzione né pronuncia, la riga secondaria del Notch e della barra dei menu può mostrare la riga successiva",
+        "La barra dei menu aggiunge “Mantieni testo in pausa”, che resta sulla riga corrente in pausa",
+        "Scorri sul riquadro “Suono” del pannello della barra dei menu per regolare il volume",
+        "Il testo fluttuante aggiunge il cursore “Opacità testo”",
+        "Il contorno del testo fluttuante può essere sottile, standard o spesso",
+        "Il testo fluttuante aggiunge “Mostra titolo senza testo”, che mostra titolo e artista quando non c’è testo",
+        "La finestra mini aggiunge “Nascondi negli screenshot” e “Nascondi durante la pubblicità”",
+        "Puoi scegliere da dove arriva l’illustrazione animata della finestra testo",
+        "Se lo apri direttamente da un’immagine disco, Lyrimuse propone di spostarlo nella cartella Applicazioni",
+        "Se QQ Music suona ma non viene riconosciuto, Lyrimuse indica quale impostazione attivare nell’app"
+      ],
+      "改进": [
+        "Rimossa la fonte dei testi Musixmatch; i brani che la usavano, anche quelli scelti a mano, passano da soli ad altre fonti",
+        "La disposizione “Sfalsato” del testo fluttuante mostra anche traduzione e pronuncia di ogni riga",
+        "“Icona animata” nella barra dei menu si anima anche mentre mostra il testo",
+        "Se il player non fornisce l’illustrazione, i brani locali usano quella incorporata nel file",
+        "Con librerie grandi, Gestione testi ordina, cerca e cambia brano più in fretta",
+        "Più brani giapponesi ottengono testi parola per parola",
+        "I pulsanti precedente, riproduci e successivo della finestra testo sono più facili da cliccare",
+        "Se Last.fm rifiuta la chiave API, Lyrimuse spiega che serve Last.fm Pro e conserva gli ascolti finché la chiave torna a funzionare",
+        "Traduzioni coreana e francese dell’interfaccia riviste"
+      ],
+      "修复": [
+        "Corretti un arresto anomalo e diversi blocchi, tra cui il pannello della barra dei menu bloccato subito dopo l’avvio",
+        "Corretto l’uso di memoria che non calava dopo aver chiuso Impostazioni e Gestione testi",
+        "Corretto lo scorrimento a scatti delle anteprime del testo in Gestione testi e in “Cerca testi”",
+        "Corrette le pagine di Impostazioni tagliate a destra e la finestra di Impostazioni che non si allargava",
+        "Corretta l’interfaccia in inglese con il cantonese come lingua di sistema",
+        "Corretto il testo fermo su “Cerco il testo…” quando il motore dei testi non è in esecuzione",
+        "Corretti la barra del titolo della finestra testo che non si trascinava e i pulsanti che saltavano o lampeggiavano",
+        "Corretti i testi di Soda Music non trovati e le ricerche di NetEase Cloud Music fallite in Giappone, Corea del Sud e Singapore",
+        "Corretti alcuni brani in hindi e thai che ricevevano il testo di un brano dal titolo simile",
+        "Corretti i player avviati insieme a Lyrimuse che passavano in primo piano",
+        "Corretto l’interruttore “Rilevamento auto” dei player che non si disattivava",
+        "Corretta la barra di avanzamento del Notch espanso che non mostrava la parte riprodotta"
+      ],
+      "贡献者": [
+        "Grazie a @HeizoFinds per il primo contributo, che corregge l’interruttore “Rilevamento auto” e la barra di avanzamento del Notch (#83, #84)"
+      ]
+    },
+    "1.13.0": {
+      "新功能": [
+        "Italiano, portoghese (Brasile), vietnamita, russo, ucraino e thai tra le lingue dell’interfaccia",
+        "Se hai scelto a mano la lingua dell’interfaccia, Lyrimuse propone di passare alla lingua del sistema quando diventa disponibile",
+        "Cinque nuovi player integrati: Pear Desktop, Swinsian, Plexamp, MyGo Music e Audirvana (Studio e Origin)",
+        "Supporto per gli audiolibri di WeRead: il passaggio letto appare come sottotitoli, ora 20 player integrati",
+        "Pear Desktop supporta il salto della pubblicità e “Preferito”, e la riproduzione casuale funziona sia lì sia in YouTube Music sul web",
+        "Con i file locali MyGo Music usa il .lrc accanto al file e i testi incorporati, supporta “Preferito” e prepara in anticipo i brani successivi",
+        "Il pannello della barra dei menu si personalizza come il “Centro di Controllo”: ordina, ridimensiona, aggiungi e rimuovi riquadri, compresa la scheda In riproduzione",
+        "Nuovi riquadri del pannello: “Suono”, “Ascolti di oggi”, traduzione, pronuncia, dimensione del testo, finestra testo in primo piano e a tutto schermo",
+        "Gli elementi della barra in basso del pannello si aggiungono, rimuovono e riordinano, e i nuovi riquadri si girano con pressione prolungata o clic destro per regolarli",
+        "Controllo da tastiera nel pannello: riproduci/pausa, cambio brano, offset del testo, più una scorciatoia globale per aprire il pannello",
+        "Le azioni rapide in alto nel Notch espanso si dispongono liberamente su due file di posti fissi, che possono restare vuoti, con molti più pulsanti tra cui scegliere",
+        "Nuovo interruttore “Mostra con tasti volume”: se è disattivato, i tasti del volume non mostrano più il banner del volume nel Notch",
+        "Pronuncia, traduzione e riga successiva del testo fluttuante hanno dimensioni regolabili separatamente",
+        "Nuova disposizione “Sfalsato” per la riga successiva del testo fluttuante: due righe della stessa dimensione, alternate a sinistra e a destra",
+        "Nuovo cursore “Dimensioni dei controlli” (100%–200%) per la finestra testo a dimensione completa, e il testo web si ingrandisce insieme",
+        "Se la riga secondaria della Touch Bar mostra traduzione o pronuncia e il brano non le ha, può mostrare la riga successiva o solo il testo",
+        "Nuova opzione “Comprimi durante la digitazione” per la Touch Bar: mentre scrivi in un campo di testo, il testo si ritrae e lascia vedere i suggerimenti di digitazione",
+        "Se nessun risultato corrisponde alla durata del brano nel player, Lyrimuse cerca di nuovo con un’altra durata e mostra i risultati in “Inutilizzabile” con la durata segnalata come diversa",
+        "Arc torna tra i browser predefiniti nel menu dei player web"
+      ],
+      "改进": [
+        "Quando non suona nulla, il pannello della barra dei menu mostra l’ultimo brano come durante la riproduzione, con l’ora dell’ultimo ascolto",
+        "L’anteprima della riga successiva nel testo fluttuante mostra anche la pronuncia parola per parola e va a capo come quando viene cantata",
+        "Avanzamento di Spotify migliorato: il testo non si sfasa più dopo una pausa o un cambio di dispositivo di uscita",
+        "Riconoscimento dei brani strumentali migliorato: la musica classica di Apple Music non resta più bloccata in ricerca né segnala per errore l’assenza di testo, e i brani appena avviati in QQ Music, Soda Music e altri vengono riconosciuti",
+        "Migliore associazione dei testi per titoli interamente tra parentesi, titoli bilingui con il nome straniero davanti e registrazioni dal vivo",
+        "La pronuncia dei testi parola per parola in cinese e cantonese assegna una sillaba a ogni carattere, e i kana giapponesi presi in prestito si allineano anche accanto ai numeri",
+        "“In uso” nella ricerca dei testi indica correttamente quale testo usa davvero il brano in riproduzione",
+        "“Importa file…” passa nel menu ⋯ della barra del titolo della ricerca dei testi",
+        "Con la sola icona, l’elemento della barra dei menu usa la larghezza standard del sistema, senza margini ai lati",
+        "Nelle lingue con testi lunghi, i riepiloghi della barra strumenti e i valori in Impostazioni non vengono più tagliati",
+        "L’avviso di testo senza timing nei testi semplici passa in fondo, con uno stile più discreto",
+        "Trascinare cursori e selettori colore in Impostazioni non va più a scatti"
+      ],
+      "修复": [
+        "Corrette le richieste ripetute di accesso ai dati di altre app quando si riproducono brani nuovi in QQ Music e altri player",
+        "Corretto un arresto anomalo a ogni avvio su macOS 15 e precedenti con “Evidenziazione HDR” attiva nella finestra testo",
+        "Corretti diversi arresti anomali rari",
+        "Corretto il testo scelto a mano sostituito da quello del player",
+        "Corretto lo sfasamento del testo in Amazon Music dopo interruzioni della riproduzione",
+        "Corretto il testo in anticipo in foobar2000 e LX Music dopo la ripresa su AirPods Max",
+        "Corretti i brani con una seconda voce breve trattati come duetti, con la traduzione che saltava da un lato all’altro",
+        "Corretta l’evidenziazione anticipata dell’intera riga nei testi arcobaleno parola per parola della barra dei menu",
+        "Corretto “Sfuma al passaggio del mouse” che sfumava il testo fluttuante con il puntatore sullo spazio vuoto accanto al testo",
+        "Corretti diversi problemi nell’importazione dei testi, tra cui file giapponesi e coreani non UTF-8 illeggibili e file vuoti presi per testi",
+        "Corretto il Notch che si rimpiccioliva molto durante la pubblicità sugli schermi senza notch",
+        "Corretto il puntatore che non raggiungeva la scheda del Notch dal basso o la attraversava passando di lato",
+        "Corrette le Impostazioni che si spostavano a sinistra quando compariva la barra di scorrimento"
+      ],
+      "贡献者": [
+        "Grazie a @youximi per il primo contributo, che corregge l’evidenziazione anticipata dell’intera riga nei testi arcobaleno della barra dei menu (#69)",
+        "Grazie a @wutongyuonce per il contributo, che aggiunge MyGo Music e la larghezza standard del sistema per la sola icona nella barra dei menu (#66, #74)"
+      ]
+    }
+  }
+}

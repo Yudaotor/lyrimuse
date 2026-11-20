@@ -3,7 +3,7 @@ import LyrimuseCore
 import SwiftUI
 
 /// 「本次更新」卡片(`Window(id: "whats-new")`,见 App.swift):菜单栏面板顶部的「已更新到 X」、右键菜单「查看本次更新…」
-/// 和深链 `whats-new` 开它。内容是包里 CHANGELOG 的当前版本那一节(`WhatsNewCenter.currentNotes`),分小节列条目;
+/// 和深链 `whats-new` 开它。内容是包里 CHANGELOG 里这次升级跨过的各节,按界面语言取译文(`WhatsNewCenter.currentNotes`),分小节列条目;
 /// 底下一个去 GitHub 发布页的链接和「好」。见 14 章决策 155。
 struct WhatsNewWindow: View {
     static let sceneID = "whats-new"

@@ -1,0 +1,116 @@
+{
+  "titles": {
+    "新功能": "Novedades",
+    "改进": "Mejoras",
+    "修复": "Correcciones",
+    "贡献者": "Colaboradores"
+  },
+  "versions": {
+    "1.14.0": {
+      "新功能": [
+        "Nuevos idiomas de la interfaz: turco e hindi, con lo que ya son 16",
+        "Nuevos reproductores integrados: Kuwo Music y Cog, con lo que ya son 22",
+        "Nueva fuente de letras Zing MP3, con letra palabra por palabra para canciones en vietnamita",
+        "Nueva fuente de letras Megalobiz, con lo que ya son 16",
+        "El gestor de letras puede escribir la letra en los archivos de las canciones, y en Laboratorio puedes activar la escritura automática",
+        "Ahora puedes deshacer tras aplicar una letra encontrada, guardar cambios, volver a buscar automáticamente o marcar como instrumental",
+        "La onda de audio del Notch añade «Seguir la música», que se mueve con el sonido real del reproductor",
+        "Ahora puedes personalizar el color de la letra en el Notch",
+        "Si una canción no tiene traducción ni romanización, la segunda línea del Notch y de la barra de menús puede mostrar la línea siguiente",
+        "La barra de menús añade «Mantener letra en pausa», que deja la línea actual al pausar",
+        "Desplázate sobre la casilla «Sonido» del panel de la barra de menús para ajustar el volumen",
+        "La letra flotante añade el regulador «Opacidad del texto»",
+        "El contorno de la letra flotante puede ser fino, estándar o grueso",
+        "La letra flotante añade «Mostrar título si no hay letra», que muestra el título y el artista cuando no hay letra",
+        "La ventana mini de letra añade «Ocultar en capturas» y «Ocultar durante anuncios»",
+        "Ahora puedes elegir de dónde sale la ilustración animada de la ventana de letra",
+        "Al abrir Lyrimuse directamente desde una imagen de disco, se sugiere moverlo a la carpeta Aplicaciones",
+        "Si QQ Music está sonando pero no se detecta, se indica qué ajuste activar en la app"
+      ],
+      "改进": [
+        "Se elimina la fuente de letras Musixmatch; las canciones que la usaban, incluso las elegidas a mano, pasan solas a otras fuentes",
+        "La disposición «Escalonado» de la letra flotante también muestra la traducción y la romanización de cada línea",
+        "«Animar icono» de la barra de menús también se mueve mientras se muestra la letra",
+        "Si el reproductor no da carátula, las canciones locales usan la ilustración incrustada en el archivo",
+        "El gestor de letras ordena, busca y cambia de canción más rápido con bibliotecas grandes",
+        "Más canciones en japonés obtienen letra palabra por palabra",
+        "Los botones anterior, reproducir y siguiente de la ventana de letra son más fáciles de pulsar",
+        "Si Last.fm rechaza la clave de API, se explica que hace falta Last.fm Pro y las reproducciones se guardan hasta que vuelva a funcionar",
+        "Traducciones revisadas de la interfaz en coreano y francés"
+      ],
+      "修复": [
+        "Se corrigen un cierre inesperado y varios bloqueos, incluido el del panel de la barra de menús justo después de abrir la app",
+        "Se corrige que el uso de memoria no bajara al cerrar Ajustes y el gestor de letras",
+        "Se corrige el desplazamiento entrecortado de las vistas previas de letra en el gestor de letras y en «Buscar letra»",
+        "Se corrige que las páginas de Ajustes se cortaran por la derecha y que la ventana de Ajustes no se pudiera agrandar",
+        "Se corrige que la interfaz apareciera en inglés con el sistema en cantonés",
+        "Se corrige que la letra se quedara en «Buscando letra…» cuando el motor de letras no está en marcha",
+        "Se corrige que la barra de título de la ventana de letra no se pudiera arrastrar y que sus botones saltaran o parpadearan",
+        "Se corrige que no se encontraran letras de Soda Music y que fallaran las búsquedas de NetEase Cloud Music en Japón, Corea del Sur y Singapur",
+        "Se corrige que algunas canciones en hindi y tailandés recibieran la letra de otra canción de título parecido",
+        "Se corrige que los reproductores abiertos junto con Lyrimuse pasaran al primer plano",
+        "Se corrige que el interruptor «Detección automática» de los reproductores no se desactivara",
+        "Se corrige que la barra de progreso del Notch expandido no mostrara la parte reproducida"
+      ],
+      "贡献者": [
+        "Gracias a @HeizoFinds por su primera contribución, que corrige el interruptor «Detección automática» y la barra de progreso del Notch (#83, #84)"
+      ]
+    },
+    "1.13.0": {
+      "新功能": [
+        "Nuevos idiomas de la interfaz: italiano, portugués de Brasil, vietnamita, ruso, ucraniano y tailandés",
+        "Si elegiste el idioma de la interfaz a mano, se te propone cambiar cuando llega el idioma de tu sistema",
+        "Cinco nuevos reproductores integrados: Pear Desktop, Swinsian, Plexamp, MyGo Music y Audirvana (Studio y Origin)",
+        "Compatibilidad con los audiolibros de WeRead, con el pasaje que se lee como subtítulos; ya son 20 reproductores integrados",
+        "Pear Desktop permite saltar anuncios y «Favorito», y tanto él como YouTube Music en la web admiten el modo aleatorio",
+        "Con archivos locales, MyGo Music usa el .lrc junto al archivo y la letra incrustada, admite «Favorito» y analiza de antemano las siguientes canciones",
+        "Ahora puedes personalizar el panel de la barra de menús como el «Centro de control»: ordenar, redimensionar, añadir y quitar casillas; la tarjeta de reproducción también es una casilla",
+        "Nuevas casillas del panel: «Sonido», «Escuchado hoy», traducción, romanización, tamaño de letra, ventana de letra siempre visible y pantalla completa",
+        "Puedes añadir, quitar y ordenar los elementos de la barra inferior del panel, y girar las casillas nuevas con una pulsación larga o clic derecho para ajustarlas",
+        "Control con el teclado en el panel: reproducir/pausar, cambiar de canción y ajustar el desfase de la letra, más un atajo global para abrir el panel",
+        "Ahora puedes ordenar las acciones rápidas de la cabecera del Notch expandido en dos filas de huecos fijos, que pueden quedar vacíos, con muchos más botones donde elegir",
+        "Nuevo interruptor «Mostrar con teclas de volumen»; desactívalo para que las teclas de volumen no muestren el aviso de volumen del Notch",
+        "Puedes ajustar por separado el tamaño de la romanización, la traducción y la línea siguiente de la letra flotante",
+        "Nueva disposición «Escalonado» para la línea siguiente de la letra flotante: dos líneas del mismo tamaño que se alternan a izquierda y derecha",
+        "Nuevo regulador «Tamaño de los controles» (100 %–200 %) en el tamaño completo de la ventana de letra, que también amplía la letra web",
+        "Si la segunda línea de la Touch Bar muestra traducción o romanización y la canción no la tiene, puede mostrar la línea siguiente o solo la letra",
+        "Nueva opción «Contraer al escribir» en la Touch Bar: al escribir en un campo de texto, la letra se recoge y deja ver las sugerencias de escritura",
+        "Si ningún resultado coincide con la duración de la canción, se busca otra vez con otra duración y los resultados aparecen en «No utilizable» con la duración marcada como distinta",
+        "Arc vuelve a aparecer por omisión en el menú de navegadores de los reproductores web"
+      ],
+      "改进": [
+        "Sin reproducción, el panel de la barra de menús muestra la última canción con su carátula, título, letra y controles, e indica cuándo sonó por última vez",
+        "La vista previa de la línea siguiente en la letra flotante también muestra la romanización palabra por palabra y corta las líneas igual que al cantarse",
+        "Mejor progreso en Spotify: la letra ya no se desfasa al reanudar tras una pausa ni al cambiar de dispositivo de salida",
+        "Mejor detección de música instrumental: la música clásica de Apple Music ya no se queda buscando ni indica por error que no hay letra, y se reconocen canciones recién puestas en QQ Music, Soda Music y otros",
+        "Mejor coincidencia de letras para títulos entre paréntesis, títulos bilingües con el nombre extranjero delante y grabaciones en directo",
+        "La romanización de letras palabra por palabra en chino y cantonés asigna una sílaba a cada carácter, y el kana japonés prestado se alinea también junto a números y otros caracteres",
+        "«En uso» en la búsqueda de letras marca de verdad qué letra usa la canción que está sonando",
+        "«Importar archivo…» pasa al menú ⋯ de la barra de título de la búsqueda de letras",
+        "El elemento de la barra de menús que solo muestra el icono usa el ancho estándar del sistema, sin márgenes a los lados",
+        "En idiomas con textos largos, los resúmenes de la barra de herramientas y los valores de Ajustes ya no se cortan",
+        "El aviso de letra sin tiempos pasa al final de las letras de texto simple, con un estilo más discreto",
+        "Arrastrar reguladores y selectores de color en Ajustes ya no va a saltos"
+      ],
+      "修复": [
+        "Se corrige la petición repetida de acceso a los datos de otras apps al reproducir canciones nuevas en QQ Music y otros reproductores",
+        "Se corrige un cierre inesperado en cada arranque en macOS 15 y anteriores con «Resaltado HDR» activado en la ventana de letra",
+        "Se corrigen varios cierres inesperados poco frecuentes",
+        "Se corrige que la letra elegida a mano se sustituyera por la del propio reproductor",
+        "Se corrige el desfase de la letra en Amazon Music tras cortes de reproducción",
+        "Se corrige que la letra fuera adelantada en foobar2000 y LX Music al reanudar con AirPods Max",
+        "Se corrige que las canciones con una segunda voz breve se mostraran como dúos, con la traducción saltando de lado",
+        "Se corrige que la letra arcoíris palabra por palabra de la barra de menús resaltara toda la línea antes de tiempo",
+        "Se corrige que «Atenuar al pasar el puntero» atenuara la letra flotante con el puntero sobre el espacio vacío junto al texto",
+        "Se corrigen varios problemas al importar letras, como archivos en japonés y coreano que no son UTF-8 con caracteres ilegibles y archivos vacíos tratados como letra",
+        "Se corrige que el Notch se encogiera mucho durante los anuncios en pantallas sin notch",
+        "Se corrige que el puntero no llegara a la tarjeta del Notch desde abajo o la atravesara al moverse de lado",
+        "Se corrige que Ajustes se desplazara a la izquierda al aparecer la barra de desplazamiento"
+      ],
+      "贡献者": [
+        "Gracias a @youximi por su primera contribución, que corrige el resaltado anticipado de toda la línea en la letra arcoíris de la barra de menús (#69)",
+        "Gracias a @wutongyuonce por su contribución, que añade MyGo Music y el ancho estándar del sistema para el icono solo en la barra de menús (#66, #74)"
+      ]
+    }
+  }
+}

@@ -5,6 +5,9 @@ import Foundation
 /// 格式跟 `.github/scripts/split_release_notes.py` 认的一致:节标题 `## v<版本>`;小节标题「英文 / 中文」(按最后一个
 /// ` / ` 切);条目以 `- ` 开头,先若干行英文、后若干行中文,一行算不算中文按 CJK 字符占比(>0.25),从第一行中文起余下
 /// 都归中文。表格、链接、HTML 注释这类两种语言共用的行不收。两处规则要一起改。见 14 章决策 155。
+///
+/// 简体、英文以外的界面语言读仓库根 `release-notes/<语言包>.json`(`Translation`,build.sh 拷进包里的
+/// `Resources/release-notes/`),按版本号和小节的中文标题跟 CHANGELOG 的条目一一对上。见 14 章决策 236。
 public enum ReleaseNotes {
     public struct Section: Equatable, Sendable {
         public var title: String
@@ -13,6 +16,22 @@ public enum ReleaseNotes {
         public init(title: String, items: [String]) {
             self.title = title
             self.items = items
+        }
+    }
+
+    /// 一种界面语言的译文。`titles`:小节标题的中文 → 译文;`versions[版本号][小节中文标题]`:那一小节的条目,
+    /// 条数和次序跟 CHANGELOG 里同一小节一致。
+    public struct Translation: Decodable, Equatable, Sendable {
+        public var titles: [String: String]
+        public var versions: [String: [String: [String]]]
+
+        public init(titles: [String: String], versions: [String: [String: [String]]]) {
+            self.titles = titles
+            self.versions = versions
+        }
+
+        public static func decode(_ data: Data) -> Translation? {
+            try? JSONDecoder().decode(Translation.self, from: data)
         }
     }
 
@@ -30,6 +49,12 @@ public enum ReleaseNotes {
     /// `baseline` 之后到 `current` 为止(含)各版的正文,按文件里的次序(新的在前);一节都没有时退回 `current` 那一节。
     /// 跳过几个版本升上来的用户看到中间每一版的内容。
     public static func sections(after baseline: String, through current: String, in changelog: String) -> [String] {
+        versionedSections(after: baseline, through: current, in: changelog).map(\.body)
+    }
+
+    /// 同 `sections(after:through:in:)`,带上每一节的版本号(查译文用)。
+    public static func versionedSections(after baseline: String, through current: String,
+                                         in changelog: String) -> [(version: String, body: String)] {
         let versions = changelog.components(separatedBy: "\n").compactMap { line -> String? in
             let trimmed = line.trimmingCharacters(in: .whitespaces)
             guard trimmed.hasPrefix("## v") else { return nil }
@@ -39,7 +64,36 @@ public enum ReleaseNotes {
             WhatsNew.compare($0, baseline) == .orderedDescending && WhatsNew.compare($0, current) != .orderedDescending
         }
         let picked = inRange.isEmpty ? [current] : inRange
-        return picked.compactMap { section(version: $0, in: changelog) }
+        return picked.compactMap { version in section(version: version, in: changelog).map { (version, $0) } }
+    }
+
+    /// 按界面语言(`UILanguage.packs` 的包名)拆一节:简体取中文、英文取英文;其余语言逐个小节取 `translation` 里
+    /// 这一版这一小节的条目,没有这一版、没有这一小节或条数跟 CHANGELOG 对不上时,繁体退回简体经 ICU 转写,其余退回英文。
+    /// 小节标题有译文用译文,同样按这条退回。
+    public static func localize(_ section: String, version: String, language: String,
+                                translation: Translation?) -> [Section] {
+        switch language {
+        case "zh-hans": return parse(section, chinese: true)
+        case "en": return parse(section, chinese: false)
+        default: break
+        }
+        let zh = parse(section, chinese: true), en = parse(section, chinese: false)
+        let traditional = language == "zh-hant"
+        guard zh.map(\.items.count) == en.map(\.items.count) else {
+            return traditional ? zh.map { Section(title: hant($0.title), items: $0.items.map(hant)) } : en
+        }
+        let byTitle = translation?.versions[version]
+        return zip(zh, en).map { zh, en in
+            let title = translation?.titles[zh.title] ?? (traditional ? hant(zh.title) : en.title)
+            if let items = byTitle?[zh.title], items.count == en.items.count {
+                return Section(title: title, items: items)
+            }
+            return Section(title: title, items: traditional ? zh.items.map(hant) : en.items)
+        }
+    }
+
+    private static func hant(_ text: String) -> String {
+        text.applyingTransform(StringTransform("Hans-Hant"), reverse: false) ?? text
     }
 
     /// 几版拆好的小节并成一份:同名小节合在一起(按先出现的次序),条目新版在前。

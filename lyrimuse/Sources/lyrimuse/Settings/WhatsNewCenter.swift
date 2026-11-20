@@ -77,21 +77,18 @@ final class WhatsNewCenter {
     }
 
     /// 这次更新的内容:包里那份 CHANGELOG.md(build.sh 拷进 Resources)里基准版本之后到当前版本的各节,同名小节并在一起。
-    /// 界面是中文取中文(繁体界面由简体转写),别的语言取英文;一节都找不到为空。
+    /// 按界面语言取:简体、英文直接拆 CHANGELOG,别的语言取包里 `release-notes/<语言包>.json` 的译文,缺的那一版退回英文
+    /// (繁体退回简体转写),规则在 Core `ReleaseNotes.localize`;一节都找不到为空。
     static func currentNotes() -> [ReleaseNotes.Section] {
         guard let url = Bundle.main.url(forResource: "CHANGELOG", withExtension: "md"),
               let data = FileIO.read(url), let text = String(data: data, encoding: .utf8) else { return [] }
         let current = SparkleUpdaterManager.appVersionString
         let baseline = UserDefaults.standard.string(forKey: Keys.baseline) ?? current
         let language = L10n.current
-        let chinese = language == "zh-hans" || language == "zh-hant"
-        let sections = ReleaseNotes.merge(ReleaseNotes.sections(after: baseline, through: current, in: text)
-            .map { ReleaseNotes.parse($0, chinese: chinese) })
-        guard language == "zh-hant" else { return sections }
-        let hant = StringTransform("Hans-Hant")
-        return sections.map { section in
-            ReleaseNotes.Section(title: section.title.applyingTransform(hant, reverse: false) ?? section.title,
-                                 items: section.items.map { $0.applyingTransform(hant, reverse: false) ?? $0 })
-        }
+        let translation = Bundle.main.url(forResource: language, withExtension: "json", subdirectory: "release-notes")
+            .flatMap { FileIO.read($0) }.flatMap(ReleaseNotes.Translation.decode)
+        return ReleaseNotes.merge(ReleaseNotes.versionedSections(after: baseline, through: current, in: text).map {
+            ReleaseNotes.localize($0.body, version: $0.version, language: language, translation: translation)
+        })
     }
 }

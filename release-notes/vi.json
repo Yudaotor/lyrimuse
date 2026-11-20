@@ -1,0 +1,116 @@
+{
+  "titles": {
+    "新功能": "Tính năng mới",
+    "改进": "Cải tiến",
+    "修复": "Sửa lỗi",
+    "贡献者": "Người đóng góp"
+  },
+  "versions": {
+    "1.14.0": {
+      "新功能": [
+        "Thêm tiếng Thổ Nhĩ Kỳ và tiếng Hindi cho giao diện, nâng tổng số lên 16 ngôn ngữ",
+        "Thêm trình phát tích hợp Kuwo Music và Cog, nâng tổng số lên 22",
+        "Thêm nguồn lời Zing MP3, bài hát tiếng Việt có lời theo từng chữ",
+        "Thêm nguồn lời Megalobiz, nâng tổng số lên 16",
+        "Quản lý lời có thể ghi lời vào tệp bài hát, và có thể bật ghi tự động trong Thử nghiệm",
+        "Có thể hoàn tác sau khi dùng lời tìm được, lưu thay đổi, tự động tìm lại hoặc đánh dấu là nhạc không lời",
+        "Sóng âm trên Notch có thêm “Nhảy theo nhạc”, chuyển động theo âm thanh thật của trình phát",
+        "Có thể tùy chỉnh màu lời trên Notch",
+        "Khi bài hát không có bản dịch hay phát âm, dòng phụ trên Notch và thanh menu có thể hiện dòng tiếp theo",
+        "Thanh menu có thêm “Giữ lời khi tạm dừng”, giữ nguyên dòng hiện tại khi tạm dừng",
+        "Cuộn trên ô “Âm thanh” của bảng thanh menu để chỉnh âm lượng",
+        "Lời nổi có thêm thanh trượt “Độ chắn sáng của chữ”",
+        "Có thể chọn viền chữ của lời nổi mảnh, tiêu chuẩn hoặc dày",
+        "Lời nổi có thêm “Hiện tên bài khi không có lời”, hiện tên bài và nghệ sĩ khi không có lời",
+        "Cửa sổ mini có thêm “Ẩn khi chụp màn hình” và “Ẩn khi có quảng cáo”",
+        "Có thể chọn nguồn ảnh bìa động của cửa sổ lời",
+        "Khi mở thẳng từ ảnh đĩa, Lyrimuse gợi ý chuyển vào thư mục “Ứng dụng”",
+        "Khi QQ Music đang phát nhưng không nhận diện được, Lyrimuse chỉ ra cần bật cài đặt nào"
+      ],
+      "改进": [
+        "Gỡ bỏ nguồn lời Musixmatch; các bài từng dùng nguồn này, kể cả bài chọn thủ công, tự chuyển sang nguồn khác",
+        "Kiểu “So le” của lời nổi cũng hiện bản dịch và phát âm của từng dòng",
+        "“Hoạt ảnh biểu tượng” trên thanh menu cũng chuyển động khi đang hiện lời",
+        "Khi trình phát không cung cấp ảnh bìa, bài hát trên máy dùng ảnh bìa nhúng trong tệp",
+        "Quản lý lời sắp xếp, tìm kiếm và chuyển bài nhanh hơn với thư viện lớn",
+        "Bài hát tiếng Nhật có lời theo từng chữ thường xuyên hơn",
+        "Các nút bài trước, phát và bài tiếp theo trong cửa sổ lời dễ bấm hơn",
+        "Khi Last.fm từ chối khóa API, Lyrimuse cho biết cần đăng ký Last.fm Pro và giữ lại lượt nghe đến khi khóa hoạt động trở lại",
+        "Chỉnh sửa bản dịch giao diện tiếng Hàn và tiếng Pháp"
+      ],
+      "修复": [
+        "Sửa một lỗi thoát đột ngột và vài lỗi đơ, gồm cả bảng thanh menu bị đơ ngay sau khi khởi động",
+        "Sửa lỗi bộ nhớ không giảm sau khi đóng Cài đặt và Quản lý lời",
+        "Sửa lỗi cuộn giật khi xem trước lời trong Quản lý lời và “Tìm lời bài hát”",
+        "Sửa lỗi trang Cài đặt bị cắt ở bên phải và cửa sổ Cài đặt không kéo rộng được",
+        "Sửa lỗi giao diện hiện tiếng Anh khi ngôn ngữ hệ thống là tiếng Quảng Đông",
+        "Sửa lỗi kẹt ở “Đang tìm lời bài hát…” khi bộ máy lời không chạy",
+        "Sửa lỗi không kéo được thanh tiêu đề cửa sổ lời và các nút góc trái trên nhảy hoặc nhấp nháy",
+        "Sửa lỗi không tìm được lời của Soda Music và không tìm được lời NetEase Cloud Music ở Nhật Bản, Hàn Quốc và Singapore",
+        "Sửa lỗi một số bài tiếng Hindi và tiếng Thái nhận lời của bài khác có tên gần giống",
+        "Sửa lỗi trình phát mở cùng Lyrimuse nhảy lên phía trước",
+        "Sửa lỗi không tắt được công tắc “Tự động nhận diện” của trình phát",
+        "Sửa lỗi thanh tiến trình của Notch khi mở rộng không hiện phần đã phát"
+      ],
+      "贡献者": [
+        "Cảm ơn @HeizoFinds vì đóng góp đầu tiên, sửa công tắc “Tự động nhận diện” và thanh tiến trình của Notch (#83, #84)"
+      ]
+    },
+    "1.13.0": {
+      "新功能": [
+        "Thêm tiếng Ý, tiếng Bồ Đào Nha (Brazil), tiếng Việt, tiếng Nga, tiếng Ukraina và tiếng Thái cho giao diện",
+        "Nếu bạn đã tự chọn ngôn ngữ giao diện, Lyrimuse gợi ý chuyển khi có giao diện bằng ngôn ngữ hệ thống của bạn",
+        "Thêm năm trình phát tích hợp: Pear Desktop, Swinsian, Plexamp, MyGo Music và Audirvana (gồm cả bản Studio và Origin)",
+        "Hỗ trợ sách nói WeRead, đoạn đang đọc hiện dưới dạng phụ đề, nâng tổng số trình phát tích hợp lên 20",
+        "Pear Desktop hỗ trợ bỏ qua quảng cáo và “Ưa thích”, cả nó và YouTube Music trên web đều hỗ trợ phát ngẫu nhiên",
+        "Khi phát tệp trên máy, MyGo Music dùng được tệp .lrc bên cạnh và lời nhúng, hỗ trợ “Ưa thích” và phân tích trước các bài tiếp theo",
+        "Có thể tùy chỉnh bảng thanh menu như “Trung tâm điều khiển”: sắp xếp, đổi kích thước, thêm hoặc bớt ô, thẻ đang phát cũng là một ô",
+        "Thêm các ô bảng “Âm thanh”, “Nghe hôm nay”, hiện bản dịch, hiện phát âm, cỡ chữ, cửa sổ lời luôn ở trên và toàn màn hình",
+        "Có thể thêm, bớt, sắp xếp các mục ở thanh dưới của bảng, các ô mới cũng có thể nhấn giữ hoặc bấm chuột phải để lật ra chỉnh cài đặt",
+        "Trong bảng có thể dùng bàn phím để phát/tạm dừng, chuyển bài, chỉnh độ lệch lời, và có thêm phím tắt toàn cục để mở bảng",
+        "Có thể tự sắp xếp tác vụ nhanh ở đầu thẻ Notch mở rộng: hai hàng ô cố định, được để trống, và có thêm nhiều nút để chọn",
+        "Thêm công tắc “Hiện khi bấm phím âm lượng”, khi tắt thì phím âm lượng không còn bật băng thông báo âm lượng trên Notch",
+        "Có thể chỉnh riêng cỡ chữ phát âm, bản dịch và dòng tiếp theo của lời nổi",
+        "Dòng tiếp theo của lời nổi có thêm kiểu “So le”: hai dòng cùng cỡ, lần lượt bên trái và bên phải",
+        "Cửa sổ lời ở cỡ đầy đủ có thêm “Cỡ nút điều khiển” (100%–200%), lời trên web cũng phóng to theo",
+        "Khi dòng phụ của Touch Bar chọn bản dịch hoặc phát âm mà bài hát không có, có thể hiện dòng tiếp theo hoặc chỉ hiện lời",
+        "Touch Bar có thêm “Thu gọn khi nhập”, khi gõ trong ô nhập liệu thì thu gọn lời để lộ gợi ý của bộ gõ",
+        "Khi không kết quả nào khớp thời lượng bài trong trình phát, Lyrimuse tìm thêm với thời lượng khác và liệt kê kết quả trong “Không dùng được” kèm ghi chú lệch thời lượng",
+        "Menu trình duyệt của trình phát web lại mặc định liệt kê Arc"
+      ],
+      "改进": [
+        "Khi không phát nhạc, bảng thanh menu vẫn hiện ảnh bìa, tên bài, lời và nút điều khiển của bài trước, kèm thời điểm phát gần nhất",
+        "Bản xem trước dòng tiếp theo của lời nổi cũng có phát âm theo từng từ, xuống dòng giống như khi hát đến dòng đó",
+        "Cải thiện tiến độ của Spotify: sau khi tiếp tục phát hoặc đổi thiết bị đầu ra, lời không còn lệch",
+        "Cải thiện nhận diện nhạc không lời: nhạc cổ điển trên Apple Music không còn kẹt ở trạng thái đang tìm hay báo nhầm là không có lời, bài vừa phát trên QQ Music, Soda Music và trình phát khác cũng được nhận ra",
+        "Cải thiện khớp lời cho tên bài nằm trọn trong ngoặc, tên song ngữ có tên nước ngoài đứng trước và bản thu buổi hòa nhạc",
+        "Phát âm của lời theo từng chữ tiếng Trung và tiếng Quảng Đông khớp mỗi chữ một âm tiết; kana tiếng Nhật mượn cũng căn đúng khi gặp số và ký tự khác",
+        "“Đang dùng” trong tìm lời đánh dấu đúng lời mà bài đang phát thực sự dùng",
+        "“Nhập tệp…” chuyển vào menu ⋯ trên thanh tiêu đề của tìm lời",
+        "Khi thanh menu chỉ hiện biểu tượng, mục này dùng độ rộng chuẩn của hệ thống, không còn khoảng trống hai bên",
+        "Với ngôn ngữ có chữ dài, phần tóm tắt và số liệu trên thanh công cụ của trang Cài đặt không còn bị cắt",
+        "Thông báo lời không có dấu thời gian trong lời văn bản thuần chuyển xuống cuối và hiện mờ hơn",
+        "Kéo thanh trượt và bộ chọn màu trong Cài đặt không còn giật"
+      ],
+      "修复": [
+        "Sửa lỗi liên tục hiện yêu cầu truy cập dữ liệu của ứng dụng khác khi phát bài mới trong QQ Music và các trình phát khác",
+        "Sửa lỗi thoát đột ngột mỗi lần khởi động trên macOS 15 trở về trước khi bật “Tô sáng HDR” trong cửa sổ lời",
+        "Sửa vài lỗi thoát đột ngột hiếm gặp",
+        "Sửa lỗi lời chọn thủ công bị thay bằng lời của chính trình phát",
+        "Sửa lỗi tiến độ lời của Amazon Music bị lệch sau khi phát bị gián đoạn",
+        "Sửa lỗi lời của foobar2000 và LX Music chạy trước sau khi tiếp tục phát trên AirPods Max",
+        "Sửa lỗi bài có bè thứ hai chỉ hát vài câu bị coi là song ca, bản dịch lúc trái lúc giữa",
+        "Sửa lỗi lời cầu vồng theo từng chữ trên thanh menu tô sáng cả dòng quá sớm khi chuyển dòng",
+        "Sửa lỗi “Làm mờ khi di chuột qua” làm mờ lời nổi khi con trỏ chỉ ở khoảng trống hai bên chữ",
+        "Sửa vài lỗi khi nhập lời, gồm tệp tiếng Nhật, tiếng Hàn không phải UTF-8 bị lỗi chữ và tệp trống bị coi là lời",
+        "Sửa lỗi Notch thu nhỏ quá mức trong lúc quảng cáo trên màn hình không có tai thỏ",
+        "Sửa lỗi con trỏ không vào được thẻ Notch từ bên dưới hoặc lướt qua khi di ngang",
+        "Sửa lỗi trang Cài đặt bị dồn sang trái khi thanh cuộn xuất hiện"
+      ],
+      "贡献者": [
+        "Cảm ơn @youximi vì đóng góp đầu tiên, sửa lỗi lời cầu vồng trên thanh menu tô sáng cả dòng quá sớm (#69)",
+        "Cảm ơn @wutongyuonce vì đã đóng góp, hỗ trợ MyGo Music và dùng độ rộng chuẩn của hệ thống cho mục chỉ hiện biểu tượng trên thanh menu (#66, #74)"
+      ]
+    }
+  }
+}

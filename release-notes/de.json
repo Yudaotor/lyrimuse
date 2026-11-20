@@ -1,0 +1,116 @@
+{
+  "titles": {
+    "新功能": "Neu",
+    "改进": "Verbesserungen",
+    "修复": "Fehlerbehebungen",
+    "贡献者": "Mitwirkende"
+  },
+  "versions": {
+    "1.14.0": {
+      "新功能": [
+        "Türkisch und Hindi als Sprachen der Oberfläche, jetzt 16 insgesamt",
+        "Kuwo Music und Cog als integrierte Player, jetzt 22 insgesamt",
+        "Zing MP3 als Liedtextquelle, mit Wort-für-Wort-Liedtexten für vietnamesische Songs",
+        "Megalobiz als Liedtextquelle, jetzt 16 insgesamt",
+        "Die Liedtext-Verwaltung kann Liedtexte in Songdateien schreiben, automatisches Schreiben lässt sich im Labor aktivieren",
+        "Nach dem Übernehmen eines gefundenen Liedtexts, dem Sichern von Änderungen, dem automatischen Neuzuordnen oder dem Markieren als Instrumental kannst du widerrufen",
+        "Neu für die Audiowelle in der Notch: „Im Takt der Musik“ bewegt sie zum tatsächlichen Klang des Players",
+        "Die Liedtextfarbe in der Notch ist frei wählbar",
+        "Hat ein Song weder Übersetzung noch Umschrift, kann die zweite Zeile in Notch und Menüleiste die nächste Zeile zeigen",
+        "Neu in der Menüleiste: „Text bei Pause behalten“ hält bei Pause die aktuelle Zeile",
+        "Scrolle über der Kachel „Ton“ im Menüleisten-Panel, um die Lautstärke zu ändern",
+        "Neuer Regler „Textdeckkraft“ für den schwebenden Text",
+        "Die Kontur des schwebenden Texts kann dünn, standard oder dick sein",
+        "Neu für den schwebenden Text: „Titel zeigen, wenn kein Text“ zeigt ohne Liedtext Titel und Interpret",
+        "Neu im Mini-Fenster: „In Bildschirmfotos ausblenden“ und „Bei Werbung ausblenden“",
+        "Die Quelle für das animierte Cover im Liedtextfenster ist wählbar",
+        "Direkt aus einem Disk-Image geöffnet, schlägt Lyrimuse vor, die App in den Ordner „Programme“ zu bewegen",
+        "Spielt QQ Music, wird aber nicht erkannt, zeigt Lyrimuse, welche Einstellung du dort aktivieren musst"
+      ],
+      "改进": [
+        "Musixmatch als Liedtextquelle entfernt; Songs, die es nutzten, auch von Hand gewählte, wechseln automatisch zu anderen Quellen",
+        "Die Anordnung „Versetzt“ des schwebenden Texts zeigt jetzt auch Übersetzung und Umschrift jeder Zeile",
+        "„Symbol animieren“ in der Menüleiste bewegt das Symbol jetzt auch, während Liedtexte angezeigt werden",
+        "Liefert der Player kein Cover, nutzen lokale Songs das in der Datei eingebettete Cover",
+        "Sortieren, Suchen und Songwechsel in der Liedtext-Verwaltung sind bei großen Bibliotheken schneller",
+        "Japanische Songs bekommen öfter Wort-für-Wort-Liedtexte",
+        "Die Tasten Zurück, Wiedergabe und Weiter im Liedtextfenster sind leichter zu treffen",
+        "Lehnt Last.fm den API-Schlüssel ab, erklärt Lyrimuse, dass Last.fm Pro nötig ist, und hebt Scrobbles auf, bis er wieder funktioniert",
+        "Überarbeitete koreanische und französische Übersetzung der Oberfläche"
+      ],
+      "修复": [
+        "Ein Absturz und mehrere Hänger behoben, darunter das hängende Menüleisten-Panel direkt nach dem Start",
+        "Speicherverbrauch, der nach dem Schließen der Einstellungen und der Liedtext-Verwaltung nicht sank, behoben",
+        "Ruckelndes Scrollen der Liedtextvorschau in der Liedtext-Verwaltung und in „Liedtext suchen“ behoben",
+        "Rechts abgeschnittene Einstellungsseiten und das nicht vergrößerbare Einstellungsfenster behoben",
+        "Englische Oberfläche bei Kantonesisch als Systemsprache behoben",
+        "Hängenbleiben bei „Liedtext wird gesucht …“, wenn die Liedtext-Engine nicht läuft, behoben",
+        "Nicht ziehbare Titelleiste des Liedtextfensters und springende oder flackernde Fenstertasten behoben",
+        "Fehlende Liedtexte von Soda Music und fehlschlagende Suchen bei NetEase Cloud Music in Japan, Südkorea und Singapur behoben",
+        "Falsche Liedtexte von Songs mit ähnlichem Titel bei manchen Songs auf Hindi und Thai behoben",
+        "Mit Lyrimuse gestartete Player, die in den Vordergrund sprangen, behoben",
+        "Den Schalter „Automatisch erkennen“ der Player, der sich nicht ausschalten ließ, behoben",
+        "Fortschrittsbalken der aufgeklappten Notch, der den gespielten Teil nicht zeigte, behoben"
+      ],
+      "贡献者": [
+        "Danke an @HeizoFinds für den ersten Beitrag, der den Schalter „Automatisch erkennen“ und den Fortschrittsbalken der Notch repariert (#83, #84)"
+      ]
+    },
+    "1.13.0": {
+      "新功能": [
+        "Italienisch, Portugiesisch (Brasilien), Vietnamesisch, Russisch, Ukrainisch und Thai als Sprachen der Oberfläche",
+        "Hast du die Sprache der Oberfläche von Hand gewählt, schlägt Lyrimuse den Wechsel vor, sobald deine Systemsprache verfügbar ist",
+        "Fünf neue integrierte Player: Pear Desktop, Swinsian, Plexamp, MyGo Music und Audirvana (Studio und Origin)",
+        "Hörbücher aus WeRead: Der vorgelesene Abschnitt erscheint als Untertitel, jetzt 20 integrierte Player",
+        "Pear Desktop kann Werbung überspringen und „Favorit“, Zufallswiedergabe gibt es dort und bei YouTube Music im Web",
+        "MyGo Music nutzt bei lokalen Dateien die .lrc daneben und eingebettete Liedtexte, kann „Favorit“ und bereitet die nächsten Songs vor",
+        "Das Menüleisten-Panel lässt sich wie das „Kontrollzentrum“ anpassen: Kacheln anordnen, in der Größe ändern, hinzufügen und entfernen, auch die Wiedergabe-Karte",
+        "Neue Panel-Kacheln: „Ton“, „Heute gehört“, Übersetzung, Umschrift, Schriftgröße, Liedtextfenster im Vordergrund und Vollbild",
+        "Die Leiste unten im Panel lässt sich bestücken und sortieren, neue Kacheln drehen sich per langem Drücken oder Rechtsklick für ihre Einstellungen um",
+        "Tastatursteuerung im Panel: Wiedergabe/Pause, Songwechsel, Liedtext-Versatz, dazu ein globaler Kurzbefehl zum Öffnen des Panels",
+        "Die Schnellaktionen oben in der aufgeklappten Notch lassen sich frei anordnen: zwei Reihen fester Plätze, die leer bleiben dürfen, und viel mehr Tasten zur Auswahl",
+        "Neuer Schalter „Bei Lautstärketasten anzeigen“: Ausgeschaltet blenden die Lautstärketasten kein Lautstärke-Banner in der Notch mehr ein",
+        "Umschrift, Übersetzung und nächste Zeile des schwebenden Texts haben jetzt getrennte Schriftgrößen",
+        "Neue Anordnung „Versetzt“ für die nächste Zeile des schwebenden Texts: zwei gleich große Zeilen, abwechselnd links und rechts",
+        "Neuer Regler „Größe der Bedienelemente“ (100 % bis 200 %) für das Liedtextfenster in Vollgröße, der Web-Liedtext wächst mit",
+        "Zeigt die zweite Zeile der Touch Bar Übersetzung oder Umschrift und der Song hat keine, kann sie die nächste Zeile oder nur den Liedtext zeigen",
+        "Neu für die Touch Bar: „Beim Tippen einklappen“ blendet den Liedtext beim Tippen in Textfeldern aus, damit Eingabevorschläge sichtbar werden",
+        "Passt kein Treffer zur Songdauer im Player, wird mit einer anderen Dauer nachgesucht, die Treffer stehen mit abweichender Dauer unter „Ungeeignet“",
+        "Arc steht wieder standardmäßig im Browser-Menü der Web-Player"
+      ],
+      "改进": [
+        "Läuft nichts, zeigt das Menüleisten-Panel den letzten Song wie bei der Wiedergabe, mit der Zeit der letzten Wiedergabe",
+        "Die Vorschau der nächsten Zeile im schwebenden Text zeigt die Umschrift jetzt wortweise und bricht die Zeilen wie beim Singen um",
+        "Bessere Spotify-Position: Nach einer Pause oder beim Wechsel des Ausgabegeräts verschiebt sich der Liedtext nicht mehr",
+        "Bessere Erkennung von Instrumentals: Klassik in Apple Music bleibt nicht mehr bei der Suche hängen und meldet nicht fälschlich fehlenden Liedtext, frisch gestartete Songs in QQ Music, Soda Music und anderen werden erkannt",
+        "Bessere Zuordnung bei Titeln ganz in Klammern, zweisprachigen Titeln mit fremdsprachigem Namen vorn und Konzertaufnahmen",
+        "Die Umschrift chinesischer und kantonesischer Wort-für-Wort-Liedtexte hat eine Silbe pro Zeichen, entlehnte japanische Kana richten sich auch an Ziffern aus",
+        "„In Verwendung“ in der Liedtextsuche zeigt korrekt, welcher Liedtext beim laufenden Song tatsächlich benutzt wird",
+        "„Datei importieren …“ ist ins ⋯-Menü der Titelleiste der Liedtextsuche gewandert",
+        "Nur als Symbol nutzt der Menüleisteneintrag die Standardbreite des Systems, ohne Rand links und rechts",
+        "In Sprachen mit langen Texten werden Zusammenfassungen und Werte in der Symbolleiste der Einstellungen nicht mehr abgeschnitten",
+        "Der Hinweis auf fehlendes Timing bei reinen Textliedtexten steht jetzt am Ende und ist dezenter",
+        "Regler und Farbwähler in den Einstellungen ruckeln beim Ziehen nicht mehr"
+      ],
+      "修复": [
+        "Wiederholte Anfragen auf Zugriff auf Daten anderer Apps beim Abspielen neuer Songs in QQ Music und anderen Playern behoben",
+        "Absturz bei jedem Start unter macOS 15 und älter mit aktivierter „HDR-Hervorhebung“ im Liedtextfenster behoben",
+        "Mehrere seltene Abstürze behoben",
+        "Ersetzen von Hand gewählter Liedtexte durch die des Players behoben",
+        "Abweichende Liedtextposition in Amazon Music nach Aussetzern behoben",
+        "Vorauseilende Liedtexte in foobar2000 und LX Music nach dem Fortsetzen auf AirPods Max behoben",
+        "Duett-Darstellung bei Songs mit nur kurzer zweiter Stimme und hin und her springende Übersetzung behoben",
+        "Zu frühes Hervorheben der ganzen Zeile bei Regenbogen-Wort-für-Wort-Liedtexten in der Menüleiste behoben",
+        "Abblenden durch „Beim Überfahren abblenden“ schon über der Leerfläche neben dem schwebenden Text behoben",
+        "Mehrere Probleme beim Liedtextimport behoben, darunter unlesbare japanische und koreanische Dateien ohne UTF-8 und leere Dateien, die als Liedtext galten",
+        "Stark geschrumpfte Notch während Werbung auf Bildschirmen ohne Notch behoben",
+        "Zeiger, der die Notch-Karte von unten nicht erreichte oder seitlich hindurchglitt, behoben",
+        "Nach links rutschende Einstellungen beim Erscheinen eines Rollbalkens behoben"
+      ],
+      "贡献者": [
+        "Danke an @youximi für den ersten Beitrag, der das zu frühe Hervorheben der ganzen Zeile bei Regenbogen-Liedtexten in der Menüleiste behebt (#69)",
+        "Danke an @wutongyuonce für den Beitrag, der MyGo Music und die Standardbreite für den Menüleisteneintrag nur als Symbol bringt (#66, #74)"
+      ]
+    }
+  }
+}

@@ -125,6 +125,149 @@ func runWhatsNewTests() {
     }
 
     do {
+        print("\n== 本次更新:按界面语言取译文 ==")
+        let changelog = """
+        ## v1.14.0
+
+        New / 新功能
+        - Added one
+          新增一
+        - Added two
+          新增二
+
+        Fixed / 修复
+        - Fixed three
+          修复三
+
+        ## v1.13.0
+
+        New / 新功能
+        - Old item
+          旧条目
+        """
+        let v14 = ReleaseNotes.section(version: "1.14.0", in: changelog) ?? ""
+        let v13 = ReleaseNotes.section(version: "1.13.0", in: changelog) ?? ""
+        typealias T = ReleaseNotes.Translation
+        let ja = T(titles: ["新功能": "新機能", "修复": "修正"],
+                   versions: ["1.14.0": ["新功能": ["一つ目", "二つ目"], "修复": ["三つ目"]]])
+        expectEqual(ReleaseNotes.localize(v14, version: "1.14.0", language: "ja", translation: ja), [
+            .init(title: "新機能", items: ["一つ目", "二つ目"]), .init(title: "修正", items: ["三つ目"]),
+        ], "译文: 按版本号和小节的中文标题取")
+        expectEqual(ReleaseNotes.localize(v14, version: "1.14.0", language: "zh-hans", translation: ja),
+                    ReleaseNotes.parse(v14, chinese: true), "简体: 直接取 CHANGELOG 的中文")
+        expectEqual(ReleaseNotes.localize(v14, version: "1.14.0", language: "en", translation: ja),
+                    ReleaseNotes.parse(v14, chinese: false), "英文: 直接取 CHANGELOG 的英文")
+        expectEqual(ReleaseNotes.localize(v13, version: "1.13.0", language: "ja", translation: ja),
+                    [.init(title: "新機能", items: ["Old item"])], "译文缺这一版: 条目退回英文,小节标题仍用译文")
+        let short = T(titles: [:], versions: ["1.14.0": ["新功能": ["一つ目"], "修复": ["三つ目"]]])
+        expectEqual(ReleaseNotes.localize(v14, version: "1.14.0", language: "ja", translation: short), [
+            .init(title: "New", items: ["Added one", "Added two"]), .init(title: "Fixed", items: ["三つ目"]),
+        ], "条数跟 CHANGELOG 对不上的小节退回英文,别的小节照用译文;没有标题译文用英文标题")
+        expectEqual(ReleaseNotes.localize(v14, version: "1.14.0", language: "de", translation: nil),
+                    ReleaseNotes.parse(v14, chinese: false), "没有这种语言的译文: 整节英文")
+        expectEqual(ReleaseNotes.localize(v13, version: "1.13.0", language: "zh-hant", translation: nil),
+                    [.init(title: "新功能", items: ["舊條目"])], "繁体缺译文: 退回简体经 ICU 转写")
+        let merged = ReleaseNotes.merge(ReleaseNotes.versionedSections(after: "1.12.0", through: "1.14.0", in: changelog).map {
+            ReleaseNotes.localize($0.body, version: $0.version, language: "ja", translation: ja)
+        })
+        expectEqual(merged.first?.items, ["一つ目", "二つ目", "Old item"], "跨版本: 带上版本号逐节取译文,同名小节并在一起")
+        expectEqual(T.decode(Data(#"{"titles":{"新功能":"新機能"},"versions":{"1.14.0":{"新功能":["一つ目"]}}}"#.utf8)),
+                    T(titles: ["新功能": "新機能"], versions: ["1.14.0": ["新功能": ["一つ目"]]]), "译文文件: JSON 读得出")
+    }
+
+    do {
+        print("\n== 本次更新:仓库里的译文 ==")
+        let repo = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+            .deletingLastPathComponent().deletingLastPathComponent()
+        let text = (try? String(contentsOf: repo.appendingPathComponent("CHANGELOG.md"), encoding: .utf8)) ?? ""
+        let versions = text.components(separatedBy: "\n").filter { $0.hasPrefix("## v") }.map { String($0.dropFirst(4)) }
+        // 从这一版起 CHANGELOG 里的每一版都要有全部界面语言的译文;新加的一节没写译文,这一组就红。见 14 章决策 236。
+        let translatedSince = "1.13.0"
+        let required = versions.filter { WhatsNew.compare($0, translatedSince) != .orderedAscending }
+        expectEqual(required.contains("1.13.0") && required.contains("1.14.0"), true, "译文范围: 含 1.13.0 与 1.14.0")
+
+        let dir = repo.appendingPathComponent("release-notes")
+        let packs = ((try? FileManager.default.contentsOfDirectory(atPath: dir.path)) ?? [])
+            .filter { $0.hasSuffix(".json") }.map { String($0.dropLast(5)) }.sorted()
+        expectEqual(Set(packs).isDisjoint(with: ["zh-hans", "en"]) && Set(packs).union(["zh-hans", "en"]) == Set(UILanguage.packs), true,
+                    "译文: 简体、英文以外的每种界面语言各一份(release-notes/<语言包>.json),没有多出来的")
+
+        // 各语言给设置名加的引号,照 Localization/<语言>-STYLE.md。加界面语言时在这里登记。
+        let nbsp = String(Character(Unicode.Scalar(UInt8(0xA0))))
+        let quotes: [String: (String, String)] = [
+            "zh-hant": ("「", "」"), "ja": ("「", "」"), "ko": ("‘", "’"), "es": ("«", "»"), "fr": ("«" + nbsp, nbsp + "»"),
+            "de": ("„", "“"), "it": ("“", "”"), "pt-br": ("“", "”"), "vi": ("“", "”"), "ru": ("«", "»"), "uk": ("«", "»"),
+            "th": ("“", "”"), "tr": ("“", "”"), "hi": ("“", "”"),
+        ]
+        expectEqual(Set(quotes.keys), Set(packs), "译文: 每种语言都登记了引号")
+
+        let catalogData = (try? Data(contentsOf: repo.appendingPathComponent("lyrimuse/Localization/Localizable.xcstrings"))) ?? Data()
+        let catalog = ((try? JSONSerialization.jsonObject(with: catalogData)) as? [String: Any])?["strings"] as? [String: Any] ?? [:]
+        func catalogValue(_ key: String, _ pack: String) -> String? {
+            let entry = catalog[key] as? [String: Any]
+            let localization = (entry?["localizations"] as? [String: Any])?[UILanguage.localeIdentifier(for: pack)] as? [String: Any]
+            return (localization?["stringUnit"] as? [String: Any])?["value"] as? String
+        }
+        func quotedNames(_ line: String) -> [String] {
+            var names: [String] = [], rest = Substring(line)
+            while let open = rest.firstIndex(of: "「"), let close = rest[open...].firstIndex(of: "」") {
+                names.append(String(rest[rest.index(after: open)..<close]))
+                rest = rest[rest.index(after: close)...]
+            }
+            return names
+        }
+        expectEqual(quotedNames("新增「跟随音乐跳动」与「声音」"), ["跟随音乐跳动", "声音"], "引号里的名字: 逐个取出")
+
+        var problems: [String] = []
+        var checkedNames = 0
+        for pack in packs {
+            guard let data = try? Data(contentsOf: dir.appendingPathComponent(pack + ".json")),
+                  let translation = ReleaseNotes.Translation.decode(data) else {
+                problems.append("\(pack): 读不出")
+                continue
+            }
+            let (open, close) = quotes[pack] ?? ("", "")
+            for version in translation.versions.keys where !versions.contains(version) {
+                problems.append("\(pack): CHANGELOG 里没有 v\(version)")
+            }
+            for version in required {
+                let section = ReleaseNotes.section(version: version, in: text) ?? ""
+                let zh = ReleaseNotes.parse(section, chinese: true), en = ReleaseNotes.parse(section, chinese: false)
+                guard let byTitle = translation.versions[version] else {
+                    problems.append("\(pack) v\(version): 缺这一版")
+                    continue
+                }
+                for title in byTitle.keys where !zh.contains(where: { $0.title == title }) {
+                    problems.append("\(pack) v\(version): CHANGELOG 里没有小节「\(title)」")
+                }
+                for (zhSection, enSection) in zip(zh, en) {
+                    let place = "\(pack) v\(version) \(zhSection.title)"
+                    if (translation.titles[zhSection.title] ?? "").isEmpty { problems.append("\(place): 缺小节标题译文") }
+                    guard let items = byTitle[zhSection.title], items.count == zhSection.items.count else {
+                        problems.append("\(place): \(byTitle[zhSection.title]?.count ?? 0) 条,CHANGELOG 是 \(zhSection.items.count) 条")
+                        continue
+                    }
+                    for (i, item) in items.enumerated() {
+                        if item.trimmingCharacters(in: .whitespaces).isEmpty || item == enSection.items[i]
+                            || (pack != "zh-hant" && item == zhSection.items[i]) {
+                            problems.append("\(place) 第 \(i + 1) 条: 空的或照抄原文")
+                        }
+                        for name in quotedNames(zhSection.items[i]) {
+                            guard let value = catalogValue(name, pack) else { continue }
+                            checkedNames += 1
+                            if !item.contains(open + value + close) {
+                                problems.append("\(place) 第 \(i + 1) 条: 要写成 \(open)\(value)\(close)")
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        expectEqual(problems, [], "译文: \(translatedSince) 起每一版、每一小节的条数跟 CHANGELOG 一致,小节标题齐全,不照抄原文")
+        expectEqual(checkedNames > 0, true, "译文: 「」里引用的设置名逐个对过 xcstrings(\(checkedNames) 处)")
+    }
+
+    do {
         print("\n== 本次更新:接线 ==")
         let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
         func sourceText(_ path: String) -> String {
@@ -153,6 +296,14 @@ func runWhatsNewTests() {
                     && sourceHas(build, "cp -p ../CHANGELOG.md \"$SNAPSHOT_ROOT/CHANGELOG.md\"")
                     && sourceHas(sourceText("../package.sh"), "\"Resources/CHANGELOG.md\""), true,
                     "接线: CHANGELOG 打进包里(含快照),打包时查它在")
+        expectEqual(sourceHas(build, "rsync \"${SNAPSHOT_RSYNC[@]}\" --delete ../release-notes/ \"$SNAPSHOT_ROOT/release-notes/\"")
+                    && sourceHas(build, "cp -R ../release-notes \"$APP_DIR/Contents/Resources/release-notes\"")
+                    && sourceHas(sourceText("../package.sh"), "\"Resources/release-notes/ja.json\""), true,
+                    "接线: 各语言的译文 release-notes/ 打进包里(含快照),打包时查它在")
+        let whatsNewCenter = sourceBody("static func currentNotes()", in: sourceText("lyrimuse/Settings/WhatsNewCenter.swift"))
+        expectEqual(sourceHas(whatsNewCenter, "subdirectory: \"release-notes\"")
+                    && sourceHas(whatsNewCenter, "ReleaseNotes.localize($0.body, version: $0.version, language: language, translation: translation)"),
+                    true, "接线: 卡片按界面语言读包里的译文")
         let portability = sourceText("lyrimuse/Settings/ConfigPortability.swift")
         let machineLocal = portability.range(of: "private static let machineLocalDefaultsKeys").flatMap { a in
             portability.range(of: "\n    ]", range: a.upperBound..<portability.endIndex).map { portability[a.upperBound..<$0.lowerBound] }

@@ -1,0 +1,116 @@
+{
+  "titles": {
+    "新功能": "Novidades",
+    "改进": "Melhorias",
+    "修复": "Correções",
+    "贡献者": "Colaboradores"
+  },
+  "versions": {
+    "1.14.0": {
+      "新功能": [
+        "Turco e hindi como idiomas da interface, agora 16 no total",
+        "Kuwo Music e Cog como players integrados, agora 22 no total",
+        "Zing MP3 como fonte de letras, com letras palavra por palavra para músicas em vietnamita",
+        "Megalobiz como fonte de letras, agora 16 no total",
+        "O Gerenciador de letras pode gravar a letra nos arquivos das músicas, e em Labs você pode ativar a gravação automática",
+        "Agora é possível desfazer depois de aplicar uma letra encontrada, salvar alterações, buscar de novo automaticamente ou marcar como instrumental",
+        "A onda sonora do Notch ganha “Acompanhar a música”, que se move com o som real do player",
+        "A cor da letra no Notch pode ser personalizada",
+        "Quando a música não tem tradução nem pronúncia, a linha secundária do Notch e da barra de menus pode mostrar a próxima linha",
+        "A barra de menus ganha “Manter letra na pausa”, que fica na linha atual durante a pausa",
+        "Role sobre o bloco “Som” do painel da barra de menus para ajustar o volume",
+        "A letra flutuante ganha o controle “Opacidade do texto”",
+        "O contorno da letra flutuante pode ser fino, padrão ou grosso",
+        "A letra flutuante ganha “Mostrar título se não houver letra”, que mostra o título e o artista quando não há letra",
+        "A janela mini ganha “Ocultar em capturas de tela” e “Ocultar durante anúncios”",
+        "Agora você escolhe de onde vem a capa animada da janela da letra",
+        "Ao ser aberto direto de uma imagem de disco, o Lyrimuse sugere movê-lo para a pasta Aplicativos",
+        "Quando o QQ Music está tocando mas não é reconhecido, o Lyrimuse indica qual ajuste ativar no app"
+      ],
+      "改进": [
+        "A fonte de letras Musixmatch foi removida; as músicas que a usavam, mesmo as escolhidas à mão, passam sozinhas para outras fontes",
+        "O layout “Escalonado” da letra flutuante também mostra a tradução e a pronúncia de cada linha",
+        "“Animar ícone” na barra de menus também se move enquanto a letra é exibida",
+        "Quando o player não fornece capa, as músicas locais usam a capa embutida no arquivo",
+        "Ordenar, buscar e trocar de música no Gerenciador de letras ficou mais rápido em bibliotecas grandes",
+        "Mais músicas em japonês recebem letras palavra por palavra",
+        "Os botões anterior, reproduzir e próxima da janela da letra ficaram mais fáceis de clicar",
+        "Quando o Last.fm recusa a chave de API, o Lyrimuse explica que é preciso assinar o Last.fm Pro e guarda os scrobbles até a chave voltar a funcionar",
+        "Traduções da interface em coreano e francês revisadas"
+      ],
+      "修复": [
+        "Corrigidos um travamento e vários congelamentos, incluindo o painel da barra de menus travado logo após abrir o app",
+        "Corrigido o uso de memória que não baixava após fechar os Ajustes e o Gerenciador de letras",
+        "Corrigida a rolagem travada das prévias de letra no Gerenciador de letras e em “Buscar letras”",
+        "Corrigidas as páginas dos Ajustes cortadas à direita e a janela dos Ajustes que não aumentava",
+        "Corrigida a interface em inglês quando o idioma do sistema é cantonês",
+        "Corrigida a letra parada em “Buscando letra…” quando o mecanismo de letras não está em execução",
+        "Corrigidas a barra de título da janela da letra que não arrastava e os botões que pulavam ou piscavam",
+        "Corrigidas as letras do Soda Music não encontradas e as buscas do NetEase Cloud Music que falhavam no Japão, na Coreia do Sul e em Singapura",
+        "Corrigidas algumas músicas em hindi e tailandês que recebiam a letra de outra música com título parecido",
+        "Corrigidos os players abertos junto com o Lyrimuse que passavam para a frente",
+        "Corrigida a chave “Detecção automática” dos players que não desligava",
+        "Corrigida a barra de progresso do Notch expandido que não mostrava a parte já tocada"
+      ],
+      "贡献者": [
+        "Obrigado a @HeizoFinds pela primeira contribuição, que corrige a chave “Detecção automática” e a barra de progresso do Notch (#83, #84)"
+      ]
+    },
+    "1.13.0": {
+      "新功能": [
+        "Italiano, português do Brasil, vietnamita, russo, ucraniano e tailandês como idiomas da interface",
+        "Se você escolheu o idioma da interface à mão, o Lyrimuse sugere trocar quando o idioma do seu sistema fica disponível",
+        "Cinco novos players integrados: Pear Desktop, Swinsian, Plexamp, MyGo Music e Audirvana (Studio e Origin)",
+        "Suporte a audiolivros do WeRead, com o trecho lido exibido como legenda; agora são 20 players integrados",
+        "O Pear Desktop permite pular anúncios e “Favoritar”, e o modo aleatório funciona nele e no YouTube Music na web",
+        "Com arquivos locais, o MyGo Music usa o .lrc ao lado do arquivo e a letra embutida, permite “Favoritar” e analisa antes as próximas músicas",
+        "O painel da barra de menus pode ser personalizado como a “Central de Controle”: organize, redimensione, adicione e remova blocos, incluindo o cartão da música atual",
+        "Novos blocos do painel: “Som”, “Ouvido hoje”, tradução, pronúncia, tamanho da fonte, janela da letra sempre na frente e tela cheia",
+        "Os itens da barra inferior do painel podem ser adicionados, removidos e reordenados, e os blocos novos viram com toque longo ou clique direito para ajustes",
+        "Controle pelo teclado no painel: reproduzir/pausar, trocar de música e ajustar o deslocamento da letra, além de um atalho global para abrir o painel",
+        "As ações rápidas no topo do Notch expandido podem ser organizadas em duas fileiras de espaços fixos, que podem ficar vazios, com muito mais botões para escolher",
+        "Nova chave “Mostrar com teclas de volume”: desligada, as teclas de volume do teclado não mostram mais o aviso de volume no Notch",
+        "Os tamanhos da pronúncia, da tradução e da próxima linha da letra flutuante podem ser ajustados separadamente",
+        "Novo layout “Escalonado” para a próxima linha da letra flutuante: duas linhas do mesmo tamanho, alternando à esquerda e à direita",
+        "Novo controle “Tamanho dos controles” (100%–200%) para a janela da letra em tamanho completo, e a letra na web aumenta junto",
+        "Se a linha secundária da Touch Bar mostra tradução ou pronúncia e a música não tem, ela pode mostrar a próxima linha ou só a letra",
+        "Nova opção “Recolher ao digitar” na Touch Bar: ao digitar em um campo de texto, a letra se recolhe e deixa ver as sugestões de digitação",
+        "Se nenhum resultado bate com a duração da música no player, o Lyrimuse busca de novo com outra duração e lista os resultados em “Excluídos” com a duração marcada como diferente",
+        "O Arc volta a aparecer por padrão no menu de navegadores dos players web"
+      ],
+      "改进": [
+        "Sem nada tocando, o painel da barra de menus mostra a última música como durante a reprodução, com o horário em que tocou por último",
+        "A prévia da próxima linha na letra flutuante também mostra a pronúncia palavra por palavra e quebra as linhas como quando é cantada",
+        "Progresso do Spotify melhorado: a letra não se desloca mais depois de uma pausa ou da troca do dispositivo de saída",
+        "Detecção de instrumentais melhorada: a música clássica do Apple Music não fica mais presa na busca nem informa por engano que não há letra, e músicas recém-tocadas no QQ Music, Soda Music e outros são reconhecidas",
+        "Melhor correspondência de letras para títulos inteiros entre parênteses, títulos bilíngues com o nome estrangeiro na frente e gravações ao vivo",
+        "A pronúncia das letras palavra por palavra em chinês e cantonês tem uma sílaba por caractere, e os kana japoneses emprestados também se alinham junto a números",
+        "“Em uso” na busca de letras indica corretamente qual letra a música atual realmente usa",
+        "“Importar arquivo…” foi para o menu ⋯ da barra de título da busca de letras",
+        "Só com o ícone, o item da barra de menus usa a largura padrão do sistema, sem margens nos lados",
+        "Em idiomas com textos longos, os resumos da barra de ferramentas e os valores dos Ajustes não são mais cortados",
+        "O aviso de letra sem marcas de tempo nas letras de texto simples foi para o final, com um estilo mais discreto",
+        "Arrastar controles deslizantes e seletores de cor nos Ajustes não trava mais"
+      ],
+      "修复": [
+        "Corrigidos os pedidos repetidos de acesso aos dados de outros apps ao tocar músicas novas no QQ Music e em outros players",
+        "Corrigido um travamento a cada abertura no macOS 15 e anteriores com “Destaque HDR” ativado na janela da letra",
+        "Corrigidos vários travamentos raros",
+        "Corrigida a letra escolhida à mão que era trocada pela do próprio player",
+        "Corrigido o desvio da letra no Amazon Music depois de interrupções na reprodução",
+        "Corrigida a letra adiantada no foobar2000 e no LX Music depois de retomar no AirPods Max",
+        "Corrigidas as músicas com uma segunda voz curta tratadas como dueto, com a tradução pulando de lado",
+        "Corrigido o destaque antecipado da linha inteira nas letras arco-íris palavra por palavra da barra de menus",
+        "Corrigido o “Esmaecer ao passar o ponteiro” que esmaecia a letra flutuante com o ponteiro sobre o espaço vazio ao lado do texto",
+        "Corrigidos vários problemas ao importar letras, como arquivos em japonês e coreano fora de UTF-8 ilegíveis e arquivos vazios tratados como letra",
+        "Corrigido o Notch que encolhia muito durante anúncios em telas sem notch",
+        "Corrigido o ponteiro que não chegava ao cartão do Notch por baixo ou o atravessava ao passar de lado",
+        "Corrigidos os Ajustes que se deslocavam para a esquerda quando aparecia a barra de rolagem"
+      ],
+      "贡献者": [
+        "Obrigado a @youximi pela primeira contribuição, que corrige o destaque antecipado da linha inteira nas letras arco-íris da barra de menus (#69)",
+        "Obrigado a @wutongyuonce pela contribuição, que adiciona o MyGo Music e a largura padrão do sistema para o item só com ícone na barra de menus (#66, #74)"
+      ]
+    }
+  }
+}

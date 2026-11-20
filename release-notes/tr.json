@@ -1,0 +1,116 @@
+{
+  "titles": {
+    "新功能": "Yeni",
+    "改进": "İyileştirmeler",
+    "修复": "Düzeltmeler",
+    "贡献者": "Katkıda Bulunanlar"
+  },
+  "versions": {
+    "1.14.0": {
+      "新功能": [
+        "Arayüz dillerine Türkçe ve Hintçe eklendi, toplam 16 dil",
+        "Yerleşik çalarlara Kuwo Music ve Cog eklendi, toplam 22 çalar",
+        "Şarkı sözü kaynağı olarak Zing MP3 eklendi; Vietnamca şarkılarda kelime kelime sözler",
+        "Şarkı sözü kaynağı olarak Megalobiz eklendi, toplam 16 kaynak",
+        "Şarkı Sözü Yöneticisi sözleri şarkı dosyalarına yazabilir; otomatik yazma Deneysel bölümünden açılabilir",
+        "Bulunan sözleri uygulama, değişiklikleri kaydetme, otomatik yeniden eşleştirme veya enstrümantal olarak işaretleme geri alınabilir",
+        "Çentikteki ses dalgasına “Müzikle Hareket Et” eklendi; dalga çaların gerçek sesiyle hareket eder",
+        "Çentikteki şarkı sözü rengi özelleştirilebilir",
+        "Şarkının çevirisi veya telaffuzu yoksa çentik ve menü çubuğundaki ikinci satır sonraki satırı gösterebilir",
+        "Menü çubuğuna “Duraklatınca Sözleri Koru” eklendi; duraklatıldığında geçerli satırda kalır",
+        "Ses düzeyini ayarlamak için menü çubuğu panelindeki “Ses” kutucuğunun üzerinde kaydırın",
+        "Yüzen sözlere “Metin Opaklığı” sürgüsü eklendi",
+        "Yüzen sözlerin kontur kalınlığı İnce, Standart veya Kalın olarak seçilebilir",
+        "Yüzen sözlere “Şarkı Sözü Yoksa Parça Adını Göster” eklendi; söz yokken parça adı ve sanatçı gösterilir",
+        "Mini pencereye “Ekran Resimlerinde Gizle” ve “Reklamlarda Gizle” eklendi",
+        "Şarkı sözü penceresindeki hareketli kapağın kaynağı seçilebilir",
+        "Doğrudan disk görüntüsünden açıldığında “Uygulamalar” klasörüne taşınması önerilir",
+        "QQ Music çalarken algılanamazsa hangi ayarının açılması gerektiği gösterilir"
+      ],
+      "改进": [
+        "Musixmatch şarkı sözü kaynağı kaldırıldı; onu kullanan şarkılar, elle seçilenler dahil, otomatik olarak başka kaynaklara geçer",
+        "Yüzen sözlerin “Dönüşümlü” düzeni her satırın çevirisini ve telaffuzunu da gösterir",
+        "Menü çubuğundaki “Simge Animasyonu” sözler gösterilirken de hareket eder",
+        "Çalar kapak sağlamadığında yerel şarkılar dosyaya gömülü kapağı kullanır",
+        "Büyük arşivlerde Şarkı Sözü Yöneticisi’nde sıralama, arama ve şarkı değiştirme daha hızlı",
+        "Japonca şarkılar daha sık kelime kelime söz alır",
+        "Şarkı sözü penceresindeki önceki, oynat ve sonraki düğmelerine tıklamak daha kolay",
+        "Last.fm API anahtarını reddettiğinde Last.fm Pro gerektiği açıklanır ve dinlemeler anahtar yeniden çalışana kadar saklanır",
+        "Arayüzün Korece ve Fransızca çevirileri gözden geçirildi"
+      ],
+      "修复": [
+        "Bir çökme ve açılıştan hemen sonra menü çubuğu panelinin donması dahil birkaç donma düzeltildi",
+        "Ayarlar ve Şarkı Sözü Yöneticisi kapatıldıktan sonra bellek kullanımının düşmemesi düzeltildi",
+        "Şarkı Sözü Yöneticisi’nde ve “Şarkı Sözü Ara” penceresinde söz önizlemesinin takılarak kaydırılması düzeltildi",
+        "Ayarlar sayfalarının sağdan kesilmesi ve Ayarlar penceresinin büyütülememesi düzeltildi",
+        "Sistem dili Kantonca olduğunda arayüzün İngilizce görünmesi düzeltildi",
+        "Şarkı sözü motoru çalışmıyorken “Şarkı sözü aranıyor…” durumunda takılı kalma düzeltildi",
+        "Şarkı sözü penceresinin başlık çubuğunun sürüklenememesi ve sol üstteki düğmelerin zıplaması veya titremesi düzeltildi",
+        "Soda Music sözlerinin bulunamaması ve Japonya, Güney Kore ile Singapur’da NetEase Cloud Music aramalarının başarısız olması düzeltildi",
+        "Bazı Hintçe ve Tayca şarkıların adı benzeyen başka bir şarkının sözlerini alması düzeltildi",
+        "Lyrimuse ile birlikte açılan çalarların öne gelmesi düzeltildi",
+        "Çalarların “Otomatik Algıla” anahtarının kapanmaması düzeltildi",
+        "Genişletilmiş çentikteki ilerleme çubuğunun çalınan kısmı göstermemesi düzeltildi"
+      ],
+      "贡献者": [
+        "İlk katkısı için @HeizoFinds’a teşekkürler: “Otomatik Algıla” anahtarı ve çentik ilerleme çubuğu düzeltildi (#83, #84)"
+      ]
+    },
+    "1.13.0": {
+      "新功能": [
+        "Arayüz dillerine İtalyanca, Portekizce (Brezilya), Vietnamca, Rusça, Ukraynaca ve Tayca eklendi",
+        "Arayüz dilini elle seçtiyseniz sistem dilinizde arayüz kullanılabilir olduğunda geçiş önerilir",
+        "Beş yeni yerleşik çalar: Pear Desktop, Swinsian, Plexamp, MyGo Music ve Audirvana (Studio ve Origin sürümleri)",
+        "WeRead sesli kitapları desteklenir; okunan bölüm altyazı olarak gösterilir, yerleşik çalar sayısı 20 oldu",
+        "Pear Desktop reklam atlamayı ve “Favorilere Ekle” seçeneğini destekler; hem o hem de web’deki YouTube Music karışık çalmayı destekler",
+        "MyGo Music yerel dosyalarda yanındaki .lrc dosyasını ve gömülü sözleri kullanabilir, “Favorilere Ekle” seçeneğini destekler ve sonraki şarkıları önceden çözümler",
+        "Menü çubuğu paneli “Denetim Merkezi” gibi özelleştirilebilir: kutucukları sürükleyip düzenleyin, boyutlandırın, ekleyin veya kaldırın; çalan şarkı kartı da bir kutucuktur",
+        "Yeni panel kutucukları: “Ses”, “Bugün”, çeviri, telaffuz, punto, şarkı sözü penceresini önde tutma ve tam ekran",
+        "Panelin alt çubuğundaki öğeler eklenip kaldırılabilir ve sıralanabilir; yeni kutucuklar uzun basarak veya sağ tıklayarak çevrilip ayarlanabilir",
+        "Panelde klavyeyle oynatma/duraklatma, şarkı değiştirme ve şarkı sözü kaydırması; paneli açmak için genel bir klavye kestirmesi de eklendi",
+        "Genişletilmiş çentik kartının üstündeki hızlı eylemler serbestçe yerleştirilebilir: boş bırakılabilen iki sıra sabit yuva ve seçilebilecek çok daha fazla düğme",
+        "“Ses Tuşlarında Göster” anahtarı eklendi; kapatıldığında klavyedeki ses tuşları çentikte ses düzeyi afişini göstermez",
+        "Yüzen sözlerde telaffuz, çeviri ve sonraki satırın puntosu ayrı ayrı ayarlanabilir",
+        "Yüzen sözlerin sonraki satırı için “Dönüşümlü” düzen eklendi: aynı boyutta iki satır sırayla solda ve sağda",
+        "Şarkı sözü penceresinin tam boyutuna “Denetim Boyutu” (%100–%200) eklendi; tarayıcıdaki sözler de birlikte büyür",
+        "Touch Bar’ın ikinci satırında çeviri veya telaffuz seçiliyken şarkıda yoksa sonraki satır ya da yalnızca sözler gösterilebilir",
+        "Touch Bar’a “Yazarken Daralt” eklendi: metin alanında yazarken sözler daralır ve yazım önerileri görünür",
+        "Hiçbir sonuç çalardaki şarkı süresiyle eşleşmezse farklı bir süreyle ek arama yapılır; sonuçlar süre uyuşmazlığı notuyla “Uygun Değil” altında listelenir",
+        "Web çalarların tarayıcı menüsünde Arc yeniden varsayılan olarak listelenir"
+      ],
+      "改进": [
+        "Hiçbir şey çalmıyorken menü çubuğu paneli önceki şarkıyı çalma sırasındaki gibi gösterir ve son çalma zamanını belirtir",
+        "Yüzen sözlerde sonraki satır önizlemesi de kelime kelime telaffuz gösterir ve satırları söylendiği andaki gibi böler",
+        "Spotify ilerlemesi iyileştirildi: duraklatıp devam ettikten veya çıkış aygıtını değiştirdikten sonra sözler kaymaz",
+        "Enstrümantal algılama iyileştirildi: Apple Music’teki klasik müzik aramada takılmaz veya yanlışlıkla söz yok demez; QQ Music, Soda Music ve diğerlerinde yeni başlatılan şarkılar da tanınır",
+        "Tamamı parantez içindeki adlar, yabancı adın önde olduğu iki dilli adlar ve konser kayıtları için söz eşleştirme iyileştirildi",
+        "Çince ve Kantonca kelime kelime sözlerin telaffuzu her karaktere bir hece verir; ödünç alınan Japonca kana rakamların yanında da hizalanır",
+        "Söz aramasındaki “Kullanımda” etiketi, çalan şarkının gerçekte hangi sözleri kullandığını doğru gösterir",
+        "“Dosya İçe Aktar…” söz aramasının başlık çubuğundaki ⋯ menüsüne taşındı",
+        "Yalnızca simge gösteren menü çubuğu öğesi sistemin standart genişliğini kullanır, iki yanda boşluk kalmaz",
+        "Uzun metinli dillerde Ayarlar araç çubuğundaki özetler ve değerler artık kesilmez",
+        "Düz metin sözlerdeki zamanlama yok uyarısı sona taşındı ve daha soluk gösterilir",
+        "Ayarlar’da sürgüleri ve renk seçicileri sürüklerken takılma giderildi"
+      ],
+      "修复": [
+        "QQ Music ve diğer çalarlarda yeni şarkılar çalınırken diğer uygulamaların verilerine erişim isteğinin tekrar tekrar çıkması düzeltildi",
+        "macOS 15 ve öncesinde şarkı sözü penceresinde “HDR Vurgusu” açıkken her açılışta çökme düzeltildi",
+        "Seyrek görülen birkaç çökme düzeltildi",
+        "Elle seçilen sözlerin çaların kendi sözleriyle değiştirilmesi düzeltildi",
+        "Amazon Music’te takılmalardan sonra söz ilerlemesinin kayması düzeltildi",
+        "AirPods Max’te devam ettikten sonra foobar2000 ve LX Music sözlerinin önde gitmesi düzeltildi",
+        "İkinci sesin yalnızca birkaç satır söylediği şarkıların düet sayılması ve çevirinin yer değiştirmesi düzeltildi",
+        "Menü çubuğundaki gökkuşağı renkli kelime kelime sözlerde satır değişirken tüm satırın erken vurgulanması düzeltildi",
+        "İşaretçi yüzen sözlerin yanındaki boşluktayken “Üzerine Gelince Soldur” seçeneğinin sözleri soldurması düzeltildi",
+        "Söz içe aktarmadaki birkaç sorun düzeltildi; UTF-8 olmayan Japonca ve Korece dosyaların bozuk görünmesi ve boş dosyaların söz sayılması dahil",
+        "Çentiği olmayan ekranlarda reklam sırasında çentiğin çok küçülmesi düzeltildi",
+        "İşaretçinin çentik kartına alttan girememesi veya yatay geçerken kayıp gitmesi düzeltildi",
+        "Kaydırma çubuğu göründüğünde Ayarlar’ın sola kayması düzeltildi"
+      ],
+      "贡献者": [
+        "İlk katkısı için @youximi’ye teşekkürler: menü çubuğundaki gökkuşağı renkli sözlerde tüm satırın erken vurgulanması düzeltildi (#69)",
+        "Katkısı için @wutongyuonce’a teşekkürler: MyGo Music desteği ve yalnızca simge gösteren menü çubuğu öğesi için standart sistem genişliği (#66, #74)"
+      ]
+    }
+  }
+}

@@ -508,6 +508,7 @@ if [ -z "${LYRIMUSE_NO_SOURCE_SNAPSHOT:-}" ]; then
     ../lyrimuse-engine/ "$SNAPSHOT_ROOT/lyrimuse-engine/"
   cp -p ../THIRD_PARTY_LICENSES "$SNAPSHOT_ROOT/THIRD_PARTY_LICENSES"
   cp -p ../CHANGELOG.md "$SNAPSHOT_ROOT/CHANGELOG.md"
+  rsync "${SNAPSHOT_RSYNC[@]}" --delete ../release-notes/ "$SNAPSHOT_ROOT/release-notes/"
   if [ ! -d "$SNAPSHOT_ROOT/lyrimuse/.build" ]; then
     mkdir -p "$SNAPSHOT_ROOT/lyrimuse/.build"
     for dep in checkouts repositories artifacts; do
@@ -916,7 +917,7 @@ done
 # "加了一张图 → 忘了往这个清单里补一行"的表现是**图标悄悄变成一个通用符号**,不报错、
 # 不崩溃,极难发现(当天新增 Spotify 平台图标时当场踩到)。遍历之后这类漏拷不可能再发生。
 # Resources/ 下的 PNG 全都是要随包分发的,没有"只用于开发"的例外;.lproj 目录和
-# THIRD_PARTY_LICENSES、CHANGELOG.md 各有各的拷贝方式,不走这里。
+# THIRD_PARTY_LICENSES、CHANGELOG.md、release-notes/ 各有各的拷贝方式,不走这里。
 # 新加的 PNG 入库前先无损压一遍:`oxipng -o max --strip safe -Z --nx <文件>`(`--nx` 不改颜色格式,
 # 去掉它会被换成调色板 / 灰度、色彩空间跟着变),见 15 章决策 71。
 for png in Sources/lyrimuse/Resources/*.png; do
@@ -926,8 +927,11 @@ done
 # mediaremote-adapter 是 BSD-3-Clause,Sparkle 和 KeyboardShortcuts 是 MIT,三者的
 # 二进制分发条款都要求随附版权声明与许可证文本。仓库根那份是唯一来源,这里只拷。
 cp ../THIRD_PARTY_LICENSES "$APP_DIR/Contents/Resources/THIRD_PARTY_LICENSES"
-# 「本次更新」卡片读包里这份取当前版本那一节(WhatsNewCenter.currentNotes),仓库根那份是唯一来源。
+# 「本次更新」卡片读包里这份取当前版本那一节(WhatsNewCenter.currentNotes),仓库根那份是唯一来源;
+# 简体、英文以外的界面语言读 release-notes/<语言包>.json 的译文,整个目录照搬。
 cp ../CHANGELOG.md "$APP_DIR/Contents/Resources/CHANGELOG.md"
+rm -rf "$APP_DIR/Contents/Resources/release-notes"
+cp -R ../release-notes "$APP_DIR/Contents/Resources/release-notes"
 printf 'APPL????' > "$APP_DIR/Contents/PkgInfo"
 cat > "$APP_DIR/Contents/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>

@@ -1,0 +1,116 @@
+{
+  "titles": {
+    "新功能": "Nouveautés",
+    "改进": "Améliorations",
+    "修复": "Corrections",
+    "贡献者": "Contributeurs"
+  },
+  "versions": {
+    "1.14.0": {
+      "新功能": [
+        "Ajout du turc et du hindi comme langues de l’interface, soit 16 au total",
+        "Ajout des lecteurs intégrés Kuwo Music et Cog, soit 22 au total",
+        "Ajout de la source de paroles Zing MP3, avec des paroles mot à mot pour les chansons vietnamiennes",
+        "Ajout de la source de paroles Megalobiz, soit 16 au total",
+        "Le gestionnaire de paroles peut écrire les paroles dans les fichiers des morceaux, et l’écriture automatique s’active dans Labo",
+        "Vous pouvez annuler après avoir appliqué des paroles trouvées, enregistré des modifications, réassocié automatiquement ou marqué un morceau comme instrumental",
+        "Ajout de « Suivre la musique » à l’onde audio de l’encoche, qui bouge au rythme du son réel du lecteur",
+        "La couleur des paroles dans l’encoche est personnalisable",
+        "Quand un morceau n’a ni traduction ni romanisation, la ligne secondaire de l’encoche et de la barre des menus peut afficher la ligne suivante",
+        "Ajout de « Garder les paroles en pause » à la barre des menus : la ligne en cours reste affichée pendant la pause",
+        "Faites défiler sur la tuile « Son » du panneau de la barre des menus pour régler le volume",
+        "Ajout du curseur « Opacité du texte » aux paroles flottantes",
+        "Le contour des paroles flottantes peut être fin, standard ou épais",
+        "Ajout de « Afficher le titre sans paroles » aux paroles flottantes : sans paroles, le titre et l’artiste s’affichent",
+        "Ajout de « Masquer dans les captures » et « Masquer pendant les pubs » à la mini-fenêtre des paroles",
+        "Vous pouvez choisir la provenance de l’illustration animée de la fenêtre des paroles",
+        "Ouvert directement depuis une image disque, Lyrimuse propose d’être déplacé dans le dossier Applications",
+        "Quand QQ Music joue sans être reconnu, Lyrimuse indique quel réglage activer dans l’app"
+      ],
+      "改进": [
+        "Suppression de la source de paroles Musixmatch : les morceaux qui l’utilisaient, même choisis à la main, passent automatiquement à d’autres sources",
+        "La disposition « Décalé » des paroles flottantes affiche aussi la traduction et la romanisation de chaque ligne",
+        "« Animer l’icône » dans la barre des menus s’anime aussi pendant l’affichage des paroles",
+        "Quand le lecteur ne fournit pas d’illustration, les morceaux locaux utilisent celle intégrée au fichier",
+        "Tri, recherche et changement de morceau plus rapides dans le gestionnaire de paroles avec une grande bibliothèque",
+        "Les chansons japonaises obtiennent plus souvent des paroles mot à mot",
+        "Les boutons précédent, lecture et suivant de la fenêtre des paroles sont plus faciles à cliquer",
+        "Quand Last.fm refuse la clé d’API, Lyrimuse explique qu’un abonnement Last.fm Pro est nécessaire et conserve les écoutes jusqu’au retour de la clé",
+        "Révision des traductions coréenne et française de l’interface"
+      ],
+      "修复": [
+        "Correction d’un plantage et de plusieurs blocages, dont le panneau de la barre des menus figé juste après le lancement",
+        "Correction de la mémoire qui ne redescendait pas après la fermeture des réglages et du gestionnaire de paroles",
+        "Correction du défilement saccadé des aperçus de paroles dans le gestionnaire de paroles et « Rechercher des paroles »",
+        "Correction des pages des réglages coupées à droite et de la fenêtre des réglages impossible à agrandir",
+        "Correction de l’interface en anglais quand la langue du système est le cantonais",
+        "Correction de l’affichage bloqué sur « Recherche des paroles… » quand le moteur de paroles ne tourne pas",
+        "Correction de la barre de titre de la fenêtre des paroles impossible à déplacer et de ses boutons qui sautaient ou clignotaient",
+        "Correction des paroles introuvables pour Soda Music et des recherches NetEase Cloud Music en échec au Japon, en Corée du Sud et à Singapour",
+        "Correction de certaines chansons en hindi et en thaï qui recevaient les paroles d’un morceau au titre proche",
+        "Correction des lecteurs lancés avec Lyrimuse qui passaient au premier plan",
+        "Correction de l’interrupteur « Détection auto » des lecteurs qui ne se désactivait pas",
+        "Correction de la barre de progression de l’encoche déployée qui n’affichait pas la partie lue"
+      ],
+      "贡献者": [
+        "Merci à @HeizoFinds pour sa première contribution, qui corrige l’interrupteur « Détection auto » et la barre de progression de l’encoche (#83, #84)"
+      ]
+    },
+    "1.13.0": {
+      "新功能": [
+        "Ajout de l’italien, du portugais (Brésil), du vietnamien, du russe, de l’ukrainien et du thaï comme langues de l’interface",
+        "Si vous avez choisi la langue de l’interface à la main, Lyrimuse propose de passer à celle de votre système dès qu’elle est disponible",
+        "Cinq nouveaux lecteurs intégrés : Pear Desktop, Swinsian, Plexamp, MyGo Music et Audirvana (versions Studio et Origin)",
+        "Prise en charge des livres audio WeRead : le passage lu s’affiche en sous-titres, soit 20 lecteurs intégrés",
+        "Pear Desktop permet de passer les pubs et « Favori », et le mode aléatoire fonctionne avec lui comme avec YouTube Music sur le web",
+        "Avec des fichiers locaux, MyGo Music utilise le .lrc voisin et les paroles intégrées, prend en charge « Favori » et prépare à l’avance les morceaux suivants",
+        "Le panneau de la barre des menus se personnalise comme le « Centre de contrôle » : réorganisez, redimensionnez, ajoutez ou retirez des tuiles, la carte de lecture comprise",
+        "Nouvelles tuiles du panneau : « Son », « Écoutes du jour », traduction, romanisation, taille du texte, fenêtre des paroles au premier plan et plein écran",
+        "Les éléments de la barre du bas du panneau s’ajoutent, se retirent et se réordonnent, et les nouvelles tuiles se retournent par appui long ou clic droit pour leurs réglages",
+        "Contrôle au clavier dans le panneau : lecture/pause, changement de morceau, décalage des paroles, plus un raccourci global pour ouvrir le panneau",
+        "Les actions rapides en haut de l’encoche déployée se disposent librement sur deux rangées de cases fixes, qui peuvent rester vides, avec bien plus de boutons au choix",
+        "Nouvel interrupteur « Afficher avec les touches de volume » : désactivé, les touches de volume du clavier n’affichent plus la bannière de volume de l’encoche",
+        "La taille de la romanisation, de la traduction et de la ligne suivante des paroles flottantes se règle séparément",
+        "Nouvelle disposition « Décalé » pour la ligne suivante des paroles flottantes : deux lignes de même taille, alternées à gauche et à droite",
+        "Ajout de « Taille des commandes » (100 % à 200 %) à la taille complète de la fenêtre des paroles, les paroles web suivant le même agrandissement",
+        "Quand la ligne secondaire de la Touch Bar montre la traduction ou la romanisation et que le morceau n’en a pas, elle peut afficher la ligne suivante ou seulement les paroles",
+        "Ajout de « Réduire pendant la saisie » à la Touch Bar : pendant la frappe dans un champ de texte, les paroles se replient pour laisser voir les suggestions de saisie",
+        "Si aucun résultat ne correspond à la durée du morceau, une seconde recherche avec une autre durée est lancée et ses résultats sont listés sous « Inutilisable » avec la durée signalée",
+        "Arc figure de nouveau par défaut dans le menu des navigateurs des lecteurs web"
+      ],
+      "改进": [
+        "Quand rien ne joue, le panneau de la barre des menus affiche le dernier morceau comme pendant la lecture, avec l’heure de sa dernière écoute",
+        "L’aperçu de la ligne suivante des paroles flottantes porte aussi la romanisation mot à mot et coupe les lignes comme une fois chantée",
+        "Progression Spotify améliorée : les paroles ne se décalent plus après une pause ni après un changement de sortie audio",
+        "Détection des instrumentaux améliorée : la musique classique d’Apple Music ne reste plus bloquée en recherche ni signalée à tort sans paroles, et les morceaux tout juste lancés dans QQ Music, Soda Music et d’autres sont reconnus",
+        "Meilleure association des paroles pour les titres entre parenthèses, les titres bilingues au nom étranger en premier et les enregistrements de concert",
+        "La romanisation des paroles mot à mot en chinois et en cantonais donne une syllabe par caractère, et les kana japonais empruntés s’alignent aussi à côté des chiffres",
+        "« Utilisé » dans la recherche de paroles indique fidèlement les paroles utilisées par le morceau en cours",
+        "« Importer un fichier… » passe dans le menu ⋯ de la barre de titre de la recherche de paroles",
+        "L’élément de la barre des menus réduit à l’icône prend la largeur standard du système, sans marge de chaque côté",
+        "Dans les langues aux textes longs, les résumés de la barre d’outils et les valeurs des réglages ne sont plus coupés",
+        "La mention d’absence de minutage des paroles en texte brut passe à la fin, en plus discret",
+        "Les curseurs et sélecteurs de couleur des réglages ne saccadent plus quand on les fait glisser"
+      ],
+      "修复": [
+        "Correction des demandes répétées d’accès aux données d’autres apps en jouant de nouveaux morceaux dans QQ Music et d’autres lecteurs",
+        "Correction d’un plantage à chaque lancement sous macOS 15 et versions antérieures avec « Surbrillance HDR » activée dans la fenêtre des paroles",
+        "Correction de plusieurs plantages rares",
+        "Correction des paroles choisies à la main remplacées par celles du lecteur",
+        "Correction du décalage des paroles dans Amazon Music après une coupure de lecture",
+        "Correction des paroles en avance dans foobar2000 et LX Music après une reprise sur AirPods Max",
+        "Correction des morceaux à seconde voix brève traités comme des duos, la traduction sautant d’un côté à l’autre",
+        "Correction de la ligne entière surlignée trop tôt dans les paroles arc-en-ciel mot à mot de la barre des menus",
+        "Correction de « Estomper au survol » qui estompait les paroles flottantes avec le pointeur sur l’espace vide à côté du texte",
+        "Correction de plusieurs problèmes d’importation de paroles, dont les fichiers japonais et coréens non UTF-8 illisibles et les fichiers vides pris pour des paroles",
+        "Correction de l’encoche qui rétrécissait fortement pendant les pubs sur les écrans sans encoche",
+        "Correction du pointeur qui n’atteignait pas la carte de l’encoche par le bas ou la traversait en passant de côté",
+        "Correction des réglages qui se décalaient vers la gauche à l’apparition d’une barre de défilement"
+      ],
+      "贡献者": [
+        "Merci à @youximi pour sa première contribution, qui corrige la ligne entière surlignée trop tôt dans les paroles arc-en-ciel de la barre des menus (#69)",
+        "Merci à @wutongyuonce pour sa contribution, qui ajoute MyGo Music et la largeur standard du système pour l’icône seule dans la barre des menus (#66, #74)"
+      ]
+    }
+  }
+}

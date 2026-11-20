@@ -81,6 +81,7 @@ REQUIRED_CONTENTS=(
   "Resources/en.lproj/InfoPlist.strings"
   "Resources/THIRD_PARTY_LICENSES"
   "Resources/CHANGELOG.md"
+  "Resources/release-notes/ja.json"
   "Frameworks/Sparkle.framework"
 )
 

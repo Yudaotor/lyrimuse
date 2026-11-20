@@ -84,7 +84,7 @@ let groups: [TestGroup] = [
     TestGroup(name: "real-audio", summary: "灵动岛音浪跟随音乐:频段 / 自适应归一化与快升慢落 / 输出延迟 / 退回判定 / 跟哪些进程 / 默认关与接线", run: runRealAudioTests),
     TestGroup(name: "idle-page", summary: "停播页:第 N 次听换算 / 收听总览 / 选句 / 平台链接", run: runIdlePageTests),
     TestGroup(name: "identity", summary: "变体身份与落盘路径:正式 / Dev 两套名字、配置目录、日志、传给引擎的环境变量", run: runIdentityTests),
-    TestGroup(name: "whats-new", summary: "更新后的新功能提示:基准版本 / 挂哪些点 / 面板横条 / 名单在设置目录里 / 接线", run: runWhatsNewTests),
+    TestGroup(name: "whats-new", summary: "更新后的新功能提示:基准版本 / 挂哪些点 / 面板横条 / 名单在设置目录里 / 接线 / 各语言译文", run: runWhatsNewTests),
     TestGroup(name: "telemetry", summary: "匿名遥测:心跳判据 / 播放器写法 / 路径脱敏 / 崩溃摘要 / 每日活动记账 / 负载键名跟 Worker 对得上 / 接线", run: runTelemetryTests),
     TestGroup(name: "update-channel", summary: "更新频道:版本号 / 构建号(与 build-version.sh 交叉校验)/ Release 列表 / 测试版该读哪份 appcast", run: runUpdateChannelTests),
     TestGroup(name: "settings-ui", summary: "设置页交互纯逻辑:顺序优先列表拖拽排序(滞回 / 让位 / 写回)/ 导入字体 / 配置包自报信息 / 系统语言(样例与引擎共用)/ 设置深链 / 设置窗侧栏宽度与收不起 / 关窗放内容", run: runSettingsInteractionTests),
