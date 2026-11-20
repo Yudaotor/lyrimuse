@@ -287,14 +287,14 @@ extension NotchLyricsView {
     }
 
     private func nextLyricLine(restingAlignment: Alignment) -> some View {
-        LayerMarquee(id: playback.nextLineText ?? "",
+        LayerMarquee(id: playback.followingLineText ?? "",
                      edgeFadeWidth: NotchMetrics.lyricEdgeFadeWidth,
                      restingAlignment: restingAlignment,
                      loops: false,
                      isActive: surfaceVisible) {
-            Text(playback.nextLineText ?? "")
+            Text(playback.followingLineText ?? "")
                 .font(playback.mainFont)
-                .lyricTypesetting(playback.nextLineText)
+                .lyricTypesetting(playback.followingLineText)
                 .foregroundStyle(lyricInk.opacity(0.45))
                 .notchTextShadow()
                 .lineLimit(1)

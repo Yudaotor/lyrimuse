@@ -436,6 +436,15 @@ func runNotchTests() {
                     && sourceHas(topRowView, "let leftModule: NotchEarModule = collapsed ? .artwork : playback.leftEar")
                     && sourceHas(topRowView, "let rightModule: NotchEarModule = collapsed ? .none : playback.rightEar"), true,
                     "耳朵歌词(契约): 歌词耳朵走单行歌词视图、放得下时贴刘海那侧,只在稳态显示(只切透明度),收起态耳朵不按配置画")
+        let notchFeedSrc = app("UI/NotchPlayback.swift"), lyricRowSrc = app("UI/NotchLyricsView+LyricRow.swift")
+        expectEqual(sourceHas(notchFeedSrc, ".map { lyrics, secondary in secondary.expandedNextLine(next: lyrics.nextText, afterCompact: lyrics.compactNextText) }\n .gated(by: live, assign: \\.followingLineText, on: self)")
+                    && sourceHas(lyricRowSrc, "LayerMarquee(id: playback.followingLineText ?? \"\",")
+                    && sourceHas(lyricRowSrc, "Text(playback.followingLineText ?? \"\")")
+                    && !lyricRowSrc.contains("playback.nextLineText"), true,
+                    "耳朵歌词(契约): 耳朵「下一句」读不跟副行去重的那一份,副行是「下一句」时右耳照样有字")
+        expectEqual([LyricSecondaryLine.nextLine.expandedNextLine(next: "B", afterCompact: "C"),
+                     LyricSecondaryLine.nextLine.expandedPreviewText(next: "B", afterCompact: "C")], ["B", nil],
+                    "耳朵歌词: 副行「下一句」时展开预览留空、耳朵那份仍是下一句")
         expectEqual(sourceHas(controller, "setting: lyricsPlacement.presentation(hasNotch: notchWidth > 0, currentLineInEar: currentLineInEar) == .belowRow,")
                     && sourceHas(controller, "let placement = lyricsPlacement.presentation(hasNotch: geo.notchWidth > 0, currentLineInEar: currentLineInEar)")
                     && sourceHas(controller, "if lyricsPlacement.presentation(hasNotch: notchWidth > 0, currentLineInEar: currentLineInEar) == .topRow {")

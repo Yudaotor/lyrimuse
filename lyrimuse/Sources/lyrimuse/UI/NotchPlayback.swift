@@ -47,6 +47,9 @@ final class NotchPlayback: ObservableObject {
     /// 不能跟"屏幕上显示哪一句"混。
     @Published private(set) var displayLine: SyncedLyricLine?
     @Published private(set) var nextLineText: String?
+    /// 耳朵模块「下一句」画的字:接主行显示的那一句往后数(`expandedNextLine`)。不读 `nextLineText`:那一份在副行
+    /// 显示下一句时为 nil(展开预览不重复画),耳朵在稳态画、不跟副行去重。见 05 章决策 159。
+    @Published private(set) var followingLineText: String?
     /// 副行的文本(`AppSettings.notchSecondaryLine` 四选一):下一句 / 当前句译文 /
     /// 当前句罗马音,取不到就是 nil(这一行留空、高度不变,不让卡片一首一首跳)。`.off` 恒为 nil。
     /// 罗马音走 `SyncedLyricLine.romanization`,跟悬浮歌词同一来源(服务端 lyrics_roma 优先、
@@ -331,6 +334,9 @@ final class NotchPlayback: ObservableObject {
             Publishers.CombineLatest(p.$notchLyrics, shown)
                 .map { lyrics, secondary in secondary.expandedPreviewText(next: lyrics.nextText, afterCompact: lyrics.compactNextText) }
                 .gated(by: live, assign: \.nextLineText, on: self),
+            Publishers.CombineLatest(p.$notchLyrics, shown)
+                .map { lyrics, secondary in secondary.expandedNextLine(next: lyrics.nextText, afterCompact: lyrics.compactNextText) }
+                .gated(by: live, assign: \.followingLineText, on: self),
             Publishers.CombineLatest(p.$notchLyrics, shown)
                 .map { lyrics, secondary in secondary.expandedNextLine(next: lyrics.nextSide, afterCompact: lyrics.compactNextSide) }
                 .gated(by: live, assign: \.nextLineSide, on: self),
