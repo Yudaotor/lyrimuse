@@ -5417,17 +5417,7 @@ func rankLyricSourceResults(artist, title, album string, durationSecs float64, r
 	raw = splitWordTimedSourceLyrics(raw)
 	raw = dropOtherVersionInstrumentalClaims(title, album, raw)
 	ne := raw["netease"].ne
-	qq, kugou, lrclib, lf, kuwo := raw["qq"], raw["kugou"], raw["lrclib"], raw["lyricfind"], raw["kuwo"]
-	qqLyr, qqYRC, qqTr, qqRoma, qqTitle, qqArtist, qqAlbum, qqCover, qqDur, qqLang := qq.lyr, qq.yrc, qq.tr, qq.roma, qq.matchTitle, qq.matchArtist, qq.matchAlbum, qq.matchCover, qq.srcDur, qq.language
-	qqInstrumental := qq.instrumental
-	qqPlainOnly := qq.plainOnly
-	kugouLyr, kugouYRC, kugouTr, kugouRoma, kugouTitle, kugouArtist, kugouAlbum, kugouCover, kugouDur, kugouLang := kugou.lyr, kugou.yrc, kugou.tr, kugou.roma, kugou.matchTitle, kugou.matchArtist, kugou.matchAlbum, kugou.matchCover, kugou.srcDur, kugou.language
-	lrclibLyr, lrclibTitle, lrclibArtist, lrclibAlbum, lrclibDur := lrclib.lyr, lrclib.matchTitle, lrclib.matchArtist, lrclib.matchAlbum, lrclib.srcDur
-	lrclibInstrumental := lrclib.instrumental
-	lrclibPlainOnly := lrclib.plainOnly
-	lrclibYRC, lrclibRoma := lrclib.yrc, lrclib.roma
-	lfLyr, lfTitle, lfArtist, lfAlbum, lfCover, lfDur, lfPlainOnly := lf.lyr, lf.matchTitle, lf.matchArtist, lf.matchAlbum, lf.matchCover, lf.srcDur, lf.plainOnly
-	kuwoLyr, kuwoYRC, kuwoTitle, kuwoArtist, kuwoAlbum, kuwoCover, kuwoDur := kuwo.lyr, kuwo.yrc, kuwo.matchTitle, kuwo.matchArtist, kuwo.matchAlbum, kuwo.matchCover, kuwo.srcDur
+	qq := raw["qq"]
 	dz := raw["deezer"]
 	am := raw["applemusic"]
 	amLyr, amYRC, amTr, amRoma, amTitle, amArtist, amAlbum, amCover, amDur, amPlainOnly := am.lyr, am.yrc, am.tr, am.roma, am.matchTitle, am.matchArtist, am.matchAlbum, am.matchCover, am.srcDur, am.plainOnly
@@ -5448,22 +5438,11 @@ func rankLyricSourceResults(artist, title, album string, durationSecs float64, r
 	// 别拿按本地歌名搜来的 Apple 封面给它兜底:那是"本地这首"的封面、不是这条候选的出处,候选缩略图本来是帮人
 	// 分辨"这条是哪个版本"的,套上一张别人的图反而像是对上了;所有没带封面的候选还会套成同一张,毫无区分度。
 	// 烘进正文的逐行中文译文(bakedtranslation.go):候选装配**之前**摘出来——共识、行数、
-	// 逐字覆盖率全都读正文,晚了就都是按"一半是中文"的正文算的。译文轨本来就是中文语义的源
-	// (netease/qq/kugou)接上摘出来的译文;lrclib/lyricfind/amll 只摘不接。
+	// 逐字覆盖率全都读正文,晚了就都是按"一半是中文"的正文算的。各源摘不摘、接不接到译文轨看描述符的 Baked
+	// (assembleSourceCandidate);这里是带专用子结构的两个:网易云接到译文轨,AMLL 只摘不接。
 	foreignSong := !containsHan(artist) && !containsHan(title)
 	bakedLines := map[string]int{}
 	ne.Lyrics, ne.Trans, ne.YRC, bakedLines["netease"] = adoptBakedTranslation(ne.Lyrics, ne.Trans, ne.YRC, foreignSong, true)
-	qqLyr, qqTr, qqYRC, bakedLines["qq"] = adoptBakedTranslation(qqLyr, qqTr, qqYRC, foreignSong, true)
-	kugouLyr, kugouTr, kugouYRC, bakedLines["kugou"] = adoptBakedTranslation(kugouLyr, kugouTr, kugouYRC, foreignSong, true)
-	lrclibLyr, _, lrclibYRC, bakedLines["lrclib"] = adoptBakedTranslation(lrclibLyr, "", lrclibYRC, foreignSong, false)
-	lfLyr, _, _, bakedLines["lyricfind"] = adoptBakedTranslation(lfLyr, "", "", foreignSong, false)
-	// 酷我对外文歌**系统性**地把中文译文烘在正文里(金标 ko-fallen-angel / latin-purple-rain 里的酷我候选
-	// 128→67 行、71→37 行),摘出来的译文照 qq/kugou 的口径接到译文轨(中文)。
-	// 酷我的译文行挂在下一句的时间戳上,整首判断之后再逐行认一遍(adoptKuwoBakedTranslation)。
-	// 逐字轨**不**传进去:它在 kuwolrcx.go 转换时已去掉译文行,而酷我的译文行跟下一句原文同一个时间戳,
-	// 交给这里按时间删会把原文那行一起删掉。
-	var kuwoTr string
-	kuwoLyr, kuwoTr, bakedLines["kuwo"] = adoptKuwoBakedTranslation(kuwoLyr, foreignSong)
 	amll.lrc, _, amll.yrc, bakedLines["amll"] = adoptBakedTranslation(amll.lrc, "", amll.yrc, foreignSong, false)
 	// 本地 .lrc 常是下载工具导出的双语文件:每句原文下面一行同一时间戳的中文译文。不摘的话 App 同一时间戳取后一行,
 	// 只显示译文。摘出来的译文固定中文,接到译文轨(同 qq / kugou)。见 09 章决策 333。
@@ -5493,35 +5472,8 @@ func rankLyricSourceResults(artist, title, album string, durationSecs float64, r
 		// 只有不带时间戳的歌词:交成 plainOnly,直通打分层那道恒 -1 的闸,口径同 deezer / lrclib 的纯文本回退。
 		slots.put(lyricCandidate{source: "netease", lyrics: ne.PlainLyrics, sourceReportedDurationSecs: ne.DurationSecs, title: ne.Title, artist: ne.Artist, album: ne.Album, cover: ne.Cover, identityFromLocalClient: ne.FromLocalClient, plainTextOnly: true})
 	}
-	if qqLyr != "" {
-		// QQ 的译文固定是中文(跟网易云 tlyric 同款),语言标 "zh";罗马音的可用判定
-		// (原文假名占比 > 5%)也沿用同一套 usableValueAdd——韩文歌的罗马音会跟网易云
-		// 一样被判不可用,这是既有口径,不是 QQ 这路新加的规则。
-		qqUsableTr, qqUsableRoma := usableValueAdd(qqLyr, qqTr, "zh", qqRoma, features().LyricsTranslationLanguage)
-		slots.put(lyricCandidate{source: "qq", lyrics: qqLyr, wordTimingYRC: usableYRC(qqLyr, qqYRC), hasWordTiming: usableWordTiming(qqLyr, qqYRC), hasUsableTranslation: qqUsableTr, hasUsableRomanization: qqUsableRoma, sourceReportedDurationSecs: qqDur, title: qqTitle, artist: qqArtist, album: qqAlbum, cover: qqCover, language: qqLang, identityFromLocalClient: qq.identityFromLocalClient, plainTextOnly: qqPlainOnly})
-	}
-	if kugouLyr != "" {
-		// 酷狗 KRC `[language:]` 轨的译文固定中文,标 "zh";罗马音的可用判定同样走
-		// usableValueAdd 的假名占比闸(韩文歌的谐音轨在 kugou.go 里已先按汉字占比挡掉一次)。
-		kugouUsableTr, kugouUsableRoma := usableValueAdd(kugouLyr, kugouTr, "zh", kugouRoma, features().LyricsTranslationLanguage)
-		slots.put(lyricCandidate{source: "kugou", lyrics: kugouLyr, wordTimingYRC: usableYRC(kugouLyr, kugouYRC), hasWordTiming: usableWordTiming(kugouLyr, kugouYRC), hasUsableTranslation: kugouUsableTr, hasUsableRomanization: kugouUsableRoma, sourceReportedDurationSecs: kugouDur, title: kugouTitle, artist: kugouArtist, album: kugouAlbum, cover: kugouCover, language: kugouLang, identityFromLocalClient: kugou.identityFromLocalClient})
-	}
-	if lrclibLyr != "" {
-		// 罗马音来自 lyricsfile 的音译(lyricsfile.go),可用性跟别的源同一道 usableValueAdd;没有译文。
-		_, lrclibUsableRoma := usableValueAdd(lrclibLyr, "", "", lrclibRoma, features().LyricsTranslationLanguage)
-		slots.put(lyricCandidate{source: "lrclib", lyrics: lrclibLyr, wordTimingYRC: usableYRC(lrclibLyr, lrclibYRC), hasWordTiming: usableWordTiming(lrclibLyr, lrclibYRC), hasUsableRomanization: lrclibUsableRoma, sourceReportedDurationSecs: lrclibDur, title: lrclibTitle, artist: lrclibArtist, album: lrclibAlbum, cover: "", plainTextOnly: lrclibPlainOnly})
-	}
-	if lfLyr != "" {
-		// 只有逐行,没有逐字/译文/罗马音——跟 lrclib 同一个形状(见 ytmusic.go 头注)。只有纯文本时 plainOnly 直通打分层那道
-		// 恒 -1 的闸,口径同 deezer/lrclib 的纯文本回退。
-		slots.put(lyricCandidate{source: "lyricfind", lyrics: lfLyr, sourceReportedDurationSecs: lfDur, title: lfTitle, artist: lfArtist, album: lfAlbum, cover: lfCover, plainTextOnly: lfPlainOnly, identityFromLocalClient: lf.identityFromLocalClient})
-	}
-	if kuwoLyr != "" {
-		// 逐行正文 + 可选的逐字轨(kuwolrcx.go),译文只有从正文摘出来的烘入译文,没有罗马音
-		// (见 kuwo.go 头注)。逐字的可用性判定同网易云/QQ/酷狗(usableYRC / usableWordTiming)。
-		kuwoUsableTr, _ := usableValueAdd(kuwoLyr, kuwoTr, "zh", "", features().LyricsTranslationLanguage)
-		slots.put(lyricCandidate{source: "kuwo", lyrics: kuwoLyr, wordTimingYRC: usableYRC(kuwoLyr, kuwoYRC), hasWordTiming: usableWordTiming(kuwoLyr, kuwoYRC), hasUsableTranslation: kuwoUsableTr, sourceReportedDurationSecs: kuwoDur, title: kuwoTitle, artist: kuwoArtist, album: kuwoAlbum, cover: kuwoCover, identityFromLocalClient: kuwo.identityFromLocalClient})
-	}
+	// 网易云凭什么搭纯音乐标记:没交正文,歌词接口说是纯音乐(pureMusic)或曲库说这一条没有人声。
+	assembled[lyricSourceNetease] = assembledSource{instrumental: ne.Lyrics == "" && (ne.PureMusic || ne.NoVocals)}
 	if amLyr != "" {
 		// 全部源里唯一的**官方逐字**来源:逐行 LRC + 逐字 YRC(itunes:timing="Word")+
 		// 可选译文,封面用 artwork 模板替换出的 1000x1000,时长用 Apple 自报的
@@ -5649,29 +5601,15 @@ func rankLyricSourceResults(artist, title, album string, durationSecs float64, r
 	consensusPeers, familyPeers := contentConsensusPeers(artist, title, candidates, durationSecs)
 	inheritIdentityTerms(title, album, candidates, familyPeers)
 	applyLineScoreReference(candidates)
-	// lrclib 明确说这首歌是纯音乐、且没有真的歌词候选(lrclibLyr=="")时,搭车塞一条
-	// Score:-1 的标记进 results——见 Instrumental 字段定义处的注释,不参与打分/排序,
-	// 不会被 pickLyricCandidate 选中,只是把这个信号原样带出这个函数。
+	// 有源说这首是纯音乐时(各源凭什么说见描述符的 Assembly.Instrumental,网易云的见它那一段),搭车塞一条 Score:-1 的
+	// 标记进 results——见 Instrumental 字段定义处的注释,不参与打分/排序,不会被 pickLyricCandidate 选中,只是把这个
+	// 信号原样带出这个函数。几个源都这么说时记在 InstrumentalRank 最靠前的那个头上。
 	var instrumentalMarker *scoredLyricCandidateResult
-	if lrclibLyr == "" && lrclibInstrumental {
-		instrumentalMarker = &scoredLyricCandidateResult{Source: "lrclib", Score: -1, Instrumental: true}
-	} else if (qqLyr == "" && qqInstrumental) || (isCreditOnlyLRC(qqLyr) && qq.noVocals) {
-		// QQ 那一路。有的曲目只有 QQ 明确回了「此歌曲为没有填词的纯音乐」(网易云只有一行署名、没有 pureMusic 字段,
-		// 酷狗、LRCLIB 都没有)。这句话不能在 resolveQQLyric 末尾的 isTimedLRC(要求 ≥3 行带戳)那里被当成"不是歌词"扔掉,
-		// 否则这类曲目会落在「无歌词」而不是「纯音乐」:界面上看起来像失败,还要按退避白搜全部源。排在网易云之前只是
-		// 因为 QQ 这句话是明文断言、语义比"正文只有占位"更硬。
-		instrumentalMarker = &scoredLyricCandidateResult{Source: "qq", Score: -1, Instrumental: true}
-	} else if ne.Lyrics == "" && (ne.PureMusic || ne.NoVocals) {
-		// 网易云那一路同款。典型案例:LoL 原声带 The Music of League of Legends Vol.1
-		// 十几首 —— lrclib 压根没有(五源全空、responded 是空的),而网易云**匹配上了歌**
-		// (封面/单曲链接都给了)、歌词接口也明确回了 pureMusic=true。lrclib 优先只是因为
-		// 它的标记是结构化字段、语义最干净。
-		instrumentalMarker = &scoredLyricCandidateResult{Source: "netease", Score: -1, Instrumental: true}
-	} else if assembled[lyricSourceMigu].instrumental {
-		// 咪咕对纯音乐回的歌词文件就是一句纯音乐占位(描述符的 instrumentalPlaceholder)。
-		instrumentalMarker = &scoredLyricCandidateResult{Source: "migu", Score: -1, Instrumental: true}
-	} else if isCreditOnlyLRC(kugouLyr) && kugou.noVocals {
-		instrumentalMarker = &scoredLyricCandidateResult{Source: "kugou", Score: -1, Instrumental: true}
+	for _, name := range lyricProviders().instrumentalOrder {
+		if assembled[name].instrumental {
+			instrumentalMarker = &scoredLyricCandidateResult{Source: name, Score: -1, Instrumental: true}
+			break
+		}
 	}
 
 	results := make([]scoredLyricCandidateResult, 0, len(candidates))
@@ -5704,7 +5642,7 @@ func rankLyricSourceResults(artist, title, album string, durationSecs float64, r
 		// 下面 switch 里各源赋完 r.LyricsTr/r.LyricsRoma 之后统一搬,见循环末尾。
 		switch c.source {
 		case "netease":
-			// 翻译/罗马音网易云固定给中文(QQ、酷狗同样,见下面各自的 case)。"固定中文"这件事必须记下来:目标语言不是中文时,这份译文
+			// 翻译/罗马音网易云固定给中文。"固定中文"这件事必须记下来:目标语言不是中文时,这份译文
 			// 用不上,得让机翻接手(见 needsTranslationBackfill)。
 			//
 			// 译文赋值前必须过 c.hasUsableTranslation 这道闸(罗马音走更宽的 usableRomaForResult,
@@ -5719,10 +5657,6 @@ func rankLyricSourceResults(artist, title, album string, durationSecs float64, r
 			}
 			if usableRomaForResult(c.lyrics, ne.Roma) {
 				r.LyricsRoma = ne.Roma
-			}
-		case "lrclib":
-			if usableRomaForResult(c.lyrics, lrclibRoma) {
-				r.LyricsRoma = lrclibRoma
 			}
 		case "amll":
 			// amll 这条 case 不能漏。amll.tr 早就在 candidates 构造那一步被读出来过(见上面
@@ -5755,35 +5689,6 @@ func rankLyricSourceResults(artist, title, album string, durationSecs float64, r
 			}
 			r.LyricsBG = amBG
 			r.Songwriters = am.songwriters
-		case "qq":
-			// QQ GetPlayLyricInfo 的 trans/roma 两轨(见 qq.go qqQRCLyric / qqAuxiliaryLRC):
-			// 译文跟网易云一样固定中文,标 "zh";两轨都由候选构造时算好的 usableValueAdd 结果
-			// 把关。 这个 switch 的纪律是"接一个源就必须在这里补一个 case"(漏了的后果见上面
-			// amll 那条:分数算对了、内容没抄进来)。
-			if c.hasUsableTranslation {
-				r.LyricsTr = qqTr
-				r.LyricsTrLang = "zh"
-			}
-			if usableRomaForResult(c.lyrics, qqRoma) {
-				r.LyricsRoma = qqRoma
-			}
-		case "kuwo":
-			// 酷我自己没有译文轨,这里接的是从正文里摘出来的烘入译文(bakedtranslation.go),
-			// 固定中文,可用性同样由候选装配时的 usableValueAdd 把关;中文歌里那段外文被它译全了的也收(kuwoBakedTranslationCovers)。
-			if c.hasUsableTranslation || kuwoBakedTranslationCovers(c.lyrics, kuwoTr, features().LyricsTranslationLanguage, artist, title) {
-				r.LyricsTr = kuwoTr
-				r.LyricsTrLang = "zh"
-			}
-		case "kugou":
-			// 酷狗 KRC `[language:]` 内嵌的中文译文 / 罗马音(见 kugou.go krcLanguageTracks),
-			// 口径与 qq 完全一致:译文固定 "zh",两轨都由候选装配时的 usableValueAdd 结果把关。
-			if c.hasUsableTranslation {
-				r.LyricsTr = kugouTr
-				r.LyricsTrLang = "zh"
-			}
-			if usableRomaForResult(c.lyrics, kugouRoma) {
-				r.LyricsRoma = kugouRoma
-			}
 		case localFileLyricsSource:
 			// 本地 .lrc 里摘出来的烘入译文(见候选装配处),固定中文,口径同 qq。
 			if c.hasUsableTranslation {

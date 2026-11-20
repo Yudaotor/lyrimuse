@@ -371,7 +371,8 @@ type ProviderDescriptor struct {
 	ParenBackground bool
 	// CarriesKana:正文里会带 `[kana:]` 假名标注(kanaDonorSources)。
 	CarriesKana bool
-	// InstrumentalRank:纯音乐标记搭车的先后(rankLyricSourceResults),从 1 起;0 = 不搭车。
+	// InstrumentalRank:纯音乐标记搭车的先后(lyricProviderRegistry.instrumentalOrder),从 1 起;0 = 不搭车。几个源同时说这首是
+	// 纯音乐时,标记记在名次最靠前的那个头上;凭什么说见 CandidateAssembly.Instrumental。
 	InstrumentalRank int
 	// SongwritersRank:词曲作者名单的取用先后(songwritersFromScored),从 1 起;0 = 不取用。
 	SongwritersRank int
@@ -415,6 +416,8 @@ type lyricProviderRegistry struct {
 	tieOrder []string
 	// defaultPriorityOrder:联网源按 DefaultPriorityRank。
 	defaultPriorityOrder []string
+	// instrumentalOrder:搭纯音乐标记的来源按 InstrumentalRank。
+	instrumentalOrder []string
 	// peerGroups:同类组的名字 → 组里的联网源按 Order。
 	peerGroups map[string][]string
 	// hostRates:单独定了令牌桶参数的主机 → 参数,各描述符的 HostRates 并在一起。
@@ -430,6 +433,8 @@ func (r *lyricProviderRegistry) index() {
 	r.networkNames = r.rankedNames(network, func(d *ProviderDescriptor) int { return d.Order })
 	r.tieOrder = r.rankedNames(func(*ProviderDescriptor) bool { return true }, func(d *ProviderDescriptor) int { return d.TieRank })
 	r.defaultPriorityOrder = r.rankedNames(network, func(d *ProviderDescriptor) int { return d.DefaultPriorityRank })
+	r.instrumentalOrder = r.rankedNames(func(d *ProviderDescriptor) bool { return d.InstrumentalRank > 0 },
+		func(d *ProviderDescriptor) int { return d.InstrumentalRank })
 	r.indexPeerGroups()
 	r.hostRates = map[string]hostRate{}
 	r.hostOwners, r.domainOwners = map[string]string{}, map[string]string{}

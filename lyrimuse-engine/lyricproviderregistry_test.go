@@ -824,6 +824,9 @@ func TestProviderRegistryInstrumentalRankMatchesRanking(t *testing.T) {
 	if !slices.Equal(got, want) {
 		t.Errorf("登记表 %v\n参照 %v", got, want)
 	}
+	if read := lyricProviders().instrumentalOrder; !slices.Equal(read, want) {
+		t.Errorf("生产代码读的搭车先后 %v\n参照 %v", read, want)
+	}
 }
 
 // descriptorCandidateShape:描述符的装配字段换成期望表 lyricSourceCandidateShape 的写法。

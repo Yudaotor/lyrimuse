@@ -24,6 +24,12 @@ func newBuiltinLyricProviderRegistry() *lyricProviderRegistry {
 		Name: lyricSourceQQ, Order: 2, TieRank: 2, DefaultPriorityRank: 3,
 		Hosts: []HostRule{{"qq.com", hostWithSubdomains}}, MaxInflight: 4,
 		Baked: bakedAdopt, ParenBackground: true, CarriesKana: true, InstrumentalRank: 2, PlainText: plainTextLast,
+		Assembly: &CandidateAssembly{
+			Reads: fieldWordTiming | fieldRomanization | fieldSourceDuration | fieldAlbum | fieldCover | fieldLanguage |
+				fieldLocalIdentity | fieldPlainText,
+			Translation: translationFixed, TranslationLang: "zh",
+			Instrumental: instrumentalDeclared | instrumentalCreditsNoVocals,
+		},
 		PeerGroup: peerGroupChinese,
 	}, privLocalClientIdentity|privTrackIDPublish|privPlayerNoVocals)})
 
@@ -31,6 +37,11 @@ func newBuiltinLyricProviderRegistry() *lyricProviderRegistry {
 		Name: lyricSourceKugou, Order: 3, TieRank: 3, DefaultPriorityRank: 1,
 		Hosts: []HostRule{{"kugou.com", hostWithSubdomains}},
 		Baked: bakedAdopt, ParenBackground: true, CarriesKana: true, InstrumentalRank: 5,
+		Assembly: &CandidateAssembly{
+			Reads: fieldWordTiming | fieldRomanization | fieldSourceDuration | fieldAlbum | fieldCover | fieldLanguage |
+				fieldLocalIdentity,
+			Translation: translationFixed, TranslationLang: "zh", Instrumental: instrumentalCreditsNoVocals,
+		},
 		PeerGroup: peerGroupChinese,
 	}, privLocalClientIdentity|privOfflineLeg)})
 
@@ -42,6 +53,10 @@ func newBuiltinLyricProviderRegistry() *lyricProviderRegistry {
 		HostRates:   map[string]hostRate{"lrclib.net": {perSec: 1, burst: 6, reserve: 3}},
 		MaxInflight: 3, ProxyFallback: true,
 		Baked: bakedStripOnly, ParenBackground: true, CarriesKana: true, InstrumentalRank: 1,
+		Assembly: &CandidateAssembly{
+			Reads:        fieldWordTiming | fieldRomanization | fieldSourceDuration | fieldAlbum | fieldPlainText,
+			Instrumental: instrumentalDeclared,
+		},
 		PeerGroup: peerGroupGlobal,
 	}, 0)})
 
@@ -66,6 +81,7 @@ func newBuiltinLyricProviderRegistry() *lyricProviderRegistry {
 		},
 		ProxyFallback: true,
 		Baked:         bakedStripOnly, ParenBackground: true, ConsensusFamily: lyricSourceLyricFind,
+		Assembly:  &CandidateAssembly{Reads: fieldSourceDuration | fieldAlbum | fieldCover | fieldLocalIdentity | fieldPlainText},
 		PeerGroup: peerGroupGlobal,
 	}, privLocalClientIdentity|privPlaybackTrackIDs)})
 
@@ -73,6 +89,11 @@ func newBuiltinLyricProviderRegistry() *lyricProviderRegistry {
 		Name: lyricSourceKuwo, Order: 7, TieRank: 6, DefaultPriorityRank: 7,
 		Hosts: []HostRule{{"kuwo.cn", hostWithSubdomains}},
 		Baked: bakedCustom, BakedSplit: adoptKuwoBakedTranslation, ParenBackground: true,
+		// 译文只有从正文里摘出来的那份(BakedSplit),固定中文;中文歌里那段外文被它译全了的,打分那道「可用」不认也照收。
+		Assembly: &CandidateAssembly{
+			Reads:       fieldWordTiming | fieldSourceDuration | fieldAlbum | fieldCover | fieldLocalIdentity,
+			Translation: translationFixed, TranslationLang: "zh", AcceptTranslation: kuwoBakedTranslationCovers,
+		},
 		PeerGroup: peerGroupChinese,
 	}, privLocalClientIdentity|privOfflineLeg)})
 
