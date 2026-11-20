@@ -379,6 +379,23 @@ func runNotchTests() {
         let earCap = T.maxCardWidth(centerX: 735, span: MenuBarCenterLayout.usableSpan(
             screenMinX: 0, screenMaxX: 1470, menusMaxX: 420, statusItemsMinX: 912))
         expectEqual(earCap, 322, "耳朵歌词: 以刘海为中心,按较窄的一侧(右边 161)夹到 322")
+        // 本机装机验证时读到的状态栏项(辅助功能框,x / 宽):放不下被收起的 RunCat、cmux、Snug、Dropover 报在刘海右沿边上、
+        // 互相叠着,露在外面的从 964(Lyrimuse 那一格)起。只按露在外面的算,右边留 948 − 735 = 213、卡片最宽 426。
+        let hiddenAndShown = [CGRect(x: 810, y: 4, width: 60, height: 24), CGRect(x: 834, y: 4, width: 36, height: 24),
+                              CGRect(x: 838, y: 4, width: 24, height: 24), CGRect(x: 838, y: 4, width: 24, height: 24),
+                              CGRect(x: 964, y: 4, width: 222, height: 24), CGRect(x: 1192, y: 4, width: 46, height: 24),
+                              CGRect(x: 1286, y: 4, width: 16, height: 24)]
+        let beside = MenuBarCenterLayout.framesBesideNotch(
+            menuFrames: [CGRect(x: 0, y: 0, width: 420, height: 24), CGRect(x: 830, y: 0, width: 60, height: 24)],
+            itemFrames: hiddenAndShown, notch: 645.5...824.5)
+        expectEqual([beside.items.map(\.minX), beside.menus.map(\.maxX)], [[964, 1192, 1286], [420]],
+                    "耳朵歌词: 有刘海的屏只认刘海右边、不叠在一起的状态栏项和刘海左边的菜单")
+        expectEqual(MenuBarCenterLayout.framesBesideNotch(
+            menuFrames: [], itemFrames: [CGRect(x: 800, y: 4, width: 20, height: 24), CGRect(x: 964, y: 4, width: 30, height: 24)],
+            notch: 645.5...824.5).items.map(\.minX), [964], "耳朵歌词: 单独一个落在刘海里的状态栏项同样不算")
+        expectEqual(T.maxCardWidth(centerX: 735, span: MenuBarCenterLayout.usableSpan(
+            screenMinX: 0, screenMaxX: 1470, menusMaxX: 420, statusItemsMinX: beside.items.map(\.minX).min())), 426,
+                    "耳朵歌词: 收起藏在刘海边上的状态栏项不算,右边按露在外面的 964 夹到 426")
         let earLayout = NotchCardLayout(
             metrics: .init(cardPadding: 10, contentInset: 16, collapsedEarWidth: 34, milestonePanelHeight: 76,
                            trackDropHeight: 26, progressLineStrip: 4),
@@ -406,7 +423,7 @@ func runNotchTests() {
                     && sourceHas(controller, "cardPadding: NotchMetrics.cardHorizontalPadding, maxCardWidth: cap) {\nsteadyWidth = fit.cardWidth")
                     && sourceHas(controller, "let newExpanded = NotchWidthBounds.expandedWidth(\nsteady: steadyWidth,"), true,
                     "顶行歌词(契约): 真窗口稳态宽按菜单栏两侧夹过,展开宽在夹过的稳态宽上取")
-        expectEqual(sourceHas(controller, "let occupied = MenuBarCenterLyrics.occupiedSpan(on: screen, notch: nil)\nlet cap = NotchTopRowLyrics.maxCardWidth(centerX: centerX, span: occupied.span)")
+        expectEqual(sourceHas(controller, "let occupied = MenuBarCenterLyrics.occupiedSpan(on: screen, notch: nil,\n besideNotch: MenuBarCenterLyrics.notchRange(of: screen))\nlet cap = NotchTopRowLyrics.maxCardWidth(centerX: centerX, span: occupied.span)")
                     && sourceHas(occupancy, "let occupied = Self.occupiedSpan(on: screen, notch: Self.notchRange(of: screen))"), true,
                     "顶行歌词(契约): 两侧占用跟菜单栏正中歌词读同一份")
         expectEqual(sourceHas(controller, "MenuBarOccupancy.shared.setActive(wants, client: ObjectIdentifier(self))")

@@ -325,6 +325,9 @@ func runDeepLinkTests() {
         expectEqual([link("lyrimuse://debug/notch-behavior?lyrics=below"), link("lyrimuse://debug/notch-behavior?ignore-notch=0")],
                     [nil, .debug(.notchBehavior(collapseWhenPaused: nil, hideWhenNotPlaying: nil, ignoreNotch: false))],
                     "debug: 歌词三档只认 rawValue;单带 ignore-notch 也认")
+        expectEqual(link("lyrimuse://debug/notch-behavior?expanded-width=468"),
+                    .debug(.notchBehavior(collapseWhenPaused: nil, hideWhenNotPlaying: nil, expandedWidth: 468)),
+                    "debug: 单带展开宽也认(05 章决策 159)")
         expectEqual([link("lyrimuse://debug/notch-behavior?left-ear=currentLine&right-ear=nextLine&width=322"),
                      link("lyrimuse://debug/notch-behavior?width=abc"), link("lyrimuse://debug/notch-behavior?left-ear=")],
                     [.debug(.notchBehavior(collapseWhenPaused: nil, hideWhenNotPlaying: nil, leftEar: "currentLine",
@@ -1040,6 +1043,7 @@ func runDeepLinkTests() {
             .debug(.notchBehavior(collapseWhenPaused: nil, hideWhenNotPlaying: nil, lyricsPlacement: .topRow, ignoreNotch: true)),
             .debug(.notchBehavior(collapseWhenPaused: nil, hideWhenNotPlaying: nil, leftEar: "currentLine", rightEar: "nextLine")),
             .debug(.notchBehavior(collapseWhenPaused: nil, hideWhenNotPlaying: nil, width: 320.5)),
+            .debug(.notchBehavior(collapseWhenPaused: nil, hideWhenNotPlaying: nil, width: 256, expandedWidth: 468)),
             .debug(.knockout(leg: .voxScript, on: false)), .debug(.knockout(leg: .systemArtwork, on: true)),
             .debug(.reportingSwitchHint(bundleID: "com.tencent.QQMusic")),
             .debug(.menuBarCenter(center: true, ignoreNotch: true)), .debug(.menuBarCenter(center: false, ignoreNotch: nil)),

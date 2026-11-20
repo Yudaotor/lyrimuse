@@ -1511,9 +1511,11 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
         return reading.cap
     }
 
-    /// 上面那个上限连同两侧读数,不碰实例状态:编辑台预览和菜单栏快捷面板的读数也按它夹耳朵歌词的宽度。
+    /// 上面那个上限连同两侧读数,不碰实例状态:编辑台预览和菜单栏快捷面板的读数也按它夹耳朵歌词的宽度。有刘海的屏只认露在
+    /// 刘海两边的菜单和图标(收起藏在刘海边上的状态栏项不算,05 章决策 159);没有刘海的屏(顶行歌词)原样读。
     static func menuBarCap(on screen: NSScreen, centerX: CGFloat) -> (cap: CGFloat, menusMaxX: CGFloat?, statusItemsMinX: CGFloat?) {
-        let occupied = MenuBarCenterLyrics.occupiedSpan(on: screen, notch: nil)
+        let occupied = MenuBarCenterLyrics.occupiedSpan(on: screen, notch: nil,
+                                                        besideNotch: MenuBarCenterLyrics.notchRange(of: screen))
         let cap = NotchTopRowLyrics.maxCardWidth(centerX: centerX, span: occupied.span)
         return (cap, occupied.menusMaxX, occupied.statusItemsMinX)
     }

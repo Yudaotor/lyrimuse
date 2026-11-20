@@ -411,14 +411,21 @@ final class MenuBarCenterLyrics {
 
     /// 按 `MenuBarOccupancy` 此刻的读数,这块屏菜单栏两侧之间空着的那一段(`MenuBarCenterLayout.usableSpan`),连同两侧的读数。
     /// 灵动岛顶行歌词拿它夹卡片宽(`notch` 传 nil:那一档只在没有刘海的屏上画)。
-    static func occupiedSpan(on screen: NSScreen, notch: ClosedRange<CGFloat>?)
+    /// `besideNotch` 给了时只认露在刘海两边的读数(`MenuBarCenterLayout.framesBesideNotch`),灵动岛耳朵歌词用。
+    static func occupiedSpan(on screen: NSScreen, notch: ClosedRange<CGFloat>?, besideNotch: ClosedRange<CGFloat>? = nil)
         -> (span: ClosedRange<CGFloat>?, menusMaxX: CGFloat?, statusItemsMinX: CGFloat?) {
         let occupancy = MenuBarOccupancy.shared
         let screenFrames = NSScreen.screens.map(\.frame)
+        var menuFrames = occupancy.frontMenuFrames
+        var itemFrames = occupancy.statusItemFrames.values.flatMap { $0 }
+        if let besideNotch {
+            (menuFrames, itemFrames) = MenuBarCenterLayout.framesBesideNotch(
+                menuFrames: menuFrames, itemFrames: itemFrames, notch: besideNotch)
+        }
         let menusMaxX = MenuBarCenterLayout.menusMaxX(
-            menuFrames: occupancy.frontMenuFrames, screenFrames: screenFrames, target: screen.frame)
+            menuFrames: menuFrames, screenFrames: screenFrames, target: screen.frame)
         let statusItemsMinX = MenuBarCenterLayout.statusItemsMinX(
-            itemFrames: occupancy.statusItemFrames.values.flatMap { $0 }, screenFrames: screenFrames,
+            itemFrames: itemFrames, screenFrames: screenFrames,
             target: screen.frame, primaryMaxY: NSScreen.screens.first?.frame.maxY ?? screen.frame.maxY,
             menuBarHeight: menuBarHeight(of: screen))
         let span = MenuBarCenterLayout.usableSpan(
