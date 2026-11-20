@@ -50,6 +50,9 @@ final class NotchPlayback: ObservableObject {
     /// 耳朵模块「下一句」画的字:接主行显示的那一句往后数(`expandedNextLine`)。不读 `nextLineText`:那一份在副行
     /// 显示下一句时为 nil(展开预览不重复画),耳朵在稳态画、不跟副行去重。见 05 章决策 159。
     @Published private(set) var followingLineText: String?
+    /// 两耳都选「歌词」时当前句在不在左耳:按主行显示的那句的序号奇偶(`NotchEarLyricLines.currentOnLeft`),跟 `displayLine`、
+    /// `followingLineText` 同一拍更新,换句时字不跨耳。见 05 章决策 163。
+    @Published private(set) var earLyricsCurrentOnLeft = true
     /// 副行的文本(`AppSettings.notchSecondaryLine` 四选一):下一句 / 当前句译文 /
     /// 当前句罗马音,取不到就是 nil(这一行留空、高度不变,不让卡片一首一首跳)。`.off` 恒为 nil。
     /// 罗马音走 `SyncedLyricLine.romanization`,跟悬浮歌词同一来源(服务端 lyrics_roma 优先、
@@ -340,6 +343,11 @@ final class NotchPlayback: ObservableObject {
             Publishers.CombineLatest(p.$notchLyrics, shown)
                 .map { lyrics, secondary in secondary.expandedNextLine(next: lyrics.nextSide, afterCompact: lyrics.compactNextSide) }
                 .gated(by: live, assign: \.nextLineSide, on: self),
+            Publishers.CombineLatest3(p.$notchLyrics, shownCurrentLine, shown)
+                .map { lyrics, current, secondary in
+                    NotchEarLyricLines.currentOnLeft(lyrics, secondary: secondary, showsCurrentLine: current != nil)
+                }
+                .gated(by: live, assign: \.earLyricsCurrentOnLeft, on: self),
             Publishers.CombineLatest(p.$playbackMode, p.$playbackModeOptions)
                 .map { mode, options in options.contains(.shuffle) && options.canRepeat ? mode : nil }
                 .removeDuplicates()

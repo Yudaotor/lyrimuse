@@ -297,7 +297,7 @@ Lyrics floating above every window, always on top, lit up word by word. Leave th
 
 ### Notch lyrics
 
-A Dynamic Island-style capsule beside the notch at the top of the screen; Macs without a notch and external displays get one too. Each side can show the title, artist, album, artwork, playback controls, or elapsed or remaining time, next to a moving audio wave. On screens without a notch, the current lyric can also sit between the two sides, keeping the capsule as tall as the menu bar. Either side can also show the current or next lyric line, which works on notched screens too. Hover to expand it for controls, a seekable progress bar, lyrics timing and quick buttons such as like and search lyrics. During ads it counts down the time left. Each side's width can also be set separately.
+A Dynamic Island-style capsule beside the notch at the top of the screen; Macs without a notch and external displays get one too. Each side can show the title, artist, album, artwork, playback controls, or elapsed or remaining time, next to a moving audio wave. On screens without a notch, the current lyric can also sit between the two sides, keeping the capsule as tall as the menu bar. Either side can also show the current or next lyric line, which works on notched screens too. With lyrics on both sides, lines take turns left and right, and the line being sung lights up. Hover to expand it for controls, a seekable progress bar, lyrics timing and quick buttons such as like and search lyrics. During ads it counts down the time left. Each side's width can also be set separately.
 
 - Off by default
 - Settings: Lyrics Display › Notch › Notch Lyrics

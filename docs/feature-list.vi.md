@@ -297,7 +297,7 @@ Lời bài hát nổi trên mọi cửa sổ, luôn ở trên cùng, sáng lên 
 
 ### Lời trên Notch
 
-Một khung kiểu Dynamic Island cạnh notch ở đầu màn hình; máy Mac không có notch và màn hình ngoài cũng có. Mỗi bên có thể hiển thị tên bài hát, nghệ sĩ, album, ảnh bìa, nút điều khiển phát, hoặc thời gian đã phát hay còn lại, bên cạnh sóng âm chuyển động. Trên màn hình không có notch, lời hiện tại cũng có thể nằm giữa hai bên, giữ khung cao bằng thanh menu. Mỗi bên cũng có thể hiển thị dòng hiện tại hoặc dòng tiếp theo, kể cả trên màn hình có notch. Di chuột lên để mở rộng, với nút điều khiển, thanh tiến trình tua được, căn thời gian lời và các nút nhanh như thích hay tìm lời. Khi có quảng cáo, Notch đếm ngược thời gian còn lại. Độ rộng mỗi bên cũng có thể đặt riêng.
+Một khung kiểu Dynamic Island cạnh notch ở đầu màn hình; máy Mac không có notch và màn hình ngoài cũng có. Mỗi bên có thể hiển thị tên bài hát, nghệ sĩ, album, ảnh bìa, nút điều khiển phát, hoặc thời gian đã phát hay còn lại, bên cạnh sóng âm chuyển động. Trên màn hình không có notch, lời hiện tại cũng có thể nằm giữa hai bên, giữ khung cao bằng thanh menu. Mỗi bên cũng có thể hiển thị dòng hiện tại hoặc dòng tiếp theo, kể cả trên màn hình có notch. Khi cả hai bên đều hiện lời bài hát, các dòng lần lượt hiện bên trái và bên phải, dòng đang hát sẽ sáng lên. Di chuột lên để mở rộng, với nút điều khiển, thanh tiến trình tua được, căn thời gian lời và các nút nhanh như thích hay tìm lời. Khi có quảng cáo, Notch đếm ngược thời gian còn lại. Độ rộng mỗi bên cũng có thể đặt riêng.
 
 - Tắt theo mặc định
 - Cài đặt: Hiển thị lời › Notch › Lời trên Notch

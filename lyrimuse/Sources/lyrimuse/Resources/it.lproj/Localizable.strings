@@ -391,6 +391,7 @@
 "专辑：%@" = "da %@";
 "丢帧" = "Scartati";
 "两个数字来自 Last.fm 的两个接口：行上的次数由 track.getInfo（autocorrect）按写法族求和，明细由 user.getTrackScrobbles 按精确写法逐条列出。两者不一致通常是因为某种写法只在其中一边被合并" = "I due numeri vengono da due endpoint di Last.fm: la riga somma track.getInfo (con autocorrect) sulla famiglia di grafie, mentre il dettaglio elenca le grafie esatte tramite user.getTrackScrobbles. Una differenza di solito indica che una grafia è stata unita solo da una parte";
+"两只耳朵都选歌词时逐句左右轮流，唱到的那句染色" = "Se entrambi i lati mostrano Testo, le righe si alternano tra sinistra e destra e quella cantata si illumina";
 "两条独立匹配的歌词一致" = "I testi associati separatamente sono identici";
 "两者各项得分完全相同，按歌词源顺序排列" = "Punteggi identici su ogni criterio; in ordine di fonte";
 "两者同分" = "Stesso punteggio per entrambi";
@@ -1763,6 +1764,7 @@
 "显示在歌词下方" = "Mostrata sotto il testo";
 "显示在菜单栏右侧" = "Mostrato a destra nella barra dei menu";
 "显示封面" = "Mostra illustrazione";
+"显示接下来要唱的那句" = "Mostra la riga che viene subito dopo";
 "显示控制" = "Visualizzazione";
 "显示播放控制" = "Mostra controlli";
 "显示桌面悬浮歌词" = "Mostra testo fluttuante";
@@ -1770,6 +1772,7 @@
 "显示歌曲简介" = "Mostra note brano";
 "显示歌词" = "Mostra testo";
 "显示歌词偏移" = "Mostra offset testo";
+"显示正在唱的那句" = "Mostra la riga che si sta cantando";
 "显示每一句的译文，没有译文的句子显示原文" = "Mostra la traduzione di ogni riga; le righe senza traduzione mostrano l’originale";
 "显示灵动岛歌词" = "Mostra testo nel notch";
 "显示简介" = "Mostra informazioni";

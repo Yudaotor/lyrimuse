@@ -291,7 +291,7 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
         func content(_ module: NotchEarModule) -> CGFloat {
             let floor: CGFloat
             switch module {
-            case .title, .artist, .album, .currentLine, .nextLine: floor = textEarWidth
+            case .title, .artist, .album, .lyrics, .currentLine, .nextLine: floor = textEarWidth
             default: floor = 0
             }
             return max(floor, module.minEarContentWidth(contentTopInset: contentTopInset))
@@ -1135,6 +1135,13 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
     /// (同 `NotchPlayback.shownSecondaryLine`)。
     var debugState: [String: Any] {
         let settings = AppSettings.shared
+        let coordinator = PlaybackCoordinator.shared
+        let shown = coordinator.shownSecondaryLine(settings.notchSecondaryLine, fallback: settings.notchSecondaryFallback)
+        let current = LyricSecondaryLine.currentLine(coordinator.notchLyrics.line,
+            inMarkedInterlude: coordinator.rawGapWindow?.isMarked(in: coordinator.lyricsGapMarkers) ?? false)
+        let earLines = NotchEarLyricLines.resolve(
+            left: leftEarModule.earLyric, right: rightEarModule.earLyric,
+            currentOnLeft: NotchEarLyricLines.currentOnLeft(coordinator.notchLyrics, secondary: shown, showsCurrentLine: current != nil))
         return ["passThrough": passThrough?.isActive ?? false, "ignoresMouseEvents": window?.ignoresMouseEvents ?? false,
                 "managesHitTesting": passThrough?.managesHitTesting ?? false,
                 "expanded": isExpanded, "passThroughBandTop": passThroughBandTop.map { $0 as Any } ?? NSNull(),
@@ -1147,6 +1154,7 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
                 "ignoresNotch": Self.ignoresNotchForDebug, "steadyCardWidth": steadyCardWidth,
                 "topRowLyricsWidth": topRowLyricsWidth, "showsTopRowLyrics": showsTopRowLyrics,
                 "leftEar": leftEarModule.rawValue, "rightEar": rightEarModule.rawValue,
+                "leftEarLyric": earLines.left?.rawValue ?? NSNull(), "rightEarLyric": earLines.right?.rawValue ?? NSNull(),
                 "showsEarLyrics": showsEarLyrics, "earWidth": earWidth(cardWidth: steadyCardWidth),
                 "earWidthsLinked": earWidthsLinked, "steadyCardOffset": steadyCardOffset,
                 "leftEarWidth": cardLayout.steadySpan.left, "rightEarWidth": cardLayout.steadySpan.right,

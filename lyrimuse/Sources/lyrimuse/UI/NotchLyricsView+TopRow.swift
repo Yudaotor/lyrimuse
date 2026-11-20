@@ -252,21 +252,38 @@ extension NotchLyricsView {
                                    scale: max(1, displayScale), alignment: alignment,
                                    trackKey: "\(playback.artist)|\(playback.title)")
             }
-        case .currentLine, .nextLine:
-            earLyricLine(module, alignment: alignment)
+        case .lyrics, .currentLine, .nextLine:
+            earLyricLine(alignment: alignment)
         case .title, .artist, .album, .none:
             earText(metadataText(module), module: module, alignment: alignment)
         }
     }
 
-    /// 耳朵里的当前句 / 下一句(单行歌词视图,同顶行歌词那一句):句子放得下时贴刘海那一侧(左耳靠右、右耳靠左),两耳连起来读是
+    /// 耳朵里的歌词(单行歌词视图,同顶行歌词那一句):句子放得下时贴刘海那一侧(左耳靠右、右耳靠左),两耳连起来读是
     /// 一句接一句;放不下时当前句从开头起排、跟唱滚动,下一句跑马灯。只在稳态画(`showsEarLyrics`),常驻只切透明度,展开 / 收回
     /// 时不重建逐字图层。见 05 章决策 159。
-    private func earLyricLine(_ module: NotchEarModule, alignment: Alignment) -> some View {
-        singleLyricLine(module.lyricLine ?? .current,
-                        restingAlignment: alignment.horizontal == .leading ? .trailing : .leading)
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .modifier(NotchCardLayerActive(active: controller.showsEarLyrics))
+    /// 画哪一句看两只耳朵的配置(`NotchEarLyricLines.resolve`)。两耳都选「歌词」时这只耳朵在当前句和下一句之间轮换:两份常驻,
+    /// 只切透明度(`NotchEarLyricTurn`),换句时字留在原来那只耳朵里。见 05 章决策 163。
+    @ViewBuilder
+    private func earLyricLine(alignment: Alignment) -> some View {
+        let resting: Alignment = alignment.horizontal == .leading ? .trailing : .leading
+        let left = playback.leftEar.earLyric, right = playback.rightEar.earLyric
+        let lines = NotchEarLyricLines.resolve(left: left, right: right, currentOnLeft: playback.earLyricsCurrentOnLeft)
+        let kind = (alignment.horizontal == .leading ? lines.left : lines.right) ?? .current
+        Group {
+            if NotchEarLyricLines.alternates(left: left, right: right) {
+                ZStack {
+                    singleLyricLine(.current, restingAlignment: resting)
+                        .modifier(NotchEarLyricTurn(active: kind == .current, fadesIn: false))
+                    singleLyricLine(.next, restingAlignment: resting)
+                        .modifier(NotchEarLyricTurn(active: kind == .next, fadesIn: true))
+                }
+            } else {
+                singleLyricLine(kind, restingAlignment: resting)
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .modifier(NotchCardLayerActive(active: controller.showsEarLyrics))
     }
 
     /// 耳朵里那枚封面(`NotchEarArtworkFlip`):换歌后新封面到了、控制器揭晓了这一首(歌名掉下来的那一拍)翻一下,
@@ -410,7 +427,7 @@ extension NotchLyricsView {
         case .artist: return (isAd || station != nil) ? "" : playback.displayArtist
         case .album: return (isAd || station != nil) ? "" : playback.displayAlbum
         // 非文本模块不走这条路(见 earContent 的分发),这里只是把 switch 补齐。
-        case .artwork, .controls, .elapsed, .remaining, .playCount, .player, .currentLine, .nextLine, .none: return ""
+        case .artwork, .controls, .elapsed, .remaining, .playCount, .player, .lyrics, .currentLine, .nextLine, .none: return ""
         }
     }
 

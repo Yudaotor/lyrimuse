@@ -364,6 +364,7 @@
 "专辑：%@" = "Albüm: %@";
 "丢帧" = "Düşen";
 "两个数字来自 Last.fm 的两个接口：行上的次数由 track.getInfo（autocorrect）按写法族求和，明细由 user.getTrackScrobbles 按精确写法逐条列出。两者不一致通常是因为某种写法只在其中一边被合并" = "İki sayı Last.fm’in iki ayrı uç noktasından gelir: satırdaki sayı track.getInfo (autocorrect) ile yazım ailesi üzerinden toplanır, döküm ise user.getTrackScrobbles ile tam yazımları tek tek listeler. Fark genellikle bir yazımın yalnızca bir tarafta birleştirilmesinden kaynaklanır";
+"两只耳朵都选歌词时逐句左右轮流，唱到的那句染色" = "İki kulakta da Şarkı Sözleri seçiliyse satırlar sırayla solda ve sağda görünür, söylenen satır renklenir";
 "两条独立匹配的歌词一致" = "Ayrı eşleşen iki şarkı sözü aynı";
 "两者各项得分完全相同，按歌词源顺序排列" = "İkisi her ölçütte aynı puanı aldı; şarkı sözü kaynağı sırasına göre listelendi";
 "两者同分" = "İkisi aynı puanı aldı";
@@ -1685,6 +1686,7 @@
 "显示在歌词下方" = "Şarkı sözlerinin altında gösterilir";
 "显示在菜单栏右侧" = "Menü çubuğunun sağında gösterilir";
 "显示封面" = "Kapağı Göster";
+"显示接下来要唱的那句" = "Sıradaki satırı gösterir";
 "显示控制" = "Görüntüleme";
 "显示播放控制" = "Denetimleri Göster";
 "显示桌面悬浮歌词" = "Yüzen Sözleri Göster";
@@ -1692,6 +1694,7 @@
 "显示歌曲简介" = "Parça Notlarını Göster";
 "显示歌词" = "Şarkı Sözlerini Göster";
 "显示歌词偏移" = "Kaydırmayı Göster";
+"显示正在唱的那句" = "Şu an söylenen satırı gösterir";
 "显示每一句的译文，没有译文的句子显示原文" = "Her satırın çevirisini gösterir; çevirisi olmayan satırlarda özgün metin gösterilir";
 "显示灵动岛歌词" = "Çentik Sözlerini Göster";
 "显示简介" = "Bilgiyi Göster";

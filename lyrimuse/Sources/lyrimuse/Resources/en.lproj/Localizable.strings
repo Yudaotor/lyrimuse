@@ -391,6 +391,7 @@
 "专辑：%@" = "on %@";
 "丢帧" = "Dropped";
 "两个数字来自 Last.fm 的两个接口：行上的次数由 track.getInfo（autocorrect）按写法族求和，明细由 user.getTrackScrobbles 按精确写法逐条列出。两者不一致通常是因为某种写法只在其中一边被合并" = "The two numbers come from two Last.fm endpoints: the row sums track.getInfo (with autocorrect) over the spelling family, while the breakdown lists exact spellings via user.getTrackScrobbles. A gap usually means one spelling was merged on only one side";
+"两只耳朵都选歌词时逐句左右轮流，唱到的那句染色" = "When both ears show Lyrics, lines alternate left and right, and the line being sung lights up";
 "两条独立匹配的歌词一致" = "Independently matched lyrics are identical";
 "两者各项得分完全相同，按歌词源顺序排列" = "Both scored identically on every term; listed in source order";
 "两者同分" = "Both scored the same";
@@ -1763,6 +1764,7 @@
 "显示在歌词下方" = "Shown under the lyrics";
 "显示在菜单栏右侧" = "Shown on the right of the menu bar";
 "显示封面" = "Show Artwork";
+"显示接下来要唱的那句" = "Shows the line coming up next";
 "显示控制" = "Display";
 "显示播放控制" = "Show Playback Controls";
 "显示桌面悬浮歌词" = "Show Desktop Floating Lyrics";
@@ -1770,6 +1772,7 @@
 "显示歌曲简介" = "Show Song Notes";
 "显示歌词" = "Show Lyrics";
 "显示歌词偏移" = "Show Lyrics Offset";
+"显示正在唱的那句" = "Shows the line being sung";
 "显示每一句的译文，没有译文的句子显示原文" = "Shows each line’s translation; lines without one show the original";
 "显示灵动岛歌词" = "Show Notch Lyrics";
 "显示简介" = "Show Info";

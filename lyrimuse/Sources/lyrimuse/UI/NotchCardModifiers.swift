@@ -64,6 +64,26 @@ struct NotchCardLayerActive: ViewModifier {
     }
 }
 
+/// 两耳轮流画歌词时一只耳朵里「当前句 / 下一句」两份的切换(`NotchLyricsView.earLyricLine`)。藏起来的那份当场藏:换句那一拍它的字
+/// 已经换成另一只耳朵那句,淡出会让那句在这只耳朵里留个残影。露出来的下一句淡入;当前句当场露出(同一句原地从淡显变成逐字填色)。
+/// 减少动态效果时一律当场切。藏着的那份按层停表(同 `NotchCardLayerActive`),逐字图层不重画。
+struct NotchEarLyricTurn: ViewModifier {
+    var active: Bool
+    var fadesIn: Bool
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    static let fadeInDuration: TimeInterval = 0.2
+
+    func body(content: Content) -> some View {
+        content
+            .transformEnvironment(\.notchCardLayerActive) { $0 = $0 && active }
+            .animation(active && fadesIn && !reduceMotion ? .easeOut(duration: Self.fadeInDuration) : nil) {
+                $0.opacity(active ? 1 : 0)
+            }
+            .accessibilityHidden(!active)
+    }
+}
+
 /// 卡片自己那道外形裁剪,可按宿主关掉(理由见 NotchLyricsView.body 末尾与 EnvironmentValues.notchHostClipsCard)。
 /// `enabled` 对某个宿主是常量;运行期切换会换分支、重建 content 子树。
 struct NotchCardClip: ViewModifier {

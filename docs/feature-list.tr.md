@@ -297,7 +297,7 @@ Tüm pencerelerin üstünde, her zaman en önde duran ve kelime kelime vurgulana
 
 ### Çentik sözleri
 
-Ekranın üstünde, çentiğin yanında Dynamic Island tarzında bir kapsül; çentiği olmayan Mac’lerde ve harici ekranlarda da çıkar. Her iki yanda parça adı, sanatçı, albüm, kapak, oynatma denetimleri veya geçen ya da kalan süre, hareketli bir ses dalgasının yanında gösterilebilir. Çentiksiz ekranlarda geçerli satır iki yanın arasında da gösterilebilir; kapsül menü çubuğu yüksekliğinde kalır. Her iki yan geçerli ya da sonraki satırı da gösterebilir; bu, çentikli ekranlarda da çalışır. Denetimler, sürüklenebilir ilerleme çubuğu, şarkı sözü zamanlaması ve beğenme, şarkı sözü arama gibi hızlı düğmeler için üzerine gelerek genişletin. Reklamlar sırasında kalan süreyi geri sayar. Her iki tarafın genişliği de ayrı ayrı ayarlanabilir.
+Ekranın üstünde, çentiğin yanında Dynamic Island tarzında bir kapsül; çentiği olmayan Mac’lerde ve harici ekranlarda da çıkar. Her iki yanda parça adı, sanatçı, albüm, kapak, oynatma denetimleri veya geçen ya da kalan süre, hareketli bir ses dalgasının yanında gösterilebilir. Çentiksiz ekranlarda geçerli satır iki yanın arasında da gösterilebilir; kapsül menü çubuğu yüksekliğinde kalır. Her iki yan geçerli ya da sonraki satırı da gösterebilir; bu, çentikli ekranlarda da çalışır. İki yanda da şarkı sözleri seçiliyse satırlar sırayla solda ve sağda görünür, söylenen satır renklenir. Denetimler, sürüklenebilir ilerleme çubuğu, şarkı sözü zamanlaması ve beğenme, şarkı sözü arama gibi hızlı düğmeler için üzerine gelerek genişletin. Reklamlar sırasında kalan süreyi geri sayar. Her iki tarafın genişliği de ayrı ayrı ayarlanabilir.
 
 - Saptanmış olarak kapalı
 - Ayarlar: Şarkı Sözü Görünümü › Çentik › Çentik Sözleri

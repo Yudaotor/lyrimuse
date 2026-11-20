@@ -491,7 +491,8 @@ struct NotchEarSettingsRows: View {
     }
 
     // 一框:音浪一行开关(「跟随音乐跳动」在开关左边那颗按钮的浮层里),这一侧显示什么一行下拉(选其一;选「不显示」就空着),
-    // 「两耳等宽」一行,关掉后再一行这只耳朵的宽度。
+    // 选了歌词模块时下面一句说明(只说选中的那一档),「两耳等宽」一行,关掉后再一行这只耳朵的宽度。
+    // 说明写在行下、不用 ⓘ:三档的区别要一眼看到,ⓘ 还会占掉行名和下拉那 166pt 里的 20pt。
     var body: some View {
         SettingsRowGroup {
             VStack(spacing: 0) {
@@ -506,6 +507,9 @@ struct NotchEarSettingsRows: View {
                         label: \.displayName,
                         compact: true
                     )
+                }
+                if let note = current.earLyricNote {
+                    SettingsNote { Text(note) }
                 }
                 CardDivider()
                 linkedRow

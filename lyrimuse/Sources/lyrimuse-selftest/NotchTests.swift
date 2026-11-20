@@ -417,21 +417,21 @@ func runNotchTests() {
                     "顶行歌词(契约): 编辑台预览同一套公式")
         let display = app("UI/NotchModuleDisplay.swift"), stage = app("UI/NotchEditorStage.swift")
         let settingsRows = app("UI/NotchSettingsRows.swift"), debugLinks = app("Settings/DebugDeepLinks.swift")
-        expectEqual(sourceHas(settings, "case currentLine\n case nextLine\n case none\n}")
+        expectEqual(sourceHas(settings, "case lyrics\n case currentLine\n case nextLine\n case none\n}")
                     && sourceHas(settings, "notchLeftEar = defaults.string(forKey: Keys.notchLeftEar)\n .flatMap(NotchEarModule.init(rawValue:)) ?? Self.defaultNotchLeftEar")
                     && sourceHas(settings, "notchRightEar = defaults.string(forKey: Keys.notchRightEar)\n .flatMap(NotchEarModule.init(rawValue:)) ?? Self.defaultNotchRightEar")
                     && sourceHas(settings, "didSet { defaults.set(notchLeftEar.rawValue, forKey: Keys.notchLeftEar) }"), true,
-                    "耳朵歌词(契约): 当前句、下一句按 rawValue 存取,认不出的值退回默认,「不显示」仍排最后")
-        expectEqual(sourceHas(display, "case .currentLine: return .current\n case .nextLine: return .next")
-                    && sourceHas(display, "var yieldsEqualizer: Bool { self == .controls || lyricLine != nil }")
-                    && sourceHas(display, "case .none, .title, .artist, .album, .currentLine, .nextLine: return 0")
+                    "耳朵歌词(契约): 歌词、当前句、下一句按 rawValue 存取,认不出的值退回默认,「不显示」仍排最后")
+        expectEqual(sourceHas(display, "case .lyrics: return .alternating\n case .currentLine: return .current\n case .nextLine: return .next")
+                    && sourceHas(display, "var yieldsEqualizer: Bool { self == .controls || earLyric != nil }")
+                    && sourceHas(display, "case .none, .title, .artist, .album, .lyrics, .currentLine, .nextLine: return 0")
                     && sourceHas(controller, "guard showsEqualizer, equalizerEar == ear, !module.yieldsEqualizer else { return 0 }")
-                    && sourceHas(controller, "case .title, .artist, .album, .currentLine, .nextLine: floor = textEarWidth")
+                    && sourceHas(controller, "case .title, .artist, .album, .lyrics, .currentLine, .nextLine: floor = textEarWidth")
                     && sourceHas(topRowView, "controller.showsEqualizer && controller.equalizerEar == side && !module.yieldsEqualizer")
                     && sourceHas(stage, "guard equalizerHere, !module.yieldsEqualizer else { return module.displayName }"), true,
                     "耳朵歌词(契约): 歌词耳朵不挂音浪,渲染、宽度下限、工具栏摘要读同一个判据;下限按跑马灯给 0,顶行歌词时同文字给 64")
-        expectEqual(sourceHas(topRowView, "case .currentLine, .nextLine:\n earLyricLine(module, alignment: alignment)")
-                    && sourceHas(topRowView, "restingAlignment: alignment.horizontal == .leading ? .trailing : .leading)")
+        expectEqual(sourceHas(topRowView, "case .lyrics, .currentLine, .nextLine:\n earLyricLine(alignment: alignment)")
+                    && sourceHas(topRowView, "let resting: Alignment = alignment.horizontal == .leading ? .trailing : .leading")
                     && sourceHas(topRowView, ".modifier(NotchCardLayerActive(active: controller.showsEarLyrics))")
                     && sourceHas(topRowView, "let leftModule: NotchEarModule = collapsed ? .artwork : playback.leftEar")
                     && sourceHas(topRowView, "let rightModule: NotchEarModule = collapsed ? .none : playback.rightEar"), true,
@@ -461,6 +461,79 @@ func runNotchTests() {
         expectEqual(sourceHas(settingsRows, "NotchEarModule.currentLineInEar(left: settings.notchLeftEar, right: settings.notchRightEar) {\n SettingsNote { Text(L10n.t(\"左耳或右耳已显示当前句，此项不生效\")) }")
                     && sourceHas(debugLinks, "if let module = leftEar.flatMap(NotchEarModule.init(rawValue:)) { AppSettings.shared.notchLeftEar = module }"), true,
                     "耳朵歌词(契约): 设置里说明歌词行这一项被耳朵当前句顶掉;调试深链能改左右耳")
+        // 耳朵「歌词」两耳轮流(05 章决策 163)。
+        typealias E = NotchEarLyricLines
+        expectEqual([E.currentOnLeft(shownIndex: 0, lineIndex: nil, hasFollowingLine: true),
+                     E.currentOnLeft(shownIndex: 1, lineIndex: 0, hasFollowingLine: true),
+                     E.currentOnLeft(shownIndex: 2, lineIndex: 1, hasFollowingLine: false),
+                     E.currentOnLeft(shownIndex: 7, lineIndex: 7, hasFollowingLine: true)],
+                    [true, false, true, false], "耳朵轮流: 偶数句在左耳、奇数句在右耳,认主行显示的那句(提前亮出的也算)")
+        expectEqual([E.currentOnLeft(shownIndex: nil, lineIndex: 3, hasFollowingLine: true),
+                     E.currentOnLeft(shownIndex: nil, lineIndex: 4, hasFollowingLine: true),
+                     E.currentOnLeft(shownIndex: nil, lineIndex: nil, hasFollowingLine: true),
+                     E.currentOnLeft(shownIndex: nil, lineIndex: nil, hasFollowingLine: false)],
+                    [false, true, false, true],
+                    "耳朵轮流: 间奏 / 前奏占位画在刚唱完那句的耳朵,接下来那句在它自己那侧;整首没有歌词时占位放左耳")
+        let both = E.resolve(left: .alternating, right: .alternating, currentOnLeft: true)
+        let bothRight = E.resolve(left: .alternating, right: .alternating, currentOnLeft: false)
+        expectEqual([both.left, both.right, bothRight.left, bothRight.right], [.current, .next, .next, .current],
+                    "耳朵轮流: 两耳都选歌词时一只画当前句、另一只画下一句,随序号对调")
+        let mixed = [E.resolve(left: .alternating, right: nil, currentOnLeft: false),
+                     E.resolve(left: nil, right: .alternating, currentOnLeft: true),
+                     E.resolve(left: .alternating, right: .current, currentOnLeft: true),
+                     E.resolve(left: .next, right: .alternating, currentOnLeft: true),
+                     E.resolve(left: .current, right: .next, currentOnLeft: false)]
+        expectEqual(mixed.map { "\($0.left?.rawValue ?? "-")/\($0.right?.rawValue ?? "-")" },
+                    ["current/-", "-/current", "next/current", "next/current", "current/next"],
+                    "耳朵轮流: 只有一只耳朵选歌词时等同当前句,另一只已是当前句就补下一句,同一句不画两遍;不选歌词照旧")
+        expectEqual([E.showsCurrentLine(left: .alternating, right: nil), E.showsCurrentLine(left: .next, right: .alternating),
+                     E.showsCurrentLine(left: .alternating, right: .alternating), E.showsCurrentLine(left: .next, right: .next),
+                     E.showsCurrentLine(left: nil, right: nil), E.alternates(left: .alternating, right: .current)],
+                    [true, true, true, false, false, false], "耳朵轮流: 有歌词耳朵就有当前句,下面的歌词行照旧去重")
+        do {
+            // 整首扫一遍:每句从亮出到唱完只出现在它序号那一侧(偶左奇右),副行开 / 关两种取句都试;最后一句时等待那只耳朵空着。
+            let yrc = "[3000,900](3000,900,0)L0\n[4000,900](4000,900,0)L1\n[5000,900](5000,900,0)L2\n"
+                + "[16000,900](16000,900,0)L3\n[17000,900](17000,900,0)L4\n[18000,1500](18000,1500,0)L5\n"
+            let engine = LyricsSyncEngine()
+            engine.load(lyrics: "", lyricsTr: "", lyricsRoma: "", lyricsYRC: yrc)
+            var wrongSide: [String] = [], seenCurrent = Set<String>(), placeholderTicks = 0, lastNext: [String?] = []
+            for secondary in [LyricSecondaryLine.off, .nextLine] {
+                for ms in stride(from: 0, through: 22000, by: 50) {
+                    let tick = engine.surfaceTick(.notch, atMs: ms, trackEndMs: 22000)
+                    let current = secondary.displayedLine(compactLine: tick.compactLine, currentLine: tick.line)?.plainText
+                    let next = secondary.expandedNextLine(next: tick.nextText, afterCompact: tick.compactNextText)
+                    let ears = E.resolve(left: .alternating, right: .alternating,
+                                         currentOnLeft: E.currentOnLeft(tick, secondary: secondary, showsCurrentLine: tick.line != nil))
+                    let left = ears.left == .current ? current : next, right = ears.right == .current ? current : next
+                    for (text, onLeft) in [(left, true), (right, false)] {
+                        guard let text, let n = Int(text.dropFirst()) else { continue }
+                        if (n % 2 == 0) != onLeft { wrongSide.append("\(secondary.rawValue)@\(ms) \(text)") }
+                    }
+                    if let current { seenCurrent.insert(current) }
+                    if current == nil, next != nil { placeholderTicks += 1 }
+                    if ms == 19000 { lastNext.append(next) }
+                }
+            }
+            expectEqual(Array(wrongSide.prefix(3)), [], "耳朵轮流(整首): 每句从亮出到唱完都在它序号那一侧,换句时字不跨耳")
+            expectEqual([seenCurrent.count == 6, placeholderTicks > 0, lastNext == [nil, nil]], [true, true, true],
+                        "耳朵轮流(整首): 六句都轮到过当前句,前奏 / 长间奏有占位的拍子,最后一句时等待那只耳朵空着")
+        }
+        let notchFeed = app("UI/NotchPlayback.swift"), cardModifiers = app("UI/NotchCardModifiers.swift")
+        expectEqual(sourceHas(notchFeed, "Publishers.CombineLatest3(p.$notchLyrics, shownCurrentLine, shown)\n .map { lyrics, current, secondary in\n NotchEarLyricLines.currentOnLeft(lyrics, secondary: secondary, showsCurrentLine: current != nil)\n }\n .gated(by: live, assign: \\.earLyricsCurrentOnLeft, on: self)")
+                    && sourceHas(display, "NotchEarLyricLines.showsCurrentLine(left: left.earLyric, right: right.earLyric)")
+                    && sourceHas(controller, "\"leftEarLyric\": earLines.left?.rawValue ?? NSNull(), \"rightEarLyric\": earLines.right?.rawValue ?? NSNull(),"),
+                    true, "耳朵轮流(契约): 左右按灵动岛那一面的序号、跟主行同一拍更新,去重认「有耳朵在画当前句」,debug/state 报两耳各画哪句")
+        expectEqual(sourceHas(topRowView, "let lines = NotchEarLyricLines.resolve(left: left, right: right, currentOnLeft: playback.earLyricsCurrentOnLeft)")
+                    && sourceHas(topRowView, "if NotchEarLyricLines.alternates(left: left, right: right) {\n ZStack {\n singleLyricLine(.current, restingAlignment: resting)\n .modifier(NotchEarLyricTurn(active: kind == .current, fadesIn: false))\n singleLyricLine(.next, restingAlignment: resting)\n .modifier(NotchEarLyricTurn(active: kind == .next, fadesIn: true))")
+                    && sourceHas(cardModifiers, ".transformEnvironment(\\.notchCardLayerActive) { $0 = $0 && active }\n .animation(active && fadesIn && !reduceMotion ? .easeOut(duration: Self.fadeInDuration) : nil) {\n $0.opacity(active ? 1 : 0)"),
+                    true, "耳朵轮流(契约): 两份常驻只切透明度,藏起来的当场藏、按层停表,只有露出的下一句淡入,减少动态效果时当场切")
+        let earNotes = sourceBody("var earLyricNote: String?", in: display)
+        expectEqual(sourceHas(settingsRows, "if let note = current.earLyricNote {\n SettingsNote { Text(note) }\n }")
+                    && sourceHas(earNotes, "case .lyrics: return L10n.t(\"两只耳朵都选歌词时逐句左右轮流，唱到的那句染色\")")
+                    && sourceHas(earNotes, "case .currentLine: return L10n.t(\"显示正在唱的那句\")")
+                    && sourceHas(earNotes, "case .nextLine: return L10n.t(\"显示接下来要唱的那句\")")
+                    && sourceHas(earNotes, "default: return nil"), true,
+                    "耳朵轮流(契约): 「显示内容」下面只说选中的那一档,歌词 / 当前句 / 下一句各一句,别的模块不说")
         expectEqual(sourceHas(settings, "notchShowLyrics = (defaults.object(forKey: Keys.notchShowLyrics) as? Bool) ?? Self.defaultNotchShowLyrics")
                     && sourceHas(settings, "notchLyricsInTopRow = (defaults.object(forKey: Keys.notchLyricsInTopRow) as? Bool) ?? Self.defaultNotchLyricsInTopRow")
                     && !settings.contains("removeObject(forKey: Keys.notchShowLyrics)")

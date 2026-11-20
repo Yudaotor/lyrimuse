@@ -391,6 +391,7 @@
 "专辑：%@" = "auf %@";
 "丢帧" = "Verworfen";
 "两个数字来自 Last.fm 的两个接口：行上的次数由 track.getInfo（autocorrect）按写法族求和，明细由 user.getTrackScrobbles 按精确写法逐条列出。两者不一致通常是因为某种写法只在其中一边被合并" = "Die beiden Zahlen stammen von zwei Last.fm-Endpunkten: Die Zeile summiert track.getInfo (mit Autokorrektur) über alle Schreibweisen, die Aufschlüsselung listet exakte Schreibweisen über user.getTrackScrobbles. Eine Abweichung heißt meist, dass eine Schreibweise nur auf einer Seite zusammengefasst wurde";
+"两只耳朵都选歌词时逐句左右轮流，唱到的那句染色" = "Zeigen beide Ohren Liedtext, wechseln die Zeilen zwischen links und rechts, die gesungene Zeile leuchtet auf";
 "两条独立匹配的歌词一致" = "Unabhängig zugeordnete Liedtexte sind identisch";
 "两者各项得分完全相同，按歌词源顺序排列" = "Beide bei jedem Kriterium gleich bewertet; in Quellenreihenfolge aufgeführt";
 "两者同分" = "Beide gleich bewertet";
@@ -1763,6 +1764,7 @@
 "显示在歌词下方" = "Unter dem Liedtext angezeigt";
 "显示在菜单栏右侧" = "Rechts in der Menüleiste";
 "显示封面" = "Cover anzeigen";
+"显示接下来要唱的那句" = "Zeigt die als Nächstes gesungene Zeile";
 "显示控制" = "Anzeige";
 "显示播放控制" = "Steuerung";
 "显示桌面悬浮歌词" = "Schwebenden Text anzeigen";
@@ -1770,6 +1772,7 @@
 "显示歌曲简介" = "Titelnotizen anzeigen";
 "显示歌词" = "Liedtext anzeigen";
 "显示歌词偏移" = "Textversatz anzeigen";
+"显示正在唱的那句" = "Zeigt die gerade gesungene Zeile";
 "显示每一句的译文，没有译文的句子显示原文" = "Zeigt die Übersetzung jeder Zeile; Zeilen ohne Übersetzung zeigen das Original";
 "显示灵动岛歌词" = "Notch-Text anzeigen";
 "显示简介" = "Informationen";

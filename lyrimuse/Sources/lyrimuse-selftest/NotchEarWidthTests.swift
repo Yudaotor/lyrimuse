@@ -275,7 +275,7 @@ func runNotchEarWidthTests() {
         .components(separatedBy: "L10n.t(\"").dropFirst().map { String($0.prefix { $0 != "\"" }) }
     let moduleCases = sourceBody("enum NotchEarModule: String, Codable, Hashable, CaseIterable", in: settings)
         .components(separatedBy: "\n").filter { $0.trimmingCharacters(in: .whitespaces).hasPrefix("case ") }.count
-    expectEqual(earBudget == 166 && moduleNames.count == moduleCases && moduleNames.contains("当前句") && moduleNames.contains("下一句"), true,
+    expectEqual(earBudget == 166 && moduleNames.count == moduleCases && moduleNames.contains("歌词") && moduleNames.contains("当前句") && moduleNames.contains("下一句"), true,
                 "左右耳浮层: 读到浮层宽 320、每个模块的名字(\(moduleNames.count) / \(moduleCases))")
     let earOverflow = UILanguage.packs.compactMap { pack -> String? in
         let need = textWidth(localized("显示内容", pack), 13) + moduleNames.map { textWidth(localized($0, pack), 12) }.max()!

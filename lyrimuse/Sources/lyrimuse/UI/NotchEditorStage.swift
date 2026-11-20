@@ -567,7 +567,7 @@ struct NotchEditorStage: View {
         let module = side == .left ? settings.notchLeftEar : settings.notchRightEar
         let equalizerHere = settings.notchShowsEqualizer
             && settings.notchEqualizerEar == (side == .left ? NotchEqualizerEar.left : .right)
-        // 播放控制、歌词那两档音浪让位(`yieldsEqualizer`),卡片上没有音浪,摘要也不报。
+        // 播放控制、歌词模块音浪让位(`yieldsEqualizer`),卡片上没有音浪,摘要也不报。
         guard equalizerHere, !module.yieldsEqualizer else { return module.displayName }
         if module == NotchEarModule.none { return L10n.t("音浪") }
         return L10n.list([module.displayName, L10n.t("音浪")])
