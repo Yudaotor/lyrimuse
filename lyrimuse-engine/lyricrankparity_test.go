@@ -1,7 +1,6 @@
 package main
 
 import (
-	"flag"
 	"fmt"
 	"maps"
 	"math/rand"
@@ -27,8 +26,8 @@ import (
 //   - 金标样本的组合扰动(rankParityMutators):去掉源、互换与移植内容、只留逐行 / 纯文本、加减译文 / 读音 / 背景人声 /
 //     作者、烘入译文、括号背景人声、纯音乐与无人声信号、本机身份、设置(译文语言、在放的播放器)。
 //
-// 排序层改一处就跑 `go test -tags devtools -run 'TestRank'`;大语料(四千多组,约一分钟)单独点名:
-// `go test -tags devtools -run TestRankParityLargeCorpus -v`。
+// 排序层改一处就跑 `go test -tags devtools -run 'TestRank'`;大语料(四千多组,机器空闲时约一分钟)要设环境变量才跑:
+// `LYRIC_RANK_PARITY_LARGE=1 go test -tags devtools -timeout 60m -run TestRankParityLargeCorpus -v`。
 
 // rankParityCase 是一组输入:查询、各源原始应答、排序会读的包级设置。
 type rankParityCase struct {
@@ -1050,8 +1049,9 @@ const (
 	rankParityLargePerFixture   = 160
 )
 
-// rankParityPerFixtureEnv:大语料每个样本叠多少组,临时要更大的语料时用这个环境变量盖过默认值。
-const rankParityPerFixtureEnv = "LYRIC_RANK_PARITY_PER_FIXTURE"
+// rankParityLargeEnv:设了才跑大语料。1 = 每个样本叠 rankParityLargePerFixture 组;别的正整数 = 每个样本叠那么多组。
+// 不能靠 -run 点没点名来判:提交校验的分片脚本(scripts/go-test-shards.py)把每个测试的名字都写进 -run。
+const rankParityLargeEnv = "LYRIC_RANK_PARITY_LARGE"
 
 func TestRankParityCorpus(t *testing.T) {
 	cases := rankParityCorpus(t, rankParityDefaultPerFixture)
@@ -1059,13 +1059,14 @@ func TestRankParityCorpus(t *testing.T) {
 	t.Logf("%d 组", len(cases))
 }
 
-// 大语料只在 -run 点名时跑(整套测试里跳过)。除了对拍,还核对语料走到了每个来源那段装配的每个分支(rankParityCoverageGaps)。
+// 大语料只在设了 rankParityLargeEnv 时跑(整套测试、提交校验里跳过)。除了对拍,还核对语料走到了每个来源那段装配的
+// 每个分支(rankParityCoverageGaps)。
 func TestRankParityLargeCorpus(t *testing.T) {
-	if run := flag.Lookup("test.run"); run == nil || !strings.Contains(run.Value.String(), "RankParityLargeCorpus") {
-		t.Skip("大语料:用 -run TestRankParityLargeCorpus 点名跑")
-	}
 	perFixture := rankParityLargePerFixture
-	if v, err := strconv.Atoi(os.Getenv(rankParityPerFixtureEnv)); err == nil && v > 0 {
+	switch v, err := strconv.Atoi(os.Getenv(rankParityLargeEnv)); {
+	case err != nil || v <= 0:
+		t.Skipf("大语料:设 %s=1 再跑", rankParityLargeEnv)
+	case v > 1:
 		perFixture = v
 	}
 	cases := rankParityCorpus(t, perFixture)
