@@ -268,14 +268,21 @@ func runMainThreadIOTests() {
                      AppLocation.isSameVolume(URL(fileURLWithPath: "/Volumes/Lyrimuse 1"), volume),
                      AppLocation.isSameVolume(nil, volume)], [true, false, false], "卷卸载: 按挂载点认是不是 App 所在的卷")
         let prompt = app("Settings/AppLocationPrompt.swift")
-        expectEqual(sourceCount(sourceBody("@MainActor static func runAtLaunch()", in: prompt),
-                                "AppVolumeUnmountWatcher.start(bundle: bundle, onUnmount: quitForUnmount)"), 2,
-                    "卷卸载(契约): 不问、问了没移走两条路都开始盯")
-        expectEqual(sourceHas(sourceBody("enum AppVolumeUnmountWatcher", in: prompt), "forName: NSWorkspace.willUnmountNotification"), true,
-                    "卷卸载(契约): 盯的是 willUnmount(真卸之前)")
+        let launch = sourceBody("@MainActor static func runAtLaunch()", in: prompt)
+        let watchAt = launch.range(of: "AppVolumeUnmountWatcher.start(bundle: bundle)")?.lowerBound
+        let askAt = launch.range(of: "ask(location: location")?.lowerBound
+        expectEqual(sourceCount(launch, "AppVolumeUnmountWatcher.start(") == 1 && watchAt != nil && askAt != nil
+                    && watchAt! < askAt! && sourceHas(launch, "quitForUnmount()"), true,
+                    "卷卸载(契约): 弹「移到应用程序文件夹」提示之前就开始盯,提示开着时推出映像也退出")
+        let watcher = sourceBody("enum AppVolumeUnmountWatcher", in: prompt)
+        expectEqual(sourceHas(watcher, "forName: NSWorkspace.willUnmountNotification, object: nil, queue: .main"), true,
+                    "卷卸载(契约): 盯的是 willUnmount(真卸之前),交给主队列(提示的模态循环里也派发得到)")
         let quit = sourceBody("@MainActor private static func quitForUnmount()", in: prompt)
         expectEqual(sourceHas(quit, "await EngineServiceManager.stopForMaintenance()") && sourceHas(quit, "AppExit.request(.appVolumeUnmounting)"), true,
                     "卷卸载(契约): 停引擎再走正常退出")
+        expectEqual(sourceHas(quit, "guard askingSettled else {") && sourceHas(sourceBody("guard askingSettled else {", in: quit), "AppExit.request(.appVolumeUnmounting) return")
+                    && !sourceHas(sourceBody("guard askingSettled else {", in: quit), "EngineServiceManager"), true,
+                    "卷卸载(契约): 提示还开着时直接走正常退出、不停别的实例装的引擎")
 
         let build = repoText("lyrimuse/build.sh")
         expectEqual(sourceHas(build, "clang -dynamiclib -fobjc-arc -O2 -arch \"$arch\" -mmacosx-version-min=14.0"), true,

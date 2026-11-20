@@ -16,6 +16,7 @@ enum AppLocationPrompt {
     /// 实例会改写引擎配置)。
     static let testDirectoryEnvironmentKey = "LYRIMUSE_APP_MOVE_TEST_DIR"
     /// 跟上一个一起设(秒数):没移走时不马上退出,先照常盯着 App 所在的卷这么久,卷要被卸载时在 `outcome.txt` 末尾记一行再退出。
+    /// 测试模式下提示开着时卷要被卸载,同样记 `asking` 加那一行再退出,不用设这个。
     static let testWatchUnmountEnvironmentKey = "LYRIMUSE_APP_MOVE_TEST_WATCH_UNMOUNT"
     static let applicationsDirectory = URL(fileURLWithPath: "/Applications", isDirectory: true)
 
@@ -48,12 +49,17 @@ enum AppLocationPrompt {
     @MainActor static func runAtLaunch() {
         let bundle = Bundle.main.bundleURL
         guard bundle.pathExtension == "app", !CommandLine.arguments.contains("--unregister-login-item") else { return }
-        let location = kind(of: bundle)
         let testDirectory = ProcessInfo.processInfo.environment[testDirectoryEnvironmentKey].map { URL(fileURLWithPath: $0, isDirectory: true) }
+        // 先盯卷再问:提示是模态的,开着时推出映像也要退出。必须在 `ask` 之前,见 15 章决策 128。
+        AppVolumeUnmountWatcher.start(bundle: bundle) {
+            if let testDirectory { exitTestForUnmount(in: testDirectory) }
+            quitForUnmount()
+        }
+        let location = kind(of: bundle)
         guard AppLocation.shouldPrompt(location, declinedVersion: UserDefaults.standard.string(forKey: declinedVersionKey),
                                        currentVersion: currentVersion) else {
-            if let testDirectory { finishTest(in: testDirectory, "skipped \(location)", bundle: bundle) }
-            AppVolumeUnmountWatcher.start(bundle: bundle, onUnmount: quitForUnmount)
+            if let testDirectory { finishTest(in: testDirectory, "skipped \(location)") }
+            askingSettled = true
             return
         }
         logger.notice("app location: running from \(String(describing: location), privacy: .public), asking to move")
@@ -71,14 +77,20 @@ enum AppLocationPrompt {
             if location == .translocated, testDirectory == nil { trashTranslocatedOriginal(of: bundle, movedTo: destination) }
             relaunch(destination, location: location, testDirectory: testDirectory)
         }
-        if let testDirectory { finishTest(in: testDirectory, String(describing: outcome), bundle: bundle) }
-        AppVolumeUnmountWatcher.start(bundle: bundle, onUnmount: quitForUnmount)
+        if let testDirectory { finishTest(in: testDirectory, String(describing: outcome)) }
+        askingSettled = true
     }
 
     /// App 所在的卷要被卸载了:停掉引擎(它的可执行文件也在这个卷上),再走正常退出。停引擎最多等 1.5 秒。
+    /// 还没问完时(提示开着)直接走正常退出、不停引擎:这份进程还没装引擎,在跑的那个是别的实例的。
     @MainActor private static func quitForUnmount() {
         guard !quittingForUnmount else { return }
         quittingForUnmount = true
+        guard askingSettled else {
+            logger.notice("app location: the volume holding the app is being unmounted while asking to move, quitting")
+            AppExit.request(.appVolumeUnmounting)
+            return
+        }
         logger.notice("app location: the volume holding the app is being unmounted, stopping the engine and quitting")
         Task { @MainActor in
             await EngineServiceManager.stopForMaintenance()
@@ -90,15 +102,23 @@ enum AppLocationPrompt {
     }
 
     @MainActor private static var quittingForUnmount = false
+    /// 问完了(或不用问):之后卷被卸载要先停引擎。
+    @MainActor private static var askingSettled = false
+    /// 测试模式下写进 `outcome.txt` 的结果,还没问完时是 `asking`。
+    @MainActor private static var testOutcome = "asking"
 
-    @MainActor private static func finishTest(in directory: URL, _ outcome: String, bundle: URL) -> Never {
+    /// 测试模式不停引擎、不走 AppKit 的退出:记下结果和卸载那一行就退出。
+    @MainActor private static func exitTestForUnmount(in directory: URL) -> Never {
+        FileIO.write(testOutcome + "\nvolume unmounting: exit\n", to: directory.appendingPathComponent("outcome.txt"))
+        exit(0)
+    }
+
+    @MainActor private static func finishTest(in directory: URL, _ outcome: String) -> Never {
+        testOutcome = outcome
         let file = directory.appendingPathComponent("outcome.txt")
         FileIO.write(outcome + "\n", to: file)
         if let seconds = ProcessInfo.processInfo.environment[testWatchUnmountEnvironmentKey].flatMap(Double.init),
-           AppVolumeUnmountWatcher.start(bundle: bundle, onUnmount: {
-               FileIO.write(outcome + "\nvolume unmounting: exit\n", to: file)
-               exit(0)
-           }) {
+           AppVolumeUnmountWatcher.isWatching {
             FileIO.write(outcome + "\nwatching\n", to: file)
             let deadline = Date().addingTimeInterval(seconds)
             while Date() < deadline { _ = RunLoop.current.run(mode: .default, before: deadline) }
@@ -221,10 +241,12 @@ enum AppLocationPrompt {
 
 /// App 所在的卷要被卸载时(推出磁盘映像、拔外置盘、断开网络卷)交给回调:代码页从那个卷上换入,卷没了以后碰到还没换入的页
 /// 就是 SIGBUS。系统先发 willUnmount 再卸:卷上有进程占着时普通推出会被拒、之后再强制推出,强制推出时两者只差几十毫秒,
-/// 回调里别做费时的事。App 在根卷上(装在「应用程序」里)不装。见 15 章决策 110。
+/// 回调里别做费时的事。App 在根卷上(装在「应用程序」里)不装。通知交给主队列:主队列在 common modes 里排空,提示的模态循环
+/// (`NSModalPanelRunLoopMode`)里也跑得到,别改成只在 default mode 里派发的投递方式。见 15 章决策 110、128。
 @MainActor
 enum AppVolumeUnmountWatcher {
     private static var observer: NSObjectProtocol?
+    static var isWatching: Bool { observer != nil }
 
     /// 装上返回 true;已经装过、或 App 在根卷上返回 false。
     @discardableResult
