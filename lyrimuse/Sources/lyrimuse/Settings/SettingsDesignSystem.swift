@@ -1246,6 +1246,9 @@ struct SettingsRow<Trailing: View>: View {
     /// 尾部控件跟标题排一行放不下(标题单行宽 + 控件宽超出行宽)时,把控件挪到标题和副标题下面、跟文字左对齐。
     /// 给定宽、压不扁的宽控件用(四档分段这类):并排硬挤会把左边的标题和副标题压成一两个字一行。
     var trailingWrapsBelow = false
+    /// 标题先排满一行,尾部控件拿剩下的宽。配会截断的尾部用(`SettingsGlassMenuPicker(truncatesTitle: true)`):
+    /// 选项多长运行时才知道(屏幕名)时,标题不被压扁的下拉挤成一字一行。只给没有副标题的行用,副标题会跟标题一起先占宽。
+    var titleKeepsLine = false
     @ViewBuilder let trailing: () -> Trailing
 
     var body: some View {
@@ -1282,6 +1285,7 @@ struct SettingsRow<Trailing: View>: View {
                     subtitleAndFooter
                 }
             }
+            .layoutPriority(titleKeepsLine ? 2 : 0)
 
             Spacer(minLength: 12)
 
@@ -1291,6 +1295,8 @@ struct SettingsRow<Trailing: View>: View {
                 .alignmentGuide(.settingsRowTitleLine) { d in
                     min(d.height, SettingsRowMetrics.trailingAlignBand) / 2
                 }
+                // 排在标题后、Spacer 前分宽:同在一档时 HStack 把剩下的宽对半分给它和 Spacer,下拉会白白截掉一半。
+                .layoutPriority(titleKeepsLine ? 1 : 0)
         }
     }
 
@@ -2226,6 +2232,8 @@ struct SettingsGlassMenuPicker<T: Hashable>: View {
     let options: [T]
     let label: (T) -> String
     var compact = false
+    /// 放不下时胶囊里的字中间截断,不撑宽。配 `SettingsRow(titleKeepsLine: true)` 用。
+    var truncatesTitle = false
 
     var body: some View {
         SettingsGlassPopoverMenu(
@@ -2233,7 +2241,8 @@ struct SettingsGlassMenuPicker<T: Hashable>: View {
             items: options,
             itemLabel: label,
             isChecked: { $0 == selection },
-            height: compact ? 28 : 32
+            height: compact ? 28 : 32,
+            truncatesTitle: truncatesTitle
         ) { selection = $0 }
     }
 }
@@ -2248,6 +2257,7 @@ struct SettingsGlassPopoverMenu<Item: Hashable>: View {
     let itemLabel: (Item) -> String
     var isChecked: (Item) -> Bool = { _ in false }
     var height: CGFloat = 32
+    var truncatesTitle = false
     let onPick: (Item) -> Void
     @State private var shown = false
 
@@ -2255,6 +2265,8 @@ struct SettingsGlassPopoverMenu<Item: Hashable>: View {
         Button { shown.toggle() } label: {
             HStack(spacing: 4) {
                 Text(title).font(.system(size: 12))
+                    .lineLimit(1)
+                    .truncationMode(.middle)
                 Image(systemName: "chevron.down")
                     .font(.system(size: 8, weight: .semibold))
                     .foregroundStyle(.secondary)
@@ -2265,7 +2277,7 @@ struct SettingsGlassPopoverMenu<Item: Hashable>: View {
         }
         .buttonStyle(SettingsGlassHoverButtonStyle(isOpen: shown))
         .settingsCardBackground(cornerRadius: height / 2)
-        .fixedSize()
+        .fixedSize(horizontal: !truncatesTitle, vertical: true)
         .popover(isPresented: $shown, arrowEdge: .bottom) {
             if items.count > Self.scrollThreshold {
                 // 选项多(「推送时间」半小时一档,48 个)时浮层封顶、自己滚,打开时把当前项滚到中间。

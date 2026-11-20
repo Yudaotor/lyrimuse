@@ -1,3 +1,4 @@
+import AppKit
 import CoreGraphics
 import Foundation
 import LyrimuseCore
@@ -256,4 +257,53 @@ func runNotchEarWidthTests() {
     expectEqual(sourceHas(rows, "Toggle(\"\", isOn: Binding(\nget: { settings.notchEarWidthsLinked },\nset: { NotchEditorStage.setEarWidthsLinked($0) }))")
                 && sourceHas(rows, "if !settings.notchEarWidthsLinked {\nCardDivider()\nwidthRow\n}"),
                 true, "两耳不等宽(契约): 左右耳浮层有等宽开关,关掉后才出现宽度行")
+
+    // MARK: 浮层里「标签 + 玻璃下拉」一行放得下(各界面语言)
+
+    // 浮层宽 W 时,一行里 13pt 行名 + 12pt 下拉字能用的宽 = W − 154:卡片两侧各让 10、行内边距 2 × 14、图标列 20、
+    // HStack 三处间距 3 × 12、Spacer 至少 12、下拉胶囊自身 38(内边距 2 × 12 + 间距 4 + 箭头 10)。
+    // 超过就折行(W = 320 时界线 166,见 05 章决策 159)。
+    let catalogData = (try? Data(contentsOf: URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+        .deletingLastPathComponent().appendingPathComponent("Localization/Localizable.xcstrings"))) ?? Data()
+    let catalog = ((try? JSONSerialization.jsonObject(with: catalogData)) as? [String: Any])?["strings"] as? [String: Any] ?? [:]
+    func localized(_ key: String, _ pack: String) -> String {
+        if pack == "zh-hans" { return key }
+        let units = (catalog[key] as? [String: Any])?["localizations"] as? [String: Any] ?? [:]
+        let unit = units.first { $0.key.lowercased() == pack }?.value as? [String: Any]
+        return (unit?["stringUnit"] as? [String: Any])?["value"] as? String ?? ""
+    }
+    func textWidth(_ text: String, _ size: CGFloat) -> CGFloat {
+        (text as NSString).size(withAttributes: [.font: NSFont.systemFont(ofSize: size)]).width.rounded(.up)
+    }
+    func popoverWidth(_ signature: String) -> CGFloat {
+        let body = sourceBody(signature, in: rows)
+        guard let r = body.range(of: #"width: (\d+)"#, options: .regularExpression) else { return 0 }
+        return CGFloat(Double(body[r].dropFirst("width: ".count)) ?? 0)
+    }
+    let earBudget = popoverWidth("struct NotchEarPopover: View") - 154
+    let display = app("UI/NotchModuleDisplay.swift")
+    let moduleNames = sourceBody("var displayName: String", in: sourceBody("extension NotchEarModule", in: display))
+        .components(separatedBy: "L10n.t(\"").dropFirst().map { String($0.prefix { $0 != "\"" }) }
+    let moduleCases = sourceBody("enum NotchEarModule: String, Codable, Hashable, CaseIterable", in: settings)
+        .components(separatedBy: "\n").filter { $0.trimmingCharacters(in: .whitespaces).hasPrefix("case ") }.count
+    expectEqual(earBudget == 166 && moduleNames.count == moduleCases && moduleNames.contains("当前句") && moduleNames.contains("下一句"), true,
+                "左右耳浮层: 读到浮层宽 320、每个模块的名字(\(moduleNames.count) / \(moduleCases))")
+    let earOverflow = UILanguage.packs.compactMap { pack -> String? in
+        let need = textWidth(localized("显示内容", pack), 13) + moduleNames.map { textWidth(localized($0, pack), 12) }.max()!
+        return need > earBudget ? "\(pack) \(Int(need))" : nil
+    }
+    expectEqual(earOverflow, [], "左右耳浮层: 「显示内容」选最长的模块时各语言都排一行(行名 + 下拉字 ≤ \(Int(earBudget)))")
+    let screenBudget = popoverWidth("struct NotchScreenPopover: View") - 154 - 20
+    let screenFixed = ["自动", "跟随当前窗口", "全部屏幕", "已断开的屏幕"].map { textWidth(localized($0, "en"), 12) }.max()!
+    expectEqual(textWidth(localized("显示在", "en"), 13) + screenFixed <= screenBudget, true,
+                "屏幕浮层: 英文「Show On」+ ⓘ + 最长的固定选项不截断")
+    let screenTight = UILanguage.packs.filter { textWidth(localized("显示在", $0), 13) + 40 > screenBudget }
+    expectEqual(screenTight, [], "屏幕浮层: 各语言「显示在」排一行后下拉还留得下 40pt 字")
+    let screenRow = sourceBody("struct NotchScreenSettingsRows: View", in: rows)
+    let design = app("Settings/SettingsDesignSystem.swift")
+    expectEqual(sourceHas(screenRow, "titleKeepsLine: true") && sourceHas(screenRow, "truncatesTitle: true")
+                && sourceHas(design, ".layoutPriority(titleKeepsLine ? 2 : 0)") && sourceHas(design, ".layoutPriority(titleKeepsLine ? 1 : 0)")
+                && sourceHas(design, ".fixedSize(horizontal: !truncatesTitle, vertical: true)")
+                && sourceHas(design, "height: compact ? 28 : 32,\ntruncatesTitle: truncatesTitle"),
+                true, "屏幕浮层(契约): 「显示在」标题先排满一行,屏幕名放不下时下拉里截断")
 }

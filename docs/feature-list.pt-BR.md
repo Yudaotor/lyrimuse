@@ -319,7 +319,7 @@ A linha atual direto na barra de menus, rolando quando é longa demais em vez de
 - Desativado por padrão
 - Ajustes: Exibição da letra › Barra de menus › Letra na barra de menus
 - Ajustes: Exibição da letra › Barra de menus › Layout › Posição
-- Ajustes: Exibição da letra › Barra de menus › Conteúdo › O que é mostrado
+- Ajustes: Exibição da letra › Barra de menus › Conteúdo › Exibição
 - Ajustes: Exibição da letra › Barra de menus › Conteúdo › Segunda linha
 - Ajustes: Atalhos de teclado › Alternar letra na barra de menus
 
@@ -784,7 +784,7 @@ Seu perfil e sua lista de amigos mostram o player, o título, o artista, a capa 
 - Ajustes: Discord › Players mostrados
 - Ajustes: Discord › Ao pausar
 - Ajustes: Discord › Ocultar por um tempo
-- Ajustes: Discord › O que é mostrado
+- Ajustes: Discord › Exibição
 - Ajustes: Discord › Botões
 - Ajustes: Discord › Ocultar detalhes da música
 
@@ -1186,7 +1186,7 @@ Todos os ajustes da janela Ajustes, por local: 346 no total. Digite um nome no c
 
 ### Exibição da letra › Barra de menus › Conteúdo
 
-- **O que é mostrado**
+- **Exibição**
 - **Segunda linha**
 - **Sem tradução**
 - **Sem pronúncia**
@@ -1485,7 +1485,7 @@ Todos os ajustes da janela Ajustes, por local: 346 no total. Digite um nome no c
 ### Discord
 
 - **Mostrar no Discord**: Quando ativado, a música que você está ouvindo aparece no seu perfil do Discord e na lista de amigos. Se seus amigos não a virem, vá em Configurações de usuário › Privacidade de atividade no Discord e ative o compartilhamento de atividade
-- **O que é mostrado**
+- **Exibição**
 - **Depois de “Ouvindo”**: O “××” de “Ouvindo ××” no seu perfil. O Discord no iOS e na web ignora isso e continua mostrando o player Com “Título” ou “Artista” aqui, “Abaixo do seu nome” não pode mostrar o player
 - **Abaixo do seu nome**: O Discord só pode mostrar abaixo do seu nome a primeira linha, a segunda ou o que vem depois de “Ouvindo”. Se nem o título nem o artista estiverem em um desses lugares, essa opção fica indisponível
 - **Selo na capa**

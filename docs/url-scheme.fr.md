@@ -42,7 +42,7 @@ Les plus courants se copient depuis **Liens profonds**, en bas de Réglages › 
 | `/about` | À propos | — |
 | `/account/lastfm` | Last.fm | `/stats` Statistiques, `/chart` Classements, `/on-this-day` Empreinte, `/settings` Règles |
 | `/account/listenbrainz` | ListenBrainz | — |
-| `/account/discord` | Discord | `/display` Contenu affiché, `/buttons` Boutons, `/privacy` Confidentialité |
+| `/account/discord` | Discord | `/display` Affichage, `/buttons` Boutons, `/privacy` Confidentialité |
 | `/account/relay` | Push web | — |
 | `/account/bark` | Alertes push | — |
 | `/software-update` | Mise à jour de logiciels | Ajoutez `?check=1` pour rechercher aussi les mises à jour |

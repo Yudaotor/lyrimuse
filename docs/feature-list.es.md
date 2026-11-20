@@ -319,7 +319,7 @@ La línea actual aparece en la barra de menús y se desplaza si es demasiado lar
 - Desactivada por omisión
 - Ajustes: Mostrar letra › Barra de menús › Letra en la barra de menús
 - Ajustes: Mostrar letra › Barra de menús › Diseño › Posición
-- Ajustes: Mostrar letra › Barra de menús › Contenido › Qué se muestra
+- Ajustes: Mostrar letra › Barra de menús › Contenido › Mostrar
 - Ajustes: Mostrar letra › Barra de menús › Contenido › Segunda línea
 - Ajustes: Atajos de teclado › Alternar letra en la barra de menús
 
@@ -784,7 +784,7 @@ Tu perfil y tu lista de amigos muestran el reproductor, el título, el artista, 
 - Ajustes: Discord › Reproductores mostrados
 - Ajustes: Discord › Al pausar
 - Ajustes: Discord › Ocultar temporalmente
-- Ajustes: Discord › Qué se muestra
+- Ajustes: Discord › Mostrar
 - Ajustes: Discord › Botones
 - Ajustes: Discord › Ocultar detalles de la canción
 
@@ -1186,7 +1186,7 @@ Todos los ajustes de la ventana Ajustes, según dónde están: 346 en total. Esc
 
 ### Mostrar letra › Barra de menús › Contenido
 
-- **Qué se muestra**
+- **Mostrar**
 - **Segunda línea**
 - **Sin traducción**
 - **Sin romanización**
@@ -1485,7 +1485,7 @@ Todos los ajustes de la ventana Ajustes, según dónde están: 346 en total. Esc
 ### Discord
 
 - **Mostrar en Discord**: Si está activado, la canción que escuchas se muestra en tu perfil de Discord y en la lista de amigos. Si tus amigos no la ven, ve a Ajustes de usuario › Privacidad de actividad en Discord y activa compartir la actividad
-- **Qué se muestra**
+- **Mostrar**
 - **Tras “Escuchando”**: El “××” de “Escuchando ××” en tu perfil. Discord en iOS y en la web lo ignora y sigue mostrando el reproductor Con «Título» o «Artista» aquí, «Debajo de tu nombre» no puede mostrar el reproductor
 - **Debajo de tu nombre**: Discord solo puede mostrar bajo tu nombre la primera línea, la segunda o lo que sigue a “Escuchando”. Si ni el título ni el artista están en uno de esos sitios, esa opción no está disponible
 - **Insignia en la ilustración**

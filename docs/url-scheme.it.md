@@ -42,7 +42,7 @@ Quelli più comuni si possono copiare da **Deep link**, in fondo a Impostazioni 
 | `/about` | Info | — |
 | `/account/lastfm` | Last.fm | `/stats` Statistiche, `/chart` Classifiche, `/on-this-day` Impronta, `/settings` Regole |
 | `/account/listenbrainz` | ListenBrainz | — |
-| `/account/discord` | Discord | `/display` Contenuto mostrato, `/buttons` Pulsanti, `/privacy` Privacy |
+| `/account/discord` | Discord | `/display` Mostra, `/buttons` Pulsanti, `/privacy` Privacy |
 | `/account/relay` | Push web | — |
 | `/account/bark` | Avvisi push | — |
 | `/software-update` | Aggiornamento software | Aggiungi `?check=1` per verificare anche la presenza di aggiornamenti |

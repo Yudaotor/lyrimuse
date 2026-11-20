@@ -42,7 +42,7 @@ Los más habituales se pueden copiar desde **Enlaces profundos**, al final de Aj
 | `/about` | Acerca de | — |
 | `/account/lastfm` | Last.fm | `/stats` Estadísticas, `/chart` Listas, `/on-this-day` Huella, `/settings` Reglas |
 | `/account/listenbrainz` | ListenBrainz | — |
-| `/account/discord` | Discord | `/display` Qué se muestra, `/buttons` Botones, `/privacy` Privacidad |
+| `/account/discord` | Discord | `/display` Mostrar, `/buttons` Botones, `/privacy` Privacidad |
 | `/account/relay` | Push web | — |
 | `/account/bark` | Avisos push | — |
 | `/software-update` | Actualización de software | Añade `?check=1` para buscar también actualizaciones |

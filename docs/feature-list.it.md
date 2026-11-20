@@ -319,7 +319,7 @@ La riga attuale direttamente nella barra dei menu, che scorre quando è troppo l
 - Disattivata di default
 - Impostazioni: Visualizzazione testo › Barra dei menu › Testo nella barra dei menu
 - Impostazioni: Visualizzazione testo › Barra dei menu › Layout › Posizione
-- Impostazioni: Visualizzazione testo › Barra dei menu › Contenuto › Contenuto mostrato
+- Impostazioni: Visualizzazione testo › Barra dei menu › Contenuto › Mostra
 - Impostazioni: Visualizzazione testo › Barra dei menu › Contenuto › Seconda riga
 - Impostazioni: Scorciatoie da tastiera › Alterna testo nella barra dei menu
 
@@ -784,7 +784,7 @@ Il tuo profilo e l’elenco degli amici mostrano player, titolo, artista, illust
 - Impostazioni: Discord › Player mostrati
 - Impostazioni: Discord › Alla pausa
 - Impostazioni: Discord › Nascondi temporaneamente
-- Impostazioni: Discord › Contenuto mostrato
+- Impostazioni: Discord › Mostra
 - Impostazioni: Discord › Pulsanti
 - Impostazioni: Discord › Nascondi dettagli brano
 
@@ -1186,7 +1186,7 @@ Tutte le impostazioni della finestra Impostazioni, per posizione: 346 in tutto. 
 
 ### Visualizzazione testo › Barra dei menu › Contenuto
 
-- **Contenuto mostrato**
+- **Mostra**
 - **Seconda riga**
 - **Senza traduzione**
 - **Senza pronuncia**
@@ -1485,7 +1485,7 @@ Tutte le impostazioni della finestra Impostazioni, per posizione: 346 in tutto. 
 ### Discord
 
 - **Mostra su Discord**: Se attivo, il brano che ascolti appare sul tuo profilo Discord e nell’elenco amici. Se gli amici non lo vedono, in Discord vai in Impostazioni utente › Privacy delle attività e attiva la condivisione delle attività
-- **Contenuto mostrato**
+- **Mostra**
 - **Dopo “Sta ascoltando”**: Il “××” di “Sta ascoltando ××” nel tuo profilo. Discord su iOS e sul web lo ignora e continua a mostrare il player Con “Titolo” o “Artista” qui, “Sotto il tuo nome” non può mostrare il player
 - **Sotto il tuo nome**: Discord può mostrare sotto il tuo nome solo la prima riga, la seconda o ciò che segue “Sta ascoltando”. Se né il titolo né l’artista si trovano in una di queste posizioni, l’opzione non è disponibile
 - **Badge illustrazione**

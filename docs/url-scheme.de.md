@@ -42,7 +42,7 @@ Die gängigsten kannst du unter **Deep Links** unten in Einstellungen › Tastat
 | `/about` | Über | — |
 | `/account/lastfm` | Last.fm | `/stats` Statistik, `/chart` Charts, `/on-this-day` Spuren, `/settings` Regeln |
 | `/account/listenbrainz` | ListenBrainz | — |
-| `/account/discord` | Discord | `/display` Was angezeigt wird, `/buttons` Buttons, `/privacy` Datenschutz |
+| `/account/discord` | Discord | `/display` Anzeige, `/buttons` Buttons, `/privacy` Datenschutz |
 | `/account/relay` | Web-Push | — |
 | `/account/bark` | Push-Mitteilungen | — |
 | `/software-update` | Softwareupdate | Hänge `?check=1` an, um zusätzlich nach Updates zu suchen |

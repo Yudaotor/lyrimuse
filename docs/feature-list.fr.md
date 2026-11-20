@@ -319,7 +319,7 @@ La ligne en cours directement dans la barre des menus, qui défile quand elle es
 - Désactivée par défaut
 - Réglages : Affichage des paroles › Barre des menus › Paroles de la barre des menus
 - Réglages : Affichage des paroles › Barre des menus › Disposition › Position
-- Réglages : Affichage des paroles › Barre des menus › Contenu › Contenu affiché
+- Réglages : Affichage des paroles › Barre des menus › Contenu › Affichage
 - Réglages : Affichage des paroles › Barre des menus › Contenu › Seconde ligne
 - Réglages : Raccourcis clavier › Afficher/masquer les paroles de la barre des menus
 
@@ -784,7 +784,7 @@ Votre profil et votre liste d’amis affichent le lecteur, le titre, l’artiste
 - Réglages : Discord › Lecteurs affichés
 - Réglages : Discord › À la pause
 - Réglages : Discord › Masquer temporairement
-- Réglages : Discord › Contenu affiché
+- Réglages : Discord › Affichage
 - Réglages : Discord › Boutons
 - Réglages : Discord › Masquer les détails du morceau
 
@@ -1186,7 +1186,7 @@ Tous les réglages de la fenêtre Réglages, classés par emplacement : 346 au 
 
 ### Affichage des paroles › Barre des menus › Contenu
 
-- **Contenu affiché**
+- **Affichage**
 - **Seconde ligne**
 - **Sans traduction**
 - **Sans romanisation**
@@ -1485,7 +1485,7 @@ Tous les réglages de la fenêtre Réglages, classés par emplacement : 346 au 
 ### Discord
 
 - **Afficher sur Discord** : Une fois activé, le morceau que vous écoutez apparaît sur votre profil Discord et dans la liste d’amis. Si vos amis ne le voient pas, activez le partage d’activité dans Discord, sous Paramètres utilisateur › Confidentialité des activités
-- **Contenu affiché**
+- **Affichage**
 - **Après « Écoute »** : Le « ×× » de « Écoute ×× » sur votre profil. Discord sur iOS et le web l’ignore et affiche toujours le lecteur Avec « Titre » ou « Artiste » ici, « Sous votre nom » ne peut pas afficher le lecteur
 - **Sous votre nom** : Discord ne peut afficher sous votre nom que la première ligne, la deuxième, ou ce qui suit « Écoute ». Si ni le titre ni l’artiste n’y figurent, cette option est indisponible
 - **Badge d’illustration**

@@ -42,7 +42,7 @@ Os mais comuns podem ser copiados em **Deep links**, no fim de Ajustes › Atalh
 | `/about` | Sobre | — |
 | `/account/lastfm` | Last.fm | `/stats` Estatísticas, `/chart` Paradas, `/on-this-day` Pegada, `/settings` Regras |
 | `/account/listenbrainz` | ListenBrainz | — |
-| `/account/discord` | Discord | `/display` O que é mostrado, `/buttons` Botões, `/privacy` Privacidade |
+| `/account/discord` | Discord | `/display` Exibição, `/buttons` Botões, `/privacy` Privacidade |
 | `/account/relay` | Push web | — |
 | `/account/bark` | Alertas push | — |
 | `/software-update` | Atualização de software | Adicione `?check=1` para também buscar atualizações |

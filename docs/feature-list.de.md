@@ -319,7 +319,7 @@ Die aktuelle Zeile direkt in der Menüleiste; ist sie zu lang, läuft sie durch,
 - Standardmäßig aus
 - Einstellungen: Liedtext-Anzeige › Menüleiste › Menüleisten-Text
 - Einstellungen: Liedtext-Anzeige › Menüleiste › Layout › Liedtext-Position
-- Einstellungen: Liedtext-Anzeige › Menüleiste › Inhalt › Was angezeigt wird
+- Einstellungen: Liedtext-Anzeige › Menüleiste › Inhalt › Anzeige
 - Einstellungen: Liedtext-Anzeige › Menüleiste › Inhalt › Zweitzeile
 - Einstellungen: Tastaturkurzbefehle › Menüleisten-Text ein-/ausblenden
 
@@ -784,7 +784,7 @@ Dein Profil und deine Freundesliste zeigen Player, Titel, Künstler, Cover und e
 - Einstellungen: Discord › Angezeigte Player
 - Einstellungen: Discord › Bei Pause
 - Einstellungen: Discord › Vorübergehend ausblenden
-- Einstellungen: Discord › Was angezeigt wird
+- Einstellungen: Discord › Anzeige
 - Einstellungen: Discord › Buttons
 - Einstellungen: Discord › Titeldetails ausblenden
 
@@ -1186,7 +1186,7 @@ Alle Einstellungen des Einstellungsfensters nach Ort: insgesamt 346. Gib einen N
 
 ### Liedtext-Anzeige › Menüleiste › Inhalt
 
-- **Was angezeigt wird**
+- **Anzeige**
 - **Zweitzeile**
 - **Ohne Übersetzung**
 - **Ohne Umschrift**
@@ -1485,7 +1485,7 @@ Alle Einstellungen des Einstellungsfensters nach Ort: insgesamt 346. Gib einen N
 ### Discord
 
 - **Auf Discord anzeigen**: Wenn aktiviert, erscheint der Titel, den du hörst, in deinem Discord-Profil und in der Freundesliste. Sehen ihn deine Freunde nicht, schalte in Discord unter „Benutzereinstellungen › Aktivitätsprivatsphäre“ die Aktivitätsfreigabe ein
-- **Was angezeigt wird**
+- **Anzeige**
 - **Nach „Hört“**: Das „××“ in „Hört ××“ in deinem Profil. Discord für iOS und im Web ignoriert dies und zeigt weiter den Player Mit Titel oder Künstler hier kann „Unter deinem Namen“ nicht den Player zeigen
 - **Unter deinem Namen**: Discord kann nur die erste Zeile, die zweite Zeile oder den Text nach „Hört“ unter deinem Namen zeigen. Steht weder Titel noch Künstler an einer dieser Stellen, ist die Option nicht verfügbar
 - **Cover-Badge**

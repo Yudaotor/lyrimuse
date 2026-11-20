@@ -42,7 +42,7 @@
 | `/about` | О программе | — |
 | `/account/lastfm` | Last.fm | `/stats` Статистика, `/chart` Чарты, `/on-this-day` Хроника, `/settings` Правила |
 | `/account/listenbrainz` | ListenBrainz | — |
-| `/account/discord` | Discord | `/display` Что показывать, `/buttons` Кнопки, `/privacy` Конфиденциальность |
+| `/account/discord` | Discord | `/display` Показ, `/buttons` Кнопки, `/privacy` Конфиденциальность |
 | `/account/relay` | Веб-push | — |
 | `/account/bark` | Push-уведомления | — |
 | `/software-update` | Обновление ПО | Добавьте `?check=1`, чтобы заодно проверить обновления |

@@ -584,15 +584,16 @@ struct NotchFollowsAudioPopover: View {
 /// 选择硬掰成两个控件,还得额外写一句"开启后上面的指定屏幕不再起作用"来解释它们的关系。
 /// 现在是一行「显示在」+ 下拉(浮层往上弹、高度有限,单选列表会撑高),那条并法原样保留。
 ///
-/// 宽度 340:下拉里显示的是 `NSScreen.localizedName`,运行时才知道多长(常见机器量下来英文最长约 215pt,
-/// "LG UltraFine 5K Display")。行名「显示在」+ ⓘ + 图标列约 110pt,再加下拉自身的边距。更长的名字下拉会截尾。
+/// 宽度 360:按英文最长的固定选项「Follow Active Window」放下不截断(浮层宽减 154 是行名 13pt + 胶囊里的字 12pt 能用的宽,
+/// 再减 ⓘ 20)。下拉里还有 `NSScreen.localizedName`,运行时才知道多长:这一行标题先排满一行(`titleKeepsLine`),
+/// 放不下的名字在胶囊里中间截断。
 @MainActor
 struct NotchScreenPopover: View {
     /// 选完之后让宿主重算编辑台的刘海几何(换到没有刘海的外接屏,画面里那个刘海要消失)。
     var onScreenChange: () -> Void
 
     var body: some View {
-        SettingsPopoverShell(title: L10n.t("屏幕"), width: 340) {
+        SettingsPopoverShell(title: L10n.t("屏幕"), width: 360) {
             NotchScreenSettingsRows(onScreenChange: onScreenChange)
         }
     }
@@ -644,14 +645,16 @@ struct NotchScreenSettingsRows: View {
             SettingsRow(
                 icon: "display",
                 title: L10n.t("显示在"),
-                help: L10n.t("「自动」优先带刘海的屏幕；指定的屏幕断开时暂按「自动」显示")
+                help: L10n.t("「自动」优先带刘海的屏幕；指定的屏幕断开时暂按「自动」显示"),
+                titleKeepsLine: true
             ) {
                 let options = screenOptions
                 SettingsGlassMenuPicker(
                     selection: Binding(get: { selection }, set: { apply($0) }),
                     options: options.map(\.tag),
                     label: { tag in options.first { $0.tag == tag }?.name ?? "" },
-                    compact: true
+                    compact: true,
+                    truncatesTitle: true
                 )
             }
             // 搜索目录里这一项按「屏幕」登记。

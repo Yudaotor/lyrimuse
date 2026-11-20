@@ -176319,7 +176319,7 @@
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Was angezeigt wird"
+            "value" : "Anzeige"
           }
         },
         "en" : {
@@ -176331,13 +176331,13 @@
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Qué se muestra"
+            "value" : "Mostrar"
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Contenu affiché"
+            "value" : "Affichage"
           }
         },
         "hi" : {
@@ -176349,7 +176349,7 @@
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Contenuto mostrato"
+            "value" : "Mostra"
           }
         },
         "ja" : {
@@ -176367,13 +176367,13 @@
         "pt-BR" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "O que é mostrado"
+            "value" : "Exibição"
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Что показывать"
+            "value" : "Показ"
           }
         },
         "th" : {
@@ -176391,7 +176391,7 @@
         "uk" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Що показувати"
+            "value" : "Показ"
           }
         },
         "vi" : {
