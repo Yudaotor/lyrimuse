@@ -1,7 +1,7 @@
 package main
 
 // 登记表(lyricprovider.go)的期望值。生产代码里名单、顺序、轮次、哪几路是播放器本机、近况统计的同类组、专用探测曲、
-// 来源链接、按 ISRC 补取这几类只读登记表里的描述符;这里是同一份事实冻结在测试里的写法,lyricproviderregistry_test.go
+// 来源链接、按 ISRC 补取这几类只读登记表里的描述符,两种失败原因问源的可选接口;这里是同一份事实冻结在测试里的写法,lyricproviderregistry_test.go
 // 逐项比「登记表推出来的 == 这里」。加减来源、改描述符里这几类字段,要同步改这里。
 // 别的测试拿这几张表当「全部联网源」「决胜序」的输入;App 的 selftest 从这个文件抠 lyricSourceNames 的字面量跟
 // LyricsSource.allCases 比:那张表保持整张写在一行里,这个文件里别处(含注释)不要再出现它的声明写法。
@@ -70,3 +70,10 @@ var lyricSourceOwnProbeCalls = map[string]string{
 	lyricSourceZing: `return zingLyric(ctx, t.Artist, t.Title, "", 0).lyrics != ""`,
 	lyricSourceSoda: `r, _ := sodaLyricBySearch(ctx, t.Artist, t.Title, "", 0)`,
 }
+
+// lyricSourceQueryIndependentFailers:带着「跟检索词无关的失败原因」时补查轮不问的源(实现 QueryIndependentFailer 的)。
+var lyricSourceQueryIndependentFailers = []string{"lyricfind", "deezer", "applemusic", "zing"}
+
+// lyricSourceFailureDiagnosers:手动搜索的可用情况和设置页「测试」显示专属失败原因的源(实现 FailureDiagnoser 的)。
+// 跟上面那一组不是同一组。
+var lyricSourceFailureDiagnosers = []string{"netease", "lyricfind", "deezer", "soda", "zing"}

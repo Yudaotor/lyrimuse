@@ -188,6 +188,10 @@ type sodaProvider struct{ desc *ProviderDescriptor }
 
 func (p sodaProvider) Descriptor() *ProviderDescriptor { return p.desc }
 
+// DiagnosedFailure:只有「端点改了形状」这一种(soda_endpoint_changed)。没用汽水放过这首、拿不到曲目 id 时本来就不该有
+// 候选,那是常态,不记失败。补查轮照问它:搜索那条路上别名会影响命中。
+func (p sodaProvider) DiagnosedFailure() string { return sodaLastFailureReasonNow() }
+
 // ProbeOwnTrack:共用的两首探测曲汽水一首只有翻唱、一首不在曲库。走搜索那条路(不看本地队列缓存),问的是联想 + seo_track
 // (09 章决策 376)。
 func (p sodaProvider) ProbeOwnTrack(ctx context.Context) bool {

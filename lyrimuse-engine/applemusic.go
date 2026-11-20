@@ -1578,6 +1578,11 @@ type appleMusicProvider struct{ desc *ProviderDescriptor }
 
 func (p appleMusicProvider) Descriptor() *ProviderDescriptor { return p.desc }
 
+// QueryIndependentFailure:没连过账号、令牌过期、拿不到 developer token,三种都跟歌手名的写法无关。连上了只是没搜到时为空,
+// 这一路照常进补查轮:它是拿歌手名加歌名去搜的,别名会影响命中。设置页的「测试」对没连账号另有专门的提示,不走
+// FailureDiagnoser。
+func (p appleMusicProvider) QueryIndependentFailure() string { return applemusicLastFailureReasonNow() }
+
 func (p appleMusicProvider) Resolve(ctx context.Context, q ProviderQuery, env RoundEnv) SourceResult {
 	appleID, _ := env.PlaybackTrackIDs(ctx)
 	r := applemusicLyric(ctx, q.Artist, q.SourceTitle, q.Album, q.DurationSecs, appleID, lyricSourceISRC(ctx, q.Artist, q.Title, q.Album))

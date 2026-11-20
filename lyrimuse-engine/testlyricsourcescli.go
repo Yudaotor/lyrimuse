@@ -205,37 +205,12 @@ func runTestLyricSourcesCLI(args []string) {
 		if down {
 			status, reasonCode = "fail", lyricTestReasonNetworkDown
 		} else {
-			// 目前接了具体失败原因诊断的源(分别见 ytmusic.go/
-			// netease.go 头注)。QQ/酷狗/LRCLIB/AMLL 没有对应旁路,拿不到具体原因时
-			// 统一退回上面的通用代码,不编一个没核实过的理由。
-			var reason string
-			switch src {
-			case "lyricfind":
-				reason = ytmusicLastFailureReasonNow()
-			case "soda":
-				// 跟 searchcli.go 的 lyricSourceFailureReasons 是**两处**,接源时两边都要补
-				// (deezer 那次就只补了一处,见下面那条注释)。这条由
-				// TestLyricSourceFailureReasonWiredInBothConsumers 钉住。
-				reason = sodaLastFailureReasonNow()
-			case "deezer":
-				// ,换不到匿名 JWT 那一档(deezer_auth_failed,见 deezer.go 头注)。
-				// 这个 case 是**真机验证抓到的漏接**:接源时只补了 searchcli.go 的
-				// lyricSourceFailureReasons,这条路照样退回通用的 no_response —— 设置页那颗
-				// 「测试」按钮于是只会说「这个源没反应」,把"换票这一步失败"说成了"没反应"。
-				// 再接新源时记得这里和 searchcli.go 是**两处**,守卫没钉住它。
-				reason = deezerLastFailureReasonNow()
-			case "zing":
-				reason = zingLastFailureReasonNow()
-			case "netease":
-				// 同 lyricSourceFailureReasons:这一轮网易云只要成功答过
-				// 一次,就不把限流当成"这个源没给出候选"的原因 —— 吃过一次 405 跟"这个源
-				// 不可用"是两件事,实测对照见 netease.go 的 neteaseSawSuccessNow 头注。
-				if !neteaseSawSuccessNow() {
-					reason = neteaseLastFailureReasonNow()
+			// 接了失败诊断的源(FailureDiagnoser)报它的专属原因,跟 searchcli.go 的 lyricSourceFailureReasonsWith 问的是
+			// 同一个方法。没接的源、接了但没认出原因的,退回上面的通用代码,不编一个没核实过的理由。
+			if diagnoser, ok := lyricProviders().provider(src).(FailureDiagnoser); ok {
+				if reason := diagnoser.DiagnosedFailure(); reason != "" {
+					reasonCode = reason
 				}
-			}
-			if reason != "" {
-				reasonCode = reason
 			}
 		}
 		emitResult(src, status, reasonCode)

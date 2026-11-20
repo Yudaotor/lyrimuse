@@ -820,6 +820,11 @@ type lyricFindProvider struct{ desc *ProviderDescriptor }
 
 func (p lyricFindProvider) Descriptor() *ProviderDescriptor { return p.desc }
 
+// QueryIndependentFailure:地区受限(拿不到 visitor id、整站只回提示页)时换个写法照样搜不到。
+func (p lyricFindProvider) QueryIndependentFailure() string { return ytmusicLastFailureReasonNow() }
+
+func (p lyricFindProvider) DiagnosedFailure() string { return ytmusicLastFailureReasonNow() }
+
 func (p lyricFindProvider) Resolve(ctx context.Context, q ProviderQuery, _ RoundEnv) SourceResult {
 	r := ytmusicLyric(ctx, q.Artist, q.SourceTitle, q.Album, q.DurationSecs)
 	return SourceResult{lyr: r.lyrics, matchTitle: r.title, matchArtist: r.artist, matchAlbum: r.album, matchCover: r.cover, srcDur: r.durationSecs, plainOnly: r.plainOnly, identityFromLocalClient: r.fromLocalClient}

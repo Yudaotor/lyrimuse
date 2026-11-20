@@ -122,6 +122,11 @@ type zingProvider struct{ desc *ProviderDescriptor }
 
 func (p zingProvider) Descriptor() *ProviderDescriptor { return p.desc }
 
+// QueryIndependentFailure:密钥全被拒(zing_signature_rejected)时换个别名照样被拒。
+func (p zingProvider) QueryIndependentFailure() string { return zingLastFailureReasonNow() }
+
+func (p zingProvider) DiagnosedFailure() string { return zingLastFailureReasonNow() }
+
 // ProbeOwnTrack:Zing MP3 只有越南曲库,共用的两首探测曲一首搜不到、一首只有不带歌词的条目(09 章决策 373)。
 func (p zingProvider) ProbeOwnTrack(ctx context.Context) bool {
 	t := p.desc.Probe

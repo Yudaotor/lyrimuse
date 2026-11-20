@@ -13,6 +13,27 @@ type LyricProvider interface {
 	Resolve(ctx context.Context, q ProviderQuery, env RoundEnv) SourceResult
 }
 
+// QueryIndependentFailer 由会遇到「跟检索词无关的失败」的源实现:鉴权、换票、地区受限、签名被拒这一类,换个歌手歌名的
+// 写法照样问不成。QueryIndependentFailure 交最近一次这类失败的原因代码,没有时为空;非空时补查轮(别名轮、按 ISRC 补取)
+// 不问这个源(lyricSourcesWorthRetry)。
+//
+// 它跟 FailureDiagnoser 是两回事、覆盖的源也不同,别并成一个方法:这里答的是「再问一遍有没有用」,那边答的是「界面上
+// 该显示什么原因」。有的源有显示得出的原因、补查轮却照问(网易云的限流过一会儿就好),有的源补查轮不问、界面上另有
+// 专门的提示(Apple Music 没连账号)。
+type QueryIndependentFailer interface {
+	QueryIndependentFailure() string
+}
+
+// FailureDiagnoser 由接了失败诊断的源实现。DiagnosedFailure 交这个进程里最近一次认出来的专属失败原因(稳定代码,不是文案,
+// 见 lyricsourcefailure.go),没有时为空。手动搜索的「歌词源可用情况」(lyricSourceFailureReasonsWith)和设置页的「测试」
+// (runTestLyricSourcesCLI)对没给出候选的源显示它;没实现的源只有传输层的通用原因。
+//
+// 只交这个源自己的请求认出来的失败。一个源因为它等的源没给编号而没法查(AMLL),那是按依赖推出来的结论,由消费方
+// 自己推,不算在这里。
+type FailureDiagnoser interface {
+	DiagnosedFailure() string
+}
+
 // OwnProbeProvider 由描述符带 Probe 的源实现:曲库盖不到共用探测曲的源,拿自己那首探测曲直接问一次这个源自己的取词,
 // 不经整轮搜索、不打扰别的源;问出了歌词返回 true。test-lyric-sources 和 healthcheck 共用(ownLyricSourceProbe)。
 type OwnProbeProvider interface {
@@ -362,9 +383,6 @@ type ProviderDescriptor struct {
 	PeerGroup string
 	// Probe:自己的探测曲,nil = 用共用的探测曲。有它的源要实现 OwnProbeProvider。
 	Probe *ProbeTrack
-	// QueryIndependentFailure:最近一次跟检索词无关的失败原因(鉴权、换票、地区受限、签名被拒),非空时补查轮不问它
-	// (lyricSourcesWorthRetry);nil = 没有这类原因。
-	QueryIndependentFailure func() string
 
 	// Privileges 只在 registerBuiltin 里写。
 	Privileges builtinPrivileges

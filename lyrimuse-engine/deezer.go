@@ -194,6 +194,11 @@ type deezerProvider struct{ desc *ProviderDescriptor }
 
 func (p deezerProvider) Descriptor() *ProviderDescriptor { return p.desc }
 
+// QueryIndependentFailure:换不到匿名 JWT(deezer_auth_failed)时,换个歌手别名同样一个字都取不回来。
+func (p deezerProvider) QueryIndependentFailure() string { return deezerLastFailureReasonNow() }
+
+func (p deezerProvider) DiagnosedFailure() string { return deezerLastFailureReasonNow() }
+
 func (p deezerProvider) Resolve(ctx context.Context, q ProviderQuery, _ RoundEnv) SourceResult {
 	r := deezerLyric(ctx, q.Artist, q.SourceTitle, q.Album, q.DurationSecs, lyricSourceISRC(ctx, q.Artist, q.Title, q.Album))
 	return SourceResult{lyr: r.lyrics, yrc: r.yrc, tr: r.tr, songwriters: r.songwriters, matchTitle: r.title, matchArtist: r.artist, matchAlbum: r.album, matchCover: r.cover, srcDur: r.durationSecs, isrc: r.isrc, plainOnly: r.plainOnly}

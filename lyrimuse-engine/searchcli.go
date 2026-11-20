@@ -474,19 +474,17 @@ func tracksFoundNoLyrics(results []scoredLyricCandidateResult) []trackFoundNoLyr
 // 查一下有没有已知的具体失败原因,查得到才放进返回的 map。返回值的 value 是**稳定
 // 代码**,不是文案,见 lyricsourcefailure.go 头注。
 //
-// 两层:① 具体失败原因,只覆盖已经接了诊断旁路的那几个源:netease/lyricfind/deezer/soda(见各自
-// xxxLastFailureReasonNow 的头注,给 test-lyric-sources 用的同一条只读旁路,这里
-// 复用,不重新发明);② 传输层通用原因,对任何源:这一轮一个 HTTP 响应都没拿到的,
+// 两层:① 具体失败原因,只覆盖接了失败诊断的那几个源(实现 FailureDiagnoser 的,跟 test-lyric-sources 问的是同一个
+// 方法);② 传输层通用原因,对任何源:这一轮一个 HTTP 响应都没拿到的,
 // 报 dns_failed / connect_failed / server_error(sourcebreaker.go 的 transportFailureCodes)。
 // 两层都没命中的源(比如拿到了 200 / 404 但没这首歌)不在返回的 map 里 —— 那就是真的"未给出
 // 候选",Swift 侧照实显示,不编一个没核实过的理由。
 //
-// **原因 ≠ 没给出候选的原因**(补的一道判据):网易云那一条现在还要过
-// `neteaseSawSuccessNow()` —— 这一轮它只要成功答过一次,就不把限流报上去。实测对照见
-// netease.go 里那个函数的头注(同一分钟两次搜索:两次都吃了 405,其中一次照样给出 4 条
-// 候选)。其余几个源没有这个信号。
+// **原因 ≠ 没给出候选的原因**:网易云那一条还要过 `neteaseSawSuccessNow()`(在它的 DiagnosedFailure 里)——
+// 这一轮它只要成功答过一次,就不把限流报上去。实测对照见 netease.go 里那个函数的头注(同一分钟两次搜索:
+// 两次都吃了 405,其中一次照样给出 4 条候选)。其余几个源没有这个信号。
 //
-// 这几个 xxxLastFailureReasonNow 读的是**进程级**"这次进程生命周期里最近一次识别出的
+// 各源的 DiagnosedFailure 读的是**进程级**"这次进程生命周期里最近一次识别出的
 // 失败原因",不是专门为"这一轮搜索"重新打点的——但 search-lyrics 本来就是一次性短命进程
 // (每次手动搜索都是全新进程),这次搜索期间对该源发起的请求要是真的撞上了已识别的失败
 // 模式,原因会在这次进程里被设置一次,读到的就是这次搜索本身的真实原因,不是别的进程/
@@ -525,36 +523,22 @@ func lyricSourceResumeAts(results []scoredLyricCandidateResult, enabled func(str
 }
 
 // lyricSourceFailureReasonsWith 是上面那个的可测版本:传输层代码表、启用判定、amll 缺 ID 标记
-// 都从参数进,不碰包级状态(各源特有的 xxxLastFailureReasonNow 仍读进程级旁路 —— 那几条
+// 都从参数进,不碰包级状态(各源的 DiagnosedFailure 仍读进程级旁路 —— 那几条
 // 各自有测试,这里只管合成规则)。
 func lyricSourceFailureReasonsWith(results []scoredLyricCandidateResult, transport map[string]string,
 	enabled func(string) bool, amllSkippedForMissingIDs bool) map[string]string {
 	responded := lyricSourcesResponded(results)
 	reasons := make(map[string]string)
-	check := func(source string, reasonFn func() string) {
-		if containsString(responded, source) {
-			return
+	// 接了失败诊断的源(FailureDiagnoser)各自答专属原因;给过候选的不问。
+	for _, source := range networkLyricSourceNames() {
+		diagnoser, ok := lyricProviders().provider(source).(FailureDiagnoser)
+		if !ok || containsString(responded, source) {
+			continue
 		}
-		if r := reasonFn(); r != "" {
+		if r := diagnoser.DiagnosedFailure(); r != "" {
 			reasons[source] = r
 		}
 	}
-	// 网易云这一轮只要**成功答过一次**,就不把限流报成"没给出候选"的原因。
-	// 病根是张冠李戴 —— `neteaseLastFailureReason` 只要进程里出现过一次 code 405 就被贴上,
-	// 而这个 map 只看"有没有给出候选",两件独立的事被显示成因果。对照实验和完整推导见
-	// netease.go 里 `neteaseSawSuccessNow` 的头注。
-	if !neteaseSawSuccessNow() {
-		check("netease", neteaseLastFailureReasonNow)
-	}
-	check("lyricfind", ytmusicLastFailureReasonNow)
-	// deezer:目前只有"换不到匿名 JWT"这一种已实测的失败模式
-	// (见 lyricsourcefailure.go 的 deezer_auth_failed)。
-	check("deezer", deezerLastFailureReasonNow)
-	// soda:只有"端点改了形状"这一种(见 lyricsourcefailure.go 的 soda_endpoint_changed)。
-	// 没用汽水放过这首歌 → 拿不到曲目 id → 这一路本来就不该有候选,那是常态不是失败。
-	check("soda", sodaLastFailureReasonNow)
-	// zing:只有「签名密钥全被拒」这一种(见 lyricsourcefailure.go 的 zing_signature_rejected)。
-	check("zing", zingLastFailureReasonNow)
 	// 传输层兜底(来龙去脉见 sourcebreaker.go 最后一节「传输层失败分类」):这一轮一个
 	// HTTP 响应都没拿到的源,报 dns_failed / connect_failed / server_error。放在具体代码之后、
 	// 只填空 —— 限流 / 地区限制 / 直连被堵比"连不上"更有信息量。只报启用的源:关掉的源这一轮

@@ -309,6 +309,15 @@ type neteaseProvider struct{ desc *ProviderDescriptor }
 
 func (p neteaseProvider) Descriptor() *ProviderDescriptor { return p.desc }
 
+// DiagnosedFailure:限流(405)的原因只置不清,这个进程里它只要成功答过一次就不报:吃过一次 405 跟「这个源没给出候选」
+// 是两件事(neteaseSawSuccessNow)。补查轮照问它:限流过一会儿就好,不算跟检索词无关的失败。
+func (p neteaseProvider) DiagnosedFailure() string {
+	if neteaseSawSuccessNow() {
+		return ""
+	}
+	return neteaseLastFailureReasonNow()
+}
+
 func (p neteaseProvider) Resolve(ctx context.Context, q ProviderQuery, env RoundEnv) SourceResult {
 	info := neteaseLookup(ctx, q.Artist, q.SourceTitle, q.Album, q.DurationSecs)
 	if info.SongID > 0 {

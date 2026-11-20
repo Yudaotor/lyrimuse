@@ -11,6 +11,7 @@ import (
 	"sort"
 	"strings"
 	"testing"
+	"time"
 )
 
 // 歌词源登记表(lyricprovider.go)的守卫。两种参照:生产代码只读登记表的那几类(名单、顺序),参照是冻结在
@@ -476,24 +477,148 @@ func TestProviderRegistryProbesMatchOwnProbes(t *testing.T) {
 	}
 }
 
-// 补查轮(别名轮、ISRC 补取)里「有跟检索词无关的失败原因就不问」的那几个源,以及各自问的是哪个函数。
+// lyricSourceFailureProbes:各源失败原因的进程级旁路怎么读、怎么写(测试里拿它造出「这个源带着失败原因」)。
+var lyricSourceFailureProbes = map[string]struct {
+	get func() string
+	set func(string)
+}{
+	lyricSourceNetease:    {neteaseLastFailureReasonNow, neteaseSetLastFailureReason},
+	lyricSourceLyricFind:  {ytmusicLastFailureReasonNow, ytmusicSetLastFailureReason},
+	lyricSourceDeezer:     {deezerLastFailureReasonNow, deezerSetLastFailureReason},
+	lyricSourceAppleMusic: {applemusicLastFailureReasonNow, applemusicSetLastFailureReason},
+	lyricSourceSoda:       {sodaLastFailureReasonNow, sodaSetLastFailureReason},
+	lyricSourceZing:       {zingLastFailureReasonNow, zingSetLastFailureReason},
+}
+
+// clearLyricSourceFailuresForTest 把各源的失败原因和网易云的「成功过」标记清掉,测试结束时还原。
+func clearLyricSourceFailuresForTest(t *testing.T) {
+	t.Helper()
+	savedSuccess := neteaseAnySuccess
+	neteaseAnySuccess = false
+	t.Cleanup(func() { neteaseAnySuccess = savedSuccess })
+	for _, probe := range lyricSourceFailureProbes {
+		saved := probe.get()
+		probe.set("")
+		t.Cleanup(func() { probe.set(saved) })
+	}
+}
+
+// 补查轮(别名轮、ISRC 补取)里「有跟检索词无关的失败原因就不问」的那几个源:恰好是实现了 QueryIndependentFailer 的,
+// 跟期望表逐个相等;各自答的是自己那条旁路上的原因,带着原因时补查轮名单里没有它、别的源不受影响。
 func TestProviderRegistryQueryIndependentFailureMatchesRetryPlan(t *testing.T) {
-	body := goFuncSource(t, "enrich.go", "lyricSourcesWorthRetry")
-	want := map[string]string{}
-	for _, m := range regexp.MustCompile(`case "(\w+)":\s*(?://[^\n]*\s*)*if (\w+)\(\) != ""`).FindAllStringSubmatch(body, -1) {
-		want[m[1]] = m[2]
-	}
-	if n := strings.Count(body, "case \""); n != len(want) || n == 0 {
-		t.Fatalf("lyricSourcesWorthRetry 里有 %d 个 case,扫出来 %d 个,扫描式跟不上源码了", n, len(want))
-	}
-	got := map[string]string{}
+	savedFeatures, savedBreaker := features(), sharedLyricSourceBreaker()
+	t.Cleanup(func() { setFeatures(savedFeatures); setSharedLyricSourceBreaker(savedBreaker) })
+	featuresRef().LyricsSources = nil
+	setSharedLyricSourceBreaker(newLyricSourceBreaker(time.Now))
+	clearLyricSourceFailuresForTest(t)
+
+	got := map[string]bool{}
 	for _, d := range registryDescriptors() {
-		if d.QueryIndependentFailure != nil {
-			got[d.Name] = funcName(d.QueryIndependentFailure)
+		if _, ok := lyricProviders().provider(d.Name).(QueryIndependentFailer); ok {
+			got[d.Name] = true
 		}
 	}
-	if !reflect.DeepEqual(got, want) {
-		t.Errorf("登记表 %v\nlyricSourcesWorthRetry %v", got, want)
+	want := map[string]bool{}
+	for _, s := range lyricSourceQueryIndependentFailers {
+		want[s] = true
+	}
+	if !reflect.DeepEqual(got, want) || len(got) == 0 {
+		t.Fatalf("实现了 QueryIndependentFailer 的源 %v\n期望表 %v", sortedKeys(got), sortedKeys(want))
+	}
+	if all := lyricSourcesWorthRetry(context.Background(), nil); !slices.Equal(all, lyricSourceNames) {
+		t.Fatalf("用例前提:没有失败原因时补查轮问全部联网源,得到 %v", all)
+	}
+	// 每个源的失败原因单独置一次:只有期望表里的源从补查轮名单里消失,而且只消失它自己。
+	for _, name := range lyricSourceNames {
+		probe, has := lyricSourceFailureProbes[name]
+		if !has {
+			if want[name] {
+				t.Fatalf("%s 在期望表里,lyricSourceFailureProbes 里没有它的旁路", name)
+			}
+			continue
+		}
+		const reason = "registry_guard_reason"
+		probe.set(reason)
+		if f, ok := lyricProviders().provider(name).(QueryIndependentFailer); ok && f.QueryIndependentFailure() != reason {
+			t.Errorf("%s:QueryIndependentFailure 交的是 %q,不是它自己那条旁路上的原因", name, f.QueryIndependentFailure())
+		}
+		retry := lyricSourcesWorthRetry(context.Background(), nil)
+		expect := slices.Clone(lyricSourceNames)
+		if want[name] {
+			expect = slices.DeleteFunc(expect, func(s string) bool { return s == name })
+		}
+		if !slices.Equal(retry, expect) {
+			t.Errorf("%s 带着失败原因时补查轮名单 %v\n期望 %v", name, retry, expect)
+		}
+		probe.set("")
+	}
+}
+
+// 设置页「测试」和手动搜索的「歌词源可用情况」显示专属失败原因的那几个源:恰好是实现了 FailureDiagnoser 的,跟期望表
+// 逐个相等;各自答的是自己那条旁路上的原因。这一组跟上面补查轮那一组不是同一组源。
+func TestProviderRegistryFailureDiagnosersMatchExpected(t *testing.T) {
+	clearLyricSourceFailuresForTest(t)
+	got := map[string]bool{}
+	for _, d := range registryDescriptors() {
+		if _, ok := lyricProviders().provider(d.Name).(FailureDiagnoser); ok {
+			got[d.Name] = true
+		}
+	}
+	want := map[string]bool{}
+	for _, s := range lyricSourceFailureDiagnosers {
+		want[s] = true
+	}
+	if !reflect.DeepEqual(got, want) || len(got) == 0 {
+		t.Fatalf("实现了 FailureDiagnoser 的源 %v\n期望表 %v", sortedKeys(got), sortedKeys(want))
+	}
+	if slices.Equal(sortedKeys(want), sortedKeys(func() map[string]bool {
+		m := map[string]bool{}
+		for _, s := range lyricSourceQueryIndependentFailers {
+			m[s] = true
+		}
+		return m
+	}())) {
+		t.Error("两组源相等了:确认是真的一样,还是两个接口被并成了一个")
+	}
+	on := func(string) bool { return true }
+	if r := lyricSourceFailureReasonsWith(nil, nil, on, false); r != nil {
+		t.Fatalf("用例前提:没有失败原因时不报,得到 %v", r)
+	}
+	for _, name := range lyricSourceNames {
+		probe, has := lyricSourceFailureProbes[name]
+		if !has {
+			if want[name] {
+				t.Fatalf("%s 在期望表里,lyricSourceFailureProbes 里没有它的旁路", name)
+			}
+			continue
+		}
+		const reason = "registry_guard_reason"
+		probe.set(reason)
+		reasons := lyricSourceFailureReasonsWith(nil, nil, on, false)
+		expect := map[string]string(nil)
+		if want[name] {
+			expect = map[string]string{name: reason}
+		}
+		if !reflect.DeepEqual(reasons, expect) {
+			t.Errorf("%s 带着失败原因时手动搜索报 %v,期望 %v", name, reasons, expect)
+		}
+		if d, ok := lyricProviders().provider(name).(FailureDiagnoser); ok && d.DiagnosedFailure() != reason {
+			t.Errorf("%s:DiagnosedFailure 交的是 %q", name, d.DiagnosedFailure())
+		}
+		// 给过候选的源不报。
+		if r := lyricSourceFailureReasonsWith([]scoredLyricCandidateResult{{Source: name, Score: -1}}, nil, on, false); r != nil {
+			t.Errorf("%s 给过候选还报了原因 %v", name, r)
+		}
+		probe.set("")
+	}
+	// 网易云:这个进程里成功答过一次就不报限流。
+	lyricSourceFailureProbes[lyricSourceNetease].set("registry_guard_reason")
+	neteaseAnySuccess = true
+	if r := lyricSourceFailureReasonsWith(nil, nil, on, false); r != nil {
+		t.Errorf("网易云成功答过之后还报了原因 %v", r)
+	}
+	if d := lyricProviders().provider(lyricSourceNetease).(FailureDiagnoser).DiagnosedFailure(); d != "" {
+		t.Errorf("网易云成功答过之后 DiagnosedFailure = %q", d)
 	}
 }
 

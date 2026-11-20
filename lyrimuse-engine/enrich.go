@@ -4999,8 +4999,8 @@ func hasUsableLyricCandidate(scored []scoredLyricCandidateResult) bool {
 
 // lyricSourcesWorthAliasRetry:这一轮**值得**拿别名再查一次的源 —— 启用、没给出可用候选、
 // 而且失败原因不是"换个名字也没用"的那几类:传输层连不上(DNS / 连接 / 5xx,sourcebreaker 的
-// transportFailureCodes,进程内累计)、lyricfind 的地区限制
-// (各自的 xxxLastFailureReasonNow 旁路)。amll 不发搜索请求(按曲目 ID 直取,按名字只在本地索引里找),
+// transportFailureCodes,进程内累计)、跟检索词无关的失败(lyricfind 的地区限制、deezer 换不到票、applemusic 没连账号、
+// zing 密钥被拒,各源自己经 QueryIndependentFailer 答)。amll 不发搜索请求(按曲目 ID 直取,按名字只在本地索引里找),
 // 它在别名轮里会跟着网易云 / QQ 的别名结果拿到新 ID,所以照常算进来
 // —— 网易云 / QQ 不在名单里时由 dropAMLLWithoutIDSource 剔掉。
 // soda 照常算进来:它有自己的搜索(本地队列缓存拿不到 id 时的兜底,见 soda.go),别名确实
@@ -5034,30 +5034,9 @@ func lyricSourcesWorthRetry(ctx context.Context, scored []scoredLyricCandidateRe
 			(outer != nil && !outer[s]) {
 			continue
 		}
-		switch s {
-		case "lyricfind":
-			if ytmusicLastFailureReasonNow() != "" {
-				continue
-			}
-		case "deezer":
-			// 换不到匿名 JWT(deezer_auth_failed)时,换个歌手别名同样一个字都取不回来
-			// —— 跟 lyricfind 那条一个道理,见 deezer.go 头注。
-			if deezerLastFailureReasonNow() != "" {
-				continue
-			}
-		case "applemusic":
-			// 没连过账号 / 令牌过期 / 拿不到 developer token —— 三种都跟"歌手名写法"
-			// 毫无关系,换个别名重试一次只是白白多打一轮请求。见 applemusic.go 头注。
-			// 反过来说,连上了只是没搜到,这一路**值得**重试:它跟网易云/QQ 一样是拿
-			// 歌手名 + 歌名去搜的,别名确实会影响命中。
-			if applemusicLastFailureReasonNow() != "" {
-				continue
-			}
-		case "zing":
-			// 密钥全被拒(zing_signature_rejected)时换个别名照样被拒。
-			if zingLastFailureReasonNow() != "" {
-				continue
-			}
+		// 带着跟检索词无关的失败原因的源(QueryIndependentFailer:鉴权、换票、地区受限、签名被拒)换个写法照样问不成。
+		if f, ok := lyricProviders().provider(s).(QueryIndependentFailer); ok && f.QueryIndependentFailure() != "" {
+			continue
 		}
 		out = append(out, s)
 	}

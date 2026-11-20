@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"os"
 	"regexp"
 	"strconv"
@@ -169,33 +168,35 @@ func TestLyricsMigrationFlagsCoverNewerSources(t *testing.T) {
 }
 
 // 源特有的失败原因代码必须在**两处**消费面都接上:搜索弹窗的
-// `lyricSourceFailureReasons`(searchcli.go)和设置页测试按钮的那个 switch
-// (testlyricsourcescli.go)。
+// `lyricSourceFailureReasons`(searchcli.go)和设置页测试按钮(testlyricsourcescli.go)。
 //
-// 接 deezer 那次只补了前者,后者照样退回通用的 no_response —— 设置页那颗「测试」按钮
-// 于是把"换票这一步失败"说成了"这个源没反应"。当时的注释里写着"守卫没钉住它",这条就是
-// 补上的那道守卫:按源名扫两个文件的源码,少哪一处就报哪一处。
-//
-// 用源码扫描而不是跑一遍诊断:后者要造出每一种失败态(限流/地区限制/换票失败/端点变形),
-// 而这里要守的只是「这个源名在这两处都出现过」,读源码就能答。
+// 漏接一处的表现:设置页那颗「测试」按钮把"换票这一步失败"说成"这个源没反应"。两处问的是同一个接口
+// (FailureDiagnoser),一个源实现了它两处就都接上;这里钉两处都经这个接口问、谁也不绕过它直接读某个源的失败原因。
+// 哪几个源有专属原因、各自答什么,由 TestProviderRegistryFailureDiagnosersMatchExpected 按行为钉。
 func TestLyricSourceFailureReasonWiredInBothConsumers(t *testing.T) {
-	// 有专属失败原因的源 → 它在两处 switch/check 里的源名。没有专属原因的源不在此列
-	// (它们只走传输层通用代码),新接的源如果加了 xxxLastFailureReasonNow,这里也要补一行。
-	sources := []string{"netease", "lyricfind", "deezer", "soda"}
-	files := map[string]string{
-		"searchcli.go":           `check("%s"`,
-		"testlyricsourcescli.go": `case "%s":`,
+	wires := map[string][]string{
+		"searchcli.go": {
+			"diagnoser, ok := lyricProviders().provider(source).(FailureDiagnoser)",
+			"if r := diagnoser.DiagnosedFailure(); r != \"\" {\n\t\t\treasons[source] = r",
+		},
+		"testlyricsourcescli.go": {
+			"if diagnoser, ok := lyricProviders().provider(src).(FailureDiagnoser); ok {",
+			"if reason := diagnoser.DiagnosedFailure(); reason != \"\" {\n\t\t\t\t\treasonCode = reason",
+		},
 	}
-	for name, pattern := range files {
+	for name, needles := range wires {
 		raw, err := os.ReadFile(name)
 		if err != nil {
 			t.Fatalf("读不到 %s: %v", name, err)
 		}
 		body := string(raw)
-		for _, s := range sources {
-			if !strings.Contains(body, fmt.Sprintf(pattern, s)) {
-				t.Errorf("%s 里没接 %q 的失败原因 —— 两处消费面必须同时接,漏一处的表现见本测试头注", name, s)
+		for _, needle := range needles {
+			if !containsCode(body, needle) {
+				t.Errorf("%s 里没有 %q —— 两处消费面都要经 FailureDiagnoser 问源", name, needle)
 			}
+		}
+		if m := regexp.MustCompile(`\b\w+LastFailureReasonNow\(`).FindString(body); m != "" {
+			t.Errorf("%s 里直接读了某个源的失败原因 %q:经 FailureDiagnoser 问,不然另一处消费面会漏接", name, m)
 		}
 	}
 }

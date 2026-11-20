@@ -60,8 +60,7 @@ func newBuiltinLyricProviderRegistry() *lyricProviderRegistry {
 		},
 		ProxyFallback: true,
 		Baked:         bakedStripOnly, ParenBackground: true, ConsensusFamily: lyricSourceLyricFind,
-		PeerGroup:               peerGroupGlobal,
-		QueryIndependentFailure: ytmusicLastFailureReasonNow,
+		PeerGroup: peerGroupGlobal,
 	}, privLocalClientIdentity|privPlaybackTrackIDs)})
 
 	r.implement(kuwoProvider{desc: r.registerBuiltin(&ProviderDescriptor{
@@ -84,8 +83,7 @@ func newBuiltinLyricProviderRegistry() *lyricProviderRegistry {
 		ProxyFallback:   true,
 		ParenBackground: true, SongwritersRank: 3, SongwritersSkipCJK: true, ConsensusFamily: lyricSourceLyricFind,
 		ISRCLookup: isrcLookupDirect, ISRCAuthority: true,
-		PeerGroup:               peerGroupGlobal,
-		QueryIndependentFailure: deezerLastFailureReasonNow,
+		PeerGroup: peerGroupGlobal,
 	}, 0)})
 
 	r.implement(appleMusicProvider{desc: r.registerBuiltin(&ProviderDescriptor{
@@ -96,8 +94,7 @@ func newBuiltinLyricProviderRegistry() *lyricProviderRegistry {
 		},
 		ProxyFallback:   true,
 		SongwritersRank: 1, ISRCAuthority: true,
-		PeerGroup:               peerGroupGlobal,
-		QueryIndependentFailure: applemusicLastFailureReasonNow,
+		PeerGroup: peerGroupGlobal,
 	}, privLocalClientIdentity|privPlaybackTrackIDs|privPlayerNoVocals|privRefetchByID)})
 
 	r.implement(sodaProvider{desc: r.registerBuiltin(&ProviderDescriptor{
@@ -132,8 +129,7 @@ func newBuiltinLyricProviderRegistry() *lyricProviderRegistry {
 		Name: lyricSourceZing, Order: 15, TieRank: 14, DefaultPriorityRank: 15,
 		Hosts:         []HostRule{{"zingmp3.vn", hostExact}, {"static-zmp3.zmdcdn.me", hostExact}},
 		ProxyFallback: true, ParenBackground: true,
-		Probe:                   &ProbeTrack{Artist: "Sơn Tùng M-TP", Title: "Lạc Trôi"},
-		QueryIndependentFailure: zingLastFailureReasonNow,
+		Probe: &ProbeTrack{Artist: "Sơn Tùng M-TP", Title: "Lạc Trôi"},
 	}, privBreakerControl)})
 
 	r.implement(megalobizProvider{desc: r.registerBuiltin(&ProviderDescriptor{
