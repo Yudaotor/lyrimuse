@@ -602,10 +602,15 @@ private func wiringContracts() {
     // 播放控制被拦下时各展示面置灰 + 说明:判据跟真发指令同一个,每拍轮询收尾刷新,六个展示面都接上。
     let controller = code("LyrimuseCore/Local/MusicPlaybackController.swift")
     expectEqual(sourceBody("public static func controlsWithheld() -> Bool {", in: controller)
-                    .contains("currentBaseRoute(mediaControlCommand: \"toggle-play-pause\") == .withheld")
+                    .contains("currentBaseRoute(mediaControlCommand: \"toggle-play-pause\", selected: PlaybackPlayerPreference.lastReadSelected) == .withheld")
                 && sourceBody("private static func dispatchRoute(", in: controller)
                     .contains("let base = currentBaseRoute(mediaControlCommand: mediaControlCommand)"), true,
                 "拦下置灰: 展示与发指令共用按命令能力判定的 currentBaseRoute")
+    let preference = code("LyrimuseCore/Local/PlaybackPlayer.swift")
+    expectEqual(sourceHas(sourceBody("public static var selected: Set<PlaybackPlayer> {", in: preference),
+                          "let value = readSelected()\nlastRead.withLock { $0 = value }")
+                && sourceHas(sourceBody("public static var lastReadSelected: Set<PlaybackPlayer> {", in: preference), "lastRead.withLock { $0 } ?? selected"),
+                true, "拦下置灰: 每拍收尾用轮询在后台读到的播放器选择,主线程不读 features.json")
     let localSource = code("LyrimuseCore/Local/LocalPlaybackSource.swift")
     expectEqual(sourceBody("private func finishPoll() {", in: localSource).contains("refreshPlaybackControlsWithheld()"), true,
                 "拦下置灰: 每拍轮询收尾刷新")

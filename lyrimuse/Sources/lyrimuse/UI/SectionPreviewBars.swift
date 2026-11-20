@@ -115,6 +115,7 @@ struct MenuBarPreviewBar<Lane: View>: View {
     @ObservedObject private var settings = AppSettings.shared
     /// 舞台整块按**真实菜单栏**的明暗渲染(见 stage 末尾那段);菜单栏由亮转暗时要重画。
     @ObservedObject private var menuBarAppearance = MenuBarAppearanceStore.shared
+    @ObservedObject private var wallpaper = DesktopWallpaperImages.shared
     /// 设置窗口自己的深浅色。舞台整块换成了菜单栏的明暗(见 `stage`),从可点区域弹的浮层要换回这一份。
     @Environment(\.colorScheme) private var colorScheme
     @State private var hoveredHotspot: Hotspot?
@@ -440,7 +441,7 @@ struct MenuBarPreviewBar<Lane: View>: View {
     /// 薄纱横向始终铺满整宽:随宽度模式 / 宽度变形的遮罩会变成「改宽度把背景也改了」。见 06 章决策 77。
     private var desktopSurface: some View {
         ZStack(alignment: .top) {
-            if let band = DesktopWallpaperTopBand.image {
+            if case let .some(.some(band)) = wallpaper.topBand {
                 GeometryReader { geo in
                     let w = max(band.size.width, geo.size.width)
                     Image(nsImage: band)
@@ -449,7 +450,7 @@ struct MenuBarPreviewBar<Lane: View>: View {
                         .frame(width: geo.size.width, height: geo.size.height, alignment: .topTrailing)
                         .clipped()
                 }
-            } else {
+            } else if wallpaper.topBand != nil {
                 Color(nsColor: .textColor).opacity(0.14)
             }
             // 把这一小片屏幕压得别在设置页里太抢眼,同灵动岛那块舞台。
@@ -460,6 +461,7 @@ struct MenuBarPreviewBar<Lane: View>: View {
         }
         .allowsHitTesting(false)
         .accessibilityHidden(true)
+        .onAppear { wallpaper.loadTopBand() }
     }
 
     /// macOS 26 起真菜单栏默认全透明、直接透出壁纸:仿菜单栏条不铺材质、也不压薄纱。更早的系统真菜单栏

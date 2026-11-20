@@ -5789,7 +5789,7 @@ private struct PlayerSettingsTab: View {
                bundleID: seen.bundleID, artist: seen.artist, album: seen.album,
                // 新鲜度由 refreshUngatedNowPlaying 每拍把关(陈旧就置 nil),这里存的 at 是第一次看到的时刻。
                observedAt: Date(), isAutoDetect: stores.players.contains(.auto), now: Date(),
-               isAccepted: { TrustedPlayers.isAccepted($0) }) {
+               isAccepted: { TrustedPlayers.isAccepted($0, trusted: FeatureSettingsStore.shared.trustedPlayers) }) {
             SettingsCard(cornerRadius: 18) {
                 SettingsRow(
                     // 用真图标,跟隔壁两张卡同一份取图逻辑(AppIconResolver)。这张「发现未知播放器」

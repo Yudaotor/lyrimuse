@@ -134,6 +134,11 @@ func runSettingsAuditContracts() {
         expectEqual(false, true, "快捷键录制: refreshTitle 里先比标题、再作废固有尺寸")
     }
     let unknown = app("Settings/UnknownPlayerNotifier.swift")
+    let unknownTick = sourceBody("private func tick()", in: unknown)
+    expectEqual(unknownTick.components(separatedBy: "TrustedPlayers.isAccepted($0, trusted: features.trustedPlayers)").count - 1 == 3
+                && !unknownTick.contains("TrustedPlayers.isAccepted($0) }")
+                && view.contains("isAccepted: { TrustedPlayers.isAccepted($0, trusted: FeatureSettingsStore.shared.trustedPlayers) }"), true,
+                "信任播放器: 未知播放器每拍判定、设置页那张卡用设置仓库里的信任名单,主线程不读 features.json")
     let trust = sourceBody("static func trust(_ bundleID: String) async", in: unknown)
     expectEqual(!trust.isEmpty
                 && trust.range(of: "dismissDelivered")!.lowerBound < trust.range(of: "guard !TrustedPlayers.isAccepted")!.lowerBound, true,

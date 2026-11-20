@@ -1,4 +1,5 @@
 import Foundation
+import os
 
 // Lyrimuse 读取"本地正在播放"状态的目标 App——rawValue 跟引擎侧的 playerXxx 常量
 // 逐字对应(两侧现在都由 shared/players.json 生成,不再靠人守),这是两侧通过共享 json
@@ -167,6 +168,20 @@ public enum PlaybackPlayerPreference {
     /// 不需要再处理"选中集合是空的"这种状态(那不是一个合法状态,跟引擎侧
     /// resolvePlayers 的保证对称)。
     public static var selected: Set<PlaybackPlayer> {
+        let value = readSelected()
+        lastRead.withLock { $0 = value }
+        return value
+    }
+
+    /// 最近一次 `selected` 从文件读到的值,一次都还没读过时现读。轮询每拍在后台读 `selected`,主线程上每拍都要问的地方
+    /// (播放控制画不画灰)用这个,不碰磁盘:配置目录所在的卷卡住时,打开这个小文件也能等上好几秒。见 02 章决策 282。
+    public static var lastReadSelected: Set<PlaybackPlayer> {
+        lastRead.withLock { $0 } ?? selected
+    }
+
+    private static let lastRead = OSAllocatedUnfairLock<Set<PlaybackPlayer>?>(initialState: nil)
+
+    private static func readSelected() -> Set<PlaybackPlayer> {
         guard let data = FileIO.read(featuresURL),
               let f = FileIO.decodeJSON(MinimalFeatureFlags.self, from: data, source: featuresURL) else {
             return [.auto]

@@ -118,12 +118,13 @@ final class UnknownPlayerNotifier: NSObject {
             resetPending(); prompt.update(offer: nil); return
         }
         let features = FeatureSettingsStore.shared
+        // 信任名单用设置仓库里那份(跟文件同步改):这一拍在主线程上,别读 features.json。
         // 第一层判据(跟设置页那张卡共用)。不过就把稳定性计数清零 —— 计数只对
         // 「一直是同一个、一直够格」的观察累积。
         guard UnknownPlayerAlert.shouldOffer(
             bundleID: seen.bundleID, artist: seen.artist, album: seen.album,
             observedAt: seen.at, isAutoDetect: features.players.contains(.auto), now: Date(),
-            isAccepted: { TrustedPlayers.isAccepted($0) })
+            isAccepted: { TrustedPlayers.isAccepted($0, trusted: features.trustedPlayers) })
         else { resetPending(); prompt.update(offer: nil); return }
 
         if pendingBundleID != seen.bundleID {
@@ -140,7 +141,7 @@ final class UnknownPlayerNotifier: NSObject {
         let qualifies = UnknownPlayerAlert.qualifiesForAnnounce(
             bundleID: seen.bundleID, artist: seen.artist, album: seen.album,
             observedAt: seen.at, isAutoDetect: true, now: Date(),
-            isAccepted: { TrustedPlayers.isAccepted($0) },
+            isAccepted: { TrustedPlayers.isAccepted($0, trusted: features.trustedPlayers) },
             hasDisplayName: displayName != nil, stableFor: stableFor, stableHits: pendingHits)
         if qualifies, AppSettings.shared.notchOverlayEnabled {
             prompt.update(offer: .init(
@@ -154,7 +155,7 @@ final class UnknownPlayerNotifier: NSObject {
         guard UnknownPlayerAlert.shouldAnnounce(
             bundleID: seen.bundleID, artist: seen.artist, album: seen.album,
             observedAt: seen.at, isAutoDetect: true, now: Date(),
-            isAccepted: { TrustedPlayers.isAccepted($0) },
+            isAccepted: { TrustedPlayers.isAccepted($0, trusted: features.trustedPlayers) },
             hasDisplayName: displayName != nil,
             stableFor: stableFor, stableHits: pendingHits, log: loadLog())
         else { return }

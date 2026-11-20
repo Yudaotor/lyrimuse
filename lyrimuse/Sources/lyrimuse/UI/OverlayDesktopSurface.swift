@@ -22,25 +22,96 @@ import SwiftUI
 /// 在读不到壁纸时宁可什么都不画,正是因为当时没有这么一份共用实现可用)。
 @MainActor
 struct OverlayDesktopSurface: View {
+    @ObservedObject private var wallpaper = DesktopWallpaperImages.shared
+
     var body: some View {
-        if let wallpaper = DesktopWallpaperSample.image {
-            Image(nsImage: wallpaper)
-                .resizable()
-                .scaledToFill()
-        } else {
-            // 拿不到壁纸(读不到文件/没有权限)就退回棋盘格 —— 它至少明确表达了
-            // 「这一块是透明的、透出的是底下的东西」,不会像纯色那样把人误导成不透明。
-            Canvas { context, size in
-                let cell: CGFloat = 8
-                let cols = Int(size.width / cell) + 1
-                let rows = Int(size.height / cell) + 1
-                for row in 0 ..< rows {
-                    for col in 0 ..< cols where (row + col).isMultiple(of: 2) {
-                        let rect = CGRect(
-                            x: CGFloat(col) * cell, y: CGFloat(row) * cell,
-                            width: cell, height: cell)
-                        context.fill(Path(rect), with: .color(.gray.opacity(0.22)))
-                    }
+        Group {
+            switch wallpaper.sample {
+            case .some(.some(let image)):
+                Image(nsImage: image)
+                    .resizable()
+                    .scaledToFill()
+            case .some(.none):
+                checkerboard
+            case .none:
+                Color.clear
+            }
+        }
+        .onAppear { wallpaper.loadSample() }
+    }
+
+    private var checkerboard: some View {
+        // 拿不到壁纸(读不到文件/没有权限)就退回棋盘格 —— 它至少明确表达了
+        // 「这一块是透明的、透出的是底下的东西」,不会像纯色那样把人误导成不透明。
+        Canvas { context, size in
+            let cell: CGFloat = 8
+            let cols = Int(size.width / cell) + 1
+            let rows = Int(size.height / cell) + 1
+            for row in 0 ..< rows {
+                for col in 0 ..< cols where (row + col).isMultiple(of: 2) {
+                    let rect = CGRect(
+                        x: CGFloat(col) * cell, y: CGFloat(row) * cell,
+                        width: cell, height: cell)
+                    context.fill(Path(rect), with: .color(.gray.opacity(0.22)))
+                }
+            }
+        }
+    }
+}
+
+/// 设置页预览垫的两张壁纸图(`DesktopWallpaperSample`、`DesktopWallpaperTopBand`),各在后台读一次,读完回主线程换上。
+/// 壁纸文件可能在网络卷上、或是 iCloud 里没下载到本机的文件,打开就要等,不能在 body 里同步读。见 04 章决策 113。
+/// 只读一次,换了壁纸要等下次启动。
+@MainActor
+final class DesktopWallpaperImages: ObservableObject {
+    static let shared = DesktopWallpaperImages()
+
+    /// nil = 还没读完(画空白);`.some(nil)` = 读过了、读不到(退回占位)。
+    @Published private(set) var sample: NSImage??
+    @Published private(set) var topBand: NSImage??
+    private var sampleStarted = false
+    private var topBandStarted = false
+    private nonisolated static let queue = DispatchQueue(label: "me.yudaotor.lyrimuse.wallpaper-images", qos: .userInitiated)
+
+    private init() {}
+
+    func loadSample() {
+        guard !sampleStarted else { return }
+        sampleStarted = true
+        guard let screen = NSScreen.main, let url = NSWorkspace.shared.desktopImageURL(for: screen) else {
+            sample = .some(nil)
+            return
+        }
+        Self.queue.async {
+            let thumb = DesktopWallpaperSample.thumbnail(url: url)
+            DispatchQueue.main.async {
+                MainActor.assumeIsolated {
+                    DesktopWallpaperImages.shared.sample = .some(thumb.map {
+                        // 点尺寸按 2x 折回去:占 640pt 宽(原图本来就不到 1280px 时按实际像素 / 2)。
+                        NSImage(cgImage: $0, size: NSSize(width: CGFloat($0.width) / 2, height: CGFloat($0.height) / 2))
+                    })
+                }
+            }
+        }
+    }
+
+    func loadTopBand() {
+        guard !topBandStarted else { return }
+        topBandStarted = true
+        // 菜单栏在主屏(第一块屏)上;`NSScreen.main` 是键盘焦点所在的屏,多屏时可能是另一块。
+        guard let screen = NSScreen.screens.first, let url = NSWorkspace.shared.desktopImageURL(for: screen) else {
+            topBand = .some(nil)
+            return
+        }
+        let screenW = Double(screen.frame.width), screenH = Double(screen.frame.height)
+        let backing = Double(screen.backingScaleFactor)
+        Self.queue.async {
+            let band = DesktopWallpaperTopBand.render(url: url, screenW: screenW, screenH: screenH, backing: backing)
+            DispatchQueue.main.async {
+                MainActor.assumeIsolated {
+                    DesktopWallpaperImages.shared.topBand = .some(band.map {
+                        NSImage(cgImage: $0.image, size: NSSize(width: screenW, height: $0.height))
+                    })
                 }
             }
         }
@@ -51,39 +122,24 @@ struct OverlayDesktopSurface: View {
 /// 屏幕最上面那一条桌面:壁纸按它在带菜单栏那块屏幕上的铺法(等比铺满、居中)缩放之后,最上面
 /// `bandHeight` 高、整屏宽的那一条,点尺寸就是屏幕上的点尺寸。菜单栏预览垫它,透出来的颜色才跟真菜单栏
 /// 那一段对得上;别改回拿 `DesktopWallpaperSample` 按预览宽度放大 —— 那样露出的是壁纸上面四分之一,
-/// 上深下浅的壁纸会浅出一大截。只读一次,换壁纸要等下次启动(同 `DesktopWallpaperSample`)。见 06 章决策 77。
-@MainActor
+/// 上深下浅的壁纸会浅出一大截。在后台读一次(`DesktopWallpaperImages.loadTopBand`)。见 06 章决策 77。
 enum DesktopWallpaperTopBand {
     /// 留多高(pt)。要盖住菜单栏预览整块舞台(仿菜单栏条 + 下沿留白 + 宽度通道)。
     static let bandHeight: CGFloat = 96
 
-    private static var loaded = false
-    private static var cache: NSImage?
-
-    static var image: NSImage? {
-        if !loaded {
-            loaded = true
-            cache = load()
-        }
-        return cache
-    }
-
-    private static func load() -> NSImage? {
-        // 菜单栏在主屏(第一块屏)上;`NSScreen.main` 是键盘焦点所在的屏,多屏时可能是另一块。
-        guard let screen = NSScreen.screens.first,
-              let url = NSWorkspace.shared.desktopImageURL(for: screen),
-              let source = CGImageSourceCreateWithURL(url as CFURL, nil),
+    /// 读壁纸文件、画出那一条,哪个线程都能调;屏幕尺寸(点)和像素密度由调用方在主线程上取好。`height` 是这一条的点高。
+    static func render(url: URL, screenW: Double, screenH: Double, backing: Double) -> (image: CGImage, height: Double)? {
+        guard let source = CGImageSourceCreateWithURL(url as CFURL, nil),
               let props = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any],
               let pixelWidth = (props[kCGImagePropertyPixelWidth] as? NSNumber)?.doubleValue,
               let pixelHeight = (props[kCGImagePropertyPixelHeight] as? NSNumber)?.doubleValue,
               pixelWidth > 0, pixelHeight > 0
         else { return nil }
-        let screenW = Double(screen.frame.width), screenH = Double(screen.frame.height)
         guard screenW > 0, screenH > 0 else { return nil }
         // 铺满屏幕时原图每个像素占几个点;解一张够屏幕像素密度的缩略图,原图更小就按原图。
         let pointsPerPixel = max(screenW / pixelWidth, screenH / pixelHeight)
         let longSide = max(pixelWidth, pixelHeight)
-        let maxPixel = min(longSide, longSide * pointsPerPixel * Double(screen.backingScaleFactor))
+        let maxPixel = min(longSide, longSide * pointsPerPixel * backing)
         let options: [CFString: Any] = [
             kCGImageSourceCreateThumbnailFromImageAlways: true,
             kCGImageSourceCreateThumbnailWithTransform: true,
@@ -110,27 +166,15 @@ enum DesktopWallpaperTopBand {
         ctx.interpolationQuality = .high
         ctx.draw(thumb, in: CGRect(x: originX, y: originY, width: drawW, height: drawH))
         guard let band = ctx.makeImage() else { return nil }
-        return NSImage(cgImage: band, size: NSSize(width: screenW, height: bandH))
+        return (band, bandH)
     }
 }
 
 /// 预览里垫在悬浮歌词卡底下的那张桌面壁纸。
 ///
-/// 只读一次并缩到预览用得着的尺寸:壁纸动辄几千像素,每次渲染都去读原图既慢又占内存。
+/// 只读一次(`DesktopWallpaperImages.loadSample`,在后台)并缩到预览用得着的尺寸:壁纸动辄几千像素,每次渲染都去读原图既慢又占内存。
 /// 代价是换了壁纸要等下次启动才更新 —— 对一个"演示半透明效果"的垫底图来说够用了。
-@MainActor
 enum DesktopWallpaperSample {
-    private static var loaded = false
-    private static var cache: NSImage?
-
-    static var image: NSImage? {
-        if !loaded {
-            loaded = true
-            cache = load()
-        }
-        return cache
-    }
-
     /// 缩到多宽(pt)。预览舞台的宽度在这附近,按 2x 出像素,Retina 上不糊。
     private static let targetWidth: CGFloat = 640
 
@@ -139,10 +183,8 @@ enum DesktopWallpaperSample {
     /// 原来是 `NSImage(contentsOf:)` + `NSImage(size:flipped:drawingHandler:)`:后者是**懒绘制**,
     /// 闭包攥着原图,每次需要重新光栅化都从原图再画一遍 —— 系统壁纸常见 6K,"缩到 640"
     /// 实际一个字节都没省下来。
-    private static func load() -> NSImage? {
-        guard let screen = NSScreen.main,
-              let url = NSWorkspace.shared.desktopImageURL(for: screen),
-              let source = CGImageSourceCreateWithURL(url as CFURL, nil),
+    static func thumbnail(url: URL) -> CGImage? {
+        guard let source = CGImageSourceCreateWithURL(url as CFURL, nil),
               let props = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any],
               let pixelWidth = (props[kCGImagePropertyPixelWidth] as? NSNumber)?.doubleValue,
               let pixelHeight = (props[kCGImagePropertyPixelHeight] as? NSNumber)?.doubleValue,
@@ -156,10 +198,6 @@ enum DesktopWallpaperSample {
             kCGImageSourceCreateThumbnailWithTransform: true,
             kCGImageSourceThumbnailMaxPixelSize: maxPixel,
         ]
-        guard let thumb = CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary)
-        else { return nil }
-        // 点尺寸按 2x 折回去:跟原来一样占 640pt 宽(原图本来就不到 1280px 时按实际像素 / 2)。
-        let size = NSSize(width: CGFloat(thumb.width) / 2, height: CGFloat(thumb.height) / 2)
-        return NSImage(cgImage: thumb, size: size)
+        return CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary)
     }
 }

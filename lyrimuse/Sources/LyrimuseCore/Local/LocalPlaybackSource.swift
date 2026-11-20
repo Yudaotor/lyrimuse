@@ -5817,6 +5817,8 @@ public final class LocalPlaybackSource: ObservableObject {
 
     /// 这首歌的歌词落定了(有词、纯音乐、或搜完确实没有)就给遥测记一笔;还在搜、广告不记。`source` 是显示的那份主歌词的来源
     /// (换用了播放器自家那份时是那份的),`plainSource` 是纯文本兜底的来源。
+    /// 判语言和记账在 `telemetryQueue` 上按交来的顺序做:拉丁字母这类要系统认语言(`NLLanguageRecognizer`),每次都现装一遍
+    /// 语言识别模型、读模型文件,不能放在主线程上。见 14 章决策 237。
     private func noteLyricsTelemetry(trackKey: String, hasContent: Bool, instrumental: Bool, noLyrics: Bool,
                                      plain: String, isCantonese: Bool, source: String?, plainSource: String?) {
         guard TelemetryActivity.shared.isRecording, !isCurrentTrackAdBreak, trackKey != "||",
@@ -5824,20 +5826,30 @@ public final class LocalPlaybackSource: ObservableObject {
         let result = TelemetryLyricsResult(LyricsKind.classify(
             hasWordTiming: syncEngine.showsWordTiming, hasLyrics: hasContent,
             hasPlainTextFallback: !plain.isEmpty, isInstrumental: instrumental))
-        let language: TelemetrySongLanguage?
+        let sample: (script: LyricScript, text: String)?
         switch result {
         case .word, .line:
-            language = syncEngine.telemetryLanguage
-        case .plain:
-            let script = Romanizer.songScript(of: plain)
-            language = TelemetrySongLanguage(
-                script: isCantonese && (script == .chinese || script == .korean) ? .cantonese : script, text: plain)
-        case .instrumental, .none:
-            language = nil
+            sample = syncEngine.telemetryLanguageSample
+        case .plain, .instrumental, .none:
+            sample = nil
         }
-        TelemetryActivity.shared.noteLyricsResult(track: trackKey, result: result,
-                                                  source: result == .plain ? plainSource : source, language: language)
+        let shown = result == .plain ? plainSource : source
+        let now = Date()
+        Self.telemetryQueue.async {
+            let language: TelemetrySongLanguage?
+            if result == .plain {
+                // 整首文字种类同样可能要系统认语言(西里尔字母分不出是哪种时)。
+                let script = Romanizer.songScript(of: plain)
+                language = TelemetrySongLanguage(
+                    script: isCantonese && (script == .chinese || script == .korean) ? .cantonese : script, text: plain)
+            } else {
+                language = sample.map { TelemetrySongLanguage(script: $0.script, text: $0.text) }
+            }
+            TelemetryActivity.shared.noteLyricsResult(track: trackKey, result: result, source: shown, language: language, now: now)
+        }
     }
+    /// 歌词结果记账的串行队列,同一首后到的那笔晚记,`noteLyricsResult` 按它挪档。
+    private nonisolated static let telemetryQueue = DispatchQueue(label: "lyrimuse.telemetry.lyrics", qos: .utility)
 
     /// 换歌时整首歌词行(`allLines`)建了这么久就记一行日志。
     private static let slowWindowLinesBuildSecs: TimeInterval = 0.05

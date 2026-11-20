@@ -1377,8 +1377,14 @@ func runTelemetryTests() {
                     true, "接线: 歌词落定时记歌词结果,广告和还在搜的不记")
         expectEqual(sourceHas(sourceBody("private func reloadCurrentLyrics()", in: source),
                               "source: playerVersion?.source ?? found?.lyricsSource, plainSource: found?.plainLyricsSource")
-                    && sourceHas(sourceBody("private func noteLyricsTelemetry(", in: source), "source: result == .plain ? plainSource : source"),
+                    && sourceHas(sourceBody("private func noteLyricsTelemetry(", in: source), "let shown = result == .plain ? plainSource : source"),
                     true, "接线: 来源取显示的那份(播放器自家那份优先),纯文本档取纯文本的来源")
+        let lyricsNote = sourceBody("private func noteLyricsTelemetry(", in: source)
+        expectEqual(sourceHas(lyricsNote, "Self.telemetryQueue.async {\nlet language: TelemetrySongLanguage?\nif result == .plain {")
+                    && sourceHas(lyricsNote, "let script = Romanizer.songScript(of: plain)\nlanguage = TelemetrySongLanguage(")
+                    && sourceHas(lyricsNote, "language = sample.map { TelemetrySongLanguage(script: $0.script, text: $0.text) }")
+                    && !sourceHas(lyricsNote, "language = syncEngine.telemetryLanguage"), true,
+                    "接线: 歌词语言在后台队列上判,主线程只取样本(系统认语言每次现装模型)")
         let window = sourceText("lyrimuse/UI/LyricsWindowView.swift")
         expectEqual(sourceHas(sourceBody("static func markOpen()", in: window), "guard LyricsWindowOpenRecord.markOpen(.standard, invisibly: invisibly) else { return }")
                     && sourceHas(sourceBody("static func markOpen()", in: window), "TelemetryActivity.shared.noteAction(.lyricsWindow)"),

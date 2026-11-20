@@ -2122,9 +2122,13 @@ public final class LyricsSyncEngine {
     public var hasContent: Bool { usingWords ? !wordLines.isEmpty : !baseLines.isEmpty }
     /// 现在显示的是逐字时间轴。
     public var showsWordTiming: Bool { usingWords && !wordLines.isEmpty }
-    /// 这首歌的语言(遥测用),没有能显示的歌词时为 nil。
+    /// 这首歌的语言(遥测用),没有能显示的歌词时为 nil。拉丁字母这类要系统认语言,慢,别在主线程上调。
     public var telemetryLanguage: TelemetrySongLanguage? {
-        hasContent ? TelemetrySongLanguage(script: songScript, text: songTextSample) : nil
+        telemetryLanguageSample.map { TelemetrySongLanguage(script: $0.script, text: $0.text) }
+    }
+    /// 判语言要的整首文字种类和正文样本,没有能显示的歌词时为 nil。只取值不判,主线程上拿它、到后台再判。
+    public var telemetryLanguageSample: (script: LyricScript, text: String)? {
+        hasContent ? (songScript, songTextSample) : nil
     }
 
     /// 说话人标签独立成行、冒号后没有真内容(如「合：」,YRC 里逐字数据把标签拆成

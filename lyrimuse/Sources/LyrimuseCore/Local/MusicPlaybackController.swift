@@ -1378,14 +1378,16 @@ public enum MusicPlaybackController {
 
     /// 此刻发播放控制会不会被拦下(`ControlRoute.withheld`)。各展示面据此把上一首 / 播放暂停 / 下一首画灰、悬停时说明原因,
     /// 判据跟真发指令时是同一个(`currentBaseRoute`)。`LocalPlaybackSource` 每拍轮询收尾时读一次。
+    /// 播放器选择用这一拍轮询在后台读到的那份(`lastReadSelected`),主线程上不读文件。
     public static func controlsWithheld() -> Bool {
-        currentBaseRoute(mediaControlCommand: "toggle-play-pause") == .withheld
+        currentBaseRoute(mediaControlCommand: "toggle-play-pause", selected: PlaybackPlayerPreference.lastReadSelected) == .withheld
     }
 
     /// 每次控制与展示面可用性都从同一份焦点上下文决定;跳转仍按自己的指令判通路。
-    private static func currentBaseRoute(mediaControlCommand: String) -> ControlRoute {
+    private static func currentBaseRoute(mediaControlCommand: String,
+                                         selected: Set<PlaybackPlayer> = PlaybackPlayerPreference.selected) -> ControlRoute {
         let focus = MediaControlClient.focusControlContext()
-        return controlRoute(exclusivelyAppleMusic: PlaybackPlayerPreference.isExclusivelyAppleMusic,
+        return controlRoute(exclusivelyAppleMusic: selected == [.appleMusic],
                             focusFallback: focus.scriptTarget,
                             focusHeldElsewhere: focus.heldElsewhere,
                             directQueryFallback: focus.directQueryTarget,

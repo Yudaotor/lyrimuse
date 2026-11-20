@@ -287,6 +287,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 MainActor.assumeIsolated { LocalPlaybackSource.shared.showsTranslation = on }
             }
             .store(in: &cancellables)
+        // 开着描边(启动时就开着,或之后打开)就先在后台建好描边用的 CoreImage 上下文,见 OverlayRowRaster.ciContext。
+        settings.$textStrokeEnabled
+            .first { $0 }
+            .sink { _ in OverlayRowRaster.prewarmStrokeContext() }
+            .store(in: &cancellables)
         // 同一个理由:BrowserPositionProbe 也在 LyrimuseCore 里,够不到 AppSettings,
         // 启动时不推一次的话「网页版」卡片里配好的配对要等用户重新打开设置页
         // 才会生效。

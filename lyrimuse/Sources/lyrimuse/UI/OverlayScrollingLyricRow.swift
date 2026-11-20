@@ -619,7 +619,15 @@ enum OverlayRowRaster {
     /// 位图一律按 sRGB 画、按 sRGB 标记 —— 跟 SwiftUI 那条路同一套色彩管理,两种模式同一个
     /// 颜色值在屏幕上才是同一个颜色(用 DeviceRGB 的话宽色域屏上会偏色)。
     static let colorSpace = CGColorSpace(name: CGColorSpace.sRGB) ?? CGColorSpaceCreateDeviceRGB()
+    /// 描边模糊用的 CoreImage 上下文。头一次建要问 GPU 设备,可能等好几秒:开着描边时由 `prewarmStrokeContext()` 先在后台建好,
+    /// 别让第一句带描边的歌词(换行模式第一次出现、单行模式换句都在主线程上画)去建它。见 04 章决策 112。
     static let ciContext = CIContext(options: [.cacheIntermediates: false])
+    private static let prewarmQueue = DispatchQueue(label: "me.yudaotor.lyrimuse.stroke-context", qos: .utility)
+
+    /// 开着描边时调(启动时、打开描边时)。上下文只建一次,建好之后再调什么都不做。
+    static func prewarmStrokeContext() {
+        prewarmQueue.async { _ = ciContext }
+    }
 
     static func render(_ g: OverlayRowGeometry, spec: OverlayScrollingLyricRow.Spec) -> OverlayRowImages {
         OverlayRowImages(

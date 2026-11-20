@@ -208,6 +208,19 @@ func runMainThreadIOTests() {
         let luma = app("UI/DesktopWallpaperLuma.swift")
         expectEqual(sourceHas(sourceBody("static func luma(for screen: NSScreen?)", in: luma), "desktopImageURL"), false,
                     "壁纸亮度(契约): 壁纸地址也走 5 秒缓存")
+        let surface = app("UI/OverlayDesktopSurface.swift")
+        let images = sourceBody("final class DesktopWallpaperImages: ObservableObject {", in: surface)
+        expectEqual(sourceHas(sourceBody("func loadSample()", in: images),
+                              "Self.queue.async {\nlet thumb = DesktopWallpaperSample.thumbnail(url: url)")
+                    && sourceHas(sourceBody("func loadTopBand()", in: images),
+                                 "Self.queue.async {\nlet band = DesktopWallpaperTopBand.render(url: url,")
+                    && !sourceHas(sourceBody("struct OverlayDesktopSurface: View {", in: surface), "thumbnail(url:")
+                    && !sourceHas(sourceBody("var desktopSurface: some View", in: app("UI/SectionPreviewBars.swift")), "render(url:"), true,
+                    "壁纸样图(契约): 设置页预览垫的两张壁纸图在后台读,body 只拿读好的")
+        let raster = app("UI/OverlayScrollingLyricRow.swift")
+        expectEqual(sourceHas(sourceBody("static func prewarmStrokeContext()", in: raster), "prewarmQueue.async { _ = ciContext }")
+                    && sourceHas(delegate, "settings.$textStrokeEnabled\n.first { $0 }\n.sink { _ in OverlayRowRaster.prewarmStrokeContext() }"), true,
+                    "描边上下文(契约): 开着描边时先在后台建 CoreImage 上下文,第一句带描边的歌词不在主线程上建")
 
         let didFinish = sourceBody("func applicationDidFinishLaunching(_ notification: Notification)", in: delegate)
         let watchdog = didFinish.range(of: "MainThreadWatchdog.shared.start()")?.lowerBound
