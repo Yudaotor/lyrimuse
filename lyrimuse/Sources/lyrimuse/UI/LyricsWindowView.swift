@@ -6392,13 +6392,13 @@ private struct KaraokeWordText: View {
             Group {
                 if let glyphs = glyphFrames(atMs: currentMs) {
                     // 长音强调词逐字形错开:每个字形画一份整个 token,只显示自己那个字形,各自动。
-                    let leading = word.text.prefix(while: \.isWhitespace).count
+                    let ranges = LyricsWordEmphasis.glyphRanges(word.text)
                     ZStack {
                         ForEach(glyphs.indices, id: \.self) { k in
                             Text(word.text)
                                 .font(.overlayFont(familyName: fontFamily, size: fontSize, weight: weight))
                                 .foregroundStyle(style)
-                                .modifier(SingleGlyph(glyph: leading + k))
+                                .modifier(SingleGlyph(range: k < ranges.count ? ranges[k] : 0..<0))
                                 .scaleEffect(glyphs[k].scale, anchor: emphasisAnchor)
                                 .shadow(color: base.opacity(glyphs[k].glow), radius: glyphs[k].glow > 0 ? glowRadius : 0)
                                 .transformEffect(CGAffineTransform(translationX: 0, y: glyphs[k].lift))
@@ -6448,38 +6448,46 @@ private struct EmphasisGlyph: Equatable {
     var glow: Double
 }
 
-/// 系统支持时给 token 挂上 `SingleGlyphRenderer`,只显示第 `glyph` 个字形;更早的系统不会走到这里
+/// 系统支持时给 token 挂上 `SingleGlyphRenderer`,只显示 `range` 那个字素簇的字形;更早的系统不会走到这里
 /// (见 KaraokeWordText.drawsGlyphsSeparately)。
 private struct SingleGlyph: ViewModifier {
-    let glyph: Int
+    let range: Range<Int>
 
     @ViewBuilder
     func body(content: Content) -> some View {
         if #available(macOS 15.0, *) {
-            content.textRenderer(SingleGlyphRenderer(glyph: glyph))
+            content.textRenderer(SingleGlyphRenderer(range: range))
         } else {
             content
         }
     }
 }
 
-/// 长音强调词逐字形错开时,每个字形画一份整个 token,这一份只显示第 `glyph` 个字形(零宽的组合附加符号
-/// 跟着前一个字形走)。字形位置、字距都是排好的原样;位移、放大、辉光都在外面按字形各自做(07 章决策 82):
+/// 长音强调词逐字形错开时,每个字形画一份整个 token,这一份只显示 `range`(token 里的 UTF-16 下标,
+/// `LyricsWordEmphasis.glyphRanges` 的一项)那个字素簇排出来的字形。按字形对应的字符下标归簇,不按字形顺序数:
+/// 天城文的元音符号、泰文的声调符号排出来是单独的、有宽度的字形,短 i 元音符号还排在基字前面,数字形会把一个字拆到
+/// 两份里(08 章决策 73)。字形位置、字距都是排好的原样;位移、放大、辉光都在外面按字形各自做(07 章决策 82):
 /// * 别的字形照画、透明度 0,不能不画 —— 填色渐变按画出来的字的范围铺,只画一个字形的话,每个字形会各自
 ///   从白到暗铺一遍。
 /// * 别在这里面平移字形 —— 在 TextRenderer 里平移,字按整像素一格一格跳,还隔一会儿错位一帧。
 @available(macOS 15.0, *)
 private struct SingleGlyphRenderer: TextRenderer {
-    let glyph: Int
+    let range: Range<Int>
 
     func draw(layout: Text.Layout, in ctx: inout GraphicsContext) {
-        var index = -1
+        // 字符下标是整段 Text 里的位置,token 第一个字的下标最小。
+        var origin: Text.Layout.CharacterIndex?
+        for line in layout {
+            for run in line {
+                for index in run.characterIndices where origin.map({ index < $0 }) ?? true { origin = index }
+            }
+        }
         for line in layout {
             for run in line {
                 for slice in run {
-                    if index < 0 || slice.typographicBounds.width > 0.01 { index += 1 }
                     var c = ctx
-                    if index != glyph { c.opacity = 0 }
+                    let offset = origin.flatMap { o in slice.characterIndices.first.map { o.distance(to: $0) } }
+                    if !(offset.map(range.contains) ?? false) { c.opacity = 0 }
                     c.draw(slice)
                 }
             }

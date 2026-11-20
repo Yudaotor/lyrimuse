@@ -111,6 +111,20 @@ public enum LyricsWordEmphasis {
         text.reduce(0) { $1.isWhitespace ? $0 : $0 + 1 }
     }
 
+    /// 逐字形错开时每个「字形」占的 UTF-16 下标范围:一个不是空白的 `Character`(字素簇)一个,跟 `glyphCount` 一一对应。
+    /// 画的时候按字体排出来的字形落在哪个范围里归到哪一个:天城文的元音符号、泰文的声调符号排出来是单独的字形,
+    /// 要跟着它的基字一起动,不能各占一个(见 08 章决策 73)。
+    public static func glyphRanges(_ text: String) -> [Range<Int>] {
+        var out: [Range<Int>] = []
+        var offset = 0
+        for ch in text {
+            let length = ch.utf16.count
+            if !ch.isWhitespace { out.append(offset..<(offset + length)) }
+            offset += length
+        }
+        return out
+    }
+
     /// 逐字形错开时,第 `index` 个字形(整词共 `count` 个)的效果窗口(毫秒,跟逐字填色同一个时间基准)。
     ///
     /// 第 i 个字形比整词晚 i 步起动,每个字形的窗口一样长,最后一个字形正好在词尾收完 —— 跟整词那版

@@ -1806,7 +1806,7 @@ public final class LyricsSyncEngine {
         // 逐字数据始终解析:要不要逐字填色是悬浮歌词 / 灵动岛 / 菜单栏各自的开关,由各展示面在消费点把行压成整行
         // (`SyncedLyricLine.lineLevel`),引擎不替任何一个面做这个决定。
         let normalizedYRC = LyricTimelineNormalizer.normalize(YRCParser.parse(lyricsYRC))
-        let yrc = Self.splittingHanWords(normalizedYRC.lines)
+        let yrc = Self.splittingHanWords(LyricWordClusters.merging(normalizedYRC.lines))
         keptOverlapLineTimes = normalizedYRC.keptOverlapLineTimes
         LyricTimelineNormalizer.logSummary(normalizedYRC.report, track: trackTitle)
         // 过滤前先把整份的文本取出来判一次(结构化规则是整份粒度的,见
@@ -1913,7 +1913,7 @@ public final class LyricsSyncEngine {
         creditTimesMs.subtract(candidateWords.map(\.timeMs))
         // 背景人声不过时间轴归一化:那一步把词夹回行的起止之内,而背景人声本来就常常唱到主句结束之后。
         // 署名行被删掉的那几行主句,它们的背景人声按行头挂不上任何一行,自然就不显示。
-        bgLines = YRCParser.parse(lyricsBG)
+        bgLines = LyricWordClusters.merging(YRCParser.parse(lyricsBG))
         overlapHoldEndMs = overlapHoldEnds()
         romaLines = LRCParser.parse(lyricsRoma).filter { !creditTimesMs.contains($0.timeMs) }.map {
             LyricLine(timeMs: $0.timeMs, text: LyricDuet.strippingKnownLabel($0.text, speakers: allSpeakers))

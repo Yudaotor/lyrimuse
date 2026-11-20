@@ -66,7 +66,7 @@ enum LyricsLayerListText {
         let line = CTLineCreateWithAttributedString(
             NSAttributedString(string: text, attributes: attributes(text, font: font, translation: translation)))
         let target = glyph.flatMap { g -> Range<Int>? in
-            let ranges = visibleGlyphRanges(text)
+            let ranges = LyricsWordEmphasis.glyphRanges(text)
             return g >= 0 && g < ranges.count ? ranges[g] : nil
         }
         if glyph != nil, target == nil { return nil }
@@ -88,18 +88,6 @@ enum LyricsLayerListText {
                 }
             }
         }
-    }
-
-    /// 可见字形(非空白字符)各自占的 UTF-16 下标范围。
-    static func visibleGlyphRanges(_ text: String) -> [Range<Int>] {
-        var out: [Range<Int>] = []
-        var offset = 0
-        for ch in text {
-            let length = ch.utf16.count
-            if !ch.isWhitespace { out.append(offset..<(offset + length)) }
-            offset += length
-        }
-        return out
     }
 
     /// 剪影糊开,给长音强调的辉光用(同 SwiftUI 版逐字那份的 `.shadow(color: 底色, radius:)`:高斯模糊,σ 取半径的一半)。

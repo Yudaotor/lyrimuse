@@ -269,6 +269,73 @@ func runLyricsParsingTests() {
         "YRC: CRLF换行正确切成两条独立行,而非整份解析失败"
     )
 
+    // MARK: - LyricWordClusters:逐字词的边界对齐到字素簇(08 章决策 73)
+    //
+    // 按码位切开的逐字词,各展示面逐词单独排字,词首的组合符号会被画成虚线圈「◌」。
+    do {
+        func perScalar(_ text: String, step: Int = 100) -> [LyricWord] {
+            text.unicodeScalars.enumerated().map { i, u in
+                LyricWord(startMs: i * step, durationMs: step, text: String(Character(u)))
+            }
+        }
+        func startsWithMark(_ text: String) -> Bool {
+            guard let u = text.unicodeScalars.first else { return false }
+            switch u.properties.generalCategory {
+            case .nonspacingMark, .spacingMark, .enclosingMark: return true
+            default: return u.value == 0x200D
+            }
+        }
+        func check(_ text: String, _ label: String) {
+            let merged = LyricWordClusters.merging(perScalar(text))
+            expectEqual(merged.map(\.text).joined(), text, "字素簇: \(label) 拼回去一字不差")
+            expectEqual(merged.dropFirst().filter { startsWithMark($0.text) }.map(\.text), [],
+                        "字素簇: \(label) 没有以组合符号 / ZWJ 开头的词")
+            let splitsCluster = zip(merged, merged.dropFirst()).contains {
+                ($0.text + $1.text).count != $0.text.count + $1.text.count
+            }
+            expectEqual(splitsCluster, false, "字素簇: \(label) 相邻两个词之间不切开一个字")
+        }
+        check("पाया मैंने तुम्हें", "天城文")
+        check("สวัสดี ค่ะ น้ำ", "泰文上下标元音和声调")
+        check("আমার সোনার", "孟加拉文")
+        check("தமிழ் நாடு", "泰米尔文")
+        check("مَرْحَبًا", "阿拉伯文元音符号")
+        check("שָׁלוֹם", "希伯来文点符")
+        check("e\u{301}te\u{301} o\u{323}\u{300}", "拉丁字母加组合重音")
+        check("\u{1100}\u{1161}\u{11A8}\u{1102}\u{1165}", "谚文分解形式")
+        check("\u{1F468}\u{200D}\u{1F469}\u{200D}\u{1F467} \u{1F1E8}\u{1F1F3}\u{1F44D}\u{1F3FD}", "emoji ZWJ 序列、国旗、肤色")
+
+        let hindi = LyricWordClusters.merging(perScalar("पाया"))
+        expectEqual(hindi, [LyricWord(startMs: 0, durationMs: 200, text: "पा"), LyricWord(startMs: 200, durationMs: 200, text: "या")],
+                    "字素簇: 并掉的词把上一个词的终点延到自己的终点,起点不动")
+        let partial = LyricWordClusters.merging([LyricWord(startMs: 0, durationMs: 100, text: "प"),
+                                                LyricWord(startMs: 100, durationMs: 300, text: "ाया")])
+        expectEqual(partial, [LyricWord(startMs: 0, durationMs: 100, text: "पा"),
+                              LyricWord(startMs: 100, durationMs: 300, text: "या")],
+                    "字素簇: 词首挪走一截后剩下的部分时间不动")
+        let whole = [LyricWord(startMs: 0, durationMs: 300, text: "पाया "), LyricWord(startMs: 300, durationMs: 300, text: "मैंने "),
+                     LyricWord(startMs: 600, durationMs: 100, text: "a"), LyricWord(startMs: 700, durationMs: 100, text: "b")]
+        expectEqual(LyricWordClusters.merging(whole), whole, "字素簇: 本来就按字切的词一个不动")
+        expectEqual(LyricWordClusters.merging([LyricWord(startMs: 0, durationMs: 100, text: "\u{093E}x")]).map(\.text),
+                    ["\u{093E}x"], "字素簇: 行首的词前面没有可并的,原样留着")
+
+        // 整条加载路:逐字歌词按码位切的,歌词窗口拿到的词已经对齐到字。
+        let yrc = "[1000,1800]" + "पाया मैंने".unicodeScalars.enumerated()
+            .map { "(\(1000 + $0 * 100),100,0)\(String(Character($1)))" }.joined()
+        let engine = LyricsSyncEngine()
+        _ = engine.load(lyrics: "[00:01.00]पाया मैंने", lyricsTr: "", lyricsRoma: "", lyricsYRC: yrc)
+        let words = engine.allLines(idPrefix: "t").first?.line.words?.map(\.text) ?? []
+        expectEqual(words, ["पा", "या", " ", "मैं", "ने"], "字素簇: 加载后天城文逐字词按字素簇切")
+        expectEqual(words.filter { startsWithMark($0) }, [], "字素簇: 加载后没有以组合符号开头的逐字词")
+
+        expectEqual(LyricsWordEmphasis.glyphRanges("पाया "), [0..<2, 2..<4], "字素簇: 长音逐字形按字素簇分,元音符号跟着基字")
+        expectEqual(LyricsWordEmphasis.glyphRanges("मिलाया"), [0..<2, 2..<4, 4..<6],
+                    "字素簇: 排在基字前面的短 i 元音符号也归它的基字")
+        expectEqual(LyricsWordEmphasis.glyphRanges("e\u{301}x"), [0..<2, 2..<3], "字素簇: 组合重音跟字母算一个字形")
+        expectEqual(LyricsWordEmphasis.glyphRanges("पाया ").count, LyricsWordEmphasis.glyphCount("पाया "),
+                    "字素簇: 字形范围跟字形数一一对应")
+    }
+
     // MARK: - LyricTimelineNormalizer:逐字时间轴合法性归一化
     //
     // 规则与阈值的依据见 LyricTimelineNormalizer 头注(全库 3071 首实测)。这里钉住每条规则的
