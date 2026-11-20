@@ -154,7 +154,7 @@ func (p qqProvider) Resolve(ctx context.Context, q ProviderQuery, env RoundEnv) 
 	// language 跟 qqDur 同一个只读缓存、同一条"QRC 那步走通时这里是热的"理由,见上面
 	// qqDur 那行注释——不为它单独发请求。
 	qqMeta := qqSongMetaCachedOnly(qqMid)
-	qqLang := qqCanonicalLanguage(qqMeta.language)
+	qqLang := qqCanonicalLanguage(qqMeta)
 	qqNoVocals := qqMeta.id != 0 && qqMeta.language == qqLanguagePureMusic
 	return SourceResult{lyr: lyr, yrc: yrc, tr: tr, roma: roma, matchTitle: match.title, matchArtist: match.artist, matchAlbum: match.album, matchCover: qqCover, srcDur: qqDur, language: qqLang, instrumental: qqInstrumental, noVocals: qqNoVocals, trackFoundNoLyrics: qqTrackFoundNoLyrics(qqNoLyrics, lyr, yrc), identityFromLocalClient: match.fromLocalLibrary, plainOnly: qqPlainOnly, trackIDs: qqTrackIDs(qqMid)}
 }
@@ -2019,11 +2019,16 @@ func qqTrackIDs(mid string) []string {
 // 不当「没有歌词」用(见 09 章决策 210)。
 const qqLanguagePureMusic = 9
 
-// qqCanonicalLanguage 把 fcg_play_single_song.fcg 的 language 数字字段折算成
+// qqCanonicalLanguage 把单曲详情(fcg_play_single_song.fcg)的 language 数字字段折算成
 // lyricCandidate.language 的取值(songLanguageMandarin/songLanguageCantonese),
 // 未识别的取值(含未实测过的枚举值)一律返回空串,不外推。
-func qqCanonicalLanguage(n int) string {
-	switch n {
+// 没读到详情(meta.id == 0,qqSongMetaCachedOnly 没命中时交的零值)也返回空串:零值的 language 跟「国语」同为 0,
+// 别当成接口答的。见 09 章决策 394。
+func qqCanonicalLanguage(meta qqSongMeta) string {
+	if meta.id == 0 {
+		return ""
+	}
+	switch meta.language {
 	case 0:
 		return songLanguageMandarin
 	case 1:

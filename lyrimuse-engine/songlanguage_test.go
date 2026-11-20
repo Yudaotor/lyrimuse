@@ -82,9 +82,39 @@ func TestQQCanonicalLanguage(t *testing.T) {
 		{99, ""},
 	}
 	for _, c := range cases {
-		if got := qqCanonicalLanguage(c.in); got != c.want {
-			t.Errorf("qqCanonicalLanguage(%d) = %q, want %q", c.in, got, c.want)
+		if got := qqCanonicalLanguage(qqSongMeta{id: 97773, language: c.in}); got != c.want {
+			t.Errorf("qqCanonicalLanguage(id=97773, language=%d) = %q, want %q", c.in, got, c.want)
 		}
+	}
+}
+
+// 没读到单曲详情(只读缓存没命中,交的是零值)时不报语种:零值的 language 是 0,跟「国语」同值。
+func TestQQCanonicalLanguageUnknownWithoutSongDetail(t *testing.T) {
+	for _, meta := range []qqSongMeta{{}, {language: 1}, {interval: 222}} {
+		if got := qqCanonicalLanguage(meta); got != "" {
+			t.Errorf("qqCanonicalLanguage(%+v) = %q, 没读到详情应为空", meta, got)
+		}
+	}
+	qqSongMetaMu.Lock()
+	saved := qqSongMetaCache
+	qqSongMetaCache = map[string]qqSongMeta{
+		"mid-cmn": {id: 1, interval: 218, language: 0},
+		"mid-yue": {id: 2, interval: 222, language: 1},
+	}
+	qqSongMetaMu.Unlock()
+	t.Cleanup(func() {
+		qqSongMetaMu.Lock()
+		qqSongMetaCache = saved
+		qqSongMetaMu.Unlock()
+	})
+	if got := qqCanonicalLanguage(qqSongMetaCachedOnly("mid-not-cached")); got != "" {
+		t.Errorf("缓存里没有这首时语种 = %q, 应为空", got)
+	}
+	if got := qqCanonicalLanguage(qqSongMetaCachedOnly("mid-cmn")); got != songLanguageMandarin {
+		t.Errorf("详情答了国语: 语种 = %q, want %q", got, songLanguageMandarin)
+	}
+	if got := qqCanonicalLanguage(qqSongMetaCachedOnly("mid-yue")); got != songLanguageCantonese {
+		t.Errorf("详情答了粤语: 语种 = %q, want %q", got, songLanguageCantonese)
 	}
 }
 

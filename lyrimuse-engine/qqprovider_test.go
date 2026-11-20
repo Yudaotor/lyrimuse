@@ -51,7 +51,7 @@ func handwrittenQQRound(ctx context.Context, artist, srcTitle, album string, dur
 		}
 	}
 	qqMeta := qqSongMetaCachedOnly(qqMid)
-	qqLang := qqCanonicalLanguage(qqMeta.language)
+	qqLang := qqCanonicalLanguage(qqMeta)
 	qqNoVocals := qqMeta.id != 0 && qqMeta.language == qqLanguagePureMusic
 	return lyricSourceResult{source: "qq", lyr: lyr, yrc: yrc, tr: tr, roma: roma, matchTitle: match.title, matchArtist: match.artist, matchAlbum: match.album, matchCover: qqCover, srcDur: qqDur, language: qqLang, instrumental: qqInstrumental, noVocals: qqNoVocals, trackFoundNoLyrics: qqTrackFoundNoLyrics(qqNoLyrics, lyr, yrc), identityFromLocalClient: match.fromLocalLibrary, plainOnly: qqPlainOnly, trackIDs: qqTrackIDs(qqMid)}
 }
@@ -598,14 +598,14 @@ func TestQQProviderMatchesHandwrittenRound(t *testing.T) {
 			}),
 		},
 		{
-			name: "单曲详情哪条路都没问成:没有逐字、封面,只有整行和 songmid,语种按没读到详情时的 0 算", artist: artist, title: title, album: album, durationSecs: secs,
+			name: "单曲详情哪条路都没问成:没有逐字、封面,只有整行和 songmid,不报语种", artist: artist, title: title, album: album, durationSecs: secs,
 			handle: with(func(f *qqParityFake) {
 				f.detail = func(parityRequest, string) parityReply { return parityStatus(http.StatusBadGateway) }
 				f.musicu = func(parityRequest, string, map[string]any) parityReply { return parityStatus(http.StatusBadGateway) }
 			}),
 			wantRequests: 14, wantLyrics: true,
 			check: want("应只有整行", func(r lyricSourceResult) bool {
-				return r.lyr == qqTestLRC && r.yrc == "" && r.matchCover == "" && r.language == songLanguageMandarin && !r.noVocals &&
+				return r.lyr == qqTestLRC && r.yrc == "" && r.matchCover == "" && r.language == "" && !r.noVocals &&
 					fmt.Sprint(r.trackIDs) == "["+qqParityMid+"]" && r.srcDur == 265
 			}),
 		},

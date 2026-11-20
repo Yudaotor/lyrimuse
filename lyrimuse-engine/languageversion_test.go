@@ -59,6 +59,40 @@ func TestInferLocalLanguageVersion(t *testing.T) {
 	}
 }
 
+// QQ 这一轮没读到单曲详情时候选不带语种:本地推成哪种语种由别的证据定,这条候选只按歌名里写的语种判。
+func TestLanguageVersionVerdictsWithoutQQSongDetail(t *testing.T) {
+	unknown := qqCanonicalLanguage(qqSongMeta{})
+	// 歌名写了「(粤语)」:按歌名算粤语,本地照旧推成粤语,不把酷狗的粤语候选判成不符。
+	cands := []lyricCandidate{
+		{source: "qq", title: "K歌之王 (粤语)", album: "打得火热", sourceReportedDurationSecs: 222, language: unknown},
+		{source: "kugou", title: "K歌之王", album: "打得火热", sourceReportedDurationSecs: 222, language: songLanguageCantonese},
+	}
+	if got := inferLocalLanguageVersion("K歌之王", "打得火热", 222.351, cands); got != languageVersionTagCantonese {
+		t.Fatalf("本地语种 = %q, want %q", got, languageVersionTagCantonese)
+	}
+	applyLanguageVersionVerdicts("K歌之王", "打得火热", 222.351, cands)
+	for _, c := range cands {
+		if c.languageVersionMismatch || !c.languageVersionAgrees {
+			t.Errorf("%s: mismatch=%v agrees=%v, 两条都该判成同语种", c.source, c.languageVersionMismatch, c.languageVersionAgrees)
+		}
+	}
+	// 歌名没写语种:这条候选不参与推断,也不被判。
+	bare := []lyricCandidate{{source: "qq", title: "K歌之王", album: "打得火热", sourceReportedDurationSecs: 222, language: unknown}}
+	if got := inferLocalLanguageVersion("K歌之王", "打得火热", 222.351, bare); got != "" {
+		t.Errorf("只有一条没带语种的候选时本地语种 = %q, 应推不出", got)
+	}
+	applyLanguageVersionVerdicts("K歌之王 (粵)", "打得火热", 222.351, bare)
+	if bare[0].languageVersionMismatch || bare[0].languageVersionAgrees {
+		t.Errorf("没带语种的候选对粤语本地: mismatch=%v agrees=%v, 两个都该是 false", bare[0].languageVersionMismatch, bare[0].languageVersionAgrees)
+	}
+	// 详情答了国语的照旧判成语种不符。
+	answered := []lyricCandidate{{source: "qq", title: "K歌之王", album: "打得火热", sourceReportedDurationSecs: 222, language: qqCanonicalLanguage(qqSongMeta{id: 1, language: 0})}}
+	applyLanguageVersionVerdicts("K歌之王 (粵)", "打得火热", 222.351, answered)
+	if !answered[0].languageVersionMismatch {
+		t.Errorf("详情答了国语的候选对粤语本地应判成语种不符")
+	}
+}
+
 func TestApplyLanguageVersionVerdicts_KGeZhiWang(t *testing.T) {
 	cands := kgezhiwangBatch()
 	applyLanguageVersionVerdicts("K歌之王", "打得火热", 222.351, cands)
