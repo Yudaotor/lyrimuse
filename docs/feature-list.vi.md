@@ -666,7 +666,7 @@ Apple Music, Spotify, QQ Music, NetEase Cloud Music, Kugou, Kuwo, Soda Music, LX
 
 ### YouTube Music và Spotify Web trong trình duyệt
 
-Ghép đôi trình duyệt một lần là nhạc phát trong đó cũng có lời, theo đúng tiến độ của trang. Một lần kiểm tra bằng một lần bấm cho bạn biết trước trình duyệt đó có điều khiển được không. Khi có quảng cáo, Notch hiển thị thời gian còn lại và đó là quảng cáo thứ mấy. YouTube Music và Spotify cài thành ứng dụng từ Chrome được nhận diện mà không cần ghép đôi.
+Ghép đôi trình duyệt một lần là nhạc phát trong đó cũng có lời, theo đúng tiến độ của trang. Một lần kiểm tra bằng một lần bấm cho bạn biết trước trình duyệt đó có điều khiển được không. Khi có quảng cáo, Notch hiển thị thời gian còn lại và đó là quảng cáo thứ mấy. YouTube Music và Spotify cài thành ứng dụng từ Chrome, Edge hoặc Brave được nhận diện mà không cần ghép đôi.
 
 - Tắt theo mặc định
 - Cài đặt: Trình phát › Web

@@ -666,7 +666,7 @@ Apple Music, Spotify, QQ Music, NetEase Cloud Music, Kugou, Kuwo, Soda Music, LX
 
 ### YouTube Music et Spotify Web dans votre navigateur
 
-Associez une fois votre navigateur, et la musique qu’il joue a aussi ses paroles, en suivant la progression de la page elle-même. Une vérification en un clic vous indique d’abord si ce navigateur peut être contrôlé. Pendant les pubs, l’encoche affiche le temps restant et de quelle pub il s’agit. YouTube Music et Spotify installés comme apps depuis Chrome sont reconnus sans jumelage.
+Associez une fois votre navigateur, et la musique qu’il joue a aussi ses paroles, en suivant la progression de la page elle-même. Une vérification en un clic vous indique d’abord si ce navigateur peut être contrôlé. Pendant les pubs, l’encoche affiche le temps restant et de quelle pub il s’agit. YouTube Music et Spotify installés comme apps depuis Chrome, Edge ou Brave sont reconnus sans jumelage.
 
 - Désactivée par défaut
 - Réglages : Lecteur › Web

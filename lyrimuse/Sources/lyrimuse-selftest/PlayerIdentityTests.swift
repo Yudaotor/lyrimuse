@@ -2776,12 +2776,8 @@ func runPlayerIdentityTests() {
             expectEqual(installed.map(\.hostBundleID), ["com.google.Chrome", "com.google.Chrome.canary", "com.microsoft.edgemac"],
                         "网页应用: 宿主按壳声明的算,没声明用前半段")
             expectEqual(W.hostsByPlatform(installed),
-                        ["youtubeMusic": ["com.google.Chrome"], "spotifyWeb": ["com.google.Chrome.canary"]],
-                        "网页应用: 设置页只给报得出壳 bundle id 的宿主摆头像(Edge 的网页应用报浏览器本体,要配对)")
-            expectEqual(W.reportsOwnBundleID(host: "com.google.Chrome"), true, "网页应用: Chrome 报壳的 id")
-            expectEqual(W.reportsOwnBundleID(host: "com.google.Chrome.beta"), true, "网页应用: Chrome 别的通道同一份代码")
-            expectEqual(W.reportsOwnBundleID(host: "com.brave.Browser"), false, "网页应用: Brave 报浏览器本体")
-            expectEqual(W.reportsOwnBundleID(host: "com.google.Chromeium"), false, "网页应用: 前缀要到点为止")
+                        ["youtubeMusic": ["com.google.Chrome"], "spotifyWeb": ["com.google.Chrome.canary", "com.microsoft.edgemac"]],
+                        "网页应用: 按平台归拢宿主")
             expectEqual(W.installed(in: root.appendingPathComponent("missing")).isEmpty, true, "网页应用: 目录不在不崩")
             _ = FileIO.remove(root)
         }

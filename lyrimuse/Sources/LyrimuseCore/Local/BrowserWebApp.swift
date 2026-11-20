@@ -133,19 +133,10 @@ public enum BrowserWebApp {
         return out.sorted { $0.bundleID < $1.bundleID }
     }
 
-    /// 按平台归拢宿主:平台 id → 宿主浏览器 bundle id 集合。只收 `reportsOwnBundleID` 的宿主:别家的网页应用报的是浏览器本体,
-    /// 跟标签页一样要在「网页版」卡里配对。纯函数,selftest 覆盖。
+    /// 按平台归拢宿主:平台 id → 宿主浏览器 bundle id 集合。纯函数,selftest 覆盖。
     public static func hostsByPlatform(_ apps: [Installed]) -> [String: Set<String>] {
         var out: [String: Set<String>] = [:]
-        for app in apps where reportsOwnBundleID(host: app.hostBundleID) {
-            out[app.platformID, default: []].insert(app.hostBundleID)
-        }
+        for app in apps { out[app.platformID, default: []].insert(app.hostBundleID) }
         return out
-    }
-
-    /// 这个浏览器的网页应用放歌时,系统「正在播放」报的是壳自己的 bundle id(而不是浏览器本体)。只收实测见过的:Chrome(各通道同一份代码)。
-    /// Edge 157、Brave 154 的网页应用报的是浏览器本体。见 02 章决策 284。纯函数,selftest 覆盖。
-    public static func reportsOwnBundleID(host: String) -> Bool {
-        host == "com.google.Chrome" || host.hasPrefix("com.google.Chrome.")
     }
 }
