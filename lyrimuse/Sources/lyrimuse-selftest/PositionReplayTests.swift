@@ -134,6 +134,7 @@ func runPositionReplayTests() {
     replayKKBOXFollowsRepublishedAnchor()
     replayKKBOXPauseHoldsUntilPauseAnchor()
     replayKKBOXStallHolds()
+    replayWebStallHoldsAndResumes()
     replayKasetFollowsWebClock()
     replayKasetResumeTakesReading()
     replayPausedHelperWithResidualRate()
@@ -859,6 +860,40 @@ private func replayKKBOXStallHolds() {
     let resumed = rig.shown(at: at(12.68))
     expectEqual(near(resumed, 6.141, 0.05), true,
                 "回放·KKBOX 卡在加载: 下一份锚点到了从它接着走(\(resumed.map { String(format: "%.3f", $0) } ?? "nil"))")
+}
+
+/// 网页播放器缓冲卡住(Chrome 里的 YouTube Music,真机数据):页面 currentTime 停在 59.920,快照层交「停住」快照(见
+/// `MediaControlClient.webStallPosition`);卡住时暂停、再按播放都停在原处;缓冲好了浏览器按同一个 elapsed 重打锚点,从那里接着走。
+@MainActor
+private func replayWebStallHoldsAndResumes() {
+    let rig = ReplayRig("web-stall")
+    defer { rig.tearDown() }
+    let chrome = "com.google.Chrome"
+    let title = "Bohemian Rhapsody"
+    let stalled = 59.920242
+    for t in stride(from: 50.0, through: 58.0, by: 2) {
+        rig.tick(mediaControl(chrome, title, anchor: 0, elapsed: t, duration: 359.461), at: at(t))
+    }
+    expectEqual(near(rig.shown(at: at(59)), 59), true, "回放·网页卡住: 卡住之前照常外推")
+    func stall(playing: Bool) -> MediaControlSnapshot {
+        var s = mediaControl(chrome, title, anchor: stalled, elapsed: stalled, duration: 359.461, playing: false)
+        if playing { s.isWaitingToPlay = true }
+        return s
+    }
+    rig.tick(stall(playing: true), at: at(60.2))
+    expectEqual(near(rig.shown(at: at(60.2)), stalled, 0.001), true, "回放·网页卡住: 停在页面卡住的位置")
+    rig.tick(stall(playing: true), at: at(62.2))
+    expectEqual(near(rig.shown(at: at(90)), stalled, 0.001), true,
+                "回放·网页卡住: 卡多久都停在原处(\(rig.shown(at: at(90)).map { String(format: "%.3f", $0) } ?? "nil"))")
+    rig.tick(stall(playing: false), at: at(100))
+    expectEqual(near(rig.shown(at: at(105)), stalled, 0.001), true, "回放·网页卡住: 卡住时暂停,暂停位置 = 卡住的位置")
+    rig.tick(stall(playing: true), at: at(115))
+    expectEqual(near(rig.shown(at: at(125)), stalled, 0.001), true, "回放·网页卡住: 卡着按播放仍停住")
+    rig.tick(mediaControl(chrome, title, anchor: stalled, elapsed: stalled + 0.2, duration: 359.461), at: at(130.2))
+    rig.tick(mediaControl(chrome, title, anchor: stalled, elapsed: stalled + 2.2, duration: 359.461), at: at(132.2))
+    let resumed = rig.shown(at: at(134.2))
+    expectEqual(near(resumed, stalled + 4.2, 0.05), true,
+                "回放·网页卡住: 缓冲好了从卡住的位置接着走(\(resumed.map { String(format: "%.3f", $0) } ?? "nil"))")
 }
 
 /// 页面内换歌(YouTube Music 在同一个标签页里切到下一首):新曲头一拍常常还没有时长。

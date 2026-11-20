@@ -3582,6 +3582,39 @@ public enum MediaControlClient {
         return record.correctionSecs
     }
 
+    // ---- 网页播放器缓冲卡住:速率报 0 ----
+    //
+    // Chromium 系浏览器缓冲卡住时照旧报在放,只把速率改报 0,同时重打锚点:elapsed 就是页面 `<video>.currentTime`,之后不再动。
+    // 按速率 1 外推会一路往前跑;卡住时被暂停,暂停那一支又会拿卡住前的位置外推到暂停时刻。这一支在两处都停在锚点上:
+    // 在放时交「停住」快照(同 republishHold),暂停时冻结值就是它。卡住那份锚点不记成播放中的锚点:恢复时浏览器按同一个
+    // elapsed 换新时间戳重打,记了会被 isStaleAnchorRepublish 当成陈旧重发、从卡住那一刻外推。见 02 章决策 283。
+
+    /// 缓冲卡住时会改报速率 0 的网页播放器:Chromium 系浏览器(`BrowserAutomationPermission.family` 判 `.chromium`),以及它们装出来的
+    /// 网页应用(会话记在 `<浏览器 bundle id>.app.<应用 id>` 名下)。Safari 的媒体进程没实测,不在内。纯函数,selftest 直接覆盖。
+    public nonisolated static func reportsStallAsZeroRate(bundleID: String?) -> Bool {
+        guard let bundleID, !bundleID.isEmpty else { return false }
+        if BrowserAutomationPermission.family(forBundleID: bundleID) == .chromium { return true }
+        guard let range = bundleID.range(of: ".app.") else { return false }
+        return BrowserAutomationPermission.family(forBundleID: String(bundleID[..<range.lowerBound])) == .chromium
+    }
+
+    /// 这一拍网页播放器卡在缓冲(或卡住时被暂停):返回该停住的位置(锚点 elapsed),不是则 nil。速率缺失不算。纯函数,selftest 直接覆盖。
+    public nonisolated static func webStallPosition(bundleID: String?, playbackRate: Double?, elapsedTime: Double?) -> Double? {
+        guard playbackRate == 0, let elapsedTime, reportsStallAsZeroRate(bundleID: bundleID) else { return nil }
+        return max(0, elapsedTime)
+    }
+
+    private static let webStallLogLock = NSLock()
+    nonisolated(unsafe) private static var lastLoggedWebStallKey: String?
+    /// 同一个锚点只记一行。
+    private nonisolated static func noteWebStallLogged(anchorKey: String) -> Bool {
+        webStallLogLock.lock()
+        defer { webStallLogLock.unlock() }
+        guard lastLoggedWebStallKey != anchorKey else { return false }
+        lastLoggedWebStallKey = anchorKey
+        return true
+    }
+
     // ---- 跟随重发锚点的播放器:重发断档 = 卡在加载 ----
     //
     // KKBOX 在放的时候约每 1.06 秒、酷我约每 0.5 秒重发一次锚点;卡在加载(网络慢、缓冲)时照旧报在放、速率 1,只是不再重发。上一份锚点
@@ -4035,16 +4068,19 @@ public enum MediaControlClient {
             bundleID: raw.bundleIdentifier, playing: raw.playing, playbackRate: raw.playbackRate,
             elapsedTime: raw.elapsedTime, timestamp: timestampDate, duration: raw.duration, now: sampledAt)
         let sighting = Self.firstSeen(anchorKey: anchorKey, now: sampledAt)
+        // 网页播放器卡在缓冲:位置停在锚点上,在放、暂停都一样(见 webStallPosition)。
+        let webStall = Self.webStallPosition(bundleID: raw.bundleIdentifier, playbackRate: raw.playbackRate,
+                                             elapsedTime: raw.elapsedTime)
         // 播放中的锚点先过一道"陈旧重发"判定(见 isStaleAnchorRepublish):命中就按原锚点时刻外推。
         var republishedAnchorInstant: Date?
-        if playing == true, let timestampDate, let elapsedRaw = raw.elapsedTime, let timestampString = raw.timestamp {
+        if playing == true, webStall == nil, let timestampDate, let elapsedRaw = raw.elapsedTime, let timestampString = raw.timestamp {
             let candidate = Self.estimatedAnchorInstant(timestamp: timestampDate, sighting: sighting)
             republishedAnchorInstant = Self.trackPlayingAnchor(
                 track: trackKey, elapsed: elapsedRaw, timestamp: timestampString,
                 candidateInstant: candidate, duration: raw.duration,
                 bundleID: raw.bundleIdentifier, now: sampledAt)
         }
-        let liveElapsed = Self.livePositionSeconds(
+        let liveElapsed = webStall ?? Self.livePositionSeconds(
             playing: playing, elapsedTime: raw.elapsedTime, elapsedTimeNow: raw.elapsedTimeNow,
             playbackRate: raw.playbackRate, timestamp: timestampDate, now: sampledAt,
             lastPlayingPosition: Self.rememberedPlayingPosition(forTrack: trackKey),
@@ -4079,7 +4115,11 @@ public enum MediaControlClient {
             bundleID: raw.bundleIdentifier, trackKey: trackKey, title: raw.title, playing: playing,
             playbackRate: raw.playbackRate, anchorElapsed: raw.elapsedTime, anchorTimestamp: timestampDate,
             duration: raw.duration, now: sampledAt)
-        if playing == true, republish.hold == nil, let readingElapsed {
+        let webStallHeld = playing == true && webStall != nil
+        if webStallHeld, Self.noteWebStallLogged(anchorKey: anchorKey) {
+            logger.notice("web player stalled: holding \(raw.title ?? "", privacy: .public) at \(webStall ?? -1, format: .fixed(precision: 3)) (\(raw.bundleIdentifier ?? "", privacy: .public) reports rate 0)")
+        }
+        if playing == true, republish.hold == nil, !webStallHeld, let readingElapsed {
             Self.rememberPlayingPosition(readingElapsed, forTrack: trackKey, at: sampledAt)
         }
         let elapsed = republish.hold ?? readingElapsed
@@ -4149,7 +4189,7 @@ public enum MediaControlClient {
            Self.noteFoobarLoopLogged(trackKey + "|" + String(Int(stretched / duration))) {
             logger.notice("repeat-one loop (\(bundleID ?? "", privacy: .public)): \(raw.title ?? "", privacy: .public) past the end without a new anchor, extrapolated=\(stretched, format: .fixed(precision: 3)) duration=\(duration, format: .fixed(precision: 3)) → \(foobarLoop, format: .fixed(precision: 3))")
         }
-        let held = republish.hold != nil || pine?.waiting == true
+        let held = republish.hold != nil || pine?.waiting == true || webStallHeld
         let reportedElapsed: Double?
         let reportedAnchor: Double?
         if let cogStream {

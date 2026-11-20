@@ -867,6 +867,65 @@ func runPlaybackPositionTests() {
                                                        nextTimestamp: t0.addingTimeInterval(4.0)), false,
                         "重发断档: 少走了 0.8s 算真卡住")
         }
+
+        // ---- 网页播放器缓冲卡住:Chromium 照报在放、速率改报 0 ----
+        // 真机(Chrome 标签页里的 YouTube Music,网络掐断):页面 currentTime 停在 59.920209,系统那份同一刻重打锚点
+        // {playbackRate:0, elapsedTime:59.920242},之后在放 / 暂停都不再动。
+        do {
+            typealias MC = MediaControlClient
+            let chrome = "com.google.Chrome"
+            for (bundle, expected, label) in [
+                (chrome, true, "Chrome"), ("com.microsoft.edgemac", true, "Edge"), ("com.brave.Browser", true, "Brave"),
+                ("company.thebrowser.Browser", true, "Arc"),
+                ("com.google.Chrome.app.cinhimbnkkaeohfgghhklpknlkffjgod", true, "Chrome 装出来的网页应用"),
+                ("com.apple.Safari", false, "Safari 没实测"), (MC.safariMediaProcessBundleID, false, "Safari 媒体进程没实测"),
+                ("com.spotify.client", false, "Spotify"), ("com.apple.Music", false, "Apple Music"),
+                (PlaybackPlayer.kkbox.bundleIdentifier, false, "KKBOX"),
+                ("com.example.app.chrome", false, "`.app.` 前面不是 Chromium 浏览器"),
+                (".app.x", false, "`.app.` 前面是空的"), ("", false, "空 bundle id"),
+            ] as [(String, Bool, String)] {
+                expectEqual(MC.reportsStallAsZeroRate(bundleID: bundle), expected, "网页卡住: \(label)")
+            }
+            expectEqual(MC.reportsStallAsZeroRate(bundleID: nil), false, "网页卡住: 没有 bundle id")
+            expectEqual(MC.webStallPosition(bundleID: chrome, playbackRate: 0, elapsedTime: 59.920242), 59.920242,
+                        "网页卡住: 停在卡住那份锚点(= 页面 currentTime)")
+            expectEqual(MC.webStallPosition(bundleID: chrome, playbackRate: 1, elapsedTime: 59.920242), nil,
+                        "网页卡住: 速率 1 照常外推")
+            expectEqual(MC.webStallPosition(bundleID: chrome, playbackRate: nil, elapsedTime: 59.920242), nil,
+                        "网页卡住: 没报速率不算卡住")
+            expectEqual(MC.webStallPosition(bundleID: chrome, playbackRate: 0, elapsedTime: nil), nil,
+                        "网页卡住: 没有 elapsed 停不住")
+            expectEqual(MC.webStallPosition(bundleID: chrome, playbackRate: 0, elapsedTime: -0.2), 0, "网页卡住: 负值按 0")
+            for native in ["com.spotify.client", "com.apple.Music", PlaybackPlayer.kkbox.bundleIdentifier, MC.safariMediaProcessBundleID] {
+                expectEqual(MC.webStallPosition(bundleID: native, playbackRate: 0, elapsedTime: 12), nil,
+                            "网页卡住: \(native) 报速率 0 不归这条管")
+            }
+            // 恢复时 Chromium 按同一个 elapsed 换新时间戳重打锚点。卡住那份要是记成播放中的锚点,这份就被当成陈旧重发,
+            // 从卡住那一刻外推、一下超前整段卡顿时长 —— 所以卡住那份不记(接线见下面的契约)。
+            let stalledAt = Date(timeIntervalSince1970: 1_795_187_052)
+            let stalledAnchor = MC.PlayingAnchor(track: "Queen|Bohemian Rhapsody", elapsed: 59.920242,
+                                                 timestamp: "2026-11-20T15:04:12Z", instant: stalledAt)
+            expectEqual(MC.isStaleAnchorRepublish(last: stalledAnchor, track: "Queen|Bohemian Rhapsody", elapsed: 59.920242,
+                                                  timestamp: "2026-11-20T15:05:40Z", duration: 359.461, bundleID: chrome,
+                                                  now: stalledAt.addingTimeInterval(88)), true,
+                        "网页卡住: 卡住那份记成播放中锚点的话,恢复锚点会被误判成陈旧重发")
+            let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+            let client = (try? String(contentsOfFile: root.appendingPathComponent("LyrimuseCore/Local/MediaControlClient.swift").path,
+                                      encoding: .utf8)) ?? ""
+            let body = sourceBody("private static func fetchRawMediaControlSnapshot(", in: client)
+            expectEqual(sourceHas(body, "let webStall = Self.webStallPosition(bundleID: raw.bundleIdentifier, playbackRate: raw.playbackRate, elapsedTime: raw.elapsedTime)"),
+                        true, "网页卡住接线: 按系统报的 bundle id 判(网页应用的会话记在它自己名下)")
+            expectEqual(sourceHas(body, "let liveElapsed = webStall ?? Self.livePositionSeconds("), true,
+                        "网页卡住接线: 在放、暂停都停在锚点上,不外推、不走暂停那一支的上一拍外推")
+            expectEqual(sourceHas(body, "if playing == true, webStall == nil, let timestampDate, let elapsedRaw = raw.elapsedTime"), true,
+                        "网页卡住接线: 卡住那份锚点不记成播放中的锚点")
+            expectEqual(sourceHas(body, "let webStallHeld = playing == true && webStall != nil"), true,
+                        "网页卡住接线: 在放时才交停住快照,暂停照常是暂停")
+            expectEqual(sourceHas(body, "if playing == true, republish.hold == nil, !webStallHeld, let readingElapsed {"), true,
+                        "网页卡住接线: 停住的那几拍不记成播放位置")
+            expectEqual(sourceHas(body, "let held = republish.hold != nil || pine?.waiting == true || webStallHeld"), true,
+                        "网页卡住接线: 停住快照 = 没在走、速率 0、标在等着出声")
+        }
         expectEqual(LocalPlaybackSource.carriesGaplessLead(tier: .noisyFloored, bundleID: nil), false,
                     "gapless 领先: 认不出播放器不校正")
 
