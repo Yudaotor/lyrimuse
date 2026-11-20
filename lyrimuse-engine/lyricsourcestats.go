@@ -106,7 +106,7 @@ const (
 )
 
 // lyricSourcePeerGroups:同类曲库。amll 按平台 ID 直取、vibe / genie 只在韩文歌上是主力、petitlyrics 只在日文歌上是主力、zing 只在越南歌上是主力、megalobiz 只在播放那一侧问(批量轮次不问)而且曲库小,覆盖面都跟组里别的源不可比,不进任何一组;
-// 播放器本地缓存那几路(isPlayerLocalLyricSource)不是歌词源,整个不统计。
+// 本机类源不是歌词源、不在联网源名单里,整个不统计。
 var lyricSourcePeerGroups = [][]string{
 	{"netease", "qq", "kugou", "kuwo", "migu", "soda"},
 	{"lrclib", "lyricfind", "deezer", "applemusic"},
@@ -411,7 +411,7 @@ func lyricSourceOutcomeFromDecision(d *lyricsDecision, enabled, eligible func(st
 		}
 	}
 	for _, s := range networkLyricSourceNames() {
-		if isPlayerLocalLyricSource(s) || !enabled(s) || !eligible(s) || queued[s] {
+		if !enabled(s) || !eligible(s) || queued[s] {
 			continue
 		}
 		o.enabled = append(o.enabled, s)
@@ -492,9 +492,6 @@ func summarizeLyricSourceStats(days map[string]*lyricSourceStatsDay, recent map[
 	var out []lyricSourceStatsSummary
 	coolingNetwork := map[string]bool{}
 	for _, src := range networkLyricSourceNames() {
-		if isPlayerLocalLyricSource(src) {
-			continue
-		}
 		s := lyricSourceStatsSummary{Source: src, Enabled: enabled(src)}
 		for _, k := range last7 {
 			if d := days[k]; d != nil && d.Sources[src] != nil {

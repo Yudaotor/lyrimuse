@@ -134,7 +134,8 @@ func (e RoundEnv) IdentityFields() (artist, title, album string) {
 	return e.identityArtist, e.identityTitle, e.identityAlbum
 }
 
-// PlayingPlayer:现在在放的播放器(playingPlayer)。要 privLocalClientIdentity,没有这一位的源拿到空串。
+// PlayingPlayer:现在在放的播放器(playingPlayer)。要 privLocalClientIdentity,没有这一位的源拿到空串。各源的 Resolve
+// 一律经它读,不直接调 playingPlayer。
 func (e RoundEnv) PlayingPlayer() string {
 	if !e.granted.has(privLocalClientIdentity) {
 		return ""
@@ -435,7 +436,12 @@ func lyricProviders() *lyricProviderRegistry {
 func networkLyricSourceNames() []string { return lyricProviders().networkNames }
 
 // isNetworkLyricSource:name 是不是登记过的联网歌词源。
-func isNetworkLyricSource(name string) bool {
+func isNetworkLyricSource(name string) bool { return lyricSourceKindIs(name, providerKindNetwork) }
+
+// lyricSourceKindIs:name 这一路登记的是不是 kind 这一类。没登记的名字一律不是。播放器本机(providerKindPlayerLocal)和导入库
+// (providerKindUserLibrary)是两类:前者是读播放器自己缓存、文件旁歌词的那几路,开搜时同步读好、只在用对应播放器时有;
+// 导入库是用户自己的歌词,不跟着播放器走。
+func lyricSourceKindIs(name string, kind ProviderKind) bool {
 	d := lyricProviders().descriptor(name)
-	return d != nil && d.Kind == providerKindNetwork
+	return d != nil && d.Kind == kind
 }

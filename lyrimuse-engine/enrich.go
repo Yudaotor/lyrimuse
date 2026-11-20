@@ -1690,11 +1690,11 @@ func rescoreDecidable(scored []scoredLyricCandidateResult, currentSource string,
 	return allEnabledLyricSourcesResponded(scored)
 }
 
-// rescorePlayerLocalUnreachable:当前这份是播放器本地歌词(isPlayerLocalLyricSource),而这首此刻正用别的播放器在放 ——
+// rescorePlayerLocalUnreachable:当前这份是播放器本地歌词(Kind 是播放器本机的来源),而这首此刻正用别的播放器在放 ——
 // 那份本地歌词只在用它自己的播放器放时才读得到,等它应答就一直判不了。这时照常判,当前这份留不留交给 rescoreKeepsLyrics。
 // 没在放这首(预取、全量扫库)时不算:还在用那个播放器的人,换了版本的扫库不该把它的本地歌词换掉。见 09 章决策 307。
 func rescorePlayerLocalUnreachable(currentSource, key string) bool {
-	return isPlayerLocalLyricSource(currentSource) && !isNativeLyricSource(currentSource) && playingPlayer() != "" &&
+	return lyricSourceKindIs(currentSource, providerKindPlayerLocal) && !isNativeLyricSource(currentSource) && playingPlayer() != "" &&
 		isEnrichPlayingKey(key)
 }
 
@@ -1763,7 +1763,7 @@ func lyricsFirstFillOnly(e enrichEntry) []string {
 	}
 	var out []string
 	for _, s := range enabledNetworkLyricSources() {
-		if lyricSourceOnDemandOnly[s] && !slices.Contains(e.LyricsSourcesEnabled, s) {
+		if onDemandOnlyLyricSource(s) && !slices.Contains(e.LyricsSourcesEnabled, s) {
 			out = append(out, s)
 		}
 	}
@@ -2162,7 +2162,7 @@ func lyricsAheadSourceAbsent(e enrichEntry) bool {
 		}
 		// 播放器本地歌词开搜前就读好了,不算缺席。
 		for _, s := range tier {
-			if !isPlayerLocalLyricSource(s) && !slices.Contains(answered, s) {
+			if !lyricSourceKindIs(s, providerKindPlayerLocal) && !slices.Contains(answered, s) {
 				return true
 			}
 		}
@@ -5092,7 +5092,7 @@ func dropAMLLWithoutIDSource(sources []string) []string {
 func usableLyricSourceCount(scored []scoredLyricCandidateResult) int {
 	seen := map[string]bool{}
 	for _, c := range scored {
-		if c.Score >= 0 && !c.Instrumental && !isPlayerLocalLyricSource(c.Source) &&
+		if c.Score >= 0 && !c.Instrumental && !lyricSourceKindIs(c.Source, providerKindPlayerLocal) &&
 			lyricSourceEnabled(c.Source) {
 			seen[c.Source] = true
 		}
@@ -6053,31 +6053,6 @@ func lyricSourceSkipFor(source string, enabled func(string) bool, plan lyricSour
 		return lyricSourceSkipCooling
 	}
 	return lyricSourceQuery
-}
-
-// lyricSourceSkippedThisRound:一个源这一轮发不发请求,true = 不发、交空结果。only 是别名轮「只查这些源」的名单
-// (nil = 不限),breakerPlan 是这一轮在冷却的源,round 记被冷却跳过的源(nil 时不记)。收集循环不调它:十六个联网源
-// 这一轮问不问都由调度判(lyricRoundPlan.decide)。它是那边的对照,只有单测调,两处判据必须一致
-// (lyricproviderrun_test.go 逐个源对着比)。
-func lyricSourceSkippedThisRound(ctx context.Context, source string, only map[string]bool, breakerPlan lyricSourceRoundPlan, round *lyricSourceRound) bool {
-	// 别名轮的"只查缺着的源"(withLyricSourceOnly):名单外的源静默跳过 ——
-	// 它们在原名那一轮已经答过了,不重复打、不记账、不打日志。名单为 nil = 不限制。
-	if only != nil && !only[source] {
-		return true
-	}
-	// 只在播放那一侧问的源(lyricSourceAllowedForRound):批量轮次里静默跳过,同关掉的源,不记跳过、不打日志。
-	if !lyricSourceAllowedForRound(ctx, source) {
-		return true
-	}
-	switch lyricSourceSkipFor(source, lyricSourceEnabled, breakerPlan) {
-	case lyricSourceSkipDisabled:
-		return true
-	case lyricSourceSkipCooling:
-		round.markSkippedBecause(source, sharedLyricSourceBreaker().cooldownReason(source))
-		log.Printf("lyrics: source %s skipped this round, cooling down for another %s", source, breakerPlan[source].Round(time.Second))
-		return true
-	}
-	return false
 }
 
 // fetchScoredLyricCandidatesStreaming 是实际实现:全部歌词源(含网易云)一起并发发出去,用带缓冲的 channel 收集结果。

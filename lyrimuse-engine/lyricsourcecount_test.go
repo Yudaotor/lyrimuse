@@ -144,3 +144,76 @@ func TestMergeLyricCandidateRoundsRebuildsByTieRank(t *testing.T) {
 		t.Errorf("同分时合并出来的先后 = %v,应按决胜序 %v", got, want)
 	}
 }
+
+// 「播放器本机」和「不是联网源」是两个集合:导入库是用户自己的歌词,不跟着播放器走。下面几处认的是播放器本机那几路,
+// 导入库在这些地方照联网源那样算;只有「设置里有没有开关」把两类一起算。
+func TestPlayerLocalReadersTreatImportLibraryAsOrdinary(t *testing.T) {
+	saved := features()
+	savedKey := enrichPlayingKey.Load()
+	t.Cleanup(func() {
+		setFeatures(saved)
+		enrichPlayingKey.Store(savedKey)
+		setNativeLyricSourcesForPlayer("")
+	})
+	featuresRef().LyricsSources = nil
+
+	// 补查轮的门槛数「给出可用候选的歌词源」:播放器本机的不算,导入库算。
+	scored := oneCandidatePerSource([]string{importLyricsSource, kkboxLocalLyricsSource, localFileLyricsSource, "netease"})
+	if got := usableLyricSourceCount(scored); got != 2 {
+		t.Errorf("可用候选的来源数 = %d,应是 2(导入库、网易云;KKBOX、文件旁的歌词不算)", got)
+	}
+
+	// 换版重判时「当前这份读不到了」只对播放器本机的歌词成立。
+	key := enrichKey("歌手", "歌名", "专辑")
+	enrichPlayingKey.Store(&key)
+	setNativeLyricSourcesForPlayer(appleMusicBundleID)
+	if !rescorePlayerLocalUnreachable(kkboxLocalLyricsSource, key) {
+		t.Error("KKBOX 本地歌词、正用别的播放器放这首:该放行")
+	}
+	if rescorePlayerLocalUnreachable(importLyricsSource, key) {
+		t.Error("导入库不跟着播放器走,不归这条管")
+	}
+
+	// 自报曲长收紧档:播放器本机的不扣,导入库照扣。
+	if sourceDurationNearMissApplies(nearMissCand(kkboxLocalLyricsSource, 1400, 261), 280.7) {
+		t.Error("播放器本机的歌词挂在正在放的这份音频上,不进收紧档")
+	}
+	if !sourceDurationNearMissApplies(nearMissCand(importLyricsSource, 1400, 261), 280.7) {
+		t.Error("导入库的候选照常进收紧档")
+	}
+
+	// 设置里的开关:两类本机来源都没有开关,恒算开着。
+	featuresRef().LyricsSources = map[string]bool{"netease": true}
+	for _, s := range []string{importLyricsSource, kkboxLocalLyricsSource, "netease"} {
+		if !lyricSourceEnabled(s) {
+			t.Errorf("%s 该算开着", s)
+		}
+	}
+	if lyricSourceEnabled("qq") {
+		t.Error("没列进启用列表的联网源是关着的")
+	}
+}
+
+// 只在播放那一侧问的源(Megalobiz):批量轮次的名单不记它、补空扫描不因为它重搜,播到时只补问它。
+func TestOnDemandOnlySourceReaders(t *testing.T) {
+	saved := features()
+	t.Cleanup(func() { setFeatures(saved) })
+	featuresRef().LyricsSources = map[string]bool{"netease": true, lyricSourceMegalobiz: true}
+
+	_, batch := withLyricSourceRound(context.Background())
+	if got := batch.enabledSources(); !slices.Equal(got, []string{"netease"}) {
+		t.Errorf("批量轮次记下的开着的源 = %v,不该有只在播放那一侧问的", got)
+	}
+	_, playing := withLyricSourceRound(withOnDemandLyricRound(context.Background()))
+	if got := playing.enabledSources(); !slices.Equal(got, []string{"netease", lyricSourceMegalobiz}) {
+		t.Errorf("播放轮次记下的开着的源 = %v", got)
+	}
+
+	prev := []string{"netease"}
+	if lyricSourceEnabledSinceFor(prev, true) {
+		t.Error("批量轮次不该因为只在播放那一侧问的源没问过就重搜")
+	}
+	if !lyricSourceEnabledSinceFor(prev, false) {
+		t.Error("播到时它算新开的源")
+	}
+}

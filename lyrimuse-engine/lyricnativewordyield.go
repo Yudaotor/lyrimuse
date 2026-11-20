@@ -10,7 +10,7 @@ import "slices"
 //   - 结尾没缺:同源那份最后一句正文在它的显示轴里配得上,或它最后一句不比同源那份早 timelineNearMs 以上。
 //
 // 就撤销同源那份的同源加分。撤销后的第一名必须是这样一份逐字候选、且接着的标题否决不会撤掉它的逐字加分,否则整批不动。播放器本地歌词
-// (isPlayerLocalLyricSource)不撤;「顺序优先」不比分,这一步不跑。
+// (Kind 是播放器本机的来源)不撤;「顺序优先」不比分,这一步不跑。
 
 // applyNativeSourceWordYield 两条流水线(rankLyricSourceResults、mergeLyricCandidateRounds)都要调,排在
 // applyDurationNearTie 之后、applyWordTimingTitleOverride 之前:要看的是各项批级扣分之后谁领先,撤销后的结果
@@ -30,7 +30,7 @@ func applyNativeSourceWordYield(results []scoredLyricCandidateResult) {
 	native := results[n]
 	bonus := scoreTermPoints(native.ScoreTerms, scoreTermNativeSource)
 	if bonus <= 0 || scoreTermPoints(native.ScoreTerms, scoreTermWordTiming) > 0 || native.Lyrics == "" ||
-		isPlayerLocalLyricSource(native.Source) {
+		lyricSourceKindIs(native.Source, providerKindPlayerLocal) {
 		return
 	}
 	nativeLines := displayedTimeline(native.Lyrics, native.LyricsYRC)

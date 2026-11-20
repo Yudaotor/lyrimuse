@@ -32,7 +32,7 @@ func sourceDurationNearMissApplies(r scoredLyricCandidateResult, durationSecs fl
 	if r.Score < 0 || r.Lyrics == "" || !sourceDurationNearMiss(r.SourceReportedDurationSecs, durationSecs) {
 		return false
 	}
-	return !isPlayerLocalLyricSource(r.Source) && scoreTermPoints(r.ScoreTerms, scoreTermNativeSource) == 0
+	return !lyricSourceKindIs(r.Source, providerKindPlayerLocal) && scoreTermPoints(r.ScoreTerms, scoreTermNativeSource) == 0
 }
 
 // applySourceDurationNearMissPenalty 给有锚点时自报曲长差出收紧档的候选扣分,并记一条

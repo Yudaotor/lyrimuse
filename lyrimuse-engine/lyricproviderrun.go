@@ -44,7 +44,7 @@ const (
 	providerRoundSkipCooling
 )
 
-// decide:联网源的判据和先后同 lyricSourceSkippedThisRound:名单外、轮次不许、关掉都先于冷却,一个既关掉又在冷却的源不记
+// decide:联网源的判据和先后(测试里的 lyricSourceSkippedThisRound 是它的对照,逐个源对着比):名单外、轮次不许、关掉都先于冷却,一个既关掉又在冷却的源不记
 // 跳过。本机类源(Kind 不是联网的)只看轮次:别名轮的名单、设置里的开关、熔断管的都是联网源,带着「只查这些源」名单的
 // 首轮(只问播放器自家那个源的探查、只补问几个源的补空轮)照样读本机那几份。
 func (p lyricRoundPlan) decide(d *ProviderDescriptor) providerRoundDecision {

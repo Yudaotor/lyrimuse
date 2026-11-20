@@ -235,7 +235,7 @@ func TestProviderPrivilegedReadsGoThroughRoundEnv(t *testing.T) {
 			body := rest[:end]
 			rest = rest[end:]
 			resolves++
-			for _, direct := range []string{"playbackTrackIDsForRound", "playbackTrackIDsFor", "waitPlayingAppleCatalogID", "playerSignalApplies", "lyricIdentityFields"} {
+			for _, direct := range []string{"playbackTrackIDsForRound", "playbackTrackIDsFor", "waitPlayingAppleCatalogID", "playerSignalApplies", "lyricIdentityFields", "playingPlayer"} {
 				if regexp.MustCompile(`\b` + direct + `\(`).MatchString(body) {
 					t.Errorf("%s 的 Resolve 直接调了 %s():这类读取只经 RoundEnv 的方法", f, direct)
 				}

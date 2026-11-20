@@ -399,7 +399,7 @@ func TestPlayerInstrumentalSignalsAreWired(t *testing.T) {
 			"trackFoundNoLyrics: noLyrics, noVocals: noVocals,",
 		},
 		"applemusic.go": {
-			"if env.PlayerNoVocalsSignalApplies() && r.lyrics == \"\" && playingPlayer() == playerAppleMusic {",
+			"if env.PlayerNoVocalsSignalApplies() && r.lyrics == \"\" && env.PlayingPlayer() == playerAppleMusic {",
 			"appleNoVocals = appleID != \"\" && applemusicCatalogNoVocals(ctx, appleID)",
 			"SourceResult{noVocals: appleNoVocals, lyr: r.lyrics,",
 			"identityFromLocalClient: r.fromLocalClient || r.fromPlayerCatalogID || appleNoVocals}",

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -206,7 +207,8 @@ func TestProviderRegistryDefaultPriorityMatchesDefaultOrder(t *testing.T) {
 	}
 }
 
-// 本机来源:isPlayerLocalLyricSource 认的是 Kind 为 playerLocal 的那几路,导入库单算一类;两类都没有设置开关。
+// 本机来源:期望表 isPlayerLocalLyricSource 认的是 Kind 为 playerLocal 的那几路,导入库单算一类;两类都没有设置开关。
+// 生产代码按 Kind 读(lyricSourceKindIs),跟期望表逐个相等。
 func TestProviderRegistryKindMatchesLocalSources(t *testing.T) {
 	saved := features()
 	t.Cleanup(func() { setFeatures(saved) })
@@ -222,6 +224,23 @@ func TestProviderRegistryKindMatchesLocalSources(t *testing.T) {
 		if got := lyricSourceEnabled(d.Name); got != (d.Kind != providerKindNetwork) {
 			t.Errorf("%s:联网源都关着时 lyricSourceEnabled=%v,Kind=%v", d.Name, got, d.Kind)
 		}
+		if got, want := lyricSourceKindIs(d.Name, providerKindPlayerLocal), isPlayerLocalLyricSource(d.Name); got != want {
+			t.Errorf("%s:生产代码读到是不是播放器本机=%v,期望表=%v", d.Name, got, want)
+		}
+		if got, want := lyricSourceKindIs(d.Name, providerKindUserLibrary), d.Name == importLyricsSource; got != want {
+			t.Errorf("%s:生产代码读到是不是导入库=%v,期望=%v", d.Name, got, want)
+		}
+		if got, want := lyricSourceEnabled(d.Name), isPlayerLocalLyricSource(d.Name) || d.Name == importLyricsSource; got != want {
+			t.Errorf("%s:联网源都关着时 lyricSourceEnabled=%v,期望(播放器本机或导入库)=%v", d.Name, got, want)
+		}
+	}
+	for _, kind := range []ProviderKind{providerKindNetwork, providerKindPlayerLocal, providerKindUserLibrary} {
+		if lyricSourceKindIs("nope", kind) || lyricSourceKindIs("", kind) {
+			t.Errorf("没登记的名字不属于任何一类(%v)", kind)
+		}
+	}
+	if lyricSourceEnabled("unregistered") {
+		t.Error("没登记的名字按联网源的开关算:只开着别的源时它是关的")
 	}
 }
 
@@ -229,6 +248,19 @@ func TestProviderRegistryRoundsMatchOnDemandOnly(t *testing.T) {
 	got := registryNameSet(func(d *ProviderDescriptor) bool { return d.Rounds == roundsOnDemand })
 	if want := trueKeys(lyricSourceOnDemandOnly); !reflect.DeepEqual(got, want) {
 		t.Errorf("登记表 %v\nlyricSourceOnDemandOnly %v", sortedKeys(got), sortedKeys(want))
+	}
+	if len(got) == 0 {
+		t.Error("没有一个源只在播放那一侧问,这条守卫什么都没比")
+	}
+	batch, playing := context.Background(), withOnDemandLyricRound(context.Background())
+	for _, name := range append(sortedKeys(registryNameSet(func(*ProviderDescriptor) bool { return true })), "nope") {
+		want := lyricSourceOnDemandOnly[name]
+		if read := onDemandOnlyLyricSource(name); read != want {
+			t.Errorf("%s:生产代码读到只在播放那一侧问=%v,期望表=%v", name, read, want)
+		}
+		if lyricSourceAllowedForRound(batch, name) != !want || !lyricSourceAllowedForRound(playing, name) {
+			t.Errorf("%s:批量轮次问不问、播放轮次问不问跟期望表(%v)对不上", name, want)
+		}
 	}
 }
 

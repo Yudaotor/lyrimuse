@@ -1584,7 +1584,7 @@ func (p appleMusicProvider) Resolve(ctx context.Context, q ProviderQuery, env Ro
 	// 正在用 Apple Music 放、它自己没给这一条的歌词时,问一次这条录音有没有人声(播放器自己的信号,见 playerInstrumentalSource)。
 	// 目录 id 开搜那一刻多半还没核对完,在放的这首等它就绪再问;待播队列、同专辑预取那几首没有提示,不等(见 applenovocals.go)。
 	appleNoVocals := false
-	if env.PlayerNoVocalsSignalApplies() && r.lyrics == "" && playingPlayer() == playerAppleMusic {
+	if env.PlayerNoVocalsSignalApplies() && r.lyrics == "" && env.PlayingPlayer() == playerAppleMusic {
 		if appleID == "" && !isPlayerQueueTrack(ctx) {
 			appleID = env.AwaitPlayingAppleCatalogID(ctx)
 		}

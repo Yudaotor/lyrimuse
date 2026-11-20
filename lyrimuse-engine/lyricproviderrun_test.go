@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"log"
 	"net/http"
 	"os"
 	"reflect"
@@ -66,6 +67,31 @@ func coolingBreakerFor(t *testing.T, d *ProviderDescriptor, cooling bool) lyricS
 		t.Fatalf("%s:想造的冷却状态是 %v,熔断器给的是 %v", d.Name, cooling, got)
 	}
 	return plan
+}
+
+// lyricSourceSkippedThisRound:一个源这一轮发不发请求,true = 不发、交空结果。only 是别名轮「只查这些源」的名单
+// (nil = 不限),breakerPlan 是这一轮在冷却的源,round 记被冷却跳过的源(nil 时不记)。这是调度的 lyricRoundPlan.decide
+// 的对照:各源对拍的参照路径(handwrittenProviderRound 等)拿它判跳过,下面那条用例拿它跟 decide 逐个源对着比,两处判据
+// 必须一致。只在播放那一侧问的源读期望表 lyricSourceOnDemandOnly,不读登记表:对照要跟被比的一方各有各的来源。
+func lyricSourceSkippedThisRound(ctx context.Context, source string, only map[string]bool, breakerPlan lyricSourceRoundPlan, round *lyricSourceRound) bool {
+	// 别名轮的"只查缺着的源"(withLyricSourceOnly):名单外的源静默跳过 ——
+	// 它们在原名那一轮已经答过了,不重复打、不记账、不打日志。名单为 nil = 不限制。
+	if only != nil && !only[source] {
+		return true
+	}
+	// 只在播放那一侧问的源:批量轮次里静默跳过,同关掉的源,不记跳过、不打日志。
+	if lyricSourceOnDemandOnly[source] && !isOnDemandLyricRound(ctx) {
+		return true
+	}
+	switch lyricSourceSkipFor(source, lyricSourceEnabled, breakerPlan) {
+	case lyricSourceSkipDisabled:
+		return true
+	case lyricSourceSkipCooling:
+		round.markSkippedBecause(source, sharedLyricSourceBreaker().cooldownReason(source))
+		log.Printf("lyrics: source %s skipped this round, cooling down for another %s", source, breakerPlan[source].Round(time.Second))
+		return true
+	}
+	return false
 }
 
 // 调度的跳过判断(lyricRoundPlan.decide)跟手写 goroutine 用的 lyricSourceSkippedThisRound 逐个源、逐种情形对着比:

@@ -119,7 +119,7 @@ func priorityPickSettled(scored []scoredLyricCandidateResult, picked *scoredLyri
 		}
 		for _, source := range tier {
 			// 播放器本地歌词开搜前就放进来了,没有回不回话这回事。
-			if isPlayerLocalLyricSource(source) {
+			if lyricSourceKindIs(source, providerKindPlayerLocal) {
 				continue
 			}
 			if !answered(source) {

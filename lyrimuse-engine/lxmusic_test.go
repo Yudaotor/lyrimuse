@@ -507,7 +507,7 @@ func TestLXMusicLocalLyricsIsWired(t *testing.T) {
 	if !lxMusicAwaitsDuration(lxMusicBundleID, 0) || lxMusicAwaitsDuration(lxMusicBundleID, 240.4) || lxMusicAwaitsDuration(kkboxBundleID, 0) {
 		t.Error("只有洛雪、而且这一拍时长还是 0 时,首次解析才等下一拍")
 	}
-	if !isPlayerLocalLyricSource(lxMusicLocalLyricsSource) {
+	if !lyricSourceKindIs(lxMusicLocalLyricsSource, providerKindPlayerLocal) {
 		t.Error("洛雪本地歌词是播放器本地的那一类(整首错开判定不给它同源否决)")
 	}
 	if playerNativeLyricSource(playerLXMusic) != lxMusicLocalLyricsSource {

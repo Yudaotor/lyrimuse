@@ -654,9 +654,9 @@ func resolveLyricsSources(list []string) map[string]bool {
 // lyricsourcesreload.go 头注。这也是这个判据必须唯一的原因:多一处直接读 features().LyricsSources,
 // 那一处就还停在启动时的旧值。
 func lyricSourceEnabled(source string) bool {
-	// KKBOX 本地歌词不是歌词源、设置里没有它的开关:用 KKBOX 放歌时读它自己缓存里的那份,跟着播放器走(见 kkboxlyrics.go)。
-	// Spotify 本地歌词、Amazon Music 本地歌词同理(见 spotifylyrics.go、amazonlibrary.go)。
-	if isPlayerLocalLyricSource(source) || source == importLyricsSource {
+	// 本机类源(Kind 不是联网的:读播放器本机数据的那几路和导入库)不是歌词源、设置里没有它们的开关:KKBOX 本地歌词
+	// 在用 KKBOX 放歌时读它自己缓存里的那份,跟着播放器走(见 kkboxlyrics.go),别的几路同理。
+	if d := lyricProviders().descriptor(source); d != nil && d.Kind != providerKindNetwork {
 		return true
 	}
 	enabled := currentLyricSources()
@@ -688,7 +688,7 @@ func lyricSourceEnabledSinceFor(prev []string, bulk bool) bool {
 		return false
 	}
 	for _, s := range enabledNetworkLyricSources() {
-		if bulk && lyricSourceOnDemandOnly[s] {
+		if bulk && onDemandOnlyLyricSource(s) {
 			continue
 		}
 		if !slices.Contains(prev, s) {
@@ -698,13 +698,17 @@ func lyricSourceEnabledSinceFor(prev []string, bulk bool) bool {
 	return false
 }
 
-// lyricSourceOnDemandOnly:只在用户实际在听、在找的时候问的源。Megalobiz 的条款不许整库镜像、批量下载(megalobiz.go 头注)。
-var lyricSourceOnDemandOnly = map[string]bool{lyricSourceMegalobiz: true}
+// onDemandOnlyLyricSource:只在用户实际在听、在找的时候问的源(描述符的 Rounds 是 roundsOnDemand)。Megalobiz 的条款不许
+// 整库镜像、批量下载(megalobiz.go 头注)。
+func onDemandOnlyLyricSource(source string) bool {
+	d := lyricProviders().descriptor(source)
+	return d != nil && d.Rounds == roundsOnDemand
+}
 
 // lyricSourceAllowedForRound:这一轮问不问这个源。只在播放那一侧问的源只在 isOnDemandLyricRound 的轮次里问,别的轮次
 // (全量扫库、补空扫描、按组重搜、专辑预取、导入清单、开发用的命令行)一律不问。别的源不受影响。
 func lyricSourceAllowedForRound(ctx context.Context, source string) bool {
-	return !lyricSourceOnDemandOnly[source] || isOnDemandLyricRound(ctx)
+	return !onDemandOnlyLyricSource(source) || isOnDemandLyricRound(ctx)
 }
 
 type onDemandLyricRoundKey struct{}
@@ -722,13 +726,6 @@ func withOnDemandLyricRound(ctx context.Context) context.Context {
 func isOnDemandLyricRound(ctx context.Context) bool {
 	v, _ := ctx.Value(onDemandLyricRoundKey{}).(bool)
 	return v || isPlayerQueueTrack(ctx) || manualLyricSearch(ctx)
-}
-
-// isPlayerLocalLyricSource:这份候选是不是读播放器自己缓存来的(KKBOX / Spotify / Amazon Music 本地歌词)。
-func isPlayerLocalLyricSource(source string) bool {
-	return source == kkboxLocalLyricsSource || source == spotifyLocalLyricsSource || source == amazonLocalLyricsSource ||
-		source == lxMusicLocalLyricsSource ||
-		source == localFileLyricsSource
 }
 
 // resolvePreferLocalFileLyrics:写过就照写的;没写过时顺序优先为 true、智能算法为 false,两种模式里没碰过开关的人行为不变。
