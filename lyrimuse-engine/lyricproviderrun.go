@@ -111,20 +111,25 @@ func sealProviderResult(d *ProviderDescriptor, r SourceResult) SourceResult {
 }
 
 // startLyricProviders 给每个源起一个 goroutine,各往 out 送一份结果。out 的缓冲必须放得下每个源各一份:
-// 收集循环到截止或被取消后不再读 out,晚到的结果要能不阻塞地送进去。这一轮源之间递曲目编号的地方在这里建,
-// 返回给还没接到调度上、要等编号的调用方。
-func startLyricProviders(ctx context.Context, providers []LyricProvider, q ProviderQuery, env RoundEnv, plan lyricRoundPlan, out chan<- SourceResult) *roundTrackIDs {
+// 收集循环到截止或被取消后不再读 out,晚到的结果要能不阻塞地送进去。这一轮源之间递曲目编号的地方在这里建。
+func startLyricProviders(ctx context.Context, providers []LyricProvider, q ProviderQuery, env RoundEnv, plan lyricRoundPlan, out chan<- SourceResult) {
 	env.trackIDs = newRoundTrackIDs(providers)
 	for _, p := range providers {
 		go func() { out <- runLyricProviderInRound(ctx, p, q, env, plan) }()
 	}
-	return env.trackIDs
 }
 
-// runLyricProviderInRound 是一个源在一轮里的那一趟:runLyricProvider 之外管源之间递曲目编号的先后。往外递编号的源
-// (这一轮有它的一格)返回之前一定递过:被跳过的、Resolve 里没递的,在这里代递空串,先于交结果;漏了这一步,等它的源会
-// 挂到这一轮截止。源在 Resolve 中途递出去的编号先到先算,这里只兜没递的。见 09 章决策 393。
+// runLyricProviderInRound 是一个源在一轮里的那一趟:runLyricProvider 之外管源之间递曲目编号的先后。见 09 章决策 393。
+//   - 等别的源递编号的源(描述符的 DependsOnIDsFrom)先把那几个编号等齐,再由 runLyricProvider 判这一轮问不问它:关掉的、
+//     名单外的、冷却中的也等,它的空结果和冷却跳过都落在那几个编号递出来之后。别改成先判再等:结果到达的先后会变,
+//     手动搜索每到一个源刷新一次的顺序跟着变。
+//   - 往外递编号的源(这一轮有它的一格)返回之前一定递过:被跳过的、Resolve 里没递的,在这里代递空串,先于交结果;
+//     漏了这一步,等它的源会挂到这一轮截止。源在 Resolve 中途递出去的编号先到先算,这里只兜没递的。
 func runLyricProviderInRound(ctx context.Context, p LyricProvider, q ProviderQuery, env RoundEnv, plan lyricRoundPlan) SourceResult {
-	defer env.trackIDs.slot(p.Descriptor().Name).publish("")
+	d := p.Descriptor()
+	for _, from := range d.DependsOnIDsFrom {
+		env.trackIDs.slot(from).await()
+	}
+	defer env.trackIDs.slot(d.Name).publish("")
 	return runLyricProvider(ctx, p, q, env, plan)
 }

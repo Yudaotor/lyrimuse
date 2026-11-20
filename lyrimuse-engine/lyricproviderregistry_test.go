@@ -687,6 +687,9 @@ func TestProviderRegistryPrivilegesMatchCode(t *testing.T) {
 			if !lyricProviders().descriptor(from).Privileges.has(privTrackIDPublish) {
 				t.Errorf("%s 等 %s 的编号,但 %s 没有 privTrackIDPublish", name, from, from)
 			}
+			if len(lyricProviders().descriptor(from).DependsOnIDsFrom) != 0 {
+				t.Errorf("%s 等 %s 的编号,%s 自己又等别人的:成环就两边都等不到", name, from, from)
+			}
 		}
 	}
 
@@ -699,6 +702,19 @@ func TestProviderRegistryPrivilegesMatchCode(t *testing.T) {
 		}
 		if containsCode(lyricProviderResolveSource(t, p), "env.PublishTrackID(") {
 			publishes[p.Descriptor().Name] = true
+		}
+		// 等编号:Resolve 里经环境读(env.TrackIDFrom),读的恰好是描述符声明要等的那几个源。
+		d := p.Descriptor()
+		var reads []string
+		for _, m := range regexp.MustCompile(`env\.TrackIDFrom\((\w+)\)`).FindAllStringSubmatch(lyricProviderResolveSource(t, p), -1) {
+			from := consts[m[1]]
+			if from == "" {
+				t.Fatalf("%s 的 Resolve 里 env.TrackIDFrom(%s):不认识的源常量", d.Name, m[1])
+			}
+			reads = append(reads, from)
+		}
+		if !slices.Equal(reads, d.DependsOnIDsFrom) {
+			t.Errorf("%s:Resolve 里等的编号 %v 跟 DependsOnIDsFrom=%v 对不上", d.Name, reads, d.DependsOnIDsFrom)
 		}
 	}
 	if containsCode(enrichSrc, "case lyricSourceSkipCooling: if r, ok := ") {

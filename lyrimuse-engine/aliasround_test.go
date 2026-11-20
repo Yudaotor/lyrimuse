@@ -95,16 +95,31 @@ func TestWithLyricSourceOnly(t *testing.T) {
 	}
 }
 
-// 源码级守卫:skipSource 必须消费 lyricSourceOnlyFrom,别名轮必须用 withLyricSourceOnly 包 ctx ——
+// 源码级守卫:调度的跳过判断(lyricRoundPlan)必须消费 lyricSourceOnlyFrom,别名轮必须用 withLyricSourceOnly 包 ctx ——
 // 少一头,"只查缺的源"就是空话(要么全查,要么名单没人读)。
 func TestAliasRoundTargetingIsWired(t *testing.T) {
+	run, err := os.ReadFile("lyricproviderrun.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, needle := range []string{
+		"only: lyricSourceOnlyFrom(ctx),",
+		"if p.only != nil && !p.only[d.Name] {\n\t\treturn providerRoundSkipSilent\n\t}",
+		"switch plan.decide(d) {\n\tcase providerRoundSkipSilent:\n\t\treturn SourceResult{source: d.Name}",
+	} {
+		if !containsCode(string(run), needle) {
+			t.Errorf("lyricproviderrun.go 缺 %q", needle)
+		}
+	}
 	src, err := os.ReadFile("enrich.go")
 	if err != nil {
 		t.Fatal(err)
 	}
 	s := string(src)
 	for _, needle := range []string{
-		"only := lyricSourceOnlyFrom(ctx)",
+		"providerPlan := newLyricRoundPlan(ctx, breakerPlan)",
+		"startLyricProviders(ctx, lyricProviders().providers, providerQuery, providerEnv, providerPlan, resultsCh)",
+		// lyricRoundPlan.decide 的对照(lyricSourceSkippedThisRound)同样先看名单。
 		"if only != nil && !only[source] {",
 		// 守的是"定向重查这道接线还在",不是那一行长什么样 —— 外面还包了
 		// withLyricQueryReason 和 withLyricQueryOrigin,所以只钉内层这一段。

@@ -708,7 +708,7 @@ func lyricSourceRoundFrom(ctx context.Context) *lyricSourceRound {
 // ---- 「这一轮只查这些源」(给别名轮用) ----
 //
 // 跟上面 lyricSourceRound 同一个理由走 ctx:fetchScoredLyricCandidatesStreaming 的签名不动。
-// nil 名单 = 不限制(所有调用方的默认);非 nil 时名单外的源在 skipSource 里静默跳过。
+// nil 名单 = 不限制(所有调用方的默认);非 nil 时名单外的源这一轮静默跳过(lyricRoundPlan.decide)。
 
 type lyricSourceOnlyKey struct{}
 

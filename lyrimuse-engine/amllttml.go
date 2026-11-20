@@ -1235,6 +1235,25 @@ type amllQuery struct {
 	translationLang                                 string
 }
 
+// amllProvider 把 amllLyric 接到 LyricProvider 上。结果整份在 amll 里,源名由调度填(runLyricProvider)。网易云、QQ 这一轮
+// 搜到的曲目 ID 经环境拿(env.TrackIDFrom,要 privTrackIDConsume):调度起它之前已经把这两个编号等齐,两个源被跳过或
+// 没搜到时是空串。ISRC 按不带编号的歌名取(lyricSourceISRC),在索引里按歌名找用带编号的那份 SourceTitle。
+type amllProvider struct{ desc *ProviderDescriptor }
+
+func (p amllProvider) Descriptor() *ProviderDescriptor { return p.desc }
+
+func (p amllProvider) Resolve(ctx context.Context, q ProviderQuery, env RoundEnv) SourceResult {
+	neteaseID, qqID := env.TrackIDFrom(lyricSourceNetease), env.TrackIDFrom(lyricSourceQQ)
+	// Apple / Spotify 的曲目 ID 由播放侧顺带记下(见 platformtrackid.go),这里只读。
+	// 别名轮 / 拆分身份轮传的是改写过的署名,那时必然落空、退回只用上面两个 ID。
+	appleCatalogID, spotifyTrackID := env.PlaybackTrackIDs(ctx)
+	return SourceResult{amll: amllLyric(ctx, amllQuery{
+		neteaseID: neteaseID, qqID: qqID, appleCatalogID: appleCatalogID, spotifyTrackID: spotifyTrackID,
+		isrc: lyricSourceISRC(ctx, q.Artist, q.Title, q.Album), artist: q.Artist, title: q.SourceTitle, album: q.Album,
+		durationSecs: q.DurationSecs, translationLang: features().LyricsTranslationLanguage,
+	})}
+}
+
 // amllLyric 先按各平台的曲目 ID 查 amll-ttml-db,挨个试,第一份解析得出来的就是结果;都没有时按 ISRC、歌名在索引里找
 // (amllIndex.lookup),找到的那份还要过 amllLookupFits。索引在手、够新时,不在索引里的 ID 不发请求;没有索引时照旧
 // 按 ID 直取,不找。

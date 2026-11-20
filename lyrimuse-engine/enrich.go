@@ -1277,7 +1277,7 @@ func needsPeripheralBackfill(e enrichEntry, artist, album string) bool {
 	// 搜索兜底链接本身也该继续争取升级成真·歌曲页。只判 `QQURL == ""` 的话,兜底 URL 非空
 	// 的那批条目**永远不会**再被补一次,「前往专辑/前往艺人」对它们也就永远做不了。
 	// 网易云链接只有网易云那一路查询能给(e.NeteaseURL = ne.SongURL),而网易云作为歌词源被
-	// 关掉时那一路不发请求(见 fetchScoredLyricCandidatesStreaming 的 skipSource)——把它算缺
+	// 关掉时那一路不发请求(见 lyricRoundPlan.decide)——把它算缺
 	// 只会让每条记录白补 5 轮、每轮把开着的源全部重查一遍。
 	// 同理,仿冒号名单上的艺人(isNeteaseImpersonatorRidden)这个链接是
 	// withholdImpersonatorRiddenIdentity **故意扣掉**的,补多少轮都不会有。
@@ -6057,7 +6057,7 @@ func kuwoSourceResult(r kuwoResult) lyricSourceResult {
 	}
 }
 
-// lyricSourceSkipFor 决定一个源这一轮发不发请求(纯函数,给 fetchScoredLyricCandidatesStreaming 的 skipSource 用,
+// lyricSourceSkipFor 决定一个源这一轮发不发请求(纯函数,调度的 lyricRoundPlan.decide 用,
 // 单测钉住"关掉的源不发请求、也不算冷却跳过")。关掉优先于冷却:一个既关掉又在冷却的源按"关掉"处理,不该因为它在
 // 冷却就被记进 lyrics_sources_skipped 招来重搜。
 func lyricSourceSkipFor(source string, enabled func(string) bool, plan lyricSourceRoundPlan) lyricSourceSkip {
@@ -6070,9 +6070,10 @@ func lyricSourceSkipFor(source string, enabled func(string) bool, plan lyricSour
 	return lyricSourceQuery
 }
 
-// lyricSourceSkippedThisRound:收集循环里手写 goroutine 的源这一轮发不发请求,true = 不发、交空结果。only 是别名轮
-// 「只查这些源」的名单(nil = 不限),breakerPlan 是这一轮在冷却的源,round 记被冷却跳过的源(nil 时不记)。
-// 接到 LyricProvider 上的源由 lyricRoundPlan.decide 判,两处判据必须一致(lyricproviderrun_test.go 逐个源对着比)。
+// lyricSourceSkippedThisRound:一个源这一轮发不发请求,true = 不发、交空结果。only 是别名轮「只查这些源」的名单
+// (nil = 不限),breakerPlan 是这一轮在冷却的源,round 记被冷却跳过的源(nil 时不记)。收集循环不调它:十六个联网源
+// 这一轮问不问都由调度判(lyricRoundPlan.decide)。它是那边的对照,只有单测调,两处判据必须一致
+// (lyricproviderrun_test.go 逐个源对着比)。
 func lyricSourceSkippedThisRound(ctx context.Context, source string, only map[string]bool, breakerPlan lyricSourceRoundPlan, round *lyricSourceRound) bool {
 	// 别名轮的"只查缺着的源"(withLyricSourceOnly):名单外的源静默跳过 ——
 	// 它们在原名那一轮已经答过了,不重复打、不记账、不打日志。名单为 nil = 不限制。
@@ -6125,10 +6126,9 @@ func fetchScoredLyricCandidatesStreaming(ctx context.Context, artist, title, alb
 	lyricQueryLogFrom(ctx).record(artist, title, lyricQueryReasonFrom(ctx), lyricQueryOriginFrom(ctx), sortedLyricSourceOnly(ctx))
 
 	// 源级熔断(sourcebreaker.go):起跑前算一次"谁在冷却中",冷却中的源不发请求、立刻回一个
-	// 空结果——省掉的正是那 20 秒截止里白等的部分。被跳过的源记进 ctx 上的 round(没挂就
+	// 空结果——省掉的正是那 20 秒截止里白等的部分。被跳过的源记进 ctx 上的 round(lyricSourceRoundFrom,没挂就
 	// 不记,CLI 路径),由写缓存的那几层落到 lyrics_sources_skipped。
 	breakerPlan := sharedLyricSourceBreaker().planRound(lyricSourceNames)
-	round := lyricSourceRoundFrom(ctx)
 	// 未启用的源这一轮**不发请求**(「没启用肯定就不查」)。无条件全查、只在
 	// filterEnabledLyricSources / pickLyricCandidate 那步丢结果的话,关掉的源照样吃一份网络
 	// 请求,而用户关掉一个源最常见的理由恰恰是"它在我这儿连不上 / 很慢"。代价要说清:
@@ -6143,36 +6143,14 @@ func fetchScoredLyricCandidatesStreaming(ctx context.Context, artist, title, alb
 	// 跟熔断跳过是两回事:不记 lyrics_sources_skipped(那是"冷却中"的记录,needsLyricsRetry 会据它
 	// 择机重搜;关掉的源不该被重搜——用户以后再开,它在 lyrics_sources_responded 里缺席,照样会
 	// 触发一次补搜),也不打日志(是设置,不是事件)。进度分母本来就只数开着的源,不受影响。
-	only := lyricSourceOnlyFrom(ctx)
-	skipSource := func(source string) bool {
-		return lyricSourceSkippedThisRound(ctx, source, only, breakerPlan, round)
-	}
-	// 已经接到 LyricProvider 上的源由调度来起(startLyricProviders),跳过判断在调度里,不走 skipSource。网易云那一次查询
-	// 顺带交封面和「网易云」链接,amll 要网易云 / QQ 搜出来的曲目 ID(经调度建的 roundTrackIDs 递),都在各自的实现里。
+	//
+	// 十六个联网源都由调度来起(startLyricProviders),一个源一个 goroutine;这一轮问不问哪个源在调度里判
+	// (lyricRoundPlan.decide:关掉的、别名轮名单外的、这种轮次不问的、冷却中的)。网易云那一次查询顺带交封面和
+	// 「网易云」链接,amll 等网易云 / QQ 把搜到的曲目 ID 递出来(调度建的 roundTrackIDs),都在各自的实现里。
 	providerPlan := newLyricRoundPlan(ctx, breakerPlan)
 	providerQuery := ProviderQuery{Artist: artist, Title: title, Album: album, SourceTitle: srcTitle, DurationSecs: durationSecs}
 	providerEnv := RoundEnv{ForPlayingTrack: forPlaying, identityArtist: idArtist, identityTitle: idTitle, identityAlbum: idAlbum}
-
-	trackIDs := startLyricProviders(ctx, lyricProviders().providers, providerQuery, providerEnv, providerPlan, resultsCh)
-
-	go func() {
-		// amll-ttml-db 按平台音乐 ID 取歌词,等网易云、QQ 把这一轮搜到的曲目 ID 递出来再查。这两个源被跳过(关掉、别名轮
-		// 名单外、冷却中)或没搜到时调度代递空串(runLyricProviderInRound),所以一定等得到,不会在这里挂死。都是空串时
-		// amllLyric 只剩 Apple / Spotify 的 ID 和在索引里按 ISRC / 歌名找。
-		neteaseID, qqID := trackIDs.slot(lyricSourceNetease).await(), trackIDs.slot(lyricSourceQQ).await()
-		if skipSource("amll") {
-			resultsCh <- lyricSourceResult{source: "amll"}
-			return
-		}
-		// Apple / Spotify 的曲目 ID 由播放侧顺带记下(见 platformtrackid.go),这里只读。
-		// 别名轮 / 拆分身份轮传的是改写过的署名,那时必然落空、退回只用上面两个 ID。
-		appleCatalogID, spotifyTrackID := playbackTrackIDsForRound(ctx, idArtist, idTitle, idAlbum)
-		resultsCh <- lyricSourceResult{source: "amll", amll: amllLyric(ctx, amllQuery{
-			neteaseID: neteaseID, qqID: qqID, appleCatalogID: appleCatalogID, spotifyTrackID: spotifyTrackID,
-			isrc: lyricSourceISRC(ctx, artist, title, album), artist: artist, title: srcTitle, album: album,
-			durationSecs: durationSecs, translationLang: features().LyricsTranslationLanguage,
-		})}
-	}()
+	startLyricProviders(ctx, lyricProviders().providers, providerQuery, providerEnv, providerPlan, resultsCh)
 
 	// raw:目前为止到手的各源原始应答,按源名存。打分/排序全部下放给
 	// rankLyricSourceResults(包级纯函数,回归金标集与生产共用),这里只负责收结果、喂进去。

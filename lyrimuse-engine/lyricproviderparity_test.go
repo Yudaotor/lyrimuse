@@ -500,8 +500,8 @@ func runProviderCancelledBeforeRound(t *testing.T, s providerParitySource, artis
 	}
 }
 
-// 已经接到 LyricProvider 上的源:登记表里各有一份实现,收集循环里没有它们的手写 goroutine,入口函数从查询里取的歌名是
-// SourceTitle(带编号的那份)。
+// 十六个联网源全部接到 LyricProvider 上:登记表里各有一份实现,收集循环里没有按源手写的 goroutine、不自己判跳过,
+// 入口函数从查询里取的歌名是 SourceTitle(带编号的那份)。
 func TestMigratedLyricSourcesAreWiredThroughProviders(t *testing.T) {
 	enrichRaw, err := os.ReadFile("enrich.go")
 	if err != nil {
@@ -530,6 +530,23 @@ func TestMigratedLyricSourcesAreWiredThroughProviders(t *testing.T) {
 	if len(implemented) != len(migratedLyricSources)+1 {
 		t.Errorf("登记了实现的源 %d 个,这张表加 lrclib 是 %d 个:迁了新的源要补进表里", len(implemented), len(migratedLyricSources)+1)
 	}
+	for _, name := range lyricSourceNames {
+		if !implemented[name] {
+			t.Errorf("联网源 %s 没有登记实现:收集循环按源名单等结果,这一轮会等到截止", name)
+		}
+	}
+	if len(implemented) != len(lyricSourceNames) {
+		t.Errorf("登记了实现的源 %d 个,联网源 %d 个", len(implemented), len(lyricSourceNames))
+	}
+	collect := goFuncSource(t, "enrich.go", "fetchScoredLyricCandidatesStreaming")
+	for _, banned := range []string{"go func", "skipSource", "lyricSourceSkippedThisRound(", "lyricSourceSkipFor(", "amllLyric(", "neteaseLookup(", "qqMusicMatchCached("} {
+		if containsCode(collect, banned) {
+			t.Errorf("收集循环里不该再有 %q:联网源都由调度起、由调度判这一轮问不问", banned)
+		}
+	}
+	if n := countCode(collect, "startLyricProviders("); n != 1 {
+		t.Errorf("收集循环里应恰好起一次调度,找到 %d 处", n)
+	}
 }
 
 // migratedLyricSources:LRCLIB 之后迁到 LyricProvider 上的源,和各自 Resolve 里调入口函数的那一行。
@@ -548,4 +565,5 @@ var migratedLyricSources = []struct{ name, file, entry, call string }{
 	{lyricSourceAppleMusic, "applemusic.go", "applemusicLyric", "applemusicLyric(ctx, q.Artist, q.SourceTitle, q.Album, q.DurationSecs, appleID, lyricSourceISRC(ctx, q.Artist, q.Title, q.Album))"},
 	{lyricSourceNetease, "netease.go", "neteaseLookup", "neteaseLookup(ctx, q.Artist, q.SourceTitle, q.Album, q.DurationSecs)"},
 	{lyricSourceQQ, "qq.go", "qqMusicMatchCached", "qqMusicMatchCached(ctx, q.Artist, q.SourceTitle, q.Album, q.DurationSecs)"},
+	{lyricSourceAMLL, "amllttml.go", "amllLyric", "isrc: lyricSourceISRC(ctx, q.Artist, q.Title, q.Album), artist: q.Artist, title: q.SourceTitle, album: q.Album,"},
 }

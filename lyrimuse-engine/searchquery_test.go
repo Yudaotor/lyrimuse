@@ -112,7 +112,6 @@ func TestLyricIdentityFieldsIsWired(t *testing.T) {
 	for file, needles := range map[string][]string{
 		"enrich.go": {
 			"idArtist, idTitle, idAlbum := lyricIdentityFields(ctx, artist, title, album)",
-			"appleCatalogID, spotifyTrackID := playbackTrackIDsForRound(ctx, idArtist, idTitle, idAlbum)",
 			"providerEnv := RoundEnv{ForPlayingTrack: forPlaying, identityArtist: idArtist, identityTitle: idTitle, identityAlbum: idAlbum}",
 			"kkboxLocalLyricsFor(idArtist, idTitle, durationSecs)",
 			"spotifyLocalLyricsFor(idArtist, idTitle, idAlbum)",
@@ -124,6 +123,7 @@ func TestLyricIdentityFieldsIsWired(t *testing.T) {
 			"appleID, _ := env.PlaybackTrackIDs(ctx)",
 			"appleID = env.AwaitPlayingAppleCatalogID(ctx)",
 		},
+		"amllttml.go": {"appleCatalogID, spotifyTrackID := env.PlaybackTrackIDs(ctx)"},
 		"lyricprovider.go": {
 			"return playbackTrackIDsForRound(ctx, e.identityArtist, e.identityTitle, e.identityAlbum)",
 			"return waitPlayingAppleCatalogID(ctx, e.identityArtist, e.identityTitle, e.identityAlbum)",

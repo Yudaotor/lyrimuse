@@ -569,7 +569,6 @@ func TestLyricSearchTitleIsWired(t *testing.T) {
 		"e.LyricsSearchTitle = lyricSearchTitleToStore(ctx, title)",
 		"ctx = withLyricSourceTitle(ctx, lyricSearchTitleFor(ctx, title), artist, title, searchAlbum)\n\tartist, title, searchAlbum = searchQueryFields(artist, title, searchAlbum)",
 		"srcTitle := lyricSourceTitleFor(ctx, title)",
-		"artist: artist, title: srcTitle, album: album,",
 		"providerQuery := ProviderQuery{Artist: artist, Title: title, Album: album, SourceTitle: srcTitle, DurationSecs: durationSecs}",
 	} {
 		if !containsCode(enrich, n) {
@@ -578,7 +577,8 @@ func TestLyricSearchTitleIsWired(t *testing.T) {
 	}
 	// 接到 LyricProvider 上的源从查询里取歌名,取的得是 SourceTitle。
 	for file, needles := range map[string][]string{
-		"netease.go": {"info := neteaseLookup(ctx, q.Artist, q.SourceTitle, q.Album, q.DurationSecs)"},
+		"netease.go":  {"info := neteaseLookup(ctx, q.Artist, q.SourceTitle, q.Album, q.DurationSecs)"},
+		"amllttml.go": {"isrc: lyricSourceISRC(ctx, q.Artist, q.Title, q.Album), artist: q.Artist, title: q.SourceTitle, album: q.Album,"},
 		"qq.go": {
 			"match := qqMusicMatchCached(ctx, q.Artist, q.SourceTitle, q.Album, q.DurationSecs)",
 			"qrc := qqQRCLyric(ctx, qqMid, q.Artist, q.SourceTitle, q.Album, q.DurationSecs)",

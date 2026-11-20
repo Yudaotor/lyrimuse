@@ -29,7 +29,7 @@ type ProviderQuery struct {
 
 // RoundEnv 是这一轮交给源的环境。带特权的那几样(播放侧记下的平台曲目编号、播放器自己的无人声信号、源之间递的曲目编号)
 // 只经下面的方法读写,方法按 granted 放行:收集循环建的那份 granted 是 0,调度交给源之前按它的描述符填(grantedTo),
-// 没有对应特权位的源读到的是零值、递的编号没有效果。见 09 章决策 392、393。
+// 没有对应特权位的源读到的是零值、等不到别人的编号、递的编号没有效果。见 09 章决策 392、393。
 //
 // 这个结构要能用 == 比:别往里加切片、map、函数字段。
 type RoundEnv struct {
@@ -61,13 +61,24 @@ func (e RoundEnv) PublishTrackID(id string) {
 	e.ownTrackID.publish(id)
 }
 
-// roundTrackIDs 是一轮里源之间递曲目编号的地方:这一轮起的源里带 privTrackIDPublish 的各有一格。见 09 章决策 393。
+// TrackIDFrom:source 这个源这一轮递出来的曲目编号。它还没递时等;它被跳过、没搜到,或这一轮没起它时是空串。
+// 要 privTrackIDConsume,没有这一位的源不等、拿到空串。
+func (e RoundEnv) TrackIDFrom(source string) string {
+	if !e.granted.has(privTrackIDConsume) {
+		return ""
+	}
+	return e.trackIDs.slot(source).await()
+}
+
+// roundTrackIDs 是一轮里源之间递曲目编号的地方:这一轮起的源里带 privTrackIDPublish 的各有一格。等编号的源自己一个
+// goroutine 等,不把它的查询塞进递编号的源里:那样它的网络耗时会串到主力源头上,拖慢它们到达。见 09 章决策 393。
 type roundTrackIDs struct {
 	slots map[string]*roundTrackID
 }
 
 // roundTrackID 是一个源这一轮递出来的曲目编号。等的一方在它递出来之前一直等、不看 ctx,所以每一格都必须有人递:
 // 源自己没递的由调度在它返回时代递空串(runLyricProviderInRound),漏了这一步等的一方会挂到这一轮截止。
+// 递编号的源不能自己又等别人的编号(DependsOnIDsFrom 为空):成环就两边都等不到。
 type roundTrackID struct {
 	once sync.Once
 	done chan struct{}
@@ -322,12 +333,12 @@ type ProviderDescriptor struct {
 	DependsOnIDsFrom []string
 }
 
-// lyricProviderRegistry 是全部歌词来源的登记表:联网源和本机来源各一份描述符,已经接到 LyricProvider 上的源另有一份实现。
+// lyricProviderRegistry 是全部歌词来源的登记表:联网源和本机来源各一份描述符,十六个联网源另各有一份实现。
 type lyricProviderRegistry struct {
 	descriptors []*ProviderDescriptor
 	byName      map[string]*ProviderDescriptor
-	// providers:已经接到统一接口上的源。收集循环由调度起它们(startLyricProviders),不在这里的源仍是循环里手写的
-	// goroutine;一个源只能走其中一条路,两条都走会多交一份结果,都不走这一轮会等到截止。
+	// providers:联网源的实现,每个联网源恰好一份。收集循环由调度起它们(startLyricProviders),按源名单数「都回来了
+	// 没有」:少登记一个这一轮会等到截止,多登记一份会多交一份结果。
 	providers []LyricProvider
 }
 

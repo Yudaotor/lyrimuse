@@ -1,12 +1,14 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"os"
 	"path/filepath"
 	"reflect"
 	"regexp"
+	"runtime"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -464,8 +466,9 @@ func TestPeripheralAndNeteaseLocalIdentityOnlyFromPrivilegedProviders(t *testing
 	}
 }
 
-// 递编号只经调度和 RoundEnv:格子只在起这一轮的源时建(startLyricProviders),各源的 goroutine 走 runLyricProviderInRound
-// (它兜底代递空串),往格子里写只有 PublishTrackID 和那一处兜底,「自己的格子」只在 grantedTo 里填。
+// 递编号只经调度和 RoundEnv:格子只在起这一轮的源时建(startLyricProviders)、不交到调度外面,各源的 goroutine 走
+// runLyricProviderInRound(它先替等编号的源等齐、兜底代递空串),往格子里写只有 PublishTrackID 和那一处兜底,从格子里等
+// 只有 TrackIDFrom 和调度那一处,「自己的格子」只在 grantedTo 里填。
 func TestTrackIDsOnlyTravelThroughScheduler(t *testing.T) {
 	files, err := filepath.Glob("*.go")
 	if err != nil {
@@ -481,7 +484,7 @@ func TestTrackIDsOnlyTravelThroughScheduler(t *testing.T) {
 			t.Fatal(err)
 		}
 		src := string(raw)
-		for _, needle := range []string{".publish(", "newRoundTrackIDs(", ".ownTrackID = ", "runLyricProviderInRound(", "&roundTrackID{"} {
+		for _, needle := range []string{".publish(", ".await()", "newRoundTrackIDs(", ".ownTrackID = ", "runLyricProviderInRound(", "&roundTrackID{", "*roundTrackIDs {"} {
 			if n := countCode(src, needle); n > 0 {
 				where[needle] = append(where[needle], fmt.Sprintf("%s×%d", f, n))
 			}
@@ -489,6 +492,8 @@ func TestTrackIDsOnlyTravelThroughScheduler(t *testing.T) {
 	}
 	for needle, want := range map[string][]string{
 		".publish(":                {"lyricprovider.go×1", "lyricproviderrun.go×1"},
+		".await()":                 {"lyricprovider.go×1", "lyricproviderrun.go×1"},
+		"*roundTrackIDs {":         {"lyricprovider.go×1"},
 		"newRoundTrackIDs(":        {"lyricprovider.go×1", "lyricproviderrun.go×1"},
 		".ownTrackID = ":           {"lyricprovider.go×1"},
 		"runLyricProviderInRound(": {"lyricproviderrun.go×2"},
@@ -501,7 +506,7 @@ func TestTrackIDsOnlyTravelThroughScheduler(t *testing.T) {
 	run := string(mustRead(t, "lyricproviderrun.go"))
 	for _, n := range []string{
 		"env.trackIDs = newRoundTrackIDs(providers)\n\tfor _, p := range providers {\n\t\tgo func() { out <- runLyricProviderInRound(ctx, p, q, env, plan) }()",
-		"defer env.trackIDs.slot(p.Descriptor().Name).publish(\"\")\n\treturn runLyricProvider(ctx, p, q, env, plan)",
+		"d := p.Descriptor()\n\tfor _, from := range d.DependsOnIDsFrom {\n\t\tenv.trackIDs.slot(from).await()\n\t}\n\tdefer env.trackIDs.slot(d.Name).publish(\"\")\n\treturn runLyricProvider(ctx, p, q, env, plan)",
 	} {
 		if !containsCode(run, n) {
 			t.Errorf("lyricproviderrun.go 缺 %q", n)
@@ -510,11 +515,165 @@ func TestTrackIDsOnlyTravelThroughScheduler(t *testing.T) {
 	provider := string(mustRead(t, "lyricprovider.go"))
 	for _, n := range []string{
 		"if !e.granted.has(privTrackIDPublish) {\n\t\treturn\n\t}\n\te.ownTrackID.publish(id)",
+		"if !e.granted.has(privTrackIDConsume) {\n\t\treturn \"\"\n\t}\n\treturn e.trackIDs.slot(source).await()",
 		"e.ownTrackID = e.trackIDs.slot(d.Name)",
 		"if d := p.Descriptor(); d.Privileges.has(privTrackIDPublish) {\n\t\t\tb.slots[d.Name] = &roundTrackID{done: make(chan struct{})}",
 	} {
 		if !containsCode(provider, n) {
 			t.Errorf("lyricprovider.go 缺 %q", n)
 		}
+	}
+}
+
+// 等别的源递来的编号要 privTrackIDConsume:没有这一位的源不等、拿到空串,收集循环建的那份环境(还没交给任何源)也一样。
+// 要等的那个源这一轮没起、或者它不往外递编号时,带这一位的也不等,立刻拿到空串。
+func TestTrackIDConsumeNeedsPrivilege(t *testing.T) {
+	pub := &stubLyricProvider{desc: &ProviderDescriptor{Name: "pub", Privileges: privTrackIDPublish}}
+	silent := &stubLyricProvider{desc: &ProviderDescriptor{Name: "silent", Privileges: privTrackIDPublish}}
+	plain := &stubLyricProvider{desc: &ProviderDescriptor{Name: "plain"}}
+	env := trackIDBoardFor(pub, silent, plain)
+	env.grantedTo(pub.desc).PublishTrackID("123")
+	// read:在限定时间里读一次;挂住了(在等一个没人递的格子)返回 ok=false。
+	read := func(e RoundEnv, source string) (id string, ok bool) {
+		got := make(chan string, 1)
+		go func() { got <- e.TrackIDFrom(source) }()
+		select {
+		case id := <-got:
+			return id, true
+		case <-time.After(4 * time.Second):
+			return "", false
+		}
+	}
+	for _, c := range []struct {
+		name       string
+		privileges builtinPrivileges
+		want       string
+	}{
+		{name: "带这一位", privileges: privTrackIDConsume, want: "123"},
+		{name: "没有特权位"},
+		{name: "只有不相干的位", privileges: privTrackIDPublish | privPlaybackTrackIDs | privLocalClientIdentity | privPeripheral | privBorrowFromPeers | privRefetchByID},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			granted := env.grantedTo(&ProviderDescriptor{Name: "consumer", Privileges: c.privileges})
+			if id, ok := read(granted, "pub"); !ok || id != c.want {
+				t.Errorf("读到 %q(读完=%v),期望 %q", id, ok, c.want)
+			}
+			if c.privileges.has(privTrackIDConsume) {
+				return
+			}
+			// 没有这一位:对着一个还没人递的格子也不等。
+			if id, ok := read(granted, "silent"); !ok || id != "" {
+				t.Errorf("没有 privTrackIDConsume 不该等:%q 读完=%v", id, ok)
+			}
+		})
+	}
+	consumer := env.grantedTo(&ProviderDescriptor{Name: "consumer", Privileges: privTrackIDConsume})
+	for _, source := range []string{"plain", "not-started-this-round"} {
+		if id, ok := read(consumer, source); !ok || id != "" {
+			t.Errorf("%s 这一轮没有格子,应立刻拿到空串:%q 读完=%v", source, id, ok)
+		}
+	}
+	if id, ok := read(env, "pub"); !ok || id != "" {
+		t.Errorf("还没交给源的环境不放行:%q 读完=%v", id, ok)
+	}
+	if id, ok := read(RoundEnv{}.grantedTo(&ProviderDescriptor{Name: "consumer", Privileges: privTrackIDConsume}), "pub"); !ok || id != "" {
+		t.Errorf("这一轮没有递编号的地方时应立刻拿到空串:%q 读完=%v", id, ok)
+	}
+}
+
+// waitGoroutineParkedIn 等到有 goroutine 在名字里带 frame 的函数里阻塞着等通道(只是路过这个函数、还没停下的不算)。
+func waitGoroutineParkedIn(t *testing.T, frame string) {
+	t.Helper()
+	buf := make([]byte, 8<<20)
+	for deadline := time.Now().Add(4 * time.Second); ; time.Sleep(time.Millisecond) {
+		for _, g := range bytes.Split(buf[:runtime.Stack(buf, true)], []byte("\n\n")) {
+			header, _, _ := bytes.Cut(g, []byte("\n"))
+			if bytes.Contains(header, []byte("[chan receive")) && bytes.Contains(g, []byte(frame)) {
+				return
+			}
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("4 秒里没有 goroutine 停在 %s 里", frame)
+		}
+	}
+}
+
+// 等别的源递编号的源(描述符的 DependsOnIDsFrom)先把那几个编号都等齐,再判这一轮问不问它:照常问的、设置里关掉的、别名轮
+// 名单外的、熔断冷却的都一样,还差一个编号没递出来的时候它没被问、没交结果、没记跳过;都递出来之后才各走各的。
+func TestTrackIDConsumerWaitsBeforeItsRoundIsDecided(t *testing.T) {
+	for _, c := range []struct {
+		name     string
+		plan     func(round *lyricSourceRound) lyricRoundPlan
+		wantAsk  bool
+		wantSkip bool
+	}{
+		{name: "照常问", wantAsk: true, plan: func(*lyricSourceRound) lyricRoundPlan {
+			return lyricRoundPlan{enabled: func(string) bool { return true }}
+		}},
+		{name: "设置里关掉", plan: func(*lyricSourceRound) lyricRoundPlan {
+			return lyricRoundPlan{enabled: func(source string) bool { return source != "consumer" }}
+		}},
+		{name: "别名轮名单外", plan: func(*lyricSourceRound) lyricRoundPlan {
+			return lyricRoundPlan{only: map[string]bool{"quick": true, "slow": true}, enabled: func(string) bool { return true }}
+		}},
+		{name: "熔断冷却中", wantSkip: true, plan: func(round *lyricSourceRound) lyricRoundPlan {
+			return lyricRoundPlan{enabled: func(string) bool { return true }, cooling: lyricSourceRoundPlan{"consumer": time.Minute}, round: round}
+		}},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			release := make(chan struct{})
+			quick := &stubLyricProvider{desc: &ProviderDescriptor{Name: "quick", Privileges: privTrackIDPublish}}
+			quick.resolve = func() SourceResult {
+				quick.gotEnv.PublishTrackID("q1")
+				return SourceResult{}
+			}
+			slow := &stubLyricProvider{desc: &ProviderDescriptor{Name: "slow", Privileges: privTrackIDPublish}}
+			slow.resolve = func() SourceResult {
+				<-release
+				slow.gotEnv.PublishTrackID("s2")
+				return SourceResult{}
+			}
+			var gotIDs atomic.Value
+			consumer := &stubLyricProvider{desc: &ProviderDescriptor{Name: "consumer", Privileges: privTrackIDConsume, DependsOnIDsFrom: []string{"quick", "slow"}}}
+			consumer.resolve = func() SourceResult {
+				gotIDs.Store(consumer.gotEnv.TrackIDFrom("quick") + "+" + consumer.gotEnv.TrackIDFrom("slow"))
+				return SourceResult{}
+			}
+			_, round := withLyricSourceRound(context.Background())
+			out := make(chan SourceResult, 3)
+			startLyricProviders(context.Background(), []LyricProvider{quick, slow, consumer}, ProviderQuery{}, RoundEnv{}, c.plan(round), out)
+			// 先收到快的那个源的结果(它的编号已经递出来),再等到有 goroutine 停在等编号里:那只能是在等慢的那个。
+			select {
+			case r := <-out:
+				if r.source != "quick" {
+					t.Fatalf("慢的那个源还没放行,先到的应是 quick,得到 %q", r.source)
+				}
+			case <-time.After(4 * time.Second):
+				t.Fatal("quick 没交结果")
+			}
+			waitGoroutineParkedIn(t, "(*roundTrackID).await")
+			if consumer.calls.Load() != 0 || len(out) != 0 || len(round.skippedSources()) != 0 {
+				t.Errorf("还差一个编号没递出来:不该已经问了它(%d 次)、交了结果(%d 份)或记了跳过(%v)", consumer.calls.Load(), len(out), round.skippedSources())
+			}
+			close(release)
+			var names []string
+			for range 2 {
+				select {
+				case r := <-out:
+					names = append(names, r.source)
+				case <-time.After(4 * time.Second):
+					t.Fatalf("只收到 %v", names)
+				}
+			}
+			if asked := consumer.calls.Load() == 1; asked != c.wantAsk {
+				t.Errorf("问没问它(%v)应是 %v", asked, c.wantAsk)
+			}
+			if ids, _ := gotIDs.Load().(string); c.wantAsk && ids != "q1+s2" {
+				t.Errorf("它等到的编号 %q", ids)
+			}
+			if skipped := len(round.skippedSources()) == 1; skipped != c.wantSkip {
+				t.Errorf("记没记跳过(%v)应是 %v", round.skippedSources(), c.wantSkip)
+			}
+		})
 	}
 }

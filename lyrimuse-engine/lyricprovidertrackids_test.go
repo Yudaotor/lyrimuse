@@ -285,7 +285,7 @@ func runTrackIDParityRound(t *testing.T, c trackIDParityCase, viaScheduler bool)
 	t.Helper()
 	neteaseParitySource.reset(t)
 	resetQQParityState(t)
-	resetAMLLParityState(t)
+	amllParitySource.reset(t)
 	g := newTrackIDRound()
 	handle := c.fake.handler()
 	fake := withParityFake(t, trackIDParitySource, func(r parityRequest) parityReply { return handle(g, r) })
@@ -615,6 +615,31 @@ func TestTrackIDsBetweenProvidersMatchHandwrittenRound(t *testing.T) {
 			check: amllResult("qq-lyrics"),
 		},
 		{
+			name: "四个编号都有:先问播放侧记下的 Apple、Spotify,再问网易云、QQ 的", enabled: all, artist: artist, title: title, album: album, durationSecs: secs,
+			prepare: func(t *testing.T) {
+				notePlayingAppleCatalogID(artist, title, album, amllParityAppleID)
+				notePlayingSpotifyTrackID(artist, title, album, amllParitySpotifyID)
+			},
+			fake: trackIDFake{ne: neHit, qq: qqHit, amll: amllHas("qq-lyrics/" + qqParityMid),
+				gate: trackIDGate(map[string]string{lyricSourceQQ: lyricSourceNetease, lyricSourceAMLL: lyricSourceQQ})},
+			wantOrder: [][]string{{lyricSourceNetease}, {lyricSourceQQ}, {lyricSourceAMLL}}, wantNeteaseID: neID, wantQQID: qqParityMid,
+			check: func(t *testing.T, o trackIDParityOutcome) {
+				amllResult("qq-lyrics")(t, o)
+				asked := strings.Join(o.requests, "\n")
+				if !strings.Contains(asked, amllParityAppleFile) || !strings.Contains(asked, "/spotify-lyrics/"+amllParitySpotifyID+".ttml") {
+					t.Errorf("播放侧记下的两个编号也该问到:%v", o.requests)
+				}
+			},
+		},
+		{
+			name: "索引够新:网易云的编号不在索引里就不问,QQ 的 songmid 在索引里照取", enabled: all, artist: artist, title: title, album: album, durationSecs: secs,
+			prepare: amllParityIndex(amllIndexEntry{Titles: []string{"别的歌名"}, QQ: []string{qqParityMid}}),
+			fake: trackIDFake{ne: neHit, qq: qqHit, amll: amllHas("qq-lyrics/" + qqParityMid),
+				gate: trackIDGate(map[string]string{lyricSourceQQ: lyricSourceNetease, lyricSourceAMLL: lyricSourceQQ})},
+			wantOrder: [][]string{{lyricSourceNetease}, {lyricSourceQQ}, {lyricSourceAMLL}}, wantQQID: qqParityMid,
+			check: amllResult("qq-lyrics"),
+		},
+		{
 			name: "网易云在设置里关掉:它的空编号有人代递,amll 不干等、只拿到 QQ 的", enabled: []string{lyricSourceQQ, lyricSourceAMLL},
 			artist: artist, title: title, album: album, durationSecs: secs,
 			fake: trackIDFake{ne: neHit, qq: qqHit, amll: amllHas("qq-lyrics/" + qqParityMid),
@@ -691,7 +716,7 @@ func TestTrackIDsBetweenProvidersWhenRoundCancelled(t *testing.T) {
 	run := func(viaScheduler bool) (order []string, requests []string) {
 		neteaseParitySource.reset(t)
 		resetQQParityState(t)
-		resetAMLLParityState(t)
+		amllParitySource.reset(t)
 		g := newTrackIDRound()
 		var inflight atomic.Int32
 		neteaseAsked := make(chan struct{})

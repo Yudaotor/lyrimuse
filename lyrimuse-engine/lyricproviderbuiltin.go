@@ -41,7 +41,7 @@ func newBuiltinLyricProviderRegistry() *lyricProviderRegistry {
 		PeerGroup: peerGroupGlobal,
 	}, 0)})
 
-	r.registerBuiltin(&ProviderDescriptor{
+	r.implement(amllProvider{desc: r.registerBuiltin(&ProviderDescriptor{
 		Name: lyricSourceAMLL, Order: 5, TieRank: 22, DefaultPriorityRank: 5,
 		Hosts: []HostRule{
 			{"raw.githubusercontent.com", hostExact}, {"cdn.jsdelivr.net", hostExact}, {"fastly.jsdelivr.net", hostExact},
@@ -50,7 +50,7 @@ func newBuiltinLyricProviderRegistry() *lyricProviderRegistry {
 		ProxyFallback: true,
 		Baked:         bakedStripOnly, SongwritersRank: 2, ISRCLookup: isrcLookupIndexed, PageURL: amllPageURL,
 		DependsOnIDsFrom: []string{lyricSourceNetease, lyricSourceQQ},
-	}, privPlaybackTrackIDs|privTrackIDConsume|privBorrowFromPeers|privRefetchByID)
+	}, privPlaybackTrackIDs|privTrackIDConsume|privBorrowFromPeers|privRefetchByID)})
 
 	r.implement(lyricFindProvider{desc: r.registerBuiltin(&ProviderDescriptor{
 		Name: lyricSourceLyricFind, Order: 6, TieRank: 5, DefaultPriorityRank: 6,
