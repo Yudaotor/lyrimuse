@@ -2518,7 +2518,7 @@ func runMenuBarTests() {
                     && sourceHas(panel, "controlButton(playback.isPlayingSmoothed ? \"pause.fill\" : \"play.fill\", size: 16, action: playPauseOrResume)"), true,
                     "面板停播: 有上次那首时走带键就是播放时那一排,中间那颗和空格停播时都接着放上次那首")
         let playbackSource = source("LyrimuseCore/Local/LocalPlaybackSource.swift")
-        expectEqual(sourceHas(playbackSource, "if newIsPlayingNow, !newTitle.isEmpty, !adByFields, !spotifyNoticeSaysAd, !knownAdThisTrack, !PlaybackSimulation.isActive {\nlet now = Date()\nif snapshot.trackKey != lastPlayedAtWrite.key || now.timeIntervalSince(lastPlayedAtWrite.at) >= 60 {\nUserDefaults.standard.set(now.timeIntervalSince1970, forKey: \"np:lastTrackPlayedAt\")")
+        expectEqual(sourceHas(playbackSource, "if newIsPlayingNow, !newTitle.isEmpty, !adByFields, !spotifyNoticeSaysAd, !knownAdThisTrack, recordsLastTrack,\n!PlaybackSimulation.isActive {\nlet now = Date()\nif snapshot.trackKey != lastPlayedAtWrite.key || now.timeIntervalSince(lastPlayedAtWrite.at) >= 60 {\nUserDefaults.standard.set(now.timeIntervalSince1970, forKey: \"np:lastTrackPlayedAt\")")
                     && sourceHas(playbackSource, "defaults.set(playedAt, forKey: \"np:lastTrackPlayedAt\")"), true,
                     "面板停播: 「上次播放」的时刻只在真在放时写(重启后认到暂停着的同一首不刷),晚到的广告确认一起撤回")
         expectEqual(sourceHas(panel, "if items.isEmpty { Spacer(minLength: 0) }\neditLayoutButton"), true,

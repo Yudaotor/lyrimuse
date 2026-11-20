@@ -727,7 +727,10 @@ enum DebugDeepLinks {
         } else {
             saved = ScrobbleHold.encode(leases).map { FileIO.write($0, to: url) } ?? false
         }
-        if saved { DiscordPresenceController.shared.scrobbleHoldChanged(leases) }
+        if saved {
+            DiscordPresenceController.shared.scrobbleHoldChanged(leases)
+            LocalPlaybackSource.shared.scrobbleHoldChanged(leases)
+        }
         let report = ScrobbleHold.encode(saved ? leases : []) ?? Data()
         if FileIO.createDirectory(outputDir) {
             _ = FileIO.write(report, to: outputDir.appendingPathComponent("scrobble-hold.json"))

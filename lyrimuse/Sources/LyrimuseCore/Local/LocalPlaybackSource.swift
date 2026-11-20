@@ -2441,6 +2441,15 @@ public final class LocalPlaybackSource: ObservableObject {
     /// 上一次写 `np:lastTrackPlayedAt` 是哪首、什么时候(见 apply 里那一段的节流)。
     private var lastPlayedAtWrite: (key: String, at: Date) = ("", .distantPast)
 
+    /// 测试播放(测试期开关开着、或歌手在测试曲名单里)不记成「上次在听」。租约在 `start()` 里后台读一次,
+    /// `debug/scrobble-hold` 改完送进来(`scrobbleHoldChanged`)。见 12 章决策 102。
+    private var lastTrackRecordGate = ScrobbleHold.RecordGate()
+
+    /// 测试期开关的租约表改了(`debug/scrobble-hold` 写完调这里)。
+    public func scrobbleHoldChanged(_ leases: [ScrobbleHold.Lease]) {
+        lastTrackRecordGate.leasesChanged(leases)
+    }
+
     /// 「上次在听」这一拍写进去之前的样子(见 apply 里 np:lastTrack* 那一段)。只留最近一次。
     private var lastTrackBeforeWrite: (key: String, title: String?, artist: String?, album: String?, playedAt: Double?,
                                        persistedTitle: String?)?
@@ -3300,6 +3309,14 @@ public final class LocalPlaybackSource: ObservableObject {
         // 后台解码采纳新内容即回捅一次 poll:新歌词/译文不等下一拍轮询(暂停档 6s)才
         // 上屏,见 EnrichCacheReader.onContentAdopted 注释。
         EnrichCacheReader.onContentAdopted = { [weak self] in self?.poll() }
+        let holdURL = LyrimusePaths.configFile(ScrobbleHold.fileName)
+        Task.detached(priority: .utility) { [weak self] in
+            let leases = ScrobbleHold.leases(from: FileIO.read(holdURL))
+            await MainActor.run {
+                guard let self, !self.lastTrackRecordGate.leasesKnown else { return }
+                self.scrobbleHoldChanged(leases)
+            }
+        }
         // 快速 tick 不在这里无条件启动——是否需要它取决于第一次 poll() 拿到的播放
         // 状态,交给 apply() 里的 ensureFastTimerRunning()/stopFastTimer() 决定。
         poll()
@@ -4634,7 +4651,10 @@ public final class LocalPlaybackSource: ObservableObject {
         let spotifyNoticeSaysAd = isSpotifyNative
             && (spotifyNotificationHint.map { $0.isAd && $0.matches(title: snapshot.title, artist: snapshot.artist) } ?? false)
         let knownAdThisTrack = isCurrentTrackAdBreak && snapshot.identityKey == lastKey
-        if !newTitle.isEmpty, !adByFields, !spotifyNoticeSaysAd, !knownAdThisTrack, newTitle != lastPersistedTrackTitle,
+        // 测试播放同样不记成「上次在听」,下面两处落盘共用这一拍的判定(见 12 章决策 102)。
+        let recordsLastTrack = !newTitle.isEmpty
+            && lastTrackRecordGate.allows(track: snapshot.trackKey, artist: newArtist, title: newTitle, now: Date())
+        if !newTitle.isEmpty, !adByFields, !spotifyNoticeSaysAd, !knownAdThisTrack, recordsLastTrack, newTitle != lastPersistedTrackTitle,
            !PlaybackSimulation.isActive {
             let defaults = UserDefaults.standard
             lastTrackBeforeWrite = (key: snapshot.trackKey,
@@ -4653,7 +4673,8 @@ public final class LocalPlaybackSource: ObservableObject {
         }
         // 菜单栏面板停播卡的「上次播放 · 时间」:最后一次真在放这首的时刻。换歌那一拍写一次,之后在放时最多每分钟写一次。
         // 只在真在放时写:App 重启后认到同一首暂停着的歌,不能把时刻刷成重启那一刻。
-        if newIsPlayingNow, !newTitle.isEmpty, !adByFields, !spotifyNoticeSaysAd, !knownAdThisTrack, !PlaybackSimulation.isActive {
+        if newIsPlayingNow, !newTitle.isEmpty, !adByFields, !spotifyNoticeSaysAd, !knownAdThisTrack, recordsLastTrack,
+           !PlaybackSimulation.isActive {
             let now = Date()
             if snapshot.trackKey != lastPlayedAtWrite.key || now.timeIntervalSince(lastPlayedAtWrite.at) >= 60 {
                 UserDefaults.standard.set(now.timeIntervalSince1970, forKey: "np:lastTrackPlayedAt")

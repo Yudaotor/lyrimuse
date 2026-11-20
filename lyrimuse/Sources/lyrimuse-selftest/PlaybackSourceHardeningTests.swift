@@ -18,9 +18,77 @@ func runPlaybackSourceHardeningTests() {
     libraryAndCacheTests()
     replayNoDurationFirstTick()
     wiringContracts()
+    lastTrackTestHoldTests()
     spotifyConnectMirrorTests()
     nowPlayingNoticeTests()
     scriptServerTests()
+}
+
+// ---- 测试播放不记「上次在听」(12 章决策 102) ----
+
+@MainActor
+private func lastTrackTestHoldTests() {
+    let t0 = Date(timeIntervalSince1970: 1_800_000_000)
+    let open = [ScrobbleHold.Lease(id: "t", since: 1_800_000_000, until: 1_800_000_600)]
+    var gate = ScrobbleHold.RecordGate()
+    expectEqual(gate.allows(track: "k1", artist: "陈奕迅", title: "浮夸", now: t0), false,
+                "上次在听(测试播放): 租约还没读回来时真歌也先不写")
+    gate.leasesChanged([])
+    expectEqual(gate.allows(track: "k1", artist: "陈奕迅", title: "浮夸", now: t0), true,
+                "上次在听(测试播放): 租约读回来、开关关着,真歌照写")
+    expectEqual(gate.allows(track: "k2", artist: "Lyrimuse Test", title: "Clean Local LRC", now: t0), false,
+                "上次在听(测试播放): 测试曲(Lyrimuse Test)不写")
+    expectEqual(gate.allows(track: "k3", artist: "Lyrimuse测试", title: "对时", now: t0), false,
+                "上次在听(测试播放): 测试曲(Lyrimuse测试)不写")
+    expectEqual(gate.allows(track: "k4", artist: "", title: "ToneClick", now: t0), false,
+                "上次在听(测试播放): 没写歌手标签的测试素材不写")
+    gate.leasesChanged(open)
+    expectEqual(gate.allows(track: "k1", artist: "陈奕迅", title: "浮夸", now: t0), false,
+                "上次在听(测试播放): 测试期开关开着,真歌也不写")
+    gate.leasesChanged([])
+    expectEqual(gate.allows(track: "k1", artist: "陈奕迅", title: "浮夸", now: t0.addingTimeInterval(60)), false,
+                "上次在听(测试播放): 认上之后开关收掉,这一首照旧不写")
+    expectEqual(gate.allows(track: "k5", artist: "陈奕迅", title: "十年", now: t0.addingTimeInterval(60)), true,
+                "上次在听(测试播放): 开关收掉后的下一首照写")
+
+    let sourcesRoot = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+    func code(_ path: String) -> String {
+        guard let text = try? String(contentsOfFile: sourcesRoot.appendingPathComponent(path).path, encoding: .utf8) else { return "" }
+        return text.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
+            .filter { !$0.trimmingCharacters(in: .whitespaces).hasPrefix("//") }.joined(separator: "\n")
+    }
+    let source = code("LyrimuseCore/Local/LocalPlaybackSource.swift")
+    let apply = sourceBody("private func apply(_ rawSnapshot: MediaControlSnapshot) {", in: source)
+    let gateLine = "let recordsLastTrack = !newTitle.isEmpty\n&& lastTrackRecordGate.allows(track: snapshot.trackKey, artist: newArtist, title: newTitle, now: Date())"
+    let titleWrite = "if !newTitle.isEmpty, !adByFields, !spotifyNoticeSaysAd, !knownAdThisTrack, recordsLastTrack, newTitle != lastPersistedTrackTitle,"
+    let playedAtWrite = "if newIsPlayingNow, !newTitle.isEmpty, !adByFields, !spotifyNoticeSaysAd, !knownAdThisTrack, recordsLastTrack,"
+    func at(_ s: String) -> String.Index? { apply.range(of: s)?.lowerBound }
+    expectEqual(sourceHas(apply, gateLine) && sourceHas(apply, titleWrite) && sourceHas(apply, playedAtWrite)
+                && (at("let recordsLastTrack").map { g in [titleWrite, playedAtWrite].allSatisfy { at($0).map { g < $0 } ?? false } } ?? false)
+                && (at(titleWrite).map { w in at("UserDefaults.standard.set(newTitle, forKey: \"np:lastTrackTitle\")").map { w < $0 } ?? false } ?? false),
+                true, "上次在听(接线): 曲目三键和时刻都过 RecordGate 再写")
+    expectEqual(apply.split(separator: "\n").filter { $0.contains(".set(") && $0.contains("np:lastTrack") }.count, 4,
+                "上次在听(接线): apply 里只有那一处曲目三键 + 一处时刻在写")
+    let start = sourceBody("public func start() {", in: source)
+    expectEqual(sourceBytes(start, contain: "ScrobbleHold.leases(from: FileIO.read(holdURL))")
+                && sourceBytes(start, contain: "guard let self, !self.lastTrackRecordGate.leasesKnown else { return }")
+                && sourceBytes(code("lyrimuse/Settings/DebugDeepLinks.swift"),
+                               contain: "if saved {\n            DiscordPresenceController.shared.scrobbleHoldChanged(leases)\n            LocalPlaybackSource.shared.scrobbleHoldChanged(leases)\n        }"),
+                true, "上次在听(接线): 租约启动时读一次,测试期开关深链改完送进来")
+    // 「上次在听」几个键只有 LocalPlaybackSource 写:别处另写一份就绕过了测试播放的判定。
+    var writers: [String] = []
+    for dir in ["lyrimuse", "LyrimuseCore"] {
+        let base = sourcesRoot.appendingPathComponent(dir)
+        let files = FileManager.default.enumerator(atPath: base.path)?.compactMap { $0 as? String }.filter { $0.hasSuffix(".swift") } ?? []
+        for f in files where !(dir == "LyrimuseCore" && f == "Local/LocalPlaybackSource.swift") {
+            let text = code("\(dir)/\(f)")
+            guard sourceBytes(text, contain: "np:lastTrack") else { continue }
+            if text.split(separator: "\n").contains(where: { $0.contains("np:lastTrack") && ($0.contains(".set(") || $0.contains("removeObject(")) }) {
+                writers.append("\(dir)/\(f)")
+            }
+        }
+    }
+    expectEqual(writers, [], "上次在听(接线): np:lastTrack* 只在 LocalPlaybackSource 落盘")
 }
 
 // ---- 轮询单飞 ----

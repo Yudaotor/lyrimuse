@@ -1407,7 +1407,7 @@ private func checkDiscordWiring() {
                 true, "Discord 接线: 测试播放(名单、测试期开关)不组曲目")
     expectEqual(sourceBytes(controller, contain: "ScrobbleHold.leases(from: FileIO.read(holdURL))")
                 && sourceBytes(code("lyrimuse/Settings/DebugDeepLinks.swift"),
-                               contain: "if saved { DiscordPresenceController.shared.scrobbleHoldChanged(leases) }"), true,
+                               contain: "if saved {\n            DiscordPresenceController.shared.scrobbleHoldChanged(leases)"), true,
                 "Discord 接线: 测试期开关启动时读一次,深链改完送进来")
     // 12 章决策 88:观感层没跟上真值时先不判定;离曲终不到一个发送间隔时歌词那一行停住;最后一句带上唱完的时刻。
     let refreshBody = sourceBody("private func refresh() {", in: controller)

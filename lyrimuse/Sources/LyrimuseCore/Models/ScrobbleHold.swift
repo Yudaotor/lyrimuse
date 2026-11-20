@@ -2,7 +2,7 @@ import Foundation
 
 /// 测试期开关的租约表(数据目录下 `lyrimuse-scrobble-hold.json`),`debug/scrobble-hold` 写,引擎 scrobblehold.go 读:
 /// 任一条没到期,测试播放就不发 Last.fm / ListenBrainz、不记本地收听日志、不推网页中继。字段名、`since` 封顶的算法跟引擎那边一致,
-/// 两处一起改。App 这边按同一套判定(租约 + 测试曲名单)挡 Discord「正在听」。见 12 章决策 98、99。
+/// 两处一起改。App 这边按同一套判定(租约 + 测试曲名单)挡 Discord「正在听」和「上次在听」(`np:lastTrack*`)。见 12 章决策 98、99、102。
 public enum ScrobbleHold {
     public static let fileName = "lyrimuse-scrobble-hold.json"
 
@@ -94,6 +94,26 @@ public enum ScrobbleHold {
             }
             heldTrack = track
             return true
+        }
+    }
+
+    /// App 侧落盘前问「这一首能不能记下来」:租约表加 `TrackGate`。租约还没读回来时一律不放行(App 刚启动那几拍
+    /// 赶上测试期开关开着,不能先写进去),读回来之后按 `TrackGate` 判。见 12 章决策 102。
+    public struct RecordGate: Sendable {
+        public private(set) var leases: [Lease] = []
+        public private(set) var leasesKnown = false
+        private var hold = TrackGate()
+
+        public init() {}
+
+        public mutating func leasesChanged(_ leases: [Lease]) {
+            self.leases = leases
+            leasesKnown = true
+        }
+
+        public mutating func allows(track: String, artist: String, title: String, now: Date) -> Bool {
+            guard leasesKnown else { return false }
+            return !hold.isHeld(track: track, artist: artist, title: title, leases: leases, now: now)
         }
     }
 
