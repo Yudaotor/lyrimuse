@@ -580,6 +580,8 @@ public enum SettingsSearchCatalog {
         surface(.menuBar, "悬停时显示播放控制", kw: ["悬停", "播放控制", "鼠标"], group: "行为"),
         surface(.menuBar, "无歌词时显示歌名", kw: ["歌名", "兜底", "没有歌词"], group: "行为"),
         surface(.menuBar, "暂停时保留歌词", kw: ["暂停", "保留", "收起", "图标"], group: "行为"),
+        surface(.menuBar, "面板", kw: ["面板格子", "格子", "左键面板", "控制中心", "排列", "换位", "尺寸", "按钮", "正在播放卡"]),
+        surface(.menuBar, "底栏", kw: ["面板底栏", "设置", "版本号", "Last.fm", "Discord", "退出"], group: "面板"),
         surface(.menuBar, "恢复默认", sub: "不含宽度和「菜单栏歌词」开关", kw: ["重置"]),
 
 

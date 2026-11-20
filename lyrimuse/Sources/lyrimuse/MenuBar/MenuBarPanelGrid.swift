@@ -53,6 +53,8 @@ struct PanelEditableTile<Content: View>: View {
     let resizing: Bool
     let remove: () -> Void
     let resizeGesture: AnyGesture<Void>
+    /// 拉手、「−」按这个比例缩(设置窗口里那份缩小的网格)。「−」朝格子外面那个角缩,少压住名字。
+    var handleScale: CGFloat = 1
     @State private var hovering = false
 
     var body: some View {
@@ -60,10 +62,12 @@ struct PanelEditableTile<Content: View>: View {
             .contentShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
             .overlay(alignment: .topLeading) {
                 PanelEditBadge(symbol: "minus", tint: Color(nsColor: .systemGray), label: L10n.t("移除"), action: remove)
+                    .scaleEffect(handleScale < 1 ? 0.8 : 1, anchor: .topLeading)
                     .offset(x: -4, y: -4)
             }
             .overlay(alignment: .bottomTrailing) {
-                PanelResizeCorner(cornerRadius: cornerRadius, visible: hovering || resizing, resizing: resizing)
+                PanelResizeCorner(cornerRadius: cornerRadius, visible: hovering || resizing, resizing: resizing,
+                                  scale: handleScale)
                     .gesture(resizeGesture)
             }
             .onHover { hovering = $0 }
@@ -78,6 +82,8 @@ struct PanelResizeCorner: View {
     let visible: Bool
     /// 正在拖这道拉手:拖动中指针离开了拉手,指针也保持拉伸的样子。
     let resizing: Bool
+    /// 弧、线宽、可按的那一块一起按这个比例缩。
+    var scale: CGFloat = 1
     @State private var hovering = false
     @State private var token = PanelResizeCursor.Token()
 
@@ -88,14 +94,16 @@ struct PanelResizeCorner: View {
 
     var body: some View {
         Canvas { context, size in
-            let center = CGPoint(x: size.width - Self.inset - Self.radius, y: size.height - Self.inset - Self.radius)
+            let radius = Self.radius * scale
+            let inset = Self.inset * scale
+            let center = CGPoint(x: size.width - inset - radius, y: size.height - inset - radius)
             var path = Path()
-            path.addArc(center: center, radius: Self.radius, startAngle: .degrees(0), endAngle: .degrees(90), clockwise: false)
-            context.stroke(path, with: .color(.white), style: StrokeStyle(lineWidth: 5, lineCap: .round))
+            path.addArc(center: center, radius: radius, startAngle: .degrees(0), endAngle: .degrees(90), clockwise: false)
+            context.stroke(path, with: .color(.white), style: StrokeStyle(lineWidth: 5 * scale, lineCap: .round))
         }
         .shadow(color: .black.opacity(0.3), radius: 2, y: 0.5)
         .opacity(visible ? 1 : 0)
-        .frame(width: Self.side, height: Self.side)
+        .frame(width: Self.side * scale, height: Self.side * scale)
         .contentShape(Rectangle())
         // 每次移动都重设一次:指针在这一块里移动时 AppKit 会按窗口的光标区把它换回箭头,只在进来那一下设会闪。
         .onContinuousHover { phase in
@@ -167,8 +175,10 @@ struct PanelTileSizeReader<Content: View>: View {
 
 /// 编辑时空着的坑位:一块淡淡的格子(同控制中心编辑时的空位)。
 struct PanelEmptyCell: View {
+    var cornerRadius = panelTileCornerRadius
+
     var body: some View {
-        RoundedRectangle(cornerRadius: panelTileCornerRadius, style: .continuous)
+        RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
             .fill(Color.primary.opacity(0.07))
             .accessibilityHidden(true)
     }
@@ -240,7 +250,81 @@ final class PanelEditBridge {
     var playbackKeysEnabled = false
 }
 
+@MainActor
+extension MenuBarPanelLayout.Tile {
+    /// 格子的名字。面板上不随状态变名字的格子取这一份,设置窗口「面板」组的缩小格子也是它;「声音」在面板上报音量读数,
+    /// 这里是不变的那个名字。
+    var panelTitle: String {
+        switch self {
+        case .nowPlaying: return L10n.t("正在播放")
+        case .overlay: return LyricsSurface.overlay.panelTitle
+        case .notch: return LyricsSurface.notch.panelTitle
+        case .menuBar: return LyricsSurface.menuBar.panelTitle
+        case .lyricsWindow: return PanelQuickTarget.lyricsWindow.panelTitle
+        case .touchBar: return PanelQuickTarget.touchBar.panelTitle
+        case .lyricsManager: return PanelQuickTarget.lyricsManager.panelTitle
+        case .translation: return L10n.t("显示译文")
+        case .romanization: return L10n.t("显示读音")
+        case .lockPosition: return L10n.t("锁定位置")
+        case .hideAllLyrics: return L10n.t("隐藏全部歌词")
+        case .searchLyrics: return L10n.t("搜索歌词")
+        case .miniWindow: return L10n.t("迷你窗口")
+        case .fontLarger: return L10n.t("放大字号")
+        case .fontSmaller: return L10n.t("缩小字号")
+        case .like: return L10n.t("喜欢")
+        case .openPlayer: return L10n.t("切换到播放器")
+        case .lyricsAdvance: return L10n.t(LyrimuseAction.lyricsAdvanceHotkey.titleKey)
+        case .lyricsDelay: return L10n.t(LyrimuseAction.lyricsDelayHotkey.titleKey)
+        case .lyricsOffsetReset: return L10n.t(LyrimuseAction.lyricsOffsetResetHotkey.titleKey)
+        case .volume: return L10n.t("声音")
+        case .todayListening: return L10n.t("今日收听")
+        case .notchSecondaryLine: return L10n.t("灵动岛副行")
+        case .lyricsWindowPin: return L10n.t("歌词窗口置顶")
+        case .lyricsWindowFullScreen: return L10n.t("歌词窗口全屏")
+        }
+    }
+
+    /// 不带状态的那一枚符号(面板上开着 / 关着换符号的格子取关着那一枚)。名字按 `SymbolImage` 画,自画的那几枚也认。
+    var panelSymbol: String {
+        switch self {
+        case .nowPlaying: return "music.note"
+        case .overlay: return LyricsSurface.overlay.symbolName
+        case .notch: return LyricsSurface.notch.symbolName
+        case .menuBar: return LyricsSurface.menuBar.symbolName
+        case .lyricsWindow: return PanelQuickTarget.lyricsWindow.symbolName
+        case .touchBar: return PanelQuickTarget.touchBar.symbolName
+        case .lyricsManager: return PanelQuickTarget.lyricsManager.symbolName
+        case .translation: return "translate"
+        case .romanization: return "character.phonetic"
+        case .lockPosition: return "lock.open.fill"
+        case .hideAllLyrics: return "eye.slash"
+        case .searchLyrics: return "magnifyingglass"
+        case .miniWindow: return "pip"
+        case .fontLarger: return "textformat.size.larger"
+        case .fontSmaller: return "textformat.size.smaller"
+        case .like: return "heart"
+        case .openPlayer: return "play.rectangle"
+        case .lyricsAdvance: return LyrimuseAction.lyricsAdvanceHotkey.iconName
+        case .lyricsDelay: return LyrimuseAction.lyricsDelayHotkey.iconName
+        case .lyricsOffsetReset: return LyrimuseAction.lyricsOffsetResetHotkey.iconName
+        case .volume: return "speaker.wave.2.fill"
+        case .todayListening: return "chart.bar.fill"
+        case .notchSecondaryLine: return "character.bubble"
+        case .lyricsWindowPin: return "pin"
+        case .lyricsWindowFullScreen: return "arrow.up.left.and.arrow.down.right"
+        }
+    }
+}
+
 extension MenuBarPanelLayout.FooterItem {
+    /// Last.fm、Discord 那一项在底栏出不出现:连着,或连过但出了问题。面板底栏、「可添加」和设置窗口「面板」组同一个判据。
+    static func panelShows(_ status: DestinationStatus?) -> Bool {
+        switch status {
+        case .active, .error, .missingCreds, .warning: return true
+        case .notConfigured, .disabled, .none: return false
+        }
+    }
+
     var panelTitle: String {
         switch self {
         case .settings: return L10n.t("设置")

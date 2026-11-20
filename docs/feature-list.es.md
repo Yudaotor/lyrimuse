@@ -877,6 +877,8 @@ Al hacer clic en el icono de la barra de menús se abre un panel inspirado en el
 
 - Activada por omisión
 - Ajustes: Atajos de teclado › Abrir/cerrar panel de la barra de menús
+- Ajustes: Mostrar letra › Barra de menús › Panel
+- Ajustes: Mostrar letra › Barra de menús › Panel › Barra inferior
 
 <a id="feature-menu-bar-icon"></a>
 
@@ -967,7 +969,7 @@ Como máximo una vez al día, envía al servidor del propio autor la versión, e
 
 ## Todos los ajustes
 
-Todos los ajustes de la ventana Ajustes, según dónde están: 349 en total. Escribe un nombre en el campo de búsqueda de la parte superior de la barra lateral de Ajustes para ir directamente a él.
+Todos los ajustes de la ventana Ajustes, según dónde están: 351 en total. Escribe un nombre en el campo de búsqueda de la parte superior de la barra lateral de Ajustes para ir directamente a él.
 
 ### Letra › Fuente
 
@@ -1190,6 +1192,7 @@ Todos los ajustes de la ventana Ajustes, según dónde están: 349 en total. Esc
 ### Mostrar letra › Barra de menús
 
 - **Letra en la barra de menús**
+- **Panel**
 - **Restaurar valores predeterminados**: El ancho y el interruptor «Letra en la barra de menús» no cambian
 
 ### Mostrar letra › Barra de menús › Contenido
@@ -1229,6 +1232,10 @@ Todos los ajustes de la ventana Ajustes, según dónde están: 349 en total. Esc
 - **Mostrar controles al pasar el puntero**
 - **Mostrar título si no hay letra**
 - **Mantener letra en pausa**: En pausa se queda en la línea actual en lugar de contraerse al icono
+
+### Mostrar letra › Barra de menús › Panel
+
+- **Barra inferior**
 
 ### Mostrar letra › Touch Bar
 

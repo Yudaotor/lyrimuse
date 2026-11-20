@@ -877,6 +877,8 @@ Click the menu bar icon for a panel modeled on macOS Control Center: a now-playi
 
 - On by default
 - Settings: Keyboard Shortcuts › Open/Close Menu Bar Panel
+- Settings: Lyrics Display › Menu Bar › Panel
+- Settings: Lyrics Display › Menu Bar › Panel › Bottom Bar
 
 <a id="feature-menu-bar-icon"></a>
 
@@ -967,7 +969,7 @@ At most once a day, sends the version, macOS, which features are on and crash su
 
 ## Every setting
 
-Every setting in the Settings window, by where it lives: 349 in all. Type a name into the search field at the top of the Settings sidebar to jump straight to it.
+Every setting in the Settings window, by where it lives: 351 in all. Type a name into the search field at the top of the Settings sidebar to jump straight to it.
 
 ### Lyrics › Source
 
@@ -1190,6 +1192,7 @@ Every setting in the Settings window, by where it lives: 349 in all. Type a name
 ### Lyrics Display › Menu Bar
 
 - **Menu Bar Lyrics**
+- **Panel**
 - **Reset to Defaults**: Width and the Menu Bar Lyrics switch stay as they are
 
 ### Lyrics Display › Menu Bar › Content
@@ -1229,6 +1232,10 @@ Every setting in the Settings window, by where it lives: 349 in all. Type a name
 - **Show Controls on Hover**
 - **Show Title When No Lyrics**
 - **Keep Lyrics When Paused**: Stays on the current line while paused instead of collapsing to the icon
+
+### Lyrics Display › Menu Bar › Panel
+
+- **Bottom Bar**
 
 ### Lyrics Display › Touch Bar
 

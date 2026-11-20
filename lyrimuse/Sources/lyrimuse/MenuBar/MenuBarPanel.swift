@@ -1060,11 +1060,11 @@ private struct MenuBarPanelView: View {
                      action: openLyricsManagerAction)
         case .translation:
             // 同右键菜单「快速开关」和快捷键:悬浮歌词、歌词窗口两份一起切,带回声(这首没有译文时画面不会变)。
-            knobTile(symbol: "translate", title: L10n.t("显示译文"), on: playback.showsTranslation, quick: .translation) {
+            knobTile(symbol: "translate", title: tile.panelTitle, on: playback.showsTranslation, quick: .translation) {
                 LyrimuseActionRunner.perform(.toggleTranslationHotkey)
             }
         case .romanization:
-            knobTile(symbol: "character.phonetic", title: L10n.t("显示读音"), on: playback.showsRomanization,
+            knobTile(symbol: "character.phonetic", title: tile.panelTitle, on: playback.showsRomanization,
                      quick: .romanization) {
                 LyrimuseActionRunner.perform(.toggleRomanizationHotkey)
             }
@@ -1072,7 +1072,7 @@ private struct MenuBarPanelView: View {
             // 只有桌面悬浮歌词有位置可锁,它关着时这一格灰着。状态读 AppSettings,不读悬浮窗控制器(渲染路径那条不变量)。
             let overlayOn = playback.classicOverlayEnabled
             let locked = overlayOn && playback.lockPosition
-            knobTile(symbol: locked ? "lock.fill" : "lock.open.fill", title: L10n.t("锁定位置"), on: locked,
+            knobTile(symbol: locked ? "lock.fill" : "lock.open.fill", title: tile.panelTitle, on: locked,
                      enabled: overlayOn, help: overlayOn ? nil : L10n.t("锁定位置仅对悬浮歌词有效"), quick: .lockPosition) {
                 LyrimuseActionRunner.perform(.toggleLockPosition)
             }
@@ -1081,7 +1081,7 @@ private struct MenuBarPanelView: View {
             // 先收面板再切,理由同菜单栏歌词那一格(面板开着切菜单栏歌词,状态栏项被锚着不变宽)。
             let hidden = !playback.classicOverlayEnabled && !playback.notchOverlayEnabled && !playback.showLyricsInMenuBar
                 && !(UserDefaults.standard.stringArray(forKey: LyrimuseActionRunner.hiddenSurfacesKey) ?? []).isEmpty
-            knobTile(symbol: "eye.slash", title: L10n.t("隐藏全部歌词"), on: hidden) {
+            knobTile(symbol: "eye.slash", title: tile.panelTitle, on: hidden) {
                 close()
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
                     LyrimuseActionRunner.perform(.toggleAllLyricsHotkey)
@@ -1089,7 +1089,7 @@ private struct MenuBarPanelView: View {
             }
         case .searchLyrics:
             // 给正在放的这首手动搜歌词(同快捷键):先收面板,搜索窗要到前台。
-            knobTile(symbol: "magnifyingglass", title: L10n.t("搜索歌词"), on: false) {
+            knobTile(symbol: "magnifyingglass", title: tile.panelTitle, on: false) {
                 close()
                 LyrimuseActionRunner.perform(.lyricsQuickSearchHotkey)
             }
@@ -1097,7 +1097,7 @@ private struct MenuBarPanelView: View {
             // 同快捷键:歌词窗口开着就切到另一种尺寸,没开就开成迷你。亮着 = 窗口开着、是迷你。先收面板,理由同歌词窗口那一格。
             let defaults = UserDefaults.standard
             let mini = defaults.bool(forKey: LyricsWindowSession.openKey) && defaults.bool(forKey: LyricsWindowSession.miniModeKey)
-            knobTile(symbol: "pip", title: L10n.t("迷你窗口"), on: mini, quick: .miniWindow) {
+            knobTile(symbol: "pip", title: tile.panelTitle, on: mini, quick: .miniWindow) {
                 close()
                 LyrimuseActionRunner.perform(.toggleLyricsWindowMiniHotkey)
             }
@@ -1105,13 +1105,13 @@ private struct MenuBarPanelView: View {
             // 同卡片右上角那颗心、快捷键「喜欢/取消喜欢」:当前播放器没有「喜欢」或在放广告时灰着。
             let favorited = playback.isFavorited
             let usable = favorited != nil && !playback.isCurrentTrackAdBreak
-            knobTile(symbol: favorited == true ? "heart.fill" : "heart", title: L10n.t("喜欢"), on: usable && favorited == true,
+            knobTile(symbol: favorited == true ? "heart.fill" : "heart", title: tile.panelTitle, on: usable && favorited == true,
                      enabled: usable, help: usable ? nil : L10n.t("当前播放器不支持喜欢")) {
                 PlaybackCoordinator.shared.toggleFavorited()
             }
         case .openPlayer:
             // 同快捷键「切换到播放器」:把正在用的播放器带到前台,先收面板。
-            knobTile(symbol: "play.rectangle", title: L10n.t("切换到播放器"), on: false) {
+            knobTile(symbol: "play.rectangle", title: tile.panelTitle, on: false) {
                 close()
                 LyrimuseActionRunner.perform(.openPlayerHotkey)
             }
@@ -1119,7 +1119,7 @@ private struct MenuBarPanelView: View {
             // 同快捷键:按设置里的步长提前 / 延后这一首的歌词,或一键归零,带偏移提示。卡片缩成大号时没有 ± 两颗,用得上这几格。
             let action: LyrimuseAction = tile == .lyricsAdvance ? .lyricsAdvanceHotkey
                 : tile == .lyricsDelay ? .lyricsDelayHotkey : .lyricsOffsetResetHotkey
-            knobTile(symbol: action.iconName, title: L10n.t(action.titleKey), on: false, quick: .lyricsOffset) {
+            knobTile(symbol: action.iconName, title: tile.panelTitle, on: false, quick: .lyricsOffset) {
                 LyrimuseActionRunner.perform(action)
             }
         case .volume:
@@ -1151,7 +1151,7 @@ private struct MenuBarPanelView: View {
             // 长按翻到灵动岛那一格的背面(副行的下拉在那里)。
             let notchOn = playback.notchOverlayEnabled
             let line = playback.notchSecondaryLine
-            knobTile(symbol: "character.bubble", title: L10n.t("灵动岛副行"), on: notchOn && line != .off, enabled: notchOn,
+            knobTile(symbol: "character.bubble", title: tile.panelTitle, on: notchOn && line != .off, enabled: notchOn,
                      help: notchOn ? String(format: L10n.t("副行：%@"), NotchQuickAction.secondaryLineName(line))
                          : L10n.t("需先打开灵动岛歌词"),
                      quick: .surface(.notch)) {
@@ -1161,7 +1161,7 @@ private struct MenuBarPanelView: View {
             // 同歌词窗口左上角「置于最顶层」:只在这次打开期间有效,窗口开着、置顶着时亮着(迷你默认置顶)。窗口没开时先开出来
             // 再置顶;开窗会激活 App,先收面板(同歌词窗口那一格)。
             let pinned = playback.lyricsWindowPinned
-            knobTile(symbol: pinned ? "pin.fill" : "pin", title: L10n.t("歌词窗口置顶"), on: pinned, quick: .lyricsWindow) {
+            knobTile(symbol: pinned ? "pin.fill" : "pin", title: tile.panelTitle, on: pinned, quick: .lyricsWindow) {
                 if !LyricsWindowRemote.shared.isOpen { close() }
                 LyricsWindowRemote.shared.togglePinned()
             }
@@ -1170,7 +1170,7 @@ private struct MenuBarPanelView: View {
             // 先收面板。
             let full = playback.lyricsWindowFullScreen
             knobTile(symbol: full ? "arrow.down.right.and.arrow.up.left" : "arrow.up.left.and.arrow.down.right",
-                     title: L10n.t("歌词窗口全屏"), on: full, quick: .lyricsWindow) {
+                     title: tile.panelTitle, on: full, quick: .lyricsWindow) {
                 close()
                 LyricsWindowRemote.shared.toggleFullScreen()
             }
@@ -1179,7 +1179,7 @@ private struct MenuBarPanelView: View {
             let larger = tile == .fontLarger
             let overlayOn = playback.classicOverlayEnabled
             knobTile(symbol: larger ? "textformat.size.larger" : "textformat.size.smaller",
-                     title: larger ? L10n.t("放大字号") : L10n.t("缩小字号"), on: false,
+                     title: tile.panelTitle, on: false,
                      enabled: overlayOn, help: overlayOn ? nil : L10n.t("字号仅对悬浮歌词有效"), quick: .overlayFont) {
                 LyrimuseActionRunner.perform(larger ? .overlayFontLargerHotkey : .overlayFontSmallerHotkey)
             }
@@ -1934,7 +1934,7 @@ private struct MenuBarPanelView: View {
     /// 和「完成」。「可添加」在旁边另一扇面板里(`galleryBody`)。
     private var editingSection: some View {
         let layout = dragPreview ?? editLayout
-        let rows = max(layout.rowCount(), (dragBase ?? editLayout).rowCount()) + 1
+        let rows = MenuBarPanelLayout.editingRows(shown: layout, base: dragBase ?? editLayout)
         return VStack(spacing: 9) {
             ZStack(alignment: .topLeading) {
                 ForEach(layout.emptySlots(rows: rows).map { $0.row * MenuBarPanelLayout.columns + $0.column }, id: \.self) { key in
@@ -1972,14 +1972,7 @@ private struct MenuBarPanelView: View {
     /// 编辑用的布局:此刻用不了的格子(`tileAvailable`:没有触控栏时的「触控栏歌词」、没连 Last.fm 时的「今日收听」)拿掉,
     /// 不画、不占坑位,跟平时那一页看到的一样;写回时放回原位(`updateLayout`)。
     private var editLayout: MenuBarPanelLayout {
-        Self.withoutUnavailable(playback.panelLayout, available: tileAvailable).layout
-    }
-
-    /// 拿掉 `layout` 里用不了的格子,连同它们原来的位置一起交回(写回时按原位放回)。
-    private static func withoutUnavailable(_ layout: MenuBarPanelLayout, available: (MenuBarPanelLayout.Tile) -> Bool)
-        -> (layout: MenuBarPanelLayout, hidden: [MenuBarPanelLayout.Placement]) {
-        let hidden = layout.placements.filter { !available($0.tile) }
-        return (hidden.reduce(layout) { $0.without($1.tile) }, hidden)
+        playback.panelLayout.splittingUnavailable(available: tileAvailable).layout
     }
 
     /// 旁边「可添加」那块拖着一格:屏幕坐标换成网格坐标,跟本面板里拖格子走同一套挤位;nil = 松手。
@@ -2150,17 +2143,12 @@ private struct MenuBarPanelView: View {
     private func updateDragPreview(swap: Bool) {
         guard let tile = draggingTile, let base = dragBase else { return }
         let origin = CGPoint(x: dragPointer.x - dragGrab.width, y: dragPointer.y - dragGrab.height)
-        let cell = Self.grid.nearestCell(to: origin)
-        let column = dragSize.alignedColumn(near: cell.column)
-        // 指针出了网格左右(还在旁边「可添加」那块上)、或拖到下面去了,都算在网格外面。
-        let outside = origin.y > Self.grid.height(rows: base.rowCount() + 1)
-            || dragPointer.x < -10 || dragPointer.x > Self.grid.width + 10
-        let key = outside ? [-1] : [column, max(cell.row, 0)]
+        // 指针出了网格左右(还在旁边「可添加」那块上)、或拖到下面去了,都算在网格外面(nil)。
+        let cell = Self.grid.dragCell(base: base, size: dragSize, origin: origin, pointer: dragPointer)
+        let key = cell.map { [$0.column, $0.row] } ?? [-1]
         guard key != dragCell else { return }
         dragCell = key
-        let preview: MenuBarPanelLayout? = outside
-            ? (base.contains(tile) ? base : nil)
-            : base.placing(tile, size: dragSize, column: column, row: cell.row, swap: swap && base.contains(tile))
+        let preview = base.dragPreview(of: tile, size: dragSize, at: cell, swap: swap)
         withAnimation(reduceMotion ? nil : .easeOut(duration: 0.18)) {
             dragPreview = preview
         }
@@ -2211,11 +2199,7 @@ private struct MenuBarPanelView: View {
 
     /// 按在哪一格的拉手上(格子右下角 `PanelResizeCorner.side` 见方那一块),没有返回 nil。
     private func resizeHandleTile(at point: CGPoint) -> MenuBarPanelLayout.Tile? {
-        let side = PanelResizeCorner.side
-        return editLayout.placements.first { p in
-            let frame = Self.grid.frame(p)
-            return CGRect(x: frame.maxX - side, y: frame.maxY - side, width: side, height: side).contains(point)
-        }?.tile
+        Self.grid.resizeHandleTile(at: point, in: editLayout, side: PanelResizeCorner.side)
     }
 
     /// 拖动中跟着指针走的那一格(网格里的,或从「可添加」拖出来的)。
@@ -2392,15 +2376,10 @@ private struct MenuBarPanelView: View {
     }
 
     /// 编辑时改布局:直接写设置,面板这一刻就按新布局排。挪位、加减格子带一小段动画。
-    /// 改的是 `editLayout` 那一份:先拿掉此刻用不了的格子,改完再放回原位(原位被占了就不放,能用时它回到「可添加」)。
-    /// `hiddenFrom`:用不了的格子按这份布局里的原位放回(拉拉手换尺寸时传开始拉那一刻的,中间压到过的格子缩回去还能回来)。
+    /// 改的是 `editLayout` 那一份,拿掉、放回用不了的格子走 `MenuBarPanelLayout.edited`(设置窗口「面板」组同一个入口)。
     private func updateLayout(hiddenFrom: MenuBarPanelLayout? = nil, _ change: (inout MenuBarPanelLayout) -> Void) {
         let stored = AppSettings.shared.menuBarPanelLayout
-        let split = Self.withoutUnavailable(stored, available: tileAvailable)
-        let hidden = hiddenFrom.map { Self.withoutUnavailable($0, available: tileAvailable).hidden } ?? split.hidden
-        var layout = split.layout
-        change(&layout)
-        layout = hidden.reduce(layout) { $0.restoring($1) }
+        let layout = MenuBarPanelLayout.edited(stored, hiddenFrom: hiddenFrom, available: tileAvailable, change)
         guard layout != stored else { return }
         withAnimation(reduceMotion ? nil : .easeOut(duration: 0.16)) {
             AppSettings.shared.menuBarPanelLayout = layout
@@ -2549,10 +2528,7 @@ private struct MenuBarPanelView: View {
 
     /// Discord「正在听」那一项出不出现:开着而且连上了,或连的时候被拒(跟 discordFooterItem 的分支同一个判据)。
     private var discordFooterVisible: Bool {
-        switch discordStatus {
-        case .active, .error, .missingCreds, .warning: return true
-        case .notConfigured, .disabled, .none: return false
-        }
+        MenuBarPanelLayout.FooterItem.panelShows(discordStatus)
     }
 
     /// Discord「正在听」的连接情况,点了跳设置里的 Discord 那一页。连着画品牌图,被拒换橙色警告(原因进悬停提示),
@@ -2577,10 +2553,7 @@ private struct MenuBarPanelView: View {
 
     /// Last.fm 那一项出不出现(跟 lastfmFooterItem 的分支同一个判据),分隔点跟着它走。
     private var lastfmFooterVisible: Bool {
-        switch lastfmStatus {
-        case .active, .error, .missingCreds, .warning: return true
-        case .notConfigured, .disabled, .none: return false
-        }
+        MenuBarPanelLayout.FooterItem.panelShows(lastfmStatus)
     }
 
     /// Last.fm 的连接情况,点了跳设置里的 Last.fm 那一页。

@@ -877,6 +877,8 @@ macOS Denetim Merkezi’nden esinlenen bir panel için menü çubuğu simgesini 
 
 - Saptanmış olarak açık
 - Ayarlar: Klavye Kestirmeleri › Menü Çubuğu Panelini Aç/Kapat
+- Ayarlar: Şarkı Sözü Görünümü › Menü Çubuğu › Panel
+- Ayarlar: Şarkı Sözü Görünümü › Menü Çubuğu › Panel › Alt Çubuk
 
 <a id="feature-menu-bar-icon"></a>
 
@@ -967,7 +969,7 @@ Neyin önce düzeltileceğine karar vermek için günde en fazla bir kez sürüm
 
 ## Tüm Ayarlar
 
-Ayarlar penceresindeki tüm ayarlar, konumlarına göre; toplam: 349. Bir ayara hemen gitmek için adını kenar çubuğunun üstündeki arama alanına yazın.
+Ayarlar penceresindeki tüm ayarlar, konumlarına göre; toplam: 351. Bir ayara hemen gitmek için adını kenar çubuğunun üstündeki arama alanına yazın.
 
 ### Şarkı Sözleri › Kaynak
 
@@ -1190,6 +1192,7 @@ Ayarlar penceresindeki tüm ayarlar, konumlarına göre; toplam: 349. Bir ayara 
 ### Şarkı Sözü Görünümü › Menü Çubuğu
 
 - **Menü Çubuğu Sözleri**
+- **Panel**
 - **Saptanmışlara Dön**: Genişlik ve “Menü Çubuğu Sözleri” anahtarı değişmez
 
 ### Şarkı Sözü Görünümü › Menü Çubuğu › İçerik
@@ -1229,6 +1232,10 @@ Ayarlar penceresindeki tüm ayarlar, konumlarına göre; toplam: 349. Bir ayara 
 - **Üzerine Gelince Denetimleri Göster**
 - **Şarkı Sözü Yoksa Parça Adını Göster**
 - **Duraklatınca Sözleri Koru**: Duraklatıldığında simgeye daralmak yerine geçerli satırda kalır
+
+### Şarkı Sözü Görünümü › Menü Çubuğu › Panel
+
+- **Alt Çubuk**
 
 ### Şarkı Sözü Görünümü › Touch Bar
 

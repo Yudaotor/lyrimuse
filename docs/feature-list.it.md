@@ -877,6 +877,8 @@ Fai clic sull’icona nella barra dei menu per aprire un pannello ispirato al Ce
 
 - Attiva di default
 - Impostazioni: Scorciatoie da tastiera › Apri/chiudi pannello della barra dei menu
+- Impostazioni: Visualizzazione testo › Barra dei menu › Pannello
+- Impostazioni: Visualizzazione testo › Barra dei menu › Pannello › Barra inferiore
 
 <a id="feature-menu-bar-icon"></a>
 
@@ -967,7 +969,7 @@ Al massimo una volta al giorno invia versione, macOS, funzioni attive e riepilog
 
 ## Tutte le impostazioni
 
-Tutte le impostazioni della finestra Impostazioni, per posizione: 349 in tutto. Scrivi un nome nel campo di ricerca in cima alla barra laterale delle Impostazioni per andarci direttamente.
+Tutte le impostazioni della finestra Impostazioni, per posizione: 351 in tutto. Scrivi un nome nel campo di ricerca in cima alla barra laterale delle Impostazioni per andarci direttamente.
 
 ### Testo › Fonte
 
@@ -1190,6 +1192,7 @@ Tutte le impostazioni della finestra Impostazioni, per posizione: 349 in tutto. 
 ### Visualizzazione testo › Barra dei menu
 
 - **Testo nella barra dei menu**
+- **Pannello**
 - **Ripristina default**: La larghezza e l’opzione “Testo nella barra dei menu” restano invariate
 
 ### Visualizzazione testo › Barra dei menu › Contenuto
@@ -1229,6 +1232,10 @@ Tutte le impostazioni della finestra Impostazioni, per posizione: 349 in tutto. 
 - **Mostra controlli al passaggio**
 - **Mostra titolo senza testo**
 - **Mantieni testo in pausa**: In pausa resta sulla riga corrente invece di ridursi all’icona
+
+### Visualizzazione testo › Barra dei menu › Pannello
+
+- **Barra inferiore**
 
 ### Visualizzazione testo › Touch Bar
 

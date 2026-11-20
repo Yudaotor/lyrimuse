@@ -877,6 +877,8 @@ Cliquez sur l’icône de la barre des menus pour ouvrir un panneau inspiré du 
 
 - Activée par défaut
 - Réglages : Raccourcis clavier › Ouvrir/fermer le panneau de la barre des menus
+- Réglages : Affichage des paroles › Barre des menus › Panneau
+- Réglages : Affichage des paroles › Barre des menus › Panneau › Barre inférieure
 
 <a id="feature-menu-bar-icon"></a>
 
@@ -967,7 +969,7 @@ Au plus une fois par jour, envoie la version, macOS, les fonctions activées et 
 
 ## Tous les réglages
 
-Tous les réglages de la fenêtre Réglages, classés par emplacement : 349 au total. Tapez un nom dans le champ de recherche en haut de la barre latérale des Réglages pour y aller directement.
+Tous les réglages de la fenêtre Réglages, classés par emplacement : 351 au total. Tapez un nom dans le champ de recherche en haut de la barre latérale des Réglages pour y aller directement.
 
 ### Paroles › Source
 
@@ -1190,6 +1192,7 @@ Tous les réglages de la fenêtre Réglages, classés par emplacement : 349 au 
 ### Affichage des paroles › Barre des menus
 
 - **Paroles de la barre des menus**
+- **Panneau**
 - **Par défaut** : La largeur et l’option « Paroles de la barre des menus » restent inchangées
 
 ### Affichage des paroles › Barre des menus › Contenu
@@ -1229,6 +1232,10 @@ Tous les réglages de la fenêtre Réglages, classés par emplacement : 349 au 
 - **Commandes au survol**
 - **Afficher le titre sans paroles**
 - **Garder les paroles en pause** : En pause, reste sur la ligne en cours au lieu de se réduire en icône
+
+### Affichage des paroles › Barre des menus › Panneau
+
+- **Barre inférieure**
 
 ### Affichage des paroles › Touch Bar
 

@@ -877,6 +877,8 @@ Bấm biểu tượng trên thanh menu để mở bảng mô phỏng Trung tâm 
 
 - Bật theo mặc định
 - Cài đặt: Phím tắt › Mở/đóng bảng trên thanh menu
+- Cài đặt: Hiển thị lời › Thanh menu › Bảng
+- Cài đặt: Hiển thị lời › Thanh menu › Bảng › Thanh dưới
 
 <a id="feature-menu-bar-icon"></a>
 
@@ -967,7 +969,7 @@ Tối đa một lần mỗi ngày, Lyrimuse gửi phiên bản, macOS, các tín
 
 ## Toàn bộ cài đặt
 
-Toàn bộ mục trong cửa sổ Cài đặt, theo vị trí: tổng cộng 349 mục. Gõ tên vào ô tìm kiếm ở đầu thanh bên của Cài đặt để đi thẳng tới mục đó.
+Toàn bộ mục trong cửa sổ Cài đặt, theo vị trí: tổng cộng 351 mục. Gõ tên vào ô tìm kiếm ở đầu thanh bên của Cài đặt để đi thẳng tới mục đó.
 
 ### Lời bài hát › Nguồn
 
@@ -1190,6 +1192,7 @@ Toàn bộ mục trong cửa sổ Cài đặt, theo vị trí: tổng cộng 349
 ### Hiển thị lời › Thanh menu
 
 - **Lời trên thanh menu**
+- **Bảng**
 - **Khôi phục mặc định**: Không gồm chiều rộng và công tắc “Lời trên thanh menu”
 
 ### Hiển thị lời › Thanh menu › Nội dung
@@ -1229,6 +1232,10 @@ Toàn bộ mục trong cửa sổ Cài đặt, theo vị trí: tổng cộng 349
 - **Hiện điều khiển khi di chuột**
 - **Hiện tên bài khi không có lời**
 - **Giữ lời khi tạm dừng**: Khi tạm dừng, giữ nguyên câu hiện tại thay vì thu gọn thành biểu tượng
+
+### Hiển thị lời › Thanh menu › Bảng
+
+- **Thanh dưới**
 
 ### Hiển thị lời › Touch Bar
 

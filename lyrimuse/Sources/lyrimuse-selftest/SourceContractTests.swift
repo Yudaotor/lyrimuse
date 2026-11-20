@@ -4370,7 +4370,6 @@ func runSourceContractSettingsTests() {
             "classicOverlayEnabled": "总开关只经 LyricsOverlayWindowController.setVisible 落盘,设置页那张开关卡调的就是它",
             "notchOverlayEnabled": "总开关只经 NotchLyricsWindowController.setVisible 落盘,设置页那张开关卡调的就是它",
             "hasCompletedOnboarding": "引导走没走完的标记,不是配置",
-            "menuBarPanelLayout": "面板格子的排法在面板自己的编辑模式里拖,设置窗口没有面板这个形态",
         ]
         let settingsText = code("Settings/AppSettings.swift") ?? ""
         let keys = Set(matches(#"@Published (?:private\(set\) )?var (\w+)"#, in: settingsText))

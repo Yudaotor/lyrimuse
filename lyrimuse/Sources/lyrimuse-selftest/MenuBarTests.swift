@@ -2450,6 +2450,7 @@ func runMenuBarTests() {
         expectEqual(occupied.placement(of: .translation)?.row == 4 && occupied.restoring(L.default.placement(of: .touchBar)) == occupied, true,
                     "面板布局: 原位被占了就不放回去")
         expectEqual(L(placements: []).addable { $0 != .touchBar }.contains(.touchBar), false, "面板布局: 没有触控栏时不进可添加")
+        checkMenuBarPanelLayoutEditing()
 
         // 源码契约:编辑时格子不接点按(拖动和角标归编辑那一层);「编辑」那一颗不受底栏显隐管;深链 quick=edit 进编辑;
         // 开面板回读一次喜欢 / 随机 / 循环。漏了不报错,只表现成拖不动、改完藏没了入口、或心的状态是旧的。
@@ -2474,9 +2475,9 @@ func runMenuBarTests() {
                     "面板格子: 歌词窗口每次 attach 都登记给面板;全屏时迷你先换完整尺寸")
         expectEqual(sourceHas(panel, "if event.isARepeat, [space, left, right].contains(event.keyCode) { return true }"), true,
                     "面板按键: 按住空格、← → 不连发(不然来回切播放 / 暂停、连跳几首)")
-        expectEqual(sourceHas(panel, "Self.withoutUnavailable(playback.panelLayout, available: tileAvailable).layout")
-                    && sourceHas(panel, "layout = hidden.reduce(layout) { $0.restoring($1) }"), true,
-                    "面板编辑: 此刻用不了的格子(没连 Last.fm 时的今日收听等)编辑时也拿掉,写回时放回原位")
+        expectEqual(sourceHas(panel, "playback.panelLayout.splittingUnavailable(available: tileAvailable).layout")
+                    && sourceHas(panel, "MenuBarPanelLayout.edited(stored, hiddenFrom: hiddenFrom, available: tileAvailable, change)"), true,
+                    "面板编辑: 此刻用不了的格子(没连 Last.fm 时的今日收听等)编辑时也拿掉,写回时放回原位(共用入口,见 checkMenuBarPanelLayoutEditing)")
         expectEqual(sourceHas(panel, "updateLayout(hiddenFrom: resizeStored) { $0 = resized }")
                     && sourceHas(panel, "resizeBase = editLayout\nresizeStored = AppSettings.shared.menuBarPanelLayout"), true,
                     "面板编辑: 拉拉手换尺寸时用不了的格子按开始拉那一刻的原位放回,中途压到过的缩回去还在")

@@ -1057,7 +1057,8 @@ struct MenuBarColorRows: View {
 
 /// 菜单栏歌词的「全部设置」抽屉。分组、顺序、标题跟工具栏五个入口一一对应(布局 → 内容 → 颜色 → 字体 → 最大宽度 → 行为
 /// → 恢复默认;每一组调的是浮层背后同一份 `MenuBarXxxRows`),照着工具栏的记忆到抽屉里也找得到。「最大宽度」不属于
-/// 任何一组(舞台上那条常驻调整条的兜底副本,跟灵动岛 / 悬浮歌词抽屉里的宽度滑杆同一个摆法)。
+/// 任何一组(舞台上那条常驻调整条的兜底副本,跟灵动岛 / 悬浮歌词抽屉里的宽度滑杆同一个摆法)。「面板」是左键面板格子的
+/// 排法(`MenuBarPanelLayoutRows`),工具栏没有对应入口,只在面板自己的编辑模式和这里改。
 /// 默认折叠,理由同另外两个抽屉:键盘/VoiceOver 全量兜底通路,不是新配置项的收纳盒。
 struct MenuBarAllSettingsDrawer: View {
     @State private var isExpanded = false
@@ -1079,6 +1080,7 @@ struct MenuBarAllSettingsDrawer: View {
                     SettingsRowGroup { MenuBarWidthRow() }
                 }
                 SettingsGroupCard(title: L10n.t("行为")) { MenuBarBehaviorRows() }
+                SettingsGroupCard(title: L10n.t("面板")) { MenuBarPanelLayoutRows() }
                 resetRow
             }
         }
@@ -1129,7 +1131,8 @@ struct MenuBarAllSettingsDrawer: View {
                     .font(.system(size: 13))
                 Spacer(minLength: 12)
                 if !isExpanded {
-                    AllSettingsGroupNames([L10n.t("布局"), L10n.t("内容"), L10n.t("颜色"), L10n.t("字体"), L10n.t("宽度"), L10n.t("行为")])
+                    AllSettingsGroupNames([L10n.t("布局"), L10n.t("内容"), L10n.t("颜色"), L10n.t("字体"), L10n.t("宽度"), L10n.t("行为"),
+                                           L10n.t("面板")])
                 }
             }
             .padding(.horizontal, SettingsRowMetrics.horizontalPadding)

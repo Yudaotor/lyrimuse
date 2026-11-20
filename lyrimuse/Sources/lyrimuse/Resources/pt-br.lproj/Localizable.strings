@@ -833,6 +833,7 @@
 "右侧" = "Direita";
 "右侧颜色" = "Cor direita";
 "右对齐" = "Direita";
+"右移" = "Mover para a direita";
 "右耳" = "Ouvido direito";
 "右耳宽度" = "Largura do ouvido direito";
 "右键点按主题可重命名、用当前配色覆盖或删除" = "Clique com o botão direito em um tema para renomeá-lo, substituí-lo pelas cores atuais ou apagá-lo";
@@ -952,6 +953,7 @@
 "在浏览器中播放时同样可显示歌词。点按「+」配对所用浏览器，播放进度直接从网页读取，切歌后立即同步" = "A letra também funciona com música tocando no navegador. Clique em + para parear o navegador que você usa; a posição é lida direto da página, então a letra sincroniza logo após a troca de música";
 "在浏览器中显示歌词窗口" = "Mostrar a janela da letra em um navegador";
 "在线 — %d" = "Online — %d";
+"在菜单栏里编辑…" = "Editar na barra de menus…";
 "在设置中查看 Last.fm" = "Ver Last.fm nos Ajustes";
 "在访达中显示" = "Mostrar no Finder";
 "在访达中显示歌词文件" = "Mostrar arquivo de letra no Finder";
@@ -1109,6 +1111,7 @@
 "尚未获得「辅助功能」权限，输入时收起无法生效" = "Sem a permissão de “Acessibilidade”, não é possível recolher ao digitar";
 "尚未连接 Apple Music。可在「歌词来源」卡片底部点按「连接」登录（需要 Apple Music 订阅）" = "O Apple Music ainda não está conectado. Inicie sessão com “Conectar”, no fim do cartão “Fontes de letras” (requer assinatura do Apple Music)";
 "尚未连接 Last.fm 账号" = "A conta do Last.fm ainda não está conectada";
+"尺寸：%@" = "Tamanho: %@";
 "局域网" = "Rede local";
 "居中" = "Centro";
 "屏幕" = "Tela";
@@ -1133,6 +1136,7 @@
 "左侧颜色" = "Cor esquerda";
 "左右耳共用这一项" = "Compartilhado pelos dois ouvidos";
 "左对齐" = "Esquerda";
+"左移" = "Mover para a esquerda";
 "左耳" = "Ouvido esquerdo";
 "左耳宽度" = "Largura do ouvido esquerdo";
 "左耳或右耳已显示当前句，此项不生效" = "O ouvido esquerdo ou direito já mostra a linha atual, então este ajuste não tem efeito";
@@ -1477,6 +1481,7 @@
 "拆分「%@」？" = "Separar “%@”?";
 "拆分后，该条目将作为独立歌曲：播放次数单独统计，不再同步歌词；此前同步过去的歌词将恢复为原有版本。之后可在此恢复合并" = "A entrada vai virar uma música à parte: as reproduções dela são contadas separadamente e a letra deixa de ser sincronizada. A letra sincronizada com ela antes volta a ser a dela. Você pode mesclá-la de novo aqui depois";
 "拆开默认正文" = "Dividir corpo padrão";
+"拖动换位，拖右下角换尺寸" = "Arraste para mover e pelo canto inferior direito para redimensionar";
 "拖动调整顺序" = "Arraste para reordenar";
 "拷贝" = "Copiar";
 "拷贝修复命令" = "Copiar comando de reparo";
@@ -3072,6 +3077,7 @@
 "静默启动" = "Início silencioso";
 "非当前行的模糊程度，设为 0% 不模糊" = "Desfoque das linhas que não são a atual; com 0% não há desfoque";
 "面向发烧友的高解析音频播放器" = "Player de áudio de alta resolução para audiófilos";
+"面板" = "Painel";
 "韩国 KT 旗下的音乐平台" = "Serviço de música coreano da KT";
 "韩国 Naver 旗下的音乐平台" = "Serviço de música coreano da Naver";
 "韩语" = "Coreano";

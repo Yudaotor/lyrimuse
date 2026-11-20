@@ -877,6 +877,8 @@ Ein Klick auf das Menüleistensymbol öffnet ein Panel nach dem Vorbild des Kont
 
 - Standardmäßig ein
 - Einstellungen: Tastaturkurzbefehle › Menüleisten-Panel öffnen/schließen
+- Einstellungen: Liedtext-Anzeige › Menüleiste › Panel
+- Einstellungen: Liedtext-Anzeige › Menüleiste › Panel › Untere Leiste
 
 <a id="feature-menu-bar-icon"></a>
 
@@ -967,7 +969,7 @@ Sendet höchstens einmal täglich Version, macOS, aktivierte Funktionen und Abst
 
 ## Alle Einstellungen
 
-Alle Einstellungen des Einstellungsfensters nach Ort: insgesamt 349. Gib einen Namen in das Suchfeld oben in der Seitenleiste der Einstellungen ein, um direkt dorthin zu springen.
+Alle Einstellungen des Einstellungsfensters nach Ort: insgesamt 351. Gib einen Namen in das Suchfeld oben in der Seitenleiste der Einstellungen ein, um direkt dorthin zu springen.
 
 ### Liedtext › Quelle
 
@@ -1190,6 +1192,7 @@ Alle Einstellungen des Einstellungsfensters nach Ort: insgesamt 349. Gib einen N
 ### Liedtext-Anzeige › Menüleiste
 
 - **Menüleisten-Text**
+- **Panel**
 - **Standard**: Breite und der Schalter „Menüleisten-Text“ bleiben unverändert
 
 ### Liedtext-Anzeige › Menüleiste › Inhalt
@@ -1229,6 +1232,10 @@ Alle Einstellungen des Einstellungsfensters nach Ort: insgesamt 349. Gib einen N
 - **Steuerung beim Überfahren zeigen**
 - **Titel zeigen, wenn kein Text**
 - **Text bei Pause behalten**: Bleibt bei Pause auf der aktuellen Zeile, statt zum Symbol einzuklappen
+
+### Liedtext-Anzeige › Menüleiste › Panel
+
+- **Untere Leiste**
 
 ### Liedtext-Anzeige › Touch Bar
 

@@ -877,6 +877,8 @@ Clique no ícone da barra de menus para abrir um painel inspirado na Central de 
 
 - Ativado por padrão
 - Ajustes: Atalhos de teclado › Abrir/fechar painel da barra de menus
+- Ajustes: Exibição da letra › Barra de menus › Painel
+- Ajustes: Exibição da letra › Barra de menus › Painel › Barra inferior
 
 <a id="feature-menu-bar-icon"></a>
 
@@ -967,7 +969,7 @@ No máximo uma vez por dia, envia a versão, o macOS, quais recursos estão ativ
 
 ## Todos os ajustes
 
-Todos os ajustes da janela Ajustes, por local: 349 no total. Digite um nome no campo de busca no topo da barra lateral dos Ajustes para ir direto até ele.
+Todos os ajustes da janela Ajustes, por local: 351 no total. Digite um nome no campo de busca no topo da barra lateral dos Ajustes para ir direto até ele.
 
 ### Letra › Origem
 
@@ -1190,6 +1192,7 @@ Todos os ajustes da janela Ajustes, por local: 349 no total. Digite um nome no c
 ### Exibição da letra › Barra de menus
 
 - **Letra na barra de menus**
+- **Painel**
 - **Restaurar padrões**: A largura e a opção “Letra na barra de menus” não mudam
 
 ### Exibição da letra › Barra de menus › Conteúdo
@@ -1229,6 +1232,10 @@ Todos os ajustes da janela Ajustes, por local: 349 no total. Digite um nome no c
 - **Mostrar controles ao passar o ponteiro**
 - **Mostrar título se não houver letra**
 - **Manter letra na pausa**: Na pausa, fica na linha atual em vez de recolher para o ícone
+
+### Exibição da letra › Barra de menus › Painel
+
+- **Barra inferior**
 
 ### Exibição da letra › Touch Bar
 

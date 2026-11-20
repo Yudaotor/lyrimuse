@@ -779,6 +779,7 @@
 "右侧" = "Sağ";
 "右侧颜色" = "Sağ Renk";
 "右对齐" = "Sağ";
+"右移" = "Sağa Taşı";
 "右耳" = "Sağ Kulak";
 "右耳宽度" = "Sağ Kulak Genişliği";
 "右键点按主题可重命名、用当前配色覆盖或删除" = "Bir temayı yeniden adlandırmak, geçerli renklerle üzerine yazmak veya silmek için sağ tıklayın";
@@ -898,6 +899,7 @@
 "在浏览器中播放时同样可显示歌词。点按「+」配对所用浏览器，播放进度直接从网页读取，切歌后立即同步" = "Tarayıcıda çalan müzik için de şarkı sözleri gösterilir. Kullandığınız tarayıcıyı eşlemek için “+” düğmesini tıklayın; çalma konumu doğrudan sayfadan okunur, böylece parça değişince sözler hemen eşzamanlanır";
 "在浏览器中显示歌词窗口" = "Şarkı Sözü Penceresi’ni web tarayıcısında gösterir";
 "在线 — %d" = "Çevrimiçi — %d";
+"在菜单栏里编辑…" = "Menü Çubuğunda Düzenle…";
 "在设置中查看 Last.fm" = "Last.fm’i Ayarlar’da Görüntüle";
 "在访达中显示" = "Finder’da Göster";
 "在访达中显示歌词文件" = "Şarkı Sözü Dosyasını Finder’da Göster";
@@ -1048,6 +1050,7 @@
 "尚未获得「辅助功能」权限，输入时收起无法生效" = "Erişilebilirlik izni verilmedi, yazarken daraltma kullanılamaz";
 "尚未连接 Apple Music。可在「歌词来源」卡片底部点按「连接」登录（需要 Apple Music 订阅）" = "Apple Music henüz bağlı değil. “Şarkı Sözü Kaynakları” kartının altındaki “Bağlan” ile bir kez giriş yapın (Apple Music aboneliği gerekir)";
 "尚未连接 Last.fm 账号" = "Last.fm hesabı henüz bağlı değil";
+"尺寸：%@" = "Boyut: %@";
 "局域网" = "Yerel Ağ";
 "居中" = "Orta";
 "屏幕" = "Ekran";
@@ -1072,6 +1075,7 @@
 "左侧颜色" = "Sol Renk";
 "左右耳共用这一项" = "İki kulak için ortaktır";
 "左对齐" = "Sol";
+"左移" = "Sola Taşı";
 "左耳" = "Sol Kulak";
 "左耳宽度" = "Sol Kulak Genişliği";
 "左耳或右耳已显示当前句，此项不生效" = "Sol veya sağ kulak geçerli satırı zaten gösterdiği için bu ayarın etkisi yok";
@@ -1402,6 +1406,7 @@
 "拆分「%@」？" = "“%@” ayrılsın mı?";
 "拆分后，该条目将作为独立歌曲：播放次数单独统计，不再同步歌词；此前同步过去的歌词将恢复为原有版本。之后可在此恢复合并" = "Ayrılan kayıt bağımsız bir parça olur: dinlemeleri ayrı sayılır ve şarkı sözleri artık eşzamanlanmaz; daha önce ona eşzamanlanan sözler kendi sürümüne döner. Daha sonra burada yeniden birleştirebilirsiniz";
 "拆开默认正文" = "Saptanmış Gövdeyi Böl";
+"拖动换位，拖右下角换尺寸" = "Taşımak için sürükleyin, boyutlandırmak için sağ alt köşeyi sürükleyin";
 "拖动调整顺序" = "Sıralamak için sürükleyin";
 "拷贝" = "Kopyala";
 "拷贝修复命令" = "Düzeltme Komutunu Kopyala";
@@ -2977,6 +2982,7 @@
 "静默启动" = "Sessizce Başlat";
 "非当前行的模糊程度，设为 0% 不模糊" = "Geçerli satır dışındaki satırların bulanıklığı; %0 bulanıklığı kapatır";
 "面向发烧友的高解析音频播放器" = "Ses tutkunları için yüksek çözünürlüklü ses çalar";
+"面板" = "Panel";
 "韩国 KT 旗下的音乐平台" = "Güney Koreli KT şirketine ait müzik hizmeti";
 "韩国 Naver 旗下的音乐平台" = "Güney Koreli Naver şirketine ait müzik hizmeti";
 "韩语" = "Korece";
