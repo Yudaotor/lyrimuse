@@ -361,7 +361,10 @@ type ProviderDescriptor struct {
 	// ProxyFallback:直连失败后改走代理(lyricSourceUsesProxyFallback)。
 	ProxyFallback bool
 
-	Baked BakedPolicy
+	// Assembly:排序时怎么把这个源交的结果装成候选(assembleSourceCandidate)。nil = 候选由 rankLyricSourceResults 里
+	// 它自己那一段装。
+	Assembly *CandidateAssembly
+	Baked    BakedPolicy
 	// BakedSplit:Baked 为 bakedCustom 时的摘法。
 	BakedSplit func(lyrics string, foreignSong bool) (clean, tr string, n int)
 	// ParenBackground:正文里的括号段拆成背景人声轨(parenBGSources)。

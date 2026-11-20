@@ -5442,10 +5442,6 @@ func rankLyricSourceResults(artist, title, album string, durationSecs float64, r
 	}
 	soda := raw["soda"]
 	vibe := raw["vibe"]
-	genie := raw["genie"]
-	petit := raw["petitlyrics"]
-	zing := raw["zing"]
-	mgz := raw["megalobiz"]
 	kk := raw[kkboxLocalLyricsSource]
 	spl := raw[spotifyLocalLyricsSource]
 	amz := raw[amazonLocalLyricsSource]
@@ -5480,6 +5476,20 @@ func rankLyricSourceResults(artist, title, album string, durationSecs float64, r
 	// 只显示译文。摘出来的译文固定中文,接到译文轨(同 qq / kugou)。见 09 章决策 333。
 	localLRC.lyr, localLRC.tr, localLRC.yrc, bakedLines[localFileLyricsSource] = adoptBakedTranslation(localLRC.lyr, localLRC.tr, localLRC.yrc, foreignSong, true)
 	slots := candidateSlots{}
+	// 描述符带 Assembly 的来源按描述符装(assembleSourceCandidate);其余的由下面各自那一段装。装的先后不影响候选的
+	// 先后(slots 按决胜序吐)。
+	target := features().LyricsTranslationLanguage
+	assembled := map[string]assembledSource{}
+	for _, d := range lyricProviders().descriptors {
+		if d.Assembly == nil {
+			continue
+		}
+		a := assembleSourceCandidate(d, raw[d.Name], foreignSong, target)
+		assembled[d.Name], bakedLines[d.Name] = a, a.bakedLines
+		if a.ok {
+			slots.put(a.candidate)
+		}
+	}
 	if ne.Lyrics != "" {
 		// 网易云的社区翻译固定中文(见下面附着处的注释),usable 判定按目标语言过闸;
 		// 这两个标志必须在**打分前**算好挂到候选上(v3 的增值内容决胜分要读它),
@@ -5577,32 +5587,6 @@ func rankLyricSourceResults(artist, title, album string, durationSecs float64, r
 		slots.put(lyricCandidate{source: "vibe", lyrics: vibe.lyr, hasUsableTranslation: vibeUsableTr,
 			sourceReportedDurationSecs: vibe.srcDur, title: vibe.matchTitle, artist: vibe.matchArtist, album: vibe.matchAlbum,
 			cover: vibe.matchCover, plainTextOnly: vibe.plainOnly})
-	}
-	if genie.lyr != "" {
-		// 逐行,没有逐字、译文、罗马音;封面、时长是搜索结果自带的(见 genie.go 头注)。plainOnly 口径同 vibe。
-		slots.put(lyricCandidate{source: "genie", lyrics: genie.lyr,
-			sourceReportedDurationSecs: genie.srcDur, title: genie.matchTitle, artist: genie.matchArtist, album: genie.matchAlbum,
-			cover: genie.matchCover, plainTextOnly: genie.plainOnly})
-	}
-	if petit.lyr != "" {
-		// 逐字(取不到时纯文本),没有译文、罗马音;封面是按 ISRC 在 Deezer 上取的,时长是这份歌词登记的(见 petitlyrics.go 头注)。
-		// plainOnly 口径同 vibe。
-		slots.put(lyricCandidate{source: "petitlyrics", lyrics: petit.lyr,
-			wordTimingYRC: usableYRC(petit.lyr, petit.yrc), hasWordTiming: usableWordTiming(petit.lyr, petit.yrc),
-			sourceReportedDurationSecs: petit.srcDur, title: petit.matchTitle, artist: petit.matchArtist, album: petit.matchAlbum,
-			cover: petit.matchCover, plainTextOnly: petit.plainOnly, isrc: petit.isrc})
-	}
-	if zing.lyr != "" {
-		// 逐行,逐字跟逐行对得上才带;没有译文、罗马音、纯文本;封面、时长是搜索结果自带的(见 zing.go 头注)。
-		slots.put(lyricCandidate{source: "zing", lyrics: zing.lyr,
-			wordTimingYRC: usableYRC(zing.lyr, zing.yrc), hasWordTiming: usableWordTiming(zing.lyr, zing.yrc),
-			sourceReportedDurationSecs: zing.srcDur, title: zing.matchTitle, artist: zing.matchArtist, album: zing.matchAlbum,
-			cover: zing.matchCover})
-	}
-	if mgz.lyr != "" {
-		// 逐行,没有逐字、译文、罗马音、封面、专辑、纯文本;时长是这份歌词登记的,歌词页地址给来源链接用(见 megalobiz.go 头注)。
-		slots.put(lyricCandidate{source: "megalobiz", lyrics: mgz.lyr,
-			sourceReportedDurationSecs: mgz.srcDur, title: mgz.matchTitle, artist: mgz.matchArtist, sourceURL: mgz.sourceURL})
 	}
 	if kk.lyr != "" {
 		// KKBOX 本地歌词(用 KKBOX 放歌时读它自己缓存里的那份,逐行,见 kkboxlyrics.go)。只精确到整秒的那类不置
@@ -5899,6 +5883,9 @@ func rankLyricSourceResults(artist, title, album string, durationSecs float64, r
 				r.LyricsTrLang = features().LyricsTranslationLanguage
 			}
 			r.Songwriters = dz.songwriters
+		default:
+			// 按描述符装的来源:译文、罗马音、背景人声轨、作者在它那一格里。
+			assembled[c.source].writeAux(&r, c, artist, title, target)
 		}
 		// 括号里拆出来的背景人声(bgparen.go):写进结果,译文 / 罗马音同一行的括号段去掉。时间戳是重挂之前的,所以排在搬时间轴之前。
 		if len(c.parenBGStamps) > 0 {

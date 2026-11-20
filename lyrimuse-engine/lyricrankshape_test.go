@@ -245,3 +245,46 @@ func rankParityCoverageGaps(ta *rankParityTally) []string {
 	}
 	return gaps
 }
+
+// 几个源同时说这首是纯音乐时,标记记在 InstrumentalRank 最靠前的那个头上;把它拿掉,轮到下一个。参照和生产都这样。
+func TestInstrumentalMarkerFollowsRank(t *testing.T) {
+	saveRankParityState(t)
+	setNativeLyricSourcesForPlayer("")
+	order := registryNames(func(d *ProviderDescriptor) bool { return d.InstrumentalRank > 0 },
+		func(d *ProviderDescriptor) int { return d.InstrumentalRank })
+	if want := []string{lyricSourceLRCLIB, lyricSourceQQ, lyricSourceNetease, lyricSourceMigu, lyricSourceKugou}; !slices.Equal(order, want) {
+		t.Fatalf("搭纯音乐标记的先后 %v,期望 %v", order, want)
+	}
+	// 每个源用它认的那种说法:明说的清空正文、署名行加无人声、占位句;网易云的在 ne 上。
+	claim := func(source string) lyricSourceResult {
+		r := lyricSourceResult{source: source, matchTitle: rankShapeTitle, matchArtist: rankShapeArtist, srcDur: rankShapeDuration}
+		switch source {
+		case lyricSourceNetease:
+			r.ne = neteaseInfo{Title: rankShapeTitle, Artist: rankShapeArtist, PureMusic: true}
+		case lyricSourceMigu:
+			r.lyr = rankParityNoLyrics
+		case lyricSourceKugou:
+			r.lyr, r.noVocals = rankParityCredit, true
+		default:
+			r.instrumental = true
+		}
+		return r
+	}
+	for name, rank := range map[string]rankFunc{"参照": handwrittenRankLyricSourceResults, "生产": rankLyricSourceResults} {
+		for first := range order {
+			raw := map[string]lyricSourceResult{}
+			for _, source := range order[first:] {
+				raw[source] = claim(source)
+			}
+			var marked []string
+			for _, r := range rank(rankShapeArtist, rankShapeTitle, rankShapeAlbum, rankShapeDuration, raw) {
+				if r.Instrumental {
+					marked = append(marked, r.Source)
+				}
+			}
+			if !slices.Equal(marked, order[first:first+1]) {
+				t.Errorf("%s:%v 同时说是纯音乐,标记记在 %v 头上,该是 %s", name, order[first:], marked, order[first])
+			}
+		}
+	}
+}

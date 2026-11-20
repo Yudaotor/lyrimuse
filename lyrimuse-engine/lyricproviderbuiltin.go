@@ -130,6 +130,7 @@ func newBuiltinLyricProviderRegistry() *lyricProviderRegistry {
 		// 搜索在 app.genie.co.kr、取词在 dn.genie.co.kr(genie.go);封面图在 image.genie.co.kr,不进来。
 		Hosts:         []HostRule{{"app.genie.co.kr", hostExact}, {"dn.genie.co.kr", hostExact}},
 		ProxyFallback: true, ParenBackground: true,
+		Assembly: &CandidateAssembly{Reads: fieldSourceDuration | fieldAlbum | fieldCover | fieldPlainText},
 	}, 0)})
 
 	r.implement(petitProvider{desc: r.registerBuiltin(&ProviderDescriptor{
@@ -139,6 +140,7 @@ func newBuiltinLyricProviderRegistry() *lyricProviderRegistry {
 			{"p1.petitlyrics.com", hostExact}, {"p0.petitlyrics.com", hostExact}, {"on.petitlyrics.com", hostExact},
 		},
 		ProxyFallback: true, ParenBackground: true,
+		Assembly: &CandidateAssembly{Reads: fieldWordTiming | fieldSourceDuration | fieldAlbum | fieldCover | fieldPlainText | fieldISRC},
 	}, 0)})
 
 	r.implement(zingProvider{desc: r.registerBuiltin(&ProviderDescriptor{
@@ -147,7 +149,8 @@ func newBuiltinLyricProviderRegistry() *lyricProviderRegistry {
 		// photo-resize-zmp3.zmdcdn.me,不进来。
 		Hosts:         []HostRule{{"zingmp3.vn", hostExact}, {"static-zmp3.zmdcdn.me", hostExact}},
 		ProxyFallback: true, ParenBackground: true,
-		Probe: &ProbeTrack{Artist: "Sơn Tùng M-TP", Title: "Lạc Trôi"},
+		Assembly: &CandidateAssembly{Reads: fieldWordTiming | fieldSourceDuration | fieldAlbum | fieldCover},
+		Probe:    &ProbeTrack{Artist: "Sơn Tùng M-TP", Title: "Lạc Trôi"},
 	}, privBreakerControl)})
 
 	r.implement(megalobizProvider{desc: r.registerBuiltin(&ProviderDescriptor{
@@ -159,6 +162,7 @@ func newBuiltinLyricProviderRegistry() *lyricProviderRegistry {
 		HostRates:    map[string]hostRate{"api.megalobiz.com": {perSec: 0.4, burst: 6, reserve: 2}},
 		HourlyBudget: megalobizHourlyBudget, DayQuotaReserve: megalobizDayQuotaReserve, ProxyFallback: true,
 		ParenBackground: true, PageURL: megalobizPageURL,
+		Assembly: &CandidateAssembly{Reads: fieldSourceDuration | fieldSourceURL},
 	}, 0)})
 
 	r.implement(kkboxLocalProvider{desc: r.registerBuiltin(&ProviderDescriptor{

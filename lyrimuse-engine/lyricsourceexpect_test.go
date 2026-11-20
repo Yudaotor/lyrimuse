@@ -247,3 +247,7 @@ var lyricSourceCandidateShapes = map[string]lyricSourceCandidateShape{
 	importLyricsSource:       {reads: "逐字 读音 专辑 背景人声轨", translation: "declared"},
 	spotifyLocalLyricsSource: {reads: "自报曲长 专辑 封面"},
 }
+
+// lyricSourceTranslationAccepters:打分那道「译文可用」没过时,另有一条判据把译文写进结果的源和各自的判据
+// (CandidateAssembly.AcceptTranslation)。照 43fa2dff7 的 rankLyricSourceResults 里 switch 的 kuwo 那一支整理。
+var lyricSourceTranslationAccepters = map[string]string{lyricSourceKuwo: "kuwoBakedTranslationCovers"}

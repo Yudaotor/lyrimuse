@@ -747,9 +747,11 @@ func TestProviderRegistryFailureDiagnosersMatchExpected(t *testing.T) {
 	}
 }
 
+// 烘入译文怎么处理:描述符的 Baked / BakedSplit 等于迁移前 rankLyricSourceResults 里 bakedLines[…] 那八行的写法
+// (扫参照 handwrittenRankLyricSourceResults 的函数体);生产的排序跟参照逐字段相等由 lyricrankparity_test.go 守。
 func TestProviderRegistryBakedPolicyMatchesRanking(t *testing.T) {
 	consts := lyricSourceConstNames(t)
-	body := goFuncSource(t, "enrich.go", "rankLyricSourceResults")
+	body := goFuncSource(t, "lyricrankreference_test.go", "handwrittenRankLyricSourceResults")
 	type baked struct {
 		policy BakedPolicy
 		split  string
@@ -775,7 +777,7 @@ func TestProviderRegistryBakedPolicyMatchesRanking(t *testing.T) {
 		}
 	}
 	if n := strings.Count(body, "bakedLines["); n != len(calls)+1 || len(want) != len(calls) {
-		t.Fatalf("rankLyricSourceResults 里写 bakedLines 的有 %d 处,扫出来 %d 处、%d 个源,扫描式跟不上源码了", n-1, len(calls), len(want))
+		t.Fatalf("参照里写 bakedLines 的有 %d 处,扫出来 %d 处、%d 个源,扫描式跟不上源码了", n-1, len(calls), len(want))
 	}
 	got := map[string]baked{}
 	for _, d := range registryDescriptors() {
@@ -791,7 +793,7 @@ func TestProviderRegistryBakedPolicyMatchesRanking(t *testing.T) {
 		}
 	}
 	if !reflect.DeepEqual(got, want) {
-		t.Errorf("登记表 %v\nrankLyricSourceResults %v", got, want)
+		t.Errorf("登记表 %v\n参照 %v", got, want)
 	}
 }
 
@@ -806,19 +808,112 @@ func TestProviderRegistryParenBackgroundAndKanaMatch(t *testing.T) {
 	}
 }
 
+// 纯音乐标记搭车的先后:描述符的 InstrumentalRank 等于迁移前 rankLyricSourceResults 里那串 if / else if 的先后(扫参照的
+// 函数体);几个源同时说是纯音乐时生产实际认谁,由 TestInstrumentalMarkerFollowsRank 按行为守。
 func TestProviderRegistryInstrumentalRankMatchesRanking(t *testing.T) {
-	body := goFuncSource(t, "enrich.go", "rankLyricSourceResults")
+	body := goFuncSource(t, "lyricrankreference_test.go", "handwrittenRankLyricSourceResults")
 	var want []string
 	for _, m := range regexp.MustCompile(`scoredLyricCandidateResult\{Source: "(\w+)", Score: -1, Instrumental: true\}`).FindAllStringSubmatch(body, -1) {
 		want = append(want, m[1])
 	}
 	if n := strings.Count(body, `scoredLyricCandidateResult{Source: "`); n != len(want) || n == 0 {
-		t.Fatalf("rankLyricSourceResults 里造纯音乐标记的有 %d 处,扫出来 %d 处,扫描式跟不上源码了", n, len(want))
+		t.Fatalf("参照里造纯音乐标记的有 %d 处,扫出来 %d 处,扫描式跟不上源码了", n, len(want))
 	}
 	got := registryNames(func(d *ProviderDescriptor) bool { return d.InstrumentalRank > 0 },
 		func(d *ProviderDescriptor) int { return d.InstrumentalRank })
 	if !slices.Equal(got, want) {
-		t.Errorf("登记表 %v\nrankLyricSourceResults %v", got, want)
+		t.Errorf("登记表 %v\n参照 %v", got, want)
+	}
+}
+
+// descriptorCandidateShape:描述符的装配字段换成期望表 lyricSourceCandidateShape 的写法。
+func descriptorCandidateShape(d *ProviderDescriptor) lyricSourceCandidateShape {
+	as := d.Assembly
+	bits := map[string]resultFields{
+		"逐字": fieldWordTiming, "读音": fieldRomanization, "自报曲长": fieldSourceDuration, "专辑": fieldAlbum, "封面": fieldCover,
+		"语种": fieldLanguage, "本机身份": fieldLocalIdentity, "纯文本": fieldPlainText, "ISRC": fieldISRC, "来源链接": fieldSourceURL,
+		"背景人声轨": fieldBackground,
+	}
+	var reads []string
+	for _, f := range rankShapeFields {
+		if as.Reads.has(bits[f]) || (f == "作者" && d.SongwritersRank > 0) {
+			reads = append(reads, f)
+		}
+	}
+	shape := lyricSourceCandidateShape{reads: strings.Join(reads, " ")}
+	switch as.Translation {
+	case translationFixed:
+		shape.translation = as.TranslationLang
+	case translationTarget:
+		shape.translation = "target"
+	case translationDeclared:
+		shape.translation = "declared"
+	}
+	switch d.Baked {
+	case bakedAdopt:
+		shape.baked = "adopt"
+	case bakedStripOnly:
+		shape.baked = "strip"
+	case bakedCustom:
+		// 自带摘法的源只用摘出来的译文,结果里交的译文轨不读。
+		shape.baked, shape.translation = "adopt", ""
+	}
+	var signals []string
+	for i, bit := range []instrumentalSignals{instrumentalDeclared, instrumentalCreditsNoVocals, instrumentalPlaceholder} {
+		if as.Instrumental.has(bit) {
+			signals = append(signals, rankShapeInstrumentalSignals[i])
+		}
+	}
+	shape.instrumental = strings.Join(signals, " ")
+	return shape
+}
+
+// 候选装配:带 Assembly 的描述符换成期望表的写法,跟 lyricSourceCandidateShapes 逐项相等(那张表是按行为从迁移前的排序里
+// 看出来的,lyricrankshape_test.go 守着它跟参照、跟生产都对得上)。另核字段之间的硬关系。
+func TestProviderRegistryAssemblyMatchesShapes(t *testing.T) {
+	const known = fieldWordTiming | fieldRomanization | fieldSourceDuration | fieldAlbum | fieldCover | fieldLanguage |
+		fieldLocalIdentity | fieldPlainText | fieldISRC | fieldSourceURL | fieldBackground
+	for _, d := range registryDescriptors() {
+		as := d.Assembly
+		want, listed := lyricSourceCandidateShapes[d.Name]
+		if as == nil {
+			continue
+		}
+		if !listed {
+			t.Errorf("%s:带 Assembly,期望表 lyricSourceCandidateShapes 里却没有它", d.Name)
+			continue
+		}
+		if got := descriptorCandidateShape(d); got != want {
+			t.Errorf("%s\n  登记表 %+v\n  期望表 %+v", d.Name, got, want)
+		}
+		if as.Reads&^known != 0 {
+			t.Errorf("%s:Reads 里有不认识的位 %b", d.Name, as.Reads&^known)
+		}
+		if (as.TranslationLang != "") != (as.Translation == translationFixed) {
+			t.Errorf("%s:TranslationLang 只在 translationFixed 时有,而且必须有", d.Name)
+		}
+		if (d.Baked == bakedAdopt || d.Baked == bakedCustom) && (as.Translation != translationFixed || as.TranslationLang != "zh") {
+			t.Errorf("%s:摘出来的烘入译文固定是中文,接到译文轨的源译文轨必须固定标 zh", d.Name)
+		}
+		if as.Reads.has(fieldLocalIdentity) && !d.Privileges.has(privLocalClientIdentity) {
+			t.Errorf("%s:候选读本机身份,却没有 privLocalClientIdentity(调度会把它交的本机身份清掉)", d.Name)
+		}
+		if as.Reads.has(fieldSourceURL) != (d.PageURL != nil) {
+			t.Errorf("%s:候选带来源链接(%v)和登记了链接校验(%v)要同时有", d.Name, as.Reads.has(fieldSourceURL), d.PageURL != nil)
+		}
+		if as.Reads.has(fieldBackground) && d.ParenBackground {
+			t.Errorf("%s:自带背景人声轨的源不拆括号背景人声", d.Name)
+		}
+		if (as.Instrumental != 0) != (d.InstrumentalRank > 0) {
+			t.Errorf("%s:搭纯音乐标记的说法(%b)和搭车的名次(%d)要同时有", d.Name, as.Instrumental, d.InstrumentalRank)
+		}
+		accept := ""
+		if as.AcceptTranslation != nil {
+			accept = funcName(as.AcceptTranslation)
+		}
+		if accept != lyricSourceTranslationAccepters[d.Name] {
+			t.Errorf("%s:AcceptTranslation 是 %q,期望表 lyricSourceTranslationAccepters 是 %q", d.Name, accept, lyricSourceTranslationAccepters[d.Name])
+		}
 	}
 }
 
