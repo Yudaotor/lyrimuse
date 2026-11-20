@@ -42,7 +42,6 @@ struct WhatsNewWindow: View {
         }
         .padding(.horizontal, 24)
         .padding(.top, 4)
-        .padding(.bottom, 12)
     }
 
     private var notes: some View {
@@ -74,9 +73,25 @@ struct WhatsNewWindow: View {
             }
             .textSelection(.enabled)
             .padding(.horizontal, 20)
-            .padding(.bottom, 16)
+            .padding(.vertical, Self.edgeFade + 2)
+        }
+        // 液态玻璃卡片的投影会铺满两侧留白,滚动区边缘一刀切开就是一条横贯整宽的灰带;
+        // 上下边缘淡出,滚动条那一列不淡。卡片离边缘的留白要大于淡出高度,停在顶 / 底时卡片本身不被淡掉。见 14 章决策 235。
+        .mask {
+            HStack(spacing: 0) {
+                VStack(spacing: 0) {
+                    LinearGradient(colors: [.clear, .black], startPoint: .top, endPoint: .bottom)
+                        .frame(height: Self.edgeFade)
+                    Color.black
+                    LinearGradient(colors: [.black, .clear], startPoint: .top, endPoint: .bottom)
+                        .frame(height: Self.edgeFade)
+                }
+                Color.black.frame(width: 16)
+            }
         }
     }
+
+    private static let edgeFade: CGFloat = 14
 
     private var footer: some View {
         HStack {

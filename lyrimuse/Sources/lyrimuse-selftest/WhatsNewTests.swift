@@ -144,6 +144,10 @@ func runWhatsNewTests() {
         expectEqual(sourceHas(sourceText("lyrimuse/MenuBar/MenuBarSceneActions.swift"),
                               "openWindowAction(id: WhatsNewWindow.sceneID)"), true, "接线: 卡片窗口由锚点视图开")
         expectEqual(sourceHas(sourceText("lyrimuse/App.swift"), "id: WhatsNewWindow.sceneID"), true, "接线: 卡片是一扇场景窗")
+        let notes = sourceBody("private var notes: some View", in: sourceText("lyrimuse/UI/WhatsNewWindow.swift"))
+        expectEqual(sourceHas(notes, ".padding(.vertical, Self.edgeFade + 2)") && sourceHas(notes, ".mask {")
+                    && sourceHas(notes, ".frame(height: Self.edgeFade)"), true,
+                    "卡片: 滚动区上下边缘淡出、卡片离边缘留白大于淡出高度(玻璃卡投影不被滚动区切出灰带,14 章决策 235)")
         let build = sourceText("../build.sh")
         expectEqual(sourceHas(build, "cp ../CHANGELOG.md \"$APP_DIR/Contents/Resources/CHANGELOG.md\"")
                     && sourceHas(build, "cp -p ../CHANGELOG.md \"$SNAPSHOT_ROOT/CHANGELOG.md\"")
