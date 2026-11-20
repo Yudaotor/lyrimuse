@@ -305,8 +305,17 @@ public final class PlayerQueryServer: @unchecked Sendable {
     /// 每首一条记录,记录之间 RS(0x1e)、字段之间 US(0x1f),字段顺序 selected(0/1)、title、artist、album、lengthText、
     /// videoId、musicVideoType;找不到队列返回 NOTFOUND。解析在 `PlayerQueryTracks.youTubeMusicQueue`,字段顺序跟它一起改。
     /// 不许有双引号和反斜杠(整段要嵌进 AppleScript 的双引号字符串),分隔符因此用 `String.fromCharCode` 现造。
-    public static let youTubeMusicQueueJS = [
-        "(function(){",
+    ///
+    /// `data` 是页面自己挂在元素上的 JS 属性,Chromium 系脚本接口的隔离环境里读不到,所以经
+    /// `BrowserTabProbeScript.inPageWorld` 包一层:队列元素上看得见 `data`(Safari)或者根本没有队列时直接读,
+    /// 否则注入主环境读(02 章决策 285)。
+    public static let youTubeMusicQueueJS = BrowserTabProbeScript.inPageWorld(
+        core: youTubeMusicQueueCoreJS,
+        pageVisible: "(function(q){ return !q.length || Array.prototype.some.call(q, function(e){ return !!e.data; }); })(document.querySelectorAll('ytmusic-player-queue-item'))")
+
+    /// `youTubeMusicQueueJS` 里真正读队列的那个函数(在看得见 `data` 的环境里调用)。
+    public static let youTubeMusicQueueCoreJS = [
+        "function(){",
         "var US = String.fromCharCode(31), RS = String.fromCharCode(30);",
         "var items = document.querySelectorAll('ytmusic-player-queue-item');",
         "if (!items.length) return 'NOTFOUND';",
@@ -334,7 +343,7 @@ public final class PlayerQueryServer: @unchecked Sendable {
         "out.push([sel, text(d.title), artist.join(''), album, text(d.lengthText), String(d.videoId || ''), vt].join(US));",
         "}",
         "return out.length ? out.join(RS) : 'NOTFOUND';",
-        "})()",
+        "}",
     ].joined()
 
     /// Spotify 网页版的待播队列:网页播放器组件树上 `playerAPI` 的 `getState()` / `getQueue()`。第一条记录是当前这首,

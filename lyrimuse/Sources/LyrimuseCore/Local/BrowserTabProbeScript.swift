@@ -42,6 +42,48 @@ import Foundation
 // 字符串本身多了真实的 `\`),整段被二次转义之后拿去比 `contains` 会稳定判 false。
 // 各探针的 selftest 都有一条守卫钉这件事。
 public enum BrowserTabProbeScript {
+    /// 把一段要读页面自己的 JS 属性的 JS 包成两种执行环境下都读得到的样子,返回整段 IIFE。
+    ///
+    /// Safari 的 `do JavaScript` 跑在页面主环境;Chromium 系的 `execute javascript` 跑在 AppleScript 专用的隔离环境:
+    /// DOM 共用,页面挂在元素上的 JS 属性(Polymer 组件的 `data`、React 的 `__reactFiber…`、播放器元素的
+    /// `getPlayerResponse`)在那里一律是 undefined。见 02 章决策 285。
+    ///
+    /// - Parameter core: JS 函数表达式(`function(){ … return 字符串; }`),在看得见页面属性的环境里调用它拿结果。
+    /// - Parameter pageVisible: JS 表达式,当前环境已经看得见页面属性(或者根本用不着注入)时为真:这时直接调 `core`,
+    ///   不往页面里插任何东西,Safari 走的就是这一条。
+    ///
+    /// 看不见时把 `core` 的源码(`Function.prototype.toString`)放进一个 `<script>` 插进页面再立刻移除:内联脚本同步跑在
+    /// 主环境,结果写到 `<html>` 的 `pageWorldAttribute` 属性上,读回来后删掉。插脚本要过页面 CSP 的两道:脚本 nonce
+    /// (抄页面已有脚本的 `nonce`)和 Trusted Types(建一个原样放行的策略 `lyrimuse-page-world`,建过就复用)。
+    /// 任何一步失败回 `NOTFOUND`,跟读不到一样。`core` 和 `pageVisible` 同样不许有双引号和反斜杠。
+    public static func inPageWorld(core: String, pageVisible: String) -> String {
+        [
+            "(function(){",
+            "var core = \(core);",
+            "if (\(pageVisible)) return core();",
+            "var de = document.documentElement, key = '\(pageWorldAttribute)', out = null;",
+            "de.removeAttribute(key);",
+            "try {",
+            "var tt = window.trustedTypes, pol = null;",
+            "if (tt && tt.createPolicy) { pol = window.lyrimusePageWorldPolicy || (window.lyrimusePageWorldPolicy = tt.createPolicy('lyrimuse-page-world', { createScript: function(x){ return x; } })); }",
+            "var src = 'try { document.documentElement.setAttribute(' + JSON.stringify(key) + ', String((' + core + ')())); } catch (e) {}';",
+            "var s = document.createElement('script');",
+            "var n = document.querySelector('script[nonce]');",
+            "if (n && n.nonce) s.nonce = n.nonce;",
+            "s.textContent = pol ? pol.createScript(src) : src;",
+            "(document.head || de).appendChild(s);",
+            "s.remove();",
+            "out = de.getAttribute(key);",
+            "} catch (e) {}",
+            "de.removeAttribute(key);",
+            "return out === null ? 'NOTFOUND' : out;",
+            "})()",
+        ].joined()
+    }
+
+    /// `inPageWorld` 从主环境带结果回来用的 `<html>` 属性名,读完就删。
+    public static let pageWorldAttribute = "data-lyrimuse-page-world"
+
     /// 拼出那段 AppleScript。公开只为让各探针的 selftest 能对它做文本断言。
     ///
     /// - Parameter hostMarker: 标签页 URL 要包含的域名片段(如 `music.youtube.com`)。

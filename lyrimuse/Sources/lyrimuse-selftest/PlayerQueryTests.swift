@@ -1,4 +1,5 @@
 import Foundation
+import JavaScriptCore
 import LyrimuseCore
 
 /// 引擎预解析要的播放器查询由 App 代跑(`PlayerQueryServer`):请求怎么判、几段固定脚本长什么样、输出怎么整理成
@@ -148,6 +149,81 @@ func runPlayerQueryTests() {
     expectEqual(S.youTubeMusicQueueJS.contains("watchEndpointMusicConfig"), true, "YouTube Music 队列 JS: 读出每一首的 musicVideoType")
     expectEqual(S.browserQueueSite(platformID: "youtubeMusic")?.hostMarker, YouTubeMusicAdProbe.hostMarker, "YouTube Music: 标签页域名")
     expectEqual(S.browserQueueSite(platformID: "spotifyWeb")?.hostMarker, SpotifyWebAdProbe.hostMarker, "Spotify 网页版: 标签页域名")
+
+    // ---- YouTube Music 队列 JS 在两种执行环境下都读得到(02 章决策 285)----
+    // JavaScriptCore 里搭一个假页面:队列元素的 `data` 只在「主环境」里看得见;插进页面的 <script> 只有带对了 nonce、
+    // 内容是 Trusted Types 包过的才在主环境里跑。Safari 那种主环境直接读、不插脚本;Chromium 那种隔离环境经注入读回来。
+    do {
+        let fakePage = #"""
+        var mainWorld = false, pageVisibleAlways = false, appended = 0, rawRejected = 0, policyFails = false;
+        var attrs = {};
+        function Item(d, sel, counterpart) { this._d = d; this._sel = sel; this._cp = counterpart; }
+        Object.defineProperty(Item.prototype, 'data', { get: function() { return (pageVisibleAlways || mainWorld) ? this._d : undefined; } });
+        Item.prototype.closest = function(sel) { return (sel === '#counterpart-renderer' && this._cp) ? {} : null; };
+        Item.prototype.hasAttribute = function(n) { return n === 'selected' && this._sel; };
+        function runs(t) { return { runs: [{ text: t }] }; }
+        function song(title, artist, album, len, id, sel, mv) {
+            return { title: runs(title), lengthText: runs(len), videoId: id, selected: sel,
+                     longBylineText: { runs: [{ text: artist }, { text: ' • ' },
+                                              { text: album, navigationEndpoint: { browseEndpoint: { browseId: 'MPREb_' + id } } }] },
+                     navigationEndpoint: { watchEndpoint: { watchEndpointMusicSupportedConfigs: { watchEndpointMusicConfig: { musicVideoType: mv } } } } };
+        }
+        var items = [new Item(song('Song A', 'Artist A', 'Album A', '3:30', 'idA', true, 'MUSIC_VIDEO_TYPE_ATV'), true, false),
+                     new Item(song('Song A (video)', 'Artist A', 'Album A', '3:31', 'idA2', false, 'MUSIC_VIDEO_TYPE_OMV'), false, true),
+                     new Item(song('Song B', 'Artist B', 'Album B', '4:05', 'idB', false, 'MUSIC_VIDEO_TYPE_OMV'), false, false)];
+        function Script() { this.nonce = ''; this._text = null; }
+        Object.defineProperty(Script.prototype, 'textContent', { set: function(v) {
+            if (!v || v.trusted !== true) { rawRejected++; throw new TypeError('requires TrustedScript'); }
+            this._text = v.text; } });
+        Script.prototype.remove = function() {};
+        var de = { setAttribute: function(k, v) { attrs[k] = String(v); },
+                   getAttribute: function(k) { return Object.prototype.hasOwnProperty.call(attrs, k) ? attrs[k] : null; },
+                   removeAttribute: function(k) { delete attrs[k]; } };
+        var document = {
+            documentElement: de,
+            head: { appendChild: function(s) {
+                appended++;
+                if (s.nonce !== 'page-nonce' || s._text === null) return;
+                mainWorld = true;
+                try { (0, eval)(s._text); } finally { mainWorld = false; }
+            } },
+            querySelectorAll: function(sel) { return sel === 'ytmusic-player-queue-item' ? items : []; },
+            querySelector: function(sel) { return sel === 'script[nonce]' ? { nonce: 'page-nonce' } : null; },
+            createElement: function() { return new Script(); }
+        };
+        var window = { trustedTypes: { createPolicy: function(name, rules) {
+            if (policyFails) throw new TypeError('policy refused');
+            return { createScript: function(x) { return { trusted: true, text: rules.createScript(x) }; } };
+        } } };
+        """#
+        let want = [["1", "Song A", "Artist A", "Album A", "3:30", "idA", "MUSIC_VIDEO_TYPE_ATV"],
+                    ["0", "Song B", "Artist B", "Album B", "4:05", "idB", "MUSIC_VIDEO_TYPE_OMV"]]
+            .map { $0.joined(separator: "\u{1f}") }.joined(separator: "\u{1e}")
+        func run(_ setup: String) -> (out: String, appended: Int32, rawRejected: Int32, attrsLeft: Int32) {
+            guard let ctx = JSContext() else { return ("", -1, -1, -1) }
+            ctx.evaluateScript(fakePage)
+            ctx.evaluateScript(setup)
+            let out = ctx.evaluateScript(S.youTubeMusicQueueJS)?.toString() ?? ""
+            return (out, ctx.evaluateScript("appended")?.toInt32() ?? -1, ctx.evaluateScript("rawRejected")?.toInt32() ?? -1,
+                    ctx.evaluateScript("Object.keys(attrs).length")?.toInt32() ?? -1)
+        }
+        let safari = run("pageVisibleAlways = true;")
+        expectEqual(safari.out, want, "YouTube Music 队列 JS 主环境(Safari): 直接读 data,跳过替身")
+        expectEqual(safari.appended, 0, "YouTube Music 队列 JS 主环境(Safari): 不往页面里插脚本")
+        let chromium = run("")
+        expectEqual(chromium.out, want, "YouTube Music 队列 JS 隔离环境(Chromium): 注入主环境读回同一份队列")
+        expectEqual(chromium.appended, 1, "YouTube Music 队列 JS 隔离环境: 插一次脚本")
+        expectEqual(chromium.rawRejected, 0, "YouTube Music 队列 JS 隔离环境: 脚本内容经 Trusted Types 策略包过")
+        expectEqual(chromium.attrsLeft, 0, "YouTube Music 队列 JS 隔离环境: 带结果的属性读完删掉")
+        let refused = run("policyFails = true;")
+        expectEqual(refused.out, "NOTFOUND", "YouTube Music 队列 JS 隔离环境: 注入失败回 NOTFOUND")
+        expectEqual(refused.attrsLeft, 0, "YouTube Music 队列 JS 隔离环境: 注入失败也不留属性")
+        let empty = run("items = [];")
+        expectEqual(empty.out, "NOTFOUND", "YouTube Music 队列 JS: 没有队列回 NOTFOUND")
+        expectEqual(empty.appended, 0, "YouTube Music 队列 JS: 没有队列不插脚本")
+        let wrapped = BrowserTabProbeScript.inPageWorld(core: "function(){ return 'x'; }", pageVisible: "false")
+        expectEqual(wrapped.contains(quote) || wrapped.contains(backslash), false, "主环境包装: 不能有双引号或反斜杠")
+    }
 
     // ---- 输出整理成结构再交(PlayerQueryTracks / PlayerQueryShuffle):样例两侧共用,引擎只解 reply 那份 JSON ----
     do {
