@@ -335,9 +335,9 @@ type ProviderDescriptor struct {
 	// Order:联网源在源名单里的位置(networkLyricSourceNames),从 1 起;本机来源为 0。只决定「有歌没词」标记、日志和
 	// 设置项里的源序,同分候选谁赢看 TieRank。
 	Order int
-	// TieRank:同分候选的决胜序(lyricProviderRegistry.tieOrder),从 1 起,小的赢。必须就是 rankLyricSourceResults 构造候选的
-	// 顺序(本机几家夹在汽水和 AMLL 之间):合并几轮结果的 mergeLyricCandidateRounds 按它重建顺序,两边口径不同的话同一首歌
-	// 走没走补查轮,同分时会换源。rankLyricSourceResults 里加了源、挪了顺序,这里跟着改(lyrictieorder_test.go 守着)。
+	// TieRank:同分候选的决胜序(lyricProviderRegistry.tieOrder),从 1 起,小的赢;本机来源排在别的联网源之后、AMLL 之前。
+	// rankLyricSourceResults 按它定候选的先后(candidateSlots.inTieOrder),合并几轮结果的 mergeLyricCandidateRounds 按它重建
+	// 顺序:两处读同一份,同一首歌走没走补查轮,同分时选出的源才相同(lyrictieorder_test.go 守着)。
 	TieRank int
 	// DefaultPriorityRank:顺序优先模式的默认顺序(resolveLyricsSourceOrder),从 1 起;本机来源为 0。必须跟 App 侧
 	// LyricsSource.allCases 的声明顺序一致:那边顺序表的默认值就是 allCases,对不上的话顺序优先模式在首次写盘前后表现不同。
