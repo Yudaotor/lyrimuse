@@ -345,15 +345,16 @@ type ProviderDescriptor struct {
 
 	// Hosts:哪些请求主机归这个源(lyricSourceForHost)。
 	Hosts []HostRule
-	// HostRates:单独定了令牌桶参数的主机(hostRateFor),没列的用 hostRateDefault。
+	// HostRates:单独定了令牌桶参数的主机(hostRateFor 经 lyricProviderRegistry.hostRates 读),没列的用 hostRateDefault。
+	// 键是小写、不带端口的主机名,只对这一个主机生效。
 	HostRates map[string]hostRate
-	// MaxInflight:同时在途的请求上限(lyricSourceInflightCaps),0 = lyricSourceInflightDefault。
+	// MaxInflight:同时在途的请求上限(lyricSourceMaxInflight),0 = lyricSourceInflightDefault。
 	MaxInflight int
-	// HourlyBudget:后台一小时的请求额度(lyricSourceHourlyBudget),0 = 不限。
+	// HourlyBudget:后台一小时的请求额度(lyricSourceBudgetPerHour),0 = 不限。
 	HourlyBudget int
-	// DayQuotaReserve:每日额度剩这么多时只留给前台(lyricSourceDayQuotaReserve),0 = 这个源不报每日额度。
+	// DayQuotaReserve:每日额度剩这么多时只留给前台(lyricSourceDayReserve),0 = 这个源不报每日额度。
 	DayQuotaReserve int
-	// ProxyFallback:直连失败后改走代理(lyricSourceProxyFallbackSources)。
+	// ProxyFallback:直连失败后改走代理(lyricSourceUsesProxyFallback)。
 	ProxyFallback bool
 
 	Baked BakedPolicy
@@ -409,6 +410,8 @@ type lyricProviderRegistry struct {
 	defaultPriorityOrder []string
 	// peerGroups:同类组的名字 → 组里的联网源按 Order。
 	peerGroups map[string][]string
+	// hostRates:单独定了令牌桶参数的主机 → 参数,各描述符的 HostRates 并在一起。
+	hostRates map[string]hostRate
 }
 
 // index 按描述符算出各份名单。全部登记完调一次;之后再改描述符里的 Kind、名次要重调。
@@ -418,6 +421,12 @@ func (r *lyricProviderRegistry) index() {
 	r.tieOrder = r.rankedNames(func(*ProviderDescriptor) bool { return true }, func(d *ProviderDescriptor) int { return d.TieRank })
 	r.defaultPriorityOrder = r.rankedNames(network, func(d *ProviderDescriptor) int { return d.DefaultPriorityRank })
 	r.indexPeerGroups()
+	r.hostRates = map[string]hostRate{}
+	for _, d := range r.descriptors {
+		for host, rate := range d.HostRates {
+			r.hostRates[host] = rate
+		}
+	}
 }
 
 // indexPeerGroups 按描述符的 PeerGroup 重算同类组。
@@ -526,6 +535,38 @@ func lyricSourceTakesISRC(source, isrc string) bool {
 		return ok && index.HasISRC(isrc)
 	}
 	return false
+}
+
+// lyricSourceMaxInflight:source 同时在途的请求上限(描述符的 MaxInflight)。没单独定的、没登记的名字都是
+// lyricSourceInflightDefault。
+func lyricSourceMaxInflight(source string) int {
+	if d := lyricProviders().descriptor(source); d != nil && d.MaxInflight > 0 {
+		return d.MaxInflight
+	}
+	return lyricSourceInflightDefault
+}
+
+// lyricSourceBudgetPerHour:source 一小时的请求额度(描述符的 HourlyBudget),0 = 不限。没登记的名字不限。
+func lyricSourceBudgetPerHour(source string) int {
+	if d := lyricProviders().descriptor(source); d != nil {
+		return d.HourlyBudget
+	}
+	return 0
+}
+
+// lyricSourceDayReserve:source 的每日额度剩多少次时只给前台用(描述符的 DayQuotaReserve);0 = 这个源不报每日额度,
+// 没登记的名字同样是 0。
+func lyricSourceDayReserve(source string) int {
+	if d := lyricProviders().descriptor(source); d != nil {
+		return d.DayQuotaReserve
+	}
+	return 0
+}
+
+// lyricSourceUsesProxyFallback:source 直连失败后改不改走代理(描述符的 ProxyFallback)。空串、没登记的名字不走。
+func lyricSourceUsesProxyFallback(source string) bool {
+	d := lyricProviders().descriptor(source)
+	return d != nil && d.ProxyFallback
 }
 
 // lyricSourceKindIs:name 这一路登记的是不是 kind 这一类。没登记的名字一律不是。播放器本机(providerKindPlayerLocal)和导入库

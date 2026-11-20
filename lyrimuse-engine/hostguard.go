@@ -70,7 +70,8 @@ type hostRate struct {
 // 数字的依据见 docs/features/15「对外请求的本地出站闸」。
 var hostRateDefault = hostRate{perSec: 3, burst: 10, reserve: 3}
 
-// hostRateFor 按主机给令牌桶参数。改数字之前先按日志里的 api call summary 重新量一遍
+// hostRateFor 按主机给令牌桶参数:不是歌词源的主机写在这里,歌词源的主机读登记表(描述符的 HostRates),都没列的用
+// hostRateDefault。host 是小写、不带端口的主机名(guardHost)。改数字之前先按日志里的 api call summary 重新量一遍
 // (逐接口那一行没失败、不慢时落 Debug,要 log_level=debug 才有;docs/features/15 有分档统计的做法)。iTunes 的 search 和 lookup 共用一个主机的额度;
 // Last.fm 与 App 侧 LastfmRateLimiter(4 次/秒)共用出口 IP,两边加起来别超过它按 IP 的限速。
 func hostRateFor(host string) hostRate {
@@ -80,13 +81,9 @@ func hostRateFor(host string) hostRate {
 		return hostRate{perSec: 20.0 / 60, burst: 10, reserve: 3}
 	case "ws.audioscrobbler.com":
 		return hostRate{perSec: 1, burst: 5, reserve: 2}
-	case "lrclib.net":
-		// lrclib 拿 503 限流,调用越密比例越高(每分钟 5 次以下 2.7%、31 次以上 6.5%),快速切歌时
-		// 一分钟能打到两百次。攒 6 个够首轮加一轮别名不排队。见 09 章决策 108。
-		return hostRate{perSec: 1, burst: 6, reserve: 3}
-	case "api.megalobiz.com":
-		// 不带 key 时每个 IP 每分钟 30 次:攒满 6 个再按每秒 0.4 个补,任意一分钟里最多 6 + 24 = 30 个(megalobiz.go 头注)。
-		return hostRate{perSec: 0.4, burst: 6, reserve: 2}
+	}
+	if rate, ok := lyricProviders().hostRates[host]; ok {
+		return rate
 	}
 	return hostRateDefault
 }

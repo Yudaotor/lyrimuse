@@ -13,7 +13,7 @@ import (
 
 // 歌词源的每日额度。Megalobiz 不带 key 时每个 IP 每天 1000 次,应答头里报这一天还剩几次(X-RateLimit-Remaining-Day)、
 // 多少秒后重置(X-RateLimit-Reset-Day,UTC 零点)。见 09 章决策 387。
-//   - 剩的不到 lyricSourceDayQuotaReserve:只给前台用(正在放的那首、用户手动搜索 / 重新匹配 / 测试),后台(待播队列的预解析)不问(hostGuard.admit)。
+//   - 剩的不到这个源的留量(描述符的 DayQuotaReserve,lyricSourceDayReserve):只给前台用(正在放的那首、用户手动搜索 / 重新匹配 / 测试),后台(待播队列的预解析)不问(hostGuard.admit)。
 //   - 用完(头里报剩 0,或回了 429 且剩 0 / Retry-After 超过熔断封顶):停到重置时刻,前台也不问。经熔断器的 blockedForLocked 生效,
 //     一轮里按冷却跳过(原因 lyricSourceSkipReasonBudget),条目的待补搜名单不收它(剩余冷却远超补搜等待)。
 //   - 状态存进 sourceDayQuotaFileName,常驻引擎和手动搜索、设置页测试的子进程共用,重启也记得;判之前看到文件变了就重读。
@@ -21,19 +21,9 @@ import (
 
 const (
 	sourceDayQuotaFileName = "lyrimuse-source-day-quota.json"
-	// megalobizDayQuotaReserve:Megalobiz 每天剩到这么多时只留给前台。
-	megalobizDayQuotaReserve = 100
 	// sourceDayQuotaMaxPause:按应答头停最长停多久,头里写了离谱的数也不会把源停上好几天。
 	sourceDayQuotaMaxPause = 25 * time.Hour
 )
-
-// lyricSourceDayQuotaReserve:这个源剩多少次时只给前台用;0 = 这个源不报每日额度。
-func lyricSourceDayQuotaReserve(source string) int {
-	if source == lyricSourceMegalobiz {
-		return megalobizDayQuotaReserve
-	}
-	return 0
-}
 
 // sourceDayQuotaRecord 是一个源的每日额度状态。时刻都是 unix 秒。
 type sourceDayQuotaRecord struct {
@@ -131,7 +121,7 @@ func headerSeconds(h http.Header, name string) (int, bool) {
 
 // noteSourceDayQuota 按一次应答更新 source 的每日额度。不报每日额度的源不记。
 func noteSourceDayQuota(source string, status int, h http.Header, now time.Time) {
-	if lyricSourceDayQuotaReserve(source) <= 0 {
+	if lyricSourceDayReserve(source) <= 0 {
 		return
 	}
 	remaining, hasRemaining := headerSeconds(h, "X-RateLimit-Remaining-Day")
@@ -163,8 +153,8 @@ func noteSourceDayQuota(source string, status int, h http.Header, now time.Time)
 		slog.Info("lyric source used up its daily quota, pausing it until the reset", "source", source, "until", logClock(resetAt))
 	}
 	sourceDayQuota[source] = r
-	// 剩余次数每个应答都变,只在跨过 lyricSourceDayQuotaReserve、用完、换了一天时落盘;别的进程看到的剩余略旧不要紧。
-	reserve := lyricSourceDayQuotaReserve(source)
+	// 剩余次数每个应答都变,只在跨过留量、用完、换了一天时落盘;别的进程看到的剩余略旧不要紧。
+	reserve := lyricSourceDayReserve(source)
 	if r.PausedUntil != before.PausedUntil || r.ResetAt/3600 != before.ResetAt/3600 ||
 		(r.Remaining <= reserve) != (before.Remaining <= reserve) || before.SeenAt == 0 {
 		saveSourceDayQuotaLocked()
@@ -173,7 +163,7 @@ func noteSourceDayQuota(source string, status int, h http.Header, now time.Time)
 
 // sourceDayQuotaPausedFor:source 用完了每日额度、还要停多久。
 func sourceDayQuotaPausedFor(source string, now time.Time) (time.Duration, bool) {
-	if lyricSourceDayQuotaReserve(source) <= 0 {
+	if lyricSourceDayReserve(source) <= 0 {
 		return 0, false
 	}
 	sourceDayQuotaMu.Lock()
@@ -186,9 +176,9 @@ func sourceDayQuotaPausedFor(source string, now time.Time) (time.Duration, bool)
 	return until.Sub(now), true
 }
 
-// sourceDayQuotaLow:source 这一天剩下的不到 lyricSourceDayQuotaReserve(只给前台用)。不知道、或已经过了重置时刻的不算。
+// sourceDayQuotaLow:source 这一天剩下的不到它的留量(只给前台用)。不知道、或已经过了重置时刻的不算。
 func sourceDayQuotaLow(source string, now time.Time) bool {
-	reserve := lyricSourceDayQuotaReserve(source)
+	reserve := lyricSourceDayReserve(source)
 	if reserve <= 0 {
 		return false
 	}

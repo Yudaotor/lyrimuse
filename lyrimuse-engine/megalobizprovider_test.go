@@ -44,7 +44,7 @@ var megalobizParitySource = providerParitySource{
 	headers: []string{"User-Agent", "Accept"},
 	baseCtx: withOnDemandLyricRound,
 	guard: func(g *hostGuard) {
-		g.rateFor, g.sourceBudget = hostRateFor, lyricSourceHourlyBudget
+		g.rateFor, g.sourceBudget = hostRateFor, lyricSourceBudgetPerHour
 	},
 }
 

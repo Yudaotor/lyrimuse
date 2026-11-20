@@ -321,31 +321,56 @@ func TestProviderRegistryHostsMatchSourceForHost(t *testing.T) {
 
 func TestProviderRegistryHostRatesMatchHostRateFor(t *testing.T) {
 	listed := map[string]bool{}
+	probes := map[string]bool{"example.com": true, "": true}
 	for _, d := range registryDescriptors() {
 		for host, rate := range d.HostRates {
 			listed[host] = true
-			if got := hostRateFor(host); got != rate {
-				t.Errorf("%s 的 %s:登记表 %+v,hostRateFor %+v", d.Name, host, rate, got)
+			if want := expectedHostRateFor(host); want != rate {
+				t.Errorf("%s 的 %s:登记表 %+v,期望表 %+v", d.Name, host, rate, want)
 			}
 			if got, _ := registrySourceForHost(host); got != d.Name {
 				t.Errorf("%s 给 %s 定了速率,但这个主机归 %q", d.Name, host, got)
 			}
 		}
 		for _, r := range d.Hosts {
-			if _, ok := d.HostRates[r.Host]; !ok && hostRateFor(r.Host) != hostRateDefault {
-				t.Errorf("%s 的 %s 在 hostRateFor 里单独定了速率,描述符没写", d.Name, r.Host)
+			probes[r.Host] = true
+			if _, ok := d.HostRates[r.Host]; !ok && expectedHostRateFor(r.Host) != hostRateDefault {
+				t.Errorf("%s 的 %s 在期望表里单独定了速率,描述符没写", d.Name, r.Host)
 			}
 		}
 	}
-	// 反过来:hostRateFor 里单列的主机,是歌词源的都得在描述符里。
-	cases := regexp.MustCompile(`case "([^"]+)":`).FindAllStringSubmatch(goFuncSource(t, "hostguard.go", "hostRateFor"), -1)
+	// 反过来:期望表里单列的主机,是歌词源的都得在描述符里。
+	caseRE := regexp.MustCompile(`case "([^"]+)":`)
+	cases := caseRE.FindAllStringSubmatch(goFuncSource(t, "lyricsourceexpect_test.go", "expectedHostRateFor"), -1)
 	if len(cases) < 4 {
-		t.Fatalf("hostRateFor 里只扫到 %d 个 case,扫描式跟不上源码了", len(cases))
+		t.Fatalf("期望表里只扫到 %d 个 case,扫描式跟不上源码了", len(cases))
 	}
 	for _, m := range cases {
+		probes[m[1]] = true
 		if lyricSourceForHost(m[1]) != "" && !listed[m[1]] {
-			t.Errorf("hostRateFor 给歌词源主机 %s 单独定了速率,描述符没写", m[1])
+			t.Errorf("期望表给歌词源主机 %s 单独定了速率,描述符没写", m[1])
 		}
+	}
+	// 生产代码读到的 == 期望表:每条主机规则的主机、期望表里单列的主机,各自再探子域和父域(速率只对列出的那一个主机生效)。
+	for base := range probes {
+		for _, host := range []string{base, "x." + base, strings.TrimPrefix(base, "api.")} {
+			if got, want := hostRateFor(host), expectedHostRateFor(host); got != want {
+				t.Errorf("%q:生产代码读到 %+v,期望表 %+v", host, got, want)
+			}
+		}
+	}
+	// hostRateFor 自己只写不是歌词源的主机,歌词源的速率只有描述符一个来源。
+	own := caseRE.FindAllStringSubmatch(goFuncSource(t, "hostguard.go", "hostRateFor"), -1)
+	if len(own) < 2 {
+		t.Fatalf("hostRateFor 里只扫到 %d 个 case,扫描式跟不上源码了", len(own))
+	}
+	for _, m := range own {
+		if source := lyricSourceForHost(m[1]); source != "" {
+			t.Errorf("hostRateFor 里写着歌词源 %s 的主机 %s,它的速率该写在描述符的 HostRates", source, m[1])
+		}
+	}
+	if !containsCode(string(mustRead(t, "hostguard.go")), "var newHostGuardRateFor = hostRateFor") {
+		t.Error("出站闸默认的速率表不是 hostRateFor")
 	}
 }
 
@@ -358,6 +383,15 @@ func TestProviderRegistryInflightCapsMatch(t *testing.T) {
 	}
 	if !reflect.DeepEqual(got, lyricSourceInflightCaps) {
 		t.Errorf("登记表 %v\nlyricSourceInflightCaps %v", got, lyricSourceInflightCaps)
+	}
+	for _, name := range append(sortedKeys(registryNameSet(func(*ProviderDescriptor) bool { return true })), "nope", "") {
+		want := lyricSourceInflightCaps[name]
+		if want == 0 {
+			want = lyricSourceInflightDefault
+		}
+		if read := lyricSourceMaxInflight(name); read != want {
+			t.Errorf("%q:生产代码读到在途上限 %d,期望表 %d", name, read, want)
+		}
 	}
 }
 
@@ -377,12 +411,32 @@ func TestProviderRegistryBudgetsMatch(t *testing.T) {
 	if limited == 0 {
 		t.Error("没有一个源带额度,这条守卫什么都没比")
 	}
+	for _, name := range append(sortedKeys(registryNameSet(func(*ProviderDescriptor) bool { return true })), "nope", "") {
+		if read, want := lyricSourceBudgetPerHour(name), lyricSourceHourlyBudget(name); read != want {
+			t.Errorf("%q:生产代码读到小时额度 %d,期望表 %d", name, read, want)
+		}
+		if read, want := lyricSourceDayReserve(name), lyricSourceDayQuotaReserve(name); read != want {
+			t.Errorf("%q:生产代码读到每日额度留量 %d,期望表 %d", name, read, want)
+		}
+	}
+	if megalobizHourlyBudget != megalobizExpectedHourlyBudget || megalobizDayQuotaReserve != megalobizExpectedDayQuotaReserve {
+		t.Errorf("Megalobiz 的小时额度 %d、每日额度留量 %d,期望 %d、%d", megalobizHourlyBudget, megalobizDayQuotaReserve,
+			megalobizExpectedHourlyBudget, megalobizExpectedDayQuotaReserve)
+	}
+	if !containsCode(string(mustRead(t, "sourcebudget.go")), "var newHostGuardSourceBudget = lyricSourceBudgetPerHour") {
+		t.Error("出站闸默认的小时额度不是读描述符的 lyricSourceBudgetPerHour")
+	}
 }
 
 func TestProviderRegistryProxyFallbackMatches(t *testing.T) {
 	got := registryNameSet(func(d *ProviderDescriptor) bool { return d.ProxyFallback })
 	if want := trueKeys(lyricSourceProxyFallbackSources); !reflect.DeepEqual(got, want) {
 		t.Errorf("登记表 %v\nlyricSourceProxyFallbackSources %v", sortedKeys(got), sortedKeys(want))
+	}
+	for _, name := range append(sortedKeys(registryNameSet(func(*ProviderDescriptor) bool { return true })), "nope", "") {
+		if read, want := lyricSourceUsesProxyFallback(name), lyricSourceProxyFallbackSources[name]; read != want {
+			t.Errorf("%q:生产代码读到走不走代理回退=%v,期望表=%v", name, read, want)
+		}
 	}
 }
 

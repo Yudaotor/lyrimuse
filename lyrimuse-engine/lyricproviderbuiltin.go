@@ -35,7 +35,9 @@ func newBuiltinLyricProviderRegistry() *lyricProviderRegistry {
 
 	r.implement(lrclibProvider{desc: r.registerBuiltin(&ProviderDescriptor{
 		Name: lyricSourceLRCLIB, Order: 4, TieRank: 4, DefaultPriorityRank: 4,
-		Hosts:       []HostRule{{"lrclib.net", hostWithSubdomains}},
+		Hosts: []HostRule{{"lrclib.net", hostWithSubdomains}},
+		// lrclib 拿 503 限流,调用越密比例越高(每分钟 5 次以下 2.7%、31 次以上 6.5%),快速切歌时
+		// 一分钟能打到两百次。攒 6 个够首轮加一轮别名不排队。见 09 章决策 108。
 		HostRates:   map[string]hostRate{"lrclib.net": {perSec: 1, burst: 6, reserve: 3}},
 		MaxInflight: 3, ProxyFallback: true,
 		Baked: bakedStripOnly, ParenBackground: true, CarriesKana: true, InstrumentalRank: 1,
@@ -134,8 +136,9 @@ func newBuiltinLyricProviderRegistry() *lyricProviderRegistry {
 
 	r.implement(megalobizProvider{desc: r.registerBuiltin(&ProviderDescriptor{
 		Name: lyricSourceMegalobiz, Order: 16, TieRank: 15, DefaultPriorityRank: 16,
-		Rounds:       roundsOnDemand,
-		Hosts:        []HostRule{{"api.megalobiz.com", hostExact}},
+		Rounds: roundsOnDemand,
+		Hosts:  []HostRule{{"api.megalobiz.com", hostExact}},
+		// 不带 key 时每个 IP 每分钟 30 次:攒满 6 个再按每秒 0.4 个补,任意一分钟里最多 6 + 24 = 30 个(megalobiz.go 头注)。
 		HostRates:    map[string]hostRate{"api.megalobiz.com": {perSec: 0.4, burst: 6, reserve: 2}},
 		HourlyBudget: megalobizHourlyBudget, DayQuotaReserve: megalobizDayQuotaReserve, ProxyFallback: true,
 		ParenBackground: true, PageURL: megalobizPageURL,

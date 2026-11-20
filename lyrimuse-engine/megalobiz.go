@@ -17,6 +17,14 @@ import (
 	"unicode"
 )
 
+const (
+	// megalobizHourlyBudget:Megalobiz 不带 key 时每个 IP 每天 1000 次,摊到每小时约 41 次。后台(待播队列的预解析)用完这一小时的
+	// 就不问它,正在放的那首照问;超了对方回 429,走熔断和后台暂停。登记在描述符的 HourlyBudget。
+	megalobizHourlyBudget = 40
+	// megalobizDayQuotaReserve:Megalobiz 每天剩到这么多时只留给前台。登记在描述符的 DayQuotaReserve。
+	megalobizDayQuotaReserve = 100
+)
+
 // megalobizLyric 是 Megalobiz 这一路:公开接口搜索 → 按元数据重新打分排序 → 按名次逐条取词,第一份带时间轴的就用。
 // 接口是官方开放的 `api.megalobiz.com/api/public/v1`(开发者说明 https://megalobiz.com/developers),不要账号、不签名,回 JSON。
 // 只有逐行(用户手打上传的 LRC,`lines[].time_ms` + `text`),没有逐字、译文、罗马音、封面、专辑。
@@ -25,8 +33,8 @@ import (
 //   - 不许整库镜像、批量下载,只查用户实际在放的歌:只在正在放的那首、待播队列、手动搜索 / 重新匹配、设置页测试时问,
 //     别的轮次(全量扫库、补空扫描、专辑预取、导入清单、开发命令行)一律不问(lyricSourceAllowedForRound,白名单)。
 //   - 请求带写明 App 名和联系网址的 User-Agent(megalobizUserAgent)。
-//   - 不带 key 时每个 IP 每分钟 30 次、每天 1000 次:令牌桶按每分钟不超过 30 次配(hostRateFor),后台的小时额度见
-//     lyricSourceHourlyBudget,429 走歌词源熔断和后台暂停;应答头报的每日剩余次数见 sourcedayquota.go(剩得少只给前台、
+//   - 不带 key 时每个 IP 每分钟 30 次、每天 1000 次:令牌桶按每分钟不超过 30 次配(描述符的 HostRates),后台的小时额度见
+//     megalobizHourlyBudget,429 走歌词源熔断和后台暂停;应答头报的每日剩余次数见 sourcedayquota.go(剩得少只给前台、
 //     用完停到重置)。这几样跟手动搜索的子进程共用一份记账。同一个请求地址的答复存 megalobizAnswerTTL,别名轮不重发。
 //   - 显示它的歌词时链回这首在 megalobiz.com 上的歌词页:页地址(`url`)随候选带到条目的 lyrics_source_url,App 在来源处做成链接。
 //

@@ -395,11 +395,11 @@ func TestMegalobizRateAndBudgetWithinTerms(t *testing.T) {
 	if perMinute := r.burst + 60*r.perSec; perMinute > 30 {
 		t.Errorf("令牌桶一分钟最多放 %.1f 个,超过每分钟 30 次", perMinute)
 	}
-	if b := lyricSourceHourlyBudget(lyricSourceMegalobiz); b <= 0 || b*24 > 1000 {
+	if b := lyricSourceBudgetPerHour(lyricSourceMegalobiz); b <= 0 || b*24 > 1000 {
 		t.Errorf("小时额度 %d 摊满一天超过每天 1000 次,或没配", b)
 	}
 	for _, s := range lyricSourceNames {
-		if s != lyricSourceMegalobiz && lyricSourceHourlyBudget(s) != 0 {
+		if s != lyricSourceMegalobiz && lyricSourceBudgetPerHour(s) != 0 {
 			t.Errorf("别的源不该有小时额度: %s", s)
 		}
 	}
