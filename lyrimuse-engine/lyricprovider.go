@@ -572,7 +572,8 @@ func lyricSourceTakesISRC(source, isrc string) bool {
 }
 
 // lyricSourceOwningHost 把请求主机归到歌词源名(描述符的 Hosts);不是歌词源的主机(Last.fm / ListenBrainz / MusicBrainz /
-// iTunes / DoH …)返回空串。host 可以带端口、大写、首尾空白。
+// iTunes / DoH …)返回空串。host 可以带端口、大写、首尾空白。按主机记的状态(熔断器的失败与成功、端点限流上报、审计汇总的
+// 分组)直接读它;「这个请求算在哪个源名下」读 outboundSourceFor。
 func lyricSourceOwningHost(host string) string {
 	h := strings.ToLower(strings.TrimSpace(host))
 	if strings.Contains(h, ":") {

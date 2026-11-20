@@ -80,7 +80,7 @@ func doHTTPTrackedOnce(cli *http.Client, req *http.Request) (*http.Response, err
 			traceMu.Unlock()
 		},
 	}))
-	// 歌词源的在途上限(lyricsourceinflight.go):排不上就等,拿到响应就还。
+	// 歌词源的在途上限(lyricsourceinflight.go):排不上就等,拿到响应就还。占的是这个请求归到的那个源的名额。
 	releaseSlot, slotErr := acquireLyricSourceSlot(req.Context(), guardHost(req.URL))
 	if slotErr != nil {
 		return nil, slotErr
@@ -128,8 +128,8 @@ func doHTTPTrackedOnce(cli *http.Client, req *http.Request) (*http.Response, err
 			slog.Warn("api call: "+target+" FAILED", "elapsed_ms", elapsed.Milliseconds(), "err", safeErr)
 			recordAPICall(summaryKey, elapsed, true, false, time.Now())
 		}
-		// 歌词源级熔断的失败观察(见 sourcebreaker.go):只有歌词源的主机会被记,别的请求
-		// 在 lyricSourceOwningHost 那里直接归零。
+		// 歌词源级熔断的失败观察(见 sourcebreaker.go):按实际请求的主机记在主机的主人头上,不看请求归到哪个源;
+		// 不是歌词源的主机在 lyricSourceOwningHost 那里直接归零。
 		sharedLyricSourceBreaker().observeTraced(req.URL.Host, guardEndpointKey(req.URL), err, 0, "", tr)
 		if !errors.Is(err, context.Canceled) {
 			err = loggedTransportError{err}
@@ -147,7 +147,7 @@ func doHTTPTrackedOnce(cli *http.Client, req *http.Request) (*http.Response, err
 	}
 	sharedHostGuard().observe(req, resp.StatusCode, resp.Header.Get("Retry-After"))
 	if resp.StatusCode < 500 && resp.StatusCode != http.StatusTooManyRequests {
-		if src := lyricSourceOwningHost(req.URL.Host); src != "" {
+		if src := outboundSourceFor(req.Context(), guardHost(req.URL)); src != "" {
 			lyricSourceRoundFrom(req.Context()).markReached(src)
 		}
 	}
@@ -182,7 +182,7 @@ func doHTTPTrackedOnce(cli *http.Client, req *http.Request) (*http.Response, err
 }
 
 // rateLimitAnswerPaused:这次应答是对方在限速(503 / 429),而且收到它的一方会自己停手、照它停是设计内的常态:
-//   - 过出站闸的歌词源:出站闸暂停它的后台请求,记一条带暂停多久的「lyric source rate-limited」(hostguard.go
+//   - 过出站闸的歌词源请求(归到某个源的,outboundSourceFor):出站闸暂停这个主机的后台请求,记一条带暂停多久的「lyric source rate-limited」(hostguard.go
 //     noteLyricSourceThrottled);lrclib 忙时回 503 + Retry-After: 1。
 //   - MusicBrainz:按 IP 限速,mbGetBody 把停手窗口写进共享文件,ISRC 补扫和歌手查询都退避。
 //
@@ -192,7 +192,7 @@ func rateLimitAnswerPaused(req *http.Request, status int) bool {
 		return false
 	}
 	host := guardHost(req.URL)
-	return host == musicbrainzHost || lyricSourceOwningHost(host) != "" && guardApplies(req)
+	return host == musicbrainzHost || outboundSourceFor(req.Context(), host) != "" && guardApplies(req)
 }
 
 // loggedTransportError:上面已经按「api call … FAILED」记过一条 WARN 的传输层错误。调用方再用 warnf / infoFailf

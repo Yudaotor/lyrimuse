@@ -353,7 +353,8 @@ func (b *lyricSourceBreaker) observe(host string, err error, status int, retryAf
 	b.observeWith(host, "", err, status, retryAfter, transportTrace{})
 }
 
-// observeWith 的 endpoint 是端点键(guardEndpointKey),空串表示不知道是哪个端点、按整个源算。
+// observeWith 的 endpoint 是端点键(guardEndpointKey),空串表示不知道是哪个端点、按整个源算。host 是实际请求的主机:
+// 失败与成功记在这个主机的主人头上(lyricSourceOwningHost),不看请求归到哪个源(outboundSourceFor)。
 func (b *lyricSourceBreaker) observeWith(host, endpoint string, err error, status int, retryAfter string, tr transportTrace) {
 	source := lyricSourceOwningHost(host)
 	if source == "" {

@@ -76,7 +76,8 @@ func lyricHTTPClient(timeout time.Duration) *http.Client {
 
 // ---- 海外歌词源直连失败时经代理重试 ----
 //
-// 按请求的主机归源(lyricSourceOwningHost):描述符带 ProxyFallback 的源(lyricSourceUsesProxyFallback)走 proxyFallbackTransport(直连优先,
+// 按请求的归源(outboundSourceFor;跟随重定向跳到别的主机、又没有显式源标签的那一跳按它自己的主机归):描述符带 ProxyFallback 的源
+// (lyricSourceUsesProxyFallback)走 proxyFallbackTransport(直连优先,
 // 直连不通改走「代理」设置里的代理,networkproxy.go),每台主机一份,走代理的粘性互不牵连;国内源和不认识的主机只直连:
 // 经代理出境可能拿不到有版权的歌词。见 09 章决策 321。
 
@@ -84,7 +85,7 @@ type lyricSourceRoundTripper struct{}
 
 func (lyricSourceRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) {
 	host := req.URL.Hostname()
-	if !lyricSourceUsesProxyFallback(lyricSourceOwningHost(host)) {
+	if !lyricSourceUsesProxyFallback(outboundSourceFor(req.Context(), guardHost(req.URL))) {
 		return sharedLyricSourceTransport().RoundTrip(req)
 	}
 	return lyricSourceFallbackFor(host).RoundTrip(req)

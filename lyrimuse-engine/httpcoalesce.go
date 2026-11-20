@@ -17,8 +17,8 @@ import (
 // 又会叠出服务端限流。
 //
 // 只合并**同时在途**的(不是缓存):第一个真的发出去,响应体整个读下来,同时在等的几个拿同一份的副本 ——
-// 它们不经过出站闸、不占名额、不进审计汇总(本来就没发出去)。范围:发往歌词源主机的 GET,URL 与请求头
-// 逐字相同才算同一个请求。发出去的那个请求因为自己的 ctx 被取消而失败时(它所在的支线被停掉了),等它的
+// 它们不经过出站闸、不占名额、不进审计汇总(本来就没发出去)。范围:归到某个歌词源的 GET(outboundSourceFor),归到的源、
+// URL 与请求头逐字相同才算同一个请求。发出去的那个请求因为自己的 ctx 被取消而失败时(它所在的支线被停掉了),等它的
 // 那几个 ctx 还活着就各自重发,不跟着失败。响应体超过 httpCoalesceMaxBody 不共享,等的那几个各自重发。
 // 见 09 章决策 102 第七批。
 const httpCoalesceMaxBody = 8 << 20
@@ -39,18 +39,27 @@ type coalescedCall struct {
 var (
 	httpCoalesceMu       sync.Mutex
 	httpCoalesceInflight = map[string]*coalescedCall{}
-	// httpCoalesceHostOK 只为单测可换(httptest 服务器在回环地址上,不是歌词源主机)。
-	httpCoalesceHostOK = func(host string) bool { return lyricSourceOwningHost(host) != "" }
+	// httpCoalesceHostOK 非 nil 时改由它按主机判一个请求进不进合并,只为单测可换(httptest 服务器在回环地址上,不归任何
+	// 歌词源)。
+	httpCoalesceHostOK func(host string) bool
 )
 
 func httpCoalesceKey(req *http.Request) (string, bool) {
 	if req.Method != http.MethodGet || req.Body != nil && req.Body != http.NoBody {
 		return "", false
 	}
-	if !httpCoalesceHostOK(guardHost(req.URL)) {
+	host := guardHost(req.URL)
+	source := outboundSourceFor(req.Context(), host)
+	if hostOK := httpCoalesceHostOK; hostOK != nil {
+		if !hostOK(host) {
+			return "", false
+		}
+	} else if source == "" {
 		return "", false
 	}
 	var b strings.Builder
+	// 带上归到的源:归到不同源的同一个请求各发各的,结果、在途名额、额度不记到别的源头上。
+	b.WriteString(source + "\x00")
 	// 带上出站档位:前台请求不跟着后台 / 补查那一个排出站闸的队(那边最长等 30 秒,前台这一轮可能先到期)。
 	// 再带上此刻的共享传输层:生产里它从不换;单测换成替身之后,换之前发出、还在途的同一个请求(上一个用例留下的
 	// 后台协程,打的是真实网络或别的替身)不能把结果交给这一个用例。见 15 章决策 125。
@@ -67,8 +76,10 @@ func httpCoalesceKey(req *http.Request) (string, bool) {
 	return b.String(), true
 }
 
-// doHTTPTracked:所有对外请求的统一出口(审计、出站闸、在途名额都在 doHTTPTrackedOnce 里),外加同 URL 合并。
+// doHTTPTracked:所有对外请求的统一出口(审计、出站闸、在途名额都在 doHTTPTrackedOnce 里),外加同 URL 合并。进来先算这个
+// 请求的归源(outboundsource.go),合并和 doHTTPTrackedOnce 里各处读的都是这一份。
 func doHTTPTracked(cli *http.Client, req *http.Request) (*http.Response, error) {
+	req = withOutboundSource(req)
 	key, ok := httpCoalesceKey(req)
 	if !ok {
 		return doHTTPTrackedOnce(cli, req)
@@ -145,7 +156,7 @@ func noteCoalescedReached(req *http.Request, status int) {
 	if status >= 500 || status == http.StatusTooManyRequests {
 		return
 	}
-	if src := lyricSourceOwningHost(req.URL.Host); src != "" {
+	if src := outboundSourceFor(req.Context(), guardHost(req.URL)); src != "" {
 		lyricSourceRoundFrom(req.Context()).markReached(src)
 	}
 }

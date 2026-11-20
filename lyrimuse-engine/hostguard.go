@@ -47,6 +47,9 @@ import (
 // 没发出去,既不是网络状态也不是对方的状态。一轮歌词搜索里被拦下的源记进 lyricSourceRound 的
 // skipped,跟熔断跳过走同一套后续(补空间隔缩短、rescoreDecidable 不降级)。
 // 回环地址(单测的 httptest 服务器)不经过这里。
+//
+// 「是不是歌词源的请求、算在哪个源名下」读入口统一算的归源(outboundSourceFor):按源记的冷却、排队拦截、小时额度、每日额度、
+// 这一轮的跳过名单都记在归到的那个源头上。令牌桶、后台暂停、接口熔断、端点限流窗口的状态按实际主机 / 端点记。
 
 var errHostGuarded = errors.New("held back by local outbound guard")
 
@@ -315,7 +318,7 @@ func (g *hostGuard) admit(req *http.Request) error {
 	}
 	ctx := req.Context()
 	host := guardHost(req.URL)
-	source := lyricSourceOwningHost(host)
+	source := outboundSourceFor(ctx, host)
 	round := lyricSourceRoundFrom(ctx)
 	key := guardEndpointKey(req.URL)
 
@@ -519,7 +522,8 @@ func (g *hostGuard) acquire(ctx context.Context, host string) error {
 	}
 }
 
-// observe 按一次真实响应更新端点限流窗口。歌词源主机不在这里记(sourcebreaker.go 管)。
+// observe 按一次真实响应更新端点限流窗口。归到歌词源的请求不在这里记(sourcebreaker.go 管),它回 503 / 429 时暂停这个
+// 主机的后台请求。
 func (g *hostGuard) observe(req *http.Request, status int, retryAfter string) {
 	if !guardApplies(req) {
 		return
@@ -529,7 +533,7 @@ func (g *hostGuard) observe(req *http.Request, status int, retryAfter string) {
 	} else {
 		g.noteEndpointHealthy(guardEndpointKey(req.URL))
 	}
-	if lyricSourceOwningHost(guardHost(req.URL)) != "" {
+	if outboundSourceFor(req.Context(), guardHost(req.URL)) != "" {
 		if status == http.StatusServiceUnavailable || status == http.StatusTooManyRequests {
 			g.noteLyricSourceThrottled(guardHost(req.URL), retryAfter)
 		}
@@ -725,7 +729,7 @@ func reportEndpointAccepted(u *url.URL) {
 }
 
 // reportEndpointRateLimited:调用方从响应体里认出了限流(比如 Last.fm 的 200 + error 29),
-// 让这个端点按 retryAfter(可空)进入窗口。只对非歌词源主机生效,同 observe。回环地址也照记,
+// 让这个端点按 retryAfter(可空)进入窗口。只对非歌词源主机生效(手里只有地址、没有请求,按主机的主人判)。回环地址也照记,
 // 反正 admit 不查它们。
 func reportEndpointRateLimited(u *url.URL, retryAfter string) {
 	if u == nil || lyricSourceOwningHost(guardHost(u)) != "" {
