@@ -185,6 +185,23 @@ func runNotchTests() {
         expectEqual(sourceHas(topRow, "let equalizerOnLeft = !isIdleNoTrack &&")
                     && sourceHas(topRow, "let equalizerOnRight = !isIdleNoTrack && (collapsed ||"), true,
                     "空闲面板(契约): 没有曲目时两只耳朵都不画音浪")
+        // 「打开菜单栏面板」常驻在分组线右边第一颗,跟快捷键、深链 menubar-panel 走同一条路;不看展开快捷操作的开关和格子。
+        let idlePanel = sourceBody("var idleExpandedPanel: some View", in: ui("NotchLyricsView+Expanded.swift"))
+        expectEqual(sourceHas(idlePanel, ".padding(.horizontal, 3)\n"
+                              + "quickActionButton(LyrimuseAction.toggleMenuBarPanelHotkey.iconName, label: L10n.t(\"打开菜单栏面板\")) {\n"
+                              + "LyrimuseActionRunner.perform(.toggleMenuBarPanelHotkey)\n}\n"
+                              + "quickActionButton(\"gearshape.fill\""), true,
+                    "空闲面板(契约): 分组线右边第一颗是「打开菜单栏面板」,点了走 LyrimuseActionRunner 的打开面板动作")
+        expectEqual(idlePanel.contains("expandedShowsQuickActions") || idlePanel.contains("quickSlots"), false,
+                    "空闲面板(契约): 这排键常驻,不读展开快捷操作的开关和格子")
+        let sources = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+        let runner = (try? String(contentsOf: sources.appendingPathComponent("lyrimuse/Settings/LyrimuseActionRunner.swift"),
+                                  encoding: .utf8)) ?? ""
+        let router = (try? String(contentsOf: sources.appendingPathComponent("lyrimuse/Settings/DeepLinkRouter.swift"),
+                                  encoding: .utf8)) ?? ""
+        expectEqual(sourceHas(runner, "case .toggleMenuBarPanelHotkey:\nMenuBarStatusItem.shared.togglePanelFromDeepLink()")
+                    && sourceHas(router, "MenuBarStatusItem.shared.togglePanelFromDeepLink(quick:"), true,
+                    "空闲面板(契约): 打开面板的动作跟深链 menubar-panel 落到同一个 togglePanelFromDeepLink")
     }
 
     // MARK: - VocalEnvelope:灵动岛音浪的人声包络(起音脉冲 + 换气泄放)

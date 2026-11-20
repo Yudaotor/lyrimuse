@@ -541,7 +541,7 @@ struct NotchIdleEarIconHost<Fallback: View>: View {
     }
 }
 
-/// 没有曲目时 hover 展开出来那一块的宿主:平时是 fallback(`idleExpandedPanel`,「没有在播放」+ 三颗键);
+/// 没有曲目时 hover 展开出来那一块的宿主:平时是 fallback(`idleExpandedPanel`,上次播放或「未在播放」+ 一排图标键);
 /// `NotchUnknownPlayerPrompt` 挂着信任提议时换成:
 ///
 ///     检测到新的播放器                                [✓ 加入信任列表] [×]
