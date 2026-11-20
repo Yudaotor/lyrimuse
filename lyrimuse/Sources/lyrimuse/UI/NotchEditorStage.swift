@@ -726,6 +726,9 @@ struct NotchEditorStage: View {
                 atScreenTop { notchCutout }
             }
             .frame(width: screenWidth, height: cardAreaHeight, alignment: .top)
+            // 缩放前先成组,别删:缩放比从小于 1 回到 1 之后,卡片里常驻、只切透明度的那几块(展开头部、多行歌词、
+            // 进度条和播放键)会停在没画出来的样子,直到整块重建。见 05 章决策 161。
+            .geometryGroup()
             .scaleEffect(scale, anchor: .top)
             .frame(width: stageWidth, height: cardAreaHeight, alignment: .top)
             .frame(maxHeight: .infinity, alignment: .top)

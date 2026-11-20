@@ -1788,6 +1788,11 @@ func runNotchTests() {
                         && !stageSrc.contains("NotchCardEdgeShadow") && !stageSrc.contains("NotchCardKeyline")
                         && sourceHas(stageSrc, "let needed = widestCardWidth + 2 * NotchCardEdge.windowMargin\n guard widestCardWidth > 0, needed > stageWidth + 0.5 else { return 1 }\n return stageWidth / needed"), true,
                         "展开边缘: 编辑台预览跟真窗口挂同一道外形裁剪和描边投影,舞台给投影留出两侧余量")
+            // 舞台缩放比在小于 1 和 1 之间来回后,预览展开态的头部、多行歌词、播放键会画不出来;缩放前先成组(05 章决策 161)。
+            expectEqual(sourceHas(sourceBody("private func stage(stageWidth: CGFloat) -> some View", in: stageSrc),
+                                  ".geometryGroup()\n .scaleEffect(scale, anchor: .top)")
+                        && stageSrc.components(separatedBy: ".scaleEffect(").count == 2, true,
+                        "编辑台缩放: 「屏幕顶端」整组先 geometryGroup 再 scaleEffect,舞台里只有这一处缩放")
             expectEqual(sourceHas(stageSrc, "NotchCardOutlineReader(outline: chrome.cardOutline) {\n            $0.stroke("), true,
                         "外轮廓契约: 编辑台拖宽度那圈虚线跟卡片同形")
             // 圆角按这一帧的高度算,不靠动画插值:两道形状都不该再声明 animatableData(插值的起点会把没展开那张卡片拉成直角再长回来)。
