@@ -122,7 +122,7 @@ struct MenuBarPanelLayoutRows: View {
         let frame = Self.grid.frame(p)
         let actions = tileActions(p)
         return PanelEditableTile(
-            content: PanelLayoutMiniTile(tile: p.tile, size: p.size, cornerRadius: Self.cornerRadius)
+            content: PanelLayoutMiniTile(tile: p.tile, size: p.size, cornerRadius: Self.cornerRadius, width: frame.width)
                 .frame(width: frame.width, height: frame.height),
             cornerRadius: Self.cornerRadius,
             resizing: resizingTile == p.tile,
@@ -253,7 +253,7 @@ struct MenuBarPanelLayoutRows: View {
     @ViewBuilder private var draggedTileCopy: some View {
         if let tile = draggingTile {
             let size = Self.grid.size(dragSize)
-            PanelLayoutMiniTile(tile: tile, size: dragSize, cornerRadius: Self.cornerRadius)
+            PanelLayoutMiniTile(tile: tile, size: dragSize, cornerRadius: Self.cornerRadius, width: size.width)
                 .frame(width: size.width, height: size.height)
                 .scaleEffect(reduceMotion ? 1 : 1.04)
                 .shadow(color: .black.opacity(0.2), radius: 6, y: 2)
@@ -510,6 +510,11 @@ struct PanelLayoutMiniTile: View {
     let tile: MenuBarPanelLayout.Tile
     let size: MenuBarPanelLayout.Size
     let cornerRadius: CGFloat
+    /// 格子多宽(量名字里最长的词放不放得下)。
+    let width: CGFloat
+
+    private static let titleFont = NSFont.systemFont(ofSize: 9, weight: .semibold)
+    private static let horizontalInset: CGFloat = 4
 
     var body: some View {
         RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
@@ -518,7 +523,7 @@ struct PanelLayoutMiniTile: View {
                 RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
                     .strokeBorder(Color.primary.opacity(0.08), lineWidth: 0.5)
             }
-            .overlay { content.padding(.horizontal, 4).padding(.vertical, 3) }
+            .overlay { content.padding(.horizontal, Self.horizontalInset).padding(.vertical, 3) }
     }
 
     @ViewBuilder private var content: some View {
@@ -574,11 +579,35 @@ struct PanelLayoutMiniTile: View {
         }
     }
 
+    /// 按空格(和连字符后面)分开的名字里有一段比格子还宽时(俄语「Плавающий」、德语「Menüleisten-」放进小号),
+    /// 一段一行、整体缩字,别让系统从词中间拆开。中日文、泰文这类不写空格的交给系统断行。
+    private var titleLines: [String]? {
+        let available = width - Self.horizontalInset * 2
+        var pieces: [String] = []
+        for word in tile.panelTitle.split(whereSeparator: \.isWhitespace) {
+            var current = ""
+            for ch in word {
+                current.append(ch)
+                if ch == "-" {
+                    pieces.append(current)
+                    current = ""
+                }
+            }
+            if !current.isEmpty { pieces.append(current) }
+        }
+        let tooWide = pieces.contains { piece in
+            TileTitleWrap.isSingleSpacedWord(piece)
+                && (piece as NSString).size(withAttributes: [.font: Self.titleFont]).width > available
+        }
+        return tooWide ? pieces : nil
+    }
+
     private func title(lines: Int?) -> some View {
-        Text(tile.panelTitle)
+        let split = titleLines
+        return Text(split?.joined(separator: "\n") ?? tile.panelTitle)
             .font(.system(size: 9, weight: .semibold))
             .foregroundStyle(.primary)
-            .lineLimit(lines)
-            .minimumScaleFactor(0.75)
+            .lineLimit(split?.count ?? lines)
+            .minimumScaleFactor(split == nil ? 0.75 : 0.6)
     }
 }
