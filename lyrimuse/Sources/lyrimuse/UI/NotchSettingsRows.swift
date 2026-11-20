@@ -396,8 +396,9 @@ struct NotchEarSettingsRows: View {
     @ObservedObject private var settings = AppSettings.shared
     @ObservedObject private var realAudio = RealAudioMeter.shared
     let side: NotchEarPopover.Side
-    /// 这只耳朵宽度滑杆拖动中节流提交,同「全部设置」抽屉那两根宽度滑杆。
-    @State private var widthThrottle = SliderCommitThrottle()
+    /// 「两耳等宽」和这只耳朵的宽度两行。「全部设置」抽屉传 false:那两行在抽屉里由「宽度」组承接(同一份行视图),
+    /// 不在左耳、右耳两组里再出一遍(14 章决策 239)。
+    var includesWidthRows = true
 
     private var current: NotchEarModule {
         side == .left ? settings.notchLeftEar : settings.notchRightEar
@@ -455,39 +456,13 @@ struct NotchEarSettingsRows: View {
         return realAudio.likelyDenied ? .orange : .accentColor
     }
 
-    /// 「两耳等宽」:左右耳浮层各一行、背后是同一个开关(ⓘ 交代两侧共用)。关掉时两侧从此刻卡片的样子起步,卡片不跳
-    /// (`NotchEditorStage.setEarWidthsLinked`)。见 05 章决策 160。
-    private var linkedRow: some View {
-        SettingsRow(icon: "arrow.left.and.right.square", title: L10n.t("两耳等宽"), help: L10n.t("左右耳共用这一项")) {
-            Toggle("", isOn: Binding(
-                get: { settings.notchEarWidthsLinked },
-                set: { NotchEditorStage.setEarWidthsLinked($0) }))
-        }
-    }
+    /// 「两耳等宽」:左右耳浮层各一行、背后是同一个开关,行本体是 `NotchEarWidthsLinkedRow`(「全部设置」抽屉「宽度」组同一份)。
+    private var linkedRow: some View { NotchEarWidthsLinkedRow() }
 
-    /// 关掉「两耳等宽」后才有:这只耳朵伸出刘海多宽(外露宽)。区间下界是这只耳朵当前模块的下限,读数报抬到下限之后的
-    /// 真实宽度。
+    /// 关掉「两耳等宽」后才有:这只耳朵的宽度,行本体是 `NotchEarWidthRow`(「全部设置」抽屉「宽度」组同一份)。
+    /// 浮层宽 320,滑杆收到 80 各语言才不折行(05 章决策 160)。
     private var widthRow: some View {
-        let range = NotchEditorStage.earUsableRange(side)
-        let effective = NotchEditorStage.splitSteadyOnCurrentScreen().map { side == .left ? $0.span.left : $0.span.right } ?? 0
-        let commit: (Double) -> Void = { value in
-            NotchEditorStage.commitEarWidths(left: side == .left ? value : nil, right: side == .right ? value : nil)
-        }
-        return SettingsRow(icon: "arrow.left.and.right", title: L10n.t("宽度")) {
-            HStack(spacing: 8) {
-                SteppedSlider(value: Binding(
-                    get: { widthThrottle.value(or: Double(effective)) },
-                    set: { widthThrottle.update($0, commit: commit) }
-                ), in: range, step: NotchEarWidths.step,
-                   onEditingChanged: { widthThrottle.editingChanged($0, commit: commit) })
-                .frame(width: 80)
-                .accessibilityLabel(side == .left ? L10n.t("左耳宽度") : L10n.t("右耳宽度"))
-                StableReadout(text: String(format: L10n.t("%@pt"), "\(Int(widthThrottle.value(or: Double(effective))))"),
-                              widest: StableReadout.points(NotchEarWidths.storageRange.upperBound), font: nil, minWidth: 46)
-                    .foregroundStyle(.secondary)
-                    .accessibilityHidden(true)
-            }
-        }
+        NotchEarWidthRow(side: side, title: L10n.t("宽度"), sliderWidth: 80)
     }
 
     // 一框:音浪一行开关(「跟随音乐跳动」在开关左边那颗按钮的浮层里),这一侧显示什么一行下拉(选其一;选「不显示」就空着),
@@ -511,11 +486,13 @@ struct NotchEarSettingsRows: View {
                 if let note = current.earLyricNote {
                     SettingsNote { Text(note) }
                 }
-                CardDivider()
-                linkedRow
-                if !settings.notchEarWidthsLinked {
+                if includesWidthRows {
                     CardDivider()
-                    widthRow
+                    linkedRow
+                    if !settings.notchEarWidthsLinked {
+                        CardDivider()
+                        widthRow
+                    }
                 }
             }
         }
@@ -531,6 +508,56 @@ struct NotchEarSettingsRows: View {
         } else {
             guard settings.notchRightEar != module else { return }
             settings.notchRightEar = module
+        }
+    }
+}
+
+/// 「两耳等宽」开关:左右耳浮层和「全部设置」抽屉「宽度」组共用这一行,背后是同一个开关(ⓘ 交代左右耳共用)。
+/// 关掉时两侧从此刻卡片的样子起步,卡片不跳(`NotchEditorStage.setEarWidthsLinked`)。见 05 章决策 160。
+@MainActor
+struct NotchEarWidthsLinkedRow: View {
+    @ObservedObject private var settings = AppSettings.shared
+
+    var body: some View {
+        SettingsRow(icon: "arrow.left.and.right.square", title: L10n.t("两耳等宽"), help: L10n.t("左右耳共用这一项")) {
+            Toggle("", isOn: Binding(
+                get: { settings.notchEarWidthsLinked },
+                set: { NotchEditorStage.setEarWidthsLinked($0) }))
+        }
+    }
+}
+
+/// 关掉「两耳等宽」后一只耳朵伸出刘海多宽(外露宽)。左右耳浮层(行名「宽度」)和「全部设置」抽屉「宽度」组
+/// (行名「左耳宽度」「右耳宽度」)共用这一行,滑杆宽由宿主给。区间下界是这只耳朵当前模块的下限,读数报抬到下限之后的
+/// 真实宽度;拖动中节流提交,落盘只走 `NotchEditorStage.commitEarWidths`。见 05 章决策 160、14 章决策 239。
+@MainActor
+struct NotchEarWidthRow: View {
+    @ObservedObject private var settings = AppSettings.shared
+    let side: NotchEarPopover.Side
+    let title: String
+    let sliderWidth: CGFloat
+    @State private var widthThrottle = SliderCommitThrottle()
+
+    var body: some View {
+        let range = NotchEditorStage.earUsableRange(side)
+        let effective = NotchEditorStage.splitSteadyOnCurrentScreen().map { side == .left ? $0.span.left : $0.span.right } ?? 0
+        let commit: (Double) -> Void = { value in
+            NotchEditorStage.commitEarWidths(left: side == .left ? value : nil, right: side == .right ? value : nil)
+        }
+        return SettingsRow(icon: "arrow.left.and.right", title: title) {
+            HStack(spacing: 8) {
+                SteppedSlider(value: Binding(
+                    get: { widthThrottle.value(or: Double(effective)) },
+                    set: { widthThrottle.update($0, commit: commit) }
+                ), in: range, step: NotchEarWidths.step,
+                   onEditingChanged: { widthThrottle.editingChanged($0, commit: commit) })
+                .frame(width: sliderWidth)
+                .accessibilityLabel(side == .left ? L10n.t("左耳宽度") : L10n.t("右耳宽度"))
+                StableReadout(text: String(format: L10n.t("%@pt"), "\(Int(widthThrottle.value(or: Double(effective))))"),
+                              widest: StableReadout.points(NotchEarWidths.storageRange.upperBound), font: nil, minWidth: 46)
+                    .foregroundStyle(.secondary)
+                    .accessibilityHidden(true)
+            }
         }
     }
 }

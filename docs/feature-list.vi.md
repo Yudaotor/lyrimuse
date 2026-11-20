@@ -305,6 +305,8 @@ Một khung kiểu Dynamic Island cạnh notch ở đầu màn hình; máy Mac k
 - Cài đặt: Hiển thị lời › Notch › Màn hình
 - Cài đặt: Hiển thị lời › Notch › Tai trái
 - Cài đặt: Hiển thị lời › Notch › Tai trái › Hai tai rộng bằng nhau
+- Cài đặt: Hiển thị lời › Notch › Chiều rộng › Độ rộng tai trái
+- Cài đặt: Hiển thị lời › Notch › Chiều rộng › Độ rộng tai phải
 - Cài đặt: Hiển thị lời › Notch › Dòng lời › Hiện lời khi thu gọn
 - Cài đặt: Phím tắt › Hiện/ẩn lời trên Notch
 - Cài đặt: Phím tắt › Xem nhanh Notch
@@ -494,6 +496,7 @@ Trỏ vào lời nổi sẽ hiện một hàng nút nhanh. Lời trên thanh men
 
 - Bật theo mặc định
 - Cài đặt: Hiển thị lời › Lời nổi › Hành vi › Hiện điều khiển khi di chuột
+- Cài đặt: Hiển thị lời › Cửa sổ lời › Hành vi › Hiện điều khiển khi di chuột
 - Cài đặt: Hiển thị lời › Thanh menu › Hành vi › Hiện điều khiển khi di chuột
 
 <a id="feature-hide-in-screenshots"></a>
@@ -964,7 +967,7 @@ Tối đa một lần mỗi ngày, Lyrimuse gửi phiên bản, macOS, các tín
 
 ## Toàn bộ cài đặt
 
-Toàn bộ mục trong cửa sổ Cài đặt, theo vị trí: tổng cộng 346 mục. Gõ tên vào ô tìm kiếm ở đầu thanh bên của Cài đặt để đi thẳng tới mục đó.
+Toàn bộ mục trong cửa sổ Cài đặt, theo vị trí: tổng cộng 349 mục. Gõ tên vào ô tìm kiếm ở đầu thanh bên của Cài đặt để đi thẳng tới mục đó.
 
 ### Lời bài hát › Nguồn
 
@@ -1134,6 +1137,11 @@ Toàn bộ mục trong cửa sổ Cài đặt, theo vị trí: tổng cộng 346
 - **Sóng âm**: Mỗi lúc chỉ hiện ở một bên
 - **Hai tai rộng bằng nhau**: Dùng chung cho cả hai tai
 - **Nhảy theo nhạc**: Nhảy theo âm thanh đang phát từ trình phát, cần cho phép ghi âm thanh hệ thống; chỉ đọc âm lượng, không lưu âm thanh
+
+### Hiển thị lời › Notch › Chiều rộng
+
+- **Độ rộng tai trái**
+- **Độ rộng tai phải**
 
 ### Hiển thị lời › Notch › Dòng lời
 
@@ -1307,6 +1315,7 @@ Toàn bộ mục trong cửa sổ Cài đặt, theo vị trí: tổng cộng 346
 
 ### Hiển thị lời › Cửa sổ lời › Hành vi
 
+- **Hiện điều khiển khi di chuột** (chỉ Mini)
 - **Làm mờ khi di chuột qua** (chỉ Mini)
 - **Bấm xuyên qua khi mờ** (chỉ Mini): Khi mờ, thao tác bấm sẽ xuyên qua tới cửa sổ bên dưới. Giữ ⌥ để hiện rõ lại và thao tác
 - **Ẩn khi chụp màn hình** (chỉ Mini)

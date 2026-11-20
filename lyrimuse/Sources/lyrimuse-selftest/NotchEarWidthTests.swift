@@ -246,6 +246,14 @@ func runNotchEarWidthTests() {
     expectEqual(sourceHas(rows, "Toggle(\"\", isOn: Binding(\nget: { settings.notchEarWidthsLinked },\nset: { NotchEditorStage.setEarWidthsLinked($0) }))")
                 && sourceHas(rows, "if !settings.notchEarWidthsLinked {\nCardDivider()\nwidthRow\n}"),
                 true, "两耳不等宽(契约): 左右耳浮层有等宽开关,关掉后才出现宽度行")
+    // 浮层和「全部设置」抽屉「宽度」组共用一份宽度行:读真实外露宽、区间按这一侧下限、落盘只走 commitEarWidths。
+    let earWidthRow = sourceBody("struct NotchEarWidthRow: View {", in: rows)
+    expectEqual(sourceHas(earWidthRow, "let range = NotchEditorStage.earUsableRange(side)")
+                && sourceHas(earWidthRow, "NotchEditorStage.splitSteadyOnCurrentScreen().map { side == .left ? $0.span.left : $0.span.right }")
+                && sourceHas(earWidthRow, "NotchEditorStage.commitEarWidths(left: side == .left ? value : nil, right: side == .right ? value : nil)")
+                && sourceHas(earWidthRow, ".frame(width: sliderWidth)")
+                && sourceHas(sourceBody("struct NotchEarWidthsLinkedRow: View {", in: rows), "set: { NotchEditorStage.setEarWidthsLinked($0) }"),
+                true, "两耳不等宽(契约): 浮层与抽屉共用的等宽开关 / 宽度行走同一组静态入口")
 
     // MARK: 浮层里「标签 + 玻璃下拉」一行放得下(各界面语言)
 

@@ -305,6 +305,8 @@ Ekranın üstünde, çentiğin yanında Dynamic Island tarzında bir kapsül; ç
 - Ayarlar: Şarkı Sözü Görünümü › Çentik › Ekran
 - Ayarlar: Şarkı Sözü Görünümü › Çentik › Sol Kulak
 - Ayarlar: Şarkı Sözü Görünümü › Çentik › Sol Kulak › Eşit Kulak Genişliği
+- Ayarlar: Şarkı Sözü Görünümü › Çentik › Genişlik › Sol Kulak Genişliği
+- Ayarlar: Şarkı Sözü Görünümü › Çentik › Genişlik › Sağ Kulak Genişliği
 - Ayarlar: Şarkı Sözü Görünümü › Çentik › Şarkı Sözü Satırı › Daraltıldığında Sözleri Göster
 - Ayarlar: Klavye Kestirmeleri › Çentik Sözlerini Göster/Gizle
 - Ayarlar: Klavye Kestirmeleri › Çentiği Geçici Olarak Genişlet
@@ -494,6 +496,7 @@ Yüzen sözlerin üzerine gelince bir sıra hızlı düğme belirir. Menü çubu
 
 - Saptanmış olarak açık
 - Ayarlar: Şarkı Sözü Görünümü › Yüzen Sözler › Davranış › Üzerine Gelince Denetimleri Göster
+- Ayarlar: Şarkı Sözü Görünümü › Şarkı Sözü Penceresi › Davranış › Üzerine Gelince Denetimleri Göster
 - Ayarlar: Şarkı Sözü Görünümü › Menü Çubuğu › Davranış › Üzerine Gelince Denetimleri Göster
 
 <a id="feature-hide-in-screenshots"></a>
@@ -964,7 +967,7 @@ Neyin önce düzeltileceğine karar vermek için günde en fazla bir kez sürüm
 
 ## Tüm Ayarlar
 
-Ayarlar penceresindeki tüm ayarlar, konumlarına göre; toplam: 346. Bir ayara hemen gitmek için adını kenar çubuğunun üstündeki arama alanına yazın.
+Ayarlar penceresindeki tüm ayarlar, konumlarına göre; toplam: 349. Bir ayara hemen gitmek için adını kenar çubuğunun üstündeki arama alanına yazın.
 
 ### Şarkı Sözleri › Kaynak
 
@@ -1134,6 +1137,11 @@ Ayarlar penceresindeki tüm ayarlar, konumlarına göre; toplam: 346. Bir ayara 
 - **Ses Dalgası**: Aynı anda yalnızca bir tarafta gösterilir
 - **Eşit Kulak Genişliği**: İki kulak için ortaktır
 - **Müzikle Hareket Et**: Çalardan gelen sese göre hareket eder; Lyrimuse’un sistem sesini kaydetmesine izin vermeniz gerekir. Yalnızca ses düzeyi okunur, ses kaydedilmez
+
+### Şarkı Sözü Görünümü › Çentik › Genişlik
+
+- **Sol Kulak Genişliği**
+- **Sağ Kulak Genişliği**
 
 ### Şarkı Sözü Görünümü › Çentik › Şarkı Sözü Satırı
 
@@ -1307,6 +1315,7 @@ Ayarlar penceresindeki tüm ayarlar, konumlarına göre; toplam: 346. Bir ayara 
 
 ### Şarkı Sözü Görünümü › Şarkı Sözü Penceresi › Davranış
 
+- **Üzerine Gelince Denetimleri Göster** (yalnızca Mini)
 - **Üzerine Gelince Soldur** (yalnızca Mini)
 - **Soluklaşınca Tıklamaları Geçir** (yalnızca Mini): Soluklaştığında tıklamalar alttaki pencereye geçer. Opak yapıp etkileşim kurmak için ⌥ tuşunu basılı tutun
 - **Ekran Resimlerinde Gizle** (yalnızca Mini)

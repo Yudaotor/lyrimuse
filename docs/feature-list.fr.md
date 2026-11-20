@@ -305,6 +305,8 @@ Une capsule façon Dynamic Island près de l’encoche, en haut de l’écran ;
 - Réglages : Affichage des paroles › Encoche › Écran
 - Réglages : Affichage des paroles › Encoche › Gauche
 - Réglages : Affichage des paroles › Encoche › Gauche › Largeur symétrique
+- Réglages : Affichage des paroles › Encoche › Largeur › Largeur gauche
+- Réglages : Affichage des paroles › Encoche › Largeur › Largeur droite
 - Réglages : Affichage des paroles › Encoche › Ligne de paroles › Paroles en mode réduit
 - Réglages : Raccourcis clavier › Afficher/masquer les paroles de l’encoche
 - Réglages : Raccourcis clavier › Développer l’encoche un instant
@@ -494,6 +496,7 @@ Pointer les paroles flottantes fait apparaître une rangée de boutons rapides. 
 
 - Activée par défaut
 - Réglages : Affichage des paroles › Paroles flottantes › Comportement › Commandes au survol
+- Réglages : Affichage des paroles › Fenêtre des paroles › Comportement › Commandes au survol
 - Réglages : Affichage des paroles › Barre des menus › Comportement › Commandes au survol
 
 <a id="feature-hide-in-screenshots"></a>
@@ -964,7 +967,7 @@ Au plus une fois par jour, envoie la version, macOS, les fonctions activées et 
 
 ## Tous les réglages
 
-Tous les réglages de la fenêtre Réglages, classés par emplacement : 346 au total. Tapez un nom dans le champ de recherche en haut de la barre latérale des Réglages pour y aller directement.
+Tous les réglages de la fenêtre Réglages, classés par emplacement : 349 au total. Tapez un nom dans le champ de recherche en haut de la barre latérale des Réglages pour y aller directement.
 
 ### Paroles › Source
 
@@ -1134,6 +1137,11 @@ Tous les réglages de la fenêtre Réglages, classés par emplacement : 346 au 
 - **Onde audio** : Un seul côté à la fois
 - **Largeur symétrique** : Commun aux deux côtés
 - **Suivre la musique** : Suit le son du lecteur et nécessite l’autorisation d’enregistrer l’audio du système ; seul le volume est lu, aucun son n’est enregistré
+
+### Affichage des paroles › Encoche › Largeur
+
+- **Largeur gauche**
+- **Largeur droite**
 
 ### Affichage des paroles › Encoche › Ligne de paroles
 
@@ -1307,6 +1315,7 @@ Tous les réglages de la fenêtre Réglages, classés par emplacement : 346 au 
 
 ### Affichage des paroles › Fenêtre des paroles › Comportement
 
+- **Commandes au survol** (taille mini uniquement)
 - **Estomper au survol** (taille mini uniquement)
 - **Clics traversants si estompé** (taille mini uniquement) : Une fois estompé, les clics passent à la fenêtre du dessous. Maintenez ⌥ pour le rendre opaque et interagir
 - **Masquer dans les captures** (taille mini uniquement)

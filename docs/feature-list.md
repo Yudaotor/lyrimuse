@@ -305,6 +305,8 @@ A Dynamic Island-style capsule beside the notch at the top of the screen; Macs w
 - Settings: Lyrics Display › Notch › Display
 - Settings: Lyrics Display › Notch › Left Ear
 - Settings: Lyrics Display › Notch › Left Ear › Equal Ear Widths
+- Settings: Lyrics Display › Notch › Width › Left Ear Width
+- Settings: Lyrics Display › Notch › Width › Right Ear Width
 - Settings: Lyrics Display › Notch › Lyric Row › Show Lyrics When Collapsed
 - Settings: Keyboard Shortcuts › Show/Hide Notch Lyrics
 - Settings: Keyboard Shortcuts › Peek at Notch Lyrics
@@ -494,6 +496,7 @@ Pointing at floating lyrics brings up a row of quick buttons. Menu bar lyrics ca
 
 - On by default
 - Settings: Lyrics Display › Floating Lyrics › Behavior › Show Controls on Hover
+- Settings: Lyrics Display › Lyrics Window › Behavior › Show Controls on Hover
 - Settings: Lyrics Display › Menu Bar › Behavior › Show Controls on Hover
 
 <a id="feature-hide-in-screenshots"></a>
@@ -964,7 +967,7 @@ At most once a day, sends the version, macOS, which features are on and crash su
 
 ## Every setting
 
-Every setting in the Settings window, by where it lives: 346 in all. Type a name into the search field at the top of the Settings sidebar to jump straight to it.
+Every setting in the Settings window, by where it lives: 349 in all. Type a name into the search field at the top of the Settings sidebar to jump straight to it.
 
 ### Lyrics › Source
 
@@ -1134,6 +1137,11 @@ Every setting in the Settings window, by where it lives: 346 in all. Type a name
 - **Audio Wave**: Shows on one side at a time
 - **Equal Ear Widths**: Shared by both ears
 - **Move with the Music**: Follows the sound from the player and needs permission to record system audio; only the volume is read, no audio is saved
+
+### Lyrics Display › Notch › Width
+
+- **Left Ear Width**
+- **Right Ear Width**
 
 ### Lyrics Display › Notch › Lyric Row
 
@@ -1307,6 +1315,7 @@ Every setting in the Settings window, by where it lives: 346 in all. Type a name
 
 ### Lyrics Display › Lyrics Window › Behavior
 
+- **Show Controls on Hover** (mini size only)
 - **Fade on Hover** (mini size only)
 - **Click Through While Faded** (mini size only): While faded, clicks pass through to the window below. Hold ⌥ to make it opaque and interact with it
 - **Hide in Screenshots** (mini size only)

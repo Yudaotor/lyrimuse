@@ -305,6 +305,8 @@ Uma cápsula no estilo Dynamic Island ao lado do notch, no topo da tela; Macs se
 - Ajustes: Exibição da letra › Notch › Tela
 - Ajustes: Exibição da letra › Notch › Ouvido esquerdo
 - Ajustes: Exibição da letra › Notch › Ouvido esquerdo › Largura simétrica
+- Ajustes: Exibição da letra › Notch › Largura › Largura do ouvido esquerdo
+- Ajustes: Exibição da letra › Notch › Largura › Largura do ouvido direito
 - Ajustes: Exibição da letra › Notch › Linha da letra › Letra no modo recolhido
 - Ajustes: Atalhos de teclado › Mostrar/ocultar letra no notch
 - Ajustes: Atalhos de teclado › Espiar a letra no notch
@@ -494,6 +496,7 @@ Apontar para a letra flutuante mostra uma fileira de botões rápidos. A letra n
 
 - Ativado por padrão
 - Ajustes: Exibição da letra › Letra flutuante › Comportamento › Mostrar controles ao passar o ponteiro
+- Ajustes: Exibição da letra › Janela da letra › Comportamento › Mostrar controles ao passar o ponteiro
 - Ajustes: Exibição da letra › Barra de menus › Comportamento › Mostrar controles ao passar o ponteiro
 
 <a id="feature-hide-in-screenshots"></a>
@@ -964,7 +967,7 @@ No máximo uma vez por dia, envia a versão, o macOS, quais recursos estão ativ
 
 ## Todos os ajustes
 
-Todos os ajustes da janela Ajustes, por local: 346 no total. Digite um nome no campo de busca no topo da barra lateral dos Ajustes para ir direto até ele.
+Todos os ajustes da janela Ajustes, por local: 349 no total. Digite um nome no campo de busca no topo da barra lateral dos Ajustes para ir direto até ele.
 
 ### Letra › Origem
 
@@ -1134,6 +1137,11 @@ Todos os ajustes da janela Ajustes, por local: 346 no total. Digite um nome no c
 - **Onda sonora**: Aparece em um lado por vez
 - **Largura simétrica**: Compartilhado pelos dois ouvidos
 - **Acompanhar a música**: Acompanha o som do player e precisa de permissão para gravar o áudio do sistema; só o volume é lido e nenhum áudio é salvo
+
+### Exibição da letra › Notch › Largura
+
+- **Largura do ouvido esquerdo**
+- **Largura do ouvido direito**
 
 ### Exibição da letra › Notch › Linha da letra
 
@@ -1307,6 +1315,7 @@ Todos os ajustes da janela Ajustes, por local: 346 no total. Digite um nome no c
 
 ### Exibição da letra › Janela da letra › Comportamento
 
+- **Mostrar controles ao passar o ponteiro** (só Mini)
 - **Esmaecer ao passar o ponteiro** (só Mini)
 - **Cliques passam ao esmaecer** (só Mini): Enquanto a janela está esmaecida, os cliques passam para a de baixo. Mantenha ⌥ pressionada para deixá-la opaca e interagir
 - **Ocultar em capturas de tela** (só Mini)

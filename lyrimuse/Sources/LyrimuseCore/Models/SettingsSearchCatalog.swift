@@ -118,7 +118,7 @@ public enum SettingsSearchCatalog {
     /// 「歌词窗口」那一段只在迷你预览下才有的行(按标题):完整尺寸那一套外观行不传字号、长句处理、歌词布局这些绑定,
     /// 「行为」「顶部信息」两组也只在迷你装配。设置页加了这类行要来这里登记。
     public static let lyricsWindowMiniOnlyTitles: Set<String> = [
-        "字号", "歌词布局", "长句处理", "悬停时淡化", "淡化时点按穿透", "截屏时隐藏", "暂停时隐藏",
+        "字号", "歌词布局", "长句处理", "悬停显示播放控制", "悬停时淡化", "淡化时点按穿透", "截屏时隐藏", "暂停时隐藏",
         "纯音乐/无歌词时隐藏", "广告时隐藏", "全屏时隐藏", "歌名", "歌手", "专辑", "封面", "时间", "宽度", "高度", "进度条",
     ]
     /// 只在完整预览下才有的行:「封面」那一组(含「动态封面」下面的「来源」)、「布局」里的对齐方式、控件大小和三格间距、
@@ -196,6 +196,9 @@ public enum SettingsSearchCatalog {
             RowGate(notch, "行数", "notch.lyricList", "多行歌词"),
             // 「跟随音乐跳动」的入口是音浪那一行开关左边的按钮,音浪关着时按钮不在(05 章决策 147)。
             RowGate(notch, "跟随音乐跳动", "notch.equalizer", "音浪"),
+            // 「全部设置」抽屉「宽度」组:关掉「两耳等宽」才有左右耳各一根滑杆。
+            RowGate(notch, "左耳宽度", "notch.earWidthsSplit", "两耳等宽"),
+            RowGate(notch, "右耳宽度", "notch.earWidthsSplit", "两耳等宽"),
             RowGate(overlay, "未唱颜色", "overlay.karaoke", "卡拉OK效果"),
             RowGate(overlay, "未唱颜色", "overlay.notRainbow", "文字颜色"),
             RowGate(overlay, "描边颜色", "overlay.stroke", "文字描边"),
@@ -516,6 +519,8 @@ public enum SettingsSearchCatalog {
                 sub: "按播放器正在播放的声音跳动，需允许 Lyrimuse 录制系统音频；只读取音量，不保存声音",
                 kw: ["音浪", "频谱", "真实音频", "节奏", "鼓点", "系统录音"], group: "左耳"),
         surface(.notch, "宽度", kw: ["稳态宽", "pt"]),
+        surface(.notch, "左耳宽度", kw: ["宽度", "两耳等宽", "不等宽", "外露宽", "pt"], group: "宽度"),
+        surface(.notch, "右耳宽度", kw: ["宽度", "两耳等宽", "不等宽", "外露宽", "pt"], group: "宽度"),
         surface(.notch, "展开宽度", kw: ["展开态", "pt"]),
         surface(.notch, "收起时显示歌词", kw: ["显示歌词", "歌词行", "状态条", "顶行", "两耳之间"], group: "歌词行"),
         surface(.notch, "对齐方式", kw: ["居中", "左对齐", "右对齐"], group: "歌词行"),
@@ -639,6 +644,8 @@ public enum SettingsSearchCatalog {
                      kw: ["单行", "双行", "多行", "一行", "两行", "当前句", "下一句", "列表", "行数", "简洁", "迷你", "布局"],
                      group: "布局"),
         // 跟悬浮歌词那条「悬浮淡化」同名、不同段,各自跳到自己那一段。
+        // 跟悬浮歌词那条同名、不同段;迷你窗右上角那颗开关的兜底入口。
+        lyricsWindow("悬停显示播放控制", kw: ["播放控制", "控制条", "播控", "悬停", "鼠标", "迷你"], group: "行为"),
         lyricsWindow("悬停时淡化", kw: ["透明", "半透明", "淡出", "让开", "悬停", "鼠标", "指针", "迷你"], group: "行为"),
         lyricsWindow("淡化时点按穿透", sub: "淡化时点按将穿透到下层窗口；按住 ⌥ 可恢复不透明并进行操作",
                      kw: ["穿透", "点击穿透", "透明", "点不到", "下面的窗口", "option", "迷你"], group: "行为"),

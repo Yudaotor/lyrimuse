@@ -475,6 +475,12 @@ func runSettingsSearchTests() {
         let notchEar = ["歌词显示", "灵动岛", "左耳"]
         expectEqual([gate(notchEar, "跟随音乐跳动", false: ["notch.equalizer"]), gate(notchEar, "跟随音乐跳动", false: [])],
                     ["音浪", nil], "搜索门: 音浪关着时「跟随音乐跳动」落到「音浪」(开着时由那一行自己点亮)")
+        let notchWidth = ["歌词显示", "灵动岛", "宽度"]
+        expectEqual([gate(notchWidth, "左耳宽度", false: ["notch.earWidthsSplit"]), gate(notchWidth, "右耳宽度", false: ["notch.earWidthsSplit"]),
+                     gate(notchWidth, "左耳宽度", false: [])],
+                    ["两耳等宽", "两耳等宽", nil], "搜索门: 两耳等宽开着时左右耳宽度落到「两耳等宽」")
+        expectEqual(sourceHas(source("Settings/SettingsSearch.swift"), "case \"notch.earWidthsSplit\": return !s.notchEarWidthsLinked"), true,
+                    "搜索门(契约): 左右耳宽度的门读两耳等宽开关")
         expectEqual(sourceHas(source("Settings/SettingsSearch.swift"), "case \"notch.equalizer\": return s.notchShowsEqualizer && RealAudioMeter.isSupported")
                         && sourceHas(source("UI/NotchSettingsRows.swift"), "private var showsFollowsAudioButton: Bool { showsEqualizerHere && RealAudioMeter.isSupported }"), true,
                     "搜索门(契约): 「跟随音乐跳动」的门跟按钮一样看系统支不支持")

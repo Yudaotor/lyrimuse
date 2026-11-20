@@ -305,6 +305,8 @@ Una capsula in stile Dynamic Island accanto al notch, in alto sullo schermo; ce 
 - Impostazioni: Visualizzazione testo › Notch › Schermo
 - Impostazioni: Visualizzazione testo › Notch › Sinistra
 - Impostazioni: Visualizzazione testo › Notch › Sinistra › Larghezza simmetrica
+- Impostazioni: Visualizzazione testo › Notch › Larghezza › Larghezza sinistra
+- Impostazioni: Visualizzazione testo › Notch › Larghezza › Larghezza destra
 - Impostazioni: Visualizzazione testo › Notch › Riga del testo › Mostra testo se compresso
 - Impostazioni: Scorciatoie da tastiera › Mostra/nascondi testo nel notch
 - Impostazioni: Scorciatoie da tastiera › Espandi il notch per un attimo
@@ -494,6 +496,7 @@ Quando punti il testo fluttuante compare una fila di pulsanti rapidi. Anche il t
 
 - Attiva di default
 - Impostazioni: Visualizzazione testo › Testo fluttuante › Comportamento › Mostra controlli al passaggio
+- Impostazioni: Visualizzazione testo › Finestra testo › Comportamento › Controlli al passaggio del mouse
 - Impostazioni: Visualizzazione testo › Barra dei menu › Comportamento › Mostra controlli al passaggio
 
 <a id="feature-hide-in-screenshots"></a>
@@ -964,7 +967,7 @@ Al massimo una volta al giorno invia versione, macOS, funzioni attive e riepilog
 
 ## Tutte le impostazioni
 
-Tutte le impostazioni della finestra Impostazioni, per posizione: 346 in tutto. Scrivi un nome nel campo di ricerca in cima alla barra laterale delle Impostazioni per andarci direttamente.
+Tutte le impostazioni della finestra Impostazioni, per posizione: 349 in tutto. Scrivi un nome nel campo di ricerca in cima alla barra laterale delle Impostazioni per andarci direttamente.
 
 ### Testo › Fonte
 
@@ -1134,6 +1137,11 @@ Tutte le impostazioni della finestra Impostazioni, per posizione: 346 in tutto. 
 - **Onda audio**: Appare su un lato alla volta
 - **Larghezza simmetrica**: Comune a entrambi i lati
 - **Segui la musica**: Segue il suono del player e richiede il permesso di registrare l’audio di sistema; legge solo il volume e non salva alcun audio
+
+### Visualizzazione testo › Notch › Larghezza
+
+- **Larghezza sinistra**
+- **Larghezza destra**
 
 ### Visualizzazione testo › Notch › Riga del testo
 
@@ -1307,6 +1315,7 @@ Tutte le impostazioni della finestra Impostazioni, per posizione: 346 in tutto. 
 
 ### Visualizzazione testo › Finestra testo › Comportamento
 
+- **Controlli al passaggio del mouse** (solo Mini)
 - **Sfuma al passaggio del mouse** (solo Mini)
 - **Clic passante se sfumato** (solo Mini): Quando è sfumato, i clic passano alla finestra sottostante. Tieni premuto ⌥ per renderlo opaco e interagire
 - **Nascondi negli screenshot** (solo Mini)

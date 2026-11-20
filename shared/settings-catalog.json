@@ -936,6 +936,24 @@
       "dest" : "tab:appearance",
       "path" : [
         "歌词显示",
+        "灵动岛",
+        "宽度"
+      ],
+      "title" : "左耳宽度"
+    },
+    {
+      "dest" : "tab:appearance",
+      "path" : [
+        "歌词显示",
+        "灵动岛",
+        "宽度"
+      ],
+      "title" : "右耳宽度"
+    },
+    {
+      "dest" : "tab:appearance",
+      "path" : [
+        "歌词显示",
         "灵动岛"
       ],
       "title" : "展开宽度"
@@ -1784,6 +1802,16 @@
       ],
       "subtitle" : "迷你尺寸仅显示当前句、显示当前句与下一句，或与完整尺寸相同整页滚动",
       "title" : "歌词布局"
+    },
+    {
+      "dest" : "tab:appearance",
+      "lyricsWindowMini" : true,
+      "path" : [
+        "歌词显示",
+        "歌词窗口",
+        "行为"
+      ],
+      "title" : "悬停显示播放控制"
     },
     {
       "dest" : "tab:appearance",

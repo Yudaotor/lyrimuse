@@ -4235,7 +4235,8 @@ func runSourceContractSettingsTests() {
                     "抽屉镜像(悬浮歌词): 舞台上的宽度条在抽屉里有「宽度」一行(同一个区间)")
 
         // 灵动岛:popoverContent(for:) 的每个 case 是一个 NotchXxxPopover,它的 body 里是一份行视图;
-        // 左右耳是同一份行视图带 side 参数,抽屉里两边都要有。
+        // 左右耳是同一份行视图带 side 参数,抽屉里两边都要有。抽屉里左右耳带 `includesWidthRows: false`:浮层多出的
+        // 「两耳等宽」和宽度两行由抽屉「宽度」组承接,下面逐项证明被拿掉的正好是这两行、「宽度」组装的是同一份行视图。
         let notchStageCases = enumCases("private enum StagePopover: Equatable {", in: notchStage)
         let notchCases = captures(#"case \.(\w+): (Notch\w+Popover)\((.*)$"#,
                                   in: sourceBody("private func popoverContent(for target: StagePopover) -> some View {", in: notchStage))
@@ -4245,6 +4246,7 @@ func runSourceContractSettingsTests() {
         let notchDrawerStruct = sourceBody("private struct NotchAllSettingsDrawer: View {", in: settingsView)
         let notchDrawer = sourceBody("var body: some View {", in: notchDrawerStruct)
         var notchMissing: [String] = []
+        var notchHandedOver: [String] = []
         for c in notchCases {
             let popover = sourceBody("struct \(c[1]): View {", in: notchStage + "\n" + settingsView)
             guard let rows = captures(#"(Notch\w+SettingsRows)\("#, in: popover).first?[0] else {
@@ -4252,9 +4254,32 @@ func runSourceContractSettingsTests() {
                 continue
             }
             let call = captures(#"side: \.(\w+)"#, in: c[2]).first.map { "\(rows)(side: .\($0[0]))" } ?? "\(rows)("
-            if !notchDrawer.contains(call) { notchMissing.append(call) }
+            let handedOver = call.hasSuffix(")") ? String(call.dropLast()) + ", includesWidthRows: false)" : nil
+            if let handedOver, notchDrawer.contains(handedOver) {
+                notchHandedOver.append(handedOver)
+            } else if !notchDrawer.contains(call) {
+                notchMissing.append(call)
+            }
         }
         expectEqual(notchMissing, [], "抽屉镜像(灵动岛): 浮层里的行视图抽屉都要装配")
+        expectEqual(notchHandedOver.sorted(),
+                    ["NotchEarSettingsRows(side: .left, includesWidthRows: false)", "NotchEarSettingsRows(side: .right, includesWidthRows: false)"],
+                    "抽屉镜像(灵动岛): 只有左右耳把宽度那两行交给「宽度」组")
+        // 被拿掉的正好是「两耳等宽」和宽度两行(整块包在 includesWidthRows 里,别的行不许进这块),两行各是一份独立行视图。
+        let earRows = sourceBody("struct NotchEarSettingsRows: View {", in: notchStage)
+        expectEqual(sourceHas(earRows, "var includesWidthRows = true")
+                    && sourceHas(earRows, "if includesWidthRows {\nCardDivider()\nlinkedRow\nif !settings.notchEarWidthsLinked {\nCardDivider()\nwidthRow\n}\n}")
+                    && sourceHas(earRows, "private var linkedRow: some View { NotchEarWidthsLinkedRow() }")
+                    && sourceHas(sourceBody("private var widthRow: some View {", in: earRows), "NotchEarWidthRow(side: side,"),
+                    true, "抽屉镜像(灵动岛): 左右耳交出去的只有「两耳等宽」和宽度两行,两行是 NotchEarWidthsLinkedRow / NotchEarWidthRow")
+        // 「宽度」组装同一份:开关常驻,关掉等宽时宽度那一行换成左右耳各一根。
+        let notchWidthCard = sourceBody("SettingsGroupCard(title: L10n.t(\"宽度\")) {", in: notchDrawer)
+        let notchDrawerWidthRow = sourceBody("private var widthRow: some View {", in: notchDrawerStruct)
+        expectEqual(sourceHas(notchWidthCard, "NotchEarWidthsLinkedRow()\nCardDivider()\nwidthRow")
+                    && sourceHas(notchDrawerWidthRow, "if settings.notchEarWidthsLinked {")
+                    && sourceHas(notchDrawerWidthRow, "} else {\nNotchEarWidthRow(side: .left, title: L10n.t(\"左耳宽度\"), sliderWidth: 150)\nCardDivider()\nNotchEarWidthRow(side: .right, title: L10n.t(\"右耳宽度\"), sliderWidth: 150)\n}")
+                    && !notchDrawerStruct.contains("earWidthsReadout"),
+                    true, "抽屉镜像(灵动岛): 「宽度」组有「两耳等宽」,分开时左右耳宽度各一根可拖的滑杆,不再只报读数")
         expectEqual(captures(#"^\s*(widthRow|expandedWidthRow)\s*$"#, in: notchDrawer).map { $0[0] }.sorted(),
                     ["expandedWidthRow", "widthRow"],
                     "抽屉镜像(灵动岛): 舞台上双滑块宽度条的两只滑块,抽屉里各装配一行")
@@ -4307,6 +4332,93 @@ func runSourceContractSettingsTests() {
         let touchBarDrawer = sourceBody("var body: some View {", in: sourceBody("struct TouchBarAllSettingsDrawer: View {", in: touchBarFile))
         expectEqual(touchBarPopovers.map { $0[1] }.filter { !touchBarDrawer.contains("\($0)()") }, [],
                     "抽屉镜像(触控栏): 浮层里的行视图抽屉都要装配")
+    }
+
+    // ---- 设置窗口是全部配置的兜底入口(14 章决策 239) ----
+    //
+    // 设置窗口外面能改配置的地方(菜单栏面板与快捷设置、状态菜单、各窗口里的按钮和右键菜单、快捷指令、网页歌词、引导页),
+    // 改的每一个 AppSettings 键,设置窗口里都得有写它的控件:「歌词显示」四段落在各自的「全部设置」抽屉(抽屉镜像那条守着
+    // 浮层 → 抽屉),别的页就是那一页本身。只在窗口里能切、设置页找不到的配置,键盘 / VoiceOver 用户和忘了按钮在哪的人都没法改。
+    // 新开一处能改配置的界面,把文件加进 surfaces;刻意不进设置窗口的键写进 exempt 并写明理由。
+    do {
+        let appDir = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("lyrimuse")
+        func code(_ rel: String) -> String? {
+            guard let text = try? String(contentsOf: appDir.appendingPathComponent(rel), encoding: .utf8) else { return nil }
+            return text.split(separator: "\n", omittingEmptySubsequences: false)
+                .filter { !$0.trimmingCharacters(in: .whitespaces).hasPrefix("//") }
+                .joined(separator: "\n")
+        }
+        func matches(_ pattern: String, in text: String) -> [String] {
+            guard let re = try? NSRegularExpression(pattern: pattern) else { return [] }
+            let ns = text as NSString
+            return re.matches(in: text, range: NSRange(location: 0, length: ns.length)).map { ns.substring(with: $0.range(at: 1)) }
+        }
+        let surfaces = [
+            "MenuBar/MenuBarPanel.swift", "MenuBar/MenuBarPanelQuickSettings.swift", "MenuBar/MenuBarStatusMenu.swift",
+            "Settings/LyrimuseActionRunner.swift", "TouchBar/TouchBarLyricsController.swift",
+            "UI/LyricsOverlayWindowController.swift", "UI/OverlayQuickSettingsMenu.swift", "UI/LyricsWindowView.swift",
+            "UI/NotchLyricsWindowController.swift", "UI/NotchLyricsView+Expanded.swift",
+            "WebLyrics/WebLyricsScreen.swift", "OnboardingView.swift",
+        ]
+        // 不算设置窗口的:模型本身、调试深链。
+        let notSettingsWindow: Set<String> = [
+            "Settings/AppSettings.swift", "Settings/AppSettings+Telemetry.swift", "Settings/AppSettingsMirror.swift",
+            "Settings/DebugDeepLinks.swift",
+        ]
+        let exempt: [String: String] = [
+            "classicOverlayEnabled": "总开关只经 LyricsOverlayWindowController.setVisible 落盘,设置页那张开关卡调的就是它",
+            "notchOverlayEnabled": "总开关只经 NotchLyricsWindowController.setVisible 落盘,设置页那张开关卡调的就是它",
+            "hasCompletedOnboarding": "引导走没走完的标记,不是配置",
+            "menuBarPanelLayout": "面板格子的排法在面板自己的编辑模式里拖,设置窗口没有面板这个形态",
+        ]
+        let settingsText = code("Settings/AppSettings.swift") ?? ""
+        let keys = Set(matches(#"@Published (?:private\(set\) )?var (\w+)"#, in: settingsText))
+        // AppSettings 里带 set 的组合属性(如 lyricsWindowListTuning):写它就是写它 set 里赋值的那几个键。
+        var composite: [String: Set<String>] = [:]
+        for name in matches(#"\n    var (\w+): [^{\n]+\{\n\s*get \{"#, in: settingsText) {
+            let setter = sourceBody("set {", in: sourceBody("var \(name):", in: settingsText))
+            let written = Set(matches(#"(\w+) = "#, in: setter)).intersection(keys)
+            if !written.isEmpty { composite[name] = written }
+        }
+        let direct = [#"AppSettings\.shared\.(\w+)\s*(?:=(?!=)|\.toggle\()"#, #"\bsettings\.(\w+)\s*(?:=(?!=)|\.toggle\()"#,
+                      #"\$settings\.(\w+)"#, #"\bs\.(\w+)\s*(?:=(?!=)|\.toggle\()"#]
+        func writes(_ text: String, keyPaths: Bool) -> Set<String> {
+            var out = Set(direct.flatMap { matches($0, in: text) })
+            if keyPaths { out.formUnion(matches(#"\\(?:AppSettings)?\.(\w+)"#, in: text)) }
+            for (name, written) in composite where text.range(of: #"\.\#(name)\b[^\n=]*=(?!=)"#, options: .regularExpression) != nil {
+                out.formUnion(written)
+            }
+            return out.intersection(keys)
+        }
+        var outside: [String: [String]] = [:]
+        var unreadable: [String] = []
+        for rel in surfaces {
+            guard let text = code(rel) else { unreadable.append(rel); continue }
+            for key in writes(text, keyPaths: false) { outside[key, default: []].append(rel) }
+        }
+        var inside = Set<String>()
+        let enumerator = FileManager.default.enumerator(at: appDir, includingPropertiesForKeys: nil)
+        while let url = enumerator?.nextObject() as? URL {
+            guard url.pathExtension == "swift" else { continue }
+            let rel = String(url.path.dropFirst(appDir.path.count + 1))
+            guard !surfaces.contains(rel), !notSettingsWindow.contains(rel), var text = code(rel) else { continue }
+            // 「恢复默认」只把键写回默认值,不算能调。
+            while let hit = text.range(of: #"static func restore(?:Defaults|TextAndColors)\("#, options: .regularExpression) {
+                let body = sourceBody(String(text[hit]), in: text)
+                guard !body.isEmpty else { break }
+                text = text.replacingOccurrences(of: body, with: "")
+            }
+            inside.formUnion(writes(text, keyPaths: true))
+        }
+        expectEqual(unreadable, [], "设置窗口兜底: 外面那几处界面的文件都读得到(读不到 = 挪了,改 surfaces)")
+        expectEqual(keys.count > 200 && outside.count > 30 && composite["lyricsWindowListTuning"]?.contains("lyricsWindowFontScalePercent") == true,
+                    true, "设置窗口兜底: 认得出设置键、外面的写入点和组合属性(认不出 = 写法变了,先改这里的正则)")
+        let missing = outside.keys.filter { !inside.contains($0) && exempt[$0] == nil }.sorted()
+            .map { "\($0) @ \(outside[$0]!.sorted().joined(separator: ","))" }
+        expectEqual(missing, [], "设置窗口兜底: 设置窗口外能改的配置,设置窗口里都要有写它的控件(「歌词显示」四段在「全部设置」抽屉)")
+        expectEqual(exempt.keys.filter { outside[$0] == nil || inside.contains($0) }.sorted(), [],
+                    "设置窗口兜底: 豁免名单里的键都还只在外面写(进了设置窗口就从名单里删掉)")
     }
 
     // ---- 编辑台工具栏第二行的对齐占位(菜单栏)与按内容分宽(灵动岛) ----

@@ -3325,6 +3325,7 @@ private struct AppearanceSettingsTab: View {
             return EditorToolbarButtonLabel(
                 icon: "switch.2", title: L10n.t("行为"),
                 summary: SettingsToggleSummary.text([
+                    (title: L10n.t("悬停显示播放控制"), isOn: settings.lyricsWindowMiniShowsControls),
                     (title: L10n.t("悬停时淡化"), isOn: settings.lyricsWindowMiniFadeOnHover),
                     (title: L10n.t("截屏时隐藏"), isOn: settings.lyricsWindowMiniHideDuringScreenCapture),
                     (title: L10n.t("暂停时隐藏"), isOn: settings.lyricsWindowMiniHideWhenNotPlaying),
@@ -3465,10 +3466,15 @@ private struct AppearanceSettingsTab: View {
     /// 「行为」那几行(工具栏浮层与抽屉同一份),只有迷你有(07 章决策 118、142、209)。标题、图标跟悬浮歌词「行为」里那颗
     /// (`OverlayBehaviorItem.fadeOnHover`、`AutoHideItem` 各项)和灵动岛 `NotchBehaviorItem.hideInFullScreen`
     /// 一样,几处一起改;值各管各的。自动隐藏几格的顺序同悬浮歌词:截屏、暂停、无歌词、广告、全屏。
+    /// 「悬停显示播放控制」跟迷你窗右上角那颗开关是同一个值,标题用那颗按钮的悬停提示(日语比悬浮歌词那条短,两行放得下),
+    /// 图标同悬浮歌词 `OverlayBehaviorItem.showHoverControls`
+    /// (07 章决策 26、14 章决策 239)。
     /// 两列小块:往上弹的浮层只有按钮上方约 200pt,一行一个开关放不下。
     @ViewBuilder
     private var lyricsWindowBehaviorRows: some View {
         SettingsTileGrid {
+            SettingsToggleTile(icon: "playpause.circle", title: L10n.t("悬停显示播放控制"),
+                               isOn: $settings.lyricsWindowMiniShowsControls)
             SettingsToggleTile(icon: "cursorarrow.motionlines", title: L10n.t("悬停时淡化"),
                                isOn: $settings.lyricsWindowMiniFadeOnHover)
             // 从属于「悬浮淡化」,只在它开着时出现(07 章决策 144)。
@@ -4983,6 +4989,7 @@ enum LyricsWindowStyleDefaults {
             s.lyricsWindowMiniFontSize = AppSettings.defaultLyricsWindowMiniFontSize
             s.lyricsWindowMiniLineOverflow = .wrap
             s.lyricsWindowMiniLyricsLayout = .twoLines
+            s.lyricsWindowMiniShowsControls = true
             s.lyricsWindowMiniFadeOnHover = false
             s.lyricsWindowMiniFadeClickThrough = false
             s.lyricsWindowMiniHideWhenNotPlaying = false
@@ -5128,8 +5135,10 @@ struct LyricsWindowAllSettingsDrawer<Content: View>: View {
 ///   - 风格 → `NotchStyleSettingsRows()`
 ///   - 屏幕 → `NotchScreenSettingsRows(onScreenChange:)`(这里没有编辑台预览要刷新,传空闭包——真窗口
 ///     的更新在组件内部已经带着 `notchOverlayEnabled` 守卫做完了)
-///   - 左耳 / 右耳 → `NotchEarSettingsRows(side:)`(顶部那行「显示音浪」开关也在里面,跟浮层一模一样)
-///   - 宽度 / 展开宽度 → 本文件的 `widthRow` / `expandedWidthRow`,只调 `NotchEditorStage` 的静态入口
+///   - 左耳 / 右耳 → `NotchEarSettingsRows(side:includesWidthRows: false)`(顶部那行「显示音浪」开关也在里面);浮层里
+///     「两耳等宽」和宽度那两行在抽屉里只出现在「宽度」组
+///   - 宽度 / 展开宽度 → 「两耳等宽」开关(`NotchEarWidthsLinkedRow`,左右耳浮层同一份)+ 本文件的 `widthRow` /
+///     `expandedWidthRow`,只调 `NotchEditorStage` 的静态入口;关掉等宽时 `widthRow` 换成左右耳各一根(`NotchEarWidthRow`)
 ///   - 歌词行 / 展开态 / 行为 → `NotchLyricRowSettingsRows` / `NotchExpandedSettingsRows` /
 ///     `NotchBehaviorSettingsRows`(跟三个浮层是同一份视图,不是"同样的 items 数组")
 ///   - 字体 → `NotchFontSettingsRows`(跟工具栏第二行「字体」浮层同一份;字体族 / 粗细 / 字号三行)
@@ -5148,7 +5157,7 @@ private struct NotchAllSettingsDrawer: View {
     /// 设置搜索命中了这个抽屉里的行时的"该展开了"信号(理由与写法同 `OverlayAllSettingsDrawer`)。
     @Environment(\.settingsSearchPendingDrawer) private var pendingSearchDrawer
 
-    // 展开后一组一张卡(同悬浮歌词抽屉,14 章决策 83)。两根宽度滑杆合成「宽度」一张卡。
+    // 展开后一组一张卡(同悬浮歌词抽屉,14 章决策 83)。「两耳等宽」和宽度滑杆合成「宽度」一张卡。
     var body: some View {
         VStack(spacing: 14) {
             SettingsCard(cornerRadius: 18) {
@@ -5157,11 +5166,13 @@ private struct NotchAllSettingsDrawer: View {
             if isExpanded {
                 SettingsGroupCard(title: L10n.t("风格")) { NotchStyleSettingsRows() }
                 SettingsGroupCard(title: L10n.t("屏幕")) { NotchScreenSettingsRows(onScreenChange: {}) }
-                SettingsGroupCard(title: L10n.t("左耳")) { NotchEarSettingsRows(side: .left) }
-                SettingsGroupCard(title: L10n.t("右耳")) { NotchEarSettingsRows(side: .right) }
+                SettingsGroupCard(title: L10n.t("左耳")) { NotchEarSettingsRows(side: .left, includesWidthRows: false) }
+                SettingsGroupCard(title: L10n.t("右耳")) { NotchEarSettingsRows(side: .right, includesWidthRows: false) }
                 SettingsGroupCard(title: L10n.t("宽度")) {
                     SettingsRowGroup {
                         VStack(spacing: 0) {
+                            NotchEarWidthsLinkedRow()
+                            CardDivider()
                             widthRow
                             CardDivider()
                             expandedWidthRow
@@ -5233,16 +5244,18 @@ private struct NotchAllSettingsDrawer: View {
     }
 
     ///
-    /// 关掉「两耳等宽」后稳态宽由左右耳各自那根滑杆调(上面两组),这一行只报「左 200 · 右 42」,不再有滑杆(05 章决策 160)。
+    /// 关掉「两耳等宽」后稳态宽由左右耳各自的外露宽决定,这一行换成「左耳宽度」「右耳宽度」两根滑杆,跟左右耳浮层那一行
+    /// 同一份(`NotchEarWidthRow`),滑杆宽跟这张卡另外两根取齐(14 章决策 239)。
+    @ViewBuilder
     private var widthRow: some View {
-        SettingsRow(icon: "arrow.left.and.right", title: L10n.t("宽度")) {
-            if let split = NotchEditorStage.splitSteadyOnCurrentScreen() {
-                Text(NotchEditorStage.earWidthsReadout(split.span))
-                    .monospacedDigit()
-                    .foregroundStyle(.secondary)
-            } else {
+        if settings.notchEarWidthsLinked {
+            SettingsRow(icon: "arrow.left.and.right", title: L10n.t("宽度")) {
                 linkedWidthControl
             }
+        } else {
+            NotchEarWidthRow(side: .left, title: L10n.t("左耳宽度"), sliderWidth: 150)
+            CardDivider()
+            NotchEarWidthRow(side: .right, title: L10n.t("右耳宽度"), sliderWidth: 150)
         }
     }
 

@@ -305,6 +305,8 @@ Eine Kapsel im Stil der Dynamic Island neben der Notch oben auf dem Bildschirm; 
 - Einstellungen: Liedtext-Anzeige › Notch › Display
 - Einstellungen: Liedtext-Anzeige › Notch › Linkes Ohr
 - Einstellungen: Liedtext-Anzeige › Notch › Linkes Ohr › Gleich breite Ohren
+- Einstellungen: Liedtext-Anzeige › Notch › Breite › Breite linkes Ohr
+- Einstellungen: Liedtext-Anzeige › Notch › Breite › Breite rechtes Ohr
 - Einstellungen: Liedtext-Anzeige › Notch › Textzeile › Liedtext eingeklappt zeigen
 - Einstellungen: Tastaturkurzbefehle › Notch-Text ein-/ausblenden
 - Einstellungen: Tastaturkurzbefehle › Notch-Liedtext kurz einblenden
@@ -494,6 +496,7 @@ Zeigst du auf den schwebenden Text, erscheint eine Reihe von Schnelltasten. Auch
 
 - Standardmäßig ein
 - Einstellungen: Liedtext-Anzeige › Schwebender Text › Verhalten › Steuerung beim Überfahren zeigen
+- Einstellungen: Liedtext-Anzeige › Liedtextfenster › Verhalten › Steuerung beim Überfahren zeigen
 - Einstellungen: Liedtext-Anzeige › Menüleiste › Verhalten › Steuerung beim Überfahren zeigen
 
 <a id="feature-hide-in-screenshots"></a>
@@ -964,7 +967,7 @@ Sendet höchstens einmal täglich Version, macOS, aktivierte Funktionen und Abst
 
 ## Alle Einstellungen
 
-Alle Einstellungen des Einstellungsfensters nach Ort: insgesamt 346. Gib einen Namen in das Suchfeld oben in der Seitenleiste der Einstellungen ein, um direkt dorthin zu springen.
+Alle Einstellungen des Einstellungsfensters nach Ort: insgesamt 349. Gib einen Namen in das Suchfeld oben in der Seitenleiste der Einstellungen ein, um direkt dorthin zu springen.
 
 ### Liedtext › Quelle
 
@@ -1134,6 +1137,11 @@ Alle Einstellungen des Einstellungsfensters nach Ort: insgesamt 346. Gib einen N
 - **Audiowelle**: Nur auf einer Seite gleichzeitig
 - **Gleich breite Ohren**: Gilt für beide Ohren
 - **Im Takt der Musik**: Folgt dem Ton des Players und braucht die Erlaubnis, Systemaudio aufzunehmen; gelesen wird nur die Lautstärke, kein Ton wird gespeichert
+
+### Liedtext-Anzeige › Notch › Breite
+
+- **Breite linkes Ohr**
+- **Breite rechtes Ohr**
 
 ### Liedtext-Anzeige › Notch › Textzeile
 
@@ -1307,6 +1315,7 @@ Alle Einstellungen des Einstellungsfensters nach Ort: insgesamt 346. Gib einen N
 
 ### Liedtext-Anzeige › Liedtextfenster › Verhalten
 
+- **Steuerung beim Überfahren zeigen** (nur Mini)
 - **Beim Überfahren abblenden** (nur Mini)
 - **Verblasst durchklickbar** (nur Mini): Im verblassten Zustand gehen Klicks an das Fenster darunter. Halte ⌥ gedrückt, um es deckend zu machen und zu bedienen
 - **In Bildschirmfotos ausblenden** (nur Mini)

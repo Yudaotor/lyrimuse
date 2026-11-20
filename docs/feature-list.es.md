@@ -305,6 +305,8 @@ Una cápsula pegada al notch, arriba en la pantalla; también funciona en Mac si
 - Ajustes: Mostrar letra › Notch › Pantalla
 - Ajustes: Mostrar letra › Notch › Izquierda
 - Ajustes: Mostrar letra › Notch › Izquierda › Ancho simétrico
+- Ajustes: Mostrar letra › Notch › Ancho › Ancho izquierdo
+- Ajustes: Mostrar letra › Notch › Ancho › Ancho derecho
 - Ajustes: Mostrar letra › Notch › Fila de letra › Mostrar letra al contraer
 - Ajustes: Atajos de teclado › Mostrar/ocultar letra en el notch
 - Ajustes: Atajos de teclado › Echar un vistazo al notch
@@ -494,6 +496,7 @@ Con el puntero sobre la letra flotante aparece una fila de botones rápidos. La 
 
 - Activada por omisión
 - Ajustes: Mostrar letra › Letra flotante › Comportamiento › Mostrar controles al pasar el puntero
+- Ajustes: Mostrar letra › Ventana de letra › Comportamiento › Mostrar controles al pasar el puntero
 - Ajustes: Mostrar letra › Barra de menús › Comportamiento › Mostrar controles al pasar el puntero
 
 <a id="feature-hide-in-screenshots"></a>
@@ -964,7 +967,7 @@ Como máximo una vez al día, envía al servidor del propio autor la versión, e
 
 ## Todos los ajustes
 
-Todos los ajustes de la ventana Ajustes, según dónde están: 346 en total. Escribe un nombre en el campo de búsqueda de la parte superior de la barra lateral de Ajustes para ir directamente a él.
+Todos los ajustes de la ventana Ajustes, según dónde están: 349 en total. Escribe un nombre en el campo de búsqueda de la parte superior de la barra lateral de Ajustes para ir directamente a él.
 
 ### Letra › Fuente
 
@@ -1134,6 +1137,11 @@ Todos los ajustes de la ventana Ajustes, según dónde están: 346 en total. Esc
 - **Onda de audio**: Se muestra en un solo lado a la vez
 - **Ancho simétrico**: Se aplica a ambos lados
 - **Seguir la música**: Sigue el sonido del reproductor y requiere permiso para grabar el audio del sistema; solo se lee el volumen y no se guarda ningún audio
+
+### Mostrar letra › Notch › Ancho
+
+- **Ancho izquierdo**
+- **Ancho derecho**
 
 ### Mostrar letra › Notch › Fila de letra
 
@@ -1307,6 +1315,7 @@ Todos los ajustes de la ventana Ajustes, según dónde están: 346 en total. Esc
 
 ### Mostrar letra › Ventana de letra › Comportamiento
 
+- **Mostrar controles al pasar el puntero** (solo tamaño mini)
 - **Atenuar al pasar el puntero** (solo tamaño mini)
 - **Dejar pasar clics al atenuarse** (solo tamaño mini): Al atenuarse, los clics pasan a la ventana de abajo. Mantén pulsada ⌥ para volverla opaca e interactuar
 - **Ocultar en capturas** (solo tamaño mini)

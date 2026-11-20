@@ -244,6 +244,7 @@ final class SettingsSearchRouter: ObservableObject {
         case "notch.lyricList": return s.notchExpandedLyricList
         case "notch.lyricListOff": return !s.notchExpandedLyricList
         case "notch.equalizer": return s.notchShowsEqualizer && RealAudioMeter.isSupported
+        case "notch.earWidthsSplit": return !s.notchEarWidthsLinked
         case "overlay.karaoke": return s.overlayLyricsKaraoke
         case "overlay.notRainbow": return !s.overlayRainbow
         case "overlay.stroke": return s.textStrokeEnabled
