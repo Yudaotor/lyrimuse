@@ -5428,11 +5428,7 @@ func rankLyricSourceResults(artist, title, album string, durationSecs float64, r
 	lrclibYRC, lrclibRoma := lrclib.yrc, lrclib.roma
 	lfLyr, lfTitle, lfArtist, lfAlbum, lfCover, lfDur, lfPlainOnly := lf.lyr, lf.matchTitle, lf.matchArtist, lf.matchAlbum, lf.matchCover, lf.srcDur, lf.plainOnly
 	kuwoLyr, kuwoYRC, kuwoTitle, kuwoArtist, kuwoAlbum, kuwoCover, kuwoDur := kuwo.lyr, kuwo.yrc, kuwo.matchTitle, kuwo.matchArtist, kuwo.matchAlbum, kuwo.matchCover, kuwo.srcDur
-	migu := raw["migu"]
-	miguLyr, miguYRC, miguTr, miguTitle, miguArtist, miguAlbum, miguCover := migu.lyr, migu.yrc, migu.tr, migu.matchTitle, migu.matchArtist, migu.matchAlbum, migu.matchCover
-	miguPlainOnly, miguDur := migu.plainOnly, migu.srcDur
 	dz := raw["deezer"]
-	dzLyr, dzYRC, dzTr, dzTitle, dzArtist, dzAlbum, dzCover, dzDur, dzPlainOnly := dz.lyr, dz.yrc, dz.tr, dz.matchTitle, dz.matchArtist, dz.matchAlbum, dz.matchCover, dz.srcDur, dz.plainOnly
 	am := raw["applemusic"]
 	amLyr, amYRC, amTr, amRoma, amTitle, amArtist, amAlbum, amCover, amDur, amPlainOnly := am.lyr, am.yrc, am.tr, am.roma, am.matchTitle, am.matchArtist, am.matchAlbum, am.matchCover, am.srcDur, am.plainOnly
 	amBG := am.bg
@@ -5440,15 +5436,12 @@ func rankLyricSourceResults(artist, title, album string, durationSecs float64, r
 	if amTrLang == "" {
 		amTrLang = features().LyricsTranslationLanguage
 	}
-	soda := raw["soda"]
-	vibe := raw["vibe"]
 	kk := raw[kkboxLocalLyricsSource]
 	spl := raw[spotifyLocalLyricsSource]
 	amz := raw[amazonLocalLyricsSource]
 	localLRC := raw[localFileLyricsSource]
 	lxm := raw[lxMusicLocalLyricsSource]
 	imp := raw[importLyricsSource]
-	sodaLyr, sodaYRC, sodaTr, sodaTitle, sodaArtist, sodaAlbum, sodaCover, sodaDur := soda.lyr, soda.yrc, soda.tr, soda.matchTitle, soda.matchArtist, soda.matchAlbum, soda.matchCover, soda.srcDur
 	amll := raw["amll"].amll
 	// 候选的封面只用它自己那个源给的,没有就空着(「搜索候选歌词」弹窗显示占位图,「解析决策」全空时整列不出现);
 	// amll 自己没有封面,借能认定是同一条录音的那几家的(amllCandidateCover)。
@@ -5529,23 +5522,6 @@ func rankLyricSourceResults(artist, title, album string, durationSecs float64, r
 		kuwoUsableTr, _ := usableValueAdd(kuwoLyr, kuwoTr, "zh", "", features().LyricsTranslationLanguage)
 		slots.put(lyricCandidate{source: "kuwo", lyrics: kuwoLyr, wordTimingYRC: usableYRC(kuwoLyr, kuwoYRC), hasWordTiming: usableWordTiming(kuwoLyr, kuwoYRC), hasUsableTranslation: kuwoUsableTr, sourceReportedDurationSecs: kuwoDur, title: kuwoTitle, artist: kuwoArtist, album: kuwoAlbum, cover: kuwoCover, identityFromLocalClient: kuwo.identityFromLocalClient})
 	}
-	if miguLyr != "" {
-		// 逐行 LRC + 可选的逐字轨(MRC,migumrc.go)+ 可选的中文译文(trcUrl,外语歌才有),没有罗马音;
-		// 封面用搜索结果自带的 imgItems(见 migu.go 头注)。译文固定中文、标 "zh",可用性同网易云/QQ/酷狗
-		// 走 usableValueAdd,逐字同样走 usableYRC / usableWordTiming。
-		// 搜索结果没有时长字段,sourceReportedDurationSecs 用文件大小估的(miguSearchItem.durationSecs),估不出时为 0。
-		// plainOnly 直通打分层那道恒 -1 的闸,口径同 deezer/lrclib 的纯文本回退。
-		miguUsableTr, _ := usableValueAdd(miguLyr, miguTr, "zh", "", features().LyricsTranslationLanguage)
-		slots.put(lyricCandidate{source: "migu", lyrics: miguLyr, wordTimingYRC: usableYRC(miguLyr, miguYRC), hasWordTiming: usableWordTiming(miguLyr, miguYRC), hasUsableTranslation: miguUsableTr, sourceReportedDurationSecs: miguDur, title: miguTitle, artist: miguArtist, album: miguAlbum, cover: miguCover, plainTextOnly: miguPlainOnly})
-	}
-	if dzLyr != "" {
-		// 逐行正文 + 可选的逐字轨 + 可选的译文(语言跟译文语言设置走),没有罗马音;封面用搜索
-		// 结果自带的 album.cover_xl,时长用 Deezer 自报的 duration(见 deezer.go 头注)。逐字走
-		// usableYRC / usableWordTiming,译文走 usableValueAdd,口径同别的源。plainOnly 直通打分层
-		// 那道恒 -1 的闸(match.go 的 scoreRejectPlainTextOnly),口径与 lrclib 的纯文本回退一致。
-		dzUsableTr, _ := usableValueAdd(dzLyr, dzTr, features().LyricsTranslationLanguage, "", features().LyricsTranslationLanguage)
-		slots.put(lyricCandidate{source: "deezer", lyrics: dzLyr, wordTimingYRC: usableYRC(dzLyr, dzYRC), hasWordTiming: usableWordTiming(dzLyr, dzYRC), hasUsableTranslation: dzUsableTr, sourceReportedDurationSecs: dzDur, title: dzTitle, artist: dzArtist, album: dzAlbum, cover: dzCover, plainTextOnly: dzPlainOnly, isrc: dz.isrc})
-	}
 	if amLyr != "" {
 		// 全部源里唯一的**官方逐字**来源:逐行 LRC + 逐字 YRC(itunes:timing="Word")+
 		// 可选译文,封面用 artwork 模板替换出的 1000x1000,时长用 Apple 自报的
@@ -5564,29 +5540,6 @@ func rankLyricSourceResults(artist, title, album string, durationSecs float64, r
 			cover: amCover, plainTextOnly: amPlainOnly,
 			identityFromLocalClient: am.identityFromLocalClient,
 		})
-	}
-	if sodaLyr != "" {
-		// 官方逐字(格式与酷狗 KRC 同构,归一化见 soda.go)+ 平台自带的中文译文(外语歌才有),
-		// 没有罗马音。译文固定中文、标 "zh",可用性同网易云/QQ/酷狗走 usableValueAdd。没有
-		// plainTextOnly —— 拿不到计时行时 krcToLRC 返回空串,这里根本进不来。
-		sodaUsableTr, _ := usableValueAdd(sodaLyr, sodaTr, "zh", "", features().LyricsTranslationLanguage)
-		slots.put(lyricCandidate{
-			source: "soda", lyrics: sodaLyr,
-			wordTimingYRC: usableYRC(sodaLyr, sodaYRC), hasWordTiming: usableWordTiming(sodaLyr, sodaYRC),
-			hasUsableTranslation:       sodaUsableTr,
-			sourceReportedDurationSecs: sodaDur,
-			title:                      sodaTitle, artist: sodaArtist, album: sodaAlbum,
-			cover:                   sodaCover,
-			identityFromLocalClient: soda.identityFromLocalClient,
-		})
-	}
-	if vibe.lyr != "" {
-		// 逐行 + 外语歌的韩文译文(标 "ko",译文语言设成韩文时才用得上),没有逐字和罗马音;封面是搜索结果自带的专辑图原图,
-		// 时长是搜索结果自报的 playTime(见 vibe.go 头注)。plainOnly 直通打分层那道恒 -1 的闸,口径同 deezer / lrclib。
-		vibeUsableTr, _ := usableValueAdd(vibe.lyr, vibe.tr, vibeTranslationLang, "", features().LyricsTranslationLanguage)
-		slots.put(lyricCandidate{source: "vibe", lyrics: vibe.lyr, hasUsableTranslation: vibeUsableTr,
-			sourceReportedDurationSecs: vibe.srcDur, title: vibe.matchTitle, artist: vibe.matchArtist, album: vibe.matchAlbum,
-			cover: vibe.matchCover, plainTextOnly: vibe.plainOnly})
 	}
 	if kk.lyr != "" {
 		// KKBOX 本地歌词(用 KKBOX 放歌时读它自己缓存里的那份,逐行,见 kkboxlyrics.go)。只精确到整秒的那类不置
@@ -5714,8 +5667,8 @@ func rankLyricSourceResults(artist, title, album string, durationSecs float64, r
 		// (封面/单曲链接都给了)、歌词接口也明确回了 pureMusic=true。lrclib 优先只是因为
 		// 它的标记是结构化字段、语义最干净。
 		instrumentalMarker = &scoredLyricCandidateResult{Source: "netease", Score: -1, Instrumental: true}
-	} else if isInstrumentalPlaceholderLyric(miguLyr) {
-		// 咪咕对纯音乐回的歌词文件就是一句「此歌曲为纯音乐,请欣赏」,判定同 QQ 的占位。
+	} else if assembled[lyricSourceMigu].instrumental {
+		// 咪咕对纯音乐回的歌词文件就是一句纯音乐占位(描述符的 instrumentalPlaceholder)。
 		instrumentalMarker = &scoredLyricCandidateResult{Source: "migu", Score: -1, Instrumental: true}
 	} else if isCreditOnlyLRC(kugouLyr) && kugou.noVocals {
 		instrumentalMarker = &scoredLyricCandidateResult{Source: "kugou", Score: -1, Instrumental: true}
@@ -5802,12 +5755,6 @@ func rankLyricSourceResults(artist, title, album string, durationSecs float64, r
 			}
 			r.LyricsBG = amBG
 			r.Songwriters = am.songwriters
-		case "soda":
-			// 汽水 lyric.translations.cn 固定中文,口径同 migu。
-			if c.hasUsableTranslation {
-				r.LyricsTr = sodaTr
-				r.LyricsTrLang = "zh"
-			}
 		case "qq":
 			// QQ GetPlayLyricInfo 的 trans/roma 两轨(见 qq.go qqQRCLyric / qqAuxiliaryLRC):
 			// 译文跟网易云一样固定中文,标 "zh";两轨都由候选构造时算好的 usableValueAdd 结果
@@ -5837,20 +5784,6 @@ func rankLyricSourceResults(artist, title, album string, durationSecs float64, r
 			if usableRomaForResult(c.lyrics, kugouRoma) {
 				r.LyricsRoma = kugouRoma
 			}
-		case "migu":
-			// 咪咕 trcUrl 的译文固定中文,标 "zh",可用性由候选装配时的 usableValueAdd 结果
-			// 把关——口径同网易云/QQ/酷狗;这个 switch 的纪律仍是"接一个源就必须在这里补一个
-			// case"(见上面 qq 那条)。
-			if c.hasUsableTranslation {
-				r.LyricsTr = miguTr
-				r.LyricsTrLang = "zh"
-			}
-		case "vibe":
-			// VIBE 只有韩文译文,可用性由候选装配时的 usableValueAdd 把关。
-			if c.hasUsableTranslation {
-				r.LyricsTr = vibe.tr
-				r.LyricsTrLang = vibeTranslationLang
-			}
 		case localFileLyricsSource:
 			// 本地 .lrc 里摘出来的烘入译文(见候选装配处),固定中文,口径同 qq。
 			if c.hasUsableTranslation {
@@ -5875,14 +5808,6 @@ func rankLyricSourceResults(artist, title, album string, durationSecs float64, r
 			if usableRomaForResult(c.lyrics, lxm.roma) {
 				r.LyricsRoma = lxm.roma
 			}
-		case "deezer":
-			// Deezer 的译文按请求时的译文语言设置取(deezer.go deezerAcceptLanguage),标同一个语言;
-			// 文字系统对不上目标语言的已在 deezerBuildTranslation 丢掉。
-			if c.hasUsableTranslation {
-				r.LyricsTr = dzTr
-				r.LyricsTrLang = features().LyricsTranslationLanguage
-			}
-			r.Songwriters = dz.songwriters
 		default:
 			// 按描述符装的来源:译文、罗马音、背景人声轨、作者在它那一格里。
 			assembled[c.source].writeAux(&r, c, artist, title, target)

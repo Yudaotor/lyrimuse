@@ -81,6 +81,10 @@ func newBuiltinLyricProviderRegistry() *lyricProviderRegistry {
 		// 搜索 pd.musicapp.migu.cn、歌词文件 d.musicapp.migu.cn 都归这一源。
 		Hosts:           []HostRule{{"migu.cn", hostWithSubdomains}},
 		ParenBackground: true, InstrumentalRank: 4,
+		Assembly: &CandidateAssembly{
+			Reads:       fieldWordTiming | fieldSourceDuration | fieldAlbum | fieldCover | fieldPlainText,
+			Translation: translationFixed, TranslationLang: "zh", Instrumental: instrumentalPlaceholder,
+		},
 		PeerGroup: peerGroupChinese,
 	}, 0)})
 
@@ -91,6 +95,10 @@ func newBuiltinLyricProviderRegistry() *lyricProviderRegistry {
 		ProxyFallback:   true,
 		ParenBackground: true, SongwritersRank: 3, SongwritersSkipCJK: true, ConsensusFamily: lyricSourceLyricFind,
 		ISRCLookup: isrcLookupDirect, ISRCAuthority: true,
+		Assembly: &CandidateAssembly{
+			Reads:       fieldWordTiming | fieldSourceDuration | fieldAlbum | fieldCover | fieldPlainText | fieldISRC,
+			Translation: translationTarget,
+		},
 		PeerGroup: peerGroupGlobal,
 	}, 0)})
 
@@ -114,8 +122,12 @@ func newBuiltinLyricProviderRegistry() *lyricProviderRegistry {
 		// 抖音自己的一大堆服务;分享页的 music.douyin.com 同样不进来(soda.go 的 sodaSharePageURL)。
 		Hosts:           []HostRule{{sodaSeoTrackHost, hostExact}, {sodaSearchHost, hostExact}},
 		ParenBackground: true,
-		PeerGroup:       peerGroupChinese,
-		Probe:           &ProbeTrack{Artist: "陈奕迅", Title: "十年"},
+		Assembly: &CandidateAssembly{
+			Reads:       fieldWordTiming | fieldSourceDuration | fieldAlbum | fieldCover | fieldLocalIdentity,
+			Translation: translationFixed, TranslationLang: "zh",
+		},
+		PeerGroup: peerGroupChinese,
+		Probe:     &ProbeTrack{Artist: "陈奕迅", Title: "十年"},
 	}, privLocalClientIdentity|privPlaybackTrackIDs|privPlayerNoVocals)})
 
 	r.implement(vibeProvider{desc: r.registerBuiltin(&ProviderDescriptor{
@@ -123,6 +135,10 @@ func newBuiltinLyricProviderRegistry() *lyricProviderRegistry {
 		// 搜索和取词都在这个主机的 /vibeWeb/ 下(vibe.go);封面图在 musicmeta-phinf.pstatic.net,不进来。
 		Hosts:         []HostRule{{"apis.naver.com", hostExact}},
 		ProxyFallback: true, ParenBackground: true,
+		Assembly: &CandidateAssembly{
+			Reads:       fieldSourceDuration | fieldAlbum | fieldCover | fieldPlainText,
+			Translation: translationFixed, TranslationLang: vibeTranslationLang,
+		},
 	}, 0)})
 
 	r.implement(genieProvider{desc: r.registerBuiltin(&ProviderDescriptor{
