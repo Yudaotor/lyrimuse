@@ -92,21 +92,6 @@ public enum MenuBarCenterLayout {
         return target.minX + (maxX - host.minX)
     }
 
-    /// 有刘海的屏上真正露在外面的菜单栏读数:前台 App 的菜单只认刘海左边的,状态栏项只认刘海右边、且不跟别的项叠在一起的。
-    /// 放不下的状态栏项被系统收起时,辅助功能照样报一个框,落在刘海边上、几个叠在一起;按它们算会把右边那段算成没剩几 pt。
-    /// 灵动岛耳朵歌词按它夹宽(05 章决策 159);菜单栏正中歌词不走这里。
-    public static func framesBesideNotch(menuFrames: [CGRect], itemFrames: [CGRect],
-                                         notch: ClosedRange<CGFloat>) -> (menus: [CGRect], items: [CGRect]) {
-        let menus = menuFrames.filter { $0.maxX <= notch.lowerBound + 1 }
-        let right = itemFrames.filter { $0.width > 0 && $0.minX >= notch.upperBound - 1 }
-        let items = right.indices.filter { i in
-            !right.indices.contains { j in
-                j != i && right[j].minX < right[i].maxX - 1 && right[i].minX < right[j].maxX - 1
-            }
-        }.map { right[$0] }
-        return (menus, items)
-    }
-
     /// 状态栏图标最左那个的左缘,目标屏上的。`itemFrames` 是辅助功能读到的各家状态栏项(左上角为原点、y 向下),
     /// `primaryMaxY` 是主屏(AppKit 坐标)的上沿,用来把 y 换过去。只认落在某块屏菜单栏那一条里的项 —— 被系统收起
     /// 藏掉的项会报在屏幕底部或左上角之外。目标屏上一个都没有时,拿别的屏菜单栏上的那一串按右缘对齐换算过来。

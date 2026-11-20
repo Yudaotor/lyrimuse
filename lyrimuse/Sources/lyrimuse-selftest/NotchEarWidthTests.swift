@@ -69,23 +69,16 @@ func runNotchEarWidthTests() {
     expectEqual(linkedMismatches, [],
                 "两耳等宽(守卫): 偏移 0 时卡片宽、收起宽、耳宽、展开宽、刘海位置、横扫判据、出场裁剪、进度线跟原公式逐数值一致")
 
-    // MARK: 两耳不等宽:本机读数(刘海 179、中线 735,前台菜单右沿 420、状态栏图标左沿 882,各让 16)
+    // MARK: 两耳不等宽:每侧按设定值(刘海 179)
 
-    let span = MenuBarCenterLayout.usableSpan(screenMinX: 0, screenMaxX: 1470, menusMaxX: 420, statusItemsMinX: 882)
-    let caps = W.caps(centerX: 735, notchWidth: 179, span: span)
-    expectEqual([caps.left, caps.right], [209.5, 41.5], "两耳不等宽: 左看前台菜单右沿、右看图标左沿,各让 16,左 209.5 / 右 41.5")
-    expectEqual(W.caps(centerX: 735, notchWidth: 179, span: nil), NotchEarSpan(left: 0, right: 0),
-                "两耳不等宽: 两侧挤得放不下时两侧上限都是 0")
     let floors = NotchEarSpan(left: 16, right: 16)
-    let steadySpan = W.steady(setting: NotchEarSpan(left: 200, right: 120), floor: floors, cap: caps)
-    expectEqual([steadySpan.left, steadySpan.right], [200, 41.5], "两耳不等宽: 设定值是上限,每侧只按自己那侧夹(左 200 不动、右 120 夹到 41.5)")
-    expectEqual(W.steady(setting: NotchEarSpan(left: 100, right: 150), floor: floors, cap: NotchEarSpan(left: 40, right: 200)),
-                NotchEarSpan(left: 40, right: 150), "两耳不等宽: 左边窄时只夹左边,右边照设定,不按较窄一侧一起夹")
-    expectEqual(W.steady(setting: NotchEarSpan(left: 200, right: 120), floor: floors, cap: nil), NotchEarSpan(left: 200, right: 120),
-                "两耳不等宽: 没有读数(锁屏那份、耳朵里没放歌词)时不夹")
-    expectEqual(W.steady(setting: NotchEarSpan(left: 200, right: 120), floor: NotchEarSpan(left: 16, right: 58),
-                         cap: caps).right, 58, "两耳不等宽: 上限比这一侧的模块下限还窄时停在下限,下限只看这一侧")
-    expectEqual(W.steady(setting: NotchEarSpan(left: 10, right: 10), floor: NotchEarSpan(left: 38, right: 16), cap: nil),
+    let steadySpan = W.steady(setting: NotchEarSpan(left: 200, right: 41.5), floor: floors)
+    expectEqual([steadySpan.left, steadySpan.right], [200, 41.5], "两耳不等宽: 每侧照自己的设定值画")
+    expectEqual(W.steady(setting: NotchEarSpan(left: 188, right: 400), floor: floors), NotchEarSpan(left: 188, right: 400),
+                "两耳不等宽: 设定再宽也照设定,不按菜单栏两侧空位收窄")
+    expectEqual(W.steady(setting: NotchEarSpan(left: 200, right: 30), floor: NotchEarSpan(left: 16, right: 58)).right, 58,
+                "两耳不等宽: 设定比这一侧的模块下限还窄时抬到下限,下限只看这一侧")
+    expectEqual(W.steady(setting: NotchEarSpan(left: 10, right: 10), floor: NotchEarSpan(left: 38, right: 16)),
                 NotchEarSpan(left: 38, right: 16), "两耳不等宽: 每只耳朵的下限各算各的,不取较大者")
     let cardWidth = steadySpan.cardWidth(notchWidth: 179)
     expectEqual([cardWidth, steadySpan.offset], [420.5, -79.25], "两耳不等宽: 卡片 = 刘海 + 两侧,中心往左偏 79.25")
@@ -164,15 +157,11 @@ func runNotchEarWidthTests() {
 
     // MARK: 无刘海屏的顶行歌词
 
-    let topRow = NotchTopRowLyrics.fit(span: NotchEarSpan(left: 300, right: 40), earWidth: 28, cardPadding: 10, cap: nil)
-    expectEqual(topRow.map { [$0.span.left, $0.span.right, $0.lyricWidth] }, [300, 68, 292],
+    let topRow = NotchTopRowLyrics.fit(span: NotchEarSpan(left: 300, right: 40), earWidth: 28, cardPadding: 10)
+    expectEqual([topRow.span.left, topRow.span.right, topRow.lyricWidth], [300, 68, 292],
                 "两耳不等宽(无刘海屏): 中线当宽 0 的刘海,每侧至少放得下一只耳朵和半段最窄歌词,歌词是两耳之间剩下的")
-    expectEqual(NotchTopRowLyrics.fit(span: NotchEarSpan(left: 300, right: 40), earWidth: 28, cardPadding: 10,
-                                      cap: NotchEarSpan(left: 250, right: 60)) == nil, true,
-                "两耳不等宽(无刘海屏): 有一侧连最窄那一段都放不下时顶行不画")
-    expectEqual(NotchTopRowLyrics.fit(span: NotchEarSpan(left: 300, right: 90), earWidth: 28, cardPadding: 10,
-                                      cap: NotchEarSpan(left: 250, right: 80)).map { [$0.span.left, $0.span.right] }, [250, 80],
-                "两耳不等宽(无刘海屏): 两侧各按自己那侧夹")
+    let wideTopRow = NotchTopRowLyrics.fit(span: NotchEarSpan(left: 400, right: 380), earWidth: 28, cardPadding: 10)
+    expectEqual([wideTopRow.span.left, wideTopRow.span.right], [400, 380], "两耳不等宽(无刘海屏): 两侧照设定,不按菜单栏收窄")
     let topRowLayout = layout(notch: 0, steady: 330, expanded: 482, offset: -110, topRowLyrics: 254)
     let topRowEars = topRowLayout.earWidths(cardWidth: 330, offset: -110)
     expectEqual([topRowEars.left, topRowEars.right], [28, 28], "两耳不等宽(无刘海屏): 画顶行歌词时两只耳朵等宽,歌词在卡片正中")
@@ -211,7 +200,7 @@ func runNotchEarWidthTests() {
     let progress = app("UI/NotchProgressLine.swift"), reveal = app("UI/NotchRevealShape.swift")
     let recompute = sourceBody("private func recomputeGeometry(animate: Bool)", in: controller)
     expectEqual(sourceHas(recompute, "if !earWidthsLinked {")
-                && sourceHas(recompute, "} else if placement == .topRow || lyricEars {")
+                && sourceHas(recompute, "} else if placement == .topRow {")
                 && sourceHas(recompute, "if steadyCardOffset != offset { steadyCardOffset = offset }")
                 && sourceHas(recompute, "NotchEarWidths.expandedWidth(steady: $0, notchWidth: geo.notchWidth, expandedSetting: baseExpandedContentWidth)"),
                 true, "两耳不等宽(契约): 真窗口两耳等宽时走原路径,分开时按两侧算稳态、偏移和以刘海为中心的展开宽")

@@ -14,7 +14,7 @@ private let logger = Logger(subsystem: "me.yudaotor.lyrimuse", category: "menuba
 /// 全量只在打开时和每 `fullScanEvery` 轮做一次、放在后台队列;平时每 `pollSeconds` 秒只复查已知有图标的那几家,
 /// 新开的 App 单独问。前台 App 的菜单每次切换前台时读一次,菜单常在激活后才换好,隔一会儿再读一次。
 /// 没授权时什么都不读、读数清空,两侧按屏幕边缘算。只在有人要用时运行(`setActive(_:client:)`):「菜单栏正中」用着、有词要显示、
-/// 屏幕亮着,或灵动岛在没有刘海的屏上放顶行歌词;停下时读数留着,再开时先按它摆,同时后台补读一轮。
+/// 屏幕亮着;停下时读数留着,再开时先按它摆,同时后台补读一轮。
 @MainActor
 final class MenuBarOccupancy {
     static let shared = MenuBarOccupancy()
@@ -25,8 +25,6 @@ final class MenuBarOccupancy {
     private(set) var frontMenuFrames: [CGRect] = []
     /// 读数变了(值真的变了才调;打开后第一轮全量扫完也调一次)。
     var onChange: (() -> Void)?
-    /// 同 `onChange`,给菜单栏以外的使用方(灵动岛顶行歌词)订阅。
-    let changes = PassthroughSubject<Void, Never>()
     /// 打开后第一轮全量扫完了(或没授权、不扫)。没扫完之前右侧按屏幕边缘算,刘海屏上会先落到刘海右边、扫完再跳到左边,
     /// 所以正中那几扇等它为真再出来。
     var isReady: Bool { firstScanDone || !AXIsProcessTrusted() }
@@ -68,7 +66,6 @@ final class MenuBarOccupancy {
 
     private func notifyChange() {
         onChange?()
-        changes.send()
     }
 
     private func start() {
@@ -410,18 +407,12 @@ final class MenuBarCenterLyrics {
     }
 
     /// 按 `MenuBarOccupancy` 此刻的读数,这块屏菜单栏两侧之间空着的那一段(`MenuBarCenterLayout.usableSpan`),连同两侧的读数。
-    /// 灵动岛顶行歌词拿它夹卡片宽(`notch` 传 nil:那一档只在没有刘海的屏上画)。
-    /// `besideNotch` 给了时只认露在刘海两边的读数(`MenuBarCenterLayout.framesBesideNotch`),灵动岛耳朵歌词用。
-    static func occupiedSpan(on screen: NSScreen, notch: ClosedRange<CGFloat>?, besideNotch: ClosedRange<CGFloat>? = nil)
+    static func occupiedSpan(on screen: NSScreen, notch: ClosedRange<CGFloat>?)
         -> (span: ClosedRange<CGFloat>?, menusMaxX: CGFloat?, statusItemsMinX: CGFloat?) {
         let occupancy = MenuBarOccupancy.shared
         let screenFrames = NSScreen.screens.map(\.frame)
-        var menuFrames = occupancy.frontMenuFrames
-        var itemFrames = occupancy.statusItemFrames.values.flatMap { $0 }
-        if let besideNotch {
-            (menuFrames, itemFrames) = MenuBarCenterLayout.framesBesideNotch(
-                menuFrames: menuFrames, itemFrames: itemFrames, notch: besideNotch)
-        }
+        let menuFrames = occupancy.frontMenuFrames
+        let itemFrames = occupancy.statusItemFrames.values.flatMap { $0 }
         let menusMaxX = MenuBarCenterLayout.menusMaxX(
             menuFrames: menuFrames, screenFrames: screenFrames, target: screen.frame)
         let statusItemsMinX = MenuBarCenterLayout.statusItemsMinX(

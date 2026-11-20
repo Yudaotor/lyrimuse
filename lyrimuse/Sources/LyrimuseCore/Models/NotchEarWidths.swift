@@ -37,7 +37,7 @@ public struct NotchEarSpan: Equatable, Sendable {
     }
 }
 
-/// 关掉「两耳等宽」后每只耳朵各自的宽度算术。设定值是上限,每侧只按自己那侧的菜单栏空位和自己那只耳朵的模块下限夹;
+/// 关掉「两耳等宽」后每只耳朵各自的宽度算术。每侧按自己的设定值画,只抬到自己那只耳朵的模块下限,不按菜单栏空位收窄;
 /// 收起、展开仍以刘海为中心。真窗口、编辑台、菜单栏快捷面板都走这里。见 05 章决策 160。
 public enum NotchEarWidths {
     /// 外露宽设定值的合法区间(存储层)。0 = 没设过(按当时的稳态宽对称起步)。
@@ -46,17 +46,9 @@ public enum NotchEarWidths {
     /// 每只耳朵宽度滑杆的步长,同编辑台宽度调整条。
     public static let step: Double = NotchWidthBounds.step
 
-    /// 一侧稳态外露宽:设定值按这一侧的上限 `cap` 夹,不窄于这一侧的下限 `floor`(上限比下限还窄时停在下限)。
-    /// `cap` 为 nil 时不夹。
-    public static func steady(setting: CGFloat, floor: CGFloat, cap: CGFloat?) -> CGFloat {
-        guard let cap else { return max(floor, setting) }
-        return max(floor, min(setting, cap))
-    }
-
-    /// 两侧各按 `steady(setting:floor:cap:)` 夹。
-    public static func steady(setting: NotchEarSpan, floor: NotchEarSpan, cap: NotchEarSpan?) -> NotchEarSpan {
-        NotchEarSpan(left: steady(setting: setting.left, floor: floor.left, cap: cap?.left),
-                     right: steady(setting: setting.right, floor: floor.right, cap: cap?.right))
+    /// 两侧稳态外露宽:各按设定值,不窄于这一侧的下限 `floor`。
+    public static func steady(setting: NotchEarSpan, floor: NotchEarSpan) -> NotchEarSpan {
+        NotchEarSpan(left: max(floor.left, setting.left), right: max(floor.right, setting.right))
     }
 
     /// 收起态两侧:每侧 `min(稳态外露宽, 收起那一段)`。有刘海时收起那一段 = 收起耳宽 + 内边距;没有刘海的屏中间按
@@ -71,14 +63,6 @@ public enum NotchEarWidths {
     /// 展开态卡片宽:以刘海为中心,取展开设定和「刘海 + 两倍较宽那一侧」的大者,展开卡片一定包住稳态卡片。
     public static func expandedWidth(steady: NotchEarSpan, notchWidth: CGFloat, expandedSetting: CGFloat) -> CGFloat {
         max(expandedSetting, notchWidth + 2 * max(steady.left, steady.right))
-    }
-
-    /// 菜单栏两侧各留给这一侧多宽:左 = 刘海左沿到可用区间左界,右 = 可用区间右界到刘海右沿。`span` 是
-    /// `MenuBarCenterLayout.usableSpan` 给的那一段(已经各让开 `clearance`);nil(两侧挤得放不下)时两侧都是 0。
-    public static func caps(centerX: CGFloat, notchWidth: CGFloat, span: ClosedRange<CGFloat>?) -> NotchEarSpan {
-        guard let span else { return NotchEarSpan(left: 0, right: 0) }
-        return NotchEarSpan(left: max(0, centerX - notchWidth / 2 - span.lowerBound),
-                            right: max(0, span.upperBound - centerX - notchWidth / 2))
     }
 
     /// 一只耳朵宽度滑杆能拖的区间:下界抬到这一侧的下限(向上取整到 `step`),上界同 `storageRange`;下界至少一个 step、

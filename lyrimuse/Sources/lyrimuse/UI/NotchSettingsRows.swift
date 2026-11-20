@@ -465,8 +465,8 @@ struct NotchEarSettingsRows: View {
         }
     }
 
-    /// 关掉「两耳等宽」后才有:这只耳朵伸出刘海多宽(外露宽)。区间下界是这只耳朵当前模块的下限,读数报夹过之后的真实宽度
-    /// (耳朵里放了歌词时按这一侧的菜单栏空位夹)。
+    /// 关掉「两耳等宽」后才有:这只耳朵伸出刘海多宽(外露宽)。区间下界是这只耳朵当前模块的下限,读数报抬到下限之后的
+    /// 真实宽度。
     private var widthRow: some View {
         let range = NotchEditorStage.earUsableRange(side)
         let effective = NotchEditorStage.splitSteadyOnCurrentScreen().map { side == .left ? $0.span.left : $0.span.right } ?? 0

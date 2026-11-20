@@ -25,11 +25,6 @@ final class NotchPreviewChrome: ObservableObject, NotchChromeSource {
     var isExpanded: Bool { cornerFocus.map { $0 == .expanded } ?? pointerExpanded }
     @Published private(set) var notchWidth: CGFloat = 0
     @Published private(set) var contentTopInset: CGFloat = 0
-    /// 菜单栏两侧之间以刘海为中心能放多宽的卡片(`NotchLyricsWindowController.menuBarCap`,同真窗口那份读数)。耳朵里放了歌词时
-    /// 编辑台按它夹稳态宽(`NotchEditorStage.steadyCardWidth`),让用户看得到耳朵会被夹多窄。
-    @Published private(set) var menuBarMaxCardWidth: CGFloat?
-    /// 同一份读数按左右两侧分开(`NotchLyricsWindowController.menuBarEarCaps`),关掉「两耳等宽」时编辑台按它夹每一侧。
-    @Published private(set) var menuBarEarCaps: NotchEarSpan?
     /// 卡片两种形态的真实宽,由舞台按真窗口同一套公式算好推进来(`NotchEditorStage.card` 的 onAppear /
     /// onChange),歌词行按它们定宽居中交叉淡入淡出(NotchChromeSource 里的说明)。初值只是占位。
     @Published private(set) var steadyCardWidth: CGFloat = AppSettings.defaultNotchContentWidth
@@ -83,8 +78,7 @@ final class NotchPreviewChrome: ObservableObject, NotchChromeSource {
             hasNotch: notchWidth > 0, currentLineInEar: NotchEarModule.currentLineInEar(left: s.notchLeftEar, right: s.notchRightEar))
     }
     var showsLyricsSetting: Bool { AppSettings.shared.notchShowLyrics }
-    /// 顶行歌词那段,同真窗口一套公式(`NotchTopRowLyrics.fit`),只是不按菜单栏两侧夹:编辑台里没有那份读数,
-    /// 舞台按稳态宽画。
+    /// 顶行歌词那段,同真窗口一套公式(`NotchTopRowLyrics.fit`)。
     var topRowLyricsWidth: CGFloat {
         let s = AppSettings.shared
         guard placement == .topRow else { return 0 }
@@ -93,7 +87,7 @@ final class NotchPreviewChrome: ObservableObject, NotchChromeSource {
             leftEar: s.notchLeftEar, rightEar: s.notchRightEar, showsEqualizer: s.notchShowsEqualizer,
             equalizerEar: s.notchEqualizerEar, contentTopInset: contentTopInset)
         return NotchTopRowLyrics.fit(steadyWidth: steadyCardWidth, earWidth: ear,
-                                     cardPadding: NotchMetrics.cardHorizontalPadding, maxCardWidth: nil)?.lyricWidth ?? 0
+                                     cardPadding: NotchMetrics.cardHorizontalPadding).lyricWidth
     }
     /// 歌词行实际高度,同上现读:拖「行高」滑杆时预览卡片跟着变矮(舞台本身按上限留高度,不跟着动,见 `cardAreaHeight`)。
     var lyricRowHeight: CGFloat { AppSettings.shared.notchEffectiveLyricRowHeight }
@@ -146,9 +140,6 @@ final class NotchPreviewChrome: ObservableObject, NotchChromeSource {
             .sink { [weak self] _ in self?.refreshGeometry() }
         debugGeometrySubscription = NotificationCenter.default.publisher(for: NotchLyricsWindowController.debugGeometryChanged)
             .sink { [weak self] _ in MainActor.assumeIsolated { self?.refreshGeometry() } }
-        // 菜单栏两侧读数变了(切前台 App、图标增减):耳朵歌词的夹宽跟着变。读数由真窗口登记要来,这里只跟着读。
-        occupancySubscription = MenuBarOccupancy.shared.changes
-            .sink { [weak self] in self?.refreshGeometry() }
         cornerSubscription = NotchCornerLive.shared.focusPublisher
             .sink { [weak self] slot in self?.cornerFocus = slot }
         // 同真窗口:三个输入一次给全,存 sink 参数值(@Published 在 willSet 发布)。
@@ -187,7 +178,6 @@ final class NotchPreviewChrome: ObservableObject, NotchChromeSource {
 
     private var screenSubscription: AnyCancellable?
     private var debugGeometrySubscription: AnyCancellable?
-    private var occupancySubscription: AnyCancellable?
     private var cornerSubscription: AnyCancellable?
     private var trackSubscription: AnyCancellable?
     private var idlePanelSubscription: AnyCancellable?
@@ -224,9 +214,5 @@ final class NotchPreviewChrome: ObservableObject, NotchChromeSource {
         let geo = NotchLyricsWindowController.geometry(for: screen)
         notchWidth = geo.notchWidth
         contentTopInset = geo.notchHeight
-        let cap = NotchLyricsWindowController.menuBarCap(on: screen, centerX: geo.centerX).cap
-        if menuBarMaxCardWidth != cap { menuBarMaxCardWidth = cap }
-        let earCaps = NotchLyricsWindowController.menuBarEarCaps(on: screen, geometry: geo)
-        if menuBarEarCaps != earCaps { menuBarEarCaps = earCaps }
     }
 }

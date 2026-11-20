@@ -129,13 +129,8 @@ struct NotchEditorStage: View {
     static func splitSteadyOnCurrentScreen() -> (span: NotchEarSpan, notchWidth: CGFloat)? {
         let settings = AppSettings.shared
         guard !settings.notchEarWidthsLinked else { return nil }
-        let screen = NotchLyricsWindowController.targetScreen()
-        let geo = screen.map { NotchLyricsWindowController.geometry(for: $0) }
+        let geo = NotchLyricsWindowController.targetScreen().map { NotchLyricsWindowController.geometry(for: $0) }
         let notchWidth = geo?.notchWidth ?? 0, topInset = geo?.notchHeight ?? 0
-        var caps: NotchEarSpan?
-        if NotchEarModule.hasLyricLine(left: settings.notchLeftEar, right: settings.notchRightEar), let screen, let geo {
-            caps = NotchLyricsWindowController.menuBarEarCaps(on: screen, geometry: geo)
-        }
         let symmetric = NotchLyricsWindowController.contentWidth(
             baseWidth: CGFloat(settings.notchContentWidth), notchWidth: notchWidth, contentTopInset: topInset)
         let split = NotchLyricsWindowController.splitSteady(
@@ -144,7 +139,7 @@ struct NotchEditorStage: View {
                 symmetricCardWidth: symmetric, notchWidth: notchWidth),
             notchWidth: notchWidth, contentTopInset: topInset, leftEar: settings.notchLeftEar,
             rightEar: settings.notchRightEar, showsEqualizer: settings.notchShowsEqualizer,
-            equalizerEar: settings.notchEqualizerEar, lyricsPlacement: settings.notchLyricsPlacement, caps: caps)
+            equalizerEar: settings.notchEqualizerEar, lyricsPlacement: settings.notchLyricsPlacement)
         return (split.span, notchWidth)
     }
 
@@ -263,16 +258,8 @@ struct NotchEditorStage: View {
         if let split = splitSteadyOnCurrentScreen() { return Double(split.span.cardWidth(notchWidth: split.notchWidth)) }
         let geo = NotchLyricsWindowController.targetScreen()
             .map { NotchLyricsWindowController.geometry(for: $0) }
-        let notchWidth = geo?.notchWidth ?? 0, topInset = geo?.notchHeight ?? 0
-        let settings = AppSettings.shared
-        return Double(NotchLyricsWindowController.earLyricsSteadyWidth(
-            NotchLyricsWindowController.contentWidth(baseWidth: CGFloat(baseWidth), notchWidth: notchWidth,
-                                                     contentTopInset: topInset),
-            floor: NotchLyricsWindowController.contentWidth(baseWidth: 0, notchWidth: notchWidth, contentTopInset: topInset),
-            leftEar: settings.notchLeftEar, rightEar: settings.notchRightEar,
-            maxCardWidth: NotchLyricsWindowController.targetScreen().map {
-                NotchLyricsWindowController.menuBarCap(on: $0, centerX: NotchLyricsWindowController.geometry(for: $0).centerX).cap
-            }))
+        return Double(NotchLyricsWindowController.contentWidth(baseWidth: CGFloat(baseWidth), notchWidth: geo?.notchWidth ?? 0,
+                                                               contentTopInset: geo?.notchHeight ?? 0))
     }
 
     /// 展开态卡片的**真实**宽度,同上给构造不出这个 View 的调用点用(抽屉 / 快捷面板那根
@@ -292,17 +279,10 @@ struct NotchEditorStage: View {
     ///
     /// 宽度调得很小时真窗口会被"两只耳朵放得下按钮"的下限顶宽,编辑台得跟着一起顶,否则
     /// 这一段恰恰在最容易出岔的区间失真(这条是从 NotchPreviewBar 继承的,不是新想的)。
-    /// 耳朵里放了当前句 / 下一句时再按菜单栏两侧夹,同真窗口(`earLyricsSteadyWidth`)。
     private var steadyCardWidth: CGFloat {
         if let split = splitSteady { return split.span.cardWidth(notchWidth: chrome.notchWidth) }
-        return NotchLyricsWindowController.earLyricsSteadyWidth(
-            NotchLyricsWindowController.contentWidth(
-                baseWidth: CGFloat(baseWidth), notchWidth: chrome.notchWidth,
-                contentTopInset: chrome.contentTopInset),
-            floor: NotchLyricsWindowController.contentWidth(
-                baseWidth: 0, notchWidth: chrome.notchWidth, contentTopInset: chrome.contentTopInset),
-            leftEar: settings.notchLeftEar, rightEar: settings.notchRightEar,
-            maxCardWidth: chrome.menuBarMaxCardWidth)
+        return NotchLyricsWindowController.contentWidth(
+            baseWidth: CGFloat(baseWidth), notchWidth: chrome.notchWidth, contentTopInset: chrome.contentTopInset)
     }
 
     /// 展开态卡片此刻真实有多宽:`max(稳态真实宽, 展开设定)`,跟真窗口 `recomputeGeometry`
@@ -316,10 +296,9 @@ struct NotchEditorStage: View {
     }
 
     /// 关掉「两耳等宽」时编辑台上的稳态(两侧外露宽、顶行歌词段宽),拖拖柄时取临时值;两耳等宽时 nil。同真窗口
-    /// `NotchLyricsWindowController.splitSteady`,耳朵里放了歌词时按菜单栏两侧读数夹(`menuBarEarCaps`)。
+    /// `NotchLyricsWindowController.splitSteady`。
     private var splitSteady: (span: NotchEarSpan, topRowLyricsWidth: CGFloat)? {
         guard !settings.notchEarWidthsLinked else { return nil }
-        let lyricEars = NotchEarModule.hasLyricLine(left: settings.notchLeftEar, right: settings.notchRightEar)
         let symmetric = NotchLyricsWindowController.contentWidth(
             baseWidth: CGFloat(baseWidth), notchWidth: chrome.notchWidth, contentTopInset: chrome.contentTopInset)
         return NotchLyricsWindowController.splitSteady(
@@ -328,8 +307,7 @@ struct NotchEditorStage: View {
                 symmetricCardWidth: symmetric, notchWidth: chrome.notchWidth),
             notchWidth: chrome.notchWidth, contentTopInset: chrome.contentTopInset, leftEar: settings.notchLeftEar,
             rightEar: settings.notchRightEar, showsEqualizer: settings.notchShowsEqualizer,
-            equalizerEar: settings.notchEqualizerEar, lyricsPlacement: settings.notchLyricsPlacement,
-            caps: lyricEars ? chrome.menuBarEarCaps : nil)
+            equalizerEar: settings.notchEqualizerEar, lyricsPlacement: settings.notchLyricsPlacement)
     }
 
     /// 稳态卡片偏到哪(两耳等宽时 0),推给替身 chrome。

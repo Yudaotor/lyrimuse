@@ -37,11 +37,6 @@ extension NotchEarModule {
     /// 渲染(`NotchLyricsView.topRow`)、宽度下限(`NotchLyricsWindowController.minEarWidth`)、工具栏摘要三处读这一份。
     var yieldsEqualizer: Bool { self == .controls || lyricLine != nil }
 
-    /// 两只耳朵里有没有放歌词(当前句或下一句)。放了就按菜单栏两侧夹稳态宽(`NotchEarLyrics.steadyWidth`)。
-    static func hasLyricLine(left: NotchEarModule, right: NotchEarModule) -> Bool {
-        left.lyricLine != nil || right.lyricLine != nil
-    }
-
     /// 有没有一只耳朵放着当前句:放了的话下面的歌词行、顶行歌词不再画当前句(`NotchLyricsPlacement.presentation`)。
     static func currentLineInEar(left: NotchEarModule, right: NotchEarModule) -> Bool {
         left == .currentLine || right == .currentLine

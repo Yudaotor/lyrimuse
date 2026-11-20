@@ -152,8 +152,8 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
     /// 是开关本身(快捷操作那颗键的文案读它)。
     @Published private(set) var showsLyrics: Bool = AppSettings.shared.notchShowLyrics
     @Published private(set) var showsLyricsSetting: Bool = AppSettings.shared.notchShowLyrics
-    /// 「收起时显示歌词」三档(`AppSettings.notchLyricsPlacement`)的镜像,订阅里先写它再重算几何:放在顶行时稳态卡片宽要按
-    /// 两侧菜单栏夹(`NotchTopRowLyrics`)。
+    /// 「收起时显示歌词」三档(`AppSettings.notchLyricsPlacement`)的镜像,订阅里先写它再重算几何:放在顶行时两只耳朵收窄、
+    /// 中间给歌词(`NotchTopRowLyrics`)。
     private var lyricsPlacement = AppSettings.shared.notchLyricsPlacement
     /// 顶行歌词那段放得下时的宽度(`recomputeGeometry` 算),0 = 这块屏不在顶行画歌词。
     private var topRowLyricsFitWidth: CGFloat = 0
@@ -314,29 +314,23 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
                             right: ears.right + NotchMetrics.cardHorizontalPadding)
     }
 
-    /// 关掉「两耳等宽」后的稳态:两侧外露宽(每侧不窄于自己那只耳朵的下限;耳朵里放了歌词时按这一侧的菜单栏空位 `caps` 夹)
-    /// 和顶行歌词段宽(没有刘海的屏选了「顶行」时,两侧从中线量各至少放得下一只耳朵和半段最窄歌词,0 = 不画)。
-    /// 真窗口(`recomputeGeometry`)、编辑台、快捷面板与抽屉读数都走它。`caps` 为 nil(锁屏那份、没有读数)时不夹。
-    /// 见 05 章决策 160。
+    /// 关掉「两耳等宽」后的稳态:两侧外露宽(每侧按设定值,不窄于自己那只耳朵的下限)和顶行歌词段宽(没有刘海的屏选了
+    /// 「顶行」时,两侧从中线量各至少放得下一只耳朵和半段最窄歌词;没选是 0)。不按菜单栏两侧占用收窄(05 章决策 162)。
+    /// 真窗口(`recomputeGeometry`)、编辑台、快捷面板与抽屉读数都走它。见 05 章决策 160。
     static func splitSteady(setting: NotchEarSpan, notchWidth: CGFloat, contentTopInset: CGFloat,
                             leftEar: NotchEarModule, rightEar: NotchEarModule, showsEqualizer: Bool,
-                            equalizerEar: NotchEqualizerEar, lyricsPlacement: NotchLyricsPlacement,
-                            caps: NotchEarSpan?) -> (span: NotchEarSpan, topRowLyricsWidth: CGFloat) {
+                            equalizerEar: NotchEqualizerEar,
+                            lyricsPlacement: NotchLyricsPlacement) -> (span: NotchEarSpan, topRowLyricsWidth: CGFloat) {
         let floor = earFloors(leftEar: leftEar, rightEar: rightEar, showsEqualizer: showsEqualizer,
                               equalizerEar: equalizerEar, contentTopInset: contentTopInset)
         let placement = lyricsPlacement.presentation(
             hasNotch: notchWidth > 0, currentLineInEar: NotchEarModule.currentLineInEar(left: leftEar, right: rightEar))
-        let lyricEars = NotchEarModule.hasLyricLine(left: leftEar, right: rightEar)
-        let span = NotchEarWidths.steady(setting: setting, floor: floor, cap: lyricEars ? caps : nil)
+        let span = NotchEarWidths.steady(setting: setting, floor: floor)
         guard placement == .topRow else { return (span, 0) }
         let ear = topRowEarWidth(leftEar: leftEar, rightEar: rightEar, showsEqualizer: showsEqualizer,
                                  equalizerEar: equalizerEar, contentTopInset: contentTopInset)
-        if let fit = NotchTopRowLyrics.fit(span: span, earWidth: ear, cardPadding: NotchMetrics.cardHorizontalPadding,
-                                           cap: caps) {
-            return (fit.span, fit.lyricWidth)
-        }
-        let side = NotchTopRowLyrics.minimumSideWidth(earWidth: ear, cardPadding: NotchMetrics.cardHorizontalPadding)
-        return (NotchEarSpan(left: max(span.left, side), right: max(span.right, side)), 0)
+        let fit = NotchTopRowLyrics.fit(span: span, earWidth: ear, cardPadding: NotchMetrics.cardHorizontalPadding)
+        return (fit.span, fit.lyricWidth)
     }
 
     /// 两侧外露宽的设定值;没设过(0)的那一侧按两耳等宽时的稳态 `symmetricCardWidth` 对称起步。
@@ -663,8 +657,8 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
             self?.expandedShowsScrubber = (ms ?? 0) > 0
         }
         .store(in: &subscriptions)
-        // 「收起时显示歌词」三档。同上:存 sink 参数值(@Published 是 willSet 时机,回读拿到旧值);放在顶行时稳态宽按
-        // 菜单栏两侧夹,所以要重算几何(`recomputeGeometry` 末尾会再算一遍生效值)。
+        // 「收起时显示歌词」三档。同上:存 sink 参数值(@Published 是 willSet 时机,回读拿到旧值);放在顶行时稳态宽的
+        // 下限要放得下两耳和最窄一段歌词,所以要重算几何(`recomputeGeometry` 末尾会再算一遍生效值)。
         AppSettings.shared.$notchShowLyrics.combineLatest(AppSettings.shared.$notchLyricsInTopRow)
             .removeDuplicates { $0 == $1 }
             .sink { [weak self] show, inTopRow in
@@ -674,13 +668,6 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
                 recomputeGeometry(animate: false)
                 applyShowsLyrics()
             }
-        .store(in: &subscriptions)
-        // 菜单栏两侧占用变了(切前台 App、状态栏图标增减):顶行歌词那一档的稳态宽要跟着夹。
-        MenuBarOccupancy.shared.changes.sink { [weak self] in
-            guard let self, lyricsPlacement == .topRow || NotchEarModule.hasLyricLine(left: leftEarModule, right: rightEarModule)
-            else { return }
-            recomputeGeometry(animate: false)
-        }
         .store(in: &subscriptions)
         // 「暂停时缩到最小」开关。同一个 willSet 坑同一个修法:存 sink 参数值。写入
         // @Published 即生效——isCollapsed 是计算属性,靠这次 objectWillChange 让依赖它的
@@ -964,7 +951,6 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
     func setVisible(_ visible: Bool) {
         isVisible = visible
         AppSettings.shared.notchOverlayEnabled = visible
-        syncOccupancyClient()
         if visible {
             setHiddenFromCapture(AppSettings.shared.notchHideDuringScreenCapture)
             setHideWhenNotPlaying(AppSettings.shared.notchHideWhenNotPlaying)
@@ -1165,8 +1151,7 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
                 "earWidthsLinked": earWidthsLinked, "steadyCardOffset": steadyCardOffset,
                 "leftEarWidth": cardLayout.steadySpan.left, "rightEarWidth": cardLayout.steadySpan.right,
                 "leftEarWidthSetting": leftEarWidthSetting, "rightEarWidthSetting": rightEarWidthSetting,
-                "expandedCardWidth": expandedCardWidth,
-                "topRowCap": topRowCapReading.mapValues { ($0 as? CGFloat).map { $0 as Any } ?? NSNull() }]
+                "expandedCardWidth": expandedCardWidth]
     }
 
     /// 指针在卡片或简介浮框上时光标钉成箭头。App 在后台,不开 `BackgroundCursor` 时 `NSCursor.set()` 不生效,
@@ -1567,58 +1552,6 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
     /// `ignoresNotchForDebug` 改了:各实例和编辑台预览重算几何。
     static let debugGeometryChanged = Notification.Name("me.yudaotor.lyrimuse.notch-debug-geometry")
 
-    /// 顶行歌词和耳朵里的歌词要菜单栏两侧的读数(`MenuBarOccupancy`):这一实例开着、在没有刘海的屏上放顶行歌词,或耳朵里放了
-    /// 当前句 / 下一句时才登记,锁屏那份不要。
-    private func syncOccupancyClient() {
-        let wants = isVisible && !presentsOnLockScreen
-            && (lyricsPlacement.presentation(hasNotch: notchWidth > 0, currentLineInEar: currentLineInEar) == .topRow
-                || NotchEarModule.hasLyricLine(left: leftEarModule, right: rightEarModule))
-        MenuBarOccupancy.shared.setActive(wants, client: ObjectIdentifier(self))
-    }
-
-    /// 以 `centerX` 居中的灵动岛在这块屏上最宽多少才不压到菜单和状态栏图标(`NotchTopRowLyrics.maxCardWidth`)。
-    /// 两侧读数跟菜单栏正中歌词同一份(`MenuBarCenterLyrics.occupiedSpan`)。
-    private func topRowMaxCardWidth(on screen: NSScreen, centerX: CGFloat) -> CGFloat {
-        let reading = Self.menuBarCap(on: screen, centerX: centerX)
-        topRowCapReading = ["maxCardWidth": reading.cap, "menusMaxX": reading.menusMaxX as Any,
-                            "statusItemsMinX": reading.statusItemsMinX as Any]
-        return reading.cap
-    }
-
-    /// 上面那个上限连同两侧读数,不碰实例状态:编辑台预览和菜单栏快捷面板的读数也按它夹耳朵歌词的宽度。有刘海的屏只认露在
-    /// 刘海两边的菜单和图标(收起藏在刘海边上的状态栏项不算,05 章决策 159);没有刘海的屏(顶行歌词)原样读。
-    static func menuBarCap(on screen: NSScreen, centerX: CGFloat) -> (cap: CGFloat, menusMaxX: CGFloat?, statusItemsMinX: CGFloat?) {
-        let occupied = MenuBarCenterLyrics.occupiedSpan(on: screen, notch: nil,
-                                                        besideNotch: MenuBarCenterLyrics.notchRange(of: screen))
-        let cap = NotchTopRowLyrics.maxCardWidth(centerX: centerX, span: occupied.span)
-        return (cap, occupied.menusMaxX, occupied.statusItemsMinX)
-    }
-
-    /// 关掉「两耳等宽」后两侧各自的菜单栏空位(`NotchEarWidths.caps`),读数同 `menuBarCap`。
-    static func menuBarEarCaps(on screen: NSScreen, geometry geo: NotchGeometry) -> NotchEarSpan {
-        let occupied = MenuBarCenterLyrics.occupiedSpan(on: screen, notch: nil,
-                                                        besideNotch: MenuBarCenterLyrics.notchRange(of: screen))
-        return NotchEarWidths.caps(centerX: geo.centerX, notchWidth: geo.notchWidth, span: occupied.span)
-    }
-
-    /// 同上,顺手记一份读数给 `debug/state`。
-    private func splitMenuBarCaps(on screen: NSScreen, geometry geo: NotchGeometry) -> NotchEarSpan {
-        let caps = Self.menuBarEarCaps(on: screen, geometry: geo)
-        topRowCapReading = ["leftCap": caps.left, "rightCap": caps.right]
-        return caps
-    }
-
-    /// 耳朵里放了当前句 / 下一句时的稳态宽:按 `maxCardWidth` 夹、不窄于耳朵下限 `floor`;没放歌词原样返回。
-    /// 真窗口(`recomputeGeometry`)、编辑台预览(`NotchEditorStage.steadyCardWidth`)、快捷面板读数(`effectiveWidth`)三处都走它。
-    static func earLyricsSteadyWidth(_ width: CGFloat, floor: CGFloat, leftEar: NotchEarModule, rightEar: NotchEarModule,
-                                     maxCardWidth: CGFloat?) -> CGFloat {
-        guard NotchEarModule.hasLyricLine(left: leftEar, right: rightEar) else { return width }
-        return NotchEarLyrics.steadyWidth(width, floor: floor, maxCardWidth: maxCardWidth)
-    }
-
-    /// 最近一次顶行歌词上限的读数,只给 `debug/state` 看。
-    private var topRowCapReading: [String: Any] = [:]
-
     private func updateActualVisibility(isPlayingNow: Bool) {
         // 跟随当前窗口:显示状态定下来之后同步要不要盯焦点屏(主实例才盯),换屏放在这一步执行完之后。
         defer {
@@ -1782,7 +1715,7 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
     /// 在菜单栏 32 的屏上(封面 22pt)就白占 6pt/耳、卡片白宽 12pt。
     ///
     /// `lyricsPlacement` 是「顶行」且这块屏没有刘海时,下限再抬到放得下两只耳朵和最窄的一段歌词
-    /// (`NotchTopRowLyrics.minimumCardWidth`)。上限(菜单栏两侧占用)不在这里夹,只有真窗口读得到,见 `recomputeGeometry`。
+    /// (`NotchTopRowLyrics.minimumCardWidth`)。
     static func contentWidth(baseWidth: CGFloat, notchWidth: CGFloat,
                              leftEar: NotchEarModule, rightEar: NotchEarModule,
                              showsEqualizer: Bool, equalizerEar: NotchEqualizerEar,
@@ -1950,7 +1883,6 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
     /// (主实例 .shared 是有意常驻的单例、从不 teardown,不受影响。)
     func teardown() {
         cancelPendingHide()
-        MenuBarOccupancy.shared.setActive(false, client: ObjectIdentifier(self))
         ListenMilestoneCenter.shared.unregisterSurface(self)
         pendingShrinkWork?.cancel()
         pendingShrinkWork = nil
@@ -2015,42 +1947,31 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
             equalizerEar: equalizerEar,
             contentTopInset: geo.notchHeight,
             lyricsPlacement: lyricsPlacement)
-        // 耳朵里放了歌词:稳态宽按菜单栏两侧较窄的那边夹,两耳仍等宽、以刘海为中心,不窄于耳朵下限(05 章决策 159)。
-        // 顶行歌词(没有刘海的屏、选了「顶行」):稳态宽再按菜单栏两侧已占的位置夹,夹完放不下最窄的一段歌词就不画、宽度照旧。
+        // 宽度一律按设定画,耳朵里放歌词、顶行歌词都不按菜单栏两侧占用收窄(05 章决策 162)。
+        // 顶行歌词(没有刘海的屏、选了「顶行」):两只耳朵收到刚好放得下模块,中间那段给当前句。
         var steadyWidth = newSteady
         var topRowFit: CGFloat = 0
         var steadySpan: NotchEarSpan?
         let placement = lyricsPlacement.presentation(hasNotch: geo.notchWidth > 0, currentLineInEar: currentLineInEar)
-        let lyricEars = NotchEarModule.hasLyricLine(left: leftEarModule, right: rightEarModule)
         if !earWidthsLinked {
-            // 两耳不等宽:每侧只按自己那侧的菜单栏空位和自己那只耳朵的下限夹,卡片偏到宽的那一侧(05 章决策 160)。
-            let caps = (placement == .topRow || lyricEars) && !presentsOnLockScreen
-                ? splitMenuBarCaps(on: screen, geometry: geo) : nil
+            // 两耳不等宽:每侧按自己的设定值、不窄于自己那只耳朵的下限,卡片偏到宽的那一侧(05 章决策 160)。
             let split = Self.splitSteady(
                 setting: Self.earWidthSetting(left: leftEarWidthSetting, right: rightEarWidthSetting,
                                               symmetricCardWidth: newSteady, notchWidth: geo.notchWidth),
                 notchWidth: geo.notchWidth, contentTopInset: geo.notchHeight, leftEar: leftEarModule,
                 rightEar: rightEarModule, showsEqualizer: showsEqualizer, equalizerEar: equalizerEar,
-                lyricsPlacement: lyricsPlacement, caps: caps)
+                lyricsPlacement: lyricsPlacement)
             steadySpan = split.span
             steadyWidth = split.span.cardWidth(notchWidth: geo.notchWidth)
             topRowFit = split.topRowLyricsWidth
-        } else if placement == .topRow || lyricEars {
-            let cap = presentsOnLockScreen ? nil : topRowMaxCardWidth(on: screen, centerX: geo.centerX)
-            if lyricEars {
-                steadyWidth = Self.earLyricsSteadyWidth(newSteady, floor: Self.contentWidth(
-                    baseWidth: 0, notchWidth: geo.notchWidth, leftEar: leftEarModule, rightEar: rightEarModule,
-                    showsEqualizer: showsEqualizer, equalizerEar: equalizerEar, contentTopInset: geo.notchHeight,
-                    lyricsPlacement: lyricsPlacement), leftEar: leftEarModule, rightEar: rightEarModule, maxCardWidth: cap)
-            }
-            if placement == .topRow, let fit = NotchTopRowLyrics.fit(
+        } else if placement == .topRow {
+            let fit = NotchTopRowLyrics.fit(
                 steadyWidth: steadyWidth,
                 earWidth: Self.topRowEarWidth(leftEar: leftEarModule, rightEar: rightEarModule, showsEqualizer: showsEqualizer,
                                               equalizerEar: equalizerEar, contentTopInset: geo.notchHeight),
-                cardPadding: NotchMetrics.cardHorizontalPadding, maxCardWidth: cap) {
-                steadyWidth = fit.cardWidth
-                topRowFit = fit.lyricWidth
-            }
+                cardPadding: NotchMetrics.cardHorizontalPadding)
+            steadyWidth = fit.cardWidth
+            topRowFit = fit.lyricWidth
         }
         topRowLyricsFitWidth = topRowFit
         if steadyCardWidth != steadyWidth { steadyCardWidth = steadyWidth }
@@ -2067,7 +1988,6 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
             expandedSetting: baseExpandedContentWidth)
         if expandedCardWidth != newExpanded { expandedCardWidth = newExpanded }
         applyShowsLyrics()
-        syncOccupancyClient()
         // 窗口恒为**最大**形态(展开态)的尺寸,不随收起/稳态/展开三种形态改:三种形态是卡片在这个
         // 固定窗口里自己变大变小(NotchWindowRoot),窗口只在屏幕几何或宽度设置变化时才动。
         //
