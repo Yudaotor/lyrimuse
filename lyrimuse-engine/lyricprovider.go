@@ -27,15 +27,16 @@ type ProviderQuery struct {
 	DurationSecs float64
 }
 
-// RoundEnv 是这一轮交给源的环境。带特权的那几样(播放侧记下的平台曲目编号、播放器自己的无人声信号、源之间递的曲目编号)
-// 只经下面的方法读写,方法按 granted 放行:收集循环建的那份 granted 是 0,调度交给源之前按它的描述符填(grantedTo),
-// 没有对应特权位的源读到的是零值、等不到别人的编号、递的编号没有效果。见 09 章决策 392、393。
+// RoundEnv 是这一轮交给源的环境。带特权的那几样(播放器原样标签、播放侧记下的平台曲目编号、播放器自己的无人声信号、
+// 源之间递的曲目编号)只经下面的方法读写,方法按 granted 放行:收集循环建的那份 granted 是 0,调度交给源之前按它的描述符填
+// (grantedTo),没有对应特权位的源读到的是零值、等不到别人的编号、递的编号没有效果。见 09 章决策 392、393、395。
 //
 // 这个结构要能用 == 比:别往里加切片、map、函数字段。
 type RoundEnv struct {
 	// ForPlayingTrack:这一轮解析的是正在放的那首或它的待播队列(playerSignalApplies)。
 	ForPlayingTrack bool
-	// identityArtist / identityTitle / identityAlbum:播放器原样标签(lyricIdentityFields),播放侧按它记平台曲目编号。
+	// identityArtist / identityTitle / identityAlbum:播放器原样标签(lyricIdentityFields),播放侧按它记平台曲目编号,
+	// 本机类源按它认这一首。
 	identityArtist, identityTitle, identityAlbum string
 	// granted:拿到这份环境的源的特权位。
 	granted builtinPrivileges
@@ -123,6 +124,15 @@ func (s *roundTrackID) await() string {
 	return s.id
 }
 
+// IdentityFields:播放器原样标签(歌手、歌名、专辑),本机类源按它在播放器自己的数据里认这一首,不用检索词。
+// 要 privLocalClientIdentity,没有这一位的源拿到三个空串。
+func (e RoundEnv) IdentityFields() (artist, title, album string) {
+	if !e.granted.has(privLocalClientIdentity) {
+		return "", "", ""
+	}
+	return e.identityArtist, e.identityTitle, e.identityAlbum
+}
+
 // PlaybackTrackIDs:播放侧为这一首记下的平台曲目编号(playbackTrackIDsForRound),别的歌那一轮不给。
 // 要 privPlaybackTrackIDs,没有这一位的源拿到两个空串。
 func (e RoundEnv) PlaybackTrackIDs(ctx context.Context) (appleCatalogID, spotifyTrackID string) {
@@ -159,7 +169,7 @@ const (
 	providerKindUserLibrary
 )
 
-// RoundPolicy:哪些轮次问这个源。
+// RoundPolicy:哪些轮次问这个源。本机类源一律是 roundsPrimaryOnly。
 type RoundPolicy int
 
 const (
@@ -167,6 +177,9 @@ const (
 	roundsAll RoundPolicy = iota
 	// roundsOnDemand:只在用户此刻在听、在找的轮次里问(isOnDemandLyricRound)。
 	roundsOnDemand
+	// roundsPrimaryOnly:只在首轮问(lyricQueryReasonPrimary)。本机类源认这一首不看检索词的写法,别名轮、反查轮里再交
+	// 一份会被当成「这个别名救回了候选」;首轮那份靠 mergeLyricCandidateRounds 的只增不减留到最后。
+	roundsPrimaryOnly
 )
 
 // HostScope:一条主机规则认多大范围。
@@ -333,12 +346,12 @@ type ProviderDescriptor struct {
 	DependsOnIDsFrom []string
 }
 
-// lyricProviderRegistry 是全部歌词来源的登记表:联网源和本机来源各一份描述符,十六个联网源另各有一份实现。
+// lyricProviderRegistry 是全部歌词来源的登记表:联网源和本机来源各一份描述符,登记了实现的由调度起(startLyricProviders)。
 type lyricProviderRegistry struct {
 	descriptors []*ProviderDescriptor
 	byName      map[string]*ProviderDescriptor
-	// providers:联网源的实现,每个联网源恰好一份。收集循环由调度起它们(startLyricProviders),按源名单数「都回来了
-	// 没有」:少登记一个这一轮会等到截止,多登记一份会多交一份结果。
+	// providers:各来源的实现,一个来源至多一份。联网源每个恰好一份:收集循环按源名单数「都回来了没有」,少登记一个
+	// 这一轮会等到截止,多登记一份会多交一份结果。本机类源按这里的先后同步问。
 	providers []LyricProvider
 }
 

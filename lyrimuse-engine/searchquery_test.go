@@ -113,7 +113,6 @@ func TestLyricIdentityFieldsIsWired(t *testing.T) {
 		"enrich.go": {
 			"idArtist, idTitle, idAlbum := lyricIdentityFields(ctx, artist, title, album)",
 			"providerEnv := RoundEnv{ForPlayingTrack: forPlaying, identityArtist: idArtist, identityTitle: idTitle, identityAlbum: idAlbum}",
-			"kkboxLocalLyricsFor(idArtist, idTitle, durationSecs)",
 			"spotifyLocalLyricsFor(idArtist, idTitle, idAlbum)",
 			"amazonLocalLyricsFor(idArtist, idTitle, idAlbum)",
 		},
@@ -123,8 +122,10 @@ func TestLyricIdentityFieldsIsWired(t *testing.T) {
 			"appleID, _ := env.PlaybackTrackIDs(ctx)",
 			"appleID = env.AwaitPlayingAppleCatalogID(ctx)",
 		},
-		"amllttml.go": {"appleCatalogID, spotifyTrackID := env.PlaybackTrackIDs(ctx)"},
+		"amllttml.go":    {"appleCatalogID, spotifyTrackID := env.PlaybackTrackIDs(ctx)"},
+		"kkboxlyrics.go": {"artist, title, _ := env.IdentityFields()\n\tr, _ := kkboxLocalLyricsFor(artist, title, q.DurationSecs)"},
 		"lyricprovider.go": {
+			"if !e.granted.has(privLocalClientIdentity) {\n\t\treturn \"\", \"\", \"\"\n\t}\n\treturn e.identityArtist, e.identityTitle, e.identityAlbum",
 			"return playbackTrackIDsForRound(ctx, e.identityArtist, e.identityTitle, e.identityAlbum)",
 			"return waitPlayingAppleCatalogID(ctx, e.identityArtist, e.identityTitle, e.identityAlbum)",
 		},

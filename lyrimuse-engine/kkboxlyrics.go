@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"math"
@@ -235,6 +236,18 @@ func kkboxLocalLyricsFor(artist, title string, durationSecs float64) (lyricSourc
 		source: kkboxLocalLyricsSource, lyr: r.lyrics, matchTitle: r.title, matchArtist: r.artist, matchAlbum: r.album,
 		matchCover: r.cover, srcDur: r.durationSecs, identityFromLocalClient: !r.coarse && !r.weakIdentity,
 	}, true
+}
+
+// kkboxLocalProvider 把 KKBOX 本地歌词接到统一接口上:按播放器原样标签在它的缓存里认这一首(kkboxLocalLyricsFor),
+// 不是在用 KKBOX 放、缓存里没有这首时交空结果。
+type kkboxLocalProvider struct{ desc *ProviderDescriptor }
+
+func (p kkboxLocalProvider) Descriptor() *ProviderDescriptor { return p.desc }
+
+func (p kkboxLocalProvider) Resolve(ctx context.Context, q ProviderQuery, env RoundEnv) SourceResult {
+	artist, title, _ := env.IdentityFields()
+	r, _ := kkboxLocalLyricsFor(artist, title, q.DurationSecs)
+	return r
 }
 
 // kkboxPlayingInfo:用 KKBOX 放的这首,它缓存里现在有的几样东西 —— 单曲详情给的歌曲页和专辑图,有没有它的歌词。

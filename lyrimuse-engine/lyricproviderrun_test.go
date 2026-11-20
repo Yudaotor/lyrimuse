@@ -201,8 +201,9 @@ func TestStartLyricProvidersSendsOneResultEach(t *testing.T) {
 	}
 }
 
-// 一个联网源只走一条路:登记了实现的由调度起,没登记的在收集循环里有且只有一个手写的 goroutine。
-func TestEveryNetworkSourceHasExactlyOneCollector(t *testing.T) {
+// 一个来源只走一条路。联网源:登记了实现的由调度起,没登记的在收集循环里有且只有一个手写的 goroutine。本机类源:
+// 登记了实现的由调度同步问,没登记的在收集循环里有且只有一处手写的读取。登记表里的每个来源都得占一条。
+func TestEveryLyricSourceHasExactlyOneCollector(t *testing.T) {
 	raw, err := os.ReadFile("enrich.go")
 	if err != nil {
 		t.Fatal(err)
@@ -214,8 +215,8 @@ func TestEveryNetworkSourceHasExactlyOneCollector(t *testing.T) {
 	implemented := map[string]int{}
 	for _, p := range lyricProviders().providers {
 		d := p.Descriptor()
-		if d == nil || lyricProviders().descriptor(d.Name) != d || d.Kind != providerKindNetwork {
-			t.Fatalf("登记的实现交的描述符不是登记表里那份联网源的:%+v", d)
+		if d == nil || lyricProviders().descriptor(d.Name) != d {
+			t.Fatalf("登记的实现交的描述符不是登记表里那份:%+v", d)
 		}
 		implemented[d.Name]++
 	}
@@ -223,12 +224,53 @@ func TestEveryNetworkSourceHasExactlyOneCollector(t *testing.T) {
 		t.Errorf("lrclib 应登记一份实现,得到 %d", implemented[lyricSourceLRCLIB])
 	}
 	for _, name := range lyricSourceNames {
+		if d := lyricProviders().descriptor(name); d == nil || d.Kind != providerKindNetwork {
+			t.Fatalf("源名单里的 %s 在登记表里应是联网源:%+v", name, d)
+		}
 		handwritten := countCode(src, fmt.Sprintf("if skipSource(%q) {", name)) +
 			countCode(src, fmt.Sprintf("switch lyricSourceSkipFor(%q, lyricSourceEnabled, breakerPlan) {", name))
 		if implemented[name]+handwritten != 1 {
 			t.Errorf("%s:登记的实现 %d 份、手写的 goroutine %d 个,应合计恰好一个", name, implemented[name], handwritten)
 		}
 	}
+	entries := map[string]string{}
+	for _, l := range localLyricSources {
+		entries[l.name] = l.entry
+	}
+	local := 0
+	for _, d := range registryDescriptors() {
+		if d.Kind == providerKindNetwork {
+			if !slices.Contains(lyricSourceNames, d.Name) {
+				t.Errorf("联网源 %s 不在源名单里:收集循环不等它的结果", d.Name)
+			}
+			continue
+		}
+		local++
+		entry := entries[d.Name]
+		if entry == "" {
+			t.Errorf("本机类源 %s 不在 localLyricSources 里:新加的本机类源要补进表里", d.Name)
+			continue
+		}
+		handwritten := countCode(src, entry+"(")
+		if implemented[d.Name]+handwritten != 1 {
+			t.Errorf("%s:登记的实现 %d 份、收集循环里手写的读取 %d 处,应合计恰好一个", d.Name, implemented[d.Name], handwritten)
+		}
+	}
+	if local != len(localLyricSources) || len(implemented) > len(lyricSourceNames)+local {
+		t.Errorf("本机类源 %d 个、localLyricSources %d 行、登记了实现的 %d 个", local, len(localLyricSources), len(implemented))
+	}
+}
+
+// localLyricSources:六路本机来源各自的入口函数,和接到调度上之后 Resolve 里调入口的那一段(按播放器原样标签查,
+// 标签经环境读)。
+var localLyricSources = []struct{ name, file, entry, call string }{
+	{kkboxLocalLyricsSource, "kkboxlyrics.go", "kkboxLocalLyricsFor",
+		"artist, title, _ := env.IdentityFields()\n\tr, _ := kkboxLocalLyricsFor(artist, title, q.DurationSecs)\n\treturn r"},
+	{spotifyLocalLyricsSource, "spotifylyrics.go", "spotifyLocalLyricsFor", ""},
+	{amazonLocalLyricsSource, "amazonlibrary.go", "amazonLocalLyricsFor", ""},
+	{localFileLyricsSource, "localfilelyrics.go", "localFileLyricsFor", ""},
+	{lxMusicLocalLyricsSource, "lxmusic.go", "lxMusicLocalLyricsFor", ""},
+	{importLyricsSource, "importstore.go", "importedLyricsFor", ""},
 }
 
 // ---- LRCLIB:经调度问出来的,跟照手写 goroutine 的写法问出来的对拍 ----

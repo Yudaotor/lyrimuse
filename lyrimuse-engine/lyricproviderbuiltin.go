@@ -6,8 +6,8 @@ const (
 	peerGroupGlobal  = "global"
 )
 
-// newBuiltinLyricProviderRegistry 登记十六个联网歌词源和六路本机来源。登记顺序不带语义,先后看各自的 Order / TieRank /
-// DefaultPriorityRank。
+// newBuiltinLyricProviderRegistry 登记十六个联网歌词源和六路本机来源。联网源的登记顺序不带语义,先后看各自的 Order /
+// TieRank / DefaultPriorityRank;本机类源登记了实现的,调度按登记的先后同步问(runLocalLyricProviders)。
 func newBuiltinLyricProviderRegistry() *lyricProviderRegistry {
 	r := &lyricProviderRegistry{byName: map[string]*ProviderDescriptor{}}
 
@@ -144,21 +144,26 @@ func newBuiltinLyricProviderRegistry() *lyricProviderRegistry {
 		ParenBackground: true, PageURL: megalobizPageURL,
 	}, 0)})
 
-	r.registerBuiltin(&ProviderDescriptor{Name: kkboxLocalLyricsSource, Kind: providerKindPlayerLocal, TieRank: 16},
-		privLocalClientIdentity)
-	r.registerBuiltin(&ProviderDescriptor{Name: amazonLocalLyricsSource, Kind: providerKindPlayerLocal, TieRank: 17},
-		privLocalClientIdentity)
+	r.implement(kkboxLocalProvider{desc: r.registerBuiltin(&ProviderDescriptor{
+		Name: kkboxLocalLyricsSource, Kind: providerKindPlayerLocal, TieRank: 16, Rounds: roundsPrimaryOnly,
+	}, privLocalClientIdentity)})
 	r.registerBuiltin(&ProviderDescriptor{
-		Name: lxMusicLocalLyricsSource, Kind: providerKindPlayerLocal, TieRank: 18, ParenBackground: true,
+		Name: amazonLocalLyricsSource, Kind: providerKindPlayerLocal, TieRank: 17, Rounds: roundsPrimaryOnly,
 	}, privLocalClientIdentity)
 	r.registerBuiltin(&ProviderDescriptor{
-		Name: localFileLyricsSource, Kind: providerKindPlayerLocal, TieRank: 19,
+		Name: lxMusicLocalLyricsSource, Kind: providerKindPlayerLocal, TieRank: 18, Rounds: roundsPrimaryOnly,
+		ParenBackground: true,
+	}, privLocalClientIdentity)
+	r.registerBuiltin(&ProviderDescriptor{
+		Name: localFileLyricsSource, Kind: providerKindPlayerLocal, TieRank: 19, Rounds: roundsPrimaryOnly,
 		Baked: bakedAdopt, PlainText: plainTextFirst,
 	}, privLocalClientIdentity)
-	r.registerBuiltin(&ProviderDescriptor{Name: importLyricsSource, Kind: providerKindUserLibrary, TieRank: 20},
-		privLocalClientIdentity)
-	r.registerBuiltin(&ProviderDescriptor{Name: spotifyLocalLyricsSource, Kind: providerKindPlayerLocal, TieRank: 21},
-		privLocalClientIdentity|privPlayerNoVocals)
+	r.registerBuiltin(&ProviderDescriptor{
+		Name: importLyricsSource, Kind: providerKindUserLibrary, TieRank: 20, Rounds: roundsPrimaryOnly,
+	}, privLocalClientIdentity)
+	r.registerBuiltin(&ProviderDescriptor{
+		Name: spotifyLocalLyricsSource, Kind: providerKindPlayerLocal, TieRank: 21, Rounds: roundsPrimaryOnly,
+	}, privLocalClientIdentity|privPlayerNoVocals)
 
 	return r
 }

@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"log"
+	"reflect"
 	"time"
 )
 
@@ -14,6 +15,8 @@ type lyricRoundPlan struct {
 	only map[string]bool
 	// onDemand:这一轮是为用户此刻在听、在找的那首问的(isOnDemandLyricRound)。
 	onDemand bool
+	// primary:这一轮是首轮(lyricQueryReasonPrimary),不是别名轮、反查轮这些追加的轮次。
+	primary bool
 	// enabled:这个源在设置里开着没有。
 	enabled func(source string) bool
 	// cooling:这一轮在熔断冷却里的源和各自还要冷却多久(lyricSourceBreaker.planRound)。
@@ -25,7 +28,7 @@ type lyricRoundPlan struct {
 func newLyricRoundPlan(ctx context.Context, cooling lyricSourceRoundPlan) lyricRoundPlan {
 	return lyricRoundPlan{
 		only: lyricSourceOnlyFrom(ctx), onDemand: isOnDemandLyricRound(ctx), enabled: lyricSourceEnabled,
-		cooling: cooling, round: lyricSourceRoundFrom(ctx),
+		primary: lyricQueryReasonFrom(ctx) == lyricQueryReasonPrimary, cooling: cooling, round: lyricSourceRoundFrom(ctx),
 	}
 }
 
@@ -41,8 +44,16 @@ const (
 	providerRoundSkipCooling
 )
 
-// decide 的判据和先后同 lyricSourceSkippedThisRound:名单外、轮次不许、关掉都先于冷却,一个既关掉又在冷却的源不记跳过。
+// decide:联网源的判据和先后同 lyricSourceSkippedThisRound:名单外、轮次不许、关掉都先于冷却,一个既关掉又在冷却的源不记
+// 跳过。本机类源(Kind 不是联网的)只看轮次:别名轮的名单、设置里的开关、熔断管的都是联网源,带着「只查这些源」名单的
+// 首轮(只问播放器自家那个源的探查、手动重新匹配指定的源)照样读本机那几份。
 func (p lyricRoundPlan) decide(d *ProviderDescriptor) providerRoundDecision {
+	if d.Rounds == roundsPrimaryOnly && !p.primary {
+		return providerRoundSkipSilent
+	}
+	if d.Kind != providerKindNetwork {
+		return providerRoundQuery
+	}
 	if p.only != nil && !p.only[d.Name] {
 		return providerRoundSkipSilent
 	}
@@ -110,13 +121,37 @@ func sealProviderResult(d *ProviderDescriptor, r SourceResult) SourceResult {
 	return r
 }
 
-// startLyricProviders 给每个源起一个 goroutine,各往 out 送一份结果。out 的缓冲必须放得下每个源各一份:
-// 收集循环到截止或被取消后不再读 out,晚到的结果要能不阻塞地送进去。这一轮源之间递曲目编号的地方在这里建。
-func startLyricProviders(ctx context.Context, providers []LyricProvider, q ProviderQuery, env RoundEnv, plan lyricRoundPlan, out chan<- SourceResult) {
+// startLyricProviders 起这一轮的全部来源,按描述符的 Kind 分两段。这一轮源之间递曲目编号的地方在这里建。见 09 章决策 395。
+//   - 并发段:联网源各起一个 goroutine,各往 out 送一份结果。out 的缓冲必须放得下每个联网源各一份:收集循环到截止或
+//     被取消后不再读 out,晚到的结果要能不阻塞地送进去。
+//   - 同步段:本机类源在联网源起跑之后当场问完(runLocalLyricProviders),交了东西的作为返回值交回,不经 out:收集循环
+//     不数它们「回来了没有」,不进进度分母和截止;返回时它们已经问完,第一份联网结果到达时本机那几份已经在候选池里。
+//     别挪到起联网源之前:洛雪那一路最多等本机接口 3 秒,会原样叠在全部联网源的起跑之前。
+func startLyricProviders(ctx context.Context, providers []LyricProvider, q ProviderQuery, env RoundEnv, plan lyricRoundPlan, out chan<- SourceResult) []SourceResult {
 	env.trackIDs = newRoundTrackIDs(providers)
+	var local []LyricProvider
 	for _, p := range providers {
+		if p.Descriptor().Kind != providerKindNetwork {
+			local = append(local, p)
+			continue
+		}
 		go func() { out <- runLyricProviderInRound(ctx, p, q, env, plan) }()
 	}
+	return runLocalLyricProviders(ctx, local, q, env, plan)
+}
+
+// runLocalLyricProviders 按 providers 的先后同步问本机类源,每个照 runLyricProvider 的规矩问(判轮次、放行特权、封口),
+// 只交回交了东西的:本机没有这一首的源交的是只带源名的空结果,在这里丢掉,不进候选池。
+func runLocalLyricProviders(ctx context.Context, providers []LyricProvider, q ProviderQuery, env RoundEnv, plan lyricRoundPlan) []SourceResult {
+	var found []SourceResult
+	for _, p := range providers {
+		r := runLyricProvider(ctx, p, q, env, plan)
+		if reflect.DeepEqual(r, SourceResult{source: r.source}) {
+			continue
+		}
+		found = append(found, r)
+	}
+	return found
 }
 
 // runLyricProviderInRound 是一个源在一轮里的那一趟:runLyricProvider 之外管源之间递曲目编号的先后。见 09 章决策 393。

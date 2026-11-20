@@ -118,10 +118,17 @@ func TestProviderRegistryIsWellFormed(t *testing.T) {
 		ties = append(ties, d.TieRank)
 		if d.Kind == providerKindNetwork {
 			orders, priorities = append(orders, d.Order), append(priorities, d.DefaultPriorityRank)
+			if d.Rounds == roundsPrimaryOnly {
+				t.Errorf("%s 是联网源,别名轮、反查轮照样要问它,不该只在首轮问", d.Name)
+			}
 			continue
 		}
-		if d.Order != 0 || d.DefaultPriorityRank != 0 || len(d.Hosts) != 0 || d.Rounds != roundsAll {
-			t.Errorf("%s 是本机来源,不该有联网源才有的名次、主机、轮次", d.Name)
+		if d.Order != 0 || d.DefaultPriorityRank != 0 || len(d.Hosts) != 0 || d.Rounds != roundsPrimaryOnly {
+			t.Errorf("%s 是本机来源,不该有联网源才有的名次、主机,轮次只能是「只在首轮问」", d.Name)
+		}
+		// 本机类源由调度同步问:不能等别的源递编号(会把收集循环挂住),也没有熔断冷却那条腿。
+		if d.Privileges.has(privTrackIDPublish|privTrackIDConsume|privOfflineLeg) || len(d.DependsOnIDsFrom) != 0 {
+			t.Errorf("%s 是本机来源,不该递 / 等曲目编号,也没有冷却时的本机那条腿", d.Name)
 		}
 	}
 	for label, got := range map[string][]int{"TieRank": ties, "Order": orders, "DefaultPriorityRank": priorities} {

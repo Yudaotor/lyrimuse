@@ -501,16 +501,40 @@ func runProviderCancelledBeforeRound(t *testing.T, s providerParitySource, artis
 }
 
 // 十六个联网源全部接到 LyricProvider 上:登记表里各有一份实现,收集循环里没有按源手写的 goroutine、不自己判跳过,
-// 入口函数从查询里取的歌名是 SourceTitle(带编号的那份)。
+// 入口函数从查询里取的歌名是 SourceTitle(带编号的那份)。接到调度上的本机类源:收集循环里没有它的手写读取,入口
+// 只在它自己的 Resolve 里调,查的是经环境读的播放器原样标签。
 func TestMigratedLyricSourcesAreWiredThroughProviders(t *testing.T) {
 	enrichRaw, err := os.ReadFile("enrich.go")
 	if err != nil {
 		t.Fatal(err)
 	}
 	enrich := string(enrichRaw)
-	implemented := map[string]bool{}
+	implemented, implementedLocal := map[string]bool{}, map[string]bool{}
 	for _, p := range lyricProviders().providers {
-		implemented[p.Descriptor().Name] = true
+		if d := p.Descriptor(); d.Kind == providerKindNetwork {
+			implemented[d.Name] = true
+		} else {
+			implementedLocal[d.Name] = true
+		}
+	}
+	for _, l := range localLyricSources {
+		if !implementedLocal[l.name] {
+			continue
+		}
+		if containsCode(enrich, l.entry+"(") {
+			t.Errorf("enrich.go 里还留着 %s 的手写读取", l.name)
+		}
+		src := string(mustRead(t, l.file))
+		if l.call == "" || !containsCode(lyricProviderResolveSource(t, lyricProviderNamed(t, l.name)), l.call) {
+			t.Errorf("%s 的 Resolve 缺 %q", l.name, l.call)
+		}
+		if n := countCode(src, l.entry+"("); n != 2 {
+			t.Errorf("%s 里 %s 应只出现两次(定义、Resolve 里调),找到 %d 次", l.file, l.entry, n)
+		}
+		delete(implementedLocal, l.name)
+	}
+	if len(implementedLocal) != 0 {
+		t.Errorf("登记了实现的本机类源不在 localLyricSources 里:%v", sortedKeys(implementedLocal))
 	}
 	for _, m := range migratedLyricSources {
 		if !implemented[m.name] {
@@ -546,6 +570,11 @@ func TestMigratedLyricSourcesAreWiredThroughProviders(t *testing.T) {
 	}
 	if n := countCode(collect, "startLyricProviders("); n != 1 {
 		t.Errorf("收集循环里应恰好起一次调度,找到 %d 处", n)
+	}
+	// 调度同步段交回的本机类源结果原样进 raw:不经结果通道,不记进「回来了的源」。
+	if !containsCode(collect, "localResults := startLyricProviders(ctx, lyricProviders().providers, providerQuery, providerEnv, providerPlan, resultsCh)") ||
+		!containsCode(collect, "for _, r := range localResults {\n\t\traw[r.source] = r\n\t}") {
+		t.Error("收集循环应把调度同步段交回的本机类源结果放进 raw")
 	}
 }
 

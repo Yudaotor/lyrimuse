@@ -505,7 +505,7 @@ func TestTrackIDsOnlyTravelThroughScheduler(t *testing.T) {
 	}
 	run := string(mustRead(t, "lyricproviderrun.go"))
 	for _, n := range []string{
-		"env.trackIDs = newRoundTrackIDs(providers)\n\tfor _, p := range providers {\n\t\tgo func() { out <- runLyricProviderInRound(ctx, p, q, env, plan) }()",
+		"env.trackIDs = newRoundTrackIDs(providers)\n\tvar local []LyricProvider\n\tfor _, p := range providers {\n\t\tif p.Descriptor().Kind != providerKindNetwork {\n\t\t\tlocal = append(local, p)\n\t\t\tcontinue\n\t\t}\n\t\tgo func() { out <- runLyricProviderInRound(ctx, p, q, env, plan) }()\n\t}\n\treturn runLocalLyricProviders(ctx, local, q, env, plan)",
 		"d := p.Descriptor()\n\tfor _, from := range d.DependsOnIDsFrom {\n\t\tenv.trackIDs.slot(from).await()\n\t}\n\tdefer env.trackIDs.slot(d.Name).publish(\"\")\n\treturn runLyricProvider(ctx, p, q, env, plan)",
 	} {
 		if !containsCode(run, n) {

@@ -6150,21 +6150,20 @@ func fetchScoredLyricCandidatesStreaming(ctx context.Context, artist, title, alb
 	providerPlan := newLyricRoundPlan(ctx, breakerPlan)
 	providerQuery := ProviderQuery{Artist: artist, Title: title, Album: album, SourceTitle: srcTitle, DurationSecs: durationSecs}
 	providerEnv := RoundEnv{ForPlayingTrack: forPlaying, identityArtist: idArtist, identityTitle: idTitle, identityAlbum: idAlbum}
-	startLyricProviders(ctx, lyricProviders().providers, providerQuery, providerEnv, providerPlan, resultsCh)
+	// 本机类源(KKBOX 本地歌词)不是歌词源,不进上面那组并发(源清单、进度分母、收集循环都只数歌词源):调度起完联网源就
+	// 同步问它们(本机文件,毫秒级),交了东西的当一份候选放进 raw;只在首轮问(描述符的 Rounds)。
+	localResults := startLyricProviders(ctx, lyricProviders().providers, providerQuery, providerEnv, providerPlan, resultsCh)
 
 	// raw:目前为止到手的各源原始应答,按源名存。打分/排序全部下放给
 	// rankLyricSourceResults(包级纯函数,回归金标集与生产共用),这里只负责收结果、喂进去。
 	raw := map[string]lyricSourceResult{}
-	// KKBOX 本地歌词不是歌词源,不进上面那组并发(源清单、进度分母、收集循环都只数歌词源):正在用 KKBOX 放歌时,
-	// 开搜之前读一次它自己的缓存(本机文件,毫秒级),有就当一份候选放进去(见 kkboxlyrics.go)。
-	//
-	// 只在首轮读:它按时长就认得出这首,跟查询用的歌手写法无关,别名轮 / 反查轮里再放一份,会被当成「这个别名救回了
-	// 候选」。首轮那份靠 mergeLyricCandidateRounds 的只增不减留到最后。
+	for _, r := range localResults {
+		raw[r.source] = r
+	}
+	// 还没接到调度上的几路本机来源同 KKBOX,只在首轮读:它们按时长、按曲目 ID 就认得出这首,跟查询用的歌手写法无关,
+	// 别名轮 / 反查轮里再放一份,会被当成「这个别名救回了候选」。首轮那份靠 mergeLyricCandidateRounds 的只增不减留到最后。
 	if lyricQueryReasonFrom(ctx) == lyricQueryReasonPrimary {
-		if r, ok := kkboxLocalLyricsFor(idArtist, idTitle, durationSecs); ok {
-			raw[kkboxLocalLyricsSource] = r
-		}
-		// Spotify 本地歌词同理(见 spotifylyrics.go),不看当前播放器:按曲目 ID 找得到就放。
+		// Spotify 本地歌词(见 spotifylyrics.go)不看当前播放器:按曲目 ID 找得到就放。
 		if r, ok := spotifyLocalLyricsFor(idArtist, idTitle, idAlbum); ok {
 			raw[spotifyLocalLyricsSource] = r
 		}
