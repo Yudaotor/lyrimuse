@@ -208,3 +208,42 @@ func lyricSourceForHost(host string) string {
 	}
 	return ""
 }
+
+// lyricSourceCandidateShape:排序时一个源交的结果里哪几栏进它的候选和结果。
+type lyricSourceCandidateShape struct {
+	// reads:读的栏,空格隔开,名字同 rankShapeFields。歌名、歌手每个源都读,不列。
+	reads string
+	// translation:交的译文轨标什么语言。空 = 不读译文轨;"zh" / "ko" = 固定是这种语言;"target" = 按设置里的译文语言;
+	// "declared" = 源自己标的,没标按设置里的译文语言。
+	translation string
+	// baked:烘在正文里的中文译文。空 = 不摘;"adopt" = 摘出来接到译文轨(标中文);"strip" = 只摘不接。
+	baked string
+	// instrumental:凭什么搭纯音乐标记,空格隔开,名字同 rankShapeInstrumentalSignals。
+	instrumental string
+}
+
+// lyricSourceCandidateShapes:照 43fa2dff7 的 rankLyricSourceResults 里各源那段装配和 switch 里它的 case 整理的
+// (lyricrankreference_test.go 是那份函数体)。lyricrankshape_test.go 拿每一栏都交了的输入喂参照和生产,看到的跟这里
+// 逐项相等。网易云、AMLL 的内容在专用子结构里(ne、amll),不在这张表里。
+var lyricSourceCandidateShapes = map[string]lyricSourceCandidateShape{
+	lyricSourceQQ:            {reads: "逐字 读音 自报曲长 专辑 封面 语种 本机身份 纯文本", translation: "zh", baked: "adopt", instrumental: "明说 署名行加无人声"},
+	lyricSourceKugou:         {reads: "逐字 读音 自报曲长 专辑 封面 语种 本机身份", translation: "zh", baked: "adopt", instrumental: "署名行加无人声"},
+	lyricSourceLRCLIB:        {reads: "逐字 读音 自报曲长 专辑 纯文本", baked: "strip", instrumental: "明说"},
+	lyricSourceLyricFind:     {reads: "自报曲长 专辑 封面 本机身份 纯文本", baked: "strip"},
+	lyricSourceKuwo:          {reads: "逐字 自报曲长 专辑 封面 本机身份", baked: "adopt"},
+	lyricSourceMigu:          {reads: "逐字 自报曲长 专辑 封面 纯文本", translation: "zh", instrumental: "占位句"},
+	lyricSourceDeezer:        {reads: "逐字 自报曲长 专辑 封面 纯文本 ISRC 作者", translation: "target"},
+	lyricSourceAppleMusic:    {reads: "逐字 读音 自报曲长 专辑 封面 本机身份 纯文本 ISRC 背景人声轨 作者", translation: "declared"},
+	lyricSourceSoda:          {reads: "逐字 自报曲长 专辑 封面 本机身份", translation: "zh"},
+	lyricSourceVibe:          {reads: "自报曲长 专辑 封面 纯文本", translation: "ko"},
+	lyricSourceGenie:         {reads: "自报曲长 专辑 封面 纯文本"},
+	lyricSourcePetitLyrics:   {reads: "逐字 自报曲长 专辑 封面 纯文本 ISRC"},
+	lyricSourceZing:          {reads: "逐字 自报曲长 专辑 封面"},
+	lyricSourceMegalobiz:     {reads: "自报曲长 来源链接"},
+	kkboxLocalLyricsSource:   {reads: "自报曲长 专辑 封面 本机身份"},
+	amazonLocalLyricsSource:  {reads: "自报曲长 专辑 封面 本机身份"},
+	lxMusicLocalLyricsSource: {reads: "逐字 读音 自报曲长 专辑 本机身份", translation: "zh"},
+	localFileLyricsSource:    {reads: "逐字 自报曲长 本机身份 纯文本", translation: "zh", baked: "adopt"},
+	importLyricsSource:       {reads: "逐字 读音 专辑 背景人声轨", translation: "declared"},
+	spotifyLocalLyricsSource: {reads: "自报曲长 专辑 封面"},
+}
