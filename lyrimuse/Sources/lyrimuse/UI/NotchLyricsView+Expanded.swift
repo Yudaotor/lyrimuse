@@ -423,6 +423,11 @@ extension NotchLyricsView {
                               label: loved ? L10n.t("已在 Last.fm 上喜欢") : L10n.t("在 Last.fm 上喜欢"), lit: loved) {
                 LastfmLoveModel.shared.toggle()
             }
+        case .menuBarPanel:
+            // 同空闲面板那颗、快捷键和深链 menubar-panel:面板开着时再点是收起(05 章决策 164)。
+            quickActionButton(action.symbolName, label: L10n.t("打开菜单栏面板")) {
+                LyrimuseActionRunner.perform(.toggleMenuBarPanelHotkey)
+            }
         }
     }
 

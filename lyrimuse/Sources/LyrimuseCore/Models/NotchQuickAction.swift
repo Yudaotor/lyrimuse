@@ -35,6 +35,8 @@ public enum NotchQuickAction: String, CaseIterable, Codable, Sendable {
     case karaoke
     case lyricsWindowMini = "lyrics-window-mini"
     case lastfmLove = "lastfm-love"
+    /// 打开 / 收起菜单栏面板,可选、默认不放(05 章决策 166)。
+    case menuBarPanel = "menubar-panel"
     /// 分组竖线,占一整格,可以放不止一条。
     case divider
 
@@ -52,7 +54,7 @@ public enum NotchQuickAction: String, CaseIterable, Codable, Sendable {
         .searchLyrics, .toggleLyrics, .copyLine, .secondaryLine, .karaoke,
         .lyricsAdvance, .lyricsDelay, .lyricsOffsetReset,
         .lyricsWindow, .lyricsWindowMini, .lyricsManager, .shareLyrics, .toggleOverlay, .lockOverlay, .menuBarLyrics,
-        .hideAllLyrics, .openPlayer,
+        .menuBarPanel, .hideAllLyrics, .openPlayer,
         .lastfm, .lastfmLove, .settings, .close, .divider,
     ]
 
@@ -84,7 +86,7 @@ public enum NotchQuickAction: String, CaseIterable, Codable, Sendable {
              .lyricsAdvance, .lyricsDelay, .lyricsOffsetReset:
             return .lyrics
         case .lyricsWindow, .lyricsWindowMini, .lyricsManager, .shareLyrics, .toggleOverlay, .lockOverlay, .menuBarLyrics,
-             .hideAllLyrics, .openPlayer:
+             .menuBarPanel, .hideAllLyrics, .openPlayer:
             return .surfaces
         case .lastfm, .lastfmLove, .settings, .close, .divider: return .other
         }

@@ -38,6 +38,7 @@ extension NotchQuickAction {
         case .karaoke: return "sparkles"
         case .lyricsWindowMini: return LyrimuseAction.toggleLyricsWindowMiniHotkey.iconName
         case .lastfmLove: return "heart.circle"
+        case .menuBarPanel: return LyrimuseAction.toggleMenuBarPanelHotkey.iconName
         case .divider: return "poweron"
         }
     }
@@ -77,6 +78,7 @@ extension NotchQuickAction {
         case .karaoke: return L10n.t("卡拉OK效果")
         case .lyricsWindowMini: return L10n.t("切换迷你/完整尺寸")
         case .lastfmLove: return L10n.t("在 Last.fm 上喜欢")
+        case .menuBarPanel: return L10n.t("打开菜单栏面板")
         case .divider: return L10n.t("分隔线")
         }
     }

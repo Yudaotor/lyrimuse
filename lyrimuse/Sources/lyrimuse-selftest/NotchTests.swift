@@ -2953,6 +2953,41 @@ func runNotchTests() {
             let order = Q.PaletteGroup.allCases
             let groups = Q.paletteOrder.map { order.firstIndex(of: $0.paletteGroup) ?? -1 }
             expectEqual(groups, groups.sorted(), "可添加: 候选栏按组排,同一组挨在一起")
+            // 「打开菜单栏面板」:可选、默认不放,存取认 rawValue,拼错的读回来是空格(05 章决策 166)。
+            expectEqual(Q(rawValue: "menubar-panel"), .menuBarPanel, "打开菜单栏面板: rawValue 是 menubar-panel")
+            expectEqual(Q.menuBarPanel.paletteGroup, .surfaces, "打开菜单栏面板: 在「窗口与显示」组")
+            expectEqual(Q.paletteOrder.firstIndex(of: .menuBarPanel).map { Q.paletteOrder[$0 - 1] }, .menuBarLyrics,
+                        "打开菜单栏面板: 候选栏里紧跟「菜单栏歌词」")
+            expectEqual(NotchQuickSlots.default.placed.contains(.menuBarPanel), false, "打开菜单栏面板: 默认格子里没有")
+            let stored = NotchQuickSlots.default.placing(.menuBarPanel, row: 1, slot: 0).stored
+            expectEqual(stored[1].first, "menubar-panel", "打开菜单栏面板: 存成 rawValue")
+            expectEqual(NotchQuickSlots.fromStored(stored, legacy: nil).rows[1].first ?? nil, .menuBarPanel,
+                        "打开菜单栏面板: 存了再读回来还在原格")
+            expectEqual(NotchQuickSlots.fromStored([["close", "menubar-panels"]], legacy: nil).rows[0].prefix(2).map { $0 },
+                        [.close, nil], "打开菜单栏面板: 认不出的值读回来是空格,别的格不动")
+            expectEqual(NotchQuickSlots.default.addingToFirstEmpty(.menuBarPanel, visibleSlots: 8).rows[0][7], .menuBarPanel,
+                        "打开菜单栏面板: 点一下放进第一个空格")
+        }
+        // 「打开菜单栏面板」的画法与动作:跟空闲面板那颗同图标、同文案、同动作;任何时候都画得出。
+        do {
+            let editor = read("NotchQuickActionsEditor.swift")
+            expectEqual(sourceHas(editor, "case .menuBarPanel: return LyrimuseAction.toggleMenuBarPanelHotkey.iconName")
+                        && sourceHas(editor, "case .menuBarPanel: return L10n.t(\"打开菜单栏面板\")"), true,
+                        "打开菜单栏面板(契约): 编辑区图标取快捷键那一枚,名字复用已有文案")
+            expectEqual(sourceHas(editor, "let addable = NotchQuickAction.paletteOrder.filter { $0.isDivider || !placed.contains($0) }"), true,
+                        "打开菜单栏面板(契约): 「可添加」按 paletteOrder 列,新键自然在里面")
+            let settingsView = read("../SettingsView.swift")
+            expectEqual(sourceHas(settingsView, "SettingsPopoverShell(title: L10n.t(\"展开时\"), width: 640) {\nNotchExpandedSettingsRows()")
+                        && sourceHas(settingsView, "SettingsGroupCard(title: L10n.t(\"展开时\")) { NotchExpandedSettingsRows() }"), true,
+                        "打开菜单栏面板(契约): 「展开时」浮层和「全部设置」抽屉装的是同一份编辑区")
+            expectEqual(sourceHas(view, "case .menuBarPanel:\n"
+                                  + "// 同空闲面板那颗、快捷键和深链 menubar-panel:面板开着时再点是收起(05 章决策 164)。\n"
+                                  + "quickActionButton(action.symbolName, label: L10n.t(\"打开菜单栏面板\")) {\n"
+                                  + "LyrimuseActionRunner.perform(.toggleMenuBarPanelHotkey)\n}"), true,
+                        "打开菜单栏面板(契约): 展开卡上那颗走 LyrimuseActionRunner 的打开面板动作")
+            let availableBody = sourceBody("let available: (NotchQuickAction) -> Bool = { action in", in: view)
+            expectEqual(availableBody.isEmpty, false, "打开菜单栏面板(契约): 读到 available")
+            expectEqual(availableBody.contains(".menuBarPanel"), false, "打开菜单栏面板(契约): 不设显示条件,放进格子就画")
         }
         do {
             typealias S = NotchQuickSlots
