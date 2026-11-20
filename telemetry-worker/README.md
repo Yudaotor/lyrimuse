@@ -66,6 +66,12 @@ npx wrangler d1 execute lyrimuse-telemetry --remote --command "ALTER TABLE hang_
 npx wrangler d1 execute lyrimuse-telemetry --remote --command "ALTER TABLE hang_events ADD COLUMN pageins INTEGER"
 ```
 
+Each hang summary also carries how much CPU time the main thread used during the stall (`main_cpu_ms`, milliseconds): close to the stall's length means it was busy computing, close to zero means it was waiting (on WindowServer, a lock, a reply) or not getting the CPU. Older apps don't send it; the column stays empty. Added once before deploying:
+
+```sh
+npx wrangler d1 execute lyrimuse-telemetry --remote --command "ALTER TABLE hang_events ADD COLUMN main_cpu_ms INTEGER"
+```
+
 `activity.lyric_sources` counts, per day, which lyric source the shown lyrics came from for each word-synced, line-synced or plain-text song (keys like `netease:line`, sources and tiers from a fixed list). `/v1/stats` returns it as `lyric_sources`. Added once before deploying:
 
 ```sh

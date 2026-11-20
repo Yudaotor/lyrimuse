@@ -245,11 +245,14 @@ public final class TelemetryActivity: @unchecked Sendable {
 
     /// `hang` 那次卡顿恢复了,一共卡了 `seconds` 秒。`memoryPressure` 是整段停顿里看到的最紧的一档(跟记下时的取紧的),
     /// `pageins` 是整段的换页次数(换掉记下时到报卡顿为止的那个数);nil(读不到、扣不出采栈那几秒的)不改。
-    public func finishHang(_ hang: HangTicket, seconds: TimeInterval, memoryPressure: String? = nil, pageins: Int? = nil) {
+    /// `mainCPUMilliseconds` 是整段停顿里主线程用掉的 CPU 时间,同样换掉记下时的那个数,nil 不改。
+    public func finishHang(_ hang: HangTicket, seconds: TimeInterval, memoryPressure: String? = nil, pageins: Int? = nil,
+                           mainCPUMilliseconds: Int? = nil) {
         changeOpenHang(hang) {
             $0.duration = TelemetryHang.durationBucket(seconds: seconds)
             $0.memoryPressure = HangMemory.tighter($0.memoryPressure, memoryPressure)
             if let pageins { $0.pageins = pageins }
+            if let mainCPUMilliseconds { $0.mainCPUMilliseconds = mainCPUMilliseconds }
         }
     }
 

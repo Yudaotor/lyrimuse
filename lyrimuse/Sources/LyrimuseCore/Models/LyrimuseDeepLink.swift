@@ -148,10 +148,11 @@ public enum LyrimuseDeepLink: Equatable, Sendable {
         /// 主线程心跳(`debug/main-thread-gaps?on=1|0[&min=<毫秒>]`):每 10 毫秒一拍,两拍隔了 `min`(默认 100)毫秒以上记一行
         /// `gap <毫秒> ms after [<最近一次 manager-list 动作>]`,量一个动作让主线程停了多久。
         case mainThreadGaps(on: Bool, minMs: Int? = nil)
-        /// 让主线程停 `seconds` 秒(`debug/main-thread-stall?seconds=<秒>[&throttle=locked|low_priority]`,
+        /// 让主线程停 `seconds` 秒(`debug/main-thread-stall?seconds=<秒>[&throttle=locked|low_priority][&busy=1]`,
         /// 不超过 `maxMainThreadStallSeconds`):卡顿探针照真卡顿记日志、记遥测;带 `throttle` 时这段停顿里看门狗的节流读数
-        /// 当作是那一种(`MainThreadThrottle.Reading(simulating:)`),不锁屏就能验节流标记。
-        case mainThreadStall(seconds: Double, throttle: String?)
+        /// 当作是那一种(`MainThreadThrottle.Reading(simulating:)`),不锁屏就能验节流标记。默认睡着停(不占 CPU),
+        /// `busy=1` 空转着停(占满 CPU),验概况里主线程 CPU 时间的两头。
+        case mainThreadStall(seconds: Double, throttle: String?, busy: Bool = false)
         /// `mainThreadStall` 最多停几秒:引擎 15 秒收不到保活就判 App 不可用。
         public static let maxMainThreadStallSeconds: Double = 12
         /// 关掉 / 接回一条来源(`debug/knockout?leg=<名字>&on=0|1`,`on=0` 关掉):验证退路撑不撑得住,见 `SourceKnockout`。
@@ -580,7 +581,12 @@ public enum LyrimuseDeepLink: Equatable, Sendable {
                   seconds <= DebugCommand.maxMainThreadStallSeconds else { return nil }
             let throttle = value("throttle")
             if let throttle, !MainThreadThrottle.reasons.contains(throttle) { return nil }
-            self = .debug(.mainThreadStall(seconds: seconds, throttle: throttle))
+            var busy = false
+            if let raw = value("busy") {
+                guard let parsed = Self.parseBool(raw) else { return nil }
+                busy = parsed
+            }
+            self = .debug(.mainThreadStall(seconds: seconds, throttle: throttle, busy: busy))
         case ("debug", "/panel-layout"):
             self = .debug(.panelLayout(json: value("json").flatMap { $0.isEmpty ? nil : $0 }))
         case ("debug", "/panel-drag"):
@@ -1158,10 +1164,11 @@ public enum LyrimuseDeepLink: Equatable, Sendable {
                 components.path = "/main-thread-gaps"
                 components.queryItems = [URLQueryItem(name: "on", value: on ? "1" : "0")]
                 if let minMs { components.queryItems?.append(URLQueryItem(name: "min", value: String(minMs))) }
-            case let .mainThreadStall(seconds, throttle):
+            case let .mainThreadStall(seconds, throttle, busy):
                 components.path = "/main-thread-stall"
                 components.queryItems = [URLQueryItem(name: "seconds", value: String(seconds))]
                 if let throttle { components.queryItems?.append(URLQueryItem(name: "throttle", value: throttle)) }
+                if busy { components.queryItems?.append(URLQueryItem(name: "busy", value: "1")) }
             case let .panelLayout(json):
                 components.path = "/panel-layout"
                 if let json { components.queryItems = [URLQueryItem(name: "json", value: json)] }

@@ -323,10 +323,14 @@ enum DebugDeepLinks {
         case let .mainThreadGaps(on, minMs):
             MainThreadGapProbe.setRunning(on, minMs: minMs ?? 100)
             logger.notice("debug main thread gaps on=\(on, privacy: .public) min=\(minMs ?? 100, privacy: .public)")
-        case let .mainThreadStall(seconds, throttle):
-            logger.notice("debug main thread stall seconds=\(seconds, privacy: .public) throttle=\(throttle ?? "-", privacy: .public)")
+        case let .mainThreadStall(seconds, throttle, busy):
+            logger.notice("debug main thread stall seconds=\(seconds, privacy: .public) throttle=\(throttle ?? "-", privacy: .public) busy=\(busy, privacy: .public)")
             MainThreadWatchdog.shared.simulateThrottle(throttle.flatMap(MainThreadThrottle.Reading.init(simulating:)))
-            Thread.sleep(forTimeInterval: seconds)
+            if busy {
+                spin(seconds: seconds)
+            } else {
+                Thread.sleep(forTimeInterval: seconds)
+            }
             MainThreadWatchdog.shared.simulateThrottle(nil)
         case .saveConfig:
             Task { @MainActor in
@@ -521,6 +525,14 @@ enum DebugDeepLinks {
     }
 
     /// `debug/font-family`:名单同 `LyrimuseDeepLink.fontFamilySurfaces`,两处同步改。
+    /// 主线程空转 `seconds` 秒(占满 CPU),`main-thread-stall?busy=1` 用。
+    private static func spin(seconds: TimeInterval) {
+        let until = ProcessInfo.processInfo.systemUptime + seconds
+        var counter: UInt64 = 0
+        while ProcessInfo.processInfo.systemUptime < until { counter &+= 1 }
+        _ = counter
+    }
+
     private static func setFontFamily(surface: String, family: String) {
         let s = AppSettings.shared
         switch surface {

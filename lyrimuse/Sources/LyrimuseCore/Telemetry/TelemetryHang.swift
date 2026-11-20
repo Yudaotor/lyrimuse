@@ -1,7 +1,7 @@
 import Foundation
 
 /// 一次主线程卡顿(`MainThreadWatchdog` 报「unresponsive」)的概况,跟着那一天的活动随心跳发出。
-/// 只有分档、枚举值、换页次数和调用栈帧(系统库符号、Lyrimuse 自己的偏移),不带歌名、路径和账号。见 14 章决策 183。
+/// 只有分档、枚举值、换页次数、主线程 CPU 时间和调用栈帧(系统库符号、Lyrimuse 自己的偏移),不带歌名、路径和账号。见 14 章决策 183。
 public struct TelemetryHang: Codable, Equatable, Sendable {
     /// 卡了多久:`durationBuckets` 之一;还没恢复(随后被强制退出、或这一条写进去时还卡着)是 `unrecovered`。
     public var duration: String
@@ -23,13 +23,16 @@ public struct TelemetryHang: Codable, Equatable, Sendable {
     public var memoryPressure: String?
     /// 停顿期间 App 进程的换页次数(page-in):先记到报卡顿那一刻为止的,恢复时补成整段的;读不到为 nil,编码时不带这个键。
     public var pageins: Int?
+    /// 停顿期间主线程用掉的 CPU 时间(毫秒,`MainThreadCPU`):先记到报卡顿那一刻为止的,恢复时补成整段的;
+    /// 读不到为 nil,编码时不带这个键。
+    public var mainCPUMilliseconds: Int?
     /// 记这一条时的 App 版本(`CFBundleShortVersionString`)。心跳带的是发出时的版本,升级当天旧版记的卡顿要按这一项归版本;
     /// 取不到为 nil,编码时不带这个键,接收端退回心跳的版本。
     public var appVersion: String?
 
     public init(duration: String = TelemetryHang.unrecovered, sinceLaunch: String, sinceWake: String?, player: String? = nil,
                 windows: [String], thermal: String, stack: [TelemetryCrash.Frame] = [], throttled: [String]? = nil,
-                memoryPressure: String? = nil, pageins: Int? = nil, appVersion: String? = nil) {
+                memoryPressure: String? = nil, pageins: Int? = nil, mainCPUMilliseconds: Int? = nil, appVersion: String? = nil) {
         self.duration = duration
         self.sinceLaunch = sinceLaunch
         self.sinceWake = sinceWake
@@ -40,12 +43,13 @@ public struct TelemetryHang: Codable, Equatable, Sendable {
         self.throttled = throttled
         self.memoryPressure = memoryPressure
         self.pageins = pageins
+        self.mainCPUMilliseconds = mainCPUMilliseconds
         self.appVersion = appVersion
     }
 
     enum CodingKeys: String, CodingKey {
         case duration, sinceLaunch = "since_launch", sinceWake = "since_wake", player, windows, thermal, stack, throttled
-        case memoryPressure = "memory_pressure", pageins, appVersion = "app_version"
+        case memoryPressure = "memory_pressure", pageins, mainCPUMilliseconds = "main_cpu_ms", appVersion = "app_version"
     }
 
     public static let unrecovered = "unrecovered"

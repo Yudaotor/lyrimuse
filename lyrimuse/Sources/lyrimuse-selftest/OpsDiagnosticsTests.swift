@@ -1246,6 +1246,54 @@ func runOpsDiagnosticsTests() {
                      M.readPressure().map(M.pressureLevels.contains) ?? false], [true, true, true],
                     "内存读数: 换页累计和内存压力在这台机器上读得到")
 
+        // 停顿期间主线程用掉的 CPU 时间(14 章决策 238):两次累计读数(微秒)之间的毫秒数。
+        typealias C = MainThreadCPU
+        expectEqual([C.millisecondsBetween(1_000_000, 3_500_000), C.millisecondsBetween(7, 7), C.millisecondsBetween(nil, 9),
+                     C.millisecondsBetween(9, nil), C.millisecondsBetween(5_000, 4_000), C.millisecondsBetween(2_000, 2_999),
+                     C.millisecondsBetween(0, UInt64(C.maxMilliseconds + 5) * 1_000)],
+                    [2_500, 0, nil, nil, nil, 0, C.maxMilliseconds],
+                    "主线程 CPU: 两次累计读数(微秒)的差折成毫秒;读不到、倒退的不报,超过上限按上限")
+        expectEqual([C.microseconds(time_value_t(seconds: 2, microseconds: 500_000)), C.microseconds(time_value_t(seconds: 0, microseconds: 7)),
+                     C.microseconds(time_value_t(seconds: -1, microseconds: 3))], [2_500_000, 7, 3],
+                    "主线程 CPU: 秒 + 微秒折成微秒,负数按 0")
+        expectEqual([C.logNote(milliseconds: 4_870), C.logNote(milliseconds: 0), C.logNote(milliseconds: nil)],
+                    [" (main thread CPU 4870 ms)", " (main thread CPU 0 ms)", ""], "主线程 CPU: 日志说明")
+        // 真读数:在别的线程上读一条线程的累计 CPU 时间(看门狗就是这样读主线程的)。忙着算的那条差值接近它自己算掉的
+        // 100 毫秒,睡着的那条接近 0。忙的那条按 `CLOCK_THREAD_CPUTIME_ID` 算够 100 毫秒才停(机器忙时不会因为轮不到 CPU 少算);
+        // 这个循环约四成是内核态时间,只读 user 不读 system 会读成六十几毫秒。
+        func cpuWhileOtherThread(busy: Bool) -> Int? {
+            var port: mach_port_t = 0
+            let ready = DispatchSemaphore(value: 0), go = DispatchSemaphore(value: 0)
+            let done = DispatchSemaphore(value: 0), leave = DispatchSemaphore(value: 0)
+            let thread = Thread {
+                port = pthread_mach_thread_np(pthread_self())
+                ready.signal()
+                go.wait()
+                if busy {
+                    let start = clock_gettime_nsec_np(CLOCK_THREAD_CPUTIME_ID)
+                    let deadline = ProcessInfo.processInfo.systemUptime + 3
+                    while clock_gettime_nsec_np(CLOCK_THREAD_CPUTIME_ID) < start + 100_000_000,
+                          ProcessInfo.processInfo.systemUptime < deadline {}
+                } else {
+                    Thread.sleep(forTimeInterval: 0.1)
+                }
+                done.signal()
+                leave.wait()
+            }
+            thread.start()
+            ready.wait()
+            let before = C.readMicroseconds(thread: port)
+            go.signal()
+            done.wait()
+            let after = C.readMicroseconds(thread: port)
+            leave.signal()
+            return C.millisecondsBetween(before, after)
+        }
+        let busyCPU = cpuWhileOtherThread(busy: true), idleCPU = cpuWhileOtherThread(busy: false)
+        expectEqual([busyCPU.map { (90..<1_000).contains($0) }, idleCPU.map { $0 < 50 },
+                     C.readMicroseconds(thread: nil) == nil, C.readMicrosecondsOnCurrentThread() != nil], [true, true, true, true],
+                    "主线程 CPU: 跨线程读得到,忙着算 100 毫秒的线程读到约 100 毫秒、睡着的接近 0(\(busyCPU.map(String.init) ?? "nil") / \(idleCPU.map(String.init) ?? "nil") ms)")
+
         typealias Dog = MainThreadWatchdog
         expectEqual([Dog.shouldSample(tookDetailSlot: true, lastSampleAt: 100, now: 101),
                      Dog.shouldSample(tookDetailSlot: false, lastSampleAt: 100, now: 101),

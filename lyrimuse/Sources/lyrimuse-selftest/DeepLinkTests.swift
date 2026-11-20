@@ -614,6 +614,10 @@ func runDeepLinkTests() {
         expectEqual([link("lyrimuse://debug/main-thread-stall"), link("lyrimuse://debug/main-thread-stall?seconds=0"),
                      link("lyrimuse://debug/main-thread-stall?seconds=13"), link("lyrimuse://debug/main-thread-stall?seconds=5&throttle=asleep")],
                     [nil, nil, nil, nil], "debug: 主线程停顿没带秒数、超过上限、节流读数认不出都不认")
+        expectEqual([link("lyrimuse://debug/main-thread-stall?seconds=7&busy=1"), link("lyrimuse://debug/main-thread-stall?seconds=7&busy=0"),
+                     link("lyrimuse://debug/main-thread-stall?seconds=7&busy=maybe")],
+                    [.debug(.mainThreadStall(seconds: 7, throttle: nil, busy: true)), .debug(.mainThreadStall(seconds: 7, throttle: nil)), nil],
+                    "debug: 主线程停顿可选空转着停(busy=1),认不出的不认")
         expectEqual(link("lyrimuse://debug/manager-visibility?state=on") == nil
                     && link("lyrimuse://debug/manager-visibility") == nil, true, "debug: 歌词管理可见性认不出的、没带都不认")
         expectEqual([link("lyrimuse://debug/settings-visibility?state=hidden"), link("lyrimuse://debug/settings-visibility?state=Visible"),
@@ -1115,6 +1119,7 @@ func runDeepLinkTests() {
             .debug(.previewClick(delayMs: 150, dy: 0)), .debug(.previewClick(delayMs: 0, dy: -24)),
             .debug(.mainThreadGaps(on: true)), .debug(.mainThreadGaps(on: false)), .debug(.mainThreadGaps(on: true, minMs: 20)),
             .debug(.mainThreadStall(seconds: 7, throttle: nil)), .debug(.mainThreadStall(seconds: 6.5, throttle: "low_priority")),
+            .debug(.mainThreadStall(seconds: 8, throttle: nil, busy: true)),
             .debug(.rainbow(overlay: true, notch: nil)), .debug(.rainbow(overlay: false, notch: true)),
             .debug(.rainbow(overlay: nil, notch: nil, menuBar: false)),
             .debug(.captureHide(overlay: true, notch: nil, mini: nil)), .debug(.captureHide(overlay: false, notch: true, mini: false)),

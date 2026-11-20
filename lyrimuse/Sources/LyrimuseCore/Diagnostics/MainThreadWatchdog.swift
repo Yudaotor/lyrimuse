@@ -24,7 +24,10 @@ import os
 /// 同样的几个时刻读系统内存压力,概况记停顿期间最紧的一档;每次投探测时记下进程累计的换页次数,报卡顿、恢复时
 /// 取差值记进概况(`HangMemory`),恢复时的那个数扣掉 `/usr/bin/sample` 采栈那几秒造成的换页。见 14 章决策 222、231。
 ///
-/// 看门狗队列上读的都只问内核(线程优先级、内存压力、换页次数),锁屏状态读 `ScreenLockState` 的标志位,不同步问
+/// 投探测时同样记下主线程累计的 CPU 时间(`MainThreadCPU`,按 `start()` 记下的主线程端口读),报卡顿时取到那一刻的差值,
+/// 恢复时取到主线程执行到探测那一刻的(主线程自己读,跟着回应一起交回来)。见 14 章决策 238。
+///
+/// 看门狗队列上读的都只问内核(线程优先级、CPU 时间、内存压力、换页次数),锁屏状态读 `ScreenLockState` 的标志位,不同步问
 /// WindowServer:WindowServer 卡住时看门狗不能跟着卡。见 14 章决策 231。
 ///
 /// 一次停顿在遥测里记成哪一条,按 `noteHang` 给的回执(`HangLedger`)补时长、补标记、补调用栈,不按「最近一次」补。
@@ -135,7 +138,7 @@ public final class MainThreadWatchdog: @unchecked Sendable {
     private var lastWindows: [String] = []
     private var expected: ExpectedStall?
     private var windowProvider: (@MainActor @Sendable () -> [String])?
-    /// 主线程的 mach 端口,`start()` 时记下;读节流状态用。
+    /// 主线程的 mach 端口,`start()` 时记下;读节流状态和主线程 CPU 时间用。
     private var mainThread: mach_port_t?
     private let readThrottle: @Sendable (mach_port_t?) -> MainThreadThrottle.Reading
     /// 调试深链造的读数(`simulateThrottle`),非 nil 时代替真实读数。
@@ -146,6 +149,8 @@ public final class MainThreadWatchdog: @unchecked Sendable {
     private var memory = HangMemory.Stall()
     /// `memory` 是哪一次探测的(投出时刻);采栈跑完回报换页时按它对上。
     private var memorySentAt: TimeInterval?
+    /// 在等的这次探测投出时主线程累计的 CPU 时间(微秒),读不到为 nil。
+    private var mainCPUAtStart: UInt64?
     private var hangs = HangLedger(activity: .shared)
     private let answer = ProbeAnswerBox()
 
@@ -227,13 +232,15 @@ public final class MainThreadWatchdog: @unchecked Sendable {
         guard tracker.shouldProbe(now: now) else { return }
         memory = HangMemory.Stall(pageinsAtStart: HangMemory.readPageins())
         memorySentAt = now
+        mainCPUAtStart = MainThreadCPU.readMicroseconds(thread: mainThread)
         hangs.reset()
         let provider = windowProvider
         let answer = answer
         DispatchQueue.main.async { [weak self] in
             let answeredAt = ProcessInfo.processInfo.systemUptime
+            let mainCPU = MainThreadCPU.readMicrosecondsOnCurrentThread()
             let windows = provider.map { provider in MainActor.assumeIsolated { provider() } }
-            answer.put(ProbeAnswerBox.Answer(sentAt: now, answeredAt: answeredAt, windows: windows))
+            answer.put(ProbeAnswerBox.Answer(sentAt: now, answeredAt: answeredAt, mainCPU: mainCPU, windows: windows))
             self?.queue.async { self?.takeAnswer() }
         }
     }
@@ -247,7 +254,7 @@ public final class MainThreadWatchdog: @unchecked Sendable {
         let answeredAt = answered.answeredAt
         if answeredAt - sentAt >= tracker.stallThreshold { observeStall(at: answeredAt, probeSentAt: sentAt) }
         guard let event = tracker.answered(now: answeredAt) else { return }
-        handle(event, at: answeredAt, probeSentAt: sentAt)
+        handle(event, at: answeredAt, probeSentAt: sentAt, mainCPUNow: answered.mainCPU)
     }
 
     /// 读一次节流状态和内存压力,并进在等的那次探测。
@@ -262,7 +269,8 @@ public final class MainThreadWatchdog: @unchecked Sendable {
         MainThreadThrottle.logNote(throttle, priority: lastThrottleReading?.priority)
     }
 
-    private func handle(_ event: Tracker.Event, at now: TimeInterval, probeSentAt: TimeInterval?) {
+    /// `mainCPUNow`:恢复时主线程执行到探测那一刻自己读的累计 CPU 时间。
+    private func handle(_ event: Tracker.Event, at now: TimeInterval, probeSentAt: TimeInterval?, mainCPUNow: UInt64? = nil) {
         if let onEvent {
             onEvent(event)
             return
@@ -277,17 +285,19 @@ public final class MainThreadWatchdog: @unchecked Sendable {
         switch event {
         case .recovered(let seconds, let throttle):
             let pageins = memory.pageinsExcludingSample(now: HangMemory.readPageins())
-            let memoryNote = HangMemory.logNote(pressure: memory.pressure, pageins: pageins)
+            let mainCPU = MainThreadCPU.millisecondsBetween(mainCPUAtStart, mainCPUNow)
+            let memoryNote = HangMemory.logNote(pressure: memory.pressure, pageins: pageins) + MainThreadCPU.logNote(milliseconds: mainCPU)
             logger.notice("main thread: stalled for \(String(format: "%.1f", seconds), privacy: .public)s\(self.throttleNote(throttle), privacy: .public)\(memoryNote, privacy: .public)")
             // 报过 unresponsive 的那次才补时长;没卡满 sampleAfter 的不算一次卡顿。
             if tracker.reportedStill {
-                hangs.recovered(seconds: seconds, memoryPressure: memory.pressure, pageins: pageins)
+                hangs.recovered(seconds: seconds, memoryPressure: memory.pressure, pageins: pageins, mainCPUMilliseconds: mainCPU)
             }
         case .stillStalled(let seconds, let throttle):
             let context = hangContext(at: now, throttle: throttle)
             let hang = hangs.stalled(context)
             let sample = Self.shouldSample(tookDetailSlot: hang?.detailed == true, lastSampleAt: lastSampleAt, now: now)
             let memoryNote = HangMemory.logNote(pressure: context.memoryPressure, pageins: context.pageins)
+                + MainThreadCPU.logNote(milliseconds: context.mainCPUMilliseconds)
             logger.error("main thread: unresponsive for \(Int(seconds), privacy: .public)s\(sample ? ", sampling its stack" : "", privacy: .public)\(self.throttleNote(throttle), privacy: .public)\(memoryNote, privacy: .public)")
             if sample {
                 lastSampleAt = now
@@ -312,6 +322,7 @@ public final class MainThreadWatchdog: @unchecked Sendable {
                       thermal: TelemetryHang.thermalTag(ProcessInfo.processInfo.thermalState),
                       throttled: throttle.isEmpty ? nil : throttle.sorted(),
                       memoryPressure: memory.pressure, pageins: memory.pageins(now: HangMemory.readPageins()),
+                      mainCPUMilliseconds: MainThreadCPU.millisecondsBetween(mainCPUAtStart, MainThreadCPU.readMicroseconds(thread: mainThread)),
                       appVersion: TelemetryHang.currentAppVersion)
     }
 
@@ -363,8 +374,11 @@ public struct HangLedger {
         return current
     }
 
-    public mutating func recovered(seconds: TimeInterval, memoryPressure: String?, pageins: Int?) {
-        if let current { activity.finishHang(current, seconds: seconds, memoryPressure: memoryPressure, pageins: pageins) }
+    public mutating func recovered(seconds: TimeInterval, memoryPressure: String?, pageins: Int?, mainCPUMilliseconds: Int? = nil) {
+        if let current {
+            activity.finishHang(current, seconds: seconds, memoryPressure: memoryPressure, pageins: pageins,
+                                mainCPUMilliseconds: mainCPUMilliseconds)
+        }
         current = nil
     }
 
@@ -383,6 +397,8 @@ private final class ProbeAnswerBox: @unchecked Sendable {
     struct Answer {
         let sentAt: TimeInterval
         let answeredAt: TimeInterval
+        /// 主线程执行到探测时自己读的累计 CPU 时间(微秒)。
+        let mainCPU: UInt64?
         let windows: [String]?
     }
 

@@ -45,6 +45,8 @@ const HANG_THROTTLE = ["locked", "low_priority"];
 // 旧版 App 不发,两列为空(14 章决策 222)。
 const HANG_MEMORY_PRESSURE = ["normal", "warning", "critical"];
 const MAX_HANG_PAGEINS = 10000000;
+// 停顿期间主线程用掉的 CPU 时间(毫秒)的上限,跟 Core MainThreadCPU.maxMilliseconds 一致;旧版 App 不发,列为空(14 章决策 238)。
+const MAX_HANG_MAIN_CPU_MS = 3600000;
 // 每台每天的卡顿概况条数:没被压着的、被压着的各有名额(Core TelemetryActivity 的两个同名常量)。
 const MAX_HANG_DETAILS_PER_DAY = 3;
 const MAX_THROTTLED_HANG_DETAILS_PER_DAY = 1;
@@ -321,11 +323,12 @@ async function heartbeat(request, env) {
       ? a.hang_details.slice(0, Math.min(MAX_HANG_DETAILS_PER_DAY + MAX_THROTTLED_HANG_DETAILS_PER_DAY, hangs)) : [];
     details.map(cleanHang).filter(Boolean).forEach((h, seq) => statements.push(env.DB.prepare(
       `INSERT INTO hang_events (day, install_id, seq, received_at, app_version, os_version, arch, duration, since_launch,
-                                since_wake, player, windows, thermal, stack, signature, throttled, memory_pressure, pageins)
-       VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18)`
+                                since_wake, player, windows, thermal, stack, signature, throttled, memory_pressure, pageins,
+                                main_cpu_ms)
+       VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19)`
     ).bind(a.day, installID, seq, now, h.app_version ?? e.app_version, e.os_version, e.arch, h.duration, h.since_launch, h.since_wake,
            h.player, JSON.stringify(h.windows), h.thermal, JSON.stringify(h.stack), hangSignature(h.stack),
-           h.throttled.length ? JSON.stringify(h.throttled) : null, h.memory_pressure, h.pageins)));
+           h.throttled.length ? JSON.stringify(h.throttled) : null, h.memory_pressure, h.pageins, h.main_cpu_ms)));
   }
   await env.DB.batch(statements);
   return json({ ok: true });
@@ -399,6 +402,7 @@ function cleanHang(h) {
     // 旧版 App 不发、或 App 读不到,记成空。
     memory_pressure: oneOf(h.memory_pressure, HANG_MEMORY_PRESSURE),
     pageins: int(h.pageins, 0, MAX_HANG_PAGEINS),
+    main_cpu_ms: int(h.main_cpu_ms, 0, MAX_HANG_MAIN_CPU_MS),
     // 记卡顿时的 App 版本;旧版 App 不发,入库时退回心跳的版本。
     app_version: str(h.app_version, 32),
   };
@@ -551,7 +555,7 @@ async function loadStatsRows(db, since) {
                        COALESCE(app_version, json_extract(env, '$.app_version')) AS app_version, frames,
                        termination_reasons, exception_frames FROM crashes WHERE day >= ?1`).bind(since).all(),
     db.prepare(`SELECT day, install_id, app_version, duration, since_launch, since_wake, player, windows, thermal, stack, signature, received_at,
-                       throttled, memory_pressure, pageins
+                       throttled, memory_pressure, pageins, main_cpu_ms
                 FROM hang_events WHERE day >= ?1`).bind(since).all(),
     db.prepare(`SELECT install_id FROM excluded_installs`).all(),
   ]);
@@ -774,6 +778,7 @@ function hangSummary(parsed) {
     throttled: countBy(parsed, (h) => (h.throttled.length ? h.throttled : ["(none)"])),
     memory_pressure: countBy(parsed, (h) => h.memory_pressure || "(not reported)"),
     pageins: countBy(parsed, (h) => pageinsBucket(h.pageins)),
+    main_cpu: countBy(parsed, (h) => mainCPUBucket(h.main_cpu_ms)),
   };
   const groups = {};
   for (const h of parsed) (groups[h.signature] ||= []).push(h);
@@ -788,6 +793,7 @@ function hangSummary(parsed) {
       throttled: list.filter((h) => h.throttled.length).length,
       memory_pressure: countBy(list, (h) => h.memory_pressure || "(not reported)"),
       pageins: countBy(list, (h) => pageinsBucket(h.pageins)),
+      main_cpu: countBy(list, (h) => mainCPUBucket(h.main_cpu_ms)),
     };
   }).sort((a, b) => b.n - a.n).slice(0, 50);
   return { detailed: parsed.length, context, hotspots };
@@ -801,6 +807,16 @@ function pageinsBucket(n) {
   if (n < 100) return "10-99";
   if (n < 1000) return "100-999";
   return n < 10000 ? "1000-9999" : "10000+";
+}
+
+// 卡顿期间主线程 CPU 时间的分档(卡顿至少 5 秒:5 秒以上是一直在算,不到 100 毫秒是一直在等或轮不到 CPU);
+// 旧版 App 没报的单独一档。
+function mainCPUBucket(ms) {
+  if (ms == null) return "(not reported)";
+  if (ms < 100) return "<100ms";
+  if (ms < 1000) return "100ms-1s";
+  if (ms < 5000) return "1-5s";
+  return ms < 10000 ? "5-10s" : "10s+";
 }
 
 function primaryWordFormat(r) {
@@ -933,7 +949,7 @@ function render(s) {
     const ctx = hg.context || {};
     html += '<div class="grid">' + [["duration", "卡顿时长"], ["since_launch", "启动后多久"], ["since_wake", "唤醒后多久"],
       ["player", "最近放歌的播放器"], ["windows", "开着的窗口"], ["thermal", "温度状态"], ["memory_pressure", "内存压力"],
-      ["pageins", "换页次数"]].map(([k, label]) =>
+      ["pageins", "换页次数"], ["main_cpu", "主线程 CPU 时间"]].map(([k, label]) =>
       '<div class="card"><h2>' + label + "(带概况的 " + hg.detailed + " 次)</h2>" + table(ctx[k] || [], hg.detailed) + "</div>").join("") + "</div>";
     html += '<div class="card"><h2>卡顿(按卡住的位置)</h2>' + (hg.hotspots || []).map((h) =>
       "<details><summary><b>" + h.n + " 次 · " + h.installs + " 台</b> " + esc(h.signature) + ' <span class="muted">' +
@@ -942,7 +958,8 @@ function render(s) {
            "唤醒后: " + h.since_wake.map(([k, v]) => k + " " + v).join(" · "),
            "窗口: " + h.windows.map(([k, v]) => k + " " + v).join(" · "),
            "内存压力: " + (h.memory_pressure || []).map(([k, v]) => k + " " + v).join(" · "),
-           "换页次数: " + (h.pageins || []).map(([k, v]) => k + " " + v).join(" · ")].join("\\n")) + "</pre></details>").join("") + "</div>";
+           "换页次数: " + (h.pageins || []).map(([k, v]) => k + " " + v).join(" · "),
+           "主线程 CPU: " + (h.main_cpu || []).map(([k, v]) => k + " " + v).join(" · ")].join("\\n")) + "</pre></details>").join("") + "</div>";
   }
   html += '<div class="card"><h2>崩溃(按归并键)</h2>' + (s.crashes.length ? s.crashes.map((c) =>
     "<details><summary><b>" + c.n + " 次 · " + c.installs + " 台</b> " + esc(c.signature) + ' <span class="muted">' +
