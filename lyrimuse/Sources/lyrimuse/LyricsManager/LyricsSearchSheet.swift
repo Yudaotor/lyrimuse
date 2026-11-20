@@ -319,8 +319,8 @@ struct LyricsSearchSheet: View {
     /// 这一轮**开着**的源(rawValue)。开搜那一刻从 FeatureSettingsStore 快照——引擎子进程
     /// 起跑时读的是同一份 features.json,所以这份集合就是它这一轮**采用结果**的那几个;搜索中途在
     /// 设置里开关源不改这一轮的标注(下次「重新搜索」才生效),跟候选一样是"这一轮"的事实。
-    /// 也就是引擎这一轮**真正发了请求**的那几个:fetchScoredLyricCandidatesStreaming
-    /// 的 skipSource 对关掉的源直接回空结果、不发请求(enrich.go)。引擎那边改成「查了但不采用」时,这条注释和
+    /// 也就是引擎这一轮**真正发了请求**的那几个:调度(runLyricProvider)按 lyricRoundPlan.decide
+    /// 对关掉的源直接回空结果、不发请求(lyricproviderrun.go)。引擎那边改成「查了但不采用」时,这条注释和
     /// disabledSourceRow 的 .help 措辞要一起改。
     /// 用途只有一个:「歌词源可用情况」把没开的源标成「未启用」而不是「未返回候选」,不藏掉。徽标的分母**不**用它,
     /// 用引擎报的 sourcesTotal,见下。
@@ -470,7 +470,7 @@ struct LyricsSearchSheet: View {
         }
     }
 
-    /// 用户在设置里关掉的源:引擎这一轮根本没查它(enrich.go skipSource,见 enabledSources 的注释),既不是「已返回候选」
+    /// 用户在设置里关掉的源:引擎这一轮根本没查它(lyricproviderrun.go lyricRoundPlan.decide,见 enabledSources 的注释),既不是「已返回候选」
     /// 也不是「未返回候选」,别并进「未返回候选」。
     /// 空心减号 + 第三级灰,比「未返回候选」的叉再退一级:它不是结果。不给失败原因(引擎的
     /// lyricSourceFailureReasons 对没开的源不发代码)。文案复用账号页那条「未启用」;悬停说明在哪开。
