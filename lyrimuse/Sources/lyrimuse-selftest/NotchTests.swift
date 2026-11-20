@@ -340,9 +340,19 @@ func runNotchTests() {
         expectEqual(P.allCases.map { P(showsLyrics: $0.storage.showsLyrics, inTopRow: $0.storage.inTopRow ?? true) }, P.allCases,
                     "歌词三档: 存回两个设置再读出来不变")
         expectEqual(P.hidden.storage.inTopRow == nil, true, "歌词三档: 选不显示不改放在哪,再打开回到原处")
-        expectEqual([P.topRow.presentation(hasNotch: true), P.topRow.presentation(hasNotch: false),
-                     P.belowRow.presentation(hasNotch: true), P.hidden.presentation(hasNotch: false)],
+        expectEqual([P.topRow.presentation(hasNotch: true, currentLineInEar: false),
+                     P.topRow.presentation(hasNotch: false, currentLineInEar: false),
+                     P.belowRow.presentation(hasNotch: true, currentLineInEar: false),
+                     P.hidden.presentation(hasNotch: false, currentLineInEar: false)],
                     [.hidden, .topRow, .belowRow, .hidden], "歌词三档: 有刘海的屏选顶行按不显示画")
+        // 耳朵歌词(05 章决策 159):有一只耳朵放着当前句时,下面的歌词行和顶行都不再画当前句。
+        expectEqual([P.belowRow.presentation(hasNotch: true, currentLineInEar: true),
+                     P.belowRow.presentation(hasNotch: false, currentLineInEar: true),
+                     P.topRow.presentation(hasNotch: false, currentLineInEar: true),
+                     P.topRow.presentation(hasNotch: true, currentLineInEar: true),
+                     P.hidden.presentation(hasNotch: false, currentLineInEar: true)],
+                    [.hidden, .hidden, .hidden, .hidden, .hidden],
+                    "耳朵歌词: 耳朵里放着当前句时歌词行、顶行一律按不显示画,不重复画当前句")
 
         typealias T = NotchTopRowLyrics
         expectEqual(T.fit(steadyWidth: 322, earWidth: 28, cardPadding: 10, maxCardWidth: nil),
@@ -357,6 +367,34 @@ func runNotchTests() {
                      T.maxCardWidth(centerX: 735, span: 800...900), T.maxCardWidth(centerX: 720, span: 16...1424)],
                     [322, 0, 0, 1408], "顶行歌词: 上限 = 以中线居中、两侧都不越过可用那段;那段在中线一侧或放不下时 0")
         expectEqual(T.minimumLyricWidth, MenuBarCenterLayout.minimumSpan, "顶行歌词: 最窄一段跟菜单栏正中歌词同一个数")
+
+        // 耳朵歌词的宽度(05 章决策 159):沿用稳态宽,按菜单栏两侧较窄那边夹,不窄于耳朵下限;没读数不夹。
+        typealias E = NotchEarLyrics
+        expectEqual([E.steadyWidth(482, floor: 256, maxCardWidth: 322), E.steadyWidth(300, floor: 256, maxCardWidth: 322),
+                     E.steadyWidth(482, floor: 256, maxCardWidth: 200), E.steadyWidth(482, floor: 256, maxCardWidth: nil)],
+                    [322, 300, 256, 482],
+                    "耳朵歌词: 宽过上限夹到上限、窄于上限照设定宽、上限比耳朵下限还窄停在下限、没有菜单栏读数不夹")
+        // 本机实测:刘海 645.5…824.5(中心 735)、前台菜单右沿 420、状态栏图标左沿 912,各让 16 → 可用 436…896,
+        // 右边只剩 161,卡片按较窄的右边夹到 322;两耳等宽 (322 − 179 − 20) / 2 = 61.5。
+        let earCap = T.maxCardWidth(centerX: 735, span: MenuBarCenterLayout.usableSpan(
+            screenMinX: 0, screenMaxX: 1470, menusMaxX: 420, statusItemsMinX: 912))
+        expectEqual(earCap, 322, "耳朵歌词: 以刘海为中心,按较窄的一侧(右边 161)夹到 322")
+        let earLayout = NotchCardLayout(
+            metrics: .init(cardPadding: 10, contentInset: 16, collapsedEarWidth: 34, milestonePanelHeight: 76,
+                           trackDropHeight: 26, progressLineStrip: 4),
+            isCollapsed: false, isExpanded: false, notchWidth: 179, contentTopInset: 32,
+            steadyCardWidth: E.steadyWidth(482, floor: 256, maxCardWidth: earCap), expandedCardWidth: 482,
+            lyricRowHeight: 44, expandedLyricListHeight: 0, hasTrack: true, isAdBreak: false, hasMilestone: false,
+            hasTrackDrop: false, transientBannerActive: false, showsProgressLine: false, progressLineStyle: .bottom,
+            showsLyrics: false, trackHasLyricPreview: true, trackHasScrubber: true, expandedShowsNextLine: true,
+            expandedShowsControls: true, trackInfoShowsArtwork: false, trackInfoShowsTitle: false,
+            trackInfoShowsArtist: false, trackInfoShowsAlbum: false, expandedShowsQuickActions: false)
+        expectEqual([earLayout.cardWidth, earLayout.earWidth(cardWidth: earLayout.cardWidth), earLayout.cardHeight], [322, 61.5, 32],
+                    "耳朵歌词: 夹过的稳态卡片 322、两耳各 61.5,歌词行不画时卡片就是刘海那么高")
+        func earLyrics(_ change: (inout NotchCardLayout) -> Void) -> Bool { var l = earLayout; change(&l); return l.showsEarLyrics }
+        expectEqual([earLayout.showsEarLyrics, earLyrics { $0.isExpanded = true }, earLyrics { $0.isCollapsed = true },
+                     earLyrics { $0.hasTrack = false }, earLyrics { $0.isAdBreak = true }],
+                    [true, false, false, false, false], "耳朵歌词: 只在稳态画,展开、收起、没曲目、广告时不画")
         func app(_ path: String) -> String {
             (try? String(contentsOf: URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
                 .appendingPathComponent("lyrimuse/" + path), encoding: .utf8)) ?? ""
@@ -375,7 +413,7 @@ func runNotchTests() {
                     && sourceHas(controller, "MenuBarOccupancy.shared.setActive(false, client: ObjectIdentifier(self))")
                     && sourceHas(controller, "MenuBarOccupancy.shared.changes.sink"), true,
                     "顶行歌词(契约): 放顶行歌词时登记要两侧读数、拆掉时放手、读数变了重算几何")
-        expectEqual(sourceHas(controller, "setting: lyricsPlacement.presentation(hasNotch: notchWidth > 0) == .belowRow,")
+        expectEqual(sourceHas(controller, "setting: lyricsPlacement.presentation(hasNotch: notchWidth > 0, currentLineInEar: currentLineInEar) == .belowRow,")
                     && sourceHas(controller, "if notchHeight > 0, !ignoresNotchForDebug,"), true,
                     "顶行歌词(契约): 下面的歌词行只在「歌词行」那档画,有刘海的屏选顶行按不显示;调试开关按无刘海几何摆")
         expectEqual(sourceHas(topRowView, "Spacer(minLength: 0).frame(width: controller.cardLayout.topRowGap)")
@@ -384,6 +422,47 @@ func runNotchTests() {
                     "顶行歌词(契约): 顶行空当跟耳宽同一份,那一句只切透明度,音浪贴外缘")
         expectEqual(sourceHas(preview, "cardPadding: NotchMetrics.cardHorizontalPadding, maxCardWidth: nil)?.lyricWidth ?? 0"), true,
                     "顶行歌词(契约): 编辑台预览同一套公式,不按菜单栏夹")
+        let display = app("UI/NotchModuleDisplay.swift"), stage = app("UI/NotchEditorStage.swift")
+        let settingsRows = app("UI/NotchSettingsRows.swift"), debugLinks = app("Settings/DebugDeepLinks.swift")
+        expectEqual(sourceHas(settings, "case currentLine\n case nextLine\n case none\n}")
+                    && sourceHas(settings, "notchLeftEar = defaults.string(forKey: Keys.notchLeftEar)\n .flatMap(NotchEarModule.init(rawValue:)) ?? Self.defaultNotchLeftEar")
+                    && sourceHas(settings, "notchRightEar = defaults.string(forKey: Keys.notchRightEar)\n .flatMap(NotchEarModule.init(rawValue:)) ?? Self.defaultNotchRightEar")
+                    && sourceHas(settings, "didSet { defaults.set(notchLeftEar.rawValue, forKey: Keys.notchLeftEar) }"), true,
+                    "耳朵歌词(契约): 当前句、下一句按 rawValue 存取,认不出的值退回默认,「不显示」仍排最后")
+        expectEqual(sourceHas(display, "case .currentLine: return .current\n case .nextLine: return .next")
+                    && sourceHas(display, "var yieldsEqualizer: Bool { self == .controls || lyricLine != nil }")
+                    && sourceHas(display, "case .none, .title, .artist, .album, .currentLine, .nextLine: return 0")
+                    && sourceHas(controller, "guard showsEqualizer, equalizerEar == ear, !module.yieldsEqualizer else { return 0 }")
+                    && sourceHas(controller, "case .title, .artist, .album, .currentLine, .nextLine: floor = textEarWidth")
+                    && sourceHas(topRowView, "controller.showsEqualizer && controller.equalizerEar == side && !module.yieldsEqualizer")
+                    && sourceHas(stage, "guard equalizerHere, !module.yieldsEqualizer else { return module.displayName }"), true,
+                    "耳朵歌词(契约): 歌词耳朵不挂音浪,渲染、宽度下限、工具栏摘要读同一个判据;下限按跑马灯给 0,顶行歌词时同文字给 64")
+        expectEqual(sourceHas(topRowView, "case .currentLine, .nextLine:\n earLyricLine(module, alignment: alignment)")
+                    && sourceHas(topRowView, "restingAlignment: alignment.horizontal == .leading ? .trailing : .leading)")
+                    && sourceHas(topRowView, ".modifier(NotchCardLayerActive(active: controller.showsEarLyrics))")
+                    && sourceHas(topRowView, "let leftModule: NotchEarModule = collapsed ? .artwork : playback.leftEar")
+                    && sourceHas(topRowView, "let rightModule: NotchEarModule = collapsed ? .none : playback.rightEar"), true,
+                    "耳朵歌词(契约): 歌词耳朵走单行歌词视图、放得下时贴刘海那侧,只在稳态显示(只切透明度),收起态耳朵不按配置画")
+        expectEqual(sourceHas(controller, "setting: lyricsPlacement.presentation(hasNotch: notchWidth > 0, currentLineInEar: currentLineInEar) == .belowRow,")
+                    && sourceHas(controller, "let placement = lyricsPlacement.presentation(hasNotch: geo.notchWidth > 0, currentLineInEar: currentLineInEar)")
+                    && sourceHas(controller, "if lyricsPlacement.presentation(hasNotch: notchWidth > 0, currentLineInEar: currentLineInEar) == .topRow {")
+                    && sourceHas(preview, "s.notchLyricsPlacement.presentation(\n hasNotch: notchWidth > 0, currentLineInEar: NotchEarModule.currentLineInEar(left: s.notchLeftEar, right: s.notchRightEar))")
+                    && !controller.contains("presentation(hasNotch: notchWidth > 0) ")
+                    && !preview.contains("presentation(hasNotch: notchWidth > 0) "), true,
+                    "耳朵歌词(契约): 真窗口、编辑台的歌词行 / 顶行都按「耳朵里有没有当前句」去重")
+        expectEqual(sourceHas(controller, "if placement == .topRow || lyricEars {\n let cap = presentsOnLockScreen ? nil : topRowMaxCardWidth(on: screen, centerX: geo.centerX)\n if lyricEars {\n steadyWidth = Self.earLyricsSteadyWidth(newSteady, floor: Self.contentWidth(\n baseWidth: 0,")
+                    && sourceHas(controller, "return NotchEarLyrics.steadyWidth(width, floor: floor, maxCardWidth: maxCardWidth)")
+                    && sourceHas(controller, "|| NotchEarModule.hasLyricLine(left: leftEarModule, right: rightEarModule))")
+                    && sourceHas(controller, "guard let self, lyricsPlacement == .topRow || NotchEarModule.hasLyricLine(left: leftEarModule, right: rightEarModule)"), true,
+                    "耳朵歌词(契约): 真窗口耳朵里有歌词时稳态宽按菜单栏两侧夹(锁屏那份不夹),登记要读数、读数变了重算")
+        expectEqual(sourceHas(stage, "maxCardWidth: chrome.menuBarMaxCardWidth)")
+                    && sourceHas(stage, "return Double(NotchLyricsWindowController.earLyricsSteadyWidth(")
+                    && sourceHas(preview, "let cap = NotchLyricsWindowController.menuBarCap(on: screen, centerX: geo.centerX).cap")
+                    && sourceHas(preview, "occupancySubscription = MenuBarOccupancy.shared.changes"), true,
+                    "耳朵歌词(契约): 编辑台预览和快捷面板读数跟真窗口同一套夹宽,读数变了跟着重画")
+        expectEqual(sourceHas(settingsRows, "NotchEarModule.currentLineInEar(left: settings.notchLeftEar, right: settings.notchRightEar) {\n SettingsNote { Text(L10n.t(\"左耳或右耳已显示当前句，此项不生效\")) }")
+                    && sourceHas(debugLinks, "if let module = leftEar.flatMap(NotchEarModule.init(rawValue:)) { AppSettings.shared.notchLeftEar = module }"), true,
+                    "耳朵歌词(契约): 设置里说明歌词行这一项被耳朵当前句顶掉;调试深链能改左右耳")
         expectEqual(sourceHas(settings, "notchShowLyrics = (defaults.object(forKey: Keys.notchShowLyrics) as? Bool) ?? Self.defaultNotchShowLyrics")
                     && sourceHas(settings, "notchLyricsInTopRow = (defaults.object(forKey: Keys.notchLyricsInTopRow) as? Bool) ?? Self.defaultNotchLyricsInTopRow")
                     && !settings.contains("removeObject(forKey: Keys.notchShowLyrics)")
@@ -1043,7 +1122,7 @@ func runNotchTests() {
                         "灵动岛接线: 全部屏幕的副本下一拍再算,不在 willSet 里读到旧的屏幕设置")
             expectEqual(sourceHas(controller, "guard pinnedScreenID != nil else {\n setVisible(false)\n return\n }\n NotchLyricsWindowController.shared.setVisible(false)"), true,
                         "灵动岛接线: 副本上的 ✕ 转给主实例关,主实例和副本一起收掉")
-            expectEqual(sourceHas(view, "LayerMarquee(id: playback.displayLine?.plainText ?? \"\",\n edgeFadeWidth: NotchMetrics.lyricEdgeFadeWidth,\n restingAlignment: playback.mainLyricAlignment,\n loops: false,\n isActive: surfaceVisible) {\n lyricContent(layerActive: layerActive)\n .font(playback.mainFont)"), true,
+            expectEqual(sourceHas(view, "LayerMarquee(id: playback.displayLine?.plainText ?? \"\",\n edgeFadeWidth: NotchMetrics.lyricEdgeFadeWidth,\n restingAlignment: restingAlignment,\n loops: false,\n isActive: surfaceVisible) {\n lyricContent(layerActive: layerActive)\n .font(playback.mainFont)"), true,
                         "灵动岛接线: 没有逐字时间的歌词行走图层跑马灯、滚到句尾就停,按窗口可见性停,字体在里面再写一次(05 章决策 99)")
             expectEqual(sourceHas(view, "return LayerMarquee(id: text, restingAlignment: alignment, isActive: surfaceVisible) {"), true,
                         "灵动岛接线: 耳朵里的歌名 / 歌手走图层跑马灯、按窗口可见性停(05 章决策 99)")
@@ -2577,7 +2656,7 @@ func runNotchTests() {
                     "停表契约: NotchLyricsView 不许在自己的属性上按层读 notchCardLayerActive(那样藏着的那份永不停表)")
         expectEqual(view.components(separatedBy: "NotchLayerActiveReader {").count - 1 >= 2, true,
                     "停表契约: 主歌词行与广告倒计时都经 NotchLayerActiveReader 在层内读")
-        expectEqual(view.contains("layerKaraokeLine(words: words, layerActive: layerActive)")
+        expectEqual(view.contains("layerKaraokeLine(words: words, layerActive: layerActive, restingAlignment: restingAlignment)")
                     && view.contains("lyricContent(layerActive: layerActive)"), true,
                     "停表契约: 逐字歌词行与其余占位吃的是层内读到的值")
         expectEqual(view.contains("currentLineFillSettled || !layerActive,"), true,
@@ -2618,7 +2697,7 @@ func runNotchTests() {
                     "无歌词收起契约: 灵动岛没有歌词时只收歌词行,不进显隐判据")
         expectEqual(sourceHas(controller, "AppSettings.shared.$notchCollapseLyricsWhenNoLyrics\n            .combineLatest(PlaybackCoordinator.shared.$currentTrackLacksLyrics)"), true,
                     "无歌词收起契约: 每个实例(含镜像副本)自己订阅开关与「这首有没有歌词」,值从 sink 参数拿")
-        expectEqual(sourceHas(controller, "let shows = NotchVisibility.showsLyrics(\nsetting: lyricsPlacement.presentation(hasNotch: notchWidth > 0) == .belowRow,\ncollapsedForNoLyrics: lyricsCollapsedForNoLyrics)")
+        expectEqual(sourceHas(controller, "let shows = NotchVisibility.showsLyrics(\nsetting: lyricsPlacement.presentation(hasNotch: notchWidth > 0, currentLineInEar: currentLineInEar) == .belowRow,\ncollapsedForNoLyrics: lyricsCollapsedForNoLyrics)")
                     && controller.components(separatedBy: "applyShowsLyrics()").count - 1 == 4, true,
                     "无歌词收起契约: 卡片读的 showsLyrics 由 Core 合成,「显示歌词」三档、无歌词、几何重算三路变化都重算")
         expectEqual(controller.contains("subscriptions.removeAll()"), true, "无歌词收起契约: 副本 teardown 摘掉订阅")
@@ -3340,7 +3419,7 @@ func runNotchTests() {
                     "灵动岛五项: 两个新开关进「恢复默认」")
         let settingsSrc = app("Settings/AppSettings.swift")
         expectEqual(sourceHas(settingsSrc, "case playCount\n    /// 正在放的播放器的图标")
-                    && sourceHas(settingsSrc, "case player\n    case none\n}"), true,
+                    && sourceHas(settingsSrc, "case nextLine\n    case none\n}"), true,
                     "灵动岛五项: 耳朵下拉里「不显示」排最后")
         expectEqual(v.contains("case .playCount: return NotchEarPlayCount.minWidth")
                     && v.contains("case .player: return NotchMetrics.earAppIconSide(contentTopInset: contentTopInset)"), true,

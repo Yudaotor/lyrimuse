@@ -184,9 +184,16 @@ struct NotchEditorStage: View {
     static func effectiveWidth(baseWidth: Double) -> Double {
         let geo = NotchLyricsWindowController.targetScreen()
             .map { NotchLyricsWindowController.geometry(for: $0) }
-        return Double(NotchLyricsWindowController.contentWidth(
-            baseWidth: CGFloat(baseWidth), notchWidth: geo?.notchWidth ?? 0,
-            contentTopInset: geo?.notchHeight ?? 0))
+        let notchWidth = geo?.notchWidth ?? 0, topInset = geo?.notchHeight ?? 0
+        let settings = AppSettings.shared
+        return Double(NotchLyricsWindowController.earLyricsSteadyWidth(
+            NotchLyricsWindowController.contentWidth(baseWidth: CGFloat(baseWidth), notchWidth: notchWidth,
+                                                     contentTopInset: topInset),
+            floor: NotchLyricsWindowController.contentWidth(baseWidth: 0, notchWidth: notchWidth, contentTopInset: topInset),
+            leftEar: settings.notchLeftEar, rightEar: settings.notchRightEar,
+            maxCardWidth: NotchLyricsWindowController.targetScreen().map {
+                NotchLyricsWindowController.menuBarCap(on: $0, centerX: NotchLyricsWindowController.geometry(for: $0).centerX).cap
+            }))
     }
 
     /// 展开态卡片的**真实**宽度,同上给构造不出这个 View 的调用点用(抽屉 / 快捷面板那根
@@ -202,10 +209,16 @@ struct NotchEditorStage: View {
     ///
     /// 宽度调得很小时真窗口会被"两只耳朵放得下按钮"的下限顶宽,编辑台得跟着一起顶,否则
     /// 这一段恰恰在最容易出岔的区间失真(这条是从 NotchPreviewBar 继承的,不是新想的)。
+    /// 耳朵里放了当前句 / 下一句时再按菜单栏两侧夹,同真窗口(`earLyricsSteadyWidth`)。
     private var steadyCardWidth: CGFloat {
-        NotchLyricsWindowController.contentWidth(
-            baseWidth: CGFloat(baseWidth), notchWidth: chrome.notchWidth,
-            contentTopInset: chrome.contentTopInset)
+        NotchLyricsWindowController.earLyricsSteadyWidth(
+            NotchLyricsWindowController.contentWidth(
+                baseWidth: CGFloat(baseWidth), notchWidth: chrome.notchWidth,
+                contentTopInset: chrome.contentTopInset),
+            floor: NotchLyricsWindowController.contentWidth(
+                baseWidth: 0, notchWidth: chrome.notchWidth, contentTopInset: chrome.contentTopInset),
+            leftEar: settings.notchLeftEar, rightEar: settings.notchRightEar,
+            maxCardWidth: chrome.menuBarMaxCardWidth)
     }
 
     /// 展开态卡片此刻真实有多宽:`max(稳态真实宽, 展开设定)`,跟真窗口 `recomputeGeometry`
@@ -461,7 +474,8 @@ struct NotchEditorStage: View {
         let module = side == .left ? settings.notchLeftEar : settings.notchRightEar
         let equalizerHere = settings.notchShowsEqualizer
             && settings.notchEqualizerEar == (side == .left ? NotchEqualizerEar.left : .right)
-        guard equalizerHere else { return module.displayName }
+        // 播放控制、歌词那两档音浪让位(`yieldsEqualizer`),卡片上没有音浪,摘要也不报。
+        guard equalizerHere, !module.yieldsEqualizer else { return module.displayName }
         if module == NotchEarModule.none { return L10n.t("音浪") }
         return L10n.list([module.displayName, L10n.t("音浪")])
     }

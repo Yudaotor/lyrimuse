@@ -325,6 +325,11 @@ func runDeepLinkTests() {
         expectEqual([link("lyrimuse://debug/notch-behavior?lyrics=below"), link("lyrimuse://debug/notch-behavior?ignore-notch=0")],
                     [nil, .debug(.notchBehavior(collapseWhenPaused: nil, hideWhenNotPlaying: nil, ignoreNotch: false))],
                     "debug: 歌词三档只认 rawValue;单带 ignore-notch 也认")
+        expectEqual([link("lyrimuse://debug/notch-behavior?left-ear=currentLine&right-ear=nextLine&width=322"),
+                     link("lyrimuse://debug/notch-behavior?width=abc"), link("lyrimuse://debug/notch-behavior?left-ear=")],
+                    [.debug(.notchBehavior(collapseWhenPaused: nil, hideWhenNotPlaying: nil, leftEar: "currentLine",
+                                           rightEar: "nextLine", width: 322)), nil, nil],
+                    "debug: 灵动岛左右耳与稳态宽(05 章决策 159);宽度不是数、耳朵空着不认")
         expectEqual(link("lyrimuse://debug/notch-behavior?lyric-row-fade=1"),
                     .debug(.notchBehavior(collapseWhenPaused: nil, hideWhenNotPlaying: nil, lyricRowFade: true)),
                     "debug: 只开灵动岛悬浮淡化")
@@ -1033,6 +1038,8 @@ func runDeepLinkTests() {
             .debug(.notchBehavior(collapseWhenPaused: nil, hideWhenNotPlaying: nil, lyricsPlacement: .hidden)),
             .debug(.notchBehavior(collapseWhenPaused: nil, hideWhenNotPlaying: nil, lyricsPlacement: .belowRow, ignoreNotch: false)),
             .debug(.notchBehavior(collapseWhenPaused: nil, hideWhenNotPlaying: nil, lyricsPlacement: .topRow, ignoreNotch: true)),
+            .debug(.notchBehavior(collapseWhenPaused: nil, hideWhenNotPlaying: nil, leftEar: "currentLine", rightEar: "nextLine")),
+            .debug(.notchBehavior(collapseWhenPaused: nil, hideWhenNotPlaying: nil, width: 320.5)),
             .debug(.knockout(leg: .voxScript, on: false)), .debug(.knockout(leg: .systemArtwork, on: true)),
             .debug(.reportingSwitchHint(bundleID: "com.tencent.QQMusic")),
             .debug(.menuBarCenter(center: true, ignoreNotch: true)), .debug(.menuBarCenter(center: false, ignoreNotch: nil)),

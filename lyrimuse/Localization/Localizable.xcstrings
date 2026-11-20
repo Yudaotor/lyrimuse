@@ -313257,103 +313257,305 @@
         }
       }
     },
-    "当前屏幕有刘海，顶行不显示歌词" : {
+    "当前屏幕有刘海，可改在左耳或右耳显示当前句" : {
       "extractionState" : "manual",
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Dieser Bildschirm hat eine Notch, daher wird in der oberen Zeile kein Liedtext angezeigt"
+            "value" : "Dieser Bildschirm hat eine Notch. Die aktuelle Zeile kann stattdessen im linken oder rechten Ohr erscheinen"
           }
         },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "This screen has a notch, so lyrics are not shown in the top row"
+            "value" : "This screen has a notch. Show the current line in the left or right ear instead"
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Esta pantalla tiene notch, así que la letra no se muestra en la fila superior"
+            "value" : "Esta pantalla tiene notch. Puedes mostrar la línea actual a la izquierda o a la derecha"
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Cet écran a une encoche : les paroles ne s’affichent pas sur la ligne du haut"
+            "value" : "Cet écran a une encoche : affichez plutôt la ligne actuelle à gauche ou à droite"
           }
         },
         "hi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "इस स्क्रीन में नॉच है, इसलिए ऊपरी पंक्ति में बोल नहीं दिखते"
+            "value" : "इस स्क्रीन में नॉच है। मौजूदा पंक्ति बाएँ या दाएँ कान में दिखाई जा सकती है"
           }
         },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Questo schermo ha il notch, quindi il testo non viene mostrato nella riga superiore"
+            "value" : "Questo schermo ha il notch. Puoi mostrare la riga attuale a sinistra o a destra"
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "この画面にはノッチがあるため、上段に歌詞は表示されません"
+            "value" : "この画面にはノッチがあります。左耳または右耳に現在の行を表示できます"
           }
         },
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "현재 화면에 노치가 있어 상단 행에 가사가 표시되지 않습니다"
+            "value" : "현재 화면에 노치가 있습니다. 왼쪽 귀 또는 오른쪽 귀에 현재 줄을 표시할 수 있습니다"
           }
         },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Esta tela tem notch, então a letra não aparece na linha superior"
+            "value" : "Esta tela tem notch. Mostre a linha atual no ouvido esquerdo ou direito"
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "У этого экрана есть вырез, поэтому текст в верхней строке не показывается"
+            "value" : "У этого экрана есть вырез. Текущую строку можно показать слева или справа"
           }
         },
         "th" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "หน้าจอนี้มีรอยบาก จึงไม่แสดงเนื้อเพลงในแถวบน"
+            "value" : "หน้าจอนี้มีรอยบาก แสดงบรรทัดปัจจุบันที่ฝั่งซ้ายหรือฝั่งขวาแทนได้"
           }
         },
         "tr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Bu ekranda çentik olduğu için üst satırda söz gösterilmez"
+            "value" : "Bu ekranda çentik var. Geçerli satırı sol veya sağ kulakta gösterebilirsiniz"
           }
         },
         "uk" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Цей екран має виріз, тому текст у верхньому рядку не показується"
+            "value" : "Цей екран має виріз. Поточний рядок можна показати зліва або справа"
           }
         },
         "vi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Màn hình hiện tại có notch nên lời không hiển thị ở hàng trên"
+            "value" : "Màn hình hiện tại có notch, có thể hiển thị dòng hiện tại ở tai trái hoặc tai phải"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "当前屏幕有刘海，顶行不显示歌词"
+            "value" : "当前屏幕有刘海，可改在左耳或右耳显示当前句"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "目前螢幕有瀏海，頂行不顯示歌詞"
+            "value" : "目前螢幕有瀏海，可改在左耳或右耳顯示目前這句"
+          }
+        }
+      }
+    },
+    "当前句" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aktuelle Zeile"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Current Line"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Línea actual"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ligne actuelle"
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "मौजूदा पंक्ति"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Riga attuale"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "現在の行"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "현재 줄"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Linha atual"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Текущая строка"
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "บรรทัดปัจจุบัน"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Geçerli Satır"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Поточний рядок"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dòng hiện tại"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "当前句"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "目前這句"
+          }
+        }
+      }
+    },
+    "左耳或右耳已显示当前句，此项不生效" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Das linke oder rechte Ohr zeigt bereits die aktuelle Zeile, daher hat diese Einstellung keine Wirkung"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The left or right ear already shows the current line, so this setting has no effect"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "La izquierda o la derecha ya muestra la línea actual, así que este ajuste no tiene efecto"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "La gauche ou la droite affiche déjà la ligne actuelle : ce réglage n’a pas d’effet"
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "बायाँ या दायाँ कान पहले से मौजूदा पंक्ति दिखा रहा है, इसलिए इस सेटिंग का असर नहीं है"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "La sinistra o la destra mostra già la riga attuale, quindi questa impostazione non ha effetto"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "左耳または右耳に現在の行を表示中のため、この設定は無効です"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "왼쪽 귀 또는 오른쪽 귀에 현재 줄이 표시되어 이 설정은 적용되지 않습니다"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "O ouvido esquerdo ou direito já mostra a linha atual, então este ajuste não tem efeito"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Слева или справа уже показывается текущая строка, поэтому этот параметр не действует"
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ฝั่งซ้ายหรือฝั่งขวาแสดงบรรทัดปัจจุบันอยู่แล้ว การตั้งค่านี้จึงไม่มีผล"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sol veya sağ kulak geçerli satırı zaten gösterdiği için bu ayarın etkisi yok"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Зліва або справа вже показується поточний рядок, тому цей параметр не діє"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tai trái hoặc tai phải đã hiển thị dòng hiện tại nên mục này không có tác dụng"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "左耳或右耳已显示当前句，此项不生效"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "左耳或右耳已顯示目前這句，此項目不生效"
           }
         }
       }

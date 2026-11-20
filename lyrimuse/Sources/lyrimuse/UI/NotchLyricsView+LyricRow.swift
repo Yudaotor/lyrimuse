@@ -264,31 +264,32 @@ extension NotchLyricsView {
     private var lyricTextColumn: some View {
         if playback.shownSecondaryLine.showsSecondaryRow {
             VStack(alignment: .leading, spacing: NotchLyricRowMetrics.lineSpacing) {
-                mainLyricLine
+                mainLyricLine(restingAlignment: playback.mainLyricAlignment)
                     .frame(height: playback.mainLineHeight)
                 secondaryLyricLine
                     .frame(height: NotchLyricRowMetrics.secondaryLineHeight)
             }
         } else {
-            mainLyricLine
+            mainLyricLine(restingAlignment: playback.mainLyricAlignment)
                 .offset(y: -NotchMetrics.singleLineOpticalLift)
         }
     }
 
     /// 单行歌词:当前句(逐字填色 / 跑马灯、各种状态占位,同歌词行的主行)或下一句(跑马灯,淡一档)。宽度由调用方给,
-    /// 字体跟歌词行主行同一份。顶行歌词用它画当前句。
+    /// 字体跟歌词行主行同一份。顶行歌词用它画当前句,耳朵模块「当前句」「下一句」也用它。
+    /// `restingAlignment` 是句子放得下时停在哪,nil = 跟「对齐方式」设置(耳朵里传贴刘海那一侧)。
     @ViewBuilder
-    func singleLyricLine(_ kind: NotchLyricLineKind) -> some View {
+    func singleLyricLine(_ kind: NotchLyricLineKind, restingAlignment: Alignment? = nil) -> some View {
         switch kind {
-        case .current: mainLyricLine
-        case .next: nextLyricLine
+        case .current: mainLyricLine(restingAlignment: restingAlignment ?? playback.mainLyricAlignment)
+        case .next: nextLyricLine(restingAlignment: restingAlignment ?? playback.nextLineAlignment)
         }
     }
 
-    private var nextLyricLine: some View {
+    private func nextLyricLine(restingAlignment: Alignment) -> some View {
         LayerMarquee(id: playback.nextLineText ?? "",
                      edgeFadeWidth: NotchMetrics.lyricEdgeFadeWidth,
-                     restingAlignment: playback.nextLineAlignment,
+                     restingAlignment: restingAlignment,
                      loops: false,
                      isActive: surfaceVisible) {
             Text(playback.nextLineText ?? "")
@@ -307,14 +308,14 @@ extension NotchLyricsView {
     ///
     /// 没有逐字时间的行走图层跑马灯(`LayerMarquee`),只按窗口可见性停、不按所在那一层停:稳态 / 展开两份靠透明度轮流显示,
     /// 按层停会让长句在悬停展开时跳回开头;藏着那份的图层动画不占主线程。它的内容不继承这里的环境,字体要在里面再写一次(05 章决策 99)。
-    private var mainLyricLine: some View {
+    private func mainLyricLine(restingAlignment: Alignment) -> some View {
         NotchLayerActiveReader { layerActive in
             if let words = playback.displayLine?.words, !words.isEmpty {
-                layerKaraokeLine(words: words, layerActive: layerActive)
+                layerKaraokeLine(words: words, layerActive: layerActive, restingAlignment: restingAlignment)
             } else {
                 LayerMarquee(id: playback.displayLine?.plainText ?? "",
                              edgeFadeWidth: NotchMetrics.lyricEdgeFadeWidth,
-                             restingAlignment: playback.mainLyricAlignment,
+                             restingAlignment: restingAlignment,
                              loops: false,
                              isActive: surfaceVisible) {
                     lyricContent(layerActive: layerActive)
@@ -337,10 +338,10 @@ extension NotchLyricsView {
     /// `WordKaraokeGradient.dimOpacity`、整行阴影(黑 0.45 / 半径 2 / 下移 1,同 `lyricContent` 里那条 `.compositingGroup().shadow`)、
     /// 溢出时尾部渐隐(`lyricEdgeFadeWidth`)、装得下时按「对齐方式」静置、停表判据(同 `lyricFollow`)。不同的一处:已唱 / 未唱的
     /// 交界是硬边(悬浮歌词滚动模式、菜单栏同款),没有 SwiftUI 版那条 `wordEdgeSoftenBand` 软过渡。
-    private func layerKaraokeLine(words: [SyncedLyricWord], layerActive: Bool) -> some View {
+    private func layerKaraokeLine(words: [SyncedLyricWord], layerActive: Bool, restingAlignment: Alignment) -> some View {
         let fg = NSColor(lyricInk)
         let side: LyricDuet.Side
-        switch playback.mainLyricAlignment.horizontal {
+        switch restingAlignment.horizontal {
         case .leading: side = .leading
         case .trailing: side = .trailing
         default: side = .center

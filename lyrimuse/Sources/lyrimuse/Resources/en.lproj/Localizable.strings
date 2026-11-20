@@ -1128,6 +1128,7 @@
 "左侧颜色" = "Left Color";
 "左对齐" = "Left";
 "左耳" = "Left Ear";
+"左耳或右耳已显示当前句，此项不生效" = "The left or right ear already shows the current line, so this setting has no effect";
 "已下载" = "Downloaded";
 "已下载 %@ / %@" = "%@ of %@ downloaded";
 "已下载的动态封面占用的磁盘空间；清除后再次显示时会重新下载" = "Disk space used by downloaded animated artwork; anything cleared downloads again the next time it’s shown";
@@ -1348,8 +1349,9 @@
 "当前 %@" = "Current %@";
 "当前使用" = "In use";
 "当前动态" = "Activity";
+"当前句" = "Current Line";
 "当前启用的其余歌词源未应答：%@" = "Other enabled sources did not respond: %@";
-"当前屏幕有刘海，顶行不显示歌词" = "This screen has a notch, so lyrics are not shown in the top row";
+"当前屏幕有刘海，可改在左耳或右耳显示当前句" = "This screen has a notch. Show the current line in the left or right ear instead";
 "当前播放器不支持喜欢" = "This player doesn’t support favorites";
 "当前播放器将这首歌曲标记为纯音乐，其他候选均不采用" = "Your player marks this track as instrumental, so no candidate is used";
 "当前播放的是 DJ Mix 专辑中的片段（歌名带 [Mixed]，专辑名带 (DJ Mix)）。此类曲目截取自完整演出，前后带有过渡，时长与原版不同，原版歌词的时间轴无法对齐，且暂无歌词源收录混音版的时间轴" = "This is a segment of a DJ Mix album (the title is tagged [Mixed] and the album (DJ Mix)). Such tracks are cut from a full set with transitions on either side and a different length, so the original lyrics’ timing can’t line up, and no lyrics source provides timing for the mixed version";

@@ -1128,6 +1128,7 @@
 "左侧颜色" = "Color izquierdo";
 "左对齐" = "Izquierda";
 "左耳" = "Izquierda";
+"左耳或右耳已显示当前句，此项不生效" = "La izquierda o la derecha ya muestra la línea actual, así que este ajuste no tiene efecto";
 "已下载" = "Descargado";
 "已下载 %@ / %@" = "%@ de %@ descargados";
 "已下载的动态封面占用的磁盘空间；清除后再次显示时会重新下载" = "Espacio en disco que ocupan las ilustraciones animadas descargadas; lo que borres se volverá a descargar la próxima vez que se muestre";
@@ -1348,8 +1349,9 @@
 "当前 %@" = "Actual: %@";
 "当前使用" = "En uso";
 "当前动态" = "Actividad";
+"当前句" = "Línea actual";
 "当前启用的其余歌词源未应答：%@" = "Otras fuentes activadas no respondieron: %@";
-"当前屏幕有刘海，顶行不显示歌词" = "Esta pantalla tiene notch, así que la letra no se muestra en la fila superior";
+"当前屏幕有刘海，可改在左耳或右耳显示当前句" = "Esta pantalla tiene notch. Puedes mostrar la línea actual a la izquierda o a la derecha";
 "当前播放器不支持喜欢" = "Este reproductor no admite favoritos";
 "当前播放器将这首歌曲标记为纯音乐，其他候选均不采用" = "Tu reproductor marca esta canción como instrumental, así que no se usa ninguna candidata";
 "当前播放的是 DJ Mix 专辑中的片段（歌名带 [Mixed]，专辑名带 (DJ Mix)）。此类曲目截取自完整演出，前后带有过渡，时长与原版不同，原版歌词的时间轴无法对齐，且暂无歌词源收录混音版的时间轴" = "Es un fragmento de un álbum DJ Mix (el título lleva [Mixed] y el álbum (DJ Mix)). Estas pistas se cortan de una sesión completa con transiciones a ambos lados y otra duración, así que los tiempos de la letra original no coinciden, y ninguna fuente de letras ofrece tiempos para la versión mezclada";

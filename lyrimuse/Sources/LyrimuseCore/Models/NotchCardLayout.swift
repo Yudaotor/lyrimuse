@@ -142,6 +142,12 @@ public struct NotchCardLayout: Equatable, Sendable {
         topRowLyricsWidth > 0 && hasTrack && !isCollapsed && !isExpanded && !hasMilestone
     }
 
+    /// 耳朵里的「当前句」「下一句」此刻画不画:只在稳态(没收起、没展开)、有曲目、不在放广告时画。展开时下面的歌词行
+    /// 和下一句预览已经有这两句;收起态耳朵本来就不按配置画。见 05 章决策 159。
+    public var showsEarLyrics: Bool {
+        hasTrack && !isCollapsed && !isExpanded && !isAdBreak
+    }
+
     /// 瞬态横幅画在卡片为它多长的那一截里:关着歌词行、没展开、没收起、没报喜时(开着歌词行或展开时横幅盖在歌词行上)。
     public var showsBannerStrip: Bool {
         transientBannerActive && hasTrack && !showsLyrics && !isExpanded && !isCollapsed && !hasMilestone

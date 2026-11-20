@@ -18,8 +18,33 @@ extension NotchEarModule {
         case .remaining: return L10n.t("剩余时长")
         case .playCount: return L10n.t("收听次数")
         case .player: return L10n.t("播放器")
+        case .currentLine: return L10n.t("当前句")
+        case .nextLine: return L10n.t("下一句")
         case .none: return L10n.t("不显示")
         }
+    }
+
+    /// 歌词模块画哪一句;不是歌词模块时 nil。
+    var lyricLine: NotchLyricLineKind? {
+        switch self {
+        case .currentLine: return .current
+        case .nextLine: return .next
+        default: return nil
+        }
+    }
+
+    /// 这只耳朵挂着音浪时音浪让位:播放控制的播放 / 暂停键、逐字填色的歌词本身就在报播放状态,再摆音浪是同一件事说两遍。
+    /// 渲染(`NotchLyricsView.topRow`)、宽度下限(`NotchLyricsWindowController.minEarWidth`)、工具栏摘要三处读这一份。
+    var yieldsEqualizer: Bool { self == .controls || lyricLine != nil }
+
+    /// 两只耳朵里有没有放歌词(当前句或下一句)。放了就按菜单栏两侧夹稳态宽(`NotchEarLyrics.steadyWidth`)。
+    static func hasLyricLine(left: NotchEarModule, right: NotchEarModule) -> Bool {
+        left.lyricLine != nil || right.lyricLine != nil
+    }
+
+    /// 有没有一只耳朵放着当前句:放了的话下面的歌词行、顶行歌词不再画当前句(`NotchLyricsPlacement.presentation`)。
+    static func currentLineInEar(left: NotchEarModule, right: NotchEarModule) -> Bool {
+        left == .currentLine || right == .currentLine
     }
 
     /// 这个模块要不要每秒重算一次(时间类才要)。用它把 TimelineView 圈在真正需要的那一格里:顶行别的模块不随播放进度重绘,
@@ -32,7 +57,7 @@ extension NotchEarModule {
     /// 判据是"再窄就真的被裁",不是"再窄就不好看"。宽度滑杆的下界完全按它算(`NotchLyricsWindowController.contentWidth`),
     /// 往上多给一个 pt 就是替用户把岛的下限抬高一个 pt。
     ///
-    /// 歌名 / 歌手 / 专辑给 0,这是有意的:它们跑马灯,窄了只是滚得更勤、再窄就是什么都不显示,不会坏,所以不该参与决定下限。
+    /// 歌名 / 歌手 / 专辑(当前句 / 下一句同理,溢出时跟唱滚动或跑马灯)给 0,这是有意的:它们跑马灯,窄了只是滚得更勤、再窄就是什么都不显示,不会坏,所以不该参与决定下限。
     /// 别给 24pt("可读窗口还剩两个汉字"),那是拿"好看"当"会坏"用,会把默认配置(歌名/歌手)的下界钉在 300pt,而 300pt 下那两个
     /// 词旁边明显还空着。给 0 之后,默认配置的下界落到跟「不显示/不显示」同一个数,下限完全由右耳外缘那簇音浪撑着。代价:拖到最底
     /// 那一格,右耳的文字会被音浪挤成 0 宽(左耳还剩 20pt 在滚),这是滑杆上肉眼可见的连续过程,想要文字就往回拖两格。
@@ -43,7 +68,7 @@ extension NotchEarModule {
     ///   - 封面 = `NotchMetrics.earArtworkSide` 现算,不给估计值(菜单栏 32 时 22pt)
     func minEarContentWidth(contentTopInset: CGFloat) -> CGFloat {
         switch self {
-        case .none, .title, .artist, .album: return 0
+        case .none, .title, .artist, .album, .currentLine, .nextLine: return 0
         case .controls: return 48
         case .artwork: return NotchMetrics.earArtworkSide(contentTopInset: contentTopInset)
         // 时间**不能**靠跑马灯兜底 —— 一秒一跳的数字滚起来根本读不了,所以这一档必须

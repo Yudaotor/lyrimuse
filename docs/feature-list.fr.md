@@ -297,7 +297,7 @@ Des paroles qui flottent au-dessus de toutes les fenêtres, toujours au premier 
 
 ### Paroles de l’encoche
 
-Une capsule façon Dynamic Island près de l’encoche, en haut de l’écran ; les Mac sans encoche et les écrans externes y ont droit aussi. Chaque côté peut afficher le titre, l’artiste, l’album, l’illustration, les commandes de lecture, ou le temps écoulé ou restant, à côté d’une onde audio animée. Sur les écrans sans encoche, la ligne en cours peut aussi s’afficher entre les deux côtés, la capsule gardant la hauteur de la barre des menus. Survolez-la pour la développer et accéder aux commandes, à une barre de progression cliquable, au minutage des paroles et à des boutons rapides comme Favori ou Rechercher les paroles. Pendant les pubs, elle affiche un compte à rebours du temps restant.
+Une capsule façon Dynamic Island près de l’encoche, en haut de l’écran ; les Mac sans encoche et les écrans externes y ont droit aussi. Chaque côté peut afficher le titre, l’artiste, l’album, l’illustration, les commandes de lecture, ou le temps écoulé ou restant, à côté d’une onde audio animée. Sur les écrans sans encoche, la ligne en cours peut aussi s’afficher entre les deux côtés, la capsule gardant la hauteur de la barre des menus. Chaque côté peut aussi afficher la ligne en cours ou la suivante, y compris sur les écrans à encoche. Survolez-la pour la développer et accéder aux commandes, à une barre de progression cliquable, au minutage des paroles et à des boutons rapides comme Favori ou Rechercher les paroles. Pendant les pubs, elle affiche un compte à rebours du temps restant.
 
 - Désactivée par défaut
 - Réglages : Affichage des paroles › Encoche › Paroles de l’encoche

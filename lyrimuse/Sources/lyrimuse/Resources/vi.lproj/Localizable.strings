@@ -1067,6 +1067,7 @@
 "左侧颜色" = "Màu bên trái";
 "左对齐" = "Căn trái";
 "左耳" = "Tai trái";
+"左耳或右耳已显示当前句，此项不生效" = "Tai trái hoặc tai phải đã hiển thị dòng hiện tại nên mục này không có tác dụng";
 "已下载" = "Đã tải về";
 "已下载 %@ / %@" = "Đã tải %@ / %@";
 "已下载的动态封面占用的磁盘空间；清除后再次显示时会重新下载" = "Dung lượng ổ đĩa do ảnh bìa động đã tải về sử dụng; sau khi xóa sẽ tải lại khi hiển thị lần sau";
@@ -1275,8 +1276,9 @@
 "当前 %@" = "Hiện tại %@";
 "当前使用" = "Đang dùng";
 "当前动态" = "Hoạt động";
+"当前句" = "Dòng hiện tại";
 "当前启用的其余歌词源未应答：%@" = "Các nguồn lời đang bật khác không phản hồi: %@";
-"当前屏幕有刘海，顶行不显示歌词" = "Màn hình hiện tại có notch nên lời không hiển thị ở hàng trên";
+"当前屏幕有刘海，可改在左耳或右耳显示当前句" = "Màn hình hiện tại có notch, có thể hiển thị dòng hiện tại ở tai trái hoặc tai phải";
 "当前播放器不支持喜欢" = "Trình phát hiện tại không hỗ trợ Ưa thích";
 "当前播放器将这首歌曲标记为纯音乐，其他候选均不采用" = "Trình phát hiện tại đánh dấu bài hát này là nhạc không lời, không dùng kết quả nào khác";
 "当前播放的是 DJ Mix 专辑中的片段（歌名带 [Mixed]，专辑名带 (DJ Mix)）。此类曲目截取自完整演出，前后带有过渡，时长与原版不同，原版歌词的时间轴无法对齐，且暂无歌词源收录混音版的时间轴" = "Bài đang phát là một đoạn trong album DJ Mix (tên bài có [Mixed], tên album có (DJ Mix)). Những bài này được cắt từ một buổi diễn đầy đủ, có đoạn chuyển tiếp ở hai đầu, thời lượng khác bản gốc nên thời gian của lời bản gốc không khớp được, và hiện chưa có nguồn lời nào có thời gian cho bản mix";

@@ -22,16 +22,29 @@ public enum NotchLyricsPlacement: String, CaseIterable, Sendable {
         }
     }
 
-    /// 这块屏上实际怎么画。有刘海的屏顶行中间是硬件,选「顶行」时按不显示画。
-    public func presentation(hasNotch: Bool) -> NotchLyricsPlacement {
-        self == .topRow && hasNotch ? .hidden : self
+    /// 这块屏上实际怎么画。有刘海的屏顶行中间是硬件,选「顶行」时按不显示画;有一只耳朵放着当前句时(`currentLineInEar`)
+    /// 歌词行和顶行都不再画当前句,一律按不显示。见 05 章决策 158、159。
+    public func presentation(hasNotch: Bool, currentLineInEar: Bool) -> NotchLyricsPlacement {
+        currentLineInEar || (self == .topRow && hasNotch) ? .hidden : self
     }
 }
 
 /// 一行歌词画哪一句。顶行歌词画当前句;单行歌词视图(`NotchLyricsView.singleLyricLine`)两种都能画,给定宽度由调用方定。
+/// 耳朵模块「当前句」「下一句」也用它。
 public enum NotchLyricLineKind: String, CaseIterable, Sendable {
     case current
     case next
+}
+
+/// 耳朵里放歌词(耳朵模块「当前句」「下一句」)时的宽度:两只耳朵仍等宽、卡片仍以刘海为中心,稳态宽沿用宽度滑杆,
+/// 再按菜单栏两侧较窄的那一边夹(`NotchTopRowLyrics.maxCardWidth`),不压前台 App 的菜单和状态栏图标。见 05 章决策 159。
+public enum NotchEarLyrics {
+    /// 稳态宽 `steadyWidth` 按上限 `maxCardWidth` 夹过之后的卡片宽,不窄于耳朵下限 `floor`(上限比下限还窄时停在下限)。
+    /// `maxCardWidth` 为 nil(没有菜单栏读数:锁屏那份)时不夹。
+    public static func steadyWidth(_ steadyWidth: CGFloat, floor: CGFloat, maxCardWidth: CGFloat?) -> CGFloat {
+        guard let maxCardWidth else { return steadyWidth }
+        return max(floor, min(steadyWidth, maxCardWidth))
+    }
 }
 
 /// 顶行歌词的几何:没有刘海的屏上,两只耳朵收到刚好放得下各自模块的宽度,中间那段给当前句。

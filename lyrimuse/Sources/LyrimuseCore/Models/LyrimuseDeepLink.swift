@@ -314,10 +314,13 @@ public enum LyrimuseDeepLink: Equatable, Sendable {
         /// 至少带一个。`real-audio=1` 跟设置页打开开关一样会去要「仅系统录音」授权。「收起时显示歌词」三档用
         /// `lyrics=belowRow|topRow|hidden`(`NotchLyricsPlacement` 的 rawValue;`show-lyrics` 只管开关)。
         /// `ignore-notch=1` 当作没有刘海、按无刘海屏的几何摆(不落盘,App 重启复原),刘海屏的开发机靠它验顶行歌词。
+        /// `left-ear=` / `right-ear=` 改左右耳显示什么(`NotchEarModule` 的 rawValue,认不认得由 App 判),`width=` 改稳态宽
+        /// (跟编辑台调整条同一条落盘路径,展开宽不够时跟着抬),都落盘。
         case notchBehavior(collapseWhenPaused: Bool?, hideWhenNotPlaying: Bool?, progressLine: NotchProgressLineChoice? = nil,
                            allScreens: Bool? = nil, showLyrics: Bool? = nil, lyricRowFade: Bool? = nil,
                            volumeKeyBanner: Bool? = nil, equalizerFollowsAudio: Bool? = nil,
-                           lyricsPlacement: NotchLyricsPlacement? = nil, ignoreNotch: Bool? = nil)
+                           lyricsPlacement: NotchLyricsPlacement? = nil, ignoreNotch: Bool? = nil,
+                           leftEar: String? = nil, rightEar: String? = nil, width: Double? = nil)
         /// 灵动岛「风格」里的「背景」「展开背景」,跟设置页走同两个设置:`debug/notch-style?style=coverArt&expanded=solidBlack|same`
         /// (值是 `NotchCardStyle` 的 rawValue,`same` = 展开背景「同上」),至少带一个。认不认得这个值由 App 判。
         case notchStyle(style: String?, expanded: String?)
@@ -700,13 +703,17 @@ public enum LyrimuseDeepLink: Equatable, Sendable {
             let realAudio = value("real-audio").flatMap(Self.parseBool)
             let placement = value("lyrics").flatMap(NotchLyricsPlacement.init(rawValue:))
             let ignoreNotch = value("ignore-notch").flatMap(Self.parseBool)
+            let leftEar = value("left-ear").flatMap { $0.isEmpty ? nil : $0 }
+            let rightEar = value("right-ear").flatMap { $0.isEmpty ? nil : $0 }
+            let width = value("width").flatMap(Double.init).flatMap { $0.isFinite && $0 > 0 ? $0 : nil }
             guard collapse != nil || hide != nil || progressLine != nil || allScreens != nil || showLyrics != nil
                     || lyricRowFade != nil || volumeKeyBanner != nil || realAudio != nil || placement != nil
-                    || ignoreNotch != nil else { return nil }
+                    || ignoreNotch != nil || leftEar != nil || rightEar != nil || width != nil else { return nil }
             self = .debug(.notchBehavior(collapseWhenPaused: collapse, hideWhenNotPlaying: hide, progressLine: progressLine,
                                          allScreens: allScreens, showLyrics: showLyrics, lyricRowFade: lyricRowFade,
                                          volumeKeyBanner: volumeKeyBanner, equalizerFollowsAudio: realAudio,
-                                         lyricsPlacement: placement, ignoreNotch: ignoreNotch))
+                                         lyricsPlacement: placement, ignoreNotch: ignoreNotch,
+                                         leftEar: leftEar, rightEar: rightEar, width: width))
         case ("debug", "/move-window"):
             guard let title = value("title"), !title.isEmpty,
                   let x = value("x").flatMap(Double.init), let y = value("y").flatMap(Double.init),
@@ -1207,7 +1214,7 @@ public enum LyrimuseDeepLink: Equatable, Sendable {
                 if let keepPaused { items.append(URLQueryItem(name: "keep-paused", value: keepPaused ? "1" : "0")) }
                 components.queryItems = items
             case let .notchBehavior(collapse, hide, progressLine, allScreens, showLyrics, lyricRowFade, volumeKeyBanner, realAudio,
-                                    placement, ignoreNotch):
+                                    placement, ignoreNotch, leftEar, rightEar, width):
                 components.path = "/notch-behavior"
                 var items: [URLQueryItem] = []
                 if let collapse { items.append(URLQueryItem(name: "collapse-when-paused", value: collapse ? "1" : "0")) }
@@ -1222,6 +1229,9 @@ public enum LyrimuseDeepLink: Equatable, Sendable {
                 if let realAudio { items.append(URLQueryItem(name: "real-audio", value: realAudio ? "1" : "0")) }
                 if let placement { items.append(URLQueryItem(name: "lyrics", value: placement.rawValue)) }
                 if let ignoreNotch { items.append(URLQueryItem(name: "ignore-notch", value: ignoreNotch ? "1" : "0")) }
+                if let leftEar { items.append(URLQueryItem(name: "left-ear", value: leftEar)) }
+                if let rightEar { items.append(URLQueryItem(name: "right-ear", value: rightEar)) }
+                if let width { items.append(URLQueryItem(name: "width", value: String(width))) }
                 components.queryItems = items
             case let .moveWindow(title, x, y, width, height):
                 components.path = "/move-window"

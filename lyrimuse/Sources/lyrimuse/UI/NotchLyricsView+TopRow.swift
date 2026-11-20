@@ -66,12 +66,11 @@ extension NotchLyricsView {
         return lum > 0.179 ? .black : .white
     }
 
-    /// 播放指示条(音浪)是不是配给了这只耳朵,而且这只耳朵没选控制键——三键本身已经在
-    /// 报播放状态(播放时画 ⏸),音浪摆在旁边是同一件事说两遍,而且窄宽度下(耳朵最窄
-    /// 70pt,减内缩 6 之后 64pt)刚好放得下三键的 48pt,再挤进音浪的 14+5 就超了。这是
-    /// "音浪贴这只耳朵外缘"唯一的例外,跟哪只耳朵无关。
+    /// 播放指示条(音浪)是不是配给了这只耳朵,而且这只耳朵没选播放控制或歌词(`NotchEarModule.yieldsEqualizer`):
+    /// 三键、逐字填色本身已经在报播放状态,音浪摆在旁边是同一件事说两遍;窄宽度下三键的 48pt 也挤不进音浪的 16+5。
+    /// 这是"音浪贴这只耳朵外缘"唯一的例外,跟哪只耳朵无关。
     private func showsEqualizer(on side: NotchEqualizerEar, module: NotchEarModule) -> Bool {
-        controller.showsEqualizer && controller.equalizerEar == side && module != .controls
+        controller.showsEqualizer && controller.equalizerEar == side && !module.yieldsEqualizer
     }
 
     private var equalizerBars: some View {
@@ -249,9 +248,21 @@ extension NotchLyricsView {
                                    scale: max(1, displayScale), alignment: alignment,
                                    trackKey: "\(playback.artist)|\(playback.title)")
             }
+        case .currentLine, .nextLine:
+            earLyricLine(module, alignment: alignment)
         case .title, .artist, .album, .none:
             earText(metadataText(module), module: module, alignment: alignment)
         }
+    }
+
+    /// 耳朵里的当前句 / 下一句(单行歌词视图,同顶行歌词那一句):句子放得下时贴刘海那一侧(左耳靠右、右耳靠左),两耳连起来读是
+    /// 一句接一句;放不下时当前句从开头起排、跟唱滚动,下一句跑马灯。只在稳态画(`showsEarLyrics`),常驻只切透明度,展开 / 收回
+    /// 时不重建逐字图层。见 05 章决策 159。
+    private func earLyricLine(_ module: NotchEarModule, alignment: Alignment) -> some View {
+        singleLyricLine(module.lyricLine ?? .current,
+                        restingAlignment: alignment.horizontal == .leading ? .trailing : .leading)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .modifier(NotchCardLayerActive(active: controller.showsEarLyrics))
     }
 
     /// 耳朵里那枚封面(`NotchEarArtworkFlip`):换歌后新封面到了、控制器揭晓了这一首(歌名掉下来的那一拍)翻一下,
@@ -395,7 +406,7 @@ extension NotchLyricsView {
         case .artist: return (isAd || station != nil) ? "" : playback.displayArtist
         case .album: return (isAd || station != nil) ? "" : playback.displayAlbum
         // 非文本模块不走这条路(见 earContent 的分发),这里只是把 switch 补齐。
-        case .artwork, .controls, .elapsed, .remaining, .playCount, .player, .none: return ""
+        case .artwork, .controls, .elapsed, .remaining, .playCount, .player, .currentLine, .nextLine, .none: return ""
         }
     }
 

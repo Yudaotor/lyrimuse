@@ -49,7 +49,8 @@ struct NotchStylePopover: View {
 }
 
 /// 「收起时显示歌词」三档(`AppSettings.notchLyricsPlacement`):顶行下面的歌词行 / 顶行两只耳朵之间 / 不显示。
-/// 放在「歌词行」浮层与「全部设置」抽屉的「歌词行」组最上面。选「顶行」而灵动岛此刻在有刘海的屏上时,下面补一句按不显示画。
+/// 放在「歌词行」浮层与「全部设置」抽屉的「歌词行」组最上面。耳朵里放着当前句、或选「顶行」而灵动岛此刻在有刘海的屏上时,
+/// 下面补一句按不显示画。
 @MainActor
 struct NotchLyricsPlacementRow: View {
     @ObservedObject private var settings = AppSettings.shared
@@ -71,8 +72,12 @@ struct NotchLyricsPlacementRow: View {
                                        label: \.displayName,
                                        compact: true)
             }
-            if settings.notchLyricsPlacement == .topRow, targetHasNotch {
-                SettingsNote { Text(L10n.t("当前屏幕有刘海，顶行不显示歌词")) }
+            // 耳朵里放着当前句时这一项按不显示画(`NotchLyricsPlacement.presentation`),说这一条就够;刘海屏上选顶行时指到耳朵。
+            if settings.notchLyricsPlacement != .hidden,
+               NotchEarModule.currentLineInEar(left: settings.notchLeftEar, right: settings.notchRightEar) {
+                SettingsNote { Text(L10n.t("左耳或右耳已显示当前句，此项不生效")) }
+            } else if settings.notchLyricsPlacement == .topRow, targetHasNotch {
+                SettingsNote { Text(L10n.t("当前屏幕有刘海，可改在左耳或右耳显示当前句")) }
             }
         }
     }

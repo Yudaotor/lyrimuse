@@ -297,7 +297,7 @@ Liedtext, der über allen Fenstern schwebt, immer im Vordergrund, Wort für Wort
 
 ### Liedtext an der Notch
 
-Eine Kapsel im Stil der Dynamic Island neben der Notch oben auf dem Bildschirm; Macs ohne Notch und externe Displays bekommen ebenfalls eine. Jede Seite kann Titel, Künstler, Album, Cover, Wiedergabesteuerung oder verstrichene bzw. verbleibende Zeit zeigen, neben einer bewegten Audiowelle. Auf Bildschirmen ohne Notch kann die aktuelle Zeile auch zwischen den beiden Seiten stehen, und die Kapsel bleibt so hoch wie die Menüleiste. Zeige darauf, um sie auszuklappen: mit Steuerung, verschiebbarem Fortschrittsbalken, Liedtext-Timing und Schnelltasten wie Favorit und Liedtext suchen. Während Werbung zählt sie die verbleibende Zeit herunter.
+Eine Kapsel im Stil der Dynamic Island neben der Notch oben auf dem Bildschirm; Macs ohne Notch und externe Displays bekommen ebenfalls eine. Jede Seite kann Titel, Künstler, Album, Cover, Wiedergabesteuerung oder verstrichene bzw. verbleibende Zeit zeigen, neben einer bewegten Audiowelle. Auf Bildschirmen ohne Notch kann die aktuelle Zeile auch zwischen den beiden Seiten stehen, und die Kapsel bleibt so hoch wie die Menüleiste. Jede Seite kann auch die aktuelle oder die nächste Zeile zeigen, auch auf Bildschirmen mit Notch. Zeige darauf, um sie auszuklappen: mit Steuerung, verschiebbarem Fortschrittsbalken, Liedtext-Timing und Schnelltasten wie Favorit und Liedtext suchen. Während Werbung zählt sie die verbleibende Zeit herunter.
 
 - Standardmäßig aus
 - Einstellungen: Liedtext-Anzeige › Notch › Notch-Text
