@@ -313578,13 +313578,13 @@
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Mismo ancho a ambos lados"
+            "value" : "Ancho simétrico"
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Même largeur des deux côtés"
+            "value" : "Largeur symétrique"
           }
         },
         "hi" : {
@@ -313596,7 +313596,7 @@
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Stessa larghezza ai due lati"
+            "value" : "Larghezza simmetrica"
           }
         },
         "ja" : {
@@ -313614,13 +313614,13 @@
         "pt-BR" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Ouvidos com a mesma largura"
+            "value" : "Largura simétrica"
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Одинаковая ширина сторон"
+            "value" : "Равная ширина"
           }
         },
         "th" : {
@@ -313638,7 +313638,7 @@
         "uk" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Однакова ширина боків"
+            "value" : "Рівна ширина"
           }
         },
         "vi" : {

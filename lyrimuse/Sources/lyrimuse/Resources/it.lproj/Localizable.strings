@@ -395,7 +395,7 @@
 "两者各项得分完全相同，按歌词源顺序排列" = "Punteggi identici su ogni criterio; in ordine di fonte";
 "两者同分" = "Stesso punteggio per entrambi";
 "两者均为现场版，但该候选的专辑名对应另一场演出（如另一次巡演），其时间轴与当前录音无法对齐" = "Sono entrambe versioni live, ma l’album di questo risultato corrisponde a un’altra esibizione (per esempio un altro tour), quindi il timing non combacerà con questa registrazione";
-"两耳等宽" = "Stessa larghezza ai due lati";
+"两耳等宽" = "Larghezza simmetrica";
 "两首探测曲均无响应，该源目前可能不可用" = "Nessuno dei due brani di prova ha risposto: questa fonte al momento potrebbe non essere disponibile";
 "个人是一串数字，群组以 -100 开头" = "Un numero per una persona; i gruppi iniziano con -100";
 "中" = "Media";

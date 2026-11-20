@@ -304,7 +304,7 @@ Una cápsula pegada al notch, arriba en la pantalla; también funciona en Mac si
 - Ajustes: Mostrar letra › Notch › Estilo
 - Ajustes: Mostrar letra › Notch › Pantalla
 - Ajustes: Mostrar letra › Notch › Izquierda
-- Ajustes: Mostrar letra › Notch › Izquierda › Mismo ancho a ambos lados
+- Ajustes: Mostrar letra › Notch › Izquierda › Ancho simétrico
 - Ajustes: Mostrar letra › Notch › Fila de letra › Mostrar letra al contraer
 - Ajustes: Atajos de teclado › Mostrar/ocultar letra en el notch
 - Ajustes: Atajos de teclado › Echar un vistazo al notch
@@ -1132,7 +1132,7 @@ Todos los ajustes de la ventana Ajustes, según dónde están: 346 en total. Esc
 ### Mostrar letra › Notch › Izquierda
 
 - **Onda de audio**: Se muestra en un solo lado a la vez
-- **Mismo ancho a ambos lados**: Se aplica a ambos lados
+- **Ancho simétrico**: Se aplica a ambos lados
 - **Seguir la música**: Sigue el sonido del reproductor y requiere permiso para grabar el audio del sistema; solo se lee el volumen y no se guarda ningún audio
 
 ### Mostrar letra › Notch › Fila de letra

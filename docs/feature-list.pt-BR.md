@@ -304,7 +304,7 @@ Uma cápsula no estilo Dynamic Island ao lado do notch, no topo da tela; Macs se
 - Ajustes: Exibição da letra › Notch › Estilo
 - Ajustes: Exibição da letra › Notch › Tela
 - Ajustes: Exibição da letra › Notch › Ouvido esquerdo
-- Ajustes: Exibição da letra › Notch › Ouvido esquerdo › Ouvidos com a mesma largura
+- Ajustes: Exibição da letra › Notch › Ouvido esquerdo › Largura simétrica
 - Ajustes: Exibição da letra › Notch › Linha da letra › Letra no modo recolhido
 - Ajustes: Atalhos de teclado › Mostrar/ocultar letra no notch
 - Ajustes: Atalhos de teclado › Espiar a letra no notch
@@ -1132,7 +1132,7 @@ Todos os ajustes da janela Ajustes, por local: 346 no total. Digite um nome no c
 ### Exibição da letra › Notch › Ouvido esquerdo
 
 - **Onda sonora**: Aparece em um lado por vez
-- **Ouvidos com a mesma largura**: Compartilhado pelos dois ouvidos
+- **Largura simétrica**: Compartilhado pelos dois ouvidos
 - **Acompanhar a música**: Acompanha o som do player e precisa de permissão para gravar o áudio do sistema; só o volume é lido e nenhum áudio é salvo
 
 ### Exibição da letra › Notch › Linha da letra

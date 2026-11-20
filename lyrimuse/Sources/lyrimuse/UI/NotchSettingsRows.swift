@@ -480,7 +480,7 @@ struct NotchEarSettingsRows: View {
                     set: { widthThrottle.update($0, commit: commit) }
                 ), in: range, step: NotchEarWidths.step,
                    onEditingChanged: { widthThrottle.editingChanged($0, commit: commit) })
-                .frame(width: 120)
+                .frame(width: 80)
                 .accessibilityLabel(side == .left ? L10n.t("左耳宽度") : L10n.t("右耳宽度"))
                 StableReadout(text: String(format: L10n.t("%@pt"), "\(Int(widthThrottle.value(or: Double(effective))))"),
                               widest: StableReadout.points(NotchEarWidths.storageRange.upperBound), font: nil, minWidth: 46)

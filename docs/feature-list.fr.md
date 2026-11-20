@@ -304,7 +304,7 @@ Une capsule façon Dynamic Island près de l’encoche, en haut de l’écran ;
 - Réglages : Affichage des paroles › Encoche › Style
 - Réglages : Affichage des paroles › Encoche › Écran
 - Réglages : Affichage des paroles › Encoche › Gauche
-- Réglages : Affichage des paroles › Encoche › Gauche › Même largeur des deux côtés
+- Réglages : Affichage des paroles › Encoche › Gauche › Largeur symétrique
 - Réglages : Affichage des paroles › Encoche › Ligne de paroles › Paroles en mode réduit
 - Réglages : Raccourcis clavier › Afficher/masquer les paroles de l’encoche
 - Réglages : Raccourcis clavier › Développer l’encoche un instant
@@ -1132,7 +1132,7 @@ Tous les réglages de la fenêtre Réglages, classés par emplacement : 346 au 
 ### Affichage des paroles › Encoche › Gauche
 
 - **Onde audio** : Un seul côté à la fois
-- **Même largeur des deux côtés** : Commun aux deux côtés
+- **Largeur symétrique** : Commun aux deux côtés
 - **Suivre la musique** : Suit le son du lecteur et nécessite l’autorisation d’enregistrer l’audio du système ; seul le volume est lu, aucun son n’est enregistré
 
 ### Affichage des paroles › Encoche › Ligne de paroles

@@ -304,7 +304,7 @@ Una capsula in stile Dynamic Island accanto al notch, in alto sullo schermo; ce 
 - Impostazioni: Visualizzazione testo › Notch › Stile
 - Impostazioni: Visualizzazione testo › Notch › Schermo
 - Impostazioni: Visualizzazione testo › Notch › Sinistra
-- Impostazioni: Visualizzazione testo › Notch › Sinistra › Stessa larghezza ai due lati
+- Impostazioni: Visualizzazione testo › Notch › Sinistra › Larghezza simmetrica
 - Impostazioni: Visualizzazione testo › Notch › Riga del testo › Mostra testo se compresso
 - Impostazioni: Scorciatoie da tastiera › Mostra/nascondi testo nel notch
 - Impostazioni: Scorciatoie da tastiera › Espandi il notch per un attimo
@@ -1132,7 +1132,7 @@ Tutte le impostazioni della finestra Impostazioni, per posizione: 346 in tutto. 
 ### Visualizzazione testo › Notch › Sinistra
 
 - **Onda audio**: Appare su un lato alla volta
-- **Stessa larghezza ai due lati**: Comune a entrambi i lati
+- **Larghezza simmetrica**: Comune a entrambi i lati
 - **Segui la musica**: Segue il suono del player e richiede il permesso di registrare l’audio di sistema; legge solo il volume e non salva alcun audio
 
 ### Visualizzazione testo › Notch › Riga del testo
