@@ -85,6 +85,26 @@ public enum NotchTopRowLyrics {
         return Fit(cardWidth: width, lyricWidth: width - 2 * cardPadding - 2 * earWidth)
     }
 
+    /// 关掉「两耳等宽」时一侧至少伸出中线多少:一只耳朵 + 内边距 + 最窄歌词段的一半。两只耳朵仍等宽(`earWidth`),
+    /// 歌词段在卡片正中。
+    public static func minimumSideWidth(earWidth: CGFloat, cardPadding: CGFloat) -> CGFloat {
+        earWidth + cardPadding + minimumLyricWidth / 2
+    }
+
+    /// 关掉「两耳等宽」时的顶行歌词:两侧外露宽(从中线量)各抬到 `minimumSideWidth`,再各按 `cap` 那一侧夹;
+    /// 有一侧的上限连最窄那一段都放不下时 nil(这一档不画)。`cap` 为 nil 时不夹。见 05 章决策 160。
+    public static func fit(span: NotchEarSpan, earWidth: CGFloat, cardPadding: CGFloat,
+                           cap: NotchEarSpan?) -> (span: NotchEarSpan, lyricWidth: CGFloat)? {
+        let floor = minimumSideWidth(earWidth: earWidth, cardPadding: cardPadding)
+        var left = max(span.left, floor), right = max(span.right, floor)
+        if let cap {
+            guard cap.left >= floor, cap.right >= floor else { return nil }
+            left = min(left, cap.left)
+            right = min(right, cap.right)
+        }
+        return (NotchEarSpan(left: left, right: right), left + right - 2 * cardPadding - 2 * earWidth)
+    }
+
     /// 以 `centerX` 居中的卡片最宽多少才不压到菜单栏两侧已占的位置:`span` 是 `MenuBarCenterLayout.usableSpan` 给的那一段
     /// (已经各让开 `clearance`)。中线落在 `span` 外、或 `span` 为 nil(两侧挤得放不下)时是 0。
     public static func maxCardWidth(centerX: CGFloat, span: ClosedRange<CGFloat>?) -> CGFloat {

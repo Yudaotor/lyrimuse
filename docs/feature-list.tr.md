@@ -297,13 +297,14 @@ Tüm pencerelerin üstünde, her zaman en önde duran ve kelime kelime vurgulana
 
 ### Çentik sözleri
 
-Ekranın üstünde, çentiğin yanında Dynamic Island tarzında bir kapsül; çentiği olmayan Mac’lerde ve harici ekranlarda da çıkar. Her iki yanda parça adı, sanatçı, albüm, kapak, oynatma denetimleri veya geçen ya da kalan süre, hareketli bir ses dalgasının yanında gösterilebilir. Çentiksiz ekranlarda geçerli satır iki yanın arasında da gösterilebilir; kapsül menü çubuğu yüksekliğinde kalır. Her iki yan geçerli ya da sonraki satırı da gösterebilir; bu, çentikli ekranlarda da çalışır. Denetimler, sürüklenebilir ilerleme çubuğu, şarkı sözü zamanlaması ve beğenme, şarkı sözü arama gibi hızlı düğmeler için üzerine gelerek genişletin. Reklamlar sırasında kalan süreyi geri sayar.
+Ekranın üstünde, çentiğin yanında Dynamic Island tarzında bir kapsül; çentiği olmayan Mac’lerde ve harici ekranlarda da çıkar. Her iki yanda parça adı, sanatçı, albüm, kapak, oynatma denetimleri veya geçen ya da kalan süre, hareketli bir ses dalgasının yanında gösterilebilir. Çentiksiz ekranlarda geçerli satır iki yanın arasında da gösterilebilir; kapsül menü çubuğu yüksekliğinde kalır. Her iki yan geçerli ya da sonraki satırı da gösterebilir; bu, çentikli ekranlarda da çalışır. Denetimler, sürüklenebilir ilerleme çubuğu, şarkı sözü zamanlaması ve beğenme, şarkı sözü arama gibi hızlı düğmeler için üzerine gelerek genişletin. Reklamlar sırasında kalan süreyi geri sayar. Her iki tarafın genişliği de ayrı ayrı ayarlanabilir.
 
 - Saptanmış olarak kapalı
 - Ayarlar: Şarkı Sözü Görünümü › Çentik › Çentik Sözleri
 - Ayarlar: Şarkı Sözü Görünümü › Çentik › Stil
 - Ayarlar: Şarkı Sözü Görünümü › Çentik › Ekran
 - Ayarlar: Şarkı Sözü Görünümü › Çentik › Sol Kulak
+- Ayarlar: Şarkı Sözü Görünümü › Çentik › Sol Kulak › Eşit Kulak Genişliği
 - Ayarlar: Şarkı Sözü Görünümü › Çentik › Şarkı Sözü Satırı › Daraltıldığında Sözleri Göster
 - Ayarlar: Klavye Kestirmeleri › Çentik Sözlerini Göster/Gizle
 - Ayarlar: Klavye Kestirmeleri › Çentiği Geçici Olarak Genişlet
@@ -963,7 +964,7 @@ Neyin önce düzeltileceğine karar vermek için günde en fazla bir kez sürüm
 
 ## Tüm Ayarlar
 
-Ayarlar penceresindeki tüm ayarlar, konumlarına göre; toplam: 345. Bir ayara hemen gitmek için adını kenar çubuğunun üstündeki arama alanına yazın.
+Ayarlar penceresindeki tüm ayarlar, konumlarına göre; toplam: 346. Bir ayara hemen gitmek için adını kenar çubuğunun üstündeki arama alanına yazın.
 
 ### Şarkı Sözleri › Kaynak
 
@@ -1131,6 +1132,7 @@ Ayarlar penceresindeki tüm ayarlar, konumlarına göre; toplam: 345. Bir ayara 
 ### Şarkı Sözü Görünümü › Çentik › Sol Kulak
 
 - **Ses Dalgası**: Aynı anda yalnızca bir tarafta gösterilir
+- **Eşit Kulak Genişliği**: İki kulak için ortaktır
 - **Müzikle Hareket Et**: Çalardan gelen sese göre hareket eder; Lyrimuse’un sistem sesini kaydetmesine izin vermeniz gerekir. Yalnızca ses düzeyi okunur, ses kaydedilmez
 
 ### Şarkı Sözü Görünümü › Çentik › Şarkı Sözü Satırı

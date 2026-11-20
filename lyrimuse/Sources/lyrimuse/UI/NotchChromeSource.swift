@@ -107,6 +107,9 @@ protocol NotchChromeSource: ObservableObject {
     /// 真窗口是控制器 recomputeGeometry 算出的那两个数;编辑台由 NotchEditorStage 用同一套公式算好推进来。
     var steadyCardWidth: CGFloat { get }
     var expandedCardWidth: CGFloat { get }
+    /// 稳态卡片中心比刘海中心往右偏多少(`NotchCardLayout.steadyOffset`):两耳等宽时 0;关掉「两耳等宽」后偏到宽的那一侧。
+    /// 真窗口是控制器 recomputeGeometry 算出的值;编辑台由 NotchEditorStage 推进来。见 05 章决策 160。
+    var steadyCardOffset: CGFloat { get }
     /// 歌词行的**实际**高度(`AppSettings.notchEffectiveLyricRowHeight`:设定值夹到装得下当前字号和副行为止)。
     /// 稳态、展开两份歌词行同高;卡片高度、展开区的位置、换歌歌名条、封面小图都按它。真窗口是控制器订阅三项设置
     /// 后镜像出来的值(`NotchWindowRoot` 只观察控制器);编辑台的替身现读设置。
@@ -247,7 +250,7 @@ extension NotchChromeSource {
             trackInfoShowsArtist: expandedTrackInfoShowsArtist, trackInfoShowsAlbum: expandedTrackInfoShowsAlbum,
             expandedShowsQuickActions: expandedShowsQuickActions,
             expandedQuickActionRows: quickSlots.usedRowCount(visibleSlots: expandedQuickVisibleSlots), idlePanelHeight: idlePanelHeight,
-            topRowLyricsWidth: topRowLyricsWidth)
+            topRowLyricsWidth: topRowLyricsWidth, steadyOffset: steadyCardOffset)
     }
 
     /// 展开卡头部快捷操作一行看得见几格:按展开卡的真实宽度、封面和文字开着没有算(按设置算、不看广告态:广告期间文字项
@@ -275,6 +278,10 @@ extension NotchChromeSource {
     var expandedExtraHeightMax: CGFloat { cardLayout.expandedExtraHeightMax }
     var topRowPadding: CGFloat { cardLayout.topRowPadding }
     func earWidth(cardWidth: CGFloat) -> CGFloat { cardLayout.earWidth(cardWidth: cardWidth) }
+    func earWidths(cardWidth: CGFloat, offset: CGFloat) -> (left: CGFloat, right: CGFloat) {
+        cardLayout.earWidths(cardWidth: cardWidth, offset: offset)
+    }
+    var cardOffset: CGFloat { cardLayout.cardOffset }
     var cardWidth: CGFloat { cardLayout.cardWidth }
     var cardHeight: CGFloat { cardLayout.cardHeight }
     var showsCardEdge: Bool { cardLayout.showsCardEdge }
@@ -288,9 +295,54 @@ extension NotchChromeSource {
             notchWidth: notchWidth, contentTopInset: contentTopInset).lowerBound + 0.5
     }
 
+    /// 某一只耳朵此刻是否顶在自己的宽度下限上。两耳等宽时同 `isCardAtMinimumWidth`(两只一起判);关掉「两耳等宽」后每只耳朵
+    /// 只看自己那一侧的外露宽有没有贴着这一侧滑杆的下界(`NotchEarWidths.usableRange`),音浪独占耳朵时按它决定居中还是贴外缘。
+    func isEarAtMinimumWidth(_ side: NotchEqualizerEar) -> Bool {
+        guard steadyCardOffset != 0 else { return isCardAtMinimumWidth }
+        let settings = AppSettings.shared
+        let floors = NotchLyricsWindowController.earFloors(
+            leftEar: settings.notchLeftEar, rightEar: settings.notchRightEar, showsEqualizer: showsEqualizer,
+            equalizerEar: equalizerEar, contentTopInset: contentTopInset)
+        let span = cardLayout.steadySpan
+        let (width, floor) = side == .left ? (span.left, floors.left) : (span.right, floors.right)
+        return width <= NotchEarWidths.usableRange(floor: Double(floor)).lowerBound + 0.5
+    }
+
     /// 卡片外形要的几何(两个圆角设置另由 `NotchCornerLive` 给)。卡片自裁、纯色底、出场裁剪、编辑台虚线框四处都传这一个。
     var cardOutline: NotchCardOutline {
         NotchCardOutline(notchHeight: contentTopInset, collapsedHeight: cardHeight(expanded: false),
-                         expandedHeight: cardHeight(expanded: true), isExpanded: isExpanded)
+                         expandedHeight: cardHeight(expanded: true), isExpanded: isExpanded,
+                         notchOffset: cardOffset)
+    }
+}
+
+private struct NotchCardOffsetKey: EnvironmentKey {
+    static let defaultValue: CGFloat = 0
+}
+
+/// 把卡片横移 `offset`(卡片中心比刘海中心往右偏多少),同时把这一帧的偏移写进环境(`notchCardOffset`):宽度和偏移走同一条
+/// 弹簧,顶行左右耳宽和刘海里那枚胶囊按动画中的偏移排,刘海空当一直对着真刘海。偏移恒为 0(两耳等宽)时什么都不变。
+/// 真窗口(`NotchWindowRoot`)和编辑台(`NotchEditorStage.card`)都挂它。见 05 章决策 160。
+struct NotchCardOffsetEffect: ViewModifier, Animatable {
+    var offset: CGFloat
+
+    var animatableData: CGFloat {
+        get { offset }
+        set { offset = newValue }
+    }
+
+    func body(content: Content) -> some View {
+        content
+            .environment(\.notchCardOffset, offset)
+            .offset(x: offset)
+    }
+}
+
+extension EnvironmentValues {
+
+    /// 卡片此刻(动画中)的中心比刘海中心往右偏多少,`NotchCardOffsetEffect` 写入。默认 0。
+    var notchCardOffset: CGFloat {
+        get { self[NotchCardOffsetKey.self] }
+        set { self[NotchCardOffsetKey.self] = newValue }
     }
 }

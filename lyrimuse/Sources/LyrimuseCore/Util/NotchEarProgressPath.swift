@@ -64,15 +64,17 @@ public struct NotchEarProgressPath: Equatable, Sendable {
     /// - Parameters:
     ///   - shoulder / cardCornerRadius: 卡片外形此刻的肩膀和底角半径(App 侧 `NotchHangingShape.cornerMetrics`)。
     ///   - notchHeight: 顶行高度(真刘海屏 = 刘海高)。
+    ///   - notchCenterX: 这一半坐标里刘海中心的 x;nil = 卡片正中(两耳等宽)。两耳不等宽时左右两半各传自己那一侧的值,
+    ///     两半照旧同时走到刘海,见 05 章决策 160。
     public init(width: CGFloat, height: CGFloat, notchWidth: CGFloat, notchHeight: CGFloat,
-                shoulder: CGFloat, cardCornerRadius: CGFloat, inset: CGFloat) {
+                shoulder: CGFloat, cardCornerRadius: CGFloat, inset: CGFloat, notchCenterX: CGFloat? = nil) {
         x = shoulder + inset
         shoulderCenterY = max(0, shoulder)
         shoulderRadius = shoulder > 0 ? shoulder + inset : 0
         startX = shoulder > 0 ? (shoulderRadius * shoulderRadius - shoulder * shoulder).squareRoot() : x
         bottomY = max(0, height - inset)
         cornerRadius = max(0, min(cardCornerRadius - inset, bottomY - shoulderCenterY))
-        let center = width / 2
+        let center = notchCenterX ?? width / 2
         let revealed = notchWidth > 0 ? min(1, max(0, (height - notchHeight) / Self.bottomRevealSpan)) : 1
         endX = max(x + cornerRadius, center - notchWidth / 2 * (1 - revealed))
     }

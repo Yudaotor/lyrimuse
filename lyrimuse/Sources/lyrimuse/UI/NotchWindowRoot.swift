@@ -118,6 +118,13 @@ struct NotchWindowRoot: View {
         return controller.isVanished ? .easeIn(duration: Self.vanishDuration) : nil
     }
 
+    /// 退场缩进刘海的锚点:刘海中心(卡片顶边上、卡片中心往左 `cardOffset` 处)。两耳等宽时就是 `.top`。
+    private var vanishAnchor: UnitPoint {
+        let offset = controller.cardOffset
+        guard offset != 0, cardWidth > 0 else { return .top }
+        return UnitPoint(x: 0.5 - offset / cardWidth, y: 0)
+    }
+
     /// 出场动画的起始几何:从真刘海两侧撑开、只露顶行。按当前卡片尺寸换算成比例(裁剪形状按比例画,
     /// 卡片在动画中途变尺寸也不会算错)。纯函数在 LyrimuseCore.NotchReveal,selftest 钉着边界。
     private var revealStartWidth: CGFloat {
@@ -161,7 +168,8 @@ struct NotchWindowRoot: View {
                     .modifier(NotchRevealClip(widthFraction: state.widthFraction,
                                               heightFraction: state.heightFraction,
                                               outline: controller.cardOutline,
-                                              showsEdge: controller.showsCardEdge))
+                                              showsEdge: controller.showsCardEdge,
+                                              startWidthFraction: revealStartWidth))
             } keyframes: { _ in
                 KeyframeTrack(\.widthFraction) {
                     MoveKeyframe(revealStartWidth)
@@ -188,7 +196,7 @@ struct NotchWindowRoot: View {
             // 看起来是被吸进刘海;不取 0 而取 0.001,避开退化变换。尺寸(frame)不参与——
             // isCollapsed 在这个开关开着时不算暂停,卡片保持稳态尺寸,只有这个缩放在动。
             .animation(vanishAnimation) {
-                $0.scaleEffect(controller.isVanished ? 0.001 : 1, anchor: .top)
+                $0.scaleEffect(controller.isVanished ? 0.001 : 1, anchor: vanishAnchor)
                     .opacity(controller.isVanished ? 0 : 1)
             }
             // 命中形状显式钉成卡片这个矩形,hover 判定就挂在**卡片本身**上。
@@ -206,13 +214,16 @@ struct NotchWindowRoot: View {
             .contentShape(Rectangle())
             .onContinuousHover(coordinateSpace: .local) { handleHover($0) }
             .onReceive(NotchDebugHover.phases) { handleHover($0) }
+            // 两耳不等宽时稳态卡片偏到宽的那一侧(`cardOffset`,跟宽度同一条弹簧);悬停的局部坐标、命中仍以卡片自身为准。
+            .modifier(NotchCardOffsetEffect(offset: controller.cardOffset))
             // 贴顶 + 水平居中。窗口本身是按刘海中心点摆的,所以"在窗口里居中"就等于
-            // "对齐刘海中心"。
+            // "对齐刘海中心"(再加上面那段偏移)。
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
             .overlay(alignment: .top) { notchCatchStrip }
             // 三种形态切换用三条**不同**的弹簧,理由见 cardAnimation。
             .animation(cardAnimation, value: cardHeight)
             .animation(cardAnimation, value: cardWidth)
+            .animation(cardAnimation, value: controller.cardOffset)
             // 收起/弹出时内容整块淡入淡出,由同一条弹簧驱动,跟尺寸变化同步。
             .animation(cardAnimation, value: controller.isCollapsed)
             .onChange(of: controller.isExpanded) { _, expanded in wasExpanded = expanded }
@@ -240,7 +251,8 @@ struct NotchWindowRoot: View {
                 .onContinuousHover(coordinateSpace: .local) { phase in
                     switch phase {
                     case .active(let point):
-                        updateHover(inside: true, point: CGPoint(x: (cardWidth - notch.width) / 2 + point.x, y: notch.bottom + point.y))
+                        updateHover(inside: true, point: CGPoint(x: (cardWidth - notch.width) / 2 - notch.offset + point.x,
+                                                                 y: notch.bottom + point.y))
                     case .ended:
                         updateHover(inside: false, point: nil)
                     }
@@ -272,7 +284,9 @@ struct NotchWindowRoot: View {
                 if Date().timeIntervalSince(crossing.at) > NotchHoverHit.sweepWindowSecs {
                     notchCrossing = nil
                 } else if NotchHoverHit.sweptPastSteadyCard(rightward: crossing.rightward, x: point.x, cardWidth: cardWidth,
-                                                            steadyWidth: controller.steadyCardWidth) {
+                                                            steadyWidth: controller.steadyCardWidth,
+                                                            offset: controller.cardOffset,
+                                                            steadyOffset: controller.steadyCardOffset) {
                     notchCrossing = nil
                     controller.collapseAfterSweep()
                 }

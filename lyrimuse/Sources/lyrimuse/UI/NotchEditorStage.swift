@@ -83,6 +83,10 @@ struct NotchEditorStage: View {
     /// onEditingChanged 收到 nil(松手)时一次性提交(commitWidths)。
     @State private var draggingSteady: Double?
     @State private var draggingExpanded: Double?
+    /// 关掉「两耳等宽」后拖卡片两侧拖柄时那一侧的临时外露宽(松手才落盘,理由同 `draggingSteady`)和按下那一刻的起点。
+    @State private var draggingLeftEar: Double?
+    @State private var draggingRightEar: Double?
+    @State private var earDragStart: (side: NotchEarPopover.Side, value: Double)?
 
     // MARK: - 度量
 
@@ -111,7 +115,81 @@ struct NotchEditorStage: View {
     /// 展开宽那根单滑块能拖的区间(`NotchWidthBounds.usableExpandedRange`),稳态真实宽**自己现读设置和屏幕**(给构造不出这个
     /// View 的调用点用)。
     static var usableExpandedWidthRangeOnCurrentScreen: ClosedRange<Double> {
-        NotchWidthBounds.usableExpandedRange(steadyWidth: effectiveWidth(baseWidth: AppSettings.shared.notchContentWidth))
+        if let split = splitSteadyOnCurrentScreen() {
+            return NotchWidthBounds.usableExpandedRange(steadyWidth: Double(NotchEarWidths.expandedWidth(
+                steady: split.span, notchWidth: split.notchWidth, expandedSetting: 0)))
+        }
+        return NotchWidthBounds.usableExpandedRange(steadyWidth: effectiveWidth(baseWidth: AppSettings.shared.notchContentWidth))
+    }
+
+    // MARK: - 两耳各自的宽度
+
+    /// 关掉「两耳等宽」时这块屏上的稳态(两侧外露宽和刘海宽),两耳等宽时 nil。给构造不出这个 View 的调用点用
+    /// (抽屉、左右耳浮层、菜单栏快捷面板的读数),现读设置和屏幕,跟真窗口同一个公式(`splitSteady`)。见 05 章决策 160。
+    static func splitSteadyOnCurrentScreen() -> (span: NotchEarSpan, notchWidth: CGFloat)? {
+        let settings = AppSettings.shared
+        guard !settings.notchEarWidthsLinked else { return nil }
+        let screen = NotchLyricsWindowController.targetScreen()
+        let geo = screen.map { NotchLyricsWindowController.geometry(for: $0) }
+        let notchWidth = geo?.notchWidth ?? 0, topInset = geo?.notchHeight ?? 0
+        var caps: NotchEarSpan?
+        if NotchEarModule.hasLyricLine(left: settings.notchLeftEar, right: settings.notchRightEar), let screen, let geo {
+            caps = NotchLyricsWindowController.menuBarEarCaps(on: screen, geometry: geo)
+        }
+        let symmetric = NotchLyricsWindowController.contentWidth(
+            baseWidth: CGFloat(settings.notchContentWidth), notchWidth: notchWidth, contentTopInset: topInset)
+        let split = NotchLyricsWindowController.splitSteady(
+            setting: NotchLyricsWindowController.earWidthSetting(
+                left: settings.notchLeftEarWidth, right: settings.notchRightEarWidth,
+                symmetricCardWidth: symmetric, notchWidth: notchWidth),
+            notchWidth: notchWidth, contentTopInset: topInset, leftEar: settings.notchLeftEar,
+            rightEar: settings.notchRightEar, showsEqualizer: settings.notchShowsEqualizer,
+            equalizerEar: settings.notchEqualizerEar, lyricsPlacement: settings.notchLyricsPlacement, caps: caps)
+        return (split.span, notchWidth)
+    }
+
+    /// 一只耳朵宽度滑杆能拖的区间(`NotchEarWidths.usableRange`):下界是这一侧在当前模块下的下限,现读设置和屏幕。
+    static func earUsableRange(_ side: NotchEarPopover.Side) -> ClosedRange<Double> {
+        let settings = AppSettings.shared
+        let geo = NotchLyricsWindowController.targetScreen().map { NotchLyricsWindowController.geometry(for: $0) }
+        let floors = NotchLyricsWindowController.earFloors(
+            leftEar: settings.notchLeftEar, rightEar: settings.notchRightEar, showsEqualizer: settings.notchShowsEqualizer,
+            equalizerEar: settings.notchEqualizerEar, contentTopInset: geo?.notchHeight ?? 0)
+        return NotchEarWidths.usableRange(floor: Double(side == .left ? floors.left : floors.right))
+    }
+
+    /// 「两耳等宽」开关的唯一写入口。关掉时先把两侧宽度写成此刻稳态卡片(以刘海为中心)两侧的外露宽,再翻开关,卡片不跳;
+    /// 打开时只翻开关,`notchContentWidth` 分开期间没被写过,原来的稳态宽原样回来。
+    static func setEarWidthsLinked(_ linked: Bool) {
+        let settings = AppSettings.shared
+        guard settings.notchEarWidthsLinked != linked else { return }
+        if !linked {
+            let geo = NotchLyricsWindowController.targetScreen().map { NotchLyricsWindowController.geometry(for: $0) }
+            let start = NotchEarWidths.unlinkStart(
+                steadyCardWidth: CGFloat(effectiveWidth(baseWidth: settings.notchContentWidth)),
+                notchWidth: geo?.notchWidth ?? 0)
+            commitEarWidths(left: Double(start.left), right: Double(start.right))
+        }
+        settings.notchEarWidthsLinked = linked
+    }
+
+    /// 左右耳宽度的唯一落盘路径:夹进存储区间、相等时不写。传 nil 的那一侧不动。
+    static func commitEarWidths(left: Double? = nil, right: Double? = nil) {
+        let settings = AppSettings.shared
+        let range = NotchEarWidths.storageRange
+        if let left {
+            let value = min(max(left, range.lowerBound), range.upperBound)
+            if settings.notchLeftEarWidth != value { settings.notchLeftEarWidth = value }
+        }
+        if let right {
+            let value = min(max(right, range.lowerBound), range.upperBound)
+            if settings.notchRightEarWidth != value { settings.notchRightEarWidth = value }
+        }
+    }
+
+    /// 「左 200 · 右 42」:两侧外露宽的读数,取整报。
+    static func earWidthsReadout(_ span: NotchEarSpan) -> String {
+        String(format: L10n.t("左 %1$@ · 右 %2$@"), "\(Int(span.left))", "\(Int(span.right))")
     }
 
     /// 三个写入口(编辑台调整条 / 抽屉 / 快捷面板)**唯一**的落盘路径。
@@ -182,6 +260,7 @@ struct NotchEditorStage: View {
     /// `NotchLyricsWindowController.shared`,安全);编辑台自己走 `cardWidth`,取的是 chrome 里
     /// 那份会跟着屏幕插拔和「屏幕」浮层刷新的镜像。同一条公式、两个新鲜度相同的来源。
     static func effectiveWidth(baseWidth: Double) -> Double {
+        if let split = splitSteadyOnCurrentScreen() { return Double(split.span.cardWidth(notchWidth: split.notchWidth)) }
         let geo = NotchLyricsWindowController.targetScreen()
             .map { NotchLyricsWindowController.geometry(for: $0) }
         let notchWidth = geo?.notchWidth ?? 0, topInset = geo?.notchHeight ?? 0
@@ -200,7 +279,11 @@ struct NotchEditorStage: View {
     /// 「展开宽度」滑杆的读数)。公式就是真窗口 `recomputeGeometry` 里那一句
     /// `NotchWidthBounds.expandedWidth`,不另写。
     static func effectiveExpandedWidth(steadyBase: Double, expandedBase: Double) -> Double {
-        Double(NotchWidthBounds.expandedWidth(
+        if let split = splitSteadyOnCurrentScreen() {
+            return Double(NotchEarWidths.expandedWidth(steady: split.span, notchWidth: split.notchWidth,
+                                                       expandedSetting: CGFloat(expandedBase)))
+        }
+        return Double(NotchWidthBounds.expandedWidth(
             steady: CGFloat(effectiveWidth(baseWidth: steadyBase)),
             expandedSetting: CGFloat(expandedBase)))
     }
@@ -211,7 +294,8 @@ struct NotchEditorStage: View {
     /// 这一段恰恰在最容易出岔的区间失真(这条是从 NotchPreviewBar 继承的,不是新想的)。
     /// 耳朵里放了当前句 / 下一句时再按菜单栏两侧夹,同真窗口(`earLyricsSteadyWidth`)。
     private var steadyCardWidth: CGFloat {
-        NotchLyricsWindowController.earLyricsSteadyWidth(
+        if let split = splitSteady { return split.span.cardWidth(notchWidth: chrome.notchWidth) }
+        return NotchLyricsWindowController.earLyricsSteadyWidth(
             NotchLyricsWindowController.contentWidth(
                 baseWidth: CGFloat(baseWidth), notchWidth: chrome.notchWidth,
                 contentTopInset: chrome.contentTopInset),
@@ -224,7 +308,38 @@ struct NotchEditorStage: View {
     /// 展开态卡片此刻真实有多宽:`max(稳态真实宽, 展开设定)`,跟真窗口 `recomputeGeometry`
     /// 同一个公式(`NotchWidthBounds.expandedWidth`)。
     private var expandedCardWidth: CGFloat {
-        NotchWidthBounds.expandedWidth(steady: steadyCardWidth, expandedSetting: CGFloat(expandedBaseWidth))
+        if let split = splitSteady {
+            return NotchEarWidths.expandedWidth(steady: split.span, notchWidth: chrome.notchWidth,
+                                                expandedSetting: CGFloat(expandedBaseWidth))
+        }
+        return NotchWidthBounds.expandedWidth(steady: steadyCardWidth, expandedSetting: CGFloat(expandedBaseWidth))
+    }
+
+    /// 关掉「两耳等宽」时编辑台上的稳态(两侧外露宽、顶行歌词段宽),拖拖柄时取临时值;两耳等宽时 nil。同真窗口
+    /// `NotchLyricsWindowController.splitSteady`,耳朵里放了歌词时按菜单栏两侧读数夹(`menuBarEarCaps`)。
+    private var splitSteady: (span: NotchEarSpan, topRowLyricsWidth: CGFloat)? {
+        guard !settings.notchEarWidthsLinked else { return nil }
+        let lyricEars = NotchEarModule.hasLyricLine(left: settings.notchLeftEar, right: settings.notchRightEar)
+        let symmetric = NotchLyricsWindowController.contentWidth(
+            baseWidth: CGFloat(baseWidth), notchWidth: chrome.notchWidth, contentTopInset: chrome.contentTopInset)
+        return NotchLyricsWindowController.splitSteady(
+            setting: NotchLyricsWindowController.earWidthSetting(
+                left: draggingLeftEar ?? settings.notchLeftEarWidth, right: draggingRightEar ?? settings.notchRightEarWidth,
+                symmetricCardWidth: symmetric, notchWidth: chrome.notchWidth),
+            notchWidth: chrome.notchWidth, contentTopInset: chrome.contentTopInset, leftEar: settings.notchLeftEar,
+            rightEar: settings.notchRightEar, showsEqualizer: settings.notchShowsEqualizer,
+            equalizerEar: settings.notchEqualizerEar, lyricsPlacement: settings.notchLyricsPlacement,
+            caps: lyricEars ? chrome.menuBarEarCaps : nil)
+    }
+
+    /// 稳态卡片偏到哪(两耳等宽时 0),推给替身 chrome。
+    private var steadyCardOffset: CGFloat { splitSteady?.span.offset ?? 0 }
+
+    /// 两种形态的宽度、稳态偏移、两耳不等宽时的顶行歌词段推给替身 chrome。
+    private func pushCardGeometry() {
+        let split = splitSteady
+        chrome.setCardWidths(steady: steadyCardWidth, expanded: expandedCardWidth, offset: split?.span.offset ?? 0,
+                             splitTopRowLyricsWidth: split?.topRowLyricsWidth)
     }
 
     /// 卡片**此刻**画多宽:hover 展开(含拖上限滑块时被程序置成的展开,见 widthBar)按展开宽,
@@ -603,7 +718,7 @@ struct NotchEditorStage: View {
             // 只在它画出来的那块上响应 hover。
             ZStack {
                 atScreenTop { menuBarStrip(stageWidth: screenWidth) }
-                card
+                card(scale: scale)
                 // 刘海画在**卡片之上**:物理刘海是屏幕上真实不发光的一块,任何窗口的像素都到
                 // 不了那里。卡片背景本来就铺满整张卡(只有顶行的**内容**给刘海让了空当),
                 // 不盖这一层的话,「磨砂玻璃」风格下刘海那一块会被画成半透明的磨砂 —— 而真机上
@@ -784,7 +899,7 @@ struct NotchEditorStage: View {
     /// 从卡片上点开的浮层开着时预览钉在展开态(`keepsExpandedForPopover`):从卡片上点开浮层时卡片本来就是展开的,浮层一开它缩回去
     /// 就是"选中的东西自己变形了"。从工具栏点开的不钉:工具栏那条路卡片本来是稳态,凭空展开是多余的动作;想看展开区的效果把指针
     /// 移到卡片上即可。
-    private var card: some View {
+    private func card(scale: CGFloat) -> some View {
         NotchLyricsView(controller: chrome)
             // 这就是真窗口 NotchWindowRoot 给根上那一层的可见性:逐字填色 / 音浪 / 进度条 /
             // 时间模块都按它停表。真窗口按自己的 occlusionState 给,预览按设置窗口的给。
@@ -808,9 +923,11 @@ struct NotchEditorStage: View {
             .environment(\.colorScheme, .dark)
             // 两种形态的真实宽推给替身 chrome(歌词行按它们定宽,见 NotchChromeSource.steadyCardWidth):
             // 拖宽度滑块时逐帧变,onChange 比卡片晚一帧跟上,16ms 肉眼不可辨。
-            .onAppear { chrome.setCardWidths(steady: steadyCardWidth, expanded: expandedCardWidth) }
-            .onChange(of: steadyCardWidth) { _, w in chrome.setCardWidths(steady: w, expanded: expandedCardWidth) }
-            .onChange(of: expandedCardWidth) { _, w in chrome.setCardWidths(steady: steadyCardWidth, expanded: w) }
+            .onAppear { pushCardGeometry() }
+            .onChange(of: steadyCardWidth) { _, _ in pushCardGeometry() }
+            .onChange(of: expandedCardWidth) { _, _ in pushCardGeometry() }
+            .onChange(of: steadyCardOffset) { _, _ in pushCardGeometry() }
+            .onChange(of: splitSteady?.topRowLyricsWidth) { _, _ in pushCardGeometry() }
             .allowsHitTesting(false)
             // 可点区域压在真视图之上、轮廓之下;它在 allowsHitTesting(false) **之后**挂上,所以自己
             // 收得到 hover / 点击。
@@ -840,7 +957,94 @@ struct NotchEditorStage: View {
             }
             // 卡片那圈轮廓压在卡片上,理由见 windowEdgeOutline。
             .overlay(alignment: .top) { windowEdgeOutline }
+            // 关掉「两耳等宽」后卡片两侧外沿的拖柄。挂在悬停那一格外面(拖柄在卡片矩形以外),悬停在拖柄上不会把卡片撑开。
+            .overlay(alignment: .topLeading) { earHandles(scale: scale) }
+            // 两耳不等宽时稳态卡片偏到宽的那一侧,刘海(`notchCutout`)不动。轮廓、热区、拖柄跟着卡片一起挪。
+            .modifier(NotchCardOffsetEffect(offset: chrome.cardOffset))
+            .animation(reduceMotion ? nil : .easeInOut(duration: 0.18), value: chrome.cardOffset)
             .frame(maxHeight: .infinity, alignment: .top)
+    }
+
+    // MARK: - 两侧拖柄
+
+    /// 关掉「两耳等宽」后,稳态卡片左右外沿各一个拖柄:往外拖加宽这一侧、往里拖收窄,按住时描出卡片轮廓(同 `windowEdgeOutline`)、
+    /// 拖柄旁一颗「左耳 200pt」读数气泡,松手才落盘(`commitEarWidths`)。读数报这一侧夹过之后的真实外露宽。
+    /// 拖动的位移按全局坐标量再除以预览缩放比:卡片在拖动中会跟着偏移挪,按局部坐标量会越拖越偏。展开态不出拖柄。
+    @ViewBuilder
+    private func earHandles(scale: CGFloat) -> some View {
+        if let split = splitSteady, !chrome.isExpanded {
+            let height = chrome.contentTopInset
+            ZStack(alignment: .topLeading) {
+                earHandle(.left, span: split.span, scale: scale)
+                    .offset(x: -Self.earHandleHitWidth, y: 0)
+                earHandle(.right, span: split.span, scale: scale)
+                    .offset(x: cardWidth, y: 0)
+            }
+            .frame(width: cardWidth, height: height, alignment: .topLeading)
+        }
+    }
+
+    /// 拖柄的命中宽度(贴在卡片外沿外面)和画出来那根竖条的尺寸。
+    private static let earHandleHitWidth: CGFloat = 14
+    private static let earHandleBarWidth: CGFloat = 4
+
+    private func earHandle(_ side: NotchEarPopover.Side, span: NotchEarSpan, scale: CGFloat) -> some View {
+        let active = earDragStart?.side == side
+        let height = chrome.contentTopInset
+        let value = side == .left ? span.left : span.right
+        return Capsule()
+            .fill(Color.white.opacity(active ? 1 : 0.85))
+            .frame(width: Self.earHandleBarWidth, height: max(10, height - 12))
+            .shadow(color: .black.opacity(0.55), radius: 1)
+            .frame(width: Self.earHandleHitWidth, height: height)
+            .contentShape(Rectangle())
+            .onHover { inside in
+                if inside { NSCursor.resizeLeftRight.push() } else { NSCursor.pop() }
+            }
+            .gesture(DragGesture(minimumDistance: 0, coordinateSpace: .global)
+                .onChanged { drag in
+                    if earDragStart?.side != side {
+                        earDragStart = (side, Double(value))
+                        chrome.setExpandedFromPreview(false)
+                    }
+                    guard let start = earDragStart?.value else { return }
+                    let dx = Double(drag.translation.width / max(scale, 0.01))
+                    let range = Self.earUsableRange(side)
+                    let next = SteppedSlider.snap(side == .left ? start - dx : start + dx, in: range,
+                                                  step: NotchEarWidths.step)
+                    if side == .left { draggingLeftEar = next } else { draggingRightEar = next }
+                }
+                .onEnded { _ in
+                    Self.commitEarWidths(left: draggingLeftEar, right: draggingRightEar)
+                    draggingLeftEar = nil
+                    draggingRightEar = nil
+                    earDragStart = nil
+                })
+            .overlay(alignment: side == .left ? .topTrailing : .topLeading) {
+                if active {
+                    Text(verbatim: "\(side == .left ? L10n.t("左耳") : L10n.t("右耳")) \(String(format: L10n.t("%@pt"), "\(Int(value))"))")
+                        .font(.system(size: 11, weight: .medium))
+                        .monospacedDigit()
+                        .foregroundStyle(.white)
+                        .fixedSize()
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(Capsule().fill(Color.black.opacity(0.7)))
+                        .overlay(Capsule().strokeBorder(Color.white.opacity(0.18), lineWidth: 0.5))
+                        .shadow(color: .black.opacity(0.35), radius: 5, y: 1)
+                        .offset(y: height + 6)
+                        .allowsHitTesting(false)
+                }
+            }
+            .accessibilityElement()
+            .accessibilityLabel(side == .left ? L10n.t("左耳宽度") : L10n.t("右耳宽度"))
+            .accessibilityValue(String(format: L10n.t("%@pt"), "\(Int(value))"))
+            .accessibilityAdjustableAction { direction in
+                let range = Self.earUsableRange(side)
+                let delta = direction == .increment ? 5 * NotchEarWidths.step : -5 * NotchEarWidths.step
+                let next = SteppedSlider.snap(Double(value) + delta, in: range, step: NotchEarWidths.step)
+                Self.commitEarWidths(left: side == .left ? next : nil, right: side == .right ? next : nil)
+            }
     }
 
     /// 从卡片上点开的浮层开着时预览钉在展开态(工具栏点开的不钉),理由见 `card` 的注释。
@@ -887,15 +1091,15 @@ struct NotchEditorStage: View {
     private var cardHotspots: [CardHotspot] {
         let width = cardWidth
         let padding = chrome.topRowPadding
-        let earWidth = chrome.earWidth(cardWidth: width)
+        let ears = chrome.earWidths(cardWidth: width, offset: chrome.cardOffset)
         let top = chrome.contentTopInset
         var spots: [CardHotspot] = [
             CardHotspot(kind: .leftEar,
-                        rects: [CGRect(x: padding, y: 0, width: earWidth, height: top)],
+                        rects: [CGRect(x: padding, y: 0, width: ears.left, height: top)],
                         target: .leftEar, title: L10n.t("左耳"), arrowEdge: .leading),
             CardHotspot(kind: .rightEar,
-                        rects: [CGRect(x: width - padding - earWidth, y: 0,
-                                       width: earWidth, height: top)],
+                        rects: [CGRect(x: width - padding - ears.right, y: 0,
+                                       width: ears.right, height: top)],
                         target: .rightEar, title: L10n.t("右耳"), arrowEdge: .trailing),
         ]
         var y = top
@@ -1009,7 +1213,7 @@ struct NotchEditorStage: View {
         var target: StagePopover?
         if let (spot, index) = anchoredHotspot {
             let local = spot.rects[index]
-            rect = CGRect(x: stageWidth / 2 + (local.minX - cardWidth / 2) * scale,
+            rect = CGRect(x: stageWidth / 2 + (local.minX - cardWidth / 2 + chrome.cardOffset) * scale,
                           y: local.minY * scale,
                           width: local.width * scale, height: local.height * scale)
             arrowEdge = spot.arrowEdge
@@ -1052,8 +1256,8 @@ struct NotchEditorStage: View {
             .shadow(color: .black.opacity(0.55), radius: 1)
             .frame(width: cardWidth, height: cardHeight)
             // 用透明度而不是 if 分支:轮廓始终在视图树里,按下/松开才淡得起来。
-            .opacity(adjustingThumb != nil ? 1 : 0)
-            .animation(.easeOut(duration: 0.12), value: adjustingThumb != nil)
+            .opacity(adjustingThumb != nil || earDragStart != nil ? 1 : 0)
+            .animation(.easeOut(duration: 0.12), value: adjustingThumb != nil || earDragStart != nil)
             .allowsHitTesting(false)
             .accessibilityHidden(true)
     }
@@ -1094,7 +1298,53 @@ struct NotchEditorStage: View {
     /// 三层各司其职:半透明黑胶囊把滑杆和读数从任意壁纸里托出来;白色发丝描边负责在**深**
     /// 壁纸上给胶囊自己留一圈边界;投影负责在**亮**壁纸上兜一圈暗轮廓。滑杆的 `.white` tint
     /// 同理 —— 默认强调色跟着系统主题走,压在壁纸上深浅不定。
+    @ViewBuilder
     private var widthBar: some View {
+        if let split = splitSteady {
+            splitWidthBar(split.span)
+        } else {
+            linkedWidthBar
+        }
+    }
+
+    /// 关掉「两耳等宽」后的调整条:稳态宽改由卡片两侧拖柄调,这里只剩展开宽一只滑块(按住时卡片按展开态画),读数
+    /// 「左 200 · 右 42 ｜ 展开 579pt」。展开宽下界 = 刘海 + 两倍较宽一侧(`NotchEarWidths.expandedWidth`)。外壳同 `linkedWidthBar`。
+    private func splitWidthBar(_ span: NotchEarSpan) -> some View {
+        let lower = NotchEarWidths.expandedWidth(steady: span, notchWidth: chrome.notchWidth, expandedSetting: 0)
+        return HStack(spacing: 8) {
+            Image(systemName: "arrow.left.and.right")
+                .font(.system(size: 10, weight: .semibold))
+            SteppedSlider(value: Binding(
+                get: { Double(expandedCardWidth) },
+                set: { draggingExpanded = $0 }
+            ), in: NotchWidthBounds.usableExpandedRange(steadyWidth: Double(lower)), step: NotchWidthBounds.step,
+               onEditingChanged: { began in
+                   adjustingThumb = began ? .expanded : nil
+                   chrome.setExpandedFromPreview(began || keepsExpandedForPopover)
+                   if !began, let expanded = draggingExpanded {
+                       Self.commitWidths(expanded: expanded)
+                       draggingExpanded = nil
+                   }
+               })
+            .tint(.white)
+            .frame(width: Self.widthBarSliderWidth)
+            .accessibilityLabel(L10n.t("灵动岛展开宽度"))
+            StableReadout(text: Self.earWidthsReadout(span) + " ｜ "
+                            + String(format: L10n.t("展开 %@pt"), "\(Int(expandedCardWidth))"),
+                          widest: Self.earWidthsReadout(NotchEarSpan(left: 400, right: 400)) + " ｜ "
+                            + String(format: L10n.t("展开 %@pt"), "\(Int(NotchWidthBounds.storageRange.upperBound))"),
+                          minWidth: 72)
+                .accessibilityHidden(true)
+        }
+        .foregroundStyle(.white)
+        .padding(.horizontal, 10)
+        .padding(.vertical, 6)
+        .background(Capsule().fill(Color.black.opacity(0.7)))
+        .overlay(Capsule().strokeBorder(Color.white.opacity(0.18), lineWidth: 0.5))
+        .shadow(color: .black.opacity(0.35), radius: 5, y: 1)
+    }
+
+    private var linkedWidthBar: some View {
         HStack(spacing: 8) {
             Image(systemName: "arrow.left.and.right")
                 .font(.system(size: 10, weight: .semibold))

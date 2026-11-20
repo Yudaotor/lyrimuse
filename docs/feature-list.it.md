@@ -297,13 +297,14 @@ Testo che fluttua sopra tutte le finestre, sempre in primo piano, e si illumina 
 
 ### Testo nel notch
 
-Una capsula in stile Dynamic Island accanto al notch, in alto sullo schermo; ce l’hanno anche i Mac senza notch e gli schermi esterni. Ogni lato può mostrare titolo, artista, album, illustrazione, controlli di riproduzione, o tempo trascorso o rimanente, accanto a un’onda audio animata. Sugli schermi senza notch la riga corrente può stare anche tra i due lati, con la capsula alta quanto la barra dei menu. Ogni lato può anche mostrare la riga corrente o la successiva, anche sugli schermi con notch. Passaci sopra con il puntatore per espanderla e avere i controlli, una barra di avanzamento su cui spostarti, il timing del testo e pulsanti rapidi come Preferito e Cerca testo. Durante la pubblicità mostra il conto alla rovescia del tempo rimanente.
+Una capsula in stile Dynamic Island accanto al notch, in alto sullo schermo; ce l’hanno anche i Mac senza notch e gli schermi esterni. Ogni lato può mostrare titolo, artista, album, illustrazione, controlli di riproduzione, o tempo trascorso o rimanente, accanto a un’onda audio animata. Sugli schermi senza notch la riga corrente può stare anche tra i due lati, con la capsula alta quanto la barra dei menu. Ogni lato può anche mostrare la riga corrente o la successiva, anche sugli schermi con notch. Passaci sopra con il puntatore per espanderla e avere i controlli, una barra di avanzamento su cui spostarti, il timing del testo e pulsanti rapidi come Preferito e Cerca testo. Durante la pubblicità mostra il conto alla rovescia del tempo rimanente. Anche la larghezza di ciascun lato si può impostare separatamente.
 
 - Disattivata di default
 - Impostazioni: Visualizzazione testo › Notch › Testo nel notch
 - Impostazioni: Visualizzazione testo › Notch › Stile
 - Impostazioni: Visualizzazione testo › Notch › Schermo
 - Impostazioni: Visualizzazione testo › Notch › Sinistra
+- Impostazioni: Visualizzazione testo › Notch › Sinistra › Stessa larghezza ai due lati
 - Impostazioni: Visualizzazione testo › Notch › Riga del testo › Mostra testo se compresso
 - Impostazioni: Scorciatoie da tastiera › Mostra/nascondi testo nel notch
 - Impostazioni: Scorciatoie da tastiera › Espandi il notch per un attimo
@@ -963,7 +964,7 @@ Al massimo una volta al giorno invia versione, macOS, funzioni attive e riepilog
 
 ## Tutte le impostazioni
 
-Tutte le impostazioni della finestra Impostazioni, per posizione: 345 in tutto. Scrivi un nome nel campo di ricerca in cima alla barra laterale delle Impostazioni per andarci direttamente.
+Tutte le impostazioni della finestra Impostazioni, per posizione: 346 in tutto. Scrivi un nome nel campo di ricerca in cima alla barra laterale delle Impostazioni per andarci direttamente.
 
 ### Testo › Fonte
 
@@ -1131,6 +1132,7 @@ Tutte le impostazioni della finestra Impostazioni, per posizione: 345 in tutto. 
 ### Visualizzazione testo › Notch › Sinistra
 
 - **Onda audio**: Appare su un lato alla volta
+- **Stessa larghezza ai due lati**: Comune a entrambi i lati
 - **Segui la musica**: Segue il suono del player e richiede il permesso di registrare l’audio di sistema; legge solo il volume e non salva alcun audio
 
 ### Visualizzazione testo › Notch › Riga del testo

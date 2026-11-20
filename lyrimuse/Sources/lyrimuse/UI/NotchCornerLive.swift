@@ -111,6 +111,8 @@ struct NotchCardOutline: Equatable {
     var collapsedHeight: CGFloat
     var expandedHeight: CGFloat
     var isExpanded: Bool
+    /// 卡片中心比刘海中心往右偏多少(`NotchChromeSource.cardOffset`),出场裁剪从刘海中心撑开时用。两耳等宽时 0。
+    var notchOffset: CGFloat = 0
 
     @MainActor
     func corner(_ live: NotchCornerLive) -> NotchCornerProfile? {

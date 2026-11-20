@@ -134,13 +134,19 @@ enum DebugDeepLinks {
             logger.notice("debug stall: blocking main thread \(ms, privacy: .public) ms")
             usleep(UInt32(ms) * 1000)
         case let .notchBehavior(collapse, hide, progressLine, allScreens, showLyrics, lyricRowFade, volumeKeyBanner, realAudio,
-                                placement, ignoreNotch, leftEar, rightEar, width, expandedWidth):
+                                placement, ignoreNotch, leftEar, rightEar, width, expandedWidth,
+                                earWidthsLinked, leftEarWidth, rightEarWidth):
             if let module = leftEar.flatMap(NotchEarModule.init(rawValue:)) { AppSettings.shared.notchLeftEar = module }
             if let module = rightEar.flatMap(NotchEarModule.init(rawValue:)) { AppSettings.shared.notchRightEar = module }
             if width != nil || expandedWidth != nil {
                 let range = NotchWidthBounds.storageRange
                 NotchEditorStage.commitWidths(steady: width.map { min(max($0, range.lowerBound), range.upperBound) },
                                               expanded: expandedWidth.map { min(max($0, range.lowerBound), range.upperBound) })
+            }
+            // 「两耳等宽」先翻(关掉时两侧从此刻的样子起步),再写给了的那一侧,同设置页那两行的落盘路径。
+            if let earWidthsLinked { NotchEditorStage.setEarWidthsLinked(earWidthsLinked) }
+            if leftEarWidth != nil || rightEarWidth != nil {
+                NotchEditorStage.commitEarWidths(left: leftEarWidth, right: rightEarWidth)
             }
             if let volumeKeyBanner { AppSettings.shared.notchVolumeBannerForVolumeKeys = volumeKeyBanner }
             if let realAudio { AppSettings.shared.notchEqualizerFollowsAudio = realAudio }
@@ -158,7 +164,7 @@ enum DebugDeepLinks {
                 if let style = progressLine.style { AppSettings.shared.notchProgressLineStyle = style }
                 AppSettings.shared.notchShowsProgressLine = progressLine.shows
             }
-            logger.notice("debug notch behavior collapse=\(String(describing: collapse), privacy: .public) hide=\(String(describing: hide), privacy: .public) progressLine=\(progressLine?.rawValue ?? "nil", privacy: .public) allScreens=\(String(describing: allScreens), privacy: .public) showLyrics=\(String(describing: showLyrics), privacy: .public) lyricRowFade=\(String(describing: lyricRowFade), privacy: .public) placement=\(placement?.rawValue ?? "nil", privacy: .public) ignoreNotch=\(String(describing: ignoreNotch), privacy: .public) leftEar=\(leftEar ?? "nil", privacy: .public) rightEar=\(rightEar ?? "nil", privacy: .public) width=\(String(describing: width), privacy: .public) expandedWidth=\(String(describing: expandedWidth), privacy: .public) volumeKeyBanner=\(String(describing: volumeKeyBanner), privacy: .public) realAudio=\(String(describing: realAudio), privacy: .public)")
+            logger.notice("debug notch behavior collapse=\(String(describing: collapse), privacy: .public) hide=\(String(describing: hide), privacy: .public) progressLine=\(progressLine?.rawValue ?? "nil", privacy: .public) allScreens=\(String(describing: allScreens), privacy: .public) showLyrics=\(String(describing: showLyrics), privacy: .public) lyricRowFade=\(String(describing: lyricRowFade), privacy: .public) placement=\(placement?.rawValue ?? "nil", privacy: .public) ignoreNotch=\(String(describing: ignoreNotch), privacy: .public) leftEar=\(leftEar ?? "nil", privacy: .public) rightEar=\(rightEar ?? "nil", privacy: .public) width=\(String(describing: width), privacy: .public) expandedWidth=\(String(describing: expandedWidth), privacy: .public) earWidthsLinked=\(String(describing: earWidthsLinked), privacy: .public) leftEarWidth=\(String(describing: leftEarWidth), privacy: .public) rightEarWidth=\(String(describing: rightEarWidth), privacy: .public) volumeKeyBanner=\(String(describing: volumeKeyBanner), privacy: .public) realAudio=\(String(describing: realAudio), privacy: .public)")
         case let .moveWindow(title, x, y, width, height):
             // 全局坐标的原点是主屏左上角;NSWindow 的原点在左下角、y 朝上。
             guard let window = NSApp.windows.first(where: { $0.title == title && $0.isVisible }),

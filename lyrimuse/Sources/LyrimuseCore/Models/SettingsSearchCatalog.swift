@@ -510,6 +510,8 @@ public enum SettingsSearchCatalog {
         surface(.notch, "左耳", kw: ["模块", "歌名", "歌手", "专辑", "封面", "播放控制", "已播时长", "剩余时长", "收听次数", "播放器"]),
         surface(.notch, "右耳", kw: ["模块", "歌名", "歌手", "专辑", "封面", "播放控制", "已播时长", "剩余时长", "收听次数", "播放器"]),
         surface(.notch, "音浪", kw: ["频谱", "音条", "律动"], group: "左耳"),
+        surface(.notch, "两耳等宽",
+                kw: ["宽度", "左耳宽度", "右耳宽度", "不等宽", "左右不对称", "偏心", "pt"], group: "左耳"),
         surface(.notch, notchFollowsAudioTitleKey,
                 sub: "按播放器正在播放的声音跳动，需允许 Lyrimuse 录制系统音频；只读取音量，不保存声音",
                 kw: ["音浪", "频谱", "真实音频", "节奏", "鼓点", "系统录音"], group: "左耳"),

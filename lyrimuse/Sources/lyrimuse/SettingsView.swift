@@ -5232,8 +5232,22 @@ private struct NotchAllSettingsDrawer: View {
         NotchEditorStage.commitWidths(steady: value, expanded: expandedAtWidthDragStart)
     }
 
+    ///
+    /// 关掉「两耳等宽」后稳态宽由左右耳各自那根滑杆调(上面两组),这一行只报「左 200 · 右 42」,不再有滑杆(05 章决策 160)。
     private var widthRow: some View {
         SettingsRow(icon: "arrow.left.and.right", title: L10n.t("宽度")) {
+            if let split = NotchEditorStage.splitSteadyOnCurrentScreen() {
+                Text(NotchEditorStage.earWidthsReadout(split.span))
+                    .monospacedDigit()
+                    .foregroundStyle(.secondary)
+            } else {
+                linkedWidthControl
+            }
+        }
+    }
+
+    private var linkedWidthControl: some View {
+        Group {
             HStack(spacing: 8) {
                 // SteppedSlider 而不是原生带步长的构造器:后者会在轨道下面画一排刻度点。
                 // 这一根的量化栅格必须锚在区间下界(SteppedSlider 就是这么做的),因为这里的下界是

@@ -16,6 +16,22 @@ public enum NotchReveal {
         return min(0.9, max(0.12, notchWidth / cardWidth))
     }
 
+    /// 撑开到 `widthFraction` 时可见那一段在卡片里的左沿和宽度(宽度恒为卡宽 × 比例)。两耳等宽(`notchOffset` 为 0)时以卡片
+    /// 中心为锚;两耳不等宽时起点是以刘海中心为中心、宽 `startFraction` × 卡宽的一段(刘海中心在卡片局部 x = 卡宽 / 2 − `notchOffset`),
+    /// 之后两条边按同一个进度各自走到卡片两侧外沿、同时到位。见 05 章决策 160。
+    public static func visibleSpan(cardWidth: CGFloat, widthFraction: CGFloat, startFraction: CGFloat,
+                                   notchOffset: CGFloat) -> (minX: CGFloat, width: CGFloat) {
+        let fraction = min(1, max(0, widthFraction))
+        let width = cardWidth * fraction
+        guard notchOffset != 0 else { return (cardWidth / 2 - width / 2, width) }
+        guard fraction < 1 else { return (0, width) }
+        let start = min(max(0, startFraction), fraction)
+        let progress = start < 1 ? (fraction - start) / (1 - start) : 1
+        let center = cardWidth / 2 - notchOffset
+        let left = (center - cardWidth * start / 2) * (1 - progress)
+        return (min(max(0, left), cardWidth - width), width)
+    }
+
     /// 起始可见高度占卡片高度的比例:只露顶行(耳朵那一条,高 = 刘海 / 菜单栏高),歌词行随后"滴"下来。
     public static func startHeightFraction(topRowHeight: CGFloat, cardHeight: CGFloat) -> CGFloat {
         guard cardHeight > 0 else { return 1 }

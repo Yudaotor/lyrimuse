@@ -97,6 +97,8 @@ struct NotchEarProgressLine: View {
     let notchWidth: CGFloat
     /// 卡片此刻的目标尺寸(`cardWidth` × `cardHeight`)。
     let cardSize: CGSize
+    /// 卡片中心比刘海中心往右偏多少(`cardOffset`,两耳等宽时 0),跟尺寸一起逐帧插值。两半各自走到刘海、同时到达。
+    var notchOffset: CGFloat = 0
     @ObservedObject private var corners = NotchCornerLive.shared
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -127,7 +129,8 @@ struct NotchEarProgressLine: View {
         let total = durationMs ?? 0
         let ticking = anchor != nil && active && total > 0
         let length = NotchEarProgressShape.geometry(size: cardSize, card: shape, notchWidth: notchWidth,
-                                                    notchHeight: outline.notchHeight).length
+                                                    notchHeight: outline.notchHeight, notchOffset: notchOffset,
+                                                    mirrored: false).length
         let paused = anchor.map(\.isFrozen) ?? true
         TimelineView(NotchEarLineSchedule(interval: NotchProgressLineTiming.interval(durationMs: total, width: length),
                                           paused: !ticking)) { _ in
@@ -152,7 +155,7 @@ struct NotchEarProgressLine: View {
             let played = ZStack {
                 ForEach([false, true], id: \.self) { mirrored in
                     NotchEarProgressShape(card: card, notchWidth: notchWidth, notchHeight: outline.notchHeight,
-                                          cardSize: cardSize, mirrored: mirrored)
+                                          cardSize: cardSize, notchOffset: notchOffset, mirrored: mirrored)
                         .trim(from: 0, to: fraction)
                         .stroke(tint, style: StrokeStyle(lineWidth: Self.strokeWidth, lineCap: .round))
                 }
@@ -189,23 +192,31 @@ struct NotchEarProgressShape: Shape {
     let notchWidth: CGFloat
     let notchHeight: CGFloat
     var cardSize: CGSize
+    /// 卡片中心比刘海中心往右偏多少,两耳等宽时 0。
+    var notchOffset: CGFloat = 0
     let mirrored: Bool
 
-    var animatableData: AnimatablePair<CGFloat, CGFloat> {
-        get { AnimatablePair(cardSize.width, cardSize.height) }
-        set { cardSize = CGSize(width: newValue.first, height: newValue.second) }
+    var animatableData: AnimatablePair<AnimatablePair<CGFloat, CGFloat>, CGFloat> {
+        get { AnimatablePair(AnimatablePair(cardSize.width, cardSize.height), notchOffset) }
+        set {
+            cardSize = CGSize(width: newValue.first.first, height: newValue.first.second)
+            notchOffset = newValue.second
+        }
     }
 
+    /// `mirrored` 那一半在左右翻过来的坐标里算,刘海中心跟着翻;两耳等宽(偏移 0)时两半都按卡片正中。
     static func geometry(size: CGSize, card: NotchHangingShape, notchWidth: CGFloat,
-                         notchHeight: CGFloat) -> NotchEarProgressPath {
+                         notchHeight: CGFloat, notchOffset: CGFloat = 0, mirrored: Bool = false) -> NotchEarProgressPath {
         let corner = card.cornerMetrics(in: CGRect(origin: .zero, size: size))
+        let center: CGFloat? = notchOffset == 0 ? nil : size.width / 2 + (mirrored ? notchOffset : -notchOffset)
         return NotchEarProgressPath(width: size.width, height: size.height, notchWidth: notchWidth, notchHeight: notchHeight,
                                     shoulder: corner.shoulder, cardCornerRadius: corner.radius,
-                                    inset: NotchEarProgressLine.inset)
+                                    inset: NotchEarProgressLine.inset, notchCenterX: center)
     }
 
     func path(in rect: CGRect) -> Path {
-        let path = Self.geometry(size: cardSize, card: card, notchWidth: notchWidth, notchHeight: notchHeight)
+        let path = Self.geometry(size: cardSize, card: card, notchWidth: notchWidth, notchHeight: notchHeight,
+                                 notchOffset: notchOffset, mirrored: mirrored)
         let r = path.cornerRadius
         var p = Path()
         p.move(to: CGPoint(x: path.startX, y: 0))

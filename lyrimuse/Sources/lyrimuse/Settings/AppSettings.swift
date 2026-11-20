@@ -415,6 +415,10 @@ final class AppSettings: ObservableObject {
         static let notchContentWidth = "np:notchContentWidth"
         // 灵动岛 hover 展开后的宽度(上限;`notchContentWidth` 是下限)。np: 前缀同上。
         static let notchExpandedContentWidth = "np:notchExpandedContentWidth"
+        // 灵动岛「两耳等宽」开关和关掉后左右耳各自的外露宽(pt,0 = 没设过),见 05 章决策 160。
+        static let notchEarWidthsLinked = "np:notchEarWidthsLinked"
+        static let notchLeftEarWidth = "np:notchLeftEarWidth"
+        static let notchRightEarWidth = "np:notchRightEarWidth"
         // 灵动岛卡片底部圆角:没展开时 / 展开时各一个。存盘值的含义见 NotchOutline.defaultRadiusSetting。
         static let notchCornerRadius = "np:notchCornerRadius"
         static let notchExpandedCornerRadius = "np:notchExpandedCornerRadius"
@@ -660,6 +664,8 @@ final class AppSettings: ObservableObject {
     // (读侧的 max 只保证展开不比稳态窄,没规定必须相等);两行紧挨着写,改一个时别漏另一个。
     static let defaultNotchContentWidth: Double = 252
     static let defaultNotchExpandedContentWidth: Double = 482
+    /// 「两耳等宽」默认开:卡片以刘海为中心,两侧宽度跟着稳态宽走。
+    static let defaultNotchEarWidthsLinked = true
     /// 「圆角 / 展开圆角」默认按卡片高度算(`NotchOutline.defaultRadiusSetting`)。
     static let defaultNotchCornerRadius: Double = NotchOutline.defaultRadiusSetting
     static let defaultNotchExpandedCornerRadius: Double = NotchOutline.defaultRadiusSetting
@@ -2500,6 +2506,18 @@ final class AppSettings: ObservableObject {
     @Published var notchExpandedContentWidth: Double {
         didSet { defaults.set(notchExpandedContentWidth, forKey: Keys.notchExpandedContentWidth) }
     }
+    // 「两耳等宽」:开着时两侧宽度跟着稳态宽 `notchContentWidth`;关掉后左右耳各按 `notchLeftEarWidth` / `notchRightEarWidth`
+    // (外露宽,`NotchEarSpan`),分开期间不写 `notchContentWidth`,再打开时原来的稳态宽原样回来。只持久化,每个灵动岛实例
+    // 自己订阅。写入口先写两侧宽度、后翻开关(`NotchEditorStage.setEarWidthsLinked`)。见 05 章决策 160。
+    @Published var notchEarWidthsLinked: Bool {
+        didSet { defaults.set(notchEarWidthsLinked, forKey: Keys.notchEarWidthsLinked) }
+    }
+    @Published var notchLeftEarWidth: Double {
+        didSet { defaults.set(notchLeftEarWidth, forKey: Keys.notchLeftEarWidth) }
+    }
+    @Published var notchRightEarWidth: Double {
+        didSet { defaults.set(notchRightEarWidth, forKey: Keys.notchRightEarWidth) }
+    }
     // 灵动岛卡片底部圆角(pt):`notchCornerRadius` 管所有没展开的状态,`notchExpandedCornerRadius` 管
     // hover 展开。存盘值:默认 / 跟随刘海 / 固定 pt,见 NotchOutline.defaultRadiusSetting;怎么画、两态怎么过渡见 NotchCornerProfile。
     @Published var notchCornerRadius: Double {
@@ -3340,6 +3358,12 @@ final class AppSettings: ObservableObject {
         // 稳态值**:那样老用户的展开宽会被钉在升级那一刻的稳态值上,以后调稳态就得再调一遍这个。
         let storedNotchExpanded = (defaults.object(forKey: Keys.notchExpandedContentWidth) as? Double) ?? Self.defaultNotchExpandedContentWidth
         notchExpandedContentWidth = min(max(storedNotchExpanded, notchRange.lowerBound), notchRange.upperBound)
+        notchEarWidthsLinked = (defaults.object(forKey: Keys.notchEarWidthsLinked) as? Bool) ?? Self.defaultNotchEarWidthsLinked
+        let earRange = NotchEarWidths.storageRange
+        notchLeftEarWidth = min(max((defaults.object(forKey: Keys.notchLeftEarWidth) as? Double) ?? 0, earRange.lowerBound),
+                                earRange.upperBound)
+        notchRightEarWidth = min(max((defaults.object(forKey: Keys.notchRightEarWidth) as? Double) ?? 0, earRange.lowerBound),
+                                 earRange.upperBound)
         notchCornerRadius = (defaults.object(forKey: Keys.notchCornerRadius) as? Double) ?? Self.defaultNotchCornerRadius
         notchExpandedCornerRadius = (defaults.object(forKey: Keys.notchExpandedCornerRadius) as? Double) ?? Self.defaultNotchExpandedCornerRadius
         foregroundColorHex = defaults.string(forKey: Keys.foregroundColorHex) ?? ColorTheme.defaultTheme.foregroundColorHex

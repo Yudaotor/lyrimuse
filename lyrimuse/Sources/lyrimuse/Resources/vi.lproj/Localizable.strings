@@ -368,6 +368,7 @@
 "两者各项得分完全相同，按歌词源顺序排列" = "Hai kết quả có điểm từng mục hoàn toàn giống nhau, xếp theo thứ tự nguồn lời";
 "两者同分" = "Hai kết quả bằng điểm";
 "两者均为现场版，但该候选的专辑名对应另一场演出（如另一次巡演），其时间轴与当前录音无法对齐" = "Cả hai đều là bản live, nhưng album của kết quả này thuộc một buổi diễn khác (chẳng hạn một tour khác), nên thời gian không khớp với bản thu này";
+"两耳等宽" = "Hai tai rộng bằng nhau";
 "两首探测曲均无响应，该源目前可能不可用" = "Cả hai bài thử đều không có phản hồi, nguồn này có thể đang không khả dụng";
 "个人是一串数字，群组以 -100 开头" = "Cá nhân là một dãy số, nhóm bắt đầu bằng -100";
 "中" = "Vừa";
@@ -778,6 +779,7 @@
 "右侧颜色" = "Màu bên phải";
 "右对齐" = "Căn phải";
 "右耳" = "Tai phải";
+"右耳宽度" = "Độ rộng tai phải";
 "右键点按主题可重命名、用当前配色覆盖或删除" = "Bấm chuột phải vào chủ đề để đổi tên, ghi đè bằng bảng màu hiện tại hoặc xóa";
 "各处是否显示译文，在「歌词显示」中设置" = "Có hiện bản dịch ở từng nơi hay không được đặt trong “Hiển thị lời”";
 "各处显示为纯音乐，不自动搜索歌词" = "Hiện là nhạc không lời ở mọi nơi, không tự động tìm lời";
@@ -1049,6 +1051,7 @@
 "居中" = "Căn giữa";
 "屏幕" = "Màn hình";
 "展开" = "Mở rộng";
+"展开 %@pt" = "Mở rộng %@pt";
 "展开/收起触控栏歌词" = "Mở rộng/thu gọn lời trên Touch Bar";
 "展开圆角" = "Bo góc khi mở rộng";
 "展开宽度" = "Độ rộng khi mở rộng";
@@ -1062,11 +1065,14 @@
 "展开时预览下一句" = "Xem trước dòng tiếp theo khi mở rộng";
 "展开背景" = "Nền khi mở rộng";
 "左" = "Trái";
+"左 %1$@ · 右 %2$@" = "Trái %1$@ · Phải %2$@";
 "左上角显示歌名、歌手和封面" = "Hiện tên bài, nghệ sĩ và ảnh bìa ở góc trên bên trái";
 "左侧" = "Bên trái";
 "左侧颜色" = "Màu bên trái";
+"左右耳共用这一项" = "Dùng chung cho cả hai tai";
 "左对齐" = "Căn trái";
 "左耳" = "Tai trái";
+"左耳宽度" = "Độ rộng tai trái";
 "左耳或右耳已显示当前句，此项不生效" = "Tai trái hoặc tai phải đã hiển thị dòng hiện tại nên mục này không có tác dụng";
 "已下载" = "Đã tải về";
 "已下载 %@ / %@" = "Đã tải %@ / %@";

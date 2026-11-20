@@ -297,13 +297,14 @@ Lời bài hát nổi trên mọi cửa sổ, luôn ở trên cùng, sáng lên 
 
 ### Lời trên Notch
 
-Một khung kiểu Dynamic Island cạnh notch ở đầu màn hình; máy Mac không có notch và màn hình ngoài cũng có. Mỗi bên có thể hiển thị tên bài hát, nghệ sĩ, album, ảnh bìa, nút điều khiển phát, hoặc thời gian đã phát hay còn lại, bên cạnh sóng âm chuyển động. Trên màn hình không có notch, lời hiện tại cũng có thể nằm giữa hai bên, giữ khung cao bằng thanh menu. Mỗi bên cũng có thể hiển thị dòng hiện tại hoặc dòng tiếp theo, kể cả trên màn hình có notch. Di chuột lên để mở rộng, với nút điều khiển, thanh tiến trình tua được, căn thời gian lời và các nút nhanh như thích hay tìm lời. Khi có quảng cáo, Notch đếm ngược thời gian còn lại.
+Một khung kiểu Dynamic Island cạnh notch ở đầu màn hình; máy Mac không có notch và màn hình ngoài cũng có. Mỗi bên có thể hiển thị tên bài hát, nghệ sĩ, album, ảnh bìa, nút điều khiển phát, hoặc thời gian đã phát hay còn lại, bên cạnh sóng âm chuyển động. Trên màn hình không có notch, lời hiện tại cũng có thể nằm giữa hai bên, giữ khung cao bằng thanh menu. Mỗi bên cũng có thể hiển thị dòng hiện tại hoặc dòng tiếp theo, kể cả trên màn hình có notch. Di chuột lên để mở rộng, với nút điều khiển, thanh tiến trình tua được, căn thời gian lời và các nút nhanh như thích hay tìm lời. Khi có quảng cáo, Notch đếm ngược thời gian còn lại. Độ rộng mỗi bên cũng có thể đặt riêng.
 
 - Tắt theo mặc định
 - Cài đặt: Hiển thị lời › Notch › Lời trên Notch
 - Cài đặt: Hiển thị lời › Notch › Phong cách
 - Cài đặt: Hiển thị lời › Notch › Màn hình
 - Cài đặt: Hiển thị lời › Notch › Tai trái
+- Cài đặt: Hiển thị lời › Notch › Tai trái › Hai tai rộng bằng nhau
 - Cài đặt: Hiển thị lời › Notch › Dòng lời › Hiện lời khi thu gọn
 - Cài đặt: Phím tắt › Hiện/ẩn lời trên Notch
 - Cài đặt: Phím tắt › Xem nhanh Notch
@@ -963,7 +964,7 @@ Tối đa một lần mỗi ngày, Lyrimuse gửi phiên bản, macOS, các tín
 
 ## Toàn bộ cài đặt
 
-Toàn bộ mục trong cửa sổ Cài đặt, theo vị trí: tổng cộng 345 mục. Gõ tên vào ô tìm kiếm ở đầu thanh bên của Cài đặt để đi thẳng tới mục đó.
+Toàn bộ mục trong cửa sổ Cài đặt, theo vị trí: tổng cộng 346 mục. Gõ tên vào ô tìm kiếm ở đầu thanh bên của Cài đặt để đi thẳng tới mục đó.
 
 ### Lời bài hát › Nguồn
 
@@ -1131,6 +1132,7 @@ Toàn bộ mục trong cửa sổ Cài đặt, theo vị trí: tổng cộng 345
 ### Hiển thị lời › Notch › Tai trái
 
 - **Sóng âm**: Mỗi lúc chỉ hiện ở một bên
+- **Hai tai rộng bằng nhau**: Dùng chung cho cả hai tai
 - **Nhảy theo nhạc**: Nhảy theo âm thanh đang phát từ trình phát, cần cho phép ghi âm thanh hệ thống; chỉ đọc âm lượng, không lưu âm thanh
 
 ### Hiển thị lời › Notch › Dòng lời

@@ -297,13 +297,14 @@ A letra flutua acima de todas as janelas, sempre na frente, acendendo palavra po
 
 ### Letra no notch
 
-Uma cápsula no estilo Dynamic Island ao lado do notch, no topo da tela; Macs sem notch e telas externas também ganham uma. Cada lado pode mostrar o título, o artista, o álbum, a capa, os controles de reprodução ou o tempo decorrido ou restante, junto de uma onda de áudio animada. Em telas sem notch, a linha atual também pode ficar entre os dois lados, com a cápsula da altura da barra de menus. Cada lado também pode mostrar a linha atual ou a próxima, inclusive em telas com notch. Passe o ponteiro sobre ela para expandi-la e ver controles, uma barra de progresso em que dá para mudar a posição, o ajuste de tempo da letra e botões rápidos como favoritar e buscar letra. Durante anúncios, mostra a contagem regressiva do tempo restante.
+Uma cápsula no estilo Dynamic Island ao lado do notch, no topo da tela; Macs sem notch e telas externas também ganham uma. Cada lado pode mostrar o título, o artista, o álbum, a capa, os controles de reprodução ou o tempo decorrido ou restante, junto de uma onda de áudio animada. Em telas sem notch, a linha atual também pode ficar entre os dois lados, com a cápsula da altura da barra de menus. Cada lado também pode mostrar a linha atual ou a próxima, inclusive em telas com notch. Passe o ponteiro sobre ela para expandi-la e ver controles, uma barra de progresso em que dá para mudar a posição, o ajuste de tempo da letra e botões rápidos como favoritar e buscar letra. Durante anúncios, mostra a contagem regressiva do tempo restante. A largura de cada lado também pode ser ajustada separadamente.
 
 - Desativado por padrão
 - Ajustes: Exibição da letra › Notch › Letra no notch
 - Ajustes: Exibição da letra › Notch › Estilo
 - Ajustes: Exibição da letra › Notch › Tela
 - Ajustes: Exibição da letra › Notch › Ouvido esquerdo
+- Ajustes: Exibição da letra › Notch › Ouvido esquerdo › Ouvidos com a mesma largura
 - Ajustes: Exibição da letra › Notch › Linha da letra › Letra no modo recolhido
 - Ajustes: Atalhos de teclado › Mostrar/ocultar letra no notch
 - Ajustes: Atalhos de teclado › Espiar a letra no notch
@@ -963,7 +964,7 @@ No máximo uma vez por dia, envia a versão, o macOS, quais recursos estão ativ
 
 ## Todos os ajustes
 
-Todos os ajustes da janela Ajustes, por local: 345 no total. Digite um nome no campo de busca no topo da barra lateral dos Ajustes para ir direto até ele.
+Todos os ajustes da janela Ajustes, por local: 346 no total. Digite um nome no campo de busca no topo da barra lateral dos Ajustes para ir direto até ele.
 
 ### Letra › Origem
 
@@ -1131,6 +1132,7 @@ Todos os ajustes da janela Ajustes, por local: 345 no total. Digite um nome no c
 ### Exibição da letra › Notch › Ouvido esquerdo
 
 - **Onda sonora**: Aparece em um lado por vez
+- **Ouvidos com a mesma largura**: Compartilhado pelos dois ouvidos
 - **Acompanhar a música**: Acompanha o som do player e precisa de permissão para gravar o áudio do sistema; só o volume é lido e nenhum áudio é salvo
 
 ### Exibição da letra › Notch › Linha da letra

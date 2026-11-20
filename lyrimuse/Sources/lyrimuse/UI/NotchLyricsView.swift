@@ -48,6 +48,8 @@ struct NotchLyricsView: View {
     @Environment(\.notchCardLayerActive) var surfaceVisible
     /// 这块内容所在显示器的像素倍率 —— 只给 `idleAppIcon` 算"要几像素的位图"用。
     @Environment(\.displayScale) var displayScale
+    /// 卡片此刻(动画中)的中心比刘海中心往右偏多少(`NotchCardOffsetEffect`);两耳等宽时恒 0。
+    @Environment(\.notchCardOffset) var cardOffset
     /// 快捷操作里此刻被指到的那颗键(见 `QuickActionTooltipOverlay`);nil = 指针不在任何一颗上。
     @State var hoveredQuickAction: QuickActionHint?
     /// 真正画出来的那一条。跟 `hoveredQuickAction` 分开存是为了那 260ms 的首次延迟(扫过一排键时
@@ -67,7 +69,8 @@ struct NotchLyricsView: View {
 
     var body: some View {
         GeometryReader { proxy in
-            let earWidth = controller.earWidth(cardWidth: proxy.size.width)
+            // 两耳不等宽时按这一帧(动画中)的偏移分左右,刘海空当一直对着真刘海(`NotchCardOffsetEffect`)。
+            let ears = controller.earWidths(cardWidth: proxy.size.width, offset: cardOffset)
             ZStack(alignment: .top) {
                 backgroundLayers(size: proxy.size)
                 // 这几种时候铺一层纯黑盖住卡片样式自己的底,底色只剩"像不像刘海"一个标准:
@@ -89,6 +92,7 @@ struct NotchLyricsView: View {
                 // 在屏幕上漏出来一会。它本来就不属于哪只耳朵,顶行里这个位置只留同宽的空当(notchGap)。
                 notchSeam
                     .frame(height: controller.contentTopInset)
+                    .offset(x: -cardOffset)
                     .opacity(revealContentOpacity)
                 if controller.topRowLyricsWidth > 0, controller.hasTrack {
                     topRowLyrics
@@ -100,7 +104,7 @@ struct NotchLyricsView: View {
                     // 歌名/播放键都收进 hover 展开卡);稳态/展开 = 歌名 + 播放键。
                     // 两种形态是**同一个** topRow 按 isCollapsed 换耳朵里的内容,不是两个视图
                     // 在这里 if/else 互换(理由见 topRow 头注)。
-                    topRow(earWidth: earWidth)
+                    topRow(leftEarWidth: ears.left, rightEarWidth: ears.right)
                         .frame(height: controller.contentTopInset)
                     // 顶行以下的一切(曲目信息头部 / 歌词行 / 展开区)**不在这个 VStack 里**,
                     // 而是作为外层 ZStack 的 overlay 各自定宽、定 y、以卡片中心为锚(见 cardBodyLayer)。
@@ -206,7 +210,8 @@ struct NotchLyricsView: View {
                                              ?? playback.currentDurationMs, tint: progressLineTint,
                                          active: surfaceVisible && shows, outline: controller.cardOutline,
                                          notchWidth: controller.notchWidth,
-                                         cardSize: CGSize(width: controller.cardWidth, height: controller.cardHeight))
+                                         cardSize: CGSize(width: controller.cardWidth, height: controller.cardHeight),
+                                         notchOffset: controller.cardOffset)
                         .animation(NotchEarProgressLine.fade(showing: shows, reduceMotion: reduceMotion)) {
                             $0.opacity(shows ? 1 : 0)
                         }

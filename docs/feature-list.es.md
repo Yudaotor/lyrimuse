@@ -297,13 +297,14 @@ Letra sobre todas las ventanas, siempre visible, iluminada palabra por palabra. 
 
 ### Letra del notch
 
-Una cápsula pegada al notch, arriba en la pantalla; también funciona en Mac sin notch y en pantallas externas. Cada lado puede mostrar título, artista, álbum, ilustración, controles de reproducción, o tiempo transcurrido o restante, junto a una onda de audio que se mueve con la música. En pantallas sin notch, la línea actual también puede ir entre los dos lados, con la cápsula a la altura de la barra de menús. Cada lado también puede mostrar la línea actual o la siguiente, también en pantallas con notch. Al pasar el puntero se expande con controles, barra de progreso, calibración de la letra y botones rápidos como favorito o buscar letra. Durante los anuncios muestra el tiempo restante.
+Una cápsula pegada al notch, arriba en la pantalla; también funciona en Mac sin notch y en pantallas externas. Cada lado puede mostrar título, artista, álbum, ilustración, controles de reproducción, o tiempo transcurrido o restante, junto a una onda de audio que se mueve con la música. En pantallas sin notch, la línea actual también puede ir entre los dos lados, con la cápsula a la altura de la barra de menús. Cada lado también puede mostrar la línea actual o la siguiente, también en pantallas con notch. Al pasar el puntero se expande con controles, barra de progreso, calibración de la letra y botones rápidos como favorito o buscar letra. Durante los anuncios muestra el tiempo restante. El ancho de cada lado también se puede ajustar por separado.
 
 - Desactivada por omisión
 - Ajustes: Mostrar letra › Notch › Letra en el notch
 - Ajustes: Mostrar letra › Notch › Estilo
 - Ajustes: Mostrar letra › Notch › Pantalla
 - Ajustes: Mostrar letra › Notch › Izquierda
+- Ajustes: Mostrar letra › Notch › Izquierda › Mismo ancho a ambos lados
 - Ajustes: Mostrar letra › Notch › Fila de letra › Mostrar letra al contraer
 - Ajustes: Atajos de teclado › Mostrar/ocultar letra en el notch
 - Ajustes: Atajos de teclado › Echar un vistazo al notch
@@ -963,7 +964,7 @@ Como máximo una vez al día, envía al servidor del propio autor la versión, e
 
 ## Todos los ajustes
 
-Todos los ajustes de la ventana Ajustes, según dónde están: 345 en total. Escribe un nombre en el campo de búsqueda de la parte superior de la barra lateral de Ajustes para ir directamente a él.
+Todos los ajustes de la ventana Ajustes, según dónde están: 346 en total. Escribe un nombre en el campo de búsqueda de la parte superior de la barra lateral de Ajustes para ir directamente a él.
 
 ### Letra › Fuente
 
@@ -1131,6 +1132,7 @@ Todos los ajustes de la ventana Ajustes, según dónde están: 345 en total. Esc
 ### Mostrar letra › Notch › Izquierda
 
 - **Onda de audio**: Se muestra en un solo lado a la vez
+- **Mismo ancho a ambos lados**: Se aplica a ambos lados
 - **Seguir la música**: Sigue el sonido del reproductor y requiere permiso para grabar el audio del sistema; solo se lee el volumen y no se guarda ningún audio
 
 ### Mostrar letra › Notch › Fila de letra

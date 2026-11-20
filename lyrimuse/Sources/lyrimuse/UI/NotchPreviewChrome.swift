@@ -28,14 +28,22 @@ final class NotchPreviewChrome: ObservableObject, NotchChromeSource {
     /// 菜单栏两侧之间以刘海为中心能放多宽的卡片(`NotchLyricsWindowController.menuBarCap`,同真窗口那份读数)。耳朵里放了歌词时
     /// 编辑台按它夹稳态宽(`NotchEditorStage.steadyCardWidth`),让用户看得到耳朵会被夹多窄。
     @Published private(set) var menuBarMaxCardWidth: CGFloat?
+    /// 同一份读数按左右两侧分开(`NotchLyricsWindowController.menuBarEarCaps`),关掉「两耳等宽」时编辑台按它夹每一侧。
+    @Published private(set) var menuBarEarCaps: NotchEarSpan?
     /// 卡片两种形态的真实宽,由舞台按真窗口同一套公式算好推进来(`NotchEditorStage.card` 的 onAppear /
     /// onChange),歌词行按它们定宽居中交叉淡入淡出(NotchChromeSource 里的说明)。初值只是占位。
     @Published private(set) var steadyCardWidth: CGFloat = AppSettings.defaultNotchContentWidth
     @Published private(set) var expandedCardWidth: CGFloat = AppSettings.defaultNotchContentWidth
+    /// 稳态卡片的偏移和两耳不等宽时的顶行歌词段宽,跟两种形态的宽度一起由舞台推进来;`splitTopRowLyricsWidth` 为 nil 时
+    /// 顶行歌词按两耳等宽那套公式现算。
+    @Published private(set) var steadyCardOffset: CGFloat = 0
+    @Published private(set) var splitTopRowLyricsWidth: CGFloat?
 
-    func setCardWidths(steady: CGFloat, expanded: CGFloat) {
+    func setCardWidths(steady: CGFloat, expanded: CGFloat, offset: CGFloat = 0, splitTopRowLyricsWidth: CGFloat? = nil) {
         if steadyCardWidth != steady { steadyCardWidth = steady }
         if expandedCardWidth != expanded { expandedCardWidth = expanded }
+        if steadyCardOffset != offset { steadyCardOffset = offset }
+        if self.splitTopRowLyricsWidth != splitTopRowLyricsWidth { self.splitTopRowLyricsWidth = splitTopRowLyricsWidth }
     }
 
     /// 预览恒为 false。isCollapsed 是真窗口"没在播放就缩回刘海大小、内容整套不渲染"的
@@ -80,6 +88,7 @@ final class NotchPreviewChrome: ObservableObject, NotchChromeSource {
     var topRowLyricsWidth: CGFloat {
         let s = AppSettings.shared
         guard placement == .topRow else { return 0 }
+        if let splitTopRowLyricsWidth { return splitTopRowLyricsWidth }
         let ear = NotchLyricsWindowController.topRowEarWidth(
             leftEar: s.notchLeftEar, rightEar: s.notchRightEar, showsEqualizer: s.notchShowsEqualizer,
             equalizerEar: s.notchEqualizerEar, contentTopInset: contentTopInset)
@@ -217,5 +226,7 @@ final class NotchPreviewChrome: ObservableObject, NotchChromeSource {
         contentTopInset = geo.notchHeight
         let cap = NotchLyricsWindowController.menuBarCap(on: screen, centerX: geo.centerX).cap
         if menuBarMaxCardWidth != cap { menuBarMaxCardWidth = cap }
+        let earCaps = NotchLyricsWindowController.menuBarEarCaps(on: screen, geometry: geo)
+        if menuBarEarCaps != earCaps { menuBarEarCaps = earCaps }
     }
 }

@@ -396,6 +396,8 @@ struct NotchEarSettingsRows: View {
     @ObservedObject private var settings = AppSettings.shared
     @ObservedObject private var realAudio = RealAudioMeter.shared
     let side: NotchEarPopover.Side
+    /// 这只耳朵宽度滑杆拖动中节流提交,同「全部设置」抽屉那两根宽度滑杆。
+    @State private var widthThrottle = SliderCommitThrottle()
 
     private var current: NotchEarModule {
         side == .left ? settings.notchLeftEar : settings.notchRightEar
@@ -453,7 +455,43 @@ struct NotchEarSettingsRows: View {
         return realAudio.likelyDenied ? .orange : .accentColor
     }
 
-    // 一框:音浪一行开关(「跟随音乐跳动」在开关左边那颗按钮的浮层里),这一侧显示什么一行下拉(选其一;选「不显示」就空着)。
+    /// 「两耳等宽」:左右耳浮层各一行、背后是同一个开关(ⓘ 交代两侧共用)。关掉时两侧从此刻卡片的样子起步,卡片不跳
+    /// (`NotchEditorStage.setEarWidthsLinked`)。见 05 章决策 160。
+    private var linkedRow: some View {
+        SettingsRow(icon: "arrow.left.and.right.square", title: L10n.t("两耳等宽"), help: L10n.t("左右耳共用这一项")) {
+            Toggle("", isOn: Binding(
+                get: { settings.notchEarWidthsLinked },
+                set: { NotchEditorStage.setEarWidthsLinked($0) }))
+        }
+    }
+
+    /// 关掉「两耳等宽」后才有:这只耳朵伸出刘海多宽(外露宽)。区间下界是这只耳朵当前模块的下限,读数报夹过之后的真实宽度
+    /// (耳朵里放了歌词时按这一侧的菜单栏空位夹)。
+    private var widthRow: some View {
+        let range = NotchEditorStage.earUsableRange(side)
+        let effective = NotchEditorStage.splitSteadyOnCurrentScreen().map { side == .left ? $0.span.left : $0.span.right } ?? 0
+        let commit: (Double) -> Void = { value in
+            NotchEditorStage.commitEarWidths(left: side == .left ? value : nil, right: side == .right ? value : nil)
+        }
+        return SettingsRow(icon: "arrow.left.and.right", title: L10n.t("宽度")) {
+            HStack(spacing: 8) {
+                SteppedSlider(value: Binding(
+                    get: { widthThrottle.value(or: Double(effective)) },
+                    set: { widthThrottle.update($0, commit: commit) }
+                ), in: range, step: NotchEarWidths.step,
+                   onEditingChanged: { widthThrottle.editingChanged($0, commit: commit) })
+                .frame(width: 120)
+                .accessibilityLabel(side == .left ? L10n.t("左耳宽度") : L10n.t("右耳宽度"))
+                StableReadout(text: String(format: L10n.t("%@pt"), "\(Int(widthThrottle.value(or: Double(effective))))"),
+                              widest: StableReadout.points(NotchEarWidths.storageRange.upperBound), font: nil, minWidth: 46)
+                    .foregroundStyle(.secondary)
+                    .accessibilityHidden(true)
+            }
+        }
+    }
+
+    // 一框:音浪一行开关(「跟随音乐跳动」在开关左边那颗按钮的浮层里),这一侧显示什么一行下拉(选其一;选「不显示」就空着),
+    // 「两耳等宽」一行,关掉后再一行这只耳朵的宽度。
     var body: some View {
         SettingsRowGroup {
             VStack(spacing: 0) {
@@ -468,6 +506,12 @@ struct NotchEarSettingsRows: View {
                         label: \.displayName,
                         compact: true
                     )
+                }
+                CardDivider()
+                linkedRow
+                if !settings.notchEarWidthsLinked {
+                    CardDivider()
+                    widthRow
                 }
             }
         }

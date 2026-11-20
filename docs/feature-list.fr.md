@@ -297,13 +297,14 @@ Des paroles qui flottent au-dessus de toutes les fenêtres, toujours au premier 
 
 ### Paroles de l’encoche
 
-Une capsule façon Dynamic Island près de l’encoche, en haut de l’écran ; les Mac sans encoche et les écrans externes y ont droit aussi. Chaque côté peut afficher le titre, l’artiste, l’album, l’illustration, les commandes de lecture, ou le temps écoulé ou restant, à côté d’une onde audio animée. Sur les écrans sans encoche, la ligne en cours peut aussi s’afficher entre les deux côtés, la capsule gardant la hauteur de la barre des menus. Chaque côté peut aussi afficher la ligne en cours ou la suivante, y compris sur les écrans à encoche. Survolez-la pour la développer et accéder aux commandes, à une barre de progression cliquable, au minutage des paroles et à des boutons rapides comme Favori ou Rechercher les paroles. Pendant les pubs, elle affiche un compte à rebours du temps restant.
+Une capsule façon Dynamic Island près de l’encoche, en haut de l’écran ; les Mac sans encoche et les écrans externes y ont droit aussi. Chaque côté peut afficher le titre, l’artiste, l’album, l’illustration, les commandes de lecture, ou le temps écoulé ou restant, à côté d’une onde audio animée. Sur les écrans sans encoche, la ligne en cours peut aussi s’afficher entre les deux côtés, la capsule gardant la hauteur de la barre des menus. Chaque côté peut aussi afficher la ligne en cours ou la suivante, y compris sur les écrans à encoche. Survolez-la pour la développer et accéder aux commandes, à une barre de progression cliquable, au minutage des paroles et à des boutons rapides comme Favori ou Rechercher les paroles. Pendant les pubs, elle affiche un compte à rebours du temps restant. La largeur de chaque côté se règle aussi séparément.
 
 - Désactivée par défaut
 - Réglages : Affichage des paroles › Encoche › Paroles de l’encoche
 - Réglages : Affichage des paroles › Encoche › Style
 - Réglages : Affichage des paroles › Encoche › Écran
 - Réglages : Affichage des paroles › Encoche › Gauche
+- Réglages : Affichage des paroles › Encoche › Gauche › Même largeur des deux côtés
 - Réglages : Affichage des paroles › Encoche › Ligne de paroles › Paroles en mode réduit
 - Réglages : Raccourcis clavier › Afficher/masquer les paroles de l’encoche
 - Réglages : Raccourcis clavier › Développer l’encoche un instant
@@ -963,7 +964,7 @@ Au plus une fois par jour, envoie la version, macOS, les fonctions activées et 
 
 ## Tous les réglages
 
-Tous les réglages de la fenêtre Réglages, classés par emplacement : 345 au total. Tapez un nom dans le champ de recherche en haut de la barre latérale des Réglages pour y aller directement.
+Tous les réglages de la fenêtre Réglages, classés par emplacement : 346 au total. Tapez un nom dans le champ de recherche en haut de la barre latérale des Réglages pour y aller directement.
 
 ### Paroles › Source
 
@@ -1131,6 +1132,7 @@ Tous les réglages de la fenêtre Réglages, classés par emplacement : 345 au 
 ### Affichage des paroles › Encoche › Gauche
 
 - **Onde audio** : Un seul côté à la fois
+- **Même largeur des deux côtés** : Commun aux deux côtés
 - **Suivre la musique** : Suit le son du lecteur et nécessite l’autorisation d’enregistrer l’audio du système ; seul le volume est lu, aucun son n’est enregistré
 
 ### Affichage des paroles › Encoche › Ligne de paroles

@@ -110,7 +110,9 @@ extension NotchLyricsView {
     ///
     /// 布局细节两条,收起与稳态一致、不随状态变:朝刘海那一侧内缩 `earNotchInset`(收起态 34pt 的耳朵减掉 6 还剩 28,放得下 23pt 的
     /// 封面 / 14pt 的音浪);左耳内容靠左外缘、右耳靠右外缘(05 章「指示条贴外缘,收放切换时不横跳」)。
-    func topRow(earWidth: CGFloat) -> some View {
+    ///
+    /// 两耳不等宽时左右耳宽不同(`NotchCardLayout.earWidths`),音浪居中与否也按各自那只耳朵判(05 章决策 160)。
+    func topRow(leftEarWidth: CGFloat, rightEarWidth: CGFloat) -> some View {
         let collapsed = controller.isCollapsed
         let leftModule: NotchEarModule = collapsed ? .artwork : playback.leftEar
         let rightModule: NotchEarModule = collapsed ? .none : playback.rightEar
@@ -126,12 +128,14 @@ extension NotchLyricsView {
         let soloEqualizerLeft = equalizerOnLeft && !controller.isAdBreakNow
             && leftModule == .none
         let soloEqualizerRight = equalizerOnRight && rightModule == .none
-        let soloInset = NotchWidthBounds.soloEqualizerInset(
-            earWidth: earWidth, barsWidth: EqualizerBars.width,
-            cardPadding: controller.topRowPadding,
-            shoulder: NotchOutline.shoulderRadius(notchHeight: controller.contentTopInset),
-            expanded: controller.isExpanded,
-            atMinimumWidth: controller.isCardAtMinimumWidth && !controller.showsTopRowLyrics)
+        func soloInset(_ side: NotchEqualizerEar, earWidth: CGFloat) -> CGFloat {
+            NotchWidthBounds.soloEqualizerInset(
+                earWidth: earWidth, barsWidth: EqualizerBars.width,
+                cardPadding: controller.topRowPadding,
+                shoulder: NotchOutline.shoulderRadius(notchHeight: controller.contentTopInset),
+                expanded: controller.isExpanded,
+                atMinimumWidth: controller.isEarAtMinimumWidth(side) && !controller.showsTopRowLyrics)
+        }
         return HStack(spacing: 0) {
             // 左耳:模块 + (可选)音浪。音浪贴哪只耳朵可配,
             // 这里跟下面右耳是完全对称的结构——只是音浪在外缘,外缘在左耳是"最左",
@@ -169,11 +173,11 @@ extension NotchLyricsView {
             .frame(maxWidth: .infinity, alignment: .leading)
             // 音浪独占且卡片顶在宽度下限时才往里推(居中于可视耳朵),其余贴外缘
             // (见 soloEqualizerInset)。
-            .padding(.leading, soloEqualizerLeft ? soloInset : 0)
+            .padding(.leading, soloEqualizerLeft ? soloInset(.left, earWidth: leftEarWidth) : 0)
             // 内缩必须在 .frame(width:) **之前** —— 之后加等于把耳朵整体变宽 6pt,
             // 三段就不再严丝合缝铺满,背景形状/刘海空当会跟着错位。
             .padding(.trailing, NotchMetrics.earNotchInset)
-            .frame(width: earWidth)
+            .frame(width: leftEarWidth)
 
             // 刘海本身的空当——物理硬件不发光区域。那枚肉眼看不见的彩蛋(notchSeam)
             // **不画在这一行里**,而是钉在 body 的 ZStack 顶部居中,这里只留空当的宽度(理由见 notchGap)。
@@ -190,9 +194,9 @@ extension NotchLyricsView {
                 }
             }
             .frame(maxWidth: .infinity, alignment: .trailing)
-            .padding(.trailing, soloEqualizerRight ? soloInset : 0) // 理由同左耳
+            .padding(.trailing, soloEqualizerRight ? soloInset(.right, earWidth: rightEarWidth) : 0) // 理由同左耳
             .padding(.leading, NotchMetrics.earNotchInset) // 理由同左耳,见 earNotchInset
-            .frame(width: earWidth)
+            .frame(width: rightEarWidth)
         }
         // 展开态收到跟下面那一列内容同一条边界(见 topRowPadding),跟卡片同一条弹簧过去。
         .padding(.horizontal, controller.topRowPadding)

@@ -27,11 +27,20 @@ struct NotchRevealShape: Shape {
     var notchHeight: CGFloat
     /// 同 `NotchHangingShape.card` 的 `corner`(`NotchCardOutline.corner`)。
     var corner: NotchCornerProfile?
+    /// 卡片中心比刘海中心往右偏多少:不为 0 时从刘海中心撑开(`NotchReveal.visibleSpan`),两耳等宽时以卡片中心为锚。
+    var notchOffset: CGFloat = 0
+    /// 出场起点的宽度比例(`NotchReveal.startWidthFraction`),两耳不等宽时从刘海中心按它撑开。
+    var startWidthFraction: CGFloat = 1
 
     func path(in rect: CGRect) -> Path {
         let width = rect.width * min(1, max(0, widthFraction))
         let height = rect.height * min(1, max(0, heightFraction))
-        let visible = CGRect(x: rect.midX - width / 2, y: rect.minY, width: width, height: height)
+        var visible = CGRect(x: rect.midX - width / 2, y: rect.minY, width: width, height: height)
+        if notchOffset != 0 {
+            let span = NotchReveal.visibleSpan(cardWidth: rect.width, widthFraction: widthFraction,
+                                               startFraction: startWidthFraction, notchOffset: notchOffset)
+            visible.origin.x = rect.minX + span.minX
+        }
         return NotchHangingShape.card(notchHeight: notchHeight, corner: corner).path(in: visible)
     }
 }
@@ -51,20 +60,24 @@ struct NotchRevealClip: ViewModifier {
     var heightFraction: CGFloat
     var outline: NotchCardOutline
     var showsEdge: Bool
+    var startWidthFraction: CGFloat = 1
     @ObservedObject private var live = NotchCornerLive.shared
     @Environment(\.displayScale) private var displayScale
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-    init(widthFraction: CGFloat, heightFraction: CGFloat, outline: NotchCardOutline, showsEdge: Bool) {
+    init(widthFraction: CGFloat, heightFraction: CGFloat, outline: NotchCardOutline, showsEdge: Bool,
+         startWidthFraction: CGFloat = 1) {
         self.widthFraction = widthFraction
         self.heightFraction = heightFraction
         self.outline = outline
         self.showsEdge = showsEdge
+        self.startWidthFraction = startWidthFraction
     }
 
     func body(content: Content) -> some View {
         let shape = NotchRevealShape(widthFraction: widthFraction, heightFraction: heightFraction,
-                                     notchHeight: outline.notchHeight, corner: outline.corner(live))
+                                     notchHeight: outline.notchHeight, corner: outline.corner(live),
+                                     notchOffset: outline.notchOffset, startWidthFraction: startWidthFraction)
         let lowRes = displayScale < 1.5
         let fade = NotchCardEdge.fade(showing: showsEdge, reduceMotion: reduceMotion)
         content.clipShape(shape)

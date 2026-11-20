@@ -297,13 +297,14 @@ Lyrics floating above every window, always on top, lit up word by word. Leave th
 
 ### Notch lyrics
 
-A Dynamic Island-style capsule beside the notch at the top of the screen; Macs without a notch and external displays get one too. Each side can show the title, artist, album, artwork, playback controls, or elapsed or remaining time, next to a moving audio wave. On screens without a notch, the current lyric can also sit between the two sides, keeping the capsule as tall as the menu bar. Either side can also show the current or next lyric line, which works on notched screens too. Hover to expand it for controls, a seekable progress bar, lyrics timing and quick buttons such as like and search lyrics. During ads it counts down the time left.
+A Dynamic Island-style capsule beside the notch at the top of the screen; Macs without a notch and external displays get one too. Each side can show the title, artist, album, artwork, playback controls, or elapsed or remaining time, next to a moving audio wave. On screens without a notch, the current lyric can also sit between the two sides, keeping the capsule as tall as the menu bar. Either side can also show the current or next lyric line, which works on notched screens too. Hover to expand it for controls, a seekable progress bar, lyrics timing and quick buttons such as like and search lyrics. During ads it counts down the time left. Each side's width can also be set separately.
 
 - Off by default
 - Settings: Lyrics Display › Notch › Notch Lyrics
 - Settings: Lyrics Display › Notch › Style
 - Settings: Lyrics Display › Notch › Display
 - Settings: Lyrics Display › Notch › Left Ear
+- Settings: Lyrics Display › Notch › Left Ear › Equal Ear Widths
 - Settings: Lyrics Display › Notch › Lyric Row › Show Lyrics When Collapsed
 - Settings: Keyboard Shortcuts › Show/Hide Notch Lyrics
 - Settings: Keyboard Shortcuts › Peek at Notch Lyrics
@@ -963,7 +964,7 @@ At most once a day, sends the version, macOS, which features are on and crash su
 
 ## Every setting
 
-Every setting in the Settings window, by where it lives: 345 in all. Type a name into the search field at the top of the Settings sidebar to jump straight to it.
+Every setting in the Settings window, by where it lives: 346 in all. Type a name into the search field at the top of the Settings sidebar to jump straight to it.
 
 ### Lyrics › Source
 
@@ -1131,6 +1132,7 @@ Every setting in the Settings window, by where it lives: 345 in all. Type a name
 ### Lyrics Display › Notch › Left Ear
 
 - **Audio Wave**: Shows on one side at a time
+- **Equal Ear Widths**: Shared by both ears
 - **Move with the Music**: Follows the sound from the player and needs permission to record system audio; only the volume is read, no audio is saved
 
 ### Lyrics Display › Notch › Lyric Row

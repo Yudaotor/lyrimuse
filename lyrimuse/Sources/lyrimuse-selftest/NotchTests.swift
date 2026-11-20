@@ -421,7 +421,7 @@ func runNotchTests() {
         let occupancy = app("MenuBar/MenuBarCenterLyrics.swift")
         expectEqual(sourceHas(controller, "let cap = presentsOnLockScreen ? nil : topRowMaxCardWidth(on: screen, centerX: geo.centerX)")
                     && sourceHas(controller, "cardPadding: NotchMetrics.cardHorizontalPadding, maxCardWidth: cap) {\nsteadyWidth = fit.cardWidth")
-                    && sourceHas(controller, "let newExpanded = NotchWidthBounds.expandedWidth(\nsteady: steadyWidth,"), true,
+                    && sourceHas(controller, "} ?? NotchWidthBounds.expandedWidth(\nsteady: steadyWidth,"), true,
                     "顶行歌词(契约): 真窗口稳态宽按菜单栏两侧夹过,展开宽在夹过的稳态宽上取")
         expectEqual(sourceHas(controller, "let occupied = MenuBarCenterLyrics.occupiedSpan(on: screen, notch: nil,\n besideNotch: MenuBarCenterLyrics.notchRange(of: screen))\nlet cap = NotchTopRowLyrics.maxCardWidth(centerX: centerX, span: occupied.span)")
                     && sourceHas(occupancy, "let occupied = Self.occupiedSpan(on: screen, notch: Self.notchRange(of: screen))"), true,
@@ -435,7 +435,7 @@ func runNotchTests() {
                     "顶行歌词(契约): 下面的歌词行只在「歌词行」那档画,有刘海的屏选顶行按不显示;调试开关按无刘海几何摆")
         expectEqual(sourceHas(topRowView, "Spacer(minLength: 0).frame(width: controller.cardLayout.topRowGap)")
                     && sourceHas(topRowView, ".modifier(NotchCardLayerActive(active: controller.showsTopRowLyrics))")
-                    && sourceHas(topRowView, "atMinimumWidth: controller.isCardAtMinimumWidth && !controller.showsTopRowLyrics)"), true,
+                    && sourceHas(topRowView, "atMinimumWidth: controller.isEarAtMinimumWidth(side) && !controller.showsTopRowLyrics)"), true,
                     "顶行歌词(契约): 顶行空当跟耳宽同一份,那一句只切透明度,音浪贴外缘")
         expectEqual(sourceHas(preview, "cardPadding: NotchMetrics.cardHorizontalPadding, maxCardWidth: nil)?.lyricWidth ?? 0"), true,
                     "顶行歌词(契约): 编辑台预览同一套公式,不按菜单栏夹")
@@ -1019,7 +1019,7 @@ func runNotchTests() {
                     "灵动岛命中接线: 悬停按刘海那一条判,被挪过刘海时马上展开")
         let controllerSrc = (try? String(contentsOf: URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
             .appendingPathComponent("lyrimuse/UI/NotchLyricsWindowController.swift"), encoding: .utf8)) ?? ""
-        expectEqual(sourceHas(root, "steadyWidth: controller.steadyCardWidth) {\nnotchCrossing = nil\ncontroller.collapseAfterSweep()")
+        expectEqual(sourceHas(root, "steadyWidth: controller.steadyCardWidth,\noffset: controller.cardOffset,\nsteadyOffset: controller.steadyCardOffset) {\nnotchCrossing = nil\ncontroller.collapseAfterSweep()")
                     && sourceHas(controllerSrc, "let expanded = (cardHovered && !hoverSuppressedUntilLeave) || editorialHovered")
                     && sourceHas(controllerSrc, "didSet { if !cardHovered { hoverSuppressedUntilLeave = false } }"), true,
                     "灵动岛命中接线: 过刘海展开后横扫走出去就收回,指针离开卡片前不再因悬停展开")
@@ -1157,7 +1157,8 @@ func runNotchTests() {
                         "灵动岛接线: 「按宽度断句」的宽度只让主实例报,副本不覆盖;别在视图里跟 .shared 比身份,那是 .shared 自己 init 里的递归初始化、启动即崩(05 章决策 102)")
             expectEqual(sourceHas(controller, "if shrinking, inPlace, window.isVisible"), true,
                         "灵动岛接线: 只有原地变窄才晚半秒缩窗,换屏、挪位置当场到位(05 章决策 102)")
-            expectEqual(sourceHas(src("NotchWindowRoot.swift"), ".animation(vanishAnimation) {\n $0.scaleEffect(controller.isVanished ? 0.001 : 1, anchor: .top)")
+            expectEqual(sourceHas(src("NotchWindowRoot.swift"), ".animation(vanishAnimation) {\n $0.scaleEffect(controller.isVanished ? 0.001 : 1, anchor: vanishAnchor)")
+                        && sourceHas(src("NotchWindowRoot.swift"), "guard offset != 0, cardWidth > 0 else { return .top }")
                         && !sourceBytes(src("NotchWindowRoot.swift"), contain: ".animation(vanishAnimation, value:"), true,
                         "灵动岛接线: 缩进刘海的缩放只套自己那条动画,回场跟卡片尺寸同一拍变时不被尺寸弹簧接管、不过冲(05 章决策 103)")
             expectEqual(sourceHas(src("NotchMilestonePanel.swift"), "DispatchQueue.main.asyncAfter(deadline: .now() + Self.startDelay) {\n if generation == round { fire(round: round) }"), true,
@@ -1720,10 +1721,10 @@ func runNotchTests() {
             expectEqual(liveSrc.contains(".card(notchHeight: notchHeight, corner: corner(live))"), true, "外轮廓契约: 外形统一由 NotchCardOutline 拼成 .card")
             expectEqual(v.contains("content.clipShape(outline.shape(live))"), true, "外轮廓契约: 卡片自己那道裁剪用 .card")
             expectEqual(v.contains("func earWidth(cardWidth: CGFloat) -> CGFloat { cardLayout.earWidth(cardWidth: cardWidth) }")
-                        && v.contains("let earWidth = controller.earWidth(cardWidth: proxy.size.width)")
+                        && v.contains("let ears = controller.earWidths(cardWidth: proxy.size.width, offset: cardOffset)")
                         && v.contains(".padding(.horizontal, controller.topRowPadding)")
                         && v.contains("cardPadding: controller.topRowPadding,")
-                        && sourceHas(stageSrc, "let padding = chrome.topRowPadding\n let earWidth = chrome.earWidth(cardWidth: width)"), true,
+                        && sourceHas(stageSrc, "let padding = chrome.topRowPadding\n let ears = chrome.earWidths(cardWidth: width, offset: chrome.cardOffset)"), true,
                         "顶行边距契约: 顶行的 padding、耳宽公式、音浪居中、编辑台耳朵热区读同一个 topRowPadding")
             expectEqual(v.contains("NotchCardClip(enabled: !hostClipsCard, outline: controller.cardOutline)"), true,
                         "外轮廓契约: 卡片裁剪的肩膀按这块屏的刘海高度、圆角按设置")
@@ -1743,10 +1744,10 @@ func runNotchTests() {
                         "展开背景契约: 前景按展开与否取那一态的风格;两态有一态跟随封面就按封面背景调对比度")
             expectEqual(reveal.contains("return NotchHangingShape.card(notchHeight: notchHeight, corner: corner).path(in: visible)"), true,
                         "外轮廓契约: 出场裁剪终态与卡片同形(真窗口里只留这一道)")
-            expectEqual(reveal.contains("notchHeight: outline.notchHeight, corner: outline.corner(live))"), true,
+            expectEqual(sourceHas(reveal, "notchHeight: outline.notchHeight, corner: outline.corner(live),\n notchOffset: outline.notchOffset,"), true,
                         "外轮廓契约: 出场裁剪的圆角也从 NotchCornerLive 取")
             expectEqual(rootSrc.contains(".modifier(NotchRevealClip(widthFraction: state.widthFraction,")
-                        && sourceHas(rootSrc, "outline: controller.cardOutline,\n showsEdge: controller.showsCardEdge))"), true,
+                        && sourceHas(rootSrc, "outline: controller.cardOutline,\n showsEdge: controller.showsCardEdge,\n startWidthFraction: revealStartWidth))"), true,
                         "外轮廓契约: 出场裁剪传的是同一个刘海高度和圆角")
             // 发丝描边和浅投影(05 章决策 150 和 05 章决策 155)。
             let ctrlSrc = src("NotchLyricsWindowController.swift")
@@ -1760,7 +1761,7 @@ func runNotchTests() {
             expectEqual(sourceHas(ctrlSrc, "let margin = NotchCardEdge.windowMargin\n let size = NSSize(\n width: expandedCardWidth + 2 * margin,")
                         && sourceHas(ctrlSrc, "geo.notchHeight + NotchExpandedMetrics.idlePanelMaxHeight) + margin)")
                         && sourceHas(ctrlSrc, "x: (geo.centerX - size.width / 2).rounded(.down),\n y: (screen.frame.maxY - size.height).rounded(.down),")
-                        && sourceHas(ctrlSrc, "return NSRect(x: window.frame.midX - cardWidth / 2, y: window.frame.maxY - cardHeight,")
+                        && sourceHas(ctrlSrc, "return NSRect(x: window.frame.midX - cardWidth / 2 + cardOffset, y: window.frame.maxY - cardHeight,")
                         && reveal.components(separatedBy: ".allowsHitTesting(false)").count == 4
                         && !rootSrc.contains(".background(Color") && !rootSrc.contains(".contentShape(Rectangle().inset"), true,
                         "展开边缘: 窗口左右下方留投影余量、左右对称不改卡片在屏幕上的位置;余量里没有命中形状,描边投影不吃点击")
@@ -2387,15 +2388,15 @@ func runNotchTests() {
                     "音浪居中(契约): 音浪宽的三个因子仍是 5 / 2.0 / 1.5(合计 16),且条宽与间距都落在整物理像素上")
         expectEqual(viewSrc.contains("NotchWidthBounds.soloEqualizerInset("), true,
                     "音浪居中(契约): 顶行确实走 Core 里那个公式,没在视图里另写一份")
-        expectEqual(viewSrc.contains("soloEqualizerLeft ? soloInset : 0")
-                    && viewSrc.contains("soloEqualizerRight ? soloInset : 0"), true,
+        expectEqual(viewSrc.contains("soloEqualizerLeft ? soloInset(.left, earWidth: leftEarWidth) : 0")
+                    && viewSrc.contains("soloEqualizerRight ? soloInset(.right, earWidth: rightEarWidth) : 0"), true,
                     "音浪居中(契约): 两只耳朵都接上了,且只在音浪独占时才推")
         expectEqual(viewSrc.contains("&& leftModule == .none")
                     && viewSrc.contains("equalizerOnRight && rightModule == .none"), true,
                     "音浪居中(契约): 边界是「这只耳朵没有模块」——有模块时仍跟模块一起贴外缘")
         expectEqual(viewSrc.contains("shoulder: NotchOutline.shoulderRadius(notchHeight: controller.contentTopInset),"), true,
                     "音浪居中(契约): 顶行把卡片肩膀传进公式(漏传 = 最小宽时音浪偏外 2pt)")
-        expectEqual(viewSrc.contains("atMinimumWidth: controller.isCardAtMinimumWidth"), true,
+        expectEqual(viewSrc.contains("atMinimumWidth: controller.isEarAtMinimumWidth(side)"), true,
                     "音浪居中(契约): 「顶在下限」判据确实从 chrome 传进来了 —— 漏传等于最小宽那档也贴外缘")
         expectEqual(viewSrc.contains("expanded: controller.isExpanded"), true,
                     "音浪居中(契约): 展开态那一档确实接上了 —— 漏传等于展开时又飘回中间")
@@ -3391,10 +3392,10 @@ func runNotchTests() {
         let progressLine = src("NotchProgressLine.swift")
         expectEqual(sourceHas(v, "if controller.showsProgressLine && controller.progressLineStyle == .ears {\n let shows = controller.showsEarProgressLine")
                     && sourceHas(v, "active: surfaceVisible && shows, outline: controller.cardOutline,\n notchWidth: controller.notchWidth,")
-                    && sourceHas(v, "cardSize: CGSize(width: controller.cardWidth, height: controller.cardHeight))\n .animation(NotchEarProgressLine.fade(showing: shows, reduceMotion: reduceMotion)) {")
-                    && sourceHas(progressLine, "var animatableData: AnimatablePair<CGFloat, CGFloat> {\n get { AnimatablePair(cardSize.width, cardSize.height) }")
+                    && sourceHas(v, "cardSize: CGSize(width: controller.cardWidth, height: controller.cardHeight),\n notchOffset: controller.cardOffset)\n .animation(NotchEarProgressLine.fade(showing: shows, reduceMotion: reduceMotion)) {")
+                    && sourceHas(progressLine, "var animatableData: AnimatablePair<AnimatablePair<CGFloat, CGFloat>, CGFloat> {\n get { AnimatablePair(AnimatablePair(cardSize.width, cardSize.height), notchOffset) }")
                     && sourceHas(v, "let (s, r) = cornerMetrics(in: rect)")
-                    && sourceHas(progressLine, "func path(in rect: CGRect) -> Path {\n let path = Self.geometry(size: cardSize, card: card, notchWidth: notchWidth, notchHeight: notchHeight)")
+                    && sourceHas(progressLine, "func path(in rect: CGRect) -> Path {\n let path = Self.geometry(size: cardSize, card: card, notchWidth: notchWidth, notchHeight: notchHeight,\n notchOffset: notchOffset, mirrored: mirrored)")
                     && progressLine.contains("let corner = card.cornerMetrics(in: CGRect(origin: .zero, size: size))")
                     && progressLine.contains("TimelineView(NotchEarLineSchedule(interval: NotchProgressLineTiming.interval(durationMs: total, width: length),")
                     && progressLine.components(separatedBy: "TimelineView(").count == 3, true,

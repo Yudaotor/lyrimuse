@@ -137,8 +137,12 @@ struct NotchQuickActionsEditor: View {
     /// 按现在的展开宽度,一行看得见几格(同 `trackInfoQuickActions` 的算法)。稳态宽被耳朵下限顶上去时真实宽度比这里算的大,
     /// 这里只会少算、不会多算。
     private var visibleSlots: Int {
-        let width = NotchWidthBounds.expandedWidth(steady: CGFloat(settings.notchContentWidth),
-                                                   expandedSetting: CGFloat(settings.notchExpandedContentWidth))
+        // 关掉「两耳等宽」后展开宽还要包住偏心的稳态卡片(`NotchEarWidths.expandedWidth`),按真实展开宽算。
+        let width = settings.notchEarWidthsLinked
+            ? NotchWidthBounds.expandedWidth(steady: CGFloat(settings.notchContentWidth),
+                                             expandedSetting: CGFloat(settings.notchExpandedContentWidth))
+            : CGFloat(NotchEditorStage.effectiveExpandedWidth(steadyBase: settings.notchContentWidth,
+                                                              expandedBase: settings.notchExpandedContentWidth))
         let capacity = NotchQuickAction.capacity(
             contentWidth: Double(width - 2 * NotchMetrics.expandedContentInset),
             showsArtwork: settings.notchExpandedShowsArtwork,

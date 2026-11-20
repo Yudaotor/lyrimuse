@@ -368,6 +368,7 @@
 "两者各项得分完全相同，按歌词源顺序排列" = "İkisi her ölçütte aynı puanı aldı; şarkı sözü kaynağı sırasına göre listelendi";
 "两者同分" = "İkisi aynı puanı aldı";
 "两者均为现场版，但该候选的专辑名对应另一场演出（如另一次巡演），其时间轴与当前录音无法对齐" = "İkisi de canlı sürüm, ancak bu adayın albümü başka bir performansa (örneğin başka bir turneye) ait, bu yüzden zamanlaması bu kayıtla örtüşmez";
+"两耳等宽" = "Eşit Kulak Genişliği";
 "两首探测曲均无响应，该源目前可能不可用" = "İki deneme parçasının hiçbiri yanıt almadı, bu kaynak şu an kullanılamıyor olabilir";
 "个人是一串数字，群组以 -100 开头" = "Kişi için bir sayı; gruplar -100 ile başlar";
 "中" = "Orta";
@@ -778,6 +779,7 @@
 "右侧颜色" = "Sağ Renk";
 "右对齐" = "Sağ";
 "右耳" = "Sağ Kulak";
+"右耳宽度" = "Sağ Kulak Genişliği";
 "右键点按主题可重命名、用当前配色覆盖或删除" = "Bir temayı yeniden adlandırmak, geçerli renklerle üzerine yazmak veya silmek için sağ tıklayın";
 "各处是否显示译文，在「歌词显示」中设置" = "Çevirilerin nerelerde gösterileceği “Şarkı Sözü Görünümü” bölümünde ayarlanır";
 "各处显示为纯音乐，不自动搜索歌词" = "Her yerde enstrümantal olarak gösterilir, şarkı sözleri otomatik olarak aranmaz";
@@ -1049,6 +1051,7 @@
 "居中" = "Orta";
 "屏幕" = "Ekran";
 "展开" = "Genişlet";
+"展开 %@pt" = "Genişletilmiş %@pt";
 "展开/收起触控栏歌词" = "Touch Bar Sözlerini Genişlet/Daralt";
 "展开圆角" = "Genişletilmiş Köşeler";
 "展开宽度" = "Genişletilmiş Genişlik";
@@ -1062,11 +1065,14 @@
 "展开时预览下一句" = "Genişletilince Sonraki Satırı Önizle";
 "展开背景" = "Genişletilmiş Arka Plan";
 "左" = "Sol";
+"左 %1$@ · 右 %2$@" = "Sol %1$@ · Sağ %2$@";
 "左上角显示歌名、歌手和封面" = "Sol üst köşede parça adını, sanatçıyı ve kapağı gösterir";
 "左侧" = "Sol";
 "左侧颜色" = "Sol Renk";
+"左右耳共用这一项" = "İki kulak için ortaktır";
 "左对齐" = "Sol";
 "左耳" = "Sol Kulak";
+"左耳宽度" = "Sol Kulak Genişliği";
 "左耳或右耳已显示当前句，此项不生效" = "Sol veya sağ kulak geçerli satırı zaten gösterdiği için bu ayarın etkisi yok";
 "已下载" = "İndirildi";
 "已下载 %@ / %@" = "%@ / %@ indirildi";

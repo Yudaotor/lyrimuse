@@ -393,6 +393,7 @@ struct PanelQuickSettings: View {
     @State private var overlayWidthThrottle = SliderCommitThrottle()
     @State private var notchFontSizeThrottle = SliderCommitThrottle()
     @State private var notchRowHeightThrottle = SliderCommitThrottle()
+    @State private var notchExpandedWidthThrottle = SliderCommitThrottle()
     @State private var menuBarWidthThrottle = SliderCommitThrottle()
     @State private var menuBarFontSizeThrottle = SliderCommitThrottle()
     @State private var miniFontSizeThrottle = SliderCommitThrottle()
@@ -968,7 +969,41 @@ struct PanelQuickSettings: View {
     /// 落盘仍走 `NotchEditorStage.commitWidths`(三个写入口唯一的落盘路径),且跟合并前一样
     /// **拖动中就落**:编辑台推迟到松手是因为它要在拖动期间切预览 chrome 的展开态,这块面板
     /// 没有预览、不需要那套本地 @State。
+    ///
+    /// 关掉「两耳等宽」后左右耳各自的宽度不在这里调(设置页左右耳浮层和编辑台拖柄),稳态那只滑块换成只读读数
+    /// 「左 200 · 右 42」,这一行只剩展开宽一只滑块(05 章决策 160)。
+    @ViewBuilder
     private var notchWidthRow: some View {
+        if let split = NotchEditorStage.splitSteadyOnCurrentScreen() {
+            splitNotchWidthRow(split.span)
+        } else {
+            linkedNotchWidthRow
+        }
+    }
+
+    private func splitNotchWidthRow(_ span: NotchEarSpan) -> some View {
+        let expanded = NotchEditorStage.effectiveExpandedWidth(steadyBase: settings.notchContentWidth,
+                                                               expandedBase: settings.notchExpandedContentWidth)
+        return row(L10n.t("宽度")) {
+            HStack(spacing: 6) {
+                SteppedSlider(value: Binding(
+                    get: { notchExpandedWidthThrottle.value(or: expanded) },
+                    set: { notchExpandedWidthThrottle.update($0, commit: { NotchEditorStage.commitWidths(expanded: $0) }) }
+                ), in: NotchEditorStage.usableExpandedWidthRangeOnCurrentScreen, step: 10,
+                   onEditingChanged: { notchExpandedWidthThrottle.editingChanged($0, commit: { NotchEditorStage.commitWidths(expanded: $0) }) })
+                .controlSize(.mini)
+                .frame(width: 128, height: 16)
+                .accessibilityLabel(L10n.t("灵动岛展开宽度"))
+                .help(String(format: L10n.t("展开 %@pt"), "\(Int(expanded))"))
+                StableReadout(text: NotchEditorStage.earWidthsReadout(span),
+                              widest: NotchEditorStage.earWidthsReadout(NotchEarSpan(left: 400, right: 400)),
+                              font: .system(size: 10), minWidth: 62)
+                    .foregroundStyle(.tertiary)
+            }
+        }
+    }
+
+    private var linkedNotchWidthRow: some View {
         row(L10n.t("宽度")) {
             HStack(spacing: 6) {
                 RangeSlider(

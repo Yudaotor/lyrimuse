@@ -79,6 +79,8 @@ public struct NotchCardLayout: Equatable, Sendable {
     public var idlePanelHeight: CGFloat
     /// 顶行歌词那段的宽度(`NotchTopRowLyrics.Fit.lyricWidth`);0 = 这块屏、这首歌不在顶行画歌词。
     public var topRowLyricsWidth: CGFloat
+    /// 稳态卡片中心比刘海中心往右偏多少(`NotchEarSpan.offset`);0 = 两耳等宽,卡片以刘海为中心。见 05 章决策 160。
+    public var steadyOffset: CGFloat
 
     public init(metrics: Metrics, isCollapsed: Bool, isExpanded: Bool, notchWidth: CGFloat, contentTopInset: CGFloat,
                 steadyCardWidth: CGFloat, expandedCardWidth: CGFloat, lyricRowHeight: CGFloat,
@@ -89,7 +91,7 @@ public struct NotchCardLayout: Equatable, Sendable {
                 trackInfoShowsArtist: Bool, trackInfoShowsAlbum: Bool, expandedShowsQuickActions: Bool,
                 expandedQuickActionRows: Int = 1,
                 idlePanelHeight: CGFloat = NotchExpandedMetrics.idlePanelHeight(showsLastTrack: false, showsQuote: false),
-                topRowLyricsWidth: CGFloat = 0) {
+                topRowLyricsWidth: CGFloat = 0, steadyOffset: CGFloat = 0) {
         self.metrics = metrics
         self.isCollapsed = isCollapsed
         self.isExpanded = isExpanded
@@ -119,6 +121,7 @@ public struct NotchCardLayout: Equatable, Sendable {
         self.expandedQuickActionRows = expandedQuickActionRows
         self.idlePanelHeight = idlePanelHeight
         self.topRowLyricsWidth = topRowLyricsWidth
+        self.steadyOffset = steadyOffset
     }
 
     /// 收起态判据。`collapsesWhenPaused` 关掉暂停时就不收;`hideWhenNotPlaying` 开着时暂停直接缩进刘海、不经过收起态,
@@ -228,6 +231,33 @@ public struct NotchCardLayout: Equatable, Sendable {
         max(0, (cardWidth - topRowGap - topRowPadding * 2) / 2)
     }
 
+    /// 左右两只耳朵各自的宽度。两耳等宽(`offset` 为 0)或画着顶行歌词时两只相等,同 `earWidth(cardWidth:)`;否则刘海空当
+    /// 跟着卡片偏移挪,窄的那一侧少、宽的那一侧多。`offset` 是此刻(动画中)卡片中心比刘海中心往右偏多少。
+    public func earWidths(cardWidth: CGFloat, offset: CGFloat) -> (left: CGFloat, right: CGFloat) {
+        let base = earWidth(cardWidth: cardWidth)
+        guard offset != 0, !showsTopRowLyrics else { return (base, base) }
+        let half = (cardWidth - topRowGap - topRowPadding * 2) / 2
+        return (max(0, half - offset), max(0, half + offset))
+    }
+
+    /// 稳态卡片两侧各伸出刘海多少。
+    public var steadySpan: NotchEarSpan {
+        NotchEarSpan.of(cardWidth: steadyCardWidth, offset: steadyOffset, notchWidth: notchWidth)
+    }
+
+    /// 两耳不等宽时收起态两侧各伸出多少(`NotchEarWidths.collapsed`)。
+    public var collapsedSpan: NotchEarSpan {
+        NotchEarWidths.collapsed(steadySpan, notchWidth: notchWidth, collapsedEarWidth: metrics.collapsedEarWidth,
+                                 cardPadding: metrics.cardPadding)
+    }
+
+    /// 卡片此刻中心比刘海中心往右偏多少:展开态 0(以刘海为中心),稳态 `steadyOffset`,收起态按两侧各自收起后算。
+    /// 卡片宽度和这个偏移走同一条弹簧。
+    public var cardOffset: CGFloat {
+        if isCollapsed { return steadyOffset == 0 ? 0 : collapsedSpan.offset }
+        return isExpanded ? 0 : steadyOffset
+    }
+
     /// 顶行两只耳朵中间空出来的宽度:刘海,加上此刻画着的顶行歌词那段。
     public var topRowGap: CGFloat {
         notchWidth + (showsTopRowLyrics ? topRowLyricsWidth : 0)
@@ -240,6 +270,7 @@ public struct NotchCardLayout: Equatable, Sendable {
     /// 卡片当前宽度:收起态收到刘海加两只耳朵(不比稳态宽),展开态取展开宽。
     public var cardWidth: CGFloat {
         if isCollapsed {
+            if steadyOffset != 0 { return collapsedSpan.cardWidth(notchWidth: notchWidth) }
             let gap = notchWidth > 0 ? notchWidth : Self.collapsedGapWithoutNotch
             return min(steadyCardWidth, gap + 2 * metrics.collapsedEarWidth + 2 * metrics.cardPadding)
         }

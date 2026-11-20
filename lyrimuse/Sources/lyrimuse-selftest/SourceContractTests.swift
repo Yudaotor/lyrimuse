@@ -4108,7 +4108,9 @@ func runSourceContractSettingsTests() {
             //    副标题也写着「不含宽度和「灵动岛歌词」开关」—— 把它塞进 restoreDefaults() 才是违背文案。
             //  - `defaultNotchExpandedContentWidth`:同上,展开态那一半(从共用稳态常量拆出来,
             //    用户把自己在用的 252 / 482 定为默认时两个数不再相等)。同样是宽度,同样不进「重置」。
-            let exempt: Set<String> = ["defaultNotchContentWidth", "defaultNotchExpandedContentWidth"]
+            //  - `defaultNotchEarWidthsLinked`:「两耳等宽」开关,同样是宽度(关掉后左右耳各自的宽度),不进「重置」。
+            let exempt: Set<String> = ["defaultNotchContentWidth", "defaultNotchExpandedContentWidth",
+                                       "defaultNotchEarWidthsLinked"]
 
             expectEqual(notchConsts.filter { !exempt.contains($0) && !notchBody.contains("AppSettings.\($0)") }.sorted(), [],
                         "重置覆盖闸: 灵动岛的默认值常量都在 NotchStyleDefaults.restoreDefaults() 里被赋值(漏了不报错,只表现为'点了重置有一项没变')")

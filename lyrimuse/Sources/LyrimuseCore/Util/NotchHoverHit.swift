@@ -27,19 +27,22 @@ public enum NotchHoverHit {
         case passThrough
     }
 
-    /// 机器刘海在卡片里的位置(卡片局部坐标):居中,宽 `width`,下沿在 `bottom`。没有刘海的屏幕不传。
+    /// 机器刘海在卡片里的位置(卡片局部坐标):宽 `width`,下沿在 `bottom`;卡片中心比刘海中心往右偏 `offset`
+    /// (两耳等宽时 0,刘海在卡片正中,见 05 章决策 160)。没有刘海的屏幕不传。
     public struct Notch: Equatable, Sendable {
         public var width: CGFloat
         public var bottom: CGFloat
+        public var offset: CGFloat
 
-        public init(width: CGFloat, bottom: CGFloat) {
+        public init(width: CGFloat, bottom: CGFloat, offset: CGFloat = 0) {
             self.width = width
             self.bottom = bottom
+            self.offset = offset
         }
 
         /// 刘海横跨卡片局部 x 的哪一段。
         public func span(cardWidth: CGFloat) -> ClosedRange<CGFloat> {
-            let left = (cardWidth - width) / 2
+            let left = (cardWidth - width) / 2 - offset
             return left...(left + width)
         }
     }
@@ -76,10 +79,12 @@ public enum NotchHoverHit {
     /// 越过收起卡片外沿多少才算走出去。
     public static let sweepMargin: CGFloat = 8
 
-    /// 指针(此刻卡片的局部 x,卡片宽 `cardWidth`)是不是已经往过刘海那一边(`rightward`)走出了收起时卡片(宽 `steadyWidth`,
-    /// 跟此刻的卡片同一个中心)的外沿。纯函数,selftest 覆盖。
-    public static func sweptPastSteadyCard(rightward: Bool, x: CGFloat, cardWidth: CGFloat, steadyWidth: CGFloat) -> Bool {
-        let center = cardWidth / 2, half = steadyWidth / 2
+    /// 指针(此刻卡片的局部 x,卡片宽 `cardWidth`)是不是已经往过刘海那一边(`rightward`)走出了收起时卡片(宽 `steadyWidth`)
+    /// 的外沿。`offset` / `steadyOffset` 是此刻卡片、稳态卡片的中心比刘海中心往右偏多少(两耳等宽时都是 0,两张卡同一个中心)。
+    /// 纯函数,selftest 覆盖。
+    public static func sweptPastSteadyCard(rightward: Bool, x: CGFloat, cardWidth: CGFloat, steadyWidth: CGFloat,
+                                           offset: CGFloat = 0, steadyOffset: CGFloat = 0) -> Bool {
+        let center = cardWidth / 2 - offset + steadyOffset, half = steadyWidth / 2
         return rightward ? x > center + half + sweepMargin : x < center - half - sweepMargin
     }
 }
