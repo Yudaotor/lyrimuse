@@ -60,15 +60,56 @@ private func lastTrackTestHoldTests() {
     let source = code("LyrimuseCore/Local/LocalPlaybackSource.swift")
     let apply = sourceBody("private func apply(_ rawSnapshot: MediaControlSnapshot) {", in: source)
     let gateLine = "let recordsLastTrack = !newTitle.isEmpty\n&& lastTrackRecordGate.allows(track: snapshot.trackKey, artist: newArtist, title: newTitle, now: Date())"
-    let titleWrite = "if !newTitle.isEmpty, !adByFields, !spotifyNoticeSaysAd, !knownAdThisTrack, recordsLastTrack, newTitle != lastPersistedTrackTitle,"
+    let titleWriteHead = "if !newTitle.isEmpty, !adByFields, !spotifyNoticeSaysAd, !knownAdThisTrack, recordsLastTrack,\n"
+    let titleWrite = titleWriteHead
+        + "newTitle != lastPersistedTrackTitle || (!bid.isEmpty && bid != lastPersistedTrackPlayerBundleID),\n!PlaybackSimulation.isActive {"
     let playedAtWrite = "if newIsPlayingNow, !newTitle.isEmpty, !adByFields, !spotifyNoticeSaysAd, !knownAdThisTrack, recordsLastTrack,"
+    let playerWrite = "if !bid.isEmpty {\nUserDefaults.standard.set(bid, forKey: \"np:lastTrackPlayerBundleID\")\nlastPersistedTrackPlayerBundleID = bid\n}"
     func at(_ s: String) -> String.Index? { apply.range(of: s)?.lowerBound }
     expectEqual(sourceHas(apply, gateLine) && sourceHas(apply, titleWrite) && sourceHas(apply, playedAtWrite)
-                && (at("let recordsLastTrack").map { g in [titleWrite, playedAtWrite].allSatisfy { at($0).map { g < $0 } ?? false } } ?? false)
-                && (at(titleWrite).map { w in at("UserDefaults.standard.set(newTitle, forKey: \"np:lastTrackTitle\")").map { w < $0 } ?? false } ?? false),
+                && (at("let recordsLastTrack").map { g in [titleWriteHead, playedAtWrite].allSatisfy { at($0).map { g < $0 } ?? false } } ?? false)
+                && (at(titleWriteHead).map { w in at("UserDefaults.standard.set(newTitle, forKey: \"np:lastTrackTitle\")").map { w < $0 } ?? false } ?? false),
                 true, "上次在听(接线): 曲目三键和时刻都过 RecordGate 再写")
-    expectEqual(apply.split(separator: "\n").filter { $0.contains(".set(") && $0.contains("np:lastTrack") }.count, 4,
-                "上次在听(接线): apply 里只有那一处曲目三键 + 一处时刻在写")
+    expectEqual(sourceHas(apply, playerWrite)
+                && (at(titleWriteHead).map { w in at("UserDefaults.standard.set(bid, forKey: \"np:lastTrackPlayerBundleID\")").map { p in
+                    w < p && (at(playedAtWrite).map { p < $0 } ?? false) } ?? false } ?? false),
+                true, "上次在听(接线): 上次那首的播放器跟曲目三键在同一个分支里写,测试播放、广告一样不写")
+    expectEqual(apply.split(separator: "\n").filter { $0.contains(".set(") && $0.contains("np:lastTrack") }.count, 5,
+                "上次在听(接线): apply 里只有那一处曲目三键 + 播放器、一处时刻在写")
+    // np:lastPlayerBundleID 照旧每首都写(测试播放也写):歌词管理手动搜索的同源加分、「切换到播放器」读它。
+    let currentPlayerWrite = "if !bid.isEmpty, !newTitle.isEmpty, bid != lastPersistedPlayerBundleID, !PlaybackSimulation.isActive {\nUserDefaults.standard.set(bid, forKey: \"np:lastPlayerBundleID\")"
+    expectEqual(sourceHas(apply, currentPlayerWrite)
+                && (at("let recordsLastTrack").map { g in at("UserDefaults.standard.set(bid, forKey: \"np:lastPlayerBundleID\")").map { $0 < g } ?? false } ?? false),
+                true, "上次在听(接线): 当前播放器那个键不过 RecordGate,测试播放照写")
+    expectEqual(sourceHas(code("lyrimuse/LyricsManager/LyricsSearchService.swift"),
+                          "if let playerBundleID = UserDefaults.standard.string(forKey: \"np:lastPlayerBundleID\"),"),
+                true, "上次在听(接线): 歌词管理同源加分仍按当前播放器")
+    let idleActions = code("lyrimuse/UI/IdlePlaybackActions.swift")
+    expectEqual(sourceHas(idleActions, "static var player: PlaybackPlayer { resolve(PlaybackPlayerPreference.lastPlayedPlayerBundleID()) }")
+                && sourceHas(idleActions, "static var currentOrLastPlayer: PlaybackPlayer { resolve(UserDefaults.standard.string(forKey: \"np:lastPlayerBundleID\")) }")
+                && sourceHas(code("lyrimuse/Settings/LyrimuseActionRunner.swift"),
+                             "case .openPlayerHotkey:\nIdlePlaybackActions.openPlayerApp(IdlePlaybackActions.currentOrLastPlayer)")
+                && sourceHas(code("lyrimuse/Settings/AppIconResolver.swift"),
+                             "if let last = PlaybackPlayerPreference.lastPlayedPlayerBundleID(), !ids.contains(last) { ids.append(last) }"),
+                true, "上次在听(接线): 停播页指「上次播放」那首的播放器,「切换到播放器」仍按当前 / 最后认下来的那家")
+
+    // 读的一侧:有「上次播放」的播放器就用它,还没写过(旧安装)退回最后认下来的那家。
+    let suite = "lyrimuse-selftest-last-played-player-\(getpid())"
+    if let d = UserDefaults(suiteName: suite) {
+        expectEqual(PlaybackPlayerPreference.lastPlayedPlayerBundleID(in: d), nil, "上次播放的播放器: 两个键都没有时不猜")
+        d.set("com.spotify.client", forKey: "np:lastPlayerBundleID")
+        expectEqual(PlaybackPlayerPreference.lastPlayedPlayerBundleID(in: d), "com.spotify.client",
+                    "上次播放的播放器: 旧安装还没有新键,退回最后认下来的那家")
+        d.set("", forKey: "np:lastTrackPlayerBundleID")
+        expectEqual(PlaybackPlayerPreference.lastPlayedPlayerBundleID(in: d), "com.spotify.client",
+                    "上次播放的播放器: 新键是空串当没有")
+        d.set("com.apple.Music", forKey: "np:lastTrackPlayerBundleID")
+        expectEqual(PlaybackPlayerPreference.lastPlayedPlayerBundleID(in: d), "com.apple.Music",
+                    "上次播放的播放器: 测完停播,指「上次播放」那首的播放器,不指刚测过的那家")
+        d.removePersistentDomain(forName: suite)
+    } else {
+        expectEqual(false, true, "上次播放的播放器: 建不出临时 UserDefaults")
+    }
     let start = sourceBody("public func start() {", in: source)
     expectEqual(sourceBytes(start, contain: "ScrobbleHold.leases(from: FileIO.read(holdURL))")
                 && sourceBytes(start, contain: "guard let self, !self.lastTrackRecordGate.leasesKnown else { return }")
@@ -88,7 +129,7 @@ private func lastTrackTestHoldTests() {
             }
         }
     }
-    expectEqual(writers, [], "上次在听(接线): np:lastTrack* 只在 LocalPlaybackSource 落盘")
+    expectEqual(writers, [], "上次在听(接线): np:lastTrack*(含上次那首的播放器 np:lastTrackPlayerBundleID)只在 LocalPlaybackSource 落盘")
 }
 
 // ---- 轮询单飞 ----
@@ -444,10 +485,12 @@ private func wiringContracts() {
     expectEqual(verifyAd.contains("self.revertLastTrackAfterAd(key: key)"), true, "广告撤回: AppleScript 晚到确认是广告 → 撤回「上次在听」")
     let revert = sourceBody("private func revertLastTrackAfterAd(key: String) {", in: source)
     expectEqual(revert.contains("prev.key == key"), true, "广告撤回: 只撤回同一首写进去的那一次")
-    for k in ["np:lastTrackTitle", "np:lastTrackArtist", "np:lastTrackAlbum"] {
+    for k in ["np:lastTrackTitle", "np:lastTrackArtist", "np:lastTrackAlbum", "np:lastTrackPlayerBundleID"] {
         expectEqual(revert.contains("\"\(k)\""), true, "广告撤回: \(k) 还原成写之前的值")
     }
-    expectEqual(revert.contains("lastPersistedTrackTitle = prev.persistedTitle"), true, "广告撤回: 去重用的上次写入标题一起还原")
+    expectEqual(revert.contains("lastPersistedTrackTitle = prev.persistedTitle")
+                && revert.contains("lastPersistedTrackPlayerBundleID = prev.persistedPlayer"), true,
+                "广告撤回: 去重用的上次写入标题、播放器一起还原")
     expectEqual(source.contains("!adByFields, !spotifyNoticeSaysAd, !knownAdThisTrack,"), true,
                 "广告撤回: 通知已说是广告 / 同曲已确认是广告时不写「上次在听」")
     expectEqual(before("lastTrackBeforeWrite = (key: snapshot.trackKey,", "UserDefaults.standard.set(newTitle, forKey: \"np:lastTrackTitle\")", in: source), true,

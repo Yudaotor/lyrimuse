@@ -211,6 +211,15 @@ public enum PlaybackPlayerPreference {
     /// `Set<PlaybackPlayer>.soleExplicitPlayer`——App target(FeatureSettingsStore.players)
     /// 直接用同一个扩展,不重复这份逻辑。
     public static var soleExplicitPlayer: PlaybackPlayer? { selected.soleExplicitPlayer }
+
+    /// 「上次播放」那首是哪家放的:`np:lastTrackPlayerBundleID`,`LocalPlaybackSource` 只跟 `np:lastTrack*` 一起写,
+    /// 测试播放、广告都不写。还没写过这个键时退回 `np:lastPlayerBundleID`(最后认下来的那家,测试播放也写)。见 12 章决策 103。
+    public static func lastPlayedPlayerBundleID(in defaults: UserDefaults = .standard) -> String? {
+        for key in ["np:lastTrackPlayerBundleID", "np:lastPlayerBundleID"] {
+            if let bid = defaults.string(forKey: key), !bid.isEmpty { return bid }
+        }
+        return nil
+    }
 }
 
 /// 引导结束之后,菜单栏菜单要不要提示「这个播放器的自动化权限没了」。

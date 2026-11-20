@@ -979,7 +979,7 @@ func runDeepLinkTests() {
         expectEqual(publish.prefix(400).contains("guard !PlaybackSimulation.isActive else { return }"), true,
                     "模拟播放: 不写给引擎的播放状态(引擎据此打卡 Last.fm)")
         expectEqual(lps.contains("bid != lastPersistedPlayerBundleID, !PlaybackSimulation.isActive")
-                    && sourceHas(lps, "newTitle != lastPersistedTrackTitle,\n           !PlaybackSimulation.isActive"), true,
+                    && sourceHas(lps, "newTitle != lastPersistedTrackTitle || (!bid.isEmpty && bid != lastPersistedTrackPlayerBundleID),\n           !PlaybackSimulation.isActive"), true,
                     "模拟播放: 不落「上次在听」")
         expectEqual(lps.contains("if let simulated = PlaybackSimulation.current {")
                     && lps.contains("if PlaybackSimulation.seek(toSeconds: seconds) {"), true,

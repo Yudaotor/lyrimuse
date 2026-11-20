@@ -10,12 +10,17 @@ import LyrimuseCore
 @MainActor
 enum IdlePlaybackActions {
     /// 停播态该指哪家播放器:恰好一个具体播放器就用它;「自动识别」、或者多选后同时勾了两个以上
-    /// 具体播放器(没有唯一答案,跟纯 auto 归为同一类)时,用停播前最后认下来的那家
-    /// (LocalPlaybackSource 落在 UserDefaults,停播时快照已清空、只有它还记得);全新用户兜底 Apple Music。
-    static var player: PlaybackPlayer {
+    /// 具体播放器(没有唯一答案,跟纯 auto 归为同一类)时,用「上次播放」那首的播放器
+    /// (`PlaybackPlayerPreference.lastPlayedPlayerBundleID`,跟停播页显示的那首同一拍落盘,测试播放不算);全新用户兜底 Apple Music。
+    static var player: PlaybackPlayer { resolve(PlaybackPlayerPreference.lastPlayedPlayerBundleID()) }
+
+    /// 「切换到播放器」指哪家:在放时是正在放的这家(测试播放也算),停播后是最后认下来的那家(`np:lastPlayerBundleID`)。
+    /// 判据同 `player`,只是不跟「上次播放」那首走。
+    static var currentOrLastPlayer: PlaybackPlayer { resolve(UserDefaults.standard.string(forKey: "np:lastPlayerBundleID")) }
+
+    private static func resolve(_ bundleID: String?) -> PlaybackPlayer {
         if let only = PlaybackPlayerPreference.soleExplicitPlayer { return only }
-        if let bid = UserDefaults.standard.string(forKey: "np:lastPlayerBundleID"),
-           let p = PlaybackPlayer.allCases.first(where: { $0 != .auto && $0.bundleIdentifier == bid }) {
+        if let bundleID, let p = PlaybackPlayer.allCases.first(where: { $0 != .auto && $0.bundleIdentifier == bundleID }) {
             return p
         }
         return .appleMusic

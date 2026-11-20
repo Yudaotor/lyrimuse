@@ -571,8 +571,8 @@ final class LyricsSearchService {
             // 「解析决策」面板上"这个源就是你正在用的播放器"对三个都是假话,而且这一项的
             // 区分力被自己抵消掉了。详见引擎侧 match.go 里 nativeLyricSources 的注释。
             //
-            // 取值沿用 `LyricsWindowView.idlePlayer` 那条既有先例:LocalPlaybackSource 把
-            // 当前播放器 bundle id 落在这个键上(停播时快照清空、只有它还记得)。 取不到
+            // 取值读 LocalPlaybackSource 落的当前播放器 bundle id(停播时快照清空、只有它还记得;测试播放也写,
+            // 验证哪家播放器就按哪家打分。停播页读的是另一个键,见 12 章决策 103)。取不到
             // 就**不传**,引擎那边认不出会让这一项不加分 —— 宁可少加一项也不要加错。
             if let playerBundleID = UserDefaults.standard.string(forKey: "np:lastPlayerBundleID"),
                !playerBundleID.isEmpty

@@ -423,6 +423,7 @@ public final class LocalPlaybackSource: ObservableObject {
     /// 已落 UserDefaults 的「最后播放器/最后曲目」内存镜像(去重用,见 apply() 里的写点)。
     private var lastPersistedPlayerBundleID: String?
     private var lastPersistedTrackTitle: String?
+    private var lastPersistedTrackPlayerBundleID: String?
 
     /// 最近一次快照实际来自哪个播放器的 bundle id,拿不到就是 nil。给「导出诊断信息」用——
     /// 用户在设置里选的可能是"自动识别",那一档只报设置值等于什么都没说,必须同时报出
@@ -2451,15 +2452,16 @@ public final class LocalPlaybackSource: ObservableObject {
     }
 
     /// 「上次在听」这一拍写进去之前的样子(见 apply 里 np:lastTrack* 那一段)。只留最近一次。
-    private var lastTrackBeforeWrite: (key: String, title: String?, artist: String?, album: String?, playedAt: Double?,
-                                       persistedTitle: String?)?
+    private var lastTrackBeforeWrite: (key: String, title: String?, artist: String?, album: String?, player: String?,
+                                       playedAt: Double?, persistedTitle: String?, persistedPlayer: String?)?
 
     /// 晚到的广告确认:这一首刚被记成「上次在听」,撤回成写之前的那首。
     private func revertLastTrackAfterAd(key: String) {
         guard let prev = lastTrackBeforeWrite, prev.key == key else { return }
         lastTrackBeforeWrite = nil
         let defaults = UserDefaults.standard
-        for (k, v) in [("np:lastTrackTitle", prev.title), ("np:lastTrackArtist", prev.artist), ("np:lastTrackAlbum", prev.album)] {
+        for (k, v) in [("np:lastTrackTitle", prev.title), ("np:lastTrackArtist", prev.artist), ("np:lastTrackAlbum", prev.album),
+                       ("np:lastTrackPlayerBundleID", prev.player)] {
             if let v { defaults.set(v, forKey: k) } else { defaults.removeObject(forKey: k) }
         }
         if let playedAt = prev.playedAt {
@@ -2468,6 +2470,7 @@ public final class LocalPlaybackSource: ObservableObject {
             defaults.removeObject(forKey: "np:lastTrackPlayedAt")
         }
         lastPersistedTrackTitle = prev.persistedTitle
+        lastPersistedTrackPlayerBundleID = prev.persistedPlayer
         logger.notice("spotify ad confirmed late; last-played track reverted")
     }
 
@@ -4606,9 +4609,9 @@ public final class LocalPlaybackSource: ObservableObject {
         if newIsPlayingNow { pausedObservedAt = nil } else if pausedObservedAt == nil { pausedObservedAt = Date() }
         let newIsWaitingToPlay = snapshot.isWaitingToPlay == true
         if newIsWaitingToPlay != isWaitingToPlay { isWaitingToPlay = newIsWaitingToPlay }
-        // 停播欢迎态的「继续播放/打开 XX」要知道停播前在用谁、放的什么 —— 停播时快照
-        // 整个清空,这里是唯一还记得的地方(见 LyricsWindowView.idleWelcomeView)。落
-        // UserDefaults,只在值变化时写,2 秒轮询不刷盘。
+        // 当前 / 停播前最后认下来的播放器,测试播放也写:歌词管理手动搜索「与当前播放器同源」加分、「切换到播放器」读它。
+        // 停播页「继续播放 / 打开 X」读的是下面跟「上次在听」一起写的 np:lastTrackPlayerBundleID(12 章决策 103)。
+        // 落 UserDefaults,只在值变化时写,2 秒轮询不刷盘。
         let bid = snapshot.bundleIdentifier ?? ""
         if !bid.isEmpty, !newTitle.isEmpty, bid != lastPersistedPlayerBundleID, !PlaybackSimulation.isActive {
             UserDefaults.standard.set(bid, forKey: "np:lastPlayerBundleID")
@@ -4654,21 +4657,29 @@ public final class LocalPlaybackSource: ObservableObject {
         // 测试播放同样不记成「上次在听」,下面两处落盘共用这一拍的判定(见 12 章决策 102)。
         let recordsLastTrack = !newTitle.isEmpty
             && lastTrackRecordGate.allows(track: snapshot.trackKey, artist: newArtist, title: newTitle, now: Date())
-        if !newTitle.isEmpty, !adByFields, !spotifyNoticeSaysAd, !knownAdThisTrack, recordsLastTrack, newTitle != lastPersistedTrackTitle,
+        if !newTitle.isEmpty, !adByFields, !spotifyNoticeSaysAd, !knownAdThisTrack, recordsLastTrack,
+           newTitle != lastPersistedTrackTitle || (!bid.isEmpty && bid != lastPersistedTrackPlayerBundleID),
            !PlaybackSimulation.isActive {
             let defaults = UserDefaults.standard
             lastTrackBeforeWrite = (key: snapshot.trackKey,
                                     title: defaults.string(forKey: "np:lastTrackTitle"),
                                     artist: defaults.string(forKey: "np:lastTrackArtist"),
                                     album: defaults.string(forKey: "np:lastTrackAlbum"),
+                                    player: defaults.string(forKey: "np:lastTrackPlayerBundleID"),
                                     playedAt: defaults.object(forKey: "np:lastTrackPlayedAt") as? Double,
-                                    persistedTitle: lastPersistedTrackTitle)
+                                    persistedTitle: lastPersistedTrackTitle,
+                                    persistedPlayer: lastPersistedTrackPlayerBundleID)
             UserDefaults.standard.set(newTitle, forKey: "np:lastTrackTitle")
             UserDefaults.standard.set(newArtist, forKey: "np:lastTrackArtist")
             // 专辑才补上(停播页的唱片 hero 要显示「歌手 · 专辑」)。它跟着
             // 曲名一起写、不单独判变化:同一首歌的专辑不会中途变,而换歌必然触发这个分支。
             // 旧安装第一次打开新版停播页时这个键还不存在 —— 消费方按「空就只显示歌手」处理。
             UserDefaults.standard.set(newAlbum, forKey: "np:lastTrackAlbum")
+            // 这首是哪家放的,停播页「继续播放 / 打开 X」指它。只在这里跟三键一起写,两边不会一个是测试曲、一个是真歌。
+            if !bid.isEmpty {
+                UserDefaults.standard.set(bid, forKey: "np:lastTrackPlayerBundleID")
+                lastPersistedTrackPlayerBundleID = bid
+            }
             lastPersistedTrackTitle = newTitle
         }
         // 菜单栏面板停播卡的「上次播放 · 时间」:最后一次真在放这首的时刻。换歌那一拍写一次,之后在放时最多每分钟写一次。

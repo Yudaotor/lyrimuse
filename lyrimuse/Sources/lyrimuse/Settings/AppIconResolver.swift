@@ -268,11 +268,11 @@ final class AppIconCache: ObservableObject {
         }
     }
 
-    /// 启动后预热哪些播放器:勾选的具体播放器,和上次在放的那家(停播时面板、迷你窗指的就是它);都没有时 Apple Music。
+    /// 启动后预热哪些播放器:勾选的具体播放器,和「上次播放」那首的播放器(停播时面板、迷你窗指的就是它);都没有时 Apple Music。
     /// 要读 features.json,在后台调。
     nonisolated static func prefetchBundleIDs() -> [String] {
         var ids = PlaybackPlayerPreference.selected.filter { $0 != .auto }.map(\.bundleIdentifier)
-        if let last = UserDefaults.standard.string(forKey: "np:lastPlayerBundleID"), !ids.contains(last) { ids.append(last) }
+        if let last = PlaybackPlayerPreference.lastPlayedPlayerBundleID(), !ids.contains(last) { ids.append(last) }
         return ids.isEmpty ? [PlaybackPlayer.appleMusic.bundleIdentifier] : ids
     }
 
