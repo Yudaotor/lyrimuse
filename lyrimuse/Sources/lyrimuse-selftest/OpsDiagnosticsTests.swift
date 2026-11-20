@@ -1312,6 +1312,20 @@ func runOpsDiagnosticsTests() {
                      Dog.isExpected(probeSentAt: 101, nil, probeInterval: 2)],
                     [true, true, false, true, false, false, false],
                     "预期停顿: 段里投出的、开始前一拍内投出的算;段外的、没有在等的、没有预期的都不算")
+        // 调试造的停顿(14 章决策 240):停顿期间投出的探测报的卡顿算模拟的;停完收起区间,之后投出的照算真卡顿。
+        let simDog = W(probeInterval: 0.05, stallThreshold: 0.5, sampleAfter: 0.8) { _ in }
+        let simFrom = ProcessInfo.processInfo.systemUptime
+        simDog.simulateStall(seconds: 0.03, busy: true)
+        let simUntil = ProcessInfo.processInfo.systemUptime
+        expectEqual([simUntil - simFrom >= 0.03, simDog.isSimulatedProbe(sentAt: simFrom + 0.01),
+                     simDog.isSimulatedProbe(sentAt: simUntil + 0.5), simDog.isSimulatedProbe(sentAt: simFrom - 1)],
+                    [true, true, false, false],
+                    "模拟停顿: 停够时长才返回,停顿期间投出的算模拟的,停完之后、开始之前一拍以外投出的不算")
+        let sleepDog = W(probeInterval: 0.05, stallThreshold: 0.5, sampleAfter: 0.8) { _ in }
+        let sleepFrom = ProcessInfo.processInfo.systemUptime
+        sleepDog.simulateStall(seconds: 0.02)
+        expectEqual([sleepDog.isSimulatedProbe(sentAt: sleepFrom + 0.01), sleepDog.isSimulatedProbe(sentAt: sleepFrom + 1)],
+                    [true, false], "模拟停顿: 睡着停的同样标、同样收起")
         let dogSource = (try? String(contentsOf: repoRoot.appendingPathComponent("Sources/LyrimuseCore/Diagnostics/MainThreadWatchdog.swift"),
                                      encoding: .utf8)) ?? ""
         let handleBody = sourceBody("private func handle(_ event: Tracker.Event", in: dogSource)

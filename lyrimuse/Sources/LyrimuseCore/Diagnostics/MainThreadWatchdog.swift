@@ -30,9 +30,12 @@ import os
 /// 看门狗队列上读的都只问内核(线程优先级、CPU 时间、内存压力、换页次数),锁屏状态读 `ScreenLockState` 的标志位,不同步问
 /// WindowServer:WindowServer 卡住时看门狗不能跟着卡。见 14 章决策 231。
 ///
+/// 调试深链 / 启动参数故意造的停顿(`simulateStall`):这段里投出的探测照常判卡顿、记日志、采栈、记概况,概况带 `simulated`,
+/// 日志行尾带 ` (simulated)`;遥测活动不计次数,接收端统计不算。停顿区间跟 `expected` 一样按探测投出时刻认。见 14 章决策 240。
+///
 /// 一次停顿在遥测里记成哪一条,按 `noteHang` 给的回执(`HangLedger`)补时长、补标记、补调用栈,不按「最近一次」补。
 ///
-/// 状态(定时器、Tracker、上次采样时刻、预期停顿、节流读数、内存读数、卡顿回执)只在 `queue` 上读写。
+/// 状态(定时器、Tracker、上次采样时刻、预期停顿、模拟停顿、节流读数、内存读数、卡顿回执)只在 `queue` 上读写。
 public final class MainThreadWatchdog: @unchecked Sendable {
     public static let shared = MainThreadWatchdog()
 
@@ -141,7 +144,9 @@ public final class MainThreadWatchdog: @unchecked Sendable {
     /// 主线程的 mach 端口,`start()` 时记下;读节流状态和主线程 CPU 时间用。
     private var mainThread: mach_port_t?
     private let readThrottle: @Sendable (mach_port_t?) -> MainThreadThrottle.Reading
-    /// 调试深链造的读数(`simulateThrottle`),非 nil 时代替真实读数。
+    /// 调试造的停顿(`simulateStall`)的区间,结束后留着:停顿期间投出的那个探测之后才被执行到,还要靠它认出来。
+    private var simulated: ExpectedStall?
+    /// 调试造的停顿带的节流读数,非 nil 时代替真实读数。
     private var simulatedThrottle: MainThreadThrottle.Reading?
     /// 最近一次节流读数,日志里带主线程优先级用。
     private var lastThrottleReading: MainThreadThrottle.Reading?
@@ -208,9 +213,39 @@ public final class MainThreadWatchdog: @unchecked Sendable {
         queue.async { [self] in expected?.until = now }
     }
 
-    /// 调试深链用:之后的节流读数当作是 `reading`(nil = 照实读)。
-    public func simulateThrottle(_ reading: MainThreadThrottle.Reading?) {
-        queue.async { [self] in simulatedThrottle = reading }
+    /// 调试用(在主线程上调):让主线程停 `seconds` 秒,`busy` 时空转占满 CPU,否则睡着;这段里的节流读数当作 `throttle`
+    /// (nil = 照实读)。这段里投出的探测报的卡顿标成模拟的;停完、返回之前收起区间和节流读数。
+    public func simulateStall(seconds: TimeInterval, busy: Bool = false, throttle: MainThreadThrottle.Reading? = nil) {
+        let from = ProcessInfo.processInfo.systemUptime
+        queue.async { [self] in
+            simulated = ExpectedStall(from: from, reason: "simulated")
+            simulatedThrottle = throttle
+        }
+        if busy {
+            Self.spin(until: from + seconds)
+        } else {
+            Thread.sleep(forTimeInterval: seconds)
+        }
+        let until = ProcessInfo.processInfo.systemUptime
+        queue.async { [self] in
+            simulated?.until = until
+            simulatedThrottle = nil
+        }
+    }
+
+    /// 在 `sentAt` 投出的探测报的卡顿算不算模拟的(单测读)。
+    public func isSimulatedProbe(sentAt: TimeInterval) -> Bool {
+        queue.sync { isSimulated(probeSentAt: sentAt) }
+    }
+
+    private func isSimulated(probeSentAt: TimeInterval?) -> Bool {
+        Self.isExpected(probeSentAt: probeSentAt, simulated, probeInterval: interval)
+    }
+
+    private static func spin(until: TimeInterval) {
+        var counter: UInt64 = 0
+        while ProcessInfo.processInfo.systemUptime < until { counter &+= 1 }
+        _ = counter
     }
 
     /// 停掉探测(单测收尾用)。
@@ -287,17 +322,18 @@ public final class MainThreadWatchdog: @unchecked Sendable {
             let pageins = memory.pageinsExcludingSample(now: HangMemory.readPageins())
             let mainCPU = MainThreadCPU.millisecondsBetween(mainCPUAtStart, mainCPUNow)
             let memoryNote = HangMemory.logNote(pressure: memory.pressure, pageins: pageins) + MainThreadCPU.logNote(milliseconds: mainCPU)
+                + Self.simulatedLogNote(isSimulated(probeSentAt: probeSentAt))
             logger.notice("main thread: stalled for \(String(format: "%.1f", seconds), privacy: .public)s\(self.throttleNote(throttle), privacy: .public)\(memoryNote, privacy: .public)")
             // 报过 unresponsive 的那次才补时长;没卡满 sampleAfter 的不算一次卡顿。
             if tracker.reportedStill {
                 hangs.recovered(seconds: seconds, memoryPressure: memory.pressure, pageins: pageins, mainCPUMilliseconds: mainCPU)
             }
         case .stillStalled(let seconds, let throttle):
-            let context = hangContext(at: now, throttle: throttle)
+            let context = hangContext(at: now, throttle: throttle, probeSentAt: probeSentAt)
             let hang = hangs.stalled(context)
             let sample = Self.shouldSample(tookDetailSlot: hang?.detailed == true, lastSampleAt: lastSampleAt, now: now)
             let memoryNote = HangMemory.logNote(pressure: context.memoryPressure, pageins: context.pageins)
-                + MainThreadCPU.logNote(milliseconds: context.mainCPUMilliseconds)
+                + MainThreadCPU.logNote(milliseconds: context.mainCPUMilliseconds) + Self.simulatedLogNote(context.simulated == true)
             logger.error("main thread: unresponsive for \(Int(seconds), privacy: .public)s\(sample ? ", sampling its stack" : "", privacy: .public)\(self.throttleNote(throttle), privacy: .public)\(memoryNote, privacy: .public)")
             if sample {
                 lastSampleAt = now
@@ -314,8 +350,13 @@ public final class MainThreadWatchdog: @unchecked Sendable {
         tookDetailSlot || lastSampleAt.map { now - $0 >= sampleCooldown } ?? true
     }
 
+    /// 日志行尾的模拟停顿说明。
+    public static func simulatedLogNote(_ simulated: Bool) -> String {
+        simulated ? " (simulated)" : ""
+    }
+
     /// 卡住这一刻的概况(时长先记成没恢复,恢复时再补)。
-    private func hangContext(at now: TimeInterval, throttle: Set<String>) -> TelemetryHang {
+    private func hangContext(at now: TimeInterval, throttle: Set<String>, probeSentAt: TimeInterval?) -> TelemetryHang {
         TelemetryHang(sinceLaunch: TelemetryHang.elapsedBucket(seconds: now - (startedAt ?? now)),
                       sinceWake: wake.lastWakeUptime.map { TelemetryHang.elapsedBucket(seconds: now - $0) },
                       windows: TelemetryHang.windowTags(identifiers: lastWindows),
@@ -323,7 +364,8 @@ public final class MainThreadWatchdog: @unchecked Sendable {
                       throttled: throttle.isEmpty ? nil : throttle.sorted(),
                       memoryPressure: memory.pressure, pageins: memory.pageins(now: HangMemory.readPageins()),
                       mainCPUMilliseconds: MainThreadCPU.millisecondsBetween(mainCPUAtStart, MainThreadCPU.readMicroseconds(thread: mainThread)),
-                      appVersion: TelemetryHang.currentAppVersion)
+                      appVersion: TelemetryHang.currentAppVersion,
+                      simulated: isSimulated(probeSentAt: probeSentAt) ? true : nil)
     }
 
     /// 采一次主线程调用栈;`hang` 是报卡顿时拿到的回执,栈补到那一条(遥测没在记时为 nil,只写本机日志)。

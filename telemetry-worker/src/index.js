@@ -47,6 +47,8 @@ const HANG_MEMORY_PRESSURE = ["normal", "warning", "critical"];
 const MAX_HANG_PAGEINS = 10000000;
 // 停顿期间主线程用掉的 CPU 时间(毫秒)的上限,跟 Core MainThreadCPU.maxMilliseconds 一致;旧版 App 不发,列为空(14 章决策 238)。
 const MAX_HANG_MAIN_CPU_MS = 3600000;
+// 调试深链 / 启动参数故意造的停顿,概况带 simulated: true(Core TelemetryHang.simulated):照存(hang_events.simulated = 1),
+// /v1/stats 不算;App 也不把它计进活动的 hangs,所以收概况的条数上限另加上这几条(14 章决策 240)。
 // 每台每天的卡顿概况条数:没被压着的、被压着的各有名额(Core TelemetryActivity 的两个同名常量)。
 const MAX_HANG_DETAILS_PER_DAY = 3;
 const MAX_THROTTLED_HANG_DETAILS_PER_DAY = 1;
@@ -318,17 +320,19 @@ async function heartbeat(request, env) {
     // 那一天的卡顿概况整批替换(同一天重发时以新的为准)。版本取概况自己带的(记卡顿时的版本),旧版 App 不带时取这条
     // 心跳的,那样升级当天旧版记的卡顿会算到新版上;系统、芯片取心跳的。
     statements.push(env.DB.prepare(`DELETE FROM hang_events WHERE day = ?1 AND install_id = ?2`).bind(a.day, installID));
-    // 概况条数不超过当天报的卡顿次数。
-    const details = Array.isArray(a.hang_details)
-      ? a.hang_details.slice(0, Math.min(MAX_HANG_DETAILS_PER_DAY + MAX_THROTTLED_HANG_DETAILS_PER_DAY, hangs)) : [];
+    // 概况条数不超过当天报的卡顿次数加上模拟的那几条。
+    const rawDetails = Array.isArray(a.hang_details) ? a.hang_details : [];
+    const simulatedDetails = rawDetails.filter((h) => h && h.simulated === true).length;
+    const details = rawDetails.slice(0, Math.min(MAX_HANG_DETAILS_PER_DAY + MAX_THROTTLED_HANG_DETAILS_PER_DAY,
+                                                 hangs + simulatedDetails));
     details.map(cleanHang).filter(Boolean).forEach((h, seq) => statements.push(env.DB.prepare(
       `INSERT INTO hang_events (day, install_id, seq, received_at, app_version, os_version, arch, duration, since_launch,
                                 since_wake, player, windows, thermal, stack, signature, throttled, memory_pressure, pageins,
-                                main_cpu_ms)
-       VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19)`
+                                main_cpu_ms, simulated)
+       VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20)`
     ).bind(a.day, installID, seq, now, h.app_version ?? e.app_version, e.os_version, e.arch, h.duration, h.since_launch, h.since_wake,
            h.player, JSON.stringify(h.windows), h.thermal, JSON.stringify(h.stack), hangSignature(h.stack),
-           h.throttled.length ? JSON.stringify(h.throttled) : null, h.memory_pressure, h.pageins, h.main_cpu_ms)));
+           h.throttled.length ? JSON.stringify(h.throttled) : null, h.memory_pressure, h.pageins, h.main_cpu_ms, h.simulated)));
   }
   await env.DB.batch(statements);
   return json({ ok: true });
@@ -403,6 +407,8 @@ function cleanHang(h) {
     memory_pressure: oneOf(h.memory_pressure, HANG_MEMORY_PRESSURE),
     pageins: int(h.pageins, 0, MAX_HANG_PAGEINS),
     main_cpu_ms: int(h.main_cpu_ms, 0, MAX_HANG_MAIN_CPU_MS),
+    // 调试造的停顿记 1,真卡顿(含旧版 App)记空。
+    simulated: h.simulated === true ? 1 : null,
     // 记卡顿时的 App 版本;旧版 App 不发,入库时退回心跳的版本。
     app_version: str(h.app_version, 32),
   };
@@ -556,7 +562,7 @@ async function loadStatsRows(db, since) {
                        termination_reasons, exception_frames FROM crashes WHERE day >= ?1`).bind(since).all(),
     db.prepare(`SELECT day, install_id, app_version, duration, since_launch, since_wake, player, windows, thermal, stack, signature, received_at,
                        throttled, memory_pressure, pageins, main_cpu_ms
-                FROM hang_events WHERE day >= ?1`).bind(since).all(),
+                FROM hang_events WHERE day >= ?1 AND simulated IS NOT 1`).bind(since).all(),
     db.prepare(`SELECT install_id FROM excluded_installs`).all(),
   ]);
   // 每行标上安装的序号(ix,去重计数用)和是不是自己的机器(own),各份统计不再按字符串查集合。

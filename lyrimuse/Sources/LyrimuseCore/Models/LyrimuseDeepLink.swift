@@ -149,7 +149,8 @@ public enum LyrimuseDeepLink: Equatable, Sendable {
         /// `gap <毫秒> ms after [<最近一次 manager-list 动作>]`,量一个动作让主线程停了多久。
         case mainThreadGaps(on: Bool, minMs: Int? = nil)
         /// 让主线程停 `seconds` 秒(`debug/main-thread-stall?seconds=<秒>[&throttle=locked|low_priority][&busy=1]`,
-        /// 不超过 `maxMainThreadStallSeconds`):卡顿探针照真卡顿记日志、记遥测;带 `throttle` 时这段停顿里看门狗的节流读数
+        /// 不超过 `maxMainThreadStallSeconds`):卡顿探针照真卡顿记日志、采栈、记概况,概况带 `simulated`
+        /// (`MainThreadWatchdog.simulateStall`,不计卡顿次数、接收端统计不算);带 `throttle` 时这段停顿里看门狗的节流读数
         /// 当作是那一种(`MainThreadThrottle.Reading(simulating:)`),不锁屏就能验节流标记。默认睡着停(不占 CPU),
         /// `busy=1` 空转着停(占满 CPU),验概况里主线程 CPU 时间的两头。
         case mainThreadStall(seconds: Double, throttle: String?, busy: Bool = false)

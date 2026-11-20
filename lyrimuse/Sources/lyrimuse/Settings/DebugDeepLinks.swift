@@ -325,13 +325,8 @@ enum DebugDeepLinks {
             logger.notice("debug main thread gaps on=\(on, privacy: .public) min=\(minMs ?? 100, privacy: .public)")
         case let .mainThreadStall(seconds, throttle, busy):
             logger.notice("debug main thread stall seconds=\(seconds, privacy: .public) throttle=\(throttle ?? "-", privacy: .public) busy=\(busy, privacy: .public)")
-            MainThreadWatchdog.shared.simulateThrottle(throttle.flatMap(MainThreadThrottle.Reading.init(simulating:)))
-            if busy {
-                spin(seconds: seconds)
-            } else {
-                Thread.sleep(forTimeInterval: seconds)
-            }
-            MainThreadWatchdog.shared.simulateThrottle(nil)
+            MainThreadWatchdog.shared.simulateStall(seconds: seconds, busy: busy,
+                                                    throttle: throttle.flatMap(MainThreadThrottle.Reading.init(simulating:)))
         case .saveConfig:
             Task { @MainActor in
                 let ok = await ConfigStore.shared.save()
@@ -525,14 +520,6 @@ enum DebugDeepLinks {
     }
 
     /// `debug/font-family`:名单同 `LyrimuseDeepLink.fontFamilySurfaces`,两处同步改。
-    /// 主线程空转 `seconds` 秒(占满 CPU),`main-thread-stall?busy=1` 用。
-    private static func spin(seconds: TimeInterval) {
-        let until = ProcessInfo.processInfo.systemUptime + seconds
-        var counter: UInt64 = 0
-        while ProcessInfo.processInfo.systemUptime < until { counter &+= 1 }
-        _ = counter
-    }
-
     private static func setFontFamily(surface: String, family: String) {
         let s = AppSettings.shared
         switch surface {
@@ -1188,7 +1175,7 @@ extension DebugDeepLinks {
 
 /// 启动参数 `--debug-launch-stall=<秒>`:看门狗起来之后、遥测服务启动之前让主线程停这么久(不超过
 /// `DebugCommand.maxMainThreadStallSeconds`),验启动阶段的卡顿记账;深链要等启动走完才处理,够不着这一段。
-/// 跟深链一样只在本机偏好 `debug:deepLinks` 为真时生效。见 14 章决策 232。
+/// 跟深链一样只在本机偏好 `debug:deepLinks` 为真时生效;这段卡顿跟深链造的一样标成模拟的。见 14 章决策 232。
 @MainActor
 enum DebugLaunchStall {
     static let argumentPrefix = "--debug-launch-stall="
@@ -1200,7 +1187,7 @@ enum DebugLaunchStall {
               UserDefaults.standard.bool(forKey: DebugDeepLinks.enabledKey) else { return }
         Logger(subsystem: LyrimuseIdentity.logSubsystem, category: "debug")
             .notice("debug launch stall seconds=\(seconds, privacy: .public)")
-        Thread.sleep(forTimeInterval: seconds)
+        MainThreadWatchdog.shared.simulateStall(seconds: seconds)
     }
 }
 

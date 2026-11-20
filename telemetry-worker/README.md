@@ -72,6 +72,12 @@ Each hang summary also carries how much CPU time the main thread used during the
 npx wrangler d1 execute lyrimuse-telemetry --remote --command "ALTER TABLE hang_events ADD COLUMN main_cpu_ms INTEGER"
 ```
 
+Stalls started on purpose from a debug link (`debug/main-thread-stall`) or the `--debug-launch-stall` launch argument carry `simulated: true` in their hang summary. The app doesn't count them in the day's `hangs`; the Worker still stores the summary (`hang_events.simulated = 1`) but `/v1/stats` leaves it out. Added once before deploying:
+
+```sh
+npx wrangler d1 execute lyrimuse-telemetry --remote --command "ALTER TABLE hang_events ADD COLUMN simulated INTEGER"
+```
+
 `activity.lyric_sources` counts, per day, which lyric source the shown lyrics came from for each word-synced, line-synced or plain-text song (keys like `netease:line`, sources and tiers from a fixed list). `/v1/stats` returns it as `lyric_sources`. Added once before deploying:
 
 ```sh

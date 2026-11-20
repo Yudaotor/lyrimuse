@@ -89,6 +89,8 @@ CREATE TABLE IF NOT EXISTS hang_events (
                          -- 旧库:ALTER TABLE hang_events ADD COLUMN pageins INTEGER
   main_cpu_ms  INTEGER,  -- 停顿期间主线程用掉的 CPU 时间(毫秒);旧版 App、读不到为空。
                          -- 旧库:ALTER TABLE hang_events ADD COLUMN main_cpu_ms INTEGER
+  simulated    INTEGER,  -- 调试深链 / 启动参数故意造的停顿为 1,统计不算;真卡顿、旧版 App 为空。
+                         -- 旧库:ALTER TABLE hang_events ADD COLUMN simulated INTEGER
   PRIMARY KEY (day, install_id, seq)
 );
 CREATE INDEX IF NOT EXISTS hang_events_day ON hang_events(day);

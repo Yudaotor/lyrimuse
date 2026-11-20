@@ -56,7 +56,7 @@ public final class TelemetryActivity: @unchecked Sendable {
     private var trusted: Set<String> = []
     /// 上一次记下的播放器,同一个播放器连着报不重复写盘。
     private var lastPlayer: (day: String, tag: String)?
-    /// 最近几次卡顿(按 `HangTicket.serial`)记在哪一天、概况是第几条(没占到名额为 nil)、算没算进被压着的次数:
+    /// 最近几次卡顿(按 `HangTicket.serial`)记在哪一天、概况是第几条(没占到名额为 nil)、算没算进被压着的次数、是不是模拟的:
     /// 恢复时补时长、采样完补调用栈、后来才看到被压着时补标记,按回执找到它。只在内存里,留最近 `maxOpenHangs` 次。
     private var openHangs: [Int: OpenHang] = [:]
     private var hangSerial = 0
@@ -66,6 +66,7 @@ public final class TelemetryActivity: @unchecked Sendable {
         var day: String
         var index: Int?
         var throttled: Bool
+        var simulated: Bool
     }
     /// 今天记过歌词结果的歌(曲目键 → 记下的那一笔)。只在内存里,不写盘、不上报;换天清空。
     private var lyricsNoted: (day: String, songs: [String: LyricsNote]) = ("", [:])
@@ -174,7 +175,8 @@ public final class TelemetryActivity: @unchecked Sendable {
     }
 
     /// 主线程卡住一次。`detail` 带了 `throttled` 的同时记进被压着的次数。`detail` 给了且当天同一类(被压着 / 没被压着)
-    /// 还有名额,记下概况(播放器填最近一次放歌的那个)。返回回执,之后的 `finishHang` / `attachHangStack` /
+    /// 还有名额,记下概况(播放器填最近一次放歌的那个)。`detail` 带 `simulated`(调试造的停顿)时只记概况、
+    /// 不计进 `hangs` / `throttledHangs`,后补节流标记时同样不计。返回回执,之后的 `finishHang` / `attachHangStack` /
     /// `markHangThrottled` 带着它补到这一次;遥测关着时不记、返回 nil。
     /// 没占到概况名额、只加次数的(锁屏一夜被压着的那一串)攒到 `deferredWriteDelay` 后写一次。
     @discardableResult
@@ -183,19 +185,22 @@ public final class TelemetryActivity: @unchecked Sendable {
         return lock.withLock {
             guard recording != .off else { return nil }
             let throttled = detail?.throttled != nil
+            let simulated = detail?.simulated == true
             let takesSlot = detail != nil
                 && Self.hasDetailSlot(load().first { $0.day == day }?.hangDetails ?? [], throttled: throttled)
             var index: Int?
             update(day: day, deferWrite: !takesSlot) { d in
-                d.hangs = min(d.hangs + 1, Self.maxCount)
-                if throttled { d.throttledHangs = min(d.throttledHangs + 1, d.hangs) }
+                if !simulated {
+                    d.hangs = min(d.hangs + 1, Self.maxCount)
+                    if throttled { d.throttledHangs = min(d.throttledHangs + 1, d.hangs) }
+                }
                 guard takesSlot, var detail else { return }
                 if detail.player == nil { detail.player = lastPlayer?.tag }
                 d.hangDetails.append(detail)
                 index = d.hangDetails.count - 1
             }
             hangSerial += 1
-            openHangs[hangSerial] = OpenHang(day: day, index: index, throttled: throttled)
+            openHangs[hangSerial] = OpenHang(day: day, index: index, throttled: throttled, simulated: simulated)
             if openHangs.count > Self.maxOpenHangs, let oldest = openHangs.keys.min() { openHangs[oldest] = nil }
             return HangTicket(day: day, serial: hangSerial, detailed: index != nil)
         }
@@ -217,7 +222,7 @@ public final class TelemetryActivity: @unchecked Sendable {
             var days = load()
             guard let i = days.firstIndex(where: { $0.day == open.day }) else { return }
             let before = days[i]
-            if !open.throttled { days[i].throttledHangs = min(days[i].throttledHangs + 1, days[i].hangs) }
+            if !open.throttled && !open.simulated { days[i].throttledHangs = min(days[i].throttledHangs + 1, days[i].hangs) }
             if let index = open.index, index < days[i].hangDetails.count { days[i].hangDetails[index].throttled = reasons }
             openHangs[hang.serial]?.throttled = true
             if days[i] != before { store(days) }

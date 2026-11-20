@@ -736,8 +736,8 @@ func runTelemetryTests() {
         let oldDay = try? JSONDecoder().decode(TelemetryActivityDay.self, from: Data(old.utf8))
         expectEqual([oldDay?.hangDetails.count, oldDay?.throttledHangs], [0, 0], "记账: 旧版本存下的活动没有概况、没有被压着的次数")
         let oldHang = #"{"duration":"5-10s","since_launch":"<1m","windows":[],"thermal":"nominal","stack":[]}"#
-        expectEqual((try? JSONDecoder().decode(H.self, from: Data(oldHang.utf8))).map { $0.throttled == nil }, true,
-                    "记账: 旧版本存下的概况没有节流标记")
+        expectEqual((try? JSONDecoder().decode(H.self, from: Data(oldHang.utf8))).map { $0.throttled == nil && $0.simulated == nil }, true,
+                    "记账: 旧版本存下的概况没有节流标记、不算模拟的")
         expectEqual((try? JSONDecoder().decode(H.self, from: Data(oldHang.utf8)))
                         .map { [$0.memoryPressure, $0.pageins.map(String.init), $0.mainCPUMilliseconds.map(String.init)] },
                     [nil, nil, nil], "记账: 旧版本存下的概况没有内存压力、换页次数和主线程 CPU 时间")
@@ -786,10 +786,32 @@ func runTelemetryTests() {
         cpuLedger.recovered(seconds: 8, memoryPressure: nil, pageins: nil, mainCPUMilliseconds: 12)
         expectEqual(memoryActivity.completedDays(before: d2).first?.hangDetails.first?.mainCPUMilliseconds, 12,
                     "CPU 记账: 看门狗的回执把恢复时的 CPU 时间补到那一条")
+        // 调试造的停顿(14 章决策 240):概况照记、带 simulated,不计进卡顿次数和被压着的次数(后补节流标记也不计)。
+        memoryActivity.clear()
+        var simulatedHang = base
+        simulatedHang.simulated = true
+        simulatedHang.throttled = [MainThreadThrottle.locked]
+        _ = memoryActivity.noteHang(base, now: day1)
+        var simLedger = HangLedger(activity: memoryActivity)
+        let simTicket = simLedger.stalled(simulatedHang, now: day1)
+        simLedger.throttled([MainThreadThrottle.locked, MainThreadThrottle.lowPriority])
+        simLedger.recovered(seconds: 7, memoryPressure: nil, pageins: nil, mainCPUMilliseconds: 6)
+        var lateSimulated = base
+        lateSimulated.simulated = true
+        var lateLedger = HangLedger(activity: memoryActivity)
+        _ = lateLedger.stalled(lateSimulated, now: day1)
+        lateLedger.throttled([MainThreadThrottle.locked])
+        let simDay = memoryActivity.completedDays(before: d2).first
+        expectEqual([simTicket?.detailed == true, simDay?.hangs == 1, simDay?.throttledHangs == 0,
+                     simDay?.hangDetails.map { $0.simulated == true } == [false, true, true],
+                     simDay?.hangDetails.dropFirst().first?.duration == "5-10s"],
+                    [true, true, true, true, true],
+                    "模拟卡顿: 概况照记(带 simulated、照补时长),卡顿次数只算真卡顿,被压着的次数不算模拟的(含后补的)")
         tight.mainCPUMilliseconds = 6_100
+        tight.simulated = true
         let memoryRoundTrip = TelemetryActivityDay(day: "2026-11-18", hangs: 1, hangDetails: [tight])
         expectEqual((try? JSONEncoder().encode(memoryRoundTrip)).flatMap { try? JSONDecoder().decode(TelemetryActivityDay.self, from: $0) },
-                    memoryRoundTrip, "内存记账: 内存压力、换页次数和主线程 CPU 时间能存能读")
+                    memoryRoundTrip, "内存记账: 内存压力、换页次数、主线程 CPU 时间和模拟标记能存能读")
         memoryActivity.clear()
         memoryActivity.waitForPendingWrites()
 
@@ -1097,6 +1119,15 @@ func runTelemetryTests() {
         versionedHang.appVersion = "1.14.0"
         expectEqual(Set(keys(versionedHang)).subtracting(keys(hang)).sorted(), ["app_version"],
                     "卡顿概况: 带记卡顿时的版本 app_version,取不到时不带")
+        var simulatedKeyHang = hang
+        simulatedKeyHang.simulated = true
+        expectEqual(Set(keys(simulatedKeyHang)).subtracting(keys(hang)).sorted(), ["simulated"],
+                    "卡顿概况: 调试造的停顿带 simulated,真卡顿不带")
+        expectEqual(sourceHas(worker, "simulated: h.simulated === true ? 1 : null,")
+                        && sourceHas(worker, "FROM hang_events WHERE day >= ?1 AND simulated IS NOT 1")
+                        && sourceHas(worker, "h.memory_pressure, h.pageins, h.main_cpu_ms, h.simulated)));")
+                        && sourceHas(worker, "hangs + simulatedDetails));"),
+                    true, "Worker: 模拟的卡顿概况照存(simulated = 1),统计读概况时跳过")
         expectEqual(sourceHas(worker, "app_version: str(h.app_version, 32),") && sourceHas(worker, "h.app_version ?? e.app_version"), true,
                     "Worker: 卡顿概况的版本先取概况自己带的,旧版 App 不带时退回心跳的")
         expectEqual(sourceHas(worker, "return quotaIPKey(request.headers.get(\"cf-connecting-ip\"));")
@@ -1127,7 +1158,7 @@ func runTelemetryTests() {
                     true, "Worker: 内存压力档位(从松到紧)、换页次数上限跟 Core 一致")
         expectEqual(worker.contains("const MAX_HANG_MAIN_CPU_MS = \(MainThreadCPU.maxMilliseconds);")
                         && sourceHas(worker, "main_cpu_ms: int(h.main_cpu_ms, 0, MAX_HANG_MAIN_CPU_MS),")
-                        && sourceHas(worker, "h.memory_pressure, h.pageins, h.main_cpu_ms)));"),
+                        && sourceHas(worker, "h.memory_pressure, h.pageins, h.main_cpu_ms, h.simulated)));"),
                     true, "Worker: 主线程 CPU 时间按毫秒收 0~上限的整数(上限跟 Core 一致),入库")
         expectEqual(worker.contains("const MAX_HANG_DETAILS_PER_DAY = \(TelemetryActivity.maxHangDetailsPerDay);")
                         && worker.contains("const MAX_THROTTLED_HANG_DETAILS_PER_DAY = \(TelemetryActivity.maxThrottledHangDetailsPerDay);"),
@@ -1233,13 +1264,22 @@ func runTelemetryTests() {
                     true, "接线: 换歌、换播放器都记一笔(连着几天用同一个播放器也每天记到)")
         let watchdog = sourceText("LyrimuseCore/Diagnostics/MainThreadWatchdog.swift")
         let handleBody = sourceBody("private func handle(", in: watchdog)
-        expectEqual(sourceHas(handleBody, "let context = hangContext(at: now, throttle: throttle)")
+        expectEqual(sourceHas(handleBody, "let context = hangContext(at: now, throttle: throttle, probeSentAt: probeSentAt)")
                         && sourceHas(handleBody, "let hang = hangs.stalled(context)")
                         && sourceHas(handleBody, "hangs.recovered(seconds: seconds, memoryPressure: memory.pressure, pageins: pageins, mainCPUMilliseconds: mainCPU)")
                         && sourceHas(sourceBody("case .recovered(let seconds, let throttle):", in: handleBody), "if tracker.reportedStill {")
                         && sourceHas(handleBody, "hangs.throttled(throttle.sorted())")
                         && sourceHas(watchdog, "private var hangs = HangLedger(activity: .shared)"),
                     true, "接线: 主线程卡住记一笔概况(带节流标记),恢复时补时长(没卡满的不补),卡住之后才被压着的补标记,都按回执补")
+        // 调试造的停顿(14 章决策 240):概况按探测投出时刻认模拟的,日志带说明;深链和启动参数都走 simulateStall。
+        let debugLinks = sourceText("lyrimuse/Settings/DebugDeepLinks.swift")
+        expectEqual(sourceHas(sourceBody("private func hangContext(", in: watchdog), "simulated: isSimulated(probeSentAt: probeSentAt) ? true : nil)")
+                        && sourceHas(handleBody, "+ Self.simulatedLogNote(context.simulated == true)")
+                        && sourceHas(handleBody, "+ Self.simulatedLogNote(isSimulated(probeSentAt: probeSentAt))")
+                        && sourceHas(debugLinks, "MainThreadWatchdog.shared.simulateStall(seconds: seconds, busy: busy,")
+                        && sourceHas(sourceBody("static func runIfRequested(", in: debugLinks), "MainThreadWatchdog.shared.simulateStall(seconds: seconds)")
+                        && !debugLinks.contains("Thread.sleep(forTimeInterval: seconds)"),
+                    true, "接线: 调试造的停顿走 simulateStall,概况带 simulated、日志带说明")
         let tickBody = sourceBody("private func tick()", in: watchdog)
         let answerBody = sourceBody("private func takeAnswer()", in: watchdog)
         let takeAnswerAt = tickBody.range(of: "takeAnswer()")

@@ -29,10 +29,14 @@ public struct TelemetryHang: Codable, Equatable, Sendable {
     /// 记这一条时的 App 版本(`CFBundleShortVersionString`)。心跳带的是发出时的版本,升级当天旧版记的卡顿要按这一项归版本;
     /// 取不到为 nil,编码时不带这个键,接收端退回心跳的版本。
     public var appVersion: String?
+    /// 调试深链 / 启动参数故意造的停顿(`MainThreadWatchdog.simulateStall`)为 true:接收端照存,统计不算,
+    /// 当天活动也不计进卡顿次数。真卡顿为 nil,编码时不带这个键。
+    public var simulated: Bool?
 
     public init(duration: String = TelemetryHang.unrecovered, sinceLaunch: String, sinceWake: String?, player: String? = nil,
                 windows: [String], thermal: String, stack: [TelemetryCrash.Frame] = [], throttled: [String]? = nil,
-                memoryPressure: String? = nil, pageins: Int? = nil, mainCPUMilliseconds: Int? = nil, appVersion: String? = nil) {
+                memoryPressure: String? = nil, pageins: Int? = nil, mainCPUMilliseconds: Int? = nil, appVersion: String? = nil,
+                simulated: Bool? = nil) {
         self.duration = duration
         self.sinceLaunch = sinceLaunch
         self.sinceWake = sinceWake
@@ -45,11 +49,13 @@ public struct TelemetryHang: Codable, Equatable, Sendable {
         self.pageins = pageins
         self.mainCPUMilliseconds = mainCPUMilliseconds
         self.appVersion = appVersion
+        self.simulated = simulated
     }
 
     enum CodingKeys: String, CodingKey {
         case duration, sinceLaunch = "since_launch", sinceWake = "since_wake", player, windows, thermal, stack, throttled
         case memoryPressure = "memory_pressure", pageins, mainCPUMilliseconds = "main_cpu_ms", appVersion = "app_version"
+        case simulated
     }
 
     public static let unrecovered = "unrecovered"
