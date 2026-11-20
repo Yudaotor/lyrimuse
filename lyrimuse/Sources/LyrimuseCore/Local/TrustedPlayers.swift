@@ -50,6 +50,8 @@ public enum TrustedPlayers {
     /// "配对浏览器"这个动作(一步自动信任+配对),用户没有理由因为没勾自动识别就让配对
     /// 形同虚设。引擎侧对应的是 `isTrustedPlayerBundleID`(署名纠正、上报标签用),判法要一致;
     /// 别名表两侧都由 shared/players.json 生成。
+    ///
+    /// 登记过平台的浏览器网页应用(`BrowserWebApp.platformID(of:)` 非 nil)不用手动信任,这里一律算信任。
     public static func isTrusted(_ bundleID: String?) -> Bool {
         isTrusted(bundleID, trusted: current)
     }
@@ -59,6 +61,7 @@ public enum TrustedPlayers {
     public static func isTrusted(_ bundleID: String?, trusted: [String: String]) -> Bool {
         guard let bundleID, !bundleID.isEmpty else { return false }
         if trusted[bundleID] != nil { return true }
+        if BrowserWebApp.platformID(of: bundleID) != nil { return true }
         if let owner = mediaProxyOwner(of: bundleID), trusted[owner] != nil { return true }
         return false
     }
@@ -106,9 +109,11 @@ public enum TrustedPlayers {
     /// **只登记实测见过的**。`com.apple.WebKit.WebContent` 这类同族进程没有实测到它报过
     /// Now Playing,不凭猜测往里加 —— 真遇到了在 shared/players.json 的 mediaProxyOwners 里补一行、
     /// 重新生成就行,其余逻辑不用动。
+    ///
+    /// 表里查不到时再认登记过平台的浏览器网页应用:壳只是启动器,页面在宿主浏览器里,同样换成宿主(`BrowserWebApp.host(of:)`)。
     public static func mediaProxyOwner(of bundleID: String?) -> String? {
         guard let bundleID else { return nil }
-        return mediaProxyOwners[bundleID]
+        return mediaProxyOwners[bundleID] ?? BrowserWebApp.host(of: bundleID)
     }
 
     /// 一条来自**信任的未知播放器**的播放,歌手名**或专辑名**是空的 → 判成"这不是一首歌",

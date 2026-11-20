@@ -261,3 +261,17 @@ var playerSubtitlesInArtist = map[string]bool{
 var mediaProxyOwners = map[string]string{
 	"com.apple.WebKit.GPU": "com.apple.Safari",
 }
+
+// browserWebAppPlatforms 是「Chromium 网页应用的应用 id → 网页平台 id」:Chrome / Edge / Brave 安装为 App 的
+// YouTube Music、Spotify 报 Now Playing 用的是壳的 bundle id,拆法见 browserwebapp.go。
+// Swift 侧 BrowserWebApp.platformByAppID 同源。
+var browserWebAppPlatforms = map[string]string{
+	"cinhimbnkkaeohfgghhklpknlkffjgod": "youtubeMusic",
+	"pjibgclleladliembfgfagdaldikeohf": "spotifyWeb",
+}
+
+// browserWebAppScrobbleLabels 是这些网页应用提交给 ListenBrainz 的 media_player。
+var browserWebAppScrobbleLabels = map[string]string{
+	"cinhimbnkkaeohfgghhklpknlkffjgod": "YouTube Music (macOS)",
+	"pjibgclleladliembfgfagdaldikeohf": "Spotify Web (macOS)",
+}

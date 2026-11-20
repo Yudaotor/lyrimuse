@@ -87,11 +87,8 @@ var spotifyWebQueueScript = func(bundleID string) (appQueryTracks, bool) {
 
 // spotifyWebUpcoming 是 browserUpcoming 的一路,规则见文件头注。
 func spotifyWebUpcoming(artist, title, bundleID string, n int) browserQueueResult {
-	target := bundleID
-	if owner, ok := mediaProxyOwners[bundleID]; ok {
-		target = owner
-	}
-	if !browserPlatformPaired(browserPlatformSpotifyWeb, target) {
+	target, paired := browserQueueTarget(browserPlatformSpotifyWeb, bundleID)
+	if !paired {
 		return browserQueueResult{}
 	}
 	r, ok := spotifyWebQueueScript(target)

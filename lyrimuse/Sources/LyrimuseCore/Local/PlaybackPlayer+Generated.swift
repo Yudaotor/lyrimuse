@@ -303,3 +303,12 @@ extension TrustedPlayers {
         "com.apple.WebKit.GPU": "com.apple.Safari",
     ]
 }
+
+extension BrowserWebApp {
+    /// 「Chromium 网页应用的应用 id → 网页平台 id」:只有登记在这里的网页应用默认就认(拆法见 `parse(_:)`)。
+    /// Go 侧 browserWebAppPlatforms 同源。
+    public static let platformByAppID: [String: String] = [
+        "cinhimbnkkaeohfgghhklpknlkffjgod": "youtubeMusic",
+        "pjibgclleladliembfgfagdaldikeohf": "spotifyWeb",
+    ]
+}

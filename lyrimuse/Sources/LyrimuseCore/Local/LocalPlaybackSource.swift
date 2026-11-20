@@ -4602,8 +4602,7 @@ public final class LocalPlaybackSource: ObservableObject {
         // YT Music 的广告会走到这里(为了让 UI 能显示「广告中」,见 YouTubeMusicAdProbe.Gate.acceptAsAd),所以这道保护要在这里做。
         // 判定语义见下面 isCurrentTrackAdBreak 那一段。
         let isSpotifyNative = snapshot.bundleIdentifier == PlaybackPlayer.spotify.bundleIdentifier
-        let resolvedBundleID = BrowserPositionProbe.probeTargetBundleID(forReported: snapshot.bundleIdentifier)
-        let isSpotifyWeb = BrowserPositionProbe.shared.isPaired(bundleID: resolvedBundleID, platformID: "spotifyWeb")
+        let isSpotifyWeb = BrowserPositionProbe.shared.isPaired(bundleID: snapshot.bundleIdentifier, platformID: "spotifyWeb")
         // YouTube Music 网页版的广告:它的字段形状跟"真歌但没报专辑名"分不开
         // (广告的 artist 是**广告主频道名**、非空,album 空),所以下面那套 adByFields 启发式
         // 对它无效 —— 判据只能来自页面本身。这里读的正是 MediaControlClient 刚用过的同一份

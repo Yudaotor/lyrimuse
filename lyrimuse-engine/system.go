@@ -23,10 +23,14 @@ func isKnownPlayerBundleID(bundleID string) bool {
 }
 
 // isTrustedPlayerBundleID 只回答"信任"这一半(不含内置播放器),跟 Swift 侧 TrustedPlayers.isTrusted 同一套判法:
-// 先查本体,再按 mediaProxyOwners(生成自 shared/players.json)换成宿主查。信任播放器的署名纠正用它。
+// 先查本体,登记过平台的浏览器网页应用一律算信任(browserwebapp.go),再按 mediaProxyOwners(生成自 shared/players.json)
+// 换成宿主查。信任播放器的署名纠正用它。
 // 这一拍算不算数不在这里判:App 只把它认下的播放器写进播放状态(见 poller.isTracked)。
 func isTrustedPlayerBundleID(bundleID string) bool {
 	if _, trusted := features().TrustedPlayers[bundleID]; trusted {
+		return true
+	}
+	if _, _, _, ok := knownBrowserWebApp(bundleID); ok {
 		return true
 	}
 	// Safari 的媒体进程按它的宿主算,见 mediaProxyOwners。
@@ -49,6 +53,10 @@ const mediaPlayerLabelIPhone = "Apple Music (iOS)"
 func mediaPlayerLabel(bundleID string) string {
 	// 内置播放器的标签表在 players_generated.go(生成自 shared/players.json)。
 	if label, ok := playerScrobbleLabels[bundleID]; ok {
+		return label
+	}
+	// 登记过平台的浏览器网页应用报它自己那个平台(同一张表)。
+	if _, _, label, ok := knownBrowserWebApp(bundleID); ok {
 		return label
 	}
 	// 用户信任的未知播放器:用它自己的 App 名(Swift 侧反查后写进共享文件),

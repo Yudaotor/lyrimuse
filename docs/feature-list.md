@@ -666,7 +666,7 @@ Apple Music, Spotify, QQ Music, NetEase Cloud Music, Kugou, Kuwo, Soda Music, LX
 
 ### YouTube Music and Spotify Web in your browser
 
-Pair your browser once and music playing in it gets lyrics too, following the page's own progress. A one-click check tells you first whether that browser can be controlled. During ads the notch shows the time left and which ad it is.
+Pair your browser once and music playing in it gets lyrics too, following the page's own progress. A one-click check tells you first whether that browser can be controlled. During ads the notch shows the time left and which ad it is. YouTube Music and Spotify installed as apps from Chrome are recognized without pairing.
 
 - Off by default
 - Settings: Player › Web

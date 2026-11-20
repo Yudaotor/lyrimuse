@@ -439,7 +439,7 @@ private func wiringContracts() {
     // 网页平台探针只对配对过的浏览器跑:App 侧 YouTube Music 广告探针的入口 + 配对关系镜像给引擎。
     let ytAd = code("LyrimuseCore/Local/YouTubeMusicAdProbe.swift")
     let kick = sourceBody("public func kickIfNeeded(bundleIdentifier: String?, key: String, title: String?, playing: Bool) {", in: ytAd)
-    expectEqual(before("BrowserPositionProbe.shared.isPaired(bundleID: hostBundleID, platformID: \"youtubeMusic\")", "inFlightKey = key", in: kick), true,
+    expectEqual(before("BrowserPositionProbe.shared.isPaired(bundleID: bundleIdentifier, platformID: \"youtubeMusic\")", "inFlightKey = key", in: kick), true,
                 "网页探针配对: YouTube Music 广告探针没配对就不发起")
     // 只认页面上放着这一首的标签页:三处调用点都带上标题和在不在放,网页版控制的目标带上标题(02 章决策 150)。
     expectEqual(kick.contains("title: title ?? \"\", playing: playing)")

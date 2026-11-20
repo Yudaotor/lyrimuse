@@ -47,7 +47,7 @@ func resolveBrowserPlatformPairs(raw map[string][]string) map[string]map[string]
 }
 
 // browserPlatformPaired:这个浏览器配对过这个平台没有。host 是浏览器本体的 bundle id —— Safari 报的媒体代理进程
-// 要先换回宿主(调用方都已经按 mediaProxyOwners 换过),配对记的是宿主。
+// 要先换回宿主(调用方经 browserQueueTarget 换过),配对记的是宿主。
 func browserPlatformPaired(platformID, host string) bool {
 	pairs := features().BrowserPlatformPairs
 	if pairs == nil {

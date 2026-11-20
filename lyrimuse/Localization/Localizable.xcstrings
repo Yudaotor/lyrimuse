@@ -315074,6 +315074,208 @@
           }
         }
       }
+    },
+    "此浏览器中安装的网页 App 已自动识别，无需配对" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aus diesem Browser installierte Web-Apps werden automatisch erkannt, Koppeln ist nicht nötig"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Web apps installed from this browser are recognized automatically, no pairing needed"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Las apps web instaladas desde este navegador se reconocen automáticamente, sin necesidad de vincularlo"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Les apps web installées depuis ce navigateur sont reconnues automatiquement, sans jumelage"
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "इस ब्राउज़र से इंस्टॉल किए गए वेब ऐप अपने-आप पहचाने जाते हैं, पेयर करने की ज़रूरत नहीं"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Le app web installate da questo browser vengono riconosciute automaticamente, senza abbinamento"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "このブラウザでインストールしたWebアプリは自動的に認識されるため、ペアリングは不要です"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "이 브라우저에서 설치한 웹 앱은 자동으로 인식되므로 페어링할 필요가 없습니다"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Apps da web instalados por este navegador são reconhecidos automaticamente, sem precisar parear"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Веб-приложения, установленные из этого браузера, распознаются автоматически, подключать его не нужно"
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "เว็บแอปที่ติดตั้งจากเบราว์เซอร์นี้จะได้รับการจดจำโดยอัตโนมัติ ไม่ต้องจับคู่"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bu tarayıcıdan yüklenen web uygulamaları otomatik olarak tanınır, eşlemeye gerek yoktur"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Вебзастосунки, встановлені з цього браузера, розпізнаються автоматично, підʼєднувати його не потрібно"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ứng dụng web cài từ trình duyệt này được nhận diện tự động, không cần ghép đôi"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "此浏览器中安装的网页 App 已自动识别，无需配对"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "此瀏覽器中安裝的網頁 App 已自動辨識，無需配對"
+          }
+        }
+      }
+    },
+    "已配置，点按可查看" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Konfiguriert – klicke zum Prüfen"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Configured — click to review"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Configurado: haz clic para revisar"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Configuré : cliquez pour voir"
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "कॉन्फ़िगर है, देखने के लिए क्लिक करें"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Configurato: fai clic per vedere"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "設定済みです。クリックすると確認できます"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "설정되어 있습니다. 클릭하여 확인할 수 있습니다"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Configurado; clique para revisar"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Настроено — нажмите, чтобы просмотреть"
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "กำหนดค่าแล้ว คลิกเพื่อดู"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Yapılandırıldı, görmek için tıklayın"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Налаштовано — натисніть, щоб переглянути"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Đã thiết lập, bấm để xem"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已配置，点按可查看"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已設定，按一下可查看"
+          }
+        }
+      }
     }
   },
   "version" : "1.0"

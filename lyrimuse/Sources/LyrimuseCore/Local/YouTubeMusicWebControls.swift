@@ -193,13 +193,14 @@ public enum YouTubeMusicWebControls {
     }
 
     /// 当前这条播放要不要走这里:播放器是浏览器、认出来在放 YouTube Music、这个浏览器配对过它,而且有标题可比。
+    /// `isPaired` 收的是报上来的原值(网页应用算配对了自己那个平台,见 `BrowserPositionProbe.isPaired`),脚本发给宿主。
     public static func target(reportedBundleID: String?, webPlatformID: String?, title: String?,
                               isPaired: (String) -> Bool) -> Target? {
         let title = (title ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
-        guard webPlatformID == platformID, !title.isEmpty,
+        guard webPlatformID == platformID, !title.isEmpty, let reportedBundleID,
               let host = BrowserPositionProbe.probeTargetBundleID(forReported: reportedBundleID), !host.isEmpty,
               let family = BrowserAutomationPermission.family(forBundleID: host),
-              isPaired(host) else { return nil }
+              isPaired(reportedBundleID) else { return nil }
         return Target(bundleID: host, family: family, title: title)
     }
 

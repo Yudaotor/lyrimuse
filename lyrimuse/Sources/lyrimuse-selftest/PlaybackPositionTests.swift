@@ -2428,7 +2428,28 @@ func runPlaybackPositionTests() {
                     "浏览器歌词同步: 没配对过的浏览器不算配对")
         expectEqual(probe.isPaired(bundleID: nil, platformID: "spotifyWeb"), false,
                     "浏览器歌词同步: nil bundle id 不算配对")
+        expectEqual(probe.isPaired(bundleID: "com.apple.WebKit.GPU", platformID: "spotifyWeb"), true,
+                    "浏览器歌词同步: 传报上来的原值也行,Safari 的媒体进程在里面换成 Safari")
+        // 浏览器网页应用:只算配对了它自己那个平台,不看宿主浏览器的配对(02 章决策 284)。
+        let ytmApp = "com.google.Chrome.app.cinhimbnkkaeohfgghhklpknlkffjgod"
+        let spApp = "com.google.Chrome.app.Profile-1-pjibgclleladliembfgfagdaldikeohf"
+        let unknownApp = "com.google.Chrome.app.abcdefghijklmnopabcdefghijklmnop"
+        probe.platformBrowserPairs = ["spotifyWeb": ["com.google.Chrome"]]
+        expectEqual(probe.isPaired(bundleID: ytmApp, platformID: "youtubeMusic"), true,
+                    "网页应用: YouTube Music 网页应用不用配对")
+        expectEqual(probe.isPaired(bundleID: ytmApp, platformID: "spotifyWeb"), false,
+                    "网页应用: 宿主 Chrome 配了 Spotify,不等于 YouTube Music 网页应用在放 Spotify")
+        expectEqual(probe.isPaired(bundleID: spApp, platformID: "spotifyWeb"), true, "网页应用: 带个人资料前缀的 Spotify")
+        expectEqual(probe.isPaired(bundleID: unknownApp, platformID: "spotifyWeb"), false,
+                    "网页应用: 没登记的网页应用不借宿主浏览器的配对")
+        expectEqual(probe.playingPlatformID(forBundleID: ytmApp), "youtubeMusic", "网页应用: 角标直接是它的平台")
+        expectEqual(probe.playingPlatformID(forBundleID: unknownApp), nil, "网页应用: 没登记的没有平台")
         probe.platformBrowserPairs = [:]
+        expectEqual(probe.playingPlatformID(forBundleID: spApp), "spotifyWeb", "网页应用: 一个配对都没有也认得出平台")
+        let webAppKey = "selftest-webapp-\(UUID().uuidString)"
+        probe.kickIfNeeded(bundleIdentifier: unknownApp, key: webAppKey, expectedDuration: 240)
+        expectEqual(probe.probeAttempts(forKey: webAppKey), 0, "网页应用: 没登记的网页应用不探")
+        probe.trackChanged()
     }
 
     // ---- 来源角标:浏览器在放哪个网页音乐平台 ----
@@ -2527,8 +2548,12 @@ func runPlaybackPositionTests() {
         // Safari 上报 com.apple.WebKit.GPU:翻标签页和整 App 激活两条路都得先折回宿主,
         // 漏任一处,点 Safari 里的 YouTube Music 角标就毫无反应。
         expectEqual(sourceHas(probeSrc, "guard let host = probeTargetBundleID(forReported: bundleID),\n              let rule = siteRules.first(where: { $0.platformID == platformID })")
-                    && sourceHas(coordinatorSrc, "guard let id = BrowserPositionProbe.probeTargetBundleID(\n            forReported: LocalPlaybackSource.shared.lastResolvedBundleID)"), true,
+                    && sourceHas(coordinatorSrc, "? reported : BrowserPositionProbe.probeTargetBundleID(forReported: reported)"), true,
                     "来源角标(契约): 翻标签页与整 App 激活都按宿主(WebKit.GPU 到 Safari)")
+        // 浏览器网页应用:打开它自己的壳,不翻宿主浏览器的标签页、不激活宿主浏览器(02 章决策 284)。
+        expectEqual(sourceHas(coordinatorSrc, "let target = BrowserWebApp.platformID(of: reported) != nil")
+                    && sourceHas(coordinatorSrc, "guard let platformID = resolvedWebPlatformID, BrowserWebApp.platformID(of: id) == nil else {"), true,
+                    "来源角标(契约): 网页应用点角标打开它自己的壳")
     }
 
     // ---- 电台曲内时钟(RadioTrackClock)----

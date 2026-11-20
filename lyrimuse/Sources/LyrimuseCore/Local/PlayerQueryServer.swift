@@ -452,17 +452,19 @@ public final class PlayerQueryServer: @unchecked Sendable {
             return makeReply(id: id, output: output.flatMap(PlayerQueryShuffle.parse).flatMap { Self.encodedReply($0) },
                              error: "script failed")
         case .browserQueue(let bundleID, let platformID):
+            // 引擎传的可能是网页应用壳的 bundle id:配对按它判,脚本发给宿主浏览器。
             guard BrowserPositionProbe.shared.isPaired(bundleID: bundleID, platformID: platformID) else {
                 return makeReply(id: id, output: nil, error: "browser not paired")
             }
-            guard let family = Self.browserFamily(forBundleID: bundleID) else {
+            let host = BrowserPositionProbe.probeTargetBundleID(forReported: bundleID) ?? bundleID
+            guard let family = Self.browserFamily(forBundleID: host) else {
                 return makeReply(id: id, output: nil, error: "browser not scriptable")
             }
             guard let site = Self.browserQueueSite(platformID: platformID) else {
                 return makeReply(id: id, output: nil, error: "unsupported platform")
             }
             let output = BrowserTabProbeScript.run(
-                bundleID: bundleID, family: family, hostMarker: site.hostMarker, js: site.js,
+                bundleID: host, family: family, hostMarker: site.hostMarker, js: site.js,
                 eventTimeoutSeconds: Self.browserEventTimeoutSeconds, processTimeout: Self.scriptTimeout, label: "player-query")
             return makeReply(id: id, output: output.map(site.parse).flatMap { Self.encodedReply($0) }, error: "script failed")
         case .kasetQueue:

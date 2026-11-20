@@ -1287,6 +1287,7 @@
 "已选择的播放器" = "Lecteurs sélectionnés";
 "已选择的播放器：%@" = "Lecteurs choisis : %@";
 "已配置" = "Configuré";
+"已配置，点按可查看" = "Configuré : cliquez pour voir";
 "已配置，点按可查看或移除" = "Configuré : cliquez pour voir ou retirer";
 "已采用" = "Appliqué";
 "已采用 %@ 的歌词" = "Paroles de %@ utilisées";
@@ -2214,6 +2215,7 @@
 "此期间的歌曲排行中无该歌手的歌曲" = "Aucun morceau de cet artiste dans le classement de cette période";
 "此次请求耗时较长。如已出现系统对话框，请先处理；如未找到对话框，可直接在系统设置中手动开启" = "Cela prend plus de temps que prévu. Si une zone de dialogue système est apparue, répondez-y. Sinon, vous pouvez activer cette option dans Réglages Système";
 "此歌词无时间戳，无法随播放高亮或自动滚动" = "Ces paroles n’ont pas de minutage : ni surlignage ni défilement auto pendant la lecture";
+"此浏览器中安装的网页 App 已自动识别，无需配对" = "Les apps web installées depuis ce navigateur sont reconnues automatiquement, sans jumelage";
 "此浏览器未运行，或未打开任何标签页。请打开浏览器并载入任意网页后再次检测" = "Ce navigateur n’est pas ouvert ou n’a aucun onglet. Ouvrez-le avec une page chargée, puis vérifiez à nouveau";
 "此版本打包时未同步歌词引擎的版本号。功能不受影响，歌词引擎的代码与 App 为同一版本，无需任何操作" = "Cette version a été livrée avec un numéro de version obsolète pour le moteur de paroles. Rien n’est cassé : le moteur exécute le même code que l’app, et vous n’avez rien à faire";
 "此类 App 未经专门适配，兼容性无法保证，部分功能可能不可用" = "Ces apps ne sont pas spécifiquement prises en charge : compatibilité non garantie, certaines fonctions peuvent manquer";

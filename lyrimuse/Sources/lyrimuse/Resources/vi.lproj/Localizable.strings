@@ -1215,6 +1215,7 @@
 "已选择的播放器" = "Trình phát đã chọn";
 "已选择的播放器：%@" = "Trình phát đã chọn: %@";
 "已配置" = "Đã thiết lập";
+"已配置，点按可查看" = "Đã thiết lập, bấm để xem";
 "已配置，点按可查看或移除" = "Đã thiết lập, bấm để xem hoặc xóa";
 "已采用" = "Đã áp dụng";
 "已采用 %@ 的歌词" = "Đang dùng lời từ %@";
@@ -2130,6 +2131,7 @@
 "此期间的歌曲排行中无该歌手的歌曲" = "Bảng xếp hạng bài hát kỳ này không có bài nào của nghệ sĩ này";
 "此次请求耗时较长。如已出现系统对话框，请先处理；如未找到对话框，可直接在系统设置中手动开启" = "Yêu cầu này mất nhiều thời gian hơn bình thường. Nếu hộp thoại hệ thống đã xuất hiện, hãy xử lý hộp thoại đó trước; nếu không thấy, bạn có thể bật thủ công trong Cài đặt hệ thống";
 "此歌词无时间戳，无法随播放高亮或自动滚动" = "Lời này không có dấu thời gian, nên không thể tô sáng hoặc tự cuộn theo nhạc";
+"此浏览器中安装的网页 App 已自动识别，无需配对" = "Ứng dụng web cài từ trình duyệt này được nhận diện tự động, không cần ghép đôi";
 "此浏览器未运行，或未打开任何标签页。请打开浏览器并载入任意网页后再次检测" = "Trình duyệt này không chạy hoặc không mở thẻ nào. Hãy mở trình duyệt, tải một trang web bất kỳ rồi kiểm tra lại";
 "此版本打包时未同步歌词引擎的版本号。功能不受影响，歌词引擎的代码与 App 为同一版本，无需任何操作" = "Bản dựng này được đóng gói mà chưa đồng bộ số phiên bản của công cụ lời bài hát. Chức năng không bị ảnh hưởng: công cụ lời bài hát chạy cùng mã với ứng dụng, bạn không cần làm gì";
 "此类 App 未经专门适配，兼容性无法保证，部分功能可能不可用" = "Các ứng dụng này chưa được hỗ trợ riêng, không đảm bảo tương thích và một số tính năng có thể không dùng được";

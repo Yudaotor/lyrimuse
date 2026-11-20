@@ -6147,6 +6147,9 @@ private struct PlayerSettingsTab: View {
         var automation: MusicAutomationPermissionStatus?
     }
     @State private var browserLiveStatus: [String: BrowserLiveStatus] = [:]
+    /// 本机装了的浏览器网页应用的宿主:平台 id → 宿主 bundle id(`BrowserWebApp.installed`)。跟 `browserLiveStatus` 同一拍在后台扫。
+    /// 这些宿主不用配对也会被驱动,平台格里照样摆出它们的头像,让只用网页应用的人也看得到两道门的状态。见 02 章决策 284。
+    @State private var webAppHosts: [String: Set<String>] = [:]
     @State private var browserLiveStatusInFlight = false
     /// 查着的时候又来了一次刷新请求(配对表变了、自动化授权刚有结果):当前这轮查完再补一轮,不直接丢掉 ——
     /// 丢掉的话刚配对的浏览器那个气泡前几秒一直显示「无法确认状态 / 没在运行」。
@@ -6174,29 +6177,28 @@ private struct PlayerSettingsTab: View {
             browserLiveStatusRerun = true
             return
         }
-        let ids = Set(stores.browserPlatformPairs.values.flatMap { $0 })
-        guard !ids.isEmpty else {
-            if !browserLiveStatus.isEmpty { browserLiveStatus = [:] }
-            return
-        }
+        let pairedIDs = Set(stores.browserPlatformPairs.values.flatMap { $0 })
         browserLiveStatusInFlight = true
         Task {
-            var fresh = await Task.detached(priority: .utility) { () -> [String: BrowserLiveStatus] in
+            var (fresh, webApps) = await Task.detached(priority: .utility) {
+                () -> ([String: BrowserLiveStatus], [String: Set<String>]) in
+                let webApps = BrowserWebApp.hostsByPlatform(BrowserWebApp.installed())
                 var out: [String: BrowserLiveStatus] = [:]
-                for id in ids {
+                for id in pairedIDs.union(webApps.values.flatMap { $0 }) {
                     out[id] = BrowserLiveStatus(
                         jsSwitch: BrowserAutomationPermission.status(forBundleID: id),
                         running: MusicAutomationPermission.isRunning(bundleID: id),
                         automation: nil)
                 }
-                return out
+                return (out, webApps)
             }.value
             // 目标没在跑时 check 查不出真实状态(会落进 procNotFound 被当成"还没问过"),
             // 干脆不问,留 nil 表示"查不到"。
-            for id in ids where fresh[id]?.running == true {
+            for id in fresh.keys where fresh[id]?.running == true {
                 fresh[id]?.automation = await MusicAutomationPermission.status(bundleID: id, askIfNeeded: false)
             }
             browserLiveStatusInFlight = false
+            if webApps != webAppHosts { webAppHosts = webApps }
             if fresh != browserLiveStatus { browserLiveStatus = fresh }
             if browserLiveStatusRerun {
                 browserLiveStatusRerun = false
@@ -6289,9 +6291,10 @@ private struct PlayerSettingsTab: View {
     @State private var expandedBrowserBundleID: String?
     @State private var expandedBrowserPlatformID: String?
 
-    /// 跳广告开关在「网页版」卡里出现:YouTube Music 配了(且装着)浏览器。没配对就没有探针、也就没有广告可跳。
+    /// 跳广告开关在「网页版」卡里出现:YouTube Music 配了(且装着)浏览器,或装了它的网页应用。都没有就没有探针、也就没有广告可跳。
     private var webAdSkipShown: Bool {
         !(stores.browserPlatformPairs["youtubeMusic"] ?? [])
+            .union(webAppHosts["youtubeMusic"] ?? [])
             .filter({ BrowserAutomationPermission.isInstalled(bundleID: $0) }).isEmpty
     }
 
@@ -6398,10 +6401,15 @@ private struct PlayerSettingsTab: View {
         let pairedBundleIDs = (stores.browserPlatformPairs[platform.id] ?? [])
             .filter { BrowserAutomationPermission.isInstalled(bundleID: $0) }
             .sorted()
+        // 装了这个平台网页应用的宿主浏览器,已经配对过的不重复摆。
+        let webAppHostIDs = (webAppHosts[platform.id] ?? [])
+            .subtracting(pairedBundleIDs)
+            .filter { BrowserAutomationPermission.isInstalled(bundleID: $0) }
+            .sorted()
         let addable = addablePlatformBrowsers(platformID: platform.id)
         let about = PlayerChoiceCard.about(webPlatform: platform.id)
         return VStack(spacing: 6) {
-            CompactTileLabel(title: platform.displayName, dimmed: pairedBundleIDs.isEmpty) {
+            CompactTileLabel(title: platform.displayName, dimmed: pairedBundleIDs.isEmpty && webAppHostIDs.isEmpty) {
                 if let icon = WebPlatformIcon.image(platform.id) {
                     Image(nsImage: icon)
                         .resizable()
@@ -6420,6 +6428,9 @@ private struct PlayerSettingsTab: View {
                 ForEach(pairedBundleIDs, id: \.self) { bundleID in
                     browserAvatarButton(bundleID: bundleID, platformID: platform.id)
                 }
+                ForEach(webAppHostIDs, id: \.self) { bundleID in
+                    browserAvatarButton(bundleID: bundleID, platformID: platform.id, viaWebApp: true)
+                }
                 // 「+」恒在,不要写成 `!addable.isEmpty` 才显示:内置候选全配完之后菜单里还有
                 // 「从应用程序中选择…」这条路 —— 装的浏览器不在内置那四个里时恰恰最需要它。
                 // 跟浏览器头像同为 22pt 的玻璃圆钮,不带下拉小箭头(会被当成旁边某个头像的角标)。
@@ -6433,10 +6444,11 @@ private struct PlayerSettingsTab: View {
                 )
             }
         }
-        .compactTileChrome(isSelected: !pairedBundleIDs.isEmpty, highlightsOnHover: false)
+        .compactTileChrome(isSelected: !pairedBundleIDs.isEmpty || !webAppHostIDs.isEmpty, highlightsOnHover: false)
     }
 
-    private func browserAvatarButton(bundleID: String, platformID: String) -> some View {
+    /// - viaWebApp: 这个浏览器没配对、是因为装了这个平台的网页应用才摆出来的。气泡里没有「移除配对」,换成一句说明。
+    private func browserAvatarButton(bundleID: String, platformID: String, viaWebApp: Bool = false) -> some View {
         Button {
             expandedBrowserBundleID = bundleID
             expandedBrowserPlatformID = platformID
@@ -6457,12 +6469,12 @@ private struct PlayerSettingsTab: View {
         .buttonStyle(.glassIcon())
         .help(browserSetupIncomplete(bundleID: bundleID)
               ? L10n.t("配置尚未完成，点按查看缺少的项目")
-              : L10n.t("已配置，点按可查看或移除"))
+              : (viaWebApp ? L10n.t("已配置，点按可查看") : L10n.t("已配置，点按可查看或移除")))
         .popover(isPresented: Binding(
             get: { expandedBrowserBundleID == bundleID && expandedBrowserPlatformID == platformID },
             set: { if !$0 { expandedBrowserBundleID = nil; expandedBrowserPlatformID = nil } }
         )) {
-            browserPermissionPopover(bundleID: bundleID, platformID: platformID)
+            browserPermissionPopover(bundleID: bundleID, platformID: platformID, viaWebApp: viaWebApp)
         }
     }
 
@@ -6474,7 +6486,7 @@ private struct PlayerSettingsTab: View {
     /// JavaScript」开关、③**系统的自动化(TCC)授权**。只显示②的话③对用户完全不可见 ——
     /// ③在界面上没有入口时只能等探针第一次真的发 Apple Event 时由系统被动弹出,体感就是
     /// "配对完没弹授权框,放歌的时候才弹"。
-    private func browserPermissionPopover(bundleID: String, platformID: String) -> some View {
+    private func browserPermissionPopover(bundleID: String, platformID: String, viaWebApp: Bool = false) -> some View {
         // 三样实时状态全部来自 `browserLiveStatus` 缓存(后台查好的),这里**不发任何 IPC、
         // 不读任何文件** —— 理由见 `refreshBrowserLiveStatus` 头注。还没查回来时按"查不到"
         // 显示,下一拍就会填上。
@@ -6592,15 +6604,22 @@ private struct PlayerSettingsTab: View {
                 }
             }
             Divider()
-            HStack {
-                Button(L10n.t("移除配对")) {
-                    unpairBrowser(bundleID, platformID: platformID)
-                    expandedBrowserBundleID = nil
-                    expandedBrowserPlatformID = nil
+            if viaWebApp {
+                Text(L10n.t("此浏览器中安装的网页 App 已自动识别，无需配对"))
+                    .font(.system(size: 11))
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            } else {
+                HStack {
+                    Button(L10n.t("移除配对")) {
+                        unpairBrowser(bundleID, platformID: platformID)
+                        expandedBrowserBundleID = nil
+                        expandedBrowserPlatformID = nil
+                    }
+                    .buttonStyle(.glassIcon())
+                    .foregroundStyle(.secondary)
+                    Spacer()
                 }
-                .buttonStyle(.glassIcon())
-                .foregroundStyle(.secondary)
-                Spacer()
             }
         }
         .padding(14)

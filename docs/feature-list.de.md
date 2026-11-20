@@ -666,7 +666,7 @@ Apple Music, Spotify, QQ Music, NetEase Cloud Music, Kugou, Kuwo, Soda Music, LX
 
 ### YouTube Music und Spotify Web im Browser
 
-Kopple deinen Browser einmal, und Musik, die darin läuft, bekommt ebenfalls Liedtext, der dem Fortschritt der Seite folgt. Eine Prüfung mit einem Klick zeigt dir vorher, ob sich dieser Browser steuern lässt. Während Werbung zeigt die Notch die verbleibende Zeit und welche Werbung gerade läuft.
+Kopple deinen Browser einmal, und Musik, die darin läuft, bekommt ebenfalls Liedtext, der dem Fortschritt der Seite folgt. Eine Prüfung mit einem Klick zeigt dir vorher, ob sich dieser Browser steuern lässt. Während Werbung zeigt die Notch die verbleibende Zeit und welche Werbung gerade läuft. Als App aus Chrome installierte YouTube Music und Spotify werden ohne Koppeln erkannt.
 
 - Standardmäßig aus
 - Einstellungen: Player › Web

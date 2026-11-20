@@ -1287,6 +1287,7 @@
 "已选择的播放器" = "Reproductores seleccionados";
 "已选择的播放器：%@" = "Los reproductores que elegiste: %@";
 "已配置" = "Configurado";
+"已配置，点按可查看" = "Configurado: haz clic para revisar";
 "已配置，点按可查看或移除" = "Configurado: haz clic para revisar o quitar";
 "已采用" = "Aplicada";
 "已采用 %@ 的歌词" = "Ahora se usa la letra de %@";
@@ -2214,6 +2215,7 @@
 "此期间的歌曲排行中无该歌手的歌曲" = "No hay canciones de este artista en la lista de canciones de este periodo";
 "此次请求耗时较长。如已出现系统对话框，请先处理；如未找到对话框，可直接在系统设置中手动开启" = "Esto tarda más de lo habitual. Si apareció un cuadro de diálogo del sistema, respóndelo. Si no ves ninguno, puedes activarlo en Ajustes del Sistema";
 "此歌词无时间戳，无法随播放高亮或自动滚动" = "Esta letra no tiene tiempos, así que no puede resaltarse ni desplazarse sola durante la reproducción";
+"此浏览器中安装的网页 App 已自动识别，无需配对" = "Las apps web instaladas desde este navegador se reconocen automáticamente, sin necesidad de vincularlo";
 "此浏览器未运行，或未打开任何标签页。请打开浏览器并载入任意网页后再次检测" = "Este navegador no está abierto o no tiene pestañas. Ábrelo con cualquier página cargada y vuelve a comprobarlo";
 "此版本打包时未同步歌词引擎的版本号。功能不受影响，歌词引擎的代码与 App 为同一版本，无需任何操作" = "Esta versión se publicó con un número de versión desactualizado del motor de letras. No hay nada roto: el motor de letras ejecuta el mismo código que la app y no tienes que hacer nada";
 "此类 App 未经专门适配，兼容性无法保证，部分功能可能不可用" = "Estas apps no tienen compatibilidad específica, así que no se garantiza que funcionen y algunas funciones pueden no estar disponibles";

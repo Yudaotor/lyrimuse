@@ -377,8 +377,9 @@ public final class BrowserPositionProbe: @unchecked Sendable {
 
     /// MediaRemote 报上来的 bundle id → **真正能被 AppleScript 驱动的那个 App**。
     ///
-    /// 绝大多数情况原样返回;只有"媒体代理进程"要换成它的宿主(目前只有一条实测登记过的:
-    /// `com.apple.WebKit.GPU` → `com.apple.Safari`,见 `TrustedPlayers.mediaProxyOwners`)。
+    /// 绝大多数情况原样返回;只有"媒体代理进程"要换成它的宿主(实测登记过的
+    /// `com.apple.WebKit.GPU` → `com.apple.Safari`,见 `TrustedPlayers.mediaProxyOwners`;
+    /// 以及登记过平台的浏览器网页应用 → 宿主浏览器,见 `BrowserWebApp`)。
     /// 纯函数,给 selftest 钉住这条跨层不变量 —— 漏了它的后果是"配对了 Safari 却永远不
     /// 同步",一条日志都不会有。
     public static func probeTargetBundleID(forReported bundleID: String?) -> String? {
@@ -490,7 +491,15 @@ public final class BrowserPositionProbe: @unchecked Sendable {
         set { lock.lock(); platformBrowserPairsStorage = newValue; lock.unlock() }
     }
 
-    /// 这个 bundle id 配对过哪些平台——没配对过任何平台的浏览器,`kickIfNeeded` 直接
+    /// 播放器报上来的 bundle id 算配对了哪些平台:登记过平台的浏览器网页应用只算它自己那个平台(不看宿主浏览器的配对),
+    /// 其余先换成宿主(`probeTargetBundleID`)再查配对表。见 02 章决策 284。
+    private func pairedPlatformIDs(forReported bundleID: String?) -> Set<String> {
+        if let platformID = BrowserWebApp.platformID(of: bundleID) { return [platformID] }
+        guard let host = Self.probeTargetBundleID(forReported: bundleID), !host.isEmpty else { return [] }
+        return pairedPlatformIDs(forBundleID: host)
+    }
+
+    /// 这个浏览器(宿主 bundle id)配对过哪些平台——没配对过任何平台的浏览器,`kickIfNeeded` 直接
     /// 短路返回,不发起任何探测。
     private func pairedPlatformIDs(forBundleID bundleID: String) -> Set<String> {
         lock.lock()
@@ -502,10 +511,9 @@ public final class BrowserPositionProbe: @unchecked Sendable {
         return ids
     }
 
-    /// 这个(已解析代理进程之后的)bundle id 有没有被用户配对给指定平台——给
-    /// `LocalPlaybackSource` 判断"网页版 Spotify 广告"用:调用方需要传已经过
-    /// `probeTargetBundleID` 解析的 host bundle id,跟 `kickIfNeeded`/`pairedPlatformIDs`
-    /// 是同一份配对数据、同一把锁,不是另起一份判断逻辑。
+    /// 这个 bundle id 有没有被配对给指定平台——给广告探针、`LocalPlaybackSource` 判断"网页版 Spotify 广告"等用。
+    /// 传播放器报上来的原值:代理进程换回宿主、登记过平台的网页应用算配对了它自己那个平台,都在这里做
+    /// (`pairedPlatformIDs(forReported:)`);传宿主本身也一样。跟 `kickIfNeeded` 是同一份配对数据、同一把锁。
     /// 配对关系写进 features.json 的样子(给引擎看,见 FeatureFlagsFile.browserPlatformPairs):没有浏览器的平台
     /// 不写、浏览器按字母排,同一份配对每次编码都一样,没变就不会白写一次盘。纯函数,selftest 覆盖。
     public static func mirroredPairs(_ pairs: [String: Set<String>]) -> [String: [String]] {
@@ -519,7 +527,7 @@ public final class BrowserPositionProbe: @unchecked Sendable {
 
     public func isPaired(bundleID: String?, platformID: String) -> Bool {
         guard let bundleID, !bundleID.isEmpty else { return false }
-        return pairedPlatformIDs(forBundleID: bundleID).contains(platformID)
+        return pairedPlatformIDs(forReported: bundleID).contains(platformID)
     }
 
     /// 「最近一次探测命中」这条证据的保质期。
@@ -535,7 +543,9 @@ public final class BrowserPositionProbe: @unchecked Sendable {
     ///
     /// 调用方传 media-control 报的原始 bundle id 就行,这里自己做代理别名解析(Safari 报 `com.apple.WebKit.GPU`,
     /// 配对表里存的是 `com.apple.Safari`;漏掉这一步就会配对了却永远不同步,而且一条日志都没有)。
+    /// 登记过平台的浏览器网页应用直接是它那个平台。
     public func playingPlatformID(forBundleID bundleID: String?, now: Date = Date()) -> String? {
+        if let platformID = BrowserWebApp.platformID(of: bundleID) { return platformID }
         guard let host = Self.probeTargetBundleID(forReported: bundleID), !host.isEmpty else {
             return nil
         }
@@ -609,7 +619,7 @@ public final class BrowserPositionProbe: @unchecked Sendable {
               let host = Self.probeTargetBundleID(forReported: bundleIdentifier),
               let family = BrowserAutomationPermission.family(forBundleID: host)
         else { return }
-        let platformIDs = pairedPlatformIDs(forBundleID: host)
+        let platformIDs = pairedPlatformIDs(forReported: bundleIdentifier)
         guard platformIDs.count >= 2 else { return }
         let startedAt = Date()
         lock.lock()
@@ -840,7 +850,7 @@ public final class BrowserPositionProbe: @unchecked Sendable {
         // 没配对过任何平台——完全不发起探测(见类头注"配对即开关")。放在锁外面查是故意的:
         // `pairedPlatformIDs` 自己会拿锁,这里不需要跟下面 inFlightKey 的检查合并成一次
         // 加锁,提前 return 的路径越简单越好读。
-        let platformIDs = pairedPlatformIDs(forBundleID: hostBundleID)
+        let platformIDs = pairedPlatformIDs(forReported: bundleIdentifier)
         guard !platformIDs.isEmpty else { return }
         lock.lock()
         guard inFlightKey != key, consumedKey != key else { lock.unlock(); return }

@@ -152,13 +152,10 @@ var ytmusicQueueScript = func(bundleID string) (appQueryTracks, bool) {
 }
 
 // ytmusicUpcoming 是 browserUpcoming 的一路:在这个浏览器里找 YouTube Music 标签页读队列。
-// bundleID 是播放器报上来的那个(Safari 报的是媒体代理进程,这里换回宿主)。
+// bundleID 是播放器报上来的那个(Safari 报的是媒体代理进程、网页应用报的是它的壳,见 browserQueueTarget)。
 func ytmusicUpcoming(artist, title, bundleID string, durationSecs float64, n int) browserQueueResult {
-	target := bundleID
-	if owner, ok := mediaProxyOwners[bundleID]; ok {
-		target = owner
-	}
-	if !browserPlatformPaired(browserPlatformYouTubeMusic, target) {
+	target, paired := browserQueueTarget(browserPlatformYouTubeMusic, bundleID)
+	if !paired {
 		return browserQueueResult{}
 	}
 	r, ok := ytmusicQueueScript(target)

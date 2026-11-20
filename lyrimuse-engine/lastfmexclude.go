@@ -36,7 +36,8 @@ import (
 //
 // 粒度是 bundle:引擎侧没有网页平台身份(平台 与 浏览器配对只在 App 侧),配对的浏览器只能整个开或关。
 // Safari 的播放报的是媒体代理进程 com.apple.WebKit.GPU,设置里存的是宿主 com.apple.Safari,查之前先按
-// mediaProxyOwners 归一(跟 isTrustedPlayerBundleID / mediaPlayerLabel 同一个坑)。
+// mediaProxyOwners 归一(跟 isTrustedPlayerBundleID / mediaPlayerLabel 同一个坑);浏览器网页应用同样按宿主浏览器查
+// (playerHostBundleID)。
 
 // resolveLastfmExcludedBundles 把文件里的列表清洗成集合:去首尾空白、丢空串、去重。nil / 空 → 空 map
 // (不是 nil,调用方可以直接 m[x] 查)。不校验"是不是认识的播放器":信任列表里的 bundle id 本来就是任意的。
@@ -62,7 +63,7 @@ func lastfmExcluded(bundleID string) bool {
 	if excluded[bundleID] {
 		return true
 	}
-	if owner, ok := mediaProxyOwners[bundleID]; ok && excluded[owner] {
+	if host := playerHostBundleID(bundleID); host != bundleID && excluded[host] {
 		return true
 	}
 	return false

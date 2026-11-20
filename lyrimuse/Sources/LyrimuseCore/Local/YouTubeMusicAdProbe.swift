@@ -506,7 +506,7 @@ public final class YouTubeMusicAdProbe: @unchecked Sendable {
         // 没在「网页播放器」里配对 YouTube Music 的浏览器不探:多半没开 JavaScript 开关,探了也必然失败,
         // 受信任浏览器里没有专辑名的普通视频却每首都会踢到这里。判定缺失,gate 照旧按拒处理;同 SpotifyWebAdProbe 入口
         // 和引擎的 browserpairs.go。
-        guard BrowserPositionProbe.shared.isPaired(bundleID: hostBundleID, platformID: "youtubeMusic") else { return }
+        guard BrowserPositionProbe.shared.isPaired(bundleID: bundleIdentifier, platformID: "youtubeMusic") else { return }
         lock.lock()
         if inFlightKey == key {
             lock.unlock()

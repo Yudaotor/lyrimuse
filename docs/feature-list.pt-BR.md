@@ -666,7 +666,7 @@ Apple Music, Spotify, QQ Music, NetEase Cloud Music, Kugou, Kuwo, Soda Music, LX
 
 ### YouTube Music e Spotify Web no navegador
 
-Pareie seu navegador uma vez e a música que toca nele também ganha letra, seguindo o progresso da própria página. Uma verificação com um clique informa antes se esse navegador pode ser controlado. Durante anúncios, o notch mostra o tempo restante e qual anúncio está tocando.
+Pareie seu navegador uma vez e a música que toca nele também ganha letra, seguindo o progresso da própria página. Uma verificação com um clique informa antes se esse navegador pode ser controlado. Durante anúncios, o notch mostra o tempo restante e qual anúncio está tocando. YouTube Music e Spotify instalados como apps pelo Chrome são reconhecidos sem parear.
 
 - Desativado por padrão
 - Ajustes: Player › Web

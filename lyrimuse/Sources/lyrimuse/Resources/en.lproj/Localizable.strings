@@ -1287,6 +1287,7 @@
 "已选择的播放器" = "Selected players";
 "已选择的播放器：%@" = "The players you picked: %@";
 "已配置" = "Configured";
+"已配置，点按可查看" = "Configured — click to review";
 "已配置，点按可查看或移除" = "Configured — click to review or remove";
 "已采用" = "Applied";
 "已采用 %@ 的歌词" = "Now using lyrics from %@";
@@ -2214,6 +2215,7 @@
 "此期间的歌曲排行中无该歌手的歌曲" = "No songs by this artist in this period’s track chart";
 "此次请求耗时较长。如已出现系统对话框，请先处理；如未找到对话框，可直接在系统设置中手动开启" = "This is taking longer than usual. If a system dialog appeared, respond to it there. If you don’t see one, you can turn this on in System Settings instead";
 "此歌词无时间戳，无法随播放高亮或自动滚动" = "These lyrics have no timing, so they can’t highlight or auto-scroll along with playback";
+"此浏览器中安装的网页 App 已自动识别，无需配对" = "Web apps installed from this browser are recognized automatically, no pairing needed";
 "此浏览器未运行，或未打开任何标签页。请打开浏览器并载入任意网页后再次检测" = "This browser isn’t running or has no open tabs. Open it with any page loaded, then check again";
 "此版本打包时未同步歌词引擎的版本号。功能不受影响，歌词引擎的代码与 App 为同一版本，无需任何操作" = "This build shipped with a stale version number for the lyrics engine. Nothing is broken — the lyrics engine runs the same code as the app, and there’s nothing you need to do";
 "此类 App 未经专门适配，兼容性无法保证，部分功能可能不可用" = "These apps aren’t specifically supported, so compatibility isn’t guaranteed and some features may be unavailable";

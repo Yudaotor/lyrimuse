@@ -666,7 +666,7 @@ Apple Music, Spotify, QQ Music, NetEase Cloud Music, Kugou, Kuwo, Soda Music, LX
 
 ### YouTube Music e Spotify Web nel browser
 
-Abbina il browser una volta e anche la musica riprodotta lì avrà il testo, seguendo l’avanzamento della pagina stessa. Una verifica con un clic ti dice prima se quel browser può essere controllato. Durante la pubblicità il notch mostra il tempo rimanente e di quale pubblicità si tratta.
+Abbina il browser una volta e anche la musica riprodotta lì avrà il testo, seguendo l’avanzamento della pagina stessa. Una verifica con un clic ti dice prima se quel browser può essere controllato. Durante la pubblicità il notch mostra il tempo rimanente e di quale pubblicità si tratta. YouTube Music e Spotify installati come app da Chrome vengono riconosciuti senza abbinamento.
 
 - Disattivata di default
 - Impostazioni: Player › Web

@@ -85,6 +85,13 @@ CI 跑 `--check` 保证生成物没被手改、也没忘记重新生成。
 报的是 com.apple.WebKit.GPU,查信任列表、Last.fm 排除名单、网页播放器配对之前要先换回宿主。两侧各生成
 一张同名的表(Go 的 mediaProxyOwners、Swift 的 TrustedPlayers.mediaProxyOwners),先查本体、再查宿主
 的判法留在手写文件里。键以 $ 开头的是注释。
+
+# 网页应用
+
+顶层的 browserWebApps 是「Chromium 网页应用的应用 id(32 位 a–p)→ {platform, scrobbleLabel}」:Chrome / Edge / Brave
+「安装为 App」的 YouTube Music、Spotify 报 Now Playing 用的是壳的 bundle id `<浏览器>.app.<应用 id>`。两侧各生成一张表
+(Go 的 browserWebAppPlatforms / browserWebAppScrobbleLabels、Swift 的 BrowserWebApp.platformByAppID),拆 bundle id 的规则
+留在手写文件里(BrowserWebApp.swift / browserwebapp.go)。键以 $ 开头的是注释。
 """
 import json
 import shutil
@@ -153,12 +160,24 @@ def load():
             sys.exit(f"mediaProxyOwners: {proxy!r} → {owner!r} 不能为空")
         if proxy in builtin:
             sys.exit(f"mediaProxyOwners: {proxy} 是内置播放器,不是媒体进程")
+    for app_id, entry in browser_web_apps(spec).items():
+        if len(app_id) != 32 or any(c < "a" or c > "p" for c in app_id):
+            sys.exit(f"browserWebApps: {app_id!r} 不是 32 位 a–p 的应用 id")
+        if not isinstance(entry, dict) or sorted(entry) != ["platform", "scrobbleLabel"] \
+                or not all(isinstance(v, str) and v for v in entry.values()):
+            sys.exit(f"browserWebApps: {app_id} 要写 platform 和 scrobbleLabel 两个非空字符串")
     return spec, players, by_id
 
 
 def media_proxy_owners(spec):
     """mediaProxyOwners 去掉 $ 开头的注释键,按键排好序。"""
     table = spec.get("mediaProxyOwners", {})
+    return {k: table[k] for k in sorted(table) if not k.startswith("$")}
+
+
+def browser_web_apps(spec):
+    """browserWebApps 去掉 $ 开头的注释键,按键排好序。"""
+    table = spec.get("browserWebApps", {})
     return {k: table[k] for k in sorted(table) if not k.startswith("$")}
 
 
@@ -291,6 +310,20 @@ def render_go(spec, players):
                "var mediaProxyOwners = map[string]string{\n")
     for proxy, owner in media_proxy_owners(spec).items():
         out.append("\t%s: %s,\n" % (go_quote(proxy), go_quote(owner)))
+    out.append("}\n")
+
+    out.append("\n// browserWebAppPlatforms 是「Chromium 网页应用的应用 id → 网页平台 id」:Chrome / Edge / Brave 安装为 App 的\n"
+               "// YouTube Music、Spotify 报 Now Playing 用的是壳的 bundle id,拆法见 browserwebapp.go。\n"
+               "// Swift 侧 BrowserWebApp.platformByAppID 同源。\n"
+               "var browserWebAppPlatforms = map[string]string{\n")
+    for app_id, entry in browser_web_apps(spec).items():
+        out.append("\t%s: %s,\n" % (go_quote(app_id), go_quote(entry["platform"])))
+    out.append("}\n")
+
+    out.append("\n// browserWebAppScrobbleLabels 是这些网页应用提交给 ListenBrainz 的 media_player。\n"
+               "var browserWebAppScrobbleLabels = map[string]string{\n")
+    for app_id, entry in browser_web_apps(spec).items():
+        out.append("\t%s: %s,\n" % (go_quote(app_id), go_quote(entry["scrobbleLabel"])))
     out.append("}\n")
     return "".join(out)
 
@@ -449,6 +482,14 @@ def render_core_swift(spec, players):
                "    public static let mediaProxyOwners: [String: String] = [\n")
     for proxy, owner in media_proxy_owners(spec).items():
         out.append('        "%s": "%s",\n' % (proxy, owner))
+    out.append("    ]\n}\n")
+
+    out.append("\nextension BrowserWebApp {\n"
+               "    /// 「Chromium 网页应用的应用 id → 网页平台 id」:只有登记在这里的网页应用默认就认(拆法见 `parse(_:)`)。\n"
+               "    /// Go 侧 browserWebAppPlatforms 同源。\n"
+               "    public static let platformByAppID: [String: String] = [\n")
+    for app_id, entry in browser_web_apps(spec).items():
+        out.append('        "%s": "%s",\n' % (app_id, entry["platform"]))
     out.append("    ]\n}\n")
     return "".join(out)
 

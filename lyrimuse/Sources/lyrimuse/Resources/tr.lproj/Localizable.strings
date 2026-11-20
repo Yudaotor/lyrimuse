@@ -1215,6 +1215,7 @@
 "已选择的播放器" = "Seçili çalarlar";
 "已选择的播放器：%@" = "Seçtiğiniz çalarlar: %@";
 "已配置" = "Ayarlandı";
+"已配置，点按可查看" = "Yapılandırıldı, görmek için tıklayın";
 "已配置，点按可查看或移除" = "Yapılandırıldı, görmek veya kaldırmak için tıklayın";
 "已采用" = "Uygulandı";
 "已采用 %@ 的歌词" = "Artık %@ kaynağındaki şarkı sözleri kullanılıyor";
@@ -2130,6 +2131,7 @@
 "此期间的歌曲排行中无该歌手的歌曲" = "Bu dönemin parça listesinde bu sanatçıya ait parça yok";
 "此次请求耗时较长。如已出现系统对话框，请先处理；如未找到对话框，可直接在系统设置中手动开启" = "Bu istek normalden uzun sürüyor. Bir sistem sorgu kutusu göründüyse önce onu yanıtlayın; görmüyorsanız bunu Sistem Ayarları’nda elle açabilirsiniz";
 "此歌词无时间戳，无法随播放高亮或自动滚动" = "Bu şarkı sözlerinde zamanlama yok; çalmayla birlikte vurgulanamaz veya otomatik kaydırılamaz";
+"此浏览器中安装的网页 App 已自动识别，无需配对" = "Bu tarayıcıdan yüklenen web uygulamaları otomatik olarak tanınır, eşlemeye gerek yoktur";
 "此浏览器未运行，或未打开任何标签页。请打开浏览器并载入任意网页后再次检测" = "Bu tarayıcı çalışmıyor veya açık sekmesi yok. Tarayıcıyı açıp herhangi bir sayfa yükleyin, sonra yeniden denetleyin";
 "此版本打包时未同步歌词引擎的版本号。功能不受影响，歌词引擎的代码与 App 为同一版本，无需任何操作" = "Bu derleme, şarkı sözü motorunun sürüm numarası güncellenmeden paketlendi. Hiçbir işlev etkilenmez: şarkı sözü motoru uygulamayla aynı kodu çalıştırır, sizin bir şey yapmanız gerekmez";
 "此类 App 未经专门适配，兼容性无法保证，部分功能可能不可用" = "Bu uygulamalar özel olarak desteklenmez; uyumluluk garanti edilmez ve bazı özellikler kullanılamayabilir";

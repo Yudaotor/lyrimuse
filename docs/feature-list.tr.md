@@ -666,7 +666,7 @@ Apple Music, Spotify, QQ Music, NetEase Cloud Music, Kugou, Kuwo, Soda Music, LX
 
 ### Tarayıcınızda YouTube Music ve Spotify Web
 
-Tarayıcınızı bir kez eşleyin; içinde çalan müzik de sayfanın kendi ilerlemesini izleyerek şarkı sözü alır. Tek tıklamalı bir denetim, o tarayıcının denetlenip denetlenemeyeceğini önceden söyler. Reklamlar sırasında çentik kalan süreyi ve kaçıncı reklam olduğunu gösterir.
+Tarayıcınızı bir kez eşleyin; içinde çalan müzik de sayfanın kendi ilerlemesini izleyerek şarkı sözü alır. Tek tıklamalı bir denetim, o tarayıcının denetlenip denetlenemeyeceğini önceden söyler. Reklamlar sırasında çentik kalan süreyi ve kaçıncı reklam olduğunu gösterir. Chrome'dan uygulama olarak yüklenen YouTube Music ve Spotify eşleme olmadan tanınır.
 
 - Saptanmış olarak kapalı
 - Ayarlar: Çalar › Web

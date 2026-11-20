@@ -681,5 +681,10 @@
   "mediaProxyOwners": {
     "$comment": "媒体进程 bundle id → 宿主 App bundle id。MediaRemote 报「现在谁在放」时,Safari 报的是替它解码播放的 WebKit GPU 进程,信任列表、Last.fm 排除名单、网页播放器配对里存的却是宿主,查这些表之前先按这张表换回宿主。Chromium 系(Arc/Chrome/Edge)报浏览器自己的 bundle id,不用登记。只登记实测见过的;为什么用别名而不是把媒体进程写进信任列表,见 LyrimuseCore/Local/TrustedPlayers.swift。",
     "com.apple.WebKit.GPU": "com.apple.Safari"
+  },
+  "browserWebApps": {
+    "$comment": "Chromium 系浏览器「安装为 App」的网页应用:应用 id → 平台。系统「正在播放」报的是网页应用壳的 bundle id `<浏览器 bundle id>.app.<应用 id>`(非默认个人资料在应用 id 前多一段「个人资料目录名-」),应用 id 是 32 位 a–p,Chrome / Edge / Brave 同一个网站的应用 id 相同。登记在这里的按宿主浏览器里的那个网页版对待、不用手动信任;platform 是「网页播放器」卡的平台 id,scrobbleLabel 是 ListenBrainz 的 media_player。拆 bundle id 的规则在 LyrimuseCore/Local/BrowserWebApp.swift 与 lyrimuse-engine/browserwebapp.go,见 02 章决策 284。",
+    "cinhimbnkkaeohfgghhklpknlkffjgod": {"platform": "youtubeMusic", "scrobbleLabel": "YouTube Music (macOS)"},
+    "pjibgclleladliembfgfagdaldikeohf": {"platform": "spotifyWeb", "scrobbleLabel": "Spotify Web (macOS)"}
   }
 }

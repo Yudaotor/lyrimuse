@@ -400,10 +400,13 @@ final class PlaybackCoordinator: ObservableObject {
     /// 顺便启动,一条路两件事。
     ///
     /// 要按**宿主**找 App(`probeTargetBundleID`):Safari 上报的 `com.apple.WebKit.GPU`
-    /// 不是一个能打开的 App,裸查 `urlForApplication` 必然落空。
+    /// 不是一个能打开的 App,裸查 `urlForApplication` 必然落空。浏览器网页应用例外:打开它自己的壳(带 Dock 图标的那个),
+    /// 不打开宿主浏览器。
     func openResolvedPlayerApp() {
-        guard let id = BrowserPositionProbe.probeTargetBundleID(
-            forReported: LocalPlaybackSource.shared.lastResolvedBundleID) else {
+        let reported = LocalPlaybackSource.shared.lastResolvedBundleID
+        let target = BrowserWebApp.platformID(of: reported) != nil
+            ? reported : BrowserPositionProbe.probeTargetBundleID(forReported: reported)
+        guard let id = target else {
             logger.notice("openResolvedPlayerApp: no resolved player")
             return
         }
@@ -436,7 +439,8 @@ final class PlaybackCoordinator: ObservableObject {
             logger.notice("openResolvedPlayer: no resolved player")
             return
         }
-        guard let platformID = resolvedWebPlatformID else {
+        // 网页应用的页面就在它自己的窗口里,打开壳就是翻到那一页。
+        guard let platformID = resolvedWebPlatformID, BrowserWebApp.platformID(of: id) == nil else {
             openResolvedPlayerApp()
             return
         }

@@ -2210,10 +2210,9 @@ public enum MediaControlClient {
         return raw
     }
 
-    /// 这个 bundle id 是不是配对了 Spotify 网页版的浏览器(Safari 报上来的是它的媒体进程,先换成宿主再查配对)。
+    /// 这个 bundle id 是不是配对了 Spotify 网页版的浏览器(Safari 的媒体进程、Spotify 网页应用由 `isPaired` 自己换算)。
     private static func isSpotifyWebBrowser(_ bundleID: String) -> Bool {
-        BrowserPositionProbe.shared.isPaired(
-            bundleID: BrowserPositionProbe.probeTargetBundleID(forReported: bundleID), platformID: "spotifyWeb")
+        BrowserPositionProbe.shared.isPaired(bundleID: bundleID, platformID: "spotifyWeb")
     }
 
     /// media-control 这一拍没给出可用快照(通道坏 / 没人在报 / 焦点在别的 App 上)时,直接去问上一份被接受的快照所属的播放器
@@ -2571,8 +2570,7 @@ public enum MediaControlClient {
     ) -> Bool {
         guard SpotifyWebAdProbe.fieldShapeNeedsProbe(title: snapshot.title,
                                                      artist: snapshot.artist) else { return false }
-        let host = BrowserPositionProbe.probeTargetBundleID(forReported: bundleID)
-        guard BrowserPositionProbe.shared.isPaired(bundleID: host, platformID: "spotifyWeb") else {
+        guard BrowserPositionProbe.shared.isPaired(bundleID: bundleID, platformID: "spotifyWeb") else {
             return false
         }
         let key = SpotifyWebAdProbe.trackKey(artist: snapshot.artist, title: snapshot.title)

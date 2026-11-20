@@ -1934,6 +1934,9 @@ func runPlayerIdentityTests() {
                     "网页版: 浏览器里放的不是 YouTube Music 不走这里")
         expectEqual(Y.target(reportedBundleID: "com.apple.Safari", webPlatformID: "youtubeMusic", title: "t", isPaired: { _ in false }) == nil, true,
                     "网页版: 没配对 YouTube Music 的浏览器不走这里")
+        let ytmApp = "com.google.Chrome.app.cinhimbnkkaeohfgghhklpknlkffjgod"
+        expectEqual(Y.target(reportedBundleID: ytmApp, webPlatformID: "youtubeMusic", title: "t", isPaired: { $0 == ytmApp })?.bundleID,
+                    "com.google.Chrome", "网页版: 网页应用按报上来的原值判配对,脚本发给宿主浏览器")
     }
 
     // Amazon Music 的随机 / 循环:按它播放条上的键,读回看它自己的日志(AmazonMusicModeControl)。样例行照真机日志。
@@ -2667,6 +2670,120 @@ func runPlayerIdentityTests() {
                         false, "isTrusted: nil bundle id 不该崩、也不该被认")
             expectEqual(TrustedPlayers.isTrusted("", trusted: [safari: "Safari"]),
                         false, "isTrusted: 空字符串 bundle id 不该被认")
+        }
+
+        // ---- 浏览器网页应用(Chrome / Edge / Brave 安装为 App 的 YouTube Music、Spotify)----
+        // 系统报的是壳的 bundle id `<浏览器>.app.<32 位 a–p>`;登记过平台的默认就认、按宿主浏览器里的网页版对待。
+        // 规则跟引擎 parseBrowserWebApp 同一套(browserwebapp_test.go 有对称的断言)。
+        do {
+            typealias W = BrowserWebApp
+            let ytmID = "cinhimbnkkaeohfgghhklpknlkffjgod"
+            let spID = "pjibgclleladliembfgfagdaldikeohf"
+            let unknownID = "abcdefghijklmnopabcdefghijklmnop"
+            let parseCases: [(String, String?, String?)] = [
+                ("com.google.Chrome.app.\(ytmID)", "com.google.Chrome", ytmID),
+                ("com.microsoft.edgemac.app.\(ytmID)", "com.microsoft.edgemac", ytmID),
+                ("com.brave.Browser.app.\(spID)", "com.brave.Browser", spID),
+                ("com.google.Chrome.canary.app.\(ytmID)", "com.google.Chrome.canary", ytmID),
+                ("com.google.Chrome.app.Profile-1-\(ytmID)", "com.google.Chrome", ytmID),
+                ("com.google.Chrome.app.Default-\(ytmID)", "com.google.Chrome", ytmID),
+                ("com.google.Chrome.app.\(unknownID)", "com.google.Chrome", unknownID),
+                ("com.google.Chrome", nil, nil),
+                ("com.google.Chrome.app.", nil, nil),
+                ("com.google.Chrome.app.\(ytmID.dropFirst())", nil, nil),
+                ("com.google.Chrome.app.x\(ytmID)", nil, nil),
+                ("com.google.Chrome.app.a.b-\(ytmID)", nil, nil),
+                ("com.google.Chrome.app.q\(ytmID.dropFirst())", nil, nil),
+                ("com.google.Chrome.app.C\(ytmID.dropFirst())", nil, nil),
+                (".app.\(ytmID)", nil, nil),
+                ("com.google.Chrome..app.\(ytmID)", nil, nil),
+                ("com.google.Chrome.app.\(ytmID).helper", nil, nil),
+                ("com.google.Chrome.app.Profile 1-\(ytmID)", nil, nil),
+                ("com.google.Chrome.application.\(ytmID)", nil, nil),
+                ("com.google.Chrome.app.\(ytmID)\(ytmID)", nil, nil),
+            ]
+            for (id, host, appID) in parseCases {
+                let s = W.parse(id)
+                expectEqual(s?.hostBundleID, host, "网页应用: 拆 \(id) 的宿主")
+                expectEqual(s?.appID, appID, "网页应用: 拆 \(id) 的应用 id")
+            }
+            expectEqual(W.parse(nil) == nil, true, "网页应用: nil 不崩")
+
+            expectEqual(W.platformID(of: "com.google.Chrome.app.\(ytmID)"), "youtubeMusic", "网页应用: YouTube Music")
+            expectEqual(W.platformID(of: "com.brave.Browser.app.Profile-3-\(spID)"), "spotifyWeb", "网页应用: Spotify")
+            expectEqual(W.platformID(of: "com.google.Chrome.app.\(unknownID)"), nil, "网页应用: 没登记的应用不认平台")
+            expectEqual(W.platformID(of: "com.google.Chrome"), nil, "网页应用: 浏览器本体不是网页应用")
+            let platformIDs = Set(BrowserPositionProbe.supportedPlatforms.map(\.id))
+            expectEqual(Set(W.platformByAppID.values).isSubset(of: platformIDs), true,
+                        "网页应用: 登记表里的平台都是「网页版」卡的平台")
+            expectEqual(W.platformByAppID.count, 2, "网页应用: 只登记 YouTube Music 和 Spotify")
+
+            // 宿主:壳声明的优先,读不到用 bundle id 前半段。没装的壳问不到 Info.plist,退回前半段。
+            let shortcut = W.Shortcut(hostBundleID: "com.google.Chrome", appID: ytmID)
+            expectEqual(W.resolvedHost(shortcut, declaredHost: "com.google.Chrome.canary"), "com.google.Chrome.canary",
+                        "网页应用: 壳的 CrBundleIdentifier 为准")
+            expectEqual(W.resolvedHost(shortcut, declaredHost: nil), "com.google.Chrome", "网页应用: 读不到 Info.plist 用前半段")
+            expectEqual(W.resolvedHost(shortcut, declaredHost: "  "), "com.google.Chrome", "网页应用: 空白声明当没写")
+            let fakeHost = "com.example.lyrimuse-selftest-\(ProcessInfo.processInfo.processIdentifier)"
+            expectEqual(W.host(of: "\(fakeHost).app.\(ytmID)"), fakeHost, "网页应用: 宿主")
+            expectEqual(W.host(of: "\(fakeHost).app.\(unknownID)"), nil, "网页应用: 没登记的应用不换宿主")
+            expectEqual(TrustedPlayers.mediaProxyOwner(of: "\(fakeHost).app.Profile-1-\(spID)"), fakeHost,
+                        "网页应用: 代理表查不到时换成宿主浏览器")
+            expectEqual(BrowserPositionProbe.probeTargetBundleID(forReported: "\(fakeHost).app.\(unknownID)"),
+                        "\(fakeHost).app.\(unknownID)", "网页应用: 没登记的原样返回")
+
+            // 默认就认,不用手动信任;没登记的网页应用照旧当未知 App。
+            let pwa = "com.google.Chrome.app.\(ytmID)"
+            let unknownPWA = "com.google.Chrome.app.\(unknownID)"
+            expectEqual(TrustedPlayers.isTrusted(pwa, trusted: [:]), true, "网页应用: 不用手动信任")
+            expectEqual(TrustedPlayers.isAccepted(pwa, trusted: [:]), true, "网页应用: 自动识别下认")
+            expectEqual(TrustedPlayers.isAccepted(unknownPWA, trusted: [:]), false, "网页应用: 没登记的不认")
+            expectEqual(TrustedPlayers.isAccepted(unknownPWA, trusted: ["com.google.Chrome": "Chrome"]), false,
+                        "网页应用: 信任了宿主浏览器不顺带放行没登记的网页应用")
+            // 「这不是一首歌」守卫照旧管它:专辑名空要复核。
+            expectEqual(TrustedPlayers.notASong(bundleID: pwa, artist: "KAO Hong Kong", album: "", trusted: [:]), true,
+                        "网页应用: 专辑名空照旧交给广告复核")
+            expectEqual(TrustedPlayers.notASong(bundleID: pwa, artist: "周杰倫", album: "葉惠美", trusted: [:]), false,
+                        "网页应用: 歌手专辑都有就是歌")
+            expectEqual(A.shouldOffer(bundleID: pwa, artist: "周杰倫", album: "葉惠美", observedAt: now, isAutoDetect: true,
+                                      now: now, isAccepted: { TrustedPlayers.isAccepted($0, trusted: [:]) }),
+                        false, "网页应用: 已经认下的不弹「发现未知播放器」")
+            expectEqual(MediaControlClient.focusFallbackTarget(forBundleID: pwa, trusted: [:]) == nil, true,
+                        "网页应用: 焦点被占时不直接问它(按浏览器算)")
+
+            // 设置页扫本机装了哪些:只看 `*.localized` 目录里的 .app,读壳的 Info.plist。
+            let root = URL(fileURLWithPath: NSTemporaryDirectory())
+                .appendingPathComponent("lyrimuse-selftest-webapps-\(ProcessInfo.processInfo.processIdentifier)-\(UUID().uuidString)")
+            func shim(_ folder: String, _ name: String, _ info: [String: String]) {
+                let contents = root.appendingPathComponent(folder).appendingPathComponent(name).appendingPathComponent("Contents")
+                _ = FileIO.createDirectory(contents)
+                if let data = try? PropertyListSerialization.data(fromPropertyList: info, format: .xml, options: 0) {
+                    _ = FileIO.write(data, to: contents.appendingPathComponent("Info.plist"))
+                }
+            }
+            shim("Chrome Apps.localized", "YouTube Music.app",
+                 ["CFBundleIdentifier": "com.google.Chrome.app.\(ytmID)", "CrBundleIdentifier": "com.google.Chrome"])
+            shim("Chrome Apps.localized", "Other.app", ["CFBundleIdentifier": "com.google.Chrome.app.\(unknownID)"])
+            shim("Chrome Canary Apps.localized", "Spotify.app",
+                 ["CFBundleIdentifier": "com.google.Chrome.canary.app.Profile-1-\(spID)", "CrBundleIdentifier": "com.google.Chrome.canary"])
+            shim("Edge Apps.localized", "Spotify.app", ["CFBundleIdentifier": "com.microsoft.edgemac.app.\(spID)"])
+            shim("Loose", "YouTube Music.app", ["CFBundleIdentifier": "com.microsoft.edgemac.app.\(ytmID)"])
+            let installed = W.installed(in: root)
+            expectEqual(installed.map(\.bundleID), ["com.google.Chrome.app.\(ytmID)",
+                                                     "com.google.Chrome.canary.app.Profile-1-\(spID)",
+                                                     "com.microsoft.edgemac.app.\(spID)"],
+                        "网页应用: 只认 .localized 目录里登记过的壳")
+            expectEqual(installed.map(\.hostBundleID), ["com.google.Chrome", "com.google.Chrome.canary", "com.microsoft.edgemac"],
+                        "网页应用: 宿主按壳声明的算,没声明用前半段")
+            expectEqual(W.hostsByPlatform(installed),
+                        ["youtubeMusic": ["com.google.Chrome"], "spotifyWeb": ["com.google.Chrome.canary"]],
+                        "网页应用: 设置页只给报得出壳 bundle id 的宿主摆头像(Edge 的网页应用报浏览器本体,要配对)")
+            expectEqual(W.reportsOwnBundleID(host: "com.google.Chrome"), true, "网页应用: Chrome 报壳的 id")
+            expectEqual(W.reportsOwnBundleID(host: "com.google.Chrome.beta"), true, "网页应用: Chrome 别的通道同一份代码")
+            expectEqual(W.reportsOwnBundleID(host: "com.brave.Browser"), false, "网页应用: Brave 报浏览器本体")
+            expectEqual(W.reportsOwnBundleID(host: "com.google.Chromeium"), false, "网页应用: 前缀要到点为止")
+            expectEqual(W.installed(in: root.appendingPathComponent("missing")).isEmpty, true, "网页应用: 目录不在不崩")
+            _ = FileIO.remove(root)
         }
 
         // **跨层不变量**:凡是我们提议信任的,用户点下去一定真的生效 ——
