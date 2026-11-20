@@ -417,6 +417,13 @@ enum DebugDeepLinks {
             if let textColor { AppSettings.shared.lyricsWindowTextColorMode = textColor }
             if let miniLayout { AppSettings.shared.lyricsWindowMiniLyricsLayout = miniLayout }
             logger.notice("debug lyrics window style textColor=\(textColor?.rawValue ?? "-", privacy: .public) miniLayout=\(miniLayout?.rawValue ?? "-", privacy: .public)")
+        case let .lyricsWindowBackground(mode, color):
+            if let mode { AppSettings.shared.lyricsWindowBackgroundMode = mode }
+            if let color { AppSettings.shared.lyricsWindowBackgroundColorHex = color }
+            logger.notice("debug lyrics window background mode=\(mode?.rawValue ?? "-", privacy: .public) color=\(color ?? "-", privacy: .public)")
+        case let .wallpaperLuma(path, delayMs):
+            DesktopWallpaperLuma.shared.setDebugOverride(path: path, delayMs: delayMs)
+            logger.notice("debug wallpaper luma path=\(path ?? "off", privacy: .public) delayMs=\(delayMs, privacy: .public)")
         case let .lyricsWindowPointer(inside):
             LyricsWindowRemote.shared.simulatePointer(inside: inside)
             logger.notice("debug lyrics window pointer inside=\(inside, privacy: .public)")
@@ -567,6 +574,8 @@ enum DebugDeepLinks {
             "notch": NotchLyricsWindowController.shared.debugState,
             "realAudio": RealAudioMeter.shared.debugState,
             "lyricsWindowChrome": LyricsWindowRemote.shared.chromeDebugState,
+            // 歌词窗口半透明背景读到的壁纸亮度(后台读,见 `DesktopWallpaperLuma`)。
+            "wallpaperLuma": DesktopWallpaperLuma.shared.debugState,
             // 悬浮歌词关着时不碰 `.shared`:读一下就会建出窗口。
             "overlay": AppSettings.shared.classicOverlayEnabled ? LyricsOverlayWindowController.shared.debugState as Any : NSNull(),
             "menuBarPanel": ["open": MenuBarStatusItem.shared.isPanelOpen,

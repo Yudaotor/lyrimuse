@@ -199,6 +199,12 @@ public enum LyrimuseDeepLink: Equatable, Sendable {
         /// 歌词窗口完整尺寸的「文字颜色」档位、迷你的「歌词布局」(跟设置页走同一个设置,原始值同存盘值,至少带一项,认不出来的整条不认):
         /// `debug/lyrics-window-style?text-color=auto|light|dark|custom&mini-layout=oneLine|compact|list`。
         case lyricsWindowStyle(textColor: LyricsWindowTextColorMode?, miniLayout: LyricsWindowMiniLyricsLayout?)
+        /// 歌词窗口完整尺寸的「背景」档位和纯色 / 渐变起点的颜色(跟设置页走同两个设置,至少带一项,认不出来的整条不认):
+        /// `debug/lyrics-window-background?mode=artwork|solid|gradient|glass&color=FFFFFF33`(颜色 RRGGBB 或 RRGGBBAA,存成 `#RRGGBBAA`)。
+        case lyricsWindowBackground(mode: LyricsWindowBackgroundMode?, color: String?)
+        /// 歌词窗口半透明背景读的壁纸亮度改读这个文件(所有屏幕),后台读之前先等 `delay-ms` 毫秒(0…`maxWallpaperLumaDelayMs`,造「壁纸文件打开要等」),不落盘:
+        /// `debug/wallpaper-luma?path=<绝对路径>&delay-ms=3000`,`off=1` 换回真壁纸。不改用户的桌面壁纸就能验深 / 浅壁纸下的字色。
+        case wallpaperLuma(path: String?, delayMs: Int = 0)
         /// 当作指针进 / 出歌词窗口(`debug/lyrics-window-pointer?inside=1|0`):完整尺寸走「闲置隐藏」的进出,迷你走面板的悬停进出,
         /// 跟真指针进出走同一处,不挪鼠标就能验按钮组和红绿灯的显隐。
         case lyricsWindowPointer(inside: Bool)
@@ -420,6 +426,8 @@ public enum LyrimuseDeepLink: Equatable, Sendable {
 
     /// `debug/stall` 的上限(毫秒)。再长就是把 App 卡死了。
     public static let maxStallMs = 2_000
+    /// `debug/wallpaper-luma` 的 `delay-ms` 上限。
+    public static let maxWallpaperLumaDelayMs = 60_000
 
     /// `action/` 下不对应快捷键的那几个名字(跟 `LyrimuseAction.linkName` 不能重名,selftest 核对)。
     public static let extraActionNames = ["copy-lyric", "surfaces", "lyrics-offset", "play-mode"]
@@ -844,6 +852,23 @@ public enum LyrimuseDeepLink: Equatable, Sendable {
             let layout = miniLayout.flatMap(LyricsWindowMiniLyricsLayout.init(rawValue:))
             guard (textColor == nil) == (mode == nil), (miniLayout == nil) == (layout == nil) else { return nil }
             self = .debug(.lyricsWindowStyle(textColor: mode, miniLayout: layout))
+        case ("debug", "/lyrics-window-background"):
+            let modeText = value("mode")
+            let colorText = value("color")
+            guard modeText != nil || colorText != nil else { return nil }
+            let mode = modeText.flatMap(LyricsWindowBackgroundMode.init(rawValue:))
+            let color = colorText.flatMap { LyricsWindowSubLines.Item.romanizationColor.storedValue(fromQuery: $0) }
+            guard (modeText == nil) == (mode == nil), (colorText == nil) == (color == nil), color?.isEmpty != true else { return nil }
+            self = .debug(.lyricsWindowBackground(mode: mode, color: color))
+        case ("debug", "/wallpaper-luma"):
+            if value("off").flatMap(Self.parseBool) == true {
+                self = .debug(.wallpaperLuma(path: nil))
+            } else {
+                guard let path = value("path"), path.hasPrefix("/") else { return nil }
+                let delayMs = value("delay-ms").map { Int($0) } ?? 0
+                guard let delayMs, (0...Self.maxWallpaperLumaDelayMs).contains(delayMs) else { return nil }
+                self = .debug(.wallpaperLuma(path: path, delayMs: delayMs))
+            }
         case ("debug", "/lyrics-window-pointer"):
             guard let inside = value("inside").flatMap(Self.parseBool) else { return nil }
             self = .debug(.lyricsWindowPointer(inside: inside))
@@ -1350,6 +1375,18 @@ public enum LyrimuseDeepLink: Equatable, Sendable {
                 components.path = "/lyrics-window-style"
                 components.queryItems = [textColor.map { URLQueryItem(name: "text-color", value: $0.rawValue) },
                                          miniLayout.map { URLQueryItem(name: "mini-layout", value: $0.rawValue) }].compactMap { $0 }
+            case let .lyricsWindowBackground(mode, color):
+                components.path = "/lyrics-window-background"
+                components.queryItems = [mode.map { URLQueryItem(name: "mode", value: $0.rawValue) },
+                                         color.map { URLQueryItem(name: "color", value: String($0.dropFirst())) }].compactMap { $0 }
+            case let .wallpaperLuma(path, delayMs):
+                components.path = "/wallpaper-luma"
+                if let path {
+                    components.queryItems = [URLQueryItem(name: "path", value: path)]
+                    if delayMs > 0 { components.queryItems?.append(URLQueryItem(name: "delay-ms", value: String(delayMs))) }
+                } else {
+                    components.queryItems = [URLQueryItem(name: "off", value: "1")]
+                }
             case let .lyricsWindowSubLines(values):
                 components.path = "/lyrics-window-sublines"
                 components.queryItems = LyricsWindowSubLines.Item.allCases.compactMap { item in

@@ -459,6 +459,23 @@ func runDeepLinkTests() {
         expectEqual(link("lyrimuse://debug/lyrics-window-style?text-color=pink") == nil
                     && link("lyrimuse://debug/lyrics-window-style?text-color=light&mini-layout=grid") == nil
                     && link("lyrimuse://debug/lyrics-window-style") == nil, true, "debug: 歌词窗口样式认不出来、一项都没带都不认")
+        expectEqual(link("lyrimuse://debug/lyrics-window-background?mode=solid&color=ffffff33"),
+                    .debug(.lyricsWindowBackground(mode: .solid, color: "#FFFFFF33")), "debug: 歌词窗口背景档位和颜色")
+        expectEqual(link("lyrimuse://debug/lyrics-window-background?color=7E5353"),
+                    .debug(.lyricsWindowBackground(mode: nil, color: "#7E5353FF")), "debug: 歌词窗口背景只带颜色,不带不透明度按不透明")
+        expectEqual(link("lyrimuse://debug/lyrics-window-background?mode=photo") == nil
+                    && link("lyrimuse://debug/lyrics-window-background?mode=solid&color=red") == nil
+                    && link("lyrimuse://debug/lyrics-window-background?color=follow") == nil
+                    && link("lyrimuse://debug/lyrics-window-background") == nil, true, "debug: 歌词窗口背景认不出来、一项都没带都不认")
+        expectEqual([link("lyrimuse://debug/wallpaper-luma?path=/tmp/a%20b.png&delay-ms=3000"),
+                     link("lyrimuse://debug/wallpaper-luma?path=/tmp/a.png"), link("lyrimuse://debug/wallpaper-luma?off=1")],
+                    [.debug(.wallpaperLuma(path: "/tmp/a b.png", delayMs: 3000)), .debug(.wallpaperLuma(path: "/tmp/a.png")),
+                     .debug(.wallpaperLuma(path: nil))], "debug: 壁纸亮度换读测试图、可带延迟,off 换回真壁纸")
+        expectEqual(link("lyrimuse://debug/wallpaper-luma?path=a.png") == nil
+                    && link("lyrimuse://debug/wallpaper-luma?path=/tmp/a.png&delay-ms=-1") == nil
+                    && link("lyrimuse://debug/wallpaper-luma?path=/tmp/a.png&delay-ms=60001") == nil
+                    && link("lyrimuse://debug/wallpaper-luma?path=/tmp/a.png&delay-ms=x") == nil
+                    && link("lyrimuse://debug/wallpaper-luma") == nil, true, "debug: 壁纸亮度相对路径、延迟越界或不是数、什么都没带都不认")
         expectEqual(link("lyrimuse://debug/lyrics-window-pointer?inside=1"), .debug(.lyricsWindowPointer(inside: true)),
                     "debug: 当作指针进了歌词窗口")
         expectEqual(link("lyrimuse://debug/lyrics-window-pointer?inside=0"), .debug(.lyricsWindowPointer(inside: false)),
@@ -1062,6 +1079,10 @@ func runDeepLinkTests() {
             .debug(.lyricsWindowSubLines(values: [.romanizationFont: "PingFang SC", .translationColor: "#FF6A0080"])),
             .debug(.lyricsWindowStyle(textColor: .light, miniLayout: nil)),
             .debug(.lyricsWindowStyle(textColor: .custom, miniLayout: .oneLine)),
+            .debug(.lyricsWindowBackground(mode: .gradient, color: "#12131A00")), .debug(.lyricsWindowBackground(mode: .artwork, color: nil)),
+            .debug(.lyricsWindowBackground(mode: nil, color: "#7E5353FF")),
+            .debug(.wallpaperLuma(path: "/tmp/壁 纸.heic", delayMs: 2500)), .debug(.wallpaperLuma(path: "/tmp/a.png")),
+            .debug(.wallpaperLuma(path: nil)),
             .debug(.lyricsWindowSubLines(values: [.romanizationFont: LyricsWindowSubLineStyle.systemFontFamily, .romanizationWeight: "heavy",
                                                   .romanizationColor: "", .translationFont: "", .translationWeight: "",
                                                   .translationColor: "#FFFFFFBA"])),

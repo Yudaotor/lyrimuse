@@ -206,8 +206,17 @@ func runMainThreadIOTests() {
                               "await Task.detached(priority: .utility) { HomeFolderAccess.check() }.value"), true,
                     "目录检查(契约): 设置页心跳里的 HomeFolderAccess 在后台查")
         let luma = app("UI/DesktopWallpaperLuma.swift")
-        expectEqual(sourceHas(sourceBody("static func luma(for screen: NSScreen?)", in: luma), "desktopImageURL"), false,
+        expectEqual(sourceHas(sourceBody("func luma(for screen: NSScreen?)", in: luma), "desktopImageURL"), false,
                     "壁纸亮度(契约): 壁纸地址也走 5 秒缓存")
+        let lumaQueued = sourceBody("Self.queue.async {", in: sourceBody("private func refresh(_ url: URL, known: Entry?)", in: luma))
+        func count(_ text: String, _ needle: String) -> Int { text.components(separatedBy: needle).count - 1 }
+        expectEqual([count(luma, "FileIO.modificationDate("), count(lumaQueued, "FileIO.modificationDate("),
+                     count(luma, "averageLuma(of: "), count(lumaQueued, "averageLuma(of: "),
+                     count(luma, "CGImageSourceCreateWithURL"),
+                     count(sourceBody("nonisolated static func averageLuma(of url: URL)", in: luma), "CGImageSourceCreateWithURL"),
+                     count(app("UI/LyricsWindowView.swift"), "averageLuma(")],
+                    [1, 1, 1, 1, 1, 1, 0],
+                    "壁纸亮度(契约): 查修改时间和解码壁纸只在后台队列上做,主线程只查缓存")
         let surface = app("UI/OverlayDesktopSurface.swift")
         let images = sourceBody("final class DesktopWallpaperImages: ObservableObject {", in: surface)
         expectEqual(sourceHas(sourceBody("func loadSample()", in: images),

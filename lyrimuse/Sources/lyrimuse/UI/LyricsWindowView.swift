@@ -1719,6 +1719,8 @@ struct LyricsWindowView: View {
     /// 迷你尺寸里点歌名 / 歌手 / 专辑弹出的简介(系统 popover,挂在顶部那组文字上)。迷你窗里没有「⋯」那个锚点。
     @State private var miniEditorialKind: EditorialCard.Kind?
     @ObservedObject private var editorial = EditorialNotesStore.shared
+    /// 半透明背景下的壁纸亮度在后台读,读到的跟原来不一样时发布一次,字色跟着重算(见 `transparentBackdropLuma`)。
+    @ObservedObject private var wallpaperLuma = DesktopWallpaperLuma.shared
     /// 「你的常听」榜单面板(Last.fm 系列 #7)。
     @State private var showsChartsPanel = false
     /// 「⋯」按钮锚点矩形的**快照**。面板定位改读它、
@@ -4910,9 +4912,9 @@ struct LyricsWindowView: View {
     /// 自定义背景色里有没有"没填满"的部分 —— 有就让窗口本体透出去。
     ///
     /// 渐变看**两端里更透的那个**:只要有一端透,那一侧就该见到背后的东西。
-    /// 背景半透明时颜色后面透出来的那一层(桌面壁纸)的亮度;不透明、或者读不到壁纸时 nil(按系统外观估计)。
+    /// 背景半透明时颜色后面透出来的那一层(桌面壁纸)的亮度;不透明、后台还没读完、或者读不到壁纸时 nil(按系统外观估计)。
     private var transparentBackdropLuma: Double? {
-        wantsTransparentWindow ? DesktopWallpaperLuma.luma(for: windowController.screen) : nil
+        wantsTransparentWindow ? wallpaperLuma.luma(for: windowController.screen) : nil
     }
 
     /// 窗口内容有多不透明:系统的窗口投影和边线按窗口内容的 alpha 算。渐变取两端平均;封面和毛玻璃按不透明算
