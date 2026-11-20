@@ -29,13 +29,13 @@ import (
 // 网页端 lyric 接口只回 {time, lineLyric} 的逐行歌词;外文歌的中文译文烘在这份正文里(译文行挂在
 // 下一句原文的时间戳上),由 enrich.go 候选装配前的 adoptBakedTranslation 摘出来接到译文轨。逐字另走
 // 客户端的 lrcx 接口,只给选中的那一条拉(kuwolrcx.go)。定位跟 amll/lyricfind 一样,是覆盖率有限的
-// "锦上添花"兜底档,不是主力源,建议排在 lyricsSourceDefaultOrder 末尾(见 features.go)。
+// "锦上添花"兜底档,不是主力源,顺序优先的默认顺序里排在末尾(ProviderDescriptor.DefaultPriorityRank)。
 //
 // 合规提醒:`search.kuwo.cn/r.s` 和 `kuwo.cn/openapi/...` 都是网页端
 // 接口、非公开 API 文档,这类接口"可能随时失效、
 // 要求验证码或发生变更"——跟 amllttml.go 是同一类风险,不是新引入
-// 一种风险类别。healthcheck 走的是 enabledLyricSourceNames()(见 enrich.go
-// lyricSourceNames),这个源接进去之后会被健康检查自动覆盖,不需要单独接线。
+// 一种风险类别。healthcheck 走的是 enabledLyricSourceNames()(登记表里
+// 开着的联网源),这个源接进去之后会被健康检查自动覆盖,不需要单独接线。
 type kuwoResult struct {
 	lyrics, title, artist, album string
 	// yrc:同一首歌的逐字轨(kuwolrcx.go),拉不到就是空串。已去掉烘入的译文行。

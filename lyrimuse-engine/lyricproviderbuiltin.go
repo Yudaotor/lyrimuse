@@ -166,5 +166,6 @@ func newBuiltinLyricProviderRegistry() *lyricProviderRegistry {
 		Name: importLyricsSource, Kind: providerKindUserLibrary, TieRank: 20, Rounds: roundsPrimaryOnly,
 	}, privLocalClientIdentity)})
 
+	r.index()
 	return r
 }

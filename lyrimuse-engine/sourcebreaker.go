@@ -346,7 +346,7 @@ func sharedLyricSourceBreaker() *lyricSourceBreaker { return lyricSourceBreakerS
 // setSharedLyricSourceBreaker 只给单测换掉整份熔断器。
 func setSharedLyricSourceBreaker(b *lyricSourceBreaker) { lyricSourceBreakerSharedPtr.Store(b) }
 
-// lyricSourceForHost 把请求主机归到歌词源名(lyricSourceNames 里的写法);不是歌词源的主机
+// lyricSourceForHost 把请求主机归到歌词源名(登记表里的源名);不是歌词源的主机
 // (Last.fm / ListenBrainz / MusicBrainz / iTunes / DoH …)返回空串。主机名单来自各源文件里
 // 实际请求的域名(grep 核对);raw.githubusercontent.com 全仓只有 amll 在用。
 func lyricSourceForHost(host string) string {

@@ -508,7 +508,7 @@ func lyricSourceFailureReasons(results []scoredLyricCandidateResult) map[string]
 func lyricSourceResumeAts(results []scoredLyricCandidateResult, enabled func(string) bool, now time.Time) map[string]int64 {
 	responded := lyricSourcesResponded(results)
 	var out map[string]int64
-	for _, source := range lyricSourceNames {
+	for _, source := range networkLyricSourceNames() {
 		if containsString(responded, source) || !enabled(source) {
 			continue
 		}

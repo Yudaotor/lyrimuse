@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"sort"
 	"sync"
 )
 
@@ -289,18 +290,22 @@ const (
 
 func (p builtinPrivileges) has(bit builtinPrivileges) bool { return p&bit != 0 }
 
-// ProviderDescriptor 是一个源的登记信息。各字段跟现有按源名写的表逐项相等,由 lyricproviderregistry_test.go 守着;
-// 改这里的值就要同步改对应的表,反之亦然。
+// ProviderDescriptor 是一个源的登记信息。每个字段要么是生产代码唯一读的那一份(期望值冻结在 lyricsourceexpect_test.go),
+// 要么跟还在用的按源名写的表逐项相等;两种都由 lyricproviderregistry_test.go 守着,改这里的值要同步改对应的期望表或旧表。
 type ProviderDescriptor struct {
 	// Name:缓存、留痕、统计里的源名。
 	Name string
 	Kind ProviderKind
 
-	// Order:联网源在源名单里的位置(lyricSourceNames),从 1 起;本机来源为 0。
+	// Order:联网源在源名单里的位置(networkLyricSourceNames),从 1 起;本机来源为 0。只决定「有歌没词」标记、日志和
+	// 设置项里的源序,同分候选谁赢看 TieRank。
 	Order int
-	// TieRank:同分候选的决胜序(lyricCandidateTieOrder),从 1 起,小的赢。
+	// TieRank:同分候选的决胜序(lyricProviderRegistry.tieOrder),从 1 起,小的赢。必须就是 rankLyricSourceResults 构造候选的
+	// 顺序(本机几家夹在汽水和 AMLL 之间):合并几轮结果的 mergeLyricCandidateRounds 按它重建顺序,两边口径不同的话同一首歌
+	// 走没走补查轮,同分时会换源。rankLyricSourceResults 里加了源、挪了顺序,这里跟着改(lyrictieorder_test.go 守着)。
 	TieRank int
-	// DefaultPriorityRank:顺序优先模式的默认顺序(lyricsSourceDefaultOrder),从 1 起;本机来源为 0。
+	// DefaultPriorityRank:顺序优先模式的默认顺序(resolveLyricsSourceOrder),从 1 起;本机来源为 0。必须跟 App 侧
+	// LyricsSource.allCases 的声明顺序一致:那边顺序表的默认值就是 allCases,对不上的话顺序优先模式在首次写盘前后表现不同。
 	DefaultPriorityRank int
 
 	Rounds RoundPolicy
@@ -361,6 +366,38 @@ type lyricProviderRegistry struct {
 	// providers:各来源的实现,一个来源至多一份。联网源每个恰好一份:收集循环按源名单数「都回来了没有」,少登记一个
 	// 这一轮会等到截止,多登记一份会多交一份结果。本机类源按这里的先后同步问。
 	providers []LyricProvider
+
+	// 下面几份名单登记完算一次(index),读的一方别改它们。
+	// networkNames:联网源按 Order。
+	networkNames []string
+	// tieOrder:全部来源按 TieRank。
+	tieOrder []string
+	// defaultPriorityOrder:联网源按 DefaultPriorityRank。
+	defaultPriorityOrder []string
+}
+
+// index 按描述符算出各份名单。全部登记完调一次;之后再改描述符里的 Kind、名次要重调。
+func (r *lyricProviderRegistry) index() {
+	network := func(d *ProviderDescriptor) bool { return d.Kind == providerKindNetwork }
+	r.networkNames = r.rankedNames(network, func(d *ProviderDescriptor) int { return d.Order })
+	r.tieOrder = r.rankedNames(func(*ProviderDescriptor) bool { return true }, func(d *ProviderDescriptor) int { return d.TieRank })
+	r.defaultPriorityOrder = r.rankedNames(network, func(d *ProviderDescriptor) int { return d.DefaultPriorityRank })
+}
+
+// rankedNames:keep 选中的描述符的源名,按 rank 从小到大。
+func (r *lyricProviderRegistry) rankedNames(keep func(*ProviderDescriptor) bool, rank func(*ProviderDescriptor) int) []string {
+	ds := make([]*ProviderDescriptor, 0, len(r.descriptors))
+	for _, d := range r.descriptors {
+		if keep(d) {
+			ds = append(ds, d)
+		}
+	}
+	sort.SliceStable(ds, func(i, j int) bool { return rank(ds[i]) < rank(ds[j]) })
+	names := make([]string, len(ds))
+	for i, d := range ds {
+		names[i] = d.Name
+	}
+	return names
 }
 
 // registerBuiltin 登记一个编在核心里的源,特权位写在调用处。返回登记好的描述符。
@@ -391,4 +428,14 @@ var (
 func lyricProviders() *lyricProviderRegistry {
 	lyricProvidersOnce.Do(func() { lyricProvidersShared = newBuiltinLyricProviderRegistry() })
 	return lyricProvidersShared
+}
+
+// networkLyricSourceNames:联网歌词源的名字,按 Order。每个联网源一轮一个并发 goroutine;结果通道的缓冲、进度分母、到齐判断、
+// 熔断轮次、近况统计、设置里的开关都只数它们,本机类源(读播放器本机数据的、导入库)不在里面。返回的是登记表里那一份,别改它。
+func networkLyricSourceNames() []string { return lyricProviders().networkNames }
+
+// isNetworkLyricSource:name 是不是登记过的联网歌词源。
+func isNetworkLyricSource(name string) bool {
+	d := lyricProviders().descriptor(name)
+	return d != nil && d.Kind == providerKindNetwork
 }

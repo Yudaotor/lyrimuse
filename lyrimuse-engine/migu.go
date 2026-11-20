@@ -45,7 +45,7 @@ import (
 //
 // 合规提醒:这是网页/客户端接口、非公开 API 文档,"可能随时失效、要求验证码或发生变更"
 // ——跟 kuwo.go 同一类风险,不是新引入一种风险类别。healthcheck 走
-// enabledLyricSourceNames()(见 enrich.go lyricSourceNames),接进去自动被覆盖。
+// enabledLyricSourceNames()(登记表里开着的联网源),接进去自动被覆盖。
 type miguResult struct {
 	lyrics, tr, title, artist, album string
 	// yrc:MRC 解出的逐字轨(migumrc.go),没有 mrcurl 或解不开就是空串。

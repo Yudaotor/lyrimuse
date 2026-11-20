@@ -25,7 +25,7 @@ import (
 //
 // 带水位(migrationRetiredLyricSources):lyrics/ 导入进来的那几条下次启动补扫,配置搬家带进来的整库重扫。只动本机数据,不联网。
 
-// retiredLyricSources:下架的歌词源名(跟当初的 lyricSourceNames 里的写法逐字一样)。
+// retiredLyricSources:下架的歌词源名(跟下架前登记的源名逐字一样)。
 var retiredLyricSources = []string{"musixmatch"}
 
 // retiredLyricSourceCoverHosts:下架源的封面图床,封面在这些主机(含子域)上的清掉,交给补封面重新取。

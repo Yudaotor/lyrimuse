@@ -4866,7 +4866,8 @@ func runSourceContractSettingsTests() {
 
     // ---- 歌词源名单:Go/Swift 两份逐个相等,App 侧只准有一份----
     //
-    // 名单在引擎侧是 enrich.go 的 `lyricSourceNames`(进度分母、断路器轮次、合并序都数它),
+    // 名单在引擎侧是登记表里的联网源(lyricproviderbuiltin.go 各描述符的 `Order`;进度分母、断路器轮次、合并序都数它),
+    // 冻结在 lyricsourceexpect_test.go 的 `lyricSourceNames` 里,引擎自己的测试钉着「登记表推出来的 == 这一行」;
     // App 侧是 `LyricsSource.allCases`(FeatureSettingsStore.swift,设置页「歌词源」列表)。「搜索
     // 候选歌词」弹窗原来还手抄了第三份,给头部「x/y」徽标的分母和「歌词源可用情况」列表用,注释
     // 写着"手工保持一致"——加咪咕时前两份都改了、第三份漏了,弹窗头部「0/8」、空状态
@@ -4882,7 +4883,7 @@ func runSourceContractSettingsTests() {
         let repoRoot = packageDir.deletingLastPathComponent()
         func read(_ url: URL) -> String? { try? String(contentsOfFile: url.path, encoding: .utf8) }
         let swiftEnum = read(packageDir.appendingPathComponent("Sources/lyrimuse/Settings/FeatureSettingsStore.swift"))
-        let go = read(repoRoot.appendingPathComponent("lyrimuse-engine/enrich.go"))
+        let go = read(repoRoot.appendingPathComponent("lyrimuse-engine/lyricsourceexpect_test.go"))
         let sheet = read(packageDir.appendingPathComponent("Sources/lyrimuse/LyricsManager/LyricsSearchSheet.swift"))
         if let swiftEnum, let go, let sheet {
             // Swift:`public enum LyricsSource: String, …{` 到它的收尾 `}` 之间的 case 行(一行多个 case 用逗号分开)。
@@ -4905,7 +4906,7 @@ func runSourceContractSettingsTests() {
                 }
             }
             expectEqual(swiftNames.count >= 9, true, "歌词源名单: 解析到了 LyricsSource 的 case(守卫自身没跑空)")
-            expectEqual(goNames.count >= 9, true, "歌词源名单: 解析到了 enrich.go 的 lyricSourceNames(守卫自身没跑空)")
+            expectEqual(goNames.count >= 9, true, "歌词源名单: 解析到了引擎 lyricsourceexpect_test.go 的 lyricSourceNames(守卫自身没跑空)")
             expectEqual(Set(swiftNames).count, swiftNames.count, "歌词源名单: Swift 侧没有重复 case")
             expectEqual(Set(swiftNames), Set(goNames),
                         "歌词源名单: 引擎 lyricSourceNames 与 App LyricsSource.allCases 逐个相等(加源两侧都要改)")

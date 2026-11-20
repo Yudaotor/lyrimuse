@@ -43,7 +43,7 @@ func kanaSongNeedsReading(e enrichEntry) bool {
 // enabledKanaDonorSources:kanaDonorSources 里开着的源。
 func enabledKanaDonorSources() []string {
 	var out []string
-	for _, s := range lyricSourceNames {
+	for _, s := range networkLyricSourceNames() {
 		if kanaDonorSources[s] && lyricSourceEnabled(s) {
 			out = append(out, s)
 		}

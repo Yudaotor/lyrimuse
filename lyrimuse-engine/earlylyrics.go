@@ -138,7 +138,7 @@ func priorityPickSettled(scored []scoredLyricCandidateResult, picked *scoredLyri
 
 // nativeLyricSourcePending:当前播放器自家的歌词源开着、这一轮还没回话。播放器本地歌词(KKBOX 等)开搜前就放进来了,不在此列。
 func nativeLyricSourcePending(answered func(string) bool) bool {
-	for _, s := range lyricSourceNames {
+	for _, s := range networkLyricSourceNames() {
 		if isNativeLyricSource(s) && lyricSourceEnabled(s) && !answered(s) {
 			return true
 		}

@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"slices"
 	"sync"
 )
 
@@ -237,7 +236,7 @@ func (l *lyricQueryLog) queries() []lyricQueryRecord {
 // sortedLyricSourceOnly 把 ctx 上那份"只查这几个源"的名单(withLyricSourceOnly 挂的
 // map[string]bool)摊成**定序**切片。必须定序:map 迭代顺序是随机的,直接落进决策存档
 // 会让同一轮解析每次序列化出不同的 JSON —— 存档是给人逐条比对用的,顺序抖动等于噪音。
-// 排序基准用 lyricSourceNames(源的规范顺序,跟"歌词来源"设置项同一份),
+// 排序基准用联网源名单(networkLyricSourceNames,源的规范顺序,跟"歌词来源"设置项同一份),
 // 不用字典序 —— 界面上列出来的顺序应当跟别处一致。
 func sortedLyricSourceOnly(ctx context.Context) []string {
 	only := lyricSourceOnlyFrom(ctx)
@@ -245,14 +244,14 @@ func sortedLyricSourceOnly(ctx context.Context) []string {
 		return nil
 	}
 	out := make([]string, 0, len(only))
-	for _, s := range lyricSourceNames {
+	for _, s := range networkLyricSourceNames() {
 		if only[s] {
 			out = append(out, s)
 		}
 	}
-	// 名单里出现了 lyricSourceNames 之外的名字(理论上不会,但别静默丢掉证据)。
+	// 名单里出现了联网源之外的名字(理论上不会,但别静默丢掉证据)。
 	for s := range only {
-		if !slices.Contains(lyricSourceNames, s) {
+		if !isNetworkLyricSource(s) {
 			out = append(out, s)
 		}
 	}

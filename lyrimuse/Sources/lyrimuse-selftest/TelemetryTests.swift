@@ -1149,13 +1149,14 @@ func runTelemetryTests() {
         expectEqual(Set(TelemetryLyricSource.tags).count == TelemetryLyricSource.tags.count
                         && ["unknown", "other", TelemetryLyricSource.subtitles].allSatisfy(TelemetryLyricSource.tags.contains), true,
                     "歌词来源: 名单不重复,带 unknown / other / subtitles")
-        // 引擎会写进条目 lyrics_source 的值:十六个歌词源(lyricSourceNames)和各本机来源常量(`const …LyricsSource = "…"`)。
+        // 引擎会写进条目 lyrics_source 的值:十六个歌词源(登记表里的联网源,冻结在 lyricsourceexpect_test.go 的 lyricSourceNames)
+        // 和各本机来源常量(`const …LyricsSource = "…"`)。
         // 漏了的会在遥测里全记成 other。
         let engineDir = root.appendingPathComponent("../../lyrimuse-engine")
-        let enrichGo = (try? String(contentsOf: engineDir.appendingPathComponent("enrich.go"), encoding: .utf8)) ?? ""
+        let expectGo = (try? String(contentsOf: engineDir.appendingPathComponent("lyricsourceexpect_test.go"), encoding: .utf8)) ?? ""
         var engineSources: [String] = []
-        if let start = enrichGo.range(of: "var lyricSourceNames = []string{"), let end = enrichGo[start.upperBound...].range(of: "}") {
-            engineSources = enrichGo[start.upperBound..<end.lowerBound].split(separator: ",").map {
+        if let start = expectGo.range(of: "var lyricSourceNames = []string{"), let end = expectGo[start.upperBound...].range(of: "}") {
+            engineSources = expectGo[start.upperBound..<end.lowerBound].split(separator: ",").map {
                 $0.trimmingCharacters(in: .whitespaces).trimmingCharacters(in: CharacterSet(charactersIn: "\""))
             }
         }

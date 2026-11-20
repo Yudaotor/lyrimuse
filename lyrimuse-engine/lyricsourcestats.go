@@ -410,7 +410,7 @@ func lyricSourceOutcomeFromDecision(d *lyricsDecision, enabled, eligible func(st
 			}
 		}
 	}
-	for _, s := range lyricSourceNames {
+	for _, s := range networkLyricSourceNames() {
 		if isPlayerLocalLyricSource(s) || !enabled(s) || !eligible(s) || queued[s] {
 			continue
 		}
@@ -491,7 +491,7 @@ func summarizeLyricSourceStats(days map[string]*lyricSourceStatsDay, recent map[
 
 	var out []lyricSourceStatsSummary
 	coolingNetwork := map[string]bool{}
-	for _, src := range lyricSourceNames {
+	for _, src := range networkLyricSourceNames() {
 		if isPlayerLocalLyricSource(src) {
 			continue
 		}
@@ -515,7 +515,7 @@ func summarizeLyricSourceStats(days map[string]*lyricSourceStatsDay, recent map[
 				continue
 			}
 			out[i].Alert = lyricSourceAlertNetwork
-			for _, s := range lyricSourceNames {
+			for _, s := range networkLyricSourceNames() {
 				if s != out[i].Source && coolingNetwork[s] {
 					out[i].NetworkPeers = append(out[i].NetworkPeers, s)
 				}
@@ -921,7 +921,7 @@ func (s *lyricSourceStats) saveIfNeeded() {
 func (s *lyricSourceStats) save() {
 	// 开关在锁外取:noteLyricSourceTrip 是熔断器持着自己的锁调进来的,持 s.mu 时别再调 features 这类外部函数。
 	on := map[string]bool{}
-	for _, src := range lyricSourceNames {
+	for _, src := range networkLyricSourceNames() {
 		on[src] = lyricSourceEnabled(src)
 	}
 	s.mu.Lock()

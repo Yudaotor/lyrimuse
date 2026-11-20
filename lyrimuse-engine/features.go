@@ -44,7 +44,7 @@ const (
 	lyricSourceKuwo = "kuwo"
 	// 咪咕音乐(加,见 migu.go 头注)。跟酷我相反,搜索排序基本可信(原版排第一),
 	// 只套身份闸淘汰、不重新打分;逐行 LRC + 逐字(MRC)+ 外语歌的中文译文。华语曲库覆盖率预期
-	// 不低,但仍先按"锦上添花"档排在默认顺序末尾——三处顺序必须一致(见 lyricsSourceDefaultOrder)。
+	// 不低,但仍先按"锦上添花"档排在默认顺序末尾——三处顺序必须一致(见 ProviderDescriptor.DefaultPriorityRank)。
 	lyricSourceMigu = "migu"
 	// Deezer(加,见 deezer.go 头注)。跟 lyricfind **数据同源**:Deezer 的词
 	// 由 LyricFind 供、时间轴 Deezer 自己做。接它有两层意义:① 给 LyricFind 这家版权方补
@@ -91,27 +91,6 @@ const (
 // 有没有曲目);引擎只在「跟随播放器启动」里用选中集合决定盯哪几个进程(companionLaunchProcessNames)。
 // playerAuto("自动识别")不对应固定的某个 App:任一内置播放器或信任列表里的播放器都算。playerXxx 常量本身由 scripts/gen-players.py 从 shared/players.json 生成,在
 // players_generated.go —— 接一个新播放器改那份 JSON,Swift 侧的 rawValue 跟着同一份走,两边不可能再漂。
-
-// lyricsSourceDefaultOrder 是"顺序优先"模式缺省的顺序。
-// 顺序必须与 Swift 侧 LyricsSource.allCases 的**声明顺序**一致 —— 那边的
-// lyricsSourceOrder 默认值就是 allCases,两边对不上会让"顺序优先"模式在首次写盘前后
-// 表现不同。改这里就要同步改那里,反之亦然(那边注释也钉着这条)。
-//
-// 排序依据(按实测采用率,此前是照抄 enrich.go candidates 的 append 顺序):
-// 用户本机 3744 条 enrich 缓存里最终被采用的歌词来自 酷狗 1506(40.2%)/ 网易云 1125(30.0%)/
-// QQ 732(19.6%)/ LRCLIB 74(2.0%) —— 酷狗是第一主力却长期排第三,
-// 这次提到首位,前四个自此按真实采用率排。
-//
-// 后四个(amll/lyricfind/kuwo/migu)**刻意不按采用率排**,维持"锦上添花"档排在末尾:
-// 它们分别是 / 08-31 / 08-31 / 09-04 才接入的,上面那 3744 条缓存绝大多数早于
-// 它们存在,采用数 0~16 是样本偏差、不是覆盖率结论 —— 别拿"没赶上考试"当"考砸了"。等各自
-// 跑满一段时间再拿数据重排。想让它们优先,用户可以自己在设置里拖。
-var lyricsSourceDefaultOrder = []string{
-	lyricSourceKugou, lyricSourceNetease, lyricSourceQQ, lyricSourceLRCLIB,
-	lyricSourceAMLL, lyricSourceLyricFind, lyricSourceKuwo, lyricSourceMigu, lyricSourceDeezer,
-	lyricSourceAppleMusic, lyricSourceSoda, lyricSourceVibe, lyricSourceGenie, lyricSourcePetitLyrics, lyricSourceZing,
-	lyricSourceMegalobiz,
-}
 
 // lyricsPriorityPlayerLocal:「顺序优先」顺序表(lyrics_source_order)里「播放器自带歌词」那一项,不是歌词源。App
 // LyricsPriorityEntry.playerLocalRawValue 逐字相同;默认排在全部源之后。
@@ -191,7 +170,7 @@ type featureFlagsFile struct {
 	// 的顺序,取第一个给出能用、没带扣分项的候选的源,不比较分数高低;都带扣分项时取第一个能用的)。空值按 smart 处理。
 	LyricsSourceMode string `json:"lyrics_source_mode,omitempty"`
 	// LyricsSourceOrder：只有 LyricsSourceMode == "priority" 时才生效。缺失时按
-	// lyricsSourceDefaultOrder 兜底。
+	// 默认顺序兜底(resolveLyricsSourceOrder)。
 	LyricsSourceOrder []string `json:"lyrics_source_order,omitempty"`
 	// PreferLocalFileLyrics:放本机文件时先用文件自带的歌词(同名 .lrc、内嵌歌词),两种匹配算法通用。缺失时跟着匹配算法:
 	// 顺序优先为 true(同名 .lrc 一直排第一),智能算法为 false(按分数比)。见 resolvePreferLocalFileLyrics。
@@ -650,14 +629,15 @@ func resolveTrustedPlayers(m map[string]string) map[string]string {
 // 同一口径:降级安装、手改过文件时清单里可能全是不认识的名字,不去掉的话这边等于所有已知源都关了,App 那边却显示
 // 全开);列表缺失 / 为空 = 全部启用。老配置升级后补上新加的源是 App 的事(xxx_lyrics 迁移标记),这里只认列表。
 func resolveLyricsSources(list []string) map[string]bool {
-	m := make(map[string]bool, len(lyricSourceNames))
+	names := networkLyricSourceNames()
+	m := make(map[string]bool, len(names))
 	for _, s := range list {
-		if slices.Contains(lyricSourceNames, s) {
+		if isNetworkLyricSource(s) {
 			m[s] = true
 		}
 	}
 	if len(m) == 0 {
-		for _, s := range lyricSourceNames {
+		for _, s := range names {
 			m[s] = true
 		}
 	}
@@ -683,10 +663,11 @@ func lyricSourceEnabled(source string) bool {
 	return len(enabled) == 0 || enabled[source]
 }
 
-// enabledNetworkLyricSources:这一刻开着的联网歌词源,按 lyricSourceNames 的顺序。
+// enabledNetworkLyricSources:这一刻开着的联网歌词源,按联网源名单的顺序(networkLyricSourceNames)。
 func enabledNetworkLyricSources() []string {
-	out := make([]string, 0, len(lyricSourceNames))
-	for _, s := range lyricSourceNames {
+	names := networkLyricSourceNames()
+	out := make([]string, 0, len(names))
+	for _, s := range names {
 		if lyricSourceEnabled(s) {
 			out = append(out, s)
 		}
@@ -770,7 +751,7 @@ func resolveLyricsSourceMode(mode string) string {
 // (去重、丢掉不认得的),没排进去的按默认顺序(全部源,再是「播放器自带歌词」)补在末尾 —— 新加了一个源、旧文件的顺序表
 // 还没有它时,用户手排的前几位原样生效,新源排最后。口径与 Swift 侧 FeatureSettingsStore.completedLyricsPriorityOrder 一致。
 func resolveLyricsSourceOrder(order []string) []string {
-	defaults := append(slices.Clone(lyricsSourceDefaultOrder), lyricsPriorityPlayerLocal)
+	defaults := append(slices.Clone(lyricProviders().defaultPriorityOrder), lyricsPriorityPlayerLocal)
 	out := make([]string, 0, len(defaults))
 	for _, s := range order {
 		if slices.Contains(defaults, s) && !slices.Contains(out, s) {

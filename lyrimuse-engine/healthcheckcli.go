@@ -427,7 +427,7 @@ func healthProbeItems(enabled []string, probes int, o healthProbeOutcome, budget
 // enabledLyricSourceNames 返回当前设置里启用的歌词源,顺序固定,便于比对输出。
 func enabledLyricSourceNames() []string {
 	var out []string
-	for _, name := range lyricSourceNames {
+	for _, name := range networkLyricSourceNames() {
 		if lyricSourceEnabled(name) {
 			out = append(out, name)
 		}

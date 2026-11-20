@@ -76,7 +76,7 @@ func TestEveryLyricSourceIsRegistered(t *testing.T) {
 // 没进过候选列表,而丢掉的不只是那一个源自己的候选——跨源正文共识也会跟着少算一份。
 //
 // 用源码扫描而不是跑一遍收集循环:那需要真网或一整套假源,而这里要守的东西很简单——
-// 「这两处有没有跟 lyricSourceNames 绑在一起」,读源码就能答。
+// 「这两处有没有跟这一轮的联网源名单(登记表的 networkLyricSourceNames)绑在一起」,读源码就能答。
 func TestLyricSourceCollectLoopTracksSourceCount(t *testing.T) {
 	raw, err := os.ReadFile("enrich.go")
 	if err != nil {
@@ -86,9 +86,12 @@ func TestLyricSourceCollectLoopTracksSourceCount(t *testing.T) {
 	for _, want := range []string{
 		// 收集循环:按源清单逐个核对到齐
 		"for !allLyricSourcesBack() {",
-		"allLyricSourcesBack := func() bool {\n\t\tfor _, s := range lyricSourceNames {",
+		"allLyricSourcesBack := func() bool {\n\t\tfor _, s := range networkSources {",
 		// 结果 channel 的缓冲:每个源一个 goroutine,都能不阻塞地放下自己那一份
-		"make(chan lyricSourceResult, len(lyricSourceNames))",
+		"make(chan lyricSourceResult, len(networkSources))",
+		// 这一轮的联网源名单取自登记表,调度起的也是登记表里的那批实现
+		"networkSources := networkLyricSourceNames()",
+		"startLyricProviders(ctx, lyricProviders().providers, providerQuery, providerEnv, providerPlan, resultsCh)",
 	} {
 		if !containsCode(body, want) {
 			t.Errorf("enrich.go 里没找到 %q —— 这两处必须跟源数联动,写死字面量会在下次加源时静默丢结果", want)

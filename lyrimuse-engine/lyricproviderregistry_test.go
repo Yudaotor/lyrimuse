@@ -13,8 +13,10 @@ import (
 	"testing"
 )
 
-// 歌词源登记表(lyricprovider.go)的「双表相等」守卫:现有按源名写的每一张表,都要能从描述符原样推出来。
-// 哪一条红了,先看是描述符填错了还是表改了没同步;推不出来的是描述符缺字段,补字段,别改守卫去迁就。
+// 歌词源登记表(lyricprovider.go)的守卫。两种参照:生产代码只读登记表的那几类(名单、顺序),参照是冻结在
+// lyricsourceexpect_test.go 里的期望表,登记表推出来的、生产代码读到的都要跟它逐项相等;还在用的按源名写的表,
+// 都要能从描述符原样推出来。哪一条红了,先看是描述符填错了还是表改了没同步;推不出来的是描述符缺字段,补字段,
+// 别改守卫去迁就。
 
 func registryDescriptors() []*ProviderDescriptor { return lyricProviders().descriptors }
 
@@ -145,11 +147,22 @@ func TestProviderRegistryIsWellFormed(t *testing.T) {
 	}
 }
 
-// 源名单、全集兜底、源常量:都等于登记表里的联网源按 Order 排出来的名单。
+// 源名单、全集兜底、源常量:都等于登记表里的联网源按 Order 排出来的名单;生产代码读到的那一份也是。
 func TestProviderRegistryNamesMatchSourceList(t *testing.T) {
 	got := registryNetworkNames()
 	if !slices.Equal(got, lyricSourceNames) {
 		t.Errorf("登记表 %v\nlyricSourceNames %v", got, lyricSourceNames)
+	}
+	if read := networkLyricSourceNames(); !slices.Equal(read, lyricSourceNames) {
+		t.Errorf("networkLyricSourceNames %v\n期望表 %v", read, lyricSourceNames)
+	}
+	for _, d := range registryDescriptors() {
+		if got, want := isNetworkLyricSource(d.Name), slices.Contains(lyricSourceNames, d.Name); got != want {
+			t.Errorf("%s:isNetworkLyricSource=%v,在不在期望表里=%v", d.Name, got, want)
+		}
+	}
+	if isNetworkLyricSource("nope") || isNetworkLyricSource("") {
+		t.Error("没登记的名字不是联网源")
 	}
 	consts := allLyricSourceConstants()
 	sort.Strings(consts)
@@ -174,6 +187,9 @@ func TestProviderRegistryTieRankMatchesTieOrder(t *testing.T) {
 	if !slices.Equal(got, lyricCandidateTieOrder) {
 		t.Errorf("登记表 %v\nlyricCandidateTieOrder %v", got, lyricCandidateTieOrder)
 	}
+	if read := lyricProviders().tieOrder; !slices.Equal(read, lyricCandidateTieOrder) {
+		t.Errorf("生产代码读的决胜序 %v\n期望表 %v", read, lyricCandidateTieOrder)
+	}
 }
 
 func TestProviderRegistryDefaultPriorityMatchesDefaultOrder(t *testing.T) {
@@ -181,6 +197,12 @@ func TestProviderRegistryDefaultPriorityMatchesDefaultOrder(t *testing.T) {
 		func(d *ProviderDescriptor) int { return d.DefaultPriorityRank })
 	if !slices.Equal(got, lyricsSourceDefaultOrder) {
 		t.Errorf("登记表 %v\nlyricsSourceDefaultOrder %v", got, lyricsSourceDefaultOrder)
+	}
+	if read := lyricProviders().defaultPriorityOrder; !slices.Equal(read, lyricsSourceDefaultOrder) {
+		t.Errorf("生产代码读的默认顺序 %v\n期望表 %v", read, lyricsSourceDefaultOrder)
+	}
+	if got, want := resolveLyricsSourceOrder(nil), append(slices.Clone(lyricsSourceDefaultOrder), lyricsPriorityPlayerLocal); !slices.Equal(got, want) {
+		t.Errorf("没排过顺序时 %v\n期望 %v", got, want)
 	}
 }
 
