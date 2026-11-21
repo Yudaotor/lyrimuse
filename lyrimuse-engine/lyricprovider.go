@@ -3,9 +3,11 @@ package main
 import (
 	"context"
 	"net"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
+	"sync/atomic"
 )
 
 // LyricProvider 是引擎问一个歌词源的统一接口:一轮对一首歌问一次,源自己做完检索、过闸、回退、取词,交一份结果。
@@ -421,24 +423,28 @@ type ProviderDescriptor struct {
 	// Probe:自己的探测曲,nil = 用共用的探测曲。有它的源要实现 OwnProbeProvider。
 	Probe *ProbeTrack
 
-	// Privileges 只在 registerBuiltin 里写。
+	// Privileges 只在 builtinLyricSources.registerBuiltin 里写。
 	Privileges builtinPrivileges
 	// DependsOnIDsFrom:等哪几个源递来的曲目编号,带 privTrackIDConsume 的源才有。别名轮的名单里这几个源一个都不在时,
 	// 这个源也不问(dropSourcesMissingIDFeeders)。
 	DependsOnIDsFrom []string
 }
 
-// lyricProviderRegistry 是全部歌词来源的登记表:联网源和本机来源各一份描述符,登记了实现的由调度起(startLyricProviders)。
+// lyricProviderRegistry 是全部歌词来源的登记表:联网源和本机来源各一份描述符、一份实现,由调度起(startLyricProviders)。
+//
+// 一份登记表一次构造完(newLyricProviderRegistry),之后不改:里面的切片、map 和各份名单谁都不许动。来源要增减就拿新的
+// 来源名单另构造一份,换掉当前生效的那一份(lyricRegistryCurrent)。所以拿着一份登记表的读者,从头到尾看到的是同一组
+// 来源、同一组名单;要跨好几步用同一组来源的(一轮搜索),开头取一次 lyricProviders() 一直用到底,别中途再取。
 type lyricProviderRegistry struct {
 	descriptors []*ProviderDescriptor
 	byName      map[string]*ProviderDescriptor
 	// byProvider:源名 → 它的实现。
 	byProvider map[string]LyricProvider
-	// providers:各来源的实现,一个来源至多一份。联网源每个恰好一份:收集循环按源名单数「都回来了没有」,少登记一个
-	// 这一轮会等到截止,多登记一份会多交一份结果。本机类源按这里的先后同步问。
+	// providers:各来源的实现,一个来源恰好一份,先后跟 descriptors 一样。联网源每个一个并发 goroutine,收集循环按
+	// networkNames 数「都回来了没有」:两份名单出自同一组实现,数目对得上。本机类源按这里的先后同步问。
 	providers []LyricProvider
 
-	// 下面几份名单登记完算一次(index),读的一方别改它们。
+	// 下面几份名单构造时算一次(index),读的一方别改它们。
 	// networkNames:联网源按 Order。
 	networkNames []string
 	// tieOrder:全部来源按 TieRank。
@@ -464,7 +470,24 @@ type lyricProviderRegistry struct {
 	hostOwners, domainOwners map[string]string
 }
 
-// index 按描述符算出各份名单。全部登记完调一次;之后再改描述符里的 Kind、名次要重调。
+// newLyricProviderRegistry 用一组来源的实现构造登记表:每个实现的描述符(Descriptor)登记一份,先后照 providers,各份名单
+// 当场算好。providers 里不能有重名的、交不出描述符的:编在核心里的那一组由登记表守卫钉着,运行时登记的在进来之前校验。
+func newLyricProviderRegistry(providers []LyricProvider) *lyricProviderRegistry {
+	r := &lyricProviderRegistry{
+		byName: make(map[string]*ProviderDescriptor, len(providers)), byProvider: make(map[string]LyricProvider, len(providers)),
+		providers: slices.Clone(providers),
+	}
+	for _, p := range r.providers {
+		d := p.Descriptor()
+		r.descriptors = append(r.descriptors, d)
+		r.byName[d.Name] = d
+		r.byProvider[d.Name] = p
+	}
+	r.index()
+	return r
+}
+
+// index 按描述符算出各份名单,只在构造时调。名单是描述符里的 Kind、名次、特权位算出来的:这些字段登记之后不改。
 func (r *lyricProviderRegistry) index() {
 	network := func(d *ProviderDescriptor) bool { return d.Kind == providerKindNetwork }
 	r.networkNames = r.rankedNames(network, func(d *ProviderDescriptor) int { return d.Order })
@@ -549,18 +572,20 @@ func (r *lyricProviderRegistry) rankedNames(keep func(*ProviderDescriptor) bool,
 	return names
 }
 
-// registerBuiltin 登记一个编在核心里的源,特权位写在调用处。返回登记好的描述符。
-func (r *lyricProviderRegistry) registerBuiltin(d *ProviderDescriptor, privileges builtinPrivileges) *ProviderDescriptor {
+// builtinLyricSources 收编在核心里的来源(builtinLyricProviderList),按登记的先后。
+type builtinLyricSources struct {
+	providers []LyricProvider
+}
+
+// registerBuiltin 给一个编在核心里的源的描述符写上特权位,特权位写在调用处。返回这份描述符。
+func (b *builtinLyricSources) registerBuiltin(d *ProviderDescriptor, privileges builtinPrivileges) *ProviderDescriptor {
 	d.Privileges = privileges
-	r.descriptors = append(r.descriptors, d)
-	r.byName[d.Name] = d
 	return d
 }
 
-// implement 登记一个源的实现。
-func (r *lyricProviderRegistry) implement(p LyricProvider) {
-	r.providers = append(r.providers, p)
-	r.byProvider[p.Descriptor().Name] = p
+// implement 收一个源的实现。
+func (b *builtinLyricSources) implement(p LyricProvider) {
+	b.providers = append(b.providers, p)
 }
 
 // provider:name 这个源的实现,没登记的名字返回 nil。问源的可选接口时用:`p, ok := r.provider(name).(接口)`。
@@ -574,15 +599,18 @@ func (r *lyricProviderRegistry) descriptor(name string) *ProviderDescriptor {
 }
 
 var (
-	lyricProvidersOnce   sync.Once
-	lyricProvidersShared *lyricProviderRegistry
+	lyricRegistryInit sync.Once
+	// lyricRegistryCurrent:当前生效的登记表。换新是整份换(Store 一份新构造的),不改已经交出去的那一份。
+	lyricRegistryCurrent atomic.Pointer[lyricProviderRegistry]
 )
 
-// lyricProviders 返回登记表,第一次用到时建。别改成包级变量的初始化式:描述符引用各源的函数,那些函数以后读登记表时
-// 会成初始化环。
+// lyricProviders 返回当前生效的登记表,第一次用到时用编在核心里的来源建。别改成包级变量的初始化式:描述符引用各源的
+// 函数,那些函数以后读登记表时会成初始化环。
+//
+// 每调一次读到的可能是不同的一份(中间换过新的)。一件事里要前后一致地读名单、描述符的,取一次存在局部变量里用。
 func lyricProviders() *lyricProviderRegistry {
-	lyricProvidersOnce.Do(func() { lyricProvidersShared = newBuiltinLyricProviderRegistry() })
-	return lyricProvidersShared
+	lyricRegistryInit.Do(func() { lyricRegistryCurrent.Store(newLyricProviderRegistry(builtinLyricProviderList())) })
+	return lyricRegistryCurrent.Load()
 }
 
 // networkLyricSourceNames:联网歌词源的名字,按 Order。每个联网源一轮一个并发 goroutine;结果通道的缓冲、进度分母、到齐判断、

@@ -360,12 +360,12 @@ func TestProviderRegistryHostsMatchSourceForHost(t *testing.T) {
 
 // 查表结构跟逐条规则扫的结果相等:只认这一个主机、连子域、只认子域三种范围各一条,加一个什么都不认的。
 func TestHostOwnerIndexMatchesRuleScan(t *testing.T) {
-	r := &lyricProviderRegistry{byName: map[string]*ProviderDescriptor{}, byProvider: map[string]LyricProvider{}}
-	r.registerBuiltin(&ProviderDescriptor{Name: "exact", Hosts: []HostRule{{"api.one.example", hostExact}, {"one.example", hostExact}}}, 0)
-	r.registerBuiltin(&ProviderDescriptor{Name: "with-sub", Hosts: []HostRule{{"two.example", hostWithSubdomains}}}, 0)
-	r.registerBuiltin(&ProviderDescriptor{Name: "sub-only", Hosts: []HostRule{{"three.example", hostSubdomainsOnly}, {"cdn.four.example", hostSubdomainsOnly}}}, 0)
-	r.registerBuiltin(&ProviderDescriptor{Name: "no-hosts"}, 0)
-	r.index()
+	r := newLyricProviderRegistry([]LyricProvider{
+		&stubLyricProvider{desc: &ProviderDescriptor{Name: "exact", Hosts: []HostRule{{"api.one.example", hostExact}, {"one.example", hostExact}}}},
+		&stubLyricProvider{desc: &ProviderDescriptor{Name: "with-sub", Hosts: []HostRule{{"two.example", hostWithSubdomains}}}},
+		&stubLyricProvider{desc: &ProviderDescriptor{Name: "sub-only", Hosts: []HostRule{{"three.example", hostSubdomainsOnly}, {"cdn.four.example", hostSubdomainsOnly}}}},
+		&stubLyricProvider{desc: &ProviderDescriptor{Name: "no-hosts"}},
+	})
 	scan := func(host string) string {
 		for _, d := range r.descriptors {
 			if slices.ContainsFunc(d.Hosts, func(rule HostRule) bool { return rule.matches(host) }) {

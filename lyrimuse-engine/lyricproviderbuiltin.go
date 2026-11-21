@@ -6,11 +6,11 @@ const (
 	peerGroupGlobal  = "global"
 )
 
-// newBuiltinLyricProviderRegistry 登记十六个联网歌词源和六路本机来源,各一份描述符、一份实现。联网源的登记顺序不带语义,
-// 先后看各自的 Order / TieRank / DefaultPriorityRank;本机类源调度按登记的先后同步问(runLocalLyricProviders):KKBOX、
-// Spotify、Amazon Music、文件旁的歌词、洛雪、导入库。
-func newBuiltinLyricProviderRegistry() *lyricProviderRegistry {
-	r := &lyricProviderRegistry{byName: map[string]*ProviderDescriptor{}, byProvider: map[string]LyricProvider{}}
+// builtinLyricProviderList 交编在核心里的十六个联网歌词源和六路本机来源,各一份描述符、一份实现,每调一次是新的一组。
+// 联网源的登记顺序不带语义,先后看各自的 Order / TieRank / DefaultPriorityRank;本机类源调度按登记的先后同步问
+// (runLocalLyricProviders):KKBOX、Spotify、Amazon Music、文件旁的歌词、洛雪、导入库。
+func builtinLyricProviderList() []LyricProvider {
+	r := &builtinLyricSources{}
 
 	r.implement(neteaseProvider{desc: r.registerBuiltin(&ProviderDescriptor{
 		Name: lyricSourceNetease, Order: 1, TieRank: 1, DefaultPriorityRank: 2,
@@ -264,6 +264,5 @@ func newBuiltinLyricProviderRegistry() *lyricProviderRegistry {
 		},
 	}, privLocalClientIdentity)})
 
-	r.index()
-	return r
+	return r.providers
 }
