@@ -355,6 +355,8 @@ type ProviderDescriptor struct {
 	// Name:缓存、留痕、统计里的源名。
 	Name string
 	Kind ProviderKind
+	// Origin:编在核心里的(零值),还是运行时登记的。只由 admitDynamicLyricSource 写。
+	Origin ProviderOrigin
 
 	// Order:联网源在源名单里的位置(networkLyricSourceNames),从 1 起;本机来源为 0。只决定「有歌没词」标记、日志和
 	// 设置项里的源序,同分候选谁赢看 TieRank。
@@ -435,6 +437,7 @@ type ProviderDescriptor struct {
 // 一份登记表一次构造完(newLyricProviderRegistry),之后不改:里面的切片、map 和各份名单谁都不许动。来源要增减就拿新的
 // 来源名单另构造一份,换掉当前生效的那一份(lyricRegistryCurrent)。所以拿着一份登记表的读者,从头到尾看到的是同一组
 // 来源、同一组名单;要跨好几步用同一组来源的(一轮搜索),开头取一次 lyricProviders() 一直用到底,别中途再取。
+// 见 09 章决策 401。
 type lyricProviderRegistry struct {
 	descriptors []*ProviderDescriptor
 	byName      map[string]*ProviderDescriptor
@@ -461,6 +464,8 @@ type lyricProviderRegistry struct {
 	// playerNoVocalsNames:带 privPlayerNoVocals 的来源,按登记的先后。正在放的播放器至多认其中一个是自家的
 	// (playerOwnsLyricSource),先后不影响结果。
 	playerNoVocalsNames []string
+	// dynamicPriorityNames:运行时登记的来源按 DefaultPriorityRank(顺序优先里排在用户顺序表的各名次之后,priorityTiers)。
+	dynamicPriorityNames []string
 	// peerGroups:同类组的名字 → 组里的联网源按 Order。
 	peerGroups map[string][]string
 	// hostRates:单独定了令牌桶参数的主机 → 参数,各描述符的 HostRates 并在一起。
@@ -497,6 +502,8 @@ func (r *lyricProviderRegistry) index() {
 		func(d *ProviderDescriptor) int { return d.InstrumentalRank })
 	r.songwritersOrder = r.rankedNames(func(d *ProviderDescriptor) bool { return d.SongwritersRank > 0 },
 		func(d *ProviderDescriptor) int { return d.SongwritersRank })
+	r.dynamicPriorityNames = r.rankedNames(func(d *ProviderDescriptor) bool { return d.Origin == originDynamic },
+		func(d *ProviderDescriptor) int { return d.DefaultPriorityRank })
 	r.playerNoVocalsNames, r.priorityPlayerLocalNames, r.priorityFileNames = nil, nil, nil
 	for _, d := range r.descriptors {
 		if d.Privileges.has(privPlayerNoVocals) {
@@ -600,7 +607,10 @@ func (r *lyricProviderRegistry) descriptor(name string) *ProviderDescriptor {
 
 var (
 	lyricRegistryInit sync.Once
-	// lyricRegistryCurrent:当前生效的登记表。换新是整份换(Store 一份新构造的),不改已经交出去的那一份。
+	// lyricRegistryBuiltin:只有编在核心里的来源的那一份,进程里只建一次。
+	lyricRegistryBuiltin *lyricProviderRegistry
+	// lyricRegistryCurrent:当前生效的登记表。换新是整份换(Store 一份新构造的),不改已经交出去的那一份。没有运行时登记的
+	// 来源时就是 lyricRegistryBuiltin。
 	lyricRegistryCurrent atomic.Pointer[lyricProviderRegistry]
 )
 
@@ -609,8 +619,20 @@ var (
 //
 // 每调一次读到的可能是不同的一份(中间换过新的)。一件事里要前后一致地读名单、描述符的,取一次存在局部变量里用。
 func lyricProviders() *lyricProviderRegistry {
-	lyricRegistryInit.Do(func() { lyricRegistryCurrent.Store(newLyricProviderRegistry(builtinLyricProviderList())) })
+	lyricRegistryInit.Do(initLyricRegistry)
 	return lyricRegistryCurrent.Load()
+}
+
+func initLyricRegistry() {
+	lyricRegistryBuiltin = newLyricProviderRegistry(builtinLyricProviderList())
+	lyricRegistryCurrent.Store(lyricRegistryBuiltin)
+}
+
+// builtinLyricRegistry 返回只有编在核心里的来源的那份登记表,运行时登记了什么都不影响它。设置里的源开关和顺序表只认
+// 这一份里的名字(resolveLyricsSources、resolveLyricsSourceOrder);运行时登记的来源的校验、名次以它为底。
+func builtinLyricRegistry() *lyricProviderRegistry {
+	lyricRegistryInit.Do(initLyricRegistry)
+	return lyricRegistryBuiltin
 }
 
 // enabledNetworkCount:这份登记表里开着的联网源有几个(进度分母)。

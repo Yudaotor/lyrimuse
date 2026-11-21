@@ -4294,8 +4294,9 @@ func priorityPick(scored []scoredLyricCandidateResult, ok func(scoredLyricCandid
 // priorityTiers:「顺序优先」实际的取用先后,每一项是占同一个名次的几个来源。各来源排在哪是描述符的 PriorityPlacement:
 // 开着「优先用歌曲文件自带的歌词」时文件自带的歌词(priorityFileLyrics)排最前,关着时并进「播放器自带歌词」那一项;用户
 // 顺序里的歌词源各占一个名次,关掉的跳过;「播放器自带歌词」(lyricsPriorityPlayerLocal)展开成 priorityWithPlayerLocal 的
-// 那几个来源,顺序表里没有那一项时(没经过 resolveLyricsSourceOrder 的数据)排在最后。返回的切片别改:里面有登记表自己的
-// 那几份名单。见 09 章决策 297、346。
+// 那几个来源,顺序表里没有那一项时(没经过 resolveLyricsSourceOrder 的数据)排在最后。运行时登记的来源不在用户的顺序表里,
+// 各占一个名次、排在上面这些之后(登记表的 dynamicPriorityNames)。返回的切片别改:里面有登记表自己的那几份名单。
+// 见 09 章决策 297、346、401。
 func priorityTiers() [][]string {
 	reg := lyricProviders()
 	var tiers [][]string
@@ -4316,6 +4317,9 @@ func priorityTiers() [][]string {
 	}
 	if !placed {
 		tiers = append(tiers, playerLocal)
+	}
+	for _, name := range reg.dynamicPriorityNames {
+		tiers = append(tiers, []string{name})
 	}
 	return tiers
 }
@@ -5654,7 +5658,7 @@ func fetchScoredLyricCandidatesStreaming(ctx context.Context, artist, title, alb
 	// 进度分母、候选怎么装、同分谁赢(rankLyricSourceResultsWith)都出自这一份:一轮中途登记表换了新的,这一轮不跟着变,
 	// 下一轮才用新的。往下别再调 lyricProviders(),也别调读当前登记表的包级函数(networkLyricSourceNames、
 	// enabledLyricSourceCount、lyricSourceEnabled):调度起了谁、通道放得下几份、等谁到齐对不上,轻则进度回跳,重则少收一份
-	// 结果或者等到截止。
+	// 结果或者等到截止。见 09 章决策 401。
 	reg := lyricProviders()
 	// 这一轮的联网源:结果通道的缓冲、熔断轮次、进度、到齐判断、截止记账都数它。本机类源不在里面:它们由调度同步问完,
 	// 不经结果通道。

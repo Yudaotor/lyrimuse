@@ -43,7 +43,7 @@ type snapshotRoundUpdate struct {
 
 // startSnapshotRound 在后台跑一轮,进度回调和最终结果各走一个通道。
 func startSnapshotRound(ctx context.Context) (updates chan snapshotRoundUpdate, finished chan []string) {
-	updates, finished = make(chan snapshotRoundUpdate, 16), make(chan []string, 1)
+	updates, finished = make(chan snapshotRoundUpdate, 256), make(chan []string, 1)
 	go func() {
 		_, scored := fetchScoredLyricCandidatesStreaming(ctx, "Snapshot Artist", "Snapshot Song", "", 70,
 			func(_ neteaseInfo, scored []scoredLyricCandidateResult, done, total int) {

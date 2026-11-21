@@ -36,6 +36,9 @@ func renderRegistryLists(r *lyricProviderRegistry) string {
 	line("priorityPlayerLocal", r.priorityPlayerLocalNames)
 	line("priorityFile", r.priorityFileNames)
 	line("playerNoVocals", r.playerNoVocalsNames)
+	if len(r.dynamicPriorityNames) > 0 {
+		line("dynamicPriority", r.dynamicPriorityNames)
+	}
 	sortedMapKeys := func(n int, each func(yield func(string))) []string {
 		keys := make([]string, 0, n)
 		each(func(k string) { keys = append(keys, k) })
@@ -173,6 +176,9 @@ func TestBuiltinRegistryMatchesFrozenLists(t *testing.T) {
 	featuresRef().LyricsSources = nil
 
 	r := lyricProviders()
+	if r != builtinLyricRegistry() {
+		t.Fatal("这条用例要在没有运行时登记的来源时跑")
+	}
 	got := renderRegistryLists(r) + renderRoundDecisions(r) +
 		fmt.Sprintf("enabledLyricSourceCount: %d\nenabledNetworkLyricSources: %s\n",
 			enabledLyricSourceCount(), strings.Join(enabledNetworkLyricSources(), " "))
@@ -265,7 +271,8 @@ func TestRegistryIsImmutableOnceBuilt(t *testing.T) {
 // registryListFields:登记表里构造时算好、之后谁都不许动的字段。
 var registryListFields = []string{
 	"descriptors", "byName", "byProvider", "networkNames", "tieOrder", "defaultPriorityOrder", "instrumentalOrder", "songwritersOrder",
-	"priorityPlayerLocalNames", "priorityFileNames", "playerNoVocalsNames", "peerGroups", "hostOwners", "domainOwners",
+	"priorityPlayerLocalNames", "priorityFileNames", "playerNoVocalsNames", "dynamicPriorityNames", "peerGroups", "hostOwners",
+	"domainOwners",
 }
 
 // 登记表只在构造时写:生产代码里给登记表的字段赋值、对它的名单 append / 排序的,只有 lyricprovider.go 里构造的那三个函数;
@@ -314,7 +321,7 @@ func TestRegistryIsWrittenOnlyWhileBuilding(t *testing.T) {
 }
 
 // registryStoreSites:生产代码里换当前生效的登记表(lyricRegistryCurrent.Store)的地方,文件 → 几处。
-var registryStoreSites = map[string]int{"lyricprovider.go": 1}
+var registryStoreSites = map[string]int{"lyricprovider.go": 1, "lyricproviderdynamic.go": 2}
 
 // stripGoLineComments:去掉整行和行尾的 `//` 注释(字符串里的 `//` 不管:这里扫的几种写法不会出现在字符串里)。
 func stripGoLineComments(src string) string {

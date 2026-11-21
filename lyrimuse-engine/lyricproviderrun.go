@@ -46,7 +46,8 @@ const (
 
 // decide:联网源的判据和先后(测试里的 lyricSourceSkippedThisRound 是它的对照,逐个源对着比):名单外、轮次不许、关掉都先于冷却,一个既关掉又在冷却的源不记
 // 跳过。本机类源(Kind 不是联网的)只看轮次:别名轮的名单、设置里的开关、熔断管的都是联网源,带着「只查这些源」名单的
-// 首轮(只问播放器自家那个源的探查、只补问几个源的补空轮)照样读本机那几份。
+// 首轮(只问播放器自家那个源的探查、只补问几个源的补空轮)照样读本机那几份。运行时登记的来源(Origin 是 originDynamic)
+// 没有设置里的开关,登记着就是开着;名单、轮次、冷却照联网源的规矩判。
 func (p lyricRoundPlan) decide(d *ProviderDescriptor) providerRoundDecision {
 	if d.Rounds == roundsPrimaryOnly && !p.primary {
 		return providerRoundSkipSilent
@@ -60,7 +61,11 @@ func (p lyricRoundPlan) decide(d *ProviderDescriptor) providerRoundDecision {
 	if d.Rounds == roundsOnDemand && !p.onDemand {
 		return providerRoundSkipSilent
 	}
-	switch lyricSourceSkipFor(d.Name, p.enabled, p.cooling) {
+	enabled := p.enabled
+	if d.Origin == originDynamic {
+		enabled = func(string) bool { return true }
+	}
+	switch lyricSourceSkipFor(d.Name, enabled, p.cooling) {
 	case lyricSourceSkipDisabled:
 		return providerRoundSkipSilent
 	case lyricSourceSkipCooling:
@@ -110,9 +115,13 @@ func offlineLegResult(p LyricProvider, d *ProviderDescriptor, q ProviderQuery) (
 // sealProviderResult:源交回的结果进收集循环之前,源名按描述符填;没有 privLocalClientIdentity 的源交的结果不算
 // 「身份由播放器本机数据给定」(两处:identityFromLocalClient 和 ne.FromLocalClient);没有 privPeripheral 的源顺带交的
 // 封面、平台链接、规范歌手名(ne.Cover / ne.SongURL / ne.Artist)不收;没有 privPlayerNoVocals 的源自己填的
-// forPlayingTrack 不收(联网源的这一栏由收集循环统一填,本机类源只有交播放器无人声信号的那一份自己填)。
+// forPlayingTrack 不收(联网源的这一栏由收集循环统一填,本机类源只有交播放器无人声信号的那一份自己填)。运行时登记的
+// 来源的结果只有公共栏:两个专用子结构、给别的源比对用的平台曲目编号整个不收。
 func sealProviderResult(d *ProviderDescriptor, r SourceResult) SourceResult {
 	r.source = d.Name
+	if d.Origin == originDynamic {
+		r.ne, r.amll, r.trackIDs = neteaseInfo{}, amllResult{}, nil
+	}
 	if !d.Privileges.has(privLocalClientIdentity) {
 		r.identityFromLocalClient, r.ne.FromLocalClient = false, false
 	}

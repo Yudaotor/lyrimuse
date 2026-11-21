@@ -628,11 +628,14 @@ func resolveTrustedPlayers(m map[string]string) map[string]string {
 // resolveLyricsSources:文件里的启用列表,先去掉这个版本不认识的源名(跟 App 侧 FeatureSettingsStore 的 compactMap
 // 同一口径:降级安装、手改过文件时清单里可能全是不认识的名字,不去掉的话这边等于所有已知源都关了,App 那边却显示
 // 全开);列表缺失 / 为空 = 全部启用。老配置升级后补上新加的源是 App 的事(xxx_lyrics 迁移标记),这里只认列表。
+//
+// 「认识的源名」是编在核心里的联网源(builtinLyricRegistry):运行时登记的来源没有设置里的开关,名字写进列表里也不算数。
 func resolveLyricsSources(list []string) map[string]bool {
-	names := networkLyricSourceNames()
+	builtin := builtinLyricRegistry()
+	names := builtin.networkNames
 	m := make(map[string]bool, len(names))
 	for _, s := range list {
-		if isNetworkLyricSource(s) {
+		if builtin.sourceKindIs(s, providerKindNetwork) {
 			m[s] = true
 		}
 	}
@@ -662,8 +665,9 @@ func lyricSourceEnabled(source string) bool {
 // sourceEnabled:lyricSourceEnabled 的判据,source 是哪一类按这份登记表认。
 func (r *lyricProviderRegistry) sourceEnabled(source string) bool {
 	// 本机类源(Kind 不是联网的:读播放器本机数据的那几路和导入库)不是歌词源、设置里没有它们的开关:KKBOX 本地歌词
-	// 在用 KKBOX 放歌时读它自己缓存里的那份,跟着播放器走(见 kkboxlyrics.go),别的几路同理。
-	if d := r.descriptor(source); d != nil && d.Kind != providerKindNetwork {
+	// 在用 KKBOX 放歌时读它自己缓存里的那份,跟着播放器走(见 kkboxlyrics.go),别的几路同理。运行时登记的来源同样没有
+	// 开关:登记着就是开着。
+	if d := r.descriptor(source); d != nil && (d.Kind != providerKindNetwork || d.Origin == originDynamic) {
 		return true
 	}
 	enabled := currentLyricSources()
@@ -754,8 +758,9 @@ func resolveLyricsSourceMode(mode string) string {
 // resolveLyricsSourceOrder:用户排的顺序里认得的项(歌词源和「播放器自带歌词」lyricsPriorityPlayerLocal)按原顺序保留
 // (去重、丢掉不认得的),没排进去的按默认顺序(全部源,再是「播放器自带歌词」)补在末尾 —— 新加了一个源、旧文件的顺序表
 // 还没有它时,用户手排的前几位原样生效,新源排最后。口径与 Swift 侧 FeatureSettingsStore.completedLyricsPriorityOrder 一致。
+// 「全部源」是编在核心里的联网源(builtinLyricRegistry):运行时登记的来源不进顺序表,排在哪由 priorityTiers 定。
 func resolveLyricsSourceOrder(order []string) []string {
-	defaults := append(slices.Clone(lyricProviders().defaultPriorityOrder), lyricsPriorityPlayerLocal)
+	defaults := append(slices.Clone(builtinLyricRegistry().defaultPriorityOrder), lyricsPriorityPlayerLocal)
 	out := make([]string, 0, len(defaults))
 	for _, s := range order {
 		if slices.Contains(defaults, s) && !slices.Contains(out, s) {

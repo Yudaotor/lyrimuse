@@ -552,8 +552,11 @@ func TestOnDemandLyricRoundMarkedOnlyAtWhitelist(t *testing.T) {
 		!containsCode(sources["megalobiz.go"], "func (p megalobizProvider) Resolve(ctx context.Context, q ProviderQuery, _ RoundEnv) SourceResult {\n\tr := megalobizLyric(") {
 		t.Errorf("megalobizLyric 只能在 megalobizProvider.Resolve 里调: %v", callers)
 	}
-	if len(resolveCallers) != 1 || len(resolveCallers["lyricproviderrun.go:runLyricProvider"]) != 1 {
-		t.Errorf("各源的 Resolve 只能由 runLyricProvider 调(那里按描述符判这一轮问不问): %v", resolveCallers)
+	if len(resolveCallers) != 2 || len(resolveCallers["lyricproviderrun.go:runLyricProvider"]) != 1 ||
+		len(resolveCallers["lyricproviderdynamic.go:Resolve"]) != 1 ||
+		!containsCode(sources["lyricproviderdynamic.go"], "func (s *dynamicLyricSource) Resolve(ctx context.Context, q ProviderQuery, env RoundEnv) SourceResult {\n\treturn s.inner.Resolve(ctx, q, env)\n}") {
+		t.Errorf("各源的 Resolve 只能由 runLyricProvider 调(那里按描述符判这一轮问不问);另外只有登记表里运行时来源那一层"+
+			"把它原样转给登记进来的实现: %v", resolveCallers)
 	}
 	for _, n := range []string{
 		"only: lyricSourceOnlyFrom(ctx), onDemand: isOnDemandLyricRound(ctx), enabled: lyricSourceEnabled,",

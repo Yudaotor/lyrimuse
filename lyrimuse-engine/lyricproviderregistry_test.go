@@ -19,8 +19,11 @@ import (
 // 歌词源登记表(lyricprovider.go)的守卫。生产代码只读登记表,对照的是冻结在 lyricsourceexpect_test.go 里的期望表:
 // 登记表推出来的、生产代码读到的都要跟它逐项相等。哪一条红了,先看是描述符填错了还是期望表改了没同步;推不出来的是
 // 描述符缺字段,补字段,别改守卫去迁就。
+//
+// 期望表只管编在核心里的来源:这里遍历的是只有内置来源的那份登记表(builtinLyricRegistry)。运行时登记的来源不进期望表,
+// 它们靠登记校验和通用装配对默认值的定义守着(lyricproviderdynamic_test.go)。
 
-func registryDescriptors() []*ProviderDescriptor { return lyricProviders().descriptors }
+func registryDescriptors() []*ProviderDescriptor { return builtinLyricRegistry().descriptors }
 
 // registryNames:满足 keep 的描述符的源名,按 rank 给的名次从小到大。
 func registryNames(keep func(*ProviderDescriptor) bool, rank func(*ProviderDescriptor) int) []string {
@@ -111,8 +114,8 @@ func funcName(f any) string {
 
 func TestProviderRegistryIsWellFormed(t *testing.T) {
 	ds := registryDescriptors()
-	if len(lyricProviders().byName) != len(ds) {
-		t.Fatalf("登记表里有重名的源:%d 份描述符、%d 个名字", len(ds), len(lyricProviders().byName))
+	if len(builtinLyricRegistry().byName) != len(ds) {
+		t.Fatalf("登记表里有重名的源:%d 份描述符、%d 个名字", len(ds), len(builtinLyricRegistry().byName))
 	}
 	var ties, orders, priorities []int
 	for _, d := range ds {
