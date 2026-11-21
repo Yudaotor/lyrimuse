@@ -188,6 +188,8 @@ final class NotchPreviewChrome: ObservableObject, NotchChromeSource {
     func closeFromQuickAction() {}
     /// 同上:预览卡点不到,也不该从预览里弹一扇真浮框。
     func toggleEditorial(_ kind: EditorialCard.Kind) {}
+    /// 同上。
+    func toggleMenuBarPanel(from button: NSView?) {}
 
     /// 编辑台自己算出来的命中结果,这才是预览里真正生效的那条路。
     func setExpandedFromPreview(_ expanded: Bool) {

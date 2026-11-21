@@ -622,6 +622,20 @@ final class MenuBarStatusItem: NSObject {
         panelController.toggle(relativeTo: button, quick: quick, editing: editing)
     }
 
+    /// 灵动岛上那颗「打开菜单栏面板」:开 / 关面板,开的话挂在 `anchor` 给的屏幕矩形下面(那颗键正下方、卡片下沿下面),
+    /// 不挂状态栏按钮,状态栏这一格不反白。返回此刻面板开没开。见 05 章决策 167。
+    @discardableResult
+    func togglePanel(below anchor: @escaping () -> (rect: NSRect, visible: NSRect)?, onClose: @escaping () -> Void) -> Bool {
+        panelController.toggle(below: anchor, onClose: onClose)
+        return panelIsOpen
+    }
+
+    /// 面板挂着的那块屏幕矩形变了(灵动岛卡片换了高度):按新位置重摆。
+    func repositionPanel() { panelController.reposition() }
+
+    /// `debug/state` 的 `menuBarPanel.anchor`。
+    var panelDebugAnchor: [String: Any]? { panelController.debugAnchor }
+
     /// lyrimuse://menubar-menu:弹出右键菜单,同右键点状态栏图标;面板开着先收起。
     /// 用 `.common` 模式的一次性定时器推迟到链接处理返回之后再弹,别换成 `DispatchQueue.main.async`:
     /// 弹出是同步的,菜单跟踪整段会嵌在那个主队列任务里,开着期间排到主队列的别的任务全都轮不到(04 章决策 60)。

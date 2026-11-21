@@ -29,6 +29,12 @@ public enum MenuBarPanelPlacement {
         CGRect(x: screen.midX, y: visible.maxY, width: 0, height: 0)
     }
 
+    /// 从灵动岛上的键打开时的锚点:横向就是那颗键(面板居中在它下面),下沿落在卡片下沿(面板顶边贴着卡片底、不跟展开卡叠)。
+    /// 键在卡片下沿以下时(不该有)按卡片下沿算,高度不为负。见 05 章决策 167。
+    public static func notchAnchor(button: CGRect, cardBottom: CGFloat) -> CGRect {
+        CGRect(x: button.minX, y: cardBottom, width: button.width, height: max(button.maxY - cardBottom, 0))
+    }
+
     /// 宿主视图报尺寸用的比较:理想尺寸按整点取整后跟现在的尺寸差到一点才报。跟 `frame` 同一个取整口径,
     /// 不然摆好之后宿主每轮布局都觉得差半点、再摆一次。
     public static func needsReport(fitting: CGSize, current: CGSize) -> Bool {

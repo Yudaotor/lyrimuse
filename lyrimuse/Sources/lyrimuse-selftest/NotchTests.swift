@@ -185,13 +185,14 @@ func runNotchTests() {
         expectEqual(sourceHas(topRow, "let equalizerOnLeft = !isIdleNoTrack &&")
                     && sourceHas(topRow, "let equalizerOnRight = !isIdleNoTrack && (collapsed ||"), true,
                     "空闲面板(契约): 没有曲目时两只耳朵都不画音浪")
-        // 「打开菜单栏面板」常驻在分组线右边第一颗,跟快捷键、深链 menubar-panel 走同一条路;不看展开快捷操作的开关和格子。
+        // 「打开菜单栏面板」常驻在分组线右边第一颗,面板开在这颗键正下方(05 章决策 167);不看展开快捷操作的开关和格子。
         let idlePanel = sourceBody("var idleExpandedPanel: some View", in: ui("NotchLyricsView+Expanded.swift"))
         expectEqual(sourceHas(idlePanel, ".padding(.horizontal, 3)\n"
                               + "quickActionButton(LyrimuseAction.toggleMenuBarPanelHotkey.iconName, label: L10n.t(\"打开菜单栏面板\")) {\n"
-                              + "LyrimuseActionRunner.perform(.toggleMenuBarPanelHotkey)\n}\n"
+                              + "controller.toggleMenuBarPanel(from: idleMenuBarPanelProbe.view)\n}\n"
+                              + ".background(NotchViewProbeView(probe: idleMenuBarPanelProbe))\n"
                               + "quickActionButton(\"gearshape.fill\""), true,
-                    "空闲面板(契约): 分组线右边第一颗是「打开菜单栏面板」,点了走 LyrimuseActionRunner 的打开面板动作")
+                    "空闲面板(契约): 分组线右边第一颗是「打开菜单栏面板」,点了按这颗键的位置开面板")
         expectEqual(idlePanel.contains("expandedShowsQuickActions") || idlePanel.contains("quickSlots"), false,
                     "空闲面板(契约): 这排键常驻,不读展开快捷操作的开关和格子")
         let sources = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
@@ -201,7 +202,33 @@ func runNotchTests() {
                                   encoding: .utf8)) ?? ""
         expectEqual(sourceHas(runner, "case .toggleMenuBarPanelHotkey:\nMenuBarStatusItem.shared.togglePanelFromDeepLink()")
                     && sourceHas(router, "MenuBarStatusItem.shared.togglePanelFromDeepLink(quick:"), true,
-                    "空闲面板(契约): 打开面板的动作跟深链 menubar-panel 落到同一个 togglePanelFromDeepLink")
+                    "菜单栏面板落点(契约): 快捷键和深链 menubar-panel 照旧挂在菜单栏图标下面")
+        // 灵动岛上点开的面板:挂在那颗键正下方、卡片下沿下面,开在这扇灵动岛那块屏,开着时卡片撑着展开(05 章决策 167)。
+        let toggleBody = sourceBody("func toggleMenuBarPanel(from button: NSView?)", in: controller)
+        expectEqual(sourceHas(toggleBody, "let open = MenuBarStatusItem.shared.togglePanel(below: { [weak self] in self?.menuBarPanelAnchor(button: buttonRect) },\n"
+                              + "onClose: { [weak self] in self?.setMenuBarPanelHold(false) })\nsetMenuBarPanelHold(open)")
+                    && !toggleBody.contains("togglePanelFromDeepLink"), true,
+                    "菜单栏面板落点(契约): 灵动岛上的键不走挂菜单栏图标那条,面板收起时放开展开卡")
+        let anchorBody = sourceBody("private func menuBarPanelAnchor(button: NSRect?)", in: controller)
+        expectEqual(sourceHas(anchorBody, "guard let card = cardScreenFrame, let screen = window?.screen ?? NSScreen.main else { return nil }")
+                    && sourceHas(anchorBody, "let rect = MenuBarPanelPlacement.notchAnchor(button: key, cardBottom: card.minY)")
+                    && sourceHas(anchorBody, "return (rect, screen.visibleFrame)"), true,
+                    "菜单栏面板落点(契约): 锚点是那颗键 + 卡片此刻的下沿,可用区取灵动岛那块屏")
+        expectEqual(sourceHas(controller, "let next = hoverExpanded || alertHold || milestoneHold || peekHold || menuBarPanelHold\n"), true,
+                    "菜单栏面板落点(契约): 面板开着时卡片撑着展开,不跟面板叠、再点同一颗收得起来")
+        expectEqual(sourceHas(sourceBody("private func followMenuBarPanelCard()", in: controller),
+                              "guard menuBarPanelHold, let card = cardScreenFrame, lastMenuBarPanelAnchor?.minY != card.minY else { return }\n"
+                              + "MenuBarStatusItem.shared.repositionPanel()")
+                    && sourceHas(controller, "objectWillChange.receive(on: DispatchQueue.main)\n"
+                                 + ".sink { [weak self] _ in MainActor.assumeIsolated { self?.followMenuBarPanelCard() } }\n"
+                                 + ".store(in: &subscriptions)"), true,
+                    "菜单栏面板落点(契约): 卡片下沿变了面板跟着重摆")
+        let buttons = ui("NotchButtons.swift")
+        expectEqual(sourceHas(sourceBody("private final class PassThroughView: NSView", in: buttons),
+                              "override func hitTest(_ point: NSPoint) -> NSView? { nil }"), true,
+                    "菜单栏面板落点(契约): 垫在键底下的测量视图不接点击和悬停")
+        expectEqual(sourceHas(preview, "func toggleMenuBarPanel(from button: NSView?) {}"), true,
+                    "菜单栏面板落点(契约): 编辑台预览里点不开真面板")
     }
 
     // MARK: - VocalEnvelope:灵动岛音浪的人声包络(起音脉冲 + 换气泄放)
@@ -2981,10 +3008,11 @@ func runNotchTests() {
                         && sourceHas(settingsView, "SettingsGroupCard(title: L10n.t(\"展开时\")) { NotchExpandedSettingsRows() }"), true,
                         "打开菜单栏面板(契约): 「展开时」浮层和「全部设置」抽屉装的是同一份编辑区")
             expectEqual(sourceHas(view, "case .menuBarPanel:\n"
-                                  + "// 同空闲面板那颗、快捷键和深链 menubar-panel:面板开着时再点是收起(05 章决策 164)。\n"
+                                  + "// 同空闲面板那颗:面板开在这颗键正下方,开着时再点是收起(05 章决策 167)。\n"
                                   + "quickActionButton(action.symbolName, label: L10n.t(\"打开菜单栏面板\")) {\n"
-                                  + "LyrimuseActionRunner.perform(.toggleMenuBarPanelHotkey)\n}"), true,
-                        "打开菜单栏面板(契约): 展开卡上那颗走 LyrimuseActionRunner 的打开面板动作")
+                                  + "controller.toggleMenuBarPanel(from: quickMenuBarPanelProbe.view)\n}\n"
+                                  + ".background(NotchViewProbeView(probe: quickMenuBarPanelProbe))"), true,
+                        "打开菜单栏面板(契约): 展开卡上那颗按这颗键的位置开面板")
             let availableBody = sourceBody("let available: (NotchQuickAction) -> Bool = { action in", in: view)
             expectEqual(availableBody.isEmpty, false, "打开菜单栏面板(契约): 读到 available")
             expectEqual(availableBody.contains(".menuBarPanel"), false, "打开菜单栏面板(契约): 不设显示条件,放进格子就画")

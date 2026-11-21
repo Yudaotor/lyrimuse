@@ -497,6 +497,10 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
         NotificationCenter.default.publisher(for: Self.debugGeometryChanged)
             .sink { [weak self] _ in MainActor.assumeIsolated { self?.recomputeGeometry(animate: false) } }
             .store(in: &subscriptions)
+        // objectWillChange 在改值之前发,推到下一拍再读卡片下沿。
+        objectWillChange.receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in MainActor.assumeIsolated { self?.followMenuBarPanelCard() } }
+            .store(in: &subscriptions)
 
         // 跟 LyricsOverlayWindowController 同一个坑同一个修法:sink 闭包里必须用参数
         // 里收到的 isPlaying,不能在闭包内另外去读 PlaybackCoordinator.shared.
@@ -940,6 +944,44 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
         }
     }
 
+    /// 菜单栏面板开着、而且是从这扇灵动岛上的键打开的:卡片撑着展开,面板挂在卡片下面,不跟它叠,再点同一颗键收得起来。
+    /// 面板收起(Esc、点外面、切 Space、再点一次)时放开。只是 isExpanded 的一个输入,不进 updateActualVisibility。
+    private var menuBarPanelHold = false
+    /// 面板上次摆位时用的锚点,`followMenuBarPanelCard` 拿它跟卡片此刻的下沿比。
+    private var lastMenuBarPanelAnchor: NSRect?
+
+    /// 灵动岛上的「打开菜单栏面板」:开 / 关菜单栏面板,开在被点那颗键正下方、卡片下沿下面,开在这扇灵动岛那块屏上;
+    /// 不经状态栏按钮,图标看不见时也打得开。键的位置在点下去时取一次,之后卡片换宽也不跟着横挪。见 05 章决策 167。
+    func toggleMenuBarPanel(from button: NSView?) {
+        let buttonRect = button.flatMap { view in view.window.map { $0.convertToScreen(view.convert(view.bounds, to: nil)) } }
+        lastMenuBarPanelAnchor = nil
+        let open = MenuBarStatusItem.shared.togglePanel(below: { [weak self] in self?.menuBarPanelAnchor(button: buttonRect) },
+                                                        onClose: { [weak self] in self?.setMenuBarPanelHold(false) })
+        setMenuBarPanelHold(open)
+    }
+
+    /// 面板的锚点:横向是那颗键(取不到时卡片正中),下沿是卡片此刻的下沿;可用区取这扇窗所在的屏。
+    private func menuBarPanelAnchor(button: NSRect?) -> (rect: NSRect, visible: NSRect)? {
+        guard let card = cardScreenFrame, let screen = window?.screen ?? NSScreen.main else { return nil }
+        let key = button ?? NSRect(x: card.midX, y: card.minY, width: 0, height: card.height)
+        let rect = MenuBarPanelPlacement.notchAnchor(button: key, cardBottom: card.minY)
+        lastMenuBarPanelAnchor = rect
+        return (rect, screen.visibleFrame)
+    }
+
+    private func setMenuBarPanelHold(_ hold: Bool) {
+        guard hold != menuBarPanelHold else { return }
+        menuBarPanelHold = hold
+        refreshExpanded()
+    }
+
+    /// 面板开着期间卡片换了高度(空闲面板换成正在播放、换歌后头部变了)就按新下沿重摆面板。init 里挂在 objectWillChange 上,
+    /// 那条很勤:没撑着、下沿没变都直接返回,别每次都量面板。
+    private func followMenuBarPanelCard() {
+        guard menuBarPanelHold, let card = cardScreenFrame, lastMenuBarPanelAnchor?.minY != card.minY else { return }
+        MenuBarStatusItem.shared.repositionPanel()
+    }
+
     /// 卡片此刻在屏幕上的矩形:卡片从窗口顶边垂下来,窗口以刘海为中心,卡片再偏 `cardOffset`(两耳等宽时 0)。
     private var cardScreenFrame: NSRect? {
         guard let window else { return nil }
@@ -1173,7 +1215,8 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
                 "leftEarWidth": cardLayout.steadySpan.left, "rightEarWidth": cardLayout.steadySpan.right,
                 "leftEarSlotWidth": steadyEarSlotWidth(.left), "rightEarSlotWidth": steadyEarSlotWidth(.right),
                 "leftEarWidthSetting": leftEarWidthSetting, "rightEarWidthSetting": rightEarWidthSetting,
-                "expandedCardWidth": expandedCardWidth]
+                "expandedCardWidth": expandedCardWidth, "menuBarPanelHold": menuBarPanelHold,
+                "cardFrame": cardScreenFrame.map { [$0.minX, $0.minY, $0.width, $0.height] as Any } ?? NSNull()]
     }
 
     /// 指针在卡片或简介浮框上时光标钉成箭头。App 在后台,不开 `BackgroundCursor` 时 `NSCursor.set()` 不生效,
@@ -1261,7 +1304,7 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
             milestoneClearPending = false
             milestone = nil
         }
-        let next = hoverExpanded || alertHold || milestoneHold || peekHold
+        let next = hoverExpanded || alertHold || milestoneHold || peekHold || menuBarPanelHold
         let opening = next && !isExpanded
         // 回读播放模式、「喜欢」只在指针悬停展开时做:提醒、报喜撑开卡片时那几颗键被盖着,而且每块屏的副本会同时撑开。
         let hoverOpening = opening && hoverExpanded && !alertHold && !milestoneHold

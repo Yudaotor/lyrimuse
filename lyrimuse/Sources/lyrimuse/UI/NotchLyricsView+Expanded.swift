@@ -424,10 +424,11 @@ extension NotchLyricsView {
                 LastfmLoveModel.shared.toggle()
             }
         case .menuBarPanel:
-            // 同空闲面板那颗、快捷键和深链 menubar-panel:面板开着时再点是收起(05 章决策 164)。
+            // 同空闲面板那颗:面板开在这颗键正下方,开着时再点是收起(05 章决策 167)。
             quickActionButton(action.symbolName, label: L10n.t("打开菜单栏面板")) {
-                LyrimuseActionRunner.perform(.toggleMenuBarPanelHotkey)
+                controller.toggleMenuBarPanel(from: quickMenuBarPanelProbe.view)
             }
+            .background(NotchViewProbeView(probe: quickMenuBarPanelProbe))
         }
     }
 
@@ -480,8 +481,8 @@ extension NotchLyricsView {
     /// 失败兜底激活 App),其它播放器没有 AppleScript、只给「打开 X」。分组线右边是「打开菜单栏面板」「设置…」
     /// 「关闭灵动岛歌词」,跟头部快捷操作同款、同分组线 —— 但**不看** `expandedShowsQuickActions` 那个开关,也不读
     /// `quickSlots`:那开关管的是"头部右侧那块空地要不要塞按钮",而这里的键是空闲面板存在的全部理由,关掉就只剩两行字。
-    /// 打开面板走 `LyrimuseActionRunner.perform(.toggleMenuBarPanelHotkey)`,跟快捷键、深链 `menubar-panel` 同一条路
-    /// (见 05 章决策 164)。不放「搜索歌词」「显示歌词」:没有曲目,两者都无物可指。左耳那枚 App 图标已经在顶行上,这里不再画第二枚。
+    /// 打开面板走 `controller.toggleMenuBarPanel(from:)`:面板开在这颗键正下方、卡片下沿下面,不挂菜单栏图标
+    /// (见 05 章决策 164、167)。不放「搜索歌词」「显示歌词」:没有曲目,两者都无物可指。左耳那枚 App 图标已经在顶行上,这里不再画第二枚。
     ///
     /// 不套 `controlButton` 那层"先查 Apple Music 自动化权限"的守卫:`IdlePlaybackActions.resume` 自己会查
     /// (AM 那条走 `checkAppleMusicSafely`),「打开 X」压根不需要权限。
@@ -506,8 +507,9 @@ extension NotchLyricsView {
                     .frame(width: 1, height: 12)
                     .padding(.horizontal, 3)
                 quickActionButton(LyrimuseAction.toggleMenuBarPanelHotkey.iconName, label: L10n.t("打开菜单栏面板")) {
-                    LyrimuseActionRunner.perform(.toggleMenuBarPanelHotkey)
+                    controller.toggleMenuBarPanel(from: idleMenuBarPanelProbe.view)
                 }
+                .background(NotchViewProbeView(probe: idleMenuBarPanelProbe))
                 quickActionButton("gearshape.fill", label: L10n.t("设置…")) { openNotchSettingsPage() }
                 quickActionButton("xmark", label: L10n.t("关闭灵动岛歌词")) {
                     controller.closeFromQuickAction()

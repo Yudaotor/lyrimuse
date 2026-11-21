@@ -213,6 +213,8 @@ protocol NotchChromeSource: ObservableObject {
     func closeFromQuickAction()
     /// 展开态头部点歌名 / 专辑名 / 歌手名:开 / 关 / 切换简介浮框(`NotchEditorialPanel`)。预览里是空实现,理由同上。
     func toggleEditorial(_ kind: EditorialCard.Kind)
+    /// 「打开菜单栏面板」(空闲面板那颗、展开卡快捷操作那颗):开 / 关菜单栏面板,开在 `button` 正下方。预览里是空实现,理由同上。
+    func toggleMenuBarPanel(from button: NSView?)
     /// 本对象 `objectWillChange` 的转发,`NotchLyricsView` 订阅它(视图存的是存在类型,订阅不了协议本身)。
     var chromeChanges: NotchChromeChanges { get }
     /// 真窗口摆没摆出来,`NotchPlayback` 按它停发换句才变的那几项(`SurfaceFeedGate`)。编辑台预览没有,一直发。

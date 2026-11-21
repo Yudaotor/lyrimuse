@@ -4,6 +4,30 @@ import Combine
 import LyrimuseCore
 import os
 
+/// 记住一块 SwiftUI 内容底下垫的那个 NSView,要用时再换算到屏幕坐标(点下去那一刻取一次,不每帧报几何)。
+final class NotchViewProbe {
+    weak var view: NSView?
+}
+
+/// 垫在要量的那块内容底下(`.background(NotchViewProbeView(probe:))`),尺寸跟着它。不接事件:点击、悬停照旧落到上面的键。
+struct NotchViewProbeView: NSViewRepresentable {
+    let probe: NotchViewProbe
+
+    func makeNSView(context: Context) -> NSView {
+        let view = PassThroughView()
+        probe.view = view
+        return view
+    }
+
+    func updateNSView(_ nsView: NSView, context: Context) {
+        probe.view = nsView
+    }
+
+    private final class PassThroughView: NSView {
+        override func hitTest(_ point: NSPoint) -> NSView? { nil }
+    }
+}
+
 /// 灵动岛卡片里所有纯图标键的那一层壳:悬停时字形底下浮出一块 `tint` 14% 的圆角底、字形抬到全亮;按下底色加深到 24%、整颗缩到
 /// 0.9,松手弹回。头部快捷操作四颗、空闲面板三颗、展开卡三键、耳朵三键全走这一份:同一张卡上的按钮反馈必须一致,不能一排会亮
 /// 一排不会。

@@ -55,6 +55,9 @@ struct NotchLyricsView: View {
     /// 真正画出来的那一条。跟 `hoveredQuickAction` 分开存是为了那 260ms 的首次延迟(扫过一排键时
     /// 不该一路闪气泡);存整个 hint 而不只是文案,是因为气泡要**定位到那颗键**,文案和落点必须同源。
     @State var shownQuickActionTooltip: QuickActionHint?
+    /// 空闲面板、展开卡快捷操作里那两颗「打开菜单栏面板」底下的测量点:点了按键在屏幕上的位置开面板(05 章决策 167)。
+    @State var idleMenuBarPanelProbe = NotchViewProbe()
+    @State var quickMenuBarPanelProbe = NotchViewProbe()
 
     init(controller: any NotchChromeSource, prompt: NotchUnknownPlayerPrompt = .inert, reportsLineLayout: Bool = false,
          drivesAdSkipGate: Bool = false, offersQuickActionsTip: Bool = false) {

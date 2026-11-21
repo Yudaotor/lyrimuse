@@ -1918,11 +1918,30 @@ func runMenuBarTests() {
         let observeBody = sourceBody("private func observeAnchorWindow(_ anchorWindow: NSWindow?)", in: panel)
         expectEqual(sourceHas(placeBody, "if !MenuBarPanelPlacement.anchorIsPlaced(anchorWindow.frame, screens: NSScreen.screens.map(\\.frame)),")
                     && sourceHas(placeBody, "followsAnchorWindow = true\nvisible = screen.visibleFrame\nbuttonRect = MenuBarPanelPlacement.fallbackAnchor(screen: screen.frame, visible: visible)\n}\nlet frame = MenuBarPanelPlacement.frame(")
-                    && sourceHas(sourceBody("func toggle(relativeTo anchor: NSView", in: panel), "observeAnchorWindow(anchor.window)\nwindow.setContent(host)")
+                    && sourceHas(sourceBody("func toggle(relativeTo anchor: NSView", in: panel), "open(quick: quick, editing: editing, anchorWindow: anchor.window)")
+                    && sourceHas(sourceBody("private func open(quick: PanelQuickTarget?", in: panel), "observeAnchorWindow(anchorWindow)\nwindow.setContent(host)")
                     && sourceHas(sourceBody("func close()", in: panel), "observeAnchorWindow(nil)")
                     && sourceHas(observeBody, "followsAnchorWindow = false\nguard let anchorWindow else { return }")
                     && sourceHas(observeBody, "guard let self, self.followsAnchorWindow, let host = self.panelHost else { return }\nself.place(size: host.fittingSize)"), true,
                     "面板摆位: 锚点还没上屏时借菜单栏下沿正中、锚点窗口挪动时重摆,收起时拆掉")
+        // 灵动岛上的键开的面板挂在一块屏幕矩形下面(05 章决策 167):不挂状态栏按钮(图标不反白、图标看不见也打得开)、不盯锚点窗口,
+        // 收起的每条路都告诉打开的一方(放开撑着的展开卡),点那块矩形不算点到外面。
+        let belowBody = sourceBody("func toggle(below anchor: @escaping () -> (rect: NSRect, visible: NSRect)?, onClose: @escaping () -> Void)", in: panel)
+        expectEqual(sourceHas(belowBody, "anchorView = nil\nanchorRect = anchor\nself.onClose = onClose\nopen(quick: nil, editing: false, anchorWindow: nil)"), true,
+                    "面板挂屏幕矩形: 清掉视图锚点、记下矩形和收起回调,不盯锚点窗口")
+        expectEqual(sourceHas(sourceBody("func close()", in: panel), "anchorRect = nil\nlet closed = onClose\nonClose = nil")
+                    && sourceHas(sourceBody("func close()", in: panel), "onVisibilityChange?(false)\nclosed?()"), true,
+                    "面板挂屏幕矩形: 收起时调一次收起回调、清掉矩形")
+        expectEqual(sourceHas(placeBody, "if let anchorRect {\nguard let fixed = anchorRect() else { return }\n"
+                              + "Self.apply(MenuBarPanelPlacement.frame(fitting: size, anchor: fixed.rect, visible: fixed.visible), to: window)"), true,
+                    "面板挂屏幕矩形: 摆位用同一个 MenuBarPanelPlacement.frame,屏和可用区由锚点给")
+        expectEqual(sourceHas(sourceBody("private var anchorScreenRect: NSRect?", in: panel), "if let anchorRect { return anchorRect()?.rect }"), true,
+                    "面板挂屏幕矩形: 点那块矩形不算点到外面")
+        let statusItem = source("lyrimuse/MenuBar/MenuBarStatusItem.swift")
+        let statusToggle = sourceBody("func togglePanel(below anchor:", in: statusItem)
+        expectEqual(sourceHas(statusToggle, "panelController.toggle(below: anchor, onClose: onClose)\nreturn panelIsOpen")
+                    && !statusToggle.contains("statusItem"), true,
+                    "面板挂屏幕矩形: 灵动岛那条不读状态栏按钮")
         // 内容贴顶:对不上高度的那一帧不许上下居中(翻面时整个面板抖一下),minHeight: 0 不能省(06 章决策 45)。
         expectEqual(panel.contains(".frame(minWidth: 0, maxWidth: .infinity, minHeight: 0, maxHeight: .infinity, alignment: .top)"), true,
                     "面板尺寸: 内容贴着窗口顶边摆")
@@ -1954,6 +1973,17 @@ func runMenuBarTests() {
         let fallback = P.frame(fitting: CGSize(width: 336, height: 384),
                                anchor: P.fallbackAnchor(screen: screens[0], visible: visible), visible: visible)
         expectEqual(fallback, CGRect(x: 567, y: 535, width: 336, height: 384), "面板锚点: 没摆好时摆在菜单栏下沿正中,高度照内容")
+        // 灵动岛上的键当锚点(05 章决策 167):居中在键下面、顶边贴卡片下沿留 4,贴屏幕边时夹进可用区。
+        let key = CGRect(x: 760, y: 868, width: 22, height: 22)
+        let underKey = P.frame(fitting: CGSize(width: 336, height: 384), anchor: P.notchAnchor(button: key, cardBottom: 840), visible: visible)
+        expectEqual(underKey, CGRect(x: 603, y: 452, width: 336, height: 384), "面板挂灵动岛: 水平居中在键下面、顶边在卡片下沿下面 4")
+        expectEqual(underKey.midX == key.midX && underKey.maxY == 840 - P.gap, true, "面板挂灵动岛: 不跟展开卡叠")
+        let nearEdge = P.frame(fitting: CGSize(width: 336, height: 384),
+                               anchor: P.notchAnchor(button: CGRect(x: 1440, y: 900, width: 22, height: 22), cardBottom: 880), visible: visible)
+        expectEqual(nearEdge.maxX, visible.maxX - P.margin, "面板挂灵动岛: 键贴屏幕右边时左挪到可用区里")
+        expectEqual(P.notchAnchor(button: key, cardBottom: 900).height, 0, "面板挂灵动岛: 键在卡片下沿以下时高度不为负")
+        expectEqual(P.frame(fitting: CGSize(width: 336, height: 384), anchor: P.notchAnchor(button: key, cardBottom: 950), visible: visible).maxY,
+                    visible.maxY, "面板挂灵动岛: 卡片下沿高过菜单栏下沿时顶边夹在可用区里")
         expectEqual(P.needsReport(fitting: CGSize(width: 336.5, height: 383.5), current: CGSize(width: 337, height: 384)), false,
                     "面板报尺寸: 跟摆位同一个整点口径,摆好之后不再觉得差半点")
         expectEqual(P.needsReport(fitting: CGSize(width: 336, height: 385), current: CGSize(width: 336, height: 384)), true,

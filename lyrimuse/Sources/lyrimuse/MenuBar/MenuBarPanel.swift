@@ -190,6 +190,11 @@ final class MenuBarPanelController {
     private var galleryHost: NSView?
     /// 面板挂在谁下面:状态栏按钮,或「菜单栏正中」那一扇的内容视图。内容变高时按它重新定位(顶边不动、往下长)。
     private weak var anchorView: NSView?
+    /// 不挂视图、挂在一块屏幕矩形下面(灵动岛上的键,`toggle(below:onClose:)`):每次摆位现取锚点和那块屏的可用区,
+    /// 取不到(灵动岛那扇窗已经拆了)就不挪。跟 `anchorView` 只会有一个,开面板时另一个清掉。
+    private var anchorRect: (() -> (rect: NSRect, visible: NSRect)?)?
+    /// 这次打开的人要知道面板收了(灵动岛放开撑着的展开卡)。收起时调一次就清掉。
+    private var onClose: (() -> Void)?
     /// 主面板的宿主视图:锚点窗口挪到位时按它的理想尺寸重摆。
     private weak var panelHost: NSView?
     /// 这次打开时摆过一回锚点还没上屏的位置(`MenuBarPanelPlacement.anchorIsPlaced`):收起之前锚点窗口每挪一下都重摆。
@@ -216,6 +221,30 @@ final class MenuBarPanelController {
             return
         }
         anchorView = anchor
+        anchorRect = nil
+        open(quick: quick, editing: editing, anchorWindow: anchor.window)
+    }
+
+    /// 挂在 `anchor` 给的屏幕矩形下面开 / 关(灵动岛上那颗「打开菜单栏面板」),不碰状态栏按钮:图标被系统挤掉、看不见时也打得开。
+    /// 开着时再调是收起,同 `toggle(relativeTo:)`。`onClose` 在这次打开的面板收起时调一次。见 05 章决策 167。
+    func toggle(below anchor: @escaping () -> (rect: NSRect, visible: NSRect)?, onClose: @escaping () -> Void) {
+        if panel != nil {
+            close()
+            return
+        }
+        anchorView = nil
+        anchorRect = anchor
+        self.onClose = onClose
+        open(quick: nil, editing: false, anchorWindow: nil)
+    }
+
+    /// 锚点的内容变了(灵动岛卡片换了高度):按新锚点重摆,尺寸照内容。
+    func reposition() {
+        guard let host = panelHost else { return }
+        place(size: host.fittingSize)
+    }
+
+    private func open(quick: PanelQuickTarget?, editing: Bool, anchorWindow: NSWindow?) {
         let window = MenuBarPanelWindow()
         window.onCancel = { [weak self] in self?.close() }
         window.onKeyDown = { [weak window] event in
@@ -234,7 +263,7 @@ final class MenuBarPanelController {
         // 先登记再装内容:内容第一次布局就会报尺寸(onFittingSizeChange),那时 panel 还是 nil 的话这次摆位会被跳过。
         panel = window
         panelHost = host
-        observeAnchorWindow(anchor.window)
+        observeAnchorWindow(anchorWindow)
         window.setContent(host)
         place(size: host.fittingSize)
         installDismissWatchers(for: window)
@@ -251,6 +280,15 @@ final class MenuBarPanelController {
         panel != nil && view != nil && anchorView === view
     }
 
+    /// `debug/state` 用:面板挂在视图下面(`view`)还是屏幕矩形下面(`rect`)、锚点矩形、面板窗口的 frame。收着时 nil。
+    var debugAnchor: [String: Any]? {
+        guard let panel else { return nil }
+        let rect = anchorScreenRect
+        return ["kind": anchorRect != nil ? "rect" : "view",
+                "anchorRect": rect.map { [$0.minX, $0.minY, $0.width, $0.height] as Any } ?? NSNull(),
+                "frame": [panel.frame.minX, panel.frame.minY, panel.frame.width, panel.frame.height]]
+    }
+
     func close() {
         guard let window = panel else { return }
         MenuBarPanelDebugState.quickTarget = nil
@@ -261,14 +299,25 @@ final class MenuBarPanelController {
         EditorialNotesStore.shared.release()
         // 收起即整树释放:下次 toggle 本来就是全新建(onAppear 快照语义还依赖这一点)。
         panel = nil
+        anchorRect = nil
+        let closed = onClose
+        onClose = nil
         window.orderOut(nil)
         onVisibilityChange?(false)
+        closed?()
     }
 
     /// 顶边贴着锚点下沿、水平居中在锚点下面,钳进锚点所在屏的可用区,比可用区高时截短(`MenuBarPanelPlacement`)。
     /// 内容变高时只往下长。锚点还没摆上屏时先摆在主屏菜单栏下沿正中,锚点窗口挪到位再重摆(06 章决策 109)。
+    /// 挂在屏幕矩形下面时同一套摆法,屏和可用区由给锚点的那一方定。
     private func place(size: CGSize) {
         guard let window = panel, size.width > 0, size.height > 0 else { return }
+        if let anchorRect {
+            guard let fixed = anchorRect() else { return }
+            Self.apply(MenuBarPanelPlacement.frame(fitting: size, anchor: fixed.rect, visible: fixed.visible), to: window)
+            placeGallery()
+            return
+        }
         guard let anchor = anchorView, let anchorWindow = anchor.window else { return }
         var buttonRect = anchorWindow.convertToScreen(anchor.convert(anchor.bounds, to: nil))
         var visible = (anchorWindow.screen ?? NSScreen.main)?.visibleFrame ?? buttonRect
@@ -358,6 +407,7 @@ final class MenuBarPanelController {
 
     /// 锚点在屏幕上的矩形。
     private var anchorScreenRect: NSRect? {
+        if let anchorRect { return anchorRect()?.rect }
         guard let anchor = anchorView, let anchorWindow = anchor.window else { return nil }
         return anchorWindow.convertToScreen(anchor.convert(anchor.bounds, to: nil))
     }
