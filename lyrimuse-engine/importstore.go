@@ -611,11 +611,3 @@ func (p importLibraryProvider) Resolve(ctx context.Context, q ProviderQuery, env
 	r, _ := importedLyricsFor(artist, title, album, q.DurationSecs)
 	return r
 }
-
-// importedTrLang:导入的译文标了语言就用它,没标按设置里的译文语言(用户导入的译文多半就是想看的那种)。
-func importedTrLang(lang string) string {
-	if lang != "" {
-		return lang
-	}
-	return features().LyricsTranslationLanguage
-}

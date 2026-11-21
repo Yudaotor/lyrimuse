@@ -210,23 +210,43 @@ func newBuiltinLyricProviderRegistry() *lyricProviderRegistry {
 
 	r.implement(kkboxLocalProvider{desc: r.registerBuiltin(&ProviderDescriptor{
 		Name: kkboxLocalLyricsSource, Kind: providerKindPlayerLocal, TieRank: 16, Rounds: roundsPrimaryOnly,
+		// 只精确到整秒的那类缓存不交本机身份(kkboxlyrics.go),不享受同源加权。
+		Assembly: &CandidateAssembly{Reads: fieldSourceDuration | fieldAlbum | fieldCover | fieldLocalIdentity},
 	}, privLocalClientIdentity)})
 	r.implement(spotifyLocalProvider{desc: r.registerBuiltin(&ProviderDescriptor{
 		Name: spotifyLocalLyricsSource, Kind: providerKindPlayerLocal, TieRank: 21, Rounds: roundsPrimaryOnly,
+		// 候选不读本机身份:Spotify 没有配同源歌词,跟各源公平打分;它交的本机身份只给播放器无人声信号用。
+		Assembly: &CandidateAssembly{Reads: fieldSourceDuration | fieldAlbum | fieldCover},
 	}, privLocalClientIdentity|privPlayerNoVocals)})
 	r.implement(amazonLocalProvider{desc: r.registerBuiltin(&ProviderDescriptor{
 		Name: amazonLocalLyricsSource, Kind: providerKindPlayerLocal, TieRank: 17, Rounds: roundsPrimaryOnly,
+		Assembly: &CandidateAssembly{Reads: fieldSourceDuration | fieldAlbum | fieldCover | fieldLocalIdentity},
 	}, privLocalClientIdentity)})
 	r.implement(localFileProvider{desc: r.registerBuiltin(&ProviderDescriptor{
 		Name: localFileLyricsSource, Kind: providerKindPlayerLocal, TieRank: 19, Rounds: roundsPrimaryOnly,
 		Baked: bakedAdopt, PlainText: plainTextFirst,
+		// 下载工具导出的双语 .lrc 每句原文下面跟一行同一时间戳的中文译文,摘出来接到译文轨(Baked),固定中文。
+		Assembly: &CandidateAssembly{
+			Reads:       fieldWordTiming | fieldSourceDuration | fieldLocalIdentity | fieldPlainText,
+			Translation: translationFixed, TranslationLang: "zh",
+		},
 	}, privLocalClientIdentity)})
 	r.implement(lxMusicLocalProvider{desc: r.registerBuiltin(&ProviderDescriptor{
 		Name: lxMusicLocalLyricsSource, Kind: providerKindPlayerLocal, TieRank: 18, Rounds: roundsPrimaryOnly,
 		ParenBackground: true,
+		// 存下的是国内平台原版的译文 / 音译轨,译文固定中文。
+		Assembly: &CandidateAssembly{
+			Reads:       fieldWordTiming | fieldRomanization | fieldSourceDuration | fieldAlbum | fieldLocalIdentity,
+			Translation: translationFixed, TranslationLang: "zh",
+		},
 	}, privLocalClientIdentity)})
 	r.implement(importLibraryProvider{desc: r.registerBuiltin(&ProviderDescriptor{
 		Name: importLyricsSource, Kind: providerKindUserLibrary, TieRank: 20, Rounds: roundsPrimaryOnly,
+		// 身份就是本地这首,不读自报曲长和本机身份;译文标了语言用它的,没标按设置里的译文语言。
+		Assembly: &CandidateAssembly{
+			Reads:       fieldWordTiming | fieldRomanization | fieldAlbum | fieldBackground,
+			Translation: translationDeclared,
+		},
 	}, privLocalClientIdentity)})
 
 	r.index()

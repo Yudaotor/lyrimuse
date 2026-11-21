@@ -879,11 +879,11 @@ func TestProviderRegistryAssemblyMatchesShapes(t *testing.T) {
 	for _, d := range registryDescriptors() {
 		as := d.Assembly
 		want, listed := lyricSourceCandidateShapes[d.Name]
-		if as == nil {
-			continue
+		if (as != nil) != listed {
+			t.Errorf("%s:带不带 Assembly(%v)和在不在期望表 lyricSourceCandidateShapes 里(%v)要一致:只有内容在专用子结构里的网易云、AMLL 不带",
+				d.Name, as != nil, listed)
 		}
-		if !listed {
-			t.Errorf("%s:带 Assembly,期望表 lyricSourceCandidateShapes 里却没有它", d.Name)
+		if as == nil {
 			continue
 		}
 		if got := descriptorCandidateShape(d); got != want {

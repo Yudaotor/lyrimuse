@@ -2,7 +2,7 @@ package main
 
 import "sort"
 
-// 排序层新旧对拍的参照:提交 43fa2dff7 里的 rankLyricSourceResults 和它直接调的三个按源名写的辅助函数,函数体原样、
+// 排序层新旧对拍的参照:提交 43fa2dff7 里的 rankLyricSourceResults 和它直接调的几个只给排序用的辅助函数,函数体原样、
 // 只改了名字(加 handwritten 前缀,互相之间的调用指到这一份上)。lyricrankparity_test.go 拿它跟生产的
 // rankLyricSourceResults 对同一份输入比全部输出。别改这里的函数体:它是迁移期间「原来怎么排」的唯一依据。
 
@@ -248,7 +248,7 @@ func handwrittenRankLyricSourceResults(artist, title, album string, durationSecs
 	}
 	if imp.lyr != "" {
 		// 导入库里这首的那份(importstore.go)。身份就是本地这首;译文语言没标时按目标语言。
-		impUsableTr, impUsableRoma := usableValueAdd(imp.lyr, imp.tr, importedTrLang(imp.trLang), imp.roma, features().LyricsTranslationLanguage)
+		impUsableTr, impUsableRoma := usableValueAdd(imp.lyr, imp.tr, handwrittenImportedTrLang(imp.trLang), imp.roma, features().LyricsTranslationLanguage)
 		candidates = append(candidates, lyricCandidate{
 			source: importLyricsSource, lyrics: imp.lyr,
 			wordTimingYRC: usableYRC(imp.lyr, imp.yrc), hasWordTiming: usableWordTiming(imp.lyr, imp.yrc),
@@ -471,7 +471,7 @@ func handwrittenRankLyricSourceResults(artist, title, album string, durationSecs
 		case importLyricsSource:
 			if c.hasUsableTranslation {
 				r.LyricsTr = imp.tr
-				r.LyricsTrLang = importedTrLang(imp.trLang)
+				r.LyricsTrLang = handwrittenImportedTrLang(imp.trLang)
 			}
 			if usableRomaForResult(c.lyrics, imp.roma) {
 				r.LyricsRoma = imp.roma
@@ -632,4 +632,11 @@ func handwrittenMegalobizTimelinePenalty(results []scoredLyricCandidateResult) {
 		r.Score = max(r.Score-timelineOffsetPenalty, 1)
 		r.ScoreTerms = append(r.ScoreTerms, scoreTerm{Kind: scoreTermTimelineOffset, Points: -timelineOffsetPenalty})
 	}
+}
+
+func handwrittenImportedTrLang(lang string) string {
+	if lang != "" {
+		return lang
+	}
+	return features().LyricsTranslationLanguage
 }

@@ -5420,12 +5420,6 @@ func rankLyricSourceResults(artist, title, album string, durationSecs float64, r
 	qq := raw["qq"]
 	dz := raw["deezer"]
 	am := raw["applemusic"]
-	kk := raw[kkboxLocalLyricsSource]
-	spl := raw[spotifyLocalLyricsSource]
-	amz := raw[amazonLocalLyricsSource]
-	localLRC := raw[localFileLyricsSource]
-	lxm := raw[lxMusicLocalLyricsSource]
-	imp := raw[importLyricsSource]
 	amll := raw["amll"].amll
 	// 候选的封面只用它自己那个源给的,没有就空着(「搜索候选歌词」弹窗显示占位图,「解析决策」全空时整列不出现);
 	// amll 自己没有封面,借能认定是同一条录音的那几家的(amllCandidateCover)。
@@ -5438,12 +5432,9 @@ func rankLyricSourceResults(artist, title, album string, durationSecs float64, r
 	bakedLines := map[string]int{}
 	ne.Lyrics, ne.Trans, ne.YRC, bakedLines["netease"] = adoptBakedTranslation(ne.Lyrics, ne.Trans, ne.YRC, foreignSong, true)
 	amll.lrc, _, amll.yrc, bakedLines["amll"] = adoptBakedTranslation(amll.lrc, "", amll.yrc, foreignSong, false)
-	// 本地 .lrc 常是下载工具导出的双语文件:每句原文下面一行同一时间戳的中文译文。不摘的话 App 同一时间戳取后一行,
-	// 只显示译文。摘出来的译文固定中文,接到译文轨(同 qq / kugou)。见 09 章决策 333。
-	localLRC.lyr, localLRC.tr, localLRC.yrc, bakedLines[localFileLyricsSource] = adoptBakedTranslation(localLRC.lyr, localLRC.tr, localLRC.yrc, foreignSong, true)
 	slots := candidateSlots{}
-	// 描述符带 Assembly 的来源按描述符装(assembleSourceCandidate);其余的由下面各自那一段装。装的先后不影响候选的
-	// 先后(slots 按决胜序吐)。
+	// 描述符带 Assembly 的来源按描述符装(assembleSourceCandidate);网易云、AMLL 的内容在专用子结构里,由下面各自那一段装。
+	// 装的先后不影响候选的先后(slots 按决胜序吐)。
 	target := features().LyricsTranslationLanguage
 	assembled := map[string]assembledSource{}
 	for _, d := range lyricProviders().descriptors {
@@ -5468,72 +5459,6 @@ func rankLyricSourceResults(artist, title, album string, durationSecs float64, r
 	}
 	// 网易云凭什么搭纯音乐标记:没交正文,歌词接口说是纯音乐(pureMusic)或曲库说这一条没有人声。
 	assembled[lyricSourceNetease] = assembledSource{instrumental: ne.Lyrics == "" && (ne.PureMusic || ne.NoVocals)}
-	if kk.lyr != "" {
-		// KKBOX 本地歌词(用 KKBOX 放歌时读它自己缓存里的那份,逐行,见 kkboxlyrics.go)。只精确到整秒的那类不置
-		// identityFromLocalClient,不享受同源加权。
-		slots.put(lyricCandidate{
-			source: kkboxLocalLyricsSource, lyrics: kk.lyr,
-			sourceReportedDurationSecs: kk.srcDur,
-			title:                      kk.matchTitle, artist: kk.matchArtist, album: kk.matchAlbum,
-			cover:                   kk.matchCover,
-			identityFromLocalClient: kk.identityFromLocalClient,
-		})
-	}
-	if amz.lyr != "" {
-		// Amazon Music 本地歌词(用它放歌时读它自己缓存里的那份,逐行,按 ASIN 认身份,见 amazonlibrary.go)。只精确到整秒的
-		// 那类不置 identityFromLocalClient,同 KKBOX。
-		slots.put(lyricCandidate{
-			source: amazonLocalLyricsSource, lyrics: amz.lyr,
-			sourceReportedDurationSecs: amz.srcDur,
-			title:                      amz.matchTitle, artist: amz.matchArtist, album: amz.matchAlbum,
-			cover:                   amz.matchCover,
-			identityFromLocalClient: amz.identityFromLocalClient,
-		})
-	}
-	if lxm.lyr != "" {
-		// 洛雪本地歌词(用洛雪放歌时读它存下的那份原版,按平台曲目 id 认身份,带逐字和译文,见 lxmusic.go)。
-		lxmUsableTr, lxmUsableRoma := usableValueAdd(lxm.lyr, lxm.tr, "zh", lxm.roma, features().LyricsTranslationLanguage)
-		slots.put(lyricCandidate{
-			source: lxMusicLocalLyricsSource, lyrics: lxm.lyr,
-			wordTimingYRC: usableYRC(lxm.lyr, lxm.yrc), hasWordTiming: usableWordTiming(lxm.lyr, lxm.yrc),
-			hasUsableTranslation: lxmUsableTr, hasUsableRomanization: lxmUsableRoma,
-			sourceReportedDurationSecs: lxm.srcDur,
-			title:                      lxm.matchTitle, artist: lxm.matchArtist, album: lxm.matchAlbum,
-			identityFromLocalClient: lxm.identityFromLocalClient,
-		})
-	}
-	if localLRC.lyr != "" {
-		// reAMP 正在放的文件同名的 .lrc(用户自己配的,按文件认身份,见 localfilelyrics.go)。逐字写法的在开头拆成了 yrc。
-		localUsableTr, _ := usableValueAdd(localLRC.lyr, localLRC.tr, "zh", "", features().LyricsTranslationLanguage)
-		slots.put(lyricCandidate{
-			source: localFileLyricsSource, lyrics: localLRC.lyr,
-			wordTimingYRC: usableYRC(localLRC.lyr, localLRC.yrc), hasWordTiming: usableWordTiming(localLRC.lyr, localLRC.yrc),
-			hasUsableTranslation:       localUsableTr,
-			sourceReportedDurationSecs: localLRC.srcDur,
-			title:                      localLRC.matchTitle, artist: localLRC.matchArtist,
-			identityFromLocalClient: localLRC.identityFromLocalClient, plainTextOnly: localLRC.plainOnly,
-		})
-	}
-	if imp.lyr != "" {
-		// 导入库里这首的那份(importstore.go)。身份就是本地这首;译文语言没标时按目标语言。
-		impUsableTr, impUsableRoma := usableValueAdd(imp.lyr, imp.tr, importedTrLang(imp.trLang), imp.roma, features().LyricsTranslationLanguage)
-		slots.put(lyricCandidate{
-			source: importLyricsSource, lyrics: imp.lyr,
-			wordTimingYRC: usableYRC(imp.lyr, imp.yrc), hasWordTiming: usableWordTiming(imp.lyr, imp.yrc),
-			hasUsableTranslation: impUsableTr, hasUsableRomanization: impUsableRoma,
-			title: imp.matchTitle, artist: imp.matchArtist, album: imp.matchAlbum,
-		})
-	}
-	if spl.lyr != "" {
-		// Spotify 本地歌词(Spotify 自己拉过的那份,逐行,见 spotifylyrics.go)。Spotify 没有配同源
-		// 歌词,不置 identityFromLocalClient,跟各源公平打分。
-		slots.put(lyricCandidate{
-			source: spotifyLocalLyricsSource, lyrics: spl.lyr,
-			sourceReportedDurationSecs: spl.srcDur,
-			title:                      spl.matchTitle, artist: spl.matchArtist, album: spl.matchAlbum,
-			cover: spl.matchCover,
-		})
-	}
 	if !amll.empty() {
 		// 按 ID 取回的那份身份是确定的 —— 这份 TTML 是按曲目 ID 直接取回来的,不是搜出来的,
 		// 所以 title/artist/album 直接沿用本地曲目信息,不会在标题/歌手/专辑那几项上
@@ -5652,30 +5577,6 @@ func rankLyricSourceResults(artist, title, album string, durationSecs float64, r
 			}
 			r.LyricsBG = amll.bg
 			r.Songwriters = amll.songwriters
-		case localFileLyricsSource:
-			// 本地 .lrc 里摘出来的烘入译文(见候选装配处),固定中文,口径同 qq。
-			if c.hasUsableTranslation {
-				r.LyricsTr = localLRC.tr
-				r.LyricsTrLang = "zh"
-			}
-		case importLyricsSource:
-			if c.hasUsableTranslation {
-				r.LyricsTr = imp.tr
-				r.LyricsTrLang = importedTrLang(imp.trLang)
-			}
-			if usableRomaForResult(c.lyrics, imp.roma) {
-				r.LyricsRoma = imp.roma
-			}
-			r.LyricsBG = imp.bg
-		case lxMusicLocalLyricsSource:
-			// 洛雪存下的是平台原版的译文 / 音译轨(国内平台的译文固定中文),口径同 qq。
-			if c.hasUsableTranslation {
-				r.LyricsTr = lxm.tr
-				r.LyricsTrLang = "zh"
-			}
-			if usableRomaForResult(c.lyrics, lxm.roma) {
-				r.LyricsRoma = lxm.roma
-			}
 		default:
 			// 按描述符装的来源:译文、罗马音、背景人声轨、作者在它那一格里。
 			assembled[c.source].writeAux(&r, c, artist, title, target)

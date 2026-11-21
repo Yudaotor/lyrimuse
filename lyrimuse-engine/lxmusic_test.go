@@ -493,9 +493,12 @@ func TestLXMusicLocalLyricsIsWired(t *testing.T) {
 	if d := lyricProviders().descriptor(lxMusicLocalLyricsSource); d == nil || d.Rounds != roundsPrimaryOnly || lyricProviderNamed(t, lxMusicLocalLyricsSource).Descriptor() != d {
 		t.Errorf("洛雪那一路应登记了实现、只在首轮问:%+v", d)
 	}
+	// 排序里它的候选按描述符装:带逐字、读音,译文固定标中文(读了哪几栏另由 TestRankShapesMatchExpected 按行为守)。
+	if as := lyricProviders().descriptor(lxMusicLocalLyricsSource).Assembly; as == nil || !as.Reads.has(fieldWordTiming) ||
+		!as.Reads.has(fieldRomanization) || as.Translation != translationFixed || as.TranslationLang != "zh" {
+		t.Errorf("洛雪那一路的候选应带逐字、读音,译文固定中文:%+v", as)
+	}
 	for _, wire := range []string{
-		"source: lxMusicLocalLyricsSource, lyrics: lxm.lyr,",
-		"case lxMusicLocalLyricsSource:\n",
 		"lxMusicLyrics: lxMusicLyricsAvail",
 		"s != lxMusicLocalLyricsSource",
 		"if lxMusicAwaitsDuration(bundleID, durationSecs) {\n\t\tenrichMu.Unlock()\n\t\treturn nil\n\t}\n\t// 从没见过这首歌:首次解析",
