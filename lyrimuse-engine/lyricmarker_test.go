@@ -62,7 +62,7 @@ func TestMarkerLineDoesNotStripPeersOfCorroboration(t *testing.T) {
 	}
 	const dur = 273
 	corro := corroboratedEndings(batch, dur)
-	peers, _ := contentConsensusPeers("Mk.gee", "Overtime", batch, dur)
+	peers, _ := contentConsensusPeers(lyricProviders(), "Mk.gee", "Overtime", batch, dur)
 	for _, c := range batch {
 		if !corro[c.source] || len(peers[c.source]) != 2 {
 			t.Errorf("%s:印证 %v、共识 %v,want 都在", c.source, corro[c.source], peers[c.source])

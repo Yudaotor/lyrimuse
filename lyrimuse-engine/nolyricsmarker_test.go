@@ -75,9 +75,9 @@ func TestNoLyricsMarkers(t *testing.T) {
 		"kugou": {source: "kugou", lyr: "[00:12.00]有词\n"},
 	}
 	// 排序里先把网易云 ne 上的内容摊到公共栏,再出标记。
-	raw = unpackSourceResults(raw)
+	raw = unpackSourceResults(lyricProviders(), raw)
 
-	got := noLyricsMarkers(raw, nil)
+	got := noLyricsMarkers(lyricProviders(), raw, nil)
 	// ① 两个源都命中就出两条 —— 界面要说"网易云音乐、QQ音乐 都找到了这首歌",不是只说一个。
 	if len(got) != 2 {
 		t.Fatalf("想要 2 条标记(netease+qq),拿到 %d 条: %+v", len(got), got)
@@ -97,13 +97,13 @@ func TestNoLyricsMarkers(t *testing.T) {
 	}
 
 	// ③ 与纯音乐互斥:同一个源既被判纯音乐又说没词是自相矛盾,以纯音乐为准(更强的结论)。
-	withInstrumental := noLyricsMarkers(raw, &scoredLyricCandidateResult{Source: "netease", Score: -1, Instrumental: true})
+	withInstrumental := noLyricsMarkers(lyricProviders(), raw, &scoredLyricCandidateResult{Source: "netease", Score: -1, Instrumental: true})
 	if len(withInstrumental) != 1 || withInstrumental[0].Source != "qq" {
 		t.Errorf("网易云已被判纯音乐时,它那条标记该让位,只剩 qq;拿到 %+v", withInstrumental)
 	}
 
 	// 没有任何源命中时返回空,别让弹窗拿到一个空壳分支。
-	if m := noLyricsMarkers(map[string]lyricSourceResult{"kugou": raw["kugou"]}, nil); len(m) != 0 {
+	if m := noLyricsMarkers(lyricProviders(), map[string]lyricSourceResult{"kugou": raw["kugou"]}, nil); len(m) != 0 {
 		t.Errorf("没有源命中时该返回空,拿到 %+v", m)
 	}
 }

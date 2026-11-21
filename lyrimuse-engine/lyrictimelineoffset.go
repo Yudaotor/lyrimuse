@@ -233,9 +233,9 @@ func timelinePairOffsets(a, b []timelineLine) (d []int, med int, ok bool) {
 
 // applyTimelineOffsetPenalty 给时间轴整体平移到另一个母带上的候选扣 timelineOffsetPenalty 分,
 // 并记一条 scoreTermTimelineOffset。必须在全部候选打完分之后、applyWordTimingTitleOverride
-// 与排序之前调用:它改分,那一步要看的是改完之后谁赢。两条流水线(rankLyricSourceResults、
+// 与排序之前调用:它改分,那一步要看的是改完之后谁赢。两条流水线(rankLyricSourceResultsWith、
 // mergeLyricCandidateRounds)都要调,判定口径才一致。
-func applyTimelineOffsetPenalty(results []scoredLyricCandidateResult, durationSecs float64) {
+func applyTimelineOffsetPenalty(reg *lyricProviderRegistry, results []scoredLyricCandidateResult, durationSecs float64) {
 	if durationSecs <= 0 {
 		return
 	}
@@ -255,7 +255,7 @@ func applyTimelineOffsetPenalty(results []scoredLyricCandidateResult, durationSe
 	if len(anchors) < 2 {
 		return
 	}
-	baseline, outliers, ok := timelineAnchorBaseline(results, lines, anchors)
+	baseline, outliers, ok := timelineAnchorBaseline(reg, results, lines, anchors)
 	if !ok {
 		return
 	}
@@ -326,7 +326,7 @@ func applyTimelineOffsetPenalty(results []scoredLyricCandidateResult, durationSe
 
 // timelineAnchorBaseline 定基准组:锚点之间没有平移 timelineAnchorConflictMs 以上的冲突时,基准组是彼此对齐、
 // 来自不同信源家族的锚点和跟它们对齐的锚点,没有落单的;有冲突时交给 timelineAnchorOutliers。ok=false 整批不判。
-func timelineAnchorBaseline(results []scoredLyricCandidateResult, lines [][]timelineLine, anchors []int) (baseline map[int]bool, outliers []int, ok bool) {
+func timelineAnchorBaseline(reg *lyricProviderRegistry, results []scoredLyricCandidateResult, lines [][]timelineLine, anchors []int) (baseline map[int]bool, outliers []int, ok bool) {
 	rel := map[[2]int]timelineRelation{}
 	conflict := false
 	for x := 0; x < len(anchors); x++ {
@@ -341,13 +341,13 @@ func timelineAnchorBaseline(results []scoredLyricCandidateResult, lines [][]time
 		}
 	}
 	if conflict {
-		return timelineAnchorOutliers(results, lines, anchors, rel)
+		return timelineAnchorOutliers(reg, results, lines, anchors, rel)
 	}
 	baseline = map[int]bool{}
 	for x := 0; x < len(anchors); x++ {
 		for y := x + 1; y < len(anchors); y++ {
 			a, b := anchors[x], anchors[y]
-			if rel[[2]int{a, b}] == timelineAligned && lyricSourceFamily(results[a].Source) != lyricSourceFamily(results[b].Source) {
+			if rel[[2]int{a, b}] == timelineAligned && reg.sourceFamily(results[a].Source) != reg.sourceFamily(results[b].Source) {
 				baseline[a], baseline[b] = true, true
 			}
 		}
@@ -378,7 +378,7 @@ func timelineAnchorBaseline(results []scoredLyricCandidateResult, lines [][]time
 //     那是歌词商按曲目编号挂上去的,挂错版本时它自己就是错开的那家。见 09 章决策 250。
 //
 // 见 09 章决策 213、218。
-func timelineAnchorOutliers(results []scoredLyricCandidateResult, lines [][]timelineLine, anchors []int, rel map[[2]int]timelineRelation) (baseline map[int]bool, outliers []int, ok bool) {
+func timelineAnchorOutliers(reg *lyricProviderRegistry, results []scoredLyricCandidateResult, lines [][]timelineLine, anchors []int, rel map[[2]int]timelineRelation) (baseline map[int]bool, outliers []int, ok bool) {
 	family := map[int]int{}
 	camp := map[int]int{}
 	for _, a := range anchors {
@@ -395,7 +395,7 @@ func timelineAnchorOutliers(results []scoredLyricCandidateResult, lines [][]time
 	for x := 0; x < len(anchors); x++ {
 		for y := x + 1; y < len(anchors); y++ {
 			a, b := anchors[x], anchors[y]
-			if lyricSourceFamily(results[a].Source) == lyricSourceFamily(results[b].Source) || timelinesIdentical(lines[a], lines[b]) {
+			if reg.sourceFamily(results[a].Source) == reg.sourceFamily(results[b].Source) || timelinesIdentical(lines[a], lines[b]) {
 				join(family, a, b)
 				join(camp, a, b)
 			}
@@ -460,7 +460,7 @@ func timelineAnchorOutliers(results []scoredLyricCandidateResult, lines [][]time
 		if len(later) > 0 && len(earlier) > 0 || len(later)+len(earlier) < timelineAnchorOutlierMinShifted {
 			continue
 		}
-		if scoreTermPoints(results[a].ScoreTerms, scoreTermNativeSource) > 0 && !lyricSourceKindIs(results[a].Source, providerKindPlayerLocal) {
+		if scoreTermPoints(results[a].ScoreTerms, scoreTermNativeSource) > 0 && !reg.sourceKindIs(results[a].Source, providerKindPlayerLocal) {
 			return nil, nil, false
 		}
 		outliers = append(outliers, a)
@@ -506,22 +506,22 @@ const handTypedTimelineShiftMs = 1500
 // handTypedTimelineShiftMs 以上、方向一致时,扣 timelineOffsetPenalty 分、记一条 scoreTermTimelineOffset。
 // 没有别家可比(只有它一家、共识的几家都是纯文本或配不上行)时不扣。只看手打时间轴的源,别的源的分不动。
 // 调用位置紧跟 applyTimelineOffsetPenalty,两条流水线都要调;那一步已经扣过它的就不再扣。
-func applyHandTypedTimelinePenalty(results []scoredLyricCandidateResult) {
+func applyHandTypedTimelinePenalty(reg *lyricProviderRegistry, results []scoredLyricCandidateResult) {
 	for i := range results {
 		r := &results[i]
-		if !lyricSourceTimelineHandTyped(r.Source) || r.Score < 0 || r.Lyrics == "" || len(r.ConsensusPeers) == 0 ||
+		if !reg.sourceTimelineHandTyped(r.Source) || r.Score < 0 || r.Lyrics == "" || len(r.ConsensusPeers) == 0 ||
 			scoreTermPoints(r.ScoreTerms, scoreTermTimelineOffset) != 0 {
 			continue
 		}
 		families := map[string]bool{}
 		for _, p := range r.ConsensusPeers {
-			families[lyricSourceFamily(p)] = true
+			families[reg.sourceFamily(p)] = true
 		}
 		own := displayedTimeline(r.Lyrics, r.LyricsYRC)
 		later, earlier := 0, 0
 		aligned := false
 		for j, peer := range results {
-			if j == i || peer.Score < 0 || peer.Lyrics == "" || !families[lyricSourceFamily(peer.Source)] {
+			if j == i || peer.Score < 0 || peer.Lyrics == "" || !families[reg.sourceFamily(peer.Source)] {
 				continue
 			}
 			switch classifyTimelines(own, displayedTimeline(peer.Lyrics, peer.LyricsYRC), handTypedTimelineShiftMs) {

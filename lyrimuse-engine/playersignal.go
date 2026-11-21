@@ -69,8 +69,8 @@ func withoutPlayerIdentity(ctx context.Context, r lyricSourceResult) lyricSource
 // 播放器自家的源回话,免得先闪一下别家的词(见 earlyLyricsWatch.holdForNative)。问的是带 privPlayerNoVocals、实现了
 // PreSearchNoVocalsHinter 的源(网易云客户端曲库的无人声位、汽水播放队列缓存的 vocal==2);QQ 音乐、Apple Music 要联网才
 // 知道,没有实现。
-func playerNoVocalsHintBeforeSearch(q ProviderQuery) bool {
-	for _, p := range lyricProviders().providers {
+func playerNoVocalsHintBeforeSearch(reg *lyricProviderRegistry, q ProviderQuery) bool {
+	for _, p := range reg.providers {
 		if !p.Descriptor().Privileges.has(privPlayerNoVocals) {
 			continue
 		}

@@ -135,7 +135,7 @@ func tlShiftedWinnerBatch() []scoredLyricCandidateResult {
 
 func TestApplyTimelineOffsetPenaltyFires(t *testing.T) {
 	results := tlShiftedWinnerBatch()
-	applyTimelineOffsetPenalty(results, 281)
+	applyTimelineOffsetPenalty(lyricProviders(), results, 281)
 	if !tlPenalized(results)["netease"] || len(tlPenalized(results)) != 1 {
 		t.Fatalf("只有网易云该吃 timelineOffset,实际 %v", tlPenalized(results))
 	}
@@ -182,7 +182,7 @@ func TestApplyTimelineOffsetPenaltyGuards(t *testing.T) {
 			for i := range results {
 				before[i] = results[i].Score
 			}
-			applyTimelineOffsetPenalty(results, c.dur)
+			applyTimelineOffsetPenalty(lyricProviders(), results, c.dur)
 			if p := tlPenalized(results); len(p) != 0 {
 				t.Fatalf("不该罚任何候选,实际 %v", p)
 			}
@@ -197,7 +197,7 @@ func TestApplyTimelineOffsetPenaltyGuards(t *testing.T) {
 
 func TestApplyTimelineOffsetPenaltySkipsRejected(t *testing.T) {
 	results := append(tlShiftedWinnerBatch(), scoredLyricCandidateResult{Source: "lrclib", Score: -1, Instrumental: true})
-	applyTimelineOffsetPenalty(results, 281)
+	applyTimelineOffsetPenalty(lyricProviders(), results, 281)
 	if results[3].Score != -1 || len(results[3].ScoreTerms) != 0 {
 		t.Fatalf("负分标记不该被动过:%+v", results[3])
 	}

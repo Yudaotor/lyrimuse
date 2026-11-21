@@ -72,7 +72,7 @@ func inheritFamilyLRC(shiftMs int) string {
 
 func inheritedPoints(t *testing.T, localTitle, localAlbum string, cands []lyricCandidate) (map[string][]string, map[string][2]int) {
 	t.Helper()
-	peers, familyPeers := contentConsensusPeers("someone", localTitle, cands, 0)
+	peers, familyPeers := contentConsensusPeers(lyricProviders(), "someone", localTitle, cands, 0)
 	inheritIdentityTerms(localTitle, localAlbum, cands, familyPeers)
 	got := map[string][2]int{}
 	for _, c := range cands {
@@ -109,7 +109,7 @@ func TestInheritIdentityTermsTakesBestOfLyricFindFamily(t *testing.T) {
 
 	// 过不了时长闸(末句比曲长多出 5 秒以上)的候选领不到共识,也继承不到。
 	cands[0].lyrics = inheritFamilyLRC(8_000)
-	_, familyPeers := contentConsensusPeers("someone", localTitle, cands, 52)
+	_, familyPeers := contentConsensusPeers(lyricProviders(), "someone", localTitle, cands, 52)
 	inheritIdentityTerms(localTitle, localAlbum, cands, familyPeers)
 	if c := cands[0]; c.inheritedAlbumPoints != 0 || c.inheritedTitlePoints != 0 {
 		t.Errorf("petitlyrics 末句超出曲长仍继承了 [%d, %d]", c.inheritedAlbumPoints, c.inheritedTitlePoints)

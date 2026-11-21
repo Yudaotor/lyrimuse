@@ -1100,7 +1100,7 @@ func TestContentConsensusFamilyDoesNotDoubleCount(t *testing.T) {
 		{source: "lyricfind", lyrics: same},
 		{source: "lrclib", lyrics: same},
 	}
-	peers, _ := contentConsensusPeers("someone", "song", cands, 0)
+	peers, _ := contentConsensusPeers(lyricProviders(), "someone", "song", cands, 0)
 
 	// ① 两条管道互相不算 peer:各自只该看到 lrclib 这一个独立信源。
 	for _, src := range []string{"deezer", "lyricfind"} {
@@ -1114,7 +1114,7 @@ func TestContentConsensusFamilyDoesNotDoubleCount(t *testing.T) {
 	}
 	// ③ 换成真正独立的第三个源,计数才该涨到 2。
 	cands = append(cands, lyricCandidate{source: "qq", lyrics: same})
-	peers, _ = contentConsensusPeers("someone", "song", cands, 0)
+	peers, _ = contentConsensusPeers(lyricProviders(), "someone", "song", cands, 0)
 	if len(peers["lrclib"]) != 2 {
 		t.Errorf("加入真正独立的 qq 之后 lrclib 该有 2 家独立印证,实际 %v", peers["lrclib"])
 	}
@@ -1144,7 +1144,7 @@ func TestContentConsensusPeers(t *testing.T) {
 		{source: "qq", lyrics: same},
 		{source: "kugou", lyrics: diff},
 	}
-	peers, _ := contentConsensusPeers("someone", "song", cands, 0)
+	peers, _ := contentConsensusPeers(lyricProviders(), "someone", "song", cands, 0)
 	if len(peers["netease"]) != 1 || len(peers["qq"]) != 1 {
 		t.Errorf("内容一致的两源应互为 peer(各 1),实际 netease=%v qq=%v", peers["netease"], peers["qq"])
 	}
@@ -1167,7 +1167,7 @@ func TestContentConsensusPeers(t *testing.T) {
 		{source: "qq", lyrics: same},
 		{source: "lrclib", lyrics: diffFits},
 	}
-	peers2, _ := contentConsensusPeers("someone", "song", cands2, 100)
+	peers2, _ := contentConsensusPeers(lyricProviders(), "someone", "song", cands2, 100)
 	if len(peers2["netease"]) != 0 || len(peers2["qq"]) != 0 {
 		t.Errorf("存在时长吻合候选时,时长不吻合的候选不该领共识分,实际 netease=%v qq=%v", peers2["netease"], peers2["qq"])
 	}
@@ -1282,7 +1282,7 @@ func TestConsensusDeniedToOvershoot(t *testing.T) {
 		{source: "qq", lyrics: long},
 		{source: "kugou", lyrics: long},
 	}
-	peers, _ := contentConsensusPeers("someone", "song", cands, 100) // 曲长 100s,末句 150s
+	peers, _ := contentConsensusPeers(lyricProviders(), "someone", "song", cands, 100) // 曲长 100s,末句 150s
 	if len(peers["qq"]) != 0 || len(peers["kugou"]) != 0 {
 		t.Errorf("overshoot 候选不该领跨源共识分,实际 qq=%v kugou=%v", peers["qq"], peers["kugou"])
 	}
@@ -1688,7 +1688,7 @@ func TestContentConsensusCopiesCountAsOneFamily(t *testing.T) {
 		{source: "kuwo", lyrics: lrc(0)},
 		{source: "netease", lyrics: lrc(400)},
 	}
-	peers, _ := contentConsensusPeers("someone", "song", cands, 0)
+	peers, _ := contentConsensusPeers(lyricProviders(), "someone", "song", cands, 0)
 	if !reflect.DeepEqual(peers["qq"], []string{"netease"}) {
 		t.Errorf("qq 的独立印证只该有 netease(kuwo 是同一份副本),实际 %v", peers["qq"])
 	}
@@ -1697,7 +1697,7 @@ func TestContentConsensusCopiesCountAsOneFamily(t *testing.T) {
 	}
 	// 再来一家自己打轴的:netease 涨到 2 家。
 	cands = append(cands, lyricCandidate{source: "kugou", lyrics: lrc(-350)})
-	peers, _ = contentConsensusPeers("someone", "song", cands, 0)
+	peers, _ = contentConsensusPeers(lyricProviders(), "someone", "song", cands, 0)
 	if len(peers["netease"]) != 2 {
 		t.Errorf("加入自己打轴的 kugou 后 netease 该有 2 家独立印证,实际 %v", peers["netease"])
 	}

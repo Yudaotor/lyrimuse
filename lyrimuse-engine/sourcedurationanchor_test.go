@@ -40,7 +40,7 @@ func TestSourceDurationNearMissPenalizesOtherRecordingWhenAnchored(t *testing.T)
 		nearMissCand("netease", 1129, 189.08),
 		nearMissCand("deezer", 900, 0),
 	}
-	applySourceDurationNearMissPenalty(results, 189.1)
+	applySourceDurationNearMissPenalty(lyricProviders(), results, 189.1)
 	if results[0].Score != 785 || scoreTermPoints(results[0].ScoreTerms, scoreTermSourceDurationNearMiss) != -sourceDurationNearMissPenalty {
 		t.Fatalf("差 11%% 的现场版应扣 %d 分并记一项,得到 %d %v", sourceDurationNearMissPenalty, results[0].Score, results[0].ScoreTerms)
 	}
@@ -61,7 +61,7 @@ func TestSourceDurationNearMissNeedsAnchor(t *testing.T) {
 		"锚点被判不可用": {nearMissCand("kugou", 1185, 213), nearMissCand("qq", -1, 189)},
 	}
 	for name, results := range cases {
-		applySourceDurationNearMissPenalty(results, 189.1)
+		applySourceDurationNearMissPenalty(lyricProviders(), results, 189.1)
 		if results[0].Score != 1185 {
 			t.Errorf("%s:不该扣分,得到 %d", name, results[0].Score)
 		}
@@ -74,7 +74,7 @@ func TestSourceDurationNearMissSparesPlayingAudio(t *testing.T) {
 		nearMissCand("qq", 1300, 261, scoreTerm{Kind: scoreTermNativeSource, Points: 250}),
 		nearMissCand("migu", 1200, 280.9),
 	}
-	applySourceDurationNearMissPenalty(results, 280.7)
+	applySourceDurationNearMissPenalty(lyricProviders(), results, 280.7)
 	if results[0].Score != 1400 || results[1].Score != 1300 {
 		t.Fatalf("播放器本地歌词和同源候选不该扣分,得到 %d / %d", results[0].Score, results[1].Score)
 	}
@@ -82,11 +82,11 @@ func TestSourceDurationNearMissSparesPlayingAudio(t *testing.T) {
 
 func TestSourceDurationNearMissClampsAndSkipsUnknownDuration(t *testing.T) {
 	results := []scoredLyricCandidateResult{nearMissCand("kugou", 300, 213), nearMissCand("netease", 900, 189)}
-	applySourceDurationNearMissPenalty(results, 0)
+	applySourceDurationNearMissPenalty(lyricProviders(), results, 0)
 	if results[0].Score != 300 {
 		t.Fatalf("本地曲长未知时不该动,得到 %d", results[0].Score)
 	}
-	applySourceDurationNearMissPenalty(results, 189.1)
+	applySourceDurationNearMissPenalty(lyricProviders(), results, 189.1)
 	if results[0].Score != 1 {
 		t.Fatalf("扣分后夹到 1,得到 %d", results[0].Score)
 	}
@@ -103,8 +103,8 @@ func TestSourceDurationNearMissWiredIntoBothPipelines(t *testing.T) {
 		t.Fatalf("enrich.go 里要有两处调用,得到 %d", n)
 	}
 	for _, pair := range []string{
-		"applySourceDurationNearMissPenalty(out, durationSecs)\n\tapplyTimelineOffsetPenalty(out, durationSecs)",
-		"applySourceDurationNearMissPenalty(results, durationSecs)\n\tapplyTimelineOffsetPenalty(results, durationSecs)",
+		"applySourceDurationNearMissPenalty(reg, out, durationSecs)\n\tapplyTimelineOffsetPenalty(reg, out, durationSecs)",
+		"applySourceDurationNearMissPenalty(reg, results, durationSecs)\n\tapplyTimelineOffsetPenalty(reg, results, durationSecs)",
 	} {
 		if !containsCode(src, pair) {
 			t.Errorf("调用位置要紧挨在时间轴平移扣分之前:%q", pair)

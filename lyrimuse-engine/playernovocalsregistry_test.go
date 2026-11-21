@@ -45,7 +45,7 @@ func TestPlayerInstrumentalSourceFollowsRegistry(t *testing.T) {
 					want = name
 				}
 			}
-			if got := playerInstrumentalSource(raw, nil); got != want {
+			if got := playerInstrumentalSource(lyricProviders(), raw, nil); got != want {
 				t.Errorf("%s 在放、%s 说没有人声:返回 %q,该是 %q", player, d.Name, got, want)
 			}
 			if want != "" {
@@ -92,7 +92,7 @@ func TestPreSearchNoVocalsHintMatchesExpected(t *testing.T) {
 		setNativeLyricSourcesForPlayer(bundle)
 		for _, q := range tracks {
 			want := expectedPlayerLocalNoVocalsHint(q.Artist, q.SourceTitle, q.Album, q.DurationSecs)
-			if got := playerNoVocalsHintBeforeSearch(q); got != want {
+			if got := playerNoVocalsHintBeforeSearch(lyricProviders(), q); got != want {
 				t.Errorf("%q 在放、%s - %s:提示=%v,迁移前=%v", player, q.Artist, q.SourceTitle, got, want)
 			}
 			if want {

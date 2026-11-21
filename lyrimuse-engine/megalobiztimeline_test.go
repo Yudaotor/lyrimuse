@@ -103,7 +103,7 @@ func TestApplyHandTypedTimelinePenalty(t *testing.T) {
 			{Source: "qq", Lyrics: base, Score: -1}}, false},
 	}
 	for _, c := range cases {
-		applyHandTypedTimelinePenalty(c.in)
+		applyHandTypedTimelinePenalty(lyricProviders(), c.in)
 		got := scoreTermPoints(c.in[0].ScoreTerms, scoreTermTimelineOffset) == -timelineOffsetPenalty
 		if got != c.want {
 			t.Errorf("%s: 扣了 = %v,期望 %v", c.name, got, c.want)
@@ -119,7 +119,7 @@ func TestApplyHandTypedTimelinePenalty(t *testing.T) {
 	}
 	// 别的源整体错开也不归它管。
 	other := []scoredLyricCandidateResult{cand("lrclib", megalobizShiftedLRC(20, 10000, 8000, 3000), "qq"), cand("qq", base)}
-	applyHandTypedTimelinePenalty(other)
+	applyHandTypedTimelinePenalty(lyricProviders(), other)
 	if len(other[0].ScoreTerms) != 0 {
 		t.Errorf("只看手打时间轴的源: %v", other[0].ScoreTerms)
 	}
@@ -128,14 +128,14 @@ func TestApplyHandTypedTimelinePenalty(t *testing.T) {
 	lrclib.HandTypedTimeline = true
 	defer func() { lrclib.HandTypedTimeline = false }()
 	marked := []scoredLyricCandidateResult{cand("lrclib", megalobizShiftedLRC(20, 10000, 8000, 3000), "qq"), cand("qq", base)}
-	applyHandTypedTimelinePenalty(marked)
+	applyHandTypedTimelinePenalty(lyricProviders(), marked)
 	if scoreTermPoints(marked[0].ScoreTerms, scoreTermTimelineOffset) != -timelineOffsetPenalty {
 		t.Errorf("登记成手打时间轴的源该扣: %v", marked[0].ScoreTerms)
 	}
 	// 已经被批级判定扣过的不重复扣。
 	twice := []scoredLyricCandidateResult{cand("megalobiz", megalobizShiftedLRC(20, 10000, 8000, 3000), "qq"), cand("qq", base)}
 	twice[0].ScoreTerms = []scoreTerm{{Kind: scoreTermTimelineOffset, Points: -timelineOffsetPenalty}}
-	applyHandTypedTimelinePenalty(twice)
+	applyHandTypedTimelinePenalty(lyricProviders(), twice)
 	if len(twice[0].ScoreTerms) != 1 || twice[0].Score != 500 {
 		t.Errorf("不重复扣: %d %v", twice[0].Score, twice[0].ScoreTerms)
 	}

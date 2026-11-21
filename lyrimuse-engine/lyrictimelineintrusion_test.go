@@ -66,7 +66,7 @@ func TestTimelineIntrusionPenalizesCopiedBlockInBreak(t *testing.T) {
 		tiResult(lyricSourceKugou, 1237, 130, tiSong()),
 		tiResult(lyricSourceNetease, 1211, 130.1, tiSong()),
 	}
-	applyTimelineIntrusionPenalty(results, tiLocal)
+	applyTimelineIntrusionPenalty(lyricProviders(), results, tiLocal)
 	got := tiPenalized(results)
 	if !got[lyricSourceKuwo] || len(got) != 1 {
 		t.Fatalf("只扣间奏里多出一段的那份,得到 %v", got)
@@ -87,7 +87,7 @@ func TestTimelineIntrusionSkipsDurationOffReferences(t *testing.T) {
 		tiResult(lyricSourceNetease, 1211, 130.1, tiSong()),
 		mirror,
 	}
-	applyTimelineIntrusionPenalty(results, tiLocal)
+	applyTimelineIntrusionPenalty(lyricProviders(), results, tiLocal)
 	got := tiPenalized(results)
 	if !got[lyricSourceKuwo] || len(got) != 1 {
 		t.Fatalf("只有 酷我 该吃 timelineIntrusion,得到 %v", got)
@@ -114,7 +114,7 @@ func TestTimelineIntrusionLeavesUnrelatedLinesAlone(t *testing.T) {
 			tiResult(lyricSourceKugou, 1237, 130, tiSong()),
 			tiResult(lyricSourceNetease, 1211, 130.1, tiSong()),
 		}
-		applyTimelineIntrusionPenalty(results, tiLocal)
+		applyTimelineIntrusionPenalty(lyricProviders(), results, tiLocal)
 		if got := tiPenalized(results); len(got) != 0 {
 			t.Errorf("%s: 不该扣,得到 %v", name, got)
 		}
@@ -128,7 +128,7 @@ func TestTimelineIntrusionNeedsTwoFamiliesOfReferences(t *testing.T) {
 		tiResult(lyricSourceKugou, 1237, 130, tiSong()),
 		tiResult(lyricSourceQQ, 1100, 150, tiSong()),
 	}
-	applyTimelineIntrusionPenalty(results, tiLocal)
+	applyTimelineIntrusionPenalty(lyricProviders(), results, tiLocal)
 	if got := tiPenalized(results); len(got) != 0 {
 		t.Errorf("只有一家参照不判,得到 %v", got)
 	}
@@ -138,7 +138,7 @@ func TestTimelineIntrusionNeedsTwoFamiliesOfReferences(t *testing.T) {
 		tiResult(lyricSourceDeezer, 1237, 130, tiSong()),
 		tiResult(lyricSourceLyricFind, 1211, 130.1, tiSong()),
 	}
-	applyTimelineIntrusionPenalty(results, tiLocal)
+	applyTimelineIntrusionPenalty(lyricProviders(), results, tiLocal)
 	if got := tiPenalized(results); len(got) != 0 {
 		t.Errorf("参照只来自一个信源家族不判,得到 %v", got)
 	}
@@ -152,7 +152,7 @@ func TestTimelineIntrusionNoCommonBreak(t *testing.T) {
 		tiResult(lyricSourceKugou, 1237, 130, tiSong()),
 		tiResult(lyricSourceNetease, 1211, 130.1, tiSong()),
 	}
-	applyTimelineIntrusionPenalty(results, tiLocal)
+	applyTimelineIntrusionPenalty(lyricProviders(), results, tiLocal)
 	if got := tiPenalized(results); len(got) != 0 {
 		t.Errorf("参照自己在那段有行时不判,得到 %v", got)
 	}
@@ -172,7 +172,7 @@ func TestTimelineIntrusionNoCommonBreak(t *testing.T) {
 		tiResult(lyricSourceKugou, 1237, 130, short()),
 		tiResult(lyricSourceNetease, 1211, 130.1, short()),
 	}
-	applyTimelineIntrusionPenalty(results, tiLocal)
+	applyTimelineIntrusionPenalty(lyricProviders(), results, tiLocal)
 	if got := tiPenalized(results); len(got) != 0 {
 		t.Errorf("空档太短不判,得到 %v", got)
 	}
@@ -195,7 +195,7 @@ func TestTimelineIntrusionIgnoresIntro(t *testing.T) {
 		tiResult(lyricSourceKugou, 1237, 130, late()),
 		tiResult(lyricSourceNetease, 1211, 130.1, late()),
 	}
-	applyTimelineIntrusionPenalty(results, tiLocal)
+	applyTimelineIntrusionPenalty(lyricProviders(), results, tiLocal)
 	if got := tiPenalized(results); len(got) != 0 {
 		t.Errorf("前奏不判,得到 %v", got)
 	}
@@ -209,7 +209,7 @@ func TestTimelineIntrusionRevertsWhenWinnerUnverified(t *testing.T) {
 		tiResult(lyricSourceKugou, 700, 130, tiSong()),
 		tiResult(lyricSourceNetease, 650, 130.1, tiSong()),
 	}
-	applyTimelineIntrusionPenalty(results, tiLocal)
+	applyTimelineIntrusionPenalty(lyricProviders(), results, tiLocal)
 	if got := tiPenalized(results); len(got) != 0 {
 		t.Errorf("冠军核实不了时撤销,得到 %v", got)
 	}
@@ -224,7 +224,7 @@ func TestTimelineIntrusionUnknownDuration(t *testing.T) {
 		tiResult(lyricSourceKugou, 1237, 130, tiSong()),
 		tiResult(lyricSourceNetease, 1211, 130.1, tiSong()),
 	}
-	applyTimelineIntrusionPenalty(results, 0)
+	applyTimelineIntrusionPenalty(lyricProviders(), results, 0)
 	if got := tiPenalized(results); len(got) != 0 {
 		t.Errorf("本地时长未知不判,得到 %v", got)
 	}
@@ -241,8 +241,8 @@ func TestTimelineIntrusionWiredIntoBothPipelines(t *testing.T) {
 		t.Fatalf("enrich.go 里要有两处调用(rankLyricSourceResults 与 mergeLyricCandidateRounds),得到 %d", n)
 	}
 	for _, pair := range []string{
-		"applyTimelineOffsetPenalty(out, durationSecs)\n\tapplyHandTypedTimelinePenalty(out)\n\tapplyTimelineIntrusionPenalty(out, durationSecs)\n\tapplyGarbledTextPenalty(out)\n\tapplyDurationNearTie(out, durationSecs)\n\tapplyNativeSourceWordYield(out)\n\tapplyWordTimingTitleOverride(out)",
-		"applyTimelineOffsetPenalty(results, durationSecs)\n\tapplyHandTypedTimelinePenalty(results)\n\tapplyTimelineIntrusionPenalty(results, durationSecs)\n\tapplyGarbledTextPenalty(results)\n\tapplyDurationNearTie(results, durationSecs)\n\tapplyNativeSourceWordYield(results)\n\tapplyWordTimingTitleOverride(results)",
+		"applyTimelineOffsetPenalty(reg, out, durationSecs)\n\tapplyHandTypedTimelinePenalty(reg, out)\n\tapplyTimelineIntrusionPenalty(reg, out, durationSecs)\n\tapplyGarbledTextPenalty(out)\n\tapplyDurationNearTie(out, durationSecs)\n\tapplyNativeSourceWordYield(reg, out)\n\tapplyWordTimingTitleOverride(out)",
+		"applyTimelineOffsetPenalty(reg, results, durationSecs)\n\tapplyHandTypedTimelinePenalty(reg, results)\n\tapplyTimelineIntrusionPenalty(reg, results, durationSecs)\n\tapplyGarbledTextPenalty(results)\n\tapplyDurationNearTie(results, durationSecs)\n\tapplyNativeSourceWordYield(reg, results)\n\tapplyWordTimingTitleOverride(results)",
 	} {
 		if !containsCode(src, pair) {
 			t.Errorf("调用位置要紧跟在时间轴平移扣分之后、乱码扣分、末句亚秒打平与同源加分撤销、逐字加分撤销之前:%q", pair)

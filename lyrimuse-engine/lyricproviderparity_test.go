@@ -576,7 +576,7 @@ func TestMigratedLyricSourcesAreWiredThroughProviders(t *testing.T) {
 	}
 	// 调度同步段交回的本机类源结果进 raw 之前只过「别的歌那一轮不算播放器给定的身份」这一道:不经结果通道,
 	// 不记进「回来了的源」,不填 forPlayingTrack。收集循环里不自己读哪一路本机来源,也不自己判是不是首轮。
-	if !containsCode(collect, "localResults := startLyricProviders(ctx, lyricProviders().providers, providerQuery, providerEnv, providerPlan, resultsCh)") ||
+	if !containsCode(collect, "localResults := startLyricProviders(ctx, reg.providers, providerQuery, providerEnv, providerPlan, resultsCh)") ||
 		!containsCode(collect, "raw := map[string]lyricSourceResult{}\n\tfor _, r := range localResults {\n\t\traw[r.source] = withoutPlayerIdentity(ctx, r)\n\t}\n\t// scoreAndSort") {
 		t.Error("收集循环应把调度同步段交回的本机类源结果放进 raw")
 	}

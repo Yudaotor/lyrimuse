@@ -628,7 +628,7 @@ func TestEmptyLocalResultRanksSameAsAbsent(t *testing.T) {
 			if !reflect.DeepEqual(a, b) {
 				t.Errorf("%s(播放器 %q):raw 里多了本机类源的空结果,排序结果变了", fx.ID, player)
 			}
-			if x, y := playerInstrumentalSource(absent, a), playerInstrumentalSource(present, b); x != y {
+			if x, y := playerInstrumentalSource(lyricProviders(), absent, a), playerInstrumentalSource(lyricProviders(), present, b); x != y {
 				t.Errorf("%s(播放器 %q):播放器无人声信号的来源 %q 变成 %q", fx.ID, player, x, y)
 			}
 		}

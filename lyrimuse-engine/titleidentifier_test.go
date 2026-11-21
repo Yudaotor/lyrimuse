@@ -613,7 +613,7 @@ func TestLyricSearchTitleIsWired(t *testing.T) {
 	// 打分、ISRC、平台曲目 ID 照旧用 key 里的歌名。
 	for _, n := range []string{
 		"ne, scored = scoredLyricCandidates(roundCtx, artist, title, searchAlbum, durationSecs)",
-		"rankLyricSourceResults(artist, title, album, durationSecs, raw)",
+		"rankLyricSourceResultsWith(reg, artist, title, album, durationSecs, raw)",
 		"idArtist, idTitle, idAlbum := lyricIdentityFields(ctx, artist, title, album)",
 	} {
 		if !strings.Contains(enrich, n) {

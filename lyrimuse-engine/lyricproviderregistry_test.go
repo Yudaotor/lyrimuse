@@ -845,11 +845,11 @@ func TestProviderRegistryHandTypedTimelineMatches(t *testing.T) {
 		t.Errorf("登记表 %v\n期望表 %v", sortedKeys(got), sortedKeys(want))
 	}
 	for _, d := range registryDescriptors() {
-		if read := lyricSourceTimelineHandTyped(d.Name); read != lyricSourceHandTypedTimelines[d.Name] {
+		if read := lyricProviders().sourceTimelineHandTyped(d.Name); read != lyricSourceHandTypedTimelines[d.Name] {
 			t.Errorf("%s:lyricSourceTimelineHandTyped=%v,期望表 %v", d.Name, read, lyricSourceHandTypedTimelines[d.Name])
 		}
 	}
-	if lyricSourceTimelineHandTyped("nope") || lyricSourceTimelineHandTyped("") {
+	if lyricProviders().sourceTimelineHandTyped("nope") || lyricProviders().sourceTimelineHandTyped("") {
 		t.Error("没登记的名字不是手打时间轴的源")
 	}
 }
@@ -1244,7 +1244,7 @@ func TestProviderRegistryConsensusFamilyMatches(t *testing.T) {
 		if want := lyricSourceConsensusFamily(d.Name); got != want {
 			t.Errorf("%s:登记表家族 %q,lyricSourceConsensusFamily %q", d.Name, got, want)
 		}
-		if read := lyricSourceFamily(d.Name); read != lyricSourceConsensusFamily(d.Name) {
+		if read := lyricProviders().sourceFamily(d.Name); read != lyricSourceConsensusFamily(d.Name) {
 			t.Errorf("%s:lyricSourceFamily=%q,期望表 %q", d.Name, read, lyricSourceConsensusFamily(d.Name))
 		}
 		if lyricProviders().descriptor(got) == nil {
@@ -1255,7 +1255,7 @@ func TestProviderRegistryConsensusFamilyMatches(t *testing.T) {
 		}
 	}
 	for _, name := range registryGuardUnknownSources {
-		if read := lyricSourceFamily(name); read != name {
+		if read := lyricProviders().sourceFamily(name); read != name {
 			t.Errorf("没登记的名字 %q 该自成一家,读到 %q", name, read)
 		}
 	}
@@ -1496,7 +1496,7 @@ func TestProviderRegistryPrivilegesMatchCode(t *testing.T) {
 	if !reflect.DeepEqual(read, noVocals) || len(lyricProviders().playerNoVocalsNames) != len(noVocals) {
 		t.Errorf("生产代码读的名单 %v\n期望表 %v", lyricProviders().playerNoVocalsNames, lyricSourcePlayerNoVocalsSources)
 	}
-	if !containsCode(goFuncSource(t, "enrich.go", "playerInstrumentalSource"), "for _, src := range lyricProviders().playerNoVocalsNames {") {
+	if !containsCode(goFuncSource(t, "enrich.go", "playerInstrumentalSource"), "for _, src := range reg.playerNoVocalsNames {") {
 		t.Error("playerInstrumentalSource 应按登记表的 playerNoVocalsNames 走")
 	}
 	var hinters []string

@@ -7,10 +7,10 @@ type candidateSlots map[string]lyricCandidate
 
 func (s candidateSlots) put(c lyricCandidate) { s[c.source] = c }
 
-// inTieOrder:收到的候选按同分决胜序。没登记的源名不在决胜序里,不吐。
-func (s candidateSlots) inTieOrder() []lyricCandidate {
+// inTieOrder:收到的候选按同分决胜序 tieOrder(这一次排序用的那份登记表的)。不在决胜序里的源名不吐。
+func (s candidateSlots) inTieOrder(tieOrder []string) []lyricCandidate {
 	var out []lyricCandidate
-	for _, name := range lyricProviders().tieOrder {
+	for _, name := range tieOrder {
 		if c, ok := s[name]; ok {
 			out = append(out, c)
 		}
@@ -160,10 +160,10 @@ type assembledSource struct {
 	instrumental bool
 }
 
-// unpackSourceResults:内容在专用子结构里的源(描述符带 Assembly.Unpack)摊到公共栏上。就地改 raw:它是
-// rankLyricSourceResults 自己复制出来的那份。
-func unpackSourceResults(raw map[string]lyricSourceResult) map[string]lyricSourceResult {
-	for _, d := range lyricProviders().descriptors {
+// unpackSourceResults:内容在专用子结构里的源(reg 里描述符带 Assembly.Unpack 的)摊到公共栏上。就地改 raw:它是
+// rankLyricSourceResultsWith 自己复制出来的那份。
+func unpackSourceResults(reg *lyricProviderRegistry, raw map[string]lyricSourceResult) map[string]lyricSourceResult {
+	for _, d := range reg.descriptors {
 		if d.Assembly == nil || d.Assembly.Unpack == nil {
 			continue
 		}
@@ -179,7 +179,7 @@ func unpackSourceResults(raw map[string]lyricSourceResult) map[string]lyricSourc
 //
 // 先后是硬约束:烘在正文里的译文先摘(候选的逐字覆盖、译文可用、之后的共识与行数全都读摘过的正文),再判纯音乐
 // 的说法(读摘过的、带时间轴的那一栏),然后才轮到另一栏不带时间戳的正文顶上来,最后装候选。括号背景人声、时间轴重挂在
-// 全部候选装完之后整批做(rankLyricSourceResults)。
+// 全部候选装完之后整批做(rankLyricSourceResultsWith)。
 func assembleSourceCandidate(d *ProviderDescriptor, r lyricSourceResult, round assemblyRound) assembledSource {
 	as := d.Assembly
 	foreignSong, target := round.foreignSong, round.target
@@ -270,7 +270,7 @@ func assembleSourceCandidate(d *ProviderDescriptor, r lyricSourceResult, round a
 // writeAux 把这一格的附属内容抄进它那条打好分的结果。c 是打完分时的候选(正文可能修过重音空格、拆过括号背景人声、
 // 重挂过时间轴)。译文过了打分那道「可用」才抄(不可用的抄进去,赢了就带着一份没有意义的译文进缓存,比如繁体原文配一份
 // 只是转成简体的「译文」),语言一并记下:目标语言不是它时这份译文用不上,得让机翻接手(needsTranslationBackfill)。
-// 罗马音走更宽的 usableRomaForResult。括号背景人声、时间轴重挂对附属内容的处理在这之后(rankLyricSourceResults)。
+// 罗马音走更宽的 usableRomaForResult。括号背景人声、时间轴重挂对附属内容的处理在这之后(rankLyricSourceResultsWith)。
 func (a assembledSource) writeAux(r *scoredLyricCandidateResult, c lyricCandidate, artist, title, target string) {
 	if c.hasUsableTranslation || (a.acceptTranslation != nil && a.acceptTranslation(c.lyrics, a.tr, target, artist, title)) {
 		r.LyricsTr, r.LyricsTrLang = a.tr, a.trLang

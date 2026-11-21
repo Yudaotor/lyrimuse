@@ -118,7 +118,7 @@ func TestAliasRoundTargetingIsWired(t *testing.T) {
 	s := string(src)
 	for _, needle := range []string{
 		"providerPlan := newLyricRoundPlan(ctx, breakerPlan)",
-		"startLyricProviders(ctx, lyricProviders().providers, providerQuery, providerEnv, providerPlan, resultsCh)",
+		"startLyricProviders(ctx, reg.providers, providerQuery, providerEnv, providerPlan, resultsCh)",
 		// 守的是"定向重查这道接线还在",不是那一行长什么样 —— 外面还包了
 		// withLyricQueryReason 和 withLyricQueryOrigin,所以只钉内层这一段。
 		"withLyricSourceOnly(ctx, only)",

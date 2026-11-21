@@ -377,11 +377,11 @@ func TestPlayerInstrumentalSignalsAreWired(t *testing.T) {
 	enrich := string(mustRead(t, "enrich.go"))
 	for _, n := range []string{
 		"language: r.language, noVocals: r.noVocals,",
-		"if src := playerInstrumentalSource(raw, results); src != \"\" {",
+		"if src := playerInstrumentalSource(reg, raw, results); src != \"\" {",
 		"forPlaying := playerSignalApplies(ctx)",
 		"providerEnv := RoundEnv{ForPlayingTrack: forPlaying,",
 		"r.forPlayingTrack = forPlaying\n\t\t\traw[r.source] = r",
-		"earlyWatch.holdForNative = playerNoVocalsHintBeforeSearch(providerQuery)",
+		"earlyWatch.holdForNative = playerNoVocalsHintBeforeSearch(reg, providerQuery)",
 		"providerQuery := ProviderQuery{Artist: artist, Title: title, Album: album, SourceTitle: srcTitle, DurationSecs: durationSecs}",
 		"if !turnedInstrumental && adoptCrossAlbumSiblingLyrics(key, &e) {",
 	} {

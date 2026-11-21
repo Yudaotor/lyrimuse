@@ -62,15 +62,15 @@ func TestCandidateSlotsEmitInTieOrder(t *testing.T) {
 		slots.put(lyricCandidate{source: lyricCandidateTieOrder[i]})
 	}
 	var got []string
-	for _, c := range slots.inTieOrder() {
+	for _, c := range slots.inTieOrder(lyricProviders().tieOrder) {
 		got = append(got, c.source)
 	}
 	if !slices.Equal(got, lyricCandidateTieOrder) {
 		t.Errorf("吐出来的先后 %v\n决胜顺序     %v", got, lyricCandidateTieOrder)
 	}
-	body := goFuncSource(t, "enrich.go", "rankLyricSourceResults")
-	if !containsCode(body, "candidates := slots.inTieOrder()") || strings.Contains(body, "append(candidates") {
-		t.Error("rankLyricSourceResults 的候选要全部经 candidateSlots 收、按 inTieOrder 吐,别另外往 candidates 里接")
+	body := goFuncSource(t, "enrich.go", "rankLyricSourceResultsWith")
+	if !containsCode(body, "candidates := slots.inTieOrder(reg.tieOrder)") || strings.Contains(body, "append(candidates") {
+		t.Error("rankLyricSourceResultsWith 的候选要全部经 candidateSlots 收、按这一次排序那份登记表的决胜序吐,别另外往 candidates 里接")
 	}
 }
 

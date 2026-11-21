@@ -472,7 +472,7 @@ func TestSimEval(t *testing.T) {
 			})
 		}
 		corro := corroboratedEndings(batch, tr.dur)
-		peers, _ := contentConsensusPeers(tr.la, tr.lt, batch, tr.dur)
+		peers, _ := contentConsensusPeers(lyricProviders(), tr.la, tr.lt, batch, tr.dur)
 		for i, rc := range run.Result.Candidates {
 			nCands++
 			ec := &evalCand{raw: rc, c: batch[i], corro: corro[rc.Source]}

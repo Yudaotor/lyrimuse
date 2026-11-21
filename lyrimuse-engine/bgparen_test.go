@@ -250,7 +250,7 @@ func TestParenBGCandidates(t *testing.T) {
 	})
 	t.Run("amll 不拆", func(t *testing.T) {
 		cands := []lyricCandidate{{source: "amll", lyrics: strings.Join(lrc, "\n"), wordTimingYRC: strings.Join(yrc, "\n")}}
-		splitCandidateParenBackground(cands)
+		splitCandidateParenBackground(lyricProviders(), cands)
 		if cands[0].parenBG != "" || !strings.Contains(cands[0].lyrics, "(slowly)") {
 			t.Errorf("amll 被拆了: %+v", cands[0])
 		}

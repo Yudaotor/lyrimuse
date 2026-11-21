@@ -236,7 +236,7 @@ func TestEveryLyricSourceHasExactlyOneCollector(t *testing.T) {
 		t.Fatal(err)
 	}
 	src := string(raw)
-	if n := countCode(src, "startLyricProviders(ctx, lyricProviders().providers, providerQuery, providerEnv, providerPlan, resultsCh)"); n != 1 {
+	if n := countCode(src, "startLyricProviders(ctx, reg.providers, providerQuery, providerEnv, providerPlan, resultsCh)"); n != 1 {
 		t.Fatalf("收集循环里应恰好起一次调度,找到 %d 处", n)
 	}
 	implemented := map[string]int{}

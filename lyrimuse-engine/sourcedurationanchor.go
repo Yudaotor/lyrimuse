@@ -28,17 +28,17 @@ func sourceDurationNearMiss(reported, local float64) bool {
 
 // sourceDurationNearMissApplies:这份候选的自报曲长落在收紧档里、且不是挂在正在放的这份音频上的歌词。
 // 有没有锚点另判;首轮先上屏不看锚点,直接用它挡(earlyLyricsVerdict)。
-func sourceDurationNearMissApplies(r scoredLyricCandidateResult, durationSecs float64) bool {
+func sourceDurationNearMissApplies(reg *lyricProviderRegistry, r scoredLyricCandidateResult, durationSecs float64) bool {
 	if r.Score < 0 || r.Lyrics == "" || !sourceDurationNearMiss(r.SourceReportedDurationSecs, durationSecs) {
 		return false
 	}
-	return !lyricSourceKindIs(r.Source, providerKindPlayerLocal) && scoreTermPoints(r.ScoreTerms, scoreTermNativeSource) == 0
+	return !reg.sourceKindIs(r.Source, providerKindPlayerLocal) && scoreTermPoints(r.ScoreTerms, scoreTermNativeSource) == 0
 }
 
 // applySourceDurationNearMissPenalty 给有锚点时自报曲长差出收紧档的候选扣分,并记一条
 // scoreTermSourceDurationNearMiss。两条流水线都要调,排在 applyTimelineOffsetPenalty 之前:
 // 时间轴那两项要看的是这一步扣完之后谁赢。
-func applySourceDurationNearMissPenalty(results []scoredLyricCandidateResult, durationSecs float64) {
+func applySourceDurationNearMissPenalty(reg *lyricProviderRegistry, results []scoredLyricCandidateResult, durationSecs float64) {
 	if durationSecs <= 0 {
 		return
 	}
@@ -53,7 +53,7 @@ func applySourceDurationNearMissPenalty(results []scoredLyricCandidateResult, du
 		return
 	}
 	for i, r := range results {
-		if !sourceDurationNearMissApplies(r, durationSecs) {
+		if !sourceDurationNearMissApplies(reg, r, durationSecs) {
 			continue
 		}
 		results[i].Score = max(r.Score-sourceDurationNearMissPenalty, 1) // 跟 scoreLyricCandidateDetailed 末尾同一条夹底纪律

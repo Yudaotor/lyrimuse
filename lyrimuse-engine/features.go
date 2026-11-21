@@ -653,10 +653,17 @@ func resolveLyricsSources(list []string) map[string]bool {
 // features().LyricsSources —— 勾一下源就重启引擎的代价是半分多钟的服务停摆,见
 // lyricsourcesreload.go 头注。这也是这个判据必须唯一的原因:多一处直接读 features().LyricsSources,
 // 那一处就还停在启动时的旧值。
+//
+// 认这个源是哪一类读的是当前生效的登记表;一轮搜索里数进度读它那一轮的(sourceEnabled)。
 func lyricSourceEnabled(source string) bool {
+	return lyricProviders().sourceEnabled(source)
+}
+
+// sourceEnabled:lyricSourceEnabled 的判据,source 是哪一类按这份登记表认。
+func (r *lyricProviderRegistry) sourceEnabled(source string) bool {
 	// 本机类源(Kind 不是联网的:读播放器本机数据的那几路和导入库)不是歌词源、设置里没有它们的开关:KKBOX 本地歌词
 	// 在用 KKBOX 放歌时读它自己缓存里的那份,跟着播放器走(见 kkboxlyrics.go),别的几路同理。
-	if d := lyricProviders().descriptor(source); d != nil && d.Kind != providerKindNetwork {
+	if d := r.descriptor(source); d != nil && d.Kind != providerKindNetwork {
 		return true
 	}
 	enabled := currentLyricSources()

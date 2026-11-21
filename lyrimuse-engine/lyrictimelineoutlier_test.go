@@ -19,7 +19,7 @@ func tlOutlierBatch() []scoredLyricCandidateResult {
 
 func TestApplyTimelineOffsetPenaltyAnchorOutlier(t *testing.T) {
 	results := tlOutlierBatch()
-	applyTimelineOffsetPenalty(results, 297)
+	applyTimelineOffsetPenalty(lyricProviders(), results, 297)
 	if p := tlPenalized(results); !p["deezer"] || len(p) != 1 {
 		t.Fatalf("只有 Deezer 该吃 timelineOffset,实际 %v", p)
 	}
@@ -110,7 +110,7 @@ func TestApplyTimelineOffsetPenaltyAnchorOutlierGuards(t *testing.T) {
 			for i := range results {
 				before[i] = results[i].Score
 			}
-			applyTimelineOffsetPenalty(results, 297)
+			applyTimelineOffsetPenalty(lyricProviders(), results, 297)
 			if p := tlPenalized(results); len(p) != 0 {
 				t.Fatalf("不该罚任何候选,实际 %v", p)
 			}
@@ -134,7 +134,7 @@ func TestApplyTimelineOffsetPenaltyPlayerLocalOutlier(t *testing.T) {
 		tlResult("netease", 1149, 295, tlLRC(20, tlConst(-200)), ""),
 	}
 	results[1].ScoreTerms = []scoreTerm{{Kind: scoreTermNativeSource, Points: 250}}
-	applyTimelineOffsetPenalty(results, 294)
+	applyTimelineOffsetPenalty(lyricProviders(), results, 294)
 	if p := tlPenalized(results); !p["qq"] || !p[amazonLocalLyricsSource] || len(p) != 2 {
 		t.Fatalf("QQ 和 Amazon 本地歌词都该吃 timelineOffset,实际 %v", p)
 	}
@@ -146,7 +146,7 @@ func TestApplyTimelineOffsetPenaltyPlayerLocalOutlier(t *testing.T) {
 // 基准组外有两家各自错开(彼此也对不上):两家都罚,冠军交给基准组。
 func TestApplyTimelineOffsetPenaltyJudgesEachOutlier(t *testing.T) {
 	results := append(tlOutlierBatch(), tlResult("netease", 1100, 297, tlLRC(20, tlConst(-2200)), ""))
-	applyTimelineOffsetPenalty(results, 297)
+	applyTimelineOffsetPenalty(lyricProviders(), results, 297)
 	if p := tlPenalized(results); !p["deezer"] || !p["netease"] || len(p) != 2 {
 		t.Fatalf("Deezer、网易云都该吃 timelineOffset,实际 %v", p)
 	}
@@ -165,7 +165,7 @@ func TestApplyTimelineOffsetPenaltyUndecidedOutlierDoesNotBlock(t *testing.T) {
 		tlResult("lrclib", 823, 297, tlLRC(20, tlConst(450)), ""),
 		tlResult("migu", 1205, 297, tlLRC(20, tlConst(500)), ""),
 	}
-	applyTimelineOffsetPenalty(results, 297)
+	applyTimelineOffsetPenalty(lyricProviders(), results, 297)
 	if p := tlPenalized(results); !p["netease"] || len(p) != 1 {
 		t.Fatalf("只有网易云该吃 timelineOffset,实际 %v", p)
 	}
@@ -184,7 +184,7 @@ func TestApplyTimelineOffsetPenaltyDurationOffIsNotAnchor(t *testing.T) {
 			t.Fatalf("%s:不该当锚点", kind)
 		}
 		results := append(tlOutlierBatch(), kugou)
-		applyTimelineOffsetPenalty(results, 297)
+		applyTimelineOffsetPenalty(lyricProviders(), results, 297)
 		if p := tlPenalized(results); !p["deezer"] || !p["kugou"] || len(p) != 2 {
 			t.Fatalf("%s:Deezer、酷狗都该吃 timelineOffset,实际 %v", kind, p)
 		}
@@ -248,7 +248,7 @@ func TestApplyTimelineOffsetPenaltyIgnoresOutlierForNonAnchors(t *testing.T) {
 	results := append(tlOutlierBatch(), tlResult("netease", 1300, 310, tlLRC(20, tlConst(4600)), ""),
 		tlResult("soda", 1250, 310, tlLRC(20, tlConst(4500)), ""))
 	results[0].Lyrics, results[0].LyricsYRC = tlLRC(20, tlConst(4000)), tlYRC(20, tlConst(4000))
-	applyTimelineOffsetPenalty(results, 297)
+	applyTimelineOffsetPenalty(lyricProviders(), results, 297)
 	if p := tlPenalized(results); !p["deezer"] || !p["netease"] || !p["soda"] || len(p) != 3 {
 		t.Fatalf("Deezer、网易云、汽水都该吃 timelineOffset,实际 %v", p)
 	}

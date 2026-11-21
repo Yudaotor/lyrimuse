@@ -360,8 +360,8 @@ type ProviderDescriptor struct {
 	// 设置项里的源序,同分候选谁赢看 TieRank。
 	Order int
 	// TieRank:同分候选的决胜序(lyricProviderRegistry.tieOrder),从 1 起,小的赢;本机来源排在别的联网源之后、AMLL 之前。
-	// rankLyricSourceResults 按它定候选的先后(candidateSlots.inTieOrder),合并几轮结果的 mergeLyricCandidateRounds 按它重建
-	// 顺序:两处读同一份,同一首歌走没走补查轮,同分时选出的源才相同(lyrictieorder_test.go 守着)。
+	// rankLyricSourceResultsWith 按它定候选的先后(candidateSlots.inTieOrder),合并几轮结果的 mergeLyricCandidateRounds 按它
+	// 重建顺序:两处读同一种名单,同一首歌走没走补查轮,同分时选出的源才相同(lyrictieorder_test.go 守着)。
 	TieRank int
 	// DefaultPriorityRank:顺序优先模式的默认顺序(resolveLyricsSourceOrder),从 1 起;本机来源为 0。必须跟 App 侧
 	// LyricsSource.allCases 的声明顺序一致:那边顺序表的默认值就是 allCases,对不上的话顺序优先模式在首次写盘前后表现不同。
@@ -407,7 +407,7 @@ type ProviderDescriptor struct {
 	// SongwritersSkipCJK:正文是中日韩文字时不用它的作者名单。
 	SongwritersSkipCJK bool
 	PlainText          PlainTextOrder
-	// ConsensusFamily:正文同出一家的源互不印证(lyricSourceFamily);空 = 自成一家。
+	// ConsensusFamily:正文同出一家的源互不印证(lyricProviderRegistry.sourceFamily);空 = 自成一家。
 	ConsensusFamily string
 	// HandTypedTimeline:时间轴是上传者手打的。它那份跟正文共识的另一家整体错开时扣分(applyHandTypedTimelinePenalty)。
 	HandTypedTimeline bool
@@ -613,6 +613,17 @@ func lyricProviders() *lyricProviderRegistry {
 	return lyricRegistryCurrent.Load()
 }
 
+// enabledNetworkCount:这份登记表里开着的联网源有几个(进度分母)。
+func (r *lyricProviderRegistry) enabledNetworkCount() int {
+	n := 0
+	for _, s := range r.networkNames {
+		if r.sourceEnabled(s) {
+			n++
+		}
+	}
+	return n
+}
+
 // networkLyricSourceNames:联网歌词源的名字,按 Order。每个联网源一轮一个并发 goroutine;结果通道的缓冲、进度分母、到齐判断、
 // 熔断轮次、近况统计、设置里的开关都只数它们,本机类源(读播放器本机数据的、导入库)不在里面。返回的是登记表里那一份,别改它。
 func networkLyricSourceNames() []string { return lyricProviders().networkNames }
@@ -704,9 +715,14 @@ func lyricSourceUsesProxyFallback(source string) bool {
 }
 
 // lyricSourceSplitsParenBackground:source 正文里的括号段拆不拆成背景人声轨(描述符的 ParenBackground)。没登记的名字
-// (手改的、粘贴的、空串)不拆。
+// (手改的、粘贴的、空串)不拆。读当前生效的登记表;一轮搜索里的排序读它那一轮的(sourceSplitsParenBackground)。
 func lyricSourceSplitsParenBackground(source string) bool {
-	d := lyricProviders().descriptor(source)
+	return lyricProviders().sourceSplitsParenBackground(source)
+}
+
+// sourceSplitsParenBackground:这份登记表里 source 的 ParenBackground。
+func (r *lyricProviderRegistry) sourceSplitsParenBackground(source string) bool {
+	d := r.descriptor(source)
 	return d != nil && d.ParenBackground
 }
 
@@ -725,16 +741,21 @@ func lyricSourcePlainTextOrder(source string) PlainTextOrder {
 	return plainTextNormal
 }
 
-// lyricSourceTimelineHandTyped:source 的时间轴是不是上传者手打的(描述符的 HandTypedTimeline)。没登记的名字不是。
-func lyricSourceTimelineHandTyped(source string) bool {
-	d := lyricProviders().descriptor(source)
+// sourceTimelineHandTyped:source 的时间轴是不是上传者手打的(描述符的 HandTypedTimeline)。没登记的名字不是。
+func (r *lyricProviderRegistry) sourceTimelineHandTyped(source string) bool {
+	d := r.descriptor(source)
 	return d != nil && d.HandTypedTimeline
 }
 
 // lyricSourceKindIs:name 这一路登记的是不是 kind 这一类。没登记的名字一律不是。播放器本机(providerKindPlayerLocal)和导入库
 // (providerKindUserLibrary)是两类:前者是读播放器自己缓存、文件旁歌词的那几路,开搜时同步读好、只在用对应播放器时有;
-// 导入库是用户自己的歌词,不跟着播放器走。
+// 导入库是用户自己的歌词,不跟着播放器走。读当前生效的登记表;一轮搜索里的排序读它那一轮的(sourceKindIs)。
 func lyricSourceKindIs(name string, kind ProviderKind) bool {
-	d := lyricProviders().descriptor(name)
+	return lyricProviders().sourceKindIs(name, kind)
+}
+
+// sourceKindIs:这份登记表里 name 登记的是不是 kind 这一类。
+func (r *lyricProviderRegistry) sourceKindIs(name string, kind ProviderKind) bool {
+	d := r.descriptor(name)
 	return d != nil && d.Kind == kind
 }

@@ -97,7 +97,7 @@ func TestSourceListReadersWalkNetworkSourcesOnly(t *testing.T) {
 		raw[s] = lyricSourceResult{source: s, trackFoundNoLyrics: true}
 	}
 	var marked []string
-	for _, m := range noLyricsMarkers(raw, nil) {
+	for _, m := range noLyricsMarkers(lyricProviders(), raw, nil) {
 		marked = append(marked, m.Source)
 	}
 	if !slices.Equal(marked, []string{"qq", "kugou"}) {
@@ -175,10 +175,10 @@ func TestPlayerLocalReadersTreatImportLibraryAsOrdinary(t *testing.T) {
 	}
 
 	// 自报曲长收紧档:播放器本机的不扣,导入库照扣。
-	if sourceDurationNearMissApplies(nearMissCand(kkboxLocalLyricsSource, 1400, 261), 280.7) {
+	if sourceDurationNearMissApplies(lyricProviders(), nearMissCand(kkboxLocalLyricsSource, 1400, 261), 280.7) {
 		t.Error("播放器本机的歌词挂在正在放的这份音频上,不进收紧档")
 	}
-	if !sourceDurationNearMissApplies(nearMissCand(importLyricsSource, 1400, 261), 280.7) {
+	if !sourceDurationNearMissApplies(lyricProviders(), nearMissCand(importLyricsSource, 1400, 261), 280.7) {
 		t.Error("导入库的候选照常进收紧档")
 	}
 

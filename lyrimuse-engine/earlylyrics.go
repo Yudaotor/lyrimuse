@@ -84,7 +84,7 @@ func earlyLyricsVerdict(scored []scoredLyricCandidateResult, picked *scoredLyric
 		return earlyLyricsWait
 	}
 	// 自报曲长差出收紧档的不提前上屏:曲长吻合的那家还没回话时,applySourceDurationNearMissPenalty 还扣不到它。
-	if sourceDurationNearMissApplies(*picked, durationSecs) {
+	if sourceDurationNearMissApplies(lyricProviders(), *picked, durationSecs) {
 		return earlyLyricsWait
 	}
 	// 文件自带的那份开搜前就读好了,优先用它、它又干净时不用等别的源。带扣分项的(同名 .lrc 是给别的版本的)也可能被挑中:

@@ -95,7 +95,7 @@ func TestNativeSourceWordYieldHandsCrownToAlignedWordVersion(t *testing.T) {
 				word.ScoreTerms[0].Points++
 			}
 			results := []scoredLyricCandidateResult{yieldNative(), word}
-			applyNativeSourceWordYield(results)
+			applyNativeSourceWordYield(lyricProviders(), results)
 			if got := scoreTermPoints(results[0].ScoreTerms, scoreTermNativeSourceYield); got != -250 {
 				t.Fatalf("同源那份该撤销 250 分,得到 %d: %+v", got, results[0].ScoreTerms)
 			}
@@ -149,7 +149,7 @@ func TestNativeSourceWordYieldKeepsNative(t *testing.T) {
 			for i, r := range tc.results {
 				before[i], terms[i] = r.Score, len(r.ScoreTerms)
 			}
-			applyNativeSourceWordYield(tc.results)
+			applyNativeSourceWordYield(lyricProviders(), tc.results)
 			for i, r := range tc.results {
 				if r.Score != before[i] || len(r.ScoreTerms) != terms[i] {
 					t.Fatalf("整批不该动,%s 变成 %d 分: %+v", r.Source, r.Score, r.ScoreTerms)
@@ -162,7 +162,7 @@ func TestNativeSourceWordYieldKeepsNative(t *testing.T) {
 func TestNativeSourceWordYieldSkipsPriorityMode(t *testing.T) {
 	isolateNativeYieldFeatures(t, lyricsModePriority)
 	results := []scoredLyricCandidateResult{yieldNative(), yieldWord("qq", -450, yieldLines)}
-	applyNativeSourceWordYield(results)
+	applyNativeSourceWordYield(lyricProviders(), results)
 	if results[0].Score != yieldNative().Score || scoreTermPoints(results[0].ScoreTerms, scoreTermNativeSourceYield) != 0 {
 		t.Fatalf("顺序优先下不该撤销同源加分: %+v", results[0])
 	}
@@ -231,7 +231,7 @@ func TestNativeSourceWordYieldSkipsWhenTitleOverrideWouldStripHeir(t *testing.T)
 			third := yieldResult("kugou", yieldLRC(0, yieldLines), "", yieldTerms(scoreTermDuration, 280, scoreTermLines, 40,
 				scoreTermTitleMatch, 120, scoreTermConsensus, tc.third-440))
 			results := []scoredLyricCandidateResult{yieldNative(), heir, third}
-			applyNativeSourceWordYield(results)
+			applyNativeSourceWordYield(lyricProviders(), results)
 			applyWordTimingTitleOverride(results)
 			if top := topScoredIndex(results, scoresOf(results)); results[top].Source != "netease" {
 				t.Fatalf("冠军该留在同源那份, got %s %+v", results[top].Source, results)

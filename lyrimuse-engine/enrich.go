@@ -4364,8 +4364,8 @@ func playerSaysInstrumental(scored []scoredLyricCandidateResult) bool {
 // 身份必须来自播放器的本地数据(同同源加权的准入,见 lyricCandidate.identityFromLocalClient),搜出来的不算;解析的得是它在放的这首
 // 或它的待播队列(forPlayingTrack,见 playerSignalApplies)。播放器自己有这一条的歌词(有词的伴奏版,只有不带时间戳的也算)时照常用歌词。
 // raw 是摊平过的(unpackSourceResults)。见 09 章决策 210。
-func playerInstrumentalSource(raw map[string]lyricSourceResult, results []scoredLyricCandidateResult) string {
-	for _, src := range lyricProviders().playerNoVocalsNames {
+func playerInstrumentalSource(reg *lyricProviderRegistry, raw map[string]lyricSourceResult, results []scoredLyricCandidateResult) string {
+	for _, src := range reg.playerNoVocalsNames {
 		r, ok := raw[src]
 		if !ok || !r.forPlayingTrack || !playerOwnsLyricSource(src) {
 			continue
@@ -5136,6 +5136,8 @@ func lyricCandidateFromScored(r scoredLyricCandidateResult) lyricCandidate {
 //	- lrclib 的 Instrumental 标记:任一轮带了、且合并后没有真实的 lrclib 候选,才保留
 //	  一条(语义同 scoreAndSort 里"lrclibLyr 为空才附"的约定)。
 func mergeLyricCandidateRounds(artist, title, album string, durationSecs float64, base, extra []scoredLyricCandidateResult) []scoredLyricCandidateResult {
+	// 合并在各轮之间做,读当前生效的登记表,取一次用到底。前几轮里有、现在已经不在登记表里的源名不丢,垫在决胜序后面。
+	reg := lyricProviders()
 	chosen := map[string]scoredLyricCandidateResult{}
 	var order []string
 	var instrumental *scoredLyricCandidateResult
@@ -5187,13 +5189,13 @@ func mergeLyricCandidateRounds(artist, title, album string, durationSecs float64
 	// 否则同一首歌走没走变体轮,同分平手时可能选出不同的源。
 	ordered := make([]string, 0, len(order))
 	inNames := map[string]bool{}
-	for _, s := range lyricProviders().tieOrder {
+	for _, s := range reg.tieOrder {
 		if _, ok := chosen[s]; ok {
 			ordered = append(ordered, s)
 			inNames[s] = true
 		}
 	}
-	for _, s := range order { // 防御:不认识的源名(理论上不存在)按到达序垫底,不丢
+	for _, s := range order { // 不在登记表里的源名按到达序垫底,不丢
 		if !inNames[s] {
 			ordered = append(ordered, s)
 		}
@@ -5207,14 +5209,14 @@ func mergeLyricCandidateRounds(artist, title, album string, durationSecs float64
 		}
 		cands = append(cands, lyricCandidateFromScored(chosen[s]))
 	}
-	// 重音字母旁多切的空格,同 rankLyricSourceResults(见 accentsplit.go)。修的是 cands,下面打分时写回结果。
+	// 重音字母旁多切的空格,同 rankLyricSourceResultsWith(见 accentsplit.go)。修的是 cands,下面打分时写回结果。
 	repairCandidateAccentSplits(cands)
-	splitCandidateParenBackground(cands)
+	splitCandidateParenBackground(reg, cands)
 	// v15:批级语种判决,跟下面两个批级步骤同一位置(理由见 match.go applyLanguageVersionVerdicts)。
 	applyLanguageVersionVerdicts(title, album, durationSecs, cands)
 	applyVerifiedTitleVersion(title, album, durationSecs, verifiedRecordingTitle(base, extra), cands)
 	corroborated := corroboratedEndings(cands, durationSecs)
-	consensusPeers, familyPeers := contentConsensusPeers(artist, title, cands, durationSecs)
+	consensusPeers, familyPeers := contentConsensusPeers(reg, artist, title, cands, durationSecs)
 	inheritIdentityTerms(title, album, cands, familyPeers)
 	applyLineScoreReference(cands)
 	out := make([]scoredLyricCandidateResult, 0, len(ordered)+1)
@@ -5244,7 +5246,7 @@ func mergeLyricCandidateRounds(artist, title, album string, durationSecs float64
 	// 同一个条件按**每个源**各判一次:某个源在原串轮说"有歌没词"、变体轮却真搜到了词,
 	// 那条标记就该消失(它已经不成立了),但别的源的标记不受影响 —— 这正是它不去重的意义。
 	// 纯音乐那条留下来时,同源的这条要让位(互斥,理由同 noLyricsMarkers 的 ③)。
-	for _, source := range networkLyricSourceNames() {
+	for _, source := range reg.networkNames {
 		m, ok := noLyrics[source]
 		if !ok {
 			continue
@@ -5260,13 +5262,13 @@ func mergeLyricCandidateRounds(artist, title, album string, durationSecs float64
 	// v5:同 scoreAndSort 里那一处——必须在排序之前跑,见 applyWordTimingTitleOverride
 	// 的注释。变体轮合并出来的这批候选一样要过这道闸,不然同一首歌走没走变体轮,判定标准会不一致。
 	// 时间轴平移扣分同理,且排在它前面(见 applyTimelineOffsetPenalty)。
-	applySourceDurationNearMissPenalty(out, durationSecs)
-	applyTimelineOffsetPenalty(out, durationSecs)
-	applyHandTypedTimelinePenalty(out)
-	applyTimelineIntrusionPenalty(out, durationSecs)
+	applySourceDurationNearMissPenalty(reg, out, durationSecs)
+	applyTimelineOffsetPenalty(reg, out, durationSecs)
+	applyHandTypedTimelinePenalty(reg, out)
+	applyTimelineIntrusionPenalty(reg, out, durationSecs)
 	applyGarbledTextPenalty(out)
 	applyDurationNearTie(out, durationSecs)
-	applyNativeSourceWordYield(out)
+	applyNativeSourceWordYield(reg, out)
 	applyWordTimingTitleOverride(out)
 	sort.SliceStable(out, func(i, j int) bool { return out[i].Score > out[j].Score })
 	applyUnmaskedWords(out)
@@ -5320,14 +5322,10 @@ func keepShownRoundUpdate(onUpdate lyricSearchUpdateFunc, base []scoredLyricCand
 
 // enabledLyricSourceCount 数"用户开着的歌词源"有几个,只数联网源(进度分母)。features().LyricsSources 为空
 // 表示还没配置过 = 全开(跟 filterEnabledLyricSources 同一条约定)。
+//
+// 读当前生效的登记表;一轮搜索自己的进度分母读它那一轮的(fetchScoredLyricCandidatesStreaming)。
 func enabledLyricSourceCount() int {
-	n := 0
-	for _, s := range networkLyricSourceNames() {
-		if lyricSourceEnabled(s) {
-			n++
-		}
-	}
-	return n
+	return lyricProviders().enabledNetworkCount()
 }
 
 // lyricSourceResult 是**一个源这一轮的原始应答**——fetchScoredLyricCandidatesStreaming 里九个
@@ -5408,7 +5406,16 @@ var lyricSearchItemsTap func(source, artist, title, album string, durationSecs f
 // 缓存(isProbablyWrongLanguageLyrics 读)之外不依赖别的包级状态。
 //
 // raw 里缺某个源(没应答/被熔断跳过)就是零值。
+//
+// 按当前生效的登记表排。一轮搜索里的排序不调它,调 rankLyricSourceResultsWith,传那一轮开搜时取的登记表。
 func rankLyricSourceResults(artist, title, album string, durationSecs float64, raw map[string]lyricSourceResult) []scoredLyricCandidateResult {
+	return rankLyricSourceResultsWith(lyricProviders(), artist, title, album, durationSecs, raw)
+}
+
+// rankLyricSourceResultsWith 是 rankLyricSourceResults 的实现。reg 是这一次排序用的登记表:哪些来源出候选、各自怎么装、
+// 同分谁赢、打分里按源名查的规矩(信源家族、拆不拆括号背景人声、时间轴是不是手打的、是不是播放器本机的来源)都只读它,
+// 这里和它调的各步都别读当前生效的那份(lyricProviders、读它的包级函数)。
+func rankLyricSourceResultsWith(reg *lyricProviderRegistry, artist, title, album string, durationSecs float64, raw map[string]lyricSourceResult) []scoredLyricCandidateResult {
 	// 第一步先把各源正文里的 HTML / XML 字符实体还原(酷狗 `they&apos;re`,见 lyricentities.go)。
 	// 返回的是新 map,调用方那份原始应答不动——它每来一个源就全量重跑一次这里。
 	raw = decodeLyricSourceEntities(raw)
@@ -5416,7 +5423,7 @@ func rankLyricSourceResults(artist, title, album string, durationSecs float64, r
 	raw = dropOtherVersionInstrumentalClaims(title, album, raw)
 	// 内容在专用子结构里的源摊到公共栏上(Assembly.Unpack)。排在上面三步之后:那三步对专用子结构里的正文只做实体还原,
 	// 挪到前面,行内逐字拆分和「匹配到伴奏版时丢占位正文」就会作用到这些源的正文上。
-	raw = unpackSourceResults(raw)
+	raw = unpackSourceResults(reg, raw)
 	// 候选的封面只用它自己那个源给的,没有就空着(「搜索候选歌词」弹窗显示占位图,「解析决策」全空时整列不出现);
 	// 自己没有封面的源只借能认定是同一条录音的那几家的(描述符的 Assembly.BorrowFromPeers)。
 	// 别拿按本地歌名搜来的 Apple 封面给它兜底:那是"本地这首"的封面、不是这条候选的出处,候选缩略图本来是帮人
@@ -5432,7 +5439,7 @@ func rankLyricSourceResults(artist, title, album string, durationSecs float64, r
 	slots := candidateSlots{}
 	// 每个来源按描述符装(assembleSourceCandidate),没登记装配的不出候选。装的先后不影响候选的先后(slots 按决胜序吐)。
 	assembled := map[string]assembledSource{}
-	for _, d := range lyricProviders().descriptors {
+	for _, d := range reg.descriptors {
 		if d.Assembly == nil {
 			continue
 		}
@@ -5442,11 +5449,11 @@ func rankLyricSourceResults(artist, title, album string, durationSecs float64, r
 			slots.put(a.candidate)
 		}
 	}
-	candidates := slots.inTieOrder()
+	candidates := slots.inTieOrder(reg.tieOrder)
 	// 重音字母旁多切的空格,拿整批候选与缓存里见过的拼法证实之后删掉(见 accentsplit.go)。只删空格、不动时间轴。
 	repairCandidateAccentSplits(candidates)
 	// 括号里的背景人声拆成背景人声轨(见 bgparen.go)。在重挂时间轴与打分之前:打分看到的是拆过的正文。
-	splitCandidateParenBackground(candidates)
+	splitCandidateParenBackground(reg, candidates)
 	// 时间轴自洽修复:候选自带的行级 LRC 与逐字轴打架时,以逐字轴为准重挂行时间戳
 	// (见 lyricstimeline.go 的完整来龙去脉)。**必须在这里**而不是选完冠军之后 ——
 	// corroboratedEndings / contentConsensusPeers / scoreLyricCandidateDetailed 的
@@ -5459,14 +5466,14 @@ func rankLyricSourceResults(artist, title, album string, durationSecs float64, r
 	corroborated := corroboratedEndings(candidates, durationSecs)
 	// v3:跨源正文共识,整批统一算(理由同 corroboratedEndings——peers 随后到的源变化,
 	// 每轮全量重算)。artist/title 已是 toSimplified 后的搜索关键词,与打分入参一致。
-	consensusPeers, familyPeers := contentConsensusPeers(artist, title, candidates, durationSecs)
+	consensusPeers, familyPeers := contentConsensusPeers(reg, artist, title, candidates, durationSecs)
 	inheritIdentityTerms(title, album, candidates, familyPeers)
 	applyLineScoreReference(candidates)
 	// 有源说这首是纯音乐时(各源凭什么说见描述符的 Assembly.Instrumental),搭车塞一条 Score:-1 的
 	// 标记进 results——见 Instrumental 字段定义处的注释,不参与打分/排序,不会被 pickLyricCandidate 选中,只是把这个
 	// 信号原样带出这个函数。几个源都这么说时记在 InstrumentalRank 最靠前的那个头上。
 	var instrumentalMarker *scoredLyricCandidateResult
-	for _, name := range lyricProviders().instrumentalOrder {
+	for _, name := range reg.instrumentalOrder {
 		if assembled[name].instrumental {
 			instrumentalMarker = &scoredLyricCandidateResult{Source: name, Score: -1, Instrumental: true}
 			break
@@ -5515,24 +5522,24 @@ func rankLyricSourceResults(artist, title, album string, durationSecs float64, r
 		}
 		results = append(results, r)
 	}
-	if src := playerInstrumentalSource(raw, results); src != "" {
+	if src := playerInstrumentalSource(reg, raw, results); src != "" {
 		instrumentalMarker = &scoredLyricCandidateResult{Source: src, Score: -1, Instrumental: true, PlayerInstrumental: true}
 	}
 	if instrumentalMarker != nil {
 		results = append(results, *instrumentalMarker)
 	}
-	results = append(results, noLyricsMarkers(raw, instrumentalMarker)...)
+	results = append(results, noLyricsMarkers(reg, raw, instrumentalMarker)...)
 	// v5:必须在排序**之前**跑——它要看的是"排完序会是谁赢",然后据此
 	// 决定要不要撤销冠军的逐字加分,晚了就成了在排好的结果上事后改分,顺序会跟着乱。
 	// instrumentalMarker(Score:-1)不受影响,函数内部本来就跳过负分。
 	// 时间轴整体平移的扣分排在它前面:那一步要看的是扣完之后谁赢(见 applyTimelineOffsetPenalty)。
-	applySourceDurationNearMissPenalty(results, durationSecs)
-	applyTimelineOffsetPenalty(results, durationSecs)
-	applyHandTypedTimelinePenalty(results)
-	applyTimelineIntrusionPenalty(results, durationSecs)
+	applySourceDurationNearMissPenalty(reg, results, durationSecs)
+	applyTimelineOffsetPenalty(reg, results, durationSecs)
+	applyHandTypedTimelinePenalty(reg, results)
+	applyTimelineIntrusionPenalty(reg, results, durationSecs)
 	applyGarbledTextPenalty(results)
 	applyDurationNearTie(results, durationSecs)
-	applyNativeSourceWordYield(results)
+	applyNativeSourceWordYield(reg, results)
 	applyWordTimingTitleOverride(results)
 	// 稳定排序:来源加分拿掉之后同分会变多(见 scoreLyricCandidateDetailed 里那段注释),
 	// 不稳定的排序会让同分候选的先后随运行变化,同一首歌两次解析可能选出不同的源。
@@ -5564,10 +5571,10 @@ const (
 //   - 跟纯音乐互斥:某个源既被判纯音乐又说没词是自相矛盾,以纯音乐为准(各源自己的判据已经保证互斥,这里再挡一道,
 //     免得日后哪个源的判据松了就冒出两条打架的结论)。
 //
-// 源序按联网源名单固定,跟别处一样确定且可复现,不跟到达顺序走。raw 是摊平过的(unpackSourceResults)。
-func noLyricsMarkers(raw map[string]lyricSourceResult, instrumental *scoredLyricCandidateResult) []scoredLyricCandidateResult {
+// 源序按联网源名单(reg 的)固定,跟别处一样确定且可复现,不跟到达顺序走。raw 是摊平过的(unpackSourceResults)。
+func noLyricsMarkers(reg *lyricProviderRegistry, raw map[string]lyricSourceResult, instrumental *scoredLyricCandidateResult) []scoredLyricCandidateResult {
 	var out []scoredLyricCandidateResult
-	for _, source := range networkLyricSourceNames() {
+	for _, source := range reg.networkNames {
 		r, ok := raw[source]
 		if !ok {
 			continue
@@ -5643,9 +5650,15 @@ func fetchScoredLyricCandidatesStreaming(ctx context.Context, artist, title, alb
 	// 交给各歌词源去搜、去挑候选的歌名:播放器报的歌名带编号时是带着编号的那一份(见 withLyricSourceTitle);
 	// ISRC、平台曲目 ID、打分照旧用 title。
 	srcTitle := lyricSourceTitleFor(ctx, title)
+	// 这一轮的来源快照:开搜时取一次当前生效的登记表,用到这一轮结束。派谁(reg.providers)、联网源名单(reg.networkNames)、
+	// 进度分母、候选怎么装、同分谁赢(rankLyricSourceResultsWith)都出自这一份:一轮中途登记表换了新的,这一轮不跟着变,
+	// 下一轮才用新的。往下别再调 lyricProviders(),也别调读当前登记表的包级函数(networkLyricSourceNames、
+	// enabledLyricSourceCount、lyricSourceEnabled):调度起了谁、通道放得下几份、等谁到齐对不上,轻则进度回跳,重则少收一份
+	// 结果或者等到截止。
+	reg := lyricProviders()
 	// 这一轮的联网源:结果通道的缓冲、熔断轮次、进度、到齐判断、截止记账都数它。本机类源不在里面:它们由调度同步问完,
 	// 不经结果通道。
-	networkSources := networkLyricSourceNames()
+	networkSources := reg.networkNames
 	// 缓冲开到"每个 goroutine 都能不阻塞地放下自己那一份"= 联网源数(每个联网源一个 goroutine)。同样不写
 	// 字面量:下面那个 collect 循环就是栽在字面量跟源数脱钩上的。
 	resultsCh := make(chan lyricSourceResult, len(networkSources))
@@ -5686,10 +5699,10 @@ func fetchScoredLyricCandidatesStreaming(ctx context.Context, artist, title, alb
 	// 上面那组并发(源清单、进度分母、收集循环都只数歌词源):调度起完联网源就同步问它们(本机文件,毫秒级),交了东西的
 	// 当一份候选放进 raw,所以第一份联网结果到达时它们已经在场。只在首轮问(描述符的 Rounds);各自「只在正用某个播放器
 	// 放歌时读」的条件在各自的入口函数里。它们的 forPlayingTrack 这里不填。
-	localResults := startLyricProviders(ctx, lyricProviders().providers, providerQuery, providerEnv, providerPlan, resultsCh)
+	localResults := startLyricProviders(ctx, reg.providers, providerQuery, providerEnv, providerPlan, resultsCh)
 
 	// raw:目前为止到手的各源原始应答,按源名存。打分/排序全部下放给
-	// rankLyricSourceResults(包级纯函数,回归金标集与生产共用),这里只负责收结果、喂进去。
+	// rankLyricSourceResultsWith(包级纯函数,回归金标集与生产共用),这里只负责收结果、喂进去。
 	raw := map[string]lyricSourceResult{}
 	for _, r := range localResults {
 		raw[r.source] = withoutPlayerIdentity(ctx, r)
@@ -5699,17 +5712,17 @@ func fetchScoredLyricCandidatesStreaming(ctx context.Context, artist, title, alb
 	// corroborated 状态可能随后到的源变化(见上面 onUpdate 的注释),分数不是只增不改
 	// 的东西,不能靠增量更新蒙混过去。
 	scoreAndSort := func() []scoredLyricCandidateResult {
-		return rankLyricSourceResults(artist, title, album, durationSecs, raw)
+		return rankLyricSourceResultsWith(reg, artist, title, album, durationSecs, raw)
 	}
 
 	deadline := time.After(lyricSearchDeadline)
 	// 哪些歌词源已经回来了。按名字记,进度分母只数开着的源(见 enabledDone)。
 	doneSources := map[string]bool{}
-	totalSources := enabledLyricSourceCount()
+	totalSources := reg.enabledNetworkCount()
 	enabledDone := func() int {
 		n := 0
 		for _, s := range networkSources {
-			if doneSources[s] && lyricSourceEnabled(s) {
+			if doneSources[s] && reg.sourceEnabled(s) {
 				n++
 			}
 		}
@@ -5717,7 +5730,7 @@ func fetchScoredLyricCandidatesStreaming(ctx context.Context, artist, title, alb
 	}
 	// 收够每一个联网源各自的那一份,按这一轮的联网源名单逐个核对,别钉一个字面量:硬编码的数字跟源数没绑在一起,每加一个源
 	// 循环就会先数满退出、把最后到达的那个源的应答扔掉(amll 最容易中招:它要等网易云/QQ 先把音乐 ID 搜出来,结构性地
-	// 总是最后回)。名单从登记表来(networkLyricSourceNames),跟调度起的联网源是同一份。
+	// 总是最后回)。名单是这一轮那份登记表的 networkNames,跟调度起的联网源(同一份登记表的 providers)对得上。
 	// 超时/取消两条分支照旧兜底,不会因为某个 goroutine 没发结果而卡死。
 	//
 	// 这里只该有歌词源:给候选兜底封面的 iTunes 查询在出站闸排队时后台请求最多等 30 秒,比这里的 20 秒截止还长,放进来
@@ -5734,7 +5747,7 @@ func fetchScoredLyricCandidatesStreaming(ctx context.Context, artist, title, alb
 	// 它不在等的时候别为它打分:自动解析不要中间结果,每到一个源整份重打分是白算(见 09 章决策 94)。
 	earlyWatch := newEarlyLyricsWatch(ctx, artist, title, durationSecs)
 	if earlyWatch != nil && forPlaying {
-		earlyWatch.holdForNative = playerNoVocalsHintBeforeSearch(providerQuery)
+		earlyWatch.holdForNative = playerNoVocalsHintBeforeSearch(reg, providerQuery)
 	}
 collect:
 	for !allLyricSourcesBack() {

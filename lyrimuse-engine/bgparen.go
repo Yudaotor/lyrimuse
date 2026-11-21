@@ -696,10 +696,10 @@ func parenBGHeadStamps(bg string) map[int]bool {
 
 // splitCandidateParenBackground 就地拆一批候选。调用时机同 repairCandidateAccentSplits(候选装配完、重挂时间轴与
 // 打分之前)。已经带背景人声的(parenBG 非空,合并轮从打好分的结果还原时带过来)不再拆。
-func splitCandidateParenBackground(candidates []lyricCandidate) {
+func splitCandidateParenBackground(reg *lyricProviderRegistry, candidates []lyricCandidate) {
 	for i := range candidates {
 		c := &candidates[i]
-		if !lyricSourceSplitsParenBackground(c.source) || c.plainTextOnly || c.wordTimingYRC == "" || c.parenBG != "" {
+		if !reg.sourceSplitsParenBackground(c.source) || c.plainTextOnly || c.wordTimingYRC == "" || c.parenBG != "" {
 			continue
 		}
 		sp, ok := splitParenBackground(c.lyrics, c.wordTimingYRC)
