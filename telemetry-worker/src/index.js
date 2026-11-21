@@ -38,6 +38,9 @@ const HANG_DURATIONS = ["5-10s", "10-30s", "30s+", "unrecovered"];
 const HANG_ELAPSED = ["<1m", "1-10m", "10-60m", "1-6h", "6h+"];
 const HANG_THERMAL = ["nominal", "fair", "serious", "critical"];
 const HANG_WINDOWS = ["settings", "lyrics-manager", "lyrics-window", "lyrics-quick-search", "lyrics-share", "whats-new", "onboarding", "menubar-panel"];
+// 卡住时设置窗口停在哪一页(深链 settings/<路径>[/<分段>] 的路径),跟 Core TelemetryHang.settingsPages 一致;名单外的、旧版 App 记空
+// (14 章决策 241)。
+const HANG_SETTINGS_PAGES = ["lyrics", "lyrics/fetch", "lyrics/translation", "lyrics/display", "lyrics/manage", "player", "player/players", "player/linkage", "player/permissions", "appearance", "appearance/overlay", "appearance/notch", "appearance/menu-bar", "appearance/touch-bar", "appearance/lyrics-window", "shortcuts", "general", "about", "account/listenbrainz", "account/relay", "account/bark", "account/lastfm", "account/lastfm/stats", "account/lastfm/chart", "account/lastfm/on-this-day", "account/lastfm/settings", "account/discord", "account/discord/display", "account/discord/buttons", "account/discord/privacy", "software-update", "lastfm-suggestions", "labs"];
 // 停顿期间主线程被系统压着(锁屏、App Nap 把优先级压到后台档)的标记,跟 Core MainThreadThrottle.reasons 一致。
 // 这类卡顿照收,统计默认不算(hangs),hangs_all 连它们一起算(14 章决策 202)。
 const HANG_THROTTLE = ["locked", "low_priority"];
@@ -328,11 +331,11 @@ async function heartbeat(request, env) {
     details.map(cleanHang).filter(Boolean).forEach((h, seq) => statements.push(env.DB.prepare(
       `INSERT INTO hang_events (day, install_id, seq, received_at, app_version, os_version, arch, duration, since_launch,
                                 since_wake, player, windows, thermal, stack, signature, throttled, memory_pressure, pageins,
-                                main_cpu_ms, simulated)
-       VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20)`
+                                main_cpu_ms, simulated, settings_page)
+       VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21)`
     ).bind(a.day, installID, seq, now, h.app_version ?? e.app_version, e.os_version, e.arch, h.duration, h.since_launch, h.since_wake,
            h.player, JSON.stringify(h.windows), h.thermal, JSON.stringify(h.stack), hangSignature(h.stack),
-           h.throttled.length ? JSON.stringify(h.throttled) : null, h.memory_pressure, h.pageins, h.main_cpu_ms, h.simulated)));
+           h.throttled.length ? JSON.stringify(h.throttled) : null, h.memory_pressure, h.pageins, h.main_cpu_ms, h.simulated, h.settings_page)));
   }
   await env.DB.batch(statements);
   return json({ ok: true });
@@ -409,6 +412,8 @@ function cleanHang(h) {
     main_cpu_ms: int(h.main_cpu_ms, 0, MAX_HANG_MAIN_CPU_MS),
     // 调试造的停顿记 1,真卡顿(含旧版 App)记空。
     simulated: h.simulated === true ? 1 : null,
+    // 设置窗口关着、旧版 App、名单外的记空。
+    settings_page: oneOf(h.settings_page, HANG_SETTINGS_PAGES),
     // 记卡顿时的 App 版本;旧版 App 不发,入库时退回心跳的版本。
     app_version: str(h.app_version, 32),
   };
@@ -561,7 +566,7 @@ async function loadStatsRows(db, since) {
                        COALESCE(app_version, json_extract(env, '$.app_version')) AS app_version, frames,
                        termination_reasons, exception_frames FROM crashes WHERE day >= ?1`).bind(since).all(),
     db.prepare(`SELECT day, install_id, app_version, duration, since_launch, since_wake, player, windows, thermal, stack, signature, received_at,
-                       throttled, memory_pressure, pageins, main_cpu_ms
+                       throttled, memory_pressure, pageins, main_cpu_ms, settings_page
                 FROM hang_events WHERE day >= ?1 AND simulated IS NOT 1`).bind(since).all(),
     db.prepare(`SELECT install_id FROM excluded_installs`).all(),
   ]);
@@ -785,6 +790,7 @@ function hangSummary(parsed) {
     memory_pressure: countBy(parsed, (h) => h.memory_pressure || "(not reported)"),
     pageins: countBy(parsed, (h) => pageinsBucket(h.pageins)),
     main_cpu: countBy(parsed, (h) => mainCPUBucket(h.main_cpu_ms)),
+    settings_page: countBy(parsed, (h) => settingsPageBucket(h)),
   };
   const groups = {};
   for (const h of parsed) (groups[h.signature] ||= []).push(h);
@@ -800,6 +806,7 @@ function hangSummary(parsed) {
       memory_pressure: countBy(list, (h) => h.memory_pressure || "(not reported)"),
       pageins: countBy(list, (h) => pageinsBucket(h.pageins)),
       main_cpu: countBy(list, (h) => mainCPUBucket(h.main_cpu_ms)),
+      settings_page: countBy(list, (h) => settingsPageBucket(h)),
     };
   }).sort((a, b) => b.n - a.n).slice(0, 50);
   return { detailed: parsed.length, context, hotspots };
@@ -823,6 +830,12 @@ function mainCPUBucket(ms) {
   if (ms < 1000) return "100ms-1s";
   if (ms < 5000) return "1-5s";
   return ms < 10000 ? "5-10s" : "10s+";
+}
+
+// 卡住时设置窗口停在哪一页;设置窗口没开的一档,开着但没报页(旧版 App)的一档。
+function settingsPageBucket(h) {
+  if (h.settings_page) return h.settings_page;
+  return h.windows.includes("settings") ? "(not reported)" : "(settings closed)";
 }
 
 function primaryWordFormat(r) {
@@ -955,7 +968,7 @@ function render(s) {
     const ctx = hg.context || {};
     html += '<div class="grid">' + [["duration", "卡顿时长"], ["since_launch", "启动后多久"], ["since_wake", "唤醒后多久"],
       ["player", "最近放歌的播放器"], ["windows", "开着的窗口"], ["thermal", "温度状态"], ["memory_pressure", "内存压力"],
-      ["pageins", "换页次数"], ["main_cpu", "主线程 CPU 时间"]].map(([k, label]) =>
+      ["pageins", "换页次数"], ["main_cpu", "主线程 CPU 时间"], ["settings_page", "设置窗口停在哪一页"]].map(([k, label]) =>
       '<div class="card"><h2>' + label + "(带概况的 " + hg.detailed + " 次)</h2>" + table(ctx[k] || [], hg.detailed) + "</div>").join("") + "</div>";
     html += '<div class="card"><h2>卡顿(按卡住的位置)</h2>' + (hg.hotspots || []).map((h) =>
       "<details><summary><b>" + h.n + " 次 · " + h.installs + " 台</b> " + esc(h.signature) + ' <span class="muted">' +
@@ -965,7 +978,8 @@ function render(s) {
            "窗口: " + h.windows.map(([k, v]) => k + " " + v).join(" · "),
            "内存压力: " + (h.memory_pressure || []).map(([k, v]) => k + " " + v).join(" · "),
            "换页次数: " + (h.pageins || []).map(([k, v]) => k + " " + v).join(" · "),
-           "主线程 CPU: " + (h.main_cpu || []).map(([k, v]) => k + " " + v).join(" · ")].join("\\n")) + "</pre></details>").join("") + "</div>";
+           "主线程 CPU: " + (h.main_cpu || []).map(([k, v]) => k + " " + v).join(" · "),
+           "设置页: " + (h.settings_page || []).map(([k, v]) => k + " " + v).join(" · ")].join("\\n")) + "</pre></details>").join("") + "</div>";
   }
   html += '<div class="card"><h2>崩溃(按归并键)</h2>' + (s.crashes.length ? s.crashes.map((c) =>
     "<details><summary><b>" + c.n + " 次 · " + c.installs + " 台</b> " + esc(c.signature) + ' <span class="muted">' +

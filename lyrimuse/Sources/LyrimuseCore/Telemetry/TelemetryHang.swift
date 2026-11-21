@@ -13,6 +13,8 @@ public struct TelemetryHang: Codable, Equatable, Sendable {
     public var player: String?
     /// 卡住前开着的窗口(`windowTags` 里的取值)。
     public var windows: [String]
+    /// 卡住时设置窗口停在哪一页(`settingsPages` 里的取值,读 `SettingsPageSnapshot`);设置窗口关着为 nil,编码时不带这个键。
+    public var settingsPage: String?
     /// 系统温度状态:nominal / fair / serious / critical。
     public var thermal: String
     /// 采样到的主线程调用栈:最深的几帧,再接最深的几个 Lyrimuse 自己的帧,都按从深到浅排;没采样时为空。
@@ -36,7 +38,7 @@ public struct TelemetryHang: Codable, Equatable, Sendable {
     public init(duration: String = TelemetryHang.unrecovered, sinceLaunch: String, sinceWake: String?, player: String? = nil,
                 windows: [String], thermal: String, stack: [TelemetryCrash.Frame] = [], throttled: [String]? = nil,
                 memoryPressure: String? = nil, pageins: Int? = nil, mainCPUMilliseconds: Int? = nil, appVersion: String? = nil,
-                simulated: Bool? = nil) {
+                simulated: Bool? = nil, settingsPage: String? = nil) {
         self.duration = duration
         self.sinceLaunch = sinceLaunch
         self.sinceWake = sinceWake
@@ -50,12 +52,13 @@ public struct TelemetryHang: Codable, Equatable, Sendable {
         self.mainCPUMilliseconds = mainCPUMilliseconds
         self.appVersion = appVersion
         self.simulated = simulated
+        self.settingsPage = settingsPage
     }
 
     enum CodingKeys: String, CodingKey {
         case duration, sinceLaunch = "since_launch", sinceWake = "since_wake", player, windows, thermal, stack, throttled
         case memoryPressure = "memory_pressure", pageins, mainCPUMilliseconds = "main_cpu_ms", appVersion = "app_version"
-        case simulated
+        case simulated, settingsPage = "settings_page"
     }
 
     public static let unrecovered = "unrecovered"
@@ -68,6 +71,30 @@ public struct TelemetryHang: Codable, Equatable, Sendable {
     /// 前面几个是 SwiftUI 场景 id(窗口标识里含它,设置窗口的标识里含 `Settings`);`menubar-panel` 是菜单栏面板。
     public static let windowTags = ["settings", "lyrics-manager", "lyrics-window", "lyrics-quick-search", "lyrics-share",
                                     "whats-new", "onboarding", "menubar-panel"]
+    /// 设置窗口的页:深链 `settings/<路径>` 的路径,有页内分段的页另有「路径/分段」(分段取深链里的名字,不取别名)。
+    /// 只报这份名单里的取值。Worker(telemetry-worker/src/index.js 的 HANG_SETTINGS_PAGES)认同一份,两处一起改;
+    /// selftest 按 `SettingsDeepLink` 的路径表、分段表核对它。见 14 章决策 241。
+    public static let settingsPages = [
+        "lyrics", "lyrics/fetch", "lyrics/translation", "lyrics/display", "lyrics/manage",
+        "player", "player/players", "player/linkage", "player/permissions",
+        "appearance", "appearance/overlay", "appearance/notch", "appearance/menu-bar", "appearance/touch-bar",
+        "appearance/lyrics-window",
+        "shortcuts", "general", "about",
+        "account/listenbrainz", "account/relay", "account/bark",
+        "account/lastfm", "account/lastfm/stats", "account/lastfm/chart", "account/lastfm/on-this-day", "account/lastfm/settings",
+        "account/discord", "account/discord/display", "account/discord/buttons", "account/discord/privacy",
+        "software-update", "lastfm-suggestions", "labs",
+    ]
+
+    /// 深链路径 + 那一页存的分段取值(`SettingsDeepLink.sectionTable` 里的值)→ `settingsPages` 里的取值。
+    /// 分段认不出时只报到页,页认不出为 nil。
+    public static func settingsPage(path: String, section: String?) -> String? {
+        guard settingsPages.contains(path) else { return nil }
+        guard let section, let table = SettingsDeepLink.sectionTable[path] else { return path }
+        let name = table.values.keys.sorted().first { table.values[$0] == section && settingsPages.contains(path + "/" + $0) }
+        return name.map { path + "/" + $0 } ?? path
+    }
+
     /// 栈里最多几帧:最深的 `leafFrames` 帧 + `ownFrames` 个说明「谁在那儿等」的帧(自家帧优先,不够时补系统帧)。接收端最多收 6 帧。
     public static let leafFrames = 3, ownFrames = 3
     public static let symbolLimit = 200

@@ -231,6 +231,21 @@ extension SettingsSidebarItem {
         case .labs: self = .labs
         }
     }
+
+    /// 侧栏目的地 → `lyrimuse://settings/<路径>` 的路径,跟 `init(deepLink:)` 互逆。卡顿概况按它报设置页(`TelemetryHang.settingsPage`)。
+    var deepLinkPath: String {
+        switch self {
+        case .tab(let tab): return tab.rawValue
+        case .account(.listenBrainz): return "account/" + SettingsDeepLink.Account.listenbrainz.rawValue
+        case .account(.lastfm): return "account/" + SettingsDeepLink.Account.lastfm.rawValue
+        case .account(.stateRelay): return "account/" + SettingsDeepLink.Account.relay.rawValue
+        case .account(.bark): return "account/" + SettingsDeepLink.Account.bark.rawValue
+        case .account(.discord): return "account/" + SettingsDeepLink.Account.discord.rawValue
+        case .softwareUpdate: return "software-update"
+        case .lastfmSuggestions: return "lastfm-suggestions"
+        case .labs: return "labs"
+        }
+    }
 }
 
 /// 设置窗里的"一个位置" = 顶层面板 + 这一页当前停在哪个二级分段(没有分段的页是 nil)。
@@ -342,6 +357,12 @@ struct SettingsView: View {
     /// 当前位置 = 选中的面板 + 那一页此刻停的分段。`selection` 为 nil(什么都没选中)时没有位置。
     private var currentLocation: SettingsLocation? {
         selection.map { SettingsLocation(panel: $0, section: section(of: $0)) }
+    }
+
+    /// 卡顿概况里的设置页(`TelemetryHang.settingsPages` 里的取值);窗口关着(内容已换成占位)时为 nil。
+    private var telemetryPage: String? {
+        guard !closedContent.released, let location = currentLocation else { return nil }
+        return TelemetryHang.settingsPage(path: location.panel.deepLinkPath, section: location.section)
     }
 
     /// 把位置里的分段写回那一页的键。没有分段的位置什么都不做。
@@ -562,6 +583,8 @@ struct SettingsView: View {
     }
 
     var body: some View {
+        // 在根视图求值时写,新一页的详情排版之前就已记下:卡在新一页排版里的卡顿报的是这一页。别挪进 onChange(见 14 章决策 241)。
+        let _ = SettingsPageSnapshot.shared.set(telemetryPage)
         NavigationSplitView {
             List(selection: sidebarSelection) {
                 // 搜索框里有字时整张侧栏换成结果列表(系统设置就是这么做的);清空就回来。
@@ -725,6 +748,7 @@ struct SettingsView: View {
         }
         .onDisappear {
             guard closedContent.windowDisappeared() else { return }
+            SettingsPageSnapshot.shared.set(nil)
             AuxiliaryWindowActivation.windowDidDisappear("settings")
             playerHealth.stop()
             // 「软件更新」页攥着的 Sparkle 回复(找到了 / 下完待装)随窗口一起放掉,见那边注释。

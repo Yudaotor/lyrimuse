@@ -333,7 +333,8 @@ public final class MainThreadWatchdog: @unchecked Sendable {
             let hang = hangs.stalled(context)
             let sample = Self.shouldSample(tookDetailSlot: hang?.detailed == true, lastSampleAt: lastSampleAt, now: now)
             let memoryNote = HangMemory.logNote(pressure: context.memoryPressure, pageins: context.pageins)
-                + MainThreadCPU.logNote(milliseconds: context.mainCPUMilliseconds) + Self.simulatedLogNote(context.simulated == true)
+                + MainThreadCPU.logNote(milliseconds: context.mainCPUMilliseconds) + Self.settingsPageLogNote(context.settingsPage)
+                + Self.simulatedLogNote(context.simulated == true)
             logger.error("main thread: unresponsive for \(Int(seconds), privacy: .public)s\(sample ? ", sampling its stack" : "", privacy: .public)\(self.throttleNote(throttle), privacy: .public)\(memoryNote, privacy: .public)")
             if sample {
                 lastSampleAt = now
@@ -348,6 +349,11 @@ public final class MainThreadWatchdog: @unchecked Sendable {
     /// 要不要采这一次:占到了当天的遥测概况名额就采(不采那条概况就没有栈),否则离上次采样满 `sampleCooldown` 才采。
     public static func shouldSample(tookDetailSlot: Bool, lastSampleAt: TimeInterval?, now: TimeInterval) -> Bool {
         tookDetailSlot || lastSampleAt.map { now - $0 >= sampleCooldown } ?? true
+    }
+
+    /// 日志行尾的设置页说明(设置窗口关着时为空)。
+    public static func settingsPageLogNote(_ page: String?) -> String {
+        page.map { " (settings page \($0))" } ?? ""
     }
 
     /// 日志行尾的模拟停顿说明。
@@ -365,7 +371,13 @@ public final class MainThreadWatchdog: @unchecked Sendable {
                       memoryPressure: memory.pressure, pageins: memory.pageins(now: HangMemory.readPageins()),
                       mainCPUMilliseconds: MainThreadCPU.millisecondsBetween(mainCPUAtStart, MainThreadCPU.readMicroseconds(thread: mainThread)),
                       appVersion: TelemetryHang.currentAppVersion,
-                      simulated: isSimulated(probeSentAt: probeSentAt) ? true : nil)
+                      simulated: isSimulated(probeSentAt: probeSentAt) ? true : nil,
+                      settingsPage: SettingsPageSnapshot.shared.current)
+    }
+
+    /// 此刻报卡顿的话概况是什么样(单测读):在看门狗队列上算,跟真报卡顿同一条路。
+    public func currentHangContext() -> TelemetryHang {
+        queue.sync { hangContext(at: ProcessInfo.processInfo.systemUptime, throttle: [], probeSentAt: nil) }
     }
 
     /// 采一次主线程调用栈;`hang` 是报卡顿时拿到的回执,栈补到那一条(遥测没在记时为 nil,只写本机日志)。

@@ -78,6 +78,12 @@ Stalls started on purpose from a debug link (`debug/main-thread-stall`) or the `
 npx wrangler d1 execute lyrimuse-telemetry --remote --command "ALTER TABLE hang_events ADD COLUMN simulated INTEGER"
 ```
 
+When the Settings window is open, a hang summary also says which page it was on (`settings_page`): the `lyrimuse://settings/<path>` path, plus the section on pages that have one (`lyrics/display`, `account/lastfm/stats`). Values outside `HANG_SETTINGS_PAGES` (the same list as Core `TelemetryHang.settingsPages`) are stored as empty, as are older apps. `/v1/stats` adds a `settings_page` distribution to the hang context and each hotspot; hangs with Settings closed count as `(settings closed)`, Settings open without a page (older apps) as `(not reported)`. Added once before deploying:
+
+```sh
+npx wrangler d1 execute lyrimuse-telemetry --remote --command "ALTER TABLE hang_events ADD COLUMN settings_page TEXT"
+```
+
 `activity.lyric_sources` counts, per day, which lyric source the shown lyrics came from for each word-synced, line-synced or plain-text song (keys like `netease:line`, sources and tiers from a fixed list). `/v1/stats` returns it as `lyric_sources`. Added once before deploying:
 
 ```sh

@@ -872,6 +872,80 @@ func runTelemetryTests() {
     }
 
     do {
+        print("\n== 遥测:卡顿概况里的设置页 ==")
+        typealias H = TelemetryHang
+        // 名单 = 深链的每一页 + 有分段的页的每个分段(取跟存的值同名的那个链接名,别名不算)。
+        let pagePaths = SettingsDeepLink.tabNames + SettingsDeepLink.Account.allCases.map { "account/" + $0.rawValue }
+            + ["software-update", "lastfm-suggestions", "labs"]
+        func linkName(_ value: String) -> String {
+            value.reduce(into: "") { out, ch in out += ch.isUppercase ? "-" + ch.lowercased() : String(ch) }
+        }
+        var derived = pagePaths
+        for (page, entry) in SettingsDeepLink.sectionTable.sorted(by: { $0.key < $1.key }) {
+            for value in Set(entry.values.values).sorted() {
+                expectEqual(entry.values[linkName(value)], value, "设置页: \(page) 的分段 \(value) 有同名的链接名")
+                derived.append(page + "/" + linkName(value))
+            }
+        }
+        expectEqual(H.settingsPages.sorted(), derived.sorted(), "设置页: 名单 = 深链的每一页 + 每个分段(深链加了页或分段,这份名单和 Worker 要跟着加)")
+        expectEqual(Set(H.settingsPages).count, H.settingsPages.count, "设置页: 名单不重复")
+        expectEqual(pagePaths.filter { SettingsDeepLink(path: $0) == nil }, [], "设置页: 每一页都是认得出的深链路径")
+        expectEqual([H.settingsPage(path: "account/lastfm", section: "stats"), H.settingsPage(path: "appearance", section: "menuBar"),
+                     H.settingsPage(path: "appearance", section: "overlay"), H.settingsPage(path: "appearance", section: "lyricsWindow"),
+                     H.settingsPage(path: "lyrics", section: "fetch"), H.settingsPage(path: "account/lastfm", section: "onThisDay")],
+                    ["account/lastfm/stats", "appearance/menu-bar", "appearance/overlay", "appearance/lyrics-window", "lyrics/fetch",
+                     "account/lastfm/on-this-day"], "设置页: 分段取值换成深链里的正名,不取别名")
+        expectEqual([H.settingsPage(path: "lyrics", section: "bogus"), H.settingsPage(path: "general", section: nil),
+                     H.settingsPage(path: "general", section: "x"), H.settingsPage(path: "account/bark", section: nil),
+                     H.settingsPage(path: "nope", section: nil), H.settingsPage(path: "/Users/me", section: "stats")],
+                    ["lyrics", "general", "general", "account/bark", nil, nil], "设置页: 分段认不出只报到页,页认不出不报")
+        let unmapped = SettingsDeepLink.sectionTable.flatMap { page, entry in
+            entry.values.values.filter { value in
+                H.settingsPage(path: page, section: value).map { !$0.hasPrefix(page + "/") || !H.settingsPages.contains($0) } ?? true
+            }.map { page + ":" + $0 }
+        }
+        expectEqual(unmapped, [], "设置页: 每个分段取值都报得出名单里的「页/分段」")
+
+        let snapshot = SettingsPageSnapshot()
+        snapshot.set("account/lastfm/stats")
+        let kept = snapshot.current
+        snapshot.set("/Users/me/Music")
+        let unknown = snapshot.current
+        snapshot.set("lyrics/display")
+        let changed = snapshot.current
+        snapshot.set(nil)
+        expectEqual([kept, unknown, changed, snapshot.current], ["account/lastfm/stats", nil, "lyrics/display", nil],
+                    "设置页快照: 换页时写进去、读得回来,名单外的记成空,关窗清空")
+
+        // 主线程卡住时看门狗照样拿得到:主线程在这里等着(= 卡住),概况在后台线程上算;回头问主线程的话等不到。
+        final class Slot: @unchecked Sendable { var page: String? }
+        let slot = Slot()
+        let dog = MainThreadWatchdog(probeInterval: 60, stallThreshold: 60, sampleAfter: 60, onEvent: { _ in })
+        SettingsPageSnapshot.shared.set("account/lastfm/stats")
+        let done = DispatchSemaphore(value: 0)
+        DispatchQueue.global().async {
+            slot.page = dog.currentHangContext().settingsPage
+            done.signal()
+        }
+        let answered = done.wait(timeout: .now() + 0.5) == .success
+        expectEqual([Thread.isMainThread, answered], [true, true], "设置页: 主线程卡住时,看门狗不问主线程就算得出概况")
+        expectEqual(answered ? slot.page : nil, "account/lastfm/stats", "设置页: 概况带上快照里的设置页")
+        if answered {
+            SettingsPageSnapshot.shared.set(nil)
+            expectEqual(dog.currentHangContext().settingsPage, nil, "设置页: 设置窗口关着时概况不带")
+        }
+        expectEqual([MainThreadWatchdog.settingsPageLogNote("account/lastfm/stats"), MainThreadWatchdog.settingsPageLogNote(nil)],
+                    [" (settings page account/lastfm/stats)", ""], "设置页: 日志行尾带页名,窗口关着时不带")
+        let oldHang = #"{"duration":"5-10s","since_launch":"<1m","windows":["settings"],"thermal":"nominal","stack":[]}"#
+        expectEqual((try? JSONDecoder().decode(H.self, from: Data(oldHang.utf8))).map { $0.settingsPage == nil }, true,
+                    "设置页: 旧版本存下的概况没有设置页")
+        var withPage = H(sinceLaunch: "<1m", sinceWake: nil, windows: ["settings"], thermal: "nominal")
+        withPage.settingsPage = "account/lastfm/stats"
+        expectEqual((try? JSONEncoder().encode(withPage)).flatMap { try? JSONDecoder().decode(H.self, from: $0) }, withPage,
+                    "设置页: 概况能存能读")
+    }
+
+    do {
         print("\n== 遥测:歌曲语言 ==")
         typealias L = TelemetrySongLanguage
         expectEqual([L(script: .chinese, text: ""), L(script: .cantonese, text: ""), L(script: .japanese, text: ""),
@@ -1123,9 +1197,17 @@ func runTelemetryTests() {
         simulatedKeyHang.simulated = true
         expectEqual(Set(keys(simulatedKeyHang)).subtracting(keys(hang)).sorted(), ["simulated"],
                     "卡顿概况: 调试造的停顿带 simulated,真卡顿不带")
+        var pagedHang = hang
+        pagedHang.settingsPage = "lyrics/display"
+        expectEqual(Set(keys(pagedHang)).subtracting(keys(hang)).sorted(), ["settings_page"],
+                    "卡顿概况: 设置窗口开着时带 settings_page,关着不带")
+        expectEqual(sourceHas(worker, "settings_page: oneOf(h.settings_page, HANG_SETTINGS_PAGES),")
+                        && sourceHas(worker, "h.main_cpu_ms, h.simulated, h.settings_page)));")
+                        && sourceHas(worker, "settings_page: countBy(parsed, (h) => settingsPageBucket(h)),"),
+                    true, "Worker: 设置页按名单收、入库,统计带分布")
         expectEqual(sourceHas(worker, "simulated: h.simulated === true ? 1 : null,")
                         && sourceHas(worker, "FROM hang_events WHERE day >= ?1 AND simulated IS NOT 1")
-                        && sourceHas(worker, "h.memory_pressure, h.pageins, h.main_cpu_ms, h.simulated)));")
+                        && sourceHas(worker, "h.memory_pressure, h.pageins, h.main_cpu_ms, h.simulated, h.settings_page)));")
                         && sourceHas(worker, "hangs + simulatedDetails));"),
                     true, "Worker: 模拟的卡顿概况照存(simulated = 1),统计读概况时跳过")
         expectEqual(sourceHas(worker, "app_version: str(h.app_version, 32),") && sourceHas(worker, "h.app_version ?? e.app_version"), true,
@@ -1134,7 +1216,7 @@ func runTelemetryTests() {
                     && sourceHas(worker, "env.INGEST_LIMITER.limit({ key: clientIP(request) })")
                     && !worker.contains("limit({ key: ip })"), true,
                     "Worker: 入口限流和按 IP 的硬限额都按 quotaIPKey 计(IPv6 取前缀),行为单测在 telemetry-worker/test")
-        let fields = keys(regional) + keys(features) + keys(TelemetryActivityDay(day: "2026-10-30")) + keys(throttledHang)
+        let fields = keys(regional) + keys(features) + keys(TelemetryActivityDay(day: "2026-10-30")) + keys(throttledHang) + keys(pagedHang)
             + ["install_id", "origin", "report_id", "exception_type", "termination_indicator", "frames", "exception_frames"]
             + TelemetryAction.allCases.map(\.rawValue)
         expectEqual(["install_method", "settings_changed", "permissions_missing", "lyrics_word_formats"].allSatisfy(keys(features).contains),
@@ -1153,12 +1235,14 @@ func runTelemetryTests() {
                     [TelemetryHang.durationBuckets.sorted(), TelemetryHang.elapsedBuckets.sorted(), TelemetryHang.thermalStates.sorted(),
                      TelemetryHang.windowTags.sorted()], "Worker: 卡顿概况的取值名单跟 Core 一致")
         expectEqual(workerList("HANG_THROTTLE"), MainThreadThrottle.reasons.sorted(), "Worker: 节流标记的取值名单跟 Core 一致")
+        expectEqual(workerList("HANG_SETTINGS_PAGES"), TelemetryHang.settingsPages.sorted(),
+                    "Worker: 设置页的取值名单跟 Core TelemetryHang.settingsPages 一致(加了页两处一起改)")
         expectEqual(sourceHas(worker, "const HANG_MEMORY_PRESSURE = [" + HangMemory.pressureLevels.map { "\"\($0)\"" }.joined(separator: ", ") + "];")
                         && worker.contains("const MAX_HANG_PAGEINS = \(HangMemory.maxPageins);"),
                     true, "Worker: 内存压力档位(从松到紧)、换页次数上限跟 Core 一致")
         expectEqual(worker.contains("const MAX_HANG_MAIN_CPU_MS = \(MainThreadCPU.maxMilliseconds);")
                         && sourceHas(worker, "main_cpu_ms: int(h.main_cpu_ms, 0, MAX_HANG_MAIN_CPU_MS),")
-                        && sourceHas(worker, "h.memory_pressure, h.pageins, h.main_cpu_ms, h.simulated)));"),
+                        && sourceHas(worker, "h.memory_pressure, h.pageins, h.main_cpu_ms, h.simulated, h.settings_page)));"),
                     true, "Worker: 主线程 CPU 时间按毫秒收 0~上限的整数(上限跟 Core 一致),入库")
         expectEqual(worker.contains("const MAX_HANG_DETAILS_PER_DAY = \(TelemetryActivity.maxHangDetailsPerDay);")
                         && worker.contains("const MAX_THROTTLED_HANG_DETAILS_PER_DAY = \(TelemetryActivity.maxThrottledHangDetailsPerDay);"),
@@ -1273,7 +1357,7 @@ func runTelemetryTests() {
                     true, "接线: 主线程卡住记一笔概况(带节流标记),恢复时补时长(没卡满的不补),卡住之后才被压着的补标记,都按回执补")
         // 调试造的停顿(14 章决策 240):概况按探测投出时刻认模拟的,日志带说明;深链和启动参数都走 simulateStall。
         let debugLinks = sourceText("lyrimuse/Settings/DebugDeepLinks.swift")
-        expectEqual(sourceHas(sourceBody("private func hangContext(", in: watchdog), "simulated: isSimulated(probeSentAt: probeSentAt) ? true : nil)")
+        expectEqual(sourceHas(sourceBody("private func hangContext(", in: watchdog), "simulated: isSimulated(probeSentAt: probeSentAt) ? true : nil,")
                         && sourceHas(handleBody, "+ Self.simulatedLogNote(context.simulated == true)")
                         && sourceHas(handleBody, "+ Self.simulatedLogNote(isSimulated(probeSentAt: probeSentAt))")
                         && sourceHas(debugLinks, "MainThreadWatchdog.shared.simulateStall(seconds: seconds, busy: busy,")
@@ -1340,6 +1424,26 @@ func runTelemetryTests() {
                     true, "接线: 采样按报卡顿时的回执补调用栈、每拍认唤醒、主线程还能动时记下开着的窗口")
         expectEqual(sourceHas(sourceText("lyrimuse/AppDelegate.swift"), "MainThreadWatchdog.shared.setWindowProvider {"), true,
                     "接线: App 给看门狗窗口提供者")
+        // 设置页(14 章决策 241):设置窗口根视图求值时写快照、关窗清空,看门狗报卡顿时读快照,日志带页名。
+        let settingsView = sourceText("lyrimuse/SettingsView.swift")
+        let settingsRoot = settingsView.range(of: "struct SettingsView: View {").map { String(settingsView[$0.lowerBound...]) } ?? ""
+        let rootBody = sourceBody("var body: some View {", in: settingsRoot)
+        let pathBody = sourceBody("var deepLinkPath: String {", in: settingsView)
+        let literalRE = try? NSRegularExpression(pattern: #""([^"]+)""#)
+        let pathLiterals = (literalRE?.matches(in: pathBody, range: NSRange(pathBody.startIndex..., in: pathBody)) ?? [])
+            .compactMap { Range($0.range(at: 1), in: pathBody).map { String(pathBody[$0]) } }.filter { $0 != "account/" }
+        expectEqual(sourceHas(rootBody, "let _ = SettingsPageSnapshot.shared.set(telemetryPage)")
+                        && sourceHas(sourceBody(".onDisappear {", in: rootBody), "SettingsPageSnapshot.shared.set(nil)")
+                        && sourceHas(sourceBody("private var telemetryPage: String? {", in: settingsRoot),
+                                     "TelemetryHang.settingsPage(path: location.panel.deepLinkPath, section: location.section)"),
+                    true, "接线: 设置窗口根视图求值时把当前页写进快照,关窗清空")
+        expectEqual(sourceHas(pathBody, "case .tab(let tab): return tab.rawValue") && pathLiterals.count == 3
+                        && pathLiterals.allSatisfy(TelemetryHang.settingsPages.contains)
+                        && SettingsDeepLink.Account.allCases.allSatisfy { sourceHas(pathBody, "SettingsDeepLink.Account.\($0.rawValue).rawValue") },
+                    true, "接线: 侧栏目的地换成深链路径,每个都在设置页名单里")
+        expectEqual(sourceHas(sourceBody("private func hangContext(", in: watchdog), "settingsPage: SettingsPageSnapshot.shared.current)")
+                        && sourceHas(handleBody, "+ Self.settingsPageLogNote(context.settingsPage)"),
+                    true, "接线: 报卡顿时从快照读设置页(不问主线程),unresponsive 那行日志带页名")
         // 偏好变更的观察者不能让后台线程写偏好时同步等主线程(14 章决策 175、231):全仓只有 UserDefaultsChangeRelay 直接登记。
         var directObservers: [String] = []
         if let files = FileManager.default.enumerator(atPath: root.path) {

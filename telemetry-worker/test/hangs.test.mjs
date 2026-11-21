@@ -59,3 +59,20 @@ test("没带模拟标记的概况照旧不超过当天报的卡顿次数", async
   assert.equal((await beat(id, 1, [hang(), hang(), hang()])).status, 200);
   assert.deepEqual(stored(id), [null]);
 });
+
+test("设置页按名单收,名单外的记空;统计按页分,设置窗口没开、开着没报页的各一档", async () => {
+  const id = randomUUID();
+  const settings = { windows: ["settings"] };
+  assert.equal((await beat(id, 3, [hang({ ...settings, settings_page: "account/lastfm/stats" }),
+                                   hang({ ...settings, settings_page: "/Users/me/Music" }), hang(settings)])).status, 200);
+  assert.deepEqual(db.prepare(`SELECT settings_page FROM hang_events WHERE install_id = ? ORDER BY seq`).all(id).map((r) => r.settings_page),
+                   ["account/lastfm/stats", null, null]);
+  const s = await stats();
+  const page = Object.fromEntries(s.hangs.context.settings_page);
+  assert.equal(page["account/lastfm/stats"], 1);
+  assert.equal(page["(not reported)"], 2);
+  assert.ok(page["(settings closed)"] > 0);
+  assert.equal(Object.values(page).reduce((n, v) => n + v, 0), s.hangs.detailed);
+  const hotspot = s.hangs.hotspots.find((h) => h.settings_page.some(([k]) => k === "account/lastfm/stats"));
+  assert.ok(hotspot);
+});
