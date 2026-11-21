@@ -347,7 +347,7 @@ func timelineAnchorBaseline(results []scoredLyricCandidateResult, lines [][]time
 	for x := 0; x < len(anchors); x++ {
 		for y := x + 1; y < len(anchors); y++ {
 			a, b := anchors[x], anchors[y]
-			if rel[[2]int{a, b}] == timelineAligned && lyricSourceConsensusFamily(results[a].Source) != lyricSourceConsensusFamily(results[b].Source) {
+			if rel[[2]int{a, b}] == timelineAligned && lyricSourceFamily(results[a].Source) != lyricSourceFamily(results[b].Source) {
 				baseline[a], baseline[b] = true, true
 			}
 		}
@@ -395,7 +395,7 @@ func timelineAnchorOutliers(results []scoredLyricCandidateResult, lines [][]time
 	for x := 0; x < len(anchors); x++ {
 		for y := x + 1; y < len(anchors); y++ {
 			a, b := anchors[x], anchors[y]
-			if lyricSourceConsensusFamily(results[a].Source) == lyricSourceConsensusFamily(results[b].Source) || timelinesIdentical(lines[a], lines[b]) {
+			if lyricSourceFamily(results[a].Source) == lyricSourceFamily(results[b].Source) || timelinesIdentical(lines[a], lines[b]) {
 				join(family, a, b)
 				join(camp, a, b)
 			}
@@ -515,13 +515,13 @@ func applyHandTypedTimelinePenalty(results []scoredLyricCandidateResult) {
 		}
 		families := map[string]bool{}
 		for _, p := range r.ConsensusPeers {
-			families[lyricSourceConsensusFamily(p)] = true
+			families[lyricSourceFamily(p)] = true
 		}
 		own := displayedTimeline(r.Lyrics, r.LyricsYRC)
 		later, earlier := 0, 0
 		aligned := false
 		for j, peer := range results {
-			if j == i || peer.Score < 0 || peer.Lyrics == "" || !families[lyricSourceConsensusFamily(peer.Source)] {
+			if j == i || peer.Score < 0 || peer.Lyrics == "" || !families[lyricSourceFamily(peer.Source)] {
 				continue
 			}
 			switch classifyTimelines(own, displayedTimeline(peer.Lyrics, peer.LyricsYRC), handTypedTimelineShiftMs) {

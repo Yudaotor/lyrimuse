@@ -3916,7 +3916,7 @@ const (
 //
 // 第二个返回值 familyPeers 是给 inheritIdentityTerms 的名单:每个源的互证伙伴所在家族里、跟它正文一致的全部成员
 // (不按家族去重,不含它自己那一家),跟 peers 过同一道时长闸。
-// lyricSourceConsensusFamily 回答"这两条候选算不算**两个独立信源**"——跨源共识
+// lyricSourceFamily 回答"这两条候选算不算**两个独立信源**"——跨源共识
 // (contentConsensusPeers)按它归组,而不是按源名。默认每个源自成一家。
 //
 // 目前只有一组例外:**deezer 与 lyricfind 同属 LyricFind**。两者的歌词正文都由 LyricFind
@@ -3934,10 +3934,11 @@ const (
 //
 // Deezer 的**时间轴**其实是它自己做的(LyricFind 只供词),所以严格说两条管道只有正文同源;
 // 但共识比的恰恰是剥掉时间戳之后的正文(lyricConsensusBody),撞的正是同源那部分。
-func lyricSourceConsensusFamily(source string) string {
-	switch source {
-	case lyricSourceDeezer, lyricSourceLyricFind:
-		return lyricSourceLyricFind
+//
+// 哪几个源同出一家登记在描述符的 ConsensusFamily 上(空 = 自成一家);没登记的名字自成一家。
+func lyricSourceFamily(source string) string {
+	if d := lyricProviders().descriptor(source); d != nil && d.ConsensusFamily != "" {
+		return d.ConsensusFamily
 	}
 	return source
 }
@@ -4074,7 +4075,7 @@ func contentConsensusPeers(localArtist, localTitle string, candidates []lyricCan
 				continue
 			}
 			agrees[i][j], agrees[j][i] = true, true
-			if lyricSourceConsensusFamily(members[i].source) == lyricSourceConsensusFamily(members[j].source) ||
+			if lyricSourceFamily(members[i].source) == lyricSourceFamily(members[j].source) ||
 				timelinesIdentical(members[i].timeline, members[j].timeline) {
 				family[root(j)] = root(i)
 			}
@@ -4086,7 +4087,7 @@ func contentConsensusPeers(localArtist, localTitle string, candidates []lyricCan
 			continue
 		}
 		var agree, agreeAll []string
-		// 按**信源家族**去重,不是按源名 —— 见 lyricSourceConsensusFamily 的头注;时间轴是同一份副本的几条也算一家。
+		// 按**信源家族**去重,不是按源名 —— 见 lyricSourceFamily 的头注;时间轴是同一份副本的几条也算一家。
 		seenFamily := map[int]bool{root(i): true}
 		for j := range members {
 			if i == j || !agrees[i][j] {

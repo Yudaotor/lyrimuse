@@ -366,9 +366,11 @@ type ProviderDescriptor struct {
 	Baked    BakedPolicy
 	// BakedSplit:Baked 为 bakedCustom 时的摘法。
 	BakedSplit func(lyrics string, foreignSong bool) (clean, tr string, n int)
-	// ParenBackground:正文里的括号段拆成背景人声轨(parenBGSources)。
+	// ParenBackground:正文里的括号段拆成背景人声轨(lyricSourceSplitsParenBackground)。自带结构化背景人声的源不拆:正文里
+	// 剩下的括号是它们判成主唱的部分,存量回填(bgbackfill.go)还会整份换掉它们的 lyrics_bg;本机文件、各客户端缓存里的
+	// 用户歌词也不拆(洛雪存下的是平台原版,拆)。
 	ParenBackground bool
-	// CarriesKana:正文里会带 `[kana:]` 假名标注(kanaDonorSources)。
+	// CarriesKana:正文里会带 `[kana:]` 假名标注(lyricSourceCarriesKana)。
 	CarriesKana bool
 	// InstrumentalRank:纯音乐标记搭车的先后(lyricProviderRegistry.instrumentalOrder),从 1 起;0 = 不搭车。几个源同时说这首是
 	// 纯音乐时,标记记在名次最靠前的那个头上;凭什么说见 CandidateAssembly.Instrumental。
@@ -378,7 +380,7 @@ type ProviderDescriptor struct {
 	// SongwritersSkipCJK:正文是中日韩文字时不用它的作者名单。
 	SongwritersSkipCJK bool
 	PlainText          PlainTextOrder
-	// ConsensusFamily:正文同出一家的源互不印证(lyricSourceConsensusFamily);空 = 自成一家。
+	// ConsensusFamily:正文同出一家的源互不印证(lyricSourceFamily);空 = 自成一家。
 	ConsensusFamily string
 	// HandTypedTimeline:时间轴是上传者手打的。它那份跟正文共识的另一家整体错开时扣分(applyHandTypedTimelinePenalty)。
 	HandTypedTimeline bool
@@ -623,6 +625,19 @@ func lyricSourceDayReserve(source string) int {
 func lyricSourceUsesProxyFallback(source string) bool {
 	d := lyricProviders().descriptor(source)
 	return d != nil && d.ProxyFallback
+}
+
+// lyricSourceSplitsParenBackground:source 正文里的括号段拆不拆成背景人声轨(描述符的 ParenBackground)。没登记的名字
+// (手改的、粘贴的、空串)不拆。
+func lyricSourceSplitsParenBackground(source string) bool {
+	d := lyricProviders().descriptor(source)
+	return d != nil && d.ParenBackground
+}
+
+// lyricSourceCarriesKana:source 的正文里会不会带 `[kana:]` 假名标注(描述符的 CarriesKana)。没登记的名字不会。
+func lyricSourceCarriesKana(source string) bool {
+	d := lyricProviders().descriptor(source)
+	return d != nil && d.CarriesKana
 }
 
 // lyricSourceTimelineHandTyped:source 的时间轴是不是上传者手打的(描述符的 HandTypedTimeline)。没登记的名字不是。

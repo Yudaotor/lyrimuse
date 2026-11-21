@@ -17,9 +17,9 @@ var parenBGFileForms atomic.Int64
 // 歌词文件里没有背景人声这一项,不接回去的话这段和声只在缓存里:清空后从文件恢复、换一台 Mac 读这个文件夹都会丢,
 // 别的播放器读文件也看不到。这个写法拆分器认得,再拆一次跟缓存里一样(启动迁移会重拆)。导入比对文件时同样用它认出
 // 「文件还是导出时那份」(lyricsimport.go),不然状态记录一作废,每首拆过的歌都会被当成文件改过。
-// 只管 parenBGSources 的条目:AMLL / Apple 的背景人声不是从括号里来的。
+// 只管拆括号背景人声的源(lyricSourceSplitsParenBackground)的条目:AMLL / Apple 的背景人声不是从括号里来的。
 func parenBGFileForm(source, lrc, yrc, bg string) (string, string) {
-	if bg == "" || yrc == "" || !parenBGSources[source] {
+	if bg == "" || yrc == "" || !lyricSourceSplitsParenBackground(source) {
 		return lrc, yrc
 	}
 	parenBGFileForms.Add(1)
@@ -132,9 +132,9 @@ func parenBGFileForm(source, lrc, yrc, bg string) (string, string) {
 // 会写出不一样的文件时加一,不然文件状态记录里旧的指纹还对得上,文件不会重写。
 const parenBGFileFormVersion = 1
 
-// parenBGFileSource:这份缓存原文(文件头、正文、逐字、背景人声)的指纹。不用接回去(没有背景人声、不是 parenBGSources)为 0。
+// parenBGFileSource:这份缓存原文(文件头、正文、逐字、背景人声)的指纹。不用接回去(没有背景人声、不是拆括号背景人声的源)为 0。
 func parenBGFileSource(header, source, lrc, yrc, bg string) uint32 {
-	if bg == "" || yrc == "" || !parenBGSources[source] {
+	if bg == "" || yrc == "" || !lyricSourceSplitsParenBackground(source) {
 		return 0
 	}
 	c := crc32.ChecksumIEEE([]byte{parenBGFileFormVersion})

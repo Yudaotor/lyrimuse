@@ -797,6 +797,10 @@ func TestProviderRegistryBakedPolicyMatchesRanking(t *testing.T) {
 	}
 }
 
+// registryGuardUnknownSources:不是登记过的来源、却会出现在条目和候选的源名一栏里的值。
+var registryGuardUnknownSources = []string{"", "nope", "manual", "pasted", "NETEASE", "netease "}
+
+// 括号背景人声、假名标注:描述符推出来的、生产代码读到的都等于期望表;没登记的名字两样都不是。
 func TestProviderRegistryParenBackgroundAndKanaMatch(t *testing.T) {
 	got := registryNameSet(func(d *ProviderDescriptor) bool { return d.ParenBackground })
 	if want := trueKeys(parenBGSources); !reflect.DeepEqual(got, want) {
@@ -805,6 +809,21 @@ func TestProviderRegistryParenBackgroundAndKanaMatch(t *testing.T) {
 	got = registryNameSet(func(d *ProviderDescriptor) bool { return d.CarriesKana })
 	if want := trueKeys(kanaDonorSources); !reflect.DeepEqual(got, want) {
 		t.Errorf("假名标注:登记表 %v\nkanaDonorSources %v", sortedKeys(got), sortedKeys(want))
+	}
+	names := slices.Clone(registryGuardUnknownSources)
+	for _, d := range registryDescriptors() {
+		names = append(names, d.Name)
+	}
+	for _, name := range names {
+		if read := lyricSourceSplitsParenBackground(name); read != parenBGSources[name] {
+			t.Errorf("%q:lyricSourceSplitsParenBackground=%v,期望表 %v", name, read, parenBGSources[name])
+		}
+		if read := lyricSourceCarriesKana(name); read != kanaDonorSources[name] {
+			t.Errorf("%q:lyricSourceCarriesKana=%v,期望表 %v", name, read, kanaDonorSources[name])
+		}
+	}
+	if len(parenBGSources) == 0 || len(kanaDonorSources) == 0 {
+		t.Error("期望表是空的,这条守卫什么都没比")
 	}
 }
 
@@ -1027,6 +1046,7 @@ func TestProviderRegistryPlainTextOrderMatches(t *testing.T) {
 	}
 }
 
+// 共识家族:描述符推出来的、生产代码读到的都等于期望表;家族名必须是登记过的源名;没登记的名字自成一家。
 func TestProviderRegistryConsensusFamilyMatches(t *testing.T) {
 	shared := 0
 	for _, d := range registryDescriptors() {
@@ -1037,8 +1057,19 @@ func TestProviderRegistryConsensusFamilyMatches(t *testing.T) {
 		if want := lyricSourceConsensusFamily(d.Name); got != want {
 			t.Errorf("%s:登记表家族 %q,lyricSourceConsensusFamily %q", d.Name, got, want)
 		}
+		if read := lyricSourceFamily(d.Name); read != lyricSourceConsensusFamily(d.Name) {
+			t.Errorf("%s:lyricSourceFamily=%q,期望表 %q", d.Name, read, lyricSourceConsensusFamily(d.Name))
+		}
+		if lyricProviders().descriptor(got) == nil {
+			t.Errorf("%s:家族 %q 不是登记过的源名", d.Name, got)
+		}
 		if got != d.Name {
 			shared++
+		}
+	}
+	for _, name := range registryGuardUnknownSources {
+		if read := lyricSourceFamily(name); read != name {
+			t.Errorf("没登记的名字 %q 该自成一家,读到 %q", name, read)
 		}
 	}
 	if shared == 0 {

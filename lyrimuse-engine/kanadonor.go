@@ -248,9 +248,6 @@ func kanaLineKey(line string) string {
 // 条目的 LyricsKanaChecked 记成它。
 const lyricsKanaVersion = 2
 
-// kanaDonorSources:会在正文里带 `[kana:]` 的源。
-var kanaDonorSources = map[string]bool{"kugou": true, "qq": true, "lrclib": true}
-
 // nextLyricsKana:这一轮写完正文 lyrics / yrc 之后条目该带的借来标注(refreshKana 和锁外预生成罗马音共用,两边一致)。
 // 正文自己带标注时为空;这一轮借到了就用这一轮的;没借到时把旧的那份对到新正文上(这一轮可能根本没问到带标注的源)。
 func nextLyricsKana(old, lyrics, yrc string, scored []scoredLyricCandidateResult) string {
@@ -281,7 +278,7 @@ func refreshKana(e *enrichEntry, scored []scoredLyricCandidateResult) {
 		e.LyricsKanaChecked = 0
 	}
 	for _, c := range scored {
-		if kanaDonorSources[c.Source] && c.Score >= 0 {
+		if lyricSourceCarriesKana(c.Source) && c.Score >= 0 {
 			e.LyricsKanaChecked = lyricsKanaVersion
 			return
 		}

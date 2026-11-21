@@ -58,7 +58,7 @@ import (
 // **它跟 lyricfind 不是两个独立信源**(正文层面)。两条管道的接口、曲库、匹配、故障面
 // 都各走各的,时间轴也不同源(Deezer 的同步是它自己做的,LyricFind 只供词)——但**正文**
 // 出自同一家。打分层的"跨源正文共识"按独立信源数给分,所以必须按**供词方**归组而不是按
-// 源名:见 match.go 的 lyricSourceConsensusFamily(deezer 与 lyricfind 归同一家)。不归组的
+// 源名:见 match.go 的 lyricSourceFamily(deezer 与 lyricfind 归同一家)。不归组的
 // 后果有两个:两条管道互相印证各拿一份加分、第三方误以为有两家印证拿 +250。这条纪律
 // ytmusic.go 顶部早就写下了,接这个源时从另一个方向又踩了一次。
 //

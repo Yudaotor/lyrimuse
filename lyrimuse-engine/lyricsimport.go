@@ -393,7 +393,7 @@ func importLyricsFromOpts(dir string, persist, cleanTemps bool) []string {
 		// lrcReplacedParenBG:拆过括号背景人声的这一首,正文被 .lrc 换掉了。逐字那份也得换成带括号的写法(文件里那份,没有
 		// 逐字文件就用接回去的写法),不然正文有括号、逐字没有,逐字模式下这句和声看不到,启动迁移也因两边对不上拆不回来。
 		lrcReplacedParenBG := false
-		hasFileForm := !e.LyricsBG.IsZero() && parenBGSources[e.LyricsSource]
+		hasFileForm := !e.LyricsBG.IsZero() && lyricSourceSplitsParenBackground(e.LyricsSource)
 		if hasFileForm {
 			fileLRC, fileYRC = parenBGFileForm(e.LyricsSource, e.Lyrics.String(), e.LyricsYRC.String(), e.LyricsBG.String())
 		}

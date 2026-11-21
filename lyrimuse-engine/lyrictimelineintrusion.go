@@ -4,7 +4,7 @@ package main
 // docs/features/09-lyrics-resolution.md 决策 98。
 //
 // 参照组 = 除被检查的这份之外、能当锚点(timelineAnchorEligible)的候选,且至少来自两个信源家族
-// (lyricSourceConsensusFamily)。
+// (lyricSourceFamily)。
 //   - 共同空档:参照组每一家的显示轴在两句之间都没有行、长度不少于 timelineIntrusionMinGapMs 的区间
 //     (各家空档求交集)。只看两句之间:第一句之前、最后一句之后各家收不收前奏人声 / 片尾 ad-lib 差别很大。
 //   - 被检查的这份在共同空档里(两端各让 timelineIntrusionEdgeMs)有不少于 timelineIntrusionMinLines 句,
@@ -111,7 +111,7 @@ func applyTimelineIntrusionPenalty(results []scoredLyricCandidateResult, duratio
 		for j := range results {
 			if j != i && anchor[j] {
 				refs = append(refs, lines[j])
-				families[lyricSourceConsensusFamily(results[j].Source)] = true
+				families[lyricSourceFamily(results[j].Source)] = true
 			}
 		}
 		if len(families) < 2 {

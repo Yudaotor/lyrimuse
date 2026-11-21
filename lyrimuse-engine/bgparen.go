@@ -15,13 +15,7 @@ import (
 // amllResult.bg:行头是所属主句的起止,词带自己的时间),正文与逐字里去掉这一段;译文、罗马音同一行里的括号段一起去掉。
 // 整行都在括号里的不拆:App 按主句挂背景人声,主句空了这一行就不显示。拿不准的整行不拆。见 09 章决策 337。
 
-// parenBGSources:拆括号背景人声的源。amll / applemusic 自带结构化的背景人声,正文里剩下的括号是它们判成主唱的部分,
-// 而且存量回填(bgbackfill.go)会整份换掉它们的 lyrics_bg;本机文件、各客户端缓存里的用户歌词不动。
-var parenBGSources = map[string]bool{
-	"netease": true, "qq": true, "kugou": true, "lrclib": true, "lyricfind": true, "kuwo": true,
-	"migu": true, "deezer": true, "soda": true, "vibe": true, "genie": true, "petitlyrics": true, "zing": true, "megalobiz": true,
-	lxMusicLocalLyricsSource: true,
-}
+// 哪些源拆:描述符的 ParenBackground(lyricSourceSplitsParenBackground)。
 
 // parenBGPairToleranceMs:逐行歌词的一行跟逐字的一行按文字配对时,两边行首时间最多差这么多。拆分在时间轴重挂之前做,
 // 同一行两边的时间戳可能差几百毫秒;文字已经要求逐字相同,这里只防同一句副歌配到隔得很远的另一遍。
@@ -705,7 +699,7 @@ func parenBGHeadStamps(bg string) map[int]bool {
 func splitCandidateParenBackground(candidates []lyricCandidate) {
 	for i := range candidates {
 		c := &candidates[i]
-		if !parenBGSources[c.source] || c.plainTextOnly || c.wordTimingYRC == "" || c.parenBG != "" {
+		if !lyricSourceSplitsParenBackground(c.source) || c.plainTextOnly || c.wordTimingYRC == "" || c.parenBG != "" {
 			continue
 		}
 		sp, ok := splitParenBackground(c.lyrics, c.wordTimingYRC)
@@ -716,7 +710,7 @@ func splitCandidateParenBackground(candidates []lyricCandidate) {
 	}
 }
 
-// migrateParenBackground 把存量条目按同一套规矩拆一遍。只动 parenBGSources 选出的、有逐字、没锁定(手改或采纳时锁上的)
+// migrateParenBackground 把存量条目按同一套规矩拆一遍。只动拆括号背景人声的源(lyricSourceSplitsParenBackground)的、有逐字、没锁定(手改或采纳时锁上的)
 // 的条目。这些源的背景人声只会是拆出来的,已经有的也再拆一遍:拆过的行不带括号了,剩下的行规矩改了能拆时并进来,
 // 跟新解析出来的候选一次拆完的结果相同,不然两边正文对不上,重评时当前这份永远不在候选里(rescoreKeepsCurrent)。演唱者标注按行记,拆分不增删行:原先对得上正文的,指纹跟着换;原样采纳的指纹同理,
 // 同 migrateAccentSplits。
@@ -727,7 +721,7 @@ func migrateParenBackground() {
 	enrichMu.Lock()
 	fixed := 0
 	for k, e := range enrichCache {
-		if e.ManualLyrics || e.Instrumental || !parenBGSources[e.LyricsSource] || e.LyricsYRC.IsZero() {
+		if e.ManualLyrics || e.Instrumental || !lyricSourceSplitsParenBackground(e.LyricsSource) || e.LyricsYRC.IsZero() {
 			continue
 		}
 		lrc, yrc := e.Lyrics.String(), e.LyricsYRC.String()

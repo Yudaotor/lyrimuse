@@ -291,7 +291,7 @@ func handwrittenRankLyricSourceResults(artist, title, album string, durationSecs
 	// 重音字母旁多切的空格,拿整批候选与缓存里见过的拼法证实之后删掉(见 accentsplit.go)。只删空格、不动时间轴。
 	repairCandidateAccentSplits(candidates)
 	// 括号里的背景人声拆成背景人声轨(见 bgparen.go)。在重挂时间轴与打分之前:打分看到的是拆过的正文。
-	splitCandidateParenBackground(candidates)
+	handwrittenSplitCandidateParenBackground(candidates)
 	// 时间轴自洽修复:候选自带的行级 LRC 与逐字轴打架时,以逐字轴为准重挂行时间戳
 	// (见 lyricstimeline.go 的完整来龙去脉)。**必须在这里**而不是选完冠军之后 ——
 	// corroboratedEndings / contentConsensusPeers / scoreLyricCandidateDetailed 的
@@ -639,6 +639,20 @@ func handwrittenImportedTrLang(lang string) string {
 		return lang
 	}
 	return features().LyricsTranslationLanguage
+}
+
+func handwrittenSplitCandidateParenBackground(candidates []lyricCandidate) {
+	for i := range candidates {
+		c := &candidates[i]
+		if !parenBGSources[c.source] || c.plainTextOnly || c.wordTimingYRC == "" || c.parenBG != "" {
+			continue
+		}
+		sp, ok := splitParenBackground(c.lyrics, c.wordTimingYRC)
+		if !ok {
+			continue
+		}
+		c.lyrics, c.wordTimingYRC, c.parenBG, c.parenBGStamps = sp.lrc, sp.yrc, sp.bg, sp.stamps
+	}
 }
 
 const handwrittenMegalobizTimelineShiftMs = 1500

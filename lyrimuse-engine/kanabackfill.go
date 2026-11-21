@@ -12,7 +12,7 @@ import (
 // 存量条目补借假名标注(lyrics_kana,见 kanadonor.go),并让引擎生成的罗马音用上它。
 //
 // 借来的标注从 lyricsKanaVersion 起才有,之前解析过的日文歌一首都没有。符合条件的条目播放到时,这一进程里每首只做一次:
-//   - 还没问过带标注的源(LyricsKanaChecked 落后):只问 kanaDonorSources 里开着的那几家搜一轮,跟正常解析同一套打分
+//   - 还没问过带标注的源(LyricsKanaChecked 落后):只问带标注的源(描述符的 CarriesKana)里开着的那几家搜一轮,跟正常解析同一套打分
 //     过身份关,借到就存。有带标注的源给出过身份关的候选才记 LyricsKanaChecked(refreshKana 的规则);一个都没问到
 //     不记,下次启动后播放再试。
 //   - 条目有借来的标注、罗马音是引擎生成的:交给 helper 按借来的标注重算(stale_roma 判是不是我们生成的),换掉。
@@ -40,11 +40,11 @@ func kanaSongNeedsReading(e enrichEntry) bool {
 	return !ownKanaAligned(l) && kanaRatio(l) >= kanaDonorMinKanaRatio && strings.ContainsFunc(l, kanaNeedsAnnotation)
 }
 
-// enabledKanaDonorSources:kanaDonorSources 里开着的源。
+// enabledKanaDonorSources:正文里会带假名标注的源(lyricSourceCarriesKana)里开着的。
 func enabledKanaDonorSources() []string {
 	var out []string
 	for _, s := range networkLyricSourceNames() {
-		if kanaDonorSources[s] && lyricSourceEnabled(s) {
+		if lyricSourceCarriesKana(s) && lyricSourceEnabled(s) {
 			out = append(out, s)
 		}
 	}
