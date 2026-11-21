@@ -1,16 +1,25 @@
 import Foundation
 
 /// 一行歌词按从右往左排还是从左往右排(阿拉伯语、希伯来语、波斯语等是从右往左)。逐词画的那几条路
-/// 都按这个结论把整行镜像:词序、填色、滚动一起变成从右往左(见 04 章决策 73)。
+/// 都按这个结论把整行镜像:词序、填色、滚动一起变成从右往左(见 04 章决策 73);菜单栏整句一次画时
+/// 也按它定 CoreText 的段落方向。
 public enum LyricTextDirection {
-    /// 第一个有方向的字母是从右往左的文字就算从右往左(Unicode 双向算法 P2 的段落方向判法)。
-    /// 数字、标点、空白没有方向,跳过;一个有方向的字母都没有按从左往右。
+    /// 有方向的字母里从右往左的占多数就算从右往左;两边一样多时看第一个有方向的字母。数字、标点、空白、
+    /// LRM / RLM 和双向嵌入、隔离控制符没有方向,跳过;一个有方向的字母都没有按从左往右。
+    /// 别改回只看第一个字母:以拉丁词开头的阿拉伯文行会被判成从左往右(见 04 章决策 114)。
     public static func isRightToLeft(_ text: String) -> Bool {
+        var rightToLeft = 0, leftToRight = 0
+        var first: Bool?
         for s in text.unicodeScalars {
-            if isStrongRightToLeft(s) { return true }
-            if s.properties.isAlphabetic || s.properties.isIdeographic { return false }
+            if isStrongRightToLeft(s) {
+                rightToLeft += 1
+                if first == nil { first = true }
+            } else if s.properties.isAlphabetic || s.properties.isIdeographic {
+                leftToRight += 1
+                if first == nil { first = false }
+            }
         }
-        return false
+        return rightToLeft == leftToRight ? first ?? false : rightToLeft > leftToRight
     }
 
     /// 去掉尾部空白。从右往左的字排版时行尾空白不占宽(量出来的宽不含它),逐词排的几处把词本身和

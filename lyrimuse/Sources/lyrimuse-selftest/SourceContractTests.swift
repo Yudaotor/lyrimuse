@@ -6837,7 +6837,8 @@ func runSourceContractIdentityTests() {
         }
         let renderer = src("lyrimuse/MenuBar/MenuBarMarqueeRenderer.swift")
         expectEqual(renderer.contains("let attrs = LyricTypesetting.attributes([.font: font], for: text, translation: translation)")
-                    && renderer.contains("let attributes = LyricTypesetting.attributes([.font: lineFont, .foregroundColor: color],"),
+                    && renderer.contains("let attributes = drawingAttributes([.font: lineFont, .foregroundColor: color], for: text, translation: translation)")
+                    && renderer.contains("var attributes = LyricTypesetting.attributes(base, for: text, translation: translation)"),
                     true, "排字语言(契约): 菜单栏量宽度与画字都标语言")
         expectEqual(src("lyrimuse/UI/OverlayNaturalWidth.swift").contains("LyricTypesetting.language(for: text, translation: translation)"),
                     true, "排字语言(契约): 悬浮歌词 / 灵动岛量宽度标语言")

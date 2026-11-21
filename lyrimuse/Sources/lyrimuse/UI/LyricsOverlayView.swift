@@ -1935,7 +1935,8 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
                               let tail = String(w.text.reversed().prefix { $0.isWhitespace }.reversed())
                               return tail.isEmpty ? 0 : MenuBarMarqueeRenderer.width(of: tail, font: nextLinePreviewNSFont)
                           },
-                          breakWidths: upcomingBreakWidths(words: words, groups: nil)) {
+                          breakWidths: upcomingBreakWidths(words: words, groups: nil),
+                          alignsTextBaselines: true) {
             // 每个字的宽按 AppKit 量(同主行):`Text` 自己报的尺寸不算字尾的空格,英文词会粘成一串。
             // 字尾的空格不进 `Text`、只占宽度:这一行带着按声部的文字对齐,挂在末尾的空格会把字往右顶一格。
             ForEach(Array(words.enumerated()), id: \.offset) { _, w in
@@ -2883,6 +2884,9 @@ struct WrapLayout: Layout {
     /// 非 nil = 在哪儿换行按这组宽度定,不按子视图自己的尺寸(下一句预览按开唱后主行的字宽断,
     /// 见 `WrapLayoutMath.rows(sizes:breakWidths:…)`)。影响它的输入(主行字体等)调用方要放进 contentKey。
     var breakWidths: [CGFloat]? = nil
+    /// 同一折行的子视图按首行文字基线对齐(`WrapLayoutMath.placements` 的 ascents),不按各自的高竖直居中。
+    /// 只给一个字一个 `Text` 的歌词行开:没有文字的子视图(按钮、色块)基线落在底边,开了会错位。
+    var alignsTextBaselines = false
 
     // 量一次子视图尺寸就存住,别每次调用都重量一遍。
     //
@@ -2895,6 +2899,8 @@ struct WrapLayout: Layout {
     // 时重建缓存挡不住,所以加 contentKey 守卫:key/数量都没变就直接复用,rows(换行分组)也一起缓存。
     struct Cache {
         var sizes: [CGSize]
+        /// 各子视图顶到首行文字基线的距离;`alignsTextBaselines` 关着时为 nil。
+        var ascents: [CGFloat]?
         var contentKey: AnyHashable?
         var subviewCount: Int
         // rows 缓存:随 sizes 重测**必须**同步失效(sizes 新 rows 旧会摆放越界/重叠),
@@ -2906,8 +2912,13 @@ struct WrapLayout: Layout {
     }
 
     func makeCache(subviews: Subviews) -> Cache {
-        Cache(sizes: subviews.map { $0.sizeThatFits(.unspecified) },
+        Cache(sizes: subviews.map { $0.sizeThatFits(.unspecified) }, ascents: measuredAscents(subviews),
               contentKey: contentKey, subviewCount: subviews.count)
+    }
+
+    private func measuredAscents(_ subviews: Subviews) -> [CGFloat]? {
+        guard alignsTextBaselines else { return nil }
+        return subviews.map { $0.dimensions(in: .unspecified)[VerticalAlignment.firstTextBaseline] }
     }
 
     func updateCache(_ cache: inout Cache, subviews: Subviews) {
@@ -2915,6 +2926,7 @@ struct WrapLayout: Layout {
             return // 内容身份没变:字体/文本都没变,尺寸和 rows 缓存照用
         }
         cache.sizes = subviews.map { $0.sizeThatFits(.unspecified) }
+        cache.ascents = measuredAscents(subviews)
         cache.contentKey = contentKey
         cache.subviewCount = subviews.count
         cache.rows = nil
@@ -2926,12 +2938,13 @@ struct WrapLayout: Layout {
         if let rows = cache.rows, cache.rowsWidth == maxWidth, cache.rowsSpacing == horizontalSpacing {
             return rows
         }
-        let rows = breakWidths.map {
+        var rows = breakWidths.map {
             WrapLayoutMath.rows(sizes: cache.sizes, breakWidths: $0, maxWidth: maxWidth,
                                 horizontalSpacing: horizontalSpacing, breakBefore: breakBefore)
         } ?? WrapLayoutMath.rows(
             sizes: cache.sizes, maxWidth: maxWidth, horizontalSpacing: horizontalSpacing,
             breakBefore: breakBefore)
+        if let ascents = cache.ascents { rows = WrapLayoutMath.baselineRows(rows, sizes: cache.sizes, ascents: ascents) }
         cache.rows = rows
         cache.rowsWidth = maxWidth
         cache.rowsSpacing = horizontalSpacing
@@ -2968,7 +2981,7 @@ struct WrapLayout: Layout {
             rows: rows,
             sizes: cache.sizes, bounds: bounds,
             horizontalSpacing: horizontalSpacing, verticalSpacing: verticalSpacing,
-            rowAlignment: rowAlignment, trailingSpaces: trailingSpaceWidths)
+            rowAlignment: rowAlignment, trailingSpaces: trailingSpaceWidths, ascents: cache.ascents)
         {
             subviews[p.index].place(
                 at: p.origin, anchor: .topLeading, proposal: ProposedViewSize(p.size))

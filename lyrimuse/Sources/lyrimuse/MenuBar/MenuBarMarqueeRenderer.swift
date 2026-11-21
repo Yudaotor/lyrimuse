@@ -1,4 +1,5 @@
 import AppKit
+import CoreText
 import LyrimuseCore
 
 // 菜单栏歌词跑马灯的渲染侧——把一行歌词画成一整条长图,交给
@@ -225,11 +226,63 @@ enum MenuBarMarqueeRenderer {
         // 显式用整句的字体量前缀,不走 font(for:):某个前缀恰好等于占位符 ♪ 时不能换成默认字重,
         // 否则这一个词的填色边界会跟长图对不上。
         let lineFont = font ?? Self.font
+        let plain = words.map(\.text).joined()
+        if LyricTextDirection.isRightToLeft(plain) {
+            return rightToLeftWordEndXs(words, plain: plain, font: lineFont)
+        }
         var prefix = ""
         return words.map { w in
             prefix += w.text
             return width(of: prefix, font: lineFont)
         }
+    }
+
+    /// 从右往左的句子:长图镜像着画、填色从右端往左走,第 i 个词唱完时边界 = 整句的宽 − 前 i 个词里最靠左的字形左沿。
+    /// 字形的 x 取整句排好的那条 CoreText 行(同 `prepare` 的属性和段落方向)。别按逻辑前缀量宽:夹着拉丁词时
+    /// 双向排字把它们摆到别处,前缀宽跟屏上的位置对不上,亮起来的是错的词(见 06 章决策 112)。
+    /// 夹在中间的一串拉丁词从左往右排,唱到其中第一个词时边界就盖过整串。
+    static func rightToLeftWordEndXs(_ words: [SyncedLyricWord], plain: String, font: NSFont) -> [CGFloat] {
+        let attributes = drawingAttributes([.font: font], for: plain, translation: false)
+        let string = NSAttributedString(string: plain, attributes: attributes)
+        let textWidth = ceil(string.size().width)
+        var ends: [Int] = []
+        var offset = 0
+        for w in words {
+            offset += (w.text as NSString).length
+            ends.append(offset)
+        }
+        var minX = [CGFloat](repeating: .infinity, count: words.count)
+        let line = CTLineCreateWithAttributedString(string)
+        for run in CTLineGetGlyphRuns(line) as? [CTRun] ?? [] {
+            let count = CTRunGetGlyphCount(run)
+            guard count > 0 else { continue }
+            var indices = [CFIndex](repeating: 0, count: count)
+            var positions = [CGPoint](repeating: .zero, count: count)
+            CTRunGetStringIndices(run, CFRange(location: 0, length: count), &indices)
+            CTRunGetPositions(run, CFRange(location: 0, length: count), &positions)
+            for k in 0..<count {
+                guard let w = ends.firstIndex(where: { indices[k] < $0 }) else { continue }
+                minX[w] = min(minX[w], positions[k].x)
+            }
+        }
+        var leftmost = textWidth
+        return minX.map { x in
+            if x.isFinite { leftmost = min(leftmost, max(0, x)) }
+            return textWidth - leftmost
+        }
+    }
+
+    /// 画长图用的属性:排字语言(`LyricTypesetting`),从右往左的句子再显式定段落方向(`LyricTextDirection`),
+    /// 不交给 CoreText 按第一个字母猜:以拉丁词开头的阿拉伯文句子也按从右往左排,跟镜像、填色同一个方向。
+    nonisolated static func drawingAttributes(_ base: [NSAttributedString.Key: Any], for text: String,
+                                              translation: Bool) -> [NSAttributedString.Key: Any] {
+        var attributes = LyricTypesetting.attributes(base, for: text, translation: translation)
+        if LyricTextDirection.isRightToLeft(text) {
+            let style = NSMutableParagraphStyle()
+            style.baseWritingDirection = .rightToLeft
+            attributes[.paragraphStyle] = style
+        }
+        return attributes
     }
 
     /// 把文字按**宽度**截断,超出部分换成省略号。装得下的句子不走这里,只有极端情况
@@ -338,6 +391,10 @@ enum MenuBarMarqueeRenderer {
         /// 整条长图的点宽 = 这句话画出来有多宽。
         let textWidth: CGFloat
         let pointHeight: CGFloat
+        /// `pointHeight` 里为装下出框墨迹在上 / 下补的那一截(点,整点;双排恒 0)。没补时的框在按钮里居中,
+        /// 补的这两截让框往上下伸,基线不动(`MenuBarScrollingLabel.contentGeometry`)。
+        var inkPadTop: CGFloat = 0
+        var inkPadBottom: CGFloat = 0
         let text: String
         /// 画这张图时用的颜色。菜单打开/系统换浅深色时要拿它比对、决定要不要重画。
         let color: NSColor
@@ -360,14 +417,19 @@ enum MenuBarMarqueeRenderer {
         guard !text.isEmpty else { return nil }
         let lineFont = font ?? Self.font(for: text)
         let rowMetrics = exactBox ? doubleRowMetrics(for: lineFont) : nil
-        let box = rowMetrics?.height ?? ceil(lineFont.ascender - lineFont.descender) + 2
-        let attributes = LyricTypesetting.attributes([.font: lineFont, .foregroundColor: color],
-                                                     for: text, translation: translation)
+        let attributes = drawingAttributes([.font: lineFont, .foregroundColor: color], for: text, translation: translation)
+        let isGapDots = text == gapDotsToken
+        // 单行:框高 = 字体上下沿 + 上下各 1pt,叠字、下加字出框的部分补进来(不超过状态栏按钮的高),见 06 章决策 113。
+        let plainBox = ceil(lineFont.ascender - lineFont.descender) + 2
+        let pads = rowMetrics == nil && !isGapDots
+            ? LyricInkExtent.menuBarPads(for: NSAttributedString(string: text, attributes: attributes),
+                                         fontDescender: lineFont.descender, box: plainBox, cap: NSStatusBar.system.thickness)
+            : (top: CGFloat(0), bottom: CGFloat(0))
+        let box = rowMetrics?.height ?? plainBox + pads.top + pads.bottom
         // 前奏/间奏那三颗点**不走文字这条路**:这里只出一张**空白**位图占住正确的尺寸,
         // 圆点由 `MenuBarScrollingLabel` 用 CALayer 画在同一块地方 —— 每颗要单独改不透明度、
         // 整组还要缩放呼吸,烘进位图就全动不了了。尺寸照常产出,是为了让下游(几何、静止落位、
         // 去重、位图缓存)一行都不用为这一档另开分支。
-        let isGapDots = text == gapDotsToken
         let textWidth = isGapDots
             ? gapDotsWidth(fontSize: lineFont.pointSize)
             : ceil((text as NSString).size(withAttributes: attributes).width)
@@ -396,13 +458,13 @@ enum MenuBarMarqueeRenderer {
                 // 双排:不带 usesLineFragmentOrigin 时 rect 的原点就是基线,文字按系统字体的基线落位。
                 drawn.draw(with: NSRect(x: 0, y: rowMetrics.baseline, width: textWidth, height: box), options: [])
             } else {
-                // 单行:draw(at:) 收的是文本框左下角,y 给 1 就是"底部留 1pt 内边距"。
-                drawn.draw(at: NSPoint(x: 0, y: 1))
+                // 单行:draw(at:) 收的是文本框左下角,y 给 1 就是"底部留 1pt 内边距"(再加上为下加字补的那一截)。
+                drawn.draw(at: NSPoint(x: 0, y: 1 + pads.bottom))
             }
             NSGraphicsContext.restoreGraphicsState()
         }
         return PreparedLine(paint: paint, scale: scale, textWidth: textWidth,
-                            pointHeight: box, text: text, color: color)
+                            pointHeight: box, inkPadTop: pads.top, inkPadBottom: pads.bottom, text: text, color: color)
     }
 }
 

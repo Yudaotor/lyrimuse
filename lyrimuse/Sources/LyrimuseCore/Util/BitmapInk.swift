@@ -16,4 +16,17 @@ public enum BitmapInk {
         guard let first = any.firstIndex(where: { $0 != 0 }), let last = any.lastIndex(where: { $0 != 0 }) else { return nil }
         return first..<(last + 1)
     }
+
+    /// 有墨迹的行(第 0 行在内存最前面),口径同 `columns`。整张全透明返回 nil。
+    public static func rows(in bytes: UnsafeRawBufferPointer, width: Int, height: Int, bytesPerRow: Int,
+                            bytesPerPixel: Int, alphaOffset: Int) -> Range<Int>? {
+        guard width > 0, height > 0, bytes.count >= (height - 1) * bytesPerRow + width * bytesPerPixel else { return nil }
+        func inked(_ y: Int) -> Bool {
+            let row = y * bytesPerRow + alphaOffset
+            for x in 0..<width where bytes[row + x * bytesPerPixel] != 0 { return true }
+            return false
+        }
+        guard let first = (0..<height).first(where: inked), let last = (0..<height).last(where: inked) else { return nil }
+        return first..<(last + 1)
+    }
 }

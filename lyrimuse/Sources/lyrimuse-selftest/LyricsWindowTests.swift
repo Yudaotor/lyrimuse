@@ -801,6 +801,15 @@ func runLyricsWindowTests() {
         let text = source("lyrimuse/UI/LyricsLayerListText.swift")
         let window = source("lyrimuse/UI/LyricsWindowView.swift")
         expectEqual(list.isEmpty || row.isEmpty || text.isEmpty || window.isEmpty, false, "图层列表(契约): 读到源码")
+        expectEqual(sourceBytes(text, contain: "ctx.scaleBy(x: 1, y: -1)\n            ctx.textMatrix = .identity")
+                        && !sourceBytes(text, contain: "textMatrix = CGAffineTransform(scaleX: 1, y: -1)"), true,
+                    "图层列表(契约): 剪影翻回 y 向上再画,不只翻文字矩阵(不然元音符号等字形的竖直偏移跟着翻反)")
+        expectEqual(sourceBytes(text, contain: "return Metrics(width: width, ascent: ascent, height: height, pad: max(pad, (overflow + 1).rounded(.up)))")
+                        && sourceBytes(row, contain: "let pad = plan.pad"), true,
+                    "图层列表(契约): 剪影留白按墨迹出框量放大,元素按自己的留白摆遮罩")
+        expectEqual(sourceBytes(row, contain: "let colored = LyricsLayerListText.hasColorGlyphs(word.text, font: font, translation: false)")
+                        && sourceBytes(row, contain: "c.contents = colorImage"), true,
+                    "图层列表(契约): 逐字词里的彩色字形单独画成 RGBA、不进透明度遮罩")
         expectEqual(sourceBytes(list, contain: """
                 override func viewDidChangeBackingProperties() {
                     super.viewDidChangeBackingProperties()

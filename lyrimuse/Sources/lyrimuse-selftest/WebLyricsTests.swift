@@ -796,7 +796,7 @@ func runWebLyricsTests() {
                         && sourceBytes(pagesSource, contain: "rgba(0,0,0,var(--rbu)) var(--p, 0%)")
                         && sourceBytes(pagesSource, contain: "const fade = style.rainbow && o.pct ? `opacity:${o.pct / 100};` : '';")
                         && sourceBytes(pagesSource, contain: "#card.rainbow .rb, #card.rainbow .w { -webkit-background-clip: text; background-clip: text; color: transparent !important;")
-                        && sourceBytes(pagesSource, contain: "const rb = inner.includes('class=\"w\"') ? '' : ' rb';")
+                        && sourceBytes(pagesSource, contain: "const rb = /class=\"w[ \"]/.test(inner) ? '' : ' rb';")
                         && sourceBytes(pagesSource, contain: "@media (prefers-reduced-motion: reduce) { #card.rainbow .rb, #card.rainbow .w { animation: none; } }")
                         && sourceBytes(pagesSource, contain: "card.classList.toggle('paused', !playing);")
                         && sourceBytes(pagesSource, contain: "card.classList.toggle('rainbow', !!style.rainbow);"), true,
@@ -928,6 +928,37 @@ func runWebLyricsTests() {
                      sourceHas(pagesSource, ".row.next > .in { max-width: calc(100% * var(--fit, 1)); }"),
                      sourceHas(pagesSource, "#card.scroll .row > .in { max-width: none;")],
                     [true, true, true], "网页歌词: 下一句最宽只到行宽 × 字号比例,断点跟开唱后一致;滚动模式不限")
+        // 逐字片段:从右往左的词反着染、emoji 单独包一层留原色。取出 OBS 页里这几个纯函数,在 JavaScriptCore 里跑
+        do {
+            let helper: String? = {
+                guard let a = pagesSource.range(of: "          const esc = (s) =>"),
+                      let b = pagesSource.range(of: "          function now() {", range: a.upperBound..<pagesSource.endIndex) else { return nil }
+                // 页面在 Swift 的多行字符串里,反斜杠写成两个。
+                return String(pagesSource[a.lowerBound..<b.lowerBound]).replacingOccurrences(of: "\\\\", with: "\\")
+            }()
+            let ctx = JSContext()
+            if let helper { ctx?.evaluateScript(helper) }
+            func run(_ js: String) -> String { ctx?.evaluateScript(js)?.toString() ?? "nil" }
+            expectEqual(helper != nil && ctx?.exception == nil, true, "网页歌词 逐字片段: 辅助函数在 JavaScriptCore 里跑得起来")
+            expectEqual(run("String(rtlText('Bitcha \u{0643}\u{0627}\u{062A}\u{0645}\u{0648}\u{062A} \u{0639}\u{0644}\u{064A}\u{0627}'))"), "true",
+                        "网页歌词 逐字片段: 拉丁词开头、阿拉伯字母占多数的行判成从右往左(同 App)")
+            expectEqual(run("String(rtlText('Money money \u{05D0}\u{05D1}'))"), "false", "网页歌词 逐字片段: 拉丁字母占多数从左往右")
+            expectEqual(run("wordHTML([100, 200, '\u{0645}\u{0631}\u{062D}\u{0628}\u{0627} '], true)"),
+                        "<span class=\"w r\" data-s=\"100\" data-d=\"200\">\u{0645}\u{0631}\u{062D}\u{0628}\u{0627} </span>",
+                        "网页歌词 逐字片段: 阿拉伯词标 .r(从右往左染)")
+            expectEqual(run("wordHTML([0, 50, 'love '], true)"), "<span class=\"w\" data-s=\"0\" data-d=\"50\">love </span>",
+                        "网页歌词 逐字片段: 拉丁词照旧")
+            expectEqual(run("wordHTML([0, 50, 'fab\u{1F389}'], true)"),
+                        "<span class=\"w\" data-s=\"0\" data-d=\"50\">fab<span class=\"e\">\u{1F389}</span></span>",
+                        "网页歌词 逐字片段: emoji 单独包一层,不跟着画成单色剪影")
+            expectEqual(run("wordHTML([0, 50, '\u{1F468}\u{200D}\u{1F469}\u{200D}\u{1F467} x'], true)"),
+                        "<span class=\"w\" data-s=\"0\" data-d=\"50\"><span class=\"e\">\u{1F468}\u{200D}\u{1F469}\u{200D}\u{1F467}</span> x</span>",
+                        "网页歌词 逐字片段: 组合 emoji 整串包在一起")
+            expectEqual(run("wordHTML([0, 50, 'a<b'], false)"), "a&lt;b", "网页歌词 逐字片段: 不填色时照旧只转义")
+            expectEqual([sourceHas(pagesSource, ".w.r { --dir: 270deg; }"),
+                         sourceHas(pagesSource, "fillX = w.offsetLeft + (w.classList.contains('r') ? 1 - f : f) * w.offsetWidth;")],
+                        [true, true], "网页歌词 逐字片段: 从右往左的词渐变 270deg、跟唱滚动按右沿算位置")
+        }
         // 歌名卡什么时候显示:取出 OBS 页里那个纯函数,在 JavaScriptCore 里跑
         do {
             let obsPage = pagesSource

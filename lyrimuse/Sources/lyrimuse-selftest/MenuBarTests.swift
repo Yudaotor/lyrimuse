@@ -1,3 +1,4 @@
+import AppKit
 import LyrimuseCore
 import Foundation
 
@@ -7,6 +8,58 @@ import Foundation
 
 @MainActor
 func runMenuBarTests() {
+    // ---- 单行长图的框高装得下墨迹(高棉、藏文、缅甸、卡纳达、泰卢固的叠字出框),不超过状态栏按钮的高 ----
+    do {
+        func pads(_ top: CGFloat, _ bottom: CGFloat) -> [CGFloat] {
+            let p = LyricInkExtent.menuBarPads(inkTop: top, inkBottom: bottom, box: 18, cap: 22)
+            return [p.top, p.bottom]
+        }
+        expectEqual(pads(15, 2), [0, 0], "菜单栏框高: 墨迹在框里不补")
+        expectEqual(pads(18.2, -1.2), [1, 2], "菜单栏框高: 出框多少补多少,对齐到整点")
+        expectEqual(pads(21, -4), [2, 2], "菜单栏框高: 放不下时补满按钮的高,剩下的上下各裁一半")
+        expectEqual(pads(17, -6), [0, 4], "菜单栏框高: 只出下面时整截补在下面")
+        let font = NSFont.menuBarFont(ofSize: 13)
+        let box = ceil(font.ascender - font.descender) + 2
+        let cap: CGFloat = 22
+        let samples = ["Hello world", "\u{4F60}\u{597D}\u{4E16}\u{754C}",
+                       "\u{1796}\u{17D2}\u{179A}\u{17C7}\u{17A2}\u{17B6}\u{1791}\u{17B7}\u{178F}\u{17D2}\u{1799} \u{179F}\u{17D2}\u{179A}\u{179F}\u{17CB}",
+                       "\u{0F56}\u{0F7C}\u{0F51}\u{0F0B}\u{0F40}\u{0FB1}\u{0F72}\u{0F0B}\u{0F66}\u{0F90}\u{0F51}\u{0F0B}\u{0F61}\u{0F72}\u{0F42}",
+                       "\u{1019}\u{103C}\u{1014}\u{103A}\u{1019}\u{102C} \u{1000}\u{103C}\u{100A}\u{1037}\u{103A}\u{101B}\u{103E}\u{102F}",
+                       "\u{0C95}\u{0CA8}\u{0CCD}\u{0CA8}\u{0CA1} \u{0CB8}\u{0CCD}\u{0CA4}\u{0CCD}\u{0CB0}\u{0CC0}",
+                       "\u{0C24}\u{0C46}\u{0C32}\u{0C41}\u{0C17}\u{0C41} \u{0C38}\u{0C4D}\u{0C24}\u{0C4D}\u{0C30}\u{0C40}"]
+        for (k, text) in samples.enumerated() {
+            let attrs: [NSAttributedString.Key: Any] = LyricTypesetting.attributes([.font: font, .foregroundColor: NSColor.black],
+                                                                                   for: text, translation: false)
+            let string = NSAttributedString(string: text, attributes: attrs)
+            let p = LyricInkExtent.menuBarPads(for: string, fontDescender: font.descender, box: box, cap: cap)
+            let height = box + p.top + p.bottom
+            // 照 `MenuBarMarqueeRenderer.prepare` 的画法真画一遍,数框外还有没有墨迹。
+            let scale: CGFloat = 2, margin: CGFloat = 12
+            let width = ceil(string.size().width)
+            let w = Int((width + 2 * margin) * scale), h = Int((height + 2 * margin) * scale)
+            guard let ctx = CGContext(data: nil, width: w, height: h, bitsPerComponent: 8, bytesPerRow: w,
+                                      space: CGColorSpaceCreateDeviceGray(), bitmapInfo: CGImageAlphaInfo.alphaOnly.rawValue),
+                  let data = ctx.data else { continue }
+            ctx.scaleBy(x: scale, y: scale)
+            ctx.translateBy(x: margin, y: margin)
+            NSGraphicsContext.saveGraphicsState()
+            NSGraphicsContext.current = NSGraphicsContext(cgContext: ctx, flipped: false)
+            string.draw(at: NSPoint(x: 0, y: 1 + p.bottom))
+            NSGraphicsContext.restoreGraphicsState()
+            let px = data.assumingMemoryBound(to: UInt8.self)
+            var outside = 0
+            for y in 0..<h {
+                // 内存第 0 行在上;换成离框底多少点
+                let fromBottom = (CGFloat(h - y) - 0.5) / scale - margin
+                guard fromBottom < 0 || fromBottom > height else { continue }
+                for x in 0..<w where px[y * w + x] > 32 { outside += 1 }
+            }
+            expectEqual(outside, 0, "菜单栏框高: 第 \(k) 个样例框高 \(height) ≥ 墨迹高(补 \(p.top) / \(p.bottom))")
+            expectEqual(height <= cap, true, "菜单栏框高: 第 \(k) 个样例不超过按钮的高")
+            if k < 2 { expectEqual([p.top, p.bottom], [0, 0], "菜单栏框高: 拉丁、汉字不补,框跟原来一样高") }
+        }
+    }
+
     // ---- 副行「无译文时 / 无读音时」:哪些档位下会有歌只排主行(「字号」据此显示滑杆还是「由副行决定」)----
     do {
         expectEqual(LyricSecondaryLine.allCases.map { $0.mayShowMainOnly(fallback: .nextLine) }, [true, false, false, false],

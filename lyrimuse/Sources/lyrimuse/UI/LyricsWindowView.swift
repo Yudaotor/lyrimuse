@@ -6106,11 +6106,13 @@ private struct KaraokeLineText: View {
     private func lineContent(coarseDate: Date, coarseMs: Int) -> some View {
         // 按组排时一组就是一个词,处处能断;逐字排时英文按音节切,只在词边界断(见 WrapLayoutMath.rows)。
         // 从右往左的行:布局方向设成从右往左,SwiftUI 把词从右往左摆;左右对齐对调,行仍落在原来那一侧。
-        // 从右往左的字量宽不含尾空格,词去掉尾空格画、空格的宽补成读的方向上的后边距(`.trailing`)。
+        // 从右往左的字量宽不含尾空格:从右往左的行、和从左往右的行里夹的从右往左的词,都去掉尾空格画、
+        // 空格的宽补成读的方向上的后边距(`.trailing`)。同一折行各词按基线对齐(混排的词行框高矮不一)。
         let rightToLeft = LyricTextDirection.isRightToLeft(words.map(\.text).joined())
         WrapLayout(rowAlignment: rightToLeft ? rowAlignment.mirrored : rowAlignment, contentKey: lineLayoutKey,
                    breakBefore: groups?.isEmpty == false
-                       ? nil : WrapLayoutMath.breakOpportunities(texts: words.map(\.text))) {
+                       ? nil : WrapLayoutMath.breakOpportunities(texts: words.map(\.text)),
+                   alignsTextBaselines: true) {
             if let groups, !groups.isEmpty {
                 // 一组一列:上面这一组的字各自逐字填色,下面标这一组的读音,列宽取
                 // 两者更宽的那个 —— 主文字的间距因此被读音撑开,跟 Apple 一样。
@@ -6169,7 +6171,8 @@ private struct KaraokeLineText: View {
                 let anchors = emphasisAnchors(spans)
                 let slots = LyricsWordEmphasis.glyphSlots(for: words, spans: spans)
                 ForEach(words.indices, id: \.self) { i in
-                    let (word, tail) = rightToLeft ? Self.splitTrailingSpace(words[i], font: tailFont) : (words[i], 0)
+                    let (word, tail) = rightToLeft || LyricTextDirection.isRightToLeft(words[i].text)
+                        ? Self.splitTrailingSpace(words[i], font: tailFont) : (words[i], 0)
                     KaraokeWordText(word: word, base: base, isPlaying: isPlaying,
                                     isLive: isLive(words[i], atMs: coarseMs, emphasis: spans[i]), staticDate: coarseDate,
                                     fontSize: fontSize, fontFamily: fontFamily, weight: weight,

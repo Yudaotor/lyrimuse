@@ -1738,7 +1738,7 @@ private struct LyricsManagerKaraokeSegmentIndex: TextAttribute {
 
 /// 逐字染色那一层的画法:每一段按唱它的那个字此刻唱到哪,唱过的部分画实色,没唱到的不画,交界处是跟各处同一条软边
 /// (`KaraokeFill`)。一段可能被字体回退拆成几个 run(汉字和它后面的空格就是两个),软边按这一段在这一行上的整个横向
-/// 范围铺,不按 run 各铺各的。
+/// 范围铺,不按 run 各铺各的。从右往左的段(`LyricTextDirection`)渐变起止对调,从这一段的右端往左染(见 11 章决策 190)。
 @available(macOS 15.0, *)
 private struct LyricsManagerKaraokeRenderer: TextRenderer {
     let segments: [LyricsKaraokeSegment]
@@ -1758,6 +1758,7 @@ private struct LyricsManagerKaraokeRenderer: TextRenderer {
                 guard let index = run[LyricsManagerKaraokeSegmentIndex.self]?.value,
                       segments.indices.contains(index), let span = spans[index] else { continue }
                 let segment = segments[index]
+                let rightToLeft = LyricTextDirection.isRightToLeft(segment.text)
                 let fraction = KaraokeFill.fillFraction(startMs: segment.startMs, durationMs: segment.durationMs, atMs: ms)
                 let left = fraction - band
                 let right = fraction + band
@@ -1775,8 +1776,8 @@ private struct LyricsManagerKaraokeRenderer: TextRenderer {
                     // 往外放一圈:伸出排版框的字形(重音符号、斜体的尾巴)不能被裁掉。
                     mask.fill(Path(rect.insetBy(dx: -rect.height, dy: -rect.height)),
                               with: .linearGradient(Gradient(stops: stops),
-                                                    startPoint: CGPoint(x: span.minX, y: rect.midY),
-                                                    endPoint: CGPoint(x: span.maxX, y: rect.midY)))
+                                                    startPoint: CGPoint(x: rightToLeft ? span.maxX : span.minX, y: rect.midY),
+                                                    endPoint: CGPoint(x: rightToLeft ? span.minX : span.maxX, y: rect.midY)))
                 }
                 masked.draw(run)
             }

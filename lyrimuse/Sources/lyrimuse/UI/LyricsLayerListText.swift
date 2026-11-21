@@ -11,7 +11,8 @@ import LyrimuseCore
 /// 大四倍,而且 App 自己一份、交给渲染服务再拷一份(见 07 章决策 115)。
 enum LyricsLayerListText {
     static let colorSpace = CGColorSpace(name: CGColorSpace.sRGB) ?? CGColorSpaceCreateDeviceRGB()
-    /// 字形四周多留的这一圈(点):字形越出行框(上下伸部分、斜体、长音强调的放大)时不被位图边缘切掉。
+    /// 字形四周至少多留的这一圈(点):字形越出行框(上下伸部分、斜体、长音强调的放大)时不被位图边缘切掉。
+    /// 字号大、字形出框多时按墨迹再放(`Metrics.pad`、`paragraph`)。
     static let pad: CGFloat = 6
 
     /// 一段排成一行的字:宽、行框高,和画字用的基线(行框顶往下 `ascent`)。
@@ -19,6 +20,9 @@ enum LyricsLayerListText {
         var width: CGFloat
         var ascent: CGFloat
         var height: CGFloat
+        /// 剪影四周留多宽(点,整点):至少 `LyricsLayerListText.pad`,字形轮廓越出行框更多时放到盖住它再多 1pt。
+        /// 藏文的叠字、下加字在大字号下出框超过 6pt(见 07 章决策 220)。
+        var pad: CGFloat = LyricsLayerListText.pad
     }
 
     static func attributes(_ text: String, font: NSFont, translation: Bool) -> [NSAttributedString.Key: Any] {
@@ -26,12 +30,24 @@ enum LyricsLayerListText {
     }
 
     static func metrics(_ text: String, font: NSFont, translation: Bool = false) -> Metrics {
-        let line = CTLineCreateWithAttributedString(
-            NSAttributedString(string: text.isEmpty ? " " : text, attributes: attributes(text, font: font, translation: translation)))
+        let string = NSAttributedString(string: text.isEmpty ? " " : text,
+                                        attributes: attributes(text, font: font, translation: translation))
+        let line = CTLineCreateWithAttributedString(string)
         var ascent: CGFloat = 0, descent: CGFloat = 0, leading: CGFloat = 0
         _ = CTLineGetTypographicBounds(line, &ascent, &descent, &leading)
-        return Metrics(width: MenuBarMarqueeRenderer.measure(text, font: font, translation: translation),
-                       ascent: ascent, height: ceil(ascent + descent + leading))
+        let width = MenuBarMarqueeRenderer.measure(text, font: font, translation: translation)
+        let height = ceil(ascent + descent + leading)
+        let ink = CTLineGetBoundsWithOptions(line, .useGlyphPathBounds)
+        var overflow: CGFloat = 0
+        if !ink.isNull, !ink.isEmpty {
+            overflow = max(ink.maxY - ascent, -ink.minY - (height - ascent), -ink.minX, ink.maxX - width)
+        }
+        return Metrics(width: width, ascent: ascent, height: height, pad: max(pad, (overflow + 1).rounded(.up)))
+    }
+
+    /// 剪影画哪些字形:全部、只画单色的(彩色字形另画)、只画彩色的(emoji 这类,画成 RGBA 留原色)。
+    enum Part: Hashable, Sendable {
+        case all, plain, color
     }
 
     /// 剪影按「文字 + 字体 + 第几个字形 + 比例 + 标的语言」记住:同一首歌里重复的字只画一次,字号没变的整张重建不必重画。
@@ -42,6 +58,7 @@ enum LyricsLayerListText {
         let glyph: Int?
         let scale: CGFloat
         let language: String?
+        var part: Part = .all
     }
 
     /// 一次建表用的剪影:查到的、新画的都记在这一代名下。缓存跟着列表视图走,装好之后只留这一代(见 `LyricsLayerListView.startBuild`)。
@@ -50,19 +67,31 @@ enum LyricsLayerListText {
         let generation: Int
     }
 
-    /// 一段字的字形剪影(单通道遮罩)。位图比行框四周各大 `pad`。
+    /// 一段字的字形剪影。位图比行框四周各大 `m.pad`。`part` 为 `.color` 时画成 RGBA(彩色字形留原色),否则单通道遮罩;
+    /// 这一段没有要画的字形时为 nil。
     /// `glyph` 非 nil 时只画第几个可见字形(空白不算,口径同 `LyricsWordEmphasis.glyphCount`),其余字形不画。
     static func silhouette(_ text: String, font: NSFont, translation: Bool, metrics m: Metrics,
-                           glyph: Int? = nil, scale: CGFloat, in silhouettes: Silhouettes) -> CGImage? {
+                           glyph: Int? = nil, part: Part = .all, scale: CGFloat, in silhouettes: Silhouettes) -> CGImage? {
         let key = SilhouetteKey(text: text, font: font, translation: translation, glyph: glyph, scale: scale,
-                                language: LyricTypesetting.language(for: text, translation: translation))
+                                language: LyricTypesetting.language(for: text, translation: translation), part: part)
         return silhouettes.cache.value(for: key, generation: silhouettes.generation) {
-            renderSilhouette(text, font: font, translation: translation, metrics: m, glyph: glyph, scale: scale)
+            renderSilhouette(text, font: font, translation: translation, metrics: m, glyph: glyph, part: part, scale: scale)
         }
     }
 
+    /// 这段字里有没有彩色字形(按排字时实际落到的字体判)。
+    static func hasColorGlyphs(_ text: String, font: NSFont, translation: Bool) -> Bool {
+        hasColorGlyphs(NSAttributedString(string: text, attributes: attributes(text, font: font, translation: translation)))
+    }
+
+    private static func isColorRun(_ run: CTRun) -> Bool {
+        let attributes = CTRunGetAttributes(run) as NSDictionary
+        guard let value = attributes[kCTFontAttributeName as String] else { return false }
+        return CTFontGetSymbolicTraits(value as! CTFont).contains(.traitColorGlyphs)
+    }
+
     private static func renderSilhouette(_ text: String, font: NSFont, translation: Bool, metrics m: Metrics,
-                                         glyph: Int?, scale: CGFloat) -> CGImage? {
+                                         glyph: Int?, part: Part, scale: CGFloat) -> CGImage? {
         let line = CTLineCreateWithAttributedString(
             NSAttributedString(string: text, attributes: attributes(text, font: font, translation: translation)))
         let target = glyph.flatMap { g -> Range<Int>? in
@@ -70,20 +99,40 @@ enum LyricsLayerListText {
             return g >= 0 && g < ranges.count ? ranges[g] : nil
         }
         if glyph != nil, target == nil { return nil }
-        return draw(width: m.width + 2 * pad, height: m.height + 2 * pad, scale: scale, mask: true) { ctx in
-            ctx.textMatrix = CGAffineTransform(scaleX: 1, y: -1)
-            ctx.textPosition = CGPoint(x: pad, y: pad + m.ascent)
+        let runs = (CTLineGetGlyphRuns(line) as? [CTRun] ?? []).filter { run in
+            switch part {
+            case .all: return true
+            case .plain: return !isColorRun(run)
+            case .color: return isColorRun(run)
+            }
+        }
+        if part != .all, runs.isEmpty { return nil }
+        let pad = m.pad
+        return draw(width: m.width + 2 * pad, height: m.height + 2 * pad, scale: scale, mask: part != .color) { ctx in
+            // 坐标系先翻回 y 向上、原点放在基线起点,文字矩阵用恒等。别改成只把文字矩阵翻成 (1, −1):字形自己的竖直偏移
+            // (阿拉伯文叠在字母上下的元音符号、连写时上下错开的字母)会跟着翻反,kasra 画到字母上面、整个词往下沉(见 07 章决策 220)。
+            ctx.translateBy(x: pad, y: pad + m.ascent)
+            ctx.scaleBy(x: 1, y: -1)
+            ctx.textMatrix = .identity
+            ctx.textPosition = .zero
             guard let target else {
-                CTLineDraw(line, ctx)
+                if part == .all {
+                    CTLineDraw(line, ctx)
+                    return
+                }
+                for run in runs {
+                    ctx.textPosition = .zero
+                    CTRunDraw(run, ctx, CFRange(location: 0, length: 0))
+                }
                 return
             }
-            for run in CTLineGetGlyphRuns(line) as? [CTRun] ?? [] {
+            for run in runs {
                 let count = CTRunGetGlyphCount(run)
                 guard count > 0 else { continue }
                 var indices = [CFIndex](repeating: 0, count: count)
                 CTRunGetStringIndices(run, CFRange(location: 0, length: count), &indices)
                 for i in 0..<count where target.contains(indices[i]) {
-                    ctx.textPosition = CGPoint(x: pad, y: pad + m.ascent)
+                    ctx.textPosition = .zero
                     CTRunDraw(run, ctx, CFRange(location: i, length: 1))
                 }
             }
@@ -114,10 +163,20 @@ enum LyricsLayerListText {
     /// 一段排好的多行字:文字框的高,和画好的图。
     struct Paragraph {
         var height: CGFloat
-        /// 左右裁到墨迹外各留 `pad` 的图;整段没有墨迹(全是空白)时为 nil,文字框照样占 `height`。
+        /// 四周裁到墨迹外各留 `pad` 的图;整段没有墨迹(全是空白)时为 nil,文字框照样占 `height`。
         var image: CGImage?
-        /// `image` 在文字框里的框(点;文字框左上为原点,上下各伸出 `pad`)。
+        /// `image` 在文字框里的框(点;文字框左上为原点)。
         var frame: CGRect
+    }
+
+    /// 整段字画的时候四周留多宽(点):至少 `pad`,大字号按最大字号的一半放,画完再裁到墨迹外 `pad`,
+    /// 出框多的字形(阿拉伯文上标、藏文叠字)不被切,位图也不跟着变大(见 07 章决策 220)。
+    static func paragraphPad(_ text: NSAttributedString) -> CGFloat {
+        var size: CGFloat = 0
+        text.enumerateAttribute(.font, in: NSRange(location: 0, length: text.length)) { value, _, _ in
+            if let font = value as? NSFont { size = max(size, font.pointSize) }
+        }
+        return max(pad, (size / 2).rounded(.up))
     }
 
     /// 多行字(按宽度折行、按对齐摆)。`mask` 为真时画成单通道遮罩(字一律按不透明画,颜色由图层上),否则按字自带的颜色
@@ -135,16 +194,17 @@ enum LyricsLayerListText {
         let options: NSString.DrawingOptions = [.usesLineFragmentOrigin, .usesFontLeading]
         let bounds = styled.boundingRect(with: CGSize(width: width, height: .greatestFiniteMagnitude), options: options)
         let height = ceil(bounds.height)
-        guard let full = draw(width: width + 2 * pad, height: height + 2 * pad, scale: scale, mask: mask, body: { _ in
+        let room = paragraphPad(styled)
+        guard let full = draw(width: width + 2 * room, height: height + 2 * room, scale: scale, mask: mask, body: { _ in
             NSGraphicsContext.saveGraphicsState()
-            styled.draw(with: CGRect(x: pad, y: pad, width: width, height: height), options: options)
+            styled.draw(with: CGRect(x: room, y: room, width: width, height: height), options: options)
             NSGraphicsContext.restoreGraphicsState()
         }) else { return nil }
         guard let cropped = croppedToInk(full, margin: Int((pad * scale).rounded(.up))) else {
             return Paragraph(height: height, image: nil, frame: .zero)
         }
         return Paragraph(height: height, image: cropped.image,
-                         frame: CGRect(x: CGFloat(cropped.originX) / scale - pad, y: -pad,
+                         frame: CGRect(x: CGFloat(cropped.originX) / scale - room, y: CGFloat(cropped.originY) / scale - room,
                                        width: CGFloat(cropped.image.width) / scale, height: CGFloat(cropped.image.height) / scale))
     }
 
@@ -161,22 +221,27 @@ enum LyricsLayerListText {
         return false
     }
 
-    /// 左右裁到墨迹外再留 `margin` 像素,拷进一张刚好这么宽的新图(只取一块子图不省内存,底下还是整张)。
-    /// 整张没有墨迹时返回 nil;读不到像素时原样返回。
-    private static func croppedToInk(_ image: CGImage, margin: Int) -> (image: CGImage, originX: Int)? {
-        guard let data = image.dataProvider?.data, let bytes = CFDataGetBytePtr(data) else { return (image, 0) }
+    /// 四周裁到墨迹外再留 `margin` 像素,拷进一张刚好这么大的新图(只取一块子图不省内存,底下还是整张)。
+    /// 整张没有墨迹时返回 nil;读不到像素时原样返回。`originY` 从图的上边量(第 0 行在内存最前面,画的时候在上)。
+    private static func croppedToInk(_ image: CGImage, margin: Int) -> (image: CGImage, originX: Int, originY: Int)? {
+        guard let data = image.dataProvider?.data, let bytes = CFDataGetBytePtr(data) else { return (image, 0, 0) }
         let bpp = image.bitsPerPixel / 8
         let raw = UnsafeRawBufferPointer(start: bytes, count: CFDataGetLength(data))
+        let alpha = bpp == 1 ? 0 : 3
         guard let ink = BitmapInk.columns(in: raw, width: image.width, height: image.height, bytesPerRow: image.bytesPerRow,
-                                          bytesPerPixel: bpp, alphaOffset: bpp == 1 ? 0 : 3) else { return nil }
+                                          bytesPerPixel: bpp, alphaOffset: alpha),
+              let inkRows = BitmapInk.rows(in: raw, width: image.width, height: image.height, bytesPerRow: image.bytesPerRow,
+                                           bytesPerPixel: bpp, alphaOffset: alpha) else { return nil }
         let lo = max(0, ink.lowerBound - margin), hi = min(image.width, ink.upperBound + margin)
-        guard lo > 0 || hi < image.width, let out = canvas(hi - lo, image.height, mask: bpp == 1), let dst = out.data
-        else { return (image, 0) }
-        for y in 0..<image.height {
-            memcpy(dst + y * out.bytesPerRow, bytes + y * image.bytesPerRow + lo * bpp, (hi - lo) * bpp)
+        let top = max(0, inkRows.lowerBound - margin), bottom = min(image.height, inkRows.upperBound + margin)
+        guard lo > 0 || hi < image.width || top > 0 || bottom < image.height,
+              let out = canvas(hi - lo, bottom - top, mask: bpp == 1), let dst = out.data
+        else { return (image, 0, 0) }
+        for y in top..<bottom {
+            memcpy(dst + (y - top) * out.bytesPerRow, bytes + y * image.bytesPerRow + lo * bpp, (hi - lo) * bpp)
         }
-        guard let cropped = out.makeImage() else { return (image, 0) }
-        return (cropped, lo)
+        guard let cropped = out.makeImage() else { return (image, 0, 0) }
+        return (cropped, lo, top)
     }
 
     /// `mask` 为真:单通道(只有透明度,每像素 1 字节);否则 sRGB 预乘 RGBA。

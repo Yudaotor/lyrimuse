@@ -863,12 +863,15 @@ enum WebLyricsPages {
         #card.scroll .row > .in.cols { flex-wrap: nowrap; }
         #card.stroked .tx { filter: url(#lmStroke); }
         .w { -webkit-background-clip: text; background-clip: text; color: transparent;
-             background-image: linear-gradient(90deg, var(--sung) 0, var(--sung) var(--p, 0%), var(--unsung) var(--p, 0%), var(--unsung) 100%); }
+             background-image: linear-gradient(var(--dir, 90deg), var(--sung) 0, var(--sung) var(--p, 0%), var(--unsung) var(--p, 0%), var(--unsung) 100%); }
+        .w.r { --dir: 270deg; }
+        .w > .e { color: #000; -webkit-text-fill-color: currentColor; }
+        #card.rainbow .w > .e { color: #000 !important; }
         #card.rainbow .rb, #card.rainbow .w { -webkit-background-clip: text; background-clip: text; color: transparent !important;
              background-image: var(--rb); background-size: var(--rbw) 100%; background-repeat: repeat-x; background-attachment: fixed;
              animation: lmRainbow var(--rbs) linear infinite; animation-delay: var(--rbd, 0s); }
-        #card.rainbow .w { -webkit-mask-image: linear-gradient(90deg, #000 0, #000 var(--p, 0%), rgba(0,0,0,var(--rbu)) var(--p, 0%), rgba(0,0,0,var(--rbu)) 100%);
-             mask-image: linear-gradient(90deg, #000 0, #000 var(--p, 0%), rgba(0,0,0,var(--rbu)) var(--p, 0%), rgba(0,0,0,var(--rbu)) 100%); }
+        #card.rainbow .w { -webkit-mask-image: linear-gradient(var(--dir, 90deg), #000 0, #000 var(--p, 0%), rgba(0,0,0,var(--rbu)) var(--p, 0%), rgba(0,0,0,var(--rbu)) 100%);
+             mask-image: linear-gradient(var(--dir, 90deg), #000 0, #000 var(--p, 0%), rgba(0,0,0,var(--rbu)) var(--p, 0%), rgba(0,0,0,var(--rbu)) 100%); }
         #card.rainbow.paused .rb, #card.rainbow.paused .w { animation-play-state: paused; }
         @media (prefers-reduced-motion: reduce) { #card.rainbow .rb, #card.rainbow .w { animation: none; } }
         @keyframes lmRainbow { from { background-position-x: 0; } to { background-position-x: var(--rbw); } }
@@ -962,6 +965,27 @@ enum WebLyricsPages {
           let view = null, ws = null, retry = 1000;
           const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
           const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
+          // 从右往左的字(同 App 的 `LyricTextDirection`):有方向的字母里希伯来 / 阿拉伯等文字占多数,一样多时看第一个。
+          // 逐字片段按它定填色方向(.r = 从右往左染),填色位置按右沿算。
+          const RTL_LETTER = /[\\u0590-\\u08FF\\uFB1D-\\uFDFF\\uFE70-\\uFEFF]/u;
+          function rtlText(s) {
+            let r = 0, l = 0, first = null;
+            for (const c of String(s)) {
+              const rtl = RTL_LETTER.test(c) && /\\p{Alphabetic}/u.test(c);
+              if (!rtl && !/[\\p{Alphabetic}\\p{Ideographic}]/u.test(c)) continue;
+              if (rtl) r++; else l++;
+              if (first === null) first = rtl;
+            }
+            return r === l ? !!first : r > l;
+          }
+          // 彩色 emoji 单独包一层、用不透明的颜色画:逐字片段的字是透明的(颜色由背景渐变透出来),emoji 跟着透明就只剩一块单色剪影。
+          const EMOJI_RUN = /((?:\\p{Emoji_Presentation}|\\p{Extended_Pictographic}\\uFE0F)(?:\\p{Emoji_Modifier}|\\uFE0F|\\u200D(?:\\p{Emoji_Presentation}|\\p{Extended_Pictographic})\\uFE0F?)*)/u;
+          function wordHTML(w, fill) {
+            if (!fill) return esc(w[2]);
+            const parts = String(w[2]).split(EMOJI_RUN);
+            const inner = parts.map((p, i) => i % 2 ? `<span class="e">${esc(p)}</span>` : esc(p)).join('');
+            return `<span class="w${rtlText(w[2]) ? ' r' : ''}" data-s="${w[0]}" data-d="${w[1]}">${inner}</span>`;
+          }
           function now() {
             if (!pos) return 0;
             return pos.pos + (pos.state === 'playing' ? (performance.now() - at) * (pos.rate || 1) : 0);
@@ -1034,13 +1058,13 @@ enum WebLyricsPages {
           // 铺在含逐字片段的行上会从半透明的未唱字底下透上来,逐字的已唱 / 未唱就看不出了;那种行由每个逐字片段自己铺。
           function row(inner, o) {
             const fade = style.rainbow && o.pct ? `opacity:${o.pct / 100};` : '';
-            const rb = inner.includes('class="w"') ? '' : ' rb';
-            return `<div class="row tx${rb}${o.cls ? ' ' + o.cls : ''}" data-side="${o.side || ''}" style="font-size:${o.em}em;font-weight:${o.weight};${o.fit ? `--fit:${o.fit};` : ''}` +
+            const rb = /class="w[ "]/.test(inner) ? '' : ' rb';
+            return `<div class="row tx${rb}${o.cls ? ' ' + o.cls : ''}" data-side="${o.side || ''}"${o.rtl ? ' data-rtl="1"' : ''} style="font-size:${o.em}em;font-weight:${o.weight};${o.fit ? `--fit:${o.fit};` : ''}` +
               `color:${o.color};${fade}margin-top:${(o.top || 0) * unit()}px"><span class="in${o.cols ? ' cols' : ''}">${inner}</span></div>`;
           }
           function perWord(line) { return !!(style.karaoke && style.roma && line.w && line.g); }
           function wordSpans(ws, fill) {
-            return ws.map((w) => fill ? `<span class="w" data-s="${w[0]}" data-d="${w[1]}">${esc(w[2])}</span>` : esc(w[2])).join('');
+            return ws.map((w) => wordHTML(w, fill)).join('');
           }
           // 逐词读音:一组一列,字在上、读音在下;读音按整组起止填色,已唱是前景色 75%,未唱同主行。
           // 一行里各列拉成同高、读音贴列底(.in.cols 的 stretch、.col 的 space-between):汉字、假名落在苹方 / 冬青黑体上,
@@ -1071,7 +1095,7 @@ enum WebLyricsPages {
             return html;
           }
           function mainRow(line) {
-            const opts = { em: 1, weight: style.weights[0], color: 'var(--sung)', side: line.s, cls: 'main' };
+            const opts = { em: 1, weight: style.weights[0], color: 'var(--sung)', side: line.s, cls: 'main', rtl: rtlText(line.text) };
             if (perWord(line)) return row(columns(line, true, 1), { ...opts, cols: true });
             return row(style.karaoke && line.w ? wordSpans(line.w, true) : esc(line.text), opts);
           }
@@ -1224,7 +1248,9 @@ enum WebLyricsPages {
               const inner = r.firstElementChild;
               const room = r.clientWidth;
               const extra = inner.scrollWidth - room;
-              const x = r.classList.contains('main') && fillX !== null ? clamp(fillX - inner.offsetLeft - room / 2, 0, extra) : f * extra;
+              // 从右往左的行句首在右:还没开始染时从右端露出,之后跟着从右往左走的填色。
+              const x = r.classList.contains('main') && fillX !== null ? clamp(fillX - inner.offsetLeft - room / 2, 0, extra)
+                : (r.dataset.rtl === '1' ? 1 - f : f) * extra;
               inner.style.transform = `translateX(${-x}px)`;
             }
           }
@@ -1259,7 +1285,7 @@ enum WebLyricsPages {
               const f = t <= s ? 0 : t >= s + d ? 1 : (t - s) / d;
               const v = (Math.round(f * 1000) / 10) + '%';
               if (w.style.getPropertyValue('--p') !== v) w.style.setProperty('--p', v);
-              if (f > 0 && !w.style.fontSize) fillX = w.offsetLeft + f * w.offsetWidth;
+              if (f > 0 && !w.style.fontSize) fillX = w.offsetLeft + (w.classList.contains('r') ? 1 - f : f) * w.offsetWidth;
             }
             if (style.overflow === 'scroll') tickScroll(t, fillX);
           }

@@ -6,11 +6,12 @@ import QuartzCore
 ///
 ///     container          上浮(position.y 加法动画)、长音强调的放大(transform)
 ///       ├ glow?          长音强调的辉光:正文色 + 糊开的剪影当遮罩,透明度随时间变
-///       └ fill           字形剪影当遮罩
-///           └ gradient   已唱色 → 未唱色的软边渐变,平移 position.x = 填色
+///       ├ fill           字形剪影当遮罩
+///       │   └ gradient   已唱色 → 未唱色的软边渐变,平移 position.x = 填色
+///       └ color?         彩色字形(emoji)原样画的 RGBA 图,不填色
 ///
 /// 遮罩挂在 `fill` 上而不是 `container` 上:挂在外层会把辉光也裁成字形的样子。渐变比词宽得多(`gradientWidth`),
-/// 软边从词左走到词右的整段路程里都盖得住字形(含四周的 `LyricsLayerListText.pad`)。
+/// 软边从词左走到词右的整段路程里都盖得住字形(含四周的留白 `pad`)。
 @MainActor
 final class LyricsLayerElement {
     let container = CALayer()
@@ -32,6 +33,8 @@ final class LyricsLayerElement {
     private var showsActiveColors = false
     /// 填色从右往左走:渐变反着排,软边中心按 1 − 进度摆。
     private let rightToLeft: Bool
+    /// 剪影四周的留白(点),同 `LyricsLayerListText.Metrics.pad`。
+    private let pad: CGFloat
 
     static let fillKey = "lyrimuse.layer-list.fill"
     static let liftKey = "lyrimuse.layer-list.lift"
@@ -47,7 +50,8 @@ final class LyricsLayerElement {
         rightToLeft = plan.rightToLeft
         restColors = [plan.sung, plan.sung, plan.unsung, plan.unsung]
         activeColors = [plan.activeSung, plan.activeSung, plan.unsung, plan.unsung]
-        let pad = LyricsLayerListText.pad
+        let pad = plan.pad
+        self.pad = pad
         gradientWidth = 3 * frame.width + 4 * pad
         let noActions: [String: CAAction] = ["position": NSNull(), "bounds": NSNull(), "transform": NSNull(),
                                              "opacity": NSNull(), "contents": NSNull(), "colors": NSNull()]
@@ -92,6 +96,14 @@ final class LyricsLayerElement {
             glow = nil
         }
         container.addSublayer(fill)
+        if let colorImage = plan.colorImage {
+            let c = CALayer()
+            c.actions = noActions
+            c.frame = mask.frame
+            c.contents = colorImage
+            c.contentsScale = scale
+            container.addSublayer(c)
+        }
         if plan.hidden { container.opacity = 0 }
         setFill(center: LyricsLayerTiming.unsungCenter)
     }
@@ -117,7 +129,7 @@ final class LyricsLayerElement {
     }
 
     func setFill(center: Double) {
-        gradient.position = CGPoint(x: gradientX(center: center), y: -LyricsLayerListText.pad)
+        gradient.position = CGPoint(x: gradientX(center: center), y: -pad)
     }
 
     /// 当前行换上 `activeColors`,其它行换回 `restColors`。
@@ -319,9 +331,14 @@ struct LyricsLayerRowPlan: @unchecked Sendable {
         var hidden: Bool
         /// 从右往左的词:填色从词的右端往左走(见 `LyricTextDirection`)。
         var rightToLeft = false
+        /// `silhouette` 四周比 `frame` 多出的留白(点)。
+        var pad: CGFloat = LyricsLayerListText.pad
+        /// 彩色字形(emoji)原样画的 RGBA 图,框同剪影;这时剪影里不含它们。遮罩画不出颜色,
+        /// 不分开画的话 emoji 成了一块单色剪影(同整句段落 `Picture.tint` 为 nil 的那条路)。
+        var colorImage: CGImage?
     }
 
-    /// 整段画成一张图的(没有逐字时间轴的正文、整行读音、译文、创作者行),框含四周的 `LyricsLayerListText.pad`。
+    /// 整段画成一张图的(没有逐字时间轴的正文、整行读音、译文、创作者行),框含四周裁到墨迹外的留白。
     struct Picture {
         var frame: CGRect
         var image: CGImage
@@ -547,6 +564,7 @@ extension LyricsLayerRowPlan {
             for e in plan.elements + plan.background {
                 add(e.silhouette)
                 add(e.glow)
+                add(e.colorImage)
             }
             for p in plan.pictures { add(p.image) }
         }
@@ -616,6 +634,7 @@ extension LyricsLayerRowPlan {
         let wordMetrics = words.map { LyricsLayerListText.metrics($0.text, font: font) }
         let anchors = emphasisAnchors(words: words, spans: spans, metrics: wordMetrics)
         // 每个折行单位:一组(带读音)或一个 token
+        let groupAscent = wordMetrics.map(\.ascent).max() ?? 0
         struct Unit { var tokens: [Int]; var roma: (text: String, metrics: LyricsLayerListText.Metrics, startMs: Int, durationMs: Int, visible: Bool)?; var size: CGSize; var mainHeight: CGFloat }
         var units: [Unit] = []
         if let groups, !groups.isEmpty {
@@ -636,8 +655,10 @@ extension LyricsLayerRowPlan {
                                   size: CGSize(width: columnW, height: mainH + romaOffset + rm.height), mainHeight: mainH))
             }
             // 各列等高:字那一格取整句最高的。组末尾的空格落在拉丁字体上,这一组的行框比纯谚文的组高;各列高矮不一的话,
-            // 折行按行高把每列居中,读音就跟着一高一低,对不成一条线。
-            let mainTallest = units.map(\.mainHeight).max() ?? 0
+            // 折行按行高把每列居中,读音就跟着一高一低,对不成一条线。字那一格放得下整句最高的上沿加最深的下沿,
+            // 各字的基线对齐到 `groupAscent`。
+            let groupBelow = wordMetrics.map { $0.height - $0.ascent }.max() ?? 0
+            let mainTallest = max(units.map(\.mainHeight).max() ?? 0, groupAscent + groupBelow)
             let romaTallest = units.map { $0.size.height - $0.mainHeight }.max() ?? 0
             for k in units.indices {
                 units[k].mainHeight = mainTallest
@@ -650,36 +671,36 @@ extension LyricsLayerRowPlan {
             }
         }
         let breakBefore = groups?.isEmpty == false ? nil : WrapLayoutMath.breakOpportunities(texts: words.map(\.text))
-        let rows = WrapLayoutMath.rows(sizes: units.map(\.size), maxWidth: width, horizontalSpacing: 0, breakBefore: breakBefore)
-        let placements = WrapLayoutMath.placements(rows: rows, sizes: units.map(\.size),
+        let sizes = units.map(\.size)
+        // 逐字排时同一折行各词按基线对齐(带读音时各列已等高、各字对齐到 `groupAscent`)。
+        let ascents: [CGFloat]? = groups?.isEmpty == false ? nil : words.indices.map { wordMetrics[$0].ascent }
+        var rows = WrapLayoutMath.rows(sizes: sizes, maxWidth: width, horizontalSpacing: 0, breakBefore: breakBefore)
+        if let ascents { rows = WrapLayoutMath.baselineRows(rows, sizes: sizes, ascents: ascents) }
+        let placements = WrapLayoutMath.placements(rows: rows, sizes: sizes,
                                                    bounds: CGRect(x: origin.x, y: origin.y, width: width, height: .greatestFiniteMagnitude),
                                                    horizontalSpacing: 0, verticalSpacing: LyricsLayerRowStyle.wrapRowSpacing,
-                                                   rowAlignment: rowAlignment(side))
-        // 从右往左的行:每一折行里的词在这一行占的范围内左右镜像,行的对齐不变、行内词序反过来。
+                                                   rowAlignment: rowAlignment(side), ascents: ascents)
+        // 从右往左的行:每一折行里的词在这一行占的范围内左右镜像,行的对齐不变、行内词序反过来。按折行分组,
+        // 不按 y 分组(`WrapLayoutMath.RowMirror`)。
         let rightToLeft = LyricTextDirection.isRightToLeft(words.map(\.text).joined())
+        let mirror = rightToLeft ? WrapLayoutMath.RowMirror(rows: rows, placements: placements) : nil
         // 一行最后那个词的尾空格镜像后落在这一行的左端,整行再往左挪掉它,行沿跟从左往右时一样齐。
-        var rowSpans: [CGFloat: (minX: CGFloat, maxX: CGFloat, lastToken: Int?)] = [:]
-        if rightToLeft {
-            for p in placements {
-                let maxX = p.origin.x + units[p.index].size.width
-                let span = rowSpans[p.origin.y] ?? (p.origin.x, maxX, nil)
-                let last = maxX >= span.maxX ? units[p.index].tokens.last : span.lastToken
-                rowSpans[p.origin.y] = (min(span.minX, p.origin.x), max(span.maxX, maxX), last)
-            }
-        }
-        func trailingSpace(rowY: CGFloat) -> CGFloat {
-            guard groups?.isEmpty != false, let i = rowSpans[rowY]?.lastToken else { return 0 }
+        func trailingSpace(row: Int) -> CGFloat {
+            guard groups?.isEmpty != false, let i = mirror?.lastItem(row: row), i < words.count else { return 0 }
             let tail = String(words[i].text.dropFirst(LyricTextDirection.trimmingTrailingWhitespace(words[i].text).count))
             return tail.isEmpty ? 0 : MenuBarMarqueeRenderer.measure(tail, font: font)
         }
-        func mirrored(_ f: CGRect, rowY: CGFloat) -> CGRect {
-            guard let span = rowSpans[rowY] else { return f }
-            return CGRect(x: span.minX + span.maxX - f.maxX - trailingSpace(rowY: rowY), y: f.minY,
+        func mirrored(_ f: CGRect, row: Int) -> CGRect {
+            guard let mirror else { return f }
+            return CGRect(x: mirror.mirroredMinX(f.minX, width: f.width, row: row, shift: trailingSpace(row: row)), y: f.minY,
                           width: f.width, height: f.height)
         }
         var elements: [Element] = []
         for p in placements {
             let unit = units[p.index]
+            let row = mirror?.rowOf[p.index] ?? 0
+            // 这一单位里字的基线离单位顶多远:逐字时是这个词自己的上沿(折行已按基线摆好),带读音时是整句最高的上沿。
+            let unitAscent = groups?.isEmpty == false ? groupAscent : wordMetrics[unit.tokens[0]].ascent
             var x = p.origin.x
             for i in unit.tokens {
                 let m = wordMetrics[i]
@@ -693,9 +714,9 @@ extension LyricsLayerRowPlan {
                         inkMetrics = LyricsLayerListText.metrics(body, font: font)
                     }
                 }
-                let frame = mirrored(CGRect(x: x, y: p.origin.y + (unit.mainHeight - inkMetrics.height) / 2,
+                let frame = mirrored(CGRect(x: x, y: p.origin.y + unitAscent - inkMetrics.ascent,
                                             width: inkMetrics.width, height: inkMetrics.height),
-                                     rowY: p.origin.y)
+                                     row: row)
                 elements += tokenElements(word, metrics: inkMetrics, frame: frame, font: font, sung: color, unsung: unsung,
                                           activeSung: activeColor, rises: rises, emphasis: spans[i], slot: slots[i], anchor: anchors[i], style: style,
                                           silhouettes: silhouettes).map { e in
@@ -708,7 +729,7 @@ extension LyricsLayerRowPlan {
             }
             if let roma = unit.roma {
                 let unitFrame = mirrored(CGRect(x: p.origin.x, y: p.origin.y, width: unit.size.width, height: unit.size.height),
-                                         rowY: p.origin.y)
+                                         row: row)
                 let frame = CGRect(x: unitFrame.minX + 2, y: p.origin.y + unit.mainHeight + romaOffset,
                                    width: roma.metrics.width, height: roma.metrics.height)
                 elements.append(Element(
@@ -717,7 +738,7 @@ extension LyricsLayerRowPlan {
                                                                metrics: roma.metrics, scale: style.scale, in: silhouettes),
                     glow: nil, sung: romaColor, unsung: romaUnsung, activeSung: romaColor,
                     fillStartMs: roma.startMs, fillDurationMs: roma.durationMs, motion: nil,
-                    anchor: CGPoint(x: 0.5, y: 0.5), hidden: !roma.visible))
+                    anchor: CGPoint(x: 0.5, y: 0.5), hidden: !roma.visible, pad: roma.metrics.pad))
             }
         }
         let height = WrapLayoutMath.totalSize(rows: rows, maxWidth: width, verticalSpacing: LyricsLayerRowStyle.wrapRowSpacing).height
@@ -732,6 +753,13 @@ extension LyricsLayerRowPlan {
                                       anchor: CGPoint, style: LyricsLayerRowStyle,
                                       silhouettes: LyricsLayerListText.Silhouettes) -> [Element] {
         let amplitude = style.riseAmplitude
+        let colored = LyricsLayerListText.hasColorGlyphs(word.text, font: font, translation: false)
+        let part: LyricsLayerListText.Part = colored ? .plain : .all
+        func colorImage(glyph: Int?) -> CGImage? {
+            guard colored else { return nil }
+            return LyricsLayerListText.silhouette(word.text, font: font, translation: false, metrics: m, glyph: glyph,
+                                                  part: .color, scale: style.scale, in: silhouettes)
+        }
         if rises, let emphasis, let slot {
             let count = LyricsWordEmphasis.glyphCount(word.text)
             if count > 0 {
@@ -740,7 +768,7 @@ extension LyricsLayerRowPlan {
                     let index = slot.offset + k
                     let window = LyricsWordEmphasis.glyphWindow(for: emphasis, glyph: index, of: slot.count)
                     let silhouette = LyricsLayerListText.silhouette(word.text, font: font, translation: false, metrics: m,
-                                                                    glyph: k, scale: style.scale, in: silhouettes)
+                                                                    glyph: k, part: part, scale: style.scale, in: silhouettes)
                     return Element(
                         frame: frame, silhouette: silhouette,
                         glow: silhouette.flatMap { LyricsLayerListText.glow($0, radius: glowRadius, scale: style.scale) },
@@ -748,18 +776,18 @@ extension LyricsLayerRowPlan {
                         fillStartMs: word.startMs, fillDurationMs: word.durationMs,
                         motion: LyricsLayerTiming.Motion(riseStartMs: window.startMs, amplitude: amplitude,
                                                          emphasis: emphasis, glyph: (index, slot.count)),
-                        anchor: anchor, hidden: false)
+                        anchor: anchor, hidden: false, pad: m.pad, colorImage: colorImage(glyph: k))
                 }
             }
         }
         return [Element(
             frame: frame,
-            silhouette: LyricsLayerListText.silhouette(word.text, font: font, translation: false, metrics: m, scale: style.scale,
-                                                       in: silhouettes),
+            silhouette: LyricsLayerListText.silhouette(word.text, font: font, translation: false, metrics: m, part: part,
+                                                       scale: style.scale, in: silhouettes),
             glow: nil, sung: sung, unsung: unsung, activeSung: activeSung,
             fillStartMs: word.startMs, fillDurationMs: word.durationMs,
             motion: rises ? LyricsLayerTiming.Motion(riseStartMs: Double(word.startMs), amplitude: amplitude) : nil,
-            anchor: anchor, hidden: false)]
+            anchor: anchor, hidden: false, pad: m.pad, colorImage: colorImage(glyph: nil))]
     }
 
     /// 长音强调绕着放大的点:同一个词的几个 token 都绕整词中心(同 `KaraokeLineText.emphasisAnchors`)。

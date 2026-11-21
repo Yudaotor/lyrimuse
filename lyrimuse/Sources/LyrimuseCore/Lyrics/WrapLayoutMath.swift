@@ -255,6 +255,62 @@ public enum WrapLayoutMath {
         return CGSize(width: totalWidth, height: sizes.map(\.height).max() ?? 0)
     }
 
+    /// 各项按基线对齐时每一折行要多高:这一行最高的上沿加最深的下沿(下沿 = 项高 − 上沿,含行距)。
+    /// 各项上沿、高都一样的行原样不变;`ascents` 个数对不上时原样返回。
+    public static func baselineRows(_ rows: [Row], sizes: [CGSize], ascents: [CGFloat]) -> [Row] {
+        guard ascents.count == sizes.count else { return rows }
+        return rows.map { row in
+            let top = row.indices.map { ascents[$0] }.max() ?? 0
+            let below = row.indices.map { sizes[$0].height - ascents[$0] }.max() ?? 0
+            return Row(indices: row.indices, width: row.width, height: max(row.height, top + below))
+        }
+    }
+
+    /// 每一项落在第几折行(`rows` 里的下标)。不在任何一行里的项为 -1。
+    public static func rowNumbers(rows: [Row], count: Int) -> [Int] {
+        var out = [Int](repeating: -1, count: count)
+        for (r, row) in rows.enumerated() {
+            for i in row.indices where i >= 0 && i < count { out[i] = r }
+        }
+        return out
+    }
+
+    /// 从右往左的行:每一折行里的项在这一行占的横向范围内左右镜像,行的对齐不变、行内词序反过来。
+    /// 按折行分组,不按 y 分组:各项按自己的行框竖直摆时同一折行的 y 不一定相等(带尾空格的词落在另一款字体上,
+    /// 行框高差 1pt),按 y 分组会把一折行拆成几组各自镜像,词序就乱了(见 07 章决策 219)。
+    public struct RowMirror: Sendable {
+        /// 每一折行里各项占的横向范围。
+        public let spans: [ClosedRange<CGFloat>?]
+        /// 每一项落在第几折行。
+        public let rowOf: [Int]
+        private let rows: [Row]
+
+        public init(rows: [Row], placements: [Placement]) {
+            self.rows = rows
+            let count = placements.map(\.index).max().map { $0 + 1 } ?? 0
+            rowOf = WrapLayoutMath.rowNumbers(rows: rows, count: count)
+            var spans = [ClosedRange<CGFloat>?](repeating: nil, count: rows.count)
+            for p in placements where p.index < rowOf.count && rowOf[p.index] >= 0 {
+                let r = rowOf[p.index]
+                let lo = min(spans[r]?.lowerBound ?? p.origin.x, p.origin.x)
+                let hi = max(spans[r]?.upperBound ?? p.origin.x + p.size.width, p.origin.x + p.size.width)
+                spans[r] = lo...hi
+            }
+            self.spans = spans
+        }
+
+        /// 第 `row` 折行的最后一项(读的方向上),它的尾空格镜像后落在行的左端。
+        public func lastItem(row: Int) -> Int? {
+            row >= 0 && row < rows.count ? rows[row].indices.last : nil
+        }
+
+        /// 一段 [minX, minX + width] 镜像后的左沿。`shift`:整行再往左挪多少(行尾那一项的尾空格宽)。
+        public func mirroredMinX(_ minX: CGFloat, width: CGFloat, row: Int, shift: CGFloat = 0) -> CGFloat {
+            guard row >= 0, row < spans.count, let span = spans[row] else { return minX }
+            return span.lowerBound + span.upperBound - (minX + width) - shift
+        }
+    }
+
     /// 每个子视图的最终位置。行内按 rowAlignment 居中/靠左/靠右,竖直方向在本行内居中。
     public static func placements(
         sizes: [CGSize], bounds: CGRect, horizontalSpacing: CGFloat, verticalSpacing: CGFloat,
@@ -270,16 +326,21 @@ public enum WrapLayoutMath {
     /// 带 rows 的版本,理由见 totalSize(rows:) 注释。
     /// `trailingSpaces`:每一项末尾空白的宽,对齐时一行的宽扣掉这一行最后一项的那一截(同悬浮歌词逐字主行,
     /// 不然居中的行左偏半个空格、靠右的行离右边差一个空格)。nil 或个数对不上 = 不扣。
+    /// `ascents`:每一项从顶到基线多高。给了就按基线对齐:同一折行各项的基线落在这一行最高的上沿处,
+    /// 行高先用 `baselineRows` 放够;nil 或个数对不上 = 各项在行内竖直居中。混排的行(谚文、天城文夹英文,
+    /// 带尾空格的词落在另一款字体上)各项行框高矮不一,居中摆的话基线一高一低(见 07 章决策 219)。
     public static func placements(
         rows: [Row], sizes: [CGSize], bounds: CGRect,
         horizontalSpacing: CGFloat, verticalSpacing: CGFloat,
-        rowAlignment: RowAlignment, trailingSpaces: [CGFloat]? = nil
+        rowAlignment: RowAlignment, trailingSpaces: [CGFloat]? = nil, ascents: [CGFloat]? = nil
     ) -> [Placement] {
         var result: [Placement] = []
         result.reserveCapacity(sizes.count)
         var y = bounds.minY
         let spaces = trailingSpaces?.count == sizes.count ? trailingSpaces : nil
+        let tops = ascents?.count == sizes.count ? ascents : nil
         for row in rows {
+            let rowTop = tops.map { t in row.indices.map { t[$0] }.max() ?? 0 }
             let tail = spaces.flatMap { s in row.indices.last.map { s[$0] } } ?? 0
             let slack = max(0, bounds.width - (row.width - tail))
             let indent: CGFloat
@@ -291,10 +352,8 @@ public enum WrapLayoutMath {
             var x = bounds.minX + indent
             for i in row.indices {
                 let size = sizes[i]
-                result.append(Placement(
-                    index: i,
-                    origin: CGPoint(x: x, y: y + (row.height - size.height) / 2),
-                    size: size))
+                let top = tops.flatMap { t in rowTop.map { $0 - t[i] } } ?? (row.height - size.height) / 2
+                result.append(Placement(index: i, origin: CGPoint(x: x, y: y + top), size: size))
                 x += size.width + horizontalSpacing
             }
             y += row.height + verticalSpacing

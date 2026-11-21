@@ -14,7 +14,17 @@ func runLyricsParsingTests() {
     expectEqual(LyricTextDirection.isRightToLeft("\u{05E9}\u{05DC}\u{05D5}\u{05DD}"), true, "文字方向: 希伯来字母从右往左")
     expectEqual(LyricTextDirection.isRightToLeft("\u{FEFB}"), true, "文字方向: 阿拉伯展示形式也认")
     expectEqual(LyricTextDirection.isRightToLeft("(\u{0661}\u{0662}) \u{0627}"), true,
-                "文字方向: 括号、阿拉伯-印度数字、空白跳过,看第一个字母")
+                "文字方向: 括号、阿拉伯-印度数字、空白跳过")
+    expectEqual(LyricTextDirection.isRightToLeft("Bitcha \u{0643}\u{0627}\u{062A}\u{0645}\u{0648}\u{062A} \u{0639}\u{0644}\u{064A}\u{0627}"), true,
+                "文字方向: 拉丁词开头、阿拉伯字母占多数的行从右往左")
+    expectEqual(LyricTextDirection.isRightToLeft("\u{200E}\u{0627}\u{0646}\u{0627} \u{0628}\u{062D}\u{0628}\u{0643} ok"), true,
+                "文字方向: 开头的 LRM 跳过,按多数判")
+    expectEqual(LyricTextDirection.isRightToLeft("\u{202B}\u{0639}\u{0646}\u{062F}\u{064A} Prada \u{0648}\u{062D}\u{0642}\u{0648}\u{062F}\u{064A}\u{0646}"), true,
+                "文字方向: 开头的双向嵌入控制符跳过")
+    expectEqual(LyricTextDirection.isRightToLeft("Money money money \u{05D5}\u{05E1}\u{05E7}\u{05E1} \u{05E2}\u{05DC}"), false,
+                "文字方向: 拉丁字母占多数的行从左往右")
+    expectEqual(LyricTextDirection.isRightToLeft("\u{05D0}\u{05D1} ab"), true, "文字方向: 两边一样多时看第一个字母(希伯来)")
+    expectEqual(LyricTextDirection.isRightToLeft("ab \u{05D0}\u{05D1}"), false, "文字方向: 两边一样多时看第一个字母(拉丁)")
     expectEqual(LyricTextDirection.isRightToLeft("Habibi \u{062D}\u{0628}\u{064A}\u{0628}\u{064A}"), false,
                 "文字方向: 拉丁字母在前按从左往右")
     expectEqual(LyricTextDirection.isRightToLeft("\u{4F60}\u{597D} \u{0627}"), false, "文字方向: 汉字在前按从左往右")

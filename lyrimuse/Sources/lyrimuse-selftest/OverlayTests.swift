@@ -1051,14 +1051,98 @@ func runOverlayTests() {
                     "从右往左(契约): 菜单栏静止对齐翻转后仍在用户选的那一侧")
         expectEqual(sourceHas(bar, "x = rightToLeft ? slack.rounded() : 0"), true,
                     "从右往左(契约): 菜单栏副行装不下时露出句首")
-        expectEqual(sourceHas(list, "return CGRect(x: span.minX + span.maxX - f.maxX - trailingSpace(rowY: rowY), y: f.minY,"), true,
-                    "从右往左(契约): 歌词窗口列表折行扣掉行尾空格")
+        expectEqual(sourceHas(list, "return CGRect(x: mirror.mirroredMinX(f.minX, width: f.width, row: row, shift: trailingSpace(row: row)), y: f.minY,")
+                        && sourceHas(list, "let mirror = rightToLeft ? WrapLayoutMath.RowMirror(rows: rows, placements: placements) : nil"), true,
+                    "从右往左(契约): 歌词窗口列表按折行号镜像、折行扣掉行尾空格")
         expectEqual(sourceHas(text("UI/WrappedKaraokeRows.swift"), "if geo.rightToLeft { indent -= trailing }"), true,
                     "从右往左(契约): 悬浮歌词换行模式行尾空格从左边扣")
         let window = text("UI/LyricsWindowView.swift")
         expectEqual(sourceHas(window, ".environment(\\.layoutDirection, rightToLeft ? .rightToLeft : .leftToRight)")
                         && sourceHas(window, "WrapLayout(rowAlignment: rightToLeft ? rowAlignment.mirrored : rowAlignment"), true,
                     "从右往左(契约): 歌词窗口 SwiftUI 逐词行按从右往左摆、对齐不变")
+    }
+
+    // ---- 逐词行按折行号镜像、按基线对齐(歌词窗口图层列表 / SwiftUI 版共用 WrapLayoutMath) ----
+    do {
+        let font = NSFont.systemFont(ofSize: 44, weight: .bold)
+        func metrics(_ t: String) -> (width: CGFloat, ascent: CGFloat, height: CGFloat) {
+            let attrs = LyricTypesetting.attributes([.font: font], for: t, translation: false)
+            let line = CTLineCreateWithAttributedString(NSAttributedString(string: t, attributes: attrs))
+            var a: CGFloat = 0, d: CGFloat = 0, l: CGFloat = 0
+            let w = CTLineGetTypographicBounds(line, &a, &d, &l)
+            return (CGFloat(w), a, ceil(a + d + l))
+        }
+        func layout(_ words: [String], maxWidth: CGFloat, baselines: Bool) -> (rows: [WrapLayoutMath.Row], placements: [WrapLayoutMath.Placement]) {
+            let ms = words.map(metrics)
+            let sizes = ms.map { CGSize(width: $0.width, height: $0.height) }
+            let ascents = baselines ? ms.map(\.ascent) : nil
+            var rows = WrapLayoutMath.rows(sizes: sizes, maxWidth: maxWidth, horizontalSpacing: 0)
+            if let ascents { rows = WrapLayoutMath.baselineRows(rows, sizes: sizes, ascents: ascents) }
+            let placements = WrapLayoutMath.placements(rows: rows, sizes: sizes, bounds: CGRect(x: 0, y: 0, width: maxWidth, height: 10_000),
+                                                       horizontalSpacing: 0, verticalSpacing: 2, rowAlignment: .leading, ascents: ascents)
+            return (rows, placements)
+        }
+        // 希伯来行:带尾空格的词(空格落在 SF 上)和不带的行框高矮不一,同一折行的 y 不相等。
+        let hebrew = ["\u{05D0}\u{05E0}\u{05D9} ", "\u{05D0}\u{05D5}\u{05D4}\u{05D1}", " \u{05D0}\u{05D5}\u{05EA}\u{05DA} ",
+                      "\u{05DE}\u{05D0}\u{05D5}\u{05D3} ", "\u{05D4}\u{05D9}\u{05D5}\u{05DD}"]
+        expectEqual(Set(hebrew.map { metrics($0).height }).count > 1, true, "折行镜像: 样例里真有行框高矮不一的词")
+        // 整行一次双向排字后各词的视觉顺序(从右往左读):按每个词最靠左的字形排。
+        let joined = hebrew.joined()
+        let line = CTLineCreateWithAttributedString(NSAttributedString(
+            string: joined, attributes: LyricTypesetting.attributes([.font: font], for: joined, translation: false)))
+        var bounds: [Int] = []
+        var offset = 0
+        for w in hebrew { offset += (w as NSString).length; bounds.append(offset) }
+        var minX = [CGFloat](repeating: .infinity, count: hebrew.count)
+        for run in CTLineGetGlyphRuns(line) as? [CTRun] ?? [] {
+            let n = CTRunGetGlyphCount(run)
+            var idx = [CFIndex](repeating: 0, count: n), pos = [CGPoint](repeating: .zero, count: n)
+            CTRunGetStringIndices(run, CFRange(location: 0, length: n), &idx)
+            CTRunGetPositions(run, CFRange(location: 0, length: n), &pos)
+            for k in 0..<n {
+                guard let w = bounds.firstIndex(where: { idx[k] < $0 }) else { continue }
+                if (joined as NSString).character(at: idx[k]) != 0x20 { minX[w] = min(minX[w], pos[k].x) }
+            }
+        }
+        let visual = hebrew.indices.sorted { minX[$0] > minX[$1] }
+        for baselines in [false, true] {
+            let tag = baselines ? "按基线摆" : "各自居中"
+            let one = layout(hebrew, maxWidth: 10_000, baselines: baselines)
+            let mirror = WrapLayoutMath.RowMirror(rows: one.rows, placements: one.placements)
+            let xs = one.placements.map { mirror.mirroredMinX($0.origin.x, width: $0.size.width, row: mirror.rowOf[$0.index]) }
+            expectEqual(one.placements.indices.sorted { xs[$0] > xs[$1] }.map { one.placements[$0].index }, visual,
+                        "折行镜像(\(tag)): 一行时镜像后的词序等于整行双向排字的视觉顺序")
+            let total = hebrew.map { metrics($0).width }.reduce(0, +)
+            let two = layout(hebrew, maxWidth: total * 0.6, baselines: baselines)
+            expectEqual(two.rows.count, 2, "折行镜像(\(tag)): 折成两行")
+            let m2 = WrapLayoutMath.RowMirror(rows: two.rows, placements: two.placements)
+            let ok = two.rows.indices.allSatisfy { r in
+                let items = two.placements.filter { m2.rowOf[$0.index] == r }
+                let order = items.sorted { m2.mirroredMinX($0.origin.x, width: $0.size.width, row: r)
+                    > m2.mirroredMinX($1.origin.x, width: $1.size.width, row: r) }.map(\.index)
+                return order == items.map(\.index).sorted()
+            }
+            expectEqual(ok, true, "折行镜像(\(tag)): 折行后每一行里从右往左仍是读的顺序")
+        }
+        // 混排的折行按基线对齐:各词基线差不超过 0.5pt。
+        let mixed = [["\u{C0AC}\u{B791}\u{D574} ", "baby ", "\u{B108}\u{B9CC} ", "\u{BCF4}\u{C5EC}"],
+                     ["\u{0BA8}\u{0BBE}\u{0BA9}\u{0BCD} ", "love ", "\u{0B89}\u{0BA9}\u{0BCD}\u{0BA9}\u{0BC8}"],
+                     ["\u{092E}\u{0948}\u{0902} ", "tumse ", "pyaar ", "\u{0915}\u{0930}\u{0924}\u{093E}"]]
+        for words in mixed {
+            let ms = words.map(metrics)
+            let laid = layout(words, maxWidth: 10_000, baselines: true)
+            let baselines = laid.placements.map { $0.origin.y + ms[$0.index].ascent }
+            let spread = (baselines.max() ?? 0) - (baselines.min() ?? 0)
+            expectEqual(spread <= 0.5, true, "混排基线: \(words[0].trimmingCharacters(in: .whitespaces)) 夹英文同一折行基线差 \(spread) ≤ 0.5pt")
+            let row = laid.rows[0]
+            expectEqual(laid.placements.allSatisfy { $0.origin.y >= 0 && $0.origin.y + $0.size.height <= row.height + 0.001 }, true,
+                        "混排基线: 行高放得下最高的上沿和最深的下沿")
+        }
+        // 没混排的行(各词上沿、高都一样)按基线摆跟各自居中逐位相同,行高也不变。
+        for words in [["Hello ", "world ", "again"], ["\u{4F60}", "\u{597D}", "\u{4E16}", "\u{754C}"], ["\u{3053}", "\u{3093}", "\u{306B}", "\u{3061}\u{306F}"]] {
+            let a = layout(words, maxWidth: 200, baselines: true), b = layout(words, maxWidth: 200, baselines: false)
+            expectEqual(a.placements == b.placements && a.rows == b.rows, true, "混排基线: \(words.joined()) 不混排的行位置、行高不变")
+        }
     }
 
     // ---- 字形出框:每一行按实际墨迹补长图,上下加高、左右加宽出血,可视窗跟着让出 ----
@@ -1415,7 +1499,7 @@ func runOverlayTests() {
                      sourceHas(breakWidths, "font: playback.overlayNSFonts.main"),
                      sourceHas(sourceBody("init(spec: WrappedKaraokeRows.Spec, width: CGFloat?)", in: karaoke),
                                "Self.itemWidths(words: spec.words, groups: spec.groups"),
-                     sourceHas(wrapLayout, "let rows = breakWidths.map {\n            WrapLayoutMath.rows(sizes: cache.sizes, breakWidths: $0")],
+                     sourceHas(wrapLayout, "var rows = breakWidths.map {\n            WrapLayoutMath.rows(sizes: cache.sizes, breakWidths: $0")],
                     [true, true, true, true, true, true, true],
                     "下一句断行: 逐词列和逐字的下一句按开唱后主行的字宽、同一个量法定断点")
         expectEqual([sourceHas(preview, "lyricStroke(upcomingWordRows(words, color: color))"),

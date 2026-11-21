@@ -745,7 +745,12 @@ final class MenuBarScrollingLabel: NSView {
             reservedIconWidth: reserved, iconLeading: plan.icon?.position == .leading)
         else { return nil }
         let clipW = slot.width
-        let y = rows?.mainY ?? ((bounds.height - height) / 2).rounded()
+        // 单行:没补墨迹时的框在按钮里居中,补的上下两截往外伸、基线不动;伸出按钮时整格挪回按钮里。
+        let padTop = rows == nil ? prepared?.inkPadTop ?? 0 : 0
+        let padBottom = rows == nil ? prepared?.inkPadBottom ?? 0 : 0
+        let centered = ((bounds.height - (height - padTop - padBottom)) / 2).rounded() - padBottom
+        let y = rows?.mainY
+            ?? (padTop + padBottom > 0 ? min(max(0, centered), max(0, bounds.height - height)) : centered)
         // 左沿取整点:图标宽可以是小数(「经典」20.5pt),落在半个点上的歌词格在 1x 屏(含外接屏菜单栏的
         // 复制品)上就是半个像素,整行字被插值、发软。向上取,图标和歌词之间的间距只会多、不会挤。
         let lyricsX = slot.x.rounded(.up)
