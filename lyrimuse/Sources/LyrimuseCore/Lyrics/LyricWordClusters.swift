@@ -48,7 +48,8 @@ public enum LyricWordClusters {
     /// 一行开头的码位跟上一行的末字合成同一个字素簇时(歌词源把行切在一个字中间),把这几个码位挪到上一行最后一个词末尾。
     /// 挪走的是整个词时,上一行最后一个词的终点延到这个词的终点,但不越过这一行的行头;一行挪完只剩空白就整行并掉,
     /// 终点不越过再下一行的行头。行头时间、其余词的时间不动。第一行、上一行以空白结尾的不挪:空白加组合符号
-    /// 虽然算一个字素簇,却不是那个字。见 08 章决策 74。
+    /// 虽然算一个字素簇,却不是那个字。换行本身就是词界,只挪本身不能起头的码位(`cannotStartCluster`),
+    /// virama 后面接的辅音不挪。见 08 章决策 74、75。
     public static func mergingLineStarts(_ lines: [LyricLineWords]) -> [LyricLineWords] {
         guard lines.count > 1 else { return lines }
         var out: [LyricLineWords] = []
@@ -64,7 +65,7 @@ public enum LyricWordClusters {
             var movedText = ""
             var movedEndMs: Int?
             while let first = words.first {
-                let (moved, rest) = continuation(of: cluster, in: first.text)
+                let (moved, rest) = continuation(of: cluster, in: first.text, marksOnly: true)
                 guard !moved.isEmpty else { break }
                 movedText += moved
                 cluster = Character(String(cluster) + moved)
@@ -105,7 +106,7 @@ public enum LyricWordClusters {
                 out.append(line)
                 continue
             }
-            let (moved, rest) = continuation(of: tail, in: line.text)
+            let (moved, rest) = continuation(of: tail, in: line.text, marksOnly: true)
             guard !moved.isEmpty else {
                 out.append(line)
                 continue
@@ -117,12 +118,14 @@ public enum LyricWordClusters {
     }
 
     /// `text` 开头有多少码位跟 `tail` 连成同一个字素簇:返回这一截和剩下的部分。按 `Character` 的切法逐个码位试,
-    /// 组合符号、ZWJ 序列、谚文字母、国旗两个区域指示符都是同一个判据。
-    static func continuation(of tail: Character, in text: String) -> (moved: String, rest: String) {
+    /// 组合符号、ZWJ 序列、谚文字母、国旗两个区域指示符都是同一个判据。`marksOnly` 时只挪 `cannotStartCluster`
+    /// 的码位,遇到能起头的(字母、emoji、区域指示符)就停,哪怕它按运行时的 Unicode 版本跟 `tail` 连成一个簇。
+    static func continuation(of tail: Character, in text: String, marksOnly: Bool = false) -> (moved: String, rest: String) {
         let scalars = Array(text.unicodeScalars)
         var cluster = String(tail)
         var taken = 0
         for scalar in scalars {
+            if marksOnly && !cannotStartCluster(scalar) { break }
             let candidate = cluster + String(Character(scalar))
             guard candidate.count == 1 else { break }
             cluster = candidate
@@ -133,5 +136,19 @@ public enum LyricWordClusters {
         moved.append(contentsOf: scalars[..<taken])
         rest.append(contentsOf: scalars[taken...])
         return (String(moved), String(rest))
+    }
+
+    /// 本身不能起头、只能接在前一个码位后面的码位:Grapheme_Cluster_Break 为 Extend、SpacingMark、ZWJ 的
+    /// (组合符号、泰文 ำ、半角浊点、emoji 肤色)。按码位属性判,不随运行时的 Unicode 版本变:辅音 + virama + 辅音
+    /// 算一个簇(GB9c)只有 Unicode 15.1 起的运行时才这样切。
+    public static func cannotStartCluster(_ scalar: Unicode.Scalar) -> Bool {
+        let properties = scalar.properties
+        if properties.isGraphemeExtend || properties.isEmojiModifier || properties.generalCategory == .spacingMark {
+            return true
+        }
+        switch scalar.value {
+        case 0x200D, 0x0E33, 0x0EB3: return true
+        default: return false
+        }
     }
 }

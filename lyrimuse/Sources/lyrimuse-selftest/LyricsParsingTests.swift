@@ -404,6 +404,38 @@ func runLyricsParsingTests() {
         expectEqual(lrcOnly.allLines(idPrefix: "tl").map { [$0.line.mainText ?? "", $0.line.translation ?? ""] },
                     [["สิ่งที่สวยงามในชี", "甲"], ["วิต", "乙"]], "字素簇跨行: 只有整行歌词时同样挪,译文对得上")
 
+        // 跨行只挪本身不能起头的码位:上一行以「辅音 + virama」结尾、下一行以辅音开头,Unicode 15.1 起的运行时按 GB9c
+        // 把两段算成一个字素簇,但换行就是词界,不挪。断言不随运行时的 Unicode 版本变。
+        let conjunctPairs = [("നിന്റെ കണ്ണിലെ നിറം കണ്ട് കയ്യിലെ വള കണ്ട്", "കാലിലെ കൊലുസിട്ട് എന്നെ നീ കുടുക്കി"),
+                             ("गलेऽवलम्ब्य लम्बितां भुजङ्गतुङ्गमालिकाम्", "डमड्डमड्डमड्डमन्निनादवड्डमर्वयं"),
+                             ("రామ్", "రఘునందన రఘు రఘునందన")]
+        for (upper, lower) in conjunctPairs {
+            let plain = [LyricLine(timeMs: 0, text: upper), LyricLine(timeMs: 1000, text: lower)]
+            expectEqual(LyricWordClusters.mergingLineStarts(plain), plain, "字素簇跨行: 上一行以 virama 结尾、下一行以辅音开头不挪(整行)「\(lower)」")
+            let pieces = upper.split(separator: " ")
+            let upperWords = pieces.enumerated().map { i, w in
+                LyricWord(startMs: i * 100, durationMs: 100, text: i + 1 < pieces.count ? String(w) + " " : String(w))
+            }
+            let worded = [LyricLineWords(timeMs: 0, words: upperWords),
+                          LyricLineWords(timeMs: 1000, words: [LyricWord(startMs: 1000, durationMs: 300, text: lower)])]
+            expectEqual(LyricWordClusters.mergingLineStarts(worded), worded, "字素簇跨行: 上一行以 virama 结尾、下一行以辅音开头不挪(逐字)「\(lower)」")
+        }
+        expectEqual(LyricWordClusters.mergingLineStarts([LyricLine(timeMs: 0, text: "क"), LyricLine(timeMs: 1000, text: "\u{094D}षा")]),
+                    [LyricLine(timeMs: 0, text: "क\u{094D}"), LyricLine(timeMs: 1000, text: "षा")],
+                    "字素簇跨行: 行首的 virama 挪回去,后面的辅音留在本行")
+        expectEqual(LyricWordClusters.mergingLineStarts([LyricLine(timeMs: 0, text: "ท"), LyricLine(timeMs: 1000, text: "\u{0E33}งาน")]),
+                    [LyricLine(timeMs: 0, text: "ท\u{0E33}"), LyricLine(timeMs: 1000, text: "งาน")],
+                    "字素簇跨行: 行首的泰文 ำ(类别是字母)仍挪回上一行")
+        expectEqual(LyricWordClusters.mergingLineStarts([LyricLineWords(timeMs: 0, words: [LyricWord(startMs: 0, durationMs: 100, text: "ｺ")]),
+                                                         LyricLineWords(timeMs: 500, words: [LyricWord(startMs: 500, durationMs: 100, text: "\u{FF9E}"),
+                                                                                             LyricWord(startMs: 600, durationMs: 100, text: "ﾚ")])]).map { $0.words.map(\.text).joined() },
+                    ["ｺ\u{FF9E}", "ﾚ"], "字素簇跨行: 行首的半角浊点(类别是字母)仍挪回上一行")
+        expectEqual(["\u{0E35}", "\u{0E33}", "\u{FF9E}", "\u{094D}", "\u{093E}", "\u{0650}", "\u{200D}", "\u{1F3FD}", "\u{0301}"]
+                        .map { LyricWordClusters.cannotStartCluster($0.unicodeScalars.first!) },
+                    Array(repeating: true, count: 9), "字素簇跨行: 组合符号、spacing mark、泰文 ำ、半角浊点、ZWJ、肤色不能起头")
+        expectEqual(["क", "ക", "ర", "ष", "ก", "ｺ", "a", "\u{1F1E8}", "\u{1161}"].map { LyricWordClusters.cannotStartCluster($0.unicodeScalars.first!) },
+                    Array(repeating: false, count: 9), "字素簇跨行: 辅音、字母、区域指示符、谚文元音能起头")
+
         // 长音强调的字母数门槛:下限按码位(至少 2),上限按含字母的字素簇(至多 7)。
         func eligible(_ text: String) -> Bool { LyricsWordEmphasis.isEligible(text: text, durationMs: 1500) }
         func eligibleByScalars(_ text: String) -> Bool {
