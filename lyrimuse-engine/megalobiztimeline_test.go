@@ -97,6 +97,7 @@ func TestApplyHandTypedTimelinePenalty(t *testing.T) {
 			cand("netease", megalobizShiftedLRC(20, 10000, 8000, -3000))}, false},
 		{"不在共识名单里", []scoredLyricCandidateResult{cand("megalobiz", megalobizShiftedLRC(20, 10000, 8000, 3000), "netease"), cand("qq", base)}, false},
 		{"共识名单按家族认", []scoredLyricCandidateResult{cand("megalobiz", megalobizShiftedLRC(20, 10000, 8000, 3000), "deezer"), cand("lyricfind", base)}, true},
+		{"共识名单按家族认(名单里是家族名、在场的是并进来的那一家)", []scoredLyricCandidateResult{cand("megalobiz", megalobizShiftedLRC(20, 10000, 8000, 3000), "lyricfind"), cand("deezer", base)}, true},
 		{"没有共识", []scoredLyricCandidateResult{cand("megalobiz", megalobizShiftedLRC(20, 10000, 8000, 3000)), cand("qq", base)}, false},
 		{"淘汰的不算", []scoredLyricCandidateResult{cand("megalobiz", megalobizShiftedLRC(20, 10000, 8000, 3000), "qq"),
 			{Source: "qq", Lyrics: base, Score: -1}}, false},

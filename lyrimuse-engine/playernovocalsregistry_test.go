@@ -10,7 +10,7 @@ import (
 // 每个播放器在放时,带 privPlayerNoVocals 的来源里它至多认一个是自家的:playerInstrumentalSource 按登记的先后走这份名单,
 // 先后不同于迁移前那份字面量名单,靠这一条才不影响结果。
 func TestPlayerOwnsAtMostOneNoVocalsSource(t *testing.T) {
-	saveRankParityState(t)
+	saveRankState(t)
 	owned := 0
 	for player, bundle := range playerBundleIDs {
 		setNativeLyricSourcesForPlayer(bundle)
@@ -33,7 +33,7 @@ func TestPlayerOwnsAtMostOneNoVocalsSource(t *testing.T) {
 // playerInstrumentalSource:每个播放器、每个来源各说一次「没有人声」(身份由本机给、解析的是在放的这首),返回的源名跟
 // 迁移前那份名单(lyricSourcePlayerNoVocalsSources)加「是它自家的」推出来的一样;不在名单里的来源说了也不算。
 func TestPlayerInstrumentalSourceFollowsRegistry(t *testing.T) {
-	saveRankParityState(t)
+	saveRankState(t)
 	hits := 0
 	for player, bundle := range playerBundleIDs {
 		setNativeLyricSourcesForPlayer(bundle)
@@ -61,7 +61,7 @@ func TestPlayerInstrumentalSourceFollowsRegistry(t *testing.T) {
 // 开搜前的无人声提示:网易云客户端曲库里带无人声位的一首、汽水播放队列缓存里 vocal==2 的一首、两边都没有的一首,在每个
 // 播放器下问一遍,跟迁移前按播放器写的那一版(expectedPlayerLocalNoVocalsHint)一样。
 func TestPreSearchNoVocalsHintMatchesExpected(t *testing.T) {
-	saveRankParityState(t)
+	saveRankState(t)
 	var m map[string]any
 	if err := json.Unmarshal([]byte(neteaseTestTrack("569213220", "像我这样的人", "毛不易", "平凡的一天", 207466)), &m); err != nil {
 		t.Fatal(err)

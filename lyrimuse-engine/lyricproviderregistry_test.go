@@ -16,10 +16,9 @@ import (
 	"time"
 )
 
-// 歌词源登记表(lyricprovider.go)的守卫。两种参照:生产代码只读登记表的那几类(名单、顺序),参照是冻结在
-// lyricsourceexpect_test.go 里的期望表,登记表推出来的、生产代码读到的都要跟它逐项相等;还在用的按源名写的表,
-// 都要能从描述符原样推出来。哪一条红了,先看是描述符填错了还是表改了没同步;推不出来的是描述符缺字段,补字段,
-// 别改守卫去迁就。
+// 歌词源登记表(lyricprovider.go)的守卫。生产代码只读登记表,对照的是冻结在 lyricsourceexpect_test.go 里的期望表:
+// 登记表推出来的、生产代码读到的都要跟它逐项相等。哪一条红了,先看是描述符填错了还是期望表改了没同步;推不出来的是
+// 描述符缺字段,补字段,别改守卫去迁就。
 
 func registryDescriptors() []*ProviderDescriptor { return lyricProviders().descriptors }
 
@@ -749,37 +748,25 @@ func TestProviderRegistryFailureDiagnosersMatchExpected(t *testing.T) {
 	}
 }
 
-// 烘入译文怎么处理:描述符的 Baked / BakedSplit 等于迁移前 rankLyricSourceResults 里 bakedLines[…] 那八行的写法
-// (扫参照 handwrittenRankLyricSourceResults 的函数体);生产的排序跟参照逐字段相等由 lyricrankparity_test.go 守。
-func TestProviderRegistryBakedPolicyMatchesRanking(t *testing.T) {
-	consts := lyricSourceConstNames(t)
-	body := goFuncSource(t, "lyricrankreference_test.go", "handwrittenRankLyricSourceResults")
+// 烘入译文怎么处理:描述符的 Baked / BakedSplit 等于期望表 lyricSourceBakedPolicies;摘不摘、接不接的实际表现由
+// TestRankShapesMatchExpected 按行为守。
+func TestProviderRegistryBakedPolicyMatchesExpected(t *testing.T) {
 	type baked struct {
 		policy BakedPolicy
 		split  string
 	}
 	want := map[string]baked{}
-	calls := regexp.MustCompile(`bakedLines\[("\w+"|\w+)\] = (\w+)\(([^\n]*)\)\n`).FindAllStringSubmatch(body, -1)
-	for _, m := range calls {
-		name := strings.Trim(m[1], `"`)
-		if !strings.HasPrefix(m[1], `"`) {
-			if name = consts[m[1]]; name == "" {
-				t.Fatalf("bakedLines[%s]:不认识的源常量", m[1])
-			}
-		}
+	for name, how := range lyricSourceBakedPolicies {
 		switch {
-		case m[2] != "adoptBakedTranslation":
-			want[name] = baked{bakedCustom, m[2]}
-		case strings.HasSuffix(m[3], ", true"):
+		case how == "adopt":
 			want[name] = baked{policy: bakedAdopt}
-		case strings.HasSuffix(m[3], ", false"):
+		case how == "strip":
 			want[name] = baked{policy: bakedStripOnly}
+		case strings.HasPrefix(how, "custom:"):
+			want[name] = baked{bakedCustom, strings.TrimPrefix(how, "custom:")}
 		default:
-			t.Fatalf("bakedLines[%s] 的调用认不出接不接译文:%s", m[1], m[3])
+			t.Fatalf("lyricSourceBakedPolicies[%s] = %q 认不出", name, how)
 		}
-	}
-	if n := strings.Count(body, "bakedLines["); n != len(calls)+1 || len(want) != len(calls) {
-		t.Fatalf("参照里写 bakedLines 的有 %d 处,扫出来 %d 处、%d 个源,扫描式跟不上源码了", n-1, len(calls), len(want))
 	}
 	got := map[string]baked{}
 	for _, d := range registryDescriptors() {
@@ -794,8 +781,8 @@ func TestProviderRegistryBakedPolicyMatchesRanking(t *testing.T) {
 			got[d.Name] = baked{policy: d.Baked}
 		}
 	}
-	if !reflect.DeepEqual(got, want) {
-		t.Errorf("登记表 %v\n参照 %v", got, want)
+	if !reflect.DeepEqual(got, want) || len(want) == 0 {
+		t.Errorf("登记表 %v\n期望表 %v", got, want)
 	}
 }
 
@@ -823,30 +810,31 @@ func TestProviderRegistryParenBackgroundAndKanaMatch(t *testing.T) {
 		if read := lyricSourceCarriesKana(name); read != kanaDonorSources[name] {
 			t.Errorf("%q:lyricSourceCarriesKana=%v,期望表 %v", name, read, kanaDonorSources[name])
 		}
+		// 歌词文件夹里的接回写法和它的指纹只给拆括号背景人声的源算。
+		const lrc, yrc, bg = "[00:02.00]Kills me slowly", "[2000,2000](2000,900,0)Kills (2900,500,0)me (3400,600,0)slowly", "[2000,2000](3500,400,0)slowly"
+		if marked := parenBGFileSource("[ti:x]", name, lrc, yrc, bg) != 0; marked != parenBGSources[name] {
+			t.Errorf("%q:导出文件的指纹非零=%v,期望表 %v", name, marked, parenBGSources[name])
+		}
+		if form, _ := parenBGFileForm(name, lrc, yrc, bg); (form != lrc) != parenBGSources[name] {
+			t.Errorf("%q:导出文件接回了括号段=%v,期望表 %v", name, form != lrc, parenBGSources[name])
+		}
 	}
 	if len(parenBGSources) == 0 || len(kanaDonorSources) == 0 {
 		t.Error("期望表是空的,这条守卫什么都没比")
 	}
 }
 
-// 纯音乐标记搭车的先后:描述符的 InstrumentalRank 等于迁移前 rankLyricSourceResults 里那串 if / else if 的先后(扫参照的
-// 函数体);几个源同时说是纯音乐时生产实际认谁,由 TestInstrumentalMarkerFollowsRank 按行为守。
-func TestProviderRegistryInstrumentalRankMatchesRanking(t *testing.T) {
-	body := goFuncSource(t, "lyricrankreference_test.go", "handwrittenRankLyricSourceResults")
-	var want []string
-	for _, m := range regexp.MustCompile(`scoredLyricCandidateResult\{Source: "(\w+)", Score: -1, Instrumental: true\}`).FindAllStringSubmatch(body, -1) {
-		want = append(want, m[1])
-	}
-	if n := strings.Count(body, `scoredLyricCandidateResult{Source: "`); n != len(want) || n == 0 {
-		t.Fatalf("参照里造纯音乐标记的有 %d 处,扫出来 %d 处,扫描式跟不上源码了", n, len(want))
-	}
+// 纯音乐标记搭车的先后:描述符的 InstrumentalRank 推出来的、生产代码读的那份名单都等于期望表 lyricSourceInstrumentalOrder;
+// 几个源同时说时实际认谁,由 TestInstrumentalMarkerFollowsRank 按行为守。
+func TestProviderRegistryInstrumentalRankMatchesExpected(t *testing.T) {
+	want := lyricSourceInstrumentalOrder
 	got := registryNames(func(d *ProviderDescriptor) bool { return d.InstrumentalRank > 0 },
 		func(d *ProviderDescriptor) int { return d.InstrumentalRank })
-	if !slices.Equal(got, want) {
-		t.Errorf("登记表 %v\n参照 %v", got, want)
+	if !slices.Equal(got, want) || len(want) == 0 {
+		t.Errorf("登记表 %v\n期望表 %v", got, want)
 	}
 	if read := lyricProviders().instrumentalOrder; !slices.Equal(read, want) {
-		t.Errorf("生产代码读的搭车先后 %v\n参照 %v", read, want)
+		t.Errorf("生产代码读的搭车先后 %v\n期望表 %v", read, want)
 	}
 }
 
@@ -912,8 +900,8 @@ func descriptorCandidateShape(d *ProviderDescriptor) lyricSourceCandidateShape {
 	return shape
 }
 
-// 候选装配:带 Assembly 的描述符换成期望表的写法,跟 lyricSourceCandidateShapes 逐项相等(那张表是按行为从迁移前的排序里
-// 看出来的,lyricrankshape_test.go 守着它跟参照、跟生产都对得上)。另核字段之间的硬关系。
+// 候选装配:每个描述符的 Assembly 换成期望表的写法,跟 lyricSourceCandidateShapes 逐项相等(lyricrankshape_test.go 按行为
+// 守着排序实际的读法也等于那张表)。另核字段之间的硬关系。
 func TestProviderRegistryAssemblyMatchesShapes(t *testing.T) {
 	const known = fieldWordTiming | fieldRomanization | fieldSourceDuration | fieldAlbum | fieldCover | fieldLanguage |
 		fieldLocalIdentity | fieldPlainText | fieldISRC | fieldSourceURL | fieldBackground | fieldUntimedBody
@@ -1022,7 +1010,7 @@ func TestDropSourcesMissingIDFeedersMatchesExpected(t *testing.T) {
 // 顺序优先里各来源排在哪:描述符的 PriorityPlacement 跟来源的种类对得上;priorityTiers、priorityPick 在各种设置下跟迁移前
 // 按源名写的那一版(expectedPriorityTiers / expectedPriorityPick)给出同样的结果。
 func TestProviderRegistryPriorityPlacementMatches(t *testing.T) {
-	saveRankParityState(t)
+	saveRankState(t)
 	wantPlacement := map[string]PriorityPlacement{localFileLyricsSource: priorityFileLyrics, importLyricsSource: priorityAboveAll}
 	for _, name := range priorityPlayerCacheSources {
 		wantPlacement[name] = priorityWithPlayerLocal

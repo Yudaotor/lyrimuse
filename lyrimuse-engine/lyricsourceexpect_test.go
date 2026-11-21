@@ -271,8 +271,7 @@ func expectedPlainTextFallbackFromScored(scored []scoredLyricCandidateResult) (l
 	return last.Lyrics, last.Source
 }
 
-// lyricSourcePlayerNoVocalsSources:交「播放器自己说这一条没有人声」信号的来源(特权位 privPlayerNoVocals),照 43fa2dff7 的
-// playerInstrumentalSource 里那份名单。
+// lyricSourcePlayerNoVocalsSources:交「播放器自己说这一条没有人声」信号的来源(特权位 privPlayerNoVocals)。
 var lyricSourcePlayerNoVocalsSources = []string{lyricSourceNetease, lyricSourceQQ, lyricSourceSoda, lyricSourceAppleMusic, spotifyLocalLyricsSource}
 
 // expectedPlayerLocalNoVocalsHint:开搜之前播放器的本机数据就说这一条没有人声(实现 PreSearchNoVocalsHinter 的源)。
@@ -374,9 +373,9 @@ type lyricSourceCandidateShape struct {
 	borrows bool
 }
 
-// lyricSourceCandidateShapes:照 43fa2dff7 的 rankLyricSourceResults 里各源那段装配和 switch 里它的 case 整理的
-// (lyricrankreference_test.go 是那份函数体)。lyricrankshape_test.go 拿每一栏都交了的输入喂参照和生产,看到的跟这里
-// 逐项相等。网易云、AMLL 的内容交上来时在专用子结构里(ne、amll),这里写的是摊到公共栏之后的读法。
+// lyricSourceCandidateShapes:每个来源交的结果排序时怎么读(ProviderDescriptor.Assembly、Baked、SongwritersRank)。
+// lyricrankshape_test.go 拿每一栏都交了的输入喂排序,看到的跟这里逐项相等。网易云、AMLL 的内容交上来时在专用子结构里
+// (ne、amll),这里写的是摊到公共栏之后的读法。
 var lyricSourceCandidateShapes = map[string]lyricSourceCandidateShape{
 	lyricSourceAMLL:          {reads: "逐字 读音 专辑 来源链接 背景人声轨 作者", translation: "declared", baked: "strip", unnamed: "query", borrows: true},
 	lyricSourceNetease:       {reads: "逐字 读音 自报曲长 专辑 封面 本机身份 另一栏纯文本", translation: "zh", baked: "adopt", instrumental: "明说 没正文加无人声"},
@@ -403,7 +402,7 @@ var lyricSourceCandidateShapes = map[string]lyricSourceCandidateShape{
 }
 
 // lyricSourceTranslationAccepters:打分那道「译文可用」没过时,另有一条判据把译文写进结果的源和各自的判据
-// (CandidateAssembly.AcceptTranslation)。照 43fa2dff7 的 rankLyricSourceResults 里 switch 的 kuwo 那一支整理。
+// (CandidateAssembly.AcceptTranslation)。
 var lyricSourceTranslationAccepters = map[string]string{lyricSourceKuwo: "kuwoBakedTranslationCovers"}
 
 // lyricSourceUnpackers:结果的内容在专用子结构里、排序时要摊到公共栏上的源和各自的摊法(CandidateAssembly.Unpack)。
@@ -412,6 +411,16 @@ var lyricSourceUnpackers = map[string]string{lyricSourceNetease: "unpackNeteaseR
 // lyricSourcePeerBorrowers:借同一条录音别家的封面、曲长的源和各自的借法(CandidateAssembly.BorrowFromPeers)。
 var lyricSourcePeerBorrowers = map[string]string{lyricSourceAMLL: "amllBorrowFromPeers"}
 
-// lyricSourceHandTypedTimelines:时间轴是上传者手打的源(ProviderDescriptor.HandTypedTimeline)。43fa2dff7 的
-// applyMegalobizTimelinePenalty 只认 megalobiz 这一个源名。
+// lyricSourceHandTypedTimelines:时间轴是上传者手打的源(ProviderDescriptor.HandTypedTimeline)。
+
+// lyricSourceBakedPolicies:烘在正文里的逐行中文译文怎么处理(ProviderDescriptor.Baked / BakedSplit)。adopt = 摘出来接到
+// 译文轨;strip = 只摘不接;custom:<函数名> = 用这个源自己的摘法,摘出来的接到译文轨。没列的源不摘。
+var lyricSourceBakedPolicies = map[string]string{
+	lyricSourceNetease: "adopt", lyricSourceQQ: "adopt", lyricSourceKugou: "adopt", localFileLyricsSource: "adopt",
+	lyricSourceLRCLIB: "strip", lyricSourceAMLL: "strip", lyricSourceLyricFind: "strip",
+	lyricSourceKuwo: "custom:adoptKuwoBakedTranslation",
+}
+
+// lyricSourceInstrumentalOrder:几个源都说这首是纯音乐时标记记在谁头上的先后(ProviderDescriptor.InstrumentalRank)。
+var lyricSourceInstrumentalOrder = []string{lyricSourceLRCLIB, lyricSourceQQ, lyricSourceNetease, lyricSourceMigu, lyricSourceKugou}
 var lyricSourceHandTypedTimelines = map[string]bool{lyricSourceMegalobiz: true}

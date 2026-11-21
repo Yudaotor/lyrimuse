@@ -95,14 +95,6 @@ type amllResult struct {
 
 func (r amllResult) empty() bool { return r.lrc == "" && r.yrc == "" }
 
-// translationLang:tr 的语言,TTML 没标时按 target。
-func (r amllResult) translationLang(target string) string {
-	if r.trLang != "" {
-		return r.trLang
-	}
-	return target
-}
-
 // unpackAMLLResult 是 AMLL 的 CandidateAssembly.Unpack:把 amll 上排序要读的内容摊到公共栏上。歌名、歌手、专辑只有按
 // ISRC / 歌名在索引里找到的才有,按曲目编号直取的为空(候选沿用查询的那一组,UnnamedIsQueryTrack)。
 func unpackAMLLResult(r lyricSourceResult) lyricSourceResult {

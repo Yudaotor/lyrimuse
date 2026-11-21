@@ -80,7 +80,7 @@ func TestParseAMLLTTMLForTranslationLang(t *testing.T) {
 		t.Errorf("只有繁体时照样挑中文、记成 zh-Hant: tr=%q lang=%q", r.tr, r.trLang)
 	}
 	untagged := strings.NewReplacer(` xml:lang="zh-CN"`, "", ` xml:lang="ja"`, "").Replace(amllMultiLangTTML)
-	if r, _ := parseAMLLTTMLFor(untagged, "en"); r.trLang != "" || r.translationLang("en") != "en" {
+	if r, _ := parseAMLLTTMLFor(untagged, "en"); r.trLang != "" || lyricProviders().descriptor(lyricSourceAMLL).Assembly.translationLang(r.trLang, "en") != "en" {
 		t.Errorf("都没标语言时不记语言、按目标语言算: lang=%q", r.trLang)
 	}
 }

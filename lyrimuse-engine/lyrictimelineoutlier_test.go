@@ -59,6 +59,14 @@ func TestApplyTimelineOffsetPenaltyAnchorOutlierGuards(t *testing.T) {
 				tlResult("applemusic", 1222, 297.4, tlLRC(20, tlConst(-300)), ""),
 			}
 		}},
+		{"同一信源家族的几家算一家", func() []scoredLyricCandidateResult {
+			return []scoredLyricCandidateResult{
+				tlResult("qq", 1227, 297, tlLRC(20, tlConst(1800)), ""),
+				tlResult("deezer", 1223, 297, tlLRC(20, tlConst(0)), ""),
+				tlResult("lyricfind", 1222, 297.4, tlLRC(20, tlConst(-300)), ""),
+				tlResult("migu", 1205, 297.4, tlLRC(20, tlConst(300)), ""),
+			}
+		}},
 		{"分成两派", func() []scoredLyricCandidateResult {
 			return append(tlOutlierBatch(), tlResult("netease", 1100, 297, tlLRC(20, tlConst(1900)), ""))
 		}},
