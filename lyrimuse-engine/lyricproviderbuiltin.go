@@ -134,6 +134,12 @@ func newBuiltinLyricProviderRegistry() *lyricProviderRegistry {
 		},
 		ProxyFallback:   true,
 		SongwritersRank: 1, ISRCAuthority: true,
+		// 官方译文按译文块的 xml:lang 标,没标的是按请求的译文语言取的;背景人声轨是 TTML 自带的。
+		Assembly: &CandidateAssembly{
+			Reads: fieldWordTiming | fieldRomanization | fieldSourceDuration | fieldAlbum | fieldCover | fieldLocalIdentity |
+				fieldPlainText | fieldISRC | fieldBackground,
+			Translation: translationDeclared,
+		},
 		PeerGroup: peerGroupGlobal,
 	}, privLocalClientIdentity|privPlaybackTrackIDs|privPlayerNoVocals|privRefetchByID)})
 

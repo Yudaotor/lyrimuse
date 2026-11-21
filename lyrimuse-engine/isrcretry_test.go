@@ -76,7 +76,7 @@ func TestISRCRetryFetchesSourceMissedByName(t *testing.T) {
 	}
 }
 
-// 接线守卫:applemusic 结果把 ISRC 带进候选;补取轮排在所有轮次之后;deezer / applemusic 两路读 lyricSourceISRC
+// 接线守卫:applemusic、deezer 的结果把 ISRC 带进候选(描述符登记了读这一栏,通用装配照它装);补取轮排在所有轮次之后;deezer / applemusic 两路读 lyricSourceISRC
 // (各在自己的 Resolve 里,按不带编号的歌名读)。
 func TestISRCRetryIsWired(t *testing.T) {
 	b, err := os.ReadFile("enrich.go")
@@ -84,8 +84,18 @@ func TestISRCRetryIsWired(t *testing.T) {
 		t.Fatal(err)
 	}
 	src := string(b)
+	for _, name := range []string{"applemusic", "deezer"} {
+		d := lyricProviders().descriptor(name)
+		if d == nil || d.Assembly == nil || !d.Assembly.Reads.has(fieldISRC) {
+			t.Errorf("%s 的候选要读结果里的 ISRC:%+v", name, d)
+			continue
+		}
+		got := assembleSourceCandidate(d, lyricSourceResult{lyr: "[00:05.00]一行目", isrc: "JPU902104759"}, false, "zh")
+		if !got.ok || got.candidate.isrc != "JPU902104759" {
+			t.Errorf("%s 交的 ISRC 没进候选:%+v", name, got.candidate)
+		}
+	}
 	for _, n := range []string{
-		"isrc:                       am.isrc,",
 		"ISRC:                       c.isrc,",
 		"isrc:                       r.ISRC,",
 		"if isrc, sources := isrcRetryPlan(ctx, results, durationSecs); isrc != \"\" {",

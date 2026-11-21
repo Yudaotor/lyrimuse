@@ -5420,12 +5420,6 @@ func rankLyricSourceResults(artist, title, album string, durationSecs float64, r
 	qq := raw["qq"]
 	dz := raw["deezer"]
 	am := raw["applemusic"]
-	amLyr, amYRC, amTr, amRoma, amTitle, amArtist, amAlbum, amCover, amDur, amPlainOnly := am.lyr, am.yrc, am.tr, am.roma, am.matchTitle, am.matchArtist, am.matchAlbum, am.matchCover, am.srcDur, am.plainOnly
-	amBG := am.bg
-	amTrLang := am.trLang
-	if amTrLang == "" {
-		amTrLang = features().LyricsTranslationLanguage
-	}
 	kk := raw[kkboxLocalLyricsSource]
 	spl := raw[spotifyLocalLyricsSource]
 	amz := raw[amazonLocalLyricsSource]
@@ -5474,25 +5468,6 @@ func rankLyricSourceResults(artist, title, album string, durationSecs float64, r
 	}
 	// 网易云凭什么搭纯音乐标记:没交正文,歌词接口说是纯音乐(pureMusic)或曲库说这一条没有人声。
 	assembled[lyricSourceNetease] = assembledSource{instrumental: ne.Lyrics == "" && (ne.PureMusic || ne.NoVocals)}
-	if amLyr != "" {
-		// 全部源里唯一的**官方逐字**来源:逐行 LRC + 逐字 YRC(itunes:timing="Word")+
-		// 可选译文,封面用 artwork 模板替换出的 1000x1000,时长用 Apple 自报的
-		// durationInMillis(见 applemusic.go 头注)。逐字的可用性判定走跟 amll 完全一样的
-		// usableYRC/usableWordTiming —— 两边都是同一套 TTML 解析出来的,没理由用两套判据。
-		// plainOnly 直通打分层那道恒 -1 的闸,口径同 deezer/lrclib 的纯文本回退。
-		amUsableTr, amUsableRoma := usableValueAdd(amLyr, amTr, amTrLang, amRoma, features().LyricsTranslationLanguage)
-		slots.put(lyricCandidate{
-			source: "applemusic", lyrics: amLyr,
-			wordTimingYRC: usableYRC(amLyr, amYRC), hasWordTiming: usableWordTiming(amLyr, amYRC),
-			hasUsableTranslation:       amUsableTr,
-			hasUsableRomanization:      amUsableRoma,
-			sourceReportedDurationSecs: amDur,
-			isrc:                       am.isrc,
-			title:                      amTitle, artist: amArtist, album: amAlbum,
-			cover: amCover, plainTextOnly: amPlainOnly,
-			identityFromLocalClient: am.identityFromLocalClient,
-		})
-	}
 	if kk.lyr != "" {
 		// KKBOX 本地歌词(用 KKBOX 放歌时读它自己缓存里的那份,逐行,见 kkboxlyrics.go)。只精确到整秒的那类不置
 		// identityFromLocalClient,不享受同源加权。
@@ -5677,18 +5652,6 @@ func rankLyricSourceResults(artist, title, album string, durationSecs float64, r
 			}
 			r.LyricsBG = amll.bg
 			r.Songwriters = amll.songwriters
-		case "applemusic":
-			// 官方译文(<translations type="subtitle">)与官方音译(<transliterations>)。语言按译文块的 xml:lang,
-			// 没标时按目标语言(网络那条按请求的语言给,applemusicLyricsQuery)。
-			if c.hasUsableTranslation {
-				r.LyricsTr = amTr
-				r.LyricsTrLang = amTrLang
-			}
-			if usableRomaForResult(c.lyrics, amRoma) {
-				r.LyricsRoma = amRoma
-			}
-			r.LyricsBG = amBG
-			r.Songwriters = am.songwriters
 		case localFileLyricsSource:
 			// 本地 .lrc 里摘出来的烘入译文(见候选装配处),固定中文,口径同 qq。
 			if c.hasUsableTranslation {
