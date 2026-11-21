@@ -200,6 +200,11 @@ func (p sodaProvider) ProbeOwnTrack(ctx context.Context) bool {
 	return !r.empty()
 }
 
+// HintsNoVocals:汽水在放时,播放队列缓存里这一条是 vocal==2(PreSearchNoVocalsHinter)。
+func (p sodaProvider) HintsNoVocals(q ProviderQuery) bool {
+	return playingPlayer() == playerSoda && sodaLocalInstrumental(q.Artist, q.SourceTitle, q.Album, q.DurationSecs)
+}
+
 func (p sodaProvider) Resolve(ctx context.Context, q ProviderQuery, _ RoundEnv) SourceResult {
 	r, noLyrics := sodaLyric(ctx, q.Artist, q.SourceTitle, q.Album, q.DurationSecs)
 	noVocals := r.fromLocalClient && (r.noVocals || sodaLocalInstrumental(q.Artist, q.SourceTitle, q.Album, q.DurationSecs))

@@ -1377,21 +1377,35 @@ func TestProviderRegistryPrivilegesMatchCode(t *testing.T) {
 		t.Error("没有一个源实现 ResolveOffline:酷狗、酷我应各有一份")
 	}
 
-	// 播放器自己的无人声信号:playerInstrumentalSource 认的那几路。
-	list := regexp.MustCompile(`range \[\]string\{([^}]*)\}`).FindStringSubmatch(goFuncSource(t, "enrich.go", "playerInstrumentalSource"))
-	if list == nil {
-		t.Fatal("playerInstrumentalSource 里找不到源名单")
-	}
+	// 播放器自己的无人声信号:playerInstrumentalSource 认的那几路(期望表),生产代码读的是登记表算出来的那份名单。
 	noVocals := map[string]bool{}
-	for _, id := range strings.Split(list[1], ",") {
-		name := consts[strings.TrimSpace(id)]
-		if name == "" {
-			t.Fatalf("playerInstrumentalSource 的名单里有不认识的源常量 %q", id)
-		}
+	for _, name := range lyricSourcePlayerNoVocalsSources {
 		noVocals[name] = true
 	}
-	if got := withPriv(privPlayerNoVocals); !reflect.DeepEqual(got, noVocals) {
-		t.Errorf("privPlayerNoVocals:登记表 %v\nplayerInstrumentalSource %v", sortedKeys(got), sortedKeys(noVocals))
+	if got := withPriv(privPlayerNoVocals); !reflect.DeepEqual(got, noVocals) || len(got) == 0 {
+		t.Errorf("privPlayerNoVocals:登记表 %v\n期望表 %v", sortedKeys(got), sortedKeys(noVocals))
+	}
+	read := map[string]bool{}
+	for _, name := range lyricProviders().playerNoVocalsNames {
+		read[name] = true
+	}
+	if !reflect.DeepEqual(read, noVocals) || len(lyricProviders().playerNoVocalsNames) != len(noVocals) {
+		t.Errorf("生产代码读的名单 %v\n期望表 %v", lyricProviders().playerNoVocalsNames, lyricSourcePlayerNoVocalsSources)
+	}
+	if !containsCode(goFuncSource(t, "enrich.go", "playerInstrumentalSource"), "for _, src := range lyricProviders().playerNoVocalsNames {") {
+		t.Error("playerInstrumentalSource 应按登记表的 playerNoVocalsNames 走")
+	}
+	var hinters []string
+	for _, p := range lyricProviders().providers {
+		if _, ok := p.(PreSearchNoVocalsHinter); ok {
+			hinters = append(hinters, p.Descriptor().Name)
+			if !p.Descriptor().Privileges.has(privPlayerNoVocals) {
+				t.Errorf("%s 实现了 PreSearchNoVocalsHinter,却没有 privPlayerNoVocals(playerNoVocalsHintBeforeSearch 不会问它)", p.Descriptor().Name)
+			}
+		}
+	}
+	if !slices.Equal(hinters, lyricSourcePreSearchNoVocalsHinters) {
+		t.Errorf("实现 PreSearchNoVocalsHinter 的源 %v,期望表 %v", hinters, lyricSourcePreSearchNoVocalsHinters)
 	}
 
 	// 存量回填按编号重取:needsBackgroundVocalsBackfill 认的胜出源。

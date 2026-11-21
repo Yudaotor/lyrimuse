@@ -4369,11 +4369,12 @@ func playerSaysInstrumental(scored []scoredLyricCandidateResult) bool {
 }
 
 // playerInstrumentalSource:正在放的播放器自己说这一条没有人声、它自己又没给出能用的歌词时,返回它自家的歌词源名,否则空串。
+// 只认描述符带 privPlayerNoVocals 的来源。
 // 身份必须来自播放器的本地数据(同同源加权的准入,见 lyricCandidate.identityFromLocalClient),搜出来的不算;解析的得是它在放的这首
 // 或它的待播队列(forPlayingTrack,见 playerSignalApplies)。播放器自己有这一条的歌词(有词的伴奏版,只有不带时间戳的也算)时照常用歌词。
 // raw 是摊平过的(unpackSourceResults)。见 09 章决策 210。
 func playerInstrumentalSource(raw map[string]lyricSourceResult, results []scoredLyricCandidateResult) string {
-	for _, src := range []string{lyricSourceNetease, lyricSourceQQ, lyricSourceSoda, lyricSourceAppleMusic, spotifyLocalLyricsSource} {
+	for _, src := range lyricProviders().playerNoVocalsNames {
 		r, ok := raw[src]
 		if !ok || !r.forPlayingTrack || !playerOwnsLyricSource(src) {
 			continue
@@ -5736,7 +5737,7 @@ func fetchScoredLyricCandidatesStreaming(ctx context.Context, artist, title, alb
 	// 它不在等的时候别为它打分:自动解析不要中间结果,每到一个源整份重打分是白算(见 09 章决策 94)。
 	earlyWatch := newEarlyLyricsWatch(ctx, artist, title, durationSecs)
 	if earlyWatch != nil && forPlaying {
-		earlyWatch.holdForNative = playerLocalNoVocalsHint(artist, srcTitle, album, durationSecs)
+		earlyWatch.holdForNative = playerNoVocalsHintBeforeSearch(providerQuery)
 	}
 collect:
 	for !allLyricSourcesBack() {

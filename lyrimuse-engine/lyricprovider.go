@@ -47,6 +47,12 @@ type ISRCIndexProvider interface {
 	HasISRC(isrc string) bool
 }
 
+// PreSearchNoVocalsHinter 由带 privPlayerNoVocals、而且播放器的本机数据在开搜之前就能说「这一条没有人声」的源实现
+// (playerNoVocalsHintBeforeSearch)。HintsNoVocals 只读本机数据、不发请求;正在放的不是它那个播放器时返回 false。
+type PreSearchNoVocalsHinter interface {
+	HintsNoVocals(q ProviderQuery) bool
+}
+
 // OfflineResolver 由带 privOfflineLeg 的源实现:这个源在熔断冷却的那一轮,调度不调 Resolve,改调 ResolveOffline,
 // 只读客户端下在本机的那一份,不发请求。ok=false 是本机没有这首,这一轮照冷却跳过记。
 type OfflineResolver interface {
@@ -313,7 +319,7 @@ const (
 	privOfflineLeg
 	// privPeripheral:这次查询顺带交封面、平台链接、规范歌手名。
 	privPeripheral
-	// privPlayerNoVocals:交「播放器自己说这一条没有人声」的信号(playerInstrumentalSource)。
+	// privPlayerNoVocals:交「播放器自己说这一条没有人声」的信号(playerInstrumentalSource 只认带这一位的源)。
 	privPlayerNoVocals
 	// privBorrowFromPeers:排序时借同一条录音别家的封面、时长(CandidateAssembly.BorrowFromPeers)。
 	privBorrowFromPeers
@@ -424,6 +430,9 @@ type lyricProviderRegistry struct {
 	instrumentalOrder []string
 	// songwritersOrder:取用词曲作者名单的来源按 SongwritersRank。
 	songwritersOrder []string
+	// playerNoVocalsNames:带 privPlayerNoVocals 的来源,按登记的先后。正在放的播放器至多认其中一个是自家的
+	// (playerOwnsLyricSource),先后不影响结果。
+	playerNoVocalsNames []string
 	// peerGroups:同类组的名字 → 组里的联网源按 Order。
 	peerGroups map[string][]string
 	// hostRates:单独定了令牌桶参数的主机 → 参数,各描述符的 HostRates 并在一起。
@@ -443,6 +452,12 @@ func (r *lyricProviderRegistry) index() {
 		func(d *ProviderDescriptor) int { return d.InstrumentalRank })
 	r.songwritersOrder = r.rankedNames(func(d *ProviderDescriptor) bool { return d.SongwritersRank > 0 },
 		func(d *ProviderDescriptor) int { return d.SongwritersRank })
+	r.playerNoVocalsNames = nil
+	for _, d := range r.descriptors {
+		if d.Privileges.has(privPlayerNoVocals) {
+			r.playerNoVocalsNames = append(r.playerNoVocalsNames, d.Name)
+		}
+	}
 	r.indexPeerGroups()
 	r.hostRates = map[string]hostRate{}
 	r.hostOwners, r.domainOwners = map[string]string{}, map[string]string{}

@@ -318,6 +318,15 @@ func (p neteaseProvider) DiagnosedFailure() string {
 	return neteaseLastFailureReasonNow()
 }
 
+// HintsNoVocals:网易云在放时,客户端曲库里这一条带无人声位(PreSearchNoVocalsHinter)。
+func (p neteaseProvider) HintsNoVocals(q ProviderQuery) bool {
+	if playingPlayer() != playerNetease {
+		return false
+	}
+	t, ok := neteaseLocalEntry(context.Background(), q.Artist, q.SourceTitle, q.Album, q.DurationSecs)
+	return ok && t.Mark&neteaseMarkNoVocals != 0
+}
+
 func (p neteaseProvider) Resolve(ctx context.Context, q ProviderQuery, env RoundEnv) SourceResult {
 	info := neteaseLookup(ctx, q.Artist, q.SourceTitle, q.Album, q.DurationSecs)
 	if info.SongID > 0 {

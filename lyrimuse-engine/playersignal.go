@@ -65,16 +65,18 @@ func withoutPlayerIdentity(ctx context.Context, r lyricSourceResult) lyricSource
 	return r
 }
 
-// playerLocalNoVocalsHint:开搜之前,正在放的播放器的本机数据就说这一条没有人声(网易云客户端曲库的无人声位、汽水播放队列缓存的
-// vocal==2)。只给先上屏用:有它时宽限期那条也等播放器自家的源回话,免得先闪一下别家的词(见 earlyLyricsWatch.holdForNative)。
-// QQ 音乐、Apple Music 要联网才知道,不在此列。
-func playerLocalNoVocalsHint(artist, title, album string, durationSecs float64) bool {
-	switch playingPlayer() {
-	case playerNetease:
-		t, ok := neteaseLocalEntry(context.Background(), artist, title, album, durationSecs)
-		return ok && t.Mark&neteaseMarkNoVocals != 0
-	case playerSoda:
-		return sodaLocalInstrumental(artist, title, album, durationSecs)
+// playerNoVocalsHintBeforeSearch:开搜之前,正在放的播放器的本机数据就说这一条没有人声。只给先上屏用:有它时宽限期那条也等
+// 播放器自家的源回话,免得先闪一下别家的词(见 earlyLyricsWatch.holdForNative)。问的是带 privPlayerNoVocals、实现了
+// PreSearchNoVocalsHinter 的源(网易云客户端曲库的无人声位、汽水播放队列缓存的 vocal==2);QQ 音乐、Apple Music 要联网才
+// 知道,没有实现。
+func playerNoVocalsHintBeforeSearch(q ProviderQuery) bool {
+	for _, p := range lyricProviders().providers {
+		if !p.Descriptor().Privileges.has(privPlayerNoVocals) {
+			continue
+		}
+		if h, ok := p.(PreSearchNoVocalsHinter); ok && h.HintsNoVocals(q) {
+			return true
+		}
 	}
 	return false
 }

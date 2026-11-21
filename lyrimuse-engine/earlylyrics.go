@@ -178,7 +178,7 @@ type earlyLyricsWatch struct {
 	shown         time.Duration
 	shownSource   string
 	rule          earlyLyricsRule
-	// holdForNative:播放器的本机数据开搜前就说这一条没有人声(playerLocalNoVocalsHint)。这时宽限期那条也等播放器自家的源回话:
+	// holdForNative:播放器的本机数据开搜前就说这一条没有人声(playerNoVocalsHintBeforeSearch)。这时宽限期那条也等播放器自家的源回话:
 	// 它多半带着播放器的纯音乐标记回来,先上屏的别家的词马上又会被撤掉。
 	holdForNative bool
 }

@@ -381,7 +381,8 @@ func TestPlayerInstrumentalSignalsAreWired(t *testing.T) {
 		"forPlaying := playerSignalApplies(ctx)",
 		"providerEnv := RoundEnv{ForPlayingTrack: forPlaying,",
 		"r.forPlayingTrack = forPlaying\n\t\t\traw[r.source] = r",
-		"earlyWatch.holdForNative = playerLocalNoVocalsHint(artist, srcTitle, album, durationSecs)",
+		"earlyWatch.holdForNative = playerNoVocalsHintBeforeSearch(providerQuery)",
+		"providerQuery := ProviderQuery{Artist: artist, Title: title, Album: album, SourceTitle: srcTitle, DurationSecs: durationSecs}",
 		"if !turnedInstrumental && adoptCrossAlbumSiblingLyrics(key, &e) {",
 	} {
 		if !containsCode(enrich, n) {
