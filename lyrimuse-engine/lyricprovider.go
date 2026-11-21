@@ -287,6 +287,22 @@ const (
 	plainTextLast
 )
 
+// PriorityPlacement:「顺序优先」模式里这个来源排在哪(priorityTiers / priorityPick)。
+type PriorityPlacement int
+
+const (
+	// priorityByUserOrder:在用户排的顺序表里自己占一个名次(联网源;默认先后看 DefaultPriorityRank)。
+	priorityByUserOrder PriorityPlacement = iota
+	// priorityWithPlayerLocal:并在「播放器自带歌词」那一个名次里,同一个名次里按分数挑。
+	priorityWithPlayerLocal
+	// priorityFileLyrics:歌曲文件自带的歌词。开着「优先用歌曲文件自带的歌词」时自成最前面的一个名次,关着时并进
+	// 「播放器自带歌词」那一个名次。
+	priorityFileLyrics
+	// priorityAboveAll:排在所有名次之前,自己不占名次。用户导入的歌词是这一种:它不像各源那样「回话」,做成一个名次的话
+	// 早定和重试会一直等它。
+	priorityAboveAll
+)
+
 // ISRCLookupMode:按 ISRC 补取那一轮问不问这个源(isrcRetryPlan)。
 type ISRCLookupMode int
 
@@ -348,6 +364,8 @@ type ProviderDescriptor struct {
 	// DefaultPriorityRank:顺序优先模式的默认顺序(resolveLyricsSourceOrder),从 1 起;本机来源为 0。必须跟 App 侧
 	// LyricsSource.allCases 的声明顺序一致:那边顺序表的默认值就是 allCases,对不上的话顺序优先模式在首次写盘前后表现不同。
 	DefaultPriorityRank int
+	// PriorityPlacement:顺序优先模式里排在哪。联网源是 priorityByUserOrder,本机类源是另外三种之一。
+	PriorityPlacement PriorityPlacement
 
 	Rounds RoundPolicy
 
@@ -405,7 +423,8 @@ type ProviderDescriptor struct {
 
 	// Privileges 只在 registerBuiltin 里写。
 	Privileges builtinPrivileges
-	// DependsOnIDsFrom:等哪几个源递来的曲目编号,带 privTrackIDConsume 的源才有。
+	// DependsOnIDsFrom:等哪几个源递来的曲目编号,带 privTrackIDConsume 的源才有。别名轮的名单里这几个源一个都不在时,
+	// 这个源也不问(dropSourcesMissingIDFeeders)。
 	DependsOnIDsFrom []string
 }
 
@@ -430,6 +449,9 @@ type lyricProviderRegistry struct {
 	instrumentalOrder []string
 	// songwritersOrder:取用词曲作者名单的来源按 SongwritersRank。
 	songwritersOrder []string
+	// priorityPlayerLocalNames / priorityFileNames:顺序优先里并在「播放器自带歌词」那一个名次的来源、歌曲文件自带歌词的
+	// 来源(PriorityPlacement),按登记的先后。
+	priorityPlayerLocalNames, priorityFileNames []string
 	// playerNoVocalsNames:带 privPlayerNoVocals 的来源,按登记的先后。正在放的播放器至多认其中一个是自家的
 	// (playerOwnsLyricSource),先后不影响结果。
 	playerNoVocalsNames []string
@@ -452,10 +474,16 @@ func (r *lyricProviderRegistry) index() {
 		func(d *ProviderDescriptor) int { return d.InstrumentalRank })
 	r.songwritersOrder = r.rankedNames(func(d *ProviderDescriptor) bool { return d.SongwritersRank > 0 },
 		func(d *ProviderDescriptor) int { return d.SongwritersRank })
-	r.playerNoVocalsNames = nil
+	r.playerNoVocalsNames, r.priorityPlayerLocalNames, r.priorityFileNames = nil, nil, nil
 	for _, d := range r.descriptors {
 		if d.Privileges.has(privPlayerNoVocals) {
 			r.playerNoVocalsNames = append(r.playerNoVocalsNames, d.Name)
+		}
+		switch d.PriorityPlacement {
+		case priorityWithPlayerLocal:
+			r.priorityPlayerLocalNames = append(r.priorityPlayerLocalNames, d.Name)
+		case priorityFileLyrics:
+			r.priorityFileNames = append(r.priorityFileNames, d.Name)
 		}
 	}
 	r.indexPeerGroups()

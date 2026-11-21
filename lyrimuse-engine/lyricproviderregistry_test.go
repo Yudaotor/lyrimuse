@@ -981,6 +981,122 @@ func TestProviderRegistryAssemblyMatchesShapes(t *testing.T) {
 	}
 }
 
+// 别名轮里等编号的源留不留:跟迁移前按源名写的那一版(dropAMLLWithoutIDSource)对同样的名单给出同样的结果,包括空名单、
+// 没登记的名字、一个都不用剔时返回的是不是原来那一份。
+func TestDropSourcesMissingIDFeedersMatchesExpected(t *testing.T) {
+	names := append(registryNetworkNames(), "nope", "")
+	rng := rand.New(rand.NewSource(20261121))
+	lists := [][]string{nil, {}}
+	for _, a := range names {
+		lists = append(lists, []string{a})
+		for _, b := range names {
+			lists = append(lists, []string{a, b})
+		}
+	}
+	for i := 0; i < 2000; i++ {
+		var l []string
+		for k := rng.Intn(8); k > 0; k-- {
+			l = append(l, names[rng.Intn(len(names))])
+		}
+		lists = append(lists, l)
+	}
+	dropped := 0
+	for _, l := range lists {
+		got, want := dropSourcesMissingIDFeeders(slices.Clone(l)), dropAMLLWithoutIDSource(slices.Clone(l))
+		if !reflect.DeepEqual(got, want) {
+			t.Fatalf("名单 %q:现在 %q,迁移前 %q", l, got, want)
+		}
+		if len(got) != len(l) {
+			dropped++
+		}
+	}
+	if dropped < 50 {
+		t.Errorf("只有 %d 份名单剔了源,这条对比太空", dropped)
+	}
+	in := []string{lyricSourceNetease, lyricSourceAMLL}
+	if out := dropSourcesMissingIDFeeders(in); &out[0] != &in[0] {
+		t.Error("没有要剔的时应原样返回传进来的那一份")
+	}
+}
+
+// 顺序优先里各来源排在哪:描述符的 PriorityPlacement 跟来源的种类对得上;priorityTiers、priorityPick 在各种设置下跟迁移前
+// 按源名写的那一版(expectedPriorityTiers / expectedPriorityPick)给出同样的结果。
+func TestProviderRegistryPriorityPlacementMatches(t *testing.T) {
+	saveRankParityState(t)
+	wantPlacement := map[string]PriorityPlacement{localFileLyricsSource: priorityFileLyrics, importLyricsSource: priorityAboveAll}
+	for _, name := range priorityPlayerCacheSources {
+		wantPlacement[name] = priorityWithPlayerLocal
+	}
+	for _, d := range registryDescriptors() {
+		if d.PriorityPlacement != wantPlacement[d.Name] {
+			t.Errorf("%s:PriorityPlacement=%v,期望 %v", d.Name, d.PriorityPlacement, wantPlacement[d.Name])
+		}
+		if (d.Kind == providerKindNetwork) != (d.PriorityPlacement == priorityByUserOrder) {
+			t.Errorf("%s:联网源在用户顺序表里各占一个名次,本机类源不占(Kind=%v,PriorityPlacement=%v)", d.Name, d.Kind, d.PriorityPlacement)
+		}
+		if (d.Kind == providerKindUserLibrary) != (d.PriorityPlacement == priorityAboveAll) {
+			t.Errorf("%s:只有用户导入的库排在各名次之前(Kind=%v,PriorityPlacement=%v)", d.Name, d.Kind, d.PriorityPlacement)
+		}
+	}
+	if got := lyricProviders().priorityPlayerLocalNames; !slices.Equal(got, priorityPlayerCacheSources) {
+		t.Errorf("生产代码读的「播放器自带歌词」那一个名次 %v,期望 %v", got, priorityPlayerCacheSources)
+	}
+
+	network := registryNetworkNames()
+	rng := rand.New(rand.NewSource(20261121))
+	pools := registryGuardScoredPools(400)
+	oks := []func(scoredLyricCandidateResult) bool{
+		func(c scoredLyricCandidateResult) bool { return c.Score >= 0 },
+		func(c scoredLyricCandidateResult) bool { return c.Lyrics != "" },
+	}
+	picked, tiersSeen := 0, map[int]bool{}
+	for round := 0; round < 60; round++ {
+		order := slices.Clone(network)
+		rng.Shuffle(len(order), func(i, j int) { order[i], order[j] = order[j], order[i] })
+		order = order[:rng.Intn(len(order)+1)]
+		if rng.Intn(3) > 0 {
+			at := rng.Intn(len(order) + 1)
+			order = slices.Insert(order, at, lyricsPriorityPlayerLocal)
+		}
+		if rng.Intn(4) == 0 {
+			order = append(order, "nope")
+		}
+		f := featuresRef()
+		f.LyricsSourceOrder, f.PreferLocalFileLyrics = order, round%2 == 0
+		f.LyricsSources = nil
+		if rng.Intn(2) == 0 {
+			f.LyricsSources = map[string]bool{}
+			for _, name := range network {
+				f.LyricsSources[name] = rng.Intn(4) > 0
+			}
+		}
+		got, want := priorityTiers(), expectedPriorityTiers()
+		if !reflect.DeepEqual(got, want) {
+			t.Fatalf("顺序 %q、优先文件自带=%v:priorityTiers=%q\n迁移前=%q", order, f.PreferLocalFileLyrics, got, want)
+		}
+		tiersSeen[len(got)] = true
+		for _, d := range registryDescriptors() {
+			wantRank := slices.IndexFunc(want, func(tier []string) bool { return slices.Contains(tier, d.Name) })
+			if r := priorityRank(d.Name); r != wantRank {
+				t.Fatalf("顺序 %q:%s 排第 %d,迁移前第 %d", order, d.Name, r, wantRank)
+			}
+		}
+		for i, p := range pools {
+			ok := oks[i%len(oks)]
+			a, b := priorityPick(p, ok), expectedPriorityPick(p, ok)
+			if (a == nil) != (b == nil) || (a != nil && a != b) {
+				t.Fatalf("顺序 %q、第 %d 组候选池:priorityPick=%+v,迁移前=%+v", order, i, a, b)
+			}
+			if a != nil {
+				picked++
+			}
+		}
+	}
+	if picked < 2000 || len(tiersSeen) < 5 {
+		t.Errorf("挑到候选 %d 次、名次数只见过 %d 种,这条对比太空", picked, len(tiersSeen))
+	}
+}
+
 const registryGuardCJKLyrics = "[00:01.00]春天的花开了\n[00:05.00]秋天的风吹过\n[00:09.00]冬天的雪落下\n"
 
 // registryGuardScoredPools:造 n 组候选池喂给「从打好分的候选里挑一条」的函数,种子固定。每组从全部登记的来源加几个没登记
@@ -1284,7 +1400,7 @@ func TestProviderRegistryPrivilegesMatchCode(t *testing.T) {
 	}
 	enrichSrc := string(enrichRaw)
 
-	// 等别的源递编号:别名轮名单里没有它等的那几个源时被剔掉(dropAMLLWithoutIDSource)。
+	// 等别的源递编号:别名轮名单里没有它等的那几个源时被剔掉(dropSourcesMissingIDFeeders)。
 	network := registryNetworkNames()
 	for _, name := range network {
 		d := lyricProviders().descriptor(name)
@@ -1292,7 +1408,7 @@ func TestProviderRegistryPrivilegesMatchCode(t *testing.T) {
 		if consumes != (len(d.DependsOnIDsFrom) > 0) {
 			t.Errorf("%s:DependsOnIDsFrom 只在带 privTrackIDConsume 时有", name)
 		}
-		if alone := slices.Contains(dropAMLLWithoutIDSource([]string{name}), name); alone == consumes {
+		if alone := slices.Contains(dropSourcesMissingIDFeeders([]string{name}), name); alone == consumes {
 			t.Errorf("%s:名单里只有它时留不留(%v)跟 privTrackIDConsume=%v 对不上", name, alone, consumes)
 		}
 		if !consumes {
@@ -1302,7 +1418,7 @@ func TestProviderRegistryPrivilegesMatchCode(t *testing.T) {
 			if other == name {
 				continue
 			}
-			kept := slices.Contains(dropAMLLWithoutIDSource([]string{name, other}), name)
+			kept := slices.Contains(dropSourcesMissingIDFeeders([]string{name, other}), name)
 			if kept != slices.Contains(d.DependsOnIDsFrom, other) {
 				t.Errorf("%s:名单里有 %s 时留不留(%v)跟 DependsOnIDsFrom=%v 对不上", name, other, kept, d.DependsOnIDsFrom)
 			}

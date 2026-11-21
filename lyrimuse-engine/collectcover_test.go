@@ -60,7 +60,7 @@ func TestDropAMLLWithoutIDSource(t *testing.T) {
 		{[]string{"lrclib", "deezer"}, []string{"lrclib", "deezer"}},
 	}
 	for _, c := range cases {
-		got := dropAMLLWithoutIDSource(append([]string(nil), c.in...))
+		got := dropSourcesMissingIDFeeders(append([]string(nil), c.in...))
 		if len(got) != len(c.want) {
 			t.Errorf("%v -> %v, want %v", c.in, got, c.want)
 			continue

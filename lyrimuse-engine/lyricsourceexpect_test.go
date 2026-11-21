@@ -3,12 +3,14 @@ package main
 import (
 	"context"
 	"net"
+	"slices"
 	"strings"
 )
 
 // 登记表(lyricprovider.go)的期望值。生产代码里名单、顺序、轮次、哪几路是播放器本机、近况统计的同类组、专用探测曲、
 // 来源链接、按 ISRC 补取、出站的归源、速率与额度(主机归源、主机速率、在途上限、小时额度、每日额度留量、代理回退)、候选装配、
-// 括号背景人声、假名标注、共识家族、词曲作者名单取谁的、纯文本回退的档位、播放器自己的无人声信号这几类只读登记表里的描述符,两种失败原因问源的可选接口;这里是同一份事实冻结在测试里的写法,lyricproviderregistry_test.go
+// 括号背景人声、假名标注、共识家族、词曲作者名单取谁的、纯文本回退的档位、播放器自己的无人声信号、
+// 顺序优先里本机类来源排在哪、别名轮里等编号的源留不留这几类只读登记表里的描述符,两种失败原因问源的可选接口;这里是同一份事实冻结在测试里的写法,lyricproviderregistry_test.go
 // 逐项比「登记表推出来的 == 这里」。加减来源、改描述符里这几类字段,要同步改这里。
 // 别的测试拿这几张表当「全部联网源」「决胜序」的输入;App 的 selftest 从这个文件抠 lyricSourceNames 的字面量跟
 // LyricsSource.allCases 比:那张表保持整张写在一行里,这个文件里别处(含注释)不要再出现它的声明写法。
@@ -287,6 +289,73 @@ func expectedPlayerLocalNoVocalsHint(artist, title, album string, durationSecs f
 
 // lyricSourcePreSearchNoVocalsHinters:实现 PreSearchNoVocalsHinter 的源。
 var lyricSourcePreSearchNoVocalsHinters = []string{lyricSourceNetease, lyricSourceSoda}
+
+// 顺序优先模式里本机类来源排在哪(ProviderDescriptor.PriorityPlacement),照迁移前按源名写的那一版:priorityPlayerCacheSources
+// 是「播放器自带歌词」那一个名次里的播放器本地歌词,priorityPlayerLocalTier 是那一个名次包括哪些来源(文件自带的歌词不优先时
+// 也在里面),expectedPriorityTiers 是实际的取用先后,expectedPriorityPick 是按它挑(用户导入的歌词排在各名次之前)。
+var priorityPlayerCacheSources = []string{kkboxLocalLyricsSource, spotifyLocalLyricsSource, amazonLocalLyricsSource,
+	lxMusicLocalLyricsSource}
+
+func priorityPlayerLocalTier(preferLocalFile bool) []string {
+	if preferLocalFile {
+		return priorityPlayerCacheSources
+	}
+	return append(slices.Clone(priorityPlayerCacheSources), localFileLyricsSource)
+}
+
+func expectedPriorityTiers() [][]string {
+	var tiers [][]string
+	prefer := features().PreferLocalFileLyrics
+	if prefer {
+		tiers = append(tiers, []string{localFileLyricsSource})
+	}
+	playerLocal := priorityPlayerLocalTier(prefer)
+	placed := false
+	for _, entry := range features().LyricsSourceOrder {
+		switch {
+		case entry == lyricsPriorityPlayerLocal:
+			tiers, placed = append(tiers, playerLocal), true
+		case lyricSourceEnabled(entry):
+			tiers = append(tiers, []string{entry})
+		}
+	}
+	if !placed {
+		tiers = append(tiers, playerLocal)
+	}
+	return tiers
+}
+
+func expectedPriorityPick(scored []scoredLyricCandidateResult, ok func(scoredLyricCandidateResult) bool) *scoredLyricCandidateResult {
+	for i := range scored {
+		if scored[i].Source == importLyricsSource && ok(scored[i]) {
+			return &scored[i]
+		}
+	}
+	for _, tier := range expectedPriorityTiers() {
+		for i := range scored {
+			if slices.Contains(tier, scored[i].Source) && ok(scored[i]) {
+				return &scored[i]
+			}
+		}
+	}
+	return nil
+}
+
+// dropAMLLWithoutIDSource:别名轮名单里既没有网易云也没有 QQ 时剔掉 amll(ProviderDescriptor.DependsOnIDsFrom)。
+func dropAMLLWithoutIDSource(sources []string) []string {
+	for _, s := range sources {
+		if s == "netease" || s == "qq" {
+			return sources
+		}
+	}
+	out := sources[:0:0]
+	for _, s := range sources {
+		if s != "amll" {
+			out = append(out, s)
+		}
+	}
+	return out
+}
 
 // lyricSourceCandidateShape:排序时一个源交的结果里哪几栏进它的候选和结果。
 type lyricSourceCandidateShape struct {

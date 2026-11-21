@@ -4274,10 +4274,10 @@ func preferredLocalFileCandidate(scored []scoredLyricCandidateResult, usable fun
 
 // priorityPick:「顺序优先」按 priorityTiers 的先后,取第一个有 ok 候选的名次里分数最高的那条(scored 已按分数从高到低排)。
 func priorityPick(scored []scoredLyricCandidateResult, ok func(scoredLyricCandidateResult) bool) *scoredLyricCandidateResult {
-	// 用户导入的歌词(importstore.go)排在各源前面。别把它做成 priorityTiers 里的一个名次:它不像各源那样「回话」,
-	// 早定和重试会一直等它。
+	// 登记成 priorityAboveAll 的来源(用户导入的歌词,importstore.go)排在各名次前面,不是 priorityTiers 里的一个名次。
+	reg := lyricProviders()
 	for i := range scored {
-		if scored[i].Source == importLyricsSource && ok(scored[i]) {
+		if d := reg.descriptor(scored[i].Source); d != nil && d.PriorityPlacement == priorityAboveAll && ok(scored[i]) {
 			return &scored[i]
 		}
 	}
@@ -4291,17 +4291,20 @@ func priorityPick(scored []scoredLyricCandidateResult, ok func(scoredLyricCandid
 	return nil
 }
 
-// priorityTiers:「顺序优先」实际的取用先后,每一项是占同一个名次的几个来源。开着「优先用歌曲文件自带的歌词」时文件自带的
-// 歌词(localfile)排最前,关着时并进「播放器自带歌词」那一项;用户顺序里的歌词源各占一个名次,关掉的跳过;「播放器自带歌词」
-// (lyricsPriorityPlayerLocal)展开成 priorityPlayerLocalTier,顺序表里没有那一项时(没经过 resolveLyricsSourceOrder 的数据)
-// 排在最后。见 09 章决策 297、346。
+// priorityTiers:「顺序优先」实际的取用先后,每一项是占同一个名次的几个来源。各来源排在哪是描述符的 PriorityPlacement:
+// 开着「优先用歌曲文件自带的歌词」时文件自带的歌词(priorityFileLyrics)排最前,关着时并进「播放器自带歌词」那一项;用户
+// 顺序里的歌词源各占一个名次,关掉的跳过;「播放器自带歌词」(lyricsPriorityPlayerLocal)展开成 priorityWithPlayerLocal 的
+// 那几个来源,顺序表里没有那一项时(没经过 resolveLyricsSourceOrder 的数据)排在最后。返回的切片别改:里面有登记表自己的
+// 那几份名单。见 09 章决策 297、346。
 func priorityTiers() [][]string {
+	reg := lyricProviders()
 	var tiers [][]string
-	prefer := features().PreferLocalFileLyrics
-	if prefer {
-		tiers = append(tiers, []string{localFileLyricsSource})
+	playerLocal := reg.priorityPlayerLocalNames
+	if features().PreferLocalFileLyrics {
+		tiers = append(tiers, reg.priorityFileNames)
+	} else {
+		playerLocal = append(slices.Clone(playerLocal), reg.priorityFileNames...)
 	}
-	playerLocal := priorityPlayerLocalTier(prefer)
 	placed := false
 	for _, entry := range features().LyricsSourceOrder {
 		switch {
@@ -4316,18 +4319,6 @@ func priorityTiers() [][]string {
 	}
 	return tiers
 }
-
-// priorityPlayerLocalTier:「播放器自带歌词」那一个名次包括哪些来源;文件自带的歌词不优先时也在这里。
-func priorityPlayerLocalTier(preferLocalFile bool) []string {
-	if preferLocalFile {
-		return priorityPlayerCacheSources
-	}
-	return append(slices.Clone(priorityPlayerCacheSources), localFileLyricsSource)
-}
-
-// priorityPlayerCacheSources:「播放器自带歌词」那一项包括的播放器本地歌词,同一个名次里按分数挑。
-var priorityPlayerCacheSources = []string{kkboxLocalLyricsSource, spotifyLocalLyricsSource, amazonLocalLyricsSource,
-	lxMusicLocalLyricsSource}
 
 // priorityCandidateClean:这一条没带说明它可能是别的版本、别的录音或时间轴不对的扣分项(earlyLyricsPenaltyTerms;逐字加分
 // 撤销那一项不算,它只是把逐字那份加分退回去)。智能算法里这些扣分让它比分落后;「顺序优先」不比分,得在挑源时直接跳过它。
@@ -5001,7 +4992,7 @@ func hasUsableLyricCandidate(scored []scoredLyricCandidateResult) bool {
 // transportFailureCodes,进程内累计)、跟检索词无关的失败(lyricfind 的地区限制、deezer 换不到票、applemusic 没连账号、
 // zing 密钥被拒,各源自己经 QueryIndependentFailer 答)。amll 不发搜索请求(按曲目 ID 直取,按名字只在本地索引里找),
 // 它在别名轮里会跟着网易云 / QQ 的别名结果拿到新 ID,所以照常算进来
-// —— 网易云 / QQ 不在名单里时由 dropAMLLWithoutIDSource 剔掉。
+// —— 网易云 / QQ 不在名单里时由 dropSourcesMissingIDFeeders 剔掉。
 // soda 照常算进来:它有自己的搜索(本地队列缓存拿不到 id 时的兜底,见 soda.go),别名确实
 // 会影响命中 —— 本地那条路在别名轮里查空是预期的(署名换了就不再对应同一条录音),搜索
 // 那条路则正是别名要救的场景。
@@ -5010,10 +5001,10 @@ func hasUsableLyricCandidate(scored []scoredLyricCandidateResult) bool {
 // 被跳过,为它去查别名只是白打别名解析那几次请求;这一轮会因此不追平打分版本,之后整首重来。
 // 给 scoredLyricCandidatesStreaming 的别名轮当"只查这些源"的名单;顺序按联网源名单(networkLyricSourceNames)。
 func lyricSourcesWorthAliasRetry(ctx context.Context, scored []scoredLyricCandidateResult) []string {
-	return dropAMLLWithoutIDSource(lyricSourcesWorthRetry(ctx, scored))
+	return dropSourcesMissingIDFeeders(lyricSourcesWorthRetry(ctx, scored))
 }
 
-// lyricSourcesWorthRetry:lyricSourcesWorthAliasRetry 剔 amll(dropAMLLWithoutIDSource)之前的名单。按 ISRC 补取那一轮用它
+// lyricSourcesWorthRetry:lyricSourcesWorthAliasRetry 剔 amll(dropSourcesMissingIDFeeders)之前的名单。按 ISRC 补取那一轮用它
 // (isrcRetryPlan):那一轮 amll 按 ISRC 在本地索引里找,不靠网易云 / QQ 的 ID。
 func lyricSourcesWorthRetry(ctx context.Context, scored []scoredLyricCandidateResult) []string {
 	usable := map[string]bool{}
@@ -5042,20 +5033,26 @@ func lyricSourcesWorthRetry(ctx context.Context, scored []scoredLyricCandidateRe
 	return out
 }
 
-// dropAMLLWithoutIDSource:别名轮名单里既没有网易云也没有 QQ 时剔掉 amll。amll 不发搜索请求,按曲目 ID
-// 直取:Apple / Spotify 两个精确 ID 跟署名写法无关、首轮已经拿它们问过(别名轮按改写后的署名也查不到它们),
-// 网易云 / QQ 的 ID 只有这一轮也重查那两个源时才可能是新的。都不在的话 amll 这一轮拿不到新 ID,只剩拿别名在
-// 本地索引里再找一次;留在名单里会让"只缺 amll"的歌(库里没有的歌占绝大多数)都跑一轮别名(MusicBrainz /
-// iTunes 身份查询)。
-func dropAMLLWithoutIDSource(sources []string) []string {
-	for _, s := range sources {
-		if s == "netease" || s == "qq" {
-			return sources
+// dropSourcesMissingIDFeeders:别名轮名单里,等别的源递曲目编号的源(描述符的 DependsOnIDsFrom)要等的那几个一个都不在时
+// 剔掉它。现在是 amll 等网易云 / QQ:它不发搜索请求,按曲目 ID 直取,Apple / Spotify 两个精确 ID 跟署名写法无关、首轮已经
+// 拿它们问过(别名轮按改写后的署名也查不到它们),网易云 / QQ 的 ID 只有这一轮也重查那两个源时才可能是新的。都不在的话
+// amll 这一轮拿不到新 ID,只剩拿别名在本地索引里再找一次;留在名单里会让"只缺 amll"的歌(库里没有的歌占绝大多数)都跑
+// 一轮别名(MusicBrainz / iTunes 身份查询)。没有要剔的时原样返回 sources。
+func dropSourcesMissingIDFeeders(sources []string) []string {
+	reg := lyricProviders()
+	starved := func(s string) bool {
+		d := reg.descriptor(s)
+		if d == nil || len(d.DependsOnIDsFrom) == 0 {
+			return false
 		}
+		return !slices.ContainsFunc(d.DependsOnIDsFrom, func(from string) bool { return slices.Contains(sources, from) })
+	}
+	if !slices.ContainsFunc(sources, starved) {
+		return sources
 	}
 	out := sources[:0:0]
 	for _, s := range sources {
-		if s != "amll" {
+		if !starved(s) {
 			out = append(out, s)
 		}
 	}
