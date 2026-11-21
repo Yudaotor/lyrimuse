@@ -7,7 +7,7 @@ import (
 
 // 登记表(lyricprovider.go)的期望值。生产代码里名单、顺序、轮次、哪几路是播放器本机、近况统计的同类组、专用探测曲、
 // 来源链接、按 ISRC 补取、出站的归源、速率与额度(主机归源、主机速率、在途上限、小时额度、每日额度留量、代理回退)、候选装配、
-// 括号背景人声、假名标注、共识家族这几类只读登记表里的描述符,两种失败原因问源的可选接口;这里是同一份事实冻结在测试里的写法,lyricproviderregistry_test.go
+// 括号背景人声、假名标注、共识家族、词曲作者名单取谁的、纯文本回退的档位这几类只读登记表里的描述符,两种失败原因问源的可选接口;这里是同一份事实冻结在测试里的写法,lyricproviderregistry_test.go
 // 逐项比「登记表推出来的 == 这里」。加减来源、改描述符里这几类字段,要同步改这里。
 // 别的测试拿这几张表当「全部联网源」「决胜序」的输入;App 的 selftest 从这个文件抠 lyricSourceNames 的字面量跟
 // LyricsSource.allCases 比:那张表保持整张写在一行里,这个文件里别处(含注释)不要再出现它的声明写法。
@@ -227,6 +227,45 @@ func lyricSourceConsensusFamily(source string) string {
 		return lyricSourceLyricFind
 	}
 	return source
+}
+
+// expectedSongwritersFromScored:词曲作者名单取谁的(ProviderDescriptor.SongwritersRank / SongwritersSkipCJK)。
+func expectedSongwritersFromScored(scored []scoredLyricCandidateResult) []string {
+	for _, src := range []string{"applemusic", "amll", "deezer"} {
+		for _, c := range scored {
+			if c.Source != src || c.Score < 0 || len(c.Songwriters) == 0 {
+				continue
+			}
+			if src == "deezer" && writtenInCJKScript(c.Lyrics) {
+				continue
+			}
+			return c.Songwriters
+		}
+	}
+	return nil
+}
+
+// expectedPlainTextFallbackFromScored:退到纯文本时取谁的(ProviderDescriptor.PlainText)。
+func expectedPlainTextFallbackFromScored(scored []scoredLyricCandidateResult) (lyrics, source string) {
+	for _, c := range scored {
+		if c.PlainTextOnly && c.Lyrics != "" && c.Source == localFileLyricsSource {
+			return c.Lyrics, c.Source
+		}
+	}
+	var last scoredLyricCandidateResult
+	for _, c := range scored {
+		if !c.PlainTextOnly || c.Lyrics == "" {
+			continue
+		}
+		if c.Source == "netease" || c.Source == "qq" {
+			if last.Lyrics == "" {
+				last = c
+			}
+			continue
+		}
+		return c.Lyrics, c.Source
+	}
+	return last.Lyrics, last.Source
 }
 
 // lyricSourceCandidateShape:排序时一个源交的结果里哪几栏进它的候选和结果。

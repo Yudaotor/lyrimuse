@@ -2,6 +2,8 @@ package main
 
 import (
 	"context"
+	"fmt"
+	"math/rand"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -981,6 +983,32 @@ func TestProviderRegistryAssemblyMatchesShapes(t *testing.T) {
 
 const registryGuardCJKLyrics = "[00:01.00]春天的花开了\n[00:05.00]秋天的风吹过\n[00:09.00]冬天的雪落下\n"
 
+// registryGuardScoredPools:造 n 组候选池喂给「从打好分的候选里挑一条」的函数,种子固定。每组从全部登记的来源加几个没登记
+// 的名字里抽几条,分数有正有负,正文有拉丁、中日韩、空的,纯文本标记、作者名单时有时无。
+func registryGuardScoredPools(n int) [][]scoredLyricCandidateResult {
+	const latin = "[00:01.00]first line here\n[00:05.00]second line here\n[00:09.00]third line here\n"
+	names := slices.Clone(registryGuardUnknownSources)
+	for _, d := range registryDescriptors() {
+		names = append(names, d.Name)
+	}
+	rng := rand.New(rand.NewSource(20261121))
+	pools := make([][]scoredLyricCandidateResult, n)
+	for i := range pools {
+		for k := rng.Intn(7); k >= 0; k-- {
+			name := names[rng.Intn(len(names))]
+			c := scoredLyricCandidateResult{Source: name, Score: rng.Intn(4) - 1, PlainTextOnly: rng.Intn(2) == 0}
+			c.Lyrics = []string{latin, registryGuardCJKLyrics, "", "text of " + name}[rng.Intn(4)]
+			if rng.Intn(3) > 0 {
+				c.Songwriters = []string{fmt.Sprintf("%s-%d", name, k)}
+			}
+			pools[i] = append(pools[i], c)
+		}
+	}
+	return pools
+}
+
+// 词曲作者名单取谁的:登记表的名次、生产代码读的那份名单、songwritersFromScored 的实际表现三样一致,并且跟迁移前按源名
+// 写的那一版(expectedSongwritersFromScored)对同样的候选池给出同样的结果。
 func TestProviderRegistrySongwritersRankMatches(t *testing.T) {
 	const latin = "[00:01.00]first line here\n[00:05.00]second line here\n[00:09.00]third line here\n"
 	var pool []scoredLyricCandidateResult
@@ -988,25 +1016,54 @@ func TestProviderRegistrySongwritersRankMatches(t *testing.T) {
 		pool = append(pool, scoredLyricCandidateResult{Source: d.Name, Score: 1, Lyrics: latin, Songwriters: []string{d.Name}})
 	}
 	// 每次取出被选中的那个源、拿掉它再问,问到没有为止,得到的就是取用顺序。
-	var want []string
-	for len(pool) > 0 {
-		sw := songwritersFromScored(pool)
-		if len(sw) == 0 {
-			break
+	order := func(pick func([]scoredLyricCandidateResult) []string) []string {
+		pool := slices.Clone(pool)
+		var out []string
+		for len(pool) > 0 {
+			sw := pick(pool)
+			if len(sw) == 0 {
+				break
+			}
+			out = append(out, sw[0])
+			pool = slices.DeleteFunc(pool, func(c scoredLyricCandidateResult) bool { return c.Source == sw[0] })
 		}
-		want = append(want, sw[0])
-		pool = slices.DeleteFunc(pool, func(c scoredLyricCandidateResult) bool { return c.Source == sw[0] })
+		return out
+	}
+	want := order(expectedSongwritersFromScored)
+	if got := order(songwritersFromScored); !slices.Equal(got, want) {
+		t.Errorf("songwritersFromScored 的取用先后 %v\n迁移前 %v", got, want)
 	}
 	got := registryNames(func(d *ProviderDescriptor) bool { return d.SongwritersRank > 0 },
 		func(d *ProviderDescriptor) int { return d.SongwritersRank })
 	if !slices.Equal(got, want) || len(want) == 0 {
-		t.Errorf("登记表 %v\nsongwritersFromScored %v", got, want)
+		t.Errorf("登记表 %v\n迁移前 %v", got, want)
+	}
+	if read := lyricProviders().songwritersOrder; !slices.Equal(read, want) {
+		t.Errorf("生产代码读的取用先后 %v\n迁移前 %v", read, want)
+	}
+	picked := 0
+	for i, p := range registryGuardScoredPools(3000) {
+		a, b := songwritersFromScored(p), expectedSongwritersFromScored(p)
+		if !slices.Equal(a, b) {
+			t.Fatalf("第 %d 组候选池:songwritersFromScored=%v,迁移前=%v\n%+v", i, a, b, p)
+		}
+		if len(a) > 0 {
+			picked++
+		}
+	}
+	if picked < 300 {
+		t.Errorf("3000 组候选池里只有 %d 组取到了名单,这条对比太空", picked)
 	}
 	for _, name := range want {
 		d := lyricProviders().descriptor(name)
 		skipped := songwritersFromScored([]scoredLyricCandidateResult{
 			{Source: name, Score: 1, Lyrics: registryGuardCJKLyrics, Songwriters: []string{name}},
 		}) == nil
+		if was := expectedSongwritersFromScored([]scoredLyricCandidateResult{
+			{Source: name, Score: 1, Lyrics: registryGuardCJKLyrics, Songwriters: []string{name}},
+		}) == nil; was != skipped {
+			t.Errorf("%s:中日韩正文时不用它的作者名单=%v,迁移前=%v", name, skipped, was)
+		}
 		if skipped != d.SongwritersSkipCJK {
 			t.Errorf("%s:中日韩正文时不用它的作者名单=%v,登记表 SongwritersSkipCJK=%v", name, skipped, d.SongwritersSkipCJK)
 		}
@@ -1018,15 +1075,41 @@ func TestProviderRegistrySongwritersRankMatches(t *testing.T) {
 	}
 }
 
+// 纯文本回退的档位:登记表的 PlainText、plainTextFallbackFromScored 的实际表现、迁移前按源名写的那一版
+// (expectedPlainTextFallbackFromScored)的表现三样一致;没登记的名字是普通那一档。
 func TestProviderRegistryPlainTextOrderMatches(t *testing.T) {
 	const ref = "registry-guard-ref"
 	plain := func(source string) scoredLyricCandidateResult {
 		return scoredLyricCandidateResult{Source: source, Score: -1, PlainTextOnly: true, Lyrics: "text of " + source}
 	}
+	picked := 0
+	for i, p := range registryGuardScoredPools(3000) {
+		al, as := plainTextFallbackFromScored(p)
+		bl, bs := expectedPlainTextFallbackFromScored(p)
+		if al != bl || as != bs {
+			t.Fatalf("第 %d 组候选池:plainTextFallbackFromScored=%q/%q,迁移前=%q/%q\n%+v", i, as, al, bs, bl, p)
+		}
+		if as != "" {
+			picked++
+		}
+	}
+	if picked < 300 {
+		t.Errorf("3000 组候选池里只有 %d 组取到了纯文本,这条对比太空", picked)
+	}
+	for _, name := range registryGuardUnknownSources {
+		if got := lyricSourcePlainTextOrder(name); got != plainTextNormal {
+			t.Errorf("没登记的名字 %q 的档位 %v,该是普通那一档", name, got)
+		}
+	}
 	seen := map[PlainTextOrder]bool{}
 	for _, d := range registryDescriptors() {
 		_, behind := plainTextFallbackFromScored([]scoredLyricCandidateResult{plain(ref), plain(d.Name)})
 		_, ahead := plainTextFallbackFromScored([]scoredLyricCandidateResult{plain(d.Name), plain(ref)})
+		_, wasBehind := expectedPlainTextFallbackFromScored([]scoredLyricCandidateResult{plain(ref), plain(d.Name)})
+		_, wasAhead := expectedPlainTextFallbackFromScored([]scoredLyricCandidateResult{plain(d.Name), plain(ref)})
+		if behind != wasBehind || ahead != wasAhead {
+			t.Errorf("%s:排在后面 / 前面时选了 %q / %q,迁移前是 %q / %q", d.Name, behind, ahead, wasBehind, wasAhead)
+		}
 		want := plainTextNormal
 		switch {
 		case behind == d.Name && ahead == d.Name:

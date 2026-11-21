@@ -375,7 +375,8 @@ type ProviderDescriptor struct {
 	// InstrumentalRank:纯音乐标记搭车的先后(lyricProviderRegistry.instrumentalOrder),从 1 起;0 = 不搭车。几个源同时说这首是
 	// 纯音乐时,标记记在名次最靠前的那个头上;凭什么说见 CandidateAssembly.Instrumental。
 	InstrumentalRank int
-	// SongwritersRank:词曲作者名单的取用先后(songwritersFromScored),从 1 起;0 = 不取用。
+	// SongwritersRank:词曲作者名单的取用先后(songwritersFromScored 经 lyricProviderRegistry.songwritersOrder 读),从 1 起;
+	// 0 = 不取用。排序时这个源交的名单抄不抄进结果也看它(assembleSourceCandidate)。
 	SongwritersRank int
 	// SongwritersSkipCJK:正文是中日韩文字时不用它的作者名单。
 	SongwritersSkipCJK bool
@@ -421,6 +422,8 @@ type lyricProviderRegistry struct {
 	defaultPriorityOrder []string
 	// instrumentalOrder:搭纯音乐标记的来源按 InstrumentalRank。
 	instrumentalOrder []string
+	// songwritersOrder:取用词曲作者名单的来源按 SongwritersRank。
+	songwritersOrder []string
 	// peerGroups:同类组的名字 → 组里的联网源按 Order。
 	peerGroups map[string][]string
 	// hostRates:单独定了令牌桶参数的主机 → 参数,各描述符的 HostRates 并在一起。
@@ -438,6 +441,8 @@ func (r *lyricProviderRegistry) index() {
 	r.defaultPriorityOrder = r.rankedNames(network, func(d *ProviderDescriptor) int { return d.DefaultPriorityRank })
 	r.instrumentalOrder = r.rankedNames(func(d *ProviderDescriptor) bool { return d.InstrumentalRank > 0 },
 		func(d *ProviderDescriptor) int { return d.InstrumentalRank })
+	r.songwritersOrder = r.rankedNames(func(d *ProviderDescriptor) bool { return d.SongwritersRank > 0 },
+		func(d *ProviderDescriptor) int { return d.SongwritersRank })
 	r.indexPeerGroups()
 	r.hostRates = map[string]hostRate{}
 	r.hostOwners, r.domainOwners = map[string]string{}, map[string]string{}
@@ -638,6 +643,15 @@ func lyricSourceSplitsParenBackground(source string) bool {
 func lyricSourceCarriesKana(source string) bool {
 	d := lyricProviders().descriptor(source)
 	return d != nil && d.CarriesKana
+}
+
+// lyricSourcePlainTextOrder:没有带时间轴的候选、退到纯文本时 source 排在哪一档(描述符的 PlainText)。没登记的名字是
+// plainTextNormal。
+func lyricSourcePlainTextOrder(source string) PlainTextOrder {
+	if d := lyricProviders().descriptor(source); d != nil {
+		return d.PlainText
+	}
+	return plainTextNormal
 }
 
 // lyricSourceTimelineHandTyped:source 的时间轴是不是上传者手打的(描述符的 HandTypedTimeline)。没登记的名字不是。

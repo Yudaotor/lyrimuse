@@ -43,17 +43,19 @@ func songLanguageFromScored(scored []scoredLyricCandidateResult) string {
 	return ""
 }
 
-// songwritersFromScored:这一轮里各源给的词曲作者名单。过了身份关(分数 >= 0)的 applemusic 候选优先,
-// 其次 amll(它的 TTML 多半就是 Apple 那份),再次 deezer;都没有时为 nil。deezer 那份正文是中日韩文字时不用它的
-// 名单(writtenInCJKScript):这类歌它给的是拼音或罗马字、名在前姓在后。跟 songLanguageFromScored 一样从全部候选里取:
-// 名单描述的是这首歌,跟最后用了谁的歌词正文无关。见 09 章决策 155。
+// songwritersFromScored:这一轮里各源给的词曲作者名单,取过了身份关(分数 >= 0)、名次最靠前的那个源的;都没有时为 nil。
+// 先后是描述符的 SongwritersRank:applemusic 优先,其次 amll(它的 TTML 多半就是 Apple 那份),再次 deezer。登记了
+// SongwritersSkipCJK 的源(deezer)那份正文是中日韩文字时不用它的名单(writtenInCJKScript):这类歌它给的是拼音或罗马字、
+// 名在前姓在后。跟 songLanguageFromScored 一样从全部候选里取:名单描述的是这首歌,跟最后用了谁的歌词正文无关。见 09 章决策 155。
 func songwritersFromScored(scored []scoredLyricCandidateResult) []string {
-	for _, src := range []string{"applemusic", "amll", "deezer"} {
+	reg := lyricProviders()
+	for _, src := range reg.songwritersOrder {
+		skipCJK := reg.descriptor(src).SongwritersSkipCJK
 		for _, c := range scored {
 			if c.Source != src || c.Score < 0 || len(c.Songwriters) == 0 {
 				continue
 			}
-			if src == "deezer" && writtenInCJKScript(c.Lyrics) {
+			if skipCJK && writtenInCJKScript(c.Lyrics) {
 				continue
 			}
 			return c.Songwriters
@@ -2471,12 +2473,12 @@ func retryLyricsUpgradeWith(ctx context.Context, key, artist, title, album strin
 // 候选——纯函数,拆出来给 rescoreLyrics/resolveEnrichAsync 两个写入点共用+单测。调用方
 // 已经确认了 picked==nil(没有分数>=0 的候选)、!e.Instrumental、e.PlainLyrics==""
 // 这三个前提,这里只负责"scored 里有没有能用的 PlainTextOnly 候选、选哪一条"——按
-// scored 原有顺序(打分环节已按固定源序排过)取第一条。正在放的文件标签里自带的(localfile)排在最前:它就是这个文件的歌词。
-// 网易云 / QQ 的纯文本排在别家后面,只在别家都没有纯文本时才用(QQ 的正文常带「歌名 - 歌手」那一行标题),
-// 有别家的时候取到的跟它们不交纯文本时一样。
+// scored 原有顺序(打分环节已按固定源序排过)取第一条。各源排在哪一档是描述符的 PlainText:正在放的文件标签里自带的
+// (localfile,plainTextFirst)排在最前,它就是这个文件的歌词;网易云 / QQ 的纯文本(plainTextLast)排在别家后面,只在别家
+// 都没有纯文本时才用(QQ 的正文常带「歌名 - 歌手」那一行标题),有别家的时候取到的跟它们不交纯文本时一样。
 func plainTextFallbackFromScored(scored []scoredLyricCandidateResult) (lyrics, source string) {
 	for _, c := range scored {
-		if c.PlainTextOnly && c.Lyrics != "" && c.Source == localFileLyricsSource {
+		if c.PlainTextOnly && c.Lyrics != "" && lyricSourcePlainTextOrder(c.Source) == plainTextFirst {
 			return c.Lyrics, c.Source
 		}
 	}
@@ -2485,7 +2487,7 @@ func plainTextFallbackFromScored(scored []scoredLyricCandidateResult) (lyrics, s
 		if !c.PlainTextOnly || c.Lyrics == "" {
 			continue
 		}
-		if c.Source == "netease" || c.Source == "qq" {
+		if lyricSourcePlainTextOrder(c.Source) == plainTextLast {
 			if last.Lyrics == "" {
 				last = c
 			}
