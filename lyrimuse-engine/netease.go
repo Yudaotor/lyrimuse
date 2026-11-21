@@ -328,6 +328,18 @@ func (p neteaseProvider) Resolve(ctx context.Context, q ProviderQuery, env Round
 	return SourceResult{ne: info}
 }
 
+// unpackNeteaseResult 是网易云的 CandidateAssembly.Unpack:把 ne 上排序要读的内容摊到公共栏上。带时间轴的正文和不带
+// 时间戳的正文是两栏(lyr / untimed),装候选时二选一;PureMusic、NoVocals 分别是「源明说纯音乐」「曲目信息说没有人声」。
+// 公共栏上原有的值一律以 ne 为准。
+func unpackNeteaseResult(r lyricSourceResult) lyricSourceResult {
+	ne := r.ne
+	r.lyr, r.yrc, r.tr, r.roma, r.untimed = ne.Lyrics, ne.YRC, ne.Trans, ne.Roma, ne.PlainLyrics
+	r.matchTitle, r.matchArtist, r.matchAlbum, r.matchCover = ne.Title, ne.Artist, ne.Album, ne.Cover
+	r.srcDur, r.identityFromLocalClient = ne.DurationSecs, ne.FromLocalClient
+	r.instrumental, r.noVocals, r.trackFoundNoLyrics = ne.PureMusic, ne.NoVocals, ne.TrackFoundNoLyrics
+	return r
+}
+
 // neteaseLookup returns a China-reachable album cover URL (p*.music.126.net) and
 // the NetEase song page URL for a track. The album is used to disambiguate: the
 // same song appears on many NetEase albums (originals, compilations, "This Is

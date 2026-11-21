@@ -851,7 +851,7 @@ func descriptorCandidateShape(d *ProviderDescriptor) lyricSourceCandidateShape {
 	bits := map[string]resultFields{
 		"逐字": fieldWordTiming, "读音": fieldRomanization, "自报曲长": fieldSourceDuration, "专辑": fieldAlbum, "封面": fieldCover,
 		"语种": fieldLanguage, "本机身份": fieldLocalIdentity, "纯文本": fieldPlainText, "ISRC": fieldISRC, "来源链接": fieldSourceURL,
-		"背景人声轨": fieldBackground,
+		"背景人声轨": fieldBackground, "另一栏纯文本": fieldUntimedBody,
 	}
 	var reads []string
 	for _, f := range rankShapeFields {
@@ -878,7 +878,7 @@ func descriptorCandidateShape(d *ProviderDescriptor) lyricSourceCandidateShape {
 		shape.baked, shape.translation = "adopt", ""
 	}
 	var signals []string
-	for i, bit := range []instrumentalSignals{instrumentalDeclared, instrumentalCreditsNoVocals, instrumentalPlaceholder} {
+	for i, bit := range []instrumentalSignals{instrumentalDeclared, instrumentalCreditsNoVocals, instrumentalPlaceholder, instrumentalNoBodyNoVocals} {
 		if as.Instrumental.has(bit) {
 			signals = append(signals, rankShapeInstrumentalSignals[i])
 		}
@@ -891,16 +891,26 @@ func descriptorCandidateShape(d *ProviderDescriptor) lyricSourceCandidateShape {
 // 看出来的,lyricrankshape_test.go 守着它跟参照、跟生产都对得上)。另核字段之间的硬关系。
 func TestProviderRegistryAssemblyMatchesShapes(t *testing.T) {
 	const known = fieldWordTiming | fieldRomanization | fieldSourceDuration | fieldAlbum | fieldCover | fieldLanguage |
-		fieldLocalIdentity | fieldPlainText | fieldISRC | fieldSourceURL | fieldBackground
+		fieldLocalIdentity | fieldPlainText | fieldISRC | fieldSourceURL | fieldBackground | fieldUntimedBody
 	for _, d := range registryDescriptors() {
 		as := d.Assembly
 		want, listed := lyricSourceCandidateShapes[d.Name]
 		if (as != nil) != listed {
-			t.Errorf("%s:带不带 Assembly(%v)和在不在期望表 lyricSourceCandidateShapes 里(%v)要一致:只有内容在专用子结构里的网易云、AMLL 不带",
+			t.Errorf("%s:带不带 Assembly(%v)和在不在期望表 lyricSourceCandidateShapes 里(%v)要一致:只有候选还由专门那一段装的 AMLL 不带",
 				d.Name, as != nil, listed)
 		}
 		if as == nil {
 			continue
+		}
+		unpack := ""
+		if as.Unpack != nil {
+			unpack = funcName(as.Unpack)
+		}
+		if unpack != lyricSourceUnpackers[d.Name] {
+			t.Errorf("%s:Unpack 是 %q,期望表 lyricSourceUnpackers 是 %q", d.Name, unpack, lyricSourceUnpackers[d.Name])
+		}
+		if as.Instrumental.has(instrumentalCreditsNoVocals) && as.Instrumental.has(instrumentalNoBodyNoVocals) {
+			t.Errorf("%s:署名行加无人声已经包含没交正文的情形,别再登记没正文加无人声", d.Name)
 		}
 		if got := descriptorCandidateShape(d); got != want {
 			t.Errorf("%s\n  登记表 %+v\n  期望表 %+v", d.Name, got, want)

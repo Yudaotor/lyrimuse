@@ -45,6 +45,8 @@ const (
 	fieldSourceURL
 	// fieldBackground:自带的背景人声轨(bg)。
 	fieldBackground
+	// fieldUntimedBody:另一栏不带时间戳的正文(untimed)。带时间轴的那一栏(lyr)为空时拿它出一条纯文本候选,两栏二选一。
+	fieldUntimedBody
 )
 
 func (f resultFields) has(bit resultFields) bool { return f&bit != 0 }
@@ -73,12 +75,17 @@ const (
 	instrumentalCreditsNoVocals
 	// instrumentalPlaceholder:正文就是一句纯音乐占位(isInstrumentalPlaceholderLyric)。
 	instrumentalPlaceholder
+	// instrumentalNoBodyNoVocals:没交带时间轴的正文,曲目信息说这一条没有人声(结果的 noVocals)。正文只有署名行的不算。
+	instrumentalNoBodyNoVocals
 )
 
 func (s instrumentalSignals) has(bit instrumentalSignals) bool { return s&bit != 0 }
 
 // CandidateAssembly:排序时怎么把这个源交的结果装成候选、往排序结果里抄什么(assembleSourceCandidate)。
 type CandidateAssembly struct {
+	// Unpack:结果的内容在专用子结构里的源把它摊到公共栏上;nil = 内容本来就在公共栏上。排序在实体还原、行内逐字拆分、
+	// 伴奏版信号清理之后才摊(unpackSourceResults):那三步对专用子结构里的正文只做实体还原。
+	Unpack func(r lyricSourceResult) lyricSourceResult
 	// Reads:结果里哪几栏进候选。
 	Reads resultFields
 	// Translation / TranslationLang:译文轨标什么语言;TranslationLang 只在 translationFixed 时有。
@@ -124,11 +131,26 @@ type assembledSource struct {
 	instrumental bool
 }
 
-// assembleSourceCandidate 按描述符把一个源交的结果装成候选。r 是这个源这一轮的原始应答(缺席的源是零值),foreignSong
-// 是「本地标签不含汉字」(烘入译文的前提),target 是设置里的译文语言。
+// unpackSourceResults:内容在专用子结构里的源(描述符带 Assembly.Unpack)摊到公共栏上。就地改 raw:它是
+// rankLyricSourceResults 自己复制出来的那份。
+func unpackSourceResults(raw map[string]lyricSourceResult) map[string]lyricSourceResult {
+	for _, d := range lyricProviders().descriptors {
+		if d.Assembly == nil || d.Assembly.Unpack == nil {
+			continue
+		}
+		if r, ok := raw[d.Name]; ok {
+			raw[d.Name] = d.Assembly.Unpack(r)
+		}
+	}
+	return raw
+}
+
+// assembleSourceCandidate 按描述符把一个源交的结果装成候选。r 是这个源这一轮的原始应答(缺席的源是零值;带 Unpack 的源
+// 已经摊过),foreignSong 是「本地标签不含汉字」(烘入译文的前提),target 是设置里的译文语言。
 //
 // 先后是硬约束:烘在正文里的译文先摘(候选的逐字覆盖、译文可用、之后的共识与行数全都读摘过的正文),再判纯音乐
-// 的说法(读摘过的正文),最后装候选。括号背景人声、时间轴重挂在全部候选装完之后整批做(rankLyricSourceResults)。
+// 的说法(读摘过的、带时间轴的那一栏),然后才轮到另一栏不带时间戳的正文顶上来,最后装候选。括号背景人声、时间轴重挂在
+// 全部候选装完之后整批做(rankLyricSourceResults)。
 func assembleSourceCandidate(d *ProviderDescriptor, r lyricSourceResult, foreignSong bool, target string) assembledSource {
 	as := d.Assembly
 	lyr, yrc, tr, roma := r.lyr, "", "", ""
@@ -152,16 +174,24 @@ func assembleSourceCandidate(d *ProviderDescriptor, r lyricSourceResult, foreign
 	}
 	a.instrumental = as.Instrumental.has(instrumentalDeclared) && lyr == "" && r.instrumental ||
 		as.Instrumental.has(instrumentalCreditsNoVocals) && isCreditOnlyLRC(lyr) && r.noVocals ||
-		as.Instrumental.has(instrumentalPlaceholder) && isInstrumentalPlaceholderLyric(lyr)
+		as.Instrumental.has(instrumentalPlaceholder) && isInstrumentalPlaceholderLyric(lyr) ||
+		as.Instrumental.has(instrumentalNoBodyNoVocals) && lyr == "" && r.noVocals
+	// 两栏二选一:带时间轴的那一栏为空才用不带时间戳的,出来的是纯文本候选,逐字、译文、读音的可用性都不算。
+	untimed := false
+	if lyr == "" && as.Reads.has(fieldUntimedBody) && r.untimed != "" {
+		lyr, untimed = r.untimed, true
+	}
 	if lyr == "" {
 		return a
 	}
 	trLang := as.translationLang(r.trLang, target)
 	c := lyricCandidate{source: d.Name, lyrics: lyr, title: r.matchTitle, artist: r.matchArtist}
-	if as.Reads.has(fieldWordTiming) {
+	if as.Reads.has(fieldWordTiming) && !untimed {
 		c.wordTimingYRC, c.hasWordTiming = usableYRC(lyr, yrc), usableWordTiming(lyr, yrc)
 	}
-	c.hasUsableTranslation, c.hasUsableRomanization = usableValueAdd(lyr, tr, trLang, roma, target)
+	if !untimed {
+		c.hasUsableTranslation, c.hasUsableRomanization = usableValueAdd(lyr, tr, trLang, roma, target)
+	}
 	if as.Reads.has(fieldSourceDuration) {
 		c.sourceReportedDurationSecs = r.srcDur
 	}
@@ -177,9 +207,7 @@ func assembleSourceCandidate(d *ProviderDescriptor, r lyricSourceResult, foreign
 	if as.Reads.has(fieldLocalIdentity) {
 		c.identityFromLocalClient = r.identityFromLocalClient
 	}
-	if as.Reads.has(fieldPlainText) {
-		c.plainTextOnly = r.plainOnly
-	}
+	c.plainTextOnly = untimed || as.Reads.has(fieldPlainText) && r.plainOnly
 	if as.Reads.has(fieldISRC) {
 		c.isrc = r.isrc
 	}

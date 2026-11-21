@@ -74,6 +74,8 @@ func TestNoLyricsMarkers(t *testing.T) {
 			matchTitle: "Iris", matchArtist: "OLORUNNS", matchAlbum: "Iris", srcDur: 167},
 		"kugou": {source: "kugou", lyr: "[00:12.00]有词\n"},
 	}
+	// 排序里先把网易云 ne 上的内容摊到公共栏,再出标记。
+	raw = unpackSourceResults(raw)
 
 	got := noLyricsMarkers(raw, nil)
 	// ① 两个源都命中就出两条 —— 界面要说"网易云音乐、QQ音乐 都找到了这首歌",不是只说一个。

@@ -361,8 +361,8 @@ type ProviderDescriptor struct {
 	// ProxyFallback:直连失败后改走代理(lyricSourceUsesProxyFallback)。
 	ProxyFallback bool
 
-	// Assembly:排序时怎么把这个源交的结果装成候选(assembleSourceCandidate)。nil 只给内容在专用子结构里的网易云(ne)、
-	// AMLL(amll):它们的候选由 rankLyricSourceResults 里各自那一段装。
+	// Assembly:排序时怎么把这个源交的结果装成候选(assembleSourceCandidate)。nil 只给内容在专用子结构里的 AMLL(amll):
+	// 它的候选由 rankLyricSourceResults 里它那一段装。
 	Assembly *CandidateAssembly
 	Baked    BakedPolicy
 	// BakedSplit:Baked 为 bakedCustom 时的摘法。

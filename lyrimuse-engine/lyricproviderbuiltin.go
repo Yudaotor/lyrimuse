@@ -17,6 +17,14 @@ func newBuiltinLyricProviderRegistry() *lyricProviderRegistry {
 		// 只认 163.com 的各级子域(music.163.com、interface3.music.163.com …),不认 163.com 自己。
 		Hosts: []HostRule{{"163.com", hostSubdomainsOnly}},
 		Baked: bakedAdopt, ParenBackground: true, InstrumentalRank: 3, PlainText: plainTextLast,
+		// 结果的内容在 ne 上,排序时摊到公共栏(Unpack)。带时间轴的正文和不带时间戳的正文是两栏,前一栏为空才用后一栏。
+		Assembly: &CandidateAssembly{
+			Unpack: unpackNeteaseResult,
+			Reads: fieldWordTiming | fieldRomanization | fieldSourceDuration | fieldAlbum | fieldCover | fieldLocalIdentity |
+				fieldUntimedBody,
+			Translation: translationFixed, TranslationLang: "zh",
+			Instrumental: instrumentalDeclared | instrumentalNoBodyNoVocals,
+		},
 		PeerGroup: peerGroupChinese,
 	}, privLocalClientIdentity|privTrackIDPublish|privPeripheral|privPlayerNoVocals)})
 

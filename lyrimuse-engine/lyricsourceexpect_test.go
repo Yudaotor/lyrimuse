@@ -224,8 +224,9 @@ type lyricSourceCandidateShape struct {
 
 // lyricSourceCandidateShapes:照 43fa2dff7 的 rankLyricSourceResults 里各源那段装配和 switch 里它的 case 整理的
 // (lyricrankreference_test.go 是那份函数体)。lyricrankshape_test.go 拿每一栏都交了的输入喂参照和生产,看到的跟这里
-// 逐项相等。网易云、AMLL 的内容在专用子结构里(ne、amll),不在这张表里。
+// 逐项相等。网易云的内容交上来时在专用子结构 ne 里,这里写的是它摊到公共栏之后的读法;AMLL 的内容在 amll 里,不在这张表里。
 var lyricSourceCandidateShapes = map[string]lyricSourceCandidateShape{
+	lyricSourceNetease:       {reads: "逐字 读音 自报曲长 专辑 封面 本机身份 另一栏纯文本", translation: "zh", baked: "adopt", instrumental: "明说 没正文加无人声"},
 	lyricSourceQQ:            {reads: "逐字 读音 自报曲长 专辑 封面 语种 本机身份 纯文本", translation: "zh", baked: "adopt", instrumental: "明说 署名行加无人声"},
 	lyricSourceKugou:         {reads: "逐字 读音 自报曲长 专辑 封面 语种 本机身份", translation: "zh", baked: "adopt", instrumental: "署名行加无人声"},
 	lyricSourceLRCLIB:        {reads: "逐字 读音 自报曲长 专辑 纯文本", baked: "strip", instrumental: "明说"},
@@ -251,6 +252,9 @@ var lyricSourceCandidateShapes = map[string]lyricSourceCandidateShape{
 // lyricSourceTranslationAccepters:打分那道「译文可用」没过时,另有一条判据把译文写进结果的源和各自的判据
 // (CandidateAssembly.AcceptTranslation)。照 43fa2dff7 的 rankLyricSourceResults 里 switch 的 kuwo 那一支整理。
 var lyricSourceTranslationAccepters = map[string]string{lyricSourceKuwo: "kuwoBakedTranslationCovers"}
+
+// lyricSourceUnpackers:结果的内容在专用子结构里、排序时要摊到公共栏上的源和各自的摊法(CandidateAssembly.Unpack)。
+var lyricSourceUnpackers = map[string]string{lyricSourceNetease: "unpackNeteaseResult"}
 
 // lyricSourceHandTypedTimelines:时间轴是上传者手打的源(ProviderDescriptor.HandTypedTimeline)。43fa2dff7 的
 // applyMegalobizTimelinePenalty 只认 megalobiz 这一个源名。

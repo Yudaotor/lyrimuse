@@ -4369,18 +4369,14 @@ func playerSaysInstrumental(scored []scoredLyricCandidateResult) bool {
 // playerInstrumentalSource:正在放的播放器自己说这一条没有人声、它自己又没给出能用的歌词时,返回它自家的歌词源名,否则空串。
 // 身份必须来自播放器的本地数据(同同源加权的准入,见 lyricCandidate.identityFromLocalClient),搜出来的不算;解析的得是它在放的这首
 // 或它的待播队列(forPlayingTrack,见 playerSignalApplies)。播放器自己有这一条的歌词(有词的伴奏版,只有不带时间戳的也算)时照常用歌词。
-// 见 09 章决策 210。
+// raw 是摊平过的(unpackSourceResults)。见 09 章决策 210。
 func playerInstrumentalSource(raw map[string]lyricSourceResult, results []scoredLyricCandidateResult) string {
 	for _, src := range []string{lyricSourceNetease, lyricSourceQQ, lyricSourceSoda, lyricSourceAppleMusic, spotifyLocalLyricsSource} {
 		r, ok := raw[src]
 		if !ok || !r.forPlayingTrack || !playerOwnsLyricSource(src) {
 			continue
 		}
-		claims, local := r.noVocals || r.instrumental, r.identityFromLocalClient
-		if src == lyricSourceNetease {
-			claims, local = r.ne.PureMusic || r.ne.NoVocals, r.ne.FromLocalClient
-		}
-		if !claims || !local {
+		if !(r.noVocals || r.instrumental) || !r.identityFromLocalClient {
 			continue
 		}
 		for _, c := range results {
@@ -5343,7 +5339,7 @@ func enabledLyricSourceCount() int {
 type lyricSourceResult struct {
 	source                  string
 	ne                      neteaseInfo
-	lyr, yrc, tr, roma      string // roma:源自带罗马音(逐行 LRC),目前只有 qq 走这里(网易云的在 ne.Roma)
+	lyr, yrc, tr, roma      string // roma:源自带罗马音(逐行 LRC)
 	bg                      string // 背景人声轨(YRC 语法,形状见 amllResult.bg)。只有 applemusic 走这里,amll 的在 amll.bg。
 	trLang                  string // tr 的语言,源自己标了才有。只有 applemusic 走这里(applemusicResult.trLang),amll 的在 amll.trLang。
 	matchTitle, matchArtist string
@@ -5363,14 +5359,16 @@ type lyricSourceResult struct {
 	songwriters []string
 	// trackFoundNoLyrics:"这个源的曲库里有这首歌,但平台上没有歌词文本"这个**明确结论**
 	//。目前 netease/qq 两路会给(经各自的 neteaseInfo.TrackFoundNoLyrics /
-	// qqLyricResult.trackFoundNoLyrics,判据和边界见那两处头注)。跟 instrumental 是并列
+	// qqLyricResult.trackFoundNoLyrics,判据和边界见那两处头注;网易云的在排序摊平时抄到这里)。跟 instrumental 是并列
 	// 而非重叠的两个结论,互斥由各源自己的判据保证。
 	trackFoundNoLyrics bool
 	// instrumental:"这首歌是纯音乐"这个**明确结论**。lrclib 的结构化字段、
 	// 网易云的 pureMusic/占位正文、QQ 的占位正文(见 qqLyricResult)会给。
 	instrumental bool
-	// plainOnly:lrclib / deezer / applemusic / migu / qq / lyricfind 会给(网易云的纯文本在 ne.PlainLyrics)——语义见 lrclibResult.plainOnly 头注。
+	// plainOnly:lrclib / deezer / applemusic / migu / qq / lyricfind 会给(网易云的纯文本是另一栏 untimed)——语义见 lrclibResult.plainOnly 头注。
 	plainOnly bool
+	// untimed:不带时间戳的正文,跟 lyr 两栏二选一(CandidateAssembly 的 fieldUntimedBody)。只有网易云有这一栏,排序摊平时填。
+	untimed string
 	// amll:amll-ttml-db 那一档的三件套(见 amllttml.go)。它跟别的源不同,一次就带回
 	// 整行+逐字+译文,所以单独放一个结构而不是复用上面的 lyr/yrc/tr。
 	amll amllResult
@@ -5378,8 +5376,7 @@ type lyricSourceResult struct {
 	// 本地路径会置位(kugou/applemusic 连正文都在本地,qq/netease/soda 只给权威 id);lyricfind 按 Kaset 报的 videoId
 	// 取到时也置位(ytmusicVideoLyric)。
 	// 语义与唯一用途见 lyricCandidate.identityFromLocalClient —— 同源加权的准入条件。
-	// netease 那一路不走这个字段,它的事实在 ne.FromLocalClient 上(neteaseInfo 整个
-	// 结构本来就随 lyricSourceResult.ne 传过来,不必再抄一份)。
+	// netease 那一路交的时候事实在 ne.FromLocalClient 上,排序摊平时抄到这里(unpackNeteaseResult)。
 	identityFromLocalClient bool
 	// noVocals:这个源给的曲目信息说这一条没有人声(QQ 语种「纯音乐」、酷狗语种「纯音乐」、汽水 vocal==2、Apple audioLocale zxx、
 	// Spotify 演唱语言 zxx)。伴奏版也带它,所以本身不等于「没有歌词」;怎么用见 playerInstrumentalSource 与 instrumentalMarker。
@@ -5416,6 +5413,9 @@ func rankLyricSourceResults(artist, title, album string, durationSecs float64, r
 	raw = decodeLyricSourceEntities(raw)
 	raw = splitWordTimedSourceLyrics(raw)
 	raw = dropOtherVersionInstrumentalClaims(title, album, raw)
+	// 内容在专用子结构里的源摊到公共栏上(Assembly.Unpack)。排在上面三步之后:那三步对专用子结构里的正文只做实体还原,
+	// 挪到前面,行内逐字拆分和「匹配到伴奏版时丢占位正文」就会作用到这些源的正文上。
+	raw = unpackSourceResults(raw)
 	ne := raw["netease"].ne
 	qq := raw["qq"]
 	dz := raw["deezer"]
@@ -5427,13 +5427,12 @@ func rankLyricSourceResults(artist, title, album string, durationSecs float64, r
 	// 分辨"这条是哪个版本"的,套上一张别人的图反而像是对上了;所有没带封面的候选还会套成同一张,毫无区分度。
 	// 烘进正文的逐行中文译文(bakedtranslation.go):候选装配**之前**摘出来——共识、行数、
 	// 逐字覆盖率全都读正文,晚了就都是按"一半是中文"的正文算的。各源摘不摘、接不接到译文轨看描述符的 Baked
-	// (assembleSourceCandidate);这里是带专用子结构的两个:网易云接到译文轨,AMLL 只摘不接。
+	// (assembleSourceCandidate);这里是内容还在专用子结构里的 AMLL:只摘不接。
 	foreignSong := !containsHan(artist) && !containsHan(title)
 	bakedLines := map[string]int{}
-	ne.Lyrics, ne.Trans, ne.YRC, bakedLines["netease"] = adoptBakedTranslation(ne.Lyrics, ne.Trans, ne.YRC, foreignSong, true)
 	amll.lrc, _, amll.yrc, bakedLines["amll"] = adoptBakedTranslation(amll.lrc, "", amll.yrc, foreignSong, false)
 	slots := candidateSlots{}
-	// 描述符带 Assembly 的来源按描述符装(assembleSourceCandidate);网易云、AMLL 的内容在专用子结构里,由下面各自那一段装。
+	// 描述符带 Assembly 的来源按描述符装(assembleSourceCandidate);AMLL 的内容在专用子结构里,由下面它那一段装。
 	// 装的先后不影响候选的先后(slots 按决胜序吐)。
 	target := features().LyricsTranslationLanguage
 	assembled := map[string]assembledSource{}
@@ -5447,18 +5446,6 @@ func rankLyricSourceResults(artist, title, album string, durationSecs float64, r
 			slots.put(a.candidate)
 		}
 	}
-	if ne.Lyrics != "" {
-		// 网易云的社区翻译固定中文(见下面附着处的注释),usable 判定按目标语言过闸;
-		// 这两个标志必须在**打分前**算好挂到候选上(v3 的增值内容决胜分要读它),
-		// 不能等选完冠军再附着。
-		neTr, neRoma := usableValueAdd(ne.Lyrics, ne.Trans, "zh", ne.Roma, features().LyricsTranslationLanguage)
-		slots.put(lyricCandidate{source: "netease", lyrics: ne.Lyrics, wordTimingYRC: usableYRC(ne.Lyrics, ne.YRC), hasWordTiming: usableWordTiming(ne.Lyrics, ne.YRC), hasUsableTranslation: neTr, hasUsableRomanization: neRoma, sourceReportedDurationSecs: ne.DurationSecs, title: ne.Title, artist: ne.Artist, album: ne.Album, cover: ne.Cover, identityFromLocalClient: ne.FromLocalClient})
-	} else if ne.PlainLyrics != "" {
-		// 只有不带时间戳的歌词:交成 plainOnly,直通打分层那道恒 -1 的闸,口径同 deezer / lrclib 的纯文本回退。
-		slots.put(lyricCandidate{source: "netease", lyrics: ne.PlainLyrics, sourceReportedDurationSecs: ne.DurationSecs, title: ne.Title, artist: ne.Artist, album: ne.Album, cover: ne.Cover, identityFromLocalClient: ne.FromLocalClient, plainTextOnly: true})
-	}
-	// 网易云凭什么搭纯音乐标记:没交正文,歌词接口说是纯音乐(pureMusic)或曲库说这一条没有人声。
-	assembled[lyricSourceNetease] = assembledSource{instrumental: ne.Lyrics == "" && (ne.PureMusic || ne.NoVocals)}
 	if !amll.empty() {
 		// 按 ID 取回的那份身份是确定的 —— 这份 TTML 是按曲目 ID 直接取回来的,不是搜出来的,
 		// 所以 title/artist/album 直接沿用本地曲目信息,不会在标题/歌手/专辑那几项上
@@ -5501,7 +5488,7 @@ func rankLyricSourceResults(artist, title, album string, durationSecs float64, r
 	consensusPeers, familyPeers := contentConsensusPeers(artist, title, candidates, durationSecs)
 	inheritIdentityTerms(title, album, candidates, familyPeers)
 	applyLineScoreReference(candidates)
-	// 有源说这首是纯音乐时(各源凭什么说见描述符的 Assembly.Instrumental,网易云的见它那一段),搭车塞一条 Score:-1 的
+	// 有源说这首是纯音乐时(各源凭什么说见描述符的 Assembly.Instrumental),搭车塞一条 Score:-1 的
 	// 标记进 results——见 Instrumental 字段定义处的注释,不参与打分/排序,不会被 pickLyricCandidate 选中,只是把这个
 	// 信号原样带出这个函数。几个源都这么说时记在 InstrumentalRank 最靠前的那个头上。
 	var instrumentalMarker *scoredLyricCandidateResult
@@ -5540,24 +5527,11 @@ func rankLyricSourceResults(artist, title, album string, durationSecs float64, r
 		// 正文时间轴被重挂过的话,附属歌词也得搬 —— 它们的时间戳是照原文 LRC 抄的
 		// (translate.go 的 assembleTranslationLRC)。
 		// 下面 switch 里各源赋完 r.LyricsTr/r.LyricsRoma 之后统一搬,见循环末尾。
+		//
+		// 译文过了 c.hasUsableTranslation 这道闸才抄进结果(罗马音走更宽的 usableRomaForResult):不可用的抄进去,分数赢了就带着
+		// 一份没有意义的「译文」进缓存(繁体原文配一份只是转成简体的「译文」)。译文固定是某种语言的源(国内平台是中文)要把语言
+		// 记下来:目标语言不是它时这份译文用不上,得让机翻接手(needsTranslationBackfill)。
 		switch c.source {
-		case "netease":
-			// 翻译/罗马音网易云固定给中文。"固定中文"这件事必须记下来:目标语言不是中文时,这份译文
-			// 用不上,得让机翻接手(见 needsTranslationBackfill)。
-			//
-			// 译文赋值前必须过 c.hasUsableTranslation 这道闸(罗马音走更宽的 usableRomaForResult,
-			// 见那边注释)。"能不能用"的判定(usableValueAdd,已经算过"原文本来就是目标语言,同语言
-			// 不同文字不算翻译"这类情况)如果只用来加 +50 的打分、不管赋值,candidates 里那份不可用的翻译内容
-			// 就会原样抄进 r.LyricsTr,分数赢了就带着这份没有意义的"翻译"一起进缓存(繁体原文配
-			// 一份只是转成简体的"翻译"就是这么来的)。判定为不可用时干脆不赋值,行为跟"这个源
-			// 没有可用译文"一致。
-			if c.hasUsableTranslation {
-				r.LyricsTr = ne.Trans
-				r.LyricsTrLang = "zh"
-			}
-			if usableRomaForResult(c.lyrics, ne.Roma) {
-				r.LyricsRoma = ne.Roma
-			}
 		case "amll":
 			// amll 这条 case 不能漏。amll.tr 早就在 candidates 构造那一步被读出来过(见上面
 			// usableValueAdd 调用,+50 分的打分信号靠它),但只要这个 switch 没有 amll 分支,分数
@@ -5648,7 +5622,7 @@ const (
 //   - 跟纯音乐互斥:某个源既被判纯音乐又说没词是自相矛盾,以纯音乐为准(各源自己的判据已经保证互斥,这里再挡一道,
 //     免得日后哪个源的判据松了就冒出两条打架的结论)。
 //
-// 源序按联网源名单固定,跟别处一样确定且可复现,不跟到达顺序走。
+// 源序按联网源名单固定,跟别处一样确定且可复现,不跟到达顺序走。raw 是摊平过的(unpackSourceResults)。
 func noLyricsMarkers(raw map[string]lyricSourceResult, instrumental *scoredLyricCandidateResult) []scoredLyricCandidateResult {
 	var out []scoredLyricCandidateResult
 	for _, source := range networkLyricSourceNames() {
@@ -5656,15 +5630,7 @@ func noLyricsMarkers(raw map[string]lyricSourceResult, instrumental *scoredLyric
 		if !ok {
 			continue
 		}
-		// 网易云这一路的结论挂在 ne 上(它整条信息走 neteaseInfo,不走 lyr 那几个字段),
-		// 其余源统一走 lyricSourceResult.trackFoundNoLyrics。
-		found := r.trackFoundNoLyrics
-		title, artist, album, dur := r.matchTitle, r.matchArtist, r.matchAlbum, r.srcDur
-		if source == "netease" {
-			found = r.ne.TrackFoundNoLyrics
-			title, artist, album, dur = r.ne.Title, r.ne.Artist, r.ne.Album, r.ne.DurationSecs
-		}
-		if !found {
+		if !r.trackFoundNoLyrics {
 			continue
 		}
 		if instrumental != nil && instrumental.Source == source {
@@ -5674,10 +5640,10 @@ func noLyricsMarkers(raw map[string]lyricSourceResult, instrumental *scoredLyric
 			Source:                     source,
 			Score:                      -1,
 			TrackFoundNoLyrics:         true,
-			Title:                      title,
-			Artist:                     artist,
-			Album:                      album,
-			SourceReportedDurationSecs: dur,
+			Title:                      r.matchTitle,
+			Artist:                     r.matchArtist,
+			Album:                      r.matchAlbum,
+			SourceReportedDurationSecs: r.srcDur,
 		})
 	}
 	return out

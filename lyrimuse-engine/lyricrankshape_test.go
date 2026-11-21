@@ -9,16 +9,18 @@ import (
 
 // 每个来源一组「每一栏都交了」的输入,看排序读了它的哪几栏、译文怎么标、烘入译文摘不摘、括号背景人声拆不拆、凭什么搭
 // 纯音乐标记;参照(handwrittenRankLyricSourceResults)和生产(rankLyricSourceResults)看到的都要等于期望表
-// lyricSourceCandidateShapes 与 parenBGSources。
+// lyricSourceCandidateShapes 与 parenBGSources。输入按公共栏写,内容在专用子结构里的源换成它实际交的摆法(rankShapeInput)。
 
 type rankFunc func(artist, title, album string, durationSecs float64, raw map[string]lyricSourceResult) []scoredLyricCandidateResult
 
 // rankShapeFields:lyricSourceCandidateShape.reads 里的栏名,按这个先后列。
-var rankShapeFields = []string{"逐字", "读音", "自报曲长", "专辑", "封面", "语种", "本机身份", "纯文本", "ISRC", "来源链接", "背景人声轨", "作者"}
+// 另一栏纯文本 = 带时间轴的正文为空时,拿另一栏不带时间戳的正文出纯文本候选。
+var rankShapeFields = []string{"逐字", "读音", "自报曲长", "专辑", "封面", "语种", "本机身份", "纯文本", "ISRC", "来源链接", "背景人声轨", "作者", "另一栏纯文本"}
 
 // rankShapeInstrumentalSignals:lyricSourceCandidateShape.instrumental 里的名字。明说 = 没交正文、源说是纯音乐;
-// 署名行加无人声 = 正文只有署名行、曲目信息说没有人声;占位句 = 正文是纯音乐占位句。
-var rankShapeInstrumentalSignals = []string{"明说", "署名行加无人声", "占位句"}
+// 署名行加无人声 = 正文只有署名行(没交正文也算)、曲目信息说没有人声;占位句 = 正文是纯音乐占位句;
+// 没正文加无人声 = 没交正文、曲目信息说没有人声,正文只有署名行的不算。
+var rankShapeInstrumentalSignals = []string{"明说", "署名行加无人声", "占位句", "没正文加无人声"}
 
 const (
 	rankShapeArtist, rankShapeTitle, rankShapeAlbum = "Shape Artist", "Shape Title", "Shape Album"
@@ -37,8 +39,25 @@ func rankShapeResult(source string, lines []string) lyricSourceResult {
 	}
 }
 
+// rankShapeInput:r 是按公共栏写的一份结果,换成这个源实际交上来的摆法:网易云的内容在 ne 上,公共栏上那几样是空的。
+func rankShapeInput(r lyricSourceResult) lyricSourceResult {
+	if r.source != lyricSourceNetease {
+		return r
+	}
+	r.ne = neteaseInfo{
+		Lyrics: r.lyr, YRC: r.yrc, Trans: r.tr, Roma: r.roma, PlainLyrics: r.untimed,
+		Title: r.matchTitle, Artist: r.matchArtist, Album: r.matchAlbum, Cover: r.matchCover, DurationSecs: r.srcDur,
+		FromLocalClient: r.identityFromLocalClient, PureMusic: r.instrumental, NoVocals: r.noVocals,
+	}
+	r.lyr, r.yrc, r.tr, r.roma, r.untimed = "", "", "", "", ""
+	r.matchTitle, r.matchArtist, r.matchAlbum, r.matchCover, r.srcDur = "", "", "", "", 0
+	r.identityFromLocalClient, r.instrumental, r.noVocals = false, false, false
+	return r
+}
+
 func rankShapeRun(rank rankFunc, lang string, r lyricSourceResult) (cand *scoredLyricCandidateResult, instrumental bool) {
 	featuresRef().LyricsTranslationLanguage = lang
+	r = rankShapeInput(r)
 	out := rank(rankShapeArtist, rankShapeTitle, rankShapeAlbum, rankShapeDuration, map[string]lyricSourceResult{r.source: r})
 	for i := range out {
 		switch {
@@ -78,10 +97,18 @@ func rankShapeObserved(t *testing.T, rank rankFunc, source string) (shape lyricS
 	if p == nil {
 		t.Fatalf("%s:带纯文本标记的那份没有候选", source)
 	}
+	// 另一栏纯文本:带时间轴的正文不交,只交不带时间戳的那一栏,逐字、译文照交。出来的得是纯文本候选,逐字、译文都不带。
+	second := full
+	second.lyr, second.untimed = "", rankParityPlain(full.lyr)
+	u, _ := rankShapeRun(rank, "zh", second)
+	if u != nil && (!u.PlainTextOnly || u.HasWordTiming || u.LyricsYRC != "" || u.LyricsTr != "" || u.Lyrics != second.untimed) {
+		t.Fatalf("%s:另一栏纯文本出来的候选不对:%+v", source, *u)
+	}
 	seen := map[string]bool{
 		"逐字": c.HasWordTiming, "读音": c.LyricsRoma != "", "自报曲长": c.SourceReportedDurationSecs != 0, "专辑": c.Album != "",
 		"封面": c.CoverURL != "", "语种": c.Language != "", "本机身份": c.IdentityFromLocalClient, "纯文本": p.PlainTextOnly,
 		"ISRC": c.ISRC != "", "来源链接": c.SourceURL != "", "背景人声轨": c.LyricsBG == rankParityBG, "作者": len(c.Songwriters) > 0,
+		"另一栏纯文本": u != nil,
 	}
 	var reads []string
 	for _, f := range rankShapeFields {
@@ -135,15 +162,25 @@ func rankShapeObserved(t *testing.T, rank rankFunc, source string) (shape lyricS
 	pc, _ := rankShapeRun(rank, "zh", lyricSourceResult{source: source, lyr: parenLRC, yrc: parenYRC, matchTitle: rankShapeTitle, matchArtist: rankShapeArtist, srcDur: rankShapeDuration})
 	paren = pc != nil && pc.LyricsBG != ""
 
-	// 纯音乐标记:三种说法各单独喂一次。
+	// 纯音乐标记:四种说法各单独喂一次。没交正文加无人声那一种,认「署名行加无人声」的源也会搭(空正文算只有署名行),
+	// 所以只在署名行那一种不搭时才记成「没正文加无人声」。
 	meta := lyricSourceResult{source: source, matchTitle: rankShapeTitle, matchArtist: rankShapeArtist, matchAlbum: rankShapeAlbum, srcDur: rankShapeDuration}
-	said, credit, placeholder := meta, meta, meta
+	said, credit, placeholder, bare := meta, meta, meta, meta
 	said.instrumental = true
 	credit.lyr, credit.noVocals = rankParityCredit, true
 	placeholder.lyr = rankParityNoLyrics
+	bare.noVocals = true
 	var signals []string
-	for i, r := range []lyricSourceResult{said, credit, placeholder} {
-		if _, marked := rankShapeRun(rank, "zh", r); marked {
+	marks := make([]bool, 4)
+	for i, r := range []lyricSourceResult{said, credit, placeholder, bare} {
+		_, marks[i] = rankShapeRun(rank, "zh", r)
+	}
+	if marks[1] && !marks[3] {
+		t.Fatalf("%s:认署名行加无人声,没交正文加无人声时却不搭标记", source)
+	}
+	marks[3] = marks[3] && !marks[1]
+	for i, marked := range marks {
+		if marked {
 			signals = append(signals, rankShapeInstrumentalSignals[i])
 		}
 	}
@@ -173,13 +210,62 @@ func TestRankShapesMatchExpected(t *testing.T) {
 			}
 		}
 	}
-	if want := []string{lyricSourceNetease, lyricSourceAMLL}; !slices.Equal(special, want) {
-		t.Errorf("不在 lyricSourceCandidateShapes 里的来源 %v,该只有带专用子结构的 %v", special, want)
+	if want := []string{lyricSourceAMLL}; !slices.Equal(special, want) {
+		t.Errorf("不在 lyricSourceCandidateShapes 里的来源 %v,该只有候选还由专门那一段装的 %v", special, want)
 	}
 	for source := range lyricSourceCandidateShapes {
 		if !slices.Contains(lyricCandidateTieOrder, source) {
 			t.Errorf("lyricSourceCandidateShapes 里有没登记的来源 %s", source)
 		}
+	}
+}
+
+// 结果的内容在专用子结构里的源,正文不过排序开头那两步对公共栏正文的清理:行内逐字写法不拆,匹配到伴奏版时占位正文不丢。
+// 同样的内容放在公共栏上的源两样都做。摊平(unpackSourceResults)因此排在那两步之后;参照和生产都这样。
+func TestUnpackedLyricsSkipBodyCleanup(t *testing.T) {
+	saveRankParityState(t)
+	setNativeLyricSourcesForPlayer("")
+	featuresRef().LyricsSources = nil
+	var lines []string
+	for i, text := range rankShapePlainLines() {
+		ms := 2000 + 4000*i
+		line := lrcTimestamp(ms)
+		for k, w := range strings.Fields(text) {
+			line += "<" + strings.Trim(lrcTimestamp(ms+300*k), "[]") + ">" + w + " "
+		}
+		lines = append(lines, strings.TrimSpace(line))
+	}
+	inline := strings.Join(lines, "\n")
+	unpacked := 0
+	for _, source := range lyricCandidateTieOrder {
+		if _, ok := lyricSourceCandidateShapes[source]; !ok {
+			continue
+		}
+		inPayload := lyricSourceUnpackers[source] != ""
+		if inPayload {
+			unpacked++
+		}
+		for name, rank := range map[string]rankFunc{"参照": handwrittenRankLyricSourceResults, "生产": rankLyricSourceResults} {
+			meta := lyricSourceResult{source: source, matchTitle: rankShapeTitle, matchArtist: rankShapeArtist, srcDur: rankShapeDuration}
+			word := meta
+			word.lyr = inline
+			c, _ := rankShapeRun(rank, "zh", word)
+			if c == nil {
+				t.Fatalf("%s(%s):行内逐字写法的正文没有候选", source, name)
+			}
+			if kept := strings.Contains(c.Lyrics, "<00:"); kept != inPayload {
+				t.Errorf("%s(%s):行内逐字写法留在正文里=%v,该是 %v", source, name, kept, inPayload)
+			}
+			inst := meta
+			inst.lyr, inst.matchTitle = rankParityNoLyrics, rankShapeTitle+" (Instrumental)"
+			p, _ := rankShapeRun(rank, "zh", inst)
+			if kept := p != nil; kept != inPayload {
+				t.Errorf("%s(%s):匹配到伴奏版时占位正文还在=%v,该是 %v", source, name, kept, inPayload)
+			}
+		}
+	}
+	if unpacked == 0 {
+		t.Error("没有一个内容在专用子结构里的源,这条什么都没比")
 	}
 }
 
@@ -212,6 +298,10 @@ func rankParityCoverageGaps(ta *rankParityTally) []string {
 		reads := strings.Fields(shape.reads)
 		for _, f := range rankShapeFields {
 			switch {
+			case f == "另一栏纯文本":
+				if slices.Contains(reads, f) {
+					need(source, "纯文本")
+				}
 			case !slices.Contains(reads, f):
 				need(source, unread[f])
 			case read[f] != "":
