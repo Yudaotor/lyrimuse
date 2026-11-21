@@ -1000,35 +1000,113 @@ func rankParityCorpus(t *testing.T, perFixture int) []rankParityCase {
 	return append(cases, rankParityFullFieldCases(t)...)
 }
 
-// rankParityFullFieldCases:每个来源四组「每一栏都交了」的输入,垫在金标样本那一轮别的源旁边:日文歌带齐各栏、同一份带纯文本
-// 标记、带括号背景人声的英文歌、烘了中文译文的英文歌。随机扰动凑不凑得出这些组合不看运气。
+// rankParityBakedSong:英文歌每句后面烘一行晚 1.5 秒的中文译文,整行和逐字轨里都有。
+func rankParityBakedSong(lines []string) (lrc, yrc string) {
+	var l, y []string
+	for i, text := range lines {
+		ms := 2000 + 4000*i
+		l = append(l, lrcTimestamp(ms)+text, lrcTimestamp(ms+1500)+rankParityHanLine(i))
+		y = append(y, yrcLine(ms, text), yrcLine(ms+1500, rankParityHanLine(i)))
+	}
+	return strings.Join(l, "\n"), strings.Join(y, "\n")
+}
+
+// rankParityFullFieldVariants:每个来源各来一组的整形输入。build 给出这个来源交的正文那一组,可以顺手改查询。
+var rankParityFullFieldVariants = []struct {
+	name      string
+	plainOnly bool
+	build     func(c *rankParityCase) rankParityContent
+}{
+	{"各栏都交", false, func(c *rankParityCase) rankParityContent {
+		lrc, yrc := rankParitySong(rankParityJapanese)
+		return rankParityContent{lyr: lrc, yrc: yrc, tr: rankParityAux(lrc, "zh", 1), roma: rankParityAux(lrc, "latin", 1)}
+	}},
+	{"各栏都交加纯文本标记", true, func(c *rankParityCase) rankParityContent {
+		lrc, yrc := rankParitySong(rankParityJapanese)
+		return rankParityContent{lyr: lrc, yrc: yrc, tr: rankParityAux(lrc, "zh", 1), roma: rankParityAux(lrc, "latin", 1)}
+	}},
+	// 英文歌不配读音:交了读音也不该进结果。
+	{"括号背景人声", false, func(c *rankParityCase) rankParityContent {
+		lrc, yrc := rankParitySong(rankParityEnglish)
+		return rankParityContent{lyr: lrc, yrc: yrc, roma: rankParityAux(lrc, "latin", 1)}
+	}},
+	{"烘入译文", false, func(c *rankParityCase) rankParityContent {
+		c.artist, c.title = "Some Artist", "Some Title"
+		lrc, _ := rankParitySong(rankParityEnglish)
+		return rankParityContent{lyr: rankParityBake(lrc, "later")}
+	}},
+	{"烘入译文连逐字轨", false, func(c *rankParityCase) rankParityContent {
+		c.artist, c.title = "Some Artist", "Some Title"
+		lrc, yrc := rankParityBakedSong(rankParityEnglish)
+		return rankParityContent{lyr: lrc, yrc: yrc}
+	}},
+	// 标签带汉字的歌不算外文歌:同一份烘了译文的英文正文不摘。
+	{"中文标签下的烘入译文", false, func(c *rankParityCase) rankParityContent {
+		c.artist, c.title = "某位歌手", "某首歌名"
+		lrc, yrc := rankParityBakedSong(rankParityEnglish)
+		return rankParityContent{lyr: lrc, yrc: yrc}
+	}},
+	{"逐字残缺", false, func(c *rankParityCase) rankParityContent {
+		lrc, yrc := rankParitySong(rankParityJapanese)
+		rows := strings.Split(yrc, "\n")
+		return rankParityContent{lyr: lrc, yrc: strings.Join(rows[:len(rows)/4], "\n")}
+	}},
+	// 拿汉字当读音的轨不进结果。
+	{"读音是汉字", false, func(c *rankParityCase) rankParityContent {
+		lrc, yrc := rankParitySong(rankParityJapanese)
+		return rankParityContent{lyr: lrc, yrc: yrc, roma: rankParityAux(lrc, "zh", 1)}
+	}},
+	// 只有逐字、没有整行:公共字段的源不出候选。
+	{"只有逐字没有整行", false, func(c *rankParityCase) rankParityContent {
+		_, yrc := rankParitySong(rankParityJapanese)
+		return rankParityContent{yrc: yrc, tr: "[00:02.00]只有译文", roma: "[00:02.00]tada yomi"}
+	}},
+	// 中文歌第一行是「歌名 - 歌手」的抬头,歌手那一段是缩写、只有歌名对得上;中间五句外文各带一行挂在下一句时间戳上的
+	// 中文译文(酷我的烘法),另有一句外文没带译文。抬头认出来就不算进要翻的行,六句译了五句,过「译全了」那条判据;
+	// 把歌手和歌名对调着认,抬头算成又一句没译的,七句译了五句,不过。
+	{"抬头行只有歌名对得上", false, func(c *rankParityCase) rankParityContent {
+		c.artist, c.title, c.lang = "Khalil Fong", "Throw It Off", "zh"
+		var lines []string
+		ms := 500
+		add := func(text string, step int) {
+			lines = append(lines, lrcTimestamp(ms)+text)
+			ms += step
+		}
+		add("Throw It Off - K. Fong", 3500)
+		for i := 0; i < 3; i++ {
+			add(rankParityHanLine(i), 4000)
+		}
+		for i := 0; i < 5; i++ {
+			add("placeholder foreign line number "+strconv.Itoa(i), 4000)
+			add(rankParityHanLine(10+i), 0)
+		}
+		add(rankParityHanLine(3), 4000)
+		add("one more foreign line left without a pair", 4000)
+		for i := 4; i < 7; i++ {
+			add(rankParityHanLine(i), 4000)
+		}
+		return rankParityContent{lyr: strings.Join(lines, "\n")}
+	}},
+}
+
+// rankParityFullFieldCases:每个来源按 rankParityFullFieldVariants 各来一组,垫在金标样本那一轮别的源旁边;除正文那一组外
+// 别的栏(背景人声轨、作者、ISRC、链接、语种、曲目编号、本机身份)都交。随机扰动凑不凑得出这些组合不看运气。
 func rankParityFullFieldCases(t *testing.T) []rankParityCase {
 	t.Helper()
 	fixtures := loadGoldenFixtures(t)
 	var cases []rankParityCase
 	for i, source := range lyricCandidateTieOrder {
 		base := rankParityCaseFromFixture(fixtures[i%len(fixtures)])
-		for v, variant := range []string{"各栏都交", "各栏都交加纯文本标记", "括号背景人声", "烘入译文"} {
+		for _, variant := range rankParityFullFieldVariants {
 			c := base
 			c.raw = cloneRankParityRaw(base.raw)
-			c.name = fmt.Sprintf("%s+%s:%s", base.name, source, variant)
-			lines := rankParityJapanese
-			if v >= 2 {
-				lines = rankParityEnglish
-			}
-			lrc, yrc := rankParitySong(lines)
-			ct := rankParityContent{lyr: lrc, yrc: yrc, title: c.title, artist: c.artist, album: c.album, cover: "https://example.com/full.jpg", dur: c.dur}
-			if v < 2 {
-				ct.tr, ct.roma = rankParityAux(lrc, "zh", 1), rankParityAux(lrc, "latin", 1)
-			}
-			if v == 3 {
-				c.artist, c.title = "Some Artist", "Some Title"
-				ct.title, ct.artist, ct.lyr, ct.yrc = c.title, c.artist, rankParityBake(lrc, "later"), ""
-			}
+			c.name = fmt.Sprintf("%s+%s:%s", base.name, source, variant.name)
+			ct := variant.build(&c)
+			ct.title, ct.artist, ct.album, ct.cover, ct.dur = c.title, c.artist, c.album, "https://example.com/full.jpg", c.dur
 			rankParityEdit(&c, source, func(r *lyricSourceResult) {
 				setRankParityContent(source, r, ct)
 				r.bg, r.songwriters, r.isrc, r.sourceURL = rankParityBG, []string{"Writer A"}, "USUM71703861", "https://www.megalobiz.com/lrc/maker/x.1"
-				r.language, r.trackIDs, r.plainOnly = songLanguageMandarin, []string{"97773"}, v == 1
+				r.language, r.trackIDs, r.plainOnly = songLanguageMandarin, []string{"97773"}, variant.plainOnly
 				r.amll.bg, r.amll.songwriters, r.amll.pageURL = rankParityBG, []string{"Writer A"}, "https://github.com/amll-dev/amll-ttml-db/blob/main/raw-lyrics/1.ttml"
 				rankParitySetLocal(r, source)
 			})
