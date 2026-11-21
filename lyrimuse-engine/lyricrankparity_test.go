@@ -84,6 +84,18 @@ func cloneRankParityRaw(raw map[string]lyricSourceResult) map[string]lyricSource
 	return out
 }
 
+// rankParityReachableAMLL:把语料里扰动出来、AMLL 实际交不出的两种摆法换掉,这两种输入新旧排序不同
+// (TestAMLLUnreachableInputsDiverge 钉着),不拿来对拍。
+//   - 整行为空、逐字非空:TTML 解析出一行就同时有整行(parseTTMLLyrics)。换成逐字也没交。
+//   - 「曲库里有这首歌、没有歌词文本」:AMLL 的结果整份在 amll 里,公共栏上这一位它从来不填。清掉。
+func rankParityReachableAMLL(r lyricSourceResult) lyricSourceResult {
+	if r.amll.lrc == "" {
+		r.amll.yrc = ""
+	}
+	r.trackFoundNoLyrics = false
+	return r
+}
+
 // rankParityDiff:两份排序结果第一处不同在哪,相同返回空串。
 func rankParityDiff(want, got []scoredLyricCandidateResult) string {
 	if reflect.DeepEqual(want, got) {
@@ -247,6 +259,9 @@ func runRankParity(t *testing.T, cases []rankParityCase, twice bool) *rankParity
 			go func() {
 				defer wg.Done()
 				for c := range work {
+					if r, ok := c.raw[lyricSourceAMLL]; ok {
+						c.raw[lyricSourceAMLL] = rankParityReachableAMLL(r)
+					}
 					input := cloneRankParityRaw(c.raw)
 					want := handwrittenRankLyricSourceResults(c.artist, c.title, c.album, c.dur, cloneRankParityRaw(c.raw))
 					if twice {

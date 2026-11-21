@@ -103,6 +103,26 @@ func (r amllResult) translationLang(target string) string {
 	return target
 }
 
+// unpackAMLLResult 是 AMLL 的 CandidateAssembly.Unpack:把 amll 上排序要读的内容摊到公共栏上。歌名、歌手、专辑只有按
+// ISRC / 歌名在索引里找到的才有,按曲目编号直取的为空(候选沿用查询的那一组,UnnamedIsQueryTrack)。
+func unpackAMLLResult(r lyricSourceResult) lyricSourceResult {
+	a := r.amll
+	r.lyr, r.yrc, r.tr, r.trLang, r.roma, r.bg = a.lrc, a.yrc, a.tr, a.trLang, a.roma, a.bg
+	r.matchTitle, r.matchArtist, r.matchAlbum = a.matchTitle, a.matchArtist, a.matchAlbum
+	r.songwriters, r.sourceURL = a.songwriters, a.pageURL
+	return r
+}
+
+// amllBorrowFromPeers 是 AMLL 的 CandidateAssembly.BorrowFromPeers:TTML 里没有封面和曲长,借同一条录音的那一家的
+// (amllCandidateCover / amllCandidateDuration)。认的是 TTML 登记过编号的四家:网易云、QQ 按曲目编号,Apple Music、
+// Deezer 按 ISRC。
+func amllBorrowFromPeers(r lyricSourceResult, peers map[string]lyricSourceResult) peerBorrow {
+	ne, qq, am, dz := peers[lyricSourceNetease].ne, peers[lyricSourceQQ], peers[lyricSourceAppleMusic], peers[lyricSourceDeezer]
+	b := peerBorrow{cover: amllCandidateCover(r.amll, ne, qq, am, dz)}
+	b.durationSecs, b.durationFrom = amllCandidateDuration(r.amll, ne, qq, am, dz)
+	return b
+}
+
 // amllCandidateCover:amll 候选的封面。TTML 里没有图,借同一条录音的候选的,取下面第一张有的:
 //   - 取回这份 TTML 的 ID 是网易云 / QQ 那一路递过来的(platform 为 ncm-lyrics / qq-lyrics),借那一家;
 //   - head 登记的网易云 / QQ ID 里有那一路匹配到的曲目(QQ 的 songmid、数字 ID 两种写法都认),借那一家;

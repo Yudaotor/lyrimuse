@@ -315,7 +315,7 @@ const (
 	privPeripheral
 	// privPlayerNoVocals:交「播放器自己说这一条没有人声」的信号(playerInstrumentalSource)。
 	privPlayerNoVocals
-	// privBorrowFromPeers:排序时借同一条录音别家的封面、时长。
+	// privBorrowFromPeers:排序时借同一条录音别家的封面、时长(CandidateAssembly.BorrowFromPeers)。
 	privBorrowFromPeers
 	// privRefetchByID:存量回填时按条目上记的编号重取(bgbackfill.go)。
 	privRefetchByID
@@ -361,8 +361,7 @@ type ProviderDescriptor struct {
 	// ProxyFallback:直连失败后改走代理(lyricSourceUsesProxyFallback)。
 	ProxyFallback bool
 
-	// Assembly:排序时怎么把这个源交的结果装成候选(assembleSourceCandidate)。nil 只给内容在专用子结构里的 AMLL(amll):
-	// 它的候选由 rankLyricSourceResults 里它那一段装。
+	// Assembly:排序时怎么把这个源交的结果装成候选(assembleSourceCandidate),每个来源都有。
 	Assembly *CandidateAssembly
 	Baked    BakedPolicy
 	// BakedSplit:Baked 为 bakedCustom 时的摘法。

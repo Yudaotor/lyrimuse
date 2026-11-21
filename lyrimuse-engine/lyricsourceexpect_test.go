@@ -220,12 +220,17 @@ type lyricSourceCandidateShape struct {
 	baked string
 	// instrumental:凭什么搭纯音乐标记,空格隔开,名字同 rankShapeInstrumentalSignals。
 	instrumental string
+	// unnamed:结果没带歌名时候选的歌名、歌手、专辑。空 = 就空着;"query" = 用查询的那一组。
+	unnamed string
+	// borrows:自己没有封面、曲长,借同一条录音别家的(借的认法是这个源自己的,amllcover_test.go 守)。
+	borrows bool
 }
 
 // lyricSourceCandidateShapes:照 43fa2dff7 的 rankLyricSourceResults 里各源那段装配和 switch 里它的 case 整理的
 // (lyricrankreference_test.go 是那份函数体)。lyricrankshape_test.go 拿每一栏都交了的输入喂参照和生产,看到的跟这里
-// 逐项相等。网易云的内容交上来时在专用子结构 ne 里,这里写的是它摊到公共栏之后的读法;AMLL 的内容在 amll 里,不在这张表里。
+// 逐项相等。网易云、AMLL 的内容交上来时在专用子结构里(ne、amll),这里写的是摊到公共栏之后的读法。
 var lyricSourceCandidateShapes = map[string]lyricSourceCandidateShape{
+	lyricSourceAMLL:          {reads: "逐字 读音 专辑 来源链接 背景人声轨 作者", translation: "declared", baked: "strip", unnamed: "query", borrows: true},
 	lyricSourceNetease:       {reads: "逐字 读音 自报曲长 专辑 封面 本机身份 另一栏纯文本", translation: "zh", baked: "adopt", instrumental: "明说 没正文加无人声"},
 	lyricSourceQQ:            {reads: "逐字 读音 自报曲长 专辑 封面 语种 本机身份 纯文本", translation: "zh", baked: "adopt", instrumental: "明说 署名行加无人声"},
 	lyricSourceKugou:         {reads: "逐字 读音 自报曲长 专辑 封面 语种 本机身份", translation: "zh", baked: "adopt", instrumental: "署名行加无人声"},
@@ -254,7 +259,10 @@ var lyricSourceCandidateShapes = map[string]lyricSourceCandidateShape{
 var lyricSourceTranslationAccepters = map[string]string{lyricSourceKuwo: "kuwoBakedTranslationCovers"}
 
 // lyricSourceUnpackers:结果的内容在专用子结构里、排序时要摊到公共栏上的源和各自的摊法(CandidateAssembly.Unpack)。
-var lyricSourceUnpackers = map[string]string{lyricSourceNetease: "unpackNeteaseResult"}
+var lyricSourceUnpackers = map[string]string{lyricSourceNetease: "unpackNeteaseResult", lyricSourceAMLL: "unpackAMLLResult"}
+
+// lyricSourcePeerBorrowers:借同一条录音别家的封面、曲长的源和各自的借法(CandidateAssembly.BorrowFromPeers)。
+var lyricSourcePeerBorrowers = map[string]string{lyricSourceAMLL: "amllBorrowFromPeers"}
 
 // lyricSourceHandTypedTimelines:时间轴是上传者手打的源(ProviderDescriptor.HandTypedTimeline)。43fa2dff7 的
 // applyMegalobizTimelinePenalty 只认 megalobiz 这一个源名。

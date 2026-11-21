@@ -95,6 +95,32 @@ type CandidateAssembly struct {
 	AcceptTranslation func(lyrics, tr, target, artist, title string) bool
 	// Instrumental:凭什么搭纯音乐标记;搭车的先后看 ProviderDescriptor.InstrumentalRank。
 	Instrumental instrumentalSignals
+	// UnnamedIsQueryTrack:结果没带歌名(按曲目编号直取的,身份是确定的)时,候选的歌名、歌手、专辑用查询的那一组。
+	UnnamedIsQueryTrack bool
+	// BorrowFromPeers:自己没有封面、曲长的源借同一条录音别家的,要 privBorrowFromPeers;nil = 不借。peers 是这一轮全部来源
+	// 摊平过的结果。认哪几家、凭什么认是同一条录音由这个源自己定。
+	BorrowFromPeers func(r lyricSourceResult, peers map[string]lyricSourceResult) peerBorrow
+}
+
+// peerBorrow:借来的东西(CandidateAssembly.BorrowFromPeers)。
+type peerBorrow struct {
+	// cover:候选的封面。
+	cover string
+	// durationSecs / durationFrom:只给显示的曲长和它的出处(源名),不进候选、不参与打分。
+	durationSecs float64
+	durationFrom string
+}
+
+// assemblyRound:一次排序里各源装候选共用的输入。
+type assemblyRound struct {
+	// artist / title / album:这一轮查询的那一组。
+	artist, title, album string
+	// foreignSong:本地标签不含汉字(烘入译文的前提)。
+	foreignSong bool
+	// target:设置里的译文语言。
+	target string
+	// peers:这一轮全部来源摊平过的结果,按源名。
+	peers map[string]lyricSourceResult
 }
 
 // translationLang:译文轨的语言。declared 是源在结果里标的,target 是设置里的译文语言。
@@ -123,6 +149,9 @@ type assembledSource struct {
 	// bg / songwriters:自带的背景人声轨、词曲作者名单,原样抄进结果。
 	bg          string
 	songwriters []string
+	// borrowedDurationSecs / borrowedDurationFrom:借来显示的曲长和出处(peerBorrow)。
+	borrowedDurationSecs float64
+	borrowedDurationFrom string
 	// bakedLines:从正文里摘掉的烘入译文行数。
 	bakedLines int
 	// acceptTranslation:CandidateAssembly.AcceptTranslation。
@@ -146,13 +175,14 @@ func unpackSourceResults(raw map[string]lyricSourceResult) map[string]lyricSourc
 }
 
 // assembleSourceCandidate 按描述符把一个源交的结果装成候选。r 是这个源这一轮的原始应答(缺席的源是零值;带 Unpack 的源
-// 已经摊过),foreignSong 是「本地标签不含汉字」(烘入译文的前提),target 是设置里的译文语言。
+// 已经摊过)。
 //
 // 先后是硬约束:烘在正文里的译文先摘(候选的逐字覆盖、译文可用、之后的共识与行数全都读摘过的正文),再判纯音乐
 // 的说法(读摘过的、带时间轴的那一栏),然后才轮到另一栏不带时间戳的正文顶上来,最后装候选。括号背景人声、时间轴重挂在
 // 全部候选装完之后整批做(rankLyricSourceResults)。
-func assembleSourceCandidate(d *ProviderDescriptor, r lyricSourceResult, foreignSong bool, target string) assembledSource {
+func assembleSourceCandidate(d *ProviderDescriptor, r lyricSourceResult, round assemblyRound) assembledSource {
 	as := d.Assembly
+	foreignSong, target := round.foreignSong, round.target
 	lyr, yrc, tr, roma := r.lyr, "", "", ""
 	if as.Reads.has(fieldWordTiming) {
 		yrc = r.yrc
@@ -185,7 +215,11 @@ func assembleSourceCandidate(d *ProviderDescriptor, r lyricSourceResult, foreign
 		return a
 	}
 	trLang := as.translationLang(r.trLang, target)
-	c := lyricCandidate{source: d.Name, lyrics: lyr, title: r.matchTitle, artist: r.matchArtist}
+	title, artist, album := r.matchTitle, r.matchArtist, r.matchAlbum
+	if as.UnnamedIsQueryTrack && title == "" {
+		title, artist, album = round.title, round.artist, round.album
+	}
+	c := lyricCandidate{source: d.Name, lyrics: lyr, title: title, artist: artist}
 	if as.Reads.has(fieldWordTiming) && !untimed {
 		c.wordTimingYRC, c.hasWordTiming = usableYRC(lyr, yrc), usableWordTiming(lyr, yrc)
 	}
@@ -196,7 +230,7 @@ func assembleSourceCandidate(d *ProviderDescriptor, r lyricSourceResult, foreign
 		c.sourceReportedDurationSecs = r.srcDur
 	}
 	if as.Reads.has(fieldAlbum) {
-		c.album = r.matchAlbum
+		c.album = album
 	}
 	if as.Reads.has(fieldCover) {
 		c.cover = r.matchCover
@@ -214,6 +248,13 @@ func assembleSourceCandidate(d *ProviderDescriptor, r lyricSourceResult, foreign
 	if as.Reads.has(fieldSourceURL) {
 		c.sourceURL = r.sourceURL
 	}
+	if as.BorrowFromPeers != nil {
+		b := as.BorrowFromPeers(r, round.peers)
+		if c.cover == "" {
+			c.cover = b.cover
+		}
+		a.borrowedDurationSecs, a.borrowedDurationFrom = b.durationSecs, b.durationFrom
+	}
 	a.candidate, a.ok = c, true
 	a.tr, a.trLang, a.roma = tr, trLang, roma
 	if as.Reads.has(fieldBackground) {
@@ -227,8 +268,9 @@ func assembleSourceCandidate(d *ProviderDescriptor, r lyricSourceResult, foreign
 }
 
 // writeAux 把这一格的附属内容抄进它那条打好分的结果。c 是打完分时的候选(正文可能修过重音空格、拆过括号背景人声、
-// 重挂过时间轴)。译文过了打分那道「可用」才抄(不可用的抄进去,赢了就带着一份没有意义的译文进缓存),罗马音走更宽的
-// usableRomaForResult。括号背景人声、时间轴重挂对附属内容的处理在这之后(rankLyricSourceResults)。
+// 重挂过时间轴)。译文过了打分那道「可用」才抄(不可用的抄进去,赢了就带着一份没有意义的译文进缓存,比如繁体原文配一份
+// 只是转成简体的「译文」),语言一并记下:目标语言不是它时这份译文用不上,得让机翻接手(needsTranslationBackfill)。
+// 罗马音走更宽的 usableRomaForResult。括号背景人声、时间轴重挂对附属内容的处理在这之后(rankLyricSourceResults)。
 func (a assembledSource) writeAux(r *scoredLyricCandidateResult, c lyricCandidate, artist, title, target string) {
 	if c.hasUsableTranslation || (a.acceptTranslation != nil && a.acceptTranslation(c.lyrics, a.tr, target, artist, title)) {
 		r.LyricsTr, r.LyricsTrLang = a.tr, a.trLang
@@ -238,4 +280,5 @@ func (a assembledSource) writeAux(r *scoredLyricCandidateResult, c lyricCandidat
 	}
 	r.LyricsBG = a.bg
 	r.Songwriters = a.songwriters
+	r.BorrowedDurationSecs, r.BorrowedDurationFrom = a.borrowedDurationSecs, a.borrowedDurationFrom
 }

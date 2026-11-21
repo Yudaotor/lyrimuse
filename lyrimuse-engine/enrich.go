@@ -5340,13 +5340,14 @@ type lyricSourceResult struct {
 	source                  string
 	ne                      neteaseInfo
 	lyr, yrc, tr, roma      string // roma:源自带罗马音(逐行 LRC)
-	bg                      string // 背景人声轨(YRC 语法,形状见 amllResult.bg)。只有 applemusic 走这里,amll 的在 amll.bg。
-	trLang                  string // tr 的语言,源自己标了才有。只有 applemusic 走这里(applemusicResult.trLang),amll 的在 amll.trLang。
+	bg                      string // 背景人声轨(YRC 语法,形状见 amllResult.bg)。applemusic 走这里,amll 的交上来时在 amll.bg,排序摊平时抄过来。
+	trLang                  string // tr 的语言,源自己标了才有。applemusic 走这里(applemusicResult.trLang),amll 的摊平时抄过来。
 	matchTitle, matchArtist string
 	matchAlbum, matchCover  string
 	srcDur                  float64 // 源自己声明的曲长(秒),0=没给。见 lyricCandidate.sourceReportedDurationSecs
 	isrc                    string  // 源报的这条录音的 ISRC,applemusic、deezer、petitlyrics 填,见 isrcretry.go
-	// sourceURL:这份歌词在源网站上的页面,显示时做成来源链接。只有 megalobiz、amll 填,见 lyricCandidate.sourceURL。
+	// sourceURL:这份歌词在源网站上的页面,显示时做成来源链接。只有 megalobiz、amll 有(amll 的摊平时从 amll.pageURL 抄过来),
+	// 见 lyricCandidate.sourceURL。
 	sourceURL string
 	// trackIDs:这一路匹配到的曲目在该平台上的 ID。只有 qq 走这里(songmid 与数字 ID,见 qqTrackIDs),amll 借封面时
 	// 跟 TTML 登记的 ID 比(amllCandidateCover);网易云的在 ne.SongID。
@@ -5355,7 +5356,7 @@ type lyricSourceResult struct {
 	// 目前只有 qq/kugou 两路会填,见 lyricCandidate.language。
 	language string
 	// songwriters:词曲作者名单(applemusicResult.songwriters / deezerResult.songwriters)。applemusic 与 deezer 走这里,
-	// amll 的在 amll.songwriters。
+	// amll 的交上来时在 amll.songwriters,排序摊平时抄过来。
 	songwriters []string
 	// trackFoundNoLyrics:"这个源的曲库里有这首歌,但平台上没有歌词文本"这个**明确结论**
 	//。目前 netease/qq 两路会给(经各自的 neteaseInfo.TrackFoundNoLyrics /
@@ -5369,8 +5370,8 @@ type lyricSourceResult struct {
 	plainOnly bool
 	// untimed:不带时间戳的正文,跟 lyr 两栏二选一(CandidateAssembly 的 fieldUntimedBody)。只有网易云有这一栏,排序摊平时填。
 	untimed string
-	// amll:amll-ttml-db 那一档的三件套(见 amllttml.go)。它跟别的源不同,一次就带回
-	// 整行+逐字+译文,所以单独放一个结构而不是复用上面的 lyr/yrc/tr。
+	// amll:amll-ttml-db 那一档交的整份结果(见 amllttml.go)。排序时内容摊到公共栏上(unpackAMLLResult),借封面借曲长
+	// 要的平台目录和登记的编号留在这里读(amllBorrowFromPeers)。
 	amll amllResult
 	// identityFromLocalClient:这一份的身份由播放器客户端自己的本地数据给定,不是搜出来的。
 	// 本地路径会置位(kugou/applemusic 连正文都在本地,qq/netease/soda 只给权威 id);lyricfind 按 Kaset 报的 videoId
@@ -5416,57 +5417,30 @@ func rankLyricSourceResults(artist, title, album string, durationSecs float64, r
 	// 内容在专用子结构里的源摊到公共栏上(Assembly.Unpack)。排在上面三步之后:那三步对专用子结构里的正文只做实体还原,
 	// 挪到前面,行内逐字拆分和「匹配到伴奏版时丢占位正文」就会作用到这些源的正文上。
 	raw = unpackSourceResults(raw)
-	ne := raw["netease"].ne
-	qq := raw["qq"]
-	dz := raw["deezer"]
-	am := raw["applemusic"]
-	amll := raw["amll"].amll
 	// 候选的封面只用它自己那个源给的,没有就空着(「搜索候选歌词」弹窗显示占位图,「解析决策」全空时整列不出现);
-	// amll 自己没有封面,借能认定是同一条录音的那几家的(amllCandidateCover)。
+	// 自己没有封面的源只借能认定是同一条录音的那几家的(描述符的 Assembly.BorrowFromPeers)。
 	// 别拿按本地歌名搜来的 Apple 封面给它兜底:那是"本地这首"的封面、不是这条候选的出处,候选缩略图本来是帮人
 	// 分辨"这条是哪个版本"的,套上一张别人的图反而像是对上了;所有没带封面的候选还会套成同一张,毫无区分度。
 	// 烘进正文的逐行中文译文(bakedtranslation.go):候选装配**之前**摘出来——共识、行数、
 	// 逐字覆盖率全都读正文,晚了就都是按"一半是中文"的正文算的。各源摘不摘、接不接到译文轨看描述符的 Baked
-	// (assembleSourceCandidate);这里是内容还在专用子结构里的 AMLL:只摘不接。
-	foreignSong := !containsHan(artist) && !containsHan(title)
-	bakedLines := map[string]int{}
-	amll.lrc, _, amll.yrc, bakedLines["amll"] = adoptBakedTranslation(amll.lrc, "", amll.yrc, foreignSong, false)
+	// (assembleSourceCandidate)。
+	round := assemblyRound{
+		artist: artist, title: title, album: album,
+		foreignSong: !containsHan(artist) && !containsHan(title),
+		target:      features().LyricsTranslationLanguage, peers: raw,
+	}
 	slots := candidateSlots{}
-	// 描述符带 Assembly 的来源按描述符装(assembleSourceCandidate);AMLL 的内容在专用子结构里,由下面它那一段装。
-	// 装的先后不影响候选的先后(slots 按决胜序吐)。
-	target := features().LyricsTranslationLanguage
+	// 每个来源按描述符装(assembleSourceCandidate),没登记装配的不出候选。装的先后不影响候选的先后(slots 按决胜序吐)。
 	assembled := map[string]assembledSource{}
 	for _, d := range lyricProviders().descriptors {
 		if d.Assembly == nil {
 			continue
 		}
-		a := assembleSourceCandidate(d, raw[d.Name], foreignSong, target)
-		assembled[d.Name], bakedLines[d.Name] = a, a.bakedLines
+		a := assembleSourceCandidate(d, raw[d.Name], round)
+		assembled[d.Name] = a
 		if a.ok {
 			slots.put(a.candidate)
 		}
-	}
-	if !amll.empty() {
-		// 按 ID 取回的那份身份是确定的 —— 这份 TTML 是按曲目 ID 直接取回来的,不是搜出来的,
-		// 所以 title/artist/album 直接沿用本地曲目信息,不会在标题/歌手/专辑那几项上
-		// 被扣分。按 ISRC / 歌名在索引里找到的(matchTitle 非空)报索引里的歌名 / 歌手 / 专辑,跟搜出来的源一样打分。
-		// 它没有自报时长,sourceReportedDurationSecs 留 0(= 该项不参与打分)。
-		// 它自己没有封面,只借能认定是同一条录音的那几家的(amllCandidateCover)。
-		amllTitle, amllArtist, amllAlbum := title, artist, album
-		if amll.matchTitle != "" {
-			amllTitle, amllArtist, amllAlbum = amll.matchTitle, amll.matchArtist, amll.matchAlbum
-		}
-		amllCover := amllCandidateCover(amll, ne, qq, am, dz)
-		target := features().LyricsTranslationLanguage
-		amllTr, amllRoma := usableValueAdd(amll.lrc, amll.tr, amll.translationLang(target), amll.roma, target)
-		slots.put(lyricCandidate{
-			source: "amll", lyrics: amll.lrc,
-			wordTimingYRC: usableYRC(amll.lrc, amll.yrc), hasWordTiming: usableWordTiming(amll.lrc, amll.yrc),
-			hasUsableTranslation:  amllTr,
-			hasUsableRomanization: amllRoma,
-			title:                 amllTitle, artist: amllArtist, album: amllAlbum, cover: amllCover,
-			sourceURL: amll.pageURL,
-		})
 	}
 	candidates := slots.inTieOrder()
 	// 重音字母旁多切的空格,拿整批候选与缓存里见过的拼法证实之后删掉(见 accentsplit.go)。只删空格、不动时间轴。
@@ -5516,53 +5490,21 @@ func rankLyricSourceResults(artist, title, album string, durationSecs float64, r
 			Language:                   c.language,
 			PlainTextOnly:              c.plainTextOnly,
 			IdentityFromLocalClient:    c.identityFromLocalClient,
-			BakedTranslationLines:      bakedLines[c.source],
-		}
-		if c.source == "amll" {
-			r.BorrowedDurationSecs, r.BorrowedDurationFrom = amllCandidateDuration(amll, ne, qq, am, dz)
+			BakedTranslationLines:      assembled[c.source].bakedLines,
 		}
 		r.Score, r.ScoreTerms = scoreLyricCandidateDetailed(
 			artist, title, album, durationSecs, c, corroborated[c.source], len(consensusPeers[c.source]))
 		r.ConsensusPeers = consensusPeers[c.source]
-		// 正文时间轴被重挂过的话,附属歌词也得搬 —— 它们的时间戳是照原文 LRC 抄的
-		// (translate.go 的 assembleTranslationLRC)。
-		// 下面 switch 里各源赋完 r.LyricsTr/r.LyricsRoma 之后统一搬,见循环末尾。
-		//
-		// 译文过了 c.hasUsableTranslation 这道闸才抄进结果(罗马音走更宽的 usableRomaForResult):不可用的抄进去,分数赢了就带着
-		// 一份没有意义的「译文」进缓存(繁体原文配一份只是转成简体的「译文」)。译文固定是某种语言的源(国内平台是中文)要把语言
-		// 记下来:目标语言不是它时这份译文用不上,得让机翻接手(needsTranslationBackfill)。
-		switch c.source {
-		case "amll":
-			// amll 这条 case 不能漏。amll.tr 早就在 candidates 构造那一步被读出来过(见上面
-			// usableValueAdd 调用,+50 分的打分信号靠它),但只要这个 switch 没有 amll 分支,分数
-			// 算对了、内容却从没被抄进 r.LyricsTr:选中 amll 之后 lyrics_tr 永远是空的,机翻又拿
-			// 这份本来就有毛病的原文(逐词粘连,见 amllttml.go)反复重试、屡试屡败,表现成"这首歌
-			// 一直没有译文"。
-			//
-			// 语言标注跟 usableValueAdd 那次调用用同一个值(amllResult.translationLang:TTML 给译文标的语言,
-			// 没标时按目标语言),"能不能用"和"语言标什么"两处口径一致。c.hasUsableTranslation 一并把关
-			// "同语言不同文字不算翻译"这类情况。
-			if c.hasUsableTranslation {
-				r.LyricsTr = amll.tr
-				r.LyricsTrLang = amll.translationLang(features().LyricsTranslationLanguage)
-			}
-			if usableRomaForResult(c.lyrics, amll.roma) {
-				r.LyricsRoma = amll.roma
-			}
-			r.LyricsBG = amll.bg
-			r.Songwriters = amll.songwriters
-		default:
-			// 按描述符装的来源:译文、罗马音、背景人声轨、作者在它那一格里。
-			assembled[c.source].writeAux(&r, c, artist, title, target)
-		}
+		// 译文、罗马音、背景人声轨、作者、借来的曲长在这个源那一格里(assembledSource.writeAux)。
+		assembled[c.source].writeAux(&r, c, artist, title, round.target)
 		// 括号里拆出来的背景人声(bgparen.go):写进结果,译文 / 罗马音同一行的括号段去掉。时间戳是重挂之前的,所以排在搬时间轴之前。
 		if len(c.parenBGStamps) > 0 {
 			r.LyricsBG = c.parenBG
 			r.LyricsTr = stripParenBackgroundAux(r.LyricsTr, c.parenBGStamps)
 			r.LyricsRoma = stripParenBackgroundAux(r.LyricsRoma, c.parenBGStamps)
 		}
-		// 正文时间轴被重挂过就把附属歌词一起搬过去。放在 switch **之后** —— 各源的
-		// r.LyricsTr/r.LyricsRoma 到这里才赋完值,搬早了搬的是空串。
+		// 正文时间轴被重挂过就把附属歌词一起搬过去:它们的时间戳是照原文 LRC 抄的(translate.go 的 assembleTranslationLRC)。
+		// 放在 writeAux **之后** —— r.LyricsTr / r.LyricsRoma 到这里才赋完值,搬早了搬的是空串。
 		if len(c.timelineRemap) > 0 {
 			if tr, ok := remapLRCTimestamps(r.LyricsTr, c.timelineRemap); ok {
 				r.LyricsTr = tr

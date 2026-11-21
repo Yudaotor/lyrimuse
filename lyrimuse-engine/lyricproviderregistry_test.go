@@ -884,6 +884,10 @@ func descriptorCandidateShape(d *ProviderDescriptor) lyricSourceCandidateShape {
 		}
 	}
 	shape.instrumental = strings.Join(signals, " ")
+	if as.UnnamedIsQueryTrack {
+		shape.unnamed = "query"
+	}
+	shape.borrows = as.BorrowFromPeers != nil
 	return shape
 }
 
@@ -895,11 +899,8 @@ func TestProviderRegistryAssemblyMatchesShapes(t *testing.T) {
 	for _, d := range registryDescriptors() {
 		as := d.Assembly
 		want, listed := lyricSourceCandidateShapes[d.Name]
-		if (as != nil) != listed {
-			t.Errorf("%s:带不带 Assembly(%v)和在不在期望表 lyricSourceCandidateShapes 里(%v)要一致:只有候选还由专门那一段装的 AMLL 不带",
-				d.Name, as != nil, listed)
-		}
-		if as == nil {
+		if as == nil || !listed {
+			t.Errorf("%s:每个来源都要有 Assembly(%v),也都要在期望表 lyricSourceCandidateShapes 里(%v)", d.Name, as != nil, listed)
 			continue
 		}
 		unpack := ""
@@ -908,6 +909,19 @@ func TestProviderRegistryAssemblyMatchesShapes(t *testing.T) {
 		}
 		if unpack != lyricSourceUnpackers[d.Name] {
 			t.Errorf("%s:Unpack 是 %q,期望表 lyricSourceUnpackers 是 %q", d.Name, unpack, lyricSourceUnpackers[d.Name])
+		}
+		borrow := ""
+		if as.BorrowFromPeers != nil {
+			borrow = funcName(as.BorrowFromPeers)
+		}
+		if borrow != lyricSourcePeerBorrowers[d.Name] {
+			t.Errorf("%s:BorrowFromPeers 是 %q,期望表 lyricSourcePeerBorrowers 是 %q", d.Name, borrow, lyricSourcePeerBorrowers[d.Name])
+		}
+		if (as.BorrowFromPeers != nil) != d.Privileges.has(privBorrowFromPeers) {
+			t.Errorf("%s:借别家的封面、曲长(%v)和 privBorrowFromPeers(%v)要同时有", d.Name, as.BorrowFromPeers != nil, d.Privileges.has(privBorrowFromPeers))
+		}
+		if as.BorrowFromPeers != nil && as.Reads.has(fieldCover|fieldSourceDuration) {
+			t.Errorf("%s:借别家封面、曲长的源自己不读这两栏", d.Name)
 		}
 		if as.Instrumental.has(instrumentalCreditsNoVocals) && as.Instrumental.has(instrumentalNoBodyNoVocals) {
 			t.Errorf("%s:署名行加无人声已经包含没交正文的情形,别再登记没正文加无人声", d.Name)

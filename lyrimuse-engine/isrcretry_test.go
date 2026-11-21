@@ -90,7 +90,7 @@ func TestISRCRetryIsWired(t *testing.T) {
 			t.Errorf("%s 的候选要读结果里的 ISRC:%+v", name, d)
 			continue
 		}
-		got := assembleSourceCandidate(d, lyricSourceResult{lyr: "[00:05.00]一行目", isrc: "JPU902104759"}, false, "zh")
+		got := assembleSourceCandidate(d, lyricSourceResult{lyr: "[00:05.00]一行目", isrc: "JPU902104759"}, assemblyRound{target: "zh"})
 		if !got.ok || got.candidate.isrc != "JPU902104759" {
 			t.Errorf("%s 交的 ISRC 没进候选:%+v", name, got.candidate)
 		}

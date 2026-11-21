@@ -34,13 +34,24 @@ func rankShapeResult(source string, lines []string) lyricSourceResult {
 		source: source, lyr: lrc, yrc: yrc, tr: rankParityAux(lrc, "zh", 1), roma: rankParityAux(lrc, "latin", 1),
 		matchTitle: rankShapeTitle, matchArtist: rankShapeArtist, matchAlbum: rankShapeAlbum,
 		matchCover: "https://example.com/shape.jpg", srcDur: rankShapeDuration,
-		isrc: "USUM71703861", sourceURL: "https://www.megalobiz.com/lrc/maker/x.1", language: songLanguageMandarin,
+		isrc: "USUM71703861", sourceURL: rankShapeSourceURL(source), language: songLanguageMandarin,
 		identityFromLocalClient: true, bg: rankParityBG, songwriters: []string{"Writer A"}, trackIDs: []string{"97773"},
 	}
 }
 
-// rankShapeInput:r 是按公共栏写的一份结果,换成这个源实际交上来的摆法:网易云的内容在 ne 上,公共栏上那几样是空的。
+// rankShapeInput:r 是按公共栏写的一份结果,换成这个源实际交上来的摆法:网易云的内容在 ne 上、AMLL 的在 amll 上,
+// 公共栏上那几样是空的。
 func rankShapeInput(r lyricSourceResult) lyricSourceResult {
+	if r.source == lyricSourceAMLL {
+		r.amll = amllResult{
+			lrc: r.lyr, yrc: r.yrc, tr: r.tr, trLang: r.trLang, roma: r.roma, bg: r.bg,
+			matchTitle: r.matchTitle, matchArtist: r.matchArtist, matchAlbum: r.matchAlbum,
+			songwriters: r.songwriters, pageURL: r.sourceURL,
+		}
+		r.lyr, r.yrc, r.tr, r.trLang, r.roma, r.bg = "", "", "", "", "", ""
+		r.matchTitle, r.matchArtist, r.matchAlbum, r.songwriters, r.sourceURL = "", "", "", nil, ""
+		return rankParityReachableAMLL(r)
+	}
 	if r.source != lyricSourceNetease {
 		return r
 	}
@@ -53,6 +64,14 @@ func rankShapeInput(r lyricSourceResult) lyricSourceResult {
 	r.matchTitle, r.matchArtist, r.matchAlbum, r.matchCover, r.srcDur = "", "", "", "", 0
 	r.identityFromLocalClient, r.instrumental, r.noVocals = false, false, false
 	return r
+}
+
+// rankShapeSourceURL:source 的歌词页地址,写成过得了它那道链接校验的样子(没登记校验的源随便给一个)。
+func rankShapeSourceURL(source string) string {
+	if source == lyricSourceAMLL {
+		return "https://github.com/amll-dev/amll-ttml-db/blob/main/ncm-lyrics/97773.ttml"
+	}
+	return "https://www.megalobiz.com/lrc/maker/x.1"
 }
 
 func rankShapeRun(rank rankFunc, lang string, r lyricSourceResult) (cand *scoredLyricCandidateResult, instrumental bool) {
@@ -185,6 +204,37 @@ func rankShapeObserved(t *testing.T, rank rankFunc, source string) (shape lyricS
 		}
 	}
 	shape.instrumental = strings.Join(signals, " ")
+
+	// 没带歌名的结果:候选的歌名、歌手、专辑空着,还是用查询的那一组。
+	anon := full
+	anon.matchTitle, anon.matchArtist, anon.matchAlbum = "", "", ""
+	ac, _ := rankShapeRun(rank, "zh", anon)
+	switch {
+	case ac == nil:
+		t.Fatalf("%s:没带歌名的那份没有候选", source)
+	case ac.Title == rankShapeTitle && ac.Artist == rankShapeArtist && ac.Album == rankShapeAlbum:
+		shape.unnamed = "query"
+	case ac.Title != "" || ac.Artist != "" || ac.Album != "":
+		t.Fatalf("%s:没带歌名的那份候选的身份认不出:%q / %q / %q", source, ac.Title, ac.Artist, ac.Album)
+	}
+
+	// 借封面、曲长:这个源说它是另一家(网易云)那一条录音,那一家交了封面和曲长。
+	donor := rankShapeInput(lyricSourceResult{source: lyricSourceNetease, matchTitle: rankShapeTitle, matchArtist: rankShapeArtist,
+		matchCover: "https://example.com/donor.jpg", srcDur: rankShapeDuration + 1})
+	donor.ne.SongID = 97773
+	lent := rankShapeInput(full)
+	lent.amll.platform = "ncm-lyrics"
+	if source != lyricSourceNetease {
+		featuresRef().LyricsTranslationLanguage = "zh"
+		for _, r := range rank(rankShapeArtist, rankShapeTitle, rankShapeAlbum, rankShapeDuration, map[string]lyricSourceResult{source: lent, lyricSourceNetease: donor}) {
+			if r.Source == source && !r.Instrumental && !r.TrackFoundNoLyrics {
+				shape.borrows = r.CoverURL == donor.ne.Cover && r.BorrowedDurationSecs == donor.ne.DurationSecs && r.BorrowedDurationFrom == lyricSourceNetease
+				if !shape.borrows && (r.CoverURL == donor.ne.Cover || r.BorrowedDurationFrom != "") {
+					t.Fatalf("%s:封面和曲长只借了一样:%q / %v / %q", source, r.CoverURL, r.BorrowedDurationSecs, r.BorrowedDurationFrom)
+				}
+			}
+		}
+	}
 	return shape, paren
 }
 
@@ -192,11 +242,10 @@ func TestRankShapesMatchExpected(t *testing.T) {
 	saveRankParityState(t)
 	setNativeLyricSourcesForPlayer("")
 	featuresRef().LyricsSources = nil
-	var special []string
 	for _, source := range lyricCandidateTieOrder {
 		want, ok := lyricSourceCandidateShapes[source]
 		if !ok {
-			special = append(special, source)
+			t.Errorf("%s 不在 lyricSourceCandidateShapes 里", source)
 			continue
 		}
 		for name, rank := range map[string]rankFunc{"参照": handwrittenRankLyricSourceResults, "生产": rankLyricSourceResults} {
@@ -209,9 +258,6 @@ func TestRankShapesMatchExpected(t *testing.T) {
 				t.Errorf("%s(%s):括号背景人声拆不拆 = %v,该是 %v(parenBGSources %v)", source, name, paren, wantParen, parenBGSources[source])
 			}
 		}
-	}
-	if want := []string{lyricSourceAMLL}; !slices.Equal(special, want) {
-		t.Errorf("不在 lyricSourceCandidateShapes 里的来源 %v,该只有候选还由专门那一段装的 %v", special, want)
 	}
 	for source := range lyricSourceCandidateShapes {
 		if !slices.Contains(lyricCandidateTieOrder, source) {
@@ -269,6 +315,44 @@ func TestUnpackedLyricsSkipBodyCleanup(t *testing.T) {
 	}
 }
 
+// AMLL 实际交不出的两种输入(rankParityReachableAMLL),43fa2dff7 的手写装配和现在的排序结果不同,两边都钉在这里:
+//   - 整行为空、逐字非空:现在不出候选,跟别的源正文为空时一样;手写装配按「整行、逐字都空才不出」判,出一条正文为空、
+//     没过闸的候选。
+//   - 公共栏上带「曲库里有这首歌、没有歌词文本」:标记上的歌名 / 歌手 / 专辑现在是索引里那一份的(摊平后公共栏上的);
+//     手写装配读公共栏上原有的,AMLL 从来不填,是空的。
+func TestAMLLUnreachableInputsDiverge(t *testing.T) {
+	saveRankParityState(t)
+	setNativeLyricSourcesForPlayer("")
+	featuresRef().LyricsSources = nil
+	lrc, yrc := rankParitySong(rankParityJapanese)
+	run := func(rank rankFunc, r lyricSourceResult) []scoredLyricCandidateResult {
+		r.source = lyricSourceAMLL
+		return rank(rankShapeArtist, rankShapeTitle, rankShapeAlbum, rankShapeDuration, map[string]lyricSourceResult{lyricSourceAMLL: r})
+	}
+	wordOnly := lyricSourceResult{amll: amllResult{yrc: yrc}}
+	if got := run(rankLyricSourceResults, wordOnly); len(got) != 0 {
+		t.Errorf("生产:只有逐字没有整行的 AMLL 结果出了候选 %+v", got)
+	}
+	if old := run(handwrittenRankLyricSourceResults, wordOnly); len(old) != 1 || old[0].Lyrics != "" || old[0].Score >= 0 {
+		t.Errorf("参照:只有逐字没有整行时该出一条正文为空、没过闸的候选,实际 %+v", old)
+	}
+	noLyrics := lyricSourceResult{trackFoundNoLyrics: true, amll: amllResult{lrc: lrc, matchTitle: "Index Title", matchArtist: "Index Artist"}}
+	marker := func(out []scoredLyricCandidateResult) (title string, found bool) {
+		for _, r := range out {
+			if r.TrackFoundNoLyrics {
+				return r.Title, true
+			}
+		}
+		return "", false
+	}
+	if title, ok := marker(run(rankLyricSourceResults, noLyrics)); !ok || title != "Index Title" {
+		t.Errorf("生产:标记上的歌名 %q(有标记=%v),该是索引里那一份的", title, ok)
+	}
+	if title, ok := marker(run(handwrittenRankLyricSourceResults, noLyrics)); !ok || title != "" {
+		t.Errorf("参照:标记上的歌名 %q(有标记=%v),该是空的", title, ok)
+	}
+}
+
 // rankParityCoverageGaps:语料的计数里,哪个来源的哪种装配结果一次都没出现。读的栏要出现过「读进去了」,不读的栏要出现过
 // 「交了但没读」;每个来源都要交过候选、过过闸、跟别的源同过分。
 func rankParityCoverageGaps(ta *rankParityTally) []string {
@@ -302,6 +386,8 @@ func rankParityCoverageGaps(ta *rankParityTally) []string {
 				if slices.Contains(reads, f) {
 					need(source, "纯文本")
 				}
+			case shape.borrows && (f == "封面" || f == "自报曲长"):
+				// 借别家的源自己不交这两栏,没有「交了但没读」可数;借到了的数在下面。
 			case !slices.Contains(reads, f):
 				need(source, unread[f])
 			case read[f] != "":
@@ -323,9 +409,16 @@ func rankParityCoverageGaps(ta *rankParityTally) []string {
 		if shape.instrumental != "" {
 			need(source, "纯音乐标记")
 		}
+		if shape.borrows {
+			need(source, "封面")
+			need(source, "借曲长")
+		}
 	}
 	for _, source := range lyricSourceNames {
-		need(source, "有歌没词标记")
+		// AMLL 公共栏上的这一位在对拍前清掉了(rankParityReachableAMLL)。
+		if source != lyricSourceAMLL {
+			need(source, "有歌没词标记")
+		}
 	}
 	for _, source := range []string{lyricSourceNetease, lyricSourceQQ, lyricSourceSoda, lyricSourceAppleMusic, spotifyLocalLyricsSource} {
 		need(source, "播放器纯音乐标记")

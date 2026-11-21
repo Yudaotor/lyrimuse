@@ -78,6 +78,13 @@ func newBuiltinLyricProviderRegistry() *lyricProviderRegistry {
 		},
 		ProxyFallback: true,
 		Baked:         bakedStripOnly, SongwritersRank: 2, ISRCLookup: isrcLookupIndexed, PageURL: amllPageURL,
+		// 结果的内容在 amll 上,排序时摊到公共栏(Unpack)。译文按 TTML 标的语言、没标按设置;背景人声轨是 TTML 自带的;
+		// 没有自己的封面和曲长,借同一条录音别家的。
+		Assembly: &CandidateAssembly{
+			Unpack:      unpackAMLLResult,
+			Reads:       fieldWordTiming | fieldRomanization | fieldAlbum | fieldSourceURL | fieldBackground,
+			Translation: translationDeclared, UnnamedIsQueryTrack: true, BorrowFromPeers: amllBorrowFromPeers,
+		},
 		DependsOnIDsFrom: []string{lyricSourceNetease, lyricSourceQQ},
 	}, privPlaybackTrackIDs|privTrackIDConsume|privBorrowFromPeers|privRefetchByID)})
 
