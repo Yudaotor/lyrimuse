@@ -23,7 +23,7 @@ import (
 // 决策 48),所以它只能是兜底:直连正常时一个包都不该经过它。
 //
 // 生效范围:lyricsourcedial.go 的海外歌词源
-// (lyricSourceProxyFallbackSources,每台主机一份)、alerter.go 的 telegramHTTPClient(推送到 api.telegram.org)、
+// (描述符带 ProxyFallback 的源,lyricSourceUsesProxyFallback,每台主机一份)、alerter.go 的 telegramHTTPClient(推送到 api.telegram.org)、
 // relay.go 的 relayHTTPClient / relaySeedClient(状态中继的推送与封面托管、启动补「上次播放」那一次 ListenBrainz 查询),
 // 以及 lb.go 的 lbHTTPClient(ListenBrainz 提交)。国内歌词源只直连,Last.fm / iTunes 等仍是 http.DefaultTransport。
 const (

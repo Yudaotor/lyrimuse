@@ -15,8 +15,8 @@ private let logger = Logger(subsystem: "me.yudaotor.lyrimuse", category: "featur
 //   ② 「顺序优先」模式下 `lyricsPriorityOrder` 的**默认值**(`LyricsPriorityEntry.defaultOrder`)——
 //      也就是新装机器上"按顺序取第一个有结果的源"真正的取用顺序。用户拖拽排过之后
 //      以自己那份为准,改这里只影响没排过的人。
-// 所以它必须跟引擎 `features.go` 的 `lyricsSourceDefaultOrder` **逐字同序**,
-// 否则同一台机器在首次写盘前后表现不同(那边注释也钉着这条)。
+// 所以它必须跟引擎各歌词源描述符的 `DefaultPriorityRank`(`lyricproviderbuiltin.go`)排出来的先后**逐字同序**,
+// 否则同一台机器在首次写盘前后表现不同(那个字段的注释也钉着这条)。
 //
 // 排序依据:前四个(酷狗 / 网易云 / QQ / LRCLIB)按实测的最终采用率排;后面几个
 // **刻意不按采用率排**:它们接入得晚,统计时的缓存绝大多数早于它们存在,采用数低是样本偏差、

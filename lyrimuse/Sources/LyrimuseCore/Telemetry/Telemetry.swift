@@ -155,7 +155,7 @@ public enum TelemetryLyricsResult: String, CaseIterable, Codable, Sendable {
 
 /// 一首歌显示的那份歌词来自哪里(活动里 `lyric_sources` 键的前半段)。只在逐字 / 逐行 / 纯文本三档记。见 14 章决策 208。
 public enum TelemetryLyricSource {
-    /// 记得下的来源:引擎的十六个歌词源(`lyricSourceNames`)、播放器自带 / 本机的几种(引擎各 `…LyricsSource` 常量)、
+    /// 记得下的来源:引擎登记表里的十六个联网歌词源(`networkLyricSourceNames`)、播放器自带 / 本机的几种(引擎各 `…LyricsSource` 常量)、
     /// 听书播放器推来的字幕 `subtitles`,条目没记来源的(手改过、老条目)`unknown`,其余一律 `other`。
     /// Worker 的 `LYRIC_SOURCES` 跟它逐字一致,selftest telemetry 组核对。
     public static let tags = [
