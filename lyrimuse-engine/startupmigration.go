@@ -63,8 +63,9 @@ const (
 	// migrationQRCLeftoverTokens:修 qrcToYRC 旧实现漏转的残缺两数字词条(qrcleftovertokens.go)。
 	// 源头已改成按标记位置切分,不会再产生,所以是真正一次性的。
 	// v2:修不动的(还剩两数字词条的)清掉逐字、交给扫库 / 重评重新取,见 qrcleftovertokens.go。
+	// v3:v1 把空文本计时标记的右括号当成括号词重排、留下没收口的两数字标记,这类同样清掉逐字。
 	migrationQRCLeftoverTokens        = "qrc_leftover_tokens"
-	migrationQRCLeftoverTokensVersion = 2
+	migrationQRCLeftoverTokensVersion = 3
 	// migrationKRCNegativeOffsets:修 krcToYRC 旧实现漏转的负偏移逐字标记(krcnegativeoffsets.go)。源头已经认负号,
 	// 不会再产生,所以是一次性的。
 	migrationKRCNegativeOffsets        = "krc_negative_offsets"
@@ -91,13 +92,14 @@ const (
 	migrationNeteaseCoverURLsVersion = 1
 	// migrationLyricEntities:存量歌词正文的字符实体解到底(lyricentities.go)。新抓取的在 rank 那道门口解,
 	// 运行期不再产生;解码是幂等的,水位只为省掉每次启动全库扫一遍。
+	// v2:逐字轨里被拆进几个词的实体先合成一个词再解(decodeYRCEntities)。
 	migrationLyricEntities        = "lyric_entities"
-	migrationLyricEntitiesVersion = 1
+	migrationLyricEntitiesVersion = 2
 	// migrationLyricLineEndings:存量歌词的换行统一成 LF、去掉开头的 BOM(lyriclineendings.go)。新抓取的在 rank
 	// 那道门口统一,运行期不再产生;lyrics/ 文件夹导入进来的外来数据只在改写过的那几条上补扫一遍。改了
-	// normalizeLyricText 去掉的字符就 +1(2:去掉控制字符)。
+	// normalizeLyricText 去掉的字符就 +1(2:去掉控制字符;3:制表符、U+2028 / U+2029 换成空格,占位文字当成没有歌词)。
 	migrationLyricLineEndings        = "lyric_line_endings"
-	migrationLyricLineEndingsVersion = 2
+	migrationLyricLineEndingsVersion = 3
 	// migrationUntranslatedMachineLines:存量机翻里外文原样没动的行(untranslatedmachine.go)。新翻出来的在各级出口
 	// 就不收,运行期不再产生。改了 lineTranslated 的判据就 +1。
 	migrationUntranslatedMachineLines        = "untranslated_machine_lines"

@@ -49,3 +49,34 @@ func TestRepairQRCLeftoverTokensLeavesCleanYRC(t *testing.T) {
 		t.Errorf("三数字词条前的括号被误修\n实际: %s", got)
 	}
 }
+
+// 连着两个空文本的两数字标记:第一个标记的右括号是它自己的收口,不是括号词,不能挪走。
+func TestRepairQRCLeftoverTokensKeepsMarkerClose(t *testing.T) {
+	const empties = "[0,500](0,100,0)a(100,100)(200,100)(300,100,0)b"
+	if got, changed := repairQRCLeftoverTokens(empties); changed || got != empties {
+		t.Errorf("标记的右括号被当成括号词挪走\n实际: %s", got)
+	}
+	// 三数字标记后面紧跟括号词:右括号还是标记的,后一个才是词。
+	const afterThree = "[0,500](0,100,0))(100,100)"
+	if got, _ := repairQRCLeftoverTokens(afterThree); got != "[0,500](0,100,0)(100,100,0))" {
+		t.Errorf("三数字标记后的括号词修错了\n实际: %s", got)
+	}
+}
+
+// 没收口的两数字标记(旧修复留下的残片)算修不动;正常逐字、假名标注行不算。
+func TestYRCHasTwoNumberTokensUnclosed(t *testing.T) {
+	for _, s := range []string{
+		"[210447,10171](215322,3874,0)心 (219196,204(219400,223,0(219623,995,0)))",
+		"[0,420](52,26,0)幕(78,26,0)由(104,26(130,26,0))(156,26,0)A",
+		"[0,500](0,100,0)a(100,100)",
+	} {
+		if !yrcHasTwoNumberTokens(s) {
+			t.Errorf("该判为有残片: %s", s)
+		}
+	}
+	for _, s := range []string{"[0,500](0,250,0)hello (250,250,0)world", "[0,500](0,100,0)((100,100,0)Live(200,100,0))", "[kana:1せ(1119,196)ん]"} {
+		if yrcHasTwoNumberTokens(s) {
+			t.Errorf("不该判为有残片: %s", s)
+		}
+	}
+}

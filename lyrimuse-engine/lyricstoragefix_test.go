@@ -65,6 +65,7 @@ func TestMigrateQRCLeftoverTokensDropsUnrecoverable(t *testing.T) {
 	broken := "[0,1000][(10632,5159,0)Verse 1](15791,14119)"
 	good := "[0,1000](0,500,0)Hi"
 	kana := "[kana:(0,100)あ]\n[0,1000](0,500,0)Hi"
+	nested := "[0,1000](0,500,0)心 (500,100(600,100,0(700,100,0)))"
 	enrichMu.Lock()
 	enrichPath = ""
 	enrichCache["a|fix|b"] = enrichEntry{Lyrics: bt("x"), LyricsYRC: bt(fixable)}
@@ -72,6 +73,7 @@ func TestMigrateQRCLeftoverTokensDropsUnrecoverable(t *testing.T) {
 	enrichCache["a|manual|b"] = enrichEntry{Lyrics: bt("x"), LyricsYRC: bt(broken), ManualLyrics: true}
 	enrichCache["a|good|b"] = enrichEntry{Lyrics: bt("x"), LyricsYRC: bt(good)}
 	enrichCache["a|kana|b"] = enrichEntry{Lyrics: bt("x"), LyricsYRC: bt(kana)}
+	enrichCache["a|nested|b"] = enrichEntry{Lyrics: bt("x"), LyricsYRC: bt(nested)}
 	enrichMu.Unlock()
 	migrateQRCLeftoverTokens()
 	if got := enrichCache["a|fix|b"].LyricsYRC; yrcHasTwoNumberTokens(got.String()) || got.EqualString(fixable) {
@@ -79,6 +81,9 @@ func TestMigrateQRCLeftoverTokensDropsUnrecoverable(t *testing.T) {
 	}
 	if e := enrichCache["a|broken|b"]; !e.LyricsYRC.IsZero() || !e.LyricsBG.IsZero() {
 		t.Errorf("修不好的应当清掉逐字和背景人声: %+v", e)
+	}
+	if !enrichCache["a|nested|b"].LyricsYRC.IsZero() {
+		t.Errorf("没收口的残片也清掉逐字: %q", enrichCache["a|nested|b"].LyricsYRC)
 	}
 	if !enrichCache["a|manual|b"].LyricsYRC.EqualString(broken) {
 		t.Error("手改过的不动")

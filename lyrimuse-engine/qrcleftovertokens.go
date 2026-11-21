@@ -30,6 +30,10 @@ import (
 // 重新去取,新的 qrcToYRC 转出来是对的(v2,见 migrateQRCLeftoverTokens)。本机实测还有二十来条是这样。
 // 手改过的、校准过时间轴的不动。
 //
+// 括号段开头的右括号紧跟在数字后面时,它是前一个计时标记自己的收口,不是词:连着两个空文本的两数字标记
+// (`(1,2)(3,4)`)按整段重排会把第一个标记的右括号挪走,留下 `(1,2(3,4,0))` 这种没收口的残片(v1 就这样
+// 改坏过一批)。这种右括号不算进括号段,没收口的两数字标记也算修不动(v3,见 09 章决策 399)。
+//
 // 只处理**真正的计时行**(`[行始,行长]` 开头)。`[kana:…]` 假名标注行里的 `(起始,时长)`
 // 本来就是两数字格式、那是它的正常写法,误修会把假名标注打烂 —— 本机缓存里有 52 条酷狗条目
 // 带这种行,别把它们当成「残缺」统计。
@@ -40,8 +44,8 @@ import (
 // 所以它满足水位闸的两个前提 —— 幂等、且运行期不再产生,跑一遍就够(见 startupmigration.go)。
 var qrcLeftoverTokenRe = regexp.MustCompile(`([()]+)\((\d+),(\d+)\)`)
 
-// yrcTwoNumberTokenRe:计时行里残留的两数字词条(正常的逐字词条是三个数字)。
-var yrcTwoNumberTokenRe = regexp.MustCompile(`\(\d+,\d+\)`)
+// yrcTwoNumberTokenRe:计时行里残留的两数字词条(正常的逐字词条是三个数字),收了口的和没收口、紧接着下一个标记的。
+var yrcTwoNumberTokenRe = regexp.MustCompile(`\(\d+,\d+[()]`)
 
 // yrcHasTwoNumberTokens:计时行(`[行始,行长]` 开头)里还有没有两数字词条。`[kana:…]` 这类行的两数字是它的
 // 正常写法,不看。
@@ -69,7 +73,7 @@ func repairQRCLeftoverTokens(yrc string) (string, bool) {
 			continue
 		}
 		body := line[len(head):]
-		fixed := qrcLeftoverTokenRe.ReplaceAllString(body, "($2,$3,0)$1")
+		fixed := repairQRCLeftoverBody(body)
 		if fixed == body {
 			continue
 		}
@@ -80,6 +84,30 @@ func repairQRCLeftoverTokens(yrc string) (string, bool) {
 		return yrc, false
 	}
 	return strings.Join(lines, "\n"), true
+}
+
+// repairQRCLeftoverBody:计时行正文里「一段括号 + 两数字标记」重排成「三数字标记 + 那段括号」。括号段开头紧跟在
+// 数字后面的右括号是前一个标记的收口,留在原处。
+func repairQRCLeftoverBody(body string) string {
+	var b strings.Builder
+	prev := 0
+	for _, m := range qrcLeftoverTokenRe.FindAllStringSubmatchIndex(body, -1) {
+		parens := m[2]
+		if body[parens] == ')' && parens > 0 && body[parens-1] >= '0' && body[parens-1] <= '9' {
+			parens++
+		}
+		if parens == m[3] {
+			continue
+		}
+		b.WriteString(body[prev:parens])
+		b.WriteString("(" + body[m[4]:m[5]] + "," + body[m[6]:m[7]] + ",0)" + body[parens:m[3]])
+		prev = m[1]
+	}
+	if prev == 0 {
+		return body
+	}
+	b.WriteString(body[prev:])
+	return b.String()
 }
 
 // migrateQRCLeftoverTokens 对整个 enrich 缓存跑一遍 repairQRCLeftoverTokens。

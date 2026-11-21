@@ -151,3 +151,62 @@ func TestMigrateLyricEntities(t *testing.T) {
 		t.Errorf("second run must be a no-op")
 	}
 }
+
+// 逐字词按字切的源把一个实体拆进几个词,中间隔着计时标记:拼起来恰好是认得的实体的那几个词并成一个再解,
+// 起点取第一个词的、终点取最后一个词的。
+func TestDecodeYRCEntitiesJoinsSplitWords(t *testing.T) {
+	cases := []struct{ name, in, want string }{
+		{"网易云形态:& / apos / ; 三个词",
+			"[102270,5760](106110,180,0)you(106290,0,0)&(106290,120,0)apos(106410,0,0);(106410,60,0)ve (106470,1560,0)started",
+			"[102270,5760](106110,180,0)you(106290,120,0)'(106410,60,0)ve (106470,1560,0)started"},
+		{"分号后面带着下一段文字",
+			"[0,3000](0,455,0)&(455,455,0)quot(910,455,0);Ransum(1365,455,0)&(1820,455,0)quot(2275,910,0); (3185,455,0)H",
+			"[0,3000](0,1365,0)\"Ransum(1365,1820,0)\" (3185,455,0)H"},
+		{"一个字母一个词,解出空格并进前一个词",
+			"[0,1000](0,100,0)s(100,10,0)&(110,10,0)n(120,10,0)b(130,10,0)s(140,10,0)p(150,10,0);(160,100,0):",
+			"[0,1000](0,160,0)s (160,100,0):"},
+		{"拆开的双重转义解到底",
+			"[0,100](0,10,0)&(10,10,0)amp;(20,10,0)apos(30,10,0);(40,10,0)s",
+			"[0,100](0,40,0)'(40,10,0)s"},
+		{"不认识的实体名不并", "[0,100](0,10,0)R(10,10,0)&(20,10,0)B(30,10,0);", "[0,100](0,10,0)R(10,10,0)&(20,10,0)B(30,10,0);"},
+		{"不带分号的不并", "[0,100](0,10,0)Q(10,10,0)&(20,10,0)A", "[0,100](0,10,0)Q(10,10,0)&(20,10,0)A"},
+		{"整个在一个词里的照旧解", "[0,100](0,10,0)&apos;til (10,10,0)x", "[0,100](0,10,0)'til (10,10,0)x"},
+		{"非计时行照旧解", "[ar:A &amp; B]\n[0,100](0,10,0)x", "[ar:A & B]\n[0,100](0,10,0)x"},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			if got := decodeYRCEntities(c.in); got != c.want {
+				t.Errorf("decodeYRCEntities(%q)\n got %q\nwant %q", c.in, got, c.want)
+			}
+			if again := decodeYRCEntities(c.want); again != c.want {
+				t.Errorf("不幂等: %q", again)
+			}
+		})
+	}
+	const plain = "[0,100](0,10,0)rock (10,10,0)& (20,10,0)roll"
+	if got := decodeYRCEntities(plain); got != plain {
+		t.Errorf("没有实体的一个字节不动: %q", got)
+	}
+}
+
+// 存量迁移:逐字和背景人声两份 YRC 里拆开的实体一起并;rank 门口同样并。
+func TestMigrateLyricEntitiesJoinsSplitYRC(t *testing.T) {
+	withTempMigrationState(t)
+	withTempDecisionCache(t)
+	split := "[0,100](0,10,0)i(10,0,0)&(10,10,0)apos(20,0,0);(20,10,0)m"
+	want := "[0,100](0,10,0)i(10,10,0)'(20,10,0)m"
+	enrichMu.Lock()
+	enrichPath = ""
+	enrichCache["a|t|b"] = enrichEntry{Lyrics: bt("[00:00.00]i'm"), LyricsYRC: bt(split), LyricsBG: bt(split)}
+	enrichMu.Unlock()
+	migrateLyricEntities()
+	if e := enrichCache["a|t|b"]; !e.LyricsYRC.EqualString(want) || !e.LyricsBG.EqualString(want) || !e.Lyrics.EqualString("[00:00.00]i'm") {
+		t.Fatalf("逐字、背景人声都该并: %+v", e)
+	}
+	r := decodeLyricSourceResultEntities(lyricSourceResult{yrc: split, bg: split})
+	r.ne.YRC, r.amll.yrc, r.amll.bg = split, split, split
+	r = decodeLyricSourceResultEntities(r)
+	if r.yrc != want || r.bg != want || r.ne.YRC != want || r.amll.yrc != want || r.amll.bg != want {
+		t.Fatalf("rank 门口的逐字字段都该并: %+v", r)
+	}
+}

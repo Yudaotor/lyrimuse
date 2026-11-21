@@ -1,9 +1,11 @@
 package main
 
 import (
+	"fmt"
 	"html"
 	"log"
 	"regexp"
+	"strconv"
 	"strings"
 )
 
@@ -83,6 +85,135 @@ func decodeLyricEntitiesOnce(s string) string {
 	})
 }
 
+// decodeYRCEntities 是逐字轨(YRC 语法)的 decodeLyricEntities:逐字词按字切的源会把一个实体拆进几个词
+// (`(…)&(…)apos(…);`),中间隔着计时标记,整份文本上认不出来。先把拼起来恰好是一个认得的实体的那几个词并成一个
+// (起点取第一个词的,终点取最后一个词的),再整份解。见 09 章决策 399。
+func decodeYRCEntities(yrc string) string {
+	return decodeLyricEntities(joinYRCSplitEntities(yrc))
+}
+
+// joinYRCSplitEntities:逐行处理计时行(`[` 开头、带词条的),没有 `&` 的行原样不动。
+func joinYRCSplitEntities(yrc string) string {
+	if !strings.Contains(yrc, "&") {
+		return yrc
+	}
+	lines := strings.Split(yrc, "\n")
+	changed := false
+	for i, line := range lines {
+		if !strings.HasPrefix(line, "[") || !strings.Contains(line, "&") {
+			continue
+		}
+		if fixed, ok := joinYRCLineEntities(line); ok {
+			lines[i] = fixed
+			changed = true
+		}
+	}
+	if !changed {
+		return yrc
+	}
+	return strings.Join(lines, "\n")
+}
+
+type yrcEntityToken struct {
+	start, end int64
+	flag, text string
+	decoded    bool // 文本被解过实体
+}
+
+// joinYRCLineEntities:一行里跨词的实体并成一个词并解开。每轮先把词里的实体各自解开,再并一处跨词的,直到不再变
+// (`&amp;` 解开后才跟后面的 `apos;` 拼成新的实体)。解出来只剩空白的词(`&nbsp;`)照 yrcMergeWhitespaceTokens
+// 的规矩并进前一个词。
+func joinYRCLineEntities(line string) (string, bool) {
+	locs := yrcWordTokenRe.FindAllStringSubmatchIndex(line, -1)
+	if len(locs) < 2 {
+		return line, false
+	}
+	head := line[:locs[0][0]]
+	toks := make([]yrcEntityToken, 0, len(locs))
+	for i, m := range locs {
+		start, _ := strconv.ParseInt(line[m[2]:m[3]], 10, 64)
+		dur, _ := strconv.ParseInt(line[m[4]:m[5]], 10, 64)
+		textEnd := len(line)
+		if i+1 < len(locs) {
+			textEnd = locs[i+1][0]
+		}
+		toks = append(toks, yrcEntityToken{start: start, end: start + dur, flag: line[m[6]:m[7]], text: line[m[1]:textEnd]})
+	}
+	joined := false
+	for { // 每并一次词数少一个,一定停得下来
+		for i := range toks {
+			if d := decodeLyricEntities(toks[i].text); d != toks[i].text {
+				toks[i].text, toks[i].decoded = d, true
+			}
+		}
+		next, ok := joinSpanningEntity(toks)
+		if !ok {
+			break
+		}
+		toks, joined = next, true
+	}
+	if !joined {
+		return line, false
+	}
+	out := make([]yrcEntityToken, 0, len(toks))
+	prefix := ""
+	for _, t := range toks {
+		if t.decoded && t.text != "" && strings.TrimSpace(t.text) == "" {
+			if n := len(out); n > 0 {
+				out[n-1].text += t.text
+				out[n-1].end = max(out[n-1].end, t.end)
+			} else {
+				prefix += t.text
+			}
+			continue
+		}
+		t.text = prefix + t.text
+		prefix = ""
+		out = append(out, t)
+	}
+	if len(out) == 0 {
+		return line, false
+	}
+	var b strings.Builder
+	b.WriteString(head)
+	for _, t := range out {
+		fmt.Fprintf(&b, "(%d,%d,%s)%s", t.start, t.end-t.start, t.flag, t.text)
+	}
+	return b.String(), true
+}
+
+// joinSpanningEntity 找出第一处跨词、解得开的实体,把那几个词并成一个(文本解开);没有时 ok=false。
+func joinSpanningEntity(toks []yrcEntityToken) (next []yrcEntityToken, ok bool) {
+	var all strings.Builder
+	owner := make([]int, 0, 64) // 拼起来的文本里每个字节属于第几个词
+	for i, t := range toks {
+		all.WriteString(t.text)
+		for range len(t.text) {
+			owner = append(owner, i)
+		}
+	}
+	text := all.String()
+	for _, m := range lyricEntityRe.FindAllStringIndex(text, -1) {
+		first, last := owner[m[0]], owner[m[1]-1]
+		if first == last || decodeLyricEntitiesOnce(text[m[0]:m[1]]) == text[m[0]:m[1]] {
+			continue
+		}
+		merged := yrcEntityToken{start: toks[first].start, end: toks[first].end, flag: toks[first].flag, decoded: true}
+		var body strings.Builder
+		for _, t := range toks[first : last+1] {
+			body.WriteString(t.text)
+			merged.end = max(merged.end, t.end)
+		}
+		merged.text = decodeLyricEntities(body.String())
+		next = make([]yrcEntityToken, 0, len(toks)-(last-first))
+		next = append(next, toks[:first]...)
+		next = append(next, merged)
+		next = append(next, toks[last+1:]...)
+		return next, true
+	}
+	return nil, false
+}
+
 // decodeLyricSourceResultEntities 对一路源应答里**所有**歌词文本字段过一遍 decodeLyricEntities,
 // 返回副本(lyricSourceResult 是值类型,改的是拷贝)。各源一视同仁:实体是编码层面的东西,
 // 哪个源的 JSON / XML / KRC 里带着都一样该解;今天没命中的源不代表明天不会。
@@ -97,21 +228,22 @@ func decodeLyricEntitiesOnce(s string) string {
 // CRLF。存量由 migrateLyricLineEndings 统一成同一个样子,两头一致,重评才不会把「只差换行」当成正文变了。
 func decodeLyricSourceResultEntities(r lyricSourceResult) lyricSourceResult {
 	clean := func(s string) string { return repairLyricMojibake(decodeLyricEntities(normalizeLyricText(s))) }
+	cleanYRC := func(s string) string { return repairLyricMojibake(decodeYRCEntities(normalizeLyricText(s))) }
 	r.lyr = clean(r.lyr)
-	r.yrc = clean(r.yrc)
+	r.yrc = cleanYRC(r.yrc)
 	r.tr = clean(r.tr)
 	r.roma = clean(r.roma)
-	r.bg = clean(r.bg)
+	r.bg = cleanYRC(r.bg)
 	r.ne.Lyrics = clean(r.ne.Lyrics)
 	r.ne.PlainLyrics = clean(r.ne.PlainLyrics)
 	r.ne.Trans = clean(r.ne.Trans)
 	r.ne.Roma = clean(r.ne.Roma)
-	r.ne.YRC = clean(r.ne.YRC)
+	r.ne.YRC = cleanYRC(r.ne.YRC)
 	r.amll.lrc = clean(r.amll.lrc)
-	r.amll.yrc = clean(r.amll.yrc)
+	r.amll.yrc = cleanYRC(r.amll.yrc)
 	r.amll.tr = clean(r.amll.tr)
 	r.amll.roma = clean(r.amll.roma)
-	r.amll.bg = clean(r.amll.bg)
+	r.amll.bg = cleanYRC(r.amll.bg)
 	return r
 }
 
@@ -161,9 +293,9 @@ func migrateLyricEntities() {
 		lyrics := decodeLyricEntities(e.Lyrics.String())
 		tr := decodeLyricEntities(e.LyricsTr.String())
 		roma := decodeLyricEntities(e.LyricsRoma.String())
-		yrc := decodeLyricEntities(e.LyricsYRC.String())
+		yrc := decodeYRCEntities(e.LyricsYRC.String())
 		plain := decodeLyricEntities(e.PlainLyrics.String())
-		bg := decodeLyricEntities(e.LyricsBG.String())
+		bg := decodeYRCEntities(e.LyricsBG.String())
 		if e.Lyrics.EqualString(lyrics) && e.LyricsTr.EqualString(tr) && e.LyricsRoma.EqualString(roma) && e.LyricsYRC.EqualString(yrc) && e.PlainLyrics.EqualString(plain) &&
 			e.LyricsBG.EqualString(bg) {
 			continue
