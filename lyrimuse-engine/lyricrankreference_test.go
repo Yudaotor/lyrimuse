@@ -617,7 +617,7 @@ func handwrittenMegalobizTimelinePenalty(results []scoredLyricCandidateResult) {
 			if j == i || peer.Score < 0 || peer.Lyrics == "" || !families[lyricSourceConsensusFamily(peer.Source)] {
 				continue
 			}
-			switch classifyTimelines(own, displayedTimeline(peer.Lyrics, peer.LyricsYRC), megalobizTimelineShiftMs) {
+			switch classifyTimelines(own, displayedTimeline(peer.Lyrics, peer.LyricsYRC), handwrittenMegalobizTimelineShiftMs) {
 			case timelineAligned:
 				aligned = true
 			case timelineShiftedLater:
@@ -640,3 +640,5 @@ func handwrittenImportedTrLang(lang string) string {
 	}
 	return features().LyricsTranslationLanguage
 }
+
+const handwrittenMegalobizTimelineShiftMs = 1500

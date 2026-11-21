@@ -204,7 +204,7 @@ func newBuiltinLyricProviderRegistry() *lyricProviderRegistry {
 		// 不带 key 时每个 IP 每分钟 30 次:攒满 6 个再按每秒 0.4 个补,任意一分钟里最多 6 + 24 = 30 个(megalobiz.go 头注)。
 		HostRates:    map[string]hostRate{"api.megalobiz.com": {perSec: 0.4, burst: 6, reserve: 2}},
 		HourlyBudget: megalobizHourlyBudget, DayQuotaReserve: megalobizDayQuotaReserve, ProxyFallback: true,
-		ParenBackground: true, PageURL: megalobizPageURL,
+		ParenBackground: true, PageURL: megalobizPageURL, HandTypedTimeline: true,
 		Assembly: &CandidateAssembly{Reads: fieldSourceDuration | fieldSourceURL},
 	}, 0)})
 

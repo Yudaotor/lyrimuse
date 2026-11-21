@@ -829,6 +829,22 @@ func TestProviderRegistryInstrumentalRankMatchesRanking(t *testing.T) {
 	}
 }
 
+// 手打时间轴的源:描述符推出来的、生产代码读到的都等于期望表;没登记的名字不是。
+func TestProviderRegistryHandTypedTimelineMatches(t *testing.T) {
+	got := registryNameSet(func(d *ProviderDescriptor) bool { return d.HandTypedTimeline })
+	if want := trueKeys(lyricSourceHandTypedTimelines); !reflect.DeepEqual(got, want) {
+		t.Errorf("登记表 %v\n期望表 %v", sortedKeys(got), sortedKeys(want))
+	}
+	for _, d := range registryDescriptors() {
+		if read := lyricSourceTimelineHandTyped(d.Name); read != lyricSourceHandTypedTimelines[d.Name] {
+			t.Errorf("%s:lyricSourceTimelineHandTyped=%v,期望表 %v", d.Name, read, lyricSourceHandTypedTimelines[d.Name])
+		}
+	}
+	if lyricSourceTimelineHandTyped("nope") || lyricSourceTimelineHandTyped("") {
+		t.Error("没登记的名字不是手打时间轴的源")
+	}
+}
+
 // descriptorCandidateShape:描述符的装配字段换成期望表 lyricSourceCandidateShape 的写法。
 func descriptorCandidateShape(d *ProviderDescriptor) lyricSourceCandidateShape {
 	as := d.Assembly

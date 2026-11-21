@@ -78,7 +78,7 @@ func megalobizShiftedLRC(n, startMs, stepMs, shiftMs int) string {
 }
 
 // 判据:有一家对得上就不扣;对不上的都同向平移才扣;两个方向都有不扣;不在共识名单里的不算;别的源不扣。
-func TestApplyMegalobizTimelinePenalty(t *testing.T) {
+func TestApplyHandTypedTimelinePenalty(t *testing.T) {
 	base := megalobizShiftedLRC(20, 10000, 8000, 0)
 	cand := func(src, lrc string, peers ...string) scoredLyricCandidateResult {
 		return scoredLyricCandidateResult{Source: src, Lyrics: lrc, Score: 500, ConsensusPeers: peers}
@@ -102,7 +102,7 @@ func TestApplyMegalobizTimelinePenalty(t *testing.T) {
 			{Source: "qq", Lyrics: base, Score: -1}}, false},
 	}
 	for _, c := range cases {
-		applyMegalobizTimelinePenalty(c.in)
+		applyHandTypedTimelinePenalty(c.in)
 		got := scoreTermPoints(c.in[0].ScoreTerms, scoreTermTimelineOffset) == -timelineOffsetPenalty
 		if got != c.want {
 			t.Errorf("%s: 扣了 = %v,期望 %v", c.name, got, c.want)
@@ -118,14 +118,23 @@ func TestApplyMegalobizTimelinePenalty(t *testing.T) {
 	}
 	// 别的源整体错开也不归它管。
 	other := []scoredLyricCandidateResult{cand("lrclib", megalobizShiftedLRC(20, 10000, 8000, 3000), "qq"), cand("qq", base)}
-	applyMegalobizTimelinePenalty(other)
+	applyHandTypedTimelinePenalty(other)
 	if len(other[0].ScoreTerms) != 0 {
-		t.Errorf("只看 Megalobiz: %v", other[0].ScoreTerms)
+		t.Errorf("只看手打时间轴的源: %v", other[0].ScoreTerms)
+	}
+	// 认哪个源由描述符定:把 lrclib 登记成手打时间轴,同一份输入就扣它。
+	lrclib := lyricProviders().descriptor(lyricSourceLRCLIB)
+	lrclib.HandTypedTimeline = true
+	defer func() { lrclib.HandTypedTimeline = false }()
+	marked := []scoredLyricCandidateResult{cand("lrclib", megalobizShiftedLRC(20, 10000, 8000, 3000), "qq"), cand("qq", base)}
+	applyHandTypedTimelinePenalty(marked)
+	if scoreTermPoints(marked[0].ScoreTerms, scoreTermTimelineOffset) != -timelineOffsetPenalty {
+		t.Errorf("登记成手打时间轴的源该扣: %v", marked[0].ScoreTerms)
 	}
 	// 已经被批级判定扣过的不重复扣。
 	twice := []scoredLyricCandidateResult{cand("megalobiz", megalobizShiftedLRC(20, 10000, 8000, 3000), "qq"), cand("qq", base)}
 	twice[0].ScoreTerms = []scoreTerm{{Kind: scoreTermTimelineOffset, Points: -timelineOffsetPenalty}}
-	applyMegalobizTimelinePenalty(twice)
+	applyHandTypedTimelinePenalty(twice)
 	if len(twice[0].ScoreTerms) != 1 || twice[0].Score != 500 {
 		t.Errorf("不重复扣: %d %v", twice[0].Score, twice[0].ScoreTerms)
 	}

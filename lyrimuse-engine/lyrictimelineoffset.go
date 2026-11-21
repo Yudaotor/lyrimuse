@@ -497,3 +497,46 @@ func timelinesIdentical(a, b []timelineLine) bool {
 	}
 	return float64(near) >= timelineCopyMinShare*float64(matched)
 }
+
+// handTypedTimelineShiftMs:手打时间轴的那份跟正文共识的另一家逐行对齐后,中位偏移到这么多就算整体错开。取值依据见 09 章决策 387。
+const handTypedTimelineShiftMs = 1500
+
+// applyHandTypedTimelinePenalty:时间轴是上传者手打的源(描述符的 HandTypedTimeline),个别整体晚好几秒,而正文共识只比文字、
+// 照样给分。它跟正文共识的另一家(ConsensusPeers 里的信源家族)逐行对齐:有一家对得上就不动;对不上的里至少一家整体平移
+// handTypedTimelineShiftMs 以上、方向一致时,扣 timelineOffsetPenalty 分、记一条 scoreTermTimelineOffset。
+// 没有别家可比(只有它一家、共识的几家都是纯文本或配不上行)时不扣。只看手打时间轴的源,别的源的分不动。
+// 调用位置紧跟 applyTimelineOffsetPenalty,两条流水线都要调;那一步已经扣过它的就不再扣。
+func applyHandTypedTimelinePenalty(results []scoredLyricCandidateResult) {
+	for i := range results {
+		r := &results[i]
+		if !lyricSourceTimelineHandTyped(r.Source) || r.Score < 0 || r.Lyrics == "" || len(r.ConsensusPeers) == 0 ||
+			scoreTermPoints(r.ScoreTerms, scoreTermTimelineOffset) != 0 {
+			continue
+		}
+		families := map[string]bool{}
+		for _, p := range r.ConsensusPeers {
+			families[lyricSourceConsensusFamily(p)] = true
+		}
+		own := displayedTimeline(r.Lyrics, r.LyricsYRC)
+		later, earlier := 0, 0
+		aligned := false
+		for j, peer := range results {
+			if j == i || peer.Score < 0 || peer.Lyrics == "" || !families[lyricSourceConsensusFamily(peer.Source)] {
+				continue
+			}
+			switch classifyTimelines(own, displayedTimeline(peer.Lyrics, peer.LyricsYRC), handTypedTimelineShiftMs) {
+			case timelineAligned:
+				aligned = true
+			case timelineShiftedLater:
+				later++
+			case timelineShiftedEarlier:
+				earlier++
+			}
+		}
+		if aligned || later+earlier == 0 || (later > 0 && earlier > 0) {
+			continue
+		}
+		r.Score = max(r.Score-timelineOffsetPenalty, 1)
+		r.ScoreTerms = append(r.ScoreTerms, scoreTerm{Kind: scoreTermTimelineOffset, Points: -timelineOffsetPenalty})
+	}
+}

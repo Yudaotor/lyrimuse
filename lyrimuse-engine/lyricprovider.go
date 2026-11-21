@@ -381,7 +381,9 @@ type ProviderDescriptor struct {
 	PlainText          PlainTextOrder
 	// ConsensusFamily:正文同出一家的源互不印证(lyricSourceConsensusFamily);空 = 自成一家。
 	ConsensusFamily string
-	ISRCLookup      ISRCLookupMode
+	// HandTypedTimeline:时间轴是上传者手打的。它那份跟正文共识的另一家整体错开时扣分(applyHandTypedTimelinePenalty)。
+	HandTypedTimeline bool
+	ISRCLookup        ISRCLookupMode
 	// ISRCAuthority:它报的 ISRC 可以当这条录音的记下来(recordingISRCsFromScored)。
 	ISRCAuthority bool
 	// PageURL:核对这份歌词在源网站上的页面地址(verifiedLyricSourcePageURL),nil = 不链回。
@@ -622,6 +624,12 @@ func lyricSourceDayReserve(source string) int {
 func lyricSourceUsesProxyFallback(source string) bool {
 	d := lyricProviders().descriptor(source)
 	return d != nil && d.ProxyFallback
+}
+
+// lyricSourceTimelineHandTyped:source 的时间轴是不是上传者手打的(描述符的 HandTypedTimeline)。没登记的名字不是。
+func lyricSourceTimelineHandTyped(source string) bool {
+	d := lyricProviders().descriptor(source)
+	return d != nil && d.HandTypedTimeline
 }
 
 // lyricSourceKindIs:name 这一路登记的是不是 kind 这一类。没登记的名字一律不是。播放器本机(providerKindPlayerLocal)和导入库

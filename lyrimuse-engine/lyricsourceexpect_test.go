@@ -251,3 +251,7 @@ var lyricSourceCandidateShapes = map[string]lyricSourceCandidateShape{
 // lyricSourceTranslationAccepters:打分那道「译文可用」没过时,另有一条判据把译文写进结果的源和各自的判据
 // (CandidateAssembly.AcceptTranslation)。照 43fa2dff7 的 rankLyricSourceResults 里 switch 的 kuwo 那一支整理。
 var lyricSourceTranslationAccepters = map[string]string{lyricSourceKuwo: "kuwoBakedTranslationCovers"}
+
+// lyricSourceHandTypedTimelines:时间轴是上传者手打的源(ProviderDescriptor.HandTypedTimeline)。43fa2dff7 的
+// applyMegalobizTimelinePenalty 只认 megalobiz 这一个源名。
+var lyricSourceHandTypedTimelines = map[string]bool{lyricSourceMegalobiz: true}

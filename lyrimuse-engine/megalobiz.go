@@ -41,7 +41,7 @@ const (
 // 曲库是用户上传的,写法不齐:约三成条目歌手栏是空的,其中一部分把歌手写进歌名(「Dorofeeva - Кохаю, але не зовсім」),还有挂着下载站
 // 标记的(「[SPOTDOWNLOADER.COM] Обійми」)。歌名由 megalobizSongTitle 整理;歌手栏空、也拆不出歌手的条目,只在歌名归一后相同、
 // 候选歌名没有本地没有的括号段、时长差不超过 megalobizNoArtistMaxDiffSecs 时才收。时间轴准度不齐(实测热门歌多数在半秒内,个别整体晚好几秒):
-// 正文共识只比文字,整体错开的照样拿共识分,所以另跟正文共识的那几家逐行对一次时间轴,错开的重扣(applyMegalobizTimelinePenalty);
+// 正文共识只比文字,整体错开的照样拿共识分,所以另跟正文共识的那几家逐行对一次时间轴,错开的重扣(描述符的 HandTypedTimeline,applyHandTypedTimelinePenalty);
 // 没有别家可比时不扣,也不按源写死偏移(09 章决策 294)。
 type megalobizResult struct {
 	lyrics, title, artist string
@@ -465,47 +465,4 @@ func resolveMegalobizLyric(ctx context.Context, artist, title, album string, dur
 		return megalobizResult{lyrics: lrc, title: name, artist: credit, url: page, durationSecs: d}
 	}
 	return megalobizResult{}
-}
-
-// megalobizTimelineShiftMs:Megalobiz 那份跟正文共识的另一家逐行对齐后,中位偏移到这么多就算整体错开。取值依据见 09 章决策 387。
-const megalobizTimelineShiftMs = 1500
-
-// applyMegalobizTimelinePenalty:Megalobiz 的时间轴是上传者手打的,个别整体晚好几秒,而正文共识只比文字、照样给分。
-// 它跟正文共识的另一家(ConsensusPeers 里的信源家族)逐行对齐:有一家对得上就不动;对不上的里至少一家整体平移
-// megalobizTimelineShiftMs 以上、方向一致时,扣 timelineOffsetPenalty 分、记一条 scoreTermTimelineOffset。
-// 没有别家可比(只有它一家、共识的几家都是纯文本或配不上行)时不扣。只看 Megalobiz,别的源的分不动。
-// 调用位置紧跟 applyTimelineOffsetPenalty,两条流水线都要调;那一步已经扣过它的就不再扣。
-func applyMegalobizTimelinePenalty(results []scoredLyricCandidateResult) {
-	for i := range results {
-		r := &results[i]
-		if r.Source != lyricSourceMegalobiz || r.Score < 0 || r.Lyrics == "" || len(r.ConsensusPeers) == 0 ||
-			scoreTermPoints(r.ScoreTerms, scoreTermTimelineOffset) != 0 {
-			continue
-		}
-		families := map[string]bool{}
-		for _, p := range r.ConsensusPeers {
-			families[lyricSourceConsensusFamily(p)] = true
-		}
-		own := displayedTimeline(r.Lyrics, r.LyricsYRC)
-		later, earlier := 0, 0
-		aligned := false
-		for j, peer := range results {
-			if j == i || peer.Score < 0 || peer.Lyrics == "" || !families[lyricSourceConsensusFamily(peer.Source)] {
-				continue
-			}
-			switch classifyTimelines(own, displayedTimeline(peer.Lyrics, peer.LyricsYRC), megalobizTimelineShiftMs) {
-			case timelineAligned:
-				aligned = true
-			case timelineShiftedLater:
-				later++
-			case timelineShiftedEarlier:
-				earlier++
-			}
-		}
-		if aligned || later+earlier == 0 || (later > 0 && earlier > 0) {
-			continue
-		}
-		r.Score = max(r.Score-timelineOffsetPenalty, 1)
-		r.ScoreTerms = append(r.ScoreTerms, scoreTerm{Kind: scoreTermTimelineOffset, Points: -timelineOffsetPenalty})
-	}
 }

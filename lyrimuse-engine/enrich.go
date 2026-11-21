@@ -5266,7 +5266,7 @@ func mergeLyricCandidateRounds(artist, title, album string, durationSecs float64
 	// 时间轴平移扣分同理,且排在它前面(见 applyTimelineOffsetPenalty)。
 	applySourceDurationNearMissPenalty(out, durationSecs)
 	applyTimelineOffsetPenalty(out, durationSecs)
-	applyMegalobizTimelinePenalty(out)
+	applyHandTypedTimelinePenalty(out)
 	applyTimelineIntrusionPenalty(out, durationSecs)
 	applyGarbledTextPenalty(out)
 	applyDurationNearTie(out, durationSecs)
@@ -5612,7 +5612,7 @@ func rankLyricSourceResults(artist, title, album string, durationSecs float64, r
 	// 时间轴整体平移的扣分排在它前面:那一步要看的是扣完之后谁赢(见 applyTimelineOffsetPenalty)。
 	applySourceDurationNearMissPenalty(results, durationSecs)
 	applyTimelineOffsetPenalty(results, durationSecs)
-	applyMegalobizTimelinePenalty(results)
+	applyHandTypedTimelinePenalty(results)
 	applyTimelineIntrusionPenalty(results, durationSecs)
 	applyGarbledTextPenalty(results)
 	applyDurationNearTie(results, durationSecs)
