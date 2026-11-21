@@ -89,7 +89,7 @@ func earlyLyricsVerdict(scored []scoredLyricCandidateResult, picked *scoredLyric
 	}
 	// 文件自带的那份开搜前就读好了,优先用它、它又干净时不用等别的源。带扣分项的(同名 .lrc 是给别的版本的)也可能被挑中:
 	// 顺序优先找不到干净候选时退回第一个能用的,智能算法比分时它也能胜出;那种照下面的规则等。见 09 章决策 347。
-	if features().PreferLocalFileLyrics && picked.Source == localFileLyricsSource && priorityCandidateClean(*picked) {
+	if features().PreferLocalFileLyrics && lyricSourceIsFileLyrics(picked.Source) && priorityCandidateClean(*picked) {
 		return earlyLyricsTrust
 	}
 	if features().LyricsSourceMode == lyricsModePriority {

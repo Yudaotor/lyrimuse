@@ -500,12 +500,15 @@ func TestLXMusicLocalLyricsIsWired(t *testing.T) {
 	}
 	for _, wire := range []string{
 		"lxMusicLyrics: lxMusicLyricsAvail",
-		"s != lxMusicLocalLyricsSource",
+		"return isNativeLyricSource(s) && !lyricSourceKindIs(s, providerKindPlayerLocal) &&",
 		"if lxMusicAwaitsDuration(bundleID, durationSecs) {\n\t\tenrichMu.Unlock()\n\t\treturn nil\n\t}\n\t// 从没见过这首歌:首次解析",
 	} {
 		if !containsCode(string(b), wire) {
 			t.Errorf("enrich.go 缺 %q", wire)
 		}
+	}
+	if !lyricSourceKindIs(lxMusicLocalLyricsSource, providerKindPlayerLocal) {
+		t.Error("洛雪本地歌词应登记成播放器本机的来源:同源落选不重来的判断读的是 Kind")
 	}
 	if !lxMusicAwaitsDuration(lxMusicBundleID, 0) || lxMusicAwaitsDuration(lxMusicBundleID, 240.4) || lxMusicAwaitsDuration(kkboxBundleID, 0) {
 		t.Error("只有洛雪、而且这一拍时长还是 0 时,首次解析才等下一拍")

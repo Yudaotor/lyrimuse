@@ -1921,10 +1921,11 @@ func preferLocalFileUpgradeVerdict(e enrichEntry, picked *scoredLyricCandidateRe
 	if !features().PreferLocalFileLyrics {
 		return false, false
 	}
+	pickedFile, currentFile := lyricSourceIsFileLyrics(picked.Source), lyricSourceIsFileLyrics(e.LyricsSource)
 	switch {
-	case picked.Source == localFileLyricsSource && e.LyricsSource != localFileLyricsSource:
+	case pickedFile && !currentFile:
 		return !keepsShownLyricsOver(e, picked), true
-	case e.LyricsSource == localFileLyricsSource && picked.Source != localFileLyricsSource:
+	case currentFile && !pickedFile:
 		if manual || lyricsFitAnotherCut(e, durationSecs) {
 			return false, false
 		}
@@ -2073,14 +2074,14 @@ func needsLyricsRetry(e enrichEntry, wrongDuration, pinned, autoUpgrade bool) bo
 	// 下面的手改保护/重试上限/时间节流照常生效 —— 同源候选要是每次都赢不了(比如它质量
 	// 实在差,250 分也翻不过来),重试次数上限会兜住,不会没完没了地重搜。
 	//
-	// kkbox 不走这条:它的词只在用 KKBOX 放过之后才进缓存,出现在候选里时几乎总是已经带着同源加权打过分了,「没选它」
+	// 播放器本机的来源(Kind 是 providerKindPlayerLocal:KKBOX、Amazon Music、文件自带的歌词、洛雪)不走这条。拿 kkbox 说:
+	// 它的词只在用 KKBOX 放过之后才进缓存,出现在候选里时几乎总是已经带着同源加权打过分了,「没选它」
 	// 就是结论(它只有逐行,输给逐字源是常态),走这条会让每首用 KKBOX 放的歌都白白全源重搜到次数上限。它什么时候值得
 	// 重来一次由 kkboxLyricsWorthRecheck 管。lyricfind 在条目记下按 videoId 问过它(LyricsNativeVideoID)之后同理:那一轮
 	// 已经带着同源加权比过,再搜结论不变;什么时候值得再按 videoId 问一次由 kasetLyricsWorthRecheck 管。
 	nativeMissedOut := hasNativeLyricSource() && !isNativeLyricSource(e.LyricsSource) &&
 		slices.ContainsFunc(e.LyricsSourcesSeen, func(s string) bool {
-			return isNativeLyricSource(s) && s != kkboxLocalLyricsSource && s != amazonLocalLyricsSource &&
-				s != localFileLyricsSource && s != lxMusicLocalLyricsSource &&
+			return isNativeLyricSource(s) && !lyricSourceKindIs(s, providerKindPlayerLocal) &&
 				(s != lyricSourceLyricFind || e.LyricsNativeVideoID == "")
 		})
 	// 版本时长对不上(预取用了另一个版本的时长做校验)跟"同源落选"一样,本身就是重来
@@ -4261,11 +4262,11 @@ func pickLyricCandidate(scored []scoredLyricCandidateResult) *scoredLyricCandida
 	return picked
 }
 
-// preferredLocalFileCandidate:智能算法下「优先用歌曲文件自带的歌词」挑的那一条 —— 文件自带的(localfile)、能用、不带
+// preferredLocalFileCandidate:智能算法下「优先用歌曲文件自带的歌词」挑的那一条 —— 文件自带的(lyricSourceIsFileLyrics)、能用、不带
 // earlyLyricsPenaltyTerms 里的扣分项;只有纯文本的打分是负的,本来就不算能用。没有为 nil。
 func preferredLocalFileCandidate(scored []scoredLyricCandidateResult, usable func(scoredLyricCandidateResult) bool) *scoredLyricCandidateResult {
 	for i := range scored {
-		if scored[i].Source == localFileLyricsSource && usable(scored[i]) && priorityCandidateClean(scored[i]) {
+		if lyricSourceIsFileLyrics(scored[i].Source) && usable(scored[i]) && priorityCandidateClean(scored[i]) {
 			return &scored[i]
 		}
 	}

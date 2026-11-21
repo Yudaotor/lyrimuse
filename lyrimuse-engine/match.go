@@ -831,7 +831,9 @@ func setNativeLyricSourcesForPlayer(bundleID string) {
 	if playsLocalFilesBesidesStreaming(player) {
 		// 放本地文件时文件旁的 .lrc、文件标签里的歌词就是它自己的那份(localfilelyrics.go);放流媒体时没有这一份候选,
 		// 不影响别的源。没有自家歌词源的播放器(Spotify)同样算。
-		want[localFileLyricsSource] = true
+		for _, s := range lyricProviders().priorityFileNames {
+			want[s] = true
+		}
 	}
 	if len(want) == 0 {
 		nativeLyricSources = nil

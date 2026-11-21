@@ -776,6 +776,13 @@ func lyricSourceKindIs(name string, kind ProviderKind) bool {
 	return lyricProviders().sourceKindIs(name, kind)
 }
 
+// lyricSourceIsFileLyrics:source 是不是歌曲文件自带的歌词那一类(描述符的 PriorityPlacement 是 priorityFileLyrics)。设置里
+// 「优先用歌曲文件自带的歌词」管的是这一类,放本地文件的播放器把这一类认作自家的歌词。没登记的名字不是。
+func lyricSourceIsFileLyrics(source string) bool {
+	d := lyricProviders().descriptor(source)
+	return d != nil && d.PriorityPlacement == priorityFileLyrics
+}
+
 // sourceKindIs:这份登记表里 name 登记的是不是 kind 这一类。
 func (r *lyricProviderRegistry) sourceKindIs(name string, kind ProviderKind) bool {
 	d := r.descriptor(name)
