@@ -334,6 +334,93 @@ func runLyricsParsingTests() {
         expectEqual(LyricsWordEmphasis.glyphRanges("e\u{301}x"), [0..<2, 2..<3], "字素簇: 组合重音跟字母算一个字形")
         expectEqual(LyricsWordEmphasis.glyphRanges("पाया ").count, LyricsWordEmphasis.glyphCount("पाया "),
                     "字素簇: 字形范围跟字形数一一对应")
+
+        // 跨行:歌词源把行切在一个字中间,下一行开头是组合符号(泰文「…ในช」/「ีวิต」)。
+        func scalarWords(_ text: String, from start: Int, step: Int = 50) -> [LyricWord] {
+            text.unicodeScalars.enumerated().map { i, u in
+                LyricWord(startMs: start + i * step, durationMs: step, text: String(Character(u)))
+            }
+        }
+        let thai = [LyricLineWords(timeMs: 0, words: scalarWords("ในช", from: 0, step: 300)),
+                    LyricLineWords(timeMs: 1000, words: [LyricWord(startMs: 1000, durationMs: 282, text: "\u{0E35}"),
+                                                         LyricWord(startMs: 1282, durationMs: 94, text: "ว"),
+                                                         LyricWord(startMs: 1376, durationMs: 47, text: "\u{0E34}"),
+                                                         LyricWord(startMs: 1423, durationMs: 138, text: "ต")])]
+        let thaiMerged = LyricWordClusters.mergingLineStarts(LyricWordClusters.merging(thai))
+        expectEqual(thaiMerged.map { $0.words.map(\.text).joined() }, ["ในชี", "วิต"], "字素簇跨行: 行首的元音符号挪回上一行末尾")
+        expectEqual(thaiMerged.filter { startsWithMark($0.words.first?.text ?? "") }.count, 0, "字素簇跨行: 没有以组合符号开头的行")
+        expectEqual(thaiMerged[0].words.last, LyricWord(startMs: 600, durationMs: 400, text: "ชี"),
+                    "字素簇跨行: 挪走的词时间并进上一行最后一个词,终点不越过这一行行头")
+        expectEqual(thaiMerged[1].timeMs, 1000, "字素簇跨行: 行头时间不动")
+        expectEqual(thaiMerged[1].words, [LyricWord(startMs: 1282, durationMs: 141, text: "วิ"),
+                                          LyricWord(startMs: 1423, durationMs: 138, text: "ต")],
+                    "字素簇跨行: 剩下的词时间不动")
+        let arabic = [LyricLineWords(timeMs: 0, words: [LyricWord(startMs: 0, durationMs: 500, text: "وجرود")]),
+                      LyricLineWords(timeMs: 800, words: [LyricWord(startMs: 800, durationMs: 300, text: "\u{0650}إنت "),
+                                                          LyricWord(startMs: 1100, durationMs: 300, text: "إنت")])]
+        expectEqual(LyricWordClusters.mergingLineStarts(arabic),
+                    [LyricLineWords(timeMs: 0, words: [LyricWord(startMs: 0, durationMs: 500, text: "وجرود\u{0650}")]),
+                     LyricLineWords(timeMs: 800, words: [LyricWord(startMs: 800, durationMs: 300, text: "إنت "),
+                                                         LyricWord(startMs: 1100, durationMs: 300, text: "إنت")])],
+                    "字素簇跨行: 只挪走词首一截时,上一个词的终点和剩下部分的时间都不动")
+        let lone = [LyricLineWords(timeMs: 0, words: [LyricWord(startMs: 0, durationMs: 100, text: "ช")]),
+                    LyricLineWords(timeMs: 500, words: [LyricWord(startMs: 500, durationMs: 900, text: "\u{0E35}")]),
+                    LyricLineWords(timeMs: 1200, words: [LyricWord(startMs: 1200, durationMs: 100, text: "ว")])]
+        expectEqual(LyricWordClusters.mergingLineStarts(lone),
+                    [LyricLineWords(timeMs: 0, words: [LyricWord(startMs: 0, durationMs: 1200, text: "ชี")]),
+                     LyricLineWords(timeMs: 1200, words: [LyricWord(startMs: 1200, durationMs: 100, text: "ว")])],
+                    "字素簇跨行: 挪空的行整行并掉,终点不越过再下一行的行头")
+        let firstLine = [LyricLineWords(timeMs: 0, words: [LyricWord(startMs: 0, durationMs: 100, text: "\u{0E35}ว")]),
+                         LyricLineWords(timeMs: 500, words: [LyricWord(startMs: 500, durationMs: 100, text: "ต")])]
+        expectEqual(LyricWordClusters.mergingLineStarts(firstLine), firstLine, "字素簇跨行: 第一行前面没有可并的,原样不动")
+        let afterSpace = [LyricLineWords(timeMs: 0, words: [LyricWord(startMs: 0, durationMs: 100, text: "ช ")]),
+                          LyricLineWords(timeMs: 500, words: [LyricWord(startMs: 500, durationMs: 100, text: "\u{0E35}ว")])]
+        expectEqual(LyricWordClusters.mergingLineStarts(afterSpace), afterSpace, "字素簇跨行: 上一行以空白结尾,不挪")
+        let wholeLines = [LyricLineWords(timeMs: 0, words: scalarWords("पाया", from: 0)),
+                          LyricLineWords(timeMs: 500, words: [LyricWord(startMs: 500, durationMs: 100, text: "मैं")])]
+        expectEqual(LyricWordClusters.mergingLineStarts(wholeLines), wholeLines, "字素簇跨行: 行首是基字的合不成一个簇,原样不动")
+        expectEqual(LyricWordClusters.mergingLineStarts([LyricLine(timeMs: 0, text: "สิ่งที่สวยงามในช"), LyricLine(timeMs: 1000, text: "\u{0E35}วิต"),
+                                                         LyricLine(timeMs: 2000, text: "\u{0E35}")]),
+                    [LyricLine(timeMs: 0, text: "สิ่งที่สวยงามในชี"), LyricLine(timeMs: 1000, text: "วิต\u{0E35}")],
+                    "字素簇跨行: 整行歌词同样挪,挪完只剩组合符号的行并掉")
+
+        // 整条加载路:逐字、整行两份都挪,译文仍按原来那一行挂。
+        let lineA = "สิ่งที่สวยงามในช", lineB = "\u{0E35}วิต"
+        func yrcLine(_ start: Int, _ text: String) -> String {
+            "[\(start),\(text.unicodeScalars.count * 100)]" + text.unicodeScalars.enumerated()
+                .map { "(\(start + $0 * 100),100,0)\(String(Character($1)))" }.joined()
+        }
+        let thaiEngine = LyricsSyncEngine()
+        _ = thaiEngine.load(lyrics: "[00:01.00]\(lineA)\n[00:03.00]\(lineB)\n[00:05.00]ที่พบเจอ",
+                            lyricsTr: "[00:01.00]生命中美好的事物\n[00:03.00]生命\n[00:05.00]遇见的",
+                            lyricsRoma: "", lyricsYRC: [yrcLine(1000, lineA), yrcLine(3000, lineB), yrcLine(5000, "ที่พบเจอ")].joined(separator: "\n"))
+        let thaiLines = thaiEngine.allLines(idPrefix: "th").map(\.line)
+        expectEqual(thaiLines.map { $0.words?.map(\.text).joined() ?? "" }, ["สิ่งที่สวยงามในชี", "วิต", "ที่พบเจอ"],
+                    "字素簇跨行: 加载后逐字行的行首没有组合符号")
+        expectEqual(thaiLines.map(\.translation), ["生命中美好的事物", "生命", "遇见的"], "字素簇跨行: 挪过之后译文仍挂在原来那一行")
+        let lrcOnly = LyricsSyncEngine()
+        _ = lrcOnly.load(lyrics: "[00:01.00]\(lineA)\n[00:03.00]\(lineB)", lyricsTr: "[00:01.00]甲\n[00:03.00]乙",
+                         lyricsRoma: "", lyricsYRC: "")
+        expectEqual(lrcOnly.allLines(idPrefix: "tl").map { [$0.line.mainText ?? "", $0.line.translation ?? ""] },
+                    [["สิ่งที่สวยงามในชี", "甲"], ["วิต", "乙"]], "字素簇跨行: 只有整行歌词时同样挪,译文对得上")
+
+        // 长音强调的字母数门槛:下限按码位(至少 2),上限按含字母的字素簇(至多 7)。
+        func eligible(_ text: String) -> Bool { LyricsWordEmphasis.isEligible(text: text, durationMs: 1500) }
+        func eligibleByScalars(_ text: String) -> Bool {
+            LyricsWordEmphasis.letterRange.contains(text.unicodeScalars.filter { CharacterSet.letters.contains($0) }.count)
+        }
+        expectEqual([eligible("evth\u{00ED}ni"), eligible("evthi\u{0301}ni")], [true, true], "长音门槛: 重音合成、分解两种写法判得一样")
+        expectEqual([eligible("יִשְׂרָאֵל"), eligible("ישראל")], [true, true], "长音门槛: 带不带点符判得一样")
+        expectEqual([eligible("वासुदेवाय"), eligible("ไม่อยากจำ")], [true, true], "长音门槛: 上限按字素簇数,天城文、泰文短语进得来")
+        expectEqual([eligible("है"), eligible("हैं"), eligible("รู้"), eligible("e\u{0300}")], [true, true, true, true],
+                    "长音门槛: 一个字素簇、两个以上码位的词照旧够格")
+        expectEqual([eligible("I "), eligible("beautiful"), eligible("abcdefgh")], [false, false, false],
+                    "长音门槛: 单个字母、超过 7 个字素簇的照旧不够格")
+        let gateSamples = ["heart", "alone", "cold?", "lone ", "पाया", "मैंने ", "तुम्हें", "है", "हैं", "हो", "สวัสดี", "ค่ะ", "รู้", "น้ำ",
+                           "আমার", "தமிழ்", "போ", "ஹே,", "مَرْحَبًا", "شو ", "שָׁלוֹם", "e\u{0301}te\u{0301}", "o\u{0323}\u{0300}", "e\u{0300}",
+                           "Thành", "ọ̀ ", "naïve", "Ελλάδα", "привет", "abcdefg", "o\u{0308}k", "a1b2", "-ok-"]
+        expectEqual(gateSamples.filter { eligibleByScalars($0) && !eligible($0) }, [],
+                    "长音门槛: 按码位数够格的样例全部仍够格")
     }
 
     // MARK: - LyricTimelineNormalizer:逐字时间轴合法性归一化

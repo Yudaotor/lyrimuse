@@ -11,7 +11,8 @@ import Foundation
 public enum LyricsWordEmphasis {
     /// 触发门槛:这个词从开唱到唱完不短于这么多毫秒。
     public static let minDurationMs = 1000
-    /// 词的字母数范围。太长的词整体放大会很突兀。
+    /// 词的字母数范围。下限按含字母类别的码位数(单个字母 `I` 这类放大没意义),上限按含字母的字素簇数(太长的词
+    /// 整体放大突兀):同一个词带不带点符、重音合成还是分解,上限判得一样。见 08 章决策 74。
     public static let letterRange = 2...7
 
     /// 一个会被强调的词:从第一个 token 开唱到最后一个 token 唱完。
@@ -147,11 +148,13 @@ public enum LyricsWordEmphasis {
         return curves(progress: t / window.lengthMs, durationMs: span.durationMs)
     }
 
-    /// 这个词够不够格:时长够长、没有中日韩文字、字母数在 `letterRange` 内。
+    /// 这个词够不够格:时长够长、没有中日韩文字、字母数在 `letterRange` 内(下限数码位、上限数字素簇)。
     public static func isEligible(text: String, durationMs: Int) -> Bool {
         guard durationMs >= minDurationMs, !containsCJK(text) else { return false }
-        let letters = text.unicodeScalars.filter { CharacterSet.letters.contains($0) }.count
-        return letterRange.contains(letters)
+        let letterScalars = text.unicodeScalars.filter { CharacterSet.letters.contains($0) }.count
+        guard letterScalars >= letterRange.lowerBound else { return false }
+        let letterClusters = text.filter { $0.unicodeScalars.contains { CharacterSet.letters.contains($0) } }.count
+        return letterClusters <= letterRange.upperBound
     }
 
     /// 某一刻的强调量(毫秒,跟逐字填色同一个时间基准)。三样都在词唱完的那一刻回到零:

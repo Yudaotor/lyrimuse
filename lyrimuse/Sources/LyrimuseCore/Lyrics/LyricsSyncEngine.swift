@@ -1806,7 +1806,7 @@ public final class LyricsSyncEngine {
         // 逐字数据始终解析:要不要逐字填色是悬浮歌词 / 灵动岛 / 菜单栏各自的开关,由各展示面在消费点把行压成整行
         // (`SyncedLyricLine.lineLevel`),引擎不替任何一个面做这个决定。
         let normalizedYRC = LyricTimelineNormalizer.normalize(YRCParser.parse(lyricsYRC))
-        let yrc = Self.splittingHanWords(LyricWordClusters.merging(normalizedYRC.lines))
+        let yrc = Self.splittingHanWords(LyricWordClusters.mergingLineStarts(LyricWordClusters.merging(normalizedYRC.lines)))
         keptOverlapLineTimes = normalizedYRC.keptOverlapLineTimes
         LyricTimelineNormalizer.logSummary(normalizedYRC.report, track: trackTitle)
         // 过滤前先把整份的文本取出来判一次(结构化规则是整份粒度的,见
@@ -1829,7 +1829,8 @@ public final class LyricsSyncEngine {
             return fromBase != 0 ? fromBase : LRCParser.parseOffsetMs(lyricsYRC)
         }()
         spatialAudioCue = LRCParser.parseSpatialAudioCue(lyrics) ?? LRCParser.parseSpatialAudioCue(lyricsYRC)
-        let parsedBase = LRCParser.parse(lyrics)
+        // 整行这份跟逐字那份同样把行首的组合符号并回上一行:译文、罗马音按整行文字配到逐字行上,两边得是同一口径。
+        let parsedBase = LyricWordClusters.mergingLineStarts(LRCParser.parse(lyrics))
         // 演唱者标签要在署名过滤**之前**认出来,再回头当豁免喂给它 —— 顺序不能反:
         // 「每句都带标记」的对唱歌天然满足署名过滤"命中 ≥3 行且过半"的闸门,先过滤就是
         // 整首被删空(speakerLabels 那份写死名单也是同一个理由)。

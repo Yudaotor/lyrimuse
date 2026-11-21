@@ -7,7 +7,7 @@ import Foundation
 /// 基字,补一个虚线圈「◌」占位,还把它当成一个字占宽。这里把开头接着上一个词末字的那几个码位并回上一个词。
 /// 见 08 章决策 73。
 public enum LyricWordClusters {
-    /// 每一行各自对齐,行与行之间不并。
+    /// 每一行各自对齐,行与行之间不并(跨行的见 `mergingLineStarts`)。
     public static func merging(_ lines: [LyricLineWords]) -> [LyricLineWords] {
         lines.map { line in
             guard line.words.count > 1 else { return line }
@@ -41,6 +41,77 @@ public enum LyricWordClusters {
             if !rest.isEmpty {
                 out.append(LyricWord(startMs: word.startMs, durationMs: word.durationMs, text: rest))
             }
+        }
+        return out
+    }
+
+    /// 一行开头的码位跟上一行的末字合成同一个字素簇时(歌词源把行切在一个字中间),把这几个码位挪到上一行最后一个词末尾。
+    /// 挪走的是整个词时,上一行最后一个词的终点延到这个词的终点,但不越过这一行的行头;一行挪完只剩空白就整行并掉,
+    /// 终点不越过再下一行的行头。行头时间、其余词的时间不动。第一行、上一行以空白结尾的不挪:空白加组合符号
+    /// 虽然算一个字素簇,却不是那个字。见 08 章决策 74。
+    public static func mergingLineStarts(_ lines: [LyricLineWords]) -> [LyricLineWords] {
+        guard lines.count > 1 else { return lines }
+        var out: [LyricLineWords] = []
+        out.reserveCapacity(lines.count)
+        for (index, line) in lines.enumerated() {
+            guard let previous = out.last, let tailWord = previous.words.last,
+                  let tail = tailWord.text.last, !tail.isWhitespace else {
+                out.append(line)
+                continue
+            }
+            var words = line.words
+            var cluster = tail
+            var movedText = ""
+            var movedEndMs: Int?
+            while let first = words.first {
+                let (moved, rest) = continuation(of: cluster, in: first.text)
+                guard !moved.isEmpty else { break }
+                movedText += moved
+                cluster = Character(String(cluster) + moved)
+                if rest.isEmpty {
+                    movedEndMs = first.startMs + first.durationMs
+                    words.removeFirst()
+                    continue
+                }
+                words[0] = LyricWord(startMs: first.startMs, durationMs: first.durationMs, text: rest)
+                break
+            }
+            guard !movedText.isEmpty else {
+                out.append(line)
+                continue
+            }
+            let emptied = words.allSatisfy { $0.text.allSatisfy(\.isWhitespace) }
+            let limitMs = emptied ? (index + 1 < lines.count ? lines[index + 1].timeMs : nil) : line.timeMs
+            var endMs = tailWord.startMs + tailWord.durationMs
+            if let movedEndMs { endMs = max(endMs, min(movedEndMs, limitMs ?? movedEndMs)) }
+            var previousWords = previous.words
+            previousWords[previousWords.count - 1] = LyricWord(
+                startMs: tailWord.startMs, durationMs: endMs - tailWord.startMs, text: tailWord.text + movedText)
+            out[out.count - 1] = LyricLineWords(timeMs: previous.timeMs, words: previousWords, durationMs: previous.durationMs)
+            if !emptied {
+                out.append(LyricLineWords(timeMs: line.timeMs, words: words, durationMs: line.durationMs))
+            }
+        }
+        return out
+    }
+
+    /// 整行歌词的同一条:行首接着上一行末字的码位挪到上一行末尾,挪完只剩空白的行并掉。规则同上一个重载。
+    public static func mergingLineStarts(_ lines: [LyricLine]) -> [LyricLine] {
+        guard lines.count > 1 else { return lines }
+        var out: [LyricLine] = []
+        out.reserveCapacity(lines.count)
+        for line in lines {
+            guard let previous = out.last, let tail = previous.text.last, !tail.isWhitespace else {
+                out.append(line)
+                continue
+            }
+            let (moved, rest) = continuation(of: tail, in: line.text)
+            guard !moved.isEmpty else {
+                out.append(line)
+                continue
+            }
+            out[out.count - 1] = LyricLine(timeMs: previous.timeMs, text: previous.text + moved)
+            if !rest.allSatisfy(\.isWhitespace) { out.append(LyricLine(timeMs: line.timeMs, text: rest)) }
         }
         return out
     }
