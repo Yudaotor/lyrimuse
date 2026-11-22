@@ -8,26 +8,40 @@ import Foundation
 /// 播放器报「没在放」却换了一首(撤会话那一瞬读到的撕裂快照)→ 还当是上一首。接手的播放器**在放**就照常切:那是用户
 /// 真的换了播放器。同一个播放器报同一首暂停也照常:那是真暂停。那个播放器已经退出了也不等。
 ///
-/// 只对标了 `dropsSessionBetweenTracks` 的播放器生效:位置链路上的判据按播放器收窄(见 02 章决策 41)。
+/// 只对标了 `dropsSessionBetweenTracks` 的播放器和网页播放器的宿主(`isWebPlayerHost`)生效:位置链路上的判据按播放器收窄
+/// (见 02 章决策 41)。
 public enum PlayerGapHold {
     /// 撤会话那一拍离最后一次看到它不超过这么久,才当是切歌空档。
     public static let startWindow: TimeInterval = 8
     /// 从撤会话那一拍起最多保持多久,再久就当它真的不放了。
     public static let window: TimeInterval = 25
+    /// 网页播放器的宿主最多保持多久。关标签页同样撤会话、不再回来,比原生播放器收得短;换歌空档实测 4 秒以内(见 02 章决策 289)。
+    public static let webHostWindow: TimeInterval = 10
+
+    /// 网页播放器的宿主:Chromium 系浏览器、它们装出来的网页应用、Safari 的媒体进程(换成宿主后是有脚本接口的浏览器)。
+    /// 页面换歌时浏览器先撤会话、隔一会儿再登记下一首,同原生播放器的 `dropsSessionBetweenTracks`(见 02 章决策 289)。纯函数。
+    public static func isWebPlayerHost(_ bundleID: String?) -> Bool {
+        guard let bundleID, !bundleID.isEmpty else { return false }
+        let host = TrustedPlayers.mediaProxyOwners[bundleID] ?? BrowserWebApp.parse(bundleID)?.hostBundleID ?? bundleID
+        return BrowserAutomationPermission.family(forBundleID: host) != nil
+    }
+
+    /// 这个播放器换歌时会不会先撤会话:内置播放器看 `dropsSessionBetweenTracks`,另加网页播放器的宿主。
+    public static func dropsSessionBetweenTracks(_ bundleID: String?) -> Bool {
+        PlaybackPlayer.builtin(forBundleID: bundleID)?.dropsSessionBetweenTracks == true || isWebPlayerHost(bundleID)
+    }
 
     /// `holdingSince` 为 nil 时判「这一拍该不该开始保持」,否则判「还该不该接着保持」。`lastPlayerRunning` 只在
     /// 别的条件都满足时才问。
     public static func shouldHold(lastBundleID: String?, lastTrackKey: String?, lastSeenAt: Date?, holdingSince: Date?,
                                   newBundleID: String?, newTrackKey: String?, newPlaying: Bool,
                                   lastPlayerRunning: () -> Bool, now: Date) -> Bool {
-        guard let lastBundleID, let lastSeenAt,
-              PlaybackPlayer.builtin(forBundleID: lastBundleID)?.dropsSessionBetweenTracks == true,
-              !newPlaying else { return false }
+        guard let lastBundleID, let lastSeenAt, !newPlaying, dropsSessionBetweenTracks(lastBundleID) else { return false }
         if newBundleID == lastBundleID && newTrackKey == lastTrackKey { return false }
         let inWindow: Bool
         if let holdingSince {
             let held = now.timeIntervalSince(holdingSince)
-            inWindow = held >= 0 && held <= window
+            inWindow = held >= 0 && held <= (isWebPlayerHost(lastBundleID) ? webHostWindow : window)
         } else {
             let age = now.timeIntervalSince(lastSeenAt)
             inWindow = age >= 0 && age <= startWindow

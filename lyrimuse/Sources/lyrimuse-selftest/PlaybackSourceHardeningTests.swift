@@ -756,6 +756,29 @@ private func wiringContracts() {
                 "会话在放时被撤: 保持接在 heldAcrossPlayerGap、按进程出声判,保持时记下")
     expectEqual(sourceBody("public static func focusControlContext() -> (scriptTarget: PlaybackPlayer?, directQueryTarget: PlaybackPlayer?, heldElsewhere: Bool) {", in: client).contains("let heldElsewhere = viaProbe || holdingDroppedSession"),
                 true, "会话在放时被撤: 保持出来的那首,播放控制不发")
+    // 网页播放器换歌空档(02 章决策 289):保持着浏览器那首时系统焦点在别家,播放控制一律不发;只在换歌空档那一支记下。
+    expectEqual(gapHold.contains("holdingWebGap = false\n")
+                && before("dropped out between tracks", "holdingWebGap = PlayerGapHold.isWebPlayerHost(last.snapshot.bundleIdentifier)", in: gapHold)
+                && before("holdingWebGap = PlayerGapHold.isWebPlayerHost(last.snapshot.bundleIdentifier)", "PlayerGapHold.shouldHoldWhileOutputting(", in: gapHold),
+                true, "网页换歌空档: 每拍先清、只在换歌空档保持那一支按宿主记下")
+    let controlContext = sourceBody("public static func focusControlContext() -> (scriptTarget: PlaybackPlayer?, directQueryTarget: PlaybackPlayer?, heldElsewhere: Bool) {", in: client)
+    expectEqual(controlContext.contains("let webGap = holdingWebGap") && controlContext.contains("if webGap { return (nil, nil, true) }")
+                && before("if webGap { return (nil, nil, true) }", "let routed = pausedFocusControl(", in: controlContext), true,
+                "网页换歌空档: 保持着浏览器那首时播放控制不发(不按焦点、不按回退目标)")
+    expectEqual(MusicPlaybackController.controlRoute(exclusivelyAppleMusic: false, focusFallback: nil, focusHeldElsewhere: true,
+                                                     directQueryFallback: nil, mediaControlCommand: "toggle-play-pause"), .withheld,
+                "网页换歌空档: 交回的上下文落到「不发」")
+    let coordinatorText = code("lyrimuse/PlaybackCoordinator.swift")
+    let pump = sourceBody("private func pumpVolumeWrite(for writer: VolumeWriter) {", in: coordinatorText)
+    expectEqual(pump.contains("} else if !ok, case .youtubeMusicWeb(let web) = writer, !self.webVolumeRetryPending {")
+                && pump.contains("self.retryWebVolumeAfterTrackChange(target, failedTitle: web.title, seq: self.volumeActionSeq)"), true,
+                "网页换歌空档: 网页版音量没写进去时等空档过去再写")
+    let retryBody = sourceBody("private func retryWebVolumeAfterTrackChange(", in: coordinatorText)
+    expectEqual(retryBody.contains("guard self.volumeActionSeq == seq else {")
+                && retryBody.contains("if MediaControlClient.isHoldingWebGap(), Date() < deadline {")
+                && retryBody.contains("guard let web = self.youtubeMusicWebTarget, web.title != failedTitle else {")
+                && before("self.refreshVolume()", "self.setVolume(value)", in: retryBody), true,
+                "网页换歌空档: 又动过音量不补写;空档里接着等;标题换了才按新标题写,没换照旧回读")
 
     // 按相对量的写入要排队(07 章决策 139、138 补记):Amazon 循环键按一下进一档、QQ「喜欢」按一下翻一次,连点时后一次读到的
     // 是前一次按之前的状态。行为在 players 组用桩测,这里钉住接线:锁在读状态之前拿,按完等确认。

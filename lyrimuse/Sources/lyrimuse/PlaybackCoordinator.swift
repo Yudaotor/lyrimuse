@@ -560,6 +560,8 @@ final class PlaybackCoordinator: ObservableObject {
     /// **最后松手的那个值一定落地**,不会停在中途某个位置。
     private var volumeWriteInFlight = false
     private var pendingVolumeTarget: Int?
+    /// 写网页版音量没写进去、正等着换歌空档过去再按新标题写一次的那个值(`retryWebVolumeAfterTrackChange`)。
+    private var webVolumeRetryPending = false
 
     /// 静音之前的音量,用来再点一次时还原。
     ///
@@ -882,12 +884,40 @@ final class PlaybackCoordinator: ObservableObject {
                 if self.pendingVolumeTarget != nil {
                     // 拖动还在继续(或刚结束但最后一个值还没写),补写最新的那个。
                     self.pumpVolumeWrite(for: writer)
+                } else if !ok, case .youtubeMusicWeb(let web) = writer, !self.webVolumeRetryPending {
+                    self.retryWebVolumeAfterTrackChange(target, failedTitle: web.title, seq: self.volumeActionSeq)
                 } else if !ok {
                     // 只有写没被接受时才回读纠正乐观更新。写成功就**不回读**:Music.app 的
                     // getter 滞后于 setter,这时候读回来的是旧值,只会把刚画对的抹掉。
                     self.refreshVolume()
                 }
             }
+        }
+    }
+
+    /// 网页版音量没写进去:多半是换歌空档里页面已经是下一首、屏上还按住上一首,按标题找不到那一页(写脚本只动放着这一首的页面,
+    /// 02 章决策 150)。等空档过去(最多 `PlayerGapHold.webHostWindow`),屏上换成了别的标题就按新标题再写一次;
+    /// 期间又动过音量、或者标题没变,照旧回读纠正。见 02 章决策 289。
+    private func retryWebVolumeAfterTrackChange(_ value: Int, failedTitle: String, seq: Int,
+                                                deadline: Date = Date().addingTimeInterval(PlayerGapHold.webHostWindow)) {
+        webVolumeRetryPending = true
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
+            guard let self else { return }
+            guard self.volumeActionSeq == seq else {
+                self.webVolumeRetryPending = false
+                return
+            }
+            if MediaControlClient.isHoldingWebGap(), Date() < deadline {
+                self.retryWebVolumeAfterTrackChange(value, failedTitle: failedTitle, seq: seq, deadline: deadline)
+                return
+            }
+            guard let web = self.youtubeMusicWebTarget, web.title != failedTitle else {
+                self.webVolumeRetryPending = false
+                self.refreshVolume()
+                return
+            }
+            self.setVolume(value)
+            self.webVolumeRetryPending = false
         }
     }
 

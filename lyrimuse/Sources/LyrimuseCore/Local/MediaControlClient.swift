@@ -270,6 +270,15 @@ public enum MediaControlClient {
     private static var gapHoldingSince: Date?
     /// 屏上这首是不是会话被撤后保持出来的(`PlayerGapHold.shouldHoldWhileOutputting`)。播放控制看它,见 `focusControlContext`。
     private static var holdingDroppedSession = false
+    /// 屏上这首是不是网页播放器换歌空档里保持出来的(`PlayerGapHold.isWebPlayerHost`)。播放控制看它,见 `focusControlContext`。
+    private static var holdingWebGap = false
+
+    /// 此刻屏上这首是不是网页播放器换歌空档里保持出来的。
+    public static func isHoldingWebGap() -> Bool {
+        gapHoldLock.lock()
+        defer { gapHoldLock.unlock() }
+        return holdingWebGap
+    }
     /// 会撤会话的那个播放器的进程号,保持期间拿它问内核「还在不在」。只在采纳它的快照时记:
     /// NSRunningApplication 在后台线程上偶尔返回空,保持期间别照它判(会提前放手)。
     private static var gapHoldPID: (bundleID: String, pid: pid_t)?
@@ -311,6 +320,7 @@ public enum MediaControlClient {
         gapHoldLock.lock()
         defer { gapHoldLock.unlock() }
         holdingDroppedSession = false
+        holdingWebGap = false
         if let last = gapHoldLast,
            PlayerGapHold.shouldHold(lastBundleID: last.snapshot.bundleIdentifier, lastTrackKey: last.snapshot.trackKey,
                                     lastSeenAt: last.at, holdingSince: gapHoldingSince,
@@ -322,6 +332,7 @@ public enum MediaControlClient {
                 gapHoldingSince = now
                 logger.notice("now playing: \(last.snapshot.bundleIdentifier ?? "", privacy: .public) dropped out between tracks, holding its last track")
             }
+            holdingWebGap = PlayerGapHold.isWebPlayerHost(last.snapshot.bundleIdentifier)
             let s = last.snapshot
             guard s.playing == true else { return s.withElapsed(s.elapsedTime, capturedAt: now) }
             let elapsed = PlayerGapHold.heldElapsed(elapsed: s.elapsedTime, rate: s.playbackRate, duration: s.duration,
@@ -2115,7 +2126,11 @@ public enum MediaControlClient {
             ? PlaybackPlayer.builtin(forBundleID: gapHoldLast?.snapshot.bundleIdentifier) : nil
         let holdingAcrossGap = gapHoldingSince != nil
         let heldBundleID = gapHoldLast?.snapshot.bundleIdentifier
+        let webGap = holdingWebGap
         gapHoldLock.unlock()
+        // 网页播放器换歌空档里保持着时,系统焦点在别家(多半是暂停着的 Apple Music)或谁都没有:按 media-control、回退目标发都会
+        // 落到别家身上,一律不发。循环键、点赞、音量走页面(`YouTubeMusicWebControls`),不经这里。见 02 章决策 289。
+        if webGap { return (nil, nil, true) }
         // 切歌间隙保持着别家时屏上不是顶上来的那家,照回退目标发(同 `controlScriptTarget`)。
         let routed = pausedFocusControl(
             substitute: holdingAcrossGap && heldBundleID != substitute?.bundleID ? nil : substitute,

@@ -962,6 +962,33 @@ func runPlayerIdentityTests() {
         expectEqual(H.heldElapsed(elapsed: 206, rate: 1, duration: 208, since: 4), 208, "切歌间隙: 不超过曲长")
         expectEqual(H.heldElapsed(elapsed: 10, rate: 0, duration: nil, since: 2), 12, "切歌间隙: 速率报 0 按 1 算(它在放)")
 
+        // 网页播放器换歌空档(02 章决策 289):浏览器换歌时同样先撤会话,系统焦点落到暂停着的 Apple Music 上。
+        let edge = "com.microsoft.edgemac", chromeApp = "com.google.Chrome.app.cinhimbnkkaeohfgghhklpknlkffjgod"
+        let safariGPU = "com.apple.WebKit.GPU"
+        for host in [edge, "com.google.Chrome", "com.brave.Browser", "company.thebrowser.Browser", chromeApp, safariGPU,
+                     "com.apple.Safari"] {
+            expectEqual(H.isWebPlayerHost(host), true, "网页换歌空档: \(host) 是网页播放器的宿主")
+            expectEqual(hold(last: host, new: apple, at: 4), true, "网页换歌空档: \(host) 撤会话、落到暂停的 Apple Music → 保持")
+            expectEqual(hold(last: host, new: host, newKey: "z|Next", at: 4), true, "网页换歌空档: \(host) 报下一首但没在放 → 保持")
+            expectEqual(hold(last: host, new: apple, playing: true, at: 4), false, "网页换歌空档: \(host) 之后别家在放 → 照常切")
+        }
+        for other in ["org.mozilla.firefox", "com.example.app.cinhimbnkkaeohfgghhklpknlkffjgod", PlaybackPlayer.spotify.bundleIdentifier,
+                      apple, "", "com.apple.WebKit.WebContent"] {
+            expectEqual(H.isWebPlayerHost(other), false, "网页换歌空档: \(other) 不是网页播放器的宿主")
+        }
+        expectEqual(H.isWebPlayerHost(nil), false, "网页换歌空档: 没有 bundle id 不算")
+        expectEqual(hold(last: "org.mozilla.firefox", new: apple, at: 4), false, "网页换歌空档: 没有脚本接口的浏览器不在内")
+        expectEqual(H.dropsSessionBetweenTracks(kk) && H.dropsSessionBetweenTracks(edge)
+                    && !H.dropsSessionBetweenTracks(PlaybackPlayer.kugou.bundleIdentifier), true,
+                    "网页换歌空档: 内置播放器照旧看标记,另加网页播放器的宿主")
+        expectEqual(hold(last: edge, since: t0.addingTimeInterval(5), new: apple, at: 5 + H.webHostWindow - 0.5), true,
+                    "网页换歌空档: 浏览器在它自己的窗口内保持")
+        expectEqual(hold(last: edge, since: t0.addingTimeInterval(5), new: apple, at: 5 + H.webHostWindow + 0.5), false,
+                    "网页换歌空档: 浏览器过了它自己的窗口(关了标签页)就放手")
+        expectEqual(H.webHostWindow < H.window, true, "网页换歌空档: 浏览器的窗口比原生播放器短")
+        expectEqual(hold(since: t0.addingTimeInterval(5), new: apple, at: 5 + H.webHostWindow + 0.5), true,
+                    "网页换歌空档: 原生播放器的窗口不变")
+
         // 会话在放时被撤(PlayerGapHold.shouldHoldWhileOutputting):网易云冷启动后一两秒内开播,启动时那次延迟的清空
         // 把在放的会话撤掉、声音照放,直到暂停或换歌才重新登记(02 章决策 96)。
         let ne = PlaybackPlayer.netease.bundleIdentifier
