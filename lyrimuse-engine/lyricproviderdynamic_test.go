@@ -308,6 +308,32 @@ func TestDynamicSourcesRankAfterBuiltinAndLeaveNoTrace(t *testing.T) {
 	if d == first.desc || d.Origin != originDynamic || cur.provider("dyn:first").Descriptor() != d {
 		t.Error("登记表里存的是描述符的副本,标着 originDynamic,实现交的也是这一份")
 	}
+	// 名次接在内置来源各类名次的最大值之后,一组里逐个往后挪、不重号;没登记纯音乐名次的那一类是 0。
+	d2 := cur.descriptor("dyn:second")
+	nets, ties := len(builtin.networkNames), len(builtin.tieOrder)
+	insts, writers := len(builtin.instrumentalOrder), len(builtin.songwritersOrder)
+	if got, want := [5]int{d.Order, d.TieRank, d.DefaultPriorityRank, d.InstrumentalRank, d.SongwritersRank},
+		[5]int{nets + 1, ties + 1, nets + 1, insts + 1, writers + 1}; got != want {
+		t.Errorf("dyn:first 的名次(源名单、决胜、默认顺序、纯音乐、词曲作者)= %v,期望 %v", got, want)
+	}
+	if got, want := [5]int{d2.Order, d2.TieRank, d2.DefaultPriorityRank, d2.InstrumentalRank, d2.SongwritersRank},
+		[5]int{nets + 2, ties + 2, nets + 2, 0, writers + 2}; got != want {
+		t.Errorf("dyn:second 的名次 = %v,期望 %v", got, want)
+	}
+	third := newDynamicStub("dyn:third", nil)
+	third.desc.InstrumentalRank = 9
+	if err := setDynamicLyricProviders([]LyricProvider{first, third, second}); err != nil {
+		t.Fatal(err)
+	}
+	if d3 := lyricProviders().descriptor("dyn:third"); d3.InstrumentalRank != insts+2 || d3.TieRank != ties+2 || d3.SongwritersRank != 0 ||
+		lyricProviders().descriptor("dyn:second").SongwritersRank != writers+2 || lyricProviders().descriptor("dyn:second").TieRank != ties+3 {
+		t.Errorf("换成三个来源的一组:dyn:third 的纯音乐名次 %d、决胜序 %d,期望 %d、%d;没登记的那一类不占名次",
+			d3.InstrumentalRank, d3.TieRank, insts+2, ties+2)
+	}
+	if err := setDynamicLyricProviders([]LyricProvider{first, second}); err != nil {
+		t.Fatal(err)
+	}
+	cur = lyricProviders()
 	if frozenNow := renderRegistryLists(builtin); frozenNow != frozen {
 		t.Error("登记运行时来源改到了内置那一份登记表")
 	}
@@ -402,7 +428,7 @@ func TestDynamicSourceIsEnabledByRegistration(t *testing.T) {
 // privilegedDynamicStub:登记进来的实现自己实现了带特权的可选接口,也实现了两个失败原因接口。
 type privilegedDynamicStub struct {
 	stubLyricProvider
-	offlineCalls, hintCalls, isrcCalls atomic.Int32
+	offlineCalls, hintCalls, isrcCalls, probeCalls atomic.Int32
 }
 
 func (p *privilegedDynamicStub) ResolveOffline(ProviderQuery) (SourceResult, bool) {
@@ -414,6 +440,7 @@ func (p *privilegedDynamicStub) HasISRC(string) bool              { p.isrcCalls.
 func (p *privilegedDynamicStub) QueryIndependentFailure() string  { return "dyn_auth" }
 func (p *privilegedDynamicStub) DiagnosedFailure() string         { return "dyn_diag" }
 func (p *privilegedDynamicStub) ProbeOwnTrack(context.Context) bool {
+	p.probeCalls.Add(1)
 	return true
 }
 
@@ -450,8 +477,8 @@ func TestDynamicSourceGetsNoPrivilegedSurface(t *testing.T) {
 	if f, ok := p.(FailureDiagnoser); !ok || f.DiagnosedFailure() != "dyn_diag" {
 		t.Error("失败诊断要转给登记进来的实现")
 	}
-	if probe := ownLyricSourceProbe("dyn:greedy"); probe == nil || !probe(context.Background()) {
-		t.Error("带探测曲的运行时来源,探测转给登记进来的实现")
+	if probe := ownLyricSourceProbe("dyn:greedy"); probe == nil || !probe(context.Background()) || inner.probeCalls.Load() != 1 {
+		t.Errorf("带探测曲的运行时来源,探测转给登记进来的实现(实现被问了 %d 次)", inner.probeCalls.Load())
 	}
 	if playerNoVocalsHintBeforeSearch(cur, ProviderQuery{}) || lyricSourceTakesISRC("dyn:greedy", "USRC17607839") ||
 		inner.hintCalls.Load() != 0 || inner.isrcCalls.Load() != 0 {

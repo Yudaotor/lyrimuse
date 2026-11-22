@@ -59,6 +59,9 @@ func TestSmartPickPrefersCleanLocalFile(t *testing.T) {
 	if earlyLyricsVerdict([]scoredLyricCandidateResult{offLrc}, &offLrc, func(string) bool { return false }, false, 0) == earlyLyricsTrust {
 		t.Error("文件自带的带扣分项(给别的版本的)不直接先上屏")
 	}
+	if got := earlyLyricsVerdict([]scoredLyricCandidateResult{netease}, &netease, func(string) bool { return false }, false, 0); got != earlyLyricsWait {
+		t.Errorf("挑中的不是文件自带的(这一首没有文件那一份):不走「不用等别的源」那条,照常等,得到 %q", got)
+	}
 
 	withSmartPrefer(t, false)
 	if got := pickLyricCandidate([]scoredLyricCandidateResult{netease, lrc}); got == nil || got.Source != "netease" {
@@ -112,6 +115,9 @@ func TestPreferLocalFileUpgradeAndRescore(t *testing.T) {
 	}
 	if _, decided := preferLocalFileUpgradeVerdict(local, &netease, 0, true); decided {
 		t.Error("手动重新匹配不替它拍板,照原来的规则")
+	}
+	if applies, decided := preferLocalFileUpgradeVerdict(local, &lrc, 0, false); applies || decided {
+		t.Errorf("现存的和这一轮挑中的都是文件自带的:不在这里拍板,照原来的规则判(applies=%v decided=%v)", applies, decided)
 	}
 	shortCut := local
 	shortCut.ResolvedDurationSecs, shortCut.DurationSecs = 240, 330
