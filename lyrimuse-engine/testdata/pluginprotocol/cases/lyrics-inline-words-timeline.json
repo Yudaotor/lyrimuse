@@ -1,0 +1,149 @@
+{
+  "id": "lyrics-inline-words-timeline",
+  "category": "lyrics",
+  "title": "搜索结果自带逐字时间轴(timeline),带对唱声部、背景人声、行内译文和读音",
+  "subject": "both",
+  "covers": ["lyrics/search", "host/fetch"],
+  "fixture": {
+    "manifest": "manifests/basic.json",
+    "plugin": "plugins/relay.js",
+    "http": [
+      {
+        "request": {"method": "GET", "url": "https://lyrics.example/search?title=Paper%20Lanterns&artist=Lyrimuse%20Test%20Band"},
+        "response": {
+          "status": 200,
+          "headers": [["content-type", "application/json"]],
+          "body": "{\"items\":[{\"id\":\"101\",\"title\":\"Paper Lanterns\",\"artist\":\"Lyrimuse Test Band\",\"album\":\"Fixtures\",\"durationSecs\":215,\"lyrics\":{\"words\":{\"format\":\"timeline\",\"translationLang\":\"zh-Hans\",\"lines\":[{\"start\":1000,\"end\":5000,\"agent\":\"v1\",\"words\":[{\"start\":1000,\"end\":1800,\"text\":\"Paper \"},{\"start\":1800,\"end\":2600,\"text\":\"lanterns \"},{\"start\":2600,\"end\":5000,\"text\":\"in the rain\"}],\"background\":[{\"start\":3000,\"end\":4500,\"text\":\"(ooh)\"}],\"translation\":\"雨中的纸灯笼\",\"romanization\":\"peipa rantan in za rein\"},{\"start\":5500,\"end\":10000,\"agent\":\"v2\",\"words\":[{\"start\":5500,\"end\":7300,\"text\":\"Drifting slowly \"},{\"start\":7300,\"end\":10000,\"text\":\"down the lane\"}],\"translation\":\"沿着小巷慢慢漂\"},{\"start\":10250,\"end\":14000,\"text\":\"Every light a small refrain\"}]}}}]}"
+        }
+      }
+    ]
+  },
+  "drive": [
+    {"before": "initialize", "do": "start"},
+    {
+      "before": "search",
+      "do": "resolve",
+      "task": "t1",
+      "track": {"title": "Paper Lanterns", "artist": "Lyrimuse Test Band", "album": "Fixtures", "durationSecs": 215},
+      "round": "playing"
+    },
+    {"before": "shutdown", "do": "stop"}
+  ],
+  "steps": [
+    {"include": "fragments/handshake.json"},
+    {"include": "fragments/load.json"},
+    {
+      "label": "search",
+      "from": "engine",
+      "message": {
+        "jsonrpc": "2.0",
+        "id": {"$var": "s1", "sample": 3},
+        "method": "lyrics/search",
+        "params": {
+          "call": {
+            "id": {"$var": "c1", "sample": "c1"},
+            "task": {"$var": "t1", "sample": "t1"},
+            "timeoutMs": {"$any": "integer", "sample": 20000}
+          },
+          "query": {
+            "title": "Paper Lanterns",
+            "artist": "Lyrimuse Test Band",
+            "album": "Fixtures",
+            "durationSecs": 215,
+            "cleanTitle": "Paper Lanterns",
+            "primaryArtist": "Lyrimuse Test Band",
+            "artists": ["Lyrimuse Test Band"],
+            "search": {"title": "Paper Lanterns", "artist": "Lyrimuse Test Band"},
+            "attempt": {"index": 1, "count": 1, "variant": "primary"},
+            "uiLanguage": {"$any": "string", "sample": "en"},
+            "round": "playing"
+          }
+        }
+      }
+    },
+    {
+      "from": "host",
+      "message": {
+        "jsonrpc": "2.0",
+        "id": {"$var": "f1", "sample": 1},
+        "method": "host/fetch",
+        "params": {
+          "call": {"$var": "c1"},
+          "request": {
+            "url": "https://lyrics.example/search?title=Paper%20Lanterns&artist=Lyrimuse%20Test%20Band",
+            "method": {"$optional": "GET"}
+          }
+        }
+      }
+    },
+    {
+      "from": "engine",
+      "message": {
+        "jsonrpc": "2.0",
+        "id": {"$var": "f1"},
+        "result": {
+          "status": 200,
+          "headers": {"$any": "array", "sample": [["content-type", "application/json"]]},
+          "url": "https://lyrics.example/search?title=Paper%20Lanterns&artist=Lyrimuse%20Test%20Band",
+          "redirected": false,
+          "body": {
+            "encoding": "utf8",
+            "data": "{\"items\":[{\"id\":\"101\",\"title\":\"Paper Lanterns\",\"artist\":\"Lyrimuse Test Band\",\"album\":\"Fixtures\",\"durationSecs\":215,\"lyrics\":{\"words\":{\"format\":\"timeline\",\"translationLang\":\"zh-Hans\",\"lines\":[{\"start\":1000,\"end\":5000,\"agent\":\"v1\",\"words\":[{\"start\":1000,\"end\":1800,\"text\":\"Paper \"},{\"start\":1800,\"end\":2600,\"text\":\"lanterns \"},{\"start\":2600,\"end\":5000,\"text\":\"in the rain\"}],\"background\":[{\"start\":3000,\"end\":4500,\"text\":\"(ooh)\"}],\"translation\":\"雨中的纸灯笼\",\"romanization\":\"peipa rantan in za rein\"},{\"start\":5500,\"end\":10000,\"agent\":\"v2\",\"words\":[{\"start\":5500,\"end\":7300,\"text\":\"Drifting slowly \"},{\"start\":7300,\"end\":10000,\"text\":\"down the lane\"}],\"translation\":\"沿着小巷慢慢漂\"},{\"start\":10250,\"end\":14000,\"text\":\"Every light a small refrain\"}]}}}]}"
+          }
+        }
+      }
+    },
+    {
+      "from": "host",
+      "message": {
+        "jsonrpc": "2.0",
+        "id": {"$var": "s1"},
+        "result": {
+          "items": [
+            {
+              "id": "101",
+              "title": "Paper Lanterns",
+              "artist": "Lyrimuse Test Band",
+              "album": "Fixtures",
+              "durationSecs": 215,
+              "lyrics": {
+                "words": {
+                  "format": "timeline",
+                  "translationLang": "zh-Hans",
+                  "lines": [
+                    {
+                      "start": 1000,
+                      "end": 5000,
+                      "agent": "v1",
+                      "words": [
+                        {"start": 1000, "end": 1800, "text": "Paper "},
+                        {"start": 1800, "end": 2600, "text": "lanterns "},
+                        {"start": 2600, "end": 5000, "text": "in the rain"}
+                      ],
+                      "background": [{"start": 3000, "end": 4500, "text": "(ooh)"}],
+                      "translation": "雨中的纸灯笼",
+                      "romanization": "peipa rantan in za rein"
+                    },
+                    {
+                      "start": 5500,
+                      "end": 10000,
+                      "agent": "v2",
+                      "words": [
+                        {"start": 5500, "end": 7300, "text": "Drifting slowly "},
+                        {"start": 7300, "end": 10000, "text": "down the lane"}
+                      ],
+                      "translation": "沿着小巷慢慢漂"
+                    },
+                    {"start": 10250, "end": 14000, "text": "Every light a small refrain"}
+                  ]
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    {"observe": {"task": "t1", "outcome": {"status": "FOUND"}}},
+    {"include": "fragments/bye.json"}
+  ]
+}

@@ -1,0 +1,17 @@
+{
+  "id": "malformed-unknown-notification-host",
+  "category": "malformed",
+  "title": "不认识的通知:丢掉、不应答(plugin-host 收到)",
+  "subject": "host",
+  "covers": ["shutdown"],
+  "fixture": {"manifest": "manifests/basic.json", "plugin": "plugins/relay.js"},
+  "steps": [
+    {"include": "fragments/handshake.json"},
+    {
+      "from": "engine",
+      "raw": "{\"jsonrpc\":\"2.0\",\"method\":\"$/setTrace\",\"params\":{\"value\":\"verbose\"}}",
+      "invalid": "unknownMethod"
+    },
+    {"include": "fragments/bye.json"}
+  ]
+}

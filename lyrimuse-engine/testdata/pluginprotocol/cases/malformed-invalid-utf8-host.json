@@ -1,0 +1,17 @@
+{
+  "id": "malformed-invalid-utf8-host",
+  "category": "malformed",
+  "title": "不是合法的 UTF-8:回 id 为 null 的 -32700(plugin-host 收到)",
+  "subject": "host",
+  "covers": ["shutdown"],
+  "fixture": {"manifest": "manifests/basic.json", "plugin": "plugins/relay.js"},
+  "steps": [
+    {"include": "fragments/handshake.json"},
+    {"from": "engine", "rawBase64": "eyJqc29ucnBjIjoiMi4wIiwibWV0aG9kIjoi/yJ9", "invalid": "parse"},
+    {
+      "from": "host",
+      "message": {"jsonrpc": "2.0", "id": null, "error": {"code": -32700, "message": {"$any": "string", "sample": "error"}}}
+    },
+    {"include": "fragments/bye.json"}
+  ]
+}

@@ -1,0 +1,12 @@
+{
+  "steps": [
+    {
+      "label": "shutdown",
+      "from": "engine",
+      "message": {"jsonrpc": "2.0", "id": {"$var": "byeId", "sample": 9000}, "method": "shutdown"}
+    },
+    {"from": "host", "message": {"jsonrpc": "2.0", "id": {"$var": "byeId"}, "result": null}},
+    {"from": "engine", "message": {"jsonrpc": "2.0", "method": "exit"}},
+    {"from": "host", "close": true, "exitCode": 0}
+  ]
+}

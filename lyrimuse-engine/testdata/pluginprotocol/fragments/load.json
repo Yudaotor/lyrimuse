@@ -1,0 +1,26 @@
+{
+  "steps": [
+    {
+      "label": "load",
+      "from": "engine",
+      "message": {
+        "jsonrpc": "2.0",
+        "id": {"$var": "loadId", "sample": 2},
+        "method": "plugin/load",
+        "params": {
+          "manifest": {"$fixture": "manifest"},
+          "source": {"mediaType": "text/javascript", "text": {"$fixture": "source"}}
+        }
+      }
+    },
+    {
+      "label": "loaded",
+      "from": "host",
+      "message": {
+        "jsonrpc": "2.0",
+        "id": {"$var": "loadId"},
+        "result": {"apiVersion": "0.1", "exports": {"lyrics": {"$unordered": ["search", "getLyrics"]}}}
+      }
+    }
+  ]
+}

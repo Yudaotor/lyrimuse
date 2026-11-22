@@ -1,0 +1,52 @@
+{
+  "id": "load-retry-after-failure",
+  "category": "load",
+  "title": "加载失败后状态还是 ready,可以再送一次",
+  "subject": "host",
+  "covers": ["plugin/load"],
+  "fixture": {"manifest": "manifests/basic.json", "plugin": "plugins/relay.js"},
+  "steps": [
+    {"include": "fragments/handshake.json"},
+    {
+      "from": "engine",
+      "message": {
+        "jsonrpc": "2.0",
+        "id": {"$var": "l1", "sample": 2},
+        "method": "plugin/load",
+        "params": {
+          "manifest": {"$fixture": "manifest"},
+          "source": {"mediaType": "text/javascript", "text": "module.exports = ;"}
+        }
+      }
+    },
+    {
+      "from": "host",
+      "message": {
+        "jsonrpc": "2.0",
+        "id": {"$var": "l1"},
+        "error": {"code": -32000, "message": {"$any": "string", "sample": "error"}, "data": {"code": "SYNTAX_ERROR"}}
+      }
+    },
+    {
+      "from": "engine",
+      "message": {
+        "jsonrpc": "2.0",
+        "id": {"$var": "l2", "sample": 3},
+        "method": "plugin/load",
+        "params": {
+          "manifest": {"$fixture": "manifest"},
+          "source": {"mediaType": "text/javascript", "text": {"$fixture": "source"}}
+        }
+      }
+    },
+    {
+      "from": "host",
+      "message": {
+        "jsonrpc": "2.0",
+        "id": {"$var": "l2"},
+        "result": {"apiVersion": "0.1", "exports": {"lyrics": {"$unordered": ["search", "getLyrics"]}}}
+      }
+    },
+    {"include": "fragments/bye.json"}
+  ]
+}

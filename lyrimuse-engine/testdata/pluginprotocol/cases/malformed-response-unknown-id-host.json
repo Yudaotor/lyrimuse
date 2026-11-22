@@ -1,0 +1,13 @@
+{
+  "id": "malformed-response-unknown-id-host",
+  "category": "malformed",
+  "title": "对不上任何在途请求的应答:丢掉、不应答(plugin-host 收到)",
+  "subject": "host",
+  "covers": ["shutdown"],
+  "fixture": {"manifest": "manifests/basic.json", "plugin": "plugins/relay.js"},
+  "steps": [
+    {"include": "fragments/handshake.json"},
+    {"from": "engine", "raw": "{\"jsonrpc\":\"2.0\",\"id\":777,\"result\":{}}", "invalid": "strayResponse"},
+    {"include": "fragments/bye.json"}
+  ]
+}

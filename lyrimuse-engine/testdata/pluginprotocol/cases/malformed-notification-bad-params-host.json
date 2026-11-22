@@ -1,0 +1,17 @@
+{
+  "id": "malformed-notification-bad-params-host",
+  "category": "malformed",
+  "title": "认识的通知、参数不合规:丢掉、不应答(通知永远不应答)(plugin-host 收到)",
+  "subject": "host",
+  "covers": ["shutdown"],
+  "fixture": {"manifest": "manifests/basic.json", "plugin": "plugins/relay.js"},
+  "steps": [
+    {"include": "fragments/handshake.json"},
+    {
+      "from": "engine",
+      "raw": "{\"jsonrpc\":\"2.0\",\"method\":\"$/cancelRequest\",\"params\":\"oops\"}",
+      "invalid": "shape"
+    },
+    {"include": "fragments/bye.json"}
+  ]
+}

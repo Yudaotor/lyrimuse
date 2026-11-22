@@ -1,0 +1,50 @@
+{
+  "id": "badresult-getlyrics-not-object",
+  "category": "badresult",
+  "title": "getLyrics 交的不是对象:plugin-host 回 -32000 BAD_RESULT",
+  "subject": "host",
+  "covers": ["lyrics/getLyrics"],
+  "fixture": {"manifest": "manifests/basic.json", "plugin": "plugins/probe.js"},
+  "steps": [
+    {"include": "fragments/handshake.json"},
+    {"include": "fragments/load.json"},
+    {
+      "from": "engine",
+      "message": {
+        "jsonrpc": "2.0",
+        "id": {"$var": "g1", "sample": 3},
+        "method": "lyrics/getLyrics",
+        "params": {
+          "call": {
+            "id": {"$var": "c1", "sample": "c1"},
+            "task": {"$var": "t1", "sample": "t1"},
+            "timeoutMs": {"$any": "integer", "sample": 20000}
+          },
+          "query": {
+            "title": "Paper Lanterns",
+            "artist": "Lyrimuse Test Band",
+            "album": "Fixtures",
+            "durationSecs": 215,
+            "cleanTitle": "Paper Lanterns",
+            "primaryArtist": "Lyrimuse Test Band",
+            "artists": ["Lyrimuse Test Band"],
+            "search": {"title": "Paper Lanterns", "artist": "Lyrimuse Test Band"},
+            "attempt": {"index": 1, "count": 1, "variant": "primary"},
+            "uiLanguage": {"$any": "string", "sample": "en"},
+            "round": "playing"
+          },
+          "item": {"id": "bad-result", "title": "Paper Lanterns", "artist": "Lyrimuse Test Band"}
+        }
+      }
+    },
+    {
+      "from": "host",
+      "message": {
+        "jsonrpc": "2.0",
+        "id": {"$var": "g1"},
+        "error": {"code": -32000, "message": {"$any": "string", "sample": "error"}, "data": {"code": "BAD_RESULT"}}
+      }
+    },
+    {"include": "fragments/bye.json"}
+  ]
+}

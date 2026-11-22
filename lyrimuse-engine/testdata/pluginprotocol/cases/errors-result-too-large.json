@@ -1,0 +1,92 @@
+{
+  "id": "errors-result-too-large",
+  "category": "errors",
+  "title": "结果序列化后超过引擎握手时报的 maxResultBytes:plugin-host 回 -32802 resultBytes,不发那一行",
+  "subject": "host",
+  "covers": ["lyrics/search", "initialize"],
+  "fixture": {"manifest": "manifests/basic.json", "plugin": "plugins/probe.js", "config": {"engine": {"maxResultBytes": 1024}}},
+  "steps": [
+    {
+      "from": "engine",
+      "message": {
+        "jsonrpc": "2.0",
+        "id": {"$var": "initId", "sample": 1},
+        "method": "initialize",
+        "params": {
+          "protocolVersion": "0.1",
+          "engineInfo": {"name": {"$any": "string", "sample": "lyrimuse-engine"}, "version": {"$any": "string", "sample": "1.15.0"}},
+          "capabilities": {
+            "host": {"fetch": {}, "match": {}, "storage": {}, "log": {}},
+            "lyrics": {"wordFormats": {"$contains": ["timeline", "ttml", "lrc-a2"]}}
+          },
+          "limits": {
+            "maxLineBytes": {"$any": "integer", "sample": 33554432},
+            "maxResultBytes": 1024,
+            "maxInFlightHostRequests": {"$any": "integer", "sample": 64}
+          },
+          "heartbeatIntervalMs": {"$any": "integer", "sample": 1000}
+        }
+      }
+    },
+    {
+      "from": "host",
+      "message": {
+        "jsonrpc": "2.0",
+        "id": {"$var": "initId"},
+        "result": {
+          "protocolVersion": "0.1",
+          "hostInfo": {
+            "name": {"$any": "string", "sample": "lyrimuse-plugin-host"},
+            "version": {"$any": "string", "sample": "1.15.0"},
+            "runtime": {"$any": "string", "sample": "goja"},
+            "sandbox": {"$any": "string", "sample": "seatbelt"}
+          },
+          "apiVersions": {"$contains": ["0.1"]},
+          "capabilities": {"lyrics": {"search": {}, "getLyrics": {}}, "heartbeat": {}},
+          "limits": {
+            "maxLineBytes": {"$any": "integer", "sample": 33554432},
+            "maxInFlightCalls": {"$any": "integer", "sample": 16}
+          }
+        }
+      }
+    },
+    {"include": "fragments/load.json"},
+    {
+      "from": "engine",
+      "message": {
+        "jsonrpc": "2.0",
+        "id": {"$var": "s1", "sample": 3},
+        "method": "lyrics/search",
+        "params": {
+          "call": {
+            "id": {"$var": "c1", "sample": "c1"},
+            "task": {"$var": "t1", "sample": "t1"},
+            "timeoutMs": {"$any": "integer", "sample": 20000}
+          },
+          "query": {
+            "title": "big-result",
+            "artist": "Lyrimuse Test Band",
+            "album": "Fixtures",
+            "durationSecs": 215,
+            "cleanTitle": "big-result",
+            "primaryArtist": "Lyrimuse Test Band",
+            "artists": ["Lyrimuse Test Band"],
+            "search": {"title": "big-result", "artist": "Lyrimuse Test Band"},
+            "attempt": {"index": 1, "count": 1, "variant": "primary"},
+            "uiLanguage": {"$any": "string", "sample": "en"},
+            "round": "playing"
+          }
+        }
+      }
+    },
+    {
+      "from": "host",
+      "message": {
+        "jsonrpc": "2.0",
+        "id": {"$var": "s1"},
+        "error": {"code": -32802, "message": {"$any": "string", "sample": "error"}, "data": {"limit": "resultBytes"}}
+      }
+    },
+    {"include": "fragments/bye.json"}
+  ]
+}

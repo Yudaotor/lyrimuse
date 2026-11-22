@@ -1,0 +1,58 @@
+{
+  "id": "lifecycle-version-echo-wrong-engine",
+  "category": "lifecycle",
+  "title": "plugin-host 的握手应答里带了别的版本号:实验期只认完全相同的,引擎让它退出",
+  "subject": "engine",
+  "covers": ["initialize", "exit"],
+  "fixture": {"manifest": "manifests/basic.json", "plugin": "plugins/relay.js"},
+  "drive": [{"before": "initialize", "do": "start"}],
+  "steps": [
+    {
+      "label": "initialize",
+      "from": "engine",
+      "message": {
+        "jsonrpc": "2.0",
+        "id": {"$var": "i1", "sample": 1},
+        "method": "initialize",
+        "params": {
+          "protocolVersion": "0.1",
+          "engineInfo": {"name": {"$any": "string", "sample": "lyrimuse-engine"}, "version": {"$any": "string", "sample": "1.15.0"}},
+          "capabilities": {
+            "host": {"fetch": {}, "match": {}, "storage": {}, "log": {}},
+            "lyrics": {"wordFormats": {"$contains": ["timeline", "ttml", "lrc-a2"]}}
+          },
+          "limits": {
+            "maxLineBytes": {"$any": "integer", "sample": 33554432},
+            "maxResultBytes": {"$any": "integer", "sample": 8388608},
+            "maxInFlightHostRequests": {"$any": "integer", "sample": 64}
+          },
+          "heartbeatIntervalMs": {"$any": "integer", "sample": 1000}
+        }
+      }
+    },
+    {
+      "from": "host",
+      "message": {
+        "jsonrpc": "2.0",
+        "id": {"$var": "i1"},
+        "result": {
+          "protocolVersion": "0.2",
+          "hostInfo": {
+            "name": {"$any": "string", "sample": "lyrimuse-plugin-host"},
+            "version": {"$any": "string", "sample": "1.15.0"},
+            "runtime": {"$any": "string", "sample": "goja"},
+            "sandbox": {"$any": "string", "sample": "seatbelt"}
+          },
+          "apiVersions": {"$contains": ["0.1"]},
+          "capabilities": {"lyrics": {"search": {}, "getLyrics": {}}, "heartbeat": {}},
+          "limits": {
+            "maxLineBytes": {"$any": "integer", "sample": 33554432},
+            "maxInFlightCalls": {"$any": "integer", "sample": 16}
+          }
+        }
+      }
+    },
+    {"from": "engine", "message": {"jsonrpc": "2.0", "method": "exit"}},
+    {"from": "host", "close": true, "exitCode": 1}
+  ]
+}

@@ -1,0 +1,14 @@
+{
+  "id": "lifecycle-engine-eof-idle",
+  "category": "lifecycle",
+  "title": "引擎那头断了(stdin 读到 EOF):plugin-host 自己退出",
+  "subject": "host",
+  "covers": ["initialize"],
+  "fixture": {"manifest": "manifests/basic.json", "plugin": "plugins/relay.js"},
+  "steps": [
+    {"include": "fragments/handshake.json"},
+    {"include": "fragments/load.json"},
+    {"from": "engine", "close": true},
+    {"from": "host", "close": true, "exitCode": 1}
+  ]
+}

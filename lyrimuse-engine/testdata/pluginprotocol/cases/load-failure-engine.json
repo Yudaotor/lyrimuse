@@ -1,0 +1,34 @@
+{
+  "id": "load-failure-engine",
+  "category": "load",
+  "title": "加载失败:引擎不调 lyrics/*,收尾退出",
+  "subject": "engine",
+  "covers": ["plugin/load", "shutdown", "exit"],
+  "fixture": {"manifest": "manifests/basic.json", "plugin": "plugins/badsyntax.js"},
+  "drive": [{"before": "initialize", "do": "start"}, {"before": "shutdown", "do": "stop"}],
+  "steps": [
+    {"include": "fragments/handshake.json"},
+    {
+      "label": "load",
+      "from": "engine",
+      "message": {
+        "jsonrpc": "2.0",
+        "id": {"$var": "l1", "sample": 2},
+        "method": "plugin/load",
+        "params": {
+          "manifest": {"$fixture": "manifest"},
+          "source": {"mediaType": "text/javascript", "text": {"$fixture": "source"}}
+        }
+      }
+    },
+    {
+      "from": "host",
+      "message": {
+        "jsonrpc": "2.0",
+        "id": {"$var": "l1"},
+        "error": {"code": -32000, "message": {"$any": "string", "sample": "error"}, "data": {"code": "SYNTAX_ERROR"}}
+      }
+    },
+    {"include": "fragments/bye.json"}
+  ]
+}

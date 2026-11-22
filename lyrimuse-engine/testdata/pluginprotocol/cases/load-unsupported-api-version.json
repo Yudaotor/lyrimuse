@@ -1,0 +1,36 @@
+{
+  "id": "load-unsupported-api-version",
+  "category": "load",
+  "title": "清单的 apiVersion 不在 plugin-host 握手时报的 apiVersions 里:-32000 UNSUPPORTED_API_VERSION",
+  "subject": "host",
+  "covers": ["plugin/load"],
+  "fixture": {"manifest": "manifests/basic.json", "manifestPatch": {"apiVersion": "9.9"}, "plugin": "plugins/relay.js"},
+  "steps": [
+    {"include": "fragments/handshake.json"},
+    {
+      "from": "engine",
+      "message": {
+        "jsonrpc": "2.0",
+        "id": {"$var": "l1", "sample": 2},
+        "method": "plugin/load",
+        "params": {
+          "manifest": {"$fixture": "manifest"},
+          "source": {"mediaType": "text/javascript", "text": {"$fixture": "source"}}
+        }
+      }
+    },
+    {
+      "from": "host",
+      "message": {
+        "jsonrpc": "2.0",
+        "id": {"$var": "l1"},
+        "error": {
+          "code": -32000,
+          "message": {"$any": "string", "sample": "error"},
+          "data": {"code": "UNSUPPORTED_API_VERSION"}
+        }
+      }
+    },
+    {"include": "fragments/bye.json"}
+  ]
+}

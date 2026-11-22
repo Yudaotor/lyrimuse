@@ -1,0 +1,33 @@
+{
+  "id": "load-twice",
+  "category": "load",
+  "title": "一个 plugin-host 进程只装一个插件:第二次 plugin/load 回 -32806",
+  "subject": "host",
+  "covers": ["plugin/load"],
+  "fixture": {"manifest": "manifests/basic.json", "plugin": "plugins/relay.js"},
+  "steps": [
+    {"include": "fragments/handshake.json"},
+    {"include": "fragments/load.json"},
+    {
+      "from": "engine",
+      "message": {
+        "jsonrpc": "2.0",
+        "id": {"$var": "l2", "sample": 3},
+        "method": "plugin/load",
+        "params": {
+          "manifest": {"$fixture": "manifest"},
+          "source": {"mediaType": "text/javascript", "text": {"$fixture": "source"}}
+        }
+      }
+    },
+    {
+      "from": "host",
+      "message": {
+        "jsonrpc": "2.0",
+        "id": {"$var": "l2"},
+        "error": {"code": -32806, "message": {"$any": "string", "sample": "error"}, "data": {"state": "loaded"}}
+      }
+    },
+    {"include": "fragments/bye.json"}
+  ]
+}

@@ -1,0 +1,17 @@
+{
+  "id": "malformed-null-id-error-host",
+  "category": "malformed",
+  "title": "收到 id 为 null 的错误应答:不应答(永远不对应答再应答)(plugin-host 收到)",
+  "subject": "host",
+  "covers": ["shutdown"],
+  "fixture": {"manifest": "manifests/basic.json", "plugin": "plugins/relay.js"},
+  "steps": [
+    {"include": "fragments/handshake.json"},
+    {
+      "from": "engine",
+      "raw": "{\"jsonrpc\":\"2.0\",\"id\":null,\"error\":{\"code\":-32700,\"message\":\"parse error\"}}",
+      "invalid": "strayResponse"
+    },
+    {"include": "fragments/bye.json"}
+  ]
+}

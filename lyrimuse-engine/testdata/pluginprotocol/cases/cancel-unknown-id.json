@@ -1,0 +1,18 @@
+{
+  "id": "cancel-unknown-id",
+  "category": "cancel",
+  "title": "取消一个不存在的 id:忽略",
+  "subject": "host",
+  "covers": ["$/cancelRequest"],
+  "fixture": {"manifest": "manifests/basic.json", "plugin": "plugins/relay.js"},
+  "steps": [
+    {"include": "fragments/handshake.json"},
+    {"include": "fragments/load.json"},
+    {"from": "engine", "message": {"jsonrpc": "2.0", "method": "$/cancelRequest", "params": {"id": 424242}}},
+    {
+      "from": "engine",
+      "message": {"jsonrpc": "2.0", "method": "$/cancelRequest", "params": {"id": "nope", "reason": "superseded"}}
+    },
+    {"include": "fragments/bye.json"}
+  ]
+}

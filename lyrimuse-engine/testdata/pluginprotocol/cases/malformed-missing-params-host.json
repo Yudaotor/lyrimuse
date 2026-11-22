@@ -1,0 +1,126 @@
+{
+  "id": "malformed-missing-params-host",
+  "category": "malformed",
+  "title": "必填参数缺了或类型不对:-32602",
+  "subject": "host",
+  "covers": ["lyrics/search", "lyrics/getLyrics", "initialize"],
+  "fixture": {"manifest": "manifests/basic.json", "plugin": "plugins/relay.js"},
+  "steps": [
+    {
+      "from": "engine",
+      "message": {
+        "jsonrpc": "2.0",
+        "id": {"$var": "i0", "sample": 1},
+        "method": "initialize",
+        "params": {"engineInfo": {"name": "x", "version": "1"}}
+      },
+      "invalid": "badParams"
+    },
+    {
+      "from": "host",
+      "message": {
+        "jsonrpc": "2.0",
+        "id": {"$var": "i0"},
+        "error": {"code": -32602, "message": {"$any": "string", "sample": "error"}}
+      }
+    },
+    {"include": "fragments/handshake.json"},
+    {"include": "fragments/load.json"},
+    {
+      "from": "engine",
+      "message": {
+        "jsonrpc": "2.0",
+        "id": {"$var": "s1", "sample": 3},
+        "method": "lyrics/search",
+        "params": {
+          "call": {
+            "id": {"$var": "c1", "sample": "c1"},
+            "task": {"$var": "t1", "sample": "t1"},
+            "timeoutMs": {"$any": "integer", "sample": 20000}
+          }
+        }
+      },
+      "invalid": "badParams"
+    },
+    {
+      "from": "host",
+      "message": {
+        "jsonrpc": "2.0",
+        "id": {"$var": "s1"},
+        "error": {"code": -32602, "message": {"$any": "string", "sample": "error"}}
+      }
+    },
+    {
+      "from": "engine",
+      "message": {
+        "jsonrpc": "2.0",
+        "id": {"$var": "s2", "sample": 4},
+        "method": "lyrics/search",
+        "params": {
+          "call": "c1",
+          "query": {
+            "title": "Paper Lanterns",
+            "artist": "Lyrimuse Test Band",
+            "album": "Fixtures",
+            "durationSecs": 215,
+            "cleanTitle": "Paper Lanterns",
+            "primaryArtist": "Lyrimuse Test Band",
+            "artists": ["Lyrimuse Test Band"],
+            "search": {"title": "Paper Lanterns", "artist": "Lyrimuse Test Band"},
+            "attempt": {"index": 1, "count": 1, "variant": "primary"},
+            "uiLanguage": {"$any": "string", "sample": "en"},
+            "round": "playing"
+          }
+        }
+      },
+      "invalid": "badParams"
+    },
+    {
+      "from": "host",
+      "message": {
+        "jsonrpc": "2.0",
+        "id": {"$var": "s2"},
+        "error": {"code": -32602, "message": {"$any": "string", "sample": "error"}}
+      }
+    },
+    {
+      "from": "engine",
+      "message": {
+        "jsonrpc": "2.0",
+        "id": {"$var": "g1", "sample": 5},
+        "method": "lyrics/getLyrics",
+        "params": {
+          "call": {
+            "id": {"$var": "c3", "sample": "c3"},
+            "task": {"$var": "t1", "sample": "t1"},
+            "timeoutMs": {"$any": "integer", "sample": 20000}
+          },
+          "query": {
+            "title": "Paper Lanterns",
+            "artist": "Lyrimuse Test Band",
+            "album": "Fixtures",
+            "durationSecs": 215,
+            "cleanTitle": "Paper Lanterns",
+            "primaryArtist": "Lyrimuse Test Band",
+            "artists": ["Lyrimuse Test Band"],
+            "search": {"title": "Paper Lanterns", "artist": "Lyrimuse Test Band"},
+            "attempt": {"index": 1, "count": 1, "variant": "primary"},
+            "uiLanguage": {"$any": "string", "sample": "en"},
+            "round": "playing"
+          },
+          "item": "101"
+        }
+      },
+      "invalid": "badParams"
+    },
+    {
+      "from": "host",
+      "message": {
+        "jsonrpc": "2.0",
+        "id": {"$var": "g1"},
+        "error": {"code": -32602, "message": {"$any": "string", "sample": "error"}}
+      }
+    },
+    {"include": "fragments/bye.json"}
+  ]
+}

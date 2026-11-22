@@ -1,0 +1,68 @@
+{
+  "id": "load-syntax-error",
+  "category": "load",
+  "title": "脚本语法错:-32000 SYNTAX_ERROR,状态留在 ready",
+  "subject": "host",
+  "covers": ["plugin/load"],
+  "fixture": {"manifest": "manifests/basic.json", "plugin": "plugins/badsyntax.js"},
+  "steps": [
+    {"include": "fragments/handshake.json"},
+    {
+      "from": "engine",
+      "message": {
+        "jsonrpc": "2.0",
+        "id": {"$var": "l1", "sample": 2},
+        "method": "plugin/load",
+        "params": {
+          "manifest": {"$fixture": "manifest"},
+          "source": {"mediaType": "text/javascript", "text": {"$fixture": "source"}}
+        }
+      }
+    },
+    {
+      "from": "host",
+      "message": {
+        "jsonrpc": "2.0",
+        "id": {"$var": "l1"},
+        "error": {"code": -32000, "message": {"$any": "string", "sample": "error"}, "data": {"code": "SYNTAX_ERROR"}}
+      }
+    },
+    {
+      "from": "engine",
+      "message": {
+        "jsonrpc": "2.0",
+        "id": {"$var": "s1", "sample": 3},
+        "method": "lyrics/search",
+        "params": {
+          "call": {
+            "id": {"$var": "c1", "sample": "c1"},
+            "task": {"$var": "t1", "sample": "t1"},
+            "timeoutMs": {"$any": "integer", "sample": 20000}
+          },
+          "query": {
+            "title": "Paper Lanterns",
+            "artist": "Lyrimuse Test Band",
+            "album": "Fixtures",
+            "durationSecs": 215,
+            "cleanTitle": "Paper Lanterns",
+            "primaryArtist": "Lyrimuse Test Band",
+            "artists": ["Lyrimuse Test Band"],
+            "search": {"title": "Paper Lanterns", "artist": "Lyrimuse Test Band"},
+            "attempt": {"index": 1, "count": 1, "variant": "primary"},
+            "uiLanguage": {"$any": "string", "sample": "en"},
+            "round": "playing"
+          }
+        }
+      }
+    },
+    {
+      "from": "host",
+      "message": {
+        "jsonrpc": "2.0",
+        "id": {"$var": "s1"},
+        "error": {"code": -32806, "message": {"$any": "string", "sample": "error"}, "data": {"state": "ready"}}
+      }
+    },
+    {"include": "fragments/bye.json"}
+  ]
+}

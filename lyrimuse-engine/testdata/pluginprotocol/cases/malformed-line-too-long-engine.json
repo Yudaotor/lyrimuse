@@ -1,0 +1,116 @@
+{
+  "id": "malformed-line-too-long-engine",
+  "category": "malformed",
+  "title": "plugin-host 发来的一行超过引擎报的 maxLineBytes:整行丢掉,回 id 为 null 的 -32600 lineTooLong",
+  "subject": "engine",
+  "covers": ["initialize", "lyrics/search"],
+  "fixture": {"manifest": "manifests/basic.json", "plugin": "plugins/relay.js", "config": {"engine": {"maxLineBytes": 65536}}},
+  "drive": [
+    {"before": "initialize", "do": "start"},
+    {
+      "before": "search",
+      "do": "resolve",
+      "task": "t1",
+      "track": {"title": "Paper Lanterns", "artist": "Lyrimuse Test Band", "album": "Fixtures", "durationSecs": 215},
+      "round": "playing"
+    },
+    {"before": "shutdown", "do": "stop"}
+  ],
+  "steps": [
+    {
+      "label": "initialize",
+      "from": "engine",
+      "message": {
+        "jsonrpc": "2.0",
+        "id": {"$var": "initId", "sample": 1},
+        "method": "initialize",
+        "params": {
+          "protocolVersion": "0.1",
+          "engineInfo": {"name": {"$any": "string", "sample": "lyrimuse-engine"}, "version": {"$any": "string", "sample": "1.15.0"}},
+          "capabilities": {
+            "host": {"fetch": {}, "match": {}, "storage": {}, "log": {}},
+            "lyrics": {"wordFormats": {"$contains": ["timeline", "ttml", "lrc-a2"]}}
+          },
+          "limits": {
+            "maxLineBytes": 65536,
+            "maxResultBytes": {"$any": "integer", "sample": 8388608},
+            "maxInFlightHostRequests": {"$any": "integer", "sample": 64}
+          },
+          "heartbeatIntervalMs": {"$any": "integer", "sample": 1000}
+        }
+      }
+    },
+    {
+      "from": "host",
+      "message": {
+        "jsonrpc": "2.0",
+        "id": {"$var": "initId"},
+        "result": {
+          "protocolVersion": "0.1",
+          "hostInfo": {
+            "name": {"$any": "string", "sample": "lyrimuse-plugin-host"},
+            "version": {"$any": "string", "sample": "1.15.0"},
+            "runtime": {"$any": "string", "sample": "goja"},
+            "sandbox": {"$any": "string", "sample": "seatbelt"}
+          },
+          "apiVersions": {"$contains": ["0.1"]},
+          "capabilities": {"lyrics": {"search": {}, "getLyrics": {}}, "heartbeat": {}},
+          "limits": {
+            "maxLineBytes": {"$any": "integer", "sample": 33554432},
+            "maxInFlightCalls": {"$any": "integer", "sample": 16}
+          }
+        }
+      }
+    },
+    {"include": "fragments/load.json"},
+    {
+      "label": "search",
+      "from": "engine",
+      "message": {
+        "jsonrpc": "2.0",
+        "id": {"$var": "s1", "sample": 3},
+        "method": "lyrics/search",
+        "params": {
+          "call": {
+            "id": {"$var": "c1", "sample": "c1"},
+            "task": {"$var": "t1", "sample": "t1"},
+            "timeoutMs": {"$any": "integer", "sample": 20000}
+          },
+          "query": {
+            "title": "Paper Lanterns",
+            "artist": "Lyrimuse Test Band",
+            "album": "Fixtures",
+            "durationSecs": 215,
+            "cleanTitle": "Paper Lanterns",
+            "primaryArtist": "Lyrimuse Test Band",
+            "artists": ["Lyrimuse Test Band"],
+            "search": {"title": "Paper Lanterns", "artist": "Lyrimuse Test Band"},
+            "attempt": {"index": 1, "count": 1, "variant": "primary"},
+            "uiLanguage": {"$any": "string", "sample": "en"},
+            "round": "playing"
+          }
+        }
+      }
+    },
+    {
+      "from": "host",
+      "rawFill": {
+        "prefix": "{\"jsonrpc\":\"2.0\",\"method\":\"host/log\",\"params\":{\"level\":\"info\",\"message\":\"",
+        "fill": "a",
+        "suffix": "\"}}",
+        "totalBytes": 65537
+      },
+      "invalid": "lineTooLong"
+    },
+    {
+      "from": "engine",
+      "message": {
+        "jsonrpc": "2.0",
+        "id": null,
+        "error": {"code": -32600, "message": {"$any": "string", "sample": "error"}, "data": {"reason": "lineTooLong"}}
+      }
+    },
+    {"from": "host", "message": {"jsonrpc": "2.0", "id": {"$var": "s1"}, "result": {"items": []}}},
+    {"include": "fragments/bye.json"}
+  ]
+}

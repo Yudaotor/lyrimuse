@@ -1,0 +1,126 @@
+{
+  "id": "hostapi-storage-roundtrip",
+  "category": "hostapi",
+  "title": "host/storage 的 set / get / keys / delete",
+  "subject": "both",
+  "covers": ["host/storage.set", "host/storage.get", "host/storage.keys", "host/storage.delete"],
+  "fixture": {"manifest": "manifests/basic.json", "plugin": "plugins/probe.js"},
+  "drive": [
+    {"before": "initialize", "do": "start"},
+    {
+      "before": "search",
+      "do": "resolve",
+      "task": "t1",
+      "track": {"title": "storage", "artist": "Lyrimuse Test Band", "album": "Fixtures", "durationSecs": 215},
+      "round": "playing"
+    },
+    {"before": "shutdown", "do": "stop"}
+  ],
+  "steps": [
+    {"include": "fragments/handshake.json"},
+    {"include": "fragments/load.json"},
+    {
+      "label": "search",
+      "from": "engine",
+      "message": {
+        "jsonrpc": "2.0",
+        "id": {"$var": "s1", "sample": 3},
+        "method": "lyrics/search",
+        "params": {
+          "call": {
+            "id": {"$var": "c1", "sample": "c1"},
+            "task": {"$var": "t1", "sample": "t1"},
+            "timeoutMs": {"$any": "integer", "sample": 20000}
+          },
+          "query": {
+            "title": "storage",
+            "artist": "Lyrimuse Test Band",
+            "album": "Fixtures",
+            "durationSecs": 215,
+            "cleanTitle": "storage",
+            "primaryArtist": "Lyrimuse Test Band",
+            "artists": ["Lyrimuse Test Band"],
+            "search": {"title": "storage", "artist": "Lyrimuse Test Band"},
+            "attempt": {"index": 1, "count": 1, "variant": "primary"},
+            "uiLanguage": {"$any": "string", "sample": "en"},
+            "round": "playing"
+          }
+        }
+      }
+    },
+    {
+      "from": "host",
+      "message": {
+        "jsonrpc": "2.0",
+        "id": {"$var": "k1", "sample": 1},
+        "method": "host/storage.set",
+        "params": {"call": {"$var": "c1"}, "key": "token", "value": {"v": 1}, "ttlSecs": 60}
+      }
+    },
+    {"from": "engine", "message": {"jsonrpc": "2.0", "id": {"$var": "k1"}, "result": {}}},
+    {
+      "from": "host",
+      "message": {
+        "jsonrpc": "2.0",
+        "id": {"$var": "k2", "sample": 2},
+        "method": "host/storage.get",
+        "params": {"call": {"$var": "c1"}, "key": "token"}
+      }
+    },
+    {
+      "from": "engine",
+      "message": {"jsonrpc": "2.0", "id": {"$var": "k2"}, "result": {"found": true, "value": {"v": 1}}}
+    },
+    {
+      "from": "host",
+      "message": {
+        "jsonrpc": "2.0",
+        "id": {"$var": "k3", "sample": 3},
+        "method": "host/storage.keys",
+        "params": {"call": {"$var": "c1"}}
+      }
+    },
+    {"from": "engine", "message": {"jsonrpc": "2.0", "id": {"$var": "k3"}, "result": {"keys": ["token"]}}},
+    {
+      "from": "host",
+      "message": {
+        "jsonrpc": "2.0",
+        "id": {"$var": "k4", "sample": 4},
+        "method": "host/storage.delete",
+        "params": {"call": {"$var": "c1"}, "key": "token"}
+      }
+    },
+    {"from": "engine", "message": {"jsonrpc": "2.0", "id": {"$var": "k4"}, "result": {"deleted": true}}},
+    {
+      "from": "host",
+      "message": {
+        "jsonrpc": "2.0",
+        "id": {"$var": "k5", "sample": 5},
+        "method": "host/storage.get",
+        "params": {"call": {"$var": "c1"}, "key": "token"}
+      }
+    },
+    {
+      "from": "engine",
+      "message": {"jsonrpc": "2.0", "id": {"$var": "k5"}, "result": {"found": false, "value": {"$absent": true}}}
+    },
+    {
+      "from": "host",
+      "message": {
+        "jsonrpc": "2.0",
+        "id": {"$var": "s1"},
+        "result": {
+          "items": [
+            {
+              "id": "storage",
+              "title": "storage",
+              "artist": "Lyrimuse Test Band",
+              "lyrics": {"plain": "{\"v\":1}\ntoken\nundefined"}
+            }
+          ]
+        }
+      }
+    },
+    {"include": "fragments/bye.json"}
+  ]
+}

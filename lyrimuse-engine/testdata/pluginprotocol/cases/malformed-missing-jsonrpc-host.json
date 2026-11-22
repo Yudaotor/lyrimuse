@@ -1,0 +1,21 @@
+{
+  "id": "malformed-missing-jsonrpc-host",
+  "category": "malformed",
+  "title": "没有 jsonrpc: \"2.0\":-32600 badVersion;看得出是请求时带上它的 id(plugin-host 收到)",
+  "subject": "host",
+  "covers": ["shutdown"],
+  "fixture": {"manifest": "manifests/basic.json", "plugin": "plugins/relay.js"},
+  "steps": [
+    {"include": "fragments/handshake.json"},
+    {"from": "engine", "raw": "{\"id\":50,\"method\":\"shutdown\"}", "invalid": "shape"},
+    {
+      "from": "host",
+      "message": {
+        "jsonrpc": "2.0",
+        "id": 50,
+        "error": {"code": -32600, "message": {"$any": "string", "sample": "error"}, "data": {"reason": "badVersion"}}
+      }
+    },
+    {"include": "fragments/bye.json"}
+  ]
+}

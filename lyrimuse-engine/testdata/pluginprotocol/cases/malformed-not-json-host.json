@@ -1,0 +1,17 @@
+{
+  "id": "malformed-not-json-host",
+  "category": "malformed",
+  "title": "不是 JSON:回 id 为 null 的 -32700(plugin-host 收到)",
+  "subject": "host",
+  "covers": ["shutdown"],
+  "fixture": {"manifest": "manifests/basic.json", "plugin": "plugins/relay.js"},
+  "steps": [
+    {"include": "fragments/handshake.json"},
+    {"from": "engine", "raw": "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":", "invalid": "parse"},
+    {
+      "from": "host",
+      "message": {"jsonrpc": "2.0", "id": null, "error": {"code": -32700, "message": {"$any": "string", "sample": "error"}}}
+    },
+    {"include": "fragments/bye.json"}
+  ]
+}

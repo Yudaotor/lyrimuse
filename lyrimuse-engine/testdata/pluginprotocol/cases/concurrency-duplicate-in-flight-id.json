@@ -1,0 +1,117 @@
+{
+  "id": "concurrency-duplicate-in-flight-id",
+  "category": "concurrency",
+  "title": "在途的 id 又被用了一次:后来的那个回 -32600 duplicateId,先来的不受影响",
+  "subject": "host",
+  "covers": ["lyrics/search", "host/fetch"],
+  "fixture": {
+    "manifest": "manifests/basic.json",
+    "plugin": "plugins/relay.js",
+    "http": [
+      {
+        "request": {"method": "GET", "url": "https://lyrics.example/search?title=Paper%20Lanterns&artist=Lyrimuse%20Test%20Band"},
+        "response": {"status": 200, "headers": [["content-type", "application/json"]], "body": "{\"items\":[]}"}
+      }
+    ]
+  },
+  "steps": [
+    {"include": "fragments/handshake.json"},
+    {"include": "fragments/load.json"},
+    {
+      "from": "engine",
+      "message": {
+        "jsonrpc": "2.0",
+        "id": 7,
+        "method": "lyrics/search",
+        "params": {
+          "call": {
+            "id": {"$var": "c1", "sample": "c1"},
+            "task": {"$var": "t1", "sample": "t1"},
+            "timeoutMs": {"$any": "integer", "sample": 20000}
+          },
+          "query": {
+            "title": "Paper Lanterns",
+            "artist": "Lyrimuse Test Band",
+            "album": "Fixtures",
+            "durationSecs": 215,
+            "cleanTitle": "Paper Lanterns",
+            "primaryArtist": "Lyrimuse Test Band",
+            "artists": ["Lyrimuse Test Band"],
+            "search": {"title": "Paper Lanterns", "artist": "Lyrimuse Test Band"},
+            "attempt": {"index": 1, "count": 1, "variant": "primary"},
+            "uiLanguage": {"$any": "string", "sample": "en"},
+            "round": "playing"
+          }
+        }
+      }
+    },
+    {
+      "from": "host",
+      "message": {
+        "jsonrpc": "2.0",
+        "id": {"$var": "f1", "sample": 1},
+        "method": "host/fetch",
+        "params": {
+          "call": {"$var": "c1"},
+          "request": {
+            "url": "https://lyrics.example/search?title=Paper%20Lanterns&artist=Lyrimuse%20Test%20Band",
+            "method": {"$optional": "GET"}
+          }
+        }
+      }
+    },
+    {
+      "from": "engine",
+      "message": {
+        "jsonrpc": "2.0",
+        "id": 7,
+        "method": "lyrics/search",
+        "params": {
+          "call": {
+            "id": {"$var": "c2", "sample": "c2"},
+            "task": {"$var": "t2", "sample": "t2"},
+            "timeoutMs": {"$any": "integer", "sample": 20000}
+          },
+          "query": {
+            "title": "Paper Lanterns",
+            "artist": "Lyrimuse Test Band",
+            "album": "Fixtures",
+            "durationSecs": 215,
+            "cleanTitle": "Paper Lanterns",
+            "primaryArtist": "Lyrimuse Test Band",
+            "artists": ["Lyrimuse Test Band"],
+            "search": {"title": "Paper Lanterns", "artist": "Lyrimuse Test Band"},
+            "attempt": {"index": 1, "count": 1, "variant": "primary"},
+            "uiLanguage": {"$any": "string", "sample": "en"},
+            "round": "playing"
+          }
+        }
+      },
+      "invalid": "duplicateId"
+    },
+    {
+      "from": "host",
+      "message": {
+        "jsonrpc": "2.0",
+        "id": 7,
+        "error": {"code": -32600, "message": {"$any": "string", "sample": "duplicate id"}, "data": {"reason": "duplicateId"}}
+      }
+    },
+    {
+      "from": "engine",
+      "message": {
+        "jsonrpc": "2.0",
+        "id": {"$var": "f1"},
+        "result": {
+          "status": 200,
+          "headers": {"$any": "array", "sample": [["content-type", "application/json"]]},
+          "url": "https://lyrics.example/search?title=Paper%20Lanterns&artist=Lyrimuse%20Test%20Band",
+          "redirected": false,
+          "body": {"encoding": "utf8", "data": "{\"items\":[]}"}
+        }
+      }
+    },
+    {"from": "host", "message": {"jsonrpc": "2.0", "id": 7, "result": {"items": []}}},
+    {"include": "fragments/bye.json"}
+  ]
+}

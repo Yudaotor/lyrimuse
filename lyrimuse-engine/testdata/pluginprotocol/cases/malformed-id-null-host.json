@@ -1,0 +1,21 @@
+{
+  "id": "malformed-id-null-host",
+  "category": "malformed",
+  "title": "请求的 id 是 null:-32600 badId,应答的 id 也是 null(plugin-host 收到)",
+  "subject": "host",
+  "covers": ["shutdown"],
+  "fixture": {"manifest": "manifests/basic.json", "plugin": "plugins/relay.js"},
+  "steps": [
+    {"include": "fragments/handshake.json"},
+    {"from": "engine", "raw": "{\"jsonrpc\":\"2.0\",\"id\":null,\"method\":\"shutdown\"}", "invalid": "shape"},
+    {
+      "from": "host",
+      "message": {
+        "jsonrpc": "2.0",
+        "id": null,
+        "error": {"code": -32600, "message": {"$any": "string", "sample": "error"}, "data": {"reason": "badId"}}
+      }
+    },
+    {"include": "fragments/bye.json"}
+  ]
+}

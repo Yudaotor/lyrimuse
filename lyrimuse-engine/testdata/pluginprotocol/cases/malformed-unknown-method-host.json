@@ -1,0 +1,21 @@
+{
+  "id": "malformed-unknown-method-host",
+  "category": "malformed",
+  "title": "不认识的方法、带 id:-32601(plugin-host 收到)",
+  "subject": "host",
+  "covers": ["shutdown"],
+  "fixture": {"manifest": "manifests/basic.json", "plugin": "plugins/relay.js"},
+  "steps": [
+    {"include": "fragments/handshake.json"},
+    {
+      "from": "engine",
+      "raw": "{\"jsonrpc\":\"2.0\",\"id\":53,\"method\":\"plugin/unload\",\"params\":{}}",
+      "invalid": "unknownMethod"
+    },
+    {
+      "from": "host",
+      "message": {"jsonrpc": "2.0", "id": 53, "error": {"code": -32601, "message": {"$any": "string", "sample": "error"}}}
+    },
+    {"include": "fragments/bye.json"}
+  ]
+}

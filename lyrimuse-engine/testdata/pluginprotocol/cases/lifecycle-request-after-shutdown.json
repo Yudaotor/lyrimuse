@@ -1,0 +1,61 @@
+{
+  "id": "lifecycle-request-after-shutdown",
+  "category": "lifecycle",
+  "title": "shutdown 应答之后只收 exit:别的请求回 -32806",
+  "subject": "host",
+  "covers": ["shutdown", "exit", "lyrics/search"],
+  "fixture": {"manifest": "manifests/basic.json", "plugin": "plugins/relay.js"},
+  "steps": [
+    {"include": "fragments/handshake.json"},
+    {"include": "fragments/load.json"},
+    {"from": "engine", "message": {"jsonrpc": "2.0", "id": {"$var": "b1", "sample": 3}, "method": "shutdown"}},
+    {"from": "host", "message": {"jsonrpc": "2.0", "id": {"$var": "b1"}, "result": null}},
+    {
+      "from": "engine",
+      "message": {
+        "jsonrpc": "2.0",
+        "id": {"$var": "s1", "sample": 4},
+        "method": "lyrics/search",
+        "params": {
+          "call": {
+            "id": {"$var": "c1", "sample": "c1"},
+            "task": {"$var": "t1", "sample": "t1"},
+            "timeoutMs": {"$any": "integer", "sample": 20000}
+          },
+          "query": {
+            "title": "Paper Lanterns",
+            "artist": "Lyrimuse Test Band",
+            "album": "Fixtures",
+            "durationSecs": 215,
+            "cleanTitle": "Paper Lanterns",
+            "primaryArtist": "Lyrimuse Test Band",
+            "artists": ["Lyrimuse Test Band"],
+            "search": {"title": "Paper Lanterns", "artist": "Lyrimuse Test Band"},
+            "attempt": {"index": 1, "count": 1, "variant": "primary"},
+            "uiLanguage": {"$any": "string", "sample": "en"},
+            "round": "playing"
+          }
+        }
+      }
+    },
+    {
+      "from": "host",
+      "message": {
+        "jsonrpc": "2.0",
+        "id": {"$var": "s1"},
+        "error": {"code": -32806, "message": {"$any": "string", "sample": "error"}, "data": {"state": "shuttingDown"}}
+      }
+    },
+    {"from": "engine", "message": {"jsonrpc": "2.0", "id": {"$var": "b2", "sample": 5}, "method": "shutdown"}},
+    {
+      "from": "host",
+      "message": {
+        "jsonrpc": "2.0",
+        "id": {"$var": "b2"},
+        "error": {"code": -32806, "message": {"$any": "string", "sample": "error"}, "data": {"state": "shuttingDown"}}
+      }
+    },
+    {"from": "engine", "message": {"jsonrpc": "2.0", "method": "exit"}},
+    {"from": "host", "close": true, "exitCode": 0}
+  ]
+}

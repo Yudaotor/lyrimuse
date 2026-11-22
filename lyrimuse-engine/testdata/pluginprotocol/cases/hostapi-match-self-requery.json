@@ -1,0 +1,177 @@
+{
+  "id": "hostapi-match-self-requery",
+  "category": "hostapi",
+  "title": "requery: self 的插件用 host/match 自己判断要不要再搜",
+  "subject": "both",
+  "covers": ["host/match", "host/fetch", "lyrics/search"],
+  "fixture": {
+    "manifest": "manifests/basic.json",
+    "plugin": "plugins/selfrequery.js",
+    "http": [
+      {
+        "request": {"method": "GET", "url": "https://lyrics.example/search?title=Paper%20Lanterns&artist=Lyrimuse%20Test%20Band"},
+        "response": {
+          "status": 200,
+          "headers": [["content-type", "application/json"]],
+          "body": "{\"items\":[{\"id\":\"201\",\"title\":\"Another Song\",\"artist\":\"Someone Else\",\"durationSecs\":180}]}"
+        }
+      },
+      {
+        "request": {"method": "GET", "url": "https://lyrics.example/search?title=Paper%20Lanterns&artist="},
+        "response": {
+          "status": 200,
+          "headers": [["content-type", "application/json"]],
+          "body": "{\"items\":[{\"id\":\"202\",\"title\":\"Paper Lanterns\",\"artist\":\"Lyrimuse Test Band\",\"album\":\"Fixtures\",\"durationSecs\":215,\"lyrics\":{\"lines\":\"[00:01.00]Paper lanterns in the rain\\n[00:05.50]Drifting slowly down the lane\\n[00:10.25]Every light a small refrain\\n\"}}]}"
+        }
+      }
+    ]
+  },
+  "drive": [
+    {"before": "initialize", "do": "start"},
+    {
+      "before": "search",
+      "do": "resolve",
+      "task": "t1",
+      "track": {"title": "Paper Lanterns", "artist": "Lyrimuse Test Band", "album": "Fixtures", "durationSecs": 215},
+      "round": "playing"
+    },
+    {"before": "shutdown", "do": "stop"}
+  ],
+  "steps": [
+    {"include": "fragments/handshake.json"},
+    {"include": "fragments/load-search-only.json"},
+    {
+      "label": "search",
+      "from": "engine",
+      "message": {
+        "jsonrpc": "2.0",
+        "id": {"$var": "s1", "sample": 3},
+        "method": "lyrics/search",
+        "params": {
+          "call": {
+            "id": {"$var": "c1", "sample": "c1"},
+            "task": {"$var": "t1", "sample": "t1"},
+            "timeoutMs": {"$any": "integer", "sample": 20000}
+          },
+          "query": {
+            "title": "Paper Lanterns",
+            "artist": "Lyrimuse Test Band",
+            "album": "Fixtures",
+            "durationSecs": 215,
+            "cleanTitle": "Paper Lanterns",
+            "primaryArtist": "Lyrimuse Test Band",
+            "artists": ["Lyrimuse Test Band"],
+            "search": {"title": "Paper Lanterns", "artist": "Lyrimuse Test Band"},
+            "attempt": {"index": 1, "count": 1, "variant": "primary"},
+            "uiLanguage": {"$any": "string", "sample": "en"},
+            "round": "playing"
+          }
+        }
+      }
+    },
+    {
+      "from": "host",
+      "message": {
+        "jsonrpc": "2.0",
+        "id": {"$var": "f1", "sample": 1},
+        "method": "host/fetch",
+        "params": {
+          "call": {"$var": "c1"},
+          "request": {
+            "url": "https://lyrics.example/search?title=Paper%20Lanterns&artist=Lyrimuse%20Test%20Band",
+            "method": {"$optional": "GET"}
+          }
+        }
+      }
+    },
+    {
+      "from": "engine",
+      "message": {
+        "jsonrpc": "2.0",
+        "id": {"$var": "f1"},
+        "result": {
+          "status": 200,
+          "headers": {"$any": "array", "sample": [["content-type", "application/json"]]},
+          "url": "https://lyrics.example/search?title=Paper%20Lanterns&artist=Lyrimuse%20Test%20Band",
+          "redirected": false,
+          "body": {
+            "encoding": "utf8",
+            "data": "{\"items\":[{\"id\":\"201\",\"title\":\"Another Song\",\"artist\":\"Someone Else\",\"durationSecs\":180}]}"
+          }
+        }
+      }
+    },
+    {
+      "from": "host",
+      "message": {
+        "jsonrpc": "2.0",
+        "id": {"$var": "m1", "sample": 2},
+        "method": "host/match",
+        "params": {
+          "call": {"$var": "c1"},
+          "items": [{"id": "201", "title": "Another Song", "artist": "Someone Else", "durationSecs": 180}]
+        }
+      }
+    },
+    {
+      "from": "engine",
+      "message": {
+        "jsonrpc": "2.0",
+        "id": {"$var": "m1"},
+        "result": {"verdicts": [{"accepted": false, "reason": {"$oneOf": ["title", "artist"]}}]}
+      }
+    },
+    {
+      "from": "host",
+      "message": {
+        "jsonrpc": "2.0",
+        "id": {"$var": "f2", "sample": 3},
+        "method": "host/fetch",
+        "params": {
+          "call": {"$var": "c1"},
+          "request": {"url": "https://lyrics.example/search?title=Paper%20Lanterns&artist=", "method": {"$optional": "GET"}}
+        }
+      }
+    },
+    {
+      "from": "engine",
+      "message": {
+        "jsonrpc": "2.0",
+        "id": {"$var": "f2"},
+        "result": {
+          "status": 200,
+          "headers": {"$any": "array", "sample": [["content-type", "application/json"]]},
+          "url": "https://lyrics.example/search?title=Paper%20Lanterns&artist=",
+          "redirected": false,
+          "body": {
+            "encoding": "utf8",
+            "data": "{\"items\":[{\"id\":\"202\",\"title\":\"Paper Lanterns\",\"artist\":\"Lyrimuse Test Band\",\"album\":\"Fixtures\",\"durationSecs\":215,\"lyrics\":{\"lines\":\"[00:01.00]Paper lanterns in the rain\\n[00:05.50]Drifting slowly down the lane\\n[00:10.25]Every light a small refrain\\n\"}}]}"
+          }
+        }
+      }
+    },
+    {
+      "from": "host",
+      "message": {
+        "jsonrpc": "2.0",
+        "id": {"$var": "s1"},
+        "result": {
+          "items": [
+            {
+              "id": "202",
+              "title": "Paper Lanterns",
+              "artist": "Lyrimuse Test Band",
+              "album": "Fixtures",
+              "durationSecs": 215,
+              "lyrics": {
+                "lines": "[00:01.00]Paper lanterns in the rain\n[00:05.50]Drifting slowly down the lane\n[00:10.25]Every light a small refrain\n"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {"observe": {"task": "t1", "outcome": {"status": "FOUND"}}},
+    {"include": "fragments/bye.json"}
+  ]
+}

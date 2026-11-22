@@ -1,0 +1,53 @@
+{
+  "id": "errors-memory-limit",
+  "category": "errors",
+  "title": "脚本把内存吃到上限:plugin-host 打断这次调用,回 -32802 memory",
+  "subject": "host",
+  "covers": ["lyrics/search"],
+  "fixture": {"manifest": "manifests/basic.json", "plugin": "plugins/probe.js"},
+  "steps": [
+    {"include": "fragments/handshake.json"},
+    {"include": "fragments/load.json"},
+    {
+      "from": "engine",
+      "message": {
+        "jsonrpc": "2.0",
+        "id": {"$var": "s1", "sample": 3},
+        "method": "lyrics/search",
+        "params": {
+          "call": {
+            "id": {"$var": "c1", "sample": "c1"},
+            "task": {"$var": "t1", "sample": "t1"},
+            "timeoutMs": {"$any": "integer", "sample": 20000}
+          },
+          "query": {
+            "title": "hog",
+            "artist": "Lyrimuse Test Band",
+            "album": "Fixtures",
+            "durationSecs": 215,
+            "cleanTitle": "hog",
+            "primaryArtist": "Lyrimuse Test Band",
+            "artists": ["Lyrimuse Test Band"],
+            "search": {"title": "hog", "artist": "Lyrimuse Test Band"},
+            "attempt": {"index": 1, "count": 1, "variant": "primary"},
+            "uiLanguage": {"$any": "string", "sample": "en"},
+            "round": "playing"
+          }
+        }
+      }
+    },
+    {
+      "from": "host",
+      "message": {
+        "jsonrpc": "2.0",
+        "id": {"$var": "s1"},
+        "error": {
+          "code": -32802,
+          "message": {"$any": "string", "sample": "error"},
+          "data": {"limit": {"$oneOf": ["memory", "jsTime"]}}
+        }
+      }
+    },
+    {"include": "fragments/bye.json"}
+  ]
+}

@@ -1,0 +1,23 @@
+{
+  "id": "malformed-framing-tolerance-host",
+  "category": "malformed",
+  "title": "空行和只有空白的行忽略;行尾多一个回车照常处理(plugin-host 收到)",
+  "subject": "host",
+  "covers": ["shutdown"],
+  "fixture": {"manifest": "manifests/basic.json", "plugin": "plugins/relay.js"},
+  "steps": [
+    {"include": "fragments/handshake.json"},
+    {"from": "engine", "raw": "", "invalid": "blank"},
+    {"from": "engine", "raw": "   ", "invalid": "blank"},
+    {
+      "from": "engine",
+      "raw": "{\"jsonrpc\":\"2.0\",\"id\":60,\"method\":\"plugin/unload\"}\r",
+      "invalid": "unknownMethod"
+    },
+    {
+      "from": "host",
+      "message": {"jsonrpc": "2.0", "id": 60, "error": {"code": -32601, "message": {"$any": "string", "sample": "error"}}}
+    },
+    {"include": "fragments/bye.json"}
+  ]
+}

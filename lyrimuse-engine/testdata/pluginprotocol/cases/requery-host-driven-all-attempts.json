@@ -1,0 +1,223 @@
+{
+  "id": "requery-host-driven-all-attempts",
+  "category": "requery",
+  "title": "三种写法都没有候选过闸:primary、titleOnly、rawTitle 各调一次,之后不再调",
+  "subject": "both",
+  "covers": ["lyrics/search", "host/fetch"],
+  "fixture": {
+    "manifest": "manifests/basic.json",
+    "manifestPatch": {"requery": "host"},
+    "plugin": "plugins/searchonly.js",
+    "http": [
+      {
+        "request": {"method": "GET", "url": "https://lyrics.example/search?title=Paper%20Lanterns&artist=Lyrimuse%20Test%20Band"},
+        "response": {"status": 200, "headers": [["content-type", "application/json"]], "body": "{\"items\":[]}"}
+      },
+      {
+        "request": {"method": "GET", "url": "https://lyrics.example/search?title=Paper%20Lanterns&artist="},
+        "response": {"status": 404, "headers": [["content-type", "application/json"]], "body": ""}
+      },
+      {
+        "request": {
+          "method": "GET",
+          "url": "https://lyrics.example/search?title=Paper%20Lanterns%20(Live%20at%20Fixture%20Hall)&artist="
+        },
+        "response": {"status": 200, "headers": [["content-type", "application/json"]], "body": "{\"items\":[]}"}
+      }
+    ]
+  },
+  "drive": [
+    {"before": "initialize", "do": "start"},
+    {
+      "before": "search",
+      "do": "resolve",
+      "task": "t1",
+      "track": {
+        "title": "Paper Lanterns (Live at Fixture Hall)",
+        "artist": "Lyrimuse Test Band",
+        "album": "Fixtures",
+        "durationSecs": 215
+      },
+      "round": "playing"
+    },
+    {"before": "shutdown", "do": "stop"}
+  ],
+  "steps": [
+    {"include": "fragments/handshake.json"},
+    {"include": "fragments/load-search-only.json"},
+    {
+      "label": "search",
+      "from": "engine",
+      "message": {
+        "jsonrpc": "2.0",
+        "id": {"$var": "s1", "sample": 3},
+        "method": "lyrics/search",
+        "params": {
+          "call": {
+            "id": {"$var": "c1", "sample": "c1"},
+            "task": {"$var": "t1", "sample": "t1"},
+            "timeoutMs": {"$any": "integer", "sample": 20000}
+          },
+          "query": {
+            "title": "Paper Lanterns (Live at Fixture Hall)",
+            "artist": "Lyrimuse Test Band",
+            "album": "Fixtures",
+            "durationSecs": 215,
+            "cleanTitle": "Paper Lanterns",
+            "primaryArtist": "Lyrimuse Test Band",
+            "artists": ["Lyrimuse Test Band"],
+            "search": {"title": "Paper Lanterns", "artist": "Lyrimuse Test Band"},
+            "attempt": {"index": 1, "count": 3, "variant": "primary"},
+            "uiLanguage": {"$any": "string", "sample": "en"},
+            "round": "playing"
+          }
+        }
+      }
+    },
+    {
+      "from": "host",
+      "message": {
+        "jsonrpc": "2.0",
+        "id": {"$var": "f1", "sample": 1},
+        "method": "host/fetch",
+        "params": {
+          "call": {"$var": "c1"},
+          "request": {
+            "url": "https://lyrics.example/search?title=Paper%20Lanterns&artist=Lyrimuse%20Test%20Band",
+            "method": {"$optional": "GET"}
+          }
+        }
+      }
+    },
+    {
+      "from": "engine",
+      "message": {
+        "jsonrpc": "2.0",
+        "id": {"$var": "f1"},
+        "result": {
+          "status": 200,
+          "headers": {"$any": "array", "sample": [["content-type", "application/json"]]},
+          "url": "https://lyrics.example/search?title=Paper%20Lanterns&artist=Lyrimuse%20Test%20Band",
+          "redirected": false,
+          "body": {"encoding": "utf8", "data": "{\"items\":[]}"}
+        }
+      }
+    },
+    {"from": "host", "message": {"jsonrpc": "2.0", "id": {"$var": "s1"}, "result": {"items": []}}},
+    {
+      "from": "engine",
+      "message": {
+        "jsonrpc": "2.0",
+        "id": {"$var": "s2", "sample": 4},
+        "method": "lyrics/search",
+        "params": {
+          "call": {
+            "id": {"$var": "c2", "sample": "c2"},
+            "task": {"$var": "t1", "sample": "t1"},
+            "timeoutMs": {"$any": "integer", "sample": 20000}
+          },
+          "query": {
+            "title": "Paper Lanterns (Live at Fixture Hall)",
+            "artist": "Lyrimuse Test Band",
+            "album": "Fixtures",
+            "durationSecs": 215,
+            "cleanTitle": "Paper Lanterns",
+            "primaryArtist": "Lyrimuse Test Band",
+            "artists": ["Lyrimuse Test Band"],
+            "search": {"title": "Paper Lanterns", "artist": ""},
+            "attempt": {"index": 2, "count": 3, "variant": "titleOnly"},
+            "uiLanguage": {"$any": "string", "sample": "en"},
+            "round": "playing"
+          }
+        }
+      }
+    },
+    {
+      "from": "host",
+      "message": {
+        "jsonrpc": "2.0",
+        "id": {"$var": "f2", "sample": 2},
+        "method": "host/fetch",
+        "params": {
+          "call": {"$var": "c2"},
+          "request": {"url": "https://lyrics.example/search?title=Paper%20Lanterns&artist=", "method": {"$optional": "GET"}}
+        }
+      }
+    },
+    {
+      "from": "engine",
+      "message": {
+        "jsonrpc": "2.0",
+        "id": {"$var": "f2"},
+        "result": {
+          "status": 404,
+          "headers": {"$any": "array", "sample": [["content-type", "application/json"]]},
+          "url": "https://lyrics.example/search?title=Paper%20Lanterns&artist=",
+          "redirected": false,
+          "body": {"encoding": "utf8", "data": ""}
+        }
+      }
+    },
+    {"from": "host", "message": {"jsonrpc": "2.0", "id": {"$var": "s2"}, "result": {"items": []}}},
+    {
+      "from": "engine",
+      "message": {
+        "jsonrpc": "2.0",
+        "id": {"$var": "s3", "sample": 5},
+        "method": "lyrics/search",
+        "params": {
+          "call": {
+            "id": {"$var": "c3", "sample": "c3"},
+            "task": {"$var": "t1", "sample": "t1"},
+            "timeoutMs": {"$any": "integer", "sample": 20000}
+          },
+          "query": {
+            "title": "Paper Lanterns (Live at Fixture Hall)",
+            "artist": "Lyrimuse Test Band",
+            "album": "Fixtures",
+            "durationSecs": 215,
+            "cleanTitle": "Paper Lanterns",
+            "primaryArtist": "Lyrimuse Test Band",
+            "artists": ["Lyrimuse Test Band"],
+            "search": {"title": "Paper Lanterns (Live at Fixture Hall)", "artist": ""},
+            "attempt": {"index": 3, "count": 3, "variant": "rawTitle"},
+            "uiLanguage": {"$any": "string", "sample": "en"},
+            "round": "playing"
+          }
+        }
+      }
+    },
+    {
+      "from": "host",
+      "message": {
+        "jsonrpc": "2.0",
+        "id": {"$var": "f3", "sample": 3},
+        "method": "host/fetch",
+        "params": {
+          "call": {"$var": "c3"},
+          "request": {
+            "url": "https://lyrics.example/search?title=Paper%20Lanterns%20(Live%20at%20Fixture%20Hall)&artist=",
+            "method": {"$optional": "GET"}
+          }
+        }
+      }
+    },
+    {
+      "from": "engine",
+      "message": {
+        "jsonrpc": "2.0",
+        "id": {"$var": "f3"},
+        "result": {
+          "status": 200,
+          "headers": {"$any": "array", "sample": [["content-type", "application/json"]]},
+          "url": "https://lyrics.example/search?title=Paper%20Lanterns%20(Live%20at%20Fixture%20Hall)&artist=",
+          "redirected": false,
+          "body": {"encoding": "utf8", "data": "{\"items\":[]}"}
+        }
+      }
+    },
+    {"from": "host", "message": {"jsonrpc": "2.0", "id": {"$var": "s3"}, "result": {"items": []}}},
+    {"observe": {"task": "t1", "outcome": {"status": "NOT_FOUND"}}},
+    {"include": "fragments/bye.json"}
+  ]
+}

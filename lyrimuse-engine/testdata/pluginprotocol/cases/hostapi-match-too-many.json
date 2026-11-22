@@ -1,0 +1,485 @@
+{
+  "id": "hostapi-match-too-many",
+  "category": "hostapi",
+  "title": "host/match 一次超过 50 条:只判前 50 条,verdicts 也只有 50 项",
+  "subject": "engine",
+  "covers": ["host/match"],
+  "fixture": {"manifest": "manifests/basic.json", "plugin": "plugins/relay.js"},
+  "drive": [
+    {"before": "initialize", "do": "start"},
+    {
+      "before": "search",
+      "do": "resolve",
+      "task": "t1",
+      "track": {"title": "Paper Lanterns", "artist": "Lyrimuse Test Band", "album": "Fixtures", "durationSecs": 215},
+      "round": "playing"
+    },
+    {"before": "shutdown", "do": "stop"}
+  ],
+  "steps": [
+    {"include": "fragments/handshake.json"},
+    {"include": "fragments/load.json"},
+    {
+      "label": "search",
+      "from": "engine",
+      "message": {
+        "jsonrpc": "2.0",
+        "id": {"$var": "s1", "sample": 3},
+        "method": "lyrics/search",
+        "params": {
+          "call": {
+            "id": {"$var": "c1", "sample": "c1"},
+            "task": {"$var": "t1", "sample": "t1"},
+            "timeoutMs": {"$any": "integer", "sample": 20000}
+          },
+          "query": {
+            "title": "Paper Lanterns",
+            "artist": "Lyrimuse Test Band",
+            "album": "Fixtures",
+            "durationSecs": 215,
+            "cleanTitle": "Paper Lanterns",
+            "primaryArtist": "Lyrimuse Test Band",
+            "artists": ["Lyrimuse Test Band"],
+            "search": {"title": "Paper Lanterns", "artist": "Lyrimuse Test Band"},
+            "attempt": {"index": 1, "count": 1, "variant": "primary"},
+            "uiLanguage": {"$any": "string", "sample": "en"},
+            "round": "playing"
+          }
+        }
+      }
+    },
+    {
+      "from": "host",
+      "message": {
+        "jsonrpc": "2.0",
+        "id": {"$var": "m1", "sample": 1},
+        "method": "host/match",
+        "params": {
+          "call": {"$var": "c1"},
+          "items": [
+            {
+              "id": "0",
+              "title": "Paper Lanterns",
+              "artist": "Lyrimuse Test Band",
+              "album": "Fixtures",
+              "durationSecs": 215
+            },
+            {
+              "id": "1",
+              "title": "Paper Lanterns",
+              "artist": "Lyrimuse Test Band",
+              "album": "Fixtures",
+              "durationSecs": 215
+            },
+            {
+              "id": "2",
+              "title": "Paper Lanterns",
+              "artist": "Lyrimuse Test Band",
+              "album": "Fixtures",
+              "durationSecs": 215
+            },
+            {
+              "id": "3",
+              "title": "Paper Lanterns",
+              "artist": "Lyrimuse Test Band",
+              "album": "Fixtures",
+              "durationSecs": 215
+            },
+            {
+              "id": "4",
+              "title": "Paper Lanterns",
+              "artist": "Lyrimuse Test Band",
+              "album": "Fixtures",
+              "durationSecs": 215
+            },
+            {
+              "id": "5",
+              "title": "Paper Lanterns",
+              "artist": "Lyrimuse Test Band",
+              "album": "Fixtures",
+              "durationSecs": 215
+            },
+            {
+              "id": "6",
+              "title": "Paper Lanterns",
+              "artist": "Lyrimuse Test Band",
+              "album": "Fixtures",
+              "durationSecs": 215
+            },
+            {
+              "id": "7",
+              "title": "Paper Lanterns",
+              "artist": "Lyrimuse Test Band",
+              "album": "Fixtures",
+              "durationSecs": 215
+            },
+            {
+              "id": "8",
+              "title": "Paper Lanterns",
+              "artist": "Lyrimuse Test Band",
+              "album": "Fixtures",
+              "durationSecs": 215
+            },
+            {
+              "id": "9",
+              "title": "Paper Lanterns",
+              "artist": "Lyrimuse Test Band",
+              "album": "Fixtures",
+              "durationSecs": 215
+            },
+            {
+              "id": "10",
+              "title": "Paper Lanterns",
+              "artist": "Lyrimuse Test Band",
+              "album": "Fixtures",
+              "durationSecs": 215
+            },
+            {
+              "id": "11",
+              "title": "Paper Lanterns",
+              "artist": "Lyrimuse Test Band",
+              "album": "Fixtures",
+              "durationSecs": 215
+            },
+            {
+              "id": "12",
+              "title": "Paper Lanterns",
+              "artist": "Lyrimuse Test Band",
+              "album": "Fixtures",
+              "durationSecs": 215
+            },
+            {
+              "id": "13",
+              "title": "Paper Lanterns",
+              "artist": "Lyrimuse Test Band",
+              "album": "Fixtures",
+              "durationSecs": 215
+            },
+            {
+              "id": "14",
+              "title": "Paper Lanterns",
+              "artist": "Lyrimuse Test Band",
+              "album": "Fixtures",
+              "durationSecs": 215
+            },
+            {
+              "id": "15",
+              "title": "Paper Lanterns",
+              "artist": "Lyrimuse Test Band",
+              "album": "Fixtures",
+              "durationSecs": 215
+            },
+            {
+              "id": "16",
+              "title": "Paper Lanterns",
+              "artist": "Lyrimuse Test Band",
+              "album": "Fixtures",
+              "durationSecs": 215
+            },
+            {
+              "id": "17",
+              "title": "Paper Lanterns",
+              "artist": "Lyrimuse Test Band",
+              "album": "Fixtures",
+              "durationSecs": 215
+            },
+            {
+              "id": "18",
+              "title": "Paper Lanterns",
+              "artist": "Lyrimuse Test Band",
+              "album": "Fixtures",
+              "durationSecs": 215
+            },
+            {
+              "id": "19",
+              "title": "Paper Lanterns",
+              "artist": "Lyrimuse Test Band",
+              "album": "Fixtures",
+              "durationSecs": 215
+            },
+            {
+              "id": "20",
+              "title": "Paper Lanterns",
+              "artist": "Lyrimuse Test Band",
+              "album": "Fixtures",
+              "durationSecs": 215
+            },
+            {
+              "id": "21",
+              "title": "Paper Lanterns",
+              "artist": "Lyrimuse Test Band",
+              "album": "Fixtures",
+              "durationSecs": 215
+            },
+            {
+              "id": "22",
+              "title": "Paper Lanterns",
+              "artist": "Lyrimuse Test Band",
+              "album": "Fixtures",
+              "durationSecs": 215
+            },
+            {
+              "id": "23",
+              "title": "Paper Lanterns",
+              "artist": "Lyrimuse Test Band",
+              "album": "Fixtures",
+              "durationSecs": 215
+            },
+            {
+              "id": "24",
+              "title": "Paper Lanterns",
+              "artist": "Lyrimuse Test Band",
+              "album": "Fixtures",
+              "durationSecs": 215
+            },
+            {
+              "id": "25",
+              "title": "Paper Lanterns",
+              "artist": "Lyrimuse Test Band",
+              "album": "Fixtures",
+              "durationSecs": 215
+            },
+            {
+              "id": "26",
+              "title": "Paper Lanterns",
+              "artist": "Lyrimuse Test Band",
+              "album": "Fixtures",
+              "durationSecs": 215
+            },
+            {
+              "id": "27",
+              "title": "Paper Lanterns",
+              "artist": "Lyrimuse Test Band",
+              "album": "Fixtures",
+              "durationSecs": 215
+            },
+            {
+              "id": "28",
+              "title": "Paper Lanterns",
+              "artist": "Lyrimuse Test Band",
+              "album": "Fixtures",
+              "durationSecs": 215
+            },
+            {
+              "id": "29",
+              "title": "Paper Lanterns",
+              "artist": "Lyrimuse Test Band",
+              "album": "Fixtures",
+              "durationSecs": 215
+            },
+            {
+              "id": "30",
+              "title": "Paper Lanterns",
+              "artist": "Lyrimuse Test Band",
+              "album": "Fixtures",
+              "durationSecs": 215
+            },
+            {
+              "id": "31",
+              "title": "Paper Lanterns",
+              "artist": "Lyrimuse Test Band",
+              "album": "Fixtures",
+              "durationSecs": 215
+            },
+            {
+              "id": "32",
+              "title": "Paper Lanterns",
+              "artist": "Lyrimuse Test Band",
+              "album": "Fixtures",
+              "durationSecs": 215
+            },
+            {
+              "id": "33",
+              "title": "Paper Lanterns",
+              "artist": "Lyrimuse Test Band",
+              "album": "Fixtures",
+              "durationSecs": 215
+            },
+            {
+              "id": "34",
+              "title": "Paper Lanterns",
+              "artist": "Lyrimuse Test Band",
+              "album": "Fixtures",
+              "durationSecs": 215
+            },
+            {
+              "id": "35",
+              "title": "Paper Lanterns",
+              "artist": "Lyrimuse Test Band",
+              "album": "Fixtures",
+              "durationSecs": 215
+            },
+            {
+              "id": "36",
+              "title": "Paper Lanterns",
+              "artist": "Lyrimuse Test Band",
+              "album": "Fixtures",
+              "durationSecs": 215
+            },
+            {
+              "id": "37",
+              "title": "Paper Lanterns",
+              "artist": "Lyrimuse Test Band",
+              "album": "Fixtures",
+              "durationSecs": 215
+            },
+            {
+              "id": "38",
+              "title": "Paper Lanterns",
+              "artist": "Lyrimuse Test Band",
+              "album": "Fixtures",
+              "durationSecs": 215
+            },
+            {
+              "id": "39",
+              "title": "Paper Lanterns",
+              "artist": "Lyrimuse Test Band",
+              "album": "Fixtures",
+              "durationSecs": 215
+            },
+            {
+              "id": "40",
+              "title": "Paper Lanterns",
+              "artist": "Lyrimuse Test Band",
+              "album": "Fixtures",
+              "durationSecs": 215
+            },
+            {
+              "id": "41",
+              "title": "Paper Lanterns",
+              "artist": "Lyrimuse Test Band",
+              "album": "Fixtures",
+              "durationSecs": 215
+            },
+            {
+              "id": "42",
+              "title": "Paper Lanterns",
+              "artist": "Lyrimuse Test Band",
+              "album": "Fixtures",
+              "durationSecs": 215
+            },
+            {
+              "id": "43",
+              "title": "Paper Lanterns",
+              "artist": "Lyrimuse Test Band",
+              "album": "Fixtures",
+              "durationSecs": 215
+            },
+            {
+              "id": "44",
+              "title": "Paper Lanterns",
+              "artist": "Lyrimuse Test Band",
+              "album": "Fixtures",
+              "durationSecs": 215
+            },
+            {
+              "id": "45",
+              "title": "Paper Lanterns",
+              "artist": "Lyrimuse Test Band",
+              "album": "Fixtures",
+              "durationSecs": 215
+            },
+            {
+              "id": "46",
+              "title": "Paper Lanterns",
+              "artist": "Lyrimuse Test Band",
+              "album": "Fixtures",
+              "durationSecs": 215
+            },
+            {
+              "id": "47",
+              "title": "Paper Lanterns",
+              "artist": "Lyrimuse Test Band",
+              "album": "Fixtures",
+              "durationSecs": 215
+            },
+            {
+              "id": "48",
+              "title": "Paper Lanterns",
+              "artist": "Lyrimuse Test Band",
+              "album": "Fixtures",
+              "durationSecs": 215
+            },
+            {
+              "id": "49",
+              "title": "Paper Lanterns",
+              "artist": "Lyrimuse Test Band",
+              "album": "Fixtures",
+              "durationSecs": 215
+            },
+            {
+              "id": "50",
+              "title": "Paper Lanterns",
+              "artist": "Lyrimuse Test Band",
+              "album": "Fixtures",
+              "durationSecs": 215
+            }
+          ]
+        }
+      }
+    },
+    {
+      "from": "engine",
+      "message": {
+        "jsonrpc": "2.0",
+        "id": {"$var": "m1"},
+        "result": {
+          "verdicts": [
+            {"accepted": true},
+            {"accepted": true},
+            {"accepted": true},
+            {"accepted": true},
+            {"accepted": true},
+            {"accepted": true},
+            {"accepted": true},
+            {"accepted": true},
+            {"accepted": true},
+            {"accepted": true},
+            {"accepted": true},
+            {"accepted": true},
+            {"accepted": true},
+            {"accepted": true},
+            {"accepted": true},
+            {"accepted": true},
+            {"accepted": true},
+            {"accepted": true},
+            {"accepted": true},
+            {"accepted": true},
+            {"accepted": true},
+            {"accepted": true},
+            {"accepted": true},
+            {"accepted": true},
+            {"accepted": true},
+            {"accepted": true},
+            {"accepted": true},
+            {"accepted": true},
+            {"accepted": true},
+            {"accepted": true},
+            {"accepted": true},
+            {"accepted": true},
+            {"accepted": true},
+            {"accepted": true},
+            {"accepted": true},
+            {"accepted": true},
+            {"accepted": true},
+            {"accepted": true},
+            {"accepted": true},
+            {"accepted": true},
+            {"accepted": true},
+            {"accepted": true},
+            {"accepted": true},
+            {"accepted": true},
+            {"accepted": true},
+            {"accepted": true},
+            {"accepted": true},
+            {"accepted": true},
+            {"accepted": true},
+            {"accepted": true}
+          ]
+        }
+      }
+    },
+    {"from": "host", "message": {"jsonrpc": "2.0", "id": {"$var": "s1"}, "result": {"items": []}}},
+    {"include": "fragments/bye.json"}
+  ]
+}

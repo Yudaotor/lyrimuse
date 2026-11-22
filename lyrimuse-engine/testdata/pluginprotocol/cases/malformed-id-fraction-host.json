@@ -1,0 +1,21 @@
+{
+  "id": "malformed-id-fraction-host",
+  "category": "malformed",
+  "title": "请求的 id 是小数:-32600 badId(plugin-host 收到)",
+  "subject": "host",
+  "covers": ["shutdown"],
+  "fixture": {"manifest": "manifests/basic.json", "plugin": "plugins/relay.js"},
+  "steps": [
+    {"include": "fragments/handshake.json"},
+    {"from": "engine", "raw": "{\"jsonrpc\":\"2.0\",\"id\":1.5,\"method\":\"shutdown\"}", "invalid": "shape"},
+    {
+      "from": "host",
+      "message": {
+        "jsonrpc": "2.0",
+        "id": null,
+        "error": {"code": -32600, "message": {"$any": "string", "sample": "error"}, "data": {"reason": "badId"}}
+      }
+    },
+    {"include": "fragments/bye.json"}
+  ]
+}

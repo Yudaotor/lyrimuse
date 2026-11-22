@@ -1,0 +1,73 @@
+{
+  "id": "lifecycle-duplicate-initialize",
+  "category": "lifecycle",
+  "title": "重复握手:第二次回 -32806,连接照常可用",
+  "subject": "host",
+  "covers": ["initialize"],
+  "fixture": {"manifest": "manifests/basic.json", "plugin": "plugins/relay.js"},
+  "steps": [
+    {"include": "fragments/handshake.json"},
+    {
+      "from": "engine",
+      "message": {
+        "jsonrpc": "2.0",
+        "id": {"$var": "i2", "sample": 5},
+        "method": "initialize",
+        "params": {
+          "protocolVersion": "0.1",
+          "engineInfo": {"name": {"$any": "string", "sample": "lyrimuse-engine"}, "version": {"$any": "string", "sample": "1.15.0"}},
+          "capabilities": {
+            "host": {"fetch": {}, "match": {}, "storage": {}, "log": {}},
+            "lyrics": {"wordFormats": {"$contains": ["timeline", "ttml", "lrc-a2"]}}
+          },
+          "limits": {
+            "maxLineBytes": {"$any": "integer", "sample": 33554432},
+            "maxResultBytes": {"$any": "integer", "sample": 8388608},
+            "maxInFlightHostRequests": {"$any": "integer", "sample": 64}
+          },
+          "heartbeatIntervalMs": {"$any": "integer", "sample": 1000}
+        }
+      }
+    },
+    {
+      "from": "host",
+      "message": {
+        "jsonrpc": "2.0",
+        "id": {"$var": "i2"},
+        "error": {"code": -32806, "message": {"$any": "string", "sample": "error"}, "data": {"state": "ready"}}
+      }
+    },
+    {"include": "fragments/load.json"},
+    {
+      "from": "engine",
+      "message": {
+        "jsonrpc": "2.0",
+        "id": {"$var": "i3", "sample": 6},
+        "method": "initialize",
+        "params": {
+          "protocolVersion": "0.1",
+          "engineInfo": {"name": {"$any": "string", "sample": "lyrimuse-engine"}, "version": {"$any": "string", "sample": "1.15.0"}},
+          "capabilities": {
+            "host": {"fetch": {}, "match": {}, "storage": {}, "log": {}},
+            "lyrics": {"wordFormats": {"$contains": ["timeline", "ttml", "lrc-a2"]}}
+          },
+          "limits": {
+            "maxLineBytes": {"$any": "integer", "sample": 33554432},
+            "maxResultBytes": {"$any": "integer", "sample": 8388608},
+            "maxInFlightHostRequests": {"$any": "integer", "sample": 64}
+          },
+          "heartbeatIntervalMs": {"$any": "integer", "sample": 1000}
+        }
+      }
+    },
+    {
+      "from": "host",
+      "message": {
+        "jsonrpc": "2.0",
+        "id": {"$var": "i3"},
+        "error": {"code": -32806, "message": {"$any": "string", "sample": "error"}, "data": {"state": "loaded"}}
+      }
+    },
+    {"include": "fragments/bye.json"}
+  ]
+}

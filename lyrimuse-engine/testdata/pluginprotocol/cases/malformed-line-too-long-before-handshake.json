@@ -1,0 +1,30 @@
+{
+  "id": "malformed-line-too-long-before-handshake",
+  "category": "malformed",
+  "title": "握手完成之前行长上限固定是 65536 字节",
+  "subject": "host",
+  "covers": ["initialize"],
+  "fixture": {"manifest": "manifests/basic.json", "plugin": "plugins/relay.js"},
+  "steps": [
+    {
+      "from": "engine",
+      "rawFill": {
+        "prefix": "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"pad\":\"",
+        "fill": "a",
+        "suffix": "\"}}",
+        "totalBytes": 65537
+      },
+      "invalid": "lineTooLong"
+    },
+    {
+      "from": "host",
+      "message": {
+        "jsonrpc": "2.0",
+        "id": null,
+        "error": {"code": -32600, "message": {"$any": "string", "sample": "error"}, "data": {"reason": "lineTooLong"}}
+      }
+    },
+    {"include": "fragments/handshake.json"},
+    {"include": "fragments/bye.json"}
+  ]
+}

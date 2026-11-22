@@ -1,0 +1,10 @@
+{
+  "id": "lifecycle-handshake-ok",
+  "category": "lifecycle",
+  "title": "正常握手、加载、关闭、退出",
+  "subject": "both",
+  "covers": ["initialize", "plugin/load", "shutdown", "exit"],
+  "fixture": {"manifest": "manifests/basic.json", "plugin": "plugins/relay.js"},
+  "drive": [{"before": "initialize", "do": "start"}, {"before": "shutdown", "do": "stop"}],
+  "steps": [{"include": "fragments/handshake.json"}, {"include": "fragments/load.json"}, {"include": "fragments/bye.json"}]
+}

@@ -1,0 +1,71 @@
+{
+  "id": "hostapi-storage-quota",
+  "category": "hostapi",
+  "title": "set 之后会超过存储额度:-32802 storageQuota,原来的内容不变",
+  "subject": "both",
+  "covers": ["host/storage.set"],
+  "fixture": {"manifest": "manifests/basic.json", "plugin": "plugins/probe.js"},
+  "drive": [
+    {"before": "initialize", "do": "start"},
+    {
+      "before": "search",
+      "do": "resolve",
+      "task": "t1",
+      "track": {"title": "storage-quota", "artist": "Lyrimuse Test Band", "album": "Fixtures", "durationSecs": 215},
+      "round": "playing"
+    },
+    {"before": "shutdown", "do": "stop"}
+  ],
+  "steps": [
+    {"include": "fragments/handshake.json"},
+    {"include": "fragments/load.json"},
+    {
+      "label": "search",
+      "from": "engine",
+      "message": {
+        "jsonrpc": "2.0",
+        "id": {"$var": "s1", "sample": 3},
+        "method": "lyrics/search",
+        "params": {
+          "call": {
+            "id": {"$var": "c1", "sample": "c1"},
+            "task": {"$var": "t1", "sample": "t1"},
+            "timeoutMs": {"$any": "integer", "sample": 20000}
+          },
+          "query": {
+            "title": "storage-quota",
+            "artist": "Lyrimuse Test Band",
+            "album": "Fixtures",
+            "durationSecs": 215,
+            "cleanTitle": "storage-quota",
+            "primaryArtist": "Lyrimuse Test Band",
+            "artists": ["Lyrimuse Test Band"],
+            "search": {"title": "storage-quota", "artist": "Lyrimuse Test Band"},
+            "attempt": {"index": 1, "count": 1, "variant": "primary"},
+            "uiLanguage": {"$any": "string", "sample": "en"},
+            "round": "playing"
+          }
+        }
+      }
+    },
+    {
+      "from": "host",
+      "message": {
+        "jsonrpc": "2.0",
+        "id": {"$var": "k1", "sample": 1},
+        "method": "host/storage.set",
+        "params": {"call": {"$var": "c1"}, "key": "big", "value": {"$any": "string", "sample": "x"}}
+      }
+    },
+    {
+      "from": "engine",
+      "message": {
+        "jsonrpc": "2.0",
+        "id": {"$var": "k1"},
+        "error": {"code": -32802, "message": {"$any": "string", "sample": "error"}, "data": {"limit": "storageQuota"}}
+      }
+    },
+    {"from": "host", "message": {"jsonrpc": "2.0", "id": {"$var": "s1"}, "result": {"items": []}}},
+    {"include": "fragments/bye.json"}
+  ]
+}

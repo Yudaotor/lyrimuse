@@ -1,0 +1,51 @@
+{
+  "id": "cancel-grace-then-interrupt",
+  "category": "cancel",
+  "title": "脚本不理会取消:plugin-host 过了 200 毫秒宽限就打断它,回 -32800",
+  "subject": "host",
+  "covers": ["$/cancelRequest", "lyrics/search"],
+  "fixture": {"manifest": "manifests/basic.json", "plugin": "plugins/probe.js"},
+  "steps": [
+    {"include": "fragments/handshake.json"},
+    {"include": "fragments/load.json"},
+    {
+      "from": "engine",
+      "message": {
+        "jsonrpc": "2.0",
+        "id": {"$var": "s1", "sample": 3},
+        "method": "lyrics/search",
+        "params": {
+          "call": {
+            "id": {"$var": "c1", "sample": "c1"},
+            "task": {"$var": "t1", "sample": "t1"},
+            "timeoutMs": {"$any": "integer", "sample": 20000}
+          },
+          "query": {
+            "title": "hang",
+            "artist": "Lyrimuse Test Band",
+            "album": "Fixtures",
+            "durationSecs": 215,
+            "cleanTitle": "hang",
+            "primaryArtist": "Lyrimuse Test Band",
+            "artists": ["Lyrimuse Test Band"],
+            "search": {"title": "hang", "artist": "Lyrimuse Test Band"},
+            "attempt": {"index": 1, "count": 1, "variant": "primary"},
+            "uiLanguage": {"$any": "string", "sample": "en"},
+            "round": "playing"
+          }
+        }
+      }
+    },
+    {"from": "engine", "message": {"jsonrpc": "2.0", "method": "$/cancelRequest", "params": {"id": {"$var": "s1"}}}},
+    {"clock": {"advanceMs": 200}},
+    {
+      "from": "host",
+      "message": {
+        "jsonrpc": "2.0",
+        "id": {"$var": "s1"},
+        "error": {"code": -32800, "message": {"$any": "string", "sample": "error"}}
+      }
+    },
+    {"include": "fragments/bye.json"}
+  ]
+}

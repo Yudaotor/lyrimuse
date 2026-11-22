@@ -1,0 +1,29 @@
+{
+  "id": "load-unsupported-media-type",
+  "category": "load",
+  "title": "source.mediaType 不是 plugin-host 会跑的那种:-32602",
+  "subject": "host",
+  "covers": ["plugin/load"],
+  "fixture": {"manifest": "manifests/basic.json", "plugin": "plugins/relay.js"},
+  "steps": [
+    {"include": "fragments/handshake.json"},
+    {
+      "from": "engine",
+      "message": {
+        "jsonrpc": "2.0",
+        "id": {"$var": "l1", "sample": 2},
+        "method": "plugin/load",
+        "params": {"manifest": {"$fixture": "manifest"}, "source": {"mediaType": "application/wasm", "base64": "AGFzbQ=="}}
+      }
+    },
+    {
+      "from": "host",
+      "message": {
+        "jsonrpc": "2.0",
+        "id": {"$var": "l1"},
+        "error": {"code": -32602, "message": {"$any": "string", "sample": "error"}}
+      }
+    },
+    {"include": "fragments/bye.json"}
+  ]
+}

@@ -1,0 +1,93 @@
+{
+  "id": "lyrics-search-404-empty",
+  "category": "lyrics",
+  "title": "上游答 404:插件交空数组,404 算对方答了没有",
+  "subject": "both",
+  "covers": ["lyrics/search", "host/fetch"],
+  "fixture": {
+    "manifest": "manifests/basic.json",
+    "plugin": "plugins/relay.js",
+    "http": [
+      {
+        "request": {"method": "GET", "url": "https://lyrics.example/search?title=Paper%20Lanterns&artist=Lyrimuse%20Test%20Band"},
+        "response": {"status": 404, "headers": [["content-type", "application/json"]], "body": ""}
+      }
+    ]
+  },
+  "drive": [
+    {"before": "initialize", "do": "start"},
+    {
+      "before": "search",
+      "do": "resolve",
+      "task": "t1",
+      "track": {"title": "Paper Lanterns", "artist": "Lyrimuse Test Band", "album": "Fixtures", "durationSecs": 215},
+      "round": "playing"
+    },
+    {"before": "shutdown", "do": "stop"}
+  ],
+  "steps": [
+    {"include": "fragments/handshake.json"},
+    {"include": "fragments/load.json"},
+    {
+      "label": "search",
+      "from": "engine",
+      "message": {
+        "jsonrpc": "2.0",
+        "id": {"$var": "s1", "sample": 3},
+        "method": "lyrics/search",
+        "params": {
+          "call": {
+            "id": {"$var": "c1", "sample": "c1"},
+            "task": {"$var": "t1", "sample": "t1"},
+            "timeoutMs": {"$any": "integer", "sample": 20000}
+          },
+          "query": {
+            "title": "Paper Lanterns",
+            "artist": "Lyrimuse Test Band",
+            "album": "Fixtures",
+            "durationSecs": 215,
+            "cleanTitle": "Paper Lanterns",
+            "primaryArtist": "Lyrimuse Test Band",
+            "artists": ["Lyrimuse Test Band"],
+            "search": {"title": "Paper Lanterns", "artist": "Lyrimuse Test Band"},
+            "attempt": {"index": 1, "count": 1, "variant": "primary"},
+            "uiLanguage": {"$any": "string", "sample": "en"},
+            "round": "playing"
+          }
+        }
+      }
+    },
+    {
+      "from": "host",
+      "message": {
+        "jsonrpc": "2.0",
+        "id": {"$var": "f1", "sample": 1},
+        "method": "host/fetch",
+        "params": {
+          "call": {"$var": "c1"},
+          "request": {
+            "url": "https://lyrics.example/search?title=Paper%20Lanterns&artist=Lyrimuse%20Test%20Band",
+            "method": {"$optional": "GET"}
+          }
+        }
+      }
+    },
+    {
+      "from": "engine",
+      "message": {
+        "jsonrpc": "2.0",
+        "id": {"$var": "f1"},
+        "result": {
+          "status": 404,
+          "headers": {"$any": "array", "sample": [["content-type", "application/json"]]},
+          "url": "https://lyrics.example/search?title=Paper%20Lanterns&artist=Lyrimuse%20Test%20Band",
+          "redirected": false,
+          "body": {"encoding": "utf8", "data": ""}
+        }
+      }
+    },
+    {"from": "host", "message": {"jsonrpc": "2.0", "id": {"$var": "s1"}, "result": {"items": []}}},
+    {"observe": {"task": "t1", "outcome": {"status": "NOT_FOUND"}}},
+    {"include": "fragments/bye.json"}
+  ]
+}

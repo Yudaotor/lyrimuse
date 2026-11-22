@@ -1,0 +1,25 @@
+{
+  "id": "malformed-params-array-host",
+  "category": "malformed",
+  "title": "params 是数组(按位置传参):-32602 paramsNotObject(plugin-host 收到)",
+  "subject": "host",
+  "covers": ["shutdown"],
+  "fixture": {"manifest": "manifests/basic.json", "plugin": "plugins/relay.js"},
+  "steps": [
+    {"include": "fragments/handshake.json"},
+    {
+      "from": "engine",
+      "raw": "{\"jsonrpc\":\"2.0\",\"id\":52,\"method\":\"plugin/load\",\"params\":[\"x\"]}",
+      "invalid": "shape"
+    },
+    {
+      "from": "host",
+      "message": {
+        "jsonrpc": "2.0",
+        "id": 52,
+        "error": {"code": -32602, "message": {"$any": "string", "sample": "error"}, "data": {"reason": "paramsNotObject"}}
+      }
+    },
+    {"include": "fragments/bye.json"}
+  ]
+}

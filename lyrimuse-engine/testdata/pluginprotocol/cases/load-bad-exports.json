@@ -1,0 +1,32 @@
+{
+  "id": "load-bad-exports",
+  "category": "load",
+  "title": "清单合规但导出对不上(没有 lyrics.search):-32000 BAD_EXPORTS",
+  "subject": "host",
+  "covers": ["plugin/load"],
+  "fixture": {"manifest": "manifests/basic.json", "plugin": "plugins/noexports.js"},
+  "steps": [
+    {"include": "fragments/handshake.json"},
+    {
+      "from": "engine",
+      "message": {
+        "jsonrpc": "2.0",
+        "id": {"$var": "l1", "sample": 2},
+        "method": "plugin/load",
+        "params": {
+          "manifest": {"$fixture": "manifest"},
+          "source": {"mediaType": "text/javascript", "text": {"$fixture": "source"}}
+        }
+      }
+    },
+    {
+      "from": "host",
+      "message": {
+        "jsonrpc": "2.0",
+        "id": {"$var": "l1"},
+        "error": {"code": -32000, "message": {"$any": "string", "sample": "error"}, "data": {"code": "BAD_EXPORTS"}}
+      }
+    },
+    {"include": "fragments/bye.json"}
+  ]
+}

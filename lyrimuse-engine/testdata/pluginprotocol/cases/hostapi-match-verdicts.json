@@ -1,0 +1,96 @@
+{
+  "id": "hostapi-match-verdicts",
+  "category": "hostapi",
+  "title": "host/match 的裁决按位置对应条目;过闸的 accepted 为真、没有 reason",
+  "subject": "engine",
+  "covers": ["host/match"],
+  "fixture": {"manifest": "manifests/basic.json", "plugin": "plugins/relay.js"},
+  "drive": [
+    {"before": "initialize", "do": "start"},
+    {
+      "before": "search",
+      "do": "resolve",
+      "task": "t1",
+      "track": {"title": "Paper Lanterns", "artist": "Lyrimuse Test Band", "album": "Fixtures", "durationSecs": 215},
+      "round": "playing"
+    },
+    {"before": "shutdown", "do": "stop"}
+  ],
+  "steps": [
+    {"include": "fragments/handshake.json"},
+    {"include": "fragments/load.json"},
+    {
+      "label": "search",
+      "from": "engine",
+      "message": {
+        "jsonrpc": "2.0",
+        "id": {"$var": "s1", "sample": 3},
+        "method": "lyrics/search",
+        "params": {
+          "call": {
+            "id": {"$var": "c1", "sample": "c1"},
+            "task": {"$var": "t1", "sample": "t1"},
+            "timeoutMs": {"$any": "integer", "sample": 20000}
+          },
+          "query": {
+            "title": "Paper Lanterns",
+            "artist": "Lyrimuse Test Band",
+            "album": "Fixtures",
+            "durationSecs": 215,
+            "cleanTitle": "Paper Lanterns",
+            "primaryArtist": "Lyrimuse Test Band",
+            "artists": ["Lyrimuse Test Band"],
+            "search": {"title": "Paper Lanterns", "artist": "Lyrimuse Test Band"},
+            "attempt": {"index": 1, "count": 1, "variant": "primary"},
+            "uiLanguage": {"$any": "string", "sample": "en"},
+            "round": "playing"
+          }
+        }
+      }
+    },
+    {
+      "from": "host",
+      "message": {
+        "jsonrpc": "2.0",
+        "id": {"$var": "m1", "sample": 1},
+        "method": "host/match",
+        "params": {
+          "call": {"$var": "c1"},
+          "items": [
+            {
+              "id": "1",
+              "title": "Paper Lanterns",
+              "artist": "Lyrimuse Test Band",
+              "album": "Fixtures",
+              "durationSecs": 215
+            },
+            {"id": "201", "title": "Another Song", "artist": "Someone Else", "durationSecs": 180},
+            {
+              "id": "3",
+              "title": "Paper Lanterns",
+              "artist": "Lyrimuse Test Band",
+              "album": "Fixtures",
+              "durationSecs": 30
+            }
+          ]
+        }
+      }
+    },
+    {
+      "from": "engine",
+      "message": {
+        "jsonrpc": "2.0",
+        "id": {"$var": "m1"},
+        "result": {
+          "verdicts": [
+            {"accepted": true, "reason": {"$absent": true}},
+            {"accepted": false, "reason": {"$any": "string", "sample": "title"}},
+            {"accepted": false, "reason": "duration"}
+          ]
+        }
+      }
+    },
+    {"from": "host", "message": {"jsonrpc": "2.0", "id": {"$var": "s1"}, "result": {"items": []}}},
+    {"include": "fragments/bye.json"}
+  ]
+}

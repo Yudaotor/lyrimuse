@@ -1,0 +1,106 @@
+{
+  "id": "fetch-redirect-manual",
+  "category": "fetch",
+  "title": "redirect: manual:3xx 原样交回,location 在应答头里",
+  "subject": "both",
+  "covers": ["host/fetch"],
+  "fixture": {
+    "manifest": "manifests/basic.json",
+    "plugin": "plugins/probe.js",
+    "http": [
+      {
+        "request": {"method": "GET", "url": "https://lyrics.example/moved"},
+        "response": {"status": 302, "headers": [["location", "/final"]], "body": ""}
+      }
+    ]
+  },
+  "drive": [
+    {"before": "initialize", "do": "start"},
+    {
+      "before": "search",
+      "do": "resolve",
+      "task": "t1",
+      "track": {"title": "redirect-manual", "artist": "Lyrimuse Test Band", "album": "Fixtures", "durationSecs": 215},
+      "round": "playing"
+    },
+    {"before": "shutdown", "do": "stop"}
+  ],
+  "steps": [
+    {"include": "fragments/handshake.json"},
+    {"include": "fragments/load.json"},
+    {
+      "label": "search",
+      "from": "engine",
+      "message": {
+        "jsonrpc": "2.0",
+        "id": {"$var": "s1", "sample": 3},
+        "method": "lyrics/search",
+        "params": {
+          "call": {
+            "id": {"$var": "c1", "sample": "c1"},
+            "task": {"$var": "t1", "sample": "t1"},
+            "timeoutMs": {"$any": "integer", "sample": 20000}
+          },
+          "query": {
+            "title": "redirect-manual",
+            "artist": "Lyrimuse Test Band",
+            "album": "Fixtures",
+            "durationSecs": 215,
+            "cleanTitle": "redirect-manual",
+            "primaryArtist": "Lyrimuse Test Band",
+            "artists": ["Lyrimuse Test Band"],
+            "search": {"title": "redirect-manual", "artist": "Lyrimuse Test Band"},
+            "attempt": {"index": 1, "count": 1, "variant": "primary"},
+            "uiLanguage": {"$any": "string", "sample": "en"},
+            "round": "playing"
+          }
+        }
+      }
+    },
+    {
+      "from": "host",
+      "message": {
+        "jsonrpc": "2.0",
+        "id": {"$var": "f1", "sample": 1},
+        "method": "host/fetch",
+        "params": {
+          "call": {"$var": "c1"},
+          "request": {"url": "https://lyrics.example/moved", "method": {"$optional": "GET"}, "redirect": "manual"}
+        }
+      }
+    },
+    {
+      "from": "engine",
+      "message": {
+        "jsonrpc": "2.0",
+        "id": {"$var": "f1"},
+        "result": {
+          "status": 302,
+          "headers": {"$contains": [["location", "/final"]]},
+          "url": "https://lyrics.example/moved",
+          "redirected": false,
+          "body": {"encoding": "utf8", "data": ""}
+        }
+      }
+    },
+    {
+      "from": "host",
+      "message": {
+        "jsonrpc": "2.0",
+        "id": {"$var": "s1"},
+        "result": {
+          "items": [
+            {
+              "id": "redirect-manual",
+              "title": "redirect-manual",
+              "artist": "Lyrimuse Test Band",
+              "lyrics": {"plain": "302\n/final\nfalse"}
+            }
+          ]
+        }
+      }
+    },
+    {"observe": {"task": "t1", "outcome": {"status": "FOUND"}}},
+    {"include": "fragments/bye.json"}
+  ]
+}

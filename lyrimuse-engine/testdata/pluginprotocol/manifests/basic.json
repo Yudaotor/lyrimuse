@@ -1,0 +1,19 @@
+{
+  "id": "org.example.conformance",
+  "name": "Conformance fixture",
+  "version": "1.0.0",
+  "apiVersion": "0.1",
+  "hosts": [
+    "lyrics.example"
+  ],
+  "provides": [
+    "word",
+    "line",
+    "plain",
+    "translation",
+    "romanization",
+    "instrumental",
+    "songwriters"
+  ],
+  "requery": "self"
+}

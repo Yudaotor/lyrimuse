@@ -1,0 +1,66 @@
+{
+  "id": "lifecycle-version-mismatch-host",
+  "category": "lifecycle",
+  "title": "引擎要的协议版本 plugin-host 不认:回 -32602 并列出自己认的版本,留在未握手状态",
+  "subject": "host",
+  "covers": ["initialize", "exit"],
+  "fixture": {"manifest": "manifests/basic.json", "plugin": "plugins/relay.js"},
+  "steps": [
+    {
+      "from": "engine",
+      "message": {
+        "jsonrpc": "2.0",
+        "id": {"$var": "i1", "sample": 1},
+        "method": "initialize",
+        "params": {
+          "protocolVersion": "9.9",
+          "engineInfo": {"name": {"$any": "string", "sample": "lyrimuse-engine"}, "version": {"$any": "string", "sample": "1.15.0"}},
+          "capabilities": {
+            "host": {"fetch": {}, "match": {}, "storage": {}, "log": {}},
+            "lyrics": {"wordFormats": {"$contains": ["timeline", "ttml", "lrc-a2"]}}
+          },
+          "limits": {
+            "maxLineBytes": {"$any": "integer", "sample": 33554432},
+            "maxResultBytes": {"$any": "integer", "sample": 8388608},
+            "maxInFlightHostRequests": {"$any": "integer", "sample": 64}
+          },
+          "heartbeatIntervalMs": {"$any": "integer", "sample": 1000}
+        }
+      }
+    },
+    {
+      "from": "host",
+      "message": {
+        "jsonrpc": "2.0",
+        "id": {"$var": "i1"},
+        "error": {
+          "code": -32602,
+          "message": {"$any": "string", "sample": "error"},
+          "data": {"reason": "unsupportedProtocolVersion", "requested": "9.9", "supported": {"$contains": ["0.1"]}}
+        }
+      }
+    },
+    {
+      "from": "engine",
+      "message": {
+        "jsonrpc": "2.0",
+        "id": {"$var": "l1", "sample": 2},
+        "method": "plugin/load",
+        "params": {
+          "manifest": {"$fixture": "manifest"},
+          "source": {"mediaType": "text/javascript", "text": {"$fixture": "source"}}
+        }
+      }
+    },
+    {
+      "from": "host",
+      "message": {
+        "jsonrpc": "2.0",
+        "id": {"$var": "l1"},
+        "error": {"code": -32806, "message": {"$any": "string", "sample": "error"}, "data": {"state": "uninitialized"}}
+      }
+    },
+    {"from": "engine", "message": {"jsonrpc": "2.0", "method": "exit"}},
+    {"from": "host", "close": true, "exitCode": 1}
+  ]
+}

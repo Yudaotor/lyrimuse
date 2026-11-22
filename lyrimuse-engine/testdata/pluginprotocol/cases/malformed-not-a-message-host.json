@@ -1,0 +1,21 @@
+{
+  "id": "malformed-not-a-message-host",
+  "category": "malformed",
+  "title": "既没有 method 也没有 result / error:-32600 notAMessage(plugin-host 收到)",
+  "subject": "host",
+  "covers": ["shutdown"],
+  "fixture": {"manifest": "manifests/basic.json", "plugin": "plugins/relay.js"},
+  "steps": [
+    {"include": "fragments/handshake.json"},
+    {"from": "engine", "raw": "{\"jsonrpc\":\"2.0\",\"id\":54}", "invalid": "shape"},
+    {
+      "from": "host",
+      "message": {
+        "jsonrpc": "2.0",
+        "id": null,
+        "error": {"code": -32600, "message": {"$any": "string", "sample": "error"}, "data": {"reason": "notAMessage"}}
+      }
+    },
+    {"include": "fragments/bye.json"}
+  ]
+}

@@ -1,0 +1,70 @@
+{
+  "id": "malformed-line-too-long-host",
+  "category": "malformed",
+  "title": "一行超过握手时报的 maxLineBytes:整行丢掉,回 id 为 null 的 -32600 lineTooLong",
+  "subject": "host",
+  "covers": ["initialize"],
+  "fixture": {"manifest": "manifests/basic.json", "plugin": "plugins/relay.js", "config": {"host": {"maxLineBytes": 65536}}},
+  "steps": [
+    {
+      "from": "engine",
+      "message": {
+        "jsonrpc": "2.0",
+        "id": {"$var": "initId", "sample": 1},
+        "method": "initialize",
+        "params": {
+          "protocolVersion": "0.1",
+          "engineInfo": {"name": {"$any": "string", "sample": "lyrimuse-engine"}, "version": {"$any": "string", "sample": "1.15.0"}},
+          "capabilities": {
+            "host": {"fetch": {}, "match": {}, "storage": {}, "log": {}},
+            "lyrics": {"wordFormats": {"$contains": ["timeline", "ttml", "lrc-a2"]}}
+          },
+          "limits": {
+            "maxLineBytes": {"$any": "integer", "sample": 33554432},
+            "maxResultBytes": {"$any": "integer", "sample": 8388608},
+            "maxInFlightHostRequests": {"$any": "integer", "sample": 64}
+          },
+          "heartbeatIntervalMs": {"$any": "integer", "sample": 1000}
+        }
+      }
+    },
+    {
+      "from": "host",
+      "message": {
+        "jsonrpc": "2.0",
+        "id": {"$var": "initId"},
+        "result": {
+          "protocolVersion": "0.1",
+          "hostInfo": {
+            "name": {"$any": "string", "sample": "lyrimuse-plugin-host"},
+            "version": {"$any": "string", "sample": "1.15.0"},
+            "runtime": {"$any": "string", "sample": "goja"},
+            "sandbox": {"$any": "string", "sample": "seatbelt"}
+          },
+          "apiVersions": {"$contains": ["0.1"]},
+          "capabilities": {"lyrics": {"search": {}, "getLyrics": {}}, "heartbeat": {}},
+          "limits": {"maxLineBytes": 65536, "maxInFlightCalls": {"$any": "integer", "sample": 16}}
+        }
+      }
+    },
+    {
+      "from": "engine",
+      "rawFill": {
+        "prefix": "{\"jsonrpc\":\"2.0\",\"id\":70,\"method\":\"plugin/load\",\"params\":{\"pad\":\"",
+        "fill": "a",
+        "suffix": "\"}}",
+        "totalBytes": 65537
+      },
+      "invalid": "lineTooLong"
+    },
+    {
+      "from": "host",
+      "message": {
+        "jsonrpc": "2.0",
+        "id": null,
+        "error": {"code": -32600, "message": {"$any": "string", "sample": "error"}, "data": {"reason": "lineTooLong"}}
+      }
+    },
+    {"include": "fragments/bye.json"}
+  ]
+}

@@ -1,0 +1,148 @@
+{
+  "protocolVersion": "0.1",
+  "methods": [
+    {
+      "name": "initialize",
+      "from": "engine",
+      "kind": "request",
+      "params": ["protocolVersion", "engineInfo", "capabilities", "limits"],
+      "result": ["protocolVersion", "hostInfo", "apiVersions", "capabilities", "limits"]
+    },
+    {
+      "name": "plugin/load",
+      "from": "engine",
+      "kind": "request",
+      "params": ["manifest", "source"],
+      "result": ["apiVersion", "exports"]
+    },
+    {
+      "name": "lyrics/search",
+      "from": "engine",
+      "kind": "request",
+      "params": ["call", "query"],
+      "result": ["items"]
+    },
+    {
+      "name": "lyrics/getLyrics",
+      "from": "engine",
+      "kind": "request",
+      "params": ["call", "query", "item"],
+      "result": ["lyrics"]
+    },
+    {
+      "name": "shutdown",
+      "from": "engine",
+      "kind": "request",
+      "params": [],
+      "result": null
+    },
+    {
+      "name": "exit",
+      "from": "engine",
+      "kind": "notification",
+      "params": []
+    },
+    {
+      "name": "$/cancelRequest",
+      "from": "both",
+      "kind": "notification",
+      "params": ["id"]
+    },
+    {
+      "name": "host/fetch",
+      "from": "host",
+      "kind": "request",
+      "params": ["call", "request"],
+      "result": ["status", "headers", "url", "redirected", "body"]
+    },
+    {
+      "name": "host/match",
+      "from": "host",
+      "kind": "request",
+      "params": ["call", "items"],
+      "result": ["verdicts"]
+    },
+    {
+      "name": "host/storage.get",
+      "from": "host",
+      "kind": "request",
+      "params": ["call", "key"],
+      "result": ["found"]
+    },
+    {
+      "name": "host/storage.set",
+      "from": "host",
+      "kind": "request",
+      "params": ["call", "key", "value"],
+      "result": []
+    },
+    {
+      "name": "host/storage.delete",
+      "from": "host",
+      "kind": "request",
+      "params": ["call", "key"],
+      "result": ["deleted"]
+    },
+    {
+      "name": "host/storage.keys",
+      "from": "host",
+      "kind": "request",
+      "params": ["call"],
+      "result": ["keys"]
+    },
+    {
+      "name": "host/log",
+      "from": "host",
+      "kind": "notification",
+      "params": ["level", "message"]
+    },
+    {
+      "name": "$/heartbeat",
+      "from": "host",
+      "kind": "notification",
+      "params": ["heapBytes", "calls"]
+    }
+  ],
+  "errors": [
+    { "code": -32700, "name": "ParseError" },
+    { "code": -32600, "name": "InvalidRequest", "data": "reason", "values": ["batchUnsupported", "notAnObject", "badVersion", "notAMessage", "badMethod", "badId", "duplicateId", "lineTooLong"] },
+    { "code": -32601, "name": "MethodNotFound", "values": ["notExported"] },
+    { "code": -32602, "name": "InvalidParams", "values": ["paramsNotObject", "unsupportedProtocolVersion", "unknownCall"] },
+    { "code": -32603, "name": "InternalError" },
+    { "code": -32000, "name": "PluginError", "data": "code" },
+    { "code": -32800, "name": "Cancelled" },
+    { "code": -32801, "name": "DeadlineExceeded" },
+    { "code": -32802, "name": "ResourceExhausted", "data": "limit", "values": ["lineBytes", "resultBytes", "responseBytes", "requestsPerCall", "inFlightCalls", "inFlightHostRequests", "storageQuota", "jsTime", "memory"] },
+    { "code": -32803, "name": "Denied", "data": "reason", "values": ["hostNotAllowed", "addressNotAllowed", "forbiddenHeader", "redirectNotAllowed"] },
+    { "code": -32804, "name": "TransportFailed", "data": "reason", "values": ["timeout", "network", "tooManyRedirects"] },
+    { "code": -32805, "name": "Throttled", "data": "reason", "values": ["cooldown", "budget", "rate"] },
+    { "code": -32806, "name": "InvalidState", "data": "state", "values": ["uninitialized", "ready", "loaded", "shuttingDown"] }
+  ],
+  "pluginErrors": {
+    "load": ["SYNTAX_ERROR", "LOAD_FAILED", "BAD_EXPORTS", "UNSUPPORTED_API_VERSION"],
+    "call": ["NOT_FOUND", "SKIPPED", "RATE_LIMITED", "UNAVAILABLE", "AUTH_FAILED", "NEEDS_SETUP", "BAD_RESPONSE", "SCRIPT_ERROR", "BAD_RESULT"]
+  },
+  "outcomes": ["FOUND", "INSTRUMENTAL", "NO_LYRICS", "NOT_FOUND", "SKIPPED", "RATE_LIMITED", "UNAVAILABLE", "AUTH_FAILED", "NEEDS_SETUP", "BAD_RESPONSE", "PLUGIN_ERROR", "TIMEOUT", "CANCELLED"],
+  "limits": {
+    "preHandshakeMaxLineBytes": 65536,
+    "minMaxLineBytes": 65536,
+    "maxMaxLineBytes": 67108864,
+    "defaultMaxLineBytes": 33554432,
+    "maxResultBytes": 8388608,
+    "maxItems": 50,
+    "maxItemBytes": 65536,
+    "maxTextBytes": 2097152,
+    "maxTimelineLines": 5000,
+    "maxMatchItems": 50,
+    "maxLogMessageBytes": 4096,
+    "maxStorageKeyBytes": 256,
+    "storageQuotaBytes": 262144,
+    "fetchDefaultTimeoutMs": 6000,
+    "fetchMaxTimeoutMs": 10000,
+    "fetchMaxRedirects": 5,
+    "cancelGraceMs": 200,
+    "cancelKillMs": 1000,
+    "shutdownWaitMs": 1000,
+    "exitWaitMs": 1000
+  }
+}

@@ -1,0 +1,127 @@
+{
+  "id": "compat-unknown-fields-host",
+  "category": "compat",
+  "title": "参数里出现不认识的字段、不认识的能力:plugin-host 一律忽略",
+  "subject": "host",
+  "covers": ["initialize", "plugin/load", "lyrics/search", "$/cancelRequest"],
+  "fixture": {"manifest": "manifests/basic.json", "plugin": "plugins/probe.js"},
+  "steps": [
+    {
+      "from": "engine",
+      "message": {
+        "jsonrpc": "2.0",
+        "id": {"$var": "initId", "sample": 1},
+        "method": "initialize",
+        "params": {
+          "protocolVersion": "0.1",
+          "engineInfo": {
+            "name": {"$any": "string", "sample": "lyrimuse-engine"},
+            "version": {"$any": "string", "sample": "1.15.0"},
+            "build": "abc123"
+          },
+          "capabilities": {
+            "host": {"fetch": {}, "match": {}, "storage": {}, "log": {}, "settings": {}},
+            "lyrics": {"wordFormats": {"$contains": ["timeline", "ttml", "lrc-a2"]}},
+            "future": {"x": 1}
+          },
+          "limits": {
+            "maxLineBytes": {"$any": "integer", "sample": 33554432},
+            "maxResultBytes": {"$any": "integer", "sample": 8388608},
+            "maxInFlightHostRequests": {"$any": "integer", "sample": 64}
+          },
+          "heartbeatIntervalMs": {"$any": "integer", "sample": 1000},
+          "x-vendor": {"anything": true}
+        }
+      }
+    },
+    {
+      "from": "host",
+      "message": {
+        "jsonrpc": "2.0",
+        "id": {"$var": "initId"},
+        "result": {
+          "protocolVersion": "0.1",
+          "hostInfo": {
+            "name": {"$any": "string", "sample": "lyrimuse-plugin-host"},
+            "version": {"$any": "string", "sample": "1.15.0"},
+            "runtime": {"$any": "string", "sample": "goja"},
+            "sandbox": {"$any": "string", "sample": "seatbelt"}
+          },
+          "apiVersions": {"$contains": ["0.1"]},
+          "capabilities": {"lyrics": {"search": {}, "getLyrics": {}}, "heartbeat": {}},
+          "limits": {
+            "maxLineBytes": {"$any": "integer", "sample": 33554432},
+            "maxInFlightCalls": {"$any": "integer", "sample": 16}
+          }
+        }
+      }
+    },
+    {
+      "from": "engine",
+      "message": {
+        "jsonrpc": "2.0",
+        "id": {"$var": "loadId", "sample": 2},
+        "method": "plugin/load",
+        "params": {
+          "manifest": {"$fixture": "manifest"},
+          "source": {"mediaType": "text/javascript", "text": {"$fixture": "source"}},
+          "futureFlag": true
+        }
+      }
+    },
+    {
+      "from": "host",
+      "message": {
+        "jsonrpc": "2.0",
+        "id": {"$var": "loadId"},
+        "result": {"apiVersion": "0.1", "exports": {"lyrics": {"$unordered": ["search", "getLyrics"]}}}
+      }
+    },
+    {
+      "from": "engine",
+      "message": {
+        "jsonrpc": "2.0",
+        "id": {"$var": "s1", "sample": 3},
+        "method": "lyrics/search",
+        "params": {
+          "call": {
+            "id": {"$var": "c1", "sample": "c1"},
+            "task": {"$var": "t1", "sample": "t1"},
+            "timeoutMs": {"$any": "integer", "sample": 20000},
+            "lane": "foreground"
+          },
+          "query": {
+            "title": "none",
+            "artist": "Lyrimuse Test Band",
+            "album": "Fixtures",
+            "durationSecs": 215,
+            "cleanTitle": "none",
+            "primaryArtist": "Lyrimuse Test Band",
+            "artists": ["Lyrimuse Test Band"],
+            "search": {"title": "none", "artist": "Lyrimuse Test Band"},
+            "attempt": {"index": 1, "count": 1, "variant": "primary"},
+            "uiLanguage": {"$any": "string", "sample": "en"},
+            "round": "rehearsal",
+            "futureField": {"a": 1}
+          },
+          "trace": "abc"
+        }
+      }
+    },
+    {
+      "from": "host",
+      "message": {
+        "jsonrpc": "2.0",
+        "id": {"$var": "s1"},
+        "result": {
+          "items": [{"id": "none", "title": "none", "artist": "Lyrimuse Test Band", "lyrics": {"plain": "no requests"}}]
+        }
+      }
+    },
+    {
+      "from": "engine",
+      "message": {"jsonrpc": "2.0", "method": "$/cancelRequest", "params": {"id": 424242, "futureField": 1}}
+    },
+    {"include": "fragments/bye.json"}
+  ]
+}

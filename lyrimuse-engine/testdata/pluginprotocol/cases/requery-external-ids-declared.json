@@ -1,0 +1,76 @@
+{
+  "id": "requery-external-ids-declared",
+  "category": "requery",
+  "title": "清单声明了 externalIds、引擎又知道编号:放进 query.externalIds,只给声明过的键",
+  "subject": "both",
+  "covers": ["lyrics/search"],
+  "fixture": {
+    "manifest": "manifests/basic.json",
+    "manifestPatch": {"externalIds": ["appleMusic", "youtube"]},
+    "plugin": "plugins/probe.js"
+  },
+  "drive": [
+    {"before": "initialize", "do": "start"},
+    {
+      "before": "search",
+      "do": "resolve",
+      "task": "t1",
+      "track": {"title": "external-ids", "artist": "Lyrimuse Test Band", "album": "Fixtures", "durationSecs": 215},
+      "round": "playing",
+      "externalIds": {"appleMusic": "1440000001", "spotify": "4uLU6hMCjMI75M1A2tKUQC"}
+    },
+    {"before": "shutdown", "do": "stop"}
+  ],
+  "steps": [
+    {"include": "fragments/handshake.json"},
+    {"include": "fragments/load.json"},
+    {
+      "label": "search",
+      "from": "engine",
+      "message": {
+        "jsonrpc": "2.0",
+        "id": {"$var": "s1", "sample": 3},
+        "method": "lyrics/search",
+        "params": {
+          "call": {
+            "id": {"$var": "c1", "sample": "c1"},
+            "task": {"$var": "t1", "sample": "t1"},
+            "timeoutMs": {"$any": "integer", "sample": 20000}
+          },
+          "query": {
+            "title": "external-ids",
+            "artist": "Lyrimuse Test Band",
+            "album": "Fixtures",
+            "durationSecs": 215,
+            "cleanTitle": "external-ids",
+            "primaryArtist": "Lyrimuse Test Band",
+            "artists": ["Lyrimuse Test Band"],
+            "search": {"title": "external-ids", "artist": "Lyrimuse Test Band"},
+            "attempt": {"index": 1, "count": 1, "variant": "primary"},
+            "uiLanguage": {"$any": "string", "sample": "en"},
+            "round": "playing",
+            "externalIds": {"$exact": {"appleMusic": "1440000001"}}
+          }
+        }
+      }
+    },
+    {
+      "from": "host",
+      "message": {
+        "jsonrpc": "2.0",
+        "id": {"$var": "s1"},
+        "result": {
+          "items": [
+            {
+              "id": "external-ids",
+              "title": "external-ids",
+              "artist": "Lyrimuse Test Band",
+              "lyrics": {"plain": "{\"appleMusic\":\"1440000001\"}"}
+            }
+          ]
+        }
+      }
+    },
+    {"include": "fragments/bye.json"}
+  ]
+}

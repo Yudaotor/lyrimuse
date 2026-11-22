@@ -1,0 +1,14 @@
+{
+  "id": "lifecycle-exit-without-shutdown",
+  "category": "lifecycle",
+  "title": "没发 shutdown 直接 exit:照样退出,退出码 1",
+  "subject": "host",
+  "covers": ["exit"],
+  "fixture": {"manifest": "manifests/basic.json", "plugin": "plugins/relay.js"},
+  "steps": [
+    {"include": "fragments/handshake.json"},
+    {"include": "fragments/load.json"},
+    {"from": "engine", "message": {"jsonrpc": "2.0", "method": "exit"}},
+    {"from": "host", "close": true, "exitCode": 1}
+  ]
+}

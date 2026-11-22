@@ -1,0 +1,21 @@
+{
+  "id": "malformed-batch-host",
+  "category": "malformed",
+  "title": "批量请求(顶层是数组):不支持,回 id 为 null 的 -32600 batchUnsupported(plugin-host 收到)",
+  "subject": "host",
+  "covers": ["shutdown"],
+  "fixture": {"manifest": "manifests/basic.json", "plugin": "plugins/relay.js"},
+  "steps": [
+    {"include": "fragments/handshake.json"},
+    {"from": "engine", "raw": "[{\"jsonrpc\":\"2.0\",\"id\":50,\"method\":\"shutdown\"}]", "invalid": "batch"},
+    {
+      "from": "host",
+      "message": {
+        "jsonrpc": "2.0",
+        "id": null,
+        "error": {"code": -32600, "message": {"$any": "string", "sample": "error"}, "data": {"reason": "batchUnsupported"}}
+      }
+    },
+    {"include": "fragments/bye.json"}
+  ]
+}

@@ -1,0 +1,81 @@
+{
+  "id": "cancel-late-result",
+  "category": "cancel",
+  "title": "取消之后对端交回的是已经算完的正常结果:引擎收下不出错,这次调用仍算取消",
+  "subject": "engine",
+  "covers": ["$/cancelRequest", "lyrics/search"],
+  "fixture": {"manifest": "manifests/basic.json", "plugin": "plugins/relay.js"},
+  "drive": [
+    {"before": "initialize", "do": "start"},
+    {
+      "before": "search",
+      "do": "resolve",
+      "task": "t1",
+      "track": {"title": "Paper Lanterns", "artist": "Lyrimuse Test Band", "album": "Fixtures", "durationSecs": 215},
+      "round": "playing"
+    },
+    {"before": "cancel", "do": "cancel", "task": "t1"},
+    {"before": "shutdown", "do": "stop"}
+  ],
+  "steps": [
+    {"include": "fragments/handshake.json"},
+    {"include": "fragments/load.json"},
+    {
+      "label": "search",
+      "from": "engine",
+      "message": {
+        "jsonrpc": "2.0",
+        "id": {"$var": "s1", "sample": 3},
+        "method": "lyrics/search",
+        "params": {
+          "call": {
+            "id": {"$var": "c1", "sample": "c1"},
+            "task": {"$var": "t1", "sample": "t1"},
+            "timeoutMs": {"$any": "integer", "sample": 20000}
+          },
+          "query": {
+            "title": "Paper Lanterns",
+            "artist": "Lyrimuse Test Band",
+            "album": "Fixtures",
+            "durationSecs": 215,
+            "cleanTitle": "Paper Lanterns",
+            "primaryArtist": "Lyrimuse Test Band",
+            "artists": ["Lyrimuse Test Band"],
+            "search": {"title": "Paper Lanterns", "artist": "Lyrimuse Test Band"},
+            "attempt": {"index": 1, "count": 1, "variant": "primary"},
+            "uiLanguage": {"$any": "string", "sample": "en"},
+            "round": "playing"
+          }
+        }
+      }
+    },
+    {
+      "label": "cancel",
+      "from": "engine",
+      "message": {"jsonrpc": "2.0", "method": "$/cancelRequest", "params": {"id": {"$var": "s1"}}}
+    },
+    {
+      "from": "host",
+      "message": {
+        "jsonrpc": "2.0",
+        "id": {"$var": "s1"},
+        "result": {
+          "items": [
+            {
+              "id": "101",
+              "title": "Paper Lanterns",
+              "artist": "Lyrimuse Test Band",
+              "album": "Fixtures",
+              "durationSecs": 215,
+              "lyrics": {
+                "lines": "[00:01.00]Paper lanterns in the rain\n[00:05.50]Drifting slowly down the lane\n[00:10.25]Every light a small refrain\n"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {"observe": {"task": "t1", "outcome": {"status": "CANCELLED"}}},
+    {"include": "fragments/bye.json"}
+  ]
+}

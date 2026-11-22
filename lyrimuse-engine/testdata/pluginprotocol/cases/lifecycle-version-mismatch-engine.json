@@ -1,0 +1,48 @@
+{
+  "id": "lifecycle-version-mismatch-engine",
+  "category": "lifecycle",
+  "title": "plugin-host 不认引擎的版本:引擎不加载插件,直接让它退出",
+  "subject": "engine",
+  "covers": ["initialize", "exit"],
+  "fixture": {"manifest": "manifests/basic.json", "plugin": "plugins/relay.js"},
+  "drive": [{"before": "initialize", "do": "start"}],
+  "steps": [
+    {
+      "label": "initialize",
+      "from": "engine",
+      "message": {
+        "jsonrpc": "2.0",
+        "id": {"$var": "i1", "sample": 1},
+        "method": "initialize",
+        "params": {
+          "protocolVersion": "0.1",
+          "engineInfo": {"name": {"$any": "string", "sample": "lyrimuse-engine"}, "version": {"$any": "string", "sample": "1.15.0"}},
+          "capabilities": {
+            "host": {"fetch": {}, "match": {}, "storage": {}, "log": {}},
+            "lyrics": {"wordFormats": {"$contains": ["timeline", "ttml", "lrc-a2"]}}
+          },
+          "limits": {
+            "maxLineBytes": {"$any": "integer", "sample": 33554432},
+            "maxResultBytes": {"$any": "integer", "sample": 8388608},
+            "maxInFlightHostRequests": {"$any": "integer", "sample": 64}
+          },
+          "heartbeatIntervalMs": {"$any": "integer", "sample": 1000}
+        }
+      }
+    },
+    {
+      "from": "host",
+      "message": {
+        "jsonrpc": "2.0",
+        "id": {"$var": "i1"},
+        "error": {
+          "code": -32602,
+          "message": {"$any": "string", "sample": "error"},
+          "data": {"reason": "unsupportedProtocolVersion", "requested": "0.1", "supported": ["0.2"]}
+        }
+      }
+    },
+    {"from": "engine", "message": {"jsonrpc": "2.0", "method": "exit"}},
+    {"from": "host", "close": true, "exitCode": 1}
+  ]
+}

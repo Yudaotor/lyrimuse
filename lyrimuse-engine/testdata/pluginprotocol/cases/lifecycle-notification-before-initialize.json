@@ -1,0 +1,18 @@
+{
+  "id": "lifecycle-notification-before-initialize",
+  "category": "lifecycle",
+  "title": "握手前的通知一律丢掉、不应答(exit 除外)",
+  "subject": "host",
+  "covers": ["initialize", "$/cancelRequest"],
+  "fixture": {"manifest": "manifests/basic.json", "plugin": "plugins/relay.js"},
+  "steps": [
+    {"from": "engine", "message": {"jsonrpc": "2.0", "method": "$/cancelRequest", "params": {"id": 1}}},
+    {
+      "from": "engine",
+      "message": {"jsonrpc": "2.0", "method": "$/unknown", "params": {"x": 1}},
+      "invalid": "unknownMethod"
+    },
+    {"include": "fragments/handshake.json"},
+    {"include": "fragments/bye.json"}
+  ]
+}

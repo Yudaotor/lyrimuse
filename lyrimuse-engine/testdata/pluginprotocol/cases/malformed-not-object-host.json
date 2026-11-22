@@ -1,0 +1,21 @@
+{
+  "id": "malformed-not-object-host",
+  "category": "malformed",
+  "title": "顶层不是对象:-32600 notAnObject(plugin-host 收到)",
+  "subject": "host",
+  "covers": ["shutdown"],
+  "fixture": {"manifest": "manifests/basic.json", "plugin": "plugins/relay.js"},
+  "steps": [
+    {"include": "fragments/handshake.json"},
+    {"from": "engine", "raw": "42", "invalid": "shape"},
+    {
+      "from": "host",
+      "message": {
+        "jsonrpc": "2.0",
+        "id": null,
+        "error": {"code": -32600, "message": {"$any": "string", "sample": "error"}, "data": {"reason": "notAnObject"}}
+      }
+    },
+    {"include": "fragments/bye.json"}
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "id": "load-ok-search-only",
+  "category": "load",
+  "title": "没有 getLyrics 的插件:exports 里只有 search",
+  "subject": "both",
+  "covers": ["plugin/load"],
+  "fixture": {"manifest": "manifests/basic.json", "plugin": "plugins/searchonly.js"},
+  "drive": [{"before": "initialize", "do": "start"}, {"before": "shutdown", "do": "stop"}],
+  "steps": [
+    {"include": "fragments/handshake.json"},
+    {
+      "label": "load",
+      "from": "engine",
+      "message": {
+        "jsonrpc": "2.0",
+        "id": {"$var": "l1", "sample": 2},
+        "method": "plugin/load",
+        "params": {
+          "manifest": {"$fixture": "manifest"},
+          "source": {"mediaType": "text/javascript", "text": {"$fixture": "source"}}
+        }
+      }
+    },
+    {
+      "from": "host",
+      "message": {
+        "jsonrpc": "2.0",
+        "id": {"$var": "l1"},
+        "result": {"apiVersion": "0.1", "exports": {"$exact": {"lyrics": ["search"]}}}
+      }
+    },
+    {"include": "fragments/bye.json"}
+  ]
+}

@@ -1,0 +1,21 @@
+{
+  "id": "malformed-method-not-string-host",
+  "category": "malformed",
+  "title": "method 不是字符串:-32600 badMethod(plugin-host 收到)",
+  "subject": "host",
+  "covers": ["shutdown"],
+  "fixture": {"manifest": "manifests/basic.json", "plugin": "plugins/relay.js"},
+  "steps": [
+    {"include": "fragments/handshake.json"},
+    {"from": "engine", "raw": "{\"jsonrpc\":\"2.0\",\"id\":51,\"method\":7}", "invalid": "shape"},
+    {
+      "from": "host",
+      "message": {
+        "jsonrpc": "2.0",
+        "id": null,
+        "error": {"code": -32600, "message": {"$any": "string", "sample": "error"}, "data": {"reason": "badMethod"}}
+      }
+    },
+    {"include": "fragments/bye.json"}
+  ]
+}
