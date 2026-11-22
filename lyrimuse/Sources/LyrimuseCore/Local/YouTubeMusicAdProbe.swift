@@ -147,6 +147,9 @@ public final class YouTubeMusicAdProbe: @unchecked Sendable {
     /// `MPREb_` 开头,歌手链接是 `channel/UC…`,所以这一条既跟语言无关(不受 byline 里
     /// 「2026年」这类本地化后缀影响),也不会把歌手/播放量误当成专辑。
     ///
+    /// 新版播放条(`ytmusic-miniplayer`,页面上没有 `ytmusic-player-bar`)的 byline 链接不带 `href`,改从队列里正在放的那一条的
+    /// 数据读同一个 `MPREb_` 专辑链接(`miniplayerAlbumJS`);广告期间不读,那时队列里选中的是广告之后那首歌。见 02 章决策 287。
+    ///
     /// 页面放的不是这一首(标题对不上,见 `titleGuardJS`)回 `NOTFOUND`;`__TITLEGUARD__` / `__PLAYING__` 两个占位符
     /// 由 `probeJS(title:playing:)` 填上,真正注入的是填过的那份。
     ///
@@ -157,7 +160,7 @@ public final class YouTubeMusicAdProbe: @unchecked Sendable {
     public static let probeJS = """
     (function(){\
     var p = document.querySelector('#movie_player') || document.querySelector('.html5-video-player');\
-    var hasTime = !!document.querySelector('.time-info');\
+    var hasTime = !!document.querySelector('.time-info, ytmusic-miniplayer');\
     if (!p && !hasTime) return 'NOTFOUND';\
     __TITLEGUARD__\
     var cls = p ? (p.className || '') : '';\
@@ -175,6 +178,7 @@ public final class YouTubeMusicAdProbe: @unchecked Sendable {
     var h = bl[i].getAttribute('href') || '';\
     if (h.indexOf('browse/MPREb') >= 0) { album = (bl[i].textContent || '').trim(); break; }\
     }\
+    if (!document.querySelector('ytmusic-player-bar') && adShowing === '0' && badge === '0') { album = \(miniplayerAlbumJS); if (album === 'NOTFOUND') album = ''; }\
     var out = adShowing + '|' + badge + '|' + bare + '|' + slot + '|' + album;\
     return (vid && vid.paused) ? 'PAUSED:' + (__PLAYING__ ? 'STALE' : out) : out;\
     })()
@@ -216,6 +220,29 @@ public final class YouTubeMusicAdProbe: @unchecked Sendable {
         probeJS.replacingOccurrences(of: "__TITLEGUARD__", with: titleGuard(expecting: title))
             .replacingOccurrences(of: "__PLAYING__", with: playing ? "true" : "false")
     }
+
+    /// 新版播放条上这一首的专辑名:队列里选中的、视频 ID 跟播放器正放的一样的那一条,byline 里 browseId 以 `MPREb` 开头的那一段,
+    /// 没有回空串。队列元素的 `data` 和播放器的 `getVideoData` 是页面属性,经 `BrowserTabProbeScript.inPageWorld` 读。
+    static let miniplayerAlbumJS = BrowserTabProbeScript.inPageWorld(
+        core: [
+            "function(){",
+            "var mp = document.querySelector('#movie_player'), vd = (mp && mp.getVideoData) ? mp.getVideoData() : null;",
+            "var vid = (vd && vd.video_id) ? String(vd.video_id) : '';",
+            "if (!vid) return '';",
+            "var items = document.querySelectorAll('ytmusic-player-queue-item');",
+            "for (var i = 0; i < items.length; i++) {",
+            "var d = items[i].data;",
+            "if (!d || String(d.videoId || '') !== vid || !(d.selected || items[i].hasAttribute('selected'))) continue;",
+            "var runs = (d.longBylineText && d.longBylineText.runs) || [];",
+            "for (var j = 0; j < runs.length; j++) {",
+            "var be = runs[j].navigationEndpoint && runs[j].navigationEndpoint.browseEndpoint;",
+            "if (be && String(be.browseId || '').indexOf('MPREb') === 0) return String(runs[j].text || '').trim();",
+            "}",
+            "}",
+            "return '';",
+            "}",
+        ].joined(separator: " "),
+        pageVisible: pageWorldVisibleJS)
 
     public static let hostMarker = "music.youtube.com"
     /// 当前执行环境看不看得见页面自己的 JS(全局的 `ytcfg`),给 `BrowserTabProbeScript.inPageWorld` 当 `pageVisible`:Safari

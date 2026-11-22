@@ -212,7 +212,8 @@ public final class BrowserPositionProbe: @unchecked Sendable {
 
     /// YouTube Music 的播放进度取自页面自己渲染的".time-info"文字(形如"0:57 / 4:04"),不取 <video>.currentTime:"电台/续播"
     /// 模式下那个字段是整个会话的累计时间(同一时刻 currentTime=516s,这首歌本身只有 243s)。顺带把 <video>.paused 也带出来,
-    /// 调用方用它排除"标签页开着但暂停/静音后台"的干扰。
+    /// 调用方用它排除"标签页开着但暂停/静音后台"的干扰。新版播放条(`ytmusic-miniplayer`,页面上没有 `.time-info`)的同一行
+    /// 文字在 `.ytMusicMiniPlayerTimeInfo`,格式相同;有 `.time-info` 时只读它(02 章决策 287)。
     ///
     /// 返回值不用 JSON.stringify:`execute … javascript` 把 JS 返回的字符串再包一层 AppleScript 字符串时,会把已有的双引号真的
     /// 转义成反斜杠(字符串本身多了 `\` 字符),拿它去跟手写的 `"\"found\":true"` 比较会稳定判 false。所以 JS 返回值从头到尾
@@ -232,7 +233,7 @@ public final class BrowserPositionProbe: @unchecked Sendable {
     /// `BrowserTabProbeScript.inPageWorld` 读(`youtubeMusicVideoIdentityJS`),其余几段照旧在当前环境读(02 章决策 286)。
     private static let youtubeMusicScript = """
     (function(){
-      var el = document.querySelector('.time-info');
+      var el = document.querySelector('.time-info') || document.querySelector('ytmusic-miniplayer .ytMusicMiniPlayerTimeInfo');
       if (!el) return 'NOTFOUND';
       var text = (el.textContent || '').trim();
       var parts = text.split('/');
