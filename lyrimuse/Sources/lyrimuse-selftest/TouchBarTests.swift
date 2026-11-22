@@ -1006,7 +1006,7 @@ func runTouchBarTests() {
                         && !overlayView.contains("rainbow ? .white : ((follows"), true,
                     "悬浮歌词彩虹: 只有逐字图层行换成白色两档当蒙版,显示色不变(状态文案、提示不变白)")
         let wrapped = code(appDir.appendingPathComponent("UI/WrappedKaraokeRows.swift")) ?? ""
-        expectEqual(sourceHas(wrapped, "rainbow: spec.rainbow,\nrainbowPaused: spec.rainbowPaused)"), true,
+        expectEqual(sourceHas(wrapped, "rainbow: spec.rainbow,\nrainbowPaused: spec.rainbowPaused,\nlineRightToLeft: rightToLeft)"), true,
                     "悬浮歌词彩虹: 换行模式每一行都带上彩虹")
         let theme = code(appDir.appendingPathComponent("Settings/ColorTheme.swift")) ?? ""
         expectEqual(theme.contains("id: \"builtin-rainbow\"") && theme.contains("textStrokeEnabled: true, textStrokeColorHex: \"#000000E6\", rainbow: true")

@@ -1285,9 +1285,11 @@ enum LyricsCompareLayout {
     /// 把对不上的那几个字(按 `Character` 下标)染成 `markColor`,其余用调用方的颜色。
     static func marked(_ text: String, marks: Set<Int>) -> AttributedString {
         let shown = text.isEmpty ? " " : text
+        // 段落方向按整行定(`LyricTextDirection.paragraphPrefix`);逐字染色那一层同样加,两层排得一样。
+        let prefix = LyricTextDirection.paragraphPrefix(shown)
         // 没有要标的字(歌词管理的预览、当前句)整段一次建好,不逐字拼。
-        guard !marks.isEmpty else { return AttributedString(shown) }
-        var out = AttributedString()
+        guard !marks.isEmpty else { return AttributedString(prefix + shown) }
+        var out = AttributedString(prefix)
         for (offset, character) in shown.enumerated() {
             var piece = AttributedString(String(character))
             if marks.contains(offset) { piece.foregroundColor = markColor }
@@ -1384,7 +1386,7 @@ private struct LyricsCompareOtherLine: View {
                 }
                 .animation(LyricsManagerPreviewMotion.line, value: isCurrent)
             if let secondary {
-                Text(secondary)
+                Text(verbatim: LyricTextDirection.paragraphPrefix(secondary) + secondary)
                     .font(.system(size: 13))
                     .foregroundStyle(.tertiary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -1587,7 +1589,7 @@ private struct LyricsManagerPreviewRow: View {
                 }
                 .animation(LyricsManagerPreviewMotion.line, value: isCurrent)
             if let secondary {
-                Text(secondary)
+                Text(verbatim: LyricTextDirection.paragraphPrefix(secondary) + secondary)
                     .font(.system(size: 13))
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -1670,7 +1672,7 @@ private struct LyricsManagerKaraokeOverlay: View {
 
     var body: some View {
         if #available(macOS 15.0, *) {
-            let text = segmentedText
+            let text = Self.segmentedText(segments)
             LyricsManagerKaraokeHost(clock: clock, content: AnyView(
                 FrameTimeline(minimumInterval: Self.refreshInterval, paused: !isPlaying) { date in
                     text
@@ -1687,8 +1689,10 @@ private struct LyricsManagerKaraokeOverlay: View {
     }
 
     /// 每一段挂上自己的序号,画的时候按序号找时间。用插值拼:`Text + Text` 在 macOS 26 SDK 里已弃用。
-    private var segmentedText: Text {
-        segments.indices.reduce(Text(verbatim: "")) { text, index in
+    /// 开头跟底下那层正文加同一个方向标记(`LyricsCompareLayout.marked`),两层排得一样;它没有序号,不画。
+    static func segmentedText(_ segments: [LyricsKaraokeSegment]) -> Text {
+        let prefix = LyricTextDirection.paragraphPrefix(segments.map(\.text).joined())
+        return segments.indices.reduce(Text(verbatim: prefix)) { text, index in
             let part = Text(verbatim: segments[index].text)
                 .customAttribute(LyricsManagerKaraokeSegmentIndex(value: index))
             return Text("\(text)\(part)")
@@ -1738,7 +1742,8 @@ private struct LyricsManagerKaraokeSegmentIndex: TextAttribute {
 
 /// 逐字染色那一层的画法:每一段按唱它的那个字此刻唱到哪,唱过的部分画实色,没唱到的不画,交界处是跟各处同一条软边
 /// (`KaraokeFill`)。一段可能被字体回退拆成几个 run(汉字和它后面的空格就是两个),软边按这一段在这一行上的整个横向
-/// 范围铺,不按 run 各铺各的。从右往左的段(`LyricTextDirection`)渐变起止对调,从这一段的右端往左染(见 11 章决策 190)。
+/// 范围铺,不按 run 各铺各的。从右往左的段(`LyricTextDirection`)渐变起止对调,从这一段的右端往左染(见 11 章决策 190);
+/// 从右往左的行里混了两种方向的段同样从右端染(`wordNeedsRightToLeftBase`),跟整行的读序一致。
 @available(macOS 15.0, *)
 private struct LyricsManagerKaraokeRenderer: TextRenderer {
     let segments: [LyricsKaraokeSegment]
@@ -1746,6 +1751,7 @@ private struct LyricsManagerKaraokeRenderer: TextRenderer {
 
     func draw(layout: Text.Layout, in ctx: inout GraphicsContext) {
         let band = KaraokeFill.wordEdgeSoftenBand
+        let lineRightToLeft = LyricTextDirection.isRightToLeft(segments.map(\.text).joined())
         for line in layout {
             var spans: [Int: (minX: CGFloat, maxX: CGFloat)] = [:]
             for run in line {
@@ -1759,6 +1765,7 @@ private struct LyricsManagerKaraokeRenderer: TextRenderer {
                       segments.indices.contains(index), let span = spans[index] else { continue }
                 let segment = segments[index]
                 let rightToLeft = LyricTextDirection.isRightToLeft(segment.text)
+                    || LyricTextDirection.wordNeedsRightToLeftBase(segment.text, lineRightToLeft: lineRightToLeft)
                 let fraction = KaraokeFill.fillFraction(startMs: segment.startMs, durationMs: segment.durationMs, atMs: ms)
                 let left = fraction - band
                 let right = fraction + band

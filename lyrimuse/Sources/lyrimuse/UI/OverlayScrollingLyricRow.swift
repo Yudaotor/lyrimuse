@@ -257,7 +257,7 @@ final class OverlayLyricScrollView: NSView {
 
     /// 文字在一行里实际占据的矩形(左上原点),算式见 `LyricLayerRowSpec.textRect`,这里只接上量字宽。
     static func textRect(spec: OverlayScrollingLyricRow.Spec, width: CGFloat, height: CGFloat) -> CGRect {
-        let rightToLeft = LyricTextDirection.isRightToLeft(spec.words.map(\.text).joined())
+        let rightToLeft = spec.rightToLeft
         return spec.textRect(width: width, height: height,
                              measureMain: { MenuBarMarqueeRenderer.width(of: $0, font: spec.font, translation: spec.translation,
                                                                          lineRightToLeft: rightToLeft) },
@@ -306,7 +306,7 @@ final class OverlayLyricScrollView: NSView {
             main: mainHeight, roma: spec.groups == nil ? nil : romaHeight, romaGap: romaGap)
         // 逐词 / 逐组排版:每个词的起止 x、罗马音每段的落点、长图总宽。规则在 Core 的
         // `OverlayRowLayout`(selftest 钉着),这里只把字体测宽喂进去。
-        let rightToLeft = LyricTextDirection.isRightToLeft(spec.words.map(\.text).joined())
+        let rightToLeft = spec.rightToLeft
         let r = OverlayRowLayout.layOut(
             words: spec.words, groups: spec.groups, inset: inset,
             strokeInset: spec.stroke?.inset ?? 0,

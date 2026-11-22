@@ -5490,7 +5490,7 @@ func runSourceContractSettingsTests() {
                     && !sourceBody("private func lyricsArea(_ summary: EnrichCacheStore.Summary) -> some View", in: manager).contains(".id(")
                     && previewList.contains(".transaction(value: resetKey) { $0.disablesAnimations = true }")
                     && sourceHas(sourceBody("static func marked(_ text: String, marks: Set<Int>) -> AttributedString", in: managerParts),
-                                 "guard !marks.isEmpty else { return AttributedString(shown) }\n var out = AttributedString()\n for (offset, character) in shown.enumerated() {")
+                                 "guard !marks.isEmpty else { return AttributedString(prefix + shown) }\n var out = AttributedString(prefix)\n for (offset, character) in shown.enumerated() {")
                     && sourceHas(previewList, ".onChange(of: resetKey) { _, _ in\n updatePosition()\n if follow, isNowPlaying, !rows.isEmpty {\n scrollToCurrent(animated: false)\n } else {\n scrollRequest = LyricsPreviewScrollRequest(row: 0, anchor: .top, animated: false,"), true,
                     "歌词管理: 预览换歌原地换内容、回到开头、不带过渡")
         // 行自己读强调色、正在放的那首和它的封面;选中且有焦点的行换白字那一套。表格那一层不碰 nowPlayingKey(11 章决策 67、89、94)。

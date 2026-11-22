@@ -1027,9 +1027,8 @@ func runOverlayTests() {
             (try? String(contentsOf: src.appendingPathComponent(path), encoding: .utf8)) ?? ""
         }
         let row = text("UI/OverlayScrollingLyricRow.swift")
-        expectEqual(sourceHas(row, "let rightToLeft = LyricTextDirection.isRightToLeft(spec.words.map(\\.text).joined())")
-                        && sourceHas(row, "rightToLeft: rightToLeft)"), true,
-                    "从右往左(契约): 图层行按整行文字判方向")
+        expectEqual(sourceHas(row, "let rightToLeft = spec.rightToLeft") && sourceHas(row, "rightToLeft: rightToLeft)"), true,
+                    "从右往左(契约): 图层行按整行文字判方向(`LyricLayerRowSpec.rightToLeft`)")
         expectEqual(sourceHas(row, "mirrorLayer.addSublayer(contentLayer)"), true,
                     "从右往左(契约): 图层行的内容挂在镜像层下")
         expectEqual(sourceHas(row, "ctx.scaleBy(x: -1, y: 1)"), true, "从右往左(契约): 图层行逐词镜像着画")
@@ -1294,6 +1293,91 @@ func runOverlayTests() {
                     "混方向的词(契约): 歌词窗口 SwiftUI 逐词行给混方向的词加 RLM")
         expectEqual(sourceHas(text("UI/WrappedKaraokeRows.swift"), "MenuBarMarqueeRenderer.width(of: $0.text, font: font, lineRightToLeft: rightToLeft)"),
                     true, "混方向的词(契约): 悬浮歌词换行模式量宽跟图层行同一个方向")
+    }
+
+    // ---- 整行一次画、逐折行画的段落方向跟着整行的多数(04 章决策 116) ----
+    do {
+        let font = NSFont.systemFont(ofSize: 16)
+        // 不带段落样式整行排字(同 SwiftUI `Text`:段落方向按第一个有方向的字母判),各字的字形 x 按字符下标(UTF-16)记。
+        func glyphXs(_ text: String) -> [Int: CGFloat] {
+            let line = CTLineCreateWithAttributedString(NSAttributedString(string: text, attributes: [.font: font]))
+            var out: [Int: CGFloat] = [:]
+            for run in CTLineGetGlyphRuns(line) as? [CTRun] ?? [] {
+                let n = CTRunGetGlyphCount(run)
+                var idx = [CFIndex](repeating: 0, count: n), pos = [CGPoint](repeating: .zero, count: n)
+                CTRunGetStringIndices(run, CFRange(location: 0, length: n), &idx)
+                CTRunGetPositions(run, CFRange(location: 0, length: n), &pos)
+                for k in 0..<n where out[idx[k]] == nil { out[idx[k]] = pos[k].x }
+            }
+            return out
+        }
+        // 句首的拉丁字母落在所有阿拉伯字母右边 = 段落从右往左;落在左边 = 从左往右。`prefixed`:按歌词管理的画法加方向标记。
+        func startsRightOfArabic(_ text: String, prefixed: Bool) -> Bool {
+            let prefix = prefixed ? LyricTextDirection.paragraphPrefix(text) : ""
+            let shown = (prefix + text) as NSString
+            let xs = glyphXs(shown as String)
+            let first = (prefix as NSString).length
+            guard let x0 = xs[first] else { return false }
+            return xs.filter { (0x0600...0x06FF).contains(Int(shown.character(at: $0.key))) }.allSatisfy { $0.value < x0 }
+        }
+        let latinFirst = "Bitcha \u{0643}\u{0627}\u{062A}\u{0645}\u{0648}\u{062A} \u{0639}\u{0627}\u{0644}\u{0644}\u{0648}\u{0646} \u{062A}\u{0627}\u{0644}\u{0642}\u{0631}\u{0641}\u{0629}"
+        let v1 = "v1\u{FF1A}\u{064A}\u{0648}\u{0645} \u{0627}\u{0644}\u{063A}\u{0627}\u{0628}\u{0648} \u{0639}\u{064A}\u{0648}\u{0646}\u{0643}"
+        for (tag, text) in [("拉丁词开头", latinFirst), ("v1： 开头", v1)] {
+            expectEqual(LyricTextDirection.paragraphPrefix(text), LyricTextDirection.rightToLeftMark,
+                        "整行段落方向(\(tag)): 歌词管理给这一行加 RLM")
+            expectEqual(startsRightOfArabic(text, prefixed: true), true, "整行段落方向(\(tag)): 加了 RLM 段落从右往左,句首在阿拉伯文右边")
+            expectEqual(startsRightOfArabic(text, prefixed: false), false,
+                        "整行段落方向(\(tag)): 不加时句首在左边(样例真能测出来)")
+        }
+        // 只有一种方向的行:从左往右的字不加,本来就从右往左的字加了 RLM 字形位置逐位不变。
+        for text in ["Take me home to the place I belong", "\u{6211}\u{4EEC}\u{4E00}\u{8D77}\u{770B}\u{6D77}",
+                     "\u{3042}\u{306A}\u{305F}\u{306E}\u{3053}\u{3068}\u{3092}"] {
+            expectEqual(LyricTextDirection.paragraphPrefix(text), "", "整行段落方向: 从左往右的行不加(\(text))")
+        }
+        for text in ["\u{0642}\u{0644}\u{0628}\u{064A} \u{062D}\u{0628}\u{064A}\u{0628}\u{062A}\u{064A}\u{064A}\u{064A}\u{064A}",
+                     "\u{05D4}\u{05D5} \u{05DE}\u{05DC}\u{05D5}\u{05D3}\u{05D9} \u{05D1}\u{05D5}\u{05D0}\u{05D9}",
+                     "\u{064A}\u{0648}\u{0645} \u{0639}\u{0646}\u{064A} \u{0634}\u{0648} \u{062A}\u{0645}\u{0646}\u{064A}\u{062A}\u{061F}"] {
+            let bare = glyphXs(text), marked = glyphXs(LyricTextDirection.rightToLeftMark + text)
+            let shifted = Dictionary(uniqueKeysWithValues: bare.map { ($0.key + 1, $0.value) })
+            expectEqual(marked.filter { $0.key > 0 } == shifted, true, "整行段落方向: 纯从右往左的行加 RLM 字形位置不变(\(text.prefix(6)))")
+        }
+        // 悬浮歌词换行模式:一折行的方向跟着整句,不按这一折行自己的字判。
+        let words = ["\u{0635}\u{0648}\u{0631}\u{064A}\u{060C} ", "\u{0639}\u{0646}\u{062F}\u{064A} ", "\u{0628}\u{0644}\u{0627}\u{0635}\u{0629} ",
+                     "\u{0641}\u{0642}\u{0644}\u{0628}\u{064A} ", "for ", "ma ", "mamacita"]
+        let big = NSFont.systemFont(ofSize: 30, weight: .bold)
+        let sizes = words.map { CGSize(width: ($0 as NSString).size(withAttributes: [.font: big]).width, height: 40) }
+        let rows = WrapLayoutMath.rows(sizes: sizes, maxWidth: sizes[4...].reduce(0) { $0 + $1.width } + 2, horizontalSpacing: 0)
+        let rowTexts = rows.map { $0.indices.map { words[$0] }.joined() }
+        let latinRow = rowTexts.firstIndex { !LyricTextDirection.isRightToLeft($0) }
+        expectEqual(LyricTextDirection.isRightToLeft(words.joined()) && latinRow != nil, true,
+                    "换行模式整句方向: 样例整句从右往左、有一折行拉丁字母占多数(\(rowTexts))")
+        if let latinRow {
+            let synced = rows[latinRow].indices.map { SyncedLyricWord(text: words[$0], startMs: 0, durationMs: 100) }
+            func spec(_ line: Bool?) -> LyricLayerRowSpec {
+                LyricLayerRowSpec(lineKey: "x#\(latinRow)", words: synced, font: big, romaFont: big, baseColor: .white,
+                                  fillColor: .white, romaBaseColor: .white, romaFillColor: .white, alignment: .leading,
+                                  paused: true, lineRightToLeft: line)
+            }
+            expectEqual([spec(true).rightToLeft, spec(nil).rightToLeft], [true, false],
+                        "换行模式整句方向: 拉丁占多数的一折行带上整句方向就镜像,不带按自己的字判")
+            expectEqual(LyricLayerRowSpec.sameImages(spec(true), spec(nil)), false, "换行模式整句方向: 方向不同算两张长图")
+        }
+        let src = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().appendingPathComponent("lyrimuse")
+        func text(_ path: String) -> String { (try? String(contentsOf: src.appendingPathComponent(path), encoding: .utf8)) ?? "" }
+        let wrapped = text("UI/WrappedKaraokeRows.swift")
+        expectEqual(sourceHas(wrapped, "spec: rowSpec(spec, row: row, index: i, rightToLeft: geo.rightToLeft))")
+                        && sourceHas(wrapped, "lineRightToLeft: rightToLeft)"), true,
+                    "换行模式整句方向(契约): 各折行的规格带上整句的方向")
+        expectEqual(sourceBytes(text("UI/OverlayScrollingLyricRow.swift"), contain: "LyricTextDirection.isRightToLeft(spec.words"), false,
+                    "换行模式整句方向(契约): 图层行只认 spec.rightToLeft,不自己按这一行的字判")
+        let manager = text("LyricsManager/LyricsManagerParts.swift")
+        expectEqual([sourceHas(manager, "let prefix = LyricTextDirection.paragraphPrefix(shown)"),
+                     sourceHas(manager, "guard !marks.isEmpty else { return AttributedString(prefix + shown) }"),
+                     sourceHas(manager, "let prefix = LyricTextDirection.paragraphPrefix(segments.map(\\.text).joined())"),
+                     sourceHas(manager, "return segments.indices.reduce(Text(verbatim: prefix)) { text, index in"),
+                     sourceHas(manager, "|| LyricTextDirection.wordNeedsRightToLeftBase(segment.text, lineRightToLeft: lineRightToLeft)")],
+                    [true, true, true, true, true],
+                    "整行段落方向(契约): 歌词管理正文和逐字染色那一层加同一个方向标记,混方向的段从右端染")
     }
 
     // ---- 字形出框:每一行按实际墨迹补长图,上下加高、左右加宽出血,可视窗跟着让出 ----

@@ -61,6 +61,14 @@ public struct LyricLayerRowSpec: Equatable {
     public var rainbow: Bool
     /// 彩虹停不停:nil = 跟着 `paused`。逐字填色唱完一句就停表的宿主(悬浮歌词、灵动岛)单独给,彩虹不在两句之间停住。
     public var rainbowPaused: Bool?
+    /// 非 nil = 这一行是一句里的一折行,方向跟着整句(悬浮歌词换行模式传):不按这一折行自己的字判,
+    /// 不然一折行里拉丁字母占多数时这一行不镜像(见 04 章决策 116)。nil = 按这一行自己的字判。
+    public var lineRightToLeft: Bool?
+
+    /// 这一行按从右往左排(镜像、逐词量宽和画字都按它)。
+    public var rightToLeft: Bool {
+        lineRightToLeft ?? LyricTextDirection.isRightToLeft(words.map(\.text).joined())
+    }
 
     /// 整行阴影。`offsetY` 取 SwiftUI 的口径(正 = 往下)。
     public struct TextShadow: Equatable {
@@ -93,7 +101,7 @@ public struct LyricLayerRowSpec: Equatable {
                 romaBaseColor: NSColor, romaFillColor: NSColor, stroke: LyricLayerStroke? = nil,
                 alignment: LyricDuet.Side, paused: Bool, pacedWindow: PacedWindow? = nil, shadow: TextShadow? = nil,
                 edgeFadeWidth: CGFloat = 0, timingEpoch: Int = 0, rate: Double = 1, translation: Bool = false,
-                still: Bool = false, rainbow: Bool = false, rainbowPaused: Bool? = nil) {
+                still: Bool = false, rainbow: Bool = false, rainbowPaused: Bool? = nil, lineRightToLeft: Bool? = nil) {
         self.lineKey = lineKey
         self.words = words
         self.groups = groups
@@ -116,6 +124,7 @@ public struct LyricLayerRowSpec: Equatable {
         self.still = still
         self.rainbow = rainbow
         self.rainbowPaused = rainbowPaused
+        self.lineRightToLeft = lineRightToLeft
     }
 
     /// 两份输入画出来的长图是不是同一张 —— 除了 `paused` / `pacedWindow` / `timingEpoch` / `rate` / `still` / `rainbowPaused` 全都一样。

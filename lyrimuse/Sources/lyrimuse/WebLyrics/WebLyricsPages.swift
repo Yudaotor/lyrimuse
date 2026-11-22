@@ -924,6 +924,7 @@ enum WebLyricsPages {
           const floodNode = document.getElementById('lmFlood');
           const ALIGN = { leading: 'left', trailing: 'right', center: 'center' };
           const FLEX = { leading: 'flex-start', trailing: 'flex-end', center: 'center' };
+          const FLEX_MIRROR = { 'flex-start': 'flex-end', 'flex-end': 'flex-start' };
           // 换句动画的时序同 `OverlayLineRise`。
           const RISE = { ms: 250, ease: 'cubic-bezier(0.4, 0, 0.2, 1)', outMs: 120, lateDelay: 130, lateMs: 120, preview: .4 };
           const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)');
@@ -978,13 +979,29 @@ enum WebLyricsPages {
             }
             return r === l ? !!first : r > l;
           }
+          // 从右往左的行里混了两种方向字母的计时词(同 App 的 `wordNeedsRightToLeftBase`):这个词自己也设 dir="rtl"、从右端染。
+          // dir 让它隔离成一段、整个词连在一起;不隔离的话整行的双向排字把它拆到两处,渐变先铺哪一段由浏览器定,读序会乱。
+          function mixedRtlWord(s, lineRtl) {
+            if (!lineRtl) return false;
+            let r = false, l = false;
+            for (const c of String(s)) {
+              if (RTL_LETTER.test(c) && /\\p{Alphabetic}/u.test(c)) r = true;
+              else if (/[\\p{Alphabetic}\\p{Ideographic}]/u.test(c)) l = true;
+            }
+            return r && l;
+          }
+          // 整行交给浏览器排的段落方向:从右往左的行(rtlText)在行内容 .in 上设 dir="rtl"。不设的话按页面的从左往右排,
+          // 以拉丁词开头的阿拉伯文行整行排反(04 章决策 116)。别设在 .row 上:放不下的内容会从右沿起排、往左溢出,
+          // 行的对齐和滚动都按左沿算。
+          function dirAttr(rtl) { return rtl ? ' dir="rtl"' : ''; }
           // 彩色 emoji 单独包一层、用不透明的颜色画:逐字片段的字是透明的(颜色由背景渐变透出来),emoji 跟着透明就只剩一块单色剪影。
           const EMOJI_RUN = /((?:\\p{Emoji_Presentation}|\\p{Extended_Pictographic}\\uFE0F)(?:\\p{Emoji_Modifier}|\\uFE0F|\\u200D(?:\\p{Emoji_Presentation}|\\p{Extended_Pictographic})\\uFE0F?)*)/u;
-          function wordHTML(w, fill) {
+          function wordHTML(w, fill, lineRtl) {
             if (!fill) return esc(w[2]);
             const parts = String(w[2]).split(EMOJI_RUN);
             const inner = parts.map((p, i) => i % 2 ? `<span class="e">${esc(p)}</span>` : esc(p)).join('');
-            return `<span class="w${rtlText(w[2]) ? ' r' : ''}" data-s="${w[0]}" data-d="${w[1]}">${inner}</span>`;
+            const mixed = mixedRtlWord(w[2], lineRtl);
+            return `<span class="w${mixed || rtlText(w[2]) ? ' r' : ''}"${dirAttr(mixed)} data-s="${w[0]}" data-d="${w[1]}">${inner}</span>`;
           }
           function now() {
             if (!pos) return 0;
@@ -1060,11 +1077,11 @@ enum WebLyricsPages {
             const fade = style.rainbow && o.pct ? `opacity:${o.pct / 100};` : '';
             const rb = /class="w[ "]/.test(inner) ? '' : ' rb';
             return `<div class="row tx${rb}${o.cls ? ' ' + o.cls : ''}" data-side="${o.side || ''}"${o.rtl ? ' data-rtl="1"' : ''} style="font-size:${o.em}em;font-weight:${o.weight};${o.fit ? `--fit:${o.fit};` : ''}` +
-              `color:${o.color};${fade}margin-top:${(o.top || 0) * unit()}px"><span class="in${o.cols ? ' cols' : ''}">${inner}</span></div>`;
+              `color:${o.color};${fade}margin-top:${(o.top || 0) * unit()}px"><span class="in${o.cols ? ' cols' : ''}"${dirAttr(o.rtl)}>${inner}</span></div>`;
           }
           function perWord(line) { return !!(style.karaoke && style.roma && line.w && line.g); }
-          function wordSpans(ws, fill) {
-            return ws.map((w) => wordHTML(w, fill)).join('');
+          function wordSpans(ws, fill, lineRtl) {
+            return ws.map((w) => wordHTML(w, fill, lineRtl)).join('');
           }
           // 逐词读音:一组一列,字在上、读音在下;读音按整组起止填色,已唱是前景色 75%,未唱同主行。
           // 一行里各列拉成同高、读音贴列底(.in.cols 的 stretch、.col 的 space-between):汉字、假名落在苹方 / 冬青黑体上,
@@ -1077,6 +1094,7 @@ enum WebLyricsPages {
             const u = unit();
             const readStyle = `font-size:${rowEm(0) / mainEm}em;font-weight:${style.weights[1]};margin-top:${(style.spacing[0] - 4) * u}px;padding:0 .12em;` +
               (fill ? '--sung:var(--sung-reading)' : '');
+            const lineRtl = rtlText(line.text);
             let i = 0, html = '';
             for (const [n, reading] of line.g) {
               const ws = line.w.slice(i, i + n);
@@ -1087,33 +1105,35 @@ enum WebLyricsPages {
               const last = ws[ws.length - 1];
               const tail = (String(last[2]).match(/\\s+$/) || [''])[0];
               const body = tail ? [...ws.slice(0, -1), [last[0], last[1], String(last[2]).slice(0, -tail.length)]] : ws;
-              html += `<span class="col"><span>${wordSpans(body, fill)}</span>` +
+              html += `<span class="col"><span>${wordSpans(body, fill, lineRtl)}</span>` +
                 (fill ? `<span class="w" data-s="${s}" data-d="${Math.max(1, e - s)}" style="${readStyle}">${r}</span>`
                       : `<span style="${readStyle}">${r}</span>`) + '</span>' + (tail ? `<span class="gap">${esc(tail)}</span>` : '');
             }
-            if (i < line.w.length) html += `<span class="col"><span>${wordSpans(line.w.slice(i), fill)}</span></span>`;
+            if (i < line.w.length) html += `<span class="col"><span>${wordSpans(line.w.slice(i), fill, lineRtl)}</span></span>`;
             return html;
           }
           function mainRow(line) {
             const opts = { em: 1, weight: style.weights[0], color: 'var(--sung)', side: line.s, cls: 'main', rtl: rtlText(line.text) };
             if (perWord(line)) return row(columns(line, true, 1), { ...opts, cols: true });
-            return row(style.karaoke && line.w ? wordSpans(line.w, true) : esc(line.text), opts);
+            return row(style.karaoke && line.w ? wordSpans(line.w, true, opts.rtl) : esc(line.text), opts);
           }
           function secondaryRows(line, side, cls) {
             let html = '';
             if (style.roma && line.roma && !perWord(line)) {
-              html += row(esc(line.roma), { em: rowEm(0), weight: style.weights[1], color: color(60), pct: 60, top: style.spacing[0], side, cls });
+              html += row(esc(line.roma), { em: rowEm(0), weight: style.weights[1], color: color(60), pct: 60, top: style.spacing[0], side, cls,
+                                            rtl: rtlText(line.roma) });
             }
             // 紧跟读音(整行或逐词)的译文不往上挤:网页的行框比原生卡片里的窄,负的行距会让读音的下伸部(g、p)压到译文上。
             const afterReading = (style.roma && line.roma) || perWord(line);
             const trTop = afterReading ? Math.max(0, style.spacing[1]) : style.spacing[1];
-            if (style.tr && line.tr) html += row(esc(line.tr), { em: rowEm(1), weight: style.weights[2], color: color(75), pct: 75, top: trTop, side, cls });
+            if (style.tr && line.tr) html += row(esc(line.tr), { em: rowEm(1), weight: style.weights[2], color: color(75), pct: 75, top: trTop, side, cls,
+                                                                 rtl: rtlText(line.tr) });
             return html;
           }
           // 下一句同样逐词标读音,读音按这一行的字号缩(columns 的 mainEm 传 1):开唱那一刻各列不挪位,整块放大。
           // 下一句那一块最宽只到行宽 × 字号比例:按小字号折行的断点跟开唱后主句按整宽折的一致(04 章决策 84)。
           function nextRow(next, em, weight) {
-            const opts = { em, weight, color: color(40), pct: 40, top: style.spacing[2], side: next.s, cls: 'next', fit: em };
+            const opts = { em, weight, color: color(40), pct: 40, top: style.spacing[2], side: next.s, rtl: rtlText(next.text), cls: 'next', fit: em };
             if (perWord(next)) return row(columns(next, false, 1), { ...opts, cols: true });
             return row(esc(next.text), opts);
           }
@@ -1177,7 +1197,9 @@ enum WebLyricsPages {
               r.style.paddingRight = right * k + 'px';
               const overflows = scroll && width > r.clientWidth - left * k - right * k + .5;
               r.style.textAlign = overflows ? 'left' : ALIGN[sideOf(raw)];
-              if (inner.classList.contains('cols')) inner.style.justifyContent = overflows ? 'flex-start' : FLEX[sideOf(raw)];
+              // dir="rtl" 的行里 flex-start 在右边:对调,行仍在用户选的那一侧。
+              const flex = FLEX[overflows ? 'leading' : sideOf(raw)];
+              if (inner.classList.contains('cols')) inner.style.justifyContent = r.dataset.rtl === '1' ? (FLEX_MIRROR[flex] || flex) : flex;
               r.dataset.over = overflows ? '1' : '';
             }
           }

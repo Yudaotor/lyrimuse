@@ -959,6 +959,56 @@ func runWebLyricsTests() {
                          sourceHas(pagesSource, "fillX = w.offsetLeft + (w.classList.contains('r') ? 1 - f : f) * w.offsetWidth;")],
                         [true, true], "网页歌词 逐字片段: 从右往左的词渐变 270deg、跟唱滚动按右沿算位置")
         }
+        // 整行的段落方向:从右往左的行在行内容上设 dir="rtl"(04 章决策 116)。取出 OBS 页拼行的几个函数,样式给最小的一份,
+        // 在 JavaScriptCore 里拼一句主行看输出。
+        do {
+            func slice(_ from: String, _ to: String) -> String? {
+                guard let a = pagesSource.range(of: from),
+                      let b = pagesSource.range(of: to, range: a.upperBound..<pagesSource.endIndex) else { return nil }
+                return String(pagesSource[a.lowerBound..<b.lowerBound]).replacingOccurrences(of: "\\\\", with: "\\")
+            }
+            let helper = slice("          const esc = (s) =>", "          function now() {")
+            let rows = slice("          function color(pct) {", "          function secondaryRows(")
+            let ctx = JSContext()
+            ctx?.evaluateScript("var style = { karaoke: true, roma: false, rainbow: null, weights: [700, 500, 400, 300], "
+                                + "scale: [.6, .65, .7], spacing: [4, 4, 6] }; function unit() { return 1; }")
+            for part in [helper, rows] { if let part { ctx?.evaluateScript(part) } }
+            expectEqual(helper != nil && rows != nil && ctx?.exception == nil, true,
+                        "网页歌词 段落方向: 拼行的函数在 JavaScriptCore 里跑得起来")
+            // 逐字主行:words 按词切开,时间随便给。
+            func mainRow(_ words: [String]) -> String {
+                let ws = words.enumerated().map { i, w in "[\(i * 100), 100, '\(w)']" }.joined(separator: ", ")
+                let js = "mainRow({ text: [\(words.map { "'\($0)'" }.joined(separator: ", "))].join(''), w: [\(ws)], s: null })"
+                return ctx?.evaluateScript(js)?.toString() ?? "nil"
+            }
+            let latinFirst = ["Bitcha ", "\u{0643}\u{0627}\u{062A}\u{0645}\u{0648}\u{062A} ", "\u{0639}\u{0627}\u{0644}\u{0644}\u{0648}\u{0646} ",
+                              "\u{062A}\u{0627}\u{0644}\u{0642}\u{0631}\u{0641}\u{0629}"]
+            let v1 = ["v1\u{FF1A}", "\u{064A}\u{0648}\u{0645} ", "\u{0627}\u{0644}\u{063A}\u{0627}\u{0628}\u{0648} ", "\u{0639}\u{064A}\u{0648}\u{0646}\u{0643}"]
+            let oui = ["Oui \u{063A}\u{0627} ", "\u{0628}\u{063A}\u{064A}\u{0646}\u{064A} ", "\u{0644}\u{064A}\u{0627}"]
+            let rtlIn = "<span class=\"in\" dir=\"rtl\">"
+            for (tag, words) in [("拉丁词开头", latinFirst), ("v1： 开头", v1), ("混方向的计时词开头", oui)] {
+                expectEqual(mainRow(words).contains(rtlIn), true, "网页歌词 段落方向: \(tag)的阿拉伯文行设 dir=\"rtl\"")
+            }
+            expectEqual(mainRow(oui).contains("<span class=\"w r\" dir=\"rtl\" data-s=\"0\" data-d=\"100\">Oui"), true,
+                        "网页歌词 段落方向: 从右往左的行里混方向的计时词自己也从右往左排、隔离成一段、从右端染")
+            expectEqual(mainRow(latinFirst).contains("<span class=\"w\" data-s=\"0\" data-d=\"100\">Bitcha </span>"), true,
+                        "网页歌词 段落方向: 只有拉丁字母的词不隔离、照旧从左往右染")
+            expectEqual(ctx?.evaluateScript("wordHTML([0, 100, 'Oui \u{063A}\u{0627} '], true, false)")?.toString(), "<span class=\"w\" data-s=\"0\" data-d=\"100\">Oui \u{063A}\u{0627} </span>",
+                        "网页歌词 段落方向: 从左往右的行里同一个词不动")
+            expectEqual(mainRow(["\u{0645}\u{0631}\u{062D}\u{0628}\u{0627} ", "\u{0628}\u{0643}\u{0645}"]).contains(rtlIn), true,
+                        "网页歌词 段落方向: 纯阿拉伯文行同样设 dir=\"rtl\"(字本来就从右往左排)")
+            expectEqual(mainRow(["\u{05D4}\u{05D5} ", "\u{05DE}\u{05DC}\u{05D5}\u{05D3}\u{05D9}"]).contains(rtlIn), true,
+                        "网页歌词 段落方向: 希伯来文行设 dir=\"rtl\"")
+            for (tag, words) in [("英文", ["Take ", "me ", "home"]), ("中文", ["\u{6211}\u{4EEC}", "\u{4E00}\u{8D77}"]),
+                                 ("日文", ["\u{3042}\u{306A}\u{305F}", "\u{306E}"]),
+                                 ("拉丁字母占多数", ["Money ", "money ", "\u{05D0}\u{05D1}"])] {
+                let html = mainRow(words)
+                expectEqual(html.hasPrefix("<div") && !html.contains("dir="), true, "网页歌词 段落方向: \(tag)行不设 dir、输出不变")
+            }
+            expectEqual(sourceHas(sourceBody("function layoutRows() {", in: pagesSource),
+                                  "inner.style.justifyContent = r.dataset.rtl === '1' ? (FLEX_MIRROR[flex] || flex) : flex;"), true,
+                        "网页歌词 段落方向: 逐词读音那一种 dir=\"rtl\" 的行 flex 起止对调,行仍在用户选的那一侧")
+        }
         // 歌名卡什么时候显示:取出 OBS 页里那个纯函数,在 JavaScriptCore 里跑
         do {
             let obsPage = pagesSource

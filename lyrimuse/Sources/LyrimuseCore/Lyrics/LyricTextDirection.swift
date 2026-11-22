@@ -40,6 +40,16 @@ public enum LyricTextDirection {
         return false
     }
 
+    /// 整行一次交给 CoreText / SwiftUI 排的字(歌词管理的预览),段落方向要按 `isRightToLeft` 的结论定:从右往左的行
+    /// 返回一个 RLM,加在字的前面;别的行返回空串。`Text` 不认段落样式,不加的话段落方向按第一个有方向的字母判,
+    /// 以拉丁词开头的阿拉伯文行整行排成从左往右(见 04 章决策 116)。RLM 不占宽,本来就从右往左的行加了画法不变。
+    public static func paragraphPrefix(_ text: String) -> String {
+        isRightToLeft(text) ? rightToLeftMark : ""
+    }
+
+    /// U+200F RIGHT-TO-LEFT MARK:不占宽、按从右往左的字母参与双向排字。
+    public static let rightToLeftMark = "\u{200F}"
+
     /// 去掉尾部空白。从右往左的字排版时行尾空白不占宽(量出来的宽不含它),逐词排的几处把词本身和
     /// 它后面的空格分开量、分开摆。
     public static func trimmingTrailingWhitespace(_ text: String) -> String {

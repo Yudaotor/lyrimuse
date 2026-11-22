@@ -264,7 +264,7 @@ final class WrappedKaraokeRowsView: NSView {
         let scale = window?.backingScaleFactor ?? 2
         let targets = geo.rows.enumerated().map { i, row in
             RowTarget(frame: rowFrame(row, index: i, geo: geo, alignment: spec.rowAlignment, scale: scale),
-                      spec: rowSpec(spec, row: row, index: i))
+                      spec: rowSpec(spec, row: row, index: i, rightToLeft: geo.rightToLeft))
         }
         if prewarmOnly {
             prewarm(targets, scale: scale)
@@ -399,7 +399,9 @@ final class WrappedKaraokeRowsView: NSView {
                       width: row.width + 2 * geo.inset + 1, height: geo.pitch + 2 * geo.inset)
     }
 
-    private func rowSpec(_ spec: WrappedKaraokeRows.Spec, row: WrapLayoutMath.Row, index: Int) -> OverlayScrollingLyricRow.Spec {
+    /// 各折行的方向跟着整句(`rightToLeft` = `Geometry.rightToLeft`),量宽、镜像都跟 `itemWidths` 同一个方向。
+    private func rowSpec(_ spec: WrappedKaraokeRows.Spec, row: WrapLayoutMath.Row, index: Int,
+                         rightToLeft: Bool) -> OverlayScrollingLyricRow.Spec {
         let groups = spec.groups.map { all in row.indices.map { all[$0] } }
         let words = groups.map { $0.flatMap(\.words) } ?? row.indices.map { spec.words[$0] }
         return OverlayScrollingLyricRow.Spec(
@@ -419,7 +421,8 @@ final class WrappedKaraokeRowsView: NSView {
             timingEpoch: spec.timingEpoch,
             rate: spec.rate,
             rainbow: spec.rainbow,
-            rainbowPaused: spec.rainbowPaused)
+            rainbowPaused: spec.rainbowPaused,
+            lineRightToLeft: rightToLeft)
     }
 }
 
