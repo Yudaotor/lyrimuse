@@ -1378,6 +1378,17 @@ func runOverlayTests() {
                      sourceHas(manager, "|| LyricTextDirection.wordNeedsRightToLeftBase(segment.text, lineRightToLeft: lineRightToLeft)")],
                     [true, true, true, true, true],
                     "整行段落方向(契约): 歌词管理正文和逐字染色那一层加同一个方向标记,混方向的段从右端染")
+        let share = text("UI/LyricShareWindow.swift"), versions = text("LyricsManager/SongVersionsSheet.swift")
+        expectEqual([share.components(separatedBy: "Text(verbatim: LyricTextDirection.paragraphPrefix(line.text) + line.text)").count - 1,
+                     share.components(separatedBy: "Text(line.text)").count - 1,
+                     sourceHas(versions, "var out = AttributedString(LyricTextDirection.paragraphPrefix(text))") ? 1 : 0],
+                    [2, 0, 1],
+                    "整行段落方向(契约): 分享卡片的列表行和卡片正文、版本对比的 marked 都按整行加方向标记")
+        let mixedLine = "Oui \u{064A}\u{0648}\u{0645} \u{0627}\u{0644}\u{063A}\u{0627}\u{0628}\u{0648}"
+        expectEqual([LyricTextDirection.paragraphPrefix(mixedLine) == LyricTextDirection.rightToLeftMark,
+                     LyricTextDirection.paragraphPrefix("Hello world") == "",
+                     LyricTextDirection.paragraphPrefix("\u{6211}\u{4EEC}\u{4E00}\u{8D77}") == ""],
+                    [true, true, true], "整行段落方向: 分享卡片 / 版本对比用的判法,拉丁词开头的阿拉伯行带 RLM,英文、中文不带")
     }
 
     // ---- 字形出框:每一行按实际墨迹补长图,上下加高、左右加宽出血,可视窗跟着让出 ----

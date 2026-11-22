@@ -158,7 +158,7 @@ struct LyricShareWindow: View {
                 Image(systemName: on ? "checkmark.circle.fill" : "circle")
                     .foregroundStyle(on ? Color.accentColor : Color.secondary.opacity(0.6))
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(line.text)
+                    Text(verbatim: LyricTextDirection.paragraphPrefix(line.text) + line.text)
                         .font(.system(size: 13))
                     if let tr = line.translation {
                         Text(tr).font(.system(size: 11)).foregroundStyle(.secondary)
@@ -315,7 +315,7 @@ struct LyricShareCardView: View {
                     if card.showsRomanization, let groups = line.rubyGroups {
                         rubyLine(groups, fontSize: fontSize)
                     } else {
-                        Text(line.text)
+                        Text(verbatim: LyricTextDirection.paragraphPrefix(line.text) + line.text)
                             .font(.system(size: fontSize, weight: .bold))
                             .foregroundStyle(.white)
                         if card.showsRomanization, let roma = line.romanization {

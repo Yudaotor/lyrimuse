@@ -776,7 +776,7 @@ struct SongVersionsSheet: View {
 
     /// 对不上的字(按 `Character` 下标)标红,其余用调用方的颜色。
     static func marked(_ text: String, marks: Set<Int>) -> AttributedString {
-        var out = AttributedString()
+        var out = AttributedString(LyricTextDirection.paragraphPrefix(text))
         for (offset, character) in text.enumerated() {
             var piece = AttributedString(String(character))
             if marks.contains(offset) { piece.foregroundColor = .red }
