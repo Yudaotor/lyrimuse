@@ -1315,7 +1315,7 @@ private func runSpotifyWebProbeJS(_ js: String, _ page: SpotifyWebPageStub) -> S
       querySelector: function(q) {
         if (q === '[data-testid=playback-position]') return { textContent: __POS };
         if (q === '[data-testid=playback-duration]') return { textContent: __DUR };
-        if (q === '[data-testid=now-playing-widget]') return __widget;
+        if (String(q).split(',').some(function(p) { return p.trim() === '[data-testid=now-playing-widget]'; })) return __widget;
         return null;
       }
     };

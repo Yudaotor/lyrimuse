@@ -359,7 +359,7 @@ public final class PlayerQueryServer: @unchecked Sendable {
     public static let spotifyWebQueueCoreJS = [
         "function(){",
         "var US = String.fromCharCode(31), RS = String.fromCharCode(30);",
-        "var el = document.querySelector('[data-testid=now-playing-widget]');",
+        "var el = document.querySelector('\(SpotifyWebAdProbe.nowPlayingWidgetSelector)');",
         "if (!el) return 'NOTFOUND';",
         "var fk = Object.keys(el).filter(function(k){ return k.indexOf('__reactFiber') === 0; })[0];",
         "var f = fk ? el[fk] : null, api = null;",

@@ -12,6 +12,7 @@ import LyrimuseCore
 func pageWorldReadTests() {
     spotifyQueueAcrossWorlds()
     spotifyProbeAcrossWorlds()
+    spotifyWidgetV2AcrossWorlds()
     youTubeMusicProbeIdentityAcrossWorlds()
     youTubeMusicControlsAcrossWorlds()
     youTubeMusicMiniplayerAcrossWorlds()
@@ -147,12 +148,14 @@ var __api = {
 };
 var __fiber = { memoizedProps: { children: null }, return: { memoizedProps: { playerAPI: __api }, return: null } };
 var __widget = __worldKeys({ '__reactFiber$stub': __fiber });
+var __widgetTestID = 'now-playing-widget';
+function __matches(q, sel) { return String(q).split(',').some(function(p) { return p.trim() === sel; }); }
 var document = {
     title: 'Song A ' + String.fromCharCode(8226) + ' Artist A',
     querySelector: function(q) {
         if (q === '[data-testid=playback-position]') return { textContent: '0:45' };
         if (q === '[data-testid=playback-duration]') return { textContent: '3:35' };
-        if (q === '[data-testid=now-playing-widget]') return __widget;
+        if (__matches(q, '[data-testid=' + __widgetTestID + ']')) return __widget;
         return null;
     }
 };
@@ -227,6 +230,31 @@ private func spotifyProbeAcrossWorlds() {
         ctx.evaluateScript("__flushBlobs();")
         let r = read(ctx)
         expectEqual(r?.seconds == 45 && r?.precise == nil, true, "Spotify 网页版探针: 进不了主环境时照旧交整秒读数")
+    }
+}
+
+/// Spotify 改版后正在播放那块叫 `now-playing-widget-v2`(组件树、封面一样):进度探针、队列、广告判据两种环境都要找得到它。
+private func spotifyWidgetV2AcrossWorlds() {
+    guard let probe = BrowserPositionProbe.filledSiteScript(platformID: "spotifyWeb", expectedDuration: 215.4) else {
+        expectEqual(true, false, "Spotify 新版正在播放块: 站点规则里没有 spotifyWeb")
+        return
+    }
+    let v2 = "__widgetTestID = 'now-playing-widget-v2';"
+    let want = "Song A\u{1f}Artist A\u{1f}Album A\u{1f}215000\u{1f}spotify:track:4uLU6hMCjMI75M1A2tKUQC"
+    func read(_ ctx: JSContext) -> BrowserPositionProbe.Reading? { BrowserPositionProbe.parseReading(fromOsascriptOutput: str(ctx, probe)) }
+    if let ctx = pageWorldContext(page: spotifyPage, setup: spotifyCSP + "safari = true;" + v2) {
+        let r = read(ctx)
+        expectEqual(r?.precise.map { abs($0.seconds - 45.5) < 0.1 } == true && r?.spotifyTrackID == "4uLU6hMCjMI75M1A2tKUQC", true,
+                    "Spotify 新版正在播放块主环境(Safari): 精确读数和曲目 ID")
+        expectEqual(str(ctx, PlayerQueryServer.spotifyWebQueueJS).hasPrefix(want), true, "Spotify 新版正在播放块主环境(Safari): 队列")
+        expectEqual(str(ctx, SpotifyWebAdProbe.probeJS), "0|0|0|0", "Spotify 新版正在播放块: 广告判据找得到这一块")
+    }
+    if let ctx = pageWorldContext(page: spotifyPage, setup: spotifyCSP + v2) {
+        _ = str(ctx, PlayerQueryServer.spotifyWebQueueJS)
+        _ = read(ctx)
+        ctx.evaluateScript("__flushBlobs();")
+        expectEqual(read(ctx)?.spotifyTrackID, "4uLU6hMCjMI75M1A2tKUQC", "Spotify 新版正在播放块隔离环境: 应答器装好后读到曲目 ID")
+        expectEqual(str(ctx, PlayerQueryServer.spotifyWebQueueJS).hasPrefix(want), true, "Spotify 新版正在播放块隔离环境: 队列")
     }
 }
 

@@ -2544,7 +2544,7 @@ func runPlayerIdentityTests() {
         //    会稳定误判成广告。这条机械闸钉住"只用精确匹配"。
         expectEqual(S.probeJS.contains("*="), false,
                     "Spotify 广告判据: 不许用 CSS 子串匹配(add-button 会把歌曲误判成广告)")
-        for marker in ["now-playing-widget", "ad-controls", "context-item-info-ad-subtitle",
+        for marker in ["now-playing-widget]", "now-playing-widget-v2]", "ad-controls", "context-item-info-ad-subtitle",
                        "ad-countdown-timer", "ad-link", "NOTFOUND"] {
             expectEqual(S.probeJS.contains(marker), true, "Spotify 广告判据: JS 里要有 \(marker)")
         }

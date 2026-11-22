@@ -105,7 +105,7 @@ public final class SpotifyWebAdProbe: @unchecked Sendable {
     /// (字母/数字/连字符,不以数字开头)。加引号只能加单引号,而单引号已经被 JS 字符串占了。
     public static let probeJS = """
     (function(){\
-    var w = document.querySelector('[data-testid=now-playing-widget]');\
+    var w = document.querySelector('\(nowPlayingWidgetSelector)');\
     if (!w) return 'NOTFOUND';\
     function h(id){ return document.querySelector('[data-testid=' + id + ']') ? '1' : '0'; }\
     return h('ad-controls') + '|' + h('context-item-info-ad-subtitle') + '|'\
@@ -114,9 +114,12 @@ public final class SpotifyWebAdProbe: @unchecked Sendable {
     """
 
     public static let hostMarker = "open.spotify.com"
+    /// 页面上「正在播放」那块:旧版 `now-playing-widget`、改版后的 `now-playing-widget-v2` 都认,两版里组件树、封面图一样
+    /// (02 章决策 288)。进度探针的播放器状态和封面、待播队列、广告判据都从这一块找起,换选择器只改这里。
+    public static let nowPlayingWidgetSelector = "[data-testid=now-playing-widget], [data-testid=now-playing-widget-v2]"
     /// 当前执行环境看不看得见页面的 React 组件树(正在播放那块的 `__reactFiber…` 键),给 `BrowserTabProbeScript.inPageWorld`
     /// 当 `pageVisible`:Safari 为真,Chromium 系的隔离环境为假;那块不在页面上也为真(注入了也读不到)。
-    public static let pageWorldVisibleJS = "(function(w){ return !w || Object.keys(w).some(function(k){ return k.indexOf('__reactFiber') === 0; }); })(document.querySelector('[data-testid=now-playing-widget]'))"
+    public static let pageWorldVisibleJS = "(function(w){ return !w || Object.keys(w).some(function(k){ return k.indexOf('__reactFiber') === 0; }); })(document.querySelector('\(nowPlayingWidgetSelector)'))"
     /// AppleScript `with timeout of N seconds` 的 N。跟 YT Music 那条同值 —— 同一台机器、
     /// 同一批浏览器,没有理由给两个不同的耐心。
     public static let eventTimeoutSeconds = 4

@@ -311,7 +311,7 @@ public final class BrowserPositionProbe: @unchecked Sendable {
     ///
     /// 播客/长音频会走到三段式,YouTube Music 那条规则只认两段(它自己的元素也只会是两段)。
     ///
-    /// 第三段:封面地址。`now-playing-widget` 里 `img[data-testid=cover-art-image]` 的 src 是 Spotify 图床 300 档
+    /// 第三段:封面地址。正在播放那块(`SpotifyWebAdProbe.nowPlayingWidgetSelector`)里 `img[data-testid=cover-art-image]` 的 src 是 Spotify 图床 300 档
     /// (`ab67616d0000e1a3…`,webp),同一 hash 换成 `82c1` 就是 2000×2000 的原图,是页面上唯一一份身份精确的封面来源(Safari 经
     /// MediaSession 交给系统的那份是 640×640、同一张图,但没有地址)。地址随读数一起回传,`parseReading` 解析、`setArtworkSink`
     /// 交出去,跟原生客户端 `SpotifyPositionProbe` 的 `artwork url` 走同一条下游(`LocalPlaybackSource.spotifyArtworkURL`)。
@@ -353,7 +353,7 @@ public final class BrowserPositionProbe: @unchecked Sendable {
       }
       var sep = ' ' + String.fromCharCode(8226) + ' ';
       var paused = document.title.indexOf(sep) < 0;
-      var img = document.querySelector('[data-testid=now-playing-widget] img[data-testid=cover-art-image]');
+      var img = document.querySelector('\(spotifyCoverSelector)');
       var art = img ? (img.currentSrc || img.src || '') : '';
       if (art.indexOf('|') >= 0) art = '';
       var precise = '', tid = '';
@@ -381,6 +381,12 @@ public final class BrowserPositionProbe: @unchecked Sendable {
     })()
     """
 
+    /// 正在播放那块里的封面图,两版各写一条、拼成一个选择器列表。
+    static let spotifyCoverSelector = SpotifyWebAdProbe.nowPlayingWidgetSelector
+        .split(separator: ",")
+        .map { "\($0.trimmingCharacters(in: .whitespaces)) img[data-testid=cover-art-image]" }
+        .joined(separator: ", ")
+
     /// `spotifyWebScript` 第四、五段要的播放器状态:网页播放器组件树上 `playerAPI.getState()` 的 `positionAsOfTimestamp`、
     /// `timestamp`、`speed`、`duration`(不是数就空)、`isPaused`、`isBuffering`(1/0)、`item.uri`,US(0x1f)分隔;找不到回
     /// NOTFOUND。函数不带参数(核对用的 `__EXPECT__` 留在外面),编号每次相同:Spotify 的 CSP 不放内联脚本,只能走
@@ -388,7 +394,7 @@ public final class BrowserPositionProbe: @unchecked Sendable {
     static let spotifyWebPlayerStateJS = BrowserTabProbeScript.inPageWorld(
         core: [
             "function(){",
-            "var w = document.querySelector('[data-testid=now-playing-widget]');",
+            "var w = document.querySelector('\(SpotifyWebAdProbe.nowPlayingWidgetSelector)');",
             "var fk = w ? Object.keys(w).filter(function(k){ return k.indexOf('__reactFiber') === 0; })[0] : null;",
             "var f = fk ? w[fk] : null, api = null;",
             "while (f) { var mp = f.memoizedProps; if (mp && mp.playerAPI && typeof mp.playerAPI.getState === 'function') { api = mp.playerAPI; break; } f = f.return; }",

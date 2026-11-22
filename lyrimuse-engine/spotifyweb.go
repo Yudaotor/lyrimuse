@@ -14,7 +14,7 @@ import (
 // 卡片。但页面里的 React 组件树上有一个组件带着 `playerAPI` 属性,它的 `getQueue()` **同步**返回
 // `{current, queued, nextUp}`:`queued` 是用户手动加进队列的(先放),`nextUp` 是播放上下文里接下来的
 // (随机时就是打乱后的顺序,跟队列面板显示的一致),每一项都带 uri、name、album.name、artists[].name、
-// duration.milliseconds。实测一份歌单 48 首。从 `now-playing-widget` 的 React fiber 往上找就能摸到它。
+// duration.milliseconds。实测一份歌单 48 首。从正在播放那块(`now-playing-widget`,改版后 `now-playing-widget-v2`)的 React fiber 往上找就能摸到它。
 //
 // `getQueue()` 会停在某一刻的快照上不再更新(实测一个标签页开着放了几个小时,它一直返回最早那首和那一批
 // 后续曲目),而同一个对象的 `getState()` 是实时的:`item` 是正在放的这首,`nextItems` 是接下来的(通常只有
