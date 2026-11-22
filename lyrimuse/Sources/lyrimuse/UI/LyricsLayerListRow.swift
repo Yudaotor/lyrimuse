@@ -631,7 +631,8 @@ extension LyricsLayerRowPlan {
         let spans: [LyricsWordEmphasis.Span?] = rises && groups == nil
             ? LyricsWordEmphasis.spans(for: words) : Array(repeating: nil, count: words.count)
         let slots = LyricsWordEmphasis.glyphSlots(for: words, spans: spans)
-        let wordMetrics = words.map { LyricsLayerListText.metrics($0.text, font: font) }
+        let rightToLeft = LyricTextDirection.isRightToLeft(words.map(\.text).joined())
+        let wordMetrics = words.map { LyricsLayerListText.metrics($0.text, font: font, lineRightToLeft: rightToLeft) }
         let anchors = emphasisAnchors(words: words, spans: spans, metrics: wordMetrics)
         // 每个折行单位:一组(带读音)或一个 token
         let groupAscent = wordMetrics.map(\.ascent).max() ?? 0
@@ -682,7 +683,6 @@ extension LyricsLayerRowPlan {
                                                    rowAlignment: rowAlignment(side), ascents: ascents)
         // 从右往左的行:每一折行里的词在这一行占的范围内左右镜像,行的对齐不变、行内词序反过来。按折行分组,
         // 不按 y 分组(`WrapLayoutMath.RowMirror`)。
-        let rightToLeft = LyricTextDirection.isRightToLeft(words.map(\.text).joined())
         let mirror = rightToLeft ? WrapLayoutMath.RowMirror(rows: rows, placements: placements) : nil
         // 一行最后那个词的尾空格镜像后落在这一行的左端,整行再往左挪掉它,行沿跟从左往右时一样齐。
         func trailingSpace(row: Int) -> CGFloat {
@@ -711,7 +711,7 @@ extension LyricsLayerRowPlan {
                     let body = LyricTextDirection.trimmingTrailingWhitespace(word.text)
                     if !body.isEmpty, body.count < word.text.count {
                         word = SyncedLyricWord(text: body, startMs: word.startMs, durationMs: word.durationMs)
-                        inkMetrics = LyricsLayerListText.metrics(body, font: font)
+                        inkMetrics = LyricsLayerListText.metrics(body, font: font, lineRightToLeft: rightToLeft)
                     }
                 }
                 let frame = mirrored(CGRect(x: x, y: p.origin.y + unitAscent - inkMetrics.ascent,
@@ -719,7 +719,7 @@ extension LyricsLayerRowPlan {
                                      row: row)
                 elements += tokenElements(word, metrics: inkMetrics, frame: frame, font: font, sung: color, unsung: unsung,
                                           activeSung: activeColor, rises: rises, emphasis: spans[i], slot: slots[i], anchor: anchors[i], style: style,
-                                          silhouettes: silhouettes).map { e in
+                                          lineRightToLeft: rightToLeft, silhouettes: silhouettes).map { e in
                     var e = e
                     e.rightToLeft = rightToLeft
                     if rightToLeft { e.anchor.x = 1 - e.anchor.x }
@@ -750,7 +750,7 @@ extension LyricsLayerRowPlan {
     private static func tokenElements(_ word: SyncedLyricWord, metrics m: LyricsLayerListText.Metrics, frame: CGRect,
                                       font: NSFont, sung: CGColor, unsung: CGColor, activeSung: CGColor, rises: Bool,
                                       emphasis: LyricsWordEmphasis.Span?, slot: LyricsWordEmphasis.GlyphSlot?,
-                                      anchor: CGPoint, style: LyricsLayerRowStyle,
+                                      anchor: CGPoint, style: LyricsLayerRowStyle, lineRightToLeft: Bool,
                                       silhouettes: LyricsLayerListText.Silhouettes) -> [Element] {
         let amplitude = style.riseAmplitude
         let colored = LyricsLayerListText.hasColorGlyphs(word.text, font: font, translation: false)
@@ -758,7 +758,8 @@ extension LyricsLayerRowPlan {
         func colorImage(glyph: Int?) -> CGImage? {
             guard colored else { return nil }
             return LyricsLayerListText.silhouette(word.text, font: font, translation: false, metrics: m, glyph: glyph,
-                                                  part: .color, scale: style.scale, in: silhouettes)
+                                                  part: .color, scale: style.scale, lineRightToLeft: lineRightToLeft,
+                                                  in: silhouettes)
         }
         if rises, let emphasis, let slot {
             let count = LyricsWordEmphasis.glyphCount(word.text)
@@ -768,7 +769,8 @@ extension LyricsLayerRowPlan {
                     let index = slot.offset + k
                     let window = LyricsWordEmphasis.glyphWindow(for: emphasis, glyph: index, of: slot.count)
                     let silhouette = LyricsLayerListText.silhouette(word.text, font: font, translation: false, metrics: m,
-                                                                    glyph: k, part: part, scale: style.scale, in: silhouettes)
+                                                                    glyph: k, part: part, scale: style.scale,
+                                                                    lineRightToLeft: lineRightToLeft, in: silhouettes)
                     return Element(
                         frame: frame, silhouette: silhouette,
                         glow: silhouette.flatMap { LyricsLayerListText.glow($0, radius: glowRadius, scale: style.scale) },
@@ -783,7 +785,7 @@ extension LyricsLayerRowPlan {
         return [Element(
             frame: frame,
             silhouette: LyricsLayerListText.silhouette(word.text, font: font, translation: false, metrics: m, part: part,
-                                                       scale: style.scale, in: silhouettes),
+                                                       scale: style.scale, lineRightToLeft: lineRightToLeft, in: silhouettes),
             glow: nil, sung: sung, unsung: unsung, activeSung: activeSung,
             fillStartMs: word.startMs, fillDurationMs: word.durationMs,
             motion: rises ? LyricsLayerTiming.Motion(riseStartMs: Double(word.startMs), amplitude: amplitude) : nil,

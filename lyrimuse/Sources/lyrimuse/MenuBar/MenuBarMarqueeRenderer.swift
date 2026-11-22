@@ -178,11 +178,13 @@ enum MenuBarMarqueeRenderer {
     /// 量过的按「文字 + 字体 + 标的语言」记住:悬浮歌词、灵动岛、菜单栏、歌词窗口都拿它量,换句那一刻同一批字会被
     /// 反复量好几遍(折行时一次布局里 `sizeThatFits` 要问好几回)。键里放标的语言而不是 `translation`:同一段字
     /// 换了日文歌 / 繁体设置会换字形,宽度跟着变。
-    static func width(of text: String, font: NSFont, translation: Bool = false) -> CGFloat {
+    /// `lineRightToLeft`:逐词量时这个词所在的整行是不是从右往左,跟画这个词时传的一样(见 `wordAttributes`)。
+    static func width(of text: String, font: NSFont, translation: Bool = false, lineRightToLeft: Bool = false) -> CGFloat {
         guard !text.isEmpty else { return 0 }
-        let key = WidthKey(text: text, font: font, language: LyricTypesetting.language(for: text, translation: translation))
+        let key = WidthKey(text: text, font: font, language: LyricTypesetting.language(for: text, translation: translation),
+                           rightToLeftBase: LyricTextDirection.wordNeedsRightToLeftBase(text, lineRightToLeft: lineRightToLeft))
         if let cached = widthMemo[key] { return cached }
-        let width = measure(text, font: font, translation: translation)
+        let width = measure(text, font: font, translation: translation, lineRightToLeft: lineRightToLeft)
         if widthMemo.count >= widthMemoLimit { widthMemo.removeAll(keepingCapacity: true) }
         widthMemo[key] = width
         return width
@@ -190,20 +192,40 @@ enum MenuBarMarqueeRenderer {
 
     /// 量宽本身(不查不记 `widthMemo`),哪个线程都能调:歌词窗口的图层列表在后台排整首歌时用它。
     /// 从右往左的字,行尾空白不算进排版宽度:单独量上补回来,逐词排时词与词之间的空格才不丢。
-    nonisolated static func measure(_ text: String, font: NSFont, translation: Bool = false) -> CGFloat {
+    nonisolated static func measure(_ text: String, font: NSFont, translation: Bool = false,
+                                    lineRightToLeft: Bool = false) -> CGFloat {
         guard !text.isEmpty else { return 0 }
-        let attrs = LyricTypesetting.attributes([.font: font], for: text, translation: translation)
+        let attrs = wordAttributes([.font: font], for: text, translation: translation, lineRightToLeft: lineRightToLeft)
         let width = (text as NSString).size(withAttributes: attrs).width
         let body = LyricTextDirection.trimmingTrailingWhitespace(text)
-        guard body.count < text.count, LyricTextDirection.isRightToLeft(text) else { return width }
+        guard body.count < text.count,
+              LyricTextDirection.isRightToLeft(text)
+                || LyricTextDirection.wordNeedsRightToLeftBase(text, lineRightToLeft: lineRightToLeft)
+        else { return width }
+        // 尾空格单独量时不带段落方向:只有空白的一段定成从右往左,量出来是 0。
         let trailing = String(text.dropFirst(body.count))
-        return width + (trailing as NSString).size(withAttributes: attrs).width
+        let plain = LyricTypesetting.attributes([.font: font], for: text, translation: translation)
+        return width + (trailing as NSString).size(withAttributes: plain).width
+    }
+
+    /// 逐词单独画、单独量一个词用的属性:排字语言(`LyricTypesetting`);整行从右往左、词里两种方向的字母都有时
+    /// 再显式定成从右往左的段落方向(`LyricTextDirection.wordNeedsRightToLeftBase`,04 章决策 115)。量和画必须用同一份。
+    nonisolated static func wordAttributes(_ base: [NSAttributedString.Key: Any], for text: String, translation: Bool,
+                                           lineRightToLeft: Bool) -> [NSAttributedString.Key: Any] {
+        var attributes = LyricTypesetting.attributes(base, for: text, translation: translation)
+        if LyricTextDirection.wordNeedsRightToLeftBase(text, lineRightToLeft: lineRightToLeft) {
+            let style = NSMutableParagraphStyle()
+            style.baseWritingDirection = .rightToLeft
+            attributes[.paragraphStyle] = style
+        }
+        return attributes
     }
 
     private struct WidthKey: Hashable {
         let text: String
         let font: NSFont
         let language: String?
+        let rightToLeftBase: Bool
     }
 
     /// 上限按几首歌的字量估;满了整张清掉重来,清空只是多量几次。

@@ -99,12 +99,18 @@ final class WrappedKaraokeRowsView: NSView {
         @MainActor
         static func itemWidths(words: [SyncedLyricWord], groups: [SyncedLyricWordGroup]?, font: NSFont,
                                romaFont: NSFont, strokeInset inset: CGFloat) -> [CGFloat] {
-            guard let groups else { return words.map { MenuBarMarqueeRenderer.width(of: $0.text, font: font) } }
+            // 量法同 `OverlayLyricScrollView`:混了两种方向的词按整行的方向量。
+            let rightToLeft = LyricTextDirection.isRightToLeft(words.map(\.text).joined())
+            guard let groups else {
+                return words.map { MenuBarMarqueeRenderer.width(of: $0.text, font: font, lineRightToLeft: rightToLeft) }
+            }
             // 列宽按 `OverlayRowLayout.columnWidth`;读音两侧留白、没有读音的组按一个空格占位 ——
             // 跟 `OverlayRowLayout.layOut` 逐项一致,两边量出来的行宽才对得上。
             let pad = OverlayRowLayout.romaSidePadding(strokeInset: inset)
             return groups.map { g in
-                let main = g.words.reduce(CGFloat(0)) { $0 + MenuBarMarqueeRenderer.width(of: $1.text, font: font) }
+                let main = g.words.reduce(CGFloat(0)) {
+                    $0 + MenuBarMarqueeRenderer.width(of: $1.text, font: font, lineRightToLeft: rightToLeft)
+                }
                 let r = MenuBarMarqueeRenderer.width(of: g.romanization ?? " ", font: romaFont) + pad * 2
                 let tail = OverlayRowLayout.trailingWhitespace(of: g.words)
                 return OverlayRowLayout.columnWidth(

@@ -915,7 +915,7 @@ func runMenuBarTests() {
             let renderer = (try? String(contentsOf: root.appendingPathComponent("lyrimuse/MenuBar/MenuBarMarqueeRenderer.swift"),
                                         encoding: .utf8)) ?? ""
             expectEqual(renderer.isEmpty, false, "量宽(契约): 读到源码")
-            expectEqual(sourceBytes(renderer, contain: "let key = WidthKey(text: text, font: font, language: LyricTypesetting.language(for: text, translation: translation))"),
+            expectEqual(sourceBytes(renderer, contain: "let key = WidthKey(text: text, font: font, language: LyricTypesetting.language(for: text, translation: translation),"),
                         true, "量宽(契约): 键里带标的语言 —— 换日文歌 / 繁体设置会换字形,宽度跟着变")
             expectEqual(sourceBytes(renderer, contain: "if let cached = widthMemo[key] { return cached }"), true,
                         "量宽(契约): 量过的直接用")

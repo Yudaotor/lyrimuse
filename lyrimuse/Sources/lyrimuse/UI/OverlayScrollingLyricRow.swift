@@ -257,9 +257,11 @@ final class OverlayLyricScrollView: NSView {
 
     /// 文字在一行里实际占据的矩形(左上原点),算式见 `LyricLayerRowSpec.textRect`,这里只接上量字宽。
     static func textRect(spec: OverlayScrollingLyricRow.Spec, width: CGFloat, height: CGFloat) -> CGRect {
-        spec.textRect(width: width, height: height,
-                      measureMain: { MenuBarMarqueeRenderer.width(of: $0, font: spec.font, translation: spec.translation) },
-                      measureRoma: { MenuBarMarqueeRenderer.width(of: $0, font: spec.romaFont) })
+        let rightToLeft = LyricTextDirection.isRightToLeft(spec.words.map(\.text).joined())
+        return spec.textRect(width: width, height: height,
+                             measureMain: { MenuBarMarqueeRenderer.width(of: $0, font: spec.font, translation: spec.translation,
+                                                                         lineRightToLeft: rightToLeft) },
+                             measureRoma: { MenuBarMarqueeRenderer.width(of: $0, font: spec.romaFont) })
     }
 
     /// 一行字本身的高度。必须跟 `OverlayPlayback.scrollTextHeight` 同一个式子,否则视图框和
@@ -304,10 +306,12 @@ final class OverlayLyricScrollView: NSView {
             main: mainHeight, roma: spec.groups == nil ? nil : romaHeight, romaGap: romaGap)
         // 逐词 / 逐组排版:每个词的起止 x、罗马音每段的落点、长图总宽。规则在 Core 的
         // `OverlayRowLayout`(selftest 钉着),这里只把字体测宽喂进去。
+        let rightToLeft = LyricTextDirection.isRightToLeft(spec.words.map(\.text).joined())
         let r = OverlayRowLayout.layOut(
             words: spec.words, groups: spec.groups, inset: inset,
             strokeInset: spec.stroke?.inset ?? 0,
-            measureMain: { MenuBarMarqueeRenderer.width(of: $0, font: spec.font, translation: spec.translation) },
+            measureMain: { MenuBarMarqueeRenderer.width(of: $0, font: spec.font, translation: spec.translation,
+                                                        lineRightToLeft: rightToLeft) },
             measureRoma: { MenuBarMarqueeRenderer.width(of: $0, font: spec.romaFont) })
         // 阅读位置按"不含预留"的坐标算、再整体平移 inset:否则开头那一截填色边界会先在左侧预留里
         // 空走一段(followReadingPath 的首点 x 恒为 0)。
@@ -322,7 +326,7 @@ final class OverlayLyricScrollView: NSView {
             imageWidth: alignedUp(r.boxWidth, scale: scale),
             wordStartXs: r.wordStartXs, wordEndXs: r.wordEndXs, romaPlacements: r.romaPlacements,
             flatWords: r.flatWords, readingPath: readingPath,
-            rightToLeft: LyricTextDirection.isRightToLeft(spec.words.map(\.text).joined()))
+            rightToLeft: rightToLeft)
     }
 
     /// 换上排好、画好的一行。不动动画,摆位交给 `place`。
@@ -681,9 +685,10 @@ enum OverlayRowRaster {
     private static func drawWords(_ g: OverlayRowGeometry, spec: OverlayScrollingLyricRow.Spec,
                                   mainAttrs: [NSAttributedString.Key: Any], romaAttrs: [NSAttributedString.Key: Any],
                                   mainY: CGFloat, romaY: CGFloat, in ctx: CGContext) {
-        // 排字语言逐词判、跟上面量宽度同一口径(见 `LyricTypesetting`)。
+        // 排字语言逐词判、混了两种方向的词定段落方向,跟上面量宽度同一口径(`MenuBarMarqueeRenderer.wordAttributes`)。
         for (i, w) in g.flatWords.enumerated() where i < g.wordStartXs.count {
-            let attrs = LyricTypesetting.attributes(mainAttrs, for: w.text, translation: spec.translation)
+            let attrs = MenuBarMarqueeRenderer.wordAttributes(mainAttrs, for: w.text, translation: spec.translation,
+                                                              lineRightToLeft: g.rightToLeft)
             draw(w.text, at: NSPoint(x: g.wordStartXs[i], y: mainY), attrs: attrs, in: ctx, mirrored: g.rightToLeft)
         }
         for r in g.romaPlacements {

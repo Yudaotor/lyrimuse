@@ -6188,7 +6188,9 @@ private struct KaraokeLineText: View {
                                     emphasisAnchor: anchors[i],
                                     emphasisSlot: slots[i],
                                     pausedMs: pausedMs,
-                                    fill: fill)
+                                    fill: fill,
+                                    rightToLeftBase: LyricTextDirection.wordNeedsRightToLeftBase(
+                                        word.text, lineRightToLeft: rightToLeft))
                     .padding(.trailing, tail)
                 }
             }
@@ -6277,6 +6279,13 @@ private struct KaraokeWordText: View {
     var pausedMs: Int? = nil
     /// 当前行唱过那一端的颜色(迷你的「已唱颜色」),nil = 跟 `base`。
     var fill: Color? = nil
+    /// true = 整行从右往左、这个词里两种方向的字母都有(`LyricTextDirection.wordNeedsRightToLeftBase`):画的字前面
+    /// 加一个 RLM,段落方向定成从右往左。`Text` 不认段落样式,默认按词里第一个字母判方向。
+    var rightToLeftBase: Bool = false
+
+    /// 画出来的字:`word.text`,要从右往左排时前面加 RLM(`rightToLeftBase`)。
+    private var shownText: String { rightToLeftBase ? Self.rightToLeftMark + word.text : word.text }
+    private static let rightToLeftMark = "\u{200F}"
 
     /// 强调辉光的模糊半径,按字号取比例。
     private static let emphasisGlowRadiusEm: CGFloat = 0.12
@@ -6353,14 +6362,14 @@ private struct KaraokeWordText: View {
         // `.animation(nil, value: distance)` 屏障之下,不会淡入淡出。
         // 排字语言逐词判,跟 KaraokeLineText 折行时逐词量宽度同一口径(见 `LyricTypesetting`)。
         if forceFilled {
-            Text(word.text)
+            Text(shownText)
                 .font(.overlayFont(familyName: fontFamily, size: fontSize, weight: weight))
                 .foregroundStyle(palette.fullStyle)
                 .lyricTypesetting(word.text)
                 .transformEffect(CGAffineTransform(
                     translationX: 0, y: raisedAtRest && rises && !reduceMotion ? -riseAmplitude : 0))
         } else {
-            Text(word.text)
+            Text(shownText)
                 .font(.overlayFont(familyName: fontFamily, size: fontSize, weight: weight))
                 .opacity(0)
                 .overlay { animatedGlyph }
@@ -6395,10 +6404,12 @@ private struct KaraokeWordText: View {
             Group {
                 if let glyphs = glyphFrames(atMs: currentMs) {
                     // 长音强调词逐字形错开:每个字形画一份整个 token,只显示自己那个字形,各自动。
-                    let ranges = LyricsWordEmphasis.glyphRanges(word.text)
+                    // 前面加了 RLM 时它排在下标 0,各字的下标往后挪它的长度。
+                    let shift = rightToLeftBase ? (Self.rightToLeftMark as NSString).length : 0
+                    let ranges = LyricsWordEmphasis.glyphRanges(word.text).map { ($0.lowerBound + shift)..<($0.upperBound + shift) }
                     ZStack {
                         ForEach(glyphs.indices, id: \.self) { k in
-                            Text(word.text)
+                            Text(shownText)
                                 .font(.overlayFont(familyName: fontFamily, size: fontSize, weight: weight))
                                 .foregroundStyle(style)
                                 .modifier(SingleGlyph(range: k < ranges.count ? ranges[k] : 0..<0))
@@ -6416,7 +6427,7 @@ private struct KaraokeWordText: View {
                     let emp: LyricsWordEmphasis.Frame = (forceFilled || lineSettled || !rises || reduceMotion)
                         ? .none
                         : (emphasis.map { LyricsWordEmphasis.frame(for: $0, atMs: currentMs) } ?? .none)
-                    Text(word.text)
+                    Text(shownText)
                         .font(.overlayFont(familyName: fontFamily, size: fontSize, weight: weight))
                         .foregroundStyle(style)
                         .scaleEffect(emp.scale, anchor: emphasisAnchor)

@@ -25,17 +25,22 @@ enum LyricsLayerListText {
         var pad: CGFloat = LyricsLayerListText.pad
     }
 
-    static func attributes(_ text: String, font: NSFont, translation: Bool) -> [NSAttributedString.Key: Any] {
-        LyricTypesetting.attributes([.font: font, .foregroundColor: NSColor.white], for: text, translation: translation)
+    /// `lineRightToLeft`:逐字的词所在的整行是不是从右往左,混了两种方向的词按它定段落方向
+    /// (`MenuBarMarqueeRenderer.wordAttributes`);量、画同一个词必须传同一个值。
+    static func attributes(_ text: String, font: NSFont, translation: Bool,
+                           lineRightToLeft: Bool = false) -> [NSAttributedString.Key: Any] {
+        MenuBarMarqueeRenderer.wordAttributes([.font: font, .foregroundColor: NSColor.white], for: text,
+                                              translation: translation, lineRightToLeft: lineRightToLeft)
     }
 
-    static func metrics(_ text: String, font: NSFont, translation: Bool = false) -> Metrics {
+    static func metrics(_ text: String, font: NSFont, translation: Bool = false, lineRightToLeft: Bool = false) -> Metrics {
         let string = NSAttributedString(string: text.isEmpty ? " " : text,
-                                        attributes: attributes(text, font: font, translation: translation))
+                                        attributes: attributes(text, font: font, translation: translation,
+                                                               lineRightToLeft: lineRightToLeft))
         let line = CTLineCreateWithAttributedString(string)
         var ascent: CGFloat = 0, descent: CGFloat = 0, leading: CGFloat = 0
         _ = CTLineGetTypographicBounds(line, &ascent, &descent, &leading)
-        let width = MenuBarMarqueeRenderer.measure(text, font: font, translation: translation)
+        let width = MenuBarMarqueeRenderer.measure(text, font: font, translation: translation, lineRightToLeft: lineRightToLeft)
         let height = ceil(ascent + descent + leading)
         let ink = CTLineGetBoundsWithOptions(line, .useGlyphPathBounds)
         var overflow: CGFloat = 0
@@ -59,6 +64,7 @@ enum LyricsLayerListText {
         let scale: CGFloat
         let language: String?
         var part: Part = .all
+        var rightToLeftBase = false
     }
 
     /// 一次建表用的剪影:查到的、新画的都记在这一代名下。缓存跟着列表视图走,装好之后只留这一代(见 `LyricsLayerListView.startBuild`)。
@@ -71,11 +77,14 @@ enum LyricsLayerListText {
     /// 这一段没有要画的字形时为 nil。
     /// `glyph` 非 nil 时只画第几个可见字形(空白不算,口径同 `LyricsWordEmphasis.glyphCount`),其余字形不画。
     static func silhouette(_ text: String, font: NSFont, translation: Bool, metrics m: Metrics,
-                           glyph: Int? = nil, part: Part = .all, scale: CGFloat, in silhouettes: Silhouettes) -> CGImage? {
+                           glyph: Int? = nil, part: Part = .all, scale: CGFloat, lineRightToLeft: Bool = false,
+                           in silhouettes: Silhouettes) -> CGImage? {
         let key = SilhouetteKey(text: text, font: font, translation: translation, glyph: glyph, scale: scale,
-                                language: LyricTypesetting.language(for: text, translation: translation), part: part)
+                                language: LyricTypesetting.language(for: text, translation: translation), part: part,
+                                rightToLeftBase: LyricTextDirection.wordNeedsRightToLeftBase(text, lineRightToLeft: lineRightToLeft))
         return silhouettes.cache.value(for: key, generation: silhouettes.generation) {
-            renderSilhouette(text, font: font, translation: translation, metrics: m, glyph: glyph, part: part, scale: scale)
+            renderSilhouette(text, font: font, translation: translation, metrics: m, glyph: glyph, part: part, scale: scale,
+                             lineRightToLeft: lineRightToLeft)
         }
     }
 
@@ -91,9 +100,9 @@ enum LyricsLayerListText {
     }
 
     private static func renderSilhouette(_ text: String, font: NSFont, translation: Bool, metrics m: Metrics,
-                                         glyph: Int?, part: Part, scale: CGFloat) -> CGImage? {
-        let line = CTLineCreateWithAttributedString(
-            NSAttributedString(string: text, attributes: attributes(text, font: font, translation: translation)))
+                                         glyph: Int?, part: Part, scale: CGFloat, lineRightToLeft: Bool) -> CGImage? {
+        let line = CTLineCreateWithAttributedString(NSAttributedString(
+            string: text, attributes: attributes(text, font: font, translation: translation, lineRightToLeft: lineRightToLeft)))
         let target = glyph.flatMap { g -> Range<Int>? in
             let ranges = LyricsWordEmphasis.glyphRanges(text)
             return g >= 0 && g < ranges.count ? ranges[g] : nil

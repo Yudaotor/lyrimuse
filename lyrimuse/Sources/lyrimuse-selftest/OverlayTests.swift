@@ -1027,7 +1027,8 @@ func runOverlayTests() {
             (try? String(contentsOf: src.appendingPathComponent(path), encoding: .utf8)) ?? ""
         }
         let row = text("UI/OverlayScrollingLyricRow.swift")
-        expectEqual(sourceHas(row, "rightToLeft: LyricTextDirection.isRightToLeft(spec.words.map(\\.text).joined())"), true,
+        expectEqual(sourceHas(row, "let rightToLeft = LyricTextDirection.isRightToLeft(spec.words.map(\\.text).joined())")
+                        && sourceHas(row, "rightToLeft: rightToLeft)"), true,
                     "从右往左(契约): 图层行按整行文字判方向")
         expectEqual(sourceHas(row, "mirrorLayer.addSublayer(contentLayer)"), true,
                     "从右往左(契约): 图层行的内容挂在镜像层下")
@@ -1040,7 +1041,7 @@ func runOverlayTests() {
         expectEqual(sourceHas(list, "word = SyncedLyricWord(text: body, startMs: word.startMs, durationMs: word.durationMs)"), true,
                     "从右往左(契约): 歌词窗口列表行的词元素不含尾空格")
         let renderer = text("MenuBar/MenuBarMarqueeRenderer.swift")
-        expectEqual(sourceHas(renderer, "guard body.count < text.count, LyricTextDirection.isRightToLeft(text) else { return width }"),
+        expectEqual(sourceHas(renderer, "guard body.count < text.count, LyricTextDirection.isRightToLeft(text)"),
                     true, "从右往左(契约): 量宽把从右往左的尾空格补回来")
         let bar = text("MenuBar/MenuBarScrollingLabel.swift")
         expectEqual(sourceHas(bar, "rightToLeft = LyricTextDirection.isRightToLeft(plan.text)"), true,
@@ -1143,6 +1144,156 @@ func runOverlayTests() {
             let a = layout(words, maxWidth: 200, baselines: true), b = layout(words, maxWidth: 200, baselines: false)
             expectEqual(a.placements == b.placements && a.rows == b.rows, true, "混排基线: \(words.joined()) 不混排的行位置、行高不变")
         }
+    }
+
+    // ---- 混了两种方向的计时词:从右往左的行里按整行的方向单独排字(04 章决策 115) ----
+    do {
+        let font = NSFont.systemFont(ofSize: 44, weight: .bold)
+        func rtlStyle() -> NSParagraphStyle {
+            let style = NSMutableParagraphStyle()
+            style.baseWritingDirection = .rightToLeft
+            return style
+        }
+        // 同 App 的 `MenuBarMarqueeRenderer.wordAttributes`:排字语言,混方向的词再定成从右往左。
+        func wordAttrs(_ t: String, forced: Bool) -> [NSAttributedString.Key: Any] {
+            var a = LyricTypesetting.attributes([.font: font], for: t, translation: false)
+            if forced { a[.paragraphStyle] = rtlStyle() }
+            return a
+        }
+        func glyphMinX(_ line: CTLine, ranges: [Range<Int>], skip: (Int) -> Bool) -> [CGFloat] {
+            var minX = [CGFloat](repeating: .infinity, count: ranges.count)
+            for run in CTLineGetGlyphRuns(line) as? [CTRun] ?? [] {
+                let n = CTRunGetGlyphCount(run)
+                var idx = [CFIndex](repeating: 0, count: n), pos = [CGPoint](repeating: .zero, count: n)
+                CTRunGetStringIndices(run, CFRange(location: 0, length: n), &idx)
+                CTRunGetPositions(run, CFRange(location: 0, length: n), &pos)
+                for k in 0..<n where !skip(idx[k]) {
+                    if let r = ranges.firstIndex(where: { $0.contains(idx[k]) }) { minX[r] = min(minX[r], pos[k].x) }
+                }
+            }
+            return minX
+        }
+        // 按空白切成小段(拉丁词、阿拉伯词各一段),记下每段在整行里的 UTF-16 范围和是不是拉丁段。
+        func pieces(_ words: [String]) -> [(range: Range<Int>, word: Int, latin: Bool)] {
+            var out: [(range: Range<Int>, word: Int, latin: Bool)] = []
+            var offset = 0
+            for (w, text) in words.enumerated() {
+                var start: Int?
+                var latin = true
+                let units = Array(text.utf16)
+                for i in 0...units.count {
+                    let u = i < units.count ? units[i] : 0x20
+                    if u == 0x20 {
+                        if let s = start { out.append((offset + s..<offset + i, w, latin)) }
+                        start = nil
+                        latin = true
+                    } else {
+                        if start == nil { start = i }
+                        if (0x0590...0x08FF).contains(Int(u)) { latin = false }
+                    }
+                }
+                offset += text.utf16.count
+            }
+            return out
+        }
+        // 从右往左读的顺序;相邻的几段拉丁按原文顺序记(连续独立的拉丁词逐词画时词序倒过来是有意的取舍,04 章决策 73)。
+        func readingOrder(_ xs: [CGFloat], _ ps: [(range: Range<Int>, word: Int, latin: Bool)]) -> [Int] {
+            let visual = ps.indices.sorted { xs[$0] > xs[$1] }
+            var out: [Int] = [], chunk: [Int] = []
+            for i in visual {
+                if ps[i].latin { chunk.append(i); continue }
+                out += chunk.sorted()
+                chunk = []
+                out.append(i)
+            }
+            return out + chunk.sorted()
+        }
+        // 整行一次双向排字(段落方向从右往左,同菜单栏)。
+        func wholeLine(_ words: [String]) -> [Int] {
+            let joined = words.joined()
+            let ps = pieces(words)
+            let line = CTLineCreateWithAttributedString(NSAttributedString(string: joined, attributes: wordAttrs(joined, forced: true)))
+            return readingOrder(glyphMinX(line, ranges: ps.map(\.range), skip: { (joined as NSString).character(at: $0) == 0x20 }), ps)
+        }
+        // 逐词单独排字再整行镜像(同图层行:词去掉尾空格镜像着画,整行再翻回来)。`fixed` = 混方向的词按整行方向排。
+        func perWord(_ words: [String], fixed: Bool) -> [Int] {
+            let lineRTL = LyricTextDirection.isRightToLeft(words.joined())
+            let ps = pieces(words)
+            var xs = [CGFloat](repeating: 0, count: ps.count)
+            var cells: [(x: CGFloat, body: CGFloat)] = []
+            var x: CGFloat = 0
+            for w in words {
+                let forced = fixed && LyricTextDirection.wordNeedsRightToLeftBase(w, lineRightToLeft: lineRTL)
+                let a = wordAttrs(w, forced: forced)
+                let body = LyricTextDirection.trimmingTrailingWhitespace(w)
+                var width = (w as NSString).size(withAttributes: a).width
+                if body.count < w.count, LyricTextDirection.isRightToLeft(w) || forced {
+                    width += (String(w.dropFirst(body.count)) as NSString).size(withAttributes: wordAttrs(w, forced: false)).width
+                }
+                cells.append((x, (body as NSString).size(withAttributes: a).width))
+                x += width
+            }
+            var offset = 0
+            for (k, w) in words.enumerated() {
+                let forced = fixed && LyricTextDirection.wordNeedsRightToLeftBase(w, lineRightToLeft: lineRTL)
+                let body = LyricTextDirection.trimmingTrailingWhitespace(w)
+                let line = CTLineCreateWithAttributedString(NSAttributedString(string: body, attributes: wordAttrs(w, forced: forced)))
+                let mine = ps.indices.filter { ps[$0].word == k }
+                let local = glyphMinX(line, ranges: mine.map { (ps[$0].range.lowerBound - offset)..<(ps[$0].range.upperBound - offset) },
+                                      skip: { (body as NSString).character(at: $0) == 0x20 })
+                for (j, i) in mine.enumerated() { xs[i] = x - cells[k].x - cells[k].body + local[j] }
+                offset += w.utf16.count
+            }
+            return readingOrder(xs, ps)
+        }
+        // 缓存里真实出现的两句:拉丁词和阿拉伯词合成了一个计时词。
+        let samples = [["Oui \u{063A}\u{0627} ", "\u{0628}\u{063A}\u{064A}\u{0646}\u{064A} ", "\u{0645}\u{0627}\u{062A}\u{062E}\u{0644}\u{064A}\u{0646}\u{064A}\u{0634} ",
+                        "\u{0646}\u{062A}\u{064A} ", "\u{0644}\u{064A} ", "\u{062F}\u{0627}\u{064A}\u{0645}\u{0629} ", "\u{0644}\u{064A}\u{0627}"],
+                       ["Eh ", "b\u{00E9}b\u{00E9} \u{062A}\u{0643}\u{0627}\u{064A}\u{0633}\u{064A} ", "\u{0639}\u{0644}\u{064A}\u{0627}"]]
+        for words in samples {
+            let tag = words[0].trimmingCharacters(in: .whitespaces)
+            expectEqual(LyricTextDirection.isRightToLeft(words.joined()), true, "混方向的词(\(tag)): 整行判成从右往左")
+            let whole = wholeLine(words)
+            expectEqual(perWord(words, fixed: true), whole, "混方向的词(\(tag)): 逐词排字镜像后的读序等于整行双向排字")
+            expectEqual(perWord(words, fixed: false) != whole, true, "混方向的词(\(tag)): 词按自己第一个字母排时读序是乱的(样例真能测出来)")
+        }
+        // 只有空白的一段定成从右往左量出来是 0:尾空格要不带段落方向单独量,不然混方向的词跟下一个词粘在一起。
+        expectEqual((" " as NSString).size(withAttributes: wordAttrs(" ", forced: true)).width, 0,
+                    "混方向的词: 空格定成从右往左量出来是 0(样例真能测出来)")
+        expectEqual((" " as NSString).size(withAttributes: wordAttrs(" ", forced: false)).width > 0, true,
+                    "混方向的词: 空格不定方向量得出宽")
+        let latin = "Eh ", arabic = "\u{0639}\u{0644}\u{064A}\u{0627}"
+        expectEqual(LyricTextDirection.wordNeedsRightToLeftBase(samples[0][0], lineRightToLeft: true), true,
+                    "混方向的词: 从右往左的行里拉丁加阿拉伯的词按整行方向排")
+        expectEqual(LyricTextDirection.wordNeedsRightToLeftBase(samples[0][0], lineRightToLeft: false), false,
+                    "混方向的词: 从左往右的行不动")
+        for w in [latin, "Eh, ", arabic, "\u{0639}\u{0644}\u{064A}\u{0627} ", "(\u{0661}\u{0662}) \u{0627}", "123 ", "\u{200F}"] {
+            expectEqual(LyricTextDirection.wordNeedsRightToLeftBase(w, lineRightToLeft: true), false,
+                        "混方向的词: 只有一种方向的词不定方向、画法不变(\(w.debugDescription))")
+        }
+        let src = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().appendingPathComponent("lyrimuse")
+        func text(_ path: String) -> String { (try? String(contentsOf: src.appendingPathComponent(path), encoding: .utf8)) ?? "" }
+        let renderer = text("MenuBar/MenuBarMarqueeRenderer.swift")
+        expectEqual(sourceHas(renderer, "let attrs = wordAttributes([.font: font], for: text, translation: translation, lineRightToLeft: lineRightToLeft)")
+                        && sourceHas(renderer, "if LyricTextDirection.wordNeedsRightToLeftBase(text, lineRightToLeft: lineRightToLeft) {"), true,
+                    "混方向的词(契约): 量宽和画字共用 wordAttributes")
+        expectEqual(sourceHas(renderer, "return width + (trailing as NSString).size(withAttributes: plain).width"), true,
+                    "混方向的词(契约): 尾空格不带段落方向单独量")
+        expectEqual(sourceHas(text("UI/OverlayScrollingLyricRow.swift"), "let attrs = MenuBarMarqueeRenderer.wordAttributes(mainAttrs, for: w.text, translation: spec.translation,"),
+                    true, "混方向的词(契约): 图层行逐词画按整行方向")
+        let listText = text("UI/LyricsLayerListText.swift")
+        expectEqual(sourceHas(listText, "MenuBarMarqueeRenderer.wordAttributes([.font: font, .foregroundColor: NSColor.white], for: text,")
+                        && sourceHas(listText, "rightToLeftBase: LyricTextDirection.wordNeedsRightToLeftBase(text, lineRightToLeft: lineRightToLeft))"), true,
+                    "混方向的词(契约): 歌词窗口图层列表的量字、剪影按整行方向,剪影缓存分开记")
+        expectEqual(sourceHas(text("UI/LyricsLayerListRow.swift"), "let wordMetrics = words.map { LyricsLayerListText.metrics($0.text, font: font, lineRightToLeft: rightToLeft) }"),
+                    true, "混方向的词(契约): 歌词窗口图层列表逐词量宽传整行方向")
+        let window = text("UI/LyricsWindowView.swift")
+        expectEqual(sourceHas(window, "private var shownText: String { rightToLeftBase ? Self.rightToLeftMark + word.text : word.text }")
+                        && sourceHas(window, "rightToLeftBase: LyricTextDirection.wordNeedsRightToLeftBase(")
+                        && !sourceHas(window, "Text(word.text)"), true,
+                    "混方向的词(契约): 歌词窗口 SwiftUI 逐词行给混方向的词加 RLM")
+        expectEqual(sourceHas(text("UI/WrappedKaraokeRows.swift"), "MenuBarMarqueeRenderer.width(of: $0.text, font: font, lineRightToLeft: rightToLeft)"),
+                    true, "混方向的词(契约): 悬浮歌词换行模式量宽跟图层行同一个方向")
     }
 
     // ---- 字形出框:每一行按实际墨迹补长图,上下加高、左右加宽出血,可视窗跟着让出 ----

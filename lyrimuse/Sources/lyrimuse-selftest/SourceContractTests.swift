@@ -2422,7 +2422,7 @@ func runSourceContractSurfaceTests() {
             expectEqual(sourceHas(lwv, ".opacity(0)\n                .overlay { animatedGlyph }"), true,
                         "逐字填色: 底层透明字占位、逐帧换色的那层走 overlay")
             // 非当前行只画一层静态字,省掉一半 Text 和 TimelineView(07 章决策 53)。
-            expectEqual(sourceHas(lwv, "if forceFilled {\n            Text(word.text)"), true,
+            expectEqual(sourceHas(lwv, "if forceFilled {\n            Text(shownText)"), true,
                         "逐字填色: 非当前行的字只画一层静态字")
             // 拖窗口边角 / 切迷你期间歌词栏尺寸只量不提交,否则字号逐帧变、整张列表逐帧重排(07 章决策 53)。
             expectEqual(lwv.contains("NSWindow.willStartLiveResizeNotification")
@@ -6836,13 +6836,13 @@ func runSourceContractIdentityTests() {
             (try? String(contentsOfFile: sources.appendingPathComponent(rel).path, encoding: .utf8)) ?? ""
         }
         let renderer = src("lyrimuse/MenuBar/MenuBarMarqueeRenderer.swift")
-        expectEqual(renderer.contains("let attrs = LyricTypesetting.attributes([.font: font], for: text, translation: translation)")
+        expectEqual(renderer.contains("let attrs = wordAttributes([.font: font], for: text, translation: translation, lineRightToLeft: lineRightToLeft)")
                     && renderer.contains("let attributes = drawingAttributes([.font: lineFont, .foregroundColor: color], for: text, translation: translation)")
                     && renderer.contains("var attributes = LyricTypesetting.attributes(base, for: text, translation: translation)"),
                     true, "排字语言(契约): 菜单栏量宽度与画字都标语言")
         expectEqual(src("lyrimuse/UI/OverlayNaturalWidth.swift").contains("LyricTypesetting.language(for: text, translation: translation)"),
                     true, "排字语言(契约): 悬浮歌词 / 灵动岛量宽度标语言")
-        expectEqual(src("lyrimuse/UI/OverlayScrollingLyricRow.swift").contains("let attrs = LyricTypesetting.attributes(mainAttrs, for: w.text, translation: spec.translation)"),
+        expectEqual(src("lyrimuse/UI/OverlayScrollingLyricRow.swift").contains("let attrs = MenuBarMarqueeRenderer.wordAttributes(mainAttrs, for: w.text, translation: spec.translation,"),
                     true, "排字语言(契约): 图层行逐词画字标语言")
         let source = src("LyrimuseCore/Local/LocalPlaybackSource.swift")
         let setAt = source.range(of: "LyricTypesetting.setJapaneseSong(japaneseSong)")?.lowerBound

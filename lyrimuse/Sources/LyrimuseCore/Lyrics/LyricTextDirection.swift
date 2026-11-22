@@ -22,6 +22,24 @@ public enum LyricTextDirection {
         return rightToLeft == leftToRight ? first ?? false : rightToLeft > leftToRight
     }
 
+    /// 逐词单独排字时,这个词要不要显式按从右往左的段落方向排:整行从右往左、词里两种方向的字母都有时要
+    /// (歌词源把一个拉丁词和一个阿拉伯词合成了一个计时词)。不定的话 CoreText 按词里第一个字母
+    /// 把它排成从左往右,拉丁词落到阿拉伯词左边,整行读序就乱了。只有一种方向的词不定:交给 CoreText 按
+    /// 第一个字母判,纯从右往左的词结果一样,纯拉丁词保持原样(见 04 章决策 115)。
+    public static func wordNeedsRightToLeftBase(_ word: String, lineRightToLeft: Bool) -> Bool {
+        guard lineRightToLeft else { return false }
+        var rightToLeft = false, leftToRight = false
+        for s in word.unicodeScalars {
+            if isStrongRightToLeft(s) {
+                rightToLeft = true
+            } else if s.properties.isAlphabetic || s.properties.isIdeographic {
+                leftToRight = true
+            }
+            if rightToLeft, leftToRight { return true }
+        }
+        return false
+    }
+
     /// 去掉尾部空白。从右往左的字排版时行尾空白不占宽(量出来的宽不含它),逐词排的几处把词本身和
     /// 它后面的空格分开量、分开摆。
     public static func trimmingTrailingWhitespace(_ text: String) -> String {
