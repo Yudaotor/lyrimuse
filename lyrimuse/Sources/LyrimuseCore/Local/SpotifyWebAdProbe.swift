@@ -114,6 +114,9 @@ public final class SpotifyWebAdProbe: @unchecked Sendable {
     """
 
     public static let hostMarker = "open.spotify.com"
+    /// 当前执行环境看不看得见页面的 React 组件树(正在播放那块的 `__reactFiber…` 键),给 `BrowserTabProbeScript.inPageWorld`
+    /// 当 `pageVisible`:Safari 为真,Chromium 系的隔离环境为假;那块不在页面上也为真(注入了也读不到)。
+    public static let pageWorldVisibleJS = "(function(w){ return !w || Object.keys(w).some(function(k){ return k.indexOf('__reactFiber') === 0; }); })(document.querySelector('[data-testid=now-playing-widget]'))"
     /// AppleScript `with timeout of N seconds` 的 N。跟 YT Music 那条同值 —— 同一台机器、
     /// 同一批浏览器,没有理由给两个不同的耐心。
     public static let eventTimeoutSeconds = 4

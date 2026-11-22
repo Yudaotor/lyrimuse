@@ -218,6 +218,10 @@ public final class YouTubeMusicAdProbe: @unchecked Sendable {
     }
 
     public static let hostMarker = "music.youtube.com"
+    /// 当前执行环境看不看得见页面自己的 JS(全局的 `ytcfg`),给 `BrowserTabProbeScript.inPageWorld` 当 `pageVisible`:Safari
+    /// 为真,Chromium 系的隔离环境为假。不拿要读的那个元素属性本身判:旧版在隔离环境里写过音量条的 `value`,那一页没刷新前
+    /// 隔离环境里留着这个普通属性,会被当成看得见。
+    public static let pageWorldVisibleJS = "(typeof ytcfg === 'object' && !!ytcfg)"
     /// AppleScript `with timeout of N seconds` 的 N —— 把 Arc 那种"挂起不返回"变成一个
     /// 抓得住的错误(裸 `try` 抓不住挂起,只有它能)。
     public static let eventTimeoutSeconds = 4

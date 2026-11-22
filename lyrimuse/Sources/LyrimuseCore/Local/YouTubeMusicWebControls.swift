@@ -10,6 +10,10 @@ import Foundation
 /// - 音量:它自己的音量条 `#volume-slider`(0~100,按听感换算,跟它界面上显示的一致);写入改值再发 change 事件,
 ///   播放器音量和它记住的音量一起变。直接调播放器的 `setVolume` 只改实际音量、音量条和记住的值不变,换歌会被改回去。
 ///
+/// 音量条的 `value` 和播放条的 `queue` 是页面挂在元素上的属性,Chromium 系脚本接口的隔离环境里看不见(读出 undefined,
+/// 写进去的只是隔离环境里的普通属性,页面音量不变):这两样经 `BrowserTabProbeScript.inPageWorld` 读写,其余照旧在当前环境
+/// 做(02 章决策 286)。
+///
 /// 注入走 `BrowserTabProbeScript`(跟广告探针同一份模板、同一个 JavaScript 授权);只在这个浏览器配对过 YouTube Music
 /// 时用。开着几个 YouTube Music 标签页时认在放的那一页:写入先只动在放的那页,一页都没在放(全暂停着)再动第一页。
 /// 读和写都只认页面上正放着当前这一首的标签页(`YouTubeMusicAdProbe.titleGuardJS`,标题对不上回 `NOTFOUND`、模板接着找):
@@ -87,12 +91,24 @@ public enum YouTubeMusicWebControls {
         "(function(){" + titleGuardPrologue(title) + """
     var lk = bar.querySelector('ytmusic-like-button-renderer');\
     var s = document.querySelector('#volume-slider');\
-    var out = 'STATE:' + (bar.getAttribute('repeat-mode') || '') + '|' + (lk ? (lk.getAttribute('like-status') || '') : '') + '|' + (s ? String(s.value) : '') + '|' + (bar.getAttribute('shuffle-on') !== null ? '1' : '0');\
+    var vol = s ? \(volumeReadJS) : '';\
+    if (vol === 'NOTFOUND') vol = '';\
+    var out = 'STATE:' + (bar.getAttribute('repeat-mode') || '') + '|' + (lk ? (lk.getAttribute('like-status') || '') : '') + '|' + vol + '|' + (bar.getAttribute('shuffle-on') !== null ? '1' : '0');\
     var v = document.querySelector('video');\
     return (v && v.paused) ? 'PAUSED:' + out : out;\
     })()
     """
     }
+
+    /// 音量条的 `value`(字符串),在看得见它的环境里读;没有音量条回空串。
+    static let volumeReadJS = BrowserTabProbeScript.inPageWorld(
+        core: "function(){ var s = document.querySelector('#volume-slider'); return s ? String(s.value) : ''; }",
+        pageVisible: YouTubeMusicAdProbe.pageWorldVisibleJS)
+
+    /// 播放条有 `queue.shuffle()` 就在看得见它的环境里调、回 `OK`,没有回 `NONE`(调用方退回点随机键)。
+    static let queueShuffleJS = BrowserTabProbeScript.inPageWorld(
+        core: "function(){ var b = document.querySelector('ytmusic-player-bar'); if (b && b.queue && b.queue.shuffle) { b.queue.shuffle(); return 'OK'; } return 'NONE'; }",
+        pageVisible: YouTubeMusicAdProbe.pageWorldVisibleJS)
 
     /// 读写共用的头:找播放条,再核对页面上放的是不是 `title`(对不上回 `NOTFOUND`)。
     static func titleGuardPrologue(_ title: String) -> String {
@@ -127,7 +143,7 @@ public enum YouTubeMusicWebControls {
         if (!b) return 'NOTFOUND';\
         var want = \(mode == .shuffle ? "true" : "false");\
         if ((bar.getAttribute('shuffle-on') !== null) !== want) {\
-        if (bar.queue && bar.queue.shuffle) { bar.queue.shuffle(); } else {\
+        if (\(queueShuffleJS) !== 'OK') {\
         var sb = bar.querySelector('yt-icon-button.shuffle');\
         if (!sb) return 'NOTFOUND';\
         sb.click(); }\
@@ -154,14 +170,15 @@ public enum YouTubeMusicWebControls {
         """
     }
 
-    /// 改音量条并发 change 事件,回 `SET:<音量条>`。
+    /// 改音量条并发 change 事件,回 `SET:<音量条>`。改值和发事件都在看得见音量条 `value` 的环境里做,到不了那里回 `NOTFOUND`。
     public static func setVolumeJS(_ value: Int, title: String, force: Bool) -> String {
-        "(function(){" + setPrologue(title: title, force: force) + """
-        var s = document.querySelector('#volume-slider');\
-        if (!s) return 'NOTFOUND';\
-        s.value = \(min(100, max(0, value)));\
-        s.dispatchEvent(new Event('change', {bubbles: true}));\
-        return 'SET:' + String(s.value);\
+        let write = BrowserTabProbeScript.inPageWorld(
+            core: "function(){ var s = document.querySelector('#volume-slider'); if (!s) return 'NOTFOUND'; s.value = " +
+                "\(min(100, max(0, value))); s.dispatchEvent(new Event('change', {bubbles: true})); return 'SET:' + String(s.value); }",
+            pageVisible: YouTubeMusicAdProbe.pageWorldVisibleJS)
+        return "(function(){" + setPrologue(title: title, force: force) + """
+        if (!document.querySelector('#volume-slider')) return 'NOTFOUND';\
+        return \(write);\
         })()
         """
     }

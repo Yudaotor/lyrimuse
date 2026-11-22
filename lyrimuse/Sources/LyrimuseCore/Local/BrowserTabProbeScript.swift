@@ -46,35 +46,57 @@ public enum BrowserTabProbeScript {
     ///
     /// Safari 的 `do JavaScript` 跑在页面主环境;Chromium 系的 `execute javascript` 跑在 AppleScript 专用的隔离环境:
     /// DOM 共用,页面挂在元素上的 JS 属性(Polymer 组件的 `data`、React 的 `__reactFiber…`、播放器元素的
-    /// `getPlayerResponse`)在那里一律是 undefined。见 02 章决策 285。
+    /// `getPlayerResponse`)在那里一律是 undefined。见 02 章决策 285、286。
     ///
     /// - Parameter core: JS 函数表达式(`function(){ … return 字符串; }`),在看得见页面属性的环境里调用它拿结果。
     /// - Parameter pageVisible: JS 表达式,当前环境已经看得见页面属性(或者根本用不着注入)时为真:这时直接调 `core`,
     ///   不往页面里插任何东西,Safari 走的就是这一条。
     ///
-    /// 看不见时把 `core` 的源码(`Function.prototype.toString`)放进一个 `<script>` 插进页面再立刻移除:内联脚本同步跑在
-    /// 主环境,结果写到 `<html>` 的 `pageWorldAttribute` 属性上,读回来后删掉。插脚本要过页面 CSP 的两道:脚本 nonce
-    /// (抄页面已有脚本的 `nonce`)和 Trusted Types(建一个原样放行的策略 `lyrimuse-page-world`,建过就复用)。
-    /// 任何一步失败回 `NOTFOUND`,跟读不到一样。`core` 和 `pageVisible` 同样不许有双引号和反斜杠。
+    /// 看不见时按顺序试三条路,结果都经 `<html>` 的 `pageWorldAttribute` 属性带回来、读完就删:
+    /// 1. 这一页之前装过应答器(第 3 条)就发 `pageWorldEvent` 事件:事件同步派给主环境里的监听,它按
+    ///    `pageWorldRequestAttribute` 里的编号(`core` 源码的散列)调对应的函数。
+    /// 2. 把 `core` 的源码(`Function.prototype.toString`)放进内联 `<script>` 插进页面再立刻移除,内联脚本同步跑在主环境。
+    ///    要过页面 CSP 的两道:脚本 nonce(抄页面已有脚本的 `nonce`)和 Trusted Types(建一个原样放行的策略
+    ///    `lyrimuse-page-world`,建过就复用)。YouTube Music 走这一条。
+    /// 3. 内联脚本没跑(页面 CSP 不放内联、也没有 nonce 可抄,如 Spotify)时,用 `blob:` 地址的外链脚本把 `core` 和事件监听
+    ///    装进主环境。外链脚本异步执行,这一次读不到,下一次走第 1 条;每一页每个编号只装一次(记在隔离环境的 `window` 上)。
+    /// 都没拿到回 `NOTFOUND`,跟读不到一样。`core` 和 `pageVisible` 同样不许有双引号和反斜杠;`core` 要拿得到页面属性
+    /// 就别带每次不同的参数,不然每次都是新编号、第 1 条永远命中不了。
     public static func inPageWorld(core: String, pageVisible: String) -> String {
         [
             "(function(){",
             "var core = \(core);",
             "if (\(pageVisible)) return core();",
-            "var de = document.documentElement, key = '\(pageWorldAttribute)', out = null;",
+            "var de = document.documentElement, key = '\(pageWorldAttribute)', req = '\(pageWorldRequestAttribute)', evt = '\(pageWorldEvent)', out = null;",
+            "var src = String(core), id = 5381;",
+            "for (var i = 0; i < src.length; i++) id = ((id * 33) ^ src.charCodeAt(i)) >>> 0;",
+            "id = 'c' + id.toString(36);",
+            "var tried = window.lyrimusePageWorldInstalls || (window.lyrimusePageWorldInstalls = {});",
             "de.removeAttribute(key);",
-            "try {",
+            "if (tried[id]) { de.setAttribute(req, id); try { document.dispatchEvent(new CustomEvent(evt)); } catch (e) {} de.removeAttribute(req); out = de.getAttribute(key); }",
             "var tt = window.trustedTypes, pol = null;",
-            "if (tt && tt.createPolicy) { pol = window.lyrimusePageWorldPolicy || (window.lyrimusePageWorldPolicy = tt.createPolicy('lyrimuse-page-world', { createScript: function(x){ return x; } })); }",
-            "var src = 'try { document.documentElement.setAttribute(' + JSON.stringify(key) + ', String((' + core + ')())); } catch (e) {}';",
+            "try { if (tt && tt.createPolicy) { pol = window.lyrimusePageWorldPolicy || (window.lyrimusePageWorldPolicy = tt.createPolicy('lyrimuse-page-world', { createScript: function(x){ return x; }, createScriptURL: function(x){ return x; } })); } } catch (e) {}",
+            "if (out === null) { try {",
+            "var run = 'try { document.documentElement.setAttribute(' + JSON.stringify(key) + ', String((' + src + ')())); } catch (e) {}';",
             "var s = document.createElement('script');",
             "var n = document.querySelector('script[nonce]');",
             "if (n && n.nonce) s.nonce = n.nonce;",
-            "s.textContent = pol ? pol.createScript(src) : src;",
+            "s.textContent = pol ? pol.createScript(run) : run;",
             "(document.head || de).appendChild(s);",
             "s.remove();",
             "out = de.getAttribute(key);",
-            "} catch (e) {}",
+            "} catch (e) {} }",
+            "if (out === null && !tried[id]) { tried[id] = true; try {",
+            "var inst = '(function(){ var w = window, reg = w.lyrimusePageWorldReaders || (w.lyrimusePageWorldReaders = Object.create(null)); reg[' + JSON.stringify(id) + '] = (' + src + ');'",
+            " + ' if (w.lyrimusePageWorldListening) return; w.lyrimusePageWorldListening = true;'",
+            " + ' document.addEventListener(' + JSON.stringify(evt) + ', function(){ var d = document.documentElement, f = reg[d.getAttribute(' + JSON.stringify(req) + ')];'",
+            " + ' if (f) { try { d.setAttribute(' + JSON.stringify(key) + ', String(f())); } catch (e) {} } }); })();';",
+            "var u = URL.createObjectURL(new Blob([inst], { type: 'text/javascript' }));",
+            "var b = document.createElement('script');",
+            "b.onload = b.onerror = function(){ b.remove(); URL.revokeObjectURL(u); };",
+            "b.src = pol ? pol.createScriptURL(u) : u;",
+            "(document.head || de).appendChild(b);",
+            "} catch (e) {} }",
             "de.removeAttribute(key);",
             "return out === null ? 'NOTFOUND' : out;",
             "})()",
@@ -83,6 +105,10 @@ public enum BrowserTabProbeScript {
 
     /// `inPageWorld` 从主环境带结果回来用的 `<html>` 属性名,读完就删。
     public static let pageWorldAttribute = "data-lyrimuse-page-world"
+    /// `inPageWorld` 第 1 条路告诉主环境应答器要调哪个函数(编号)的 `<html>` 属性名,发完事件就删。
+    public static let pageWorldRequestAttribute = "data-lyrimuse-page-world-request"
+    /// `inPageWorld` 第 1 条路发给主环境应答器的事件名。
+    public static let pageWorldEvent = "lyrimuse-page-world"
 
     /// 拼出那段 AppleScript。公开只为让各探针的 selftest 能对它做文本断言。
     ///

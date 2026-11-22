@@ -228,7 +228,8 @@ public final class BrowserPositionProbe: @unchecked Sendable {
     ///
     /// 第五段:视频身份 `#<videoId>,<musicVideoType>`(读不到就空)。取自 `#movie_player.getPlayerResponse()`,给 MV 时间轴
     /// 换算用(`LocalPlaybackSource.noteBrowserVideo`)。前缀 `#` 同样是为了不让 AppleScript 那层的 `|1` 暂停判据撞上以 1 开头的
-    /// videoId。
+    /// videoId。`getPlayerResponse` 是页面挂在播放器元素上的方法,Chromium 系脚本接口的隔离环境里看不见,这一段经
+    /// `BrowserTabProbeScript.inPageWorld` 读(`youtubeMusicVideoIdentityJS`),其余几段照旧在当前环境读(02 章决策 286)。
     private static let youtubeMusicScript = """
     (function(){
       var el = document.querySelector('.time-info');
@@ -268,14 +269,18 @@ public final class BrowserPositionProbe: @unchecked Sendable {
       } catch (e) {}
       var ident = '';
       try {
-        var mp = document.querySelector('#movie_player');
-        var pr = (mp && mp.getPlayerResponse) ? mp.getPlayerResponse() : null;
-        var vd = pr && pr.videoDetails;
-        if (vd && vd.videoId) ident = '#' + vd.videoId + ',' + (vd.musicVideoType || '');
+        ident = \(youtubeMusicVideoIdentityJS);
+        if (ident === 'NOTFOUND') ident = '';
       } catch (e) {}
       return cur + '|' + (paused ? '1' : '0') + '|' + art + '|' + precise + '|' + ident;
     })()
     """
+
+    /// `youtubeMusicScript` 第五段:`#movie_player.getPlayerResponse()` 的视频身份,在看得见它的环境里读,读不到回空串。
+    /// 函数不带参数,编号每次相同(见 `BrowserTabProbeScript.inPageWorld`)。
+    static let youtubeMusicVideoIdentityJS = BrowserTabProbeScript.inPageWorld(
+        core: "function(){ var mp = document.querySelector('#movie_player'); var pr = (mp && mp.getPlayerResponse) ? mp.getPlayerResponse() : null; var vd = pr && pr.videoDetails; return (vd && vd.videoId) ? '#' + vd.videoId + ',' + (vd.musicVideoType || '') : ''; }",
+        pageVisible: "(function(m){ return !m || typeof m.getPlayerResponse === 'function'; })(document.querySelector('#movie_player'))")
 
     /// Spotify 网页版(`open.spotify.com`)的播放进度。跟 YouTube Music 那条规则差异很大,没有一条能照搬。
     ///
@@ -319,6 +324,10 @@ public final class BrowserPositionProbe: @unchecked Sendable {
     ///
     /// 第五段:曲目 URI `spotify:track:<id>`,只在第四段交出时一起交(同一份状态、已核对过是这一首);广告、播客单集不交。
     /// 页面 DOM 上没有 `/track/` 链接,曲目 ID 只有这一处来源。
+    ///
+    /// 组件树(`__reactFiber…`)是页面挂在元素上的属性,Chromium 系脚本接口的隔离环境里看不见:播放器状态经
+    /// `BrowserTabProbeScript.inPageWorld` 读(`spotifyWebPlayerStateJS`,只搬原样的几个字段),外推和几道核对照旧在当前环境做
+    /// (02 章决策 286)。
     private static let spotifyWebScript = """
     (function(){
       function toSecs(s) {
@@ -348,15 +357,11 @@ public final class BrowserPositionProbe: @unchecked Sendable {
       if (art.indexOf('|') >= 0) art = '';
       var precise = '', tid = '';
       try {
-        var w = document.querySelector('[data-testid=now-playing-widget]');
-        var fk = w ? Object.keys(w).filter(function(k){ return k.indexOf('__reactFiber') === 0; })[0] : null;
-        var f = fk ? w[fk] : null, api = null;
-        while (f) {
-          var mp = f.memoizedProps;
-          if (mp && mp.playerAPI && typeof mp.playerAPI.getState === 'function') { api = mp.playerAPI; break; }
-          f = f.return;
-        }
-        var st = api ? api.getState() : null;
+        var raw = \(spotifyWebPlayerStateJS);
+        var sf = raw === 'NOTFOUND' ? [] : String(raw).split(String.fromCharCode(31));
+        var num = function(v){ return v === '' ? undefined : Number(v); };
+        var st = sf.length === 7 ? { positionAsOfTimestamp: num(sf[0]), timestamp: num(sf[1]), speed: num(sf[2]), duration: num(sf[3]),
+                                     isPaused: sf[4] === '1', isBuffering: sf[5] === '1', item: { uri: sf[6] } } : null;
         var rate = (st && typeof st.speed === 'number') ? st.speed : 1;
         if (st && !paused && !st.isPaused && !st.isBuffering && rate > 0
             && typeof st.positionAsOfTimestamp === 'number' && typeof st.timestamp === 'number'
@@ -374,6 +379,25 @@ public final class BrowserPositionProbe: @unchecked Sendable {
       return cur + '|' + (paused ? '1' : '0') + '|' + art + '|' + precise + '|' + tid;
     })()
     """
+
+    /// `spotifyWebScript` 第四、五段要的播放器状态:网页播放器组件树上 `playerAPI.getState()` 的 `positionAsOfTimestamp`、
+    /// `timestamp`、`speed`、`duration`(不是数就空)、`isPaused`、`isBuffering`(1/0)、`item.uri`,US(0x1f)分隔;找不到回
+    /// NOTFOUND。函数不带参数(核对用的 `__EXPECT__` 留在外面),编号每次相同:Spotify 的 CSP 不放内联脚本,只能走
+    /// `inPageWorld` 的应答器,装一次之后每次都直接命中。字段顺序跟 `spotifyWebScript` 里拆它的那几行一起改。
+    static let spotifyWebPlayerStateJS = BrowserTabProbeScript.inPageWorld(
+        core: [
+            "function(){",
+            "var w = document.querySelector('[data-testid=now-playing-widget]');",
+            "var fk = w ? Object.keys(w).filter(function(k){ return k.indexOf('__reactFiber') === 0; })[0] : null;",
+            "var f = fk ? w[fk] : null, api = null;",
+            "while (f) { var mp = f.memoizedProps; if (mp && mp.playerAPI && typeof mp.playerAPI.getState === 'function') { api = mp.playerAPI; break; } f = f.return; }",
+            "var st = api ? api.getState() : null;",
+            "if (!st) return 'NOTFOUND';",
+            "var num = function(v){ return typeof v === 'number' ? String(v) : ''; };",
+            "return [num(st.positionAsOfTimestamp), num(st.timestamp), num(st.speed), num(st.duration), st.isPaused ? '1' : '0', st.isBuffering ? '1' : '0', String((st.item && st.item.uri) || '')].join(String.fromCharCode(31));",
+            "}",
+        ].joined(),
+        pageVisible: SpotifyWebAdProbe.pageWorldVisibleJS)
 
     /// MediaRemote 报上来的 bundle id → **真正能被 AppleScript 驱动的那个 App**。
     ///

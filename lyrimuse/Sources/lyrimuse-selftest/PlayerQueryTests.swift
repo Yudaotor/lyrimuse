@@ -225,6 +225,9 @@ func runPlayerQueryTests() {
         expectEqual(wrapped.contains(quote) || wrapped.contains(backslash), false, "主环境包装: 不能有双引号或反斜杠")
     }
 
+    // ---- 隔离环境里读不到的另几处(YouTube Music 视频身份 / 音量 / 随机,Spotify 网页版播放器状态 / 队列,02 章决策 286)----
+    pageWorldReadTests()
+
     // ---- 输出整理成结构再交(PlayerQueryTracks / PlayerQueryShuffle):样例两侧共用,引擎只解 reply 那份 JSON ----
     do {
         typealias T = PlayerQueryTracks

@@ -1196,6 +1196,7 @@ private func scriptServerTests() {
 // 下面在 JavaScriptCore 里跑真正注入的那段 JS,页面 DOM 用桩对象。
 
 /// 桩页面:`#movie_player` / `ytmusic-player-bar` 两个元素,`video` 暂停与否、mediaSession 标题、document.title 可调。
+/// 两个桩都是 Safari 那种主环境(看得见页面的 `ytcfg`);隔离环境的读写在 `PageWorldReadTests`。
 /// 带状态的播放条桩:`queue.shuffle()`(有 `hasQueue` 时)或随机键翻转 `shuffle-on`,循环键按「关 → 全部 → 单曲」转。
 /// 跑一段注入脚本,回 (输出, 跑完的随机开关, 跑完的 repeat-mode)。
 private func runModeJS(_ js: String, title: String, shuffleOn: Bool, repeatMode: String, hasQueue: Bool) -> (String?, Bool, String) {
@@ -1221,6 +1222,7 @@ private func runModeJS(_ js: String, title: String, shuffleOn: Bool, repeatMode:
       }
     };
     if (__HQ) __bar.queue = { shuffle: function() { __state.shuffle = !__state.shuffle; } };
+    var ytcfg = {};
     var navigator = { mediaSession: { metadata: { title: __MT } } };
     var document = {
       title: '',
@@ -1256,6 +1258,7 @@ private func runPageJS(_ js: String, mediaTitle: String?, documentTitle: String,
         return null;
       }
     };
+    var ytcfg = {};
     var navigator = { mediaSession: { metadata: __MT === null ? null : { title: __MT } } };
     var document = {
       title: __DT,

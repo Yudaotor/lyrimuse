@@ -349,8 +349,15 @@ public final class PlayerQueryServer: @unchecked Sendable {
     /// Spotify 网页版的待播队列:网页播放器组件树上 `playerAPI` 的 `getState()` / `getQueue()`。第一条记录是当前这首,
     /// 之后按播放顺序;记录之间 RS(0x1e)、字段之间 US(0x1f),字段顺序 title、artist、album、毫秒、uri,只收曲目;
     /// 找不到播放器接口返回 NOTFOUND。解析在 `PlayerQueryTracks.spotifyWebQueue`,字段顺序跟它一起改。纪律同上。
-    public static let spotifyWebQueueJS = [
-        "(function(){",
+    ///
+    /// 组件树是页面挂在元素上的属性,Chromium 系脚本接口的隔离环境里读不到,同样经 `BrowserTabProbeScript.inPageWorld` 包一层;
+    /// Spotify 的 CSP 不放内联脚本,走的是它的应答器那条路(02 章决策 286)。
+    public static let spotifyWebQueueJS = BrowserTabProbeScript.inPageWorld(
+        core: spotifyWebQueueCoreJS, pageVisible: SpotifyWebAdProbe.pageWorldVisibleJS)
+
+    /// `spotifyWebQueueJS` 里真正读队列的那个函数(在看得见组件树的环境里调用)。
+    public static let spotifyWebQueueCoreJS = [
+        "function(){",
         "var US = String.fromCharCode(31), RS = String.fromCharCode(30);",
         "var el = document.querySelector('[data-testid=now-playing-widget]');",
         "if (!el) return 'NOTFOUND';",
@@ -370,7 +377,7 @@ public final class PlayerQueryServer: @unchecked Sendable {
         "var out = [rec(cur)];",
         "rest.forEach(function(t){ if (t && String(t.uri || '').indexOf('spotify:track:') === 0) out.push(rec(t)); });",
         "return out.join(RS);",
-        "})()",
+        "}",
     ].joined()
 
     private let queue = DispatchQueue(label: "me.yudaotor.lyrimuse.player-query", qos: .utility)
