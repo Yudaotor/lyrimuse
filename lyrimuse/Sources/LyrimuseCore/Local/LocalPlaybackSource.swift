@@ -3504,6 +3504,12 @@ public final class LocalPlaybackSource: ObservableObject {
                 }
             }
         }
+        // Safari 页面的钟停住 / 又走了(系统那份什么都不报):同样补查一次 poll(),停住时先冻住外推(见 SafariStallWatch)。
+        SafariStallWatch.shared.setChangeHandler { frozen in
+            Task { @MainActor [weak self] in
+                self?.handlePlayerInfoChanged(freezeExtrapolation: frozen, stateSignal: false)
+            }
+        }
         let watcher = MediaControlStreamWatcher { [weak self] pauseSignal, resumeSignal in
             guard !SourceKnockout.isOut(.streamEvents) else { return }
             MainActor.assumeIsolated {

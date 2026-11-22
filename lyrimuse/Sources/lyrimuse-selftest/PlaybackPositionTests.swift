@@ -1,5 +1,6 @@
 import LyrimuseCore
 import Foundation
+import JavaScriptCore
 
 // 播放位置:外推伺服 / 锚点 / seek / 浏览器探针。
 // 由 main.swift 的注册表按组调用;往这一组加断言就写进下面这个函数体里(顺序执行,失败只计
@@ -915,16 +916,163 @@ func runPlaybackPositionTests() {
             let body = sourceBody("private static func fetchRawMediaControlSnapshot(", in: client)
             expectEqual(sourceHas(body, "let webStall = Self.webStallPosition(bundleID: raw.bundleIdentifier, playbackRate: raw.playbackRate, elapsedTime: raw.elapsedTime)"),
                         true, "网页卡住接线: 按系统报的 bundle id 判(网页应用的会话记在它自己名下)")
-            expectEqual(sourceHas(body, "let liveElapsed = webStall ?? Self.livePositionSeconds("), true,
+            expectEqual(sourceHas(body, "let anchorElapsed = webStall ?? Self.livePositionSeconds("), true,
                         "网页卡住接线: 在放、暂停都停在锚点上,不外推、不走暂停那一支的上一拍外推")
             expectEqual(sourceHas(body, "if playing == true, webStall == nil, let timestampDate, let elapsedRaw = raw.elapsedTime"), true,
                         "网页卡住接线: 卡住那份锚点不记成播放中的锚点")
-            expectEqual(sourceHas(body, "let webStallHeld = playing == true && webStall != nil"), true,
+            expectEqual(sourceHas(body, "let webStallHeld = playing == true && (webStall != nil || safariStallHeld)"), true,
                         "网页卡住接线: 在放时才交停住快照,暂停照常是暂停")
             expectEqual(sourceHas(body, "if playing == true, republish.hold == nil, !webStallHeld, let readingElapsed {"), true,
                         "网页卡住接线: 停住的那几拍不记成播放位置")
             expectEqual(sourceHas(body, "let held = republish.hold != nil || pine?.waiting == true || webStallHeld"), true,
                         "网页卡住接线: 停住快照 = 没在走、速率 0、标在等着出声")
+            // Safari 卡住时什么都不报,照页面的钟扣(02 章决策 290):只在 Chromium 那条没接手时看,扣完的位置是后面一切的起点。
+            expectEqual(sourceHas(body, "let safariClock = webStall == nil ? SafariStallWatch.shared.observe(reportedBundleID: bundleID, trackKey: trackKey, anchorKey: anchorKey, playing: playing == true, rate: raw.playbackRate, live: anchorElapsed, now: sampledAt) : nil"),
+                        true, "Safari 卡住接线: Chromium 报速率 0 那条优先,按换过的 bundle id(Kaset 内嵌网页不算 Safari)、这份锚点看")
+            expectEqual(sourceHas(body, "let liveElapsed = safariClock.flatMap { clock in anchorElapsed.map { SafariStallWatch.position(live: $0, now: sampledAt, rate: raw.playbackRate, state: clock) } } ?? anchorElapsed"),
+                        true, "Safari 卡住接线: 外推出来的位置照页面的钟换掉")
+            expectEqual(sourceHas(body, "let safariStallHeld = playing == true && safariClock?.isFrozen(now: sampledAt) == true"), true,
+                        "Safari 卡住接线: 页面停着(读数不旧)时交停住快照")
+        }
+
+        // ---- 网页播放器缓冲卡住:Safari 什么都不报,照页面的钟(SafariStallWatch) ----
+        // 真机(Safari 里的 YouTube Music,扣住分片请求):页面 currentTime 停在 60.853、readyState 2,系统那份一行都不来,速率照报 1。
+        do {
+            typealias W = SafariStallWatch
+            let t0 = Date(timeIntervalSince1970: 1_795_400_000)
+            func sample(_ t: Double, _ clock: Double, paused: Bool = false, starved: Bool = false) -> W.Sample {
+                W.Sample(at: t0.addingTimeInterval(t), clock: clock, paused: paused, starved: starved)
+            }
+            func near(_ a: Double?, _ b: Double, _ tol: Double = 0.001) -> Bool { a.map { abs($0 - b) <= tol } ?? false }
+            let parsed = W.parseSample("CLOCK:60.853|0|1|1795400000123")
+            expectEqual(parsed?.clock == 60.853 && parsed?.paused == false && parsed?.starved == true
+                        && near(parsed?.at.timeIntervalSince1970, 1_795_400_000.123), true,
+                        "Safari 卡住: 解出页面的钟、暂停、断粮、读数时刻")
+            for bad in ["NOTFOUND", "NOTRUNNING", "CLOCK:x|0|0|1", "CLOCK:1|0|0", "CLOCK:1|0|0|0", "", "CLOCK:nan|0|0|5"] {
+                expectEqual(W.parseSample(bad), nil, "Safari 卡住: 读不懂的回答不算(\(bad))")
+            }
+            // 一路正常:每 2 秒读一次,页面的钟跟墙钟一起走(带几毫秒抖动)。
+            var st = W.State()
+            for (i, t) in stride(from: 0.0, through: 10, by: 2).enumerated() {
+                st = W.advance(st, with: sample(t, 40 + t + (i % 2 == 0 ? 0.004 : -0.006)), rate: 1)
+            }
+            expectEqual(st.lag == 0 && st.frozen == false, true, "Safari 卡住: 正常放着不扣、不停")
+            let live = { (t: Double) in 40 + t }
+            expectEqual(W.position(live: live(11), now: t0.addingTimeInterval(11), rate: 1, state: st), 51,
+                        "Safari 卡住: 正常放着照锚点外推")
+            // 10.8s 时卡在 50.8:12s 那次只走了 0.8,14s 那次没动。
+            st = W.advance(st, with: sample(12, 50.8, starved: true), rate: 1)
+            expectEqual(near(st.lag, 1.2, 0.01) && st.frozen, true, "Safari 卡住: 断粮当场停住,少走的 1.2s 扣掉")
+            expectEqual(near(W.position(live: live(13), now: t0.addingTimeInterval(13), rate: 1, state: st), 50.8, 0.01), true,
+                        "Safari 卡住: 停在页面卡住的位置")
+            st = W.advance(st, with: sample(14, 50.8), rate: 1)
+            expectEqual(st.frozen && near(st.lag, 3.2, 0.01), true, "Safari 卡住: 没断粮但钟没走(readyState 还是 4)也算停住")
+            for t in stride(from: 16.0, through: 32, by: 2) { st = W.advance(st, with: sample(t, 50.8, starved: true), rate: 1) }
+            expectEqual(near(W.position(live: live(33), now: t0.addingTimeInterval(33), rate: 1, state: st), 50.8, 0.01), true,
+                        "Safari 卡住: 卡 22 秒一直停在原处")
+            expectEqual(st.frozenSince, t0.addingTimeInterval(12), "Safari 卡住: 记着这次从哪次读数停住(日志一次一行)")
+            // 33.5s 恢复:34s 那次走了 0.5。
+            st = W.advance(st, with: sample(34, 51.3), rate: 1)
+            expectEqual(st.frozen == false && st.frozenSince == nil, true, "Safari 卡住: 钟又走了就放开")
+            expectEqual(near(W.position(live: live(36), now: t0.addingTimeInterval(36), rate: 1, state: st), 53.3, 0.01), true,
+                        "Safari 卡住: 恢复后从卡住的位置接着走(扣掉整段卡顿)")
+            // 只停了一半:读之间少走的部分扣掉,不算停住。
+            var half = W.advance(W.advance(W.State(), with: sample(0, 10), rate: 1), with: sample(2, 11), rate: 1)
+            expectEqual(near(half.lag, 1, 0.01) && half.frozen == false, true, "Safari 卡住: 两次读之间卡过又恢复,只扣少走的")
+            half = W.advance(half, with: sample(4, 13.2), rate: 1)
+            expectEqual(near(half.lag, 1, 0.01), true, "Safari 卡住: 少走不到 \(W.lagTolerance)s 不算")
+            // 暂停、跳转、页面换了一条视频:不扣。
+            let paused = W.advance(W.advance(W.State(), with: sample(0, 10), rate: 1), with: sample(5, 10, paused: true), rate: 1)
+            expectEqual(paused.lag == 0 && paused.frozen == false, true, "Safari 卡住: 页面暂停着不算卡住")
+            let pausedInStall = W.advance(W.advance(W.State(), with: sample(0, 10, starved: true), rate: 1),
+                                          with: sample(2, 10, paused: true), rate: 1)
+            expectEqual(pausedInStall.frozen == false && pausedInStall.frozenSince == nil, true,
+                        "Safari 卡住: 卡着时页面暂停了就不再算停住")
+            let back = W.advance(W.advance(W.State(), with: sample(0, 500), rate: 1), with: sample(2, 3), rate: 1)
+            expectEqual(back.lag == 0 && back.frozen == false, true, "Safari 卡住: 钟往回跳(换了一条视频)不比")
+            let ahead = W.advance(W.advance(W.State(), with: sample(0, 10), rate: 1), with: sample(2, 40), rate: 1)
+            expectEqual(ahead.lag == 0 && ahead.frozen == false, true, "Safari 卡住: 钟往前跳(跳转)不比")
+            let fast = W.advance(W.advance(W.State(), with: sample(0, 10), rate: 2), with: sample(2, 13), rate: 2)
+            expectEqual(near(fast.lag, 1, 0.01), true, "Safari 卡住: 按报的速率算该走多少")
+            // 同一首里页面的钟和曲目位置差一个定值(电台 / 续播时差着整段会话):正常走着时记下,换锚点后头一次读数就拿它比。
+            var learn = W.State()
+            for t in stride(from: 0.0, through: 4, by: 2) {
+                learn = W.advance(learn, with: sample(t, 900 + 30 + t), rate: 1, anchorPosition: 30 + t)
+            }
+            expectEqual(near(learn.offset, 900, 0.01), true, "Safari 卡住: 正常走着时记下页面的钟减曲目位置")
+            let stalledPair = W.advance(learn, with: sample(6, 934.5), rate: 1, anchorPosition: 36)
+            expectEqual(near(stalledPair.offset, 900, 0.01), true, "Safari 卡住: 少走了的那一对扣掉之后记下的还是同一个值")
+            let jumpedPair = W.advance(learn, with: sample(6, 2000), rate: 1, anchorPosition: 36)
+            expectEqual(near(jumpedPair.offset, 900, 0.01), true, "Safari 卡住: 钟跳了的那一对不拿来记")
+            expectEqual(W.advance(W.State(), with: sample(0, 10), rate: 1, anchorPosition: 10).offset, nil,
+                        "Safari 卡住: 只有一次读数不记")
+            // 跳到没缓冲的 150s:新锚点 {150, 跳转那一刻},1.5s 后头一次读数页面停在 150。
+            let seekStall = W.advance(W.State(offset: 900), with: sample(1.5, 1050, starved: true), rate: 1, anchorPosition: 151.5)
+            expectEqual(near(seekStall.lag, 1.5, 0.01) && seekStall.frozen, true, "Safari 卡住: 新锚点下头一次读就比出少走的")
+            expectEqual(near(W.position(live: 152.5, now: t0.addingTimeInterval(2.5), rate: 1, state: seekStall), 150, 0.01), true,
+                        "Safari 卡住: 跳到没缓冲的地方卡住也停在页面的位置")
+            let seekOK = W.advance(W.State(offset: 900), with: sample(1.5, 1051.48), rate: 1, anchorPosition: 151.5)
+            expectEqual(seekOK.lag == 0 && seekOK.frozen == false, true, "Safari 卡住: 新锚点下正常走着不扣")
+            let first = W.advance(W.State(), with: sample(0, 10, starved: true), rate: 1)
+            expectEqual(first.frozen, true, "Safari 卡住: 头一次读就断粮也停住")
+            expectEqual(first.isFrozen(now: t0.addingTimeInterval(W.staleAfter + 0.5)), false,
+                        "Safari 卡住: 读不到页面太久就不停着了")
+            expectEqual(W.position(live: 30, now: t0.addingTimeInterval(W.staleAfter + 0.5), rate: 1, state: first), 30,
+                        "Safari 卡住: 读数旧了照锚点外推")
+            expectEqual(W.interval < 2 && W.interval >= 1, true, "Safari 卡住: 放着时每拍(2s)读一次页面")
+            let sources = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+            let lps = (try? String(contentsOfFile: sources.appendingPathComponent("LyrimuseCore/Local/LocalPlaybackSource.swift").path,
+                                   encoding: .utf8)) ?? ""
+            expectEqual(sourceHas(sourceBody("private func startStreamWatcher() {", in: lps),
+                                  "SafariStallWatch.shared.setChangeHandler { frozen in Task { @MainActor [weak self] in self?.handlePlayerInfoChanged(freezeExtrapolation: frozen, stateSignal: false) } }"),
+                        true, "Safari 卡住接线: 页面停住 / 又走了当场补查一次,停住时先冻住外推")
+            let watch = (try? String(contentsOfFile: sources.appendingPathComponent("LyrimuseCore/Local/SafariStallWatch.swift").path,
+                                     encoding: .utf8)) ?? ""
+            let observeBody = sourceBody("public func observe(reportedBundleID: String?, trackKey: String, anchorKey: String, playing: Bool, rate: Double?,", in: watch)
+            expectEqual(sourceHas(observeBody, "if epoch != anchorKey { epoch = anchorKey state = State(offset: track == trackKey ? state.offset : nil) track = trackKey }")
+                        && sourceHas(observeBody, "guard playing, let host = BrowserPositionProbe.probeTargetBundleID(forReported: reportedBundleID), BrowserAutomationPermission.family(forBundleID: host) == .safari else { reset(now: now) return nil }"),
+                        true, "Safari 卡住接线: 只看 Safari、在放;换锚点从头记但留着同一首的 offset,换歌全清")
+            let readBody = sourceBody("private func read(request: String, epoch readEpoch: String, rate: Double?) {", in: watch)
+            expectEqual(sourceHas(readBody, "guard epoch == readEpoch, let sample else {")
+                        && sourceHas(readBody, "if after.frozen != before.frozen { handler?(after.frozen)"), true,
+                        "Safari 卡住接线: 读数回来时锚点换过了就不用;停住 / 又走了才通知")
+            // 页面脚本:在 JavaScriptCore 里对着假页面跑。
+            func run(_ js: String, prelude: String) -> String {
+                let ctx = JSContext()!
+                ctx.evaluateScript(prelude)
+                return ctx.evaluateScript(js)?.toString() ?? ""
+            }
+            let ytm = run(W.youtubeMusicClockJS, prelude: "var document = { querySelector: function(q) { return q === 'video' ? { currentTime: 60.8531, paused: false, readyState: 2 } : null; } };")
+            let ytmSample = W.parseSample(ytm)
+            expectEqual(ytmSample?.clock == 60.853 && ytmSample?.starved == true && ytmSample?.paused == false, true,
+                        "Safari 卡住: YouTube Music 读 video 的钟和 readyState(\(ytm))")
+            expectEqual(run(W.youtubeMusicClockJS, prelude: "var document = { querySelector: function() { return null; } };"), "NOTFOUND",
+                        "Safari 卡住: 没有 video 回 NOTFOUND")
+            func spotifyPage(_ fields: String) -> String {
+                """
+                var __api = { getState: function() { return \(fields); } };
+                var __fiber = { memoizedProps: { playerAPI: __api }, return: null };
+                var __w = { '__reactFiber$x': __fiber };
+                var document = { querySelector: function(q) { return String(q).indexOf('now-playing-widget') >= 0 ? __w : null; } };
+                """
+            }
+            let buffering = W.parseSample(run(W.spotifyWebClockJS, prelude: spotifyPage(
+                "{ positionAsOfTimestamp: 45000, timestamp: 1, speed: 1, duration: 215000, isPaused: false, isBuffering: true, item: { uri: 'spotify:track:x' } }")))
+            expectEqual(buffering?.clock == 45 && buffering?.starved == true, true,
+                        "Safari 卡住: Spotify 缓冲中停在 positionAsOfTimestamp、算断粮")
+            let playingSp = W.parseSample(run(W.spotifyWebClockJS, prelude: spotifyPage(
+                "{ positionAsOfTimestamp: 45000, timestamp: Date.now() - 2000, speed: 1, duration: 215000, isPaused: false, isBuffering: false, item: { uri: 'spotify:track:x' } }")))
+            expectEqual(playingSp.map { abs($0.clock - 47) < 0.05 && !$0.starved && !$0.paused } == true, true,
+                        "Safari 卡住: Spotify 在放按 timestamp 外推到此刻")
+            let pausedSp = W.parseSample(run(W.spotifyWebClockJS, prelude: spotifyPage(
+                "{ positionAsOfTimestamp: 45000, timestamp: 1, speed: 1, duration: 215000, isPaused: true, isBuffering: false, item: { uri: 'spotify:track:x' } }")))
+            expectEqual(pausedSp?.paused == true && pausedSp?.clock == 45, true, "Safari 卡住: Spotify 暂停着")
+            // 常驻 osascript 的脚本:每个平台带上自己的网址特征和页面脚本,不把 Safari 拉起来。
+            let server = W.serverScript
+            expectEqual(server.contains("\"music.youtube.com\"") && server.contains("\"open.spotify.com\"")
+                        && server.contains("runningApplicationsWithBundleIdentifier('com.apple.Safari')")
+                        && server.contains("return 'NOTRUNNING'"), true,
+                        "Safari 卡住: 常驻脚本按网址找页面、Safari 没开不拉起")
         }
         expectEqual(LocalPlaybackSource.carriesGaplessLead(tier: .noisyFloored, bundleID: nil), false,
                     "gapless 领先: 认不出播放器不校正")

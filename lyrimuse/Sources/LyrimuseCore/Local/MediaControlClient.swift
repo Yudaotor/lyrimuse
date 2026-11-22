@@ -4093,7 +4093,7 @@ public enum MediaControlClient {
                 candidateInstant: candidate, duration: raw.duration,
                 bundleID: raw.bundleIdentifier, now: sampledAt)
         }
-        let liveElapsed = webStall ?? Self.livePositionSeconds(
+        let anchorElapsed = webStall ?? Self.livePositionSeconds(
             playing: playing, elapsedTime: raw.elapsedTime, elapsedTimeNow: raw.elapsedTimeNow,
             playbackRate: raw.playbackRate, timestamp: timestampDate, now: sampledAt,
             lastPlayingPosition: Self.rememberedPlayingPosition(forTrack: trackKey),
@@ -4102,6 +4102,14 @@ public enum MediaControlClient {
             pauseObservedAt: Self.lastPauseObservedAt(),
             playbackStartedAt: Self.startsPausedAnchorOnPlay(bundleID: raw.bundleIdentifier)
                 ? Self.playbackStart(forAnchorKey: anchorKey) : nil)
+        // Safari 卡住时什么都不报:照页面的钟扣掉少走的,卡着就停住(见 SafariStallWatch)。Chromium 那条(webStall)不经这里。
+        let safariClock = webStall == nil
+            ? SafariStallWatch.shared.observe(reportedBundleID: bundleID, trackKey: trackKey, anchorKey: anchorKey,
+                                              playing: playing == true, rate: raw.playbackRate, live: anchorElapsed, now: sampledAt)
+            : nil
+        let liveElapsed = safariClock.flatMap { clock in
+            anchorElapsed.map { SafariStallWatch.position(live: $0, now: sampledAt, rate: raw.playbackRate, state: clock) }
+        } ?? anchorElapsed
         // 切歌时新标题的锚点晚打了,按旧标题下先到的那份候选锚点的起播时刻补回来(见 resetAnchorStartCorrection);
         // 这一拍没有候选锚点(App 中途重启过)时,同一个锚点用上一个进程记下的量(见 restoredStartCorrection)。
         let correctsStart = playing == true && Self.correctsFromResetAnchor(bundleID: raw.bundleIdentifier)
@@ -4128,9 +4136,14 @@ public enum MediaControlClient {
             bundleID: raw.bundleIdentifier, trackKey: trackKey, title: raw.title, playing: playing,
             playbackRate: raw.playbackRate, anchorElapsed: raw.elapsedTime, anchorTimestamp: timestampDate,
             duration: raw.duration, now: sampledAt)
-        let webStallHeld = playing == true && webStall != nil
-        if webStallHeld, Self.noteWebStallLogged(anchorKey: anchorKey) {
-            logger.notice("web player stalled: holding \(raw.title ?? "", privacy: .public) at \(webStall ?? -1, format: .fixed(precision: 3)) (\(raw.bundleIdentifier ?? "", privacy: .public) reports rate 0)")
+        let safariStallHeld = playing == true && safariClock?.isFrozen(now: sampledAt) == true
+        let webStallHeld = playing == true && (webStall != nil || safariStallHeld)
+        if playing == true, let webStall, Self.noteWebStallLogged(anchorKey: anchorKey) {
+            logger.notice("web player stalled: holding \(raw.title ?? "", privacy: .public) at \(webStall, format: .fixed(precision: 3)) (\(raw.bundleIdentifier ?? "", privacy: .public) reports rate 0)")
+        }
+        if safariStallHeld, let since = safariClock?.frozenSince,
+           Self.noteWebStallLogged(anchorKey: anchorKey + "|" + String(since.timeIntervalSince1970)) {
+            logger.notice("web player stalled: holding \(raw.title ?? "", privacy: .public) at \(liveElapsed ?? -1, format: .fixed(precision: 3)) (Safari page clock stopped, lag \(safariClock?.lag ?? 0, format: .fixed(precision: 3)))")
         }
         if playing == true, republish.hold == nil, !webStallHeld, let readingElapsed {
             Self.rememberPlayingPosition(readingElapsed, forTrack: trackKey, at: sampledAt)
