@@ -537,6 +537,72 @@ func runTelemetryTests() {
         let noMain = sample.replacingOccurrences(of: "com.apple.main-thread", with: "x")
         expectEqual(H.mainThreadStack(fromSample: noMain, executable: "lyrimuse").first?.symbol, "__psynch_mutexwait",
                     "采样: 没标主线程时取第一个线程")
+        // 真实 sample 输出的形状(主线程在主队列回调里睡着,采到约四分之一时恢复):最重的是恢复后在顶层 run loop 里等事件。
+        let recovered = """
+        Call graph:
+            1722 Thread_25237828   DispatchQueue_1: com.apple.main-thread  (serial)
+            + 1722 start  (in dyld) + 6688  [0x188c6be88]
+            +   1722 ???  (in lyrimuse)  load address 0x10022c000 + 0x8f9648  [0x100b25648]
+            +     1722 -[NSApplication run]  (in AppKit) + 396  [0x18d6a290c]
+            +       1722 -[NSApplication(NSEventRouting) nextEventMatchingMask:untilDate:inMode:dequeue:]  (in AppKit) + 292  [0x18df2726c]
+            +         1722 _DPSNextEvent  (in AppKit) + 580  [0x18d6af4fc]
+            +           1722 _CFRunLoopRunSpecificWithOptions  (in CoreFoundation) + 536  [0x1891db644]
+            +             1284 __CFRunLoopRun  (in CoreFoundation) + 1172  [0x189101220]
+            +             ! 1284 __CFRunLoopServiceMachPort  (in CoreFoundation) + 160  [0x1891029d8]
+            +             !   1284 mach_msg  (in libsystem_kernel.dylib) + 24  [0x188ffcfac]
+            +             !     1284 mach_msg_overwrite  (in libsystem_kernel.dylib) + 480  [0x189005a28]
+            +             !       1284 mach_msg2_internal  (in libsystem_kernel.dylib) + 76  [0x18900f8e0]
+            +             !         1284 mach_msg2_trap  (in libsystem_kernel.dylib) + 8  [0x188ffcc20]
+            +             437 __CFRunLoopRun  (in CoreFoundation) + 1980  [0x189101548]
+            +             ! 437 __CFRUNLOOP_IS_SERVICING_THE_MAIN_DISPATCH_QUEUE__  (in CoreFoundation) + 16  [0x18913f868]
+            +             !   437 _dispatch_main_queue_callback_4CF  (in libdispatch.dylib) + 44  [0x188e8fa44]
+            +             !     437 _dispatch_client_callout  (in libdispatch.dylib) + 16  [0x188e9a59c]
+            +             !       437 ???  (in lyrimuse)  load address 0x10022c000 + 0x1a2b  [0x10022da2b]
+            +             !         437 ???  (in lyrimuse)  load address 0x10022c000 + 0x3c4d  [0x10022fc4d]
+            +             !           437 usleep  (in libsystem_c.dylib) + 68  [0x188ed6fe0]
+            +             !             437 nanosleep  (in libsystem_c.dylib) + 220  [0x188ed70c8]
+            +             !               437 __semwait_signal  (in libsystem_kernel.dylib) + 8  [0x189000308]
+            +             1 __CFRunLoopRun  (in CoreFoundation) + 2572  [0x189101798]
+            +               1 __kdebug_trace64  (in libsystem_kernel.dylib) + 8  [0x188fff914]
+            1722 Thread_25237837
+            + 1722 start_wqthread  (in libsystem_pthread.dylib) + 8  [0x18903cce0]
+        """
+        let frameName = { (f: TelemetryCrash.Frame) in f.symbol ?? "\(f.image ?? "")+\(f.offset ?? -1)" }
+        expectEqual(H.mainThreadStack(fromSample: recovered, executable: "lyrimuse").map(frameName),
+                    ["__semwait_signal", "nanosleep", "usleep", "lyrimuse+15437", "lyrimuse+6699", "lyrimuse+9410120"],
+                    "采样: 最重的是恢复后的顶层空闲、另有 25% 样本卡在别处时取卡住的那条(采样起得晚,停顿采到一半已经恢复)")
+        let barelyBusy = recovered.replacingOccurrences(of: " 1284 ", with: " 1669 ").replacingOccurrences(of: " 437 ", with: " 52 ")
+        expectEqual(H.mainThreadStack(fromSample: barelyBusy, executable: "lyrimuse").map(frameName),
+                    ["mach_msg2_trap", "mach_msg2_internal", "mach_msg_overwrite", "lyrimuse+9410120"],
+                    "采样: 不在等的样本只占 3%(平时空闲时零星的活)时照旧报顶层空闲,不拿零星的活顶替")
+        let inModal = recovered.replacingOccurrences(of: "usleep  (in libsystem_c.dylib)", with: "-[NSApplication runModalForWindow:]  (in AppKit)")
+            .replacingOccurrences(of: "nanosleep  (in libsystem_c.dylib)", with: "__CFRunLoopServiceMachPort  (in CoreFoundation)")
+            .replacingOccurrences(of: "__semwait_signal  (in libsystem_kernel.dylib)", with: "mach_msg2_trap  (in libsystem_kernel.dylib)")
+        expectEqual(H.mainThreadStack(fromSample: inModal, executable: "lyrimuse").map(frameName),
+                    ["mach_msg2_trap", "__CFRunLoopServiceMachPort", "-[NSApplication runModalForWindow:]",
+                     "lyrimuse+15437", "lyrimuse+6699", "lyrimuse+9410120"],
+                    "采样: 卡住的那段是模态循环在等事件时同样取它(嵌套循环里等不算顶层空闲)")
+        let busiestNotIdle = """
+        Call graph:
+            2000 Thread_1   DispatchQueue_1: com.apple.main-thread  (serial)
+            + 2000 start  (in dyld) + 6688  [0x18204be88]
+            +   2000 ???  (in lyrimuse)  load address 0x10022c000 + 0x8f9648  [0x100b25648]
+            +     2000 _CFRunLoopRunSpecificWithOptions  (in CoreFoundation) + 536  [0x1891db644]
+            +       1200 __CFRunLoopRun  (in CoreFoundation) + 1172  [0x189101220]
+            +       ! 650 __CFRUNLOOP_IS_CALLING_OUT_TO_A_TIMER_CALLBACK_FUNCTION__  (in CoreFoundation) + 32  [0x18913f000]
+            +       ! : 650 ???  (in lyrimuse)  load address 0x10022c000 + 0x1a2b  [0x10022da2b]
+            +       ! :   650 __open  (in libsystem_kernel.dylib) + 8  [0x189000100]
+            +       ! 550 __CFRunLoopServiceMachPort  (in CoreFoundation) + 160  [0x1891029d8]
+            +       !   550 mach_msg2_trap  (in libsystem_kernel.dylib) + 8  [0x188ffcc20]
+            +       800 __CFRunLoopRun  (in CoreFoundation) + 1980  [0x189101548]
+            +         800 ???  (in lyrimuse)  load address 0x10022c000 + 0x3c4d  [0x10022fc4d]
+            +           800 __semwait_signal  (in libsystem_kernel.dylib) + 8  [0x189000308]
+        """
+        expectEqual(H.mainThreadStack(fromSample: busiestNotIdle, executable: "lyrimuse").first?.symbol, "__open",
+                    "采样: 最重的那条本来就不是顶层空闲时照旧按样本数走,不改按「不在等」的样本数挑")
+        expectEqual(H.isTopLevelIdle([TelemetryCrash.Frame(image: "CoreFoundation", symbol: "__CFRunLoopServiceMachPort", offset: nil),
+                                      TelemetryCrash.Frame(image: "AppKit", symbol: "-[NSApplication _doModalLoop:peek:]", offset: nil)]),
+                    false, "采样: 在模态循环里等事件不算顶层空闲")
 
         var wake = WakeDetector()
         wake.observe(uptime: 100, continuous: 1000)

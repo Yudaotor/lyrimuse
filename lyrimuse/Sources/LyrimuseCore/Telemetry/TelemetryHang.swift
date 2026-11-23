@@ -139,21 +139,23 @@ public struct TelemetryHang: Codable, Equatable, Sendable {
     /// 弹菜单这类,说明为什么主队列上的探测任务等不到),再给最深的、不属于 run loop 等事件那几层(`runLoopPlumbing`)的帧。
     /// 发版包剥了符号,自家帧只有偏移(跟崩溃摘要的 `imageOffset` 同一口径,用发版符号包能还原);有符号的(本机构建)带符号。
     /// 找不到主线程时返回空。见 14 章决策 194。
+    ///
+    /// 最重的那条是顶层 run loop 在等事件(`isTopLevelIdle`),而不在等的样本至少占 `minStallShare` 时,改取不在等的那部分里
+    /// 最重的路径:看门狗卡满 `sampleAfter` 才起 `sample`,它还要零点几到一秒多才开始取样,短停顿常常采到一半已经恢复,
+    /// 2 秒里多数样本是恢复后的空闲。平时空闲的主线程不在等的样本不到 1%。见 14 章决策 243。
     public static func mainThreadStack(fromSample text: String, executable: String) -> [TelemetryCrash.Frame] {
         let lines = text.split(separator: "\n", omittingEmptySubsequences: false)
         guard let graph = lines.firstIndex(where: { $0.hasPrefix("Call graph:") }) else { return [] }
         let threads = lines[(graph + 1)...].indices.filter { lines[$0].contains("Thread_") && countColumn(lines[$0]) != nil }
         guard let header = threads.first(where: { lines[$0].contains("com.apple.main-thread") }) ?? threads.first,
-              var column = countColumn(lines[header]) else { return [] }
-        // 调用图按深度优先排,每个节点的子节点按样本数从多到少:紧跟着、缩进更深的那一行就是最重的子节点。
-        var path: [TelemetryCrash.Frame] = []
-        var i = header + 1
-        while i < lines.count, let next = countColumn(lines[i]), next > column {
-            if let frame = frame(lines[i]) { path.append(frame) }
-            column = next
-            i += 1
+              let tree = SampleTree(lines: lines, header: header) else { return [] }
+        let heaviest = tree.path { tree.count[$0] }
+        var path = heaviest
+        if isTopLevelIdle(heaviest.compactMap { tree.frame[$0] }),
+           Double(tree.busy[0]) >= minStallShare * Double(tree.count[0]) {
+            path = tree.path { tree.busy[$0] }
         }
-        let deepestFirst = Array(path.reversed())
+        let deepestFirst = Array(path.compactMap { tree.frame[$0] }.reversed())
         let rest = Array(deepestFirst.indices.dropFirst(leafFrames))
         var chosen = Array(rest.filter { deepestFirst[$0].image == executable }.prefix(ownFrames))
         let spare = ownFrames - chosen.count
@@ -168,6 +170,75 @@ public struct TelemetryHang: Codable, Equatable, Sendable {
             chosen.append(contentsOf: (markers + others).prefix(spare))
         }
         return Array(deepestFirst.prefix(leafFrames)) + chosen.sorted().map { deepestFirst[$0] }
+    }
+
+    /// 最重路径是顶层空闲时,不在等的样本占到这么多才改取它们(14 章决策 243)。
+    static let minStallShare = 0.05
+
+    /// 这条路径(从浅到深)是不是主线程在顶层 run loop 里等事件:经过 run loop 等消息那一层(`__CFRunLoopServiceMachPort`),
+    /// 而且没有任何嵌套循环 / 主队列回调这类线索帧(`nestingKind`)。
+    public static func isTopLevelIdle(_ path: [TelemetryCrash.Frame]) -> Bool {
+        path.contains { $0.symbol?.hasPrefix("__CFRunLoopServiceMachPort") == true } && !path.contains { nestingKind($0) != nil }
+    }
+
+    /// 主线程那一段调用图建成的树:下标 0 是线程那一行,其余按出现顺序。`count` 是含子节点的样本数,
+    /// `busy` 是其中不是顶层空闲(`isTopLevelIdle`)的样本数。
+    struct SampleTree {
+        var frame: [TelemetryCrash.Frame?] = [nil]
+        var count: [Int]
+        var children: [[Int]] = [[]]
+        var busy: [Int]
+
+        init?(lines: [Substring], header: Int) {
+            guard let column = TelemetryHang.countColumn(lines[header]), let total = TelemetryHang.sampleCount(lines[header]) else {
+                return nil
+            }
+            count = [total]
+            var parent: [Int] = [0]
+            var columns: [Int] = [column]
+            var i = header + 1
+            while i < lines.count, let next = TelemetryHang.countColumn(lines[i]), next > column {
+                while let last = columns.last, last >= next {
+                    columns.removeLast()
+                    parent.removeLast()
+                }
+                let node = count.count
+                frame.append(TelemetryHang.frame(lines[i]))
+                count.append(TelemetryHang.sampleCount(lines[i]) ?? 0)
+                children.append([])
+                children[parent.last ?? 0].append(node)
+                parent.append(node)
+                columns.append(next)
+                i += 1
+            }
+            busy = Array(repeating: 0, count: count.count)
+            fillBusy(0, waiting: false, nested: false)
+        }
+
+        /// `waiting` / `nested`:从线程那一行到这里(含)有没有 run loop 等消息那一层、有没有线索帧,跟 `isTopLevelIdle` 同一判据。
+        private mutating func fillBusy(_ node: Int, waiting: Bool, nested: Bool) {
+            let waiting = waiting || frame[node]?.symbol?.hasPrefix("__CFRunLoopServiceMachPort") == true
+            let nested = nested || frame[node].map { TelemetryHang.nestingKind($0) != nil } == true
+            var busyHere = waiting && !nested ? 0 : max(count[node] - children[node].reduce(0) { $0 + count[$1] }, 0)
+            for child in children[node] {
+                fillBusy(child, waiting: waiting, nested: nested)
+                busyHere += busy[child]
+            }
+            busy[node] = busyHere
+        }
+
+        /// 从线程那一行往下,每层走 `weight` 最大的子节点(一样大取先列出的),走到 `weight` 都为 0 或没有子节点为止。
+        /// 返回经过的节点(不含线程那一行),从浅到深。
+        func path(_ weight: (Int) -> Int) -> [Int] {
+            var nodes: [Int] = []
+            var node = 0
+            while let next = children[node].max(by: { weight($0) < weight($1) || (weight($0) == weight($1) && $0 > $1) }),
+                  weight(next) > 0 {
+                nodes.append(next)
+                node = next
+            }
+            return nodes
+        }
     }
 
     /// 主线程在等事件时每次都有的那几层(加上进程入口):空名额不给它们。
@@ -197,7 +268,7 @@ public struct TelemetryHang: Codable, Equatable, Sendable {
     }
 
     /// 行里样本数开始的那一列(`+ ! : |` 和空格是缩进);不是调用图的行返回 nil。
-    private static func countColumn(_ line: Substring) -> Int? {
+    static func countColumn(_ line: Substring) -> Int? {
         var column = 0
         for ch in line {
             if ch == " " || ch == "+" || ch == "!" || ch == ":" || ch == "|" { column += 1; continue }
@@ -206,9 +277,15 @@ public struct TelemetryHang: Codable, Equatable, Sendable {
         return nil
     }
 
+    /// 调用图一行开头的样本数;不是调用图的行返回 nil。
+    static func sampleCount(_ line: Substring) -> Int? {
+        guard let column = countColumn(line) else { return nil }
+        return Int(line.dropFirst(column).prefix { $0.isNumber })
+    }
+
     /// `1542 -[NSApplication run]  (in AppKit) + 396  [0x186a8290c]`、
     /// `1542 ???  (in lyrimuse)  load address 0x10022c000 + 0x8f9648  [0x100b25648]`。
-    private static func frame(_ line: Substring) -> TelemetryCrash.Frame? {
+    static func frame(_ line: Substring) -> TelemetryCrash.Frame? {
         var start = line.startIndex
         while start < line.endIndex, !line[start].isNumber { start = line.index(after: start) }
         while start < line.endIndex, line[start].isNumber { start = line.index(after: start) }
