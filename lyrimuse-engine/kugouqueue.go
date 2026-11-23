@@ -482,8 +482,17 @@ type kugouQueueSongRow struct {
 
 // kugouPlayingQueueSong:sqlite 那份队列(推荐流时酷狗写在这里)里正在放的这首:歌名(showName,没有时 musicName 的后半)一致、
 // 署名对得上、两边时长都知道时对得上。不止一条时取第一条(同一首在队列里出现两次,id 是同一套)。读不了、没有为 false。
+//
+// 先看 Mac 版那份,再看 iPad 版的(kugouIPadQueuePath)。
 func kugouPlayingQueueSong(artist, title string, durationSecs float64) (kugouQueueSongRow, bool) {
-	path := kugouUpcomingPath()
+	if s, ok := kugouQueueSongIn(kugouUpcomingPath(), kugouQueueSongSQL, artist, title, durationSecs); ok {
+		return s, true
+	}
+	return kugouQueueSongIn(kugouIPadQueuePath(), kugouIPadQueueSQL(kugouQueueSongSQL), artist, title, durationSecs)
+}
+
+// kugouQueueSongIn:按 query 读一份队列库,找正在放的这首,判据见 kugouPlayingQueueSong。
+func kugouQueueSongIn(path, query, artist, title string, durationSecs float64) (kugouQueueSongRow, bool) {
 	if path == "" {
 		return kugouQueueSongRow{}, false
 	}
@@ -493,7 +502,7 @@ func kugouPlayingQueueSong(artist, title string, durationSecs float64) (kugouQue
 	ctx, cancel := context.WithTimeout(context.Background(), kugouUpcomingQueryTimeout)
 	defer cancel()
 	uri := (&neturl.URL{Scheme: "file", Path: path, RawQuery: "mode=ro"}).String()
-	out, err := exec.CommandContext(ctx, "/usr/bin/sqlite3", "-json", uri, kugouQueueSongSQL).Output()
+	out, err := exec.CommandContext(ctx, "/usr/bin/sqlite3", "-json", uri, query).Output()
 	if err != nil {
 		return kugouQueueSongRow{}, false
 	}

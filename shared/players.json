@@ -104,6 +104,7 @@
       "bundleID": "com.kugou.mac.Music",
       "goBundleConst": "kugouMusicBundleID",
       "processName": "酷狗音乐",
+      "otherProcessNames": ["kugou"],
       "displayName": {"l10n": "酷狗音乐"},
       "scrobbleLabel": "Kugou Music (macOS)",
       "nativeLyricSource": "kugou",
@@ -123,7 +124,7 @@
       "tint": {"source": "kugou"},
       "fallbackSymbol": "music.note",
       "bundledIcon": "KugouIcon",
-      "note": "Mac Catalyst 应用,靠 MPNowPlayingInfoCenter 发布进 MediaRemote。processName 是 UTF-8 12 字节,内核 p_comm 上限 16 字节——再长两个汉字 pgrep -x 就会失效。「喜欢」按它菜单栏的「喜欢歌曲」、读播放条那颗心(KugouMenuControl),所以要辅助功能权限。"
+      "note": "Mac Catalyst 应用,靠 MPNowPlayingInfoCenter 发布进 MediaRemote。processName 是 UTF-8 12 字节,内核 p_comm 上限 16 字节——再长两个汉字 pgrep -x 就会失效。「喜欢」按它菜单栏的「喜欢歌曲」、读播放条那颗心(KugouMenuControl),所以要辅助功能权限。iPad 版(com.kugou.kugou1002,可执行文件 kugou)按它认(PlayerBundleAliases、KugouIPadNowPlaying)。"
     },
     {
       "id": "kuwo_music",

@@ -344,6 +344,16 @@ public final class MediaControlStreamWatcher {
                 next[key] = payload[key]
             }
         }
+        // iPad 版酷狗认恢复要看速率(见 KugouIPadNowPlaying),合并状态只为它多存速率和在放。
+        if next["bundleIdentifier"] as? String == KugouIPadNowPlaying.bundleID {
+            for key in ["playbackRate", "playing"] where payload.keys.contains(key) {
+                if payload[key] is NSNull {
+                    next.removeValue(forKey: key)
+                } else {
+                    next[key] = payload[key]
+                }
+            }
+        }
         // 只看这一行**带不带** playing:false —— 取的是"暂停发生在这一刻"这个时刻,不是状态值本身
         // (状态仍由轮询快照决定,见文件头"唯一的例外")。
         //
@@ -352,18 +362,28 @@ public final class MediaControlStreamWatcher {
         // `{playbackRate:0, …}`,不会再报一次 `playing:false`。不认它就不冻结外推,暂停那一刻回跳 ~0.45s。
         let rateStopped = (payload["playbackRate"] as? NSNumber)?.doubleValue == 0
             && PlaybackPlayer.builtin(forBundleID: next["bundleIdentifier"] as? String)?.playingFromRate == true
-        let paused = (payload["playing"] as? Bool) == false || rateStopped
-        let resumed = (payload["playing"] as? Bool) == true
+        var paused = (payload["playing"] as? Bool) == false || rateStopped
+        var resumed = (payload["playing"] as? Bool) == true
         // 曲目换没换,跟锚点判定完全无关:只带 title/artist 的 diff 行(实测电台换歌就有这种形态)会在
         // 下面那道"没有 elapsedTime/timestamp 就早退"的闸之前返回,所以这一步必须在闸之前算。
         // 合并状态里留原样(下一行只带 title 的 diff 才拼得回 iPad 版网易云的歌词模式),判换歌、算锚点身份用整理过的,
-        // 跟轮询那一路逐字一致(见 NetEaseIPadNowPlaying、QQIPadNowPlaying)。开播差量要在整理之前记下,这一行的锚点身份才带上提前量。
+        // 跟轮询那一路逐字一致(见 NetEaseIPadNowPlaying、QQIPadNowPlaying、KugouIPadNowPlaying)。开播差量要在整理之前记下,这一行的锚点身份才带上提前量。
         // 上一行要先于这一行再整理一次:整理共用一份状态,反过来的话上一行(撕裂帧)会按这一行刚记下的真名认成新歌,换歌报不出来。
         if NetEaseIPadNowPlaying.isBareStart(payload: payload, merged: next), let timestamp = next["timestamp"] as? String {
             NetEaseIPadNowPlaying.noteBareStart(timestamp: timestamp, full: payload["elapsedTime"] != nil)
         }
-        let before = QQIPadNowPlaying.normalizedFields(NetEaseIPadNowPlaying.normalizedFields(merged))
-        let identity = QQIPadNowPlaying.normalizedFields(NetEaseIPadNowPlaying.normalizedFields(next))
+        let before = KugouIPadNowPlaying.normalizedFields(
+            QQIPadNowPlaying.normalizedFields(NetEaseIPadNowPlaying.normalizedFields(merged)))
+        let identity = KugouIPadNowPlaying.normalizedFields(
+            QQIPadNowPlaying.normalizedFields(NetEaseIPadNowPlaying.normalizedFields(next)))
+        // iPad 版酷狗:只换时间戳的那一行就是它恢复播放的那一刻;补成在放之后,进度变了、速率还是 0 的那一行是暂停,
+        // 它这时不再报 `playing:false`(见 KugouIPadNowPlaying)。按 Mac 版的 `playingFromRate` 认 `playbackRate:0`。
+        if next["bundleIdentifier"] as? String == KugouIPadNowPlaying.bundleID {
+            let was = before["playing"] as? Bool == true, now = identity["playing"] as? Bool == true
+            if now, !was { resumed = true }
+            if was, !now { paused = true }
+            if (payload["playbackRate"] as? NSNumber)?.doubleValue == 0 { paused = true }
+        }
         let changed = changedTrackKey(before: before, after: identity)
         guard payload.keys.contains("elapsedTime") || payload.keys.contains("timestamp") else {
             return MediaControlAnchorDigest(merged: next, anchorKey: nil, tight: false, anchorAge: nil,
@@ -371,7 +391,7 @@ public final class MediaControlStreamWatcher {
                                             trackChangeKey: changed, trackChangeAt: changed == nil ? nil : arrivedAt)
         }
         let elapsed = (identity["elapsedTime"] as? NSNumber)?.doubleValue
-        let timestamp = next["timestamp"] as? String
+        let timestamp = identity["timestamp"] as? String
         guard elapsed != nil || timestamp != nil else {
             return MediaControlAnchorDigest(merged: next, anchorKey: nil, tight: false, anchorAge: nil,
                                             pausedAtArrival: paused, resumedAtArrival: resumed,

@@ -68,6 +68,24 @@ func kugouLocalLyricDir() string {
 		"Application Support/com.kugou.mac.Music/Caches/kgLyric"))
 }
 
+// kugouIPadLocalDirOverride 让单测把 iPad 版的目录指到临时路径。空 = 用真实路径。
+var kugouIPadLocalDirOverride string
+
+// kugouIPadLocalLyricDir 是 iPad 版酷狗(iOS 应用跑在 Apple 芯片 Mac 上,bundle id com.kugou.kugou1002)的歌词缓存目录,
+// 跟 Mac 版同一种 KRC、同样按「歌手 - 歌名_hash.krc」或数字起名。App 把它按 Mac 版认,引擎拿到的都是 Mac 版的 bundle id,
+// 两个目录合进同一份索引。读它的成败不记进 "kugou" 的访问状态(那一份管 Mac 版)。见 02 章决策 292。
+func kugouIPadLocalLyricDir() string {
+	if kugouIPadLocalDirOverride != "" {
+		return kugouIPadLocalDirOverride
+	}
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return ""
+	}
+	return otherAppContainer(filepath.Join(home, "Library/Containers/com.kugou.kugou1002/Data/Library",
+		"Application Support/com.kugou.kugou1002/Caches/kgLyric"))
+}
+
 // kugouLocalMaxFileBytes:单个 KRC 的大小上限。实测本机最大 12KB 量级;设 1MB 是防"目录里
 // 混进一个异常大的文件"时白读白解压,不是格式约束。
 const kugouLocalMaxFileBytes = 1 << 20
@@ -121,10 +139,11 @@ func kugouLocalAIGenerated(body string) bool {
 }
 
 var (
-	kugouLocalMu      sync.Mutex
-	kugouLocalIndex   map[string][]kugouLocalEntry
-	kugouLocalFiles   map[string]kugouLocalFile
-	kugouLocalDirMod  time.Time
+	kugouLocalMu    sync.Mutex
+	kugouLocalIndex map[string][]kugouLocalEntry
+	kugouLocalFiles map[string]kugouLocalFile
+	// kugouLocalDirSig:上次列成功的各目录 mtime 拼起来的签名,没变就不重扫。
+	kugouLocalDirSig  string
 	kugouLocalScanned time.Time
 	kugouLocalReady   bool
 )
@@ -139,24 +158,40 @@ func kugouLocalKey(artist, title string) string {
 	return na + "|" + nt
 }
 
-// refreshKugouLocalIndexLocked 在目录 mtime 变过、且距上次扫描超过节流间隔时重建索引。
+// refreshKugouLocalIndexLocked 在目录 mtime 变过、且距上次扫描超过节流间隔时重建索引。Mac 版、iPad 版两个目录合进同一份索引。
 // 调用方必须持有 kugouLocalMu。
 func refreshKugouLocalIndexLocked() {
-	dir := kugouLocalLyricDir()
-	if dir == "" {
+	type lyricDir struct {
+		path string
+		mod  time.Time
+		mac  bool
+	}
+	var dirs []lyricDir
+	if dir := kugouLocalLyricDir(); dir != "" {
+		st, err := os.Stat(dir)
+		if err != nil || !st.IsDir() {
+			// 没装酷狗 / 没开过 / 路径变了 —— 都是正常情况,静默退回网络解析。
+			// 被 TCC 拒了**不是**常态,那一种由 noteLocalCacheDenied 记一行,理由见它的头注。
+			noteLocalCacheDenied("kugou", dir, err)
+		} else {
+			dirs = append(dirs, lyricDir{dir, st.ModTime(), true})
+		}
+	}
+	if dir := kugouIPadLocalLyricDir(); dir != "" {
+		if st, err := os.Stat(dir); err == nil && st.IsDir() {
+			dirs = append(dirs, lyricDir{dir, st.ModTime(), false})
+		}
+	}
+	if len(dirs) == 0 {
 		kugouLocalIndex, kugouLocalReady = nil, true
 		return
 	}
-	st, err := os.Stat(dir)
-	if err != nil || !st.IsDir() {
-		// 没装酷狗 / 没开过 / 路径变了 —— 都是正常情况,静默退回网络解析。
-		// 被 TCC 拒了**不是**常态,那一种由 noteLocalCacheDenied 记一行,理由见它的头注。
-		noteLocalCacheDenied("kugou", dir, err)
-		kugouLocalIndex, kugouLocalReady = nil, true
-		return
+	sig := ""
+	for _, d := range dirs {
+		sig += d.path + "@" + d.mod.Format(time.RFC3339Nano) + "\n"
 	}
 	now := time.Now()
-	if kugouLocalReady && st.ModTime().Equal(kugouLocalDirMod) {
+	if kugouLocalReady && sig == kugouLocalDirSig {
 		return
 	}
 	if kugouLocalReady && now.Sub(kugouLocalScanned) < kugouLocalRescanMin {
@@ -164,19 +199,40 @@ func refreshKugouLocalIndexLocked() {
 	}
 	kugouLocalScanned, kugouLocalReady = now, true
 
-	ents, err := os.ReadDir(dir)
-	if err != nil {
-		// stat 过了不代表这一步也过:TCC 允许 stat 一个目录却拒绝列它的内容。
-		noteLocalCacheDenied("kugou", dir, err)
-		kugouLocalIndex, kugouLocalFiles = nil, nil
+	idx := map[string][]kugouLocalEntry{}
+	files := map[string]kugouLocalFile{}
+	listed := 0
+	for _, d := range dirs {
+		ents, err := os.ReadDir(d.path)
+		if err != nil {
+			// stat 过了不代表这一步也过:TCC 允许 stat 一个目录却拒绝列它的内容。
+			if d.mac {
+				noteLocalCacheDenied("kugou", d.path, err)
+			}
+			continue
+		}
+		listed++
+		if d.mac {
+			// 读到了就撤掉「被拒」—— 授权之后设置页那个提示要能自己消失。
+			noteLocalCacheReadable("kugou")
+		}
+		indexKugouLocalDir(d.path, ents, idx, files)
+	}
+	if listed < len(dirs) {
+		// 有目录没列成功:签名不记,下一次照样重试。
+		kugouLocalIndex, kugouLocalFiles = idx, files
 		return
 	}
 	// 目录版本列成功才记:先记的话,一次偶发失败之后直到目录再变都不会重试。
-	kugouLocalDirMod = st.ModTime()
-	// 读到了就撤掉「被拒」—— 授权之后设置页那个提示要能自己消失。
-	noteLocalCacheReadable("kugou")
-	idx := map[string][]kugouLocalEntry{}
-	files := make(map[string]kugouLocalFile, len(ents))
+	kugouLocalDirSig = sig
+	kugouLocalIndex, kugouLocalFiles = idx, files
+	if len(idx) > 0 {
+		log.Printf("kugou local: indexed %d tracks from client cache", len(idx))
+	}
+}
+
+// indexKugouLocalDir 把一个目录里的 .krc 收进索引;没变过的文件沿用上一轮(kugouLocalFiles)的解析结果。
+func indexKugouLocalDir(dir string, ents []os.DirEntry, idx map[string][]kugouLocalEntry, files map[string]kugouLocalFile) {
 	for _, e := range ents {
 		if e.IsDir() || !strings.HasSuffix(e.Name(), ".krc") {
 			// 同目录下还有 `artistsInfo-…` 那批 plist(歌手资料),不是歌词。
@@ -215,10 +271,6 @@ func refreshKugouLocalIndexLocked() {
 				idx[key] = append(idx[key], f.named)
 			}
 		}
-	}
-	kugouLocalIndex, kugouLocalFiles = idx, files
-	if len(idx) > 0 {
-		log.Printf("kugou local: indexed %d tracks from client cache", len(idx))
 	}
 }
 
@@ -574,8 +626,18 @@ func kugouUpcomingSplit(musicName string) (artist, title string) {
 // **读不到队列**(没有这个文件 / plutil 解不开 / 结构不认识 —— 更老的客户端,或者正在播推荐流)
 // 才退回 currentPlayList.sqlite(两种情形见 kugouUpcomingPath)。plist 读到了、只是当前这首不在里面时**不**退回 sqlite:plist 是
 // 当前队列,它说不在就是不在,拿那份过期库去反查只会预取一批不会播的歌。
+//
+// iPad 版酷狗(App 按 Mac 版认,引擎拿到的是 Mac 版的 bundle id)的队列在它自己容器的库里(kugouIPadQueuePath):Mac 版那份
+// plist 没认出当前这首时先看它,当前这首在里面才用,不在就照旧走 Mac 版的路。
 func kugouUpcoming(artist, title string, n int) ([]upcomingTrack, bool) {
-	if res, ok, handled := kugouUpcomingFromPlist(artist, title, n); handled {
+	res, ok, handled := kugouUpcomingFromPlist(artist, title, n)
+	if handled && ok {
+		return res, ok
+	}
+	if ipad, found := kugouUpcomingFromDB(kugouIPadQueuePath(), kugouIPadQueueSQL(kugouUpcomingSQL), false, artist, title, n); found {
+		return ipad, true
+	}
+	if handled {
 		return res, ok
 	}
 	return kugouUpcomingFromSQLite(artist, title, n)
@@ -587,13 +649,20 @@ func kugouUpcoming(artist, title string, n int) ([]upcomingTrack, bool) {
 // (实测 59.7 / 180.6 / 59.6 / 120.7 …),不是当前进度 —— 别拿它定位。所以位置只能靠
 // 正在播的那首歌反查 `musicName`,查不到就退回同专辑预取(这份库停在上一个歌单是常态)。
 func kugouUpcomingFromSQLite(artist, title string, n int) ([]upcomingTrack, bool) {
-	path := kugouUpcomingPath()
+	return kugouUpcomingFromDB(kugouUpcomingPath(), kugouUpcomingSQL, true, artist, title, n)
+}
+
+// kugouUpcomingFromDB:按 query 读一份队列库(Mac 版的 currentPlayList.sqlite 或 iPad 版的),当前这首在里面就取之后的几首。
+// mac:读的是 Mac 版那份,访问状态记进 "kugou";iPad 版那份不记(见 kugouIPadQueuePath)。
+func kugouUpcomingFromDB(path, query string, mac bool, artist, title string, n int) ([]upcomingTrack, bool) {
 	if path == "" {
 		return nil, false
 	}
 	if _, err := os.Stat(path); err != nil {
 		// 没装酷狗 / 没播过是常态,静默;被 TCC 拒了不是,那一种要留痕(见 localcachefs.go)。
-		noteLocalCacheDenied("kugou", path, err)
+		if mac {
+			noteLocalCacheDenied("kugou", path, err)
+		}
 		return nil, false
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), kugouUpcomingQueryTimeout)
@@ -601,15 +670,19 @@ func kugouUpcomingFromSQLite(artist, title string, n int) ([]upcomingTrack, bool
 	// mode=ro + net/url 组 URI 的理由同 queryQQLocalSongs:路径里带空格要转义,
 	// 只读快照撞上客户端写锁就直接失败、fail-soft 退回。
 	uri := (&neturl.URL{Scheme: "file", Path: path, RawQuery: "mode=ro"}).String()
-	out, err := exec.CommandContext(ctx, "/usr/bin/sqlite3", "-json", uri, kugouUpcomingSQL).Output()
+	out, err := exec.CommandContext(ctx, "/usr/bin/sqlite3", "-json", uri, query).Output()
 	if err != nil {
-		noteLocalCacheReadFailure("kugou", path)
-		if sqliteSchemaMismatch(err) {
-			noteParserUnrecognized("kugou-local-library", sqliteErrorDetail(err))
+		if mac {
+			noteLocalCacheReadFailure("kugou", path)
+			if sqliteSchemaMismatch(err) {
+				noteParserUnrecognized("kugou-local-library", sqliteErrorDetail(err))
+			}
 		}
 		return nil, false
 	}
-	noteLocalCacheReadable("kugou")
+	if mac {
+		noteLocalCacheReadable("kugou")
+	}
 	trimmed := bytes.TrimSpace(out)
 	if len(trimmed) == 0 {
 		return nil, false // 零行时 sqlite3 -json 输出空串,不是 "[]"

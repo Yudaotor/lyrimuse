@@ -1625,7 +1625,7 @@ public enum MediaControlClient {
         let duration: Double?
         let elapsedTime: Double?
         let elapsedTimeNow: Double?
-        let playing: Bool?
+        var playing: Bool?
         let playbackRate: Double?
         /// elapsedTime 是"在这一刻"的位置。ISO8601(带 Z),用来在 elapsedTimeNow 不可信时
         /// 自己补算 —— 见 livePositionSeconds。
@@ -1686,10 +1686,21 @@ public enum MediaControlClient {
             duration = names.duration
             var lead = 0.0
             if let normalized = names.elapsed, let reported = times.elapsedTime { lead = normalized - reported }
+            // iPad 版酷狗按「播放」恢复时只换时间戳、速率还报 0,补成在放;紧跟着补来的晚锚点往前挪(见 KugouIPadNowPlaying)。
+            // 补过的这一帧不用 media-control 按速率 0 外推出来的此刻进度。
+            let reportedFrame = KugouIPadNowPlaying.Frame(
+                title: title, elapsed: names.elapsed, timestamp: MediaControlClient.parseTimestamp(times.timestamp),
+                rate: rate, playing: playing)
+            let kugou = KugouIPadNowPlaying.normalized(reportedFrame, bundleID: bundleIdentifier)
+            let kugouRewrote = kugou != reportedFrame
+            playing = kugou.playing
+            let reportedTimestamp = kugou.timestamp != reportedFrame.timestamp
+                ? kugou.timestamp.flatMap { MediaControlMicros.timestampString($0.timeIntervalSince1970 * 1_000_000) }
+                : times.timestamp
             // Plexamp 4.50 起那份锚点后面紧跟一份清空位置的,补回上一份锚点(见 PlexampSessionAnchor)。
             let plexamp = PlexampSessionAnchor.filled(
                 bundleID: bundleIdentifier, identity: [title ?? "", artist ?? "", album ?? ""].joined(separator: "|"),
-                playing: playing, elapsed: names.elapsed, timestamp: times.timestamp, rate: rate)
+                playing: playing, elapsed: names.elapsed, timestamp: reportedTimestamp, rate: kugou.rate)
             // MyGo 开始出声那一刻报的锚点按它的混音缓冲和设备延迟往后挪(见 MyGoSessionAnchor)。
             let mygo = MyGoSessionAnchor.filled(
                 bundleID: bundleIdentifier, identity: [title ?? "", artist ?? "", album ?? ""].joined(separator: "|"),
@@ -1700,7 +1711,7 @@ public enum MediaControlClient {
             // VOX 那份播放中缺位置、恢复后速率报 0,补成能外推的锚点(见 VoxPlayerInfo.systemAnchor)。
             let anchor = VoxPlayerInfo.systemAnchor(
                 bundleID: bundleIdentifier, playing: playing, elapsed: mygo.elapsed,
-                elapsedNow: plexamp.elapsed == names.elapsed && mygo.timestamp == plexamp.timestamp
+                elapsedNow: !kugouRewrote && plexamp.elapsed == names.elapsed && mygo.timestamp == plexamp.timestamp
                     ? times.elapsedTimeNow.map { $0 + lead - kuwoLead * (plexamp.rate ?? 1) } : nil,
                 rate: plexamp.rate, hasTimestamp: plexamp.timestamp != nil)
             elapsedTime = anchor.elapsed

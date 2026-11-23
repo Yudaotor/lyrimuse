@@ -58,6 +58,7 @@ func TestMain(m *testing.M) {
 	_ = os.Setenv("HOME", sandbox)
 	missing := filepath.Join(os.TempDir(), "lyrimuse-no-such-external-app-data")
 	kugouLocalDirOverride = missing
+	kugouIPadLocalDirOverride = filepath.Join(missing, "ipad-kgLyric")
 	// 读播放器容器的用例都当有「完全磁盘访问」;测没授权的用例自己换(containergate_test.go)。
 	fullDiskAccessCheck = func() bool { return true }
 	// Clash 控制口不连本机真实的那个;要测它的用例自己换。
@@ -86,6 +87,7 @@ func TestMain(m *testing.M) {
 	neteaseFMOverride = filepath.Join(missing, "fmPlay")
 	neteaseIPadKVOverride = filepath.Join(missing, "music_storage_keyValue.sqlite3")
 	kugouUpcomingOverride = filepath.Join(missing, "currentPlayList.sqlite")
+	kugouIPadQueueOverride = filepath.Join(missing, "ipad", "currentPlayList.sqlite")
 	kugouQueuePlistOverride = filepath.Join(missing, "userCurrentPlayList.plist")
 	kugouConfigPlistOverride = filepath.Join(missing, "KugouConfigPlist.plist")
 	kugouLibraryDBOverride = filepath.Join(missing, "kugou3.sqlite")

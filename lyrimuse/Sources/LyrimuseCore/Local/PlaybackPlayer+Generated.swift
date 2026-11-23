@@ -14,7 +14,7 @@ public enum PlaybackPlayer: String, CaseIterable, Identifiable, Codable, Hashabl
     case qqMusic = "qq_music"
     /// 同 QQ 音乐:无 AppleScript 字典,走 media-control,整秒量化。失焦时三项播放控制走自身「控制」菜单(PlaybackMenuControl),需要辅助功能权限;「喜欢」也按同一菜单里的「喜欢歌曲」(NetEaseMenuControl)。不接失焦 seek,没有模式键。冷启动后一两秒内开播,它启动时那次延迟的清空会把在放的会话撤掉、声音照放,直到暂停或换歌才重新登记(02 章决策 96)。
     case netease = "netease_music"
-    /// Mac Catalyst 应用,靠 MPNowPlayingInfoCenter 发布进 MediaRemote。processName 是 UTF-8 12 字节,内核 p_comm 上限 16 字节——再长两个汉字 pgrep -x 就会失效。「喜欢」按它菜单栏的「喜欢歌曲」、读播放条那颗心(KugouMenuControl),所以要辅助功能权限。
+    /// Mac Catalyst 应用,靠 MPNowPlayingInfoCenter 发布进 MediaRemote。processName 是 UTF-8 12 字节,内核 p_comm 上限 16 字节——再长两个汉字 pgrep -x 就会失效。「喜欢」按它菜单栏的「喜欢歌曲」、读播放条那颗心(KugouMenuControl),所以要辅助功能权限。iPad 版(com.kugou.kugou1002,可执行文件 kugou)按它认(PlayerBundleAliases、KugouIPadNowPlaying)。
     case kugou = "kugou_music"
     /// 原生 AppKit 的 App Store 版(带沙盒),没有 AppleScript 字典、没有 URL scheme,走 media-control。系统会话报歌名、歌手、专辑、时长和毫秒级位置,不带封面;播放中每 0.5~0.6 秒重发一次锚点,形态同 KKBOX(followsRepublishedAnchors)。暂停时 playbackRate 仍是 1,按 playing 判状态。失焦时三项播放控制走它自己的「播放控制」菜单(PlaybackMenuControl,「播放」「暂停」标题随状态变),要辅助功能权限。喜欢读它容器 cloud.db 里当前账号的「我喜欢听」,写按「编辑」菜单的收藏/取消收藏(KuwoFavoriteControl),没登录不显示。nativeLyricSource 填 kuwo:引擎先读它容器里当场落盘的 DocumentData/Lyric/「歌手 - 歌名 - rid.lrcx」,要完全磁盘访问。
     case kuwo = "kuwo_music"

@@ -53,7 +53,7 @@ func resetKugouLocalIndex(t *testing.T, dir string) {
 	t.Helper()
 	kugouLocalMu.Lock()
 	kugouLocalIndex, kugouLocalReady, kugouLocalScanned = nil, false, time.Time{}
-	kugouLocalDirMod, kugouLocalFiles = time.Time{}, nil
+	kugouLocalDirSig, kugouLocalFiles = "", nil
 	kugouLocalMu.Unlock()
 	old := kugouLocalDirOverride
 	kugouLocalDirOverride = dir
@@ -61,7 +61,7 @@ func resetKugouLocalIndex(t *testing.T, dir string) {
 		kugouLocalDirOverride = old
 		kugouLocalMu.Lock()
 		kugouLocalIndex, kugouLocalReady, kugouLocalScanned = nil, false, time.Time{}
-		kugouLocalDirMod, kugouLocalFiles = time.Time{}, nil
+		kugouLocalDirSig, kugouLocalFiles = "", nil
 		kugouLocalMu.Unlock()
 	})
 }

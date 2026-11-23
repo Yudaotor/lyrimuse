@@ -165,12 +165,12 @@ func runQQIPadTests() {
         expectEqual(sourceHas(sourceBody("public static func snapshotWithAnchor(forBundleID", in: probe),
                               "if found.snapshot.playing == true { break }"), true,
                     "iPad QQ 单问: 问到的没在放、还有别的版本在跑时接着问")
-        expectEqual([sourceHas(probe, "let data = QQIPadNowPlaying.normalizedPayload(NetEaseIPadNowPlaying.normalizedPayload(raw))"),
+        expectEqual([sourceHas(probe, "QQIPadNowPlaying.normalizedPayload(NetEaseIPadNowPlaying.normalizedPayload(raw)))"),
                      sourceHas(probe, "(title, artist) = QQIPadNowPlaying.names(title: title, artist: artist, bundleID: foundID)")],
                     [true, true], "iPad QQ 接线: 单问会话、单问封面都整理")
         let watcher = sourceText("LyrimuseCore/Local/MediaControlStreamWatcher.swift")
-        expectEqual([sourceHas(watcher, "let before = QQIPadNowPlaying.normalizedFields(NetEaseIPadNowPlaying.normalizedFields(merged))"),
-                     sourceHas(watcher, "let identity = QQIPadNowPlaying.normalizedFields(NetEaseIPadNowPlaying.normalizedFields(next))")],
+        expectEqual([sourceHas(watcher, "QQIPadNowPlaying.normalizedFields(NetEaseIPadNowPlaying.normalizedFields(merged)))"),
+                     sourceHas(watcher, "QQIPadNowPlaying.normalizedFields(NetEaseIPadNowPlaying.normalizedFields(next)))")],
                     [true, true], "iPad QQ 接线: 事件流判换歌、算锚点身份用整理过的")
         let source = sourceText("LyrimuseCore/Local/LocalPlaybackSource.swift")
         expectEqual([sourceHas(source, "bundleID: qqMacQuirkBundleID, anchorElapsed: anchorElapsedTime, rawReported: rawReported,"),

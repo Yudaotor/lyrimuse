@@ -5,8 +5,8 @@ import AppKit
 /// 收窄的判据照本体走;找它的进程、单问它的会话和封面、判装没装、取图标、启动它时几个都试(`all(for:)`、`inProbeOrder(for:)`、
 /// `applicationURL(forBundleID:)`、`isInstalled(_:)`)。见 02 章决策 165。
 ///
-/// `otherClients` 是另一个程序的那几个(iPad 版网易云、iPad 版 QQ 音乐):报给系统的会话按本体认,菜单、界面、本机数据却跟本体
-/// 不一样,按本体的程序界面或数据去找它的地方(进程号、辅助功能 / 完全磁盘访问那两行)不算它。见 02 章决策 198、204。
+/// `otherClients` 是另一个程序的那几个(iPad 版网易云、iPad 版 QQ 音乐、iPad 版酷狗):报给系统的会话按本体认,菜单、界面、本机
+/// 数据却跟本体不一样,按本体的程序界面或数据去找它的地方(进程号、辅助功能 / 完全磁盘访问那两行)不算它。见 02 章决策 198、204、292。
 public enum PlayerBundleAliases {
     public static let aliases: [String: PlaybackPlayer] = [
         "com.digipine.pineplayer.pro": .pinePlayer,
@@ -14,9 +14,12 @@ public enum PlayerBundleAliases {
         "com.audirvana.Audirvana-Origin": .audirvana,
         NetEaseIPadNowPlaying.bundleID: .netease,
         QQIPadNowPlaying.bundleID: .qqMusic,
+        KugouIPadNowPlaying.bundleID: .kugou,
     ]
 
-    public static let otherClients: Set<String> = [NetEaseIPadNowPlaying.bundleID, QQIPadNowPlaying.bundleID]
+    public static let otherClients: Set<String> = [
+        NetEaseIPadNowPlaying.bundleID, QQIPadNowPlaying.bundleID, KugouIPadNowPlaying.bundleID,
+    ]
 
     /// 别名换成它所属的内置播放器的 bundle id;不是别名原样交回。纯函数,selftest 覆盖。
     public static func canonical(_ bundleID: String) -> String {

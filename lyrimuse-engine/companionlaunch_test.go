@@ -85,7 +85,7 @@ func TestPlayerProcessNameCoversEveryPlayer(t *testing.T) {
 	// companionLaunchProcessNames() 的结果里,不能只盯着某一个。
 	featuresRef().Players = map[string]bool{playerQQMusic: true, playerKugou: true}
 	multi := companionLaunchProcessNames()
-	for _, want := range []string{"QQMusic", "酷狗音乐"} {
+	for _, want := range []string{"QQMusic", "酷狗音乐", "kugou"} {
 		found := false
 		for _, name := range multi {
 			if name == want {
@@ -97,8 +97,8 @@ func TestPlayerProcessNameCoversEveryPlayer(t *testing.T) {
 			t.Errorf("多选 {qq, kugou} 时 companionLaunchProcessNames() 缺 %q: %v", want, multi)
 		}
 	}
-	if len(multi) != 2 {
-		t.Errorf("多选 {qq, kugou} 时应恰好盯 2 个进程名, got %v", multi)
+	if len(multi) != 3 {
+		t.Errorf("多选 {qq, kugou} 时应恰好盯 3 个进程名(酷狗连 iPad 版的 kugou), got %v", multi)
 	}
 
 	// 手动选定的每一个播放器,它的进程名都必须在"自动识别"那份列表里 —— 否则

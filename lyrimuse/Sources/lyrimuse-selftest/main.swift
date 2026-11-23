@@ -54,6 +54,7 @@ let groups: [TestGroup] = [
     TestGroup(name: "amazon-music", summary: "Amazon Music 位置:日志重放 / 自记时 / 开播校准 / 陈旧元数据(样例与引擎共用)", run: runAmazonMusicTests),
     TestGroup(name: "netease-ipad", summary: "iPad 版网易云:按 Mac 版认 / 锁屏歌词占掉的歌名还原 / 换歌那一帧的撕裂 / 🅴 / 接线契约", run: runNetEaseIPadTests),
     TestGroup(name: "qq-ipad", summary: "iPad 版 QQ 音乐:按 Mac 版认 / 「歌名 — 歌手」改写帧还原 / Mac 版位置修正不套 / 两版都开着不按本体菜单 / 接线契约", run: runQQIPadTests),
+    TestGroup(name: "kugou-ipad", summary: "iPad 版酷狗:按 Mac 版认 / 「播放」恢复只换时间戳补成在放、晚锚点前挪 / 事件流逐行回放 / 单问 / 接线契约", run: runKugouIPadTests),
     TestGroup(name: "netease-podcast", summary: "网易云播客单集:按引擎写的单集名单认出当前这一条 / 名单缓存 / 接线契约 / App 不读别家容器", run: runNeteasePodcastTests),
     TestGroup(name: "kaset", summary: "Kaset:AppleScript 读数解读 / 广告·加载·卡住 / 署名清理 / 跟系统那份的取舍 / 接线契约", run: runKasetTests),
     TestGroup(name: "vox", summary: "VOX:AppleScript 读数解读 / 没写标签的文件名·乱码·精确时长 / 换歌撕裂 / 系统那份的歌手专辑 / 循环音量 / 接线契约", run: runVoxTests),

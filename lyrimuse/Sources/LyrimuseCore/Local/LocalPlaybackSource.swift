@@ -1176,6 +1176,8 @@ public final class LocalPlaybackSource: ObservableObject {
     /// iPad 版网易云(`client`:这份会话实际是谁报的)恢复那一拍的锚点对真值在 0.01 秒上下,换歌开播那一拍补过提前量
     /// (`NetEaseIPadNowPlaying.bareStartLead` / `fullStartLead`),同样原样采信,不然提前量被削成信号至今那一截。见 02 章决策 198。
     /// iPad 版 QQ 音乐开播后那一帧改写帧带着准的进度,常正好落在速率翻 1 那一拍,同样原样采信。见 02 章决策 204。
+    /// iPad 版酷狗暂停帧报的就是停住的位置,按「播放」恢复时补成的在放锚点从恢复那一刻起算(`KugouIPadNowPlaying`),同样原样采信。
+    /// 见 02 章决策 292。
     /// 别的播放器照旧削。纯函数,selftest 覆盖。
     public nonisolated static func resumeReadingNeverLeads(bundleID: String?, client: String? = nil) -> Bool {
         bundleID == PlaybackPlayer.kaset.bundleIdentifier || bundleID == PlaybackPlayer.vox.bundleIdentifier
@@ -1183,6 +1185,7 @@ public final class LocalPlaybackSource: ObservableObject {
             || bundleID == PlaybackPlayer.plexamp.bundleIdentifier || bundleID == PlaybackPlayer.mygoMusic.bundleIdentifier
             || bundleID == PlaybackPlayer.audirvana.bundleIdentifier || bundleID == PlaybackPlayer.cog.bundleIdentifier
             || client == NetEaseIPadNowPlaying.bundleID || client == QQIPadNowPlaying.bundleID
+            || client == KugouIPadNowPlaying.bundleID
     }
 
     /// 冻结检测:曲目/广告结尾 Spotify 会把 MediaRemote 锚点冻住 ——
