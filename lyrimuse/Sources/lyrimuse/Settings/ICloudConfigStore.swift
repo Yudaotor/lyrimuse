@@ -227,6 +227,8 @@ enum ICloudConfigStore {
     ///
     /// 只列目录、不读内容 —— 未下载的文件在这一步也能被看到(见
     /// `ConfigSnapshotName.realName(ofDirectoryEntry:)`),真正要读的时候才触发下载。
+    ///
+    /// 要列 iCloud 和各云盘挂载点下的目录,文件系统忙或云盘没响应时会同步等;界面上用 `latestSnapshotOffMain()`。
     static func latestSnapshot() -> Snapshot? {
         let folders = searchFolders()
         let hit = BackupDiscovery.latest(in: folders)
@@ -245,7 +247,7 @@ enum ICloudConfigStore {
         // 不能无条件 `Data(contentsOf)`:实测(brctl evict 造出真占位符)——
         // 读一个未下载的文件会触发**透明物化**,也就是当场去 iCloud 下载并**阻塞调用线程**
         // 直到下完(那次小文件用了 1.06s,网络差时可以是几十秒)。而这个方法是在设置页
-        // .onAppear、以及启动探测里同步调的,一卡就是整个界面卡住。
+        // .onAppear、以及启动探测里调的,在主线程上一卡就是整个界面卡住,所以这些调用方都经 latestSnapshotOffMain 放到后台。
         //
         // isMaterialized 用的资源属性查询本身不会触发下载(同次实测:已下载 → Current,
         // 逐出后 → NotDownloaded,两次都是立即返回)。
@@ -255,6 +257,11 @@ enum ICloudConfigStore {
             found.deviceName = meta.deviceName
         }
         return found
+    }
+
+    /// `latestSnapshot()` 放到后台跑,主线程只等结果(见 14 章决策 242)。
+    static func latestSnapshotOffMain() async -> Snapshot? {
+        await Task.detached(priority: .userInitiated) { latestSnapshot() }.value
     }
 
     /// 从配置内容里取出自报的导出时间和机器名,规则见 `ConfigExportMetadata`。

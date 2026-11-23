@@ -7381,6 +7381,8 @@ private struct GeneralSettingsTab: View {
     // iCloud 文件夹里最新的那份配置(没有就是 nil)。只在 .onAppear 查一次 —— 这是文件
     // 系统状态,App 不会主动收到"iCloud 里多了个文件"的通知。
     @State private var iCloudSnapshot: ICloudConfigStore.Snapshot?
+    /// 第几次查 `iCloudSnapshot`:几次查询并发时只认最后发起的那次。
+    @State private var iCloudSnapshotLoad = 0
     /// `ICloudConfigStore.isAvailable` 的结论:几次 stat 在后台查,出现时、换备份文件夹后各查一次,body 里只读这一位。
     @State private var iCloudAvailable = true
     /// 系统「登录项」里被用户关掉了(见 `LoginItemManager.needsApproval`)。
@@ -7627,7 +7629,7 @@ private struct GeneralSettingsTab: View {
         if ICloudConfigStore.usingCustomFolder {
             entries.append(.action(L10n.t("切换回 iCloud")) {
                 ICloudConfigStore.setCustomFolder(nil)
-                iCloudSnapshot = ICloudConfigStore.latestSnapshot()
+                refreshICloudSnapshot()
                 refreshICloudAvailability()
             })
         }
@@ -7753,7 +7755,7 @@ private struct GeneralSettingsTab: View {
             }
         }
         .onAppear {
-            iCloudSnapshot = ICloudConfigStore.latestSnapshot()
+            refreshICloudSnapshot()
             refreshICloudAvailability()
         }
         // 这个 alert 必须带 message 说清风险:存到 iCloud 才是把明文 token 推上 Apple
@@ -7801,7 +7803,7 @@ private struct GeneralSettingsTab: View {
                     // 真要省空间由用户自己去备份文件夹删(卡头菜单里有「打开备份文件夹」)。
                     //
                     // 写成功的反馈由按钮自己变身「已保存」承担,写法与理由见 iCloudJustSaved 声明处注释。
-                    iCloudSnapshot = ICloudConfigStore.latestSnapshot()
+                    refreshICloudSnapshot()
                     if let credentialNote { note = note.map { credentialNote + "\n" + $0 } ?? credentialNote }
                     iCloudMessage = note
                     // note 非 nil(歌词库那份没写成功)时不弹这个打勾态:那种情况
@@ -8042,9 +8044,19 @@ private struct GeneralSettingsTab: View {
         guard panel.runModal() == .OK, let url = panel.url else { return }
         ICloudConfigStore.setCustomFolder(url)
         // 换了目录,原来那份快照的信息就不成立了,立刻按新目录重新探测一次。
-        iCloudSnapshot = ICloudConfigStore.latestSnapshot()
+        refreshICloudSnapshot()
         iCloudMessage = nil
         refreshICloudAvailability()
+    }
+
+    /// 重查备份文件夹里最新的那份配置:列目录(iCloud、各云盘挂载点)在后台,主线程只收结果。
+    private func refreshICloudSnapshot() {
+        iCloudSnapshotLoad &+= 1
+        let load = iCloudSnapshotLoad
+        Task {
+            let snapshot = await ICloudConfigStore.latestSnapshotOffMain()
+            if load == iCloudSnapshotLoad { iCloudSnapshot = snapshot }
+        }
     }
 
     private func refreshICloudAvailability() {

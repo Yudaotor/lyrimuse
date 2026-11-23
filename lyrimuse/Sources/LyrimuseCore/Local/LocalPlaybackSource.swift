@@ -1955,7 +1955,8 @@ public final class LocalPlaybackSource: ObservableObject {
         persistAnchorLagTable(anchorLagByPlayer)
     }
 
-    /// 此刻默认输出设备(startObservingOutputRoute 之后随系统变化刷新;为 nil 时按 .other 处理)。
+    /// 此刻默认输出设备(`start()` 装上 `AudioOutputRoute.startObserving` 后由它在后台读好送来,之后随系统变化刷新;
+    /// 送到之前为 nil,领先量按 0 算)。
     private var currentOutputRoute: AudioOutputRoute.Current?
 
     /// 此刻该从探针值里扣掉的领先量:这台输出设备学过的值,或按传输类型的先验。
@@ -3118,9 +3119,10 @@ public final class LocalPlaybackSource: ObservableObject {
     /// 位置状态机的外部依赖(见 PlaybackPositionEnvironment)。
     private let env: PlaybackPositionEnvironment
 
+    /// 线上实例不在这里读输出设备:那要同步等 coreaudiod,这里在主线程上。第一份由 `start()` 里的
+    /// `AudioOutputRoute.startObserving` 在后台读好送来(见 15 章决策 129)。
     private init() {
         env = .live
-        currentOutputRoute = env.outputRoute()
     }
 
     private init(environment: PlaybackPositionEnvironment) {

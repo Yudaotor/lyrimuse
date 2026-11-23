@@ -202,6 +202,14 @@ func runMainThreadIOTests() {
                     "iCloud(契约): 按钮的可用性读 @State,不在 body 里 stat")
         expectEqual(sourceHas(delegate, "Task.detached(priority: .utility) { ICloudConfigStore.ensureFolderIconIfPresent() }"), true,
                     "iCloud(契约): 启动时贴文件夹图标在后台")
+        expectEqual(appCodeOccurrences(of: "latestSnapshot()"),
+                    Array(repeating: "lyrimuse/Settings/ICloudConfigStore.swift", count: 2),
+                    "iCloud(契约): 找最新备份(列各云盘目录)只有定义和后台包装两处,界面上都走 latestSnapshotOffMain")
+        expectEqual(sourceHas(sourceBody("static func latestSnapshotOffMain()", in: app("Settings/ICloudConfigStore.swift")),
+                              "await Task.detached(priority: .userInitiated) { latestSnapshot() }.value")
+                        && sourceHas(sourceBody("static func offerIfNeeded(", in: app("Settings/ICloudConfigImportPrompt.swift")),
+                                     "guard let snapshot = await ICloudConfigStore.latestSnapshotOffMain() else {"),
+                    true, "iCloud(契约): 新机器首启问要不要导入时,在后台列备份目录")
         expectEqual(sourceHas(sourceBody("private func refreshEngineFolderFindings()", in: settingsView),
                               "await Task.detached(priority: .utility) { HomeFolderAccess.check() }.value"), true,
                     "目录检查(契约): 设置页心跳里的 HomeFolderAccess 在后台查")
@@ -603,10 +611,14 @@ func runMainThreadIOTests() {
         expectEqual(sourceHas(observe, "observeQueue.async {") && sourceHas(observe, "&addr, observeQueue) { _, _ in\nonChange(current())")
                         && !sourceHas(observe, "DispatchQueue.main"), true,
                     "输出链路(契约): 挂监听、变化后读新设备都在后台队列上,读好的设备交给回调")
+        expectEqual(sourceHas(observe, "onChange(current())\n}\nonChange(current())\n}"), true,
+                    "输出链路(契约): 装上监听后先在后台读一次此刻的设备交给回调,调用方的第一份设备也从这里来")
         let playback = core("Local/LocalPlaybackSource.swift")
         expectEqual(sourceHas(playback, "AudioOutputRoute.startObserving { [weak self] route in\nDispatchQueue.main.async { MainActor.assumeIsolated { self?.outputRouteChanged(to: route) } }")
                         && !sourceHas(sourceBody("private func outputRouteChanged(to route: AudioOutputRoute.Current?) {", in: playback), "outputRoute()"),
                     true, "输出链路(契约): 换了设备时主线程只拿读好的设备,不自己再问 CoreAudio")
+        expectEqual(sourceHas(sourceBody("private init() {", in: playback), "outputRoute()"), false,
+                    "输出链路(契约): 线上实例建出来时不在主线程上读输出设备,等 startObserving 在后台送第一份")
 
         // 全仓的 CoreAudio 属性监听都不派到主队列上。
         var registrations: [String] = []

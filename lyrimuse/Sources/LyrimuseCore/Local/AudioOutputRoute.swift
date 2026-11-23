@@ -103,8 +103,9 @@ public enum AudioOutputRoute {
     private static let observeQueue = DispatchQueue(label: "me.yudaotor.lyrimuse.output-route", qos: .utility)
     private static var listening = false
 
-    /// 默认输出设备变化时在后台串行队列上读一次此刻的设备(`current()`),把结果交给回调;回调也在那条队列上,
-    /// 按变化的先后依次调。只装一次;重复调用忽略。只在主线程上调。
+    /// 装上监听后先在后台串行队列上读一次此刻的设备(`current()`)交给回调,之后默认输出设备每变一次再读一次;
+    /// 回调也在那条队列上,按先后依次调。调用方要的第一份设备也从这里拿,别在主线程上调 `current()`。
+    /// 只装一次;重复调用忽略。只在主线程上调。
     public static func startObserving(_ onChange: @escaping @Sendable (Current?) -> Void) {
         guard !listening else { return }
         listening = true
@@ -113,6 +114,7 @@ public enum AudioOutputRoute {
             AudioObjectAddPropertyListenerBlock(AudioObjectID(kAudioObjectSystemObject), &addr, observeQueue) { _, _ in
                 onChange(current())
             }
+            onChange(current())
         }
     }
 }

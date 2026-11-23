@@ -6,8 +6,8 @@ import Foundation
 /// ## 为什么歌词不塞进配置包本体,而是单独一份 sidecar
 ///
 /// 三条硬约束,任一条都足以否掉"直接加个 lyrics 字段":
-///  1. `ICloudConfigStore.latestSnapshot()` 为了取 `exportedAt`/`deviceName` 会在主线程整份读 + 解析配置包,
-///     而它挂在设置页 `.onAppear` 等好几处。包一旦变成几十 MB,每次进设置页都要卡一下。
+///  1. `ICloudConfigStore.latestSnapshot()` 为了取 `exportedAt`/`deviceName` 会整份读 + 解析配置包,
+///     而它挂在设置页 `.onAppear` 等好几处。包一旦变成几十 MB,每次进设置页都要多读几十 MB。
 ///  2. `ICloudConfigStore.write` 每次点「更新备份」都新写一份带时间戳的文件,既没有大小上限也没有"只保留 N 份"清理
 ///     (旧份永远不会被读)。几十 MB × N 份 = iCloud 空间黑洞。
 ///  3. 新机首启那条"发现 iCloud 里有备份,问要不要导入"的路径只给 8 秒下载超时。大包大概率撑不过去,而超时是静默

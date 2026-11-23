@@ -27,14 +27,17 @@ enum ICloudConfigImportPrompt {
     @MainActor
     static func offerIfNeeded(then continuation: @escaping () -> Void) {
         let settings = AppSettings.shared
-        guard !settings.hasOfferedICloudImport,
-              let snapshot = ICloudConfigStore.latestSnapshot()
-        else {
+        guard !settings.hasOfferedICloudImport else {
             continuation()
             return
         }
 
         Task { @MainActor in
+            // 列 iCloud 和各云盘挂载点下的备份目录在后台,新机器首启时主线程不等文件系统。
+            guard let snapshot = await ICloudConfigStore.latestSnapshotOffMain() else {
+                continuation()
+                return
+            }
             // 自动这条路用短一点的超时:超了就安静地走引导,别让用户对着空屏幕干等。
             // 设置里那个手动按钮用完整超时(20s),想等的人可以在那儿等。
             guard let data = await ICloudConfigStore.read(snapshot.url, timeout: 8) else {
