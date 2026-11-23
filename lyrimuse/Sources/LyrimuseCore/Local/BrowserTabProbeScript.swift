@@ -110,7 +110,23 @@ public enum BrowserTabProbeScript {
     /// `inPageWorld` 第 1 条路发给主环境应答器的事件名。
     public static let pageWorldEvent = "lyrimuse-page-world"
 
+    /// osascript 交回的 JS 结果还原成 JS 返回的那个字符串。
+    ///
+    /// Arc 的 `execute javascript` 把返回值按 JSON 编码交回:字符串外面一对双引号,里面的 `"` `\` 换行、控制字符(队列的
+    /// 字段 / 记录分隔符 US、RS)、`<`、U+2028 / U+2029 都写成转义;Chrome / Edge / Brave 和 Safari 交回原样的字符串。
+    /// 整段是一个合法的 JSON 字符串就解开,否则原样返回。见 02 章决策 291。
+    public static func decodedOutput(_ raw: String) -> String {
+        let s = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard s.count >= 2, s.hasPrefix("\""), s.hasSuffix("\""),
+              let decoded = try? JSONSerialization.jsonObject(with: Data(s.utf8), options: [.fragmentsAllowed]) as? String
+        else { return raw }
+        return decoded
+    }
+
     /// 拼出那段 AppleScript。公开只为让各探针的 selftest 能对它做文本断言。
+    ///
+    /// 暂停页的 `PAUSED:` 前缀两种形状都认:原样的,和 Arc 包在 JSON 引号里的(`"PAUSED:…"`,去掉前缀后仍包着引号,
+    /// 由 `run` 统一解开)。
     ///
     /// - Parameter hostMarker: 标签页 URL 要包含的域名片段(如 `music.youtube.com`)。
     /// - Parameter js: 要执行的 JS(不许含双引号,见类头注)。
@@ -145,6 +161,8 @@ public enum BrowserTabProbeScript {
                         if r does not contain "NOTFOUND" then
                             if r starts with "PAUSED:" then
                                 if fallback is "" then set fallback to text 8 thru -1 of r
+                            else if r starts with (quote & "PAUSED:") then
+                                if fallback is "" then set fallback to quote & (text 9 thru -1 of r)
                             else
                                 return r
                             end if
@@ -167,6 +185,8 @@ public enum BrowserTabProbeScript {
                             if r does not contain "NOTFOUND" then
                                 if r starts with "PAUSED:" then
                                     if fallback is "" then set fallback to text 8 thru -1 of r
+                                else if r starts with (quote & "PAUSED:") then
+                                    if fallback is "" then set fallback to quote & (text 9 thru -1 of r)
                                 else
                                     return r
                                 end if
@@ -181,8 +201,8 @@ public enum BrowserTabProbeScript {
         """
     }
 
-    /// 跑一次,返回 osascript 的裸输出。失败(写不出临时文件 / 起不来 / 非零退出)一律 nil,
-    /// 由调用方按 fail-closed 处理。
+    /// 跑一次,返回 JS 交回的字符串(Arc 的 JSON 编码已解开,见 `decodedOutput`)。失败(写不出临时文件 / 起不来 / 非零退出)
+    /// 一律 nil,由调用方按 fail-closed 处理。
     ///
     /// - Parameter label: 临时文件名里的标识(便于 `ls /var/folders/...` 时认出是谁留下的)。
     public static func run(
@@ -200,6 +220,6 @@ public enum BrowserTabProbeScript {
                                              timeout: processTimeout),
               result.succeeded
         else { return nil }
-        return result.stdoutText
+        return decodedOutput(result.stdoutText)
     }
 }

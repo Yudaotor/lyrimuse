@@ -76,7 +76,7 @@ public enum BrowserTabFocus {
                             with timeout of \(eventTimeoutSeconds) seconds
                                 set r to \(executeTab)
                             end timeout
-                            if r is "AD" then
+                            if r is "AD" or r is (quote & "AD" & quote) then
                                 set curIdx to \(currentIndex)
                                 if curIdx is ti then return "ALREADY"
                                 if \(avoidFrontWindow ? "true" : "false") and wi is 1 then return "FRONTWINDOW"

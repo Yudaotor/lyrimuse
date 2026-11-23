@@ -324,6 +324,8 @@ private func browserProbeTests() {
     expectEqual(YouTubeMusicAdProbe.parse(quoted)?.album, "Live at \"Budokan\"",
                 "专辑名: 只脱两头一对引号,里面转义的引号还原")
 
+    arcJSONOutputTests()
+
     var backoff = ProbeFailureBackoff()
     let t0 = Date(timeIntervalSince1970: 1_790_500_000)
     expectEqual(backoff.suppresses(key: "k", now: t0), false, "探针退避: 没失败过不挡")
@@ -1499,4 +1501,52 @@ private func webProbeTitleGuardTests() {
     expectEqual(mode(.repeatOne, shuffle: true, repeat: "NONE"), "SET:ONE|false|ONE", "网页版随机: 开单曲循环时关掉随机(互斥)")
     expectEqual(mode(.repeatAll, shuffle: false, repeat: "ONE"), "SET:ALL|false|ALL", "网页版随机: 单曲到列表循环绕一圈")
     expectEqual(mode(.list, shuffle: false, repeat: "ONE"), "SET:NONE|false|NONE", "网页版随机: 单曲循环回到顺序")
+}
+
+/// Arc 的 `execute javascript` 把返回值按 JSON 编码交回(外面一对引号,控制字符、`<`、换行、反斜杠写成转义),02 章决策 291。
+private func arcJSONOutputTests() {
+    let D = BrowserTabProbeScript.decodedOutput
+    let us = "\u{1f}", rs = "\u{1e}"
+    // osascript 原样打出的 Arc 输出(实测形状:大写十六进制的 \u001F、<)。
+    let arcQueue = #""0\u001FNever Gonna Give You Up\u001FRick Astley\u001F\u001F3:34\u001FdQw4w9WgXcQ\u001FMUSIC_VIDEO_TYPE_OMV\u001E1\u001FA < B\u001FX\u001FAlbum\u001F3:41\u001FVBssFzSx6sI\u001FMUSIC_VIDEO_TYPE_ATV""# + "\n"
+    expectEqual(D(arcQueue), ["0", "Never Gonna Give You Up", "Rick Astley", "", "3:34", "dQw4w9WgXcQ", "MUSIC_VIDEO_TYPE_OMV"].joined(separator: us)
+                + rs + ["1", "A < B", "X", "Album", "3:41", "VBssFzSx6sI", "MUSIC_VIDEO_TYPE_ATV"].joined(separator: us),
+                "Arc 输出: 解开 JSON 转义(分隔符、<)")
+    let queue = PlayerQueryTracks.youTubeMusicQueue(D(arcQueue))
+    expectEqual(queue.tracks.map(\.title), ["Never Gonna Give You Up", "A < B"], "Arc 输出: 队列解得出两首")
+    expectEqual(queue.tracks.map(\.selected), [nil, true], "Arc 输出: 当前那首认得出")
+    expectEqual(D(#""line\nnext \\ \"q\" \u2028""#), "line\nnext \\ \"q\" \u{2028}", "Arc 输出: 换行、反斜杠、引号、U+2028 还原")
+    expectEqual(YouTubeMusicWebControls.parseRead(D(#""STATE:ALL|LIKE|37.6|0""#))?.liked, true, "Arc 输出: 网页版读回解得出赞")
+    expectEqual(YouTubeMusicWebControls.parseSet(D(#""SET:LIKE""#)), .set("LIKE"), "Arc 输出: 网页版写入回执解得出")
+    expectEqual(YouTubeMusicWebControls.parseSet(D(#""SKIP""#)), .skipped, "Arc 输出: 只剩暂停页的 SKIP 解得出")
+    // 别的浏览器原样交回:不是一个完整 JSON 字符串的一律不动。
+    let raw = ["0", "T", "A", "", "3:00", "v", ""].joined(separator: us) + "\n"
+    expectEqual(D(raw), raw, "原样输出: Chrome / Safari 的不动")
+    expectEqual(D("2\n"), "2\n", "原样输出: 数字不动")
+    expectEqual(D("\"Heroes\"" + us + "David Bowie\"\n"), "\"Heroes\"" + us + "David Bowie\"\n", "原样输出: 首尾是引号但不是 JSON 的不动")
+    expectEqual(D("\"a" + us + "b\""), "\"a" + us + "b\"", "原样输出: 引号里有未转义的控制字符(不是 JSON)不动")
+    expectEqual(D("\"\""), "", "Arc 输出: 空字符串")
+    // 模板:Arc 包在引号里的暂停页同样记成备选,去掉前缀后补回开头的引号,交回去由 run 解开。
+    for family in [BrowserAutomationPermission.Family.chromium, .safari] {
+        let s = BrowserTabProbeScript.build(bundleID: "company.thebrowser.Browser", family: family,
+                                            hostMarker: "music.youtube.com", js: "1", eventTimeoutSeconds: 1)
+        expectEqual(s.components(separatedBy: "else if r starts with (quote & \"PAUSED:\") then").count - 1, 2,
+                    "Arc 输出/\(family): 两轮扫描都认带引号的 PAUSED:")
+        expectEqual(s.components(separatedBy: "set fallback to quote & (text 9 thru -1 of r)").count - 1, 2,
+                    "Arc 输出/\(family): 备选补回开头的引号")
+    }
+    expectEqual(D("\"" + String(#"PAUSED:STATE:NONE|LIKE|40|0""#.dropFirst(7))), "STATE:NONE|LIKE|40|0",
+                "Arc 输出: 模板去掉前缀、补回引号后解得开")
+    let probeScriptSource = (try? String(contentsOfFile: URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().appendingPathComponent("LyrimuseCore/Local/BrowserTabProbeScript.swift").path,
+                                          encoding: .utf8)) ?? ""
+    expectEqual(sourceHas(probeScriptSource, "return decodedOutput(result.stdoutText)"), true,
+                "Arc 输出: run 交回前统一解开")
+    // 广告页翻台前:Arc 交回带引号的 "AD"。
+    let arcFocus = BrowserTabFocus.focusScript(bundleID: BrowserTabFocus.arcBundleID, family: .chromium, hostMarker: "music.youtube.com",
+                                               avoidFrontWindow: false, eventTimeoutSeconds: 1)
+    expectEqual(arcFocus.contains("if r is \"AD\" or r is (quote & \"AD\" & quote) then"), true, "Arc 输出: 广告页认带引号的 AD")
+    // 标签页标题、进度读数。
+    expectEqual(BrowserPositionProbe.parseIdentifyOutput("youtubeMusic:\"A \\u003C B \\\"x\\\"\"\nspotifyWeb:\"\"\n").map(\.title),
+                ["A < B \"x\""], "Arc 输出: 标签页标题解开、空标题丢掉")
+    expectEqual(BrowserPositionProbe.parseReading(fromOsascriptOutput: "\"12.5|0\"\n")?.seconds, 12.5, "Arc 输出: 进度读数照常")
 }

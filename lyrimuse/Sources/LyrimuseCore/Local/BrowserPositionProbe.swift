@@ -728,7 +728,9 @@ public final class BrowserPositionProbe: @unchecked Sendable {
             let parts = line.split(separator: ":", maxSplits: 1, omittingEmptySubsequences: false)
             guard parts.count == 2, !parts[0].isEmpty,
                   !parts[1].trimmingCharacters(in: .whitespaces).isEmpty else { return nil }
-            return PageTitle(platformID: String(parts[0]), title: String(parts[1]))
+            let title = BrowserTabProbeScript.decodedOutput(String(parts[1]))
+            guard !title.trimmingCharacters(in: .whitespaces).isEmpty else { return nil }
+            return PageTitle(platformID: String(parts[0]), title: title)
         }
     }
 
@@ -1435,7 +1437,7 @@ public final class BrowserPositionProbe: @unchecked Sendable {
     /// 又认出了第五段的视频身份时,另给这支视频的截图 `videoFrameURL`,只给 Discord 状态兜底);第四段可选,是精确读数,形状不对就当没有、
     /// 整秒读数照旧成立;第五段是 YouTube Music 的视频身份或 Spotify 网页版的曲目 URI,形状不对一样当没有。纯函数,selftest 直接覆盖。
     public static func parseReading(fromOsascriptOutput raw: String) -> Reading? {
-        var text = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        var text = BrowserTabProbeScript.decodedOutput(raw).trimmingCharacters(in: .whitespacesAndNewlines)
         if text.hasPrefix("\""), text.hasSuffix("\""), text.count >= 2 {
             text.removeFirst()
             text.removeLast()
