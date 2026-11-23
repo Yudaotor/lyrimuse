@@ -7,6 +7,7 @@ func runKugouIPadTests() {
     typealias L = LocalPlaybackSource
     let mac = PlaybackPlayer.kugou.bundleIdentifier
     func at(_ s: Double) -> Date { Date(timeIntervalSince1970: 1_795_401_800 + s) }
+    func ms(_ d: Date?) -> Int? { d.map { Int(($0.timeIntervalSince1970 * 1000).rounded()) } }
 
     // ---- 按酷狗 Mac 版认,找进程、权限行不算它 ----
     do {
@@ -45,14 +46,14 @@ func runKugouIPadTests() {
         let seekPlay = Frame(title: song, elapsed: 52, timestamp: at(83.905), rate: 0, playing: false)
         expectEqual(K.normalized(seekPlay, memory: &echo).rate, 1, "iPad 酷狗恢复: 跳转后按「播放」那一次是恢复")
         let seekLate = Frame(title: song, elapsed: 52, timestamp: at(84.457), rate: 1, playing: true)
-        expectEqual(K.normalized(seekLate, memory: &echo).timestamp, at(84.457 - K.lateResumeFrameSecs),
+        expectEqual(ms(K.normalized(seekLate, memory: &echo).timestamp), ms(at(84.457 - K.lateResumeFrameSecs)),
                     "iPad 酷狗恢复: 跳转后补来的速率 1(不带进度)往前挪")
 
         var long: K.Memory?
         _ = K.normalized(Frame(title: song, elapsed: 106.749, timestamp: at(29.817), rate: 0, playing: false), memory: &long)
         _ = K.normalized(Frame(title: song, elapsed: 106.749, timestamp: at(41.761), rate: 0, playing: false), memory: &long)
         let late = Frame(title: song, elapsed: 106.767, timestamp: at(42.341), rate: 1, playing: true)
-        expectEqual(K.normalized(late, memory: &long).timestamp, at(42.341 - K.lateResumeFrameSecs),
+        expectEqual(ms(K.normalized(late, memory: &long).timestamp), ms(at(42.341 - K.lateResumeFrameSecs)),
                     "iPad 酷狗恢复: 暂停 12 秒后补来的晚锚点往前挪 0.49 秒")
         let later = Frame(title: song, elapsed: 106.767, timestamp: at(43.6), rate: 1, playing: true)
         expectEqual(K.normalized(later, memory: &long), later, "iPad 酷狗恢复: 隔太久的不挪")
@@ -79,6 +80,67 @@ func runKugouIPadTests() {
         _ = K.normalized(pause, bundleID: mac)
         expectEqual(K.normalized(quiet, bundleID: mac), quiet, "iPad 酷狗恢复: Mac 版报的不动")
         K.resetForTesting()
+    }
+
+    // ---- 换到听过一半的听书单集:开播整帧之后跳到上次位置的那一帧往前挪(录到的真实序列) ----
+    do {
+        var start: K.Start?
+        func j(_ f: Frame) -> Frame { K.resumedJump(f, start: &start) }
+        let ep = "第2集 系统，我囸你奶奶！"
+        let open = Frame(title: ep, elapsed: 0.012, timestamp: at(2.313), rate: 1, playing: true)
+        expectEqual(j(open), open, "iPad 酷狗续播: 开播整帧原样")
+        let jump = Frame(title: ep, elapsed: 10.064, timestamp: at(2.880), rate: 1, playing: true)
+        expectEqual(ms(j(jump).timestamp), ms(at(2.880 - K.lateResumeJumpSecs)), "iPad 酷狗续播: 0.57 秒后跳到上次位置的那一帧往前挪")
+        expectEqual(ms(j(jump).timestamp), ms(at(2.880 - K.lateResumeJumpSecs)), "iPad 酷狗续播: 同一帧再过一次结果不变")
+        let later = Frame(title: ep, elapsed: 30, timestamp: at(3.6), rate: 1, playing: true)
+        expectEqual(j(later), later, "iPad 酷狗续播: 开播 1 秒以后的跳转不挪")
+        let small = Frame(title: ep, elapsed: 0.4, timestamp: at(2.9), rate: 1, playing: true)
+        expectEqual(j(small), small, "iPad 酷狗续播: 换歌两步式那份新歌名整帧(进度不到 1 秒)不挪")
+        let other = Frame(title: "别的", elapsed: 10, timestamp: at(2.9), rate: 1, playing: true)
+        expectEqual(j(other), other, "iPad 酷狗续播: 别的一首不挪")
+        let paused = Frame(title: ep, elapsed: 10.064, timestamp: at(2.9), rate: 0, playing: false)
+        expectEqual(j(paused), paused, "iPad 酷狗续播: 暂停帧不挪")
+        _ = j(Frame(title: ep, elapsed: 0, timestamp: at(60), rate: 1, playing: true))
+        let again = j(Frame(title: ep, elapsed: 20, timestamp: at(60.57), rate: 1, playing: true))
+        expectEqual(ms(again.timestamp), ms(at(60.57 - K.lateResumeJumpSecs)), "iPad 酷狗续播: 同一集过后再开播一次,按新的开播帧算")
+        K.resetForTesting()
+        _ = K.normalized(open, bundleID: K.bundleID)
+        expectEqual(ms(K.normalized(jump, bundleID: K.bundleID).timestamp), ms(at(2.880 - K.lateResumeJumpSecs)),
+                    "iPad 酷狗续播: 按 bundle id 整理的那一路也挪")
+        K.resetForTesting()
+    }
+
+    // ---- 放着歌拖进度:跳转那一帧往后挪(录到的真实序列) ----
+    do {
+        var last: K.Last?
+        func sk(_ f: Frame, _ n: Frame? = nil) -> Frame { K.seekedWhilePlaying(f, normalized: n ?? f, last: &last) }
+        let song = "雨过后的风景"
+        let playingFrame = Frame(title: song, elapsed: 6.88, timestamp: at(29.071), rate: 1, playing: true)
+        expectEqual(sk(playingFrame), playingFrame, "iPad 酷狗拖动: 恢复那一帧(进度接得上)不挪")
+        let seek = Frame(title: song, elapsed: 50, timestamp: at(30.346), rate: 1, playing: true)
+        expectEqual(ms(sk(seek).timestamp), ms(at(30.346 + K.seekFrameLeadSecs)), "iPad 酷狗拖动: 跳转那一帧往后挪 0.14 秒")
+        expectEqual(ms(sk(seek).timestamp), ms(at(30.346 + K.seekFrameLeadSecs)), "iPad 酷狗拖动: 同一帧再过一次结果不变")
+        expectEqual(sk(playingFrame), playingFrame, "iPad 酷狗拖动: 轮询晚一步读到的旧帧不动、不改记住的那份")
+        expectEqual(ms(sk(seek).timestamp), ms(at(30.346 + K.seekFrameLeadSecs)), "iPad 酷狗拖动: 读过旧帧之后跳转那一帧照样挪")
+        let pause = Frame(title: song, elapsed: 66.43, timestamp: at(46.93), rate: 0, playing: false)
+        expectEqual(sk(pause), pause, "iPad 酷狗拖动: 暂停帧不挪")
+        let resume = Frame(title: song, elapsed: 66.43, timestamp: at(60), rate: 1, playing: true)
+        expectEqual(sk(resume), resume, "iPad 酷狗拖动: 暂停后恢复(进度跟暂停处一样)不挪")
+        let candidate = Frame(title: song, elapsed: 0.045, timestamp: at(80), rate: 1, playing: true)
+        expectEqual(sk(candidate), candidate, "iPad 酷狗拖动: 换歌那份旧歌名下的锚点(进度不到 1 秒)不挪")
+        let next = Frame(title: "别的歌", elapsed: 0.73, timestamp: at(80.6), rate: 1, playing: true)
+        expectEqual(sk(next), next, "iPad 酷狗拖动: 换了一首不挪")
+        let jumped = Frame(title: "别的歌", elapsed: 208.32, timestamp: at(81.0), rate: 1, playing: true)
+        var shiftedJump = jumped
+        shiftedJump.timestamp = at(81.0 - K.lateResumeJumpSecs)
+        expectEqual(sk(jumped, shiftedJump), shiftedJump, "iPad 酷狗拖动: 前面已经按续播挪过的不再挪")
+        K.resetForTesting()
+        _ = K.normalized(playingFrame, bundleID: K.bundleID)
+        expectEqual(ms(K.normalized(seek, bundleID: K.bundleID).timestamp), ms(at(30.346 + K.seekFrameLeadSecs)),
+                    "iPad 酷狗拖动: 按 bundle id 整理的那一路也挪")
+        K.resetForTesting()
+        expectEqual([MediaControlClient.correctsFromResetAnchor(bundleID: K.bundleID), MediaControlClient.correctsFromResetAnchor(bundleID: mac)],
+                    [true, true], "iPad 酷狗换歌: 旧歌名下的候选锚点那条修正按它自己的 bundle id 也开")
     }
 
     // ---- 事件流:真实的几行逐行喂,恢复那一行报恢复、暂停那几行报暂停、晚锚点的身份按挪过的时刻算 ----

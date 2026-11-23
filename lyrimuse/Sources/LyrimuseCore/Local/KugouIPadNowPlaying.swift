@@ -12,6 +12,13 @@ import Foundation
 /// 那份速率 1 的锚点,时刻往前挪 `lateResumeFrameSecs`。暂停中跳转后约 0.57 秒它也会只换一次时间戳(没开播),比
 /// `resumeGapSecs` 短,不算。`toggle-play-pause`、它自己界面上的播放键恢复时当场报速率 1,不经这里。
 ///
+/// 换到听过一半的听书单集时,它先报一帧进度 0 的开播整帧,约 0.57 秒后才跳到上次听到的位置,按跳过去那一帧推出的起点晚约
+/// 0.455 秒(真实从开播整帧之后约 0.12 秒起放):开播整帧之后 `resumeJumpWindowSecs` 之内同一首跳到 1 秒以后的那一帧,时刻往前挪
+/// `lateResumeJumpSecs`(`resumedJump`)。
+///
+/// 放着歌拖进度时,跳转那一帧比真实从那个位置放起早 0.12~0.17 秒:进度跟上一帧对不上的那一帧(不是开播、换歌、续播那几种),
+/// 时刻往后挪 `seekFrameLeadSecs`(`seekedWhilePlaying`)。
+///
 /// 轮询、媒体事件流、单问会话三条路都过这里,记住的那份共用;同一帧再过一次结果不变,先后到也一样(同一个进度只记最早的时刻)。
 /// 见 02 章决策 292。
 public enum KugouIPadNowPlaying {
@@ -25,6 +32,14 @@ public enum KugouIPadNowPlaying {
     static let lateResumeFrameWindowSecs: TimeInterval = 1.2
     /// 补来的那份进度最多比暂停处多多少(实测 0~0.02 秒)。
     static let lateResumeElapsedSlackSecs: Double = 0.1
+    /// 换到听过一半的单集时跳到上次位置的那一帧晚多少:0.448~0.463 秒(4 次)。
+    public static let lateResumeJumpSecs: TimeInterval = 0.455
+    /// 跳过去那一帧在开播整帧之后多久之内到(实测 0.57 秒)。
+    static let resumeJumpWindowSecs: TimeInterval = 1.0
+    /// 放着歌拖进度时跳转那一帧早多少:0.123~0.167 秒(5 次,中位 0.143)。
+    public static let seekFrameLeadSecs: TimeInterval = 0.14
+    /// 进度跟按上一帧推出来的差多少以上才算跳转。
+    static let seekJumpSecs: Double = 1.0
 
     public struct Frame: Equatable, Sendable {
         public var title: String?
@@ -57,15 +72,92 @@ public enum KugouIPadNowPlaying {
         }
     }
 
+    /// 最近一次开播整帧(进度 0)是哪一首、什么时刻。
+    public struct Start: Equatable, Sendable {
+        var title: String
+        var at: Date
+
+        public init(title: String, at: Date) {
+            self.title = title
+            self.at = at
+        }
+    }
+
+    /// 见到的最新一帧(原样报的):哪一首、进度、时刻、速率,以及最近几份认成跳转的帧的时刻(轮询晚一步再读到它时照样挪)。
+    public struct Last: Equatable, Sendable {
+        var title: String
+        var elapsed: Double
+        var at: Date
+        var rate: Double
+        var seeks: [Date]
+
+        public init(title: String, elapsed: Double, at: Date, rate: Double, seeks: [Date] = []) {
+            self.title = title
+            self.elapsed = elapsed
+            self.at = at
+            self.rate = rate
+            self.seeks = seeks
+        }
+    }
+
+    /// 记住的跳转帧最多几份。
+    static let rememberedSeeks = 8
+
     private static let lock = NSLock()
     nonisolated(unsafe) private static var memory: Memory?
+    nonisolated(unsafe) private static var start: Start?
+    nonisolated(unsafe) private static var last: Last?
 
     /// 是 iPad 版报上来的就整理,别的原样交回。
     public static func normalized(_ frame: Frame, bundleID: String?) -> Frame {
         guard bundleID == Self.bundleID else { return frame }
         lock.lock()
         defer { lock.unlock() }
-        return normalized(frame, memory: &memory)
+        let resumed = resumedJump(normalized(frame, memory: &memory), start: &start)
+        return seekedWhilePlaying(frame, normalized: resumed, last: &last)
+    }
+
+    /// 放着歌拖进度的那一帧时刻往后挪。`frame` 是原样报的(记住的那份按它算),`normalized` 是前面几步整理过的:
+    /// 前面已经挪过时刻的(续播跳转、恢复晚锚点)不再挪。纯函数(状态由调用方给),selftest 覆盖。
+    public static func seekedWhilePlaying(_ frame: Frame, normalized: Frame, last: inout Last?) -> Frame {
+        guard let title = frame.title, !title.isEmpty, let elapsed = frame.elapsed, let at = frame.timestamp else { return normalized }
+        let rate = normalized.rate ?? 0
+        if let known = last {
+            if known.seeks.contains(at) { return seekShifted(normalized, at: at) }
+            if at <= known.at { return normalized }
+        }
+        var seek = false
+        if let known = last, known.title == title, rate > 0, elapsed >= 1, normalized.timestamp == frame.timestamp {
+            let predicted = known.elapsed + at.timeIntervalSince(known.at) * known.rate
+            seek = abs(elapsed - predicted) > seekJumpSecs
+        }
+        var seeks = last?.seeks ?? []
+        if seek { seeks = Array((seeks + [at]).suffix(rememberedSeeks)) }
+        last = Last(title: title, elapsed: elapsed, at: at, rate: rate, seeks: seeks)
+        return seek ? seekShifted(normalized, at: at) : normalized
+    }
+
+    private static func seekShifted(_ frame: Frame, at: Date) -> Frame {
+        var out = frame
+        out.timestamp = at.addingTimeInterval(seekFrameLeadSecs)
+        return out
+    }
+
+    /// 换到听过一半的单集:开播整帧之后不久同一首跳到上次位置的那一帧,时刻往前挪。纯函数(状态由调用方给),selftest 覆盖。
+    public static func resumedJump(_ frame: Frame, start: inout Start?) -> Frame {
+        guard let title = frame.title, !title.isEmpty, let elapsed = frame.elapsed, let at = frame.timestamp,
+              (frame.rate ?? 0) > 0 else { return frame }
+        if elapsed <= 0.1 {
+            if start.map({ $0.title != title || at < $0.at || at.timeIntervalSince($0.at) > resumeJumpWindowSecs }) ?? true {
+                start = Start(title: title, at: at)
+            }
+            return frame
+        }
+        guard elapsed >= 1, let known = start, known.title == title, at > known.at,
+              at.timeIntervalSince(known.at) <= resumeJumpWindowSecs else { return frame }
+        var out = frame
+        out.timestamp = max(known.at, at.addingTimeInterval(-lateResumeJumpSecs))
+        return out
     }
 
     /// 纯函数(状态由调用方给),selftest 覆盖。
@@ -136,6 +228,8 @@ public enum KugouIPadNowPlaying {
     public static func resetForTesting() {
         lock.lock()
         memory = nil
+        start = nil
+        last = nil
         lock.unlock()
     }
 }

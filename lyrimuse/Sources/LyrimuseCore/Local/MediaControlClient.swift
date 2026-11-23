@@ -3498,8 +3498,9 @@ public enum MediaControlClient {
     }
 
     /// 只对实测过的播放器开(02 章决策 41)。
+    /// iPad 版酷狗换歌是同一种两步式,它报的会话这里拿到的是它自己的 bundle id(见 02 章决策 292)。
     public nonisolated static func correctsFromResetAnchor(bundleID: String?) -> Bool {
-        bundleID == PlaybackPlayer.kugou.bundleIdentifier
+        bundleID == PlaybackPlayer.kugou.bundleIdentifier || bundleID == KugouIPadNowPlaying.bundleID
     }
 
     /// 一份锚点是不是下一首的第一份:标题跟上一份锚点相同,时长却变了。是就返回这个新时长。纯函数,selftest 直接覆盖。
