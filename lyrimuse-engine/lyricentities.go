@@ -224,11 +224,17 @@ func joinSpanningEntity(toks []yrcEntityToken) (next []yrcEntityToken, ok bool) 
 //
 // 同一个门口顺带还原 UTF-8 被当 Windows-1252 解出来的乱码(repairLyricMojibake,见 lyricmojibake.go)。
 //
+// 整份是唱名谱的当成没有歌词(dropSolfegeNotation)。只在这道门口判,存量不迁移:用户手选过的不动。
+//
 // 也顺带统一换行和开头的 BOM(normalizeLyricText):酷狗的歌词几乎全是 CRLF、三分之一开头带 BOM,QQ 偶有
 // CRLF。存量由 migrateLyricLineEndings 统一成同一个样子,两头一致,重评才不会把「只差换行」当成正文变了。
 func decodeLyricSourceResultEntities(r lyricSourceResult) lyricSourceResult {
-	clean := func(s string) string { return repairLyricMojibake(decodeLyricEntities(normalizeLyricText(s))) }
-	cleanYRC := func(s string) string { return repairLyricMojibake(decodeYRCEntities(normalizeLyricText(s))) }
+	clean := func(s string) string {
+		return dropSolfegeNotation(repairLyricMojibake(decodeLyricEntities(normalizeLyricText(s))))
+	}
+	cleanYRC := func(s string) string {
+		return dropSolfegeNotation(repairLyricMojibake(decodeYRCEntities(normalizeLyricText(s))))
+	}
 	r.lyr = clean(r.lyr)
 	r.yrc = cleanYRC(r.yrc)
 	r.tr = clean(r.tr)

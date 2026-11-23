@@ -241,11 +241,11 @@ func TestTimelineIntrusionWiredIntoBothPipelines(t *testing.T) {
 		t.Fatalf("enrich.go 里要有两处调用(rankLyricSourceResults 与 mergeLyricCandidateRounds),得到 %d", n)
 	}
 	for _, pair := range []string{
-		"applyTimelineOffsetPenalty(reg, out, durationSecs)\n\tapplyHandTypedTimelinePenalty(reg, out)\n\tapplyTimelineIntrusionPenalty(reg, out, durationSecs)\n\tapplyGarbledTextPenalty(out)\n\tapplyDurationNearTie(out, durationSecs)\n\tapplyNativeSourceWordYield(reg, out)\n\tapplyWordTimingTitleOverride(out)",
-		"applyTimelineOffsetPenalty(reg, results, durationSecs)\n\tapplyHandTypedTimelinePenalty(reg, results)\n\tapplyTimelineIntrusionPenalty(reg, results, durationSecs)\n\tapplyGarbledTextPenalty(results)\n\tapplyDurationNearTie(results, durationSecs)\n\tapplyNativeSourceWordYield(reg, results)\n\tapplyWordTimingTitleOverride(results)",
+		"applyTimelineOffsetPenalty(reg, out, durationSecs)\n\tapplyHandTypedTimelinePenalty(reg, out)\n\tapplyTimelineIntrusionPenalty(reg, out, durationSecs)\n\tapplyGarbledTextPenalty(out)\n\tapplyDurationNearTie(out, durationSecs)\n\tapplyNativeSourceWordYield(reg, out)\n\tapplyNativeScriptPriority(out)\n\tapplyWordTimingTitleOverride(out)",
+		"applyTimelineOffsetPenalty(reg, results, durationSecs)\n\tapplyHandTypedTimelinePenalty(reg, results)\n\tapplyTimelineIntrusionPenalty(reg, results, durationSecs)\n\tapplyGarbledTextPenalty(results)\n\tapplyDurationNearTie(results, durationSecs)\n\tapplyNativeSourceWordYield(reg, results)\n\tapplyNativeScriptPriority(results)\n\tapplyWordTimingTitleOverride(results)",
 	} {
 		if !containsCode(src, pair) {
-			t.Errorf("调用位置要紧跟在时间轴平移扣分之后、乱码扣分、末句亚秒打平与同源加分撤销、逐字加分撤销之前:%q", pair)
+			t.Errorf("调用位置要紧跟在时间轴平移扣分之后、乱码扣分、末句亚秒打平与同源加分撤销、原文优先、逐字加分撤销之前:%q", pair)
 		}
 	}
 }

@@ -3112,9 +3112,11 @@ func rescoreCurrentContradicted(current string, scored []scoredLyricCandidateRes
 
 // rescoreWouldLoseWordTiming:冠军是另一份正文、没有逐字,而当前这份有逐字。逐字取决于那个源这一轮有没有把逐字
 // 接口给全,同一首歌这一轮有、下一轮一个都没有很常见;换过去会把卡拉 OK 填色丢掉,而且不可逆。正文相同时不算
-// (那种情形只会补逐字,见 gainsWordTiming);这一轮判了当前这份整首错开时也不算(rescoreCurrentTimelineOff)。
+// (那种情形只会补逐字,见 gainsWordTiming);这一轮判了当前这份整首错开时也不算(rescoreCurrentTimelineOff);
+// 当前这份是冠军那份原文的拉丁转写时也不算(lyricsTransliterate,原文优先,见 09 章决策 403)。
 func rescoreWouldLoseWordTiming(e enrichEntry, scored []scoredLyricCandidateResult, picked *scoredLyricCandidateResult) bool {
-	return !e.Lyrics.EqualString(picked.Lyrics) && !e.LyricsYRC.IsZero() && picked.LyricsYRC == "" && !rescoreCurrentTimelineOff(e, scored)
+	return !e.Lyrics.EqualString(picked.Lyrics) && !e.LyricsYRC.IsZero() && picked.LyricsYRC == "" && !rescoreCurrentTimelineOff(e, scored) &&
+		!lyricsTransliterate(e.Lyrics.String(), picked.Lyrics)
 }
 
 // rescoreCurrentTimelineOff:当前这份的时间轴跟这一轮某份扣了 timelineOffset 的候选是同一份(timelinesIdentical),
@@ -5219,6 +5221,7 @@ func mergeLyricCandidateRounds(artist, title, album string, durationSecs float64
 	splitCandidateParenBackground(reg, cands)
 	// v15:批级语种判决,跟下面两个批级步骤同一位置(理由见 match.go applyLanguageVersionVerdicts)。
 	applyLanguageVersionVerdicts(title, album, durationSecs, cands)
+	applyScriptMarkerVerdicts(title, album, cands)
 	applyVerifiedTitleVersion(title, album, durationSecs, verifiedRecordingTitle(base, extra), cands)
 	corroborated := corroboratedEndings(cands, durationSecs)
 	consensusPeers, familyPeers := contentConsensusPeers(reg, artist, title, cands, durationSecs)
@@ -5274,6 +5277,7 @@ func mergeLyricCandidateRounds(artist, title, album string, durationSecs float64
 	applyGarbledTextPenalty(out)
 	applyDurationNearTie(out, durationSecs)
 	applyNativeSourceWordYield(reg, out)
+	applyNativeScriptPriority(out)
 	applyWordTimingTitleOverride(out)
 	sort.SliceStable(out, func(i, j int) bool { return out[i].Score > out[j].Score })
 	applyUnmaskedWords(out)
@@ -5468,6 +5472,7 @@ func rankLyricSourceResultsWith(reg *lyricProviderRegistry, artist, title, album
 	// 其余批级步骤之前——它只读 title/album/language/自报时长,与时间轴无关,位置只求跟另一条
 	// 流水线(mergeLyricCandidateRounds)一致。
 	applyLanguageVersionVerdicts(title, album, durationSecs, candidates)
+	applyScriptMarkerVerdicts(title, album, candidates)
 	corroborated := corroboratedEndings(candidates, durationSecs)
 	// v3:跨源正文共识,整批统一算(理由同 corroboratedEndings——peers 随后到的源变化,
 	// 每轮全量重算)。artist/title 已是 toSimplified 后的搜索关键词,与打分入参一致。
@@ -5545,6 +5550,7 @@ func rankLyricSourceResultsWith(reg *lyricProviderRegistry, artist, title, album
 	applyGarbledTextPenalty(results)
 	applyDurationNearTie(results, durationSecs)
 	applyNativeSourceWordYield(reg, results)
+	applyNativeScriptPriority(results)
 	applyWordTimingTitleOverride(results)
 	// 稳定排序:来源加分拿掉之后同分会变多(见 scoreLyricCandidateDetailed 里那段注释),
 	// 不稳定的排序会让同分候选的先后随运行变化,同一首歌两次解析可能选出不同的源。
