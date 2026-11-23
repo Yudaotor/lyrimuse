@@ -242,8 +242,9 @@ func TestProviderPrivilegedReadsGoThroughRoundEnv(t *testing.T) {
 			}
 		}
 	}
-	if resolves != len(lyricProviders().providers) {
-		t.Errorf("扫到 %d 个 Resolve,登记的实现有 %d 个", resolves, len(lyricProviders().providers))
+	// 两段式适配器(twoStageProvider)不在内置登记表里:运行时登记的来源经它接进来,它的 Resolve 同样在上面扫过。
+	if want := len(builtinLyricRegistry().providers) + 1; resolves != want {
+		t.Errorf("扫到 %d 个 Resolve,该是登记的内置实现 %d 个加两段式适配器", resolves, want-1)
 	}
 	if len(granters) != 1 || granters[0] != "lyricproviderrun.go:x" {
 		t.Errorf("环境的特权位只该由调度在 runLyricProvider 里填一次:%v", granters)
