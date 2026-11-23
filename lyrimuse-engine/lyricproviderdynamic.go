@@ -15,8 +15,8 @@ import (
 //
 // 校验守的是四件事,规则代码见 dynamicSourceRule*:
 //   - 动态来源拿不到特权:特权位、等别的源的编号、能看到别家结果的钩子、本机身份、ISRC 的记录权一律不许带;
-//   - 不改内置来源:名字不能撞,名次一律由登记表重排到内置之后,纯文本回退不能排到最前,不能并进内置的信源家族、
-//     同类组,主机归源表不收它的规则;
+//   - 不改内置来源:名字不能撞,名次一律由登记表重排到内置之后(同分决胜是排在内置垫底的那一个之前、别的内置之后,
+//     tieOrderNames),纯文本回退不能排到最前,不能并进内置的信源家族、同类组,主机归源表不收它的规则;
 //   - 描述符是纯数据:函数字段一律不许带,登记表存的是校验过的副本,登记之后外面改不到;
 //   - 通用代码对它成立:只能是联网源,轮次只有「都问」和「只在播放那一侧问」,要有 Assembly。
 //
@@ -162,7 +162,8 @@ func dynamicRanksAfter(builtin *lyricProviderRegistry) dynamicRanks {
 
 // admitDynamicLyricSource 校验一个运行时登记的来源,过了就交登记表里存的那一份:描述符是副本(外面那份之后怎么改都
 // 影响不到),Origin 标成 originDynamic,名次从 next 里取、取完往后挪一个:源名单里的位置、同分决胜序、顺序优先的默认序
-// 一律重排;纯音乐标记、词曲作者名单这两类登记的名次不是 0 才参加,同样重排。排出来都在内置来源之后。
+// 一律重排;纯音乐标记、词曲作者名单这两类登记的名次不是 0 才参加,同样重排。排出来的名次都在内置来源之后;同分决胜
+// 实际排在哪见 lyricProviderRegistry.tieOrderNames。
 func admitDynamicLyricSource(builtin *lyricProviderRegistry, p LyricProvider, next *dynamicRanks) (*dynamicLyricSource, error) {
 	var given *ProviderDescriptor
 	if p != nil {

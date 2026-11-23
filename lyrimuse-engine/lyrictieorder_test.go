@@ -90,3 +90,43 @@ func TestMergeLyricCandidateRoundsKeepsTieOrder(t *testing.T) {
 		t.Errorf("同分时直接排序选 %s,过合并选 %s", direct[0].Source, merged[0].Source)
 	}
 }
+
+// 运行时登记的来源同分时排在别的内置联网源和本机来源之后、垫底的 AMLL 之前,它们之间照登记的先后;过一遍合并
+// (另一轮为空)先后不变。导入库自带加分排最前,不在同分的那一段里。
+func TestDynamicSourcesTieBreakBeforeBottomBuiltin(t *testing.T) {
+	useDynamicLyricProviders(t, newDynamicStub("dyn:tie-a", nil), newDynamicStub("dyn:tie-b", nil))
+	raw := tieOrderProbeRaw()
+	for _, s := range []string{"dyn:tie-a", "dyn:tie-b"} {
+		raw[s] = lyricSourceResult{source: s, lyr: raw[lyricSourceLRCLIB].lyr, matchTitle: "测试", matchArtist: "歌手"}
+	}
+	bottom := len(lyricCandidateTieOrder) - 1
+	var want []string
+	for _, s := range slices.Concat(lyricCandidateTieOrder[:bottom], []string{"dyn:tie-a", "dyn:tie-b"}, lyricCandidateTieOrder[bottom:]) {
+		if s != importLyricsSource {
+			want = append(want, s)
+		}
+	}
+	if lyricCandidateTieOrder[bottom] != lyricSourceAMLL || want[len(want)-3] != "dyn:tie-a" {
+		t.Fatalf("用例前提:内置决胜序垫底的是 AMLL,运行时登记的两个紧挨在它前面,得到 %v", want)
+	}
+	ranked := rankLyricSourceResults("歌手", "测试", "", 0, raw)
+	tied := func(results []scoredLyricCandidateResult) []string {
+		var got []string
+		for _, r := range results {
+			if r.Source == importLyricsSource {
+				continue
+			}
+			if r.Score != ranked[1].Score {
+				t.Fatalf("用例前提:导入库之外该同分,%s 是 %d、%s 是 %d", ranked[1].Source, ranked[1].Score, r.Source, r.Score)
+			}
+			got = append(got, r.Source)
+		}
+		return got
+	}
+	if got := tied(ranked); !slices.Equal(got, want) {
+		t.Errorf("同分时的先后 %v\n期望         %v", got, want)
+	}
+	if got := tied(mergeLyricCandidateRounds("歌手", "测试", "", 0, ranked, nil)); !slices.Equal(got, want) {
+		t.Errorf("过合并之后的先后 %v\n期望             %v", got, want)
+	}
+}

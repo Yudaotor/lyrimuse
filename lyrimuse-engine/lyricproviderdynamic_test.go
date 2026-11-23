@@ -259,7 +259,8 @@ func TestRoundsSurviveConcurrentRegistration(t *testing.T) {
 	}
 }
 
-// 登记着的时候:各份名单是内置的那一份后面接上运行时登记的,内置之间的先后一项不动;登记时自报的名次不算数。
+// 登记着的时候:各份名单是内置的那一份后面接上运行时登记的(同分决胜序是插在内置垫底的那一个之前),内置之间的先后
+// 一项不动;登记时自报的名次不算数。
 // 注销之后:当前生效的又是内置那一份,它不再被问。
 func TestDynamicSourcesRankAfterBuiltinAndLeaveNoTrace(t *testing.T) {
 	builtinSourcesOff(t)
@@ -275,9 +276,10 @@ func TestDynamicSourcesRankAfterBuiltinAndLeaveNoTrace(t *testing.T) {
 
 	cur := lyricProviders()
 	both := []string{"dyn:first", "dyn:second"}
+	bottom := len(builtin.tieOrder) - 1
 	for label, pair := range map[string][2][]string{
 		"networkNames":             {cur.networkNames, append(slices.Clone(builtin.networkNames), both...)},
-		"tieOrder":                 {cur.tieOrder, append(slices.Clone(builtin.tieOrder), both...)},
+		"tieOrder":                 {cur.tieOrder, slices.Concat(builtin.tieOrder[:bottom], both, builtin.tieOrder[bottom:])},
 		"defaultPriorityOrder":     {cur.defaultPriorityOrder, append(slices.Clone(builtin.defaultPriorityOrder), both...)},
 		"instrumentalOrder":        {cur.instrumentalOrder, append(slices.Clone(builtin.instrumentalOrder), "dyn:first")},
 		"songwritersOrder":         {cur.songwritersOrder, append(slices.Clone(builtin.songwritersOrder), both...)},
@@ -672,7 +674,7 @@ func TestConcurrentDynamicRegistrationStaysWhole(t *testing.T) {
 				cur := lyricProviders()
 				if n := len(cur.descriptors) - len(builtin.descriptors); n < 0 || n > 2 || len(cur.dynamicPriorityNames) != n ||
 					len(cur.networkNames) != len(builtin.networkNames)+n || len(cur.tieOrder) != len(builtin.tieOrder)+n ||
-					!slices.Equal(cur.tieOrder[:len(builtin.tieOrder)], builtin.tieOrder) {
+					!slices.Equal(slices.DeleteFunc(slices.Clone(cur.tieOrder), func(s string) bool { return strings.HasPrefix(s, "dyn:") }), builtin.tieOrder) {
 					t.Errorf("读到的登记表不完整:%d 个来源、运行时登记的 %v", len(cur.descriptors), cur.dynamicPriorityNames)
 					return
 				}

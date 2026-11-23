@@ -362,6 +362,7 @@ type ProviderDescriptor struct {
 	// 设置项里的源序,同分候选谁赢看 TieRank。
 	Order int
 	// TieRank:同分候选的决胜序(lyricProviderRegistry.tieOrder),从 1 起,小的赢;本机来源排在别的联网源之后、AMLL 之前。
+	// 运行时登记的来源的 TieRank 只定它们之间的先后:它们整段排在内置里垫底的那一个之前(tieOrderNames)。
 	// rankLyricSourceResultsWith 按它定候选的先后(candidateSlots.inTieOrder),合并几轮结果的 mergeLyricCandidateRounds 按它
 	// 重建顺序:两处读同一种名单,同一首歌走没走补查轮,同分时选出的源才相同(lyrictieorder_test.go 守着)。
 	TieRank int
@@ -450,7 +451,7 @@ type lyricProviderRegistry struct {
 	// 下面几份名单构造时算一次(index),读的一方别改它们。
 	// networkNames:联网源按 Order。
 	networkNames []string
-	// tieOrder:全部来源按 TieRank。
+	// tieOrder:全部来源的同分决胜序(tieOrderNames)。
 	tieOrder []string
 	// defaultPriorityOrder:联网源按 DefaultPriorityRank。
 	defaultPriorityOrder []string
@@ -496,7 +497,7 @@ func newLyricProviderRegistry(providers []LyricProvider) *lyricProviderRegistry 
 func (r *lyricProviderRegistry) index() {
 	network := func(d *ProviderDescriptor) bool { return d.Kind == providerKindNetwork }
 	r.networkNames = r.rankedNames(network, func(d *ProviderDescriptor) int { return d.Order })
-	r.tieOrder = r.rankedNames(func(*ProviderDescriptor) bool { return true }, func(d *ProviderDescriptor) int { return d.TieRank })
+	r.tieOrder = r.tieOrderNames()
 	r.defaultPriorityOrder = r.rankedNames(network, func(d *ProviderDescriptor) int { return d.DefaultPriorityRank })
 	r.instrumentalOrder = r.rankedNames(func(d *ProviderDescriptor) bool { return d.InstrumentalRank > 0 },
 		func(d *ProviderDescriptor) int { return d.InstrumentalRank })
@@ -532,6 +533,20 @@ func (r *lyricProviderRegistry) index() {
 			}
 		}
 	}
+}
+
+// tieOrderNames:全部来源的同分决胜序。编在核心里的按 TieRank;运行时登记的按各自的 TieRank 排成一段,插在编在核心里的
+// 垫底的那一个之前:排在别的内置联网源和本机来源之后、AMLL 之前。没有运行时登记的来源时,就是内置来源按 TieRank
+// 排出来的那一份。见 09 章决策 402。
+func (r *lyricProviderRegistry) tieOrderNames() []string {
+	tieRank := func(d *ProviderDescriptor) int { return d.TieRank }
+	builtin := r.rankedNames(func(d *ProviderDescriptor) bool { return d.Origin != originDynamic }, tieRank)
+	dynamic := r.rankedNames(func(d *ProviderDescriptor) bool { return d.Origin == originDynamic }, tieRank)
+	if len(builtin) == 0 {
+		return dynamic
+	}
+	bottom := len(builtin) - 1
+	return slices.Concat(builtin[:bottom], dynamic, builtin[bottom:])
 }
 
 // sourceOwningHost:host(小写、不带端口)按各描述符的 Hosts 归到哪个源,都不认是空串。先看主机自己,再从左到右逐级
