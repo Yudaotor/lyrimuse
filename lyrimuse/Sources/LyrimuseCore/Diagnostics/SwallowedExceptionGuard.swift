@@ -32,6 +32,7 @@ public enum SwallowedExceptionGuard {
                     SwallowedExceptionGuard.lastMainThreadException = exception
                 }
                 DisplayCycleLimit.noteThrown(reason: exception.reason)
+                WindowFrameLimit.noteThrown(name: exception.name.rawValue, reason: exception.reason)
             }
             return SwallowedExceptionGuard.previousPreprocessor.map { $0(thrown) } ?? thrown
         }

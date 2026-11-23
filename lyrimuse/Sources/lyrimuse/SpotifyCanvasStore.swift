@@ -32,6 +32,9 @@ final class SpotifyCanvasStore {
     }()
 
     private var directory: URL { LyrimusePaths.cacheFile("spotify-canvas") }
+    /// 超出磁盘上限时按修改时间(读一次就刷新一次)删最旧的,在后台串行队列上做。
+    private nonisolated let pruner = CacheBudgetPruner(label: "spotify canvas", directory: LyrimusePaths.cacheFile("spotify-canvas"),
+                                                       budgetBytes: SpotifyCanvasStore.diskBudgetBytes, extensions: ["mp4"])
 
     private init() {}
 
@@ -55,7 +58,7 @@ final class SpotifyCanvasStore {
             switch outcome {
             case .ready:
                 self.transientBackoff[remote] = nil
-                self.pruneIfNeeded()
+                self.pruner.request()
                 return target
             case .transient:
                 let failures = (self.transientBackoff[remote]?.failures ?? 0) + 1
@@ -114,22 +117,5 @@ final class SpotifyCanvasStore {
     private func fileURL(for remote: URL) -> URL {
         let digest = SHA256.hash(data: Data(remote.absoluteString.utf8)).map { String(format: "%02x", $0) }.joined()
         return directory.appendingPathComponent(String(digest.prefix(32)) + ".mp4")
-    }
-
-    /// 超出磁盘上限时按修改时间(读一次就刷新一次)删最旧的。
-    private func pruneIfNeeded() {
-        let keys: [URLResourceKey] = [.fileSizeKey, .contentModificationDateKey]
-        guard let files = try? fm.contentsOfDirectory(at: directory, includingPropertiesForKeys: keys) else { return }
-        var entries = files.filter { $0.pathExtension == "mp4" }.compactMap { url -> (URL, Int64, Date)? in
-            guard let v = try? url.resourceValues(forKeys: Set(keys)) else { return nil }
-            return (url, Int64(v.fileSize ?? 0), v.contentModificationDate ?? .distantPast)
-        }
-        var total = entries.reduce(Int64(0)) { $0 + $1.1 }
-        guard total > Self.diskBudgetBytes else { return }
-        entries.sort { $0.2 < $1.2 }
-        for (url, size, _) in entries where total > Self.diskBudgetBytes {
-            try? fm.removeItem(at: url)
-            total -= size
-        }
     }
 }

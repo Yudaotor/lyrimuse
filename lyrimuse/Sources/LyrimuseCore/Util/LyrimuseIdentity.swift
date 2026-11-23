@@ -151,6 +151,9 @@ public enum LogFiles {
     /// 运行时的 fatal 信息、被子进程漏出的 stderr 这类"本不该有"的东西,正因为如此它排查崩溃时最有用。
     public static var appStderr: URL { logsDir.appendingPathComponent(LyrimuseIdentity.current.appLogFileName) }
 
+    /// App 在崩溃前自己留的说明(`WindowFrameLimit`),一个进程号一份,扫崩溃报告时补进对应那份。
+    public static var crashNotes: URL { logsDir.appendingPathComponent("crash-notes") }
+
     /// App 主线程卡住时 MainThreadWatchdog 用 `/usr/bin/sample` 采的调用栈,只留最近一次。诊断导出带上 7 天内的那份。
     public static var mainThreadStall: URL {
         logsDir.appendingPathComponent(LyrimuseIdentity.current.mainThreadStallFileName)

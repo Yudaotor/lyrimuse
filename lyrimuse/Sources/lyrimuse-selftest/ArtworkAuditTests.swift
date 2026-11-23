@@ -58,7 +58,7 @@ func checkArtworkAudit() {
         expectEqual(sourceHas(store, "guard let reference, running.reference != reference else { return result }\n if let hit = cachedFile(master: master) {\n return await checkCached(hit, master: master, key: key, reference: reference)"),
                     true, "动态封面: 加入别的参照图在跑的那一轮,下好了按自己的参照图再比一次")
         expectEqual(sourceHas(store, "case .mismatch:\n // 资源本身没问题")
-                    && sourceHas(store, "try Self.moveIntoPlace(scratch, final: final)\n await MainActor.run { self.pruneIfNeeded() }\n return .referenceMismatch"),
+                    && sourceHas(store, "try Self.moveIntoPlace(scratch, final: final)\n pruner.request()\n return .referenceMismatch"),
                     true, "动态封面: 终审没过也落盘,封面到了按新参照图比,不再下第二遍")
         expectEqual(store.contains("if let backoff = transientBackoff[key], backoff.until > Date() { return nil }")
                     && store.contains("if http.statusCode == 429 || http.statusCode >= 500 { throw URLError(.badServerResponse) }"), true,

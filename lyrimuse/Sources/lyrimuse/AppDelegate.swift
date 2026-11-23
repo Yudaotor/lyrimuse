@@ -33,6 +33,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         DisplayCycleLimit.onLimitReached = { event in
             MainActor.assumeIsolated { AppDelegate.recordLayoutLimit(event) }
         }
+        // 窗口帧越界的断言中止进程前,异常预处理器把窗口种类和尺寸记到这里,下次启动补进那份崩溃报告(见 WindowFrameLimit)。
+        WindowFrameLimit.notesDirectory = LogFiles.crashNotes
         if isUnregisterLoginItemRun {
             LoginItemManager.shared.unregisterForUninstall()
             AppExit.request(.unregisterLoginItemHelper)

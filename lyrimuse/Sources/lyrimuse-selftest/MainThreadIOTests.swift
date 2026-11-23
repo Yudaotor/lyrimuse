@@ -268,6 +268,138 @@ func runMainThreadIOTests() {
     }
 
     do {
+        print("\n== 异常守卫:窗口帧越界断言记下窗口种类和尺寸(15 章决策 130) ==")
+        let reason = "Invalid parameter not satisfying: CGRectContainsRect(CGRectMake((CGFloat)INT_MIN, (CGFloat)INT_MIN, "
+            + "(CGFloat)INT_MAX - (CGFloat)INT_MIN, (CGFloat)INT_MAX - (CGFloat)INT_MIN), frame). "
+            + "self=<SwiftUI.AppKitWindow: 0x7a588e8600> frame={{nan, 274}, {inf, 450}}"
+        let event = WindowFrameLimit.parse(name: "NSInternalInconsistencyException", reason: reason)
+        expectEqual(event, WindowFrameLimit.Event(windowClass: "SwiftUI.AppKitWindow", windowAddress: 0x7a588e8600,
+                                                  frame: "{{nan, 274}, {inf, 450}}"),
+                    "帧越界: 认出断言,取出类名、地址和要设的帧")
+        expectEqual([WindowFrameLimit.parse(name: "NSGenericException", reason: reason) == nil,
+                     WindowFrameLimit.parse(name: "NSInternalInconsistencyException", reason: "Invalid parameter not satisfying: x") == nil,
+                     WindowFrameLimit.parse(name: "NSInternalInconsistencyException", reason: nil) == nil],
+                    [true, true, true], "帧越界: 别的异常、别的断言不认")
+        let line = "window frame limit: window=lyrics-window class=SwiftUI.AppKitWindow frame={{nan, 274}, {inf, 450}} current={{100, 200}, {640, 480}}"
+        expectEqual(event.map { WindowFrameLimit.noteLine($0, identifier: "lyrics-window", currentFrame: "{{100, 200}, {640, 480}}") }, line,
+                    "帧越界: 说明一行写窗口种类、类名、要设的帧和当前的帧")
+        expectEqual(event.map { WindowFrameLimit.noteLine($0, identifier: "歌名 <x>", currentFrame: "标题 {{1, 2}, {3, 4}}") },
+                    "window frame limit: window=x class=SwiftUI.AppKitWindow frame={{nan, 274}, {inf, 450}} current={{1, 2}, {3, 4}}",
+                    "帧越界: 标识符和帧只留 ASCII 名字字符和数字")
+
+        // 预处理器那一步:真窗口按地址找到、经 KVC 读标识符和帧,写进按进程号命名的说明文件。
+        let notes = tmp.appendingPathComponent("crash-notes")
+        let window = NSWindow(contentRect: NSRect(x: -4000, y: -4000, width: 320, height: 240), styleMask: [.titled],
+                              backing: .buffered, defer: true)
+        window.isReleasedWhenClosed = false
+        window.identifier = NSUserInterfaceItemIdentifier("lyrics-window")
+        let address = String(UInt(bitPattern: Unmanaged.passUnretained(window).toOpaque()), radix: 16)
+        WindowFrameLimit.notesDirectory = notes
+        WindowFrameLimit.noteThrown(name: "NSInternalInconsistencyException",
+                                    reason: reason.replacingOccurrences(of: "0x7a588e8600", with: "0x" + address))
+        WindowFrameLimit.notesDirectory = nil
+        let written = try? String(contentsOf: WindowFrameLimit.noteURL(pid: Int(getpid()), in: notes), encoding: .utf8)
+        expectEqual(written, "window frame limit: window=lyrics-window class=SwiftUI.AppKitWindow frame={{nan, 274}, {inf, 450}} "
+                        + "current=\(NSStringFromRect(window.frame))",
+                    "帧越界: 抛的当场按地址找到那扇窗口,记下场景标识符和当前帧")
+        window.close()
+
+        func ips(pid: Int, throwSite: String) -> Data {
+            let body: [String: Any] = [
+                "procName": "lyrimuse", "pid": pid, "exception": ["type": "EXC_CRASH", "signal": "SIGABRT"],
+                "termination": ["namespace": "SIGNAL", "indicator": "Abort trap: 6"],
+                "usedImages": [["name": "AppKit"], ["name": "Foundation"]],
+                "lastExceptionBacktrace": [["symbol": "__exceptionPreprocess"], ["symbol": "objc_exception_throw"],
+                                           ["imageIndex": 1, "symbol": "-[NSMutableDictionary(NSMutableDictionary) initWithContentsOfFile:]"],
+                                           ["imageIndex": 0, "symbol": throwSite]],
+            ]
+            let header = Data("{\"app_name\":\"lyrimuse\",\"bug_type\":\"309\"}\n".utf8)
+            return header + ((try? JSONSerialization.data(withJSONObject: body)) ?? Data())
+        }
+        WindowFrameLimit.write(line, pid: 4242, in: notes)
+        var crashed = CrashReportSummary.parse(fileName: "lyrimuse-a.ips", data: ips(pid: 4242, throwSite: WindowFrameLimit.throwSiteSymbol))
+            ?? CrashReportSummary(fileName: "unparsed")
+        expectEqual(crashed.pid, 4242, "帧越界: 崩溃报告摘要读出进程号")
+        expectEqual(WindowFrameLimit.attachNote(to: &crashed, in: notes, reportModified: Date()), true, "帧越界: 同一进程号的说明补进那份报告")
+        expectEqual(crashed.terminationReasons, [line], "帧越界: 补在 terminationReasons 里")
+        let env = TelemetryEnvironment(appVersion: "1", build: "1", osVersion: "26.1", arch: "arm64", uiLanguage: "en", systemLanguage: "en")
+        expectEqual(TelemetryCrash(summary: crashed, reportID: "r", executableName: "lyrimuse", installID: "i", env: env).terminationReasons,
+                    [line], "帧越界: 遥测的 termination_reasons 带上窗口和尺寸")
+        func attaches(pid: Int, throwSite: String, modified: Date) -> Bool {
+            guard var summary = CrashReportSummary.parse(fileName: "lyrimuse-b.ips", data: ips(pid: pid, throwSite: throwSite)) else { return true }
+            return WindowFrameLimit.attachNote(to: &summary, in: notes, reportModified: modified)
+        }
+        expectEqual([attaches(pid: 4242, throwSite: "-[NSView layout]", modified: Date()),
+                     attaches(pid: 4243, throwSite: WindowFrameLimit.throwSiteSymbol, modified: Date()),
+                     attaches(pid: 4242, throwSite: WindowFrameLimit.throwSiteSymbol, modified: Date().addingTimeInterval(3600))],
+                    [false, false, false], "帧越界: 别的崩溃、别的进程号、时间对不上的报告不补")
+        try? FileManager.default.setAttributes([.modificationDate: Date().addingTimeInterval(-WindowFrameLimit.noteMaxAge - 60)],
+                                               ofItemAtPath: WindowFrameLimit.noteURL(pid: 4242, in: notes).path)
+        WindowFrameLimit.pruneNotes(in: notes)
+        expectEqual([FileManager.default.fileExists(atPath: WindowFrameLimit.noteURL(pid: 4242, in: notes).path),
+                     FileManager.default.fileExists(atPath: WindowFrameLimit.noteURL(pid: Int(getpid()), in: notes).path)],
+                    [false, true], "帧越界: 过期的说明文件删掉,新的留着")
+
+        let install = sourceBody("public static func install()", in: core("Diagnostics/SwallowedExceptionGuard.swift"))
+        expectEqual(sourceHas(install, "WindowFrameLimit.noteThrown(name: exception.name.rawValue, reason: exception.reason)"), true,
+                    "帧越界(契约): 异常预处理器里认这句断言")
+        expectEqual(sourceHas(sourceBody("public static func noteThrown(", in: core("Diagnostics/WindowFrameLimit.swift")), "MainActor"), false,
+                    "帧越界(契约): 预处理器里那一步不带主线程隔离")
+        expectEqual(sourceHas(sourceBody("func applicationWillFinishLaunching(_ notification: Notification)", in: app("AppDelegate.swift")),
+                              "WindowFrameLimit.notesDirectory = LogFiles.crashNotes"), true,
+                    "帧越界(契约): App 启动时设好说明文件目录")
+        let scan = app("Settings/DiagnosticsExporter.swift")
+        expectEqual(sourceHas(scan, "WindowFrameLimit.attachNote(to: &annotated, in: LogFiles.crashNotes, reportModified: modified)\n"
+                                  + "scan.reports.append((annotated, modified))")
+                        && sourceHas(scan, "WindowFrameLimit.pruneNotes(in: LogFiles.crashNotes)"), true,
+                    "帧越界(契约): 扫崩溃报告时补上说明(诊断导出和遥测共用)")
+    }
+
+    do {
+        print("\n== 主线程 I/O:动态封面 / Spotify Canvas 缓存超预算清理在后台(03 章决策 73) ==")
+        let dir = tmp.appendingPathComponent("prune")
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        let base = Date(timeIntervalSince1970: 1_700_000_000)
+        for (i, name) in ["a.mp4", "b.mp4", "c.mp4", "d.mp4"].enumerated() {
+            let url = dir.appendingPathComponent(name)
+            try? Data(count: 100).write(to: url)
+            try? FileManager.default.setAttributes([.modificationDate: base.addingTimeInterval(Double(i))], ofItemAtPath: url.path)
+        }
+        try? Data(count: 10).write(to: dir.appendingPathComponent("x.mp4.tmp"))
+        let queue = DispatchQueue(label: "selftest.cache-prune")
+        let pruner = CacheBudgetPruner(label: "selftest", directory: dir, budgetBytes: 250, extensions: ["mp4"],
+                                       orphanExtensions: ["tmp"], queue: queue)
+        func names() -> [String] { ((try? FileManager.default.contentsOfDirectory(atPath: dir.path)) ?? []).sorted() }
+        queue.suspend()
+        pruner.request()
+        pruner.request()
+        pruner.request()
+        expectEqual(names(), ["a.mp4", "b.mp4", "c.mp4", "d.mp4", "x.mp4.tmp"], "缓存清理: request 当场返回,不在调用方线程上列目录、删文件")
+        queue.resume()
+        pruner.waitUntilIdle()
+        expectEqual([names(), ["\(pruner.runs)"]], [["c.mp4", "d.mp4"], ["1"]],
+                    "缓存清理: 排着时来的几次合成一次,删最旧的到预算以内、孤儿临时文件一起删")
+        try? Data(count: 100).write(to: dir.appendingPathComponent("e.mp4"))
+        pruner.request()
+        pruner.waitUntilIdle()
+        expectEqual([names(), ["\(pruner.runs)"]], [["d.mp4", "e.mp4"], ["2"]], "缓存清理: 跑完之后再来的请求照样跑")
+
+        let motion = app("MotionCoverStore.swift")
+        let canvas = app("SpotifyCanvasStore.swift")
+        expectEqual([sourceHas(motion, "func pruneIfNeeded"), sourceHas(canvas, "func pruneIfNeeded"),
+                     sourceHas(motion, "MainActor.run { self.pruneIfNeeded() }")], [false, false, false],
+                    "缓存清理(契约): 两个 store 不再有主线程上的 pruneIfNeeded")
+        expectEqual([sourceCount(motion, "pruner.request()"), sourceCount(canvas, "self.pruner.request()"),
+                     sourceCount(motion, "private nonisolated let pruner = CacheBudgetPruner("),
+                     sourceCount(canvas, "private nonisolated let pruner = CacheBudgetPruner(")], [2, 1, 1, 1],
+                    "缓存清理(契约): 下完一份就请求后台清理")
+        expectEqual([sourceCount(canvas, "contentsOfDirectory"), sourceCount(motion, "contentsOfDirectory"),
+                     sourceCount(sourceBody("private nonisolated static func measure(", in: motion), "contentsOfDirectory")
+                        + sourceCount(sourceBody("func removeAllCached(keeping: URL?) async -> Int64", in: motion), "contentsOfDirectory")],
+                    [0, 2, 2], "缓存清理(契约): store 里列缓存目录的只剩后台的统计和清空两处")
+    }
+
+    do {
         print("\n== 运行环境:App 所在卷被卸载、最低系统版本 ==")
         expectEqual([AppLocation.watchesVolume(at: "/"), AppLocation.watchesVolume(at: "/Volumes/Lyrimuse"),
                      AppLocation.watchesVolume(at: "/Volumes/Lyrimuse/")], [false, true, true], "卷卸载: 根卷不盯,别的卷盯")

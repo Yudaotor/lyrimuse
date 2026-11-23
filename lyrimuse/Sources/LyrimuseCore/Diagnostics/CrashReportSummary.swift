@@ -39,6 +39,8 @@ public struct CrashReportSummary: Equatable {
     public var fileName: String
     public var processName: String?
     public var processPath: String?
+    /// 崩溃进程的进程号(正文的 `pid`),对上 App 自己留的说明(`WindowFrameLimit`)用。
+    public var pid: Int?
     public var bundleIdentifier: String?
     public var version: String?
     public var buildVersion: String?
@@ -114,6 +116,7 @@ public struct CrashReportSummary: Equatable {
         if let body {
             summary.processName = (body["procName"] as? String) ?? summary.processName
             summary.processPath = body["procPath"] as? String
+            summary.pid = intish(body["pid"])
             if let info = body["bundleInfo"] as? [String: Any] {
                 summary.bundleIdentifier = (info["CFBundleIdentifier"] as? String) ?? summary.bundleIdentifier
                 summary.version = (info["CFBundleShortVersionString"] as? String) ?? summary.version

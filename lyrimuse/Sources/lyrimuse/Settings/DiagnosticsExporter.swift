@@ -515,8 +515,11 @@ enum DiagnosticsExporter {
             guard summary.belongsToApp(executableName: executable,
                                        bundleIdentifier: LyrimuseIdentity.bundleIdentifier,
                                        appDisplayName: LyrimuseIdentity.displayName) else { continue }
-            scan.reports.append((summary, modified))
+            var annotated = summary
+            WindowFrameLimit.attachNote(to: &annotated, in: LogFiles.crashNotes, reportModified: modified)
+            scan.reports.append((annotated, modified))
         }
+        WindowFrameLimit.pruneNotes(in: LogFiles.crashNotes)
         return scan
     }
 

@@ -67,6 +67,11 @@ final class MotionCoverStore {
     }()
 
     private var directory: URL { LyrimusePaths.cacheFile("motion-covers") }
+    /// 超预算就按 mtime 从旧到新删,删到预算之下,在后台串行队列上做。老版本落盘时先写 `<key>.mp4.tmp` 再改名,
+    /// 中途失败会留下这种孤儿,预算只数 mp4、永远删不到它们,见到就删。
+    private nonisolated let pruner = CacheBudgetPruner(label: "motion cover", directory: LyrimusePaths.cacheFile("motion-covers"),
+                                                       budgetBytes: MotionCoverStore.diskBudgetBytes, extensions: ["mp4"],
+                                                       orphanExtensions: ["tmp"])
 
     /// 旧版本放在配置目录下,第一次用到时搬过来(`CacheRelocation`)。
     private init() {
@@ -341,7 +346,7 @@ final class MotionCoverStore {
                     // 由 checkCached 按新参照图比,不必再下一遍。
                     let final = await MainActor.run { self.fileURL(for: master) }
                     try Self.moveIntoPlace(scratch, final: final)
-                    await MainActor.run { self.pruneIfNeeded() }
+                    pruner.request()
                     return .referenceMismatch
                 // 读不出时长/取不到帧 —— 是这份视频本身的问题,跟参照图无关,按这条候选不可用算。
                 case .undecidable: return .unavailable
@@ -355,7 +360,7 @@ final class MotionCoverStore {
             let final = await MainActor.run { self.fileURL(for: master) }
             try Self.moveIntoPlace(scratch, final: final)
             logger.info("motion cover: stored \(codec, privacy: .public) \(data.count / 1024, privacy: .public)KB")
-            await MainActor.run { self.pruneIfNeeded() }
+            pruner.request()
             return .ready(final)
         } catch {
             logger.notice("motion cover: \(codec, privacy: .public) store failed — \(error.localizedDescription, privacy: .public)")
@@ -494,31 +499,6 @@ final class MotionCoverStore {
         return items.reduce(0) { sum, url in
             guard url.pathExtension == "mp4" else { return sum }
             return sum + Int64((try? url.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0)
-        }
-    }
-
-    /// 超预算就按 mtime 从旧到新删,删到预算之下。
-    private func pruneIfNeeded() {
-        guard let items = try? fm.contentsOfDirectory(
-            at: directory, includingPropertiesForKeys: [.fileSizeKey, .contentModificationDateKey]) else { return }
-        var files: [(url: URL, size: Int64, date: Date)] = []
-        var total: Int64 = 0
-        // 老版本落盘时先写 `<key>.mp4.tmp` 再改名,中途失败会留下这种孤儿,预算只数 mp4、永远删不到它们。
-        for url in items where url.pathExtension == "tmp" {
-            try? fm.removeItem(at: url)
-        }
-        for url in items where url.pathExtension == "mp4" {
-            guard let v = try? url.resourceValues(forKeys: [.fileSizeKey, .contentModificationDateKey]),
-                  let size = v.fileSize, let date = v.contentModificationDate else { continue }
-            files.append((url, Int64(size), date))
-            total += Int64(size)
-        }
-        guard total > Self.diskBudgetBytes else { return }
-        for f in files.sorted(by: { $0.date < $1.date }) {
-            guard total > Self.diskBudgetBytes else { break }
-            try? fm.removeItem(at: f.url)
-            total -= f.size
-            logger.info("motion cover: pruned \(f.size / 1024, privacy: .public)KB")
         }
     }
 }
